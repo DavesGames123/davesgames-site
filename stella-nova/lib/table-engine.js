@@ -39,17 +39,19 @@
 //  A page with no spec.saver gets the generic screensaver mode.
 //
 //  SAVER LABEL: when a saver cell goes on, the engine calls opts.label (the
-//  shell plate, lower right) with the cell name, its family, the
-//  species text, the named knob values, the generator values (tempo and so
-//  on) and the cell equation. The equation is cell.eq in spec.json (a string
-//  or a list of lines, plain Unicode maths). With no cell.eq, the engine uses
-//  spec.saver.eq[family]. The engine sends the label again each second with
-//  the same title, so the live values change in place. PAGE.saverLabel(t,
-//  info), if the PAGE has it, can change info before it goes to the shell.
+//  shell plate, lower right, no anchor) with the cell name, its family, the
+//  species text, the knob and generator values as params, the cell TeX and
+//  the plain equation. The TeX comes from the page docs (saverDocs: the
+//  docs.js DOCS of field-table, or PAGE.saverDocs()), else cell.tex or
+//  spec.saver.tex[family]. The plain equation is cell.eq in spec.json (a
+//  string or a list of lines, Unicode maths), else spec.saver.eq[family].
+//  The engine sends the label again each second with the same title, so
+//  the live values change in place. PAGE.saverLabel(t, info), if the PAGE
+//  has it, can change info before it goes to the shell.
 //
 //  grep -n targets: "function frame", "function sizeSurf", "function makeSurface",
 //  "function saverEnter", "function saverStep", "function saverFade", "saver.t === t",
-//  "function saverLabel"
+//  "function saverLabel", "function saverDocs"
 // ============================================================================
 import { TOUCH, HOVER_LABEL, fitTable, playhead, maxDpr, initMobile } from './table-mobile.js';
 
@@ -357,8 +359,9 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
     const canvas = document.createElement('canvas'); canvas.className = 'tbl-saver-canvas';
     document.body.appendChild(canvas); document.documentElement.classList.add('tbl-saver');
     close();
-    saver = { t, canvas, style, surf: makeSurface(canvas), dpr: cfg.dpr || 2, opts };
+    saver = { t, canvas, style, surf: makeSurface(canvas), dpr: cfg.dpr || 2, opts, docs: null };
     saverLabel();
+    saverDocs().then(d => { if (saver && d) { saver.docs = d; saverLabel(); } });
     if (typeof opts.label === 'function' && opts.labels !== false) saver.labelTimer = setInterval(saverLabel, 1000);
     if (cfg.cycle && list.length > 1) {
       // seeded order that starts at the first cell; fade pass: out = canvas * (1 - a)
@@ -396,23 +399,48 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
     const u = Math.min(now - s.t0, s.per - (now - s.t0)) / s.fadeS;
     s.dim = 1 - sstep(u);
   }
-  // The plate for the saver cell: name, family, species, live knob and
-  // generator values, and the equation (cell.eq, else spec.saver.eq[family]).
-  // A second call with the same title swaps the text in place in the shell.
+  // The plate for the saver cell (lib/screensaver.js label plate fields):
+  //   params  each named knob (name and setting), then the generators
+  //           (tempo and so on), at most five. With docs, a knob gets its
+  //           TeX symbol and, for a linear map [sym, lo, hi], the mapped
+  //           value lo + (hi - lo) k.
+  //   tex     the docs TeX of the cell (already coloured with \class), else
+  //           cell.tex or spec.saver.tex[family] when the spec has them
+  //   lines   the species text
+  //   eq      cell.eq, else spec.saver.eq[family]: the plain fallback
+  // No anchor: a saver cell fills the window, so the plate sits at the
+  // lower right. A second call with the same title swaps the text in place.
   function saverLabel() {
     const s = saver;
     if (!s || !s.opts || typeof s.opts.label !== 'function' || s.opts.labels === false) return;
     const c = s.t.s, eqs = c.eq || ((SPEC.saver.eq || {})[c.family]) || [];
-    const knobs = c.knobs.map((k, i) => k ? `${k} ${s.t.knobs[i].toFixed(2)}` : '').filter(Boolean);
-    const gens = GENS.map(g => `${String(g.title || g.id).split(' · ')[0].toLowerCase()} ${g.unit(G[g.id])}`);
+    const D = s.docs && s.docs.DOCS ? s.docs.DOCS[c.name] : null;
+    const params = c.knobs.map((name, i) => {
+      if (!name) return null;
+      const k = s.t.knobs[i], kn = D && D.knobs[i];
+      return { sym: kn ? kn[0] : '', name, value: (kn && typeof kn[1] === 'number' ? kn[1] + (kn[2] - kn[1]) * k : k).toFixed(2) };
+    }).filter(Boolean);
+    for (const g of GENS) params.push({ sym: '', name: String(g.title || g.id).split(' · ')[0].toLowerCase(), value: g.unit(G[g.id]) });
+    const tex = D ? D.tex : c.tex || ((SPEC.saver.tex || {})[c.family]) || null;
     let info = {
       title: c.name.replace(/_/g, ' ').replace(/^./, m => m.toUpperCase()),
-      sub: c.family,
-      lines: [c.species, knobs.length ? 'knobs  ' + knobs.join(' · ') : '', gens.join(' · ')].filter(Boolean),
+      sub: c.family.replace(/^./, m => m.toUpperCase()),
+      params: params.slice(0, 5),
+      lines: [c.species].filter(Boolean),
+      tex: tex ? (Array.isArray(tex) ? tex : [tex]) : undefined,
       eq: Array.isArray(eqs) ? eqs : [eqs],
     };
     if (PAGE.saverLabel) info = PAGE.saverLabel(s.t, info) || info;
     try { s.opts.label(info); } catch (_) {}
+  }
+  // The TeX docs of the cells, once per saver: PAGE.saverDocs() when the
+  // page has it, else docs.js next to a page with an inspector doc box
+  // (#m-doc: field-table, 8c3311b). Each gives { DOCS: { name: { tex,
+  // knobs } } } as docs.js does. null when there are none.
+  function saverDocs() {
+    if (PAGE.saverDocs) return Promise.resolve(PAGE.saverDocs()).catch(() => null);
+    if (!$('m-doc')) return Promise.resolve(null);
+    return import(new URL('docs.js', document.baseURI).href).then(m => (m && m.DOCS ? m : null)).catch(() => null);
   }
   function saverFade(enc) {
     const s = saver, a = s.dim;
