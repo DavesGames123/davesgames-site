@@ -25,14 +25,25 @@
 //      tick signals -> ease each tile's hover rate -> pick the tiles that draw
 //      -> advance their clocks -> draw them into their caches -> on an active
 //      frame, present every visible cache into its canvas -> submit
+//
+//  SCREENSAVER  (lib/screensaver.js calls window.snSaver.enter(opts))
+//      enter() hides the page, adds one full-window canvas and draws one calm
+//      cell from SAVER_CELLS into it on each frame. grep -n "saverEnter", "saver.t"
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 import { $, G, stage, tiles } from './state.js';
 import { initSignals, tickSignals, sigTime } from './signals.js';
 import { initControls } from './controls.js';
-import { initGPU, device, msurf, visible, stats, sizeSurface, present } from './gpu.js';
+import { initGPU, device, msurf, visible, stats, makeSurface, sizeSurface, present } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
 import { TOUCH, fitTable, playhead, maxDpr, initMobile } from '../../lib/table-mobile.js';
+
+// The screensaver hook is defined before the first fetch, so the shell finds
+// it in time. enter() waits for the GPU; on a GPU failure it rejects and the
+// shell uses its generic mode.
+let saverEnter = null, saverReady, saverFail;
+const saverGate = new Promise((a, b) => { saverReady = a; saverFail = b; }); saverGate.catch(() => {});
+window.snSaver = { enter: opts => saverGate.then(() => saverEnter(opts || {})) };
 
 // Pack source lives in a real .wgsl file under shaders/. Fetch it up front.
 const SH = await loadShaders(import.meta.url, ['shaders/noise.wgsl']);
@@ -69,6 +80,7 @@ if (await initGPU(STYLES, PACK)) {
   // scroll, or HOLD seconds after one), every visible surface copies its
   // cache into its canvas, drawn or not. See gpu.js.
   const ANIM_CAP = 12, HOLD = 0.5;
+  let saver = null;   // { t, canvas, surf } while the screensaver runs, see saverEnter
   let fpsT = 0, frames = 0, frameNo = 0, activeUntil = 0, prev = { scale: 1, gain: 1, ink: '', tone: '', cream: '' };
   stage.addEventListener('scroll', () => { activeUntil = sigTime() + HOLD; }, { passive: true });
   function fill(t, surf, rect, dpr) {
@@ -106,7 +118,7 @@ if (await initGPU(STYLES, PACK)) {
       if (t.pipeline && visible.has(t)) { const rect = t.canvas.getBoundingClientRect(); if (rect.width >= 1) t.rect = rect; }
       const focus = band !== null && !!t.rect && t.rect.top <= band && t.rect.bottom > band;
       if (focus !== !!t.focus) { t.focus = focus; t.el.classList.toggle('tm-live', focus); }
-      const want = (!G.hoverOnly || t.hover || t.focus || inspected === t) ? 1 : 0;
+      const want = (!G.hoverOnly || t.hover || t.focus || inspected === t || (saver && saver.t === t)) ? 1 : 0;
       t.rate += (want - t.rate) * (1 - Math.exp(-dt / 0.18));
       t.moving = t.rate > 0.002;
       if (!t.pipeline) { if (t.moving) t.phase += dt * t.rate * G.tempo; continue; }
@@ -123,7 +135,8 @@ if (await initGPU(STYLES, PACK)) {
     // pass 2: advance the clocks of the tiles that draw, then draw
     for (const t of tiles) {
       if (!t.pipeline) continue;
-      if (t.moving && (t.go || !t.rect)) t.phase += dt * t.rate * G.tempo;
+      if (t.moving && (t.go || !t.rect || (saver && saver.t === t))) t.phase += dt * t.rate * G.tempo;
+      if (saver && saver.t === t) { const r = saver.canvas.getBoundingClientRect(), sd = Math.min(devicePixelRatio || 1, 2); sizeTo(saver.surf, r, sd); drawTo(enc, t, saver.surf, r, sd); any = true; }
       if (inspected === t) { const r = msurf.canvas.getBoundingClientRect(); const rs = sizeTo(msurf, r, dpr); if (t.moving || t.dirty || globalDirty || rs) { drawTo(enc, t, msurf, r, dpr); any = true; } }
       if (!t.go || !t.rect) continue;
       drawTo(enc, t, t.surf, t.rect, dpr); t.dirty = false; t.lastDraw = frameNo; any = true;
@@ -132,8 +145,33 @@ if (await initGPU(STYLES, PACK)) {
     if (now <= activeUntil) {
       for (const t of tiles) if (t.rect) present(enc, t.surf);
       if (inspected) present(enc, msurf);
+      if (saver) present(enc, saver.surf);
       device.queue.submit([enc.finish()]);
     }
   }
+  // Screensaver: one calm cell (by opts.seed) draws into a full-window canvas.
+  // The hash family (white, ign, sparkle and so on) re-hashes each frame and
+  // strobes, so it is not in the list. The tempo slider goes to a speed from
+  // opts.calm (1 = slowest). The shell reloads the page when the saver stops.
+  const SAVER_CELLS = ['fbm', 'warp', 'warp_self', 'marble', 'wood', 'caustics', 'flow_lines', 'gabor_noise', 'plasma', 'worley_smooth', 'perlin3d', 'gyroid', 'contour', 'interference', 'billow', 'sum_sines'];
+  saverEnter = async opts => {
+    const calm = Math.min(1, Math.max(0, opts.calm ?? 0.7));
+    const list = tiles.filter(t => SAVER_CELLS.includes(t.s.name));
+    let t = list[(opts.seed >>> 0) % list.length];
+    for (const t0 = performance.now(); !t.pipeline && performance.now() - t0 < 12000;) await new Promise(r => setTimeout(r, 100));
+    if (!t.pipeline) t = list.find(x => x.pipeline);
+    if (!t) throw new Error('no cell compiled');
+    const bias = $('tempo-bias'); bias.value = ((1.0 + (0.25 - 1.0) * calm) - 0.1) / 2.9; bias.dispatchEvent(new Event('input'));
+    const style = document.createElement('style');
+    style.textContent = `html.tbl-saver, html.tbl-saver body { background: #000 !important; overflow: hidden !important; cursor: none !important; }
+html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
+.tbl-saver-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 2147483647; background: #000; }`;
+    document.head.appendChild(style);
+    const canvas = document.createElement('canvas'); canvas.className = 'tbl-saver-canvas';
+    document.body.appendChild(canvas); document.documentElement.classList.add('tbl-saver');
+    saver = { t, canvas, surf: makeSurface(canvas) };
+    return { canvas, warmupMs: 600 };
+  };
+  saverReady();
   requestAnimationFrame(frame);
-}
+} else saverFail(new Error('no WebGPU'));
