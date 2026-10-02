@@ -23,16 +23,28 @@
 //      tick signals -> attack/release the live level and activity -> per tile:
 //      advance phase, integrate the signal accumulators, draw the inspected orb,
 //      then draw the visible grid -> submit
+//
+//  SCREENSAVER  (grep "window.snSaver", "function saverEnter", "function saverFrame")
+//  ----------------------------------------------------------------------------
+//      The shell screensaver (lib/screensaver.js) calls snSaver.enter(opts).
+//      One full-window canvas shows one calm species at a time, centered on the
+//      ink ground. The species changes 3 times per dwell behind a fade to ink.
+//      Each species goes idle -> listening -> idle. Nothing else draws.
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
-import { $, STATES, SEED, ENTRY, ease, sstep, ACT_LIFT, LVL_LIFT, ATTACK, RELEASE, G, stage, clock, tiles } from './state.js';
+import { $, STATES, SEED, ENTRY, ease, sstep, ACT_LIFT, LVL_LIFT, ATTACK, RELEASE, G, stage, clock, tiles, hexToRgb } from './state.js';
 import { initSignals, tickSignals } from './signals.js';
 import { initControls } from './controls.js';
 import { fitTable, maxDpr, initMobile } from '../../lib/table-mobile.js';
-import { initGPU, device, msurf, visible, stats } from './gpu.js';
+import { initGPU, device, msurf, visible, stats, makeSurface } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
 
 // Pack source lives in real .wgsl files under shaders/. Fetch it all up front.
+// The hook is defined before the awaits, so the shell finds it at once.
+// enter() waits for initGPU and rejects if WebGPU is absent (generic mode).
+let saverBoot; const saverGate = new Promise(r => { saverBoot = r; });
+window.snSaver = { enter: opts => saverGate.then(go => go ? go(opts || {}) : Promise.reject(new Error('no WebGPU'))) };
+
 const FAMILIES = ['glass', 'liquid', 'ink', 'light', 'signal', 'orb', 'presence'];
 const SH = await loadShaders(import.meta.url, FAMILIES.map(f => `shaders/${f}.wgsl`));
 const PACKS = Object.fromEntries(FAMILIES.map(f => [f, SH[`shaders/${f}.wgsl`]]));
@@ -53,7 +65,7 @@ if (await initGPU(STYLES, PACKS)) {
   initInspector(PACKS);
 
   let last = clock(), fpsT = 0, frames = 0;
-  function fill(t, surf, rect, dpr, now) {
+  function fill(t, surf, rect, dpr, now, ox, oy) {
     const tau = now - t.changedAt;
     const from = SEED[t.prev], to = SEED[t.cur], k = ease(tau), entry = ENTRY[to.entry];
     const speed = from.speed * (1 - k) + to.speed * k;
@@ -65,7 +77,7 @@ if (await initGPU(STYLES, PACKS)) {
       tilt = [Math.max(-1, Math.min(1, (G.pointer[0] - cx) / (R * 3))), Math.max(-1, Math.min(1, (G.pointer[1] - cy) / (R * 3)))];
     }
     const d = surf.data;
-    d[0] = rect.width; d[1] = rect.height; d[2] = 0; d[3] = 0;
+    d[0] = rect.width; d[1] = rect.height; d[2] = ox || 0; d[3] = oy || 0;
     d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([G.tone[0], G.tone[1], G.tone[2], 1], 8); d.set([G.tone2[0], G.tone2[1], G.tone2[2], 1], 12);
     d[16] = tilt[0]; d[17] = tilt[1];
     d[18] = Math.max(t.phase + entry.phase(tau) * to.speed, 0) / Math.max(quick, 1e-6); d[19] = dpr;
@@ -114,12 +126,73 @@ if (await initGPU(STYLES, PACKS)) {
         const g = t.sig; g[0] += voice * dp; g[1] += pace * dp; g[2] += drive * dp; g[3] += voice * drive * dp; g[4] += pace * drive * dp; g[5] += L * dp; g[6] += A * dp; }
       if (!t.pipeline) continue;
       if (inspected === t) drawTo(enc, t, msurf, msurf.canvas.getBoundingClientRect(), dpr, now);
-      if (modalOpen || !visible.has(t)) continue;   // behind the blur or off-screen: skip the draw
+      if (saver || modalOpen || !visible.has(t)) continue;   // behind the blur or off-screen: skip the draw
       const rect = t.canvas.getBoundingClientRect();
       if (rect.width < 1) continue;
       drawTo(enc, t, t.surf, rect, dpr, now);
     }
+    if (saver) saverFrame(enc, now);
     device.queue.submit([enc.finish()]);
   }
+
+  // ── screensaver ──────────────────────────────────────────────────────────
+  // Calm species only: no lightning (tempest), no colour flashes (opal), no
+  // counted sparkles (glimmer), no near-black (abyss). Order, tones and the
+  // first species come from opts.seed. G.tempo follows opts.calm.
+  const SAVER_CELLS = ['aura', 'nebula', 'fathom', 'duet', 'helix', 'flux', 'sol', 'still', 'eddy', 'tide', 'meander', 'confluence',
+    'marbling', 'strata', 'halation', 'caustic', 'aurora', 'lantern', 'eclipse', 'murmuration', 'veil', 'breathe', 'orbit', 'daybreak', 'skein', 'nucleus', 'braid'];
+  const SAVER_TONES = ['#5a8cc0', '#7a72c8', '#4fa39a', '#c0905a', '#8fb0d8', '#b07aa8'];
+  const FADE = 1.6;
+  let saver = null;
+  function saverEnter(opts) {
+    const calm = Math.min(1, Math.max(0, opts.calm ?? 0.7)), secs = Math.max(20, +opts.seconds || 60);
+    let r = (opts.seed >>> 0) || 1; const rnd = () => { r = (r + 0x6D2B79F5) >>> 0; let x = Math.imul(r ^ (r >>> 15), 1 | r); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+    const list = tiles.filter(t => SAVER_CELLS.includes(t.s.name));
+    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    const style = document.createElement('style');
+    style.textContent = `html.orb-saver, html.orb-saver body { background: #0e1118 !important; overflow: hidden !important; cursor: none !important; }
+html.orb-saver body > :not(#orb-saver) { display: none !important; }
+#orb-saver { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 2147483647; background: #0e1118; }`;
+    document.head.appendChild(style);
+    const canvas = document.createElement('canvas'); canvas.id = 'orb-saver';
+    document.body.appendChild(canvas); document.documentElement.classList.add('orb-saver');
+    G.ink = hexToRgb('#0e1118'); G.pointer = null; G.paused = false; G.tempo = 1 - 0.55 * calm;
+    // the fade draws the ink colour over the orb with blend constant a: out = ink * a + orb * (1 - a)
+    const k = G.ink.map(v => v.toFixed(4)).join(', ');
+    const mod = device.createShaderModule({ code: `@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)); return vec4f(p[i], 0.0, 1.0); }
+@fragment fn fs() -> @location(0) vec4f { return vec4f(${k}, 1.0); }` });
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    const fade = device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'vs' }, primitive: { topology: 'triangle-list' },
+      fragment: { module: mod, entryPoint: 'fs', targets: [{ format, blend: { color: { srcFactor: 'constant', dstFactor: 'one-minus-constant' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } } }] } });
+    saver = { canvas, surf: makeSurface(canvas), fade, list, i: -1, t: null, t0: 0, per: Math.max(14, secs / 3), rnd, step: 0 };
+    saverNext(clock());
+    return { canvas, warmupMs: 1200 };
+  }
+  // the next species starts idle from a fresh phase, under a full ink fade
+  function saverNext(now) {
+    const s = saver; s.i = (s.i + 1) % s.list.length; s.t = s.list[s.i]; s.t0 = now; s.step = 0;
+    const t = s.t; t.prev = t.cur = 'idle'; t.changedAt = now - 5; t.phase = 0; t.sig.fill(0);
+    G.tone = G.tone2 = hexToRgb(SAVER_TONES[Math.floor(s.rnd() * SAVER_TONES.length)]);
+  }
+  function saverState(t, st, now) { if (t.cur !== st) { t.prev = t.cur; t.cur = st; t.changedAt = now; } }
+  function saverFrame(enc, now) {
+    const s = saver; let tau = now - s.t0;
+    if (tau >= s.per) { saverNext(now); tau = 0; }
+    const t = s.t;
+    saverState(t, tau > s.per * 0.34 && tau < s.per * 0.7 ? 'listening' : 'idle', now);
+    if (!t.pipeline) return;
+    const cv = s.canvas, r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    const S = Math.round(Math.min(r.width, r.height) * 0.78);
+    fill(t, s.surf, { width: S, height: S, left: 0, right: S, top: 0, bottom: S }, dpr, now, (w - S * dpr) / 2, (h - S * dpr) / 2);
+    const a = 1 - sstep(Math.min(tau, s.per - tau) / FADE);
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: s.surf.ctx.getCurrentTexture().createView(), clearValue: { r: G.ink[0], g: G.ink[1], b: G.ink[2], a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
+    pass.setPipeline(t.pipeline); pass.setBindGroup(0, s.surf.bind); pass.draw(3);
+    if (a > 0.001) { pass.setPipeline(s.fade); pass.setBlendConstant({ r: a, g: a, b: a, a }); pass.draw(3); }
+    pass.end();
+  }
+  saverBoot(saverEnter);
   requestAnimationFrame(frame);
-}
+} else saverBoot(null);
