@@ -55,6 +55,7 @@
 //      domain coloring ..... "function buildDomain"  complex-plane hue image
 //      streamer budget ..... "function tracerBudget" default count by area
 //      tracers ............. "function spawnTracers" spawn + advect the trails
+//      pole guard .......... "POLE GUARD"            arc-length cap, pole disks, level scale
 //      tracer draw ......... "function renderTracersGL"  one instanced call
 //      2D fallback ......... "function drawTracers2D"    per-segment strokes
 //      hidden page ......... "visibilitychange"      stop / restart loop
@@ -176,14 +177,14 @@ const SYS={
       {sub:"Pólya field · domain hue",tex:`\\big(\\,\\mathrm{Re}\\,\\textcolor{${ST}}{f},\\, -\\mathrm{Im}\\,\\textcolor{${ST}}{f}\\,\\big),\\quad \\arg \\textcolor{${ST}}{f}\\in(-\\pi,\\pi]`}]},
   // 1/z = conj(z)/|z|^2 = (x - iy)/(x^2+y^2); the d||1e-9 guards the pole at 0.
   cinv:{name:"f(z) = 1/z",group:"complex",sim:"trajectory",positive:false,
-    view:{cx:0,cy:0,span:2.6}, ic:[1.2,0.5],
+    view:{cx:0,cy:0,span:2.6}, ic:[1.2,0.5], poles:[[0,0]],
     blurb:"A simple pole. The phase winds the opposite way and the Pólya field streams inward.",
     cf:(x,y)=>{const d=x*x+y*y||1e-9;return[x/d,-y/d];},
     eqs:()=>[{sub:"Complex map",tex:`\\textcolor{${ST}}{f(z)} = \\dfrac{1}{\\textcolor{${ST}}{z}}`},
       {sub:"Pole at z = 0",tex:`\\arg \\textcolor{${ST}}{f} = -\\arg\\textcolor{${ST}}{z}\\in(-\\pi,\\pi]`}]},
   // Joukowski map z - 1/z with zeros at +/-1, the transform behind airfoil theory.
   cjou:{name:"f(z) = z − 1/z",group:"complex",sim:"trajectory",positive:false,
-    view:{cx:0,cy:0,span:2.8}, ic:[1.3,0.7],
+    view:{cx:0,cy:0,span:2.8}, ic:[1.3,0.7], poles:[[0,0]],
     blurb:"Two simple zeros at ±1 — the Joukowski map behind classical airfoil theory.",
     cf:(x,y)=>{const d=x*x+y*y||1e-9;return[x-x/d,y+y/d];},
     eqs:()=>[{sub:"Complex map",tex:`\\textcolor{${ST}}{f(z)} = \\textcolor{${ST}}{z} - \\dfrac{1}{\\textcolor{${ST}}{z}}`},
@@ -304,7 +305,7 @@ function drawToneCurve(){const cv=document.getElementById("toneCurve");if(!cv)re
   for(let px=0;px<W;px++){let o=toneMap(px/(W-1))*cfg.exposure;o=o<0?0:o>1?1:o;const yy=pad+(1-o)*ph;px===0?x.moveTo(px,yy):x.lineTo(px,yy);}x.stroke();}
 // Speed mode: compress field magnitude with log10 so a wide dynamic range fits
 // 0..1, then look it up through the tone curve and palette.
-function rampRGB(mag){const lc=Math.max(0,Math.min(1,Math.log10(1+mag*2.2)/1.5));return ramp(PALETTES[cfg.palette]||PALETTES.stella,toneMap(lc));}
+function rampRGB(mag){const lc=speedLevel(mag);return ramp(PALETTES[cfg.palette]||PALETTES.stella,toneMap(lc));}
 // Phase mode: HSL-style hue wheel (an inlined hue->rgb) at fixed saturation.
 function hueRGB(h){h=((h%1)+1)%1;const a=0.85*Math.min(0.6,1-0.6);const f=n=>{const k=(n+h*12)%12;return 0.6-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1)));};return[f(0),f(8),f(4)];}
 
@@ -353,8 +354,11 @@ function tracerBudget(){
 let SPX=0, SPY=0;
 function spawnPos(){
   const x0=wx(0),y0=wy(CH),x1=wx(CW),y1=wy(0);
-  if(SYS[cur].positive){SPX=0.02+Math.random()*Math.max(0.1,x1-0.02);SPY=0.02+Math.random()*Math.max(0.1,y0-0.02);}
-  else{SPX=x0+Math.random()*(x1-x0);SPY=y1+Math.random()*(y0-y1);}
+  for(let k=0;k<8;k++){
+    if(SYS[cur].positive){SPX=0.02+Math.random()*Math.max(0.1,x1-0.02);SPY=0.02+Math.random()*Math.max(0.1,y0-0.02);}
+    else{SPX=x0+Math.random()*(x1-x0);SPY=y1+Math.random()*(y0-y1);}
+    if(!nearPole(SPX,SPY,POLE_PX*2/view.scale))return;
+  }
 }
 // Put tracer i at a fresh spawn with an empty trail and a random lifespan, so
 // the pool does not respawn all on the same frame.
@@ -375,34 +379,85 @@ function spawnTracers(){
   TR_N=n;
   for(let i=0;i<n;i++) respawnTracer(i);
 }
-// Advance every tracer one step along the field with a midpoint (RK2) update,
-// write the new point into its trail ring, and respawn any tracer that has
-// stalled, aged out, or left the box.
+/* ════════ POLE GUARD ════════ */
+// A pole field (1/z, z - 1/z) has |v| -> infinity at the pole. A fixed
+// time step then moves a tracer far past the pole in one jump, and the
+// trails show straight lines across the center. Three guards stop this:
+//   1. Arc-length cap. Each sub-step moves at most DS_PX screen px
+//      (h = min(h, ds/|v|)). A frame takes at most SUB_MAX sub-steps, so
+//      a tracer near a pole goes slower than the field, not farther.
+//   2. Pole disk. A tracer inside POLE_PX of a pole in SYS[k].poles is
+//      respawned. spawnPos() does not put a tracer inside 2 POLE_PX.
+//   3. Level scale. The speed level is log(1 + m/mRef) / log(1 + mHi/mRef).
+//      mRef and mHi are the median and the 98th percentile of |v| on a grid
+//      over the view, out of the pole disks. Only the top 2 % of the view
+//      gets the top palette color, so the center does not saturate.
+// The shown equations do not change. Only the integration and the color do.
+const DS_PX=3, SUB_MAX=10, POLE_PX=8;
+function nearPole(x,y,r){
+  const pl=SYS[cur].poles; if(!pl)return false;
+  for(let k=0;k<pl.length;k++){const dx=x-pl[k][0],dy=y-pl[k][1];if(dx*dx+dy*dy<r*r)return true;}
+  return false;
+}
+// The level scale, cached for one system, parameter set and view.
+let lvKey="", lvRef=1/2.2, lvDen=1.5;
+function updateLevelScale(){
+  const key=cur+"|"+view.cx+"|"+view.cy+"|"+view.scale+"|"+CW+"|"+CH+"|"+JSON.stringify(P);
+  if(key===lvKey)return; lvKey=key;
+  if(!SYS[cur].poles){lvRef=1/2.2;lvDen=1.5;return;}   // the old curve: log10(1+2.2 m)/1.5
+  const ms=[], rp=POLE_PX*2/view.scale;
+  for(let j=0;j<20;j++)for(let i=0;i<32;i++){
+    const x=wx((i+0.5)/32*CW), y=wy((j+0.5)/20*CH);
+    if(nearPole(x,y,rp))continue;
+    const f=fieldAt(x,y), m=Math.hypot(f[0],f[1]); if(isFinite(m))ms.push(m);
+  }
+  if(ms.length<16)return;
+  ms.sort((a,b)=>a-b);
+  const ref=Math.max(1e-6,ms[ms.length>>1]), hi=Math.max(ref*1.5,ms[Math.floor(ms.length*0.98)]);
+  lvRef=ref; lvDen=Math.log10(1+hi/ref);
+}
+// The speed level in 0..1 for the trails, the arrows and rampRGB.
+function speedLevel(m){const l=Math.log10(1+m/lvRef)/lvDen;return l<0?0:l>1?1:l;}
+
+// Advance every tracer along the field with midpoint (RK2) sub-steps, write
+// the new point into its trail ring, and respawn any tracer that has
+// stalled, aged out, left the box or gone into a pole disk.
 function updateTracers(dt){
+  updateLevelScale();
   const positive=SYS[cur].positive, step=cfg.spd/10*0.016;
-  const maxMove=0.7/view.scale*CH;          // cap world-units per frame (poles)
+  // A field with no poles keeps one step per frame and the old cap of
+  // 0.7 CH px per frame, so its tracers move as before.
+  const pole=!!SYS[cur].poles, sub=pole?SUB_MAX:1;
+  const ds=(pole?DS_PX:0.7*CH)/view.scale, rp=POLE_PX/view.scale;
   // Slightly enlarged bounds so trails can leave the frame before respawning.
   const x0=wx(0)-1,y0=wy(CH)-1,x1=wx(CW)+1,y1=wy(0)+1;
   const TWO_PI=2*Math.PI;
   for(let i=0;i<TR_N;i++){
     tAge[i]+=dt;
-    const x=tX[i], y=tY[i];
+    let x=tX[i], y=tY[i];
     const f=fieldAt(x,y), fx=f[0], fy=f[1], m=Math.hypot(fx,fy);
     // Retire a tracer that is on a singularity, too slow, too old, or off-box.
-    if(!isFinite(m)||m<1e-4||tAge[i]>tMax[i]||x<x0||x>x1||y<y0||y>y1||(positive&&(x<=0||y<=0))){
+    if(!isFinite(m)||m<1e-4||tAge[i]>tMax[i]||x<x0||x>x1||y<y0||y>y1||(positive&&(x<=0||y<=0))||nearPole(x,y,rp)){
       respawnTracer(i); continue;
     }
-    // Shrink the step near fast regions (poles) so no single jump overshoots.
-    let h=step; if(m*h>maxMove)h=maxMove/m;
-    // Midpoint integration: sample the field at the half-step, then move.
-    const f2=fieldAt(x+fx*h*0.5,y+fy*h*0.5);
-    const nx=x+f2[0]*h, ny=y+f2[1]*h;
-    tX[i]=nx; tY[i]=ny;
+    // Sub-steps with an arc-length cap: h = min(h, ds/|v|) at each start
+    // point, and the midpoint move is clamped to ds too.
+    let rem=step, gx=fx, gy=fy, gm=m;
+    for(let k=0;k<sub&&rem>0;k++){
+      const h=Math.min(rem, ds/gm); rem-=h;
+      const f2=fieldAt(x+gx*h*0.5,y+gy*h*0.5), m2=Math.hypot(f2[0],f2[1]);
+      if(!isFinite(m2)||m2<1e-12)break;
+      const L=Math.min(m2*h,ds)/m2;
+      x+=f2[0]*L; y+=f2[1]*L;
+      if(rem<=0||k===sub-1)break;
+      const g=fieldAt(x,y); gx=g[0]; gy=g[1]; gm=Math.hypot(gx,gy);
+      if(!isFinite(gm)||gm<1e-12)break;
+    }
+    tX[i]=x; tY[i]=y;
     // Write [x, y, speed level, phase hue] to the next ring slot. The speed
-    // level is the log compression of rampRGB, so the draw does no log.
+    // level comes from speedLevel() here, so the draw does no log.
     const hd=trHead[i]+1===TRAIL_MAX?0:trHead[i]+1, o=i*TRAIL_MAX+hd;
-    const lc=Math.log10(1+m*2.2)/1.5;
-    trX[o]=nx; trY[o]=ny; trS[o]=lc<0?0:lc>1?1:lc; trH[o]=(Math.atan2(fy,fx)+Math.PI)/TWO_PI;
+    trX[o]=x; trY[o]=y; trS[o]=speedLevel(m); trH[o]=(Math.atan2(fy,fx)+Math.PI)/TWO_PI;
     trHead[i]=hd; if(trLen[i]<TRAIL_MAX)trLen[i]++;
   }
 }
@@ -424,11 +479,20 @@ function resetPS(){const ic=SYS[cur].ic;ps.x=ic[0];ps.y=ic[1];ps.hist=[];oscHist
 function updatePS(dt){
   const S=SYS[cur];
   const h=Math.min(dt,0.033)*1.0;
-  let n=4; for(let i=0;i<n;i++){const r=rk4([ps.x,ps.y],h/n*1.4);ps.x=r[0];ps.y=r[1];}
+  // RK4 sub-steps with the same arc-length cap as the tracers (POLE GUARD):
+  // no sub-step moves more than DS_PX screen px. Four sub-steps for a smooth
+  // field, up to 64 near a pole. A field with no poles has no cap.
+  const ds=SYS[cur].poles?DS_PX/view.scale:Infinity;
+  let rem=h*1.4;
+  for(let i=0;i<64&&rem>1e-9;i++){
+    const f=fieldAt(ps.x,ps.y), m=Math.hypot(f[0],f[1]);
+    const hh=Math.min(rem,h*1.4/4,isFinite(m)&&m>0?ds/m:rem); rem-=hh;
+    const r=rk4([ps.x,ps.y],hh);ps.x=r[0];ps.y=r[1];
+  }
   // reseed on divergence / escape (saddle, complex, etc.)
   // Escape radius depends on the system so bounded orbits are never reset early.
   const lim=S.group==="complex"?6:(S.sim==="trajectory"?7:1e4);
-  if(!isFinite(ps.x)||!isFinite(ps.y)||Math.hypot(ps.x,ps.y)>lim||(S.positive&&(ps.x<=0.001||ps.y<=0.001))) resetPS();
+  if(!isFinite(ps.x)||!isFinite(ps.y)||Math.hypot(ps.x,ps.y)>lim||nearPole(ps.x,ps.y,POLE_PX/view.scale)||(S.positive&&(ps.x<=0.001||ps.y<=0.001))) resetPS();
   // Ring buffers: phase-plane trail (90 pts) and oscillator waveform (120 pts).
   ps.hist.push([ps.x,ps.y]); if(ps.hist.length>90)ps.hist.shift();
   oscHist.push(ps.x); if(oscHist.length>120)oscHist.shift();
@@ -470,7 +534,7 @@ function drawArrows(){
   // Sample the field at each grid node; skip near-zero cells to avoid noise.
   for(let px=step/2;px<CW;px+=step)for(let py=step/2;py<CH;py+=step){
     const f=fieldAt(wx(px),wy(py)); let m=Math.hypot(f[0],f[1]); if(m<1e-5)continue;
-    let[r,g,b]=rampRGB(m);r*=cfg.exposure;g*=cfg.exposure;b*=cfg.exposure; const lv=Math.min(1,Math.log10(1+m*2.2)/1.5);
+    let[r,g,b]=rampRGB(m);r*=cfg.exposure;g*=cfg.exposure;b*=cfg.exposure; const lv=speedLevel(m);
     const len=Math.max(3,lv*13), nx=f[0]/m, ny=-f[1]/m, a=Math.max(0.06,Math.min(0.5,lv*0.6));
     ctx.strokeStyle=`rgba(${r*0.4*255|0},${g*0.4*255|0},${b*0.4*255|0},${a})`; ctx.lineWidth=1.2;
     const ex=px+nx*len, ey=py+ny*len;
