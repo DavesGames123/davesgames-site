@@ -63,6 +63,7 @@
 //      controls ............. "---------- controls"  panel wiring + shortcuts
 //      pointer .............. "tap / pan / pinch" gesture handling
 //      render ............... "function draw"     the per-frame canvas paint
+//      screensaver .......... "window.snSaver"    silent Wander for lib/screensaver.js
 // ============================================================================
 'use strict';
 /* ============================================================
@@ -252,6 +253,8 @@ let comets=[];                    // {e,t0,dur}
 let flash={};                     // nodeId -> until-timestamp
 let wanderTimer=null, playTimer=null;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Screensaver state (window.snSaver): silent, eased highlights, seeded walk.
+let saverOn=false, saverCalm=0.7, rnd=Math.random, cometK=1, lastDraw=0;
 
 // Build the highlight subset for one major key: its tonic plus the diatonic
 // chords and their dominants/diminished. Dimming everything else focuses the key.
@@ -303,6 +306,7 @@ const inFocus=n=>!focusSet||focusSet.has(n.id);
 let AC=null, master=null, delaySend=null;
 // Create the audio graph once, or just resume it if it already exists.
 function audio(){
+  if(saverOn) return;               // the screensaver is silent: no audio graph
   if(AC) {if(AC.state==='suspended')AC.resume(); return;}
   AC=new (window.AudioContext||window.webkitAudioContext)();
   const comp=AC.createDynamicsCompressor();
@@ -356,6 +360,7 @@ let kbTimer=null;
 // short attack, gentle settle and long release so consecutive chords overlap.
 // Also flashes the node, lights the keyboard, and pushes bars into the roll.
 function playNode(n,dur){
+  if(saverOn) return;               // silent: the eased selection glow shows the step
   audio(); if(!AC) return;
   dur=dur||1.9;
   const t=AC.currentTime;
@@ -424,7 +429,7 @@ function select(n,fromNode){
 // Queue a comet to travel an edge, unless reduced-motion is requested.
 function spawnComet(e){
   if(reduced) return;
-  comets.push({e,t0:performance.now(),dur:620});
+  comets.push({e,t0:performance.now(),dur:620*cometK});
 }
 
 /* ---------- pattern sequencer ---------- */
@@ -560,22 +565,22 @@ function wanderStep(){
   let cur=sel;
   if(!cur) cur=outerMaj[0];
   let next=null;
-  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const pick=a=>a[Math.floor(rnd()*a.length)];
   if(cur.kind==='dom'||cur.kind==='dim'){
     next=spokeOuter(cur.spoke);                       // resolve home
-    if(cur.kind==='dim'&&Math.random()<0.25){
+    if(cur.kind==='dim'&&rnd()<0.25){
       const st=outE[cur.id].filter(e=>e.t==='star'&&edgeVisible(e));
       if(st.length) next=pick(st).b;                  // symmetric surprise
     }
   }else{
-    const r=Math.random();
+    const r=rnd();
     const secs=outE[cur.id].filter(e=>e.t==='sec'&&edgeVisible(e));
     const outs=outE[cur.id].filter(e=>(e.t==='rel'||e.t==='five')&&edgeVisible(e));
     if(r<0.62&&secs.length) next=pick(secs).b;
     else if(outs.length) next=pick(outs).b;
     else if(secs.length) next=pick(secs).b;
   }
-  if(!next) next=outerMaj[Math.floor(Math.random()*12)];
+  if(!next) next=outerMaj[Math.floor(rnd()*12)];
   const e=outE[cur.id].find(e=>e.b===next); if(e)spawnComet(e);
   sel=next;
   document.getElementById('fnMain').textContent='WANDER · '+funcText(next);
@@ -935,6 +940,17 @@ function draw(now){
   try{
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.clearRect(0,0,W,H);
+  // Screensaver: an opaque frame for the recorder, a slow zoom and drift, and
+  // eased alpha, width and glow, so a new selection fades in (ek < 1).
+  let ek=1;
+  if(saverOn){
+    ctx.fillStyle='#0e1118'; ctx.fillRect(0,0,W,H);
+    const dt=Math.min(0.1,(now-(lastDraw||now))/1000), ts=now/1000*(0.05+0.07*(1-saverCalm));
+    ek=1-Math.exp(-dt*(1.4+1.6*(1-saverCalm)));
+    cam.z=0.97+0.04*Math.sin(ts*1.3); cam.x=baseR*0.035*Math.sin(ts); cam.y=baseR*0.03*Math.cos(ts*0.8);
+  }
+  lastDraw=now;
+  const ez=(o,k,v)=>{ if(ek>=1||o[k]==null) o[k]=v; else o[k]+=(v-o[k])*ek; return o[k]; };
   ctx.save();
   ctx.translate(W/2,H/2); ctx.scale(cam.z,cam.z); ctx.translate(cam.x,cam.y);
   // center cross
@@ -958,10 +974,11 @@ function draw(now){
       else if(isIn){alpha=0.5;w=1.3;}
       else alpha*=0.25;
     }
-    if(e.hidden&&!isOut&&!isIn) return;
+    if(e.hidden&&!isOut&&!isIn){ if(!saverOn) return; alpha=0; }
     // Key focus and the note filter dim edges that fall outside them.
     if(focusSet&&!(inFocus(e.a)&&inFocus(e.b))) alpha*=0.12;
     if(noteFilter.size&&!(chordHasAll(e.a,noteFilter)&&chordHasAll(e.b,noteFilter))) alpha*=0.12;
+    if(saverOn){ alpha=ez(e,'sa',alpha); w=ez(e,'sw',w); glow=ez(e,'sg',glow); }
     if(alpha<0.02) return;
     const {q,cx,cy,t0,t1}=edgePts(e);
     const [x0,y0]=q(t0),[x1,y1]=q(t1);
@@ -1010,10 +1027,12 @@ function draw(now){
     }
     const col=pcColor(n.pc,64);
     const fl=flash[n.id]&&now<flash[n.id];
+    let lw=sel===n?2.2:1.3, nb=(sel===n||fl)?16:0;
+    if(saverOn){ alpha=ez(n,'sa',alpha); lw=ez(n,'sw',lw); nb=ez(n,'sg',nb); }
     ctx.globalAlpha=alpha;
     ctx.fillStyle='rgba(14,17,24,0.88)';
-    ctx.strokeStyle=col; ctx.lineWidth=(sel===n?2.2:1.3)/cam.z;
-    ctx.shadowBlur=(sel===n||fl)?16:0; ctx.shadowColor=col;
+    ctx.strokeStyle=col; ctx.lineWidth=lw/cam.z;
+    ctx.shadowBlur=nb; ctx.shadowColor=col;
     ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,TAU);ctx.fill();ctx.stroke();
     ctx.shadowBlur=0;
     ctx.fillStyle=col;
@@ -1035,3 +1054,28 @@ requestAnimationFrame(draw);
 // Create the audio graph on the first pointer down anywhere, satisfying the
 // browser gesture requirement before the first chord plays.
 window.addEventListener('pointerdown',()=>audio(),{once:true});
+
+/* ---------- screensaver ---------- */
+// Hook for the shell screensaver (lib/screensaver.js). enter() hides every
+// element but the wheel, turns all sound off (audio() and playNode() return
+// early, so no AudioContext is made), seeds the walk, and starts Wander with
+// one step every 2.2 to 4.8 s (calm 0 to 1). draw() then fills the canvas,
+// eases every highlight, and drifts the camera. Nothing is stored.
+window.snSaver={
+  enter(o){
+    o=o||{};
+    const calm=Math.max(0,Math.min(1,o.calm==null?0.7:+o.calm));
+    let seed=(o.seed>>>0)||1;
+    rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+    saverOn=true; saverCalm=calm; cometK=1.6+1.6*calm;
+    const st=document.createElement('style');
+    st.textContent='body>*:not(#wheel){display:none!important}body::before,body::after{display:none!important}#wheel{cursor:none!important}';
+    document.head.appendChild(st);
+    resize();
+    sel=outerMaj[FIFTHS[Math.floor(rnd()*12)]];
+    setMode('wander');
+    clearInterval(wanderTimer); wanderTimer=setInterval(wanderStep,(2.2+2.6*calm)*1000);
+    return {canvas:cvs,warmupMs:1500};
+  },
+  exit(){ setMode('explore'); saverOn=false; rnd=Math.random; cometK=1; cam.x=cam.y=0; cam.z=1; }
+};
