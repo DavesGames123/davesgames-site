@@ -567,6 +567,33 @@ const frag = ([name, , , , body]) =>
 const pack = HELPERS + '\n// ── the 60 cells ─────────────────────────────────────────────────────────────\n' +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// uv: x centered, y = 0 at the floor. h is the heat. colFlame() is the shared
+// flame column; firePresent() maps h through the ink, tone, cream ramp.
+const FLAME = ['colFlame:  x = (uₓ + sway)/w,  q = (1.8x, 2.3y − R·t)', 'h = (1 − smoothstep(0, 1, |x|))·taper(y)·(0.4 + 1.2·fbm(q + ½D·turb(1.2q))) − 0.32y'];
+const SHOW = 'color = ramp(((h − ½)·contrast + ½)·exposure)';
+const SAVER_EQ = {
+  candle: [...FLAME, 'w = 0.09…0.18,  R = 1.3…2.2 (flicker),  D = 0.5…1.3', SHOW],
+  torch: ['lean: uₓ += (0.15 + 0.4·lean)·y²', ...FLAME, 'w = 0.18…0.34,  R = 1.4…2.4 (rise)'],
+  bonfire: ['h = max of three colFlame at x = −s, 0, +s  (+ ½ coals)', ...FLAME, 's = 0.18…0.32 (spread),  R = 1.4…2.2'],
+  pyre: ['h = colFlame + 1.2·sparks + ½·coals', ...FLAME, 'w = 0.16…0.3,  R = 1.6…2.8,  spark speed 0.5…1.1'],
+  billow: ['plume: x = uₓ/(W(0.25 + 0.9y) + 0.05),  q = (1.4x, 1.6y − R·t)', 'h = e^(−1.3x²)·taper(y)·fbm(q + 0.6·fbm(1.1q))', 'W = 0.3…0.55 (width),  R = 1.2…2.2 (rise)', SHOW],
+  chimney: ['q = (s·x, 1.6y − R·t),  n = fbm(q + D·turb(q))', 'h = e^(−a·x²)·smoothstep(1.2, −0.05, y)·(0.3 + 1.3n)', 's = 5…8,  a = 20…50 (width),  R = 1.4…2.4'],
+  curtain: ['q = (f·x, 2.2y − R·t),  w = q + A·(sin(2q_y + t), sin(2qₓ − t))', 'h = 1.7·fbm(w)·smoothstep(1.15, −0.05, y) − 0.2y', 'f = 2…5 (fold),  A = 0.3…1.4 (warp),  R = 1.2…2.2'],
+  ribbons: ['S = Σᵢ aᵢ·(½ + ½ sin(fᵢ d̂ᵢ·q + v(1 + 0.3i)t))^p / Σaᵢ', 'fᵢ = 3·1.6ⁱ,  aᵢ = 0.6ⁱ,  d̂ᵢ at angle 1.9i,  5 terms', 'p = 3…7 (thin),  h = 1.9·S·taper − 0.2y'],
+  serpent: ['path(y) = A sin(3y + 1.5t) + 0.1 sin(7y − t),  A = 0.1…0.32', 'x = (uₓ − path)/w,  w = 0.1…0.22', 'h = (1 − smoothstep(0, 1, |x|))·taper·(0.4 + 1.2·fbm(1.5x, 2y − R·t))'],
+  firefly_coals: ['one coal per grid cell of 1/g where hash > 0.6,  g = 4…10', 'h = 1.6·Σ (0.6 + 0.4 sin(ωt + 2πr))·max(1 − 2d, 0)^2.5', 'ω = 1…4 (twinkle)'],
+  cinders: ['q = (6x + ½ sin ½t,  6(y − v·t)),  v = 0.15…0.4 (drift)', 'spots = Σ r·e^(−|d|²/w²),  w = 0.1…0.22 (size)', 'h = 1.4·smoothstep(0.3, 0.9, spots)·smoothstep(1.1, −0.1, y)'],
+  starfield_embers: ['one ember per cell where hash > 0.82,  g = 3…9', 'h = 1.7·Σ (½ + ½ sin(ωt + 2πr))·max(1 − d/0.4, 0)³', 'drift (0…0.3)·t,  ω = 1…5'],
+  heat_haze: ['w = uv + A·(0.7f₁ + 0.3f₂, 0.4f₁)·smoothstep(0, 1, y)', 'f₁ = fbm(4x, 4y − 1.2t),  f₂ = fbm(7x + 3, 6y − 1.8t)', 'h = (0.8…1.5)·smoothstep(0.6, −0.1, w_y)·(0.7 + 0.5 fbm(4w)),  A = 0.02…0.09'],
+  phoenix: ['body = colFlame(uv, w = 0.12, R = 2)', 'wing = e^(−(8wₓ² + 30w_y²))·(0.6 + 0.6 fbm),  wₓ = |x| − s', 'w_y = y − 0.45 − 0.15b − 0.6(|x| − 0.1),  b = ½ + 0.3 sin(ωt)'],
+  cold_fire: [...FLAME, 'w = 0.14…0.28,  R = 1.6…2.8', 'own ramp: deep blue → (0.15, 0.55, 1) → (0.8, 0.95, 1)'],
+  magma_cracks: ['q = s·uv + (0, v·t),  s = 2.5…5,  v = 0.05…0.2', 'ridged = (1 − turb(q))²,  turb = Σ aᵢ|noise(2ⁱR(½)ⁱq)|', 'h = (0.8…1.6)·smoothstep(0.6, 0.95, ridged) + 0.06·fbm(1.5q)'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -575,6 +602,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
