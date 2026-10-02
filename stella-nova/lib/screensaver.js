@@ -541,11 +541,10 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // The plate is a specimen poster across the frame, all text centred. Type
 // scales with --fs: the frame width, capped at 80vh for a landscape frame.
 //   top     catalogue line (number, constellation), title, a rule that draws
-//           from the centre, sub in italics, the parameters, then a short
-//           rule and the site mark [ www.davesgames.io ] under them
-//   bottom  equations, notes and code
-// With no parameters, the equations and notes go to the top under the rule.
-// Code always goes to the bottom. In a landscape frame (wider than 5:4, not
+//           from the centre, sub in italics, then a short rule and the site
+//           mark [ www.davesgames.io ]
+//   bottom  equations, then the parameters, then notes and code
+// Code always goes last. In a landscape frame (wider than 5:4, not
 // the 9:16 column) the bottom text and the code sit side by side. A page
 // with no label gets a poster with its nav name only (see "function
 // fallbackPoster"). The padding keeps clear of the safe-area insets (a
@@ -616,7 +615,9 @@ function posterSlots(info) {
     : eq.length ? `<div class="eqs">${eq.map(t => `<div class="eq plain">${esc(t)}</div>`).join('')}</div>` : '';
   const code = codeBlock(info);
   // .col holds the bottom text, so a landscape frame can set it beside the code.
-  return params.length ? { top: pp, bot: (eqs || notes ? `<div class="col">${eqs + notes}</div>` : '') + code } : { top: eqs + notes, bot: code };
+  // The top holds only the header and the site mark. The parameters go
+  // under the equations, so the description line stands alone.
+  return { top: '', bot: (eqs || pp || notes ? `<div class="col">${eqs + pp + notes}</div>` : '') + code };
 }
 function posterHTML(info, page) {
   const s = posterSlots(info);
