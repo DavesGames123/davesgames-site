@@ -1270,6 +1270,26 @@ const frag = ([name, , , , body]) =>
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ─────────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// The front f is how many metres of ice have passed a floor point pM.
+const FRONT = ['radial = f(t) − |pM|,  band = ½c_b + 0.65·vein + 0.15·finger', 'coverage = smoothstep(−½c_b, ½c_b, radial + vein bias + finger)'];
+const MELT = 'since = progress·(1 + w + d) − resist;  keep = 1 − smoothstep(0, w, since)';
+const SAVER_EQ = {
+  dendrite_fingers: ['f(t) = mix(0.15, 2.9, smoothstep(0, 0.75, fract(t/12 + 0.34))) m', ...FRONT, 'finger = 0.5…4,  noise scale 0.8…3,  vein = 0…0.7'],
+  frost_surface: ['f(t) = mix(0.15, 3, smoothstep(0, 0.75, fract(t/14 + 0.38))) m', ...FRONT, 'vein = 0.1…0.7,  finger = 0.3…3,  c_b = 0.2,  snow = k₂'],
+  voronoi_crystals: ['crystals = Voronoi F1 on a skewed lattice, scale 12…4', 'cell tilt n = normalize(h.x, 1, h.y),  jitter 0…1', 'lit = (n·L)⁴ + 0.8·(n·h)¹⁵²,  seam where F2 − F1 < 0.08'],
+  gem_prism: ['spec = ((n·h)^(0.85s), (n·h)^(1.25s), (n·h)^(1.9s))  for R, G, B', 's = 60·(0.6…4) (sharpness)', 'micro facets lean 0…1.5× on an ice dome'],
+  sky_reflection: ['r = reflect(−v, n),  sky(r) = mix((0.02, 0.03, 0.05), (0.45, 0.62, 0.85), ((r_y + 1)/2)²)', 'Fresnel = (1 − n·v)^2.5', 'color = sky·(0.6 + 0.6·Fresnel)·(0.8…2.2)'],
+  outside_in: ['frozen front f = 2.1 m,  progress = fract(t/12 + 0.35)', MELT, 'w = 0.06…0.4 (wet band),  patch = 0…1.8'],
+  wet_sheen: ['frozen front f = 2.1 m,  progress = fract(t/12 + 0.35)', MELT, 'wet = smoothstep(0, ½w, since)·(1 − smoothstep(w, w + d, since))', 'w = 0.06…0.4,  d = 0.1…0.8'],
+  freeze_melt_loop: ['a = fract(t/P + 0.62),  grow = smoothstep(0, 0.4, a),  melt = smoothstep(0.55, 0.9, a)', 'f = mix(0.1, 2.9, grow) m,  P = 10…30 s (period)', MELT],
+  tendril_warp: ['p = uv/cell,  w_lo = fbm(0.7p) − ½,  w_hi = fbm(3.3p) − ½', 'uv′ = uv + τ·(0.28·w_lo + 0.07·w_hi)', 'τ = 0.6…1.4 (tendril),  cell = 0.15…0.45'],
+  fern_body: ['uv′ = uv + τ·(0.28·w_lo + 0.07·w_hi)  (domain warp)', 'field = |2·(uv′ − ½)|  (grows in from the edges)', 'cell = 0.08…0.3,  reach = 0.5…1'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 8,
@@ -1278,6 +1298,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
