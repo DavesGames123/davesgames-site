@@ -23,9 +23,12 @@
 // ============================================================================
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
+// The repo root: this file is <root>/tools/saver-check.mjs.
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const argv = process.argv.slice(2);
 const key = argv[0];
 const opt = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : argv[i + 1]; };
@@ -106,15 +109,23 @@ async function main() {
     await send('Network.setCacheDisabled', { cacheDisabled: true });
     await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: path.join(OUT, 'dl') });
     await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
-    const settings = { pages: [key], seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
+    // seenDefaults lists every catalog key. Since cbcf689 the shell adds each
+    // catalog default that a saved list has not seen (chosenKeys in
+    // lib/screensaver.js), so without it the run plays the whole default
+    // list instead of <key>. order 'nav' keeps the one page first.
+    const catalogKeys = (() => { const w = {}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'stella-nova/lib/screensaver-catalog.js'), 'utf8'), { window: w }); return Object.keys(w.SN_SAVER_CATALOG.pages); })();
+    const settings = { pages: [key], seenDefaults: catalogKeys, order: 'nav', seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
     // lib/screensaver.js reads 'sn-saver-settings-v2' (the v2 key dropped older saved choices); write both keys
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{for(const k of ['sn-saver-settings','sn-saver-settings-v2'])localStorage.setItem(k, ${JSON.stringify(JSON.stringify(settings))})}catch(e){}` });
     await send('Page.navigate', { url: `${SERVER}/stella-nova/#home` });
     // The shell head waits for the Google Fonts stylesheet (near 3 s under
     // load), so poll for the controller instead of one fixed wait.
-    let ok = false;
-    for (let i = 0; i < 60 && ok !== true; i++) { await sleep(250); ok = await ev(`typeof snScreensaver === 'object'`); }
-    if (ok !== true) throw new Error('window.snScreensaver missing in the shell');
+    // Up to 45 s: on a loaded machine or a slow font host the shell can
+    // take longer than 15 s. The time goes to stderr.
+    let ok = false; const tShell = Date.now();
+    for (let i = 0; i < 180 && ok !== true; i++) { await sleep(250); ok = await ev(`typeof snScreensaver === 'object'`); }
+    if (ok !== true) throw new Error('window.snScreensaver missing in the shell after 45 s');
+    console.error(`shell ready after ${Date.now() - tShell} ms`);
     await ev(`snScreensaver.start(), 1`);
     // Wait until the status line names the page (it is set when the page shows).
     let hud = '';
