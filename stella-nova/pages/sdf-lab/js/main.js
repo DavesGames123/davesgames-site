@@ -37,7 +37,7 @@
 import * as D from './doc.js';
 import * as V from './math.js';
 import { History, isStructuralRecord } from './history.js';
-import { buildLayout, packParams, lipschitz } from './codegen.js';
+import { buildLayout, packParams, lipschitz, nodeBound } from './codegen.js';
 import { compileField, traceProbe, grad } from './field.js';
 import { createRenderer, UNIFORM_FLOATS } from './render.js';
 import { projection, frameBounds, ORTHO_BACK } from './camera.js';
@@ -121,6 +121,8 @@ function writeGPU() {
   packParams(app.doc, live, app.gpuP);
   app.stepK = 1 / lipschitz(app.doc);
   app.sceneSphere = sceneSphere(app.doc);
+  // the smallest field ratio of the roots (codegen nodeBound), for the tests
+  app.sceneRho = Math.min(1, ...app.doc.roots.map(r => (nodeBound(app.doc, r) || [0, 0, 0, 0, 1])[4]));
   app.R.writeParams(app.gpuP.subarray(0, L.size * 4));
 }
 
@@ -322,7 +324,7 @@ function packPane(r, cw, ch, scale, now) {
   const hv = app.hoverId && L && L.ord[app.hoverId] !== undefined ? L.ord[app.hoverId] : -9;
   u.set([rg[0], rg[1], hv, app.disp.ghost ? app.ghostOrd() : -1], 28);
   const tmax = (s.ortho ? ORTHO_BACK : 0) + s.cam.dist * 3 + 80;
-  u.set([app.stepK || 1, tmax, app.disp.ghost ? 1 : 0, 0], 32);
+  u.set([app.stepK || 1, tmax, app.disp.ghost ? 1 : 0, app.sceneRho || 1], 32);
   const S = app.slice, A = SLICE_AX[S.axis];
   u.set([...A.n, S.off], 36); u.set([...A.u, S.cu], 40); u.set([...A.v, S.cv], 44); u.set([S.ext, 0, 0, 0], 48);
   u.set(app.sceneSphere || [0, 0, 0, -1], 52);

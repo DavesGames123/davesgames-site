@@ -151,19 +151,26 @@ fn softShadow(ro: vec3f, rd: vec3f, tmax: f32, k: f32) -> f32 {
 }
 // THE SCENE BOUNDING SPHERE. u.scene holds a world sphere (centre, radius)
 // that holds every visible shape; radius < 0 means none (a plane primitive
-// has no bound). sceneBnd is a lower bound of the distance to the scene.
+// has no bound). sceneBnd is a lower bound of the TRUE distance to the
+// scene. mapD can sit below the true distance by the factor u.mrch.w (rho,
+// codegen nodeBound: non-uniform scale, the ellipsoid estimate), and the
+// shadow march also multiplies mapD by the step factor u.mrch.x. Each test
+// below applies those factors, so it decides the same way as the code it
+// skips.
 fn sceneBnd(p: vec3f) -> f32 {
   if (u.scene.w < 0.0) { return -1e9; }
   return length(p - u.scene.xyz) - u.scene.w;
 }
 // True when a shadow ray from o along unit d cannot be shaded: the cone
 // round the ray, of half-angle atan(1 / k2), misses the sphere for all t >= 0.
-// Then every sample keeps k h / t >= 1 and softShadow returns 1. The test
-// uses k2 = 2 k (twice the cone of the k it guards) as a margin for the
-// improved penumbra term, which can sit below k h / t.
+// softShadow sees h = mapD * stepK >= stepK * rho * (true distance), so with
+// k' = k * stepK * rho every sample keeps k h / t >= 1 and it returns 1.
+// k2 = 2 k' is a margin for the improved penumbra term, which can sit below
+// k h / t. A cone of k2 <= 1 is never clear.
 fn shadowClear(o: vec3f, d: vec3f, k: f32) -> bool {
   if (u.scene.w < 0.0) { return false; }
-  let k2 = 2.0 * k;
+  let k2 = 2.0 * k * u.mrch.x * u.mrch.w;
+  if (k2 <= 1.01) { return false; }
   let w = o - u.scene.xyz;
   let b = dot(d, w);
   let q = sqrt(max(dot(w, w) - b * b, 0.0));
@@ -276,7 +283,7 @@ fn fieldCol(d: f32, w: f32) -> vec3f {
   // and a field that sits below the true distance (rho, a step factor < 1).
   let maxSteps = i32(u.fwd.w);
   let k = u.mrch.x;
-  let span = sceneSpan(ro, rd, 4.0 * (pixW * u.mrch.y + pixO) + 0.05);
+  let span = sceneSpan(ro, rd, 4.0 * (pixW * u.mrch.y + pixO) / max(u.mrch.w, 1e-3) + 0.05);
   var t = 0.0; var hit = false; var steps = 0;
   let tEnd = select(-1.0, min(u.mrch.y, span.y), span.x <= span.y);
   for (var i = 0; i < 512; i++) {
@@ -328,7 +335,7 @@ fn fieldCol(d: f32, w: f32) -> vec3f {
           var sh = 1.0;
           if (!shadowClear(po, KEY, 8.0)) { sh = softShadow(po, KEY, 20.0, 8.0); }
           var ao = 1.0;
-          if (sceneBnd(pp) < 1.2) { ao = clamp(0.35 + 0.65 * mapD(pp) / 0.6, 0.0, 1.0); }
+          if (sceneBnd(pp) * u.mrch.w < 1.2) { ao = clamp(0.35 + 0.65 * mapD(pp) / 0.6, 0.0, 1.0); }
           let fall = exp(-0.012 * g.t);
           col = mix(col, col * 0.35, (1.0 - sh * ao) * fall);
         }
