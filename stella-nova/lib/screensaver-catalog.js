@@ -30,7 +30,7 @@ window.SN_SAVER_CATALOG = {
     'planner': { tier: 3, default: true, hook: true, note: 'Editor, but it ships a built-in layout: PL.example() (planner/model.js:318), which boot() loads when there is no share hash and no localStorage key ’sn-planner-' },
     'crafting': { tier: 5, note: 'Exclude. crafting/main.js builds a production-chain explorer from DOM cards and an SVG wire layer (main.js:137 svg.wires, main.js:161 paths).' },
     'shipdesigner': { tier: 2, default: true, hook: true, note: 'The fleet canvas (#fleetCanvas, index.html) already flies on its own.' },
-    'flagdesigner': { tier: 2, default: true, hook: true, note: '#flagCanvas inside #heroWrap (index.html:63) shows a waving cloth.' },
+    'flagdesigner': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02): presets can read as real national flags. Its hook stays in the page.' },
     'selection': { tier: 3, default: true, hook: true, note: '#cv fills main#stage.' },
     'behaviors': { tier: 5, note: 'Exclude. A static written page.' },
     'controls': { tier: 5, note: 'Exclude. A key-binding reference: controls/main.js builds a DOM keyboard (#board, #arrows, #keyGrid) and a list from SN_DATA.controls.' },
