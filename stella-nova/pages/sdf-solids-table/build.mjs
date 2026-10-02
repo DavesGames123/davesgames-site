@@ -494,6 +494,35 @@ const frag = cell =>
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ─────────────────────────────────────────────────────────────\n` +
   CELLS.map(c => `\n// ── ${c[name_]} (${c[fam_]}) ──\n` + [c[decl_], stamp(c), frag(c)].filter(Boolean).join('\n')).join('\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// Every solid is sphere traced: t += d(ro + t·rd) until d < 0.0008·t, at
+// most 64 steps. smin(a, b, k) = mix(b, a, h) − k·h(1 − h), h = clamp(½ + (b − a)/2k).
+const TRACE = 'sphere trace: t += d(ro + t·rd),  hit at d < 0.0008t';
+const FILM = 'film: I = ½ + ½ cos(2π·2η·h·cos θₜ/λ + π),  λ = 650, 532, 450';
+const SAVER_EQ = {
+  lava_lamp: ['wax d = smin over 5 balls of r = 0.14 + 0.05 sin 2.3i,  k = 0.24', 'ball yᵢ = −0.2 − 0.72 cos(τ(0.34 + 0.07i) + 2.1i)', 'τ = (0.35…1.2)·t,  vessel r = 0.5 − 0.1y', TRACE],
+  soap_bubble: ['film thickness h = (150…950)·(0.6 + 0.7 fbm(2.3q)) + (0…900)·drain', 'q = R_y(swirl·n_y + 0.35t)·n,  η = 1.33,  both walls', 'Fresnel = 0.06 + 0.94(1 − cos θ)³', FILM],
+  nebula_orb: ['refract in at η = 1.45,  24 steps through the orb', 'σ = max(fbm(1.7q + warp·∇noise) + 0.08, 0)·(1.5…6)', 'C += T·emission·σ·Δs,  T *= e^(−0.9σΔs)'],
+  mercury: ['body = 0.8(|(x, 1.25(y + 0.3), z)| − 0.52) + w·sin 5x·sin 4.3z·sin 4y', 'pool ripple = 0.018·(0…2)·sin(16r − 5t)·e^(−1.2r)', 'd = smin(smin(pool, body, 0.3), min(drop₁, drop₂), 0.2)', TRACE],
+  oil_drops: ['d = smin over 5 drops, r = 0.36 − 0.04i,  k = 0.1…0.45 (fusion)', 'cᵢ = (0.55 cos(wᵢt + 1.3i), 0.45 sin(…), 0.35 sin(wᵢt + 1.3i)),  wᵢ = 0.45 + 0.13i', 'dispersive glass: η − s, η, η + s for R, G, B'],
+  wine_glass: ['bowl: ellipse (q_x/0.46, (q_y − 0.18)/0.62) shell 0.011 thick', 'wine level y = (−0.25…0.25) + (0…0.1)·sin 1.6t·(0.8x + 0.3z)', 'light refracts in and out of each wall,  the wine absorbs'],
+  hourglass: ['f = fract((0.02…0.1)·t + 0.45)  (fraction drained)', 'top sand level = mix(0.62, 0.04, f),  bottom cone = mix(−0.78, −0.24, √f)', 'two ellipsoid bulbs (0.4, 0.38, 0.4) joined by smin 0.1'],
+  spinning_top: ['spin φ = (1…9)·t,  precession ψ = 1.1t', 'tilt θ = 0.05…0.35 + 0.03 sin 5t  (nutation)', 'body = smin(cone, ellipsoid, stem, knob)'],
+  gear_train: ['N = 14, 9, 7 teeth,  R = 0.56, 0.36, 0.28', 'θ_B = −(14/9)θ_A + c,  θ_C = −(9/7)θ_B + c′', 'θ_A = (0.2…1.4)·t'],
+  ball_bearing: ['10 balls r = 0.12 in a groove of radius 0.128 at r = 0.62', 'shaft key turns at ω = (0.3…2)·t,  balls and cage at 0.4ω', 'races: inner at r = 0.45,  outer at r = 0.85'],
+  borromean: ['ring = |(|e_xz| − 0.3, e_y)| − r,  e = q − clamp(q_x, −h, h)x̂', 'three rings in the xz, yx and zy planes', 'r = 0.05…0.11 (tube),  h = 0.38…0.6 (stretch)'],
+  rainbow_knot: ['(2, Q) torus knot: s = (θ + 2πi)/2', 'core at (0.6 + 0.3 cos Qs,  0.3 sin Qs),  Q = 3, 5, 7', 'glow = 30e^(−d²/w²) + 0.8e^(−14d),  hue = fract(s/2π − v·t)'],
+  gyroid_core: ['g = (sin q·cos q_zxy)/s,  q = s·p + (0, 0.4t, 0)', 'd = min(max(|p| − 0.95, 0.6(|g| − w)), |p| − 0.36)', 's = 3…6.5 (cells),  w = 0.025…0.08 (sheet)'],
+  morph_solid: ['d = mix(shapeᵢ, shapeᵢ₊₁, smoothstep(0.2, 0.8, fract s))', 's = 4·fract((0.05…0.25)·t + 0.6)', 'cube → sphere → octahedron → torus'],
+  marble_pair: ['vein = (1 − |sin(f·(0.6, 1, 0.3)·q′)|)¹⁴', 'q′ = q + 0.9·(fbm(1.3q), fbm(1.3q + 7), fbm(1.3q + 13))', 'f = 2…5 (veins)'],
+  teacup: ['lathe profile: segments in (r, y) around the y axis', 'tea level y = 0,  steam: three fbm wisps over 12 steps', 'cup turns at 0.3t'],
+  plasma_ring: ['ring = e^(−|b − R|/w),  b = ray distance from the center,  R = 0.85', 'w = (0.012…0.05)·(0.6 + 1.2·max(fbm + 0.3, 0))', 'grid lines × (1 − |n·v|)^(1.5…5)  (silhouette)'],
+  iris_blob: ['d = 0.75(|p| − 0.78 − (0.05…0.3)·noise(1.7p + 0.2t))', 'film h = 280…560 nm + 120·noise(2p),  η = 1.6', FILM],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -502,6 +531,7 @@ const spec = {
     name: c[name_], family: c[fam_], species: c[sp_], knobs: c[kn_],
     defaults: (c[opt_] && c[opt_].def) || [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + c[name_],
+    ...(SAVER_EQ[c[name_]] ? { eq: SAVER_EQ[c[name_]] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
