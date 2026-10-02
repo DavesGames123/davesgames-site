@@ -1,59 +1,42 @@
 // ============================================================================
 //  equations.js · rendered reference equations + mobile drawer toggles
 // ----------------------------------------------------------------------------
-//  A classic script loaded before main.js. On load it renders the molecular-
-//  orbital equations into the info panel with KaTeX, colour-coding each symbol
-//  so the maths matches the on-screen legend. It also defines the mobile drawer
-//  open/close helpers used by the inline onclick handlers in index.html.
+//  A classic script loaded before main.js. It typesets the molecular-orbital
+//  equations ([data-tex] in the panel) and the control label symbols
+//  ([data-sym]) as MathJax SVG through lib/sci-math.js, with one math color
+//  class per quantity. It also defines the mobile drawer open/close helpers
+//  used by the inline onclick handlers in index.html.
 //
 //  SECTION MAP  (jump with grep -n "<anchor>" equations.js)
-//      equation render ...... "katex.render"       colour-coded LaTeX into #eq-*
+//      color rules .......... "const RULES"        symbol -> .mN class
+//      equation render ...... "typesetAll"         MathJax SVG into [data-tex]
 //      panel collapse ....... "eqCollapseBtn"      show/hide the equation panel
 //      drawer toggles ....... "function toggleDrawer"  mobile side panels
 // ============================================================================
-// Render the equations once the page and KaTeX have loaded.
+// Typeset the equations. A classic script cannot use a static import, so
+// lib/sci-math.js comes in by dynamic import. If it fails, the TeX stays.
 (function(){
-  // Bail if KaTeX failed to load; the page still runs without the equations.
-  if(!window.katex) return;
-  // Per-symbol colours, matched to the simulator legend (ψ, φ, E, R, Z, S, J/K).
-  const C_psi='#7ad87a', C_phi='#7ad87a', C_E='#ffc832', C_R='#96c8ff',
-        C_Z='#ff9050', C_S='#d870c8', C_JK='#d870c8', C_N='#dde3f0';
-  const opts={throwOnError:false,displayMode:true};
-
-  // LCAO: ψ_± = N (φ_A ± φ_B)
-  katex.render(
-    String.raw`\textcolor{${C_psi}}{\psi_\pm} \;=\; N_\pm\!\left(\,\textcolor{${C_phi}}{\varphi_A} \pm \textcolor{${C_phi}}{\varphi_B}\,\right)`,
-    document.getElementById('eq-lcao'), opts
-  );
-  // Normalization
-  katex.render(
-    String.raw`N_\pm \;=\; \dfrac{1}{\sqrt{\,2 \pm 2\,\textcolor{${C_S}}{S}\,}}`,
-    document.getElementById('eq-norm'), opts
-  );
-
-  // Hydrogen-like AO: φ = Z^(3/2) R(Zr) Y
-  katex.render(
-    String.raw`\textcolor{${C_phi}}{\varphi_{n\ell m}(\mathbf r)} \;=\; \textcolor{${C_Z}}{Z}^{3/2}\,R_{n\ell}\!\left(\textcolor{${C_Z}}{Z}\,r\right)\,Y_{\ell m}(\theta,\phi)`,
-    document.getElementById('eq-ao'), opts
-  );
-
-  // H2+ bonding energy
-  katex.render(
-    String.raw`\textcolor{${C_E}}{E_+} \;=\; -\tfrac{1}{2} + \dfrac{1}{\textcolor{${C_R}}{R}} + \dfrac{\textcolor{${C_JK}}{J} + \textcolor{${C_JK}}{K}}{1 + \textcolor{${C_S}}{S}}`,
-    document.getElementById('eq-eplus'), opts
-  );
-  // Overlap integral
-  katex.render(
-    String.raw`\textcolor{${C_S}}{S(R)} \;=\; e^{-\textcolor{${C_R}}{R}}\!\left(1 + \textcolor{${C_R}}{R} + \tfrac{\textcolor{${C_R}}{R}^{\,2}}{3}\right)`,
-    document.getElementById('eq-overlap'), opts
-  );
-
-  // Collapse toggle: fold the equation panel and flip the caret glyph.
+  // One class per quantity (lib/sci.css colors .m1 to .m6). The control
+  // labels R and E_total carry the same class in index.html.
+  //   m3  wavefunctions psi_+-, phi_A, phi_B, phi_nlm    m2  nuclear charge Z
+  //   m1  bond length R                                  m4  overlap S
+  //   m5  energy E_+, E_total                            m6  integrals J, K
+  // R is written as \class{m1}{R} in the TeX, because a rule for R would
+  // also color the radial function R_nl.
+  const RULES=[['\\psi_\\pm','m3'],['\\varphi_A','m3'],['\\varphi_B','m3'],['\\varphi_{n\\ell m}','m3'],
+    ['Z','m2'],['S','m4'],['E_+','m5'],['J','m6'],['K','m6']];
   const panel=document.getElementById('eqPanel');
+  import('../../lib/sci-math.js').then(M=>{
+    M.typesetAll(panel,RULES);
+    for(const el of document.querySelectorAll('[data-sym]')) M.typeset(el,el.dataset.sym,{display:false,rules:RULES});
+  }).catch(()=>{});
+
+  // Collapse toggle: fold the equation panel. The word says what the next
+  // click does.
   const btn=document.getElementById('eqCollapseBtn');
   btn.addEventListener('click',()=>{
     const c=panel.classList.toggle('collapsed');
-    btn.innerHTML=c?'&#9660;':'&#9650;';
+    btn.textContent=c?'Show':'Hide';
     btn.title=c?'Expand':'Collapse';
   });
 })();

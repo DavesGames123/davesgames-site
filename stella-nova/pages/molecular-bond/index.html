@@ -4,14 +4,14 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-<title>Stella Nova // Molecular Bond</title>
+<title>Molecular bond — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    MOLECULAR BOND  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. Two stacked canvases fill the screen: #c is the WebGPU
    point cloud main.js renders; #ov is the 2D overlay it draws bond lines and
-   labels onto. equations.js renders the KaTeX formulas into the #eq nodes.
+   labels onto. equations.js typesets the [data-tex] formulas as MathJax SVG.
    This file lays out the preset bar, control bar, side panels, and overlays
    that the scripts bind to by id.
 
@@ -26,21 +26,20 @@
      │ #panel a   │      #c canvas  +  #ov overlay     │ #panel b       │
      │ atom edit  │      #eqPanel (formulas)           │ atom list      │
      └────────────┴───────────────────────────────────┴────────────────┘
-   Load order: KaTeX (CDN), style.css, equations.js (classic), main.js (module).
+   Load order: style.css, ../../lib/sci.css (shared science type, the math
+   colors .m1 to .m6; it loads the fonts), equations.js (classic; it imports
+   ../../lib/sci-math.js), main.js (module).
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Interactive WebGPU molecular orbital simulator. LCAO bonding with real hydrogen-like wavefunctions, per-atom element selection, and 3D nuclear dynamics.">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: mark the page when embedded in the site shell iframe so the
      CSS can hide this page's own chrome. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
-<div class="grid-bg"></div>
 <!-- #c: WebGPU render target. #ov: 2D overlay for bond lines and atom labels. -->
 <canvas id="c"></canvas>
 <canvas id="ov"></canvas>
@@ -48,8 +47,7 @@
 <div class="topbar">
   <div class="topbar-l">
     <span class="sys-name">Stella Nova</span>
-    <span class="sys-sub">Molecular Bond</span>
-    <div class="sys-status">Live</div>
+    <span class="sys-sub">Molecular bond</span>
   </div>
   <div class="topbar-r">
     <span class="hide-narrow">Atoms <strong id="bodyCount">2</strong></span>
@@ -69,7 +67,7 @@
       <circle cx="26" cy="20" r="3" fill="#e0e0e0"/>
     </svg></span>
     <span class="pcard-meta">
-      <span class="pcard-name">H₂⁺ Bond</span>
+      <span class="pcard-name">H₂⁺ bond</span>
       <span class="pcard-sub">σ(1s) exact</span>
     </span>
   </button>
@@ -81,7 +79,7 @@
       <circle cx="29" cy="20" r="4.2" fill="#90e050"/>
     </svg></span>
     <span class="pcard-meta">
-      <span class="pcard-name">H–F Polar</span>
+      <span class="pcard-name">H–F polar</span>
       <span class="pcard-sub">Polar σ bond</span>
     </span>
   </button>
@@ -117,7 +115,7 @@
       <circle cx="30" cy="20" r="2.4" fill="#e0e0e0"/>
     </svg></span>
     <span class="pcard-meta">
-      <span class="pcard-name">Li–H Ionic</span>
+      <span class="pcard-name">Li–H ionic</span>
       <span class="pcard-sub">Z asymmetry</span>
     </span>
   </button>
@@ -131,7 +129,7 @@
       <line x1="20" y1="9" x2="20" y2="31" stroke="rgba(220,168,56,0.5)" stroke-width="0.6" stroke-dasharray="1.5,2"/>
     </svg></span>
     <span class="pcard-meta">
-      <span class="pcard-name">Antibond*</span>
+      <span class="pcard-name">Antibond</span>
       <span class="pcard-sub">σ*(1s) repulsive</span>
     </span>
   </button>
@@ -145,7 +143,7 @@
       <circle cx="35" cy="20" r="2.4" fill="#808080"/>
     </svg></span>
     <span class="pcard-meta">
-      <span class="pcard-name">4-Chain</span>
+      <span class="pcard-name">4-chain</span>
       <span class="pcard-sub">Delocalised</span>
     </span>
   </button>
@@ -159,7 +157,7 @@
       <circle cx="27" cy="27" r="2.8" fill="#3050f8"/>
     </svg></span>
     <span class="pcard-meta">
-      <span class="pcard-name">4-Cluster</span>
+      <span class="pcard-name">4-cluster</span>
       <span class="pcard-sub">2D lattice</span>
     </span>
   </button>
@@ -175,19 +173,19 @@
 
   <span class="cb-divider"></span>
 
-  <button class="act-btn go" id="btn-release">&#9654; Release 3D</button>
+  <button class="act-btn go" id="btn-release">Release 3D</button>
 
   <span class="cb-divider"></span>
 
   <div class="dist-ctl">
-    <span class="lbl">R</span>
+    <span class="lbl"><span class="sci-sym m1" data-sym="R">R</span> spacing</span>
     <input type="range" id="sl-d" min="1" max="10" value="3.5" step="0.1">
     <span class="dist-val" id="vl-d">3.5</span>
     <span class="dist-unit">a₀</span>
   </div>
 
   <div class="e-readout">
-    <span class="lbl">E_total</span>
+    <span class="lbl"><span class="sci-sym m5" data-sym="E_{\mathrm{total}}">E</span></span>
     <span class="val" id="h-e-val">0.000</span>
     <span class="unit">Ha</span>
   </div>
@@ -197,7 +195,7 @@
 <aside class="panel" id="panel-a">
   <div class="p-head">
     <div class="p-title" id="sel-title">Atom 1</div>
-    <div class="p-sub">Selected Atom</div>
+    <div class="p-sub">Selected atom</div>
   </div>
 
   <div class="p-section">
@@ -275,7 +273,7 @@
 <aside class="panel" id="panel-b">
   <div class="p-head">
     <div class="p-title">Atoms</div>
-    <div class="p-sub">Tap to Edit</div>
+    <div class="p-sub">Tap to edit</div>
   </div>
   <div class="al-bar">
     <button class="al-btn" id="btn-add">+ Add</button>
@@ -289,29 +287,28 @@
 <div class="canvas-area">
   <section class="eq-panel" id="eqPanel">
     <div class="eq-head">
-      <span class="eq-dot"></span>
-      <span class="lbl">Molecular Orbital Theory</span>
-      <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">&#9650;</button>
+      <span class="lbl">Molecular orbital theory</span>
+      <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">Hide</button>
     </div>
     <div class="eq-block">
-      <div class="eq-sublabel">LCAO &middot; Linear Combination of Atomic Orbitals</div>
-      <div class="eq-row" id="eq-lcao"></div>
-      <div class="eq-row" id="eq-norm"></div>
+      <div class="eq-sublabel">LCAO: linear combination of atomic orbitals</div>
+      <div class="eq-row sci-eq" id="eq-lcao" data-tex="\psi_\pm \;=\; N_\pm\!\left(\,\varphi_A \pm \varphi_B\,\right)"></div>
+      <div class="eq-row sci-eq" id="eq-norm" data-tex="N_\pm \;=\; \dfrac{1}{\sqrt{\,2 \pm 2\,S\,}}"></div>
     </div>
     <div class="eq-block">
-      <div class="eq-sublabel">Hydrogen-like Atomic Orbital with Z<sub>eff</sub></div>
-      <div class="eq-row" id="eq-ao"></div>
+      <div class="eq-sublabel">Hydrogen-like atomic orbital with Z<sub>eff</sub></div>
+      <div class="eq-row sci-eq" id="eq-ao" data-tex="\varphi_{n\ell m}(\mathbf r) \;=\; Z^{3/2}\,R_{n\ell}\!\left(Z\,r\right)\,Y_{\ell m}(\theta,\phi)"></div>
     </div>
     <div class="eq-block">
-      <div class="eq-sublabel">H₂⁺ Bonding Energy &middot; Exact one-electron diatomic</div>
-      <div class="eq-row" id="eq-eplus"></div>
-      <div class="eq-row" id="eq-overlap"></div>
+      <div class="eq-sublabel">H₂⁺ bonding energy: exact one-electron diatomic</div>
+      <div class="eq-row sci-eq" id="eq-eplus" data-tex="E_+ \;=\; -\tfrac{1}{2} + \dfrac{1}{\class{m1}{R}} + \dfrac{J + K}{1 + S}"></div>
+      <div class="eq-row sci-eq" id="eq-overlap" data-tex="S(\class{m1}{R}) \;=\; e^{-\class{m1}{R}}\!\left(1 + \class{m1}{R} + \tfrac{\class{m1}{R}^{\,2}}{3}\right)"></div>
     </div>
   </section>
 
   <div id="ket">
     <div class="ket-main" id="ket-main">H – H</div>
-    <div class="ket-sub" id="ket-sub">2-atom LCAO Molecular Orbital</div>
+    <div class="ket-sub" id="ket-sub">2-atom LCAO molecular orbital</div>
   </div>
 
   <div class="force-legend">
@@ -320,12 +317,12 @@
   </div>
 </div>
 
-<button class="fab left" id="fabA" onclick="toggleDrawer('a')">Atom &equiv;</button>
-<button class="fab right" id="fabB" onclick="toggleDrawer('b')">List &equiv;</button>
+<button class="fab left" id="fabA" onclick="toggleDrawer('a')">Atom</button>
+<button class="fab right" id="fabB" onclick="toggleDrawer('b')">Atoms</button>
 <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
 
-<div id="loading">Sampling···</div>
-<div id="no-webgpu"><h2>WebGPU Required</h2><p>This page uses WebGPU compute shaders for the live wavefunction. Chrome 113+, Edge 113+, or Safari 18+ with WebGPU enabled.</p></div>
+<div id="loading">Sampling…</div>
+<div id="no-webgpu"><h2>WebGPU required</h2><p>This page uses WebGPU compute shaders for the live wavefunction. Chrome 113+, Edge 113+, or Safari 18+ with WebGPU enabled.</p></div>
 <div id="gpu-err"></div>
 
 <!-- ───────── Color-coded reference equations ───────── -->

@@ -204,15 +204,15 @@ function drawOverlay(){ov.width=innerWidth;ov.height=innerHeight;octx.clearRect(
     octx.strokeStyle=F<0?'rgba(92,216,232,'+(t*(sel?.78:.3))+')':'rgba(232,116,102,'+(t*(sel?.78:.3))+')';
     octx.lineWidth=Math.max(1,t*(sel?4.5:2.2));octx.beginPath();octx.moveTo(pi.x,pi.y);octx.lineTo(pj.x,pj.y);octx.stroke();
     if(sel&&t>.04){var mx=(pi.x+pj.x)/2,my=(pi.y+pj.y)/2;
-      octx.font='bold 12px "JetBrains Mono"';octx.fillStyle=F<0?'rgba(92,216,232,0.78)':'rgba(232,116,102,0.78)';
+      octx.font='bold 12px ui-monospace,Menlo,monospace';octx.fillStyle=F<0?'rgba(92,216,232,0.78)':'rgba(232,116,102,0.78)';
       octx.textAlign='left';octx.fillText(r.toFixed(2)+' a₀',mx+7,my-6)}}
   // Atom labels: element symbol above, orbital name below each projected nucleus.
   octx.textAlign='center';
   for(var i=0;i<nA;i++){var p=proj3D(AD[i].x*sc,AD[i].y*sc,AD[i].z*sc);if(!p)continue;
     var isSel=i===selIdx,E=EL[AD[i].el];
-    octx.font=(isSel?'bold ':'')+' 15px "JetBrains Mono"';octx.fillStyle=isSel?'rgba(255,200,50,0.95)':E.c;
+    octx.font=(isSel?'bold ':'')+' 15px ui-monospace,Menlo,monospace';octx.fillStyle=isSel?'rgba(255,200,50,0.95)':E.c;
     octx.fillText(E.s,p.x,p.y-16);
-    octx.font='12px "JetBrains Mono"';octx.fillStyle='rgba(200,210,230,0.42)';
+    octx.font='12px ui-monospace,Menlo,monospace';octx.fillStyle='rgba(200,210,230,0.42)';
     octx.fillText(ORBS[AD[i].ot].name,p.x,p.y+24)}}
 
 /* ═══ WGSL (unchanged) ═══ */
@@ -324,7 +324,7 @@ function totalEnergy(){var E=0;for(var i=0;i<AD.length;i++)for(var j=i+1;j<AD.le
 function updateDisplay(){var E=totalEnergy();
   var parts=AD.map(function(a){return EL[a.el].s});
   document.getElementById('ket-main').textContent=parts.join(' – ');
-  document.getElementById('ket-sub').textContent=AD.length+'-atom LCAO Molecular Orbital';
+  document.getElementById('ket-sub').textContent=AD.length+'-atom LCAO molecular orbital';
   document.getElementById('h-e-val').textContent=E.toFixed(3);
   document.getElementById('e-live-top').textContent='E = '+E.toFixed(3)+' Ha';
   document.getElementById('bodyCount').textContent=AD.length;
@@ -430,7 +430,7 @@ window.loadPresetUI=function(key,btn){
   document.getElementById('sl-d').value=ST.spread;sg(document.getElementById('sl-d'));document.getElementById('vl-d').textContent=ST.spread.toFixed(1);
   document.getElementById('btn-grid').classList.toggle('on',layoutMode==='grid');document.getElementById('btn-line').classList.toggle('on',layoutMode==='line');
   document.getElementById('p-info').textContent=P.desc;
-  if(ST.releasing){ST.releasing=false;const rb=document.getElementById('btn-release');rb.classList.remove('on');rb.innerHTML='\u25b6 Release 3D'}
+  if(ST.releasing){ST.releasing=false;const rb=document.getElementById('btn-release');rb.classList.remove('on');rb.innerHTML='Release 3D'}
   selIdx=0;relayout();buildAtomList();updateLeftPanel();adjustCamera();ST.dirty=true;
   if(innerWidth<=980) closeDrawers();
 };
@@ -452,7 +452,7 @@ document.getElementById('btn-grid').addEventListener('click',function(){layoutMo
 document.getElementById('btn-line').addEventListener('click',function(){layoutMode='line';document.getElementById('btn-line').classList.add('on');document.getElementById('btn-grid').classList.remove('on');relayout();ST.dirty=true});
 // Sliders: R spacing (also cancels release), particle count, sprite size, gain.
 document.getElementById('sl-d').addEventListener('input',function(){ST.spread=+this.value;document.getElementById('vl-d').textContent=ST.spread.toFixed(1);sg(this);relayout();ST.dirty=true;
-  if(ST.releasing){ST.releasing=false;const rb=document.getElementById('btn-release');rb.classList.remove('on');rb.innerHTML='\u25b6 Release 3D'}});
+  if(ST.releasing){ST.releasing=false;const rb=document.getElementById('btn-release');rb.classList.remove('on');rb.innerHTML='Release 3D'}});
 document.getElementById('sl-N').addEventListener('input',function(){ST.N=+this.value;document.getElementById('vl-N').textContent=(ST.N>=1000?(ST.N/1000|0)+'k':ST.N);sg(this);ST.dirty=true});
 document.getElementById('sl-sz').addEventListener('input',function(){ST.psize=+this.value;document.getElementById('vl-sz').textContent=ST.psize.toFixed(3);sg(this)});
 document.getElementById('sl-gain').addEventListener('input',function(){ST.gain=+this.value;document.getElementById('vl-gain').textContent=ST.gain.toFixed(1);sg(this);ST.colorDirty=true});
@@ -460,7 +460,7 @@ document.getElementById('sl-gain').addEventListener('input',function(){ST.gain=+
 document.querySelectorAll('.p-mode').forEach(function(b){b.addEventListener('click',function(){ST.colorMode=+b.dataset.mode;document.querySelectorAll('.p-mode').forEach(function(x){x.classList.remove('active')});b.classList.add('active');ST.colorDirty=true})});
 // Release 3D: start/stop nuclear dynamics; kick atoms with small random velocities.
 document.getElementById('btn-release').addEventListener('click',function(){ST.releasing=!ST.releasing;this.classList.toggle('on',ST.releasing);
-  this.innerHTML=ST.releasing?'\u25a0 Freeze':'\u25b6 Release 3D';
+  this.innerHTML=ST.releasing?'Freeze':'Release 3D';
   if(ST.releasing)for(var i=0;i<AD.length;i++){AD[i].vx=(Math.random()-.5)*.2;AD[i].vy=(Math.random()-.5)*.2;AD[i].vz=(Math.random()-.5)*.2}});
 // Keyboard shortcuts: space release, +/- add/remove, arrows change selection.
 document.addEventListener('keydown',function(e){if(e.target.tagName==='INPUT')return;
