@@ -343,6 +343,48 @@ const start = (location.hash || '').slice(1);
 swapTo(VARIANTS.some(v => v.id === start) ? start : 'open').then(() => setScen('corner'));
 requestAnimationFrame(frame);
 
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh: the circle holds every mesh of the subject
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours one unit: the whole axle in a
@@ -379,15 +421,30 @@ window.snSaver = {
     const name = () => INFO[S.cur.id].title;
     const f1 = v => (Math.abs(v) < 0.05 ? 0 : v).toFixed(1);
     const torqueEq = () => S.cur.id === 'open' ? 'T_L = T_R = T_C / 2' : S.cur.id === 'clutch' ? 'T_slow − T_fast ≤ T_pre + c · T_C' : 'T_slow / T_fast ≤ TBR = 3';
+    // Plate fields. params and TeX share one colour map (RULES): ω_L m1,
+    // ω_R m2, ω_C m3, ω_s and ω_e m4, T m5, ω_p m6. The plain eq lists stay
+    // as the fallback. Anchors: plateAnchor() on the step's parts; the key
+    // points are gear or wheel centres (centreOf).
+    // L is null until the first frame: a label built before it reads zeros.
+    const LL = () => L || { wL: 0, wR: 0, wC: 0, spin: 0, wP: 0 };
+    const RULES = [['\\omega_L', 'm1'], ['\\omega_R', 'm2'], ['\\omega_C', 'm3'], ['\\omega_s', 'm4'], ['\\omega_e', 'm4'], ['T_L', 'm5'], ['T_R', 'm5'], ['T_C', 'm5'], ['\\omega_p', 'm6']];
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const rpm = v => `${f1(v)} rpm`;
+    const torqueTex = () => S.cur.id === 'open' ? String.raw`T_L = T_R = \frac{T_C}{2}` : S.cur.id === 'clutch' ? String.raw`T_{\text{slow}} - T_{\text{fast}} \le T_{\text{pre}} + c\,T_C` : String.raw`\frac{T_{\text{slow}}}{T_{\text{fast}}} \le \text{TBR} = 3`;
+    const TAVG = String.raw`\omega_C = \frac{\omega_L + \omega_R}{2}`;
+    const parts = re => Object.values(S.cur.B.parts).filter(q => re.test(q.id));
+    const an = (re, keys) => () => plateAnchor(parts(re).map(q => q.holder), parts(keys).map(q => centreOf(q.holder)));
+    const DIFF = /^(?!wheel|axle)/, GEARS = /^(side[LR]|spider[TB]|elem.*|crossShaft)$/;
     const STEPS = [
-      { view: 'three', scen: 'corner', lab: () => ({ title: name(), sub: `In a ${S.R} m ${S.dir > 0 ? 'left' : 'right'} turn`, lines: [`Left wheel ${f1(L.wL)} rpm · right wheel ${f1(L.wR)} rpm`, `Carrier ${f1(L.wC)} rpm, the average of the two`, 'The outer wheel runs the longer path'], eq: ['ω_C = (ω_L + ω_R) / 2'] }) },
+      { view: 'three', scen: 'corner', lab: () => ({ title: name(), sub: `In a ${S.R} m ${S.dir > 0 ? 'left' : 'right'} turn`, params: [P('\\omega_L', 'left wheel', rpm(LL().wL), 'm1'), P('\\omega_R', 'right wheel', rpm(LL().wR), 'm2'), P('\\omega_C', 'carrier', rpm(LL().wC), 'm3')], lines: ['The carrier runs at the average of the two wheels.', 'The outer wheel runs the longer path.'], tex: [TAVG, torqueTex()], eq: ['ω_C = (ω_L + ω_R) / 2'], anchor: an(DIFF, /^(ring|pinion|side[LR])$/) }) },
       { view: S => S.cur.id === 'torsen' ? 'inside' : 'gears', scen: 'corner', lab: () => S.cur.id === 'torsen'
-        ? ({ title: 'Helical element gears', sub: 'Three pairs in pockets of the case', lines: ['Each element meshes with one side gear and its partner', `Elements turn ${f1(Math.abs(L.spin))} rpm in their pockets`, 'Pocket friction resists the speed difference'], eq: ['ω_e = (ω_R − ω_L)/2 · 18/9'] })
-        : ({ title: S.cur.id === 'clutch' ? 'Spiders and clutch packs' : 'Spider and side gears', sub: 'The differential gears', lines: [`Spiders turn ${f1(Math.abs(L.spin))} rpm on their pin`, 'Each spider pushes both side gears equally', S.cur.id === 'clutch' ? 'Lined plates slip against the steel plates' : 'Straight ahead, the spiders stand still on the pin'], eq: ['ω_s = (ω_R − ω_L)/2 · 16/10'] }) },
-      { view: 'ring', scen: 'straight', lab: () => ({ title: 'Ring and pinion', sub: `Spiral bevel, ${SPEC.ring.N}:${SPEC.pinion.N}`, lines: [`Pinion ${f1(L.wP)} rpm → carrier ${f1(L.wC)} rpm`, `Torque × ${BEV.ratio.toFixed(2)} at the carrier`, 'The drive turns through a right angle'], eq: [`ω_p = ${BEV.ratio.toFixed(3)} · ω_C`] }) },
-      { view: 'exploded', scen: 'corner', lab: () => ({ title: 'Exploded view', sub: name(), lines: ['Housing lifts off; the case halves part on the axle', 'Ring gear, side gears and half-shafts slide out on x', S.cur.id === 'torsen' ? 'Element gears leave their pockets' : 'Spiders leave the cross-shaft'], eq: [torqueEq()] }) },
-      { view: 'top', scen: 'ice', lab: () => ({ title: 'One wheel on ice', sub: name(), lines: [`Ice wheel ${f1(L.wR)} rpm · dry wheel ${f1(L.wL)} rpm`, `Torque L ${Math.round(S.drv.TL)} N·m · R ${Math.round(S.drv.TR)} N·m`, S.drv.moving ? 'The car moves off' : 'The car is stuck: the dry wheel stands still'], eq: [torqueEq()] }) },
+        ? ({ title: 'Helical element gears', sub: 'Three pairs in pockets of the case', params: [P('\\omega_e', 'element gears', rpm(Math.abs(LL().spin)), 'm4'), P('\\omega_L', 'left', rpm(LL().wL), 'm1'), P('\\omega_R', 'right', rpm(LL().wR), 'm2')], lines: ['Each element meshes with one side gear and its partner.', 'Pocket friction resists the speed difference.'], tex: [String.raw`\omega_e = \frac{\omega_R - \omega_L}{2}\cdot\frac{18}{9}`, torqueTex()], eq: ['ω_e = (ω_R − ω_L)/2 · 18/9'], anchor: an(GEARS, /^(side[LR]|elem.*)$/) })
+        : ({ title: S.cur.id === 'clutch' ? 'Spiders and clutch packs' : 'Spider and side gears', sub: 'The differential gears', params: [P('\\omega_s', 'spiders on their pin', rpm(Math.abs(LL().spin)), 'm4'), P('\\omega_L', 'left', rpm(LL().wL), 'm1'), P('\\omega_R', 'right', rpm(LL().wR), 'm2')], lines: ['Each spider pushes both side gears equally.', S.cur.id === 'clutch' ? 'Lined plates slip against the steel plates.' : 'Straight ahead, the spiders stand still on the pin.'], tex: [String.raw`\omega_s = \frac{\omega_R - \omega_L}{2}\cdot\frac{16}{10}`, TAVG], eq: ['ω_s = (ω_R − ω_L)/2 · 16/10'], anchor: an(GEARS, /^(side[LR]|spider[TB])$/) }) },
+      { view: 'ring', scen: 'straight', lab: () => ({ title: 'Ring and pinion', sub: `Spiral bevel, ${SPEC.ring.N}:${SPEC.pinion.N}`, params: [P('\\omega_p', 'pinion', rpm(LL().wP), 'm6'), P('\\omega_C', 'carrier', rpm(LL().wC), 'm3'), P('i', 'ratio, ring to pinion teeth', BEV.ratio.toFixed(3), '')], lines: ['The torque is multiplied by i at the carrier.', 'The drive turns through a right angle.'], tex: [String.raw`\omega_p = i\,\omega_C, \qquad i = \frac{N_{\text{ring}}}{N_{\text{pinion}}} = \frac{${SPEC.ring.N}}{${SPEC.pinion.N}}`], eq: [`ω_p = ${BEV.ratio.toFixed(3)} · ω_C`], anchor: an(/^(ring|pinion)$/, /^(ring|pinion)$/) }) },
+      { view: 'exploded', scen: 'corner', lab: () => ({ title: 'Exploded view', sub: name(), params: [P('\\omega_C', 'carrier', rpm(LL().wC), 'm3')], lines: ['Housing lifts off; the case halves part on the axle.', 'Ring gear, side gears and half-shafts slide out on x.'], tex: [torqueTex(), TAVG], eq: [torqueEq()], anchor: an(DIFF, /^(ring|pinion)$/) }) },
+      { view: 'top', scen: 'ice', lab: () => ({ title: 'One wheel on ice', sub: name(), params: [P('\\omega_R', 'ice wheel', rpm(LL().wR), 'm2'), P('\\omega_L', 'dry wheel', rpm(LL().wL), 'm1'), P('T_L', 'left torque', `${Math.round(S.drv.TL)} N·m`, 'm5'), P('T_R', 'right torque', `${Math.round(S.drv.TR)} N·m`, 'm5')], lines: [S.drv.moving ? 'The car moves off.' : 'The car is stuck: the dry wheel stands still.'], tex: [torqueTex(), TAVG], eq: [torqueEq()], anchor: an(/./, /^(wheel[LR]|ring)$/) }) },
     ];
+    STEPS.forEach(s => { const f = s.lab; s.lab = () => Object.assign(f(), { rules: RULES }); });
     let n = 0, ord = first, stepT = 0, lastLab = '', labT = 0;
     const show = s => {
       if (s.scen === 'corner') { setDir(rnd() < 0.5 ? 1 : -1); setR([6, 8, 10, 14][Math.floor(rnd() * 4)]); }
