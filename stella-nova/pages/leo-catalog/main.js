@@ -64,6 +64,7 @@
 //      boot ................. "function boot"      load groups, then reveal
 //      main loop ............ "function animate"   the per-frame update
 //      xr ................... "function startXR"   VR/AR via xr.js + lib/xr-view.js
+//      screensaver .......... "window.snSaver"     shell saver hook: slow orbit + tour
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -2506,3 +2507,52 @@ function animate(now) {
 boot();
 animate(performance.now());
 
+
+// ═══════════════════════════════════════════════════════════════════
+// SCREENSAVER  (window.snSaver, the shell hook in lib/screensaver.js)
+// ═══════════════════════════════════════════════════════════════════
+// enter() hides every DOM element except canvas#scene: panels, chip,
+// reticle, splash and the city, station and sat labels. The clear colour
+// becomes opaque black, because the canvas has alpha over the page
+// background. The hook waits for boot (startXR sets __leoXR), then turns
+// on a slow autoRotate and sets SIM.speed to 240x (calm 0) .. 60x (calm 1),
+// so the orbits sweep and the terminator moves. A tour eases the camera
+// with flyTo between four views (distance and latitude), about three per
+// dwell, each move 7 s long. opts.seed sets the view order. The hook makes
+// no network request: the catalog comes from the boot snapshot. No exit():
+// the shell reloads the page on stop.
+window.snSaver = { enter(opts) {
+  const calm = Math.max(0, Math.min(1, opts && opts.calm != null ? +opts.calm : 0.7));
+  const secs = Math.max(20, +(opts && opts.seconds) || 60);
+  let seed = ((opts && opts.seed) | 0) >>> 0;
+  const st = document.createElement('style');
+  st.textContent = 'body>*:not(#scene){display:none!important}canvas#scene{cursor:none}';
+  document.head.appendChild(st);
+  renderer.setClearColor(0x000000, 1);
+  OVERLAY.cities = false; OVERLAY.satlabels = false;
+  const VIEWS = [            // radius (scene units, Earth = 1), polar angle
+    { r: 3.4, phi: 1.42 }, { r: 2.3, phi: 0.95 }, { r: 2.7, phi: 2.05 }, { r: 4.6, phi: 0.55 },
+  ];
+  let vi = seed % VIEWS.length;
+  const tour = () => {
+    if (chipLocked) unlockChip();
+    vi = (vi + 1 + (seed = (seed * 1103515245 + 12345) >>> 0) % 2) % VIEWS.length;
+    const sph = new THREE.Spherical().setFromVector3(camera.position);
+    const to = new THREE.Vector3().setFromSpherical(new THREE.Spherical(VIEWS[vi].r, VIEWS[vi].phi, sph.theta + 0.6));
+    flyTo(to, new THREE.Vector3(0, 0, 0), 7000);
+  };
+  return new Promise(res => {
+    const t0 = performance.now();
+    const ready = () => {
+      if (!window.__leoXR && performance.now() - t0 < 20000) { setTimeout(ready, 250); return; }
+      for (const c of cityElements) c.el.classList.remove('visible');
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.8 * (1 - 0.6 * calm);
+      SIM.playing = true;
+      applyRate(rateSpeedToFrac(240 - 180 * calm));
+      setInterval(tour, Math.max(12, secs / 3) * 1000);
+      res({ canvas, warmupMs: 2500 });
+    };
+    ready();
+  });
+} };
