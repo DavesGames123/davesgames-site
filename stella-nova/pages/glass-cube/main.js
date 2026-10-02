@@ -56,9 +56,9 @@ window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_l
 // l=label, min/max/step/def=range and default, sec=starts a new labelled group.
 // buildUI() turns this into the control panel; the order here is the panel order.
 const DEFS=[
-  {k:'zoom',     l:'Zoom',     min:1.5, max:14,  step:.05, def:4,     sec:'Camera'},
-  {k:'fov',      l:'FOV',      min:.2,  max:2.5, step:.01, def:.7},
-  {k:'height',   l:'Height',   min:.01, max:.49, step:.005,def:.35},
+  {k:'zoom',     l:'Zoom',     min:1.5, max:14,  step:.05, def:3,     sec:'Camera'},
+  {k:'fov',      l:'FOV',      min:.2,  max:2.5, step:.01, def:.64},
+  {k:'height',   l:'Height',   min:.01, max:.49, step:.005,def:.13},
   {k:'spin',     l:'Spin',     min:0,   max:2,   step:.01, def:.12},
   {k:'curvature',l:'Curvature',min:.01, max:1.5, step:.01, def:.5,    sec:'Shape'},
   {k:'ior',      l:'IOR',      min:1,   max:3,   step:.01, def:1.33,  sec:'Optics'},
