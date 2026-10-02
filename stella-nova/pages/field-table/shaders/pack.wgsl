@@ -2,11 +2,19 @@
 //  FIELD TABLE  ·  2-D vector fields, one function per cell, drawn by particles.
 //
 //  Each cell is  fn v_<name>(p: vec2f, t: f32, k: vec4f) -> vec2f  — the
-//  velocity at p (domain about ±1). A compute pass moves 4096 particles along
+//  velocity at p (domain about ±1). A compute pass moves the particles along
 //  the field and deposits them into a trail texture that fades; a present pass
-//  colors the trail by speed. The same field function is also evaluated per
-//  pixel for the background: a faint LIC-like streak so the structure reads
-//  even when the cell is still.
+//  colors the trail. The same field function is also evaluated per pixel for
+//  the background: a faint LIC-like streak so the structure reads even when
+//  the cell is still.
+//
+//  Two modes (u.mode). Mode 0 is the small tile: 4096 particles, a 256 x 256
+//  trail, point splats, the swatch rail colored by speed. Mode 1 is a large
+//  surface (the screensaver or the inspector): the trail matches the canvas
+//  pixels, u.ext covers the full frame, each particle splats a thin line
+//  segment, and the present pass colors the trail by flow direction through
+//  a vivid palette. The trail channels are (density, density * speed,
+//  density * dir.x, density * dir.y). Mode 0 writes zero into the last two.
 //
 //  References: potential-flow elements (source, vortex, doublet, uniform stream)
 //  from Anderson's aerodynamics; Taylor–Green vortices; Rankine vortex; curl
@@ -21,11 +29,10 @@ struct FieldU {
     ink: vec4f, tone: vec4f, cream: vec4f,
     k: vec4f,
     speed: f32, fade: f32, frame: f32, seed: f32,
+    ext: vec2f, mode: f32, np: f32,     // domain half-size, 0 tile / 1 large, particle count
 }
 const PI: f32 = 3.14159265358979;
 const TAU: f32 = 6.28318530717959;
-const NP: u32 = 4096u;
-const TS: i32 = 256;    // trail texture size
 
 fn pcg(vin: vec3u) -> vec3u { var v = vin * 1664525u + 1013904223u; v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y; v ^= v >> vec3u(16u); v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y; return v; }
 fn rnd3(i: u32, s: f32) -> vec3f { return vec3f(pcg(vec3u(i, u32(s * 1000.0) + 7u, 13u))) / 4294967295.0; }
@@ -145,43 +152,67 @@ struct Particle { p: vec2f, v: vec2f }
 @group(0) @binding(2) var trailIn: texture_2d<f32>;
 @group(0) @binding(3) var trailOut: texture_storage_2d<rgba16float, write>;
 
-fn tex_of(p: vec2f) -> vec2i { return vec2i((p * 0.5 + 0.5) * f32(TS)); }
-
 // FIELD_DISPATCH is generated per cell by the page: fn field(p, t, k) -> vec2f { return v_<name>(p, t, k); }
 __FIELD_FN__
 
+// the particle step in domain units per frame; vs_points uses it to find the previous position
+fn step_dt(s: f32) -> f32 { return 0.016 * s; }
+
 @compute @workgroup_size(64) fn cs_move(@builtin(global_invocation_id) id: vec3u) {
-    let i = id.x; if (i >= NP) { return; }
+    let n = u32(u.np); let i = id.x; if (i >= n) { return; }
     var pt = parts[i];
-    if (u.frame < 0.5) { let r = rnd3(i, u.seed); pt.p = r.xy * 2.0 - 1.0; pt.v = vec2f(0.0); }
+    if (u.frame < 0.5) { let r = rnd3(i, u.seed); pt.p = (r.xy * 2.0 - 1.0) * u.ext; pt.v = vec2f(0.0); }
     // RK2 midpoint along the field
-    let dt = 0.016 * u.speed;
+    let dt = step_dt(u.speed);
     let v1 = field(pt.p, u.time, u.k); let mid = pt.p + v1 * dt * 0.5; let v2 = field(mid, u.time, u.k);
     pt.p += v2 * dt; pt.v = v2;
     // respawn when the particle leaves the domain or stalls, at a hashed point; a little of the swarm respawns anyway so sinks never empty the field
-    let r = rnd3(i + u32(u.frame) * NP, u.seed);
-    let out = any(abs(pt.p) > vec2f(1.05)) || length(pt.v) < 1e-4 || r.z < mix(0.001, 0.02, u.fade);
-    if (out) { pt.p = r.xy * 2.0 - 1.0; pt.v = field(pt.p, u.time, u.k); }
+    let r = rnd3(i + u32(u.frame) * n, u.seed);
+    let out = any(abs(pt.p) > u.ext + vec2f(0.05)) || length(pt.v) < 1e-4 || r.z < mix(0.001, 0.02, u.fade);
+    if (out) { pt.p = (r.xy * 2.0 - 1.0) * u.ext; pt.v = field(pt.p, u.time, u.k); }
     parts[i] = pt;
 }
 // fade the trail texture; particles are splatted by the draw pass
 @compute @workgroup_size(8, 8) fn cs_fade(@builtin(global_invocation_id) id: vec3u) {
-    let p = vec2i(id.xy); if (p.x >= TS || p.y >= TS) { return; }
+    let dims = vec2i(textureDimensions(trailIn));
+    let p = vec2i(id.xy); if (p.x >= dims.x || p.y >= dims.y) { return; }
     let c = textureLoad(trailIn, p, 0);
     textureStore(trailOut, p, c * (1.0 - mix(0.02, 0.2, u.fade)));
 }
 
-// particle splat: draw as points via instanced quads
-struct VOut { @builtin(position) pos: vec4f, @location(0) spd: f32 }
+// particle splat, instanced quads. Mode 0: a point about 1.6 texels wide.
+// Mode 1: a line segment from the previous position to the current one,
+// about 2 pixels wide, so the streamers are continuous fine lines.
+struct VOut { @builtin(position) pos: vec4f, @location(0) spd: f32, @location(1) dir: vec2f, @location(2) side: f32 }
 @group(0) @binding(0) var<uniform> pu: FieldU;
 @group(0) @binding(1) var<storage, read> partsR: array<Particle>;
 @vertex fn vs_points(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut {
     let pt = partsR[ii];
     var corner = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0), vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
-    let sz = 1.6 / f32(TS);
-    var o: VOut; o.pos = vec4f(pt.p + corner[vi] * sz, 0.0, 1.0); o.spd = length(pt.v); return o;
+    let c = corner[vi];
+    var o: VOut; o.spd = length(pt.v); o.dir = pt.v / max(o.spd, 1e-6); o.side = c.y;
+    if (pu.mode < 0.5) {
+        let sz = 1.6 / pu.size.y;
+        o.pos = vec4f(pt.p + c * sz, 0.0, 1.0); return o;
+    }
+    // the segment in pixels of the trail texture; clip = p / ext, pixel = clip * size / 2
+    let toPx = 0.5 * pu.size / pu.ext;
+    let b = pt.p * toPx;
+    var d = pt.v * step_dt(pu.speed) * toPx;
+    let len = length(d);
+    if (len > 48.0) { d *= 48.0 / len; }          // a fast core particle does not draw a long spoke
+    let a = b - d;
+    let t = select(vec2f(1.0, 0.0), d / max(len, 1e-6), len > 1e-4);
+    let nrm = vec2f(-t.y, t.x); let hw = 1.3;
+    let along = select(a - t * hw, b + t * hw, c.x > 0.0);
+    let px = along + nrm * hw * c.y;
+    o.pos = vec4f(px / toPx / pu.ext, 0.0, 1.0); return o;
 }
-@fragment fn fs_points(in: VOut) -> @location(0) vec4f { return vec4f(0.12, 0.12 * min(in.spd, 4.0), 0.0, 1.0); }
+@fragment fn fs_points(in: VOut) -> @location(0) vec4f {
+    if (pu.mode < 0.5) { return vec4f(0.12, 0.12 * min(in.spd, 4.0), 0.0, 1.0); }
+    let a = 0.5 * (1.0 - in.side * in.side);
+    return vec4f(a, a * min(in.spd, 4.0), a * in.dir.x, a * in.dir.y);
+}
 
 // present: the faint per-pixel field direction as a background, then the trail
 @group(0) @binding(0) var<uniform> qu: FieldU;
@@ -191,16 +222,47 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) spd: f32 }
     return vec4f(p[i], 0.0, 1.0);
 }
 fn rail(v: f32) -> vec3f { let lo = mix(qu.ink.rgb, qu.tone.rgb, smoothstep(0.0, 0.62, v)); return mix(lo, qu.cream.rgb, smoothstep(0.62, 1.0, v)); }
-@fragment fn fs_present(@builtin(position) fp: vec4f) -> @location(0) vec4f {
-    let pos = fp.xy / qu.pixelScale; let uv = (pos - 0.5 * qu.size) / max(min(qu.size.x, qu.size.y), 1.0) * 2.0;
+// the vivid palette for mode 1: hue h in turns
+fn vivid(h: f32) -> vec3f { return 0.5 + 0.5 * cos(TAU * (h + vec3f(0.0, 0.33, 0.67))); }
+// bilinear read of the trail at n in [0, 1]^2 (the texture is rgba16float, read with textureLoad)
+fn trail_at(n: vec2f) -> vec4f {
+    let dims = vec2f(textureDimensions(trailTex)); let hi = vec2i(dims) - vec2i(1);
+    let x = n * dims - 0.5; let i0 = floor(x); let f = x - i0;
+    let a = clamp(vec2i(i0), vec2i(0), hi); let b = clamp(vec2i(i0) + vec2i(1), vec2i(0), hi);
+    let r0 = mix(textureLoad(trailTex, a, 0), textureLoad(trailTex, vec2i(b.x, a.y), 0), f.x);
+    let r1 = mix(textureLoad(trailTex, vec2i(a.x, b.y), 0), textureLoad(trailTex, b, 0), f.x);
+    return mix(r0, r1, f.y);
+}
+fn present_tile(uv: vec2f) -> vec3f {
     let v = field(uv, qu.time, qu.k); let a = atan2(v.y, v.x);
     // streak: a sine along the local flow direction, so the background is combed like iron filings
     let comb = 0.5 + 0.5 * sin(dot(uv, vec2f(-sin(a), cos(a))) * 90.0);
     let bg = mix(qu.ink.rgb, qu.tone.rgb, 0.10 + 0.10 * comb * smoothstep(0.0, 0.05, length(v)));
-    let tp = vec2i(clamp((uv * 0.5 + 0.5) * f32(TS), vec2f(0.0), vec2f(f32(TS) - 1.0)));
+    let ts = f32(textureDimensions(trailTex).x);
+    let tp = vec2i(clamp((uv * 0.5 + 0.5) * ts, vec2f(0.0), vec2f(ts - 1.0)));
     let tr = textureLoad(trailTex, tp, 0);
-    // the trail covers uv in [-1, 1]; a wide canvas (the screensaver) fades it out past that square
     let glow = (1.0 - exp(-tr.x * 1.2)) * (1.0 - smoothstep(1.0, 1.12, max(abs(uv.x), abs(uv.y))));
-    let col = mix(bg, rail(0.55 + 0.45 * clamp(tr.y / max(tr.x, 1e-3) * 0.5, 0.0, 1.0)), glow);
-    return vec4f(col, 1.0);
+    return mix(bg, rail(0.55 + 0.45 * clamp(tr.y / max(tr.x, 1e-3) * 0.5, 0.0, 1.0)), glow);
+}
+fn present_large(uv: vec2f) -> vec3f {
+    // the trail rows run top-down from p.y = +ext.y, so the particle point under this pixel is q
+    let q = vec2f(uv.x, -uv.y);
+    let v = field(q, qu.time, qu.k); let a = atan2(v.y, v.x);
+    let comb = 0.5 + 0.5 * sin(dot(q, vec2f(-sin(a), cos(a))) * 90.0);
+    let bgTint = mix(qu.tone.rgb, vivid(a / TAU), 0.25);
+    let bg = mix(qu.ink.rgb, bgTint, 0.08 + 0.10 * comb * smoothstep(0.0, 0.05, length(v)));
+    let tr = trail_at(uv / qu.ext * 0.5 + 0.5);
+    let dens = max(tr.x, 1e-4);
+    let glow = 1.0 - exp(-tr.x * 1.6);
+    let sp = clamp(tr.y / dens * 0.45, 0.0, 1.0);
+    let dir = tr.zw / dens; let coh = clamp(length(dir), 0.0, 1.0);
+    var c = vivid(atan2(dir.y, dir.x) / TAU + 0.12 * sp);
+    c = mix(qu.tone.rgb, c, 0.35 + 0.65 * coh) * (0.6 + 0.7 * sp);
+    c = mix(c, qu.cream.rgb, 0.4 * smoothstep(0.65, 1.0, sp));
+    return mix(bg, c, glow);
+}
+@fragment fn fs_present(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let pos = fp.xy / qu.pixelScale; let uv = (pos - 0.5 * qu.size) / max(min(qu.size.x, qu.size.y), 1.0) * 2.0;
+    if (qu.mode < 0.5) { return vec4f(present_tile(uv), 1.0); }
+    return vec4f(present_large(uv), 1.0);
 }
