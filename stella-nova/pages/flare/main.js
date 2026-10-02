@@ -258,7 +258,8 @@ window.selectFlare = selectFlare;
 // ── Screensaver hook (stella-nova/lib/screensaver.js) ─────────────────────────
 // The shell calls enter() in screensaver mode. It shows one column full frame
 // (the seed picks one of four hued presets), centres the plume, widens it,
-// lowers the intensity and the trail speed, and drifts the hue slowly.
+// lowers the intensity and the trail speed, and drifts the hue slowly. Once a
+// second it sends opts.label the particle sum and the live column params.
 window.snSaver = {
   raf: 0,
   enter: function(opts) {
@@ -282,8 +283,29 @@ window.snSaver = {
       self.raf = requestAnimationFrame(step);
     }
     this.raf = requestAnimationFrame(step);
+    // The plate: the particle sum of shaders/flare.frag.glsl with the live
+    // params of this column. One fixed title, so the drifting hue φ and the
+    // sway refresh in place once a second.
+    var label = opts && typeof opts.label === 'function' ? opts.label : null;
+    function plate() {
+      if (!label) return;
+      var f2 = function (v) { return Number(v).toFixed(2); };
+      label({ title: 'Flare study · ' + LABELS[i], sub: 'particle streak summed in one fragment pass',
+        eq: ['C = Σᵢ hueᵢ·Bᵢ / (10⁴·|aᵢ|),  i < N',
+          'hueᵢ = cos(sin i·(1, 2, 3) + φ) + 1',
+          'Bᵢ = I·exp(A·sin(i + i·ψ)),  ψ = f·t + 0.25·y',
+          'aᵢ = max(p, p / (w, 40·k·nebula))',
+          'p ← p + (0.02·L, 0.015·S·cos(i(11 + i) + 2ψ))',
+          'colour = tanh(bg + C²)'],
+        lines: ['N = ' + Math.round(p.particleCount) + ' particles · I = ' + f2(p.intensity) + ' · hue φ = ' + f2(p.colorShift) + ' rad (drifts)',
+          'flicker f = ' + f2(p.flickerSpeed) + ' · A = ' + f2(p.flickerAmt) + ' · trail L = ' + f2(p.trailLength) + ', S = ' + f2(p.trailSpread) + ', w = ' + f2(p.trailWidth),
+          'nebula noise k = ' + f2(p.noiseStrength) + ' · origin (' + f2(p.posX) + ', ' + f2(p.posY) + ') of the frame'] });
+    }
+    plate();
+    clearInterval(this.plateTimer);
+    this.plateTimer = setInterval(plate, 1000);
     return { canvas: instances[i].canvas, warmupMs: 300 };
   },
-  exit: function() { cancelAnimationFrame(this.raf); soloIdx = -1; }
+  exit: function() { cancelAnimationFrame(this.raf); clearInterval(this.plateTimer); soloIdx = -1; }
 };
 })();
