@@ -12,7 +12,11 @@
 //
 //  Page protocol. When a page is on screen, the controller waits for
 //  window.snSaver in the page (up to HOOK_WAIT_MS):
-//    snSaver.enter(opts)  opts = { calm, seconds, caption, seed, label }.
+//    snSaver.enter(opts)  opts = { calm, seconds, caption, seed, label,
+//                         labels }. labels is the menu's "Show labels and
+//                         equations" setting, for a page that draws its
+//                         own labels into the canvas (so recordings keep
+//                         them).
 //                         calm is 0..1 (1 is slowest). The page hides its
 //                         own GUI, sets a preset and starts its autopilot.
 //                         It can return (or resolve to) { canvas, warmupMs }.
@@ -439,7 +443,7 @@ async function enterPage(w, key, r, token) {
   while (!w.snSaver && performance.now() - t0 < limit) await wait(100);
   // label() from a page that is already gone (an old token) does nothing.
   const label = info => { if (run === r && token === r.token) setLabel(info); };
-  const opts = { calm: S.calm, seconds: S.seconds, caption: S.caption, seed: (Math.random() * 1e9) | 0, label };
+  const opts = { calm: S.calm, seconds: S.seconds, caption: S.caption, seed: (Math.random() * 1e9) | 0, label, labels: !!S.labels };
   if (w.snSaver && typeof w.snSaver.enter === 'function') {
     try {
       const res = (await w.snSaver.enter(opts)) || {};
