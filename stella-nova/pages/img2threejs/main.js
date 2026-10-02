@@ -312,6 +312,23 @@ function saverTick(dt) {
   saver.mesh.material.opacity = a; saver.mesh.visible = a > 0.001;
   S.dirty = true;
 }
+// The plate: the model, the pass on screen and its review scores, all from
+// models/catalog.js. A new model gives a new title; a new pass swaps the text.
+function saverPlate(label, mi, pi, exploded) {
+  if (!label) return;
+  const M = MODELS[mi], P = M.passes[pi], c = M.credit;
+  const clay = PASS_ORDER.indexOf(P.id) < PASS_ORDER.indexOf(CLAY_BEFORE);
+  label({
+    title: M.title,
+    sub: `pass ${pi + 1} / ${M.passes.length} · ${PASS_NAMES[P.id]}${clay ? ' · clay' : ''}${exploded ? ' · exploded' : ''}`,
+    lines: [
+      `AI vision score ${P.score != null ? P.score.toFixed(2) : '—'}` + (P.sameAs ? ` · same code as ${PASS_NAMES[P.sameAs]}` : ''),
+      Object.entries(P.layers || {}).map(([k, v]) => `${LAYER_NAMES[k] || k} ${v.toFixed(2)}`).join(' · '),
+      `${M.components} components · ${M.materials.join(', ')}`,
+      `Reference: ${c.artist}, ${c.work} (${c.licence})`,
+    ],
+  });
+}
 async function saverRun(m0, stepMs) {
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const fadeTo = v => { saver.fadeTo = v; return wait(FADE_S * 1000 + 100); };
@@ -322,11 +339,12 @@ async function saverRun(m0, stepMs) {
         await fadeTo(1);
         if (pi === 0) { S.explode = S.explodeTo = 0; setExplode(false); S.m = mi; await load(mi, 0); }
         else await load(mi, pi, { keepView: true });
+        saverPlate(saver.label, mi, pi, false);
         await fadeTo(0);
         await wait(stepMs - 2 * (FADE_S * 1000 + 100));
       } else {
-        setExplode(true); await wait(stepMs * 0.5);
-        setExplode(false); await wait(stepMs * 0.5);
+        setExplode(true); saverPlate(saver.label, mi, pi, true); await wait(stepMs * 0.5);
+        setExplode(false); saverPlate(saver.label, mi, pi, false); await wait(stepMs * 0.5);
       }
     }
   }
@@ -342,7 +360,7 @@ window.snSaver = { enter(opts) {
   saver.mesh.position.z = -0.1; saver.mesh.renderOrder = 999; saver.mesh.frustumCulled = false;
   camera.add(saver.mesh); scene.add(camera);
   controls.enabled = false; controls.autoRotate = true; controls.autoRotateSpeed = 1.1 * (1 - 0.6 * calm);
-  saver.on = true; saver.fade = saver.fadeTo = 1;
+  saver.on = true; saver.fade = saver.fadeTo = 1; saver.label = opts.label;
   saverRun((opts.seed >>> 0) % MODELS.length, Math.max(10, secs / 4) * 1000);
   return { canvas: renderer.domElement, warmupMs: 1500 };
 } };
