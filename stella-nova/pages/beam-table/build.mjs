@@ -453,6 +453,8 @@ const spec = {
     { id: 'tone', label: 'Beam', hex: '#3cb4ff' },
     { id: 'cream', label: 'Heat', hex: '#ffa046' },
   ],
+  // screensaver: calm moving cells, tempo and cell cycle for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['beam_filament', 'beam_draw_on', 'beam_path', 'beam_charge', 'curve_pulse', 'tracer_streak', 'tracer_fan', 'tracer_heat_trail', 'tracer_plasma', 'tracer_chain', 'tg_cone', 'tg_annulus', 'tg_sweep', 'sh_hex', 'sh_bubble', 'sh_multi', 'sh_wall'], tempo: [0.7, 0.3], dpr: 2, cycle: 4, minDwell: 12, fade: 1.5 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
