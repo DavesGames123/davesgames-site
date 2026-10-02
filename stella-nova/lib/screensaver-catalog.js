@@ -96,6 +96,7 @@ window.SN_SAVER_CATALOG = {
     'wankel-engine': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: single and twin rotor, labelled with the epitrochoid and chamber cycle.' },
     'differential': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: open, clutch and Torsen units, labelled with the speed and torque split.' },
     'planetary-gearbox': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: simple set and Simpson train, labelled with the Willis equation.' },
+    'spirograph': { tier: 2, default: true, hook: true, note: 'Mechanism page with its own saver tour: cycles the presets, draws each one calmly with the gears shown, labelled with the hypotrochoid or epitrochoid and gcd(R, r).' },
     'pin-tumbler-lock': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: right and wrong keys against the shear line, pin and wafer locks.' },
     'stirling-engine': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: explode and assemble cycles, labelled with the Stirling cycle.' },
     'origami': { tier: 3, default: true, hook: true, note: 'WebGPU. One canvas #gl (index.html:92) draws two panes by scissor rects measured from DOM #pane2d and #pane3d (app/layout.js paneGeom).' },
