@@ -28,6 +28,8 @@
 //      hidden? skip : dt = min(delta, MAX_DT)
 //      dirty? rebuild : spawnChunk ▶ evolve colors ▶ animateFlow ▶ tracers
 //      ▶ periodic B recompute ▶ nucleus spin ▶ XR input ▶ AR panel ▶ render
+//
+//  SCREENSAVER  window.snSaver (end of file), for lib/screensaver.js
 // ============================================================================
 import * as THREE from 'three';
 import { renderer, scene, camera, controls, orbitalGroup, S, RT,
@@ -37,7 +39,7 @@ import { computeBField } from './bfield.js';
 import { updateFlowTracers, updateBTracers } from './tracers.js';
 import { updateARPanel } from './arpanel.js';
 import { handleVRInput } from './gestures.js';
-import { initUI, syncQN } from './ui.js';
+import { initUI, syncQN, applyQN, setAnimate } from './ui.js';
 import './arsession.js';   // side effect: wires the AR button + window._arUpdate*
 
 // Bind the DOM controls and run the initial setters (setMagField / setAnimate
@@ -125,3 +127,27 @@ renderer.setAnimationLoop((time, frame)=>{
 
 // Seed the display from the default sliders once wiring is complete.
 syncQN();
+
+// Screensaver hook for the shell (lib/screensaver.js). It hides the GUI, picks
+// one orbital from opts.seed, and turns on a slow camera orbit. opts.calm
+// (1 = slowest) scales the orbit, flow and tracer speeds. The shell reloads
+// the page on stop, so enter() does not keep the old values.
+const SAVER_QN=[[3,1,1],[3,2,1],[4,2,2],[4,3,1],[5,3,2]];
+window.snSaver={
+  enter(o){
+    const calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
+    const st=document.createElement('style');
+    st.textContent='body>*:not(#c){display:none!important}';
+    document.head.appendChild(st);
+    const qn=SAVER_QN[Math.abs((o&&o.seed)|0)%SAVER_QN.length];
+    applyQN(qn[0],qn[1],qn[2]); S.dirty=true;
+    setAnimate(true);
+    S.flowSpeed=0.5*(1-0.6*calm);
+    S.timeSpeed=1-0.6*calm;
+    S.bTrSpeed=1-0.5*calm;
+    controls.autoRotate=true;
+    controls.autoRotateSpeed=0.15+0.6*(1-calm);
+    renderer.setClearColor(0x0e1118,1);
+    return {canvas:document.getElementById('c'),warmupMs:2500};
+  }
+};
