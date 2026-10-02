@@ -57,6 +57,7 @@
 //      input .............. "applyDrag"        mouse / touch / keyboard
 //      boids .............. "boid swarm plumbing" init/step/render the swarm
 //      boot ............... "async function boot" fetch shaders, start loop
+//      screensaver ........ "window.snSaver"   hook for the shell screensaver
 // ============================================================================
 const canvas=document.getElementById('gl');
 const stage=document.getElementById('stage');
@@ -75,7 +76,7 @@ const S={
   mode:'fly', playing:true,
   resScale:0.7, dprCap:1.5,
   camClock:0, morphClock:0, bakeMorph:0,
-  morphSpeed:0.08, pathSpeed:0.4, moveSpeed:14,
+  morphSpeed:0.08, pathSpeed:0.4, moveSpeed:14, snapSec:1.8,
   seed:0, seedAxis:0,
   // planned flight path
   loop:null, dist:0, bank:0, showPath:true, needPlan:true, planMorph:0, lastPlanMs:0, hoPos:[0,0,0], hoFwd:[0,0,0],
@@ -173,7 +174,7 @@ function smoothstep(a,b,x){x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2
 // read this so the geometry only shifts during the brief snap window.
 function steppedMorph(phase){
   const cyclePeriod=1/Math.max(S.morphSpeed,1e-4);
-  const snapFrac=Math.min(0.55, 1.8/cyclePeriod);   // ~1.8s snap regardless of cycle length
+  const snapFrac=Math.min(0.55, S.snapSec/cyclePeriod);   // ~1.8s snap regardless of cycle length
   const it=Math.floor(phase), ft=phase-it;
   return it + smoothstep(1.0-snapFrac, 1.0, ft);
 }
@@ -791,6 +792,7 @@ window.addEventListener('touchend',()=>S.dragging=false);
 // Keyboard: a movement key in fly mode seamlessly takes over into walk mode and
 // then feeds updateWalk via the S.keys map.
 window.addEventListener('keydown',e=>{
+  if(S.saver) return;                     // the screensaver owns the keys
   const k=e.key.toLowerCase();
   const isMove = ['w','a','s','d',' '].includes(k) || k==='shift';
   if(isMove){
@@ -905,3 +907,27 @@ async function boot(){
   requestAnimationFrame(loop);
 }
 setTimeout(boot,50);
+// Screensaver hook for the shell (lib/screensaver.js). enter() hides the rail,
+// status bar, path overlay and legend so #stage fills the window, renders at
+// full resolution with no scanlines, and cruises the flythrough slower as
+// opts.calm goes to 1. Terrain snaps stretch to 6 s so no state change cuts.
+/* ---- screensaver ---- */
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??0.7));
+    const st=document.createElement('style');
+    st.textContent='#rail,#mob-btn,#status-bar,#pathOverlay,#ctrlLegend,.topbar,.mob-overlay{display:none!important}'+
+      'body::after{display:none}';
+    document.head.appendChild(st);
+    S.saver=true; S.resScale=1; S.dprCap=1;
+    document.getElementById('tog-scan').classList.remove('on');
+    S.showPath=false;
+    if(S.mode!=='fly') setMode('fly');
+    S.playing=true; S.lookYaw=0; S.lookPitch=0;
+    S.pathSpeed=0.4-0.25*calm;
+    S.morphSpeed=0.08*(1-0.6*calm);
+    S.snapSec=6;
+    resize();
+    return { canvas, warmupMs:1000 };
+  }
+};
