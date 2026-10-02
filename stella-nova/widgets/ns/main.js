@@ -53,7 +53,7 @@
 //      main loop ............ "main loop"          view dispatch + error trap
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
-//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d
+//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, wave
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -1041,6 +1041,17 @@ const SV_VIEWS = {
     i=(i+2)%3; next(); F2.spd=1-0.6*calm; TOG.fixed=false; const clock=svClock(show,fade,next);
     return { draw(dt){ frameNo++; const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); f2Advance(dt);
       FT.sync(); const S=Math.max(W,H); f2Field((W-S)/2,(H-S)/2,S,FT.current()); svFinish(k); } };
+  },
+  // Wave: the two field panels of drawWave, centred, with no phase plane and no
+  // series plots. Each state is one run (growth, steer, hold) with a new tilt
+  // s and frequency λ. WV.spd makes growth and steering use 60 to 90 percent
+  // of the show time (more at calm 1); the frozen hold shows for the rest.
+  wave(calm, show, fade, rng){
+    TOG.phaseplane=false; TOG.series=false;
+    const next=()=>{ WV.s=0.25+0.6*rng(); WV.lam=8+Math.round(20*rng()); wvReset(); WV.playing=true; WV.spd=(WV.L+1+1/WV.Lambda)/WV.gamma()/(1.4*show*(0.6+0.3*calm)); };
+    next(); const clock=svClock(show,fade,next);
+    return { draw(dt){ const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); if(WV.playing) wvAdvance(dt*WV.spd*1.4);
+      const S=W<760?0:Math.max(80,Math.min(H-62,(W-70)/2)); ctx.save(); ctx.translate(0,W<760?0:Math.max(0,(H-S)/2-30)); drawWave(); ctx.restore(); svFinish(k); } };
   },
 };
 if (SV_VIEWS[FIXED]) window.snSaver = { enter(opts) {
