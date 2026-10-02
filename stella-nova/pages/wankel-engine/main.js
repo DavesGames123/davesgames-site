@@ -343,6 +343,48 @@ const start = (location.hash || '').slice(1);
 swapTo(VARIANTS.some(v => v.id === start) ? start : 'single');
 requestAnimationFrame(frame);
 
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh: the circle holds every mesh of the subject
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours: the face with the chambers, the
@@ -378,14 +420,31 @@ window.snSaver = {
     const canvas = $('view');
     const vt = E.volumes();
     const chLine = () => L ? L.units[0].ch.map(q => `${q.k + 1} ${STROKES[q.stroke].name.toLowerCase()} ${(q.V / 1000).toFixed(0)} cm³`).join(' · ') : '';
+    // Plate fields. params and TeX share one colour map (RULES): R m1, e m2,
+    // α m3, ε m4, V m5, θ and ω m6. The plain eq lists stay as the
+    // fallback. Anchors: plateAnchor() on the step's parts; the key points
+    // are the apex seal tips, the rotor, gear, plug or port centres
+    // (centreOf). The close views (gears, plugs, ports) use only the parts
+    // they frame: the housing box would put the centre off screen.
+    const RULES = [['R', 'm1'], ['e', 'm2'], ['\\alpha', 'm3'], ['\\varepsilon', 'm4'], ['V', 'm5'], ['V_s', 'm5'], ['\\theta', 'm6'], ['\\omega_s', 'm6'], ['\\omega_r', 'm6']];
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const pR = P('R', 'generating radius', `${GEO.R} mm`, 'm1'), pE = P('e', 'eccentricity', `${GEO.e} mm`, 'm2');
+    const TEPI = String.raw`\begin{aligned} x &= e\cos 3\alpha + R\cos\alpha \\ y &= e\sin 3\alpha + R\sin\alpha \end{aligned}`;
+    const TALPHA = String.raw`c = e\,(\cos\theta,\ \sin\theta), \qquad \alpha = \theta / 3`;
+    const TVS = String.raw`V_s = 3\sqrt{3}\,e\,R\,W`;
+    const parts = re => Object.values(S.cur.B.parts).filter(q => re.test(q.id));
+    const ctr = re => parts(re).map(q => centreOf(q.holder));
+    const an = (re, keys) => () => plateAnchor(parts(re).map(q => q.holder), ctr(keys));
+    const UNIT = /^(housing|rotor)\d$/, TIPS = /^(apex0\d|rotor0)$/;
     const STEPS = [
-      { view: 'face', lab: () => ({ title: `Wankel engine · ${S.cur.V.name.toLowerCase()}`, sub: 'Epitrochoid housing, three-cornered rotor', lines: ['The rotor tips trace the housing curve', 'Three chambers, each a full four-stroke cycle per rotor turn', chLine()], eq: ['x = e cos 3α + R cos α', 'y = e sin 3α + R sin α', `R = ${GEO.R} mm · e = ${GEO.e} mm`] }) },
-      { view: 'gears', lab: () => ({ title: 'Phasing gears', sub: `Ring ${GEO.gear.ring} teeth · stationary ${GEO.gear.fixed} teeth`, lines: ['The ring gear in the rotor rolls round the fixed gear', 'It holds the rotor at one third of the shaft speed', `Shaft ${S.rpm} rpm · rotor ${+(S.rpm / 3).toFixed(1)} rpm`], eq: ['r(ring) − r(fixed) = e', 'ω(rotor) = ω(shaft) · (1 − 20/30) = ω(shaft) / 3'] }) },
-      { view: 'plugs', lab: () => ({ title: 'Spark plugs', sub: 'Leading and trailing, at the top waist', lines: ['The chamber is smallest as its flank passes the waist', 'The pocket in the flank keeps the flame path open', `Compression ratio ${vt.CR.toFixed(1)} : 1`], eq: ['ε = Vₘₐₓ / Vₘᵢₙ', `= ${(vt.Vmax / 1000).toFixed(0)} / ${(vt.Vmin / 1000).toFixed(0)} cm³`] }) },
-      { view: 'exploded', lab: () => ({ title: 'Exploded view', sub: `${S.cur.V.name} · ${S.cur.V.kind}`, lines: ['Bolts, side housing and stationary gear come off the front', 'The rotor slides off its lobe; the seals leave their slots', 'The eccentric shaft and flywheel come out last'], eq: ['c = e (cos θ, sin θ)', 'α = θ / 3'] }) },
-      { view: 'three', lab: () => ({ title: 'Three chambers, four strokes', sub: 'Intake · compression · power · exhaust', lines: [chLine(), `Swept ${(E.SWEPT / 1000).toFixed(0)} cm³ per chamber`, 'One power stroke per rotor per shaft turn'], eq: ['V(θ) = Vₘᵢₙ + ½ Vₛ (1 − cos ⅔θ)', 'Vₛ = 3√3 e R W'] }) },
-      { view: 'ports', lab: () => ({ title: 'Ports, not valves', sub: 'Exhaust before the bottom waist, intake after it', lines: ['The apexes open and close the ports as they pass', 'The apex seal leans as it sweeps the curve', `Lean now ${(L ? L.units[0].k.lean[0] / D : 0).toFixed(1)}° of ±${(E.LEAN_MAX / D).toFixed(1)}°`], eq: ['φₘₐₓ = asin(3e / R)', 'T = Σ (p − p₀) dV/dθ'] }) },
+      { view: 'face', lab: () => ({ title: `Wankel engine, ${S.cur.V.name.toLowerCase()}`, sub: 'Epitrochoid housing, three-cornered rotor', params: [pR, pE, P('W', 'rotor width', `${GEO.W} mm`, '')], lines: ['The rotor tips trace the housing curve.', 'Three chambers, each a full four-stroke cycle per rotor turn.'], tex: [TEPI, TALPHA], eq: ['x = e cos 3α + R cos α', 'y = e sin 3α + R sin α', `R = ${GEO.R} mm · e = ${GEO.e} mm`], anchor: an(UNIT, TIPS) }) },
+      { view: 'gears', lab: () => ({ title: 'Phasing gears', sub: `Ring ${GEO.gear.ring} teeth, stationary ${GEO.gear.fixed} teeth`, params: [P('\\omega_s', 'shaft speed', `${S.rpm} rpm`, 'm6'), P('\\omega_r', 'rotor speed', `${+(S.rpm / 3).toFixed(1)} rpm`, 'm6'), pE], lines: ['The ring gear in the rotor rolls round the fixed gear.', 'It holds the rotor at one third of the shaft speed.'], tex: [String.raw`\omega_r = \omega_s\left(1 - \frac{${GEO.gear.fixed}}{${GEO.gear.ring}}\right) = \frac{\omega_s}{3}`, String.raw`r_{\text{ring}} - r_{\text{fixed}} = e`], eq: ['r(ring) − r(fixed) = e', `ω(rotor) = ω(shaft) · (1 − ${GEO.gear.fixed}/${GEO.gear.ring}) = ω(shaft) / 3`], anchor: an(/^(ring0|pinion0)$/, /^(ring0|pinion0)$/) }) },
+      { view: 'plugs', lab: () => ({ title: 'Spark plugs', sub: 'Leading and trailing, at the top waist', params: [P('\\varepsilon', 'compression ratio', `${vt.CR.toFixed(1)} : 1`, 'm4'), P('V_{\\max}', 'largest chamber', `${(vt.Vmax / 1000).toFixed(0)} cm³`, 'm5'), P('V_{\\min}', 'smallest chamber', `${(vt.Vmin / 1000).toFixed(0)} cm³`, 'm5')], lines: ['The chamber is smallest as its flank passes the waist.', 'The pocket in the flank keeps the flame path open.'], tex: [String.raw`\varepsilon = \frac{V_{\max}}{V_{\min}}`], eq: ['ε = Vₘₐₓ / Vₘᵢₙ', `= ${(vt.Vmax / 1000).toFixed(0)} / ${(vt.Vmin / 1000).toFixed(0)} cm³`], anchor: an(/^plug0/, /^plug0/) }) },
+      { view: 'exploded', lab: () => ({ title: 'Exploded view', sub: `${S.cur.V.name}, ${S.cur.V.kind}`, params: [pR, pE], lines: ['Bolts, side housing and stationary gear come off the front.', 'The rotor slides off its lobe; the shaft and flywheel come out last.'], tex: [TALPHA, TEPI], eq: ['c = e (cos θ, sin θ)', 'α = θ / 3'], anchor: an(/./, /^(rotor\d|shaft)$/) }) },
+      { view: 'three', lab: () => ({ title: 'Three chambers, four strokes', sub: 'Intake, compression, power, exhaust', params: [P('V_s', 'swept, per chamber', `${(E.SWEPT / 1000).toFixed(0)} cm³`, 'm5'), pR, pE], lines: [chLine(), 'One power stroke per rotor per shaft turn.'], tex: [String.raw`V(\theta) = V_{\min} + \tfrac12 V_s\left(1 - \cos\tfrac23\theta\right)`, TVS], eq: ['V(θ) = Vₘᵢₙ + ½ Vₛ (1 − cos ⅔θ)', 'Vₛ = 3√3 e R W'], anchor: an(UNIT, TIPS) }) },
+      { view: 'ports', lab: () => ({ title: 'Ports, not valves', sub: 'Exhaust before the bottom waist, intake after it', params: [P('\\varphi', 'apex seal lean now', `${(L ? L.units[0].k.lean[0] / D : 0).toFixed(1)}°`, ''), P('\\varphi_{\\max}', 'largest lean', `±${(E.LEAN_MAX / D).toFixed(1)}°`, '')], lines: ['The apexes open and close the ports as they pass.', 'The apex seal leans as it sweeps the curve.'], tex: [String.raw`\varphi_{\max} = \arcsin\frac{3e}{R}`, String.raw`T = \sum (p - p_0)\,\frac{dV}{d\theta}`], eq: ['φₘₐₓ = asin(3e / R)', 'T = Σ (p − p₀) dV/dθ'], anchor: an(/^(intake0|exhaust0)$/, /^(intake0|exhaust0)$/) }) },
     ];
+    STEPS.forEach(s => { const f = s.lab; s.lab = () => Object.assign(f(), { rules: RULES }); });
     let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0;
     const show = s => { setView(s.view, true); const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
     const fadeSwap = async (id, then) => {
