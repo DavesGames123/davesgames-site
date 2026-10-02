@@ -669,16 +669,44 @@ function driftStep(now) {
   if (name !== drift.name) { drift.name = name; saverLabel(row); }
 }
 
-// Send the label plate for one row of SOLIDS to the shell.
+// Send the label plate for one row of SOLIDS to the shell: the fold, the
+// seed point, the face distance and the Fresnel mix of the shader, with
+// the live Wythoff weights. Colours: p, r m1 (ray), d and the seed s m2,
+// the mirror normals and corners m3, phi and eta m4, L m5, m, U, V, W, z
+// m6.
+const PLATE_RULES = [['\\mathbf{p}', 'm1'], ['\\mathbf{r}', 'm1'], ['d', 'm2'], ['\\mathbf{s}', 'm2'],
+  ['\\mathbf{n}_c', 'm3'], ['\\mathbf{n}_k', 'm3'], ['\\mathbf{n}', 'm3'], ['\\mathbf{a}', 'm3'], ['\\mathbf{b}', 'm3'], ['\\mathbf{c}', 'm3'],
+  ['\\phi', 'm4'], ['\\eta', 'm4'], ['L', 'm5'], ['m', 'm6'], ['U', 'm6'], ['V', 'm6'], ['W', 'm6'], ['z', 'm6']];
 function saverLabel(row) {
   if (!drift.label || !row) return;
-  const [, name, F, E, V, sch] = row;
+  const [, name, F, E, V, sch] = row, f2 = v => (+v).toFixed(2);
   try {
-    drift.label({ title: name, sub: 'Wythoff construction · ' + GROUP[S.poly_type],
-      lines: ['Faces ' + F + ' · Edges ' + E + ' · Vertices ' + V,
-              'Schläfli symbol ' + sch],
-      eq: ['V − E + F = ' + V + ' − ' + E + ' + ' + F + ' = 2'] });
+    drift.label({ title: name, sub: 'Wythoff construction, ' + GROUP[S.poly_type],
+      params: [{ sym: 'm', name: 'mirror order', value: String(S.poly_type), cls: 'm6' },
+        { sym: 'U, V, W', name: 'seed weights', value: f2(S.poly_U) + ', ' + f2(S.poly_V) + ', ' + f2(S.poly_W), cls: 'm6' },
+        { sym: 'z', name: 'zoom', value: f2(S.poly_zoom), cls: 'm6' },
+        { sym: '\\eta', name: 'refraction ratio', value: f2(S.refr_index), cls: 'm4' }],
+      lines: [F + ' faces, ' + E + ' edges, ' + V + ' vertices; Schläfli symbol ' + sch,
+              'Euler: ' + V + ' − ' + E + ' + ' + F + ' = 2'],
+      tex: ['\\mathbf{p}_{xy} \\leftarrow |\\mathbf{p}_{xy}|, \\quad \\mathbf{p} \\leftarrow \\mathbf{p} - 2\\min(0,\\, \\mathbf{p}\\cdot\\mathbf{n}_c)\\,\\mathbf{n}_c \\quad (m\\ \\text{times})',
+        'd(\\mathbf{p}) = z \\max_k \\bigl((\\mathbf{p}/z - \\mathbf{s})\\cdot\\mathbf{n}_k\\bigr)',
+        '\\mathbf{s} = \\frac{U\\mathbf{a} + V\\mathbf{b} + W\\mathbf{c}}{\\lVert U\\mathbf{a} + V\\mathbf{b} + W\\mathbf{c}\\rVert}',
+        '\\phi = (1 + \\mathbf{r}\\cdot\\mathbf{n})^2, \\quad L = (0.5 + 0.5\\phi)\\,L_{\\text{refl}} + (1 - 0.75\\phi)\\,L_{\\text{in}}'],
+      rules: PLATE_RULES,
+      eq: ['V − E + F = ' + V + ' − ' + E + ' + ' + F + ' = 2'],
+      anchor: solidAnchor });
   } catch (e) {}
+}
+// The solid on screen, for the shell's label plate. The shader looks from
+// (0, cam_y, cam_z) at the origin, so the centre of the solid is the
+// centre of #c. Its circumradius is z (the seed point is a unit vector,
+// scaled by zoom), and the ray of a pixel at p (short side -1..1) is
+// -p.x u + p.y v + fov w, so the silhouette radius is
+// z / sqrt(D^2 - z^2) * fov * (height / 2). No key points: one solid.
+function solidAnchor() {
+  const R = canvas.getBoundingClientRect(), z = S.poly_zoom, D = Math.hypot(S.cam_y, S.cam_z);
+  if (!(D > z) || R.width < 2) return null;
+  return { x: R.left + R.width / 2, y: R.top + R.height / 2, r: z / Math.sqrt(D * D - z * z) * S.fov * R.height / 2 };
 }
 
 // Hide the GUI, set the first look, and start the chain of legs. calm
@@ -699,6 +727,8 @@ saverEnter = (o) => {
   drift = { A, B, t0: performance.now(), hold: 0.35 * leg, dur: leg, rnd,
             label: typeof o.label === 'function' ? o.label : null, name: null };
   driftStep(performance.now());
+  // The weights and the zoom drift, so the plate refreshes in place each second.
+  setInterval(() => saverLabel(solidNow()), 1000);
   return { canvas, warmupMs: 1000 };
 };
 glReadyResolve();
