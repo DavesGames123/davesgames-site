@@ -190,17 +190,39 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
     s.plateAt = now;
     const t = s.t, tau = now - t.changedAt, from = SEED[t.prev], to = SEED[t.cur], k = ease(tau);
     const mix = f => from[f] * (1 - k) + to[f] * k, f2 = v => v.toFixed(2);
+    // Colours: time and phase (tau, phi) m1, glow g m2, the crossfade k m4,
+    // the voice inputs (L, A) m5, the rates (v, T) m6.
     s.label({ title: 'Presence orb · ' + t.s.name, sub: t.s.species,
+      params: [{ sym: 'L', name: 'voice level', value: f2(G.live.level), cls: 'm5' },
+        { sym: 'A', name: 'voice activity', value: f2(G.live.activity), cls: 'm5' },
+        { sym: 'v', name: 'phase speed', value: f2(mix('speed')), cls: 'm6' },
+        { sym: 'g', name: 'glow', value: f2(mix('glow')), cls: 'm2' },
+        { sym: 'T', name: 'tempo', value: f2(G.tempo), cls: 'm6' }],
+      lines: ['State ' + (t.prev === t.cur ? t.cur : t.prev + ' → ' + t.cur) + '; listening from ' + Math.round(s.per * 0.34) + ' s to ' + Math.round(s.per * 0.7) + ' s of ' + Math.round(s.per) + ' s',
+        'fn ' + t.s.fn + ', ' + t.s.family + ' pack: ' + t.s.knobs.map((q, i) => q[0] + ' ' + f2(t.knobs[i])).join(', ')],
+      tex: ['k = \\operatorname{smoothstep}(\\tau / 0.6), \\qquad x = (1 - k)\\,x_{\\text{from}} + k\\,x_{\\text{to}}',
+        '\\varphi \\leftarrow \\varphi + \\Delta t\\, v\\,(1 + 0.25\\,A)\\,T',
+        'g = g_{\\text{state}}\\,(1 + 0.35\\,L)',
+        '\\nu \\leftarrow \\nu + L^{0.65}\\,c\\,\\Delta\\varphi, \\qquad c = 1 \\text{ or } 0.55'],
+      rules: [['\\tau', 'm1'], ['\\varphi', 'm1'], ['g', 'm2'], ['k', 'm4'], ['L', 'm5'], ['A', 'm5'], ['v', 'm6'], ['T', 'm6']],
       eq: ['k = smoothstep(τ / 0.6)   (state crossfade)',
         'x = x_from·(1 − k) + x_to·k',
         'φ ← φ + dt·speed·(1 + 0.25·A)·tempo',
         'glow = glow_state·(1 + 0.35·L)',
         'voice ← voice + L^0.65·(1 or 0.55)·dφ',
         'fade: out = ink·a + orb·(1 − a)'],
-      lines: ['fn ' + t.s.fn + ' · ' + t.s.family + ' pack · ' + t.s.knobs.map((q, i) => 'c' + i + ' ' + q[0] + ' ' + f2(t.knobs[i])).join(', '),
-        'state ' + (t.prev === t.cur ? t.cur : t.prev + ' → ' + t.cur) + ' · speed ' + f2(mix('speed')) + ' · glow ' + f2(mix('glow')) + ' · depth ' + f2(mix('depth')),
-        'listening from ' + Math.round(s.per * 0.34) + ' s to ' + Math.round(s.per * 0.7) + ' s of ' + Math.round(s.per) + ' s · tempo ' + f2(G.tempo),
-        'level L = ' + f2(G.live.level) + ' · activity A = ' + f2(G.live.activity) + ' · tone ' + s.tone] });
+      anchor: saverAnchor });
+  }
+  // The orb on screen, for the shell's label plate. saverFrame draws the
+  // species in a centred square of side S = 0.78 min(w, h), and the orb
+  // shaders put the disc near radius 0.335 S (MG_ORB_R, uv spans -0.5..0.5);
+  // the drawn discs measure 0.27 to 0.33 S, and the orb pack (mo_*) about
+  // 0.38 S, so r is 0.38 S for that pack and 0.33 S for the rest. No key
+  // points: one orb.
+  function saverAnchor() {
+    if (!saver || !saver.canvas) return null;
+    const r = saver.canvas.getBoundingClientRect(), S = Math.min(r.width, r.height) * 0.78;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: (saver.t && saver.t.s.family === 'orb' ? 0.38 : 0.33) * S };
   }
   function saverState(t, st, now) { if (t.cur !== st) { t.prev = t.cur; t.cur = st; t.changedAt = now; } }
   function saverFrame(enc, now) {
