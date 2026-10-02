@@ -110,6 +110,7 @@
   <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" id="rng-norm" min="0" max="50" value="4" style="width:50px"/></div>
   <div class="ctrl-sep"></div>
   <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="btn-atmo">On</button></div>
+  <span id="xrSec" hidden><span class="ctrl-sep"></span><span class="ctrl-group"><span class="ctrl-label">Headset</span><button class="bot-btn" id="bVR" hidden>VR</button><button class="bot-btn" id="bAR" hidden>AR</button></span></span>
   <div style="flex:1"></div>
   <button class="bot-btn" id="btn-batch" onclick="document.getElementById('batch-panel').classList.toggle('open');this.classList.toggle('active')">Batch</button>
   <button class="bot-btn gen-btn" id="btn-gen">▶ Generate</button>
@@ -157,5 +158,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="main.js"></script>
+<!-- xr.js: VR and AR view (a module; it passes the global THREE to lib/xr-view.js) -->
+<script type="module" src="xr.js"></script>
 </body>
 </html>

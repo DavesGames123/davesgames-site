@@ -46,6 +46,7 @@
 //      controls ........... "// CONTROLS"        orbit, zoom, sun, toggles
 //      sidebar ............ "// SIDEBAR"         map switch, download, generate
 //      batch .............. "BATCH GENERATION"   queue → ZIP of many planets
+//      xr hook ............ "window.__forge"     objects xr.js reads (VR, AR)
 // ============================================================================
 (async () => {
 "use strict";
@@ -513,6 +514,9 @@ resize();
 // placeholder globe and the scan ring, run tweens, frame the camera, draw.
 function anim(now){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;for(const m of [pmsh,amsh,holo,scanG]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}runTweens(now||performance.now());fitCam(false);ren.render(scn,cam)}
 anim();
+// xr.js (a module, lib/xr-view.js) reads these for the VR and AR view. They
+// are set here, after the shader fetch, so xr.js waits for them.
+window.__forge={ren,scn,cam,dr};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTROLS
