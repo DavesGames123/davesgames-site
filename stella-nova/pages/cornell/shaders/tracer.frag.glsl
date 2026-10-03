@@ -20,8 +20,10 @@
 //   --------------------------------------------------------------------------
 //     camRay(jittered) ─▶ radiance():
 //        loop b: hitScene() ─┬─ walls  (analytic plane clips)
-//                            └─ objects(marchObjects over shapeSDF)
-//                 at diffuse: sampleLight() next-event + cosine bounce
+//                            └─ objects(marchObjects over shapeSDF, clipped
+//                                       to per-object bounding spheres)
+//                 at diffuse: sampleLight() next-event (occlusion-only
+//                                 shadow ray) + cosine bounce
 //                 mirror / glass / glossy: reflect or refract, keep going
 //                 Russian roulette after 3 bounces
 //     running average: out = prev + (sample - prev) / (uSamples+1)
@@ -67,43 +69,68 @@ float shapeSDF(int sh, vec3 p, float r){
   float s2=(cb.x<0.0&&ca.y<0.0)?-1.0:1.0;
   return s2*sqrt(min(dot(ca,ca),dot(cb,cb)));
 }
-// Nearest object to p (in world space) and its id; each object is tested in its
-// own rotated frame via the uRotInv rows.
-float mapObjects(vec3 p, out int id){ float best=1e9; id=0;
-  for(int i=0;i<8;i++){ if(i>=uNumSph) break; if(uVis[i]<0.5) continue; vec3 d=p-uSph[i].xyz;
-    vec3 l=vec3(dot(uRotInvR0[i],d),dot(uRotInvR1[i],d),dot(uRotInvR2[i],d));
-    float dd=shapeSDF(int(uSphMat2[i].z+0.5), l, uSph[i].w); if(dd<best){best=dd;id=i;} }
-  return best; }
+// Distance from world point p to object i, evaluated in its own rotated frame
+// via the uRotInv rows.
+float objSDF(int i, vec3 p){ vec3 d=p-uSph[i].xyz;
+  vec3 l=vec3(dot(uRotInvR0[i],d),dot(uRotInvR1[i],d),dot(uRotInvR2[i],d));
+  return shapeSDF(int(uSphMat2[i].z+0.5), l, uSph[i].w); }
+// Radius of a sphere about the object centre that holds the whole shape: r
+// times a per-shape factor (box corner sqrt(3)*0.82, text half-diagonal from
+// uTextAspect, and so on), plus 2% and 0.01 of slack for the hit threshold.
+float boundR(int sh, float r){ float k=1.06;
+  if(sh==0||sh==6) k=1.0; else if(sh==1) k=1.43; else if(sh==2) k=1.09; else if(sh==3) k=1.02;
+  else if(sh==4) k=1.05; else if(sh==5) k=1.15; else if(sh==8) k=sqrt(uTextAspect*uTextAspect+1.0256);
+  return r*k*1.02+0.01; }
 // Sphere-trace the object field to tMax; returns hit distance or -1.
-float marchObjects(vec3 ro, vec3 rd, float tMax, out int id){ float t=2e-3; id=0;
-  for(int i=0;i<256;i++){ if(i>=uMSteps) break; int oid; float d=mapObjects(ro+rd*t,oid); float ad=abs(d);
-    if(ad<6e-4*(1.0+t*0.5)){ id=oid; return t; } t+=ad*0.9; if(t>tMax) break; } return -1.0; }
-// SDF gradient (central differences) gives the object surface normal.
-vec3 normalObjects(vec3 p){ float e=5e-4; int d;
-  float nx=mapObjects(p+vec3(e,0,0),d)-mapObjects(p-vec3(e,0,0),d);
-  float ny=mapObjects(p+vec3(0,e,0),d)-mapObjects(p-vec3(0,e,0),d);
-  float nz=mapObjects(p+vec3(0,0,e),d)-mapObjects(p-vec3(0,0,e),d); return normalize(vec3(nx,ny,nz)); }
+// First the ray is clipped against each object's bounding sphere: objects the
+// ray misses are left out of the field (mask), and the march runs only from
+// the first sphere entry to the last sphere exit. A ray that misses every
+// sphere costs no SDF evaluations at all. The hit set is the same as a march
+// over all objects, because a shape surface lies inside its sphere.
+float marchObjects(vec3 ro, vec3 rd, float tMax, out int id){ id=0; uint mask=0u; float t0=INF, t1=-INF;
+  for(int i=0;i<8;i++){ if(i>=uNumSph) break; if(uVis[i]<0.5) continue;
+    float R=boundR(int(uSphMat2[i].z+0.5), uSph[i].w); vec3 oc=ro-uSph[i].xyz; float b=dot(oc,rd), h=b*b-dot(oc,oc)+R*R;
+    if(h<0.0) continue; h=sqrt(h); if(-b+h<2e-3) continue;
+    mask|=1u<<uint(i); t0=min(t0,-b-h); t1=max(t1,-b+h); }
+  if(mask==0u) return -1.0;
+  float t=max(2e-3,t0), tEnd=min(tMax,t1);
+  for(int i=0;i<256;i++){ if(i>=uMSteps||t>tEnd) break; float best=1e9; int oid=0; vec3 p=ro+rd*t;
+    for(int k=0;k<8;k++){ if(k>=uNumSph) break; if((mask&(1u<<uint(k)))==0u) continue; float dd=objSDF(k,p); if(dd<best){best=dd;oid=k;} }
+    float ad=abs(best); if(ad<6e-4*(1.0+t*0.5)){ id=oid; return t; } t+=ad*0.9; } return -1.0; }
+// Surface normal of object id at p: central differences of that object's SDF
+// only (6 evaluations, not 6 per object).
+vec3 normalObjects(vec3 p, int id){ float e=5e-4;
+  float nx=objSDF(id,p+vec3(e,0,0))-objSDF(id,p-vec3(e,0,0));
+  float ny=objSDF(id,p+vec3(0,e,0))-objSDF(id,p-vec3(0,e,0));
+  float nz=objSDF(id,p+vec3(0,0,e))-objSDF(id,p-vec3(0,0,e)); return normalize(vec3(nx,ny,nz)); }
 // A ray hit: distance, normal, albedo, material type, roughness, ior, emission.
 struct Hit{ float t; vec3 n; vec3 alb; int type; float rough; float ior; vec3 emis; };
 // Record a wall-plane hit if it is the nearest so far.
 void face(inout Hit h,float t,vec3 n,vec3 alb,vec3 e,int ty){ if(t>0.001&&t<h.t){h.t=t;h.n=n;h.alb=alb;h.emis=e;h.type=ty;h.rough=1.0;h.ior=1.0;} }
-// Intersect the whole scene: the six box walls as clipped planes (the +y face
-// carries the light patch in its centre), then the SDF objects via marchObjects.
-Hit hitScene(vec3 ro,vec3 rd){ Hit h; h.t=INF; h.type=-1; h.emis=vec3(0.0); float t; vec3 p;
+// Intersect the six box walls as clipped planes (the +y face carries the light
+// patch in its centre). Cheap: no marching.
+Hit hitWalls(vec3 ro,vec3 rd){ Hit h; h.t=INF; h.type=-1; h.emis=vec3(0.0); float t; vec3 p;
   if(abs(rd.x)>1e-6){ t=(-1.0-ro.x)/rd.x; p=ro+rd*t; if(all(lessThanEqual(abs(p.yz),vec2(1.0)))) face(h,t,vec3(1,0,0),uColL,vec3(0),0);
                       t=( 1.0-ro.x)/rd.x; p=ro+rd*t; if(all(lessThanEqual(abs(p.yz),vec2(1.0)))) face(h,t,vec3(-1,0,0),uColR,vec3(0),0); }
   if(abs(rd.y)>1e-6){ t=(-1.0-ro.y)/rd.y; p=ro+rd*t; if(all(lessThanEqual(abs(p.xz),vec2(1.0)))) face(h,t,vec3(0,1,0),uColW,vec3(0),0);
                       t=( 1.0-ro.y)/rd.y; p=ro+rd*t; if(all(lessThanEqual(abs(p.xz),vec2(1.0)))){ bool lit=abs(p.x)<uLightSize&&abs(p.z)<uLightSize;
                         face(h,t,vec3(0,-1,0), lit?vec3(0):uColW, lit?uLightCol*uLightInt:vec3(0), lit?1:0); } }
   if(abs(rd.z)>1e-6){ t=(-1.0-ro.z)/rd.z; p=ro+rd*t; if(all(lessThanEqual(abs(p.xy),vec2(1.0)))) face(h,t,vec3(0,0,1),uColW,vec3(0),0); }
-  { int oid; float tObj=marchObjects(ro,rd,(h.t>1e8?6.0:h.t),oid); if(tObj>0.0&&tObj<h.t){ vec3 q=ro+rd*tObj; h.t=tObj; h.n=normalObjects(q); h.alb=uSphMat[oid].yzw; h.type=int(uSphMat[oid].x+0.5); h.rough=uSphMat2[oid].x; h.ior=uSphMat2[oid].y; h.emis=(h.type==5)?(uSphMat[oid].yzw*uSphMat2[oid].w):vec3(0); } }
+  return h; }
+// Intersect the whole scene: the walls, then the SDF objects via marchObjects,
+// limited to the nearest wall. The normal is computed only for an object hit.
+Hit hitScene(vec3 ro,vec3 rd){ Hit h=hitWalls(ro,rd);
+  { int oid; float tObj=marchObjects(ro,rd,(h.t>1e8?6.0:h.t),oid); if(tObj>0.0&&tObj<h.t){ vec3 q=ro+rd*tObj; h.t=tObj; h.n=normalObjects(q,oid); h.alb=uSphMat[oid].yzw; h.type=int(uSphMat[oid].x+0.5); h.rough=uSphMat2[oid].x; h.ior=uSphMat2[oid].y; h.emis=(h.type==5)?(uSphMat[oid].yzw*uSphMat2[oid].w):vec3(0); } }
   return h; }
 // Next-event estimation: sample a point on the ceiling light, test the shadow
 // ray, and return its direct contribution (BRDF x geometry x area).
 vec3 sampleLight(vec3 p,vec3 n,vec3 alb){ float lx=(rnd()*2.0-1.0)*uLightSize, lz=(rnd()*2.0-1.0)*uLightSize; vec3 lp=vec3(lx,0.999,lz);
   vec3 d=lp-p; float dist=length(d); vec3 L=d/dist; float ndl=max(dot(n,L),0.0); if(ndl<=0.0) return vec3(0);
   float cosl=max(dot(vec3(0,-1,0),-L),0.0); if(cosl<=0.0) return vec3(0);
-  Hit s=hitScene(p+n*1.5e-3,L); if(s.t<dist-2e-3) return vec3(0);
+  // Shadow ray: an occlusion test only. A wall nearer than the light, or any
+  // object hit before the light, blocks it. No object normal is computed.
+  vec3 so=p+n*1.5e-3; float lim=dist-2e-3; Hit w=hitWalls(so,L); if(w.t<lim) return vec3(0);
+  int oid; if(marchObjects(so,L,lim,oid)>0.0) return vec3(0);
   float area=pow(2.0*uLightSize,2.0); return alb/PI*ndl*uLightCol*uLightInt*cosl/(dist*dist)*area; }
 // The path integrator: bounce the ray, adding direct light at diffuse hits and
 // carrying throughput thr. spec tracks whether the last bounce was specular, so
