@@ -4,7 +4,9 @@
 //  Cmd+Option+S on the Mac, or Ctrl+Alt+S on any system, opens the menu. Start
 //  in the menu hides the shell chrome and plays a list of pages. Each page
 //  shows for a set time, behind a fade to black. The menu can also record
-//  each page canvas to a video file, which the browser saves in Downloads.
+//  each page to a video file, which the browser saves in Downloads. The
+//  recording is the tab itself, so it holds the page and all the GUI over
+//  it: poster, equations, credit, caption and leader lines ("CAPTURE").
 //
 //  The shell (stella-nova/index.html) loads this classic script after its own
 //  script. It uses the shell's switchTab, PAGES, LABELS and SN_NAV. It does
@@ -28,8 +30,8 @@
 //                         live values); label(null) clears it. The shell
 //                         draws it as a centred specimen poster (title,
 //                         rule, parameters; equations, code and the site
-//                         mark at the base). The poster is DOM, so a
-//                         recording does not hold it.
+//                         mark at the base). The poster is DOM. A tab
+//                         capture records it; the canvas fallback does not.
 //                         Fields: see "label plate (poster)" below.
 //    snSaver.exit()       optional. The controller calls it when the user
 //                         stops the screensaver on that page.
@@ -51,6 +53,7 @@
 //    menu markup .......... "function buildMenu"
 //    play loop ............ "function showPage"
 //    page hook / generic .. "function enterPage"
+//    tab capture .......... "function openCapture"
 //    recorder ............. "function startRecording"
 //    poster ............... "function posterHTML"
 //    leader line .......... "function drawLeader"
@@ -400,7 +403,7 @@ function buildMenu() {
         <div class="row"><span>Frame rate</span><span></span>${seg('recordFps', [['24', '24 fps'], ['30', '30 fps'], ['60', '60 fps']])}</div>
         <div class="row"><span>Bit rate</span><output data-o="recordMbps"></output><input type="range" data-k="recordMbps" min="2" max="40" step="1"></div>
         <div class="row"><span>Wait before recording</span><output data-o="recordWarmup"></output><input type="range" data-k="recordWarmup" min="0" max="15" step="0.5"></div>
-        <p class="note">${esc(fmt.split(';')[0])}${fmt.startsWith('video/mp4') ? '' : ' (this browser cannot record MP4)'}. Files go to the browser download folder. Only the page canvas is recorded, not the poster over it. For a short video with the poster, use the 9:16 frame and a screen recorder.</p>
+        <p class="note">${esc(fmt.split(';')[0])}${fmt.startsWith('video/mp4') ? '' : ' (this browser cannot record MP4)'}. Files go to the browser download folder. Each file holds the page and all the GUI over it: poster, equations and credit. Start asks once to share this tab: choose this tab. With the 9:16 frame, the file is the column only. A browser with no tab capture records the page canvas only.</p>
       </div>` : '<p class="note">This browser cannot record a canvas.</p>'}
     </div>
   </div>
@@ -509,6 +512,18 @@ async function startSaver() {
     const de = document.documentElement, rq = de.requestFullscreen || de.webkitRequestFullscreen;
     if (rq) Promise.resolve(rq.call(de)).catch(() => {});
   }
+  if (S.record) {
+    const r = run;
+    await openCapture(r);
+    if (run !== r) return;
+    // The share prompt can take the window out of full screen. Ask again;
+    // without a user gesture the browser can refuse, and the run then plays
+    // in the window.
+    if (S.display === 'screen' && !fsElement()) {
+      const de = document.documentElement, rq = de.requestFullscreen || de.webkitRequestFullscreen;
+      if (rq) await Promise.resolve(rq.call(de)).catch(() => {});
+    }
+  }
   if (S.wakeLock && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { if (run) run.lock = l; else l.release(); }).catch(() => {});
   if (S.exitOnInput) setTimeout(() => { if (run) { run.moveArm = true; } }, 1500);
   document.addEventListener('fullscreenchange', onFullscreen);
@@ -517,7 +532,7 @@ async function startSaver() {
 }
 // Leaving full screen (Esc in the browser) stops the run.
 function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
-function onFullscreen() { if (run && S.display === 'screen' && !fsElement()) stopSaver(); }
+function onFullscreen() { if (run && !run.asking && S.display === 'screen' && !fsElement()) stopSaver(); }
 
 function next(step) {
   if (!run) return;
@@ -557,7 +572,7 @@ async function showPage(key) {
   if (S.labels) fallbackPoster(r, token, page);
   else if (S.caption) { setTimeout(() => { if (run === r && token === r.token) cap.classList.add('on'); }, S.fade * 1000 + 400); setTimeout(() => cap.classList.remove('on'), S.fade * 1000 + 6500); }
   hud(`${r.i + 1}/${r.order.length} ${page.label} · ${got.mode}${got.canvas ? '' : ' · no canvas'}`);
-  if (S.record && got.canvas) startRecording(r, key, got.canvas, Math.max(S.recordWarmup * 1000, got.warmupMs || 0), token);
+  if (S.record && (r.cap || got.canvas)) startRecording(r, key, got.canvas, Math.max(S.recordWarmup * 1000, got.warmupMs || 0), token);
   r.left = S.seconds * 1000; r.started = performance.now();
   r.timer = setTimeout(() => next(1), r.left);
 }
@@ -907,6 +922,7 @@ async function stopSaver() {
   run = null;
   clearTimeout(r.timer);
   await finishRecording(r);
+  closeCapture(r);
   try { const w = r.frameWin; if (w && w.snSaver && w.snSaver.exit) w.snSaver.exit(); } catch (e) {}
   if (r.lock) r.lock.release().catch(() => {});
   document.removeEventListener('fullscreenchange', onFullscreen);
@@ -923,22 +939,70 @@ async function stopSaver() {
   setTimeout(() => el('sn-saver-cover').classList.remove('on'), 300);
 }
 
+// ── tab capture ────────────────────────────────────────────────────────────
+// CAPTURE. With "Save each page as a video" on, Start asks once to share
+// this tab (getDisplayMedia, preferCurrentTab). The run then records the tab
+// pixels, not the page canvas, so each file holds what the screen shows: the
+// page, the poster, the equations, the credit, the caption and the leader
+// lines. Region Capture crops the track to #content: the whole window in the
+// fill frame, the 9:16 column in the vertical frame. cropTo() fails when the
+// share is some other tab, a window or a screen, so a wrong choice cannot
+// record the wrong thing. A refused prompt, a wrong share, or a browser with
+// no Region Capture falls back to the page canvas (no GUI), and the status
+// line (H) says so. One stream serves the whole run. Each page gets its own
+// MediaRecorder on it (startRecording).
+async function openCapture(r) {
+  const md = navigator.mediaDevices;
+  if (!md || !md.getDisplayMedia || !window.CropTarget) { hud('tab capture is not possible here: canvas only, no GUI'); return; }
+  r.asking = true;
+  let stream = null;
+  try {
+    // No ideal size: the capture keeps the tab's own device pixels, up to 4K.
+    // A size taken from screen.width scaled the video down where the
+    // reported screen is small.
+    stream = await md.getDisplayMedia({
+      video: { displaySurface: 'browser', cursor: 'never', frameRate: S.recordFps, width: { max: 3840 }, height: { max: 2160 } },
+      audio: false, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude',
+    });
+    const track = stream.getVideoTracks()[0];
+    await track.cropTo(await CropTarget.fromElement(el('content')));
+    // The user can end the share from the browser bar: later pages then use
+    // the canvas.
+    track.addEventListener('ended', () => { if (r.cap === stream) { r.cap = null; hud('tab share ended: canvas only, no GUI'); } });
+  } catch (e) {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    hud(`tab capture refused (${(e && e.name) || 'error'}): canvas only, no GUI`);
+  }
+  r.asking = false;
+  if (run !== r) { if (stream) stream.getTracks().forEach(t => t.stop()); return; }
+  r.cap = stream;
+}
+function closeCapture(r) {
+  if (!r.cap) return;
+  r.cap.getTracks().forEach(t => t.stop());
+  r.cap = null;
+}
+
 // ── recorder ───────────────────────────────────────────────────────────────
 // One file per page. The recording starts after the warmup and stops when
-// the page fades out, so a file holds no black frames.
+// the page fades out, so a file holds no black frames. The source is the
+// shared tab capture (r.cap) when there is one, else the page canvas.
 function startRecording(r, key, canvas, warmup, token) {
   const type = recFormat();
-  if (!type || !canvas.captureStream) { hud('recording is not possible here'); return; }
+  if (!type) { hud('recording is not possible here'); return; }
+  if (!r.cap && !(canvas && canvas.captureStream)) { hud(`${key}: no canvas to record`); return; }
   setTimeout(() => {
     if (run !== r || token !== r.token || r.rec) return;
+    const shared = !!r.cap;
     let stream;
-    try { stream = canvas.captureStream(S.recordFps); } catch (e) { hud(`${key}: capture failed`); return; }
+    try { stream = shared ? r.cap : canvas.captureStream(S.recordFps); } catch (e) { hud(`${key}: capture failed`); return; }
     const chunks = [];
     const mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: S.recordMbps * 1e6 });
     mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     const done = new Promise(res => { mr.onstop = res; });
     mr.start(1000);
-    r.rec = { mr, chunks, done, key, type, stream };
+    r.rec = { mr, chunks, done, key, type, stream, shared };
   }, warmup);
 }
 async function finishRecording(r) {
@@ -946,7 +1010,7 @@ async function finishRecording(r) {
   r.rec = null;
   try { rec.mr.stop(); } catch (e) {}
   await Promise.race([rec.done, wait(3000)]);
-  rec.stream.getTracks().forEach(t => t.stop());
+  if (!rec.shared) rec.stream.getTracks().forEach(t => t.stop());   // the tab capture lives for the run
   if (!rec.chunks.length) return;
   const blob = new Blob(rec.chunks, { type: rec.type.split(';')[0] });
   const ext = rec.type.startsWith('video/mp4') ? 'mp4' : 'webm';
