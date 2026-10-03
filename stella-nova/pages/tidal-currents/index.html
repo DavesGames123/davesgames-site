@@ -16,16 +16,25 @@
 
    The map fills the whole window at every aspect. There is no letterbox,
    no zoom, no pan and no scroll. view.js picks the part of the extent
-   raster that the window shows. The text blocks float over the quietest
-   parts of that view. The atlas changes the location.
+   raster that the window shows. The text has the look of the shell
+   screensaver plate (lib/screensaver.js): a centred head at the top and a
+   centred foot at the base, over a dark veil. In saver mode the page hides
+   its head, foot and labels, and the shell plate is the only text.
+
+   HEAD LOAD ORDER
+     1. style.css    the page stylesheet
+     2. sci.css      STIX Two Text and Inter. It loads the fonts.
+     3. nav-data.js, screensaver-catalog.js   the page number and the
+                     section colour for the head, in the same order as the
+                     saver plate
 
    FILES
-     main.js      overlay text, block placement, clock, controls, atlas, captions
+     main.js      head, foot, labels, clock, controls, atlas, about sheet
      view.js      extent / core / view math (no DOM)
-     locator.js   the small locator globe (2D canvas)
+     locator.js   the small locator globe (2D canvas), in the about sheet
      quality.js   frame-rate governor: particle share, then render scale
      engine.js    WebGPU particles, glow and composite (no DOM text)
-     colormap.js  the temperature ramp; engine and legend use the same ramp
+     colormap.js  the temperature ramp; engine and foot use the same ramp
      shaders/     WGSL programs that engine.js fetches at run time
      data/<id>/   meta.json, mask.png, field PNGs and thumb for each location
      data/index.json  the location list, in atlas order
@@ -33,75 +42,85 @@
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────── #stage ─────────────────────────────────┐
-     │ #poster = the whole window                                          │
-     │   #map      WebGPU canvas                                           │
-     │   #overlay  place labels + four floating blocks:                    │
-     │             .title  .legend (with scale)  .credit  .locator         │
-     │   #fade  #loading  #fallback                                        │
-     │ #caption   caption; a bottom sheet on a phone                       │
-     │ #atlas     location menu; a side panel, or a bottom sheet on a phone│
-     │ #controls  ‹  [n / N · name]  ›  |  play  atlas  i                  │
+     │ #map      WebGPU canvas, the whole window                           │
+     │ #veil     dark bands behind the head and the foot                   │
+     │ #overlay  place labels                                              │
+     │ #head     No. · section  /  location title  /  rule  /  model       │
+     │ #foot     #params  /  #notes  /  #scrub (the week)  /  #controls    │
+     │           #controls = ‹  [ location ]  ›  play  i                   │
+     │ #fade  #loading  #fallback                                          │
+     ├─────────────────────────────────────────────────────────────────────┤
+     │ #atlas    location menu: a drawer on the right, a sheet on a phone  │
+     │ #caption  about sheet with the locator globe; same placement        │
      └─────────────────────────────────────────────────────────────────────┘
 
    GREP MAP  (main.js)
-     grep -n 'function relayout'      view, canvas size, labels, blocks
-     grep -n 'function bestSpot'      the quiet-spot search for one block
-     grep -n 'function placeBlocks'   block order and preferences
+     grep -n 'function relayout'      view, canvas size, labels
+     grep -n 'function buildOverlay'  head, foot and place labels
      grep -n 'function placeLabels'   labels from lon/lat, collisions
      grep -n 'function buildAtlas'    the location menu
      grep -n 'function switchTo'      crossfade and dataset load
      grep -n 'function frame'         clock and render loop
+     grep -n 'function pageMark'      page number and section colour
      grep -n 'const CAPTIONS'         fallback captions (meta.blurb wins)
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A week of tidal currents in many places, drawn as fine glowing particle trails over NOAA model data. Color is water temperature and brightness is speed.">
-<link href="../../vendor/fonts/ibm-plex-mono+source-serif-4.80c5ff54.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<script src="../../lib/nav-data.js"></script>
+<script src="../../lib/screensaver-catalog.js"></script>
 </head>
 <body>
 <main id="stage">
-  <div id="poster">
-    <canvas id="map" aria-label="Animated map of surface currents"></canvas>
-    <div id="overlay"></div>
-    <div id="fade"></div>
-    <div id="loading" hidden><span></span>Loading</div>
-    <div id="fallback" hidden></div>
-  </div>
+  <canvas id="map" aria-label="Animated map of surface currents"></canvas>
+  <div id="veil"></div>
+  <div id="overlay"></div>
+  <header id="head">
+    <div id="cat"></div>
+    <h1 id="ttl"></h1>
+    <i class="rule"></i>
+    <div id="sub"></div>
+  </header>
+  <footer id="foot">
+    <div id="params"></div>
+    <div id="notes"></div>
+    <div id="scrub" role="slider" aria-label="Time in the week" aria-valuemin="0"><i class="fill"></i><i class="knob"></i></div>
+    <nav id="controls" aria-label="Location">
+      <button id="prev" type="button" aria-label="Previous location" title="Previous location (Left)">‹</button>
+      <button id="where" type="button" aria-haspopup="dialog" aria-expanded="false" title="All locations (M)">
+        <span class="br">[</span><span id="locName"></span><span id="locCount"></span><span class="br">]</span>
+      </button>
+      <button id="next" type="button" aria-label="Next location" title="Next location (Right)">›</button>
+      <span class="sep"></span>
+      <button id="play" type="button" aria-label="Pause" title="Play / pause (Space)"></button>
+      <button id="info" type="button" aria-label="About this map" aria-pressed="false" title="About this map (I)">i</button>
+    </nav>
+  </footer>
+  <div id="fade"></div>
+  <div id="loading" hidden><span></span>Loading</div>
+  <div id="fallback" hidden></div>
 </main>
 
 <div id="scrim" hidden></div>
 
-<aside id="caption" hidden aria-live="polite">
+<aside id="caption" class="sheet" hidden aria-live="polite">
   <div id="capGrip" class="grip" aria-hidden="true"></div>
-  <button id="capClose" class="close" type="button" aria-label="Close caption">×</button>
+  <button id="capClose" class="close" type="button" aria-label="Close about">×</button>
   <h2 id="capTitle"></h2>
+  <div id="capGlobe"><canvas id="globe" role="img" aria-label="Locator globe"></canvas></div>
   <div id="capBody"></div>
 </aside>
 
-<aside id="atlas" hidden aria-label="Locations">
+<aside id="atlas" class="sheet" hidden aria-label="Locations">
   <div id="atlasGrip" class="grip" aria-hidden="true"></div>
   <header>
     <h2>Atlas</h2>
-    <span id="atlasCount" class="mono"></span>
+    <span id="atlasCount"></span>
     <button id="atlasClose" class="close" type="button" aria-label="Close atlas">×</button>
   </header>
   <div id="atlasBody"></div>
 </aside>
-
-<nav id="controls" aria-label="Location">
-  <button id="prev" type="button" aria-label="Previous location" title="Previous location (Left)">‹</button>
-  <button id="where" type="button" aria-haspopup="dialog" aria-expanded="false" title="All locations (M)">
-    <span id="locCount"></span>
-    <span id="locName"></span>
-  </button>
-  <button id="next" type="button" aria-label="Next location" title="Next location (Right)">›</button>
-  <span class="sep"></span>
-  <button id="play" type="button" aria-label="Pause" title="Play / pause (Space)"></button>
-  <button id="atlasBtn" type="button" aria-label="All locations" aria-pressed="false" title="All locations (M)">
-    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg>
-  </button>
-  <button id="info" type="button" aria-label="About this map" aria-pressed="false" title="About this map (I)">i</button>
-</nav>
 
 <script type="module" src="main.js"></script>
 </body>

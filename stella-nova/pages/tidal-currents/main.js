@@ -1,21 +1,21 @@
-// main.js — Tidal Currents page: full-screen map, floating text, clock, atlas.
+// main.js — Tidal Currents page: full-screen map, plate text, clock, atlas.
 //
 // engine.js draws the map into #map with WebGPU. The map fills the whole
 // window at every aspect: view.js picks the part of the extent raster that
-// the screen shows. This file does everything else. It floats the title,
-// legend, credit and locator blocks over the quietest parts of the
-// view, places the place labels, runs the clock, and switches the location
-// with a short fade through black. quality.js lowers the particle share and
-// the render scale when the frames do not keep up with the display.
+// the screen shows. This file does everything else. It fills the head and
+// the foot in the look of the shell screensaver plate, places the place
+// labels clear of both, runs the clock, and switches the location with a
+// short fade through black. quality.js lowers the particle share and the
+// render scale when the frames do not keep up with the display.
 //
 //   Left / Right   previous / next location     Space   play / pause
-//   M              atlas (location menu)        I       caption
+//   M              atlas (location menu)        I       about sheet
 //   Esc            close the open sheet
-//   Swipe left or right to change the location. Drag the 7-day bar to set the time.
+//   Swipe left or right to change the location. Drag the week bar to set the time.
 //   #<id> in the URL picks a location.
 //
-// grep: function relayout  function buildCover  function placeLabels
-//       function placeBlocks  function bestSpot  function switchTo  function frame
+// grep: function relayout  function buildOverlay  function placeLabels
+//       function pageMark  function switchTo  function frame
 //       function buildAtlas  const CAPTIONS  function captionHTML
 //       window.snSaver (shell screensaver hook)  function saverPlate (its label plate)
 
@@ -25,7 +25,6 @@ import { createGovernor, LEVELS } from './quality.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
-const poster = $('poster');
 const canvas = $('map');
 const overlay = $('overlay');
 const fadeEl = $('fade');
@@ -35,11 +34,12 @@ const captionEl = $('caption');
 const atlasEl = $('atlas');
 const scrim = $('scrim');
 const strip = $('controls');
+const headEl = $('head');
+const footEl = $('foot');
+const scrubEl = $('scrub');
 
 const WEEK_SECONDS = 70;            // one week of model time in about 70 s
 const IDLE_MS = 2500;
-const DESIGN_AREA = 720 * 1280;     // the v1 design grid: one portrait poster
-const TEXT_SCALE = 0.78;            // v2: the text is about 22 % smaller than v1
 const STORE_KEY = 'tidal-currents.location';
 // The location of a fresh visit. A #hash in the URL wins, then the last
 // location of this tab session (sessionStorage).
@@ -54,14 +54,6 @@ const DEFAULT_LOCS = [
   { id: 'straits-of-mackinac', title: 'Straits of Mackinac' },
 ];
 
-// Line breaks for a stacked title, when meta.titleLines is not there.
-const TITLE_LINES = {
-  'puget-sound': ['Puget', 'Sound'],
-  'sf-bay': ['San Francisco', 'Bay'],
-  'san-juan-islands': ['San Juan', 'Islands'],
-  'straits-of-mackinac': ['Straits of', 'Mackinac'],
-};
-
 // Hand-written captions, used when meta.blurb is not there.
 const CAPTIONS = {
   'puget-sound': 'Puget Sound fills and drains through a few narrow passages. Twice a day, the whole of the South Sound pushes in and out through the Tacoma Narrows, a channel only about a mile wide, and the current there is among the fastest in the Sound.',
@@ -71,7 +63,7 @@ const CAPTIONS = {
   'straits-of-mackinac': 'Lake Michigan and Lake Huron are one lake, joined here at the Straits of Mackinac. The current through the straits often reverses, but not with the tide: wind piles water against one shore, and the lake sloshes back in a slow seiche.',
 };
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const ICON_PAUSE = '<svg viewBox="0 0 14 14" aria-hidden="true"><rect x="2.5" y="1.5" width="3" height="11" rx="0.6"/><rect x="8.5" y="1.5" width="3" height="11" rx="0.6"/></svg>';
 const ICON_PLAY = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 1.6v10.8a.5.5 0 0 0 .76.43l8.6-5.4a.5.5 0 0 0 0-.86l-8.6-5.4a.5.5 0 0 0-.76.43z"/></svg>';
 
@@ -91,11 +83,8 @@ let shownHour = -1;
 let switchToken = 0;
 let ui = {};                  // live overlay elements
 let view = { x0: 0, y0: 0, x1: 1, y1: 1 };
-let scr = { w: 1, h: 1, u: 1 };
-let cover = null;             // coarse water coverage of the view, with a summed-area table
-let coverSrc = null;          // the canvas that holds the full mask at low res
-let locator = null;
-let locatorBlock = null;
+let scr = { w: 1, h: 1 };
+let locator = null;           // the globe in the about sheet
 const metaCache = new Map();  // id -> meta (for the atlas)
 let saver = false;            // true in the shell screensaver (window.snSaver)
 let timeScale = 1;            // model-time rate; the screensaver slows it
@@ -185,92 +174,69 @@ function device() {
   return { phone, tablet: coarse.matches && !phone };
 }
 
-// Read env(safe-area-inset-*) through a probe element.
-const insetProbe = el('div');
-insetProbe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;' +
-  'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
-document.body.appendChild(insetProbe);
-function safeInsets() {
-  const cs = getComputedStyle(insetProbe);
-  return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
-}
-
 // ─── overlay content ────────────────────────────────────────────────────────
 function legendRamp() {
   return rampCSS || 'linear-gradient(90deg, #3b2a8f, #3f5fd6, #2fb3e0, #3fd49a, #d8e04a, #f39a3a, #e0453a)';
 }
 
+// PAGE MARK. The number and the section of this page, counted as the saver
+// plate counts them (lib/screensaver.js allPages): every page of
+// lib/nav-data.js in order, less home and the pages the saver catalog
+// excludes. The section colour goes to --c.
+function pageMark() {
+  const cat = window.SN_SAVER_CATALOG?.pages ?? {};
+  let n = 0, hit = null;
+  for (const r of window.SN_NAV ?? []) for (const c of r.constellations) for (const g of c.groups) for (const p of g.p) {
+    if (p[0] === 'home' || cat[p[0]]?.tier === 'excluded') continue;
+    n++;
+    if (p[0] === 'tidal-currents') hit = { n, con: c.label, color: c.color };
+  }
+  if (!hit) return { text: 'Tidal currents', color: null };
+  return { text: `No. ${String(hit.n).padStart(3, '0')} · ${hit.con}`, color: hit.color };
+}
+
+// A parameter in the plate style: an italic value over a small spaced label.
+const param = (v, label, extra = '') => `<div class="p"><span class="v">${v}</span>${extra}<small>${esc(label)}</small></div>`;
+
 function buildOverlay() {
   overlay.textContent = '';
+  $('ttl').textContent = meta.title;
+  $('sub').textContent = `${meta.modelLong || `${agencyOf(meta)} ${modelShort(meta)}`} (${modelShort(meta)})`;
 
-  // title, subtitle, time, 7-day bar
-  const t = el('div', 'blk title');
-  const tt = el('div', 't-title');
-  const sub = el('div', 't-sub', esc(meta.subtitle || 'A Week of Currents'));
-  const time = el('div', 't-time mono');
-  const prog = el('div', 'prog');
-  prog.setAttribute('role', 'slider');
-  prog.setAttribute('aria-label', 'Time in the week');
-  prog.setAttribute('aria-valuemin', '0');
-  prog.setAttribute('aria-valuemax', String(lastHour()));
+  // Week bar: one tick per day.
+  scrubEl.querySelectorAll('.tick').forEach((t) => t.remove());
+  scrubEl.setAttribute('aria-valuemax', String(lastHour()));
   const days = Math.round(lastHour() / 24);
   for (let i = 1; i < days; i++) {
-    const tick = el('div', 'tick');
+    const tick = el('i', 'tick');
     tick.style.left = (i / days * 100) + '%';
-    prog.appendChild(tick);
+    scrubEl.prepend(tick);
   }
-  const fill = el('div', 'fill');
-  const knob = el('div', 'knob');
-  prog.append(fill, knob);
-  t.append(tt, sub, time, prog);
-  bindScrub(prog);
 
-  // legend and scale bar
-  const g = el('div', 'blk legend');
-  g.appendChild(el('div', 'l-head mono', 'Water temperature'));
-  const bar = el('div', 'l-bar');
-  bar.style.background = legendRamp();
-  g.appendChild(bar);
+  // Parameters: time, water temperature (with the ramp), fastest water, scale.
   const lf = meta.legendF ?? { min: 51, max: 61 };
-  g.appendChild(el('div', 'l-ends mono', `<span>${lf.min}°F</span><span>${lf.max}°F</span>`));
-  g.appendChild(el('div', 'l-foot mono', 'Brightness = speed'));
-  const scale = el('div', 'scale mono');
-  g.appendChild(scale);
-
-  // data credit
-  const b = el('div', 'blk credit');
-  b.appendChild(el('div', 'c-line mono first', esc(`${agencyOf(meta)} ${modelShort(meta)} model`)));
-  b.appendChild(el('div', 'c-line mono', esc(sourceOf(meta).short)));
-  b.appendChild(el('div', 'c-line mono', esc(meta.dates ?? '')));
-  const more = el('button', 'c-line mono c-more', 'Sources &amp; credits ›');
-  more.type = 'button';
-  more.addEventListener('click', () => { setCaption(true); $('capCredits')?.scrollIntoView({ block: 'nearest' }); });
-  b.appendChild(more);
-
-  // locator globe: one canvas for the page, so it can turn between locations
-  if (!locatorBlock) {
-    locatorBlock = el('div', 'blk locator');
-    const lc = el('canvas');
-    lc.setAttribute('role', 'img');
-    lc.setAttribute('aria-label', 'Locator globe');
-    locatorBlock.appendChild(lc);
-    locator = createLocator(lc, new URL('data/world.json', import.meta.url).href);
-  }
-  const l = locatorBlock;
-
-  overlay.append(t, g, b, l);
+  const pk = meta.peak?.knots > 0 ? meta.peak : null;
+  $('params').innerHTML =
+    param('<i class="sym">t</i> = <span id="pTime"></span>', 'model time') +
+    param(`<i class="sym">T</i> = ${lf.min}–${lf.max} °F`, 'water temperature', `<i class="ramp" style="background:${legendRamp()}"></i>`) +
+    (pk ? param(`<i class="sym m1">u</i><sub>max</sub> = ${pk.knots.toFixed(1)} kn`, 'fastest this week') : '') +
+    '<div class="p" id="pScale"></div>';
+  const where = [meta.region, titleCase(meta.dates ?? '')].filter(Boolean).join(', ');
+  // The short source line keeps the attribution on screen (CC BY 4.0 for NEATL).
+  $('notes').innerHTML = `${esc(where)}. Color is water temperature, brightness is speed.<span class="src">${esc(sourceOf(meta).short)}</span>`;
 
   // place labels
   const labels = [];
   for (const lb of meta.labels ?? []) {
-    const n = el('div', `lbl s-${lb.side === 'left' ? 'left' : 'right'} z-${['xs', 'sm', 'md', 'lg'].includes(lb.size) ? lb.size : 'sm'}`);
+    const size = ['xs', 'sm', 'md', 'lg'].includes(lb.size) ? lb.size : 'sm';
+    const n = el('div', `lbl s-${lb.side === 'left' ? 'left' : 'right'} z-${size}`);
     n.append(el('div', 'dot'), el('div', 'txt', esc(lb.name)));
-    n.dataset.size = ['xs', 'sm', 'md', 'lg'].includes(lb.size) ? lb.size : 'sm';
+    n.dataset.size = size;
     overlay.appendChild(n);
     labels.push({ node: n, lb });
   }
 
-  ui = { time, prog, fill, knob, tt, scale, labels, blocks: { title: t, legend: g, credit: b, locator: l } };
+  ui = { time: $('pTime'), fill: scrubEl.querySelector('.fill'), knob: scrubEl.querySelector('.knob'), scale: $('pScale'), labels };
   shownHour = -1;
   updateClockUI(true);
 }
@@ -284,8 +250,8 @@ function updateClockUI(force) {
   if (force || h !== shownHour) {
     shownHour = h;
     ui.time.textContent = stamp(h);
-    ui.prog.setAttribute('aria-valuenow', String(h));
-    ui.prog.setAttribute('aria-valuetext', stamp(h));
+    scrubEl.setAttribute('aria-valuenow', String(h));
+    scrubEl.setAttribute('aria-valuetext', stamp(h));
   }
 }
 
@@ -309,15 +275,13 @@ function bindScrub(prog) {
 }
 
 // ─── layout ─────────────────────────────────────────────────────────────────
-// Full layout pass: view, canvas size, coverage, labels, blocks, locator.
+// Full layout pass: view, canvas size, labels, scale, locator.
 function relayout() {
   if (!meta) return;
   const w = window.innerWidth, h = window.innerHeight;
   const { phone, tablet } = device();
   document.body.classList.toggle('phone', phone);
-  const u = Math.sqrt((w * h) / DESIGN_AREA) * TEXT_SCALE;
-  scr = { w, h, u };
-  poster.style.setProperty('--u', u.toFixed(4) + 'px');
+  scr = { w, h };
 
   view = computeView(meta, w / h);
 
@@ -336,81 +300,33 @@ function relayout() {
     if (typeof engine.setView === 'function') engine.setView(view);
   }
 
-  // Title: stacked on a narrow screen, one line on a wide one.
-  const lines = meta.titleLines ?? TITLE_LINES[meta.id] ?? [meta.title];
-  const stacked = w / h < 1.25 || w < 720;
-  ui.tt.innerHTML = (stacked ? lines : [lines.join(' ')]).map(esc).join('<br>');
-
-  // Locator size: small on a phone.
-  const locPx = Math.round(clamp((phone ? 58 : 120) * Math.max(1, u / 0.9), 52, 150));
-  ui.blocks.locator.style.setProperty('--loc', locPx + 'px');
-  locator.resize(locPx);
-
-  buildCover();
-  const labelBoxes = placeLabels();
-  placeBlocks(labelBoxes);
   updateScale();
+  placeLabels();
   const corners = viewCornersLonLat(meta, view);
   const b = meta.bbox, c = coreOf(meta);
   const clon = b.lon0 + (c.x0 + c.x1) / 2 * (b.lon1 - b.lon0);
   const clat = b.lat1 - (c.y0 + c.y1) / 2 * (b.lat1 - b.lat0);
-  locator.setTarget(clon, clat, corners, !relayout.turned);
+  locator?.setTarget(clon, clat, corners, !relayout.turned);
   relayout.turned = true;
 }
 
-// Coverage of the view on a coarse grid (0 land .. 1 water), with a summed-area table.
-function buildCoverSource(images) {
-  coverSrc = null;
-  const img = images?.mask ?? images?.base;
-  if (!img) return;
-  try {
-    const cw = Math.min(512, img.width);
-    const ch = Math.max(1, Math.round(cw * img.height / img.width));
-    const c = document.createElement('canvas');
-    c.width = cw; c.height = ch;
-    const cx = c.getContext('2d', { willReadFrequently: true });
-    cx.drawImage(img, 0, 0, cw, ch);
-    coverSrc = c;
-  } catch { coverSrc = null; }
-}
-
-function buildCover() {
-  const gw = 96;
-  const gh = Math.max(24, Math.round(gw * scr.h / scr.w));
-  const data = new Float32Array(gw * gh);
-  if (coverSrc) {
-    const c = document.createElement('canvas');
-    c.width = gw; c.height = gh;
-    const cx = c.getContext('2d', { willReadFrequently: true });
-    const sw = coverSrc.width, sh = coverSrc.height;
-    cx.drawImage(coverSrc, view.x0 * sw, view.y0 * sh, (view.x1 - view.x0) * sw, (view.y1 - view.y0) * sh, 0, 0, gw, gh);
-    const px = cx.getImageData(0, 0, gw, gh).data;
-    for (let i = 0; i < gw * gh; i++) data[i] = px[i * 4] / 255;
+const hits = (a, b, pad = 0) => a.x0 - pad < b.x1 && a.x1 + pad > b.x0 && a.y0 - pad < b.y1 && a.y1 + pad > b.y0;
+// The box of the visible content of the head or the foot, not of its padding.
+function contentBox(node) {
+  let box = null;
+  for (const c of node.children) {
+    if (c.offsetParent === null) continue;
+    const r = c.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    box = box
+      ? { x0: Math.min(box.x0, r.left), y0: Math.min(box.y0, r.top), x1: Math.max(box.x1, r.right), y1: Math.max(box.y1, r.bottom) }
+      : { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
   }
-  const sat = new Float64Array((gw + 1) * (gh + 1));
-  for (let y = 0; y < gh; y++) {
-    let row = 0;
-    for (let x = 0; x < gw; x++) {
-      row += data[y * gw + x];
-      sat[(y + 1) * (gw + 1) + x + 1] = sat[y * (gw + 1) + x + 1] + row;
-    }
-  }
-  cover = { gw, gh, sat };
+  return box;
 }
 
-// Mean water coverage in a screen rect.
-function waterIn(x, y, w, h) {
-  if (!cover) return 0;
-  const { gw, gh, sat } = cover;
-  const x0 = clamp(Math.floor(x / scr.w * gw), 0, gw), x1 = clamp(Math.ceil((x + w) / scr.w * gw), 0, gw);
-  const y0 = clamp(Math.floor(y / scr.h * gh), 0, gh), y1 = clamp(Math.ceil((y + h) / scr.h * gh), 0, gh);
-  const n = (x1 - x0) * (y1 - y0);
-  if (n <= 0) return 1;
-  const W = gw + 1;
-  return (sat[y1 * W + x1] - sat[y0 * W + x1] - sat[y1 * W + x0] + sat[y0 * W + x0]) / n;
-}
-
-// Put each label at its lon/lat. Hide it when it is off screen or collides.
+// Put each label at its lon/lat. Hide it when it is off screen, when it
+// collides with a larger label, or when it is under the head or the foot.
 function placeLabels() {
   const rank = { lg: 0, md: 1, sm: 2, xs: 3 };
   const items = [...ui.labels];
@@ -421,108 +337,16 @@ function placeLabels() {
     it.node.hidden = false;
   }
   items.sort((a, b) => rank[a.node.dataset.size] - rank[b.node.dataset.size]);
-  const kept = [];
-  const pad = 4;
+  const kept = [contentBox(headEl), contentBox(footEl)].filter(Boolean);
+  const small = Math.min(scr.w, scr.h) < 520;
   for (const it of items) {
-    if (it.node.dataset.size === 'xs' && scr.u < 0.5) { it.node.hidden = true; continue; }
+    if (it.node.dataset.size === 'xs' && small) { it.node.hidden = true; continue; }
     const t = it.node.querySelector('.txt').getBoundingClientRect();
     const d = it.node.querySelector('.dot').getBoundingClientRect();
     const box = { x0: Math.min(t.left, d.left), x1: Math.max(t.right, d.right), y0: Math.min(t.top, d.top), y1: Math.max(t.bottom, d.bottom) };
     const off = box.x0 < 4 || box.y0 < 4 || box.x1 > scr.w - 4 || box.y1 > scr.h - 4;
-    const hit = kept.some((k) => box.x0 - pad < k.x1 && box.x1 + pad > k.x0 && box.y0 - pad < k.y1 && box.y1 + pad > k.y0);
-    if (off || hit) { it.node.hidden = true; continue; }
-    box.node = it.node;
+    if (off || kept.some((k) => hits(box, k, 8))) { it.node.hidden = true; continue; }
     kept.push(box);
-  }
-  return kept;
-}
-
-const overlapArea = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
-
-// Search the screen for the quietest spot for a block of w x h px.
-function bestSpot(w, h, opts) {
-  const { avoid, labels, pref, corners } = opts;
-  const ins = safeInsets();
-  const m = Math.max(14, 26 * scr.u);
-  const L = ins.l + m, T = ins.t + m, R = scr.w - ins.r - m - w, B = scr.h - ins.b - m - h;
-  if (R < L || B < T) return null;
-  const cands = [];
-  if (corners) {
-    cands.push([L, T], [R, T], [L, B], [R, B]);
-  } else {
-    const step = Math.max(6, Math.min(scr.w, scr.h) / 60);
-    for (let y = T; y <= B + 0.5; y += step) for (let x = L; x <= R + 0.5; x += step) cands.push([x, y]);
-    cands.push([L, T], [R, T], [L, B], [R, B], [R, (T + B) / 2], [L, (T + B) / 2]);
-  }
-  let best = null;
-  for (const [x, y] of cands) {
-    const r = { x0: x, y0: y, x1: x + w, y1: y + h };
-    if (avoid.some((a) => overlapArea(r, a) > 0)) continue;
-    let cost = waterIn(x, y, w, h);
-    let lab = 0;
-    for (const k of labels) lab += overlapArea(r, { x0: k.x0 - 6, y0: k.y0 - 6, x1: k.x1 + 6, y1: k.y1 + 6 });
-    cost += 3 * lab / (w * h);
-    cost += pref(x, y, w, h);
-    if (!best || cost < best.cost) best = { x, y, cost };
-  }
-  if (!best) return null;
-  // Snap to the margin when the spot is near it, so blocks share an edge.
-  const snap = Math.max(24, scr.w * 0.03);
-  for (const sx of [L, R]) {
-    if (Math.abs(best.x - sx) < snap) {
-      const r = { x0: sx, y0: best.y, x1: sx + w, y1: best.y + h };
-      if (!avoid.some((a) => overlapArea(r, a) > 0)) best.x = sx;
-    }
-  }
-  return best;
-}
-
-function placeBlocks(labelBoxes) {
-  const k = ui.blocks;
-  const { phone } = device();
-  const sr = strip.getBoundingClientRect();
-  const avoid = [{ x0: sr.left - 10, y0: sr.top - 10, x1: sr.right + 10, y1: sr.bottom + 10 }];
-  const W = scr.w, H = scr.h, diag = Math.hypot(W, H);
-  const placed = {};
-
-  const put = (name, node, opts) => {
-    node.hidden = false;
-    node.classList.remove('a-right');
-    // measure after alignment is known: a trial at the left first
-    let w = node.offsetWidth, h = node.offsetHeight;
-    let spot = bestSpot(w, h, { avoid, labels: labelBoxes, ...opts });
-    if (!spot) { node.hidden = true; return null; }
-    const right = spot.x + w / 2 > W / 2;
-    node.classList.toggle('a-right', right);
-    w = node.offsetWidth; h = node.offsetHeight;
-    node.style.left = Math.round(spot.x) + 'px';
-    node.style.top = Math.round(spot.y) + 'px';
-    const r = { x0: spot.x, y0: spot.y, x1: spot.x + w, y1: spot.y + h, cost: spot.cost };
-    avoid.push({ x0: r.x0 - 12, y0: r.y0 - 12, x1: r.x1 + 12, y1: r.y1 + 12 });
-    placed[name] = r;
-    node.classList.toggle('busy', spot.cost > 0.45);   // over bright water: a darker halo
-    return r;
-  };
-
-  const edge = (x, w) => 1 - Math.abs((x + w / 2) / W - 0.5) * 2;       // 0 at an edge, 1 at the center
-  put('title', k.title, { pref: (x, y, w, h) => 0.35 * (y / H) + 0.12 * edge(x, w) });
-  const tr = placed.title;
-  put('locator', k.locator, {
-    corners: true,
-    pref: (x, y) => (phone ? 0.2 * (y / H) : 0) + (tr ? 0.05 * (Math.hypot(x - tr.x0, y - tr.y0) < W / 3 ? 0 : 1) : 0),
-  });
-  put('legend', k.legend, {
-    pref: (x, y, w, h) => (tr ? 0.3 * Math.hypot(x + w / 2 - (tr.x0 + tr.x1) / 2, y - tr.y1) / diag : 0) + 0.08 * edge(x, w),
-  });
-  put('credit', k.credit, { pref: (x, y, w, h) => 0.3 * (1 - (y + h) / H) + 0.1 * edge(x, w) });
-
-  // A locator on a busy spot is noise: hide it on a phone.
-  if (phone && placed.locator && placed.locator.cost > 0.55) k.locator.hidden = true;
-
-  // Labels that a block still covers go.
-  const blocks = Object.values(placed);
-  for (const lb of labelBoxes) {
-    if (blocks.some((b) => overlapArea(lb, b) > 0)) lb.node.hidden = true;
   }
 }
 
@@ -533,17 +357,19 @@ function niceLength(target) {
   return best;
 }
 
+// The scale parameter: a bracket as long as a round distance on the map.
 function updateScale() {
   const mpp = metersPerScreenPx(meta, view, scr.h);
-  if (!(mpp > 0)) { ui.scale.textContent = ''; return; }
-  const target = Math.max(60, 90 * scr.u);
-  const km = niceLength((target * mpp) / 1000);
-  const mi = niceLength((target * mpp) / 1609.344);
-  const kmLen = (km * 1000) / mpp, miLen = (mi * 1609.344) / mpp;
-  ui.scale.innerHTML =
-    `<div class="row"><i style="width:${kmLen.toFixed(1)}px"></i><span>${km} km</span></div>` +
-    `<div class="row mi"><i style="width:${miLen.toFixed(1)}px"></i><span>${mi} mi</span></div>`;
-  ui.scale.setAttribute('aria-label', `Scale: ${km} kilometers, ${mi} miles. North is up.`);
+  if (!(mpp > 0)) { ui.scale.hidden = true; return; }
+  ui.scale.hidden = false;
+  const target = clamp(Math.min(scr.w, scr.h) * 0.1, 56, 110);
+  const metric = (meta.agency === 'Marine Institute');
+  const unit = metric ? { m: 1000, name: 'km' } : { m: 1609.344, name: 'mi' };
+  const len = niceLength((target * mpp) / unit.m);
+  const px = (len * unit.m) / mpp;
+  const other = metric ? `${niceLength(len / 1.609344)} mi` : `${niceLength(len * 1.609344)} km`;
+  ui.scale.innerHTML = `<span class="v">${len} ${unit.name}</span><i class="bar" style="width:${px.toFixed(1)}px"></i><small>scale</small>`;
+  ui.scale.setAttribute('aria-label', `Scale: ${len} ${unit.name === 'mi' ? 'miles' : 'kilometers'} (about ${other}). North is up.`);
 }
 
 // ─── caption ────────────────────────────────────────────────────────────────
@@ -562,7 +388,7 @@ function captionHTML() {
     if (CAPTIONS[meta.id]) paras.push(`<p>${esc(CAPTIONS[meta.id])}</p>`);
     const pk = meta.peak;
     if (pk && pk.knots > 0) {
-      const when = pk.hour != null ? stamp(pk.hour).replace(/^(\d+) ([A-Z]+)/, (m, d, mo) => `${d} ${mo[0]}${mo.slice(1).toLowerCase()}`) : null;
+      const when = pk.hour != null ? stamp(pk.hour) : null;
       paras.push(`<p>At its strongest this week, the fastest surface water on this map ran at ${fmtKnots(pk.knots)}${when ? ` (${esc(when)})` : ''}.</p>`);
     }
   }
@@ -578,7 +404,7 @@ function setCaption(open) {
   captionEl.hidden = !open;
   $('info').setAttribute('aria-pressed', String(open));
   if (open && meta) {
-    $('capTitle').innerHTML = `${esc(meta.title)}<small>${esc(meta.subtitle || 'A Week of Currents')}</small>`;
+    $('capTitle').innerHTML = `${esc(meta.title)}<small>${esc(meta.subtitle || 'A week of currents')}</small>`;
     $('capBody').innerHTML = captionHTML();
   }
   syncScrim();
@@ -625,7 +451,7 @@ async function buildAtlas() {
   body.textContent = '';
   for (const [region, items] of groups) {
     const sec = el('section', 'a-group');
-    sec.appendChild(el('h3', 'mono', esc(region)));
+    sec.appendChild(el('h3', null, `${esc(region)}<small>${items.length}</small>`));
     const grid = el('div', 'a-grid');
     for (const it of items) {
       const b = el('button', 'a-item');
@@ -633,7 +459,7 @@ async function buildAtlas() {
       b.dataset.index = String(it.i);
       b.appendChild(thumbFor(it));
       const cap = el('span', 'a-cap');
-      cap.append(el('span', 'a-title', esc(it.title)), el('span', 'a-model mono', esc(it.model ? `${it.agency} ${it.model}` : '')));
+      cap.append(el('span', 'a-title', esc(it.title)), el('span', 'a-model', esc(it.model ? `${it.agency} ${it.model}` : '')));
       b.appendChild(cap);
       b.addEventListener('click', () => { setAtlas(false); if (it.i !== locIndex) switchTo(it.i); });
       grid.appendChild(b);
@@ -652,7 +478,6 @@ function markAtlas() {
 function setAtlas(open) {
   if (open) setCaption(false);
   atlasEl.hidden = !open;
-  $('atlasBtn').setAttribute('aria-pressed', String(open));
   $('where').setAttribute('aria-expanded', String(open));
   if (open) {
     if (!atlasBuilt) buildAtlas(); else markAtlas();
@@ -712,7 +537,7 @@ function bindInput() {
   $('play').addEventListener('click', () => setPlaying(!playing));
   $('info').addEventListener('click', () => setCaption(captionEl.hidden));
   $('where').addEventListener('click', () => setAtlas(atlasEl.hidden));
-  $('atlasBtn').addEventListener('click', () => setAtlas(atlasEl.hidden));
+  bindScrub(scrubEl);
   $('capClose').addEventListener('click', () => setCaption(false));
   $('atlasClose').addEventListener('click', () => setAtlas(false));
   scrim.addEventListener('click', () => { setAtlas(false); setCaption(false); });
@@ -830,7 +655,6 @@ async function switchTo(i, initial = false) {
   metaCache.set(loc.id, Promise.resolve(ds.meta));
   hour = Math.min(hour, lastHour());
   buildOverlay();
-  buildCoverSource(ds.images);
   if (engine) engine.setDataset(ds);
   governor.hold();
   loadingEl.hidden = true;
@@ -840,7 +664,7 @@ async function switchTo(i, initial = false) {
   if (token !== switchToken) return;
   relayout();
   fillFallback();
-  requestAnimationFrame(() => fadeEl.classList.add('clear'));
+  requestAnimationFrame(() => { fadeEl.classList.add('clear'); document.body.classList.add('shown'); });
 }
 
 // ─── frame loop ─────────────────────────────────────────────────────────────
@@ -875,19 +699,19 @@ function showFallback() {
   fillFallback();
 }
 
-// The fallback names the location, so the title block can stay hidden.
+// The head names the location, so the fallback says only why the map is missing.
 function fillFallback() {
   if (fallbackEl.hidden) return;
-  const title = meta?.title ?? locs[locIndex]?.title ?? '';
-  fallbackEl.innerHTML =
-    `<div class="f-title">${esc(title)}</div>` +
-    `<h2>${esc(meta?.subtitle || 'A Week of Currents')}</h2>` +
-    '<div class="rule"></div>' +
-    '<p>This browser does not offer WebGPU,<br>so the map cannot draw here.<br>Try a recent Chrome, Edge or Safari.</p>';
+  fallbackEl.innerHTML = '<p>This browser does not offer WebGPU, so the map cannot draw here. Try a recent Chrome, Edge or Safari.</p>';
 }
 
 // ─── start ──────────────────────────────────────────────────────────────────
 async function start() {
+  const mark = pageMark();
+  $('cat').textContent = mark.text;
+  if (mark.color) document.documentElement.style.setProperty('--c', mark.color);
+  locator = createLocator($('globe'), new URL('data/world.json', import.meta.url).href);
+  locator.resize(132);
   bindInput();
   wake();
 
@@ -931,7 +755,8 @@ async function start() {
 
 // ─── screensaver ────────────────────────────────────────────────────────────
 // The shell screensaver (lib/screensaver.js) calls enter(). It hides the
-// controls and the sheets, keeps the title, legend and labels, and plays.
+// head, the foot, the labels and the sheets (style.css SAVER), and plays.
+// The shell plate is then the only text over the map.
 // opts.seed picks the location. The switch fades through black, as a normal
 // switch does. calm 1 halves the model-time rate. In saver mode, switchTo()
 // does not write the URL hash or the session store.
@@ -957,7 +782,7 @@ function saverPlate() {
   ];
   if (meta.peak?.knots) params.push({ sym: 'u_{\\max}', name: 'fastest', value: `${meta.peak.knots.toFixed(1)} kn, h ${meta.peak.hour}`, cls: 'm1' });
   if (meta.tempC) params.push({ sym: 'T', name: 'water', value: `${meta.tempC.min.toFixed(1)}–${meta.tempC.max.toFixed(1)} °C` });
-  const lines = [`${meta.region ? meta.region + ', ' : ''}${meta.dates || ''}`.replace(/, $/, '') + '.',
+  const lines = [`${meta.region ? meta.region + ', ' : ''}${titleCase(meta.dates || '')}`.replace(/, $/, '') + '.',
     `Colour is water temperature. ${rate.toFixed(1)} model hours per second` + (meta.metersPerPixel ? `, ${Math.round(meta.metersPerPixel)} m per cell.` : '.')];
   try {
     saverLabel({
@@ -986,9 +811,6 @@ window.snSaver = {
     saverLabel = opts.labels === false || typeof opts.label !== 'function' ? null : opts.label;
     saverPlateT = 0;
     timeScale = 1 / (1 + calm);
-    const st = document.createElement('style');
-    st.textContent = 'body.saver #controls,body.saver #caption,body.saver #atlas,body.saver #scrim,body.saver #loading{display:none!important}body.saver,body.saver #stage{cursor:none}';
-    document.head.appendChild(st);
     document.body.classList.add('saver', 'idle');
     setCaption(false); setAtlas(false);
     setPlaying(true);
