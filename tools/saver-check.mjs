@@ -19,7 +19,7 @@
 //  pixel change between the two screenshots, 0..255 (0 = frozen). The
 //  screenshots are <out>/<key>-a.png and <key>-b.png, taken 4 s and
 //  (seconds - 4) s after the page shows. With --record, the video goes to
-//  <out>/dl/.
+//  <out>/dl/. The recording is a tab capture, so it holds the poster too.
 //
 //  grep -n targets: "function launch", "async function main", "function motion"
 // ============================================================================
@@ -50,7 +50,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function launch() {
   const prof = path.join(OUT, 'profile');
+  // --record: the shell asks to share this tab (lib/screensaver.js
+  // openCapture). The switch accepts that prompt, as a user would.
   const p = spawn(CHROME, ['--headless=new', '--enable-unsafe-webgpu', '--use-angle=metal', '--autoplay-policy=no-user-gesture-required',
+    ...(RECORD ? ['--auto-accept-this-tab-capture'] : []),
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${prof}`, `--window-size=${W},${H}`, 'about:blank'], { stdio: 'ignore' });
   return p;
 }
@@ -106,12 +109,14 @@ async function main() {
     };
     await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
     const send = (method, params = {}) => new Promise(r => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-    const ev = async x => { const r = await send('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true }); return r && r.result ? r.result.value : r; };
+    const ev = async (x, gesture = false) => { const r = await send('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true, userGesture: gesture }); return r && r.result ? r.result.value : r; };
     const shot = async name => { const r = await send('Page.captureScreenshot', { format: 'png' }); const b = Buffer.from(r.data, 'base64'); fs.writeFileSync(path.join(OUT, name), b); return b; };
     await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable');
     await send('Network.setCacheDisabled', { cacheDisabled: true });
     await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: path.join(OUT, 'dl') });
-    await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
+    // A tab capture (--record) records the real window, not an emulated
+    // viewport, so the override is left out there; --window-size sets it.
+    if (!RECORD) await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
     // seenDefaults lists every catalog key. Since cbcf689 the shell adds each
     // catalog default that a saved list has not seen (chosenKeys in
     // lib/screensaver.js), so without it the run plays the whole default
@@ -129,7 +134,9 @@ async function main() {
     for (let i = 0; i < 180 && ok !== true; i++) { await sleep(250); ok = await ev(`typeof snScreensaver === 'object'`); }
     if (ok !== true) throw new Error('window.snScreensaver missing in the shell after 45 s');
     console.error(`shell ready after ${Date.now() - tShell} ms`);
-    await ev(`snScreensaver.start(), 1`);
+    // Start runs as a user gesture, as the menu button does (tab capture and
+    // full screen need one).
+    await ev(`snScreensaver.start(), 1`, true);
     // Wait until the status line names the page (it is set when the page shows).
     let hud = '';
     for (let i = 0; i < 80; i++) { hud = await ev(`(document.getElementById('sn-saver-hud')||{}).textContent||''`); if (/· (hook|generic)/.test(hud)) break; await sleep(250); }
