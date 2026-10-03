@@ -213,9 +213,14 @@ body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
 #sn-saver-label .code .tk-fn { color: #8ee08a; } #sn-saver-label .code .tk-num, #sn-saver-label .code .tk-con { color: #ffd27a; } #sn-saver-label .code .tk-st { color: #f0a36b; }
 #sn-saver-label .code .tk-at, #sn-saver-label .code .tk-pp { color: #ff9f72; } #sn-saver-label .code .tk-sw { color: #a9c1ff; } #sn-saver-label .code .tk-op { color: #9aa4b2; }
 #sn-saver-label .code .tk-cm { color: #6b7685; }
-#sn-saver-label .rule2 { display: block; width: 46px; height: 1px; margin: 1.15em 0 0; font-size: clamp(13px, calc(var(--fs) * .03), 24px); background: rgba(244,240,230,.7); transform: scaleX(0); transition: transform 1.2s ease 1s; }
-#sn-saver-label.on .rule2 { transform: scaleX(1); }
-#sn-saver-label .logo { margin-top: .85em; font: 500 clamp(13px, calc(var(--fs) * .03), 24px)/1 'STIX Two Text', Georgia, serif; letter-spacing: .24em; color: #f6f1e6; white-space: nowrap; padding: .5em .5em .5em .74em; border-radius: 3px; background: rgba(5,7,11,.58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity 1.4s ease 1.3s; }
+/* The site mark sits in a rule as wide as the title rule: line, boxed mark,
+   line. The box border is the line colour, so the two lines and the box
+   read as one stroke. The lines draw outward from the box. */
+#sn-saver-label .mark { display: flex; align-items: center; width: min(78%, 560px); margin-top: 1.15em; font-size: clamp(13px, calc(var(--fs) * .03), 24px); }
+#sn-saver-label .mark .ln { flex: 1; height: 1px; background: rgba(244,240,230,.85); transform: scaleX(0); transition: transform 1.5s cubic-bezier(.22,.7,.12,1) 1.1s; }
+#sn-saver-label .mark .ln.l { transform-origin: 100% 50%; } #sn-saver-label .mark .ln.r { transform-origin: 0 50%; }
+#sn-saver-label.on .mark .ln { transform: scaleX(1); }
+#sn-saver-label .logo { flex: none; font: 500 1em/1 'STIX Two Text', Georgia, serif; letter-spacing: .24em; color: #f6f1e6; white-space: nowrap; padding: .5em .5em .5em .74em; border: 1px solid rgba(244,240,230,.85); background: rgba(5,7,11,.58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity 1.2s ease .6s; }
 #sn-saver-label.on .logo { opacity: 1; }
 #sn-saver-label .logo span { color: var(--c, #8ec5ff); letter-spacing: 0; padding: 0 .35em; }
 #sn-saver-label .m1 { color: #62c4ff; fill: #62c4ff; } #sn-saver-label .m2 { color: #ff9a62; fill: #ff9a62; } #sn-saver-label .m3 { color: #86dc7c; fill: #86dc7c; }
@@ -563,8 +568,8 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // The plate is a specimen poster across the frame, all text centred. Type
 // scales with --fs: the frame width, capped at 80vh for a landscape frame.
 //   top     catalogue line (number, constellation), title, a rule that draws
-//           from the centre, sub in italics, then a short rule and the site
-//           mark [ www.davesgames.io ]
+//           from the centre, sub in italics, then the site mark
+//           [ www.davesgames.io ] boxed inside a second full rule
 //   bottom  equations, then the parameters, then notes and code
 // Code always goes last. In a landscape frame (wider than 5:4, not
 // the 9:16 column) the bottom text and the code sit side by side. A page
@@ -670,8 +675,8 @@ function posterHTML(info, page) {
   const all = allPages(), n = page ? all.findIndex(q => q.key === page.key) + 1 : 0;
   const cat = page ? `<div class="cat">No. ${String(n).padStart(3, '0')} · ${esc(page.con || page.regionName || '')}</div>` : '';
   return `<div class="top">${cat}<b class="ttl">${esc(info.title || (page && page.label) || '')}</b><i class="rule"></i>`
-    + `<div class="sub">${esc(info.sub || '')}</div><div class="slot-top">${s.top}</div><i class="rule2"></i>`
-    + `<div class="logo"><span>[</span>www.davesgames.io<span>]</span></div></div>`
+    + `<div class="sub">${esc(info.sub || '')}</div><div class="slot-top">${s.top}</div>`
+    + `<div class="mark"><i class="ln l"></i><div class="logo"><span>[</span>www.davesgames.io<span>]</span></div><i class="ln r"></i></div></div>`
     + `<div class="bot"><div class="slot-bot">${s.bot}</div></div>`;
 }
 // Fill each [data-tex] box from the cache, or typeset it once and keep the
