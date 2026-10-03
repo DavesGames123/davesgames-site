@@ -30,8 +30,8 @@
 //                         live values); label(null) clears it. The shell
 //                         draws it as a centred specimen poster (title,
 //                         rule, parameters; equations, code and the site
-//                         mark at the base). The poster is DOM. A tab
-//                         capture records it; the canvas fallback does not.
+//                         mark at the base). The poster is DOM. The tab
+//                         capture records it with the page.
 //                         Fields: see "label plate (poster)" below.
 //    snSaver.exit()       optional. The controller calls it when the user
 //                         stops the screensaver on that page.
@@ -53,7 +53,7 @@
 //    menu markup .......... "function buildMenu"
 //    play loop ............ "function showPage"
 //    page hook / generic .. "function enterPage"
-//    tab capture .......... "function openCapture"
+//    tab capture .......... "function askCapture"
 //    recorder ............. "function startRecording"
 //    poster ............... "function posterHTML"
 //    leader line .......... "function drawLeader"
@@ -329,6 +329,12 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
 #sn-saver-menu .x { padding: 9px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12) !important; }
 #sn-saver-menu .go { padding: 9px 22px; border-radius: 8px; background: #8ec5ff !important; color: #0c0f15 !important; font-weight: 600; }
 #sn-saver-menu .go:disabled { opacity: .4; cursor: default; }
+#sn-saver-menu footer .msg { flex: 1; font-size: .84rem; color: #ffb4a8; line-height: 1.4; }
+#sn-saver-menu footer .msg.wait { color: #8ec5ff; }
+#sn-saver-menu footer .msg:not([hidden]) + .sum { display: none; }
+#sn-saver-go { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 9002; font: 500 18px/1 'STIX Two Text', Georgia, serif; letter-spacing: .2em; color: #f6f1e6; background: rgba(5,7,11,.7); border: 1px solid rgba(244,240,230,.85); padding: .8em 1em .8em 1.2em; cursor: pointer; }
+#sn-saver-go span { color: #8ec5ff; letter-spacing: 0; padding: 0 .4em; }
+#sn-saver-go small { display: block; margin-top: .9em; font: 400 11px/1.4 'Inter', system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #a4acb8; }
 @media (max-width: 760px) {
   #sn-saver-menu .box { height: calc(100dvh - 24px); }
   #sn-saver-menu .cols { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
@@ -403,11 +409,11 @@ function buildMenu() {
         <div class="row"><span>Frame rate</span><span></span>${seg('recordFps', [['24', '24 fps'], ['30', '30 fps'], ['60', '60 fps']])}</div>
         <div class="row"><span>Bit rate</span><output data-o="recordMbps"></output><input type="range" data-k="recordMbps" min="2" max="40" step="1"></div>
         <div class="row"><span>Wait before recording</span><output data-o="recordWarmup"></output><input type="range" data-k="recordWarmup" min="0" max="15" step="0.5"></div>
-        <p class="note">${esc(fmt.split(';')[0])}${fmt.startsWith('video/mp4') ? '' : ' (this browser cannot record MP4)'}. Files go to the browser download folder. Each file holds the page and all the GUI over it: poster, equations and credit. Start asks once to share this tab: choose this tab. With the 9:16 frame, the file is the column only. A browser with no tab capture records the page canvas only.</p>
+        <p class="note">${esc(fmt.split(';')[0])}${fmt.startsWith('video/mp4') ? '' : ' (this browser cannot record MP4)'}. Files go to the browser download folder. Each file holds the page and all the GUI over it: poster, equations and credit. Start first asks to share this tab: choose this tab and Share. Nothing plays until the share works, so no file is made without the GUI. With the 9:16 frame, the file is the column only. Chrome or Edge only.</p>
       </div>` : '<p class="note">This browser cannot record a canvas.</p>'}
     </div>
   </div>
-  <footer><span class="sum"></span><button class="reset" data-act="reset">Reset to defaults</button><button class="x" data-act="close">Cancel</button><button class="go" data-act="start">Start</button></footer>
+  <footer><span class="msg" role="alert" hidden></span><span class="sum"></span><button class="reset" data-act="reset">Reset to defaults</button><button class="x" data-act="close">Cancel</button><button class="go" data-act="start">Start</button></footer>
 </div>`;
   document.body.appendChild(m);
 
@@ -473,7 +479,7 @@ function buildMenu() {
       m.sync();
     }
     if (act && act.dataset.act === 'close') closeMenu();
-    if (act && act.dataset.act === 'start') { closeMenu(); startSaver(); }
+    if (act && act.dataset.act === 'start') startFromMenu();
   });
   return m;
 }
@@ -492,14 +498,38 @@ function el(id, tag) {
 }
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-async function startSaver() {
+// Start from the menu (and snScreensaver.start). With recording on, the tab
+// share comes first, while the menu is still open in a normal window. A
+// refused or wrong share starts nothing, and the menu says why. So a run
+// never makes a file without the GUI.
+async function startFromMenu() {
+  if (run || startFromMenu.busy) return;
+  let cap = null;
+  if (S.record) {
+    startFromMenu.busy = true;
+    menuMsg('Choose this tab in the browser prompt, then Share.', true);
+    const got = await askCapture();
+    startFromMenu.busy = false;
+    if (!got.stream) { menuMsg(got.why); if (menu && menu.hidden) openMenu(); return; }
+    cap = got.stream;
+  }
+  menuMsg('');
+  closeMenu();
+  startSaver(cap);
+}
+function menuMsg(t, wait) {
+  const m = menu && menu.querySelector('footer .msg'); if (!m) return;
+  m.textContent = t; m.hidden = !t; m.classList.toggle('wait', !!wait);
+}
+
+async function startSaver(cap) {
   const keys = chosenKeys();
-  if (!keys.length || run) return;
+  if (!keys.length || run) { if (cap) cap.getTracks().forEach(t => t.stop()); return; }
   const order = S.order === 'shuffle' ? shuffle(keys.slice()) : keys;
   run = {
     order, i: -1, timer: 0, paused: false, left: 0, started: 0, t0: performance.now(),
     back: window.activeTab || null, rec: null, frameWin: null, lock: null, token: 0,
-    onFrameLoad: () => {},
+    onFrameLoad: () => {}, cap: cap || null,
   };
   const cover = el('sn-saver-cover');
   cover.style.setProperty('--fade', S.fade + 's');
@@ -509,20 +539,10 @@ async function startSaver() {
   document.body.classList.toggle('sn-saver-vert', S.frame === 'vertical');
   el('sn-saver-hud').hidden = true;
   if (S.display === 'screen' && !fsElement()) {
-    const de = document.documentElement, rq = de.requestFullscreen || de.webkitRequestFullscreen;
-    if (rq) Promise.resolve(rq.call(de)).catch(() => {});
-  }
-  if (S.record) {
+    // After the share prompt the click that pressed Start can be too old for
+    // full screen. Then a button on the cover asks for one more click.
     const r = run;
-    await openCapture(r);
-    if (run !== r) return;
-    // The share prompt can take the window out of full screen. Ask again;
-    // without a user gesture the browser can refuse, and the run then plays
-    // in the window.
-    if (S.display === 'screen' && !fsElement()) {
-      const de = document.documentElement, rq = de.requestFullscreen || de.webkitRequestFullscreen;
-      if (rq) await Promise.resolve(rq.call(de)).catch(() => {});
-    }
+    if (!(await goFullscreen()) && cap) { await clickToStart(r); if (run !== r) return; }
   }
   if (S.wakeLock && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { if (run) run.lock = l; else l.release(); }).catch(() => {});
   if (S.exitOnInput) setTimeout(() => { if (run) { run.moveArm = true; } }, 1500);
@@ -532,7 +552,24 @@ async function startSaver() {
 }
 // Leaving full screen (Esc in the browser) stops the run.
 function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
-function onFullscreen() { if (run && !run.asking && S.display === 'screen' && !fsElement()) stopSaver(); }
+function goFullscreen() {
+  const de = document.documentElement, rq = de.requestFullscreen || de.webkitRequestFullscreen;
+  if (!rq) return Promise.resolve(false);
+  try { return Promise.resolve(rq.call(de)).then(() => true, () => false); } catch (e) { return Promise.resolve(false); }
+}
+function clickToStart(r) {
+  return new Promise(res => {
+    const b = document.createElement('button');
+    b.id = 'sn-saver-go'; b.type = 'button';
+    b.innerHTML = '<span>[</span>Start recording<span>]</span><small>Click for full screen</small>';
+    const done = () => { b.remove(); res(); };
+    b.addEventListener('click', () => { goFullscreen().then(done); });
+    r.cancelGo = done;
+    document.body.appendChild(b);
+    b.focus();
+  });
+}
+function onFullscreen() { if (run && S.display === 'screen' && !fsElement()) stopSaver(); }
 
 function next(step) {
   if (!run) return;
@@ -572,7 +609,7 @@ async function showPage(key) {
   if (S.labels) fallbackPoster(r, token, page);
   else if (S.caption) { setTimeout(() => { if (run === r && token === r.token) cap.classList.add('on'); }, S.fade * 1000 + 400); setTimeout(() => cap.classList.remove('on'), S.fade * 1000 + 6500); }
   hud(`${r.i + 1}/${r.order.length} ${page.label} · ${got.mode}${got.canvas ? '' : ' · no canvas'}`);
-  if (S.record && (r.cap || got.canvas)) startRecording(r, key, got.canvas, Math.max(S.recordWarmup * 1000, got.warmupMs || 0), token);
+  if (S.record) startRecording(r, key, Math.max(S.recordWarmup * 1000, got.warmupMs || 0), token);
   r.left = S.seconds * 1000; r.started = performance.now();
   r.timer = setTimeout(() => next(1), r.left);
 }
@@ -921,6 +958,7 @@ async function stopSaver() {
   const r = run; if (!r) return;
   run = null;
   clearTimeout(r.timer);
+  if (r.cancelGo) r.cancelGo();
   await finishRecording(r);
   closeCapture(r);
   try { const w = r.frameWin; if (w && w.snSaver && w.snSaver.exit) w.snSaver.exit(); } catch (e) {}
@@ -940,43 +978,38 @@ async function stopSaver() {
 }
 
 // ── tab capture ────────────────────────────────────────────────────────────
-// CAPTURE. With "Save each page as a video" on, Start asks once to share
-// this tab (getDisplayMedia, preferCurrentTab). The run then records the tab
+// CAPTURE. With "Save each page as a video" on, Start first asks to share
+// this tab (getDisplayMedia, preferCurrentTab). The run records the tab
 // pixels, not the page canvas, so each file holds what the screen shows: the
 // page, the poster, the equations, the credit, the caption and the leader
 // lines. Region Capture crops the track to #content: the whole window in the
 // fill frame, the 9:16 column in the vertical frame. cropTo() fails when the
-// share is some other tab, a window or a screen, so a wrong choice cannot
-// record the wrong thing. A refused prompt, a wrong share, or a browser with
-// no Region Capture falls back to the page canvas (no GUI), and the status
-// line (H) says so. One stream serves the whole run. Each page gets its own
-// MediaRecorder on it (startRecording).
-async function openCapture(r) {
+// share is some other tab, a window or a screen. There is no canvas-only
+// fallback: a file without the GUI is of no use, so a failed share starts
+// nothing (startFromMenu) and the menu says why. One stream serves the run.
+// Each page gets its own MediaRecorder on it (startRecording).
+async function askCapture() {
   const md = navigator.mediaDevices;
-  if (!md || !md.getDisplayMedia || !window.CropTarget) { hud('tab capture is not possible here: canvas only, no GUI'); return; }
-  r.asking = true;
+  if (!recFormat() || !md || !md.getDisplayMedia || !window.CropTarget) {
+    return { stream: null, why: 'This browser cannot record the page with its GUI. Use Chrome or Edge. Nothing was recorded.' };
+  }
   let stream = null;
   try {
     // No ideal size: the capture keeps the tab's own device pixels, up to 4K.
-    // A size taken from screen.width scaled the video down where the
-    // reported screen is small.
     stream = await md.getDisplayMedia({
       video: { displaySurface: 'browser', cursor: 'never', frameRate: S.recordFps, width: { max: 3840 }, height: { max: 2160 } },
       audio: false, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude',
     });
-    const track = stream.getVideoTracks()[0];
-    await track.cropTo(await CropTarget.fromElement(el('content')));
-    // The user can end the share from the browser bar: later pages then use
-    // the canvas.
-    track.addEventListener('ended', () => { if (r.cap === stream) { r.cap = null; hud('tab share ended: canvas only, no GUI'); } });
   } catch (e) {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = null;
-    hud(`tab capture refused (${(e && e.name) || 'error'}): canvas only, no GUI`);
+    return { stream: null, why: 'The tab share was cancelled, so nothing plays and nothing is recorded. Press Start and choose Share.' };
   }
-  r.asking = false;
-  if (run !== r) { if (stream) stream.getTracks().forEach(t => t.stop()); return; }
-  r.cap = stream;
+  try {
+    await stream.getVideoTracks()[0].cropTo(await CropTarget.fromElement(el('content')));
+  } catch (e) {
+    stream.getTracks().forEach(t => t.stop());
+    return { stream: null, why: 'That share was not this tab. Press Start and choose this tab.' };
+  }
+  return { stream, why: '' };
 }
 function closeCapture(r) {
   if (!r.cap) return;
@@ -985,24 +1018,23 @@ function closeCapture(r) {
 }
 
 // ── recorder ───────────────────────────────────────────────────────────────
-// One file per page. The recording starts after the warmup and stops when
-// the page fades out, so a file holds no black frames. The source is the
-// shared tab capture (r.cap) when there is one, else the page canvas.
-function startRecording(r, key, canvas, warmup, token) {
+// One file per page, from the shared tab capture (r.cap). The recording
+// starts after the warmup and stops when the page fades out, so a file holds
+// no black frames. If the user ends the share from the browser bar, the
+// run stops: later pages could not be recorded with their GUI.
+function startRecording(r, key, warmup, token) {
   const type = recFormat();
-  if (!type) { hud('recording is not possible here'); return; }
-  if (!r.cap && !(canvas && canvas.captureStream)) { hud(`${key}: no canvas to record`); return; }
+  if (!r.cap || !type) return;
+  const track = r.cap.getVideoTracks()[0];
+  if (!track.snEnded) { track.snEnded = true; track.addEventListener('ended', () => { if (run === r) stopSaver(); }); }
   setTimeout(() => {
-    if (run !== r || token !== r.token || r.rec) return;
-    const shared = !!r.cap;
-    let stream;
-    try { stream = shared ? r.cap : canvas.captureStream(S.recordFps); } catch (e) { hud(`${key}: capture failed`); return; }
+    if (run !== r || token !== r.token || r.rec || !r.cap) return;
     const chunks = [];
-    const mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: S.recordMbps * 1e6 });
+    const mr = new MediaRecorder(r.cap, { mimeType: type, videoBitsPerSecond: S.recordMbps * 1e6 });
     mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     const done = new Promise(res => { mr.onstop = res; });
     mr.start(1000);
-    r.rec = { mr, chunks, done, key, type, stream, shared };
+    r.rec = { mr, chunks, done, key, type };
   }, warmup);
 }
 async function finishRecording(r) {
@@ -1010,7 +1042,6 @@ async function finishRecording(r) {
   r.rec = null;
   try { rec.mr.stop(); } catch (e) {}
   await Promise.race([rec.done, wait(3000)]);
-  if (!rec.shared) rec.stream.getTracks().forEach(t => t.stop());   // the tab capture lives for the run
   if (!rec.chunks.length) return;
   const blob = new Blob(rec.chunks, { type: rec.type.split(';')[0] });
   const ext = rec.type.startsWith('video/mp4') ? 'mp4' : 'webm';
@@ -1023,5 +1054,5 @@ async function finishRecording(r) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-window.snScreensaver = { plate: plateBoxes, label: info => setLabel(info), open: openMenu, start: startSaver, stop: stopSaver, settings: () => Object.assign({}, S), pages: allPages, get running() { return !!run; } };
+window.snScreensaver = { plate: plateBoxes, label: info => setLabel(info), open: openMenu, start: startFromMenu, stop: stopSaver, settings: () => Object.assign({}, S), pages: allPages, get running() { return !!run; } };
 })();
