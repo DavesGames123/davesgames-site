@@ -20,8 +20,14 @@
 //     good copy, the worker posts { type: 'sn-live-fallback' }. This script
 //     shows a notice with the source and the date of that copy.
 //
-//  A new worker version takes control at once (skipWaiting in sw.js). The
-//  shell does not reload: the next page swap gets the new files.
+//  4. A new worker version takes control at once (skipWaiting in sw.js).
+//     The shell code in an open tab (lib/*.js, among them the screensaver
+//     recorder) is then the old version. If the tab had a worker before
+//     and the shell loaded less than RELOAD_WINDOW_MS ago, the shell
+//     reloads at once: that is the first load after a deploy, before the
+//     user has done anything. Later it does not reload by itself. It sets
+//     snOffline.stale, and the screensaver reloads before it records
+//     (lib/screensaver.js startFromMenu). Page swaps get the new files.
 //
 //  window.snOffline.status() gives a promise of the worker cache counts:
 //  { version, core, coreTotal, lazy, lazyTotal, warming }. Test scripts use it.
@@ -30,12 +36,16 @@
 //    register ............. "serviceWorker.register"
 //    background pass ...... "function warmLater"
 //    live-data notice ..... "function showLiveNotice"
+//    new version .......... "function onNewWorker"
 // ============================================================================
 (function () {
   'use strict';
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
   var SW = navigator.serviceWorker;
   var WARM_DELAY_MS = 8000;
+  var RELOAD_WINDOW_MS = 30000;
+  var T0 = Date.now();
+  var stale = false;
   var base = document.baseURI;
 
   // Local server: no worker unless opted in, so edits on disk show at once.
@@ -53,6 +63,7 @@
   }
 
   window.snOffline = {
+    get stale() { return stale; },
     status: function () {
       return SW.ready.then(function (reg) {
         return new Promise(function (resolve) {
@@ -102,6 +113,17 @@
   // addEventListener does not start the client message queue (onmessage
   // does). Without this call the notice waits until the load event.
   SW.startMessages();
+
+  // A tab with no worker at load gets its first one now: its code is
+  // current, so only a change from one worker to another counts.
+  var hadWorker = !!SW.controller;
+  function onNewWorker() {
+    if (!hadWorker) { hadWorker = true; return; }
+    stale = true;
+    var saver = window.snScreensaver && window.snScreensaver.running;
+    if (!saver && Date.now() - T0 < RELOAD_WINDOW_MS) location.reload();
+  }
+  SW.addEventListener('controllerchange', onNewWorker);
 
   function register() {
     SW.register(new URL(LOCAL ? '../sw.js?local=1' : '../sw.js', base).href, { scope: new URL('../', base).href })
