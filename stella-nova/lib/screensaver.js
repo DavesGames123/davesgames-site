@@ -40,8 +40,9 @@
 //
 //  Keys while it plays: Esc stops, Right and Left go to the next and the
 //  previous page, Space pauses the timer, H shows the status line.
-//  On a touch screen, a tap stops it ("function onTap"). A mouse click does
-//  not stop it: on a desktop only Esc does, unless the "Stop on any key or
+//  A double-click or a double tap goes to the next page ("function onTap").
+//  On a touch screen, a single tap stops it. A single mouse click does not
+//  stop it: on a desktop only Esc does, unless the "Stop on any key or
 //  mouse move" setting is on.
 //
 //  grep -n targets
@@ -145,12 +146,26 @@ function onKey(e) {
   else if (menu && !menu.hidden && e.key === 'Escape') { e.preventDefault(); closeMenu(); }
 }
 window.addEventListener('keydown', onKey, true);
-// A tap (touch or pen, not a mouse) stops the run and returns to the site.
-// The first 700 ms are ignored, so the tap on Start does not stop it.
+// Two presses within DOUBLE_MS and 40 px (screen coordinates, so a press in
+// the shell and one in the page frame compare) go to the next page. A single
+// touch or pen tap stops the run and returns to the site, but only after
+// DOUBLE_MS with no second tap. A single mouse click does nothing. The first
+// 700 ms after start are ignored, so the tap on Start does not count.
+const DOUBLE_MS = 320;
+let tapPrev = null, tapTimer = 0;
 function onTap(e) {
-  if (!run || e.pointerType === 'mouse' || performance.now() - run.t0 < 700) return;
-  e.preventDefault(); e.stopPropagation();
-  stopSaver();
+  if (!run || performance.now() - run.t0 < 700) return;
+  const now = performance.now(), touch = e.pointerType !== 'mouse';
+  if (touch) { e.preventDefault(); e.stopPropagation(); }
+  const p = tapPrev;
+  if (p && now - p.t < DOUBLE_MS && Math.hypot(e.screenX - p.x, e.screenY - p.y) < 40) {
+    tapPrev = null; clearTimeout(tapTimer);
+    next(1);
+    return;
+  }
+  tapPrev = { t: now, x: e.screenX, y: e.screenY };
+  clearTimeout(tapTimer);
+  if (touch) tapTimer = setTimeout(() => { if (tapPrev && tapPrev.t === now) { tapPrev = null; stopSaver(); } }, DOUBLE_MS);
 }
 window.addEventListener('pointerdown', onTap, true);
 
@@ -358,7 +373,7 @@ function buildMenu() {
   const fmt = recFormat();
   const combo = /Mac/.test(navigator.platform) ? '<kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>S</kbd>' : '<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>S</kbd>';
   m.innerHTML = `<div class="box">
-  <header><h2>Screensaver</h2><p>${combo} opens this menu. <kbd>Esc</kbd> stops the screensaver. On a touch screen, tap to stop it.</p></header>
+  <header><h2>Screensaver</h2><p>${combo} opens this menu. <kbd>Esc</kbd> stops the screensaver. Double-click or double tap for the next page. On a touch screen, tap once to stop it.</p></header>
   <div class="cols">
     <div class="pages">
       <div class="bar" role="tablist">${tabs}<div class="quick"><button data-q="default">Defaults</button><button data-q="all">All</button><button data-q="none">None</button></div></div>
