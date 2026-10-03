@@ -7,7 +7,7 @@
 //
 //    node tools/saver-check.mjs <key> [--port 9500] [--server http://127.0.0.1:8963]
 //        [--out <dir>] [--calm 0.7] [--seconds 20] [--record] [--width 1280 --height 800]
-//        [--frame fill|vertical]
+//        [--frame fill|vertical] [--paint]
 //
 //  A static server must already serve the repo root at --server, for example:
 //    python3 -m http.server 8963 --bind 127.0.0.1
@@ -20,6 +20,7 @@
 //  screenshots are <out>/<key>-a.png and <key>-b.png, taken 4 s and
 //  (seconds - 4) s after the page shows. With --record, the video goes to
 //  <out>/dl/. The recording is a tab capture, so it holds the poster too.
+//  With --record --paint it uses the painter that Safari and Firefox use.
 //
 //  grep -n targets: "function launch", "async function main", "function motion"
 // ============================================================================
@@ -44,6 +45,7 @@ const CALM = +opt('calm', 0.7);
 const FRAME = opt('frame', 'fill');   // 'fill' or 'vertical' (the 9:16 column)
 const W = +opt('width', 1280), H = +opt('height', 800);
 const RECORD = flag('record');
+const PAINT = flag('paint');   // with --record: the Safari path (lib/saver-paint.js), not tab capture
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(path.join(OUT, 'dl'), { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -122,7 +124,7 @@ async function main() {
     // lib/screensaver.js), so without it the run plays the whole default
     // list instead of <key>. order 'nav' keeps the one page first.
     const catalogKeys = (() => { const w = {}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'stella-nova/lib/screensaver-catalog.js'), 'utf8'), { window: w }); return Object.keys(w.SN_SAVER_CATALOG.pages); })();
-    const settings = { pages: [key], seenDefaults: catalogKeys, order: 'nav', seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', frame: FRAME, record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
+    const settings = { pages: [key], seenDefaults: catalogKeys, order: 'nav', seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', frame: FRAME, record: RECORD, recordVia: PAINT ? 'paint' : 'auto', recordWarmup: 2, loop: false, caption: false, wakeLock: false };
     // lib/screensaver.js reads 'sn-saver-settings-v2' (the v2 key dropped older saved choices); write both keys
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{for(const k of ['sn-saver-settings','sn-saver-settings-v2'])localStorage.setItem(k, ${JSON.stringify(JSON.stringify(settings))})}catch(e){}` });
     await send('Page.navigate', { url: `${SERVER}/stella-nova/#home` });
