@@ -739,6 +739,12 @@ function occlusion() {
 }
 
 // -------------------------------------------------------------------- frame
+// The time of the picture on the screen: the render mix (frame()) shows the
+// world between one step back and now.
+function shownTime() {
+  const b = S.engine ? S.engine.view.blend : 1;
+  return S.time - (1 - (b == null ? 1 : b)) / S.rule.T;
+}
 let frames = 0, lastT = 0, lastStat = 0, fps = 0, stepsWin = 0, sps = 0, statBusy = false;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -756,9 +762,14 @@ function frame(now) {
     if (S.acc > S.stepCap) S.acc = 0;   // do not build a backlog
     if (n > 0) { S.engine.step(n); S.time += n / S.rule.T; stepsWin += n; }
   }
+  // The picture is the state one step back mixed with the current state by
+  // the part of the next step that the clock has used. A step comes every
+  // 3 to 5 frames at the default speed, and with no mix the creature moves
+  // in jumps at each step.
+  S.engine.setView({ blend: S.playing ? Math.min(1, S.acc) : 1 });
   if (S.view.follow && S.stats && S.stats.mass > 1e-3 && S.stats.focus > 0.2) {
     // The centroid is a few frames old. Move it forward by the velocity.
-    const { W, H } = S.engine.info, v = S.engine.view, age = S.time - S.statT;
+    const { W, H } = S.engine.info, v = S.engine.view, age = shownTime() - S.statT;
     const tx = S.stats.cx + S.vel.x * age, ty = S.stats.cy + S.vel.y * age;
     const dx = wrapDelta(tx - v.cx, W), dy = wrapDelta(ty - v.cy, H);
     S.engine.setView({ cx: wrap(v.cx + dx * 0.12, W), cy: wrap(v.cy + dy * 0.12, H) });
@@ -994,7 +1005,7 @@ function saverLabel(label) {
 function creatureAnchor() {
   const st = S.stats, E = S.engine;
   if (!E || !st || st.mass < 1e-3 || st.focus <= 0.2 || st.sx == null) return null;
-  const rc = $('gl').getBoundingClientRect(), { W, H } = E.info, v = E.view, k = E.cellPx(), age = S.time - S.statT;
+  const rc = $('gl').getBoundingClientRect(), { W, H } = E.info, v = E.view, k = E.cellPx(), age = shownTime() - S.statT;
   const tx = st.cx + S.vel.x * age, ty = st.cy + S.vel.y * age;
   const x = rc.left + rc.width / 2 + v.ox + wrapDelta(tx - v.cx, W) * k, y = rc.top + rc.height / 2 + v.oy + wrapDelta(ty - v.cy, H) * k;
   if (x < rc.left || x > rc.right || y < rc.top || y > rc.bottom) return null;

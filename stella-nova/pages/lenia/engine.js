@@ -37,14 +37,16 @@
 //                                  in cells. sx, sy: the circular standard
 //                                  deviation of A about it, in cells.
 //   engine.readState()             Promise<Float32Array(W * H)>
-//   engine.setView({mode, palette, zoom, cx, cy, ox, oy})
+//   engine.setView({mode, palette, zoom, cx, cy, ox, oy, blend})
 //                                  mode 'world' | 'potential' | 'growth';
 //                                  palette: 256 x rgb Float32Array or a name
 //                                  from PALETTES; zoom: screen px per cell as
 //                                  a multiple of the "cover" fit; cx, cy: the
 //                                  world cell at the view center; ox, oy: the
 //                                  view center minus the canvas center, in
-//                                  CSS px (a sheet over part of the canvas)
+//                                  CSS px (a sheet over part of the canvas);
+//                                  blend 0..1: render mix of the state one
+//                                  step back (0) and the current state (1)
 //   engine.cellPx()                screen px per cell (CSS px)
 //   engine.resize(pixelW, pixelH, dpr)
 //   engine.render()
@@ -272,12 +274,14 @@ const RENDER_WGSL = /* wgsl */`
 struct View {
   canvas: vec2f, center: vec2f,
   world: vec2f, cellPx: f32, mode: u32,
-  m: f32, pad0: f32, offset: vec2f,
+  m: f32, blend: f32, offset: vec2f,
 }
 @group(0) @binding(0) var<uniform> v: View;
 @group(0) @binding(1) var<storage, read> world: array<f32>;
 @group(0) @binding(2) var<storage, read> fld: array<vec2f>;
 @group(0) @binding(3) var<storage, read> pal: array<vec4f, 256>;
+@group(0) @binding(4) var<storage, read> worldPrev: array<f32>;
+@group(0) @binding(5) var<storage, read> fldPrev: array<vec2f>;
 
 @vertex
 fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -285,11 +289,14 @@ fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   return vec4f(p * 2.0 - 1.0, 0.0, 1.0);
 }
 
+// The state one step back mixed with the current state by v.blend, the
+// part of the next step that the clock has used. The picture then moves at
+// each frame, also when a step comes only at every third or fifth frame.
 fn cellValue(k: u32) -> f32 {
   switch v.mode {
-    case 1u: { return clamp(fld[k].x / max(2.0 * v.m, 1e-4), 0.0, 1.0); }
-    case 2u: { return fld[k].y * 0.5 + 0.5; }
-    default: { return world[k]; }
+    case 1u: { return clamp(mix(fldPrev[k].x, fld[k].x, v.blend) / max(2.0 * v.m, 1e-4), 0.0, 1.0); }
+    case 2u: { return mix(fldPrev[k].y, fld[k].y, v.blend) * 0.5 + 0.5; }
+    default: { return mix(worldPrev[k], world[k], v.blend); }
   }
 }
 
@@ -395,12 +402,12 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   const partBuf = buf(REDUCE_GROUPS * 32, SU | CS, 'partials');
   const readBuf = buf(REDUCE_GROUPS * 32, GPUBufferUsage.MAP_READ | CD, 'partials-read');
   let tapBuf = null, patchBuf = null;
-  let A = [null, null], fld = null, cur = 0;
+  let A = [null, null], F = [null, null], cur = 0;
   let stepBG = [null, null], reduceBG = [null, null], renderBG = [null, null];
   let reading = false;
 
   const rule = { R: 13, T: 10, m: 0.15, s: 0.015, b: [1], kn: 1, gn: 1 };
-  const view = { mode: 'world', zoom: 1, cx: 0, cy: 0, ox: 0, oy: 0 };
+  const view = { mode: 'world', zoom: 1, cx: 0, cy: 0, ox: 0, oy: 0, blend: 1 };
   let px = { w: 1, h: 1, dpr: 1 };
   engine.view = view;
 
@@ -420,7 +427,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
           { binding: 0, resource: { buffer: ruleBuf } },
           { binding: 1, resource: { buffer: A[i] } },
           { binding: 2, resource: { buffer: A[1 - i] } },
-          { binding: 3, resource: { buffer: fld } },
+          { binding: 3, resource: { buffer: F[1 - i] } },
           { binding: 4, resource: { buffer: tapBuf } },
         ],
       });
@@ -438,8 +445,10 @@ export async function createEngine(canvas, { mobile = false } = {}) {
           entries: [
             { binding: 0, resource: { buffer: viewBuf } },
             { binding: 1, resource: { buffer: A[i] } },
-            { binding: 2, resource: { buffer: fld } },
+            { binding: 2, resource: { buffer: F[i] } },
             { binding: 3, resource: { buffer: palBuf } },
+            { binding: 4, resource: { buffer: A[1 - i] } },
+            { binding: 5, resource: { buffer: F[1 - i] } },
           ],
         });
       }
@@ -448,9 +457,10 @@ export async function createEngine(canvas, { mobile = false } = {}) {
 
   engine.setWorld = (W, H) => {
     W = Math.max(16, Math.round(W)); H = Math.max(16, Math.round(H));
-    for (const b of [A[0], A[1], fld]) if (b) b.destroy();
+    for (const b of [A[0], A[1], F[0], F[1]]) if (b) b.destroy();
     A = [buf(W * H * 4, SU | CD | CS, 'A0'), buf(W * H * 4, SU | CD | CS, 'A1')];
-    fld = buf(W * H * 8, SU | CD, 'field');
+    // F[i] is the field of the step that wrote A[i].
+    F = [buf(W * H * 8, SU | CD, 'field0'), buf(W * H * 8, SU | CD, 'field1')];
     cur = 0;
     info.W = W; info.H = H; info.steps = 0;
     view.cx = W / 2; view.cy = H / 2;
@@ -479,9 +489,9 @@ export async function createEngine(canvas, { mobile = false } = {}) {
 
   engine.clear = () => {
     if (!A[0]) return;
-    const z = new Float32Array(info.W * info.H);
-    device.queue.writeBuffer(A[cur], 0, z);
-    device.queue.writeBuffer(fld, 0, new Float32Array(info.W * info.H * 2));
+    // Both states and both fields, so the render mix shows an empty world.
+    const z = new Float32Array(info.W * info.H), zf = new Float32Array(info.W * info.H * 2);
+    for (let i = 0; i < 2; i++) { device.queue.writeBuffer(A[i], 0, z); device.queue.writeBuffer(F[i], 0, zf); }
     info.steps = 0;
   };
 
@@ -498,19 +508,22 @@ export async function createEngine(canvas, { mobile = false } = {}) {
     s[4] = Math.round(x - patch.w / 2); s[5] = Math.round(y - patch.h / 2);
     u[6] = op === 'erase' ? 1 : 0;
     device.queue.writeBuffer(stampBuf, 0, d);
-    const bg = device.createBindGroup({
-      layout: stampPipe.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: stampBuf } },
-        { binding: 1, resource: { buffer: patchBuf } },
-        { binding: 2, resource: { buffer: A[cur] } },
-      ],
-    });
+    // The patch goes into the current state and the state one step back, so
+    // the render mix shows it at full strength at once.
     const enc = device.createCommandEncoder();
     const pass = enc.beginComputePass();
     pass.setPipeline(stampPipe);
-    pass.setBindGroup(0, bg);
-    pass.dispatchWorkgroups(Math.ceil(patch.w / 16), Math.ceil(patch.h / 16));
+    for (const b of [A[cur], A[1 - cur]]) {
+      pass.setBindGroup(0, device.createBindGroup({
+        layout: stampPipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: stampBuf } },
+          { binding: 1, resource: { buffer: patchBuf } },
+          { binding: 2, resource: { buffer: b } },
+        ],
+      }));
+      pass.dispatchWorkgroups(Math.ceil(patch.w / 16), Math.ceil(patch.h / 16));
+    }
     pass.end();
     device.queue.submit([enc.finish()]);
   };
@@ -584,7 +597,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   };
 
   engine.setView = o => {
-    for (const k of ['mode', 'zoom', 'cx', 'cy', 'ox', 'oy']) if (o[k] !== undefined && o[k] !== null) view[k] = o[k];
+    for (const k of ['mode', 'zoom', 'cx', 'cy', 'ox', 'oy', 'blend']) if (o[k] !== undefined && o[k] !== null) view[k] = o[k];
     if (o.palette) device.queue.writeBuffer(palBuf, 0, typeof o.palette === 'string' ? paletteData(o.palette) : o.palette);
   };
   engine.setView({ palette: 'lenia' });
@@ -606,7 +619,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
     f[0] = px.w; f[1] = px.h; f[2] = view.cx; f[3] = view.cy;
     f[4] = info.W; f[5] = info.H; f[6] = engine.cellPx() * px.dpr;
     u[7] = view.mode === 'potential' ? 1 : view.mode === 'growth' ? 2 : 0;
-    f[8] = rule.m; f[10] = view.ox * px.dpr; f[11] = view.oy * px.dpr;
+    f[8] = rule.m; f[9] = Math.max(0, Math.min(1, view.blend)); f[10] = view.ox * px.dpr; f[11] = view.oy * px.dpr;
     device.queue.writeBuffer(viewBuf, 0, d);
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({
@@ -620,7 +633,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   };
 
   engine.destroy = () => {
-    for (const b of [A[0], A[1], fld, tapBuf, patchBuf, ruleBuf, stampBuf, viewBuf, palBuf, partBuf, readBuf]) if (b) b.destroy();
+    for (const b of [A[0], A[1], F[0], F[1], tapBuf, patchBuf, ruleBuf, stampBuf, viewBuf, palBuf, partBuf, readBuf]) if (b) b.destroy();
     if (context) context.unconfigure();
     device.destroy();
   };
