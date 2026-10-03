@@ -860,16 +860,38 @@ window.snSaver={enter:function(o){
   function load(){
     loadPreset(name);computeForces();R=1;
     for(var b of bodies)R=Math.max(R,Math.hypot(b.x,b.y));
-    var a=document.getElementById('canvasArea');
-    // A portrait phone docks the plate at the top or the base (about 330 px
-    // tall). Fit the system in the space below it, so the plate does not
-    // cover the orbits.
-    var tall=a.clientWidth<=760&&a.clientHeight>a.clientWidth+200;
-    camZoom=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,a.clientHeight-(tall?340:0))/R));
-    // On a wide screen the plate (about 400 px wide) sits beside the system:
-    // move the system left until 450 px are free at the right.
-    var rad=camZoom*R;
-    camX=tall?0:-Math.max(0,Math.min(a.clientWidth/2-rad-28,450-(a.clientWidth/2-rad)));camY=tall?170:0;
+    var f=saverFrame();camX=f.x;camY=f.y;camZoom=f.z;tgt=f;
+  }
+  // The shell poster is centred: a header block at the top, equations and
+  // parameters at the base. Centre the system, horizontally and in the
+  // free band between the two blocks, and fit it to that band.
+  // posterBand reads the poster boxes from the shell (same origin), in
+  // canvas px. Before the poster shows, the band is the whole canvas.
+  function posterBand(a){
+    var H=a.clientHeight,band={y0:0,y1:H};
+    try{
+      var P=window.parent&&window.parent!==window&&window.parent.snScreensaver,b=P&&P.plate&&P.plate();
+      var fr=window.frameElement&&window.frameElement.getBoundingClientRect(),ar=a.getBoundingClientRect();
+      if(b&&b.top&&fr){
+        var off=fr.top+ar.top;
+        band.y0=Math.max(0,b.top.y+b.top.h-off+16);
+        band.y1=b.bot&&b.bot.h>0?Math.min(H,b.bot.y-off-16):H-24;
+        if(band.y1-band.y0<120)band={y0:0,y1:H};
+      }
+    }catch(e){}
+    return band;
+  }
+  function saverFrame(){
+    var a=document.getElementById('canvasArea'),band=posterBand(a),bh=band.y1-band.y0;
+    var z=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,bh)/R));
+    return{x:0,y:(band.y0+band.y1)/2-a.clientHeight/2,z:z};
+  }
+  // tgt: the framing the camera eases to. plate() sets it again each second,
+  // when the poster has moved (it shows about 0.7 s after the page).
+  var tgt=null;
+  function reframe(){
+    var f=saverFrame();
+    if(!tgt||Math.abs(f.y-tgt.y)>12||Math.abs(f.z/tgt.z-1)>0.05)tgt=f;
   }
   // The plate (o.label) names the preset, its bodies and masses, the softened
   // pairwise law that computeForces() sums, the velocity-Verlet step, and the
@@ -932,11 +954,17 @@ window.snSaver={enter:function(o){
   }
   var baseLoad=load;
   load=function(){baseLoad();E0=0;plate();};
+  var basePlate=plate;
+  plate=function(){basePlate();reframe();};
   resizeCanvas();load();
   if(label)setInterval(plate,1000);
   // A fade overlay drawn after each frame; dir is -1 while fading out, +1 in.
   var base=render;
   render=function(){
+    // Ease the camera to tgt (about 3 per second). A frame step is at most
+    // 1/30 s, so a long frame does not jump.
+    if(tgt){var now=performance.now(),dt=Math.min(1/30,(now-(render.t||now))/1000),k=1-Math.exp(-3*dt);render.t=now;
+      camX+=(tgt.x-camX)*k;camY+=(tgt.y-camY)*k;camZoom+=(tgt.z-camZoom)*k;}
     base();
     if(dir===0&&bodies.some(function(b){return Math.hypot(b.x,b.y)>3*R;}))dir=-1;
     if(dir<0){fade=Math.min(1,fade+0.02);if(fade>=1){load();dir=1;}}
