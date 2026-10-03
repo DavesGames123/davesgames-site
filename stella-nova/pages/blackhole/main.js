@@ -44,7 +44,8 @@
 //      warning gate ......... "window.dismissWarn"    reveal UI after warning
 //      pointer input ........ "let dragging"          mouse, touch, wheel
 //      keyboard ............. "keydown"               arrow-key orbit
-//      toggles .............. "function setBtn"       geodesic, RK4, disc, bg
+//      toggles .............. "function setBtn"       geodesic, RK4, disc, Doppler, bg
+//      disc constants ....... "const DISC_IN="        ISCO, outer edge, T0, clock
 //      resize ............... "RenderScale.create"    pixel budget + fps control
 //      frame loop ........... "function frame"        camera basis + uniforms
 //      screensaver hook ..... "window.snSaver"        UI off, sharper, slow orbit
@@ -84,7 +85,8 @@ gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
 // Cache every uniform location once, keyed by name, for cheap per-frame updates.
 const U={};
 ['u_res','u_camPos','u_camFwd','u_camRight','u_camUp','u_focalLen','u_rs','u_discInner','u_discOuter',
- 'u_geodesicDl','u_maxSteps','u_escapeR','u_useGeodesic','u_useRK4','u_showDisc','u_bgMode'
+ 'u_geodesicDl','u_maxSteps','u_escapeR','u_useGeodesic','u_useRK4','u_showDisc','u_bgMode',
+ 'u_time','u_discTemp','u_doppler'
 ].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 
 // Physics constants and derived Schwarzschild radius. RS is computed from c, G,
@@ -102,6 +104,14 @@ const FOCAL_PER_H=1.0;
 // faster than fixed-step Euler and closer to the true path.
 let useGeodesic=true,useRK4=true,showDisc=true;
 let bgMode=0;
+// Accretion disc: inner edge at the ISCO (3 r_s), outer edge DISC_OUT r_s.
+// DISC_T0 is the peak emitted temperature in K (shadeDisc() in the shader).
+// useDoppler 0 keeps only the gravitational part of the shift g. DISC_CLOCK
+// converts seconds to the shader clock in r_s/c: the ISCO orbit lasts
+// 2 pi sqrt(2 x 27) = 46 r_s/c, so 2.9 gives one inner turn in 16 s.
+// The clock wraps at 17 x 588: a whole number of DISC_FLOW_P (17) periods.
+const DISC_IN=3.0,DISC_OUT=8.0,DISC_T0=4000,DISC_CLOCK=2.9;
+let useDoppler=true;
 // Base step size, step budget, and escape-radius multiplier; scaled by zoom in frame().
 let geodesicDl=5e7*1.9*4.0,maxSteps=2048,escMul=35;
 let autoSpin=true;
@@ -212,6 +222,7 @@ function setBtn(id,on){var el=document.getElementById(id);el.classList.toggle('o
 window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);renderScale.reset();};
 window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);renderScale.reset();};
 window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
+window.toggleDoppler=function(){useDoppler=!useDoppler;setBtn('btnDoppler',useDoppler);};
 // Background selector: set bgMode and highlight the active icon (0..4).
 window.setBg=function(m){
   bgMode=m;
@@ -268,7 +279,9 @@ function frame(){
   gl.uniform3f(U.u_camPos,cx,cy,cz);gl.uniform3f(U.u_camFwd,fwd[0],fwd[1],fwd[2]);
   gl.uniform3f(U.u_camRight,right[0],right[1],right[2]);gl.uniform3f(U.u_camUp,up[0],up[1],up[2]);
   gl.uniform1f(U.u_focalLen,FOCAL_PER_H*canvas.height);gl.uniform1f(U.u_rs,RS);
-  gl.uniform1f(U.u_discInner,3.0*RS);gl.uniform1f(U.u_discOuter,5.1*RS);
+  gl.uniform1f(U.u_discInner,DISC_IN*RS);gl.uniform1f(U.u_discOuter,DISC_OUT*RS);
+  gl.uniform1f(U.u_time,(now/1000)*DISC_CLOCK%(17*588));gl.uniform1f(U.u_discTemp,DISC_T0);
+  gl.uniform1f(U.u_doppler,useDoppler?1:0);
   gl.uniform1f(U.u_geodesicDl,dl);gl.uniform1f(U.u_maxSteps,steps);gl.uniform1f(U.u_escapeR,escR);
   gl.uniform1f(U.u_useGeodesic,useGeodesic?1:0);gl.uniform1f(U.u_useRK4,useRK4?1:0);
   gl.uniform1f(U.u_showDisc,showDisc?1:0);gl.uniform1f(U.u_bgMode,bgMode);
@@ -325,16 +338,19 @@ window.snSaver={
       label({title:'Schwarzschild black hole',sub:'Sgr A* mass, null geodesics, '+(useGeodesic?(useRK4?'RK4':'Euler'):'straight rays'),
         params:[{sym:'r_s',name:'horizon',value:sci(RS)+' m',cls:'m2'},
           {sym:'r',name:'camera',value:(camRadius/RS).toFixed(1)+' rₛ · pitch '+(camPitch*180/Math.PI).toFixed(1)+'°',cls:'m3'},
-          {sym:'r_{\\text{disc}}',name:'accretion disc',value:'3.0 – 5.1 rₛ',cls:'m3'},
+          {sym:'r_{\\text{disc}}',name:'accretion disc',value:DISC_IN.toFixed(1)+' – '+DISC_OUT.toFixed(1)+' rₛ',cls:'m3'},
           {sym:'N',name:'steps per ray',value:String(steps)}],
-        lines:['M = 4.3 × 10⁶ solar masses. The photon sphere is at 1.5 rₛ, the disc inner edge at the ISCO (3 rₛ).'],
+        lines:['M = 4.3 × 10⁶ solar masses. The photon sphere is at 1.5 rₛ, the disc inner edge at the ISCO (3 rₛ).',
+          'Disc colour: a blackbody at g T, with g the gravitational and Doppler shift'+(useDoppler?'.':' (Doppler off).')],
         tex:['ds^2 = -\\left(1 - \\tfrac{r_s}{r}\\right)c^2\\,dt^2 + \\frac{dr^2}{1 - r_s/r} + r^2\\,d\\Omega^2',
           '\\ddot\\varphi = -\\frac{2\\,\\dot r\\,\\dot\\varphi}{r}, \\qquad \\dot t = \\frac{E}{1 - r_s/r}',
-          'R_{\\mu\\nu} - \\tfrac{1}{2}g_{\\mu\\nu}R = \\frac{8\\pi G}{c^4}T_{\\mu\\nu}'],
+          'R_{\\mu\\nu} - \\tfrac{1}{2}g_{\\mu\\nu}R = \\frac{8\\pi G}{c^4}T_{\\mu\\nu}',
+          'g = \\frac{\\sqrt{1 - 3r_s/2r}}{1 - \\Omega\\lambda/c}, \\quad \\Omega = \\sqrt{\\tfrac{r_s c^2}{2r^3}}, \\quad T \\propto r^{-3/4}\\big(1 - \\sqrt{r_{\\text{in}}/r}\\big)^{1/4}'],
         rules:EQ_RULES,
         eq:['ds² = −f c²dt² + dr²/f + r²dΩ²',
           'r̈ = −(r_s/2r²)fṫ² + (r_s/2r²f)ṙ² + (r−r_s)φ̇²',
-          'φ̈ = −2ṙφ̇/r,   ṫ = E/f,   f = 1 − r_s/r'],
+          'φ̈ = −2ṙφ̇/r,   ṫ = E/f,   f = 1 − r_s/r',
+          'g = √(1 − 3r_s/2r) / (1 − Ωλ/c),   T ∝ r^(−3/4) (1 − √(r_in/r))^(1/4)'],
         anchor:holeAnchor});
     }
     // The hole on screen. The canvas fills the window, the camera looks at
@@ -344,7 +360,7 @@ window.snSaver={
     // plus 20 percent for the lensed far side. The key point is the centre.
     function holeAnchor(){
       var b=canvas.getBoundingClientRect(),f=FOCAL_PER_H*b.height,cx=b.left+b.width/2,cy=b.top+b.height/2;
-      return {x:cx,y:cy,r:1.2*f*5.1*RS/camRadius,pts:[{x:cx,y:cy}]};
+      return {x:cx,y:cy,r:1.2*f*DISC_OUT*RS/camRadius,pts:[{x:cx,y:cy}]};
     }
     plate();
     if(label)this.timer=setInterval(plate,1000);

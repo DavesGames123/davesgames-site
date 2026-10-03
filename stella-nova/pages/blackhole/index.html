@@ -37,7 +37,7 @@
      │                                                                  │
      │ #eqPanel (metric + EFE)                                          │
      │ #bgBar   ✦ ▦ ◧ ☁ ◎   background modes                            │
-     │ #ctrlWrap  Geodesic · RK4 · Disc · Spin · Zoom · quality          │
+     │ #ctrlWrap  Geodesic · RK4 · Disc · Doppler · Spin · Zoom · quality│
      └─────────────────────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -106,6 +106,7 @@
   <button class="toggle-btn on" id="btnRK4" onclick="toggleRK4()">RK4</button>
   <div class="ctrl-sep"></div>
   <button class="toggle-btn on" id="btnDisc" onclick="toggleDisc()">Disc</button>
+  <button class="toggle-btn on" id="btnDoppler" onclick="toggleDoppler()" title="Doppler shift and beaming of the disc light">Doppler</button>
   <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">Spin</button>
   <div class="ctrl-sep"></div>
   <span class="ctrl-label">Zoom <span class="sci-sym" id="zoomSym" data-tex="r/r_s" data-inline></span></span>

@@ -5,7 +5,9 @@
 //   around a black hole. Light near mass does not travel straight; this shader
 //   integrates the null geodesic equation step by step, checking each short
 //   segment against the event horizon and the accretion disc, and finally
-//   samples a background sphere in the ray's escaped direction.
+//   samples a background sphere in the ray's escaped direction. The disc is
+//   semi-transparent: each crossing adds blackbody light at the shifted
+//   temperature g T (shadeDisc) and the ray goes on through it.
 //
 //   RAY PATH  (curved, integrated in the ray's own orbital plane)
 //   ------------------------------------------------------------------
@@ -36,14 +38,16 @@
 //     hash / sky uv ....... "float hash21"           noise and direction->uv
 //     backgrounds ......... "vec3 sampleStars"       5 background modes
 //     background switch ... "vec3 sampleBg"          pick a mode by u_bgMode
-//     disc color .......... "vec3 sampleDisc"        accretion disc gradient
+//     disc emission ....... "vec3 shadeDisc"         T(r), shift g, turbulence
+//     blackbody colour .... "vec3 planckRGB"         B_lambda(T) / B_lambda(6500 K)
+//     tone map ............ "vec3 discToDisplay"     exposure, ACES fit, gamma
 //     intersections ....... "struct Isect"           ray/seg vs sphere and disc
 //     orbital plane ....... "struct OrbPlane"        per-ray 2D frame
 //     geodesic state ...... "struct GRay"            r, phi and their rates
 //     geodesic RHS ........ "vec4 gRHS"              equation of motion
 //     integrators ......... "GRay stepEuler"         Euler and RK4 steps
-//     straight trace ...... "TR traceStraight"       flat-space fallback
-//     geodesic trace ...... "TR traceGeodesic"       the bent-ray march
+//     straight trace ...... "vec3 traceStraight"     flat-space fallback
+//     geodesic trace ...... "vec3 traceGeodesic"     the bent-ray march
 //     entry point ......... "void main"              build ray, trace, shade
 precision highp float;
 // Camera basis and screen size (u_res); u_focalLen sets the field of view.
@@ -54,6 +58,10 @@ uniform float u_geodesicDl,u_maxSteps,u_escapeR;
 uniform float u_useGeodesic,u_useRK4,u_showDisc;
 // Which background sphere to sample: 0 stars, 1 grid, 2 UV, 3 nebula, 4 rings.
 uniform float u_bgMode;
+// Disc emission: u_time is the clock in units of r_s/c (main.js scales it so
+// that the inner edge turns once in about 16 s), u_discTemp the peak emitted
+// temperature in K, u_doppler 1 = full shift g, 0 = gravitational shift only.
+uniform float u_time,u_discTemp,u_doppler;
 out vec4 fragColor;
 const float PI=3.141592653589793;
 
@@ -246,14 +254,94 @@ vec3 sampleBg(vec3 dir){
   return sampleRings(dir);
 }
 
-// Accretion disc color: radius across the disc (inner->outer) drives a gradient
-// from hot orange to pale gold, with a dark-red floor added toward the inside.
-vec3 sampleDisc(vec3 p){
-  float rd=length(p.xz);float t=clamp((rd-u_discInner)/(u_discOuter-u_discInner),0.0,1.0);
-  return clamp(mix(vec3(1.0,0.282,0.0),vec3(1.0,0.835,0.18),t)+vec3(0.11,0.024,0.0)*(1.0-t),vec3(0.0),vec3(1.0));
+// ─── Accretion disc emission ───
+// A thin disc in the y = 0 plane between u_discInner (the ISCO, 3 r_s) and
+// u_discOuter. Gas moves on circular Keplerian orbits about +y. All radii
+// here are x = r / r_s.
+//
+//   temperature  T(x) = T0 x^(-3/4) (1 - sqrt(x_in / x))^(1/4) / peak
+//                (Shakura-Sunyaev / Page-Thorne shape, zero torque at the
+//                ISCO; the peak is at x = 49/36 x_in and has T = T0)
+//   angular vel. Omega = sqrt(1 / (2 x^3))           (units c / r_s)
+//   shift        g = nu_obs / nu_em
+//                  = sqrt(1 - 3/(2x)) / (1 - Omega lambda) / sqrt(1 - 1/x_cam)
+//                lambda = L_z / E of the photon (constant along the ray, so
+//                main() computes it once at the camera)
+//   colour       a blackbody shifts to a blackbody: I_nu / nu^3 is invariant,
+//                so the observed spectrum is B_nu(g T). The bolometric
+//                intensity goes as g^4. planckRGB() samples B_lambda(g T)
+//                at three wavelengths.
+float discX(vec3 p){return length(p.xz)/u_rs;}
+// Planck B_lambda at 610, 550 and 465 nm, divided by B_lambda at 6500 K, so a
+// 6500 K body is (1,1,1). The lambda^-5 factor cancels in the ratio.
+vec3 planckRGB(float T){
+  const vec3 L=vec3(0.610,0.550,0.465);      // wavelengths in micrometres
+  const float C2=14388.0;                    // h c / k in micrometre K
+  vec3 ref=exp(C2/(L*6500.0))-1.0;
+  return ref/(exp(min(C2/(L*max(T,300.0)),vec3(80.0)))-1.0);
+}
+// Value noise with period N cells in y, so the azimuth wraps with no seam.
+float vnoiseP(vec2 p,float N){
+  vec2 i=floor(p),f=fract(p),u=f*f*(3.0-2.0*f);
+  float y0=mod(i.y,N),y1=mod(i.y+1.0,N);
+  return mix(mix(hash21(vec2(i.x,y0)),hash21(vec2(i.x+1.0,y0)),u.x),
+             mix(hash21(vec2(i.x,y1)),hash21(vec2(i.x+1.0,y1)),u.x),u.y);
+}
+// Gas density texture: two octaves stretched along the orbit (thin arcs).
+// u = radius, v = turns x N, so one cell is 0.4 r_s across and 1/24 turn long.
+float discFbm(float x,float ph,float seed){
+  float v=ph*(1.0/(2.0*PI));
+  vec2 q=vec2(x*2.5+seed,v*24.0);
+  return 0.62*vnoiseP(q,24.0)+0.38*vnoiseP(q*vec2(2.3,2.0)+vec2(seed*1.7,5.0),48.0);
+}
+// Keplerian shear winds a texture up without limit, so two copies run with a
+// phase offset of half a period (DISC_FLOW_P) and swap in turn; each copy
+// resets at the moment its weight is zero.
+const float DISC_FLOW_P=17.0;
+// Shade one crossing of the disc plane at point p for a photon with
+// lambda = L_z / E (units r_s). Returns linear HDR radiance times alpha, and
+// writes the opacity to alpha.
+vec3 shadeDisc(vec3 p,float lam,out float alpha){
+  float x=discX(p),xin=u_discInner/u_rs,xout=u_discOuter/u_rs;
+  float ph=atan(p.z,p.x);
+  // Temperature profile, normalized to 1 at its peak (x = 49/36 xin).
+  float xp=xin*49.0/36.0;
+  float tPeak=pow(xp,-0.75)*pow(1.0/7.0,0.25);
+  float tProf=pow(x,-0.75)*pow(max(1.0-sqrt(xin/x),0.0),0.25)/tPeak;
+  // Redshift factor g. The camera is a static observer at x_cam.
+  float om=inversesqrt(2.0*x*x*x);
+  float camF=inversesqrt(max(1.0-u_rs/length(u_camPos),1e-3));
+  float g=u_doppler>0.5?sqrt(max(1.0-1.5/x,0.0))/max(1.0-om*lam,0.05)
+                       :sqrt(max(1.0-1.0/x,0.0));
+  g*=camF;
+  // Turbulence: the gas at angle ph now came from ph + om t, so the texture
+  // turns with the local orbital speed (inner gas is faster).
+  float f1=fract(u_time/DISC_FLOW_P),f2=fract(u_time/DISC_FLOW_P+0.5);
+  float n1=discFbm(x,ph+om*f1*DISC_FLOW_P,0.0);
+  float n2=discFbm(x,ph+om*f2*DISC_FLOW_P,31.7);
+  float w1=1.0-abs(2.0*f1-1.0);
+  float dens=mix(n2,n1,w1);
+  dens=smoothstep(0.15,0.85,dens);
+  // Soft edges: opacity rises over 0.5 r_s at the ISCO and fades over the
+  // outer 35 percent, where the thin gas lets the far side show through.
+  float edge=smoothstep(xin,xin+0.5,x)*(1.0-smoothstep(xout*0.65,xout,x));
+  alpha=clamp(edge*(0.55+0.45*dens),0.0,0.95);
+  vec3 B=planckRGB(g*u_discTemp*tProf);
+  return B*(0.45+0.9*dens)*alpha;
+}
+// Filmic curve (Narkowicz ACES fit) and display gamma for the disc radiance.
+// The exposure puts the green channel of a T0 blackbody at DISC_EXPOSURE, so
+// the u_discTemp setting changes the colour but not the overall level.
+// The sky samplers already return display values and are not mapped.
+const float DISC_EXPOSURE=1.2;
+vec3 discToDisplay(vec3 c){
+  c*=DISC_EXPOSURE/planckRGB(u_discTemp).g;
+  c=clamp((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14),0.0,1.0);
+  return pow(c,vec3(1.0/2.2));
 }
 
-// Intersection result: hit flag, distance along the ray, and the color found.
+// Intersection result: hit flag, distance along the ray, and a vec3 payload:
+// the hit point for a disc hit (shadeDisc() shades it), black for the horizon.
 struct Isect{bool hit;float dist;vec3 color;};
 Isect noHit(){return Isect(false,1e30,vec3(0.0));}
 // Keep whichever of two hits is nearer (used to merge horizon and disc tests).
@@ -269,13 +357,13 @@ Isect raySphere(vec3 ro,vec3 rd,vec3 c,float r,vec3 col){
   if(t>=1e30)return noHit();return Isect(true,t,col);}
 
 // Ray vs disc for a whole ray: intersects the y=0 plane, then keeps the hit only
-// inside the annulus between inner and outer radius. bias hides a seam at the rim.
+// inside the annulus between inner and outer radius. The payload is the hit point.
 Isect rayDisc(vec3 ro,vec3 rd){
   if(u_showDisc<0.5||abs(rd.y)<1e-9)return noHit();
   float t=-ro.y/rd.y;if(t<=0.0)return noHit();vec3 p=ro+rd*t;
-  float r=length(p.xz),bias=u_rs*0.1;
-  if(r<u_discInner+bias||r>u_discOuter)return noHit();
-  return Isect(true,t,sampleDisc(p));}
+  float r=length(p.xz);
+  if(r<u_discInner||r>u_discOuter)return noHit();
+  return Isect(true,t,p);}
 
 // Segment vs sphere: same test but bounded to a finite segment [s0, s1]. The
 // geodesic march is piecewise-linear, so each bent step is one such segment.
@@ -288,19 +376,14 @@ Isect segSphere(vec3 s0,vec3 s1,vec3 c,float r,vec3 col){
   if(t>=1e30)return noHit();return Isect(true,t,col);}
 
 // Segment vs disc: crosses the y=0 plane within one bent step, inside the annulus.
+// The payload is the hit point.
 Isect segDisc(vec3 s0,vec3 s1){
   if(u_showDisc<0.5)return noHit();vec3 seg=s1-s0;
   if(abs(seg.y)<1e-9)return noHit();float t=-s0.y/seg.y;
   if(t<0.0||t>1.0)return noHit();vec3 p=s0+seg*t;
-  float r=length(p.xz),bias=u_rs*0.1;
-  if(r<u_discInner+bias||r>u_discOuter)return noHit();
-  return Isect(true,length(seg)*t,sampleDisc(p));}
-
-// Combine the horizon (black sphere) and disc tests for a full ray or one segment.
-Isect traceRay(vec3 ro,vec3 rd,float bhR){
-  return closest(closest(noHit(),raySphere(ro,rd,vec3(0.0),bhR,vec3(0.0))),rayDisc(ro,rd));}
-Isect traceSeg(vec3 s0,vec3 s1,float bhR){
-  return closest(closest(noHit(),segSphere(s0,s1,vec3(0.0),bhR,vec3(0.0))),segDisc(s0,s1));}
+  float r=length(p.xz);
+  if(r<u_discInner||r>u_discOuter)return noHit();
+  return Isect(true,length(seg)*t,p);}
 
 // Per-ray orbital plane: a null geodesic in Schwarzschild space stays in one
 // plane through the center. radial points from the hole to the ray origin;
@@ -349,53 +432,65 @@ vec3 wPoint(GRay g,OrbPlane op){return op.radial*(g.r*cos(g.phi))+op.tangent*(g.
 vec3 wDir(GRay g,OrbPlane op){float cp=cos(g.phi),sp=sin(g.phi);
   return normalize(op.radial*(g.dr*cp-g.r*g.dphi*sp)+op.tangent*(g.dr*sp+g.r*g.dphi*cp));}
 
-// Trace result: whether the ray terminated on something, and the color to show.
-struct TR{bool hit;vec3 color;};
-
 // Flat-space fallback (geodesic off): a single straight ray. The capture radius
 // is the photon-sphere impact parameter b = sqrt(27)/2 * rs, so the black disc
-// matches the true shadow size without integrating anything.
-TR traceStraight(vec3 ro,vec3 rd){
-  Isect h=traceRay(ro,rd,0.5*sqrt(27.0)*u_rs);
-  if(!h.hit)return TR(false,vec3(0.0));return TR(true,h.color);}
+// matches the true shadow size without integrating anything. A disc hit in
+// front of the shadow is shaded over the shadow or the sky.
+vec3 traceStraight(vec3 ro,vec3 rd,float lam){
+  Isect hs=raySphere(ro,rd,vec3(0.0),0.5*sqrt(27.0)*u_rs,vec3(0.0));
+  vec3 behind=hs.hit?vec3(0.0):sampleBg(rd);
+  Isect hd=rayDisc(ro,rd);
+  if(!hd.hit||(hs.hit&&hs.dist<hd.dist))return behind;
+  float a;vec3 e=shadeDisc(hd.color,lam,a);
+  return discToDisplay(e)+(1.0-a)*behind;
+}
 
 // The bent-ray march. Integrate the geodesic step by step; at each step test the
 // short segment against horizon and disc, stop if captured (r <= capR), and once
 // the ray is far out and receding, sample the background in its escape direction.
+// The disc is semi-transparent: each crossing adds its emission times the
+// transmittance so far (acc) and lowers the transmittance (trans), and the ray
+// goes on. So the lensed far side and the photon-ring images show through
+// the thin outer gas. The march stops when trans < 0.02.
 // RK4 step growth: the step is dl inside STEP_NEAR_RS horizon radii, then
 // grows as r, up to STEP_MAX_GAIN times dl. Escaping rays at the default
 // zoom then take about 5x fewer steps.
 const float STEP_NEAR_RS=2.0,STEP_MAX_GAIN=32.0;
-TR traceGeodesic(vec3 ro,vec3 rd){
+vec3 traceGeodesic(vec3 ro,vec3 rd,float lam){
   float capR=u_rs*1.035;
   OrbPlane op=buildOrbPlane(ro,rd);
   GRay g=initGRay(ro,rd,op,u_rs,capR);
   float dl=u_geodesicDl;int maxS=int(u_maxSteps);
   float escR=u_escapeR*u_rs;bool rk4=u_useRK4>0.5;
-  vec3 prev=ro;
+  vec3 prev=ro,acc=vec3(0.0);float trans=1.0;
   // Fixed 8192 cap so the loop bound is constant (GLSL needs it); maxS is the
   // real per-frame step budget from the quality setting.
   for(int i=0;i<8192;i++){
     if(i>=maxS)break;
     // Captured before stepping: inside the horizon means black.
-    if(g.r<=capR)return TR(true,vec3(0.0));
+    if(g.r<=capR)return discToDisplay(acc);
     // Advance one step with the chosen integrator. The bend falls off as rs/r,
     // so RK4 steps grow with r (see STEP_NEAR_RS). Euler keeps the fixed dl:
     // the (r, phi) terms curve a straight ray, and a long Euler step moves
     // every star in the sky.
     float sdl=rk4?dl*clamp(g.r/(STEP_NEAR_RS*u_rs),1.0,STEP_MAX_GAIN):dl;
     if(rk4){g=stepRK4(g,sdl,u_rs,capR);}else{g=stepEuler(g,sdl,u_rs,capR);}
-    if(g.r<=capR)return TR(true,vec3(0.0));
-    // Test the segment just traversed against horizon and disc.
+    // Test the segment just traversed against the disc, then the horizon.
     vec3 cur=wPoint(g,op);
-    Isect h=traceSeg(prev,cur,capR);
-    if(h.hit)return TR(true,h.color);
+    Isect hs=segSphere(prev,cur,vec3(0.0),capR,vec3(0.0));
+    Isect hd=segDisc(prev,cur);
+    if(hd.hit&&(!hs.hit||hd.dist<hs.dist)){
+      float a;vec3 e=shadeDisc(hd.color,lam,a);
+      acc+=trans*e;trans*=1.0-a;
+      if(trans<0.02)return discToDisplay(acc);
+    }
+    if(hs.hit||g.r<=capR)return discToDisplay(acc);
     // Far out and moving away: the ray has escaped; read the sky it points at.
-    if(g.r>=escR&&i>8)return TR(false,sampleBg(wDir(g,op)));
+    if(g.r>=escR&&i>8)return discToDisplay(acc)+trans*sampleBg(wDir(g,op));
     prev=cur;
   }
   // Ran out of steps: fall back to the background in the current direction.
-  return TR(false,sampleBg(wDir(g,op)));
+  return discToDisplay(acc)+trans*sampleBg(wDir(g,op));
 }
 
 // Entry point: build the view ray from the camera basis, trace it (geodesic or
@@ -407,11 +502,9 @@ void main(){
   // focal length sets how far forward the image plane sits (field of view).
   float x=uv.x*u_res.x-u_res.x*0.5,y=(1.0-uv.y)*u_res.y-u_res.y*0.5;
   vec3 rd=normalize(u_camRight*x+u_camUp*(-y)+u_camFwd*u_focalLen);
-  TR r;
-  if(u_useGeodesic>0.5){r=traceGeodesic(u_camPos,rd);}
-  else{r=traceStraight(u_camPos,rd);}
-  if(r.hit){fragColor=vec4(r.color,1.0);}
-  else if(u_useGeodesic>0.5){fragColor=vec4(r.color,1.0);}
-  else{fragColor=vec4(sampleBg(rd),1.0);}
+  // lambda = L_z / E of the photon, in units of r_s. The photon moves along
+  // -rd; a static observer at the camera sees b = r sin(alpha) / sqrt(f).
+  float lam=cross(u_camPos/u_rs,-rd).y*inversesqrt(max(1.0-u_rs/length(u_camPos),1e-3));
+  vec3 col=u_useGeodesic>0.5?traceGeodesic(u_camPos,rd,lam):traceStraight(u_camPos,rd,lam);
+  fragColor=vec4(col,1.0);
 }
-

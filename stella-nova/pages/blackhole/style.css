@@ -68,6 +68,9 @@
     background:rgba(0,0,0,0.6);backdrop-filter:blur(14px);
     border:1px solid rgba(255,255,255,0.07);border-radius:10px;
     padding:9px 15px;max-width:calc(100vw - 32px);
+    /* max-content: left:50% leaves only half the window for the bar, so it
+       wrapped to two rows at 1440 px once the Doppler button was added. */
+    width:max-content;
   }
   .ctrl-label{font-size:0.78rem;font-weight:500;color:rgba(255,255,255,0.65);white-space:nowrap;user-select:none}
   .ctrl-val{font:0.74rem var(--sci-mono);color:rgba(255,255,255,0.8);min-width:28px;text-align:right;user-select:none}
@@ -133,7 +136,7 @@
 
   /* Mobile */
   @media(max-width:600px){
-    .ctrl-wrap{padding:7px 11px;gap:6px;bottom:10px}
+    .ctrl-wrap{padding:7px 11px;gap:6px;bottom:10px;width:auto}
     .toggle-btn{font-size:0.72rem;padding:5px 9px}
     .ctrl-label{font-size:0.7rem}
     .ctrl-val{font-size:0.68rem;min-width:22px}
