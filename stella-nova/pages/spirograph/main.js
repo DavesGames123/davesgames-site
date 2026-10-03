@@ -22,6 +22,13 @@
 //  ink or width starts a new trace at the same t, as a change of pen does.
 //  When a trace closes, the page stops until the next change, or Play.
 //
+//  SAVER INK. In the screensaver the paper is always night paper, and the
+//  ink is light: the hue runs along the curve, one full turn of the color
+//  circle in each lap of the wheel, from the hue of the pen. The strokes
+//  are opaque and wider, and a soft copy of the ink (#glow, blurred,
+//  screen) lies under the sharp lines. The gears show at 55%. The normal
+//  page keeps its paper and pen colors.
+//
 //  GREP MAP
 //     grep -n 'function layout'       fit the sheet in the clear area
 //     grep -n 'function drawPaper'    paper color, grain, fibers, vignette
@@ -36,6 +43,8 @@
 //     grep -n 'function exportSVG'    the vector file
 //     grep -n 'function bindDrag'     turn the wheel by hand
 //     grep -n 'function setOpen'      the panel, the phone sheet, the dock
+//     grep -n 'function saverHue'     the hue of the saver ink at t
+//     grep -n 'function drawGlow'     the soft copy of the ink (saver)
 //     grep -n 'window.snSaver'        the screensaver hook
 // ============================================================================
 import { TAU, closure, wheelAngle, wheelCenter, penAt, holes, extent, samplePath } from './spiro.js';
@@ -48,6 +57,7 @@ const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:c
 const LAND_Q = matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)');
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const INK_A = 0.9;
+const SAVER_RIG_A = 0.55;                // the gears step back in the saver
 const PAPER = { cream: '#f3eee2', night: '#12151b' };
 const RULES = [['R', 'm1'], ['r', 'm2'], ['d', 'm3'], ['L', 'm4'], ['g', 'm5'], ['n', 'm6']];
 const MAX_EXT = 190;                     // the largest rig, in units
@@ -67,6 +77,19 @@ const S = {
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const userRate = () => 0.08 * Math.pow(60, S.speed) * TAU;         // rad of t per s
 const inkOf = pen => INKS[pen][S.paper];
+const inkA = () => S.saver ? 1 : INK_A;
+// The hue of a hex color, in degrees.
+function hexHue(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b); if (!d) return 0;
+  const h = mx === r ? (g - b) / d % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+// The saver ink at t: the hue starts at the pen hue and turns once in each
+// lap of the wheel (t = 2 pi). A trace has a whole number of laps, so the
+// color is continuous where the curve closes.
+function saverHue(tr, t) { return hexHue(INKS[tr.pen].night) + 360 * t / TAU; }
+const saverInk = (tr, t) => `hsl(${saverHue(tr, t).toFixed(1)},100%,66%)`;
 const blend = () => S.paper === 'night' ? 'screen' : 'multiply';
 const widthPx = w => WIDTHS[w].px * S.dpr * clamp(S.P / 800, 0.7, 1.25);
 function mulberry(seed) {
@@ -166,15 +189,29 @@ function drawPaper(ctx, n, kind) {
 function strokeTrace(ctx, tr, t0, t1, k, c, wScale) {
   if (t1 <= t0) return;
   const pts = samplePath(tr.R, tr.r, tr.out, tr.d, tr.rot, t0, t1, 1.4 / k);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (S.saver) {
+    // Short opaque runs, each in the hue of its middle t. The runs share
+    // their end points, so the line has no gaps and no dark joints.
+    const m = pts.length / 2 - 1, step = 6;
+    ctx.lineWidth = WIDTHS[tr.w].px * wScale * 1.5;
+    for (let i = 0; i < m; i += step) {
+      const j = Math.min(m, i + step);
+      ctx.strokeStyle = saverInk(tr, t0 + (t1 - t0) * (i + j) / 2 / m);
+      ctx.beginPath(); ctx.moveTo(c + pts[2 * i] * k, c + pts[2 * i + 1] * k);
+      for (let q = i + 1; q <= j; q++) ctx.lineTo(c + pts[2 * q] * k, c + pts[2 * q + 1] * k);
+      ctx.stroke();
+    }
+    return;
+  }
   ctx.strokeStyle = INKS[tr.pen][S.paper];
   ctx.lineWidth = WIDTHS[tr.w].px * wScale;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(c + pts[0] * k, c + pts[1] * k);
   for (let i = 2; i < pts.length; i += 2) ctx.lineTo(c + pts[i] * k, c + pts[i + 1] * k);
   ctx.stroke();
 }
 function bake() {
-  dry.save(); dry.globalCompositeOperation = blend(); dry.globalAlpha = INK_A;
+  dry.save(); dry.globalCompositeOperation = blend(); dry.globalAlpha = inkA();
   dry.drawImage(wetC, 0, 0); dry.restore();
   wet.clearRect(0, 0, wetC.width, wetC.height);
 }
@@ -297,7 +334,7 @@ function drawRig() {
   const [px, py] = penAt(a.R, a.r, a.out, a.d, a.t);
   const pr = Math.max(2.4 * S.dpr, 0.75 * k);
   rigX.beginPath(); rigX.arc(px * k, py * k, pr, 0, TAU);
-  rigX.fillStyle = inkOf(a.pen); rigX.fill();
+  rigX.fillStyle = S.saver ? saverInk(a, a.t) : inkOf(a.pen); rigX.fill();
   rigX.lineWidth = 1.2 * S.dpr; rigX.strokeStyle = S.paper === 'night' ? 'rgba(255,255,255,0.85)' : 'rgba(20,20,24,0.8)';
   rigX.stroke();
   rigX.restore();
@@ -318,7 +355,8 @@ function loadPreset(i, drawSec = 9) {
   wet.clearRect(0, 0, wetC.width, wetC.height); dry.clearRect(0, 0, dryC.width, dryC.height);
   const specs = p.traces.map(presetSpec);
   S.units = p.units || Math.max(...specs.map(s => extent(s.R, s.r, s.out))) * 1.03;
-  if (S.paper !== p.paper) setPaper(p.paper);
+  const paper = S.saver ? 'night' : p.paper;
+  if (S.paper !== paper) setPaper(paper);
   setScale();
   const total = specs.reduce((s, sp) => s + TAU * lapsOf(sp), 0);
   S.presetRate = S.saver ? total / drawSec : Math.max(userRate(), total / drawSec);
@@ -612,6 +650,7 @@ function frame(now) {
   advance(dt);
   if (S.saver) saverStep(now);
   if (S.rigDirty) { drawRig(); S.rigDirty = false; updateCaption(); }
+  if (S.saver) drawGlow(now);
   if (S.saver && S.saver.comp) composite(S.saver.comp);
   requestAnimationFrame(frame);
 }
@@ -620,8 +659,27 @@ function composite(cv) {
   if (cv.width !== n) { cv.width = cv.height = n; }
   const x = cv.getContext('2d');
   x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1; x.drawImage(paperC, 0, 0);
-  x.globalCompositeOperation = blend(); x.drawImage(dryC, 0, 0); x.globalAlpha = INK_A; x.drawImage(wetC, 0, 0);
-  x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1; x.drawImage(rigC, 0, 0);
+  const g = S.saver && S.saver.glow;
+  if (g) { x.globalCompositeOperation = 'screen'; x.filter = 'blur(6px)'; x.drawImage(g, 0, 0, n, n); x.filter = 'none'; }
+  x.globalCompositeOperation = blend(); x.drawImage(dryC, 0, 0); x.globalAlpha = inkA(); x.drawImage(wetC, 0, 0);
+  x.globalCompositeOperation = 'source-over'; x.globalAlpha = S.saver ? SAVER_RIG_A : 1; x.drawImage(rigC, 0, 0);
+}
+// The soft copy of the ink: #dry and #wet at a quarter of the size. CSS
+// blurs the #glow canvas and screens it under the sharp lines. It is drawn
+// again when the ink changes (a new tMax, a new trace, a new size), at most
+// 20 times in a second.
+function drawGlow(now) {
+  const s = S.saver, g = s.glow; if (!g) return;
+  const n = Math.max(1, Math.round(dryC.width / 4)), a = S.active;
+  const key = `${dryC.width}|${S.traces.length}|${S.preset}|${a ? a.tMax : 0}`;
+  if (key === s.glowKey || (now - s.glowAt < 50 && g.width === n)) return;
+  s.glowKey = key; s.glowAt = now;
+  if (g.width !== n) { g.width = g.height = n; }
+  const x = g.getContext('2d');
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';   // a box filter, so thin lines do not break
+  x.globalCompositeOperation = 'source-over'; x.clearRect(0, 0, n, n);
+  x.globalCompositeOperation = 'lighter';
+  x.drawImage(dryC, 0, 0, n, n); x.drawImage(wetC, 0, 0, n, n);
 }
 
 // ── screensaver ────────────────────────────────────────────────────────────
@@ -687,9 +745,12 @@ window.snSaver = {
     const hold = Math.max(14, (o.seconds || 60) / 2) * 1000 * (0.85 + 0.3 * calm);
     const st = document.createElement('style');
     st.id = 'saverStyle';
-    st.textContent = '.topbar,#panel,#dock,#gear,#caption{display:none!important}#desk{top:0!important;bottom:0!important}#sheet{cursor:none;transition:opacity 1s ease}';
+    st.textContent = '.topbar,#panel,#dock,#gear,#caption{display:none!important}#desk{top:0!important;bottom:0!important}#sheet{cursor:none;transition:opacity 1s ease}' +
+      `#glow{mix-blend-mode:screen;filter:blur(5px);opacity:0.9}#sheet #rig{opacity:${SAVER_RIG_A}}`;
     document.head.append(st);
-    S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, hold, drawSec: hold / 1000 * 0.7, phase: 'draw', until: performance.now() + hold, key: '', comp: document.createElement('canvas') };
+    const glow = document.createElement('canvas'); glow.id = 'glow';
+    dryC.before(glow);
+    S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, hold, drawSec: hold / 1000 * 0.7, phase: 'draw', until: performance.now() + hold, key: '', comp: document.createElement('canvas'), glow, glowKey: '', glowAt: 0, paper: S.paper };
     S.held = false; setGears(true);
     panel.classList.remove('open'); layout();
     loadPreset(order[0], S.saver.drawSec);
@@ -697,8 +758,10 @@ window.snSaver = {
   },
   exit() {
     const st = $('saverStyle'); if (st) st.remove();
-    if (S.saver) S.saver.label(null);
+    const paper = S.saver ? S.saver.paper : S.paper;
+    if (S.saver) { S.saver.label(null); S.saver.glow.remove(); }
     S.saver = null; sheet.style.opacity = '';
+    setPaper(paper);              // draws the ink again in the pen colors
     setOpen(!PHONE_Q.matches);
   },
 };
