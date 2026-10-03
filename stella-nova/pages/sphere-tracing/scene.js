@@ -19,6 +19,8 @@
 //    PRESETS ............. the teaching scenes
 //    function sdPrim ..... one primitive at a point
 //    function map ........ the whole field: domain warps, then the op chain
+//    function primRadius . the bounding radius of one primitive
+//    function shadowBound  the sphere outside which a shadow sample has no effect
 //    function march ...... plain or over-relaxed tracer with a step record
 //    function camera ..... orbit camera basis, ray for a pixel, projection
 //    function plane ...... slice plane basis from an axis and an offset
@@ -126,6 +128,34 @@ export function map(S, px, py, pz) {
   let d = 1e9;
   S.prims.forEach((pr, i) => { const di = sdPrim(pr, x, y, z); d = i === 0 ? di : combine(d, di, pr.op, Math.max(pr.k, 1e-3)); });
   return d;
+}
+// The radius of a sphere about pr.pos that holds the primitive. Each exact
+// primitive is >= |q - pos| - r; the octahedron bound is >= (|q - pos| - r)
+// times 1/sqrt(3).
+export function primRadius(pr) {
+  const [a, b, c] = pr.size, rb = 0.25 * Math.min(a, b, c);
+  return [a, len3(a, b, c), len3(a - rb, b - rb, c - rb) + rb, a + b, Math.hypot(a, b), a + b, a][pr.type] ?? a;
+}
+// A radius R about the origin such that map(p) > 0.84 when |p| > R. The soft
+// shadow in lab.wgsl (k = 12, t <= 10, steps of at most 0.3) gets nothing from
+// a sample with d > max(0.3, 10/12), so it marches only inside this sphere.
+// Each exact primitive at c is >= |q - c| - r (r: its bounding radius); the
+// octahedron bound is >= (|q - c| - s)/sqrt(3). A union or a cut keeps the
+// least of these. A smooth union can go k/4 below the min, so the sum of
+// those k/4 comes off. A subtract or an intersect can only raise d. The
+// twist turns about y, so |q| = |p|; the repeat fold moves a point by at
+// most period * n * sqrt(2).
+export function shadowBound(S, need = 0.84) {
+  const fold = S.rep > 0 ? S.period * S.rep * Math.SQRT2 : 0;
+  let K = 0;
+  S.prims.forEach((pr, i) => { if (i && (pr.op === 3)) K += Math.max(pr.k, 1e-3) / 4; });
+  let R = 0;
+  S.prims.forEach((pr, i) => {
+    if (i && pr.op !== 0 && pr.op !== 3) return;
+    const L = pr.type === 6 ? 0.57735027 : 1;
+    R = Math.max(R, len3(...pr.pos) + primRadius(pr) + fold + (need + K) / L);
+  });
+  return R + 0.01;
 }
 export function grad(S, x, y, z) {
   const e = 1e-3;

@@ -20,6 +20,7 @@
 //    fn sdPrim ........ one primitive          ·  fn map ...... the field
 //    fn mapCol ........ color at a surface     ·  fn march .... the tracer
 //    fn calcNormal / calcAO / softShadow       ·  fn fieldCol . slice coloring
+//    bound ............ the shadow bound sphere (softShadow skips outside it)
 //    fn fs_view ....... 3D view and modes      ·  fn fs_slice . slice view
 // ═══════════════════════════════════════════════════════════════════════════
 const PI: f32 = 3.141592653589793;
@@ -40,6 +41,7 @@ struct LabU {
     pv: vec4f,      // plane v axis, omega for the compare view
     scene: vec4f,   // twist, repeat period, repeat count, fade to black (screensaver; 0 = none)
     prims: array<Prim, 8>,
+    bound: vec4f,   // shadow bound radius about the origin (scene.js shadowBound), pad
 };
 @group(0) @binding(0) var<uniform> u: LabU;
 
@@ -190,13 +192,26 @@ fn calcAO(p: vec3f, n: vec3f) -> f32 {
     }
     return clamp(1.0 - 2.4 * occ, 0.0, 1.0);
 }
+// Outside the sphere of radius u.bound.x about the origin, map > 0.84 and
+// map > t / 12 for t <= 10 (scene.js shadowBound). A sample there does not
+// change res, and its step is the full 0.3. So the march starts at the first
+// sample in the sphere and stops where the ray leaves it. The samples it
+// evaluates are the same as in a march from t = 0.02, so the result is the
+// same. A ray that misses the sphere is lit (res = 1). k must be 12.
 fn softShadow(ro: vec3f, rd: vec3f, k: f32) -> f32 {
-    var res = 1.0; var t = 0.02;
-    for (var i = 0; i < 64; i++) {
+    let b = dot(ro, rd);
+    let disc = b * b - (dot(ro, ro) - u.bound.x * u.bound.x);
+    if (disc <= 0.0) { return 1.0; }
+    let tOut = -b + sqrt(disc);
+    let tIn = -b - sqrt(disc);
+    var res = 1.0; var t = 0.02; var i0 = 0;
+    if (tIn > t) { i0 = i32(ceil((tIn - 0.02) / 0.3)); t = 0.02 + 0.3 * f32(i0); }
+    if (t > tOut || t > 10.0) { return 1.0; }
+    for (var i = i0; i < 64; i++) {
         let h = map(ro + rd * t);
         res = min(res, k * h / t);
         t += clamp(h, 0.01, 0.3);
-        if (res < 0.002 || t > 10.0) { break; }
+        if (res < 0.002 || t > 10.0 || t > tOut) { break; }
     }
     res = clamp(res, 0.0, 1.0);
     return res * res * (3.0 - 2.0 * res);

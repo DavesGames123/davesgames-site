@@ -71,7 +71,7 @@ function traceProbe() {
   return tr;
 }
 
-// ── uniform block (35 vec4 = 560 bytes; matches struct LabU) ────────────────
+// ── uniform block (35 vec4 = 560 bytes; matches struct LabU; bound at 136) ──
 const U = new Float32Array(140);
 function packUniforms(now) {
   const C = cam(), Pl = plane();
@@ -87,6 +87,7 @@ function packUniforms(now) {
   U.set([...Pl.v, S.omega], 32);
   U.set([S.twist, S.period, S.rep, S.fade || 0], 36);
   S.prims.forEach((p, i) => U.set([...p.pos, p.type, ...p.size, p.op, p.k, p.color, p.rot, 0], 40 + i * 12));
+  U.set([SC.shadowBound(S), 0, 0, 0], 136);
 }
 
 // ── overlays ────────────────────────────────────────────────────────────────
