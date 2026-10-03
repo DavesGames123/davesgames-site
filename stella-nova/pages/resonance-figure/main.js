@@ -50,8 +50,9 @@
   window.addEventListener('resize', resize);
 
   // ------------------------------------------------------------ geometry map
-  // Layout: the wave panels get a wide band; the figure gets what is left. A
-  // gap separates each panel from the figure so all three have their own frame.
+  // Layout: the figure square centers in the usable area. The wave panels sit
+  // above it and to its left, each behind a gap. The panels make the block
+  // asymmetric, so the figure side and the panel side share one half extent.
   function box() {
     const pad = MOB ? 8 : 14;
     const gap = MOB ? 8 : 12;
@@ -59,20 +60,19 @@
     // moves left so the shell label plate (lower right) does not cover it.
     const botRes = SAVER.on ? 0 : (MOB ? 38 : 22);           // clear of the status bar
     // On a wide screen the open control panel covers the right edge, so the
-    // block centers in the part that is left.
+    // figure centers in the part that is left.
     const pnl = document.getElementById('panel');
     const pw = !SAVER.on && !MOB && pnl && pnl.classList.contains('open') ? pnl.offsetWidth : 0;
     const usableW = SAVER.on && W > H * 1.2 ? W - Math.min(500, W * 0.4) : W - pw, usableH = H - botRes;
-    const avail = Math.min(usableW, usableH) - pad * 2;
-    const strip = Math.round(avail * (MOB ? 0.28 : 0.32));   // wave panels: more space
-    const r = Math.max(36, (avail - strip - gap) / 2);       // figure: less space
-    const blk = strip + gap + 2 * r;                          // whole diagram block
+    // half: the distance from the figure center to the far edge of a panel.
+    const half = Math.max(60, Math.min(usableW, usableH) / 2 - pad);
+    const strip = Math.round(half * 0.30);                    // wave panels
+    const r = Math.max(36, half - gap - strip);               // figure
     // A saver on a tall screen: the shell docks the plate at the base when
-    // the subject is high, so the block centres in the part above a 260 px
+    // the subject is high, so the figure centres in the part above a 260 px
     // band for the plate.
-    const tall = SAVER.on && H > W * 1.2, room = tall ? Math.min(260, usableH - blk - pad) : 0;
-    const ox = Math.max(pad, (usableW - blk) / 2), oy = Math.max(pad, (usableH - room - blk) / 2);
-    const cx = ox + strip + gap + r, cy = oy + strip + gap + r;
+    const tall = SAVER.on && H > W * 1.2, room = tall ? Math.max(0, Math.min(260, usableH - 2 * pad - 2 * half)) : 0;
+    const cx = usableW / 2, cy = (usableH - room) / 2;
     return { cx, cy, r, strip, gap, pad,
       figL: cx - r, figR: cx + r, figT: cy - r, figB: cy + r };
   }
