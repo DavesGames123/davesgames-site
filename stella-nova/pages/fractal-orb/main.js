@@ -477,8 +477,8 @@ const SAVER_EASE=['speed','density','atmosphereGlow','atmosphereLevel','atmosphe
   'orbRotation','internalAnim','fractalScale','fractalDecay','smoothness','asymmetry','chromaticAberration'];
 // The orb on screen, for the shell's label plate: the projected centre of
 // the volume sphere (radius 2, the orb mesh), and the screen radius of its
-// silhouette, R/sqrt(D^2 - R^2) over tan(fov/2), in page CSS px. project()
-// includes the saver's view offset. No key
+// silhouette, R/sqrt(D^2 - R^2) over tan(fov/2), in page CSS px. The saver
+// sets no view offset, so the centre is the frame centre. No key
 // points: the orb is one volume, so the leader ends at its edge.
 const _orbC=new THREE.Vector3();
 function orbAnchor(){
@@ -521,11 +521,9 @@ window.snSaver={
       const h=innerHeight/2, t=Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
       const r=Math.min(0.31*innerHeight,0.44*innerWidth);
       camera.position.setLength(Math.max(6,Math.hypot(2*h/(t*r),2)));
-      // On a tall screen the shell docks the plate at the top, so move the
-      // image of the orb down by 0.12 of the height (a view offset: the
-      // camera and its orbit stay the same).
-      const W=innerWidth,H=innerHeight;
-      if(H>W) camera.setViewOffset(W,H,0,-Math.round(0.12*H),W,H); else camera.clearViewOffset();
+      // The orb sits at the centre of the frame on every screen. (A tall
+      // screen had a view offset that moved it down by 0.12 of the height.)
+      camera.clearViewOffset();
       camera.updateProjectionMatrix();
     };
     fit(); addEventListener('resize',fit);
