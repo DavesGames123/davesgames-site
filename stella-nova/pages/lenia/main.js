@@ -1031,7 +1031,7 @@ window.snSaver = {
     const c2 = cv.getContext('2d', { alpha: false });
     const list = SAVER_CODES.map(([code, zoom]) => ({ i: S.creatures.findIndex(c => c.code === code), zoom })).filter(e => e.i >= 0);
     const hold = Math.max(15, (+opts.seconds || 60) / 4), FADE = 1.0;
-    let k = (opts.seed >>> 0) % list.length, t = 0, last = 0, dead = 0;
+    let k = (opts.seed >>> 0) % list.length, t = 0, last = 0, dead = 0, tIn = -1e9;
     const show = () => {
       const e = list[k];
       setPlaying(true);
@@ -1049,7 +1049,7 @@ window.snSaver = {
       setFollow(!grow);
       setZoom(e.zoom * S.worldShort / SAVER_SHORT);
       S.speed = 2 * (1 - 0.5 * calm);
-      t = 0; dead = 0;
+      t = 0; dead = 0; tIn = -1e9;
       saverLabel(opts.label);
     };
     show();
@@ -1058,11 +1058,13 @@ window.snSaver = {
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
       t += dt;
       if (t > hold) { k = (k + 1) % list.length; show(); }
-      // A creature that dies leaves an empty world: stamp it again.
-      if (S.stats && S.stats.mass < 1e-3 && S.time > 2) { if ((dead += dt) > 1) { placeCreature(); dead = 0; } } else dead = 0;
+      // A creature that dies leaves an empty world: stamp it again. The copy
+      // goes to black across the 1 s wait and fades in on the new stamp, so
+      // the new creature does not appear in one frame.
+      if (S.stats && S.stats.mass < 1e-3 && S.time > 2) { if ((dead += dt) > 1) { placeCreature(); dead = 0; tIn = t; } } else dead = 0;
       if (cv.width !== gl.width || cv.height !== gl.height) { cv.width = gl.width; cv.height = gl.height; }
       c2.drawImage(gl, 0, 0);
-      const f = Math.max(0, 1 - t / FADE, 1 - (hold - t) / FADE);
+      const f = Math.max(0, 1 - t / FADE, 1 - (hold - t) / FADE, Math.min(1, dead), 1 - (t - tIn) / FADE);
       if (f > 0) { c2.fillStyle = `rgba(0,0,0,${Math.min(1, f)})`; c2.fillRect(0, 0, cv.width, cv.height); }
     })(0);
     return { canvas: cv, warmupMs: 1500 };
