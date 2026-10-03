@@ -732,6 +732,11 @@ function initFind(root) {
     else if (e.key === 'Enter') { const a = items()[sel < 0 ? 0 : sel]; if (a) { e.preventDefault(); a.click(); close(); } }
     else if (e.key === 'Escape') { if (input.value && list.hidden) input.value = ''; close(); input.blur(); }
   });
+  // Keep the focus in the field when a result is pressed. Safari and Firefox
+  // on macOS do not focus a link on a click, so the field blurred with no
+  // relatedTarget, focusout closed the list before mouseup, and the click
+  // fell on nothing. Chrome focuses the link, so it did not show there.
+  list.addEventListener('mousedown', e => e.preventDefault());
   list.addEventListener('pointermove', e => {
     const a = e.target.closest('.find-item'); if (!a) return;
     const n = Number(a.dataset.n); if (n !== sel) { items()[sel]?.classList.remove('sel'); sel = n; a.classList.add('sel'); }
