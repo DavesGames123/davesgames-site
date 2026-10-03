@@ -6,15 +6,15 @@
 //  This file owns everything around that draw: it builds the GL program, keeps
 //  the camera and wormhole parameters, turns pointer/keyboard/touch input into
 //  an orbit + look-around + fly-through camera, drives an auto-descent through
-//  the throat, draws a 2D throat minimap on a side canvas, and renders the
-//  KaTeX metric equations.
+//  the throat, draws a 2D embedding map of the camera position on a corner
+//  canvas, and renders the MathJax metric equations.
 //
 //  RENDER + STATE FLOW
 //  -------------------
 //      input (drag / wheel / keys / sliders) ─▶ camera + throat state
 //                                                     │
 //      frame(): build camera basis (orbit ∘ look) ─▶ set uniforms ─▶ drawArrays
-//                                                     └─▶ drawMinimap()
+//                                                     └─▶ drawMinimap(rhat, fwd)
 //
 //  CAMERA MODEL
 //  ------------
@@ -37,7 +37,7 @@
 //      input ................ "addEventListener('mousedown'" drag / touch / wheel
 //      sliders .............. "getElementById('zoomSlider')" K / L / range wiring
 //      resize ............... "RenderScale.create" pixel budget + fps control
-//      minimap .............. "function drawMinimap" throat cross-section canvas
+//      map .................. "function drawMinimap" embedding map, camera dot + view
 //      frame loop ........... "function frame"     camera basis + uniforms + draw
 //      equations ............ "function renderEqs" MathJax metric / throat / T
 //      screensaver .......... "window.snSaver"     hook for lib/screensaver.js
@@ -109,7 +109,7 @@ var qualitySteps=[512,2048,4096],qualityLabels=['btnQLow','btnQMed','btnQHigh'];
 window.setQuality=function(q){maxSteps=qualitySteps[q];renderScale.reset();qualityLabels.forEach(function(id,i){document.getElementById(id).classList.toggle('on',i===q);});};
 
 // Dismiss the GPU-load gate and reveal the interface; on mobile the equations
-// start collapsed and the minimap stays hidden.
+// start collapsed. The map shows on all screens while its toggle is on.
 window.dismissWarn=function(){
   document.getElementById('gpuWarn').classList.add('hide');
   document.getElementById('ctrlWrap').style.display='flex';
@@ -121,9 +121,8 @@ window.dismissWarn=function(){
     var p=document.getElementById('eqPanel');
     p.classList.add('collapsed');
     document.getElementById('eqToggleBtn').textContent='+';
-  } else {
-    document.getElementById('minimap').style.display='block';
   }
+  if(mapOn){mmCanvas.style.display='block';sizeMap();}
 };
 
 // Set a button's on/off classes to match a boolean.
@@ -227,59 +226,91 @@ var renderScale=RenderScale.create({canvas:canvas,gl:gl,label:document.getElemen
   fracDesktop:0.4,fracMobile:0.25,mobileWidth:768});
 window.addEventListener('resize',renderScale.resize);renderScale.resize();
 
-// Minimap: draw the wormhole's embedding surface (the classic funnel) as a 2D
-// wireframe on a side canvas, sampling the same r(l) profile the shader uses,
-// then plot the camera as a dot coloured by which universe it is in.
+// Map: the embedding diagram of the equatorial slice, drawn on canvas#minimap.
+// The slice (l, phi) is embedded in flat 3D space as a surface of revolution.
+// It has the areal radius r(l) as its radius and z(l) as its height, where
+// dz/dl = sqrt(1 - r'(l)^2). Thus z = l in the flat throat, and outside it
+// z = sign(l) (a + k asinh(x/k)) with x = |l| - a. Arc length along the
+// profile is the proper distance l. r and z use one scale (no exaggeration),
+// so the funnel shape is true. Sheet A (l > 0) is the upper sheet, sheet B
+// (l < 0) the lower sheet, and they join at the throat ring (r = k).
+// The metric is spherically symmetric, so the orbit angles do not change the
+// physics. The camera dot is always on the right meridian at height z(camL).
+// The arrow is the radial part of the view direction, along the profile:
+// toward the throat when cos(alpha) > 0, where cos(alpha) = -fwd . rhat. The
+// sideways part sin(alpha) points along the ring, out of the drawing, and
+// shows as a circled dot. The shader uses the same split (initWRay).
 var mmCanvas=document.getElementById('minimap'),mmCtx=mmCanvas.getContext('2d');
-function drawMinimap(){
-  if(window.innerWidth<768)return; // skip on mobile
-  var W=mmCanvas.width,H=mmCanvas.height;
-  mmCtx.clearRect(0,0,W,H);
-  // Sample the profile: at each axial l, radius r(l) and embedding height z(l).
-  var k=throatK,a=throatA;
-  var NL=50,lMax=20,prof=[];
-  for(var i=0;i<=NL;i++){var l=-lMax+i*2*lMax/NL;
-    var x=Math.max(0,Math.abs(l)-a),r=Math.sqrt(k*k+x*x);
-    var z=Math.abs(l)<=a?l:Math.sign(l)*(a+k*Math.asinh(x/k));
-    prof.push({r:r,z:z,l:l});}
-  // Revolve the profile around the axis into a surface of quads.
-  var NPHI=28,surf=[];
-  for(var i=0;i<prof.length;i++){var row=[];
-    for(var j=0;j<=NPHI;j++){var phi=j*2*Math.PI/NPHI;
-      row.push({x:prof[i].r*Math.cos(phi),y:prof[i].r*Math.sin(phi),z:prof[i].z});}
-    surf.push(row);}
-  var maxE=0;for(var i=0;i<prof.length;i++){maxE=Math.max(maxE,prof[i].r,Math.abs(prof[i].z));}
-  var scX=W*0.72/Math.max(maxE,1),scZ=H*0.30/Math.max(maxE,1);var sc=Math.min(scX,scZ);
-  // Slowly rotating tilted orthographic projection for the wireframe.
-  var tilt=0.35,rot=performance.now()*0.0002;
-  var ct=Math.cos(tilt),st=Math.sin(tilt),cr=Math.cos(rot),sr=Math.sin(rot);
-  function proj(p){var pz=p.z*3.0;var rx=p.x*cr-p.y*sr,ry=p.x*sr+p.y*cr;
-    var tz=ry*st+pz*ct,ty=ry*ct-pz*st;
-    return{x:W/2+rx*sc,y:H/2-tz*sc,d:ty};}
-  for(var j=0;j<NPHI;j+=2){mmCtx.beginPath();mmCtx.strokeStyle='rgba(255,255,255,0.28)';mmCtx.lineWidth=1.0;
-    for(var i=0;i<surf.length;i++){var p=proj(surf[i][j]);if(i===0)mmCtx.moveTo(p.x,p.y);else mmCtx.lineTo(p.x,p.y);}mmCtx.stroke();}
-  for(var i=2;i<surf.length;i+=3){mmCtx.beginPath();
-    var side=prof[i].l>=0;
-    mmCtx.strokeStyle=side?'rgba(255,200,120,0.35)':'rgba(120,180,255,0.35)';mmCtx.lineWidth=1.0;
-    for(var j=0;j<=NPHI;j++){var p=proj(surf[i][j]);if(j===0)mmCtx.moveTo(p.x,p.y);else mmCtx.lineTo(p.x,p.y);}mmCtx.stroke();}
-  var ti=Math.floor(NL/2);mmCtx.beginPath();mmCtx.strokeStyle='rgba(100,240,240,0.75)';mmCtx.lineWidth=2.0;
-  for(var j=0;j<=NPHI;j++){var p=proj(surf[ti][j]);if(j===0)mmCtx.moveTo(p.x,p.y);else mmCtx.lineTo(p.x,p.y);}mmCtx.stroke();
-  var pA=proj({x:0,y:0,z:prof[prof.length-1].z*0.7}),pB=proj({x:0,y:0,z:prof[0].z*0.7});
-  mmCtx.font='bold 11px "JetBrains Mono",monospace';mmCtx.textAlign='center';
-  mmCtx.fillStyle='rgba(255,200,120,0.7)';mmCtx.fillText('A',pA.x,pA.y-8);
-  mmCtx.fillStyle='rgba(120,180,255,0.7)';mmCtx.fillText('B',pB.x,pB.y-8);
-  // Place the camera dot on the surface at (r(camL), orbYaw, z(camL)).
-  var cx2=Math.max(0,Math.abs(camL)-a),cR=Math.sqrt(k*k+cx2*cx2);
-  var cZ=Math.abs(camL)<=a?camL:Math.sign(camL)*(a+k*Math.asinh(cx2/k));
-  var cPhi=orbYaw,cam3={x:cR*Math.cos(cPhi),y:cR*Math.sin(cPhi),z:cZ};
-  var cp=proj(cam3),dotC=camL>=0?'#ffb850':'#64b4ff';
-  mmCtx.fillStyle=dotC;mmCtx.shadowColor=dotC;mmCtx.shadowBlur=10;
-  mmCtx.beginPath();mmCtx.arc(cp.x,cp.y,4.5,0,Math.PI*2);mmCtx.fill();mmCtx.shadowBlur=0;
+var mapOn=true,mmW=0,mmH=0,mmDpr=1,mmFont='',mmSerif='',mmColL='';
+// Size the backing store from the CSS box (DPR aware); call when shown or resized.
+function sizeMap(){var b=mmCanvas.getBoundingClientRect();if(!b.width)return;
+  mmDpr=Math.min(window.devicePixelRatio||1,2);mmW=b.width;mmH=b.height;
+  mmCanvas.width=Math.round(mmW*mmDpr);mmCanvas.height=Math.round(mmH*mmDpr);
+  var cs=getComputedStyle(document.documentElement);
+  mmFont=cs.getPropertyValue('--sci-mono').trim()||'monospace';mmSerif=cs.getPropertyValue('--sci-serif').trim()||'serif';mmColL=cs.getPropertyValue('--m1').trim()||'#7fd0ff';}
+window.addEventListener('resize',sizeMap);
+window.toggleMap=function(){mapOn=!mapOn;setBtn('btnMap',mapOn);
+  mmCanvas.style.display=mapOn?'block':'none';if(mapOn)sizeMap();};
+// Profile of the slice at signed l: areal radius r and embedding height z.
+function mapProf(l){var k=throatK,a=throatA,al=Math.abs(l),x=Math.max(0,al-a);
+  var z=al<=a?al:a+k*Math.asinh(x/k);return{r:Math.sqrt(k*k+x*x),z:l<0?-z:z};}
+function drawMinimap(rad,fwd){
+  if(!mapOn||!mmW||mmCanvas.style.display==='none')return;
+  var c=mmCtx,W=mmW,H=mmH,small=W<220;
+  c.setTransform(mmDpr,0,0,mmDpr,0,0);c.clearRect(0,0,W,H);
+  // Drawn range of |l|: the descent range, or more when the camera is far out.
+  var lMax=Math.max(20,Math.abs(camL)*1.1+1),pm=mapProf(lMax);
+  // Orthographic view from 10 degrees above the slice plane. Depth y > 0 is
+  // toward the viewer and goes down on the screen.
+  var el=0.17,ce=Math.cos(el),se=Math.sin(el);
+  var textH=small?16:20,plotH=H-textH,pad=6;
+  var sc=Math.min((W/2-pad)/pm.r,(plotH/2-pad)/(pm.z*ce+pm.r*se));
+  var ox=W/2,oy=plotH/2+2;
+  function P(x,y,z){return[ox+x*sc,oy-(z*ce-y*se)*sc];}
+  var warm='255,200,120',cool='120,180,255';
+  // Rings of constant l on both sheets: back half faint, front half brighter.
+  function ring(l,col,aBack,aFront,lw){var p=mapProf(l),cy=oy-p.z*ce*sc,rx=p.r*sc,ry=p.r*se*sc;
+    c.lineWidth=lw;c.strokeStyle='rgba('+col+','+aBack+')';c.beginPath();c.ellipse(ox,cy,rx,ry,0,Math.PI,2*Math.PI);c.stroke();
+    c.strokeStyle='rgba('+col+','+aFront+')';c.beginPath();c.ellipse(ox,cy,rx,ry,0,0,Math.PI);c.stroke();}
+  for(var i=1;i<=4;i++){var lr=throatA+(lMax-throatA)*i/4;ring(lr,warm,0.12,0.3,1);ring(-lr,cool,0.12,0.3,1);}
+  // The two meridians (left and right limbs) of each sheet.
+  for(var s=-1;s<=1;s+=2){c.lineWidth=1.4;
+    for(var side=-1;side<=1;side+=2){c.strokeStyle='rgba('+(side>0?warm:cool)+',0.75)';c.beginPath();
+      for(var j=0;j<=60;j++){var l=side*lMax*j/60,p=mapProf(l),q=P(s*p.r,0,p.z);if(j)c.lineTo(q[0],q[1]);else c.moveTo(q[0],q[1]);}
+      c.stroke();}}
+  ring(0,'100,240,240',0.45,0.9,1.6);
+  // Sheet labels at the outer left end of each sheet.
+  c.font=(small?'600 10px ':'600 11px ')+mmFont;c.textBaseline='middle';c.textAlign='left';
+  var qa=P(-pm.r,0,pm.z),qb=P(-pm.r,0,-pm.z);
+  c.fillStyle='rgba('+warm+',0.85)';c.fillText('A',qa[0]+2,qa[1]-7);
+  c.fillStyle='rgba('+cool+',0.85)';c.fillText('B',qb[0]+2,qb[1]+7);
+  // Camera dot on the right meridian.
+  var pc=mapProf(camL),dp=P(pc.r,0,pc.z),dotC=camL>=0?'#ffb850':'#64b4ff';
+  // Unit tangent toward the throat, on the screen: finite step of l toward 0.
+  var h=0.02,lt=Math.abs(camL)>h?camL-Math.sign(camL)*h:(camL>=0?-h:h);
+  var pt=mapProf(lt),tp=P(pt.r,0,pt.z),tx=tp[0]-dp[0],ty=tp[1]-dp[1],tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
+  var cosA=-(fwd[0]*rad[0]+fwd[1]*rad[1]+fwd[2]*rad[2]);cosA=Math.max(-1,Math.min(1,cosA));
+  var sinA=Math.sqrt(1-cosA*cosA),AL=small?20:28;
+  if(Math.abs(cosA)>0.08){var ex=dp[0]+tx*AL*cosA,ey=dp[1]+ty*AL*cosA,ux=tx*Math.sign(cosA),uy=ty*Math.sign(cosA);
+    c.strokeStyle='#fff';c.fillStyle='#fff';c.lineWidth=1.6;c.beginPath();c.moveTo(dp[0],dp[1]);c.lineTo(ex,ey);c.stroke();
+    c.beginPath();c.moveTo(ex+ux*2,ey+uy*2);c.lineTo(ex-ux*5-uy*3.5,ey-uy*5+ux*3.5);c.lineTo(ex-ux*5+uy*3.5,ey-uy*5-ux*3.5);c.closePath();c.fill();}
+  if(sinA>0.15){var gx=dp[0]+9,gy=dp[1]-9;c.globalAlpha=Math.min(1,sinA);c.strokeStyle='#fff';c.fillStyle='#fff';c.lineWidth=1;
+    c.beginPath();c.arc(gx,gy,3.5,0,2*Math.PI);c.stroke();c.beginPath();c.arc(gx,gy,1,0,2*Math.PI);c.fill();c.globalAlpha=1;}
+  c.fillStyle=dotC;c.shadowColor=dotC;c.shadowBlur=8;c.beginPath();c.arc(dp[0],dp[1],small?3.5:4.5,0,2*Math.PI);c.fill();c.shadowBlur=0;
+  // Readout: proper distance, universe, and the view angle off the throat.
+  var ty0=H-textH/2-1,ang=Math.round(Math.acos(cosA)*180/Math.PI);
+  c.font=(small?'10px ':'11px ')+mmFont;c.textAlign='left';
+  // The ell glyph is small in monospace fonts, so it is set in the serif.
+  c.fillStyle=mmColL;c.font=(small?'italic 13px ':'italic 14px ')+mmSerif;c.fillText('ℓ',6,ty0);
+  var x1=6+c.measureText('ℓ ').width;c.font=(small?'10px ':'11px ')+mmFont;
+  var s1=(camL<0?'−':'')+Math.abs(camL).toFixed(1);c.fillText(s1,x1,ty0);x1+=c.measureText(s1+'  ').width;
+  c.fillStyle=dotC;var s2=camL>=0?'A':'B';c.fillText(s2,x1,ty0);x1+=c.measureText(s2+'  ').width;
+  c.fillStyle='rgba(255,255,255,0.6)';c.fillText((small?'':'view ')+ang+'° off throat',x1,ty0);
 }
 
 // The per-frame loop: apply idle spin and descent, build the camera basis from
 // orbit and look angles, derive adaptive step counts from distance, push all
-// uniforms, draw the fullscreen quad, and refresh the minimap.
+// uniforms, draw the fullscreen quad, and refresh the map.
 var frames=0,lastT=performance.now();
 function frame(){
   var now=performance.now();frames++;renderScale.tick(now);
@@ -340,7 +371,7 @@ function frame(){
   gl.uniform1f(U.u_showDisc,showDisc?1:0);gl.uniform1f(U.u_showGlow,showGlow?1:0);
   gl.uniform1f(U.u_bgMode,bgMode);gl.uniform1f(U.u_camL,shaderL);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-  drawMinimap();
+  drawMinimap([cx/fl,cy/fl,cz/fl],fwd);
   requestAnimationFrame(frame);
 }
 // Inside the site shell iframe, mark the body so CSS can hide page chrome.
@@ -407,6 +438,7 @@ window.snSaver={enter:function(o){
   var st=document.createElement('style');
   st.textContent='body>*:not(#c){display:none!important}canvas#c{cursor:none!important}';
   document.head.appendChild(st);
+  mapOn=false;   // the style above hides canvas#minimap; do not draw it
   renderScale=RenderScale.create({canvas:canvas,gl:gl,fracDesktop:1,fracMobile:0.5,mobileWidth:768});
   window.addEventListener('resize',renderScale.resize);renderScale.resize();
   setBg(((o&&o.seed)|0)%2?3:0);

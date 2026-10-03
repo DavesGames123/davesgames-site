@@ -10,7 +10,7 @@
    ELLIS WORMHOLE  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js renders the geodesic ray tracer into
-   <canvas id="c"> and draws the throat cross-section into <canvas id="minimap">.
+   <canvas id="c"> and draws the embedding map into <canvas id="minimap">.
    Everything else here is overlay: a GPU-load gate, the HUD, the A/B traverse
    bar, the equation panel, and the control row. main.js binds all of it
    by id and by the global on* handlers it defines on window.
@@ -26,12 +26,12 @@
 
    LAYOUT  (# marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
-     │ #c  full-screen ray-traced wormhole            #minimap (throat) │
+     │ #c  full-screen ray-traced wormhole       #minimap (map, corner) │
      │ .hud  title / universe            .stats  #fps #res #mode         │
      │                                                                   │
      │  #eqPanel  metric tensor / throat / stress-energy                 │
      │  #traverseBar   B ◀──── #zoomSlider ────▶ A   #playBtn            │
-     │  #ctrlWrap   Geodesic RK4 Disc Glow Spin · bg modes · k a · Q     │
+     │  #ctrlWrap   Geodesic RK4 Disc Glow Spin Map · bg · k a · Q       │
      └─────────────────────────────────────────────────────────────────┘
 
    CONTROL MODEL
@@ -45,11 +45,12 @@
 <body>
 <!-- The ray-traced view; lib/render-scale.js sizes it below native resolution for speed. -->
 <canvas id="c"></canvas>
-<!-- Side minimap: a rotating cross-section of the throat with the camera dot. -->
-<canvas id="minimap" width="280" height="480" style="display:none"></canvas>
+<!-- Map: the embedding funnel (sheets A and B, throat ring) with the camera dot
+     and its view direction. main.js sizes the backing store from the CSS box. -->
+<canvas id="minimap" style="display:none" aria-label="Map of the camera position on the wormhole embedding"></canvas>
 
 <!-- GPU-load gate: shown first; Continue calls dismissWarn(), which reveals the
-     controls, traverse bar, equations, and (on desktop) the minimap. -->
+     controls, traverse bar, equations, and the map. -->
 <div class="gpu-warn" id="gpuWarn">
   <h2>GPU intensive</h2>
   <p>Per-pixel geodesic ray tracing through an Ellis wormhole metric. Drag to look around, scroll or pinch to fly through.</p>
@@ -89,6 +90,7 @@
   <button class="toggle-btn off mob-hide" id="btnDisc" onclick="toggleDisc()">Disc</button>
   <button class="toggle-btn on" id="btnGlow" onclick="toggleGlow()">Glow</button>
   <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">Spin</button>
+  <button class="toggle-btn on" id="btnMap" onclick="toggleMap()">Map</button>
   <div class="ctrl-sep"></div>
   <button class="toggle-btn on" id="bgStars" onclick="setBg(0)">Stars</button>
   <button class="toggle-btn" id="bgGrid" onclick="setBg(1)">Grid</button>

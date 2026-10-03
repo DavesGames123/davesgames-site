@@ -7,8 +7,10 @@
   .hud .sub{font-size:0.78rem;color:rgba(255,255,255,0.55);margin-top:2px}
   .stats{position:fixed;top:60px;right:20px;z-index:10;pointer-events:none;font:0.72rem/1.7 var(--sci-mono);color:rgba(255,255,255,0.55);text-align:right;font-weight:400}
 
-  #minimap{position:fixed;bottom:145px;right:20px;z-index:12;border:1px solid rgba(100,220,220,0.18);border-radius:8px;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px)}
+  /* Map: landscape inset, bottom right; above the traverse bar on narrow desktops. */
+  #minimap{position:fixed;bottom:145px;right:20px;width:300px;height:160px;z-index:12;border:1px solid rgba(100,220,220,0.18);border-radius:8px;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);pointer-events:none}
   .in-frame #minimap{bottom:100px;right:12px}
+  @media(max-width:1200px) and (min-width:769px){#minimap,.in-frame #minimap{bottom:214px}}
 
   .eq-panel{
     position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10;
@@ -74,8 +76,10 @@
      MOBILE — aggressive compact layout
      ═══════════════════════════════════════════ */
   @media(max-width:768px){
-    /* Hide: stats, minimap, hint, hud */
-    .hud, .stats, #minimap, .hint { display:none!important }
+    /* Hide: stats, hint, hud */
+    .hud, .stats, .hint { display:none!important }
+    /* Map: small inset, top right, clear of the throat and the traverse bar */
+    #minimap,.in-frame #minimap{top:8px;right:8px;bottom:auto;width:180px;height:104px;border-radius:6px}
     .ctrl-sep, .mob-hide { display:none!important }
 
     /* Equation panel: visible but collapsed, top-left */
