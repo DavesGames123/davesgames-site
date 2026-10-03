@@ -43,6 +43,7 @@
 //      energy ............ "function calcEnergy"    KE, PE, momentum for the HUD
 //      canvas + input .... "CANVAS + INPUT"         canvas setup, mouse, touch
 //      transforms ........ "function worldToScreen" world and screen mapping
+//      framing ........... "function viewRect"      free canvas band, fit + centre
 //      rendering ......... "/* RENDERING */"        the whole scene draw
 //      arrows ............ "function drawArrow"     vector glyph, clamped length
 //      energy graph ...... "function renderEnergyGraph" KE/PE/total trace
@@ -66,6 +67,10 @@ var showForce=true,showVel=true,showAcc=false,showTrails=true,showField=false,sh
 var bodies=[],selectedIdx=-1;
 // Camera: pan offset in pixels and a zoom factor applied to world coordinates.
 var camX=0,camY=0,camZoom=1;
+// autoFrame stays true until the user pans or zooms. While it is true, a resize
+// of the canvas or of the equations panel frames the system again. fitBox is
+// the half extent (world units) of a preset whose shape is not a disc.
+var autoFrame=true,fitBox=null;
 // Pan gesture bookkeeping: start pointer and start camera, captured on down.
 var isPan=false,panSX=0,panSY=0,panCX=0,panCY=0;
 // Launch-drag bookkeeping: start and current pointer while dragging a new body.
@@ -127,6 +132,8 @@ function figure8(){
   // Chenciner-Montgomery (1993)
   var s=100,m=500;
   var vs=Math.sqrt(G*m/s);
+  // The curve reaches |x| = 1.08 s and |y| = 0.35 s; add the body radius.
+  fitBox={x:1.09*s+10,y:0.36*s+10};
   bodies=[
     makeBody('A',-0.97000436*s, 0.24308753*s,  0.466203685*vs,  0.43236573*vs,m,10,'#ffc832'),
     makeBody('B', 0.97000436*s,-0.24308753*s,  0.466203685*vs,  0.43236573*vs,m,10,'#5cd8e8'),
@@ -171,7 +178,7 @@ function loadPreset(name,btn){
     var cards=document.querySelectorAll('.pcard');
     if(map[name]!==undefined&&cards[map[name]]) cards[map[name]].classList.add('active');
   }
-  currentPreset=name;
+  currentPreset=name;fitBox=null;
   if(name==='laplace')laplace();
   else if(name==='binary')binaryStar();
   else if(name==='figure8')figure8();
@@ -184,7 +191,7 @@ function loadPreset(name,btn){
 // Wipe the scene down to a single fixed star, ready for hand-launched bodies.
 function clearBodies(){
   nextId=0;simTime=0;energyHistory=[];selectedIdx=-1;
-  bodies=[makeBody('Star',0,0,0,0,5000,18,'#ffeebb',true)];
+  bodies=[makeBody('Star',0,0,0,0,5000,18,'#ffeebb',true)];fitBox=null;
   document.querySelectorAll('.pcard').forEach(function(b){b.classList.remove('active');});
   currentPreset='';
   updateBodyList();centerCamera();
@@ -281,6 +288,13 @@ function initCanvas(){
   resCanvas=document.getElementById('resonanceCanvas');resCtx=resCanvas.getContext('2d');
   resizeCanvas();
   window.addEventListener('resize',resizeCanvas);
+  // The equations panel changes height when MathJax typesets it, when it
+  // collapses, and at a breakpoint. The canvas changes on rotation. Each
+  // change frames the system again, until the user pans or zooms.
+  if(window.ResizeObserver){
+    var ro=new ResizeObserver(function(){if(autoFrame&&!window.__snSaverOn)centerCamera();});
+    ro.observe(document.getElementById('canvasArea'));ro.observe(document.getElementById('eqPanel'));
+  }
   canvas.addEventListener('mousedown',onDown);
   canvas.addEventListener('mousemove',onMove);
   canvas.addEventListener('mouseup',onUp);
@@ -350,7 +364,7 @@ function onDown(e){
 // Mouse move: drag the camera while panning, extend the launch vector while
 // dragging, and otherwise show a hover HUD for whatever body is under the cursor.
 function onMove(e){
-  if(isPan){camX=panCX+(e.clientX-panSX);camY=panCY+(e.clientY-panSY);return;}
+  if(isPan){autoFrame=false;camX=panCX+(e.clientX-panSX);camY=panCY+(e.clientY-panSY);return;}
   var rect=canvas.getBoundingClientRect();
   if(isDrag){dragCX=e.clientX-rect.left;dragCY=e.clientY-rect.top;}
   var mx=e.clientX-rect.left,my=e.clientY-rect.top;
@@ -383,6 +397,7 @@ function onUp(e){
 // re-projecting it after the zoom change and shifting the camera to compensate.
 function zoomAt(sx,sy,factor){
   var w=screenToWorld(sx,sy);
+  autoFrame=false;
   camZoom=Math.max(0.1,Math.min(5,camZoom*factor));
   var s=worldToScreen(w[0],w[1]);
   camX+=sx-s[0];camY+=sy-s[1];
@@ -393,11 +408,42 @@ function onWheel(e){
   var rect=canvas.getBoundingClientRect();
   zoomAt(e.clientX-rect.left,e.clientY-rect.top,e.deltaY>0?0.9:1.1);
 }
-// Button zoom controls zoom about the canvas centre.
-function zoomIn(){var a=document.getElementById('canvasArea');zoomAt(a.clientWidth/2,a.clientHeight/2,1.2);}
-function zoomOut(){var a=document.getElementById('canvasArea');zoomAt(a.clientWidth/2,a.clientHeight/2,1/1.2);}
-// Reset pan and zoom to the default framing.
-function centerCamera(){camX=0;camY=0;camZoom=1;}
+// Button zoom controls zoom about the centre of the free band (viewRect).
+function zoomIn(){var v=viewRect();zoomAt(v.cx,v.cy,1.2);}
+function zoomOut(){var v=viewRect();zoomAt(v.cx,v.cy,1/1.2);}
+// The free band of the canvas, in canvas px: the part that the equations panel
+// (a band at the top) and the drawer buttons (a row at the base, phones only)
+// do not cover. A hidden element does not count. If the band is shorter than
+// 120 px, the whole canvas is the band.
+function viewRect(){
+  var a=document.getElementById('canvasArea'),ar=a.getBoundingClientRect();
+  var W=a.clientWidth,H=a.clientHeight,top=0,bot=H;
+  function shown(el){if(!el)return null;var cs=getComputedStyle(el),r=el.getBoundingClientRect();
+    return cs.display==='none'||cs.visibility==='hidden'||!r.height?null:r;}
+  var eq=shown(document.getElementById('eqPanel'));
+  if(eq&&eq.top-ar.top<H/2)top=Math.max(top,eq.bottom-ar.top+8);
+  var fab=shown(document.getElementById('fabL'));
+  if(fab&&fab.top-ar.top>H/2)bot=Math.min(bot,fab.top-ar.top-8);
+  if(bot-top<120){top=0;bot=H;}
+  return{x:0,y:top,w:W,h:bot-top,cx:W/2,cy:(top+bot)/2};
+}
+// Default framing: put the centre of mass at the centre of the free band and
+// zoom out (never in past 1) until the system fits it with a 12 % margin. The
+// extent is fitBox for a preset that sets it, else the largest distance of a
+// body from the centre of mass plus its radius.
+function centerCamera(){
+  var M=0,mx=0,my=0,i,b;
+  for(i=0;i<bodies.length;i++){b=bodies[i];M+=b.mass;mx+=b.mass*b.x;my+=b.mass*b.y;}
+  if(M>0){mx/=M;my/=M;}
+  var ex=fitBox?fitBox.x:1,ey=fitBox?fitBox.y:1;
+  if(!fitBox){for(i=0;i<bodies.length;i++){b=bodies[i];ex=Math.max(ex,Math.hypot(b.x-mx,b.y-my)+b.radius);}ey=ex;}
+  var v=viewRect(),a=document.getElementById('canvasArea');
+  camZoom=Math.max(0.1,Math.min(1,0.88*v.w/2/ex,0.88*v.h/2/ey));
+  // worldToScreen maps world (0,0) to the canvas centre plus (camX, camY).
+  camX=v.cx-a.clientWidth/2-mx*camZoom;
+  camY=v.cy-a.clientHeight/2-my*camZoom;
+  autoFrame=true;
+}
 
 // Touch state machine: one finger selects or launches, two fingers pinch-zoom
 // and pan. lastDist/lastCx/lastCy hold the previous gesture frame for deltas.
@@ -434,7 +480,7 @@ function onTouchMove(e){
     var cx=(t0.clientX+t1.clientX)/2,cy=(t0.clientY+t1.clientY)/2;
     var pivotX=cx-rect.left,pivotY=cy-rect.top;
     if(touch.lastDist>0) zoomAt(pivotX,pivotY,dist/touch.lastDist);
-    camX+=cx-touch.lastCx;camY+=cy-touch.lastCy;
+    autoFrame=false;camX+=cx-touch.lastCx;camY+=cy-touch.lastCy;
     touch.lastDist=dist;touch.lastCx=cx;touch.lastCy=cy;
   }
 }
@@ -798,6 +844,9 @@ document.addEventListener('DOMContentLoaded',init);
 // if a body escapes, so the dwell has no hard cut. No exit(): the shell reloads
 // the page on stop.
 window.snSaver={enter:function(o){
+  // The saver sets its own framing in load(); the ResizeObserver must not
+  // change it.
+  window.__snSaverOn=true;
   var calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
   var st=document.createElement('style');
   st.textContent='body *:not(#canvasArea):not(#simCanvas){visibility:hidden!important;pointer-events:none!important}'+

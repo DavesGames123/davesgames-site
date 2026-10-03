@@ -18,6 +18,7 @@
 //      typeset ........... "typesetAll("          every [data-tex] box
 //      slider symbols .... "data-sym"             G on its slider label
 //      collapse toggle ... "eqCollapseBtn"        show or hide the panel
+//      short canvas ...... "setCollapsed(true)"   start collapsed below 560 px
 // ============================================================================
 import { typeset, typesetAll } from '../../lib/sci-math.js';
 
@@ -36,8 +37,13 @@ for (const el of document.querySelectorAll('[data-sym]')) {
 
 // Collapse toggle: flip the panel's collapsed class and swap the caret glyph.
 const btn = document.getElementById('eqCollapseBtn');
-btn.addEventListener('click', () => {
-  const c = panel.classList.toggle('collapsed');
+function setCollapsed(c) {
+  panel.classList.toggle('collapsed', c);
   btn.innerHTML = c ? '&#9660;' : '&#9650;';
   btn.title = c ? 'Expand' : 'Collapse';
-});
+}
+btn.addEventListener('click', () => setCollapsed(!panel.classList.contains('collapsed')));
+// A short canvas (a phone in landscape) cannot hold the open panel, which is
+// about 430 px tall, and the orbits. Start collapsed there. main.js frames the
+// system in the free band below the panel (viewRect).
+if (document.getElementById('canvasArea').clientHeight < 560) setCollapsed(true);
