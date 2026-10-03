@@ -126,10 +126,8 @@
         if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0);
       }
     }
-    // A saver on a tall screen: keep a band at the base for the shell label
-    // plate. The membrane then sits higher, so the shell docks the plate at
-    // the base, clear of it.
-    if (saverOn && h > w * 1.2) o.b = Math.max(o.b, Math.min(340, h * 0.4));
+    // The saver keeps no band for the shell plate: the membrane sits at the
+    // centre of the frame (see frame()).
     return o;
   }
   // Camera distance that fits the membrane in the clear part. At R = 5.4 the
@@ -367,11 +365,16 @@
     const w = canvas.clientWidth, h = canvas.clientHeight, o = occlusion(w, h);
     for (const k in occ) occ[k] += (o[k] - occ[k]) * 0.18;
     const wV = Math.max(80, w - occ.l - occ.r), hV = Math.max(80, h - occ.t - occ.b);
-    view.R = fitR(w, h, wV, hV) * view.zoom;
+    // Saver: on a tall frame the 0.85 close-up cut off the corners of the
+    // membrane, so it uses zoom 1 there.
+    const zoom = saverOn && h > w * 1.2 ? Math.max(1, view.zoom) : view.zoom;
+    view.R = fitR(w, h, wV, hV) * zoom;
     camera.setViewOffset(w, h, (occ.r - occ.l) / 2, (occ.b - occ.t) / 2, w, h);
     const st = Math.sin(view.phi), ct = Math.cos(view.phi);
     camera.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
-    camera.lookAt(0, -0.15, 0);
+    // The page aims a little below the centre, for its panels. The saver
+    // aims at the centre of the membrane, so it sits at the frame centre.
+    camera.lookAt(0, saverOn ? 0 : -0.15, 0);
     renderer.render(scene, camera);
     if (++frameNo % 6 === 0) { refreshReadout(); refreshLegendScale(); }
     requestAnimationFrame(frame);
