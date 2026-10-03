@@ -48,6 +48,7 @@
 //      picking .............. "function pickGizmo"    hit-test gizmo + objects
 //      input ................ "function down"         mouse/touch/pinch/wheel
 //      sizing ............... "function renderDims"   aspect-correct buffers
+//      frame budget ......... "function budget"       GPU samples per frame
 //      frame loop ........... "function loop"         per-frame mode dispatch
 //      shaded preview ....... "function drawShaded"   progressive raycast
 //      3D text .............. "function genTextSDF"   rasterize string to SDF
@@ -553,17 +554,34 @@ var APP=(function(){
     if(resizeTO) clearTimeout(resizeTO); resizeTO=setTimeout(function(){ applyRes(); if(mode==='render') resetRender(); }, 180); }
   if(window.ResizeObserver) new ResizeObserver(resize).observe(document.getElementById('canvas-wrap')); else window.addEventListener('resize',resize);
 
+  /* GPU frame budget */
+  // The GPU trace adds spf samples per frame (additive increase, halve on a
+  // slow frame). A frame longer than SPF_SLOW ms halves spf. After SPF_PROBE
+  // frames that are not slow, spf goes up by one, to SPF_MAX. lastN is the
+  // sample count of the previous frame (0 = no trace work). cPx is the ms per
+  // sample per pixel, from frame time over samples x pixels in windows of 30
+  // traced frames. It is high when the GPU is not saturated, so a size made
+  // from it errs small. The screensaver uses it to size the trace.
+  var spf=1, lastN=0, calmN=0, SPF_SLOW=21, SPF_PROBE=40, SPF_MAX=16;
+  var cPx=0, wT=0, wS=0, wN=0;
+  function budget(dtMs){ var n=lastN, px=glCv.width*glCv.height; lastN=0;
+    if(n<1||!(dtMs>0)||dtMs>250||px<1) return;                 // a tab switch or a stall is not a measure
+    wT+=dtMs; wS+=n*px; if(++wN>=30){ var c=wT/wS; cPx=cPx?cPx*0.5+c*0.5:c; wT=0; wS=0; wN=0; }
+    if(dtMs>SPF_SLOW){ spf=Math.max(1,Math.floor(n/2)); calmN=0; }
+    else if(++calmN>=SPF_PROBE){ calmN=0; if(spf<SPF_MAX) spf++; } }
+
   /* loop */
   // The animation loop dispatches by mode: draw the wireframe, step the shaded
-  // preview, or advance the path trace (2 GPU samples or 1 CPU sample per frame,
-  // capped once converged). It also runs the one-time GPU-blank fallback check.
+  // preview, or advance the path trace (spf GPU samples from budget(), or 1 CPU
+  // sample per frame, capped once converged). It also runs the one-time
+  // GPU-blank fallback check.
   function loop(t){ raf=requestAnimationFrame(loop);
     var dt=(t-lastT)/1000; lastT=t; fpsT+=dt; fpsN++; if(fpsT>=0.5){ fps=Math.round(fpsN/fpsT); fpsT=0; fpsN=0; }
     try{
       if(mode==='wire'){ drawScene(true); }
       else if(mode==='shaded'){ drawShaded(); }
       else { var a=active();
-        if(backend==='gpu'&&gpu){ if(a.samples()<4000) a.step(2); if(!checked&&a.samples()>=10&&FADE===0){ checked=true; if(a.isBlank()){ gpuAvail=false; backend='cpu'; paintBackend(); showCanvas(); resetRender(); note('<b>GPU blank on this device</b> — using CPU.'); } } }
+        if(backend==='gpu'&&gpu){ budget(dt*1000); if(a.samples()<4000){ lastN=Math.min(spf,4000-a.samples()); a.step(lastN); } if(!checked&&a.samples()>=10&&FADE===0){ checked=true; if(a.isBlank()){ gpuAvail=false; backend='cpu'; paintBackend(); showCanvas(); resetRender(); note('<b>GPU blank on this device</b> — using CPU.'); } } }
         else { if(a.samples()<400) a.step(); }
         drawScene(false);
       }
@@ -854,7 +872,17 @@ var APP=(function(){
       var x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity; d.forEach(function(e){ x0=Math.min(x0,e.x-e.r); x1=Math.max(x1,e.x+e.r); y0=Math.min(y0,e.y-e.r); y1=Math.max(y1,e.y+e.r); });
       var x=(x0+x1)/2, y=(y0+y1)/2, r=0; d.forEach(function(e){ r=Math.max(r,Math.hypot(e.x-x,e.y-y)+e.r); });
       return {x:x,y:y,r:r,pts:d.slice(0,8).map(function(e){ return {x:e.x,y:e.y}; })}; }
-    function station(){ var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); wallSet=s.p; resetRender(); plate(); }
+    // The saver trace size. The base is set so that one sample costs about
+    // SAVER_MS at the measured cPx, between 360 and the full window (at most
+    // 1200 px). Before any GPU-bound frame the first station uses 720 and
+    // later stations use the full size. station() applies it in the dark.
+    var SAVER_MS=25;
+    function saverBase(){ var full=Math.min(1200,Math.round(Math.min(WW,WH)*dpr));
+      if(!cPx) return n===0?Math.min(full,720):full;
+      var asp=WW/WH, b=Math.round(Math.sqrt(SAVER_MS/cPx/Math.max(asp,1/asp)));
+      return Math.max(Math.min(360,full),Math.min(full,b)); }
+    function station(){ if(usingGpu()){ var b=saverBase(); if(!resBase||Math.abs(b-resBase)>resBase*0.1){ resBase=b; applyRes(); spf=1; } }
+      var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); wallSet=s.p; resetRender(); plate(); }
     function tick(t){ var dt=Math.min(0.05,(t-(last||t))/1000); last=t; if(!since) since=t;
       if(phase==='show'&&t-since>hold) phase='out';
       else if(phase==='out'){ FADE=Math.min(1,FADE+dt/fadeS); if(FADE>=1){ station(); phase='dark'; since=t; } }
@@ -865,7 +893,7 @@ var APP=(function(){
       requestAnimationFrame(tick); }
     return new Promise(function(res){ (function wait(){ if(!cpu){ setTimeout(wait,100); return; }
       if(mode!=='render') setMode('render');
-      resize(); resBase=Math.min(1200,Math.round(Math.min(WW,WH)*dpr)); applyRes();
+      resize(); resBase=saverBase(); applyRes();
       FADE=1; station(); phase='dark'; requestAnimationFrame(function(t){ since=t; requestAnimationFrame(tick); });
       setInterval(plate,1000);
       res({canvas:usingGpu()?glCv:cpuCv, warmupMs:2500}); })(); }); }};
