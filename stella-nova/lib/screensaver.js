@@ -207,6 +207,9 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 #sn-saver-cap i { display: block; font: 400 .8rem/1.6 'Inter', system-ui, sans-serif; font-style: normal; color: var(--c, #7f91ad); }
 #sn-saver-label { --fw: 100vw; --fs: min(var(--fw), 80vh); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(22px, calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(18px, calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
 body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
+/* The 9:16 column is narrow: tighter letters keep the mark lines in view. */
+body.sn-saver-vert #sn-saver-label .mark { width: 94%; }
+body.sn-saver-vert #sn-saver-label .logo { letter-spacing: .12em; }
 #sn-saver-label.on { opacity: 1; }
 #sn-saver-label .top, #sn-saver-label .bot { width: 100%; display: flex; flex-direction: column; align-items: center; }
 #sn-saver-label .cat { font: 500 clamp(9px, calc(var(--fs) * .017), 14px)/1 'Inter', system-ui, sans-serif; letter-spacing: .34em; text-transform: uppercase; color: var(--c, #8ec5ff); margin: 0 0 1.1em; padding-left: .34em; }
@@ -220,7 +223,7 @@ body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
 #sn-saver-label .p .v .sym { display: inline-block; font-style: italic; }
 #sn-saver-label .p .v .sym svg { vertical-align: -.2em; }
 #sn-saver-label .p small { margin-top: .3em; font: 400 .56em/1.2 'Inter', system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: #a4acb8; text-shadow: none; }
-#sn-saver-label .eqs { display: grid; gap: .6em; justify-items: center; max-width: 100%; margin-top: 1em; font-size: clamp(14px, calc(var(--fs) * .03), 25px); color: #f4f1ea; }
+#sn-saver-label .eqs { display: grid; gap: .6em; justify-items: center; max-width: 100%; margin-top: 1em; font-size: clamp(17px, calc(var(--fs) * .036), 30px); color: #f4f1ea; }
 #sn-saver-label .eq { max-width: 100%; line-height: 0; overflow: hidden; }
 #sn-saver-label .eq svg { max-width: 100%; height: auto; overflow: visible; }
 #sn-saver-label .eq.raw { line-height: 1.35; font-style: italic; white-space: pre-wrap; }
@@ -238,13 +241,16 @@ body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
 /* The site mark sits in a rule as wide as the title rule: line, boxed mark,
    line. The box border is the line colour, so the two lines and the box
    read as one stroke. The lines draw outward from the box. */
-#sn-saver-label .mark { display: flex; align-items: center; width: min(78%, 560px); margin-top: 1.15em; font-size: clamp(13px, calc(var(--fs) * .03), 24px); }
-#sn-saver-label .mark .ln { flex: 1; height: 1px; background: rgba(244,240,230,.85); transform: scaleX(0); transition: transform 1.5s cubic-bezier(.22,.7,.12,1) 1.1s; }
+/* The site mark is the attribution of every page and every recording, so it
+   is the largest line after the title: about 1.75x the old size, weight 600,
+   a 2px stroke and a dark box behind it. */
+#sn-saver-label .mark { display: flex; align-items: center; width: min(90%, 760px); margin-top: 1.3em; font-size: clamp(20px, calc(var(--fs) * .052), 44px); }
+#sn-saver-label .mark .ln { flex: 1; height: 2px; background: rgba(244,240,230,.9); transform: scaleX(0); transition: transform 1.5s cubic-bezier(.22,.7,.12,1) 1.1s; }
 #sn-saver-label .mark .ln.l { transform-origin: 100% 50%; } #sn-saver-label .mark .ln.r { transform-origin: 0 50%; }
 #sn-saver-label.on .mark .ln { transform: scaleX(1); }
-#sn-saver-label .logo { flex: none; font: 500 1em/1 'STIX Two Text', Georgia, serif; letter-spacing: .24em; color: #f6f1e6; white-space: nowrap; padding: .5em .5em .5em .74em; border: 1px solid rgba(244,240,230,.85); background: rgba(5,7,11,.58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity 1.2s ease .6s; }
+#sn-saver-label .logo { flex: none; font: 600 1em/1 'STIX Two Text', Georgia, serif; letter-spacing: .22em; color: #fffaf0; white-space: nowrap; padding: .55em .55em .55em .8em; border: 2px solid rgba(244,240,230,.9); background: rgba(5,7,11,.74); text-shadow: 0 0 18px rgba(0,0,0,.9); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity 1.2s ease .6s; }
 #sn-saver-label.on .logo { opacity: 1; }
-#sn-saver-label .logo span { color: var(--c, #8ec5ff); letter-spacing: 0; padding: 0 .35em; }
+#sn-saver-label .logo span { color: var(--c, #8ec5ff); font-weight: 700; letter-spacing: 0; padding: 0 .35em; }
 #sn-saver-label .m1 { color: #62c4ff; fill: #62c4ff; } #sn-saver-label .m2 { color: #ff9a62; fill: #ff9a62; } #sn-saver-label .m3 { color: #86dc7c; fill: #86dc7c; }
 #sn-saver-label .m4 { color: #e889dc; fill: #e889dc; } #sn-saver-label .m5 { color: #ffd666; fill: #ffd666; } #sn-saver-label .m6 { color: #a8a4ff; fill: #a8a4ff; }
 #sn-saver-lead { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 9000; pointer-events: none; opacity: 0; transition: opacity 1.2s ease .8s; }
@@ -266,7 +272,7 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot .col { max-width: 92%; }
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot:has(.code) .col { max-width: 52%; }
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot .code { margin-top: 0; max-width: 44%; }
-  body:not(.sn-saver-vert) #sn-saver-label .eqs { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .7em 2.4em; font-size: clamp(16px, calc(var(--fs) * .036), 30px); }
+  body:not(.sn-saver-vert) #sn-saver-label .eqs { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .7em 2.4em; font-size: clamp(19px, calc(var(--fs) * .0432), 36px); }
   body:not(.sn-saver-vert) #sn-saver-label .notes { max-width: 46em; }
 }
 @media (max-width: 760px), (max-height: 520px) {
