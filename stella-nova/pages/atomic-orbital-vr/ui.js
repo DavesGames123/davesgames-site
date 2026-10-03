@@ -9,9 +9,9 @@
    readQNHash() parses it, and a manual change writes it again.
    GREP: updateDisplay | updateInfoBar | applyQN | syncQN | setN
          setColorMode | setAnimate | setMagField | initUI
-         readQNHash | writeQNHash
+         readQNHash | writeQNHash | syncBExtent | resize
    ════════════════════════════════════════════════════════════ */
-import { S, RT, camera, renderer } from './core.js';
+import { S, RT, camera, renderer, controls, fitDistance } from './core.js';
 import { pMat, startGrow, rebuildStaticFlow, axesHelper } from './particles.js';
 import { computeBField, uploadBArrows, bArrowShaft } from './bfield.js';
 import { ftLines, btLines } from './tracers.js';
@@ -108,6 +108,14 @@ export function syncQN(){
   applyQN(+document.getElementById('sl-n').value,
           +document.getElementById('sl-l').value,
           +document.getElementById('sl-m').value);
+}
+
+// Show S.bGridExtent on the B Extent slider. startRebuild calls this when a
+// new (n, l) moves the extent with r99.
+export function syncBExtent(){
+  const el=document.getElementById('sl-bgext'); if(!el) return;
+  el.value=S.bGridExtent; sg(el);
+  document.getElementById('vl-bgext').textContent=S.bGridExtent;
 }
 
 /* ── Particle count — synced between quick and adv sliders ── */
@@ -243,7 +251,7 @@ export function initUI(){
   document.getElementById('sl-fspd').addEventListener('input',function(){S.flowSpeed=+this.value;document.getElementById('vl-fspd').textContent=S.flowSpeed.toFixed(2);sg(this);});sg(document.getElementById('sl-fspd'));
   document.getElementById('sl-ftr-n').addEventListener('input',function(){S.flowTrCount=+this.value;document.getElementById('vl-ftr-n').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-n'));
   document.getElementById('sl-ftr-tl').addEventListener('input',function(){S.flowTrTrail=+this.value;document.getElementById('vl-ftr-tl').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-tl'));
-  document.getElementById('sl-bgext').addEventListener('input',function(){S.bGridExtent=+this.value;document.getElementById('vl-bgext').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgext'));
+  document.getElementById('sl-bgext').addEventListener('input',function(){S.bGridExtent=+this.value;S.bExtRel=S.bGridExtent/S.r99;document.getElementById('vl-bgext').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgext'));
   document.getElementById('sl-basc').addEventListener('input',function(){S.bArrowScale=+this.value;document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);sg(this);if(RT.bFieldData)uploadBArrows();});sg(document.getElementById('sl-basc'));
   document.getElementById('sl-bgam').addEventListener('input',function(){S.bColGamma=+this.value;document.getElementById('vl-bgam').textContent=S.bColGamma.toFixed(1);sg(this);if(RT.bFieldData)uploadBArrows();});sg(document.getElementById('sl-bgam'));
   document.getElementById('sl-buev').addEventListener('input',function(){S.bUpdateEvery=+this.value;document.getElementById('vl-buev').textContent=this.value;sg(this);});sg(document.getElementById('sl-buev'));
@@ -258,7 +266,16 @@ export function initUI(){
   document.getElementById('cb-axes').addEventListener('change',function(){S.showAxes=this.checked;axesHelper.visible=this.checked;});
 
   // Keep camera aspect and canvas size matched to the window.
-  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+  // On resize, the camera distance changes by the ratio of the two fit
+  // distances, so the orbital keeps its fit and a user zoom is kept.
+  window.addEventListener('resize',()=>{
+    const a0=camera.aspect,a1=innerWidth/innerHeight;
+    if(!renderer.xr.isPresenting&&a1>0&&a0>0){
+      const k=fitDistance(a1)/fitDistance(a0);
+      camera.position.sub(controls.target).multiplyScalar(k).add(controls.target);
+    }
+    camera.aspect=a1;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
+  });
 
   // Init all toggles and displays
   // Run the toggle setters once so button states match S at start.

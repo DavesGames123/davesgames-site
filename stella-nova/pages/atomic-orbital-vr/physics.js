@@ -3,7 +3,8 @@
    Pure hydrogenic math and colormaps. No THREE, no scene, no
    shared state — every function uses only its parameters and the
    other pure helpers here. Safe to import from any module.
-   GREP: radialR | legendrePlm | particleColor | probabilityFlow | fieldColor
+   GREP: radialR | legendrePlm | toneMap | particleColor | probabilityFlow
+         fieldColor
    ════════════════════════════════════════════════════════════ */
 // Plain factorial, used by the radial normalization constant below.
 function factorial(n){if(n<=1)return 1;let r=1;for(let i=2;i<=n;i++)r*=i;return r;}
@@ -33,16 +34,32 @@ function heatmap(v){v=Math.max(0,Math.min(1,v));const sv=v*5,i=Math.min(Math.flo
 // Signed colormap for Re(ψ) / Im(ψ): negative reads blue, positive reads red.
 function diverging(v){v=Math.max(-1,Math.min(1,v));if(v>=0){const t=v;return[Math.min(1,t*2),Math.min(1,Math.max(0,t*2-.5)),0];}const t=-v;return[0,Math.min(1,Math.max(0,t*2-.5)),Math.min(1,t*2)];}
 
+// Map a density d = |ψ|² (unnormalized, R²·P²) to [0.1, 1] with the
+// per-state tone from buildTone in cdf.js. gain is the Scale slider / 800.
+// x = gain·d/hi. For x <= 1: 0.1 + 0.8·asinh(x/c)/asinh(1/c), so the
+// median particle is near 0.5 and the faintest lobe stays above black.
+// For x > 1: 0.9 + 0.1·ln x / ln(peak/hi), so the peak gets 1 and no
+// value is clipped below the peak.
+export function toneMap(d,tone,gain){
+  const x=d*tone.inv*gain;
+  if(x<=1)return 0.1+0.8*Math.asinh(x/tone.c)*tone.k;
+  return 0.9+0.1*(tone.lnPk>1e-6?Math.min(1,Math.log(x)/tone.lnPk):1);
+}
+
 // Color one particle from the wavefunction at its position. Rebuilds R and P_ℓ^m
 // there, forms the time-dependent phase m·φ − t/(2n²), then selects by mode:
 // 0 |ψ|² heatmap · 1 Re · 2 Im · 3 phase (hue wheel around the azimuth).
-export function particleColor(x,y,z,n,l,m,t,mode,scaler){
+// Modes 0-2 use toneMap. Re and Im are sign(R·P)·tone·cos or sin of the phase.
+export function particleColor(x,y,z,n,l,m,t,mode,tone,gain){
   const r=Math.sqrt(x*x+y*y+z*z);if(r<1e-6)return[0,0,0];
   const R=radialR(r,n,l),Plm=legendrePlm(y/r,l,m),phi=Math.atan2(z,x);
   const phase=m*phi-t/(2*n*n);
-  if(mode===0)return heatmap(R*R*Plm*Plm*scaler);
-  if(mode===1)return diverging(R*Plm*Math.cos(phase)*scaler*.05);
-  if(mode===2)return diverging(R*Plm*Math.sin(phase)*scaler*.05);
+  if(mode<3){
+    const a=R*Plm,v=toneMap(a*a,tone,gain);
+    if(mode===0)return heatmap(v);
+    const sv=a<0?-v:v;
+    return diverging(sv*(mode===1?Math.cos(phase):Math.sin(phase)));
+  }
   const phiE=((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
   const hh=phiE/(2*Math.PI)*6,hi=Math.floor(hh)%6,ff=hh-Math.floor(hh),q=1-ff;
   return[[1,ff,0],[q,1,0],[0,1,ff],[0,q,1],[ff,0,1],[1,0,q]][hi];

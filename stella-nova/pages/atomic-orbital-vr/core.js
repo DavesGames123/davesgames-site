@@ -7,7 +7,7 @@
    Nothing here depends on a subsystem module.
    GREP: isMobile | S | scene | camera | renderer | controls
          orbitalGroup | boundingCube | reticle | bgDimMesh
-         nucleusGroup | RT
+         nucleusGroup | RT | VIEW_R | fitDistance | pointScale
    ════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -20,15 +20,21 @@ export const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||inn
 // colDirty forces a recolor pass without moving any particle.
 export const S={
   n:3,l:1,m:1,
-  N:100000, scale:0.13,
-  colorMode:0, scaler:800,
+  // scale is scene units per bohr radius. startRebuild sets it to
+  // VIEW_R / r99 for each (n, l), and stores r99 (a.u.) here.
+  N:100000, scale:0.13, r99:24.4,
+  // scaler is the Scale slider: the tone gain is scaler/800. tone is the
+  // per-state density normalization from buildTone (cdf.js).
+  colorMode:0, scaler:800, tone:{inv:1,c:0.3,k:1/Math.asinh(1/0.3),lnPk:0},
   evolving:true, timeSpeed:1, simTime:0,
   viewMode:0, cutAxis:1, cutPos:0,
   // Flow
   animateFlow:true, showFlowTr:false, flowSpeed:0.5,
   flowTrCount:400, flowTrTrail:30,
   // B field — on by default at max resolution, minimum arrow scale, fast update
-  showBField:true, bGridDim:24, bGridExtent:40,
+  // bGridExtent is in a.u. bExtRel is the same extent as a multiple of r99,
+  // so the grid follows the orbital when (n, l) changes (40 a.u. for 3p).
+  showBField:true, bGridDim:24, bGridExtent:40, bExtRel:40/24.4,
   bArrowScale:0.1, bColGamma:1.0, bUpdateEvery:10,
   // B tracers: 100 trail points, one each 2 frames, so a streamer is about
   // 3 s long at 60 Hz. The lower spawn rate keeps the segment count near the
@@ -68,7 +74,24 @@ renderer.xr.enabled=true;
 
 export const scene=new THREE.Scene();
 export const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.01,100000);
-camera.position.set(0,1.8,8.5);
+
+/* ── VIEW FIT ──
+   Every orbital is drawn with its r99 (the radius that holds 99 percent of
+   the probability) at VIEW_R scene units, which is also the half-size of
+   the AR bounding cube. fitDistance(aspect) is the camera distance at which
+   a sphere of radius VIEW_R fills FIT of the half-size of the short screen
+   axis: D = VIEW_R / sin(atan(FIT · tan(fov/2) · min(1, aspect))). */
+export const VIEW_R=3;
+const FIT=0.7;
+export function fitDistance(aspect){
+  const t=Math.tan(camera.fov*Math.PI/360)*Math.min(1,aspect);
+  return VIEW_R/Math.sin(Math.atan(FIT*t));
+}
+camera.position.set(0,1.8,8.5).setLength(fitDistance(camera.aspect));
+// A portrait screen puts the camera farther away, so the points get smaller
+// on screen. pointScale() is the factor for the point size that keeps the
+// size of a point the same as on a landscape screen (factor 1).
+export function pointScale(){return fitDistance(camera.aspect)/fitDistance(1);}
 
 // Desktop orbit controls. Re-enabled on XR session end since AR disables them.
 export const controls=new OrbitControls(camera,renderer.domElement);

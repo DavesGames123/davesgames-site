@@ -34,6 +34,14 @@
 //  draws from opts.seed. A URL that names an orbital (#n=4&l=2&m=1, see
 //  readQNHash in ui.js) wins over the random draw.
 //
+//  VIEW AND TONE  Each state is drawn with its r99 (the radius that holds 99
+//  percent of the probability) at VIEW_R = 3 scene units: S.scale =
+//  VIEW_R / r99, set in startRebuild (particles.js). The camera distance is
+//  fitDistance(aspect) in core.js, so r99 fills 70 percent of the half-size
+//  of the short screen axis on a desktop, a phone or the 9:16 saver column.
+//  Color is toneMap (physics.js) with the per-state tone from buildTone
+//  (cdf.js): density over its 99.5 percent value, asinh curve, median at 0.5.
+//
 //  SCREENSAVER  window.snSaver (end of file), for lib/screensaver.js. The
 //  hook sends saverPlate() to opts.label: n, l, m, the subshell, the explicit
 //  radial factor R_nl, E_n, the node counts and the Biot-Savart sum.
@@ -44,7 +52,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { renderer, scene, camera, controls, orbitalGroup, S, RT,
-         nucleusGroup, bgDimMesh } from './core.js';
+         nucleusGroup, bgDimMesh, pointScale } from './core.js';
 import { startRebuild, spawnChunk, updateColors, animateFlow, pMat } from './particles.js';
 import { computeBField } from './bfield.js';
 import { updateFlowTracers, updateBTracers } from './tracers.js';
@@ -124,6 +132,9 @@ renderer.setAnimationLoop((time, frame)=>{
   if(frame && window._arUpdateHitTest) _arUpdateHitTest(frame);
   if(window._arUpdateScale) _arUpdateScale(dt);
   updateARPanel(frame);
+  // Point size: S.psize times the portrait factor. The AR session sets
+  // its own size, so this runs only outside XR.
+  if(!renderer.xr.isPresenting) pMat.size=S.psize*pointScale();
   // Safety: clamp scale back to 1 if something collapsed it outside AR mode
   if(!document.body.classList.contains('ar-mode') && orbitalGroup.scale.x < 0.05)
     orbitalGroup.scale.setScalar(1);

@@ -10,11 +10,11 @@
          spawnChunk | updateColors | animateFlow | rebuildStaticFlow
    ════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
-import { S, RT, orbitalGroup } from './core.js';
+import { S, RT, orbitalGroup, VIEW_R } from './core.js';
 import { particleColor, probabilityFlow } from './physics.js';
-import { buildRadialCDF, buildThetaCDF, sampleCDF } from './cdf.js';
-import { updateInfoBar } from './ui.js';
-import { computeBField } from './bfield.js';
+import { buildRadialCDF, buildThetaCDF, sampleCDF, radialQuantile, buildTone } from './cdf.js';
+import { updateInfoBar, syncBExtent } from './ui.js';
+import { computeBField, bArrowShaft } from './bfield.js';
 
 /* ════════════════════════════════════════════════════════════
    PRE-ALLOCATED PARTICLE BUFFERS (2 M cap)
@@ -95,12 +95,26 @@ export const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;orbital
    ════════════════════════════════════════════════════════════ */
 // Clear the cloud and start filling from zero. Rebuilds the CDF tables only when
 // (n,ℓ) or (ℓ,m) actually changed, then aims spawning at the target count.
+// A new (n,ℓ) also sets the view scale: S.scale = VIEW_R / r99, so every
+// orbital has the same size on screen and in AR. The B grid extent keeps its
+// ratio to r99. A new state also gets a new tone (buildTone in cdf.js).
+// When the scale changes, the old B arrows have the wrong size, so they
+// stay hidden until computeBField runs on the new cloud.
 export function startRebuild(){
   RT.liveCount=0; pGeo.setDrawRange(0,0); RT.colorRollIdx=0;
   RT.flowTracers=[]; RT.bTracers=[];
   const{n,l,m}=S;
-  if(n!==cdfN||l!==cdfL) rCDF=buildRadialCDF(n,l);
-  if(l!==cdfL||m!==cdfM) tCDF=buildThetaCDF(l,m);
+  const nl=n!==cdfN||l!==cdfL, lm=l!==cdfL||m!==cdfM;
+  if(nl){
+    rCDF=buildRadialCDF(n,l);
+    S.r99=radialQuantile(rCDF,0.99);
+    S.bGridExtent=Math.max(5,Math.min(200,Math.round(S.bExtRel*S.r99)));
+    syncBExtent();
+    const sc=VIEW_R/S.r99;
+    if(sc!==S.scale){S.scale=sc;RT.bFieldData=null;bArrowShaft.visible=false;}
+  }
+  if(lm) tCDF=buildThetaCDF(l,m);
+  if(nl||lm) S.tone=buildTone(rCDF,tCDF,n,l,m);
   cdfN=n; cdfL=l; cdfM=m;
   RT.targetCount=Math.min(S.N, MAX_P);
   RT.spawning=true;
@@ -137,7 +151,7 @@ export function spawnChunk(){
     return;
   }
 
-  const{n,l,m,scale,viewMode,cutAxis,cutPos,simTime,colorMode,scaler}=S;
+  const{n,l,m,scale,viewMode,cutAxis,cutPos,simTime,colorMode,scaler,tone}=S;
   const toAdd=Math.min(SPAWN_CHUNK, RT.targetCount-RT.liveCount);
   let added=0, attempts=0;
 
@@ -154,7 +168,7 @@ export function spawnChunk(){
     const i=RT.liveCount+added;
     sphArr[i*3]=r; sphArr[i*3+1]=th; sphArr[i*3+2]=ph;
     posArr[i*3]=x*scale; posArr[i*3+1]=y*scale; posArr[i*3+2]=z*scale;
-    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,scaler);
+    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,tone,scaler/800);
     colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
     added++;
   }
@@ -175,7 +189,7 @@ export function spawnChunk(){
    ════════════════════════════════════════════════════════════ */
 export function updateColors(){
   if(RT.liveCount===0) return;
-  const{n,l,m,simTime,colorMode,scaler}=S;
+  const{n,l,m,simTime,colorMode,scaler,tone}=S;
   const count=RT.liveCount;
   // Roll through COLOR_CHUNK particles per call
   const end=Math.min(RT.colorRollIdx+COLOR_CHUNK, count);
@@ -184,7 +198,7 @@ export function updateColors(){
     const r=sphArr[i*3],th=sphArr[i*3+1],ph=sphArr[i*3+2];
     const sinT=Math.sin(th);
     const x=r*sinT*Math.cos(ph), y=r*Math.cos(th), z=r*sinT*Math.sin(ph);
-    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,scaler);
+    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,tone,scaler/800);
     colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
   }
   RT.colorRollIdx = end>=count ? 0 : end;
@@ -221,14 +235,16 @@ export function rebuildStaticFlow(){
   const geo=flowGeo;geo.dispose();while(geo.attributes.position)geo.deleteAttribute('position');
   if(!S.showFlow){flowLines.visible=false;return;}
   flowLines.visible=true;
-  const{m,n,scale}=S,rMax=7*n*n;
+  // The shell and the arrow length follow r99, so the arrows have the
+  // same size on screen for each (n, l).
+  const{m,scale,r99}=S,rMax=r99;
   const pts=[];
   for(let i=0;i<350;i++){
     let rx,ry,rz,r;
-    do{rx=(Math.random()*2-1)*rMax;ry=(Math.random()*2-1)*rMax;rz=(Math.random()*2-1)*rMax;r=Math.sqrt(rx*rx+ry*ry+rz*rz);}while(r<3||r>rMax*.75);
+    do{rx=(Math.random()*2-1)*rMax;ry=(Math.random()*2-1)*rMax;rz=(Math.random()*2-1)*rMax;r=Math.sqrt(rx*rx+ry*ry+rz*rz);}while(r<0.12*r99||r>rMax);
     const J=probabilityFlow(rx,ry,rz,m);
     const fl=Math.sqrt(J[0]*J[0]+J[1]*J[1]+J[2]*J[2]);if(fl<1e-8)continue;
-    const len=2;
+    const len=0.08*r99;
     pts.push(rx*scale,ry*scale,rz*scale);
     pts.push((rx+J[0]/fl*len)*scale,(ry+J[1]/fl*len)*scale,(rz+J[2]/fl*len)*scale);
   }
