@@ -207,6 +207,10 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 #sn-saver-cap i { display: block; font: 400 .8rem/1.6 'Inter', system-ui, sans-serif; font-style: normal; color: var(--c, #7f91ad); }
 #sn-saver-label { --fw: 100vw; --fs: min(var(--fw), 80vh); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(22px, calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(18px, calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
 body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
+/* A 9:16 file plays full screen on a phone. The status bar and the camera
+   cut-out (Dynamic Island) cover about the top 6% of the frame, and the
+   recording has no safe-area inset, so the column top pad is 8% of its height. */
+body.sn-saver-vert #sn-saver-label { padding-top: max(8vh, calc(env(safe-area-inset-top, 0px) + 14px)); }
 /* The 9:16 column is narrow: tighter letters keep the mark lines in view. */
 body.sn-saver-vert #sn-saver-label .mark { width: 94%; }
 body.sn-saver-vert #sn-saver-label .logo { letter-spacing: .12em; }
