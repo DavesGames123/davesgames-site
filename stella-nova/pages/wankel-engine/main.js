@@ -29,6 +29,7 @@ import { createStage } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { createAnalysis } from './analysis.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
+import { createTour } from '../../lib/mech-tour.js';
 
 const { VARIANTS, TAU, D, GEO, STROKES } = E;
 const $ = id => document.getElementById(id);
@@ -391,12 +392,17 @@ const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Ve
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours: the face with the chambers, the
-// phasing gears, the plugs, the exploded parts, the engine put together
-// again, and the ports; then a fade to the other layout. Each step holds
-// seconds/4 (at least 9 s); calm (1 = slowest) slows the orbit, the shaft
-// and the explode. opts.label names the subject of each step with its
-// equation. No URL hash writes while it plays. No exit(): the shell
-// reloads the page.
+// phasing gears, the plugs, the exploded engine, close-ups of 5 exploded
+// parts, sometimes a pull-back on the whole exploded stack, the engine put
+// together again, and the ports; then a fade to the other layout. Each
+// step holds seconds/12 (at least 4.5 s). lib/mech-tour.js moves the
+// camera in each step (a seeded move that is never the move of the step
+// before, near the front of the view), seeds the explode spread and the
+// close-up mode of each unit, and frames, glows and names each close-up
+// part (the others ghost). calm (1 = slowest) slows the shaft and the
+// explode, not the step time. opts.label names the subject of each step
+// with its equation. No URL hash writes while it plays. No exit(): the
+// shell reloads the page.
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -416,9 +422,10 @@ window.snSaver = {
     const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
     stage.scene.background = bg;
     stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
-    S.ekRate = 1.4 - 0.8 * calm;
-    setRpm(Math.round(32 - 18 * calm));
-    const hold = Math.max(9, (o.seconds || 60) / 4) * 1000;
+    S.ekRate = 2.2 - 0.8 * calm;
+    const RPM = Math.round(32 - 18 * calm);
+    setRpm(RPM);
+    const hold = Math.max(4.5, (o.seconds || 60) / 12) * 1000;
     const order = rnd() < 0.5 ? ['single', 'twin'] : ['twin', 'single'];
     const canvas = $('view');
     const vt = E.volumes();
@@ -448,8 +455,32 @@ window.snSaver = {
       { view: 'ports', lab: () => ({ title: 'Ports, not valves', sub: 'Exhaust before the bottom waist, intake after it', params: [P('\\varphi', 'apex seal lean now', `${(L ? L.units[0].k.lean[0] / D : 0).toFixed(1)}°`, ''), P('\\varphi_{\\max}', 'largest lean', `±${(E.LEAN_MAX / D).toFixed(1)}°`, '')], lines: ['The apexes open and close the ports as they pass.', 'The apex seal leans as it sweeps the curve.'], tex: [String.raw`\varphi_{\max} = \arcsin\frac{3e}{R}`, String.raw`T = \sum (p - p_0)\,\frac{dV}{d\theta}`], eq: ['φₘₐₓ = asin(3e / R)', 'T = Σ (p − p₀) dV/dθ'], anchor: an(/^(intake0|exhaust0)$/, /^(intake0|exhaust0)$/) }) },
     ];
     STEPS.forEach(s => { const f = s.lab; s.lab = () => Object.assign(f(), { rules: RULES }); });
-    let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0;
-    const show = s => { setView(s.view, true); const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
+    // Close-ups (lib/mech-tour.js): the rotor and its seals and gears first.
+    const tour = createTour({ THREE, stage, cards, cur: () => S.cur, rnd, hold,
+      prefer: ['rotor', 'apexSeal', 'sideSeal', 'cornerSeal', 'ringGear', 'pinion', 'shaft', 'plug', 'flywheel', 'rotorHousing'],
+      skip: ['intake', 'exhaust', 'pocket'] });
+    const focusStep = info => ({ focus: info, still: true, lab: () => { const t = tour.plate(info, S.cur.V.name); return { ...t, anchor: () => plateAnchor(t.meshes) }; } });
+    // A unit: STEPS 0-3, the close-ups, in 'circle' or 'mixed' mode
+    // sometimes a pull-back on the exploded stack, then STEPS 4-5.
+    let plan = [];
+    const makePlan = () => {
+      const u = tour.unit(), F = tour.pick(5).map(focusStep);
+      if (u.mode !== 'flyby' && rnd() < 0.6) F.push({ ...STEPS[3], still: true, stack: true });
+      plan = [STEPS[0], STEPS[1], STEPS[2], { ...STEPS[3], still: true }, ...F, STEPS[4], STEPS[5]];
+    };
+    let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0, now = null;
+    // The exploded engine and the close-ups stand still: the seals and the
+    // ring gear ride in the turning rotor and would leave a close frame.
+    const show = s => {
+      setRpm(s.still ? 0 : RPM);
+      if (s.focus) tour.show(s.focus);
+      else {
+        tour.clear();
+        setView(s.view, true);
+        tour.fromFly({ kind: s.stack ? 'stack' : 'view', move: s.stack ? 'pull' : null, exploded: s.view === 'exploded' });
+      }
+      const l = s.lab(); lastLab = JSON.stringify(l); label(l);
+    };
     const fadeSwap = async (id, then) => {
       canvas.style.opacity = '0';
       await new Promise(r => setTimeout(r, 950));
@@ -457,18 +488,22 @@ window.snSaver = {
       setTimeout(() => { canvas.style.opacity = '1'; then(); }, 250);
     };
     const advance = () => {
-      const s = STEPS[n % STEPS.length];
-      if (n % STEPS.length === 0 && n > 0) fadeSwap(order[++ord % order.length], () => show(s));
-      else show(s);
-      n++;
+      if (n === 0 || n >= plan.length) {
+        const go = () => { makePlan(); n = 0; stepT = 0; now = plan[n++]; show(now); };
+        if (now) { tour.clear(); fadeSwap(order[++ord % order.length], go); now = null; } else go();
+        return;
+      }
+      now = plan[n++]; show(now);
     };
+    window.__mechTour = tour;
     saverTick = dt => {
+      tour.tick(dt);
       stepT += dt * 1000; labT += dt;
-      if (stepT >= hold) { stepT = 0; advance(); }
+      if (stepT >= hold && !S.swapping && now) { stepT = 0; advance(); }
       // refresh the plate when its live numbers change (at most every 2 s)
-      if (labT > 2 && n > 0) {
+      if (labT > 2 && now) {
         labT = 0;
-        const l = STEPS[(n - 1) % STEPS.length].lab(), js = JSON.stringify(l);
+        const l = now.lab(), js = JSON.stringify(l);
         if (js !== lastLab) { lastLab = js; label(l); }
       }
     };
