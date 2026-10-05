@@ -30,6 +30,7 @@ import { createStage } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { createAnalysis } from './analysis.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
+import { createTour } from '../../lib/mech-tour.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -391,11 +392,18 @@ const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Ve
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours one unit: the whole axle in a
-// turn, the gear set, the ring and pinion, the exploded parts, the ice
-// test from above, then a fade to the next unit. Each step holds
-// seconds/4 (at least 9 s); calm (1 = slowest) slows the orbit, the wheels
-// and the explode. opts.label names the subject of each step. No URL hash
-// writes while it plays. No exit(): the shell reloads the page.
+// turn, the gear set, the ring and pinion, the exploded unit, then close-ups
+// of 5 exploded parts, the ice test from above, then a fade to the next
+// unit. Each step holds seconds/12 (at least 4.5 s) and the camera flies in
+// 1.2 s. A close-up frames the meshes of one part (all parts with its info
+// id), so that they fill about 45% of the short screen side, and the cards
+// hover glow marks them. FOCUS_PREFER parts come first in a seeded order.
+// lib/mech-tour.js moves the camera in each step (a seeded move that is
+// never the move of the step before, near the front of the view) and
+// seeds the explode spread and the close-up mode of each unit. calm (1 =
+// slowest) slows the wheels and the explode, not the step time. opts.label names the subject of each step: a close-up has
+// the part name, group, role and specs of parts.js. No URL hash writes
+// while it plays. No exit(): the shell reloads the page.
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -415,9 +423,10 @@ window.snSaver = {
     const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
     stage.scene.background = bg;
     stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
-    S.ekRate = 1.5 - 0.9 * calm; S.kRate = 1.4 - 0.8 * calm;
-    setRpm(Math.round(30 - 16 * calm));
-    const hold = Math.max(9, (o.seconds || 60) / 4) * 1000;
+    S.ekRate = 2.4 - 0.8 * calm; S.kRate = 1.4 - 0.8 * calm;
+    const RPM = Math.round(30 - 16 * calm);
+    setRpm(RPM);
+    const hold = Math.max(4.5, (o.seconds || 60) / 12) * 1000;
     const order = ['open', 'clutch', 'torsen'];
     const first = Math.floor(rnd() * 3);
     const canvas = $('view');
@@ -448,11 +457,37 @@ window.snSaver = {
       { view: 'top', scen: 'ice', lab: () => ({ title: 'One wheel on ice', sub: name(), params: [P('\\omega_R', 'ice wheel', rpm(LL().wR), 'm2'), P('\\omega_L', 'dry wheel', rpm(LL().wL), 'm1'), P('T_L', 'left torque', `${Math.round(S.drv.TL)} N·m`, 'm5'), P('T_R', 'right torque', `${Math.round(S.drv.TR)} N·m`, 'm5')], lines: [S.drv.moving ? 'The car moves off.' : 'The car is stuck: the dry wheel stands still.'], tex: [torqueTex(), TAVG], eq: [torqueEq()], anchor: an(/./, /^(wheel[LR]|ring)$/) }) },
     ];
     STEPS.forEach(s => { const f = s.lab; s.lab = () => Object.assign(f(), { rules: RULES }); });
-    let n = 0, ord = first, stepT = 0, lastLab = '', labT = 0;
+    // Close-ups (lib/mech-tour.js): FOCUS_PREFER parts first, in a seeded
+    // order. FOCUS_SKIP parts are too large to frame as one part.
+    const tour = createTour({ THREE, stage, cards, cur: () => S.cur, rnd, hold,
+      prefer: ['spider', 'side', 'ring', 'pinion', 'frictionPlate', 'steelPlate', 'spring', 'hside', 'elemA', 'elemB', 'crossShaft'],
+      skip: ['housing', 'wheelL', 'wheelR', 'axle', 'case'] });
+    const focusStep = info => ({ focus: info, still: true, lab: () => { const t = tour.plate(info, name()); return { ...t, anchor: () => plateAnchor(t.meshes) }; } });
+    const pickFocus = () => tour.pick(5);
+    // The plan of one unit: STEPS 0-2, the exploded unit, the close-ups,
+    // then STEPS 4 (the ice test, assembled).
+    let plan = [];
+    // A unit: a seeded spread and close-up mode (tour.unit), and in 'circle'
+    // or 'mixed' mode, sometimes a pull-back on the whole exploded stack.
+    const makePlan = () => {
+      const u = tour.unit(), F = pickFocus().map(focusStep);
+      if (u.mode !== 'flyby' && rnd() < 0.6) F.push({ ...STEPS[3], still: true, stack: true });
+      plan = [STEPS[0], STEPS[1], STEPS[2], { ...STEPS[3], still: true }, ...F, STEPS[4]];
+    };
+    // The exploded unit and the close-ups stand still: the spiders and the
+    // element gears ride in the carrier and would leave a close frame.
     const show = s => {
-      if (s.scen === 'corner') { setDir(rnd() < 0.5 ? 1 : -1); setR([6, 8, 10, 14][Math.floor(rnd() * 4)]); }
-      setScen(s.scen);
-      setView(typeof s.view === 'function' ? s.view(S) : s.view, true);
+      setRpm(s.still ? 0 : RPM);
+      // a close-up shows the whole part: no section cut
+      setShow('section', !s.focus);
+      if (s.focus) tour.show(s.focus);
+      else {
+        tour.clear();
+        if (s.scen === 'corner') { setDir(rnd() < 0.5 ? 1 : -1); setR([6, 8, 10, 14][Math.floor(rnd() * 4)]); }
+        setScen(s.scen);
+        setView(typeof s.view === 'function' ? s.view(S) : s.view, true);
+        tour.fromFly({ kind: s.stack ? 'stack' : 'view', move: s.stack ? 'pull' : null });
+      }
       const l = s.lab(); lastLab = JSON.stringify(l); label(l);
     };
     const fadeSwap = async (id, then) => {
@@ -462,18 +497,23 @@ window.snSaver = {
       await swapTo(id);
       setTimeout(() => { canvas.style.opacity = '1'; then(); }, 250);
     };
+    let n = 0, ord = first, stepT = 0, lastLab = '', labT = 0, now = null;
     const advance = () => {
-      const s = STEPS[n % STEPS.length];
-      if (n % STEPS.length === 0 && n > 0) fadeSwap(order[++ord % order.length], () => show(s));
-      else show(s);
-      n++;
+      if (n === 0 || n >= plan.length) {
+        const go = () => { makePlan(); n = 0; stepT = 0; now = plan[n++]; show(now); };
+        if (now) { tour.clear(); fadeSwap(order[++ord % order.length], go); now = null; } else go();
+        return;
+      }
+      now = plan[n++]; show(now);
     };
+    window.__mechTour = tour;
     saverTick = dt => {
+      tour.tick(dt);
       stepT += dt * 1000; labT += dt;
-      if (stepT >= hold) { stepT = 0; advance(); }
-      if (labT > 2 && n > 0) {
+      if (stepT >= hold && !S.swapping && now) { stepT = 0; advance(); }
+      if (labT > 2 && now) {
         labT = 0;
-        const l = STEPS[(n - 1) % STEPS.length].lab(), js = JSON.stringify(l);
+        const l = now.lab(), js = JSON.stringify(l);
         if (js !== lastLab) { lastLab = js; label(l); }
       }
     };
