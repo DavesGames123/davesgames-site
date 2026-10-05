@@ -37,6 +37,7 @@
 //      program build ........ "function build"    link program, cache uniforms
 //      quad buffer .......... "const quad"        the covering geometry
 //      render loop .......... "function frame"    resize, uniforms, draw, FPS
+//      screensaver hook ..... "SCREENSAVER HOOK"  window.snSaver: a specimen tour
 // ============================================================================
 (async () => {
 // Fetch both shader stages as text before touching GL, so build() runs with
@@ -159,13 +160,17 @@ function mkS(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.c
 let prog=null,uL={};
 // Compile both stages, link the program, cache all uniform locations, and wire
 // the a_pos attribute to the bound quad buffer. Replaces any prior program.
-function build(){if(prog)gl.deleteProgram(prog);const vs=mkS(gl.VERTEX_SHADER,VS),fs=mkS(gl.FRAGMENT_SHADER,FS);if(!vs||!fs)return;const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,fs);gl.linkProgram(p);gl.deleteShader(vs);gl.deleteShader(fs);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));return;}prog=p;gl.useProgram(p);['iResolution','iTime','iMouse','u_zoom','u_fov','u_height','u_spin','u_curvature','u_ior','u_fresnel','u_fresnelIn','u_lightAng','u_ambient','u_diffuse','u_accent','u_cPhase','u_cSat','u_cFreq','u_edgeFade'].forEach(n=>uL[n]=gl.getUniformLocation(p,n));const a=gl.getAttribLocation(p,'a_pos');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);}
+function build(){if(prog)gl.deleteProgram(prog);const vs=mkS(gl.VERTEX_SHADER,VS),fs=mkS(gl.FRAGMENT_SHADER,FS);if(!vs||!fs)return;const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,fs);gl.linkProgram(p);gl.deleteShader(vs);gl.deleteShader(fs);if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));return;}prog=p;gl.useProgram(p);['iResolution','iTime','iMouse','u_zoom','u_fov','u_height','u_spin','u_curvature','u_ior','u_fresnel','u_fresnelIn','u_lightAng','u_ambient','u_diffuse','u_accent','u_cPhase','u_cSat','u_cFreq','u_edgeFade','u_disp','u_absorb','u_env','u_yaw','u_tint'].forEach(n=>uL[n]=gl.getUniformLocation(p,n));const a=gl.getAttribLocation(p,'a_pos');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);}
 // The covering geometry: four clip-space corners drawn as a triangle strip, so
 // the fragment shader runs once per screen pixel. Bound before build() wires the
 // a_pos attribute to it.
 const quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
 build();
 
+// Saver-only optics, pushed as uniforms each frame. All zero on the page, so
+// the shader renders as before; the saver tour (SCREENSAVER HOOK) sets them.
+const SV={disp:0,absorb:0,env:0,yaw:0,tint:[1,1,1]};
+let saverTick=null;
 // smoothstep and floored modulo, in JS, used by the shape auto-animation below.
 function sst(e0,e1,x){const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t);}
 function fmod(a,b){return a-b*Math.floor(a/b);}
@@ -176,7 +181,7 @@ const t0=performance.now()/1000;let frames=0,lastFps=performance.now(),fpsVal=0;
 // the display, compute time and the optional shape/colour animation, push every
 // uniform, draw the quad, and update the FPS readout twice a second.
 function frame(now){
-  requestAnimationFrame(frame);tickRand(now);
+  requestAnimationFrame(frame);tickRand(now);if(saverTick)saverTick(now);
   // Match the drawing buffer to the CSS size times device pixel ratio, capped at
   // 2 so retina displays do not quadruple the fragment cost.
   const dpr=Math.min(devicePixelRatio||1,2);
@@ -200,11 +205,92 @@ function frame(now){
   gl.uniform1f(uL.u_ior,P.ior);gl.uniform1f(uL.u_fresnel,P.fresnel);gl.uniform1f(uL.u_fresnelIn,P.fresnelIn);
   gl.uniform1f(uL.u_lightAng,P.lightAng);gl.uniform1f(uL.u_ambient,P.ambient);gl.uniform1f(uL.u_diffuse,P.diffuse);gl.uniform1f(uL.u_accent,P.accent);
   gl.uniform1f(uL.u_cPhase,cShift);gl.uniform1f(uL.u_cSat,P.cSat);gl.uniform1f(uL.u_cFreq,P.cFreq);gl.uniform1f(uL.u_edgeFade,P.edgeFade);
+  gl.uniform1f(uL.u_disp,SV.disp);gl.uniform1f(uL.u_absorb,SV.absorb);gl.uniform1f(uL.u_env,SV.env);gl.uniform1f(uL.u_yaw,SV.yaw);gl.uniform3f(uL.u_tint,SV.tint[0],SV.tint[1],SV.tint[2]);
   // One draw: the covering quad, which runs the fragment shader per pixel.
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   // FPS: count frames and report the rate every 500 ms.
   frames++;if(now-lastFps>=500){fpsVal=frames/((now-lastFps)/1000)|0;frames=0;lastFps=now;document.getElementById('fps').textContent=fpsVal+' fps';}
 }
+// ═══════════════ SCREENSAVER HOOK ═══════════════
+// The shell's screensaver (lib/screensaver.js) calls snSaver.enter(opts).
+// Before this hook the generic mode showed one cube at the page defaults
+// with a slow spin. Now the saver tours SPECIMENS in a seeded order: each
+// one is a glass (index n, dispersion dn, tint and absorption) with an
+// interior shape and a camera move, chosen to show one optical effect.
+// A specimen holds 5.5 to 7 s (calm 0 to 1). The next one morphs in over
+// 1.1 s: every value eases, so the cube changes in place. The camera eases
+// to the new shot, then drifts (zoom, height) to its end over the hold, and
+// the yaw turns at the specimen's rate. Once a second opts.label gets the
+// specimen, its effect and the live optics (n, dn, critical angle, R0).
+// dn is larger than in real glass (flint is about 0.02), so the colour
+// split shows at screen size; the plate says so.
+//   d: [n, dn, curvature]   look: P overrides   cam: [zoom0, zoom1, h0, h1, yaw rate]
+const SPECIMENS=[
+  {name:'Water',effect:'Low index: the interior bends only a little',d:[1.33,.004,.55],look:{fresnel:5,cSat:1,cFreq:1,accent:3},cam:[3.3,2.9,.13,.2,.10]},
+  {name:'Crown glass',effect:'Window glass: the ornament shifts as the cube turns',d:[1.52,.008,.9],look:{fresnel:4,cSat:1.1,cFreq:.9,accent:3},cam:[3.1,2.7,.2,.1,-.12]},
+  {name:'Flint prism edge',effect:'Dispersion: each colour bends by its own index',d:[1.66,.04,.7],look:{fresnel:3,cSat:.45,cFreq:.7,accent:2},cam:[2.9,2.05,.06,.1,.05]},
+  {name:'Diamond',effect:'Total internal reflection traps light past 24°',d:[2.42,.022,.8],look:{fresnel:2,fresnelIn:.8,cSat:.7,cFreq:1.3,accent:4},cam:[3,2.6,.3,.18,.14],env:1.4},
+  {name:'Cobalt glass',effect:'Beer–Lambert: long paths absorb red and green',d:[1.52,.006,.6],look:{cSat:.25,cFreq:1,accent:1.5},cam:[3.2,2.8,.16,.26,-.1],tint:[.12,.35,1],absorb:1.8},
+  {name:'Amber block',effect:'Beer–Lambert: blue is absorbed first',d:[1.54,.006,1.1],look:{cSat:.7,cFreq:1.2,accent:3},cam:[3,2.6,.22,.12,.12],tint:[1,.66,.2],absorb:.9},
+  {name:'Emerald',effect:'Green tint and a moderate index',d:[1.58,.012,.4],look:{cSat:.35,cFreq:.8,accent:2},cam:[2.9,2.5,.1,.24,-.08],tint:[.18,1,.42],absorb:1.4},
+  {name:'Ruby',effect:'High index and a deep red absorption',d:[1.77,.016,1.3],look:{cSat:.6,cFreq:1.5,accent:4},cam:[3.1,2.6,.28,.14,.1],tint:[1,.15,.25],absorb:1.1},
+  {name:'Saddle bloom',effect:'The bilinear patches open from planes to saddles',d:[1.45,.01,.03],sweep:1.45,look:{cSat:1.4,cFreq:1.1,accent:4},cam:[3.2,2.7,.18,.18,.16]},
+  {name:'Flat planes',effect:'Planes inside a dense glass: strong refraction shift',d:[1.9,.012,.02],look:{cSat:1.2,cFreq:.9,accent:3},cam:[3.4,3,.42,.36,-.06]},
+  {name:'Grazing Fresnel',effect:'At a low angle the faces turn to mirrors',d:[1.5,.008,.7],look:{fresnel:1,fresnelIn:1,cSat:1,cFreq:1,accent:3},cam:[3.2,2.9,.035,.06,.09],env:1.6},
+  {name:'Iridescent core',effect:'Close in on the ornament through the glass',d:[1.4,.014,1.2],look:{cSat:1.8,cFreq:2.2,accent:6},cam:[2.4,1.9,.2,.28,-.14]},
+];
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??.7));
+    for(const id of['ui','toggle-btn']){const e=document.getElementById(id);if(e)e.style.display='none';}
+    let seed=(opts.seed>>>0)||1;
+    const rnd=()=>{seed=(seed+0x6D2B79F5)>>>0;let t=seed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};
+    const order=SPECIMENS.map((_,i)=>i);
+    for(let k=order.length-1;k>0;k--){const m=Math.floor(rnd()*(k+1));[order[k],order[m]]=[order[m],order[k]];}
+    const hold=(5.5+1.5*calm)*1000,morph=1100;
+    P.spin=0;P.fov=.64;P.lightAng=6.28*rnd();
+    // The eased state: optics, look and camera. A shot starts from the
+    // current values (from) and eases to the specimen (to) over morph ms.
+    const KEYS=['ior','curvature','fresnel','fresnelIn','cSat','cFreq','accent','zoom','height'];
+    const state=()=>({...Object.fromEntries(KEYS.map(k=>[k,P[k]])),disp:SV.disp,absorb:SV.absorb,env:SV.env,tint:SV.tint.slice(),rate:yawRate});
+    const target=sp=>({ior:sp.d[0],curvature:sp.d[2],fresnel:5,fresnelIn:1.3,cSat:1,cFreq:1,accent:3,...sp.look,
+      zoom:sp.cam[0],height:sp.cam[2],disp:sp.d[1],absorb:sp.absorb||0,env:sp.env??1,tint:sp.tint||[1,1,1],rate:sp.cam[4]*(1.2-.5*calm)});
+    let yawRate=0,si=-1,sp=null,from=null,to=null,t0=0,last=performance.now();
+    const next=now=>{si++;sp=SPECIMENS[order[si%order.length]];from=state();to=target(sp);t0=now;plate();};
+    const lerp=(a,b,e)=>a+(b-a)*e;
+    saverTick=now=>{
+      const dt=Math.min(.1,(now-last)/1000);last=now;
+      if(!sp||now-t0>=hold)next(now);
+      const u=now-t0,e=Math.min(1,u/morph),k=e*e*(3-2*e),q=Math.min(1,u/hold);
+      for(const key of KEYS)P[key]=lerp(from[key],to[key],k);
+      SV.disp=lerp(from.disp,to.disp,k);SV.absorb=lerp(from.absorb,to.absorb,k);SV.env=lerp(from.env,to.env,k);
+      SV.tint=from.tint.map((v,i)=>lerp(v,to.tint[i],k));yawRate=lerp(from.rate,to.rate,k);
+      // after the morph: drift the camera to the shot's end, and sweep the
+      // interior shape on a specimen that has a sweep
+      const dq=q*q*(3-2*q);
+      P.zoom=lerp(P.zoom,lerp(sp.cam[0],sp.cam[1],dq),k);P.height=lerp(P.height,lerp(sp.cam[2],sp.cam[3],dq),k);
+      if(sp.sweep)P.curvature=lerp(P.curvature,lerp(sp.d[2],sp.sweep,dq),k);
+      SV.yaw+=yawRate*dt;
+    };
+    const label=typeof opts.label==='function'?opts.label:null;
+    const plate=()=>{
+      if(!label||!sp)return;
+      const n=P.ior,R0=((n-1)/(n+1))**2,tc=Math.asin(1/n)*180/Math.PI,f=(v,d=2)=>Number(v).toFixed(d);
+      const tinted=to.absorb>.05,disp=to.disp;
+      const tex=[String.raw`n_1\sin\theta_1=n_2\sin\theta_2,\qquad \theta_c=\arcsin\frac{1}{n}`,
+        String.raw`R(\theta)=R_0+(1-R_0)(1-\cos\theta)^5,\qquad R_0=\Bigl(\frac{n-1}{n+1}\Bigr)^2`];
+      const eq=['n₁ sin θ₁ = n₂ sin θ₂,  θc = arcsin(1/n)','R(θ) = R₀ + (1 − R₀)(1 − cos θ)⁵'];
+      if(tinted){tex.push(String.raw`I=I_0\,e^{-\alpha L}`);eq.push('I = I₀ e^(−αL)');}
+      else if(disp>.015){tex.push(String.raw`n(\lambda)=A+\frac{B}{\lambda^2}`);eq.push('n(λ) = A + B / λ²');}
+      label({title:'Refraction · '+sp.name,sub:sp.effect,tex,eq,
+        params:[{sym:'n',name:'index',value:f(n)},{sym:'\\Delta n',name:'channel split, R to B (shown large)',value:f(2*SV.disp,3)},
+          {sym:'\\theta_c',name:'critical angle',value:f(tc,1)+'°'},{sym:'R_0',name:'normal reflectance',value:f(100*R0,1)+'%'}]});
+    };
+    this._plate=setInterval(plate,1000);
+    return{canvas,warmupMs:1200};
+  },
+  exit(){saverTick=null;clearInterval(this._plate);},
+};
 // Start the render loop.
 requestAnimationFrame(frame);
 })();

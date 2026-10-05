@@ -126,7 +126,7 @@ window.SN_SAVER_CATALOG = {
     'sdf-lab': { tier: 4, note: 'Editor. Renders only dirty panes (frame() stella-nova/pages/sdf-lab/js/main.js:336), so idle is a frozen image;' },
     'sphere-tracing': { tier: 3, default: true, hook: true, note: 'On-demand renderer: frame() (stella-nova/pages/sphere-tracing/main.js:461) only draws when gpuDirty/ovDirty, so idle is static.' },
     'cornell': { tier: 3, default: true, hook: true, note: 'Classic script; globals SCENE (stella-nova/pages/cornell/main.js:70), CAM {az,el,R,fov,tx,ty,tz} (main.js:81) and APP (main.js:432) returning {init,setMode,setB' },
-    'glass-cube': { tier: 1, default: true, note: 'Generic is enough: one canvas #gl (stella-nova/pages/glass-cube/index.html:38);' },
+    'glass-cube': { tier: 3, default: true, hook: true, note: 'Specimen tour: 12 glasses (index, dispersion, tint, interior shape, camera move), one every 5.5 to 7 s, morphing in place.' },
     'platonic': { tier: 1, default: true, hook: true, note: 'Generic is enough: one canvas #c (stella-nova/pages/platonic-mirrors/index.html:36), resize() uses window.innerWidth/innerHeight (main.js:209) with a window res' },
     'branched-flow': { tier: 3, default: true, hook: true, note: 'Seeded look per run: palette, field shape, start time, camera;' },
     'orbs': { tier: 3, default: true, hook: true, note: 'Grid of 66 small WebGPU canvases;' },
