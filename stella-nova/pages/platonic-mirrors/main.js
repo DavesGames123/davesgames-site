@@ -34,6 +34,7 @@
 //      presets ............ "const PRESETS"    named solids
 //      hsv ................ "hsv2rgb"          colour pickers → RGB uniforms
 //      poly params ........ "computePoly"      Wythoff fold planes from U/V/W
+//      inner core ......... "coreRadius"       inner sphere capped inside the faces
 //      webgl setup ........ "======== WEBGL"   context, program, quad, uniforms
 //      resize ............. "function resize"  size buffer to DPR + res_scale
 //      ui ................. "======== UI"      sections, sliders, colour groups
@@ -158,6 +159,18 @@ function computePoly() {
   const cl = Math.sqrt(pca_[0]**2+pca_[1]**2+pca_[2]**2) || 1;
   const pca = pca_.map(x=>x/cl);
   return { nc, pab, pbc, pca, p };
+}
+
+// The radius of the inner glowing sphere that the shader gets. The solid is
+// the set where dot(x/z - p, n_k) <= 0 for the three face normals in every
+// fold image, so its inradius is z * min_k dot(p, n_k). A tetrahedron has
+// only 0.333 z, and a sphere past the faces showed as a dark faceted blob
+// cut by the glass. The core is S.inner_sphere, capped at 0.8 of the
+// inradius. The cap moves with U, V, W and zoom, so it eases with them.
+function coreRadius(poly) {
+  const { p, pab, pbc, pca } = poly;
+  const d = n => p[0] * n[0] + p[1] * n[1] + p[2] * n[2];
+  return Math.min(S.inner_sphere, 0.8 * S.poly_zoom * Math.min(d(pab), d(pbc), d(pca)));
 }
 
 // WebGL2 context, opaque and without MSAA (a single shaded quad needs neither).
@@ -782,7 +795,7 @@ function frame(now) {
   gl.uniform1f(U.u_rot_y, S.rot_y);
   gl.uniform1i(U.u_poly_type, S.poly_type);
   gl.uniform1f(U.u_poly_zoom, S.poly_zoom);
-  gl.uniform1f(U.u_inner_sphere, S.inner_sphere);
+  gl.uniform1f(U.u_inner_sphere, coreRadius(poly));
   gl.uniform1f(U.u_refr_index, S.refr_index);
   gl.uniform1i(U.u_max_bounces, S.max_bounces);
   gl.uniform1f(U.u_fov, S.fov);
