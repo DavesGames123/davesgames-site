@@ -684,7 +684,14 @@ function drawGlow(now) {
 
 // ── screensaver ────────────────────────────────────────────────────────────
 // lib/screensaver.js has the protocol. The tour draws one preset after
-// another. Each preset draws in about 70% of its dwell, rests, and fades.
+// another. Each preset draws in 65% of its hold, rests, and fades. The
+// hold is max(9 s, seconds / 5), so a 60 s dwell shows about 5 finished
+// curves (it was max(14 s, seconds / 2): 2 curves).
+//
+// The saver canvas (S.saver.comp) holds the paper, glow, ink and rig in
+// one canvas, and it is in #sheet, over the other layers, which hide.
+// Safari records the page canvas through captureStream (lib/saver-paint.js),
+// and a canvas that is not in the document gave black frames there.
 // The plate names the preset, gives the tooth counts as parameters, and the
 // panel's own TeX (TEX_IN or TEX_OUT, TEX_CLOSE, SLIP_*) with RULES. The
 // plain eq list stays as the fallback. The anchor is penAnchor().
@@ -742,15 +749,17 @@ window.snSaver = {
     const rnd = mulberry((o.seed >>> 0) || 1);
     const order = PRESETS.map((_, i) => i);
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    const hold = Math.max(14, (o.seconds || 60) / 2) * 1000 * (0.85 + 0.3 * calm);
+    const hold = Math.max(9, (o.seconds || 60) / 5) * 1000 * (0.85 + 0.3 * calm);
     const st = document.createElement('style');
     st.id = 'saverStyle';
     st.textContent = '.topbar,#panel,#dock,#gear,#caption{display:none!important}#desk{top:0!important;bottom:0!important}#sheet{cursor:none;transition:opacity 1s ease}' +
-      `#glow{mix-blend-mode:screen;filter:blur(5px);opacity:0.9}#sheet #rig{opacity:${SAVER_RIG_A}}`;
+      '#sheet>canvas:not(#saverComp){visibility:hidden}';
     document.head.append(st);
     const glow = document.createElement('canvas'); glow.id = 'glow';
     dryC.before(glow);
-    S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, hold, drawSec: hold / 1000 * 0.7, phase: 'draw', until: performance.now() + hold, key: '', comp: document.createElement('canvas'), glow, glowKey: '', glowAt: 0, paper: S.paper };
+    const comp = document.createElement('canvas'); comp.id = 'saverComp';
+    sheet.append(comp);
+    S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, hold, drawSec: hold / 1000 * 0.65, phase: 'draw', until: performance.now() + hold, key: '', comp, glow, glowKey: '', glowAt: 0, paper: S.paper };
     S.held = false; setGears(true);
     panel.classList.remove('open'); layout();
     loadPreset(order[0], S.saver.drawSec);
@@ -759,7 +768,7 @@ window.snSaver = {
   exit() {
     const st = $('saverStyle'); if (st) st.remove();
     const paper = S.saver ? S.saver.paper : S.paper;
-    if (S.saver) { S.saver.label(null); S.saver.glow.remove(); }
+    if (S.saver) { S.saver.label(null); S.saver.glow.remove(); S.saver.comp.remove(); }
     S.saver = null; sheet.style.opacity = '';
     setPaper(paper);              // draws the ink again in the pen colors
     setOpen(!PHONE_Q.matches);
