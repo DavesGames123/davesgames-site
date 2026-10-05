@@ -19,7 +19,9 @@
 // Camera: f.camera = { eye, target, fovY, shift: [sx, sy] }. shift moves the
 // projection center in NDC, so main.js can center the tunnel in the part of
 // the canvas that the panels leave clear. f.dim (0..1, default 0) darkens the
-// whole frame toward black, for the screensaver fade in main.js.
+// whole frame toward black, for the screensaver fade in main.js. f.look
+// (optional, the screensaver) sets the palette, body tint, rim, sky and
+// floor of view3d.wgsl; with no f.look the page look applies (LOOK0).
 //
 // Memory: populations 2 x 19 x n f32 (152 bytes per cell), types n u32,
 // macro texture 8 bytes per cell. The caller picks a grid that fits
@@ -119,7 +121,7 @@ export async function createEngine3D(device, code, opts) {
   const simBuf = buf(48, U.UNIFORM | U.COPY_DST, 'sim');
   const simMBuf = buf(48, U.UNIFORM | U.COPY_DST, 'simMeasure');
   const shapeBuf = buf(160, U.UNIFORM | U.COPY_DST, 'shape');
-  const camBuf = buf(224, U.UNIFORM | U.COPY_DST, 'cam');
+  const camBuf = buf(304, U.UNIFORM | U.COPY_DST, 'cam');
   const partUBuf = buf(80, U.UNIFORM | U.COPY_DST, 'partU');
   const fA = buf(19 * n * 4, U.STORAGE, 'fA');
   const fB = buf(19 * n * 4, U.STORAGE, 'fB');
@@ -207,7 +209,10 @@ export async function createEngine3D(device, code, opts) {
     a.end();
   }
 
-  const cam = new Float32Array(56);
+  const cam = new Float32Array(76);
+  // The page look (CamU look, tint, glow, skyA, skyB in view3d.wgsl). The
+  // screensaver passes its own in f.look.
+  const LOOK0 = { look: [0, 0, 1, 1], tint: [0, 0, 0, 0], glow: [0.12, 0.2, 0.3, 0.5], skyA: [0.016, 0.018, 0.026, 0], skyB: [0.04, 0.05, 0.07, 0] };
 
   const engine = {
     kind: '3d', nx, ny, nz, n, K, maxParticles, stats,
@@ -281,6 +286,8 @@ export async function createEngine3D(device, code, opts) {
       cam.set(f.slice, 44);
       cam.set([f.surface, f.refL, f.ground, f.vortScale], 48);
       cam.set([f.presScale, f.time, f.whiteStreaks ? 1 : 0, f.dim || 0], 52);
+      const lk = f.look || LOOK0;
+      cam.set(lk.look, 56); cam.set(lk.tint, 60); cam.set(lk.glow, 64); cam.set(lk.skyA, 68); cam.set(lk.skyB, 72);
       device.queue.writeBuffer(camBuf, 0, cam);
 
       const count = Math.min(f.particles | 0, maxParticles);

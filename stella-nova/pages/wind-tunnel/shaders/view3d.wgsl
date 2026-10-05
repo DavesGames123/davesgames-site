@@ -16,7 +16,7 @@
 // coordinate of world point p is p / dims.
 //
 // grep: struct CamU  struct PartU  fn advect  fn fsScene  fn march  fn shadow
-//       fn fsSlice  fn vsLine  fn speedRamp  fn divRamp  fn fieldColor  fn pref
+//       fn fsSlice  fn vsLine  fn speedRamp  fn divRamp  fn palRamp  fn fieldColor  fn pref
 
 struct CamU {
   vp: mat4x4f,
@@ -27,6 +27,13 @@ struct CamU {
   slice: vec4f,   // axis (0 x, 1 y, 2 z, 3 off), position (cells), field, alpha
   misc: vec4f,    // surface (0 material, 1 pressure), refL, ground, vorticity scale
   misc2: vec4f,   // pressure scale, time (s), streak color mode, dim (0 = none, 1 = black)
+  // The look (main.js SAVER_LOOKS). The defaults of engine3d.js frame() give
+  // the page look: palette 0, no tint, the rim, sky and floor below.
+  look: vec4f,    // palette (0 page ramps, 1..6 palRamp), body tint mix, schlieren gain, floor brightness
+  tint: vec4f,    // body tint rgb, -
+  glow: vec4f,    // rim colour rgb, rim strength
+  skyA: vec4f,    // sky colour below the horizon rgb, -
+  skyB: vec4f,    // sky colour above rgb, -
 };
 
 struct PartU {
@@ -98,9 +105,38 @@ fn streakRamp(t: f32) -> vec3f {
                vec3f(0.98, 0.97, 0.90), vec3f(1.0, 0.62, 0.22));
 }
 
+// The look palettes, t in 0..1. 1 smoke greys, 2 thermal (black, purple,
+// red, amber, white), 3 neon (violet, magenta, cyan), 4 blueprint (navy to
+// white), 5 aurora (teal, green, gold), 6 copper.
+fn palRamp(t: f32, pal: u32) -> vec3f {
+  switch (pal) {
+    case 1u: { return rampN(t, vec3f(0.02), vec3f(0.16), vec3f(0.42), vec3f(0.74), vec3f(0.97)); }
+    case 2u: { return rampN(t, vec3f(0.02, 0.01, 0.05), vec3f(0.30, 0.05, 0.42), vec3f(0.80, 0.18, 0.22),
+                            vec3f(1.0, 0.62, 0.10), vec3f(1.0, 0.97, 0.80)); }
+    case 3u: { return rampN(t, vec3f(0.04, 0.01, 0.10), vec3f(0.35, 0.05, 0.75), vec3f(0.95, 0.10, 0.70),
+                            vec3f(0.15, 0.85, 1.0), vec3f(0.90, 1.0, 1.0)); }
+    case 4u: { return rampN(t, vec3f(0.02, 0.06, 0.18), vec3f(0.08, 0.22, 0.52), vec3f(0.30, 0.55, 0.90),
+                            vec3f(0.72, 0.86, 1.0), vec3f(1.0)); }
+    case 5u: { return rampN(t, vec3f(0.01, 0.05, 0.07), vec3f(0.03, 0.30, 0.36), vec3f(0.12, 0.70, 0.48),
+                            vec3f(0.70, 0.90, 0.35), vec3f(1.0, 0.86, 0.40)); }
+    default: { return rampN(t, vec3f(0.04, 0.02, 0.02), vec3f(0.35, 0.12, 0.06), vec3f(0.78, 0.40, 0.18),
+                            vec3f(0.96, 0.72, 0.45), vec3f(1.0, 0.95, 0.85)); }
+  }
+}
+
 fn fieldColor(p: vec3f, field: u32) -> vec3f {
   let m = macroAt(p);
   let U = CAM.dims.w;
+  let pal = u32(CAM.look.x + 0.5);
+  if (field == 5u) {
+    // Schlieren: the size of the density gradient, in the look palette.
+    let h = 1.0;
+    let g = vec3f(macroAt(p + vec3f(h, 0.0, 0.0)).w - macroAt(p - vec3f(h, 0.0, 0.0)).w,
+                  macroAt(p + vec3f(0.0, h, 0.0)).w - macroAt(p - vec3f(0.0, h, 0.0)).w,
+                  macroAt(p + vec3f(0.0, 0.0, h)).w - macroAt(p - vec3f(0.0, 0.0, h)).w) * 0.5 / h;
+    let s = length(g) * CAM.misc.y / (U * U) * CAM.look.z;
+    return palRamp(sqrt(clamp(s, 0.0, 1.0)), max(pal, 1u));
+  }
   if (field == 1u) {
     let h = 1.0;
     let dx = (macroAt(p + vec3f(h, 0.0, 0.0)) - macroAt(p - vec3f(h, 0.0, 0.0))).xyz;
@@ -108,12 +144,16 @@ fn fieldColor(p: vec3f, field: u32) -> vec3f {
     let dz = (macroAt(p + vec3f(0.0, 0.0, h)) - macroAt(p - vec3f(0.0, 0.0, h))).xyz;
     let w = vec3f(dy.z - dz.y, dz.x - dx.z, dx.y - dy.x) * 0.5 / h;
     let wn = length(w) * CAM.misc.y / U * CAM.misc.w;
+    if (pal > 0u) { return palRamp(wn, pal); }
     return rampN(wn, vec3f(0.02, 0.03, 0.07), vec3f(0.20, 0.10, 0.45), vec3f(0.75, 0.22, 0.42),
                  vec3f(1.0, 0.62, 0.30), vec3f(1.0, 0.95, 0.75));
   }
   if (field == 2u) {
-    return divRamp((m.w - prefR[0]) / 3.0 / (0.5 * U * U) * CAM.misc2.x);
+    let cp = (m.w - prefR[0]) / 3.0 / (0.5 * U * U) * CAM.misc2.x;
+    if (pal > 0u) { return palRamp(cp * 0.5 + 0.5, pal); }
+    return divRamp(cp);
   }
+  if (pal > 0u) { return palRamp(length(m.xyz) / U / 1.5, pal); }
   return speedRamp(length(m.xyz) / U);
 }
 
@@ -291,7 +331,7 @@ fn fsScene(i: SOut) -> FOut {
   let L = normalize(vec3f(-0.45, 0.85, 0.35));
 
   var o: FOut;
-  let sky = mix(vec3f(0.016, 0.018, 0.026), vec3f(0.04, 0.05, 0.07), clamp(rd.y * 0.5 + 0.5, 0.0, 1.0));
+  let sky = mix(CAM.skyA.xyz, CAM.skyB.xyz, clamp(rd.y * 0.5 + 0.5, 0.0, 1.0));
   o.col = vec4f(sky, 1.0);
   o.depth = 1.0;
 
@@ -309,7 +349,7 @@ fn fsScene(i: SOut) -> FOut {
     let p = ro + rd * hit.x;
     let n = normalAt(p);
     let q = p - SH.origin.xyz - vec3f(hit.z * SH.spacing, 0.0, 0.0);
-    var base = matColor(hit.y, toLocal(q));
+    var base = mix(matColor(hit.y, toLocal(q)), CAM.tint.xyz, CAM.look.y);
     if (CAM.misc.x > 0.5) {
       let m = macroAt(p + n * 1.5);
       base = divRamp((m.w - prefR[0]) / 3.0 / (0.5 * CAM.dims.w * CAM.dims.w) * CAM.misc2.x);
@@ -320,7 +360,7 @@ fn fsScene(i: SOut) -> FOut {
     let shiny = select(0.15, 0.6, (hit.y > 1.5 && hit.y < 2.5) || (hit.y > 4.5 && hit.y < 6.5));
     let spec = pow(max(dot(n, hv), 0.0), 48.0) * shiny;
     let rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
-    var c = base * (0.18 + 0.85 * dif + 0.22 * fill) + vec3f(spec) + vec3f(0.12, 0.2, 0.3) * rim * 0.5;
+    var c = base * (0.18 + 0.85 * dif + 0.22 * fill) + vec3f(spec) + CAM.glow.xyz * rim * CAM.glow.w;
     o.col = vec4f(c * (1.0 - CAM.misc2.w), 1.0);
     o.depth = depthOf(p);
     return o;
@@ -343,6 +383,7 @@ fn fsScene(i: SOut) -> FOut {
       }
       c *= 0.35 + 0.65 * shadow(p + vec3f(0.0, 0.2, 0.0), L);
     }
+    c *= CAM.look.w;
     o.col = vec4f(mix(sky, c, clamp(fade, 0.0, 1.0)), 1.0);
     o.depth = depthOf(p);
   }
@@ -430,6 +471,7 @@ fn vsLine(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> L
   let ageF = clamp(pa.w / 4.0, 0.0, 1.0) * clamp((life - pa.w) / 12.0, 0.0, 1.0);
   let sp = mix(a.w, b.w, k.x) / CAM.dims.w;
   var col = streakRamp(sp);
+  if (CAM.look.x > 0.5) { col = palRamp(0.25 + 0.6 * clamp(sp / 1.6, 0.0, 1.0) + 0.15 * rand01(p), u32(CAM.look.x + 0.5)); }
   if (CAM.misc2.z > 0.5) { col = mix(vec3f(0.80, 0.88, 0.95), vec3f(1.0, 0.97, 0.92), clamp(sp, 0.0, 1.0)); }
   o.col = vec4f(col, tailF * ageF * CAM.vpSize.w);
   o.across = k.y * w;

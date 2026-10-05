@@ -50,6 +50,7 @@
 import { SHAPES, COMMON, FLUIDS, defaults, commonDefaults, packShape } from './shapes.js';
 import { createEngine2D } from './engine2d.js';
 import { createEngine3D } from './engine3d.js';
+import { plateBand } from '../../lib/saver-clear.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const COARSE = window.matchMedia('(pointer:coarse)').matches;
@@ -328,13 +329,16 @@ function objectBox() {
 // 3D: orbit camera around the object, shifted into the clear part.
 function camera3d() {
   const o = occlusion(canvas.clientWidth, canvas.clientHeight);
+  // Saver: the plate's text bands count as 60% overlays, so the object sits
+  // mostly in the clear band and the streaks may pass under the text.
+  if (SAVER && SAVER.band) { o.t = Math.max(o.t, 0.6 * SAVER.band.t); o.b = Math.max(o.b, 0.6 * SAVER.band.b); }
   for (const k in occ) occ[k] += (o[k] - occ[k]) * 0.25;
   const cwCss = canvas.clientWidth, chCss = canvas.clientHeight;
   const clearW = Math.max(40, cwCss - occ.l - occ.r), clearH = Math.max(40, chCss - occ.t - occ.b);
   const sx = ((occ.l + clearW / 2) - cwCss / 2) / (cwCss / 2);
   const sy = -((occ.t + clearH / 2) - chCss / 2) / (chCss / 2);
   const b = objectBox();
-  const target = [b.cx + b.len * 0.35, Math.max(b.cy, 4) + orbit.panY, engine.nz / 2];
+  const target = [b.cx + b.len * (0.35 + (SAVER ? SAVER.tx : 0)), Math.max(b.cy, 4) + orbit.panY, engine.nz / 2];
   // Fit the footprint of the object into the clear part. Seen from the
   // camera, the horizontal half-extent at distance d is d tan(fov/2) W/H of
   // the canvas, and the clear part is a fraction of it. yaw 0 looks from the
@@ -391,15 +395,21 @@ function frame(t) {
     // object, and the near side stays in view.
     const zw = Math.min(nz / 2 - 2, b.w * 0.9 + 1.5);
     const sl = slicePosCells();
+    // The saver look (SAVER_LOOKS) sets the slice field and alpha, the
+    // streak alpha and colour mode, and the palette, tint, rim and sky.
+    const L = SAVER && SAVER.look;
     engine.frame(target, {
       steps: n, canvas: [W, H], camera: cam,
-      slice: [G.slice, sl, G.field === 3 ? 0 : G.field, G.field === 4 ? 0 : 0.82],
+      slice: L ? [G.slice, sl, L.field, L.alpha] : [G.slice, sl, G.field === 3 ? 0 : G.field, G.field === 4 ? 0 : 0.82],
       surface: G.surface, refL: pk.refCells, ground: { none: 0, fixed: 1, belt: 2 }[G.ground],
       vortScale: 0.1 * G.contrast, presScale: 0.6 * G.contrast,
-      lineW: Math.max(1.3, 1.2 * dpr), lineAlpha: G.slice < 3 && G.field !== 4 ? 0.4 : 0.62, whiteStreaks: G.slice < 3 && G.field !== 4,
+      lineW: Math.max(1.3, (L ? L.lineW : 1.2) * dpr),
+      lineAlpha: L ? L.lineA : G.slice < 3 && G.field !== 4 ? 0.4 : 0.62,
+      whiteStreaks: L ? !!L.white : G.slice < 3 && G.field !== 4,
       particles: count, mode, life,
       rakeA: [2, 8, Math.max(y0, b.cy - b.h * 0.9), y1], rakeB: [nz / 2 - zw, nz / 2 + zw],
       time: t / 1000, dim: SAVER ? 1 - SAVER.k : 0,
+      look: L ? L.gpu : undefined,
     });
   }
 
@@ -838,20 +848,80 @@ function bindGestures() {
 
 // ------------------------------------------------------------- screensaver
 // Shell screensaver hook (lib/screensaver.js). enter() hides every overlay
-// with display:none, so occlusion() gives the camera the full canvas, and
-// keeps the 3D mode with rake streaks. The autopilot plays a seeded tour of
-// SAVER_TOUR, about three objects per dwell. setShape() restarts the flow,
-// so each change happens at the bottom of a fade to black (f.dim in the
-// engine). The camera orbits slowly and the pitch eases between 0.2 and 0.4.
-// G.rate (1 - 0.5 calm) slows the flow. SAVER is null outside the saver.
+// with display:none and keeps the 3D mode. Each scene is a seeded draw of:
+//   a body ....... SAVER_BODIES: every object and preset, airfoils and the
+//                  plate at a random angle of attack, tandem cylinders and
+//                  spheres, cars and boxes at a random yaw
+//   a speed ...... 30 to 120 km/h in air
+//   a look ....... SAVER_LOOKS: the slice field (speed, vorticity, pressure
+//                  or schlieren, |grad rho|) and plane, the streak mode,
+//                  colour and alpha, the palette (view3d.wgsl palRamp), the
+//                  body tint, rim glow, sky and floor
+//   a shot ....... SAVER_SHOTS: side orbit, high three-quarter, wake
+//                  close-up, push-in, pull-back, low grazing pass
+// A scene runs 8 to 12 s. setShape() restarts the flow, so the scene
+// starts black (f.dim = 1) and runs WARM s at the full step rate before it
+// fades in, and the start transient does not show. No look repeats on the
+// next scene, and no body key repeats either.
 //
-// The label plate (opts.label) names the object and gives the lattice
-// equations that lbm3d.wgsl computes: pull streaming with BGK collision,
-// the second-order equilibrium, the Smagorinsky relaxation time and the
-// momentum-exchange force. The params give the live Re of applyFlow() and
-// the smoothed C_D, C_L of readForces(); bodyAnchor() gives the object. tick() calls saverPlate()
-// every 1 s; a new object gives a new title, so the plate fades with it.
-const SAVER_TOUR = [['cow', 'Spherical cow'], ['car', 'Fastback'], ['airfoil', 'NACA 4412'], ['truck', 'Aero kit'], ['cow', 'Holstein'], ['sphere', 'Ball'], ['car', 'SUV']];
+// Framing: the plate's text bands (lib/saver-clear.js plateBand, read 4
+// times a second) count as 60% overlays in camera3d, so the object sits
+// mostly in the clear band. SAVER.tx moves the camera target downstream
+// (in body lengths) for the wake shots.
+//
+// The label plate (opts.label) names the body, the angle and the look, and
+// gives the lattice equations that lbm3d.wgsl computes: pull streaming with
+// BGK collision, the second-order equilibrium, the Smagorinsky relaxation
+// time and the momentum-exchange force. The params give the live Re of
+// applyFlow() and the smoothed C_D, C_L of readForces(); bodyAnchor() gives
+// the object. tick() calls saverPlate() every 1 s. SAVER is null outside
+// the saver, and the page look and framing do not change.
+const SAVER_BODIES = [
+  ['cow', 'Holstein'], ['cow', 'Grazing'], ['cow', 'Bull'], ['cow', 'Calf'], ['cow', 'Spherical cow'],
+  ['car', 'Sedan'], ['car', 'Fastback'], ['car', 'Hatchback'], ['car', 'SUV'], ['car', 'Van'],
+  ['truck', 'Bare'], ['truck', 'Deflector'], ['truck', 'Aero kit'],
+  ['airfoil', 'NACA 0012', { aoa: [0, 16] }], ['airfoil', 'NACA 2412', { aoa: [2, 14] }], ['airfoil', 'NACA 4412', { aoa: [0, 12] }],
+  ['airfoil', 'NACA 6409', { aoa: [0, 10] }], ['airfoil', 'NACA 0024', { aoa: [0, 20] }],
+  ['cylinder', 'Spanning'], ['cylinder', 'Stub'], ['cylinder', 'Disc'], ['cylinder', 'Stub', { copies: [2, 3] }],
+  ['sphere', 'Ball'], ['sphere', 'Ball', { copies: [2, 3] }],
+  ['box', 'Cube', { yaw: [0, 45] }], ['box', 'Brick'], ['box', 'Rounded', { yaw: [0, 30] }],
+  ['plate', 'Flat', { aoa: [12, 40] }], ['plate', 'Square plate', { aoa: [20, 30] }],
+];
+// gpu: { look: [palette, tint mix, schlieren gain, floor], tint, glow, skyA, skyB } (engine3d LOOK0).
+// field: 0 speed, 1 vorticity, 2 pressure, 5 schlieren; slice: 3 off, 2 the
+// centre plane z, 1 a level plane at mid height of the body.
+const SAVER_LOOKS = [
+  { name: 'smoke tunnel', line: 'White smoke streaklines from a rake, on black.', slice: 3, field: 0, alpha: 0, streaks: 'rake', density: 0.42, lineW: 1.0, lineA: 0.7, white: true,
+    gpu: { look: [0, 0.65, 1, 0.55], tint: [0.5, 0.5, 0.52, 0], glow: [0.6, 0.62, 0.66, 0.35], skyA: [0.005, 0.005, 0.006, 0], skyB: [0.02, 0.02, 0.022, 0] } },
+  { name: 'vorticity', line: 'Vorticity |ω| on the centre plane; streaks over it.', slice: 2, field: 1, alpha: 0.9, streaks: 'rake', density: 0.12, lineW: 0.9, lineA: 0.22, white: false,
+    gpu: { look: [0, 0, 1, 1], tint: [0, 0, 0, 0], glow: [0.12, 0.2, 0.3, 0.5], skyA: [0.016, 0.018, 0.026, 0], skyB: [0.04, 0.05, 0.07, 0] } },
+  { name: 'schlieren', line: 'Schlieren: the density gradient |∇ρ| on the centre plane, in grey.', slice: 2, field: 5, alpha: 0.92, streaks: 'off', density: 0, lineW: 1, lineA: 0, white: false,
+    gpu: { look: [1, 0.6, 0.25, 0.9], tint: [0.7, 0.7, 0.72, 0], glow: [0.9, 0.9, 0.9, 0.3], skyA: [0.10, 0.10, 0.10, 0], skyB: [0.16, 0.16, 0.17, 0] } },
+  { name: 'thermal camera', line: 'Speed on the centre plane in a thermal palette.', slice: 2, field: 0, alpha: 0.72, streaks: 'rake', density: 0.15, lineW: 1.0, lineA: 0.3, white: false,
+    gpu: { look: [2, 0.55, 1, 0.5], tint: [0.95, 0.55, 0.15, 0], glow: [1.0, 0.45, 0.15, 0.6], skyA: [0.01, 0.0, 0.02, 0], skyB: [0.05, 0.01, 0.06, 0] } },
+  { name: 'neon tracers', line: 'Tracers seeded through the whole tunnel, in neon.', slice: 3, field: 0, alpha: 0, streaks: 'field', density: 0.22, lineW: 1.0, lineA: 0.55, white: false,
+    gpu: { look: [3, 0.7, 1, 0.45], tint: [0.28, 0.14, 0.38, 0], glow: [0.9, 0.2, 1.0, 1.2], skyA: [0.01, 0.0, 0.03, 0], skyB: [0.05, 0.01, 0.10, 0] } },
+  { name: 'surface pressure', line: 'Pressure coefficient Cₚ painted on the body; rake streaks.', slice: 3, field: 0, alpha: 0, streaks: 'rake', density: 0.3, lineW: 1.2, lineA: 0.6, white: false, surface: 1,
+    gpu: { look: [0, 0, 1, 1], tint: [0, 0, 0, 0], glow: [0.12, 0.2, 0.3, 0.5], skyA: [0.016, 0.018, 0.026, 0], skyB: [0.04, 0.05, 0.07, 0] } },
+  { name: 'blueprint', line: 'Pressure on a level plane, in blueprint blues.', slice: 1, field: 2, alpha: 0.8, streaks: 'rake', density: 0.25, lineW: 1.0, lineA: 0.55, white: false,
+    gpu: { look: [4, 0.7, 1, 0.7], tint: [0.9, 0.94, 1.0, 0], glow: [0.6, 0.8, 1.0, 0.6], skyA: [0.01, 0.03, 0.09, 0], skyB: [0.03, 0.08, 0.2, 0] } },
+  { name: 'aurora', line: 'Speed on the centre plane in an aurora palette.', slice: 2, field: 0, alpha: 0.75, streaks: 'rake', density: 0.25, lineW: 1.0, lineA: 0.5, white: false,
+    gpu: { look: [5, 0.4, 1, 0.6], tint: [0.2, 0.75, 0.6, 0], glow: [0.3, 1.0, 0.7, 0.7], skyA: [0.0, 0.015, 0.02, 0], skyB: [0.01, 0.05, 0.06, 0] } },
+  { name: 'copper wake', line: 'Vorticity on the centre plane in copper.', slice: 2, field: 1, alpha: 0.85, streaks: 'rake', density: 0.15, lineW: 1.0, lineA: 0.3, white: false,
+    gpu: { look: [6, 0.5, 1, 0.6], tint: [0.75, 0.45, 0.25, 0], glow: [1.0, 0.7, 0.4, 0.7], skyA: [0.02, 0.01, 0.005, 0], skyB: [0.06, 0.035, 0.02, 0] } },
+];
+// Shots: yaw from the side (0 looks along -z at the side), pitch, the
+// distance factor at the start and the end, the downstream target offset
+// tx (body lengths) and the orbit rate (rad/s). slice looks keep |yaw| low
+// so the plane faces the camera.
+const SAVER_SHOTS = [
+  { name: 'side orbit', yaw: [-0.5, 0.5], pitch: [0.15, 0.3], d0: [0.95, 1.1], d1: [0.95, 1.1], tx: [0, 0.1], spin: [0.03, 0.06] },
+  { name: 'high three-quarter', yaw: [-0.9, 0.9], pitch: [0.5, 0.75], d0: [1.0, 1.15], d1: [0.95, 1.1], tx: [0, 0.2], spin: [0.02, 0.05] },
+  { name: 'wake close-up', yaw: [-0.4, 0.4], pitch: [0.12, 0.3], d0: [0.78, 0.86], d1: [0.72, 0.8], tx: [0.4, 0.6], spin: [0.01, 0.03] },
+  { name: 'push-in', yaw: [-0.6, 0.6], pitch: [0.2, 0.4], d0: [1.25, 1.35], d1: [0.7, 0.8], tx: [0, 0.15], spin: [0.01, 0.03] },
+  { name: 'pull-back reveal', yaw: [-0.6, 0.6], pitch: [0.25, 0.45], d0: [0.72, 0.8], d1: [1.15, 1.3], tx: [0.1, 0.25], spin: [0.02, 0.04] },
+  { name: 'low grazing pass', yaw: [-1.1, 1.1], pitch: [0.04, 0.1], d0: [0.85, 0.95], d1: [0.8, 0.9], tx: [0, 0.3], spin: [0.04, 0.07] },
+];
 let SAVER = null;
 function saverPlate() {
   if (!SAVER || !SAVER.label || !engine || !pk || !flowInfo) return;
@@ -868,10 +938,11 @@ function saverPlate() {
     { sym: 'C_L', name: 'lift coefficient', value: ok ? clS.toFixed(2) : 'settling', cls: 'm6' },
     { sym: '\\tau', name: 'relaxation time', value: tau.toFixed(4) },
   ];
-  const lines = [`L = ${pk.realLen.toFixed(2)} m, grid ${engine.nx} × ${engine.ny} × ${engine.nz}.` + (ok ? ` Drag ${newtons(dragN, false)}.` : '')];
+  const lines = [SAVER.look.line + ` Shot: ${SAVER.shot.name}.`,
+    `L = ${pk.realLen.toFixed(2)} m, grid ${engine.nx} × ${engine.ny} × ${engine.nz}.` + (ok ? ` Drag ${newtons(dragN, false)}.` : '')];
   try {
     SAVER.label({
-      title: `${s.label} · ${SAVER.preset}`,
+      title: `${s.label} · ${SAVER.preset} · ${SAVER.look.name}`,
       sub: 'Lattice Boltzmann, D3Q19 BGK with a Smagorinsky eddy model',
       params,
       lines,
@@ -918,44 +989,65 @@ function bodyAnchor() {
 window.snSaver = {
   enter(opts) {
     const calm = Math.max(0, Math.min(1, +opts.calm || 0));
-    const secs = Math.max(20, +opts.seconds || 60), fade = 2;
-    const show = Math.max(6, secs / 3 - 2 * fade);
+    const WARM = 1.8, FIN = 1.0, FOUT = 0.8;
     let a = (opts.seed >>> 0) || 1;
     const rng = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const pick = (arr, not) => { let x; do { x = arr[Math.floor(rng() * arr.length)]; } while (arr.length > 1 && not && not(x)); return x; };
+    const span = (r) => r[0] + (r[1] - r[0]) * rng();
     const st = document.createElement('style');
     st.textContent = 'html.saver #hint,html.saver #gear,html.saver #card,html.saver #legend,html.saver #panel,html.saver #status,html.saver #dock,html.saver .topbar{display:none!important}html.saver #gl{cursor:none}';
     document.head.appendChild(st);
     document.documentElement.classList.add('saver');
     if (G.mode !== '3d') setMode('3d');
-    G.streaks = 'rake'; G.field = 0; G.slice = 3; G.paused = false; G.rate = 1 - 0.5 * calm;
-    let i = Math.floor(rng() * SAVER_TOUR.length);
-    const yaw0 = rng() * 6.283;
-    let presetNow = '';
+    G.paused = false; G.fluid = 'air';
+    const rate = 1 - 0.5 * calm;
+    let body = null, presetNow = '', shot = SAVER_SHOTS[0], look = SAVER_LOOKS[0], yaw0 = 0, pitch0 = 0.3, d0 = 1, d1 = 1, spin = 0.04, show = 10;
+    // One scene: a body, a speed, a look and a shot (see the block comment).
     const next = () => {
-      const [key, preset] = SAVER_TOUR[i];
-      i = (i + 1) % SAVER_TOUR.length;
+      body = pick(SAVER_BODIES, (b) => body && b[0] === body[0]);
+      look = pick(SAVER_LOOKS, (l) => l === look);
+      shot = pick(SAVER_SHOTS, (h) => h === shot || (look.slice < 3 && Math.abs(h.yaw[1]) > 0.7));
+      const [key, preset, opt = {}] = body;
       G.params[key] = Object.assign(defaults(key), SHAPES[key].presets[preset]);
-      presetNow = preset;
+      const c = G.common[key] = commonDefaults(key);
+      let tag = preset;
+      if (opt.aoa) { c.pitch = Math.round(span(opt.aoa)); tag += ` at ${c.pitch}°`; }
+      if (opt.yaw) { c.yaw = Math.round(span(opt.yaw)); if (c.yaw) tag += `, yaw ${c.yaw}°`; }
+      if (opt.copies) { c.copies = Math.round(span(opt.copies)); c.spacing = +(1.8 + rng()).toFixed(2); tag += ` × ${c.copies}`; }
+      presetNow = tag;
+      G.speedT = speedT(30 + 90 * rng());
+      G.streaks = look.streaks; G.density = look.density; G.surface = look.surface || 0;
+      G.slice = look.slice;
+      if (look.slice === 2) G.slicePos = 0.5;
       setShape(key);
+      if (look.slice === 1 && engine) { const b = objectBox(); G.slicePos = Math.min(0.95, Math.max(0.05, (b.cy - 1) / (engine.ny - 2))); }
+      yaw0 = span(shot.yaw); pitch0 = span(shot.pitch); d0 = span(shot.d0); d1 = span(shot.d1);
+      SAVER.tx = span(shot.tx); spin = span(shot.spin) * (rng() < 0.5 ? -1 : 1) * (1 - 0.5 * calm);
+      show = 8 + 4 * rng();
+      SAVER.look = look; SAVER.shot = shot;
     };
-    next();
-    let ph = 'in', pt = 0, tt = 0;
-    let lt = 1;
+    let ph = 'warm', pt = 0, lt = 1;
     SAVER = {
-      k: 0,
+      k: 0, tx: 0, band: null, bandT: 1, look, shot,
       get preset() { return presetNow; },
       label: opts.labels === false || typeof opts.label !== 'function' ? null : opts.label,
       tick(dt) {
-        pt += dt; tt += dt; lt += dt;
-        if (lt >= 1) { lt = 0; saverPlate(); }
-        if (ph === 'in') { SAVER.k = Math.min(1, pt / fade); if (SAVER.k >= 1) { ph = 'show'; pt = 0; } }
-        else if (ph === 'show') { if (pt >= show) { ph = 'out'; pt = 0; } }
-        else { SAVER.k = Math.max(0, 1 - pt / fade); if (SAVER.k <= 0) { next(); ph = 'in'; pt = 0; lt = 1; } }
-        orbit.yaw = yaw0 + tt * 0.05 * (1 - 0.6 * calm);
-        orbit.pitch = 0.3 - 0.1 * Math.cos(tt * 0.04);
-        orbit.dist = 1; orbit.panY = 0;
+        pt += dt; lt += dt; SAVER.bandT += dt;
+        if (SAVER.bandT > 0.25) { SAVER.bandT = 0; SAVER.band = plateBand(canvas.clientHeight); }
+        if (ph === 'warm') { SAVER.k = 0; G.rate = 1; if (pt >= WARM) { ph = 'in'; pt = 0; G.rate = rate; lt = 1; } }
+        else if (ph === 'in') { SAVER.k = Math.min(1, pt / FIN); if (SAVER.k >= 1) { ph = 'show'; } }
+        else if (ph === 'show') { if (pt >= show - FOUT) { ph = 'out'; pt = 0; } }
+        else { SAVER.k = Math.max(0, 1 - pt / FOUT); if (SAVER.k <= 0) { next(); ph = 'warm'; pt = 0; } }
+        if (ph !== 'warm' && lt >= 1) { lt = 0; saverPlate(); }
+        // The scene clock runs from the end of the warmup to the fade out.
+        const u = ph === 'warm' ? 0 : Math.min(1, (ph === 'out' ? show : pt) / show);
+        const e = u * u * (3 - 2 * u);
+        orbit.yaw = yaw0 + spin * u * show;
+        orbit.pitch = pitch0;
+        orbit.dist = d0 + (d1 - d0) * e; orbit.panY = 0;
       },
     };
+    next();
     return { canvas, warmupMs: 3000 };
   },
 };
