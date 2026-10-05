@@ -56,6 +56,7 @@
 //      main loop ............ "main loop"          view dispatch + error trap
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
+//      saver collapse ....... "function vxSaverTick" time warp, zoom, flash, VX_SHAPES
 //      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
 //      saver plate .......... "function svPlate"   opts.label: title, live params, TeX, anchor
 // ============================================================================
@@ -610,17 +611,17 @@ function vxInit(){
 // the axis (volume-preserving), spin it up as 1/radius², colour by angular speed,
 // and extend its trail. S is the per-parcel axial stretch factor.
 function vxStep(dt){
-  VX.u=Math.min(0.985,VX.u+dt); const ell=Math.pow(1-VX.u,VX.gam); VX.ell=ell;
-  const Smax=Math.min(1/(ell*ell),40); const N=VX.N; let maxw=0, minw=1e30; if(!VX.w){ VX.w=new Float32Array(N); VX.S=new Float32Array(N).fill(1); VX.str=new Float32Array(N); }
+  VX.u=Math.min(VX.uMax||0.985,VX.u+dt); const ell=Math.pow(1-VX.u,VX.gam); VX.ell=ell;
+  const Smax=Math.min(1/(ell*ell),VX.sCap||40); const N=VX.N; let maxw=0, minw=1e30; if(!VX.w){ VX.w=new Float32Array(N); VX.S=new Float32Array(N).fill(1); VX.str=new Float32Array(N); }
   for(let i=0;i<N;i++){
-    const r0=VX.rho0[i]; const S=1+(Smax-1)*Math.exp(-r0*r0/3.2); const rho=r0/Math.sqrt(S); const z=VX.z0[i]*S; VX.str[i]=dt>0?Math.log(S/VX.S[i])/dt:0; VX.S[i]=S;
+    const r0=VX.rho0[i]; const S=1+(Smax-1)*Math.exp(-r0*r0/3.2); const rho=r0/Math.sqrt(S); const z=VX.zMap?VX.zMap(VX.z0[i]*S):VX.z0[i]*S; VX.str[i]=dt>0?Math.log(S/VX.S[i])/dt:0; VX.S[i]=S;
     const w=VX.circ/(rho*rho+0.09*ell*ell+0.0015); const dth=Math.min(w*dt*3.0,0.6); VX.th[i]+=dth; VX.w[i]=w; if(w>maxw)maxw=w; if(w<minw)minw=w;
     const th=VX.th[i]; VX.pos[3*i]=rho*Math.cos(th); VX.pos[3*i+1]=z; VX.pos[3*i+2]=rho*Math.sin(th);
   }
   // colour by angular speed on a log scale between this frame's own min and max, so the core is the only bright thing
-  const lr=Math.log(maxw/minw)||1; for(let i=0;i<N;i++){ const u=Math.pow(Math.log(VX.w[i]/minw)/lr,2.4); const c=heatRGB(u); VX.col[3*i]=c[0]/255; VX.col[3*i+1]=c[1]/255; VX.col[3*i+2]=c[2]/255; }
+  const lr=Math.log(maxw/minw)||1; for(let i=0;i<N;i++){ const u=Math.pow(Math.log(VX.w[i]/minw)/lr,VX.colPow||2.4); const c=heatRGB(u); VX.col[3*i]=c[0]/255; VX.col[3*i+1]=c[1]/255; VX.col[3*i+2]=c[2]/255; }
   VX.maxw=maxw; VX.points.geometry.attributes.position.needsUpdate=true; VX.points.geometry.attributes.color.needsUpdate=true;
-  for(let k=0;k<VX.trailsN;k++){ const i=VX.trailIdx[k]; const h=VX.trailHist[k]; const lp=h[h.length-1]; if(!lp||Math.hypot(VX.pos[3*i]-lp[0],VX.pos[3*i+1]-lp[1],VX.pos[3*i+2]-lp[2])>0.02) h.push([VX.pos[3*i],VX.pos[3*i+1],VX.pos[3*i+2],VX.str[i]]); trimTrail(h,VX.trailLen); }
+  for(let k=0;k<VX.trailsN;k++){ const i=VX.trailIdx[k]; const h=VX.trailHist[k]; const lp=h[h.length-1]; if(!lp||Math.hypot(VX.pos[3*i]-lp[0],VX.pos[3*i+1]-lp[1],VX.pos[3*i+2]-lp[2])>0.02*(VX.trailK||1)) h.push([VX.pos[3*i],VX.pos[3*i+1],VX.pos[3*i+2],VX.str[i]]); trimTrail(h,VX.trailLen); }
 }
 // Seek the collapse to progress u: reset angles, warm the trails with 500 steps
 // at u held near zero so tracers reach full length, then integrate up to u.
@@ -628,7 +629,8 @@ function vxSeek(u){ VX.u=0; for(let i=0;i<VX.N;i++) VX.th[i]=VX.th0[i]; VX.trail
 // Render the vortex view: advance if playing, rebuild the tracer geometry, render
 // the WebGL scene into the scissored stage rect, and print the scaling readout.
 function drawVortex(dtFrame){ ctx.clearRect(0,0,stage.clientWidth,stage.clientHeight);
-  if(VX.playing){ vxStep(dtFrame*VX.spd*0.12); if(VX.u>=0.985){ VX.playing=false; $('x-play').textContent='Play'; } $('r-xt').value=VX.u; $('v-xt').textContent=VX.u.toFixed(3); }
+  if(VX.sv) vxSaverTick(dtFrame);
+  else if(VX.playing){ vxStep(dtFrame*VX.spd*0.12); if(VX.u>=0.985){ VX.playing=false; $('x-play').textContent='Play'; } $('r-xt').value=VX.u; $('v-xt').textContent=VX.u.toFixed(3); }
   VX.bundle.set(VX.trailHist,TOG.trails);
   const rr=VX.renderer; rr.setScissorTest(false); rr.clear(); const Hv=stageH(); if(!rr.xr.isPresenting){ rr.setViewport(0,SCRUB_H,stage.clientWidth,Hv); rr.setScissor(0,SCRUB_H,stage.clientWidth,Hv); rr.setScissorTest(true); } VX.camera.aspect=stage.clientWidth/Hv; VX.camera.updateProjectionMatrix();
   VX.controls.autoRotate=TOG.spin; VX.controls.update(); rr.render(VX.scene,VX.camera); rr.setScissorTest(false);
@@ -1022,20 +1024,103 @@ if (FIXED === 'vortex' || FIXED === 'flow3d') import('../../lib/xr-view.js').the
 // Shell screensaver hook (lib/screensaver.js), on the page pinned to vortex
 // only. enter() hides the topbar, both panels, the scrubber and the labels,
 // makes #stage fill the window, and sets SCRUB.vortex to null so stageH()
-// gives the 3D viewport the full height. The clear colour becomes opaque for
-// the recording. The collapse runs from u = 0 up to a cap (0.95 at calm 0,
-// 0.85 at calm 1) over about one dwell, then holds while the camera orbits,
-// so the fast-spin end and the reset cut never show.
+// gives the 3D viewport the full height. The clear colour becomes opaque.
+//
+// The saver runs its own collapse loop (VX.sv, vxSaverTick), not the page
+// timeline. The old hook ran u linearly at about 0.015 per second, so a
+// 60 s dwell ended near l = 0.4 and never reached the collapse. Now:
+//   time warp   tau = -ln(T* - t) runs linearly in clock time, from tau 0.25
+//               to the climax at l = 0.035, in about 9 s. Each second the
+//               core shrinks by the same factor (a self-similar clock).
+//   zoom        the camera distance goes as l, so the core keeps its screen
+//               size while it collapses. The model stretches the axis as
+//               z0 S (S = l^-2), which would leave the frame at once, so the
+//               saver draws z on a log scale (VX.zMap), scaled so that the
+//               needle tip stays in the frame, and the plate says so.
+//               Colour uses a softer curve (VX.colPow 1.1, page 2.4), and
+//               the tracers are brighter and wider (gain 0.7, width 1.8).
+//   climax      at l = 0.035 a core flash and a warm screen bloom; the
+//               collapse goes on under the flash, then a fade and a reset.
+//   variation   each cycle takes a seeded parcel shape (VX_SHAPES), gamma in
+//               [0.42, 0.6], circulation, camera elevation and orbit sense.
+// One cycle is about 13 s at calm 0.7 (0.8 s fade in, 9.5 s to the climax,
+// 1.4 s flash, 0.5 s hold, 0.8 s fade out). VX.sCap, VX.uMax, VX.trailK and
+// VX.trailLen let vxStep follow the collapse to l = 0.01. The page keeps
+// the defaults (40, 0.985, 1, 6), so the page view does not change.
+const VX_SHAPES = [
+  ['Disc', (R, i) => [0.08 + 4.0 * Math.sqrt(R()), R() * 6.2832, (R() * 2 - 1) * 0.9]],
+  ['Spiral arms', (R, i, k) => { const r = 0.08 + 4.0 * Math.sqrt(R()), m = k.arms; return [r, Math.floor(R() * m) / m * 6.2832 + k.wind * Math.log(r) + (R() - 0.5) * 0.35, (R() * 2 - 1) * 0.5]; }],
+  ['Thin sheet', (R, i) => [0.08 + 4.0 * Math.sqrt(R()), R() * 6.2832, (R() * 2 - 1) * 0.12]],
+  ['Tall column', (R, i) => [0.08 + 2.6 * Math.sqrt(R()), R() * 6.2832, (R() * 2 - 1) * 2.4]],
+  ['Nested shells', (R, i) => [[0.35, 0.8, 1.4, 2.1, 2.9, 3.8][Math.floor(R() * 6)] + (R() - 0.5) * 0.08, R() * 6.2832, (R() * 2 - 1) * 0.9]],
+  ['Twin helix', (R, i, k) => { const z = (R() * 2 - 1) * 1.6; return [0.25 + 3.4 * Math.sqrt(R()), k.wind * z + (R() < 0.5 ? 0 : Math.PI) + (R() - 0.5) * 0.3, z]; }],
+];
+// A soft radial sprite texture (white centre, amber edge) for the core glow
+// and the climax flash.
+function vxGlowTex(){ const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(255,250,235,1)'); r.addColorStop(0.18, 'rgba(255,200,120,0.75)'); r.addColorStop(0.5, 'rgba(240,110,40,0.22)'); r.addColorStop(1, 'rgba(120,30,10,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+// Start a cycle: new shape, gamma, circulation and view from the seeded rng;
+// refill the parcels and the tracer picks (75% of tracers in the inner 2.2,
+// so the core has trails), then seek to tau0 with the page's trail warm-up.
+function vxSaverCycle(){ const s = VX.sv, R = s.rng, N = VX.N;
+  s.shape = (s.shape == null ? Math.floor(R() * VX_SHAPES.length) : (s.shape + 1 + Math.floor(R() * (VX_SHAPES.length - 1))) % VX_SHAPES.length);
+  const k = { arms: [2, 3, 5][Math.floor(R() * 3)], wind: (R() < 0.5 ? -1 : 1) * (0.8 + 1.6 * R()) }, f = VX_SHAPES[s.shape][1];
+  for (let i = 0; i < N; i++){ const [r, th, z] = f(R, i, k); VX.rho0[i] = Math.max(0.05, r); VX.th0[i] = th; VX.z0[i] = z; }
+  for (let j = 0; j < VX.trailsN; j++){ const inner = j < VX.trailsN * 0.75; let best = j; for (let t = 0; t < 120; t++){ const i = Math.floor(R() * N), r = VX.rho0[i]; if (inner ? r > 0.06 && r < 2.2 : r >= 2.2 && r < 3.9){ best = i; break; } } VX.trailIdx[j] = best; }
+  VX.gam = 0.42 + 0.18 * R(); VX.circ = 0.8 + 1.0 * R();
+  s.el = 0.08 + 1.25 * R(); s.az = R() * 6.2832; s.dir = R() < 0.5 ? -1 : 1;
+  s.t = 0; s.tau1 = -Math.log(0.035) / VX.gam; s.ell0 = Math.pow(1 - (1 - Math.exp(-s.tau0)), VX.gam);
+  if (VX.S) VX.S.fill(1); VX.trailK = 1; VX.trailLen = 6; s.zc = 0.6; s.zg = 1; s.z0max = 0; for (let i = 0; i < N; i++) s.z0max = Math.max(s.z0max, Math.abs(VX.z0[i])); vxSeek(1 - Math.exp(-s.tau0)); }
+function vxSaverTick(dt){ const s = VX.sv; s.t += dt;
+  const tc = s.tIn + s.run, rate = (s.tau1 - s.tau0) / tc, tau = Math.min(s.tau0 + rate * s.t, -Math.log(1e-6));
+  const u = 1 - Math.exp(-tau);
+  // trails and the push step scale with l, so the core trails stay legible
+  const ell = Math.pow(1 - u, VX.gam); VX.trailK = ell / s.ell0; VX.trailLen = 6 * VX.trailK; s.zc = 0.6 * VX.trailK;
+  // the needle tip, z0max S, lands at 3.6 l/l0 at most: the log map gets a gain g <= 1
+  { const Z = s.z0max * Math.min(1 / (ell * ell), VX.sCap); s.zg = Math.min(1, 3.6 * VX.trailK / (s.zc * Math.log1p(Z / s.zc))); }
+  if (u > VX.u) vxStep(u - VX.u);
+  // self-similar zoom: distance as l, a slow orbit, and the near plane with it
+  const z = ell / s.ell0, d = s.d0 * z, cam = VX.camera; s.az += s.dir * s.azRate * dt;
+  const el = s.el + 0.08 * Math.sin(s.t * 0.4);
+  cam.position.set(d * Math.cos(el) * Math.sin(s.az), d * Math.sin(el), d * Math.cos(el) * Math.cos(s.az)); cam.lookAt(0, 0, 0);
+  cam.near = d * 0.004; cam.far = d * 60 + 400; VX.controls.target.set(0, 0, 0);
+  // core glow: a constant screen size (scale as l), brighter near the climax
+  const p = Math.min(1, s.t / tc), fl = s.t - tc;
+  s.glow.scale.setScalar(1.5 * z); s.glow.material.opacity = 0.1 + 0.4 * p * p * p;
+  // the flash: 0.18 s rise, then decay; the sprite grows, the bloom plane lifts
+  const amp = fl < 0 ? 0 : fl < 0.18 ? fl / 0.18 : Math.exp(-(fl - 0.18) / 0.45);
+  s.flash.scale.setScalar(d * (0.6 + 4 * (1 - Math.exp(-Math.max(0, fl) * 2.5)))); s.flash.material.opacity = amp;
+  s.bloom.material.opacity = 0.55 * amp;
+  const tEnd = tc + s.tFl + s.tHold, out = s.t - tEnd;
+  s.veil.material.opacity = s.t < s.tIn ? 1 - s.t / s.tIn : out > 0 ? Math.min(1, out / s.tOut) : 0;
+  s.phase = s.t < s.tIn + 0.35 * s.run ? 'approach' : fl < 0 ? 'zoom' : out < 0 ? 'blowup' : 'reset';
+  if (out >= s.tOut) vxSaverCycle(); }
 if (FIXED === 'vortex') window.snSaver = { enter(opts) {
-  const calm = Math.max(0, Math.min(1, +opts.calm || 0)), secs = Math.max(20, +opts.seconds || 60), cap = 0.95 - 0.1 * calm;
+  const calm = Math.max(0, Math.min(1, opts.calm == null ? 0.7 : +opts.calm)), c = 0.85 + 0.3 * calm;
   const st = document.createElement('style');
   st.textContent = 'html.saver .topbar,html.saver #qp,html.saver #mp,html.saver #stage-scrub,html.saver #stage-overlay,html.saver #stage-caption,html.saver .grid-bg{display:none!important}html.saver #stage{top:0!important;left:0!important;right:0!important;bottom:0!important;transition:none}html.saver #c3d{cursor:none}';
   document.head.appendChild(st); document.documentElement.classList.add('saver');
-  SCRUB.vortex = null; TOG.spin = true; TOG.trails = true; VX.renderer.setClearColor(0x0a0810, 1);
-  svDolly(VX.camera, VX.controls, 1.4);
-  VX.spd = Math.min(0.25 * (1 - 0.5 * calm), cap / (0.12 * secs)); VX.controls.autoRotateSpeed = 0.5 * (1 - 0.5 * calm);
-  vxSeek(0); VX.playing = true; resize();
-  const hold = () => { if (VX.u >= cap) VX.playing = false; requestAnimationFrame(hold); }; hold();
+  SCRUB.vortex = null; TOG.spin = false; TOG.trails = true; VX.renderer.setClearColor(0x0a0810, 1);
+  VX.playing = false; VX.controls.enabled = false; VX.controls.enableDamping = false; VX.sCap = 1e5; VX.uMax = 1 - 1e-7;
+  VX.points.material.size = 2.0; VX.colPow = 1.1; VX.bundle.gain = 0.7; VX.bundle.setWidth(1.8);
+  // the axial stretch z = z0 S grows as l^-2 while the zoom follows l, so
+  // the saver draws the axis on a log scale: z -> g zc ln(1 + |z|/zc), with
+  // zc = 0.6 l/l0 and a gain g that keeps the needle tip in the frame
+  VX.zMap = z => { const s = VX.sv; return Math.sign(z) * s.zg * s.zc * Math.log1p(Math.abs(z) / s.zc); };
+  resize();
+  // base distance: the page camera (|(6, 2.6, 6.8)|) at 1.25, more on a
+  // portrait window, where the horizontal field of view is the narrow one
+  const W = stage.clientWidth, H = stage.clientHeight, tex = vxGlowTex();
+  const sprite = () => { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true })); m.renderOrder = 10; VX.scene.add(m); return m; };
+  // camera planes: the bloom (additive warm) and the veil (black) for fades
+  const plane = (col, blend) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, depthTest: false, depthWrite: false, blending: blend }));
+    m.renderOrder = 20; m.onBeforeRender = (r, sc, cam) => { m.position.set(0, 0, -cam.near * 2); m.scale.set(cam.near * 20, cam.near * 20, 1); }; VX.camera.add(m); return m; };
+  VX.scene.add(VX.camera);
+  VX.sv = { rng: svRng(opts.seed), shape: null, tau0: 0.25, tIn: 0.8, run: 9 * c, tFl: 1.4, tHold: 0.5, tOut: 0.8,
+    d0: 9.43 * 1.25 * Math.sqrt(Math.max(1, H / Math.max(1, W))), azRate: 0.14 - 0.07 * calm,
+    glow: sprite(), flash: sprite(), bloom: plane(0xffc58a, THREE.AdditiveBlending), veil: plane(0x0a0810, THREE.NormalBlending) };
+  vxSaverCycle();
   svLabels(opts);
   return { canvas: c3d, warmupMs: 1500 };
 } };
@@ -1166,9 +1251,11 @@ function svAnchor(cam, centre, ring, keys){ const C = svProj(cam, ...centre); if
 // The vortex: the tracers start at radius 0.2 to 3.6 and the outer parcels
 // stay near their start, so a ring of 3.2 world units holds the visible
 // cloud. The key points are the core and the axis just above and below it.
-function svVortexAnchor(){ if (!VX.camera) return null; const ring = [], R = 3.2;
+// In the saver the camera zooms as l, so the ring and the key points scale
+// with the zoom (l / l0).
+function svVortexAnchor(){ if (!VX.camera) return null; const k = VX.sv ? (VX.ell || 1) / VX.sv.ell0 : 1, ring = [], R = 3.2 * k;
   for (let i = 0; i < 12; i++){ const a = i / 12 * 6.2832; ring.push([R * Math.cos(a), 0, R * Math.sin(a)]); }
-  return svAnchor(VX.camera, [0, 0, 0], ring, [[0, 0, 0], [0, 0.8, 0], [0, -0.8, 0]]); }
+  return svAnchor(VX.camera, [0, 0, 0], ring, [[0, 0, 0], [0, 0.8 * k, 0], [0, -0.8 * k, 0]]); }
 function svPlate(){
   const v = FIXED, rules = NS_RULES[v], [title] = TITLES[v];
   if (v === 'burgers'){ const h = BG.hist[BG.hist.length - 1], tb = 1 / Math.max(BG.q0, 1e-9);
@@ -1199,10 +1286,14 @@ function svPlate(){
       R`\dot{\zeta} = -D^{\mathsf T}\zeta,\qquad \dot{\Theta} = -\frac{J\zeta\cdot G}{\lambda|\zeta|^2}\,\Omega,\qquad \dot{\Omega} = \lambda\,\zeta_1\,\Theta`,
       R`\nabla\vartheta(0,t)=\lambda\,\Theta\,\zeta`],
     eq: ['∂ₜθ + u·∇θ = f_θ,  ∂ₜω + u·∇ω = ∂₁θ + curl f_u', 'Θ̇ = −(Jζ·G)/(λ|ζ|²) Ω,  Ω̇ = λ ζ₁ Θ'] }; }
-  if (v === 'vortex'){ const ell = VX.ell || 1; return { title: 'Self-similar vortex collapse', sub: 'The core shrinks as ℓ(t) and spins up', rules,
+  if (v === 'vortex'){ const ell = VX.ell || 1, sv = VX.sv;
+    // saver: the shape in the title (a new title each cycle), the phase in the sub
+    const PH = { approach: 'Parcels spiral in. Clock time runs as log(T∗ − t)', zoom: 'Self-similar zoom: the camera shrinks with ℓ(t)', blowup: 'Blowup at T∗: ω ∼ ℓ⁻² without bound', reset: 'Next collapse' };
+    return { title: sv ? 'Vortex collapse · ' + VX_SHAPES[sv.shape][0] : 'Self-similar vortex collapse', sub: sv ? PH[sv.phase] : 'The core shrinks as ℓ(t) and spins up', rules,
     params: [{ sym: '\\ell', name: 'core length', value: SV_FMT(ell) }, { sym: 'T_*-t', name: 'time to blowup', value: SV_FMT(1 - VX.u) },
-      { sym: 'u', name: 'sup |u| ∼ ℓ⁻¹', value: SV_FMT(1 / ell), cls: 'm1' }, { sym: '\\omega', name: 'vorticity ∼ ℓ⁻²', value: SV_FMT(1 / (ell * ell)), cls: 'm4' }],
-    lines: ['A kinematic stand-in. Colour is angular speed.'],
+      { sym: 'u', name: 'sup |u| ∼ ℓ⁻¹', value: SV_FMT(1 / ell), cls: 'm1' }, { sym: '\\omega', name: 'vorticity ∼ ℓ⁻²', value: SV_FMT(1 / (ell * ell)), cls: 'm4' }]
+      .concat(sv ? [{ sym: '\\gamma', name: 'ℓ = (T∗ − t)^γ', value: VX.gam.toFixed(2) }, { sym: 'Z', name: 'camera zoom', value: '×' + SV_FMT(sv.ell0 / ell) }] : []),
+    lines: [sv ? 'A kinematic stand-in. Colour is angular speed. The camera distance follows ℓ(t); the axis is on a log scale.' : 'A kinematic stand-in. Colour is angular speed.'],
     tex: [R`u(x,t)=\frac{1}{\sqrt{T_*-t}}\;U\!\left(\frac{x}{\sqrt{T_*-t}}\right)`, R`u_\mu(x,t)=\mu\,u(\mu x,\mu^2 t),\qquad p_\mu=\mu^2 p(\mu x,\mu^2 t)`,
       R`E(t)=\tfrac12\!\int|u|^2\,dx\ \sim\ \ell^{-2}\cdot\ell^{3}=\ell\to 0`],
     eq: ['u(x,t) = U(x/√(T∗ − t)) / √(T∗ − t)', 'u_μ(x,t) = μ u(μx, μ²t)'], anchor: svVortexAnchor }; }
