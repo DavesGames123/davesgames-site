@@ -516,13 +516,89 @@ function animate() {
 // ─── Screensaver hook (lib/screensaver.js has the protocol) ───────────────
 // The CSS under html.sn-saver hides the panel, the legend and the hint, so
 // #stage and the renderer fill the frame. The seed picks one ray or the
-// ring (sphere is too busy). δ drifts slowly through circular, elliptical
-// and linear states, so no hard cut occurs. calm 1 gives the slowest wave
-// and orbit. The clear colour is opaque, so a recording has no alpha.
+// ring (sphere is too busy). The clear colour is opaque, so a recording has
+// no alpha. calm 1 gives the slowest wave.
+//
+// SHOTS. The saver owns the camera (no autoRotate). Each shot holds 5 s
+// (5 to 6.5 s with calm) and the camera eases to the next one in 1.5 s.
+// A shot is a pose function of its own time u, so a dolly or an orbit
+// moves during the hold. The order is a seeded shuffle of SAVER_SHOTS,
+// one shot never twice in a row. The far factor of frameFor keeps the ray
+// in a tall frame.
+//   down the beam ... on the axis past R_MAX, looking back: the helix
+//                     projects to the ellipse the receiver sees
+//   side-on ......... square to the ray: the E and B helices
+//   three-quarter ... an orbit about the middle of the ray
+//   dolly ........... beside the ray, from the source out, looking ahead
+//                     (the ring: a push in toward the source)
+//   grazing ......... low beside the source, along the ray
+// The ring has its own five poses with the same names.
+//
+// STATES. Every second shot the next state of SAVER_STATES (seeded order)
+// starts: δ eases to its target in 2 s (the short way round), or for the
+// sweep runs through 360° in the state time. k eases to a seeded value in
+// [1.1, 2.2], so the pitch of the helix changes too. The page models equal
+// component amplitudes, so the states vary δ and k only.
+const SAVER_STATES = [
+  { name: 'Right circular', d: 90 }, { name: 'Left circular', d: -90 },
+  { name: 'Elliptical', d: 45 }, { name: 'Elliptical', d: -135 },
+  { name: 'Linear at +45°', d: 0 }, { name: 'Linear at −45°', d: 180 },
+  { name: 'Phase sweep', sweep: true },
+];
+const SAVER_SHOTS = ['Down the beam', 'Side-on', 'Three-quarter', 'Dolly along the beam', 'Grazing'];
 let saver = null;
+const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+// The pose of shot i at time u (s), for the saver mode: { pos, target }.
+function saverPose(i, u) {
+  const asp = Math.max(0.45, camera.aspect), far = asp < 1 ? 1 / Math.pow(asp, 0.75) : 1;
+  if (params.dist === 'single') {
+    const d = SINGLE_DIR, side = V3(-d.z, 0, d.x).normalize(), up = V3().crossVectors(side, d).normalize();
+    const at = r => d.clone().multiplyScalar(r), mid = at(10.5);
+    if (i === 0) return { pos: at(R_MAX + 5 * far).addScaledVector(side, 0.8).addScaledVector(up, 0.6), target: at(R_OBS) };
+    if (i === 1) return { pos: mid.clone().addScaledVector(side, 30 * far).addScaledVector(up, 2), target: mid };
+    if (i === 2) {
+      const a = 0.9 + 0.12 * u, el = 0.38;
+      return { pos: mid.clone().addScaledVector(side, Math.cos(a) * Math.cos(el) * 30 * far).addScaledVector(d, Math.sin(a) * Math.cos(el) * 30 * far).addScaledVector(up, Math.sin(el) * 30 * far), target: mid };
+    }
+    if (i === 3) { const r = 2 + 1.6 * u; return { pos: at(r).addScaledVector(side, 13 * far).addScaledVector(up, 4), target: at(r + 7) }; }
+    return { pos: at(3).addScaledVector(side, 12 * far).addScaledVector(up, -1.2), target: at(14).addScaledVector(up, 0.5) };
+  }
+  // ring: the rays lie in the y = 0 plane
+  const R = 40 * far;
+  if (i === 0) return { pos: V3(0.01, R * 0.85, R * 0.22), target: V3() };
+  if (i === 1) { const a = 0.4 + 0.05 * u; return { pos: V3(Math.cos(a) * R * 1.2, 1.5, Math.sin(a) * R * 1.2), target: V3() }; }
+  if (i === 2) { const a = 0.7 + 0.12 * u; return { pos: V3(Math.cos(a) * R, R * 0.55, Math.sin(a) * R), target: V3() }; }
+  if (i === 3) { const r = R * Math.max(0.42, 0.95 - 0.07 * u), a = 1.1; return { pos: V3(Math.cos(a) * r, r * 0.3, Math.sin(a) * r), target: V3() }; }
+  const a = -0.5 + 0.08 * u; return { pos: V3(Math.cos(a) * R * 0.75, 3.5, Math.sin(a) * R * 0.75), target: V3(0, 1, 0) };
+}
 function saverTick() {
-  const d = Math.round(90 * Math.cos(saver.ph + (performance.now() - saver.t0) / 1000 * saver.w));
-  if (d !== params.delta) setDelta(d);
+  const s = saver, now = performance.now() / 1000, dt = Math.min(0.1, now - s.last); s.last = now;
+  s.u += dt; s.su += dt;
+  if (s.u >= s.hold) {
+    s.u = 0; s.n++;
+    s.from = { pos: camera.position.clone(), target: controls.target.clone() };
+    let j; do { j = Math.floor(s.r() * SAVER_SHOTS.length); } while (j === s.shot);
+    s.shot = j;
+    if (s.n % 2 === 0) saverState();
+  }
+  // camera: the live pose of the shot, eased in from the pose at the cut
+  const P = saverPose(s.shot, s.u), e = s.from ? 1 - Math.pow(1 - Math.min(1, s.u / 1.5), 3) : 1;
+  if (e < 1) { camera.position.lerpVectors(s.from.pos, P.pos, e); controls.target.lerpVectors(s.from.target, P.target, e); }
+  else { s.from = null; camera.position.copy(P.pos); controls.target.copy(P.target); }
+  // state: δ and k
+  const st = SAVER_STATES[s.state], k = Math.min(1, s.su / 2), ek = k * k * (3 - 2 * k);
+  let d;
+  if (st.sweep) d = s.d0 + 360 * s.su / (2 * s.hold);
+  else { let dd = st.d - s.d0; dd -= 360 * Math.round(dd / 360); d = s.d0 + dd * ek; }
+  d = ((d + 180) % 360 + 360) % 360 - 180;
+  params.k = s.k0 + (s.k1 - s.k0) * ek;
+  if (Math.round(d) !== params.delta) setDelta(d);
+}
+// The next state: δ and k start from the live values.
+function saverState() {
+  const s = saver;
+  s.si++; s.state = s.order[s.si % s.order.length];
+  s.su = 0; s.d0 = params.delta; s.k0 = params.k; s.k1 = 1.1 + 1.1 * s.r();
 }
 saverEnter((o = {}) => {
   const calm = o.calm ?? 0.7, seed = (o.seed >>> 0) || 0;
@@ -531,15 +607,21 @@ saverEnter((o = {}) => {
   resize();
   const mode = seed % 3 === 2 ? 'ring' : 'single';
   if (mode !== params.dist) document.querySelector(`.mode-btn[data-mode="${mode}"]`).click();
-  tween = null; frameFor(mode, true);
+  tween = null;
   params.playing = true;
-  params.omega = 0.35 + 0.5 * (1 - calm);
+  params.omega = 0.45 + 0.5 * (1 - calm);
   idleTimer = -1;
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.15 + 0.25 * (1 - calm);
-  // one full δ cycle in 100 to 160 s; the start phase comes from the seed
-  saver = { t0: performance.now(), ph: (seed % 360) * Math.PI / 180, w: 2 * Math.PI / (100 + 60 * calm) };
+  controls.autoRotate = false;
+  let x = seed * 2654435761 + 1 >>> 0;
+  const r = () => { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
+  const order = SAVER_STATES.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  saver = { r, order, si: -1, state: 0, su: 0, d0: params.delta, k0: params.k, k1: params.k,
+    shot: Math.floor(r() * SAVER_SHOTS.length), n: 0, u: 0, hold: 5 + 1.5 * calm, from: null, last: performance.now() / 1000 };
+  saverState();
+  saver.d0 = SAVER_STATES[saver.state].sweep ? 0 : SAVER_STATES[saver.state].d; setDelta(saver.d0);
   saverTick();
+  controls.update();
   saverLabel = o.labels !== false && typeof o.label === 'function' ? o.label : null;
   clearInterval(saverTimer); saverPlate();
   if (saverLabel) saverTimer = setInterval(saverPlate, 1000);
@@ -560,12 +642,12 @@ function saverPlate() {
   // of typeset.mjs: E m2, B m1, e1 m4, e2 m6, delta m3, omega m5. The TeX
   // is the panel TeX of typeset.mjs, the classes written as rules.
   saverLabel({
-    title: 'Circular polarization · ' + (params.dist === 'single' ? 'one ray' : params.dist === 'ring' ? 'ring of ' + params.n + ' rays' : 'sphere of ' + params.n + ' rays'),
-    sub: 'Outgoing wave: the E helix is amber, the B helix cyan. The phase δ drifts.',
+    title: (saver ? SAVER_STATES[saver.state].name : 'Circular polarization') + ' · ' + (params.dist === 'single' ? 'one ray' : params.dist === 'ring' ? 'ring of ' + params.n + ' rays' : 'sphere of ' + params.n + ' rays'),
+    sub: (saver ? SAVER_SHOTS[saver.shot] + ' · ' : '') + 'the E helix is amber, the B helix cyan',
     params: [
       { sym: '\\delta', name: 'phase, ' + st.kind, value: (params.delta < 0 ? '−' : '') + Math.abs(params.delta) + '°', cls: 'm3' },
       { sym: '\\chi', name: 'ellipticity', value: sg(st.chi) + '°' },
-      { sym: 'k', name: 'wave number', value: params.k.toFixed(1) },
+      { sym: 'k', name: 'wave number', value: params.k.toFixed(2) },
       { sym: '\\omega', name: 'angular frequency', value: params.omega.toFixed(2), cls: 'm5' },
     ],
     lines: ['Turn: ' + hand + '.', rScaled ? 'Drawn as r·E, the far-field pattern.' : 'E₀ = ' + params.amp.toFixed(1) + ', falling as 1/r.'],
