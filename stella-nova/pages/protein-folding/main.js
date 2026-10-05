@@ -91,7 +91,7 @@ controls.enableDamping = true; controls.dampingFactor = 0.08; controls.enablePan
 controls.minDistance = D0 * 0.3; controls.maxDistance = D0 * 3;
 controls.rotateSpeed = COARSE ? 0.8 : 0.6;
 controls.autoRotateSpeed = -0.6;
-let idle = 0, dragging = false;
+let idle = 0, dragging = false, saverOn = false;
 controls.addEventListener('start', () => { dragging = true; idle = 0; hideHint(); });
 controls.addEventListener('end', () => { dragging = false; });
 
@@ -158,7 +158,7 @@ function loadPreset(id, keep = false) {
   S.preset = pr; S.kind = pr.kind; S.ramp = null;
   document.body.classList.toggle('mode-go', pr.kind === 'go');
   document.body.classList.toggle('mode-hp', pr.kind === 'hp');
-  try { history.replaceState(null, '', '#' + pr.id); } catch (e) {}
+  if (!saverOn) try { history.replaceState(null, '', '#' + pr.id); } catch (e) {}
   for (const b of document.querySelectorAll('.pcard')) b.classList.toggle('on', b.dataset.id === pr.id);
   $('presetSel').value = pr.id;
   const wasHp2 = S.lastView === 'hp2';
@@ -875,46 +875,97 @@ function saverPlate() {
   };
 }
 
-// screensaver hook for the shell (lib/screensaver.js): hide the GUI so
-// insets() frees the full canvas, start the melt and refold ramp, and slow
-// the sim rate and the pivot orbit by opts.calm (1 = slowest). It keeps the
-// boot preset, because loadPreset writes the URL hash. No exit(): the shell
-// reloads the page on stop.
-// The plate (saverPlate) goes to opts.label at the start and then when T
+// screensaver hook for the shell (lib/screensaver.js). enter() hides the
+// GUI so insets() frees the full canvas. Before, the saver kept the boot
+// preset (villin, from the URL hash) with one ramp and one slow orbit, so
+// every run showed the same fold. Now opts.seed shuffles a tour of runs and
+// a new run fades in every seconds/5 (10 to 15 s). Each run draws from the
+// seed:
+//   protein ... a Go preset or an HP lattice benchmark, in shuffled order
+//   start ..... extended chain or random coil (each replica has its own
+//               coil seed); presets over 80 residues start native and melt
+//   T plan .... fold at the preset T, quench at 0.55 Tm, or the melt and
+//               refold ramp
+//   gamma ..... Langevin friction 0.2 to 1.0
+//   replicas .. 1, 2 or 4 (2 at most on a touch screen)
+//   colour .... secondary structure, hydrophobicity or native contacts
+//   camera .... a pivot direction, elevation, orbit speed and sense
+// loadPreset does not write the URL hash while saverOn is set.
+// The plate (saverPlate) goes to opts.label at each new run and then when T
 // has moved 0.04 Tm, or Q 0.1, since the last call (on the HP lattice: when
 // its energy line changes), at most once in 4 s.
-// The shell fades the plate out and in on each call, so a faster update
-// would keep it from ever showing in full.
+const SAVER_COLOURS = [['ss', 'secondary structure'], ['hyd', 'hydrophobicity'], ['con', 'native contacts']];
+let saverRun = null;
 window.snSaver = {
   enter(o) {
-    const calm = clamp(o && o.calm != null ? o.calm : 0.7, 0, 1);
+    o = o || {};
+    saverOn = true;
+    const calm = clamp(o.calm != null ? o.calm : 0.7, 0, 1);
     const st = document.createElement('style');
-    st.textContent = 'body *:not(#view){visibility:hidden!important;pointer-events:none!important}#view{visibility:visible!important}';
+    st.textContent = 'body *:not(#view){visibility:hidden!important;pointer-events:none!important}#view{visibility:visible!important;transition:opacity .6s ease}';
     document.head.appendChild(st);
     if (renderer) renderer.setClearColor(0x08090f, 1);   // --ink, so a recording is opaque
     S.orbit = true; idle = 3;
-    controls.autoRotateSpeed = -0.6 * (1 - 0.6 * calm);
-    if (S.kind === 'go' && S.speed < 100) sendAll({ type: 'set', rate: Math.max(1, Math.round(speedToRate(S.speed, 3.6) * (1 - 0.75 * calm))) });
+    let seed = (o.seed >>> 0) || 1;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    // Go presets up to 80 residues fold in a hold; larger ones melt from
+    // native. HP benchmarks up to 50 beads, so the search shows progress.
+    const order = PRESETS.filter(p => p.kind === 'go' || p.seq.length <= 50).map(p => p.id);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const hold = clamp((o.seconds || 60) / 5, 10, 15) * 1000;
+    let oi = 0, last = null, at = 0;
+    const push = force => {
+      if (typeof o.label !== 'function') return;
+      const info = saverPlate(); if (!info) return;
+      if (saverRun) info.lines = (info.lines || []).concat([saverRun.note]);
+      const fr = S.sims.map(s => s.frame).filter(Boolean);
+      const q = fr.length ? fr.reduce((a, f) => a + f.obs.Q, 0) / fr.length : -1;
+      const now = performance.now();
+      const txt = JSON.stringify(info.params || info.lines);
+      const same = S.kind === 'hp' ? last && txt === last.txt
+        : last && Math.abs(S.tFrac - last.t) < 0.04 && Math.abs(q - last.q) < 0.1 && (last.q >= 0 || q < 0);
+      if (!force && (now - at < 4000 || same)) return;
+      last = { t: S.tFrac, q, txt }; at = now;
+      o.label(info);
+    };
+    const run = () => {
+      const pr = presetById(order[oi++ % order.length]);
+      S.R = pick(COARSE ? [1, 2, 2] : [1, 2, 4, 4]);
+      S.colour = pick(SAVER_COLOURS)[0];
+      S.gamma = 0.2 + 0.8 * rnd();
+      loadPreset(pr.id);
+      let note = '';
+      if (S.kind === 'go') {
+        const big = P.N > 80, plan = big ? 'melt' : pick(['fold', 'fold', 'quench', 'ramp']);
+        S.start = big ? 'native' : pick(['extended', 'coil']);
+        restart();
+        if (plan === 'ramp') startRamp(); else setTemp(plan === 'melt' ? 1.3 : plan === 'quench' ? 0.55 : pr.fold);
+        note = `Start ${S.start}, ${plan === 'ramp' ? 'melt and refold ramp' : plan === 'melt' ? 'melting at 1.3 Tm' : plan === 'quench' ? 'quench to 0.55 Tm' : `folding at ${pr.fold} Tm`}, γ ${S.gamma.toFixed(2)}, ${S.R} ${S.R === 1 ? 'replica' : 'replicas'}, coloured by ${SAVER_COLOURS.find(c => c[0] === S.colour)[1]}.`;
+      } else note = `Replica-exchange search, ${S.hpR} replicas.`;
+      colours(true);
+      // the camera: a seeded direction and orbit (a 2D lattice stays face on)
+      if (!(S.kind === 'hp' && S.hpDim === 2)) {
+        const az = 6.2832 * rnd(), el = -0.35 + 1.0 * rnd(), d = pivot.position.length() || D0;
+        pivot.position.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)).multiplyScalar(d);
+        controls.update();
+      }
+      controls.autoRotateSpeed = (rnd() < 0.5 ? -1 : 1) * (0.5 + 0.9 * rnd()) * (1 - 0.5 * calm);
+      saverRun = { note };
+      frameCamera();
+      last = null; push(true);
+    };
     setRunning(true);
-    startRamp();
-    frameCamera();
-    if (o && typeof o.label === 'function') {
-      let last = null, at = 0;
-      const push = force => {
-        const info = saverPlate(); if (!info) return;
-        const fr = S.sims.map(s => s.frame).filter(Boolean);
-        const q = fr.length ? fr.reduce((a, f) => a + f.obs.Q, 0) / fr.length : -1;
-        const now = performance.now();
-        const txt = JSON.stringify(info.params || info.lines);
-        const same = S.kind === 'hp' ? last && txt === last.txt
-          : last && Math.abs(S.tFrac - last.t) < 0.04 && Math.abs(q - last.q) < 0.1 && (last.q >= 0 || q < 0);
-        if (!force && (now - at < 4000 || same)) return;
-        last = { t: S.tFrac, q, txt }; at = now;
-        o.label(info);
-      };
-      push(true);
-      setInterval(() => push(false), 1000);
-    }
+    run();
+    let t0 = performance.now(), fading = false;
+    setInterval(() => {
+      const now = performance.now();
+      if (!fading && now - t0 > hold) {
+        fading = true; canvas.style.opacity = '0';
+        setTimeout(() => { run(); canvas.style.opacity = '1'; fading = false; t0 = performance.now(); }, 650);
+      }
+      push(false);
+    }, 250);
     return { canvas, warmupMs: 2000 };
   },
 };
