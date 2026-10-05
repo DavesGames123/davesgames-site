@@ -36,6 +36,7 @@ import { createStage } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { createAnalysis, ratioText, fmtRpm, SHORT } from './analysis.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
+import { createTour } from '../../lib/mech-tour.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -487,10 +488,16 @@ const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Ve
 // stage gradient in the scene, and tours: the simple set in reduction,
 // overdrive and reverse, the gear face with the pitch circles, the exploded
 // parts; then a fade to the Simpson train through 1st, 2nd, 3rd and reverse
-// and its exploded view; then back, with new tooth counts. Each step holds
-// seconds/4 (at least 9 s); calm (1 = slowest) slows the orbit, the gears and
-// the explode. A mode change eases the input to a stop and back up. opts.label
-// names the subject of each step. No URL hash writes while it plays.
+// and its exploded view; then back, with new tooth counts. After each
+// exploded view come close-ups of 5 exploded parts, and sometimes a
+// pull-back on the whole exploded set. Each step holds seconds/12 (at least
+// 4.5 s). lib/mech-tour.js moves the camera in each step (a seeded move
+// that is never the move of the step before, near the front of the view),
+// and frames, glows and names each close-up part (the others ghost; the
+// gears stop, because the planets ride round on the carrier). calm (1 =
+// slowest) slows the gears and the explode. A mode change eases the input
+// to a stop and back up. opts.label names the subject of each step. No URL
+// hash writes while it plays.
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -511,10 +518,10 @@ window.snSaver = {
     const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
     stage.scene.background = bg;
     stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
-    S.ekRate = 1.5 - 0.9 * calm;
+    S.ekRate = 2.4 - 0.8 * calm;
     const runRpm = Math.round(16 - 9 * calm);
     setRpm(runRpm);
-    const hold = Math.max(9, (o.seconds || 60) / 4) * 1000;
+    const hold = Math.max(4.5, (o.seconds || 60) / 12) * 1000;
     // tooth sets the tour may pick (all assemble with 3 planets)
     const TEETH = [[30, 18], [24, 18], [36, 15], [27, 21], [33, 18], [21, 15]];
     const fmt = (v, n = 3) => (Math.abs(v) < 0.0005 ? 0 : v).toFixed(n).replace('-', '−');
@@ -566,9 +573,21 @@ window.snSaver = {
       // at most 2 notes: the old third line held the numbers, now params
       return Object.assign(l, { lines: l.lines.filter(t => !/\d/.test(t)).slice(0, 2) }, ADD[k](), { rules: RULES, anchor: an(SET, KEYS) });
     } }));
-    let n = 0, stepT = 0, lastLab = '', labT = 0, busy = false;
+    let n = 0, stepT = 0, lastLab = '', labT = 0, busy = false, now = null, queue = [];
     const canvas = $('view');
-    const showLab = s => { const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
+    const showLab = s => { now = s; const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
+    // Close-ups (lib/mech-tour.js). The exploded offsets come from
+    // layout.js windows, not part vectors, so tour.unit() seeds only the
+    // close-up mode here.
+    const tour = createTour({ THREE, stage, cards, cur: () => S.cur, rnd, hold,
+      prefer: [/^sun/, /^planet/, /^ring/, /^carrier/, /^pins$/, /^band/],
+      skip: [/^input$/] });
+    const focusStep = info => ({ focus: info, lab: () => { const t = tour.plate(info, S.cur.L.id === 'simple' ? 'Simple planetary set' : 'Simpson gear train'); return { ...t, anchor: () => plateAnchor(t.meshes) }; } });
+    const queueFocus = () => {
+      const u = tour.unit();
+      queue = tour.pick(5).map(focusStep);
+      if (u.mode !== 'flyby' && rnd() < 0.6) queue.push({ stack: true, lab: STEPS[n % STEPS.length].lab });
+    };
     const wait = ms => new Promise(r => setTimeout(r, ms));
     // ease the input to a stop, change the mode, ease back up
     const modeSwap = async s => {
@@ -589,22 +608,37 @@ window.snSaver = {
       setTimeout(() => { canvas.style.opacity = '1'; }, 250);
     };
     const advance = async () => {
+      if (queue.length) {
+        const q = queue.shift();
+        if (q.focus) tour.show(q.focus);
+        else { tour.clear(); setView('exploded', true); tour.fromFly({ kind: 'stack', move: 'pull', exploded: true }); }
+        showLab(q);
+        if (!queue.length) { tour.clear(); setRpm(runRpm); }
+        return;
+      }
       busy = true;
+      tour.clear();
       const s = STEPS[n % STEPS.length];
       try {
         if (!S.cur || S.cur.L.id !== s.v) await fadeSwap(s);
         else if ((s.mode && (s.mode.hold !== S.hold || s.mode.input !== S.input)) || (s.gear && s.gear !== S.gear)) { setView(s.view, true); await modeSwap(s); }
         setView(s.view, true);
+        tour.fromFly({ exploded: s.view === 'exploded' });
         showLab(s);
+        // after an exploded view: stop the gears (the planets ride round on
+        // the carrier and would leave a close frame), then the close-ups
+        if (s.view === 'exploded') { setRpm(0); S.wNow = 0; queueFocus(); }
       } finally { busy = false; }
       n++;
     };
+    window.__mechTour = tour;
     saverTick = dt => {
+      tour.tick(dt);
       stepT += dt * 1000; labT += dt;
       if (stepT >= hold && !busy) { stepT = 0; advance(); }
-      if (labT > 2 && n > 0 && !busy) {
+      if (labT > 2 && now && !busy) {
         labT = 0;
-        const l = STEPS[(n - 1) % STEPS.length].lab(), js = JSON.stringify(l);
+        const l = now.lab(), js = JSON.stringify(l);
         if (js !== lastLab) { lastLab = js; label(l); }
       }
     };
