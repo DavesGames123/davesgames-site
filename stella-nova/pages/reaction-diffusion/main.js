@@ -823,8 +823,20 @@ function bindKeys() {
 // cover the window. The autopilot plays a list of moving
 // presets, from opts.seed, three to four per dwell. calm 1 runs 0.4 times
 // the steps per frame of each preset.
+// The saver pool: presets that show a pattern within a few seconds of a
+// fresh start (checked by a headless render of each at 11 s). Left out:
+// the heat and Laplace presets, wave-equation, shallow-water, schlogl and
+// lotka-volterra (a few slow blobs), and the parameter maps of Maginu,
+// Turing, Morozov and Rosenzweig-MacArthur (not rendered in that check).
 const SAVER_IDS = ['gs-waves', 'gs-u-skate', 'gs-mitosis', 'gs-self-replicating', 'cgl-waves', 'ks-chaos',
-  'oregonator', 'rm-predator-prey', 'kobayashi-crystal', 'gs-coral'];
+  'oregonator', 'rm-predator-prey', 'kobayashi-crystal', 'gs-coral',
+  'gs-pearson-theta', 'gs-o-ring', 'gs-lesmes-noisy', 'gs-parameter-map', 'froese-2014', 'brusselator',
+  'fhn-tip-splitting', 'fhn-ising', 'fhn-pulsate', 'fhn-parameter-map', 'fhn-tip-splitting-web', 'cgl-magnitude', 'cgl-ramps',
+  'guo-2014', 'kobayashi-laplacian-growth', 'ks-cells', 'kytta-5-7a', 'kytta-5-8c', 'kytta-5-8f',
+  'morozov-fig2', 'morozov-fig4', 'orbits', 'purwins-glider', 'purwins-multi-glider', 'rock-paper-scissors',
+  'schrodinger-two-slit', 'sh-parameter-map', 'sh-phyllotaxis-fibonacci', 'sh-phyllotaxis-hexagons',
+  'sh-spots', 'sh-stripes', 'splats', 'surfing-solitons', 'turing-spots',
+  'yang-1', 'yang-2b', 'yang-3a', 'yang-3c', 'yang-4'];
 // The label plate typesets the TeX strings of the preset (presets.json, the
 // same as the panel) in the panel colours (S.colors from presetRules).
 // SAVER_EQ is the plain Unicode fallback of each family: there the two
@@ -865,7 +877,8 @@ function saverLabel(label) {
     if (sym && params.length < 5) params.push({ sym, name: (pfK ? 'latent heat' : SAVER_NAME[q.name]) || (d ? 'diffusion of ' + d[1] : 'parameter'), value: fmt(v, q.step), cls: by[q.name] || '' });
   });
   const grid = `${p.width || 256} × ${p.height || p.width || 256} grid${p.wrap !== false ? ', wrapped' : ''}`;
-  label({ title: p.name, sub: `${p.family} reaction–diffusion`, params, lines: [grid],
+  const look = `${S.view.colormap} colour map${S.view.height ? `, height relief lit from ${S.view.lightAngle}°` : ''}`;
+  label({ title: p.name, sub: `${p.family} reaction–diffusion`, params, lines: [grid, look],
     tex: (p.equations || []).slice(0, 4), rules: S.colors ? S.colors.rules : null,
     eq: SAVER_EQ[p.family] || [] });
 }
@@ -884,13 +897,30 @@ window.snSaver = {
     if (!S.engine) return { canvas: gl, warmupMs: 0 };
     const cv = document.createElement('canvas'); cv.id = 'saver-cv'; document.body.appendChild(cv);
     const c2 = cv.getContext('2d', { alpha: false });
+    // The seed gives the order (a shuffle of SAVER_IDS) and, for each show,
+    // the init seed of the engine (the engine counter starts at 1 on each
+    // page load, so without it every run grew the same pattern), the
+    // colour map (the preset map 55%, else another one), the height relief
+    // (30%, at a random light angle) and the zoom of a wrapped grid (1-2).
+    let seed = (opts.seed >>> 0) || 1;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let x = seed; x = Math.imul(x ^ x >>> 15, x | 1); x ^= x + Math.imul(x ^ x >>> 7, x | 61); return ((x ^ x >>> 14) >>> 0) / 4294967296; };
     const list = SAVER_IDS.map(id => S.presets.findIndex(p => p.id === id)).filter(i => i >= 0);
-    const hold = Math.max(15, (+opts.seconds || 60) / 4), FADE = 1.0;
-    let k = (opts.seed >>> 0) % list.length, t = 0, last = 0, loading = true;
+    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    const hold0 = Math.max(10, (+opts.seconds || 60) / 6), FADE = 0.8;
+    let k = 0, t = 0, last = 0, loading = true, hold = hold0, zoomK = 1;
     const show = async () => {
       loading = true;
       await selectPreset(list[k]);
-      S.spf = Math.max(1, Math.round((S.preset.speed || 10) * slow * (ONE.includes(S.preset.id) ? 0.5 : 1)));
+      const p = S.preset, one = ONE.includes(p.id), own = (p.render || {}).colormap;
+      S.engine.reset((rnd() * 4294967296) >>> 0);
+      const maps = S.cmaps.map(c => c.id).filter(id => id !== own);
+      if (maps.length && rnd() < 0.45) S.view.colormap = maps[Math.floor(rnd() * maps.length)];
+      S.view.height = !one && rnd() < 0.3; S.view.lightAngle = Math.round(360 * rnd());
+      zoomK = !one && p.wrap !== false && !p.paramMap ? 1 + rnd() : 1;
+      pushView();
+      S.spf = Math.max(1, Math.round((p.speed || 10) * slow * (one ? 0.5 : 1)));
+      // the crystal grows from one seed: it needs the longer hold to fill
+      hold = one ? 2 * hold0 : hold0;
       S.playing = true; t = 0; loading = false;
       cover();
       saverLabel(opts.label);
@@ -903,7 +933,7 @@ window.snSaver = {
     const cover = () => {
       const p = S.preset, sx = gl.width / (p.width || 256), sy = gl.height / (p.height || p.width || 256);
       if (ONE.includes(p.id)) { S.engine.setView({ zoom: 1, tile: false }); return; }
-      S.engine.setView({ zoom: p.wrap !== false ? 1 : Math.max(sx, sy) / Math.min(sx, sy), tile: null });
+      S.engine.setView({ zoom: p.wrap !== false ? zoomK : Math.max(sx, sy) / Math.min(sx, sy), tile: null });
     };
     show();
     (function drive(now) {
