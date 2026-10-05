@@ -30,6 +30,7 @@ import { createStage } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { createAnalysis } from './analysis.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
+import { createTour } from '../../lib/mech-tour.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -406,11 +407,17 @@ const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Ve
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours: the running engine in section,
-// the hot end and the regenerator, the exploded parts, the section face
-// with the cycle, then a fade to the other layout. Each step holds
-// seconds/4 (at least 9 s); calm (1 = slowest) slows the orbit, the crank
-// and the explode. opts.label names the subject of each step. No URL hash
-// writes while it plays. No exit(): the shell reloads the page.
+// the hot end and the regenerator, the exploded engine, close-ups of 5
+// exploded parts, sometimes a pull-back on the exploded stack, the section
+// face with the cycle, the crank, then a fade to the other layout. Each
+// step holds seconds/12 (at least 4.5 s). lib/mech-tour.js moves the
+// camera in each step (a seeded move that is never the move of the step
+// before, near the front of the view), seeds the explode spread and the
+// close-up mode of each unit, and frames, glows and names each close-up
+// part (the others ghost; the crank stops and the section cut is off for
+// them). calm (1 = slowest) slows the crank and the explode. opts.label
+// names the subject of each step. No URL hash writes while it plays. No
+// exit(): the shell reloads the page.
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -430,9 +437,10 @@ window.snSaver = {
     const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
     stage.scene.background = bg;
     stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
-    S.ekRate = 1.6 - 1.0 * calm;
-    setRpm(Math.round(48 - 30 * calm));
-    const hold = Math.max(9, (o.seconds || 60) / 4) * 1000;
+    S.ekRate = 2.4 - 0.8 * calm;
+    const RPM = Math.round(48 - 30 * calm);
+    setRpm(RPM);
+    const hold = Math.max(4.5, (o.seconds || 60) / 12) * 1000;
     let order = rnd() < 0.5 ? ['gamma', 'beta'] : ['beta', 'gamma'];
     const canvas = $('view');
     const fmt = (v, n = 2) => v.toFixed(n);
@@ -467,8 +475,31 @@ window.snSaver = {
     ];
     STEPS.forEach(s => { const f = s.lab; s.lab = () => Object.assign(f(), { rules: RULES }); });
     const regenT = () => (S.Th - TC) / Math.log(S.Th / TC);
-    let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0;
-    const show = s => { setView(s.view, true); const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
+    // Close-ups (lib/mech-tour.js): the moving parts and the hot end first.
+    const tour = createTour({ THREE, stage, cards, cur: () => S.cur, rnd, hold,
+      prefer: ['displacer', 'piston', 'flywheel', 'crank', 'dRod', 'pRod', 'dispRod', 'regen', 'matrix', 'hotcap', 'heater', 'cooler'],
+      skip: ['base', 'frame'] });
+    const focusStep = info => ({ focus: info, still: true, lab: () => { const t = tour.plate(info, S.cur.E.g.name); return { ...t, anchor: () => plateAnchor(t.meshes) }; } });
+    // A unit: STEPS 0-3, the close-ups (in 'circle' or 'mixed' mode
+    // sometimes a pull-back on the stack), then STEPS 4-5.
+    let plan = [];
+    const makePlan = () => {
+      const u = tour.unit(), F = tour.pick(5).map(focusStep);
+      if (u.mode !== 'flyby' && rnd() < 0.6) F.push({ ...STEPS[3], still: true, stack: true });
+      plan = [STEPS[0], STEPS[1], STEPS[2], { ...STEPS[3], still: true }, ...F, STEPS[4], STEPS[5]];
+    };
+    let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0, now = null;
+    const show = s => {
+      setRpm(s.still ? 0 : RPM);
+      setShow('section', !s.focus);
+      if (s.focus) tour.show(s.focus);
+      else {
+        tour.clear();
+        setView(s.view, true);
+        tour.fromFly({ kind: s.stack ? 'stack' : 'view', move: s.stack ? 'pull' : null, exploded: s.view === 'exploded' });
+      }
+      const l = s.lab(); lastLab = JSON.stringify(l); label(l);
+    };
     const fadeSwap = async (id, then) => {
       canvas.style.opacity = '0';
       await new Promise(r => setTimeout(r, 950));
@@ -479,18 +510,22 @@ window.snSaver = {
       setTimeout(() => { canvas.style.opacity = '1'; then(); }, 250);
     };
     const advance = () => {
-      const s = STEPS[n % STEPS.length];
-      if (n % STEPS.length === 0 && n > 0) fadeSwap(order[++ord % order.length], () => show(s));
-      else show(s);
-      n++;
+      if (n === 0 || n >= plan.length) {
+        const go = () => { makePlan(); n = 0; stepT = 0; now = plan[n++]; show(now); };
+        if (now) { tour.clear(); fadeSwap(order[++ord % order.length], go); now = null; } else go();
+        return;
+      }
+      now = plan[n++]; show(now);
     };
+    window.__mechTour = tour;
     saverTick = dt => {
+      tour.tick(dt);
       stepT += dt * 1000; labT += dt;
-      if (stepT >= hold) { stepT = 0; advance(); }
+      if (stepT >= hold && !S.swapping && now) { stepT = 0; advance(); }
       // refresh the plate when the subject's numbers change (at most every 2 s)
-      if (labT > 2 && n > 0) {
+      if (labT > 2 && now) {
         labT = 0;
-        const l = STEPS[(n - 1) % STEPS.length].lab(), js = JSON.stringify(l);
+        const l = now.lab(), js = JSON.stringify(l);
         if (js !== lastLab) { lastLab = js; label(l); }
       }
     };
