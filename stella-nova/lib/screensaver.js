@@ -699,7 +699,7 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // or box, or one key point at the centre (explosion: the fireball), gets
 // no leader. anchor.lead true or false overrides this test.
 const CODE_LINES = 12;
-let labelTimer = 0, plate = null, plateRAF = 0;
+let labelTimer = 0, labelWait = null, plate = null, plateRAF = 0;
 const texCache = new Map();
 let sciMath = null;
 function loadSciMath() {
@@ -824,11 +824,18 @@ function setLabel(info, fallback) {
     fillTex(p, info.rules); fillCode(p); plate.info = info;
     return;
   }
-  clearTimeout(labelTimer);
+  // A plate with the same title that waits to show: keep its timer and
+  // take the new values. (A page that sent its plate more often than the
+  // 700 ms wait, tidal-currents at calm 0 every 0.42 s, restarted the
+  // timer on each call, so its plate never showed.)
+  if (info && S.labels && run && labelWait && labelWait.title === String(info.title || '')) { labelWait.info = info; return; }
+  clearTimeout(labelTimer); labelWait = null;
   p.classList.remove('on'); leadEl().classList.remove('on');
   if (!info || !S.labels || !run) { if (plate) plate.info = null; return; }
   const page = allPages().find(q => q.key === run.order[run.i]);
+  const wait = labelWait = { title: String(info.title || ''), info };
   labelTimer = setTimeout(() => {
+    labelWait = null; info = wait.info;
     p.innerHTML = posterHTML(info, page); fillTex(p, info.rules); fillCode(p);
     p.dataset.title = String(info.title || '');
     if (page) p.style.setProperty('--c', page.color);
