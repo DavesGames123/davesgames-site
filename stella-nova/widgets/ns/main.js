@@ -1054,6 +1054,20 @@ let SV = null;
 // horizontal field of view is the narrow one, so k gets larger by sqrt(H/W).
 function svDolly(cam,ctl,k){ const W=stage.clientWidth, H=stage.clientHeight; k*=Math.sqrt(Math.max(1,H/Math.max(1,W)));
   cam.position.sub(ctl.target).multiplyScalar(k).add(ctl.target); cam.far=Math.max(cam.far,cam.position.distanceTo(ctl.target)*4); cam.updateProjectionMatrix(); ctl.update(); }
+// Saver framing of Flow 3D. A wide stage keeps the old view: the page camera
+// direction at 2x its distance (elevation 16°). On a tall stage the cloud of
+// the column is a flat disc, and it was a thin band of 1.7 px points across
+// the middle. There the camera rises by (1 - W/H) x 0.75 rad, to 37° at
+// 9:16, so the disc shows as a taller ellipse. The distance fits a radius
+// to 94% of the half width: 4.4 world units for the column, 5.6 for a flow
+// in the box (half side 4.3, the corners may cut). Points go to 2.6 px (the headset
+// size) and tracers to 2.1 px. The azimuth of the auto-orbit is kept.
+function f3Fit(){ const W=stage.clientWidth, H=stage.clientHeight, a=W/Math.max(1,H), c=F3.camera, t=F3.controls.target;
+  const v=c.position.clone().sub(t), az=Math.atan2(v.x,v.z); let el=Math.atan2(2.6,Math.hypot(6.0,6.8)), d=2*Math.hypot(6.0,2.6,6.8);
+  if(a<1){ el+=(1-a)*0.75; d=(F3.ic==='column'?4.4:5.6)/(0.94*Math.tan(c.fov*Math.PI/360)*a); }
+  c.position.set(t.x+d*Math.cos(el)*Math.sin(az), t.y+d*Math.sin(el), t.z+d*Math.cos(el)*Math.cos(az));
+  c.far=Math.max(c.far,4*d); c.updateProjectionMatrix(); F3.controls.update();
+  F3.points.material.size=a<1?2.6:1.7; F3.bundle.setWidth(a<1?2.1:1.4); }
 // Seeded generator (mulberry32) for every saver choice.
 function svRng(seed){ let a=(seed>>>0)||1; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }; }
 // Run f with Math.random replaced by rng (the random initial fields use Math.random).
@@ -1110,12 +1124,13 @@ const SV_VIEWS = {
   // velocity: vortex column, then Taylor–Green. ABC is not in the cycle: its
   // tracers do not show and the cloud looks static. The fade multiplies the
   // opacity of every transparent material in the scene by the visibility.
+  // f3Fit frames the scene for the stage shape (see "function f3Fit").
   flow3d(calm, show, fade, rng){
     const ics=['column','taylor-green']; let i=Math.floor(rng()*2);
     const mats=[]; F3.scene.traverse(o=>{ if(o.material&&o.material.transparent) mats.push([o.material,o.material.opacity]); });
-    const next=()=>{ i=(i+1)%2; F3.ic=ics[i]; svSeeded(rng,f3Reset); };
+    const next=()=>{ i=(i+1)%2; F3.ic=ics[i]; svSeeded(rng,f3Reset); f3Fit(); };
     F3.n=16; F3.rate=1-0.6*calm; TOG.spin=true; TOG.trails=true; F3.controls.autoRotateSpeed=0.4*(1-0.5*calm); VX.renderer.setClearColor(0x0a0810,1);
-    svDolly(F3.camera,F3.controls,2.0);
+    f3Fit(); addEventListener('resize',f3Fit);
     i=(i+1)%2; next(); const clock=svClock(show,fade,next);
     return { draw(dt){ const k=clock(dt); for(const [m,o] of mats) m.opacity=o*k; drawFlow3D(dt); } };
   },
