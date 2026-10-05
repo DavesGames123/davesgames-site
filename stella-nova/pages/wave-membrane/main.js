@@ -43,6 +43,7 @@
   const TAU = Math.PI * 2;
   const S = 1.5;            // half-width of the membrane in world units
   const HEIGHT = 0.85;      // world height per unit of u
+  let heightK = 1;          // height scale: 1 on the page, 0.75-1.25 in the saver
   const GRID = 96;          // solver nodes per side
   const CFL = 0.5;          // below the 2D limit 1/sqrt(2)
   const STEP_RATE = 110;    // solver steps per real second at c = 1, rate = 1
@@ -137,7 +138,7 @@
   function fitR(w, h, wV, hV) { return Math.max(5.4, 4.96 * h / wV, 3.5 * h / hV); }
 
   // Low ambient and a strong key light, so the slope of the membrane shades.
-  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+  const amb = new THREE.AmbientLight(0xffffff, 0.42); scene.add(amb);
   const sun = new THREE.DirectionalLight(0xffffff, 0.85); sun.position.set(3, 5, 2); scene.add(sun);
   const fill = new THREE.DirectionalLight(0xffd8c0, 0.18); fill.position.set(-3, -2, -2); scene.add(fill);
 
@@ -148,6 +149,16 @@
   });
   const membrane = new THREE.Mesh(new THREE.BufferGeometry(), memMat);
   scene.add(membrane);
+  // Saver only: a wire overlay that shares the membrane geometry, and a
+  // black plane in front of the camera for the fade between scenes. Both
+  // stay hidden on the page.
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.22, depthWrite: false });
+  const wire = new THREE.Mesh(membrane.geometry, wireMat);
+  wire.visible = false; wire.renderOrder = 1; scene.add(wire);
+  const fadeMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+  const fadePlane = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), fadeMat);
+  fadePlane.position.z = -0.5; fadePlane.renderOrder = 999; fadePlane.visible = false;
+  camera.add(fadePlane); scene.add(camera);
 
   const rimMat = new THREE.LineBasicMaterial({ color: 0xd6cfe0, transparent: true, opacity: 0.9 });
   let rim = null;
@@ -259,7 +270,7 @@
 
   function updateMesh() {
     const u = sim.u, p = POS.array, n = GRID * GRID;
-    for (let k = 0; k < n; k++) p[k * 3 + 1] = u[k] * HEIGHT;
+    for (let k = 0; k < n; k++) p[k * 3 + 1] = u[k] * HEIGHT * heightK;
     POS.needsUpdate = true;
     membrane.geometry.computeVertexNormals();
     paint();
@@ -276,9 +287,11 @@
     for (let k = 0; k < n; k++) if (mask[k]) { const a = Math.abs(f[k]); if (a > fmax) fmax = a; }
     runMax = Math.max(fmax, runMax * 0.998, 1e-9);
     const inv = 1 / runMax;
+    const sv = saverOn ? saverScene : null;
     for (let k = 0; k < n; k++) {
       const v = f[k] * inv;
-      if (G.color === 'accmag') ramp(MAGMA, Math.abs(v), _c);
+      if (sv) saverColor(sv, v);
+      else if (G.color === 'accmag') ramp(MAGMA, Math.abs(v), _c);
       else if (G.color === 'accsgn') ramp(DIVERGE, 0.5 + 0.5 * v, _c);
       else ramp(HEIGHTR, 0.5 + 0.5 * v, _c);
       col[k * 3] = _c[0]; col[k * 3 + 1] = _c[1]; col[k * 3 + 2] = _c[2];
@@ -362,6 +375,8 @@
       if (k > 0) { sim.step(k); updateMesh(); }
     }
     if (saverSpin) view.theta += saverSpin * dtReal;   // screensaver orbit only
+    if (saverOn) saverTick(dtReal);
+    wire.geometry = membrane.geometry;
     const w = canvas.clientWidth, h = canvas.clientHeight, o = occlusion(w, h);
     for (const k in occ) occ[k] += (o[k] - occ[k]) * 0.18;
     const wV = Math.max(80, w - occ.l - occ.r), hV = Math.max(80, h - occ.t - occ.b);
@@ -585,44 +600,167 @@
   // ------------------------------------------------------------ screensaver
   // lib/screensaver.js has the protocol. The CSS under html.sn-saver hides
   // every overlay, so occlusion() reads no margins and the membrane sits in
-  // the center of the full frame. The seed picks the shape and a pair of
-  // modes with different omega, so the sum beats and the shape keeps moving.
-  // calm 1 gives the slowest time and orbit. Nothing changes during a dwell.
+  // the center of the full frame. calm 1 gives the slowest time and orbit.
+  //
+  // SCENES. opts.seed drives rnd(). A scene is one curated look (SAVER_LOOKS:
+  // material, height ramp, background, line colours, the render styles that
+  // suit it), a lighting rig (SAVER_RIGS), a render style, a shape, an
+  // excitation, a height scale and a camera (polar angle, start azimuth,
+  // orbit speed and sense). The excitation is one mode with its nodal lines,
+  // a pair of modes with different omega (the sum beats), or a strike: a
+  // Gaussian bump at rest, which holds many modes. A new scene comes every
+  // hold = seconds / 5, clamped to 8-12 s, behind a 0.6 s fade to black
+  // (fadePlane), and the look never repeats twice in a row. On the page
+  // (saverOn false) none of this runs: paint() keeps its ramps, heightK
+  // stays 1, the wire and the fade plane stay hidden.
   const SAVER_PAIRS = {
-    square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 4, 1], [1, 2, 3, 3]],
-    circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2]],
+    square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 4, 1], [1, 2, 3, 3], [4, 1, 1, 4], [3, 3, 1, 5], [5, 2, 2, 1]],
+    circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2], [0, 3, 2, 1], [4, 1, 1, 2], [2, 2, 0, 1], [5, 1, 0, 2]],
   };
-  // The plate (opts.label) gives the wave equation and the mode shape that
-  // setMode() in sim.js builds as TeX, and the live values as params: the
-  // mode numbers and amplitudes, c, the beat |f1 − f2| (f = ω/2π from
-  // sim.omega()) and the energy ratio. The anchor is membraneAnchor(). The solver is a lossless leapfrog, so the damping is
-  // 0 and E/E0 shows the drift. Sim time runs at STEP_RATE·speed·c·dt per real
+  const SAVER_SINGLES = {
+    square: [[3, 2], [4, 3], [5, 4], [2, 5], [6, 3], [3, 3]],
+    circle: [[2, 3], [4, 2], [3, 3], [0, 3], [5, 2], [1, 4]],
+  };
+  // Ramps run trough, zero, crest (paint maps u/|u|max from -1..1 to 0..1).
+  const SAVER_LOOKS = [
+    { name: 'Calfskin', ramp: [[0.30,0.17,0.08],[0.55,0.38,0.22],[0.80,0.68,0.50],[0.93,0.82,0.60],[1.00,0.95,0.82]], shin: 6, spec: 0x1a140c, opacity: 1, bg: 0x0c0805, rim: 0xc9a77a, node: [0.35,0.18,0.07], wire: 0x6b4a2a, floor: 0x3a2a18, styles: ['smooth', 'contour', 'nodal'] },
+    { name: 'Mylar', ramp: [[0.10,0.22,0.55],[0.42,0.55,0.80],[0.70,0.74,0.82],[0.98,0.80,0.45],[1.00,0.95,0.78]], shin: 160, spec: 0xffffff, opacity: 1, bg: 0x05070c, rim: 0xdfe6f2, node: [1.00,0.45,0.25], wire: 0x9fb4d6, floor: 0x26304a, styles: ['smooth', 'nodal', 'wire'] },
+    { name: 'Brushed steel', ramp: [[0.18,0.20,0.24],[0.40,0.43,0.48],[0.60,0.62,0.66],[0.78,0.80,0.84],[0.95,0.96,0.98]], shin: 70, spec: 0x9a9a9a, opacity: 1, bg: 0x060708, rim: 0xb8c0cc, node: [0.95,0.70,0.25], wire: 0x8a929e, floor: 0x2a2e36, styles: ['smooth', 'contour', 'wire'] },
+    { name: 'Glass', ramp: [[0.05,0.35,0.55],[0.20,0.62,0.78],[0.50,0.82,0.88],[0.70,0.95,0.86],[0.95,1.00,0.95]], shin: 200, spec: 0xffffff, opacity: 0.62, bg: 0x03080b, rim: 0xbff4ff, node: [1.00,1.00,1.00], wire: 0x7fe0f0, floor: 0x10303a, styles: ['smooth', 'wire', 'nodal'] },
+    { name: 'Graphite', ramp: [[0.05,0.05,0.07],[0.14,0.15,0.18],[0.24,0.25,0.29],[0.30,0.45,0.70],[0.55,0.80,1.00]], shin: 25, spec: 0x444a55, opacity: 1, bg: 0x030305, rim: 0x6a7488, node: [0.40,0.85,1.00], wire: 0x5f7aa8, floor: 0x1a1d26, styles: ['contour', 'wire', 'nodal'] },
+    { name: 'Iridescent', ramp: [[0.55,0.25,0.95],[0.20,0.55,1.00],[0.20,0.90,0.75],[0.95,0.85,0.25],[1.00,0.35,0.55]], shin: 110, spec: 0xcccccc, opacity: 1, bg: 0x06040a, rim: 0xe8dcff, node: [1.00,1.00,1.00], wire: 0xc0a8ff, floor: 0x2a1c3a, styles: ['smooth', 'contour'] },
+    { name: 'Copper', ramp: [[0.10,0.02,0.02],[0.45,0.10,0.04],[0.72,0.33,0.12],[0.98,0.62,0.25],[1.00,0.92,0.65]], shin: 90, spec: 0xffb070, opacity: 1, bg: 0x0a0503, rim: 0xffc890, node: [0.30,0.95,0.85], wire: 0xb0602a, floor: 0x3a1c10, styles: ['smooth', 'nodal', 'contour'] },
+    { name: 'Violet and amber', ramp: HEIGHTR, shin: 40, spec: 0x3a3a3a, opacity: 1, bg: 0x040308, rim: 0xd6cfe0, node: [0.99,0.99,0.75], wire: 0x8a70c0, floor: 0x3a2a48, styles: ['smooth', 'nodal', 'wire'] },
+  ];
+  const SAVER_RIGS = [
+    { name: 'key', amb: 0.42, sun: [3, 5, 2, 0.85], fill: [-3, -2, -2, 0.18] },
+    { name: 'top', amb: 0.30, sun: [0.3, 8, 0.2, 1.0], fill: [0, -3, 0, 0.10] },
+    { name: 'rim', amb: 0.25, sun: [-4, 1.2, -3, 1.15], fill: [3, 2, 3, 0.28] },
+    { name: 'grazing', amb: 0.16, sun: [6, 0.8, 1, 1.3], fill: [-3, 2, -1, 0.12] },
+  ];
+  const SAVER_STYLE = { smooth: 'smooth shaded', contour: 'contour bands', nodal: 'nodal lines', wire: 'mesh overlay' };
+  let saverScene = null;
+  // The colour of one vertex in the saver, from v = u / running max.
+  function saverColor(sv, v) {
+    ramp(sv.look.ramp, 0.5 + 0.5 * v, _c);
+    if (sv.style === 'contour') {
+      const b = (0.5 + 0.5 * v) * 9, f = b - Math.floor(b);
+      if (f < 0.14) { _c[0] *= 0.3; _c[1] *= 0.3; _c[2] *= 0.3; }
+    } else if (sv.style === 'nodal') {
+      // the zero set of u: the nodal lines of the sum, which move as it beats
+      const a = Math.abs(v);
+      if (a < 0.07) { const t = 1 - a / 0.07, nc = sv.look.node; _c[0] += (nc[0] - _c[0]) * t; _c[1] += (nc[1] - _c[1]) * t; _c[2] += (nc[2] - _c[2]) * t; }
+    }
+  }
+  function pickScene(rnd, prev, calm) {
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    let look; do look = pick(SAVER_LOOKS); while (prev && look === prev.look);
+    const shape = rnd() < 0.5 ? 'circle' : 'square', kr = rnd();
+    let ex;
+    if (kr < 0.4) { const q = pick(SAVER_PAIRS[shape]); ex = { kind: 'pair', m1: q[0], n1: q[1], m2: q[2], n2: q[3] }; }
+    else if (kr < 0.75) { const q = pick(SAVER_SINGLES[shape]); ex = { kind: 'single', m1: q[0], n1: q[1] }; }
+    else {
+      // a strike off the centre: within r 0.22 of the centre on the drum,
+      // and 0.25-0.75 on the square, so the bump is inside the edge
+      const a = rnd() * TAU, r = 0.08 + 0.14 * rnd();
+      ex = shape === 'circle' ? { kind: 'strike', x: 0.5 + r * Math.cos(a), y: 0.5 + r * Math.sin(a) } : { kind: 'strike', x: 0.25 + 0.5 * rnd(), y: 0.25 + 0.5 * rnd() };
+      ex.w = 0.045 + 0.04 * rnd();
+    }
+    return {
+      look, shape, ex, style: pick(look.styles), rig: pick(SAVER_RIGS),
+      heightK: 0.75 + 0.5 * rnd(), phi: 0.62 + 0.58 * rnd(), theta: rnd() * TAU,
+      spin: (rnd() < 0.5 ? -1 : 1) * (0.04 + 0.06 * rnd()) * (1 - 0.5 * calm), floor: rnd() < 0.6,
+    };
+  }
+  // A Gaussian bump at rest: uPrev = u + dt^2/2 acc, as setMode does.
+  function applyStrike(ex) {
+    const N = GRID, h = 1 / (N - 1), u = sim.u, up = sim.uPrev, mask = sim.mask;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const id = j * N + i, dx = i * h - ex.x, dy = j * h - ex.y;
+      u[id] = mask[id] ? G.amp * Math.exp(-(dx * dx + dy * dy) / (2 * ex.w * ex.w)) : 0;
+    }
+    sim._computeAcc();
+    const k2 = 0.5 * sim.dt * sim.dt;
+    for (let id = 0; id < N * N; id++) up[id] = mask[id] ? u[id] + k2 * sim.acc[id] : 0;
+    sim.t = 0; E0 = sim.energy(); runMax = 1e-9; stepCarry = 0;
+    updateMesh();
+  }
+  function applyScene(sc) {
+    saverScene = sc;
+    const L = sc.look, R = sc.rig;
+    memMat.shininess = L.shin; memMat.specular.setHex(L.spec);
+    memMat.transparent = L.opacity < 1; memMat.opacity = L.opacity; memMat.depthWrite = L.opacity >= 1; memMat.needsUpdate = true;
+    renderer.setClearColor(L.bg, 1);
+    rimMat.color.setHex(L.rim); nodalMat.color.setRGB(L.node[0], L.node[1], L.node[2]);
+    wireMat.color.setHex(L.wire); wire.visible = sc.style === 'wire';
+    // the grid keeps its own vertex colours on the page; the saver tints it
+    floor.visible = sc.floor; floor.material.vertexColors = false; floor.material.color.setHex(L.floor); floor.material.needsUpdate = true;
+    amb.intensity = R.amb;
+    sun.position.set(R.sun[0], R.sun[1], R.sun[2]); sun.intensity = R.sun[3];
+    fill.position.set(R.fill[0], R.fill[1], R.fill[2]); fill.intensity = R.fill[3];
+    heightK = sc.heightK; floor.position.y = -HEIGHT * 1.15 * heightK;
+    view.theta = sc.theta; view.phi = sc.phi; saverSpin = sc.spin;
+    const ex = sc.ex;
+    G.nodal = sc.style === 'nodal' && ex.kind === 'single';
+    if (ex.kind === 'pair') Object.assign(G, { m1: ex.m1, n1: ex.n1, m2: ex.m2, n2: ex.n2, two: true, amp2: 0.6 });
+    else if (ex.kind === 'single') Object.assign(G, { m1: ex.m1, n1: ex.n1, two: false });
+    else G.two = false;
+    if (sc.shape !== G.shape) { G.shape = sc.shape; makeSolver(); } else applyModes();
+    if (ex.kind === 'strike') { applyStrike(ex); if (nodal) nodal.visible = false; }
+    saverPlate();
+  }
+  let saverRnd = null, saverCalm = 0.7, saverT = 0, saverHold = 10;
+  const SAVER_FADE = 0.6;
+  function saverTick(dt) {
+    saverT += dt;
+    const k = Math.min(1, saverT / SAVER_FADE, (saverHold - saverT) / SAVER_FADE);
+    fadeMat.opacity = 1 - Math.max(0, k);
+    if (saverT >= saverHold) { saverT = 0; applyScene(pickScene(saverRnd, saverScene, saverCalm)); }
+  }
+  // The plate (opts.label): the look and the excitation in the title, the
+  // render style, the light and the shape in the sub. The TeX is the wave
+  // equation and the mode shape that setMode() in sim.js builds; a strike
+  // adds its start shape. params: the modes and amplitudes (or the strike
+  // point and width), c, the beat |f1 − f2| or f1 (f = ω/2π from
+  // sim.omega()), and the energy ratio. The solver is a lossless leapfrog,
+  // so E/E0 shows the drift. Sim time runs at STEP_RATE·speed·c·dt per real
   // second, so a sim frequency times that rate is the frequency on screen.
   // applyModes() calls saverPlate(), so a mode change updates the plate.
   let saverLabel = null, saverTimer = 0, saverOn = false;
   function saverPlate() {
     if (!saverLabel || !sim) return;
-    const circ = G.shape === 'circle', TAUv = 2 * Math.PI;
+    const sc = saverScene, circ = G.shape === 'circle', TAUv = 2 * Math.PI;
+    const strike = sc && sc.ex.kind === 'strike';
     const md = modeList(), f = md.map(q => sim.omega(q.m, q.n) / TAUv);
     const rate = STEP_RATE * G.speed * G.c * sim.dt;      // sim time per real second
     const hz = v => (v * rate).toFixed(2) + ' Hz';
     const P = [];
-    md.forEach((q, k) => P.push({ sym: '(m, n)_' + (k + 1), name: 'mode, amplitude', value: '(' + q.m + ', ' + q.n + '), ' + q.amp.toFixed(2), cls: 'm4' }));
+    if (strike) {
+      P.push({ sym: '\\mathbf{x}_0', name: 'strike point', value: '(' + sc.ex.x.toFixed(2) + ', ' + sc.ex.y.toFixed(2) + ')', cls: 'm4' });
+      P.push({ sym: 'w', name: 'strike width', value: sc.ex.w.toFixed(3) });
+      P.push({ sym: 'f_{1}', name: 'lowest mode', value: hz(sim.omega(circ ? 0 : 1, 1) / TAUv) });
+    } else {
+      md.forEach((q, k) => P.push({ sym: '(m, n)_' + (k + 1), name: 'mode, amplitude', value: '(' + q.m + ', ' + q.n + '), ' + q.amp.toFixed(2), cls: 'm4' }));
+      if (f.length > 1) {
+        const fb = Math.abs(f[0] - f[1]);
+        P.push({ sym: '|f_1 - f_2|', name: 'beat', value: hz(fb) + (fb > 0 ? ', ' + (1 / (fb * rate)).toFixed(1) + ' s' : '') });
+      } else P.push({ sym: 'f_1', name: 'frequency', value: hz(f[0]) });
+    }
     P.push({ sym: 'c', name: 'wave speed', value: G.c.toFixed(2), cls: 'm2' });
-    if (f.length > 1) {
-      const fb = Math.abs(f[0] - f[1]);
-      P.push({ sym: '|f_1 - f_2|', name: 'beat', value: hz(fb) + (fb > 0 ? ', ' + (1 / (fb * rate)).toFixed(1) + ' s' : '') });
-    } else P.push({ sym: 'f_1', name: 'frequency', value: hz(f[0]) });
     P.push({ sym: 'E/E_0', name: 'energy ratio', value: E0 > 0 ? (sim.energy() / E0).toFixed(4) : '1', cls: 'm5' });
+    const exName = !sc ? 'two modes' : strike ? 'struck' : sc.ex.kind === 'pair'
+      ? 'modes (' + sc.ex.m1 + ',' + sc.ex.n1 + ') + (' + sc.ex.m2 + ',' + sc.ex.n2 + ')' : 'mode (' + sc.ex.m1 + ',' + sc.ex.n1 + ')';
+    const tex = (circ ? SAVER_TEX.circle : SAVER_TEX.square).slice();
+    if (strike) tex.splice(1, 1, String.raw`u(\mathbf{x},0)=A\,e^{-|\mathbf{x}-\mathbf{x}_0|^2/2w^2}=\sum_k A_k\,\phi_k(\mathbf{x})`);
     saverLabel({
-      title: circ ? 'Drum membrane · two modes' : 'Square membrane · two modes',
-      sub: 'Clamped edge, ' + GRID + ' × ' + GRID + ' leapfrog grid',
+      title: (sc ? sc.look.name : (circ ? 'Drum membrane' : 'Square membrane')) + ' · ' + exName,
+      sub: sc ? SAVER_STYLE[sc.style] + ' · ' + sc.rig.name + ' light · ' + (circ ? 'drum' : 'square') + ', clamped edge' : 'Clamped edge',
       params: P,
-      lines: [(circ ? 'Drum of radius 0.5' : 'Square of side 1') + ', lossless, so E/E₀ shows the drift'],
-      tex: circ ? SAVER_TEX.circle : SAVER_TEX.square, rules: SAVER_RULES,
+      lines: [GRID + ' × ' + GRID + ' leapfrog grid, lossless, so E/E₀ shows the drift'],
+      tex, rules: SAVER_RULES,
       eq: circ
-        ? ['∂²u/∂t² = c²∇²u,   u = 0 at r = R', 'u = Σ Aₖ Jₘ(k r) cos(mθ) cos(ωₖ t)', 'k = jₘ,ₙ / R,   ω = c k,   f = ω/2π']
-        : ['∂²u/∂t² = c²∇²u,   u = 0 on the edge', 'u = Σ Aₖ sin(mₖπx) sin(nₖπy) cos(ωₖ t)', 'ω = cπ√(m² + n²),   f = ω/2π'],
+        ? ['∂²u/∂t² = c²∇²u,   u = 0 at r = R', strike ? 'u(x, 0) = A exp(−|x − x₀|²/2w²)' : 'u = Σ Aₖ Jₘ(k r) cos(mθ) cos(ωₖ t)', 'k = jₘ,ₙ / R,   ω = c k,   f = ω/2π']
+        : ['∂²u/∂t² = c²∇²u,   u = 0 on the edge', strike ? 'u(x, 0) = A exp(−|x − x₀|²/2w²)' : 'u = Σ Aₖ sin(mₖπx) sin(nₖπy) cos(ωₖ t)', 'ω = cπ√(m² + n²),   f = ω/2π'],
       anchor: membraneAnchor,
     });
   }
@@ -659,22 +797,26 @@
     return { x: cx, y: cy, r, pts: pk };
   }
   window.snSaver = {
-    exit() { saverLabel = null; saverOn = false; clearInterval(saverTimer); saverTimer = 0; },
+    exit() {
+      saverLabel = null; saverOn = false; saverScene = null; clearInterval(saverTimer); saverTimer = 0;
+      fadePlane.visible = false; wire.visible = false; heightK = 1;
+    },
     enter(o) {
-      const calm = o && o.calm != null ? o.calm : 0.7, seed = (o && o.seed) >>> 0;
+      const calm = o && o.calm != null ? o.calm : 0.7;
+      let seed = ((o && o.seed) >>> 0) || 1;
+      saverRnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+      saverCalm = calm;
+      saverHold = Math.max(8, Math.min(12, ((o && o.seconds) || 60) / 5)); saverT = 0;
       document.documentElement.classList.add('sn-saver'); saverOn = true;
-      renderer.setClearColor(0x040308, 1);     // opaque, so a recording has no alpha
       resize();
-      const shape = seed % 3 === 2 ? 'circle' : 'square', L = SAVER_PAIRS[shape];
-      const [m1, n1, m2, n2] = L[(seed >>> 2) % L.length];
-      Object.assign(G, { m1, n1, m2, n2, two: true, amp2: 0.6, amp: 0.7, paused: false, color: 'height', nodal: true });
+      Object.assign(G, { amp: 0.7, paused: false, color: 'height' });
       G.speed = 0.35 + 0.4 * (1 - calm);
-      if (shape !== G.shape) { G.shape = shape; makeSolver(); } else applyModes();
-      drawLegend();
-      view.theta = VIEW0.theta + (seed % 628) / 100; view.phi = VIEW0.phi; view.zoom = 0.85;
-      saverSpin = 0.04 * (1 - 0.5 * calm);
+      view.zoom = 0.85;
       saverLabel = o && o.labels !== false && typeof o.label === 'function' ? o.label : null;
-      clearInterval(saverTimer); saverPlate();
+      fadePlane.visible = true;
+      applyScene(pickScene(saverRnd, null, calm));
+      drawLegend();
+      clearInterval(saverTimer);
       if (saverLabel) saverTimer = setInterval(saverPlate, 1000);
       return { canvas, warmupMs: 500 };
     },
