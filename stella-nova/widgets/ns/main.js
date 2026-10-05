@@ -268,7 +268,13 @@ class TracerBundle{
     // Emit each trail bracketed by a black point at either end (the join),
     // fading the head-to-tail brightness and colouring by stretch rate / p95.
     for(const t of trails){ if(t.length<2) continue; const L=t.length; put(t[0],0,0,0); for(let j=0;j<L;j++){ const p=t[j]; const f=0.3+0.7*Math.pow(j/(L-1),1.3); const c=cyanRGB(Math.max(0,p[3])/p95); const g=this.gain; put(p,c[0]*f*g,c[1]*f*g,c[2]*f*g); } put(t[L-1],0,0,0); }
-    this.g.setPositions(pos); this.g.setColors(col); this.g.computeBoundingSphere(); }
+    this.g.setPositions(pos); this.g.setColors(col); this.g.computeBoundingSphere();
+    // three r160 caches _maxInstanceCount at the first bind of an instanced
+    // geometry and clears it only on dispose. The buffers here are new each
+    // frame: with fewer segments than that first frame, the draw asked for
+    // instances past the buffer end and WebGL dropped it, so every tracer
+    // vanished. Set the real count and clear the cap after each rebuild.
+    this.g.instanceCount=n-1; delete this.g._maxInstanceCount; }
 }
 // 2D arrow with a filled head, used for velocity fields on the canvas.
 function arrow(x0,y0,x1,y1,col,w=1.2){
