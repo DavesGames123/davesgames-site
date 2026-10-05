@@ -703,13 +703,15 @@ const FQ = FRAMES.map(F => G.quatFromR(F.R));
 const R0 = rng(7);
 const JIT = FRAMES.map(() => G.unit([gauss(R0), gauss(R0), gauss(R0)]));
 const DELAY = FRAMES.map((_, i) => (PL[i] < 70 ? 0.18 : 0) + 0.12 * R0());
+const SUMO_FOLD = { FRAMES, FQ, JIT, DELAY };
 // Illustrative frame at fractional layer lam in [0, 8]. Final = real frame.
-function frameAt(i, lam) {
-  const s = lam / 8, p = smooth(clamp((s - DELAY[i]) / (1 - DELAY[i]), 0, 1));
+// M holds the frames and the path of one protein (the saver passes its own).
+function frameAt(i, lam, M = SUMO_FOLD) {
+  const s = lam / 8, p = smooth(clamp((s - M.DELAY[i]) / (1 - M.DELAY[i]), 0, 1));
   if (lam <= 0) return { R: G.I3, t: [0, 0, 0] };
   const pr = smooth(clamp(p * 1.35, 0, 1));
-  const R = G.RfromQuat(G.slerp([1, 0, 0, 0], FQ[i], pr));
-  const t = G.add(G.scl(FRAMES[i].t, p), G.scl(JIT[i], 5 * Math.sin(Math.PI * p) * (1 - p * 0.4)));
+  const R = G.RfromQuat(G.slerp([1, 0, 0, 0], M.FQ[i], pr));
+  const t = G.add(G.scl(M.FRAMES[i].t, p), G.scl(M.JIT[i], 5 * Math.sin(Math.PI * p) * (1 - p * 0.4)));
   return { R, t };
 }
 function initStruct() {
@@ -1142,22 +1144,59 @@ rafId = requestAnimationFrame(loop);
 // ============================================================================
 // Hook for the shell screensaver (lib/screensaver.js). The article has no
 // single canvas, so enter() hides the page and lays one full-window canvas
-// with its own View3D over it. It shows four scenes of the same SUMO1 model, one per
-// seconds/4 (10 s or more), from a seeded start: the structure module fold,
-// the Cα trace in pLDDT colours, the AF3 diffusion from noise, and all atoms
-// in pLDDT colours. Each scene fades in and out through the backdrop
+// with its own View3D over it. It shows four scenes, one per seconds/4
+// (10 s or more), from a seeded start: the structure module fold, the Cα
+// trace in pLDDT colours, the AF3 diffusion from noise, and all atoms in
+// pLDDT colours. Each scene shows the next protein of the gallery: SUMO1
+// of data.js, then the 14 AlphaFold DB models of saver-data.js (one per
+// fold class) in a seeded order. enter() imports saver-data.js, and SUMO1
+// plays until the import is done. Scene and protein step together, and
+// 15 proteins against 4 scenes give each protein every scene in turn.
+// Each scene fades in and out through the backdrop
 // colour, and its caption is drawn in the canvas, so the recording has it.
 // The fold and the denoise use 70% and 75% of the scene time. The spin is
 // 0.18 to 0.06 rad/s (calm 0 to 1). The page loop runs the tick (register).
 // The screensaver plate (opts.label) for scene si at scene time p (0..1).
-// Every number comes from PROT (data.js): the chain, the heavy atoms by
+// Every number comes from the protein model M: the chain, the heavy atoms by
 // element (the model has no H), the pLDDT bands of plddtColor, and the
 // share of residues whose phi/psi falls in the alpha and beta basins that
 // initRama draws. The TeX is the TeX of the matching cards (typeset.mjs);
 // eq keeps the Unicode fallback. The live value is the layer of frameAt or
 // the noise level sigma. chainAnchor (in enter) gives the chain on screen.
 const SUBN = n => String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
-function saverStats() {
+// One protein for the saver: SUMO1 of data.js (g null) or one GALLERY record
+// of saver-data.js. M holds what the scenes, frameAt and the plate read.
+// A gallery record gets its frame path from rng(7), as SUMO1 does.
+function saverModel(g) {
+  let M;
+  if (!g) M = { id: PROT.id, uni: (PROT.id.match(/AF-([A-Z0-9]+)-/) || [])[1] || '', name: PROT.name,
+    fold: 'β-grasp, ubiquitin-like', L, CA, NN, CC, FRAMES, FQ, JIT, DELAY, ATOMS, PL };
+  else {
+    const ATOMS = [], NN = [], CA = [], CC = [], PL = g.plddt, X = g.xyz;
+    let k = 0;
+    g.nat.forEach((n, i) => {
+      for (let j = 0; j < n; j++, k += 4) {
+        const p = [X[k] / 10, X[k + 1] / 10, X[k + 2] / 10];
+        [NN, CA, CC][j]?.push(p);
+        ATOMS.push({ p, el: X[k + 3], res: i, ca: j === 1 ? 1 : 0 });
+      }
+    });
+    const FRAMES = CA.map((_, i) => G.frameFrom3(NN[i], CA[i], CC[i])), R = rng(7);
+    M = { id: g.id, uni: g.uni, name: g.name, fold: g.fold, L: CA.length, CA, NN, CC, FRAMES, ATOMS, PL,
+      FQ: FRAMES.map(F => G.quatFromR(F.R)),
+      JIT: FRAMES.map(() => G.unit([gauss(R), gauss(R), gauss(R)])),
+      DELAY: FRAMES.map((_, i) => (PL[i] < 70 ? 0.18 : 0) + 0.12 * R()) };
+  }
+  // frame most of the chain, the low-confidence tails too (CORE_R is the core)
+  M.RC = 0.72 * Math.max(...M.CA.map(G.norm));
+  M.RA = 0.72 * Math.max(...M.ATOMS.map(a => G.norm(a.p)));
+  const R = rng(3);
+  M.EPS = M.ATOMS.map(() => [gauss(R), gauss(R), gauss(R)]);
+  M.ST = saverStats(M);
+  return M;
+}
+function saverStats(M) {
+  const { ATOMS, L, NN, CA, CC, PL } = M;
   const el = [0, 0, 0, 0];
   for (const a of ATOMS) el[a.el]++;
   let ha = 0, sb = 0, n = 0;
@@ -1171,10 +1210,10 @@ function saverStats() {
   const band = [PL.filter(v => v > 90).length, PL.filter(v => v > 70 && v <= 90).length, PL.filter(v => v > 50 && v <= 70).length, PL.filter(v => v <= 50).length];
   return { el, ha: Math.round(100 * ha / n), sb: Math.round(100 * sb / n), mean, band };
 }
-function saverPlate(si, p, ST) {
-  const uni = (PROT.id.match(/AF-([A-Z0-9]+)-/) || [])[1] || '';
-  const name = PROT.name.split(' (')[0];
-  const sub = `UniProt ${uni} · ${PROT.id}`;
+function saverPlate(si, p, M) {
+  const { ST, L, ATOMS } = M;
+  const name = M.name.split(' (')[0];
+  const sub = `${M.fold} · UniProt ${M.uni} · ${M.id}`;
   // Parameters: TeX symbol, short name, live value. The classes are those
   // of typeset.mjs: x m1, frames T, R, t m6, sigma m5. The TeX is the TeX
   // of typeset.mjs for the matching card.
@@ -1226,39 +1265,51 @@ window.snSaver = {
     document.body.appendChild(cv);
     const STEPS = 200, SMAX = 40, SMIN = 0.05, RHO = 7;   // the schedule of initDiffusion
     const sigma = t => Math.pow(Math.pow(SMAX, 1 / RHO) + t / STEPS * (Math.pow(SMIN, 1 / RHO) - Math.pow(SMAX, 1 / RHO)), RHO);
-    const R = rng(3), EPS = ATOMS.map(() => [gauss(R), gauss(R), gauss(R)]);
+    // The gallery: SUMO1 now, the saver-data.js models when the import is
+    // done, in an order from the seed. A model is built when it is first shown.
+    const seed = o.seed >>> 0, list = [null], built = new Map();
+    let pi = 0, M = saverModel(null);
+    built.set(null, M);
+    import('./saver-data.js').then(({ GALLERY }) => {
+      const R = rng(seed + 11), g = GALLERY.slice();
+      for (let k = g.length - 1; k > 0; k--) { const m = Math.floor(R() * (k + 1)); [g[k], g[m]] = [g[m], g[k]]; }
+      list.push(...g);
+    }).catch(() => { /* SUMO1 alone */ });
+    const nextModel = () => {
+      pi = (pi + 1) % list.length;
+      if (!built.has(list[pi])) built.set(list[pi], saverModel(list[pi]));
+      M = built.get(list[pi]);
+    };
+    const rbw = i => ramp(RAMP, i / (M.L - 1));
     let shown = null;   // the Cα points the scene drew last (null: the model CA)
-    // frame most of the chain, the low-confidence tails too (CORE_R is the core)
-    const RC = 0.72 * Math.max(...CA.map(G.norm)), RA = 0.72 * Math.max(...ATOMS.map(a => G.norm(a.p)));
     const SCENES = [
-      { cap: 'Structure module · residue frames fold into place', r: RC, build(add, p) {
-        const F = FRAMES.map((_, i) => frameAt(i, 8 * smooth(clamp(p / 0.7, 0, 1))));
+      { cap: 'Structure module · residue frames fold into place', r: 'RC', build(add, p) {
+        const F = M.FRAMES.map((_, i) => frameAt(i, 8 * smooth(clamp(p / 0.7, 0, 1)), M));
         shown = F.map(f => f.t);   // the plate anchor follows the drawn frames
-        for (let i = 0; i < L - 1; i++) add.seg(F[i].t, F[i + 1].t, rainbow(i), 0.55);
-        for (let i = 0; i < L; i++) {
+        for (let i = 0; i < M.L - 1; i++) add.seg(F[i].t, F[i + 1].t, rbw(i), 0.55);
+        for (let i = 0; i < M.L; i++) {
           const Rm = F[i].R, q = F[i].t;
-          add.dot(q, rainbow(i), 0.42);
+          add.dot(q, rbw(i), 0.42);
           add.line(q, G.add(q, [Rm[0] * 2.4, Rm[3] * 2.4, Rm[6] * 2.4]), '#ff6b6b', 1.1);
           add.line(q, G.add(q, [Rm[1] * 2.4, Rm[4] * 2.4, Rm[7] * 2.4]), '#5be08a', 1.1);
           add.line(q, G.add(q, [Rm[2] * 2.4, Rm[5] * 2.4, Rm[8] * 2.4]), '#6aa8ff', 1.1);
         }
       } },
-      { cap: 'The predicted model · Cα trace in pLDDT confidence colours', r: RC, build(add) {
-        for (let i = 0; i < L - 1; i++) add.seg(CA[i], CA[i + 1], plddtColor(PL[i]), 1.0);
+      { cap: 'The predicted model · Cα trace in pLDDT confidence colours', r: 'RC', build(add) {
+        for (let i = 0; i < M.L - 1; i++) add.seg(M.CA[i], M.CA[i + 1], plddtColor(M.PL[i]), 1.0);
       } },
-      { cap: 'AlphaFold 3 · diffusion takes noise to atoms', r: RA, build(add, p) {
+      { cap: 'AlphaFold 3 · diffusion takes noise to atoms', r: 'RA', build(add, p) {
         const sg = sigma(STEPS * smooth(clamp(p / 0.75, 0, 1)));
         shown = [];
-        ATOMS.forEach((a, k) => { const q = G.add(a.p, G.scl(EPS[k], sg)); if (a.ca) shown.push(q); add.dot(q, ELEM_COL[a.el], a.ca ? 0.75 : 0.55); });
+        M.ATOMS.forEach((a, k) => { const q = G.add(a.p, G.scl(M.EPS[k], sg)); if (a.ca) shown.push(q); add.dot(q, ELEM_COL[a.el], a.ca ? 0.75 : 0.55); });
       } },
-      { cap: 'Every atom · pLDDT confidence colours', r: RA, build(add) {
-        for (const a of ATOMS) add.dot(a.p, mix(plddtColor(PL[a.res]), ELEM_COL[a.el], a.el === 0 ? 0 : 0.35), a.ca ? 0.75 : 0.62);
+      { cap: 'Every atom · pLDDT confidence colours', r: 'RA', build(add) {
+        for (const a of M.ATOMS) add.dot(a.p, mix(plddtColor(M.PL[a.res]), ELEM_COL[a.el], a.el === 0 ? 0 : 0.35), a.ca ? 0.75 : 0.62);
       } },
     ];
-    let si = (o.seed >>> 0) % SCENES.length, t = 0, time = 0;
-    const view = new View3D(cv, { radius: SCENES[si].r, yaw: 0.6, pitch: -0.25, spin: 0.06 + 0.12 * (1 - calm), build: add => SCENES[si].build(add, t / beat) });
+    let si = seed % SCENES.length, t = 0, time = 0;
+    const view = new View3D(cv, { radius: M[SCENES[si].r], yaw: 0.6, pitch: -0.25, spin: 0.06 + 0.12 * (1 - calm), build: add => SCENES[si].build(add, t / beat) });
     const g = view.ctx;
-    const ST = saverStats();
     let plateAt = -1e9, plateSi = -1;
     // The chain on screen, for the plate leader: the Cα points that the
     // scene drew (the frames of the fold, the noisy atoms of the diffusion,
@@ -1267,7 +1318,7 @@ window.snSaver = {
     // tail residues do not push the plate away. The key points are the two
     // chain ends and the residue nearest the centre.
     const chainAnchor = () => {
-      const b = cv.getBoundingClientRect(), q = ((si === 0 || si === 2) && shown ? shown : CA).map(p => view.project(p));
+      const b = cv.getBoundingClientRect(), q = ((si === 0 || si === 2) && shown ? shown : M.CA).map(p => view.project(p));
       let x = 0, y = 0; for (const v of q) { x += v[0]; y += v[1]; } x /= q.length; y /= q.length;
       const d = q.map(v => Math.hypot(v[0] - x, v[1] - y)).sort((m, n) => m - n);
       let r = d[Math.floor(0.9 * (d.length - 1))];
@@ -1280,11 +1331,11 @@ window.snSaver = {
       // a new scene at once; the live value (layer, sigma) at most once a second
       if (si === plateSi && (time - plateAt < 1 || si === 1 || si === 3)) return;
       plateAt = time; plateSi = si;
-      try { o.label(Object.assign(saverPlate(si, t / beat, ST), { anchor: chainAnchor })); } catch (e) { /* the plate is optional */ }
+      try { o.label(Object.assign(saverPlate(si, t / beat, M), { anchor: chainAnchor })); } catch (e) { /* the plate is optional */ }
     };
     register(cv, dt => {
       t += dt; time += dt;
-      if (t >= beat) { t = 0; si = (si + 1) % SCENES.length; view.radius = SCENES[si].r; }
+      if (t >= beat) { t = 0; si = (si + 1) % SCENES.length; nextModel(); shown = null; plateSi = -1; view.radius = M[SCENES[si].r]; }
       plate();
       view.pitch = -0.25 + 0.15 * Math.sin(time * 0.05);
       view.dirty = true;
