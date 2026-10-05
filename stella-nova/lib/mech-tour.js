@@ -25,8 +25,8 @@
 //  while the director runs. Each run seeds its own move weights and a lens
 //  (fov 24-38 degrees, r scaled so the framing holds).
 //      orbit ... an arc of 30-60 degrees (a part: 60-140, a circle round it)
-//      push .... the radius closes from 1.3 to 0.8
-//      pull .... the radius opens from 0.75 to 1.25, a reveal
+//      push .... the radius closes from 1.3 to 0.92 (a part: 0.8)
+//      pull .... the radius opens from 0.82 to 1.27 (a part: 0.7 to 1.15)
 //      crane ... the elevation rises or falls by 28 degrees
 //      truck ... the target slides along the explode axis
 //      graze ... a low pass at 5-8 degrees elevation
@@ -47,7 +47,11 @@
 //      createTour(o) ..... one saver run:
 //        begin(base, o) .. start a step from a base pose; o.kind 'view' |
 //                          'part' | 'stack', o.move forces a move,
-//                          o.exploded scales r by the unit's spread
+//                          o.exploded scales r by the unit's spread,
+//                          o.azRange [lo, hi] keeps az on the working side
+//                          (default: createTour's azRange, null = free)
+//      createTour options: prefer, skip, hold, fill, fly, group(q) (one
+//                          close-up per group), azRange
 //        fromFly(o) ...... begin() from the fly the page's setView started
 //        tick(dt) ........ run the move (call each frame)
 //        unit() .......... new unit: seeded spread and inspection mode
@@ -61,7 +65,7 @@ const GHOST = 0.12, D = Math.PI / 180;
 const MOVES = ['orbit', 'push', 'pull', 'crane', 'truck', 'graze', 'top', 'rack'];
 const sm = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
 
-export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = [], fill = 0.45, fly = 1.2, hold = 5000 }) {
+export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = [], fill = 0.45, fly = 1.2, hold = 5000, group = q => q.info, azRange = null }) {
   const top = q => (q.holder && q.holder.parent === q.root ? q.root : q.holder || q.root);
   const parts = () => Object.values(cur().B.parts);
   const own = q => {
@@ -96,18 +100,26 @@ export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = 
     return best;
   };
   const pose = (m, u) => {
-    const b = m.b, P = { az: b.az, el: b.el, r: b.r, t: b.t.clone() }, s = sm(u);
+    // z: the closest r, as a share of the base. A whole unit stays in frame
+    // (0.92); a close-up part can come nearer (0.8).
+    const b = m.b, P = { az: b.az, el: b.el, r: b.r, t: b.t.clone() }, s = sm(u), z = m.kind === 'part' ? 0.8 : 0.92;
     switch (m.move) {
       case 'orbit': P.az = b.az + m.dir * m.range * (u - 0.5); break;
-      case 'push': P.r = b.r * (1.3 - 0.5 * s); break;
-      case 'pull': P.r = b.r * (0.75 + 0.5 * s); break;
+      case 'push': P.r = b.r * (1.3 - (1.3 - z) * s); break;
+      case 'pull': P.r = b.r * (z - 0.1 + 0.45 * s); break;
       case 'crane': P.el = b.el + m.dir * (28 * s - 14); P.az = b.az + 8 * m.dir * (u - 0.5); break;
       case 'truck': P.t.addScaledVector(m.ax, m.len * (2 * u - 1)); P.az = b.az + 6 * m.dir * (u - 0.5); break;
       case 'graze': P.el = 5 + 3 * u; P.az = b.az + m.dir * 24 * (u - 0.5); P.r = b.r * 0.9; break;
       case 'top': P.el = 72 + 8 * u; P.az = b.az + m.dir * 30 * u; break;
-      case 'rack': P.r = b.r * (1.8 - 1.05 * sm(u / 0.45)); break;
+      case 'rack': P.r = b.r * (1.8 - (1.8 - z) * sm(u / 0.45)); break;
     }
     P.el = Math.max(2, Math.min(82, P.el));
+    // the working side: keep az in the step's range (unwrapped to the base)
+    if (m.azRange) {
+      const [lo, hi] = m.azRange, c = (lo + hi) / 2;
+      let a = P.az; while (a - c > 180) a -= 360; while (c - a > 180) a += 360;
+      P.az = Math.max(lo, Math.min(hi, a));
+    }
     return P;
   };
   const apply = P => {
@@ -131,7 +143,7 @@ export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = 
       if (kind !== 'part') front = base.az;
       const k = lens();
       const b = { az: base.az + (kind === 'part' ? 0 : 40 * (rnd() - 0.5)), el: Math.max(3, Math.min(75, base.el + 16 * (rnd() - 0.5))), r: base.r * k * (o.exploded || kind === 'stack' ? spreadK : 1), t: base.target.clone() };
-      mv = { move, b, dir: rnd() < 0.5 ? -1 : 1, t: 0, range: kind === 'part' ? 60 + 80 * rnd() : 30 + 30 * rnd(),
+      mv = { kind, azRange: o.azRange !== undefined ? o.azRange : azRange, move, b, dir: rnd() < 0.5 ? -1 : 1, t: 0, range: kind === 'part' ? 60 + 80 * rnd() : 30 + 30 * rnd(),
         ax: o.axis || axis(), len: 0.3 * base.r * Math.tan(15 * D) };
       const P = pose(mv, 0);
       log.push({ move, az: Math.round(P.az), el: Math.round(P.el), r: Math.round(P.r) });
@@ -160,8 +172,9 @@ export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = 
       return { mode, spread: spreadK };
     },
     pick(n) {
+      // one info id per group (group(q), for example one valve spring of 16)
       const P = cur().PARTS, seen = new Set();
-      const have = parts().map(q => q.info).filter(k => P[k] && !seen.has(k) && seen.add(k) && !skip.some(s => s instanceof RegExp ? s.test(k) : s === k) && inst(k));
+      const have = parts().filter(q => !seen.has(group(q)) && P[q.info] && !skip.some(s => s instanceof RegExp ? s.test(q.info) : s === q.info) && own(q).length && seen.add(group(q))).map(q => q.info);
       const isPref = k => prefer.some(s => s instanceof RegExp ? s.test(k) : s === k);
       const pref = shuf(have.filter(isPref)), rest = shuf(have.filter(k => !isPref(k)));
       const nPref = Math.min(pref.length, Math.max(n - 2, Math.ceil(n * 0.6)));
