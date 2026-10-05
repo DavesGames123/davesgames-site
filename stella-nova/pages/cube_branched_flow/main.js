@@ -52,6 +52,7 @@
 //      ui ................... "function buildUI"    sliders, toggles, shuffle
 //      input ................ "canvas.onmousedown"  drag / wheel / touch
 //      render ............... "function render"     the four-pass frame loop
+//      screensaver hook ..... "SCREENSAVER HOOK"     window.snSaver for the shell
 // ============================================================================
 (async () => {
 // Shader source lives in real .glsl files. Fetch all four before building any
@@ -469,6 +470,7 @@ function setSdfUniforms(ro){
 // matrix, trace filaments on the CPU, then run the four GPU passes.
 function render(now){requestAnimationFrame(render);
   const dt=(now-lastNow)/1000;lastNow=now;if(!chk.sPause)simTime+=dt*cur.timeScale;
+  if(saverTick)saverTick(Math.min(dt,.1),now);
   fc++;if(now-lt_>1000){infoEl.textContent=Math.round(fc*1000/(now-lt_))+' fps';fc=0;lt_=now;}
   const ro=[camD*Math.sin(camT)*Math.cos(camP),camD*Math.sin(camP),camD*Math.cos(camT)*Math.cos(camP)];
   const W=canvas.width,H=canvas.height;
@@ -555,5 +557,101 @@ function render(now){requestAnimationFrame(render);
   // Append filament and edge counts to the FPS readout.
   if(chk.sFil)infoEl.textContent=(infoEl.textContent.split('|')[0].trim())+' | '+nFils+' fils '+filCount+' edges';
 }
+// ═══════════════ SCREENSAVER HOOK ═══════════════
+// The shell's screensaver (lib/screensaver.js) calls snSaver.enter(opts).
+// Before this hook, the generic mode showed the page defaults from sim time 0,
+// so each run was the same picture. Now opts.seed picks a look for each run:
+// one palette of SAVER_LOOKS turned by up to 0.08 in hue, a field shape
+// from SAVER_SHAPE (frequencies, harmonics, radial wave, swirl, seed spread,
+// field drift, carve depth and pulse, spin axes), the metal, a start time
+// in [0, 300) s and a camera angle. Each half dwell (12 s or more), the
+// continuous values ease to a new look over 6 s. The seed count sN and the
+// ring count sRings stay fixed in one run, because an integer step pops.
+// The camera orbits at 0.05 to 0.02 rad/s (calm 0 to 1). Once a second it
+// sends opts.label the field the trace integrates (field3D) with live values.
+const SAVER_LOOKS=[
+  ['Indigo',  {cRH:.65,cTH:.56,cSat:1,  cGrad:.6, gH:.675}],
+  ['Ember',   {cRH:.02,cTH:.11,cSat:1,  cGrad:.7, gH:.05}],
+  ['Aurora',  {cRH:.36,cTH:.50,cSat:.9, cGrad:.8, gH:.45}],
+  ['Orchid',  {cRH:.83,cTH:.95,cSat:.85,cGrad:.6, gH:.88}],
+  ['Brass',   {cRH:.11,cTH:.53,cSat:.8, cGrad:.9, gH:.55}],
+  ['Glacier', {cRH:.55,cTH:.60,cSat:.35,cGrad:.4, gH:.58}],
+  ['Verdant', {cRH:.27,cTH:.17,cSat:.9, cGrad:.6, gH:.30}],
+  ['Coral',   {cRH:.97,cTH:.58,cSat:.8, cGrad:1,  gH:.98}],
+  ['Ultraviolet',{cRH:.75,cTH:.70,cSat:1, cGrad:.5, gH:.78}],
+  ['Solar',   {cRH:.08,cTH:.15,cSat:.6, cGrad:.3, gH:.12}],
+  ['Lagoon',  {cRH:.47,cTH:.62,cSat:1,  cGrad:.9, gH:.52}],
+  ['Prism',   {cRH:0,  cTH:.66,cSat:.9, cGrad:1,  gH:.80}],
+];
+// [key, min, max]: wide ranges, each one inside the P_ range. The page's own
+// defaults sit inside each range. Above about 1.6 the field frequencies
+// break the filaments into short noise, so they stop there.
+const SAVER_SHAPE=[
+  ['fFr',.2,1.6],['fFrZ',.2,1.6],['fO2',0,1.6],['fO3',0,1.4],['fWf',0,2.5],['fWa',1,5],
+  ['fMo',0,1],['sCur',0,6],['sCf',0,12],['sSp',.3,1.5],['moPulse',0,5],['moPulseR',.1,1.2],
+  ['tO',6,20],['rS',.1,1.2],['moRA',0,2],['moRB',0,2],['moRC',0,2],
+  ['rCw',3,16],['gP',.8,3.6],['mBase',0,.3],['mMetal',.4,3],['mFres',.8,6],
+];
+const SAVER_EASE=[...SAVER_SHAPE.map(e=>e[0]),'cRH','cTH','cSat','cGrad','gH'];
+let saverTick=null;
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??.7));
+    ['panel','info'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+    let seed=(opts.seed>>>0)||1;
+    const rnd=()=>{seed=Math.imul(seed^seed>>>15,0x2c1b3c6d)+0x6d2b79f5>>>0;seed^=seed>>>12;return(seed>>>0)/4294967296;};
+    let li=Math.floor(rnd()*SAVER_LOOKS.length);
+    // Hues wrap: ease each one by the short way round the circle.
+    const hueTo=(a,b,e)=>{let d=b-a;d-=Math.round(d);return((a+d*e)%1+1)%1;};
+    // A palette turns by up to 0.08 of the hue circle, so a palette that
+    // comes back does not give the same colours.
+    const pickLook=()=>{
+      const o={...SAVER_LOOKS[li][1]},turn=.16*rnd()-.08;
+      for(const k of['cRH','cTH','gH'])o[k]=((o[k]+turn)%1+1)%1;
+      for(const[k,a,b]of SAVER_SHAPE)o[k]=a+(b-a)*rnd();
+      return o;};
+    Object.assign(cur,pickLook());
+    cur.sN=Math.round(40+80*rnd());cur.sRings=Math.round(4+10*rnd());
+    cur.timeScale=1-.5*calm;
+    simTime=300*rnd();
+    camT=6.2832*rnd();camP=-.35+.85*rnd();camD=homeCamD();
+    const orbit=(.05-.03*calm)*(rnd()<.5?-1:1);
+    const hold=Math.max(12,(opts.seconds||60)/2)*1000,ease=6000;
+    let t0=performance.now(),A=null,B=null;
+    saverTick=(dt,now)=>{
+      camT+=orbit*dt;
+      if(!A){if(now-t0<hold)return;
+        li=(li+1+Math.floor(rnd()*(SAVER_LOOKS.length-1)))%SAVER_LOOKS.length;
+        A={...cur};B=pickLook();t0=now;}
+      const k=Math.min(1,(now-t0)/ease),e=k*k*(3-2*k);
+      for(const f of SAVER_EASE)cur[f]=/H$/.test(f)?hueTo(A[f],B[f],e):A[f]+(B[f]-A[f])*e;
+      if(k>=1){A=null;t0=now;}
+    };
+    // The plate: field3D with the live frequencies and gains. q is p scaled
+    // by fFr (fFrZ on z); a, b, c are the three fixed wave vectors.
+    const label=typeof opts.label==='function'?opts.label:null;
+    const plate=()=>{
+      if(!label)return;
+      const f=(v,d=2)=>Number(v).toFixed(d);
+      label({
+        title:'Branched flow · '+SAVER_LOOKS[li][0],
+        sub:'Filaments traced through a sinusoidal field over a carved SDF body',
+        tex:[String.raw`\vec F(\vec p)=-\nabla\bigl[\cos(\vec a\cdot\vec q)+g_2\cos(\vec b\cdot\vec q)+g_3\cos(\vec c\cdot\vec q)\bigr]`,
+          String.raw`\vec v\leftarrow\vec v+\vec F-(\vec v\cdot\hat n)\,\hat n,\qquad \vec q=(f\,x,\;f\,y,\;f_z\,z)`],
+        eq:['F(p) = −∇[cos(a·q) + g₂ cos(b·q) + g₃ cos(c·q)]','v ← v + F − (v·n̂) n̂,  q = (f x, f y, f_z z)'],
+        params:[
+          {sym:'f',name:'field frequency',value:f(cur.fFr)},
+          {sym:'f_z',name:'z frequency',value:f(cur.fFrZ)},
+          {sym:'g_2',name:'second wave',value:f(cur.fO2)},
+          {sym:'g_3',name:'third wave',value:f(cur.fO3)},
+          {sym:'N',name:'seed density',value:String(cur.sN)},
+        ],
+      });
+    };
+    plate();this._plate=setInterval(plate,1000);
+    return{canvas,warmupMs:1500};
+  },
+  exit(){saverTick=null;clearInterval(this._plate);},
+};
 requestAnimationFrame(render);
 })();

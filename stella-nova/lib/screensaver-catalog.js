@@ -128,7 +128,7 @@ window.SN_SAVER_CATALOG = {
     'cornell': { tier: 3, default: true, hook: true, note: 'Classic script; globals SCENE (stella-nova/pages/cornell/main.js:70), CAM {az,el,R,fov,tx,ty,tz} (main.js:81) and APP (main.js:432) returning {init,setMode,setB' },
     'glass-cube': { tier: 1, default: true, note: 'Generic is enough: one canvas #gl (stella-nova/pages/glass-cube/index.html:38);' },
     'platonic': { tier: 1, default: true, hook: true, note: 'Generic is enough: one canvas #c (stella-nova/pages/platonic-mirrors/index.html:36), resize() uses window.innerWidth/innerHeight (main.js:209) with a window res' },
-    'branched-flow': { tier: 1, default: true, note: 'Generic is enough: one canvas #gl;' },
+    'branched-flow': { tier: 3, default: true, hook: true, note: 'Seeded look per run: palette, field shape, start time, camera;' },
     'orbs': { tier: 3, default: true, hook: true, note: 'Grid of 66 small WebGPU canvases;' },
     'voxel': { tier: 2, default: true, hook: true, note: 'Already an autopilot: fly mode cruises a planned loop (loop() stella-nova/pages/voxel-flythrough/main.js:652).' },
     'img2threejs': { tier: 3, default: true, hook: true, note: 'On-demand: loop() (stella-nova/pages/img2threejs/main.js:281) renders only when S.dirty or controls.update() returns true, so idle is static.' },
