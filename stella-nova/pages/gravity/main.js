@@ -53,7 +53,8 @@
 //      keys .............. "addEventListener('keydown'" keyboard shortcuts
 //      frame loop ........ "function loop"          per-frame update
 //      boot .............. "function init"          first preset, start loop
-//      screensaver ....... "/* SCREENSAVER */"      window.snSaver hook
+//      screensaver ....... "/* SCREENSAVER */"      window.snSaver hook: scene tour
+//      saver scenes ...... saver-scenes.js           orbital patterns; check: saver-test.mjs
 // ============================================================================
 
 /* SIMULATION STATE */
@@ -838,35 +839,88 @@ document.addEventListener('DOMContentLoaded',init);
 
 /* SCREENSAVER */
 // Hook for the shell screensaver (lib/screensaver.js). enter() pins canvasArea
-// to the window and resizes through resizeCanvas(), hides the panels, turns off
-// the vectors and the grid, and loads one stable preset from opts.seed. opts.calm
-// (1 = slowest) sets timeScale. A watchdog fades to black and reloads the preset
-// if a body escapes, so the dwell has no hard cut. No exit(): the shell reloads
-// the page on stop.
+// to the window, hides the panels, the vectors and the grid, and runs a tour
+// of the orbital patterns in saver-scenes.js (window.GRAVITY_SAVER): a seeded
+// order, one scene per hold of seconds/6 (8 to 12 s), a 0.5 s fade between.
+// Before a scene shows, it runs once out of sight for 1.3 holds with the
+// page's own step(), and the box of its framed bodies sets the camera
+// (saverFrame: 92% of the width, or the band plus half of each poster
+// block in height). A scene with omega is
+// drawn in the frame that turns with its planet; a scene with extra adds a
+// force after computeForces(). opts.calm (1 = slowest) sets the substeps.
+// No exit(): the shell reloads the page on stop.
 window.snSaver={enter:function(o){
-  // The saver sets its own framing in load(); the ResizeObserver must not
-  // change it.
+  // The saver sets its own framing; the ResizeObserver must not change it.
   window.__snSaverOn=true;
-  var calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
+  o=o||{};
+  var calm=Math.max(0,Math.min(1,o.calm!=null?o.calm:0.7));
   var st=document.createElement('style');
   st.textContent='body *:not(#canvasArea):not(#simCanvas){visibility:hidden!important;pointer-events:none!important}'+
     '#canvasArea{position:fixed!important;inset:0!important;z-index:2147483646;visibility:visible!important}'+
     '#simCanvas{visibility:visible!important;cursor:none!important}';
   document.head.appendChild(st);
-  showForce=showVel=showAcc=showGrid=showField=showLines=false;showTrails=true;trailLen=900;
-  paused=false;timeScale=1-0.5*calm;
-  var list=calm<0.5?['laplace','figure8','solar','binary','chaos']:['laplace','figure8','solar'];
-  var name=list[Math.abs((o&&o.seed)|0)%list.length],R=1,fade=0,dir=0;
+  showForce=showVel=showAcc=showGrid=showField=showLines=false;showTrails=true;paused=false;
+  var LIB=window.GRAVITY_SAVER,SC=LIB.SCENES,seed=(o.seed>>>0)||1;
+  function rng(s){return function(){s=(s+0x6D2B79F5)>>>0;var t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
+  var R0=rng(seed),order=SC.map(function(_,i){return i;});
+  for(var i=order.length-1;i>0;i--){var j=Math.floor(R0()*(i+1)),t=order[i];order[i]=order[j];order[j]=t;}
+  var hold=Math.max(8,Math.min(12,(o.seconds||60)/6))*1000;
+  var si=-1,cur=null,curSc=null,box=null,E0=0,shownAt=0,fade=1,dir=1;
+
+  // The scene force and the turning frame hook into the page loop through
+  // the globals that loop() and step() call.
+  var baseForces=computeForces;
+  computeForces=function(){baseForces();if(cur&&cur.extra)cur.extra(bodies);};
+  var baseStep=step;
+  step=function(h){
+    baseStep(h);
+    if(cur&&cur.omega){var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),s=Math.sin(a);
+      for(var b of bodies){(b.rtrail=b.rtrail||[]).push([c*b.x-s*b.y,s*b.x+c*b.y]);if(b.rtrail.length>trailLen)b.rtrail.shift();}}
+  };
+  // A position as drawn: turned into the frame of the planet if omega,
+  // with the planet (at angle 0 at t = 0) at the top, so L4 and L5 spread
+  // to the left and right.
+  function shown(b){if(!cur||!cur.omega)return[b.x,b.y];var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),s=Math.sin(a);return[c*b.x-s*b.y,s*b.x+c*b.y];}
+  function build(k){
+    var sc=SC[order[k%order.length]];
+    nextId=0;simTime=0;energyHistory=[];selectedIdx=-1;fitBox=null;
+    var S=sc.build(rng(seed*31+k*7919),G,makeBody);
+    bodies=S.bodies;trailLen=sc.trail;
+    timeScale=Math.max(1,Math.round(sc.ts*(1-0.3*calm)));
+    return{sc:sc,S:S};
+  }
+  // The box of the framed bodies over 1.3 holds, relative to the follow
+  // body (sc.follow) or the origin. With 10 or more framed bodies, each
+  // sample uses the 8th to 92nd percentile on each axis, so a few stars
+  // flung out of a tail do not zoom the view out.
+  function measure(sc){
+    var x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,rad=1,frames=Math.round(1.3*hold/1000*60),sub=timeScale;
+    computeForces();
+    for(var f=0;f<frames;f++){
+      for(var s=0;s<sub;s++)step(dt);
+      if(f%3)continue;
+      var org=sc.follow!=null?shown(bodies[sc.follow]):[0,0],xs=[],ys=[];
+      for(var b of bodies){if(b.noframe)continue;var p=shown(b);xs.push(p[0]-org[0]);ys.push(p[1]-org[1]);rad=Math.max(rad,b.radius);}
+      xs.sort(function(a,b){return a-b;});ys.sort(function(a,b){return a-b;});
+      var lo=xs.length>=10?Math.floor(0.08*(xs.length-1)):0,hi=xs.length>=10?Math.ceil(0.92*(xs.length-1)):xs.length-1;
+      x0=Math.min(x0,xs[lo]);x1=Math.max(x1,xs[hi]);y0=Math.min(y0,ys[lo]);y1=Math.max(y1,ys[hi]);
+    }
+    return{x0:x0-rad,x1:x1+rad,y0:y0-rad,y1:y1+rad};
+  }
   function load(){
-    loadPreset(name);computeForces();R=1;
-    for(var b of bodies)R=Math.max(R,Math.hypot(b.x,b.y));
+    si++;
+    var m=build(si);cur=m.S;curSc=m.sc;   // measure needs cur for extra and omega
+    box=measure(curSc);
+    m=build(si);cur=m.S;curSc=m.sc;       // the same seed: the run repeats the measured path
+    for(var b of bodies){b.trail=[];b.rtrail=[];}
+    computeForces();E0=0;shownAt=performance.now();
     var f=saverFrame();camX=f.x;camY=f.y;camZoom=f.z;tgt=f;
+    plate();
   }
   // The shell poster is centred: a header block at the top, equations and
-  // parameters at the base. Centre the system, horizontally and in the
-  // free band between the two blocks, and fit it to that band.
-  // posterBand reads the poster boxes from the shell (same origin), in
-  // canvas px. Before the poster shows, the band is the whole canvas.
+  // parameters at the base. posterBand reads the poster boxes from the
+  // shell (same origin), in canvas px. Before the poster shows, the band is
+  // the whole canvas.
   function posterBand(a){
     var H=a.clientHeight,band={y0:0,y1:H};
     try{
@@ -881,70 +935,57 @@ window.snSaver={enter:function(o){
     }catch(e){}
     return band;
   }
+  // Fit the box: 92% of the width, and in height the free band between the
+  // poster blocks plus half of each block. In a landscape window the band
+  // alone is about a quarter of the height, and a fit to it made every
+  // system tiny, so the orbits may pass under the poster gradient. The box
+  // centre (plus the follow body) goes to the band centre.
   function saverFrame(){
-    var a=document.getElementById('canvasArea'),band=posterBand(a),bh=band.y1-band.y0;
-    var z=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,bh)/R));
-    return{x:0,y:(band.y0+band.y1)/2-a.clientHeight/2,z:z};
+    var a=document.getElementById('canvasArea'),band=posterBand(a),W=a.clientWidth,H=a.clientHeight,bh=band.y1-band.y0;
+    var bw=Math.max(20,box.x1-box.x0),bH=Math.max(20,box.y1-box.y0);
+    var rmax=1;for(var b of bodies)if(!b.noframe)rmax=Math.max(rmax,b.radius);
+    // No body draws larger than 3% of the short side of the canvas.
+    var z=Math.max(0.05,Math.min(6,0.92*W/bw,(bh+0.5*(H-bh))/bH,0.03*Math.min(W,H)/rmax));
+    var org=curSc.follow!=null?shown(bodies[curSc.follow]):[0,0];
+    var cx=org[0]+(box.x0+box.x1)/2,cy=org[1]+(box.y0+box.y1)/2;
+    return{x:-cx*z,y:(band.y0+band.y1)/2-H/2-cy*z,z:z};
   }
-  // tgt: the framing the camera eases to. plate() sets it again each second,
-  // when the poster has moved (it shows about 0.7 s after the page).
   var tgt=null;
   function reframe(){
     var f=saverFrame();
-    if(!tgt||Math.abs(f.y-tgt.y)>12||Math.abs(f.z/tgt.z-1)>0.05)tgt=f;
+    if(!tgt||curSc.follow!=null||Math.abs(f.y-tgt.y)>12||Math.abs(f.z/tgt.z-1)>0.05)tgt=f;
   }
-  // The plate (o.label) names the preset, its bodies and masses, the softened
-  // pairwise law that computeForces() sums, the velocity-Verlet step, and the
-  // live values from calcEnergy(): t, KE, PE and the energy drift E/E0. E0 is
-  // read again after each load(), so a reload starts the drift at 1.
-  var TITLE={laplace:'Laplace resonance 1:2:4',binary:'Binary star + planet',figure8:'Figure-eight three-body orbit',
-    solar:'Mini solar system',chaos:'Five-body chaos'};
-  var SUB={laplace:'Io, Europa, Ganymede · periods 1 : 2 : 4 · Kepler T² ∝ r³',binary:'two equal stars about the barycentre',
-    figure8:'Chenciner–Montgomery (1993) periodic solution',solar:'fixed Sun, near-circular orbits v = √(GM/r)',
-    chaos:'no dominant mass · orbits diverge'};
-  var label=o&&o.labels!==false&&typeof o.label==='function'?o.label:null,E0=0;
+  // The plate (o.label): "Gravity · <scene>", the scene law (sc.tex) over
+  // the energy of the pair sum, the scene values (S.info) and the energy
+  // drift E/E0 (E0 is read again at each load). E includes S.pe when the
+  // scene adds a force.
+  var label=o.labels!==false&&typeof o.label==='function'?o.label:null;
+  function energyNow(){var e=calcEnergy();return e.total+(cur&&cur.pe?cur.pe(bodies):0);}
   function plate(){
-    if(!label)return;
-    var e=calcEnergy(),lines=[];
-    if(!E0)E0=e.total;
-    lines.push('N = '+bodies.length+' bodies · '+bodies.map(function(b){return b.name+' '+(b.mass>=1000?b.mass.toFixed(0):b.mass.toFixed(b.mass%1?1:0))+(b.fixed?' (fixed)':'');}).join(', '));
-    lines.push('G = '+G+' · ε = 4 · h = '+(dt*timeScale).toFixed(4)+' · velocity Verlet · direct O(N²) pair sum');
-    lines.push('t = '+simTime.toFixed(1)+' · KE = '+fmt(e.ke)+' · PE = '+fmt(e.pe));
-    lines.push('E = '+fmt(e.total)+' · drift E/E₀ = '+(E0?(e.total/E0).toFixed(5):'1')+' · |p| = '+fmt(e.pmag));
-    var drift=E0?(e.total/E0).toFixed(5):'1';
-    // The plate: the live values as parameters, and the page's own TeX
-    // (index.html data-tex) with its RULES from equations.js: F m1, m and M
-    // m2, v m3, L m4, G m5, r m6. E and t stay the default colour. eq is the
-    // plain fallback; lines keep the bodies and the integrator.
-    label({title:TITLE[name]||'N-body gravity',sub:(SUB[name]||'').replace(/ · /g,', '),
-      params:[{sym:'N',name:'bodies',value:String(bodies.length)},
-        {sym:'G',name:'constant',value:String(G),cls:'m5'},
-        {sym:'E',name:'total energy',value:fmt(e.total)},
-        {sym:'E/E_0',name:'drift',value:drift},
-        {sym:'t',name:'time',value:simTime.toFixed(1)}],
-      lines:[lines[0].replace(/^N = \d+ bodies · /,''),'Velocity Verlet, softening ε = 4, direct pair sum.'],
-      tex:['F \\;=\\; G\\,\\frac{m_1\\,m_2}{r^{2}}',
-        'E \\;=\\; \\underbrace{\\tfrac{1}{2}m\\,v^{2}}_{K} \\;-\\; \\underbrace{G\\,\\tfrac{m_1 m_2}{r}}_{U}',
-        'L \\;=\\; m\\,v\\,r\\,\\sin\\theta',
-        'T^{2} \\;=\\; \\frac{4\\pi^{2}}{G\\,M}\\,a^{3}'],
-      rules:[['F','m1'],['m_1','m2'],['m_2','m2'],['m','m2'],['M','m2'],['v','m3'],['L','m4'],['G','m5'],['r','m6']],
-      eq:['aᵢ = Σⱼ G mⱼ (rⱼ − rᵢ) / (|rⱼ − rᵢ|² + ε)^³ᐟ²',
-          'v += ½a h,   x += v h,   v += ½a h',
-          'E = Σ ½mᵢvᵢ² − Σᵢ<ⱼ G mᵢmⱼ / √(r²ᵢⱼ + ε)'],
+    if(!label||!cur)return;
+    var E=energyNow();if(!E0)E0=E;
+    var named=bodies.filter(function(b){return b.name;});
+    var lines=[named.length<bodies.length?named.map(function(b){return b.name;}).join(', ')+' and '+(bodies.length-named.length)+' disk stars'
+      :named.map(function(b){return b.name;}).join(', '),
+      'Velocity Verlet, h = '+dt+', softening ε = 4, direct pair sum'+(cur.omega?', drawn in the turning frame':'')+'.'];
+    label({title:'Gravity · '+curSc.title,sub:curSc.sub,
+      params:(cur.info?cur.info(bodies,simTime):[]).concat([{sym:'N',name:'bodies',value:String(bodies.length)},{sym:'E/E_0',name:'energy drift',value:(E/E0).toFixed(5)}]),
+      lines:lines,
+      tex:curSc.tex.concat([String.raw`E \;=\; \sum_i \tfrac{1}{2}m_i v_i^{2} \;-\; \sum_{i<j} G\,\frac{m_i m_j}{r_{ij}}`]),
+      rules:[['F','m1'],['m_i','m2'],['m_j','m2'],['m','m2'],['M','m2'],['v_i','m3'],['v','m3'],['L','m4'],['G','m5'],['r_{ij}','m6'],['r','m6']],
+      eq:curSc.eq.concat(['E = Σ ½mᵢvᵢ² − Σᵢ<ⱼ G mᵢmⱼ / rᵢⱼ']),
       anchor:bodiesAnchor});
   }
-  // The bodies on screen, for the shell's label plate. worldToScreen gives
-  // canvas px, and #canvasArea fills the window in saver mode, so they are
-  // window px. The radius holds each body plus its drawn radius (radius
-  // times camZoom). The key points are the eight heaviest bodies.
-  // A body that escapes the view does not count.
+  // The bodies on screen, for the shell's label plate, in window px (the
+  // canvas fills the window). The radius holds each body plus its drawn
+  // radius. A dominant mass (over half the total) is the centre; else the
+  // centre of the box of the bodies on screen. Key points: the eight
+  // heaviest bodies on screen.
   function bodiesAnchor(){
     var a=document.getElementById('canvasArea'),W=a.clientWidth,H=a.clientHeight,on=[],i;
-    for(i=0;i<bodies.length;i++){var q=worldToScreen(bodies[i].x,bodies[i].y);
+    for(i=0;i<bodies.length;i++){var p=shown(bodies[i]),q=worldToScreen(p[0],p[1]);
       if(q[0]>=0&&q[0]<=W&&q[1]>=0&&q[1]<=H)on.push({x:q[0],y:q[1],r:Math.max(3,(bodies[i].radius||4)*camZoom),m:bodies[i].mass});}
     if(!on.length)return null;
-    // A dominant mass (over half the total) is the centre: the orbits ring
-    // it. Else the centre of the bounding box of the bodies on screen.
     var tot=0,big=on[0],x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
     on.forEach(function(p){tot+=p.m;if(p.m>big.m)big=p;x0=Math.min(x0,p.x-p.r);x1=Math.max(x1,p.x+p.r);y0=Math.min(y0,p.y-p.r);y1=Math.max(y1,p.y+p.r);});
     var cx=big.m>tot/2?big.x:(x0+x1)/2,cy=big.m>tot/2?big.y:(y0+y1)/2;
@@ -952,23 +993,27 @@ window.snSaver={enter:function(o){
     on.sort(function(p,q){return q.m-p.m;});
     return{x:cx,y:cy,r:r,pts:on.slice(0,8).map(function(p){return{x:p.x,y:p.y};})};
   }
-  var baseLoad=load;
-  load=function(){baseLoad();E0=0;plate();};
-  var basePlate=plate;
-  plate=function(){basePlate();reframe();};
   resizeCanvas();load();
-  if(label)setInterval(plate,1000);
-  // A fade overlay drawn after each frame; dir is -1 while fading out, +1 in.
+  setInterval(function(){plate();reframe();},1000);
+  // Draw: ease the camera to tgt, swap in the turned positions and trails
+  // for a scene with omega, then the fade. A scene ends after its hold, or
+  // early if a framed body leaves three box sizes.
   var base=render;
   render=function(){
-    // Ease the camera to tgt (about 3 per second). A frame step is at most
-    // 1/30 s, so a long frame does not jump.
-    if(tgt){var now=performance.now(),dt=Math.min(1/30,(now-(render.t||now))/1000),k=1-Math.exp(-3*dt);render.t=now;
+    if(tgt){var now=performance.now(),k=1-Math.exp(-3*Math.min(1/30,(now-(render.t||now))/1000));render.t=now;
+      if(curSc&&curSc.follow!=null)tgt=saverFrame();
       camX+=(tgt.x-camX)*k;camY+=(tgt.y-camY)*k;camZoom+=(tgt.z-camZoom)*k;}
+    var keep=null;
+    if(cur&&cur.omega){keep=bodies.map(function(b){var p=shown(b),q={x:b.x,y:b.y,t:b.trail};b.x=p[0];b.y=p[1];b.trail=b.rtrail||[];return q;});}
     base();
-    if(dir===0&&bodies.some(function(b){return Math.hypot(b.x,b.y)>3*R;}))dir=-1;
-    if(dir<0){fade=Math.min(1,fade+0.02);if(fade>=1){load();dir=1;}}
-    else if(dir>0){fade=Math.max(0,fade-0.02);if(fade<=0)dir=0;}
+    if(keep)bodies.forEach(function(b,i){b.x=keep[i].x;b.y=keep[i].y;b.trail=keep[i].t;});
+    if(dir===0){
+      var size=Math.max(box.x1-box.x0,box.y1-box.y0),org=curSc.follow!=null?shown(bodies[curSc.follow]):[0,0],cx=org[0]+(box.x0+box.x1)/2,cy=org[1]+(box.y0+box.y1)/2;
+      var lost=bodies.some(function(b){var p=shown(b);return!b.noframe&&curSc.escapeOk==null&&Math.hypot(p[0]-cx,p[1]-cy)>1.5*size;});
+      if(lost||performance.now()-shownAt>hold)dir=-1;
+    }
+    if(dir<0){fade=Math.min(1,fade+0.035);if(fade>=1){load();dir=1;}}
+    else if(dir>0){fade=Math.max(0,fade-0.035);if(fade<=0)dir=0;}
     if(fade>0){ctx.fillStyle='rgba(6,8,16,'+fade+')';ctx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);}
   };
   return{canvas:canvas,warmupMs:1500};
