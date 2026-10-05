@@ -2,7 +2,8 @@
 //  PROTEIN VIEWER  ·  app/paint.js — colours on the layers, surface opacity
 // ────────────────────────────────────────────────────────────────────────────
 //  paint() gets the scheme colours from colors.js, tints the selection,
-//  its 5 Å neighbours and the hover residue, and gives linear colours
+//  its 5 Å neighbours and the hover residue, dims the residues outside
+//  S.hl (the saver feature) when it is set, and gives linear colours
 //  to each layer through paintResidues or paintAtoms.
 //
 //  GREP MAP
@@ -30,6 +31,11 @@ export function paint() {
   S.resColSRGB = resCol;
   const hasSel = !!S.sel;
   const resF = new Float32Array(resCol), atomF = new Float32Array(atomCol);
+  if (S.hl) for (let ri = 0; ri < s.residues.length; ri++) {
+    if (S.hl.has(ri)) continue;
+    for (let c = 0; c < 3; c++) resF[3 * ri + c] *= 0.22;
+    for (const i of s.residues[ri].atoms) for (let c = 0; c < 3; c++) atomF[3 * i + c] *= 0.22;
+  }
   if (hasSel || S.hoverRes >= 0) {
     const dim = hasSel ? 0.7 : 1;
     for (let ri = 0; ri < s.residues.length; ri++) {

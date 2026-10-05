@@ -37,6 +37,8 @@
 //    window.snSaver                        screensaver hook (lib/screensaver.js)
 //    function saverPlate                   screensaver plate: name, PDB id, counts, formula, ss
 //    function moleculeAnchor               the shown residues on screen, for the plate leader
+//    function saverFeatures                helices, strands, pockets, disulfides, low-pLDDT tails
+//    function shotAnchor                   one feature on screen, for the plate leader
 // ============================================================================
 import * as THREE from 'three';
 import { PRESETS, byId } from './presets.js';
@@ -50,7 +52,8 @@ import { addMeasureAtom, setMeasure } from './app/measure.js';
 import { focusSelection, resetView } from './app/camera.js';
 import { setOpen } from './app/panel.js';
 import { buildUI, setColor, setRep, syncUI } from './app/ui.js';
-import { isPolymer } from './app/state.js';
+import { isPolymer, ADDITIVES } from './app/state.js';
+import { paint } from './app/paint.js';
 import { frame } from './app/loop.js';
 
 // debug and headless checks
@@ -65,12 +68,21 @@ requestAnimationFrame(frame);
 
 // ── screensaver ───────────────────────────────────────────────────────────
 // Hook for the shell screensaver (lib/screensaver.js). It closes the panel,
-// hides all DOM but canvas#view, spins the camera slowly and plays a seeded
-// order of local presets that show the whole molecule (no focus, so no fly
-// to a pocket). Each change fades the molecule into the background in the
-// composite pass (post.fade), so the recorded canvas has no hard cut. The
-// presets come from data/; fetchId (network) is never called. S.saver stops
-// the URL hash write in loadPreset. No exit(): the shell reloads the page.
+// hides all DOM but canvas#view and plays a seeded order of the local
+// presets (one per PDB entry, the three large assemblies left out). Each
+// structure gets an inspection tour, not a slow orbit. Shots hold 2.2 to
+// 3 s (calm 0 to 1), with eased 1 s moves between them:
+//   1 overview ... the whole fold from a seeded direction, slow spin
+//   2 feature .... a push-in to a feature that saverFeatures finds in the
+//                  data: a ligand pocket, a disulfide, a low-pLDDT tail, a
+//                  beta sheet or a helix bundle. S.hl dims the rest.
+//   3 fly-along .. the camera runs the length of one helix or strand
+//   4 pull-back .. a fade, a change of representation, and the overview
+// The seed also picks the colour scheme and the first representation. Each
+// change of structure fades the molecule into the background in the
+// composite pass (post.fade). The presets come from data/; fetchId
+// (network) is never called. S.saver stops the URL hash write in
+// loadPreset. No exit(): the shell reloads the page.
 // The screensaver plate (opts.label) for the loaded structure. All counts
 // come from S.s and the chains that the preset shows (S.chainOn): chains
 // with a polymer, polymer residues, atoms, the element counts of the
@@ -145,11 +157,90 @@ function moleculeAnchor() {
   return { x, y, r: ds[ds.length - 1] + 12, pts: [first[0], first[first.length - 1], q[c]].map(p => ({ x: p.x, y: p.y })) };
 }
 
-const SAVER_LIST = ['rhodopsin', 'ubiquitin', 'tim', 'deoxyhb', 'gb1', 'adkopen', 'bdna', 'afp53', 'crambin', 'villin'];
+// Features of the loaded structure, from secondary structure, het groups,
+// SG-SG distance and pLDDT. Each is { kind, res (residue indices), sub }.
+// Runs: helices of 7 or more residues, strands of 4 or more, numbered from
+// the N-terminus of the shown chains.
+function saverFeatures() {
+  const s = S.s, on = r => !S.chainOn || S.chainOn[r.chain];
+  const runs = [], F = [];
+  let cur = null;
+  for (const r of s.residues) {
+    const k = r.kind === 'protein' && on(r) ? (r.ss === 'H' || r.ss === 'G' ? 'H' : r.ss === 'E' ? 'E' : '') : '';
+    if (cur && (k !== cur.k || r.chain !== cur.chain)) { runs.push(cur); cur = null; }
+    if (k && !cur) cur = { k, chain: r.chain, res: [] };
+    if (cur) cur.res.push(r.index);
+  }
+  if (cur) runs.push(cur);
+  const label = r => `${s.chains[r.chain].id || ''}${r.seq}`;
+  const span = res => `residues ${label(s.residues[res[0]])}–${label(s.residues[res[res.length - 1]])}`;
+  let hn = 0, en = 0;
+  const helices = [], strands = [];
+  for (const u of runs) {
+    if (u.k === 'H' && u.res.length >= 7) helices.push({ kind: 'helix', res: u.res, sub: `Helix ${++hn}, ${span(u.res)}` });
+    if (u.k === 'E' && u.res.length >= 4) strands.push({ kind: 'strand', res: u.res, sub: `Strand ${++en}, ${span(u.res)}` });
+  }
+  const P = i => [S.wpos[3 * i], S.wpos[3 * i + 1], S.wpos[3 * i + 2]];
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  // a ligand pocket: the het group and the polymer residues within 5 Å
+  const ligs = s.residues.filter(r => r.kind === 'ligand' && on(r) && !ADDITIVES.has(r.name) && r.atoms.length >= 6);
+  for (const L of ligs.slice(0, 3)) {
+    const la = L.atoms.map(P), res = [L.index];
+    for (const r of s.residues) if (isPolymer(r) && on(r) && r.atoms.some(i => { const q = P(i); return la.some(a => d2(a, q) < 25); })) res.push(r.index);
+    F.push({ kind: 'pocket', res, sub: `${L.name} pocket, ${res.length - 1} residues within 5 Å` });
+  }
+  // disulfides: SG to SG under 2.5 Å
+  const sg = s.residues.filter(r => r.name === 'CYS' && on(r) && r.map.SG != null);
+  const ss = [];
+  for (let a = 0; a < sg.length; a++) for (let b = a + 1; b < sg.length; b++) if (d2(P(sg[a].map.SG), P(sg[b].map.SG)) < 6.25) ss.push([sg[a].index, sg[b].index]);
+  if (ss.length) F.push({ kind: 'disulfide', res: ss.flat(), sub: `${ss.length} disulfide ${ss.length === 1 ? 'bond' : 'bonds'}, Cys ${ss.map(p => p.map(i => label(s.residues[i])).join('–')).join(', ')}` });
+  // a low-confidence run in an AlphaFold model: pLDDT < 50, 6 or more residues
+  if (s.meta.af) {
+    let run = [];
+    const flush = () => { if (run.length >= 6) F.push({ kind: 'tail', res: run, sub: `Low-confidence region, pLDDT < 50, ${span(run)}` }); run = []; };
+    for (const r of s.residues) { if (r.kind === 'protein' && on(r) && r.ca >= 0 && s.atoms[r.ca].b < 50) run.push(r.index); else flush(); }
+    flush();
+  }
+  if (strands.length >= 3) F.push({ kind: 'sheet', res: strands.flatMap(u => u.res), sub: `β-sheet, ${strands.length} strands` });
+  if (helices.length >= 3) {
+    const top = helices.slice().sort((a, b) => b.res.length - a.res.length).slice(0, 3);
+    F.push({ kind: 'bundle', res: top.flatMap(u => u.res), sub: `Helix bundle: ${top.map(u => u.sub.split(',')[0]).join(', ')}` });
+  }
+  if (!F.length && helices.length) F.push(helices.slice().sort((a, b) => b.res.length - a.res.length)[0]);
+  return { features: F, runs: helices.concat(strands) };
+}
+// One feature on screen for the plate leader: the anchor atoms of its
+// residues through the camera, as moleculeAnchor does for the molecule.
+function shotAnchor(res) {
+  const s = S.s; if (!s || !S.wpos) return null;
+  const b = canvas.getBoundingClientRect(), v = new THREE.Vector3(), q = [];
+  for (const ri of res) {
+    const r = s.residues[ri], i = r.ca >= 0 ? r.ca : r.atoms[0];
+    if (i == null) continue;
+    v.set(S.wpos[3 * i], S.wpos[3 * i + 1], S.wpos[3 * i + 2]).project(camera);
+    if (v.z < 1) q.push({ x: b.left + (v.x + 1) / 2 * b.width, y: b.top + (1 - v.y) / 2 * b.height });
+  }
+  if (!q.length) return null;
+  let x = 0, y = 0; for (const p of q) { x += p.x; y += p.y; } x /= q.length; y /= q.length;
+  const r = Math.max(...q.map(p => Math.hypot(p.x - x, p.y - y))) + 12;
+  return { x, y, r, pts: [q[0], q[q.length - 1]] };
+}
+const centreOf = res => {
+  const c = new THREE.Vector3(); let n = 0;
+  for (const ri of res) for (const i of S.s.residues[ri].atoms) { c.x += S.wpos[3 * i]; c.y += S.wpos[3 * i + 1]; c.z += S.wpos[3 * i + 2]; n++; }
+  return n ? c.multiplyScalar(1 / n) : S.bound.c.clone();
+};
+const radiusOf = (res, c) => {
+  let r = 0;
+  for (const ri of res) for (const i of S.s.residues[ri].atoms) r = Math.max(r, Math.hypot(S.wpos[3 * i] - c.x, S.wpos[3 * i + 1] - c.y, S.wpos[3 * i + 2] - c.z));
+  return r;
+};
+
+const SAVER_SKIP = new Set(['spike', 'groel', 'nucleosome']);
+const SAVER_COLORS = ['rainbow', 'ss', 'chain', 'hydro', 'residue'];
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
-    const secs = Math.max(20, +o.seconds || 60);
     S.saver = true;
     setOpen(false);
     const st = document.createElement('style');
@@ -157,37 +248,121 @@ window.snSaver = {
       '#stage{top:0!important;bottom:0!important;right:0!important;left:0!important}#view{cursor:none!important}';
     document.head.appendChild(st);
     window.dispatchEvent(new Event('resize'));
-    controls.autoRotateSpeed = 1.1 * (0.25 + 0.35 * (1 - calm));
-    S.spin = true;
-    // seeded order of the list (an LCG and a shuffle)
+    const spinK = 1.1 * (0.25 + 0.35 * (1 - calm));
+    controls.autoRotateSpeed = spinK;
+    // seeded order of one preset per PDB entry (an LCG and a shuffle)
     let r = (o.seed >>> 0) || 1;
     const rnd = () => (r = (r * 1664525 + 1013904223) >>> 0) / 4294967296;
-    const order = SAVER_LIST.slice();
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    const seen = new Set(), order = [];
+    for (const p of PRESETS) if (!SAVER_SKIP.has(p.id) && !seen.has(p.code)) { seen.add(p.code); order.push(p.id); }
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    const hold = Math.max(10, secs / 3) * 1000, fadeS = 0.8 + 1.2 * calm;
-    const fadeTo = to => new Promise(res => {
+    const HOLD = (2.2 + 0.8 * calm) * 1000, MOVE = 1.0, fadeS = 0.5 + 0.5 * calm;
+    const wait = ms => new Promise(res => setTimeout(res, ms));
+    const fadeTo = (to, sec = fadeS) => new Promise(res => {
       const from = post.fade, t0 = performance.now();
       const step = now => {
-        const k = Math.min(1, (now - t0) / (fadeS * 1000));
+        const k = Math.min(1, (now - t0) / (sec * 1000));
         post.fade = from + (to - from) * (k * k * (3 - 2 * k));
         S.dirty = true;
         if (k < 1) requestAnimationFrame(step); else res();
       };
       requestAnimationFrame(step);
     });
-    const plate = () => { if (typeof o.label === 'function') { try { o.label(saverPlate()); } catch (e) { /* the plate is optional */ } } };
+    // the move of app/camera.js flyTo: target and distance ease, the view
+    // direction stays (loop.js runs S.fly)
+    const fly = (t1, d1, dur = MOVE) => { S.fly = { t: 0, dur, t0: controls.target.clone(), t1: t1.clone(), d0: camera.position.distanceTo(controls.target), d1 }; S.dirty = true; return wait(dur * 1000); };
+    const fit = rad => rad / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * 1.08;
+    // a seeded view direction round the target, at distance d
+    const aim = d => {
+      const az = 6.2832 * rnd(), el = -0.4 + 0.9 * rnd();
+      camera.position.copy(controls.target).add(new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)).multiplyScalar(d));
+      camera.lookAt(controls.target); controls.update(); S.dirty = true;
+    };
+    let shot = { sub: '', res: null };
+    const plate = () => {
+      if (typeof o.label !== 'function') return;
+      try {
+        const info = saverPlate(); if (!info) return;
+        if (shot.sub) { info.sub = shot.sub; info.lines = [shot.line || info.sub].concat(info.lines.slice(0, 1)); }
+        if (shot.res) { const res = shot.res; info.anchor = () => shotAnchor(res); }
+        o.label(info);
+      } catch (e) { /* the plate is optional */ }
+    };
+    const setShot = (sub, res, line) => { shot = { sub, res, line }; S.hl = res ? new Set(res) : null; paint(); plate(); };
+    // the camera runs along one helix or strand, side on, over dur seconds
+    const flyAlong = (res, dur) => new Promise(done => {
+      const s = S.s, pts = res.map(ri => s.residues[ri]).filter(q => q.ca >= 0).map(q => new THREE.Vector3(S.wpos[3 * q.ca], S.wpos[3 * q.ca + 1], S.wpos[3 * q.ca + 2]));
+      if (pts.length < 2) { done(); return; }
+      const axis = pts[pts.length - 1].clone().sub(pts[0]).normalize();
+      let side = new THREE.Vector3().crossVectors(axis, new THREE.Vector3(0, 1, 0));
+      if (side.lengthSq() < 1e-3) side = new THREE.Vector3(1, 0, 0);
+      side.normalize().add(new THREE.Vector3(0, 0.35, 0)).normalize();
+      // side on at 1.4 run lengths (30 Å or more), so the run and its
+      // neighbours stay in view while the target walks along it
+      const d = Math.max(30, 1.4 * pts[0].distanceTo(pts[pts.length - 1])), t0 = performance.now();
+      S.spin = false; S.fly = null;
+      const step = now => {
+        const k = Math.min(1, (now - t0) / (dur * 1000)), u = k * k * (3 - 2 * k) * (pts.length - 1);
+        const i = Math.min(pts.length - 2, Math.floor(u)), p = pts[i].clone().lerp(pts[i + 1], u - i);
+        controls.target.lerp(p, k < 0.15 ? 0.25 : 1);
+        camera.position.copy(controls.target).addScaledVector(side, d);
+        camera.lookAt(controls.target); S.dirty = true;
+        if (k < 1) requestAnimationFrame(step); else done();
+      };
+      requestAnimationFrame(step);
+    });
     let n = 0;
-    const next = async () => {
+    const tour = async () => {
+      const id = order[n++ % order.length];
+      await loadPreset(id);
+      const s = S.s; if (!s) return;
+      const atoms = s.atoms.length, small = atoms < 3000;
+      const reps = small ? ['cartoon', 'cartoon', 'ballstick', 'licorice', 'trace'] : ['cartoon', 'cartoon', 'trace'];
+      const rep0 = s.residues.some(q => q.kind === 'protein') ? pick(reps) : S.rep;
+      const cols = s.meta.af ? ['plddt', 'plddt', ...SAVER_COLORS] : SAVER_COLORS;
+      if (rep0 !== S.rep) setRep(rep0);
+      setColor(pick(cols));
+      const { features, runs } = saverFeatures();
+      // 1 overview
+      S.fly = null; controls.target.copy(S.bound.c);
+      const dAll = fit(S.bound.r);
+      aim(dAll * 1.12);
+      S.spin = true;
+      setShot('', null);
+      await wait(250); await fadeTo(0);
+      await fly(S.bound.c, dAll, 0.8);
+      await wait(HOLD);
+      // 2 feature
+      const f = features.length ? pick(features) : null;
+      if (f) {
+        const c = centreOf(f.res), rad = Math.max(8, radiusOf(f.res, c));
+        setShot(f.sub, f.res);
+        await fly(c, fit(rad) * 1.15);
+        await wait(HOLD);
+      }
+      // 3 fly-along
+      const along = runs.filter(u => !f || u !== f);
+      const u = along.length ? pick(along) : null;
+      if (u) {
+        setShot(`Along ${u.sub[0].toLowerCase()}${u.sub.slice(1)}`, u.res);
+        await flyAlong(u.res, (HOLD + MOVE * 1000) / 1000);
+      }
+      // 4 pull-back with a change of representation
+      const other = (small ? ['surface', 'ballstick', 'cartoon', 'spacefill'] : atoms < 6000 ? ['surface', 'cartoon', 'trace'] : ['cartoon', 'trace']).filter(q => q !== S.rep);
+      const rep1 = s.residues.some(q => q.kind === 'protein') ? pick(other) : S.rep;
+      await fadeTo(0.85, 0.35);
+      if (rep1 !== S.rep) setRep(rep1);
+      setShot('', null);
+      S.spin = true;
+      fadeTo(0, 0.6);
+      await fly(S.bound.c, dAll * 1.05);
+      await wait(HOLD);
       await fadeTo(1);
-      await loadPreset(order[n++ % order.length]);
-      plate();
-      await new Promise(res => setTimeout(res, 300));
-      await fadeTo(0);
-      setTimeout(next, hold);
     };
     // start on a fresh molecule from the faded state
     post.fade = 1; S.dirty = true;
-    (async () => { await loadPreset(order[n++ % order.length]); plate(); await new Promise(res => setTimeout(res, 300)); await fadeTo(0); setTimeout(next, hold); })();
+    (async () => { for (;;) { try { await tour(); } catch (e) { await fadeTo(1); } } })();
     return { canvas, warmupMs: 2500 };
   },
 };

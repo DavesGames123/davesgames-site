@@ -27,6 +27,7 @@ export const S = {
   vis: null, cells: null, surfCache: null, look: { ao: true, outline: true, fog: true }, frames: 0, ready: false,
   xr: false,   // true while a VR or AR session runs (app/xr.js)
   saver: false,   // true in the shell screensaver (main.js window.snSaver)
+  hl: null,       // Set of residue indices the saver tour shows; paint() dims the rest
 };
 export const dirty = () => { S.dirty = true; };
 
