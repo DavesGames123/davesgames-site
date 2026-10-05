@@ -486,7 +486,7 @@ window.snSaver = {
         if (s.scen === 'corner') { setDir(rnd() < 0.5 ? 1 : -1); setR([6, 8, 10, 14][Math.floor(rnd() * 4)]); }
         setScen(s.scen);
         setView(typeof s.view === 'function' ? s.view(S) : s.view, true);
-        tour.fromFly({ kind: s.stack ? 'stack' : 'view', move: s.stack ? 'pull' : null });
+        tour.fromFly({ kind: s.stack ? 'stack' : 'view', move: s.stack ? 'pull' : null, exploded: s.view === 'exploded' });
       }
       const l = s.lab(); lastLab = JSON.stringify(l); label(l);
     };
