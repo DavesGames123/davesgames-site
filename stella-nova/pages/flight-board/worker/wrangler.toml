@@ -1,0 +1,8 @@
+# Cloudflare Worker config for the flight board proxy (worker.js).
+# Deploy from this folder: npx wrangler deploy
+# Then put the printed https://flight-board.<you>.workers.dev URL into
+# PROXY_URL in ../main.js.
+name = "flight-board"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
