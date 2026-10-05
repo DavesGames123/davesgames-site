@@ -1148,10 +1148,11 @@ rafId = requestAnimationFrame(loop);
 // (10 s or more), from a seeded start: the structure module fold, the Cα
 // trace in pLDDT colours, the AF3 diffusion from noise, and all atoms in
 // pLDDT colours. Each scene shows the next protein of the gallery: SUMO1
-// of data.js, then the 14 AlphaFold DB models of saver-data.js (one per
-// fold class) in a seeded order. enter() imports saver-data.js, and SUMO1
-// plays until the import is done. Scene and protein step together, and
-// 15 proteins against 4 scenes give each protein every scene in turn.
+// of data.js and the 14 AlphaFold DB models of saver-data.js (one per
+// fold class), in a seeded order. enter() imports saver-data.js. The run
+// opens on the first protein of that order when the import is done in
+// the warmup. Scene and protein step together, and 15 proteins against
+// 4 scenes give each protein every scene in turn.
 // Each scene fades in and out through the backdrop
 // colour, and its caption is drawn in the canvas, so the recording has it.
 // The fold and the denoise use 70% and 75% of the scene time. The spin is
@@ -1270,10 +1271,18 @@ window.snSaver = {
     const seed = o.seed >>> 0, list = [null], built = new Map();
     let pi = 0, M = saverModel(null);
     built.set(null, M);
+    // SUMO1 is one of the 15 in the shuffle, so a run does not always open
+    // on it. If the import is done in the warmup (the first 1.5 s), the
+    // run starts on the first protein of the shuffle; later, SUMO1 stays
+    // on screen and the tour goes on from its place in the order.
     import('./saver-data.js').then(({ GALLERY }) => {
-      const R = rng(seed + 11), g = GALLERY.slice();
+      const R = rng(seed + 11), g = [null, ...GALLERY];
       for (let k = g.length - 1; k > 0; k--) { const m = Math.floor(R() * (k + 1)); [g[k], g[m]] = [g[m], g[k]]; }
-      list.push(...g);
+      list.splice(0, list.length, ...g);
+      if (time < 1.5 && list[0]) {
+        pi = 0; built.set(list[0], saverModel(list[0])); M = built.get(list[0]);
+        t = 0; shown = null; plateSi = -1; view.radius = M[SCENES[si].r];
+      } else pi = list.indexOf(null);
     }).catch(() => { /* SUMO1 alone */ });
     const nextModel = () => {
       pi = (pi + 1) % list.length;
