@@ -30,6 +30,7 @@
 //      1D Burgers ........... "class Burgers"      Strang split viscosity + RK4
 //      2D Navier–Stokes ..... "class Flow2D"       vorticity form, RK4
 //      3D Navier–Stokes ..... "class Flow3D"       velocity form, Heun + e^{-νk²}
+//      3D saver fields ...... "const F3_FIELDS"    vortex filaments, shear, jet, turbulence
 //      Helmholtz demo ....... "function helmholtz" Leray split for the equations
 // ============================================================================
 /* radix-2 complex FFT, in place. forward: e^{-ikx}; inverse divides by n */
@@ -167,6 +168,7 @@ class Flow3D{
   // physical space, then transform to spectral. The vortex column adds a curl-based
   // field afterward.
   setIC(name){ if(name) this.ic=name; const n=this.n; for(let c=0;c<3;c++){ this.U[c][1].fill(0); }
+    if(F3_FIELDS[this.ic]) F3_FIELDS[this.ic](this); else {
     for(let k=0;k<n;k++) for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=2*Math.PI*i/n,y=2*Math.PI*j/n,z=2*Math.PI*k/n,p=i+n*(j+n*k);
       if(this.ic==='taylor-green'||this.ic==='column'){ this.U[0][0][p]=Math.sin(x)*Math.cos(y)*Math.cos(z); this.U[1][0][p]=-Math.cos(x)*Math.sin(y)*Math.cos(z); this.U[2][0][p]=0; }
       else { const A=1,B=Math.sqrt(2/3),C=Math.sqrt(1/3); this.U[0][0][p]=A*Math.sin(z)+C*Math.cos(y); this.U[1][0][p]=B*Math.sin(x)+A*Math.cos(z); this.U[2][0][p]=C*Math.sin(y)+B*Math.cos(x); } }
@@ -181,7 +183,7 @@ class Flow3D{
         // û = i (k×ω̂)/k²
         const cxr=ky*wzr-kz*wyr, cxi=ky*wzi-kz*wyi, cyr=kz*wxr-kx*wzr, cyi=kz*wxi-kx*wzi, czr=kx*wyr-ky*wxr, czi=kx*wyi-ky*wxi;
         this.U[0][0][p]=-cxi/k2; this.U[0][1][p]=cxr/k2; this.U[1][0][p]=-cyi/k2; this.U[1][1][p]=cyr/k2; this.U[2][0][p]=-czi/k2+jr[p]; this.U[2][1][p]=czr/k2+ji[p]; }
-      this.U[2][0][0]=0; this.U[2][1][0]=0; }
+      this.U[2][0][0]=0; this.U[2][1][0]=0; } }
     // Prime the diagnostics and store the reference energy/enstrophy/max.
     this.t=0; this.hist=[]; this.bkm=0; this.rhs(this.U,this.S.slice(0,6)); this.diag(); this.E0=this.lastE; this.Z0=this.lastZ; this.m0=this.lastMax; }
   // trilinear velocity at a point in [0,2π)^3, from the last physical field
@@ -222,6 +224,95 @@ class Flow3D{
   // Append a diagnostics sample (with the BKM integral) for the plots.
   record(){ this.hist.push({t:this.t,E:this.lastE,Z:this.lastZ,m:this.lastMax,bkm:this.bkm}); }
 }
+
+/* ─── 3D saver fields: vortex filaments and velocity fields ─── */
+// F3_FIELDS[name](sim) fills sim.U (spectral velocity) for one initial field.
+// Flow3D.setIC calls it, then primes the diagnostics as for its own fields.
+// Random parameters use Math.random, so the saver seeds them (svSeeded).
+// Every field is scaled to a peak speed of 1, the Taylor–Green peak.
+//
+//   f3Tubes   closed vortex filaments c(s) with circulation G and core a:
+//             omega(x) = G sum_s t(s) ds (pi a^2)^(-3/2) exp(-|x - c(s)|^2 / a^2)
+//             with the periodic nearest image of x - c(s). The velocity is
+//             u = curl^-1 of the divergence-free part of omega.
+//   f3Vel     a physical velocity field, projected to divergence-free.
+// On the 16^3 saver grid, dx = 0.39 and the 2/3 mask keeps |k| < 5.3, so a
+// core under about 0.4 does not resolve. The cores here are 0.42 to 0.6.
+const F3_TAU=2*Math.PI, f3Per=d=>d-F3_TAU*Math.round(d/F3_TAU);
+// Spectral velocity from physical vorticity (ox, oy, oz): project, then
+// u^ = i (k x omega^) / k^2. The mean (k = 0) is zero.
+function f3FromVort(sim,ox,oy,oz){ const N=sim.N, d=sim.dims, W=[[ox,F64(N)],[oy,F64(N)],[oz,F64(N)]];
+  for(const [r,i] of W) fftND(r,i,d,false);
+  for(let p=0;p<N;p++){ const k2=sim.k2[p]; if(k2===0){ for(let c=0;c<3;c++){ sim.U[c][0][p]=0; sim.U[c][1][p]=0; } continue; }
+    const kx=sim.kx[p],ky=sim.ky[p],kz=sim.kz[p], dr=(kx*W[0][0][p]+ky*W[1][0][p]+kz*W[2][0][p])/k2, di=(kx*W[0][1][p]+ky*W[1][1][p]+kz*W[2][1][p])/k2;
+    const wxr=W[0][0][p]-kx*dr, wxi=W[0][1][p]-kx*di, wyr=W[1][0][p]-ky*dr, wyi=W[1][1][p]-ky*di, wzr=W[2][0][p]-kz*dr, wzi=W[2][1][p]-kz*di;
+    const cxr=ky*wzr-kz*wyr, cxi=ky*wzi-kz*wyi, cyr=kz*wxr-kx*wzr, cyi=kz*wxi-kx*wzi, czr=kx*wyr-ky*wxr, czi=kx*wyi-ky*wxi;
+    sim.U[0][0][p]=-cxi/k2; sim.U[0][1][p]=cxr/k2; sim.U[1][0][p]=-cyi/k2; sim.U[1][1][p]=cyr/k2; sim.U[2][0][p]=-czi/k2; sim.U[2][1][p]=czr/k2; } }
+// Vortex tubes along closed curves. curves: [{ pts: [[x,y,z], ...], G }],
+// the last point joins the first (through the periodic image for a curve
+// that crosses the box, as a helix does).
+function f3Tubes(sim,curves,a){ const n=sim.n, N=sim.N, o=[F64(N),F64(N),F64(N)], A=Math.pow(Math.PI*a*a,-1.5), cut=9*a*a;
+  for(const {pts,G} of curves){ const M=pts.length;
+    for(let s=0;s<M;s++){ const p0=pts[s], p1=pts[(s+1)%M], t=[f3Per(p1[0]-p0[0]),f3Per(p1[1]-p0[1]),f3Per(p1[2]-p0[2])], c=[p0[0]+t[0]/2,p0[1]+t[1]/2,p0[2]+t[2]/2];
+      for(let k=0;k<n;k++){ const dz=f3Per(F3_TAU*k/n-c[2]); if(dz*dz>cut) continue;
+        for(let j=0;j<n;j++){ const dy=f3Per(F3_TAU*j/n-c[1]); if(dy*dy+dz*dz>cut) continue;
+          for(let i=0;i<n;i++){ const dx=f3Per(F3_TAU*i/n-c[0]), r2=dx*dx+dy*dy+dz*dz; if(r2>cut) continue;
+            const w=G*A*Math.exp(-r2/(a*a)), q=i+n*(j+n*k); o[0][q]+=w*t[0]; o[1][q]+=w*t[1]; o[2][q]+=w*t[2]; } } } } }
+  f3FromVort(sim,o[0],o[1],o[2]); }
+// A circle of radius R about centre c in the plane normal to nrm, M points.
+// With G > 0 the ring moves along +nrm.
+function f3Ring(c,nrm,R,M=96){ const l=Math.hypot(...nrm), z=nrm.map(v=>v/l), h=Math.abs(z[0])<0.9?[1,0,0]:[0,1,0];
+  const e1=[z[1]*h[2]-z[2]*h[1],z[2]*h[0]-z[0]*h[2],z[0]*h[1]-z[1]*h[0]], l1=Math.hypot(...e1); for(let q=0;q<3;q++) e1[q]/=l1;
+  const e2=[z[1]*e1[2]-z[2]*e1[1],z[2]*e1[0]-z[0]*e1[2],z[0]*e1[1]-z[1]*e1[0]], pts=[];
+  for(let s=0;s<M;s++){ const a=F3_TAU*s/M, ca=Math.cos(a), sa=Math.sin(a); pts.push([0,1,2].map(q=>c[q]+R*(ca*e1[q]+sa*e2[q]))); } return pts; }
+// A physical velocity field f(x, y, z) -> [u, v, w], projected, zero mean.
+function f3Vel(sim,f){ const n=sim.n, N=sim.N, d=sim.dims;
+  for(let k=0;k<n;k++) for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const p=i+n*(j+n*k), u=f(F3_TAU*i/n,F3_TAU*j/n,F3_TAU*k/n); for(let c=0;c<3;c++){ sim.U[c][0][p]=u[c]; sim.U[c][1][p]=0; } }
+  for(let c=0;c<3;c++) fftND(sim.U[c][0],sim.U[c][1],d,false);
+  for(let p=0;p<N;p++){ const k2=sim.k2[p]; if(k2===0){ for(let c=0;c<3;c++){ sim.U[c][0][p]=0; sim.U[c][1][p]=0; } continue; }
+    const kx=sim.kx[p],ky=sim.ky[p],kz=sim.kz[p];
+    for(const h of [0,1]){ const dv=(kx*sim.U[0][h][p]+ky*sim.U[1][h][p]+kz*sim.U[2][h][p])/k2; sim.U[0][h][p]-=kx*dv; sim.U[1][h][p]-=ky*dv; sim.U[2][h][p]-=kz*dv; } } }
+// Scale U so that the peak physical speed is 1.
+function f3Norm(sim){ sim.rhs(sim.U,sim.S.slice(0,6)); let m=1e-9; for(let c=0;c<3;c++) for(let p=0;p<sim.N;p++) m=Math.max(m,Math.abs(sim.P[c][p]));
+  for(let c=0;c<3;c++) for(const a of sim.U[c]) for(let p=0;p<sim.N;p++) a[p]/=m; }
+const F3_R=Math.random, F3_C=Math.PI;
+// Each entry sets sim.U and stores its random choices in sim.par for the plate.
+const F3_FIELDS={
+  // one ring, moving up the vertical axis (sim z, world y)
+  ring(sim){ const R=1.3+0.4*F3_R(), a=0.45+0.1*F3_R(); sim.par={R,a};
+    f3Tubes(sim,[{pts:f3Ring([F3_C,F3_C,F3_C-1.2],[0.15*(F3_R()-0.5),0.15*(F3_R()-0.5),1],R),G:1}],a); f3Norm(sim); },
+  // two coaxial rings of the same sign: the rear one shrinks, speeds up and passes through
+  leapfrog(sim){ const R=1.25+0.2*F3_R(), a=0.45, h=0.8+0.3*F3_R(); sim.par={R,a,h};
+    f3Tubes(sim,[{pts:f3Ring([F3_C,F3_C,F3_C-h],[0,0,1],R),G:1},{pts:f3Ring([F3_C,F3_C,F3_C],[0,0,1],R*0.92),G:1}],a); f3Norm(sim); },
+  // two coaxial rings of opposite sign meet head-on and spread out radially
+  collide(sim){ const R=1.0+0.3*F3_R(), a=0.45, h=1.1+0.3*F3_R(), e=0.12*F3_R(); sim.par={R,a,h};
+    f3Tubes(sim,[{pts:f3Ring([F3_C,F3_C,F3_C-h],[e,0,1],R),G:1},{pts:f3Ring([F3_C,F3_C,F3_C+h],[0,e,-1],R),G:1}],a); f3Norm(sim); },
+  // two rings side by side, tilted toward each other: they touch and reconnect
+  oblique(sim){ const R=1.0+0.2*F3_R(), a=0.45, th=0.45+0.35*F3_R(), dx=1.25; sim.par={R,a,th};
+    f3Tubes(sim,[{pts:f3Ring([F3_C-dx,F3_C,F3_C-0.8],[Math.sin(th),0,Math.cos(th)],R),G:1},{pts:f3Ring([F3_C+dx,F3_C,F3_C-0.8],[-Math.sin(th),0,Math.cos(th)],R),G:1}],a); f3Norm(sim); },
+  // a trefoil knot of vorticity
+  trefoil(sim){ const k=0.42+0.08*F3_R(), a=0.42, M=192, pts=[]; sim.par={k,a};
+    for(let s=0;s<M;s++){ const t=F3_TAU*s/M; pts.push([F3_C+k*(Math.sin(t)+2*Math.sin(2*t)),F3_C+k*(Math.cos(t)-2*Math.cos(2*t)),F3_C-k*Math.sin(3*t)]); }
+    f3Tubes(sim,[{pts,G:1}],a); f3Norm(sim); },
+  // two (or three) helical vortices along the vertical axis, as behind a rotor
+  helix(sim){ const m=F3_R()<0.6?2:3, r=0.75+0.35*F3_R(), turns=1, a=0.45, M=128, cv=[]; sim.par={m,r};
+    for(let q=0;q<m;q++){ const pts=[]; for(let s=0;s<M;s++){ const z=F3_TAU*s/M, ph=turns*z+F3_TAU*q/m; pts.push([F3_C+r*Math.cos(ph),F3_C+r*Math.sin(ph),z]); } cv.push({pts,G:1}); }
+    f3Tubes(sim,cv,a); f3Norm(sim); },
+  // a double shear layer with a wavy seed: Kelvin–Helmholtz rolls in 3D
+  shear(sim){ const d=0.28+0.12*F3_R(), m=1+Math.floor(2*F3_R()), e=0.12, ph=F3_TAU*F3_R(), ph2=F3_TAU*F3_R(); sim.par={d,m};
+    f3Vel(sim,(x,y,z)=>[Math.tanh((z-F3_C/2)/d)-Math.tanh((z-3*F3_C/2)/d)-1, 0.3*e*Math.sin(y+ph2)*Math.cos(z),
+      e*Math.sin(m*x+ph)*(Math.exp(-((f3Per(z-F3_C/2)/d)**2)/4)+Math.exp(-((f3Per(z-3*F3_C/2)/d)**2)/4))]); f3Norm(sim); },
+  // a round jet up the vertical axis with a seeded swirl and lobes
+  jet(sim){ const R=0.8+0.3*F3_R(), d=0.18, m=2+Math.floor(3*F3_R()), e=0.1, sw=0.5*F3_R(), ph=F3_TAU*F3_R(); sim.par={R,m};
+    f3Vel(sim,(x,y,z)=>{ const X=f3Per(x-F3_C), Y=f3Per(y-F3_C), r=Math.hypot(X,Y)+1e-9, th=Math.atan2(Y,X), env=0.5*(1-Math.tanh((r-R)/d)), sh=Math.exp(-(((r-R)/(2*d))**2)), ur=e*sh*Math.cos(m*th+ph)*Math.sin(z), ut=sw*env*r/R;
+      return [ur*X/r-ut*Y/r, ur*Y/r+ut*X/r, env]; }); f3Norm(sim); },
+  // random-phase velocity, energy near |k| = k0
+  turbulence(sim){ const N=sim.N, k0=1.5+1.5*F3_R(); sim.par={k0}; const ph=[F64(N),F64(N),F64(N)];
+    for(let p=0;p<N;p++){ const k=Math.sqrt(sim.k2[p]), A=k>0&&sim.mask[p]?k*k*Math.exp(-(k*k)/(k0*k0))/(k*k):0; for(let c=0;c<3;c++){ const a=F3_TAU*F3_R(); sim.U[c][0][p]=A*Math.cos(a); sim.U[c][1][p]=A*Math.sin(a); } }
+    // a real field: back to physical space, keep the real part, transform again
+    for(let c=0;c<3;c++){ fftND(sim.U[c][0],sim.U[c][1],sim.dims,true); ph[c].set(sim.U[c][0]); }
+    f3Vel(sim,(x,y,z)=>{ const n=sim.n, p=Math.round(x*n/F3_TAU)%n+n*(Math.round(y*n/F3_TAU)%n+n*(Math.round(z*n/F3_TAU)%n)); return [ph[0][p],ph[1][p],ph[2][p]]; }); f3Norm(sim); },
+};
 
 /* ─── Helmholtz / Leray decomposition demo ─── */
 // Build a random smooth 2D vector field f and split it, in Fourier space, into a

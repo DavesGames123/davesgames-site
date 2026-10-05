@@ -60,6 +60,7 @@
 //      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
 //      saver 2D fields ...... "const F2_SV"        seeded flow2d initial fields, "function f2SvSet"
 //      saver plate .......... "function svPlate"   opts.label: title, live params, TeX, anchor
+//      saver 3D flows ....... "const F3_SV"        names, TeX and cycle of the Flow 3D saver fields
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -869,7 +870,14 @@ function f3Init3D(){ F3.scene=new THREE.Scene(); F3.camera=new THREE.Perspective
   F3.px=new Float32Array(N*3); F3.gen=new Uint16Array(F3.nt); }
 // Seed particle i: inside the core disc for the vortex column, or uniformly over
 // the periodic box otherwise.
-function f3Seed(i){ const s=F3.sim; if(F3.ic==='column'){ const r=Math.sqrt(Math.random())*F3.cylR*0.97, a=Math.random()*6.2832; F3.px[3*i]=(Math.PI+r*Math.cos(a)+6.2832)%6.2832; F3.px[3*i+1]=(Math.PI+r*Math.sin(a)+6.2832)%6.2832; F3.px[3*i+2]=Math.PI+(Math.random()*2-1)*0.9*Math.PI/F3SCALE; } else { F3.px[3*i]=Math.random()*6.2832; F3.px[3*i+1]=Math.random()*6.2832; F3.px[3*i+2]=Math.random()*6.2832; } }
+// A saver field (F3_FIELDS in script-2.js) seeds half its particles where
+// |ω| is large: a random grid cell, kept with probability (|ω|/max)^0.5,
+// jittered in the cell. The other half is uniform: with all seeds weighted,
+// the points made one dense blob on the cores and left the flow around them empty.
+function f3SeedW(i){ const s=F3.sim, n=s.n, h=6.2832/n, mx=Math.max(1e-9,s._max); let p=Math.floor(Math.random()*s.N);
+  if(Math.random()<0.5) for(let t=0;t<200;t++){ p=Math.floor(Math.random()*s.N); if(Math.random()<Math.pow(s.omMag[p]/mx,0.5)) break; }
+  const q=[p%n,Math.floor(p/n)%n,Math.floor(p/(n*n))]; for(let c=0;c<3;c++){ const v=(q[c]+Math.random()-0.5)*h; F3.px[3*i+c]=(v+6.2832)%6.2832; } }
+function f3Seed(i){ const s=F3.sim; if(typeof F3_FIELDS!=='undefined'&&F3_FIELDS[F3.ic]) return f3SeedW(i); if(F3.ic==='column'){ const r=Math.sqrt(Math.random())*F3.cylR*0.97, a=Math.random()*6.2832; F3.px[3*i]=(Math.PI+r*Math.cos(a)+6.2832)%6.2832; F3.px[3*i+1]=(Math.PI+r*Math.sin(a)+6.2832)%6.2832; F3.px[3*i+2]=Math.PI+(Math.random()*2-1)*0.9*Math.PI/F3SCALE; } else { F3.px[3*i]=Math.random()*6.2832; F3.px[3*i+1]=Math.random()*6.2832; F3.px[3*i+2]=Math.random()*6.2832; } }
 // Advect every particle one step by midpoint integration through velAt(), wrapping
 // periodically. Tracers take 4 substeps and record their path; for them the local
 // line-stretching rate is measured by finite difference along the tangent.
@@ -1291,17 +1299,20 @@ const SV_VIEWS = {
   // Flow 3D: the tracer scene of drawFlow3D on the full c3d, with the slow
   // auto-orbit. The 16³ grid (5 ms a step) keeps the frame rate smooth. F3.rate
   // scales the solver step, 1 - 0.6 * calm. Each state takes the next initial
-  // velocity: vortex column, then Taylor–Green. ABC is not in the cycle: its
-  // tracers do not show and the cloud looks static. The fade multiplies the
-  // opacity of every transparent material in the scene by the visibility.
+  // velocity, from a seeded shuffle of the 11 flows of F3_SV (vortex rings,
+  // knots, helices, shear, jet, turbulence, the column, Taylor–Green). Each
+  // flow shows for half the dwell. ABC is not in the cycle: its tracers do
+  // not show and the cloud looks static. The fade multiplies the opacity of
+  // every transparent material in the scene by the visibility.
   // f3Fit frames the scene for the stage shape (see "function f3Fit").
   flow3d(calm, show, fade, rng){
-    const ics=['column','taylor-green']; let i=Math.floor(rng()*2);
+    const ics=Object.keys(F3_SV); for(let a=ics.length-1;a>0;a--){ const b=Math.floor(rng()*(a+1)); [ics[a],ics[b]]=[ics[b],ics[a]]; } let i=-1;
     const mats=[]; F3.scene.traverse(o=>{ if(o.material&&o.material.transparent) mats.push([o.material,o.material.opacity]); });
-    const next=()=>{ i=(i+1)%2; F3.ic=ics[i]; svSeeded(rng,f3Reset); f3Fit(); };
+    const next=()=>{ i=(i+1)%ics.length; F3.ic=ics[i]; svSeeded(rng,f3Reset); f3Fit(); };
     F3.n=16; F3.rate=1-0.6*calm; TOG.spin=true; TOG.trails=true; F3.controls.autoRotateSpeed=0.4*(1-0.5*calm); VX.renderer.setClearColor(0x0a0810,1);
     f3Fit(); addEventListener('resize',f3Fit);
-    i=(i+1)%2; next(); const clock=svClock(show,fade,next);
+    // show is a third of the dwell less two fades: this hold is half the dwell less two fades
+    next(); const clock=svClock((show+2*fade)*1.5-2*fade,fade,next);
     return { draw(dt){ const k=clock(dt); for(const [m,o] of mats) m.opacity=o*k; drawFlow3D(dt); } };
   },
 };
@@ -1356,13 +1367,13 @@ function svPlate(){
     lines: ['Colour is vorticity, arrows are velocity.'],
     tex: [R`\partial_t\omega+u\cdot\nabla\omega=\nu\Delta\omega,\qquad u=\nabla^\perp\psi,\quad \Delta\psi=\omega`, ic ? ic.tex : R`\frac{dZ}{dt}=-\nu\!\int|\nabla\omega|^2\le 0,\qquad \frac{dE}{dt}=-2\nu Z`],
     eq: ['∂ₜω + u·∇ω = ν Δω', ic ? ic.eq : 'dZ/dt = −ν ∫|∇ω|² ≤ 0,  dE/dt = −2νZ'] }; }
-  if (v === 'flow3d'){ const s = F3.sim; return { title: 'Navier–Stokes in 3D', sub: F3.ic === 'column' ? 'A vortex column, stretched by the flow' : 'Taylor–Green vortex in a periodic box', rules,
+  if (v === 'flow3d'){ const s = F3.sim, f = F3_SV[F3.ic] || F3_SV.column, x = f.p ? f.p(s.par || {}) : null;
+    return { title: 'Navier–Stokes 3D · ' + f.name, sub: f.sub, rules,
     params: [{ sym: '\\nu', name: 'viscosity', value: F3.nu.toFixed(4), cls: 'm3' }, { sym: 'Z/Z_0', name: 'enstrophy', value: (s.lastZ / s.Z0).toFixed(3) },
-      { sym: '\\omega', name: 'max |ω| / initial', value: (s.lastMax / s.m0).toFixed(3), cls: 'm4' }, { sym: 't', name: 'time', value: s.t.toFixed(2) }],
+      { sym: '\\omega', name: 'max |ω| / initial', value: (s.lastMax / s.m0).toFixed(3), cls: 'm4' }, { sym: 't', name: 'time', value: s.t.toFixed(2) }, ...(x ? [x] : [])],
     lines: ['Points show where |ω| is large. Tracers follow the flow.'],
-    tex: [R`\partial_t\omega+(u\cdot\nabla)\omega=\underbrace{(\omega\cdot\nabla)u}_{\text{stretching}}+\nu\Delta\omega`, R`\frac{dZ}{dt}=\int\omega\cdot S\,\omega\;-\;\nu\!\int|\nabla\omega|^2`,
-      F3.ic === 'column' ? R`\omega=\nabla\times u,\qquad \nabla\cdot u=0` : R`\text{Taylor–Green:}\quad u=(\sin x\cos y\cos z,\ -\cos x\sin y\cos z,\ 0)`],
-    eq: ['∂ₜω + (u·∇)ω = (ω·∇)u + ν Δω', 'dZ/dt = ∫ ω·Sω − ν ∫|∇ω|²'] }; }
+    tex: [R`\partial_t\omega+(u\cdot\nabla)\omega=\underbrace{(\omega\cdot\nabla)u}_{\text{stretching}}+\nu\Delta\omega`, R`\frac{dZ}{dt}=\int\omega\cdot S\,\omega\;-\;\nu\!\int|\nabla\omega|^2`, f.tex],
+    eq: ['∂ₜω + (u·∇)ω = (ω·∇)u + ν Δω', f.eq] }; }
   if (v === 'wave'){ const g = WV.gamma(); return { title: 'Affine-wave blowup', sub: 'An exact Boussinesq wave, in its ' + WV.phase + ' phase', rules,
     params: [{ sym: '\\Theta', name: 'amplitude', value: SV_FMT(WV.Th), cls: 'm5' }, { sym: '\\Omega', name: 'vorticity amplitude', value: SV_FMT(WV.Om), cls: 'm4' },
       { sym: '\\lambda', name: 'frequency', value: String(WV.lam) }, { sym: '\\gamma', name: 'growth rate', value: g.toFixed(3) }],
@@ -1383,6 +1394,25 @@ function svPlate(){
       R`E(t)=\tfrac12\!\int|u|^2\,dx\ \sim\ \ell^{-2}\cdot\ell^{3}=\ell\to 0`],
     eq: ['u(x,t) = U(x/√(T∗ − t)) / √(T∗ − t)', 'u_μ(x,t) = μ u(μx, μ²t)'], anchor: svVortexAnchor }; }
   return { title }; }
+// The Flow 3D saver flows: plate name, sub line, the TeX and Unicode of the
+// initial field, and p(par) -> one plate parameter from the random choices
+// that F3_FIELDS (script-2.js) stores in sim.par. The order of the keys is
+// the order before the seeded shuffle in SV_VIEWS.flow3d.
+const F3_TUBE_TEX = R`\omega_0(\mathbf x)=\Gamma\oint \hat t(s)\,\frac{e^{-|\mathbf x-\mathbf c(s)|^2/a^2}}{(\pi a^2)^{3/2}}\,ds`, F3_TUBE_EQ = 'ω₀(x) = Γ ∮ t̂(s) exp(−|x − c(s)|²/a²) / (πa²)^(3/2) ds';
+const F3_A = p => ({ sym: 'a', name: 'core radius', value: (p.a || 0).toFixed(2) });
+const F3_SV = {
+  column: { name: 'vortex column', sub: 'A kinked vortex column with an axial jet, stretched by the flow', tex: R`\omega_z=A\,e^{-\rho^2/r_0^2}\ \text{on a helical axis},\qquad \nabla\cdot u=0`, eq: 'ω_z = A exp(−ρ²/r₀²) on a helical axis' },
+  'taylor-green': { name: 'Taylor–Green', sub: 'Taylor–Green vortex in a periodic box', tex: R`u_0=(\sin x\cos y\cos z,\ -\cos x\sin y\cos z,\ 0)`, eq: 'u₀ = (sin x cos y cos z, −cos x sin y cos z, 0)' },
+  ring: { name: 'vortex ring', sub: 'A ring of vorticity moves along its axis on its own induced flow', tex: F3_TUBE_TEX, eq: F3_TUBE_EQ, p: p => ({ sym: 'R', name: 'ring radius', value: (p.R || 0).toFixed(2) }) },
+  leapfrog: { name: 'leapfrogging rings', sub: 'Two coaxial rings of one sign: the rear ring shrinks and passes through', tex: F3_TUBE_TEX, eq: F3_TUBE_EQ, p: p => ({ sym: 'h', name: 'ring spacing', value: (p.h || 0).toFixed(2) }) },
+  collide: { name: 'ring collision', sub: 'Two rings of opposite sign meet head-on and spread outward', tex: F3_TUBE_TEX, eq: F3_TUBE_EQ, p: p => ({ sym: '2h', name: 'start gap', value: (2 * (p.h || 0)).toFixed(2) }) },
+  oblique: { name: 'ring reconnection', sub: 'Two tilted rings touch, and their vortex lines reconnect', tex: F3_TUBE_TEX, eq: F3_TUBE_EQ, p: p => ({ sym: '\\theta', name: 'tilt, rad', value: (p.th || 0).toFixed(2) }) },
+  trefoil: { name: 'trefoil knot', sub: 'A vortex tube tied in a trefoil knot, carried by its own flow', tex: F3_TUBE_TEX, eq: F3_TUBE_EQ, p: F3_A },
+  helix: { name: 'helical vortices', sub: 'Helical tip vortices, as in the wake of a rotor', tex: F3_TUBE_TEX, eq: F3_TUBE_EQ, p: p => ({ sym: 'm', name: 'helices', value: String(p.m || 2) }) },
+  shear: { name: 'shear layers', sub: 'Two shear layers roll up into Kelvin–Helmholtz vortex tubes', tex: R`u_0=\tanh\tfrac{z-z_1}{d}-\tanh\tfrac{z-z_2}{d}-1,\quad w_0=\varepsilon\sin(mx+\phi)\,g(z)`, eq: 'u₀ = tanh((z−z₁)/d) − tanh((z−z₂)/d) − 1,  w₀ = ε sin(mx + φ) g(z)', p: p => ({ sym: 'd', name: 'layer thickness', value: (p.d || 0).toFixed(2) }) },
+  jet: { name: 'swirling jet', sub: 'A round jet with swirl, seeded with lobes, breaks up', tex: R`w_0=\tfrac12\Bigl[1-\tanh\tfrac{r-R}{d}\Bigr],\qquad u_r=\varepsilon\cos(m\theta+\phi)\sin z`, eq: 'w₀ = ½[1 − tanh((r − R)/d)],  u_r = ε cos(mθ + φ) sin z', p: p => ({ sym: 'm', name: 'seeded lobes', value: String(p.m || 2) }) },
+  turbulence: { name: 'decaying turbulence', sub: 'A random-phase velocity field cascades and decays', tex: R`\hat u_0(\mathbf k)=\mathsf P\bigl[e^{-|\mathbf k|^2/k_0^2}\,e^{i\phi_{\mathbf k}}\bigr],\qquad \phi_{\mathbf k}\ \text{random}`, eq: 'û₀(k) = P[exp(−|k|²/k₀²) e^{iφₖ}], φₖ random', p: p => ({ sym: 'k_0', name: 'peak wavenumber', value: (p.k0 || 0).toFixed(2) }) },
+};
 // Send the plate once a second, only when it changed (the anchor function is
 // not part of the comparison).
 function svLabels(opts){ if (!opts || typeof opts.label !== 'function') return; let last = '';
