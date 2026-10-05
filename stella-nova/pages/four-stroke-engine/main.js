@@ -28,6 +28,7 @@ import { createStage, ease } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { createAnalysis, SCOL } from './analysis.js';
 import { partsFor } from './parts.js';
+import { createTour } from '../../lib/mech-tour.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -49,7 +50,7 @@ const cards = createCards({
 });
 stage.onStart = () => hideHint();
 stage.setShadowExtent(420);
-let saverOn = false;
+let saverOn = false, saverTick = null;
 const analysis = createAnalysis({ $, getTrain: () => (S.cur ? S.cur.T : E.TRAINS.dohc) });
 
 // ── train swap ──────────────────────────────────────────────────────────────
@@ -244,6 +245,7 @@ function frame(now) {
   raf = requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (!S.cur) return;
+  if (saverTick) saverTick(dt);
   S.th += S.rpm * 6 * dt;
   if (S.th > 72000) S.th -= 72000;
   if (S.rpm) { const c = E.mod(S.th, 720); if (Math.abs(+$('crank').value - c) > 1) $('crank').value = c.toFixed(0); }
@@ -360,11 +362,16 @@ function plateAnchor(objs, keys = []) {
 
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, paints the
 // stage gradient into the scene, lowers the pixel-ratio cap, and starts a
-// calm tour: each step sets a view, an explode and a speed, and names its
-// subject on the shell's plate (opts.label). Each step holds seconds/4, at
-// least 8 s. calm (1 = slowest) slows the orbit and the crank. The variant
-// changes once per lap. No URL hash writes while it plays; no exit(): the
-// shell reloads the page.
+// tour: each step sets a view, an explode and a speed, and names its
+// subject on the shell's plate (opts.label). Each step holds seconds/12, at
+// least 4.5 s. lib/mech-tour.js moves the camera in each step (a seeded
+// move that is never the move of the step before), seeds the explode
+// spread and the close-up mode of each lap, and frames, glows and names 5
+// exploded parts, one of each kind (the others ghost; the crank stops and
+// the section cut and the gas are off for them). All steps but the timing
+// drive keep az within 45 degrees of the section face. calm (1 = slowest)
+// slows the crank. The variant changes once per lap. No URL hash writes
+// while it plays; no exit(): the shell reloads the page.
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -439,24 +446,56 @@ window.snSaver = {
         anchor: () => plateAnchor(parts(CORE), [...crowns(), crankC()]) }) },
     ];
     STEPS.forEach(s => { const f = s.label; s.label = T => Object.assign(f(T), { rules: RULES }); });
-    const hold = Math.max(8, (o.seconds || 60) / 4) * 1000;
-    let n = Math.floor(rnd() * STEPS.length), laps = 0;
-    function step() {
-      const s = STEPS[n % STEPS.length];
-      if (n > 0 && n % STEPS.length === 0) { laps++; swapTo(laps % 2 ? 'sohc' : 'dohc'); }
-      setShow('castings', true); setShow('section', true); setShow('gas', true);
-      setRpm(rpm);
-      setView(s.view);
+    const hold = Math.max(4.5, (o.seconds || 60) / 12) * 1000;
+    // Close-ups (lib/mech-tour.js), one part of each kind. The section cut
+    // faces +z (az 0): every step but the timing drive stays within 45
+    // degrees of it, so no hold shows the outside or the end of the block.
+    const tour = createTour({ THREE, stage, cards, cur: () => S.cur, rnd, hold, azRange: [-45, 45],
+      group: q => q.kind || q.info,
+      prefer: [/^piston/, /^rod/, /^cam/, /^valve/, /^spring/, /^bucket/, /^rocker-/, /^crank$/, /^plug/, /^flywheel/],
+      skip: [/^block/, /^gas/] });
+    const RANGE = { end: [60, 120] };
+    const focusStep = info => ({ focus: info, still: true, label: () => { const t = tour.plate(info, S.cur.T.name); return { ...t, anchor: () => plateAnchor(t.meshes) }; } });
+    // A unit: the engine, the exploded engine, the close-ups (in 'circle'
+    // or 'mixed' mode sometimes a pull-back on the stack), the valve train,
+    // the Otto cycle, the timing drive and the firing order. Then the other
+    // valve train.
+    let plan = [], n = 0, laps = 0, stepT = 0, cur = null, labT = 0;
+    const makePlan = () => {
+      const u = tour.unit(), F = tour.pick(5).map(focusStep);
+      if (u.mode !== 'flyby' && rnd() < 0.6) F.push({ ...STEPS[1], still: true, stack: true });
+      plan = [STEPS[0], { ...STEPS[1], still: true }, ...F, STEPS[2], STEPS[3], STEPS[4], STEPS[5]];
+    };
+    const show = s => {
+      setRpm(s.still ? 0 : rpm);
+      setShow('castings', true); setShow('gas', !s.focus); setShow('section', !s.focus);
+      if (s.focus) tour.show(s.focus);
+      else {
+        tour.clear();
+        setView(s.view);
+        tour.fromFly({ kind: s.stack ? 'stack' : 'view', move: s.stack ? 'pull' : null, exploded: s.view === 'exploded', azRange: RANGE[s.view] });
+      }
       cur = s; label(s.label(S.cur.T));
-      n++;
-      setTimeout(step, hold);
-    }
-    // Refresh the live values (θ, x) on the plate every second. The shell
-    // swaps the text with no fade when the title stays the same.
-    let cur = null;
-    setInterval(() => { if (cur && S.cur) label(cur.label(S.cur.T)); }, 1000);
+    };
+    const advance = () => {
+      if (n >= plan.length) {
+        tour.clear(); laps++;
+        swapTo(laps % 2 ? 'sohc' : 'dohc');
+        makePlan(); n = 0;
+      }
+      show(plan[n++]);
+    };
+    window.__mechTour = tour;
+    saverTick = dt => {
+      tour.tick(dt);
+      stepT += dt * 1000; labT += dt;
+      if (stepT >= hold) { stepT = 0; advance(); }
+      // the live values (θ, x) once a second; the shell swaps the text with
+      // no fade when the title stays the same
+      if (labT > 1 && cur && S.cur) { labT = 0; label(cur.label(S.cur.T)); }
+    };
     if (rnd() < 0.5) swapTo('sohc');
-    step();
+    makePlan(); show(plan[n++]);
     return { canvas: $('view'), warmupMs: 1500 };
   },
 };
