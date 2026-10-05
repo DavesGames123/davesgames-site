@@ -49,6 +49,8 @@
 //  GREP MAP
 //    window.__hs                                     debug and headless checks
 //    window.snSaver                                  screensaver tour (lib/screensaver.js)
+//    const SHOTS                                     screensaver shots: region, move, explode
+//    function plateClear                             screensaver: the clear part beside the plate
 //    function saverPlate                             screensaver plate: layout, region, bone in focus
 //    function boneAnchor                             the bone in focus (landmarks) or the skeleton on screen
 //    // ── boot                                     start the page
@@ -57,16 +59,18 @@ import * as THREE from 'three';
 import { $, TYPE_NAME, SIDE_NAME, MODE_NAME } from './app/env.js';
 import { canvas, camera, controls, scene } from './app/stage.js';
 import { T, S, toast } from './app/state.js';
-import { fitView } from './app/camera.js';
+import { fitView, saverOcc } from './app/camera.js';
+import { loopHook } from './app/loop.js';
 import { pickAt } from './app/pick.js';
 import { loadAll } from './app/load.js';
-import { setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
+import { setMode, explode, reconstruct, setAmount, toggleRegionExplode, retarget } from './app/layouts.js';
 import { boneCentre, select, clearSelection, step, setHi } from './app/select.js';
 import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
 import { setRegionHidden } from './app/list.js';
 import { setOpen } from './app/panel.js';
 import { setTheme, setShow, buildUI } from './app/controls.js';
 import { frame } from './app/loop.js';
+import * as L from './layout.js';
 
 // debug and headless checks
 window.__hs = {
@@ -83,12 +87,22 @@ window.__hs = {
 
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell screensaver (lib/screensaver.js). enter() hides all the
-// DOM but the canvas, paints the gallery backdrop into the scene (the canvas
-// is transparent), and turns the spin on at 0.38 to 0.86 of its speed (calm
-// 1 to 0). The tour has one beat per seconds/4 (8 s or more), in a loop of
-// three beats: explode (radial and regional in turn), fly to one seeded
-// region and glow its bones, reconstruct. The fits keep the spin angle. Moves and flights take 1.5 to 2.5
-// times longer. Nothing goes to localStorage or the URL.
+// DOM but the canvas and paints the gallery backdrop into the scene (the
+// canvas is transparent). The tour is a list of shots (SHOTS), one every 5
+// to 7 s (calm 0 to 1), in a seeded order, with a whole-body shot after
+// every four. The tour opens on a region shot. A shot names a set of regions, ghosts the other bones (the
+// isolate glass), may explode its regions, and has a camera move: orbit,
+// push in, pan up the spine, or look down. loopHook.tick drives the camera
+// every frame, so the page's own flights do not run.
+//
+// FRAMING. The shell's label plate covers a band at the top (title, logo)
+// and one at the bottom (equations, values). plateClear() reads the text
+// boxes of the plate in the shell document and offers three clear parts:
+// the middle band, and the columns left and right of the text. The shot
+// takes the part where its box fits largest, and saverOcc moves the view
+// offset to the centre of that part. Before the first plate, or with no
+// shell, the clear part is the whole canvas. Nothing goes to storage or
+// the URL.
 function saverBackdrop() {
   const c = document.createElement('canvas'); c.width = 768; c.height = 512;
   const g = c.getContext('2d'), light = S.theme === 'light';
@@ -99,25 +113,22 @@ function saverBackdrop() {
   const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
   return tx;
 }
-// The screensaver plate (opts.label), from the manifest (S.M). beat is
-// 'open', 'region' or 'closed'. In a region beat, lit holds the glowing
-// bones and focus is the one that the plate names (name, Latin name,
-// type, side, length and the fact of the card). Else the plate counts the
-// bones in each body group.
-function saverPlate(beat, rid, lit, focus) {
+// The screensaver plate (opts.label), from the manifest (S.M). shot is a
+// SHOTS entry, or null for a whole-body shot (mode: the explode mode). In a region shot, lit holds the bones of the shot and focus is
+// the one that the plate names (name, Latin name, type, side, length and
+// the fact of the card). Else the plate counts the bones in each group.
+function saverPlate(shot, mode, lit, focus) {
   if (!S.M) return null;
   const counted = S.bones.filter(b => b.counted).length;
   const teeth = S.bones.filter(b => b.type === 'tooth').length, cart = S.bones.filter(b => b.type === 'cartilage').length;
   const ear = S.regions.find(r => r.id === 'ear');
   // The page has no equations, so the plate has no TeX. The parameters
   // carry the counts and the bone in focus.
-  if (beat === 'region') {
-    const reg = S.regions.find(r => r.id === rid) || { label: rid };
-    const grp = S.M.groups.find(g => g.id === reg.group);
+  if (shot) {
     const types = {};
     for (const i of lit) { const t = S.bones[i].type; types[t] = (types[t] || 0) + 1; }
-    const b = S.bones[focus];
-    const params = [{ name: 'pieces lit', value: String(lit.length) }];
+    const nb = lit.filter(i => S.bones[i].counted).length, b = S.bones[focus];
+    const params = [{ name: 'bones', value: String(nb) }];
     const lines = [Object.keys(types).map(t => `${TYPE_NAME[t]} ${types[t]}`).join(', ') + '.'];
     if (b) {
       params.push({ name: 'in focus', value: b.side ? SIDE_NAME[b.side].toLowerCase() + ' ' + b.name.toLowerCase() : b.name },
@@ -126,12 +137,12 @@ function saverPlate(beat, rid, lit, focus) {
       lines[0] = b.latin + '. ' + lines[0];
       if (b.fact) lines.push(b.fact);
     }
-    return { title: reg.label, sub: `Human skeleton · ${grp ? grp.label : ''}`, params, lines,
+    return { title: shot.title, sub: `${nb} bone${nb === 1 ? '' : 's'} ${shot.noun} · ${shot.move}`, params, lines,
       anchor: () => boneAnchor(b ? focus : -1, lit) };
   }
   const params = [{ name: 'counted bones', value: String(counted) }, { name: 'teeth', value: String(teeth) }, { name: 'costal cartilages', value: String(cart) }];
   const per = S.M.groups.filter(g => g.id !== 'cartilage').map(g => `${g.label} ${S.bones.filter(b => b.group === g.id && b.counted).length}`);
-  return { title: beat === 'open' ? `Human skeleton · ${MODE_NAME[S.mode] || 'Exploded'}` : 'Human skeleton', sub: beat === 'open' ? 'Exploded view' : 'Assembled',
+  return { title: `Human skeleton · ${MODE_NAME[mode] || 'Exploded'}`, sub: 'Exploded view',
     params, lines: [per.join(', ') + '.'].concat(ear && ear.count < ear.expected ? [`The ${ear.expected} ear ossicles are not in the set.`] : []),
     anchor: () => boneAnchor(-1, null) };
 }
@@ -178,10 +189,71 @@ function boneAnchor(i, set) {
   }
   return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, pts };
 }
+// The shots. regions: the bones of the shot. explode: explode those
+// regions. az, el: the camera direction in degrees (az 0 is the front, 90
+// the subject's left side), with daz, del over the shot. zoom: the fit
+// distance at the start and the end (1 fills the clear part). pan: the
+// share of the box height that the camera shows, moving from the bottom
+// to the top. box(lo, hi): a smaller box round a joint.
+const SHOTS = [
+  { id: 'skull', title: 'Skull', noun: 'in the skull and jaw', move: 'orbit', regions: ['skull', 'teeth', 'hyoid'], az: -40, daz: 80, el: 8, zoom: [1.1, 0.96] },
+  { id: 'spine', title: 'Spine', noun: 'in the column', move: 'pan from the sacrum to the atlas', regions: ['spine'], az: 75, daz: 20, el: 4, pan: 0.42, zoom: [1, 1] },
+  { id: 'thorax', title: 'Rib cage', noun: 'in the thorax', move: 'exploded, orbit', regions: ['thorax'], explode: true, az: 35, daz: -70, el: 14, zoom: [1.05, 0.98] },
+  { id: 'pelvis', title: 'Pelvis', noun: 'in the pelvic girdle', move: 'from above', regions: ['pelvis'], az: 0, daz: 45, el: 68, del: -18, zoom: [1.1, 0.95] },
+  { id: 'hand-r', title: 'Right hand', noun: 'in the hand', move: 'exploded, push in', regions: ['hand-r'], explode: true, az: -15, daz: 25, el: 12, zoom: [1.25, 0.92] },
+  { id: 'hand-l', title: 'Left hand', noun: 'in the hand', move: 'exploded, push in', regions: ['hand-l'], explode: true, az: 15, daz: -25, el: 12, zoom: [1.25, 0.92] },
+  { id: 'foot-l', title: 'Left foot', noun: 'in the foot', move: 'exploded, from above', regions: ['foot-l'], explode: true, az: 30, daz: 30, el: 52, del: -12, zoom: [1.2, 0.95] },
+  { id: 'foot-r', title: 'Right foot', noun: 'in the foot', move: 'exploded, from above', regions: ['foot-r'], explode: true, az: -30, daz: -30, el: 52, del: -12, zoom: [1.2, 0.95] },
+  { id: 'shoulders', title: 'Shoulder girdle', noun: 'in the two shoulders', move: 'from behind', regions: ['shoulder-l', 'shoulder-r'], az: 160, daz: 40, el: 22, zoom: [1.1, 0.97] },
+  { id: 'knee', title: 'Knee', noun: 'at the left knee', move: 'orbit of the joint', regions: ['leg-l'], joint: /patella/i, half: 0.13, az: 70, daz: -90, el: 6, zoom: [1.15, 0.95] },
+  { id: 'hip', title: 'Hip joints', noun: 'in the pelvis and thighs', move: 'push in', regions: ['pelvis', 'leg-l', 'leg-r'], hip: true, az: 0, daz: 20, el: 10, zoom: [1.2, 0.95] },
+];
+const WHOLE = [{ mode: 'radial', az: -30, daz: 60, el: 8 }, { mode: 'regional', az: 30, daz: -60, el: 10 }];
+// The text boxes of the shell plate in this page's CSS px, and the three
+// clear parts round them as insets {l, r, t, b}. Null with no plate on.
+function plateClear(w, h) {
+  let doc, fr;
+  try { doc = window.parent && window.parent !== window ? window.parent.document : null; fr = window.frameElement; } catch (e) { return null; }
+  const p = doc && doc.getElementById('sn-saver-label');
+  if (!p || !fr || !p.classList.contains('on')) return null;
+  const o = fr.getBoundingClientRect(), rg = doc.createRange();
+  const box = { x0: Infinity, x1: -Infinity };
+  const band = sel => {
+    let y0 = Infinity, y1 = -Infinity;
+    const host = p.querySelector(sel); if (!host) return null;
+    const add = q => { if (q.width < 1 || q.height < 1) return; y0 = Math.min(y0, q.top - o.top); y1 = Math.max(y1, q.bottom - o.top); box.x0 = Math.min(box.x0, q.left - o.left); box.x1 = Math.max(box.x1, q.right - o.left); };
+    const walk = n => {
+      if (n.nodeType === 3) { if (n.textContent.trim()) { rg.selectNodeContents(n); add(rg.getBoundingClientRect()); } return; }
+      if (n.nodeType !== 1 || n.classList.contains('rule') || n.classList.contains('ln')) return;
+      if (n.tagName.toLowerCase() === 'svg' || n.classList.contains('logo')) { add(n.getBoundingClientRect()); return; }
+      for (const c of n.childNodes) walk(c);
+    };
+    walk(host);
+    return y1 > y0 ? { y0, y1 } : null;
+  };
+  const top = band('.top'), bot = band('.bot'), m = 14;
+  if (!top && !bot) return null;
+  const parts = [{ l: 0, r: 0, t: top ? Math.max(0, top.y1 + m) : 0, b: bot ? Math.max(0, h - bot.y0 + m) : 0 }];
+  if (box.x0 > 0.18 * w) parts.push({ l: 0, r: Math.max(0, w - box.x0 + m), t: 0, b: 0 });
+  if (box.x1 < 0.82 * w) parts.push({ l: Math.max(0, box.x1 + m), r: 0, t: 0, b: 0 });
+  return parts;
+}
+// The half width, half height and depth of a box seen along dir.
+const _p = new THREE.Vector3();
+function extentOf(lo, hi, dir) {
+  const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize(), up = dir.clone().cross(right).normalize();
+  const mid = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+  let hw = 0, hh = 0, hd = 0;
+  for (let k = 0; k < 8; k++) {
+    _p.set(k & 1 ? hi[0] : lo[0], k & 2 ? hi[1] : lo[1], k & 4 ? hi[2] : lo[2]).sub(mid);
+    hw = Math.max(hw, Math.abs(_p.dot(right))); hh = Math.max(hh, Math.abs(_p.dot(up))); hd = Math.max(hd, _p.dot(dir));
+  }
+  return { mid, hw, hh, hd };
+}
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
-    const beat = Math.max(8, (+o.seconds || 60) / 4), pace = 1.5 + calm;
+    const hold = 5 + 2 * calm;
     let seed = (o.seed >>> 0) || 1;
     const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     const css = document.createElement('style');
@@ -189,42 +261,100 @@ window.snSaver = {
     document.head.appendChild(css);
     setOpen(false);
     scene.background = saverBackdrop();
-    controls.autoRotateSpeed = 0.8 * (0.38 + 0.48 * (1 - calm));
-    setShow('spin', true);
-    const regions = ['skull', 'thorax', 'hand-r', 'foot-l', 'pelvis', 'spine', 'hand-l', 'foot-r'];
-    for (let i = regions.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [regions[i], regions[j]] = [regions[j], regions[i]]; }
-    let k = 0, lit = [];
-    const glow = v => { for (const i of lit) setHi(i, 0, v); };
-    // stretch the transition and the flight that the last call started; a
-    // fit (keepDir) keeps the spin angle and does not swing back to the front
-    const slow = keepDir => {
-      if (S.tr && S.tr.t === 0) { S.tr.dur *= pace; S.tr.end *= pace; for (let i = 0; i < S.n; i++) S.delay[i] *= pace; }
-      if (S.fly && S.fly.t === 0) { S.fly.dur *= pace; if (keepDir) S.fly.u1 = null; }
+    setShow('spin', false);
+    // the tour: the shots in a seeded order, a whole-body shot after every four
+    const order = SHOTS.slice();
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const tour = [];
+    let wk = Math.floor(rnd() * WHOLE.length);
+    order.forEach((sh, k) => { tour.push({ shot: sh }); if (k % 4 === 3) tour.push({ whole: WHOLE[wk++ % WHOLE.length] }); });
+    let ti = -1, t = 0, cur = null, lit = [], focusK = 0, focusT = 0, prevFocus = -1, clearT = 0, parts = null;
+    const cam = { c: null, d: 0, az: 0, el: 0 };
+    const fy = () => Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+    const label = l => { if (typeof o.label === 'function') try { o.label(l); } catch (e) { /* the plate is optional */ } };
+    const setFocus = i => { if (prevFocus >= 0) setHi(prevFocus, 0, 0); prevFocus = i; if (i >= 0) setHi(i, 0, 0.85); };
+    // the bone flags: 0 shown, 1 hidden, 2 ghost (see refreshVisibility)
+    const ghost = keep => {
+      let any = false;
+      for (const b of S.bones) { const f = !S.vis[b.i] ? 1 : keep(b) ? 0 : 2; if (f === 2) any = true; S.state.setK(2, b.i, 3, f); }
+      for (const g of S.groups.values()) g.ghost.visible = any;
+      S.state.dirty(); S.dirty = true;
     };
-    // the plate: one per beat; in a region beat the bone in focus steps
-    // through the lit bones, largest first, every 3 s with the same title
-    let pBeat = '', pRid = '', order = [], fk = 0;
-    const plate = () => {
-      if (typeof o.label !== 'function') return;
-      try { o.label(saverPlate(pBeat, pRid, lit, order.length ? order[fk % order.length] : -1)); } catch (e) { /* the plate is optional */ }
+    const start = () => {
+      ti = (ti + 1) % tour.length; t = 0; cur = tour[ti];
+      setFocus(-1);
+      if (cur.whole) {
+        const m = cur.whole.mode;
+        S.mode = S.lastMode = m;
+        S.amt.fill(1);
+        retargetSaver();
+        ghost(() => true);
+        lit = []; label(saverPlate(null, m, lit, -1));
+      } else {
+        const sh = cur.shot, want = new Set(sh.regions);
+        S.mode = S.lastMode = 'radial';
+        S.amt.fill(0);
+        if (sh.explode) for (const r of sh.regions) S.amt[S.regionIx.get(r)] = 1;
+        retargetSaver();
+        ghost(b => want.has(b.region));
+        lit = S.bones.filter(b => want.has(b.region) && S.vis[b.i]).map(b => b.i).sort((a, b) => S.bones[b].len - S.bones[a].len);
+        // the knee and the hip name the bones at the joint first
+        if (sh.joint) lit.sort((a, b) => (sh.joint.test(S.bones[b].name) ? 1 : 0) - (sh.joint.test(S.bones[a].name) ? 1 : 0));
+        focusK = 0; focusT = 0; setFocus(lit[0] ?? -1);
+        label(saverPlate(sh, null, lit, lit[0] ?? -1));
+      }
     };
-    setInterval(() => { if (pBeat === 'region' && order.length > 1) { fk++; plate(); } }, 3000);
-    const stepBeat = () => {
+    // retarget to S.amt without the page's fit flight (the tick frames)
+    const retargetSaver = () => { retarget(true, false, false); S.fly = null; };
+    // the box that the camera frames now (u = 0..1 through the shot)
+    const goal = u => {
+      const sh = cur.shot, wh = cur.whole, spec = sh || wh;
+      const az = THREE.MathUtils.degToRad(spec.az + (spec.daz || 0) * u), el = THREE.MathUtils.degToRad(spec.el + (spec.del || 0) * u);
+      const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+      const want = sh ? new Set(sh.regions) : null;
+      const bd = L.bounds(S.P, S.to.off, S.vis, want ? b => want.has(b.region) : null, true);
+      let lo = bd.lo.slice(), hi = bd.hi.slice();
+      if (sh && sh.joint) {
+        const k = S.bones.find(b => want.has(b.region) && sh.joint.test(b.name));
+        if (k) { const c = [0, 1, 2].map(a => k.c[a] + S.to.off[k.i * 3 + a]); lo = c.map(v => v - sh.half); hi = c.map(v => v + sh.half); }
+      }
+      if (sh && sh.hip) { const pb = L.bounds(S.P, S.to.off, S.vis, b => b.region === 'pelvis', true); lo[1] = pb.lo[1] - 0.12; hi[1] = pb.hi[1]; }
+      if (sh && sh.pan) { const H = hi[1] - lo[1], wnd = H * sh.pan, y0 = lo[1] + (H - wnd) * smooth(u); lo[1] = y0; hi[1] = y0 + wnd; }
+      const e = extentOf(lo, hi, dir);
+      // the clear part where this box fits largest
+      const W = canvas.clientWidth || 1, Hc = canvas.clientHeight || 1;
+      let best = { l: 0, r: 0, t: 0, b: 0 }, bs = -1;
+      for (const q of parts || [best]) {
+        const cw = Math.max(40, W - q.l - q.r), ch = Math.max(40, Hc - q.t - q.b), sc = Math.min(cw / e.hw, ch / e.hh);
+        if (sc > bs) { bs = sc; best = q; }
+      }
+      const fh = Math.max(0.15, (Hc - best.t - best.b) / Hc), fw = Math.max(0.15, (W - best.l - best.r) / Hc);
+      const z = spec.zoom ? spec.zoom[0] + (spec.zoom[1] - spec.zoom[0]) * smooth(u) : 1.05;
+      return { c: e.mid, d: (Math.max(e.hh / (fy() * fh), e.hw / (fy() * fw)) * 1.08 * z) + e.hd, az, el, occ: best };
+    };
+    const smooth = x => x * x * (3 - 2 * x);
+    loopHook.tick = dt => {
       if (!S.ready || !T.allBones) return;
-      const phase = k % 3;
-      if (phase === 0) { setMode(k % 6 === 0 ? 'radial' : 'regional'); pBeat = 'open'; }
-      else if (phase === 1) {
-        const rid = regions[(k / 3 | 0) % regions.length];
-        const want = rid === 'skull' ? new Set(['skull', 'teeth', 'hyoid', 'ear']) : new Set([rid]);
-        lit = S.bones.filter(b => want.has(b.region) && S.vis[b.i]).map(b => b.i);
-        glow(1);
-        focusRegion(rid);
-        pBeat = 'region'; pRid = rid; order = lit.slice().sort((a, b) => S.bones[b].len - S.bones[a].len); fk = 0;
-      } else { glow(0); lit = []; reconstruct(); pBeat = 'closed'; order = []; }
-      slow(phase !== 1); k++;
-      plate();
+      if (!cur) start();
+      t += dt; clearT += dt;
+      if (clearT > 0.25) { clearT = 0; parts = plateClear(canvas.clientWidth, canvas.clientHeight); }
+      if (t >= hold) start();
+      // the plate names the next bone of the shot every 2 s
+      if (cur.shot && lit.length > 1 && (focusT += dt) > 2) { focusT = 0; focusK++; const f = lit[focusK % lit.length]; setFocus(f); label(saverPlate(cur.shot, null, lit, f)); }
+      const g = goal(Math.min(1, t / hold));
+      saverOcc.o = g.occ;
+      // ease toward the goal: a new shot glides in about 1.2 s
+      const k = Math.min(1, dt * 2.6);
+      if (!cam.c) { cam.c = g.c.clone(); cam.d = g.d; cam.az = g.az; cam.el = g.el; }
+      cam.c.lerp(g.c, k); cam.d += (g.d - cam.d) * k;
+      let da = g.az - cam.az; da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
+      cam.az += da * k; cam.el += (g.el - cam.el) * k;
+      S.fly = null;
+      controls.target.copy(cam.c);
+      camera.position.set(Math.sin(cam.az) * Math.cos(cam.el), Math.sin(cam.el), Math.cos(cam.az) * Math.cos(cam.el)).multiplyScalar(cam.d).add(cam.c);
+      camera.lookAt(cam.c);
+      S.dirty = true;
     };
-    setTimeout(() => { stepBeat(); setInterval(stepBeat, beat * 1000); }, 4000);
     return { canvas, warmupMs: 3000 };
   },
 };

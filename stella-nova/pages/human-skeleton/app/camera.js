@@ -8,6 +8,7 @@
 //
 //  GREP MAP
 //    const occ / function occlusion / clearRect      the clear part
+//    const saverOcc                                  screensaver plate insets
 //    function fitDist / fitBox / fitView             camera distance
 //    function resize                                 canvas size, view offset
 //    function flyTo                                  start a camera flight
@@ -25,6 +26,9 @@ import { setHover } from './pointer.js';
 import { panel } from './panel.js';
 
 export const occ = { l: 0, r: 0, t: 0, b: 0 };
+// The screensaver sets o to the insets (CSS px) that keep the subject off
+// the shell's label plate. Null outside the saver.
+export const saverOcc = { o: null };
 export function occlusion() {
   const o = { l: 0, r: 0, t: 0, b: 0 };
   const cr = canvas.getBoundingClientRect(), w = cr.width, h = cr.height;
@@ -40,6 +44,7 @@ export function occlusion() {
   };
   if (panel.classList.contains('open')) consider(panel);
   consider(card);
+  if (saverOcc.o) for (const k in o) o[k] = Math.max(o[k], saverOcc.o[k]);
   return o;
 }
 export function clearRect() {

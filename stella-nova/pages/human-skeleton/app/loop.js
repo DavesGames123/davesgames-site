@@ -9,6 +9,7 @@
 //
 //  GREP MAP
 //    let last / raf / running                        loop state
+//    const loopHook                                  per-frame screensaver tick
 //    function frame                                  the loop
 //    window.addEventListener('pagehide'              release on page exit
 // ============================================================================
@@ -22,6 +23,8 @@ import { pickRT } from './pick.js';
 import { dVelZero, hoverPick } from './pointer.js';
 
 let last = performance.now(), raf = 0, running = true;
+// The screensaver sets tick(dt): it runs after the occ ease, before the fly.
+export const loopHook = { tick: null };
 const _q = new Float32Array(4);
 export function frame(now) {
   if (!running) return;
@@ -34,6 +37,7 @@ export function frame(now) {
     const d = o[k] - occ[k];
     if (Math.abs(d) > 0.5) { occ[k] += d * Math.min(1, dt * 9); S.dirty = true; } else if (d) { occ[k] = o[k]; S.dirty = true; }
   }
+  if (loopHook.tick) loopHook.tick(dt);
   if (S.fly) {
     const f = S.fly;
     f.t = Math.min(1, f.t + dt / f.dur);
