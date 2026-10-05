@@ -78,6 +78,8 @@ const S={
   camClock:0, morphClock:0, bakeMorph:0,
   morphSpeed:0.08, pathSpeed:0.4, moveSpeed:14, snapSec:1.8,
   seed:0, seedAxis:0,
+  // base circuit shape: turn (rad), mirror (+1/-1), extra altitude; fade 0..1
+  loopRot:0, loopFlip:1, loopAlt:0, fade:1, saverTick:null,
   // planned flight path
   loop:null, dist:0, bank:0, showPath:true, needPlan:true, planMorph:0, lastPlanMs:0, hoPos:[0,0,0], hoFwd:[0,0,0],
   // walk camera
@@ -134,7 +136,7 @@ function initGL(){
   // uniform locations
   sceneLoc={}; ['uRes','uRO','uRight','uUp','uFwd','uFocal','uMorphTime','uSeedVec','uRegion','uFreq','uHeight','uThresh','uSlope','uMorphAmt','uClearR','uOct','uMaxSteps','uEdgeGlow','uEdgeW','uBaseBright','uSat','uDuotone','uFog']
     .forEach(n=>sceneLoc[n]=gl.getUniformLocation(sceneProg,n));
-  postLoc={}; ['uScene','uRes','uBloom','uScan','uScanOn'].forEach(n=>postLoc[n]=gl.getUniformLocation(postProg,n));
+  postLoc={}; ['uScene','uRes','uBloom','uScan','uScanOn','uFade'].forEach(n=>postLoc[n]=gl.getUniformLocation(postProg,n));
   return true;
 }
 let sceneLoc,postLoc;
@@ -231,10 +233,13 @@ function gradN(x,y,z,m){
 // The unrelaxed reference circuit: a smooth closed Lissajous-like loop the
 // planner tethers to so the relaxed path stays a coherent tour.
 // base circuit (2π-periodic closed loop)
+// The saver turns, mirrors and lifts the circuit (S.loopRot, loopFlip,
+// loopAlt); the page keeps 0, 1, 0, so its circuit does not change.
 function baseLoop(s){
-  return [ 90*Math.sin(s) + 38*Math.sin(2*s+1.3) + 16*Math.sin(3*s+0.5),
-           38 + 9*Math.sin(2*s+0.7) + 5*Math.sin(3*s),
-           90*Math.cos(s) + 38*Math.cos(2*s+2.1) + 16*Math.cos(3*s+1.7) ];
+  const x=90*Math.sin(s) + 38*Math.sin(2*s+1.3) + 16*Math.sin(3*s+0.5),
+        z=(90*Math.cos(s) + 38*Math.cos(2*s+2.1) + 16*Math.cos(3*s+1.7))*S.loopFlip,
+        c=Math.cos(S.loopRot), n=Math.sin(S.loopRot);
+  return [ c*x - n*z, 38 + S.loopAlt + 9*Math.sin(2*s+0.7) + 5*Math.sin(3*s), n*x + c*z ];
 }
 // ELASTIC BAND: relax a closed loop into the open corridors of the CURRENT field.
 // Each node feels: a smoothing pull (taut curve), repulsion away from solids — sampled at the
@@ -625,6 +630,7 @@ function draw(){
   gl.uniform1f(postLoc.uBloom,U.uBloom);
   gl.uniform1f(postLoc.uScan,U.uScan);
   gl.uniform1i(postLoc.uScanOn, document.getElementById('tog-scan').classList.contains('on')?1:0);
+  gl.uniform1f(postLoc.uFade,S.fade);
   gl.drawArrays(gl.TRIANGLES,0,3);
   // data fauna: step + draw the swarm over the composited scene (terrain-occluded via scene depth)
   if(BO.on){ if(S.playing) boidsStep(lastDt, morphT); boidsRender(); }
@@ -672,6 +678,7 @@ function loop(time){
     if(Math.abs(S.lookPitch)<1e-3)S.lookPitch=0;
   }
   if(S.mode==='walk') updateWalk(dt);
+  if(S.saverTick) S.saverTick(dt);
   draw();
   drawPath();
   const p = (S.mode==='fly')?camRO:S.pos;
@@ -878,7 +885,7 @@ function boidsRender(){
   gl.uniform3f(BO.ploc.uRight,camR[0],camR[1],camR[2]);
   gl.uniform3f(BO.ploc.uUp,camU[0],camU[1],camU[2]);
   gl.uniform3f(BO.ploc.uFwd,camF[0],camF[1],camF[2]);
-  gl.uniform1f(BO.ploc.uFocal,U.uFocal); gl.uniform1f(BO.ploc.uPoint,42.0); gl.uniform2f(BO.ploc.uRes,RW,RH); gl.uniform1f(BO.ploc.uGlow,BO.glow);
+  gl.uniform1f(BO.ploc.uFocal,U.uFocal); gl.uniform1f(BO.ploc.uPoint,42.0); gl.uniform2f(BO.ploc.uRes,RW,RH); gl.uniform1f(BO.ploc.uGlow,BO.glow*S.fade);
   gl.uniform1f(BO.ploc.uFog,U.uFog); gl.uniform1f(BO.ploc.uTime,performance.now()*0.001);
   gl.drawArrays(gl.POINTS,0,BO.N);
   gl.disable(gl.BLEND);
@@ -909,11 +916,29 @@ async function boot(){
 setTimeout(boot,50);
 // Screensaver hook for the shell (lib/screensaver.js). enter() hides the rail,
 // status bar, path overlay and legend so #stage fills the window, renders at
-// full resolution with no scanlines, and cruises the flythrough slower as
-// opts.calm goes to 1. Terrain snaps stretch to 6 s so no state change cuts.
-// Once a second it sends opts.label the density, DDA and boid equations with
-// the live terrain values and camera position.
+// full resolution with no scanlines, and cruises slower as opts.calm goes to 1.
+// Terrain snaps stretch to 6 s so no state change cuts.
+//
+// Before, every run was the same flight: seed 0 on axis X, the default
+// terrain, the same circuit and the same start point. Now opts.seed drives
+// a run of flights. Each flight takes the next scene of a seeded shuffle of
+// SAVER_SCENES (terrain shape) and seeds the noise offset (value and axis),
+// the morph phase, the circuit (turn, mirror, altitude), the start point on
+// it, the cruise speed, the look (palette mode, saturation, glow, fog,
+// bloom, focal length) and the boid wander. Every 10 to 15 s the picture
+// fades to black (post uFade, boid glow), the next flight is planned, and
+// the picture fades in. The plate names the scene; numbers refresh each second.
 /* ---- screensaver ---- */
+// [name, terrain uniforms]: each keeps open corridors for the planner.
+const SAVER_SCENES=[
+  ['Canyon run',       {uFreq:0.055,uOct:2,uHeight:26,uThresh:11,uSlope:0.07}],
+  ['Cavern drift',     {uFreq:0.085,uOct:3,uHeight:20,uThresh:8, uSlope:0.03}],
+  ['Spire field',      {uFreq:0.10, uOct:2,uHeight:30,uThresh:14,uSlope:0.09}],
+  ['Open archipelago', {uFreq:0.06, uOct:2,uHeight:18,uThresh:13,uSlope:0.05}],
+  ['Coral lattice',    {uFreq:0.12, uOct:1,uHeight:22,uThresh:9, uSlope:0.04}],
+  ['Data canyon',      {uFreq:0.07, uOct:2,uHeight:22,uThresh:12,uSlope:0.06}],
+];
+const SAVER_AXIS=['X','Y','Z'];
 window.snSaver={
   enter(opts){
     const calm=Math.min(1,Math.max(0,opts.calm??0.7));
@@ -926,13 +951,45 @@ window.snSaver={
     S.showPath=false;
     if(S.mode!=='fly') setMode('fly');
     S.playing=true; S.lookYaw=0; S.lookPitch=0;
-    S.pathSpeed=0.4-0.25*calm;
-    S.morphSpeed=0.08*(1-0.6*calm);
     S.snapSec=6;
     resize();
+    let seed=(opts.seed>>>0)||1;
+    const rnd=()=>{seed=(seed+0x6D2B79F5)>>>0;let t=seed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};
+    const R=(a,b)=>a+(b-a)*rnd();
+    // a seeded shuffle of the scenes; a new shuffle after the last one
+    let order=[], oi=0;
+    const nextScene=()=>{
+      if(oi>=order.length){order=SAVER_SCENES.map((_,i)=>i);for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];}oi=0;}
+      return order[oi++];
+    };
+    let scene=0;
+    const flight=()=>{
+      scene=nextScene();
+      Object.assign(U,SAVER_SCENES[scene][1]);
+      S.seed=R(0,200); S.seedAxis=Math.floor(rnd()*3);
+      S.morphClock=Math.floor(R(0,40));
+      S.loopRot=R(0,6.2832); S.loopFlip=rnd()<0.5?-1:1; S.loopAlt=R(-6,8);
+      S.pathSpeed=(0.4-0.25*calm)*R(0.8,1.3);
+      S.morphSpeed=0.08*(1-0.6*calm)*R(0.6,1.4);
+      U.uDuotone=rnd()<0.25?1:0; U.uSat=R(0.7,1.2); U.uBaseBright=R(0.45,0.8);
+      U.uEdgeGlow=R(1.3,2.6); U.uFog=R(0.01,0.035); U.uBloom=R(0.15,0.4); U.uFocal=R(0.85,1.25);
+      if(BO.on) BO.wander=+R(0.12,0.45).toFixed(2);
+      S.loop=null; S.needPlan=true; planFlight();
+      S.dist=R(0,S.loop.total); S.hoPos=[0,0,0]; S.hoFwd=[0,0,0];
+    };
+    const hold=Math.min(15,Math.max(10,(opts.seconds||60)/5)), OUT=0.6, IN=0.9;
+    let t=0, phase='in';
+    flight(); S.fade=0;
+    S.saverTick=dt=>{
+      t+=dt;
+      if(phase==='in'){S.fade=Math.min(1,t/IN);if(t>=IN){phase='hold';t=0;}}
+      else if(phase==='hold'){if(t>=hold){phase='out';t=0;}}
+      else{S.fade=Math.max(0,1-t/OUT);if(t>=OUT){flight();plate();phase='in';t=0;}}
+    };
     // The plate: the density field and DDA walk of scene.frag.glsl, the boid
     // force sum of boid-sim.frag.glsl, and the live terrain values from U and
-    // S. The title stays the same, so the numbers refresh in place each second.
+    // S. A new scene gives a new title, so the plate fades to it; the same
+    // title refreshes the numbers in place each second.
     const label=typeof opts.label==='function'?opts.label:null;
     const plate=()=>{
       if(!label) return;
@@ -944,17 +1001,17 @@ window.snSaver={
       // (c, w) m4, the boid acceleration a m5, the terrain values (H, f,
       // sigma, tau, m) m6.
       label({
-        title:'Voxel flythrough',
-        sub:'DDA ray march through an fBm voxel field',
+        title:'Voxel flythrough · '+SAVER_SCENES[scene][0],
+        sub:'DDA ray march through an fBm voxel field, seed '+S.seed.toFixed(1)+' on axis '+SAVER_AXIS[S.seedAxis],
         params:[
           {sym:'f',name:'frequency',value:U.uFreq.toFixed(3),cls:'m6'},
           {sym:'H',name:'height',value:String(U.uHeight),cls:'m6'},
           {sym:'\\tau',name:'threshold',value:String(U.uThresh),cls:'m6'},
           {sym:'m',name:'morph',value:U.uMorphAmt+' × '+m.toFixed(2),cls:'m6'},
-        ].concat(BO.on?[{sym:'c',name:'cohesion',value:String(BO.cohesion),cls:'m4'}]:[]),
+        ].concat(BO.on?[{sym:'w',name:'wander',value:String(BO.wander),cls:'m4'}]:[]),
         lines:[
           U.uOct+' octaves, slope σ = '+U.uSlope+', up to '+U.uMaxSteps+' cells per ray; solid where ρ > 0',
-          BO.on?(BO.N.toLocaleString('en-US')+' boids, 12 neighbours each, wander w = '+BO.wander):'Boid swarm off (no float render target)',
+          BO.on?(BO.N.toLocaleString('en-US')+' boids, 12 neighbours each, cohesion c = '+BO.cohesion):'Boid swarm off (no float render target)',
         ],
         tex:[
           '\\rho(\\mathbf{p}) = H\\,\\operatorname{fbm}(f\\,\\mathbf{p} + m\\,\\mathbf{u}) - \\sigma\\, y - \\tau',
@@ -979,5 +1036,5 @@ window.snSaver={
     this._plate=setInterval(plate,1000);
     return { canvas, warmupMs:1000 };
   },
-  exit(){ clearInterval(this._plate); }
+  exit(){ clearInterval(this._plate); S.saverTick=null; S.fade=1; }
 };

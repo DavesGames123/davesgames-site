@@ -19,6 +19,7 @@ out vec4 outColor;
 uniform sampler2D uScene;
 uniform vec2 uRes;
 uniform float uBloom, uScan;
+uniform float uFade;   // 1 = full picture, 0 = black (the saver fades between flights)
 uniform int uScanOn;
 
 // hue-preserving tonemap: tonemap luminance, keep chroma → neon stays neon
@@ -92,5 +93,5 @@ void main(){
   vec2 q=uv;
   c*=0.55+0.45*pow(16.0*q.x*q.y*(1.0-q.x)*(1.0-q.y),0.16);
 
-  outColor=vec4(c,1.0);
+  outColor=vec4(c*uFade,1.0);
 }
