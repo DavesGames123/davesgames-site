@@ -325,9 +325,18 @@ function labels(force) {
   // The phone sheet shows a copy of #eq, made after the boxes are typeset.
   if ($('eqPlate').dataset.tex !== E.plate || $('eqD').dataset.tex !== E.d)
     Promise.all([staticEqs(), setEq('eqPlate', E.plate), setEq('eqD', E.d)]).then(() => { $('eqPhone').innerHTML = $('eq').innerHTML; });
-  if (saver && saver.label) {
-    const sub = nm.on ? `${name.title}${name.tag ? ' · ' + name.tag : ''} · ${fmtHz(cur.sim.freq[nm.m])}` : `sweeping · ${fmtHz(st.f)}`;
-    const key = S.name + sub;
+  if (saver && saver.label && saver.modes.length) {
+    // The title names the tour mode: the mode on screen, or in a glide the
+    // mode the glide goes to, so the title changes when the glide starts.
+    // The sub says the glide (from, live Hz) or the tag and the mode Hz.
+    // The first line is the tour of this plate, the current mode in [ ].
+    const F = cur.sim.freq, tm = saver.modes[saver.mi], tn = modeName(tm);
+    const gliding = !!st.glide && saver.phase === 'glide', pm = saver.modes[saver.mi - 1];
+    const title = `${S.name} · ${tn.title}`;
+    const sub = gliding ? `Gliding from ${modeName(pm).title} · ${fmtHz(st.f)} → ${fmtHz(F[tm])}`
+      : `${tn.tag ? tn.tag.charAt(0).toUpperCase() + tn.tag.slice(1) + ' · ' : ''}${fmtHz(F[tm])}`;
+    const tour = `Mode ${saver.mi + 1} of ${saver.modes.length} on this plate: ` + saver.modes.map((m, k) => k === saver.mi ? `[ ${modeName(m).title} ]` : modeName(m).title).join(' · ');
+    const key = title + sub;
     if (key !== lastSaverLabel) {
       lastSaverLabel = key;
       const c = CP.stiffness(st.material, st.t / 1000), M = CP.MATERIALS[st.material];
@@ -337,8 +346,8 @@ function labels(force) {
           : { sym: 'D_y / D_x', name: 'grain stiffness ratio', value: (c.DL / c.DR).toFixed(1), cls: 'm2' },
         { sym: '\\rho', name: 'density', value: M.rho + ' kg/m³', cls: 'm4' },
         { sym: 'Q', name: 'quality factor', value: (1 / (2 * st.zeta)).toFixed(0) }];
-      saver.label({ title: S.name, sub: sub.charAt(0).toUpperCase() + sub.slice(1), params,
-        lines: [nm.on ? name.sub : 'Between resonances', `${M.name}, ${st.bc} edges`],
+      saver.label({ title, sub, params,
+        lines: [tour, `${gliding ? 'Between resonances' : tn.sub} · ${M.name}, ${st.bc} edges`],
         tex: [E.plate, SAVER_RESP, String.raw`\omega^2\,|w|>g`], rules: CP_RULES,
         eq: eqText(true).slice(0, 2).concat(['sand lifts where ω²|w| > g']), anchor: plateAnchor });
     }
@@ -477,6 +486,7 @@ function frame(now) {
       fieldDirty = false;
     }
     cur.sim.step(dt, HOP);
+    if (saver) cur.sim.step(dt, HOP);
     if (R) {
       R.grains(cur.sim.buf, cur.sim.count);
       R.trail(Math.pow(0.86, dt * 60), 0.085 * Math.min(1.6, dt * 60));
@@ -661,11 +671,11 @@ function saverPlate(id) {
 function saverModes() {
   // modes that lift the sand well, in rising order; a violin shows 1, 2, 5
   const S = CP.SHAPES[st.shape];
-  if (S.violin) return [0, 1, 4].filter(m => peakAt(m) > 1.5).concat([6, 8].filter(m => peakAt(m) > 3)).slice(0, 4);
+  if (S.violin) return [0, 1, 4].filter(m => peakAt(m) > 1.5).concat([6, 8].filter(m => peakAt(m) > 3)).slice(0, 3);
   const good = []; for (let m = 0; m < 16; m++) if (peakAt(m) > 6) good.push(m);
   // a degenerate pair has one frequency: keep one mode of each pair
   const F = cur.sim.freq, pick = [];
-  while (good.length && pick.length < 4) {
+  while (good.length && pick.length < 3) {
     const m = good.splice(Math.floor(saver.r() * good.length), 1)[0];
     if (pick.every(q => Math.abs(Math.log(F[q] / F[m])) > 0.03)) pick.push(m);
   }
@@ -694,14 +704,18 @@ function saverSwap() {
     solveFor(saverPlate(saver.order[saver.si % saver.order.length]));
   }, true);
 }
+// Times at calm 0.7: fade in 1.2 s, hold 4.7 s, glide 2.1 s, fade out
+// 1.0 s. A plate with 3 modes takes about 20 s. (It was 9 s holds, 4.5 s
+// glides and 4 modes, about 60 s on one plate.) The frame loop steps the
+// sand twice per frame in the saver, so a pattern forms in the hold.
 function saverTick(dt) {
-  const s = saver, slow = 0.6 + 0.8 * s.calm;
+  const s = saver, slow = 0.85 + 0.3 * s.calm;
   s.t += dt;
   st.yaw = st.view === 'tilt' ? 0.18 * Math.sin(simTime * 0.05 * (1.2 - s.calm)) : 0;
-  if (s.phase === 'fadein') { st.fade = Math.min(1, s.t / 1.6); if (s.t >= 1.6) { s.phase = 'hold'; s.t = 0; } }
-  else if (s.phase === 'hold') { if (s.t > 9 * slow) { s.mi++; if (s.mi >= s.modes.length) { s.phase = 'fadeout'; s.t = 0; } else { glideTo(s.modes[s.mi], 4.5 * slow); s.phase = 'glide'; s.t = 0; } } }
+  if (s.phase === 'fadein') { st.fade = Math.min(1, s.t / 1.2); if (s.t >= 1.2) { s.phase = 'hold'; s.t = 0; } }
+  else if (s.phase === 'hold') { if (s.t > 4.5 * slow) { if (s.mi + 1 >= s.modes.length) { s.phase = 'fadeout'; s.t = 0; } else { s.mi++; glideTo(s.modes[s.mi], 2 * slow); s.phase = 'glide'; s.t = 0; } } }
   else if (s.phase === 'glide') { if (!st.glide) { s.phase = 'hold'; s.t = 0; } }
-  else if (s.phase === 'fadeout') { st.fade = Math.max(0, 1 - s.t / 1.4); if (s.t >= 1.4) { st.fade = 0; saverSwap(); } }
+  else if (s.phase === 'fadeout') { st.fade = Math.max(0, 1 - s.t / 1.0); if (s.t >= 1.0) { st.fade = 0; saverSwap(); } }
 }
 window.snSaver = {
   enter(o) {
