@@ -105,7 +105,7 @@ window.SN_SAVER_CATALOG = {
     'sims': { tier: 3, default: true, hook: true, note: 'Uses the shared table-engine snSaver hook (see fields plan: saverCanvas + ssurf drawn via PAGE.draw at the inspected-style path table-engine.js:261, saverTile f' },
     'dot-field': { tier: 2, hook: true, note: 'Not a default (user, 2026-10-02): a mostly static shader table. Shared table-engine snSaver hook (see fields plan).' },
     'polar': { tier: 2, hook: true, note: 'Not a default (user, 2026-10-02): a mostly static shader table. Shared table-engine snSaver hook (see fields plan);' },
-    'sdf2d': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
+    'sdf2d': { tier: 4, default: true, hook: true, note: 'Own build-up saver (pages/sdf2d-table/saver.js): 8 shapes built op by op, the field shown as flowing bands, a sphere-tracing demo or a tile-out.' },
     'color': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02). Its saver list stays in the page.' },
     'postfx': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02). Its saver list stays in the page.' },
     'sampling': { tier: 2, default: false, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
