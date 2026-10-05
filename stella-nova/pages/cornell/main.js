@@ -806,7 +806,12 @@ var APP=(function(){
 
   // Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI,
   // the overlays and the wire canvas, sets the GPU trace to the window size,
-  // and shows a list of camera stations with lighting presets. A station holds
+  // and shows a list of stations. A station is a wall preset, a set of
+  // materials for the three objects, a small turn of the camera and a fov.
+  // The objects do not move. fit() sets the camera distance so that the open
+  // front of the box fits the frame, in a wide window and in the 9:16
+  // column. The canonical station (classic walls, glass sphere) is first,
+  // and opts.seed sets the order of the others. A station holds
   // seconds/3 (at least 10 s) and converges; the change between stations is
   // behind a fade to black in the display pass (FADE), so the noisy restart
   // stays dark. calm (1 = slowest) makes the fades longer; opts.seed sets the
@@ -818,8 +823,23 @@ var APP=(function(){
     var st=document.createElement('style');
     st.textContent='.topbar,#panel,#status-bar,#mob-btn,#err,#wire{display:none!important}body::before,body::after{display:none!important}#canvas-wrap canvas{cursor:none}';
     document.head.appendChild(st);
-    var ST=[{az:90,el:14,R:2.45,p:'brand'},{az:85,el:9,R:2.2,p:'classic'},{az:95,el:12,R:2.3,p:'brand'},{az:90,el:4,R:2.4,p:'classic'},{az:93,el:7,R:1.95,p:'brand'},{az:87,el:12,R:2.3,p:'dim'}];
-    for(var i=ST.length-1;i>0;i--){ var j=Math.floor(rnd()*(i+1)), q=ST[i]; ST[i]=ST[j]; ST[j]=q; }
+    // m: material of the torus, the sphere and the round box (0 diffuse,
+    // 2 mirror, 3 glass, 4 glossy). k: the half-size of the box front in
+    // the frame, 0.98 = all of it, larger crops the walls a little.
+    var ST=[{az:90,el:6,fov:40,k:0.98,p:'classic',m:[0,3,2]},{az:90,el:10,fov:40,k:0.98,p:'brand',m:[0,3,2]},
+      {az:87,el:4,fov:46,k:1.08,p:'classic',m:[0,0,0]},{az:93,el:8,fov:46,k:1.08,p:'brand',m:[3,2,4]},
+      {az:90,el:3,fov:40,k:0.98,p:'dim',m:[4,3,0]},{az:88,el:12,fov:44,k:1.05,p:'classic',m:[2,3,4]}];
+    for(var i=ST.length-1;i>1;i--){ var j=1+Math.floor(rnd()*i), q=ST[i]; ST[i]=ST[j]; ST[j]=q; }
+    var GEO=SCENE.spheres.filter(function(q){ return q.shape!==8&&q.mat!==5; }).slice(0,3);
+    // The camera distance: the smallest R (step 0.02) at which the four
+    // corners of the open front (x, y = +-1 at z = 1) project inside k of
+    // the frame. The vertical tan is cam.tan, the horizontal is tan * WW/WH.
+    function fit(s){ CAM.az=s.az; CAM.el=s.el; CAM.fov=s.fov; CAM.tx=0; CAM.ty=0; CAM.tz=0;
+      var asp=WW/WH;
+      for(var R=1.6;R<14;R+=0.02){ CAM.R=R; var c=cameraBasis(), ok=true;
+        for(var a=-1;a<=1&&ok;a+=2) for(var b=-1;b<=1&&ok;b+=2){ var r=[a-c.cp[0],b-c.cp[1],1-c.cp[2]], dz=vdot(r,c.f);
+          if(dz<=0.05||Math.abs(vdot(r,c.rt)/dz/(c.tan*asp))>s.k||Math.abs(vdot(r,c.up)/dz/c.tan)>s.k) ok=false; }
+        if(ok) return; } }
     var hold=Math.max(10,(o.seconds||60)/3)*1000, fadeS=0.9+0.8*calm, n=0, phase='in', since=0, last=0;
     // The plate: the integral radiance() estimates, the next-event term of
     // sampleLightS, the glass Fresnel term, and the live sample count of the
@@ -855,8 +875,8 @@ var APP=(function(){
           'glass: F = 0.04 + 0.96(1 − cos θ)⁵, η = 1.5',
           'pixel = (1/N) Σ L  →  ACES  →  γ 1/2.2'],
         anchor:objAnchor }); }
-    // The objects on screen, for the shell's label plate (the box itself
-    // fills the window, so it is not the subject). Each visible object
+    // The objects on screen, for the shell's label plate (the box frames
+    // them, so it is not the subject). Each visible object
     // that is not text or a light gives its projected centre and a disc of
     // its bounding radius (r times a factor per shape, from the wireframe
     // sizes). The projection is project() with a fresh cameraBasis(), plus
@@ -882,7 +902,9 @@ var APP=(function(){
       var asp=WW/WH, b=Math.round(Math.sqrt(SAVER_MS/cPx/Math.max(asp,1/asp)));
       return Math.max(Math.min(360,full),Math.min(full,b)); }
     function station(){ if(usingGpu()){ var b=saverBase(); if(!resBase||Math.abs(b-resBase)>resBase*0.1){ resBase=b; applyRes(); spf=1; } }
-      var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); wallSet=s.p; resetRender(); plate(); }
+      var s=ST[n++%ST.length]; fit(s);
+      GEO.forEach(function(q,k){ q.mat=s.m[k]; q.rough=q.mat===4?0.18:0; });
+      preset(s.p); wallSet=s.p; resetRender(); plate(); }
     function tick(t){ var dt=Math.min(0.05,(t-(last||t))/1000); last=t; if(!since) since=t;
       if(phase==='show'&&t-since>hold) phase='out';
       else if(phase==='out'){ FADE=Math.min(1,FADE+dt/fadeS); if(FADE>=1){ station(); phase='dark'; since=t; } }
