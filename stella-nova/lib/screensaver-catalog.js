@@ -110,7 +110,7 @@ window.SN_SAVER_CATALOG = {
     'postfx': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02). Its saver list stays in the page.' },
     'sampling': { tier: 2, default: false, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
     'lighting': { tier: 2, hook: true, note: 'Not a default (user, 2026-10-02): a mostly static shader table. Shared table-engine snSaver hook (see fields plan).' },
-    'sdf-solids': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
+    'sdf-solids': { tier: 4, default: true, hook: true, note: 'Own build-up saver (pages/sdf-solids-table/saver.js): 11 solids built op by op from primitives, cuts and modifiers.' },
     'liquid-metal': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan);' },
     'bench': { tier: 4, note: 'Generic fallback fails: no canvas in static HTML;' },
     'explosion': { tier: 2, default: true, hook: true, note: 'Classic (non-module) script, so playback state is global: stella-nova/pages/explosion/main.js:124-128 declares top-level vars playing, speed, zoom, quality, cur' },
