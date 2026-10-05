@@ -60,6 +60,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { loadShaders } from '../../lib/shaders.js';
+import { plateBand } from '../../lib/saver-clear.js';
 
 // Shader source lives in real .glsl files under shaders/. Fetch it all before
 // building any material, so init runs in the original synchronous order.
@@ -477,8 +478,8 @@ const SAVER_EASE=['speed','density','atmosphereGlow','atmosphereLevel','atmosphe
   'orbRotation','internalAnim','fractalScale','fractalDecay','smoothness','asymmetry','chromaticAberration'];
 // The orb on screen, for the shell's label plate: the projected centre of
 // the volume sphere (radius 2, the orb mesh), and the screen radius of its
-// silhouette, R/sqrt(D^2 - R^2) over tan(fov/2), in page CSS px. The saver
-// sets no view offset, so the centre is the frame centre. No key
+// silhouette, R/sqrt(D^2 - R^2) over tan(fov/2), in page CSS px. project()
+// includes the saver's view offset (the clear band centre). No key
 // points: the orb is one volume, so the leader ends at its edge.
 const _orbC=new THREE.Vector3();
 function orbAnchor(){
@@ -514,19 +515,32 @@ window.snSaver={
     };
     let i=(opts.seed>>>0)%SAVER_PRESETS.length;
     Object.assign(S,calmOf(SAVER_PRESETS[i]),{preset:SAVER_PRESETS[i]});
-    // Pull the camera back so that the orb takes about 0.31 of the height
-    // (0.44 of the width on a narrow screen). Then the label plate fits
-    // beside the orb, not over it. Never closer than the page's 6 units.
-    const fit=()=>{
+    // The orb sits in the clear band between the plate's top text and its
+    // bottom text (plateBand, lib/saver-clear.js), centred in that band,
+    // with a screen radius of 0.46 of the band height or of the visible
+    // column width, whichever is less. With no plate, it takes 0.31 of the
+    // height (0.44 of the width) at the frame centre. The band is read 4
+    // times a second; the centre and radius ease to it, so a new plate
+    // does not jump the orb. Never closer than the page's 6 units.
+    let fr=null, band=null, bandAt=-1e9;
+    const goal=()=>{
+      const H=innerHeight;
+      if(!band) return {cy:H/2, r:Math.min(0.31*H,0.44*innerWidth)};
+      const hc=Math.max(0.3*H,H-band.t-band.b);
+      return {cy:band.t+hc/2, r:Math.max(0.2*Math.min(H,band.w),Math.min(0.46*hc,0.46*band.w))};
+    };
+    const fit=k=>{
+      const now=performance.now();
+      if(now-bandAt>250){ bandAt=now; band=plateBand(innerHeight); }
+      const g=goal();
+      fr=fr&&k<1?{cy:fr.cy+(g.cy-fr.cy)*k, r:fr.r+(g.r-fr.r)*k}:g;
       const h=innerHeight/2, t=Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
-      const r=Math.min(0.31*innerHeight,0.44*innerWidth);
-      camera.position.setLength(Math.max(6,Math.hypot(2*h/(t*r),2)));
-      // The orb sits at the centre of the frame on every screen. (A tall
-      // screen had a view offset that moved it down by 0.12 of the height.)
-      camera.clearViewOffset();
+      camera.position.setLength(Math.max(6,Math.hypot(2*h/(t*fr.r),2)));
+      // A view window moved up by d puts the orb d px below the centre.
+      camera.setViewOffset(innerWidth,innerHeight,0,-(fr.cy-h),innerWidth,innerHeight);
       camera.updateProjectionMatrix();
     };
-    fit(); addEventListener('resize',fit);
+    fit(1); addEventListener('resize',()=>fit(1));
     applyState();
     // Autopilot: ease S toward the next preset, colours through THREE.Color.
     const c=new THREE.Color();
@@ -546,7 +560,7 @@ window.snSaver={
       if(k>=1){ a=null; t0=now; S.preset=SAVER_PRESETS[i]; }
     };
     t0=performance.now();
-    this._timer=setInterval(()=>step(performance.now()),50);
+    this._timer=setInterval(()=>{ step(performance.now()); fit(0.12); },50);
     // The plate: the fold the shader runs (shaders/orb.frag.glsl,
     // evaluateStructure and traceEnergy) with the live values from S. The
     // same title refreshes the numbers once a second; a new preset name
