@@ -127,10 +127,23 @@
         if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0);
       }
     }
-    // The saver keeps no band for the shell plate: the membrane sits at the
-    // centre of the frame (see frame()).
+    // The saver adds the shell plate: its top text and bottom text
+    // (plateBand, lib/saver-clear.js, read 4 times a second) count as bars,
+    // so the membrane sits and fits in the clear band between them. The
+    // band keeps at least 35% of the height; a taller plate gives up its
+    // margin in proportion.
+    if (saverOn && plateBandFn) {
+      const now = performance.now();
+      if (now - bandAt > 250) { bandAt = now; band = plateBandFn(h); }
+      if (band) {
+        let t = band.t, b = band.b; const k = (t + b) / (0.65 * h);
+        if (k > 1) { t /= k; b /= k; }
+        o.t = Math.max(o.t, t); o.b = Math.max(o.b, b);
+      }
+    }
     return o;
   }
+  let plateBandFn = null, band = null, bandAt = -1e9;
   // Camera distance that fits the membrane in the clear part. At R = 5.4 the
   // membrane spans about 0.85 h across and 0.55 h high, with h the canvas
   // height. The fit keeps it inside 92% of the clear width and 85% of the
@@ -388,7 +401,8 @@
     const st = Math.sin(view.phi), ct = Math.cos(view.phi);
     camera.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
     // The page aims a little below the centre, for its panels. The saver
-    // aims at the centre of the membrane, so it sits at the frame centre.
+    // aims at the centre of the membrane, so it sits at the centre of the
+    // clear part (between the plate's top and bottom text).
     camera.lookAt(0, saverOn ? 0 : -0.15, 0);
     renderer.render(scene, camera);
     if (++frameNo % 6 === 0) { refreshReadout(); refreshLegendScale(); }
@@ -798,10 +812,12 @@
   }
   window.snSaver = {
     exit() {
+      band = null;
       saverLabel = null; saverOn = false; saverScene = null; clearInterval(saverTimer); saverTimer = 0;
       fadePlane.visible = false; wire.visible = false; heightK = 1;
     },
     enter(o) {
+      import('../../lib/saver-clear.js').then(m => { plateBandFn = m.plateBand; }).catch(() => { /* no band: the frame centre */ });
       const calm = o && o.calm != null ? o.calm : 0.7;
       let seed = ((o && o.seed) >>> 0) || 1;
       saverRnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
