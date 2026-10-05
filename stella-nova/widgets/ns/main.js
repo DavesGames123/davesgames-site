@@ -58,6 +58,7 @@
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
 //      saver collapse ....... "function vxSaverTick" time warp, zoom, flash, VX_SHAPES
 //      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
+//      saver 2D fields ...... "const F2_SV"        seeded flow2d initial fields, "function f2SvSet"
 //      saver plate .......... "function svPlate"   opts.label: title, live params, TeX, anchor
 // ============================================================================
 import * as THREE from 'three';
@@ -1168,6 +1169,82 @@ function svClock(hold,fade,next){ let ph='in', t=0, k=0; return dt=>{ t+=dt;
 function svFinish(k){ const W=stage.clientWidth, H=stage.clientHeight; ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.globalCompositeOperation='destination-over'; ctx.fillStyle=COL.bg; ctx.fillRect(0,0,W,H); ctx.globalCompositeOperation='source-over';
   if(k<1){ ctx.fillStyle=`rgba(10,8,16,${(1-k).toFixed(3)})`; ctx.fillRect(0,0,W,H); } ctx.restore(); }
+// Saver initial fields for Flow 2D. The page's own setIC() list stays as it
+// is. Each entry: key, name, sub (one line for the plate), the TeX and the
+// Unicode of omega_0, the viscosity nu, the target peak |omega|, and
+// make(rng) -> { f(x, y) = omega_0 on [0, 2pi)^2, extra plate params }.
+// f2SvSet() samples f on the grid, scales it to the target peak and does the
+// tail of Flow2D.setIC (spectral transform, zero mean, reference values).
+// Grep: "const F2_SV"  "function f2SvSet"
+const SV_TAU=2*Math.PI;
+// Periodic offset in [-pi, pi], and a periodic Gaussian blob of width s.
+const svPer=d=>d-SV_TAU*Math.round(d/SV_TAU);
+const svBlob=(x,y,x0,y0,s)=>{ const dx=svPer(x-x0), dy=svPer(y-y0); return Math.exp(-(dx*dx+dy*dy)/(2*s*s)); };
+// A sum of Gaussian vortices [x, y, strength, width].
+const svVort=vs=>(x,y)=>{ let o=0; for(const [x0,y0,g,s] of vs) o+=g*svBlob(x,y,x0,y0,s); return o; };
+const SV_GAUSS_TEX=R`\omega_0=\sum_k \Gamma_k\,\frac{e^{-|\mathbf{x}-\mathbf{x}_k|^2/2s_k^2}}{2\pi s_k^2}`, SV_GAUSS_EQ='ω₀ = Σₖ Γₖ exp(−|x − xₖ|²/2sₖ²) / 2πsₖ²';
+const F2_SV=[
+  { key:'kh', name:'Kelvin–Helmholtz', sub:'Two thin shear layers roll up into chains of vortices', nu:0.0015, peak:9,
+    tex:R`\omega_0=\tfrac{U}{2d}\Bigl[\operatorname{sech}^2\tfrac{y-y_1}{d}-\operatorname{sech}^2\tfrac{y-y_2}{d}\Bigr]+\varepsilon\sin(mx+\phi)`,
+    eq:'ω₀ = (U/2d)[sech²((y−y₁)/d) − sech²((y−y₂)/d)] + ε sin(mx + φ)',
+    make(r){ const d=0.07+0.05*r(), m=2+Math.floor(3*r()), m2=m+1+Math.floor(2*r()), ph=SV_TAU*r(), ph2=SV_TAU*r(), e=0.25+0.25*r();
+      return { extra:[{ sym:'m', name:'seeded wavenumber', value:String(m) }, { sym:'d', name:'layer thickness', value:d.toFixed(3) }],
+        f(x,y){ const y1=y-Math.PI/2, y2=y-3*Math.PI/2, s1=1/Math.cosh(y1/d), s2=1/Math.cosh(y2/d), g1=Math.exp(-((y1/(3*d))**2)), g2=Math.exp(-((y2/(3*d))**2));
+          return (s1*s1-s2*s2)/(2*d)+e/d*(g1*(Math.sin(m*x+ph)+0.4*Math.sin(m2*x+ph2))-g2*(Math.sin(m*x+ph2)+0.4*Math.sin(m2*x+ph))); } }; } },
+  { key:'collide', name:'dipole collision', sub:'Two vortex pairs meet head-on and swap partners', nu:0.0015, peak:10, tex:SV_GAUSS_TEX, eq:SV_GAUSS_EQ,
+    make(r){ const b=r()<0.4?0:0.25+0.45*r(), a=0.4+0.1*r(), s=0.2, c=Math.PI, L=1.6+0.4*r();
+      return { extra:[{ sym:'b', name:'impact offset', value:b.toFixed(2) }],
+        f:svVort([[c-L,c+b/2+a,1,s],[c-L,c+b/2-a,-1,s],[c+L,c-b/2+a,-1,s],[c+L,c-b/2-a,1,s]]) }; } },
+  { key:'merger', name:'vortex merger', sub:'Two like-signed vortices orbit, then merge into one with spiral arms', nu:0.0012, peak:10, tex:SV_GAUSS_TEX, eq:SV_GAUSS_EQ,
+    make(r){ const d=0.5+0.25*r(), s=0.26+0.06*r(), q=0.6+0.4*r(), sg=r()<0.5?1:-1, th=SV_TAU*r(), c=Math.PI, dx=d*Math.cos(th), dy=d*Math.sin(th);
+      return { extra:[{ sym:'s/d', name:'core size / half gap', value:(s/d).toFixed(2) }, { sym:'\\Gamma_2/\\Gamma_1', name:'strength ratio', value:q.toFixed(2) }],
+        f:svVort([[c+dx,c+dy,sg,s],[c-dx,c-dy,sg*q,s*(0.85+0.3*r())]]) }; } },
+  { key:'polygon', name:'vortex polygon', sub:'Like-signed vortices on a circle: the ring goes unstable and breaks up', nu:0.0012, peak:10, tex:SV_GAUSS_TEX, eq:SV_GAUSS_EQ,
+    make(r){ const N=6+Math.floor(4*r()), R0=1.0+0.4*r(), s=0.17+0.03*r(), c=Math.PI, mid=r()<0.4, vs=[];
+      for(let k=0;k<N;k++){ const a=SV_TAU*k/N+0.24*(r()-0.5), rr=R0*(1+0.08*(r()-0.5)); vs.push([c+rr*Math.cos(a),c+rr*Math.sin(a),1,s]); }
+      if(mid) vs.push([c,c,-0.6*N/3,0.3]);
+      return { extra:[{ sym:'N', name:'vortices on the ring', value:String(N) }, { sym:'R', name:'ring radius', value:R0.toFixed(2) }], f:svVort(vs) }; } },
+  { key:'shielded', name:'shielded vortex', sub:'A vortex in an opposite-signed shield breaks up along mode m', nu:0.0010, peak:12,
+    tex:R`\omega_0=\Bigl(1-\tfrac{\alpha}{2}q\Bigr)e^{-q},\qquad q=\Bigl(\tfrac{r}{R}\,(1+\varepsilon\cos m\theta)\Bigr)^{\alpha}`,
+    eq:'ω₀ = (1 − αq/2) e^{−q},  q = ((r/R)(1 + ε cos mθ))^α',
+    make(r){ const m=2+Math.floor(2*r()), al=4+2*r(), R0=0.75+0.15*r(), e=0.04+0.04*r(), ph=SV_TAU*r(), c=Math.PI;
+      return { extra:[{ sym:'m', name:'seeded mode', value:String(m) }, { sym:'\\alpha', name:'profile steepness', value:al.toFixed(1) }],
+        f(x,y){ const dx=svPer(x-c), dy=svPer(y-c), q=Math.pow(Math.hypot(dx,dy)/R0*(1+e*Math.cos(m*Math.atan2(dy,dx)+ph)),al); return (1-al/2*q)*Math.exp(-q); } }; } },
+  { key:'jet', name:'Bickley jet', sub:'A jet goes sinuous and sheds a street of vortices', nu:0.0015, peak:7,
+    tex:R`u_0=U\operatorname{sech}^2\frac{y-\eta(x)}{L},\qquad \omega_0=-\partial_y u_0,\qquad \eta=\varepsilon\sin(mx+\phi)`,
+    eq:'u₀ = U sech²((y − η)/L),  ω₀ = −∂ᵧu₀,  η = ε sin(mx + φ)',
+    make(r){ const L=0.28+0.12*r(), m=2+Math.floor(2*r()), e=0.05+0.08*r(), ph=SV_TAU*r(), c=Math.PI;
+      return { extra:[{ sym:'L', name:'jet width', value:L.toFixed(2) }, { sym:'m', name:'seeded wavenumber', value:String(m) }],
+        f(x,y){ const z=(y-c-e*Math.sin(m*x+ph))/L, sc=1/Math.cosh(z); return 2*sc*sc*Math.tanh(z)/L; } }; } },
+  { key:'turbulence', name:'decaying turbulence', sub:'Random-phase vorticity: like signs merge, energy moves to large scales', nu:0.0012, peak:10,
+    tex:R`\hat\omega_0(\mathbf k)\propto|\mathbf k|\,e^{-|\mathbf k|^2/k_0^2}\,e^{i\phi_{\mathbf k}},\qquad \phi_{\mathbf k}\ \text{random}`,
+    eq:'ω̂₀(k) ∝ |k| exp(−|k|²/k₀²) e^{iφₖ}, φₖ random',
+    make(r){ const n=F2.n, k0=4+Math.floor(7*r()), K=Math.ceil(2.2*k0), w=new Float64Array(n*n), cs=[], sn=[];
+      for(let k=0;k<=K;k++){ const c1=new Float64Array(n), s1=new Float64Array(n); for(let i=0;i<n;i++){ c1[i]=Math.cos(SV_TAU*k*i/n); s1[i]=Math.sin(SV_TAU*k*i/n); } cs.push(c1); sn.push(s1); }
+      for(let kx=-K;kx<=K;kx++) for(let ky=0;ky<=K;ky++){ if(ky===0&&kx<=0) continue; const kk=Math.hypot(kx,ky); if(kk>K) continue;
+        const A=kk*Math.exp(-(kk*kk)/(k0*k0)), ph=SV_TAU*r(), cp=Math.cos(ph), sp=Math.sin(ph), ax=Math.abs(kx), sx=kx<0?-1:1;
+        // cos(kx x + ky y + ph) through 1D tables: cos(a + b) with a = kx x + ph, b = ky y
+        for(let i=0;i<n;i++){ const ca=cs[ax][i]*cp-sx*sn[ax][i]*sp, sa=sx*sn[ax][i]*cp+cs[ax][i]*sp;
+          for(let j=0;j<n;j++) w[i+n*j]+=A*(ca*cs[ky][j]-sa*sn[ky][j]); } }
+      return { extra:[{ sym:'k_0', name:'peak wavenumber', value:String(k0) }], f:(x,y)=>w[Math.round(x*n/SV_TAU)%n+n*(Math.round(y*n/SV_TAU)%n)] }; } },
+  { key:'gas', name:'vortex gas', sub:'Many vortices of both signs pair up, merge and scatter', nu:0.0012, peak:10, tex:SV_GAUSS_TEX, eq:SV_GAUSS_EQ,
+    make(r){ const N=18+Math.floor(18*r()), vs=[]; for(let k=0;k<N;k++) vs.push([SV_TAU*r(),SV_TAU*r(),(r()<0.5?-1:1)*(0.6+0.4*r()),0.14+0.12*r()]);
+      return { extra:[{ sym:'N', name:'vortices', value:String(N) }], f:svVort(vs) }; } },
+  { key:'annulus', name:'vortex annulus', sub:'A thin ring of vorticity buckles into m lobes and rolls up', nu:0.0012, peak:14,
+    tex:R`\omega_0=A\exp\!\Bigl(-\frac{(r-R(\theta))^2}{2s^2}\Bigr),\qquad R(\theta)=R_0\,(1+\varepsilon\cos m\theta)`,
+    eq:'ω₀ = A exp(−(r − R(θ))²/2s²),  R(θ) = R₀(1 + ε cos mθ)',
+    make(r){ const R0=0.9+0.4*r(), s=0.09+0.03*r(), m=3+Math.floor(4*r()), e=0.05+0.05*r(), ph=SV_TAU*r(), c=Math.PI;
+      return { extra:[{ sym:'m', name:'seeded lobes', value:String(m) }, { sym:'R_0', name:'ring radius', value:R0.toFixed(2) }],
+        f(x,y){ const dx=svPer(x-c), dy=svPer(y-c), rr=Math.hypot(dx,dy), Rt=R0*(1+e*Math.cos(m*Math.atan2(dy,dx)+ph)); return Math.exp(-((rr-Rt)**2)/(2*s*s)); } }; } },
+];
+// Load one saver field into F2: sample, scale to the peak, transform, and
+// reset time, history, timeline and the reference values (as f2Reset does).
+function f2SvSet(ic,rng){ const n=F2.n, N=F2.N, w=F2.wr, made=ic.make(rng); let m=0;
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const o=made.f(SV_TAU*i/n,SV_TAU*j/n); w[i+n*j]=o; m=Math.max(m,Math.abs(o)); }
+  const k=ic.peak/Math.max(m,1e-9); for(let p=0;p<N;p++) w[p]*=k; F2.wi.fill(0); F2.nu=ic.nu;
+  fftND(w,F2.wi,F2.dims,false); w[0]=0; F2.wi[0]=0; F2.t=0; F2.hist=[]; F2.steps=0; F2.rhs(w,F2.wi,F2.S[0],F2.S[1]);
+  F2.w0max=F2.maxOm(); F2.E0=F2.energy(); F2.Z0=F2.enstrophy(); F2.ic=ic.key; F2.sv={ ic, extra:made.extra||[] };
+  F2.lastE=F2.E0; F2.lastZ=F2.Z0; F2.lastMax=F2.w0max; F2.record(); FT.clear(); f2Snap(); F2.playing=true; }
 // One autopilot per view: (calm, show s per state, fade s, rng) -> { draw(dt) }.
 const SV_VIEWS = {
   // Burgers: one run from t = 0 to tEnd per state, over most of the show time,
@@ -1183,12 +1260,14 @@ const SV_VIEWS = {
   },
   // Flow 2D: the vorticity field covers the window (one period on the long
   // side, centred), with faint velocity arrows. The colour scale follows the
-  // live maximum, so the decay does not fade the picture. Each state takes the
-  // next initial field (random, shear layer, dipole); random fields use rng.
-  flow2d(calm, show, fade, rng){
-    const ics=['random','shear','dipole']; let i=Math.floor(rng()*3);
-    const next=()=>{ i=(i+1)%3; svSeeded(rng,()=>{ F2.ic=ics[i]; f2Reset(); }); };
-    i=(i+2)%3; next(); F2.spd=1-0.6*calm; TOG.fixed=false; const clock=svClock(show,fade,next);
+  // live maximum, so the decay does not fade the picture. Each state is one
+  // F2_SV field with its own seeded parameters. Two states fill one dwell,
+  // so a field has half the dwell to develop. The next field is never the
+  // same kind as the one before.
+  flow2d(calm, show, fade, rng, secs){
+    let i=Math.floor(rng()*F2_SV.length);
+    const next=()=>{ i=(i+1+Math.floor(rng()*(F2_SV.length-1)))%F2_SV.length; f2SvSet(F2_SV[i],rng); };
+    f2SvSet(F2_SV[i],rng); F2.spd=1-0.6*calm; TOG.fixed=false; const clock=svClock(Math.max(8,secs/2-2*fade),fade,next);
     return { draw(dt){ frameNo++; const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); f2Advance(dt);
       FT.sync(); const S=Math.max(W,H); f2Field((W-S)/2,(H-S)/2,S,FT.current()); svFinish(k); } };
   },
@@ -1226,7 +1305,7 @@ if (SV_VIEWS[FIXED]) window.snSaver = { enter(opts) {
   st.textContent = 'html.saver .topbar,html.saver #qp,html.saver #mp,html.saver #stage-scrub,html.saver #stage-overlay,html.saver #stage-caption,html.saver .grid-bg{display:none!important}html.saver #stage{top:0!important;left:0!important;right:0!important;bottom:0!important;transition:none}html.saver #stage canvas{cursor:none}';
   document.head.appendChild(st); document.documentElement.classList.add('saver'); document.body.classList.add('qp-collapsed', 'mp-collapsed');
   SCRUB[FIXED] = null; resize();
-  SV = SV_VIEWS[FIXED](calm, Math.max(6, secs / 3 - 2 * fade), fade, svRng(opts.seed || 1));
+  SV = SV_VIEWS[FIXED](calm, Math.max(6, secs / 3 - 2 * fade), fade, svRng(opts.seed || 1), secs);
   svLabels(opts);
   return { canvas: FIXED === 'flow3d' ? c3d : c2d, warmupMs: 2000 };
 } };
@@ -1265,12 +1344,12 @@ function svPlate(){
       lines: ['Top: the profile. Below: the space–time map.'],
       tex: [R`\partial_t u+u\,\partial_x u=\nu\,\partial_{xx}u`, R`\frac{Dq}{Dt}=-q^2\quad\Longrightarrow\quad q(t)=\frac{q_0}{1+q_0t}`, R`u=-2\nu\,\frac{\partial_x\varphi}{\varphi}\qquad\Longrightarrow\qquad \partial_t\varphi=\nu\,\partial_{xx}\varphi`],
       eq: ['∂ₜu + u ∂ₓu = ν ∂ₓₓu', 'Dq/Dt = −q²,  q(t) = q₀/(1 + q₀t)'] }; }
-  if (v === 'flow2d') return { title: 'Navier–Stokes in 2D', sub: 'Vorticity of a ' + F2.ic + ' field, decaying', rules,
-    params: [{ sym: '\\nu', name: 'viscosity', value: F2.nu.toFixed(4), cls: 'm3' }, { sym: 'E', name: 'energy', value: SV_FMT(F2.lastE) },
-      { sym: 'Z', name: 'enstrophy', value: SV_FMT(F2.lastZ) }, { sym: '\\omega', name: 'max |ω| / initial', value: (F2.lastMax / F2.w0max).toFixed(3), cls: 'm4' }],
+  if (v === 'flow2d'){ const ic = F2.sv && F2.sv.ic; return { title: ic ? 'Navier–Stokes 2D · ' + ic.name : 'Navier–Stokes in 2D', sub: ic ? ic.sub : 'Vorticity of a ' + F2.ic + ' field, decaying', rules,
+    params: [{ sym: '\\nu', name: 'viscosity', value: F2.nu.toFixed(4), cls: 'm3' }, { sym: 't', name: 'time', value: F2.t.toFixed(1) },
+      { sym: 'Z', name: 'enstrophy', value: SV_FMT(F2.lastZ) }, { sym: '\\omega', name: 'max |ω| / initial', value: (F2.lastMax / F2.w0max).toFixed(3), cls: 'm4' }, ...(ic ? F2.sv.extra : [])],
     lines: ['Colour is vorticity, arrows are velocity.'],
-    tex: [R`\partial_t\omega+u\cdot\nabla\omega=\nu\Delta\omega,\qquad u=\nabla^\perp\psi,\quad \Delta\psi=\omega`, R`\frac{dZ}{dt}=-\nu\!\int|\nabla\omega|^2\le 0,\qquad \frac{dE}{dt}=-2\nu Z`],
-    eq: ['∂ₜω + u·∇ω = ν Δω', 'dZ/dt = −ν ∫|∇ω|² ≤ 0,  dE/dt = −2νZ'] };
+    tex: [R`\partial_t\omega+u\cdot\nabla\omega=\nu\Delta\omega,\qquad u=\nabla^\perp\psi,\quad \Delta\psi=\omega`, ic ? ic.tex : R`\frac{dZ}{dt}=-\nu\!\int|\nabla\omega|^2\le 0,\qquad \frac{dE}{dt}=-2\nu Z`],
+    eq: ['∂ₜω + u·∇ω = ν Δω', ic ? ic.eq : 'dZ/dt = −ν ∫|∇ω|² ≤ 0,  dE/dt = −2νZ'] }; }
   if (v === 'flow3d'){ const s = F3.sim; return { title: 'Navier–Stokes in 3D', sub: F3.ic === 'column' ? 'A vortex column, stretched by the flow' : 'Taylor–Green vortex in a periodic box', rules,
     params: [{ sym: '\\nu', name: 'viscosity', value: F3.nu.toFixed(4), cls: 'm3' }, { sym: 'Z/Z_0', name: 'enstrophy', value: (s.lastZ / s.Z0).toFixed(3) },
       { sym: '\\omega', name: 'max |ω| / initial', value: (s.lastMax / s.m0).toFixed(3), cls: 'm4' }, { sym: 't', name: 'time', value: s.t.toFixed(2) }],
