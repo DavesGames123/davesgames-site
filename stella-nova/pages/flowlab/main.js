@@ -210,6 +210,7 @@ const SYS={
 /* ════════ state ════════ */
 // cur = active system key; P = current parameter values for that system.
 let cur="pendulum", P={};
+let saverOn=false;   // set by snSaver.enter: tracers use stepAlong()
 // cfg is the live control config: tracer count/speed/trail, color mode and
 // palette, tone-curve knobs, and the display and playback toggles.
 const cfg={den:2200,spd:14,trl:36,colMode:"speed",palette:"stella",gamma:1.0,contrast:1.0,exposure:1.0,dom:false,arr:false,axes:true,sim:true,playing:true};
@@ -403,9 +404,11 @@ function nearPole(x,y,r){
 // The level scale, cached for one system, parameter set and view.
 let lvKey="", lvRef=1/2.2, lvDen=1.5;
 function updateLevelScale(){
-  const key=cur+"|"+view.cx+"|"+view.cy+"|"+view.scale+"|"+CW+"|"+CH+"|"+JSON.stringify(P);
+  const key=saverOn+"|"+cur+"|"+view.cx+"|"+view.cy+"|"+view.scale+"|"+CW+"|"+CH+"|"+JSON.stringify(P);
   if(key===lvKey)return; lvKey=key;
-  if(!SYS[cur].poles){lvRef=1/2.2;lvDen=1.5;return;}   // the old curve: log10(1+2.2 m)/1.5
+  // the old curve: log10(1+2.2 m)/1.5. The saver uses the percentile scale
+  // for every system, so the fast rows of sin z do not all go white.
+  if(!SYS[cur].poles&&!saverOn){lvRef=1/2.2;lvDen=1.5;return;}
   const ms=[], rp=POLE_PX*2/view.scale;
   for(let j=0;j<20;j++)for(let i=0;i<32;i++){
     const x=wx((i+0.5)/32*CW), y=wy((j+0.5)/20*CH);
@@ -416,6 +419,29 @@ function updateLevelScale(){
   ms.sort((a,b)=>a-b);
   const ref=Math.max(1e-6,ms[ms.length>>1]), hi=Math.max(ref*1.5,ms[Math.floor(ms.length*0.98)]);
   lvRef=ref; lvDen=Math.log10(1+hi/ref);
+}
+// SAVER STEP. In the saver a tracer moves along the unit direction of the
+// field, not at the field speed. A streamline does not depend on the
+// speed, so the curves stay the same. The screen speed stays in a band of
+// 0.3 to 1 times SAVER_PX px/s, set by the speed level. Before, a field with no
+// poles took one step per frame, capped at 0.7 CH px. In a 9:16 frame,
+// sin z shows |y| up to 6, where |v| ~ cosh y is near 200, so a tracer
+// jumped most of the canvas in one frame and its trail drew a straight
+// streak. stepAlong() takes midpoint sub-steps of at most ds world units,
+// at most SUB_MAX of them, and returns null on a non-finite or zero field.
+// tests.mjs runs it on each saver system.
+const SAVER_PX=360;
+function stepAlong(x,y,dist,ds){
+  for(let k=0;k<SUB_MAX&&dist>1e-12;k++){
+    const h=Math.min(dist,ds); dist-=h;
+    let f=fieldAt(x,y), m=Math.hypot(f[0],f[1]);
+    if(!isFinite(m)||m<1e-9)return null;
+    const mx=x+f[0]/m*h*0.5, my=y+f[1]/m*h*0.5;
+    f=fieldAt(mx,my); m=Math.hypot(f[0],f[1]);
+    if(!isFinite(m)||m<1e-9)return null;
+    x+=f[0]/m*h; y+=f[1]/m*h;
+  }
+  return [x,y];
 }
 // The speed level in 0..1 for the trails, the arrows and rampRGB.
 function speedLevel(m){const l=Math.log10(1+m/lvRef)/lvDen;return l<0?0:l>1?1:l;}
@@ -441,9 +467,14 @@ function updateTracers(dt){
     if(!isFinite(m)||m<1e-4||tAge[i]>tMax[i]||x<x0||x>x1||y<y0||y>y1||(positive&&(x<=0||y<=0))||nearPole(x,y,rp)){
       respawnTracer(i); continue;
     }
+    if(saverOn){
+      const q=stepAlong(x,y,SAVER_PX*cfg.spd/14*dt*(0.3+0.7*speedLevel(m))/view.scale,DS_PX/view.scale);
+      if(!q){respawnTracer(i);continue;}
+      x=q[0]; y=q[1];
+    }
     // Sub-steps with an arc-length cap: h = min(h, ds/|v|) at each start
     // point, and the midpoint move is clamped to ds too.
-    let rem=step, gx=fx, gy=fy, gm=m;
+    let rem=saverOn?0:step, gx=fx, gy=fy, gm=m;
     for(let k=0;k<sub&&rem>0;k++){
       const h=Math.min(rem, ds/gm); rem-=h;
       const f2=fieldAt(x+gx*h*0.5,y+gy*h*0.5), m2=Math.hypot(f2[0],f2[1]);
@@ -1058,13 +1089,16 @@ setTimeout(()=>{
 // then calls resize() and respawns the tracers), and shows one system chosen by
 // opts.seed with no axes, arrows or inset. calm 1 halves the tracer speed. The
 // system does not change inside one dwell, so there is no respawn cut.
+// saverOn moves the tracers by stepAlong() ("SAVER STEP"): the same
+// streamlines at a bounded screen speed. The systems are the bounded flows
+// and the complex maps; log z is out (its branch cut tears the trails).
 // saverPlate() then sends the shell label plate the equations of that system.
 window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));
   while(!started)await new Promise(r=>setTimeout(r,50));
   const st=document.createElement("style");st.textContent="html.saver #panel,html.saver #mob-btn,html.saver .mob-overlay,html.saver #eq-panel,html.saver #msim-panel,html.saver #status-bar,html.saver .topbar{display:none!important}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver #sim-canvas{cursor:none}";
   document.head.appendChild(st);document.documentElement.classList.add("saver");
-  const keys=["vdp","duffing","lotka","pendulum","cjou","cinv","cz3","csin"].filter(k=>SYS[k]);
-  cfg.sim=false;cfg.axes=false;cfg.arr=false;cfg.dom=false;cfg.playing=true;cfg.spd=14*(1-0.5*calm);cfg.trl=Math.max(cfg.trl,48);
+  const keys=["vdp","duffing","lotka","pendulum","spiral","cjou","cinv","cz2","cz3","csin"].filter(k=>SYS[k]);saverOn=true;
+  cfg.sim=false;cfg.axes=false;cfg.arr=false;cfg.dom=false;cfg.playing=true;cfg.spd=14*(1-0.5*calm);cfg.trl=Math.max(cfg.trl,72);
   selectSystem(keys[(opts.seed>>>0)%keys.length]);resize();spawnTracers();
   if(opts.labels!==false&&typeof opts.label==="function")try{opts.label(saverPlate());}catch(e){}
   return{canvas,warmupMs:2500};}};
