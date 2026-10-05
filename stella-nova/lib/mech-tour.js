@@ -15,7 +15,8 @@
 //
 //  CAMERA MOVES. A step starts from a base pose (az, el, r, target): the
 //  page's view preset, read from stage.fly after the page's setView, or the
-//  frame of one part (az within 30 degrees of the last view's base az).
+//  frame of one part (az within 30 degrees of the last view's base az; a
+//  flat part is seen 15-35 degrees off the normal of its broad face).
 //  begin() picks a move that is not the last move and
 //  turns the base by a seeded offset (az +-20, el +-8 degrees). The camera
 //  flies to the move's first pose in FLY s, then the move runs over the
@@ -45,7 +46,8 @@
 //  EXPORTS  (grep the name to find it)
 //      createTour(o) ..... one saver run:
 //        begin(base, o) .. start a step from a base pose; o.kind 'view' |
-//                          'part' | 'stack', o.move forces a move
+//                          'part' | 'stack', o.move forces a move,
+//                          o.exploded scales r by the unit's spread
 //        fromFly(o) ...... begin() from the fly the page's setView started
 //        tick(dt) ........ run the move (call each frame)
 //        unit() .......... new unit: seeded spread and inspection mode
@@ -128,7 +130,7 @@ export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = 
       last = move;
       if (kind !== 'part') front = base.az;
       const k = lens();
-      const b = { az: base.az + (kind === 'part' ? 0 : 40 * (rnd() - 0.5)), el: Math.max(3, Math.min(75, base.el + 16 * (rnd() - 0.5))), r: base.r * k, t: base.target.clone() };
+      const b = { az: base.az + (kind === 'part' ? 0 : 40 * (rnd() - 0.5)), el: Math.max(3, Math.min(75, base.el + 16 * (rnd() - 0.5))), r: base.r * k * (o.exploded || kind === 'stack' ? spreadK : 1), t: base.target.clone() };
       mv = { move, b, dir: rnd() < 0.5 ? -1 : 1, t: 0, range: kind === 'part' ? 60 + 80 * rnd() : 30 + 30 * rnd(),
         ax: o.axis || axis(), len: 0.3 * base.r * Math.tan(15 * D) };
       const P = pose(mv, 0);
@@ -184,8 +186,19 @@ export function createTour({ THREE, stage, cards, cur, rnd, prefer = [], skip = 
       // near the front of the last view, not where the last close-up ended
       const s0 = new THREE.Spherical().setFromVector3(cam.position.clone().sub(stage.controls.target));
       const az0 = front != null ? front : s0.theta / D;
+      let az = az0 + 60 * (rnd() - 0.5), el = 14 + 24 * rnd();
+      // A flat part (a gear, a disc, a plate): look at its broad face, from
+      // the side of the face nearer the front, 15-35 degrees off its normal.
+      const sz = FS.toArray(), lo = sz.indexOf(Math.min(...sz)), off = 15 + 20 * rnd();
+      if (sz[lo] < 0.55 * Math.max(...sz)) {
+        const near = (a, b) => Math.abs(Math.atan2(Math.sin((a - b) * D), Math.cos((a - b) * D)));
+        const toward = (n, f) => { const d = Math.atan2(Math.sin((f - n) * D), Math.cos((f - n) * D)); return n + Math.sign(d || 1) * off; };
+        if (lo === 0) { const n = near(90, az0) < near(-90, az0) ? 90 : -90; az = toward(n, az0); }
+        else if (lo === 2) { const n = near(0, az0) < near(180, az0) ? 0 : 180; az = toward(n, az0); }
+        else el = 50 + 22 * rnd();
+      }
       const force = mode === 'flyby' ? 'truck' : mode === 'circle' ? 'orbit' : null;
-      T.begin({ az: az0 + 60 * (rnd() - 0.5), el: 14 + 24 * rnd(), r: R / (fill * h), target: FB.getCenter(FC).clone() },
+      T.begin({ az, el, r: R / (fill * h), target: FB.getCenter(FC).clone() },
         { kind: 'part', move: force === last ? null : force });
     },
     clear() {
