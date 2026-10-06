@@ -42,8 +42,12 @@ export const WIDTH = { Z: 2495.2, W: 2085, H: 3.2, t: 1420 };   // MeV
 
 // Display classes: name, colour, and the legend line. 'shower' is not a
 // species: the display uses it for e and gamma tracks born in a calorimeter.
+// Checked with the dataviz palette validator on the #06080e surface: CVD
+// separation and the normal-vision floor pass. The lightness band fails on
+// purpose: these are emissive glows on black. Neutral hadrons are a pale
+// neutral and draw dashed (their second encoding).
 export const CLASS_COLOR = {
-  mu: '#ff4f7b', e: '#45f0b5', gamma: '#ffd45c', had: '#71b9ff', neu: '#b58cff', nu: '#f2a5ff', shower: '#ffa040',
+  mu: '#ff4f7b', e: '#45f0b5', gamma: '#ffd45c', had: '#6aaeff', neu: '#c9c9d6', nu: '#f2a5ff', shower: '#ff9a3c',
 };
 export const CLASS_LABEL = {
   mu: 'muon', e: 'electron', gamma: 'photon', had: 'charged hadron', neu: 'neutral hadron', nu: 'missing E_T', shower: 'shower e±, γ',
