@@ -158,8 +158,9 @@ export function createEngine(o = {}) {
     // ── recording ──────────────────────────────────────────────────────────
     const segAdd = (tr, x0, y0, z0, ta, x1, y1, z1, tb, E) => {
       if (R.nSeg >= opt.maxSeg || E < (tr.cls === 6 ? opt.segShowerMinE : opt.segMinE)) return;
-      // pile-up: only the tracker part and muons, as an event display shows them
-      if (tr.fast && tr.cls !== 0 && x1 * x1 + y1 * y1 > 1.44e6) return;
+      // pile-up: as an event display shows it, only primary tracks over
+      // 0.7 GeV (in the tracker) and muons
+      if (tr.fast && (tr.cls === 0 ? tr.E0 < 2000 : (tr.gen > 0 || tr.E0 < 700 || x1 * x1 + y1 * y1 > 1.44e6))) return;
       const k = R.nSeg * 9, S = R.seg;
       S[k] = x0; S[k + 1] = y0; S[k + 2] = z0; S[k + 3] = ta; S[k + 4] = x1; S[k + 5] = y1; S[k + 6] = z1; S[k + 7] = tb; S[k + 8] = E;
       R.segCls[R.nSeg] = tr.cls; R.segTrk[R.nSeg] = tr.idx; R.nSeg++;
@@ -399,7 +400,7 @@ export function createEngine(o = {}) {
         // electron curls in the field for metres and adds no signal
         if (q !== 0 && tr.T < (ek ? (calo ? opt.eKillCalo : m.rho < 0.01 ? opt.eKillGas : opt.eKill) : 1.0)) { deposit(v, tr.x, tr.y, tr.z, tr.t, tr.T); tr.T = 0; atRest(tr, v); fate = 'stopped'; break; }
         // looper killer: a soft charged track that curls on in the tracker
-        if (q !== 0 && tr.path > (ek ? 3000 : 15000) && tr.T < 300) { deposit(v, tr.x, tr.y, tr.z, tr.t, tr.T); tr.T = 0; atRest(tr, v); fate = 'looper'; break; }
+        if (q !== 0 && tr.path > (ek ? 3000 : tr.fast ? 5000 : 15000) && tr.T < 300) { deposit(v, tr.x, tr.y, tr.z, tr.t, tr.T); tr.T = 0; atRest(tr, v); fate = 'looper'; break; }
         if ((tr.name === 'n' || tr.name === 'K0L') && tr.T < 50) { deposit(v, tr.x, tr.y, tr.z, tr.t, 0.3 * tr.T); L.inv += 0.7 * tr.T; tr.T = 0; atRest(tr, v); fate = 'absorbed'; break; }
         // fast electromagnetic shower (GFlash-like spots) for soft e, gamma
         // and for every e, gamma of a pile-up or underlying-event particle
@@ -482,7 +483,7 @@ export function createEngine(o = {}) {
           if (m.n > 0 && beta * m.n > 1) {
             const s2 = 1 - 1 / (beta * beta * m.n * m.n), nph = 49.2 * s2 * s;
             R.cher[v.sys] = (R.cher[v.sys] || 0) + nph;
-            if (tr.idx >= 0 && E > 300 && R.cones.length < 600 && (v.sys === 'ecal' || v.sys === 'hcalS') && tr.lastCone !== v) {
+            if (tr.idx >= 0 && !tr.fast && E > 300 && R.cones.length < 600 && (v.sys === 'ecal' || v.sys === 'hcalS') && tr.lastCone !== v) {
               tr.lastCone = v;
               R.cones.push([x0, y0, z0, tA, tr.ux, tr.uy, tr.uz, Math.acos(1 / (beta * m.n)), Math.min(s, 60), tr.cls, nph]);
             }

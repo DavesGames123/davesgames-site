@@ -215,7 +215,7 @@ export function generate(kind, o = {}, rng) {
       break;
     }
     case 'mb': default: {
-      minBias(rng, v, prims, 1, 'hard');
+      minBias(rng, v, prims, 1, 'pu');   // drawn as pile-up: primary tracks over 0.7 GeV
       truth.vertices = 1;
       break;
     }
