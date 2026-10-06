@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Volume Noise // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   VOLUME NOISE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js builds the WebGPU textures, the three views and
+   the frame loop, and binds the controls by id. The noise is a WGSL port of
+   TileableVolumeNoise (Sebastien Hillaire, MIT): see CREDITS.txt.
+
+   HEAD LOAD ORDER  (order matters)
+     1. lib/gpu-guard.js  first, so the shell can release the GPU device
+     2. style.css         the page stylesheet
+     3. lib/sci.css       the shared science type (Inter, STIX Two Text)
+     4. main.js           type=module, at the end of body
+
+   LAYOUT  (# marks an element id)
+     #gl        the WebGPU canvas, full frame
+     topbar     hidden in the site shell iframe (.in-frame)
+     #panel     desktop: a left panel; phone portrait: a bottom sheet above
+                #dock; phone landscape: a right drawer
+     #dock      phone only: controls button, the three views, play
+     #hud       one line of live values at the top of the clear area
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<canvas id="gl" aria-label="Tileable volume noise view"></canvas>
+
+<div class="topbar">
+  <span class="brand">Stella Nova</span><span class="pagetitle">Volume Noise · tileable Perlin and Worley in WGSL</span>
+</div>
+
+<button id="gear" type="button" aria-label="Show controls">☰</button>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Hide controls">✕</button>
+  <header class="ph">
+    <h1>Volume noise</h1>
+    <p class="sub">Tileable 3D Perlin and Worley noise, and the cloud textures built from them, on the GPU.</p>
+  </header>
+
+  <section class="sec">
+    <div class="sec-label">View</div>
+    <div class="modes" id="views">
+      <button type="button" data-view="slice">Slice</button>
+      <button type="button" data-view="tiles">Tiles</button>
+      <button type="button" data-view="volume">Cube</button>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Channel</div>
+    <div class="chan-grid" id="chans"></div>
+    <p class="hint" id="chanNote"></p>
+  </section>
+
+  <section class="sec" data-for="slice tiles volume">
+    <div class="sec-label">Slice</div>
+    <div class="row"><label for="z">z</label><input type="range" id="z" min="0" max="1" step="0.001" value="0.5"><span class="val" id="zv"></span></div>
+    <div class="chips">
+      <button type="button" class="chip" id="sweep" aria-pressed="true">Sweep z</button>
+      <button type="button" class="chip" id="seams" aria-pressed="true">Seam lines</button>
+      <button type="button" class="chip" id="ice" aria-pressed="false">Ice ramp</button>
+    </div>
+    <div class="row" data-for="tiles"><label for="span">tiles</label><input type="range" id="span" min="1" max="3" step="0.01" value="3"><span class="val" id="spanv"></span></div>
+    <div class="row" data-for="volume"><label for="thr">threshold</label><input type="range" id="thr" min="0" max="0.95" step="0.01" value="0.8"><span class="val" id="thrv"></span></div>
+    <div class="row" data-for="volume"><label for="gain">density</label><input type="range" id="gain" min="0.2" max="6" step="0.05" value="1.2"><span class="val" id="gainv"></span></div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Texture <span class="now" id="genStat"></span></div>
+    <div class="row"><label>resolution</label><div class="seg" id="res"><button type="button" data-res="32">32³</button><button type="button" data-res="64">64³</button><button type="button" data-res="128">128³</button></div></div>
+    <div class="row"><label for="pf">Perlin freq</label><input type="range" id="pf" min="1" max="16" step="1" value="8"><span class="val" id="pfv"></span></div>
+    <div class="row"><label for="po">octaves</label><input type="range" id="po" min="1" max="5" step="1" value="3"><span class="val" id="pov"></span></div>
+    <div class="row"><label for="pwc">PW cells</label><input type="range" id="pwc" min="1" max="8" step="1" value="4"><span class="val" id="pwcv"></span></div>
+    <div class="row"><label for="gbc">FBM cells</label><input type="range" id="gbc" min="1" max="8" step="1" value="4"><span class="val" id="gbcv"></span></div>
+    <div class="row"><label for="dtc">detail cells</label><input type="range" id="dtc" min="1" max="4" step="1" value="2"><span class="val" id="dtcv"></span></div>
+    <div class="row"><label for="seed">seed</label><input type="range" id="seed" min="0" max="999" step="1" value="0"><span class="val" id="seedv"></span></div>
+    <div class="chips">
+      <button type="button" class="chip" id="dice">New seed</button>
+      <button type="button" class="chip" id="reset">main.cpp values</button>
+    </div>
+    <p class="hint">Seed 0 and the main.cpp values give the textures of the original tool.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Export</div>
+    <div class="chips">
+      <button type="button" class="chip" id="expRaw">.raw RGBA8</button>
+      <button type="button" class="chip" id="expPng">.png slice atlas</button>
+    </div>
+    <p class="hint" id="expNote">The texture of the selected channel. .raw is x fastest, then y, then z, as main.cpp writes it.</p>
+  </section>
+
+  <section class="sec about">
+    <div class="sec-label">About</div>
+    <p>A WGSL port of <a href="https://github.com/sebh/TileableVolumeNoise" target="_blank" rel="noopener">TileableVolumeNoise</a> by Sébastien Hillaire (MIT). It was made for <i>Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite</i>, SIGGRAPH 2016 course <i>Physically Based Shading in Theory and Practice</i>. The Perlin noise ports GLM's periodic <code>perlin</code> (MIT), from the webgl-noise of Stefan Gustavson and Ashima Arts. Every texture here is computed in your browser. See <a href="CREDITS.txt" target="_blank">CREDITS.txt</a>.</p>
+  </section>
+</aside>
+
+<div id="hud" aria-live="off"><span id="hudL"></span><span id="hudR"></span></div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button type="button" id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg" id="dockViews">
+    <button type="button" data-view="slice">Slice</button>
+    <button type="button" data-view="tiles">Tiles</button>
+    <button type="button" data-view="volume">Cube</button>
+  </div>
+  <button type="button" id="dockPlay" aria-label="Pause">❚❚</button>
+</nav>
+
+<div id="nogpu" hidden>WebGPU is not available in this browser, so the noise cannot be computed. Chrome, Edge and Safari 26 have it on by default.</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
