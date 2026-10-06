@@ -304,7 +304,7 @@ export function drawER(ctx, w, h, M, model, ball, o = {}) {
     line(ctx, [[X, Y], [X, box.y + box.h]], 'rgba(98,196,255,0.4)', 1, [3, 3]);
     label(ctx, `minimum at R = ${(mn.R / 1e3).toFixed(0)} km`, X + 8, Y + 16, COL.m1, 'left', 'top');
   } else {
-    label(ctx, 'no minimum: E falls without end as R → 0', box.x + box.w * 0.5, box.y + 22, COL.red, 'center', 'top');
+    label(ctx, 'no minimum: E falls without end as R → 0', box.x + box.w * 0.35, A.sy(sl(-0.3)), COL.red, 'center', 'middle');
   }
   if (ball) {
     const R = Math.exp(ball.u), e = model.at(M, R);
