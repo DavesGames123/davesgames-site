@@ -50,6 +50,8 @@
 //    window.__hs                                     debug and headless checks
 //    window.snSaver                                  screensaver tour (lib/screensaver.js)
 //    const SHOTS                                     screensaver shots: region, move, explode
+//    function saverTour                              screensaver order: full view, bones, region
+//    function boneView                               screensaver: the camera side for one bone
 //    function plateClear                             screensaver: the clear part beside the plate
 //    function saverPlate                             screensaver plate: layout, region, bone in focus
 //    function boneAnchor                             the bone in focus (landmarks) or the skeleton on screen
@@ -88,12 +90,16 @@ window.__hs = {
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell screensaver (lib/screensaver.js). enter() hides all the
 // DOM but the canvas and paints the gallery backdrop into the scene (the
-// canvas is transparent). The tour is a list of shots (SHOTS), one every 5
-// to 7 s (calm 0 to 1), in a seeded order, with a whole-body shot after
-// every four. The tour opens on a region shot. A shot names a set of regions, ghosts the other bones (the
-// isolate glass), may explode its regions, and has a camera move: orbit,
-// push in, pan up the spine, or look down. loopHook.tick drives the camera
-// every frame, so the page's own flights do not run.
+// canvas is transparent). The tour (saverTour) always opens on the full
+// view: the assembled skeleton from the front, with a slow turn. Then come
+// push-ins on single bones (a seeded shuffle, one region at a time): the
+// bone glows, the other bones turn to glass, and the camera comes in from
+// the side that shows the bone (boneView) at a new angle each time. After
+// three bones there is a region shot (SHOTS: a set of regions, maybe
+// exploded, with an orbit, a push in, a pan up the spine or a look down),
+// then the full view again from a new angle. Shots last 5 to 9 s (calm 0
+// to 1). loopHook.tick drives the camera every frame, so the page's own
+// flights do not run.
 //
 // FRAMING. The shell's label plate covers a band at the top (title, logo)
 // and one at the bottom (equations, values). plateClear() reads the text
@@ -142,7 +148,8 @@ function saverPlate(shot, mode, lit, focus) {
   }
   const params = [{ name: 'counted bones', value: String(counted) }, { name: 'teeth', value: String(teeth) }, { name: 'costal cartilages', value: String(cart) }];
   const per = S.M.groups.filter(g => g.id !== 'cartilage').map(g => `${g.label} ${S.bones.filter(b => b.group === g.id && b.counted).length}`);
-  return { title: `Human skeleton · ${MODE_NAME[mode] || 'Exploded'}`, sub: 'Exploded view',
+  const full = mode === 'full';
+  return { title: full ? 'Human skeleton' : `Human skeleton · ${MODE_NAME[mode] || 'Exploded'}`, sub: full ? 'Assembled · front view' : 'Exploded view',
     params, lines: [per.join(', ') + '.'].concat(ear && ear.count < ear.expected ? [`The ${ear.expected} ear ossicles are not in the set.`] : []),
     anchor: () => boneAnchor(-1, null) };
 }
@@ -250,10 +257,67 @@ function extentOf(lo, hi, dir) {
   }
   return { mid, hw, hh, hd };
 }
+// The bones that get a push-in: counted bones of 20 mm or more, no teeth
+// or cartilage. The tour takes them a region at a time, so two bones in a
+// row are never from the same region.
+function saverBones(rnd) {
+  const by = new Map();
+  for (const b of S.bones) {
+    if (!b.counted || b.len < 20 || b.type === 'tooth' || b.type === 'cartilage' || !S.vis[b.i]) continue;
+    if (!by.has(b.region)) by.set(b.region, []);
+    by.get(b.region).push(b.i);
+  }
+  const shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  for (const a of by.values()) shuf(a);
+  const regs = shuf([...by.keys()]), out = [];
+  for (let k = 0, more = true; more; k++) {
+    more = false;
+    for (const r of regs) { const a = by.get(r); if (k < a.length) { out.push(a[k]); more = true; } }
+  }
+  return out;
+}
+// The tour: the full view first, then three bones, a region shot, the full
+// view from a new angle, and so on. Every second round also has an
+// exploded whole-body shot (WHOLE) after the region shot. az 0 is the front.
+function saverTour(rnd) {
+  const bones = saverBones(rnd), regs = SHOTS.slice();
+  for (let i = regs.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [regs[i], regs[j]] = [regs[j], regs[i]]; }
+  const tour = [], turn = rnd() < 0.5 ? 1 : -1;
+  const fulls = [{ az: -12 * turn, daz: 24 * turn, el: 6 }, { az: 35, daz: -30, el: 12 }, { az: -35, daz: 30, el: 10 }, { az: 160, daz: 40, el: 14 }];
+  let bi = 0, ri = 0, fi = 0;
+  while (bi < bones.length) {
+    tour.push({ full: fulls[fi++ % fulls.length] });
+    for (let k = 0; k < 3 && bi < bones.length; k++) tour.push({ bone: bones[bi++] });
+    tour.push({ shot: regs[ri++ % regs.length] });
+    if (fi % 2 === 0) tour.push({ whole: WHOLE[(fi / 2 - 1) % WHOLE.length] });
+  }
+  return tour;
+}
+// The camera side for bone i, in degrees: outward from the body axis for a
+// bone off the midline, from the side for a vertebra, from the front or the
+// back for the other midline bones. A seeded turn of up to 35 deg is added,
+// and the angle moves by 40 deg when it is near the last one. The feet are
+// seen from above. Below the knee the camera stays over the floor.
+function boneView(i, rnd, last) {
+  const b = S.bones[i], [x, , z] = b.c, side = rnd() < 0.5 ? 1 : -1;
+  let az;
+  if (Math.abs(x) > 0.03) az = Math.atan2(x, Math.max(0.05, z + 0.08)) * 180 / Math.PI;
+  else if (b.region === 'spine') az = side * (70 + 40 * rnd());
+  else if (b.region === 'skull' || b.region === 'hyoid') az = side * 50 * rnd();
+  else az = z >= 0 ? 0 : 180;
+  az += (rnd() * 2 - 1) * 35;
+  let el = /foot/.test(b.region) ? 35 + 20 * rnd() : /hand/.test(b.region) ? 10 + 25 * rnd() : -4 + 26 * rnd();
+  if (/leg|foot|pelvis/.test(b.region)) el = Math.max(6, el);
+  if (last) {
+    let da = az - last.az; da -= Math.round(da / 360) * 360;
+    if (Math.abs(da) < 25 && Math.abs(el - last.el) < 12) az += da >= 0 ? 40 : -40;
+  }
+  return { az, daz: (rnd() < 0.5 ? 1 : -1) * (18 + 14 * rnd()), el, del: 0, zoom: [1.25, 0.95], glide: 1.5 };
+}
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
-    const hold = 5 + 2 * calm;
+    const hold = 5 + 2 * calm, holdLong = 6.5 + 2.5 * calm;
     let seed = (o.seed >>> 0) || 1;
     const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     const css = document.createElement('style');
@@ -262,12 +326,8 @@ window.snSaver = {
     setOpen(false);
     scene.background = saverBackdrop();
     setShow('spin', false);
-    // the tour: the shots in a seeded order, a whole-body shot after every four
-    const order = SHOTS.slice();
-    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    const tour = [];
-    let wk = Math.floor(rnd() * WHOLE.length);
-    order.forEach((sh, k) => { tour.push({ shot: sh }); if (k % 4 === 3) tour.push({ whole: WHOLE[wk++ % WHOLE.length] }); });
+    // the tour is made when the bones are in (saverTour needs S.vis)
+    let tour = null, lastView = null, dur = hold;
     let ti = -1, t = 0, cur = null, lit = [], focusK = 0, focusT = 0, prevFocus = -1, clearT = 0, parts = null;
     const cam = { c: null, d: 0, az: 0, el: 0 };
     const fy = () => Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
@@ -281,9 +341,28 @@ window.snSaver = {
       S.state.dirty(); S.dirty = true;
     };
     const start = () => {
+      if (!tour) tour = saverTour(rnd);
       ti = (ti + 1) % tour.length; t = 0; cur = tour[ti];
+      dur = cur.shot ? hold : holdLong;
       setFocus(-1);
-      if (cur.whole) {
+      if (cur.full) {
+        // the primary view: the assembled skeleton, nothing ghosted
+        S.mode = S.lastMode = 'radial';
+        S.amt.fill(0);
+        retargetSaver();
+        ghost(() => true);
+        lit = []; label(saverPlate(null, 'full', lit, -1));
+      } else if (cur.bone != null) {
+        const i = cur.bone, b = S.bones[i], reg = S.regions.find(r => r.id === b.region);
+        cur.view = boneView(i, rnd, lastView); lastView = cur.view;
+        S.mode = S.lastMode = 'radial';
+        S.amt.fill(0);
+        retargetSaver();
+        ghost(q => q.i === i);
+        lit = [i]; setFocus(i);
+        const name = b.side ? SIDE_NAME[b.side] + ' ' + b.name.toLowerCase() : b.name;
+        label(saverPlate({ title: name, noun: `in focus, ${reg ? reg.label.toLowerCase() : b.region}`, move: 'push in' }, null, lit, i));
+      } else if (cur.whole) {
         const m = cur.whole.mode;
         S.mode = S.lastMode = m;
         S.amt.fill(1);
@@ -308,12 +387,15 @@ window.snSaver = {
     const retargetSaver = () => { retarget(true, false, false); S.fly = null; };
     // the box that the camera frames now (u = 0..1 through the shot)
     const goal = u => {
-      const sh = cur.shot, wh = cur.whole, spec = sh || wh;
+      const sh = cur.shot, wh = cur.whole || cur.full, spec = sh || wh || cur.view;
       const az = THREE.MathUtils.degToRad(spec.az + (spec.daz || 0) * u), el = THREE.MathUtils.degToRad(spec.el + (spec.del || 0) * u);
       const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
       const want = sh ? new Set(sh.regions) : null;
-      const bd = L.bounds(S.P, S.to.off, S.vis, want ? b => want.has(b.region) : null, true);
+      const one = cur.bone != null ? cur.bone : -1;
+      const bd = L.bounds(S.P, S.to.off, S.vis, want ? b => want.has(b.region) : one >= 0 ? b => b.i === one : null, true);
       let lo = bd.lo.slice(), hi = bd.hi.slice();
+      // a small bone keeps a little of its neighbours in the frame
+      if (one >= 0) for (let a = 0; a < 3; a++) { const m = (lo[a] + hi[a]) / 2, h = Math.max(0.022, (hi[a] - lo[a]) / 2); lo[a] = m - h; hi[a] = m + h; }
       if (sh && sh.joint) {
         const k = S.bones.find(b => want.has(b.region) && sh.joint.test(b.name));
         if (k) { const c = [0, 1, 2].map(a => k.c[a] + S.to.off[k.i * 3 + a]); lo = c.map(v => v - sh.half); hi = c.map(v => v + sh.half); }
@@ -338,13 +420,14 @@ window.snSaver = {
       if (!cur) start();
       t += dt; clearT += dt;
       if (clearT > 0.25) { clearT = 0; parts = plateClear(canvas.clientWidth, canvas.clientHeight); }
-      if (t >= hold) start();
+      if (t >= dur) start();
       // the plate names the next bone of the shot every 2 s
       if (cur.shot && lit.length > 1 && (focusT += dt) > 2) { focusT = 0; focusK++; const f = lit[focusK % lit.length]; setFocus(f); label(saverPlate(cur.shot, null, lit, f)); }
-      const g = goal(Math.min(1, t / hold));
+      const g = goal(Math.min(1, t / dur));
       saverOcc.o = g.occ;
-      // ease toward the goal: a new shot glides in about 1.2 s
-      const k = Math.min(1, dt * 2.6);
+      // ease toward the goal: a new shot glides in about 1.2 s, a push-in
+      // on a bone in about 2 s
+      const k = Math.min(1, dt * (cur.view ? cur.view.glide : 2.6));
       if (!cam.c) { cam.c = g.c.clone(); cam.d = g.d; cam.az = g.az; cam.el = g.el; }
       cam.c.lerp(g.c, k); cam.d += (g.d - cam.d) * k;
       let da = g.az - cam.az; da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
@@ -355,6 +438,9 @@ window.snSaver = {
       camera.lookAt(cam.c);
       S.dirty = true;
     };
+    // the tour state, for the headless probe
+    window.snSaver.debug = () => cur && { k: ti, kind: cur.full ? 'full' : cur.bone != null ? 'bone' : cur.shot ? 'region' : 'whole',
+      what: cur.bone != null ? S.bones[cur.bone].name : cur.shot ? cur.shot.id : cur.whole ? cur.whole.mode : 'full', t: +t.toFixed(1), dur: +dur.toFixed(1) };
     return { canvas, warmupMs: 3000 };
   },
 };
