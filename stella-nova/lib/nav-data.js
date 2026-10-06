@@ -87,7 +87,8 @@ w.SN_NAV = [
     { h: "Deep Space", p: [
       ["galaxy", "Galaxy", "SIM"],
       ["blackhole", "Black Hole", "GPU"],
-      ["wormhole", "Wormhole", "GPU", "ellis-wormhole"]
+      ["wormhole", "Wormhole", "GPU", "ellis-wormhole"],
+      ["gravitational-imaging", "Gravitational Imaging", "NEW"]
     ] }
   ] },
   { id: "quantum", label: "Quantum", short: "Quantum", icon: "ψ", color: "#9088e0", color2: "#64b4ff", groups: [

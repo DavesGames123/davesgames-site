@@ -141,6 +141,7 @@ const BLURBS = {
   forge: 'Sculpt and paint a planet from noise.',
   blackhole: 'Gravitational lensing around a Schwarzschild hole.',
   wormhole: 'Fly through an Ellis wormhole.',
+  'gravitational-imaging': 'A million Suns of dark mass, found by the dent it makes in a lensed arc.',
   orbital: 'Hydrogen orbitals in 3D, VR ready.',
   'molecular-bond': 'Watch two atoms share an electron.',
   'hydrogen-table': 'Every hydrogen wave function, side by side.',
