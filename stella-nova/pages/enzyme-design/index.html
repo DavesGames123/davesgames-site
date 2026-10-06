@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>AlphaProtein Novo: building an enzyme around its chemistry — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ENZYME DESIGN  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and the text. The page explains AlphaProtein Novo (Wu,
+   Abramson, Frerix et al., bioRxiv 2026.10.01.756017): a pipeline that
+   designs an enzyme around a catalytic motif instead of starting from a
+   natural protein. Sections 01 to 03 and 07 explain the method. Sections
+   04 to 06 hold the lab, which is our own simulation, not the pipeline.
+
+   SOURCES. Two, and the page keeps them apart.
+     The preprint is All Rights Reserved. The page quotes no sentence of
+     it and copies no figure. Paper claims come from PAPER.claims in
+     data.js, already in our own words.
+     The code repository is Apache-2.0. Its documented facts are in
+     STAGES, DIFFUSION, CAMPAIGNS, METRICS, KEMP_MANIFEST and LICENCES.
+     The weights and the model outputs have their own terms of use and
+     are not on this site.
+
+   NUMBERS
+     Every paper fact and every repository fact comes from data.js. An
+     element with data-d="PAPER.authorCount" gets its text from main.js
+     (function bindNumbers). Do not type one into this file by hand.
+
+   NO GPU
+     This page makes no WebGL and no WebGPU context. The 3D views draw on
+     a 2D canvas. gpu-guard still loads first, because every page loads it.
+
+   HEAD LOAD ORDER
+     1. gpu-guard   ../../lib/gpu-guard.js
+     2. style.css   then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module). It imports data.js,
+   design.js and ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id a script binds to)
+     #chips   sticky section bar
+     hero     title, citation, #heroStats, #termsNote
+     #s1 problem      #claimList, #barrierCv + #barrierIn, motif SVG
+     #s2 motif        #motifPick #motifView #spinBtn #geoTable #motifBlurb
+                      #campCards            (bound by main.js, needs motif.js)
+     #s3 scaffold     #msIn #msLen #msSeed #msBtn #msCv #msOut #msErr
+                      #manifestTable
+     #s4 lab          #labView #motifSeg #motifStr #seqLen #seedIn #stepsIn
+                      #modeSeg #idxSeg #idxWrap #backIn #backOut #backWrap
+                      #runBtn #stepScrub #playBtn #scrubOut #shellBtn #metricCard
+                      #runLog   (bound by lab.js)
+     #s5 sequence     #seqPanel #scBox (bound by lab.js)
+     #s6 funnel       #campN #campSeed #campMix #campBtn #campStop
+                      #campProg #funnelCv #campList (bound by lab.js)
+     #s7 pipeline     #stageList #diffTable #metricTable #licenceTable
+     #tip     one shared tooltip for all charts
+
+   GREP MAP  (main.js)
+     grep -n 'function bindNumbers'  data-d attributes to text
+     grep -n 'function initProblem'  section 01 claims and barrier chart
+     grep -n 'function initMotif'    section 02 3D view and geometry check
+     grep -n 'function initScaffold' section 03 motif_str parser box
+     grep -n 'function initLab'      sections 04 to 06: loads lab.js
+     grep -n 'function initPipeline' section 07 tables and stage diagram
+     grep -n 'function initChips'    sticky section bar
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Interactive explainer of AlphaProtein Novo (bioRxiv 2026.10.01.756017): a pipeline that designs enzymes from scratch around a catalytic motif. What a motif is, the motif_str language, the four pipeline stages and the metrics, plus an original in-browser design lab with its own scaffolder, sequence designer and self-consistency check.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">De novo enzyme design</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>The problem</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>The motif</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Scaffolding</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>The lab</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Sequence and self-consistency</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>The campaign funnel</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>The real pipeline</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Protein design · diffusion models · enzymes</p>
+  <h1>Build the enzyme around the chemistry it has to do</h1>
+  <p class="lede">An enzyme is mostly packaging. The chemistry happens at a handful of chemical groups held in one exact arrangement; the rest of the protein exists to hold them there. So you can turn enzyme making around: write down the arrangement first, then ask a model to grow a protein that holds it. AlphaProtein Novo does that. A diffusion model draws a backbone around the motif and the molecule it acts on, a second model may rewrite the sequence for that shape, AlphaFold 3 folds the sequence back, and a set of metrics asks one question: did the active site survive the round trip? The pipeline is built to generate far more designs than it keeps.</p>
+  <p class="cite" id="citeLine"></p>
+  <div class="stats" id="heroStats">
+    <div><b data-d="STAGES.length"></b><span>stages in the pipeline: generate, resequence, fold, evaluate</span></div>
+    <div><b data-d="DIFFUSION.totalSteps" data-fmt="int"></b><span>denoising steps in the generator's default schedule</span></div>
+    <div><b data-d="CAMPAIGNS.length"></b><span>worked design campaigns shipped as examples in the repository</span></div>
+    <div><b data-d="METRICS.length"></b><span>evaluation metrics named in the repository's scorer</span></div>
+    <div><b data-d="PAPER.authorCount"></b><span>authors, from <span data-d="PAPER.groups"></span></span></div>
+  </div>
+  <p class="note" id="termsNote"></p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The problem: a few groups, held exactly</h2><p>A reaction has a worst moment. Halfway through, bonds are half broken and charge sits where no stable molecule would put it. That state is the transition state, and it is rare, which is why uncatalysed reactions are slow. An enzyme works by making that moment cheaper: it surrounds the transition state with groups that fit it better than they fit the starting material.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>What a catalytic motif is</h3><span class="tag toy">our own drawing, not from the paper</span></div>
+      <div class="motif-fig">
+        <svg viewBox="0 0 520 250" aria-label="A catalytic motif: three groups held around a substrate by a protein scaffold">
+          <defs><radialGradient id="pocketG" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(169,140,242,0.22)"/><stop offset="100%" stop-color="rgba(169,140,242,0)"/></radialGradient></defs>
+          <path class="sv-chain" d="M28 206 C 14 120 70 36 160 26 C 262 14 352 24 440 52 C 500 72 512 142 486 192 C 462 236 404 244 352 232"/>
+          <circle cx="258" cy="128" r="86" fill="url(#pocketG)"/>
+          <circle class="sv-pocket" cx="258" cy="128" r="62"/>
+          <g class="sv-sub"><path d="M232 112 L268 104 L286 132 L262 152 L234 142 Z"/><circle cx="258" cy="128" r="3.5"/></g>
+          <g class="sv-grp"><line x1="150" y1="78" x2="226" y2="114"/><circle cx="144" cy="74" r="9"/><text x="110" y="62">base</text></g>
+          <g class="sv-grp"><line x1="356" y1="92" x2="284" y2="116"/><circle cx="362" cy="88" r="9"/><text x="378" y="76">donor</text></g>
+          <g class="sv-grp"><line x1="248" y1="216" x2="256" y2="156"/><circle cx="246" cy="222" r="9"/><text x="206" y="244">anchor</text></g>
+          <g class="sv-meas"><line x1="153" y1="83" x2="229" y2="119"/><text x="168" y="112">held</text></g>
+          <g class="sv-meas"><line x1="353" y1="97" x2="287" y2="119"/><text x="316" y="122">held</text></g>
+          <text class="sv-cap" x="40" y="40">scaffold: everything else</text>
+        </svg>
+      </div>
+      <p class="cap">The motif is the small set of atoms the reaction needs: here a base that takes a proton, a donor that steadies the negative charge that forms, and an anchor that holds the molecule still. What matters is not that the protein contains those groups but that it holds them at the right distances and angles from each other and from the substrate. Move one group by a fraction of a bond length and the catalysis goes. The rest of the chain, all of it, is scaffolding with one job: hold the motif.</p>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\frac{k_{\rm cat}}{k_{\rm uncat}} \;=\; \exp\!\left(\frac{\Delta\Delta G^{\ddagger}}{RT}\right)"></div><p>Textbook relation, not a result of the paper: the speed-up is set by how much the enzyme lowers the barrier. The exponential is the whole difficulty. A small error in the arrangement costs a large factor in rate.</p></div>
+      </div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Why small errors cost so much</h3><span class="tag toy">illustration, textbook relation</span></div>
+      <canvas id="barrierCv" class="fig chart" aria-label="Free energy along a reaction coordinate, with and without a catalyst"></canvas>
+      <div class="ctrls">
+        <label class="ctrl" for="barrierIn">barrier lowered by</label>
+        <input type="range" id="barrierIn" min="0" max="40" step="0.5" value="22" aria-label="Barrier lowering in kilojoules per mole">
+        <output id="barrierOut" class="mono"></output>
+      </div>
+      <p class="cap">Drag the slider. The curve is drawn, not measured: it shows only the shape of the relation above, at room temperature. A design that holds the motif a little loosely does not lose a little rate, it loses orders of magnitude. That is why the pipeline spends its effort on geometry.</p>
+    </article>
+    <article class="card span-6 prose">
+      <div class="card-top"><h3>The old way needs a protein that already exists</h3><span class="tag toy">background, our own words</span></div>
+      <p>Traditional enzyme engineering starts from a natural protein that already does something close to what you want, then improves it by rounds of mutation and selection. It works well, and it has one hard requirement: the starting protein. Someone has to find it, by searching sequence databases for a family that acts on a similar molecule by a similar mechanism.</p>
+      <p>For a reaction that nothing in nature performs, that search can come back empty. There is no family to mine and no scaffold to improve. The same wall appears when the substrate is man-made: a natural enzyme may use the right chemistry but have a pocket shaped for the wrong molecule, and widening a pocket without breaking the fold is its own hard problem.</p>
+      <p><b>De novo design removes the requirement.</b> Instead of finding a protein and bending it toward the chemistry, you state the chemistry as a geometric arrangement and ask for a protein that holds it. Nothing in the method cares whether the reaction has a natural precedent. What the method needs instead is a way to know which of its many designs are worth making in the laboratory, because the arrangement being drawn correctly on a screen says nothing about whether real protein will hold it.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>What the paper reports</h3><span class="tag real">from the abstract, in our words</span></div>
+      <ul class="list" id="claimList"></ul>
+      <p class="cap">The preprint is All rights reserved, so this page quotes no sentence of it and gives no catalytic rate, no success rate and no count of designs tested: only the abstract is public. For the numbers, read the preprint itself at the link above.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>The motif: three arrangements, measured</h2><p>Here are three catalytic arrangements of the kind the campaigns use. They are idealised stand-ins built from textbook bond lengths and angles, not the paper's coordinates. Turn one around and read the measurements the chemistry depends on. Those same measurements become the first metric of the lab.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Turn it around</h3><span class="tag toy">idealised geometry, our own build</span></div>
+      <div class="ctrls top">
+        <div class="seg" id="motifPick" role="group" aria-label="Motif"></div>
+        <button class="btn" id="spinBtn" aria-pressed="true">spin</button>
+      </div>
+      <div class="panel">
+        <canvas id="motifView" class="fig wide" aria-label="Three-dimensional view of the catalytic motif"></canvas>
+        <span class="lab">drag to turn</span>
+        <span class="empty" id="motifEmpty">The motif view loads with the lab.</span>
+      </div>
+      <p class="cap" id="motifBlurb"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The measurements the chemistry needs</h3><span class="tag toy">measured live from the drawing</span></div>
+      <div class="t-wrap"><table class="geo" id="geoTable"></table></div>
+      <p class="cap">Each row is measured from the arrangement this section draws, as it stands, then compared with the value the chemistry wants and the tolerance it allows. The same comparison, applied to a design instead of to an ideal, is the motif metric of section 07.</p>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathrm{RMSD} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}\lVert \mathbf{r}_i - \hat{\mathbf{r}}_i \rVert^2}"></div><p>One number for a whole arrangement: the root-mean-square distance between where the atoms should be and where they ended up, after the two are superposed.</p></div>
+      </div>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>The six campaigns shipped with the code</h3><span class="tag real">repository facts, CC-BY docs</span></div>
+      <div class="camps" id="campCards"></div>
+      <p class="cap">Each campaign is a manifest and an evaluation suite in the repository, named after its chemistry and pointing at the design it was drawn from. <b>Folding states</b> are the snapshots of the reaction that AlphaFold 3 is asked to predict: the protein alone, the protein with the substrate bound, the covalent intermediates. A campaign with five states is asking whether the active site holds together all the way along the reaction, not only at the start. The model weights that generated those designs are not in the repository and not on this site.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>Scaffolding: a one-line language for the chain</h2><p>Before anything is generated, the designer writes down what the chain must contain and how much freedom it has. The repository does that with one string, <span class="mono">motif_str</span>. It lists segments in order: the motif residues, held at their input coordinates, separated by runs of residues the model is free to invent. A run written as a range is sampled once per design, so every design in a campaign gets a different layout.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Type a layout, see the chain</h3><span class="tag toy">parsed by our own code in design.js</span></div>
+      <div class="ctrls top">
+        <div class="ctrl grow"><label for="msIn">motif_str</label><input type="text" id="msIn" class="txt wide" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" value=""></div>
+      </div>
+      <div class="ctrls">
+        <div class="ctrl"><label for="msLen">seq_length</label><input type="text" id="msLen" class="txt" spellcheck="false" autocapitalize="off" autocomplete="off" value=""></div>
+        <div class="ctrl"><label for="msSeed">seed</label><input type="number" id="msSeed" class="txt num" min="0" max="99999" step="1" value="7"></div>
+        <button class="btn" id="msBtn">sample again</button>
+      </div>
+      <p class="err" id="msErr" role="status" aria-live="polite"></p>
+      <canvas id="msCv" class="fig chart short" aria-label="Chain layout: held segments against designed segments"></canvas>
+      <div class="readout" id="msOut"></div>
+      <p class="cap">Blocks on the bar are chain segments, left to right along the sequence. A <b>held</b> block is a motif residue kept at its input coordinates. A <b>designed</b> block is free chain, and a block written as a range is redrawn each time you change the seed: that is the only randomness in the layout. The tick marks below count residues. <b>Tap a block</b> to read it.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The real Kemp eliminase manifest</h3><span class="tag real">repository facts, CC-BY docs</span></div>
+      <div class="t-wrap"><table class="kv" id="manifestTable"></table></div>
+      <p class="cap">The shape of one of the six shipped manifests, with the fields this page explains. The real file carries a few more, among them the input motif structure and how many designs to make. <span class="mono">motif_atoms</span> names the atoms of each motif residue that the restraint actually holds: for the glutamate, the two carboxylate oxygens and the two carbons behind them, which fixes the direction the group points as well as its place. Everything after <span class="mono">design</span> configures the later stages: how many sequences to write, how many seeds to fold, which evaluation suite to run.</p>
+    </article>
+    <article class="card span-12 prose two-col">
+      <div class="card-top"><h3>Two choices the language encodes</h3><span class="tag real">repository facts and our own explanation</span></div>
+      <p><b>Indexed against unindexed.</b> The string above is indexed: the motif groups sit at the sequence positions it gives, with this much chain between them. Its bar sets one thing loose, which of the two groups comes first, so the resolved line above changes from run to run. That is ordering, not freedom of position. <b>Unindexed</b> conditioning is a different setting: the motif residues move to their own field, <span class="mono">unindexed_motif_residues</span>, <span class="mono">motif_str</span> keeps a single designable run and the ligand chain, and the model decides during generation where the groups land. In theory that freedom should find better placements. The repository reports the opposite in practice: indexed conditioning gives slightly better results, which is why the main Kemp manifest is the indexed one and the unindexed form ships beside it as a variant.</p>
+      <p><b>Full against partial motifs.</b> A full motif states every catalytic group and the molecule they act on. A partial motif states fewer of them, or holds only some atoms of each residue, and leaves the rest to the model. Holding less gives the generator more room to find a shape that folds, at the cost of saying less about the chemistry. The <span class="mono">motif_atoms</span> field is where that trade is made concrete: hold a whole side chain and its direction is fixed; hold one atom and the group can swing.</p>
+      <p><b>Why the lengths are sampled.</b> A designed run written as a range is drawn once per design, so a campaign of many designs covers many layouts from one manifest. The chain planner in <span class="mono">design.js</span> tries repeatedly until the total lands inside the requested <span class="mono">seq_length</span>, and tells you when the range cannot be reached at all. That is a plain sampler, not a model: no learning is involved in deciding how long a loop should be.</p>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="L = \sum_i \ell_i, \qquad \ell_i \sim \mathcal{U}\{\,l_i,\dots,h_i\,\} \;\;\text{for a designed run}"></div><p>Total length is the sum over segments. Held segments contribute a fixed count; designed runs contribute a draw from their range.</p></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>The lab: grow a protein around the motif</h2><p>This is our own simulation, and it is not AlphaProtein Novo. There is no learned model anywhere on this page. The scaffolder below runs reverse diffusion with a hand-written denoiser: at every step it pulls the chain toward protein-like geometry, holds the motif in place, keeps the ligand enclosed, and then adds back a little less noise than it did last step. The shapes it makes are not predictions. What it reproduces faithfully is the structure of the problem: hold a motif, build a plausible chain around it, then find out whether the chain would hold the motif on its own.</p></div></div>
+  <div class="grid lab">
+    <article class="card span-8">
+      <div class="card-top"><h3>Scaffolder</h3><span class="tag toy">original simulation, no learned model</span></div>
+      <div class="ctrls top">
+        <div class="seg" id="motifSeg" role="group" aria-label="Motif"></div>
+        <div class="seg" id="modeSeg" role="group" aria-label="Mode"><button data-v="novel" class="on">from noise</button><button data-v="partial">from a parent</button></div>
+      </div>
+      <div class="ctrls">
+        <div class="ctrl grow"><label for="motifStr">motif_str</label><input type="text" id="motifStr" class="txt wide" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></div>
+        <div class="ctrl"><label for="seqLen">seq_length</label><input type="text" id="seqLen" class="txt" spellcheck="false" autocapitalize="off" autocomplete="off"></div>
+        <div class="ctrl"><label for="seedIn">seed</label><input type="number" id="seedIn" class="txt num" min="0" max="99999" step="1" value="0"></div>
+        <div class="ctrl"><label for="stepsIn">steps</label><input type="number" id="stepsIn" class="txt num" min="40" max="600" step="20" value="240"></div>
+        <div class="ctrl" id="idxWrap"><label>placement</label><div class="seg" id="idxSeg" role="group" aria-label="Motif placement"></div></div>
+        <div class="ctrl" id="backWrap" hidden><label for="backIn">how far back</label><input type="range" id="backIn" min="10" max="100" step="5" value="60"><output id="backOut" class="mono">60% back</output></div>
+        <button class="btn primary" id="runBtn">run a design</button>
+      </div>
+      <div class="panel">
+        <canvas id="labView" class="fig wide" aria-label="The design as it denoises, in three dimensions"></canvas>
+        <span class="lab">drag to turn</span>
+        <span class="empty" id="labEmpty">The lab loads when you scroll here.</span>
+      </div>
+      <div class="ctrls scrub-row">
+        <button class="btn icon" id="playBtn" aria-label="Play the trajectory">play</button>
+        <button class="btn" id="shellBtn" aria-pressed="false" aria-label="Show the pocket shell">pocket</button>
+        <input type="range" id="stepScrub" min="0" max="0" step="1" value="0" aria-label="Denoising step">
+        <output id="scrubOut" class="mono">step –</output>
+      </div>
+      <pre id="runLog" class="log" aria-live="polite">The lab loads when you scroll here.</pre>
+      <p class="cap">From noise, the chain starts as a cloud and the motif is the only thing that is certain. From a parent, the run starts from a finished design that has been noised part way back, which is how the real pipeline makes a family of variations around one design that worked. Section 07 says what the real generator does at each of these steps instead.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Evaluation</h3><span class="tag toy">simplified metrics, same shape as the real ones</span></div>
+      <div id="metricCard" class="metric-card">
+        <div class="mc-empty">Run a design to score it.</div>
+      </div>
+      <p class="cap">Four families, each measured from the design itself: did the motif stay put, is the ligand enclosed and free of clashes, is the fold compact and protein-like, and does the site still hold once the catalytic residues are let go. The lab also tries the real pipeline's test, folding the sequence again from noise, and reports plainly that our version of it carries no signal. Section 07 lists which of the real pipeline's metrics each one stands in for, and which ones have no counterpart here at all.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Sequence and self-consistency: the honesty check</h2><p>A backbone is not a protein. It is a shape, and it only means something if some chain of amino acids would actually fold into it. So the design is written as a sequence, and then the sequence alone is folded back, with every memory of the design thrown away.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Sequences for this backbone</h3><span class="tag toy">heuristic designer, not LigandMPNN</span></div>
+      <div id="seqPanel" class="seq-panel">
+        <div class="mc-empty">Run a design in the lab to write sequences for it.</div>
+      </div>
+      <div id="scBox" class="sc-box">
+        <div class="mc-empty">The two self-consistency checks appear here once a design has been scored.</div>
+      </div>
+      <p class="cap">Our designer is a heuristic, not a learned model: it scores each position by how buried it is, how close it sits to the ligand, and what the local shape prefers, then samples from that at a temperature. The motif residues keep their own identity, because their identity <em>is</em> the chemistry. The real pipeline uses LigandMPNN here, which sees the ligand as context and writes far better sequences than any heuristic.</p>
+    </article>
+    <article class="card span-5 prose">
+      <div class="card-top"><h3>Why fold it back, and why more than once</h3><span class="tag real">method of the paper, our own words</span></div>
+      <p><b>The trap.</b> A scaffolder that is told to hold a motif will hold the motif. That tells you nothing: the restraint did the work, not the protein. Remove the restraint, fold the sequence on its own, and a design that was only held together by the clamp falls apart. The gap between the two is the self-consistency check, and the real pipeline measures it with AlphaFold 3, by its default tuned for designs that carry a covalent intermediate.</p>
+      <p><b>Why an ensemble.</b> One sequence can fail for its own reasons and one sequence can get lucky. Writing several sequences for the same backbone and scoring their agreement asks about the backbone rather than about one sequence written for it. The paper names that, with mechanism-based metrics, as what made the designs work.</p>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathrm{TM} = \frac{1}{L}\sum_{i=1}^{L} \frac{1}{1 + (d_i/d_0)^2}, \qquad d_0 = 1.24\sqrt[3]{L-15} - 1.8"></div><p>TM-score, the standard fold-level comparison: near 1 is the same fold, near 0.3 is unrelated. The length term keeps the scale fair between a small protein and a large one.</p></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>The campaign funnel: make many, keep few</h2><p>No single design is the output of this method. A campaign is, and a campaign is a funnel: generate a batch, write sequences for each, fold them, then throw away everything that fails a filter. The filters are where mechanism knowledge enters, and getting them right is what the paper reports as the thing that unlocked the rest.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Run a campaign</h3><span class="tag toy">original simulation, our own filters</span></div>
+      <div class="ctrls">
+        <div class="ctrl"><label for="campN">designs</label><input type="number" id="campN" class="txt num" min="4" max="48" step="4" value="12"></div>
+        <div class="ctrl"><label for="campSeed">first seed</label><input type="number" id="campSeed" class="txt num" min="0" max="99999" step="1" value="100"></div>
+        <div class="ctrl"><label>chemistry</label><div class="seg" id="campMix" role="group" aria-label="Which motifs the campaign uses"></div></div>
+        <button class="btn primary" id="campBtn">run a campaign</button>
+        <button class="btn" id="campStop">stop</button>
+      </div>
+      <div id="campProg" class="camp-prog">Each design costs about a tenth of a second. Twelve of them run in a few seconds, one at a time, so the page keeps answering a press.</div>
+      <div class="panel">
+        <canvas id="funnelCv" class="fig chart tall" aria-label="Designs surviving each filter of a campaign"></canvas>
+        <span class="empty" id="funnelEmpty">The campaign runner loads with the lab.</span>
+      </div>
+      <div id="campList" class="camp-list"></div>
+      <p class="cap">Each stage of the funnel keeps the designs that pass one filter and drops the rest. The shape of the funnel, not its height, is the thing to watch: a filter that keeps almost everything is not doing any work, and a filter that keeps almost nothing is either the real constraint or badly set.</p>
+    </article>
+    <article class="card span-5 prose">
+      <div class="card-top"><h3>What a filter is for</h3><span class="tag real">method of the paper, our own words</span></div>
+      <p>A filter is cheap and the laboratory is not. Everything upstream exists to put a small number of designs in front of an experiment with a decent chance of working, so the only useful filter is one that correlates with what happens in a tube. That is a harder requirement than it sounds: a metric can be perfectly well defined, easy to compute and completely uninformative about catalysis.</p>
+      <p>The paper's stated enabler was finding metrics of the right kind. Two things mattered: reading the metric off a structure predicted for the designed sequence rather than off the design itself, and deriving the metric from the reaction mechanism, so it asks whether the chemistry can happen rather than whether the picture looks like a protein.</p>
+      <p>Our funnel runs our own filters on our own designs, so its proportions mean nothing about AlphaProtein Novo. What it does show is the mechanic: the cost of one design, the cost of the whole campaign, and how fast a stack of filters cuts a batch down.</p>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="N_k = N_0 \prod_{j\le k} p_j"></div><p>Designs left after the first k filters, if each passes a share p of what reaches it. Stacked filters multiply, which is why a campaign starts large.</p></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>The real pipeline, and what this page leaves out</h2><p>Everything in this section is documented in the Apache-2.0 repository. Sections 04 to 06 are our own simulation of the same idea, and the differences are large. Here they are, side by side.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Four stages, one command each</h3><span class="tag real">repository facts, CC-BY docs</span></div>
+      <ol class="pipe" id="stageList" aria-label="Pipeline stages"></ol>
+      <p class="cap">One run of the pipeline produces a directory per stage, so a design can be traced from the backbone that was generated to the metrics that judged it. The resequencing stage is optional. The folding stage is run once per reaction state and per seed, which is why a campaign with seven states costs several times what a campaign with two costs.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>Diffusion, and starting from a parent</h3><span class="tag real">repository facts, CC-BY docs</span></div>
+      <p class="prose-p">The generator's default schedule runs <b data-d="DIFFUSION.totalSteps" data-fmt="int"></b> steps from noise to structure. Partial diffusion starts somewhere in the middle instead: take a design that already works, add noise back to the level of step <i>k</i>, and run the reverse from there. How far back you go sets how much of the parent survives.</p>
+      <div class="t-wrap"><table class="kv" id="diffTable"></table></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\text{noise level at restart} \;\propto\; \frac{k}{T}, \qquad T = 1000 \text{ steps by default}"></div></div>
+      </div>
+      <p class="cap">The TM-scores in the table are the real pipeline's, as its README reports them, and they are approximate. They are <b>not</b> measurements of our simulation. Our scaffolder reproduces the direction only: fewer steps back keeps the parent, more steps back frees the design.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>What is licensed, and what is not here</h3><span class="tag real">repository facts, CC-BY docs</span></div>
+      <div class="t-wrap"><table class="lic" id="licenceTable"></table></div>
+      <p class="cap">The split matters for a page like this one. The code and its documentation can be read, described and built on. The weights are a separate download under their own terms and are not in the repository; anything the model produced carries its own terms too. The preprint is All rights reserved, so this page states its claims in its own words and links to it rather than quoting it.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>The metrics the repository's README names</h3><span class="tag real">names from the repository, CC-BY docs</span></div>
+      <div class="t-wrap"><table class="met" id="metricTable"></table></div>
+      <p class="cap">The last column says whether this page computes something of the same shape. A <b>yes</b> means our lab measures the same kind of thing with its own code on its own designs: it does not mean the numbers are comparable. The confidence metrics have no counterpart here at all, because they come out of AlphaFold 3 and there is no learned model on this page to be confident about anything.</p>
+    </article>
+    <article class="card span-12 prose two-col">
+      <div class="card-top"><h3>What the lab simplifies</h3><span class="tag toy">plainly</span></div>
+      <p><b>No learned model.</b> The real generator is a diffusion model trained on protein structures. Ours is a hand-written relaxation: springs, repulsion, a compaction term and a secondary-structure preference, with noise on a schedule. It has the same loop shape as reverse diffusion and none of the knowledge.</p>
+      <p><b>No full backbone and no side chains.</b> A design here is one point per residue for the backbone and one for the side-chain direction, plus a fixed ligand. The real model generates every atom, which is what makes a hydrogen bond a hydrogen bond rather than a distance between two dots.</p>
+      <p><b>No AlphaFold 3.</b> The scoring check lets go of the catalytic residues and relaxes the design: a pocket that really cradles the motif hardly moves, and one that only looked right because the residues were nailed down springs apart. That is the lab's own stand-in, not the pipeline's test. We also ran the real test, folding the sequence again from noise, and it carries no signal here: the score sits near 0.20 whatever sequence goes in, because AlphaFold 3 learned how a sequence folds and our denoiser learned nothing. The lab reports that number and marks it as uninformative.</p>
+      <p><b>No chemistry.</b> There is no energy function, no solvent, no electrostatics and no reaction. The transition state is a rigid body with the right shape and nothing happens to it.</p>
+      <p><b>One ligand, one chain, no states.</b> The real campaigns fold several snapshots of the reaction and compare them. Ours has one state: the ligand sits in the pocket and stays there.</p>
+      <p><b>Numbers are ours.</b> Every number the lab shows was computed by the lab, from a design the lab made. None of them is from the paper, and none of them should be read as a claim about AlphaProtein Novo.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Read the sources</h3><span class="tag real">links</span></div>
+      <div class="refs" id="refList"></div>
+    </article>
+  </div>
+</section>
+
+</main>
+
+<div id="tip" role="status" aria-live="polite"></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
