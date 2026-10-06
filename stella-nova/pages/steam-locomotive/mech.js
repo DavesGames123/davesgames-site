@@ -20,7 +20,7 @@
 //    eccentric rod (Le) drives the foot F of the expansion link, a distance
 //    a below the trunnion K. The link turns by psi about K. DELTA is not
 //    90 deg: the rod slopes up to F0 = K - (0, a), so E is set at right
-//    angles to the line O-F0 (102.7 deg). Then the link is at mid swing at
+//    angles to the line O-F0 (102.4 deg). Then the link is at mid swing at
 //    both dead centres, and Le = |F0 - E|.
 //    The die block D sits in the curved slot at arc length s from K. The
 //    slot radius is the radius rod length Rr, so with the link at mid
@@ -73,7 +73,7 @@ export const G = {
   // radius rod, combination lever, union link, drop arm, valve line
   Rr: 2900, cv: 133, cu: 867, Lu: 520, hd: 307, YV: 560,
   // valve: steam lap, exhaust lap, port width, valve spindle to valve centre
-  LAP: 38, EXL: 0, PORT: 50, SPINDLE: 700,
+  LAP: 38, EXL: 0, PORT: 50, SPINDLE: 760,
   // indicator: clearance volume (share of stroke), exhaust pressure (share of boiler)
   CLEAR: 0.08, PEX: 0.07,
   // weigh shaft (reverser): shaft W, lifting arm, lifting link, reach-rod arm

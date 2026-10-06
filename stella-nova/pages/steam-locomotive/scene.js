@@ -43,15 +43,19 @@ const L3 = (x, y, z) => [x, z, -y];
 const ZC = 160;            // cylinder and valve axis, and the section plane
 const HS = 400, HL = G.LAP + G.PORT;   // valve head centres +-HS, head length
 const CYL = { x0: 4480, x1: 5420, bore0: 4520, bore1: 5380, ro: 310, ri: 235 };
-const CHEST = { x0: 4300, x1: 5500, y: G.YV, ro: 185, ri: 130 };
+// the chest starts 30 mm ahead of the lever (V at most 4285, lever half
+// width 60), so the lever and the valve crosshead stay outside it
+const CHEST = { x0: 4380, x1: 5540, y: G.YV, ro: 185, ri: 130 };
 const SLEEPER = 700;
 
 // a bar of length len along +X: round ends of radius w/2 (w1 at the far
-// end), eyes of radius hole, from depth z0 to z1
+// end), eyes of radius hole, from depth z0 to z1. Each eye keeps a wall of
+// 10 mm or more: an eye wider than its end cuts through the outline, and
+// the cap triangles then lie on top of each other and fight.
 function bar(len, w, z0, z1, hole, w1 = w) {
   const a = w / 2, b = w1 / 2, s = new THREE.Shape();
   s.moveTo(0, -a); s.lineTo(len, -b); s.absarc(len, 0, b, -Math.PI / 2, Math.PI / 2, false); s.lineTo(0, a); s.absarc(0, 0, a, Math.PI / 2, 3 * Math.PI / 2, false);
-  if (hole) s.holes.push(circle(hole, 0, 0), circle(hole, len, 0));
+  if (hole) s.holes.push(circle(Math.min(hole, a - 10), 0, 0), circle(Math.min(hole, b - 10), len, 0));
   return slab(s, z0, z1 - z0, Math.min(4, (z1 - z0) / 6));
 }
 // a pin along z at (x, y) of the part frame
@@ -112,7 +116,7 @@ export function build(B) {
   // ── track: rail and sleepers ───────────────────────────────────────────
   const track = part('track', { info: 'track', label: 'Track', labelAt: L3(-2600, -1000, 300), explode: [0, 0, 600], st: 0, en: 0.4 });
   B.mesh(track, box(-6400, 8000, -1090, -947, -95, -35), 'shaft');           // rail head and web
-  B.mesh(track, box(-6400, 8000, -1098, -1082, -125, -5), 'shaft');          // rail foot
+  B.mesh(track, box(-6420, 8020, -1098, -1082, -125, -5), 'shaft');          // rail foot, ends past the web
   const sleepers = part('sleepers', { info: 'track', explode: [0, 0, 600], st: 0, en: 0.4 });
   const sl = [];
   for (let x = -5600; x <= 7700; x += SLEEPER) sl.push(box(x - 130, x + 130, -1240, -1106, -1600, 420));
@@ -123,7 +127,7 @@ export function build(B) {
   const fs = new THREE.Shape([[-3600, -350], [5660, -350], [5660, 1040], [-3600, 1040]].map(p => new THREE.Vector2(...p)));
   for (const ax of [-G.PITCH, 0, G.PITCH]) fs.holes.push(circle(140, ax, 0));
   B.mesh(frame, slab(fs, -300, 30, 3), 'paint');
-  for (const ax of [-G.PITCH, 0, G.PITCH]) { B.mesh(frame, box(ax - 230, ax + 230, -260, 260, -262, -150), 'cast'); B.mesh(frame, pin(110, -800, -150, ax, 0), 'shaft'); }
+  for (const ax of [-G.PITCH, 0, G.PITCH]) { B.mesh(frame, box(ax - 230, ax + 230, -260, 260, -262, -150), 'cast'); B.mesh(frame, pin(110, -800, -165, ax, 0), 'shaft'); }
   B.mesh(frame, box(-3600, 5660, 1050, 1080, -2000, 230), 'paint');            // running board
   B.mesh(frame, box(5650, 5750, 450, 1000, -2000, 430), 'red');                // buffer beam
   // buffer: a lathe about local y, turned onto +X, at height 760 and z 83
@@ -132,9 +136,10 @@ export function build(B) {
   B.mesh(frame, box(G.K[0] - 70, G.K[0] + 70, G.K[1] + 30, 1040, -268, 268), 'cast');
   // weigh shaft bracket on the running board
   B.mesh(frame, box(G.W[0] - 70, G.W[0] + 70, 1090, G.W[1] - 30, -40, 30), 'cast');
-  // slide bars: above and below the crosshead, into the cylinder cover
-  B.mesh(frame, box(3150, CYL.x0 + 40, 140, 190, 105, 215), 'steel');
-  B.mesh(frame, box(3150, CYL.x0 + 40, -190, -140, 105, 215), 'steel');
+  // slide bars: above and below the crosshead, 15 mm short of the bore
+  // (bore0), so their ends do not lie in the rear cover's inner face
+  B.mesh(frame, box(3150, CYL.bore0 - 15, 140, 190, 105, 215), 'steel');
+  B.mesh(frame, box(3150, CYL.bore0 - 15, -190, -140, 105, 215), 'steel');
   // slide bar brackets at the rear end (the main rod passes between them)
   B.mesh(frame, box(3140, 3230, 186, 260, 98, 222), 'cast');
   B.mesh(frame, box(3140, 3230, -260, -186, 98, 222), 'cast');
@@ -156,9 +161,9 @@ export function build(B) {
   // cab: side sheet with a window, front sheet, roof
   const cs = new THREE.Shape([[-3600, 1090], [-1500, 1090], [-1500, 3410], [-3600, 3410]].map(p => new THREE.Vector2(...p)));
   const win = new THREE.Path(); win.moveTo(-3200, 2300); win.lineTo(-2000, 2300); win.lineTo(-2000, 3050); win.lineTo(-3200, 3050); win.closePath(); cs.holes.push(win);
-  B.mesh(body, slab(cs, 525, 30, 3), 'paint');
-  B.mesh(body, box(-1530, -1490, 1090, 3410, -2100, 520), 'paint');
-  B.mesh(body, box(-3700, -1420, 3400, 3480, -2160, 600), 'bolt');
+  B.mesh(body, slab(cs, 195, 30, 3), 'paint');                     // side sheet on the running board edge (z 230)
+  B.mesh(body, box(-1530, -1490, 1090, 3410, -1770, 190), 'paint');
+  B.mesh(body, box(-3700, -1420, 3400, 3480, -1840, 270), 'bolt');
 
   // ── wheels ─────────────────────────────────────────────────────────────
   const wheels = [-1, 0, 1].map(k => {
@@ -249,8 +254,11 @@ export function build(B) {
   { const g = poly([[55, CYL.x0], [CYL.ro, CYL.x0], [CYL.ro, CYL.x1], [0.1, CYL.x1], [0.1, CYL.bore1], [CYL.ri, CYL.bore1], [CYL.ri, CYL.bore0], [55, CYL.bore0]], 72); g.rotateZ(-Math.PI / 2); g.translate(0, ZC, 0); B.mesh(cyl, g, 'cast'); }
   const chest = part('chest', { info: 'chest', label: 'Steam chest', labelAt: L3((CHEST.x0 + CHEST.x1) / 2, CHEST.y + CHEST.ro + 60, ZC), cut: ZC, explode: [0, 300, 0], st: 0.1, en: 0.6 });
   { const g = poly([[45, CHEST.x0], [CHEST.ro, CHEST.x0], [CHEST.ro, CHEST.x1], [0.1, CHEST.x1], [0.1, CHEST.x1 - 40], [CHEST.ri, CHEST.x1 - 40], [CHEST.ri, CHEST.x0 + 40], [45, CHEST.x0 + 40]], 64); g.rotateZ(-Math.PI / 2); g.translate(0, ZC, -CHEST.y); B.mesh(chest, g, 'cast'); }
-  // the steam pipe from the smokebox down into the top of the chest
-  B.mesh(chest, up([[[70, CHEST.y + CHEST.ro - 30], [70, 1100], [0.1, 1100], [0.1, CHEST.y + CHEST.ro - 30]]], 4900, ZC, 32), 'cast');
+  // the steam pipe: up from the chest through the running board (radius
+  // 60, 10 mm inside its edge at z 230), then in along z into the smokebox
+  // side (the smokebox surface is at z -305 at height 1250)
+  B.mesh(chest, up([[[60, CHEST.y + CHEST.ro - 30], [60, 1250], [0.1, 1250], [0.1, CHEST.y + CHEST.ro - 30]]], 4900, ZC, 32), 'cast');
+  B.mesh(chest, pin(70, -420, 240, 4900, 1250), 'cast');
 
   // ── coloured insides: ports, the steam between the valve heads, the two
   // cylinder ends. Half-solids behind the section plane (z <= 157), with
@@ -269,11 +277,14 @@ export function build(B) {
   const steam = part('steam', { info: 'steam', explode: [0, 300, 0], st: 0.1, en: 0.6 });
   const mkGas = (h, y) => B.mesh(steam, box(0, 1, y - h, y + h, ZC - 23, ZC - 3), 'rubber', { shadow: false });
   const gasF = mkGas(CYL.ri - 4, 0), gasR = mkGas(CYL.ri - 4, 0), live = mkGas(CHEST.ri - 6, CHEST.y);
-  // each coloured mesh owns its material, so main.js can tint one alone
-  for (const m of [portF, portR, gasF, gasR, live]) {
+  // each coloured mesh owns its material, so main.js can tint one alone.
+  // The part lists it in mats too: the saver tour ghosts and B.dispose
+  // frees a part's materials through mats only.
+  for (const [q, ms] of [[ports, [portF, portR]], [steam, [gasF, gasR, live]]]) ms.forEach((m, i) => {
     m.material = new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.7, metalness: 0 });
     m.material.userData.baseEmissive = new THREE.Color(0);
-  }
+    q.mats['own' + i] = m.material;
+  });
 
   const sc = {
     gear, ports: { portF, portR }, gas: { gasF, gasR, live },
@@ -311,7 +322,7 @@ export function build(B) {
       return Q;
     },
     box: { c: [1300, 900, -300], R: 6200 },
-    keys: { spread: [1600, 300, 900], gear: [2500, 500, 300], valve: [4900, 300, ZC], link: [G.K[0], G.K[1], 300], wheel: [0, 0, 0] },
+    keys: { spread: [1600, 300, 900], gear: [2200, 500, 300], valve: [4900, 300, ZC], link: [G.K[0], G.K[1], 300], wheel: [0, 0, 0] },
   };
   return sc;
 }
