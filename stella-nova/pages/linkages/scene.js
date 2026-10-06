@@ -91,7 +91,11 @@ export function build(B, id) {
   });
   // trace and pen
   const tr = B.part('trace', { info: 'trace', label: id === 'peaucellier' ? 'Path of P' : id === 'jansen' ? 'Foot path' : 'Coupler curve', labelAt: [curve[0][0], depth + 6, -curve[0][1]], explode: [0, 20 + nL * 9, 0], st: 0.4, en: 1 });
-  const cp = new THREE.CatmullRomCurve3(curve.map(([x, y]) => new THREE.Vector3(x, depth + 6, -y)), id !== 'peaucellier', 'centripetal');
+  // Peaucellier: the arm swings, so P runs up and back down the same line.
+  // Tube only the up run (th -90 .. 90 deg); a full turn makes two tubes on
+  // one path, and their faces z-fight.
+  const run = id === 'peaucellier' ? [...curve.slice(270), ...curve.slice(0, 91)] : curve;
+  const cp = new THREE.CatmullRomCurve3(run.map(([x, y]) => new THREE.Vector3(x, depth + 6, -y)), id !== 'peaucellier', 'centripetal');
   B.mesh(tr, new THREE.TubeGeometry(cp, 360, 1.4, 6, id !== 'peaucellier'), 'red', { shadow: false, pick: true });
   const pen = B.part('pen', { info: 'trace', explode: [0, 20 + nL * 9, 0], st: 0.4, en: 1 });
   B.mesh(pen, new THREE.SphereGeometry(5, 20, 12), 'red');
