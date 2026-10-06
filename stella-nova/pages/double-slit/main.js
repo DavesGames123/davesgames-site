@@ -32,7 +32,8 @@
 //
 //  FRAME PIPELINE
 //  --------------------------------------------------------------------------
-//      loop() ─ step() ×P.spf     advance the three fields; planeSource() drives
+//      loop() ─ step() ×n         n from real frame time: stepRate() steps per
+//             │                   second (frame-rate independent); planeSource() drives
 //             │                   the left column when P.plane is on
 //             ├ accumI()          move the <ψ²> average of every cell
 //             ├ autoRef()         exposure reference from the diffraction zone
@@ -131,10 +132,16 @@ const P = {
   scale: 2,
   dissipation: 1.000,   // retention per step (1 = lossless away from the PML)
   plane: true,   // continuous plane wave from the left edge (on at load)
-  spf: 2,        // FDTD steps per animation frame
+  spf: 2,        // speed: SPEED_UNIT x spf FDTD steps per second (stepRate)
   expo: 0,       // exposure in stops around the auto reference
 };
 let COL = P.lamNm.map(specRGB);
+// Sim speed (loop, stepRate). SPEED_UNIT: steps per second per unit of the
+// speed slider P.spf. The default spf 2 is 60 steps/s, half the old speed
+// at 60 Hz. In the saver the rate is SAVER_RATE x (1 - 0.7 calm): 31
+// steps/s at calm 0.7, which is 0.9 fs of light per second. MAX_SPF caps
+// the steps in one frame.
+const SPEED_UNIT = 30, SAVER_RATE = 60, MAX_SPF = 12;
 
 // (Re)allocate every buffer to match the field size and the cell size. The
 // grid resolution is the CSS size divided by P.scale. Called at start, on a
@@ -353,10 +360,17 @@ buildTone();
 //   Intensity  <ψ²> / refI[c][zone]
 //   Phase      amplitude from ψ and its previous slice, times (1 + cos φ)/2
 // Barrier cells are drawn last: slit walls in slate, painted walls in blue.
+// In the saver the incident zone draws at SAVER_INC of its level and each
+// colour moves SAVER_DESAT of the way to its grey. The three plane waves
+// beat into a dense band of stripes left of the barrier, and the eye goes
+// there first. The fields are not changed, only the draw.
+const SAVER_INC=0.42,SAVER_DESAT=0.3;
+const desat=c=>{const l=0.3*c[0]+0.59*c[1]+0.11*c[2];return c.map(v=>v+(l-v)*SAVER_DESAT);};
 function render(){
   const d=imgData.data,disp=P.disp,on=P.chOn,bx=Math.floor(NX*P.barrierX)+3;
-  const c0=COL[0],c1=COL[1],c2=COL[2],ref=disp==='intensity'?refI:refA;
-  const k=[0,1].map(z=>[0,1,2].map(c=>128/(ref[c][z]||1)));
+  const cs=saverOn?COL.map(desat):COL;
+  const c0=cs[0],c1=cs[1],c2=cs[2],ref=disp==='intensity'?refI:refA;
+  const k=[0,1].map(z=>[0,1,2].map(c=>128/(ref[c][z]||1)*(saverOn&&z===0?SAVER_INC:1)));
   const tone=v=>{v=v|0;return TONE[v>1023?1023:v];};
   for(let y=0;y<NY;y++){const row=y*NX;for(let x=0;x<NX;x++){
     const i=row+x,kz=k[x<bx?0:1];let t0=0,t1=0,t2=0;
@@ -472,7 +486,7 @@ bindRange('sl-exp','val-exp',v=>{P.expo=v;buildTone();},v=>(v>0?'+':'')+v.toFixe
 bindRange('sl-br','val-br',v=>{P.brushR=v;},v=>String(v));
 bindRange('sl-dt','val-dt',v=>{P.dt=v;},v=>v.toFixed(2));
 bindRange('sl-diss','val-diss',v=>{P.dissipation=v;if(NX)buildDamping();},v=>v.toFixed(3));
-bindRange('sl-spf','val-spf',v=>{P.spf=v;},v=>String(v));
+bindRange('sl-spf','val-spf',v=>{P.spf=v;},v=>(v*SPEED_UNIT)+' steps/s');
 bindRange('sl-scale','val-scale',v=>{if(P.scale!==v){P.scale=v;if(NX)init();}},v=>v+' px');
 
 // Channel swatches: each one turns its wave on or off.
@@ -498,12 +512,20 @@ $('btn-clr').addEventListener('click',()=>{userWalls.fill(0);buildBarrier();});
 if(matchMedia('(max-width:760px) and (orientation:portrait)').matches)$('eqs').open=false;
 
 // ── main loop ───────────────────────────────────────────────────────────────
-// Advance the sim (P.spf steps) unless paused, refresh the exposure every 6
-// frames, render the field each frame and the profile every 3rd frame.
-function loop(){
+// Advance the sim unless paused, refresh the exposure every 6 frames, render
+// the field each frame and the profile every 3rd frame.
+// The step count comes from real frame time, not one batch per frame: a
+// 120 Hz display ran the old loop 2x as fast as a 60 Hz display. stepAcc
+// keeps the part step. A slow frame takes at most MAX_SPF steps and drops
+// the rest, so a stall does not make a burst.
+// SPEED_UNIT, SAVER_RATE and MAX_SPF are next to P.
+let stepAcc=0,lastLoopT=0,saverRate=0;
+function stepRate(){return saverOn&&saverRate?saverRate:SPEED_UNIT*P.spf;}
+function loop(ts){
   fCount++;frameN++;const now=performance.now();
   if(now-lastFT>500){fps=Math.round(fCount/((now-lastFT)/1000));fCount=0;lastFT=now;$('ofps').textContent=fps+' fps';}
-  if(!paused)for(let k=0;k<P.spf;k++){step();accumI();}
+  const dt=lastLoopT&&ts?Math.min(0.1,Math.max(0,(ts-lastLoopT)/1000)):1/60;if(ts)lastLoopT=ts;
+  if(!paused){stepAcc+=stepRate()*dt;let n=Math.floor(stepAcc);stepAcc-=n;if(n>MAX_SPF){n=MAX_SPF;stepAcc=0;}for(let k=0;k<n;k++){step();accumI();}}
   if(frameN%6===1)autoRef();
   render();if(saverOn)drawDetector();else if(frameN%3===0)drawProfile();
   $('ot').textContent=(simTime*C_FS_PER_STEP(P.dt)).toFixed(1);
@@ -618,27 +640,56 @@ function fringeAnchor(){
 
 // Screensaver hook (lib/screensaver.js has the protocol). The CSS under
 // html.sn-saver hides the panel, the profile and the overlays, so the field
-// fills the frame. init() re-grids to that size, then the sim runs ahead
-// under the shell's black cover until the fringes reach the screen column.
-// calm 1 gives one step per frame. The seed picks the slit count and gap.
-// saverOn makes loop() draw the detector strip (drawDetector) in place of
-// the hidden profile panel. The plate gets d, a, λ, L once a second.
+// fills the frame. The field sits in the clear band of the label plate
+// (plateBand, lib/saver-clear.js): the plate text goes up first, then
+// saverBand() sets --sv-t and --sv-b on #stage, then init() re-grids to
+// that box, at most 2.6 x as wide as it is tall. A band under 0.38 of the height grows about its centre to
+// 0.38, and #field fades out at its top and bottom edges, so only the
+// faded edge goes under the text. The sim then runs ahead under the shell's black
+// cover until the fringes reach the screen column (8 s at most). The speed is
+// SAVER_RATE x (1 - 0.7 calm) steps per second (stepRate). The seed picks
+// the slit count and gap. saverOn makes loop() draw the detector strip
+// (drawDetector) in place of the hidden profile panel, and render() dim
+// the incident zone. The plate gets d, a, λ, L once a second.
+async function saverBand(){
+  let band=null;
+  try{const m=await import('../../lib/saver-clear.js');
+    for(let i=0;i<20;i++){band=m.plateBand(innerHeight);if(band&&band.b>0)break;await new Promise(r=>setTimeout(r,100));}
+  }catch(e){band=null;}
+  const h=innerHeight,st=$('stage').style;
+  let t=band?band.t:0,b=band?band.b:0;
+  if(h-t-b<0.38*h){const c=(t+h-b)/2;t=Math.max(0,c-0.19*h);b=Math.max(0,h-(c+0.19*h));}
+  // The width is at most 2.6 x the height, centred: a wide strip only adds
+  // path from the source to the screen, and warmup steps to fill it.
+  const w=innerWidth,fw=Math.min(w,2.6*(h-t-b)),side=Math.round((w-fw)/2);
+  st.setProperty('--sv-t',Math.round(t)+'px');st.setProperty('--sv-b',Math.round(b)+'px');
+  st.setProperty('--sv-x',side+'px');
+  return h-t-b;
+}
 window.snSaver={async enter(o){
   const calm=o&&o.calm!=null?o.calm:0.7,seed=(o&&o.seed)>>>0;
   document.documentElement.classList.add('sn-saver');
-  $('preset-rgb').click();setPaused(false);P.plane=true;P.disp='amplitude';P.expo=0;buildTone();
+  $('preset-rgb').click();setPaused(false);P.plane=true;P.disp='amplitude';P.expo=-0.3;buildTone();
   P.slitMode=seed%4===3?'triple':'double';
-  setSlider('sl-ss',P.slitMode==='triple'?[60,72,84][(seed>>2)%3]:[90,111,130,150][(seed>>2)%4]);
-  setSlider('sl-spf',calm>=0.5?1:2);
+  saverRate=SAVER_RATE*(1-0.7*Math.max(0,Math.min(1,calm)));
+  const label=o&&o.labels!==false?o.label:null;
+  saverPlate(label);
+  // A short band (a wide window, where the plate text takes most of the
+  // height) gets 1 px cells, so the grid keeps 260 or more rows past the
+  // 30-cell PML at each edge. The slit gap is at most 0.4 of the rows (the
+  // outer slits of a triple at most 0.6), so the slits stay clear of it.
+  const bandH=await saverBand();
+  P.scale=bandH<520?1:2;$('sl-scale').value=P.scale;
   init();
+  const gap=P.slitMode==='triple'?[60,72,84][(seed>>2)%3]:[90,111,130,150][(seed>>2)%4];
+  setSlider('sl-ss',Math.min(gap,Math.floor(NY*(P.slitMode==='triple'?0.3:0.4))));
   const need=(screenX()-sourceX())/P.dt+240,t0=performance.now();
-  while(stepN<need&&performance.now()-t0<4000){for(let k=0;k<40;k++){step();accumI();}autoRef();await new Promise(r=>setTimeout(r,0));}
+  while(stepN<need&&performance.now()-t0<8000){for(let k=0;k<40;k++){step();accumI();}autoRef();await new Promise(r=>setTimeout(r,0));}
   for(let k=0;k<12;k++)autoRef();
   saverOn=true;
-  const label=o&&o.labels!==false?o.label:null;
   clearInterval(saverTimer);saverPlate(label);saverTimer=setInterval(()=>saverPlate(label),1000);
   return {canvas,warmupMs:1000};
-},exit(){saverOn=false;clearInterval(saverTimer);saverTimer=0;}};
+},exit(){saverOn=false;saverRate=0;clearInterval(saverTimer);saverTimer=0;}};
 
 // Boot: a narrow field (a phone) uses 1 px cells, so the 40-cell PML and
 // the absorber do not take most of the grid. Then build the grid and start.

@@ -157,3 +157,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 /* SCREENSAVER (lib/screensaver.js): the field alone fills the frame */
 html.sn-saver #panel,html.sn-saver #profile,html.sn-saver #readout,html.sn-saver #fxCanvas,html.sn-saver .topbar{display:none}
 html.sn-saver #waveCanvas{cursor:none}
+/* The field in the clear band of the plate: --sv-t, --sv-b and --sv-x come from
+   saverBand() in main.js. Fixed, so the phone-portrait 56svh stage does not
+   apply in the 9:16 column. The edges fade under the plate text. */
+html.sn-saver #stage{position:fixed;left:var(--sv-x,0px);right:var(--sv-x,0px);top:var(--sv-t,0px);bottom:var(--sv-b,0px);height:auto;flex:none}
+html.sn-saver #stage{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(to bottom,transparent,#000 7%,#000 93%,transparent)}
