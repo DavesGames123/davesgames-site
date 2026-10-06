@@ -1,0 +1,125 @@
+FRACTAL FLAMES · CREDITS
+========================
+
+This directory is a port of flam3 by Scott Draves and the flam3 authors,
+https://github.com/scottdraves/flam3 (flam3 is Copyright (C) 1992-2009
+Spotworks LLC). The port follows the flam3 source at commit
+1cdfc77275821182ad3c057e629c75a240dd52d3.
+
+flam3 is licensed under the GNU General Public License, version 3 or later.
+This port is licensed the same way: GPL-3.0-or-later. The full licence text
+is in LICENSE (copied from COPYING in the flam3 repository). Each source file
+here carries a GPL-3.0-or-later header.
+
+
+WHICH FLAM3 FILES EACH MODULE PORTS
+-----------------------------------
+genome.js           flam3.h            the genome and xform structure, the
+                                       variation list and the parameter set
+                    variations.c       initialize_xforms (defaults),
+                                       xform_precalc, prepare_precalc_flags
+                    flam3.c            flam3_random, flam3_add_symmetry,
+                                       flam3_mutate, flam3_cross, flam3_print,
+                                       flam3_create_xform_distrib,
+                                       flam3_create_chaos_distrib,
+                                       flam3_delete_xform, flam3_copy_params
+                    flam3-genome.c     truncate_variations, the default
+                                       variation list (the novars)
+                    interpolation.c    flam3_align, flam3_interpolate_n,
+                                       convert_linear_to_polar,
+                                       interp_and_convert_back,
+                                       adjust_percentage, compare_xforms
+                    parser.c           the flame XML reader
+                    palettes.c         flam3_get_palette, rgb2hsv, hsv2rgb
+variations.js       variations.c       all variations, apply_xform (CPU)
+                    flam3.c            flam3_iterate,
+                                       flam3_estimate_bounding_box
+                    rect.c             the tone map without density
+                                       estimation (for the probe renders)
+                    palettes.c         flam3_calc_alpha, flam3_calc_newrgb,
+                                       flam3_improve_colors, try_colors
+                    filters.c          flam3_create_spatial_filter (gaussian)
+                    flam3-genome.c     the random / mutate / cross loop: the
+                                       bounding-box reframe (golden section),
+                                       test_cp and the avg / black / white
+                                       image test
+flame.wgsl          variations.c       all variations and apply_xform (GPU)
+                    flam3.c            flam3_iterate (the chaos game)
+                    rect.c             the bucket splat (camera, rotate,
+                                       bounds, palette lookup)
+render.wgsl         rect.c             de_thread (density estimation), the
+                                       k1 / k2 log-density scale, the spatial
+                                       filter pass and the final tone map
+                    palettes.c         flam3_calc_alpha, flam3_calc_newrgb,
+                                       rgb2hsv, hsv2rgb
+engine.js           rect.c             the render loop: camera, k1, k2, the
+                                       sample count from quality
+                    filters.c          flam3_create_de_filters,
+                                       flam3_create_spatial_filter
+build-palettes.mjs  palettes.c         parse_palettes
+palettes.bin/.json  flam3-palettes.xml all 701 palettes, as RGB bytes and a
+                                       list of numbers and names
+main.js, index.html, style.css, tests.mjs
+                    (page code)        the controls, the screensaver hook and
+                                       the checks; they drive the port
+
+
+VARIATIONS
+----------
+All 99 flam3 variations are ported, on the GPU (flame.wgsl) and on the CPU
+(variations.js): linear through mobius. pre_blur is applied in apply_xform
+before the precalc values, as in flam3. No variation is skipped.
+tests.mjs --gpu compares the 79 variations that draw no random numbers
+between flame.wgsl and variations.js.
+
+
+DENSITY ESTIMATION
+------------------
+The variable-width density estimation of flam3 is ported (not a fixed
+supersample filter). flam3 scatters each bucket over a gaussian disc whose
+width falls with the hit count (flam3_create_de_filters, de_thread). The GPU
+pass computes the same sum as a gather: each pixel adds every neighbour whose
+disc reaches it, with the neighbour's own width and kernel normalisation,
+and with flam3's limits (distance / width <= 1, offsets up to
+ceil(width) - 1). The kernel table is the flam3 table, filter index rule
+included.
+Limit: the estimator radius is capped at 9 pixels (6 on phones), the tile
+apron of the compute pass. flam3's default radius is 9.
+The spatial filter is flam3's gaussian kernel with the genome's filter
+radius (supersample 1).
+
+
+WHAT DIFFERS FROM FLAM3
+-----------------------
+- Random numbers: one 32-bit generator (mulberry32) on the CPU and a PCG
+  hash per walker on the GPU, in place of random() and ISAAC. A seed gives
+  the same genome every time in this port, but not the genome that flam3
+  makes from that seed.
+- The chaos game runs many walkers in parallel; each walker discards 20
+  steps (the fuse) after a reset. A bad value restarts the walker at a
+  random point and discards 4 steps (flam3 retries up to 4 times).
+- The xform choice table has 1024 entries per row (flam3: 16384).
+- The histogram is u32 fixed point (32 units per hit). While the genome or
+  the camera moves (screensaver morphs and drift), the histogram decays
+  each frame instead of flam3's temporal samples and temporal filter.
+- At most 48 xforms (standard plus final) and 16 variations per xform (the
+  largest weights stay). Symmetry is reduced to fit.
+- Not ported: motion elements (<motion>), smooth (Catmull-Rom)
+  interpolation, interpolation stagger, asymmetric reference angles (wind),
+  spatial oversample above 1, palette_mode "linear" (step mode is used),
+  early clip, transparency, the <edit> history, flam3_dimension,
+  flam3_lyapunov, flam3_colorhist, sheep_loop and sheep_edge.
+- flam3_improve_colors: try_colors in flam3 returns (double)(hits / res3)
+  with integer division, so flam3 never keeps a colour change. This port
+  divides in floating point.
+- XML: flam3_print writes <symmetry kind="N"/> and the symmetry xforms; a
+  reader then adds the symmetry twice. This port writes the kind as a
+  comment. It writes twintrian (flam3_print skips it). It reads
+  <symmetry>, palette="N" with hue, <color>, <colors>, hex <palette>, xaos
+  (chaos=), the old symmetry= and oscope_* attributes, var1 and var.
+- The page adds a framed probe to flam3-genome's image test (coverage and
+  white-out in the genome's own camera) for random genomes.
+- The "weighted" variation choice and the screensaver weights are this
+  page's own; "flam3 (uniform)" is flam3's choice.
+
+The name "Electric Sheep" and its logo are not used.
