@@ -146,9 +146,9 @@ function fillPanel() {
 // ── views ───────────────────────────────────────────────────────────────────
 const VIEWS = {
   three: { az: 28, el: 12, explode: 0, k: 1.02, at: null },
-  gear: { az: 18, el: 8, explode: 0, k: 0.56, at: 'gear' },
+  gear: { az: 18, el: 8, explode: 0, k: 0.62, at: 'gear' },
   valve: { az: 8, el: 4, explode: 0, k: 0.2, at: 'valve' },
-  side: { az: 0, el: 2, explode: 0, k: 0.78, at: null },
+  side: { az: 0, el: 2, explode: 0, k: 1.0, at: null },
   exploded: { az: 26, el: 36, explode: 1, k: 1.1, at: 'spread' },
 };
 function fitDist(k) {
