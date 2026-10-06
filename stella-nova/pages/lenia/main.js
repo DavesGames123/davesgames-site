@@ -774,7 +774,7 @@ function frame(now) {
     const dx = wrapDelta(tx - v.cx, W), dy = wrapDelta(ty - v.cy, H);
     S.engine.setView({ cx: wrap(v.cx + dx * 0.12, W), cy: wrap(v.cy + dy * 0.12, H) });
   }
-  const occ = occlusion(), v = S.engine.view;
+  const occ = S.saverOcc || occlusion(), v = S.engine.view;
   if (Math.abs(occ.x - v.ox) > 0.5 || Math.abs(occ.y - v.oy) > 0.5) {
     S.engine.setView({ ox: v.ox + (occ.x - v.ox) * 0.2, oy: v.oy + (occ.y - v.oy) * 0.2 });
   }
@@ -955,17 +955,91 @@ function bindKeys() {
 // Shell screensaver hook (lib/screensaver.js). enter() waits for the first
 // creature, hides the GUI and gives #gl the full window. A 2D canvas over
 // #gl takes a copy of each frame and is the canvas to record: it can fade to
-// black across a creature change, which the WebGPU pass cannot. The
-// autopilot plays SAVER_CODES from opts.seed, three to four per dwell. A
-// glider runs with the follow camera, zoomed in. A grower (a chain creature
-// that fills the world) runs at zoom 1 with no follow. calm 1 runs at 0.5
-// times the normal speed. A creature that dies is stamped again.
-// Speed: a zoomed creature gets a world cut to the screen part, and #gl
-// draws at 1 px per CSS px. See show() and observeSize().
-const SAVER_CODES = [
-  ['O2u', 2.4], ['OG2g', 2.4], ['HN+m', 1], ['OV2u', 2], ['2S1f', 2.2], ['O4t', 1.6], ['PN+i', 1],
-  ['P4al', 1.8], ['K4s', 2.2], ['HN+bs', 1],
-];
+// black across a scene change, which the WebGPU pass cannot.
+// WORLD. The saver runs at detail 1 with a short side of 256 cells, so the
+// world is about 8 creatures across and a step costs about 5x less than at
+// detail 2 and 128 cells.
+// SCENES. A seeded shuffle of SAVER_CODES gives one creature per scene. A
+// glider scene stamps 1 to 6 copies with random turns, so the copies roam
+// and meet. A grower (a chain creature that fills the world) gets one stamp.
+// A creature set that dies is stamped again behind a fade. A set that fills
+// the world after a collision (2.5x its start mass) ends the scene.
+// SHOTS. A scene is 3 shots of 6 to 10 s with hard cuts between them (see
+// SHOTS). The camera does not lock on the creature: it pushes in, lets the
+// creature cross the frame, waits ahead of its path, or holds wide.
+// TRACKER. engine.stats() gives one centroid for all cells, which is the
+// empty space between two copies. The saver reads the world 5 times a
+// second into a grid of R/2 blocks (saverGrid) and follows the centroid of
+// the blocks near one creature (saverTrack).
+// The subject sits in the clear band of the label plate (plateBand,
+// lib/saver-clear.js) through the view offset, read in frame().
+const SAVER_CODES = ['O2u', 'OG2g', 'HN+m', 'OV2u', '2S1f', 'O4t', 'PN+i', 'P4al', 'K4s', 'HN+bs'];
+// Shot order per scene kind. The first shot of a scene is the first entry.
+const SHOTS = {
+  one: [['push', 'ahead', 'drift'], ['ahead', 'push', 'wide'], ['drift', 'push', 'ahead']],
+  herd: [['wide', 'push', 'drift'], ['push', 'wide', 'ahead'], ['wide', 'drift', 'push']],
+  grow: [['wide', 'pan', 'push'], ['push', 'pan', 'wide']],
+};
+function mulberry(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// The world as blocks of B x B cells: mass and mass-weighted x, y per block.
+function saverGrid(A, W, H, B) {
+  const gw = Math.ceil(W / B), gh = Math.ceil(H / B);
+  const m = new Float32Array(gw * gh), mx = new Float32Array(gw * gh), my = new Float32Array(gw * gh);
+  for (let y = 0; y < H; y++) {
+    const row = y * W, gy = ((y / B) | 0) * gw;
+    for (let x = 0; x < W; x++) {
+      const a = A[row + x];
+      if (a < 0.02) continue;
+      const g = gy + ((x / B) | 0);
+      m[g] += a; mx[g] += a * x; my[g] += a * y;
+    }
+  }
+  return { gw, gh, B, W, H, m, mx, my };
+}
+// The torus centroid of the blocks within rad cells of p, or null if empty.
+function gridCentroid(g, p, rad) {
+  let M = 0, X = 0, Y = 0;
+  const n = Math.ceil(rad / g.B);
+  const bx = Math.floor(p.x / g.B), by = Math.floor(p.y / g.B);
+  for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) {
+    const k = wrap(by + j, g.gh) * g.gw + wrap(bx + i, g.gw), mk = g.m[k];
+    if (mk <= 0) continue;
+    const dx = wrapDelta(g.mx[k] / mk - p.x, g.W), dy = wrapDelta(g.my[k] / mk - p.y, g.H);
+    if (dx * dx + dy * dy > rad * rad) continue;
+    M += mk; X += mk * dx; Y += mk * dy;
+  }
+  return M > 1e-3 ? { x: wrap(p.x + X / M, g.W), y: wrap(p.y + Y / M, g.H), m: M } : null;
+}
+// Points with mass: the blocks whose 3 x 3 sum is a local maximum above a
+// quarter of the largest. One point per creature, near enough.
+function gridPeaks(g) {
+  const s = new Float32Array(g.m.length);
+  let top = 0;
+  for (let y = 0; y < g.gh; y++) for (let x = 0; x < g.gw; x++) {
+    let v = 0;
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) v += g.m[wrap(y + j, g.gh) * g.gw + wrap(x + i, g.gw)];
+    s[y * g.gw + x] = v; top = Math.max(top, v);
+  }
+  const out = [];
+  for (let y = 0; y < g.gh; y++) for (let x = 0; x < g.gw; x++) {
+    const v = s[y * g.gw + x];
+    if (v < top * 0.25) continue;
+    let max = true;
+    for (let j = -2; j <= 2 && max; j++) for (let i = -2; i <= 2; i++) {
+      if ((i || j) && s[wrap(y + j, g.gh) * g.gw + wrap(x + i, g.gw)] > v) { max = false; break; }
+    }
+    if (max) out.push({ x: (x + 0.5) * g.B, y: (y + 0.5) * g.B, v });
+  }
+  return out;
+}
 // Plate text, index gn - 1 and kn - 1 (the order of growthTeX and CORE_TEX).
 const SAVER_GROWTH = ['G(u) = 2(1 − (u − m)²/9s²)₊⁴ − 1', 'G(u) = 2 exp(−(u − m)²/2s²) − 1', 'G(u) = +1 if |u − m| ≤ s, else −1'];
 const SAVER_CORE = ['k(r) = (4r(1 − r))⁴', 'k(r) = exp(4 − 1/(r(1 − r)))', 'k(r) = 1 if ¼ ≤ r ≤ ¾, else 0',
@@ -996,27 +1070,30 @@ function saverLabel(label) {
     anchor: c.cls === 'grow' ? null : creatureAnchor,
   });
 }
-// The creature on screen, for the shell's label plate, from the stats that
-// the follow camera reads. The centre is the centroid moved forward by the
-// velocity (as in frame()), mapped as the render shader does: canvas
-// centre + offset + (cell - view centre) x cellPx. r is twice the larger
-// circular standard deviation (a disc of radius a has sigma a / 2). Null
-// when the mass is spread over the torus (focus <= 0.2). Page CSS px.
+// The creature on screen, for the shell's label plate. In the saver it is
+// the tracked creature (saverTrack), moved forward by its velocity. It maps
+// as the render shader does: canvas centre + offset + (cell - view centre)
+// x cellPx. r is the kernel radius on the screen. Null when no creature is
+// tracked or it is off the canvas. Page CSS px.
 function creatureAnchor() {
-  const st = S.stats, E = S.engine;
-  if (!E || !st || st.mass < 1e-3 || st.focus <= 0.2 || st.sx == null) return null;
-  const rc = $('gl').getBoundingClientRect(), { W, H } = E.info, v = E.view, k = E.cellPx(), age = shownTime() - S.statT;
-  const tx = st.cx + S.vel.x * age, ty = st.cy + S.vel.y * age;
-  const x = rc.left + rc.width / 2 + v.ox + wrapDelta(tx - v.cx, W) * k, y = rc.top + rc.height / 2 + v.oy + wrapDelta(ty - v.cy, H) * k;
+  const tr = S.saverTrack, E = S.engine;
+  if (!E || !tr || !tr.p) return null;
+  const rc = $('gl').getBoundingClientRect(), { W, H } = E.info, v = E.view, k = E.cellPx();
+  const q = trackAt(tr);
+  const x = rc.left + rc.width / 2 + v.ox + wrapDelta(q.x - v.cx, W) * k, y = rc.top + rc.height / 2 + v.oy + wrapDelta(q.y - v.cy, H) * k;
   if (x < rc.left || x > rc.right || y < rc.top || y > rc.bottom) return null;
-  return { x, y, r: 2 * Math.max(st.sx, st.sy) * k, pts: [{ x, y }] };
+  return { x, y, r: E.info.R * k, pts: [{ x, y }] };
+}
+// The tracked point now: the last grid centroid moved by the velocity.
+function trackAt(tr) {
+  const { W, H } = S.engine.info, age = shownTime() - tr.t;
+  return { x: wrap(tr.p.x + tr.v.x * age, W), y: wrap(tr.p.y + tr.v.y * age, H) };
 }
 window.snSaver = {
   async enter(opts) {
     const calm = Math.max(0, Math.min(1, +opts.calm || 0));
     while (S.idx < 0) await new Promise(r => setTimeout(r, 50));
     S.saver = true;
-    const SAVER_SHORT = S.worldShort;
     const st = document.createElement('style');
     st.textContent = 'html.saver #panel,html.saver #gear,html.saver #toast,html.saver #cursor,html.saver #dock,html.saver #status,'
       + 'html.saver #browser,html.saver #nogpu{display:none!important}'
@@ -1027,44 +1104,197 @@ window.snSaver = {
     if (S.applySize) S.applySize();
     const gl = $('gl');
     if (!S.engine) return { canvas: gl, warmupMs: 0 };
+    const E = S.engine;
     const cv = document.createElement('canvas'); cv.id = 'saver-cv'; document.body.appendChild(cv);
     const c2 = cv.getContext('2d', { alpha: false });
-    const list = SAVER_CODES.map(([code, zoom]) => ({ i: S.creatures.findIndex(c => c.code === code), zoom })).filter(e => e.i >= 0);
-    const hold = Math.max(15, (+opts.seconds || 60) / 4), FADE = 1.0;
-    let k = (opts.seed >>> 0) % list.length, t = 0, last = 0, dead = 0, tIn = -1e9;
-    const show = () => {
-      const e = list[k];
-      setPlaying(true);
-      // The world of a zoomed creature is cut to the part that the screen
-      // shows (worldShort / zoom), not the full 128. The step cost is per
-      // cell, so zoom 2.4 costs about 5x less. The world keeps 4.5 R across
-      // its short side, so a glider does not feel itself across the wrap.
-      // The zoom goes up by the same factor, so a cell keeps its size.
-      const c = S.creatures[e.i];
-      const Rs = c.R * c.scale;
-      S.worldShort = Math.max(Math.ceil(4.5 * Rs), Math.round(SAVER_SHORT / e.zoom));
-      selectCreature(e.i);
-      sizeWorld(true);
-      const grow = S.c.cls === 'grow';
-      setFollow(!grow);
-      setZoom(e.zoom * S.worldShort / SAVER_SHORT);
-      S.speed = 2 * (1 - 0.5 * calm);
-      t = 0; dead = 0; tIn = -1e9;
-      saverLabel(opts.label);
+    let plateBand = null;
+    import('../../lib/saver-clear.js').then(m => { plateBand = m.plateBand; }).catch(() => { /* no band: the canvas centre */ });
+
+    const rnd = mulberry(opts.seed);
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    // A seeded shuffle, so each run plays a new order from a new start.
+    const list = SAVER_CODES.map(code => S.creatures.findIndex(c => c.code === code)).filter(i => i >= 0);
+    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    const FADE = 1.0;
+    const shotLen = () => 6 + 4 * calm * 0.5 + rnd() * 3;
+    let k = -1, t = 0, last = 0, dead = 0, tIn = -1e9, sceneT = 0;
+    let scene = null, shot = null, si = 0, grid = null, gridBusy = false, gridF = 0, band = null, bandAt = -1e9;
+    let mass0 = 0;   // the mass of the set soon after the stamp
+    let simRate = 1, simT0 = 0, wall0 = 0;   // sim time units per second, measured
+    const cam = { x: 0, y: 0, z: 1 };
+    const track = { p: null, v: { x: 0, y: 0 }, t: 0 };
+    S.saverTrack = track;
+    const Rc = () => E.info.R;
+
+    // The pixel size of a cell at zoom 1, and the clear band in CSS px.
+    const px1 = () => E.cellPx() / E.view.zoom;
+    const bandBox = () => {
+      const w = gl.clientWidth, h = gl.clientHeight;
+      const bt = band ? Math.min(band.t, h * 0.4) : 0, bb = band ? Math.min(band.b, h * 0.4) : 0;
+      return { w: band && band.w ? Math.min(w, band.w) : w, h: Math.max(80, h - bt - bb), oy: (bt - bb) / 2 };
     };
-    show();
+    // The zoom at which the creature fills f of the short side of the clear
+    // band. The size is the start patch (1.2 to 1.6 R for most gliders).
+    const size = () => Math.max(S.c.w, S.c.h) * S.rule.scale * det();
+    const zFor = f => { const bx = bandBox(); return Math.max(1, Math.min(7, f * Math.min(bx.w, bx.h) / (size() * px1()))); };
+    // Half the clear band in cells at zoom z, along a unit direction d.
+    const halfSpan = (z, d) => { const bx = bandBox(), c = px1() * z; return 0.5 * Math.min(Math.abs(d.x) > 1e-6 ? bx.w / Math.abs(d.x) : 1e9, Math.abs(d.y) > 1e-6 ? bx.h / Math.abs(d.y) : 1e9) / c; };
+
+    // Stamp the scene: n copies of the creature at random places and turns,
+    // kept 5 R apart on the torus.
+    const stage = () => {
+      if (scene.n <= 1) { placeCreature(); mass0 = 0; return; }
+      const { W, H } = E.info, base = resample(cellsOf(S.c), S.rule.scale * det());
+      const gap = 5 * Rc(), pts = [];
+      for (let tries = 0; pts.length < scene.n && tries < 200; tries++) {
+        const p = { x: rnd() * W, y: rnd() * H };
+        if (pts.every(q => Math.hypot(wrapDelta(p.x - q.x, W), wrapDelta(p.y - q.y, H)) > gap)) pts.push(p);
+      }
+      E.clear();
+      for (const p of pts) E.stamp(rotate(base, Math.floor(rnd() * 4)), Math.round(p.x), Math.round(p.y));
+      S.time = 0; S.acc = 0; S.stats = null; S.vel = { x: 0, y: 0 }; mass0 = 0;
+      track.p = { x: pts[0].x, y: pts[0].y }; track.v = { x: 0, y: 0 }; track.t = 0;
+    };
+    const showScene = () => {
+      k = (k + 1) % list.length;
+      setPlaying(true);
+      S.worldShort = 256; S.detail = 1;
+      selectCreature(list[k]);
+      sizeWorld(true);
+      setFollow(false);
+      const grow = S.c.cls === 'grow';
+      const { W, H } = E.info, room = Math.floor(W * H / (36 * Rc() * Rc()));
+      const n = grow ? 1 : Math.max(1, Math.min(room, 4, rnd() < 0.3 ? 1 : 2 + Math.floor(rnd() * 3)));
+      const kind = grow ? 'grow' : n > 1 ? 'herd' : 'one';
+      scene = { n, kind, shots: pick(SHOTS[kind]) };
+      track.p = { x: W / 2, y: H / 2 }; track.v = { x: 0, y: 0 }; track.t = 0;
+      stage();
+      grid = null;
+      S.speed = 3.5 * (1 - 0.3 * calm);
+      t = 0; sceneT = 0; dead = 0; tIn = -1e9; si = -1; mass0 = 0;
+      saverLabel(opts.label);
+      nextShot();
+    };
+    // Start a shot: choose its subject, then put the camera on its first
+    // pose with no ease (a hard cut).
+    const nextShot = () => {
+      si++;
+      const type = scene.shots[si % scene.shots.length], dur = shotLen();
+      const { W, H } = E.info;
+      // A herd or grower shot takes a new creature (or part) to look at. An
+      // ahead or drift shot keeps the creature, which has a velocity.
+      if (grid && si > 0 && scene.kind !== 'one' && type !== 'ahead' && type !== 'drift') {
+        const pk = gridPeaks(grid);
+        if (pk.length) { const p = pick(pk), c = gridCentroid(grid, p, 1.6 * Rc()) || p; track.p = { x: c.x, y: c.y }; track.v = { x: 0, y: 0 }; track.t = shownTime(); }
+      }
+      const P = track.p ? trackAt(track) : { x: W / 2, y: H / 2 };
+      const sp = Math.hypot(track.v.x, track.v.y);
+      const dir = sp > 1e-3 ? { x: track.v.x / sp, y: track.v.y / sp } : (a => ({ x: Math.cos(a), y: Math.sin(a) }))(rnd() * Math.PI * 2);
+      const zc = zFor(0.75);
+      shot = { type, dur, t: 0, dir, zc, fix: null, pan: null };
+      // ahead: the camera waits on the path, half a shot in front of the
+      // creature, at a zoom that holds the whole crossing in the clear band.
+      // The band is wide and short, so a path that is mostly vertical gets
+      // a drift. With no clear motion it is a push-in.
+      if (shot.type === 'ahead') {
+        const travel = sp * simRate * dur;
+        if (travel < 1.5 * Rc()) shot.type = 'push';
+        else if (Math.abs(dir.y) > 0.6) shot.type = 'drift';
+        else {
+          const h1 = halfSpan(1, dir), z = Math.max(1, Math.min(zc, (h1 - 0.6 * size()) / (0.55 * travel)));
+          shot.fix = { x: wrap(P.x + dir.x * travel * 0.5, W), y: wrap(P.y + dir.y * travel * 0.5, H), z };
+        }
+      }
+      // drift: the sweep is along x, where the band has room.
+      if (shot.type === 'drift') shot.dir = { x: rnd() < 0.5 ? -1 : 1, y: 0 };
+      if (type === 'wide') shot.fix = { x: P.x, y: P.y, z: 1 };
+      if (type === 'pan') {
+        const a = rnd() * Math.PI * 2, z = Math.max(1.3, zc * 0.7);
+        shot.pan = { x: P.x, y: P.y, vx: Math.cos(a) * halfSpan(z, { x: 1, y: 0 }) * 0.9 / dur, vy: Math.sin(a) * halfSpan(z, { x: 0, y: 1 }) * 0.9 / dur, z };
+      }
+      const p0 = pose(0);
+      cam.x = p0.x; cam.y = p0.y; cam.z = p0.z;
+    };
+    const ease = s => s * s * (3 - 2 * s);
+    // The camera target at shot time ts.
+    const pose = ts => {
+      const s = Math.min(1, ts / shot.dur), { W, H } = E.info;
+      const P = track.p ? trackAt(track) : { x: W / 2, y: H / 2 };
+      switch (shot.type) {
+        case 'push': return { x: P.x, y: P.y, z: Math.max(1, shot.zc * (0.45 + 0.55 * ease(s))) };
+        case 'drift': {
+          // The creature crosses the frame: the camera holds an offset that
+          // goes from one side to the other, a creature radius inside the band.
+          const z = Math.max(1, shot.zc * 0.55), o = (0.5 - s) * 2 * Math.max(0, halfSpan(z, shot.dir) - 0.6 * size() - 4);
+          return { x: wrap(P.x + shot.dir.x * o, W), y: wrap(P.y + shot.dir.y * o, H), z };
+        }
+        case 'ahead': return shot.fix;
+        case 'wide': return { x: shot.fix.x, y: shot.fix.y, z: 1 + 0.25 * s };
+        case 'pan': return { x: wrap(shot.pan.x + shot.pan.vx * ts, W), y: wrap(shot.pan.y + shot.pan.vy * ts, H), z: shot.pan.z };
+      }
+      return { x: P.x, y: P.y, z: 1 };
+    };
+    // Read the world into the block grid and move the tracker to the
+    // centroid near its last point. A lost creature goes to the nearest peak.
+    const readGrid = () => {
+      if (gridBusy) return;
+      gridBusy = true;
+      const ts = S.time, B = Math.max(4, Math.round(Rc() / 2)), sc = scene;
+      E.readState().then(A => {
+        const { W, H } = E.info;
+        if (sc !== scene || A.length !== W * H) return;
+        grid = saverGrid(A, W, H, B);
+        const prev = track.p ? { x: wrap(track.p.x + track.v.x * (ts - track.t), W), y: wrap(track.p.y + track.v.y * (ts - track.t), H) } : { x: W / 2, y: H / 2 };
+        let c = gridCentroid(grid, prev, 1.6 * Rc());
+        if (!c) {
+          const pk = gridPeaks(grid);
+          if (!pk.length) return;
+          pk.sort((a, b) => Math.hypot(wrapDelta(a.x - prev.x, W), wrapDelta(a.y - prev.y, H)) - Math.hypot(wrapDelta(b.x - prev.x, W), wrapDelta(b.y - prev.y, H)));
+          c = gridCentroid(grid, pk[0], 1.6 * Rc()) || pk[0];
+          track.v = { x: 0, y: 0 };
+        } else if (track.p && ts - track.t > 1e-3) {
+          const vx = wrapDelta(c.x - track.p.x, W) / (ts - track.t), vy = wrapDelta(c.y - track.p.y, H) / (ts - track.t);
+          // A grower spreads: its centroid speed is not a motion to follow.
+          const g = scene.kind === 'grow' ? 0 : 0.15;
+          track.v = { x: track.v.x * (1 - g) + vx * g, y: track.v.y * (1 - g) + vy * g };
+        }
+        track.p = { x: c.x, y: c.y }; track.t = ts;
+      }).catch(() => {}).finally(() => { gridBusy = false; });
+    };
+
+    // The state of the director, for the headless probe.
+    window.snSaver.debug = () => ({ code: S.c && S.c.code, scene: scene && { n: scene.n, kind: scene.kind }, shot: shot && { type: shot.type, t: +shot.t.toFixed(1), dur: +shot.dur.toFixed(1) },
+      cam: { x: Math.round(cam.x), y: Math.round(cam.y), z: +cam.z.toFixed(2) }, track: track.p && { x: Math.round(track.p.x), y: Math.round(track.p.y), vx: +track.v.x.toFixed(2), vy: +track.v.y.toFixed(2) },
+      world: [E.info.W, E.info.H], simRate: +simRate.toFixed(2), band: bandBox(), steps: S.stepCap, mass: S.stats && +S.stats.mass.toFixed(1) });
+    showScene();
     (function drive(now) {
       requestAnimationFrame(drive);
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
-      t += dt;
-      if (t > hold) { k = (k + 1) % list.length; show(); }
-      // A creature that dies leaves an empty world: stamp it again. The copy
-      // goes to black across the 1 s wait and fades in on the new stamp, so
-      // the new creature does not appear in one frame.
-      if (S.stats && S.stats.mass < 1e-3 && S.time > 2) { if ((dead += dt) > 1) { placeCreature(); dead = 0; tIn = t; } } else dead = 0;
+      t += dt; sceneT += dt; shot.t += dt;
+      if (now - wall0 > 2000) { if (wall0) simRate = 0.5 * simRate + 0.5 * Math.max(0.05, (S.time - simT0) / ((now - wall0) / 1000)); wall0 = now; simT0 = S.time; }
+      if (now - bandAt > 250 && plateBand) { bandAt = now; band = plateBand(innerHeight); }
+      S.saverOcc = { x: 0, y: bandBox().oy };
+      if (sceneT > 0.5 && ++gridF % 12 === 0) readGrid();
+      if (shot.t > shot.dur) {
+        if (si + 1 >= scene.shots.length) { showScene(); t = 0; } else nextShot();
+      }
+      // A creature set that dies leaves an empty world: stamp it again. The
+      // copy goes to black across the 1 s wait and fades in on the new stamp.
+      // A set that fills the world after a collision ends the scene.
+      if (S.stats && !mass0 && S.time > 1) mass0 = S.stats.mass;
+      const bloom = scene.kind !== 'grow' && mass0 > 0 && S.stats && S.stats.mass > 2.5 * mass0;
+      if (S.stats && (S.stats.mass < 1e-3 || bloom) && S.time > 2) {
+        if ((dead += dt) > 1) { if (bloom) showScene(); else { stage(); tIn = t; } dead = 0; }
+      } else dead = 0;
+      // Ease the camera to the pose. A fixed pose holds still.
+      const p = pose(shot.t), { W, H } = E.info, a = 1 - Math.exp(-dt * 3), az = 1 - Math.exp(-dt * 2);
+      cam.x = wrap(cam.x + wrapDelta(p.x - cam.x, W) * a, W); cam.y = wrap(cam.y + wrapDelta(p.y - cam.y, H) * a, H);
+      cam.z += (p.z - cam.z) * az;
+      E.setView({ cx: cam.x, cy: cam.y, zoom: cam.z });
       if (cv.width !== gl.width || cv.height !== gl.height) { cv.width = gl.width; cv.height = gl.height; }
       c2.drawImage(gl, 0, 0);
-      const f = Math.max(0, 1 - t / FADE, 1 - (hold - t) / FADE, Math.min(1, dead), 1 - (t - tIn) / FADE);
+      const left = scene.shots.length - si - 1;
+      const f = Math.max(0, 1 - t / FADE, left ? 0 : 1 - (shot.dur - shot.t) / FADE, Math.min(1, dead), 1 - (t - tIn) / FADE);
       if (f > 0) { c2.fillStyle = `rgba(0,0,0,${Math.min(1, f)})`; c2.fillRect(0, 0, cv.width, cv.height); }
     })(0);
     return { canvas: cv, warmupMs: 1500 };
