@@ -298,6 +298,7 @@ w.SN_NAV = [
     { h: "Generative", p: [
       ["markov-junior", "MarkovJunior", "RULES"],
       ["shan-shui", "Shan Shui", "SVG"],
+      ["fishdraw", "Fishdraw", "SVG"],
       ["holocloth", "Holocloth", "CLOTH"],
       ["line-art", "Line Art", "RUST"]
     ] },

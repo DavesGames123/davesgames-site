@@ -44,6 +44,7 @@ const EXCLUDED = new Set([
   'fractal-flames',    // port of flam3 (GPL-3.0)
   'line-art',          // Rust port of fogleman/ln
   'volume-noise',      // port of TileableVolumeNoise
+  'fishdraw',          // port of LingDong-/fishdraw
   'randoma11y',        // removed from the site
 ]);
 // Pages listed only in the plain directory: no featured spot, quick link,
