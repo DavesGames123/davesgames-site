@@ -33,6 +33,7 @@
 //    window.snSaver ............ screensaver tour for lib/screensaver.js
 //    function saverPlate ....... screensaver plate: layout or the isolated bone
 //    function partAnchor ....... the bone (landmarks) or the layout on screen
+//    function partView ......... screensaver: the camera side for one bone
 // ============================================================================
 import * as THREE from 'three';
 import { createStage, KEY_DIR } from './stage.js';
@@ -638,11 +639,16 @@ window.__skull = {
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell screensaver (lib/screensaver.js). enter() hides all the
 // DOM but the canvas, paints the studio backdrop into the scene (the canvas
-// is transparent), and plays a tour: one beat per seconds/4 (8 s or more),
-// in a loop of three beats. Open a layout, then isolate one seeded bone
-// (the camera frames it, the rest turn to ghosts), then reconstruct. The next layout opens from the closed skull. Part moves and
-// camera flights take 1.6 to 2.8 times longer (calm 0 to 1), and the slow
-// orbit runs at 1.4 to 0.5 of its speed. No URL or storage writes.
+// is transparent), and plays a tour. It always opens on the full view: the
+// closed skull from the face. Then come push-ins on single bones (a seeded
+// shuffle, facial and cranial in turn, no teeth, no part under 30 mm): the rest turn to ghosts
+// and the camera comes in from the outer face of the bone (partView) at a
+// new angle each time. After three bones one layout opens, then the full
+// view comes back from a new angle. A shot lasts 6 to 9 s (calm 0 to 1).
+// Part moves and camera flights take 1.6 to 2.8 times longer, and the slow
+// orbit runs at 1.2 to 0.4 of its speed. The subject sits in the clear band
+// of the label plate (plateBand, through stage.clearExtra). No URL or
+// storage writes.
 function saverBackdrop(t) {
   const c = document.createElement('canvas'); c.width = 768; c.height = 512;
   const g = c.getContext('2d'), dark = t !== 'light';
@@ -722,10 +728,29 @@ function partAnchor() {
   let r = 0; for (const o of cs) r = Math.max(r, Math.hypot(o.q.x - x, o.q.y - y) + o.h);
   return { x, y, r, pts: cs.sort((m, n2) => n2.s - m.s).slice(0, 8).map(o => o.q) };
 }
+// The camera side for part p, in degrees: outward from the middle of the
+// skull, so the camera looks at the outer face of the bone. A part deep on
+// the midline (sphenoid, vomer, palatines) is seen from the side, through
+// the ghosts. A seeded turn of up to 25 deg is added, and the angle moves by
+// 40 deg when it is near the last one. az 0 is the face (+z), az 90 the left.
+const SKULL_MID = new THREE.Vector3(0, -10, 15);
+function partView(p, rnd, last) {
+  const v = p.home.clone().sub(SKULL_MID), h = Math.hypot(v.x, v.z), side = rnd() < 0.5 ? 1 : -1;
+  let az = Math.atan2(v.x, v.z) / D2R, el = Math.atan2(v.y, h) / D2R;
+  if (p.m.side === 'mid' && v.length() < 50) { az = side * (60 + 40 * rnd()); el = 5; }
+  az += (rnd() * 2 - 1) * 25;
+  el = Math.max(-15, Math.min(50, el + (rnd() * 2 - 1) * 10));
+  if (last) {
+    let da = az - last.az; da -= Math.round(da / 360) * 360;
+    if (Math.abs(da) < 25 && Math.abs(el - last.el) < 12) az += da >= 0 ? 40 : -40;
+  }
+  return { az, el };
+}
+const D2R = Math.PI / 180;
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
-    const beat = Math.max(8, (+o.seconds || 60) / 4), pace = 1.6 + 1.2 * calm;
+    const pace = 1.6 + 1.2 * calm, hold = 6 + 3 * calm;
     let seed = (o.seed >>> 0) || 1;
     const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     saver = { calm, pace };
@@ -733,28 +758,81 @@ window.snSaver = {
     css.textContent = '#stage{top:0!important}#stage>*:not(#view),body>*:not(#stage){display:none!important}#view{cursor:none!important}';
     document.head.appendChild(css);
     stage.scene.background = saverBackdrop(theme);
-    stage.orbit = true; stage.orbitRate = 1.4 - 0.9 * calm;
-    const arrs = ['anatomy', 'symmetry', 'region'], a0 = Math.floor(rnd() * 3);
-    let k = 0;
-    // stretch the moves that the last call started, from now
-    const slow = () => {
-      const now = performance.now() / 1000;
-      for (const m of motion.M) if (m.t0 > -1e8 && m.t0 + m.dur > now) { m.t0 = now + Math.max(0, m.t0 - now) * pace; m.dur *= pace; }
-      if (stage.fly) stage.fly.dur *= pace;
+    stage.orbit = true; stage.orbitRate = 1.2 - 0.8 * calm;
+    // the clear band between the plate's top and bottom text
+    let band = null, bandAt = -1e9, plateBand = null;
+    import('../../lib/saver-clear.js').then(m => { plateBand = m.plateBand; }).catch(() => { /* no band: the full canvas */ });
+    stage.clearExtra = (w, h) => {
+      const now = performance.now();
+      if (plateBand && now - bandAt > 250) { bandAt = now; band = plateBand(h); }
+      return band ? { t: band.t, b: band.b, l: 0, r: 0 } : null;
     };
+    // The tour: the full view of the closed skull from the face first, then
+    // three bones (a seeded shuffle, cranial and facial in turn), then one
+    // open layout, then the full view again from a new angle, and so on.
+    const shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const turn = rnd() < 0.5 ? 1 : -1;
+    const fulls = [{ az: -10 * turn, el: 6 }, { az: 40 * turn, el: 14 }, { az: -45 * turn, el: 10 }, { az: 90 * turn, el: 4 }];
+    const arrs = shuf(['anatomy', 'symmetry', 'region']);
+    let tour = null, k = -1, last = null, cur = null;
+    const makeTour = () => {
+      // a part under 30 mm (the lacrimals) is a speck inside the ghosts
+      const big = p => Math.max(...p.m.ext) >= 30;
+      const cran = shuf(parts.filter(p => p.m.group === 'cranial' && big(p))), face = shuf(parts.filter(p => (p.m.group === 'facial' || p.m.group === 'hyoid') && big(p)));
+      const bones = [];
+      while (cran.length || face.length) { if (face.length) bones.push(face.pop()); if (cran.length) bones.push(cran.pop()); }
+      const t = [];
+      let bi = 0, fi = 0, ai = 0;
+      while (bi < bones.length) {
+        t.push({ full: fulls[fi++ % fulls.length] });
+        for (let j = 0; j < 3 && bi < bones.length; j++) t.push({ part: bones[bi++].i });
+        t.push({ arr: arrs[ai++ % arrs.length] });
+      }
+      return t;
+    };
+    const label = () => { if (typeof o.label === 'function') { try { o.label(saverPlate()); } catch (e) { /* the plate is optional */ } } };
     const step = () => {
-      if (!S.ready || !motion || !parts.length) return;
-      const phase = k % 3;
-      if (phase === 0) { select(-1); setArrangement(arrs[(a0 + k / 3) % 3]); }
-      else if (phase === 1) {
-        const bones = parts.filter(p => p.m.group !== 'dentition');
-        isolate(bones[Math.floor(rnd() * bones.length)].i);   // the rest turn to ghosts
+      if (!S.ready || !motion || !parts.length) { saver.timer = setTimeout(step, 300); return; }
+      if (!tour) tour = makeTour();
+      k = (k + 1) % tour.length; cur = tour[k];
+      clearTimeout(S.introTimer);
+      let d = hold;
+      if (cur.full) {
+        // the primary view: every part in place, nothing ghosted
+        if (S.iso >= 0) isolate(-1, { fly: false });
+        select(-1);
+        const was = S.e;
+        if (S.arr !== 'anatomy') { S.arr = 'anatomy'; computeLayout('anatomy'); tray.show(false); }
+        setExplodeUI(0);
+        motion.go(targetsAt(0), performance.now() / 1000, { order: 'in', stagger: 0.5, dur: 1.15 * pace });
+        stage.flyTo(fitFor(targetsAt(0), cur.full, 1.3), (was > 0.05 ? 1.6 : 2.2) * pace);
+        d = hold + 1;
+      } else if (cur.part != null) {
+        // a push-in on one bone: the rest turn to ghosts
+        const p = parts[cur.part];
+        if (S.e > 0.02) { setExplodeUI(0); motion.go(targetsAt(0), performance.now() / 1000, { order: 'in', stagger: 0.3, dur: 0.9 * pace }); }
+        cur.view = partView(p, rnd, last); last = cur.view;
+        isolate(p.i, { fly: false });
+        const b = new THREE.Box3().setFromCenterAndSize(p.home, new THREE.Vector3(...p.m.ext).max(new THREE.Vector3(18, 18, 18)));
+        stage.flyTo(stage.fitBox(b, cur.view.az, cur.view.el, 1.55), 1.5 * pace);
         stage.hold = false;   // keep the orbit
-      } else { select(-1); setExplode(0, { animate: true }); }
-      slow(); k++;
-      if (typeof o.label === 'function') { try { o.label(saverPlate()); } catch (e) { /* the plate is optional */ } }
+      } else {
+        // an open layout, from its own view
+        if (S.iso >= 0) isolate(-1, { fly: false });
+        select(-1);
+        setArrangement(cur.arr);
+        if (S.e < 0.5) setExplode(1, { animate: true });
+        const now = performance.now() / 1000;
+        for (const m of motion.M) if (m.t0 > -1e8 && m.t0 + m.dur > now) { m.t0 = now + Math.max(0, m.t0 - now) * pace; m.dur *= pace; }
+        if (stage.fly) stage.fly.dur *= pace;
+        d = hold + 1.5;
+      }
+      label();
+      saver.timer = setTimeout(step, d * 1000);
     };
-    saver.timer = setTimeout(() => { step(); saver.timer = setInterval(step, beat * 1000); }, 4000);
+    // the tour state, for the headless probe
+    window.snSaver.debug = () => cur && { k, kind: cur.full ? 'full' : cur.part != null ? 'part' : 'layout', what: cur.part != null ? parts[cur.part].m.name : cur.arr || 'full', e: +S.e.toFixed(2), iso: S.iso };
+    saver.timer = setTimeout(step, 300);
     return { canvas, warmupMs: 3000 };
   },
 };

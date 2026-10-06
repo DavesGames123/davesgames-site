@@ -23,6 +23,7 @@
 //    st.fitSpheres ............. the same for part spheres (the layouts)
 //    st.flyTo .................. a camera flight on a spherical arc
 //    function occlusion ........ overlay margins round the canvas
+//    st.clearExtra ............. more margins from outside (the saver plate)
 //    st.frame .................. per-frame camera, resize, render
 // ============================================================================
 import * as THREE from 'three';
@@ -280,6 +281,12 @@ export function createStage(o) {
     // never let overlays take more than 60% of either axis
     const sx = Math.min(1, w * 0.6 / Math.max(1, out.l + out.r)), sy = Math.min(1, h * 0.6 / Math.max(1, out.t + out.b));
     out.l *= sx; out.r *= sx; out.t *= sy; out.b *= sy;
+    // st.clearExtra(w, h) -> {l, r, t, b} or null: margins that no element
+    // of this page gives, such as the shell label plate in the screensaver.
+    // They come after the 60% cap: the plate text can take more than that,
+    // and a capped band puts the subject under the text.
+    const ex = st.clearExtra && st.clearExtra(w, h);
+    if (ex) for (const k in out) out[k] = Math.min(k === 'l' || k === 'r' ? w * 0.45 : h * 0.45, Math.max(out[k], ex[k] || 0));
     return out;
   }
   st.occlusion = () => occlusion(canvas.clientWidth, canvas.clientHeight);
