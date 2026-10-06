@@ -292,7 +292,8 @@ w.SN_NAV = [
     { h: "Generative", p: [
       ["markov-junior", "MarkovJunior", "RULES"],
       ["shan-shui", "Shan Shui", "SVG"],
-      ["holocloth", "Holocloth", "CLOTH"]
+      ["holocloth", "Holocloth", "CLOTH"],
+      ["line-art", "Line Art", "RUST"]
     ] },
     { h: "Image to 3D", p: [
       ["img2threejs", "Image to Three.js", "3D"]
