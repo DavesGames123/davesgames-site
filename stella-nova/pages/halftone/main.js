@@ -14,6 +14,7 @@
 //  MODULE MAP
 //    halftone-ref.js .. the CPU twin of the port (tests only)
 //    gpu.js ........... device, source texture, pipelines, readback
+//    saver.js ......... window.snSaver: the screensaver shot director
 //    shaders/ ......... halftone.wgsl (the port), extended.wgsl (the
 //                       extensions), present.wgsl (the view), scene.wgsl
 //                       (the procedural scenes)
@@ -45,6 +46,7 @@
 //           "export function buildWGSL"  "window.__ht"
 // ============================================================================
 import { createGPU, UNI_FLOATS, SCENE_SIZE } from './gpu.js';
+import { installSaver } from './saver.js';
 
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const TOUCH = matchMedia('(hover:none)').matches;
@@ -241,6 +243,14 @@ export function zoomAt(k, px, py) {
   clampView(); syncZoom();
 }
 
+/** The span of the split line in CSS px: the part of the image inside the area. */
+function splitSpan() {
+  const v = viewRect();
+  const x0 = Math.max(area.x, v.x), x1 = Math.min(area.x + area.w, v.x + v.w);
+  return x1 > x0 ? [x0, x1] : [area.x, area.x + area.w];
+}
+function splitX() { const [x0, x1] = splitSpan(); return x0 + S.split.f * (x1 - x0); }
+
 // ── uniforms ───────────────────────────────────────────────────────────────
 function loupeRadius() { return TOUCH ? 78 : 96; }
 
@@ -249,16 +259,19 @@ function writeUniforms(u, sc, W, H) {
   u.set([W, H, S.time, S.fade], 0);
   u.set([v.x * sc, v.y * sc, v.w * sc, v.h * sc], 4);
   u.set([S.srcW, S.srcH, S.srcW / S.srcH, 0], 8);
-  const sx = S.split.on ? (area.x + S.split.f * area.w) * sc : -1;
+  const sx = S.split.on ? splitX() * sc : -1;
   u.set([S.freq, S.mode === 'extended' ? 1 : 0, sx, 0], 12);
   const L = S.loupe, lon = L.on && L.x >= 0;
   u.set([L.x * sc, L.y * sc, lon ? loupeRadius() * sc : 0, L.mag], 16);
   u.set([...(S.saver ? [0, 0, 0] : BG), 0], 20);
+  // The screensaver keeps the image inside the plate's clear band.
+  if (S.saver) u.set([area.x * sc, area.y * sc, (area.x + area.w) * sc, (area.y + area.h) * sc], 24);
+  else u.set([0, 0, W, H], 24);
   const E = S.ext, I = E.inks, rad = d => (d + E.rot) * Math.PI / 180;
-  u.set([S.freq, E.shape, E.gain, E.mono ? 1 : 0], 24);
-  u.set(E.angles.map(rad), 28);
-  u.set([E.grain, E.grainScale, E.misreg, 0], 32);
-  u.set(I.c, 36); u.set(I.m, 40); u.set(I.y, 44); u.set(I.k, 48); u.set([...I.paper, 0], 52);
+  u.set([S.freq, E.shape, E.gain, E.mono ? 1 : 0], 28);
+  u.set(E.angles.map(rad), 32);
+  u.set([E.grain, E.grainScale, E.misreg, 0], 36);
+  u.set(I.c, 40); u.set(I.m, 44); u.set(I.y, 48); u.set(I.k, 52); u.set([...I.paper, 0], 56);
 }
 
 // ── frame loop ─────────────────────────────────────────────────────────────
@@ -310,7 +323,7 @@ function placeGrip() {
   const g = $('splitGrip');
   const show = S.split.on && !S.saver;
   if (g.hidden === show) g.hidden = !show;
-  if (show) { g.style.left = (area.x + S.split.f * area.w) + 'px'; g.style.top = (area.y + area.h * 0.5) + 'px'; }
+  if (show) { g.style.left = splitX() + 'px'; g.style.top = (area.y + area.h * 0.5) + 'px'; }
 }
 
 // ── controls ───────────────────────────────────────────────────────────────
@@ -501,7 +514,11 @@ function bindPointer() {
 
   const g = $('splitGrip');
   g.addEventListener('pointerdown', e => { g.setPointerCapture(e.pointerId); g.dataset.drag = '1'; });
-  g.addEventListener('pointermove', e => { if (g.dataset.drag) S.split.f = Math.max(0, Math.min(1, (e.clientX - area.x) / area.w)); });
+  g.addEventListener('pointermove', e => {
+    if (!g.dataset.drag) return;
+    const [x0, x1] = splitSpan();
+    S.split.f = Math.max(0, Math.min(1, (e.clientX - x0) / Math.max(1, x1 - x0)));
+  });
   const gEnd = () => { delete g.dataset.drag; };
   g.addEventListener('pointerup', gEnd); g.addEventListener('pointercancel', gEnd);
 }
@@ -665,3 +682,7 @@ export const ready = (async () => {
   }
 })();
 ready.catch(() => {});
+installSaver({ S, SOURCES, canvas, ready, setSource, setMode, setExt, syncUI, clampView,
+  resetExt: () => { S.ext = freshExt(); },
+  preload: () => Promise.all(SOURCES.filter(s => s.kind === 'photo').map(s => loadPhoto(s.key).catch(() => null))),
+  shaderSource: () => gpu && gpu.src });

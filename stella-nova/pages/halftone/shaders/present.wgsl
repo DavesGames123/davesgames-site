@@ -24,6 +24,7 @@ struct U {
   ht: vec4f,       // frequency, mode (0 upstream, 1 extended), split x px (< 0: off), 0
   loupe: vec4f,    // centre x, y px, radius px (0: off), magnification
   bg: vec4f,       // the colour outside the image
+  clip: vec4f,     // x0, y0, x1, y1 px: the image shows only inside it
   ext: Ext,        // extended.wgsl parameters
 }
 
@@ -68,12 +69,13 @@ fn src_color(uv: vec2f, lod: f32) -> vec3f {
   // The split: the original image left of the line.
   let orig = (u.ht.z >= 0.0) & (p.x < u.ht.z);
   var col = select(ht, tex, orig);
-  let inside = all(uv >= vec2f(0.0)) & all(uv <= vec2f(1.0));
+  let in_clip = all(pos.xy >= u.clip.xy) & all(pos.xy <= u.clip.zw);
+  let inside = all(uv >= vec2f(0.0)) & all(uv <= vec2f(1.0)) & in_clip;
   col = select(u.bg.rgb, col, inside);
 
   // The split line (outside the loupe) and the loupe ring.
   let line_d = abs(pos.x - u.ht.z);
-  let on_line = (u.ht.z >= 0.0) & (line_d < 1.0) & !in_loupe;
+  let on_line = (u.ht.z >= 0.0) & (line_d < 1.0) & !in_loupe & inside;
   col = select(col, vec3f(1.0, 0.78, 0.2), on_line);
   let ring_d = abs(distance(pos.xy, lc) - u.loupe.z);
   let on_ring = (u.loupe.z > 0.0) & (ring_d < 1.6);

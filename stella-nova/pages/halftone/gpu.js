@@ -23,7 +23,7 @@
 //           "drawScene("  "render("  "async renderImage("  "async readSource("
 // ============================================================================
 
-export const UNI_FLOATS = 56;
+export const UNI_FLOATS = 60;
 const SCENE_W = 1600, SCENE_H = 1000;
 export const SCENE_SIZE = [SCENE_W, SCENE_H];
 
