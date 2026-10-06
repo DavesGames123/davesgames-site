@@ -1,0 +1,50 @@
+HALFTONE  ·  credits and licences
+=================================
+
+This page is a WebGPU (WGSL) and JavaScript port of glsl-halftone, with
+extensions of its own.
+
+glsl-halftone
+  Authors:  stackgl / glslify (Matt DesLauriers, npm package glsl-halftone 1.0.4)
+  Source:   https://github.com/glslify/glsl-halftone
+            (ported from commit 46120a3f59b5bc1801b49e200a7ec5df86119ab2)
+  Licence:  MIT, Copyright (c) 2015 stackgl. The full notice is in
+            LICENSE-glsl-halftone.txt.
+  Ported here:
+    index.glsl  halftone(vec3, vec2, float), halftone(vec3, vec2)
+                -> shaders/halftone.wgsl halftone, halftone30
+                -> halftone-ref.js screenValues, compose, halftonePixel
+
+The halftone method
+  Author:   Stefan Gustavson, Linkoping University. glsl-halftone says that
+            "the halftone effect is public domain, by Stefan Gustavson".
+  Source:   his WebGL shader tutorial, "Procedural textures in GLSL" /
+            halftone: http://webstaff.itn.liu.se/~stegu/webglshadertutorial/shadertutorial.html
+            (steps 5 and 9 of that tutorial, bilinear sampling and
+            minification, are left to the user by glsl-halftone; this page
+            uses a mip chain for minification, see gpu.js).
+
+glsl-aastep (a dependency of glsl-halftone)
+  Source:   https://github.com/glslify/glsl-aastep
+            (commit 49d59670789be4b9863c3991baa3a58b9bff8c05)
+  Licence:  MIT, Copyright (c) 2015 stackgl (in LICENSE-glsl-halftone.txt)
+  Ported:   aastep -> shaders/halftone.wgsl aastep (the
+            GL_OES_standard_derivatives branch), halftone-ref.js aastep
+
+Simplex noise (glsl-noise simplex/2d, from webgl-noise)
+  Author:   Ian McEwan, Ashima Arts (2011). webgl-noise is maintained by
+            Stefan Gustavson.
+  Source:   https://github.com/hughsk/glsl-noise simplex/2d.glsl
+            (commit 7870430c384bd53488ff6fe9a47f8a6f571524c4), a copy of
+            https://github.com/ashima/webgl-noise src/noise2D.glsl
+  Licence:  MIT, Copyright (C) 2011 by Ashima Arts. The full notice is in
+            LICENSE-webgl-noise.txt.
+  Ported:   mod289, permute, snoise -> shaders/halftone.wgsl mod289_3,
+            mod289_2, permute3, snoise; halftone-ref.js snoise
+  Note:     glsl-noise has the 2011 permutation ((x*34.0)+1.0)*x. The later
+            webgl-noise has +10.0. The port keeps +1.0, the value that
+            glsl-halftone uses.
+
+tests.mjs holds a copy of the upstream GLSL (index.glsl with snoise and
+aastep put in, as glslify does) under the same MIT licences. It runs that
+GLSL in WebGL as the reference for the WGSL port.
