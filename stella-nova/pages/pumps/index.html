@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Positive-Displacement Pumps — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PUMPS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Three rotary positive-displacement pumps in 3D,
+   with the face open: an external gear pump, a sliding-vane pump with an
+   offset rotor and a two-lobe Roots blower. Fluid pockets show in colour
+   as they go from the inlet (blue) through the sealed arc (amber) to the
+   outlet (red). mech.js holds the geometry, the flow and the pocket
+   states (no DOM, no THREE; tests.mjs runs it). scene.js makes the parts
+   with kit.js. stage.js, kit.js and cards.js are copies of the
+   differential modules (through swashplate-pump).
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (pump, view, run, show), #anaPanel at
+                 the right (volume and ripple plot, numbers, relations),
+                 #view fills the rest. #read is the readout, top left.
+     phone ..... #dock at the base: five tabs and play. A tab opens #panel
+                 with only its .grp, as a bottom sheet (portrait) or a
+                 drawer (landscape). The analysis group moves into #panel.
+
+   GREP MAP  (main.js)
+     grep -n 'function swapTo'      build a pump and cross-fade to it
+     grep -n 'const VIEWS'          camera presets
+     grep -n 'function drawPlot'    the delivered volume and ripple plot
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Three rotary positive-displacement pumps in 3D: an external gear pump, a sliding-vane pump and a two-lobe Roots blower. Watch the fluid pockets go from inlet to outlet, and plot the delivered volume per turn and the flow ripple of each.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Positive-Displacement Pumps</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">hover a part to name it · click to pin its card · drag to orbit</div>
+  <button id="anaOpen" type="button" hidden>∑ Flow</button>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the mechanisms cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="unit">
+    <div class="sec-label first">Pump</div>
+    <div id="variants" class="three"></div>
+    <div id="engInfo">
+      <h1 id="engTitle">Pump</h1>
+      <div class="kind" id="engKind"></div>
+      <p class="lede" id="engLede"></p>
+    </div>
+    <div class="sec-label">Parts</div>
+    <div id="partList"></div>
+  </section>
+
+  <section class="grp" data-grp="view">
+    <div class="sec-label">View</div>
+    <div class="grid2" id="views">
+      <button data-view="three" type="button">Whole pump</button>
+      <button data-view="front" type="button">Face on</button>
+      <button data-view="mesh" type="button">The mesh</button>
+      <button data-view="pocket" type="button">A pocket</button>
+      <button data-view="side" type="button">From the side</button>
+      <button data-view="exploded" type="button">Exploded</button>
+    </div>
+    <div class="sec-label">Explode</div>
+    <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0"><span class="val" id="explodeV"></span></div>
+    <div class="toggles">
+      <button class="tog" id="assemble" type="button">Assemble</button>
+      <button class="tog" id="burst" type="button">Explode</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="run">
+    <div class="sec-label">Run</div>
+    <div class="grid3" id="rates">
+      <button data-rpm="0" type="button">❚❚ Pause</button>
+      <button data-rpm="5" type="button">5 rpm</button>
+      <button data-rpm="15" type="button">15 rpm</button>
+      <button data-rpm="30" type="button">30 rpm</button>
+      <button data-rpm="60" type="button">60 rpm</button>
+      <button data-rpm="120" type="button">120 rpm</button>
+    </div>
+    <div class="row"><label for="rpm">Input</label><input type="range" id="rpm" min="0" max="120" step="1" value="15"><span class="val" id="rpmV"></span></div>
+    <div class="row"><label for="turn">Turn by hand</label><input type="range" id="turn" min="0" max="360" step="0.5" value="0"><span class="val" id="turnV"></span></div>
+    <p class="note">Speed in rpm of the drive shaft, slowed so you can follow each pocket. Drag the hand slider to set the shaft angle; it pauses the drive.</p>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tBase" type="button">Back plate</button>
+      <button class="tog on" id="tFluid" type="button">Fluid pockets</button>
+      <button class="tog on" id="tLabels" type="button">Labels</button>
+      <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
+    </div>
+    <p class="note">Labels show when the parts spread apart. Pockets: blue is open to the inlet, amber is sealed, red is open to the outlet.</p>
+  </section>
+
+  <section class="grp ana" data-grp="ana" id="anaSec">
+    <div class="sec-label first">Now</div>
+    <div id="now" class="proc"></div>
+    <div class="sec-label" id="plotTitle">Volume and flow over one shaft turn</div>
+    <canvas id="plot" class="plot mot"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="sec-label">Numbers</div>
+    <table class="readout" id="nums"></table>
+    <div class="sec-label">Relations</div>
+    <div id="eqs" class="eqs"></div>
+    <div class="sec-label">How it works</div>
+    <div class="about" id="about"></div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Flow">
+  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="unit" type="button"><i>◎</i><span>Pump</span></button>
+  <button class="tab" data-grp="view" type="button"><i>◈</i><span>View</span></button>
+  <button class="tab" data-grp="run" type="button"><i>◷</i><span>Run</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Flow</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
