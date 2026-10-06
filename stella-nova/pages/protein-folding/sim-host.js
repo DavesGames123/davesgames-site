@@ -23,7 +23,8 @@
 //       a chain lags the state by 0.3 s at most and folds at the same speed
 //    4  bonds set back to the native length (a mean cuts the corners)
 //    5  a part of the turn to the native fit, time constant TURN_S in wall
-//       seconds, so a folded chain comes to rest on the ghost
+//       seconds, times Q^2, at most TURN_MAX rad/s, so a folded chain comes
+//       to rest on the ghost and an unfolded chain does not swing
 //  obs, formed and samples stay the instantaneous values. 'reset' and
 //  'go-init' start a new display chain.
 //
@@ -50,7 +51,7 @@ let kind = null, sys = null, hp = null, rnd = null, dead = false;
 let rate = 200, running = true, timer = 0, gen = 0;
 let samples = [], doneSinceFrame = 0, lastPost = performance.now();
 const BUDGET = opt.budget ?? 12, PERIOD = 16, SAMPLE = 50;
-const AVG = 5, TAU_SIM = 1.5, TAU_WALL = 0.3, TURN_S = 1.2;
+const AVG = 5, TAU_SIM = 1.5, TAU_WALL = 0.3, TURN_S = 4, TURN_MAX = 4 * Math.PI / 180;
 let acc = null, accN = 0, disp = null, dispAt = 0;
 
 function goTick() {
@@ -110,10 +111,14 @@ function drawn(now) {
   }
   // A part of the turn to the native fit, about the native centroid.
   const fit = M.kabsch(disp, sys.nat, N), [q0, q1, q2, q3] = fit.q;
-  const b = 1 - Math.exp(-dw / TURN_S);
+  // The native fit of a chain that has not folded changes from frame to
+  // frame, so the turn is weighted by Q^2 and has a cap of TURN_MAX rad/s.
+  let q = 0; for (let c = 0; c < sys.nc; c++) q += sys.formed[c];
+  q = sys.nc ? q / sys.nc : 0;
+  const b = (1 - Math.exp(-dw / TURN_S)) * q * q;
   dispAt = now;
   const half = Math.acos(Math.min(1, Math.abs(q0))), sg = q0 < 0 ? -1 : 1;
-  const sv = Math.sin(half), h2 = half * b;
+  const sv = Math.sin(half), h2 = Math.min(half * b, 0.5 * TURN_MAX * dw);
   const p0 = Math.cos(h2), m = sv > 1e-9 ? sg * Math.sin(h2) / sv : 0;
   const p1 = q1 * m, p2 = q2 * m, p3 = q3 * m;
   const R = [
