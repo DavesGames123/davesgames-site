@@ -135,11 +135,13 @@ function buildPicker() {
 // ── views ───────────────────────────────────────────────────────────────────
 // az 0 looks from +z, at the open face of the pump. at: 'box' (the box
 // centre) or a key point of the scene (sc.keys, world coordinates).
+// pocket: near face on, into the idler bore. From the drive side the
+// coupling disc and the casing wall hid the pockets.
 const VIEWS = {
   three: { az: 26, el: 16, explode: 0, k: 0.95, at: 'box' },
   front: { az: 0, el: 3, explode: 0, k: 0.92, at: 'box' },
   mesh: { az: -16, el: 14, explode: 0, k: 0.46, at: 'mesh' },
-  pocket: { az: 28, el: 18, explode: 0, k: 0.46, at: 'pocket' },
+  pocket: { az: 16, el: 10, explode: 0, k: 0.46, at: 'pocket' },
   side: { az: 64, el: 12, explode: 0, k: 0.95, at: 'box' },
   exploded: { az: 38, el: 18, explode: 1, k: 1.35, at: 'box' },
 };

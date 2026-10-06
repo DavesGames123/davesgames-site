@@ -156,7 +156,7 @@ function gearPump(B, u) {
       for (const q of P.pockets) paint(pockets[q.side + q.k], q.state);
       return P;
     },
-    keys: { mesh: [0, 0, b], pocket: [G.r + G.Ra, 0, b] },
+    keys: { mesh: [0, 0, b], pocket: [-G.r, 0, b / 2] },
   };
 }
 
@@ -259,7 +259,7 @@ function rootsPump(B, u) {
       for (const q of P.pockets) paint(pockets[q.side + q.k], q.state);
       return P;
     },
-    keys: { mesh: [0, 0, b], pocket: [u.r + d.Ra, 0, b] },
+    keys: { mesh: [0, 0, b], pocket: [-u.r, 0, b / 2] },
   };
 }
 
