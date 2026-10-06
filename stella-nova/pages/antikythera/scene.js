@@ -12,13 +12,16 @@
 //  the front.
 //
 //  DEPTH (mm, h)
-//    front pointers ... Moon 5.4..6.2, Sun 3.4..4.2, phase ball at 9.6
+//    front pointers ... Moon 5.4..6.2, Sun 3.4..4.2 (Sun bead 3.05..4.65),
+//                       phase ball at 9.6
 //    front dial ....... decal at 2.9, plate 0..2.5
 //    wheels ........... layer L face at hOf(L) = -4 - 3.4 L. The driver of a
 //                       pair is 2 mm thick, the driven wheel 1.2 mm and
 //                       0.4 mm in from each face: no two faces share a plane
 //    back plate ....... -47.5..-45, decals at -47.9 and -48.2, spiral
-//                       ridges -48.1..-49.1, pointers from -50
+//                       ridges -48.1..-49.1, Games and Exeligmos
+//                       pointers -49.3..-48.5, Metonic and Saros pointers
+//                       -50.8..-50.0 behind them
 //  Pipes and hubs stop 0.6 mm past their own wheel faces.
 //
 //  PIN AND SLOT. k1 and k2 ride on the turntable e3 (child parts). k2
@@ -167,6 +170,19 @@ const LBL = { b: 'Main wheel b1', b3: 'Moon pointer', e34: 'Turntable e3', k1: '
 export const ARBOR_INFO = { a: 'crank', b: 'b', b3: 'moon', c: 'c', d: 'd', l: 'l', m: 'm', n: 'n', o: 'o', f: 'f', g: 'g', h: 'h', i: 'i', e25: 'e25', e61: 'e61', e34: 'e34', k1: 'k1', k2: 'k2' };
 const HMID = -22;
 const xp = (h, k = 1.6) => [0, (h - HMID) * k, 0];
+// EXPLODE (mm along h). The plates, their dials and the arbors that run
+// through them move as two rigid groups, X_PLATE forward and back, in the
+// first 60 % of the slider. The e axis is nested: e1 (e61) is in front of
+// e2 and e5 (e25), e6 (e61) behind them, and d2 lies between e1 and k1. So
+// e61, e25 and d move as one (X_EPIPE), the turntable X_E34 behind them.
+// k1 and its bracket move X_K1 forward of the turntable, so k1 stays in
+// mesh with e5 and behind d2. m moves 1.2 in front of the turntable (m1
+// clear of k1, m2 clear of e3). The other arbors use xp() of their middle
+// depth. In a disc model of the wheels, no wheel crosses another wheel or
+// a plate at any step of the slider.
+const X_PLATE = 110, WITH_PLATE = s => ({ explode: [0, s * X_PLATE, 0], st: 0, en: 0.6 });
+const hMid = ws => { let lo = Infinity, hi = -Infinity; for (const w of ws) { const [a, b] = wheelSpan(w); lo = Math.min(lo, a); hi = Math.max(hi, b); } return (lo + hi) / 2; };
+const X_E34 = xp(hMid(['e3', 'e4']))[1], X_EPIPE = X_E34 + 9, X_K1 = 9;
 
 export function build(B) {
   B.root.rotation.x = Math.PI / 2;
@@ -185,7 +201,7 @@ export function build(B) {
   B.mesh(spindle, rod(1.1, hOf(8) - 3.4, hOf(3) + 1.4, 16), 'shaft');
 
   // plates: the front plate has a round window inside the dial ring
-  const plateF = B.part('plateF', { info: 'plateF', label: 'Front plate', labelAt: [X0 + 10, FR[1], -(Y1 - 12)], explode: [0, 110, 0], st: 0, en: 0.6 });
+  const plateF = B.part('plateF', { info: 'plateF', label: 'Front plate', labelAt: [X0 + 10, FR[1], -(Y1 - 12)], explode: [0, X_PLATE, 0], st: 0, en: 0.6 });
   const plate = (win) => {
     const s = new THREE.Shape([[X0, Y0], [X1, Y0], [X1, Y1], [X0, Y1]].map(p => new THREE.Vector2(...p)));
     for (const [cx, cy, r] of win) s.holes.push(circle(r, cx, cy));
@@ -196,13 +212,13 @@ export function build(B) {
   for (const [x, y] of [[X0 + 6, Y0 + 6], [X1 - 6, Y0 + 6], [X0 + 6, Y1 - 6], [X1 - 6, Y1 - 6]]) {
     const g = lathe([[[3.4, BK[1]], [3.4, FR[0]], [0, FR[0]], [0, BK[1]]]], 24); g.translate(x, 0, -y); B.mesh(plateF, g, 'bronze');
   }
-  const dialF = B.part('dialF', { info: 'frontDial', label: 'Zodiac and calendar', labelAt: [0, FR[1], -76], explode: [0, 112, 0], st: 0, en: 0.6 });
+  const dialF = B.part('dialF', { info: 'frontDial', label: 'Zodiac and calendar', labelAt: [0, FR[1], -76], explode: [0, X_PLATE, 0], st: 0, en: 0.6 });
   B.decal(dialF, discGeo(49, 74, FR[1] + 0.4, false), drawFront(74));
-  const plateB = B.part('plateB', { info: 'plateB', label: 'Back plate', labelAt: [X0 + 10, BK[0], -(Y1 - 12)], explode: [0, -110, 0], st: 0, en: 0.6 });
+  const plateB = B.part('plateB', { info: 'plateB', label: 'Back plate', labelAt: [X0 + 10, BK[0], -(Y1 - 12)], explode: [0, -X_PLATE, 0], st: 0, en: 0.6 });
   B.mesh(plateB, slab(plate([]), BK[0], BK[1] - BK[0], 0.5), 'patina');
   // back dials: decals at -47.9, ridges below, subsidiary decals at -48.2
   const backDial = (id, info, P, D, title, label) => {
-    const p = B.part(id, { info, label, labelAt: [0, BK[0] - 2, -(D.rOut + 6)], at: at(P), explode: [0, -112, 0], st: 0, en: 0.6 });
+    const p = B.part(id, { info, label, labelAt: [0, BK[0] - 2, -(D.rOut + 6)], at: at(P), explode: [0, -X_PLATE, 0], st: 0, en: 0.6 });
     const R = D.rOut + 3;
     B.decal(p, discGeo(0, R, BK[0] - 0.4, true), drawSpiral(D, R, title));
     // the ridge between the turns: an Archimedean spiral, front-view angle
@@ -215,7 +231,7 @@ export function build(B) {
   backDial('dialM', 'metonic', AT.n, DIALS.metonic, 'ΜΕΤΩΝ · 235', 'Metonic dial');
   backDial('dialS', 'saros', AT.g, DIALS.saros, 'ΣΑΡΟΣ · 223', 'Saros dial');
   const sub = (id, info, P, D, names, label) => {
-    const p = B.part(id, { info, label, labelAt: [0, BK[0] - 2, -(D.r + 3)], at: at(P), explode: [0, -112, 0], st: 0, en: 0.6 });
+    const p = B.part(id, { info, label, labelAt: [0, BK[0] - 2, -(D.r + 3)], at: at(P), explode: [0, -X_PLATE, 0], st: 0, en: 0.6 });
     B.decal(p, discGeo(0, D.r + 1, BK[0] - 0.7, true), drawSectors(D.r, names));
     return p;
   };
@@ -235,18 +251,20 @@ export function build(B) {
   const rodOf = (p, r, h0, h1) => B.mesh(p, rod(r, h0, h1, 16), 'shaft');
   const hubOf = (p, w, r0, r1) => hub(B, p, w, r0, r1);
 
-  // b: b1 and b2 on a pipe out through the front plate to the Sun pointer
-  // arbors that run through a plate explode past it, so a pointer never
-  // crosses its plate: front b +118, b3 +124 (plate +110); back -118
-  // (plate -110)
-  const b = arbor('b', ['b1', 'b2'], { explode: [0, 118, 0], wheel: { b1: { mat: 'bronze', spokeAt: Math.PI / 4 } } });
+  // b: b1 and b2 on a pipe out through the front plate to the Sun pointer.
+  // An arbor that runs through a plate has a wheel on one side and a
+  // pointer on the other, so it explodes with its plate, by the same offset
+  // and at the same time: no wheel or pointer goes through a plate.
+  const b = arbor('b', ['b1', 'b2'], { ...WITH_PLATE(1), wheel: { b1: { mat: 'bronze', spokeAt: Math.PI / 4 } } });
   B.mesh(b, tube(1.5, 2.4, wheelSpan('b2')[0] - 0.6, 4.4, 24), 'bronze');
   hubOf(b, 'b1', 2.4, 6); hubOf(b, 'b2', 2.4, 4.6);
   B.mesh(b, arm(-14, 66, 3.2, 3.4, 0.8), 'gold');
-  { const g = new THREE.SphereGeometry(2.6, 24, 14); g.translate(56, 3.8, 0); B.mesh(b, g, 'gold'); }
+  // the Sun: a flat bead, h 3.05..4.65, clear of the dial decal (2.9) and
+  // of the Moon pointer (5.4) that passes over it at each new Moon
+  { const g = new THREE.SphereGeometry(2.6, 24, 14); g.scale(1, 0.8 / 2.6, 1); g.translate(56, 3.85, 0); B.mesh(b, g, 'gold'); }
   // b3: the Moon rod through the b pipe to the Moon pointer, phase ball on it
   const MOON_AT = -M.pose(0).A.b3 + M.pose(0).moon;     // pointer angle on b3
-  const b3 = arbor('b3', ['b3'], { at: AT.b, explode: [0, 124, 0] });
+  const b3 = arbor('b3', ['b3'], { at: AT.b, ...WITH_PLATE(1) });
   rodOf(b3, 1.2, wheelSpan('b3')[0] - 0.6, 6.8);
   hubOf(b3, 'b3', 1.2, 3.6);
   B.mesh(b3, arm(-12, 64, 2.6, 5.4, 0.8, MOON_AT), 'silver');
@@ -261,16 +279,16 @@ export function build(B) {
 
   // the Moon train and the back trains
   const c = arbor('c', ['c1', 'c2']); rodOf(c, 1.2, ...span(['c1', 'c2'])); hubOf(c, 'c1', 1.2, 3); hubOf(c, 'c2', 1.2, 3);
-  const d = arbor('d', ['d1', 'd2']); rodOf(d, 1.2, ...span(['d1', 'd2'])); hubOf(d, 'd1', 1.2, 3); hubOf(d, 'd2', 1.2, 4.5);
+  const d = arbor('d', ['d1', 'd2'], { explode: [0, X_EPIPE, 0] }); rodOf(d, 1.2, ...span(['d1', 'd2'])); hubOf(d, 'd1', 1.2, 3); hubOf(d, 'd2', 1.2, 4.5);
   const l = arbor('l', ['l1', 'l2']); rodOf(l, 1.2, ...span(['l1', 'l2'])); hubOf(l, 'l1', 1.2, 3); hubOf(l, 'l2', 1.2, 3.4);
-  const m = arbor('m', ['m1', 'm3', 'm2']); rodOf(m, 1.2, ...span(['m1', 'm2'])); for (const w of ['m1', 'm3', 'm2']) hubOf(m, w, 1.2, 2.8);
+  const m = arbor('m', ['m1', 'm3', 'm2'], { explode: [0, X_E34 + 1.2, 0] }); rodOf(m, 1.2, ...span(['m1', 'm2'])); for (const w of ['m1', 'm3', 'm2']) hubOf(m, w, 1.2, 2.8);
   const f = arbor('f', ['f1', 'f2']); rodOf(f, 1.2, ...span(['f1', 'f2'])); hubOf(f, 'f1', 1.2, 3); hubOf(f, 'f2', 1.2, 3);
-  const h = arbor('h', ['h1', 'h2']); rodOf(h, 1.2, ...span(['h1', 'h2'])); hubOf(h, 'h1', 1.2, 2.8); hubOf(h, 'h2', 1.2, 2.8);
+  const h = arbor('h', ['h1', 'h2'], WITH_PLATE(-1)); rodOf(h, 1.2, ...span(['h1', 'h2'])); hubOf(h, 'h1', 1.2, 2.8); hubOf(h, 'h2', 1.2, 2.8);
   // dial arbors: out through the back plate to a pointer (front-view local
   // angle start - T0, so the pointer starts at the top)
   const P0 = M.pose(0).A;
   const backArbor = (id, ws, len, w, hp, follower) => {
-    const p = arbor(id, ws, { explode: [0, -118, 0] });
+    const p = arbor(id, ws, WITH_PLATE(-1));
     rodOf(p, 1.4, hp - 0.6, span(ws)[1]);
     for (const x of ws) hubOf(p, x, 1.4, 3);
     const a0 = Math.PI / 2 - P0[id];
@@ -279,47 +297,52 @@ export function build(B) {
     if (follower) { fol = B.mesh(p, new THREE.SphereGeometry(1.5, 16, 10), 'gold'); fol.userData.a0 = a0; }
     return { p, fol };
   };
+  // the small pointers (o, i) lie in front of the long ones (n, g), and
+  // their rods stop at -49.9, so a long pointer passes behind them
   const nA = backArbor('n', ['n1', 'n3'], DIALS.metonic.rOut + 1, 2.6, -50.8, true);
-  const oA = backArbor('o', ['o1'], DIALS.games.r - 1, 1.6, -50.4, false);
+  const oA = backArbor('o', ['o1'], DIALS.games.r - 1, 1.6, -49.3, false);
   const gA = backArbor('g', ['g1', 'g2'], DIALS.saros.rOut + 1, 2.6, -50.8, true);
-  const iA = backArbor('i', ['i1'], DIALS.exeligmos.r - 1, 1.6, -50.4, false);
+  const iA = backArbor('i', ['i1'], DIALS.exeligmos.r - 1, 1.6, -49.3, false);
 
   // the e axis: e61 inside (e1 front, e6 back), e25 outside it (e2, e5)
-  const e61 = arbor('e61', ['e1', 'e6'], { at: AT.e });
+  const e61 = arbor('e61', ['e1', 'e6'], { at: AT.e, explode: [0, X_EPIPE, 0] });
   B.mesh(e61, tube(1.25, 2.2, ...span(['e1', 'e6'])), 'bronze');
   hubOf(e61, 'e1', 2.2, 3.6); hubOf(e61, 'e6', 2.2, 4);
-  const e25 = arbor('e25', ['e2', 'e5'], { at: AT.e });
+  const e25 = arbor('e25', ['e2', 'e5'], { at: AT.e, explode: [0, X_EPIPE, 0] });
   B.mesh(e25, tube(2.25, 3.2, ...span(['e2', 'e5'])), 'bronze');
   hubOf(e25, 'e2', 3.2, 4.6); hubOf(e25, 'e5', 3.2, 4.6);
   // the turntable: e3 (front) and e4 on one hub, with the k wheels on it
-  const e34 = arbor('e34', ['e3', 'e4'], { at: AT.e, wheel: { e3: { mat: 'bronze' } } });
+  const e34 = arbor('e34', ['e3', 'e4'], { at: AT.e, explode: [0, X_E34, 0], wheel: { e3: { mat: 'bronze' } } });
   B.mesh(e34, tube(1.15, 4.5, ...span(['e3', 'e4'])), 'bronze');
   const tt = wheelSpan('e3')[1];   // the turntable front face
   // k2 on a short axle from the turntable; k1 from a bracket above
-  const k2 = B.part('k2', { info: 'k2', label: LBL.k2, labelAt: [0, wheelSpan('k2')[1] + 1, 0], parent: e34.root, at: [K_AT.k2[0], 0, -K_AT.k2[1]], explode: [0, 3, 0], st: 0.4, en: 1 });
+  const k2 = B.part('k2', { info: 'k2', label: LBL.k2, labelAt: [0, wheelSpan('k2')[1] + 1, 0], parent: e34.root, at: [K_AT.k2[0], 0, -K_AT.k2[1]], explode: [0, 3, 0], st: 0.15, en: 0.85 });
   wheel(B, k2, 'k2', { slot: [8.1, 11.6, 0.75], spokes: 0 });
   B.mesh(k2, rod(0.45, tt + 0.3, wheelSpan('k2')[1] + 0.5, 12), 'shaft');
   B.mesh(k2, tube(0.45, 1.9, wheelSpan('k2')[0] - 0.5, wheelSpan('k2')[1] + 0.5, 16), 'bronze');
-  const k1 = B.part('k1', { info: 'k1', label: LBL.k1, labelAt: [0, wheelSpan('k1')[1] + 2, 0], parent: e34.root, at: [K_AT.k1[0], 0, -K_AT.k1[1]], explode: [0, 9, 0], st: 0.4, en: 1 });
+  const k1 = B.part('k1', { info: 'k1', label: LBL.k1, labelAt: [0, wheelSpan('k1')[1] + 2, 0], parent: e34.root, at: [K_AT.k1[0], 0, -K_AT.k1[1]], explode: [0, X_K1, 0], st: 0.15, en: 0.85 });
   wheel(B, k1, 'k1', { spokes: 0 });
   const kTop = wheelSpan('k1')[1];
   B.mesh(k1, rod(0.45, wheelSpan('k1')[0] - 0.3, kTop + 0.9, 12), 'shaft');
   B.mesh(k1, tube(0.45, 1.6, wheelSpan('k1')[0] - 0.2, kTop + 0.4, 16), 'bronze');
   // the pin on the back of k1 at local angle 0, radius SLOT.r
   { const g = rod(0.55, wheelSpan('k2')[0] - 0.3, wheelSpan('k1')[0] + 0.2, 12); g.translate(SLOT.r, 0, 0); B.mesh(k1, g, 'steel'); }
-  // the bracket: a post on the turntable outside the k wheels, a bar over k1
+  // the bracket: a post on the turntable outside the k wheels, a bar over
+  // k1. It explodes with k1, so k1 never passes through its bar.
+  const kbr = B.part('kbr', { info: 'e34', parent: e34.root, explode: [0, X_K1, 0], st: 0.15, en: 0.85 });
   {
     const ang = Math.atan2(K_AT.k1[1], K_AT.k1[0]), R0 = Math.hypot(...K_AT.k1), Rp = R0 + 15.5;
     const px = Rp * Math.cos(ang), py = Rp * Math.sin(ang), hBar0 = kTop + 0.9, hBar1 = hBar0 + 0.7;
-    const post = rod(1.4, tt + 0.2, hBar1 - 0.35, 16); post.translate(px, 0, -py); B.mesh(e34, post, 'bronze');
+    const post = rod(1.4, tt + 0.2, hBar1 - 0.35, 16); post.translate(px, 0, -py); B.mesh(kbr, post, 'bronze');
     const s = new THREE.Shape(); const L = Rp - R0;
     s.moveTo(0, -1.6); s.lineTo(L, -1.6); s.absarc(L, 0, 1.6, -Math.PI / 2, Math.PI / 2, false); s.lineTo(0, 1.6); s.absarc(0, 0, 1.6, Math.PI / 2, 3 * Math.PI / 2, false);
-    const bar = slab(s, hBar0, hBar1 - hBar0, 0.12); bar.rotateY(ang); bar.translate(K_AT.k1[0], 0, -K_AT.k1[1]); B.mesh(e34, bar, 'bronze');
+    const bar = slab(s, hBar0, hBar1 - hBar0, 0.12); bar.rotateY(ang); bar.translate(K_AT.k1[0], 0, -K_AT.k1[1]); B.mesh(kbr, bar, 'bronze');
   }
 
   // the crank: a contrate a1 under the b1 rim, its axle out to the right
   const hc = wheelSpan('b1')[0] + 1 - CRANK.r;
-  const crank = B.part('a', { info: 'crank', label: LBL.a, labelAt: [-24, 0, 0], at: [CRANK.x + 0.55, hc, 0], u: [-1, 0, 0], e0: [0, 1, 0], explode: [0, 0, 0], st: 0, en: 1 });
+  // the crank explodes out along its own axle, clear of the k wheels
+  const crank = B.part('a', { info: 'crank', label: LBL.a, labelAt: [-24, 0, 0], at: [CRANK.x + 0.55, hc, 0], u: [-1, 0, 0], e0: [0, 1, 0], explode: [60, 0, 0], st: 0, en: 0.6 });
   {
     const N = TEETH.a1, mm = MODULE.a1, r = CRANK.r, p = Math.PI * 2 / N;
     // local y: the axle; the disc behind (+x), the face teeth toward b1
