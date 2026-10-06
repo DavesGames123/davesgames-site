@@ -1,8 +1,8 @@
 // ============================================================================
 //  HALFTONE  ·  shaders/present.wgsl — the view: image, halftone, split, loupe
 // ----------------------------------------------------------------------------
-//  One full-screen triangle. gpu.js compiles halftone.wgsl + this file as
-//  one module. The same pipeline draws the canvas and the
+//  One full-screen triangle. gpu.js compiles halftone.wgsl + extended.wgsl +
+//  this file as one module. The same pipeline draws the canvas and the
 //  off-screen PNG export (view = the whole target, img.w = 1: lod 0).
 //
 //  Each pixel maps to an image uv through the view rectangle (pan and zoom),
@@ -10,8 +10,9 @@
 //  view scale). The halftone is a function of uv, so a zoom or the loupe
 //  computes new dots at the new scale; nothing is a scaled copy.
 //
-//  UNIFORMITY. halftone() calls dpdx and dpdy, so the shader picks per
-//  pixel with select() after the call, never with a branch before it.
+//  UNIFORMITY. halftone() and halftone_ext() call dpdx and dpdy, so the
+//  shader picks per pixel with select() after the calls, never with a
+//  branch before them. The upstream / extended branch reads a uniform.
 //
 //  grep -n: "struct U"  "fn src_color"  "fn fs_main"  "fn vs_main"
 // ============================================================================
@@ -20,9 +21,10 @@ struct U {
   canvas: vec4f,   // target w, h (px), time (s), fade 0..1
   view: vec4f,     // image rectangle on the target, px: x, y, w, h
   img: vec4f,      // source w, h, aspect w / h, exact (1: lod 0, export)
-  ht: vec4f,       // frequency, 0, split x px (< 0: off), 0
+  ht: vec4f,       // frequency, mode (0 upstream, 1 extended), split x px (< 0: off), 0
   loupe: vec4f,    // centre x, y px, radius px (0: off), magnification
   bg: vec4f,       // the colour outside the image
+  ext: Ext,        // extended.wgsl parameters
 }
 
 @group(0) @binding(0) var<uniform> u: U;
@@ -51,7 +53,17 @@ fn src_color(uv: vec2f, lod: f32) -> vec3f {
 
   let tex = src_color(uv, lod);
   let st = vec2f(uv.x * u.img.z, 1.0 - uv.y);
-  let ht = halftone(tex, st, u.ht.x);
+  var ht: vec3f;
+  if (u.ht.y < 0.5) {
+    ht = halftone(tex, st, u.ht.x);
+  } else {
+    let e = u.ext;
+    let a = vec2f(1.0 / u.img.z, -1.0);   // st offset -> uv offset
+    let tc = src_color(uv + misreg_offset(0u, e) * a, lod);
+    let tm = src_color(uv + misreg_offset(1u, e) * a, lod);
+    let ty = src_color(uv + misreg_offset(2u, e) * a, lod);
+    ht = halftone_ext(tc, tm, ty, tex, st, e);
+  }
 
   // The split: the original image left of the line.
   let orig = (u.ht.z >= 0.0) & (p.x < u.ht.z);

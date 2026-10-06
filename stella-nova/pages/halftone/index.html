@@ -25,7 +25,8 @@
      topbar      hidden in the site shell iframe (.in-frame)
      #panel      desktop: a left panel; phone portrait: a bottom sheet above
                  #dock; phone landscape: a right drawer
-     #dock       phone only: controls button, split, loupe, play
+     #dock       phone only: controls button, mode (upstream / extended),
+                 split, loupe
      #splitGrip  the handle of the split line (shown with Split)
      #drop       the drop target that shows while a file is dragged in
      #hud        one line of live values at the top of the clear area
@@ -65,6 +66,11 @@
 
   <section class="sec">
     <div class="sec-label">Halftone <span class="now" id="modeNow">upstream</span></div>
+    <div class="modes two" id="modes">
+      <button type="button" data-mode="upstream">Upstream</button>
+      <button type="button" data-mode="extended">Extended</button>
+    </div>
+    <p class="hint" id="modeNote"></p>
     <div class="row"><label for="freq">frequency</label><input type="range" id="freq" min="4" max="160" step="1" value="30"><span class="val" id="freqv"></span></div>
     <div class="chips"><button type="button" class="chip" id="freqReset">30 · upstream default</button></div>
     <p class="hint">Frequency is the number of screen cells across the image height. The noise in each dot edge and on the paper is upstream's: three octaves of simplex noise.</p>
@@ -76,10 +82,55 @@
       <button type="button" class="chip" id="split" aria-pressed="false">Split view</button>
       <button type="button" class="chip" id="loupe" aria-pressed="false">Loupe</button>
       <button type="button" class="chip" id="fit">Fit image</button>
+      <button type="button" class="chip" id="play" aria-pressed="false">Pause scene</button>
     </div>
     <div class="row"><label for="mag">loupe zoom</label><input type="range" id="mag" min="2" max="16" step="0.5" value="4"><span class="val" id="magv"></span></div>
     <div class="row"><label for="zoom">view zoom</label><input type="range" id="zoom" min="0" max="6" step="0.01" value="0"><span class="val" id="zoomv"></span></div>
     <p class="hint" id="viewHint">Wheel or pinch to zoom, drag to move. Each zoom and the loupe compute the dots again at that scale.</p>
+  </section>
+
+  <section class="sec ext" id="extSec">
+    <div class="sec-label">Extensions <span class="tag">this page's own</span></div>
+    <p class="hint">Not in glsl-halftone. A change here selects Extended; Upstream is one click away and keeps these values.</p>
+    <div class="sub-label">Inks</div>
+    <div class="pal-grid" id="palettes"></div>
+    <div class="inks">
+      <label title="Cyan ink"><input type="color" id="inkC"><span>C</span></label>
+      <label title="Magenta ink"><input type="color" id="inkM"><span>M</span></label>
+      <label title="Yellow ink"><input type="color" id="inkY"><span>Y</span></label>
+      <label title="Black ink"><input type="color" id="inkK"><span>K</span></label>
+      <label title="Paper"><input type="color" id="paper"><span>paper</span></label>
+    </div>
+    <div class="chips"><button type="button" class="chip" id="mono" aria-pressed="false">Mono (K screen only)</button></div>
+    <div class="sub-label">Dot shape</div>
+    <div class="modes" id="shapes">
+      <button type="button" data-shape="0">Round</button>
+      <button type="button" data-shape="1">Ellipse</button>
+      <button type="button" data-shape="2">Line</button>
+      <button type="button" data-shape="3">Square</button>
+    </div>
+    <div class="sub-label">Screen angles</div>
+    <div class="row"><label for="angC">cyan</label><input type="range" id="angC" min="0" max="180" step="0.5"><span class="val" id="angCv"></span></div>
+    <div class="row"><label for="angM">magenta</label><input type="range" id="angM" min="0" max="180" step="0.5"><span class="val" id="angMv"></span></div>
+    <div class="row"><label for="angY">yellow</label><input type="range" id="angY" min="0" max="180" step="0.5"><span class="val" id="angYv"></span></div>
+    <div class="row"><label for="angK">black</label><input type="range" id="angK" min="0" max="180" step="0.5"><span class="val" id="angKv"></span></div>
+    <div class="row"><label for="rot">rotation</label><input type="range" id="rot" min="-45" max="45" step="0.5"><span class="val" id="rotv"></span></div>
+    <div class="sub-label">Press</div>
+    <div class="row"><label for="misreg">misregister</label><input type="range" id="misreg" min="0" max="1" step="0.01"><span class="val" id="misregv"></span></div>
+    <div class="row"><label for="gain">dot gain</label><input type="range" id="gain" min="0" max="0.8" step="0.01"><span class="val" id="gainv"></span></div>
+    <div class="row"><label for="grain">paper grain</label><input type="range" id="grain" min="0" max="3" step="0.05"><span class="val" id="grainv"></span></div>
+    <div class="row"><label for="grainScale">grain scale</label><input type="range" id="grainScale" min="0.25" max="4" step="0.05"><span class="val" id="grainScalev"></span></div>
+    <div class="chips"><button type="button" class="chip" id="extReset">Reset extensions</button></div>
+    <p class="hint">Angles: upstream screens C 15, M 75, Y 0, K 45 degrees. Misregistration moves C, M and Y off K, in screen cells. Dot gain grows the mid tones. Grain 1 and scale 1 are upstream's noise.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Export</div>
+    <div class="chips">
+      <button type="button" class="chip" id="expPng">PNG</button>
+      <button type="button" class="chip" id="expWgsl">WGSL</button>
+    </div>
+    <p class="hint" id="expNote">PNG: the halftone at the full size of the image, rendered off screen. WGSL: the port, plus the extensions when Extended is on, with the current settings and a fragment entry point.</p>
   </section>
 
   <section class="sec about">
@@ -94,12 +145,14 @@
 
 <nav id="dock" aria-label="Quick controls">
   <button type="button" id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg" id="dockModes">
+    <button type="button" data-mode="upstream">Upstream</button>
+    <button type="button" data-mode="extended">Extended</button>
+  </div>
   <div class="seg" id="dockTools">
     <button type="button" data-tool="split">Split</button>
     <button type="button" data-tool="loupe">Loupe</button>
-    <button type="button" data-tool="fit">Fit</button>
   </div>
-  <button type="button" id="dockPlay" aria-label="Pause">❚❚</button>
 </nav>
 
 <div id="nogpu" hidden>WebGPU is not available in this browser, so the halftone cannot be computed. Chrome, Edge and Safari 26 have it on by default.</div>

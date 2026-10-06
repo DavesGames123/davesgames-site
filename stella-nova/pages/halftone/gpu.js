@@ -7,7 +7,8 @@
 //
 //  SHADERS (shaders/, fetched as text)
 //    halftone.wgsl  the upstream port (snoise, aastep, halftone)
-//    present.wgsl   the view pass        -> module halftone + present
+//    extended.wgsl  this page's extensions (struct Ext, halftone_ext)
+//    present.wgsl   the view pass        -> module halftone + extended + present
 //    scene.wgsl     the procedural scenes -> its own module
 //
 //  SOURCE TEXTURE. One rgba8unorm texture. A photo gets a full mip chain
@@ -22,7 +23,7 @@
 //           "drawScene("  "render("  "async renderImage("  "async readSource("
 // ============================================================================
 
-export const UNI_FLOATS = 24;
+export const UNI_FLOATS = 56;
 const SCENE_W = 1600, SCENE_H = 1000;
 export const SCENE_SIZE = [SCENE_W, SCENE_H];
 
@@ -48,7 +49,7 @@ export async function createGPU(canvas) {
   const format = navigator.gpu.getPreferredCanvasFormat();
   ctx.configure({ device, format, alphaMode: 'opaque' });
   const src = {};
-  for (const n of ['halftone', 'present', 'scene']) src[n] = await loadText(n + '.wgsl');
+  for (const n of ['halftone', 'extended', 'present', 'scene']) src[n] = await loadText(n + '.wgsl');
   const errors = [];
   device.addEventListener('uncapturederror', e => { errors.push(String(e.error && e.error.message || e.error)); console.error('WebGPU:', e.error && e.error.message); });
   const g = new HalftoneGPU(device, ctx, format, src);
@@ -66,7 +67,7 @@ class HalftoneGPU {
 
   async build() {
     const d = this.device;
-    const viewCode = this.src.halftone + '\n' + this.src.present;
+    const viewCode = this.src.halftone + '\n' + this.src.extended + '\n' + this.src.present;
     const viewMod = d.createShaderModule({ label: 'halftone view', code: viewCode });
     const sceneMod = d.createShaderModule({ label: 'halftone scenes', code: this.src.scene });
     await checkModule(viewMod, 'present'); await checkModule(sceneMod, 'scene');

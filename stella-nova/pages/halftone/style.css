@@ -69,6 +69,21 @@ html.in-frame #panel{top:0}
 .modes button,.src-grid button,.seg button,.chip{background:transparent;border:1px solid var(--line-b);color:var(--dim);padding:7px 4px;font-size:0.74rem;cursor:pointer;transition:background 0.14s,color 0.14s,border-color 0.14s;border-radius:4px}
 .modes button:hover,.src-grid button:hover,.seg button:hover,.chip:hover{color:var(--ink);background:var(--blue-faint)}
 .modes button.on,.src-grid button.on,.seg button.on,.chip[aria-pressed=true]{background:rgba(255,200,50,0.1);border-color:rgba(255,200,50,0.45);color:var(--yellow)}
+.modes.two{grid-template-columns:repeat(2,1fr);margin-bottom:8px}
+.sub-label{font-size:0.68rem;color:var(--faint);margin:10px 0 5px}
+.sec-label .tag{font-weight:400;color:var(--faint);order:2}
+.sec.ext.dim > :not(.sec-label):not(.hint:first-of-type){opacity:0.55}
+.pal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.pal-grid button{background:transparent;border:1px solid var(--line-b);color:var(--dim);padding:6px 4px;font-size:0.72rem;cursor:pointer;border-radius:4px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.pal-grid button:hover{color:var(--ink);background:var(--blue-faint)}
+.pal-grid button.on{background:rgba(255,200,50,0.1);border-color:rgba(255,200,50,0.45);color:var(--yellow)}
+.pal-grid i{display:flex;height:8px;width:100%;border-radius:2px;overflow:hidden}
+.pal-grid i b{flex:1}
+.inks{display:flex;gap:6px;margin-top:8px}
+.inks label{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:0.66rem;color:var(--dim);cursor:pointer}
+.inks input{width:100%;height:26px;border:1px solid var(--line-b);border-radius:4px;background:transparent;padding:0;cursor:pointer}
+.inks input::-webkit-color-swatch-wrapper{padding:2px}
+.inks input::-webkit-color-swatch{border:0;border-radius:2px}
 .src-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
 .src-grid button{padding:7px 2px;font-size:0.72rem;line-height:1.2}
 .src-grid button small{display:block;font-size:0.62rem;color:var(--faint);margin-top:2px}
@@ -109,6 +124,9 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
   #panelClose{width:44px;height:44px}
   .modes button,.seg button,.chip{min-height:44px;font-size:0.8rem}
   .src-grid button{min-height:44px;font-size:0.78rem}
+  .pal-grid button{min-height:44px;font-size:0.76rem}
+  .inks input{height:44px}
+  .sub-label{font-size:0.74rem}
   #splitGrip{width:48px;height:48px;margin:-24px 0 0 -24px}
   .row{min-height:44px;margin:2px 0}
   .row label{font-size:0.8rem;width:86px}
@@ -133,8 +151,9 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
     background:rgba(9,12,20,0.95);border-top:1px solid var(--line-b)}
   #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;cursor:pointer}
   #dock > button.on{border-color:var(--yellow);color:var(--yellow)}
-  #dock .seg{flex:1;height:48px;min-width:0;gap:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
-  #dock .seg button{min-width:0;min-height:0;border:0;border-right:1px solid var(--line);border-radius:0;background:var(--bg2);font-size:0.8rem}
+  #dock .seg{flex:1 1 0;height:48px;min-width:0;gap:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
+  #dock .seg button{min-width:0;min-height:0;border:0;border-right:1px solid var(--line);border-radius:0;background:var(--bg2);font-size:0.74rem;padding:0 2px}
+  #dockModes{flex-grow:1.3!important}
   #dock .seg button:last-child{border-right:0}
   #dock .seg button.on{background:rgba(255,200,50,0.12)}
   /* The panel is a bottom sheet above the dock. */

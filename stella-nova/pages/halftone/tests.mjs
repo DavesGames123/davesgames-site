@@ -2,7 +2,7 @@
 //  HALFTONE  ·  tests.mjs — the WGSL port against the CPU port and the GLSL
 // ----------------------------------------------------------------------------
 //  node stella-nova/pages/halftone/tests.mjs [--port 9852]
-//       [--server http://127.0.0.1:8963] [--cpu-only]
+//       [--server http://127.0.0.1:8963] [--cpu-only] [--dump <dir>]
 //
 //  CPU part (Node only, halftone-ref.js):
 //    cpu.noise.ref .... snoise at 12 points equals the values that the
@@ -32,6 +32,20 @@
 //                       sample pixels against halftone-ref.js on the source
 //                       bytes that the page read back. Sources: Spectrum
 //                       (a procedural scene) and Aldrin (a photo, mip chain)
+//    page.ext.default . Extended mode with the default extension values
+//                       against upstream on the same image. The only change
+//                       is exact cos and sin for the angles: the dot edges
+//                       move by part of a pixel. The mean difference must
+//                       stay under 2/255 and the mean tone within 0.5/255
+//    page.ext.variants  each dot shape, mono, misregistration, dot gain,
+//                       grain and two ink sets render with no error and
+//                       differ from upstream
+//    page.wgsl ........ the exported WGSL (upstream, extended, extended
+//                       with lines) compiles in Chrome; each one draws the
+//                       source at its own size, and the result equals the
+//                       page's exact render (--dump writes the files, for
+//                       naga)
+//    page.png ......... the PNG export decodes to the size of the source
 //  The GLSL below is the upstream code (glsl-halftone index.glsl, glsl-noise
 //  simplex/2d, glsl-aastep), put together as glslify does. MIT: see
 //  LICENSE-glsl-halftone.txt and LICENSE-webgl-noise.txt.
@@ -47,6 +61,7 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf('--' + n); return i < 0 ? d : argv[i + 1]; };
 const PORT = +opt('port', 9852);
+const DUMP = opt('dump', '');
 const SERVER = opt('server', 'http://127.0.0.1:8963');
 const BASE = `${SERVER}/stella-nova/pages/halftone/`;
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -440,6 +455,67 @@ async function pageTests({ send, ev, log }) {
     const c = cpuSamples(src, out, r.w, r.h, freq, 3000, 7 + freq);
     report(`page.upstream ${key} f${freq}`, c.share >= 0.99, `${size.join(' x ')}: ${(100 * c.share).toFixed(2)}% of ${c.n} samples within 2/255 of halftone-ref.js (max ${c.max}${c.worst.length ? ', worst ' + JSON.stringify(c.worst) : ''})`);
   }
+  // Extended mode with the default values against upstream.
+  await ev(`__ht.setSource('aldrin', 30)`);
+  await ev(`__ht.setMode('upstream')`);
+  const up = unb64((await ev('__ht.exact()')).out);
+  await ev(`__ht.resetExt(); __ht.setMode('extended')`);
+  const ex = unb64((await ev('__ht.exact()')).out);
+  const meanDiff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) s += Math.abs(a[i + c] - b[i + c]); return s / (a.length / 4 * 3); };
+  {
+    // The dot edges move by a fraction of a pixel, so edge pixels differ;
+    // the tone (the mean output) must not.
+    const d = diffStats(up, ex), m = meanDiff(up, ex);
+    const mean = a => { let t = 0; for (let i = 0; i < a.length; i += 4) t += a[i] + a[i + 1] + a[i + 2]; return t / (a.length / 4 * 3); };
+    const dt = Math.abs(mean(up) - mean(ex));
+    report('page.ext.default', m < 2 && dt < 0.5, `aldrin f30: mean |extended - upstream| ${m.toFixed(3)}/255, mean tone ${mean(up).toFixed(2)} vs ${mean(ex).toFixed(2)} (difference ${dt.toFixed(3)}/255); ${(100 * d.share).toFixed(2)}% of pixels within 2/255 (max ${d.max})`);
+  }
+  const variants = [
+    ['ellipse', { shape: 1 }], ['line', { shape: 2 }], ['square', { shape: 3 }], ['mono', { mono: true }],
+    ['misreg 0.5', { misreg: 0.5 }], ['gain 0.4', { gain: 0.4 }], ['grain 2.5 x 0.5', { grain: 2.5, grainScale: 0.5 }],
+    ['riso', { palette: 'riso' }], ['blueprint', { palette: 'blueprint' }], ['angles +20', { rot: 20 }],
+  ];
+  const vres = [];
+  let vok = true;
+  for (const [name, patch] of variants) {
+    await ev(`__ht.resetExt(); __ht.setExt(${JSON.stringify(patch)})`);
+    const m = meanDiff(up, unb64((await ev('__ht.exact()')).out));
+    vres.push(`${name} ${m.toFixed(1)}`); if (!(m > 0.5)) vok = false;
+  }
+  const verr = await ev('__ht.errors');
+  report('page.ext.variants', vok && !verr.length, `mean |variant - upstream| /255: ${vres.join(', ')}; WebGPU errors ${verr.length}`);
+
+  // The exported WGSL: compile it, draw the source with it, compare.
+  for (const [name, mode, patch] of [['upstream', 'upstream', null], ['extended', 'extended', {}], ['extended-line', 'extended', { shape: 2, misreg: 0.3, palette: 'riso' }]]) {
+    await ev(`__ht.resetExt(); ${patch ? `__ht.setExt(${JSON.stringify(patch)});` : ''} __ht.setMode(${JSON.stringify(mode)})`);
+    const code = await ev('__ht.buildWGSL()');
+    if (DUMP) { fs.mkdirSync(DUMP, { recursive: true }); fs.writeFileSync(path.join(DUMP, `export-${name}.wgsl`), code); }
+    const page = unb64((await ev('__ht.exact()')).out);
+    const r = await ev(`(async (code) => {
+      const g = __ht.gpu, d = g.device, mod = d.createShaderModule({ code });
+      const info = await mod.getCompilationInfo();
+      const errs = info.messages.filter(m => m.type === 'error').map(m => m.lineNum + ':' + m.message);
+      if (errs.length) return { errs };
+      const W = g.texW, H = g.texH;
+      const pipe = d.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'vs_main' }, fragment: { module: mod, entryPoint: 'fs_main', targets: [{ format: 'rgba8unorm' }] } });
+      const bg = d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: g.tex.createView() }, { binding: 1, resource: g.smp }] });
+      const tgt = d.createTexture({ size: [W, H], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+      const enc = d.createCommandEncoder();
+      const p = enc.beginRenderPass({ colorAttachments: [{ view: tgt.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] });
+      p.setPipeline(pipe); p.setBindGroup(0, bg); p.draw(3); p.end(); d.queue.submit([enc.finish()]);
+      const o = await g.readTexture(tgt, W, H); tgt.destroy();
+      let s = ''; for (let i = 0; i < o.data.length; i += 0x8000) s += String.fromCharCode.apply(null, o.data.subarray(i, i + 0x8000));
+      return { errs: [], lines: code.split(String.fromCharCode(10)).length, out: btoa(s) };
+    })(${JSON.stringify(code)})`);
+    if (r.errs.length) { report(`page.wgsl ${name}`, false, 'compile errors: ' + r.errs.join('; ')); continue; }
+    const dd = diffStats(page, unb64(r.out));
+    report(`page.wgsl ${name}`, dd.share > 0.99, `${r.lines} lines, compiles; its render vs the page: ${(100 * dd.share).toFixed(2)}% of pixels within 2/255 (max ${dd.max})`);
+  }
+  await ev(`__ht.resetExt(); __ht.setMode('upstream')`);
+  const png = await ev('__ht.pngSize()');
+  const sz = await ev('[__ht.S.srcW, __ht.S.srcH]');
+  report('page.png', png.w === sz[0] && png.h === sz[1] && png.type === 'image/png', `${png.type} ${png.w} x ${png.h}, ${(png.bytes / 1048576).toFixed(2)} MB; source ${sz.join(' x ')}`);
+
   const late = await ev('__ht.errors');
   report('page.noerrors', !log.length && !late.length, log.length || late.length ? JSON.stringify({ log, late }) : 'no console, exception or WebGPU errors');
 }
