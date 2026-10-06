@@ -56,7 +56,7 @@ export const REFLECTORS = { B: 'YRUHQSLDPXNGOKMIEBFZCWVJAT' };
 export const UNITS = [
   { id: 'test', name: 'I · II · III', kind: 'Rings AAA · start AAA', rotors: ['I', 'II', 'III'], reflector: 'B', rings: 'AAA', start: 'AAA', plugs: '',
     tape: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
-  { id: 'double', name: 'Double step', kind: 'Start ADS · middle at its notch', rotors: ['I', 'II', 'III'], reflector: 'B', rings: 'AAA', start: 'ADS', plugs: '',
+  { id: 'double', name: 'Double step', kind: 'Start ADS · double step on press 5', rotors: ['I', 'II', 'III'], reflector: 'B', rings: 'AAA', start: 'ADS', plugs: '',
     tape: 'WETTERVORHERSAGEBISKAYAXDOPPELSCHRITTXDERMITTLERENWALZEXENIGMA' },
   { id: 'barbarossa', name: 'Barbarossa 1941', kind: 'II IV V · rings BUL · ten plugs', rotors: ['II', 'IV', 'V'], reflector: 'B', rings: 'BUL', start: 'BLA', plugs: 'AV BS CG DL FU HZ IN KM OW RX',
     tape: 'EDPUDNRGYSZRCXNUYTPOMRMBOFKTBZREZKMLXLVEFGUEYSIOZVEQMIKUBPMMYLKLTTDEISMDICAGYKUACTCDOMOHWXMUUIAUBSTSLRNBZSZWNRFXWFYSSXJZVIJHIDISHPRKLKAYUPADTXQSPINQMATLPIFSVKDASCTACDPBOPVHJK' },
