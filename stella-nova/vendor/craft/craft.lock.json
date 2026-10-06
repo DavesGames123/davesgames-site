@@ -1,0 +1,17 @@
+{
+  "comment": "Pinned upstream web builds of the Crafting Apps (github.com/storytold). tools/craft-fetch.mjs downloads each release asset, checks sha256, and unpacks it here unchanged. Bump with: node tools/craft-fetch.mjs --bump <app>",
+  "apps": {
+    "photocraft": {
+      "name": "PhotoCraft",
+      "kind": "Image editor: layers, masks, type and PSD files",
+      "repo": "storytold/photocraft",
+      "tag": "v0.2.0",
+      "asset": "photocraft-web-0.2.0.zip",
+      "sha256": "a03e6118beed115eac25e6f0d11d3a3b3a3624538bf8a77dbaebf2352bf48e5f",
+      "dir": "photocraft-web-0.2.0",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors",
+      "site": "https://getartcraft.com/apps/photocraft"
+    }
+  }
+}
