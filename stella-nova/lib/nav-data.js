@@ -265,6 +265,13 @@ w.SN_NAV = [
       ["img2threejs", "Image to Three.js", "3D"]
     ] }
   ] }
+] },
+{ id: "studio", label: "Studio", constellations: [
+  { id: "craft", label: "Crafting Apps", short: "Craft", icon: "✎", color: "#7cc4ff", color2: "#ffb86c", groups: [
+    { h: "Image", p: [
+      ["photocraft", "PhotoCraft", "RUST"]
+    ] }
+  ] }
 ] }
 ];
 

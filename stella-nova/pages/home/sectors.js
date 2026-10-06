@@ -86,6 +86,8 @@ const SECTOR_TEXT = {
     blurb: 'The visual effects of the game: explosions, engine plumes, beams, fire, smoke, heat haze and frost.' },
   rendering: { at: [850, 452], tilt: -50, lead: 'supernova',
     blurb: 'Rendering techniques you can steer: ray marching, sphere tracing, a path tracer, glass and mirrors, volumes and a voxel world.' },
+  craft: { at: [930, 560], tilt: 15, lead: 'photocraft',
+    blurb: 'The open-source Crafting Apps by the ArtCraft Team, in pure Rust, running in your browser: the official web builds, unchanged, with full credits. PhotoCraft first.' },
 };
 
 // Region bands on the chart: a faint name and the edge of the band.
@@ -93,6 +95,7 @@ const REGION_BANDS = [
   { id: 'stella', name: 'Stella Nova', at: [22, 606], edge: 'M250 30 L250 600' },
   { id: 'science', name: 'Science', at: [272, 352], edge: 'M265 368 Q 620 348 985 368' },
   { id: 'graphics', name: 'Graphics', at: [272, 394], edge: null },
+  { id: 'studio', name: 'Studio', at: [880, 606], edge: null },
 ];
 
 // One sector per constellation, in nav order.
