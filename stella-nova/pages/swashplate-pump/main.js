@@ -124,13 +124,15 @@ function buildPicker() {
 const VIEWS = {
   three: { az: 32, el: 26, explode: 0, k: 1, at: [20, -6, 0] },
   close: { az: 40, el: 32, explode: 0, k: 0.6, at: [12, 6, 0] },
-  side: { az: 2, el: 6, explode: 0, k: 0.82, at: [20, -6, 0] },
+  // kn: the k on a tall screen, where the side view is the full pump length
+  side: { az: 2, el: 6, explode: 0, k: 0.82, kn: 1.12, at: [20, -6, 0] },
   // the valve plate explodes up and back: look at its barrel side
   ports: { az: -62, el: 16, explode: 1, k: 0.62, at: [224, 100, 0] },
   exploded: { az: 22, el: 24, explode: 1, k: 1.8, at: [62, -10, 0] },
 };
-function fitDist(k) {
+function fitDist(k, kn) {
   const c = $('view'), a = c.clientWidth / Math.max(1, c.clientHeight);
+  if (kn && a < 1.1) k = kn;
   const wide = a < 1.1 ? 1 + 0.9 * (1.1 - a) * Math.min(1, k) : 1;
   return S.cur.sc.box.R * 3.3 * k * wide;
 }
@@ -138,7 +140,7 @@ function setView(name, soft) {
   if (!S.cur) return;
   S.view = name;
   const v = VIEWS[name];
-  stage.flyTo({ az: v.az, el: v.el, r: fitDist(v.k), target: new THREE.Vector3(...v.at), t: soft ? 1.8 : 1.4 });
+  stage.flyTo({ az: v.az, el: v.el, r: fitDist(v.k, v.kn), target: new THREE.Vector3(...v.at), t: soft ? 1.8 : 1.4 });
   setExplode(v.explode);
   document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
 }
