@@ -173,19 +173,27 @@ w.SN_NAV = [
     ] }
   ] },
   { id: "machines", label: "Machines", short: "Machines", icon: "◷", color: "#e6c27a", color2: "#f0b27a", groups: [
-    { h: null, p: [
-      ["watch-movement", "Watch Movement", "3D"],
-      ["watch-randomizer", "Timepiece Randomizer", "3D"],
+    { h: "Engines", p: [
       ["stirling-engine", "Stirling Engine", "3D"],
       ["four-stroke-engine", "Four-Stroke Engine", "3D"],
-      ["wankel-engine", "Wankel Rotary Engine", "3D"],
+      ["wankel-engine", "Wankel Rotary Engine", "3D"]
+    ] },
+    { h: "Gears & Transmissions", p: [
       ["differential", "Differential", "3D"],
       ["planetary-gearbox", "Planetary Gearbox", "3D"],
+      ["manual-gearbox", "Manual Gearbox", "3D"],
+      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"]
+    ] },
+    { h: "Linkages & Cams", p: [
       ["geneva-cams", "Geneva Drive & Cams", "3D"],
       ["linkages", "Linkages", "3D"],
-      ["manual-gearbox", "Manual Gearbox", "3D"],
-      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
-      ["spirograph", "Spirograph", "NEW"],
+      ["spirograph", "Spirograph", "NEW"]
+    ] },
+    { h: "Timekeeping", p: [
+      ["watch-movement", "Watch Movement", "3D"],
+      ["watch-randomizer", "Timepiece Randomizer", "3D"]
+    ] },
+    { h: "Locks & Folding", p: [
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"],
       ["origami", "Origami Simulator", "SIM"]
     ] }
