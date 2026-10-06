@@ -73,7 +73,7 @@ function genevaUnit(B, u) {
   B.mesh(drv, slab(shapeOf(Array.from({ length: 96 }, (_, i) => [(G.r + 14) * Math.cos(TAU * i / 96), (G.r + 14) * Math.sin(TAU * i / 96)]), [circle(10)]), 14, 8, 0.8), 'gear');
   const pin = B.part('pin', { info: 'pin', label: 'Drive pin', labelAt: [G.r, 44, 0], parent: drv.root, explode: [0, 18, 0], st: 0.3, en: 0.9 });
   const pg = rod(u.pinR, 22, 40, 32); pg.translate(G.r, 0, 0); B.mesh(pin, pg, 'steel');
-  const pr = tube(u.pinR, u.pinR + 3, 20, 22, 32); pr.translate(G.r, 0, 0); B.mesh(pin, pr, 'steel');
+  const pr = tube(u.pinR, u.pinR + 3, 20, 22.5, 32); pr.translate(G.r, 0, 0); B.mesh(pin, pr, 'steel');
   const lock = B.part('lock', { info: 'lock', label: 'Locking disc', labelAt: [-G.Rl * 0.6, 40, 0], parent: drv.root, explode: [0, 36, 0], st: 0.3, en: 0.9 });
   B.mesh(lock, slab(shapeOf(G.lock, [circle(10)]), 24, 14, 0.8), 'brass');
   B.mesh(lock, lathe([[[10, 22], [22, 22], [22, 24], [10, 24]]], 48), 'brass');
@@ -103,7 +103,7 @@ function camUnit(B, u) {
   const cam = B.part('cam', { info: 'cam', label: 'Disc cam', labelAt: [-30, 40, 0], at: [xc, 0, 0], explode: [0, 60, 0], st: 0.2, en: 0.8 });
   B.mesh(cam, slab(shapeOf(prof, [circle(10)]), 20, 14, 0.8), 'steel');
   B.mesh(cam, lathe([[[10, 34], [20, 34], [20, 42], [10, 42]]], 48), 'steel');
-  const key = boxGeo(8, 14, 20, 34, -3, 3); B.mesh(cam, key, 'bolt');
+  const key = boxGeo(8, 14, 20.5, 34, -3, 3); B.mesh(cam, key, 'bolt');
   const cshaft = B.part('camShaft', { info: 'shaft', at: [xc, 0, 0], explode: [0, 60, 0], st: 0.2, en: 0.8 });
   B.mesh(cshaft, rod(10, -12, 60, 32), 'shaft');
   const pul = B.part('pulley', { info: 'pulley', label: 'Drive pulley', labelAt: [30, 58, 0], at: [xc, 0, 0], explode: [0, 120, 0], st: 0.3, en: 1 });
@@ -114,7 +114,7 @@ function camUnit(B, u) {
   const fol = B.part('follower', { info: 'stem', label: 'Follower', labelAt: [120, 36, 0], at: [xf0, 0, 0], explode: [70, 0, 0], st: 0.1, en: 0.7 });
   const roller = B.part('roller', { info: 'roller', label: 'Roller', labelAt: [0, 40, 0], parent: fol.root, explode: [-30, 30, 0], st: 0.3, en: 0.9 });
   B.mesh(roller, lathe([[[u.Rr, 21], [u.Rr, 33], [4, 33], [4, 21]]], 48), 'steel');
-  B.mesh(fol, rod(4, 16, 38, 16), 'bolt');
+  B.mesh(fol, rod(4, 15.5, 38.5, 16), 'bolt');
   B.mesh(fol, merge([boxGeo(-u.Rr - 4, 34, 16, 20, -11, 11), boxGeo(-u.Rr - 4, 34, 34, 38, -11, 11), boxGeo(u.Rr + 6, 34, 20, 34, -11, 11)]), 'gear');
   const stem = rod(8, 0, 150, 24); stem.rotateZ(-Math.PI / 2); stem.translate(34, 27, 0); B.mesh(fol, stem, 'shaft');
   const collar = tube(8, 16, 0, 8, 32); collar.rotateZ(-Math.PI / 2); collar.translate(40, 27, 0); B.mesh(fol, collar, 'bolt');
