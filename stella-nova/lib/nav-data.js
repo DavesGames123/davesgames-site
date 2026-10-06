@@ -183,6 +183,7 @@ w.SN_NAV = [
       ["planetary-gearbox", "Planetary Gearbox", "3D"],
       ["geneva-cams", "Geneva Drive & Cams", "3D"],
       ["linkages", "Linkages", "3D"],
+      ["manual-gearbox", "Manual Gearbox", "3D"],
       ["spirograph", "Spirograph", "NEW"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"],
       ["origami", "Origami Simulator", "SIM"]
