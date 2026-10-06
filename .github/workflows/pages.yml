@@ -31,6 +31,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Write leo-catalog TLE snapshot
         run: bash stella-nova/pages/leo-catalog/tools/tle-snapshot.sh
+      # The Craft Suite pages host upstream web builds that are not in git.
+      # Download the pinned release zips and check each sha256.
+      - name: Fetch pinned Craft builds
+        run: node tools/craft-fetch.mjs && node tools/craft-fetch.mjs --check
       # The service worker file list and version stamp (sw-manifest.js, sw.js).
       # Run here too, so the deploy never ships a list that is out of date.
       - name: Write offline manifest
