@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Pascaline & Curta — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PASCALINE & CURTA  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Two mechanical calculators in 3D: Pascal's
+   Pascaline (1642) with its sautoir, the falling-weight carry, and
+   Herzstark's Curta (1948) with its stepped drum and shifting carriage.
+   The user types a sum or a product and watches the digit wheels and
+   the carries. mech.js plans the jobs (no DOM, no THREE; tests.mjs runs
+   it). scene.js makes the parts with kit.js. stage.js, kit.js and
+   cards.js are copies of the differential modules.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (machine, view, job, show), #anaPanel
+                 at the right (digit plot, numbers, relations), #view fills
+                 the rest. #read is the readout, top left of the view.
+     phone ..... #dock at the base: five tabs and play. A tab opens #panel
+                 with only its .grp, as a bottom sheet (portrait) or a
+                 drawer (landscape). The analysis group moves into #panel.
+
+   GREP MAP  (main.js)
+     grep -n 'function swapTo'      build a unit and cross-fade to it
+     grep -n 'const VIEWS'          camera presets
+     grep -n 'function runJob'      a job: limits, plan, scrub
+     grep -n 'function drawPlot'    the digit-wheel and carry plot
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Two mechanical calculators in 3D: the Pascaline and its falling-weight carry, and the Curta with its stepped drum. Type a sum or a product and watch every carry ripple through the digit wheels.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Pascaline &amp; Curta</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">hover a part to name it · click to pin its card · drag to orbit</div>
+  <button id="anaOpen" type="button" hidden>∑ Digits</button>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the calculators cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="unit">
+    <div class="sec-label first">Machine</div>
+    <div id="variants"></div>
+    <div id="engInfo">
+      <h1 id="engTitle">Pascaline</h1>
+      <div class="kind" id="engKind"></div>
+      <p class="lede" id="engLede"></p>
+    </div>
+    <div class="sec-label">Parts</div>
+    <div id="partList"></div>
+  </section>
+
+  <section class="grp" data-grp="view">
+    <div class="sec-label">View</div>
+    <div class="grid2" id="views">
+      <button data-view="three" type="button">Whole machine</button>
+      <button data-view="close" type="button">The carry</button>
+      <button data-view="top" type="button">From above</button>
+      <button data-view="side" type="button">From the side</button>
+      <button data-view="exploded" type="button">Exploded</button>
+    </div>
+    <div class="sec-label">Explode</div>
+    <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0"><span class="val" id="explodeV"></span></div>
+    <div class="toggles">
+      <button class="tog" id="assemble" type="button">Assemble</button>
+      <button class="tog" id="burst" type="button">Explode</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="run">
+    <div class="sec-label">Job</div>
+    <div id="job">
+      <input id="inA" type="number" inputmode="numeric" min="0" step="1" value="999999" aria-label="First number">
+      <select id="inOp" aria-label="Operation"><option value="+">+</option><option value="×">×</option></select>
+      <input id="inB" type="number" inputmode="numeric" min="0" step="1" value="1" aria-label="Second number">
+    </div>
+    <button class="tog" id="run" type="button">Run it</button>
+    <p class="note" id="jobNote"></p>
+    <div class="sec-label">Examples</div>
+    <div id="examples"></div>
+    <p class="note" id="limits"></p>
+    <div class="sec-label">Speed</div>
+    <div class="grid3" id="rates">
+      <button data-speed="0" type="button">❚❚ Pause</button>
+      <button data-speed="0.5" type="button">0.5×</button>
+      <button data-speed="1" type="button">1×</button>
+      <button data-speed="2" type="button">2×</button>
+      <button data-speed="4" type="button">4×</button>
+      <button data-speed="8" type="button">8×</button>
+    </div>
+    <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="8" step="0.5" value="1"><span class="val" id="speedV"></span></div>
+    <div class="row"><label for="scrub">Scrub</label><input type="range" id="scrub" min="0" max="1000" step="1" value="0"><span class="val" id="scrubV"></span></div>
+    <p class="note">At 1×: four dial steps a second on the Pascaline, a crank turn in 1.4 s on the Curta. Drag Scrub to move through the job; it pauses.</p>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tBase" type="button">Case</button>
+      <button class="tog on" id="tLabels" type="button">Labels</button>
+      <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
+      <button class="tog on" id="tLoop" type="button">Loop examples</button>
+    </div>
+    <p class="note">Labels show when the parts spread apart.</p>
+  </section>
+
+  <section class="grp ana" data-grp="ana" id="anaSec">
+    <div class="sec-label first">Now</div>
+    <div id="now" class="proc"></div>
+    <div class="sec-label" id="plotTitle">Digit wheels and carries, step by step</div>
+    <canvas id="plot" class="plot dig"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="sec-label">Numbers</div>
+    <table class="readout" id="nums"></table>
+    <div class="sec-label">Relations</div>
+    <div id="eqs" class="eqs"></div>
+    <div class="sec-label">How it works</div>
+    <div class="about" id="about"></div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Digits">
+  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="unit" type="button"><i>◎</i><span>Machine</span></button>
+  <button class="tab" data-grp="view" type="button"><i>◈</i><span>View</span></button>
+  <button class="tab" data-grp="run" type="button"><i>±</i><span>Job</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Digits</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
