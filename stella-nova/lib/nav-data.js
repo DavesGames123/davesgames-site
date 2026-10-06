@@ -199,9 +199,12 @@ w.SN_NAV = [
     ] },
     { h: "Timekeeping", p: [
       ["watch-movement", "Watch Movement", "3D"],
-      ["watch-randomizer", "Timepiece Randomizer", "3D"]
+      ["watch-randomizer", "Timepiece Randomizer", "3D"],
+      ["pendulum-clock", "Pendulum Clock", "3D"],
+      ["antikythera", "Antikythera Mechanism", "3D"]
     ] },
     { h: "Pumps", p: [
+      ["pumps", "Positive-Displacement Pumps", "3D"],
       ["swashplate-pump", "Swashplate Piston Pump", "3D"]
     ] },
     { h: "Calculating & Cipher", p: [
