@@ -30,7 +30,10 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg);overflow-x:hidden;scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+/* No overflow-x on the body: it would make the body a scroll container,
+   and #chips, a body child, would then stick to the body instead of to
+   the viewport and scroll away. html{overflow-x:hidden} already clips. */
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
 html.in-frame{--top:0px;scroll-padding-top:60px}
 button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 a{color:var(--arc);text-decoration:none}
