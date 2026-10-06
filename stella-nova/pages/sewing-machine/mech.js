@@ -42,7 +42,11 @@
 //    the lower guide G1 and the needle bar guide G2 to the eye. upper(th) is
 //    that path length. loop(th) is the length of the loop the hook holds:
 //    from the eye down to the beak on the near face of the bobbin case,
-//    across the beak to the far face, and back up to the plate hole.
+//    across the beak to the far face, over the hook cup and under the feed
+//    dog to the plate hole. The far points open over BLEND of hook turn
+//    after the catch, and the loop shrinks into the hole over BLEND after
+//    the cast-off, so the drawn path has no jump. lower is the length of
+//    the whole path below the eye.
 //
 //  GREP MAP
 //    export const M ............ every number of the machine
@@ -66,6 +70,10 @@ export const M = {
   TU: { C: [-1, 23], b: 32, c: 30, u: 36, v: 2.5, x: 10 },
   // rotary hook: axis on x at y = HY, beak radius RH, case radius RB
   HY: -17, RH: 11, RB: 9.5, RISE: 2.4, CAST: 280 * D,
+  // hook turn over which the loop opens after the catch and shrinks after
+  // the cast-off; the height of the loop strand under the plate (above
+  // the hook cup, below the feed dog)
+  BLEND: 60 * D, UNDER: -5.3,
   // the case and the beak along x (from XN)
   CASE: [1.2, 9.2], BEAK_X: 0.6,
   // feed dog and fabric
@@ -147,6 +155,16 @@ export function feed(th, L) {
 }
 
 const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+const smooth = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+// the loop on the hook, after the beak: the beak, the far face of the case,
+// over the hook cup, under the plate hole. s = 0 folds the far points onto
+// the beak and the plate hole (a loop just caught), s = 1 opens them.
+function loopPts(beak, s) {
+  const { XN } = M, xf = XN + M.CASE[1] + 0.5, P0 = [XN, 0, 0];
+  const far = [xf, beak[1], beak[2]], under = [xf, M.UNDER, 0], hole = [XN + 0.4, M.UNDER, -0.95];
+  const mix = (p, q) => p.map((v, i) => v + (q[i] - v) * s);
+  return [beak, mix(beak, far), mix(P0, under), mix(P0, hole)];
+}
 // the needle thread: points from the tension discs to the plate hole
 export function threadPath(th) {
   const N = needle(th), T = takeUp(th), K = hook(th), { XN, H } = M;
@@ -155,13 +173,19 @@ export function threadPath(th) {
   const up = [M.T, E, M.G1, G2, eye];
   let upper = 0;
   for (let i = 1; i < up.length; i++) upper += dist(up[i - 1], up[i]);
-  let below, loop = 0;
+  let below = [eye, P0], loop = 0;
   if (K.caught) {
-    const near = K.beak, far = [XN + M.CASE[1] + 0.5, K.beak[1], K.beak[2]], under = [XN + M.CASE[1] + 0.5, -2, 0];
-    below = [eye, near, far, under, P0];
+    below = [eye, ...loopPts(K.beak, smooth(K.psi / M.BLEND)), P0];
     for (let i = 1; i < below.length; i++) loop += dist(below[i - 1], below[i]);
-  } else below = [eye, P0];
-  return { up, below, upper, loop, E, eye };
+  } else if (K.psi < M.CAST + M.BLEND) {
+    // cast off: the loop at the cast-off angle shrinks into the plate hole
+    const a = -M.CAST, r = smooth((K.psi - M.CAST) / M.BLEND);
+    const pts = loopPts([XN + M.BEAK_X, M.HY + M.RH * Math.cos(a), M.RH * Math.sin(a)], 1);
+    below = [eye, ...pts.map(p => p.map((v, i) => v + (P0[i] - v) * r)), P0];
+  }
+  let lower = 0;
+  for (let i = 1; i < below.length; i++) lower += dist(below[i - 1], below[i]);
+  return { up, below, upper, loop, lower, E, eye };
 }
 
 // everything at one shaft angle; L the stitch length

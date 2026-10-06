@@ -17,7 +17,9 @@
 //                  above the fabric; the fabric moves L per turn, also for
 //                  0 and reverse; the teeth rise LIFT - DROP
 //    thread ...... the upper path has no jump; the loop is positive on the
-//                  hook and has its peak near half a hook turn
+//                  hook and has its peak near half a hook turn; the path
+//                  below the eye has no jump at the catch or the cast-off;
+//                  the strand under the plate clears the teeth and the hook
 // ============================================================================
 import { M, needle, takeUp, hook, feed, threadPath, thC, thCast, POINT_TDC, POINT_BDC, PRESETS, TAU, DEG } from './mech.js';
 
@@ -93,6 +95,15 @@ let uj = 0, up = null, neg = 0;
 for (let i = 0; i <= N; i++) { const P = threadPath(ang(i)); if (up !== null) uj = Math.max(uj, Math.abs(P.upper - up)); up = P.upper; if (hook(ang(i)).caught && !(P.loop > 0)) neg++; }
 ok(uj < 1, `thread: upper path has no jump (largest step ${uj.toFixed(3)} mm)`);
 ok(neg === 0, 'thread: the loop has a length at every caught angle');
+// the path below the eye: no jump at the catch or at the cast-off
+let lj = 0, lp = null, ljAt = 0;
+const plen = pts => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1], p[2] - pts[i - 1][2]) : 0), 0);
+for (let i = 0; i <= N; i++) { const L = plen(threadPath(ang(i)).below); if (lp !== null && Math.abs(L - lp) > lj) { lj = Math.abs(L - lp); ljAt = ang(i); } lp = L; }
+ok(lj < 1, `thread: the path below the eye has no jump (largest step ${lj.toFixed(3)} mm at ${(ljAt * DEG).toFixed(1)} deg)`);
+// the strand under the plate (thread r 0.4) clears the hook cup (r RH)
+// and the feed dog teeth (2 mm deep) at their lowest
+const teethLow = -M.LIFT - M.DROP - 2;
+ok(M.UNDER + 0.4 < teethLow && M.UNDER - 0.4 > M.HY + M.RH, `thread: the strand under the plate (y ${M.UNDER}) clears the teeth (${teethLow.toFixed(2)}) and the hook cup (${M.HY + M.RH})`);
 
 console.log(`${n - fail}/${n} passed`);
 process.exit(fail ? 1 : 0);
