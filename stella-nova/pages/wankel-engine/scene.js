@@ -158,7 +158,9 @@ export function build(B, V) {
       const n = E.housingNormal(pl.a), c = E.housingPt(pl.a), tip = [c[0] + n[0] * 2.2, c[1] + n[1] * 2.2];
       const P = B.part(`plug${ui}${pl.id}`, { info: 'plug', parent: H, label: ui === 0 && pl.id === 'lead' ? 'Spark plugs' : null, labelAt: [0, 0, 70], explode: [n[0] * 70, n[1] * 70, 0], win: [0, 0.3] });
       orientTo(P.root, tip, n);
-      B.mesh(P, merge([rod(0.9, -1.6, 0.2, 12), tube(4.2, 7, 0.2, 27.8, 40)]), 'steel');
+      // the thread ends 0.5 mm into the washer: at 27.8 its end face lay on
+      // the housing outer face, and the two z-fought round the washer
+      B.mesh(P, merge([rod(0.9, -1.6, 0.2, 12), tube(4.2, 7, 0.2, 28.3, 40)]), 'steel');
       B.mesh(P, merge([tube(1.4, 4.2, 0.2, 2.2, 24)]), 'ceramic');
       B.mesh(P, tube(4.4, 9, 27.8, 28.8, 40), 'steel');
       B.mesh(P, rod(10.5, 28.8, 37.4, 6), 'hex');
@@ -186,7 +188,9 @@ export function build(B, V) {
       orientTo(P.root, at, n);
       const len = isIn ? 92 : 80;
       B.mesh(P, tube(11, 13.4, 0, len, 48), isIn ? 'alu' : 'soot');
-      B.mesh(P, merge([tube(11, 22, OUT - 6 + 0.4, OUT - 6 + 6, 48)]), isIn ? 'alu' : 'iron');
+      // the flange bore is 13.1, in the pipe wall (11 to 13.4): with the bore
+      // of the pipe (11) the two inner faces z-fought
+      B.mesh(P, merge([tube(13.1, 22, OUT - 6 + 0.4, OUT - 6 + 6, 48)]), isIn ? 'alu' : 'iron');
       for (let k = 0; k < 4; k++) { const g = rod(2.8, OUT - 6 + 6, OUT - 6 + 9, 6); g.translate(17 * Math.cos(k * TAU / 4 + 0.785), 17 * Math.sin(k * TAU / 4 + 0.785), 0); B.mesh(P, g, 'hex', { shadow: false }); }
       if (isIn) B.mesh(P, lathe([[[13.4, len], [17, len + 6], [22, len + 9]], [[20.5, len + 9.5]], [[15, len + 6], [11, len]]], 48), 'alu');
       else B.mesh(P, tube(11, 15, len, len + 5, 48), 'soot');

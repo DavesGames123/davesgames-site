@@ -19,6 +19,7 @@
 //  GREP MAP
 //    const MAT_DEF ............. material templates by name
 //    export function extrudeZ .. an outline with holes, extruded along z
+//    function insetCaps ........ caps cut again on the bevelled outline
 //    export function lathe ..... a closed (r, z) profile turned round z
 //    function createBuild ...... the builder
 //      B.part / B.mesh ......... parts and their meshes
@@ -97,15 +98,96 @@ export function circle(r, n = 64, c = [0, 0]) { const out = []; for (let i = 0; 
 // small bevel on the outline edges
 export function extrudeZ(outline, holes, z0, z1, bevel = 0.8) {
   const s = new THREE.Shape(ccw(outline).map(v2));
-  for (const h of holes || []) s.holes.push(new THREE.Path(ccw(h).reverse().map(v2)));
+  // slice: ccw returns h itself when h is CCW, and reverse() then turned the
+  // array of the caller. scene.js gives the same hole array to three slabs,
+  // so the notches of the middle slab were cut on a CW curve and crossed.
+  for (const h of holes || []) s.holes.push(new THREE.Path(ccw(h).slice().reverse().map(v2)));
   const b = Math.min(bevel, (z1 - z0) * 0.3);
   const g = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.01, z1 - z0 - 2 * b), bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: 2, curveSegments: 8 });
   g.translate(0, 0, z0 + b);
+  if (b > 0) insetCaps(g, s, b);
   // smooth normals over the many side faces of a curved outline; corners
   // sharper than 35 degrees stay sharp. The caps keep their true normal.
   const sm = toCreasedNormals(g, 35 * Math.PI / 180);   // the same object when g has no index
   flattenCaps(sm);
   return sm;
+}
+// ExtrudeGeometry cuts the caps into triangles on the outline, and then
+// moves the cap points b in from the outline (bevelOffset). A long thin
+// triangle near a bolt hole then turns over: its front face points into the
+// part, and a part of it covers a hole or the bevel. There it fought the
+// face of the next part on the same plane (zfight-check). insetCaps cuts
+// the caps again on the moved outline. The side faces do not change.
+function bevelVec(p, a, c) {                    // three.js getBevelVec, r160
+  const px = p.x - a.x, py = p.y - a.y, nx = c.x - p.x, ny = c.y - p.y, cr = px * ny - py * nx;
+  let tx, ty, k;
+  if (Math.abs(cr) > Number.EPSILON) {
+    const pl = Math.hypot(px, py), nl = Math.hypot(nx, ny);
+    const ax = a.x - py / pl, ay = a.y + px / pl, cx = c.x - ny / nl, cy = c.y + nx / nl;
+    const sf = ((cx - ax) * ny - (cy - ay) * nx) / cr;
+    tx = ax + px * sf - p.x; ty = ay + py * sf - p.y;
+    const l2 = tx * tx + ty * ty;
+    if (l2 <= 2) return [tx, ty];
+    k = Math.sqrt(l2 / 2);
+  } else {
+    const same = px > Number.EPSILON ? nx > Number.EPSILON : px < -Number.EPSILON ? nx < -Number.EPSILON : Math.sign(py) === Math.sign(ny);
+    if (same) { tx = -py; ty = px; k = Math.hypot(px, py); } else { tx = px; ty = py; k = Math.sqrt((px * px + py * py) / 2); }
+  }
+  return [tx / k, ty / k];
+}
+// A step shorter than b in the outline (the 0.2 mm step at the mouth of an
+// apex seal slot) makes a small loop in the moved outline. unloop cuts each
+// loop of at most 8 edges at its crossing point. The bevel ring has the same
+// loop, so the cap edge leaves the ring only inside the loop.
+function unloop(r) {
+  const X = (a, b, c, d) => {
+    const ux = b.x - a.x, uy = b.y - a.y, vx = d.x - c.x, vy = d.y - c.y, den = ux * vy - uy * vx;
+    if (Math.abs(den) < 1e-12) return null;
+    const t = ((c.x - a.x) * vy - (c.y - a.y) * vx) / den, u = ((c.x - a.x) * uy - (c.y - a.y) * ux) / den;
+    return t > 0 && t < 1 && u > 0 && u < 1 ? new THREE.Vector2(a.x + ux * t, a.y + uy * t) : null;
+  };
+  for (let pass = 0, hit = true; hit && pass < 64; pass++) {
+    hit = false;
+    const n = r.length;
+    for (let i = 0; i < n && !hit; i++) {
+      for (let k = 2; k <= 8 && k < n - 1; k++) {
+        const j = (i + k) % n, q = X(r[i], r[(i + 1) % n], r[j], r[(j + 1) % n]);
+        if (!q) continue;
+        const out = [];   // r[i], q, r[j + 1] ... : drop r[i + 1] .. r[j]
+        for (let m = 0; m < n; m++) { const o = (m - i - 1 + n) % n; if (o >= k) out.push(r[m]); else if (o === 0) out.push(q); }
+        r = out; hit = true; break;
+      }
+    }
+  }
+  return r;
+}
+function insetCaps(g, s, b) {
+  const sp = s.extractPoints(8);
+  let c = sp.shape, hs = sp.holes;
+  if (!THREE.ShapeUtils.isClockWise(c)) { c = c.slice().reverse(); hs = hs.map(h => THREE.ShapeUtils.isClockWise(h) ? h.slice().reverse() : h); }
+  const dedup = r => (r.length > 2 && r[r.length - 1].equals(r[0]) ? r.slice(0, -1) : r);
+  const inset = r => { r = dedup(r); const n = r.length; return r.map((p, i) => { const v = bevelVec(p, r[(i + n - 1) % n], r[(i + 1) % n]); return new THREE.Vector2(p.x - v[0] * b, p.y - v[1] * b); }); };
+  const ci = unloop(inset(c)), hi = hs.map(h => unloop(inset(h))), all = ci.concat(...hi);
+  const faces = THREE.ShapeUtils.triangulateShape(ci, hi);
+  // keep the caps of ExtrudeGeometry when the new triangles do not fill the
+  // moved outline once (an outline that crosses itself after unloop)
+  const ar = r => Math.abs(THREE.ShapeUtils.area(r)), want = ar(ci) - hi.reduce((t, h) => t + ar(h), 0);
+  let sum = 0, sgn = 0;
+  for (const f of faces) { const t = THREE.ShapeUtils.area([all[f[0]], all[f[1]], all[f[2]]]); sum += Math.abs(t); sgn += t; }
+  if (Math.abs(sum - want) > want * 1e-5 || Math.abs(Math.abs(sgn) - sum) > want * 1e-5) return;
+  const pos = g.attributes.position, uv = g.attributes.uv, lid = g.groups[0], side = g.groups[1];
+  let zb = Infinity, zt = -Infinity;
+  for (let i = lid.start; i < lid.start + lid.count; i++) { const z = pos.getZ(i); zb = Math.min(zb, z); zt = Math.max(zt, z); }
+  const P = [], U = [];
+  const put = (q, z) => { P.push(q.x, q.y, z); U.push(q.x, q.y); };
+  for (const f of faces) { put(all[f[2]], zb); put(all[f[1]], zb); put(all[f[0]], zb); }   // bottom: the winding of ExtrudeGeometry
+  for (const f of faces) { put(all[f[0]], zt); put(all[f[1]], zt); put(all[f[2]], zt); }
+  const nLid = P.length / 3;
+  for (let i = side.start; i < side.start + side.count; i++) { P.push(pos.getX(i), pos.getY(i), pos.getZ(i)); U.push(uv.getX(i), uv.getY(i)); }
+  g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(U, 2));
+  g.deleteAttribute("normal");
+  g.clearGroups(); g.addGroup(0, nLid, 0); g.addGroup(nLid, side.count, 1);
 }
 // A cap triangle (face normal on +z or -z) gets its true normal back, so the
 // bevel smoothing does not tilt the light across a flat face (watch kit.js).
