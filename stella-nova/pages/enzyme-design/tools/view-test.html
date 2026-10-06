@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>View3D test</title>
+<!--
+  Bare test page for view3d.js. It depends on design.js only, so it runs
+  before motif.js, scaffold.js and the page land.
+
+  The page builds one synthetic scene inline and animates it:
+    * a 140-residue C-alpha trace, made from helix, strand and loop
+      internal coordinates, so the spacing is exactly 3.80 A
+    * a C-beta point per residue, for the side-chain direction
+    * three motif residues with side-chain sticks: a glutamate, a serine
+      and a histidine ring, all aimed at the ligand
+    * a small flat ligand with an explicit bond list: a six-ring fused to
+      a five-ring, plus a nitro group
+    * a noise cloud: the trace blends between a scattered copy and the
+      clean chain, which is what reverse diffusion looks like
+
+  Everything comes from rng() in design.js, so the scene is the same on
+  every run. validate() from design.js checks the clean design.
+
+  Query options
+    ?noise=0.6     pin the noise level (the default cycles 1 to 0)
+    ?color=ss|index|value|uniform
+    ?shell=0       hide the pocket shell
+    ?still=1       stop the spin and pin the camera
+    ?n=200         another chain length
+    ?pick=0        skip the tap test
+    ?zoom=12       a close view of the active site, radius in A
+    ?drag=1        run the drag test, which turns the camera
+    ?once=1        draw one time only, so the view drives its own frames
+
+  window.__vt = { ok, errors, frameMs, maxMs, frames, prims, picked, n, valid,
+                  touchAction, dragged }
+  window.__view is the view, for a console.
+  ok becomes true after 60 frames with no error.
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0a0c13; color: #c9cfdc;
+    font: 12px/1.4 ui-monospace, Menlo, monospace; }
+  #cv { display: block; width: 100%; height: calc(100% - 34px); touch-action: pan-y; }
+  #st { height: 34px; padding: 5px 10px; box-sizing: border-box; white-space: pre; overflow: hidden; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="st">loading</div>
+<script type="module">
+// Record every context type the page asks a canvas for, before any module
+// runs. A probe that calls getContext('webgl') itself would be the thing
+// the rule forbids, so the test watches instead of asking.
+window.__ctxCalls = [];
+{
+  const base = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+    window.__ctxCalls.push(String(type));
+    return base.call(this, type, ...rest);
+  };
+}
+import { createView } from '../view3d.js';
+import { rng, validate } from '../design.js';
+
+const vt = window.__vt = { ok: false, errors: [], frameMs: 0, maxMs: 0, frames: 0, prims: 0,
+  picked: undefined, n: 0, valid: null, touchAction: null, dragged: undefined };
+addEventListener('error', ev => vt.errors.push('error: ' + ev.message));
+addEventListener('unhandledrejection', ev => vt.errors.push('rejection: ' + ((ev.reason && ev.reason.message) || ev.reason)));
+const q = new URLSearchParams(location.search);
+const st = document.getElementById('st');
+const SEED = +(q.get('seed') || 7) || 7;
+const N = Math.max(40, Math.min(320, +(q.get('n') || 140) || 140));
+const rnd = rng(SEED);
+
+// ---- small vector helpers -------------------------------------------------
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const scl = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const len = a => Math.hypot(a[0], a[1], a[2]);
+const unit = a => { const L = len(a) || 1; return [a[0] / L, a[1] / L, a[2] / L]; };
+const RAD = Math.PI / 180;
+
+// Place atom D from A, B, C: bond length |CD|, bond angle B-C-D, torsion
+// A-B-C-D. This is the standard internal-coordinate step.
+function place(a, b, c, bond, theta, phi) {
+  const bc = unit(sub(c, b));
+  let nrm = cross(sub(b, a), bc);
+  if (len(nrm) < 1e-6) nrm = cross([0, 0, 1], bc);
+  nrm = unit(nrm);
+  const p = cross(nrm, bc);
+  const d0 = -bond * Math.cos(theta), d1 = bond * Math.sin(theta) * Math.cos(phi), d2 = bond * Math.sin(theta) * Math.sin(phi);
+  return [c[0] + bc[0] * d0 + p[0] * d1 + nrm[0] * d2,
+          c[1] + bc[1] * d0 + p[1] * d1 + nrm[1] * d2,
+          c[2] + bc[2] * d0 + p[2] * d1 + nrm[2] * d2];
+}
+
+// ---- the chain ------------------------------------------------------------
+// One pattern of helix, strand and loop, repeated and then cut to N.
+function ssPlan(n) {
+  const pattern = [['H', 17], ['L', 4], ['E', 9], ['L', 3], ['E', 9], ['L', 5], ['H', 19], ['L', 4], ['E', 8], ['L', 3], ['E', 8], ['L', 4]];
+  let s = '';
+  for (let k = 0; s.length < n; k++) {
+    const [ch, m] = pattern[k % pattern.length];
+    s += ch.repeat(m);
+  }
+  return s.slice(0, n);
+}
+
+// C-alpha pseudo bond angle and pseudo torsion per state. The helix and the
+// strand values are the textbook ones.
+const GEOM = { H: { th: 91 * RAD, ph: 50 * RAD }, E: { th: 122 * RAD, ph: -170 * RAD }, L: { th: 112 * RAD, ph: 0 } };
+
+function buildChain(n) {
+  const ss = ssPlan(n);
+  const P = [[0, 0, 0], [3.8, 0, 0]];
+  const th0 = GEOM[ss[1]].th;
+  P.push([3.8 - 3.8 * Math.cos(th0), 3.8 * Math.sin(th0), 0]);
+  for (let i = 3; i < n; i++) {
+    const g = GEOM[ss[i]] || GEOM.L;
+    const a = P[i - 3], b = P[i - 2], c = P[i - 1];
+    if (ss[i] === 'L') {
+      // A loop turns where the chain comes back toward the centre, so the
+      // test chain stays compact.
+      let best = null, bd = Infinity;
+      for (let k = 0; k < 8; k++) {
+        const ph = (k / 8) * 2 * Math.PI + rnd() * 0.3;
+        const th = (96 + rnd() * 40) * RAD;
+        const p = place(a, b, c, 3.8, th, ph);
+        const d = len(p);
+        if (d < bd) { bd = d; best = p; }
+      }
+      P.push(best);
+    } else {
+      P.push(place(a, b, c, 3.8, g.th, g.ph));
+    }
+  }
+  // Centre the chain on the origin.
+  const ctr = P.reduce((s, p) => add(s, p), [0, 0, 0]).map(v => v / n);
+  return { ss, ca: P.map(p => sub(p, ctr)) };
+}
+
+// C-beta: out along the bisector of the two chain bonds, with a twist.
+function cbeta(ca, i, n) {
+  const c = ca[i];
+  const a = ca[Math.max(0, i - 1)], b = ca[Math.min(n - 1, i + 1)];
+  const u = unit(sub(c, a)), v = unit(sub(b, c));
+  let bis = sub(u, v);
+  if (len(bis) < 1e-3) bis = cross(u, [0, 0, 1]);
+  const nrm = unit(cross(v, u));
+  return add(c, scl(unit(add(scl(unit(bis), 0.83), scl(nrm, 0.56))), 1.53));
+}
+
+const chain = buildChain(N);
+const CA = chain.ca, SS = chain.ss;
+vt.n = N;
+
+// ---- the motif: three residues that sit near each other -------------------
+function pickTriple(ca, n) {
+  const ctr = [0, 0, 0];
+  let i0 = 0, d0 = Infinity;
+  for (let i = 8; i < n - 8; i++) { const d = len(sub(ca[i], ctr)); if (d < d0) { d0 = d; i0 = i; } }
+  const near = [];
+  for (let i = 4; i < n - 4; i++) {
+    if (Math.abs(i - i0) < 7) continue;
+    const d = len(sub(ca[i], ca[i0]));
+    if (d < 12) near.push([d, i]);
+  }
+  near.sort((p, r) => p[0] - r[0]);
+  const out = [i0];
+  for (const [, i] of near) {
+    if (out.length >= 3) break;
+    if (out.every(j => Math.abs(j - i) >= 7)) out.push(i);
+  }
+  while (out.length < 3) out.push(Math.min(n - 1, i0 + 20 * out.length));
+  return out.sort((p, r) => p - r);
+}
+
+const TRI = pickTriple(CA, N);
+const CB = CA.map((_, i) => cbeta(CA, i, N));
+
+// The ligand sits off the three C-beta points, in the pocket they make.
+const triCtr = scl(TRI.reduce((s, i) => add(s, CA[i]), [0, 0, 0]), 1 / 3);
+const triOut = unit(TRI.reduce((s, i) => add(s, unit(sub(CB[i], CA[i]))), [0, 0, 0]));
+const LIGC = add(triCtr, scl(triOut, 3.4));
+
+// Two directions across triOut, for the flat ligand and the rings.
+const axW = unit(cross(triOut, len(cross(triOut, [0, 0, 1])) > 0.2 ? [0, 0, 1] : [0, 1, 0]));
+const axT = unit(cross(triOut, axW));
+
+// ---- side chains ----------------------------------------------------------
+function sideChain(code, i) {
+  const ca = CA[i], cb = CB[i];
+  const u = unit(sub(LIGC, cb));            // aim at the ligand
+  const w = unit(cross(u, len(cross(u, axW)) > 0.2 ? axW : axT));
+  const atoms = [{ name: 'CA', el: 'C', p: ca }, { name: 'CB', el: 'C', p: cb }];
+  const push = (name, el, p) => atoms.push({ name, el, p });
+  if (code === 'E') {
+    const cg = add(cb, scl(unit(add(scl(u, 0.9), scl(w, 0.44))), 1.52));
+    const cd = add(cg, scl(unit(add(scl(u, 0.95), scl(w, -0.31))), 1.52));
+    push('CG', 'C', cg); push('CD', 'C', cd);
+    push('OE1', 'O', add(cd, scl(unit(add(scl(u, 0.5), scl(w, 0.87))), 1.25)));
+    push('OE2', 'O', add(cd, scl(unit(add(scl(u, 0.5), scl(w, -0.87))), 1.25)));
+    return { code, name: 'GLU', tip: ['OE1', 'OE2'], atoms };
+  }
+  if (code === 'S') {
+    push('OG', 'O', add(cb, scl(u, 1.42)));
+    return { code, name: 'SER', tip: ['OG'], atoms };
+  }
+  // Histidine: a five-ring in the plane of u and w, with C-gamma on it.
+  const cg = add(cb, scl(u, 1.50));
+  const R = 1.17, ctr = add(cg, scl(u, R));
+  const ring = ['CG', 'ND1', 'CE1', 'NE2', 'CD2'];
+  const el = ['C', 'N', 'C', 'N', 'C'];
+  for (let k = 0; k < 5; k++) {
+    const a = k * 72 * RAD;
+    const p = add(ctr, scl(add(scl(u, -Math.cos(a)), scl(w, Math.sin(a))), R));
+    if (k === 0) push('CG', 'C', p); else push(ring[k], el[k], p);
+  }
+  return { code: 'H', name: 'HIS', tip: ['ND1', 'NE2'], atoms };
+}
+
+const CODES = ['E', 'S', 'H'];
+const residues = TRI.map((i, k) => {
+  const r = sideChain(CODES[k], i);
+  return { code: r.code, name: r.name, chain: 'A', resId: i + 1, tip: r.tip,
+    atoms: r.atoms.map(a => ({ name: a.name, el: a.el, x: a.p[0], y: a.p[1], z: a.p[2] })) };
+});
+const motif = { id: 'test', label: 'test motif', residues, ligand: null, geometry: [] };
+
+// ---- the ligand -----------------------------------------------------------
+// A six-ring (1.39 A sides) fused to a five-ring on one edge, plus a nitro
+// group on the far vertex. Flat, with an explicit bond list.
+function buildLigand() {
+  const atoms = [], bonds = [];
+  const at = (name, el, a, b) => { atoms.push({ name, el, x: LIGC[0] + axW[0] * a + axT[0] * b, y: LIGC[1] + axW[1] * a + axT[1] * b, z: LIGC[2] + axW[2] * a + axT[2] * b }); };
+  const R6 = 1.39;
+  for (let k = 0; k < 6; k++) at('C' + (k + 1), 'C', R6 * Math.cos(k * 60 * RAD), R6 * Math.sin(k * 60 * RAD));
+  for (let k = 0; k < 6; k++) bonds.push([k, (k + 1) % 6]);
+  // The five-ring shares the C1-C2 edge. Work in that edge's own frame.
+  const e0 = atoms[0], e1 = atoms[1];
+  const mid = [(e0.x + e1.x) / 2, (e0.y + e1.y) / 2, (e0.z + e1.z) / 2];
+  const tHat = unit([e1.x - e0.x, e1.y - e0.y, e1.z - e0.z]);
+  const nHat = unit(sub(mid, LIGC));
+  const R5 = 1.182, ctr5 = add(mid, scl(nHat, 0.956));
+  const five = [[108, 'N1', 'N'], [180, 'N2', 'N'], [-108, 'N3', 'N']];
+  const base = atoms.length;
+  for (const [deg, name, el] of five) {
+    const a = deg * RAD;
+    const p = add(ctr5, add(scl(tHat, R5 * Math.sin(a)), scl(nHat, -R5 * Math.cos(a))));
+    atoms.push({ name, el, x: p[0], y: p[1], z: p[2] });
+  }
+  bonds.push([1, base], [base, base + 1], [base + 1, base + 2], [base + 2, 0]);
+  // The nitro group, on C4, pointing away from the five-ring.
+  const c4 = atoms[3];
+  const out = unit(sub([c4.x, c4.y, c4.z], LIGC));
+  const nN = add([c4.x, c4.y, c4.z], scl(out, 1.47));
+  const side = unit(cross(out, nHat));
+  const i = atoms.length;
+  atoms.push({ name: 'N4', el: 'N', x: nN[0], y: nN[1], z: nN[2] });
+  const o1 = add(nN, scl(unit(add(scl(out, 0.5), scl(side, 0.87))), 1.23));
+  const o2 = add(nN, scl(unit(add(scl(out, 0.5), scl(side, -0.87))), 1.23));
+  atoms.push({ name: 'O1', el: 'O', x: o1[0], y: o1[1], z: o1[2] });
+  atoms.push({ name: 'O2', el: 'O', x: o2[0], y: o2[1], z: o2[2] });
+  bonds.push([3, i], [i, i + 1], [i, i + 2]);
+  return { name: 'TST', atoms, bonds };
+}
+const ligand = buildLigand();
+
+// ---- the design -----------------------------------------------------------
+const clean = new Float32Array(N * 3), cb = new Float32Array(N * 3);
+for (let i = 0; i < N; i++) {
+  clean[i * 3] = CA[i][0]; clean[i * 3 + 1] = CA[i][1]; clean[i * 3 + 2] = CA[i][2];
+  cb[i * 3] = CB[i][0]; cb[i * 3 + 1] = CB[i][1]; cb[i * 3 + 2] = CB[i][2];
+}
+const fixed = new Uint8Array(N), motifId = new Int32Array(N).fill(-1);
+let seq = new Array(N).fill('X');
+TRI.forEach((i, k) => { fixed[i] = 1; motifId[i] = k; seq[i] = CODES[k]; });
+const design = {
+  n: N, ca: new Float32Array(clean), cb, fixed, motifId,
+  seq: seq.join(''), ss: SS, ligand,
+  meta: { seed: SEED, steps: 0, motifStr: 'A1,A2,A3|10-100,{},4-40,{},4-40,{},10-100/B1', seqLength: String(N) },
+};
+const v = validate({ ...design, ca: clean });
+vt.valid = v;
+if (!v.ok) vt.errors.push('validate: ' + v.errors.join('; '));
+
+// Burial, for colorBy 'value': 0 at the surface, 1 at the core.
+const values = new Float32Array(N);
+{
+  const ctr = [0, 0, 0];
+  for (let i = 0; i < N; i++) ctr[0] += CA[i][0], ctr[1] += CA[i][1], ctr[2] += CA[i][2];
+  for (let k = 0; k < 3; k++) ctr[k] /= N;
+  let mx = 0;
+  for (let i = 0; i < N; i++) { values[i] = len(sub(CA[i], ctr)); mx = Math.max(mx, values[i]); }
+  for (let i = 0; i < N; i++) values[i] = 1 - values[i] / (mx || 1);
+}
+
+// The noisy copy. Reverse diffusion starts near this and ends at the chain.
+const noisy = new Float32Array(N * 3);
+for (let i = 0; i < N * 3; i++) {
+  const g = (rnd() + rnd() + rnd() + rnd() - 2) * 1.4;  // near-normal, mean 0
+  noisy[i] = clean[i] * 1.12 + g * 4.6;
+}
+
+// ---- the view -------------------------------------------------------------
+const cv = document.getElementById('cv');
+const still = q.get('still') === '1';
+let view;
+try {
+  view = createView(cv, {
+    yaw: 0.75, pitch: -0.26, spin: still ? 0 : 0.14,
+    onPick: (id, info) => { vt.picked = { id, info }; },
+  });
+} catch (err) { vt.errors.push('createView: ' + err.message); }
+window.__view = view;
+
+// A canvas with a GPU context would break the rule of this page.
+const twoD = cv.getContext('2d');
+if (!twoD) vt.errors.push('the canvas has no 2D context');
+vt.ctxCalls = [...new Set(window.__ctxCalls)];
+const gpu = vt.ctxCalls.filter((t) => t !== '2d');
+if (gpu.length) vt.errors.push('a canvas asked for ' + gpu.join(', '));
+// A vertical swipe must still scroll the page on a phone.
+vt.touchAction = getComputedStyle(cv).touchAction;
+if (!/pan-y/.test(vt.touchAction)) vt.errors.push('touch-action is ' + vt.touchAction + ', not pan-y');
+
+const pinned = q.get('noise') === null ? null : Math.max(0, Math.min(1, +q.get('noise') || 0));
+const colorBy = q.get('color') || 'ss';
+const scene = {
+  design, motif, ligand, colorBy, values,
+  selected: TRI[1], pocket: q.get('shell') === '0' ? null : true,
+  noise: pinned === null ? 1 : pinned, seed: SEED,
+};
+
+const t0 = performance.now();
+let sum = 0, nMs = 0;
+
+function frame() {
+  if (!view || vt.errors.length > 6) return;
+  const sec = (performance.now() - t0) / 1000;
+  const noise = pinned === null ? Math.max(0, Math.min(1, 0.5 + 0.5 * Math.cos(sec * 0.5))) : pinned;
+  // Blend the cloud into the chain, which is what the scaffolder animates.
+  const ca = design.ca;
+  for (let i = 0; i < N * 3; i++) ca[i] = clean[i] + (noisy[i] - clean[i]) * noise;
+  scene.noise = noise;
+  let ms = 0;
+  try {
+    ms = view.draw(scene, { fit: false });
+  } catch (err) { vt.errors.push('draw: ' + err.message); return; }
+  sum += ms; nMs++;
+  if (nMs > 3) vt.maxMs = Math.max(vt.maxMs, +ms.toFixed(3));
+  vt.frameMs = +(sum / nMs).toFixed(3);
+  vt.frames = nMs;
+  vt.prims = view.stats().prims;
+  if (nMs === 45 && q.get('pick') !== '0') {
+    const r = cv.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    for (const type of ['pointerdown', 'pointerup']) {
+      cv.dispatchEvent(new PointerEvent(type, { pointerId: 9, clientX: x, clientY: y, bubbles: true, pointerType: 'mouse' }));
+    }
+    if (vt.picked === undefined) vt.errors.push('the tap test called no pick handler');
+  }
+  if (nMs === 50 && q.get('drag') === '1') {
+    const r = cv.getBoundingClientRect(), y = r.top + r.height / 2;
+    const before = view.getCamera().yaw;
+    const ev = (type, x) => cv.dispatchEvent(new PointerEvent(type, { pointerId: 3, clientX: r.left + x, clientY: y, bubbles: true, pointerType: 'mouse' }));
+    ev('pointerdown', 200); ev('pointermove', 240); ev('pointermove', 300); ev('pointerup', 300);
+    vt.dragged = +(view.getCamera().yaw - before).toFixed(4);
+    if (!(Math.abs(vt.dragged) > 0.1)) vt.errors.push('the drag test did not turn the camera: ' + vt.dragged);
+  }
+  if (nMs >= 60 && !vt.errors.length) vt.ok = true;
+  if (q.get('once') === '1' && nMs >= 1) {
+    // One draw only. The view keeps its own frames after a short pause, so
+    // the spin runs without the page.
+    const was = view.getCamera().yaw, f0 = view.stats().frames;
+    setTimeout(() => {
+      const s1 = view.stats();
+      vt.selfFrames = s1.frames - f0;
+      vt.selfYaw = +(view.getCamera().yaw - was).toFixed(4);
+      if (!(vt.selfFrames > 5 && Math.abs(vt.selfYaw) > 0.01)) {
+        vt.errors.push(`the view did not drive its own frames: ${vt.selfFrames} frames, yaw ${vt.selfYaw}`);
+      } else { vt.ok = true; }
+      vt.frames = 60 + vt.selfFrames;
+    }, 1400);
+    return;
+  }
+  st.textContent = `n=${N} noise=${noise.toFixed(2)} color=${colorBy} draw=${vt.frameMs}/${vt.maxMs} ms prims=${vt.prims} frames=${nMs}`
+    + ` pick=${vt.picked ? vt.picked.id + (vt.picked.info ? ':' + vt.picked.info.kind : '') : '-'}`
+    + ` ${vt.ok ? 'ok' : ''} ${vt.errors.join(' | ')}`;
+  requestAnimationFrame(frame);
+}
+// The first draw aims the camera at the clean chain, not at the cloud.
+if (view) {
+  view.fit({ design: { ...design, ca: clean }, ligand });
+  const zoom = +(q.get('zoom') || 0);
+  if (zoom > 0) view.setCamera({ radius: zoom, center: LIGC, yaw: 0.75, pitch: -0.26 });
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
