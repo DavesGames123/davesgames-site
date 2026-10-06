@@ -225,12 +225,15 @@ export function build(B, id, L) {
 
   // the carriage: end plate on the flange, bushings, table, ruler pointer
   const car = B.part('carriage', { info: 'carriage', label: 'Carriage', labelAt: [52, -8, 0], at: [0, AXIS, 0], ...AX, explode: [0, 150, 0], st: 0.3, en: 1, cut: true, cutY: AXIS });
-  const cp = rrect(78, 124, 4); cp.holes.push(circle(13));
-  const cg = across(cp, -37.6, -25.3, 0.8); cg.translate(1, 0, 0);   // plate spans world y 22..100
+  // the extrude bevel grows the outline by 0.8 mm, so the shape is 1.6 mm
+  // smaller than the plate: 78 x 123.2 mm, world y 22..100 and z +-61.6,
+  // under the table (y 100.3, z +-62) and not through it
+  const cp = rrect(76.4, 121.6, 3.2); cp.holes.push(circle(13));
+  const cg = across(cp, -37.6, -25.3, 0.8); cg.translate(1, 0, 0);
   B.mesh(car, cg, 'alu');
   for (const z of [-48, 48]) B.mesh(car, tube(6.4, 11, -45, -14, 40).translate(0, 0, -z), 'bronze');
   B.mesh(car, boxGeo(40.3, 50, -45, 30, -62, 62), 'alu');
-  B.mesh(car, boxGeo(-55, -20, -32.4, -30.4, -66.5, -62.3), 'red');
+  B.mesh(car, boxGeo(-55, -20, -32.4, -30.4, -66.5, -61.3), 'red');   // 0.3 mm into the plate side
   // the load arrow on the table (one for each sense)
   const arrow = sgn => { const a = merge([rod(2.6, 0, 37.5, 16), new THREE.ConeGeometry(7, 14, 24).translate(0, 44, 0)]); if (sgn < 0) a.rotateZ(Math.PI); a.translate(60, sgn > 0 ? 10 : -25, 0); return a; };
   const loadP = B.part('load', { info: 'load', label: 'Load F', labelAt: [74, 0, 0], parent: car.root, explode: [0, 0, 0] });
