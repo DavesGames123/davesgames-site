@@ -44,7 +44,30 @@ function spiderShape(S, hubR, armW) {
     }
     pts.push(new THREE.Vector2(r * Math.cos(th), r * Math.sin(th)));
   }
-  return new THREE.Shape(pts);
+  // Remove the points on the straight arm edges. The triangulation made
+  // slivers of three such points on the plate faces, and the slivers lay
+  // over other cap triangles in one plane (z-fighting). A point that is
+  // less than 1e-5 mm from the chord of its neighbours is on a line.
+  const keep = [];
+  for (let k = 0; k < n; k++) {
+    const a = keep.length ? keep[keep.length - 1] : pts[n - 1], b = pts[k], c = pts[(k + 1) % n];
+    const cx = c.x - a.x, cy = c.y - a.y, len = Math.hypot(cx, cy);
+    if (len > 0 && Math.abs(cx * (b.y - a.y) - cy * (b.x - a.x)) / len < 1e-5) continue;
+    keep.push(b);
+  }
+  // A concave corner (hub to arm) is where the bevel offset folds: the
+  // 0.2 mm arc steps next to it moved out past the corner and crossed.
+  // Remove the points less than 1.5 mm from such a corner (the new chord
+  // is at most 0.03 mm from the old outline). Of two corner points closer
+  // than 1.5 mm, only the sharper one stays.
+  const m = keep.length, turn = k => {
+    const a = keep[(k + m - 1) % m], b = keep[k], c = keep[(k + 1) % m];
+    const ux = b.x - a.x, uy = b.y - a.y, vx = c.x - b.x, vy = c.y - b.y;
+    return (ux * vy - uy * vx) / (Math.hypot(ux, uy) * Math.hypot(vx, vy));
+  };
+  const tk = keep.map((q, k) => turn(k)), corners = keep.filter((q, k) => tk[k] < -0.17);
+  const near = (q, c) => c !== q && c.distanceTo(q) < 1.5;
+  return new THREE.Shape(keep.filter((q, k) => corners.every(c => !near(q, c) || (corners.includes(q) && tk[k] < tk[keep.indexOf(c)]))));
 }
 const pinHoles = (S, r) => S.psi.map(p => circlePath(r, S.a * Math.cos(p), S.a * Math.sin(p)));
 // hex bolt heads on a circle, facing +z (dir 1) or -z (dir -1) from face z
@@ -82,7 +105,9 @@ function band(B, p, r, z0, z1) {
   B.mesh(p, lathe([[[r + 3.4, z0 + 0.3]], [[r + 3.4, z1 - 0.3]], [[r + 1.3, z1 - 0.3]], [[r + 1.3, z0 + 0.3]]], 128, ph0, len), 'band');
   const ears = [];
   for (const sg of [-1, 1]) {
-    const e = new THREE.BoxGeometry(5, 8.5, z1 - z0 - 0.6);
+    // the ear end faces stand 0.4 mm inside the strap end faces (z0 + 0.3,
+    // z1 - 0.3): at the same z, the two faces z-fought where they overlap
+    const e = new THREE.BoxGeometry(5, 8.5, z1 - z0 - 1.4);
     const a = -Math.PI / 2 + sg * (gap + 0.02);
     e.translate(0, r + 6.6, 0); e.rotateZ(a - Math.PI / 2); e.translate(0, 0, (z0 + z1) / 2);
     ears.push(e);
