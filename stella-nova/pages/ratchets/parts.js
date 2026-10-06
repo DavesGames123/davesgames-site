@@ -26,7 +26,7 @@ export function partsFor(id) {
       wheel: { name: `Ratchet wheel, ${u.N} teeth`, group: 'Output', role: `Saw teeth: a radial face that the pawl pushes, and a long back slope that lifts the pawl when the lever goes back. One tooth is ${(360 / u.N).toFixed(0)}°, the most motion a back stroke can lose.`, specs: [['Teeth', String(u.N)], ['Tip / root', `${u.rTip} / ${u.rRoot} mm`], ['Pitch', `${(360 / u.N).toFixed(0)}°`]], live: ['out', 'gap'] },
       lever: { name: 'Lever (input)', group: 'Input', role: 'Swings on the shaft and carries the pawl. A forward stroke drives the wheel; a back stroke clicks the pawl over the teeth.', specs: [['Handle radius', '106 mm']], live: ['in', 'state'] },
       pawl: { name: 'Pawl', group: 'Clutch', role: `A hooked pawl. Its pivot sits near the tangent at mid-tooth, so the face force pulls it into the tooth (self-engaging up to μ ${(() => { let m = 0; for (let x = 0; x < 1; x += 0.01) if (pawlMoment(u, x, G) > 0) m = x; return m.toFixed(2); })()}). Its tip lifts ${(u.rTip - u.rRoot)} mm over each tooth.`, specs: [['Pivot to tip', `${G.l.toFixed(1)} mm`], ['Crest overrun c', deg(G.c)]], live: ['gap', 'state'] },
-      spring: { name: 'Pawl spring', group: 'Spring', role: 'A coil spring from a lug on the lever to the back of the pawl. It keeps the tip on the teeth, so the pawl drops into each tooth: the click.', specs: [['Coil', '7.2 mm, 7 turns']], live: ['state'] },
+      spring: { name: 'Pawl spring', group: 'Spring', role: 'A coil spring from a lug on the lever to the back of the pawl. It keeps the tip on the teeth, so the pawl drops into each tooth: the click.', specs: [['Coil', '7.2 mm, 6 turns']], live: ['state'] },
     };
   }
   if (id === 'sprag') {
