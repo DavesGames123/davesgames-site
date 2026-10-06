@@ -1,0 +1,48 @@
+CHANDRASEKHAR LIMIT · image credits and licences
+=================================================
+
+Every image in img/ is a resized copy (JPEG, metadata removed) of an
+official release. The credit line is copied unchanged from the source
+page, as the licences ask. The page shows the same credit in each caption.
+
+ESA/Hubble, ESA/Webb and ESO images: Creative Commons Attribution 4.0
+International (CC BY 4.0).
+  https://esahubble.org/copyright/
+  https://esawebb.org/copyright/
+  https://www.eso.org/public/outreach/copyright/
+Chandra images: "no claim to copyright is being asserted and the material
+may be used in accordance with NASA guidelines"; credit is requested.
+  https://chandra.harvard.edu/photo/image_use.html
+The Tycho file is the X-ray-only image (no DSS optical data).
+
+img/sirius-b.jpg       Sirius A and the white dwarf Sirius B (Hubble WFPC2)
+                       Credit: NASA, ESA, H. Bond (STScI), and M. Barstow (University of Leicester)
+                       Source: https://esahubble.org/images/heic0516a/   Licence: CC BY 4.0
+img/southern-ring.jpg  Southern Ring Nebula, NGC 3132 (Webb MIRI)
+                       Credit: NASA, ESA, CSA, STScI, and the Webb ERO Production Team
+                       Source: https://esawebb.org/images/weic2207c/   Licence: CC BY 4.0
+img/cats-eye.jpg       Cat's Eye Nebula, NGC 6543 (Hubble ACS)
+                       Credit: ESA, NASA, HEIC and The Hubble Heritage Team (STScI/AURA)
+                       Source: https://esahubble.org/images/heic0414a/   Licence: CC BY 4.0
+img/ring-m57.jpg       Ring Nebula, M57 (Webb NIRCam, 2023)
+                       Credit: ESA/Webb, NASA, CSA, M. Barlow, N. Cox, R. Wesson
+                       Source: https://esawebb.org/images/weic2320b/   Licence: CC BY 4.0
+img/helix.jpg          Helix Nebula, NGC 7293 (ESO 2.2 m Wide Field Imager)
+                       Credit: ESO
+                       Source: https://www.eso.org/public/images/eso0907a/   Licence: CC BY 4.0
+img/crab.jpg           Crab Nebula, M1 (Hubble mosaic)
+                       Credit: NASA, ESA and Allison Loll/Jeff Hester (Arizona State University). Acknowledgement: Davide De Martin (ESA/Hubble)
+                       Source: https://esahubble.org/images/heic0515a/   Licence: CC BY 4.0
+img/m87-eht.jpg        M87* black hole, Event Horizon Telescope 2019 (square crop)
+                       Credit: EHT Collaboration
+                       Source: https://www.eso.org/public/images/eso1907a/   Licence: CC BY 4.0
+img/tycho.jpg          Tycho's supernova remnant, SN 1572 (Chandra, X-ray only)
+                       Credit: X-ray: NASA/CXC/RIKEN & GSFC/T. Sato et al.
+                       Source: https://chandra.harvard.edu/photo/2019/tycho/more.html   Licence: NASA/CXC image use policy
+img/sn1006.jpg         SN 1006 supernova remnant (Chandra X-ray mosaic)
+                       Credit: NASA/CXC/Middlebury College/F.Winkler
+                       Source: https://chandra.harvard.edu/photo/2013/sn1006/   Licence: NASA/CXC image use policy
+
+All other visuals on the page (the binary, the planetary nebula, the
+white-dwarf cutaway, the black hole and every chart) are drawn by this
+page's own code (glsl.js, renders.js, figures.js).
