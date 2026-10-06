@@ -122,6 +122,7 @@ function checkRegistry() {
     if (!fs.existsSync(path.join(SN, p.path))) errs.push(`no file for ${p.key}: ${p.path}`);
   });
   for (const k of ctx.SN_XR || []) if (!seen.has(k)) errs.push(`SN_XR key is not a registered page: ${k}`);
+  for (const k of ctx.SN_CRAFT || []) if (!seen.has(k)) errs.push(`SN_CRAFT key is not a registered page: ${k}`);
   const dirs = new Set(PAGES.map(p => p.path.split('/')[1]));
   fs.readdirSync(path.join(SN, 'pages'), { withFileTypes: true })
     .filter(d => d.isDirectory() && !dirs.has(d.name) && !UNLISTED[d.name])

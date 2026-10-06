@@ -26,6 +26,7 @@
 //    one region ........... "{ id: \"science\""
 //    flat page list ....... "function snPages"
 //    XR pages ............. "w.SN_XR ="
+//    Craft pages .......... "w.SN_CRAFT ="
 // ============================================================================
 (function (w) {
 'use strict';
@@ -279,6 +280,12 @@ w.SN_NAV = [
 // iframe allow="xr-spatial-tracking". Without it, a page in the shell cannot
 // ask for a session. tools/nav-sync.js checks that each key is registered.
 w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'forge', 'attractorlab', 'resonance-3d', 'img2threejs'];
+
+// Craft Suite pages (lib/craft-host.js). Each one holds an upstream app in a
+// child iframe. The shell gives their iframe allow="fullscreen;
+// clipboard-read; clipboard-write", so the child can ask for these too.
+// tools/nav-sync.js checks that each key is registered.
+w.SN_CRAFT = ['photocraft'];
 
 // Flatten SN_NAV into one record per page, in nav order.
 function snPages() {
