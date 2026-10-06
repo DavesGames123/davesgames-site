@@ -10,6 +10,11 @@
 //                progress 0: for each point whose sign flips, |d| at 0 is
 //                below 0.03. So a cutter starts outside the shape and a
 //                modifier starts small.
+//    spread .... a lerp op (a cutter or intersector that eases its distance
+//                in) shows half its change at progress 0.5: of the points
+//                whose sign differs between progress 0 and 1, at least 20%
+//                have flipped at 0.5. So the op grows through its step
+//                and does not appear in the last few frames.
 //  For each finished shape:
 //    framed .... every inside point lies in the extent() circle that the
 //                camera fits (radius + 0.05), so the view holds the shape
@@ -27,7 +32,7 @@ const fail = m => { fails++; console.log('FAIL', m); };
 for (const rec of RECIPES) {
   const ops = rec.ops.map(prep), ord = steps(ops);
   if (ops.length > MAX_OPS) fail(`${rec.name}: ${ops.length} ops > ${MAX_OPS}`);
-  let worstPop = 0;
+  let worstPop = 0, worstSpread = 1;
   ord.forEach((at, s) => {
     const set = pr => ops.forEach(o => { const k = ord.indexOf(o.at); o.pr = k < s ? 1 : k === s ? pr : 0; });
     set(0); const d0 = PTS.map(p => mapM(ops, p));
@@ -39,6 +44,16 @@ for (const rec of RECIPES) {
     const pop = Math.max(0, ...d1.map((v, i) => (v < 0) !== (d0[i] < 0) ? Math.min(Math.abs(v), Math.abs(d0[i])) : 0));
     worstPop = Math.max(worstPop, pop);
     if (pop > 0.03) fail(`${rec.name} step ${s} (${ops.find(o => o.at === at).cap}): progress 0.01 moves the edge by ${pop.toFixed(3)}`);
+    const op = ops.find(o => o.at === at);
+    if (op.lerp) {
+      set(1); const dF = PTS.map(p => mapM(ops, p));
+      set(0.5); const dH = PTS.map(p => mapM(ops, p));
+      let ch = 0, half = 0;
+      dF.forEach((v, i) => { if ((v < 0) !== (d0[i] < 0)) { ch++; if ((dH[i] < 0) === (v < 0)) half++; } });
+      const sp = ch ? half / ch : 1;
+      worstSpread = Math.min(worstSpread, sp);
+      if (sp < 0.2) fail(`${rec.name} step ${s} (${op.cap}): only ${(100 * sp).toFixed(1)}% of the change shows at progress 0.5`);
+    }
   });
   ops.forEach(o => { o.pr = 1; });
   const ex = extent(ops, ord, -1);
@@ -46,7 +61,7 @@ for (const rec of RECIPES) {
   for (const p of PTS) if (mapM(ops, p) < 0) { inside++; if (Math.hypot(p[0] - ex.c[0], p[1] - ex.c[1]) > ex.r + 0.05) outside++; }
   if (!inside) fail(`${rec.name}: no point is inside`);
   if (outside) fail(`${rec.name}: ${outside} inside points lie outside the camera extent`);
-  console.log(`${rec.name.padEnd(18)} ops ${String(ops.length).padStart(2)}  steps ${ord.length}  worst pop ${worstPop.toFixed(4)}  inside ${inside}  extent r ${ex.r.toFixed(2)}`);
+  console.log(`${rec.name.padEnd(18)} ops ${String(ops.length).padStart(2)}  steps ${ord.length}  worst pop ${worstPop.toFixed(4)}  spread ${worstSpread.toFixed(2)}  inside ${inside}  extent r ${ex.r.toFixed(2)}`);
 }
 console.log(fails ? `${fails} failure(s)` : 'all recipe checks pass');
 process.exit(fails ? 1 : 0);

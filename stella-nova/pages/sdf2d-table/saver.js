@@ -35,8 +35,10 @@ const MAX_OPS = 24;
 
 // ---------------------------------------------------------------- recipes
 // op fields: t type, c combine, b params, pos, turn (degrees), rep and repR
-// (polar copies), slide (the cutter offset at progress 0), lerp (ease the
-// distance in, no slide), k, at (timeline step; default the list index),
+// (polar copies), slide (the cutter offset at progress 0), lerp L (ease the
+// distance in from L, no slide; L is about half the cutter depth, or for
+// an intersector the largest d_i over the shape, so the change grows
+// through the step; saver-test.mjs "spread" checks it), k, at (timeline step; default the list index),
 // cap (plate sub). Units: a shape sits within radius about 1.2.
 const IN = [0, 3.5];
 const RECIPES = [
@@ -59,21 +61,21 @@ const RECIPES = [
     { t: 'capsule', c: 'union', b: [0.55, 0.06], rep: 6, repR: 0.55, cap: 'Six arms by polar repetition' },
     { t: 'star', c: 'union', b: [6, 0.18, 0.07], rep: 6, repR: 0.78, k: 0.02, cap: 'A small star on each arm' },
     { t: 'poly', c: 'union', b: [6, 0.2, 0.02], k: 0.05, cap: 'A hexagon at the centre' },
-    { t: 'poly', c: 'sub', b: [6, 0.09, 0], lerp: true, cap: 'Cutting a hexagonal hole' },
+    { t: 'poly', c: 'sub', b: [6, 0.09, 0], lerp: 0.045, cap: 'Cutting a hexagonal hole' },
     { t: 'round', b: [0.015], cap: 'Rounding every corner' },
   ] },
   { name: 'Flower', note: 'Seven petals, swirled', ops: [
     { t: 'swirl', b: [0.9], at: 4, cap: 'Swirling it' },
     { t: 'circle', c: 'union', b: [0.3], at: 0, cap: 'The disc' },
     { t: 'ellipse', c: 'union', b: [0.34, 0.14], rep: 7, repR: 0.52, k: 0.08, at: 1, cap: 'Seven petals by polar repetition' },
-    { t: 'ring', c: 'sub', b: [0.2, 0.025], lerp: true, at: 2, cap: 'Cutting a ring in the disc' },
+    { t: 'ring', c: 'sub', b: [0.2, 0.025], lerp: 0.0125, at: 2, cap: 'Cutting a ring in the disc' },
     { t: 'circle', c: 'union', b: [0.08], k: 0.02, at: 3, cap: 'A seed at the centre' },
   ] },
   { name: 'Wrench', note: 'Handle, head, jaw and hole', ops: [
     { t: 'capsule', c: 'union', b: [0.72, 0.1], pos: [0.2, 0], cap: 'The handle' },
     { t: 'circle', c: 'union', b: [0.32], pos: [-0.72, 0], k: 0.12, cap: 'The head' },
     { t: 'box', c: 'sub', b: [0.18, 0.12, 0], pos: [-0.92, 0], slide: [-3.5, 0], cap: 'Cutting the jaw' },
-    { t: 'circle', c: 'sub', b: [0.06], pos: [0.82, 0], lerp: true, cap: 'A hanging hole' },
+    { t: 'circle', c: 'sub', b: [0.06], pos: [0.82, 0], lerp: 0.03, cap: 'A hanging hole' },
     { t: 'round', b: [0.012], cap: 'Rounding every corner' },
   ] },
   { name: 'Crescent and star', note: 'One disc cut by another', ops: [
@@ -90,9 +92,9 @@ const RECIPES = [
   ] },
   { name: 'Hex nut', note: 'A hexagon, chamfered and tapped', ops: [
     { t: 'poly', c: 'union', b: [6, 0.7, 0.03], cap: 'A hexagon' },
-    { t: 'circle', c: 'inter', b: [0.78], lerp: true, k: 0.02, cap: 'Chamfering the corners' },
+    { t: 'circle', c: 'inter', b: [0.78], lerp: 0.03, k: 0.02, cap: 'Chamfering the corners' },
     { t: 'circle', c: 'sub', b: [0.36], slide: IN, cap: 'Tapping the hole' },
-    { t: 'ring', c: 'sub', b: [0.45, 0.012], lerp: true, cap: 'Facing a ring on the bearing face' },
+    { t: 'ring', c: 'sub', b: [0.45, 0.012], lerp: 0.006, cap: 'Facing a ring on the bearing face' },
   ] },
 ];
 
@@ -134,10 +136,10 @@ const ease = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2
 function prep(op, i) {
   const b = [0, 0, 0, 0]; (op.b || []).forEach((v, j) => { b[j] = v; });
   return { ...op, ti: T[op.t], ci: C[op.c] ?? 0, b, pos: op.pos || [0, 0], turn: (op.turn || 0) * D2R, rep: op.rep || 0, repR: op.repR || 0,
-    slide: op.slide || [0, 0], lerp: !!op.lerp, k: op.k || 0, at: op.at ?? i, pr: 0 };
+    slide: op.slide || [0, 0], lerp: +op.lerp || 0, k: op.k || 0, at: op.at ?? i, pr: 0 };
 }
 function packOp(o, f, at) {
-  f.set([o.ti, o.ci, o.pr, o.k, ...o.b, o.pos[0], o.pos[1], o.turn, o.rep, o.slide[0], o.slide[1], o.repR, o.lerp ? 1 : 0], at);
+  f.set([o.ti, o.ci, o.pr, o.k, ...o.b, o.pos[0], o.pos[1], o.turn, o.rep, o.slide[0], o.slide[1], o.repR, o.lerp], at);
 }
 
 // ---------------------------------------------------------------- JS port
@@ -173,7 +175,7 @@ function opDist(o, p) {
   let d;
   if (o.ci === 0) { const sc = Math.max(pr, 1e-3); d = prim(o.ti, [qx / sc, qy / sc], o.b) * sc; }
   else d = prim(o.ti, [qx, qy], o.b);
-  if (o.lerp) { if (o.ci === 1) d = 5 + (d - 5) * pr; if (o.ci === 2) d = -5 + (d + 5) * pr; }
+  if (o.lerp) { const L = o.lerp; if (o.ci === 1) d = L + (d - L) * pr; if (o.ci === 2) d = -L + (d + L) * pr; }
   return d;
 }
 function mapM(ops, p0) {

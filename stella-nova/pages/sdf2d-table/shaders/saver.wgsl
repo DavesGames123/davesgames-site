@@ -7,8 +7,9 @@
 //  Each op has a progress pr in [0, 1]. An op at pr = 0 changes nothing:
 //    union ...... skipped; it grows in by scale, from pr > 0
 //    subtract ... skipped; the cutter slides in from far (s.xy), or its
-//                 distance eases in from +5 (lerp flag)
-//    intersect .. skipped; the distance eases in from -5
+//                 distance eases in from +L (the lerp
+//                 distance L, about half the cutter depth)
+//    intersect .. skipped; the distance eases in from -L
 //    onion ...... d = mix(d, |d| - t, pr)     round ... d = d - r pr
 //    swirl ...... turn by b.x pr |p|          grid .... spacing eases from 40
 //  The field is the picture: iso bands that flow outward, a zero isoline
@@ -20,7 +21,7 @@
 //    a  type, combine (0 union, 1 subtract, 2 intersect), pr, k
 //    b  primitive or modifier parameters
 //    c  pos.xy, turn (radians), polar repetition count (0 none)
-//    s  slide.xy (offset at pr = 0), polar repetition radius, lerp flag
+//    s  slide.xy (offset at pr = 0), polar repetition radius, lerp distance L (0 off)
 //
 //  GREP MAP
 //    fn prim ...... 0 circle 1 box 2 capsule 3 ring 4 polygon 5 star
@@ -126,9 +127,9 @@ fn opDist(i: i32, p: vec2f) -> f32 {
   var d: f32;
   if (c == 0) { let sc = max(pr, 1e-3); d = prim(t, q / sc, o.b) * sc; }
   else { d = prim(t, q, o.b); }
-  if (o.s.w > 0.5) {
-    if (c == 1) { d = mix(5.0, d, pr); }
-    if (c == 2) { d = mix(-5.0, d, pr); }
+  if (o.s.w > 0.0) {
+    if (c == 1) { d = mix(o.s.w, d, pr); }
+    if (c == 2) { d = mix(-o.s.w, d, pr); }
   }
   return d;
 }
