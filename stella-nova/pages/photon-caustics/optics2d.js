@@ -100,12 +100,12 @@ export function mulberry(seed) {
 // exp exposure. view: the world rectangle that must show. focus: the
 // subject point for the saver push-ins, with the width to show there.
 export const SCENES = [
-  { id: 'cup', name: 'Coffee cup', sub: 'Parallel light off a round mirror folds onto a nephroid', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.1 } },
-  { id: 'cardioid', name: 'Cardioid', sub: 'A point source on the rim of a round mirror', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.0 } },
-  { id: 'drop', name: 'Raindrop', sub: 'A water ball: a focal caustic behind it, the rainbow ray at 138°', defaults: { n: 1.333, dn: 0.05, ang: 0, wave: 1, exp: 1.1 } },
+  { id: 'cup', name: 'Coffee cup', sub: 'Parallel light off a round mirror folds onto a nephroid', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.0 } },
+  { id: 'cardioid', name: 'Cardioid', sub: 'A point source on the rim of a round mirror', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 0.7 } },
+  { id: 'drop', name: 'Raindrop', sub: 'A water ball: a focal caustic behind it, the rainbow ray at 138°', defaults: { n: 1.333, dn: 0.05, ang: 0, wave: 1, exp: 1.0 } },
   { id: 'lens', name: 'Lens', sub: 'Spherical aberration: the edge rays focus first, a cusp forms', defaults: { n: 1.5, dn: 0.02, ang: 0, wave: 1, exp: 1.0 } },
-  { id: 'pool', name: 'Pool floor', sub: 'Sunlight through moving waves: the bright net on the floor', defaults: { n: 1.333, dn: 0.03, ang: 0, wave: 1, exp: 1.1 } },
-  { id: 'prism', name: 'Prism', sub: 'Dispersion: each wavelength has its own index', defaults: { n: 1.5, dn: 0.12, ang: 0, wave: 1, exp: 1.3 } },
+  { id: 'pool', name: 'Pool floor', sub: 'Sunlight through moving waves: the bright net on the floor', defaults: { n: 1.333, dn: 0.03, ang: 0, wave: 1, exp: 1.4 } },
+  { id: 'prism', name: 'Prism', sub: 'Dispersion: each wavelength has its own index', defaults: { n: 1.5, dn: 0.12, ang: 0, wave: 1, exp: 6.0 } },
   { id: 'marbles', name: 'Marbles', sub: 'Glass balls in a slant beam: many caustics cross', defaults: { n: 1.5, dn: 0.04, ang: 0, wave: 1, exp: 1.0 } },
 ];
 
