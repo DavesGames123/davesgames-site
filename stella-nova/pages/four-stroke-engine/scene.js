@@ -188,13 +188,17 @@ function lobeGeometry() {
   return exYZ(shapeOf(zy(pts).reverse()), 12, 12);
 }
 function valveGeometry(rHead, tip) {
-  const prof = [[0, 0], [rHead, 0], [rHead, 1.5], [rHead - 2.5, 3.2], [8, 6], [4.5, 11], [3.5, 16], [3.5, tip], [0, tip]];
+  // The face stands 0.5 mm proud of the seat plane. On the seat plane it
+  // lies on the pent roof of the head, and the two faces z-fight.
+  const prof = [[0, -0.5], [rHead, -0.5], [rHead, 1.5], [rHead - 2.5, 3.2], [8, 6], [4.5, 11], [3.5, 16], [3.5, tip], [0, tip]];
   return new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 40);
 }
 function valveTrain(B, T, sc, axisEx) {
   const springG = springGeometry(), lobeG = lobeGeometry();
   const seatG = new THREE.CylinderGeometry(13, 13, 1.5, 32);
-  const retG = new THREE.CylinderGeometry(9, 13, 3.5, 32);
+  // The retainer has a 1.75 mm rim under its cone. A plain cone crossed the
+  // top coil of the spring at a shallow angle, and the faces z-fought there.
+  const retG = new THREE.LatheGeometry([[0, -1.75], [13, -1.75], [13, 0], [9, 1.75], [0, 1.75]].map(([r, y]) => new THREE.Vector2(r, y)), 32);
   const keepG = new THREE.CylinderGeometry(4.5, 5.5, 6, 16);
   const bucketG = new THREE.CylinderGeometry(15, 15, 24, 40);
   const tipS = T.id === 'dohc' ? 96 : T.tipS - 1.2;
@@ -241,7 +245,9 @@ function valveTrain(B, T, sc, axisEx) {
     // sprocket on the nose
     const ps = Object.assign(B.part(id + 'Sprocket', { ex: [ex[0] + 60, ex[1], ex[2]], delay: 0.1, label: side >= 0 ? 'Cam sprocket' : null, labelAt: [8, 40, 0] }), { kind: 'camSprocket' });
     ps.holder.position.set(KX.chainX, yc, zc);
-    B.add(ps, exYZ(shapeOf(gearPts(36, 42.5, 49.5), [0, 1, 2, 3, 4].map(i => ({ c: [26 * Math.cos(i * 1.2566 + 0.3), 26 * Math.sin(i * 1.2566 + 0.3)], r: 9 }))), 8, 10), 'steel');
+    // The tips are 0.5 mm under the outer face of the wrapped plates (r 48.1).
+    // At r 49.5 the tip lands crossed the plate faces at a shallow angle.
+    B.add(ps, exYZ(shapeOf(gearPts(36, 42.5, 47.6), [0, 1, 2, 3, 4].map(i => ({ c: [26 * Math.cos(i * 1.2566 + 0.3), 26 * Math.sin(i * 1.2566 + 0.3)], r: 9 }))), 8, 10), 'steel');
     B.add(ps, cylX(16, 16, 28), 'forged', { pos: [-5, 0, 0] });     // hub face 1 mm inside the sprocket face
     sc.cams.push(pc, ps);
   }
@@ -249,8 +255,10 @@ function valveTrain(B, T, sc, axisEx) {
   sc.rockers = [];
   if (T.id === 'sohc') {
     const R = T.rocker, rise = R.rise;
-    const arm = shapeOf(zy([[-R.aIn - 5, -rise], [R.aOut + 5, -rise], [R.aOut + 5, -rise + 9], [10, 7], [10, 11], [-10, 11], [-10, 7], [-R.aIn - 5, -rise + 9]]));
-    const armG = exYZ(arm, 11), bossG = cylX(12, 13, 28), padG = new THREE.BoxGeometry(11.5, 2, 10);
+    // Over the pad the arm face is 0.5 mm up, inside the pad. Flush with the
+    // pad face (0.05 mm apart) the two faces z-fought.
+    const arm = shapeOf(zy([[-R.aIn - 5, -rise + 0.5], [-R.aIn + 4, -rise + 0.5], [-R.aIn + 4, -rise], [R.aOut + 5, -rise], [R.aOut + 5, -rise + 9], [10, 7], [10, 11], [-10, 11], [-10, 7], [-R.aIn - 5, -rise + 9]]));
+    const armG = exYZ(arm, 11), bossG = cylX(12, 13, 28), padG = new THREE.BoxGeometry(11.5, 2, 8.8);   // pad ends 0.6 mm inside the arm end
     const sh = Object.assign(B.part('rockerShaft', { ex: [0, EX.head + EX.cam + 70, 0], delay: 0.05, label: 'Rocker shafts', labelAt: [-180, R.pivotY, R.pivotZ] }), { kind: 'rockerShaft' });
     for (const s of [1, -1]) B.add(sh, cylX(8, 404, 24), 'bright', { pos: [0, R.pivotY, s * R.pivotZ] });
     let lab = true;
@@ -322,7 +330,9 @@ function timingDrive(B, T, sc) {
   const crankC = { c: [0, 0], r }, pitch = path.L / N;
   sc.chain = { path, N, pitch, r };
   const ch = Object.assign(B.part('chain', { ex: [EX.chain, 0, 0], delay: 0.15, label: 'Timing chain', labelAt: [6, 170, 0] }), { kind: 'chain' });
-  const plate = new THREE.BoxGeometry(1.4, 10.5, 5.2);
+  // The plate ends stand 2.2 mm past the pin axis, so they clear the pins
+  // (r 1.7). At 10.5 mm the ends cut the pins near a facet edge and z-fought.
+  const plate = new THREE.BoxGeometry(1.4, 12.4, 5.2);
   const mk = (gap, n) => {
     const a = plate.clone().translate(gap, 0, 0), b = plate.clone().translate(-gap, 0, 0);
     const merged = mergeTwo(a, b);
@@ -338,7 +348,9 @@ function timingDrive(B, T, sc) {
   // crank sprocket
   const cs = Object.assign(B.part('crankSprocket', { ex: [60, EX.crank, 0], delay: 0.45, label: 'Crank sprocket', labelAt: [8, -30, 0] }), { kind: 'crankSprocket' });
   cs.holder.position.x = KX.chainX;
-  B.add(cs, exYZ(shapeOf(gearPts(18, 19.6, 26)), 8, 8), 'steel');
+  // The tips are 0.5 mm under the outer face of the wrapped plates (r 25.1).
+  // At r 26 the tip lands crossed the plate faces at a shallow angle.
+  B.add(cs, exYZ(shapeOf(gearPts(18, 19.6, 24.6)), 8, 8), 'steel');
   sc.movers.crank.push(cs);
   // Turn the teeth of each sprocket so that a tooth gap meets the chain pins.
   // Before, the pins went through the teeth. At θ = 0, pin i is at
@@ -379,8 +391,10 @@ function mergeTwo(a, b) {
 
 // ── spark plugs and the gas in each cylinder ────────────────────────────────
 function ignitionAndGas(B, T, sc) {
-  const plugG = new THREE.LatheGeometry([[0, -1.5], [1.2, -1.5], [1.2, 0], [7, 0], [7, 19], [10.5, 19], [10.5, 28], [7.5, 28], [6.5, 31], [6.5, 66], [3.5, 68], [3.5, 76], [0, 76]].map(([r, y]) => new THREE.Vector2(r, y)), 6 * 4);
-  const ceramic = new THREE.LatheGeometry([[6.4, 31], [6.6, 31], [6.6, 66], [6.4, 66]].map(([r, y]) => new THREE.Vector2(r, y)), 32);
+  const plugG = new THREE.LatheGeometry([[0, -1.5], [1.2, -1.5], [1.2, 0], [7, 0], [7, 19], [10.5, 19], [10.5, 28], [7.5, 28], [6.5, 31], [6, 31.5], [6, 65.5], [6.5, 66], [3.5, 68], [3.5, 76], [0, 76]].map(([r, y]) => new THREE.Vector2(r, y)), 6 * 4);
+  // The ceramic is a closed sleeve (r 6.4 to 6.6) round a 6 mm body. A 6.5 mm
+  // body inside the sleeve wall z-fought with it where the facets cross.
+  const ceramic = new THREE.LatheGeometry([[6.4, 31], [6.6, 31], [6.6, 66], [6.4, 66], [6.4, 31]].map(([r, y]) => new THREE.Vector2(r, y)), 32);
   // The gas starts 0.4 mm above the crown and stays inside the piston radius
   // (42.6 mm). On the crown plane, the gas and the crown z-fight.
   const gasG = new THREE.CylinderGeometry(42.4, 42.4, 1, 48, 1, false).translate(0, 0.5, 0);
@@ -388,7 +402,9 @@ function ignitionAndGas(B, T, sc) {
   for (const k of CYLS) {
     const p = Object.assign(B.part('plug' + k, { info: 'plug' + k, ex: [0, EX.head + 240, 0], delay: 0.05, label: k === 1 ? 'Spark plug' : null, labelAt: [0, 70, 0] }), { kind: 'plug', cyl: k });
     if (T.id === 'dohc') { p.holder.position.set(CYL_X[k], roof(0) - 1, 0); }
-    else { p.holder.position.set(CYL_X[k] + 16, roof(20) - 1, 20); p.holder.rotation.x = 35 * D; }
+    // SOHC: the tilted plug sits 2.8 mm into the roof, so its end ring is
+    // below the roof all round. At 1 mm it crossed the roof at 16 degrees.
+    else { p.holder.position.set(CYL_X[k] + 16, roof(20) - 2.8, 20); p.holder.rotation.x = 35 * D; }
     B.add(p, plugG, 'steel');
     B.add(p, ceramic, 'ceramic');
     const gp = B.part('gas' + k, {}); gp.holder.position.x = CYL_X[k];
