@@ -1,0 +1,77 @@
+VOLUME NOISE  ·  credits and licences
+=====================================
+
+This page is a WebGPU (WGSL) and JavaScript port of TileableVolumeNoise.
+
+TileableVolumeNoise
+  Author:   Sébastien Hillaire (with weirdfoo)
+  Source:   https://github.com/sebh/TileableVolumeNoise
+            (ported from commit 1f879a26b89aaa4b5a7f112f14ec149d08057661)
+  Licence:  MIT. The full notice is in LICENSE-TileableVolumeNoise.
+  Context:  part of "Physically Based Sky, Atmosphere and Cloud Rendering in
+            Frostbite" by Sébastien Hillaire, in the SIGGRAPH 2016 course
+            "Physically Based Shading in Theory and Practice"
+            (http://blog.selfshadow.com/publications/s2016-shading-course/).
+            The cloud texture recipes follow "Real-Time Volumetric
+            Cloudscapes" by Andrew Schneider (GPU Pro 7, chapter II-4).
+
+  Ported here:
+    TileableVolumeNoise.cpp  hash, noise, Cells, WorleyNoise, PerlinNoise
+                             -> shaders/noise.wgsl and noise-ref.js
+    main.cpp                 remap, the 128^3 base shape loop, the packed
+                             shape, the 32^3 erosion loop and its packed value
+                             -> shaders/gen.wgsl and noise-ref.js
+
+  The Worley noise of TileableVolumeNoise is based on the Shadertoy
+  https://www.shadertoy.com/view/Xl2XRR by Marc-Andre Loyer.
+
+GLM (OpenGL Mathematics) periodic Perlin noise
+  TileableVolumeNoise calls glm::perlin(vec4, vec4). That function is ported
+  too (perlin4_periodic in shaders/noise.wgsl, perlin4Periodic in
+  noise-ref.js).
+  Source:   GLM 0.9.x, glm/gtc/noise.inl, Copyright (c) 2005 - 2015 G-Truc
+            Creation (www.g-truc.net), MIT licence (the "Happy Bunny"
+            variant, with the request that it is not used for military
+            purposes).
+  Based on: "webgl-noise" by Stefan Gustavson and Ashima Arts, MIT licence
+            (https://github.com/ashima/webgl-noise).
+
+  The GLM notice:
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+What is this page's own
+  - The views (slice, tiles, volume cube) in shaders/views.wgsl.
+  - The cloud layer renderer in shaders/clouds.wgsl. It follows the
+    published model (coverage remap, erosion, Beer's law, powder, Henyey-
+    Greenstein phase, multiple-scattering octaves) but it is not a port of
+    any published shader.
+  - The 2D weather (coverage) texture: main.cpp makes no such texture.
+  - The seed: the original has none. Seed 0 gives the original values.
+  - Every image the page shows is computed in the browser. No sample image
+    of the original repository is included.
+
+Changes from the original, and why
+  - The hash fract(sin(n + 1.951) * 43758.5453) is computed on the CPU in
+    float steps and uploaded as a table, because a GPU sin() is not exact
+    enough near n = 20000 for that product. The values are the same.
+  - floor(x / 289), floor(x / 7) and the integer mod add 0.5 before the
+    division, so that a fast GPU reciprocal cannot change the integer.
+  - The detail texture keeps the packed value in A (main.cpp writes 255 to
+    A and the packed value to a second file). The page also keeps a "parts"
+    texture with the Perlin FBM, the Perlin-Worley Worley FBM, one Worley
+    octave and the packed shape, so each part can be shown.
