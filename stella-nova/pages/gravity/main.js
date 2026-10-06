@@ -28,7 +28,7 @@
 //
 //  FRAME   (loop, requestAnimationFrame)
 //  ---------------------------------------------------------------------------
-//      loop() ─┬─ substep step(h) × round(timeScale)   keeps each h small
+//      loop() ─┬─ step(h) × n, h <= dt   PACE·timeScale sim s per real s
 //              ├─ render()         bodies, vectors, trails, field, grid
 //              └─ every 3rd frame  calcEnergy() ▶ readouts + energy graph
 //
@@ -60,7 +60,14 @@
 /* SIMULATION STATE */
 // Physics constants and integrator step. G is tunable; dt is the base step,
 // timeScale multiplies it, simTime accumulates simulated seconds.
-var G=1000,dt=0.01,timeScale=1.0,simTime=0;
+// PACE sets the sim seconds per real second at timeScale 1. The loop uses
+// the frame time, not the frame count, so a 120 Hz display runs at the
+// same speed as a 60 Hz display. 0.3 is half of the old rate of one dt
+// per frame at 60 Hz.
+// trailAcc: the trails take one point per dt of sim time, so a smaller h
+// does not make a trail shorter. trailPushed is true when the last step
+// took a point (the saver turning-frame trail reads it).
+var G=1000,dt=0.01,timeScale=1.0,simTime=0,PACE=0.3,trailAcc=0,trailPushed=false;
 // Run state and display toggles. Each show* flag maps to one Display switch.
 var paused=false,vecScale=1.0,trailLen=400;
 var showForce=true,showVel=true,showAcc=false,showTrails=true,showField=false,showLines=false,showGrid=true;
@@ -244,11 +251,16 @@ function step(h){
     if(b.fixed)continue;
     b.vx+=0.5*b.ax*h;b.vy+=0.5*b.ay*h;
   }
-  // Bookkeeping: append to the trail and track the unwrapped orbital angle so the
-  // readout can count whole orbits without a ±π jump at the atan2 seam.
+  // Bookkeeping: append to the trail (one point per dt of sim time) and track
+  // the unwrapped orbital angle so the readout can count whole orbits without
+  // a ±π jump at the atan2 seam.
+  trailAcc+=h;trailPushed=trailAcc>=dt*0.999;
+  if(trailPushed)trailAcc=Math.max(0,trailAcc-dt);
   for(var b of bodies){
-    b.trail.push([b.x,b.y]);
-    if(b.trail.length>trailLen)b.trail.shift();
+    if(trailPushed){
+      b.trail.push([b.x,b.y]);
+      if(b.trail.length>trailLen)b.trail.shift();
+    }
     var na=Math.atan2(b.y,b.x);
     if(b.lastAngle!==null){
       var da=na-b.lastAngle;
@@ -793,15 +805,19 @@ function lighten(hex,amt){
 function fmt(n){return Math.abs(n)<1000?n.toFixed(2):n.toExponential(2);}
 
 // The animation loop, driven by requestAnimationFrame.
-var frameCount=0;
-// One frame: sub-step the physics, draw, and every 3rd frame refresh the readouts
-// and graphs. Sub-stepping splits the scaled step into pieces so a large time
-// scale does not blow up the integrator with one oversized h.
-function loop(){
-  if(!paused){
-    var substeps=Math.max(1,Math.round(timeScale));
-    var h=dt*timeScale/substeps;
-    for(var s=0;s<substeps;s++)step(h);
+var frameCount=0,lastFrameT=0;
+// One frame: advance the physics by the sim time that the frame time owes,
+// draw, and every 3rd frame refresh the readouts and graphs. The owed time
+// goes in n equal steps of h <= dt, so a large time scale does not blow up
+// the integrator with one oversized h, and each frame moves the bodies. A
+// frame time over 0.1 s (a hidden tab) counts as 0.1 s.
+function loop(now){
+  var fdt=lastFrameT&&now?Math.min(0.1,Math.max(0,(now-lastFrameT)/1000)):1/60;
+  if(now)lastFrameT=now;
+  if(!paused&&timeScale>0){
+    var owe=PACE*timeScale*fdt;
+    var n=Math.max(1,Math.ceil(owe/dt-1e-9)),h=owe/n;
+    for(var s=0;s<n;s++)step(h);
     // Refresh forces after the last step so drawn vectors match current positions.
     computeForces();
   }
@@ -815,7 +831,7 @@ function loop(){
     document.getElementById('eMom').textContent=fmt(e.pmag);
     document.getElementById('eMomX').textContent=fmt(e.px);
     document.getElementById('eMomY').textContent=fmt(e.py);
-    document.getElementById('hud-dt').textContent=(dt*timeScale).toFixed(4);
+    document.getElementById('hud-dt').textContent=Math.min(dt,PACE*timeScale/60).toFixed(4);
     document.getElementById('hud-time').textContent=simTime.toFixed(1);
     energyHistory.push({ke:e.ke,pe:e.pe,total:e.total});
     if(energyHistory.length>maxEnergyPts)energyHistory.shift();
@@ -847,7 +863,7 @@ document.addEventListener('DOMContentLoaded',init);
 // (saverFrame: 92% of the width, or the band plus half of each poster
 // block in height). A scene with omega is
 // drawn in the frame that turns with its planet; a scene with extra adds a
-// force after computeForces(). opts.calm (1 = slowest) sets the substeps.
+// force after computeForces(). opts.calm (1 = slowest) sets the time scale.
 // No exit(): the shell reloads the page on stop.
 window.snSaver={enter:function(o){
   // The saver sets its own framing; the ResizeObserver must not change it.
@@ -875,7 +891,7 @@ window.snSaver={enter:function(o){
   step=function(h){
     baseStep(h);
     if(cur&&cur.omega){var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),s=Math.sin(a);
-      for(var b of bodies){(b.rtrail=b.rtrail||[]).push([c*b.x-s*b.y,s*b.x+c*b.y]);if(b.rtrail.length>trailLen)b.rtrail.shift();}}
+      if(trailPushed)for(var b of bodies){(b.rtrail=b.rtrail||[]).push([c*b.x-s*b.y,s*b.x+c*b.y]);if(b.rtrail.length>trailLen)b.rtrail.shift();}}
   };
   // A position as drawn: turned into the frame of the planet if omega,
   // with the planet (at angle 0 at t = 0) at the top, so L4 and L5 spread
@@ -883,10 +899,10 @@ window.snSaver={enter:function(o){
   function shown(b){if(!cur||!cur.omega)return[b.x,b.y];var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),s=Math.sin(a);return[c*b.x-s*b.y,s*b.x+c*b.y];}
   function build(k){
     var sc=SC[order[k%order.length]];
-    nextId=0;simTime=0;energyHistory=[];selectedIdx=-1;fitBox=null;
+    nextId=0;simTime=0;trailAcc=0;energyHistory=[];selectedIdx=-1;fitBox=null;
     var S=sc.build(rng(seed*31+k*7919),G,makeBody);
     bodies=S.bodies;trailLen=sc.trail;
-    timeScale=Math.max(1,Math.round(sc.ts*(1-0.3*calm)));
+    timeScale=sc.ts*(1-0.3*calm);
     return{sc:sc,S:S};
   }
   // The box of the framed bodies over 1.3 holds, relative to the follow
@@ -894,11 +910,13 @@ window.snSaver={enter:function(o){
   // sample uses the 8th to 92nd percentile on each axis, so a few stars
   // flung out of a tail do not zoom the view out.
   function measure(sc){
-    var x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,rad=1,frames=Math.round(1.3*hold/1000*60),sub=timeScale;
+    // The sim time of 1.3 holds at the page pace, in steps of dt, with a
+    // sample every 20th of a second.
+    var x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,rad=1,T=1.3*hold/1000*PACE*timeScale,n=Math.max(1,Math.round(T/dt)),every=Math.max(1,Math.round(PACE*timeScale/20/dt));
     computeForces();
-    for(var f=0;f<frames;f++){
-      for(var s=0;s<sub;s++)step(dt);
-      if(f%3)continue;
+    for(var f=0;f<n;f++){
+      step(dt);
+      if(f%every)continue;
       var org=sc.follow!=null?shown(bodies[sc.follow]):[0,0],xs=[],ys=[];
       for(var b of bodies){if(b.noframe)continue;var p=shown(b);xs.push(p[0]-org[0]);ys.push(p[1]-org[1]);rad=Math.max(rad,b.radius);}
       xs.sort(function(a,b){return a-b;});ys.sort(function(a,b){return a-b;});
