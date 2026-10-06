@@ -4,7 +4,8 @@
 //  Boot order: build the family chips, bind the input, show a first pair.
 //  What the user types goes through lookup() (matcher.js) on each input
 //  event; the top match goes on the stage, the next ones into #more.
-//  With an empty input the stage shows pairs from the chosen family.
+//  With an empty input cycle.js plays pairs from the chosen family; it
+//  stops while the user types and pauses while the pointer is on #stage.
 //
 //  grep -n targets
 //    "function onInput"        live lookup as you type
@@ -15,10 +16,12 @@
 //    "function say"            speechSynthesis, only on a click
 //    "function dockToKeyboard" keep the dock on top of a phone keyboard
 //    "function setTheme"       dark or light, kept in localStorage
+//    "const cycle"             the autoplay and its pause rules
 // ============================================================================
 import { PHRASES, FAMILIES } from './phrases.js';
 import { lookup } from './matcher.js';
 import { createStage, famLabel } from './stage.js';
+import { createCycle } from './cycle.js';
 
 const $ = id => document.getElementById(id);
 const q = $('q');
@@ -56,18 +59,32 @@ export function showEntry(e, { word = e.targets[0], how = '' } = {}) {
   document.querySelectorAll('#more .row').forEach(r => r.classList.toggle('on', +r.dataset.id === e.id));
 }
 
-// Hooks that cycle.js replaces: what the empty input does.
+// What the empty input does: the autoplay (cycle.js).
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const onPickCycle = w => { S.word = w; copyWord(w); };
+export const cycle = createCycle({
+  stage, reduced: REDUCED, onPick: onPickCycle,
+  pick: prev => randomEntry(prev),
+  onShow: (e, w) => { S.cur = e; S.word = w; },
+});
 export const hooks = {
-  idle() { showEntry(randomEntry(S.cur)); },
-  familyChanged() { showEntry(randomEntry(S.cur)); },
-  next() { showEntry(randomEntry(S.cur)); },
-  typing() {},
+  idle() { cycle.start(); },
+  familyChanged() { cycle.start(); },
+  next() { cycle.start(); },
+  typing() { cycle.stop(); },
 };
+const IDLE_MS = 2500;
+const stageEl = $('stage');
+// Pause on hover (a mouse) and on a tap (touch); resume when idle again.
+stageEl.addEventListener('pointerenter', ev => { if (ev.pointerType === 'mouse' && !S.typing) cycle.pause(); });
+stageEl.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse' && !S.typing && !q.value && S.mode !== 'paste') cycle.resume(1200); });
+stageEl.addEventListener('pointerdown', ev => { if (ev.pointerType !== 'mouse' && !S.typing) { cycle.pause(); if (!q.value) cycle.resume(7000); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) cycle.stop(); else if (!q.value && S.mode !== 'paste') cycle.resume(400); });
 
-function idle() {
+function idle(delay = IDLE_MS) {
   S.typing = false; S.results = [];
   $('more').innerHTML = '';
-  hooks.idle();
+  if (delay) { cycle.stop(); cycle.resume(delay); } else hooks.idle();
 }
 
 // ── input ──────────────────────────────────────────────────────────────────
@@ -163,7 +180,8 @@ export function setMode(m) {
   document.querySelectorAll('.modes button').forEach(x => { const on = x.dataset.mode === m; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); });
   for (const [k, el] of Object.entries(modes)) el.hidden = k !== m;
   $('dock').hidden = m !== 'words';
-  document.documentElement.dataset.mode = m;
+  document.documentElement.dataset.mode = m; S.mode = m;
+  if (m === 'words' && !q.value) cycle.resume(300); else cycle.stop();
   hooks.mode && hooks.mode(m);
 }
 
@@ -171,7 +189,7 @@ export function setMode(m) {
 buildPicker();
 const startQ = new URLSearchParams(location.search).get('q');
 if (startQ) { q.value = startQ; }
-const boot = () => { if (q.value) onInput(); else idle(); };
+const boot = () => { if (q.value) onInput(); else idle(0); };
 if (document.fonts && document.fonts.load) Promise.all([document.fonts.load("700 100px 'Space Grotesk'"), document.fonts.load("500 100px 'IBM Plex Mono'")]).then(boot, boot);
 else boot();
-window.__ltm = { S, PHRASES, lookup, stage, famLabel, onInput, setMode };
+window.__ltm = { S, PHRASES, lookup, stage, famLabel, onInput, setMode, cycle };
