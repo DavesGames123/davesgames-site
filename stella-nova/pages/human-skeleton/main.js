@@ -299,9 +299,9 @@ function saverTour(rnd) {
 // and the angle moves by 40 deg when it is near the last one. The feet are
 // seen from above. Below the knee the camera stays over the floor.
 // A bone shot fits the larger side of the bone box to BONE_FIT of the short
-// side of the band. The full view takes the band if the body is FULL_MIN px
-// tall or more there.
-const BONE_FIT = 0.6, FULL_MIN = 260;
+// side of the band. The other shots fit the box to SHOT_FIT of the band, and
+// take a side column only when the subject is under FULL_MIN px tall there.
+const BONE_FIT = 0.6, SHOT_FIT = 0.88, FULL_MIN = 260;
 function boneView(i, rnd, last) {
   const b = S.bones[i], [x, , z] = b.c, side = rnd() < 0.5 ? 1 : -1;
   let az;
@@ -417,19 +417,16 @@ window.snSaver = {
         const [cw, ch] = size(band), px = BONE_FIT * Math.min(cw, ch) / 2;
         return { c: e.mid, d: e.hd + Math.max(e.hw, e.hh) * Hc / (2 * fy() * px) * z, az, el, occ: band };
       }
-      // The full view: the middle band, the hero shot, when the body fits
-      // there at FULL_MIN px tall or more. Else the larger side column.
+      // The full view, a region shot and a whole-body shot: the middle band,
+      // when the subject is FULL_MIN px tall or more there at SHOT_FIT. Else
+      // the larger side column. The box width goes to SHOT_FIT of the clear
+      // width and its height to SHOT_FIT of the clear height, whichever is
+      // closer, over the near face of the box.
       let best = band;
-      if (cur.full) {
-        const [cw, ch] = size(band), tall = Math.min(ch, cw * e.hh / Math.max(1e-6, e.hw)) / 1.08;
-        if (tall < FULL_MIN) { let bs = -1; for (const q of all.slice(1)) { const [w2, h2] = size(q), sc = Math.min(w2 / e.hw, h2 / e.hh); if (sc > bs) { bs = sc; best = q; } } }
-      } else {
-        // a region or whole-body shot: the clear part where the box fits largest
-        let bs = -1;
-        for (const q of all) { const [w2, h2] = size(q), sc = Math.min(w2 / e.hw, h2 / e.hh); if (sc > bs) { bs = sc; best = q; } }
-      }
-      const fh = Math.max(0.15, (Hc - best.t - best.b) / Hc), fw = Math.max(0.15, (W - best.l - best.r) / Hc);
-      return { c: e.mid, d: (Math.max(e.hh / (fy() * fh), e.hw / (fy() * fw)) * 1.08 * z) + e.hd, az, el, occ: best };
+      const [bw, bh] = size(band), tall = SHOT_FIT * Math.min(bh, bw * e.hh / Math.max(1e-6, e.hw));
+      if (tall < FULL_MIN) { let bs = -1; for (const q of all.slice(1)) { const [w2, h2] = size(q), sc = Math.min(w2 / e.hw, h2 / e.hh); if (sc > bs) { bs = sc; best = q; } } }
+      const [cw, ch] = size(best);
+      return { c: e.mid, d: e.hd + Math.max(e.hw / (SHOT_FIT * cw / 2), e.hh / (SHOT_FIT * ch / 2)) * Hc / (2 * fy()) * z, az, el, occ: best };
     };
     const smooth = x => x * x * (3 - 2 * x);
     loopHook.tick = dt => {
