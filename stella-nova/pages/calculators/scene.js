@@ -245,7 +245,7 @@ function curta(B, u) {
   for (let j = 0; j < u.NC; j++) cnt.push(wheel('cnt_' + j, 'counter', j, 36, 145, 4.2, 2.5, 0.8, j === 0 ? 'Turn counter' : null));
 
   // crank on the drum shaft
-  const crank = B.part('crank', { info: 'crank', label: 'Crank', labelAt: [50, 196, 0], explode: [0, 110, 0], st: 0.2, en: 0.7 });
+  const crank = B.part('crank', { info: 'crank', label: 'Crank', labelAt: [50, 196, 0], explode: [0, 75, 0], st: 0.2, en: 0.7 });
   B.mesh(crank, merge([lathe([[[9, 156], [9, 164], [0, 164], [0, 156]]], 32), boxGeo(-6, 54, 163, 169, -5, 5)]), 'black');
   B.mesh(crank, merge([pinAt(3, 50, 0, 169, 178), lathe([[[5.5, 178], [6.5, 186], [5.5, 196], [0, 196], [0, 178]]], 24).translate(50, 0, 0)]), 'black');
 
