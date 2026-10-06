@@ -21,6 +21,7 @@
 //!   rng       not in ln: the seeded random source (Go uses math/rand)
 //!   examples  the ln examples/ directory as scene builders
 //!   bin/render.rs  not in ln: a native CLI that writes one example as SVG
+//!   wasm      not in ln: the wasm-bindgen API of the web worker
 //!
 //! GREP MAP
 //!   grep -n 'pub fn render'        scene.rs   the whole render
@@ -29,6 +30,7 @@
 //!   grep -n 'fn filter'            path.rs    cut a path at hidden points
 //!   grep -n 'pub enum Op'          csg.rs     intersection, difference, union
 //!   grep -n 'pub static EXAMPLES'  examples/mod.rs  the example table
+//!   grep -n 'pub struct Job'       wasm.rs    the streaming render job
 
 pub mod bbox;
 pub mod cone;
@@ -54,6 +56,9 @@ pub mod tree;
 pub mod triangle;
 pub mod util;
 pub mod vector;
+
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 #[cfg(test)]
 mod tests;
