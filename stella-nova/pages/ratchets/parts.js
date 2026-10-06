@@ -48,6 +48,6 @@ export function partsFor(id) {
     body: { name: 'Freehub body (input)', group: 'Input', role: 'The chain turns the cassette, and the cassette turns the body. The body carries the pawls.', specs: [['Splines', '9']], live: ['in', 'state'] },
     pawl: { name: 'Pawl', group: 'Clutch', role: `One of ${u.pawls} pawls that tip out into the ring. The pivot must sit inside the ring, so the tip moves along the teeth as it folds: it clears a crest ${deg(G.c)} late.`, specs: [['Pivot to tip', `${G.l.toFixed(1)} mm`], ['Crest overrun c', deg(G.c)]], live: ['gap', 'state'] },
     spring: { name: 'Pawl spring', group: 'Spring', role: 'A small coil spring under each pawl that pushes it out against the ring.', specs: [] },
-    cassette: { name: 'Cassette', group: 'Input', role: 'Three chain cogs on the splined body: 26, 21 and 16 teeth for 1/2 in chain.', specs: [['Cogs', '26 · 21 · 16']] },
+    cassette: { name: 'Cassette', group: 'Input', role: 'Three chain cogs on the splined body: 18, 16 and 14 teeth for 1/2 in chain. Small cogs, so the pawls stay in view.', specs: [['Cogs', '18 · 16 · 14']] },
   };
 }

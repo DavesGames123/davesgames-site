@@ -212,12 +212,15 @@ function freehubUnit(B, u) {
   const body = B.part('body', { info: 'body', label: 'Freehub body (input)', labelAt: [-30, 60, 30], explode: [0, 70, 0], st: 0.2, en: 0.9 });
   B.mesh(body, lathe([[[41, 14], [41, 17]], [[33, 17], [33, 32.5]], [[22, 32.5], [22, 98]], [[8.4, 98], [8.4, 14]]], 96), 'gear');
   for (let i = 0; i < 9; i++) { const t = TAU * i / 9, g = boxGeo(21.6, 23.4, 33, 97.5, -2, 2); g.rotateY(t); B.mesh(body, g, 'gear'); }
-  // cassette: three cogs on the core with spacers
+  // cassette: three cogs on the core with spacers. The largest cog
+  // (18 teeth, tip r 39.2) stays inside the pawl hooks (r 40.4 .. 50), so the
+  // pawls and the ring show from above. A 26-tooth cog (tip r 55.3)
+  // covered all of them in the whole, close and top views.
   const cas = B.part('cassette', { info: 'cassette', label: 'Cassette', labelAt: [40, 90, 0], parent: body.root, explode: [0, 50, 0], st: 0.4, en: 1 });
-  [[26, 52], [21, 66], [16, 80]].forEach(([z, y]) => {
+  [[18, 52], [16, 66], [14, 80]].forEach(([z, y]) => {
     const c = cog(z);
     B.mesh(cas, slab(shapeOf(c.pts, [circle(23.8)]), y, 2.6, 0), 'steel');
-    B.mesh(cas, tube(24.2, 27, y + 2.4, y + 14.2, 48), 'bolt');
+    B.mesh(cas, tube(24.2, 25.4, y + 2.4, y + 14.2, 48), 'bolt');   // under the 14-tooth root, r 24.6
   });
   // pawls, pins and springs: three, in phase, on the body
   const pawls = [];
