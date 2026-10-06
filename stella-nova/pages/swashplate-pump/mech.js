@@ -126,7 +126,10 @@ export function kidney(R, a0, a1, w, seg = 32) {
   arc(0, 0, R - w, a1, a0, seg);
   arc(R * Math.cos(a0), R * Math.sin(a0), w, a0 + Math.PI, a0 + TAU, 10);
   // the arcs share their end points: drop the repeats
-  return pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 1e-6);
+  const out = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 1e-6);
+  const [f, l] = [out[0], out[out.length - 1]];
+  if (Math.hypot(f[0] - l[0], f[1] - l[1]) < 1e-6) out.pop();
+  return out;
 }
 
 // slipper centre in the plate frame (e1, e2), and the retainer hole for it
