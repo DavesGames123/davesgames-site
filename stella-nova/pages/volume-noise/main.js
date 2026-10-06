@@ -3,13 +3,13 @@
 // ----------------------------------------------------------------------------
 //  The entry module. It starts the GPU (gpu.js), generates the textures with
 //  the main.cpp constants, binds the controls of index.html, and draws one
-//  of three views each frame.
+//  of four views each frame.
 //
 //  MODULE MAP
 //    noise-ref.js ... the CPU reference port (also makes the hash table)
 //    gpu.js ......... device, textures, generation, view pipelines, readback
 //    shaders/ ....... noise.wgsl + gen.wgsl (compute), common.wgsl +
-//                     views.wgsl (render)
+//                     views.wgsl / clouds.wgsl (render)
 //
 //  FRAMING. The panel, the phone dock and sheet, and the topbar cover parts
 //  of the canvas. clearArea() measures them, and every view centres its
@@ -28,17 +28,23 @@ const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:c
 const TOUCH = matchMedia('(hover:none)').matches;
 const $ = id => document.getElementById(id);
 const canvas = $('gl');
-const VIEWS = ['slice', 'tiles', 'volume'];
-// Pixel budget per view (backing pixels): the cube march is the costly one.
-const BUDGET = { slice: 4.0e6, tiles: 4.0e6, volume: 1.2e6 };
+const VIEWS = ['slice', 'tiles', 'volume', 'clouds'];
+// Pixel budget per view (backing pixels): the cloud march is the costly one.
+const BUDGET = { slice: 4.0e6, tiles: 4.0e6, volume: 1.2e6, clouds: 0.5e6 };
+const WIND_DIR = [Math.cos(0.6), Math.sin(0.6)];
+const TIME_LAPSE = 30;   // the wind runs 30 times faster than real time
 
 export const S = {
   view: 'slice', chan: 7,
   z: 0.5, sweep: true, seams: true, ice: false, span: 3,
   thr: CUBE_THR[7], gain: 1.2, cubeThr: CUBE_THR.slice(),
+  cov: 0.5, dens: 1, ero: 0.3, sunEl: 24, sunAz: 200, wind: 18,
   prm: { ...RECIPE },
   playing: true, time: 0, fade: 1,
   orbit: { yaw: 0.7, pitch: 0.42, dist: 2.3 },
+  look: { yaw: 3.3, pitch: 0.14, x: 0, z: 0, alt: 0.7 },
+  windOff: [0, 0, 0, 0],
+  tint: [1, 1, 1],
 };
 
 let gpu = null;
@@ -78,16 +84,27 @@ function writeUniforms(sc) {
   u.set([ax, ay, aw, ah], 4);
   u.set([S.chan, S.z, S.span, S.seams ? 1 : 0], 8);
   const m = Math.min(aw, ah);
-  const O = S.orbit, cp = Math.cos(O.pitch);
-  const eye = [O.dist * cp * Math.sin(O.yaw), O.dist * Math.sin(O.pitch), O.dist * cp * Math.cos(O.yaw)];
-  const b = basis(eye.map(c => -c));
-  const R = 0.87, focal = 0.46 * m * Math.sqrt(Math.max(0.01, O.dist * O.dist - R * R)) / R;
-  u.set([...eye, focal], 12);
-  u.set([...b.r, 0], 16); u.set([...b.up, 0], 20); u.set([...b.f, 0], 24);
-  u.fill(0, 28, 40);   // sun, cloud, wind: no view reads them yet
+  if (S.view === 'clouds') {
+    const L = S.look, cp = Math.cos(L.pitch);
+    const b = basis([cp * Math.sin(L.yaw), Math.sin(L.pitch), cp * Math.cos(L.yaw)]);
+    const focal = 0.5 * canvas.height / Math.tan(0.5 * 1.05);
+    u.set([L.x, L.alt, L.z, focal], 12);
+    u.set([...b.r, 0], 16); u.set([...b.up, 0], 20); u.set([...b.f, 0], 24);
+  } else {
+    const O = S.orbit, cp = Math.cos(O.pitch);
+    const eye = [O.dist * cp * Math.sin(O.yaw), O.dist * Math.sin(O.pitch), O.dist * cp * Math.cos(O.yaw)];
+    const b = basis(eye.map(c => -c));
+    const R = 0.87, focal = 0.46 * m * Math.sqrt(Math.max(0.01, O.dist * O.dist - R * R)) / R;
+    u.set([...eye, focal], 12);
+    u.set([...b.r, 0], 16); u.set([...b.up, 0], 20); u.set([...b.f, 0], 24);
+  }
+  const el = S.sunEl * Math.PI / 180, az = S.sunAz * Math.PI / 180;
+  u.set([Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az), Math.max(0, Math.sin(el))], 28);
+  u.set([S.cov, S.dens, S.ero, TOUCH ? 48 : 64], 32);
+  u.set(S.windOff, 36);
   u.set([S.thr, S.gain, S.ice ? 1 : 0, S.prm.shapeRes], 40);
   u.set([1, 1, 1.1, 0], 44);
-  u.set([1, 1, 1, 0], 48);
+  u.set([...S.tint, 0], 48);
 }
 
 // ── frame loop ─────────────────────────────────────────────────────────────
@@ -98,8 +115,13 @@ function frame(now) {
   fpsN++; fpsT += dt; if (fpsT > 0.5) { fps = fpsN / fpsT; fpsN = 0; fpsT = 0; }
   if (S.playing) {
     S.time += dt;
-    if (S.sweep && !dragging) { S.z = (S.z + dt * 0.04) % 1; syncZ(); }
+    if (S.sweep && !dragging && S.view !== 'clouds') { S.z = (S.z + dt * 0.04) % 1; syncZ(); }
     if (S.view === 'volume' && !dragging) S.orbit.yaw += dt * 0.12;
+  }
+  if (S.playing) {
+    const k = S.wind * dt * TIME_LAPSE / 1000;
+    S.windOff[0] += WIND_DIR[0] * k; S.windOff[1] += WIND_DIR[1] * k;
+    S.windOff[2] += WIND_DIR[0] * k * 1.6; S.windOff[3] += WIND_DIR[1] * k * 1.6;
   }
   // Canvas backing size: CSS size x dpr, cut to the view's pixel budget.
   const cw = innerWidth, ch = innerHeight;
@@ -122,7 +144,8 @@ function hud() {
   h.style.left = area.x + 'px'; h.style.top = (area.y - 24) + 'px'; h.style.width = area.w + 'px';
   const c = CHANNELS[S.chan];
   let l;
-  if (S.view === 'tiles') l = `${c.name} · z ${S.z.toFixed(3)} · ${S.span.toFixed(2)} tiles`;
+  if (S.view === 'clouds') l = `cloud layer · coverage ${S.cov.toFixed(2)} · sun ${S.sunEl.toFixed(0)}°`;
+  else if (S.view === 'tiles') l = `${c.name} · z ${S.z.toFixed(3)} · ${S.span.toFixed(2)} tiles`;
   else if (S.view === 'volume') l = `${c.name} · threshold ${S.thr.toFixed(2)}`;
   else l = `${c.name} · z ${S.z.toFixed(3)}`;
   $('hudL').textContent = l;
@@ -164,6 +187,8 @@ function regen(delay = 220) {
 // ── controls ───────────────────────────────────────────────────────────────
 const SLIDERS = [
   ['z', 'z', v => v.toFixed(3)], ['span', 'span', v => v.toFixed(2)], ['thr', 'thr', v => v.toFixed(2)], ['gain', 'gain', v => v.toFixed(2)],
+  ['cov', 'cov', v => v.toFixed(2)], ['dens', 'dens', v => v.toFixed(2)], ['ero', 'ero', v => v.toFixed(2)],
+  ['sunEl', 'sunEl', v => v.toFixed(1) + '°'], ['sunAz', 'sunAz', v => v.toFixed(0) + '°'], ['wind', 'wind', v => v.toFixed(0) + ' m/s'],
 ];
 const TEX_SLIDERS = [['pf', 'perlinFreq'], ['po', 'perlinOct'], ['pwc', 'pwCells'], ['gbc', 'gbaCells'], ['dtc', 'detailCells'], ['seed', 'seed']];
 
@@ -209,7 +234,7 @@ function bindUI() {
   $('dockPlay').addEventListener('click', () => { S.playing = !S.playing; syncUI(); });
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return;
-    const i = '123'.indexOf(e.key); if (i >= 0) setView(VIEWS[i]);
+    const i = '1234'.indexOf(e.key); if (i >= 0) setView(VIEWS[i]);
     if (e.key === ' ') { S.playing = !S.playing; syncUI(); e.preventDefault(); }
   });
 
@@ -254,6 +279,7 @@ function bindPointer() {
       if (pinch0) zoom(pinch0 / d); pinch0 = d; return;
     }
     if (S.view === 'volume') { S.orbit.yaw -= dx * 0.008; S.orbit.pitch = Math.max(-1.45, Math.min(1.45, S.orbit.pitch + dy * 0.008)); }
+    else if (S.view === 'clouds') { S.look.yaw -= dx * 0.004; S.look.pitch = Math.max(-0.35, Math.min(1.3, S.look.pitch + dy * 0.004)); }
     else { S.z = ((S.z + dx / Math.max(100, area.w)) % 1 + 1) % 1; S.sweep = false; syncZ(); $('sweep').setAttribute('aria-pressed', 'false'); }
   });
   canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(e.deltaY * 0.0015)); }, { passive: false });
@@ -261,6 +287,7 @@ function bindPointer() {
 function zoom(k) {
   if (S.view === 'volume') S.orbit.dist = Math.max(1.2, Math.min(5, S.orbit.dist * k));
   else if (S.view === 'tiles') { S.span = Math.max(1, Math.min(3, S.span * k)); $('span').value = S.span; $('spanv').textContent = S.span.toFixed(2); }
+  else if (S.view === 'clouds') S.look.alt = Math.max(0.1, Math.min(6, S.look.alt * k));
 }
 
 // ── export ─────────────────────────────────────────────────────────────────

@@ -16,8 +16,8 @@
 //  the GPU watchdog on a slow device.
 //
 //  RENDER. One uniform buffer of UNI_FLOATS floats (shaders/common.wgsl
-//  struct Uni). One pipeline per view: slice, tiles, volume (views.wgsl).
-//  All use one explicit bind group layout.
+//  struct Uni). One pipeline per view: slice, tiles, volume (views.wgsl),
+//  clouds (clouds.wgsl). All use one explicit bind group layout.
 //
 //  grep -n: "export async function createGPU"  "async generate"  "render("
 //           "async readTexture"  "export const CHANNELS"
@@ -69,7 +69,7 @@ export async function createGPU(canvas) {
   const format = navigator.gpu.getPreferredCanvasFormat();
   ctx.configure({ device, format, alphaMode: 'opaque' });
   const src = {};
-  for (const n of ['noise', 'gen', 'common', 'views']) src[n] = await loadText(n + '.wgsl');
+  for (const n of ['noise', 'gen', 'common', 'views', 'clouds']) src[n] = await loadText(n + '.wgsl');
   const errors = [];
   device.addEventListener('uncapturederror', e => { errors.push(String(e.error && e.error.message || e.error)); console.error('WebGPU:', e.error && e.error.message); });
   const g = new VolumeGPU(device, ctx, format, src);
@@ -89,7 +89,8 @@ class VolumeGPU {
     const d = this.device;
     const genMod = d.createShaderModule({ label: 'gen', code: this.src.noise + '\n' + this.src.gen });
     const viewMod = d.createShaderModule({ label: 'views', code: this.src.common + '\n' + this.src.views });
-    await checkModule(d, genMod, 'gen.wgsl'); await checkModule(d, viewMod, 'views.wgsl');
+    const cloudMod = d.createShaderModule({ label: 'clouds', code: this.src.common + '\n' + this.src.clouds });
+    await checkModule(d, genMod, 'gen.wgsl'); await checkModule(d, viewMod, 'views.wgsl'); await checkModule(d, cloudMod, 'clouds.wgsl');
     const cp = entry => d.createComputePipelineAsync({ layout: 'auto', compute: { module: genMod, entryPoint: entry } });
     [this.pShape, this.pDetail, this.pWeather] = await Promise.all([cp('gen_shape'), cp('gen_detail'), cp('gen_weather')]);
     this.hashBuf = d.createBuffer({ size: TABLE_LEN * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -107,8 +108,8 @@ class VolumeGPU {
     ] });
     const layout = d.createPipelineLayout({ bindGroupLayouts: [this.bgl] });
     const rp = (mod, fs) => d.createRenderPipelineAsync({ layout, vertex: { module: mod, entryPoint: 'vs_main' }, fragment: { module: mod, entryPoint: fs, targets: [{ format: this.format }] }, primitive: { topology: 'triangle-list' } });
-    const [slice, tiles, volume] = await Promise.all([rp(viewMod, 'fs_slice'), rp(viewMod, 'fs_tiles'), rp(viewMod, 'fs_volume')]);
-    this.pipes = { slice, tiles, volume };
+    const [slice, tiles, volume, clouds] = await Promise.all([rp(viewMod, 'fs_slice'), rp(viewMod, 'fs_tiles'), rp(viewMod, 'fs_volume'), rp(cloudMod, 'fs_clouds')]);
+    this.pipes = { slice, tiles, volume, clouds };
     const usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC;
     this.tex.detail = d.createTexture({ size: [32, 32, 32], dimension: '3d', format: 'rgba8unorm', usage });
     this.tex.weather = d.createTexture({ size: [WEATHER_RES, WEATHER_RES], format: 'rgba8unorm', usage });

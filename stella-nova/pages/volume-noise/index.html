@@ -9,7 +9,7 @@
   ════════════════════════════════════════════════════════════════════════════
    VOLUME NOISE  ·  page shell
   ────────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js builds the WebGPU textures, the three views and
+   Static markup only. main.js builds the WebGPU textures, the four views and
    the frame loop, and binds the controls by id. The noise is a WGSL port of
    TileableVolumeNoise (Sebastien Hillaire, MIT): see CREDITS.txt.
 
@@ -24,7 +24,7 @@
      topbar     hidden in the site shell iframe (.in-frame)
      #panel     desktop: a left panel; phone portrait: a bottom sheet above
                 #dock; phone landscape: a right drawer
-     #dock      phone only: controls button, the three views, play
+     #dock      phone only: controls button, the four views, play
      #hud       one line of live values at the top of the clear area
   ════════════════════════════════════════════════════════════════════════════
 -->
@@ -55,6 +55,7 @@
       <button type="button" data-view="slice">Slice</button>
       <button type="button" data-view="tiles">Tiles</button>
       <button type="button" data-view="volume">Cube</button>
+      <button type="button" data-view="clouds">Sky</button>
     </div>
   </section>
 
@@ -75,6 +76,17 @@
     <div class="row" data-for="tiles"><label for="span">tiles</label><input type="range" id="span" min="1" max="3" step="0.01" value="3"><span class="val" id="spanv"></span></div>
     <div class="row" data-for="volume"><label for="thr">threshold</label><input type="range" id="thr" min="0" max="0.95" step="0.01" value="0.8"><span class="val" id="thrv"></span></div>
     <div class="row" data-for="volume"><label for="gain">density</label><input type="range" id="gain" min="0.2" max="6" step="0.05" value="1.2"><span class="val" id="gainv"></span></div>
+  </section>
+
+  <section class="sec" data-for="clouds">
+    <div class="sec-label">Cloud layer</div>
+    <div class="row"><label for="cov">coverage</label><input type="range" id="cov" min="0" max="1" step="0.01" value="0.5"><span class="val" id="covv"></span></div>
+    <div class="row"><label for="dens">density</label><input type="range" id="dens" min="0.2" max="2.5" step="0.01" value="1"><span class="val" id="densv"></span></div>
+    <div class="row"><label for="ero">erosion</label><input type="range" id="ero" min="0" max="0.6" step="0.01" value="0.3"><span class="val" id="erov"></span></div>
+    <div class="row"><label for="sunEl">sun height</label><input type="range" id="sunEl" min="-2" max="75" step="0.5" value="24"><span class="val" id="sunElv"></span></div>
+    <div class="row"><label for="sunAz">sun bearing</label><input type="range" id="sunAz" min="0" max="360" step="1" value="200"><span class="val" id="sunAzv"></span></div>
+    <div class="row"><label for="wind">wind</label><input type="range" id="wind" min="0" max="60" step="1" value="18"><span class="val" id="windv"></span></div>
+    <p class="hint">Drag to look around. The layer is 1.5 to 4 km up.</p>
   </section>
 
   <section class="sec">
@@ -116,6 +128,7 @@
     <button type="button" data-view="slice">Slice</button>
     <button type="button" data-view="tiles">Tiles</button>
     <button type="button" data-view="volume">Cube</button>
+    <button type="button" data-view="clouds">Sky</button>
   </div>
   <button type="button" id="dockPlay" aria-label="Pause">❚❚</button>
 </nav>
