@@ -3,17 +3,19 @@
 // ----------------------------------------------------------------------------
 //  The entry module. It starts the GPU (gpu.js), generates the textures with
 //  the main.cpp constants, binds the controls of index.html, and draws one
-//  of four views each frame.
+//  of four views each frame. saver.js adds the screensaver hook.
 //
 //  MODULE MAP
 //    noise-ref.js ... the CPU reference port (also makes the hash table)
 //    gpu.js ......... device, textures, generation, view pipelines, readback
+//    saver.js ....... window.snSaver: the screensaver shot director
 //    shaders/ ....... noise.wgsl + gen.wgsl (compute), common.wgsl +
 //                     views.wgsl / clouds.wgsl (render)
 //
 //  FRAMING. The panel, the phone dock and sheet, and the topbar cover parts
 //  of the canvas. clearArea() measures them, and every view centres its
-//  subject in the rest.
+//  subject in the rest. In the screensaver the clear area is the band
+//  between the plate's top and bottom text (lib/saver-clear.js plateBand).
 //
 //  TEST HOOK. window.__vn = { ready, failed, gpu, S, generate, sample,
 //  seamStats, roll, errors }. tests.mjs drives it over CDP.
@@ -23,6 +25,7 @@
 // ============================================================================
 import { createGPU, CHANNELS, CUBE_THR, UNI_FLOATS } from './gpu.js';
 import { RECIPE } from './noise-ref.js';
+import { installSaver } from './saver.js';
 
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const TOUCH = matchMedia('(hover:none)').matches;
@@ -45,6 +48,7 @@ export const S = {
   look: { yaw: 3.3, pitch: 0.14, x: 0, z: 0, alt: 0.7 },
   windOff: [0, 0, 0, 0],
   tint: [1, 1, 1],
+  saver: false, band: null, saverTick: null,
 };
 
 let gpu = null;
@@ -54,6 +58,12 @@ const area = { x: 0, y: 0, w: 1, h: 1, ok: false };
 // ── framing ────────────────────────────────────────────────────────────────
 function clearArea() {
   const W = innerWidth, H = innerHeight;
+  if (S.saver) {
+    const b = S.band;
+    if (!b) return { x: 0, y: 0, w: W, h: H };
+    const w = Math.min(W, b.w || W), x = (W - w) / 2;
+    return { x, y: b.t, w, h: Math.max(80, H - b.t - b.b) };
+  }
   let l = 0, t = 0, r = W, bot = H;
   const top = document.querySelector('.topbar');
   if (top && getComputedStyle(top).display !== 'none') t = top.getBoundingClientRect().bottom;
@@ -113,12 +123,13 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   fpsN++; fpsT += dt; if (fpsT > 0.5) { fps = fpsN / fpsT; fpsN = 0; fpsT = 0; }
-  if (S.playing) {
+  if (S.saverTick) S.saverTick(dt, now);
+  else if (S.playing) {
     S.time += dt;
     if (S.sweep && !dragging && S.view !== 'clouds') { S.z = (S.z + dt * 0.04) % 1; syncZ(); }
     if (S.view === 'volume' && !dragging) S.orbit.yaw += dt * 0.12;
   }
-  if (S.playing) {
+  if (S.playing || S.saverTick) {
     const k = S.wind * dt * TIME_LAPSE / 1000;
     S.windOff[0] += WIND_DIR[0] * k; S.windOff[1] += WIND_DIR[1] * k;
     S.windOff[2] += WIND_DIR[0] * k * 1.6; S.windOff[3] += WIND_DIR[1] * k * 1.6;
@@ -136,7 +147,7 @@ function frame(now) {
   if (!gpu || !gpu.bg) return;
   writeUniforms(W / cw);
   gpu.render(S.view, uni);
-  hud();
+  if (!S.saver) hud();
 }
 
 function hud() {
@@ -167,7 +178,7 @@ async function cubeThresholds() {
       S.cubeThr[ch] = Math.min(0.95, k / 255);
     }
   }
-  S.thr = S.cubeThr[S.chan]; syncUI();
+  if (!S.saver) { S.thr = S.cubeThr[S.chan]; syncUI(); }
 }
 async function generate(prm) {
   const ms = await gpu.generate(prm);
@@ -409,3 +420,4 @@ const ready = (async () => {
     throw e;
   }
 })();
+installSaver({ S, canvas, ready, setView, syncUI, regen: prm => { Object.assign(S.prm, prm); return generate(S.prm); }, shaderSource: () => gpu && gpu.src });
