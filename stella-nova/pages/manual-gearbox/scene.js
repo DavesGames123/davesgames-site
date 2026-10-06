@@ -26,14 +26,14 @@
 //    sc.pose ................. every part from one state
 // ============================================================================
 import * as THREE from 'three';
-import { slab, rod, tube, lathe, circle, merge } from './kit.js';
+import { slab, rod, tube, lathe, poly, circle, merge } from './kit.js';
 import { outline } from './teeth.js';
 import { SPEC, M, CD, angles } from './box.js';
 
 const shapeOf = (pts, holes = []) => { const s = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], p[1]))); for (const h of holes) s.holes.push(h); return s; };
 function gearGeo(N, w, bore) {
   const pts = outline(N, N, M, { ha: 1, hf: 1.25 }).map(([r, p]) => [r * Math.cos(p), r * Math.sin(p)]);
-  return slab(shapeOf(pts, [circle(bore)]), 0, w, 0.5);
+  return slab(shapeOf(pts, [circle(bore)]), 0, w, 0.3);
 }
 // dogs on the face at local y = at (toward +y if dir > 0), a cone beyond
 function dogRing(at, dir, bore) {
@@ -60,11 +60,16 @@ export function build(B) {
   B.mesh(P.inShaft, gearGeo(SPEC.input.N, 18, 13.9).translate(0, 130, 0), 'gear');
   B.mesh(P.inShaft, dogRing(130 + 18, 1, 13.9), 'steel');
   P.mainShaft = B.part('mainShaft', { info: 'mainShaft', label: 'Main shaft', labelAt: [0, 230, 0], at: [SPEC.main[0], 0, 0], ...MAIN, explode: [0, 0, 0] });
-  B.mesh(P.mainShaft, rod(14, 0, SPEC.main[1] - SPEC.main[0], 32), 'shaft');
+  // the nose (x 20 .. 30) runs inside the input shaft: a thinner pilot, so
+  // the two r 14 rods do not share a surface where they overlap
+  const nose = SPEC.inShaft[1] - SPEC.main[0];
+  B.mesh(P.mainShaft, poly([[10, 0], [10, nose], [14, nose], [14, SPEC.main[1] - SPEC.main[0]], [0, SPEC.main[1] - SPEC.main[0]], [0, 0]], 32), 'shaft');
   B.mesh(P.mainShaft, lathe([[[40, 236], [40, 250], [14, 250], [14, 236]]], 48), 'steel');
   P.lay = B.part('lay', { info: 'lay', label: 'Layshaft cluster', labelAt: [0, 120, 0], at: [SPEC.lay[0], -CD, 0], ...LAY, explode: [0, -70, 0], st: 0.1, en: 0.7 });
   B.mesh(P.lay, rod(13, 0, SPEC.lay[1] - SPEC.lay[0], 32), 'shaft');
-  const layGear = (N, x) => B.mesh(P.lay, gearGeo(N, 18, 12.9).translate(0, x[0] - SPEC.lay[0], 0), 'gear');
+  // lay gears are 0.6 mm wider than their mates (0.3 mm each side), so the
+  // end faces of a meshed pair are not in one plane
+  const layGear = (N, x) => B.mesh(P.lay, gearGeo(N, 18.6, 12.9).translate(0, x[0] - SPEC.lay[0] - 0.3, 0), 'gear');
   layGear(SPEC.layIn.N, SPEC.input.x);
   for (const g in SPEC.pairs) layGear(SPEC.pairs[g].lay, SPEC.pairs[g].x);
 
@@ -89,11 +94,12 @@ export function build(B) {
     // fork: a half ring in the groove and an arm up to its rail
     P['f' + h] = B.part('f' + h, { info: 'fork', label: null, at: [H.x, 0, 0], explode: [0, 210, 0], st: 0.4, en: 1 });
     const half = new THREE.TorusGeometry(33.5, 3, 8, 32, Math.PI); half.rotateY(Math.PI / 2); B.mesh(P['f' + h], half, 'bronze');
-    B.mesh(P['f' + h], boxGeo(-3, 3, 33, 70, railZ[h] - 4, railZ[h] + 4), 'bronze');
+    B.mesh(P['f' + h], boxGeo(-2.7, 2.7, 33, 70, railZ[h] - 4, railZ[h] + 4), 'bronze');   // 0.3 mm in from the bar faces
     B.mesh(P['f' + h], merge([boxGeo(-3, 3, 30, 40, -36, 36)]), 'bronze');
     P['r' + h] = B.part('r' + h, { info: 'rail', at: [H.x, 70, railZ[h]], explode: [0, 210, 0], st: 0.4, en: 1 });
     const rr = along(rod(5, -150, 120, 16)); B.mesh(P['r' + h], rr, 'shaft');
-    const finger = boxGeo(-6, 6, 4, 20, -5, 5); finger.translate(110 - H.x, 0, 0); B.mesh(P['r' + h], finger, 'steel');
+    // the finger is 0.5 mm clear of each side of the r 6 lever rod
+    const finger = boxGeo(-6.5, 6.5, 4, 20, -5, 5); finger.translate(110 - H.x, 0, 0); B.mesh(P['r' + h], finger, 'steel');
   }
   // lever: a ball, a rod and a knob; it pivots at (110, 120, 0)
   P.lever = B.part('lever', { info: 'lever', label: 'Gear lever', labelAt: [0, 210, 0], at: [110, 120, 0], explode: [0, 260, 0], st: 0.5, en: 1 });
