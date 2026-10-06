@@ -48,6 +48,7 @@
 //      atmosphere ........... "atmosphereMaterial"   the fresnel shell
 //      post processing ...... "ChromaticAberration"  the composer pass
 //      state -> uniforms .... "function applyState"  push S into the GPU
+//      preset fade .......... "function fadeTo"      a preset change goes through black
 //      state -> widgets ..... "function syncAllUI"   push S into the DOM
 //      preset grid .......... "BUILD PRESET GRID"    build the preset buttons
 //      control bindings ..... "BIND QUICK PANEL"     wire inputs back to S
@@ -244,8 +245,7 @@ composer.addPass(caPass);
 // Push every value in S into the GPU uniforms and renderer. Called once at start
 // and after any control change, so the render always reflects the current state.
 function applyState(){
-  uniforms.uPrimaryColor.value.set(S.primaryEnergy);
-  uniforms.uSecondaryColor.value.set(S.secondaryEnergy);
+  applyColors();
   uniforms.uDensity.value=S.density;
   uniforms.uFractalIters.value=S.fractalIters;
   uniforms.uFractalScale.value=S.fractalScale;
@@ -253,12 +253,32 @@ function applyState(){
   uniforms.uInternalAnim.value=S.internalAnim;
   uniforms.uSmoothness.value=S.smoothness;
   uniforms.uAsymmetry.value=S.asymmetry;
-  atmosphereUniforms.uColor.value.set(S.primaryEnergy);
   atmosphereUniforms.uGlow.value=S.atmosphereGlow;
   atmosphereUniforms.uLevel.value=S.atmosphereLevel;
   atmosphereMesh.scale.setScalar(S.atmosphereScale);
   caPass.uniforms.uAmount.value=S.chromaticAberration;
   setRatio();
+}
+// The colours, times the fade level. Emission and alpha both scale with the
+// colours, so 0 is black and the atmosphere (additive) is gone too.
+function applyColors(){
+  const e=fade.k*fade.k*(3-2*fade.k);
+  uniforms.uPrimaryColor.value.set(S.primaryEnergy).multiplyScalar(e);
+  uniforms.uSecondaryColor.value.set(S.secondaryEnergy).multiplyScalar(e);
+  atmosphereUniforms.uColor.value.set(S.primaryEnergy).multiplyScalar(e);
+}
+// FADE. A preset change goes through black. The fold p <- s q/|q|^2 - s is
+// chaotic in s, so an ease of the fields between two presets passes through
+// shapes that churn. fadeTo() eases fade.k to 0 over outS, runs fn (the new
+// preset), and eases fade.k back to 1 over inS. stepFade runs each frame.
+const fade={k:1,dir:0,out:0.35,in:0.5,then:null};
+function fadeTo(fn,outS=0.35,inS=0.5){ fade.then=fn; fade.out=outS; fade.in=inS; fade.dir=-1; }
+function stepFade(dt){
+  if(!fade.dir) return;
+  fade.k+=fade.dir*dt/(fade.dir<0?fade.out:fade.in);
+  if(fade.k<=0){ fade.k=0; const f=fade.then; fade.then=null; if(f) f(); fade.dir=1; }
+  else if(fade.k>=1){ fade.k=1; fade.dir=0; }
+  applyColors();
 }
 // Apply the pixel ratio only when it changes: setPixelRatio reallocates the
 // composer targets, and the saver autopilot calls applyState every 50 ms.
@@ -341,9 +361,8 @@ for(const name of Object.keys(presets)){
   btn.innerHTML=`<span class="swatch" style="background:${presets[name].primaryEnergy}"></span>${name}`;
   btn.addEventListener('click',()=>{
     S.preset=name;
-    Object.assign(S,presets[name]);
-    applyState();
     syncAllUI();
+    fadeTo(()=>{ Object.assign(S,presets[name]); applyState(); syncAllUI(); });
   });
   presetGrid.appendChild(btn);
 }
@@ -444,6 +463,7 @@ const fpsEl=document.getElementById('fps');
 function animate(){
   requestAnimationFrame(animate);
   const dt=clock.getDelta();
+  stepFade(Math.min(dt,0.1));
   uniforms.uTime.value+=dt*S.speed;
   orb.rotation.y+=dt*S.orbRotation;
   orb.rotation.x+=dt*(S.orbRotation*0.5);
@@ -469,13 +489,14 @@ animate();
 // ═══════════════════ SCREENSAVER HOOK ═══════════════════
 // The shell's screensaver (lib/screensaver.js) calls snSaver.enter(opts). It
 // hides the panels, loads a calm preset chosen by opts.seed, and slows time and
-// spin by opts.calm (1 = slowest), with a floor so the volume never freezes. Every half dwell it eases the continuous
-// fields toward the next calm preset over 8 s. fractalIters stays fixed, because
-// an integer step would pop. Once a second it sends opts.label the fold and
-// march equations with the live values. No storage, no URL writes.
+// spin by opts.calm (1 = slowest), with a floor so the volume never freezes.
+// The presets play in a seeded shuffle. Each holds 8 to 11 s, then the orb
+// fades to black over 1.2 s, the next preset applies in one frame (all
+// fields, fractalIters too), and the orb fades in over 1.6 s. Only the shape
+// and colour change at the black frame: the camera and the plate band stay.
+// Once a second it sends opts.label the fold and march equations with the
+// live values. No storage, no URL writes.
 const SAVER_PRESETS=['Void','Gray','Ember','Default','Cyan'];
-const SAVER_EASE=['speed','density','atmosphereGlow','atmosphereLevel','atmosphereScale',
-  'orbRotation','internalAnim','fractalScale','fractalDecay','smoothness','asymmetry','chromaticAberration'];
 // The orb on screen, for the shell's label plate: the projected centre of
 // the volume sphere (radius 2, the orb mesh), and the screen radius of its
 // silhouette, R/sqrt(D^2 - R^2) over tan(fov/2), in page CSS px. project()
@@ -513,8 +534,13 @@ window.snSaver={
       p.chromaticAberration*=0.5; p.dpr=1;
       return p;
     };
-    let i=(opts.seed>>>0)%SAVER_PRESETS.length;
-    Object.assign(S,calmOf(SAVER_PRESETS[i]),{preset:SAVER_PRESETS[i]});
+    // A seeded shuffle, so each run plays a new order.
+    let seed=(opts.seed>>>0)||1;
+    const rnd=()=>{ seed=(Math.imul(seed,1664525)+1013904223)>>>0; return seed/4294967296; };
+    const order=SAVER_PRESETS.slice();
+    for(let j=order.length-1;j>0;j--){ const q=Math.floor(rnd()*(j+1)); [order[j],order[q]]=[order[q],order[j]]; }
+    let i=0;
+    Object.assign(S,calmOf(order[i]),{preset:order[i]});
     // The orb sits in the clear band between the plate's top text and its
     // bottom text (plateBand, lib/saver-clear.js), centred in that band,
     // with a screen radius of 0.46 of the band height or of the visible
@@ -542,24 +568,21 @@ window.snSaver={
     };
     fit(1); addEventListener('resize',()=>fit(1));
     applyState();
-    // Autopilot: ease S toward the next preset, colours through THREE.Color.
-    const c=new THREE.Color();
-    const hold=Math.max(10,(opts.seconds||60)/2)*1000, ease=8000;
-    let a=null,b=null,a1=new THREE.Color(),a2=new THREE.Color(),b1=new THREE.Color(),b2=new THREE.Color(),t0=0;
+    // Autopilot: hold a preset, then fade through black to the next one.
+    const holdFor=()=>(8+3*rnd())*1000;
+    let hold=holdFor(), t0=performance.now(), going=false;
     const step=now=>{
-      if(!a){ if(now-t0<hold) return;
-        i=(i+1)%SAVER_PRESETS.length;
-        a={...S}; b=calmOf(SAVER_PRESETS[i]); t0=now;
-        a1.set(a.primaryEnergy); a2.set(a.secondaryEnergy); b1.set(b.primaryEnergy); b2.set(b.secondaryEnergy);
-      }
-      const k=Math.min(1,(now-t0)/ease), e=k*k*(3-2*k);
-      for(const f of SAVER_EASE) S[f]=a[f]+(b[f]-a[f])*e;
-      S.primaryEnergy='#'+c.copy(a1).lerp(b1,e).getHexString();
-      S.secondaryEnergy='#'+c.copy(a2).lerp(b2,e).getHexString();
-      applyState();
-      if(k>=1){ a=null; t0=now; S.preset=SAVER_PRESETS[i]; }
+      if(going||now-t0<hold) return;
+      going=true;
+      const next=order[(i+1)%order.length];
+      fadeTo(()=>{
+        i=(i+1)%order.length;
+        Object.assign(S,calmOf(next),{preset:next});
+        applyState(); plate();
+        going=false; t0=performance.now(); hold=holdFor();
+      },1.2,1.6);
     };
-    t0=performance.now();
+    this.debug=()=>({ preset:S.preset, fade:+fade.k.toFixed(2), going, held:+((performance.now()-t0)/1000).toFixed(1), hold:+(hold/1000).toFixed(1), order });
     this._timer=setInterval(()=>{ step(performance.now()); fit(0.12); },50);
     // The plate: the fold the shader runs (shaders/orb.frag.glsl,
     // evaluateStructure and traceEnergy) with the live values from S. The
@@ -582,7 +605,7 @@ window.snSaver={
         ],
         lines:[
           'Up to 64 march steps per pixel; colour out = ½ ln(1 + E)',
-          a?'Easing to '+SAVER_PRESETS[i]:'Churn '+f(S.speed*S.internalAnim,2)+' rad/s, spin '+f(S.orbRotation,2)+' rad/s',
+          going?'Fading to '+order[(i+1)%order.length]:'Churn '+f(S.speed*S.internalAnim,2)+' rad/s, spin '+f(S.orbRotation,2)+' rad/s',
         ],
         tex:[
           '\\mathbf{q} = \\sqrt{\\mathbf{p}^2 + k}, \\qquad \\mathbf{p} \\leftarrow \\frac{s\\,\\mathbf{q}}{|\\mathbf{q}|^2} - s',
