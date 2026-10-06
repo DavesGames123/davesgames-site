@@ -10,6 +10,8 @@
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
+import { plateSVG, platePolylines } from './svg.js';
+import { THEMES } from './plate.js';
 import { layoutPlate, pageSize, PAGES, GRID_PRESETS, cellAt, MM_PER_PX } from './plate.js';
 import { makeEngine, drawFish, baseParams, PARAMS, GROUPS, sanitize, mutate, mulberry, diffParams,
   encodeShare, decodeShare, randomName, relativeName, flatten, unflatten, blendParams, upstreamCSV } from './engine.js';
@@ -171,6 +173,69 @@ test('grid layout: cellAt finds the centre of every cell', () => {
   for (const c of L.cells) eq(cellAt(L, c.x + c.w / 2, c.y + c.h / 2), c.i, 'cellAt');
   eq(cellAt(L, 1, 1), -1, 'margin');
   ok(GRID_PRESETS.every(p => p.rows * p.cols >= 4), 'presets');
+});
+
+// ── SVG ─────────────────────────────────────────────────────────────────────
+// A small XML well-formedness check: one root, every tag closed in order,
+// quoted attributes with no raw < or &, no raw < or & in text.
+function wellFormed(xml) {
+  let s = xml.replace(/^<\?xml[^?]*\?>\s*/, '');
+  const stack = [];
+  let i = 0, roots = 0;
+  const badAmp = /&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i;
+  while (i < s.length) {
+    const lt = s.indexOf('<', i);
+    const text = lt < 0 ? s.slice(i) : s.slice(i, lt);
+    if (badAmp.test(text)) throw new Error('raw & in text near ' + text.slice(0, 40));
+    if (text.trim() && !stack.length) throw new Error('text outside the root');
+    if (lt < 0) break;
+    const gt = s.indexOf('>', lt);
+    if (gt < 0) throw new Error('unclosed tag');
+    const tag = s.slice(lt + 1, gt);
+    if (tag.startsWith('/')) {
+      const nm = tag.slice(1).trim();
+      if (stack.pop() !== nm) throw new Error('mismatched </' + nm + '>');
+    } else {
+      const self = tag.endsWith('/');
+      const m = tag.replace(/\/$/, '').match(/^([A-Za-z][\w:-]*)((?:\s+[\w:-]+="[^"<]*")*)\s*$/);
+      if (!m) throw new Error('bad tag <' + tag.slice(0, 60) + '>');
+      if (badAmp.test(m[2])) throw new Error('raw & in attribute of <' + m[1] + '>');
+      if (!stack.length) roots++;
+      if (!self) stack.push(m[1]);
+    }
+    i = gt + 1;
+  }
+  if (stack.length) throw new Error('unclosed ' + stack.join(','));
+  if (roots !== 1) throw new Error('roots ' + roots);
+  return true;
+}
+function plateFixture(rows, cols, names) {
+  const E = makeEngine(SRC);
+  const fishes = names.map(n => { const f = drawFish(E, n, null, false); return { ...flatten(f.polylines), seed: f.seed, name: n }; });
+  const L = layoutPlate({ w: 297, h: 210, rows, cols, border: true, title: true, labels: true, titleText: 'Tom & Jerry <fish> "plate"', subText: "it's & <i>", names });
+  return { L, fishes };
+}
+test('the plate SVG is well formed, with hostile names escaped', () => {
+  const names = ['Biggus fishus', 'A & B <c>', 'Quote "q" fish', "Apos 'a' fish"];
+  const { L, fishes } = plateFixture(2, 2, names);
+  for (const theme of Object.values(THEMES)) for (const jitter of [0, 0.6]) {
+    const svg = plateSVG(L, fishes, { theme, pen: 0.3, jitter, title: 'A & B' });
+    ok(wellFormed(svg), 'not well formed');
+    ok(svg.includes('width="297mm"') && svg.includes('viewBox="0 0 297 210"'), 'mm units');
+    eq((svg.match(/<path data-cell=/g) || []).length, 4, 'one path per fish');
+  }
+});
+test('the checker itself rejects broken SVG', () => {
+  for (const bad of ['<svg><g></svg>', '<svg>a & b</svg>', '<svg x=1></svg>', '<svg></svg><svg></svg>', '<svg><text>x</tex></svg>']) {
+    let threw = false; try { wellFormed(bad); } catch (e) { threw = true; }
+    ok(threw, 'accepted: ' + bad);
+  }
+});
+test('plate polylines stay in their cells, in mm', () => {
+  const { L, fishes } = plateFixture(1, 2, ['Xipola nare', 'Colus splennita']);
+  const lines = platePolylines(L, fishes, 0);
+  eq(lines.length, fishes.reduce((a, f) => a + f.offs.length - 1, 0), 'line count');
+  for (const pl of lines) for (const [x, y] of pl) ok(x >= 0 && y >= 0 && x <= L.w && y <= L.h, 'point off the plate');
 });
 
 for (const [name, fn] of tests) {

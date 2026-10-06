@@ -21,6 +21,8 @@
      pool.js      the worker pool, queue and fish cache
      plate.js     themes, page sizes, the plate layout (no DOM)
      render.js    the plate on a canvas, as vectors, and the pen draw-on
+     svg.js       the plate as SVG in mm, the plate polylines (no DOM)
+     export.js    the file downloads, PNG at a DPI, the share link
      main.js      the controls, history, modes, view, and the boot
      tests.mjs    node tests (engine, share link, layout, SVG)
 
@@ -157,7 +159,31 @@
   </div>
   <div id="params"></div>
 
-  <!-- EXPORT SECTION -->
+  <div class="sec-label">Export</div>
+  <div class="btns">
+    <button id="xSvg" title="The plate as SVG, in mm">SVG</button>
+    <button id="xPng" title="The plate as PNG at the DPI below">PNG</button>
+    <button id="xLink" title="Copy a link to this fish or plate">Copy link</button>
+  </div>
+  <div class="row2">
+    <label class="nm" for="dpiSel">PNG</label>
+    <select id="dpiSel" aria-label="PNG resolution">
+      <option value="96">96 dpi (screen)</option>
+      <option value="150">150 dpi</option>
+      <option value="300" selected>300 dpi (print)</option>
+      <option value="600">600 dpi</option>
+    </select>
+  </div>
+  <p class="hint" id="pngHint"></p>
+  <div class="hint">Upstream formats (the fishdraw CLI):</div>
+  <div class="btns wrap">
+    <button id="xUpSvg" title="The upstream draw_svg() of the fish">svg</button>
+    <button id="xSmil" title="The upstream animated SVG (SMIL), at the pen speed">smil</button>
+    <button id="xJson" title="The polylines as JSON">json</button>
+    <button id="xCsv" title="One polyline per line">csv</button>
+  </div>
+  <p class="hint" id="xHint">Upstream svg and smil are for one fish. A grid gives json and csv of the whole plate, in mm.</p>
+  <div class="namerow" id="linkRow" hidden><input id="linkInp" type="text" readonly aria-label="Share link"></div>
 
   <div class="sec-label">About</div>
   <div class="about">

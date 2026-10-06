@@ -44,6 +44,7 @@
 //    grep -n 'function writeHash'   the share link
 //    grep -n 'function readHash'    the boot state from the link
 //    grep -n 'function bindView'    pan, zoom and pinch
+//    grep -n 'function bindExport'  the export buttons (export.js)
 //    grep -n 'function setOpen'     the panel, the phone sheet, the dock
 //    grep -n 'BOOT'                 the boot order
 // ============================================================================
@@ -52,6 +53,7 @@ import { makeEngine, PARAMS, GROUPS, PARAM_BY_KEY, sanitize, mutate, takeGroup, 
 import { createPool } from './pool.js';
 import { THEMES, THEME_KEYS, PAGES, MM_PER_PX, GRID_PRESETS, pageSize, layoutPlate, cellAt } from './plate.js';
 import { drawPlate, makeGrain } from './render.js';
+import { exportPlateSVG, exportPNG, exportUpstream, copyLink, pngSize, slug } from './export.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -109,6 +111,7 @@ function layout() {
   const cap = S.saver ? 0 : 30;
   S.clear = { x: L - desk.left, y: T - desk.top, w: Math.max(40, R - L), h: Math.max(40, B - T - cap) };
   S.dirty = true;
+  if (E && !S.saver) syncExport();
 }
 
 // ── plateNow ────────────────────────────────────────────────────────────────
@@ -473,6 +476,7 @@ function syncUI() {
   if (document.activeElement !== $('titleInp')) $('titleInp').value = S.title;
   syncParamRows();
   syncPlay();
+  syncExport();
   S.dirty = true;
 }
 
@@ -688,6 +692,42 @@ function bindCells() {
   canvas.addEventListener('pointerleave', () => { if (S.hiCell >= 0) { S.hiCell = -1; canvas.classList.remove('cell'); S.dirty = true; } });
 }
 
+// ── bindExport ──────────────────────────────────────────────────────────────
+// The files use the plate on show (lastPlate) at its own size in mm.
+function exportOpts() { return { theme: THEMES[S.theme], ink: S.ink, pen: S.pen, jitter: S.jitter, grain: S.grain ? grain : null, title: S.mode === 'grid' ? (S.title || 'Pisces fictae') : S.name }; }
+function exportName() { return S.mode === 'grid' ? 'fishdraw-plate-' + S.grid.seed : 'fishdraw-' + slug(S.name); }
+function exportFishes() { return S.mode === 'grid' ? S.gfish : [S.fish]; }
+function syncExport() {
+  const L = plateNow(), z = pngSize(L, +$('dpiSel').value);
+  $('pngHint').textContent = `PNG ${z.w} × ${z.h} px` + (z.clamped ? `, lowered to ${z.dpi} dpi (the browser canvas limit)` : '') +
+    `. Plate ${L.w.toFixed(0)} × ${L.h.toFixed(0)} mm.`;
+  const grid = S.mode === 'grid';
+  $('xUpSvg').disabled = $('xSmil').disabled = grid;
+}
+function bindExport() {
+  $('xSvg').addEventListener('click', () => exportPlateSVG(plateNow(), exportFishes(), exportOpts(), exportName()));
+  $('xPng').addEventListener('click', async () => {
+    $('xPng').disabled = true;
+    try { await exportPNG(plateNow(), exportFishes(), exportOpts(), +$('dpiSel').value, exportName()); } finally { $('xPng').disabled = false; }
+  });
+  $('dpiSel').addEventListener('change', syncExport);
+  const up = fmt => () => exportUpstream(fmt, E, S.mode === 'grid'
+    ? { fish: null, L: plateNow(), fishes: S.gfish, jitter: S.jitter, name: exportName() }
+    : { fish: S.fish, speed: 1 / penRate(), name: exportName() });
+  $('xUpSvg').addEventListener('click', up('svg'));
+  $('xSmil').addEventListener('click', up('smil'));
+  $('xJson').addEventListener('click', up('json'));
+  $('xCsv').addEventListener('click', up('csv'));
+  $('xLink').addEventListener('click', async () => {
+    const url = location.href.split('#')[0] + '#' + encodeShare(shareState());
+    const ok = await copyLink(url);
+    $('xLink').textContent = ok ? 'Copied' : 'Copy below';
+    $('linkRow').hidden = ok; $('linkInp').value = url;
+    if (!ok) $('linkInp').select();
+    setTimeout(() => { $('xLink').textContent = 'Copy link'; }, 1600);
+  });
+}
+
 // ── panel ───────────────────────────────────────────────────────────────────
 function setOpen(open) {
   panel.classList.toggle('open', open);
@@ -724,7 +764,7 @@ async function boot() {
   E = makeEngine(src);
   pool = createPool(4);
   grain = makeGrain(11);
-  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells();
+  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells(); bindExport();
   if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
   addEventListener('resize', layout);
   layout();
