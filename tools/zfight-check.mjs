@@ -119,6 +119,12 @@ const ADAPTERS = {
       const B = kit.createBuild(), sc = scene.build(B, cal), st = cal.createState(3 * 3600 + 25 * 60, 0.85);
       return { label: c.id, root: B.root, poses: [0, 0.13, 0.41, 7.7].map(t => () => { cal.step(st, t); sc.pose(cal.pose(st), 0); B.applyExplode(0, sc.unit); }) }; }));
   },
+  async 'steam-locomotive'(key) {
+    const kit = await imp(key, 'kit.js'), scene = await imp(key, 'scene.js');
+    const B = kit.createBuild(), sc = scene.build(B);
+    // pose(phi, c): wheel angle and reverser cut-off, full forward (1) to reverse (-1)
+    return [{ label: 'loco', root: B.root, poses: ANGLES.map((a, i) => () => sc.pose(a, [1, 0.4, 0, -0.6][i])) }];
+  },
   async 'pin-tumbler-lock'(key) {
     const M = await imp(key, 'lock.js'), kit = await imp(key, 'kit.js'), scene = await imp(key, 'scene.js');
     return M.VARIANTS.map(v => { const Lk = M.makeLock(v.id), B = kit.createBuild(), sc = scene.build(B, Lk);
