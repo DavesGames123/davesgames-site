@@ -1,0 +1,162 @@
+/* ============================================================================
+   PHOTON CAUSTICS  ·  stylesheet
+   ----------------------------------------------------------------------------
+   One WebGL2 canvas fills the stage. Type comes from lib/sci.css: Inter for
+   the controls, STIX Two Text for titles and the caption, the system mono
+   for numbers only. On a wide screen the control panel is a column on the
+   left, over the canvas; main.js frames the subject in the part that the
+   panel does not cover (function clearRect).
+
+     grep -n 'STAGE'      the canvas and the caption
+     grep -n 'PANEL'      the control column
+     grep -n 'CONTROLS'   scene cards, sliders, segments
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      dock and bottom sheet
+     grep -n 'LANDSCAPE'  the phone drawer at the right edge
+   ========================================================================== */
+:root{
+  --bg:#05070b; --bg2:#11141a; --ink:#d9dde4; --dim:#8a909b; --faint:#2a2f38;
+  --line:rgba(150,200,255,0.10); --line-b:rgba(150,200,255,0.24);
+  --acc:#9fd4ff; --warm:#ffd79a; --panel-w:316px; --top:52px; --dock-h:0px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:1px solid var(--acc);outline-offset:1px}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px 0 calc(var(--panel-w) + 20px);background:rgba(5,7,11,0.88);border-bottom:1px solid var(--line);pointer-events:none;transition:padding 0.28s cubic-bezier(0.4,0,0.2,1)}
+.brand{font-size:0.85rem;font-weight:500;color:var(--dim)}
+.pagetitle{font-family:var(--sci-serif);font-size:1.15rem;color:#eef3f8}
+html.in-frame{--top:0px}
+html.in-frame .topbar{display:none}
+body.panel-closed .topbar{padding-left:68px}
+
+#gear{position:fixed;top:7px;left:14px;z-index:40;width:38px;height:38px;border:1px solid var(--line-b);background:rgba(17,20,26,0.85);color:var(--ink);border-radius:9px;font-size:1rem;display:none}
+html.in-frame #gear{top:14px}
+#gear:hover{border-color:var(--acc);color:var(--acc)}
+@media(min-width:769px){ body.panel-closed #gear{display:block} }
+
+/* STAGE */
+#stage{position:fixed;top:var(--top);left:0;right:0;bottom:var(--dock-h);overflow:hidden;background:var(--bg)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gl.drag{cursor:grabbing}
+#caption{position:absolute;right:16px;bottom:12px;font-family:var(--sci-serif);font-size:0.95rem;color:#a9b2bf;pointer-events:none;text-align:right;text-shadow:0 1px 3px #000}
+#caption i{font-style:italic}
+#caption .n{font-variant-numeric:tabular-nums}
+#nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--sci-serif);font-size:1.1rem;color:var(--dim)}
+#nogl[hidden]{display:none}
+
+/* PANEL */
+#panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(10,12,16,0.94);border-right:1px solid var(--line-b);
+  padding:66px 18px 40px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#panel.open{transform:none}
+html.in-frame #panel{padding-top:20px}
+#panelClose{position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px}
+#panelClose:hover{color:var(--acc);border-color:var(--acc)}
+#sheetGrip,#dock{display:none}
+section[hidden]{display:none}
+
+.sec-label{font-size:0.8rem;font-weight:600;color:#eceff3;margin:22px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.sec-label.first{margin-top:0;padding-top:0;border-top:0}
+.hint{font-size:0.72rem;line-height:1.55;color:var(--dim);margin:8px 0 2px}
+
+/* CONTROLS */
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.card{padding:8px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--dim);font-size:0.76rem;text-align:left;transition:border-color 0.2s,color 0.2s}
+.card:hover{border-color:var(--line-b);color:var(--ink)}
+.card.on{border-color:var(--acc);color:var(--acc)}
+
+.eq{font-size:0.86rem;margin:6px 0;color:#eceff3;min-height:1.2em}
+.eq svg{display:block;max-width:100%}
+
+.prm{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;margin:8px 0 10px}
+.prm .nm{font-size:0.82rem;color:var(--ink);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.prm .nm .sci-sym{font-size:1rem}
+.prm .val{font:0.74rem var(--sci-mono);color:var(--ink);text-align:right}
+.prm input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--acc);height:3px;margin-top:4px}
+.prm[hidden]{display:none}
+
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.seg button,.btns button{padding:8px 4px;border:1px solid var(--line-b);background:var(--bg2);color:var(--dim);border-radius:7px;font-size:0.76rem;transition:border-color 0.2s,color 0.2s}
+.seg button:hover,.btns button:hover{border-color:var(--acc);color:var(--ink)}
+.seg button.on,.btns button.on{border-color:var(--acc);color:var(--acc);background:rgba(159,212,255,0.07)}
+.btns{display:flex;gap:6px;margin:6px 0}
+.btns button{flex:1;color:var(--ink)}
+
+.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
+.about span[class^=m]{font-family:var(--sci-serif);font-style:italic;font-size:0.95rem}
+
+/* TOUCH. Any touch screen or narrow window: targets are 44px or more. */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:330px}
+  #panelClose{width:44px;height:44px}
+  .seg button,.btns button,.card{min-height:44px;font-size:0.8rem;border-radius:10px}
+  .prm{margin:4px 0 6px}
+  .prm .nm{font-size:0.86rem}
+  .prm .val{font-size:0.8rem}
+  .hint{font-size:0.76rem}
+  .about p{font-size:0.84rem;line-height:1.65}
+  .eq{font-size:1rem}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:40px!important;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--acc);border:3px solid #0b0e13;box-shadow:0 0 0 1px var(--acc)}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid #0b0e13}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(64px + env(safe-area-inset-bottom));--panel-w:0px}
+  html.in-frame{--top:0px}
+  html,body{height:100dvh}
+  .topbar{padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  .brand{font-size:0.8rem}
+  .pagetitle{font-size:1rem}
+  #gear,body.panel-closed #gear{display:none}
+  #caption{font-size:0.82rem;right:12px;bottom:8px}
+
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,12,16,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem}
+  #dock > button.on{border-color:var(--acc);color:var(--acc);background:rgba(159,212,255,0.08)}
+  #dock > #dockView{font-size:0.86rem;font-weight:600}
+  #dock > button.name{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px;font-family:var(--sci-serif);font-size:1rem;text-align:left}
+  #dock > button.name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dock > button.name i{font-style:normal;color:var(--dim);font-family:var(--sci-sans)}
+
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(50vh,520px);height:min(50dvh,520px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 28px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+  #panel.open{transform:none}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px - env(safe-area-inset-top))}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -18px 2px;background:linear-gradient(180deg,rgba(10,12,16,0.98) 70%,rgba(10,12,16,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .cards{grid-template-columns:repeat(3,1fr)}
+}
+
+/* LANDSCAPE phone. The panel is a drawer at the right edge, the dock a
+   tab at the lower left, and the topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--top:0px;--dock-h:0px}
+  .topbar{display:none}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;transform:translateX(100%)}
+  #panel.open{transform:none}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2;background:var(--bg2)}
+  #caption{bottom:auto;top:8px}
+}
+@media(prefers-reduced-motion:reduce){#panel,.topbar{transition:none}}
+
+/* SAVER. main.js sets html.saver in screensaver mode. */
+html.saver .topbar,html.saver #panel,html.saver #dock,html.saver #gear,html.saver #caption{display:none!important}
+html.saver #stage{top:0;bottom:0}
+html.saver #gl{cursor:none}

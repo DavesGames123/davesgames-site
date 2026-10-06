@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Photon Caustics — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PHOTON CAUSTICS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Light goes as photons through mirrors, glass and
+   water. Where the rays crowd together the light is bright: that bright
+   envelope is a caustic. Two views share one WebGL2 canvas:
+     2D ... a photon tracer on the CPU, each path drawn as a line and
+            added into a light image (seven scenes)
+     3D ... a pool in the sun: a photon grid refracts through a wave
+            field to the floor, with the area of each patch giving E
+
+   FILES
+     optics2d.js  the 2D scenes and the photon tracer (no DOM)
+     gl.js        WebGL2 helpers: programs, float targets
+     render2d.js  the 2D light image, tone map and overlay
+     pool3d.js    the 3D pool: waves, caustic grid, view
+     main.js      layout, controls, the loop, equations, the saver hook
+     tests.mjs    node tests of optics2d.js
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops the frame loop when the shell swaps pages
+     2. style.css, then lib/sci.css (fonts, math colors .m1 to .m6)
+   The equations are MathJax SVG through lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #stage fills the window under the
+                 topbar. #gl fills #stage; main.js frames the subject in
+                 the part that the panel does not cover.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: view, scene (next), play, overlay,
+                 settings. #panel is a bottom sheet (portrait) or a
+                 drawer at the right (landscape).
+
+   GREP MAP  (main.js)
+     grep -n 'function clearRect'   the part of the canvas that shows
+     grep -n 'function frame2d'     trace, accumulate, draw the 2D view
+     grep -n 'function frame3d'     step and draw the pool
+     grep -n 'function setView'     switch 2D and 3D
+     grep -n 'function renderMath'  the equations for the current view
+     grep -n 'function bindPointer' drag, zoom, tap
+     grep -n 'window.snSaver'       the screensaver hook
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Photon caustics in 2D and 3D: trace photons through mirrors, lenses, prisms and water, and watch the bright envelopes form, from the coffee-cup nephroid to the net of light on a pool floor.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Photon Caustics</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="stage">
+  <canvas id="gl"></canvas>
+  <div id="caption"></div>
+  <div id="nogl" hidden>This page needs WebGL2.</div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label first">View</div>
+  <div class="seg" id="viewSeg">
+    <button data-view="2d" class="on">2D photons</button>
+    <button data-view="3d">3D pool</button>
+  </div>
+
+  <section id="ctl2d">
+    <div class="sec-label">Scene</div>
+    <div id="scenes" class="cards"></div>
+    <p class="hint" id="sceneSub"></p>
+    <div class="prm"><div class="nm">Light angle <span class="sci-sym m6" data-tex="\theta" data-inline>θ</span></div><span class="val" id="angV"></span>
+      <input type="range" id="ang" min="-40" max="40" step="0.5" value="0" aria-label="Light angle"></div>
+    <div class="prm"><div class="nm">Index <span class="sci-sym m1" data-tex="n" data-inline>n</span></div><span class="val" id="nV"></span>
+      <input type="range" id="n" min="1.1" max="2.4" step="0.005" value="1.5" aria-label="Refractive index"></div>
+    <div class="prm"><div class="nm">Dispersion <span class="sci-sym m2" data-tex="\Delta n" data-inline>Δn</span></div><span class="val" id="dnV"></span>
+      <input type="range" id="dn" min="0" max="0.25" step="0.002" value="0.02" aria-label="Dispersion"></div>
+    <div class="prm" id="waveRow"><div class="nm">Wave height <span class="sci-sym m5" data-tex="h" data-inline>h</span></div><span class="val" id="waveV"></span>
+      <input type="range" id="wave" min="0" max="2.5" step="0.01" value="1" aria-label="Wave height"></div>
+    <div class="prm"><div class="nm">Exposure</div><span class="val" id="expV"></span>
+      <input type="range" id="exp" min="0.2" max="8" step="0.05" value="1" aria-label="Exposure"></div>
+    <div class="seg" id="specSeg">
+      <button data-mono="0" class="on">White light</button>
+      <button data-mono="550">One colour, 550 nm</button>
+    </div>
+    <div class="btns">
+      <button id="geomBtn" class="on">Outlines</button>
+      <button id="curveBtn" class="on">Floor graph</button>
+    </div>
+    <p class="hint">Drag across the light to turn it. Scroll or pinch to zoom; double-click to reset.</p>
+  </section>
+
+  <section id="ctl3d" hidden>
+    <div class="sec-label">Pool</div>
+    <div class="seg three" id="waveSeg">
+      <button data-mode="rain" class="on">Rain</button>
+      <button data-mode="swell">Swell</button>
+      <button data-mode="calm">Calm</button>
+    </div>
+    <div class="prm"><div class="nm">Sun height</div><span class="val" id="elV"></span>
+      <input type="range" id="el" min="15" max="89" step="0.5" value="58" aria-label="Sun height"></div>
+    <div class="prm"><div class="nm">Sun bearing</div><span class="val" id="azV"></span>
+      <input type="range" id="az" min="-180" max="180" step="1" value="135" aria-label="Sun bearing"></div>
+    <div class="prm"><div class="nm">Depth <span class="sci-sym m5" data-tex="d" data-inline>d</span></div><span class="val" id="depthV"></span>
+      <input type="range" id="depth" min="0.3" max="1.6" step="0.01" value="1" aria-label="Depth"></div>
+    <div class="prm"><div class="nm">Wave strength</div><span class="val" id="ampV"></span>
+      <input type="range" id="amp" min="0" max="2.5" step="0.01" value="1" aria-label="Wave strength"></div>
+    <div class="prm"><div class="nm">Index <span class="sci-sym m1" data-tex="n" data-inline>n</span></div><span class="val" id="n3V"></span>
+      <input type="range" id="n3" min="1.1" max="2.0" step="0.005" value="1.333" aria-label="Refractive index"></div>
+    <div class="prm"><div class="nm">Dispersion <span class="sci-sym m2" data-tex="\Delta n" data-inline>Δn</span></div><span class="val" id="dn3V"></span>
+      <input type="range" id="dn3" min="0" max="0.15" step="0.001" value="0.02" aria-label="Dispersion"></div>
+    <div class="prm"><div class="nm">Exposure</div><span class="val" id="exp3V"></span>
+      <input type="range" id="exp3" min="0.3" max="3" step="0.02" value="1" aria-label="Exposure"></div>
+    <div class="btns">
+      <button id="raysBtn">Photon paths</button>
+      <button id="splashBtn">Splash</button>
+    </div>
+    <p class="hint">Drag to orbit, scroll or pinch to zoom, tap the water to make a ripple.</p>
+  </section>
+
+  <div class="btns">
+    <button id="playBtn">Pause</button>
+    <button id="clearBtn" title="Clear the light image (C)">Clear</button>
+  </div>
+
+  <div class="sec-label">Equations</div>
+  <div class="eq" id="eqA"></div>
+  <div class="eq" id="eqB"></div>
+  <div class="eq" id="eqC"></div>
+
+  <div class="sec-label">How it works</div>
+  <div class="about">
+    <p>Light leaves the source as photons. Each photon goes straight until it meets a surface. A mirror reflects it. At glass or water the Fresnel equations give the chance <span class="m4">R</span> that it reflects; else it refracts by Snell's law, with an index <span class="m1">n</span> that changes with the wavelength <span class="m2">λ</span>.</p>
+    <p>The light image adds the path of every photon, so a pixel is as bright as the number of photons that cross it. Where the rays of a family come near each other the image is bright. The edge where they touch and fold back is the caustic. On it the Jacobian <span class="m3">J</span> of the ray map is zero, and the irradiance <span class="m4">E</span> ∝ 1/|<span class="m3">J</span>| goes to a peak.</p>
+    <p>In the pool each wave crest is a weak lens. The photon grid refracts the sun through the surface to the floor; a patch of water that maps to a smaller patch of floor makes it brighter by the ratio of the two areas. Where crests focus at the depth <span class="m5">d</span>, the patches shrink to lines: the bright net on the floor.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockView" aria-label="Switch view">3D</button>
+  <button id="dockScene" class="name" aria-label="Next scene"><span id="dockName">…</span><i>›</i></button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <button id="dockGeom" class="on" aria-label="Overlay" aria-pressed="true">◎</button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

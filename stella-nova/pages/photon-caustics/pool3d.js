@@ -35,7 +35,10 @@
 //  surface, surface to floor, through the same refraction.
 //
 //  EXPORTS
-//    createPool3D(gl, caps, { phone }) -> { resize, draw, drop, pick, ray }
+//    createPool3D(gl, caps, { phone }) -> { resize, draw, drop, pick, ray,
+//                                            flatten }
+//    CAUS_SRC ..... the caustic fragment shader source (the saver plate
+//                   shows an extract of it)
 //    draw(o): o = { dt, cam, shift, sun, depth, n, dn, mode, amp, rays,
 //                   exposure, fade }
 //      cam = { yaw, pitch, dist, ty }  orbit about (0, ty, 0)
@@ -113,6 +116,8 @@ void main(){
   float E = min(40.0, a0 / max(a1, 1e-12)) * v_t;
   o = vec4(E, E, E, 1.0);
 }`;
+
+export const CAUS_SRC = CAUS_FS;
 
 // Shading of the pool and the sky, shared by the view passes.
 const SCENE_GLSL = `
@@ -384,6 +389,11 @@ export function createPool3D(gl, caps, opt = {}) {
       return Math.abs(x) < 1 && Math.abs(z) < 1 ? [x, z] : null;
     },
     get simTime() { return simT; },
+    // still water: clear both wave textures
+    flatten() {
+      for (const t of [simA, simB]) { gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); queue.length = 0;
+    },
     draw(o) {
       const dt = Math.min(0.1, o.dt || 0.016);
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
