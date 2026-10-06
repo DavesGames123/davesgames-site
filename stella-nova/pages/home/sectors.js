@@ -150,6 +150,7 @@ const BLURBS = {
   'protein-viewer': 'Real protein structures in 3D, 37 presets.',
   'protein-folding': 'Watch a chain fold into its native shape.',
   alphafold: 'How AlphaFold turns a sequence into a structure.',
+  'enzyme-design': 'Design an enzyme from scratch: hold the chemistry still and grow a protein around it.',
   '4d-codebench': 'Can coding agents rebuild a moving scene from video? Play the benchmark in your browser.',
   'human-skull': 'A human skull in 51 parts, pulled apart.',
   'human-skeleton': 'Explode a skeleton and inspect all 200 bones.',
