@@ -24,7 +24,8 @@
 //    function drawPlot .......... efficiency against lead angle
 //    function fillNums / fillEqs  numbers and relations
 //    function liveValue ......... the live rows of the part cards
-//    function frame ............. step, pose, explode, stage, cards, plot
+//    function frame ............. step, pose, explode, stage, cards, plot;
+//                                 the close view follows the nut (followX)
 //    window.snSaver ............. screensaver hook: a tour of each unit
 // ============================================================================
 import * as THREE from 'three';
@@ -389,6 +390,7 @@ function readout() {
 
 // ── loop ────────────────────────────────────────────────────────────────────
 let last = performance.now(), raf = 0, running = true, numT = 0;
+let followX = 0;
 function frame(now) {
   if (!running) return;
   raf = requestAnimationFrame(frame);
@@ -399,6 +401,13 @@ function frame(now) {
   S.moving = S.rpm > 0 && (S.mode === 'motor' || (S.F > 0 && !torques(cur.g, S.F, S.mu).locks));
   if (S.moving) S.psi += S.rpm / 60 * TAU * dt;
   S.Q = cur.sc.pose(S.psi, loadSign());
+  // the close view follows the nut: at 8 to 40 mm/s it leaves a fixed
+  // frame in a few seconds. A flight moves its end target; else the target
+  // and the camera shift together. The saver runs slow and does not follow.
+  const dx = S.Q.x - followX; followX = S.Q.x;
+  if (S.view === 'close' && !saverOn && dx && Math.abs(dx) < 50) {
+    if (stage.fly) stage.fly.t1.x += dx; else if (!stage.dragging) stage.shift(new THREE.Vector3(dx, 0, 0));
+  }
   for (const o of S.leaving) o.sc.pose(psiFor(o.g, S.Q.x, S.Q.dir), loadSign());
   S.explode += (S.explodeTarget - S.explode) * Math.min(1, dt * S.ekRate);
   cur.B.applyExplode(S.explode);
