@@ -113,13 +113,19 @@ const ADAPTERS = {
     const B = kit.createBuild(), sc = scene.build(B);
     return [{ label: 'box', root: B.root, poses: ANGLES.map((a, i) => () => sc.pose({ thIn: a, thOut: a * 0.4, sx: [{ h12: 0, h34: 0, h5: 0 }, { h12: 1, h34: 0, h5: 0 }, { h12: 0, h34: -1, h5: 0 }, { h12: 0, h34: 0, h5: 1 }][i], lever: [[0, 0], [0, 1], [1, -1], [0, 0]][i] })) }];
   },
+  async 'watch-movement'(key) {
+    const I = await imp(key, 'calibres/index.js'), kit = await imp(key, 'kit.js');
+    return Promise.all(I.CALIBRES.map(async c => { const cal = await I.loadCalibre(c.id), scene = await imp(key, `scenes/${c.id}.js`);
+      const B = kit.createBuild(), sc = scene.build(B, cal), st = cal.createState(3 * 3600 + 25 * 60, 0.85);
+      return { label: c.id, root: B.root, poses: [0, 0.13, 0.41, 7.7].map(t => () => { cal.step(st, t); sc.pose(cal.pose(st), 0); B.applyExplode(0, sc.unit); }) }; }));
+  },
   async 'pin-tumbler-lock'(key) {
     const M = await imp(key, 'lock.js'), kit = await imp(key, 'kit.js'), scene = await imp(key, 'scene.js');
     return M.VARIANTS.map(v => { const Lk = M.makeLock(v.id), B = kit.createBuild(), sc = scene.build(B, Lk);
       return { label: v.id, root: B.root, poses: [[0, 0], [0.5, 0], [1, 0], [1, 60]].map(([s, t]) => () => sc.pose(Lk.state('right', s, t * M.D), 0)) }; });
   },
 };
-const MECH = ['stirling-engine', 'four-stroke-engine', 'wankel-engine', 'differential', 'planetary-gearbox', 'manual-gearbox', 'harmonic-drive', 'geneva-cams', 'linkages', 'pin-tumbler-lock'];
+const MECH = ['stirling-engine', 'four-stroke-engine', 'wankel-engine', 'differential', 'planetary-gearbox', 'manual-gearbox', 'harmonic-drive', 'geneva-cams', 'linkages', 'pin-tumbler-lock', 'watch-movement'];
 
 // ── triangles ───────────────────────────────────────────────────────────────
 function visible(o) { for (let x = o; x; x = x.parent) if (!x.visible) return false; return true; }
