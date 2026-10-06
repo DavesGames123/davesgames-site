@@ -24,6 +24,14 @@
 //                       and 3000 sample pixels against halftone-ref.js
 //    gpu.port f75 ..... the same with the three-argument form, frequency 75
 //    gpu.noerrors ..... no console, exception or WebGPU validation error
+//  Page part (when index.html is there; the same Chrome, a new navigation):
+//    page.load ........ the page boots with no exception, console error or
+//                       WebGPU validation error
+//    page.upstream .... the page's own view pipeline (present.wgsl, upstream
+//                       path) renders the source at its own size; 3000
+//                       sample pixels against halftone-ref.js on the source
+//                       bytes that the page read back. Sources: Spectrum
+//                       (a procedural scene) and Aldrin (a photo, mip chain)
 //  The GLSL below is the upstream code (glsl-halftone index.glsl, glsl-noise
 //  simplex/2d, glsl-aastep), put together as glslify does. MIT: see
 //  LICENSE-glsl-halftone.txt and LICENSE-webgl-noise.txt.
@@ -317,10 +325,10 @@ void main() {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const unb64 = s => new Uint8Array(Buffer.from(s, 'base64'));
 
-export async function withChrome(fn, { width = 1280, height = 800 } = {}) {
+export async function withChrome(fn, { width = 1280, height = 800, args = [] } = {}) {
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'ht-test-'));
   const chrome = spawn(CHROME, ['--headless=new', '--enable-unsafe-webgpu', '--use-angle=metal', `--remote-debugging-port=${PORT}`,
-    `--user-data-dir=${prof}`, `--window-size=${width},${height}`, 'about:blank'], { stdio: 'ignore' });
+    `--user-data-dir=${prof}`, `--window-size=${width},${height}`, ...args, 'about:blank'], { stdio: 'ignore' });
   const log = [];
   let ws;
   try {
@@ -412,7 +420,28 @@ async function gpuTests() {
     }
     const late = await ev('__T.errors');
     report('gpu.noerrors', !log.length && !late.length, log.length || late.length ? JSON.stringify({ log, late }) : 'no console, exception or WebGPU errors');
+    if (fs.existsSync(path.join(HERE, 'index.html'))) { log.length = 0; await pageTests({ send, ev, log }); }
   });
+}
+
+async function pageTests({ send, ev, log }) {
+  await send('Page.navigate', { url: BASE + 'index.html' });
+  let st = null;
+  for (let i = 0; i < 120; i++) { await sleep(250); st = await ev('window.__ht ? { ready: __ht.ready, failed: __ht.failed } : null'); if (st && (st.ready || st.failed)) break; }
+  await sleep(600);
+  const gpuErr = await ev('__ht.errors');
+  const ok = st && st.ready && !st.failed && !log.length && !gpuErr.length;
+  report('page.load', ok, ok ? 'ready' : JSON.stringify({ st, log, gpuErr }));
+  if (!st || !st.ready) return;
+  for (const [key, freq] of [['spectrum', 30], ['aldrin', 30], ['aldrin', 90]]) {
+    const size = await ev(`__ht.setSource(${JSON.stringify(key)}, ${freq})`);
+    const r = await ev('__ht.exact()');
+    const out = unb64(r.out), src = unb64(r.src);
+    const c = cpuSamples(src, out, r.w, r.h, freq, 3000, 7 + freq);
+    report(`page.upstream ${key} f${freq}`, c.share >= 0.99, `${size.join(' x ')}: ${(100 * c.share).toFixed(2)}% of ${c.n} samples within 2/255 of halftone-ref.js (max ${c.max}${c.worst.length ? ', worst ' + JSON.stringify(c.worst) : ''})`);
+  }
+  const late = await ev('__ht.errors');
+  report('page.noerrors', !log.length && !late.length, log.length || late.length ? JSON.stringify({ log, late }) : 'no console, exception or WebGPU errors');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {

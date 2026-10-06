@@ -48,3 +48,20 @@ Simplex noise (glsl-noise simplex/2d, from webgl-noise)
 tests.mjs holds a copy of the upstream GLSL (index.glsl with snoise and
 aastep put in, as glslify does) under the same MIT licences. It runs that
 GLSL in WebGL as the reference for the WGSL port.
+
+Built-in photos (img/, cut to 1600 px on the long side, JPEG)
+  All four are NASA photos. NASA material is not under copyright in the
+  United States (NASA media usage guidelines); NASA asks for credit and
+  does not endorse this page.
+  earthrise.jpg    Earthrise, Apollo 8, 24 Dec 1968. AS08-14-2383
+                   (cropped to the lower 70 percent).
+                   https://images.nasa.gov/details/as08-14-2383
+  aldrin.jpg       Buzz Aldrin on the Moon, Apollo 11, 20 Jul 1969.
+                   AS11-40-5903. https://images.nasa.gov/details/as11-40-5903
+  blue-marble.jpg  The Blue Marble, Apollo 17, 7 Dec 1972. AS17-148-22727.
+                   https://images.nasa.gov/details/as17-148-22727
+  mccandless.jpg   Bruce McCandless II on the first untethered EVA, STS-41B,
+                   7 Feb 1984. S84-27017.
+                   https://images.nasa.gov/details/s84-27017
+
+Procedural scenes (Orbs, Spectrum): shaders/scene.wgsl, this page's own code.

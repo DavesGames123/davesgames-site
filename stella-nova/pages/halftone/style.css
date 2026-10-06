@@ -1,0 +1,168 @@
+/* ============================================================================
+   HALFTONE  ·  stylesheet
+   ----------------------------------------------------------------------------
+   The Shader Tables palette (dark navy, blue lines, yellow for the active
+   choice). Type comes from lib/sci.css: Inter for text, STIX Two Text for
+   the title, the system mono for numbers. The WebGPU canvas fills the
+   frame. main.js fits the image in the part of the canvas that no panel
+   covers.
+
+   DESKTOP. #panel is a left panel. #gear opens it again after a close.
+   PHONE (max-width 768px, or a short landscape touch screen). #dock at the
+   base holds the panel button, the tools and play. In portrait the panel is
+   a bottom sheet above the dock; in landscape it is a right drawer.
+   Every touch target is 44px or more.
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block (matches PHONE_Q in main.js)
+     grep -n 'LANDSCAPE'  the landscape overrides
+     grep -n 'SPLIT'      the split handle and the drop target
+     grep -n 'ht-saver'   the screensaver mode (saver.js sets it; not the shell's generic sn-saver)
+   ========================================================================== */
+:root{
+  --bg:#0e1118; --bg2:#121620; --surface2:#243040;
+  --line:rgba(150,200,255,0.08); --line-b:rgba(150,200,255,0.2);
+  --blue:#96c8ff; --blue-dim:#5a8cc0; --blue-faint:rgba(150,200,255,0.06);
+  --yellow:#ffc832; --green:#64c864;
+  --ink:#c8d0e0; --dim:#8090b0; --faint:#506080; --bright:#e8ecf4;
+  --panel-w:300px; --dock-h:0px;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:13px}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible{outline:1px solid var(--yellow);outline-offset:1px}
+a{color:var(--blue)}
+
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gl.drag{cursor:grabbing}
+#gl.loupe{cursor:crosshair}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:46px;z-index:30;display:flex;align-items:center;gap:16px;padding:0 18px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(14,17,24,0.9),rgba(14,17,24,0))}
+.brand{font-family:var(--sci-serif);font-size:1.1rem;color:var(--bright)}
+.pagetitle{font-size:0.8rem;color:var(--dim);margin-left:auto}
+html.in-frame .topbar{display:none}
+
+#gear{position:fixed;bottom:14px;left:14px;z-index:40;width:40px;height:40px;border:1px solid var(--line-b);background:rgba(12,15,22,0.8);color:var(--ink);border-radius:9px;font-size:1.05rem;cursor:pointer;display:none}
+body.panel-closed #gear{display:block}
+#gear:hover{border-color:var(--yellow);color:var(--yellow)}
+
+#panel{position:fixed;top:46px;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(9,12,20,0.96);border-right:1px solid var(--line-b);
+  overflow-y:auto;overflow-x:hidden;padding:0 0 24px;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;backdrop-filter:blur(18px)}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{top:0}
+#panelClose{position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer;z-index:3}
+#panelClose:hover{color:var(--yellow);border-color:var(--yellow)}
+#sheetGrip,#dock{display:none}
+
+.ph{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(150,200,255,0.05),transparent)}
+.ph h1{font-family:var(--sci-serif);font-weight:400;font-size:1.7rem;color:var(--blue);line-height:1.1}
+.ph .sub{color:var(--dim);margin-top:6px;line-height:1.45;font-size:0.8rem;padding-right:20px}
+.sec{padding:12px 18px 14px;border-bottom:1px solid var(--line)}
+.sec[hidden],.row[hidden]{display:none!important}
+.sec-label{font-size:0.72rem;color:var(--blue-dim);font-weight:600;margin-bottom:9px;display:flex;align-items:center;gap:10px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--line)}
+.sec-label .now{font-family:var(--sci-mono);color:var(--green);font-weight:400;font-variant-numeric:tabular-nums;order:2}
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.modes button,.src-grid button,.seg button,.chip{background:transparent;border:1px solid var(--line-b);color:var(--dim);padding:7px 4px;font-size:0.74rem;cursor:pointer;transition:background 0.14s,color 0.14s,border-color 0.14s;border-radius:4px}
+.modes button:hover,.src-grid button:hover,.seg button:hover,.chip:hover{color:var(--ink);background:var(--blue-faint)}
+.modes button.on,.src-grid button.on,.seg button.on,.chip[aria-pressed=true]{background:rgba(255,200,50,0.1);border-color:rgba(255,200,50,0.45);color:var(--yellow)}
+.src-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.src-grid button{padding:7px 2px;font-size:0.72rem;line-height:1.2}
+.src-grid button small{display:block;font-size:0.62rem;color:var(--faint);margin-top:2px}
+.src-grid button.on small{color:rgba(255,200,50,0.7)}
+.chip.file{position:relative;overflow:hidden;display:inline-flex;align-items:center}
+.chip.file input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{padding:6px 9px}
+.row{display:flex;align-items:center;gap:10px;margin-bottom:6px;min-height:24px}
+.row label{font-size:0.74rem;color:var(--dim);width:78px;flex-shrink:0}
+.val{font-family:var(--sci-mono);font-size:0.72rem;color:var(--blue);min-width:42px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+.seg{display:flex;flex:1;gap:3px}
+.seg button{flex:1}
+input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:3px;background:rgba(150,200,255,0.18);border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);box-shadow:0 0 8px rgba(150,200,255,0.3)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim)}
+.hint{font-size:0.72rem;color:var(--faint);line-height:1.45;margin-top:6px}
+.about p{font-size:0.76rem;line-height:1.55;color:var(--dim)}
+.about code{font-family:var(--sci-mono);font-size:0.72rem}
+
+#hud{position:fixed;z-index:20;left:0;top:0;display:flex;gap:14px;justify-content:space-between;padding:6px 12px;font-family:var(--sci-mono);font-size:0.72rem;color:var(--dim);pointer-events:none;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+#hud span{overflow:hidden;text-overflow:ellipsis;background:rgba(9,12,20,0.62);padding:2px 7px;border-radius:4px}
+#hudL{color:var(--blue)}
+/* SPLIT. The handle sits on the split line; main.js moves it. */
+#splitGrip{position:fixed;z-index:25;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;border:2px solid var(--yellow);background:rgba(9,12,20,0.85);color:var(--yellow);
+  font-size:0.62rem;letter-spacing:-1px;cursor:ew-resize;touch-action:none;display:flex;align-items:center;justify-content:center;padding:0}
+#splitGrip[hidden]{display:none}
+#drop{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(9,12,20,0.7);border:2px dashed var(--yellow);pointer-events:none}
+#drop[hidden]{display:none}
+#drop span{font-size:1.1rem;color:var(--yellow);background:var(--bg2);padding:12px 18px;border-radius:8px}
+#nogpu{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);max-width:420px;padding:18px 20px;border:1px solid var(--line-b);background:var(--bg2);z-index:60;line-height:1.5}
+
+/* TOUCH. Any touch screen or narrow window: targets 44px or more, text 11px or more. */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:320px}
+  body{font-size:14px}
+  #panelClose{width:44px;height:44px}
+  .modes button,.seg button,.chip{min-height:44px;font-size:0.8rem}
+  .src-grid button{min-height:44px;font-size:0.78rem}
+  #splitGrip{width:48px;height:48px;margin:-24px 0 0 -24px}
+  .row{min-height:44px;margin:2px 0}
+  .row label{font-size:0.8rem;width:86px}
+  .val{font-size:0.78rem}
+  .hint,.about p{font-size:0.8rem}
+  .sec-label{font-size:0.78rem}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--surface2)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--yellow);border:3px solid var(--bg);box-shadow:0 0 0 1px var(--yellow)}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--surface2)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--yellow);border:3px solid var(--bg)}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{height:calc(42px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  .pagetitle{display:none}
+  #gear,body.panel-closed #gear{display:none}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(9,12,20,0.95);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;cursor:pointer}
+  #dock > button.on{border-color:var(--yellow);color:var(--yellow)}
+  #dock .seg{flex:1;height:48px;min-width:0;gap:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
+  #dock .seg button{min-width:0;min-height:0;border:0;border-right:1px solid var(--line);border-radius:0;background:var(--bg2);font-size:0.8rem}
+  #dock .seg button:last-child{border-right:0}
+  #dock .seg button.on{background:rgba(255,200,50,0.12)}
+  /* The panel is a bottom sheet above the dock. */
+  #panel,html.in-frame #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(46vh,500px);height:min(46dvh,500px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:16px 16px 0 0;padding:0 0 20px;
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;
+    background:linear-gradient(180deg,rgba(9,12,20,1) 65%,rgba(9,12,20,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .ph{padding-top:4px}
+  .ph h1{font-size:1.4rem}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge; the dock is a
+   tab at the lower left. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  .topbar{display:none}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full,html.in-frame #panel{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;transform:translateX(100%)}
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:8px;margin:8px 8px 0 auto;background:var(--bg2)}
+}
+
+/* screensaver (lib/screensaver.js): the canvas alone fills the frame */
+html.ht-saver #panel,html.ht-saver #dock,html.ht-saver #hud,html.ht-saver #gear,html.ht-saver .topbar,html.ht-saver #splitGrip,html.ht-saver #drop{display:none!important}
+html.ht-saver #gl{cursor:none}
