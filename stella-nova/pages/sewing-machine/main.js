@@ -67,6 +67,7 @@ function boot() {
   B.setSection(false);
   S.Q = sc.pose(S.th, S.L, S.travel, S.thread);
   stage.root.add(B.root);
+  cards.reset();
   fillPanel();
   stage.setShadowExtent(sc.box.R, new THREE.Vector3(...sc.box.c));
   stage.controls.minDistance = 40; stage.controls.maxDistance = sc.box.R * 8;
