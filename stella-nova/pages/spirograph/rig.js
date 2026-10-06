@@ -11,7 +11,8 @@
 //
 //  EXPORTS   (jump with grep -n "<anchor>" rig.js)
 //      gearPath ...... "export function gearPath"    tooth outline as Path2D
-//      fixedSprite ... "export function fixedSprite" the ring or the fixed wheel
+//      drawFixed ..... "export function drawFixed"   the ring or the fixed wheel
+//      fixedSprite ... "export function fixedSprite" drawFixed in a sprite
 //      wheelSprite ... "export function wheelSprite" the rolling wheel
 //      wheelTint ..... "export function wheelTint"   plastic color by teeth
 // ============================================================================
@@ -27,7 +28,7 @@ function rgba(hex, a) {
 
 // The tooth outline of an N-tooth gear centered at (cx, cy), k px per unit.
 export function gearPath(N, k, cx, cy, phase0, internal, path = new Path2D()) {
-  const n = N * 12;
+  const n = N * 24;          // 24 points a tooth: no flat facets in the close saver view
   for (let i = 0; i <= n; i++) {
     const a = i / n * TAU, rr = toothRadius(N, a, phase0, internal) * k;
     const x = cx + rr * Math.cos(a), y = cy + rr * Math.sin(a);
@@ -58,26 +59,32 @@ function engrave(ctx, text, x, y, size, tint, night) {
 }
 
 // The fixed gear: a ring with R inner teeth (inside mode), or a wheel with
-// R outer teeth (outside mode). Teeth are centered at 2 pi k / R.
-export function fixedSprite(R, out, k, night, dpr) {
+// R outer teeth (outside mode). Teeth are centered at 2 pi k / R. drawFixed
+// draws it about (0, 0) of ctx. The saver draws it as a vector each frame,
+// so it stays sharp in the close view.
+export function drawFixed(ctx, R, out, k, night, dpr) {
   const tint = night ? '#a9c4ff' : '#5f86b8';
-  const ext = (out ? R + ADD : R + DED + ringRim(R)) + 2;
-  const size = Math.ceil(2 * ext * k), c = size / 2;
-  const cv = document.createElement('canvas'); cv.width = cv.height = size;
-  const ctx = cv.getContext('2d');
   const path = new Path2D();
   if (out) {
-    gearPath(R, k, c, c, 0, false, path);
-    path.moveTo(c + 0.06 * R * k, c); path.arc(c, c, 0.06 * R * k, 0, TAU);
+    gearPath(R, k, 0, 0, 0, false, path);
+    path.moveTo(0.06 * R * k, 0); path.arc(0, 0, 0.06 * R * k, 0, TAU);
   } else {
     const ro = (R + DED + ringRim(R)) * k;
-    path.moveTo(c + ro, c); path.arc(c, c, ro, 0, TAU);
-    gearPath(R, k, c, c, 0, true, path);
+    path.moveTo(ro, 0); path.arc(0, 0, ro, 0, TAU);
+    gearPath(R, k, 0, 0, 0, true, path);
   }
   plastic(ctx, path, tint, night, dpr);
   const fs = Math.max(9 * dpr, Math.min(14 * dpr, 4.5 * k));
-  if (out) engrave(ctx, String(R), c, c + 0.06 * R * k + fs * 1.4, fs, tint, night);
-  else engrave(ctx, String(R), c, c - (R + DED + ringRim(R) * 0.5) * k, fs, tint, night);
+  if (out) engrave(ctx, String(R), 0, 0.06 * R * k + fs * 1.4, fs, tint, night);
+  else engrave(ctx, String(R), 0, -(R + DED + ringRim(R) * 0.5) * k, fs, tint, night);
+}
+export function fixedSprite(R, out, k, night, dpr) {
+  const ext = (out ? R + ADD : R + DED + ringRim(R)) + 2;
+  const size = Math.ceil(2 * ext * k);
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  ctx.translate(size / 2, size / 2);
+  drawFixed(ctx, R, out, k, night, dpr);
   return cv;
 }
 

@@ -26,7 +26,9 @@
 //  ink is light: the hue swings 28 degrees about the hue of the pen, once
 //  in each trace. The strokes are opaque and wider, and a soft copy of the
 //  ink (#glow, blurred, screen) lies under the sharp lines. The gears show
-//  at 95%. The normal page keeps its paper and pen colors.
+//  at 95%. The camera follows the wheel at zoom CLOSE, and the ink and the
+//  rig draw as vectors through it each frame (composite), so the lines
+//  stay sharp. The normal page keeps its paper and pen colors.
 //
 //  PEN SPEED. A trace draws at a rate that keeps the wheel spin at or
 //  below SPIN_MAX rad/s (spinOf), so the teeth stay readable. The rig shows
@@ -48,10 +50,12 @@
 //     grep -n 'function setOpen'      the panel, the phone sheet, the dock
 //     grep -n 'function saverHue'     the hue of the saver ink at t
 //     grep -n 'function drawGlow'     the soft copy of the ink (saver)
+//     grep -n 'function composite'    the saver view through the camera
+//     grep -n 'function strokeSaverInk' the saver ink as vectors, culled
 //     grep -n 'window.snSaver'        the screensaver hook
 // ============================================================================
-import { TAU, closure, wheelAngle, wheelCenter, penAt, holes, extent, samplePath } from './spiro.js';
-import { fixedSprite, wheelSprite } from './rig.js';
+import { TAU, ADD, closure, wheelAngle, wheelCenter, penAt, holes, extent, samplePath } from './spiro.js';
+import { drawFixed, fixedSprite, wheelSprite } from './rig.js';
 import { INKS, WIDTHS, PRESETS } from './presets.js';
 import { typeset } from '../../lib/sci-math.js';
 
@@ -314,47 +318,61 @@ function finishNow() {
 }
 
 // ── rig ────────────────────────────────────────────────────────────────────
-function sprites(a) {
-  const key = `${a.R}|${a.r}|${a.out}|${a.hole}|${S.k}|${S.paper}`;
+// k: device px per unit. The saver asks for sprites at the zoom its
+// camera eases to, so they draw near 1:1 there.
+function sprites(a, k) {
+  const key = `${a.R}|${a.r}|${a.out}|${a.hole}|${k}|${S.paper}|${!!S.saver}`;
   if (!S.sprites || S.sprites.key !== key) {
     const night = S.paper === 'night';
-    S.sprites = { key, fixed: fixedSprite(a.R, a.out, S.k, night, S.dpr), wheel: wheelSprite(a.r, S.k, night, S.dpr, a.hole) };
+    S.sprites = { key, fixed: S.saver ? null : fixedSprite(a.R, a.out, k, night, S.dpr), wheel: wheelSprite(a.r, k, night, S.dpr, a.hole) };
   }
   return S.sprites;
 }
+// The normal page draws the rig in #rig when it changes. In the saver,
+// composite() calls paintRig through the camera each frame.
 function drawRig() {
-  const n = rigC.width, c = n / 2, a = S.active;
+  const n = rigC.width;
   rigX.clearRect(0, 0, n, n);
+  if (S.saver) return;
+  rigX.save(); rigX.translate(n / 2, n / 2); paintRig(rigX, S.k); rigX.restore();
+}
+// The gears and the pen about (0, 0) of ctx, k device px per unit. The
+// saver draws the ring as a vector (a sprite of the ring at the close zoom
+// is too large) and the wheel from a sprite made at kS px per unit.
+function paintRig(ctx, k, kS = k) {
+  const a = S.active;
   if (!a) return;
-  const k = S.k, sp = sprites(a), th = holes(a.r)[a.hole].a;
+  const sp = sprites(a, kS), th = holes(a.r)[a.hole].a;
   const [wx, wy] = wheelCenter(a.R, a.r, a.out, a.t), phi = wheelAngle(a.R, a.r, a.out, a.t);
-  rigX.save();
-  rigX.translate(c, c); rigX.rotate(a.rot);
+  ctx.save();
+  ctx.rotate(a.rot);
   const [px, py] = penAt(a.R, a.r, a.out, a.d, a.t);
+  const night = S.paper === 'night';
   if (S.gears) {
-    rigX.drawImage(sp.fixed, -sp.fixed.width / 2, -sp.fixed.height / 2);
-    rigX.save();
-    rigX.translate(wx * k, wy * k); rigX.rotate(phi - th);
-    rigX.drawImage(sp.wheel, -sp.wheel.width / 2, -sp.wheel.height / 2);
-    rigX.restore();
+    if (sp.fixed) ctx.drawImage(sp.fixed, -sp.fixed.width / 2, -sp.fixed.height / 2);
+    else drawFixed(ctx, a.R, a.out, k, night, S.dpr);
+    ctx.save();
+    ctx.translate(wx * k, wy * k); ctx.rotate(phi - th); ctx.scale(k / kS, k / kS);
+    ctx.drawImage(sp.wheel, -sp.wheel.width / 2, -sp.wheel.height / 2);
+    ctx.restore();
     // The pen arm from the wheel centre, the hub, and the contact point:
     // the wheel touches the ring at radius R on the line to its centre.
-    const night = S.paper === 'night', line = night ? 'rgba(255,255,255,0.55)' : 'rgba(20,20,24,0.45)';
-    rigX.lineWidth = 1 * S.dpr; rigX.strokeStyle = line;
-    rigX.beginPath(); rigX.moveTo(wx * k, wy * k); rigX.lineTo(px * k, py * k); rigX.stroke();
-    rigX.fillStyle = line;
-    rigX.beginPath(); rigX.arc(wx * k, wy * k, 1.8 * S.dpr, 0, TAU); rigX.fill();
+    const line = night ? 'rgba(255,255,255,0.55)' : 'rgba(20,20,24,0.45)';
+    ctx.lineWidth = 1 * S.dpr; ctx.strokeStyle = line;
+    ctx.beginPath(); ctx.moveTo(wx * k, wy * k); ctx.lineTo(px * k, py * k); ctx.stroke();
+    ctx.fillStyle = line;
+    ctx.beginPath(); ctx.arc(wx * k, wy * k, 1.8 * S.dpr, 0, TAU); ctx.fill();
     const ca = a.t, cr = a.R * k;
-    rigX.beginPath(); rigX.arc(cr * Math.cos(ca), cr * Math.sin(ca), Math.max(2.5 * S.dpr, 0.9 * k), 0, TAU);
-    rigX.strokeStyle = night ? 'rgba(255,236,170,0.9)' : 'rgba(150,90,10,0.85)'; rigX.lineWidth = 1.3 * S.dpr; rigX.stroke();
+    ctx.beginPath(); ctx.arc(cr * Math.cos(ca), cr * Math.sin(ca), Math.max(2.5 * S.dpr, 0.9 * k), 0, TAU);
+    ctx.strokeStyle = night ? 'rgba(255,236,170,0.9)' : 'rgba(150,90,10,0.85)'; ctx.lineWidth = 1.3 * S.dpr; ctx.stroke();
   }
   // the pen: a dot of its ink in a thin ring
   const pr = Math.max(2.4 * S.dpr, 0.75 * k);
-  rigX.beginPath(); rigX.arc(px * k, py * k, pr, 0, TAU);
-  rigX.fillStyle = S.saver ? saverInk(a, a.t) : inkOf(a.pen); rigX.fill();
-  rigX.lineWidth = 1.2 * S.dpr; rigX.strokeStyle = S.paper === 'night' ? 'rgba(255,255,255,0.85)' : 'rgba(20,20,24,0.8)';
-  rigX.stroke();
-  rigX.restore();
+  ctx.beginPath(); ctx.arc(px * k, py * k, pr, 0, TAU);
+  ctx.fillStyle = S.saver ? saverInk(a, a.t) : inkOf(a.pen); ctx.fill();
+  ctx.lineWidth = 1.2 * S.dpr; ctx.strokeStyle = night ? 'rgba(255,255,255,0.85)' : 'rgba(20,20,24,0.8)';
+  ctx.stroke();
+  ctx.restore();
 }
 
 // ── presets ────────────────────────────────────────────────────────────────
@@ -683,20 +701,89 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 // The saver camera (S.saver.cam: zoom z about the sheet point fx, fy in
-// device px) applies to every layer, so ink and gears stay in register.
+// device px, put at view point n/2, cy). The paper and the glow are soft,
+// so they scale up from their sheet canvases. The ink and the rig draw as
+// vectors through the camera each frame: a #dry scaled up by z showed its
+// pixels as steps on the thin lines.
 function composite(cv) {
   const n = paperC.width;
   if (cv.width !== n) { cv.width = cv.height = n; }
-  const x = cv.getContext('2d'), cam = S.saver.cam;
+  const x = cv.getContext('2d'), s = S.saver, cam = s.cam, z = cam.z;
+  const ox = n / 2 - cam.fx * z, oy = cam.cy - cam.fy * z;
   x.setTransform(1, 0, 0, 1, 0, 0);
   x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1; x.fillStyle = PAPER.night; x.fillRect(0, 0, n, n);
-  x.setTransform(cam.z, 0, 0, cam.z, n / 2 - cam.fx * cam.z, cam.cy - cam.fy * cam.z);
+  x.setTransform(z, 0, 0, z, ox, oy);
   x.drawImage(paperC, 0, 0);
-  const g = S.saver && S.saver.glow;
-  if (g) { x.globalCompositeOperation = 'screen'; x.filter = 'blur(6px)'; x.drawImage(g, 0, 0, n, n); x.filter = 'none'; }
-  x.globalCompositeOperation = blend(); x.drawImage(dryC, 0, 0); x.globalAlpha = inkA(); x.drawImage(wetC, 0, 0);
-  x.globalCompositeOperation = 'source-over'; x.globalAlpha = S.saver ? SAVER_RIG_A : 1; x.drawImage(rigC, 0, 0);
+  if (s.glow) { x.globalCompositeOperation = 'screen'; x.filter = 'blur(6px)'; x.drawImage(s.glow, 0, 0, n, n); x.filter = 'none'; }
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  // Each trace goes into s.layer in opaque runs, then into the view with
+  // the paper blend, as #wet goes into #dry (see INK LAYERS).
+  if (s.layer.width !== n) { s.layer.width = s.layer.height = n; }
+  const lx = s.layer.getContext('2d'), K = S.k * z, A = ox + z * n / 2, B = oy + z * n / 2;
+  const a = S.active, list = S.traces.map(tr => [tr, tr.t1]);
+  if (a && a.tMax > a.t0) list.push([a, a.tMax]);
+  x.globalCompositeOperation = blend();
+  for (const [tr, tTo] of list) {
+    lx.clearRect(0, 0, n, n);
+    if (strokeSaverInk(lx, tr, tTo, K, A, B, n, z)) x.drawImage(s.layer, 0, 0);
+  }
+  x.globalCompositeOperation = 'source-over'; x.globalAlpha = SAVER_RIG_A;
+  x.setTransform(1, 0, 0, 1, A, B); paintRig(x, K, S.k * s.zGoal);
   x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1;
+}
+// The points of a saver trace, sampled once for the whole trace at the
+// closest zoom (S.k CLOSE px per unit) and kept on the trace: x, y in units, in blocks of INK_BLK
+// points. Each block has a box (for the cull) and a hue.
+const INK_BLK = 48;
+function inkPlan(tr) {
+  const tEnd = tr.tEnd ?? tr.t1, K = S.k * CLOSE;
+  if (tr.plan && tr.plan.K === K && tr.plan.tEnd === tEnd) return tr.plan;
+  const pts = samplePath(tr.R, tr.r, tr.out, tr.d, tr.rot, tr.t0, tEnd, 1.2 / K), N = pts.length / 2 - 1;
+  const nb = Math.ceil(N / INK_BLK), box = new Float32Array(nb * 4), hue = new Float32Array(nb);
+  for (let b = 0; b < nb; b++) {
+    const i0 = b * INK_BLK, i1 = Math.min(N, i0 + INK_BLK);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = i0; i <= i1; i++) {
+      const px = pts[2 * i], py = pts[2 * i + 1];
+      if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
+    }
+    box.set([x0, y0, x1, y1], 4 * b);
+    hue[b] = Math.round(saverHue(tr, tr.t0 + (tEnd - tr.t0) * (i0 + i1) / 2 / N) * 2) / 2;
+  }
+  return (tr.plan = { K, tEnd, pts, N, box, hue });
+}
+// Stroke the saver trace tr from t0 to tTo into ctx, a view of n px with
+// the sheet centre at (A, B) and K px per unit. Blocks out of the view are
+// skipped. Blocks next to each other with the same half-degree hue share
+// one path. Returns false when no block is in the view.
+function strokeSaverInk(ctx, tr, tTo, K, A, B, n, z) {
+  const p = inkPlan(tr), tEnd = tr.tEnd ?? tr.t1, { pts, N, box, hue } = p;
+  const f = (tTo - tr.t0) / (tEnd - tr.t0) * N, m = Math.min(N, Math.floor(f));
+  const lw = WIDTHS[tr.w].px * wScale() * 1.5 * z, pad = lw / K;
+  const ux0 = -A / K - pad, ux1 = (n - A) / K + pad, uy0 = -B / K - pad, uy1 = (n - B) / K + pad;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = lw;
+  let open = false, h = NaN, any = false, last = -1;
+  for (let b = 0; b * INK_BLK < Math.max(1, m); b++) {
+    const i0 = b * INK_BLK, i1 = Math.min(m, i0 + INK_BLK), o = 4 * b;
+    if (box[o + 2] < ux0 || box[o] > ux1 || box[o + 3] < uy0 || box[o + 1] > uy1) {
+      if (open) { ctx.stroke(); open = false; }
+      continue;
+    }
+    if (!open || hue[b] !== h) {
+      if (open) ctx.stroke();
+      h = hue[b]; ctx.strokeStyle = `hsl(${h},88%,68%)`;
+      ctx.beginPath(); ctx.moveTo(A + pts[2 * i0] * K, B + pts[2 * i0 + 1] * K); open = true; any = true;
+    }
+    for (let i = i0 + 1; i <= i1; i++) ctx.lineTo(A + pts[2 * i] * K, B + pts[2 * i + 1] * K);
+    last = b;
+  }
+  // The pen point between two samples, so the line meets the pen.
+  if (open && last === Math.floor(Math.max(0, m - 1) / INK_BLK) && f > m) {
+    const [x, y] = penAt(tr.R, tr.r, tr.out, tr.d, tTo), c = Math.cos(tr.rot), sn = Math.sin(tr.rot);
+    ctx.lineTo(A + (c * x - sn * y) * K, B + (sn * x + c * y) * K);
+  }
+  if (open) ctx.stroke();
+  return any;
 }
 // The soft copy of the ink: #dry and #wet at a quarter of the size. CSS
 // blurs the #glow canvas and screens it under the sharp lines. It is drawn
@@ -721,12 +808,14 @@ function drawGlow(now) {
 // another in a seeded order. A preset keeps the traces that fit in
 // SAVER_LAPS laps, draws them one at a time at S.saver.rate (or slower,
 // see SPIN_MAX), rests REST s on the closed figure, and fades.
-// CAMERA. Shots of 6 to 10 s go between the whole sheet (z 1) and a close
-// view (z CLOSE) that follows the wheel centre, so the teeth show as they
-// roll. The close view puts the wheel at the centre of the clear band of
-// the label plate (plateBand, lib/saver-clear.js), in cam.cy, and the pen
-// runs at SLOW of its rate there. The camera eases between shots. The
-// rest is a whole-sheet shot.
+// CAMERA. The camera follows the wheel centre all the time, so the teeth
+// show as they roll. The zoom is CLOSE, or less when the whole wheel would
+// not fit in WHEEL_FIT of the view (zoomFor). The camera puts the wheel at
+// the centre of the clear band of the label plate (plateBand,
+// lib/saver-clear.js), in cam.cy.
+// The pen runs at SLOW of its rate while it draws, so the longest figure
+// still closes inside the 60 s draw limit. When the wheel jumps (a
+// new trace with other gears, a new preset), the camera glides to it.
 //
 // The saver canvas (S.saver.comp) holds the paper, glow, ink and rig in
 // one canvas, and it is in #sheet, over the other layers, which hide.
@@ -773,7 +862,16 @@ function penAnchor() {
   const o = view(0, 0), p = view((px * c - py * s) * u, (px * s + py * c) * u);
   return { x: o.x, y: o.y, r: extent(a.R, a.r, a.out) * u * cam.z, pts: [p] };
 }
-const CLOSE = 1.9, SLOW = 0.4, REST = 4000, FADE_MS = 1100;
+const CLOSE = 1.9, WHEEL_FIT = 0.8, SLOW = 0.65, REST = 4000, FADE_MS = 1100;
+// The camera zoom for the active wheel: CLOSE at most, and the wheel (tips
+// included) at most WHEEL_FIT of the n px view. The plate text lies over
+// the gears, so the fit uses the view, not the clear band. Quantized to
+// 0.05, so the wheel sprite is not made again on each small change.
+function zoomFor(a, n) {
+  if (!a) return CLOSE;
+  const z = WHEEL_FIT * n / (2 * (a.r + ADD) * S.k);
+  return clamp(Math.floor(z * 20) / 20, 1, CLOSE);
+}
 function saverStep(now) {
   const s = S.saver, a = S.active;
   const key = `${S.preset}|${a && a.R}|${a && a.r}|${a && a.d}`;
@@ -785,33 +883,34 @@ function saverStep(now) {
     s.i = (s.i + 1) % s.order.length;
     loadPreset(s.order[s.i], 0);
     sheet.style.opacity = '1'; s.phase = 'draw'; s.until = now + 60000;
-    s.close = s.rnd() < 0.5; s.shotEnd = now + 6000 + s.rnd() * 4000;
-    s.w = 0; s.slow = 1;
+    s.slow = SLOW; s.tx = null; s.jx = s.jy = 0;   // the fade hides the cut
+    s.cam.z = s.zGoal = zoomFor(S.active, paperC.width);
   }
-  // The shot: whole sheet or close on the wheel. A new shot every 6 to
-  // 10 s while the pen draws. The rest and the fade are whole-sheet shots.
-  if (s.phase === 'draw' && now > s.shotEnd) { s.close = !s.close; s.shotEnd = now + 6000 + s.rnd() * 4000; }
-  const close = s.close && s.phase === 'draw' && a, n = paperC.width;
+  const n = paperC.width;
   if (s.bandFn && now - s.bandAt > 250) { s.bandAt = now; s.band = s.bandFn(innerHeight); }
-  // The weight w of the close view and the pen slow-down ease; the close
-  // pose itself is exact, so the wheel holds still on the screen and does
-  // not trail behind its own motion.
   const dt = Math.min(0.05, (now - (s.camAt || now)) / 1000); s.camAt = now;
   const e = 1 - Math.exp(-dt * 1.6);
-  s.w += ((close ? 1 : 0) - s.w) * e;
-  s.slow += ((close ? SLOW : 1) - s.slow) * e;
+  s.slow += ((s.phase === 'draw' ? SLOW : 1) - s.slow) * e;
   let fx = n / 2, fy = n / 2, cy = n / 2;
-  if (a && s.w > 1e-3) {
-    const [wx, wy] = wheelCenter(a.R, a.r, a.out, a.t), c = Math.cos(a.rot), sn = Math.sin(a.rot);
-    const q = sheet.getBoundingClientRect(), b = s.band;
-    if (b && q.height) cy = clamp(((b.t + innerHeight - b.b) / 2 - q.top) * S.dpr, n * 0.25, n * 0.75);
+  const q = sheet.getBoundingClientRect(), b = s.band;
+  if (b && q.height) cy = clamp(((b.t + innerHeight - b.b) / 2 - q.top) * S.dpr, n * 0.25, n * 0.75);
+  if (a) {
     // The wheel rides near the ring, near the sheet edge, so the view may
     // pass the edge. composite() fills that part with night paper.
+    const [wx, wy] = wheelCenter(a.R, a.r, a.out, a.t), c = Math.cos(a.rot), sn = Math.sin(a.rot);
     fx = n / 2 + (wx * c - wy * sn) * S.k; fy = n / 2 + (wx * sn + wy * c) * S.k;
   }
-  const w = s.w, cam = s.cam;
-  cam.z = 1 + (CLOSE - 1) * w;
-  cam.fx = n / 2 + (fx - n / 2) * w; cam.fy = n / 2 + (fy - n / 2) * w; cam.cy = n / 2 + (cy - n / 2) * w;
+  // The pose is exact on the wheel, so the wheel holds still on the screen.
+  // A jump of the wheel goes into an offset (jx, jy) that eases out.
+  if (s.tx != null && Math.hypot(fx - s.tx, fy - s.ty) > 0.08 * n) { s.jx -= fx - s.tx; s.jy -= fy - s.ty; }
+  s.tx = fx; s.ty = fy;
+  const ej = 1 - Math.exp(-dt * 2.2);
+  s.jx -= s.jx * ej; s.jy -= s.jy * ej;
+  const cam = s.cam;
+  s.zGoal = zoomFor(a, n);
+  cam.z += (s.zGoal - cam.z) * e;
+  cam.fx = fx + s.jx; cam.fy = fy + s.jy;
+  cam.cy += (cy - cam.cy) * e;
 }
 window.snSaver = {
   enter(o = {}) {
@@ -833,7 +932,8 @@ window.snSaver = {
     sheet.append(comp);
     const now = performance.now();
     S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, rate, rnd, phase: 'draw', until: now + 60000, key: '', comp, glow, glowKey: '', glowAt: 0, paper: S.paper,
-      cam: { z: 1, fx: 0, fy: 0, cy: 0 }, close: rnd() < 0.5, shotEnd: now + 6000 + rnd() * 4000, camAt: 0, w: 0, slow: 1, bandFn: null, band: null, bandAt: 0 };
+      cam: { z: CLOSE, fx: 0, fy: 0, cy: 0 }, zGoal: CLOSE, camAt: 0, slow: SLOW, tx: null, ty: null, jx: 0, jy: 0,
+      layer: document.createElement('canvas'), bandFn: null, band: null, bandAt: 0 };
     import('../../lib/saver-clear.js').then(m => { if (S.saver) S.saver.bandFn = m.plateBand; }).catch(() => { /* no band: the sheet centre */ });
     S.held = false; setGears(true);
     panel.classList.remove('open'); layout();
