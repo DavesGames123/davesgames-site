@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-ui="light">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Line art — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   LINE ART  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A Rust port of ln, the 3D line art engine by Michael Fogleman
+   (github.com/fogleman/ln, MIT). The engine draws a 3D scene as 2D vector
+   paths: each shape gives polylines on its surface, the paths are chopped
+   into short steps, and a ray from each point to the eye says if the point
+   shows. The page plays the visible paths back like a pen plotter.
+
+   FILES
+     crate/        the Rust port (Cargo.toml, src/, one file per ln file)
+     pkg/          the wasm-bindgen output of the crate (committed)
+     worker.js     the module worker: runs the engine in slices
+     plotter.js    the pen plotter view: sheets, pen, zoom, paper, export
+     themes.js     the paper and ink palettes (no DOM)
+     main.js       the controls, the camera, the gallery, the saver hook
+     LICENSE-ln    the ln MIT licence;  CREDITS.txt  sources and examples
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops the frame loop when the shell swaps pages
+     2. style.css, then lib/sci.css (Inter and STIX Two Text)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #view fills the window: the paper and the ink. main.js fits the image
+     in the clear part of it (function layout).
+     desktop ... #panel at the left, #gallery strip at the base of the
+                 clear part, #hud (stats) at the upper right, #tools at
+                 the lower right.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: replay, previous, the example name
+                 (next example), orbit, settings. #panel is a bottom sheet
+                 (portrait) or a drawer at the right (landscape). The
+                 gallery moves into the sheet.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'      the clear area and the image size
+     grep -n 'function render('     ask the worker for a render
+     grep -n 'function cameraFor'   the camera with the orbit
+     grep -n 'function buildParams' the sliders of one example
+     grep -n 'function selectExample'
+     grep -n 'function bindView'    orbit, pan, zoom, pinch
+     grep -n 'function thumbs'      the gallery renders
+     grep -n 'function exportSVG'   the SVG from the engine (to_svg)
+     grep -n 'window.snSaver'       the screensaver hook
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="ln, the 3D line art engine, ported to Rust and WebAssembly: cubes, spheres, CSG, meshes and height fields drawn as vector paths with hidden lines removed, played back like a pen plotter. Export SVG or PNG.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<canvas id="view" aria-label="Line art drawing. Drag to orbit, scroll or pinch to zoom."></canvas>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Line art</div>
+  <div class="tagline">ln, the 3D line art engine, in Rust</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<div id="hud" aria-live="off">
+  <div id="hudTitle"></div>
+  <div id="hudStats"></div>
+</div>
+<div id="progress"><i></i></div>
+<div id="msg" hidden></div>
+
+<div id="tools" role="toolbar" aria-label="Drawing">
+  <button id="replayBtn" title="Plot again (R)" aria-label="Plot again">↻</button>
+  <button id="orbitBtn" title="Slow orbit (O)" aria-label="Slow orbit" aria-pressed="false">◎</button>
+  <button id="fitBtn" title="Fit the drawing (0)" aria-label="Fit">⤢</button>
+</div>
+
+<section id="gallery" aria-label="Examples">
+  <div id="cards" class="cards"></div>
+</section>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <header class="ex">
+    <h1 id="exTitle">Line art</h1>
+    <div id="exSource" class="src"></div>
+    <p id="exBlurb"></p>
+  </header>
+  <div id="gallerySlot"></div>
+
+  <div class="sec-label">Parameters <button id="resetParams" class="mini">Reset</button></div>
+  <div id="params"></div>
+
+  <div class="sec-label">Camera <button id="resetCam" class="mini">Reset</button></div>
+  <div class="btns">
+    <button id="orbitBtn2" aria-pressed="false">Slow orbit</button>
+    <button id="replayBtn2">Plot again</button>
+  </div>
+  <div class="prm"><div class="nm">Orbit speed</div><span class="val" id="orbitSpeedV"></span>
+    <input type="range" id="orbitSpeed" min="2" max="40" step="1" value="10" aria-label="Orbit speed"></div>
+  <p class="hint" id="camLine"></p>
+
+  <div class="sec-label">Pen</div>
+  <div class="prm"><div class="nm">Line width</div><span class="val" id="lineWV"></span>
+    <input type="range" id="lineW" min="0.4" max="4" step="0.1" value="1.2" aria-label="Line width"></div>
+  <div class="prm"><div class="nm">Jitter</div><span class="val" id="jitterV"></span>
+    <input type="range" id="jitter" min="0" max="4" step="0.1" value="0" aria-label="Jitter"></div>
+  <div class="prm"><div class="nm">Plot time</div><span class="val" id="plotTimeV"></span>
+    <input type="range" id="plotTime" min="0" max="20" step="0.5" value="6" aria-label="Plot time in seconds"></div>
+  <div class="btns"><button id="penHeadBtn" class="on" aria-pressed="true">Pen head shown</button></div>
+
+  <div class="sec-label">Paper and ink</div>
+  <div id="themes" class="themes"></div>
+
+  <div class="sec-label">Export</div>
+  <div class="btns">
+    <button id="svgBtn" title="The engine's own SVG (Paths to_svg)">SVG</button>
+    <button id="pngBtn" title="A still at twice the screen size">PNG</button>
+  </div>
+
+  <div class="sec-label">Rust</div>
+  <div class="codehead"><span id="codeName"></span></div>
+  <pre id="code" class="code"></pre>
+
+  <div class="sec-label">How it works</div>
+  <div class="about">
+    <p>Each shape gives two things: a solid that blocks the view (a ray test) and some 3D polylines on its surface, its vector texture. Only the polylines can show. A cube gives its twelve edges; a sphere gives rings of latitude and longitude.</p>
+    <p>The engine chops every polyline into steps of 0.01 world units. For each point it casts a ray toward the eye. If a shape is hit before the eye, the point is hidden and the line breaks there. A k-d tree over the shape boxes keeps the ray test fast.</p>
+    <p>Visible runs are projected with the camera, simplified, and drawn in the order the engine made them. That order is the pen path you see.</p>
+    <p>Solids can be combined: an intersection keeps lines inside both, a difference cuts one out of another. Outline spheres, cylinders and cones draw only their silhouette for the current eye.</p>
+  </div>
+
+  <div class="sec-label">Credits</div>
+  <div class="about small">
+    <p><a href="https://github.com/fogleman/ln" target="_blank" rel="noopener">ln</a> by Michael Fogleman, MIT licence. This page runs a Rust port of it, compiled to WebAssembly. The examples are ports of the ln examples directory. Coastlines: Natural Earth (public domain). Suzanne mesh: from the ln repository.</p>
+    <p id="engineVersion"></p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockReplay" aria-label="Plot again">↻</button>
+  <button id="dockPrev" aria-label="Previous example">‹</button>
+  <button id="dockNext" class="name" aria-label="Next example"><span id="dockName">…</span><i>›</i></button>
+  <button id="dockOrbit" aria-label="Slow orbit" aria-pressed="false">◎</button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
