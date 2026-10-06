@@ -100,6 +100,11 @@ button:disabled{opacity:0.4;cursor:default}
 .themes button i::after{content:'';position:absolute;left:4px;right:4px;top:8px;height:2px;border-radius:1px;background:var(--k)}
 .themes button.on{border-color:var(--acc);color:var(--acc)}
 
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 6px}
+.chips button{flex:1 1 auto;padding:6px 9px;border:1px solid var(--line-b);border-radius:999px;background:var(--bg2);color:var(--dim);font-size:0.74rem}
+.chips button.on{border-color:var(--acc);color:var(--acc)}
+.chips button:hover{color:var(--ink)}
+
 /* Parameters: one <details> per group. */
 #params details{border:1px solid var(--line);border-radius:9px;margin:6px 0;background:#101217}
 #params summary{list-style:none;display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;font-size:0.8rem;color:#ecebe6}
@@ -133,6 +138,7 @@ button:disabled{opacity:0.4;cursor:default}
   .row2 select{min-height:44px}
   .row2 input[type=color]{width:52px;height:44px}
   .themes button{min-height:44px;font-size:0.74rem}
+  .chips button{min-height:40px;font-size:0.8rem}
   .prm .nm{font-size:0.86rem}
   .prm .val{font-size:0.8rem}
   .hint{font-size:0.76rem}

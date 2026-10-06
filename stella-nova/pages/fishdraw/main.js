@@ -21,8 +21,17 @@
 //  with history.replaceState, so the back button of the browser is not
 //  filled with fish.
 //
+//  GRID. buildGrid() makes the spec { name, params } of each cell from the
+//  grid seed: random names, or relatives of the specimen (same genus,
+//  mutate() with the family spread). The pool draws the cells in order
+//  (prio = cell index), so the plate fills cell by cell. A new grid cancels
+//  the queued jobs of the old one (pool tag). A tap on a cell opens that
+//  fish in single mode.
+//
 //  GREP MAP
 //    grep -n 'function layout'      the canvas size and the clear area
+//    grep -n 'function buildGrid'   the cell specs and the progressive fill
+//    grep -n 'function setMode'     single or grid
 //    grep -n 'function plateNow'    the layout of the plate on screen
 //    grep -n 'function fitView'     plate mm to device px
 //    grep -n 'function draw'        one frame
@@ -39,9 +48,9 @@
 //    grep -n 'BOOT'                 the boot order
 // ============================================================================
 import { makeEngine, PARAMS, GROUPS, PARAM_BY_KEY, sanitize, mutate, takeGroup, applyLocks, diffParams,
-  encodeShare, decodeShare, randomName, roundTo } from './engine.js';
+  encodeShare, decodeShare, randomName, relativeName, mulberry, roundTo } from './engine.js';
 import { createPool } from './pool.js';
-import { THEMES, THEME_KEYS, PAGES, MM_PER_PX, pageSize, layoutPlate } from './plate.js';
+import { THEMES, THEME_KEYS, PAGES, MM_PER_PX, GRID_PRESETS, pageSize, layoutPlate, cellAt } from './plate.js';
 import { drawPlate, makeGrain } from './render.js';
 
 const $ = id => document.getElementById(id);
@@ -66,6 +75,8 @@ const S = {
   },
   anim: { auto: !REDUCED, tip: true, speed: 0.5, p: null, last: 0 },
   view: { z: 1, px: 0, py: 0 },
+  grid: { rows: 3, cols: 3, seed: 1, family: false, spread: 0.3, preset: '3x3', no: 1 },
+  gspec: [], gfish: [], gprog: [], gtag: '', hiCell: -1,
   dpr: 1, clear: { x: 0, y: 0, w: 1, h: 1 }, dirty: true,
   saver: null,
 };
@@ -74,6 +85,7 @@ let E = null;            // the main-thread engine (names and params only)
 let pool = null;
 let grain = null;
 let token = 0;           // the latest showFish request
+let gridSeq = 0;         // the latest grid (pool cancel tag)
 
 // ── layout ──────────────────────────────────────────────────────────────────
 // The canvas covers the desk at device px. The clear area is the part of
@@ -106,12 +118,16 @@ function plateNow() {
   const cfg = plateCfg();
   const view = { w: S.clear.w * MM_PER_PX, h: S.clear.h * MM_PER_PX };
   const size = pageSize(cfg.page, cfg.orient, view);
-  const names = S.mode === 'single' ? [S.name] : [];
+  const grid = S.mode === 'grid', G = S.grid;
+  const names = grid ? S.gspec.map(c => c.name) : [S.name];
+  const sub = grid
+    ? (G.family ? 'The family of ' + (S.name.split(' ')[0] || 'Pisces') + ', ' + (G.rows * G.cols) + ' specimens' : (G.rows * G.cols) + ' specimens, plate seed ' + G.seed)
+    : 'Seed ' + (E ? E.str_to_seed(S.name) : '');
   return layoutPlate({
-    w: size.w, h: size.h, rows: 1, cols: 1, screen: cfg.page === 'screen',
+    w: size.w, h: size.h, rows: grid ? G.rows : 1, cols: grid ? G.cols : 1, screen: cfg.page === 'screen',
     border: cfg.border, title: cfg.title, labels: cfg.labels,
-    titleText: S.title || S.name || 'Pisces fictae', subText: S.mode === 'single' ? 'Seed ' + (E ? E.str_to_seed(S.name) : '') : '',
-    footRight: 'davesgames.io', names, plateNo: 1, fig: S.mode === 'single',
+    titleText: S.title || (grid ? 'Pisces fictae' : S.name) || 'Pisces fictae', subText: sub,
+    footRight: 'davesgames.io', names, plateNo: grid ? G.no : 1, fig: !grid,
   });
 }
 
@@ -132,22 +148,32 @@ function draw() {
   const theme = THEMES[S.theme];
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const prog = S.anim.p;
+  const grid = S.mode === 'grid';
   drawPlate(ctx, {
     L, theme, ink: S.ink, pen: S.pen, jitter: S.jitter, view,
-    fishes: [S.fish], progress: [prog], grain: S.grain ? grain : null,
-    marker: S.anim.tip, hiCell: -1, paperOut: cfg.page !== 'screen', dpr: S.dpr,
+    fishes: grid ? S.gfish : [S.fish], progress: grid ? S.gprog : [S.anim.p], grain: S.grain ? grain : null,
+    marker: S.anim.tip, hiCell: grid ? S.hiCell : -1, paperOut: cfg.page !== 'screen', dpr: S.dpr,
   });
+  lastPlate = { L, view };
   placeCaption(L, view);
 }
-// The caption line under the plate: name, seed, lines.
+let lastPlate = null;
+// The caption line under the plate: name, seed, lines (single), or the
+// count of drawn cells (grid).
 function placeCaption(L, view) {
   const cap = $('caption');
   const f = S.fish;
-  if (!f) { cap.textContent = ''; return; }
-  const ed = Object.keys(diffParams(S.params, S.base)).length;
-  cap.innerHTML = `<i>${esc(S.name)}</i> · seed <span class="n">${f.seed}</span> · <span class="n">${f.offs.length - 1}</span> lines` +
-    (ed ? ` · ${ed} edited` : '');
+  if (S.mode === 'grid') {
+    const n = S.gspec.length, done = S.gfish.filter(Boolean).length;
+    const hi = S.hiCell >= 0 && S.gspec[S.hiCell];
+    cap.innerHTML = hi ? `${S.hiCell + 1}. <i>${esc(hi.name)}</i> · click to open`
+      : `${S.grid.family ? 'Family of <i>' + esc(S.name) + '</i>' : 'Random plate'} · <span class="n">${done}/${n}</span> drawn`;
+  } else if (!f) { cap.textContent = ''; return; }
+  else {
+    const ed = Object.keys(diffParams(S.params, S.base)).length;
+    cap.innerHTML = `<i>${esc(S.name)}</i> · seed <span class="n">${f.seed}</span> · <span class="n">${f.offs.length - 1}</span> lines` +
+      (ed ? ` · ${ed} edited` : '');
+  }
   const bottom = Math.min((view.oy + L.h * view.s) / S.dpr, S.clear.y + S.clear.h) + 8;
   cap.style.left = (S.clear.x + S.clear.w / 2) + 'px';
   cap.style.top = bottom + 'px';
@@ -167,16 +193,29 @@ function frame(now) {
     if (a.p >= f.total) { a.p = null; syncPlay(); }
     S.dirty = true;
   }
+  if (S.mode === 'grid') {
+    const dt = Math.min(0.1, (now - (a.last || now)) / 1000);
+    for (let i = 0; i < S.gprog.length; i++) {
+      const g = S.gfish[i];
+      if (S.gprog[i] == null || !g) continue;
+      S.gprog[i] += penRate() * dt;
+      if (S.gprog[i] >= g.total) { S.gprog[i] = null; if (!drawing()) syncPlay(); }
+      S.dirty = true;
+    }
+  }
   a.last = now;
   if (S.dirty) { S.dirty = false; draw(); }
 }
 function startDrawOn() {
+  if (S.mode === 'grid') { S.gprog = S.gfish.map(f => (f ? 0 : null)); S.dirty = true; syncPlay(); return; }
   if (!S.fish) return;
   S.anim.p = 0; S.anim.last = 0; S.dirty = true; syncPlay();
 }
+function drawing() { return S.mode === 'grid' ? S.gprog.some(p => p != null) : S.anim.p != null; }
+function stopDrawOn() { S.anim.p = null; S.gprog = S.gprog.map(() => null); S.dirty = true; syncPlay(); }
 function syncPlay() {
-  $('playBtn').textContent = S.anim.p != null ? 'Finish' : 'Draw on';
-  $('dockDraw').classList.toggle('on', S.anim.p != null);
+  $('playBtn').textContent = drawing() ? 'Finish' : 'Draw on';
+  $('dockDraw').classList.toggle('on', drawing());
 }
 
 // ── showFish ────────────────────────────────────────────────────────────────
@@ -198,6 +237,7 @@ function showFish(name, params, { push = true, animate = S.anim.auto } = {}) {
     S.fish = f;
     if (animate) startDrawOn(); else { S.anim.p = null; syncPlay(); }
     S.dirty = true; syncCaptionOnly();
+    if (S.mode === 'grid' && S.grid.family) buildGrid();
   }).catch(err => {
     if (my === token && !err.cancelled) note('This fish broke the engine: ' + err.message);
   }).finally(() => { S.pending--; busy(); });
@@ -231,6 +271,7 @@ function goHist(d) {
 
 // ── newFish / mutateFish ────────────────────────────────────────────────────
 function newFish() {
+  if (S.mode === 'grid' && !S.grid.family) { newPlate(); return; }
   const name = randomName(E, (Math.random() * 4294967295) >>> 0);
   const p = applyLocks(baseOf(name), S.params || {}, S.locks);
   showFish(name, p);
@@ -242,6 +283,69 @@ function mutateFish() {
 function rollGroup(group) {
   const fresh = baseOf(randomName(E, (Math.random() * 4294967295) >>> 0));
   showFish(S.name, takeGroup(S.params, fresh, group, S.locks));
+}
+
+// ── buildGrid ───────────────────────────────────────────────────────────────
+// The cell specs come from the grid seed, so a seed and the settings give
+// the same plate. A random cell keeps the locked fields of the specimen.
+function gridSpecs() {
+  const G = S.grid, n = G.rows * G.cols, rnd = mulberry(G.seed ^ 0x51ED);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const u = (rnd() * 4294967295) >>> 0;
+    if (G.family) {
+      if (i === 0) { out.push({ name: S.name, params: Object.assign({}, S.params) }); continue; }
+      out.push({ name: relativeName(E, S.name, u), params: mutate(S.params, G.spread, rnd, S.locks) });
+    } else {
+      const name = randomName(E, u);
+      out.push({ name, params: S.locks.size ? applyLocks(baseOf(name), S.params, S.locks) : null });
+    }
+  }
+  return out;
+}
+function buildGrid() {
+  if (!E || !S.params) return;
+  if (S.gtag) pool.cancel(S.gtag);
+  const tag = S.gtag = 'grid' + (++gridSeq);
+  S.gspec = gridSpecs();
+  const label = S.plates.grid.hershey;
+  S.gfish = S.gspec.map(c => pool.cached(c.name, c.params, label));
+  S.gprog = S.gfish.map(() => null);
+  S.dirty = true; syncPlay();
+  S.gspec.forEach((c, i) => {
+    if (S.gfish[i]) return;
+    S.pending++; busy();
+    pool.draw(c.name, c.params, label, 10 + i, tag).then(f => {
+      if (S.gtag !== tag) return;
+      S.gfish[i] = f;
+      S.gprog[i] = S.anim.auto && S.mode === 'grid' ? 0 : null;
+      S.dirty = true; syncPlay();
+    }).catch(() => { /* cancelled or broken: the cell stays empty */ }).finally(() => { S.pending--; busy(); });
+  });
+  writeHash();
+}
+function newPlate() { S.grid.seed = (Math.random() * 4294967295) >>> 0 || 1; S.grid.no++; buildGrid(); syncUI(); }
+let gridTimer = 0;
+function gridSoon() { clearTimeout(gridTimer); gridTimer = setTimeout(buildGrid, 140); }
+function setMode(m) {
+  if (S.mode === m) return;
+  S.mode = m; S.hiCell = -1;
+  resetView();
+  if (m === 'grid') buildGrid();
+  else { stopDrawOn(); refetch(); }
+  syncUI(); layout(); writeHash();
+}
+function openCell(i) {
+  const c = S.gspec[i]; if (!c) return;
+  S.mode = 'single'; S.hiCell = -1; resetView();
+  showFish(c.name, c.params);
+  syncUI(); layout();
+}
+// Plate mm of a desk point (CSS px), with the last drawn view.
+function plateAt(x, y) {
+  if (!lastPlate) return [-1, -1];
+  const v = lastPlate.view;
+  return [(x * S.dpr - v.ox) / v.s, (y * S.dpr - v.oy) / v.s];
 }
 
 // ── buildParams ─────────────────────────────────────────────────────────────
@@ -332,7 +436,18 @@ function syncParamRows() {
 
 // ── syncUI ──────────────────────────────────────────────────────────────────
 function syncUI() {
-  const cfg = plateCfg();
+  const cfg = plateCfg(), G = S.grid, grid = S.mode === 'grid';
+  for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === S.mode);
+  $('gridSec').hidden = !grid;
+  $('dockMode').textContent = grid ? '◧' : '▦';
+  $('dockMode').setAttribute('aria-label', grid ? 'Single fish' : 'Grid');
+  $('dockMode').classList.toggle('on', grid);
+  $('rows').value = G.rows; $('cols').value = G.cols; $('rowsV').textContent = G.rows; $('colsV').textContent = G.cols;
+  for (const b of $('presets').children) b.classList.toggle('on', b.dataset.id === G.preset);
+  for (const b of $('srcSeg').children) b.classList.toggle('on', +b.dataset.f === (G.family ? 1 : 0));
+  $('spreadRow').style.display = G.family ? '' : 'none';
+  $('spread').value = G.spread; $('spreadV').textContent = Math.round(G.spread * 100) + '%';
+  $('newBtn').textContent = grid && !G.family ? 'New plate' : 'New fish';
   if (document.activeElement !== $('nameInp')) $('nameInp').value = S.name;
   $('dockName').textContent = S.name || '…';
   $('seedLine').innerHTML = S.name ? `Seed <code>${E.str_to_seed(S.name)}</code>, from <code>str_to_seed()</code> of the name.` : '';
@@ -371,6 +486,7 @@ function shareState() {
     pg: cfg.page, or: cfg.orient === 'portrait' ? 'p' : 'l',
     fl: [cfg.border ? 'b' : '', cfg.title ? 't' : '', cfg.labels ? 'l' : '', cfg.hershey ? 'h' : '', S.grain ? 'g' : ''].join('') || '-',
     ti: S.title,
+    ...(S.mode === 'grid' ? { gs: S.grid.seed, r: S.grid.rows, c: S.grid.cols, fam: S.grid.family ? 1 : '', sp: S.grid.family ? S.grid.spread : '', no: S.grid.no } : {}),
   };
 }
 function writeHash() {
@@ -393,6 +509,12 @@ function readHash() {
   if (q.or) cfg.orient = q.or === 'p' ? 'portrait' : 'landscape';
   if (q.fl) { cfg.border = q.fl.includes('b'); cfg.title = q.fl.includes('t'); cfg.labels = q.fl.includes('l'); cfg.hershey = q.fl.includes('h'); S.grain = q.fl.includes('g'); }
   if (q.ti) S.title = q.ti.slice(0, 80);
+  const G = S.grid, int = (v, a, b, d) => (Number.isFinite(+v) && v !== undefined ? clamp(Math.round(+v), a, b) : d);
+  G.seed = int(q.gs, 1, 4294967295, G.seed); G.rows = int(q.r, 1, 10, G.rows); G.cols = int(q.c, 1, 12, G.cols);
+  G.no = int(q.no, 1, 3999, G.no);
+  if (q.fam) G.family = q.fam === '1';
+  if (q.sp && Number.isFinite(+q.sp)) G.spread = clamp(+q.sp, 0.02, 1);
+  if (q.r || q.c) G.preset = (GRID_PRESETS.find(p => !p.page && p.rows === G.rows && p.cols === G.cols) || {}).id || '';
   return { name: q.f || '', params: q.p || null, q };
 }
 
@@ -407,7 +529,7 @@ function bindUI() {
   $('backBtn').addEventListener('click', () => goHist(-1));
   $('fwdBtn').addEventListener('click', () => goHist(1));
   $('resetBtn').addEventListener('click', () => showFish(S.name, null, { animate: false }));
-  $('playBtn').addEventListener('click', () => { if (S.anim.p != null) { S.anim.p = null; syncPlay(); S.dirty = true; } else startDrawOn(); });
+  $('playBtn').addEventListener('click', () => { if (drawing()) stopDrawOn(); else startDrawOn(); });
   $('autoBtn').addEventListener('click', () => { S.anim.auto = !S.anim.auto; syncUI(); });
   $('tipBtn').addEventListener('click', () => { S.anim.tip = !S.anim.tip; syncUI(); });
   $('speed').addEventListener('input', e => { S.anim.speed = +e.target.value; syncUI(); });
@@ -447,13 +569,36 @@ function bindUI() {
     $('openAllBtn').textContent = open ? 'Close all' : 'Open all';
   });
 
+  for (const b of $('modeSeg').children) b.addEventListener('click', () => setMode(b.dataset.mode));
+  $('dockMode').addEventListener('click', () => setMode(S.mode === 'grid' ? 'single' : 'grid'));
+  for (const p of GRID_PRESETS) {
+    const b = document.createElement('button');
+    b.dataset.id = p.id; b.textContent = p.label || p.rows + ' × ' + p.cols;
+    b.addEventListener('click', () => {
+      const G = S.grid, cfg = S.plates.grid;
+      G.rows = p.rows; G.cols = p.cols; G.preset = p.id;
+      if (p.page) { cfg.page = p.page; cfg.orient = p.orient; cfg.border = cfg.title = p.plate; cfg.labels = true; }
+      else if (cfg.page === 'phone') cfg.page = 'screen';
+      resetView(); buildGrid(); syncUI();
+    });
+    $('presets').append(b);
+  }
+  $('rows').addEventListener('input', e => { S.grid.rows = +e.target.value; S.grid.preset = ''; syncUI(); gridSoon(); });
+  $('cols').addEventListener('input', e => { S.grid.cols = +e.target.value; S.grid.preset = ''; syncUI(); gridSoon(); });
+  for (const b of $('srcSeg').children) b.addEventListener('click', () => { S.grid.family = b.dataset.f === '1'; buildGrid(); syncUI(); });
+  $('spread').addEventListener('input', e => { S.grid.spread = +e.target.value; syncUI(); gridSoon(); });
+  $('gridNew').addEventListener('click', newPlate);
+
   $('dockBack').addEventListener('click', () => goHist(-1));
   $('dockFwd').addEventListener('click', () => goHist(1));
   $('dockNew').addEventListener('click', newFish);
   $('dockDraw').addEventListener('click', () => $('playBtn').click());
 }
 // The pen name is part of the drawing (reframe), so a change draws again.
-function refetch() { if (S.name) showFish(S.name, S.params, { push: false, animate: false }); }
+function refetch() {
+  if (S.mode === 'grid') buildGrid();
+  else if (S.name) showFish(S.name, S.params, { push: false, animate: false });
+}
 
 function bindKeys() {
   addEventListener('keydown', e => {
@@ -467,6 +612,7 @@ function bindKeys() {
     else if (k === '[') goHist(-1);
     else if (k === ']') goHist(1);
     else if (k === '0') resetView();
+    else if (k === 'g') setMode(S.mode === 'grid' ? 'single' : 'grid');
     else return;
   });
 }
@@ -488,7 +634,7 @@ function bindView() {
   let moved = 0, pinch = null;
   const local = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   canvas.addEventListener('pointerdown', e => {
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* synthetic pointer */ }
     pts.set(e.pointerId, local(e)); moved = 0;
     if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: S.view.z }; }
     canvas.classList.add('drag');
@@ -528,6 +674,19 @@ function bindView() {
   canvas.addEventListener('dblclick', resetView);
 }
 let onHover = null;
+function bindCells() {
+  onTap = (x, y) => {
+    if (S.mode !== 'grid' || !lastPlate) return;
+    const [mx, my] = plateAt(x, y), i = cellAt(lastPlate.L, mx, my);
+    if (i >= 0) openCell(i);
+  };
+  onHover = (x, y) => {
+    if (S.mode !== 'grid' || !lastPlate) return;
+    const [mx, my] = plateAt(x, y), i = cellAt(lastPlate.L, mx, my);
+    if (i !== S.hiCell) { S.hiCell = i; canvas.classList.toggle('cell', i >= 0); S.dirty = true; }
+  };
+  canvas.addEventListener('pointerleave', () => { if (S.hiCell >= 0) { S.hiCell = -1; canvas.classList.remove('cell'); S.dirty = true; } });
+}
 
 // ── panel ───────────────────────────────────────────────────────────────────
 function setOpen(open) {
@@ -565,14 +724,16 @@ async function boot() {
   E = makeEngine(src);
   pool = createPool(4);
   grain = makeGrain(11);
-  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel();
+  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells();
   if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
   addEventListener('resize', layout);
   layout();
   const h = readHash();
-  showFish(h.name || randomName(E, (Math.random() * 4294967295) >>> 0), h.params);
+  if (!h.q.gs) S.grid.seed = (Math.random() * 4294967295) >>> 0 || 1;
+  showFish(h.name || randomName(E, (Math.random() * 4294967295) >>> 0), h.params, { animate: S.mode === 'single' && S.anim.auto });
+  if (S.mode === 'grid') buildGrid();
   if (document.fonts) document.fonts.ready.then(() => { S.dirty = true; });
   requestAnimationFrame(frame);
-  window.__fish = { S, pool, E, showFish, newFish, mutateFish, draw, plateNow, layout, ready: true };
+  window.__fish = { S, pool, E, showFish, newFish, mutateFish, draw, plateNow, layout, setMode, buildGrid, openCell, ready: true };
 }
 boot().catch(err => { $('caption').textContent = 'Fishdraw failed to start: ' + err.message; console.error(err); });

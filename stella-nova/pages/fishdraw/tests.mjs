@@ -10,6 +10,7 @@
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
+import { layoutPlate, pageSize, PAGES, GRID_PRESETS, cellAt, MM_PER_PX } from './plate.js';
 import { makeEngine, drawFish, baseParams, PARAMS, GROUPS, sanitize, mutate, mulberry, diffParams,
   encodeShare, decodeShare, randomName, relativeName, flatten, unflatten, blendParams, upstreamCSV } from './engine.js';
 
@@ -133,6 +134,43 @@ test('flatten and unflatten are exact; csv matches the upstream format', () => {
   eq(f.offs.length, pl.length + 1, 'offs');
   eq(upstreamCSV(pl).split('\n').length, pl.length, 'csv lines');
   ok(f.total > 1000 && f.bbox.w > 100, 'length and bbox');
+});
+
+// ── plate layout ────────────────────────────────────────────────────────────
+const overlap = (a, b) => a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y < b.y + b.h - 1e-9 && b.y < a.y + a.h - 1e-9;
+function layouts() {
+  const out = [];
+  const grids = [[1, 1], [2, 2], [3, 3], [3, 4], [4, 6], [5, 8], [5, 3], [10, 12], [1, 12], [10, 1]];
+  for (const key of Object.keys(PAGES)) for (const orient of ['portrait', 'landscape'])
+    for (const [rows, cols] of grids) for (const flags of [0, 1, 2, 3, 7]) {
+      const sz = pageSize(key, orient, { w: 1280 * MM_PER_PX, h: 760 * MM_PER_PX });
+      out.push({ desc: `${key} ${orient} ${rows}x${cols} f${flags}`, L: layoutPlate({ w: sz.w, h: sz.h, rows, cols, border: !!(flags & 1), title: !!(flags & 2), labels: !!(flags & 4), screen: key === 'screen', names: [] }) });
+    }
+  return out;
+}
+test('grid layout: no two cells overlap, for every page and grid', () => {
+  for (const { desc, L } of layouts()) {
+    for (let i = 0; i < L.cells.length; i++) for (let j = i + 1; j < L.cells.length; j++)
+      ok(!overlap(L.cells[i], L.cells[j]), desc + `: cells ${i} and ${j} overlap`);
+  }
+});
+test('grid layout: fish boxes and labels stay inside their cell and the page', () => {
+  for (const { desc, L } of layouts()) {
+    for (const c of L.cells) {
+      ok(c.fx >= c.x - 1e-6 && c.fy >= c.y - 1e-6 && c.fx + c.fw <= c.x + c.w + 1e-6 && c.fy + c.fh <= c.y + c.h + 1e-6, desc + ' fish box out of cell ' + c.i);
+      ok(Math.abs(c.fw / c.fh - 5 / 3) < 1e-6, desc + ' fish box is not 5:3');
+      ok(c.x >= 0 && c.y >= 0 && c.x + c.w <= L.w + 1e-6 && c.y + c.h <= L.h + 1e-6, desc + ' cell off the page');
+      if (c.ls) ok(c.ly <= c.y + c.h + 1e-6, desc + ' label below the cell ' + c.i);
+    }
+    for (const t of L.texts) if (t.role === 'title' || t.role === 'sub') ok(t.y <= L.content.y, desc + ' title runs into the cells');
+    for (const r of L.rules) for (const c of L.cells) ok(c.x > r.x && c.y > r.y && c.x + c.w < r.x + r.w && c.y + c.h < r.y + r.h, desc + ' cell crosses the border');
+  }
+});
+test('grid layout: cellAt finds the centre of every cell', () => {
+  const L = layoutPlate({ w: 420, h: 297, rows: 4, cols: 6, border: true, title: true, labels: true, names: [] });
+  for (const c of L.cells) eq(cellAt(L, c.x + c.w / 2, c.y + c.h / 2), c.i, 'cellAt');
+  eq(cellAt(L, 1, 1), -1, 'margin');
+  ok(GRID_PRESETS.every(p => p.rows * p.cols >= 4), 'presets');
 });
 
 for (const [name, fn] of tests) {
