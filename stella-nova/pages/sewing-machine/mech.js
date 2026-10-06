@@ -60,8 +60,8 @@ export const DEG = 180 / Math.PI;
 const D = Math.PI / 180;
 
 export const M = {
-  XN: -100, H: 122,
-  a: 16, l: 48, LP: 70, EYE: 2, NEEDLE_LEN: 38,
+  XN: -100, H: 142,
+  a: 16, l: 48, LP: 90, EYE: 2, NEEDLE_LEN: 38,
   // take-up four-bar, in the head plane (z, y) about the shaft centre
   TU: { C: [-1, 23], b: 32, c: 30, u: 36, v: 2.5, x: 10 },
   // rotary hook: axis on x at y = HY, beak radius RH, case radius RB
@@ -71,7 +71,7 @@ export const M = {
   // feed dog and fabric
   LIFT: 1.1, DROP: 0.25, FABRIC: 1.0,
   // thread guides (world)
-  T: [-88, 132, 44], G1: [-94, 86, 14], G2Z: 3.5, G2UP: 42,
+  T: [-70, 157, 40], G1: [-98, 106, 14], G2Z: 5.5, G2UP: 41,
 };
 M.thE = Math.acos(M.DROP / M.LIFT);
 
