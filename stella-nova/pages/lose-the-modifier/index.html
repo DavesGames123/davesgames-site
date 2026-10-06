@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark light">
+<title>Lose the Modifier — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   LOSE THE MODIFIER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A weak phrase ("very tired") goes in, and one strong
+   word ("exhausted") comes out. With no input the stage plays the pairs
+   by itself. The idea comes from losethevery.com (credit in #about). The
+   word data, the text, the design and the code are original.
+
+   FILES
+     phrases.js   the phrase data: 16 families, the parser (no DOM)
+     matcher.js   stem, lookup, scan, fixText (no DOM)
+     stage.js     the big type on #stage: fit, render, type, strike
+     cycle.js     the autoplay: type in, strike, backspace, type out
+     paste.js     the "Paste text" view: marks, tips, fix-all preview
+     saver.js     window.snSaver: the canvas type tour for the shell
+     main.js      input, picker, matches, copy, speech, theme, about
+     tests.mjs    node tests of phrases.js and matcher.js
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops frame loops when the shell swaps pages
+     2. style.css (fonts: Space Grotesk, IBM Plex Mono, Instrument Serif)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #bar ....... title, the Words / Paste text switch, theme, about
+     #words ..... #stage (#fam tag, #big line, #eq formula, #alts, #ex,
+                  #acts copy and speech), then #more (other matches)
+     #paste ..... the textarea, the marked text, the fix-all preview
+     #dock ...... #picker (family chips) and #q (the input). On a phone
+                  it sits on the keyboard (main.js "function dockToKeyboard").
+     #about ..... a dialog: how it works, family counts, credits
+
+   GREP MAP
+     main.js   grep -n 'function onInput'      live lookup as you type
+               grep -n 'function showEntry'    one entry on the stage
+               grep -n 'function buildPicker'  the family chips
+               grep -n 'function copyWord'     clipboard and toast
+               grep -n 'function say'          speechSynthesis on a click
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Lose the Modifier: type a weak phrase such as 'very tired' or 'walked slowly' and get one strong word. Over 1100 original pairs for very, really, so, a bit, kind of, verb + adverb and wordy stock phrases, with a paste-your-text checker.">
+<link rel="stylesheet" href="style.css">
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame');try{var t=localStorage.getItem('ltm-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+
+<header id="bar">
+  <div class="brand"><span class="kicker">Stella Nova · Language</span><h1>Lose the Modifier</h1></div>
+  <div class="modes" role="tablist" aria-label="Mode">
+    <button role="tab" data-mode="words" class="on" aria-selected="true">Words</button>
+    <button role="tab" data-mode="paste" aria-selected="false">Paste text</button>
+  </div>
+  <button id="themeBtn" class="icon" aria-label="Switch light or dark theme" title="Theme">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>
+  </button>
+  <button id="aboutBtn" class="icon" aria-label="About this page" title="About">?</button>
+</header>
+
+<main id="words" class="view">
+  <section id="stage" aria-live="polite">
+    <div id="fam" class="fam"></div>
+    <div id="big" class="big"></div>
+    <div id="eq" class="eq"></div>
+    <div id="alts" class="alts"></div>
+    <p id="ex" class="ex"></p>
+    <div id="acts" class="acts">
+      <button id="copyBtn" class="act" aria-label="Copy the strong word">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 5V4a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span>Copy</span></button>
+      <button id="sayBtn" class="act" aria-label="Say the strong word">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Say it</span></button>
+      <button id="nextBtn" class="act" aria-label="Next pair">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5l8 7-8 7M15 5v14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Next</span></button>
+    </div>
+  </section>
+  <section id="more" class="more" aria-label="Other matches"></section>
+</main>
+
+<main id="paste" class="view" hidden></main>
+
+<div id="dock">
+  <div id="picker" class="chips" role="tablist" aria-label="Modifier family"></div>
+  <div class="inbox">
+    <input id="q" type="search" placeholder="Try: very tired" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="Weak phrase">
+    <button id="clearQ" class="icon" aria-label="Clear" hidden>×</button>
+  </div>
+</div>
+
+<dialog id="about" aria-label="About Lose the Modifier">
+  <form method="dialog"><button class="icon close" aria-label="Close">×</button></form>
+  <h2>Lose the Modifier</h2>
+  <p>A weak modifier pads a word that already exists in a stronger form. <em>Very tired</em> is <em>exhausted</em>. <em>Walked slowly</em> is <em>trudged</em> or <em>ambled</em>. <em>Due to the fact that</em> is <em>because</em>. One exact word reads faster and says more.</p>
+  <p>Type a phrase in the box. The page finds it as you type: other word forms (<em>walking slowly</em>), the base word alone (<em>tired</em>), any intensifier in front of a known word (<em>awfully tired</em>), a strong word to see what it replaces (<em>exhausted</em>), and small typos. With nothing typed, the page plays the pairs by itself. Pick a family in the chips to play only that family.</p>
+  <p><b>Paste text</b> marks every weak phrase it knows in your own paragraph. Tap a mark for the options. <b>Fix all</b> shows the paragraph with each mark replaced, ready to copy. A verb in another tense (<em>walks slowly</em>) is marked but not replaced: change the tense by hand.</p>
+  <p>Strong words are not always better. A precise word carries a shade of meaning (<em>trudged</em> is tired, <em>ambled</em> is relaxed), so read the example before you swap.</p>
+  <h3>The data</h3>
+  <p id="counts"></p>
+  <p>All pairs, tags and example sentences were written for this page. The tags give the part of speech and the register: neutral, formal, casual, vivid or literary.</p>
+  <h3>Credit</h3>
+  <p>The idea comes from <a href="https://www.losethevery.com" target="_blank" rel="noopener">losethevery.com</a>, which pairs <em>very</em> + a word with one better word. This page adds the other modifiers, verb + adverb pairs, stock phrases and a paste checker. No list, text or design from that site is used here.</p>
+  <button class="act theme" id="themeBtn2">Switch light or dark theme</button>
+  <p class="fine">Type: Space Grotesk, IBM Plex Mono and Instrument Serif (SIL Open Font License). Speech: the browser's own voices (Web Speech API), only when you press Say it.</p>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
