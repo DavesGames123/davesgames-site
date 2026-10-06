@@ -20,7 +20,8 @@
 //    inside its collar, a foot floats 0.4 mm over the plate, a bolt head
 //    sinks 0.4 mm into the foot, and each bore is 0.6 mm over its shaft.
 //    Rzeppa: inner race sphere 33.5, cage 36.5 .. 40, bell 42.5 .. 50, so
-//    no two spheres are equal.
+//    no two spheres are equal. The inner race grooves are 0.3 mm over the
+//    ball radius.
 //
 //  GREP MAP
 //    function fork ............ a yoke: collar, web, two ears, pin bosses
@@ -28,11 +29,12 @@
 //    function pedestal ........ a pillow block in its own group
 //    function cardanParts ..... single and double Cardan parts; the second
 //                               middle fork is a mesh of midShaft (P.yoke2)
+//    function grooveRace ...... the inner race sphere with six ball grooves
 //    function rzeppaParts ..... bell, inner race, cage, six balls
 //    export function build .... base plate, parts, pose
 // ============================================================================
 import * as THREE from 'three';
-import { slab, rod, tube, lathe, poly, shell, hex, merge } from './kit.js';
+import { slab, rod, tube, poly, shell, hex, merge } from './kit.js';
 import { unit, solve, axes, shaftFrame, SIZE, V, TAU, DEG } from './mech.js';
 
 const H = 70;                 // shaft height over the base plate top
@@ -117,9 +119,58 @@ function cardanParts(B, id) {
 
 // ── Rzeppa ────────────────────────────────────────────────────────────────
 const WIN = Math.asin(7.4 / SIZE.rp) + 3 * DEG;   // cage window half width
-function sphereZone(R, y0, y1, n = 24) {
-  const pts = []; for (let i = 0; i < n; i++) { const y = y0 + (y1 - y0) * i / n; pts.push([Math.sqrt(R * R - y * y), y]); }
-  return lathe([pts, [[Math.sqrt(R * R - y1 * y1), y1], [0, y1]], [[0, y0]]], 72);
+// The inner race: a sphere zone of radius R with six grooves on three
+// meridian planes (k 60 deg, k = 0..2, each plane holds two grooves). A
+// groove is a tube of radius rb + 0.3 about the ball-centre circle (radius
+// rp) in its plane, so each ball sits in its groove with 0.3 mm play and
+// never shares a surface with it. Vertices move in toward the axis at a
+// fixed y, so the two end faces stay flat. phi runs from local +X toward
+// local -Z, as in kit.js shell(); groove 0 lies on local X.
+function grooveRace(R, y0, y1, nPhi = 180, nY = 30) {
+  const rp = SIZE.rp, RG = SIZE.rb + 0.3, P = [], N = [], I = [];
+  const clear = (rho, y, f) => {
+    for (let k = 0; k < 3; k++) {
+      const d = f - k * Math.PI / 3, q = Math.hypot(rho * Math.cos(d), y) - rp, w = rho * Math.sin(d);
+      if (q * q + w * w < RG * RG) return false;
+    }
+    return true;
+  };
+  const vert = (y, f) => {
+    const r0 = Math.sqrt(R * R - y * y), c = Math.cos(f), s = -Math.sin(f);
+    let rho = r0;
+    if (!clear(r0, y, f)) { let lo = 0, hi = r0; for (let i = 0; i < 32; i++) { const m = (lo + hi) / 2; if (clear(m, y, f)) lo = m; else hi = m; } rho = lo; }
+    const p = [rho * c, y, rho * s];
+    let n = V.norm(p);
+    if (rho < r0 - 1e-6) {
+      // in a groove: the normal points from the surface to the tube centre
+      let best = null;
+      for (let k = 0; k < 3; k++) {
+        const g = [Math.cos(k * Math.PI / 3), 0, -Math.sin(k * Math.PI / 3)], m = V.cross([0, 1, 0], g);
+        const inPl = V.sub(p, V.mul(m, V.dot(p, m))), cc = V.mul(V.norm(inPl), rp), d = V.len(V.sub(cc, p));
+        if (!best || d < best.d) best = { d, cc };
+      }
+      n = V.norm(V.sub(best.cc, p));
+    }
+    P.push(...p); N.push(...n);
+  };
+  for (let i = 0; i <= nY; i++) for (let j = 0; j < nPhi; j++) vert(y0 + (y1 - y0) * i / nY, j / nPhi * TAU);
+  const at = (i, j) => i * nPhi + (j % nPhi);
+  for (let i = 0; i < nY; i++) for (let j = 0; j < nPhi; j++) I.push(at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i, j), at(i + 1, j + 1), at(i + 1, j));
+  // flat end faces: a fan from the axis to a copy of the end ring
+  for (const [i, ny] of [[0, -1], [nY, 1]]) {
+    const c0 = P.length / 3;
+    P.push(0, y0 + (y1 - y0) * i / nY, 0); N.push(0, ny, 0);
+    for (let j = 0; j < nPhi; j++) { const k = at(i, j) * 3; P.push(P[k], P[k + 1], P[k + 2]); N.push(0, ny, 0); }
+    for (let j = 0; j < nPhi; j++) {
+      const a = c0 + 1 + j, b = c0 + 1 + (j + 1) % nPhi;
+      if (ny > 0) I.push(a, b, c0); else I.push(c0, b, a);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setIndex(I);
+  return g.toNonIndexed();
 }
 function rzeppaParts(B) {
   const P = {}, L = SIZE.L;
@@ -132,7 +183,7 @@ function rzeppaParts(B) {
   B.mesh(P.bell, poly([[14, -60], [34, -46], [34, -27.4], [0, -27.4], [0, -60]], 64), 'gear');
   B.mesh(P.bell, rod(12, -L, -58, 32), 'shaft');
   P.inner = B.part('inner', { info: 'inner', label: 'Inner race and output shaft', labelAt: [0, 110, 0], explode: [0, 0, 0], st: 0.1, en: 0.8 });
-  B.mesh(P.inner, sphereZone(33.5, -15, 15), 'steel');
+  B.mesh(P.inner, grooveRace(33.5, -15, 15), 'steel');
   B.mesh(P.inner, rod(12, 10, L, 32), 'shaft');
   P.cage = B.part('cage', { info: 'cage', label: 'Ball cage', labelAt: [0, 0, 0], explode: [0, 80, 0], st: 0.2, en: 0.9 });
   const cr = [];
