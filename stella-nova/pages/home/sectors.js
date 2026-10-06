@@ -41,6 +41,9 @@ const EXCLUDED = new Set([
   'sdf-clouds',        // port of SDF Clouds
   'refraction-table',  // port of quick-liquid optics
   'thinking-orbs',     // port of RareFormLabs thinking-orbs
+  'fractal-flames',    // port of flam3 (GPL-3.0)
+  'line-art',          // Rust port of fogleman/ln
+  'volume-noise',      // port of TileableVolumeNoise
   'randoma11y',        // removed from the site
 ]);
 // Pages listed only in the plain directory: no featured spot, quick link,
