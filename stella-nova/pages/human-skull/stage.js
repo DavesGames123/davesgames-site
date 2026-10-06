@@ -21,6 +21,7 @@
 //    st.setTheme ............... swap the room, floor and exposure
 //    st.fitBox ................. distance and target to frame a box
 //    st.fitSpheres ............. the same for part spheres (the layouts)
+//    st.fitFrac ................ a box at a share of the clear short side
 //    st.flyTo .................. a camera flight on a spherical arc
 //    function occlusion ........ overlay margins round the canvas
 //    st.clearExtra ............. more margins from outside (the saver plate)
@@ -220,6 +221,26 @@ export function createStage(o) {
     const cw = Math.max(80, w - ob.l - ob.r), ch = Math.max(80, h - ob.t - ob.b);
     const tn = Math.tan(camera.fov / 2 * D);
     const d = Math.max(hx * margin / (tn * cw / h), hy * margin / (tn * ch / h)) + hz;
+    return { az, el, r: Math.min(controls.maxDistance, Math.max(controls.minDistance, d)), target: c };
+  };
+  // distance and target that put the larger side of box (its near face,
+  // seen from az/el) at frac of the short side of the clear area. With
+  // rect, the box width goes to frac of the clear width and its height to
+  // frac of the clear height, whichever is closer (a wide layout).
+  st.fitFrac = (box, az, el, frac, rect = false) => {
+    const dir = new THREE.Vector3().setFromSpherical(new THREE.Spherical(1, (90 - el) * D, az * D));
+    const fwd = dir.clone().negate(), right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+    const up = new THREE.Vector3().crossVectors(right, fwd);
+    const c = box.getCenter(new THREE.Vector3());
+    let hx = 0, hy = 0, hz = 0;
+    for (let i = 0; i < 8; i++) {
+      const p = new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(c);
+      hx = Math.max(hx, Math.abs(p.dot(right))); hy = Math.max(hy, Math.abs(p.dot(up))); hz = Math.max(hz, Math.abs(p.dot(fwd)));
+    }
+    const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+    const ob = occlusion(w, h), cw = Math.max(80, w - ob.l - ob.r), ch = Math.max(80, h - ob.t - ob.b), short = Math.min(cw, ch);
+    const tn = Math.tan(camera.fov / 2 * D);
+    const d = hz + (rect ? Math.max(hx / (frac * cw / 2), hy / (frac * ch / 2)) : Math.max(hx, hy) / (frac * short / 2)) * h / (2 * tn);
     return { az, el, r: Math.min(controls.maxDistance, Math.max(controls.minDistance, d)), target: c };
   };
   // the same, for a list of spheres [{ c: Vector3, r }]: tighter than a box,
