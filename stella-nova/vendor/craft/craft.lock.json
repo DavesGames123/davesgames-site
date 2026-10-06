@@ -12,6 +12,81 @@
       "license": "MIT OR Apache-2.0",
       "copyright": "Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors",
       "site": "https://getartcraft.com/apps/photocraft"
+    },
+    "vectorcraft": {
+      "name": "VectorCraft",
+      "kind": "Vector illustration: paths, shapes, type and SVG files",
+      "repo": "storytold/vectorcraft",
+      "tag": "v0.3.1",
+      "asset": "vectorcraft-web-0.3.1.zip",
+      "sha256": "b53425e50cda9d466d770d1dd88ffcc317ffb03baf303a26a5c5fa21b1d78a5a",
+      "dir": "vectorcraft-web-0.3.1",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors",
+      "attribution": "ASSETS.md",
+      "site": "https://getartcraft.com/apps/vectorcraft"
+    },
+    "designcraft": {
+      "name": "DesignCraft",
+      "kind": "Page layout: spreads, parent pages, threaded text and IDML files",
+      "repo": "storytold/designcraft",
+      "tag": "v0.2.1",
+      "asset": "designcraft-web-0.2.1.zip",
+      "sha256": "762df9c5fff781dfb221c0996d304325bf893a0bacd0da0d5b1b70597e3cdc62",
+      "dir": "designcraft-web-0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the DesignCraft contributors",
+      "site": "https://getartcraft.com/apps/designcraft",
+      "attribution": "ASSETS.md"
+    },
+    "printcraft": {
+      "name": "PrintCraft",
+      "kind": "PDF workbench: read, organize, combine, split and secure PDFs",
+      "repo": "storytold/printcraft",
+      "tag": "v0.2.1",
+      "asset": "printcraft-web-0.2.1.zip",
+      "sha256": "47cda2075ee79dbe8729b630f3bc559e6dd1bb37834ba5c592bcce50309a0a7f",
+      "dir": "printcraft-web-0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the PrintCraft contributors",
+      "site": "https://getartcraft.com/apps/printcraft"
+    },
+    "lightcraft": {
+      "name": "LightCraft",
+      "kind": "Photo library and raw development",
+      "repo": "storytold/lightcraft",
+      "tag": "v0.2.1",
+      "asset": "lightcraft-web-0.2.1.zip",
+      "sha256": "5b64a944583330e38e36d879984fd71d02efbe68a2d354e6f5211819eee5a8a5",
+      "dir": "lightcraft-web-0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the LightCraft contributors",
+      "site": "https://getartcraft.com/apps/lightcraft",
+      "attribution": "assets/ATTRIBUTION.md"
+    },
+    "filmcraft": {
+      "name": "FilmCraft",
+      "kind": "Video editor: timeline, color and sound",
+      "repo": "storytold/filmcraft",
+      "tag": "v0.2.1",
+      "asset": "filmcraft-web-0.2.1.zip",
+      "sha256": "f496c41f65e3f38b32b05b92c27940c5f464b442573b617e69923df0f085005c",
+      "dir": "filmcraft-web-0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the FilmCraft contributors",
+      "site": "https://getartcraft.com/apps/filmcraft"
+    },
+    "effectcraft": {
+      "name": "EffectCraft",
+      "kind": "Motion graphics and visual effects: compositions, layers, keyframes and effects",
+      "repo": "storytold/effectcraft",
+      "tag": "v0.3.1",
+      "asset": "effectcraft-web-0.3.1.zip",
+      "sha256": "50ca687ee3bdb8a47084f7ae644adfea75fdca6586006ecbbf16a9e10bb625ee",
+      "dir": "effectcraft-web-0.3.1",
+      "license": "MIT OR Apache-2.0",
+      "copyright": "Copyright (c) 2026 ArtCraft Team and the EffectCraft contributors",
+      "site": "https://getartcraft.com/apps/effectcraft"
     }
   }
 }

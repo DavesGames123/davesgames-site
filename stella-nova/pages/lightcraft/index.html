@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LightCraft // Stella Nova · davesgames.io</title>
+<meta name="description" content="LightCraft, the open-source photo library and raw developer in pure Rust by the ArtCraft Team and the LightCraft contributors (MIT OR Apache-2.0), running in your browser on WebGL2 and Web Workers. The official web build, unchanged.">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   LIGHTCRAFT  ·  hosted Crafting App
+  ───────────────────────────────────────────────────────────────────────────
+   The official LightCraft web build (github.com/storytold/lightcraft, MIT OR
+   Apache-2.0, by the ArtCraft Team and the LightCraft contributors) in an
+   iframe, with a credits bar. The site does not change the build.
+   LightCraft draws its UI with WebGL2 (eframe glow) and develops photos on
+   the CPU in Web Workers. It keeps its library in the Origin Private File
+   System of this site.
+
+   FILES
+     index.html                  this frame. data-craft selects the pin.
+     ../../lib/craft-host.js     bar, credits, iframe, GPU release
+     ../../lib/craft-host.css    styles of the frame
+     ../../vendor/craft/craft.lock.json   the pinned release and its sha256
+     ../../vendor/craft/lightcraft-web-<v>/  the build (not in git;
+                                 node tools/craft-fetch.mjs unpacks it)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link href="../../vendor/fonts/space-grotesk+ibm-plex-mono+instrument-serif.e9f187bf.css" rel="stylesheet">
+<link rel="stylesheet" href="../../lib/craft-host.css">
+<script type="module" src="../../lib/craft-host.js"></script>
+</head>
+<body data-craft="lightcraft">
+</body>
+</html>
