@@ -42,6 +42,7 @@ import { Card, SERIES, drawSeries, drawCurve, drawHeat, drawContactMap, drawPair
 import { mountEquations } from './equations.js';
 import { createHost } from './sim-host.js';
 import { initXR } from './xr.js';
+import { plateBand } from '../../lib/saver-clear.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -551,8 +552,18 @@ function tags() {
 // ── camera framing ───────────────────────────────────────────────────────────
 const occ = { l: 0, r: 0, t: 0, b: 0 };
 let grid = { cols: 1, rows: 1, cell: 40 };
+// In the saver the GUI is hidden, and the shell label plate covers the top
+// and the bottom of the canvas. The chains go in the clear band between the
+// plate texts (plateBand, lib/saver-clear.js), read 4 times a second.
+let band = null, bandAt = -1e9;
 function insets(w, h) {
   const o = { l: 0, r: 0, t: 0, b: 0 }, cr = canvas.getBoundingClientRect();
+  if (saverOn) {
+    const now = performance.now();
+    if (now - bandAt > 250) { bandAt = now; band = plateBand(h); }
+    if (band) { o.t = band.t; o.b = band.b; o.l = o.r = Math.max(0, (w - band.w) / 2); }
+    return o;
+  }
   const els = [$('panel'), $('plots'), $('read'), $('dock'), $('legend')];
   for (const el of els) {
     if (!el || el.offsetParent === null && getComputedStyle(el).position !== 'fixed') continue;
@@ -931,7 +942,11 @@ window.snSaver = {
     };
     const run = () => {
       const pr = presetById(order[oi++ % order.length]);
-      S.R = pick(COARSE ? [1, 2, 2] : [1, 2, 4, 4]);
+      // replicas: as many as fit side by side in the clear band at a usable
+      // size. A short wide band takes 4, the 9:16 column 1 or 2.
+      const bw = band ? band.w : canvas.clientWidth, bh = band ? canvas.clientHeight - band.t - band.b : canvas.clientHeight;
+      const asp = bw / Math.max(1, bh);
+      S.R = pick(asp >= 3 && !COARSE ? [1, 2, 4] : asp >= 1.4 ? [1, 1, 2] : [1]);
       S.colour = pick(SAVER_COLOURS)[0];
       S.gamma = 0.2 + 0.8 * rnd();
       loadPreset(pr.id);
