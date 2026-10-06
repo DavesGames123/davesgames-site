@@ -36,7 +36,7 @@ export function partsFor(id) {
       inner: { name: 'Inner race (input)', group: 'Input', role: 'When it turns forward, friction tilts each sprag up, the sprag gets taller than the gap, and it wedges. When it turns back, the sprags tilt down and the race slides under them.', specs: [['Radius', `${u.ri} mm`]], live: ['in', 'state'] },
       outer: { name: 'Outer race (output)', group: 'Output', role: 'A gear ring on the outside takes the drive away. The sprags lock it to the inner race in one direction only.', specs: [['Bore', `${u.ro} mm`], ['Gap', `${u.ro - u.ri} mm`]], live: ['out'] },
       sprag: { name: 'Sprag', group: 'Clutch', role: `A hardened strut with two curved contact faces. The line between its contacts leans ${deg(S.epsI)} from the radius; tan ε = ${Math.tan(S.epsI).toFixed(3)} is under the friction μ ${u.mu}, so it wedges instead of slipping. It has no teeth, so it locks at any angle.`, specs: [['Count', String(u.Z)], ['Strut angle ε', deg(S.epsI)], ['Contact load', `${(S.Q / 1000).toFixed(2)} kN at ${u.T / 1000} N·m`], ['Take-up', deg(S.e)]], live: ['gap', 'state'] },
-      cage: { name: 'Cage', group: 'Clutch', role: 'Two rings that keep the sprags spaced, so they all tilt and lock together.', specs: [] },
+      cage: { name: 'Cage', group: 'Clutch', role: 'A ring under the sprags. In a real clutch it has a window for each sprag, so they stay spaced and all tilt and lock together.', specs: [] },
       garter: { name: 'Garter spring', group: 'Spring', role: 'A ring spring through the sprags. It tips every sprag lightly onto both races, so there is no gap to close before it locks.', specs: [] },
     };
   }
