@@ -11,12 +11,13 @@
 //    - an iframe with vendor/craft/<dir>/index.html, the upstream build as
 //      tools/craft-fetch.mjs unpacked it, with no change to any byte
 //  The app id is the key in the pin file, so the next app needs only a new
-//  pin and a page with a new data-craft value.
+//  pin and a page with a new data-craft value. A pin can set "attribution"
+//  to the path of the upstream third-party list (default ATTRIBUTION.md).
 //
 //  GPU release: lib/gpu-guard.js frees the GPU work of this document only.
-//  The app makes its WebGPU device in the child iframe. The shell calls
-//  window.__snRelease before it unloads the page, so this module wraps
-//  __snRelease and also unloads the child iframe (about:blank).
+//  The app makes its WebGPU device or WebGL2 context in the child iframe.
+//  The shell calls window.__snRelease before it unloads the page, so this
+//  module wraps __snRelease and also unloads the child iframe (about:blank).
 //
 //  grep -n targets
 //    pin file path ........ "const LOCK"
@@ -31,7 +32,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 function links(a) {
   const repo = `https://github.com/${a.repo}`;
   return { repo, tree: `${repo}/tree/${a.tag}`, release: `${repo}/releases/tag/${a.tag}`,
-    notice: `${repo}/blob/${a.tag}/NOTICE`, attribution: `${repo}/blob/${a.tag}/ATTRIBUTION.md` };
+    notice: `${repo}/blob/${a.tag}/NOTICE`, attribution: `${repo}/blob/${a.tag}/${a.attribution || 'ATTRIBUTION.md'}` };
 }
 
 function bar(a, L, appUrl) {
