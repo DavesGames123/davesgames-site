@@ -1,0 +1,8 @@
+Correction (coordinator): the body of 398f2e5 was written before the --eps 2e-5 run finished, and its last validation line is wrong. The real output of node tools/zfight-check.mjs steam-locomotive --eps 2e-5 was:
+steam-locomotive/loco: R 7738.0  81440 tris  eps 0.155  6 FIGHT PAIRS
+  32795.8 mm2 d<=0.138 coupling <-> coupling
+    242.6 mm2 d<=0.061 wheel <-> coupling
+    112.8 mm2 d<=0.038 weigh <-> reach
+     84.0 mm2 d<=0.140 cylinder <-> ports (x2)
+      0.9 mm2 d<=0.006 lifting <-> lifting
+These gaps are near the depth step at 15 m (about 0.09 mm), so they can flicker. A follow-up fix in steam-locomotive/scene.js is due.
