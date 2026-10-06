@@ -23,11 +23,14 @@
 //  When a trace closes, the page stops until the next change, or Play.
 //
 //  SAVER INK. In the screensaver the paper is always night paper, and the
-//  ink is light: the hue runs along the curve, one full turn of the color
-//  circle in each lap of the wheel, from the hue of the pen. The strokes
-//  are opaque and wider, and a soft copy of the ink (#glow, blurred,
-//  screen) lies under the sharp lines. The gears show at 55%. The normal
-//  page keeps its paper and pen colors.
+//  ink is light: the hue swings 28 degrees about the hue of the pen, once
+//  in each trace. The strokes are opaque and wider, and a soft copy of the
+//  ink (#glow, blurred, screen) lies under the sharp lines. The gears show
+//  at 95%. The normal page keeps its paper and pen colors.
+//
+//  PEN SPEED. A trace draws at a rate that keeps the wheel spin at or
+//  below SPIN_MAX rad/s (spinOf), so the teeth stay readable. The rig shows
+//  the pen arm (wheel centre to pen) and the contact point on the ring.
 //
 //  GREP MAP
 //     grep -n 'function layout'       fit the sheet in the clear area
@@ -57,7 +60,9 @@ const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:c
 const LAND_Q = matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)');
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const INK_A = 0.9;
-const SAVER_RIG_A = 0.55;                // the gears step back in the saver
+const SAVER_RIG_A = 0.95;                // the gears in the saver
+const SPIN_MAX = 5;                      // wheel spin limit, rad/s
+const SAVER_LAPS = 15;                   // saver: laps of t in one figure, at most
 const PAPER = { cream: '#f3eee2', night: '#12151b' };
 const RULES = [['R', 'm1'], ['r', 'm2'], ['d', 'm3'], ['L', 'm4'], ['g', 'm5'], ['n', 'm6']];
 const MAX_EXT = 190;                     // the largest rig, in units
@@ -85,11 +90,11 @@ function hexHue(hex) {
   const h = mx === r ? (g - b) / d % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return (h * 60 + 360) % 360;
 }
-// The saver ink at t: the hue starts at the pen hue and turns once in each
-// lap of the wheel (t = 2 pi). A trace has a whole number of laps, so the
-// color is continuous where the curve closes.
-function saverHue(tr, t) { return hexHue(INKS[tr.pen].night) + 360 * t / TAU; }
-const saverInk = (tr, t) => `hsl(${saverHue(tr, t).toFixed(1)},100%,66%)`;
+// The saver ink at t: the hue swings 28 degrees about the pen hue, one
+// sine period over the trace (L laps). sin is 0 at both ends, so the color
+// is continuous where the curve closes.
+function saverHue(tr, t) { return hexHue(INKS[tr.pen].night) + 28 * Math.sin(t / lapsOf(tr)); }
+const saverInk = (tr, t) => `hsl(${saverHue(tr, t).toFixed(1)},88%,68%)`;
 const blend = () => S.paper === 'night' ? 'screen' : 'multiply';
 const widthPx = w => WIDTHS[w].px * S.dpr * clamp(S.P / 800, 0.7, 1.25);
 function mulberry(seed) {
@@ -101,6 +106,8 @@ function specNow() {
   return { R: S.R, r: S.r, out: S.out, hole: hi, d: holes(S.r)[hi].d, rot: S.rot, pen: S.pen, w: S.w, loops: S.loops };
 }
 function lapsOf(sp) { return sp.loops || closure(sp.R, sp.r).laps; }
+// The wheel spin per unit of t, |d phi / dt| (spiro.js wheelAngle).
+function spinOf(sp) { return (sp.out ? sp.R + sp.r : sp.R - sp.r) / sp.r; }
 
 // ── layout ─────────────────────────────────────────────────────────────────
 // The clear part of #desk: the panel covers the left (desktop), the base
@@ -265,7 +272,7 @@ function advance(dt) {
   const a = S.active;
   if (!a || !S.playing || S.held || S.drag) return;
   if (a.wait > 0) { a.wait -= dt; return; }
-  const rate = a.rate || userRate();
+  const rate = (a.rate || userRate()) * (S.saver ? S.saver.slow : 1);
   moveTo(Math.min(a.tEnd, a.t + rate * dt));
 }
 // Move the pen to t. Ink goes down only on the part of the curve that has
@@ -279,7 +286,7 @@ function moveTo(t) {
 }
 function finishTrace() {
   liftPen();
-  if (S.queue.length) { const q = S.queue.shift(); syncUI(q); startTrace(q, 0, null, S.presetRate); return; }
+  if (S.queue.length) { const q = S.queue.shift(); syncUI(q); startTrace(q, 0, null, q.rate || S.presetRate); return; }
   // Closed: wait with the gears at the start, ready to draw again.
   S.playing = false;
   startTrace(specNow());
@@ -323,15 +330,25 @@ function drawRig() {
   const [wx, wy] = wheelCenter(a.R, a.r, a.out, a.t), phi = wheelAngle(a.R, a.r, a.out, a.t);
   rigX.save();
   rigX.translate(c, c); rigX.rotate(a.rot);
+  const [px, py] = penAt(a.R, a.r, a.out, a.d, a.t);
   if (S.gears) {
     rigX.drawImage(sp.fixed, -sp.fixed.width / 2, -sp.fixed.height / 2);
     rigX.save();
     rigX.translate(wx * k, wy * k); rigX.rotate(phi - th);
     rigX.drawImage(sp.wheel, -sp.wheel.width / 2, -sp.wheel.height / 2);
     rigX.restore();
+    // The pen arm from the wheel centre, the hub, and the contact point:
+    // the wheel touches the ring at radius R on the line to its centre.
+    const night = S.paper === 'night', line = night ? 'rgba(255,255,255,0.55)' : 'rgba(20,20,24,0.45)';
+    rigX.lineWidth = 1 * S.dpr; rigX.strokeStyle = line;
+    rigX.beginPath(); rigX.moveTo(wx * k, wy * k); rigX.lineTo(px * k, py * k); rigX.stroke();
+    rigX.fillStyle = line;
+    rigX.beginPath(); rigX.arc(wx * k, wy * k, 1.8 * S.dpr, 0, TAU); rigX.fill();
+    const ca = a.t, cr = a.R * k;
+    rigX.beginPath(); rigX.arc(cr * Math.cos(ca), cr * Math.sin(ca), Math.max(2.5 * S.dpr, 0.9 * k), 0, TAU);
+    rigX.strokeStyle = night ? 'rgba(255,236,170,0.9)' : 'rgba(150,90,10,0.85)'; rigX.lineWidth = 1.3 * S.dpr; rigX.stroke();
   }
   // the pen: a dot of its ink in a thin ring
-  const [px, py] = penAt(a.R, a.r, a.out, a.d, a.t);
   const pr = Math.max(2.4 * S.dpr, 0.75 * k);
   rigX.beginPath(); rigX.arc(px * k, py * k, pr, 0, TAU);
   rigX.fillStyle = S.saver ? saverInk(a, a.t) : inkOf(a.pen); rigX.fill();
@@ -346,9 +363,9 @@ function presetSpec(tr) {
   return { R: tr.R, r: tr.r, out: tr.out, hole: hi, d: hs[hi].d, rot: tr.rot, pen: tr.pen, w: tr.w, loops: tr.loops };
 }
 // Clear the sheet, set the paper and the scale, and queue the traces. The
-// preset draws in about drawSec seconds, or slower when the user speed is
-// slower than that.
-function loadPreset(i, drawSec = 9) {
+// preset draws in about drawSec seconds, or slower when the wheel would
+// spin faster than SPIN_MAX, or faster when the user speed is higher.
+function loadPreset(i, drawSec = 14) {
   const p = PRESETS[i];
   S.preset = i; markPreset();
   S.traces = []; S.active = null; S.rot = 0;
@@ -358,11 +375,22 @@ function loadPreset(i, drawSec = 9) {
   const paper = S.saver ? 'night' : p.paper;
   if (S.paper !== paper) setPaper(paper);
   setScale();
+  // The saver keeps the first traces that fit in SAVER_LAPS laps (one at
+  // least), so a figure builds in about half a minute.
+  if (S.saver) {
+    const fit = specs.filter(sp => lapsOf(sp) <= SAVER_LAPS);
+    if (fit.length) { specs.length = 0; specs.push(...fit); }
+    let laps = 0;
+    for (let j = 0; j < specs.length; j++) { laps += lapsOf(specs[j]); if (j && laps > SAVER_LAPS) { specs.length = j; break; } }
+  }
+  // Each trace draws at the preset rate, but no faster than a wheel spin
+  // of SPIN_MAX. A user speed above that wins on the normal page.
   const total = specs.reduce((s, sp) => s + TAU * lapsOf(sp), 0);
-  S.presetRate = S.saver ? total / drawSec : Math.max(userRate(), total / drawSec);
+  S.presetRate = S.saver ? S.saver.rate : total / drawSec;
+  for (const sp of specs) sp.rate = S.saver ? Math.min(S.presetRate, SPIN_MAX / spinOf(sp)) : Math.max(userRate(), Math.min(S.presetRate, SPIN_MAX / spinOf(sp)));
   S.queue = specs.slice(1);
   syncUI(specs[0]);
-  startTrace(specs[0], 0, null, S.presetRate);
+  startTrace(specs[0], 0, null, specs[0].rate);
   S.held = false; S.playing = true; updatePlay();
   setText('dockName', p.name);
 }
@@ -515,7 +543,7 @@ function bindUI() {
   });
   const sp = $('speed');
   const showSpeed = () => { S.speed = +sp.value; setText('speedV', `${(userRate() / TAU).toFixed(2)} laps/s`); };
-  sp.addEventListener('input', () => { showSpeed(); if (S.active) S.active.rate = 0; S.presetRate = 0; });
+  sp.addEventListener('input', () => { showSpeed(); if (S.active) S.active.rate = 0; S.presetRate = 0; S.queue.forEach(q => { q.rate = 0; }); });
   showSpeed();
   $('playBtn').addEventListener('click', togglePlay);
   $('dockPlay').addEventListener('click', togglePlay);
@@ -654,15 +682,21 @@ function frame(now) {
   if (S.saver && S.saver.comp) composite(S.saver.comp);
   requestAnimationFrame(frame);
 }
+// The saver camera (S.saver.cam: zoom z about the sheet point fx, fy in
+// device px) applies to every layer, so ink and gears stay in register.
 function composite(cv) {
   const n = paperC.width;
   if (cv.width !== n) { cv.width = cv.height = n; }
-  const x = cv.getContext('2d');
-  x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1; x.drawImage(paperC, 0, 0);
+  const x = cv.getContext('2d'), cam = S.saver.cam;
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1; x.fillStyle = PAPER.night; x.fillRect(0, 0, n, n);
+  x.setTransform(cam.z, 0, 0, cam.z, n / 2 - cam.fx * cam.z, cam.cy - cam.fy * cam.z);
+  x.drawImage(paperC, 0, 0);
   const g = S.saver && S.saver.glow;
   if (g) { x.globalCompositeOperation = 'screen'; x.filter = 'blur(6px)'; x.drawImage(g, 0, 0, n, n); x.filter = 'none'; }
   x.globalCompositeOperation = blend(); x.drawImage(dryC, 0, 0); x.globalAlpha = inkA(); x.drawImage(wetC, 0, 0);
   x.globalCompositeOperation = 'source-over'; x.globalAlpha = S.saver ? SAVER_RIG_A : 1; x.drawImage(rigC, 0, 0);
+  x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1;
 }
 // The soft copy of the ink: #dry and #wet at a quarter of the size. CSS
 // blurs the #glow canvas and screens it under the sharp lines. It is drawn
@@ -684,9 +718,15 @@ function drawGlow(now) {
 
 // ── screensaver ────────────────────────────────────────────────────────────
 // lib/screensaver.js has the protocol. The tour draws one preset after
-// another. Each preset draws in 65% of its hold, rests, and fades. The
-// hold is max(9 s, seconds / 5), so a 60 s dwell shows about 5 finished
-// curves (it was max(14 s, seconds / 2): 2 curves).
+// another in a seeded order. A preset keeps the traces that fit in
+// SAVER_LAPS laps, draws them one at a time at S.saver.rate (or slower,
+// see SPIN_MAX), rests REST s on the closed figure, and fades.
+// CAMERA. Shots of 6 to 10 s go between the whole sheet (z 1) and a close
+// view (z CLOSE) that follows the wheel centre, so the teeth show as they
+// roll. The close view puts the wheel at the centre of the clear band of
+// the label plate (plateBand, lib/saver-clear.js), in cam.cy, and the pen
+// runs at SLOW of its rate there. The camera eases between shots. The
+// rest is a whole-sheet shot.
 //
 // The saver canvas (S.saver.comp) holds the paper, glow, ink and rig in
 // one canvas, and it is in #sheet, over the other layers, which hide.
@@ -722,34 +762,66 @@ function saverLabel() {
 // canvas maps one unit to S.k device px about the sheet centre, turned by
 // a.rot (see drawRig). x, y: the ring centre. r: the reach of the rig,
 // extent(R, r, out). pts: the pen hole (penAt), so the leader points at it.
+// The points go through the saver camera (see composite).
 function penAnchor() {
   const a = S.active; if (!a || !S.k) return null;
   const q = sheet.getBoundingClientRect(); if (!q.width) return null;
-  const u = S.k / S.dpr, cx = q.left + q.width / 2, cy = q.top + q.height / 2;
+  const u = S.k / S.dpr, cam = S.saver ? S.saver.cam : { z: 1, fx: q.width * S.dpr / 2, fy: q.height * S.dpr / 2 };
+  const cy = cam.cy == null ? q.height * S.dpr / 2 : cam.cy;
+  const view = (x, y) => ({ x: q.left + q.width / 2 + (q.width / 2 + x - cam.fx / S.dpr) * cam.z, y: q.top + cy / S.dpr + (q.height / 2 + y - cam.fy / S.dpr) * cam.z });
   const [px, py] = penAt(a.R, a.r, a.out, a.d, a.t), c = Math.cos(a.rot), s = Math.sin(a.rot);
-  return { x: cx, y: cy, r: extent(a.R, a.r, a.out) * u, pts: [{ x: cx + (px * c - py * s) * u, y: cy + (px * s + py * c) * u }] };
+  const o = view(0, 0), p = view((px * c - py * s) * u, (px * s + py * c) * u);
+  return { x: o.x, y: o.y, r: extent(a.R, a.r, a.out) * u * cam.z, pts: [p] };
 }
+const CLOSE = 1.9, SLOW = 0.4, REST = 4000, FADE_MS = 1100;
 function saverStep(now) {
-  const s = S.saver;
-  if (s.key !== `${S.preset}|${S.active && S.active.R}|${S.active && S.active.r}|${S.active && S.active.d}`) {
-    s.key = `${S.preset}|${S.active && S.active.R}|${S.active && S.active.r}|${S.active && S.active.d}`;
-    saverLabel();
-  }
-  if (now < s.until) return;
-  if (s.phase === 'draw') { s.phase = 'fade'; sheet.style.opacity = '0'; s.until = now + 1100; }
-  else if (s.phase === 'fade') {
+  const s = S.saver, a = S.active;
+  const key = `${S.preset}|${a && a.R}|${a && a.r}|${a && a.d}`;
+  if (s.key !== key) { s.key = key; saverLabel(); }
+  if (s.phase === 'draw') {
+    if (S.closed || now > s.until) { s.phase = 'rest'; s.until = now + REST; }
+  } else if (s.phase === 'rest' && now > s.until) { s.phase = 'fade'; sheet.style.opacity = '0'; s.until = now + FADE_MS; }
+  else if (s.phase === 'fade' && now > s.until) {
     s.i = (s.i + 1) % s.order.length;
-    loadPreset(s.order[s.i], s.drawSec);
-    sheet.style.opacity = '1'; s.phase = 'draw'; s.until = now + s.hold;
+    loadPreset(s.order[s.i], 0);
+    sheet.style.opacity = '1'; s.phase = 'draw'; s.until = now + 60000;
+    s.close = s.rnd() < 0.5; s.shotEnd = now + 6000 + s.rnd() * 4000;
+    s.w = 0; s.slow = 1;
   }
+  // The shot: whole sheet or close on the wheel. A new shot every 6 to
+  // 10 s while the pen draws. The rest and the fade are whole-sheet shots.
+  if (s.phase === 'draw' && now > s.shotEnd) { s.close = !s.close; s.shotEnd = now + 6000 + s.rnd() * 4000; }
+  const close = s.close && s.phase === 'draw' && a, n = paperC.width;
+  if (s.bandFn && now - s.bandAt > 250) { s.bandAt = now; s.band = s.bandFn(innerHeight); }
+  // The weight w of the close view and the pen slow-down ease; the close
+  // pose itself is exact, so the wheel holds still on the screen and does
+  // not trail behind its own motion.
+  const dt = Math.min(0.05, (now - (s.camAt || now)) / 1000); s.camAt = now;
+  const e = 1 - Math.exp(-dt * 1.6);
+  s.w += ((close ? 1 : 0) - s.w) * e;
+  s.slow += ((close ? SLOW : 1) - s.slow) * e;
+  let fx = n / 2, fy = n / 2, cy = n / 2;
+  if (a && s.w > 1e-3) {
+    const [wx, wy] = wheelCenter(a.R, a.r, a.out, a.t), c = Math.cos(a.rot), sn = Math.sin(a.rot);
+    const q = sheet.getBoundingClientRect(), b = s.band;
+    if (b && q.height) cy = clamp(((b.t + innerHeight - b.b) / 2 - q.top) * S.dpr, n * 0.25, n * 0.75);
+    // The wheel rides near the ring, near the sheet edge, so the view may
+    // pass the edge. composite() fills that part with night paper.
+    fx = n / 2 + (wx * c - wy * sn) * S.k; fy = n / 2 + (wx * sn + wy * c) * S.k;
+  }
+  const w = s.w, cam = s.cam;
+  cam.z = 1 + (CLOSE - 1) * w;
+  cam.fx = n / 2 + (fx - n / 2) * w; cam.fy = n / 2 + (fy - n / 2) * w; cam.cy = n / 2 + (cy - n / 2) * w;
 }
 window.snSaver = {
   enter(o = {}) {
     const calm = clamp(o.calm ?? 0.7, 0, 1);
     const rnd = mulberry((o.seed >>> 0) || 1);
-    const order = PRESETS.map((_, i) => i);
+    // A preset with no trace that fits in SAVER_LAPS laps (Lace) stays out.
+    const order = PRESETS.map((_, i) => i).filter(i => PRESETS[i].traces.some(tr => lapsOf(presetSpec(tr)) <= SAVER_LAPS));
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    const hold = Math.max(9, (o.seconds || 60) / 5) * 1000 * (0.85 + 0.3 * calm);
+    // Radians of t per second: calm 1 draws at 70% of calm 0.
+    const rate = 3.4 * (1 - 0.3 * calm);
     const st = document.createElement('style');
     st.id = 'saverStyle';
     st.textContent = '.topbar,#panel,#dock,#gear,#caption{display:none!important}#desk{top:0!important;bottom:0!important}#sheet{cursor:none;transition:opacity 1s ease}' +
@@ -759,10 +831,14 @@ window.snSaver = {
     dryC.before(glow);
     const comp = document.createElement('canvas'); comp.id = 'saverComp';
     sheet.append(comp);
-    S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, hold, drawSec: hold / 1000 * 0.65, phase: 'draw', until: performance.now() + hold, key: '', comp, glow, glowKey: '', glowAt: 0, paper: S.paper };
+    const now = performance.now();
+    S.saver = { label: typeof o.label === 'function' ? o.label : () => {}, order, i: 0, rate, rnd, phase: 'draw', until: now + 60000, key: '', comp, glow, glowKey: '', glowAt: 0, paper: S.paper,
+      cam: { z: 1, fx: 0, fy: 0, cy: 0 }, close: rnd() < 0.5, shotEnd: now + 6000 + rnd() * 4000, camAt: 0, w: 0, slow: 1, bandFn: null, band: null, bandAt: 0 };
+    import('../../lib/saver-clear.js').then(m => { if (S.saver) S.saver.bandFn = m.plateBand; }).catch(() => { /* no band: the sheet centre */ });
     S.held = false; setGears(true);
     panel.classList.remove('open'); layout();
-    loadPreset(order[0], S.saver.drawSec);
+    S.saver.cam.fx = S.saver.cam.fy = S.saver.cam.cy = paperC.width / 2;
+    loadPreset(order[0], 0);
     return { canvas: S.saver.comp, warmupMs: 600 };
   },
   exit() {
