@@ -1,6 +1,7 @@
 // ============================================================================
 //  BALL SCREW & LEAD SCREW  ·  stage.js — a copy of differential/stage.js (same API)
-//  One addition: o.band(), the saver plate band, counts as an occluder.
+//  Two additions: o.band(), the saver plate band, counts as an occluder,
+//  and o.tall(), the subject height over its width, for the fit.
 // ────────────────────────────────────────────────────────────────────────────
 //  createStage() follows the watch-movement stage: a WebGL renderer on a
 //  transparent canvas, a studio environment for reflections, a key light
@@ -145,7 +146,10 @@ export function createStage(o) {
     // out when the clear width is less than the full height, or it is short.
     // A narrow phone has room above and below: it zooms out a little less.
     const nw = cw / h, gain = 1 + 0.35 * Math.max(0, Math.min(1, (0.9 - nw) / 0.4));
-    camera.zoom = Math.min(1, Math.max(0.3, Math.min(nw * gain, ch / h)));
+    // ball-screw: o.tall() is the subject height over its width (a long,
+    // low stage is about 0.55), so a short clear band does not shrink it
+    const tk = typeof o.tall === 'function' ? o.tall() : 1;
+    camera.zoom = Math.min(1, Math.max(0.3, Math.min(nw * gain, ch / h / tk)));
     camera.setViewOffset(w, h, (occ.l - occ.r) / -2, (occ.t - occ.b) / -2, w, h);
     camera.updateProjectionMatrix();
   }
