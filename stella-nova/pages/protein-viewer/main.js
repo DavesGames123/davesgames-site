@@ -55,6 +55,7 @@ import { buildUI, setColor, setRep, syncUI } from './app/ui.js';
 import { isPolymer, ADDITIVES } from './app/state.js';
 import { paint } from './app/paint.js';
 import { frame } from './app/loop.js';
+import { ease } from './app/env.js';
 
 // debug and headless checks
 window.__pv = { S, loadPreset, select, clearSelection, setRep, setColor, setMeasure, addMeasureAtom, pickAt, resolveSel, camera, controls, PRESETS, setOpen, focusSelection, resetView, fetchId };
@@ -70,13 +71,17 @@ requestAnimationFrame(frame);
 // Hook for the shell screensaver (lib/screensaver.js). It closes the panel,
 // hides all DOM but canvas#view and plays a seeded order of the local
 // presets (one per PDB entry, the three large assemblies left out). Each
-// structure gets an inspection tour, not a slow orbit. Shots hold 2.2 to
-// 3 s (calm 0 to 1), with eased 1 s moves between them:
+// structure gets a calm inspection tour. The overview holds 6 to 9 s and
+// a feature 4.5 to 6.5 s (calm 0 to 1). Moves ease over 2.5 to 3.5 s, and
+// the spin is about 2 deg/s (half of that on a feature):
 //   1 overview ... the whole fold from a seeded direction, slow spin
 //   2 feature .... a push-in to a feature that saverFeatures finds in the
 //                  data: a ligand pocket, a disulfide, a low-pLDDT tail, a
-//                  beta sheet or a helix bundle. S.hl dims the rest.
-//   3 fly-along .. the camera runs the length of one helix or strand
+//                  beta sheet or a helix bundle. S.hl dims the rest. No
+//                  feature, no push-in: the overview holds longer.
+//   3 fly-along .. on half the structures (seeded): the camera turns to
+//                  the side of one helix or strand from its current
+//                  direction, then moves slowly along the run axis
 //   4 pull-back .. a fade, a change of representation, and the overview
 // The seed also picks the colour scheme and the first representation. Each
 // change of structure fades the molecule into the background in the
@@ -257,7 +262,7 @@ window.snSaver = {
     const seen = new Set(), order = [];
     for (const p of PRESETS) if (!SAVER_SKIP.has(p.id) && !seen.has(p.code)) { seen.add(p.code); order.push(p.id); }
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    const HOLD = (2.2 + 0.8 * calm) * 1000, MOVE = 1.0, fadeS = 0.5 + 0.5 * calm;
+    const HOLD_ALL = (6 + 3 * calm) * 1000, HOLD = (4.5 + 2 * calm) * 1000, MOVE = 2.5 + calm, fadeS = 0.6 + 0.6 * calm;
     const wait = ms => new Promise(res => setTimeout(res, ms));
     const fadeTo = (to, sec = fadeS) => new Promise(res => {
       const from = post.fade, t0 = performance.now();
@@ -290,25 +295,46 @@ window.snSaver = {
       } catch (e) { /* the plate is optional */ }
     };
     const setShot = (sub, res, line) => { shot = { sub, res, line }; S.hl = res ? new Set(res) : null; paint(); plate(); };
-    // the camera runs along one helix or strand, side on, over dur seconds
+    // The camera turns from its current direction to the side of one helix
+    // or strand (MOVE seconds for each 30 deg), then moves along the run axis over dur
+    // seconds. The axis is a line from the mean of the first 4 CA to the
+    // mean of the last 4 CA: the CA of a helix go round its axis at 2.3 A,
+    // and a target on the CA makes the camera wobble at each residue.
     const flyAlong = (res, dur) => new Promise(done => {
       const s = S.s, pts = res.map(ri => s.residues[ri]).filter(q => q.ca >= 0).map(q => new THREE.Vector3(S.wpos[3 * q.ca], S.wpos[3 * q.ca + 1], S.wpos[3 * q.ca + 2]));
-      if (pts.length < 2) { done(); return; }
-      const axis = pts[pts.length - 1].clone().sub(pts[0]).normalize();
-      let side = new THREE.Vector3().crossVectors(axis, new THREE.Vector3(0, 1, 0));
+      if (pts.length < 4) { done(); return; }
+      const mean = a => a.reduce((m, p) => m.add(p), new THREE.Vector3()).multiplyScalar(1 / a.length);
+      const a0 = mean(pts.slice(0, 4)), a1 = mean(pts.slice(-4)), len = a0.distanceTo(a1);
+      const axis = a1.clone().sub(a0).normalize();
+      // the side direction nearest to the current view direction
+      const dir0 = camera.position.clone().sub(controls.target).normalize();
+      let side = dir0.clone().addScaledVector(axis, -dir0.dot(axis));
+      if (side.lengthSq() < 1e-3) side = new THREE.Vector3().crossVectors(axis, new THREE.Vector3(0, 1, 0));
       if (side.lengthSq() < 1e-3) side = new THREE.Vector3(1, 0, 0);
-      side.normalize().add(new THREE.Vector3(0, 0.35, 0)).normalize();
-      // side on at 1.4 run lengths (30 Å or more), so the run and its
-      // neighbours stay in view while the target walks along it
-      const d = Math.max(30, 1.4 * pts[0].distanceTo(pts[pts.length - 1])), t0 = performance.now();
+      side.normalize();
+      // the entry takes MOVE s for each 30 deg of turn, so a smoothstep
+      // peak stays near 15 deg/s
+      const enter = MOVE * Math.max(1, Math.acos(Math.min(1, dir0.dot(side))) * 180 / Math.PI / 30);
+      // side on at 1.4 run lengths (30 A or more), so the run and its
+      // neighbours stay in view; the walk covers the middle 60 % of the run
+      const d = Math.max(30, 1.4 * len), d0 = camera.position.distanceTo(controls.target), tg0 = controls.target.clone();
+      const p0 = a0.clone().lerp(a1, 0.2), p1 = a0.clone().lerp(a1, 0.8);
       S.spin = false; S.fly = null;
+      const t0 = performance.now(), dir = new THREE.Vector3();
       const step = now => {
-        const k = Math.min(1, (now - t0) / (dur * 1000)), u = k * k * (3 - 2 * k) * (pts.length - 1);
-        const i = Math.min(pts.length - 2, Math.floor(u)), p = pts[i].clone().lerp(pts[i + 1], u - i);
-        controls.target.lerp(p, k < 0.15 ? 0.25 : 1);
-        camera.position.copy(controls.target).addScaledVector(side, d);
+        const t = (now - t0) / 1000;
+        if (t < enter) {
+          const k = ease(t / enter);
+          controls.target.lerpVectors(tg0, p0, k);
+          dir.copy(dir0).lerp(side, k).normalize();
+          camera.position.copy(controls.target).addScaledVector(dir, d0 + (d - d0) * k);
+        } else {
+          const k = ease(Math.min(1, (t - enter) / dur));
+          controls.target.lerpVectors(p0, p1, k);
+          camera.position.copy(controls.target).addScaledVector(side, d);
+        }
         camera.lookAt(controls.target); S.dirty = true;
-        if (k < 1) requestAnimationFrame(step); else done();
+        if (t < enter + dur) requestAnimationFrame(step); else done();
       };
       requestAnimationFrame(step);
     });
@@ -331,22 +357,24 @@ window.snSaver = {
       S.spin = true;
       setShot('', null);
       await wait(250); await fadeTo(0);
-      await fly(S.bound.c, dAll, 0.8);
-      await wait(HOLD);
+      await fly(S.bound.c, dAll, MOVE);
+      await wait(HOLD_ALL);
       // 2 feature
       const f = features.length ? pick(features) : null;
       if (f) {
         const c = centreOf(f.res), rad = Math.max(8, radiusOf(f.res, c));
         setShot(f.sub, f.res);
+        controls.autoRotateSpeed = spinK * 0.5;
         await fly(c, fit(rad) * 1.15);
         await wait(HOLD);
-      }
+        controls.autoRotateSpeed = spinK;
+      } else await wait(HOLD);
       // 3 fly-along
       const along = runs.filter(u => !f || u !== f);
-      const u = along.length ? pick(along) : null;
+      const u = along.length && rnd() < 0.5 ? pick(along) : null;
       if (u) {
         setShot(`Along ${u.sub[0].toLowerCase()}${u.sub.slice(1)}`, u.res);
-        await flyAlong(u.res, (HOLD + MOVE * 1000) / 1000);
+        await flyAlong(u.res, HOLD / 1000);
       }
       // 4 pull-back with a change of representation
       const other = (small ? ['surface', 'ballstick', 'cartoon', 'spacefill'] : atoms < 6000 ? ['surface', 'cartoon', 'trace'] : ['cartoon', 'trace']).filter(q => q !== S.rep);
@@ -357,7 +385,7 @@ window.snSaver = {
       S.spin = true;
       fadeTo(0, 0.6);
       await fly(S.bound.c, dAll * 1.05);
-      await wait(HOLD);
+      await wait(HOLD_ALL);
       await fadeTo(1);
     };
     // start on a fresh molecule from the faded state
