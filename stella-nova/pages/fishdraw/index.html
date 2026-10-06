@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Fishdraw — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FISHDRAW  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Procedural fish drawings in pen lines. The engine is fishdraw by
+   Lingdong Huang, 2021 (MIT, see LICENSE-fishdraw.txt). fishdraw.js is a
+   byte copy of the upstream file. The other files are our own code.
+
+   FILES
+     fishdraw.js  upstream engine, not changed
+     engine.js    the shim (new Function), params schema, mutate, share link
+     worker.js    one fish per message, in a module worker
+     pool.js      the worker pool, queue and fish cache
+     plate.js     themes, page sizes, the plate layout (no DOM)
+     render.js    the plate on a canvas, as vectors, and the pen draw-on
+     main.js      the controls, history, modes, view, and the boot
+     tests.mjs    node tests (engine, share link, layout, SVG)
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops the frame loop when the shell swaps pages
+     2. style.css, then lib/sci.css (Inter and STIX Two Text)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #desk fills the rest. #view is one
+                 canvas over the whole desk. #caption is the line under
+                 the plate: the name, the seed and the line count.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base. #panel is a bottom sheet (portrait)
+                 or a drawer at the right (landscape). The plate fits in
+                 the part of #desk that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'      the canvas size and the clear area
+     grep -n 'function plateNow'    the layout of the plate on screen
+     grep -n 'function draw'        one frame
+     grep -n 'function showFish'    ask the pool for a fish, then show it
+     grep -n 'function buildParams' the parameter panel
+     grep -n 'function setOpen'     the panel, the phone sheet, the dock
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Procedural fish drawings in pen lines, from fishdraw by Lingdong Huang. One large specimen with every parameter, or a natural-history plate of many, with paper themes, a pen-plotter draw-on, and SVG, PNG, JSON and CSV export.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Fishdraw</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="desk">
+  <canvas id="view" aria-label="Fish drawing. Drag to pan, wheel or pinch to zoom."></canvas>
+  <div id="caption"></div>
+  <div id="busy" hidden>Drawing…</div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <!-- MODE SECTION -->
+  <div class="sec-label first">Specimen</div>
+  <div class="namerow">
+    <input id="nameInp" type="text" autocomplete="off" spellcheck="false" aria-label="Fish name (the seed)">
+    <button id="nameGo" title="Draw the fish of this name (Enter)">Draw</button>
+  </div>
+  <div class="hint" id="seedLine"></div>
+  <div class="btns">
+    <button id="newBtn" title="A new fish. Locked fields stay (N)">New fish</button>
+    <button id="mutBtn" title="Change the fish a little (M)">Mutate</button>
+  </div>
+  <div class="prm"><div class="nm">Mutation size</div><span class="val" id="mutAmtV"></span>
+    <input type="range" id="mutAmt" min="0.02" max="0.6" step="0.01" value="0.12" aria-label="Mutation size"></div>
+  <div class="btns">
+    <button id="backBtn" title="Back in history ([)">‹ Back</button>
+    <button id="fwdBtn" title="Forward in history (])">Forward ›</button>
+    <button id="resetBtn" title="Remove all edits of this fish">Reset edits</button>
+  </div>
+
+  <div class="sec-label">Pen draw-on</div>
+  <div class="btns">
+    <button id="playBtn" title="Draw the fish again with the pen (D)">Draw on</button>
+    <button id="autoBtn" class="on" title="Draw each new fish with the pen">Each new fish</button>
+    <button id="tipBtn" class="on" title="Show the pen tip">Pen tip</button>
+  </div>
+  <div class="prm"><div class="nm">Pen speed</div><span class="val" id="speedV"></span>
+    <input type="range" id="speed" min="0" max="1" step="0.001" value="0.5" aria-label="Pen speed"></div>
+
+  <!-- GRID SECTION -->
+
+  <div class="sec-label">Plate</div>
+  <div class="themes" id="themes"></div>
+  <div class="row2">
+    <label class="nm" for="inkInp">Ink</label>
+    <input type="color" id="inkInp" value="#2a2118" aria-label="Ink color">
+    <button id="inkReset" class="small" title="Use the ink of the theme">Theme ink</button>
+  </div>
+  <div class="prm"><div class="nm">Pen width</div><span class="val" id="penV"></span>
+    <input type="range" id="pen" min="0.05" max="1.2" step="0.01" value="0.3" aria-label="Pen width"></div>
+  <div class="prm"><div class="nm">Hand wobble</div><span class="val" id="jitterV"></span>
+    <input type="range" id="jitter" min="0" max="1" step="0.01" value="0" aria-label="Hand-drawn wobble"></div>
+  <div class="row2">
+    <label class="nm" for="pageSel">Page</label>
+    <select id="pageSel" aria-label="Page size"></select>
+  </div>
+  <div class="seg" id="orientSeg">
+    <button data-o="portrait">Portrait</button>
+    <button data-o="landscape" class="on">Landscape</button>
+  </div>
+  <div class="btns wrap">
+    <button id="borderBtn" title="Double rule around the plate">Border</button>
+    <button id="titleBtn" title="Plate number, title and credit line">Title block</button>
+    <button id="labelsBtn" title="Number and name under each fish">Labels</button>
+    <button id="hersheyBtn" title="The upstream name in pen letters under the fish">Pen name</button>
+    <button id="grainBtn" class="on" title="Paper grain and vignette">Grain</button>
+  </div>
+  <div class="namerow">
+    <input id="titleInp" type="text" autocomplete="off" spellcheck="false" placeholder="Plate title" aria-label="Plate title">
+  </div>
+
+  <div class="sec-label">Parameters</div>
+  <p class="hint">Every field of <code>generate_params()</code>. A lock keeps a field when you ask for a new fish, mutate, or roll a group.</p>
+  <div class="btns">
+    <button id="unlockBtn">Unlock all</button>
+    <button id="openAllBtn">Open all</button>
+  </div>
+  <div id="params"></div>
+
+  <!-- EXPORT SECTION -->
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>Each fish is a set of pen lines, made from a seed. The seed is the Latin name: the same name always gives the same fish. A random name comes from the same syllable tables that the engine uses.</p>
+    <p>The body is two noise curves. Scales are a clipped mesh, fins are rays clipped by the body, and the head, eye, jaw, barbels and teeth are added on top. The result is plain polylines for a pen plotter.</p>
+    <p>Engine: <a href="https://github.com/LingDong-/fishdraw" target="_blank" rel="noopener">fishdraw</a> by Lingdong Huang, 2021. <a href="LICENSE-fishdraw.txt" target="_blank" rel="noopener">MIT License</a>. The page, plates and controls are our own.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+  <button id="dockBack" aria-label="Back">‹</button>
+  <button id="dockNew" class="name" aria-label="New fish"><span id="dockName">…</span><i>↻</i></button>
+  <button id="dockFwd" aria-label="Forward">›</button>
+  <button id="dockDraw" aria-label="Draw on">✎</button>
+  <!-- DOCK MODE -->
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

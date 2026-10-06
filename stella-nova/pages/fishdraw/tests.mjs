@@ -109,6 +109,16 @@ test('the extreme corners of every slider draw', () => {
     ok(f.polylines.length > 20, end + ' corner drew too few lines');
   }
 });
+test('mutate keeps locked fields and stays in range', () => {
+  const E = makeEngine(SRC), rnd = mulberry(3);
+  const base = baseParams(E, 'Xipola nare');
+  const locked = new Set(['tail_type', 'body_length', 'eye_size']);
+  for (let i = 0; i < 50; i++) {
+    const p = mutate(base, 0.6, rnd, locked);
+    for (const k of locked) eq(p[k], base[k], 'locked ' + k);
+    for (const d of PARAMS) if (d.kind !== 'float') ok(p[d.key] >= d.min && p[d.key] <= d.max, d.key + ' out of range');
+  }
+});
 test('relatives keep the genus; blend ends match its inputs', () => {
   const E = makeEngine(SRC);
   const r = relativeName(E, 'Colus splennita', 99);

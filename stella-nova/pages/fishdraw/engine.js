@@ -111,7 +111,7 @@ export const PARAMS = [
   F_('body_length', 'body', 'Length', 200, 420, 1),
   F_('body_height', 'body', 'Height', 45, 150, 1),
 
-  E_('scale_type', 'skin', 'Scales', ['Mesh', 'Round', 'Fine', 'Plate']),
+  E_('scale_type', 'skin', 'Scales', ['Diamond', 'Cycloid', 'Hatched', 'Smooth']),
   F_('scale_scale', 'skin', 'Scale size', 0.8, 1.5, 0.01),
   E_('pattern_type', 'skin', 'Pattern', ['None', 'Spots', 'Mottle', 'Bands', 'Speckle']),
   F_('pattern_scale', 'skin', 'Pattern size', 0.5, 2, 0.01),
@@ -239,13 +239,16 @@ export function relativeName(E, base, n) {
 }
 
 // ── mutate ──────────────────────────────────────────────────────────────────
-// spread 0..1. A numeric field moves by a normal step of spread * range / 2.
+// spread 0..1. Each field takes part with chance 0.3 + spread, so a small
+// mutation changes a few fields. A numeric field moves by a normal step of
+// spread * range / 2.
 // An enum field changes with chance spread * 0.35, a bool with spread * 0.2.
 // Locked keys (a Set) do not change. Returns sanitized, rounded params.
 export function mutate(p, spread, rnd, locked = null) {
   const o = Object.assign({}, p);
   for (const d of PARAMS) {
     if (locked && locked.has(d.key)) continue;
+    if (rnd() > 0.3 + spread) continue;
     const v = +o[d.key];
     if (d.kind === 'float' || d.kind === 'int') {
       const nv = clamp(v + gauss(rnd) * spread * (d.max - d.min) * 0.5, d.min, d.max);
