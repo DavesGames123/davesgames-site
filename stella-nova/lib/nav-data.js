@@ -87,8 +87,7 @@ w.SN_NAV = [
     { h: "Deep Space", p: [
       ["galaxy", "Galaxy", "SIM"],
       ["blackhole", "Black Hole", "GPU"],
-      ["wormhole", "Wormhole", "GPU", "ellis-wormhole"],
-      ["gravitational-imaging", "Gravitational Imaging", "NEW"]
+      ["wormhole", "Wormhole", "GPU", "ellis-wormhole"]
     ] }
   ] },
   { id: "quantum", label: "Quantum", short: "Quantum", icon: "ψ", color: "#9088e0", color2: "#64b4ff", groups: [
@@ -107,8 +106,7 @@ w.SN_NAV = [
   { id: "life", label: "Life Sciences", short: "Life", icon: "✿", color: "#6cd6a8", color2: "#e8d2a8", groups: [
     { h: "Proteins", p: [
       ["protein-viewer", "Protein Structure", "3D"],
-      ["protein-folding", "Protein Folding", "SIM"],
-      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"]
+      ["protein-folding", "Protein Folding", "SIM"]
     ] },
     { h: "Anatomy", p: [
       ["human-skull", "Human Skull", "3D"],
@@ -184,6 +182,14 @@ w.SN_NAV = [
       ["spirograph", "Spirograph", "NEW"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"],
       ["origami", "Origami Simulator", "SIM"]
+    ] }
+  ] },
+  { id: "papers", label: "Research", short: "Research", icon: "¶", color: "#ffa06e", color2: "#c9a7ff", groups: [
+    { h: "Astrophysics", p: [
+      ["gravitational-imaging", "Gravitational Imaging", "NEW"]
+    ] },
+    { h: "Machine Learning", p: [
+      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"]
     ] }
   ] }
 ] },
