@@ -1,0 +1,152 @@
+// ============================================================================
+//  ROCHE LIMIT  ·  tests.mjs — checks of the model, the CPU reference and GPU
+// ----------------------------------------------------------------------------
+//  node stella-nova/pages/roche-limit/tests.mjs          all CPU tests
+//
+//  1  Roche formulas against published values (Earth-Moon, Earth-comet,
+//     Phobos, the Saturn A ring edge)
+//  2  the tide formula against a direct f64 difference and the quadrupole
+//  3  a two-body Kepler orbit in the moving frame: energy, angular momentum
+//     and the period over 10 orbits; Kepler conic prediction closes
+//  4  a gravitating pair (extrapolated self-gravity): energy over 10 orbits
+//  5  the energy ledger E - W of an isolated pile
+//  6  disruption at low N (CPU): a fluid pile at 0.6 d_fluid loses most of
+//     its mass in 3 orbits, at 1.5 d_fluid it keeps it
+//
+//  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
+//  Published values: Wikipedia "Roche limit", revision of 2020-12 (tables
+//  "Roche limits for selected examples"), and the A ring outer edge
+//  136,775 km (NASA Saturnian rings fact sheet).
+// ============================================================================
+import * as P from './physics.js';
+
+const GPU_ONLY = false;
+let fails = 0;
+const ok = (name, cond, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}  ${info}`); if (!cond) fails++; };
+const rel = (a, b) => Math.abs(a - b) / Math.abs(b);
+
+function settledPile(N, mat, seed = 7, time = 6) {
+  const C = P.contactParams(N, mat);
+  const cl = P.makeCloud(N, seed);
+  const sim = new P.CpuSim(N, cl.rad, cl.mass, C, { GM: 0, Rp: 1 });
+  sim.x.set(cl.pos); sim.init(null);
+  const blocks = Math.ceil(time / (C.dt * P.K_STEP));
+  for (let b = 0; b < blocks; b++) { sim.settleDrag = b < blocks * 0.8 ? 1.5 : 0; sim.block(C.dt); }
+  sim.settleDrag = 0;
+  return { C, cl, sim };
+}
+
+function cpuTests() {
+  // 1 ─ Roche formulas
+  const B = P.BODIES;
+  const em_r = P.rocheRigid(B.earth.R, B.earth.rho, B.moon.rho), em_f = P.rocheFluid(B.earth.R, B.earth.rho, B.moon.rho);
+  ok('Earth-Moon rigid limit', rel(em_r, 9492) < 1e-3, `${em_r.toFixed(0)} km vs 9,492 km`);
+  ok('Earth-Moon fluid limit', rel(em_f, 18381) < 1e-3, `${em_f.toFixed(0)} km vs 18,381 km`);
+  const ec_r = P.rocheRigid(B.earth.R, B.earth.rho, B.comet.rho), ec_f = P.rocheFluid(B.earth.R, B.earth.rho, B.comet.rho);
+  ok('Earth-comet limits', rel(ec_r, 17887) < 1e-3 && rel(ec_f, 34638) < 1e-3, `${ec_r.toFixed(0)} / ${ec_f.toFixed(0)} km vs 17,887 / 34,638 km`);
+  const ph_r = B.phobos.peri / P.rocheRigid(B.mars.R, B.mars.rho, B.phobos.rho), ph_f = B.phobos.peri / P.rocheFluid(B.mars.R, B.mars.rho, B.phobos.rho);
+  ok('Phobos periapsis / Roche limit', Math.abs(ph_r - 1.72) < 0.05 && Math.abs(ph_f - 0.89) < 0.03, `${(100 * ph_r).toFixed(0)}% rigid, ${(100 * ph_f).toFixed(0)}% fluid vs 172% / 89%`);
+  const sat_f = P.rocheFluid(B.saturn.R, B.saturn.rho, B.ice.rho);
+  ok('Saturn: fluid limit of ice near the A ring edge', rel(sat_f, B.ringA.a) < 0.03, `${sat_f.toFixed(0)} km vs 136,775 km (${(100 * (sat_f / B.ringA.a - 1)).toFixed(1)}%)`);
+  ok('rigid coefficient is 2^(1/3)', Math.abs(P.K_RIGID - 1.2599) < 1e-4, P.K_RIGID.toFixed(4));
+  // the gauge: tide = self gravity exactly at the rigid limit
+  { const Rp = 1, rhoP = 3, rhoS = 1.5, d = P.rocheRigid(Rp, rhoP, rhoS), r = 0.01;
+    const g = P.tideGauge(rhoP * 4 / 3 * Math.PI * Rp ** 3, rhoS * 4 / 3 * Math.PI * r ** 3, r, d);
+    ok('gauge ratio is 1 at d_rigid', Math.abs(g.ratio - 1) < 1e-12, g.ratio.toFixed(12)); }
+
+  // 2 ─ tide formula
+  { const GM = 7.3, X = [1234.5, -321.2, 40.1], x = [3.2, -1.1, 0.7], o = [0, 0, 0];
+    P.tideAccel(GM, ...X, ...x, o);
+    const R = X.map((q, k) => q + x[k]), r3 = Math.hypot(...R) ** 3, X3 = Math.hypot(...X) ** 3;
+    const direct = [0, 1, 2].map(k => GM * (X[k] / X3 - R[k] / r3));
+    const d = Math.hypot(...X), u = X.map(q => q / d), ux = u[0] * x[0] + u[1] * x[1] + u[2] * x[2];
+    const quad = [0, 1, 2].map(k => GM / d ** 3 * (3 * ux * u[k] - x[k]));
+    const e1 = Math.hypot(...o.map((q, k) => q - direct[k])) / Math.hypot(...direct);
+    const e2 = Math.hypot(...o.map((q, k) => q - quad[k])) / Math.hypot(...quad);
+    ok('tide: stable form = direct difference', e1 < 1e-9, `rel err ${e1.toExponential(2)}`);
+    ok('tide: near the quadrupole 3(u.x)u - x', e2 < 1e-2, `rel diff ${e2.toExponential(2)} (|x|/d = ${(Math.hypot(...x) / d).toExponential(1)})`); }
+
+  // 3 ─ Kepler orbit of one grain in the moving frame
+  { const C = P.contactParams(400, P.MATERIALS.fluid);
+    const pl = { GM: 5e6, Rp: 100, J2: 0, drag: 0 };
+    const o = P.orbitStart(pl, { kind: 'circular', d: 3 });
+    const g = new P.CpuSim(1, [1], [1], C, pl);
+    g.v.set([0, 0.2 * o.V[1], 0]);
+    const ref = new P.RefOrbit(pl, o.X, o.V); g.init(ref);
+    const st = () => { const r = [ref.X[0] + g.x[0], ref.X[1] + g.x[1], ref.X[2] + g.x[2]], v = [ref.V[0] + g.v[0], ref.V[1] + g.v[1], ref.V[2] + g.v[2]]; return { r, v }; };
+    const s0 = st(), el = P.keplerElements(s0.r, s0.v, pl.GM), T = P.orbitalPeriod(pl.GM, el.a);
+    const E0 = P.energyOf(g.x, g.v, g.w, g.rad, g.mass, g.phi, ref.X, ref.V, pl.GM);
+    const dt = T / 4000, K = 40, nb = Math.round(10 * T / (dt * K));
+    for (let b = 0; b < nb; b++) g.block(dt, K, ref);
+    const E1 = P.energyOf(g.x, g.v, g.w, g.rad, g.mass, g.phi, ref.X, ref.V, pl.GM);
+    const s1 = st(), back = Math.hypot(s1.r[0] - s0.r[0], s1.r[1] - s0.r[1], s1.r[2] - s0.r[2]) / Math.hypot(...s0.r);
+    ok('Kepler: energy over 10 orbits (e = ' + el.e.toFixed(2) + ')', rel(E1.E, E0.E) < 1e-6, `|dE/E| = ${rel(E1.E, E0.E).toExponential(2)}`);
+    ok('Kepler: angular momentum over 10 orbits', rel(E1.L[2], E0.L[2]) < 1e-6, `|dL/L| = ${rel(E1.L[2], E0.L[2]).toExponential(2)}`);
+    ok('Kepler: back at the start after 10 periods (leapfrog phase error)', back < 3e-3, `|dr|/r = ${back.toExponential(2)}`);
+    const path = P.keplerPath(s0.r, s0.v, pl.GM, T, 65).pts;
+    const close = Math.hypot(path[192] - path[0], path[193] - path[1], path[194] - path[2]) / Math.hypot(...s0.r);
+    ok('Kepler conic: the predicted path closes after one period', close < 1e-9, `${close.toExponential(2)}`);
+  }
+
+  // 4 ─ a gravitating pair, gravity once per block (extrapolated)
+  { const C = P.contactParams(400, P.MATERIALS.fluid);
+    const m = P.RHO_GRAIN * 4 / 3 * Math.PI, sep = 12, w = Math.sqrt(2 * m / sep ** 3);
+    const g = new P.CpuSim(2, [1, 1], [m, m], C, { GM: 0, Rp: 1 });
+    g.x.set([sep / 2, 0, 0, -sep / 2, 0, 0]); g.v.set([0, w * sep / 2, 0, 0, -w * sep / 2, 0]);
+    g.init(null);
+    const E0 = P.energyOf(g.x, g.v, g.w, g.rad, g.mass, g.phi, [0, 0, 0], [0, 0, 0], 0);
+    const T = 2 * Math.PI / w, nb = Math.round(10 * T / (C.dt * P.K_STEP));
+    for (let b = 0; b < nb; b++) g.block(C.dt);
+    const E1 = P.energyOf(g.x, g.v, g.w, g.rad, g.mass, g.phi, [0, 0, 0], [0, 0, 0], 0);
+    const h = C.dt * P.K_STEP;
+    ok('pair, gravity per block: energy over 10 orbits', rel(E1.E, E0.E) < 1e-4, `|dE/E| = ${rel(E1.E, E0.E).toExponential(2)}, h = T/${(T / h).toFixed(0)}`);
+  }
+
+  // 5 ─ energy ledger of an isolated pile
+  { const { sim } = settledPile(400, P.MATERIALS.rigid, 3);
+    const z = [0, 0, 0];
+    let W0 = 0; for (const q of sim.work) W0 += q;
+    const e0 = P.energyOf(sim.x, sim.v, sim.w, sim.rad, sim.mass, sim.phi, z, z, 0);
+    // stir it: random velocities at 0.3 of the escape speed
+    const r = P.rng(5); for (let i = 0; i < sim.v.length; i++) sim.v[i] += (r() - 0.5) * 0.6 * sim.C.vesc;
+    const e1 = P.energyOf(sim.x, sim.v, sim.w, sim.rad, sim.mass, sim.phi, z, z, 0);
+    for (let b = 0; b < 300; b++) sim.block(sim.C.dt);
+    let W1 = 0; for (const q of sim.work) W1 += q;
+    const e2 = P.energyOf(sim.x, sim.v, sim.w, sim.rad, sim.mass, sim.phi, z, z, 0);
+    const drift = Math.abs((e2.E - W1) - (e1.E - W0)) / Math.abs(e0.Us);
+    ok('ledger E - W of a stirred rough pile', drift < 1e-3, `|d(E-W)|/|U_self| = ${drift.toExponential(2)}; dissipated ${((e1.E - e2.E) / Math.abs(e0.Us)).toExponential(2)} |U_self|`);
+  }
+
+  // 6 ─ disruption at low N
+  { const N = 400, { C, cl, sim } = settledPile(N, P.MATERIALS.fluid, 7);
+    const st = P.pileStats(sim.x, sim.mass);
+    const run = f => {
+      const spec = { kind: 'circular', q: 1, s: 0.08 };
+      const pl = P.planetFor(st, spec);
+      spec.d = f * P.rocheFluid(pl.Rp, pl.rhoP, pl.rhoS) / pl.Rp;
+      const o = P.orbitStart(pl, spec);
+      const s2 = new P.CpuSim(N, cl.rad, cl.mass, C, pl);
+      s2.x.set(sim.x); P.placeOnOrbit(s2.x, s2.v, s2.w, s2.mass, o.Omega);
+      const ref = new P.RefOrbit(pl, o.X, o.V); s2.init(ref);
+      const e0 = P.energyOf(s2.x, s2.v, s2.w, s2.rad, s2.mass, s2.phi, ref.X, ref.V, pl.GM);
+      const T = P.orbitalPeriod(pl.GM, spec.d * pl.Rp), nb = Math.ceil(3 * T / (C.dt * P.K_STEP));
+      for (let b = 0; b < nb; b++) s2.block(C.dt, P.K_STEP, ref);
+      const an = P.analyzeBound(s2.x, s2.v, s2.mass, s2.rad, 3, ref.X, pl.GM);
+      const e1 = P.energyOf(s2.x, s2.v, s2.w, s2.rad, s2.mass, s2.phi, ref.X, ref.V, pl.GM);
+      let W = 0; for (const q of s2.work) W += q;
+      return { f, d: spec.d, bound: an.M / st.M, drift: (e1.E - W - e0.E) / Math.abs(e0.Us), acc: s2.accreted || 0 };
+    };
+    const a = run(0.6), b = run(1.5);
+    ok('disruption at 0.6 d_fluid (fluid pile, N = 400)', a.bound < 0.5, `d = ${a.d.toFixed(2)} R_p, bound ${(100 * a.bound).toFixed(1)}% after 3 orbits, ledger drift ${a.drift.toExponential(2)} |U_self|, ${a.acc} grains hit the planet`);
+    ok('survival at 1.5 d_fluid (fluid pile, N = 400)', b.bound > 0.95, `d = ${b.d.toFixed(2)} R_p, bound ${(100 * b.bound).toFixed(1)}% after 3 orbits, ledger drift ${b.drift.toExponential(2)} |U_self|`);
+  }
+}
+
+if (!GPU_ONLY) {
+  const t0 = Date.now();
+  cpuTests();
+  console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+}
+console.log(fails ? `${fails} FAILED` : 'ALL PASS');
+if (typeof Deno !== 'undefined') { if (fails) Deno.exit(1); }
+else process.exitCode = fails ? 1 : 0;
