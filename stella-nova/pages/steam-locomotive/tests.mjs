@@ -16,7 +16,8 @@
 //                    never open to steam and exhaust at the same time
 //    indicator ..... forward gear does positive work running forward and
 //                    negative work running backward; a shorter cut-off
-//                    gives less work but more work per unit of steam
+//                    gives less work but more work per unit of steam;
+//                    the rear end does about the same work as the front
 //    continuity .... no joint jumps between two close wheel angles
 // ============================================================================
 import { G, makeGear, events, indicator, TAU } from './mech.js';
@@ -83,6 +84,8 @@ const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
   ok(f1.mep > 0.5 && r1.mep > 0.5, `full gear MEP ${f1.mep.toFixed(3)} forward, reverse gear backward ${r1.mep.toFixed(3)} (share of boiler pressure)`);
   ok(b1.mep < 0, `forward gear running backward works against the motion (MEP ${b1.mep.toFixed(3)})`);
   ok(f1.mep > f50.mep && f50.mep > f25.mep, `MEP falls with cut-off: ${f1.mep.toFixed(3)} > ${f50.mep.toFixed(3)} > ${f25.mep.toFixed(3)}`);
+  const r1f = indicator(1, 1, 1440, 'rear');
+  ok(r1f.mep > 0.5 && Math.abs(r1f.mep - f1.mep) < 0.05, `rear end full gear MEP ${r1f.mep.toFixed(3)} near the front end ${f1.mep.toFixed(3)}`);
   ok(f25.eff > 1.2 * f1.eff, `work per unit of steam at 25 % reverser ${f25.eff.toFixed(3)} > 1.2 x full gear ${f1.eff.toFixed(3)}`);
 }
 

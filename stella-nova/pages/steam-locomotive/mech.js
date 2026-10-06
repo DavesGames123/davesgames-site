@@ -43,8 +43,8 @@
 //    Openings clip at PORT. Cut-off = piston travel (share of stroke)
 //    from the dead centre when the port closes to steam.
 //
-//  INDICATOR DIAGRAM (front end, Rankine ideal)
-//    Volume v = CLEAR + travel / stroke. Port open to steam: p = 1 (boiler).
+//  INDICATOR DIAGRAM (one end, Rankine ideal)
+//    Volume v = CLEAR + travel / stroke from that end. Port open to steam: p = 1 (boiler).
 //    Open to exhaust: p = PEX. Both closed: p v = constant (hyperbolic
 //    expansion and compression). Work = loop integral of p dv; mean
 //    effective pressure MEP = work / 1 (one stroke volume).
@@ -57,7 +57,7 @@
 //    function solveLever ........ combination lever (Newton, 3 x 3)
 //    export function makeGear ... pose(phi, c) -> every joint and the valve
 //    export function events ..... lead, cut-off, release, compression
-//    export function indicator .. p-v loop, MEP, steam use
+//    export function indicator .. p-v loop of one end, MEP, steam use
 //    export function circle2 .... both intersections of two circles
 // ============================================================================
 
@@ -195,8 +195,9 @@ export function sample(c, dir = 1, N = 1440) {
 
 // valve events, both ends. Shares of stroke for cut-off, release and
 // compression, measured from the dead centre where that stroke starts.
-export function events(c, dir = 1, N = 1440) {
-  const P = sample(c, dir, N), n = P.length, S = G.STROKE;
+// P: a sample(c, dir, N) to share between events() and indicator()
+export function events(c, dir = 1, N = 1440, P = sample(c, dir, N)) {
+  const n = P.length, S = G.STROKE;
   const at = i => P[(i + n) % n];
   // front dead centre is i = 0; rear dead centre at the largest travel
   let iR = 0; for (let i = 0; i < n; i++) if (P[i].x > P[iR].x) iR = i;
@@ -211,11 +212,13 @@ export function events(c, dir = 1, N = 1440) {
   return { front, rear, travel: travelVal, maxOpen: Math.max(...P.map(p => Math.max(p.open.fs, p.open.rs))), iR, n };
 }
 
-// the ideal indicator loop of the front end. Returns { pv: [[v, p]], mep,
-// steam, eff } with eff = mep / steam (work per unit of steam).
-export function indicator(c, dir = 1, N = 1440) {
-  const P = sample(c, dir, N), S = G.STROKE;
-  const vol = p => G.CLEAR + p.x / S;
+// the ideal indicator loop of one end ('front' or 'rear'). Returns
+// { pv: [[v, p]] by sample step, mep, steam, eff } with eff = mep / steam
+// (work per unit of steam).
+export function indicator(c, dir = 1, N = 1440, end = 'front', P = sample(c, dir, N)) {
+  const S = G.STROKE, rear = end === 'rear';
+  const vol = p => G.CLEAR + (rear ? S - p.x : p.x) / S;
+  const ks = rear ? 'rs' : 'fs', kx = rear ? 'rx' : 'fx';
   let p = 1, vPrev = vol(P[0]), steamIn = 0, before = null;
   const pv = [];
   let W = 0;
@@ -223,10 +226,10 @@ export function indicator(c, dir = 1, N = 1440) {
     for (let i = 0; i < P.length; i++) {
       const Q = P[i], v = vol(Q);
       let pn;
-      if (Q.open.fs > 0) { if (before === null) before = p * vPrev; pn = 1; }
+      if (Q.open[ks] > 0) { if (before === null) before = p * vPrev; pn = 1; }
       else {
         if (before !== null) { if (k) steamIn += 1 * vPrev - before; before = null; }
-        pn = Q.open.fx > 0 ? G.PEX : p * vPrev / v;
+        pn = Q.open[kx] > 0 ? G.PEX : p * vPrev / v;
       }
       if (k) { W += 0.5 * (p + pn) * (v - vPrev); pv.push([v, pn]); }
       p = pn; vPrev = v;
