@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>4DCodeBench: rebuilding a moving scene as code — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   4DCODEBENCH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and the text. The page explains Shen, Kovacic, Kulits et
+   al. (2026), arXiv:2610.03715: a benchmark that gives an agent a video of
+   a moving scene and asks for code that builds the 3D geometry of the scene
+   at each frame. Sections 01 to 05 explain the task, the data, the scores
+   and the results. Section 06 is a small original playground of the same
+   idea. Section 07 says what is from the paper and what is a toy.
+
+   NUMBERS
+     Every number from the paper comes from data.js. An element with
+     data-d="HUMAN.agreePct" gets its text from main.js (function bindNumbers).
+     Do not type a paper number into this file by hand.
+
+   LICENCE
+     The 4DCodeBench code, data and renders have no licence. This page uses
+     no part of them. The playground is original code.
+
+   HEAD LOAD ORDER
+     1. gpu-guard   ../../lib/gpu-guard.js (the playground makes a WebGL2 context)
+     2. style.css   then ../../lib/sci.css (fonts, math colours)
+   Script at end of body: main.js (module). It imports data.js and
+   ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips   sticky section bar
+     hero     title, citation, #heroStats
+     #s1 task        pipeline figure, equations, rules
+     #s2 benchmark   #famCv (matter families), #splitCv (scene splits)
+     #s3 scoring     #famTable, #btCv (Elo curve), human study numbers
+     #s4 leaderboard #lbAccess, #lbTable, #eloCv, #lbPick
+     #s5 motion      #gapCv, #effCv, #stratBar, #stratNotes, #reasonCv
+     #s6 try it      #sceneSeg #subSeg #playRef #playSub #playBtn #scrub
+                     #code #runBtn #scoreCard #runLog, and #viewSeg
+                     #pathsBtn #playViews #subEmpty #scPaper #runHist
+                     #presetNote #scrubOut #sceneBlurb (bound by play.js,
+                     which main.js loads when #s6 comes near the view)
+     #s7 real/toy    notes and references
+     #tip     one shared tooltip for all charts
+
+   GREP MAP  (main.js)
+     grep -n 'function bindNumbers'  data-d attributes to text
+     grep -n 'function initBench'    section 2 composition charts
+     grep -n 'function initScore'    section 3 family table, Elo curve
+     grep -n 'function initBoard'    section 4 table, scatter, pick card
+     grep -n 'function initMotion'   section 5 gap, effects, strategies
+     grep -n 'function initPlay'     section 6: loads play.js
+     grep -n 'function initChips'    sticky section bar
+   GREP MAP  (play.js): see the header of play.js
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Interactive explainer of 4DCodeBench (arXiv:2610.03715): agents watch a video of a moving scene and write code that rebuilds its 3D geometry over time. The task, the 200 scenes, five metric families, the leaderboard of 18 models, why motion is the hard part, and a small playground.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">4D inverse graphics</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>The task</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>The benchmark</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>How it scores</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Leaderboard</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Motion is the hard part</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>Try it</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>Real and toy</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Computer vision · coding agents · physics</p>
+  <h1>Watch a video, then write the code that makes it again</h1>
+  <p class="lede">An agent gets one thing: a short video of objects that fall, bend, pour or tangle. It must write a program that builds the scene in 3D, moves every piece of it frame by frame, and renders it back to a video. The program has to stand on its own, without the video. The benchmark then checks the copy against the original: how it looks, where its surfaces are, and how its matter moves. The best agents now copy a scene's look and shape well. Their motion is still clearly worse.</p>
+  <p class="cite">Shen, Kovačič, Kulits, Wang, Li, Tenenbaum, Yuille, Chen &amp; Wu, <a id="citeArxiv" href="https://arxiv.org/abs/2610.03715" target="_blank" rel="noopener"><em>4DCodeBench: Benchmarking Agents on Inverse Graphics of Dynamic Scenes</em></a>, arXiv:2610.03715 (2026). <a id="citeSite" href="https://4dcodebench.com" target="_blank" rel="noopener">Project site</a> · <a id="citeCode" href="https://github.com/4DCodeBench/4DCodeBench" target="_blank" rel="noopener">GitHub</a></p>
+  <div class="stats" id="heroStats">
+    <div><b data-d="PAPER.scenes" data-fmt="int"></b><span>scenes: <i data-d="PAPER.real" data-fmt="int"></i> real videos, <i data-d="PAPER.synthetic" data-fmt="int"></i> simulated with 3D truth</span></div>
+    <div><b data-d="PAPER.models" data-fmt="int"></b><span>models, each run once on every scene</span></div>
+    <div><b data-d="FAMILIES.length" data-fmt="int"></b><span>metric families: look, 2D motion, depth, 3D shape, 3D motion</span></div>
+    <div><b data-d="PAPER.executable" data-fmt="frac1"></b><span>of submissions run end to end</span></div>
+    <div><b data-d="HUMAN.spearmanHumanVlm" data-fmt="f3"></b><span>Spearman ρ between human and VLM-judge Elo</span></div>
+  </div>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The task: inverse graphics, in code, over time</h2><p>Graphics turns a description of a scene into pictures. Inverse graphics goes back: from pictures to the description. Here the description must be a program, and the scene moves, so the program must say where every bit of matter is at every moment. The paper calls that program 4D code.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>From a video to a program and back to a video</h3><span class="tag real">paper Fig. 1 and Sec. 2.1, redrawn</span></div>
+      <ol class="pipe" aria-label="Task pipeline">
+        <li class="stage">
+          <svg viewBox="0 0 120 72" aria-hidden="true"><rect x="6" y="10" width="64" height="44" rx="4" class="sv-frame" opacity=".35"/><rect x="18" y="14" width="64" height="44" rx="4" class="sv-frame" opacity=".6"/><rect x="30" y="18" width="64" height="44" rx="4" class="sv-frame"/><line x1="36" y1="54" x2="88" y2="54" class="sv-floor"/><circle cx="52" cy="30" r="5" class="sv-ghost"/><circle cx="62" cy="40" r="5" class="sv-ghost"/><circle cx="72" cy="48" r="5" class="sv-ball"/></svg>
+          <b>Reference video</b>
+          <span>RGB frames <i class="mi">x</i><sub>0</sub> … <i class="mi">x</i><sub>T−1</sub>. No scene name, no object list, no depth.</span>
+        </li>
+        <li class="stage">
+          <svg viewBox="0 0 120 72" aria-hidden="true"><rect x="18" y="8" width="84" height="56" rx="6" class="sv-frame"/><line x1="28" y1="22" x2="62" y2="22" class="sv-code"/><line x1="34" y1="31" x2="86" y2="31" class="sv-code2"/><line x1="34" y1="40" x2="74" y2="40" class="sv-code2"/><line x1="40" y1="49" x2="90" y2="49" class="sv-code"/><line x1="28" y1="57" x2="50" y2="57" class="sv-code2"/></svg>
+          <b>Agent writes 4D code</b>
+          <span>Programs Γ = (γ<sub>1</sub>, …, γ<sub>m</sub>), any number, any structure. It may render and compare as often as it likes.</span>
+        </li>
+        <li class="stage">
+          <svg viewBox="0 0 120 72" aria-hidden="true"><path d="M30 50 L60 60 L92 48 L62 40 Z" class="sv-grid"/><path d="M38 20 Q56 6 74 22" class="sv-path"/><circle cx="38" cy="20" r="2.5" class="sv-dot"/><circle cx="50" cy="13" r="2.5" class="sv-dot"/><circle cx="62" cy="13" r="2.5" class="sv-dot"/><circle cx="74" cy="22" r="2.5" class="sv-dot"/><g class="sv-mesh"><path d="M66 30 L80 26 L86 38 L72 42 Z"/><path d="M66 30 L72 42"/></g></svg>
+          <b>Geometry over time</b>
+          <span>State <i class="mi">s</i><sub>Γ</sub>(<i class="mi">t</i>): meshes at each frame (their vertex count may change), plus tracked points or particles that stay the same piece of matter from frame to frame.</span>
+        </li>
+        <li class="stage">
+          <svg viewBox="0 0 120 72" aria-hidden="true"><rect x="22" y="14" width="76" height="48" rx="4" class="sv-frame"/><line x1="28" y1="54" x2="92" y2="54" class="sv-floor"/><circle cx="70" cy="46" r="7" class="sv-ball2"/><path d="M12 22 L22 30 L12 38 Z" class="sv-cam"/></svg>
+          <b>Render</b>
+          <span>Blender draws <i class="mi">x̂</i><sub>k</sub> with the program's own camera, lights and materials, at the reference size and frame rate.</span>
+        </li>
+        <li class="stage">
+          <svg viewBox="0 0 120 72" aria-hidden="true"><rect x="10" y="16" width="44" height="32" rx="3" class="sv-frame"/><rect x="66" y="16" width="44" height="32" rx="3" class="sv-frame"/><circle cx="36" cy="38" r="5" class="sv-ball"/><circle cx="90" cy="36" r="5" class="sv-ball2"/><rect x="14" y="56" width="40" height="5" rx="2" class="sv-bar1"/><rect x="58" y="56" width="26" height="5" rx="2" class="sv-bar2"/></svg>
+          <b>Compare</b>
+          <span>With the video on every scene; with the true 3D world on the simulated scenes. Five metric families, VQA and pairwise Elo.</span>
+        </li>
+      </ol>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>The formal statement</h3><span class="tag real">paper eq. 1</span></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\Gamma = \mathcal{A}(x_{\rm ref}), \qquad x_{\rm ref} = (x_0, \dots, x_{T-1})"></div><p>The agent 𝒜 reads the reference video and returns the program Γ.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\hat{x}_k = R_\Gamma\big(s_\Gamma(k/r)\big), \qquad k = 0, \dots, T-1"></div><p>Run the program, take its geometric state s<sub>Γ</sub> at time k/r (r is the frame rate of the reference) and render it with the procedure R<sub>Γ</sub> that the program sets up. Frame k of the copy must line up with frame k of the original.</p></div>
+      </div>
+      <p class="cap">The state s<sub>Γ</sub>(t) is the important part. A video-generation model only has to make pixels. Here the scorer can read the 3D geometry itself, so a copy that looks right from the camera but has the wrong shape or the wrong motion behind it loses points.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The rules</h3><span class="tag real">Sec. 2.1 and 3.1</span></div>
+      <ul class="list">
+        <li><b>Only the video</b>The agent gets the RGB video and a fixed task prompt. No scene name, description or list of objects.</li>
+        <li><b>Stands on its own</b>The program must rebuild the whole scene from nothing, without access to the video.</li>
+        <li><b>Same shape of output</b>Same resolution, frame count and frame rate as the reference. Blender does the render.</li>
+        <li><b>Any physics</b>Motion may be keyframed, written as formulas, simulated in Blender, or simulated with any tool such as Taichi or Warp, or with the agent's own solver.</li>
+        <li><b>One run each</b>An isolated container, one GPU, an empty workspace. A run that gives no valid video or world gets the worst score on the affected metrics.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>The benchmark: real videos and simulated worlds</h2><p>Half the scenes are real clips: true appearance and true physics, but no 3D answer key. The other half come from physics simulators: simpler physics, but the geometry and motion at every frame are known.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>What the moving things are made of</h3><span class="tag real">paper Fig. 3</span></div>
+      <div class="legend"><span><i class="sw sw-real"></i>real videos</span><span><i class="sw sw-syn"></i>synthetic scenes</span></div>
+      <canvas id="famCv" class="fig chart" aria-label="Scenes that contain each matter family, real and synthetic"></canvas>
+      <p class="cap">Number of scenes, out of <span data-d="PAPER.real" data-fmt="int"></span> in each split, that contain each family. A scene can contain more than one, so a column does not add to 100. Real clips are mostly rigid things; the simulators add many more soft, deforming bodies. <b>Tap a bar</b> for its value.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>How busy the scenes are</h3><span class="tag real">paper Fig. 3</span></div>
+      <canvas id="splitCv" class="fig chart" aria-label="Share of scenes with one or many objects, one or many materials, passive or driven motion"></canvas>
+      <p class="cap">Percent of each split. Most scenes have several moving objects and several materials. Driven means something pushes the scene during the clip, for example a robot arm or an object on a set path; passive means the motion follows from the first frame and physics alone.</p>
+    </article>
+    <article class="card span-12 prose two-col">
+      <p><b>Four kinds of matter.</b> The scenes are sorted by the matter of their main moving objects. <em>Rigid and articulated</em>: rigid bodies and jointed systems. <em>Deformable solids</em>: hyperelastic, viscoelastic and elastoplastic materials, so things that bounce back, sag slowly or stay bent. <em>Co-dimensional</em>: shells and rods, that is cloth, paper, rope and wire, things thin in one or two directions. <em>Flowing</em>: grains, Newtonian fluids such as water, and viscoplastic fluids such as shaving cream or toothpaste.</p>
+      <p><b>Mixtures.</b> <span data-d="COMPOSITION.multiObjectPct" data-fmt="p0"></span> of scenes have more than one moving object and <span data-d="COMPOSITION.multiMaterialPct" data-fmt="p0"></span> have more than one material, with couplings such as rigid with fluid, fluid with soft body, and soft body with cloth. Events include collisions, deformation, flow and fracture.</p>
+      <p><b>Real clips</b> come from physics, video-generation and robotics datasets and the web. The authors preferred clips with a still camera, little occlusion and no cuts, left out people and animals, and kept visible hands to a minimum: their bodies are a different hard problem.</p>
+      <p><b>Synthetic scenes</b> were built by the authors in existing simulators, some extended with new material models, and checked by hand for instability and interpenetration. Frame rates are capped at <span data-d="PAPER.maxFps" data-fmt="int"></span> fps and real clips at <span data-d="PAPER.maxRealFrames" data-fmt="int"></span> frames.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>How it scores: five families, a quiz and a tournament</h2><p>A copy can be good in one way and bad in another. So the benchmark measures appearance, geometry and motion apart, in 2D against the video and in 3D against the simulator's truth. The Overall score is the mean of the five families.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>The five metric families</h3><span class="tag real">Sec. 2.4, App. D</span></div>
+      <div class="t-wrap"><table class="fam" id="famTable"></table></div>
+      <p class="cap">The 2D and 2.5D families compare the copy with the video. On the copy's side they are computed from the 4D world, not estimated from its rendered pixels. On real videos the reference flow, tracks and depth come from vision models (RAFT, CoTracker3, Video Depth Anything). The 3D families need the true world, so they run on synthetic scenes only, after a similarity transform aligns the copy with the reference. Mesh-quality checks (holes, self-intersection and so on) are reported apart: simple but wrong geometry can pass them.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The formulas, in short</h3><span class="tag real">App. D eqs. 3, 7, 8, 9</span></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathrm{DynIoU} = \frac{1}{T}\sum_k \frac{|(M_k \cap \hat M_k)\setminus B_k|}{|(M_k \cup \hat M_k)\setminus B_k|}"></div><p>Overlap of the masks of moving objects, per frame, without a thin band at the edges.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathrm{Scene3D} = 1 - D_\kappa(P, \hat P)/\kappa"></div><p>Chamfer distance of the surfaces at frame 0, capped at κ.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathrm{TrajDTW} = 1 - \frac{1}{n}\sum_i \frac{\min\big(\mathrm{DTW}(\tau_i, \hat\tau_{\pi(i)}),\,\kappa\big)}{\kappa}"></div><p>Lagrangian: follow bits of matter along their 3D paths. π pairs the paths one to one (Hungarian algorithm).</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathrm{EMD\ step} = \max\Big(0,\ 1 - \frac{\sum_k \mathrm{SW}(U_k, \hat U_k)}{\sum_k m(U_k) + m(\hat U_k)}\Big)"></div><p>Eulerian: compare the spread of one-step displacements without knowing which bit is which (sliced Wasserstein).</p></div>
+      </div>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>VQA and pairwise Elo</h3><span class="tag real">Sec. 2.4, App. D.5 and D.6</span></div>
+      <div class="duo-text">
+        <div class="prose">
+          <p><b>VQA.</b> Each scene has hand-written yes/no questions about the first frame, the last frame, the key events and the contacts, for example whether two cloths pass through each other. A VLM judge sees 16 frames of the copy only and answers them. A copy whose main object is missing fails every question.</p>
+          <p><b>Pairwise.</b> The judge sees the reference and two copies, and picks the one closer in geometry and motion (A or B, no ties). Many such games across scenes give each model a rating on the Elo scale with the Bradley–Terry model. In the human study people could also answer “about the same”, which counts as half a win.</p>
+        </div>
+        <div>
+          <div class="sci-eq" data-tex="P(a \succ b) = \frac{1}{1 + 10^{-(R_a - R_b)/400}}"></div>
+          <canvas id="btCv" class="fig chart short" aria-label="Win probability against Elo gap"></canvas>
+        </div>
+      </div>
+      <p class="cap">Line: the chance that the higher-rated model wins, for each rating gap. Dots: how often one VLM judgment agreed with the humans on single comparisons, at three gaps the paper reports. Close models are close to a coin flip, so one judgment on them says little, from a human or from a VLM; the rating needs many games. <b>Tap or drag</b> along the chart to read it.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Do people agree with the judge?</h3><span class="tag real">Sec. 3.2 and 4.1</span></div>
+      <div class="mini-stats">
+        <div><b data-d="HUMAN.judgments" data-fmt="int"></b><span>human judgments from <i data-d="HUMAN.participants" data-fmt="int"></i> people on <i data-d="HUMAN.models" data-fmt="int"></i> models</span></div>
+        <div><b data-d="HUMAN.spearmanHumanVlm" data-fmt="f3"></b><span>Spearman ρ, human Elo against VLM Elo (Pearson <i data-d="HUMAN.pearsonHumanVlm" data-fmt="f3"></i>)</span></div>
+        <div><b data-d="HUMAN.agreePct" data-fmt="p1"></b><span>human and VLM agree on <i data-d="HUMAN.sharedComparisons" data-fmt="int"></i> shared comparisons (κ <i data-d="HUMAN.kappa" data-fmt="f3"></i>)</span></div>
+        <div><b data-d="HUMAN.humanHumanAgreePct" data-fmt="p1"></b><span>two humans agree with each other (κ <i data-d="HUMAN.humanHumanKappa" data-fmt="f3"></i>)</span></div>
+        <div><b data-d="HUMAN.humanEloVsOverallSpearman" data-fmt="f2"></b><span>Spearman ρ, human Elo against the Overall score</span></div>
+        <div><b data-d="HUMAN.aboutSamePct" data-fmt="p1"></b><span>of human answers were "about the same"</span></div>
+      </div>
+      <p class="cap">So the judge is nearly as consistent with people as people are with each other, and the automatic Overall score ranks models nearly as people do. The fit of VLM Elo against human Elo has a slope of <span data-d="HUMAN.slope" data-fmt="f2"></span>: the judge spreads the models further apart than people do.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>Leaderboard</h2><p><span data-d="PAPER.models" data-fmt="int"></span> models on <span data-d="PAPER.scenes" data-fmt="int"></span> scenes, from the paper's Fig. 4. One model appears at three reasoning efforts. Proprietary models ran in their own agent tools, open-weight models in a shared open harness.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>All scores, sortable</h3><span class="tag real">tap a heading to sort, a row to pick</span></div>
+      <div class="ctrls top">
+        <div class="seg" id="lbAccess" role="group" aria-label="Access"><button data-v="all" class="on">all</button><button data-v="proprietary">proprietary</button><button data-v="open">open-weight</button></div>
+        <div class="legend in"><span><i class="sw sw-fam" style="--c:var(--f-perceptual)"></i>Perceptual</span><span><i class="sw sw-fam" style="--c:var(--f-dyn2d)"></i>2D Dyn.</span><span><i class="sw sw-fam" style="--c:var(--f-geom25)"></i>2.5D Geom.</span><span><i class="sw sw-fam" style="--c:var(--f-geom3d)"></i>3D Geom.</span><span><i class="sw sw-fam" style="--c:var(--f-dyn3d)"></i>3D Dyn.</span></div>
+      </div>
+      <p class="lb-hint">Swipe the table sideways for the five families. The model names stay in place.</p>
+      <div class="t-wrap lb-wrap"><table class="lb" id="lbTable"></table></div>
+      <p class="cap">Family scores are in 0 to 1, higher is better; VQA is the mean share of questions answered right. Elo has no fixed zero: only differences mean something. A dash means the model was not in the human study (it came out too late).</p>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>Human Elo against VLM Elo</h3><span class="tag real">paper Fig. 2, right</span></div>
+      <div class="legend"><span><i class="mk mk-prop"></i>proprietary</span><span><i class="mk mk-open"></i>open-weight</span><span><i class="ln ln-eq"></i>equal ratings</span></div>
+      <canvas id="eloCv" class="fig chart tall" aria-label="Scatter of human Elo against VLM Elo"></canvas>
+      <p class="cap">Each dot is one model. Points above the dashed line are rated higher by the judge than by people. The model at the left edge has a VLM Elo but no human Elo, so it sits on its own strip. <b>Tap a dot</b> to pick that model.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Picked model</h3><span class="tag real">from Fig. 4, 5 and 8</span></div>
+      <div id="lbPick" class="pick"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Motion is the hard part</h2><p>Every model copies how a scene looks and where its surfaces are better than how its matter moves. The gap stays at the top of the board.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Static against dynamic, per model</h3><span class="tag real">the idea of Fig. 8, from Fig. 4</span></div>
+      <div class="legend"><span><i class="mk mk-static"></i>static: mean of Perceptual and 3D Geometry</span><span><i class="mk mk-dyn"></i>dynamic: mean of 2D and 3D Dynamics</span></div>
+      <canvas id="gapCv" class="fig chart dumb" aria-label="Static and dynamic scores for each model"></canvas>
+      <p class="cap" id="gapCap">For every model the dynamic dot sits to the left of the static one. <b>Tap a row</b> to read its two values.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Which scenes hurt which score</h3><span class="tag real">effects quoted in Sec. 4.3</span></div>
+      <div class="legend"><span><i class="sw" style="--c:var(--neg)"></i>lower score</span><span><i class="sw" style="--c:var(--pos)"></i>higher score</span><span><i class="sw sw-weak"></i>not consistent across models</span></div>
+      <canvas id="effCv" class="fig chart eff" aria-label="Standardized effects of scene categories on scores"></canvas>
+      <p class="cap">Standardized change in a score on one kind of scene, against its counterpart (or, for a matter family, against all scenes). Real clips and mixed materials hurt the look of the copy. Cloth and rope hurt 2D motion and depth. Driven scenes are harder to quiz but have better 3D geometry. The flowing effect falls short of the paper's consistency test.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>How agents write motion</h3><span class="tag real">Sec. 4.4, Table A4</span></div>
+      <div class="strat" id="stratBar" role="img" aria-label="Share of solutions by motion strategy"></div>
+      <ul class="strat-key" id="stratKey"></ul>
+      <ul class="list" id="stratNotes"></ul>
+      <p class="cap">Analytic motion means formulas for position against time, for example a parabola for a thrown ball. Custom simulation means the agent writes its own solver and steps it. Prescribed paths can score well, so the benchmark does not yet reward real physics for its own sake; the paper names this as a limit.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>More reasoning, better motion</h3><span class="tag real">Sec. 4.5</span></div>
+      <canvas id="reasonCv" class="fig chart short" aria-label="Astra scores at three reasoning efforts"></canvas>
+      <div class="readout" id="reasonVqa"></div>
+      <p class="cap">One model at three reasoning efforts. Each step up raises the Overall score and both motion scores, and costs more tokens. Across different models, more tokens did not reliably buy a better copy; within one model they did.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>Try it: a small 4D inverse-graphics bench</h2><p>Four reference scenes run in your browser, one per matter family. A submission is a short JavaScript program that builds a 4D world. Pick a preset that copies the scene in one of the ways agents do, or edit the code, then run it and see how a toy scorer with the same five families grades it.</p></div></div>
+  <div class="grid play">
+    <article class="card span-8">
+      <div class="card-top"><h3>Reference and submission</h3><span class="tag toy">original toy, no benchmark data</span></div>
+      <div class="ctrls top">
+        <div class="seg" id="sceneSeg" role="group" aria-label="Scene"><button data-v="rigid" class="on">rigid</button><button data-v="deformable">deformable</button><button data-v="codim">cloth</button><button data-v="flowing">flowing</button></div>
+        <div class="ctrl"><div class="seg" id="viewSeg" role="group" aria-label="View"><button data-v="both" class="on">side by side</button><button data-v="overlay">overlay</button></div><button class="btn" id="pathsBtn" aria-pressed="false">paths</button></div>
+      </div>
+      <div class="duo play-views" id="playViews">
+        <div class="panel"><canvas id="playRef" class="fig wide" aria-label="Reference scene"></canvas><span class="lab" id="refLab">reference</span></div>
+        <div class="panel sub"><canvas id="playSub" class="fig wide" aria-label="Submission"></canvas><span class="lab">submission</span><span class="empty" id="subEmpty">run a submission to see it here</span></div>
+      </div>
+      <div class="ctrls scrub-row">
+        <button class="btn icon" id="playBtn" aria-label="Play">play</button>
+        <input type="range" id="scrub" min="0" max="89" step="1" value="0" aria-label="Frame">
+        <output id="scrubOut" class="mono">frame 0</output>
+      </div>
+      <p class="cap" id="sceneBlurb"></p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Score</h3><span class="tag toy">simplified metrics</span></div>
+      <div id="scoreCard" class="score-card">
+        <div class="sc-overall"><b data-k="overall">–</b><span>Overall, the mean of the five</span></div>
+        <div class="sc-row" data-k="perceptual"><span>Perceptual</span><div class="bar"><i style="--c:var(--f-perceptual)"></i></div><output>–</output></div>
+        <div class="sc-row" data-k="dyn2d"><span>2D Dynamics</span><div class="bar"><i style="--c:var(--f-dyn2d)"></i></div><output>–</output></div>
+        <div class="sc-row" data-k="geom25"><span>2.5D Geometry</span><div class="bar"><i style="--c:var(--f-geom25)"></i></div><output>–</output></div>
+        <div class="sc-row" data-k="geom3d"><span>3D Geometry</span><div class="bar"><i style="--c:var(--f-geom3d)"></i></div><output>–</output></div>
+        <div class="sc-row" data-k="dyn3d"><span>3D Dynamics</span><div class="bar"><i style="--c:var(--f-dyn3d)"></i></div><output>–</output></div>
+      </div>
+      <div class="sc-paper" id="scPaper"></div>
+      <ol class="run-hist" id="runHist" aria-label="Runs on this scene"></ol>
+      <p class="cap">The bars show the last run. Section 07 says how each toy metric differs from the paper's.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Submission code</h3><span class="tag toy">runs in a Web Worker</span></div>
+      <div class="ctrls top">
+        <div class="seg" id="subSeg" role="group" aria-label="Preset submission"></div>
+        <button class="btn primary" id="runBtn">run and score</button>
+      </div>
+      <p class="cap" id="presetNote"></p>
+      <textarea id="code" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Submission code"></textarea>
+      <pre id="runLog" class="log" aria-live="polite">The playground loads when you scroll here.</pre>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>What is real here, and what is a toy</h2><p>Sections 01 to 05 report the paper. Section 06 is a small original model of its idea, not a copy of the benchmark.</p></div></div>
+  <div class="grid">
+    <article class="card span-6 prose">
+      <p><b>From the paper.</b> Every number in sections 01 to 05: the scene counts and splits, the leaderboard, VQA accuracy, the human study, the category effects, the strategy shares and the reasoning-effort results. The metric formulas of section 03 are the paper's, shortened. The static and dynamic dots of section 05 are recomputed from the family scores of Fig. 4 as the paper defines them, so they can differ from Fig. 8 in the last digit.</p>
+      <p><b>Not shown.</b> The paper's videos and renders, its per-scene results, its confidence intervals, and the cost chart of Fig. 2 (left).</p>
+    </article>
+    <article class="card span-6 prose">
+      <p><b>Toy.</b> The playground's four scenes are small simulations written for this page. Its renderer is WebGL2, not Blender. Submissions are JavaScript in a sandbox, not Python with a GPU. The scorer keeps the five families but uses simple stand-ins: an image similarity of low-resolution renders instead of DINOv3, depth maps from the true world instead of estimated depth, and no alignment step (the submission gets the reference camera and units).</p>
+      <p><b>Licence.</b> The 4DCodeBench code, datasets and renders have no licence, so this page uses none of them. The playground code is original and uses no benchmark assets.</p>
+    </article>
+    <article class="card span-12">
+      <div class="refs">
+        <div>Shen R., Kovačič Ž., Kulits P., Wang X., Li Z., Tenenbaum J. B., Yuille A., Chen J. &amp; Wu J. 2026, <em>4DCodeBench: Benchmarking Agents on Inverse Graphics of Dynamic Scenes</em>, <a href="https://arxiv.org/abs/2610.03715" target="_blank" rel="noopener">arXiv:2610.03715</a>. <a href="https://4dcodebench.com" target="_blank" rel="noopener">4dcodebench.com</a> · <a href="https://github.com/4DCodeBench/4DCodeBench" target="_blank" rel="noopener">github.com/4DCodeBench/4DCodeBench</a></div>
+        <div>Bradley R. A. &amp; Terry M. E. 1952, Biometrika 39, 324 — the paired-comparison model behind the Elo ratings.</div>
+        <div>Chiang W.-L. et al. 2024, ICML — Chatbot Arena, the adaptive pair sampling used in the human study.</div>
+        <div>Everingham M. et al. 2010, IJCV 88, 303 — PASCAL VOC, the source of the boundary band in Dynamic IoU.</div>
+        <div>Besl P. J. &amp; McKay N. D. 1992, TPAMI 14, 239 — ICP, used to align a copy with the true world.</div>
+      </div>
+    </article>
+  </div>
+</section>
+
+</main>
+<div id="tip" role="status" aria-live="polite"></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
