@@ -12,6 +12,21 @@
 //  budget (12 ms in a worker), then sends one frame. Ticks repeat about
 //  every 16 ms.
 //
+//  DRAWN CHAIN (Go). At high speed one frame holds up to 1500 steps (7 tau),
+//  more than the 2 tau velocity memory, so each raw frame is a new thermal
+//  sample: the beads jump 2 to 3 A per frame on a 3.8 A bond. The frame x is
+//  therefore a display chain, not the last state:
+//    1  the mean of the chain over the frame, sampled every AVG steps
+//    2  that mean fitted onto the last drawn chain, so it does not turn
+//    3  an exponential mean over frames. The time constant is the shorter
+//       of TAU_SIM (tau of simulated time) and TAU_WALL (wall seconds), so
+//       a chain lags the state by 0.3 s at most and folds at the same speed
+//    4  bonds set back to the native length (a mean cuts the corners)
+//    5  a part of the turn to the native fit, time constant TURN_S in wall
+//       seconds, so a folded chain comes to rest on the ghost
+//  obs, formed and samples stay the instantaneous values. 'reset' and
+//  'go-init' start a new display chain.
+//
 //  MESSAGES IN
 //    go-init  { protein, seed, T, gamma, pull, start, rate, running }
 //    hp-init  { seq, dim, replicas, mode, Tlo, Thi, Tfix, seed, rate, running }
@@ -35,13 +50,20 @@ let kind = null, sys = null, hp = null, rnd = null, dead = false;
 let rate = 200, running = true, timer = 0, gen = 0;
 let samples = [], doneSinceFrame = 0, lastPost = performance.now();
 const BUDGET = opt.budget ?? 12, PERIOD = 16, SAMPLE = 50;
+const AVG = 5, TAU_SIM = 1.5, TAU_WALL = 0.3, TURN_S = 1.2;
+let acc = null, accN = 0, disp = null, dispAt = 0;
 
 function goTick() {
   const t0 = performance.now();
   let n = 0;
   while (n < rate && performance.now() - t0 < BUDGET) {
     const k = Math.min(SAMPLE, rate - n);
-    M.step(sys, k); n += k;
+    for (let j = 0; j < k; j += AVG) {
+      M.step(sys, Math.min(AVG, k - j));
+      const x = sys.x; for (let i = 0; i < x.length; i++) acc[i] += x[i];
+      accN++;
+    }
+    n += k;
     let q = 0; for (let c = 0; c < sys.nc; c++) q += sys.formed[c];
     let cx = 0, cy = 0, cz = 0; const x = sys.x, N = sys.N;
     for (let i = 0; i < N; i++) { cx += x[3 * i]; cy += x[3 * i + 1]; cz += x[3 * i + 2]; }
@@ -60,13 +82,54 @@ function hpTick() {
   }
   doneSinceFrame += n;
 }
+// The display chain (see DRAWN CHAIN in the header).
+function drawn(now) {
+  const N = sys.N, L = 3 * N;
+  const mean = new Float64Array(L);
+  if (accN) for (let i = 0; i < L; i++) mean[i] = acc[i] / accN; else mean.set(sys.x);
+  const span = accN * AVG * sys.P.dt;
+  acc.fill(0); accN = 0;
+  if (!disp) {
+    disp = M.applyFit(M.kabsch(mean, sys.nat, N), mean, new Float64Array(L), N);
+    dispAt = now; return disp;
+  }
+  const a = M.applyFit(M.kabsch(mean, disp, N), mean, new Float64Array(L), N);
+  const dw = Math.min(0.25, (now - dispAt) / 1000);
+  const w = 1 - Math.exp(-Math.min(span / TAU_SIM, dw / TAU_WALL));
+  for (let i = 0; i < L; i++) disp[i] += w * (a[i] - disp[i]);
+  // A mean of a moving chain cuts its corners, and the bonds get 10 to 25 %
+  // short. A few passes set each bond back to its native length r0.
+  const r0 = sys.r0;
+  for (let it = 0; it < 4; it++) for (let i = 0; i < N - 1; i++) {
+    const p = 3 * i, q = p + 3;
+    const dx = disp[q] - disp[p], dy = disp[q + 1] - disp[p + 1], dz = disp[q + 2] - disp[p + 2];
+    const d = Math.hypot(dx, dy, dz); if (d < 1e-9) continue;
+    const c = 0.5 * (d - r0[i]) / d;
+    disp[p] += c * dx; disp[p + 1] += c * dy; disp[p + 2] += c * dz;
+    disp[q] -= c * dx; disp[q + 1] -= c * dy; disp[q + 2] -= c * dz;
+  }
+  // A part of the turn to the native fit, about the native centroid.
+  const fit = M.kabsch(disp, sys.nat, N), [q0, q1, q2, q3] = fit.q;
+  const b = 1 - Math.exp(-dw / TURN_S);
+  dispAt = now;
+  const half = Math.acos(Math.min(1, Math.abs(q0))), sg = q0 < 0 ? -1 : 1;
+  const sv = Math.sin(half), h2 = half * b;
+  const p0 = Math.cos(h2), m = sv > 1e-9 ? sg * Math.sin(h2) / sv : 0;
+  const p1 = q1 * m, p2 = q2 * m, p3 = q3 * m;
+  const R = [
+    p0 * p0 + p1 * p1 - p2 * p2 - p3 * p3, 2 * (p1 * p2 - p0 * p3), 2 * (p1 * p3 + p0 * p2),
+    2 * (p1 * p2 + p0 * p3), p0 * p0 - p1 * p1 + p2 * p2 - p3 * p3, 2 * (p2 * p3 - p0 * p1),
+    2 * (p1 * p3 - p0 * p2), 2 * (p2 * p3 + p0 * p1), p0 * p0 - p1 * p1 - p2 * p2 + p3 * p3,
+  ];
+  // The centroid goes to the native centroid at once: the fit pins it there.
+  return M.applyFit({ R, ca: fit.ca, cb: fit.cb }, disp, disp, N);
+}
 function post() {
   const now = performance.now(), sps = doneSinceFrame / Math.max(1e-3, (now - lastPost) / 1000);
   lastPost = now; doneSinceFrame = 0;
   if (kind === 'go') {
-    const xf = new Float64Array(3 * sys.N);
-    const obs = M.observe(sys, xf);
-    const x = Float32Array.from(xf), formed = Uint8Array.from(sys.formed), s = Float32Array.from(samples);
+    const obs = M.observe(sys);
+    const x = Float32Array.from(drawn(now)), formed = Uint8Array.from(sys.formed), s = Float32Array.from(samples);
     samples = [];
     send({ type: 'frame', gen, kind, x, obs, formed, samples: s, sps, T: sys.T, Eparts: Array.from(sys.Eparts), blowups: sys.blowups || 0 });
   } else if (kind === 'hp') {
@@ -94,7 +157,7 @@ function start(which) {
   if (which === 'native') M.initNative(sys);
   else if (which === 'coil') M.initCoil(sys);
   else M.initExtended(sys);
-  samples = [];
+  samples = []; acc = new Float64Array(3 * sys.N); accN = 0; disp = null;
 }
 
 function handle(m) {

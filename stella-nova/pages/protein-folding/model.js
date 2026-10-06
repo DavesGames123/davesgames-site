@@ -294,7 +294,7 @@ export function kabsch(a, b, n) {
     2 * (q1 * q3 - q0 * q2), 2 * (q2 * q3 + q0 * q1), q0 * q0 - q1 * q1 - q2 * q2 + q3 * q3,
   ];
   const rmsd = Math.sqrt(Math.max(0, (ga + gb - 2 * val[m]) / n));
-  return { rmsd, R, ca, cb };
+  return { rmsd, R, ca, cb, q: [q0, q1, q2, q3] };
 }
 // Cyclic Jacobi eigen solver for a symmetric 4x4 matrix.
 function jacobi4(A0) {
