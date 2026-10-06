@@ -114,7 +114,7 @@ const VIEWS = {
 };
 function fitDist(k) {
   const c = $('view'), a = c.clientWidth / Math.max(1, c.clientHeight);
-  const wide = a < 1.1 ? 1 + 0.9 * (1.1 - a) * Math.min(1, k) : 1;
+  const wide = a < 1.1 ? 1 + 0.55 * (1.1 - a) * Math.min(1, k) : 1;
   return S.cur.sc.box.R * 3.3 * k * wide;
 }
 function setView(name, soft) {
