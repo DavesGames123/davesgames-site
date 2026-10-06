@@ -694,35 +694,41 @@ window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;
 // The fade scales both the dye colour and the push of an emitter, so a jet
 // eases in and out with no step. calm (0..1, 1 = slowest) sets rate, the speed
 // of every drift, the actor life and the fade time. The full window needs more
-// push than the panel view, so the strength multiplier is 6 at calm 0 and 3 at
-// calm 1. exit() stops the director and puts back the GUI and the boot scene.
+// push than the panel view, so the strength multiplier is 4 at calm 0 and 2.4
+// at calm 1. A scene has 2 or 3 slots (wake 1 or 2), so with the crossfade at
+// most 6 emitters push at one time. The palette has two hues, and the hue
+// drifts 0.3 degrees per second times rate. The saver viscosity is SAVER_NU.
+// exit() stops the director and puts back the GUI, nu 0 and the boot scene.
 let saverRun=null;
 function saverRng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
 function saverHsl(h,s,l){h=((h%360)+360)%360/360;const f=n=>{const k=(n+h*12)%12,a=s*Math.min(l,1-l);return l-a*Math.max(-1,Math.min(k-3,9-k,1));};return[f(0),f(8),f(4)];}
 const SAVER_SCENES=['crossfire','carousel','wake','fountain'];
+// The saver viscosity. With nu 0 the full window breaks into fine eddies of
+// every size. nu 4 (a = nu dt = 0.07 cells^2 per step) keeps the large vortices.
+const SAVER_NU=4;
 // Make one actor for slot i of the scene: a jet (or a vortex) with a base place,
 // a base angle, drift amplitudes and phases, a hue and a life.
-function saverSpawn(R,i,now){const sc=R.scene,r=R.rng,M=0.04;let x,y,a,type='jet',wob=0.25+r()*0.35,str=90+r()*90,w=0.02+r()*0.04;
+function saverSpawn(R,i,now){const sc=R.scene,r=R.rng,M=0.04;let x,y,a,type='jet',wob=0.06+r()*0.12,str=70+r()*50,w=0.025+r()*0.03;
   const aim=(px,py)=>Math.atan2(py-y,px-x);
   if(sc==='crossfire'){const ed=Math.floor(r()*4),u=0.15+r()*0.7;
     if(ed===0){x=M;y=u;}else if(ed===1){x=1-M;y=u;}else if(ed===2){x=u;y=M;}else{x=u;y=1-M;}
-    a=aim(0.5+(r()-0.5)*0.4,0.5+(r()-0.5)*0.4)+(r()-0.5)*0.5;}
+    a=aim(0.5,0.5)+R.hand*(0.35+r()*0.25);}
   else if(sc==='carousel'){const ph=R.ring+i/R.slots*Math.PI*2+(r()-0.5)*0.5,rad=0.22+r()*0.12;
     x=0.5+Math.cos(ph)*rad*R.ch/R.cw;y=0.5+Math.sin(ph)*rad;a=ph+R.hand*(Math.PI/2+0.15+r()*0.3);str*=0.8;
-    if(r()<0.25){type='vortex';w=0.05+r()*0.04;str=60+r()*60;}}
+    if(r()<0.15){type='vortex';w=0.05+r()*0.04;str=40+r()*40;}}
   else if(sc==='wake'){if(i===0){x=M;y=0.5+(r()-0.5)*0.3;a=(r()-0.5)*0.3;w=0.12+r()*0.12;str=70+r()*40;wob=0.08+r()*0.1;}
-    else{const top=r()<0.5;x=0.15+r()*0.6;y=top?M:1-M;a=(top?1:-1)*(Math.PI/2-0.4-r()*0.5);str*=0.7;}}
-  else{const up=(i+R.flip)%2===0;x=0.1+0.8*(i+0.2+0.6*r())/R.slots;y=up?1-M:M;a=(up?-1:1)*Math.PI/2+(r()-0.5)*0.9;wob=0.3+r()*0.4;str*=0.8;}
-  if(type==='jet'&&r()<0.12&&sc!=='wake'){type='vortex';w=0.05+r()*0.05;str=60+r()*60;x=0.2+r()*0.6;y=0.2+r()*0.6;}
+    else{const top=r()<0.5;x=0.15+r()*0.6;y=top?M:1-M;a=(top?1:-1)*(Math.PI/2-0.4-r()*0.5);str*=0.5;}}
+  else{const up=(i+R.flip)%2===0;x=0.1+0.8*(i+0.2+0.6*r())/R.slots;y=up?1-M:M;a=(up?-1:1)*Math.PI/2+(r()-0.5)*0.5;wob=0.1+r()*0.12;str*=0.8;}
+  if(type==='jet'&&r()<0.06&&sc!=='wake'){type='vortex';w=0.05+r()*0.05;str=40+r()*40;x=0.2+r()*0.6;y=0.2+r()*0.6;}
   const e=createEmitter(type,x*R.cw,y*R.ch);e.angle=a;e.strength=str;e.width=w;e.dyeR=e.dyeG=e.dyeB=0;e.mult=0;
-  const life=(10+r()*12)/Math.sqrt(R.rate),fade=Math.min(life*0.3,4.5/Math.sqrt(R.rate));
-  return{e,bx:x,by:y,ba:a,wob,str,w:(0.05+r()*0.08)*R.rate,ph:r()*6.283,pd:(0.01+r()*0.025),
-    hue:R.hues[Math.floor(r()*R.hues.length)]+(r()-0.5)*30,sat:0.65+r()*0.3,lit:0.45+r()*0.12,birth:now,life,fade,next:false,slot:i};}
+  const life=(18+r()*14)/Math.sqrt(R.rate),fade=Math.min(life*0.3,6/Math.sqrt(R.rate));
+  return{e,bx:x,by:y,ba:a,wob,str,w:(0.04+r()*0.05)*R.rate,ph:r()*6.283,pd:(0.008+r()*0.015),
+    hue:R.hues[i%R.hues.length]+(r()-0.5)*12,sat:0.6+r()*0.25,lit:0.4+r()*0.08,birth:now,life,fade,next:false,slot:i};}
 function saverStart(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));let seed=opts.seed;if(!Number.isFinite(+seed))seed=Math.floor(Math.random()*4294967296);
-  const rng=saverRng(+seed),rate=1-0.6*calm,k=6*(1-0.5*calm);
+  const rng=saverRng(+seed),rate=1-0.6*calm,k=4*(1-0.4*calm);
   const R={rng,rate,k,cw:CW,ch:CH,scene:SAVER_SCENES[Math.floor(rng()*SAVER_SCENES.length)],ring:rng()*6.283,hand:rng()<0.5?-1:1,actors:[],raf:0,t0:performance.now(),hueShift:0};
-  const base=rng()*360,scheme=Math.floor(rng()*3);R.hues=scheme===0?[base,base+35,base-35]:scheme===1?[base,base+120,base+240]:[base,base+180,base+20];
-  R.flip=rng()<0.5?0:1;R.slots=R.scene==='wake'?2+Math.floor(rng()*2):3+Math.floor(rng()*3);
+  const base=rng()*360,scheme=Math.floor(rng()*3);R.hues=scheme===0?[base,base+30]:scheme===1?[base,base+150]:[base,base+180];
+  R.flip=rng()<0.5?0:1;R.slots=R.scene==='wake'?1+Math.floor(rng()*2):2+Math.floor(rng()*2);
   clearAll();SIM.selectedId=-1;
   if(R.scene==='wake'||(R.scene==='crossfire'&&rng()<0.5)){const types=['circle','airfoil','star','gear','circle'],t=types[Math.floor(rng()*types.length)];
     const s=createShape(t,CW*(R.scene==='wake'?0.28+rng()*0.1:0.4+rng()*0.2),CH*(0.4+rng()*0.2));const sz=Math.min(CW,CH)*(0.09+rng()*0.06);
@@ -734,7 +740,7 @@ function saverStart(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));let s
   for(let i=0;i<R.slots;i++){const A=saverSpawn(R,i,now);const age=A.fade+rng()*(A.life-2*A.fade)*0.7;A.birth=now-age*1000;R.actors.push(A);emitters.push(A.e);}
   R.scene0=R.scene;saverRun=R;
   R.label=opts.labels===false||typeof opts.label!=='function'?null:opts.label;R.plateT=0;
-  let last=now;(function tick(t){if(saverRun!==R)return;R.raf=requestAnimationFrame(tick);const dt=Math.min((t-last)/1000,0.1);last=t;R.hueShift+=dt*rate*1.2;
+  let last=now;(function tick(t){if(saverRun!==R)return;R.raf=requestAnimationFrame(tick);const dt=Math.min((t-last)/1000,0.1);last=t;R.hueShift+=dt*rate*0.3;
     if(R.label&&t-R.plateT>=1000){R.plateT=t;saverPlate(R);}
     const cw=CW,ch=CH;
     for(let j=R.actors.length-1;j>=0;j--){const A=R.actors[j],e=A.e,age=(t-A.birth)/1000;
@@ -743,15 +749,15 @@ function saverStart(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));let s
       const s=x=>x<=0?0:x>=1?1:x*x*(3-2*x),f=s(age/A.fade)*s((A.life-age)/A.fade),tt=age*A.w;
       e.angle=A.ba+A.wob*Math.sin(tt+A.ph)+0.4*A.wob*Math.sin(tt*2.3+A.ph*1.7);
       e.x=(A.bx+A.pd*Math.sin(tt*0.7+A.ph*2.1))*cw;e.y=(A.by+A.pd*Math.cos(tt*0.6+A.ph))*ch;
-      e.mult=R.k*f*(0.75+0.25*Math.sin(tt*1.3+A.ph*0.5));
-      const c=saverHsl(A.hue+R.hueShift,A.sat,A.lit),g=f*1.05;e.dyeR=c[0]*g;e.dyeG=c[1]*g;e.dyeB=c[2]*g;}
+      e.mult=R.k*f*(0.85+0.15*Math.sin(tt*0.8+A.ph*0.5));
+      const c=saverHsl(A.hue+R.hueShift,A.sat,A.lit),g=f*(e.type==='vortex'?0.45:0.9);e.dyeR=c[0]*g;e.dyeG=c[1]*g;e.dyeB=c[2]*g;}
   })(now);
   return R;}
 // The label plate (opts.label) names the scene and gives the equations that
 // step() solves: momentum and incompressibility, then the projection (the
 // pressure Poisson solve by SIM.jacobiIters Jacobi sweeps and the gradient
-// subtraction). The saver sets SIM.viscosity to 0, so step() skips the viscous
-// stage. The params give nu, dt, the Jacobi sweeps and the jet and stirrer
+// subtraction). The saver sets SIM.viscosity to SAVER_NU, so step() runs the
+// viscous stage. The params give nu, dt, the Jacobi sweeps and the jet and stirrer
 // count. The lines give the scene, the obstacle and the grid. The TeX and the
 // rules match the equations panel (equations.js). The director calls it every 1 s.
 // The plate code extract: shaders/jacobi.frag.glsl main(), laid out to read
@@ -786,11 +792,11 @@ window.snSaver={async enter(opts){
   await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
   const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #vec-btn,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
-  resize();SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=0;SIM.bloom=0.4;setCmap(3);
+  resize();SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.bloom=0.25;setCmap(3);
   const R=saverStart(opts);window.__saverScene=R.scene+'/'+R.slots;
   const until=performance.now()+2400;(function pw(){if(performance.now()<until){for(let i=0;i<3;i++){step();frame++;}requestAnimationFrame(pw);}})();
   return{canvas,warmupMs:2500};},
   exit(){if(saverRun){cancelAnimationFrame(saverRun.raf);saverRun=null;}
     const st=document.getElementById('saver-style');if(st)st.remove();document.documentElement.classList.remove('saver');
-    resize();clearAll();defaultSetup();}};
+    SIM.viscosity=0;SIM.bloom=0.4;resize();clearAll();defaultSetup();}};
 })();
