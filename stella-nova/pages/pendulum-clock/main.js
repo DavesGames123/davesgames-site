@@ -108,6 +108,8 @@ const PHASE = [
   ['lock', 'Locked', 'The tooth rests on the locking face: the wheel is dead still.'],
   ['drop', 'Drop', 'A tooth has left a pallet; the wheel turns free to the other one.'],
 ];
+// the grasshopper nib rolls on the tooth: it does not slide
+const IMPULSE_NIB = 'The tooth pushes the nib and the pendulum. The nib does not slide on the tooth.';
 
 // ── unit swap ───────────────────────────────────────────────────────────────
 async function swapTo(id) {
@@ -348,7 +350,11 @@ function fillNums() {
   html += row('Power to the wheel', `${f(Tw * P_TOOTH / (isFinite(T) ? T : T0) * 1e6, 1)} µW`);
   if (html !== lastNums) { $('nums').innerHTML = html; lastNums = html; }
   const ph = phase();
-  if (ph !== lastPh) { lastPh = ph; const P = PHASE[ph]; $('now').className = 'proc ph-' + P[0]; $('now').innerHTML = `<b>${P[1]}</b><span>${P[2]}</span>`; }
+  const phKey = ph + S.cur.id;
+  if (phKey !== lastPh) {
+    lastPh = phKey; const P = PHASE[ph], txt = ph === 0 && S.cur.id === 'grasshopper' ? IMPULSE_NIB : P[2];
+    $('now').className = 'proc ph-' + P[0]; $('now').innerHTML = `<b>${P[1]}</b><span>${txt}</span>`;
+  }
 }
 function fillEqs() {
   const id = S.cur.id;
