@@ -25,7 +25,7 @@
 :root{
   --bg:#0e0f12; --bg2:#17191e; --bg3:#20232a; --ink:#f3f1ea; --dim:#9297a1; --faint:#3a3e47;
   --line:rgba(255,255,255,0.08); --line-b:rgba(255,255,255,0.16);
-  --hi-ink:#ffd23f; --hi-band:transparent; --cut:#ff5b4d; --acc:#ffd23f; --acc-ink:#16130a;
+  --hi-ink:#ffd23f; --hi-band:transparent; --ex-band:rgba(255,210,63,0.4); --cut:#ff5b4d; --acc:#ffd23f; --acc-ink:#16130a;
   --f-disp:'Space Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
   --f-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
   --f-serif:'Instrument Serif',Georgia,serif;
@@ -36,14 +36,14 @@
   :root:not([data-theme="dark"]){
     --bg:#f4f1e8; --bg2:#fffdf7; --bg3:#ebe6d9; --ink:#15161a; --dim:#62666f; --faint:#cfc9ba;
     --line:rgba(0,0,0,0.08); --line-b:rgba(0,0,0,0.18);
-    --hi-ink:#15161a; --hi-band:#ffd84d; --cut:#e0372a; --acc:#15161a; --acc-ink:#fffdf7;
+    --hi-ink:#15161a; --hi-band:#ffd84d; --ex-band:#ffd84d; --cut:#e0372a; --acc:#15161a; --acc-ink:#fffdf7;
     color-scheme:light;
   }
 }
 :root[data-theme="light"]{
   --bg:#f4f1e8; --bg2:#fffdf7; --bg3:#ebe6d9; --ink:#15161a; --dim:#62666f; --faint:#cfc9ba;
   --line:rgba(0,0,0,0.08); --line-b:rgba(0,0,0,0.18);
-  --hi-ink:#15161a; --hi-band:#ffd84d; --cut:#e0372a; --acc:#15161a; --acc-ink:#fffdf7;
+  --hi-ink:#15161a; --hi-band:#ffd84d; --ex-band:#ffd84d; --cut:#e0372a; --acc:#15161a; --acc-ink:#fffdf7;
   color-scheme:light;
 }
 
@@ -106,7 +106,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .alts button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .alts .tag{display:inline-flex;align-items:center;min-height:32px;padding:0 11px;font:500 12px/1 var(--f-mono);color:var(--dim);background:transparent;border-color:var(--line);align-self:center}
 .ex{max-width:42em;min-height:2.6em;font:italic 400 clamp(19px,2.3vw,25px)/1.3 var(--f-serif);color:var(--dim);text-wrap:balance}
-.ex b{font-weight:400;color:var(--ink);background:linear-gradient(transparent 70%,color-mix(in srgb,var(--hi-ink) 40%,transparent) 70%)}
+.ex b{font-weight:400;color:var(--ink);background:linear-gradient(transparent 70%,var(--ex-band) 70%)}
 .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .act{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);font:600 15px/1 var(--f-disp);color:var(--ink);background:var(--bg2)}
 .act:hover{background:var(--bg3)}
