@@ -98,6 +98,7 @@ window.SN_SAVER_CATALOG = {
     'differential': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: open, clutch and Torsen units, labelled with the speed and torque split.' },
     'planetary-gearbox': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: simple set and Simpson train, labelled with the Willis equation.' },
     'geneva-cams': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: 4- and 6-slot Geneva drives and a disc cam, whole unit, close view, from above, exploded, part close-ups.' },
+    'linkages': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: four-bar coupler curve, Peaucellier straight line and a Jansen leg, upright on a backboard.' },
     'spirograph': { tier: 2, default: true, hook: true, note: 'Mechanism page with its own saver tour: cycles the presets, draws each one calmly with the gears shown, labelled with the hypotrochoid or epitrochoid and gcd(R, r).' },
     'pin-tumbler-lock': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: right and wrong keys against the shear line, pin and wafer locks.' },
     'stirling-engine': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: explode and assemble cycles, labelled with the Stirling cycle.' },
