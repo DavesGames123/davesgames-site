@@ -100,6 +100,7 @@ window.SN_SAVER_CATALOG = {
     'geneva-cams': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: 4- and 6-slot Geneva drives and a disc cam, whole unit, close view, from above, exploded, part close-ups.' },
     'linkages': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: four-bar coupler curve, Peaucellier straight line and a Jansen leg, upright on a backboard.' },
     'manual-gearbox': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: shifts through five gears while the camera visits the gear set, the synchro, the top and the exploded box, then part close-ups.' },
+    'harmonic-drive': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: a strain wave gear with a flexing flexspline and a two-disc cycloidal drive, whole, mesh close-up, from above, exploded, part close-ups.' },
     'spirograph': { tier: 2, default: true, hook: true, note: 'Mechanism page with its own saver tour: cycles the presets, draws each one calmly with the gears shown, labelled with the hypotrochoid or epitrochoid and gcd(R, r).' },
     'pin-tumbler-lock': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: right and wrong keys against the shear line, pin and wafer locks.' },
     'stirling-engine': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: explode and assemble cycles, labelled with the Stirling cycle.' },
