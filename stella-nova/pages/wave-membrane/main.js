@@ -43,7 +43,7 @@
   const TAU = Math.PI * 2;
   const S = 1.5;            // half-width of the membrane in world units
   const HEIGHT = 0.85;      // world height per unit of u
-  let heightK = 1;          // height scale: 1 on the page, 0.75-1.25 in the saver
+  let heightK = 1;          // height scale: 1 on the page, 0.5-0.8 in the saver
   const GRID = 96;          // solver nodes per side
   const CFL = 0.5;          // below the 2D limit 1/sqrt(2)
   const STEP_RATE = 110;    // solver steps per real second at c = 1, rate = 1
@@ -627,36 +627,45 @@
   // (fadePlane), and the look never repeats twice in a row. On the page
   // (saverOn false) none of this runs: paint() keeps its ramps, heightK
   // stays 1, the wire and the fade plane stay hidden.
+  // BRIGHTNESS AND MOTION. Ambient plus key light is 0.85 or less in each
+  // rig, and the looks have a wide, dim specular lobe (shininess 20 to 36).
+  // A narrow white lobe on the steep crests of a fine mesh gave white
+  // speckles. The modes stop at about omega = pi sqrt(13), and a strike
+  // bump is 0.08 to 0.12 wide, so no scene holds many fine ripples.
   const SAVER_PAIRS = {
-    square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 4, 1], [1, 2, 3, 3], [4, 1, 1, 4], [3, 3, 1, 5], [5, 2, 2, 1]],
-    circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2], [0, 3, 2, 1], [4, 1, 1, 2], [2, 2, 0, 1], [5, 1, 0, 2]],
+    square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 3, 1], [1, 2, 3, 1], [2, 2, 1, 3]],
+    circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2], [0, 3, 2, 1], [2, 2, 0, 1]],
   };
   const SAVER_SINGLES = {
-    square: [[3, 2], [4, 3], [5, 4], [2, 5], [6, 3], [3, 3]],
-    circle: [[2, 3], [4, 2], [3, 3], [0, 3], [5, 2], [1, 4]],
+    square: [[3, 2], [2, 3], [3, 3], [4, 2], [1, 3]],
+    circle: [[2, 2], [3, 2], [0, 3], [1, 3], [4, 1]],
   };
   // Ramps run trough, zero, crest (paint maps u/|u|max from -1..1 to 0..1).
+  // The zero entry is a mid tone (0.62 or less), so a lit flat is not white.
   const SAVER_LOOKS = [
-    { name: 'Calfskin', ramp: [[0.30,0.17,0.08],[0.55,0.38,0.22],[0.80,0.68,0.50],[0.93,0.82,0.60],[1.00,0.95,0.82]], shin: 6, spec: 0x1a140c, opacity: 1, bg: 0x0c0805, rim: 0xc9a77a, node: [0.35,0.18,0.07], wire: 0x6b4a2a, floor: 0x3a2a18, styles: ['smooth', 'contour', 'nodal'] },
-    { name: 'Mylar', ramp: [[0.10,0.22,0.55],[0.42,0.55,0.80],[0.70,0.74,0.82],[0.98,0.80,0.45],[1.00,0.95,0.78]], shin: 160, spec: 0xffffff, opacity: 1, bg: 0x05070c, rim: 0xdfe6f2, node: [1.00,0.45,0.25], wire: 0x9fb4d6, floor: 0x26304a, styles: ['smooth', 'nodal', 'wire'] },
-    { name: 'Brushed steel', ramp: [[0.18,0.20,0.24],[0.40,0.43,0.48],[0.60,0.62,0.66],[0.78,0.80,0.84],[0.95,0.96,0.98]], shin: 70, spec: 0x9a9a9a, opacity: 1, bg: 0x060708, rim: 0xb8c0cc, node: [0.95,0.70,0.25], wire: 0x8a929e, floor: 0x2a2e36, styles: ['smooth', 'contour', 'wire'] },
-    { name: 'Glass', ramp: [[0.05,0.35,0.55],[0.20,0.62,0.78],[0.50,0.82,0.88],[0.70,0.95,0.86],[0.95,1.00,0.95]], shin: 200, spec: 0xffffff, opacity: 0.62, bg: 0x03080b, rim: 0xbff4ff, node: [1.00,1.00,1.00], wire: 0x7fe0f0, floor: 0x10303a, styles: ['smooth', 'wire', 'nodal'] },
-    { name: 'Graphite', ramp: [[0.05,0.05,0.07],[0.14,0.15,0.18],[0.24,0.25,0.29],[0.30,0.45,0.70],[0.55,0.80,1.00]], shin: 25, spec: 0x444a55, opacity: 1, bg: 0x030305, rim: 0x6a7488, node: [0.40,0.85,1.00], wire: 0x5f7aa8, floor: 0x1a1d26, styles: ['contour', 'wire', 'nodal'] },
-    { name: 'Iridescent', ramp: [[0.55,0.25,0.95],[0.20,0.55,1.00],[0.20,0.90,0.75],[0.95,0.85,0.25],[1.00,0.35,0.55]], shin: 110, spec: 0xcccccc, opacity: 1, bg: 0x06040a, rim: 0xe8dcff, node: [1.00,1.00,1.00], wire: 0xc0a8ff, floor: 0x2a1c3a, styles: ['smooth', 'contour'] },
-    { name: 'Copper', ramp: [[0.10,0.02,0.02],[0.45,0.10,0.04],[0.72,0.33,0.12],[0.98,0.62,0.25],[1.00,0.92,0.65]], shin: 90, spec: 0xffb070, opacity: 1, bg: 0x0a0503, rim: 0xffc890, node: [0.30,0.95,0.85], wire: 0xb0602a, floor: 0x3a1c10, styles: ['smooth', 'nodal', 'contour'] },
+    { name: 'Calfskin', ramp: [[0.25,0.14,0.06],[0.45,0.30,0.17],[0.62,0.50,0.36],[0.78,0.66,0.46],[0.92,0.84,0.66]], shin: 6, spec: 0x1a140c, opacity: 1, bg: 0x0c0805, rim: 0xc9a77a, node: [0.35,0.18,0.07], wire: 0x6b4a2a, floor: 0x3a2a18, styles: ['smooth', 'contour', 'nodal'] },
+    { name: 'Mylar', ramp: [[0.08,0.16,0.42],[0.25,0.36,0.62],[0.38,0.42,0.50],[0.78,0.62,0.32],[0.95,0.82,0.55]], shin: 30, spec: 0x3c4048, opacity: 1, bg: 0x05070c, rim: 0xdfe6f2, node: [1.00,0.45,0.25], wire: 0x9fb4d6, floor: 0x26304a, styles: ['smooth', 'nodal', 'wire'] },
+    { name: 'Brushed steel', ramp: [[0.12,0.13,0.16],[0.28,0.30,0.34],[0.44,0.46,0.50],[0.62,0.64,0.68],[0.82,0.84,0.88]], shin: 30, spec: 0x3a3a3a, opacity: 1, bg: 0x060708, rim: 0xb8c0cc, node: [0.95,0.70,0.25], wire: 0x8a929e, floor: 0x2a2e36, styles: ['smooth', 'contour', 'wire'] },
+    { name: 'Glass', ramp: [[0.04,0.25,0.40],[0.12,0.45,0.60],[0.30,0.60,0.68],[0.50,0.75,0.70],[0.80,0.92,0.85]], shin: 36, spec: 0x404448, opacity: 0.62, bg: 0x03080b, rim: 0xbff4ff, node: [1.00,1.00,1.00], wire: 0x7fe0f0, floor: 0x10303a, styles: ['smooth', 'wire', 'nodal'] },
+    { name: 'Graphite', ramp: [[0.05,0.05,0.07],[0.14,0.15,0.18],[0.24,0.25,0.29],[0.30,0.45,0.70],[0.55,0.80,1.00]], shin: 20, spec: 0x2a2e36, opacity: 1, bg: 0x030305, rim: 0x6a7488, node: [0.40,0.85,1.00], wire: 0x5f7aa8, floor: 0x1a1d26, styles: ['contour', 'wire', 'nodal'] },
+    { name: 'Iridescent', ramp: [[0.55,0.25,0.95],[0.20,0.55,1.00],[0.20,0.90,0.75],[0.95,0.85,0.25],[1.00,0.35,0.55]], shin: 28, spec: 0x383838, opacity: 1, bg: 0x06040a, rim: 0xe8dcff, node: [1.00,1.00,1.00], wire: 0xc0a8ff, floor: 0x2a1c3a, styles: ['smooth', 'contour'] },
+    { name: 'Copper', ramp: [[0.10,0.02,0.02],[0.45,0.10,0.04],[0.72,0.33,0.12],[0.98,0.62,0.25],[1.00,0.92,0.65]], shin: 28, spec: 0x402818, opacity: 1, bg: 0x0a0503, rim: 0xffc890, node: [0.30,0.95,0.85], wire: 0xb0602a, floor: 0x3a1c10, styles: ['smooth', 'nodal', 'contour'] },
     { name: 'Violet and amber', ramp: HEIGHTR, shin: 40, spec: 0x3a3a3a, opacity: 1, bg: 0x040308, rim: 0xd6cfe0, node: [0.99,0.99,0.75], wire: 0x8a70c0, floor: 0x3a2a48, styles: ['smooth', 'nodal', 'wire'] },
   ];
   const SAVER_RIGS = [
-    { name: 'key', amb: 0.42, sun: [3, 5, 2, 0.85], fill: [-3, -2, -2, 0.18] },
-    { name: 'top', amb: 0.30, sun: [0.3, 8, 0.2, 1.0], fill: [0, -3, 0, 0.10] },
-    { name: 'rim', amb: 0.25, sun: [-4, 1.2, -3, 1.15], fill: [3, 2, 3, 0.28] },
-    { name: 'grazing', amb: 0.16, sun: [6, 0.8, 1, 1.3], fill: [-3, 2, -1, 0.12] },
+    { name: 'key', amb: 0.30, sun: [3, 5, 2, 0.55], fill: [-3, -2, -2, 0.12] },
+    { name: 'top', amb: 0.24, sun: [0.3, 8, 0.2, 0.6], fill: [0, -3, 0, 0.08] },
+    { name: 'rim', amb: 0.22, sun: [-4, 1.2, -3, 0.62], fill: [3, 2, 3, 0.18] },
+    { name: 'grazing', amb: 0.16, sun: [6, 0.8, 1, 0.68], fill: [-3, 2, -1, 0.10] },
   ];
   const SAVER_STYLE = { smooth: 'smooth shaded', contour: 'contour bands', nodal: 'nodal lines', wire: 'mesh overlay' };
   let saverScene = null;
   // The colour of one vertex in the saver, from v = u / running max.
+  // SAVER_EXPOSURE scales the ramp, so a lit crest stays below white.
+  const SAVER_EXPOSURE = 0.86;
   function saverColor(sv, v) {
     ramp(sv.look.ramp, 0.5 + 0.5 * v, _c);
+    _c[0] *= SAVER_EXPOSURE; _c[1] *= SAVER_EXPOSURE; _c[2] *= SAVER_EXPOSURE;
     if (sv.style === 'contour') {
       const b = (0.5 + 0.5 * v) * 9, f = b - Math.floor(b);
       if (f < 0.14) { _c[0] *= 0.3; _c[1] *= 0.3; _c[2] *= 0.3; }
@@ -671,19 +680,19 @@
     let look; do look = pick(SAVER_LOOKS); while (prev && look === prev.look);
     const shape = rnd() < 0.5 ? 'circle' : 'square', kr = rnd();
     let ex;
-    if (kr < 0.4) { const q = pick(SAVER_PAIRS[shape]); ex = { kind: 'pair', m1: q[0], n1: q[1], m2: q[2], n2: q[3] }; }
-    else if (kr < 0.75) { const q = pick(SAVER_SINGLES[shape]); ex = { kind: 'single', m1: q[0], n1: q[1] }; }
+    if (kr < 0.45) { const q = pick(SAVER_PAIRS[shape]); ex = { kind: 'pair', m1: q[0], n1: q[1], m2: q[2], n2: q[3] }; }
+    else if (kr < 0.85) { const q = pick(SAVER_SINGLES[shape]); ex = { kind: 'single', m1: q[0], n1: q[1] }; }
     else {
       // a strike off the centre: within r 0.22 of the centre on the drum,
       // and 0.25-0.75 on the square, so the bump is inside the edge
       const a = rnd() * TAU, r = 0.08 + 0.14 * rnd();
       ex = shape === 'circle' ? { kind: 'strike', x: 0.5 + r * Math.cos(a), y: 0.5 + r * Math.sin(a) } : { kind: 'strike', x: 0.25 + 0.5 * rnd(), y: 0.25 + 0.5 * rnd() };
-      ex.w = 0.045 + 0.04 * rnd();
+      ex.w = 0.08 + 0.04 * rnd();
     }
     return {
       look, shape, ex, style: pick(look.styles), rig: pick(SAVER_RIGS),
-      heightK: 0.75 + 0.5 * rnd(), phi: 0.62 + 0.58 * rnd(), theta: rnd() * TAU,
-      spin: (rnd() < 0.5 ? -1 : 1) * (0.04 + 0.06 * rnd()) * (1 - 0.5 * calm), floor: rnd() < 0.6,
+      heightK: 0.5 + 0.3 * rnd(), phi: 0.62 + 0.58 * rnd(), theta: rnd() * TAU,
+      spin: (rnd() < 0.5 ? -1 : 1) * (0.025 + 0.025 * rnd()) * (1 - 0.5 * calm), floor: rnd() < 0.6,
     };
   }
   // A Gaussian bump at rest: uPrev = u + dt^2/2 acc, as setMode does.
@@ -716,7 +725,7 @@
     view.theta = sc.theta; view.phi = sc.phi; saverSpin = sc.spin;
     const ex = sc.ex;
     G.nodal = sc.style === 'nodal' && ex.kind === 'single';
-    if (ex.kind === 'pair') Object.assign(G, { m1: ex.m1, n1: ex.n1, m2: ex.m2, n2: ex.n2, two: true, amp2: 0.6 });
+    if (ex.kind === 'pair') Object.assign(G, { m1: ex.m1, n1: ex.n1, m2: ex.m2, n2: ex.n2, two: true, amp2: 0.45 });
     else if (ex.kind === 'single') Object.assign(G, { m1: ex.m1, n1: ex.n1, two: false });
     else G.two = false;
     if (sc.shape !== G.shape) { G.shape = sc.shape; makeSolver(); } else applyModes();
@@ -826,7 +835,7 @@
       document.documentElement.classList.add('sn-saver'); saverOn = true;
       resize();
       Object.assign(G, { amp: 0.7, paused: false, color: 'height' });
-      G.speed = 0.35 + 0.4 * (1 - calm);
+      G.speed = 0.22 + 0.2 * (1 - calm);
       view.zoom = 0.85;
       saverLabel = o && o.labels !== false && typeof o.label === 'function' ? o.label : null;
       fadePlane.visible = true;
