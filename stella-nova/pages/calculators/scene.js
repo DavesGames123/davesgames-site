@@ -14,13 +14,20 @@
 //                  a crown of 10 pins at y 40 .. 50 under the cover
 //    axle j ...... horizontal axle along z at y AY: lantern pinion
 //                  (z 17 .. 26.5), carry wheel (z -4 .. 0) with 10 drive pins
-//                  and one lift pin, 1:1 with the dial. The lift pin turns
-//                  clockwise seen from the front and rises on the left,
-//                  under the sautoir tip, over digits 7 .. 9 (LIFT0)
+//                  and one lift pin (z -1 .. 8.6), 1:1 with the dial. The
+//                  lift pin turns clockwise seen from the front and rises
+//                  on the left, under the sautoir shoe, over digits 7 .. 9
 //    drum j ...... digit drum r 22, z -44 .. -30, 4 mm under the window
-//    sautoir j ... lever on axle j + 1, in the plane z 4.5 .. 8.5 (j even) or
-//                  10 .. 14 (j odd), so two levers never share a plane; its
-//                  tip rides on the lift pin of wheel j, a lead weight on top
+//    sautoir j ... lever on axle j + 1. Hub, arm and pawl in the plane
+//                  z 9.5 .. 12.5 (j even) or 13 .. 16 (j odd), so two levers
+//                  never share a plane; a lead weight on top. A web drops
+//                  the tip to the shoe plane z 4.6 .. 8.1, the only plane
+//                  that the short lift pins reach. A pin that turns round
+//                  the hub of a lever so passes under it.
+//    sautoirAngle  the lever rests at SA_REST. From digit 7 the pin pushes
+//                  the flat underside of the shoe, then its corner; at
+//                  9 -> 0 the corner slips off (SA_TOP) and the mech.js
+//                  fall takes the lever back to SA_REST
 //
 //  CURTA (mm; y up, about 2.3 x a Type I). Angles phi from +x toward -z.
 //    base ........ black case, a shell r 58 .. 62 with 8 slider slots and a
@@ -77,7 +84,29 @@ function spur(n, r0, r1, y0, h) {
 }
 
 // ── PASCALINE ───────────────────────────────────────────────────────────────
-const SP = 56, AY = 34, DZ = 32, LIFT_AT0 = 160;
+const SP = 56, AY = 34, DZ = 32, LIFT_AT0 = 120;
+// sautoir kinematics, in the frame of the lever pivot (axle j + 1), axle j
+// at (SP, 0). The lift pin (radius PIN_R, at PIN_RP) is at angle
+// LIFT_AT0 - 36 p deg. SA_YU: the underside of the shoe, set so that the
+// pin first meets it at digit 7 with the lever at SA_REST. SA_EX: the
+// shoe corner, set so that the corner slips off the pin at 9 -> 0.
+const PIN_R = 1.6, PIN_RP = 10, SA_REST = -0.10, SA_X0 = 42;
+const pinC = p => { const a = (LIFT_AT0 - 36 * p) * Math.PI / 180; return [SP + PIN_RP * Math.cos(a), PIN_RP * Math.sin(a)]; };
+const SA_YU = (() => { const c = pinC(7); return PIN_R - Math.hypot(...c) * Math.sin(SA_REST - Math.atan2(c[1], c[0])); })();
+const SA_EX = (() => { const c = pinC(10); return Math.sqrt((Math.hypot(...c) - PIN_R) ** 2 - SA_YU * SA_YU); })();
+const SA_TOP = (() => { const c = pinC(10); return Math.atan2(c[1], c[0]) - Math.atan2(SA_YU, SA_EX); })();
+// the lever angle while the pin of its wheel is at position p (tenths)
+export function sautoirAngle(p) {
+  if (p < 6 || p >= 10) return SA_REST;
+  const c = pinC(p), r = Math.hypot(...c), f = Math.atan2(c[1], c[0]);
+  const local = a => c[0] * Math.cos(a) + c[1] * Math.sin(a);   // x of the pin in the lever frame
+  let a = SA_REST;
+  const s = (PIN_R - SA_YU) / r;
+  if (Math.abs(s) <= 1) { const al = f + Math.asin(s), x = local(al); if (x >= SA_X0 && x <= SA_EX) a = Math.max(a, al); }
+  const rE = Math.hypot(SA_EX, SA_YU), k = (rE * rE + r * r - PIN_R * PIN_R) / (2 * rE * r);
+  if (k <= 1) { const ac = f + Math.acos(k) - Math.atan2(SA_YU, SA_EX); if (local(ac) >= SA_EX) a = Math.max(a, ac); }
+  return a;
+}
 function pascaline(B, u) {
   const N = u.N, X = j => (2.5 - j) * SP, W = 180;
   // base: plate, walls, front posts under the axles
@@ -120,12 +149,13 @@ function pascaline(B, u) {
     const lan = [rod(9, 17, 18.5, 32), rod(9, 25, 26.5, 32)];
     for (let k = 0; k < 10; k++) { const b = k * 36 * D; lan.push(pinAt(1, 7.2 * Math.cos(b), 7.2 * Math.sin(b), 18, 25.5, 8)); }
     B.mesh(ax, merge(lan), 'bronze');
-    // carry wheel: disk, 10 drive pins on its front, one long lift pin
+    // carry wheel: disk, 10 drive pins on its front, one lift pin that
+    // reaches the shoe plane and stops under the lever planes
     B.mesh(ax, tube(2.5, 17, -4, 0, 48), 'brass');
     const pins = [];
     for (let k = 0; k < 10; k++) { const b = k * 36 * D; pins.push(pinAt(1.2, 14 * Math.cos(b), 14 * Math.sin(b), -1, 4, 10)); }
     B.mesh(ax, merge(pins), 'steel');
-    B.mesh(ax, pinAt(1.6, 10, 0, -1, 15.5, 12), 'red');
+    B.mesh(ax, pinAt(PIN_R, PIN_RP, 0, -1, 8.6, 12), 'red');
     axles.push(ax);
 
     const dr = B.part('drum_' + j, { info: 'drum', label: lab ? 'Digit drum' : null, labelAt: [0, 44, 30], at: [x, AY, 0], u: [0, 0, -1], e0: [1, 0, 0], explode: [0, 0, -40], st: 0.3, en: 0.8 });
@@ -133,17 +163,22 @@ function pascaline(B, u) {
     drums.push(dr);
 
     if (j < N - 1) {
-      // pivot on axle j + 1, arm toward axle j (+x)
-      const z0 = j % 2 ? 10 : 4.5, h = 4;
+      // pivot on axle j + 1, arm toward axle j (+x); hub plane z0 .. z0 + h
+      const z0 = j % 2 ? 13 : 9.5, h = 3, ZT0 = 4.6, ZT1 = 8.1;
       const sa = B.part('sautoir_' + j, { info: 'sautoir', label: j === 1 ? 'Sautoir (falling weight)' : null, labelAt: [24, 16, z0 + 4], at: [X(j + 1), AY, 0], explode: [0, 0, 50], st: 0.2, en: 0.7 });
       const s = new THREE.Shape();
-      s.moveTo(0, -7); s.lineTo(44, -3.5); s.lineTo(47, -6); s.lineTo(49, -3.5); s.lineTo(49, 3); s.lineTo(0, 7);
+      s.moveTo(0, -7); s.lineTo(46, -2.5); s.lineTo(46, 3.5); s.lineTo(0, 7);
       s.absarc(0, 0, 7, Math.PI / 2, 3 * Math.PI / 2, false);
       s.holes.push(circle(3.1));
-      // the pawl: a hook on the hub toward the drive pins of wheel j + 1
-      const pw = new THREE.Shape(); pw.moveTo(-3, -5); pw.lineTo(-11, -12); pw.lineTo(-14, -11); pw.lineTo(-13, -8); pw.lineTo(-6, -2); pw.lineTo(-3, -2);
+      // the pawl: a hook on the hub toward the drive pins of wheel j + 1,
+      // under the web of the next lever
+      const pw = new THREE.Shape(); pw.moveTo(-3, -6); pw.lineTo(-11, -12); pw.lineTo(-14, -11); pw.lineTo(-13, -9); pw.lineTo(-6, -4); pw.lineTo(-3, -4);
       // the pawl plate is thinner than the hub it grows from: no shared face
       B.mesh(sa, merge([plateZ(s, z0, h), plateZ(pw, z0 + 0.6, h - 1.2, 0.2)]), 'steel');
+      // the shoe: no bevel, so its underside is the exact SA_YU line that
+      // rides on the lift pin; a web joins it to the arm
+      const shoe = plateZ(rectShape(SA_X0, SA_YU, SA_EX, SA_YU + 3.6), ZT0, ZT1 - ZT0, 0);
+      B.mesh(sa, merge([shoe, boxGeo(SA_X0 + 0.6, 45.4, 0, 2.4, ZT1 - 0.3, z0 + 0.3)]), 'steel');
       // pawl tooth reaches back to the plane of the drive pins
       const tooth = boxGeo(-13.4, -11.4, -11.6, -9.6, 1.2, z0 + 0.5);
       B.mesh(sa, tooth, 'steel');
@@ -163,7 +198,11 @@ function pascaline(B, u) {
         dials[j].spin(-p * 36 * D);
         axles[j].spin((LIFT_AT0 - p * 36) * D);
         drums[j].spin(-(p + 0.5) * 36 * D);
-        if (j < N - 1) sauts[j].root.quaternion.setFromAxisAngle(Zv, -0.14 + 0.2 * Q.lift[j]);
+        if (j < N - 1) {
+          // the pin sets the lever; after 9 -> 0 the mech.js lift (1 -> 0) is the fall
+          const fall = Q.ev && Q.ev.kind === 'carry' && Q.ev.src === j;
+          sauts[j].root.quaternion.setFromAxisAngle(Zv, fall ? SA_REST + (SA_TOP - SA_REST) * Q.lift[j] : sautoirAngle(p));
+        }
       }
       return Q;
     },
