@@ -187,7 +187,14 @@ function smoothShell(g) {
 }
 
 // slab(shape, y0, h): a flat outline in (x, −z) extruded up local Y
+// The outline goes in as points. An arc of 2π ends a rounding error away
+// from its start, so three keeps both end points, and the bevel at that
+// zero-length edge folds over itself and z-fights. clean() drops the copy.
+const clean = pts => { const a = pts[0], b = pts[pts.length - 1]; if (pts.length > 2 && a.distanceTo(b) < 1e-6) pts.pop(); return pts; };
 export function slab(shape, y0, h, bevel = 0.6) {
+  const sp = shape.extractPoints(48), flat = new THREE.Shape(clean(sp.shape));
+  flat.holes = sp.holes.map(p => new THREE.Path(clean(p)));
+  shape = flat;
   const g = new THREE.ExtrudeGeometry(shape, { depth: h - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 48 });
   g.translate(0, 0, bevel);
   g.rotateX(-Math.PI / 2);

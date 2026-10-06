@@ -22,6 +22,8 @@
 //    export function bevelTeeth
 //    export function helicalTeeth
 //    function Surf ........... triangle lists that check their own facing
+//    function cap ............ an end face: root ring plus one polygon a tooth
+//    function skin ........... the bore under the teeth, on the root angles
 // ============================================================================
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -61,6 +63,42 @@ function triN(P, t) {
   const bx = P[t + 6] - P[t], by = P[t + 7] - P[t + 1], bz = P[t + 8] - P[t + 2];
   return [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx];
 }
+// the outline points on the root circle: their angles only run forward
+function rootIds(O) {
+  const rf = Math.min(...O.map(p => p[0])), tol = 1e-9 * Math.max(1, rf), out = [];
+  for (let i = 0; i < O.length; i++) if (O[i][0] - rf < tol) out.push(i);
+  return out;
+}
+// the bore skin under the teeth, on the root angles for the same reason;
+// quad(i, i1) makes the strip between two of them
+function skin(O, quad) {
+  const roots = rootIds(O);
+  for (let k = 0; k < roots.length; k++) quad(roots[k], roots[(k + 1) % roots.length]);
+}
+// an end cap of the toothed ring: a ring from the bore rin up to the root
+// circle, then each tooth above the root as its own polygon. A fan from
+// every outline point down to rin is wrong: on an undercut flank the angle
+// runs back, the fan folds over itself, and the folded and unfolded
+// triangles lie in one plane and z-fight. pt(i, r) is outline point i at
+// radius r (its own radius when r is undefined).
+function cap(su, O, rin, pt, want) {
+  const n = O.length, roots = rootIds(O);
+  su.begin();
+  for (let k = 0; k < roots.length; k++) { const i = roots[k], i1 = roots[(k + 1) % roots.length]; su.quad(pt(i), pt(i1), pt(i1, rin), pt(i, rin)); }
+  su.end(want);
+  su.begin();
+  for (let k = 0; k < roots.length; k++) {
+    const i0 = roots[k], i1 = roots[(k + 1) % roots.length], m = (i1 - i0 + n) % n;
+    if (m < 2) continue;
+    const ids = []; for (let q = 0; q <= m; q++) ids.push((i0 + q) % n);
+    const xy = ids.map(i => new THREE.Vector2(O[i][0] * Math.cos(O[i][1]), O[i][0] * Math.sin(O[i][1])));
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(xy, [])) {
+      const A = xy[a], B = xy[b], C = xy[c], ccw = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x) > 0;
+      su.P.push(...pt(ids[a]), ...(ccw ? pt(ids[b]) : pt(ids[c])), ...(ccw ? pt(ids[c]) : pt(ids[b])));
+    }
+  }
+  su.end(want);
+}
 const tipIndex = (O, N) => { let best = 0; for (let i = 0; i < O.length / N; i++) if (O[i][0] > O[best][0]) best = i; return best; };
 
 // o: { N, m, gam, A, F, ha, hf, t, slices, spiral(s) -> dphi, depth (m below root for the inner ring) }
@@ -82,14 +120,10 @@ export function bevelTeeth(o) {
   for (let jj = 0; jj < n; jj++) { const i = (t0 + jj) % n, i1 = (i + 1) % n; for (let j = 0; j < S - 1; j++) su.quad(at(i, j), at(i1, j), at(i1, j + 1), at(i, j + 1)); }
   su.end(ndir);
   // heel cap (away from the apex) and toe cap (toward it)
-  for (const [j, sgn] of [[S - 1, 1], [0, -1]]) {
-    su.begin();
-    for (let i = 0; i < n; i++) { const i1 = (i + 1) % n; su.quad(at(i, j), at(i1, j), at(i1, j, rin), at(i, j, rin)); }
-    su.end(p => ldir(p).map(v => v * sgn));
-  }
+  for (const [j, sgn] of [[S - 1, 1], [0, -1]]) cap(su, O, rin, (i, r) => at(i, j, r), p => ldir(p).map(v => v * sgn));
   // inner skin under the teeth
   su.begin();
-  for (let i = 0; i < n; i++) { const i1 = (i + 1) % n; for (let j = 0; j < S - 1; j++) su.quad(at(i, j, rin), at(i1, j, rin), at(i1, j + 1, rin), at(i, j + 1, rin)); }
+  skin(O, (i, i1) => { for (let j = 0; j < S - 1; j++) su.quad(at(i, j, rin), at(i1, j, rin), at(i1, j + 1, rin), at(i, j + 1, rin)); });
   su.end(p => ndir(p).map(v => -v));
   return { geom: su.geometry(), Rv, rin, map, root: Rv - o.hf * o.m };
 }
@@ -105,14 +139,10 @@ export function helicalTeeth(o) {
   const t0 = tipIndex(O, o.N);
   for (let jj = 0; jj < n; jj++) { const i = (t0 + jj) % n, i1 = (i + 1) % n; for (let j = 0; j < S - 1; j++) su.quad(at(i, j), at(i1, j), at(i1, j + 1), at(i, j + 1)); }
   su.end(rad);
-  for (const [j, sgn] of [[S - 1, 1], [0, -1]]) {
-    su.begin();
-    for (let i = 0; i < n; i++) { const i1 = (i + 1) % n; su.quad(at(i, j), at(i1, j), at(i1, j, rin), at(i, j, rin)); }
-    su.end(() => [0, sgn, 0]);
-  }
+  for (const [j, sgn] of [[S - 1, 1], [0, -1]]) cap(su, O, rin, (i, r) => at(i, j, r), () => [0, sgn, 0]);
   if (rin > 0) {
     su.begin();
-    for (let i = 0; i < n; i++) { const i1 = (i + 1) % n; for (let j = 0; j < S - 1; j++) su.quad(at(i, j, rin), at(i1, j, rin), at(i1, j + 1, rin), at(i, j + 1, rin)); }
+    skin(O, (i, i1) => { for (let j = 0; j < S - 1; j++) su.quad(at(i, j, rin), at(i1, j, rin), at(i1, j + 1, rin), at(i, j + 1, rin)); });
     su.end(p => rad(p).map(v => -v));
   }
   return { geom: su.geometry(0.6), R: o.N * o.m / 2 };
