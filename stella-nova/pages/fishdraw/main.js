@@ -47,12 +47,15 @@
 //    grep -n 'function bindExport'  the export buttons (export.js)
 //    grep -n 'function setOpen'     the panel, the phone sheet, the dock
 //    grep -n 'BOOT'                 the boot order
+//  The screensaver hook (window.snSaver) is in saver.js; it sets S.saver,
+//  and frame() then leaves the canvas to it.
 // ============================================================================
 import { makeEngine, PARAMS, GROUPS, PARAM_BY_KEY, sanitize, mutate, takeGroup, applyLocks, diffParams,
   encodeShare, decodeShare, randomName, relativeName, mulberry, roundTo } from './engine.js';
 import { createPool } from './pool.js';
 import { THEMES, THEME_KEYS, PAGES, MM_PER_PX, GRID_PRESETS, pageSize, layoutPlate, cellAt } from './plate.js';
 import { drawPlate, makeGrain } from './render.js';
+import { installSaver } from './saver.js';
 import { exportPlateSVG, exportPNG, exportUpstream, copyLink, pngSize, slug } from './export.js';
 
 const $ = id => document.getElementById(id);
@@ -774,6 +777,9 @@ async function boot() {
   if (S.mode === 'grid') buildGrid();
   if (document.fonts) document.fonts.ready.then(() => { S.dirty = true; });
   requestAnimationFrame(frame);
+  installSaver({ S, pool, E, src, getGrain: () => grain,
+    onEnter: () => { S.saver = true; panel.classList.remove('open'); },
+    onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; } });
   window.__fish = { S, pool, E, showFish, newFish, mutateFish, draw, plateNow, layout, setMode, buildGrid, openCell, ready: true };
 }
 boot().catch(err => { $('caption').textContent = 'Fishdraw failed to start: ' + err.message; console.error(err); });
