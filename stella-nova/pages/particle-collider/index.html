@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Particle Collider — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PARTICLE COLLIDER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Two linked views of one machine:
+     Accelerator  the CERN-style chain from the ion source to the beam dump,
+                  ten stations, each with live plots from accel.js
+     Detector     a barrel detector at the interaction point; events from
+                  generators.js go through the Monte Carlo transport engine
+                  (transport.js, in Web Workers) and show in 3D (display.js)
+                  and in 2D (views2d.js)
+   The physics follows the Geant4 Physics Reference Manual and the PDG; the
+   page is not Geant4 (see CREDITS.txt and the About section).
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts (Space Grotesk, IBM Plex Mono, Instrument Serif), style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel left (mode, stations or scenarios, controls),
+                 #anaPanel right (plots, 2D views, numbers), #view between
+     phone ..... #dock at the base; a tab opens #panel as a bottom sheet
+                 (portrait) or a right drawer (landscape) with one .grp
+
+   GREP MAP  (main.js)
+     grep -n 'function setMode'     accelerator or detector
+     grep -n 'function runEvent'    generate, transport in workers, reco, show
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A particle collider from the ion source to the event display: linac, booster, synchrotron, FODO optics, RF buckets, the energy ramp and luminosity, then a barrel detector with a Monte Carlo transport engine that tracks every particle step by step through silicon, crystals, brass and iron.">
+<link href="../../vendor/fonts/space-grotesk+ibm-plex-mono+instrument-serif.e9f187bf.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Particle Collider</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="read" class="pread"></div>
+  <div id="legend" class="plegend" aria-label="Track colours"></div>
+  <div id="clock" class="pclock" hidden>
+    <button id="tPlay" type="button" aria-label="Pause">❚❚</button>
+    <input type="range" id="tSlide" min="-4" max="30" step="0.01" value="0" aria-label="Time after the crossing, ns">
+    <span id="tVal">0.0 ns</span>
+  </div>
+  <div id="busy" class="pbusy" hidden><i></i><span>Transporting particles</span></div>
+  <div id="hint" class="phint">drag to orbit · scroll or pinch to zoom</div>
+  <button id="anaOpen" type="button" hidden>∑ Analysis</button>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the collider cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="mode">
+    <div class="modes" role="tablist">
+      <button class="mode" data-mode="ring" type="button" role="tab"><b>Accelerator</b><span>source → ring → dump</span></button>
+      <button class="mode" data-mode="det" type="button" role="tab"><b>Detector</b><span>collisions at IP5</span></button>
+    </div>
+    <div id="ringCtl">
+      <div class="sec-label">Stations</div>
+      <div id="stations" class="cards"></div>
+      <div class="sec-label">Machine</div>
+      <div class="row"><label for="preset">Settings</label><select id="preset"></select></div>
+      <div class="row"><label for="clockK">Cycle clock</label><input type="range" id="clockK" min="0" max="3" step="0.01" value="1.78"><span class="val" id="clockKV"></span></div>
+      <div class="row"><label for="qp">Q′ target</label><input type="range" id="qp" min="-10" max="20" step="1" value="2"><span class="val" id="qpV"></span></div>
+      <div class="row"><label for="qh">Hénon Q</label><input type="range" id="qh" min="0.20" max="0.40" step="0.001" value="0.31"><span class="val" id="qhV"></span></div>
+      <div class="toggles"><button class="tog" id="dumpBtn" type="button">Dump the beam</button><button class="tog accent" id="collide" type="button">Collide at IP5 →</button></div>
+    </div>
+    <div id="detCtl" hidden>
+      <div class="sec-label">Event</div>
+      <div id="scenarios" class="cards two"></div>
+      <div id="gunBox">
+        <div class="sec-label">Particle gun</div>
+        <div class="row"><label for="gunP">Particle</label><select id="gunP"></select></div>
+        <div class="row"><label for="gunE">Energy</label><input type="range" id="gunE" min="0" max="3" step="0.01" value="1.7"><span class="val" id="gunEV"></span></div>
+        <div class="row"><label for="gunEta">η</label><input type="range" id="gunEta" min="-2.8" max="2.8" step="0.01" value="0.3"><span class="val" id="gunEtaV"></span></div>
+        <div class="row"><label for="gunPhi">φ</label><input type="range" id="gunPhi" min="-3.14" max="3.14" step="0.01" value="0.6"><span class="val" id="gunPhiV"></span></div>
+        <div class="row"><label for="gunN">Count</label><input type="range" id="gunN" min="1" max="10" step="1" value="1"><span class="val" id="gunNV"></span></div>
+      </div>
+      <div class="row"><label for="pu">Pile-up μ</label><input type="range" id="pu" min="0" max="60" step="1" value="0"><span class="val" id="puV"></span></div>
+      <div class="toggles"><button class="tog accent" id="fire" type="button">New event</button><button class="tog" id="auto" type="button">Auto</button></div>
+      <div class="sec-label">Time</div>
+      <div class="row"><label for="speed">Slow motion</label><input type="range" id="speed" min="0.3" max="12" step="0.1" value="3"><span class="val" id="speedV"></span></div>
+      <p class="note">Speed in ns of event time per second. The bunches cross at t = 0; light crosses the detector in about 25 ns.</p>
+      <div class="sec-label">View</div>
+      <div class="grid3" id="cuts">
+        <button data-cut="wedge" type="button">Wedge</button><button data-cut="half" type="button">Half</button><button data-cut="quarter" type="button">Quarter</button>
+        <button data-cut="none" type="button">Closed</button><button data-v="side" type="button">Side</button><button data-v="end" type="button">End-on</button>
+      </div>
+      <div class="grid3" id="shows">
+        <button class="tog on" data-show="pix" type="button">Pixels</button><button class="tog on" data-show="sct" type="button">Strips</button><button class="tog on" data-show="ecal" type="button">ECAL</button>
+        <button class="tog on" data-show="hcal" type="button">HCAL</button><button class="tog on" data-show="sol" type="button">Coil</button><button class="tog on" data-show="yoke" type="button">Yoke</button>
+        <button class="tog on" data-show="mu" type="button">Muon</button><button class="tog on" data-show="labels" type="button">Labels</button><button class="tog on" data-show="orbit" type="button">Orbit</button>
+      </div>
+    </div>
+    <div class="sec-label">About</div>
+    <div class="about" id="about">
+      <p>The accelerator side computes the beam optics, RF and ramp from formulas (accel.js). The detector side generates proton-proton events and moves every particle step by step through the detector materials: ionisation (Bethe-Bloch with the density effect), multiple scattering (Highland), bremsstrahlung, pair production, Compton scattering, photoelectric absorption, decays with real lifetimes, and a parametrised hadronic cascade. A 3.8 T solenoid bends the tracks; tracks are fitted from their silicon hits.</p>
+      <p class="fine">The physics models follow the Geant4 Physics Reference Manual and the Geant4 Application Developer guides, and the PDG review of particle physics. This page is not Geant4, contains no Geant4 code, and is not endorsed by the Geant4 Collaboration. Details in <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
+    </div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Analysis">
+  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
+  <section class="grp ana" data-grp="ana" id="anaSec">
+    <div id="anaRing">
+      <div class="kind" id="stKind"></div>
+      <h1 id="stTitle"></h1>
+      <p class="lede" id="stLede"></p>
+      <canvas class="plot" id="plotA"></canvas>
+      <canvas class="plot" id="plotB"></canvas>
+      <div class="sec-label">Numbers</div>
+      <table class="readout" id="stNums"></table>
+      <div class="sec-label">Relations</div>
+      <div id="stEqs" class="eqs"></div>
+    </div>
+    <div id="anaDet" hidden>
+      <div class="kind" id="evKind"></div>
+      <h1 id="evTitle"></h1>
+      <div id="evMass" class="mass"></div>
+      <div class="views2">
+        <canvas class="v2" id="vRphi"></canvas>
+        <canvas class="v2" id="vRz"></canvas>
+      </div>
+      <div class="legowrap"><canvas class="plot lego" id="vLego"></canvas><div id="legoTip" class="ltip" hidden></div></div>
+      <div class="sec-label">Trigger</div>
+      <div id="trig" class="trig"></div>
+      <div class="sec-label">Objects</div>
+      <table class="readout objs" id="objs"></table>
+      <div class="sec-label">Energy by subsystem</div>
+      <div id="subs" class="subs"></div>
+      <div class="sec-label">Engine</div>
+      <table class="readout" id="eng"></table>
+    </div>
+  </section>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="mode" type="button"><i>◎</i><span>Controls</span></button>
+  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Analysis</span></button>
+  <button id="dockMode" type="button"><i>⇄</i><span>Detector</span></button>
+  <button id="dockGo" type="button"><i>✦</i><span>Event</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

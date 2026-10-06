@@ -1,0 +1,54 @@
+PARTICLE COLLIDER — credits and sources
+=======================================
+
+This page is an original work for davesgames.io (Stella Nova). It is a
+teaching model of a hadron collider and a barrel detector.
+
+Geant4
+------
+The physics models of the transport engine (physics.js, transport.js) follow
+the methods described in the Geant4 Physics Reference Manual and the Geant4
+Application Developer guides (https://geant4.web.cern.ch/docs/): step-by-step
+tracking with the step limited by physics processes and geometry boundaries,
+the number-of-interaction-lengths method, production cuts set by range,
+physics tables on a logarithmic energy grid, the Berger-Seltzer (Moller /
+Bhabha) stopping power, Klein-Nishina Compton sampling, and a GFlash-like
+fast shower for soft particles.
+
+This page is not Geant4. It contains no Geant4 source code and no Geant4 data
+tables, and it is not endorsed by the Geant4 Collaboration. The names
+"Geant4" and "The Geant4 toolkit" are used here only to cite the published
+documentation.
+
+Other physics sources
+---------------------
+- Particle Data Group, Review of Particle Physics (2024): "Passage of
+  particles through matter" (Bethe-Bloch, density effect, radiation length,
+  Tsai formula, Highland formula, shower profile), particle masses and
+  lifetimes, and the "Atomic and Nuclear Properties of Materials" tables
+  (density, mean excitation energy, Sternheimer parameters, nuclear
+  interaction lengths, critical energies) used in materials.js.
+- R. M. Sternheimer and R. F. Peierls, Phys. Rev. B 3 (1971) 3681: the
+  density-effect rules for PbWO4 and brass.
+- ESTAR (NIST): the shape of the low-energy radiative stopping power.
+- R. D. Field and R. P. Feynman, Nucl. Phys. B136 (1978) 1: independent
+  fragmentation of jets.
+- T. P. Wangler, RF Linear Accelerators; S. Y. Lee, Accelerator Physics;
+  H. Wiedemann, Particle Accelerator Physics: linac phase stability, FODO
+  optics, chromaticity, synchrotron motion, synchrotron radiation.
+- LHC Design Report, Vol. I (CERN-2004-003) and the LHC Run 3 configuration
+  papers: machine parameters in accel.js (circumference, bending radius,
+  harmonic number, momentum compaction, bunch parameters, beam dump).
+
+Detector
+--------
+The detector dimensions are near those of a large LHC barrel detector with a
+3.8 T solenoid, rounded and simplified. The layout of the accelerator complex
+is a schematic, not survey data. No experiment or organisation endorses this
+page.
+
+Third-party code in the page
+----------------------------
+three.js r160 (MIT licence), vendored at stella-nova/vendor/three@0.160.0.
+Fonts: Space Grotesk, IBM Plex Mono, Instrument Serif (SIL Open Font
+Licence 1.1), vendored at stella-nova/vendor/fonts.
