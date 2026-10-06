@@ -22,7 +22,10 @@
 //  ink or width starts a new trace at the same t, as a change of pen does.
 //  When a trace closes, the page stops until the next change, or Play.
 //
-//  SAVER INK. In the screensaver the paper is always night paper, and the
+//  PAPER. The page is always dark: night paper only (user, 2026-10-06).
+//  The cream code path stays for the blend and ink tables, unused.
+//
+//  SAVER INK. In the screensaver the paper is night paper, as always, and the
 //  ink is light: the hue swings 28 degrees about the hue of the pen, once
 //  in each trace. The strokes are opaque and wider, and a soft copy of the
 //  ink (#glow, blurred, screen) lies under the sharp lines. The gears show
@@ -76,7 +79,7 @@ const dry = dryC.getContext('2d'), wet = wetC.getContext('2d'), rigX = rigC.getC
 
 const S = {
   R: 144, r: 60, out: false, hole: 99, loops: 0, pen: 0, w: 0, rot: 0,
-  paper: 'cream', units: 170, P: 0, dpr: 1, k: 1,
+  paper: 'night', units: 170, P: 0, dpr: 1, k: 1,
   playing: true, held: false, gears: true, speed: 0.5,
   traces: [], active: null, queue: [], preset: -1, presetRate: 0,
   rigDirty: true, drag: null, saver: null,
@@ -390,7 +393,7 @@ function loadPreset(i, drawSec = 14) {
   wet.clearRect(0, 0, wetC.width, wetC.height); dry.clearRect(0, 0, dryC.width, dryC.height);
   const specs = p.traces.map(presetSpec);
   S.units = p.units || Math.max(...specs.map(s => extent(s.R, s.r, s.out))) * 1.03;
-  const paper = S.saver ? 'night' : p.paper;
+  const paper = 'night';
   if (S.paper !== paper) setPaper(paper);
   setScale();
   // The saver keeps the first traces that fit in SAVER_LAPS laps (one at
@@ -572,7 +575,6 @@ function bindUI() {
   $('dockPreset').addEventListener('click', () => loadPreset((S.preset + 1) % PRESETS.length));
   $('gearsBtn').addEventListener('click', () => setGears(!S.gears));
   $('dockGears').addEventListener('click', () => setGears(!S.gears));
-  document.querySelectorAll('#paperSeg button').forEach(b => b.addEventListener('click', () => setPaper(b.dataset.paper)));
   $('pngBtn').addEventListener('click', exportPNG);
   $('svgBtn').addEventListener('click', exportSVG);
   for (const el of document.querySelectorAll('.sci-sym[data-tex]')) {
@@ -953,7 +955,7 @@ window.snSaver = {
 
 // ── boot ───────────────────────────────────────────────────────────────────
 bindUI(); bindKeys(); bindDrag(); bindPanel();
-setPaper('cream', true);
+setPaper('night', true);
 if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
 layout();
 addEventListener('resize', layout);

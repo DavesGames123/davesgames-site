@@ -36,22 +36,22 @@ const T = (R, r, hole, pen, o = {}) => ({ R, r, out: false, hole, pen, w: 0, rot
 const ring = (n, k) => k * Math.PI * 2 / n;
 
 export const PRESETS = [
-  { name: 'Twelve', paper: 'cream', units: 0, traces: [
+  { name: 'Twelve', paper: 'night', units: 0, traces: [
     T(144, 60, 1, 0), T(144, 60, 0.6, 8), T(144, 60, 0.25, 7, { w: 1 }),
   ] },
-  { name: 'Lace', paper: 'cream', units: 0, traces: [
+  { name: 'Lace', paper: 'night', units: 0, traces: [
     T(150, 52, 1, 1), T(150, 52, 0.55, 6),
   ] },
-  { name: 'Seven', paper: 'cream', units: 0, traces: [
+  { name: 'Seven', paper: 'night', units: 0, traces: [
     T(105, 45, 1, 4), T(105, 45, 1, 6, { rot: ring(21, 1) }), T(105, 45, 1, 1, { rot: ring(21, 2) }),
   ] },
-  { name: 'Garland', paper: 'cream', units: 0, traces: [
+  { name: 'Garland', paper: 'night', units: 0, traces: [
     T(52, 40, 1, 2, { out: true }),
   ] },
-  { name: 'Nested', paper: 'cream', units: 0, traces: [
+  { name: 'Nested', paper: 'night', units: 0, traces: [
     T(120, 75, 1, 6), T(120, 50, 0.9, 0), T(120, 32, 0.8, 7),
   ] },
-  { name: 'Rosette', paper: 'cream', units: 0, traces: [
+  { name: 'Rosette', paper: 'night', units: 0, traces: [
     T(96, 36, 1, 2, { w: 1 }), T(96, 30, 0.85, 0), T(96, 84, 0.9, 7),
   ] },
   { name: 'Star chart', paper: 'night', units: 0, traces: [
