@@ -54,6 +54,8 @@
 //    function shockRadius ........ free-air shock radius at time t
 //    function fireballRadius ..... luminous fireball radius at time t
 //    function thermalPower ....... the second thermal pulse
+//    function firstPulse ......... the first (1%) pulse
+//    function wilsonWindow ....... when a condensation cloud shows
 //    function thermalFluence ..... radiant exposure at a slant range
 //    function burnThreshold ...... radiant exposure for a burn degree
 //    function promptDose ......... initial radiation dose
@@ -276,6 +278,20 @@ export function pulseEnergy(x) {
 }
 // thermal power (kt/s) at time t, second pulse only
 export function thermalPower(t, W) { return thermalPeakPower(W) * pulseShape(t / thermalPeakTime(W)); }
+// First pulse (G&D 2.39, 7.03): short and ultraviolet, it ends at the first
+// thermal minimum and carries about 1% of the thermal energy. Shape: a
+// linear rise to 0.8 P_max at t_min / 4, then an exponential fall; its area
+// is 0.35 P_max t_min, which gives 0.9% of the energy for 20 kt.
+export function firstPulse(t, W) {
+  const u = t / tThermalMin(W), pk = 0.8 * thermalPeakPower(W);
+  if (u <= 0) return 0;
+  return u < 0.25 ? pk * u / 0.25 : pk * Math.exp(-(u - 0.25) * 3.2);
+}
+export const thermalPowerTotal = (t, W) => thermalPower(t, W) + firstPulse(t, W);
+// Wilson (condensation) cloud in humid air (G&D 2.48-2.50): at Bikini
+// (about 23 kt) it formed 1 to 2 s after the burst, a dome that became a
+// ring and was gone a second or so later. Times scale as W^(1/3).
+export function wilsonWindow(W) { const k = cbrt(W / 23); return { t0: 1.2 * k, life: 1.5 * k }; }
 // Thermal partition f: 0.35 for an air burst (G&D 7.04, Table 7.88), 0.18
 // for a contact surface burst (G&D 7.101). Between, a linear blend in burst
 // height over the maximum fireball radius (a reading of Table 7.101).

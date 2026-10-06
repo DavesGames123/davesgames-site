@@ -66,6 +66,11 @@ check('G&D 7.85 t_max, 500 kt (s)', E.thermalPeakTime(500), 0.64, 0.02);
 check('G&D 7.85 power at 1 s, 500 kt (kt/s)', E.thermalPower(1, 500), 60.8, 0.1);
 check('G&D 7.85 energy fraction by 1 s, 500 kt', E.pulseEnergy(1 / E.thermalPeakTime(500)), 0.40, 0.1);
 check('G&D 7.84 energy fraction by 10 t_max', E.pulseEnergy(10), 0.80, 0.12);
+{
+  let e1 = 0; const W = 20, tm = E.tThermalMin(W);
+  for (let i = 0; i < 4000; i++) { const t = (i + 0.5) * tm * 4 / 4000; e1 += E.firstPulse(t, W) * tm * 4 / 4000; }
+  check('G&D 7.03 first pulse share of the thermal energy, 20 kt', e1 / (0.35 * W), 0.01, 0.2);
+}
 check('G&D 7.101 contact surface burst partition', E.thermalPartition(100, 0), 0.18, 0.001);
 const BURNS = [[20, 540, 1, 4.3], [20, 540, 2, 3.2], [20, 540, 3, 2.7], [1000, 2000, 1, 18], [1000, 2000, 2, 14.4], [1000, 2000, 3, 12], [20000, 5400, 1, 52], [20000, 5400, 2, 45], [20000, 5400, 3, 39]];
 for (const [W, h, d, km] of BURNS) check(`FAQ 5.1 ${d}° burn, ${W} kt (km)`, E.thermalRange(E.burnThreshold(d, W), W, h) / 1000, km, 0.2);
