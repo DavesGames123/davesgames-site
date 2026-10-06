@@ -276,7 +276,9 @@ export function build(B, E) {
     const s = rrect(68, 78, 6, cx, -(-42 + 36) / 2);
     s.holes.push(circlePath(d.rodR + 0.15, cx, 0));
     B.mesh(cp, slabXZ(s, d.floor - 10, 10, 1), 'enamel');
-    const gl = tubeWall(d.rodR + 0.15, 7, 84, d.floor - 10 - GAP, 32); gl.translate(cx, 0, 0);
+    // the gland body stops on the nut top (y = 88): run down to y = 84 it
+    // put its bottom face and bore on the nut bottom face and hole flats
+    const gl = tubeWall(d.rodR + 0.15, 7, 88, d.floor - 10 - GAP, 32); gl.translate(cx, 0, 0);
     // a hex nut: the flats of its hole, not the corners, clear the rod
     const nut = tubeWall((d.rodR + 0.15) / Math.cos(Math.PI / 6), 8.5, 84, 88, 6); nut.translate(cx, 0, 0);
     B.mesh(cp, merge([gl, nut]), 'brass');
@@ -287,8 +289,10 @@ export function build(B, E) {
     for (let i = 0; i < 4; i++) { const y = pw.cylY0 + 16 + i * 9; parts.push(tubeWall(pwall - 0.1, 25, y, y + 2, 96)); }
     const gp = merge(parts); gp.translate(px, 0, 0);
     B.mesh(pc, gp, 'alu');
-    // the bracket stands a GAP inside the foot flange top and bottom faces
-    const br = slabXZ(rrect(30, 26, 3, px, 29), pw.cylY0 + GAP, 6 - 2 * GAP, 0.8);
+    // the bracket stands a GAP inside the foot flange top and bottom faces.
+    // Its front edge (z = -17.5, -16.7 with the bevel) stays 0.7 mm clear
+    // of the bore wall (r 16): the bevel no longer cuts the bore faces.
+    const br = slabXZ(rrect(30, 24.5, 3, px, 29.75), pw.cylY0 + GAP, 6 - 2 * GAP, 0.8);
     B.mesh(pc, br, 'enamel');
     const ph = P('pHead', { label: 'Power head', labelAt: [px + 22, pw.head + 5, 0], explode: [0, 92, 0], st: 0.3, cut: true });
     const hr = g.pipes.transfer.rOut + GAP;
@@ -300,9 +304,16 @@ export function build(B, E) {
   } else {
     // the beta cylinder's bracket back to the upright
     const bk = P('bracket', { label: null, labelAt: [0, pw.cylY0 + 3, -30], explode: [0, 0, -40], st: 0.08, cut: true });
-    const s = rrect(56, 34, 4, 0, 26); s.holes.push(circlePath(bore + 0.2, 0, 0));
-    const s2 = new THREE.Shape(); s2.absarc(0, 0, 31, 0, TAU, false); s2.holes.push(circlePath(bore + 0.2, 0, 0));
-    B.mesh(bk, merge([slabXZ(s, pw.cylY0 - 6, 6, 0.8), slabXZ(s2, pw.cylY0 - 6, 6, 0.8)]), 'enamel');
+    // one outline: the r 31 ring round the bore and the 56 x 34 arm back to
+    // the upright (shape y = -z, 9 to 43). Two slabs that overlap put their
+    // top, bottom and bore faces on one plane and z-fight.
+    const s = new THREE.Shape(), ra = 31, hw = 28, y1 = 43, rc = 4;
+    const ya = Math.sqrt(ra * ra - hw * hw), a = Math.atan2(ya, hw);
+    s.moveTo(hw, ya); s.lineTo(hw, y1 - rc); s.quadraticCurveTo(hw, y1, hw - rc, y1);
+    s.lineTo(-hw + rc, y1); s.quadraticCurveTo(-hw, y1, -hw, y1 - rc); s.lineTo(-hw, ya);
+    s.absarc(0, 0, ra, Math.PI - a, TAU + a, false);
+    s.holes.push(circlePath(bore + 0.2, 0, 0));
+    B.mesh(bk, slabXZ(s, pw.cylY0 - 6, 6, 0.8), 'enamel');
   }
 
   // ── pose ───────────────────────────────────────────────────────────────────
