@@ -245,6 +245,9 @@ w.SN_NAV = [
       ["liquid-metal", "Liquid Metal Table", "WGSL", "liquid-metal-table"],
       ["refraction-table", "Refraction Table", "WGSL"]
     ] },
+    { h: "Fractals", p: [
+      ["fractal-flames", "Fractal Flames", "WGSL"]
+    ] },
     { h: "Composition", p: [
       ["bench", "Composition Bench", "NODES", "composition-bench"]
     ] }
