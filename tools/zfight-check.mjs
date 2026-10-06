@@ -12,7 +12,7 @@
 //
 //  METHOD
 //    1. Collect every visible mesh triangle in world space (InstancedMesh
-//       too). A BackSide material flips the normal. A material with
+//       too). A BackSide material or a mirrored matrix flips the normal. A material with
 //       polygonOffset is skipped: its page offsets it on purpose.
 //    2. Put each triangle into a uniform grid, cell size R / 40.
 //    3. Sample points inside each triangle. A sample "fights" when it lies
@@ -144,11 +144,13 @@ function collect(root) {
     const inst = o.isInstancedMesh ? o.count : 1;
     for (let k = 0; k < inst; k++) {
       M.copy(o.matrixWorld); if (o.isInstancedMesh) { o.getMatrixAt(k, IM); M.multiply(IM); }
+      // three.js swaps the front face of a mirrored mesh (det < 0)
+      const mirror = M.determinant() < 0 ? -1 : 1;
       for (const gr of groups) {
         const mat = mats[gr.materialIndex ?? 0] || mats[0];
         // a polygonOffset material already wins its shared planes on purpose
         if (mat.polygonOffset) continue;
-        const two = mat.side === THREE.DoubleSide, flip = mat.side === THREE.BackSide ? -1 : 1;
+        const two = mat.side === THREE.DoubleSide, flip = (mat.side === THREE.BackSide ? -1 : 1) * mirror;
         for (let i = gr.start; i + 2 < Math.min(n, gr.start + gr.count); i += 3) {
           const p = [];
           for (let j = 0; j < 3; j++) { v.fromBufferAttribute(pos, idx ? idx.getX(i + j) : i + j).applyMatrix4(M); p.push(v.x, v.y, v.z); }
