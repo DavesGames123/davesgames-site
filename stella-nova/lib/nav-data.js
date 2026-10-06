@@ -176,25 +176,40 @@ w.SN_NAV = [
     { h: "Engines", p: [
       ["stirling-engine", "Stirling Engine", "3D"],
       ["four-stroke-engine", "Four-Stroke Engine", "3D"],
-      ["wankel-engine", "Wankel Rotary Engine", "3D"]
+      ["wankel-engine", "Wankel Rotary Engine", "3D"],
+      ["radial-engine", "Radial Engine", "3D"],
+      ["steam-locomotive", "Steam Locomotive", "3D"]
     ] },
     { h: "Gears & Transmissions", p: [
       ["differential", "Differential", "3D"],
       ["planetary-gearbox", "Planetary Gearbox", "3D"],
       ["manual-gearbox", "Manual Gearbox", "3D"],
-      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"]
+      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
+      ["gear-types", "Gear Types", "3D"],
+      ["cvt", "CVT", "3D"],
+      ["universal-joints", "Universal & CV Joints", "3D"],
+      ["ball-screw", "Ball Screw & Lead Screw", "3D"]
     ] },
     { h: "Linkages & Cams", p: [
       ["geneva-cams", "Geneva Drive & Cams", "3D"],
       ["linkages", "Linkages", "3D"],
-      ["spirograph", "Spirograph", "NEW"]
+      ["spirograph", "Spirograph", "NEW"],
+      ["ratchets", "Ratchets & Freewheels", "3D"],
+      ["sewing-machine", "Lockstitch Sewing Machine", "3D"]
     ] },
     { h: "Timekeeping", p: [
       ["watch-movement", "Watch Movement", "3D"],
       ["watch-randomizer", "Timepiece Randomizer", "3D"]
     ] },
-    { h: "Locks & Folding", p: [
-      ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"],
+    { h: "Pumps", p: [
+      ["swashplate-pump", "Swashplate Piston Pump", "3D"]
+    ] },
+    { h: "Calculating & Cipher", p: [
+      ["calculators", "Pascaline & Curta", "3D"],
+      ["enigma-rotors", "Enigma Rotors", "3D"],
+      ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"]
+    ] },
+    { h: "Folding", p: [
       ["origami", "Origami Simulator", "SIM"]
     ] }
   ] },
