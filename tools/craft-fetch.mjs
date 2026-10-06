@@ -49,9 +49,13 @@ const LOCK = path.join(DIR, 'craft.lock.json');
 const STAMP = '.craft-sha256';
 
 // Zip entries that are not part of the web app. The lightcraft 0.2.1 zip
-// carries its cargo deps/ folder (rlibs, about 100 MB) and precompressed
-// copies that GitHub Pages cannot serve as Content-Encoding.
-const SKIP = ['*/deps/*', '*.rlib', '*.so', '*.dylib', '*.d', '*.wasm.gz', '*.wasm.br'];
+// carries its cargo target folder (deps/, build/, .fingerprint/,
+// incremental/, examples/, .cargo-*lock files, about 110 MB) and
+// precompressed .gz/.br copies that GitHub Pages cannot serve as
+// Content-Encoding.
+const SKIP = ['*/deps/*', '*/build/*', '*/.fingerprint/*', '*/incremental/*', '*/examples/*',
+  '*/.cargo-lock', '*/.cargo-artifact-lock', '*/.cargo-build-lock',
+  '*.rlib', '*.so', '*.dylib', '*.d', '*.gz', '*.br'];
 
 const readLock = () => JSON.parse(fs.readFileSync(LOCK, 'utf8'));
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
