@@ -1,0 +1,63 @@
+LINE ART — credits and sources
+==============================
+
+ENGINE
+  ln, the 3D line art engine, by Michael Fogleman.
+  https://github.com/fogleman/ln  (MIT licence, Copyright (C) 2016
+  Michael Fogleman; the full text is in LICENSE-ln).
+  crate/ is a Rust port of the ln Go package (ln/*.go). Each Rust file
+  names the Go file it ports. Additions that are not in ln are marked in
+  the file headers (crate/src/lib.rs lists the modules).
+
+DATA
+  crate/src/data/suzanne.obj
+    From the ln repository (examples/suzanne.obj), under the ln MIT
+    licence. Suzanne is the monkey head primitive of Blender (Blender
+    Foundation); the file header says it was exported from Blender 2.71.
+  crate/src/data/coast50.bin
+    Made with Natural Earth: the 50m coastline (public domain,
+    naturalearthdata.com), thinned to 0.04 degrees by crate/tools/coast.mjs.
+    ln's earth example reads the 10m coastline shapefile, which is not in
+    the ln repository.
+  Not used: bowser.stl (slices.go, voxelize.go load it; it is not in the
+  ln repository and is not free art) and mountain.csv (not in the ln
+  repository). See the example list for what replaces them.
+
+THE LN EXAMPLES (ln examples/ directory, 16 Go programs)
+  Each one is a Rust scene builder in crate/src/examples/<name>.rs.
+  Random layouts use a seeded Rust generator, not Go math/rand, so they
+  are not the same as the Go output.
+
+  example0.go     ported   "One cube"
+  example1.go     ported   "Cube field"
+  csg.go          ported   "Drilled die" (the frame loop is a parameter)
+  skyscrapers.go  ported   "Skyscrapers" (+ the README StripedCube texture)
+  test.go         ported   "Sphere grid" (the empty cube loop is left out)
+  outline.go      ported   "Outline spheres"
+  function.go     ported   "Function well" (+ the commented formula and
+                           the three ln function textures)
+  graph.go        ported   "Ball and stick" (the frame loop is a parameter)
+  beads.go        ported   "Beads". Change: the low-pass filter starts at
+                           0.5 by default. With the ln start (0, kept as
+                           an option) every string runs to the eye.
+  cones.go        ported   "Forest from below". pt.PoissonDisc (from
+                           fogleman/pt) is an own Bridson sampler.
+  earth.go        ported   "Earth" with the Natural Earth 50m coastline
+                           in place of the 10m shapefile.
+  suzanne.go      ported   "Suzanne" (+ a sharp-fold edge option)
+  slices.go       ported   "Contour slices" with suzanne.obj in place of
+                           bowser.stl
+  voxelize.go     ported   "Voxels" with suzanne.obj in place of
+                           bowser.stl. The default fill marks every cell
+                           along each cut; the ln rule (cut ends only) is
+                           an option.
+  slicer.go       ported   "Slicer": the 32 slice images on one sheet
+  mountain.go     ported   "Block mountain": the camera, lens and step
+                           of the Go file, with a generated height field
+                           in place of mountain.csv
+
+  Not an ln example: "Sphere textures" (crate/src/examples/textures.rs)
+  shows the four sphere textures of ln/sphere.go.
+
+PAGE
+  Fonts: Inter and STIX Two Text (lib/sci.css).

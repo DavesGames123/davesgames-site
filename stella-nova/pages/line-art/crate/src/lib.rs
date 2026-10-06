@@ -19,6 +19,8 @@
 //!   sphere cube cylinder cone triangle mesh function csg  the shapes
 //!   obj stl   the mesh loaders
 //!   rng       not in ln: the seeded random source (Go uses math/rand)
+//!   examples  the ln examples/ directory as scene builders
+//!   bin/render.rs  not in ln: a native CLI that writes one example as SVG
 //!
 //! GREP MAP
 //!   grep -n 'pub fn render'        scene.rs   the whole render
@@ -26,12 +28,14 @@
 //!   grep -n 'pub fn visible'       scene.rs   the hidden line ray
 //!   grep -n 'fn filter'            path.rs    cut a path at hidden points
 //!   grep -n 'pub enum Op'          csg.rs     intersection, difference, union
+//!   grep -n 'pub static EXAMPLES'  examples/mod.rs  the example table
 
 pub mod bbox;
 pub mod cone;
 pub mod csg;
 pub mod cube;
 pub mod cylinder;
+pub mod examples;
 pub mod filter;
 pub mod function;
 pub mod hit;
