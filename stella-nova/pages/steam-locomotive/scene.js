@@ -53,8 +53,11 @@ const SLEEPER = 700;
 // 10 mm or more: an eye wider than its end cuts through the outline, and
 // the cap triangles then lie on top of each other and fight.
 function bar(len, w, z0, z1, hole, w1 = w) {
-  const a = w / 2, b = w1 / 2, s = new THREE.Shape();
-  s.moveTo(0, -a); s.lineTo(len, -b); s.absarc(len, 0, b, -Math.PI / 2, Math.PI / 2, false); s.lineTo(0, a); s.absarc(0, 0, a, Math.PI / 2, 3 * Math.PI / 2, false);
+  // Each absarc draws its own straight run from the last point. The outline
+  // starts on the exact end point of the last arc, so no two points lie
+  // within 1e-14 mm of each other: such a pair folds the bevel.
+  const a = w / 2, b = w1 / 2, s = new THREE.Shape(), e = Math.PI / 2 + (3 * Math.PI / 2 - Math.PI / 2);
+  s.moveTo(a * Math.cos(e), a * Math.sin(e)); s.absarc(len, 0, b, -Math.PI / 2, Math.PI / 2, false); s.absarc(0, 0, a, Math.PI / 2, 3 * Math.PI / 2, false);
   if (hole) s.holes.push(circle(Math.min(hole, a - 10), 0, 0), circle(Math.min(hole, b - 10), len, 0));
   return slab(s, z0, z1 - z0, Math.min(4, (z1 - z0) / 6));
 }
@@ -181,9 +184,12 @@ export function build(B) {
 
   // ── rods ───────────────────────────────────────────────────────────────
   const coupF = part('coupF', { info: 'coupling', label: 'Coupling rod', labelAt: L3(G.PITCH / 2, 90, 100), explode: [0, 220, 0], st: 0.1, en: 0.6 });
-  B.mesh(coupF, bar(G.PITCH, 150, 46, 96, 70, 130), 'motion');
+  // ends 150 / 160 (front) and 160 / 170 (rear). At the main crank pin the
+  // two outlines differ by 10 mm and the two eyes by 5 mm. At a side wheel
+  // the 68 mm crank pin stays 12 mm inside the 80 mm rod end.
+  B.mesh(coupF, bar(G.PITCH, 150, 46, 96, 70, 160), 'motion');
   const coupR = part('coupR', { info: 'coupling', explode: [0, 220, 0], st: 0.1, en: 0.6 });
-  B.mesh(coupR, bar(G.PITCH, 130, 54, 104, 70, 150), 'motion');
+  B.mesh(coupR, bar(G.PITCH, 160, 54, 104, 70, 170), 'motion');
   const mainRod = part('mainRod', { info: 'mainrod', label: 'Main rod', labelAt: L3(G.L * 0.5, 100, 170), explode: [0, 420, 0], st: 0.12, en: 0.65 });
   B.mesh(mainRod, bar(G.L, 230, 115, 170, 70, 160), 'motion');
   const retC = part('retC', { info: 'retcrank', label: 'Return crank', labelAt: L3(200, 0, 225), explode: [0, 620, 0], st: 0.15, en: 0.7 });
@@ -218,7 +224,8 @@ export function build(B) {
   { const g = bar(G.LR, 100, 426, 444, 0, 80); g.rotateY(Math.PI / 2); B.mesh(weigh, g, 'cast'); }
   B.mesh(weigh, pin(62, 0, 455), 'shaft');
   B.mesh(weigh, pin(38, 380, 456, G.LA, 0), 'shaft');
-  { const g = pin(36, 418, 490); g.translate(0, 0, -G.LR); B.mesh(weigh, g, 'shaft'); }
+  // reach rod pin: radius 30, 5 mm inside the 35 mm rod end
+  { const g = pin(30, 418, 490); g.translate(0, 0, -G.LR); B.mesh(weigh, g, 'shaft'); }
   const lift = part('lift', { info: 'lifting', label: 'Lifting link', labelAt: L3(G.LL * 0.5, 50, 410), explode: [0, 1330, 0], st: 0.28, en: 0.85 });
   B.mesh(lift, bar(G.LL, 90, 385, 410, 40, 90), 'motion');
   const reach = part('reach', { info: 'reach', label: 'Reach rod', labelAt: L3(-1300, 60, 485), explode: [0, 1500, 0], st: 0.3, en: 0.9 });
@@ -268,7 +275,9 @@ export function build(B) {
   const ports = part('ports', { info: 'ports', explode: [0, 300, 0], st: 0.1, en: 0.6 });
   const portMesh = sg => {
     const [a, b] = portX(sg), lo = sg > 0 ? [CYL.bore1 - 38, CYL.bore1 - 2] : [CYL.bore0 + 2, CYL.bore0 + 38];
-    const s = new THREE.Shape([[a, CHEST.y - CHEST.ri - 2], [lo[0], CYL.ri - 10], [lo[1], CYL.ri - 10], [b, CHEST.y - CHEST.ri - 2]].map(p => new THREE.Vector2(...p)));
+    // the 2 mm bevel moves each face out by 2 mm: the faces stop 2 mm
+    // inside the walls, clear of the bore (radius ri) and the chest liner
+    const s = new THREE.Shape([[a, CHEST.y - CHEST.ri - 4], [lo[0], CYL.ri + 4], [lo[1], CYL.ri + 4], [b, CHEST.y - CHEST.ri - 4]].map(p => new THREE.Vector2(...p)));
     return B.mesh(ports, slab(s, 70, 80, 2), 'rubber', { shadow: false });
   };
   const portF = portMesh(1), portR = portMesh(-1);
