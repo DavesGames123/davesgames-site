@@ -324,7 +324,7 @@ function fillNums() {
   let html = `<tr><th>${INFO[id].title}</th><th></th></tr>`;
   if (id === 'rack') html += row('Pace', `${S.rpm} rpm`) + row('Pinion ω', `${sp.w.toFixed(2)} rad/s`) + row('Rack v = ω r', `${sp.v.toFixed(1)} mm/s`) + row('Pitch radius r', `${D.r1.toFixed(1)} mm`) + row('Rack place', `${Q.x.toFixed(1)} mm`);
   else html += row('Input', `${S.rpm} rpm`) + row('Output', `${sp.out.toFixed(2)} rpm`) + row('Ratio', `${D.ratio.toFixed(3).replace(/\.?0+$/, '')} : 1`);
-  html += row('Contact ratio ε_α', D.epsA.toFixed(3)) + (D.epsB ? row('Face ratio ε_β', D.epsB.toFixed(3)) + row('Total ε', D.eps.toFixed(3)) : '') + row('Pairs in contact', String(Q.inContact));
+  html += row('Contact ratio ε_α', D.epsA.toFixed(3)) + (D.epsB ? row('Face ratio ε_β', D.epsB.toFixed(3)) + row('Total ε', D.eps.toFixed(3)) : '') + row(id === 'helical' ? 'Pairs, front section' : 'Pairs in contact', String(Q.inContact));
   if (id === 'spur') html += row(`Ft at ${T_IN} N·m`, N(D.Ft)) + row('Fr = Ft tan α', N(D.Fr)) + row('Fa', '0 N');
   if (id === 'helical') html += row('Helix β', dg(D.beta)) + row('Ft', N(D.Ft)) + row('Fr = Ft tan α_t', N(D.Fr)) + row('Fa = Ft tan β', N(D.Fa));
   if (id === 'bevel') html += row('Pitch cones γ₁ / γ₂', `${dg(D.g1)} / ${dg(D.g2)}`) + row('Cone distance A', `${D.A.toFixed(1)} mm`) + row('Fa pinion', N(D.Fa1)) + row('Fa gear', N(D.Fa2));
@@ -358,7 +358,7 @@ function liveValue(key) {
   switch (key) {
     case 'in': return S.cur.id === 'rack' ? ['Pinion ω', `${sp.w.toFixed(2)} rad/s`] : ['Input', `${S.rpm} rpm`];
     case 'out': return ['Output', `${sp.out.toFixed(2)} rpm`];
-    case 'pairs': return ['Pairs in contact', String(S.Q.inContact)];
+    case 'pairs': return [S.cur.id === 'helical' ? 'Pairs, front section' : 'Pairs in contact', String(S.Q.inContact)];
     case 'lock': return ['Back efficiency', `${(D.eff.back * 100).toFixed(1)} % (locked)`];
     case 'v': return ['Rack speed', `${sp.v.toFixed(1)} mm/s`];
   }
@@ -501,7 +501,7 @@ window.snSaver = {
       if (S.cur.id === 'worm') out.push(P('\\lambda', 'lead angle', dg(D.lambda), 'm4'), P("\\varphi'", 'friction angle', dg(D.phiF), 'm4'));
       if (S.cur.id === 'rack') { const sp = speeds(); out.push(P('v', 'rack speed', `${sp.v.toFixed(1)} mm/s`, 'm5')); }
       else out.push(P('i', 'ratio', `${D.ratio.toFixed(3).replace(/\.?0+$/, '')} : 1`, ''));
-      out.push(P('n', 'pairs in contact', String(Q.inContact), 'm1'));
+      out.push(S.cur.id === 'helical' ? P('n', 'pairs over the face', pairsIn(D, Q.arc).toFixed(2), 'm1') : P('n', 'pairs in contact', String(Q.inContact), 'm1'));
       return out;
     };
     const all = () => Object.values(S.cur.B.parts).filter(q => q.info !== 'base').map(q => q.holder);
