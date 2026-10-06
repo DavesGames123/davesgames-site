@@ -196,7 +196,7 @@ function mkP(vs,fs){const cs=(s,t)=>{const o=gl.createShader(t);gl.shaderSource(
 const sdfP=mkP(SDF_VS,SDF_FS),filP=mkP(FIL_VS,FIL_FS);
 // Cache every uniform location for each program, keyed by name.
 const sU={},fU={};
-['u_res','u_time','u_ro','u_sR','u_pK','u_tO','u_tM','u_tm','u_cD','u_pM','u_rS','u_gP','u_gH','u_mode','u_filTex','u_vp','u_mBase','u_mMetal','u_mFres','u_mEnv','u_mRough','u_mBrush','u_rA','u_rB','u_rC','u_pulse','u_pulseR']
+['u_res','u_time','u_ro','u_ta','u_foc','u_sR','u_pK','u_tO','u_tM','u_tm','u_cD','u_pM','u_rS','u_gP','u_gH','u_mode','u_filTex','u_vp','u_mBase','u_mMetal','u_mFres','u_mEnv','u_mRough','u_mBrush','u_rA','u_rB','u_rC','u_pulse','u_pulseR']
   .forEach(n=>sU[n]=gl.getUniformLocation(sdfP,n));
 ['u_vp','u_res','u_width','u_taper','u_eStep','u_rootHue','u_tipHue','u_sat','u_val','u_hotHue','u_hotThresh','u_hotInt','u_ringSpread','u_grad','u_bright','u_sdfDist','u_cam']
   .forEach(n=>fU[n]=gl.getUniformLocation(filP,n));
@@ -373,7 +373,12 @@ function buildBuf(fils,nodes){const edges=nodes-1,tot=fils.length*edges;
 // frame. A portrait viewport has a narrow horizontal view, so the distance
 // grows by the inverse aspect there. Load and Reset use this distance.
 function homeCamD(){return Math.min(500,135*Math.max(1,innerHeight/Math.max(1,innerWidth)));}
-let resScale=.85,camT=.5,camP=.25,camD=homeCamD(),drg=false,lmx,lmy;
+// camTa is the point the camera looks at. The orbit and the target move
+// together, so a target off the origin pans the view (the saver uses it to
+// put the body in the clear band of the label plate). It is 0 on the page.
+// camF is the focal length in canvas heights: tan(60 deg) on the page, the
+// fov that the SDF pass and persp() share. The saver changes it to frame.
+let resScale=.85,camT=.5,camP=.25,camD=homeCamD(),camTa=[0,0,0],camF=Math.tan(PI/3),drg=false,lmx,lmy;
 function resize(){const d=Math.min(devicePixelRatio||1,2);
   canvas.width=Math.floor(innerWidth*d*resScale);canvas.height=Math.floor(innerHeight*d*resScale);
   gl.viewport(0,0,canvas.width,canvas.height);mkFBO(canvas.width,canvas.height);}
@@ -455,7 +460,7 @@ let fc=0,lt_=0,simTime=0,lastNow=0;
 // origin, torus/box shape, glow, material, and spin parameters.
 function setSdfUniforms(ro){
   gl.uniform2f(sU.u_res,canvas.width,canvas.height);gl.uniform1f(sU.u_time,simTime);
-  gl.uniform3f(sU.u_ro,ro[0],ro[1],ro[2]);
+  gl.uniform3f(sU.u_ro,ro[0],ro[1],ro[2]);gl.uniform3f(sU.u_ta,camTa[0],camTa[1],camTa[2]);gl.uniform1f(sU.u_foc,camF);
   gl.uniform1f(sU.u_sR,cur.sR);gl.uniform1f(sU.u_pK,cur.pK);gl.uniform1f(sU.u_tO,cur.tO);
   gl.uniform1f(sU.u_tM,cur.tM);gl.uniform1f(sU.u_tm,cur.tm);gl.uniform1f(sU.u_cD,cur.cD);
   gl.uniform1f(sU.u_pM,cur.pM);gl.uniform1f(sU.u_rS,cur.rS);gl.uniform1f(sU.u_gP,cur.gP);
@@ -472,13 +477,13 @@ function render(now){requestAnimationFrame(render);
   const dt=(now-lastNow)/1000;lastNow=now;if(!chk.sPause)simTime+=dt*cur.timeScale;
   if(saverTick)saverTick(Math.min(dt,.1),now);
   fc++;if(now-lt_>1000){infoEl.textContent=Math.round(fc*1000/(now-lt_))+' fps';fc=0;lt_=now;}
-  const ro=[camD*Math.sin(camT)*Math.cos(camP),camD*Math.sin(camP),camD*Math.cos(camT)*Math.cos(camP)];
+  const ro=[camTa[0]+camD*Math.sin(camT)*Math.cos(camP),camTa[1]+camD*Math.sin(camP),camTa[2]+camD*Math.cos(camT)*Math.cos(camP)];
   const W=canvas.width,H=canvas.height;
 
   // Compute VP matrix (shared by all passes)
   // The row negation flips handedness so the filament and SDF passes agree.
-  const fovY=2*Math.atan(.5/Math.tan(PI/3)),asp=W/H;
-  const vp=mM4(persp(fovY,asp,.1,1e3),lookAt(ro,[0,0,0],[0,1,0]));
+  const fovY=2*Math.atan(.5/camF),asp=W/H;
+  const vp=mM4(persp(fovY,asp,.1,1e3),lookAt(ro,camTa,[0,1,0]));
   vp[0]*=-1;vp[4]*=-1;vp[8]*=-1;vp[12]*=-1;
 
   // CPU: trace filaments once, then upload the instanced edge buffer.
@@ -559,16 +564,22 @@ function render(now){requestAnimationFrame(render);
 }
 // ═══════════════ SCREENSAVER HOOK ═══════════════
 // The shell's screensaver (lib/screensaver.js) calls snSaver.enter(opts).
-// Before this hook, the generic mode showed the page defaults from sim time 0,
-// so each run was the same picture. Now opts.seed picks a look for each run:
-// one palette of SAVER_LOOKS turned by up to 0.08 in hue, a field shape
-// from SAVER_SHAPE (frequencies, harmonics, radial wave, swirl, seed spread,
-// field drift, carve depth and pulse, spin axes), the metal, a start time
-// in [0, 300) s and a camera angle. Each half dwell (12 s or more), the
-// continuous values ease to a new look over 6 s. The seed count sN and the
-// ring count sRings stay fixed in one run, because an integer step pops.
-// The camera orbits at 0.05 to 0.02 rad/s (calm 0 to 1). Once a second it
-// sends opts.label the field the trace integrates (field3D) with live values.
+// The saver plays SHOTS of 6 to 12.5 s (longer at a high calm) with hard
+// cuts. A seeded shuffle of SAVER_SHOTS sets the order, so each run is a new
+// sequence.
+// A shot sets the parts of the picture that the eye reads first: the body
+// shape (fold pK, torus offset tO, torus radii tM and tm, cube size sR), the
+// glow gP, the metal, and the filament regime (field gain fCu, surface pull
+// sCf, length sNd x sSl, count sN). Each shot also gets a palette, a new sim
+// time (a new spin state), a camera angle, an orbit and a slow dolly.
+// The values of the field shape (frequencies, waves, spin rates) are seeded
+// in each shot too, but alone they change the picture too little to see.
+// FRAMING. The body sits in the clear band of the label plate (plateBand,
+// lib/saver-clear.js). The focal length camF makes the body radius 0.5 of
+// the band at a distance near 200, and camTa pans the view to the band
+// centre. Macro has no fit: its camera is in the filaments.
+// The dolly changes the distance by 16 % over a shot with camF fixed to the
+// fit, so a push-in grows the body and a pull-out shrinks it.
 const SAVER_LOOKS=[
   ['Indigo',  {cRH:.65,cTH:.56,cSat:1,  cGrad:.6, gH:.675}],
   ['Ember',   {cRH:.02,cTH:.11,cSat:1,  cGrad:.7, gH:.05}],
@@ -583,16 +594,21 @@ const SAVER_LOOKS=[
   ['Lagoon',  {cRH:.47,cTH:.62,cSat:1,  cGrad:.9, gH:.52}],
   ['Prism',   {cRH:0,  cTH:.66,cSat:.9, cGrad:1,  gH:.80}],
 ];
-// [key, min, max]: wide ranges, each one inside the P_ range. The page's own
-// defaults sit inside each range. Above about 1.6 the field frequencies
-// break the filaments into short noise, so they stop there.
-const SAVER_SHAPE=[
-  ['fFr',.2,1.6],['fFrZ',.2,1.6],['fO2',0,1.6],['fO3',0,1.4],['fWf',0,2.5],['fWa',1,5],
-  ['fMo',0,1],['sCur',0,6],['sCf',0,12],['sSp',.3,1.5],['moPulse',0,5],['moPulseR',.1,1.2],
-  ['tO',6,20],['rS',.1,1.2],['moRA',0,2],['moRB',0,2],['moRC',0,2],
-  ['rCw',3,16],['gP',.8,3.6],['mBase',0,.3],['mMetal',.4,3],['mFres',.8,6],
+// [name, values, r]. A [min, max] pair is a seeded value. r is the body
+// radius in world units: the 95th percentile radius of the lit pixels in
+// renders at 3 spin states, for the band fit. r 0: no fit (Macro).
+const SAVER_SHOTS=[
+  ['Lantern',      {}, 31],
+  ['Silhouette',   {mMetal:0,mBase:0,gP:[.3,.5],fCu:1.5,sCf:1,rCb:1.2}, 33],
+  ['Fused',        {pK:20,tm:[2,3],tO:[7,9],cD:4}, 26],
+  ['Constellation',{pK:.1,tO:[17,20],sR:[7,10],tM:[6,8],tm:[.3,.5]}, 40],
+  ['Burst',        {sCf:0,sPr:0,fCu:[.2,.5],sNd:40,sSl:5,sN:40,gP:.6}, 33],
+  ['Fur',          {fCu:[2.5,4],sCf:0,sPr:0,fFr:[.5,.8],fFrZ:[.5,.8],sN:110,sRings:16,sNd:14,rCw:4,rHw:10,gP:.5,mMetal:.6}, 31],
+  ['Hollow',       {tO:0,pK:5,tM:[19,22],tm:[1.5,2.5],cD:4}, 30],
+  ['Macro',        {mBrush:.6}, 0],
 ];
-const SAVER_EASE=[...SAVER_SHAPE.map(e=>e[0]),'cRH','cTH','cSat','cGrad','gH'];
+// Seeded in each shot before the shot values, which win.
+const SAVER_JITTER=[['fFr',.2,.9],['fFrZ',.2,.9],['fO2',0,1.2],['fO3',0,1],['rS',.2,.8],['moRA',0,1],['moRB',0,1],['moRC',0,1]];
 let saverTick=null;
 window.snSaver={
   enter(opts){
@@ -600,42 +616,59 @@ window.snSaver={
     ['panel','info'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
     let seed=(opts.seed>>>0)||1;
     const rnd=()=>{seed=Math.imul(seed^seed>>>15,0x2c1b3c6d)+0x6d2b79f5>>>0;seed^=seed>>>12;return(seed>>>0)/4294967296;};
-    let li=Math.floor(rnd()*SAVER_LOOKS.length);
-    // Hues wrap: ease each one by the short way round the circle.
-    const hueTo=(a,b,e)=>{let d=b-a;d-=Math.round(d);return((a+d*e)%1+1)%1;};
-    // A palette turns by up to 0.08 of the hue circle, so a palette that
-    // comes back does not give the same colours.
-    const pickLook=()=>{
-      const o={...SAVER_LOOKS[li][1]},turn=.16*rnd()-.08;
-      for(const k of['cRH','cTH','gH'])o[k]=((o[k]+turn)%1+1)%1;
-      for(const[k,a,b]of SAVER_SHAPE)o[k]=a+(b-a)*rnd();
-      return o;};
-    Object.assign(cur,pickLook());
-    cur.sN=Math.round(40+80*rnd());cur.sRings=Math.round(4+10*rnd());
-    cur.timeScale=1-.5*calm;
-    simTime=300*rnd();
-    camT=6.2832*rnd();camP=-.35+.85*rnd();camD=homeCamD();
-    const orbit=(.05-.03*calm)*(rnd()<.5?-1:1);
-    const hold=Math.max(12,(opts.seconds||60)/2)*1000,ease=6000;
-    let t0=performance.now(),A=null,B=null;
-    saverTick=(dt,now)=>{
-      camT+=orbit*dt;
-      if(!A){if(now-t0<hold)return;
-        li=(li+1+Math.floor(rnd()*(SAVER_LOOKS.length-1)))%SAVER_LOOKS.length;
-        A={...cur};B=pickLook();t0=now;}
-      const k=Math.min(1,(now-t0)/ease),e=k*k*(3-2*k);
-      for(const f of SAVER_EASE)cur[f]=/H$/.test(f)?hueTo(A[f],B[f],e):A[f]+(B[f]-A[f])*e;
-      if(k>=1){A=null;t0=now;}
+    const val=v=>Array.isArray(v)?v[0]+(v[1]-v[0])*rnd():v;
+    let band=null,bandAt=-1e9,plateBand=null;
+    import('../../lib/saver-clear.js').then(m=>{plateBand=m.plateBand;}).catch(()=>{});
+    // The clear band in CSS px: its height and width, and the offset of its
+    // centre from the canvas centre (down is +).
+    const bandBox=()=>{const h=innerHeight,w=innerWidth;
+      if(!band)return{h:h*.9,w,oy:0};
+      const t=Math.min(band.t,h*.42),b=Math.min(band.b,h*.42);
+      return{h:Math.max(80,h-t-b),w:band.w?Math.min(w,band.w):w,oy:(t-b)/2};};
+    let order=[],shot=null,li=0;
+    const nextShot=()=>{
+      if(!order.length){
+        order=SAVER_SHOTS.map((_,i)=>i);
+        for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+        if(shot&&order[0]===shot.i)order.push(order.shift());
+      }
+      const i=order.shift(),[name,vals,r]=SAVER_SHOTS[i];
+      for(const[k,p]of Object.entries(P_))cur[k]=p.v;
+      // A palette, turned by up to 0.08 of the hue circle. Half the shots
+      // take a tip hue across the circle from the root hue.
+      li=Math.floor(rnd()*SAVER_LOOKS.length);
+      const look={...SAVER_LOOKS[li][1]},turn=.16*rnd()-.08;
+      for(const k of['cRH','cTH','gH'])look[k]=((look[k]+turn)%1+1)%1;
+      if(rnd()<.5){look.cTH=(look.cRH+.35+.15*rnd())%1;look.cGrad=1;}
+      Object.assign(cur,look);
+      for(const[k,a,b]of SAVER_JITTER)cur[k]=a+(b-a)*rnd();
+      for(const[k,v]of Object.entries(vals))cur[k]=val(v);
+      cur.timeScale=1-.5*calm;
+      simTime=300*rnd();
+      camT=6.2832*rnd();camP=-.3+.9*rnd();
+      shot={i,name,r,t:0,dur:6+5*rnd()+1.5*calm,
+        orbit:(.08-.04*calm)*(.6+.4*rnd())*(rnd()<.5?-1:1),
+        rise:(rnd()-.5)*.03,
+        // dolly: the distance goes from 1 to k over the shot.
+        k:rnd()<.5?.84:1.16,
+        macro:r?0:40+15*rnd()};
+      plate();
     };
+    // The focal length that makes the body radius f of the band. A body of
+    // radius r at distance d is camF r / d canvas heights tall (sdf.frag.glsl
+    // and persp() share camF). The distance stays near 200, inside the march
+    // range (MD 500 in sdf.frag.glsl), and the lens does the framing.
+    const fitF=(r,d)=>{const bx=bandBox(),H=innerHeight,f=.5;
+      return Math.min(f*bx.h,f*bx.w)*d/(r*H);};
+    const label=typeof opts.label==='function'?opts.label:null;
     // The plate: field3D with the live frequencies and gains. q is p scaled
     // by fFr (fFrZ on z); a, b, c are the three fixed wave vectors.
-    const label=typeof opts.label==='function'?opts.label:null;
     const plate=()=>{
-      if(!label)return;
+      if(!label||!shot)return;
       const f=(v,d=2)=>Number(v).toFixed(d);
       label({
-        title:'Branched flow · '+SAVER_LOOKS[li][0],
-        sub:'Filaments traced through a sinusoidal field over a carved SDF body',
+        title:'Branched flow · '+shot.name,
+        sub:SAVER_LOOKS[li][0]+' · filaments traced through a sinusoidal field over a carved SDF body',
         tex:[String.raw`\vec F(\vec p)=-\nabla\bigl[\cos(\vec a\cdot\vec q)+g_2\cos(\vec b\cdot\vec q)+g_3\cos(\vec c\cdot\vec q)\bigr]`,
           String.raw`\vec v\leftarrow\vec v+\vec F-(\vec v\cdot\hat n)\,\hat n,\qquad \vec q=(f\,x,\;f\,y,\;f_z\,z)`],
         eq:['F(p) = −∇[cos(a·q) + g₂ cos(b·q) + g₃ cos(c·q)]','v ← v + F − (v·n̂) n̂,  q = (f x, f y, f_z z)'],
@@ -644,14 +677,32 @@ window.snSaver={
           {sym:'f_z',name:'z frequency',value:f(cur.fFrZ)},
           {sym:'g_2',name:'second wave',value:f(cur.fO2)},
           {sym:'g_3',name:'third wave',value:f(cur.fO3)},
-          {sym:'N',name:'seed density',value:String(cur.sN)},
+          {sym:'N',name:'seed density',value:String(Math.round(cur.sN))},
         ],
       });
     };
-    plate();this._plate=setInterval(plate,1000);
+    nextShot();
+    saverTick=(dt,now)=>{
+      if(plateBand&&now-bandAt>500){bandAt=now;band=plateBand(innerHeight);}
+      shot.t+=dt;
+      if(shot.t>shot.dur)nextShot();
+      const s=Math.min(1,shot.t/shot.dur),e=s*s*(3-2*s);
+      camT+=shot.orbit*dt;camP=Math.max(-.6,Math.min(.8,camP+shot.rise*dt));
+      camD=(shot.macro||200)*(1+(shot.k-1)*e);
+      camF=shot.macro?Math.tan(PI/3):fitF(shot.r,200);
+      // Pan to the band centre: move the orbit and its target together along
+      // the camera up vector. oy CSS px down is oy / H canvas heights, which
+      // is camF delta / d at the target.
+      const bx=bandBox(),o=[Math.sin(camT)*Math.cos(camP),Math.sin(camP),Math.cos(camT)*Math.cos(camP)];
+      const ww=[-o[0],-o[1],-o[2]],uu=nrm([ww[2],0,-ww[0]]);
+      const vv=[ww[1]*uu[2]-ww[2]*uu[1],ww[2]*uu[0]-ww[0]*uu[2],ww[0]*uu[1]-ww[1]*uu[0]];
+      const dl=bx.oy*camD/(camF*innerHeight);
+      camTa=[vv[0]*dl,vv[1]*dl,vv[2]*dl];
+    };
+    this._plate=setInterval(plate,1000);
     return{canvas,warmupMs:1500};
   },
-  exit(){saverTick=null;clearInterval(this._plate);},
+  exit(){saverTick=null;clearInterval(this._plate);camTa=[0,0,0];camF=Math.tan(PI/3);},
 };
 requestAnimationFrame(render);
 })();

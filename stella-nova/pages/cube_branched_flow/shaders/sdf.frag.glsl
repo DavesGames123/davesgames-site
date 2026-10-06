@@ -21,11 +21,13 @@
 //     │   cube  s8   ()│◀─ torus (min with d1); g_gd tracks nearest torus dist
 //     └───────────────┘        for the volumetric glow.
 //
-//   Uniforms come from main.js (u_ro camera, torus/box shape, glow, material,
-//   spin, u_filTex the filament reflection texture, u_vp shared view-proj).
+//   Uniforms come from main.js (u_ro camera, u_ta the point it looks at,
+//   u_foc the focal length in screen heights, torus/box shape, glow,
+//   material, spin, u_filTex the filament reflection texture, u_vp shared
+//   view-proj). The page sets u_ta 0 and u_foc tan(60 deg).
 precision highp float;
-uniform vec2 u_res;uniform float u_time;uniform vec3 u_ro;
-uniform float u_sR,u_pK,u_tO,u_tM,u_tm,u_cD,u_pM,u_rS,u_gP,u_gH,u_mode;
+uniform vec2 u_res;uniform float u_time;uniform vec3 u_ro,u_ta;
+uniform float u_foc,u_sR,u_pK,u_tO,u_tM,u_tm,u_cD,u_pM,u_rS,u_gP,u_gH,u_mode;
 uniform float u_mBase,u_mMetal,u_mFres,u_mEnv,u_mRough,u_mBrush;
 uniform float u_rA,u_rB,u_rC,u_pulse,u_pulseR;
 uniform sampler2D u_filTex;
@@ -73,9 +75,9 @@ float marchLo(vec3 ro,vec3 rd,float ts){float t=ts;vec2 dti=vec2(1e10,0);int i;
 vec3 env(vec3 rd){float y=.5+.5*rd.y;vec3 b=mix(vec3(.03,.03,.06),vec3(.06,.07,.12),y);
   b+=.015*exp(-3.*abs(rd.y));return b;}
 void main(){vec2 uv=(gl_FragCoord.xy-.5*u_res)/u_res.y;vec3 ro=u_ro;
-  // Build the camera basis looking at the origin and the primary ray.
-  vec3 ww=normalize(-ro);vec3 uu=normalize(cross(vec3(0,1,0),ww));vec3 vv=cross(ww,uu);
-  float fov=tan(TAU/6.);vec3 rd=normalize(uv.x*uu+uv.y*vv+fov*ww);
+  // Build the camera basis looking at u_ta and the primary ray.
+  vec3 ww=normalize(u_ta-ro);vec3 uu=normalize(cross(vec3(0,1,0),ww));vec3 vv=cross(ww,uu);
+  vec3 rd=normalize(uv.x*uu+uv.y*vv+u_foc*ww);
   // Animated scene rotation, matching the CPU trace's computeGRot.
   float tm=u_time*u_rS;gR=rX(u_rA*tm)*rZ(u_rB*tm)*rY(u_rC*tm);
   g_gd=1e3;float t=marchHi(ro,rd);float gd=g_gd;int it=g_i;
