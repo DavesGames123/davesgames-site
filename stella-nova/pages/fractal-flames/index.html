@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Fractal Flames — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FRACTAL FLAMES  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A port of flam3 by Scott Draves and the flam3 authors,
+   https://github.com/scottdraves/flam3 (flam3 is Copyright (C) 1992-2009
+   Spotworks LLC). SPDX-License-Identifier: GPL-3.0-or-later. This page is
+   free software under the GNU General Public License, version 3 or later,
+   distributed WITHOUT ANY WARRANTY. See LICENSE and CREDITS.txt here.
+
+   Static markup only. main.js runs the flam3 port on WebGPU in #fl and
+   builds the lists (palettes, variation weights). The modules:
+     genome.js       the genome, random / mutate / cross / interpolate, XML
+     variations.js   the CPU port of the variations, the probe and the gate
+     engine.js       the WebGPU renderer (flame.wgsl, render.wgsl)
+     main.js         the controls, the phone sheet and window.snSaver
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js    first: records the GPU device for page release
+     2. style.css, lib/sci.css
+     3. lib/render-scale.js classic script: window.RenderScale (canvas size)
+     4. main.js             type=module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #fl       the canvas, the whole frame
+     #panel    controls: genome, palette, variations, render, symmetry,
+               camera, flam3 XML, about. A drawer at the left on a wide
+               screen, a bottom sheet over #dock on a phone.
+     #status   samples per pixel, steps per frame, the last action
+     #dock     phone only: panel, New, Mutate, Cross, Back
+   main.js keeps the genome frame in the part of #fl that the panel, the
+   sheet and the bars leave clear.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Fractal flames: a WebGPU port of flam3, the fractal flame renderer by Scott Draves. Random genomes, mutation, crossing, smooth morphs and flam3 XML.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<script src="../../lib/render-scale.js"></script>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<canvas id="fl"></canvas>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Fractal Flames <span class="sub">· a port of flam3</span></div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+<div id="msg" hidden></div>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <h1 class="ptitle">Fractal Flames</h1>
+  <p class="psub">A WebGPU port of <a href="https://github.com/scottdraves/flam3" target="_blank" rel="noopener">flam3</a>, the fractal flame renderer by Scott Draves</p>
+
+  <div class="sec-label">Genome</div>
+  <div class="modes">
+    <button id="bRandom">New random</button>
+    <button id="bMutate">Mutate</button>
+  </div>
+  <div class="modes">
+    <button id="bCross">Cross</button>
+    <button id="bBack" title="The previous genome">Back</button>
+  </div>
+  <div class="row sel"><label for="selChoice">Variation choice</label>
+    <select id="selChoice">
+      <option value="weighted">Weighted to classic shapes</option>
+      <option value="uniform">flam3 (uniform)</option>
+    </select>
+  </div>
+  <div class="hint" id="action"></div>
+
+  <div class="sec-label">Palette</div>
+  <div class="row sel"><label for="selPalette">flam3 palette</label><select id="selPalette"></select></div>
+  <canvas id="palStrip" width="256" height="1"></canvas>
+  <div class="row"><label>Hue rotation</label><input type="range" id="hue" min="0" max="1" step="0.005" value="0"><span class="val" id="hueV"></span></div>
+  <div class="modes"><button id="bPalRandom">Random palette</button></div>
+
+  <div class="sec-label">Variations</div>
+  <div class="hint">The weight of each variation in each xform. A row with a coloured mark is a symmetry xform.</div>
+  <div id="xforms"></div>
+
+  <div class="sec-label">Render</div>
+  <div class="row"><label>Quality <span class="w">samples per pixel</span></label><input type="range" id="quality" min="1" max="3.3" step="0.01" value="2.3"><span class="val" id="qualityV"></span></div>
+  <div class="row"><label>Brightness</label><input type="range" id="brightness" min="0.5" max="24" step="0.1" value="4"><span class="val" id="brightnessV"></span></div>
+  <div class="row"><label>Gamma</label><input type="range" id="gamma" min="1" max="8" step="0.05" value="4"><span class="val" id="gammaV"></span></div>
+  <div class="row"><label>Vibrancy</label><input type="range" id="vibrancy" min="0" max="1" step="0.01" value="1"><span class="val" id="vibrancyV"></span></div>
+  <div class="row"><label>Highlight power</label><input type="range" id="highlight" min="-1" max="3" step="0.05" value="-1"><span class="val" id="highlightV"></span></div>
+  <div class="row"><label>Gamma threshold</label><input type="range" id="gamLin" min="0" max="0.2" step="0.005" value="0.01"><span class="val" id="gamLinV"></span></div>
+  <div class="row"><label>Density estimator radius</label><input type="range" id="estimator" min="0" max="9" step="0.5" value="9"><span class="val" id="estimatorV"></span></div>
+
+  <div class="sec-label">Symmetry</div>
+  <div class="row sel"><label for="selSym">Kind</label>
+    <select id="selSym">
+      <option value="1">None</option>
+      <option value="2">Rotational 2</option><option value="3">Rotational 3</option><option value="4">Rotational 4</option>
+      <option value="5">Rotational 5</option><option value="6">Rotational 6</option><option value="8">Rotational 8</option>
+      <option value="12">Rotational 12</option>
+      <option value="-1">Bilateral</option>
+      <option value="-2">Dihedral 2</option><option value="-3">Dihedral 3</option><option value="-4">Dihedral 4</option>
+      <option value="-5">Dihedral 5</option><option value="-6">Dihedral 6</option><option value="-8">Dihedral 8</option>
+    </select>
+  </div>
+  <div class="hint">flam3_add_symmetry adds one xform per rotation (and one mirror for bilateral and dihedral).</div>
+
+  <div class="sec-label">Camera</div>
+  <div class="row"><label>Zoom <span class="w">log2</span></label><input type="range" id="zoom" min="-2" max="3" step="0.01" value="0"><span class="val" id="zoomV"></span></div>
+  <div class="row"><label>Rotate <span class="w">degrees</span></label><input type="range" id="rotate" min="-180" max="180" step="1" value="0"><span class="val" id="rotateV"></span></div>
+  <div class="modes"><button id="bFit">Fit to frame</button><button id="bReframe">flam3 reframe</button></div>
+
+  <div class="sec-label">flam3 XML</div>
+  <div class="modes"><button id="bExport">Save .flam3</button><button id="bCopy">Copy XML</button></div>
+  <textarea id="xml" spellcheck="false" placeholder="Paste a &lt;flame&gt; genome here, then Load"></textarea>
+  <div class="modes"><button id="bImport">Load pasted genome</button><label class="filebtn">Open file<input type="file" id="file" accept=".flam3,.flame,.xml,text/xml"></label></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>A fractal flame is an iterated function system. Each xform is an affine map followed by a weighted sum of non-linear variations. The chaos game moves many points through randomly chosen xforms and counts where they land.</p>
+    <p>flam3 colours each point by a palette index that each xform pulls toward its own colour, and maps the hit count through a logarithm. That log-density map, with gamma and vibrancy, gives the soft glow. A variable-width filter (density estimation) smooths the sparse areas.</p>
+    <p>This page is a port of flam3 by Scott Draves and the flam3 authors (GPL-3.0). It is free software under the GNU GPL, version 3 or later. The source of each file is in this directory, with LICENSE and CREDITS.txt.</p>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg">
+    <button id="dRandom">New</button>
+    <button id="dMutate">Mutate</button>
+    <button id="dCross">Cross</button>
+  </div>
+  <button id="dBack" aria-label="Back">↶</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
