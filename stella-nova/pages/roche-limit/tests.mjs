@@ -1,7 +1,9 @@
 // ============================================================================
 //  ROCHE LIMIT  ·  tests.mjs — checks of the model, the CPU reference and GPU
 // ----------------------------------------------------------------------------
-//  node stella-nova/pages/roche-limit/tests.mjs          all CPU tests
+//  node stella-nova/pages/roche-limit/tests.mjs          all CPU tests, then
+//                                                       the GPU test in Deno
+//  deno run -A stella-nova/pages/roche-limit/tests.mjs --gpu   GPU test only
 //
 //  1  Roche formulas against published values (Earth-Moon, Earth-comet,
 //     Phobos, the Saturn A ring edge)
@@ -12,6 +14,8 @@
 //  5  the energy ledger E - W of an isolated pile
 //  6  disruption at low N (CPU): a fluid pile at 0.6 d_fluid loses most of
 //     its mass in 3 orbits, at 1.5 d_fluid it keeps it
+//  7  GPU (Deno WebGPU): forces of shaders/sim.wgsl against CpuSim for a
+//     pile of 300 grains with every force term on, then 2 blocks of motion
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 //  Published values: Wikipedia "Roche limit", revision of 2020-12 (tables
@@ -20,7 +24,7 @@
 // ============================================================================
 import * as P from './physics.js';
 
-const GPU_ONLY = false;
+const GPU_ONLY = typeof Deno !== 'undefined' && Deno.args.includes('--gpu');
 let fails = 0;
 const ok = (name, cond, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}  ${info}`); if (!cond) fails++; };
 const rel = (a, b) => Math.abs(a - b) / Math.abs(b);
@@ -142,10 +146,80 @@ function cpuTests() {
   }
 }
 
+// 7 ─ GPU against CPU (Deno WebGPU)
+async function gpuTest() {
+  if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  GPU test: no navigator.gpu here'); return; }
+  const { SimGPU, loadSimCode } = await import('./engine.js');
+  const adapter = await navigator.gpu.requestAdapter();
+  const device = await adapter.requestDevice();
+  const errs = []; device.addEventListener?.('uncapturederror', e => errs.push(String(e.error?.message || e)));
+  const N = 300, mat = P.MATERIALS.cohesive;
+  const { C, cl, sim } = settledPile(N, mat, 11, 4);
+  const st = P.pileStats(sim.x, sim.mass);
+  const spec = { kind: 'circular', q: 1.5, s: 0.08, J2: 0.015 };
+  const pl = P.planetFor(st, spec);
+  spec.d = 0.8 * P.rocheFluid(pl.Rp, pl.rhoP, pl.rhoS) / pl.Rp;
+  const o = P.orbitStart(pl, spec);
+  const cpu = new P.CpuSim(N, cl.rad, cl.mass, C, pl);
+  cpu.x.set(sim.x); P.placeOnOrbit(cpu.x, cpu.v, cpu.w, cpu.mass, o.Omega);
+  // stir: random velocities and spins, so dashpots, friction and rolling act
+  const r = P.rng(9);
+  for (let i = 0; i < 3 * N; i++) { cpu.v[i] += (r() - 0.5) * 0.2 * C.vesc; cpu.w[i] += (r() - 0.5) * 0.2 * C.vesc; }
+  const pos0 = cpu.x.slice(), vel0 = cpu.v.slice(), spin0 = cpu.w.slice();
+  const refC = new P.RefOrbit(pl, o.X, o.V); cpu.init(refC);
+  const gpu = new SimGPU(device, N, await loadSimCode());
+  gpu.setParams(C, pl, 0);
+  gpu.ref = new P.RefOrbit(pl, o.X, o.V);
+  gpu.setState(pos0, vel0, spin0, cl.rad, cl.mass);
+  gpu.prime();
+  const acc = await gpu.readAccs();
+  let num = 0, den = 0, numA = 0, denA = 0, contacts = 0;
+  for (let i = 0; i < N; i++) {
+    for (let k = 0; k < 3; k++) {
+      num += (acc[16 * i + k] - cpu.aF[3 * i + k]) ** 2; den += cpu.aF[3 * i + k] ** 2;
+      numA += (acc[16 * i + 4 + k] - cpu.al[3 * i + k]) ** 2; denA += cpu.al[3 * i + k] ** 2;
+    }
+    contacts += cpu.cnt[i];
+  }
+  const eF = Math.sqrt(num / den), eA = Math.sqrt(numA / denA);
+  ok('GPU forces = CPU reference (300 grains, every term on)', eF < 1e-4, `rms rel err of the acceleration ${eF.toExponential(2)} (${contacts} list entries)`);
+  ok('GPU torques = CPU reference', eA < 1e-3, `rms rel err of the angular acceleration ${eA.toExponential(2)}`);
+  // two blocks of motion
+  for (let b = 0; b < 2; b++) cpu.block(C.dt, P.K_STEP, refC);
+  const enc = device.createCommandEncoder(); gpu.encode(enc, 2, true); device.queue.submit([enc.finish()]);
+  const rb = await gpu.readback();
+  let dx = 0, dv = 0, vs = 0;
+  for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) {
+    dx = Math.max(dx, Math.abs(rb.body[12 * i + k] - cpu.x[3 * i + k]));
+    dv += (rb.body[12 * i + 4 + k] - cpu.v[3 * i + k]) ** 2; vs += cpu.v[3 * i + k] ** 2;
+  }
+  ok('GPU = CPU after 2 blocks (64 steps)', dx < 1e-2 && Math.sqrt(dv / vs) < 1e-3, `max |dx| ${dx.toExponential(2)} grain radii, rms rel dv ${Math.sqrt(dv / vs).toExponential(2)}, ref dX ${Math.abs(rb.X[0] - refC.X[0]).toExponential(1)}`);
+  // energy from the GPU readback (cs_potential) against the CPU energy
+  { const N3 = N * 3, gx = new Float64Array(N3), gv = new Float64Array(N3), gw = new Float64Array(N3), gm = new Float64Array(N), gp = new Float64Array(N);
+    for (let i = 0; i < N; i++) { for (let k = 0; k < 3; k++) { gx[3 * i + k] = rb.body[12 * i + k]; gv[3 * i + k] = rb.body[12 * i + 4 + k]; gw[3 * i + k] = rb.body[12 * i + 8 + k]; } gm[i] = rb.body[12 * i + 7]; gp[i] = rb.grav[8 * i + 3]; }
+    const eg = P.energyOf(gx, gv, gw, cl.rad, gm, gp, rb.X, rb.V, pl.GM), ec = P.energyOf(cpu.x, cpu.v, cpu.w, cpu.rad, cpu.mass, cpu.phi, refC.X, refC.V, pl.GM);
+    const dU = Math.abs(eg.Us - ec.Us) / Math.abs(ec.Us), dK = Math.abs((eg.K + eg.Kr + eg.Up) - (ec.K + ec.Kr + ec.Up)) / Math.abs(ec.Us);
+    let Wc = 0; for (const q of cpu.work) Wc += q;
+    ok('GPU energy terms = CPU (self potential, orbit)', dU < 1e-5 && dK < 1e-3, `|dU_self|/|U_self| ${dU.toExponential(2)}, |d(K + U_planet)|/|U_self| ${dK.toExponential(2)}, contact work GPU ${rb.W.toExponential(4)} CPU ${Wc.toExponential(4)}`); }
+  ok('no grid bucket overflow', rb.overflow === 0, `${rb.overflow} grains found a full bucket`);
+  ok('no WebGPU validation errors', errs.length === 0, errs.join(' | ') || 'none');
+  gpu.destroy(); device.destroy();
+}
+
 if (!GPU_ONLY) {
   const t0 = Date.now();
   cpuTests();
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+}
+if (typeof Deno !== 'undefined') await gpuTest();
+else {
+  // Node has no WebGPU: run the GPU test in Deno when it is installed.
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const here = fileURLToPath(import.meta.url);
+  const d = spawnSync('deno', ['run', '-A', here, '--gpu'], { encoding: 'utf8' });
+  if (d.error) console.log('SKIP  GPU test: deno is not installed (' + d.error.code + ')');
+  else { process.stdout.write(d.stdout); if (d.stderr.trim()) process.stdout.write(d.stderr); if (d.status !== 0) fails++; }
 }
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
 if (typeof Deno !== 'undefined') { if (fails) Deno.exit(1); }
