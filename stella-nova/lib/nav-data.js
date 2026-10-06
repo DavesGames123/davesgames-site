@@ -184,6 +184,7 @@ w.SN_NAV = [
       ["geneva-cams", "Geneva Drive & Cams", "3D"],
       ["linkages", "Linkages", "3D"],
       ["manual-gearbox", "Manual Gearbox", "3D"],
+      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
       ["spirograph", "Spirograph", "NEW"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"],
       ["origami", "Origami Simulator", "SIM"]

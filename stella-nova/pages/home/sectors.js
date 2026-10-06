@@ -166,6 +166,7 @@ const BLURBS = {
   'geneva-cams': 'Turn steady rotation into steps: a Geneva drive and a disc cam in 3D.',
   linkages: 'Bars and pins that draw curves, a true straight line, and a walking step.',
   'manual-gearbox': 'A five-speed gearbox cut open: shift and watch the synchros lock each gear.',
+  'harmonic-drive': 'The reducers inside robot joints: a flexing strain wave gear and a cycloidal drive.',
   'photon-caustics': 'Trace photons through mirrors, lenses and water and watch caustics form, in 2D and in a 3D pool.',
   attractorlab: 'Lorenz, Rossler, Thomas and friends.',
   'wave-membrane': 'Chladni modes of a vibrating drum.',
