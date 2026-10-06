@@ -102,6 +102,9 @@ w.SN_NAV = [
       ["qft-flow", "Quantum Encoding", "MATH"],
       ["qft-store", "Quantum Decoding", "DATA"],
       ["frqi", "Quantum Image Encoding", "IMG", "frqi-quantum-image-lab"]
+    ] },
+    { h: "Particle Physics", p: [
+      ["particle-collider", "Particle Collider", "SIM"]
     ] }
   ] },
   { id: "life", label: "Life Sciences", short: "Life", icon: "✿", color: "#6cd6a8", color2: "#e8d2a8", groups: [
@@ -311,7 +314,8 @@ w.SN_NAV = [
     ] },
     { h: "Vector & Layout", p: [
       ["vectorcraft", "VectorCraft", "RUST"],
-      ["designcraft", "DesignCraft", "RUST"]
+      ["designcraft", "DesignCraft", "RUST"],
+      ["pattern-designer", "Pattern Designer", "SVG"]
     ] },
     { h: "Video & Motion", p: [
       ["filmcraft", "FilmCraft", "RUST"],
