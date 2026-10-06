@@ -66,14 +66,17 @@ function harmonic(B, u) {
   const cs = B.part('cs', { info: 'cs', label: 'Circular spline (fixed)', labelAt: [Rc + 12, 16, 0], explode: [0, -50, 0], st: 0, en: 0.6 });
   const inner = outline(u.Nc, u.Nc, m, { ha: 1, hf: 1.25 }).map(([r, p]) => { const q = 2 * Rc - r, a = p + Math.PI / u.Nc; return [q * Math.cos(a), q * Math.sin(a)]; });
   const hole = new THREE.Path(inner.map(p => new THREE.Vector2(p[0], p[1])).reverse());
-  B.mesh(cs, slab(shapeOf(ring(Rc + 14), [hole]), 0, 14, 0.5), 'steel');
+  // the ring and the flexspline tooth ring are not flush: their end faces
+  // would z-fight where the teeth mesh. The ring top stands 0.4 mm proud
+  // (y 14.4) and the tooth ring bottom hangs 0.4 mm below (y -0.4).
+  B.mesh(cs, slab(shapeOf(ring(Rc + 14), [hole]), 0, 14.4, 0.5), 'steel');
   B.mesh(cs, lathe([[[Rc + 30, -8], [Rc + 30, 0], [Rc + 6, 0], [Rc + 6, -8]]], 96), 'cast');
   for (let i = 0; i < 8; i++) { const a = TAU * i / 8 + 0.2, g = rod(3.5, 0, 4, 16); g.translate((Rc + 22) * Math.cos(a), 0, -(Rc + 22) * Math.sin(a)); B.mesh(cs, g, 'bolt'); }
 
   // flexspline: tooth ring and cup, deformed each frame
   const fs = B.part('fs', { info: 'fs', label: 'Flexspline', labelAt: [Rf + 8, 40, 0], explode: [0, 70, 0], st: 0.2, en: 0.8 });
   const teeth = outline(u.Nf, u.Nf, m, { ha: 1, hf: 1.25 }).map(([r, p]) => [r * Math.cos(p), r * Math.sin(p)]);
-  const tg = slab(shapeOf(teeth, [circle(Rf - 3.4)]), 0, 14, 0.3);
+  const tg = slab(shapeOf(teeth, [circle(Rf - 3.4)]), -0.4, 14.4, 0.3);
   const cup = lathe([[[Rf - 2.2, 14], [Rf - 2.2, 56], [16, 60], [16, 63], [Rf - 3.4, 59], [Rf - 3.4, 14]]], 120);
   const tgN = tg.index ? tg.toNonIndexed() : tg; tgN.computeVertexNormals();
   const flexT = flexMesh(tgN, () => 1), flexC = flexMesh(cup, y => Math.max(0, 1 - (y - 14) / 46));
@@ -108,7 +111,8 @@ function cycloidal(B, u) {
   const prof = discProfile(u, 1080), h = B.part('housing', { info: 'housing', label: 'Pin housing (fixed)', labelAt: [u.R + 22, 26, 0], explode: [0, -60, 0], st: 0, en: 0.6 });
   B.mesh(h, lathe([[[u.R + 22, -6], [u.R + 22, 26], [u.R + 2, 26], [u.R + 2, 0], [20, 0], [20, -6]]], 120), 'cast');
   const pins = B.part('pins', { info: 'pins', label: 'Ring pins', labelAt: [u.R, 30, 0], explode: [0, -30, 0], st: 0.1, en: 0.6 });
-  for (let j = 0; j < u.Np; j++) { const a = TAU * j / u.Np, g = rod(u.Rr, 0, 26, 24); g.translate(u.R * Math.cos(a), 0, -u.R * Math.sin(a)); B.mesh(pins, g, 'steel'); }
+  // the pins stand 0.4 mm proud of the housing top (y 26): flush caps z-fight
+  for (let j = 0; j < u.Np; j++) { const a = TAU * j / u.Np, g = rod(u.Rr, 0, 26.4, 24); g.translate(u.R * Math.cos(a), 0, -u.R * Math.sin(a)); B.mesh(pins, g, 'steel'); }
   const discs = [0, 1].map(k => {
     const holes = [circle(16), ...holeAngles(u, k).map(a => circle(u.rp + u.E, u.rOut * Math.cos(a), u.rOut * Math.sin(a)))];
     const p = B.part('disc' + k, { info: 'disc', label: k ? null : 'Cycloid disc', labelAt: [0, 14, 0], explode: [0, 40 + 40 * k, 0], st: 0.2, en: 0.8 });
