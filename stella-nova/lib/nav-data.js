@@ -271,7 +271,19 @@ w.SN_NAV = [
 { id: "studio", label: "Studio", constellations: [
   { id: "craft", label: "Crafting Apps", short: "Craft", icon: "✎", color: "#7cc4ff", color2: "#ffb86c", groups: [
     { h: "Image", p: [
-      ["photocraft", "PhotoCraft", "RUST"]
+      ["photocraft", "PhotoCraft", "RUST"],
+      ["lightcraft", "LightCraft", "RUST"]
+    ] },
+    { h: "Vector & Layout", p: [
+      ["vectorcraft", "VectorCraft", "RUST"],
+      ["designcraft", "DesignCraft", "RUST"]
+    ] },
+    { h: "Video & Motion", p: [
+      ["filmcraft", "FilmCraft", "RUST"],
+      ["effectcraft", "EffectCraft", "RUST"]
+    ] },
+    { h: "Documents", p: [
+      ["printcraft", "PrintCraft", "RUST"]
     ] }
   ] }
 ] }
@@ -286,7 +298,7 @@ w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protei
 // child iframe. The shell gives their iframe allow="fullscreen;
 // clipboard-read; clipboard-write", so the child can ask for these too.
 // tools/nav-sync.js checks that each key is registered.
-w.SN_CRAFT = ['photocraft'];
+w.SN_CRAFT = ['photocraft', 'lightcraft', 'vectorcraft', 'designcraft', 'filmcraft', 'effectcraft', 'printcraft'];
 
 // Flatten SN_NAV into one record per page, in nav order.
 function snPages() {

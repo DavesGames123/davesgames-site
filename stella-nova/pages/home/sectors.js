@@ -87,7 +87,7 @@ const SECTOR_TEXT = {
   rendering: { at: [850, 452], tilt: -50, lead: 'supernova',
     blurb: 'Rendering techniques you can steer: ray marching, sphere tracing, a path tracer, glass and mirrors, volumes and a voxel world.' },
   craft: { at: [930, 560], tilt: 15, lead: 'photocraft',
-    blurb: 'The open-source Crafting Apps by the ArtCraft Team, in pure Rust, running in your browser: the official web builds, unchanged, with full credits. PhotoCraft first.' },
+    blurb: 'The open-source Crafting Apps by the ArtCraft Team, in pure Rust, running in your browser: image editing, raw photos, vector art, page layout, video, motion graphics and PDFs. The official web builds, unchanged, with full credits.' },
 };
 
 // Region bands on the chart: a faint name and the edge of the band.
