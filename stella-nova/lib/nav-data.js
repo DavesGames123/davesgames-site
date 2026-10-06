@@ -228,6 +228,7 @@ w.SN_NAV = [
   { id: "shaders", label: "Shader Tables", short: "Shaders", icon: "✦", color: "#e58bd0", color2: "#b896ff", groups: [
     { h: "Patterns", p: [
       ["noise", "Noise Table", "WGSL", "noise-table"],
+      ["volume-noise", "Volume Noise", "WGSL"],
       ["fields", "Field Table", "COMPUTE", "field-table"],
       ["sims", "Simulation Table", "COMPUTE", "simulation-table"],
       ["dot-field", "Dot Field Table", "WGSL", "dot-field-table"],
