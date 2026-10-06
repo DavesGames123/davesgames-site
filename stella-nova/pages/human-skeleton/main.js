@@ -298,6 +298,10 @@ function saverTour(rnd) {
 // back for the other midline bones. A seeded turn of up to 35 deg is added,
 // and the angle moves by 40 deg when it is near the last one. The feet are
 // seen from above. Below the knee the camera stays over the floor.
+// A bone shot fits the larger side of the bone box to BONE_FIT of the short
+// side of the band. The full view takes the band if the body is FULL_MIN px
+// tall or more there.
+const BONE_FIT = 0.6, FULL_MIN = 260;
 function boneView(i, rnd, last) {
   const b = S.bones[i], [x, , z] = b.c, side = rnd() < 0.5 ? 1 : -1;
   let az;
@@ -312,7 +316,7 @@ function boneView(i, rnd, last) {
     let da = az - last.az; da -= Math.round(da / 360) * 360;
     if (Math.abs(da) < 25 && Math.abs(el - last.el) < 12) az += da >= 0 ? 40 : -40;
   }
-  return { az, daz: (rnd() < 0.5 ? 1 : -1) * (18 + 14 * rnd()), el, del: 0, zoom: [1.25, 0.95], glide: 1.5 };
+  return { az, daz: (rnd() < 0.5 ? 1 : -1) * (18 + 14 * rnd()), el, del: 0, zoom: [1.15, 0.92], glide: 1.5 };
 }
 window.snSaver = {
   enter(o = {}) {
@@ -394,8 +398,6 @@ window.snSaver = {
       const one = cur.bone != null ? cur.bone : -1;
       const bd = L.bounds(S.P, S.to.off, S.vis, want ? b => want.has(b.region) : one >= 0 ? b => b.i === one : null, true);
       let lo = bd.lo.slice(), hi = bd.hi.slice();
-      // a small bone keeps a little of its neighbours in the frame
-      if (one >= 0) for (let a = 0; a < 3; a++) { const m = (lo[a] + hi[a]) / 2, h = Math.max(0.022, (hi[a] - lo[a]) / 2); lo[a] = m - h; hi[a] = m + h; }
       if (sh && sh.joint) {
         const k = S.bones.find(b => want.has(b.region) && sh.joint.test(b.name));
         if (k) { const c = [0, 1, 2].map(a => k.c[a] + S.to.off[k.i * 3 + a]); lo = c.map(v => v - sh.half); hi = c.map(v => v + sh.half); }
@@ -403,15 +405,30 @@ window.snSaver = {
       if (sh && sh.hip) { const pb = L.bounds(S.P, S.to.off, S.vis, b => b.region === 'pelvis', true); lo[1] = pb.lo[1] - 0.12; hi[1] = pb.hi[1]; }
       if (sh && sh.pan) { const H = hi[1] - lo[1], wnd = H * sh.pan, y0 = lo[1] + (H - wnd) * smooth(u); lo[1] = y0; hi[1] = y0 + wnd; }
       const e = extentOf(lo, hi, dir);
-      // the clear part where this box fits largest
+      cur.box = { lo, hi };
       const W = canvas.clientWidth || 1, Hc = canvas.clientHeight || 1;
-      let best = { l: 0, r: 0, t: 0, b: 0 }, bs = -1;
-      for (const q of parts || [best]) {
-        const cw = Math.max(40, W - q.l - q.r), ch = Math.max(40, Hc - q.t - q.b), sc = Math.min(cw / e.hw, ch / e.hh);
-        if (sc > bs) { bs = sc; best = q; }
+      const z = spec.zoom ? spec.zoom[0] + (spec.zoom[1] - spec.zoom[0]) * smooth(u) : 1.05;
+      const all = parts || [{ l: 0, r: 0, t: 0, b: 0 }], band = all[0];
+      const size = q => [Math.max(40, W - q.l - q.r), Math.max(40, Hc - q.t - q.b)];
+      // A bone: the middle band, with the larger side of the box at 60% of
+      // the short side of the band (BONE_FIT), over the near face of the
+      // box. The zoom moves it from about 52% to 65% in the hold.
+      if (one >= 0) {
+        const [cw, ch] = size(band), px = BONE_FIT * Math.min(cw, ch) / 2;
+        return { c: e.mid, d: e.hd + Math.max(e.hw, e.hh) * Hc / (2 * fy() * px) * z, az, el, occ: band };
+      }
+      // The full view: the middle band, the hero shot, when the body fits
+      // there at FULL_MIN px tall or more. Else the larger side column.
+      let best = band;
+      if (cur.full) {
+        const [cw, ch] = size(band), tall = Math.min(ch, cw * e.hh / Math.max(1e-6, e.hw)) / 1.08;
+        if (tall < FULL_MIN) { let bs = -1; for (const q of all.slice(1)) { const [w2, h2] = size(q), sc = Math.min(w2 / e.hw, h2 / e.hh); if (sc > bs) { bs = sc; best = q; } } }
+      } else {
+        // a region or whole-body shot: the clear part where the box fits largest
+        let bs = -1;
+        for (const q of all) { const [w2, h2] = size(q), sc = Math.min(w2 / e.hw, h2 / e.hh); if (sc > bs) { bs = sc; best = q; } }
       }
       const fh = Math.max(0.15, (Hc - best.t - best.b) / Hc), fw = Math.max(0.15, (W - best.l - best.r) / Hc);
-      const z = spec.zoom ? spec.zoom[0] + (spec.zoom[1] - spec.zoom[0]) * smooth(u) : 1.05;
       return { c: e.mid, d: (Math.max(e.hh / (fy() * fh), e.hw / (fy() * fw)) * 1.08 * z) + e.hd, az, el, occ: best };
     };
     const smooth = x => x * x * (3 - 2 * x);
@@ -440,7 +457,21 @@ window.snSaver = {
     };
     // the tour state, for the headless probe
     window.snSaver.debug = () => cur && { k: ti, kind: cur.full ? 'full' : cur.bone != null ? 'bone' : cur.shot ? 'region' : 'whole',
-      what: cur.bone != null ? S.bones[cur.bone].name : cur.shot ? cur.shot.id : cur.whole ? cur.whole.mode : 'full', t: +t.toFixed(1), dur: +dur.toFixed(1) };
+      what: cur.bone != null ? S.bones[cur.bone].name : cur.shot ? cur.shot.id : cur.whole ? cur.whole.mode : 'full', t: +t.toFixed(1), dur: +dur.toFixed(1),
+      ...frameStats() };
+    // the subject box on the screen and the clear part, in canvas CSS px
+    const frameStats = () => {
+      if (!cur.box) return {};
+      const W = canvas.clientWidth, Hc = canvas.clientHeight, { lo, hi } = cur.box, q = new THREE.Vector3();
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (let k = 0; k < 8; k++) {
+        q.set(k & 1 ? hi[0] : lo[0], k & 2 ? hi[1] : lo[1], k & 4 ? hi[2] : lo[2]).project(camera);
+        const x = (q.x + 1) / 2 * W, y = (1 - q.y) / 2 * Hc;
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      const o = saverOcc.o || { l: 0, r: 0, t: 0, b: 0 };
+      return { box: [x0, y0, x1, y1].map(Math.round), clear: [o.l, o.t, W - o.r, Hc - o.b].map(Math.round), W, H: Hc };
+    };
     return { canvas, warmupMs: 3000 };
   },
 };
