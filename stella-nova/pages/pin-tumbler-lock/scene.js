@@ -62,7 +62,10 @@ function keyParts(B, p, g, bit) {
   const slab = (pts, z0, z1) => slabXY(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), z0, z1 - z0, 0);
   const t = k.thick / 2, gs = [];
   const plus = k.grooves.find(q => q.side > 0), minus = k.grooves.find(q => q.side < 0);
+  // a side with no groove gives a layer of zero depth: skip it. Its two
+  // caps lay exactly on the blade's own side face and z-fought with it.
   const layer = (gr, z0, z1) => {
+    if (z1 - z0 < 1e-6) return;
     if (!gr) { gs.push(slab(prof, z0, z1)); return; }
     gs.push(slab(clipY(prof, gr.y1, true), z0, z1), slab(clipY(prof, gr.y0, false), z0, z1));
   };
@@ -110,9 +113,14 @@ function pinTumbler(B, L) {
   const Rq = Rp - 0.03, zt = Math.sqrt(g.Rh * g.Rh - Rp * Rp), kmax = Math.max(...g.kLen);
   const out = { kp: [], dp: [], sp: [], springs: [] };
 
-  // housing: the round body to the shear-line height, the tower above it
+  // housing: the round body to the shear-line height, the tower above it.
+  // The body is open along the top of the bore for the chamber width
+  // (dl = holeR), so each chamber goes through to the bore. With a narrow
+  // slot (0.35 mm), the body top made a ledge in each chamber at y = Rp:
+  // it z-fought with the key pin tops, and its bore facets z-fought with
+  // the tower floor 0.01 mm above them.
   const H = B.part('housing', { cut: true, label: 'Housing', labelAt: [-3, g.yTop - 2, -zt] });
-  const a0 = Math.atan2(Rp, zt), dl = 0.35, b0 = Math.atan2(Math.sqrt(Rp * Rp - dl * dl), -dl);
+  const a0 = Math.atan2(Rp, zt), dl = g.holeR, b0 = Math.atan2(Math.sqrt(Rp * Rp - dl * dl), -dl);
   const body = [...arcPts(g.Rh, a0, PI - a0 - 2 * PI, 120), [-dl, Rp], ...arcPts(Rp, b0, 2 * PI + PI - b0, 120)];
   body.push([dl, Rp]);
   B.mesh(H, zyExtrude(body, x0, x1), 'housing');
@@ -168,11 +176,13 @@ function pinTumbler(B, L) {
   const Cl = B.part('clip', { explode: [-9, 0, 0], st: 0.2, label: 'Clip', labelAt: [x0 - 0.4, -6.5, 0] });
   B.mesh(Cl, alongX(lathe([[[4.92, x0 - 0.75]], [[7.0, x0 - 0.75]], [[7.0, x0 - 0.05]], [[4.92, x0 - 0.05]]], 64)), 'blued');
 
-  // cam: hub, arm and the pin that drives the bolt
+  // cam: hub, arm and the pin that drives the bolt. The arm stands 0.3 mm
+  // proud of the hub at the back and stops 0.3 mm short of the hub front.
+  // With equal ends, the end faces of the two bodies z-fought.
   const Rc = g.cam.Rc;
   const Cm = B.part('cam', { explode: [-16, 0, 0], st: 0.12, label: 'Cam', labelAt: [-29.6, -Rc, 0] });
-  B.mesh(Cm, alongX(rod(4.6, -29.6, x0 - 1.9, 48)), 'zinc');
-  B.mesh(Cm, zyExtrude([[1.8, 0], ...arcPts(1.8, 0, -PI, 16, 0, -Rc), [-1.8, 0]], -29.6, x0 - 1.9), 'zinc');
+  B.mesh(Cm, alongX(rod(4.6, -29.3, x0 - 1.9, 48)), 'zinc');
+  B.mesh(Cm, zyExtrude([[1.8, 0], ...arcPts(1.8, 0, -PI, 16, 0, -Rc), [-1.8, 0]], -29.6, x0 - 2.2), 'zinc');
   const pin = alongX(rod(g.cam.pinR, -32.6, -29.6, 20)); pin.translate(0, -Rc, 0);
   B.mesh(Cm, pin, 'steel');
 
