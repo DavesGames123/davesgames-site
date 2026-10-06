@@ -1,0 +1,4 @@
+# Cargo build output of the line-art crate. pkg/ (the wasm-bindgen output)
+# is committed; target/ is not.
+crate/target/
+crate/Cargo.lock.bak

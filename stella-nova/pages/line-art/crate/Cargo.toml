@@ -1,0 +1,23 @@
+[package]
+name = "line-art"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust port of ln, the 3D line art engine by Michael Fogleman (MIT)"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+# wasm-bindgen is only for the wasm32 build. The native `cargo test` build
+# has no dependencies. The version is pinned to the wasm-bindgen CLI
+# (`wasm-bindgen --version` = 0.2.103): the CLI rejects a different schema.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.103"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
