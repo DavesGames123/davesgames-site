@@ -189,7 +189,8 @@ w.SN_NAV = [
       ["gravitational-imaging", "Gravitational Imaging", "NEW"]
     ] },
     { h: "Machine Learning", p: [
-      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"]
+      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"],
+      ["4d-codebench", "4DCodeBench", "NEW"]
     ] }
   ] }
 ] },
