@@ -14,6 +14,7 @@
 //
 //  GREP MAP
 //    function swapTo ............ build a pair and cross-fade to it
+//    function explodedBox ....... the frame of the exploded view
 //    const INFO / ABOUT ......... the panel text of each pair
 //    const VIEWS / function setView  camera presets
 //    function drawPlot .......... tooth pairs in contact over two pitches
@@ -65,12 +66,24 @@ function applyShow(cur = S.cur) {
   }
 }
 
+// The frame of the exploded view. The explode offsets push the parts up and
+// toward the camera, so the assembled box framed the exploded pair off centre
+// and cut it at the edge. Measured before B.root has a parent, so the world
+// frame is the pair frame. R is the box R that frames it like 'three'.
+function explodedBox(B) {
+  B.applyExplode(1); B.root.updateMatrixWorld(true);
+  const s = new THREE.Box3().setFromObject(B.root).getBoundingSphere(new THREE.Sphere());
+  B.applyExplode(0); B.root.updateMatrixWorld(true);
+  return { c: s.center.toArray(), R: s.radius / 1.12 };
+}
+
 // ── pair swap ───────────────────────────────────────────────────────────────
 async function swapTo(id) {
   if (S.swapping || (S.cur && S.cur.id === id)) return;
   S.swapping = true;
   try {
     const B = createBuild(), sc = build(B, id);
+    sc.xbox = explodedBox(B);
     const next = { id, B, sc, D: sc.D, PARTS: partsFor(id), alpha: 0, t0: performance.now() };
     B.setAlpha(0.001);
     B.setSection(false);
@@ -148,31 +161,32 @@ function buildPicker() {
 }
 
 // ── views ───────────────────────────────────────────────────────────────────
-// at: 'box' (the model centre) or a key of sc.keys
+// at: 'box' (the model centre), 'xbox' (the centre of the exploded pair,
+// see function explodedBox) or a key of sc.keys
 const VIEWS = {
   three: { az: 28, el: 24, explode: 0, k: 1, at: 'box' },
   close: { az: 14, el: 14, explode: 0, k: 0.42, at: 'mesh' },
   top: { az: 0, el: 76, explode: 0, k: 0.9, at: 'box' },
   low: { az: -32, el: 6, explode: 0, k: 0.95, at: 'box' },
-  exploded: { az: 34, el: 22, explode: 1, k: 1.45, at: 'box' },
+  exploded: { az: 34, el: 22, explode: 1, k: 1, at: 'xbox' },
 };
 // per pair: a better side for the close-up
 const CLOSE = { bevel: { az: 48, el: -2 }, worm: { az: 30, el: 26 }, rack: { az: 10, el: 8 } };
-function fitDist(k) {
+function fitDist(k, R = S.cur.sc.box.R) {
   const c = $('view'), a = c.clientWidth / Math.max(1, c.clientHeight);
   const wide = a < 1.1 ? 1 + 0.9 * (1.1 - a) * Math.min(1, k) : 1;
-  return S.cur.sc.box.R * 3.3 * k * wide;
+  return R * 3.3 * k * wide;
 }
 function viewPose(name) {
   const v = { ...VIEWS[name], ...(name === 'close' ? CLOSE[S.cur.id] || {} : {}) };
-  const at = v.at === 'box' ? S.cur.sc.box.c : S.cur.sc.keys[v.at];
-  return { v, at };
+  const sc = S.cur.sc, at = v.at === 'box' ? sc.box.c : v.at === 'xbox' ? sc.xbox.c : sc.keys[v.at];
+  return { v, at, R: v.at === 'xbox' ? sc.xbox.R : sc.box.R };
 }
 function setView(name, soft) {
   if (!S.cur) return;
   S.view = name;
-  const { v, at } = viewPose(name);
-  stage.flyTo({ az: v.az, el: v.el, r: fitDist(v.k), target: new THREE.Vector3(...at), t: soft ? 1.8 : 1.4 });
+  const { v, at, R } = viewPose(name);
+  stage.flyTo({ az: v.az, el: v.el, r: fitDist(v.k, R), target: new THREE.Vector3(...at), t: soft ? 1.8 : 1.4 });
   setExplode(v.explode);
   document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
 }

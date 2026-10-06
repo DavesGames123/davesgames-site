@@ -234,7 +234,7 @@ function worm(B, u, D) {
   const th = threadGeom(D, turns, -D.L * turns / 2);
   B.mesh(w, th, 'steel');
   B.mesh(w, rod(7.5, -102, 102, 24), 'shaft');
-  const g2 = B.part('g2', { info: 'wheel', u: [0, 0, 1], e0: [0, -1, 0], at: [0, a, 0], label: 'Worm wheel (30 teeth)', labelAt: [-(D.r2 + 12), 0, 0], explode: [0, 70, 30], st: 0.2, en: 0.9 });
+  const g2 = B.part('g2', { info: 'wheel', u: [0, 0, 1], e0: [0, -1, 0], at: [0, a, 0], label: 'Worm wheel (30 teeth)', labelAt: [0, 0, -(D.r2 + 12)], explode: [0, 70, 30], st: 0.2, en: 0.9 });
   B.mesh(g2, helicalTeeth({ N: u.N2, m: D.mt, y0: -D.b / 2, y1: D.b / 2, ha: 1, hf: 1.25, t: T_TH, alpha: D.at, rin: 0, slices: 8, twist: y => y * Math.tan(D.lambda) / D.r2 }).geom, 'satinb');
   B.mesh(g2, merge([rod(18, D.b / 2 - 0.5, D.b / 2 + 4, 48), rod(18, -D.b / 2 - 5, -D.b / 2 + 0.5, 48), rod(7.5, -66, D.b / 2 + 9, 24)]), 'shaft');
   const yB = -42;
