@@ -269,6 +269,10 @@ export function build(B, id) {
   let shownKey = null, xrayV = -1;
   const xrayMats = [];
   for (const p of [ukw, etw, ...rotors]) for (const k in p.mats) if (k !== 'brass' && k !== 'letters') xrayMats.push(p.mats[k]);
+  // the case side plates fade too: in the wiring view (explode 0.6) the
+  // left plate stands between reflector B and the left rotor, and the
+  // wires from the reflector go through it
+  xrayMats.push(cs.mats.cast);
 
   const disp = [0, 0, 0];
   const sc = {
