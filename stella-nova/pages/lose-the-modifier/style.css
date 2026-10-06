@@ -15,6 +15,7 @@
      grep -n 'STAGE'      the big line, the formula, tags, example, actions
      grep -n 'MORE'       the list of other matches
      grep -n 'DOCK'       the family chips and the input
+     grep -n 'PASTE'      the Paste text view: marks, tip, preview
      grep -n 'ABOUT'      the dialog
      grep -n 'PHONE'      narrow screens
    ========================================================================== */
@@ -142,6 +143,37 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 #toast{position:fixed;left:50%;bottom:calc(var(--dock-h) + var(--kb) + 14px);z-index:40;transform:translate(-50%,12px);opacity:0;pointer-events:none;padding:10px 16px;border-radius:999px;background:var(--ink);color:var(--bg);font:600 14px/1 var(--f-disp);transition:opacity .18s,transform .18s}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
+/* PASTE */
+html[data-mode="paste"] #paste{padding-bottom:calc(32px + env(safe-area-inset-bottom))}
+.paste{position:relative;width:100%;max-width:860px;display:flex;flex-direction:column;gap:14px;padding-top:10px}
+.phead h2{font:700 clamp(28px,4vw,44px)/1.05 var(--f-disp);letter-spacing:-.025em}
+.phead p{color:var(--dim);margin-top:6px}
+#src{width:100%;min-height:150px;resize:vertical;padding:14px 16px;border-radius:14px;border:1.5px solid var(--line-b);background:var(--bg2);color:var(--ink);font:400 16px/1.55 var(--f-mono)}
+#src:focus{outline:none;border-color:var(--ink)}
+.pbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pcount{margin-right:auto;font:500 14px/1.3 var(--f-mono);color:var(--dim)}
+.act.hi{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.act.hi[disabled]{opacity:.35}
+.marked,.fixed{padding:18px 20px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);font:400 clamp(19px,2.2vw,23px)/1.6 var(--f-serif);white-space:pre-wrap;word-wrap:break-word}
+.marked .empty{color:var(--dim);font-style:italic}
+.marked mark{color:inherit;background:color-mix(in srgb,var(--cut) 22%,transparent);border-bottom:2px solid var(--cut);border-radius:3px;padding:0 2px;cursor:pointer;transition:background .15s}
+.marked mark:hover,.marked mark.on{background:color-mix(in srgb,var(--cut) 42%,transparent)}
+.marked mark.loose{background:transparent;border-bottom:2px dotted var(--cut)}
+.fixedbox{display:flex;flex-direction:column;gap:10px}
+.fhead{display:flex;align-items:center;gap:8px}
+.fhead h3{margin-right:auto;font:500 13px/1 var(--f-mono);color:var(--dim);letter-spacing:.06em}
+.fixed ins{text-decoration:none;font-family:var(--f-disp);font-weight:700;font-size:.86em;color:var(--hi-ink);background:linear-gradient(transparent 60%,var(--hi-band) 60%);animation:rise .3s cubic-bezier(.2,1.4,.4,1) both}
+.tip{position:absolute;z-index:30;padding:14px 14px 12px;border-radius:14px;border:1px solid var(--line-b);background:var(--bg2);box-shadow:0 18px 50px -12px rgba(0,0,0,.5);animation:rise .16s ease-out}
+.tip .th{display:flex;flex-direction:column;gap:3px;margin-bottom:10px}
+.tip .tw{font:500 15px/1.2 var(--f-mono);text-decoration:line-through;text-decoration-color:var(--cut)}
+.tip .tf{font:400 12px/1.2 var(--f-mono);color:var(--dim)}
+.tip .to{display:flex;flex-wrap:wrap;gap:6px}
+.tip .to button{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line-b);font:700 17px/1 var(--f-disp);background:var(--bg3)}
+.tip .to button:first-child{background:var(--ink);color:var(--bg)}
+.tip .to button[disabled]{cursor:default}
+.tip .tn{margin-top:10px;font-size:13px;color:var(--dim)}
+.tip .tx{margin-top:10px;font:italic 400 17px/1.3 var(--f-serif);color:var(--dim)}
+
 /* ABOUT */
 #about{margin:auto;max-width:min(640px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:26px 24px 22px;border:1px solid var(--line-b);border-radius:18px;background:var(--bg2);color:var(--ink);overflow:auto}
 #about::backdrop{background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
@@ -169,6 +201,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
   .act span{display:none}
   .act{padding:0 14px}
   .more{grid-template-columns:1fr}
+  .pcount{flex-basis:100%}
 }
 html.in-frame #bar .kicker{display:none}
 html.kb-open #stage{min-height:0;padding-top:4px}

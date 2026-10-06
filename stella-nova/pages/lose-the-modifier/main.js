@@ -17,11 +17,13 @@
 //    "function dockToKeyboard" keep the dock on top of a phone keyboard
 //    "function setTheme"       dark or light, kept in localStorage
 //    "const cycle"             the autoplay and its pause rules
+//    "function setMode"        Words or Paste text (paste.js, made on first use)
 // ============================================================================
 import { PHRASES, FAMILIES } from './phrases.js';
 import { lookup } from './matcher.js';
 import { createStage, famLabel } from './stage.js';
 import { createCycle } from './cycle.js';
+import { initPaste } from './paste.js';
 
 const $ = id => document.getElementById(id);
 const q = $('q');
@@ -117,14 +119,14 @@ export function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('on');
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1400);
 }
-export async function copyWord(w) {
+export async function copyWord(w, msg) {
   if (!w) return;
   try { await navigator.clipboard.writeText(w); }
   catch (e) {
     const ta = document.createElement('textarea'); ta.value = w; ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.append(ta); ta.select(); try { document.execCommand('copy'); } catch (e2) { /* nothing more to try */ } ta.remove();
   }
-  toast(`Copied “${w}”`);
+  toast(msg || `Copied “${w}”`);
 }
 function say(w) {
   if (!w || !('speechSynthesis' in window)) return;
@@ -173,7 +175,8 @@ let fitT = 0;
 addEventListener('resize', () => { clearTimeout(fitT); fitT = setTimeout(() => { if (S.cur) stage.fit(S.cur, [S.word || S.cur.targets[0]], false); }, 120); });
 
 // ── modes ──────────────────────────────────────────────────────────────────
-export const modes = { words: $('words') };
+export const modes = { words: $('words'), paste: $('paste') };
+let paste = null;
 document.querySelectorAll('.modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 export function setMode(m) {
   if (!modes[m]) return;
@@ -182,14 +185,16 @@ export function setMode(m) {
   $('dock').hidden = m !== 'words';
   document.documentElement.dataset.mode = m; S.mode = m;
   if (m === 'words' && !q.value) cycle.resume(300); else cycle.stop();
-  hooks.mode && hooks.mode(m);
+  if (m === 'paste' && !paste) paste = initPaste({ root: $('paste'), copyWord, toast });
+  try { history.replaceState(null, '', m === 'paste' ? '?mode=paste' : location.pathname); } catch (e) { /* file: URL */ }
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
 buildPicker();
-const startQ = new URLSearchParams(location.search).get('q');
+const params = new URLSearchParams(location.search), startQ = params.get('q');
+if (params.get('mode') === 'paste') setMode('paste');
 if (startQ) { q.value = startQ; }
-const boot = () => { if (q.value) onInput(); else idle(0); };
+const boot = () => { if (S.mode === 'paste') return; if (q.value) onInput(); else idle(0); };
 if (document.fonts && document.fonts.load) Promise.all([document.fonts.load("700 100px 'Space Grotesk'"), document.fonts.load("500 100px 'IBM Plex Mono'")]).then(boot, boot);
 else boot();
 window.__ltm = { S, PHRASES, lookup, stage, famLabel, onInput, setMode, cycle };
