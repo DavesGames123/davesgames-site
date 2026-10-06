@@ -77,6 +77,7 @@ window.SN_SAVER_CATALOG = {
     'diffraction': { tier: 3, default: true, hook: true, note: 'Classic script; S (main.js:182), PR presets (main.js:490), applyP(pr), animDir/animLoop (main.js:275), recompute, scheduleRecompute, syncBars are global.' },
     'double-slit': { tier: 2, default: true, hook: true, note: 'Classic script; P (main.js:120), init(), setSlider, setPaused, paused, window.__ds (main.js:516) exist.' },
     'polarization': { tier: 2, default: true, hook: true, note: 'ES module; window.__polar (main.js:555) exposes params, setDelta, controls, camera, renderer.' },
+    'photon-caustics': { tier: 3, default: true, hook: true, note: 'Own saver tour: 2D photon scenes with push-ins on the caustic cusps, and 3D pool shots (camera, sun and wave moves), taken in turn.' },
     'attractorlab': { tier: 2, default: true, hook: true, note: 'Classic script pages/attractorlab/main.js.' },
     'flowlab': { tier: 2, default: true, hook: true, note: 'Classic script pages/flowlab/main.js.' },
     'reaction-diffusion': { tier: 3, default: true, hook: true, note: 'ES module pages/reaction-diffusion/main.js;' },
