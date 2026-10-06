@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Enigma Rotors — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ENIGMA ROTORS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The rotor stack of an Enigma I in 3D: three rotors
+   with notch rings and ratchets, three pawls, reflector B, the entry
+   wheel, the lamp board and the keyboard. A key press steps the rotors,
+   then lights a lamp, and the current path shows through the wiring.
+   mech.js is the cipher model (no DOM, no THREE; tests.mjs runs it).
+   scene.js makes the parts with kit.js. stage.js, kit.js and cards.js
+   are copies of the differential modules.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (machine, view, type, show), #anaPanel
+                 at the right (step plot, tape, numbers, relations), #view
+                 fills the rest. #read is the readout, top left of the view.
+     phone ..... #dock at the base: five tabs and play. A tab opens #panel
+                 with only its .grp, as a bottom sheet (portrait) or a
+                 drawer (landscape). The analysis group moves into #panel.
+
+   GREP MAP  (main.js)
+     grep -n 'function swapTo'      build a machine and cross-fade to it
+     grep -n 'const VIEWS'          camera presets
+     grep -n 'function drawPlot'    the rotor position plot
+     grep -n 'function typeKey'     a typed key: one press
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The Enigma I rotor stack in 3D: rotors I-V with notches, pawls and ratchets, reflector B, the double step of the middle rotor, and the current path from key to lamp.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Enigma Rotors</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">type on your keyboard to press a key · hover a part to name it · drag to orbit</div>
+  <button id="anaOpen" type="button" hidden>∑ Steps</button>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the Enigma cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="unit">
+    <div class="sec-label first">Machine</div>
+    <div id="variants" class="three"></div>
+    <div id="engInfo">
+      <h1 id="engTitle">Enigma I</h1>
+      <div class="kind" id="engKind"></div>
+      <p class="lede" id="engLede"></p>
+    </div>
+    <div class="sec-label">Parts</div>
+    <div id="partList"></div>
+  </section>
+
+  <section class="grp" data-grp="view">
+    <div class="sec-label">View</div>
+    <div class="grid2" id="views">
+      <button data-view="three" type="button">Whole unit</button>
+      <button data-view="close" type="button">Rotor windows</button>
+      <button data-view="wiring" type="button">Wiring (x-ray)</button>
+      <button data-view="back" type="button">Pawls</button>
+      <button data-view="exploded" type="button">Exploded</button>
+    </div>
+    <div class="sec-label">Explode</div>
+    <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0"><span class="val" id="explodeV"></span></div>
+    <div class="toggles">
+      <button class="tog" id="assemble" type="button">Assemble</button>
+      <button class="tog" id="burst" type="button">Explode</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="run">
+    <div class="sec-label">Type</div>
+    <div class="grid3" id="rates">
+      <button data-rpm="0" type="button">❚❚ Pause</button>
+      <button data-rpm="15" type="button">15 / min</button>
+      <button data-rpm="40" type="button">40 / min</button>
+      <button data-rpm="90" type="button">90 / min</button>
+      <button data-rpm="180" type="button">180 / min</button>
+      <button data-rpm="600" type="button">600 / min</button>
+    </div>
+    <div class="row"><label for="rpm">Keys</label><input type="range" id="rpm" min="0" max="600" step="5" value="40"><span class="val" id="rpmV"></span></div>
+    <div class="row"><label for="turn">Press no.</label><input type="range" id="turn" min="0" max="120" step="0.02" value="0"><span class="val" id="turnV"></span></div>
+    <div class="sec-label">Your keys</div>
+    <div id="kbd" aria-label="Type a letter"></div>
+    <p class="note">The machine types its preset tape at the speed above. Type on your keyboard (or tap a letter) to press your own key: it pauses the tape. The slider scrubs through the presses.</p>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tBase" type="button">Case</button>
+      <button class="tog" id="tXray" type="button">X-ray rotors</button>
+      <button class="tog on" id="tLabels" type="button">Labels</button>
+      <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
+    </div>
+    <p class="note">Labels show when the parts spread apart. X-ray fades the rotor bodies, so the wires inside show.</p>
+  </section>
+
+  <section class="grp ana" data-grp="ana" id="anaSec">
+    <div class="sec-label first">Now</div>
+    <div id="now" class="proc"></div>
+    <div class="sec-label" id="plotTitle">Rotor positions over key presses</div>
+    <canvas id="plot" class="plot mot"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="sec-label">Tape</div>
+    <div id="tape" class="tape"></div>
+    <div class="sec-label">Numbers</div>
+    <table class="readout" id="nums"></table>
+    <div class="sec-label">Relations</div>
+    <div id="eqs" class="eqs"></div>
+    <div class="sec-label">How it works</div>
+    <div class="about" id="about"></div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Analysis">
+  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="unit" type="button"><i>◎</i><span>Machine</span></button>
+  <button class="tab" data-grp="view" type="button"><i>◈</i><span>View</span></button>
+  <button class="tab" data-grp="run" type="button"><i>⌨</i><span>Type</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Steps</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
