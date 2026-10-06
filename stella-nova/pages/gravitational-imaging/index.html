@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>A million-solar-mass object, weighed by its gravity — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   GRAVITATIONAL IMAGING  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and the text. The page explains Powell et al. (2025),
+   Nature Astronomy 9, 1714: a 1.13e6 Msun object found in the lens JVAS
+   B1938+666 by its pull on a thin VLBI radio arc. Each section is a set of
+   cards with a live figure. One toy lens, made to look like Fig. 1 of the
+   paper, runs through all of them.
+
+   WHAT IS REAL
+     real .......... the masses, radii, evidences and probabilities quoted
+                     from the paper; Sigma_cr and the pc-per-mas scale
+                     (recomputed from Planck 2015); the PJ and EPL formulas
+     toy ........... the lens and source parameters (not published), the
+                     image-plane residuals (the paper fits visibilities),
+                     the GI solver (it knows the true source), the detection
+                     floor (build-floor.mjs). Each card has a "toy" tag.
+
+   HEAD LOAD ORDER
+     1. gpu-guard   ../../lib/gpu-guard.js (the page makes no GPU context)
+     2. style.css   then ../../lib/sci.css (fonts, math colours)
+   Script at end of body: main.js (module). It imports lens.js, model.js,
+   floor.js and ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips   sticky section bar
+     hero     title, key numbers
+     #s1 lens       #skyCv (drag V), #srcCv (drag the source), toggles
+     #s2 gap        #gapData #gapModel #gapRes, #causCv, #vMass
+     #s3 resolution #resData #resRes, #inst, #fwhm, #floorCv, #baseKm
+     #s4 GI         #giKap, #giProf, #giReg, #giGrid, #giLam, #giNoise
+     #s5 weighing   #pivotCv, #rtSl, #mtSl, #lockM80, #t1
+     #s6 what is it #dmCv, #wdmKev, #dmMode
+     #s7 real/toy   notes and references
+
+   GREP MAP  (main.js)
+     grep -n 'function initSky'     section 1 sky and source plane
+     grep -n 'function initGap'     section 2 gap, residual, caustic kink
+     grep -n 'function initRes'     section 3 beam size and floor chart
+     grep -n 'function initGI'      section 4 gravitational imaging
+     grep -n 'function initPivot'   section 5 M(<r) and Table 1
+     grep -n 'function initDM'      section 6 subhalo counts
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Interactive explainer of Powell et al. (2025): a million-solar-mass object detected at redshift 0.881 by its gravitational pull on a thin radio arc in JVAS B1938+666. Live lens model, residuals, resolution limits, gravitational imaging and dark-matter counts.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Gravitational imaging</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>The lens</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>A gap in the arc</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Resolution</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Gravitational imaging</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Weighing it</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>What is it?</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>Real and toy</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Astrophysics · strong gravitational lensing · dark matter</p>
+  <h1>A million-solar-mass object, found only by its gravity</h1>
+  <p class="lede">Light that left a radio galaxy about 10 billion years ago bends around a closer galaxy and smears into a thin arc. One short stretch of that arc is dented. Nothing there shines, but the dent says that about a million Suns of mass sit in the foreground galaxy, within 80 parsecs of one point. That is a hundred times lighter than anything found this way before.</p>
+  <p class="cite">Powell, McKean, Vegetti, Spingola, White &amp; Fassnacht, <a href="https://doi.org/10.1038/s41550-025-02651-2" target="_blank" rel="noopener"><em>A million-solar-mass object detected at a cosmological distance using gravitational imaging</em></a>, Nature Astronomy 9, 1714–1722 (2025).</p>
+  <div class="stats">
+    <div><b>1.13 × 10<sup>6</sup></b><span>M<sub>☉</sub> inside 80 pc (m<sub>80</sub>)</span></div>
+    <div><b>26σ</b><span>detection significance</span></div>
+    <div><b>3.3%</b><span>uncertainty on m<sub>80</sub></span></div>
+    <div><b>194 μas</b><span>position uncertainty<br>(1.5 pc)</span></div>
+    <div><b>z = 0.881</b><span>lens galaxy<br>(source z = 2.059)</span></div>
+    <div><b>~5 mas</b><span>global VLBI resolution<br>at 1.7 GHz</span></div>
+  </div>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The lens: JVAS B1938+666</h2><p>An elliptical galaxy at z = 0.881 sits almost exactly in front of a radio galaxy at z = 2.059. Its gravity maps each point of the background sky to one, two or four points on our sky.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>What the radio telescope sees</h3><span class="tag toy">toy lens made to look like Fig. 1</span></div>
+      <div class="panel"><canvas id="skyCv" class="fig" aria-label="Lensed radio arc with critical curve and perturbers"></canvas><span class="lab">image plane</span><span class="scale" id="skyScale">200 mas</span></div>
+      <div class="ctrls">
+        <button class="tog on" id="tCrit">critical curve</button>
+        <button class="tog on" id="tSubs">perturbers A and V</button>
+        <button class="tog on" id="tMarks">markers</button>
+        <button class="tog" id="tStretch">faint stretch</button>
+        <button class="btn" id="skyReset">reset</button>
+      </div>
+      <p class="cap">The bright source lies just inside a fold of the caustic, so two of its four images merge into the long, thin arc on the upper right. <b>Drag the green V</b> along or off the arc: section 2 follows it. A is the 10<sup>8</sup> M<sub>☉</sub> perturber reported in 2012 from Keck adaptive-optics images. The square marks the 60 mas zoom of Fig. 1.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Where the light starts</h3><span class="tag toy">toy source</span></div>
+      <div class="panel"><canvas id="srcCv" class="fig" aria-label="Source plane with caustic"></canvas><span class="lab">source plane</span><span class="scale" id="srcScale">20 mas</span></div>
+      <p class="cap"><b>Drag the bright lobe.</b> The blue line is the caustic: inside it a point has four images, outside it two. Slide the lobe across the fold and watch the merged arc split or vanish. The faint lobe to the north stays outside and gives two images.</p>
+      <div class="readout" id="srcRead"></div>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>The lens equation</h3><span class="tag real">paper eqs. 6 and 7</span></div>
+      <div class="eqs duo">
+        <div class="eq-row"><div class="sci-eq" data-tex="\vec\beta = \vec\theta - \vec\alpha(\vec\theta), \qquad \kappa = \frac{\Sigma}{\Sigma_{\rm cr}}"></div><p>A ray seen at θ left the source plane at β. The deflection α comes from the projected mass, in units of the critical density.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\Sigma_{\rm cr} = \frac{c^2 D_s}{4\pi G\, D_{ls} D_l} = 1.50\times10^{11}\,M_\odot\,\mathrm{arcsec}^{-2}"></div><p>For z<sub>l</sub> = 0.881, z<sub>s</sub> = 2.059 and Planck 2015. This page recomputes it as 1.501 × 10<sup>11</sup>; 1 mas is 7.96 pc at the lens.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\kappa(\xi) = \frac{3-\gamma}{2}\left(\frac{R_E}{\xi}\right)^{\gamma-1}, \qquad \xi^2 = x^2 q + y^2/q"></div><p>The smooth galaxy: an elliptical power law with slope γ (2 is isothermal), plus external shear. The paper also adds m = 3, 4 multipoles.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="m = \pi\,\theta_E^2\,\Sigma_{\rm cr} \;\Rightarrow\; \theta_E(10^6 M_\odot) \approx 1.5\ \mathrm{mas}"></div><p>The lensing scale of a million Suns at this distance is smaller than the 5 mas beam. Section 2 shows why it is still found.</p></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>A gap in the arc</h2><p>Near a critical curve the lens magnifies tangentially by a huge factor. A pull of a fraction of a milli-arcsecond then moves the arc by much more, and a thin arc shows the dent.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>60 mas around V, through a 5 mas beam</h3><span class="tag toy">image plane, not visibilities</span></div>
+      <div class="trio">
+        <div class="panel"><canvas id="gapData" class="fig"></canvas><span class="lab">data: lens with V</span></div>
+        <div class="panel"><canvas id="gapModel" class="fig"></canvas><span class="lab">best smooth model</span></div>
+        <div class="panel"><canvas id="gapRes" class="fig"></canvas><span class="lab">residual (σ)</span></div>
+      </div>
+      <div class="ctrls">
+        <div class="ctrl"><span class="ctrl-lab">m<sub>80</sub> of V</span><input type="range" id="vMass" min="4" max="9" step="0.01" value="6.053"><output id="vMassOut"></output></div>
+        <button class="tog on" id="tVon">V present</button>
+        <button class="tog on" id="tBeam">5 mas beam</button>
+        <button class="btn" id="vPaper">paper value</button>
+      </div>
+      <div class="readout" id="gapRead"></div>
+      <p class="cap">The smooth model is the lens without V, but it may absorb any part of V's pull that is uniform or changes linearly across the window: a source shift plus a local change of convergence and shear. What is left is V's own signature at the crossing of the arc and the critical curve. Turn off the beam to see the raw dent. The noise is 1/350 of the arc's peak, as in the VLBI map (34 μJy per beam against about 12 mJy per beam).</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The caustic folds over the source</h3><span class="tag toy">source plane, 8 mas</span></div>
+      <div class="panel"><canvas id="causCv" class="fig"></canvas><span class="lab">caustic near the bright lobe</span></div>
+      <p class="cap">Dashed: the caustic of the smooth lens. Solid: with V. Where the fold passes over the bright radio lobe, V moves it and puts a kink in it. The paper's Fig. 2 shows the result: without V, the fitted source has to break along the caustic to imitate the dent.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>Resolution sets the lightest mass you can see</h2><p>The mass of a perturber sets the size of its lensing signature. A beam much wider than that signature averages the dent away.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>The same V through different telescopes</h3><span class="tag toy">same noise for every beam</span></div>
+      <div class="duo">
+        <div class="panel"><canvas id="resData" class="fig"></canvas><span class="lab">data</span><span class="scale" id="resScale"></span></div>
+        <div class="panel"><canvas id="resRes" class="fig"></canvas><span class="lab">residual (σ)</span></div>
+      </div>
+      <div class="ctrls">
+        <div class="seg" id="inst" role="group" aria-label="Instrument"></div>
+        <div class="ctrl"><span class="ctrl-lab">beam FWHM</span><input type="range" id="fwhm" min="0.3" max="2.18" step="0.01" value="0.699"><output id="fwhmOut"></output></div>
+      </div>
+      <div id="resVerdict"></div>
+      <div class="readout" id="resRead"></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Detection floor</h3><span class="tag toy">read the slope, not the height</span></div>
+      <canvas id="floorCv" class="fig chart" aria-label="Lightest detectable mass against beam size"></canvas>
+      <p class="cap">Line: the m<sub>80</sub> that leaves a 5σ residual peak in this toy, for each beam (computed with the same engine by <span class="mono">build-floor.mjs</span>). Dots: perturbers found so far in galaxy-scale lenses with resolved arcs. The toy knows the source exactly and gives every telescope the same signal-to-noise, so its floor sits lower than in real data. The trend is the point: a narrower beam reaches lighter objects.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>An Earth-sized telescope</h3><span class="tag real">19 antennas, VLBA + EVN, 14 h</span></div>
+      <div class="ctrls">
+        <div class="ctrl"><span class="ctrl-lab">longest baseline</span><input type="range" id="baseKm" min="2" max="4.106" step="0.001" value="4.0"><output id="baseOut"></output></div>
+      </div>
+      <p class="cap" id="baseRead"></p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>Gravitational imaging: a map of missing mass</h2><p>Gravitational imaging does not assume a shape or a place for a perturber. It adds a free correction δψ to the lensing potential on a grid of pixels, and lets the data say where mass is missing.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Recovered convergence correction, 80 mas around V</h3><span class="tag toy">solver knows the true source</span></div>
+      <div class="duo">
+        <div class="panel"><canvas id="giKap" class="fig" aria-label="Recovered convergence correction"></canvas><span class="lab">κ<sub>GI</sub> (red: extra mass)</span><span class="scale">80 mas</span></div>
+        <div class="panel"><canvas id="giData" class="fig" aria-label="Residual before gravitational imaging"></canvas><span class="lab">residual before GI (σ)</span></div>
+      </div>
+      <div class="ctrls">
+        <div class="seg" id="giReg" role="group" aria-label="Regularisation"><button data-v="mass" class="on">mass</button><button data-v="grad">gradient</button><button data-v="curv">curvature</button></div>
+        <div class="seg" id="giGrid" role="group" aria-label="Grid"><button data-v="33" class="on">2.5 mas pixels</button><button data-v="49">1.7 mas pixels</button></div>
+        <div class="ctrl"><span class="ctrl-lab">λ<sub>ψ</sub></span><input type="range" id="giLam" min="1" max="9" step="0.1" value="5"><output id="giLamOut"></output></div>
+      </div>
+      <div class="ctrls">
+        <button class="tog on" id="giV">V in the data</button>
+        <button class="tog on" id="giTruth">show true V</button>
+        <button class="btn" id="giNoise">new noise</button>
+      </div>
+      <div class="readout" id="giRead"></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Enclosed mass, every run</h3><span class="tag toy">like Fig. 3</span></div>
+      <canvas id="giProf" class="fig chart" aria-label="Cylindrical enclosed mass of GI runs"></canvas>
+      <p class="cap">Each run adds a curve: the mass of κ<sub>GI</sub> inside radius r of its peak. Grey: the true PJ profile of V. In the paper, six runs (three penalties, two grids) gave 0.83–1.8 × 10<sup>6</sup> M<sub>☉</sub> at 80 pc, so the result was then checked by a parametric fit. Turn off "V in the data" to see what noise alone makes.</p>
+      <button class="btn" id="giClear">clear runs</button>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>How the solver works</h3><span class="tag real">paper eqs. 13–18, simplified</span></div>
+      <div class="eqs duo">
+        <div class="eq-row"><div class="sci-eq" data-tex="I(\vec\theta) = S\big(\vec\theta - \vec\alpha_0 - \nabla\delta\psi\big) \approx I_0 - \nabla_\beta S\cdot\nabla\delta\psi"></div><p>Linearise the image in the potential correction. The paper solves for the source S and δψ together; this toy keeps S fixed at the truth.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\big[\mathbf{A}^{T}C^{-1}\mathbf{A} + \lambda_\psi R_\psi\big]\,\Delta\psi = \mathbf{A}^{T}C^{-1}\,(d - B I) - \lambda_\psi R_\psi\,\delta\psi"></div><p>One Newton step, solved by conjugate gradients, four steps per run. A is blur(−∇S·∇), R penalises κ, its gradient or its curvature.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\kappa_{\rm GI} = \tfrac12\nabla^2\delta\psi"></div><p>The correction to the convergence. The paper writes −½∇²ψ in its sign convention. Features above 3σ<sub>GI</sub> count as real.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\delta\vec\alpha = \nabla\delta\psi"></div><p>The extra deflection. A Gaussian prior on δψ makes noise look like a smooth random field, which is why the paper uses a 3σ threshold.</p></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Weighing it: why 80 parsecs</h2><p>A truncated isothermal (pseudo-Jaffe) profile has two numbers, total mass and truncation radius. The data cannot separate them, but they pin the mass inside one radius very well.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Cylindrical mass M(&lt;r) of a PJ profile</h3><span class="tag real">paper eq. 9, integrated</span></div>
+      <canvas id="pivotCv" class="fig chart" aria-label="Enclosed mass curves crossing at 80 pc"></canvas>
+      <div class="ctrls">
+        <div class="ctrl"><span class="ctrl-lab">r<sub>t</sub></span><input type="range" id="rtSl" min="1.3" max="2.7" step="0.005" value="2.173"><output id="rtOut"></output></div>
+        <div class="ctrl"><span class="ctrl-lab">m<sub>tot</sub></span><input type="range" id="mtSl" min="5.8" max="7.2" step="0.005" value="6.45"><output id="mtOut"></output></div>
+        <button class="tog on" id="lockM80"><span>hold m<sub>80</sub> fixed</span></button>
+      </div>
+      <div class="readout" id="pivotRead"></div>
+      <p class="cap">With m<sub>80</sub> held, every (m<sub>tot</sub>, r<sub>t</sub>) pair passes through the same point at 80 pc. Grey curves span r<sub>t</sub> = 149 ± 18 pc. The paper found 80 pc to be the radius where the enclosed mass and r<sub>t</sub> are uncorrelated, so it quotes m<sub>80</sub> = (1.13 ± 0.04) × 10<sup>6</sup> M<sub>☉</sub>. Release the hold to change m<sub>tot</sub> on its own.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The profiles</h3><span class="tag real">paper eqs. 9 and 10</span></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\kappa(r) = \frac{m_{\rm tot}}{2\pi r_t^2\,\Sigma_{\rm cr}}\left(\frac{1}{x} - \frac{1}{\sqrt{x^2+1}}\right), \quad x = \frac{r}{r_t}"></div></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="M(<r) = m_{\rm tot}\,\frac{r_t + r - \sqrt{r^2 + r_t^2}}{r_t}"></div><p>Integral of the line above. At 80 pc: m<sub>tot</sub> 2.82 × 10<sup>6</sup>, r<sub>t</sub> 149 pc gives 1.13 × 10<sup>6</sup>.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="r_t = \frac{2R}{3}\left(\frac{m_{\rm tot}}{2M_{\rm lens}(<R)}\right)^{1/3}"></div><p>PJ_tidal fixes r<sub>t</sub> to the tidal radius. For V that gives 53 pc, too compact: the evidence drops by 16. V may sit farther from the galaxy centre along the line of sight than its projected distance.</p></div>
+      </div>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Table 1: every model the paper compared</h3><span class="tag real">tap a row</span></div>
+      <div class="t1-wrap"><table class="t1" id="t1"></table></div>
+      <p class="cap">Δlog ℰ is the Bayesian log-evidence relative to the smooth galaxy alone. The significances in the paper follow σ ≈ √(2 Δlog ℰ) between two models: adding V to the best model without it gives Δlog ℰ = 364 − 16 = 348, or 26σ. A alone is a 5.7σ effect in these data.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>What is it?</h2><p>The lens tells us mass, size and position. It does not say whether the mass is dark.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>How many such clumps should there be?</h3><span class="tag real">paper eqs. 19 and 20</span></div>
+      <canvas id="dmCv" class="fig chart" aria-label="Subhalo mass function, cold and warm dark matter"></canvas>
+      <div class="ctrls">
+        <div class="seg" id="dmMode" role="group" aria-label="Dark matter"><button data-v="cdm" class="on">cold</button><button data-v="wdm">warm</button></div>
+        <div class="ctrl"><span class="ctrl-lab">WDM particle</span><input type="range" id="wdmKev" min="0" max="1.5" step="0.01" value="0.959"><output id="wdmOut"></output></div>
+      </div>
+      <div class="readout" id="dmRead"></div>
+      <p class="cap">Warm dark matter erases small haloes below a half-mode mass M<sub>hm</sub>. The expected number μ of subhaloes of 10<sup>6</sup>–10<sup>7</sup> M<sub>☉</sub> in the sensitive area of 1.06 × 10<sup>−2</sup> arcsec<sup>2</sup> sets P(n ≥ 1) = 1 − e<sup>−μ</sup>. The paper reports 0.65 for cold dark matter, 0.36 for 9.1 keV and 0.14 for 4.6 keV. This page scales from the cold-dark-matter value with the half-mode mass of Schneider et al. (2012) and gets 0.38 and 0.16: close, not identical. One detection does not separate the models; its density profile might.</p>
+      <div class="eqs" style="margin-top:10px">
+        <div class="eq-row"><div class="sci-eq" data-tex="\frac{dn}{dm} \propto m^{\alpha}\left[1 + \left(\alpha_2\,\frac{M_{\rm hm}}{m}\right)^{\beta}\right]^{\gamma},\quad \alpha=-1.9,\ \alpha_2=1.1,\ \beta=1,\ \gamma=-0.5"></div></div>
+      </div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Candidates</h3><span class="tag real">companion paper, as reported</span></div>
+      <ul class="list">
+        <li class="ok"><b>Dark-matter subhalo</b>Its presence is in no strong tension with the expected numbers in cold or warm dark matter. But the best NFW fit is much more concentrated than simulated cold-dark-matter subhaloes, as for A and for the 10<sup>9</sup> M<sub>☉</sub> object in SDSS J0946+1006.</li>
+        <li class="bad"><b>Intermediate-mass black hole</b>Its profile is disfavoured at high significance.</li>
+        <li class="bad"><b>Globular cluster</b>Disfavoured at high significance.</li>
+        <li class="maybe"><b>Ultracompact dwarf galaxy</b>A relatively extended one is not ruled out. Deep optical or infrared images could find its light, but the lensed optical arc lies on top of it.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>What is real here, and what is a toy</h2><p>The figures run a small lens model in your browser. They show the mechanisms of the paper, not its data.</p></div></div>
+  <div class="grid">
+    <article class="card span-6 prose">
+      <p><b>From the paper.</b> Every mass, radius, position uncertainty, evidence and probability in the text and in Table 1. The redshifts, the 5 mas resolution, the noise level, the PJ and power-law formulas, the WDM mass function and its constants.</p>
+      <p><b>Recomputed.</b> Σ<sub>cr</sub> = 1.501 × 10<sup>11</sup> M<sub>☉</sub> arcsec<sup>−2</sup> and 7.96 pc per mas, from Planck 2015 distances. M(&lt;r) of the PJ profile, which gives the paper's m<sub>80</sub> from its m<sub>tot</sub> and r<sub>t</sub> for both PJ_free and PJ_tidal.</p>
+    </article>
+    <article class="card span-6 prose">
+      <p><b>Toy.</b> The lens and source parameters, made to look like Fig. 1 (the paper does not list them). Residuals are made in the image plane; the paper fits the 1.7 GHz visibilities directly with PRONTO and uses nested sampling for the evidence. The smooth model may only absorb a linear part of V's pull. The GI solver keeps the source fixed at the truth. So the toy's residuals are larger than the paper's (tens of σ here, more than 5σ there) and its detection floor is too low.</p>
+      <p><b>Data.</b> The VLBI observation (project GM068) is public in the EVN archive. This page does not use it.</p>
+    </article>
+    <article class="card span-12">
+      <div class="refs">
+        <div>Powell D. M. et al. 2025, Nature Astronomy 9, 1714. <a href="https://doi.org/10.1038/s41550-025-02651-2" target="_blank" rel="noopener">doi:10.1038/s41550-025-02651-2</a></div>
+        <div>Tessore N. &amp; Metcalf R. B. 2015, A&amp;A 580, A79 — deflection of the elliptical power law used here.</div>
+        <div>Schneider A. et al. 2012, MNRAS 424, 684 — half-mode mass of warm dark matter used in section 6.</div>
+        <div>Vegetti S. et al. 2012, Nature 481, 341 — the earlier detection of A in JVAS B1938+666.</div>
+      </div>
+    </article>
+  </div>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
