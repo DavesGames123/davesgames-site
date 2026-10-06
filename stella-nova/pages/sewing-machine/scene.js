@@ -38,9 +38,11 @@
 // ============================================================================
 import * as THREE from 'three';
 import { slab, rod, tube, lathe, poly, circle, merge } from './kit.js';
-import { M, pose as mpose, thC } from './mech.js';
+import { M, pose as mpose, thC, feed as mfeed, needle as mneedle, TAU } from './mech.js';
 
 const XN = M.XN, H = M.H, LOW = -38;
+// the shaft angle where the needle point goes into the cloth top (way down)
+const TH_IN = (() => { let lo = 0, hi = Math.PI; const y = 0.35 + M.FABRIC; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (mneedle(m).point > y) lo = m; else hi = m; } return (lo + hi) / 2; })();
 // the eccentric straps: eccentric centre to the feed bar pin (about)
 const STRAP = Math.hypot(-5.2 - LOW, 11);
 const XAX = { u: [1, 0, 0], e0: [0, 1, 0] };   // parts that turn about x
@@ -270,7 +272,7 @@ export function build(B) {
     const s = new THREE.Shape([[XN - 16, 80], [XN + 12, 80], [XN + 12, -80], [XN - 16, -80]].map(q => new THREE.Vector2(...q)));
     B.mesh(cl, slab(s, 0.35, M.FABRIC, 0.2), 'cloth', { shadow: false });
   }
-  const NST = 16, marks = [];
+  const NST = 16, marks = [], holes = new Map();
   for (let i = 0; i < NST; i++) {
     const g = new THREE.CylinderGeometry(0.25, 0.25, 1, 8); g.rotateX(Math.PI / 2);
     marks.push(B.mesh(cl, g, 'mark', { pick: false, shadow: false }));
@@ -314,12 +316,24 @@ export function build(B) {
       }
       // cloth: the weave and the stitch marks move with the feed
       clothMat.map.offset.y = -travel * 0.25;
-      const turn = Math.floor((t - Math.PI) / (Math.PI * 2)), sk = (turn + 1) * L;
+      // a cloth point s sits at z = s - travel. Each turn k the needle goes in
+      // at s = the travel then (the feed is still while the needle is in),
+      // so a stitch mark joins two holes. The holes are kept, not computed
+      // from k * L, so the marks stay on the cloth when L changes.
+      const k = Math.floor((t - TH_IN) / TAU);
+      for (const key of holes.keys()) if (key > k || key < k - NST - 1) holes.delete(key);
+      if (!holes.has(k)) {
+        const sk = travel - (mfeed(t, L).travel - mfeed(TH_IN + k * TAU, L).travel);
+        // turns skipped by a jump (or the first frame) get holes L apart
+        for (let j = 1; j <= NST + 1 && !holes.has(k - j); j++) holes.set(k - j, sk - j * L);
+        holes.set(k, sk);
+      }
       for (let i = 0; i < NST; i++) {
-        const z0 = -(travel - (sk - i * L)), z1 = z0 - L, m = marks[i];
-        const zc = (z0 + z1) / 2, show = Math.abs(L) > 0.1 && Math.abs(zc) < 76;
+        const a = holes.get(k - i), b = holes.get(k - i - 1), m = marks[i];
+        const zc = a !== undefined && b !== undefined ? (a + b) / 2 - travel : 1e9, len = Math.abs(a - b);
+        const show = len > 0.1 && Math.abs(zc) < 76;
         m.visible = show; if (!show) continue;
-        m.position.set(XN, 0.35 + M.FABRIC + 0.55, zc); m.scale.set(1, 1, 0.72 * Math.abs(L));
+        m.position.set(XN, 0.35 + M.FABRIC + 0.55, zc); m.scale.set(1, 1, 0.72 * len);
       }
       // thread
       th.holder.visible = threadOn;
