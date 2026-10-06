@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Render test</title>
+<!--
+  Bare test page for render.js. The page builds a synthetic world inline:
+  a rotating cube (8 shared corners, so the shader must find hard edges),
+  a cloud of points that falls and bounces on the floor, and a static
+  tilted plane. A ghost copy of the world (shifted and late by 10 frames)
+  and the vertex paths are on, and the orbit turns slowly, so that one
+  screenshot shows every pass.
+
+  Query options: ?ghost=0  ?paths=0  ?cloth=1 (add a waving sheet)  ?lose=1 (lose and restore the context
+  with WEBGL_lose_context, if the browser has it)
+
+  window.__rt = { ok, errors: [string], frameMs, frames, lostAndRestored }
+  ok becomes true after 60 frames without errors (after the restore when
+  lose=1).
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #06070b; color: #c9cfdc; font: 13px/1.4 system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: calc(100% - 28px); }
+  #st { height: 28px; padding: 4px 10px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="st">loading</div>
+<script type="module">
+import { createRenderer } from '../render.js';
+import { validate } from '../world.js';
+
+const rt = window.__rt = { ok: false, errors: [], frameMs: 0, frames: 0, lostAndRestored: false };
+window.addEventListener('error', ev => rt.errors.push('error: ' + ev.message));
+window.addEventListener('unhandledrejection', ev => rt.errors.push('rejection: ' + (ev.reason && ev.reason.message || ev.reason)));
+const q = new URLSearchParams(location.search);
+const st = document.getElementById('st');
+
+const FPS = 30, T = 90;
+
+function cube(size, cx, cy, cz) {
+  const h = size / 2, count = 8;
+  const corners = [];
+  for (let i = 0; i < 8; i++) corners.push([(i & 1 ? h : -h), (i & 2 ? h : -h), (i & 4 ? h : -h)]);
+  const faces = new Uint32Array([0,2,1, 1,2,3, 4,5,6, 5,7,6, 0,1,4, 1,5,4, 2,6,3, 3,6,7, 0,4,2, 2,4,6, 1,3,5, 3,7,5]);
+  const pos = new Float32Array(T * count * 3);
+  for (let t = 0; t < T; t++) {
+    const a = t / T * Math.PI * 2, b = a * 0.5;
+    const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+    for (let i = 0; i < count; i++) {
+      let [x, y, z] = corners[i];
+      [x, z] = [x * ca + z * sa, -x * sa + z * ca];      // about y
+      [x, y] = [x * cb - y * sb, x * sb + y * cb];       // about z
+      const k = (t * count + i) * 3;
+      pos[k] = x + cx; pos[k + 1] = y + cy; pos[k + 2] = z + cz;
+    }
+  }
+  return { name: 'cube', kind: 'mesh', color: [0.86, 0.52, 0.28], dynamic: true, count, faces, pos };
+}
+
+function cloud(n, r) {
+  let s = 12345;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const pos = new Float32Array(T * n * 3);
+  for (let i = 0; i < n; i++) {
+    let x = 0.9 + (rnd() - 0.5) * 0.5, y = 1.2 + rnd() * 0.8, z = -0.2 + (rnd() - 0.5) * 0.5;
+    let vx = (rnd() - 0.5) * 0.4, vy = 0, vz = (rnd() - 0.5) * 0.4;
+    for (let t = 0; t < T; t++) {
+      const k = (t * n + i) * 3;
+      pos[k] = x; pos[k + 1] = y; pos[k + 2] = z;
+      const dt = 1 / FPS;
+      vy -= 9.81 * dt; x += vx * dt; y += vy * dt; z += vz * dt;
+      if (y < r) { y = r; vy = -vy * 0.45; vx *= 0.8; vz *= 0.8; }
+    }
+  }
+  return { name: 'grains', kind: 'points', color: [0.40, 0.70, 0.95], dynamic: true, count: n, radius: r, pos };
+}
+
+function plane() {
+  // A 1 x 0.8 m panel, tilted 25 degrees, resting near the back left.
+  const g = 6, count = (g + 1) * (g + 1), pos = new Float32Array(count * 3), f = [];
+  const tilt = 25 * Math.PI / 180;
+  for (let j = 0; j <= g; j++) for (let i = 0; i <= g; i++) {
+    const u = i / g - 0.5, v = j / g;
+    const k = (j * (g + 1) + i) * 3;
+    pos[k] = -1.0 + u * 1.0; pos[k + 1] = v * 0.8 * Math.sin(tilt) + 0.02; pos[k + 2] = -0.7 - v * 0.8 * Math.cos(tilt);
+  }
+  for (let j = 0; j < g; j++) for (let i = 0; i < g; i++) {
+    const a = j * (g + 1) + i, b = a + 1, c = a + g + 1, d = c + 1;
+    f.push(a, b, c, b, d, c);
+  }
+  return { name: 'panel', kind: 'mesh', color: [0.62, 0.66, 0.74], dynamic: false, count, faces: new Uint32Array(f), pos };
+}
+
+function flag() {
+  // A 0.8 x 0.5 m sheet that waves (smooth-shading check), for ?cloth=1.
+  const gx = 24, gy = 15, count = (gx + 1) * (gy + 1), pos = new Float32Array(T * count * 3), f = [];
+  for (let t = 0; t < T; t++) for (let j = 0; j <= gy; j++) for (let i = 0; i <= gx; i++) {
+    const u = i / gx, v = j / gy, k = (t * count + j * (gx + 1) + i) * 3;
+    pos[k] = 0.2 + u * 0.8; pos[k + 1] = 1.0 + v * 0.5;
+    pos[k + 2] = -0.9 + 0.12 * u * Math.sin(u * 7 - t / T * Math.PI * 4);
+  }
+  for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+    const a = j * (gx + 1) + i, b = a + 1, c = a + gx + 1, d = c + 1;
+    f.push(a, b, c, b, d, c);
+  }
+  return { name: 'flag', kind: 'mesh', color: [0.80, 0.30, 0.42], dynamic: true, count, faces: new Uint32Array(f), pos };
+}
+
+const world = {
+  fps: FPS, frames: T,
+  camera: { eye: [2.6, 1.9, 3.2], target: [0, 0.45, 0], fovY: 40 },
+  objects: [cube(0.6, -0.1, 0.75, 0.2), cloud(600, 0.03), plane()],
+};
+if (q.get('cloth') === '1') world.objects.push(flag());
+
+// Ghost: the same scene, shifted 0.25 m in x and 10 frames late.
+function shifted(w, dx, lag) {
+  return { ...w, objects: w.objects.map(o => {
+    const stored = o.pos.length / (o.count * 3), per = o.count * 3;
+    const pos = new Float32Array(o.pos.length);
+    for (let f = 0; f < stored; f++) {
+      const src = Math.max(0, f - lag) * per;
+      for (let k = 0; k < per; k++) pos[f * per + k] = o.pos[src + k] + (k % 3 === 0 ? dx : 0);
+    }
+    return { ...o, pos };
+  }) };
+}
+const ghost = shifted(world, 0.25, 10);
+
+for (const [name, w] of [['world', world], ['ghost', ghost]]) {
+  const v = validate(w);
+  if (!v.ok) rt.errors.push(name + ': ' + v.errors.join('; '));
+}
+
+const cv = document.getElementById('cv');
+let R;
+try { R = createRenderer(cv); } catch (err) { rt.errors.push('createRenderer: ' + err.message); }
+if (R && !R.ok) rt.errors.push('createRenderer: ' + R.error);
+window.addEventListener('resize', () => R && R.resize());
+
+const showGhost = q.get('ghost') !== '0', showPaths = q.get('paths') !== '0', doLose = q.get('lose') === '1';
+const loseExt = doLose && R && R.gl ? R.gl.getExtension('WEBGL_lose_context') : null;
+if (doLose && !loseExt) rt.errors.push('WEBGL_lose_context is not available');
+
+let t0 = performance.now(), sumMs = 0, nMs = 0, okAfter = 60, phase = doLose ? 'before' : 'run';
+cv.addEventListener('webglcontextlost', () => { phase = 'lost'; });
+cv.addEventListener('webglcontextrestored', () => { phase = 'run'; rt.lostAndRestored = true; okAfter = rt.frames + 60; });
+
+function frame(now) {
+  if (!R || !R.ok) return;
+  const sec = (now - t0) / 1000;
+  const t = (sec * FPS) % (T - 1);                  // fractional frame
+  const orbit = { yaw: Math.sin(sec * 0.4) * 0.35, pitch: 0.05 };
+  const a = performance.now();
+  try {
+    R.draw(world, t, { ghost: showGhost ? ghost : null, showPaths, orbit });
+  } catch (err) { rt.errors.push('draw: ' + err.message); return; }
+  const ms = performance.now() - a;
+  sumMs += ms; nMs++; rt.frameMs = +(sumMs / nMs).toFixed(3);
+  rt.frames++;
+  if (phase !== 'lost' && !R.gl.isContextLost()) {
+    const err = R.gl.getError();
+    if (err !== R.gl.NO_ERROR && err !== R.gl.CONTEXT_LOST_WEBGL) rt.errors.push('gl error 0x' + err.toString(16) + ' at frame ' + rt.frames);
+  }
+  if (phase === 'before' && rt.frames === 30) {
+    loseExt.loseContext();
+    setTimeout(() => loseExt.restoreContext(), 200);
+  }
+  if (phase === 'run' && rt.frames >= okAfter && !rt.errors.length) rt.ok = true;
+  st.textContent = `frame ${t.toFixed(2)} / ${T}  draw ${rt.frameMs} ms  ${phase}  ${rt.ok ? 'ok' : ''} ${rt.errors.join(' | ')}`;
+  requestAnimationFrame(frame);
+}
+R && R.resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
