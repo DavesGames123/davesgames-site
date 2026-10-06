@@ -219,6 +219,11 @@ w.SN_NAV = [
       ["origami", "Origami Simulator", "SIM"]
     ] }
   ] },
+  { id: "language", label: "Language", short: "Language", icon: "❝", color: "#f2d16b", color2: "#7ee0c3", groups: [
+    { h: null, p: [
+      ["lose-the-modifier", "Lose the Modifier", "WORDS"]
+    ] }
+  ] },
   { id: "papers", label: "Research", short: "Research", icon: "¶", color: "#ffa06e", color2: "#c9a7ff", groups: [
     { h: "Astrophysics", p: [
       ["gravitational-imaging", "Gravitational Imaging", "NEW"]

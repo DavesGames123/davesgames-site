@@ -50,6 +50,7 @@
 [data-sector="patterns"]   { --c: #9db4ff; --c2: #c490ff; }
 [data-sector="sound"]      { --c: #ff8ac2; --c2: #ffb478; }
 [data-sector="machines"]   { --c: #e6c27a; --c2: #f0b27a; }
+[data-sector="language"]   { --c: #f2d16b; --c2: #7ee0c3; }
 [data-sector="papers"]     { --c: #ffa06e; --c2: #c9a7ff; }
 [data-sector="shaders"]    { --c: #e58bd0; --c2: #b896ff; }
 [data-sector="effects"]    { --c: #ff9a5c; --c2: #ff5a4a; }
