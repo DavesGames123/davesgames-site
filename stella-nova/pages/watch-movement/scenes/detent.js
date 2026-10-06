@@ -93,7 +93,7 @@ export function build(B, cal, opts = {}) {
   const det = B.part('detent', 'train', L.foot, { label: 'Spring detent', labelZ: Z.detent + 0.5, labelAt: L.stoneAt });
   const sLoc = local(L.stoneAt, L.foot), hLoc = local(L.hornTip, L.foot), zd = Z.detent;
   B.add(det, B.slab(G.capsule([0, 0], sLoc, 0.22), [], zd - 0.08, zd + 0.08, 'steel', 0.01),
-    B.slab(G.capsule(sLoc, hLoc, 0.3), [], zd - 0.12, zd + 0.12, 'steel', 0.015),
+    B.slab(G.capsule(sLoc, hLoc, 0.3), [], zd - 0.17, zd + 0.17, 'steel', 0.015),
     B.slab(G.capsule(G.pol(0.3, Math.atan2(sLoc[1], sLoc[0])), G.pol(1.8, Math.atan2(sLoc[1], sLoc[0])), 0.7), [], zd - 0.25, zd + 0.25, 'steel', 0.03),
     B.slab(circ(0.55, 20, sLoc), [], zd - 0.3, zd + 0.3, 'steel', 0.03),
     B.slab(cal.ESC.stonePoly(0).map(q => local(q, L.foot)), [], Z.escape - 0.14, Z.escape + 0.14, 'ruby', 0.01));
@@ -171,7 +171,7 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
     const dialHoles = [hole(1.0, 24), hole(0.45, 16, L.F), hole(0.4, 16, L.upAt)];
-    B.add(dial, B.slab(circ(20.3, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(19.95, 20.3, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+    B.add(dial, B.slab(circ(20.25, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.05, 'brass', 0.05), B.ring(19.95, 20.3, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
       B.dialFace(20.3, Z.dialLo, dialHoles, opts.dialPaint || paintChrono(cal)));
   }
   const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['spade', 10.5, 0.42], minute: ['spade', 15.5, 0.32], mat: 'blued', second: { at: L.F, len: 4.4, z: Z.dialLo - 0.3 } }, ...(opts.hands || {}) });

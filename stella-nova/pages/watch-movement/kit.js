@@ -378,7 +378,7 @@ export function createBuild(opts = {}) {
     const m = new THREE.Mesh(geo, null);
     owned.push(geo);
     m.userData.matName = null;
-    m.userData.dialMat = new THREE.MeshPhysicalMaterial({ map: t, roughness: 0.4, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06 });
+    m.userData.dialMat = new THREE.MeshPhysicalMaterial({ map: t, roughness: 0.4, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     m.material = m.userData.dialMat;
     m.userData.noShadow = true;
     return m;

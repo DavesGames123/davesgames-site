@@ -50,7 +50,7 @@ export function build(B, cal, opts = {}) {
   }
   fz.unshift(new THREE.Vector2(0.5, f.zLo)); fz.push(new THREE.Vector2(0.5, f.zHi));
   const cone = new THREE.LatheGeometry(fz, 64); cone.rotateX(Math.PI / 2);
-  B.add(fu, B.mesh(cone, 'gilt'), B.cyl(0.5, -c.plateT, Z.topHi, 'steel', 18), B.slab(circ(f.r0 + 0.25, 64), [hole(0.5)], f.zLo - 0.2, f.zLo, 'gilt', 0.03));
+  B.add(fu, B.mesh(cone, 'gilt'), B.cyl(0.5, -c.plateT - 0.05, Z.topHi + 0.05, 'steel', 18), B.slab(circ(f.r0 + 0.25, 64), [hole(0.5)], f.zLo - 0.2, f.zLo, 'gilt', 0.03));
   // the chain (world coordinates, rebuilt from the reserve each frame)
   const ch = B.part('chain', 'train', [0, 0], { label: 'Fusee chain', labelZ: 3.0, labelAt: add(L.F, pol(5, 10 * D)) });
   const chainMesh = B.path(900, 0.42, 'chain', 0.5);
@@ -59,7 +59,7 @@ export function build(B, cal, opts = {}) {
   const bar = B.part('barrel', 'train', L.Bb, { label: 'Barrel', labelZ: Z.barrelHi });
   B.add(bar, B.slab(circ(c.barrelR, 96), [hole(c.barrelR - 0.3, 96)], Z.barrelLo, Z.barrelHi, 'gilt', 0.04),
     B.slab(circ(c.barrelR + 0.25, 96), [hole(0.6)], Z.barrelLo, Z.barrelLo + 0.2, 'gilt', 0.04), B.slab(circ(c.barrelR + 0.25, 96), [hole(0.6)], Z.barrelHi - 0.2, Z.barrelHi, 'gilt', 0.04),
-    B.cyl(0.6, -c.plateT, Z.topHi + 0.4, 'steel', 18));
+    B.cyl(0.6, -c.plateT - 0.05, Z.topHi + 0.4, 'steel', 18));
   const sq = B.part('barrelArbor', 'top', L.Bb, { info: 'barrel' });       // the set-up square above the top plate
   B.add(sq, B.slab([[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6]], [], Z.topHi, Z.topHi + 0.5, 'steel', 0.03));
 
@@ -132,7 +132,7 @@ export function build(B, cal, opts = {}) {
   for (const [rr, n, hr, off] of [[2.6, 8, 0.55, 0], [4.4, 12, 0.48, 0.5], [6.0, 18, 0.3, 0]]) for (let k = 0; k < n; k++) holes.push(hole(hr, 18, add(L.V, pol(rr, (k + off) / n * TAU))));
   B.add(ck, B.slab(circ(7.2, 120, L.V), holes, Z.cockLo, Z.cockHi, 'giltBridge', 0.05), B.ring(6.85, 7.2, Z.cockHi - 0.02, Z.cockHi + 0.06, 'gilt', L.V),
     B.slab(G.hullOfCircles([[L.cockFoot, 2.6], [add(L.cockFoot, pol(-2.2, 18 * D)), 1.6]]), [], Z.topHi, Z.topHi + 0.45, 'giltBridge', 0.05),
-    B.slab(circ(1.5, 32, add(L.cockFoot, pol(-1.6, 18 * D))), [], Z.topHi + 0.45, Z.cockLo, 'gilt', 0.03));
+    B.slab(circ(1.5, 32, add(L.cockFoot, pol(-1.6, 18 * D))), [], Z.topHi + 0.4, Z.cockLo, 'gilt', 0.03));
   const dia = B.part('jewelCock', 'cock', [0, 0], { info: 'jewel' });
   B.add(dia, B.slab(circ(0.8, 32, L.V), [], Z.cockHi, Z.cockHi + 0.12, 'gilt', 0.03), B.slab(circ(0.32, 16, L.V), [], Z.cockHi + 0.1, Z.cockHi + 0.22, 'steel', 0.03));
   const screws = B.part('screws', 'cock', [0, 0], { lift: 0.4, info: 'cock' });
@@ -143,7 +143,7 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
     const dialHoles = [hole(1.0, 24)];
-    B.add(dial, B.slab(circ(18.9, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.55, 18.9, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+    B.add(dial, B.slab(circ(18.85, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.05, 'brass', 0.05), B.ring(18.55, 18.9, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
       B.dialFace(18.9, Z.dialLo, dialHoles, opts.dialPaint || paintEnglish({ brand: 'Stella Nova', line: 'London' })));
   }
   const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['beetle', 10.0, 0.4], minute: ['poker', 15.0, 0.3], mat: 'blued', hubR: 1.0 }, ...(opts.hands || {}) });

@@ -126,8 +126,8 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelAt: [-24, -30], labelZ: Z.dialLo });
     const dialHoles = [hole(2.1, 24), hole(L.aperture.r, 96, L.aperture.c), hole(2.0, 24, L.B), hole(0.9, 16, L.regulator)];
-    B.add(dial, B.slab(circ(c.dialR, 200), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.1),
-      B.ring(L.aperture.r, L.aperture.r + 0.9, Z.dialLo - 0.25, Z.dialHi, 'gilt', L.aperture.c),
+    B.add(dial, B.slab(circ(c.dialR - 0.15, 200), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.15, 'brass', 0.1),
+      B.ring(L.aperture.r - 0.15, L.aperture.r + 0.9, Z.dialLo - 0.25, Z.dialHi, 'gilt', L.aperture.c),
       B.ring(c.dialR - 0.8, c.dialR, Z.dialLo - 0.25, Z.dialHi, 'gilt'),
       B.dialFace(c.dialR, Z.dialLo, dialHoles, opts.dialPaint || paintBrocotDial(L, c)));
   }

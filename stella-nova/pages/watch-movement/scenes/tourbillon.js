@@ -65,7 +65,7 @@ export function build(B, cal, opts = {}) {
   // the fixed wheel (does not turn), hung from the tourbillon bridge
   const fw = B.part('fixedWheel', 'cage', O, { label: 'Fixed wheel', labelZ: Z.fixed + 0.5, labelAt: [O[0] - 4.6, O[1]] });
   B.add(fw, B.slab(G.wheelProfile(c.fixed.N, L.mFixed), G.spokeWindows(1.2, G.rootR(c.fixed.N, L.mFixed) - 0.35, 5, 0.42).map(h => h.reverse()), Z.fixed - 0.13, Z.fixed + 0.13, 'gilt', 0.012),
-    B.ring(0.45, 1.15, Z.fixed - 0.13, Z.tbLo, 'steel'));
+    B.ring(0.45, 1.15, Z.fixed, Z.tbLo, 'steel'));
 
   // BRIDGES
   const feetBB = [pol(8.5, 200 * D), pol(8.45, 95 * D)].map(p => [L.B[0] + p[0], L.B[1] + p[1]]);
@@ -123,8 +123,8 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
     const dialHoles = [hole(1.0, 24), hole(c.cageR + 0.15, 96, O)];
-    B.add(dial, B.slab(circ(18.6, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
-      B.ring(c.cageR + 0.15, c.cageR + 0.55, Z.dialLo - 0.08, Z.dialHi, 'gilt', O),
+    B.add(dial, B.slab(circ(18.55, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.05, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+      B.ring(c.cageR + 0.1, c.cageR + 0.55, Z.dialLo - 0.08, Z.dialHi, 'gilt', O),
       B.dialFace(18.6, Z.dialLo, dialHoles, opts.dialPaint || paintRoman({ aperture: [-O[1], c.cageR + 0.15], line: 'TOURBILLON  ·  18 000 A/h' })));
   }
   const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.6, 0.42], minute: ['breguet', 14.6, 0.32], second: { at: O, len: 5.6, z: Z.dialLo - 0.3, w: 0.22 } }, ...(opts.hands || {}) });

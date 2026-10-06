@@ -27,7 +27,7 @@ export function wheelArbor(B, o) {
   const holes = w.spokes ? G.spokeWindows(w.spokes.rIn, Rf - w.spokes.rim, w.spokes.n, w.spokes.w).map(h => h.reverse()) : (w.holeR ? [hole(w.holeR)] : []);
   B.add(p, B.slab(w.profile || G.wheelProfile(w.N, w.m), holes, w.z - th / 2, w.z + th / 2, w.mat || 'gilt', bevelFor(w.m)));
   if (o.pinion) B.add(p, B.slab(G.pinionProfile(o.pinion.N, o.pinion.m), [], o.pinion.z - (o.pinion.t ?? 0.34) / 2, o.pinion.z + (o.pinion.t ?? 0.34) / 2, 'steel', 0.01));
-  if (w.spokes) B.add(p, B.cyl(w.spokes.rIn * 0.75, w.z - th / 2 - 0.04, w.z + th / 2 + 0.04, 'steel'));
+  if (w.spokes) B.add(p, B.cyl(w.spokes.rIn * 0.75, w.z - th / 2 - Math.max(0.04, th * 0.1), w.z + th / 2 + Math.max(0.04, th * 0.1), 'steel'));
   if (o.arbor) B.add(p, B.cyl(o.arbor[2] ?? 0.22, o.arbor[0], o.arbor[1], 'steel', 18));
   return p;
 }

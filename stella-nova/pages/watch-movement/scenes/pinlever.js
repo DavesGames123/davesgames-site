@@ -34,7 +34,7 @@ export function build(B, cal, opts = {}) {
   // the fixed post the cannon pinion turns on (there is no centre arbor)
   B.add(plate, B.cyl(0.42, Z.dialLo - 0.7, -c.plateT, 'steel', 18));
   const jw = B.part('jewelsPlate', 'plate', [0, 0], { info: 'jewel' });
-  B.add(jw, B.jewel(L.Bal, 0.04, 0.62));
+  B.add(jw, B.jewel(L.Bal, 0.0, 0.62));
 
   // GOING TRAIN: the big barrel, second, third, escape
   const barrel = barrelParts(B, { at: L.B, N: c.barrel.N, m: c.barrel.m, zLo: Z.barrelLo, zHi: Z.barrelHi, rDrum: 8.45, arborHi: Z.bridgeHi + 0.05, drumMat: 'brass' });
@@ -127,7 +127,7 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
     const dialHoles = [hole(1.05, 24)];
-    B.add(dial, B.slab(circ(c.plateR + 0.3, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(c.plateR - 0.05, c.plateR + 0.3, Z.dialLo - 0.02, Z.dialHi, 'steel'),
+    B.add(dial, B.slab(circ(c.plateR + 0.25, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.05, 'brass', 0.05), B.ring(c.plateR - 0.05, c.plateR + 0.3, Z.dialLo - 0.02, Z.dialHi, 'steel'),
       B.dialFace(c.plateR + 0.3, Z.dialLo, dialHoles, opts.dialPaint || paintRoman({ line: 'PIN LEVER  ·  17 280 A/h' })));
   }
   const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['spade', 10.6, 0.42], minute: ['spade', 15.6, 0.34], mat: 'blued', hubR: 1.05 }, ...(opts.hands || {}) });

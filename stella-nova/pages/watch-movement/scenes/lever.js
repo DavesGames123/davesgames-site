@@ -111,7 +111,7 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
     const dialHoles = [hole(1.0, 24), hole(0.45, 16, L.F)];
-    B.add(dial, B.slab(circ(18.6, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+    B.add(dial, B.slab(circ(18.55, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.05, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
       B.dialFace(18.6, Z.dialLo, dialHoles, opts.dialPaint || paintRoman({ sub: [10.25, 3.95], line: 'LEVER  ·  18 000 A/h' })));
   }
   const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.6, 0.42], minute: ['breguet', 14.6, 0.32], second: { at: L.F, len: 3.7, z: Z.dialLo - 0.3 } }, ...(opts.hands || {}) });

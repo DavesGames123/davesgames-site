@@ -111,7 +111,7 @@ export function build(B, cal, opts = {}) {
   const line = B.mesh(lineG, 'black'); B.add(wt, line);
 
   // GOING TRAIN
-  wheelArbor(B, { id: 'center', at: L.C, label: 'Centre wheel', wheel: { N: 96, m: 0.9, z: Z.center, t: 1.6, spokes: { rIn: 5, rim: 2.2, n: 6, w: 2.6 } }, pinion: { N: 12, m: 0.7, z: Z.great, t: 2.2 }, arbor: [Z.dialLo - 2, Z.backHi + 1, 1.6] });
+  wheelArbor(B, { id: 'center', at: L.C, label: 'Centre wheel', wheel: { N: 96, m: 0.9, z: Z.center, t: 1.6, spokes: { rIn: 5, rim: 2.2, n: 6, w: 2.6 } }, pinion: { N: 12, m: 0.7, z: Z.great, t: 2.2 }, arbor: [Z.dialLo - 2.3, Z.backHi + 1, 1.6] });
   wheelArbor(B, { id: 'third', at: L.T, label: 'Third wheel', wheel: { N: 80, m: 0.75, z: Z.third, t: 1.4, spokes: { rIn: 4, rim: 2, n: 6, w: 2.2 } }, pinion: { N: 8, m: 0.9, z: Z.center, t: 2.2 }, arbor: [0, Z.backHi + 1, 1.3] });
 
   // ESCAPE WHEEL (its arbor reaches the seconds hand at 12)
@@ -164,7 +164,7 @@ export function build(B, cal, opts = {}) {
     B.slab(G.pinionProfile(10, 2.0), [], Z.hour - 1.4, Z.minute - 1, 'steel', 0.05), B.cyl(1.4, Z.hour - 1.5, -4, 'steel', 18));
   const hw = B.part('hourWheel', 'motion', L.H, { label: 'Hour wheel', labelZ: Z.hour - 2 });
   B.add(hw, B.slab(G.wheelProfile(40, 2.0), G.spokeWindows(5, G.rootR(40, 2) - 3, 5, 3).map(h => h.reverse()), Z.hour - 1, Z.hour + 1, 'brass', 0.1),
-    B.cyl(1.6, Z.dialLo - 1.2, -4, 'steel', 18));
+    B.cyl(1.6, Z.dialLo - 1.5, -4, 'steel', 18));
 
   // DIAL
   const DR = 145;

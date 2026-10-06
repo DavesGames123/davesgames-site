@@ -106,7 +106,7 @@ export function build(B, cal, opts = {}) {
   if (!opts.noDial) {
     const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
     const dialHoles = [hole(1.0, 24), hole(0.45, 16, L.F)];
-    B.add(dial, B.slab(circ(18.9, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.55, 18.9, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+    B.add(dial, B.slab(circ(18.85, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi - 0.05, 'brass', 0.05), B.ring(18.55, 18.9, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
       B.dialFace(18.9, Z.dialLo, dialHoles, opts.dialPaint || paintRoman({ sub: [-L.F[1], 3.6], line: 'ÉCHAPPEMENT À CYLINDRE', brand: 'STELLA  NOVA' })));
   }
   const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.8, 0.42], minute: ['breguet', 14.8, 0.32], second: { at: L.F, len: 3.4, z: Z.dialLo - 0.3 } }, ...(opts.hands || {}) });

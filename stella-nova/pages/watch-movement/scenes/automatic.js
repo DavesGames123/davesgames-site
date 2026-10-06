@@ -88,7 +88,7 @@ export function build(B, cal, opts = {}) {
     for (let i = n; i >= 0; i--) out.push(pol(r0, a0 + (a1 - a0) * i / n));
     return out;
   };
-  B.add(rotor, B.slab(sector(2.0, c.plateR - 1.6, -96 * D, 96 * D), [], Z.rotorLo, Z.rotorHi, 'rhodium', 0.04),
+  B.add(rotor, B.slab(sector(2.0, c.plateR - 1.6, -96 * D, 96 * D), [], Z.rotorLo + 0.05, Z.rotorHi, 'rhodium', 0.04),
     B.slab(sector(c.plateR - 1.75, c.plateR - 0.35, -98 * D, 98 * D, 80), [], Z.rimLo, Z.rimHi, 'gold', 0.08),
     B.ring(0.4, 2.15, Z.rotorLo, Z.rotorHi + 0.1, 'gold'));
   for (const a of [-40 * D, 40 * D]) B.add(rotor, B.slab(circ(1.3, 32, pol(6.8, a)), [hole(0.85, 32, pol(6.8, a))], Z.rotorHi, Z.rotorHi + 0.05, 'gold', 0));
@@ -118,7 +118,7 @@ export function build(B, cal, opts = {}) {
     B.add(dial, B.slab(circ(12.9, 160), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.04),
       B.dialFace(12.9, Z.dialLo, dialHoles, opts.dialPaint || paintBaton({ line: 'AUTOMATIC', line2: '28 800 A/h  ·  25 JEWELS' })));
   }
-  const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['dauphine', 6.4, 0.55], minute: ['dauphine', 10.2, 0.45], mat: 'steel', hubR: 0.6,
+  const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['dauphine', 6.4, 0.55], minute: ['dauphine', 10.2, 0.45], mat: 'steel', hubR: 0.66,
     second: { at: L.C, len: 11.2, z: Z.dialLo - 0.85, w: 0.16, hub: 0.32, mat: 'gold' } }, ...(opts.hands || {}) });
 
   const ROT = { barrel: 'barrel', barrelCover: 'barrel', barrelArbor: 'ratchet', center: 'center', third: 'third', fourth: 'fourth', secp: 'secp', escape: 'escape', pallet: 'fork', balance: 'balance', ratchet: 'ratchet', reduction: 'red', rev1Wheel: 'rev1', rev2Wheel: 'rev2', rev1Pin: 'revP1', rev2Pin: 'revP2', rotor: 'rotor', rotorHub: 'rotor', cannon: 'center', minuteWheel: 'minute', hourWheel: 'hour' };
