@@ -8,9 +8,9 @@
 //
 //  PASCALINE (Blaise Pascal, 1642). N decimal wheels. The user dials each
 //  digit with a stylus: one dial step turns a wheel one tenth of a turn and
-//  takes one beat. Two pins on wheel j lift the sautoir (a weighted lever
+//  takes one beat. A pin on wheel j lifts the sautoir (a weighted lever
 //  that pivots on the axle of wheel j + 1) while wheel j turns from LIFT0 to
-//  9. When wheel j goes from 9 to 0, the sautoir is free and falls; its pawl
+//  9 (in this model the last three tenths). When wheel j goes from 9 to 0, the sautoir is free and falls; its pawl
 //  pushes wheel j + 1 one tenth (one carry, CARRY_DUR beats). That step can
 //  take wheel j + 1 from 9 to 0, so the carries ripple, one weight at a time.
 //  The weight stores the energy of the carry, so a ripple through all wheels
@@ -51,7 +51,7 @@ export const UNITS = [
 ];
 export const unit = id => UNITS.find(u => u.id === id);
 
-export const LIFT0 = 5;            // pascaline: the pins lift the sautoir from digit 5
+export const LIFT0 = 7;            // pascaline: the lift pin raises the sautoir from digit 7
 export const CARRY_DUR = 0.6;      // pascaline: beats for one sautoir fall
 export const MOVE_DUR = 0.6;       // pascaline: beats to move the stylus to the next wheel
 export const ADD_END = 0.42, CARRY0 = 0.5, CARRY_STEP = 0.04, TICK_F = 0.2, TICK_W = 0.1;
