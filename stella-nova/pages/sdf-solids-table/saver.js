@@ -21,6 +21,7 @@
 //    function packOp .... op -> 7 vec4 (the WGSL Op layout)
 //    function timeline .. op progress from the build clock
 //    function camera .... orbit eye, fit to the frame, detail moves
+//    function detailFocus the detail-shot aim point, kept inside the solid
 //    function plate ..... opts.label: solid, step, formula, live values
 //    export const SAVER . setCtx, install, and the JS port for saver-test.mjs
 // ============================================================================
@@ -33,7 +34,10 @@ const MAX_OPS = 24;
 // ---------------------------------------------------------------- recipes
 // op fields: t type, c combine, b params, pos, rot (degrees x, y, z: the
 // solid's own turn), rep and repR (polar copies about local y), slide (the
-// cutter offset at progress 0), lerp (ease the distance in, no slide), k,
+// cutter offset at progress 0), lerp L (ease the distance in from L,
+// no slide; L is about half the cutter depth, or for an intersector a
+// small part of its d_i range, so the change grows through the step;
+// saver-test.mjs "spread" checks it), k,
 // mat (0..3), at (timeline step; default the list index), cap (plate sub).
 // Units: the floor is y = -1.25, and every solid stays in the bound sphere
 // of radius 2.6 (saver-test.mjs checks both).
@@ -65,7 +69,7 @@ const RECIPES = [
     { t: 'capsule', c: 'union', b: [1.1, 0.06], pos: [0, 0, 0], rep: 3, repR: 0.82, slide: [0, 3, 0], mat: 0, cap: 'Three turned pillars' },
     { t: 'ellipsoid', c: 'union', b: [0.6, 0.55, 0.6], pos: [0, 0.5, 0], mat: 1, cap: 'Blowing the upper bulb' },
     { t: 'ellipsoid', c: 'union', b: [0.6, 0.55, 0.6], pos: [0, -0.5, 0], k: 0.35, mat: 1, cap: 'Blowing the lower bulb' },
-    { t: 'torus', c: 'sub', b: [0.42, 0.3], pos: [0, 0, 0], lerp: true, k: 0.04, mat: 1, cap: 'Pinching the waist' },
+    { t: 'torus', c: 'sub', b: [0.42, 0.3], pos: [0, 0, 0], lerp: 0.15, k: 0.04, mat: 1, cap: 'Pinching the waist' },
     { t: 'round', b: [0.008], cap: 'Breaking every edge' },
   ] },
   { name: 'Spinning top', note: 'Lacquered body, brass stem', mats: [[0.75, 0.12, 0.1, 0.15], [0.9, 0.7, 0.35, 0.85], [0.92, 0.88, 0.8, 0.05], [1.0, 0.85, 0.5, 0.7]], ops: [
@@ -97,14 +101,14 @@ const RECIPES = [
   { name: 'Gyroscope', note: 'Rotor in two gimbal rings', mats: [[0.9, 0.72, 0.4, 0.85], [0.85, 0.86, 0.9, 0.9], [0.2, 0.2, 0.24, 0.4], [1.0, 0.8, 0.5, 0.8]], ops: [
     { t: 'cyl', c: 'union', b: [0.6, 0.08, 0.02], pos: [0, 0, 0], mat: 1, cap: 'The rotor disc' },
     { t: 'capsule', c: 'union', b: [0.95, 0.04], pos: [0, 0, 0], k: 0.02, mat: 1, cap: 'Its axle' },
-    { t: 'torus', c: 'sub', b: [0.6, 0.03], pos: [0, 0, 0], lerp: true, mat: 3, cap: 'Grooving the rotor rim' },
+    { t: 'torus', c: 'sub', b: [0.6, 0.03], pos: [0, 0, 0], lerp: 0.015, mat: 3, cap: 'Grooving the rotor rim' },
     { t: 'torus', c: 'union', b: [1.0, 0.05], pos: [0, 0, 0], rot: [90, 0, 0], mat: 0, cap: 'The inner gimbal ring' },
     { t: 'torus', c: 'union', b: [1.2, 0.05], pos: [0, 0, 0], rot: [0, 0, 90], mat: 0, cap: 'The outer gimbal ring' },
     { t: 'cone', c: 'union', b: [0.5, 0.08, 0.1], pos: [0, -1.15, 0], k: 0.04, mat: 2, cap: 'The pedestal' },
   ] },
   { name: 'Gyroid core', note: 'A triply periodic shell in a sphere', mats: [[0.25, 0.75, 0.7, 0.2], [1.0, 0.75, 0.3, 0.5], [0.9, 0.9, 0.9, 0.2], [0.5, 1.0, 0.85, 0.5]], ops: [
     { t: 'sphere', c: 'union', b: [1.1], pos: [0, 0, 0], mat: 0, cap: 'A sphere' },
-    { t: 'gyroid', c: 'inter', b: [5.0, 0.07], pos: [0, 0, 0], lerp: true, k: 0.02, mat: 0, cap: 'Intersecting a gyroid shell' },
+    { t: 'gyroid', c: 'inter', b: [5.0, 0.07], pos: [0, 0, 0], lerp: 0.03, k: 0.02, mat: 0, cap: 'Intersecting a gyroid shell' },
     { t: 'sphere', c: 'union', b: [0.45], pos: [0, 0, 0], mat: 1, cap: 'Growing a core inside' },
     { t: 'box', c: 'sub', b: [1.3, 1.3, 1.3, 0], pos: [1.3, 1.3, 1.3], slide: [3, 3, 3], mat: 2, cap: 'Cutting an octant away' },
     { t: 'round', b: [0.01], cap: 'Breaking every edge' },
@@ -112,7 +116,7 @@ const RECIPES = [
   { name: 'Twisted column', note: 'Fluted shaft, plinth and capital', mats: [[0.9, 0.88, 0.85, 0.05], [0.9, 0.72, 0.35, 0.9], [0.6, 0.6, 0.6, 0.2], [1.0, 0.85, 0.6, 0.7]], ops: [
     { t: 'twist', b: [1.4], at: 4, cap: 'Twisting the shaft' },
     { t: 'box', c: 'union', b: [0.32, 0.95, 0.32, 0.04], pos: [0, 0, 0], at: 0, mat: 0, cap: 'A square shaft' },
-    { t: 'cyl', c: 'sub', b: [0.07, 1.0, 0], pos: [0, 0, 0], rep: 4, repR: 0.32, lerp: true, at: 1, mat: 0, cap: 'Fluting the four faces' },
+    { t: 'cyl', c: 'sub', b: [0.07, 1.0, 0], pos: [0, 0, 0], rep: 4, repR: 0.32, lerp: 0.035, at: 1, mat: 0, cap: 'Fluting the four faces' },
     { t: 'box', c: 'union', b: [0.55, 0.12, 0.55, 0.03], pos: [0, -1.05, 0], k: 0.05, at: 2, mat: 1, cap: 'The plinth' },
     { t: 'box', c: 'union', b: [0.55, 0.12, 0.55, 0.03], pos: [0, 1.05, 0], k: 0.05, at: 3, mat: 1, cap: 'The capital' },
     { t: 'round', b: [0.01], at: 5, cap: 'Breaking every edge' },
@@ -177,11 +181,11 @@ function rotRows(deg = [0, 0, 0]) {
 function prep(op, i) {
   const b = [0, 0, 0, 0]; (op.b || []).forEach((v, j) => { b[j] = v; });
   return { ...op, ti: T[op.t], ci: C[op.c] ?? 0, b, pos: op.pos || [0, 0, 0], rows: rotRows(op.rot), rep: op.rep || 0, repR: op.repR || 0,
-    slide: op.slide || [0, 0, 0], lerp: !!op.lerp, k: op.k || 0, mat: op.mat || 0, at: op.at ?? i, pr: 0 };
+    slide: op.slide || [0, 0, 0], lerp: +op.lerp || 0, k: op.k || 0, mat: op.mat || 0, at: op.at ?? i, pr: 0 };
 }
 // One op as 7 vec4 (28 floats), the WGSL Op layout.
 function packOp(o, f, at) {
-  f.set([o.ti, o.ci, o.pr, o.k, ...o.b, ...o.pos, o.rep, ...o.rows[0], o.mat, ...o.rows[1], o.lerp ? 1 : 0, ...o.rows[2], 0, ...o.slide, o.repR], at);
+  f.set([o.ti, o.ci, o.pr, o.k, ...o.b, ...o.pos, o.rep, ...o.rows[0], o.mat, ...o.rows[1], o.lerp, ...o.rows[2], 0, ...o.slide, o.repR], at);
 }
 
 // ---------------------------------------------------------------- JS port
@@ -222,7 +226,7 @@ function opDist(o, p) {
   let d;
   if (o.ci === 0) { const sc = Math.max(pr, 1e-3); d = prim(o.ti, q.map(v => v / sc), o.b) * sc; }
   else d = prim(o.ti, q, o.b);
-  if (o.lerp) { if (o.ci === 1) d = 5 + (d - 5) * pr; if (o.ci === 2) d = -5 + (d + 5) * pr; }
+  if (o.lerp) { const L = o.lerp; if (o.ci === 1) d = L + (d - L) * pr; if (o.ci === 2) d = -L + (d + L) * pr; }
   return d;
 }
 function mapM(ops, p0) {
@@ -268,6 +272,18 @@ function extent(ops, ord, s) {
   }
   if (lo[0] > hi[0]) return { c: [0, -0.2, 0], r: 1 };
   return { c: lo.map((v, j) => (v + hi[j]) / 2), r: Math.max(0.45, 0.5 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])) };
+}
+
+// The point a detail shot looks at: the op position (round the polar copy
+// that faces the camera), pulled toward the solid centre so that it lies
+// within 0.6 of the extent radius. A cutter centre is often outside the
+// solid (the octant box of the gyroid core sits at (1.3, 1.3, 1.3)), and
+// a shot aimed there puts the solid at the frame edge, under the plate.
+function detailFocus(o, ex, az) {
+  const f = o.pos.slice();
+  if (o.rep) { f[0] += Math.sin(az) * o.repR; f[2] += Math.cos(az) * o.repR; }
+  const v = f.map((x, j) => x - ex.c[j]), l = Math.hypot(...v), m = 0.6 * ex.r;
+  return l > m ? ex.c.map((c, j) => c + v[j] * m / l) : f;
 }
 
 // ---------------------------------------------------------------- the hook
@@ -331,8 +347,7 @@ html.sdf-saver body > :not(.sdf-saver-canvas) { display: none !important; }
     if (st !== cam.step) {
       cam.step = st;
       const ex = extent(ops, ord, st), tall = canvas.clientWidth < canvas.clientHeight;
-      const detail = o && o.ti < 20 && st >= 0 && R() < 0.6, foc = detail ? [o.pos[0], o.pos[1], o.pos[2]] : ex.c;
-      if (detail && o.rep) { const a = cam.az; foc[0] += Math.sin(a) * o.repR; foc[2] += Math.cos(a) * o.repR; }
+      const detail = o && o.ti < 20 && st >= 0 && R() < 0.6, foc = detail ? detailFocus(o, ex, cam.az) : ex.c;
       cam.from = { el: cam.el, dist: cam.dist, rad: cam.rad, tgt: cam.tgt.slice(), base: cam.base };
       cam.to = { el: 0.25 + 0.5 * R(), dist: detail ? (tall ? 0.8 : 0.62) : 1, rad: ex.r, tgt: foc, daz: (R() - 0.5) * 1.2 };
       cam.t = 0;
@@ -403,4 +418,4 @@ function exit() {
 }
 function install() { window.snSaver = { enter, exit }; }
 
-export const SAVER = { setCtx, install, RECIPES, prep, steps, timeline, mapM, opDist, MAX_OPS };
+export const SAVER = { setCtx, install, RECIPES, prep, steps, timeline, mapM, opDist, extent, detailFocus, MAX_OPS };

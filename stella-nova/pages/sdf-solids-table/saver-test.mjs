@@ -11,14 +11,22 @@
 //                below 0.03. So a cutter starts outside the solid and a
 //                modifier starts small. (Empty space may change: a union
 //                that grows in changes d far from the surface.)
+//    spread .... a lerp op (a cutter or intersector that eases its distance
+//                in) shows half its change at progress 0.5: of the points
+//                whose sign differs between progress 0 and 1, at least 20%
+//                have flipped at 0.5. So the op grows through its step
+//                and does not appear in the last few frames.
 //  For each finished solid:
 //    bound ..... no surface reaches the bound sphere (radius 2.6) of the shader
 //    floor ..... nothing goes below the floor (y = -1.25) by more than 0.02
 //    solid ..... some point is inside (d < 0)
 //    ops ....... no more than MAX_OPS ops
+//    focus ..... the aim point of a detail shot on any primitive op lies
+//                within 0.6 of the extent radius of the solid built so
+//                far, so the camera does not look at empty space
 // ============================================================================
 import { SAVER } from './saver.js';
-const { RECIPES, prep, steps, mapM, MAX_OPS } = SAVER;
+const { RECIPES, prep, steps, mapM, extent, detailFocus, MAX_OPS } = SAVER;
 
 const PTS = [];
 for (let x = -2.4; x <= 2.4; x += 0.15) for (let y = -1.25; y <= 2.4; y += 0.15) for (let z = -2.4; z <= 2.4; z += 0.15)
@@ -33,7 +41,7 @@ const fail = m => { fails++; console.log('FAIL', m); };
 for (const rec of RECIPES) {
   const ops = rec.ops.map(prep), ord = steps(ops);
   if (ops.length > MAX_OPS) fail(`${rec.name}: ${ops.length} ops > ${MAX_OPS}`);
-  let worstPop = 0;
+  let worstPop = 0, worstSpread = 1;
   ord.forEach((at, s) => {
     const set = pr => ops.forEach(o => { const k = ord.indexOf(o.at); o.pr = k < s ? 1 : k === s ? pr : 0; });
     set(0); const d0 = PTS.map(p => mapM(ops, p));
@@ -47,6 +55,27 @@ for (const rec of RECIPES) {
     const pop = Math.max(0, ...d1.map((v, i) => (v < 0) !== (d0[i] < 0) ? Math.min(Math.abs(v), Math.abs(d0[i])) : 0));
     worstPop = Math.max(worstPop, pop);
     if (pop > 0.03) fail(`${rec.name} step ${s} (${ops.find(o => o.at === at).cap}): progress 0.01 moves the field by ${pop.toFixed(3)}`);
+    const op = ops.find(o => o.at === at);
+    if (op.lerp) {
+      set(1); const dF = PTS.map(p => mapM(ops, p));
+      set(0.5); const dH = PTS.map(p => mapM(ops, p));
+      let ch = 0, half = 0;
+      dF.forEach((v, i) => { if ((v < 0) !== (d0[i] < 0)) { ch++; if ((dH[i] < 0) === (v < 0)) half++; } });
+      const sp = ch ? half / ch : 1;
+      worstSpread = Math.min(worstSpread, sp);
+      if (sp < 0.2) fail(`${rec.name} step ${s} (${op.cap}): only ${(100 * sp).toFixed(1)}% of the change shows at progress 0.5`);
+    }
+  });
+  let worstFocus = 0;
+  ord.forEach((at, s) => {
+    const o = ops.find(q => q.at === at && q.ti < 20);
+    if (!o) return;
+    const ex = extent(ops, ord, s);
+    for (let a = 0; a < 8; a++) {
+      const f = detailFocus(o, ex, a * Math.PI / 4), r = Math.hypot(...f.map((v, j) => v - ex.c[j])) / ex.r;
+      worstFocus = Math.max(worstFocus, r);
+      if (r > 0.6 + 1e-9) { fail(`${rec.name} step ${s} (${o.cap}): the detail aim is ${r.toFixed(2)} extent radii from the centre`); break; }
+    }
   });
   ops.forEach(o => { o.pr = 1; });
   const bound = Math.min(...SPH.map(p => mapM(ops, p)));
@@ -55,7 +84,7 @@ for (const rec of RECIPES) {
   if (bound < 0.02) fail(`${rec.name}: the solid reaches the bound sphere (min d ${bound.toFixed(3)})`);
   if (floor < -0.02) fail(`${rec.name}: the solid goes below the floor (min d ${floor.toFixed(3)})`);
   if (!inside) fail(`${rec.name}: no point is inside`);
-  console.log(`${rec.name.padEnd(16)} ops ${String(ops.length).padStart(2)}  steps ${ord.length}  worst pop ${worstPop.toFixed(4)}  bound gap ${bound.toFixed(3)}  floor gap ${floor.toFixed(3)}`);
+  console.log(`${rec.name.padEnd(16)} ops ${String(ops.length).padStart(2)}  steps ${ord.length}  worst pop ${worstPop.toFixed(4)}  spread ${worstSpread.toFixed(2)}  bound gap ${bound.toFixed(3)}  floor gap ${floor.toFixed(3)}  focus ${worstFocus.toFixed(2)}`);
 }
 console.log(fails ? `${fails} failure(s)` : 'all recipe checks pass');
 process.exit(fails ? 1 : 0);

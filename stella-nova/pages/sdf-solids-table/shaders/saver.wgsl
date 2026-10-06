@@ -7,8 +7,9 @@
 //  Each op has a progress pr in [0, 1]. An op at pr = 0 changes nothing:
 //    union ...... skipped; it grows in by scale, from pr > 0
 //    subtract ... skipped; the cutter slides in from far (s.xyz), or its
-//                 distance eases in from +5 (lerp flag)
-//    intersect .. skipped; the distance eases in from -5
+//                 distance eases in from +L (the lerp
+//                 distance L, about half the cutter depth)
+//    intersect .. skipped; the distance eases in from -L
 //    onion ...... d = mix(d, |d| - t, pr)     round ... d = d - r pr
 //    twist ...... angle b.x pr y             grid .... spacing eases from 40
 //  The active op (act.x) also draws a ghost glow along the ray, so a cutter
@@ -18,7 +19,7 @@
 //    a  type, combine (0 union, 1 subtract, 2 intersect), pr, k
 //    b  primitive or modifier parameters
 //    c  pos.xyz, polar repetition count (0 none)
-//    r0 world-to-local row 0, material id   r1 row 1, lerp flag   r2 row 2
+//    r0 world-to-local row 0, material id   r1 row 1, lerp distance L (0 off)   r2 row 2
 //    s  slide.xyz (offset at pr = 0), polar repetition radius
 //
 //  GREP MAP
@@ -94,7 +95,7 @@ fn prim(t: i32, q: vec3f, b: vec4f) -> f32 {
 }
 
 // One op in its local frame. Union ops grow in by scale; cutters slide in
-// from pos + s.xyz, or ease their distance in (lerp flag r1.w).
+// from pos + s.xyz, or ease their distance in (lerp distance L (0 off) r1.w).
 fn opDist(i: i32, p: vec3f) -> f32 {
   let o = u.ops[i];
   let t = i32(o.a.x);
@@ -112,9 +113,9 @@ fn opDist(i: i32, p: vec3f) -> f32 {
   var d: f32;
   if (c == 0) { let sc = max(pr, 1e-3); d = prim(t, q / sc, o.b) * sc; }
   else { d = prim(t, q, o.b); }
-  if (o.r1.w > 0.5) {
-    if (c == 1) { d = mix(5.0, d, pr); }
-    if (c == 2) { d = mix(-5.0, d, pr); }
+  if (o.r1.w > 0.0) {
+    if (c == 1) { d = mix(o.r1.w, d, pr); }
+    if (c == 2) { d = mix(-o.r1.w, d, pr); }
   }
   return d;
 }
