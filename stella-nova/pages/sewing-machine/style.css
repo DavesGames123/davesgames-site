@@ -1,0 +1,295 @@
+/* ============================================================================
+   LOCKSTITCH SEWING MACHINE  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A copy of the differential stylesheet (the watch-movement shell: dark ink,
+   gilt accent, Inter, STIX Two Text, the system monospace for numbers). The
+   element ids are the same, so the panels, cards, dock and sheet work the
+   same way. Added at the end: the timing plot (.plot.mot) and its legend.
+     grep -n 'ANALYSIS'   #anaPanel, the plots, the torque bar, the relations
+     grep -n 'STAGE'      the canvas, the readout, the labels
+     grep -n 'CARDS'      hover and pinned part cards, the leader line
+     grep -n 'PICKER'     the variant cards and the parts list
+     grep -n 'PANEL'      the control panel (desktop: left column)
+     grep -n 'TOUCH'      44px targets for any coarse pointer
+     grep -n 'PHONE'      dock and bottom sheet
+     grep -n 'LANDSCAPE'  the phone drawer at the right edge
+   ========================================================================== */
+:root{
+  --ink:#08090f; --ink2:#0f111b; --ink3:#171a28; --text:#dcdde6; --dim:#8d90a6; --faint:#3a3d52;
+  --tone:#d9b36a; --cream:#ffe0aa; --steel:#8fb0ff; --ruby:#ff6a7a;
+  --line:rgba(217,179,106,0.10); --line-b:rgba(217,179,106,0.24);
+  --panel-w:320px; --top:52px; --dock-h:0px;
+  --sans:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --serif:'STIX Two Text','Times New Roman',Georgia,serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);overscroll-behavior:none}
+body{font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:1px solid var(--cream);outline-offset:1px}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 18px;background:rgba(8,9,15,0.94);border-bottom:1px solid var(--line)}
+.brand{font-family:var(--serif);font-size:1.15rem;letter-spacing:0.08em;color:#f2efe6;display:flex;align-items:center;gap:9px}
+.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--cream);box-shadow:0 0 9px var(--cream)}
+.pagetitle{font-size:0.72rem;letter-spacing:0.18em;color:var(--tone);text-transform:uppercase}
+#gear{margin-left:auto;display:none;height:34px;padding:0 14px;border:1px solid var(--line-b);border-radius:8px;background:var(--ink2);color:var(--text);font-size:0.75rem}
+#gear:hover{border-color:var(--cream);color:var(--cream)}
+html.in-frame{--top:0px}
+html.in-frame .topbar{display:none}
+html.in-frame #gear{display:none!important}
+
+/* STAGE. The canvas fills the window under the topbar; main.js frames the
+   movement in the part that the panel and the dock leave clear. */
+#stage{position:fixed;top:var(--top);left:0;right:0;bottom:0;overflow:hidden;background:radial-gradient(120% 90% at 60% 40%,#161826 0%,#08090f 70%)}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.pread{position:absolute;top:12px;left:calc(var(--panel-w) + 14px);font:0.72rem/1.55 var(--mono);color:var(--text);pointer-events:none;background:rgba(8,9,15,0.72);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+.pread .hi{color:var(--cream)} .pread .lo{color:var(--dim)} .pread .bad{color:var(--ruby)}
+.phint{position:absolute;top:12px;right:14px;max-width:46%;text-align:right;font-size:0.66rem;color:var(--dim);pointer-events:none;transition:opacity 0.8s;line-height:1.4}
+.phint.gone{opacity:0}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#labels .lb{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;font-size:0.64rem;letter-spacing:0.04em;color:#f3ead6;background:rgba(8,9,15,0.66);border:1px solid var(--line-b);border-radius:20px;padding:2px 8px 2px 7px;display:flex;align-items:center;gap:5px;transition:opacity 0.25s}
+#labels .lb i{width:5px;height:5px;border-radius:50%;background:var(--cream);box-shadow:0 0 5px var(--cream)}
+#nogl{position:fixed;top:calc(var(--top) + 20px);left:calc(var(--panel-w) + 20px);right:20px;z-index:50;padding:14px 18px;border:1px solid rgba(255,120,100,0.4);color:#ffb0a0;background:var(--ink2);border-radius:8px;max-width:60ch;line-height:1.6}
+
+/* CARDS. #tipHover follows the mouse; #tipPin sits by its part. main.js sets
+   the translate each frame; .show fades and lifts the inner card in, and
+   .swap replays the content entrance when the part changes. */
+.tip{position:absolute;left:0;top:0;z-index:6;width:min(300px,calc(100% - 24px));pointer-events:none;will-change:transform}
+.tip-in{opacity:0;transform:translateY(8px) scale(0.965);filter:blur(3px);transform-origin:0 0;transition:opacity 0.24s ease,transform 0.32s cubic-bezier(0.2,0.8,0.2,1),filter 0.24s ease;background:linear-gradient(180deg,rgba(22,22,34,0.94),rgba(12,13,22,0.96));border:1px solid var(--line-b);border-radius:14px;padding:12px 14px 12px;box-shadow:0 18px 40px rgba(0,0,0,0.45),0 0 0 1px rgba(255,224,170,0.04) inset;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.tip.show .tip-in{opacity:1;transform:none;filter:none}
+.tip-in.swap > *{animation:tipIn 0.38s cubic-bezier(0.2,0.8,0.2,1) both}
+.tip-in.swap > *:nth-child(2){animation-delay:0.04s}
+.tip-in.swap > *:nth-child(3){animation-delay:0.08s}
+@keyframes tipIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.tip.pinned{pointer-events:auto}
+.tip.pinned .tip-in{border-color:rgba(255,224,170,0.42);box-shadow:0 22px 48px rgba(0,0,0,0.5),0 0 24px rgba(255,200,112,0.08)}
+#tipPinClose{position:absolute;top:8px;right:8px;z-index:2;width:26px;height:26px;border:1px solid var(--line);border-radius:7px;background:rgba(8,9,15,0.6);color:var(--dim);opacity:0;transition:opacity 0.2s}
+.tip.pinned.show #tipPinClose{opacity:1}
+#tipPinClose:hover{color:var(--cream);border-color:var(--cream)}
+.tip-head{display:flex;gap:11px;align-items:center;padding-right:26px}
+.gauge{flex:0 0 40px;width:40px;height:40px}
+.gauge .face{fill:rgba(255,224,170,0.04);stroke:rgba(217,179,106,0.35);stroke-width:1}
+.gauge .arc{fill:none;stroke:var(--cream);stroke-width:2.2;stroke-linecap:round}
+.gauge .needle{stroke:var(--cream);stroke-width:1.8;stroke-linecap:round}
+.gauge .hub{fill:var(--tone)}
+.eyebrow{font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--gc);display:flex;align-items:center;gap:6px;font-weight:600}
+.eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--gc);box-shadow:0 0 8px var(--gc)}
+.tip .name{font-family:var(--serif);font-size:1.22rem;color:#f6efe0;line-height:1.15;margin-top:2px}
+.tip .role{font-family:var(--serif);font-size:0.88rem;line-height:1.42;color:#c6c4d0;margin:8px 0 9px}
+.specs{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:0.68rem;border-top:1px solid var(--line);padding-top:8px}
+.specs .k{color:var(--dim)}
+.specs .v{color:var(--text);font-family:var(--mono);text-align:right}
+.specs .v.live{color:var(--cream)}
+#leader{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;opacity:0;transition:opacity 0.25s}
+#leader.show{opacity:1}
+#leader line{stroke:rgba(255,224,170,0.75);stroke-width:1.2;stroke-dasharray:4 3;animation:dash 1.2s linear infinite}
+#leader .dotA{fill:var(--cream)}
+#leader .pulse{fill:none;stroke:var(--cream);stroke-width:1.2;transform-box:fill-box;transform-origin:center;animation:pulse 1.6s ease-out infinite}
+@keyframes dash{to{stroke-dashoffset:-14}}
+@keyframes pulse{from{transform:scale(0.5);opacity:0.9}to{transform:scale(2.2);opacity:0}}
+
+/* PICKER. One card per calibre; the panel text under it cross-fades. */
+#variants{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mv{position:relative;text-align:left;padding:9px 10px 9px;border:1px solid var(--line-b);border-radius:10px;background:var(--ink2);color:var(--dim);overflow:hidden;transition:border-color 0.25s,color 0.25s,background 0.25s,transform 0.15s}
+.mv b{display:block;font-family:var(--serif);font-weight:500;font-size:0.98rem;color:#e9e4d6;transition:color 0.25s}
+.mv span{display:block;font-size:0.62rem;margin-top:2px;line-height:1.3}
+.mv::after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--cream),transparent);transform:scaleX(0);transition:transform 0.4s cubic-bezier(0.2,0.8,0.2,1)}
+.mv:hover{border-color:rgba(217,179,106,0.5);color:var(--text)}
+.mv:active{transform:scale(0.98)}
+.mv.on{border-color:var(--cream);background:rgba(255,224,170,0.07)}
+.mv.on b{color:var(--cream)}
+.mv.on::after{transform:scaleX(1)}
+#engInfo{margin-top:16px;transition:opacity 0.22s,transform 0.22s}
+#engInfo.fading{opacity:0;transform:translateY(4px)}
+.kind{font-size:0.66rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--tone);margin-top:3px}
+.sec-label.first{margin-top:4px}
+#about,#train{transition:opacity 0.22s}
+
+/* PANEL */
+#panel{position:fixed;top:var(--top);left:0;bottom:0;width:var(--panel-w);z-index:35;background:linear-gradient(180deg,rgba(15,17,27,0.97),rgba(8,9,15,0.98));border-right:1px solid var(--line-b);padding:18px 18px 28px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#panel.open{transform:none}
+body.panel-closed .pread{left:14px}
+body.panel-closed #nogl{left:20px}
+#panelClose{position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px}
+#panelClose:hover{color:var(--cream);border-color:var(--cream)}
+#sheetGrip{display:none}
+#panel h1{font-family:var(--serif);font-weight:400;font-size:1.7rem;color:#f6efe0;letter-spacing:0.01em}
+.lede{font-family:var(--serif);font-size:0.98rem;line-height:1.45;color:var(--dim);margin:6px 0 4px}
+.sec-label{font-size:0.62rem;letter-spacing:0.2em;color:var(--tone);margin:20px 0 9px;text-transform:uppercase;font-weight:600;display:flex;align-items:center;gap:10px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--line)}
+.note{font-size:0.72rem;line-height:1.5;color:var(--dim);margin-top:8px}
+.grid2,.grid3{display:grid;gap:6px}
+.grid2{grid-template-columns:1fr 1fr}
+.grid3{grid-template-columns:1fr 1fr 1fr}
+.grid2 button,.grid3 button,.tog{padding:8px 6px;border:1px solid var(--line-b);background:var(--ink2);color:var(--dim);border-radius:7px;font-size:0.7rem;text-align:center;line-height:1.25}
+.grid2 button:hover,.grid3 button:hover,.tog:hover{color:var(--text);border-color:rgba(217,179,106,0.45)}
+.grid2 button.on,.grid3 button.on,.tog.on{border-color:var(--cream);color:var(--cream);background:rgba(255,224,170,0.07)}
+.toggles{display:flex;gap:6px;margin-top:4px}
+.tog{flex:1}
+.tog.wide{width:100%;margin-top:8px;user-select:none;-webkit-user-select:none}
+.tog.wide.on{background:rgba(255,224,170,0.14)}
+.row{display:flex;align-items:center;gap:10px;margin:7px 0}
+.row label{flex:0 0 60px;font-size:0.7rem;color:var(--dim)}
+.row input[type=range]{flex:1;min-width:0;accent-color:var(--cream)}
+.row .val{flex:0 0 40px;text-align:right;font:0.7rem var(--mono);color:var(--text)}
+.reserve{display:flex;align-items:center;gap:10px}
+.reserve .bar{flex:1;height:8px;border-radius:4px;background:var(--ink3);border:1px solid var(--line);overflow:hidden}
+.reserve .bar i{display:block;height:100%;width:50%;background:linear-gradient(90deg,#b8862f,var(--cream));transition:width 0.2s}
+.reserve span{flex:0 0 auto;font:0.7rem var(--mono);color:var(--text)}
+.readout{width:100%;border-collapse:collapse;font-size:0.7rem}
+.readout th{font-weight:500;color:var(--dim);text-align:right;padding:3px 0;border-bottom:1px solid var(--line-b)}
+.readout th:first-child{text-align:left}
+.readout td{padding:4px 0;border-bottom:1px solid var(--line);font-family:var(--mono);text-align:right}
+.readout td:first-child{font-family:var(--sans);text-align:left;color:var(--text)}
+.readout tr[data-part]{cursor:pointer}
+.readout tr[data-part]:hover td{color:var(--cream)}
+.about p{font-family:var(--serif);font-size:0.95rem;line-height:1.5;color:#bdbccb;margin:0 0 9px}
+.about b{color:var(--cream);font-weight:500}
+.about .fine{font-size:0.82rem;color:var(--dim)}
+
+#dock{display:none}
+
+/* ANALYSIS. Desktop: a right column (main.js moves #anaSec into it). Phone:
+   #anaSec stays in #panel as the Cycle tab. */
+:root{--ana-w:318px}
+#anaPanel{position:fixed;top:var(--top);right:0;bottom:0;width:var(--ana-w);z-index:34;background:linear-gradient(180deg,rgba(15,17,27,0.97),rgba(8,9,15,0.98));border-left:1px solid var(--line-b);padding:16px 16px 28px;overflow-y:auto;transform:translateX(100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#anaPanel.open{transform:none}
+#anaClose{position:absolute;top:10px;right:10px;width:28px;height:28px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;z-index:2}
+#anaClose:hover{color:var(--cream);border-color:var(--cream)}
+#anaOpen{position:absolute;right:14px;bottom:14px;height:34px;padding:0 14px;border:1px solid var(--line-b);border-radius:8px;background:rgba(8,9,15,0.82);color:var(--text);font-size:0.74rem}
+#anaOpen:hover{border-color:var(--cream);color:var(--cream)}
+body.ana-open .phint{right:calc(var(--ana-w) + 14px)}
+.proc{display:flex;flex-direction:column;gap:2px;min-height:38px}
+.proc b{font-family:var(--serif);font-weight:500;font-size:1.25rem}
+.proc span{font-size:0.7rem;color:var(--dim);line-height:1.35}
+.plot{display:block;width:100%;border-radius:8px;background:rgba(8,9,15,0.55);border:1px solid var(--line)}
+.plot.pv{height:206px}
+.plot.ph{height:98px}
+.legend{display:flex;gap:14px;font-size:0.66rem;color:var(--dim);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:2px;margin-right:6px;vertical-align:middle}
+.legend .ld i{background:#e2c27a} .legend .lp i{background:#e9a0a8}
+.gasbar{display:flex;height:12px;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--ink3)}
+.gasbar i{display:block;height:100%;transition:width 0.15s linear}
+.barlab{display:flex;justify-content:space-between;font:0.64rem var(--mono);color:var(--dim);margin-top:5px}
+.eqs .eq{margin:0 0 9px}
+.eqs .eq span{display:block;font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.eqs .eq div{font-family:var(--serif);font-size:0.98rem;color:#efe6d2;line-height:1.35}
+.eqs sub{font-size:0.7em}
+.ana #nums td:last-child{white-space:nowrap}
+#partList{display:flex;flex-wrap:wrap;gap:5px}
+#partList button{padding:5px 9px;border:1px solid var(--line);border-radius:14px;background:var(--ink2);color:var(--dim);font-size:0.66rem;display:flex;align-items:center;gap:6px}
+#partList button i{width:6px;height:6px;border-radius:50%;background:var(--gc)}
+#partList button:hover{color:var(--cream);border-color:var(--line-b)}
+.row label sub{font-size:0.75em}
+
+@media(min-width:769px){
+  body.panel-closed #gear{display:block}
+}
+
+/* TOUCH. Any coarse pointer or narrow window: 44px targets, larger text. */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:330px}
+  #panelClose,  .grid2 button,.grid3 button,.tog{min-height:44px;font-size:0.78rem;border-radius:10px}
+  .row{min-height:44px;margin:3px 0}
+  .row label{flex-basis:70px;font-size:0.78rem}
+  .row .val{font-size:0.78rem;flex-basis:46px}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--cream);border:3px solid var(--ink2);box-shadow:0 0 0 1px var(--cream)}
+  .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--cream);border:3px solid var(--ink2)}
+  .note,.readout{font-size:0.8rem}
+  .readout td{padding:8px 0}
+  .pread{font-size:0.74rem}
+  .phint{font-size:0.7rem}
+  #labels .lb{font-size:0.7rem}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(65px + env(safe-area-inset-bottom));--panel-w:0px}
+  html.in-frame{--top:0px}
+  .topbar{padding:env(safe-area-inset-top) 14px 0 calc(14px + env(safe-area-inset-left))}
+  .brand{font-size:1rem}
+  #gear,body.panel-closed #gear{display:none}
+  #anaPanel,#anaOpen{display:none!important}
+  .plot.pv{height:min(200px,26vh)}
+  .plot.ph{height:84px}
+  #stage{bottom:var(--dock-h)}
+  .tip{width:calc(100% - 20px)}
+  .tip .role{font-size:0.84rem}
+  .pread{left:calc(10px + env(safe-area-inset-left));top:10px}
+  .phint{max-width:70%;top:auto;bottom:10px;right:10px}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:4px;align-items:stretch;padding:6px calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));background:rgba(8,9,15,0.97);border-top:1px solid var(--line-b)}
+  #dock > button{flex:1 1 0;min-width:0;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid transparent;border-radius:12px;background:transparent;color:var(--dim);transition:color 0.2s,background 0.2s,border-color 0.2s}
+  #dock > button i{font-style:normal;font-size:1.15rem;line-height:1}
+  #dock > button span{font-size:0.62rem;letter-spacing:0.02em}
+  #dock > button.on{color:var(--cream);background:rgba(255,224,170,0.08);border-color:rgba(255,224,170,0.35)}
+  #dockPlay{flex:0 0 58px!important;border-color:var(--line-b)!important;background:var(--ink2)!important;color:var(--text)!important}
+
+  /* the panel is a bottom sheet above the dock */
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:auto;max-height:min(58vh,540px);max-height:min(58dvh,540px);border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+  #panel.open{transform:none}
+  #panel.full{max-height:calc(100vh - var(--dock-h) - var(--top) - 8px);max-height:calc(100dvh - var(--dock-h) - var(--top) - 8px)}
+  #panel .grp{display:none}
+  #panel .grp.on{display:block;animation:grpIn 0.28s cubic-bezier(0.2,0.8,0.2,1)}
+  #panel .grp .sec-label:first-child{margin-top:2px}
+  #variants{grid-template-columns:1fr 1fr}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -16px;background:linear-gradient(180deg,rgba(15,17,27,1) 70%,rgba(15,17,27,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  #panel h1{font-size:1.4rem}
+}
+
+/* LANDSCAPE phone. The panel is a drawer at the right edge; the dock is a
+   tab at the lower left; the topbar is hidden to give the view the height. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--top:0px}
+  .topbar{display:none}
+  #dock{right:auto;width:min(480px,60vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel .grp{display:block}
+  #panel .grp:not(.on){display:none}
+  #stage{bottom:0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(44vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)}
+  #panel.open{transform:none}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;background:var(--ink2)}
+}
+@keyframes grpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){#panel,#anaPanel,.phint,#labels .lb,.tip-in,#engInfo{transition:none}.tip-in.swap>*,#leader line,#leader .pulse{animation:none}}
+
+/* DIFFERENTIAL additions: speed colours, the top view, the torque bar */
+:root{--wl:#8fb0ff; --wr:#e9a0a8; --wc:#e9c27a}
+.pread .l{color:var(--wl)} .pread .r{color:var(--wr)} .pread .c{color:var(--wc)}
+.plot.top{height:170px}
+.plot.spd{height:104px}
+.legend .ll i{background:var(--wl)} .legend .lr i{background:var(--wr)} .legend .lc i{background:var(--wc);height:0;border-top:2px dashed var(--wc)}
+.split{display:flex;height:14px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:var(--ink3)}
+.split i{display:block;height:100%;transition:width 0.35s ease}
+.split i.l{background:linear-gradient(90deg,#4d6fb8,var(--wl))} .split i.r{background:linear-gradient(90deg,var(--wr),#b0606a)}
+.readout .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.readout .sw.l{background:var(--wl)} .readout .sw.r{background:var(--wr)} .readout .sw.c{background:var(--wc)}
+.readout tr.chk td{color:var(--cream)}
+.readout th:last-child{text-align:right}
+.eqs .eq em{display:block;font-style:normal;font-size:0.68rem;color:var(--dim);margin-top:2px;line-height:1.35}
+.row.dim{opacity:0.45}
+#cornerBox[hidden]{display:none}
+.proc b{color:var(--cream)}
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  .plot.top{height:min(150px,20vh)}
+  .plot.spd{height:88px}
+}
+#variants.three{grid-template-columns:1fr 1fr 1fr} #variants.three .mv b{font-size:0.9rem}
+
+/* MOTION PLOT */
+.plot.mot{height:190px}
+.legend .lo i{background:#e2c27a} .legend .lw i{background:#8fb0ff} .legend .la i{background:#e9a0a8}
+@media (max-width:768px){ .plot.mot{height:min(170px,24vh)} }
+
+/* timing plot legend (sewing-machine) */
+.legend .ln i{background:#8fb0ff} .legend .lt i{background:#e9a0a8} .legend .lh i{background:#c8a6ff} .legend .lf i{background:rgba(159,214,176,0.5)}
+/* the long page title must not wrap the brand on a phone */
+.brand{white-space:nowrap}
+.pagetitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
