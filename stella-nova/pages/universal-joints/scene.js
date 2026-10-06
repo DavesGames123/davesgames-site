@@ -26,7 +26,8 @@
 //    function fork ............ a yoke: collar, web, two ears, pin bosses
 //    function crossGeom ....... the cross (spider) with four bearing caps
 //    function pedestal ........ a pillow block in its own group
-//    function cardanParts ..... single and double Cardan parts
+//    function cardanParts ..... single and double Cardan parts; the second
+//                               middle fork is a mesh of midShaft (P.yoke2)
 //    function rzeppaParts ..... bell, inner race, cage, six balls
 //    export function build .... base plate, parts, pose
 // ============================================================================
@@ -99,8 +100,12 @@ function cardanParts(B, id) {
     const Lm = SIZE.Lm;
     P.midShaft = B.part('midShaft', { info: 'midShaft', label: 'Intermediate shaft', labelAt: [0, Lm / 2, 0], explode: [0, 0, 0], st: 0, en: 0.6 });
     B.mesh(P.midShaft, fork(1), 'bronze'); B.mesh(P.midShaft, rod(10, 40, Lm - 40, 32), 'shaft');
-    P.midYoke2 = B.part('midYoke2', { info: 'midShaft', label: null, labelAt: [0, Lm - 40, 0], explode: [0, 0, 0], st: 0.1, en: 0.7 });
-    B.mesh(P.midYoke2, fork(-1, Lm), 'bronze');
+    // The second fork is welded to the intermediate shaft, so it is a mesh
+    // of the same part. A group turns it 90 deg about the shaft when the
+    // forks are out of phase (mech.js: a2 = sm x b1 = -Z in this frame).
+    P.yoke2 = new THREE.Group();
+    P.midShaft.root.add(P.yoke2);
+    B.mesh(P.midShaft, fork(-1, Lm), 'bronze', { parent: P.yoke2 });
     const X2 = crossGeom();
     P.cross2 = B.part('cross2', { info: 'cross', label: null, labelAt: [0, 0, 0], explode: [0, 70, 0], st: 0.25, en: 0.95 });
     B.mesh(P.cross2, X2.body, 'gear'); B.mesh(P.cross2, X2.caps, 'bolt');
@@ -182,9 +187,8 @@ export function build(B, id) {
         setExplode(P.inYoke, V.mul(A.s1, -90)); setExplode(P.outYoke, V.mul(A.sOut, 90));
         if (P.midShaft) {
           setFrame(P.midShaft, F.midShaft.X, F.midShaft.Y, F.midShaft.at);
-          setFrame(P.midYoke2, F.midYoke2.X, F.midYoke2.Y, F.midYoke2.at);
+          P.yoke2.rotation.set(0, phase ? Math.PI / 2 : 0, 0);
           setFrame(P.cross2, F.cross2.X, V.cross(F.cross2.Z, F.cross2.X), F.cross2.at);
-          setExplode(P.midYoke2, V.mul(A.sm, -45));
         }
       }
       setFrame(fIn, dir(Fi, th), A.s1, A.J1);

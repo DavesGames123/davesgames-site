@@ -494,7 +494,7 @@ window.snSaver = {
       ];
     };
     const all = () => Object.values(S.cur.B.parts).filter(q => q.info !== 'base').map(q => q.holder);
-    const pair = () => Object.values(S.cur.B.parts).filter(q => /^(cross1|cross2|cage|ball\d|inYoke|outYoke|midShaft|midYoke2)$/.test(q.id)).map(q => q.holder);
+    const pair = () => Object.values(S.cur.B.parts).filter(q => /^(cross1|cross2|cage|ball\d|inYoke|outYoke|midShaft)$/.test(q.id)).map(q => q.holder);
     const SUB = { cardan: 'The cross keeps its arms square', doubleZ: 'Two joints, equal angles, forks in phase', doubleW: 'Two joints, the outer shafts meet', rzeppa: 'The cage holds the balls on the bisecting plane' };
     const STEPS = [
       { view: 'three', lab: () => ({ title: INFO[S.cur.id].title, sub: INFO[S.cur.id].kind, params: params(), tex: tex(), eq: eq(), anchor: () => plateAnchor(all()) }) },
