@@ -18,12 +18,14 @@
 //    "function setTheme"       dark or light, kept in localStorage
 //    "const cycle"             the autoplay and its pause rules
 //    "function setMode"        Words or Paste text (paste.js, made on first use)
+//    "installSaver"            the screensaver hook (saver.js)
 // ============================================================================
 import { PHRASES, FAMILIES } from './phrases.js';
 import { lookup } from './matcher.js';
 import { createStage, famLabel } from './stage.js';
 import { createCycle } from './cycle.js';
 import { initPaste } from './paste.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const q = $('q');
@@ -197,4 +199,8 @@ if (startQ) { q.value = startQ; }
 const boot = () => { if (S.mode === 'paste') return; if (q.value) onInput(); else idle(0); };
 if (document.fonts && document.fonts.load) Promise.all([document.fonts.load("700 100px 'Space Grotesk'"), document.fonts.load("500 100px 'IBM Plex Mono'")]).then(boot, boot);
 else boot();
+installSaver({
+  onEnter: () => cycle.stop(),
+  onExit: () => { if (!q.value && S.mode !== 'paste') cycle.resume(300); },
+});
 window.__ltm = { S, PHRASES, lookup, stage, famLabel, onInput, setMode, cycle };
