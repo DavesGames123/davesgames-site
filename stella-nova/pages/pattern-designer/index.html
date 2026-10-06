@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Pattern Designer — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PATTERN DESIGNER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A generative vector pattern tool for posters: pick a
+   pattern from the book, set its sliders and seed, stack modifiers, pick a
+   palette and a board, then export SVG or PNG. Every pattern is an
+   original pure function (params, seed) -> elements. Nothing here comes
+   from another pattern site.
+
+   FILES
+     engine.js        random source, noise, output list, caps, geometry
+     palettes.js      poster palettes and board sizes
+     patterns/*.js    the families; patterns/index.js joins them
+     modifiers.js     warp, mask, clip, mirror, repeat, jitter, dash
+     export.js        style modes, SVG text, canvas drawing, reveal
+     worker.js        runs a pattern and its modifiers off the main thread
+     main.js          the artboard, the controls, the explorer, exports
+     saver.js         the screensaver tour (window.snSaver)
+     tests.mjs        node tests (determinism, SVG, units, caps)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #desk fills the rest. #board is the
+                 artboard canvas in the middle of #desk. #caption is one
+                 line under it. #tools holds Explore and Randomise.
+                 #explorer covers #desk with the pattern book.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: explore, the pattern name (next),
+                 randomise, palette, settings. #panel is a bottom sheet
+                 (portrait) or a drawer at the right (landscape). The
+                 board fits in the part of #desk that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'       fit the board in the clear area
+     grep -n 'function regen'        send a job to the worker
+     grep -n 'function paint'        draw the items on the board
+     grep -n 'function buildParams'  the sliders of a pattern
+     grep -n 'function buildMods'    the modifier cards
+     grep -n 'function randomiseAll' the tasteful random pick
+     grep -n 'function openExplorer' the pattern book
+     grep -n 'function exportSVG'    the vector file
+     grep -n 'function exportPNG'    the raster file at a DPI
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Pattern Designer: an original generative vector pattern tool for posters. Over forty patterns in eight families, stackable modifiers, poster palettes, A-size boards, and SVG or PNG export.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Pattern Designer</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="desk">
+  <canvas id="board" aria-label="Artboard"></canvas>
+  <div id="busy" aria-hidden="true"></div>
+  <div id="caption"></div>
+  <div id="tools">
+    <button id="exploreBtn" title="Browse every pattern (E)">Explore the book</button>
+    <button id="randBtn" class="acc" title="A new pattern, palette and seed (R)">Randomise all</button>
+  </div>
+  <section id="explorer" aria-label="Pattern book" hidden>
+    <header>
+      <div class="ex-title">The pattern book <span id="exCount"></span></div>
+      <input id="exSearch" type="search" placeholder="Search patterns" aria-label="Search patterns" autocomplete="off">
+      <button id="exClose" aria-label="Close the book">✕</button>
+    </header>
+    <div id="exFam" class="chips"></div>
+    <div id="exGrid"></div>
+  </section>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label first">Pattern</div>
+  <div class="patrow">
+    <button id="prevPat" aria-label="Previous pattern">‹</button>
+    <button id="patName" class="pname" title="Open the pattern book"><b id="patTitle">…</b><small id="patFam"></small></button>
+    <button id="nextPat" aria-label="Next pattern">›</button>
+  </div>
+  <p class="hint" id="patBlurb"></p>
+  <div class="seedrow">
+    <label for="seed">Seed</label>
+    <input id="seed" type="number" min="1" max="999999" step="1" value="1" inputmode="numeric">
+    <button id="seedNew" title="A new seed (S)">New seed</button>
+    <button id="seedLock" title="Randomise all keeps this seed" aria-pressed="false">Lock</button>
+  </div>
+
+  <div class="sec-label">Parameters</div>
+  <div id="params"></div>
+  <div class="btns"><button id="paramReset">Reset parameters</button><button id="paramShake">Shake parameters</button></div>
+
+  <div class="sec-label">Colour</div>
+  <div id="palettes" class="pals"></div>
+  <div class="custom" id="custom"></div>
+  <div class="seg four" id="mode">
+    <button data-m="auto" class="on">As drawn</button>
+    <button data-m="stroke">Lines</button>
+    <button data-m="fill">Solids</button>
+    <button data-m="knock">Cut-out</button>
+  </div>
+  <div class="prm"><div class="nm">Line weight</div><span class="val" id="lwV"></span>
+    <input type="range" id="lw" min="0.25" max="8" step="0.05" value="2" aria-label="Line weight"></div>
+
+  <div class="sec-label">Board</div>
+  <div id="boards" class="chips"></div>
+  <div class="btns"><button id="landBtn" aria-pressed="false">Landscape</button></div>
+
+  <div class="sec-label">Modifiers</div>
+  <div id="mods"></div>
+  <div id="modAdd" class="chips add"></div>
+
+  <div class="sec-label">Export</div>
+  <div class="btns">
+    <button id="svgBtn">SVG</button>
+    <button id="copyBtn">Copy SVG</button>
+  </div>
+  <div class="btns png">
+    <button id="pngBtn">PNG</button>
+    <select id="dpi" aria-label="PNG resolution"></select>
+  </div>
+  <p class="hint" id="exportInfo"></p>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>Each pattern is a small program: the sliders and the seed go in, and a list of vector shapes comes out. The same seed always gives the same shapes, so a design can be made again from its numbers. The SVG file keeps these numbers in its description.</p>
+    <p>Modifiers act on the shapes after the pattern makes them, from the top of the list to the bottom. A warp bends every line, a mask cuts lines at the edge of a shape, and a clip sets a hard edge in the file.</p>
+    <p>The SVG has a viewBox and, for A sizes, a width and height in millimetres, so it opens at print size. The PNG export writes its DPI into the file.</p>
+    <p>All patterns, modifiers and code here are original work for davesgames.io. See also <a href="https://bookofshapes.com" target="_blank" rel="noopener">bookofshapes.com</a> by Nikolaj Sokolowski, a pattern site in the same genre. Nothing on this page is taken from it.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockBook" aria-label="Explore the book"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
+  <button id="dockName" class="name" aria-label="Next pattern"><span id="dockTitle">…</span><i>›</i></button>
+  <button id="dockRand" aria-label="Randomise all"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.4"/><circle cx="15" cy="15" r="1.4"/><circle cx="15" cy="9" r="1.4"/><circle cx="9" cy="15" r="1.4"/></svg></button>
+  <button id="dockPal" aria-label="Next palette"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/></svg></button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
