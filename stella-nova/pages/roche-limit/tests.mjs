@@ -11,7 +11,8 @@
 //  3  a two-body Kepler orbit in the moving frame: energy, angular momentum
 //     and the period over 10 orbits; Kepler conic prediction closes
 //  4  a gravitating pair (extrapolated self-gravity): energy over 10 orbits
-//  5  the energy ledger E - W of an isolated pile
+//  5  the energy ledger E - W of an isolated pile; the bound mass search
+//     when no grain stays bound
 //  6  disruption at low N (CPU): a fluid pile at 0.6 d_fluid loses most of
 //     its mass in 3 orbits, at 1.5 d_fluid it keeps it
 //  7  GPU (Deno WebGPU): forces of shaders/sim.wgsl against CpuSim for a
@@ -120,6 +121,12 @@ function cpuTests() {
     const drift = Math.abs((e2.E - W1) - (e1.E - W0)) / Math.abs(e0.Us);
     ok('ledger E - W of a stirred rough pile', drift < 1e-3, `|d(E-W)|/|U_self| = ${drift.toExponential(2)}; dissipated ${((e1.E - e2.E) / Math.abs(e0.Us)).toExponential(2)} |U_self|`);
   }
+
+  // 5b ─ the bound mass search when no grain stays bound: two touching
+  // grains that fly apart at 100x their mutual escape speed
+  { const pos = [0, 0, 0, 2.0, 0, 0], vel = [0, 0, 0, 0, 500, 0], mass = [7, 7], rad = [1, 1];
+    const an = P.analyzeBound(pos, vel, mass, rad, 3, [100, 0, 0], 1e6);
+    ok('bound mass search: an unbound pair gives M = 0 and a finite centre', an.M === 0 && an.com.every(Number.isFinite), `M = ${an.M}, com = ${an.com.map(q => +q.toFixed(3)).join(', ')}`); }
 
   // 6 ─ disruption at low N
   { const N = 400, { C, cl, sim } = settledPile(N, P.MATERIALS.fluid, 7);

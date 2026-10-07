@@ -84,6 +84,8 @@ fn cs_kick(@builtin(global_invocation_id) gid: vec3u) {
   if ((S.flags & 1u) != 0u) { x = x + S.dt * v; }
   let R = S.X + x;
   if (P.GM > 0.0 && dot(R, R) < P.Rp * P.Rp) {
+    // v is the half-step velocity. A test that moved it to the time of x
+    // (v + dt/2 a) gave a 4x larger ledger drift (physics.js accrete)
     let VV = S.V + v;
     let ri = b.pos.w;
     let e = 0.5 * m * dot(VV, VV) + 0.2 * m * ri * ri * dot(w, w) - P.GM * m / length(R) + m * grav[i].g.w;

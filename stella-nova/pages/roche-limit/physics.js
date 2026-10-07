@@ -528,6 +528,9 @@ export class CpuSim {
       const X = this.ref[0] + x[o], Y = this.ref[1] + x[o + 1], Z = this.ref[2] + x[o + 2];
       const r2 = X * X + Y * Y + Z * Z;
       if (r2 >= R2) continue;
+      // v is the half-step velocity here. Moving it to the time of x
+      // (v + dt/2 a) was tried: at N = 1500, d = 1.55 R_p, the ledger drift
+      // after 2 orbits went from 5.4e-4 to 2.3e-3 |U_self|, so it stays
       const V = this.refV || [0, 0, 0];
       const vx = V[0] + v[o], vy = V[1] + v[o + 1], vz = V[2] + v[o + 2];
       const m = mass[i];
@@ -609,13 +612,15 @@ export function analyzeBound(pos, vel, mass, rad, stride, X, GMp, N = mass.lengt
   for (let i = 0; i < N; i++) if (mass[i] && find(i) === best) mask[i] = 1;
   let M = 0, com = [0, 0, 0], vcm = [0, 0, 0], rH = 0;
   for (let pass = 0; pass < 3; pass++) {
-    M = 0; com = [0, 0, 0]; vcm = [0, 0, 0];
+    let m0 = 0; const c0 = [0, 0, 0], v0 = [0, 0, 0];
     for (let i = 0; i < N; i++) {
       if (!mask[i]) continue;
-      const m = mass[i], o = i * stride; M += m;
-      for (let k = 0; k < 3; k++) { com[k] += m * pos[o + k]; vcm[k] += m * vel[o + k]; }
+      const m = mass[i], o = i * stride; m0 += m;
+      for (let k = 0; k < 3; k++) { c0[k] += m * pos[o + k]; v0[k] += m * vel[o + k]; }
     }
-    for (let k = 0; k < 3; k++) { com[k] /= M; vcm[k] /= M; }
+    // a pass that keeps no grain ends the search; the last set stays
+    if (!(m0 > 0)) { if (pass === 0) return { mask, M: 0, com: [0, 0, 0], vcm: [0, 0, 0], rH: 0, groups, largest: bestM }; break; }
+    M = m0; for (let k = 0; k < 3; k++) { com[k] = c0[k] / M; vcm[k] = v0[k] / M; }
     const Xc = [X[0] + com[0], X[1] + com[1], X[2] + com[2]];
     const dc = Math.hypot(Xc[0], Xc[1], Xc[2]);
     rH = GMp > 0 ? dc * Math.cbrt(G * M / (3 * GMp)) : Infinity;
