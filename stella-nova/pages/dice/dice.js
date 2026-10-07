@@ -221,7 +221,6 @@ export function buildDie(type) {
   if (cache.has(type)) return cache.get(type);
   const T = DIE_TYPES[type];
   const P = baseShape(type), F = hullFaces(P), vals = numberFaces(type, F);
-  const faceOf = (i) => F[i];
   // d4: vertex labels 1..4, value of face = label of its opposite vertex
   // (the vertex that is up when that face is down)
   let vLabels = null;
