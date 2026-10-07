@@ -143,6 +143,13 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
 #topbar-title,#topbar-active{white-space:nowrap}
 #topbar-active{min-width:0;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:520px){#topbar-title{display:none}#topbar{gap:8px;padding:0 14px}}
+/* Top-bar wishlist chip. The sidebar holds #sb-wishlist, so the chip shows
+   only when the sidebar is hidden: the phone drawer, or a collapsed sidebar.
+   lib/wishlist.js gives both links their UTM tags in markTab. */
+#tb-wishlist{display:none;flex:none;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:999px;background:linear-gradient(135deg,#ffd65c,#ffb31a 55%,#ff8a3d);color:#1a1204;font:600 0.8rem/1 var(--f-sans);text-decoration:none;white-space:nowrap}
+#tb-wishlist:hover{filter:brightness(1.08)}
+body.sb-collapsed #tb-wishlist{display:inline-flex}
+@media (max-width:768px),(max-height:500px) and (pointer:coarse){#tb-wishlist{display:inline-flex;min-height:40px}}
 </style>
 </head>
 <body>
@@ -168,11 +175,13 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
       <button id="collapse-btn" onclick="toggleSidebar()" title="Collapse / expand index">&#171;</button>
       <span id="topbar-title">S T E L L A  N O V A</span>
       <span id="topbar-active">Overview</span>
+      <a id="tb-wishlist" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener">&#9733; Wishlist</a>
     </div>
     <div id="frame-wrap"></div>
   </div>
 </div>
 <script src="lib/nav-data.js"></script>
+<script src="lib/wishlist.js"></script>
 <script>
 /* ── nav ──────────────────────────────────────────────────────────────
    lib/nav-data.js is the one page registry. buildNav writes the sidebar
@@ -239,7 +248,9 @@ function parseShellHash(h){h=(h||'').replace(/^#/,'');var i=h.indexOf('/');var i
 function setHistory(hash,mode){if(mode==='none'||location.hash===hash)return;try{history[mode==='push'?'pushState':'replaceState'](null,'',hash)}catch(e){}}
 function currentFrame(){return document.querySelector('#frame-wrap iframe')}
 function tabForPath(path){for(var k in PAGES){if(path.slice(-PAGES[k].length)===PAGES[k])return k}return null}
-function markTab(id){document.querySelectorAll('#sb-nav [data-tab]').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});openClusterOf(id);var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova')}
+// wishlistTag: UTM tags on the two shell wishlist links name the active page.
+function wishlistTag(id){var W=window.snWishlist;if(!W)return;var c=id==='home'?'home':(W.pageKey(PAGES[id])||id);var a=document.getElementById('sb-wishlist'),b=document.getElementById('tb-wishlist');if(a)a.href=W.url(c,'sidebar');if(b)b.href=W.url(c,'topbar')}
+function markTab(id){wishlistTag(id);document.querySelectorAll('#sb-nav [data-tab]').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});openClusterOf(id);var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova')}
 function adoptFrame(iframe){var w;try{w=iframe.contentWindow;if(!w||w.location.href==='about:blank')return}catch(e){return}var id=tabForPath(w.location.pathname);var sub=pageRoute(w.location.hash);if(id&&id!==activeTab){activeTab=id;markTab(id)}if(id){activeSub=sub;setHistory(tabHash(activeTab,sub),'replace')}w.document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target&&e.target.closest&&e.target.closest('a[href]');if(!a||(a.target&&a.target!=='_self'))return;var u;try{u=new URL(a.href)}catch(x){return}if(u.origin!==w.location.origin||u.pathname!==w.location.pathname||u.search!==w.location.search||!u.hash||u.hash===w.location.hash)return;e.preventDefault();window.snNav(u.hash);w.location.replace(u.href)});w.addEventListener('hashchange',function(){if(iframe!==currentFrame())return;var s=pageRoute(w.location.hash);if(s===activeSub)return;activeSub=s;setHistory(tabHash(activeTab,s),'replace')})}
 window.snNav=function(sub,mode){sub=pageRoute(sub);if(sub===activeSub)return;activeSub=sub;setHistory(tabHash(activeTab,sub),mode==='replace'?'replace':'push')};
 function mountTab(id){var wrap=document.getElementById('frame-wrap');var iframe=document.createElement('iframe');iframe.src=(PAGES[id]||'home.html')+(id===activeTab&&activeSub?'#'+activeSub:'');iframe.addEventListener('load',function(){adoptFrame(iframe)});var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';if(CRAFT_PAGES.has(id))allow='fullscreen; clipboard-read; clipboard-write; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe)}
