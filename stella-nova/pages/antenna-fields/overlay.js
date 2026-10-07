@@ -11,12 +11,9 @@
 //    traceLines() field lines by RK2 from a fixed jittered seed set. The seeds
 //                 do not move, so a line changes smoothly with the field and
 //                 does not flicker. Used only where psi has no flux function.
-//    arrows       the time-average Poynting vector, projected on the plane;
-//                 the alpha follows the instantaneous flux, so energy pulses
-//                 outward along the arrows.
 //
 //  grep -n: "export function drawOverlay"  "export function traceLines"
-//           "function drawAntenna"  "function drawZones"  "function drawArrows"
+//           "function drawAntenna"  "function drawZones"
 // ============================================================================
 
 // Plane <-> canvas pixels. view: { u0, v0, u1, v1 } in wavelengths.
@@ -105,12 +102,11 @@ export function traceLines(F, w, h, opt = {}) {
 // ── drawing ──────────────────────────────────────────────────────────────────
 // a: { W, H, dpr, view, map, wires, plane ('side'|'top'), phase, centre,
 //      zones: { on, rNear, rFar, lambdaM } (wavelengths), lines: { list, gw, gh, ref, color },
-//      arrows: { on, probe, ref, axU, axV, w2 }, feed: [x,y,z], scaleM (m per lambda) }
+//      feed: [x,y,z], scaleBox: { x, y, lambdaM } }
 export function drawOverlay(ctx, a) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, a.W, a.H);
   if (a.lines && a.lines.list) drawLines(ctx, a);
-  if (a.arrows && a.arrows.on) drawArrows(ctx, a);
   if (a.zones && a.zones.on) drawZones(ctx, a);
   drawAntenna(ctx, a);
   drawScale(ctx, a);
@@ -139,56 +135,6 @@ function drawLines(ctx, a) {
     }
   }
   paths.forEach((pa, b) => { ctx.strokeStyle = L.color.replace('A', ((b + 0.5) / NB * 0.75).toFixed(3)); ctx.stroke(pa); });
-}
-
-function drawArrows(ctx, a) {
-  const A = a.arrows, P = A.probe, w = P.w, h = P.h;
-  const cell = 46 * a.dpr, c = Math.cos(a.phase), s = Math.sin(a.phase);
-  const T = P.T, o = [0, 0, 0, 0];
-  const get = (gx, gy) => {
-    // nearest probe cell: time-average and instantaneous S
-    const i = Math.max(0, Math.min(w - 1, gx | 0)), j = Math.max(0, Math.min(h - 1, gy | 0)), q = (j * w + i) * 4;
-    const E = [[T[0][q], T[0][q + 1]], [T[0][q + 2], T[0][q + 3]], [T[1][q], T[1][q + 1]]];
-    const Hh = [[T[1][q + 2], T[1][q + 3]], [T[2][q], T[2][q + 1]], [T[2][q + 2], T[2][q + 3]]];
-    const crossRe = (X, Y) => [X[1] * Y[2] - X[2] * Y[1], X[2] * Y[0] - X[0] * Y[2], X[0] * Y[1] - X[1] * Y[0]];
-    const Er = E.map(z => z[0]), Ei = E.map(z => z[1]), Hr = Hh.map(z => z[0]), Hi = Hh.map(z => z[1]);
-    const a1 = crossRe(Er, Hr), a2 = crossRe(Ei, Hi);
-    const Sa = [0.5 * (a1[0] + a2[0]), 0.5 * (a1[1] + a2[1]), 0.5 * (a1[2] + a2[2])];
-    const Et = Er.map((v, k) => v * c - Ei[k] * s), Ht = Hr.map((v, k) => v * c - Hi[k] * s);
-    const St = crossRe(Et, Ht);
-    o[0] = Sa[0] * A.axU[0] + Sa[1] * A.axU[1] + Sa[2] * A.axU[2];
-    o[1] = Sa[0] * A.axV[0] + Sa[1] * A.axV[1] + Sa[2] * A.axV[2];
-    o[2] = Math.hypot(...Sa); o[3] = Math.hypot(...St);
-    return o;
-  };
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  for (let y = cell / 2; y < a.H; y += cell) {
-    for (let x = cell / 2; x < a.W; x += cell) {
-      const gx = x / a.W * w, gy = (a.H - y) / a.H * h;
-      const S = get(gx, gy);
-      const u = a.view.u0 + gx / w * (a.view.u1 - a.view.u0), v = a.view.v0 + gy / h * (a.view.v1 - a.view.v0);
-      const r = Math.hypot(u - a.centre[0], v - a.centre[1]);
-      const wr = A.w2 ? Math.pow(Math.max(r, 0.12) / A.rref, 2) : 1;
-      const m = Math.hypot(S[0], S[1]);
-      if (m * wr < A.ref * 0.01) continue;
-      const len = cell * 0.78 * Math.min(1, Math.pow(m * wr / A.ref, 0.4));
-      const dx = S[0] / m, dy = -S[1] / m;
-      const pulse = Math.min(1, S[3] / Math.max(1e-30, 2 * S[2]));
-      const al = 0.22 + 0.7 * pulse;
-      const x0 = x - dx * len / 2, y0 = y - dy * len / 2, x1 = x + dx * len / 2, y1 = y + dy * len / 2;
-      ctx.strokeStyle = `rgba(255,214,150,${al.toFixed(3)})`;
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.lineWidth = 1.3 * a.dpr;
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-      const hs = Math.min(6 * a.dpr, len * 0.4);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 - dx * hs - dy * hs * 0.5, y1 - dy * hs + dx * hs * 0.5);
-      ctx.lineTo(x1 - dx * hs + dy * hs * 0.5, y1 - dy * hs - dx * hs * 0.5);
-      ctx.closePath(); ctx.fill();
-    }
-  }
 }
 
 function drawZones(ctx, a) {
