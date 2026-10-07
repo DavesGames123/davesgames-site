@@ -499,7 +499,8 @@ export class Cloth {
       const a = 3 * T[t], b = 3 * T[t + 1], c = 3 * T[t + 2];
       const ux = X[b] - X[a], uy = X[b + 1] - X[a + 1], uz = X[b + 2] - X[a + 2];
       const vx = X[c] - X[a], vy = X[c + 1] - X[a + 1], vz = X[c + 2] - X[a + 2];
-      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      // (c - a) x (b - a): the side three.js draws as the front face
+      const cx = vy * uz - vz * uy, cy = vz * ux - vx * uz, cz = vx * uy - vy * ux;
       nrm[a] += cx; nrm[a + 1] += cy; nrm[a + 2] += cz;
       nrm[b] += cx; nrm[b + 1] += cy; nrm[b + 2] += cz;
       nrm[c] += cx; nrm[c + 1] += cy; nrm[c + 2] += cz;
