@@ -29,7 +29,9 @@
 //  EXPORTS
 //    createRender2D(gl, caps) -> { resize, reset, draw, frames }
 //  draw(o): o = { scene, segs, ns, view, exposure, live, outline,
-//                 curve, fade, geom, flight, hold }
+//                 curve, curves, fade, geom, flight, hold }
+//    curves = [{ pts, color: [r, g, b, a, width px] } or { tris, color }]
+//           more polylines and fills (the plot of the pool cross-section)
 //    hold: true to show the light image again with no new photons
 //    flight = { verts, count }  from flight.js build()
 //    view = { cx, cy, s, px, py }  world point (cx, cy) shows at device
@@ -172,6 +174,7 @@ export function createRender2D(gl, caps) {
         for (const f of o.outline.fills) put(f.f32 || (f.f32 = new Float32Array(f.tris)), STYLE.fill[f.kind]);
         for (const l of o.outline.lines) { const c = STYLE.line[l.kind]; put(strip(l.pts, c[4] * (v.dpr || 1) / v.s), c); }
         if (o.curve) put(strip(o.curve, STYLE.curve[4] * (v.dpr || 1) / v.s), STYLE.curve);
+        for (const c of o.curves || []) put(c.tris ? new Float32Array(c.tris) : strip(c.pts, c.color[4] * (v.dpr || 1) / v.s), c.color);
         if (o.marker) { const c = [1, 0.95, 0.8, 0.95]; put(disc(o.marker[0], o.marker[1], 4 * (v.dpr || 1) / v.s), c); }
         gl.disable(gl.BLEND);
       }

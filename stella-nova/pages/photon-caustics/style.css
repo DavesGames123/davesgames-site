@@ -47,6 +47,11 @@ html.in-frame #gear{top:14px}
 #xlink{position:absolute;top:10px;right:14px;z-index:5;font-size:0.76rem;color:var(--acc);text-decoration:none;padding:6px 10px;border:1px solid var(--line-b);border-radius:8px;background:rgba(10,12,16,0.72)}
 #xlink:hover{border-color:var(--acc);color:#d8eeff}
 .about a.xl{color:var(--acc)}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#labels[hidden]{display:none}
+#labels span{position:absolute;left:0;top:0;font-size:0.72rem;color:#9fb0c4;white-space:nowrap;text-shadow:0 1px 3px #000;margin-top:-0.6em}
+#labels span[data-k="water"]{color:#8fc6f2}
+#labels span[data-k="plot"]{color:#e8cf9f}
 #nogl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--sci-serif);font-size:1.1rem;color:var(--dim)}
 #nogl[hidden]{display:none}
 
@@ -70,6 +75,8 @@ section[hidden]{display:none}
 .card{padding:8px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--dim);font-size:0.76rem;text-align:left;transition:border-color 0.2s,color 0.2s}
 .card:hover{border-color:var(--line-b);color:var(--ink)}
 .card.on{border-color:var(--acc);color:var(--acc)}
+.card.wide{grid-column:1 / -1;font-size:0.82rem;font-weight:600;color:var(--ink);background:linear-gradient(90deg,rgba(159,212,255,0.10),rgba(159,212,255,0.02))}
+.card.wide.on{color:var(--acc)}
 
 .eq{font-size:0.86rem;margin:6px 0;color:#eceff3;min-height:1.2em}
 .eq svg{display:block;max-width:100%}
@@ -162,6 +169,6 @@ section[hidden]{display:none}
 @media(prefers-reduced-motion:reduce){#panel,.topbar{transition:none}}
 
 /* SAVER. main.js sets html.saver in screensaver mode. */
-html.saver .topbar,html.saver #xlink,html.saver #panel,html.saver #dock,html.saver #gear,html.saver #caption{display:none!important}
+html.saver .topbar,html.saver #xlink,html.saver #labels,html.saver #panel,html.saver #dock,html.saver #gear,html.saver #caption{display:none!important}
 html.saver #stage{top:0;bottom:0}
 html.saver #gl{cursor:none}

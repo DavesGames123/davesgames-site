@@ -34,6 +34,7 @@
 //    fresnel ......... (cosi, n1, n2) -> reflectance, unpolarized
 //    refract ......... (dx, dy, nx, ny, eta) -> [tx, ty] or null (TIR)
 //    waterHeight ..... (water, x) -> [h, dh/dx]
+//    sectionWaves .... (A, k, sx, mix) -> the waves of the pool cross-section
 //    mulberry ........ (seed) -> a seeded random function
 //    mediumAt ........ (scene, x, y, nm) -> index of the medium at a point
 //    emitPulse ....... (scene, count, rand, P) -> photons of one pulse
@@ -105,6 +106,8 @@ export function mulberry(seed) {
 // exp exposure. view: the world rectangle that must show. focus: the
 // subject point for the saver push-ins, with the width to show there.
 export const SCENES = [
+  { id: 'section', name: 'Pool cross-section', short: 'Pool slice', sub: 'A slice of a pool: sunlight bends at the moving waves and focuses into bright spots on the floor', angMax: 60,
+    defaults: { n: 1.333, dn: 0, ang: 12, wave: 1, exp: 1.6, amp: 0.04, lam: 0.9, wspd: 0.5, depth: 1.4, mix: 1, tir: 0, sx: 0 } },
   { id: 'cup', name: 'Coffee cup', sub: 'Parallel light off a round mirror folds onto a nephroid', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.5 } },
   { id: 'cardioid', name: 'Cardioid', sub: 'A point source on the rim of a round mirror', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.0 } },
   { id: 'drop', name: 'Raindrop', sub: 'A water ball: a focal caustic behind it, the rainbow ray at 138°', defaults: { n: 1.333, dn: 0.05, ang: 0, wave: 1, exp: 1.4 } },
@@ -115,11 +118,24 @@ export const SCENES = [
 ];
 
 const circle = (cx, cy, r) => ({ type: 'circle', cx, cy, r });
+// The waves of the pool cross-section, as { A, k, w, p } for
+// A sin(k x + w t + p) with t = 0: the phase p = -k r sx holds the motion.
+// The main wave goes +x at the speed wspd; the others go at the deep-water
+// speed for their k (v ~ 1/sqrt(k)), one of them in -x.
+export function sectionWaves(A, k, sx, mix) {
+  const W = [[1, 1, 1, 0]];
+  if (mix) W.push([0.42, 1.93, 1 / Math.sqrt(1.93), 1.1], [0.2, 3.4, -1 / Math.sqrt(3.4), 2.3]);
+  return W.map(([a, m, r, p0]) => ({ A: A * a, k: k * m, w: 0, p: p0 - k * m * r * sx }));
+}
 // The half-plane n . p <= d, with (nx, ny) the outward unit normal.
 const plane = (nx, ny, d) => ({ type: 'plane', nx, ny, d });
 
 // P = { n, dn, ang, wave, t }. Returns a scene for one instant: animated
 // scenes are made again each frame.
+// The pool cross-section also takes amp (m), lam (m), depth (m), mix (0:
+// one sine wave, 1: three waves), tir (1: a lamp on the floor) and sx, the
+// distance the main wave has gone (main.js adds wspd dt each frame), and
+// halfW, the half width of the slice (main.js fits it to the screen).
 export function makeScene(id, P) {
   const a = (P.ang || 0) * DEG, t = P.t || 0;
   const s = { id, objects: [], light: null, view: null, focus: null, detector: null, bounces: 8, animated: false };
@@ -163,6 +179,30 @@ export function makeScene(id, P) {
       wall(-1.9, -0.85, -1.9, 0.75); wall(1.9, -0.85, 1.9, 0.75); wall(-1.9, -0.85, 1.9, -0.85, true);
       beam(-Math.PI / 2 + a, 0, 0.35, 4.6);
       s.view = { cx: 0, cy: -0.1, w: 4.0, h: 1.9 }; s.focus = { x: 0.3, y: -0.7, w: 1.4 };
+      break;
+    }
+    case 'section': {
+      // still water at y = 0, the floor at y = -depth; under the floor a
+      // band for the plot of the floor light (main.js draws it)
+      const d = P.depth ?? 1.4, A = P.amp ?? 0.04, k = TAU / (P.lam ?? 0.9), sx = P.sx || 0, W = P.halfW ?? 2.4;
+      s.animated = true;
+      s.objects.push({ kind: 'water', y0: 0, x0: -W, x1: W, n: P.n, dn: P.dn, waves: sectionWaves(A, k, sx, P.mix ?? 1), t: 0 });
+      wall(-W, -d, W, -d, true); wall(-W, -d, -W, 0.25); wall(W, -d, W, 0.25);
+      // the deck: light beside the pool stops there
+      wall(-W - 4, 0.25, -W, 0.25); wall(W, 0.25, W + 4, 0.25);
+      beam(-Math.PI / 2 + a, 0, 0, 2 * W * Math.cos(a) + 0.6);
+      if (P.tir) {
+        // a lamp on the floor: rays steeper than the critical angle go out
+        // through the surface, the rest reflect back (TIR)
+        s.lamp = { type: 'point', x: -0.52 * W, y: -d + 0.06, a0: 12 * DEG, a1: 168 * DEG };
+        s.lampShare = 0.3;
+      }
+      // P.tight: less air above, for the short band of the saver plate
+      const top = P.tight ? 0.55 : 0.95, bot = -d - 0.78;
+      s.view = { cx: 0, cy: (top + bot) / 2, w: 2 * W + 0.2, h: top - bot };
+      s.focus = { x: 0, y: -d * 0.75, w: 2.2 };
+      s.plot = { x0: -W, x1: W, y0: -d - 0.7, y1: -d - 0.12 };
+      s.bounces = 6;
       break;
     }
     case 'prism': {

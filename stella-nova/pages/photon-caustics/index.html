@@ -35,6 +35,8 @@
                  topbar. #gl fills #stage; main.js frames the subject in
                  the part that the panel does not cover.
      phone ..... (max-width 768px, or a short landscape touch screen)
+                 #labels: air, water, floor and plot names over the
+                 pool cross-section, placed by main.js placeLabels.
                  #dock at the base: photons in flight, scene (next),
                  play, overlay, settings. #panel is a bottom sheet (portrait) or a
                  drawer at the right (landscape).
@@ -63,6 +65,7 @@
 
 <main id="stage">
   <canvas id="gl"></canvas>
+  <div id="labels" hidden><span data-k="air"></span><span data-k="water"></span><span data-k="floor"></span><span data-k="plot"></span></div>
   <a id="xlink" href="../photon-caustics-3d/index.html" target="_self">See the 3D pool →</a>
   <div id="caption"></div>
   <div id="nogl" hidden>This page needs WebGL2.</div>
@@ -76,6 +79,21 @@
     <div class="sec-label first">Scene</div>
     <div id="scenes" class="cards"></div>
     <p class="hint" id="sceneSub"></p>
+    <div id="secCtl" hidden>
+      <div class="seg" id="mixSeg">
+        <button data-mix="0">One sine wave</button>
+        <button data-mix="1" class="on">Three waves</button>
+      </div>
+      <div class="prm"><div class="nm">Wave height <span class="sci-sym m5" data-tex="A" data-inline>A</span></div><span class="val" id="ampV"></span>
+        <input type="range" id="amp" min="0" max="0.12" step="0.001" value="0.04" aria-label="Wave height"></div>
+      <div class="prm"><div class="nm">Wavelength <span class="sci-sym m2" data-tex="\lambda" data-inline>λ</span></div><span class="val" id="lamV"></span>
+        <input type="range" id="lam" min="0.3" max="2.4" step="0.01" value="0.9" aria-label="Wavelength"></div>
+      <div class="prm"><div class="nm">Wave speed <span class="sci-sym" data-tex="v" data-inline>v</span></div><span class="val" id="wspdV"></span>
+        <input type="range" id="wspd" min="0" max="2" step="0.01" value="0.5" aria-label="Wave speed"></div>
+      <div class="prm"><div class="nm">Depth <span class="sci-sym m5" data-tex="d" data-inline>d</span></div><span class="val" id="depthV"></span>
+        <input type="range" id="depth" min="0.4" max="2.2" step="0.01" value="1.4" aria-label="Depth"></div>
+      <div class="btns"><button id="tirBtn" title="A lamp on the floor: total internal reflection">Lamp below (TIR)</button></div>
+    </div>
     <div class="prm"><div class="nm">Light angle <span class="sci-sym m6" data-tex="\theta" data-inline>θ</span></div><span class="val" id="angV"></span>
       <input type="range" id="ang" min="-40" max="40" step="0.5" value="0" aria-label="Light angle"></div>
     <div class="prm"><div class="nm">Index <span class="sci-sym m1" data-tex="n" data-inline>n</span></div><span class="val" id="nV"></span>
@@ -120,6 +138,7 @@
   <div class="about">
     <p>Light leaves the source as photons. Each photon goes straight until it meets a surface. A mirror reflects it. At glass or water the Fresnel equations give the chance <span class="m4">R</span> that it reflects; else it refracts by Snell's law, with an index <span class="m1">n</span> that changes with the wavelength <span class="m2">λ</span>.</p>
     <p>Real light goes 3.00 × 10⁸ m/s, too fast to see. Here the photons in flight go at a slowed speed <i>c</i> that you set, about a metre a second. In glass or water of index <span class="m1">n</span> each photon goes at <i>c</i>/<span class="m1">n</span>, so a pulse slows down and its front bends as it goes in. That change of speed is the cause of refraction.</p>
+    <p>The pool cross-section is a vertical slice of a pool. The surface is a sum of travelling sine waves <span class="m5">h</span>(<i>x</i>, <i>t</i>). Each crest is a weak lens: sunlight refracts at it by Snell's law and focuses at the depth <span class="m5">d</span> ≈ 1 / ((1 − 1/<span class="m1">n</span>) <span class="m5">A</span> <i>k</i>²). Where the focus is near the floor, the floor gets a bright spot that moves with the wave. The plot under the floor is the light on the floor. With the lamp below, rays that meet the surface at more than the critical angle, 48.6° in water, reflect back: total internal reflection.</p>
     <p>The light image adds the path of every photon, so a pixel is as bright as the number of photons that cross it. Where the rays of a family come near each other the image is bright. The edge where they touch and fold back is the caustic. On it the Jacobian <span class="m3">J</span> of the ray map is zero, and the irradiance <span class="m4">E</span> ∝ 1/|<span class="m3">J</span>| goes to a peak.</p>
     <p>In the pool each wave crest is a weak lens. Where a crest focuses at the depth <span class="m5">d</span>, the rays crowd into a bright line on the floor. <a class="xl" href="../photon-caustics-3d/index.html" target="_self">See the 3D pool</a> for the net of these lines in two dimensions of floor.</p>
   </div>
