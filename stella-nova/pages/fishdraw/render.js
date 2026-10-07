@@ -78,13 +78,16 @@ export function fishPath(f, jitter) {
   P.path = p;
   return p;
 }
-// The path of the first `len` units of line, in drawing order (the upstream
-// order of the polylines, as the upstream SMIL animation). Returns the pen
-// tip [x, y] or null when the fish is done.
+// The path of the first `len` units of line, in the draw-on order f.order
+// (engine.js partsOf: body outline and head first, then eye, mouth, fins,
+// scales, pattern, speckles, shading and the name). A fish with no order
+// draws in the upstream order. Returns the pen tip [x, y] or null.
 export function tracePartial(ctx, f, xy, len) {
   let acc = 0, tip = null;
+  const n = f.offs.length - 1, ord = f.order && f.order.length === n ? f.order : null;
   ctx.beginPath();
-  for (let i = 0; i + 1 < f.offs.length; i++) {
+  for (let j = 0; j < n; j++) {
+    const i = ord ? ord[j] : j;
     const a = f.offs[i], b = f.offs[i + 1], L = f.lens[i];
     if (b - a < 2) continue;
     ctx.moveTo(xy[a * 2], xy[a * 2 + 1]);

@@ -28,6 +28,8 @@
 //  GREP MAP
 //    grep -n 'export function makeEngine'   the new Function() shim
 //    grep -n 'export function drawFish'     one fish, upstream order
+//    grep -n 'function tagger'              part tags for the draw-on order
+//    grep -n 'export const PART_ORDER'      body and head first
 //    grep -n 'export const PARAMS'          every field of generate_params()
 //    grep -n 'export const GROUPS'          the panel groups
 //    grep -n 'export function sanitize'     clamp, round, fin index order
@@ -52,10 +54,108 @@ const EXPORTS = ['main', 'generate_params', 'default_params', 'fish', 'reframe',
 // src: the text of fishdraw.js. Returns the upstream functions plus setJsr,
 // getJsr and resetNoise. The body is sloppy mode, as upstream expects.
 export function makeEngine(src) {
-  const footer = `\n;return {${EXPORTS.join(',')},` +
+  const footer = `\n;var __tagger=(${tagger.toString()})();` +
+    PART_FNS.map(([f, part]) => `${f}=__tagger.wrap(${f},${JSON.stringify(part)});`).join('') +
+    HELPER_FNS.map(([f, part]) => `${f}=__tagger.helper(${f},${JSON.stringify(part)});`).join('') +
+    'approx_poly_dp=__tagger.keep(approx_poly_dp);' +
+    `\n;return {${EXPORTS.join(',')},` +
     'setJsr:function(v){jsr=v},getJsr:function(){return jsr},resetNoise:function(){perlin=null}};';
   // eslint-disable-next-line no-new-func
   return new Function(src + footer)();
+}
+
+// ── part tags (the draw-on order) ───────────────────────────────────────────
+// The footer replaces some upstream function bindings with wrappers. A
+// wrapper calls the upstream function with the same arguments and returns
+// its value unchanged. It only adds a property __part to each point array
+// [x, y] in the value that has no __part yet (the first tag wins, so an
+// inner call tags its points before the outer one). JSON and the numbers
+// do not see the property, so the drawing stays identical to upstream.
+//   PART_FNS    a part of the fish; a call marks the active part. A body
+//               function gets the two body curves as its first two
+//               arguments: their points are tagged 'body' (the outline)
+//               before the call, and the rest of its value 'scales'.
+//   HELPER_FNS  shading helpers: in the head or at fish level they tag
+//               their own part; in the body they tag 'scales'; inside an
+//               eye, a jaw or a fin they take that part
+//   approx_poly_dp (used by cleanup) copies __part from its input
+//               polyline to the new polyline it returns
+// partsOf() then gives each final polyline the most common tag of its
+// points (a polyline made only of clip intersections takes the tag of the
+// polyline before it), and the Hershey name gets 'name'.
+const PART_FNS = [
+  ['fish_body_a', 'body'], ['fish_body_b', 'body'], ['fish_body_c', 'body'], ['fish_body_d', 'body'],
+  ['fin_a', 'fins'], ['fin_b', 'fins'], ['finlet', 'fins'], ['fin_adipose', 'fins'],
+  ['fish_head', 'head'], ['fish_eye_a', 'eye'], ['fish_eye_b', 'eye'],
+  ['fish_lip', 'mouth'], ['fish_jaw', 'mouth'], ['fish_teeth', 'mouth'], ['barbel', 'barbel'],
+];
+const HELPER_FNS = [
+  ['shade_shape', 'shade'], ['vein_shape', 'shade'], ['fill_shape', 'shade'],
+  ['patternshade_shape', 'pattern'], ['smalldot_shape', 'speckle'],
+];
+// The draw-on order of the parts: body outline and head first, then the
+// eye and mouth, fins, scales, pattern, speckles, shading, the name.
+export const PART_ORDER = ['body', 'head', 'eye', 'mouth', 'barbel', 'fins', 'scales', 'pattern', 'speckle', 'shade', 'name'];
+
+// This function is turned to text and runs inside the engine scope.
+function tagger() {
+  var stack = [];
+  function tag(v, part, d) {
+    if (!Array.isArray(v) || d > 5) return;
+    if (v.length === 2 && typeof v[0] === 'number') { if (v.__part === undefined) v.__part = part; return; }
+    for (var i = 0; i < v.length; i++) tag(v[i], part, d + 1);
+  }
+  return {
+    wrap: function (f, part) {
+      return function () {
+        if (part === 'body') { tag(arguments[0], 'body', 1); tag(arguments[1], 'body', 1); }
+        stack.push(part);
+        try { var r = f.apply(this, arguments); } finally { stack.pop(); }
+        tag(r, part === 'body' ? 'scales' : part, 0);
+        return r;
+      };
+    },
+    helper: function (f, part) {
+      return function () {
+        var ctx = stack[stack.length - 1];
+        var p = ctx === undefined || ctx === 'head' ? part : ctx === 'body' ? 'scales' : ctx;
+        var r = f.apply(this, arguments);
+        tag(r, p, 0);
+        return r;
+      };
+    },
+    keep: function (f) {
+      return function (pl) {
+        var r = f.apply(this, arguments);
+        if (r !== pl && pl && pl.__part !== undefined) r.__part = pl.__part;
+        return r;
+      };
+    },
+  };
+}
+// Tags each polyline of a fish() result with a part, from its points.
+function markParts(drawing) {
+  let last = 'body';
+  for (const pl of drawing) {
+    const count = {};
+    let best = null, bn = 0;
+    for (const pt of pl) {
+      const t = pt.__part;
+      if (t === undefined) continue;
+      count[t] = (count[t] || 0) + 1;
+      if (count[t] > bn) { bn = count[t]; best = t; }
+    }
+    pl.__part = best || last;
+    last = pl.__part;
+  }
+}
+// The part of each final polyline, and the draw-on order: the indices
+// sorted by PART_ORDER, with the upstream order kept inside a part.
+export function partsOf(polylines) {
+  const parts = polylines.map(pl => pl.__part || 'name');
+  const rank = p => { const i = PART_ORDER.indexOf(p); return i < 0 ? PART_ORDER.length : i; };
+  const order = parts.map((_, i) => i).sort((a, b) => rank(parts[a]) - rank(parts[b]) || a - b);
+  return { parts, order };
 }
 
 // ── drawFish ────────────────────────────────────────────────────────────────
@@ -71,8 +171,10 @@ export function drawFish(E, name, params = null, label = true) {
   const base = E.generate_params();
   const p = params ? sanitize(Object.assign({}, base, params)) : base;
   const drawing = E.fish(p);
+  markParts(drawing);
   const polylines = E.cleanup(E.reframe(drawing, 20, label ? name + '.' : ''));
-  return { name, seed, base, params: p, polylines };
+  const { parts, order } = partsOf(polylines);
+  return { name, seed, base, params: p, polylines, parts, order };
 }
 
 // The generated params of a name, with no drawing.

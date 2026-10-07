@@ -6,7 +6,7 @@
 //  engine.js makeEngine(), and answers each job with drawFish().
 //
 //  IN   { id, name, params (object or null), label (bool) }
-//  OUT  { id, name, seed, base, params, xy, offs, lens, total, bbox, ms }
+//  OUT  { id, name, seed, base, params, xy, offs, lens, total, bbox, order, ms }
 //       xy, offs and lens are typed arrays, sent as transfers.
 //       { id, error } when the engine throws for these params.
 //
@@ -25,8 +25,10 @@ self.onmessage = async e => {
     const t0 = performance.now();
     const f = drawFish(E, name, params, label);
     const flat = flatten(f.polylines);
-    self.postMessage({ id, name: f.name, seed: f.seed, base: f.base, params: f.params, ...flat, ms: performance.now() - t0 },
-      [flat.xy.buffer, flat.offs.buffer, flat.lens.buffer]);
+    // order: the draw-on order of the polylines (body and head first).
+    const order = Uint32Array.from(f.order);
+    self.postMessage({ id, name: f.name, seed: f.seed, base: f.base, params: f.params, ...flat, order, ms: performance.now() - t0 },
+      [flat.xy.buffer, flat.offs.buffer, flat.lens.buffer, order.buffer]);
   } catch (err) {
     self.postMessage({ id, error: String(err && err.message || err) });
   }

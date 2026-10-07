@@ -14,6 +14,7 @@ import { plateSVG, platePolylines } from './svg.js';
 import { buildTree, layoutTree, tipBoxes, drift, lineage, paramChanges, TIP_CAP, T_MAX } from './tree.js';
 import { THEMES } from './plate.js';
 import { layoutPlate, pageSize, PAGES, GRID_PRESETS, cellAt, MM_PER_PX } from './plate.js';
+import { PART_ORDER, partsOf } from './engine.js';
 import { makeEngine, drawFish, baseParams, PARAMS, GROUPS, sanitize, mutate, mulberry, diffParams,
   encodeShare, decodeShare, randomName, relativeName, flatten, unflatten, blendParams, upstreamCSV } from './engine.js';
 
@@ -47,6 +48,38 @@ test('drawFish equals the upstream main() of a fresh engine', () => {
     const up = makeEngine(SRC).main(name);
     const ours = drawFish(makeEngine(SRC), name).polylines;
     ok(sameLines(up, ours), name + ': drawFish differs from main()');
+  }
+});
+// ── draw-on order ───────────────────────────────────────────────────────────
+// An engine with no wrappers at all: the upstream file and a plain return.
+const rawEngine = () => new Function(SRC + '\n;return {main};')();
+test('the part tags leave the drawing identical to an unwrapped upstream engine', () => {
+  for (const name of ['Biggus fishus', 'Colus splennita', 'Tautes hyptigbota', 'Xipola nare']) {
+    const up = rawEngine().main(name), ours = drawFish(makeEngine(SRC), name).polylines;
+    ok(sameLines(up, ours), name + ' differs from the unwrapped upstream main()');
+  }
+});
+test('the draw-on order is a permutation of the upstream polylines (same set)', () => {
+  const E = makeEngine(SRC), rnd = mulberry(9);
+  for (let i = 0; i < 6; i++) {
+    const name = randomName(E, 300 + i);
+    const f = drawFish(E, name, i % 2 ? mutate(baseParams(E, name), 0.5, rnd) : null, i % 3 !== 0);
+    eq(f.order.length, f.polylines.length, 'order length');
+    eq(new Set(f.order).size, f.polylines.length, 'order repeats an index');
+    const key = pl => JSON.stringify(pl);
+    const a = f.polylines.map(key).sort(), b = f.order.map(k => key(f.polylines[k])).sort();
+    eq(JSON.stringify(a), JSON.stringify(b), name + ': reordered set differs');
+  }
+});
+test('the draw-on order starts with the body outline and the head', () => {
+  const E = makeEngine(SRC);
+  for (const name of ['Biggus fishus', 'Colus splennita', 'Xipola nare']) {
+    const f = drawFish(E, name), seq = f.order.map(k => f.parts[k]);
+    ok(seq[0] === 'body', name + ' does not start with the body: ' + seq[0]);
+    const rank = p => PART_ORDER.indexOf(p);
+    for (let i = 1; i < seq.length; i++) ok(rank(seq[i]) >= rank(seq[i - 1]), name + ' order goes back at ' + i);
+    for (const p of ['body', 'head', 'eye', 'fins', 'scales', 'name']) ok(f.parts.includes(p), name + ' has no ' + p);
+    eq(seq[seq.length - 1], 'name', name + ' does not end with the name');
   }
 });
 test('every generate_params field is in PARAMS and back', () => {

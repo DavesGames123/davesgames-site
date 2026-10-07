@@ -73,7 +73,7 @@ export function createPool(n) {
       if (fallback.busy || !queue.length) return;
       const job = queue.shift(); fallback.busy = true;
       fallback.then(E => new Promise(r => setTimeout(r, 0)).then(() => {
-        try { const f = drawFish(E, job.name, job.params, job.label); finish(job, { name: f.name, seed: f.seed, base: f.base, params: f.params, ...flatten(f.polylines), ms: 0 }); }
+        try { const f = drawFish(E, job.name, job.params, job.label); finish(job, { name: f.name, seed: f.seed, base: f.base, params: f.params, ...flatten(f.polylines), order: Uint32Array.from(f.order), ms: 0 }); }
         catch (err) { finish(job, { error: String(err && err.message || err) }); }
       })).finally(() => { fallback.busy = false; pump(); });
       return;
