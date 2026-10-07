@@ -10,208 +10,244 @@
   ═══════════════════════════════════════════════════════════════════════════
    ROCHE LIMIT  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js runs a self-gravitating rubble pile of N
-   grains on the GPU (engine.js, shaders/sim.wgsl), next to a planet, and
-   draws it (render.js) in #gpu. It compares the run with the analytic
-   Roche limits, the Kepler conic of the satellite centre and the tidal
-   gauge, and plots the bound mass and the energy ledger.
+   Static markup only. main.js runs a self-gravitating rubble moon of
+   thousands of grains on the GPU (engine.js, shaders/sim.wgsl) next to a
+   planet, draws it (render.js) and tells the story in plain words. The
+   default story: "How Saturn got its rings".
 
    MODULES
      physics.js   model, CPU reference, bound mass, Kepler conics (no DOM)
-     engine.js    SimGPU: the compute pipelines for one satellite
+     engine.js    SimGPU: the compute pipelines for one moon
      render.js    Renderer: sky, planet, grains, ring layer, field, lines,
                   bloom
      worker.js    bound mass and energy for each readback (module worker)
-     scenarios.js the scenarios and the real bodies
-     plots.js     the four live plots (canvas 2D)
-     main.js      boot, frame loop, camera, panel, labels, screensaver
+     scenarios.js the scenarios, the real bodies, the story lines
+     plots.js     the plots (canvas 2D)
+     main.js      boot, frame loop, time controls, camera, story, UI, saver
      tests.mjs    node tests.mjs (CPU tests, then the GPU test in Deno)
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · Roche limit                                 │
-     ├────────────┬───────────────────────────────────────┬─────────────┤
-     │ #panel     │ #gpu  the scene (drag, pinch, wheel)  │ #hud plots  │
-     │  scenario  │ #labels  ring and point names          │  gauge      │
-     │  body      │ #legend  field colour scale            │  bound mass │
-     │  orbit     │ #busy    pile settling progress        │  energy     │
-     │  material  │                                         │  runs vs d  │
-     │  time      │                                         │             │
-     │  view      │                                         │             │
-     │  readout   │                                         │             │
-     │  equations │                                         │             │
-     ├────────────┴───────────────────────────────────────┴─────────────┤
-     │ #status  scenario · t · d/R_p · bound mass                       │
+     │ #bar [scenario ▾] [⟲ ❚❚ › »] [Slow Normal Fast ──●──] clock [Display │
+     │      Advanced Details ?]                                          │
+     │                                                                   │
+     │ #gpu  the scene: the planet stays still, the moon goes round      │
+     │                                                                   │
+     │ #readouts (distance bar,      #story  caption, phase strip,       │
+     │  one-piece share)                     time scrubber               │
      └──────────────────────────────────────────────────────────────────┘
+     #gallery   the scenario gallery (modal)
+     #display   view, colour, field, overlays, quality (popover)
+     #advanced  the physics settings (drawer)
+     #details   the plots and numbers for physicists (drawer)
+     #explain   "What am I looking at?" (popover)
+     #legend    the colour key of the grains or the force map
+   KEYS  Space pause · . and , step · [ and ] speed · R restart
 
-   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
-     #dock    at the base: #dockPanel (sheet), #dockPlay, the time warp
-              stepper, #dockHeat (field overlay), #dockCam (camera mode)
-     #panel   a bottom sheet above the dock (#sheetGrip: half / full)
-     #hud     a slim strip under the top edge: the gauge and the bound
-              mass only; the full plots are in the sheet (#plotsHome)
-     main.js measures the overlays and frames the subject in the clear part
+   PHONE (max-width 768px, or a short landscape touch screen)
+     #bar keeps the scenario button, the time and "?"; #dock at the base
+     holds play, step, speed and "more"; the drawers are bottom sheets.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A rubble-pile moon of thousands of grains, simulated on the GPU with self-gravity and contact forces, meets the tide of its planet. Inside the Roche limit it stretches, sheds and winds into a ring.">
+<meta name="description" content="Watch an icy moon spiral into Saturn, cross the Roche limit and become a ring: thousands of grains with their own gravity and collisions, simulated on the GPU.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
-<div class="topbar">
-  <div class="brand">Stella Nova</div>
-  <div class="pagetitle">Roche limit</div>
-</div>
-
-<canvas id="gpu"></canvas>
+<canvas id="gpu" aria-label="Simulation view"></canvas>
 <div id="labels" aria-hidden="true"></div>
-<div id="fpsChip" class="off" aria-live="off"></div>
-<div id="busy" class="off"><div class="busy-t" id="busyT">Settling the rubble pile</div><div class="busy-bar"><span id="busyBar"></span></div></div>
+<div id="fpsChip" class="off"></div>
+<div id="busy" class="off"><div class="busy-t" id="busyT">Building the moon</div><div class="busy-bar"><span id="busyBar"></span></div></div>
 <div id="nogpu" class="off">
   <h2>WebGPU is not available</h2>
   <p>This page runs a simulation of thousands of grains on the GPU. It needs WebGPU: Chrome or Edge 113+, Safari 26+, or Firefox 141+ on Windows.</p>
   <p id="nogpuWhy"></p>
 </div>
-<button id="gear" aria-label="Controls">☰</button>
+
+<header id="bar">
+  <button id="scenBtn" class="pill" aria-haspopup="dialog"><span id="scenName">Saturn’s rings</span><span class="caret">▾</span></button>
+  <div class="grp transport">
+    <button id="resetBtn" class="ib" title="Back to the start (R)" aria-label="Back to the start">⟲</button>
+    <button id="playBtn" class="ib play" title="Pause (Space)" aria-label="Pause">❚❚</button>
+    <button id="stepBtn" class="ib" title="Step forward 1/100 orbit (.)" aria-label="Step forward 1/100 orbit">›</button>
+    <button id="blockBtn" class="ib" title="Step forward 1/10 orbit (,)" aria-label="Step forward 1/10 orbit">»</button>
+  </div>
+  <div class="grp speed">
+    <div class="stops" id="stops"><button data-s="0.18">Slow</button><button data-s="0.78">Normal</button><button data-s="1.38">Fast</button></div>
+    <input type="range" id="speed" min="-1.3" max="2" step="0.01" value="0.78" list="speedTicks" aria-label="Speed, orbits per minute (log scale)">
+    <datalist id="speedTicks"><option value="0.18"></option><option value="0.78"></option><option value="1.38"></option></datalist>
+    <output id="speedV"></output>
+  </div>
+  <div id="clock" class="clock"></div>
+  <div class="grp right">
+    <button id="dispBtn" class="tb" aria-haspopup="dialog">Display</button>
+    <button id="advBtn" class="tb">Advanced</button>
+    <button id="detBtn" class="tb">Details</button>
+    <button id="helpBtn" class="ib round" aria-label="What am I looking at?">?</button>
+  </div>
+</header>
+
+<section id="story">
+  <div id="caption"></div>
+  <div id="phases" role="group" aria-label="Phases"></div>
+  <div class="scrubrow">
+    <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub back in time">
+    <span id="scrubInfo"></span>
+  </div>
+</section>
+
+<aside id="readouts">
+  <div class="ro-h"><span id="distTitle">Distance from Saturn</span></div>
+  <div id="distBar"><div class="zone in"></div><div class="zone out"></div><div id="distMark"></div><div id="distLim"></div></div>
+  <div class="zl"><span>inside the Roche limit: tides pull it apart</span><span>safe: the moon holds together</span></div>
+  <p id="sentence"></p>
+  <div class="piece">
+    <div><div class="ro-h">Still in one piece</div><div id="pieceV" class="big">100%</div></div>
+    <canvas id="spark" height="44"></canvas>
+  </div>
+</aside>
 
 <div id="legend" class="off">
-  <div class="lg-title" id="lgTitle">Roche potential</div>
+  <div class="lg-title" id="lgTitle"></div>
   <canvas id="lgBar" width="220" height="10"></canvas>
   <div class="lg-ticks"><span id="lgLo"></span><span id="lgMid"></span><span id="lgHi"></span></div>
 </div>
 
-<aside id="hud">
-  <div class="hud-card" id="gaugeCard">
-    <div class="hud-h"><span>Tide against self-gravity</span><span class="hud-v" id="gaugeV"></span></div>
-    <canvas id="gaugeC" height="58"></canvas>
+<div id="gallery" class="modal off" role="dialog" aria-label="Scenarios">
+  <div class="sheet">
+    <div class="sh-h"><h2>Choose a story</h2><button class="x" data-close="gallery" aria-label="Close">✕</button></div>
+    <div id="cards"></div>
   </div>
-  <div id="plotsHud">
-    <div class="hud-card">
-      <div class="hud-h"><span>Bound mass</span><span class="hud-v" id="boundV"></span></div>
-      <canvas id="boundC" height="96"></canvas>
-    </div>
-    <div class="hud-card">
-      <div class="hud-h"><span>Energy ledger <span class="sci-sym" data-tex="|\Delta(E - W)|/|U_s|" data-inline></span></span><span class="hud-v" id="energyV"></span></div>
-      <canvas id="energyC" height="80"></canvas>
-    </div>
-    <div class="hud-card">
-      <div class="hud-h"><span>Bound mass after 3 orbits</span><span class="hud-v" id="runsV"></span></div>
-      <canvas id="runsC" height="120"></canvas>
-    </div>
+</div>
+
+<div id="display" class="pop off" role="dialog" aria-label="Display">
+  <div class="pg"><div class="ph">View</div>
+    <div class="seg" id="cams"><button data-c="planet">Planet</button><button data-c="top">From above</button><button data-c="follow">Follow moon</button></div>
+    <p class="hint" id="camHint"></p></div>
+  <div class="pg"><div class="ph">Colour the grains by</div>
+    <div class="seg" id="colors"><button data-k="4">Ice &amp; heat</button><button data-k="3">Heat</button><button data-k="0">In one piece?</button><button data-k="2">Tide strain</button></div></div>
+  <div class="pg"><div class="ph">Force map on the orbit plane</div>
+    <div class="seg" id="fields"><button data-f="0">Off</button><button data-f="1">Who holds what</button><button data-f="2">Tide strength</button></div></div>
+  <div class="pg"><div class="ph">Show</div>
+    <div class="toggles">
+      <label><input type="checkbox" id="tRings" checked> Roche limit</label>
+      <label><input type="checkbox" id="tReal" checked> Today’s rings</label>
+      <label><input type="checkbox" id="tPred" checked> Path ahead</label>
+      <label><input type="checkbox" id="tHill"> Moon’s grip zone</label>
+      <label><input type="checkbox" id="tRing" checked> Ring glow</label>
+      <label><input type="checkbox" id="tBlur"> Motion streaks</label>
+      <label><input type="checkbox" id="tCalm"> Reduce motion</label>
+      <label><input type="checkbox" id="tFps"> Frame rate</label>
+    </div></div>
+  <div class="pg"><div class="ph">Quality</div>
+    <div class="seg" id="quals"><button data-q="auto">Auto</button><button data-q="high">High</button><button data-q="medium">Medium</button><button data-q="low">Low</button></div></div>
+</div>
+
+<div id="explain" class="pop off" role="dialog" aria-label="What am I looking at?">
+  <h3>What am I looking at?</h3>
+  <p>A planet pulls the near side of a moon a little harder than the far side. That difference, the <b>tide</b>, tries to stretch the moon, and the moon’s own gravity holds it together.</p>
+  <p>The tide grows fast as the moon comes closer. Inside a distance called the <b>Roche limit</b>, a moon held together only by its own gravity is pulled apart, and its pieces spread into a ring.</p>
+  <p>Here thousands of grains, each pulled by the planet and by every other grain, and bumping into each other, show it happen. Nothing is scripted.</p>
+  <p id="explainSaturn">Saturn’s rings may be what is left of such a moon. Canup (2010) proposed a Titan-sized moon that spiralled in and lost its icy mantle; the “Chrysalis” idea (Wisdom et al. 2022) has a moon torn apart about 160 million years ago. The moon here is a simple icy rubble pile.</p>
+</div>
+
+<aside id="advanced" class="drawer off" aria-label="Advanced settings">
+  <div class="sh-h"><h2>Advanced</h2><button class="x" data-close="advanced" aria-label="Close">✕</button></div>
+  <p class="hint">Change the physics, then start again. Each setting starts with plain words; the symbol is the one in the equations.</p>
+  <div class="ag">
+    <div class="ph">Orbit</div>
+    <div class="row" id="rowD"><label>Start distance <i>(planet radii)</i> <span class="sym" data-tex="d" data-inline></span></label><input type="range" id="d" min="1.2" max="5" step="0.01"><span class="val" id="dV"></span><p class="hint">How far from the planet the moon starts.</p></div>
+    <div class="row" id="rowPeri"><label>Closest approach <i>(planet radii)</i> <span class="sym" data-tex="q" data-inline></span></label><input type="range" id="peri" min="1.05" max="4" step="0.01"><span class="val" id="periV"></span><p class="hint">How close the comet passes.</p></div>
+    <div class="row" id="rowEcc"><label>Orbit shape <span class="sym" data-tex="e" data-inline></span></label><input type="range" id="ecc" min="0.5" max="1.2" step="0.01"><span class="val" id="eccV"></span><p class="hint">1 is a parabola; below 1 the comet comes back.</p></div>
+    <div class="row"><label>Planet vs moon density <span class="sym" data-tex="\rho_p/\rho_s" data-inline></span></label><input type="range" id="q" min="-1.2" max="1.4" step="0.01"><span class="val" id="qV"></span><p class="hint">A denser planet tears moons apart from farther out.</p></div>
+    <div class="row"><label>Planet flattening <span class="sym" data-tex="J_2" data-inline></span></label><input type="range" id="j2" min="0" max="0.02" step="0.0005"><span class="val" id="j2V"></span><p class="hint">A flattened planet pulls a little harder at its equator.</p></div>
   </div>
-  <button id="hudToggle" aria-label="Hide plots">▸</button>
+  <div class="ag">
+    <div class="ph">Moon</div>
+    <div class="seg" id="materials"><button data-m="fluid">Loose</button><button data-m="rigid">Rough</button><button data-m="cohesive">Cemented</button></div>
+    <p class="hint" id="matHint"></p>
+    <div class="row"><label>Grain friction <span class="sym" data-tex="\mu" data-inline></span></label><input type="range" id="mu" min="0" max="1" step="0.05"><span class="val" id="muV"></span></div>
+    <div class="row"><label>Cement between grains <span class="sym" data-tex="C/P_c" data-inline></span></label><input type="range" id="coh" min="0" max="1.5" step="0.05"><span class="val" id="cohV"></span></div>
+    <div class="row"><label>Number of grains <span class="sym" data-tex="N" data-inline></span></label><select id="nSel"></select><p class="hint">More grains: finer detail, more work for the GPU.</p></div>
+  </div>
+  <div class="ag">
+    <div class="ph">Real moons</div>
+    <div class="chips" id="bodies"></div>
+  </div>
+  <button id="applyBtn" class="primary">Start again with these settings</button>
 </aside>
 
-<div id="panel" class="open">
-  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
-  <button id="panelClose" aria-label="Close controls">✕</button>
-
-  <div class="sec-label">Scenario</div>
-  <div class="cards" id="scenarios"></div>
-  <div class="hint" id="scenHint"></div>
-
-  <div id="bodyBox">
-    <div class="sec-label">Body</div>
-    <div class="presets" id="bodies"></div>
+<aside id="details" class="drawer off" aria-label="Details for physicists">
+  <div class="sh-h"><h2>Details for physicists</h2><button class="x" data-close="details" aria-label="Close">✕</button></div>
+  <div class="card">
+    <div class="ch"><span>Tide against the moon’s own gravity</span><span class="v" id="gaugeV"></span></div>
+    <p class="cap">How hard the planet’s tide pulls on the moon’s surface, compared with the moon’s own gravity there. A solid sphere fails at 1; a tidally locked one at 2/3; a fluid moon already at 0.14.</p>
+    <canvas id="gaugeC" height="58"></canvas>
   </div>
-
-  <div class="sec-label">Orbit</div>
-  <div class="row" id="rowD"><label><span class="sci-sym" data-tex="d" data-inline></span> <span class="w">distance / R<sub>p</sub></span></label><input type="range" id="d" min="1.1" max="5" step="0.01" value="1.9"><span class="val" id="dV"></span></div>
-  <div class="row" id="rowPeri"><label><span class="sci-sym" data-tex="q" data-inline></span> <span class="w">pericentre / R<sub>p</sub></span></label><input type="range" id="peri" min="1.05" max="4" step="0.01" value="1.6"><span class="val" id="periV"></span></div>
-  <div class="row" id="rowEcc"><label><span class="sci-sym" data-tex="e" data-inline></span> <span class="w">eccentricity</span></label><input type="range" id="ecc" min="0.5" max="1.2" step="0.01" value="1"><span class="val" id="eccV"></span></div>
-  <div class="row"><label><span class="sci-sym" data-tex="\rho_p/\rho_s" data-inline></span> <span class="w">density ratio</span></label><input type="range" id="q" min="-1.2" max="1.4" step="0.01" value="0"><span class="val" id="qV"></span></div>
-  <div class="row" id="rowJ2"><label><span class="sci-sym" data-tex="J_2" data-inline></span> <span class="w">planet oblateness</span></label><input type="range" id="j2" min="0" max="0.02" step="0.0005" value="0"><span class="val" id="j2V"></span></div>
-
-  <div class="sec-label">Satellite</div>
-  <div class="seg3" id="materials">
-    <button data-m="fluid">Fluid</button><button data-m="rigid">Rigid-ish</button><button data-m="cohesive">Cohesive</button>
+  <div class="card">
+    <div class="ch"><span>Held together, over time</span><span class="v" id="boundV"></span></div>
+    <p class="cap">The share of the moon’s mass still bound by its own gravity. Time runs in orbits of the starting orbit.</p>
+    <canvas id="boundC" height="96"></canvas>
   </div>
-  <div class="hint" id="matHint"></div>
-  <div class="row"><label><span class="sci-sym" data-tex="\mu" data-inline></span> <span class="w">friction</span></label><input type="range" id="mu" min="0" max="1" step="0.05" value="0"><span class="val" id="muV"></span></div>
-  <div class="row"><label><span class="sci-sym" data-tex="C" data-inline></span> <span class="w">cohesion / P<sub>c</sub></span></label><input type="range" id="coh" min="0" max="1.5" step="0.05" value="0"><span class="val" id="cohV"></span></div>
-  <div class="row"><label><span class="sci-sym" data-tex="N" data-inline></span> <span class="w">grains</span></label><select id="nSel"></select></div>
-  <div class="modes"><button id="restartBtn" class="on">Restart</button><button id="pauseBtn">Pause</button></div>
-
-  <div class="sec-label">Time warp</div>
-  <div class="row"><label><span class="w">steps per frame</span></label><input type="range" id="warp" min="0" max="8" step="1" value="4"><span class="val" id="warpV"></span></div>
-  <div class="hint" id="warpHint"></div>
-
-  <div class="sec-label">View</div>
-  <div class="row"><label><span class="w">quality</span></label><select id="qualSel"><option value="auto">Auto</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
-  <div class="toggles"><label><input type="checkbox" id="tFps"> Show frame rate</label></div>
-  <div class="seg3" id="cams"><button data-c="planet">Planet</button><button data-c="top">Top-down</button><button data-c="follow">Follow moon</button></div>
-  <div class="hint" id="camHint"></div>
-  <div class="sec-sub">Grain colour</div>
-  <div class="seg3" id="colors"><button data-k="0">Bound / shed</button><button data-k="1">Speed</button><button data-k="2">Tidal stress</button></div>
-  <div class="sec-sub">Force field on the orbit plane</div>
-  <div class="seg3" id="fields"><button data-f="0">Off</button><button data-f="1">Roche potential</button><button data-f="2">Tidal stretch</button></div>
-  <div class="toggles">
-    <label class="wide"><input type="checkbox" id="tCalm"> Reduce motion (slower camera and time warp, no streaks)</label>
-    <label><input type="checkbox" id="tRings" checked> Roche limits</label>
-    <label><input type="checkbox" id="tHill" checked> Hill sphere</label>
-    <label><input type="checkbox" id="tPred" checked> Predicted orbits</label>
-    <label><input type="checkbox" id="tTrack" checked> Past track</label>
-    <label><input type="checkbox" id="tRing" checked> Ring glow</label>
-    <label><input type="checkbox" id="tBlur"> Motion streaks</label>
+  <div class="card">
+    <div class="ch"><span>Energy books of the simulation</span><span class="v" id="energyV"></span></div>
+    <p class="cap">How well the simulation keeps its energy: the error as a share of the moon’s binding energy (lower is better; 0.001 is 0.1%). <span class="sym" data-tex="|\Delta(E - W)|/|U_s|" data-inline></span></p>
+    <canvas id="energyC" height="80"></canvas>
   </div>
-  <div class="row"><label><span class="w">ring glow gain</span></label><input type="range" id="ringGain" min="0.25" max="12" step="0.25" value="2"><span class="val" id="ringGainV"></span></div>
-
-  <div class="sec-label">Readout</div>
-  <table class="readout">
-    <tr><td>Time</td><td id="rdT"></td></tr>
-    <tr><td>Distance <span class="sci-sym" data-tex="d/R_p" data-inline></span></td><td id="rdD"></td></tr>
-    <tr><td><span class="sci-sym" data-tex="d/d_\mathrm{rigid}" data-inline></span></td><td id="rdDr"></td></tr>
-    <tr><td><span class="sci-sym" data-tex="d/d_\mathrm{fluid}" data-inline></span></td><td id="rdDf"></td></tr>
-    <tr><td>Bound mass</td><td id="rdB"></td></tr>
-    <tr><td>Fragments</td><td id="rdG"></td></tr>
-    <tr><td>Hill radius / <span class="sci-sym" data-tex="R_s" data-inline></span></td><td id="rdH"></td></tr>
-    <tr><td>Bulk <span class="sci-sym" data-tex="\rho_s" data-inline></span> (pile)</td><td id="rdRho"></td></tr>
-    <tr><td>Energy ledger</td><td id="rdE"></td></tr>
-    <tr><td><span class="sci-sym" data-tex="L_z" data-inline></span> drift</td><td id="rdL"></td></tr>
-    <tr><td>Hit the planet</td><td id="rdAcc"></td></tr>
-    <tr><td>Step <span class="sci-sym" data-tex="\Delta t" data-inline></span></td><td id="rdDt"></td></tr>
-    <tr><td>GPU frame</td><td id="rdGpu"></td></tr>
-  </table>
-
-  <div class="sec-label">Equations</div>
-  <div class="eqs">
-    <div class="eq-sublabel">Rigid sphere, no spin: tide = surface gravity</div>
+  <div class="card">
+    <div class="ch"><span>Where moons break up</span><span class="v" id="runsV"></span></div>
+    <p class="cap">Each dot is one run: how much of the moon is left after 3 orbits, against its distance from the planet. Rough and cemented moons survive closer in than loose ones. Distance in planet radii, scaled to equal densities <abbr title="x = d / (R_p (ρ_p/ρ_s)^(1/3))">(formula)</abbr>.</p>
+    <canvas id="runsC" height="120"></canvas>
+  </div>
+  <div class="card">
+    <div class="ch"><span>Numbers</span></div>
+    <table class="readout">
+      <tr><td>Time</td><td id="rdT"></td></tr>
+      <tr><td>Distance <span class="sym" data-tex="d/R_p" data-inline></span></td><td id="rdD"></td></tr>
+      <tr><td>Distance / rigid limit</td><td id="rdDr"></td></tr>
+      <tr><td>Distance / fluid limit</td><td id="rdDf"></td></tr>
+      <tr><td>Held together</td><td id="rdB"></td></tr>
+      <tr><td>Separate pieces</td><td id="rdG"></td></tr>
+      <tr><td>Grip zone (Hill radius) / moon radius</td><td id="rdH"></td></tr>
+      <tr><td>Moon bulk density (pile)</td><td id="rdRho"></td></tr>
+      <tr><td>Energy error</td><td id="rdE"></td></tr>
+      <tr><td>Angular momentum error</td><td id="rdL"></td></tr>
+      <tr><td>Grains that hit the planet</td><td id="rdAcc"></td></tr>
+      <tr><td>Time step</td><td id="rdDt"></td></tr>
+      <tr><td>GPU frame</td><td id="rdGpu"></td></tr>
+    </table>
+  </div>
+  <div class="card eqs">
+    <div class="ch"><span>Equations</span></div>
+    <div class="eq-sublabel">Rigid sphere, not spinning: tide = surface gravity</div>
     <div class="sci-eq" data-tex="d_\mathrm{rigid} = R_p\left(\frac{2\rho_p}{\rho_s}\right)^{1/3} \approx 1.26\,R_p\left(\frac{\rho_p}{\rho_s}\right)^{1/3}"></div>
-    <div class="eq-sublabel">Fluid satellite (Roche 1849; Chandrasekhar: 2.455)</div>
+    <div class="eq-sublabel">Fluid moon (Roche 1849; Chandrasekhar: 2.455)</div>
     <div class="sci-eq" data-tex="d_\mathrm{fluid} \approx 2.44\,R_p\left(\frac{\rho_p}{\rho_s}\right)^{1/3}"></div>
-    <div class="eq-sublabel">The gauge at the surface point under the planet</div>
+    <div class="eq-sublabel">The tide at the surface point under the planet</div>
     <div class="sci-eq" data-tex="a_\mathrm{tide} = \frac{2 G M_p r}{d^3} \quad\text{vs}\quad g = \frac{G m}{r^2}"></div>
-    <div class="eq-sublabel">Hill sphere of the bound mass</div>
+    <div class="eq-sublabel">Grip zone (Hill sphere) of the moon</div>
     <div class="sci-eq" data-tex="r_H = d\left(\frac{m}{3 M_p}\right)^{1/3}"></div>
-    <div class="eq-sublabel">Contacts: spring-dashpot, Coulomb friction, cohesion</div>
+    <div class="eq-sublabel">Contacts: spring-dashpot, Coulomb friction, cement</div>
     <div class="sci-eq" data-tex="F_n = k_n\delta - \gamma_n v_n,\quad |F_t| \le \mu\,(F_n + C)"></div>
   </div>
-
-  <div id="plotsHome"></div>
-
-  <div class="sec-label">About</div>
-  <div class="about">
-    <p>The satellite is a pile of grains that touch. Each grain feels the gravity of every other grain, the planet, and the push, friction and cement of the grains it touches. Nothing else holds the pile together, so the run, not a formula, decides if it survives.</p>
-    <p>Roche's limit compares two pulls at the satellite: the tide, the difference of the planet's gravity across the body, and the body's own gravity. A rigid sphere comes apart where the tide at its surface equals its surface gravity, at 1.26 R<sub>p</sub>(ρ<sub>p</sub>/ρ<sub>s</sub>)<sup>1/3</sup>. A fluid body stretches first, which makes the tide stronger, so it fails farther out, at 2.44. A real rubble pile has friction and some cement, so its limit falls between the two.</p>
-    <p>Inside the limit the satellite stretches along the line to the planet and sheds grains from its two tips (the Lagrange points L1 and L2). The grains go onto orbits a little faster or slower than the satellite, and the difference winds the stream into a ring. Outside the limit, shed grains fall back together: this is how the comet Shoemaker-Levy 9 became a string of fragments after Jupiter pulled it apart in 1992.</p>
-    <p>Method. N up to 32k grains in WebGPU compute. Contacts every step (spring-dashpot, a friction spring with a Coulomb cap, rolling resistance, cohesion), self-gravity by a direct sum every 32 steps with a linear extrapolation between sums, the planet as a point mass with J<sub>2</sub>, kick-drift-kick steps. tests.mjs checks the GPU forces against a CPU reference and checks the formulas against published values. The satellite is drawn larger than real moons (R<sub>s</sub>/R<sub>p</sub> = 0.12); the Roche limit does not depend on its size. The ring glow multiplies the optical depth of the few thousand shed grains by the gain above.</p>
+  <div class="card about">
+    <div class="ch"><span>Method</span></div>
+    <p>Up to 32k grains in WebGPU compute. Contacts every step (spring-dashpot, a friction spring with a Coulomb cap, rolling resistance, cement); self-gravity by a direct sum every 32 steps with a linear extrapolation between sums; the planet as a point mass with J<sub>2</sub>; kick-drift-kick steps. The spiral comes from a gentle drag on the orbit (tidal decay, much faster than in nature). Heat colour: the energy per kilogram that each grain’s collisions turn into heat (dashpots and sliding friction), fading with a time constant of 1/20 of an orbit.</p>
+    <p>The moon is drawn about twice Titan’s radius; the Roche limit does not depend on the moon’s size. tests.mjs checks the GPU forces against a CPU reference and the formulas against published values.</p>
+    <p class="credit">Saturn map: Solar System Scope (CC BY 4.0). Plasma colours: matplotlib (CC0). Ring radii: NASA. See CREDITS.txt.</p>
   </div>
-</div>
-
-<div id="status">
-  <span id="stMain" class="fn"></span>
-  <span class="right" id="stRight"></span>
-</div>
+</aside>
 
 <nav id="dock" aria-label="Quick controls">
-  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
   <button id="dockPlay" aria-label="Pause">❚❚</button>
-  <div class="seg" id="dockWarp"><button data-d="-1" aria-label="Slower">−</button><span id="dockWarpV">1×</span><button data-d="1" aria-label="Faster">+</button></div>
-  <button id="dockHeat" aria-label="Force field overlay">◎</button>
-  <button id="dockCam" aria-label="Camera">⌖</button>
+  <button id="dockStep" aria-label="One step">›</button>
+  <div class="seg" id="dockSpeed"><button data-d="-1" aria-label="Slower">−</button><span id="dockSpeedV"></span><button data-d="1" aria-label="Faster">+</button></div>
+  <button id="dockDisp" aria-label="Display">◐</button>
+  <button id="dockMore" aria-label="More">⋯</button>
 </nav>
+<div id="moreMenu" class="pop off"><button data-open="advanced">Advanced</button><button data-open="details">Details for physicists</button><button data-open="explain">What am I looking at?</button></div>
 
 <script type="module" src="main.js"></script>
 </body>

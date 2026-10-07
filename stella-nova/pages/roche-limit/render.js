@@ -69,13 +69,29 @@ export class Renderer {
     this.gridN = opts.gridN || 1024;
     this.sims = [];
     this.segCap = 0; this.segCount = 0;
-    this.camData = new Float32Array(96);
+    this.camData = new Float32Array(100);
     this.prevVp = null;
     this.ping = 0;
     this.W = 0; this.H = 0;
     this.modules = {};
     for (const [k, v] of Object.entries(code)) this.modules[k] = device.createShaderModule({ code: v, label: 'roche ' + k + '.wgsl' });
     this._make();
+  }
+  _makeBG0() {
+    this.bg0 = this.tau.map(t => this.dev.createBindGroup({ layout: this.bgl0, entries: [
+      { binding: 0, resource: { buffer: this.camBuf } }, { binding: 1, resource: t.createView() }, { binding: 2, resource: this.samp },
+      { binding: 3, resource: this.planetTex.createView() }] }));
+  }
+  // A planet map (planet.wgsl style 5): levels = [ImageBitmap, ...], level
+  // 0 the full size, each next level half the size. writeCam picks the mip
+  // level from the size of the disc on screen.
+  setPlanetTexture(levels) {
+    const dev = this.dev, T = GPUTextureUsage;
+    if (this.planetTex) this.planetTex.destroy();
+    this.planetTex = dev.createTexture({ size: [levels[0].width, levels[0].height], mipLevelCount: levels.length, format: 'rgba8unorm', usage: T.TEXTURE_BINDING | T.COPY_DST | T.RENDER_ATTACHMENT });
+    levels.forEach((b, i) => dev.queue.copyExternalImageToTexture({ source: b }, { texture: this.planetTex, mipLevel: i }, [b.width, b.height]));
+    this.planetTexW = levels[0].width; this.planetMips = levels.length;
+    this._makeBG0();
   }
   async compilationMessages() {
     const out = [];
@@ -85,8 +101,7 @@ export class Renderer {
   _make() {
     const dev = this.dev, U = GPUBufferUsage, T = GPUTextureUsage, S = GPUShaderStage;
     const ALL = S.VERTEX | S.FRAGMENT | S.COMPUTE;
-    this.camBuf = dev.createBuffer({ size: 384, usage: U.UNIFORM | U.COPY_DST });
-    this.samp = dev.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+    this.camBuf = dev.createBuffer({ size: 400, usage: U.UNIFORM | U.COPY_DST });
     const n = this.gridN;
     this.grid = dev.createBuffer({ size: n * n * 4, usage: U.STORAGE | U.COPY_DST });
     this.tau = [0, 1].map(() => dev.createTexture({ size: [n, n], format: 'rgba16float', usage: T.TEXTURE_BINDING | T.STORAGE_BINDING }));
@@ -94,17 +109,22 @@ export class Renderer {
       { binding: 0, visibility: ALL, buffer: { type: 'uniform' } },
       { binding: 1, visibility: ALL, texture: { sampleType: 'float' } },
       { binding: 2, visibility: ALL, sampler: { type: 'filtering' } },
+      { binding: 3, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
     ] });
-    this.bg0 = this.tau.map(t => dev.createBindGroup({ layout: this.bgl0, entries: [
-      { binding: 0, resource: { buffer: this.camBuf } }, { binding: 1, resource: t.createView() }, { binding: 2, resource: this.samp }] }));
+    this.planetTex = dev.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: T.TEXTURE_BINDING | T.COPY_DST });
+    // one sampler for the tau texture, the planet map and the post passes:
+    // clamp on both axes (the planet map seam is at most half a texel)
+    this.samp = dev.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+    this.sampClamp = this.samp;
+    this._makeBG0();
     const ro = { type: 'read-only-storage' };
     this.bglPart = dev.createBindGroupLayout({ entries: [
       { binding: 0, visibility: S.VERTEX, buffer: ro }, { binding: 1, visibility: S.VERTEX, buffer: ro },
       { binding: 2, visibility: S.VERTEX, buffer: ro }, { binding: 3, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 4, visibility: S.VERTEX, buffer: ro }] });
     this.bglSmooth = dev.createBindGroupLayout({ entries: [
-      { binding: 1, visibility: S.COMPUTE, buffer: ro }, { binding: 3, visibility: S.COMPUTE, buffer: { type: 'uniform' } },
-      { binding: 5, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
+      { binding: 3, visibility: S.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 5, visibility: S.COMPUTE, buffer: { type: 'storage' } }, { binding: 6, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
     this.bglSplat = dev.createBindGroupLayout({ entries: [
       { binding: 0, visibility: S.COMPUTE, buffer: ro }, { binding: 1, visibility: S.COMPUTE, buffer: ro },
       { binding: 2, visibility: S.COMPUTE, buffer: { type: 'uniform' } }, { binding: 3, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
@@ -169,7 +189,7 @@ export class Renderer {
     }
     this.bloomViews = this.bloom.map(t => t.createView());
     const mk = (buf, src, bl) => dev.createBindGroup({ layout: this.bglPost, entries: [
-      { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.samp }, { binding: 3, resource: (bl || this.dummy).createView() }] });
+      { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.sampClamp }, { binding: 3, resource: (bl || this.dummy).createView() }] });
     this.downBG = this.bloom.map((t, i) => mk(this.postBufs[i], i === 0 ? this.hdrTex : this.bloom[i - 1]));
     this.upBG = this.bloom.slice(0, -1).map((t, i) => mk(this.postBufs[BLOOM_LEVELS + i], this.bloom[i + 1]));
     this.finalBG = mk(this.postBufs[2 * BLOOM_LEVELS], this.hdrTex, this.bloom[0]);
@@ -180,16 +200,16 @@ export class Renderer {
     const e = { sim };
     e.tagBuf = dev.createBuffer({ size: sim.np * 4, usage: U.STORAGE | U.COPY_DST });
     dev.queue.writeBuffer(e.tagBuf, 0, new Float32Array(sim.np).fill(-1));
-    e.inst = dev.createBuffer({ size: 80, usage: U.UNIFORM | U.COPY_DST });
-    e.stress = dev.createBuffer({ size: sim.np * 4, usage: U.STORAGE });
+    e.inst = dev.createBuffer({ size: 96, usage: U.UNIFORM | U.COPY_DST });
+    e.stress = dev.createBuffer({ size: sim.np * 8, usage: U.STORAGE });
     e.fresh = true;   // the first smoothing pass takes the value as it is
     e.bgPart = dev.createBindGroup({ layout: this.bglPart, entries: [
       { binding: 0, resource: { buffer: sim.bufBody } }, { binding: 1, resource: { buffer: sim.bufDiag } },
       { binding: 2, resource: { buffer: e.tagBuf } }, { binding: 3, resource: { buffer: e.inst } },
       { binding: 4, resource: { buffer: e.stress } }] });
     e.bgSmooth = dev.createBindGroup({ layout: this.bglSmooth, entries: [
-      { binding: 1, resource: { buffer: sim.bufDiag } }, { binding: 3, resource: { buffer: e.inst } },
-      { binding: 5, resource: { buffer: e.stress } }] });
+      { binding: 3, resource: { buffer: e.inst } },
+      { binding: 5, resource: { buffer: e.stress } }, { binding: 6, resource: { buffer: sim.bufDiag } }] });
     e.bgSplat = dev.createBindGroup({ layout: this.bglSplat, entries: [
       { binding: 0, resource: { buffer: sim.bufBody } }, { binding: 1, resource: { buffer: e.tagBuf } },
       { binding: 2, resource: { buffer: e.inst } }, { binding: 3, resource: { buffer: this.grid } }] });
@@ -231,6 +251,10 @@ export class Renderer {
     d[84] = f.GMs || 0; d[85] = f.GMp || 0; d[86] = f.omega || 0; d[87] = f.phiL1 || 0;
     d[88] = f.fieldMode || 0; d[89] = f.fieldExt || 4; d[90] = f.fieldScale || 1; d[91] = f.fieldAlpha || 0;
     d[92] = f.ringExt; d[93] = this.gridN; d[94] = f.ringGain; d[95] = f.ringBlend;
+    // the planet map level: the texels per screen pixel across the disc
+    let lod = 0;
+    if (this.planetTexW) { const rpx = focal / Math.max(1e-3, Math.hypot(...f.eye)); lod = Math.max(0, Math.min(this.planetMips - 1, Math.log2(this.planetTexW / (Math.PI * 2 * rpx)))); }
+    d[96] = f.flattening || 0; d[97] = lod; d[98] = f.realRings || 0; d[99] = 0;
     // vp shift is in clip space; the shaders' px math assumes a centred
     // projection, so the shift must stay 0 for grains (main.js uses a
     // target offset for framing instead)
@@ -247,7 +271,8 @@ export class Renderer {
   }
   // One frame. f: camera and overlay state; sims: [{ e, frame:[x,y,z,k],
   // refV:[vx,vy,vz, sim time of one frame], opts:[mode, stressMix, bright,
-  // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing] }].
+  // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing,
+  // heat decay], heatInv: 1 / the reference collision heat }].
   // The stages of a frame, each encoded into enc. draws (optional) picks
   // the scene draws, for profiling: { sky, surface, part, disk, field,
   // lines, atmo }.
@@ -262,10 +287,11 @@ export class Renderer {
     const dev = this.dev;
     this.writeCam(f);
     for (const s of sims) {
-      const a = this._instData || (this._instData = new Float32Array(20));
-      const m = s.motion || [0, 0, 0.1, 0];
+      const a = this._instData || (this._instData = new Float32Array(24));
+      const m = s.motion || [0, 0, 0.1, 1];
       a.set(s.frame, 0); a.set(s.refV, 4); a.set(s.opts, 8); a.set(s.tint || [0.80, 0.88, 1.0, 1], 12);
-      a[16] = m[0]; a[17] = m[1]; a[18] = s.e.fresh ? 1 : m[2]; a[19] = 0;
+      a[16] = m[0]; a[17] = m[1]; a[18] = s.e.fresh ? 1 : m[2]; a[19] = s.e.fresh ? 0 : (m[3] ?? 1);
+      a[20] = s.heatInv || 1; a[21] = 0; a[22] = 0; a[23] = 0;
       s.e.fresh = false;
       dev.queue.writeBuffer(s.e.inst, 0, a);
     }
@@ -329,7 +355,8 @@ export class Renderer {
   }
   // One frame. f: camera and overlay state; sims: [{ e, frame:[x,y,z,k],
   // refV:[vx,vy,vz, sim time of one frame], opts:[mode, stressMix, bright,
-  // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing] }].
+  // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing,
+  // heat decay], heatInv: 1 / the reference collision heat }].
   render(f, sims) {
     this._uniforms(f, sims);
     const enc = this.dev.createCommandEncoder();

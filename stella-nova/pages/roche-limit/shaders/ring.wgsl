@@ -25,7 +25,14 @@ struct Cam {
   eye: vec4f, sun: vec4f, vpSize: vec4f,
   right: vec4f, up: vec4f, fwd: vec4f,
   planet: vec4f, misc: vec4f, sat: vec4f, sat2: vec4f, field: vec4f, ringExt: vec4f,
+  extra: vec4f,   // z: real-ring overlay on (Saturn), w unused
 };
+// today's rings of Saturn in planet radii: C, B, Cassini Division, A
+const RING_C0: f32 = 1.2388;
+const RING_B0: f32 = 1.5265;
+const RING_CD0: f32 = 1.9510;
+const RING_A0: f32 = 2.0271;
+const RING_A1: f32 = 2.2694;
 struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f };
 // ringExt: x half extent (world), y grid size, z display gain, w time blend
@@ -113,9 +120,14 @@ fn phase(c: f32) -> f32 { return 4.0 * 3.14159265 * (0.75 * hg(c, -0.3) + 0.25 *
 fn fs_disk(in: VOut) -> @location(0) vec4f {
   let uv = in.w.xy / (2.0 * cam.ringExt.x) + 0.5;
   let tau = textureSampleLevel(tauTex, linSamp, uv, 0.0).r;
-  if (tau < 2e-4) { discard; }
   let p = in.w;
   let r = length(p.xy);
+  // a faint picture of today's rings, for comparison (cam.extra.z)
+  var ghost = 0.0;
+  if (cam.extra.z > 0.0 && r > RING_C0 && r < RING_A1 && !(r > RING_CD0 && r < RING_A0)) {
+    ghost = select(0.016, select(0.03, 0.022, r > RING_A0), r > RING_B0 && r < RING_CD0) * cam.extra.z;
+  }
+  if (tau < 2e-4 && ghost <= 0.0) { discard; }
   if (r < 1.0) { discard; }
   let L = cam.sun.xyz;
   let V = normalize(cam.eye.xyz - p);
@@ -139,9 +151,10 @@ fn fs_disk(in: VOut) -> @location(0) vec4f {
   // themselves are large on screen it fades out (cam.misc.w: grain radius)
   let rpx = cam.misc.w * cam.misc.x / max(length(cam.eye.xyz - p), 1e-4);
   let wgt = smoothstep(2.5, 0.6, rpx);
-  if (wgt <= 0.0) { discard; }
+  if (wgt <= 0.0 && ghost <= 0.0) { discard; }
   let alpha = (1.0 - exp(-tau / mu)) * wgt;
   let tint = mix(vec3f(0.80, 0.72, 0.60), vec3f(0.92, 0.88, 0.82), smoothstep(0.0, 0.6, tau));
   let col = tint * I * sh * cam.sun.w * 0.55 * wgt + tint * alpha * 0.004;
-  return vec4f(col, alpha * 0.7);
+  let gcol = vec3f(0.62, 0.70, 0.86) * ghost * cam.sun.w * sh;
+  return vec4f(col + gcol, alpha * 0.7 + ghost * 0.5);
 }

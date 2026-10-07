@@ -14,7 +14,10 @@
 //                through the shell, lit by the sun with a red sunset edge.
 //                Depth test only, at the entry point of the ray, so grains
 //                behind the thin limb glow through it.
-//  Styles (cam.planet.z): 0 ice giant, 1 Saturn, 2 Jupiter, 3 Mars, 4 Earth.
+//  Styles (cam.planet.z): 0 ice giant, 1 Saturn, 2 Jupiter, 3 Mars, 4 Earth,
+//  5 a texture map (planetTex, equirectangular; Saturn in the default
+//  story). The planet is an oblate spheroid with flattening cam.extra.x:
+//  each ray is intersected in a space stretched along z (fn hitPlanet).
 //
 //  grep -n targets: "fn rayDir", "fn fbm", "fn albedo", "fn fs_surface",
 //  "fn fs_atmo", "fn fs_sky"
@@ -25,10 +28,12 @@ struct Cam {
   eye: vec4f, sun: vec4f, vpSize: vec4f,
   right: vec4f, up: vec4f, fwd: vec4f,
   planet: vec4f, misc: vec4f, sat: vec4f, sat2: vec4f, field: vec4f, ringExt: vec4f,
+  extra: vec4f,   // x flattening of the planet, y texture mip level (style 5), z real-ring overlay
 };
 @group(0) @binding(0) var<uniform> cam: Cam;
 @group(0) @binding(1) var tauTex: texture_2d<f32>;
 @group(0) @binding(2) var linSamp: sampler;
+@group(0) @binding(3) var planetTex: texture_2d<f32>;
 
 struct VOut { @builtin(position) pos: vec4f };
 @vertex
@@ -54,6 +59,20 @@ fn hitSphere(o: vec3f, d: vec3f, r: f32) -> vec2f {
   if (h < 0.0) { return vec2f(1.0, -1.0); }
   let s = sqrt(h);
   return vec2f(-b - s, -b + s);
+}
+
+// A ray against the spheroid x^2 + y^2 + (z/c)^2 = r^2, c = 1 - flattening:
+// the hit in a space stretched along z, mapped back to the ray parameter.
+fn hitPlanet(o: vec3f, d: vec3f, r: f32) -> vec2f {
+  let c = 1.0 - cam.extra.x;
+  let ds = vec3f(d.x, d.y, d.z / c);
+  let l = length(ds);
+  let h = hitSphere(vec3f(o.x, o.y, o.z / c), ds / l, r);
+  return h / l;
+}
+fn planetNormal(p: vec3f) -> vec3f {
+  let c = 1.0 - cam.extra.x;
+  return normalize(vec3f(p.x, p.y, p.z / (c * c)));
 }
 
 // ── noise ───────────────────────────────────────────────────────────────────
@@ -100,6 +119,15 @@ fn albedo(nW: vec3f) -> vec3f {
   let n = vec3f(ca * nW.x + sa * nW.y, -sa * nW.x + ca * nW.y, nW.z);
   let lat = asin(clamp(n.z, -1.0, 1.0));
   let style = i32(cam.planet.z + 0.5);
+  if (style == 5) {
+    let uv = vec2f(0.5 + atan2(n.y, n.x) / 6.2831853, 0.5 - lat / 3.14159265);
+    // the map is sRGB in an rgba8unorm texture, and its rows only span
+    // about 0.58 to 1.0 (the equator near white). Stretch 0.4..1 to 0..1 in
+    // sRGB, then decode to linear; sampled as is, the disc reads flat white.
+    let c = textureSampleLevel(planetTex, linSamp, uv, cam.extra.y).rgb;
+    let k = clamp((c - vec3f(0.4)) / 0.6, vec3f(0.0), vec3f(1.0));
+    return pow(k, vec3f(2.2)) * 0.8;
+  }
   let w = fbm(n * vec3f(2.0, 2.0, 7.0)) - 0.5;
   let fine = fbm(n * 14.0 + vec3f(w * 3.0));
   if (style == 1) {
@@ -134,7 +162,7 @@ fn albedo(nW: vec3f) -> vec3f {
 }
 fn atmColor() -> vec3f {
   let style = i32(cam.planet.z + 0.5);
-  if (style == 1) { return vec3f(0.95, 0.80, 0.55); }
+  if (style == 1 || style == 5) { return vec3f(0.95, 0.82, 0.58); }
   if (style == 2) { return vec3f(0.85, 0.75, 0.62); }
   if (style == 3) { return vec3f(0.90, 0.55, 0.40); }
   if (style == 4) { return vec3f(0.35, 0.60, 1.00); }
@@ -148,11 +176,11 @@ fn fs_surface(in: VOut) -> FOut {
   var o: FOut;
   let d = rayDir(in.pos.xy);
   let e = cam.eye.xyz;
-  let h = hitSphere(e, d, 1.0);
+  let h = hitPlanet(e, d, 1.0);
   if (h.x > h.y || h.y < 0.0) { discard; }
   let t = max(h.x, 0.0);
   let p = e + t * d;
-  let n = normalize(p);
+  let n = planetNormal(p);
   let L = cam.sun.xyz;
   let ndl = dot(n, L);
   let lit = clamp(ndl * 0.92 + 0.08, 0.0, 1.0) * smoothstep(-0.10, 0.12, ndl);
@@ -191,16 +219,16 @@ fn fs_atmo(in: VOut) -> FOut {
   let d = rayDir(in.pos.xy);
   let e = cam.eye.xyz;
   let Ra = 1.0 + cam.planet.x;
-  let ha = hitSphere(e, d, Ra);
+  let ha = hitPlanet(e, d, Ra);
   if (ha.x > ha.y || ha.y < 0.0) { discard; }
   let t0 = max(ha.x, 0.0);
   var t1 = ha.y;
-  let hp = hitSphere(e, d, 1.0);
+  let hp = hitPlanet(e, d, 1.0);
   if (hp.x <= hp.y && hp.x > 0.0) { t1 = hp.x; }
   // closest approach to the centre along the ray segment
   let tc = clamp(-dot(e, d), t0, t1);
   let pc = e + tc * d;
-  let b = length(pc);
+  let b = length(vec3f(pc.x, pc.y, pc.z / (1.0 - cam.extra.x)));
   let H = cam.planet.x * 0.33;
   let dens = exp(-(max(b, 1.0) - 1.0) / H);
   let chord = (t1 - t0) / cam.planet.x;

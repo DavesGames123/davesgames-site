@@ -22,7 +22,8 @@
 //    grav    g (self-gravity accel, potential) · gp (g of the block before)
 //    ledger  xyz: angular momentum of grains that hit the planet,
 //            w: work of contacts minus the energy of grains that hit
-//    diag    |tide| · |self g| · contact pressure · contact count
+//    diag    |tide| · |self g| · collision heat (energy per mass, summed
+//            until the renderer reads it) · contact count
 //    nbr     NB slots per grain, then np counts; xi: tangential springs
 //    gcount, gitems   the hashed grid, CAP grains per bucket; gcount[H]
 //            counts the grains that found their bucket full, gcount[H+1]
@@ -144,6 +145,7 @@ fn cs_forces(@builtin(global_invocation_id) gid: vec3u) {
   var f = vec3f(0.0);
   var t = vec3f(0.0);
   var pn = 0.0;
+  var heat = 0.0;   // power taken by the dashpots and by sliding friction
   var nc = 0.0;
   let reach = select(0.0, P.cohGap, P.coh > 0.0);
   let cnt = min(nbrA[P.np * NB + i], NB);
@@ -177,6 +179,7 @@ fn cs_forces(@builtin(global_invocation_id) gid: vec3u) {
       let vn = dot(vrel, n);
       let vt = vrel - vn * n;
       let Fn = max(0.0, P.kn * (-gap) - P.gnK * sm * vn);
+      if (Fn > 0.0) { heat = heat + P.gnK * sm * vn * vn; }
       F = Fn * n;
       pn = pn + Fn;
       nc = nc + 1.0;
@@ -191,12 +194,14 @@ fn cs_forces(@builtin(global_invocation_id) gid: vec3u) {
         let fm = length(ft);
         let cap = P.mu * (Fn + coh);
         if (fm > cap) {
+          heat = heat + cap * length(vt);
           ft = ft * (cap / fm);
           // sliding: the spring holds the elastic part of the capped force
           // only, not the dashpot part (Luding 2008), so it stores no
           // energy that the dashpot took
           sp = -(ft + P.gtK * sm * vt) / P.kt;
         }
+        else { heat = heat + P.gtK * sm * dot(vt, vt); }
         xiA[q] = vec4f(sp, 0.0);
         F = F + ft;
         t = t - ai * cross(n, ft);
@@ -225,7 +230,11 @@ fn cs_forces(@builtin(global_invocation_id) gid: vec3u) {
   ledger[i].w = ledger[i].w + 0.5 * pw * S.dt;
   let iI = 1.0 / (0.4 * mi * ri * ri);
   accs[i] = Acc(vec4f(a, 0.0), vec4f(t * iI, 0.0), vec4f(f, 0.0), vec4f(t, 0.0));
-  diag[i] = vec4f(length(td), length(g.g.xyz), pn / (4.0 * PI * ri * ri), nc);
+  // diag.z: energy per unit mass taken by collisions since the renderer
+  // last read it (particles.wgsl cs_smooth reads it and sets it to 0);
+  // each grain of a pair counts half the pair's power
+  let heatAcc = diag[i].z + 0.5 * heat / mi * S.dt;
+  diag[i] = vec4f(length(td), length(g.g.xyz), heatAcc, nc);
 }
 
 // ── self-gravity: direct sum ────────────────────────────────────────────────

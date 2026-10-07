@@ -1,0 +1,25 @@
+Roche limit page (stella-nova/pages/roche-limit) — credits
+
+tex/saturn_2k.jpg
+  Saturn surface map, 2048 x 1024, equirectangular.
+  Solar System Scope, https://www.solarsystemscope.com/textures/
+  Licence: Creative Commons Attribution 4.0 International (CC BY 4.0),
+  https://creativecommons.org/licenses/by/4.0/
+  Unchanged copy of 2k_saturn.jpg (downloaded 2026-10-06). The page makes
+  smaller mip levels of it at run time.
+
+Plasma colour map (shaders/particles.wgsl fn plasma)
+  A polynomial fit of matplotlib's "plasma" colour map (matplotlib colour
+  maps by Nathaniel Smith and Stefan van der Walt, CC0), fit by Matt Zucker
+  (shadertoy "Matplotlib colormaps", CC0).
+
+Ring radii (scenarios.js SATURN_RINGS)
+  NASA Saturnian Rings Fact Sheet (public domain).
+
+Science
+  Roche limit coefficients: E. Roche (1849); S. Chandrasekhar (1969).
+  Ring-origin hypotheses quoted in the page text: R. M. Canup, "Origin of
+  Saturn's rings and inner moons by mass removal from a lost Titan-sized
+  satellite", Nature 468, 943 (2010); J. Wisdom et al., "Loss of a
+  satellite could explain Saturn's obliquity and young rings" (the
+  "Chrysalis" hypothesis), Science 377, 1285 (2022).

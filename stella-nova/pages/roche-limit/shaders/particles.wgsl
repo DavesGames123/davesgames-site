@@ -22,7 +22,7 @@
 //  |tide| / |self-gravity| per grain, from the force kernel's diag).
 //
 //  grep -n targets: "fn vs_main", "fn fs_main", "fn sunShadow", "fn heat",
-//  "fn cs_smooth"
+//  "fn cs_smooth", "fn plasma"
 // ============================================================================
 
 struct Cam {
@@ -36,8 +36,11 @@ struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 // sim time) and the blur time; opts: colour mode, stress mix, brightness,
 // scale of the vesc for the speed colours; tint: shed-ice colour.
 // motion: x 1 = draw streaks, y the screen motion (px per frame) above
-// which a grain dims (anti-strobe, 0 = off), z the stress smoothing factor
-struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f };
+// which a grain dims (anti-strobe, 0 = off), z the stress smoothing factor,
+// w the heat decay factor of this frame, exp(-dt_frame / tau)
+// heatP: x 1 / reference heat (energy per mass), the colour runs over
+// log10(heat x) in [-3, 1]
+struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f, heatP: vec4f };
 
 @group(0) @binding(0) var<uniform> cam: Cam;
 @group(0) @binding(1) var tauTex: texture_2d<f32>;
@@ -48,17 +51,38 @@ struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f
 @group(1) @binding(3) var<uniform> inst: Inst;
 // the tidal stress of each grain, smoothed in time (cs_smooth writes it,
 // the vertex stage reads it), so the heatmap colours do not flicker
-@group(1) @binding(4) var<storage, read> stressS: array<f32>;
-@group(1) @binding(5) var<storage, read_write> stressW: array<f32>;
+@group(1) @binding(4) var<storage, read> stressS: array<vec2f>;
+@group(1) @binding(5) var<storage, read_write> stressW: array<vec2f>;
+@group(1) @binding(6) var<storage, read_write> diagW: array<vec4f>;
 
+// x: the tidal stress, smoothed in time. y: the collision heat, energy per
+// unit mass that decays with time constant tau (exp(-dt/tau) in motion.w),
+// fed by what cs_forces summed since the last frame. Both read by the
+// vertex stage, so the colours never flicker.
 @compute @workgroup_size(64)
 fn cs_smooth(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
   if (i >= arrayLength(&stressW)) { return; }
-  let dg = diag[i];
+  let dg = diagW[i];
   let ratio = dg.x / max(dg.y, 1e-12);
   let st = clamp((log(max(ratio, 1e-6)) / 2.302585 + 1.5) / 3.0, 0.0, 1.0);
-  stressW[i] = mix(stressW[i], st, inst.motion.z);
+  let o = stressW[i];
+  stressW[i] = vec2f(mix(o.x, st, inst.motion.z), o.y * inst.motion.w + dg.z);
+  diagW[i].z = 0.0;
+}
+
+// matplotlib "plasma" as a polynomial fit (CC0, Matt Zucker's fit of the
+// matplotlib colormaps): dark purple, magenta, orange, yellow
+fn plasma(t0: f32) -> vec3f {
+  let t = clamp(t0, 0.0, 1.0);
+  let c0 = vec3f(0.05873234392399702, 0.02333670892565664, 0.5433401826748754);
+  let c1 = vec3f(2.176514634195958, 0.2383834171260182, 0.7539604599784036);
+  let c2 = vec3f(-2.689460476458034, -7.455851135738909, 3.110799939717086);
+  let c3 = vec3f(6.130348345893603, 42.3461881477227, -28.51885465332158);
+  let c4 = vec3f(-11.10743619062271, -82.66631109428045, 60.13984767418263);
+  let c5 = vec3f(10.02306557647065, 71.41361770095349, -54.07218655560067);
+  let c6 = vec3f(-3.658713842777788, -22.93153465461149, 18.19190778539828);
+  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), vec3f(0.0), vec3f(1.0));
 }
 
 struct VOut {
@@ -186,9 +210,21 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
     alb = cool(log2(1.0 + 4.0 * s) / log2(9.0));
     em = alb * 0.15;
   }
-  let st = stressS[ii];
+  let sh = stressS[ii];
+  let st = sh.x;
+  let hn = clamp((log(max(sh.y * inst.heatP.x, 1e-9)) / 2.302585 + 3.0) / 4.0, 0.0, 1.0);
+  if (mode > 2.5 && mode < 3.5) {
+    // heat: plasma colour of the collision heat
+    let pc = plasma(hn);
+    alb = pc * 0.55;
+    em = pc * (0.08 + 1.1 * hn * hn);
+  } else if (mode > 3.5) {
+    // ice and heat: icy grains; the ones that collide glow in plasma
+    alb = vec3f(0.80, 0.86, 0.95) * (0.85 + 0.3 * hash11(fi + 3.3));
+    em = plasma(hn) * (1.3 * pow(smoothstep(0.3, 1.0, hn), 1.5));
+  }
   let hcol = heat(st);
-  let mixS = select(inst.opts.y, 1.0, mode > 1.5);
+  let mixS = select(inst.opts.y, 1.0, mode > 1.5 && mode < 2.5);
   alb = mix(alb, hcol * 0.85, mixS);
   em = mix(em, hcol * (0.25 + 1.6 * st * st), mixS);
   o.color = alb * inst.opts.z * fade;
