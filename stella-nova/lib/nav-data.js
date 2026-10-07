@@ -310,7 +310,8 @@ w.SN_NAV = [
       ["line-art", "Line Art", "RUST"]
     ] },
     { h: "Image to 3D", p: [
-      ["img2threejs", "Image to Three.js", "3D"]
+      ["img2threejs", "Image to Three.js", "3D"],
+      ["image-worlds", "Image Worlds", "3D"]
     ] }
   ] }
 ] },
