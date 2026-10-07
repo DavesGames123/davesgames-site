@@ -206,6 +206,8 @@ vec3 biome(float latd, float z, float inland, float n, out float ice) {
   float wet = 0.85 * exp(-sq(al / 11.0)) + 0.55 * exp(-sq((al - 52.0) / 13.0)) + 0.28;
   wet -= 0.55 * exp(-sq((al - 25.0) / 8.0));
   wet -= inland / 3600.0;
+  // warm poles (greenhouse worlds) were wet enough for polar forests
+  wet += 0.4 * smoothstep(0.0, 14.0, T) * smoothstep(55.0, 75.0, al);
   wet += (n - 0.5) * 0.25;
   wet = clamp(wet, 0.0, 1.0);
   vec3 rock = mix(vec3(0.14, 0.10, 0.075), vec3(0.24, 0.18, 0.13), n);        // bare rock and soil
@@ -242,6 +244,20 @@ void main() {
   float latd = degrees(lat), lond = degrees(lon);
   vec2 uv = vec2((lond + 180.0 + 0.5) / 360.0, (latd + 90.0 + 0.5) / 181.0);
   vec2 zs = sampleZ(uv);
+  // Toward a pole the 1 deg columns get narrow, and the grid (and the
+  // PaleoDEMs, which were regridded there) shows as radial streaks. Average
+  // along the parallel over about the cell height (1/cos(lat) columns),
+  // and over the whole ring at the pole itself.
+  float cl = cos(lat);
+  if (cl < 0.55) {
+    float du = min(0.5, (1.0 / max(cl, 0.002) - 1.0) / 360.0);
+    vec2 acc = zs;
+    for (int k = 1; k <= 3; k++) {
+      float o = du * float(k) / 3.0;
+      acc += sampleZ(vec2(uv.x + o, uv.y)) + sampleZ(vec2(uv.x - o, uv.y));
+    }
+    zs = mix(zs, acc / 7.0, smoothstep(0.55, 0.35, cl));
+  }
   float z = zs.x, inland = zs.y;
   // small-scale relief and coast detail (fbm), weaker where the screen is coarse
   float n1 = fbm(p * 38.0, uQuality > 0.5 ? 5 : 3);
@@ -276,7 +292,7 @@ void main() {
     // ── realistic ────────────────────────────────────────────────────────
     float ice;
     vec3 alb;
-    float n3 = 0.6 * fbm(p * 9.0 + 5.0, 3) + 0.4 * vnoise(p * 70.0);
+    float n3 = 0.6 * fbm(p * 9.0 + 5.0, 3) + 0.4 * fbm(p * 31.0 + 2.0, 2);
     if (land) {
       alb = biome(latd, zl, inland, n3, ice);
       alb = mix(alb, vec3(0.80, 0.84, 0.88), ice);
