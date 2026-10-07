@@ -35,8 +35,7 @@
 //    fieldAt ............ E, H and A/mu at one point (complex, 18 numbers)
 //    farIntensity ....... radiation intensity U in one direction
 //    patternStats ....... P_rad, D, max direction, HPBW, F/B
-//    patternCut ......... U along a great circle (polar plots)
-//    patternGrid ........ U on a theta x phi grid (3D lobe)
+//    patternCut ......... U along a great circle (the pattern cut)
 //    solveWires ......... PWS Galerkin MoM for parallel z-directed wires
 //    dipoleZsin ......... induced-EMF impedance of a sinusoidal dipole
 //    mutualZsin ......... induced-EMF mutual impedance, parallel dipoles
@@ -253,19 +252,6 @@ export function patternCut(L, p, q, n) {
   }
   return out;
 }
-// U on a grid: theta 0..pi (nt + 1 rows), phi 0..2pi (np + 1 columns).
-export function patternGrid(L, nt, np) {
-  const out = new Float32Array((nt + 1) * (np + 1));
-  for (let i = 0; i <= nt; i++) {
-    const th = Math.PI * i / nt, st = Math.sin(th), ct = Math.cos(th);
-    for (let j = 0; j <= np; j++) {
-      const ph = 2 * Math.PI * j / np;
-      out[i * (np + 1) + j] = j === np ? out[i * (np + 1)] : farIntensity(L, st * Math.cos(ph), st * Math.sin(ph), ct);
-    }
-  }
-  return out;
-}
-
 // ── PWS kernel integral ─────────────────────────────────────────────────────
 // Integral over [z0, z1] of sin(k sg (z - zb)) e^{-jkR}/R dz with
 // R = sqrt((z - zp)^2 + c^2). z - zp = c sinh t gives dz/R = dt, so the
