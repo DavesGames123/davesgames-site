@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Ulam Spiral — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ULAM SPIRAL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws the numbers into the WebGL2 canvas
+   (#gl) and the labels, lines and markers into #ov. The primes come from a
+   segmented sieve in worker.js; numbers past the sieve get Miller-Rabin
+   tiles from the same worker.
+
+   MODULES
+     numtheory.js  sieve, Miller-Rabin, factors, li(x), Bateman-Horn C(f)
+     layouts.js    the 22 shapes: n <-> position in closed form
+     diagonals.js  prime-rich half-lines and their quadratics
+     glsl.js       the GLSL twins of layouts.js and of the classes
+     render.js     the WebGL2 passes (field, points, path, bloom)
+     worker.js     sieve, arithmetic bytes, CPU tiles
+     main.js       state, camera, input, overlay, panel, readouts
+     saver.js      the screensaver director (window.snSaver)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #gl        the numbers;  #ov  labels, diagonals, cursor ring
+     #panel     shape gallery, highlight, quadratic, drawing, navigate,
+                prime count, sieve, about. Desktop: a drawer on the left.
+     #readout   the number under the cursor (or the centre on a phone)
+     #mini      the minimap; click or drag to move
+     #status    shape · highlight · region · sieve
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      panel, shapes, highlight, walk, home: one tap each
+     #panel     portrait: a bottom sheet above the dock (#sheetGrip: half
+                or full height). Landscape: a drawer on the right.
+     main.js "function occlusion" measures the overlays and centres the
+     spiral in the part of the canvas that stays clear.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The Ulam spiral and 21 more ways to lay out the integers: watch the primes form lines, find the quadratics behind them, and fly from single labelled cells to millions of numbers.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Ulam spiral</div>
+</div>
+
+<canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
+<div id="nogl" hidden>This page needs WebGL2.</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<aside id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+  <h1 class="ptitle">Ulam spiral</h1>
+  <p class="lede">Write the integers in a square spiral and mark the primes. They are not random: they line up on diagonals, and each diagonal is a quadratic. Pick a shape, pick what to mark, and zoom from one number to millions.</p>
+
+  <div class="sec-label">Shape <span class="sec-sub" id="shapeName"></span></div>
+  <div id="gallery" class="gallery" role="listbox" aria-label="Shapes"></div>
+  <div class="hint" id="shapeNote"></div>
+  <div id="shapeParams"></div>
+  <label class="sw"><input type="checkbox" id="morphOn" checked><span>Fly the numbers to the new shape</span></label>
+
+  <div class="sec-label">Highlight</div>
+  <div id="modes" class="chips"></div>
+  <div class="hint" id="modeNote"></div>
+  <div id="legend" class="legend"></div>
+
+  <div class="sec-label">Quadratic</div>
+  <div class="quad">
+    <label class="sw"><input type="checkbox" id="quadOn"><span>Light up f(n) = </span></label>
+    <div class="quadin"><input id="qa" type="number" value="1" step="1" aria-label="a"><i>n² +</i><input id="qb" type="number" value="1" step="1" aria-label="b"><i>n +</i><input id="qc" type="number" value="41" step="1" aria-label="c"></div>
+  </div>
+  <div class="presets" id="quadPresets"></div>
+  <table class="readout" id="quadRead"></table>
+  <div class="hint">Expected: the Bateman–Horn conjecture (Hardy–Littlewood conjecture F) gives C(f) · Σ 1/ln f(n), where C(f) = ∏ (1 − ω(p)/p)/(1 − 1/p) over the primes and ω(p) counts the roots of f mod p.</div>
+
+  <div class="sec-label">Drawing</div>
+  <div class="seg" id="styleSeg"><button data-v="0">Cell</button><button data-v="1">Dot</button><button data-v="2">Glow</button><button data-v="3">Soft</button></div>
+  <div class="swatches" id="palettes" aria-label="Colour map"></div>
+  <div class="swatches bgs" id="bgs" aria-label="Background"></div>
+  <div class="row"><label>Dot size</label><input type="range" id="dotR" min="0.12" max="0.5" step="0.01" value="0.36"><span class="val" id="dotRV"></span></div>
+  <div class="row"><label>Composites</label><input type="range" id="compA" min="0" max="0.4" step="0.01" value="0.06"><span class="val" id="compAV"></span></div>
+  <div class="row"><label>Glow</label><input type="range" id="bloom" min="0" max="2" step="0.05" value="0.9"><span class="val" id="bloomV"></span></div>
+  <div class="toggles">
+    <label class="sw"><input type="checkbox" id="labelsOn" checked><span>Numbers when zoomed in</span></label>
+    <label class="sw"><input type="checkbox" id="pathOn"><span>Connected path</span></label>
+    <label class="sw"><input type="checkbox" id="diagOn"><span>Mark the densest diagonals</span></label>
+    <label class="sw"><input type="checkbox" id="miniOn" checked><span>Minimap</span></label>
+  </div>
+
+  <div class="sec-label">Navigate</div>
+  <div class="goto"><input id="gotoN" type="text" inputmode="numeric" placeholder="Go to a number, e.g. 1e12+39" aria-label="Go to number"><button id="gotoBtn">Go</button></div>
+  <div class="modes">
+    <button id="walkBtn">Walk the spiral</button>
+    <button id="homeBtn">Home</button>
+  </div>
+  <div class="row"><label>Walk speed</label><input type="range" id="walkRate" min="0.2" max="3" step="0.05" value="1"><span class="val" id="walkRateV"></span></div>
+
+  <div class="sec-label">Prime count</div>
+  <table class="readout" id="piRead"></table>
+  <div class="hint">N is the largest number on the screen. π(N) is exact from the sieve; li(N) = ∫₂ᴺ dt/ln t is the far better estimate.</div>
+
+  <div class="sec-label">Sieve</div>
+  <div class="seg" id="limitSeg"><button data-v="10000000">10⁷</button><button data-v="100000000">10⁸</button><button data-v="1000000000">10⁹</button></div>
+  <div class="bar"><i id="sieveBar"></i></div>
+  <div class="hint" id="sieveNote"></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>Stanisław Ulam drew the spiral in 1963, bored in a meeting. Each diagonal half-line of the spiral is a quadratic 4m² + bm + c; some quadratics give far more primes than others, and the Bateman–Horn constant C(f) predicts how many.</p>
+    <p>The page sieves the odd numbers to 10⁸ (or 10⁹) in a worker. Past that it tests each number with Miller–Rabin (deterministic bases), so you can fly over 10¹² and beyond. Every shape maps n to its place and back in closed form, so any region draws at once.</p>
+  </div>
+</aside>
+
+<div id="readout" class="card" aria-live="polite"></div>
+<canvas id="mini" width="160" height="160" aria-label="Minimap"></canvas>
+
+<div id="dock">
+  <button id="dockPanel" aria-label="Controls">☰</button>
+  <button id="dockShapes" class="wide">Shapes</button>
+  <button id="dockMode" class="wide">Primes</button>
+  <button id="dockWalk" aria-label="Walk">▶</button>
+  <button id="dockHome" aria-label="Home">⌂</button>
+</div>
+
+<div id="status"><span id="stShape"></span><span class="right" id="stRight"></span></div>
+<div id="toast"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
