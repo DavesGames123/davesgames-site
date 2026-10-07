@@ -123,7 +123,7 @@ const GAME_STARS = [
   { href: '#media', label: 'Gameplay', sub: 'Video and screenshots' },
   { href: '#download', label: 'Download the demo', sub: 'Windows and macOS' },
   { href: '#report', label: 'Report a bug', sub: 'Straight to the dev' },
-  { href: 'https://store.steampowered.com/app/4474070/Stella_Nova/', label: 'Steam', sub: 'Wishlist and demo', ext: true },
+  { href: 'https://store.steampowered.com/app/4474070/Stella_Nova/?utm_source=davesgames.io&utm_medium=home&utm_campaign=site&utm_content=sectors', label: 'Steam', sub: 'Wishlist and demo', ext: true },
   { href: 'https://discord.gg/SkJDmnRmdJ', label: 'Discord', sub: 'Talk to Dave', ext: true },
 ];
 
