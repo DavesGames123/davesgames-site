@@ -119,12 +119,15 @@ export function installSaver(ctxIn) {
   // The art card in css px: the clear band, with side margins.
   // Before the plate has text, plateBand() is null: the first shots use a
   // guess of the band the plate will leave (measured at 1280 x 800: top
-  // text to 38% of the height, bottom text from 66%). With no shell at
+  // text to 38% of the height, bottom text from 66%; in portrait the
+  // plate leaves 26% to 90%). With no shell at
   // all, the band stays at that guess. The card is at most 1.6 times as
   // wide as it is high: a design fills the height, not a wide white strip.
   function cardOf() {
     const b = V.band;
-    const t = b ? b.t : innerHeight * (V.inShell ? 0.385 : 0.12), bb = b ? b.b : innerHeight * (V.inShell ? 0.35 : 0.12);
+    const port = innerHeight > innerWidth;   // measured at 390 x 844: 26% and 10%
+    const t = b ? b.t : innerHeight * (V.inShell ? (port ? 0.26 : 0.385) : 0.12),
+      bb = b ? b.b : innerHeight * (V.inShell ? (port ? 0.1 : 0.35) : 0.12);
     const h = Math.max(100, innerHeight - t - bb);
     const w = Math.min(innerWidth * 0.92, h * 1.6);
     return { x: (innerWidth - w) / 2, y: t, w, h };
@@ -189,7 +192,7 @@ export function installSaver(ctxIn) {
   // ── label ─────────────────────────────────────────────────────────────────
   function labelFor(shot) {
     const d = shot.d, code = varToString(shot.variation);
-    const lines = [`Variation ${code} · ${shot.shapes.toLocaleString('en-US')} shapes` + (d.tiled ? ' · tiled' : '') + (d.anim ? ` · ${d.anim} frames` : '')];
+    const lines = [`Variation ${code} · ${shot.shapes.toLocaleString('en-US')} shapes` + (d.tiled ? ' · tiled' : '') + (d.anim ? ` · ${shot.frames.filter(Boolean).length} frames` : '')];
     lines.push(d.note);
     return {
       title: d.title,
