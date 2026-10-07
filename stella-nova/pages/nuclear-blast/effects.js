@@ -378,14 +378,16 @@ export function falloutContour(level, W, vms) {
   return { d: v('d') * F, w: v('w') / 2, g: v('g') / 2 };
 }
 // Is ground point (x downwind, y crosswind, metres from ground zero) inside
-// the contour C? Upwind: a half-circle of radius g (G&D 9.93). Downwind: a
-// cigar from the half-width g at ground zero to a point at d, with its
-// widest half-width w at about 0.45 d.
+// the contour C? Upwind: a half-circle of radius g (G&D 9.93). Downwind:
+// the half-width grows from g at ground zero to w at 0.35 d, then the
+// contour closes as a half-ellipse at d (the cigar of G&D Fig. 9.93).
 export function inContour(x, y, C) {
   if (x <= 0) return x * x + y * y <= C.g * C.g;
   if (x >= C.d) return false;
-  const u = x / C.d, bump = Math.sin(Math.PI * Math.min(1, u / 0.9)) ** 0.8;
-  const hw = Math.max(C.g * (1 - u) ** 0.5, C.w * bump);
+  const u = x / C.d;
+  let hw;
+  if (u < 0.35) { const s = u / 0.35; hw = C.g + (C.w - C.g) * s * s * (3 - 2 * s); }
+  else { const v = (u - 0.35) / 0.65; hw = C.w * Math.sqrt(Math.max(0, 1 - v * v)); }
   return Math.abs(y) <= hw;
 }
 // H+1 reference dose rate (rad/hr) at a ground point; x along the wind.

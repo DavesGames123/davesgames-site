@@ -53,8 +53,14 @@ float fbIrr(vec3 P){ vec3 d = uFbPos - P; float r2 = max(dot(d, d), 1.0); return
 export const FOG = /* glsl */`
 uniform vec3 uFogCol; uniform float uFogDen; uniform vec3 uFogFlash; uniform float uExpo;
 vec3 outCol(vec3 c){ return min(c * uExpo, vec3(10.0)); }
+// The haze thins with height (scale height 2.5 km), so the path from a
+// high camera down to the ground crosses less of it: the mean density on
+// the straight path is H (e^(-y1/H) - e^(-y2/H)) / (y2 - y1).
 vec3 fogMix(vec3 col, vec3 P, vec3 cam){
-  float d = length(P - cam), f = 1.0 - exp(-pow(d * uFogDen, 1.25));
+  float d = length(P - cam), H = 2500.0;
+  float y1 = max(min(P.y, cam.y), 0.0), y2 = max(max(P.y, cam.y), 0.0), dy = y2 - y1;
+  float rho = dy > 1.0 ? H * (exp(-y1 / H) - exp(-y2 / H)) / dy : exp(-y1 / H);
+  float f = 1.0 - exp(-pow(d * rho * uFogDen, 1.25));
   return mix(col, uFogCol + uFogFlash, clamp(f, 0.0, 1.0));
 }
 `;
