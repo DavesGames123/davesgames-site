@@ -17,6 +17,7 @@
 //               between the plates and round the wire, and the
 //               displacement term is necessary
 //    light      a pulse on the Yee grid moves at 1/sqrt(mu0 eps0)
+//    panel      each panels.js scene readout obeys its law
 // ============================================================================
 import {
   EPS0, MU0, SI_EPS0, SI_MU0, lightSpeed, coulomb, sphereFluxCharges, chargeInside, sphereFlux,
@@ -118,6 +119,19 @@ for (const [name, lp] of [['between the plates, s = 0.5 Rp', { x: 0, s: 0.5 * ca
   }
   const v = (b - a) * w.dx / (pb[1] - pa[1]);
   check('light: Yee pulse speed = 1/sqrt(mu0 eps0)', rel(v, c) < 5e-3, `measured ${v.toExponential(4)} m/s  c ${c.toExponential(4)} m/s`);
+}
+
+// ── panels.js readouts ─────────────────────────────────────────────────────
+{
+  const P = await import('./panels.js');
+  P.faradayPageTable().fill();
+  const sim = { t: 1.3, strength: 1, speed: 1 };
+  for (const C of [P.GaussE, P.GaussB, P.Faraday, P.Ampere, P.CapGaussE, P.CapGaussB, P.CapFaraday]) {
+    const s = new C(); for (let i = 0; i < 30; i++) s.step(1 / 60, sim);
+    const r = s.readout(), rhs = r.zero ? 0 : r.rhs.reduce((a, x) => a + x.v, 0);
+    const scale = r.zero ? Math.abs(r.rhs[0].v) : Math.max(Math.abs(rhs), 1e-9);
+    check(`panel ${C.name}: lhs = rhs`, Math.abs(r.lhs.v - rhs) < (r.zero ? 5e-3 : 2e-3) * scale, `lhs ${r.lhs.v.toExponential(4)}  rhs ${rhs.toExponential(4)}`);
+  }
 }
 
 console.log(`\n${n - fails}/${n} checks passed`);
