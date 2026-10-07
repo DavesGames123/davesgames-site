@@ -1,7 +1,7 @@
 // ============================================================================
 //  DATA TESTS  ·  pages/market-forecast/tests-data.mjs — node test runner
 // ----------------------------------------------------------------------------
-//  Checks synth.js and providers.js with no network and no
+//  Checks synth.js, providers.js and analysis.js with no network and no
 //  npm packages:  node tests-data.mjs        (prints PASS/FAIL, exit 1 on fail)
 //                 node tests-data.mjs --live (also 4 real requests with the
 //                 providers' public "demo" keys: Twelve Data AAPL, Alpha
@@ -11,10 +11,12 @@
 //  provider's own host, and never into a Series, a storage key other than
 //  'mf-key-<id>', or an error message.
 //
-//  grep -n targets: "section('", "function fakeFetch", "LIVE"
+//  grep -n targets: "section('", "function fakeFetch", "LIVE", "perfect forecaster"
 // ============================================================================
 import { synthMarket, etParts, etOffsetMs, BAR_MS } from './synth.js';
 import { PROVIDERS, keys, redact, providerHost } from './providers.js';
+import { normInv, normCdf, quantileFn, interpLevels, logReturns, corrMatrix, cholesky, portfolio, pinball, wql, backtest, pickOrigins } from './analysis.js';
+import { rng } from './synth.js';
 
 let fails = 0, passes = 0;
 const ok = (cond, name, info = '') => { if (cond) { passes++; console.log('PASS', name, info); } else { fails++; console.log('FAIL', name, info); } };
@@ -169,6 +171,92 @@ for (const id of ['twelvedata', 'alphavantage', 'polygon']) {
   globalThis.localStorage = keep;
   const s = await PROVIDERS.synthetic.fetchSeries('LYRA.SYN', '5min');
   ok(s.source.synthetic && s.sym === 'LYRA.SYN', 'synthetic provider serves the demo market');
+}
+
+// ── analysis ────────────────────────────────────────────────────────────────
+section('analysis');
+{
+  let w = 0;
+  for (let i = -60; i <= 60; i++) { const p = i < 0 ? 10 ** (i / 10) : i === 0 ? 0.5 : 1 - 10 ** (-i / 10); if (p > 0 && p < 1) w = Math.max(w, Math.abs(normCdf(normInv(p)) - p) / Math.min(p, 1 - p)); }
+  for (let i = 1; i < 2000; i++) { const p = i / 2000; w = Math.max(w, Math.abs(normCdf(normInv(p)) - p)); }
+  ok(w < 1e-9, 'normInv/normCdf round trip < 1e-9 (relative in the tails)', w.toExponential(2));
+  ok(Math.abs(normInv(0.975) - 1.959963984540054) < 1e-12 && Math.abs(normCdf(-1.959963984540054) - 0.025) < 1e-14, 'normInv(0.975) = 1.959963984540054');
+  const L = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], V = L.map(p => 50 + 4 * normInv(p));
+  const f = quantileFn(L, V);
+  ok(L.every((p, k) => Math.abs(f(p) - V[k]) < 1e-12), 'quantileFn reproduces the given levels');
+  let mono = true, prev = -Infinity;
+  for (let i = 1; i < 1000; i++) { const x = f(i / 1000); if (x < prev - 1e-12) mono = false; prev = x; }
+  const g = quantileFn(L, [1, 2, 3, 2.5, 5, 6, 7, 8, 9]); prev = -Infinity;
+  for (let i = 1; i < 1000; i++) { const x = g(i / 1000); if (x < prev - 1e-12) mono = false; prev = x; }
+  ok(mono, 'quantileFn is monotone (also for crossing inputs)');
+  ok(Math.abs(f(0.01) - (50 + 4 * normInv(0.01))) < 1e-9, 'tail extrapolation is exact for a normal (linear in z)', f(0.01).toFixed(6));
+  const [q25, q75] = interpLevels(L, V, [0.25, 0.75]);
+  ok(Math.abs(q25 - (50 + 4 * normInv(0.25))) < 1e-9 && Math.abs(q75 - (50 + 4 * normInv(0.75))) < 1e-9, 'interpLevels gives the 25/75 band', `${q25.toFixed(4)} ${q75.toFixed(4)}`);
+
+  // correlation and Cholesky
+  const R = rng(5), n = 4000, a = new Float64Array(n), b = new Float64Array(n), c = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const x = R.n(), y = R.n(), z = R.n(); a[i] = x; b[i] = 0.6 * x + 0.8 * y; c[i] = z; }
+  const C = corrMatrix([a, b, c], 0);
+  ok(Math.abs(C[0][1] - 0.6) < 0.04 && Math.abs(C[0][2]) < 0.04, 'corrMatrix finds 0.6 and 0', `${C[0][1].toFixed(3)} ${C[0][2].toFixed(3)}`);
+  const Cs = corrMatrix([a, b, c], 0.1);
+  ok(Math.abs(Cs[0][1] - 0.9 * C[0][1]) < 1e-12 && Cs[1][1] === 1, 'shrinkage to the identity');
+  const Lc = cholesky(Cs); let err = 0;
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += Lc[i][k] * Lc[j][k]; err = Math.max(err, Math.abs(s - Cs[i][j])); }
+  ok(err < 1e-12, 'cholesky: L L^T = A', err.toExponential(2));
+  ok(cholesky([[1, 1], [1, 1]]).length === 2, 'cholesky of a singular matrix works with jitter');
+  const lr = logReturns(Float64Array.from([100, 110, 99]));
+  ok(Math.abs(lr[0] - Math.log(1.1)) < 1e-15 && lr.length === 2, 'logReturns');
+
+  // portfolio
+  const pos = (sym, shares, price, mu, sd) => ({ sym, shares, price, levels: L, endQ: L.map(p => mu + sd * normInv(p)) });
+  const one = portfolio({ positions: [pos('A', 3, 100, 101, 2)], n: 20000, seed: 11 });
+  const exp = p => 3 * (101 + 2 * normInv(p));
+  ok(Math.abs(one.q.p10 - exp(0.1)) < 0.15 && Math.abs(one.q.p50 - exp(0.5)) < 0.12 && Math.abs(one.q.p90 - exp(0.9)) < 0.15, 'one position reproduces its quantiles (MC error)', `${one.q.p10.toFixed(2)}/${exp(0.1).toFixed(2)} ${one.q.p50.toFixed(2)}/${exp(0.5).toFixed(2)} ${one.q.p90.toFixed(2)}/${exp(0.9).toFixed(2)}`);
+  ok(Math.abs(one.pUp - (1 - normCdf(-0.5))) < 0.01, 'one position P(up) = Phi(mu-p / sd)', one.pUp.toFixed(4));
+  const two = [pos('A', 1, 100, 100, 2), pos('B', 1, 100, 100, 2)];
+  const corr1 = portfolio({ positions: two, corr: [[1, 1], [1, 1]], n: 20000, seed: 3, compareIndependent: true });
+  const ratio = corr1.sd / corr1.indep.sd;
+  ok(ratio > 1.35 && ratio < 1.48, 'perfectly correlated pair is wider than independent (about sqrt 2)', ratio.toFixed(3));
+  ok(Math.abs(corr1.pUp - 0.5) < 0.015 && Math.abs(corr1.indep.pUp - 0.5) < 0.015, 'symmetric case P(up) ~ 0.5', `${corr1.pUp.toFixed(3)} ${corr1.indep.pUp.toFixed(3)}`);
+  const cs = corr1.perPos.reduce((s, p) => s + p.contrib, 0);
+  ok(Math.abs(cs - 1) < 1e-9, 'variance contributions sum to 1', cs.toFixed(12));
+  const loss = portfolio({ positions: [pos('A', 10, 100, 95, 1), pos('B', 5, 50, 48, 1)], corr: [[1, 0.3], [0.3, 1]], n: 20000, seed: 9 });
+  ok(loss.var95 >= 0 && loss.es95 >= loss.var95 && loss.pUp < 0.01, 'loss case: VaR95 >= 0, ES95 >= VaR95', `VaR ${loss.var95.toFixed(2)} ES ${loss.es95.toFixed(2)} pUp ${loss.pUp}`);
+  const again = portfolio({ positions: [pos('A', 10, 100, 95, 1), pos('B', 5, 50, 48, 1)], corr: [[1, 0.3], [0.3, 1]], n: 20000, seed: 9 });
+  ok(eqArr(loss.samples, again.samples), 'portfolio is deterministic for a seed');
+  const hst = loss.histogram(40);
+  ok(hst.counts.length === 40 && hst.edges.length === 41 && hst.counts.reduce((x, y) => x + y, 0) > 19800, 'histogram helper');
+  t0 = performance.now();
+  portfolio({ positions: m1.universe.map((u, i) => pos(u.sym, 10, 100, 100, 1 + i / 4)), corr: corrMatrix(m1.universe.map(u => logReturns(m1.intraday[u.sym].c))), n: 20000, seed: 1 });
+  ok(performance.now() - t0 < 400, '8 positions, 20000 samples with the synthetic correlation', `${(performance.now() - t0).toFixed(0)} ms`);
+
+  // losses
+  ok(pinball(10, 8, 0.9) === 0.9 * 2 && Math.abs(pinball(10, 12, 0.9) - 0.2) < 1e-15 && pinball(5, 5, 0.3) === 0, 'pinball hand values: 1.8, 0.2, 0');
+  const wv = wql([{ y: 10, q: [8, 10, 12], levels: [0.1, 0.5, 0.9] }]);
+  ok(Math.abs(wv - 0.08 / 3) < 1e-15, 'wql hand value: (0.04 + 0 + 0.04) / 3', wv.toFixed(6));
+
+  // backtest: a perfect forecaster on a sine plus iid noise
+  const N = 2000, sig = 0.5, per = 50, rr = rng(21);
+  const mean = t => 100 + 10 * Math.sin(2 * Math.PI * t / per);
+  const closes = Float64Array.from({ length: N }, (_, t) => mean(t) + sig * rr.n());
+  const H = 20, origins = pickOrigins(N, H, 40);
+  ok(origins.length === 40 && origins.at(-1) === N - 1 - H && origins[0] >= 32, 'pickOrigins: 40 origins, newest last', `${origins[0]}..${origins.at(-1)}`);
+  ok(eqArr(pickOrigins(100, 10, 3, 5), [79, 84, 89]), 'pickOrigins with a stride');
+  const fcs = origins.map(o => L.map(p => Float64Array.from({ length: H }, (_, h) => mean(o + h + 1) + sig * normInv(p))));
+  const bt = backtest({ closes, origins, H, levels: L, forecasts: fcs, season: per });
+  ok(Math.abs(bt.coverage80 - 0.8) < 0.04 && bt.steps === 800, 'perfect forecaster: 80 % band coverage ~ 0.8', `${bt.coverage80.toFixed(3)} over ${bt.steps} steps, end ${bt.coverage80End.toFixed(3)}`);
+  ok(bt.reliability.every(r => Math.abs(r.observed - r.tau) < 0.05), 'reliability near the diagonal', bt.reliability.map(r => r.observed.toFixed(2)).join(' '));
+  ok(bt.wqlModel < bt.wqlSeasonal && bt.wqlSeasonal < bt.wqlNaive && bt.skillNaive > 0, 'WQL: perfect < seasonal naive < naive', `${bt.wqlModel.toFixed(5)} < ${bt.wqlSeasonal.toFixed(5)} < ${bt.wqlNaive.toFixed(5)}, skill ${bt.skillNaive.toFixed(3)}`);
+  ok(bt.maseMedian < 1 && bt.perOrigin.length === 40 && bt.perOrigin.every(p => p.end && Number.isFinite(p.wql)), 'median MAE ratio < 1 and per-origin rows', bt.maseMedian.toFixed(3));
+  // A forecaster that knows nothing more than the last value scores about the naive baseline.
+  const naiveF = origins.map(o => L.map(p => new Float64Array(H).fill(closes[o])));
+  const bt2 = backtest({ closes, origins, H, levels: L, forecasts: naiveF, season: per });
+  ok(bt2.coverage80 < 0.2 && bt2.wqlModel > bt.wqlModel, 'a point forecaster (no spread) has poor coverage', bt2.coverage80.toFixed(3));
+  // No look-ahead: change every bar after one origin; its naive band must not move.
+  const o = origins[20], c2 = closes.slice(); for (let t = o + 1; t < N; t++) c2[t] *= 3;
+  const one1 = backtest({ closes, origins: [o], H, levels: L, forecasts: [fcs[20]], season: per }).perOrigin[0].end.naive;
+  const one2 = backtest({ closes: c2, origins: [o], H, levels: L, forecasts: [fcs[20]], season: per }).perOrigin[0].end.naive;
+  ok(one1.q10 === one2.q10 && one1.q50 === one2.q50 && one1.q90 === one2.q90, 'naive baseline reads no bar after the origin', `${one1.q10.toFixed(3)} ${one1.q90.toFixed(3)}`);
 }
 
 // ── LIVE (optional, public demo keys only) ──────────────────────────────────
