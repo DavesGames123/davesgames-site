@@ -1,0 +1,74 @@
+ANCIENT EARTH — data sources, licences and credits
+==================================================
+
+Inspiration
+-----------
+Ancient Earth by Ian Webster (https://dinosaurpictures.org/ancient-earth).
+This page was made after looking at its features. It uses none of its maps,
+textures, code or text. (That site uses C. R. Scotese PALEOMAP map images
+under permission; this page uses only the openly licensed data below.)
+
+Plate model and paleo-elevation
+-------------------------------
+C. R. Scotese and N. Wright (2018). PALEOMAP Paleodigital Elevation Models
+(PaleoDEMS) for the Phanerozoic. Zenodo. https://doi.org/10.5281/zenodo.5460860
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0). The
+download holds a License.txt with this licence.
+  - data/dem.bin: the 109 one-degree PaleoDEMs (0-540 Ma, about every 5 Myr),
+    re-encoded to 8 bits (square-root scale) by build/build_data.py.
+  - data/rotations.json, data/polygons.json, data/plateidx.bin,
+    data/boundaries.json: the PALEOMAP plate model of the same work
+    (rotation file Scotese_Wright_PlateModel.rot, continental polygons,
+    plate boundary topologies), from the GPlates plate-model-manager mirror
+    https://repo.gplates.org/webdav/pmm/scotese_and_wright2018/ (its model
+    record points to the same Zenodo DOI). Polygons simplified, the raster
+    and boundaries computed with pygplates 1.0.
+Thanks to EarthByte (University of Sydney) and the GPlates project for
+hosting and for pygplates (https://www.gplates.org).
+
+Optional live source: GPlates Web Service (https://gws.gplates.org), model
+PALEOMAP, which answers with CORS. The page does not need it; tests.mjs
+uses pygplates fixtures instead.
+
+Modern places
+-------------
+Natural Earth (https://www.naturalearthdata.com), public domain:
+ne_50m_coastline, ne_50m_admin_0_boundary_lines_land,
+ne_110m_admin_0_countries (label points, continent of each country),
+ne_10m_populated_places_simple (cities, search, the night lights).
+Files from https://github.com/nvkelso/natural-earth-vector.
+
+Fossil sites
+------------
+Paleobiology Database (https://paleobiodb.org), CC BY 4.0. data/fossils.json
+is a sample of genus-level occurrences from the data1.2 API (occs/list,
+pgm=scotese), fetched by build/build_data.py on the date in the file. The
+"Fetch more" button asks the same API live. Please cite the Paleobiology
+Database and the original references (PBDB reference numbers in the API).
+
+Geological time scale
+---------------------
+International Chronostratigraphic Chart, International Commission on
+Stratigraphy (https://stratigraphy.org), unit boundaries and the CGMW
+standard colours (facts). The values were checked against the Macrostrat API
+(https://macrostrat.org/api/v2/defs/intervals, CC BY 4.0), copied to
+tests/ics.json.
+
+Colour maps
+-----------
+magma, viridis, inferno: Stéfan van der Walt, Nathaniel Smith and Eric
+Firing for matplotlib, CC0. turbo: Anton Mikhailov, Google LLC, Apache
+License 2.0. Each sampled at 16 stops (globe.js CMAPS).
+
+Software
+--------
+three.js r160 (MIT), vendored in vendor/three@0.160.0.
+Fonts: Inter (SIL OFL 1.1), STIX Two Text (SIL OFL 1.1), vendored.
+
+Written for this page
+---------------------
+The captions, the climate estimate curve (world.js), the biome colours, the
+ancient-name anchors and all code are original work for davesgames.io.
+The temperature curve follows the shape of published curves (for example
+Scotese et al. 2021, Earth-Science Reviews 215; Judd et al. 2024, Science
+385) but is not their data.
