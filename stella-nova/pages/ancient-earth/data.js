@@ -120,12 +120,14 @@ export function elevAt(bytes, meta, t, lat, lon) {
 }
 
 // ── progressive loading ─────────────────────────────────────────────────────
-// Core: what the first frame needs besides the DEM (about 120 KB).
+// Core: what the first frame needs besides the DEM (about 135 KB): the
+// meta, the rotations, the polygons and the biome colour table.
 export async function loadCore(base) {
   const u = f => new URL('data/' + f, base).href;
-  const [meta, rot, poly] = await Promise.all([fetchJSON(u('meta.json')), fetchJSON(u('rotations.json')), fetchJSON(u('polygons.json'))]);
+  const [meta, rot, poly, lut] = await Promise.all([fetchJSON(u('meta.json')), fetchJSON(u('rotations.json')), fetchJSON(u('polygons.json')), fetchJSON(u('biome-lut.json'))]);
   if (!meta.dem.files) throw new Error('meta.json: no DEM chunk list');
-  return { meta, rot, poly };
+  if (lut.rgb.length !== lut.nT * lut.nW * 3) throw new Error('biome-lut.json: wrong size');
+  return { meta, rot, poly, lut };
 }
 // The rest, each as a promise, started after the first frame.
 export function loadLazy(base) {

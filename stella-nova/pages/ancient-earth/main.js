@@ -73,7 +73,7 @@ async function boot() {
   }
   $('lfill').style.width = '100%';
   const lite = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
-  G = new Globe(cv, D, P, dem, { lite, keep: new URLSearchParams(location.search).has('keep') });
+  G = new Globe(cv, D, P, dem, { lite, base: import.meta.url, keep: new URLSearchParams(location.search).has('keep') });
   L = new Labels($('labels'), G, P, D);
   AE.globe = G; AE.plates = P; AE.labels = L; AE.dem = dem;
   buildUI();
@@ -462,7 +462,7 @@ function hypsoCss(z) {
 function drawLegend() {
   const host = $('legend'), m = MODES[G.state.mode];
   if (m === 'realistic') {
-    host.innerHTML = `<div id="tintKeyR" class="cap">Land colour: an estimate from latitude, height, distance from the sea and the global temperature of the age. White is ice. Turquoise water is shallow shelf sea.</div>`;
+    host.innerHTML = `<div id="tintKeyR" class="cap">Today: NASA Blue Marble and Black Marble. Past ages: an estimate. Each place gets the mean Blue Marble colour of present land with the same yearly temperature and wetness, from its latitude, height, distance from the sea and the age's global temperature. White is ice. Clouds and their speed are illustrative.</div>`;
     return;
   }
   if (m === 'outline') { host.innerHTML = `<div class="cap">The paleo-coastline at sea level, land dark, sea darker.</div>`; return; }

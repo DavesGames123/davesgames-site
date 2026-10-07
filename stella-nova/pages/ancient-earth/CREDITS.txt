@@ -14,8 +14,9 @@ C. R. Scotese and N. Wright (2018). PALEOMAP Paleodigital Elevation Models
 (PaleoDEMS) for the Phanerozoic. Zenodo. https://doi.org/10.5281/zenodo.5460860
 Licence: Creative Commons Attribution 4.0 International (CC BY 4.0). The
 download holds a License.txt with this licence.
-  - data/dem.bin: the 109 one-degree PaleoDEMs (0-540 Ma, about every 5 Myr),
-    re-encoded to 8 bits (square-root scale) by build/build_data.py.
+  - data/dem/dem-NN.bin: the 109 one-degree PaleoDEMs (0-540 Ma, about
+    every 5 Myr), re-encoded to 8 bits (square-root scale) by
+    build/build_data.py, 10 frames per file.
   - data/rotations.json, data/polygons.json, data/plateidx.bin,
     data/boundaries.json: the PALEOMAP plate model of the same work
     (rotation file Scotese_Wright_PlateModel.rot, continental polygons,
@@ -30,12 +31,30 @@ Optional live source: GPlates Web Service (https://gws.gplates.org), model
 PALEOMAP, which answers with CORS. The page does not need it; tests.mjs
 uses pygplates fixtures instead.
 
+Present-day Earth imagery
+-------------------------
+NASA Earth Observatory / NASA Visible Earth, public domain (NASA imagery
+is not copyrighted; credit requested):
+  - Blue Marble: Next Generation, August 2004 (Reto Stockli, NASA Earth
+    Observatory), 5400x2700, resized to data/present/color-2k.jpg and
+    color-4k.jpg. Its mean colours by temperature and wetness of present
+    land are data/biome-lut.json, the colour of past land on this page.
+  - Blue Marble topography and bathymetry (from GEBCO_08, the GEBCO grid,
+    as released with Blue Marble), resized and re-encoded as
+    data/present/relief-2k.png.
+  - Black Marble 2016 (NASA Earth Observatory, Suomi NPP VIIRS, Miguel
+    Roman and colleagues, NASA GSFC), the city lights only, as
+    data/present/lights-2k.jpg.
+Source pages: https://science.nasa.gov/earth/earth-observatory/ (Blue
+Marble and Black Marble collections). build/build_present.py makes the
+files and lists the exact source file names.
+
 Modern places
 -------------
 Natural Earth (https://www.naturalearthdata.com), public domain:
 ne_50m_coastline, ne_50m_admin_0_boundary_lines_land,
 ne_110m_admin_0_countries (label points, continent of each country),
-ne_10m_populated_places_simple (cities, search, the night lights).
+ne_10m_populated_places_simple (cities, search).
 Files from https://github.com/nvkelso/natural-earth-vector.
 
 Fossil sites

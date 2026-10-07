@@ -103,6 +103,15 @@ const over = J('data/overlays.json'), cities = J('data/cities.json'), foss = J('
 ok(over.coast.length > 100 && over.coast.every(r => r.length % 2 === 1 && r.length >= 5), `overlays: ${over.coast.length} coast runs, ${over.borders.length} border runs`);
 ok(cities.rows.length > 5000 && cities.rows[0][4] >= cities.rows[100][4], `cities: ${cities.rows.length} places, sorted by population`);
 ok(bounds.times[0] === 0 && bounds.frames.length === bounds.times.length, `boundaries: ${bounds.frames.length} frames, ${bounds.times[0]}-${bounds.times[bounds.times.length - 1]} Ma`);
+const lut = J('data/biome-lut.json'), lutAt = (T, W) => { const a = Math.max(0, Math.min(lut.nT - 1, Math.floor((T - lut.T0) / (lut.T1 - lut.T0) * lut.nT))), b = Math.max(0, Math.min(lut.nW - 1, Math.floor(W * lut.nW))); return lut.rgb.slice((a * lut.nW + b) * 3, (a * lut.nW + b) * 3 + 3); };
+const ice = lutAt(-30, 0.5), desert = lutAt(22, 0), forest = lutAt(26, 0.95);
+ok(lut.rgb.length === lut.nT * lut.nW * 3 && ice[2] > 0.5 && desert[0] > desert[2] * 1.4 && forest[1] > forest[2] && forest[1] < 0.06,
+  `biome-lut: ${lut.nT}x${lut.nW}, ice white, dry warm land tan, wet warm land dark green`, `ice ${ice.map(v => v.toFixed(2))}, desert ${desert.map(v => v.toFixed(2))}, forest ${forest.map(v => v.toFixed(3))}`);
+// the moisture index of the shader and of the table build must be the same formula
+const wetJs = fs.readFileSync(path.join(HERE, 'surface.js'), 'utf8').match(/float wetIndex\(float[\s\S]*?return/)[0].match(/\d+\.\d+/g).map(Number);
+const wetPy = fs.readFileSync(path.join(HERE, 'build/build_present.py'), 'utf8').match(/wet = \([\s\S]*?\)\)/)[0].replace(/\*\* 2/g, '').match(/\d+(?:\.\d+)?/g).map(Number);
+ok(JSON.stringify(wetJs) === JSON.stringify(wetPy), 'wetIndex in surface.js matches build_present.py', wetJs.join(' '));
+for (const f of ['color-2k.jpg', 'color-4k.jpg', 'relief-2k.png', 'lights-2k.jpg']) ok(fs.statSync(path.join(HERE, 'data/present', f)).size < 800e3, `present/${f} under 800 KB`);
 let total = 0;
 const walk = d => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f), st = fs.statSync(q); if (st.isDirectory()) walk(q); else total += st.size; } };
 walk(path.join(HERE, 'data'));

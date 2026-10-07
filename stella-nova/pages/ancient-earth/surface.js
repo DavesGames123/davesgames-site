@@ -8,23 +8,33 @@
 //  poles), the biome model, the cloud noise and 30 noise octaves.
 //
 //  HEIGHT_FRAG  pass 1: the surface height with detail noise, 16 bits in
-//               rg ((z + 9000) / 15000), inland km / 4080 in b
+//               rg ((z + 9000) / 15000), inland km / 4080 in b. Near
+//               0 Ma it cross-fades to the GEBCO relief of NASA Blue
+//               Marble (uPresentK)
 //  BAKE_FRAG    pass 2 (two outputs), reads pass 1 at three texels:
 //    out0 rgb  surface colour, square-root encoded (linear = rgb^2)
 //    out0 a    0 on land; on water the sun-glint weight (1 - sea ice)
 //    out1 rg   east and north slope, 0.5 + slope / 400 (metres per km)
-//    out1 b    1 on land (where the present-day night lights may show)
+//    out1 b    present-day land times uPresentK: where the night lights
+//              (NASA Black Marble) may show
+//  The realistic colour of past land comes from biome-lut.json: the mean
+//  NASA Blue Marble colour of present land with the same yearly
+//  temperature T and moisture index W (build/build_present.py, "wet").
+//  Near 0 Ma the colour cross-fades to the Blue Marble image itself.
+//  wetIndex must match build/build_present.py.
 //  CLOUD_FRAG  two fbm cloud fields (r, g) on the sphere, baked once
 //  PLANET      lighting: sun through the atmosphere, bump normal from the
 //              slopes, ocean GGX glint and Fresnel, clouds drifting with
 //              zonal winds (flow-map with two phases, so the shear never
-//              grows), cloud shadows, city lights, aerial perspective.
+//              grows; each cycle starts at a new place, so the weather
+//              changes), cloud shadows, city lights, aerial perspective.
 //              It mixes two bakes (uA/uB and uA2/uB2) by uK: the cached
 //              bakes of the two DEM frames around the age while it moves.
 //
 //  grep -n targets
 //    surface height ........ "vec2 heightAt"
-//    land colour ........... "vec3 landColour"
+//    moisture index ........ "float wetIndex"
+//    land colour ........... "vec3 realColour"
 //    bake main ............. "BAKE_FRAG"
 //    cloud flow ............ "float cloudAt"
 //    planet main ........... "PLANET_FRAG"
@@ -47,7 +57,8 @@ export const HEIGHT_FRAG = /* glsl */`
 precision highp float;
 precision highp sampler2DArray;
 uniform sampler2DArray uDem;
-uniform float uLayA, uLayB, uMix, uDetail;
+uniform sampler2D uRelief;
+uniform float uLayA, uLayB, uMix, uDetail, uPresentK;
 in vec2 vUv;
 layout(location = 0) out highp vec4 outH;
 ${NOISE}
@@ -92,8 +103,9 @@ vec2 paleoZs(vec2 uv) {
 // surface height (m) with detail; x = height, y = inland km
 vec2 heightAt(vec2 uv) {
   vec2 zs = paleoZs(uv);
+  if (uPresentK > 0.0) zs.x = mix(zs.x, decodeZ(texture(uRelief, uv).r), uPresentK);
   vec3 p = sphere(uv);
-  float amp = mix(90.0, 450.0, smoothstep(0.0, 2500.0, abs(zs.x))) * uDetail;
+  float amp = mix(90.0, 450.0, smoothstep(0.0, 2500.0, abs(zs.x))) * uDetail * (1.0 - 0.75 * uPresentK);
   zs.x += (fbm(p * 38.0, 4) - 0.5) * amp + (fbm(p * 150.0 + 3.0, 2) - 0.5) * amp * 0.35;
   return zs;
 }
@@ -107,8 +119,8 @@ void main() {
 
 export const BAKE_FRAG = /* glsl */`
 precision highp float;
-uniform sampler2D uH, uIdx, uPal, uCmap;
-uniform float uTeq, uDT, uSea, uVeg, uTall, uGrass, uTintK;
+uniform sampler2D uH, uIdx, uPal, uCmap, uLut, uBM, uRelief;
+uniform float uTeq, uDT, uSea, uVeg, uTall, uGrass, uTintK, uPresentK, uLutT0, uLutT1;
 uniform int uMode, uTint;
 in vec2 vUv;
 layout(location = 0) out highp vec4 out0;
@@ -122,6 +134,11 @@ vec2 hAt(ivec2 c, ivec2 sz) {
   return vec2((h.r * 255.0 * 256.0 + h.g * 255.0) / 65535.0 * 15000.0 - 9000.0, h.b * 4080.0);
 }
 vec3 srgb2lin(vec3 c) { return pow(c, vec3(2.2)); }
+float decodeZ(float c) {
+  c *= 255.0;
+  if (c < 127.5) { float s = (127.0 - c) / 127.0; return -9000.0 * s * s; }
+  float s = max(0.0, c - 128.0) / 127.0; return 6000.0 * s * s;
+}
 float signedSqrt(float z) { return z < 0.0 ? 0.5 - 0.5 * sqrt(-z / 9000.0) : 0.5 + 0.5 * sqrt(z / 6000.0); }
 vec3 hypso(float z) {
   if (z < 0.0) {
@@ -135,36 +152,39 @@ vec3 hypso(float z) {
   c = mix(c, vec3(0.67, 0.48, 0.32), smoothstep(1200.0, 2600.0, z));
   return srgb2lin(mix(c, vec3(0.92, 0.91, 0.90), smoothstep(2600.0, 4200.0, z)));
 }
-// Land colour from the climate estimate (linear RGB), ice in ice.
-vec3 landColour(float latd, float z, float inland, vec3 p, out float ice) {
-  float n = 0.6 * fbm(p * 9.0 + 5.0, 3) + 0.4 * fbm(p * 31.0 + 2.0, 2);
-  // the belts wander a few degrees, so they do not read as stripes
-  latd += (n - 0.5) * 9.0;
-  float s = sin(radians(latd));
-  float T = uTeq - uDT * s * s - 6.5 * max(z, 0.0) / 1000.0 + (n - 0.5) * 3.0;
-  float al = abs(latd);
-  // moisture: wet in the rising air at the equator and at 45-65 deg,
-  // dry under the subtropical highs (20-32 deg) and far from the sea;
-  // warm poles (greenhouse worlds) were wet enough for polar forests
-  float wet = 0.85 * exp(-sq(al / 11.0)) + 0.55 * exp(-sq((al - 52.0) / 13.0)) + 0.28 - 0.55 * exp(-sq((al - 25.0) / 8.0));
-  wet -= inland / 3600.0;
-  wet += 0.4 * smoothstep(0.0, 14.0, T) * smoothstep(55.0, 75.0, al);
-  wet = clamp(wet + (n - 0.5) * 0.25, 0.0, 1.0);
-  vec3 rock = mix(vec3(0.14, 0.10, 0.075), vec3(0.24, 0.18, 0.13), n);
-  vec3 sand = vec3(0.42, 0.30, 0.17), redbed = vec3(0.36, 0.16, 0.08);
-  vec3 forestTrop = vec3(0.024, 0.058, 0.016), forestTemp = vec3(0.034, 0.066, 0.02), boreal = vec3(0.022, 0.04, 0.022);
-  vec3 grass = vec3(0.16, 0.17, 0.06), shrub = vec3(0.13, 0.13, 0.07), tundra = vec3(0.17, 0.16, 0.12);
-  vec3 bare = mix(rock, mix(sand, redbed, smoothstep(22.0, 30.0, uTeq - uDT / 3.0) * 0.6), smoothstep(0.45, 0.1, wet));
-  float warm = smoothstep(-6.0, 8.0, T);
-  vec3 veg = mix(boreal, forestTemp, smoothstep(2.0, 12.0, T));
-  veg = mix(veg, forestTrop, smoothstep(18.0, 25.0, T));
-  veg = mix(mix(shrub, grass, uGrass), veg, mix(0.25, 1.0, uTall) * smoothstep(0.3, 0.65, wet));
-  veg = mix(tundra, veg, warm);
-  float cover = uVeg * smoothstep(0.08, 0.4, wet) * smoothstep(-12.0, -2.0, T);
-  vec3 col = mix(bare, veg, cover);
-  if (uTall < 0.01) col = mix(bare, vec3(0.12, 0.13, 0.07), cover * 0.6);
+float wetIndex(float al, float inland, float T) {
+  float w = 0.85 * exp(-sq(al / 11.0)) + 0.55 * exp(-sq((al - 52.0) / 13.0)) + 0.34 - 0.45 * exp(-sq((al - 25.0) / 8.0));
+  w -= inland / 6000.0;
+  w += 0.4 * smoothstep(0.0, 14.0, T) * smoothstep(55.0, 75.0, al);
+  return clamp(w, 0.0, 1.0);
+}
+// The table is square-root encoded, x = moisture, y = temperature.
+vec3 lutAt(float W, float T) { vec3 c = texture(uLut, vec2(clamp(W, 0.0, 1.0), clamp((T - uLutT0) / (uLutT1 - uLutT0), 0.0, 1.0))).rgb; return c * c; }
+// Realistic land colour at a paleo point (linear RGB), ice in ice.
+vec3 realColour(float latd, float z, float inland, vec3 p, out float ice) {
+  float n = fbm(p * 9.0 + 5.0, 3), n2 = fbm(p * 47.0 + 11.0, 3);
+  float lw = latd + (n - 0.5) * 9.0;
+  float s = sin(radians(lw)), al = abs(lw);
+  float T = uTeq - uDT * s * s - 6.5 * max(z, 0.0) / 1000.0 + (n2 - 0.5) * 3.0;
+  float W = wetIndex(al, inland, T) + (n - 0.5) * 0.22;
+  vec3 c = lutAt(W, T);
+  // Deserts: present land with W near 0 is the only desert in the table
+  // (its first column), and only up to about 24 C; above that the table
+  // holds wet equatorial lowland. So dry land mixes toward the first
+  // column at its temperature, capped at 23 C (the hottest present desert).
+  vec3 desert = lutAt(0.01, clamp(T, 2.0, 23.0));
+  c = mix(c, desert, smoothstep(0.12, 0.0, W) * smoothstep(-2.0, 6.0, T));
+  // before land plants: the colour of the driest present land at that
+  // temperature, a little redder (bare soil and rock)
+  float warm = smoothstep(-10.0, -4.0, T);
+  vec3 bare = lutAt(0.03, clamp(T, 4.0, 27.0)) * vec3(1.05, 0.92, 0.85);
+  c = mix(c, bare, warm * (1.0 - uVeg));
+  // before trees (390-360 Ma): low plants, paler and browner
+  c = mix(c, c * vec3(1.25, 1.12, 0.8) + 0.01, warm * uVeg * (1.0 - uTall) * 0.6);
   ice = smoothstep(-7.0, -11.0, T);
-  return mix(col, vec3(0.80, 0.84, 0.88), ice);
+  c = mix(c, vec3(0.78, 0.82, 0.86), ice);
+  // texture: brightness and hue variation at a few kilometres
+  return c * (0.82 + 0.36 * n2);
 }
 void main() {
   ivec2 sz = textureSize(uH, 0), c = ivec2(gl_FragCoord.xy);
@@ -179,14 +199,22 @@ void main() {
   float ze = hAt(c + ivec2(1, 0), sz).x, zn = hAt(c + ivec2(0, 1), sz).x;
   float dxkm = 360.0 * 111.2 * coslat / float(sz.x), dykm = 180.0 * 111.2 / float(sz.y);
   vec2 slope = land ? vec2((ze - z) / dxkm, (zn - z) / dykm) : vec2(0.0);
-  vec3 col; float glint = 0.0;
+  vec3 col; float glint = 0.0, lights = 0.0;
   float ii = floor(texture(uIdx, uv).r * 255.0 + 0.5);
   vec3 tintC = srgb2lin(texture(uPal, vec2((ii + 0.5) / 256.0, uTint == 2 ? 0.75 : 0.25)).rgb);
   float tintOn = (uTint > 0 && ii < 254.5 && land) ? uTintK : 0.0;
   if (uMode == 0) {
     if (land) {
       float ice;
-      col = landColour(latd, zl, inland, p, ice);
+      col = realColour(latd, zl, inland, p, ice);
+      if (uPresentK > 0.0) {
+        vec3 bm = srgb2lin(texture(uBM, uv).rgb);
+        float wasLand = step(0.0, decodeZ(texture(uRelief, uv).r));
+        // the exposed shelf of the ice age keeps the biome colour
+        vec3 pc = mix(col, mix(bm, vec3(0.78, 0.82, 0.86), ice * 0.85), wasLand);
+        col = mix(col, pc, uPresentK);
+        lights = wasLand * uPresentK;
+      }
       col = mix(col, tintC * 0.6, tintOn);
     } else {
       float d = -zl;
@@ -212,7 +240,7 @@ void main() {
     glint = land ? 0.0 : 0.02;
   }
   out0 = vec4(sqrt(clamp(col, 0.0, 1.0)), glint);
-  out1 = vec4(clamp(0.5 + slope / 400.0, 0.0, 1.0), land ? 1.0 : 0.0, 1.0);
+  out1 = vec4(clamp(0.5 + slope / 400.0, 0.0, 1.0), lights, 1.0);
 }
 `;
 
@@ -264,12 +292,15 @@ float cloudAt(vec2 uv, float latd) {
   float al = abs(latd);
   float band = 0.55 * exp(-sq(al / 7.0)) + (0.45 + 0.25 * uStorm) * exp(-sq((al - 52.0 - 6.0 * uStorm) / 13.0)) + 0.18 - (0.3 - 0.1 * uWet) * exp(-sq((al - 24.0) / 7.0));
   // each phase drifts at most about 8 deg of longitude before it fades out
-  float ph = fract(uCloudT / 6.0), u = wind(al) * 0.022;
-  float f1 = texture(uCloud, vec2(uv.x + u * ph + 0.11, uv.y)).r;
-  float f2 = texture(uCloud, vec2(uv.x + u * fract(ph + 0.5) + 0.57, uv.y)).g;
+  // A phase restarts while its weight is zero; it restarts 0.383 turns
+  // further east each cycle, so the pattern never repeats.
+  float c = uCloudT / 6.0, ph = fract(c), u = wind(al) * 0.022;
+  float f1 = texture(uCloud, vec2(uv.x + u * ph + 0.11 + 0.383 * floor(c), uv.y)).r;
+  float f2 = texture(uCloud, vec2(uv.x + u * fract(ph + 0.5) + 0.57 + 0.383 * floor(c + 0.5), uv.y)).g;
   float k = abs(2.0 * ph - 1.0);
   float f = mix(f1, f2, k);
-  float lo = 0.585 - band * 0.13;
+  // warmer, wetter worlds are cloudier
+  float lo = 0.585 - band * 0.13 - 0.03 * uWet;
   return smoothstep(lo, lo + 0.17, f);
 }
 void main() {
@@ -304,7 +335,8 @@ void main() {
   vec3 sunT = extinct(sunDepth(Nw * 1.0005, L, uQuality > 0.5 ? 5 : 3));
   vec3 sunC = vec3(SUN) * sunT;
   vec3 sky = vec3(0.10, 0.17, 0.32) * clamp(NgL + 0.25, 0.0, 1.0) * 1.2;
-  vec3 surf = alb * (sunC * NL * (1.0 - 0.7 * shadow) + sky + vec3(0.010, 0.012, 0.018));
+  // + faint starlight and airglow, so the night side is not pure black
+  vec3 surf = alb * (sunC * NL * (1.0 - 0.7 * shadow) + sky + vec3(0.016, 0.019, 0.028));
   if (water > 0.0) {
     // GGX glint on a rippled sea, Schlick Fresnel, sky reflection
     // roughness: a smooth sea, rougher in the windy belts (no texel-scale
@@ -323,8 +355,8 @@ void main() {
   surf = mix(surf, cloudC, cloud * 0.93);
   if (uLightsK > 0.001 && B.b > 0.01) {
     float night = smoothstep(0.06, -0.16, NgL);
-    vec3 lt = texture(uLights, uv).rgb;
-    surf += vec3(1.0, 0.62, 0.30) * lt * 1.6 * night * uLightsK * B.b * (1.0 - cloud * 0.8);
+    float lt = texture(uLights, uv).r;
+    surf += vec3(1.0, 0.62, 0.30) * pow(lt, 1.3) * 9.0 * night * uLightsK * B.b * (1.0 - cloud * 0.7);
   }
   vec3 o = cameraPosition, d = -V;
   vec2 ha = raySphere(o, d, RA);

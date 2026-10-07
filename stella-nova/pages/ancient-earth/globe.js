@@ -24,9 +24,11 @@
 //
 //  Progressive data: the DEM layers arrive by chunk (data.js DemStream,
 //  uploaded layer by layer in "uploadLayers("); setAge uses the nearest
-//  frames already in. Lines, fossils, the polygon raster and the city
-//  lights attach later ("attachLazy("); each feature is off until its data
-//  is in.
+//  frames already in. Lines, fossils and the polygon raster attach later
+//  ("attachLazy("); each feature is off until its data is in. The
+//  present-day imagery (NASA Blue Marble colour, its GEBCO relief, Black
+//  Marble city lights; "loadPresent(") loads only when the age comes
+//  within PREFETCH Ma of today.
 //
 //  The drawing buffer size comes from lib/render-scale.js (a pixel budget,
 //  then a factor that the frame rate lowers), through a proxy canvas.
@@ -41,6 +43,7 @@
 //    one bake .............. "bakeInto("
 //    DEM layer upload ...... "uploadLayers("
 //    lazy layers ........... "attachLazy("
+//    present imagery ....... "loadPresent("
 //    render scale .......... "RenderScale"
 //    quaternion texture .... "updateQuats("
 //    sun direction ......... "sunDir("
@@ -55,7 +58,10 @@ import * as SF from './surface.js';
 import { framesAt } from './data.js';
 import { climateAt } from './world.js';
 
-const PAIR_MIN = 6, CACHE_N = 6;
+const PAIR_MIN = 6, CACHE_N = 6, PREFETCH = 30;
+function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+// Weight of the present-day imagery at age t: 1 up to 1 Ma, 0 from 5 Ma.
+export const presentK = t => 1 - smooth(1.0, 5.0, t);
 const D2R = Math.PI / 180;
 export const MODES = ['realistic', 'hypsometric', 'grey', 'magma', 'viridis', 'inferno', 'turbo', 'outline'];
 
@@ -97,7 +103,7 @@ export function llToThree(lat, lon, r = 1) {
 export class Globe {
   constructor(canvas, core, plates, dem, opt = {}) {
     this.canvas = canvas; this.core = core; this.plates = plates; this.dem = dem; this.data = core;
-    this.lite = !!opt.lite;
+    this.lite = !!opt.lite; this.presentBase = opt.base || null;
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !this.lite, powerPreference: 'high-performance', preserveDrawingBuffer: !!opt.keep });
     r.setClearColor(0x000000, 1);
     r.outputColorSpace = THREE.LinearSRGBColorSpace;   // the shaders encode sRGB themselves
@@ -173,6 +179,12 @@ export class Globe {
     ['magma', 'viridis', 'inferno', 'turbo'].forEach((n, row) => { for (let i = 0; i < 256; i++) lut.set([...cmapRGB(n, i / 255), 255], (row * 256 + i) * 4); });
     this.cmapTex = new THREE.DataTexture(lut, 256, 4, THREE.RGBAFormat);
     this.cmapTex.minFilter = this.cmapTex.magFilter = THREE.LinearFilter; this.cmapTex.needsUpdate = true;
+    // biome table (Blue Marble colour by T and W), square-root encoded
+    const B = this.core.lut, bt = new Uint8Array(B.nW * B.nT * 4);
+    for (let i = 0; i < B.nW * B.nT; i++) bt.set([Math.sqrt(B.rgb[3 * i]) * 255, Math.sqrt(B.rgb[3 * i + 1]) * 255, Math.sqrt(B.rgb[3 * i + 2]) * 255, 255], i * 4);
+    this.biomeTex = new THREE.DataTexture(bt, B.nW, B.nT, THREE.RGBAFormat);
+    this.biomeTex.minFilter = this.biomeTex.magFilter = THREE.LinearFilter; this.biomeTex.needsUpdate = true;
+    this.hasBM = 0;
     // placeholders until the lazy data arrive
     const one = (r, g, b, a) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, a]), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; };
     this.blackTex = one(0, 0, 0, 255); this.idxNone = one(255, 0, 0, 255);
@@ -196,11 +208,13 @@ export class Globe {
     this.bakeBig = this.mrt(this.bigSize); this.bakeSmall = this.mrt(this.smallSize);
     const hrt = ([w, h]) => new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
     this.hBig = hrt(this.bigSize); this.hSmall = hrt(this.smallSize);
-    this.hU = { uDem: { value: this.demTex }, uLayA: { value: 0 }, uLayB: { value: 0 }, uMix: { value: 0 }, uDetail: { value: 1 } };
+    this.hU = { uDem: { value: this.demTex }, uRelief: { value: this.blackTex }, uLayA: { value: 0 }, uLayB: { value: 0 }, uMix: { value: 0 }, uDetail: { value: 1 }, uPresentK: { value: 0 } };
     this.bakeU = {
       uH: { value: this.hSmall.texture }, uIdx: { value: this.idxNone }, uPal: { value: this.palTex }, uCmap: { value: this.cmapTex },
       uTeq: { value: 27 }, uDT: { value: 37.5 }, uSea: { value: 0 }, uVeg: { value: 1 }, uTall: { value: 1 }, uGrass: { value: 1 },
       uTintK: { value: 0.7 }, uMode: { value: 0 }, uTint: { value: 0 },
+      uLut: { value: this.biomeTex }, uBM: { value: this.blackTex }, uRelief: this.hU.uRelief, uPresentK: this.hU.uPresentK,
+      uLutT0: { value: this.core.lut.T0 }, uLutT1: { value: this.core.lut.T1 },
     };
     const quad = new THREE.PlaneGeometry(2, 2);
     const scene = (frag, uniforms) => {
@@ -227,8 +241,9 @@ export class Globe {
   }
   // One bake: the height pass into hRt, the colour pass into rt, for DEM
   // frames a, b mixed by f, with the climate cl.
-  bakeInto(rt, hRt, a, b, f, cl) {
+  bakeInto(rt, hRt, a, b, f, cl, t) {
     const r = this.renderer, t0 = performance.now(), old = r.getRenderTarget(), S = this.state, H = this.hU, U = this.bakeU;
+    H.uPresentK.value = presentK(t) * this.hasBM;
     H.uLayA.value = a; H.uLayB.value = b; H.uMix.value = f; H.uDetail.value = S.detail;
     U.uTeq.value = cl.teq; U.uDT.value = cl.dT; U.uSea.value = cl.sea; U.uVeg.value = cl.veg; U.uTall.value = cl.tall; U.uGrass.value = cl.grass;
     U.uMode.value = S.mode; U.uTint.value = S.tint; U.uTintK.value = S.tintK; U.uH.value = hRt.texture;
@@ -256,14 +271,15 @@ export class Globe {
     }
     const ti = this.core.meta.dem.times[i];
     if (this.state.tint > 0 && this.idxRT) { this.updateQuats(ti); this.renderIndex(); this.updateQuats(this.t); this.idxDirty = true; }
-    this.bakeInto(e.rt, this.hSmall, i, i, 0, climateAt(ti));
+    this.bakeInto(e.rt, this.hSmall, i, i, 0, climateAt(ti), ti);
     e.key = key; e.used = now; this.stats.lastBake = 'frame ' + i;
     return e.rt;
   }
   bakeExact(big) {
     if (this.state.tint > 0 && this.idxRT && this.idxDirty) this.renderIndex();
     const fr = this.fr || { a: 0, b: 0, f: 0 }, rt = big ? this.bakeBig : this.bakeSmall;
-    this.bakeInto(rt, big ? this.hBig : this.hSmall, fr.a, fr.b, fr.f, this.climate || climateAt(Math.max(0, this.t)));
+    const t = Math.max(0, this.t);
+    this.bakeInto(rt, big ? this.hBig : this.hSmall, fr.a, fr.b, fr.f, this.climate || climateAt(t), t);
     this.show(rt); this.stats.lastBake = big ? 'big' : 'small';
   }
   // Per frame: pick the bake work for this frame (see the header).
@@ -303,36 +319,35 @@ export class Globe {
     this.scene.add(this.sky);
   }
 
+  // ── present-day imagery (NASA Blue Marble, GEBCO relief, Black Marble) ──
+  loadPresent() {
+    if (this.presentP || !this.presentBase) return this.presentP;
+    const L = new THREE.TextureLoader(), u = f => new URL('data/present/' + f, this.presentBase).href;
+    const get = f => new Promise((res, rej) => L.load(u(f), res, undefined, rej));
+    const prep = (t, mip = true) => {
+      t.colorSpace = THREE.NoColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4;
+      if (!mip) { t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; }
+      return t;
+    };
+    this.presentP = Promise.all([get(this.lite ? 'color-2k.jpg' : 'color-4k.jpg'), get('relief-2k.png'), get('lights-2k.jpg')]).then(([c, rl, li]) => {
+      if (this.disposed) { c.dispose(); rl.dispose(); li.dispose(); return; }
+      this.presentTex = [prep(c), prep(rl, false), prep(li)];
+      this.bakeU.uBM.value = this.presentTex[0]; this.hU.uRelief.value = this.presentTex[1]; this.planetU.uLights.value = this.presentTex[2];
+      this.hasBM = 1;
+      if (this.t >= 0) this.setAge(this.t, this.climate, true);
+    }).catch(e => { console.warn('present imagery', e); });
+    return this.presentP;
+  }
+
   // ── lazy layers ──────────────────────────────────────────────────────────
   attachLazy(k, v) {
     this.data[k] = v;
     if (k === 'raster') { this.plates.setRaster(v); this.buildIndex(); for (const p of this.pins) this.repin(p); }
     if (k === 'over') this.buildLines();
     if (k === 'fossils') this.buildFossils();
-    if (k === 'cities') this.buildLights();
     if (k === 'bounds') { this.boundGeo = new Map(); this.bounds = new THREE.LineSegments(new THREE.BufferGeometry(), this.lineMaterial('#ffffff', 0.85, 1.0022)); this.bounds.frustumCulled = false; this.bounds.renderOrder = 4; this.group.add(this.bounds); this.boundIdx = -1; }
     this.applyLayers();
     if (this.t >= 0) this.setAge(this.t, this.climate, true);
-  }
-  // City lights from Natural Earth places, splatted by population.
-  buildLights() {
-    const cv = document.createElement('canvas'); cv.width = this.lite ? 1024 : 2048; cv.height = cv.width / 2;
-    const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
-    g.globalCompositeOperation = 'lighter';
-    const W = cv.width, H = cv.height;
-    for (const c of this.data.cities.rows) {
-      const pop = c[4]; if (pop < 20000) continue;
-      const x = (c[3] + 180) / 360 * W, y = (90 - c[2]) / 180 * H;
-      const rad = Math.max(0.8, Math.sqrt(pop) / 900) * W / 2048 * 2.2;
-      const a = Math.min(0.9, 0.12 + Math.log10(pop) / 14);
-      const gr = g.createRadialGradient(x, y, 0, x, y, rad * 2.2);
-      gr.addColorStop(0, `rgba(255,220,170,${a})`); gr.addColorStop(0.35, `rgba(255,170,90,${a * 0.45})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = gr; g.fillRect(x - rad * 2.2, y - rad * 2.2, rad * 4.4, rad * 4.4);
-    }
-    const t = this.lightsTex = new THREE.CanvasTexture(cv);
-    t.flipY = true;   // canvas row 0 = north; the shader's v = 1 is north
-    t.colorSpace = THREE.NoColorSpace; t.wrapS = THREE.RepeatWrapping;
-    this.planetU.uLights.value = t;
   }
   buildStars() {
     // A seeded random sky: magnitudes from an exponential count law, and
@@ -513,7 +528,8 @@ export class Globe {
       this.planetU.uWet.value = Math.max(0, Math.min(1, (climate.gmst - 14) / 14));
       this.planetU.uStorm.value = Math.max(-1, Math.min(1, (climate.gmst - 18) / 10));
     }
-    this.planetU.uLightsK.value = this.lightsTex ? Math.max(0, 1 - t / 0.004) : 0;
+    if (t < PREFETCH && !this.presentP) this.loadPresent();
+    this.planetU.uLightsK.value = this.hasBM * Math.max(0, 1 - t / 0.004);
     if (t !== this.t || force) {
       if (t !== this.t) { this.updateQuats(t); this.idxDirty = true; }
       this.markDirty(); if (t !== this.t) this.ageMovedAt = now;
@@ -663,7 +679,9 @@ export class Globe {
     U.uTime.value = (now - this.time0) / 1000;
     // weather: the clouds drift slowly at rest and churn while time moves
     if (now - (this.lastAgeAt || 0) > 300) this.ageRate *= 0.9;
-    this.cloudT += dt * (0.012 + 0.05 * Math.min(60, this.ageRate));
+    // (one flow cycle is 6 units: about 3 min at rest, 10 s at 5 Myr/s,
+    // 2.5 s at 20 Myr/s)
+    this.cloudT += dt * (0.03 + 0.12 * Math.min(40, this.ageRate));
     U.uCloudT.value = this.cloudT;
     this.sunDir(U.uSun.value);
     this.group.updateMatrixWorld();
@@ -678,7 +696,8 @@ export class Globe {
     this.controls.dispose();
     const rts = [this.bakeBig, this.bakeSmall, this.hBig, this.hSmall, this.cloudRT, this.idxRT, ...[...this.cache.values()].map(e => e.rt)];
     for (const rt of rts) if (rt) rt.dispose();
-    for (const t of [this.demTex, this.qTex, this.palTex, this.cmapTex, this.blackTex, this.idxNone, this.lightsTex]) if (t) t.dispose();
+    this.disposed = true;
+    for (const t of [this.demTex, this.qTex, this.palTex, this.cmapTex, this.biomeTex, this.blackTex, this.idxNone, ...(this.presentTex || [])]) if (t) t.dispose();
     this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
     this.renderer.dispose();
     this.renderer.forceContextLoss();
