@@ -78,6 +78,8 @@ const LAZY_DIRS = [
   /^stella-nova\/vendor\/mathjax@[^/]+\/es5\/(a11y|ui)\//, // menu options only
   /^stella-nova\/vendor\/spark@[^/]+\//,           // 2.7 MB splat renderer, image-worlds only
   /^stella-nova\/vendor\/onnxruntime-web@[^/]+\//, // ML runtime + wasm, market-forecast only
+  /^stella-nova\/vendor\/rapier3d-compat@[^/]+\//, // physics wasm, dice only
+  /^stella-nova\/vendor\/openchemlib@[^/]+\//,     // chemistry engine, molecules only
 ];
 
 function isCore(p, size) {
