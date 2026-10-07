@@ -16,7 +16,8 @@
 //                   When dir is absent, it is the same as key.
 //
 //  Classic script, no ES modules, so the home page also runs on file://.
-//  It sets window.SN_NAV, window.SN_XR and window.snPages.
+//  It sets window.SN_NAV, window.SN_XR, window.SN_CRAFT, window.SN_HIDDEN
+//  and window.snPages.
 //
 //  To add a page: add one row to a group, then run
 //    node tools/nav-sync.js
@@ -27,6 +28,7 @@
 //    flat page list ....... "function snPages"
 //    XR pages ............. "w.SN_XR ="
 //    Craft pages .......... "w.SN_CRAFT ="
+//    hidden pages ......... "w.SN_HIDDEN ="
 // ============================================================================
 (function (w) {
 'use strict';
@@ -374,6 +376,13 @@ w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protei
 // clipboard-read; clipboard-write", so the child can ask for these too.
 // tools/nav-sync.js checks that each key is registered.
 w.SN_CRAFT = ['photocraft', 'lightcraft', 'vectorcraft', 'designcraft', 'filmcraft', 'effectcraft', 'printcraft'];
+
+// Hidden pages: [key, label, dir]. The shell opens them at #<key>, and
+// nothing links to them: they are not in SN_NAV, so snPages(), the sidebar,
+// the home chart, search, the saver and the crawler directory never list
+// them. tools/nav-sync.js checks that each one has a file.
+//   stats   site statistics; the page asks for the key of the sn-stats Worker
+w.SN_HIDDEN = [['stats', 'Site Statistics']];
 
 // Flatten SN_NAV into one record per page, in nav order.
 function snPages() {

@@ -123,7 +123,11 @@ function checkRegistry() {
   });
   for (const k of ctx.SN_XR || []) if (!seen.has(k)) errs.push(`SN_XR key is not a registered page: ${k}`);
   for (const k of ctx.SN_CRAFT || []) if (!seen.has(k)) errs.push(`SN_CRAFT key is not a registered page: ${k}`);
-  const dirs = new Set(PAGES.map(p => p.path.split('/')[1]));
+  for (const [k, , dir] of ctx.SN_HIDDEN || []) {
+    if (seen.has(k)) errs.push(`SN_HIDDEN key is also in SN_NAV: ${k}`);
+    if (!fs.existsSync(path.join(SN, 'pages', dir || k, 'index.html'))) errs.push(`no file for hidden page ${k}: pages/${dir || k}/index.html`);
+  }
+  const dirs = new Set(PAGES.map(p => p.path.split('/')[1]).concat((ctx.SN_HIDDEN || []).map(([k, , dir]) => dir || k)));
   fs.readdirSync(path.join(SN, 'pages'), { withFileTypes: true })
     .filter(d => d.isDirectory() && !dirs.has(d.name) && !UNLISTED[d.name])
     .forEach(d => errs.push(`pages/${d.name} is not in lib/nav-data.js (add it, or list it in UNLISTED)`));

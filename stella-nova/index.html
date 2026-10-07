@@ -192,6 +192,8 @@ body.sb-collapsed #tb-wishlist{display:inline-flex}
    grep -n targets: "function buildNav", "function openClusterOf" */
 var PAGES={},LABELS={};
 snPages().forEach(function(p){PAGES[p.key]=p.path;LABELS[p.key]=p.label});
+// Hidden pages (SN_HIDDEN): routable at #<key>, never in the sidebar.
+(window.SN_HIDDEN||[]).forEach(function(p){PAGES[p[0]]='pages/'+(p[2]||p[0])+'/index.html';LABELS[p[0]]=p[1]});
 function navEsc(t){return String(t).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function navRow(p){return '<button class="nav-item" data-tab="'+p[0]+'" onclick="switchTab(\''+p[0]+'\')"><span class="nav-label">'+navEsc(p[1])+'</span>'+(p[2]?'<span class="nav-badge">'+navEsc(p[2])+'</span>':'')+'</button>'}
 function buildNav(){var h='';SN_NAV.forEach(function(r){h+='<div class="nav-region">'+navEsc(r.label)+'</div>';r.constellations.forEach(function(c){var st=' style="--c:'+c.color+'"';var icon='<span class="cluster-icon">'+c.icon+'</span><span class="cluster-label">'+navEsc(c.label)+'</span><span class="cluster-arrow">&#8250;</span>';var g0=c.groups[0];if(c.groups.length===1&&!g0.h&&g0.p.length===1){var k=g0.p[0][0];h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head solo" data-tab="'+k+'" onclick="switchTab(\''+k+'\')">'+icon+'</button></div>';return}h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head" onclick="toggleCluster(\'cl-'+c.id+'\')">'+icon+'</button><div class="cluster-body">';c.groups.forEach(function(g){if(g.h)h+='<div class="nav-sub"'+(g.id?' id="'+g.id+'"':'')+'>'+navEsc(g.h)+'</div>';g.p.forEach(function(p){h+=navRow(p)})});h+='</div></div>'})});document.getElementById('sb-nav').innerHTML=h}
