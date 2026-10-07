@@ -154,11 +154,13 @@ const alphavantage = {
     if (!key) throw new ProviderError('Alpha Vantage needs an API key', 'auth');
     if (!symOK(sym)) throw new ProviderError('Bad symbol', 'arg');
     const u = new URL('https://www.alphavantage.co/query');
-    if (interval === '5min') { u.searchParams.set('function', 'TIME_SERIES_INTRADAY'); u.searchParams.set('interval', '5min'); }
-    else u.searchParams.set('function', 'TIME_SERIES_DAILY');
-    // outputsize is left out: 'compact' (100 bars) is the default, and the
-    // public 'demo' key refused the URL with the extra parameter.
+    // The documented order: function, symbol, interval, apikey. The public
+    // 'demo' key is accepted only for the documented URL (measured: the same
+    // parameters as interval-before-symbol got the "demo purposes only"
+    // answer). outputsize is left out: 'compact' (100 bars) is the default.
+    u.searchParams.set('function', interval === '5min' ? 'TIME_SERIES_INTRADAY' : 'TIME_SERIES_DAILY');
     u.searchParams.set('symbol', sym);
+    if (interval === '5min') u.searchParams.set('interval', '5min');
     u.searchParams.set('apikey', key);
     const j = await getJSON(this.id, u.href, key, { signal, fetchImpl });
     // Rate limit and plan messages come back as 200 with one text field.
