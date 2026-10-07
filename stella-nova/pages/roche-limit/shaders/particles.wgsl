@@ -6,6 +6,10 @@
 //  a grain smaller than a pixel writes a coverage, not a blend, so it needs
 //  no sort and the depth test stays exact.
 //
+//  MOTION. Streaks are off unless inst.motion.x is 1. A grain that moves
+//  more than inst.motion.y px in a frame dims (no strobing at high warp).
+//  The stress colour comes from stressS, smoothed in time by cs_smooth.
+//
 //  MOTION BLUR. The quad is a capsule from the grain's screen position one
 //  frame of sim time ago (cam.prevVp, with p - v dt) to its position now.
 //  Its coverage falls as the capsule grows, so a streak keeps the light of
@@ -17,7 +21,8 @@
 //  Colour: bound rock / shed ice, speed, or tidal stress (the ratio
 //  |tide| / |self-gravity| per grain, from the force kernel's diag).
 //
-//  grep -n targets: "fn vs_main", "fn fs_main", "fn sunShadow", "fn heat"
+//  grep -n targets: "fn vs_main", "fn fs_main", "fn sunShadow", "fn heat",
+//  "fn cs_smooth"
 // ============================================================================
 
 struct Cam {
@@ -30,7 +35,9 @@ struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 // frame: frame point (world) and k = 1/R_p; refV: frame velocity (world per
 // sim time) and the blur time; opts: colour mode, stress mix, brightness,
 // scale of the vesc for the speed colours; tint: shed-ice colour.
-struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f };
+// motion: x 1 = draw streaks, y the screen motion (px per frame) above
+// which a grain dims (anti-strobe, 0 = off), z the stress smoothing factor
+struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f };
 
 @group(0) @binding(0) var<uniform> cam: Cam;
 @group(0) @binding(1) var tauTex: texture_2d<f32>;
@@ -39,6 +46,20 @@ struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f };
 @group(1) @binding(1) var<storage, read> diag: array<vec4f>;
 @group(1) @binding(2) var<storage, read> tag: array<f32>;
 @group(1) @binding(3) var<uniform> inst: Inst;
+// the tidal stress of each grain, smoothed in time (cs_smooth writes it,
+// the vertex stage reads it), so the heatmap colours do not flicker
+@group(1) @binding(4) var<storage, read> stressS: array<f32>;
+@group(1) @binding(5) var<storage, read_write> stressW: array<f32>;
+
+@compute @workgroup_size(64)
+fn cs_smooth(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= arrayLength(&stressW)) { return; }
+  let dg = diag[i];
+  let ratio = dg.x / max(dg.y, 1e-12);
+  let st = clamp((log(max(ratio, 1e-6)) / 2.302585 + 1.5) / 3.0, 0.0, 1.0);
+  stressW[i] = mix(stressW[i], st, inst.motion.z);
+}
 
 struct VOut {
   @builtin(position) pos: vec4f,
@@ -115,6 +136,11 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   let rpx = max(rpxTrue, 0.75);
   var d = sa - sb;
   let dl = length(d);
+  // a grain that jumps far across the screen each frame strobes at high
+  // time warp; it dims, and the time-blended ring layer carries the light
+  var fade = 1.0;
+  if (inst.motion.y > 0.0 && dl > inst.motion.y) { fade = max(0.12, inst.motion.y / dl); }
+  if (inst.motion.x < 0.5) { d = vec2f(0.0); }
   // a dead zone of one diameter: slow drift (a following camera that lags)
   // draws a round grain, only real motion draws a streak
   let dz = max(0.0, dl - 2.0 * rpxTrue);
@@ -160,15 +186,13 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
     alb = cool(log2(1.0 + 4.0 * s) / log2(9.0));
     em = alb * 0.15;
   }
-  let dg = diag[ii];
-  let ratio = dg.x / max(dg.y, 1e-12);
-  let st = clamp((log(max(ratio, 1e-6)) / 2.302585 + 1.5) / 3.0, 0.0, 1.0);
+  let st = stressS[ii];
   let hcol = heat(st);
   let mixS = select(inst.opts.y, 1.0, mode > 1.5);
   alb = mix(alb, hcol * 0.85, mixS);
   em = mix(em, hcol * (0.25 + 1.6 * st * st), mixS);
-  o.color = alb * inst.opts.z;
-  o.emis = em * inst.opts.z;
+  o.color = alb * inst.opts.z * fade;
+  o.emis = em * inst.opts.z * fade;
   return o;
 }
 

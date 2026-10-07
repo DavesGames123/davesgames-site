@@ -138,18 +138,20 @@
   <div class="hint" id="warpHint"></div>
 
   <div class="sec-label">View</div>
-  <div class="seg3" id="cams"><button data-c="follow">Satellite</button><button data-c="planet">Planet</button><button data-c="top">Top-down</button></div>
+  <div class="seg3" id="cams"><button data-c="planet">Planet</button><button data-c="top">Top-down</button><button data-c="follow">Follow moon</button></div>
+  <div class="hint" id="camHint"></div>
   <div class="sec-sub">Grain colour</div>
   <div class="seg3" id="colors"><button data-k="0">Bound / shed</button><button data-k="1">Speed</button><button data-k="2">Tidal stress</button></div>
   <div class="sec-sub">Force field on the orbit plane</div>
   <div class="seg3" id="fields"><button data-f="0">Off</button><button data-f="1">Roche potential</button><button data-f="2">Tidal stretch</button></div>
   <div class="toggles">
+    <label class="wide"><input type="checkbox" id="tCalm"> Reduce motion (slower camera and time warp, no streaks)</label>
     <label><input type="checkbox" id="tRings" checked> Roche limits</label>
     <label><input type="checkbox" id="tHill" checked> Hill sphere</label>
     <label><input type="checkbox" id="tPred" checked> Predicted orbits</label>
     <label><input type="checkbox" id="tTrack" checked> Past track</label>
     <label><input type="checkbox" id="tRing" checked> Ring glow</label>
-    <label><input type="checkbox" id="tBlur" checked> Motion blur</label>
+    <label><input type="checkbox" id="tBlur"> Motion streaks</label>
   </div>
   <div class="row"><label><span class="w">ring glow gain</span></label><input type="range" id="ringGain" min="0.25" max="12" step="0.25" value="2"><span class="val" id="ringGainV"></span></div>
 

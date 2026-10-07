@@ -6,8 +6,9 @@
 //  for drawing. World units are planet radii; the planet is at the origin.
 //
 //  FRAME
-//    compute   ring.wgsl cs_splat for each satellite (shed grains -> grid),
-//              cs_resolve (grid -> tau texture, blurred, time-blended)
+//    compute   particles.wgsl cs_smooth (the stress colour, smoothed in
+//              time), ring.wgsl cs_splat for each satellite (shed grains ->
+//              grid), cs_resolve (grid -> tau texture, blurred, blended)
 //    scene     4x MSAA, rgba16float, reversed-Z depth (clear 0, 'greater'):
 //              sky, planet surface, grains (alpha-to-coverage), ring layer,
 //              field heatmap, lines, atmosphere (additive)
@@ -99,7 +100,11 @@ export class Renderer {
     const ro = { type: 'read-only-storage' };
     this.bglPart = dev.createBindGroupLayout({ entries: [
       { binding: 0, visibility: S.VERTEX, buffer: ro }, { binding: 1, visibility: S.VERTEX, buffer: ro },
-      { binding: 2, visibility: S.VERTEX, buffer: ro }, { binding: 3, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } }] });
+      { binding: 2, visibility: S.VERTEX, buffer: ro }, { binding: 3, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 4, visibility: S.VERTEX, buffer: ro }] });
+    this.bglSmooth = dev.createBindGroupLayout({ entries: [
+      { binding: 1, visibility: S.COMPUTE, buffer: ro }, { binding: 3, visibility: S.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 5, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
     this.bglSplat = dev.createBindGroupLayout({ entries: [
       { binding: 0, visibility: S.COMPUTE, buffer: ro }, { binding: 1, visibility: S.COMPUTE, buffer: ro },
       { binding: 2, visibility: S.COMPUTE, buffer: { type: 'uniform' } }, { binding: 3, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
@@ -113,6 +118,7 @@ export class Renderer {
       { binding: 4, resource: { buffer: this.grid } }, { binding: 5, resource: this.tau[1 - i].createView() }, { binding: 6, resource: this.tau[i].createView() }] }));
     const M = this.modules;
     this.pSplat = dev.createComputePipeline({ layout: pl(this.bgl0, this.bglSplat), compute: { module: M.ring, entryPoint: 'cs_splat' } });
+    this.pSmooth = dev.createComputePipeline({ layout: pl(this.bgl0, this.bglSmooth), compute: { module: M.particles, entryPoint: 'cs_smooth' } });
     this.pResolve = dev.createComputePipeline({ layout: pl(this.bgl0, this.bglResolve), compute: { module: M.ring, entryPoint: 'cs_resolve' } });
     const ms = { count: MSAA };
     const premul = { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
@@ -172,17 +178,23 @@ export class Renderer {
     const e = { sim };
     e.tagBuf = dev.createBuffer({ size: sim.np * 4, usage: U.STORAGE | U.COPY_DST });
     dev.queue.writeBuffer(e.tagBuf, 0, new Float32Array(sim.np).fill(-1));
-    e.inst = dev.createBuffer({ size: 64, usage: U.UNIFORM | U.COPY_DST });
+    e.inst = dev.createBuffer({ size: 80, usage: U.UNIFORM | U.COPY_DST });
+    e.stress = dev.createBuffer({ size: sim.np * 4, usage: U.STORAGE });
+    e.fresh = true;   // the first smoothing pass takes the value as it is
     e.bgPart = dev.createBindGroup({ layout: this.bglPart, entries: [
       { binding: 0, resource: { buffer: sim.bufBody } }, { binding: 1, resource: { buffer: sim.bufDiag } },
-      { binding: 2, resource: { buffer: e.tagBuf } }, { binding: 3, resource: { buffer: e.inst } }] });
+      { binding: 2, resource: { buffer: e.tagBuf } }, { binding: 3, resource: { buffer: e.inst } },
+      { binding: 4, resource: { buffer: e.stress } }] });
+    e.bgSmooth = dev.createBindGroup({ layout: this.bglSmooth, entries: [
+      { binding: 1, resource: { buffer: sim.bufDiag } }, { binding: 3, resource: { buffer: e.inst } },
+      { binding: 5, resource: { buffer: e.stress } }] });
     e.bgSplat = dev.createBindGroup({ layout: this.bglSplat, entries: [
       { binding: 0, resource: { buffer: sim.bufBody } }, { binding: 1, resource: { buffer: e.tagBuf } },
       { binding: 2, resource: { buffer: e.inst } }, { binding: 3, resource: { buffer: this.grid } }] });
     this.sims.push(e);
     return e;
   }
-  removeSims() { for (const e of this.sims) { e.tagBuf.destroy(); e.inst.destroy(); } this.sims = []; }
+  removeSims() { for (const e of this.sims) { e.tagBuf.destroy(); e.inst.destroy(); e.stress.destroy(); } this.sims = []; }
   setTags(e, tags) { this.dev.queue.writeBuffer(e.tagBuf, 0, tags); }
   // segs: Float32Array, 16 floats per segment (a.xyz w, b.xyz -, ca, cb)
   setSegments(segs, count) {
@@ -232,13 +244,17 @@ export class Renderer {
     return { x: (x / w * 0.5 + 0.5) * cssW, y: (0.5 - y / w * 0.5) * cssH, w };
   }
   // One frame. f: camera and overlay state; sims: [{ e, frame:[x,y,z,k],
-  // refV:[vx,vy,vz,blurT], opts:[mode, stressMix, bright, vesc], tint }].
+  // refV:[vx,vy,vz, sim time of one frame], opts:[mode, stressMix, bright,
+  // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing] }].
   render(f, sims) {
     const dev = this.dev;
     this.writeCam(f);
     for (const s of sims) {
-      const a = new Float32Array(16);
+      const a = new Float32Array(20);
+      const m = s.motion || [0, 0, 0.1, 0];
       a.set(s.frame, 0); a.set(s.refV, 4); a.set(s.opts, 8); a.set(s.tint || [0.80, 0.88, 1.0, 1], 12);
+      a.set([m[0], m[1], s.e.fresh ? 1 : m[2], 0], 16);
+      s.e.fresh = false;
       dev.queue.writeBuffer(s.e.inst, 0, a);
     }
     const enc = dev.createCommandEncoder();
@@ -249,6 +265,8 @@ export class Renderer {
       const pass = enc.beginComputePass();
       pass.setPipeline(this.pSplat); pass.setBindGroup(0, this.bg0[1 - cur]);
       for (const s of sims) { if (!s.ring) continue; pass.setBindGroup(1, s.e.bgSplat); pass.dispatchWorkgroups(Math.ceil(s.e.sim.np / 64)); }
+      pass.setPipeline(this.pSmooth); pass.setBindGroup(0, this.bg0[1 - cur]);
+      for (const s of sims) { pass.setBindGroup(1, s.e.bgSmooth); pass.dispatchWorkgroups(Math.ceil(s.e.sim.np / 64)); }
       pass.setPipeline(this.pResolve); pass.setBindGroup(0, this.bg0[1 - cur]); pass.setBindGroup(1, this.resolveBG[cur]);
       pass.dispatchWorkgroups(Math.ceil(this.gridN / 8), Math.ceil(this.gridN / 8));
       pass.end();

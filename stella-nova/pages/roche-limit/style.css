@@ -73,6 +73,7 @@ html.in-frame #panel{padding-top:20px}
 .toggles{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:12px 0 4px}
 .toggles label{font-size:0.76rem;color:var(--dim);display:flex;align-items:center;gap:6px;cursor:pointer}
 .toggles input{accent-color:var(--warm)}
+.toggles label.wide{grid-column:1/3;color:var(--ink)}
 .readout{width:100%;border-collapse:collapse;font-size:0.76rem}
 .readout td{padding:3px 0;border-bottom:1px solid var(--line);vertical-align:top}
 .readout td:first-child{color:var(--dim);padding-right:8px}

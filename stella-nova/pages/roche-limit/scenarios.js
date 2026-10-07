@@ -5,6 +5,8 @@
 //  spiral, compare), the orbit size in planet radii, the density ratio
 //  q = rho_p / rho_s, the material, the planet style, the camera and the
 //  time warp. main.js copies it into the panel, and the panel can change it.
+//  Every scenario starts in an inertial planet or top view at a low time
+//  warp; the follow camera is opt-in (the user found motion nauseating).
 //  REAL holds the real bodies. Their densities and distances come from
 //  physics.js BODIES. The satellite is drawn at R_s / R_p = 0.12 for every
 //  body: the Roche limit does not depend on the satellite size.
@@ -18,17 +20,17 @@ const B = BODIES;
 export const S_RATIO = 0.12;     // R_s / R_p on screen and in the sim
 
 export const SCENARIOS = [
-  { key: 'moon', name: 'Moon inside the limit', short: 'Moon', kind: 'circular', d: 1.9, q: 1, material: 'fluid', style: 0, cam: 'follow', warp: 4,
+  { key: 'moon', name: 'Moon inside the limit', short: 'Moon', kind: 'circular', d: 1.9, q: 1, material: 'fluid', style: 0, cam: 'planet', warp: 2,
     hint: 'A fluid rubble moon on a circular orbit at 1.9 planet radii, inside its fluid Roche limit (2.44 for equal densities). It stretches toward the planet, sheds grains from its two tips and the stream winds into a ring.' },
-  { key: 'flyby', name: 'Comet flyby', short: 'Flyby', kind: 'flyby', peri: 1.6, e: 1, q: 2.65, material: 'fluid', style: 2, cam: 'follow', warp: 4,
+  { key: 'flyby', name: 'Comet flyby', short: 'Flyby', kind: 'flyby', peri: 1.6, e: 1, q: 2.65, material: 'fluid', style: 2, cam: 'planet', warp: 2,
     hint: 'A loose comet passes a Jupiter-like planet on a parabola, closest at 1.6 R_p, as Shoemaker-Levy 9 did in July 1992. The tide pulls it into a stream; the stream\'s own gravity then gathers it into a string of clumps.' },
-  { key: 'spiral', name: 'Spiral through the limit', short: 'Spiral', kind: 'spiral', d: 3.1, d1: 1.2, orbits: 7, q: 1, material: 'rigid', style: 1, cam: 'follow', warp: 5,
+  { key: 'spiral', name: 'Spiral through the limit', short: 'Spiral', kind: 'spiral', d: 3.1, d1: 1.2, orbits: 7, q: 1, material: 'rigid', style: 1, cam: 'planet', warp: 3,
     hint: 'A slow drag (tidal decay, in a few orbits instead of millions of years) moves a rough moon inward from 3.1 R_p. Watch the bound mass hold, then fall as the moon crosses its limit.' },
-  { key: 'ring', name: 'Ring formation (long)', short: 'Ring', kind: 'circular', d: 1.55, q: 1, material: 'fluid', style: 1, cam: 'top', warp: 8, nScale: 0.5, ringBlend: 0.9,
+  { key: 'ring', name: 'Ring formation (long)', short: 'Ring', kind: 'circular', d: 1.55, q: 1, material: 'fluid', style: 1, cam: 'top', warp: 5, nScale: 0.5, ringBlend: 0.9,
     hint: 'A long run at high time warp with fewer grains: a moon deep inside the limit comes apart, and Keplerian shear winds the debris into a full ring in some tens of orbits. Gaps and clumps form where the grains still pull on each other.' },
-  { key: 'compare', name: 'Fluid and rigid', short: 'Compare', kind: 'compare', d: 2.0, q: 1, materials: ['fluid', 'rigid'], style: 0, cam: 'planet', warp: 4,
+  { key: 'compare', name: 'Fluid and rigid', short: 'Compare', kind: 'compare', d: 2.0, q: 1, materials: ['fluid', 'rigid'], style: 0, cam: 'planet', warp: 2,
     hint: 'Two moons on one orbit at 2.0 R_p, half an orbit apart: a fluid pile (no friction) and a rough pile (friction 0.6, rolling resistance). The fluid limit for this density is 2.44, the rigid limit 1.26. The fluid moon sheds; the rough one keeps its shape.' },
-  { key: 'bodies', name: 'Real bodies', short: 'Real', kind: 'real', body: 'phobos', warp: 4,
+  { key: 'bodies', name: 'Real bodies', short: 'Real', kind: 'real', body: 'phobos', warp: 2,
     hint: 'Real pairs with their real density ratio and distance.' },
 ];
 
@@ -49,7 +51,7 @@ export const REAL = {
 export function specFor(sc, ui) {
   if (sc.kind === 'real') {
     const r = REAL[ui.body || sc.body];
-    return Object.assign({ key: 'bodies', body: ui.body || sc.body, s: S_RATIO, cam: r.cam || (r.kind === 'flyby' ? 'follow' : 'follow') }, r, pick(ui, r.kind));
+    return Object.assign({ key: 'bodies', body: ui.body || sc.body, s: S_RATIO, cam: r.cam || 'planet' }, r, pick(ui, r.kind));
   }
   const base = { key: sc.key, kind: sc.kind, s: S_RATIO, style: sc.style, cam: sc.cam, q: sc.q, material: sc.material, d: sc.d, peri: sc.peri, e: sc.e, J2: 0 };
   if (sc.kind === 'spiral') Object.assign(base, { d1: sc.d1, orbits: sc.orbits });
