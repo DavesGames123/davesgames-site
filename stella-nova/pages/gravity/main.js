@@ -64,12 +64,13 @@
 // the frame time, not the frame count, so a 120 Hz display runs at the
 // same speed as a 60 Hz display. 0.3 is half of the old rate of one dt
 // per frame at 60 Hz.
-// trailAcc: the trails take one point per dt of sim time, so a smaller h
-// does not make a trail shorter. trailPushed is true when the last step
-// took a point (the saver turning-frame trail reads it).
-var G=1000,dt=0.01,timeScale=1.0,simTime=0,PACE=0.3,trailAcc=0,trailPushed=false;
+var G=1000,dt=0.01,timeScale=1.0,simTime=0,PACE=0.3;
 // Run state and display toggles. Each show* flag maps to one Display switch.
-var paused=false,vecScale=1.0,trailLen=400;
+var paused=false,vecScale=1.0;
+// Trails (trails.js): style 'line', 'ribbon' or 'dots'. The length is in
+// orbits of each body (its osculating Kepler period, smoothed in b.tper)
+// or in sim seconds, as trailMode sets. trailWindow(b) gives sim seconds.
+var trailStyle='ribbon',trailMode='orbits',trailOrbits=1,trailSecs=6,TRAIL_MAX=60;
 var showForce=true,showVel=true,showAcc=false,showTrails=true,showField=false,showLines=false,showGrid=true;
 // The body set and the index of the inspected body (−1 = none selected).
 var bodies=[],selectedIdx=-1;
@@ -97,7 +98,7 @@ var nextId=0,currentPreset='laplace';
 // One body record. Stores position, velocity, and the force/accel scratch
 // fields the integrator fills each step, plus a trail and a wound-angle counter.
 function makeBody(name,x,y,vx,vy,mass,radius,color,fixed){
-  return{id:nextId++,name:name,x:x,y:y,vx:vx,vy:vy,ax:0,ay:0,fx:0,fy:0,mass:mass,radius:radius,color:color,fixed:fixed||false,trail:[],angle:0,lastAngle:null};
+  return{id:nextId++,name:name,x:x,y:y,vx:vx,vy:vy,ax:0,ay:0,fx:0,fy:0,mass:mass,radius:radius,color:color,fixed:fixed||false,trail:GravityTrails.make(),tper:0,angle:0,lastAngle:null};
 }
 
 /* PRESETS */
@@ -192,7 +193,6 @@ function loadPreset(name,btn){
   else if(name==='figure8')figure8();
   else if(name==='solar')miniSolar();
   else if(name==='chaos')chaos5();
-  for(var b of bodies)b.trail=[];
   centerCamera();updateBodyList();
   if(window.innerWidth<=980) closeDrawers();
 }
@@ -251,16 +251,13 @@ function step(h){
     if(b.fixed)continue;
     b.vx+=0.5*b.ax*h;b.vy+=0.5*b.ay*h;
   }
-  // Bookkeeping: append to the trail (one point per dt of sim time) and track
-  // the unwrapped orbital angle so the readout can count whole orbits without
-  // a ±π jump at the atan2 seam.
-  trailAcc+=h;trailPushed=trailAcc>=dt*0.999;
-  if(trailPushed)trailAcc=Math.max(0,trailAcc-dt);
+  // Bookkeeping: offer the new position to the trail (trails.js keeps it
+  // after DS world units or DTMAX sim s) and track the unwrapped orbital
+  // angle so the readout can count whole orbits without a ±π jump at the
+  // atan2 seam.
+  simTime+=h;
   for(var b of bodies){
-    if(trailPushed){
-      b.trail.push([b.x,b.y]);
-      if(b.trail.length>trailLen)b.trail.shift();
-    }
+    GravityTrails.sample(b.trail,b.x,b.y,simTime);
     var na=Math.atan2(b.y,b.x);
     if(b.lastAngle!==null){
       var da=na-b.lastAngle;
@@ -271,7 +268,6 @@ function step(h){
     }
     b.lastAngle=na;
   }
-  simTime+=h;
 }
 // Diagnostics for the readouts: total kinetic energy, gravitational potential
 // energy, and net linear momentum. A stable integrator keeps ke+pe roughly flat.
@@ -580,28 +576,14 @@ function render(){
     }
   }
 
-  // Banded trails: split each trail into 6 age bands and fade the older bands so
-  // the path reads as a comet tail, oldest points faintest.
-  // Banded trails
+  // Trails (trails.js): world points in a ring, drawn through the camera
+  // transform, smoothed by a spline, faded by age. Fixed bodies do not move.
   if(showTrails){
-    var BANDS=6;
-    ctx.lineWidth=1.6;
+    var ta=document.getElementById('canvasArea'),tox=ta.clientWidth/2+camX,toy=ta.clientHeight/2+camY;
     for(var b of bodies){
-      var n=b.trail.length;if(n<2)continue;
-      for(var band=0;band<BANDS;band++){
-        var startT=Math.floor(band*n/BANDS),endT=Math.floor((band+1)*n/BANDS);
-        if(endT<=startT+1)continue;
-        var alpha=(band+1)/BANDS*0.6;
-        ctx.strokeStyle=hexToRGBA(b.color,alpha);
-        ctx.beginPath();
-        var p=worldToScreen(b.trail[startT][0],b.trail[startT][1]);
-        ctx.moveTo(p[0],p[1]);
-        for(var t=startT+1;t<endT&&t<n;t++){
-          var q=worldToScreen(b.trail[t][0],b.trail[t][1]);
-          ctx.lineTo(q[0],q[1]);
-        }
-        ctx.stroke();
-      }
+      if(b.fixed)continue;
+      GravityTrails.draw(ctx,b.trail,b.x,b.y,simTime,trailWindow(b),tox,toy,camZoom,trailStyle,b.color,
+        Math.max(1.6,Math.min(5,b.radius*camZoom*0.9)));
     }
   }
 
@@ -717,6 +699,45 @@ function stepOnce(){
   }
   step(dt);
 }
+// The trail length of body b in sim seconds. In 'orbits' mode it is
+// trailOrbits times b.tper, the smoothed osculating period (refreshed by
+// updatePeriods once per frame); an unbound body gets TRAIL_MAX.
+function trailWindow(b){
+  if(trailMode!=='orbits')return trailSecs;
+  return b.tper>0?Math.max(0.25,Math.min(TRAIL_MAX,trailOrbits*b.tper)):TRAIL_MAX;
+}
+// Smooth each body's osculating period (trails.js oscPeriod) over a few
+// frames, so the "orbits" length of a chaotic body does not flicker.
+function updatePeriods(){
+  for(var i=0;i<bodies.length;i++){
+    var b=bodies[i],T=GravityTrails.oscPeriod(bodies,i,G);
+    if(!(T>0)||T>TRAIL_MAX)T=TRAIL_MAX;
+    b.tper=b.tper>0?b.tper+(T-b.tper)*0.08:T;
+  }
+}
+// Trail controls. The style buttons and the unit buttons are .seg groups;
+// the length slider (0..100) is logarithmic: 0.1..8 orbits or 0.25..60 s.
+function setTrailStyle(v){
+  trailStyle=v;
+  document.querySelectorAll('#trailStyle button').forEach(function(e){e.classList.toggle('on',e.dataset.v===v);});
+}
+function setTrailUnit(v){
+  trailMode=v;
+  document.querySelectorAll('#trailUnit button').forEach(function(e){e.classList.toggle('on',e.dataset.v===v);});
+  var x=v==='orbits'?Math.log(trailOrbits/0.1)/Math.log(80):Math.log(trailSecs/0.25)/Math.log(240);
+  document.getElementById('tlSlider').value=Math.round(100*x);
+  showTrailLen();
+}
+function setTrailLen(p){
+  p=Math.max(0,Math.min(100,+p))/100;
+  if(trailMode==='orbits')trailOrbits=0.1*Math.pow(80,p);else trailSecs=0.25*Math.pow(240,p);
+  showTrailLen();
+}
+function showTrailLen(){
+  document.getElementById('tlVal').textContent=trailMode==='orbits'
+    ?(trailOrbits<1?trailOrbits.toFixed(2):trailOrbits.toFixed(1))+(Math.abs(trailOrbits-1)<0.005?' orbit':' orbits')
+    :(trailSecs<10?trailSecs.toFixed(1):trailSecs.toFixed(0))+' s';
+}
 // Slider 0..40 maps to a 0..4\u00d7 time multiplier (the loop sub-steps to stay stable).
 function setTimeScale(v){timeScale=v/10;document.getElementById('tsVal').textContent=timeScale.toFixed(1)+'\u00d7';}
 
@@ -785,6 +806,7 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='-'||e.key==='_'){zoomOut();}
   else if(e.key==='c'||e.key==='C'){centerCamera();}
   else if(e.key==='r'||e.key==='R'){if(currentPreset)loadPreset(currentPreset);}
+  else if(e.key==='t'||e.key==='T'){var ts=['line','ribbon','dots'];setTrailStyle(ts[(ts.indexOf(trailStyle)+1)%3]);}
   else if(e.key>='1'&&e.key<='5'){
     var presets=['laplace','binary','figure8','solar','chaos'];
     loadPreset(presets[+e.key-1]);
@@ -821,6 +843,7 @@ function loop(now){
     // Refresh forces after the last step so drawn vectors match current positions.
     computeForces();
   }
+  updatePeriods();
   render();
   // Throttle the expensive readout/graph updates to one frame in three.
   if(frameCount%3===0){
@@ -891,7 +914,7 @@ window.snSaver={enter:function(o){
   step=function(h){
     baseStep(h);
     if(cur&&cur.omega){var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),s=Math.sin(a);
-      if(trailPushed)for(var b of bodies){(b.rtrail=b.rtrail||[]).push([c*b.x-s*b.y,s*b.x+c*b.y]);if(b.rtrail.length>trailLen)b.rtrail.shift();}}
+      for(var b of bodies)GravityTrails.sample(b.rtrail||(b.rtrail=GravityTrails.make()),c*b.x-s*b.y,s*b.x+c*b.y,simTime);}
   };
   // A position as drawn: turned into the frame of the planet if omega,
   // with the planet (at angle 0 at t = 0) at the top, so L4 and L5 spread
@@ -899,9 +922,10 @@ window.snSaver={enter:function(o){
   function shown(b){if(!cur||!cur.omega)return[b.x,b.y];var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),s=Math.sin(a);return[c*b.x-s*b.y,s*b.x+c*b.y];}
   function build(k){
     var sc=SC[order[k%order.length]];
-    nextId=0;simTime=0;trailAcc=0;energyHistory=[];selectedIdx=-1;fitBox=null;
+    nextId=0;simTime=0;energyHistory=[];selectedIdx=-1;fitBox=null;
     var S=sc.build(rng(seed*31+k*7919),G,makeBody);
-    bodies=S.bodies;trailLen=sc.trail;
+    // The scene sets the trail: sc.trail sim seconds in sc.style.
+    bodies=S.bodies;trailMode='time';trailSecs=sc.trail;trailStyle=sc.style||'ribbon';
     timeScale=sc.ts*(1-0.3*calm);
     return{sc:sc,S:S};
   }
@@ -930,7 +954,7 @@ window.snSaver={enter:function(o){
     var m=build(si);cur=m.S;curSc=m.sc;   // measure needs cur for extra and omega
     box=measure(curSc);
     m=build(si);cur=m.S;curSc=m.sc;       // the same seed: the run repeats the measured path
-    for(var b of bodies){b.trail=[];b.rtrail=[];}
+    for(var b of bodies){GravityTrails.reset(b.trail);if(b.rtrail)GravityTrails.reset(b.rtrail);}
     computeForces();E0=0;shownAt=performance.now();
     var f=saverFrame();camX=f.x;camY=f.y;camZoom=f.z;tgt=f;
     plate();
@@ -1021,10 +1045,13 @@ window.snSaver={enter:function(o){
     if(tgt){var now=performance.now(),k=1-Math.exp(-3*Math.min(1/30,(now-(render.t||now))/1000));render.t=now;
       if(curSc&&curSc.follow!=null)tgt=saverFrame();
       camX+=(tgt.x-camX)*k;camY+=(tgt.y-camY)*k;camZoom+=(tgt.z-camZoom)*k;}
-    var keep=null;
-    if(cur&&cur.omega){keep=bodies.map(function(b){var p=shown(b),q={x:b.x,y:b.y,t:b.trail};b.x=p[0];b.y=p[1];b.trail=b.rtrail||[];return q;});}
+    // The swap keeps the world values in fields of each body (no new
+    // objects per frame).
+    var turned=!!(cur&&cur.omega&&bodies.length&&bodies[0].rtrail),i,b;
+    if(turned){var a=-cur.omega*simTime-Math.PI/2,c=Math.cos(a),sn=Math.sin(a);
+      for(i=0;i<bodies.length;i++){b=bodies[i];b._wx=b.x;b._wy=b.y;b._wt=b.trail;b.x=c*b._wx-sn*b._wy;b.y=sn*b._wx+c*b._wy;b.trail=b.rtrail;}}
     base();
-    if(keep)bodies.forEach(function(b,i){b.x=keep[i].x;b.y=keep[i].y;b.trail=keep[i].t;});
+    if(turned)for(i=0;i<bodies.length;i++){b=bodies[i];b.x=b._wx;b.y=b._wy;b.trail=b._wt;}
     if(dir===0){
       var size=Math.max(box.x1-box.x0,box.y1-box.y0),org=curSc.follow!=null?shown(bodies[curSc.follow]):[0,0],cx=org[0]+(box.x0+box.x1)/2,cy=org[1]+(box.y0+box.y1)/2;
       var lost=bodies.some(function(b){var p=shown(b);return!b.noframe&&curSc.escapeOk==null&&Math.hypot(p[0]-cx,p[1]-cy)>1.5*size;});

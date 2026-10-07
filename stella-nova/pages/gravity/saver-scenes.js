@@ -9,7 +9,12 @@
 //  SCENE FIELDS
 //    key, title, sub .. the plate names
 //    ts ............... timeScale at calm 0 (substeps of h = dt = 0.01)
-//    trail ............ trail length in steps
+//    trail ............ trail length in sim seconds (trails.js). At calm
+//                       0.7 a 10 s hold shows about 2.4 ts sim s, so a
+//                       trail near that keeps the whole hold in view
+//    style ............ trail style: 'line', 'ribbon' (default) or 'dots'
+//                       (dots: equal time steps, so they bunch where the
+//                       body is slow; kepler uses them for the law of areas)
 //    follow ........... the camera centres on this body (else the box)
 //    escapeOk ......... share of framed bodies that may leave (tails)
 //    tex, eq .......... the scene law (TeX and plain fallback)
@@ -55,7 +60,7 @@ var f1 = function (v) { return v.toFixed(1); };
 var f2 = function (v) { return v.toFixed(2); };
 
 var SCENES = [
-  { key: 'kepler', title: 'Kepler ellipses', sub: 'Three orbits share one focus, e = 0, 0.45 and 0.7', ts: 3, trail: 1600,
+  { key: 'kepler', title: 'Kepler ellipses', sub: 'Three orbits share one focus, e = 0, 0.45 and 0.7', ts: 3, trail: 8, style: 'dots',
     tex: [String.raw`r(\theta)=\frac{a\,(1-e^{2})}{1+e\cos\theta},\qquad T^{2}=\frac{4\pi^{2}}{G\,M}\,a^{3}`],
     eq: ['r(θ) = a(1 − e²) / (1 + e cos θ)', 'T² = 4π² a³ / (G M)'],
     build: function (rnd, G, mk) {
@@ -67,7 +72,7 @@ var SCENES = [
       return { bodies: B, info: function () { return [{ sym: 'T_1', name: 'period, a = 110', value: f2(T(110)) }, { sym: 'T_3', name: 'period, a = 230', value: f2(T(230)) }, { sym: 'T_3/T_1', name: '(a₃/a₁)^{3/2}', value: f2(T(230) / T(110)) }]; } };
     } },
 
-  { key: 'precession', title: 'Apsidal precession', sub: 'A GR-like 1/r⁴ term turns each ellipse into a rosette', ts: 3, trail: 4200,
+  { key: 'precession', title: 'Apsidal precession', sub: 'A GR-like 1/r⁴ term turns each ellipse into a rosette', ts: 3, trail: 8,
     tex: [String.raw`\ddot{\vec r}=-\frac{G M}{r^{2}}\Bigl(1+\frac{3\,h^{2}}{c^{2}r^{2}}\Bigr)\hat r,\qquad \Delta\varpi=\frac{6\pi G M}{c^{2}a\,(1-e^{2})}`],
     eq: ['r̈ = −(GM/r²)(1 + 3h²/(c²r²)) r̂', 'Δϖ = 6πGM / (c² a (1 − e²)) per orbit'],
     build: function (rnd, G, mk) {
@@ -82,7 +87,7 @@ var SCENES = [
         info: function () { return [{ sym: 'c^{2}', name: 'light speed², sim units', value: '2.3·10⁶' }, { sym: '\\Delta\\varpi_1', name: 'inner, per orbit', value: f1(dw(120, 0.35)) + '°' }, { sym: '\\Delta\\varpi_2', name: 'outer, per orbit', value: f1(dw(200, 0.6)) + '°' }]; } };
     } },
 
-  { key: 'circumbinary', title: 'Circumbinary planets', sub: 'Two planets orbit a binary star, outside 2.4 times its separation', ts: 4, trail: 2400,
+  { key: 'circumbinary', title: 'Circumbinary planets', sub: 'Two planets orbit a binary star, outside 2.4 times its separation', ts: 4, trail: 10,
     tex: [String.raw`a_p>a_{\mathrm{crit}}\approx 2.4\,a_{\mathrm{bin}},\qquad \Omega_{\mathrm{bin}}^{2}=\frac{G\,(m_1+m_2)}{a_{\mathrm{bin}}^{3}}`],
     eq: ['a_p > a_crit ≈ 2.4 a_bin', 'Ω_bin² = G(m₁ + m₂) / a_bin³'],
     build: function (rnd, G, mk) {
@@ -95,7 +100,7 @@ var SCENES = [
       return { bodies: centre(B), info: function () { return [{ sym: 'a_{\\mathrm{bin}}', name: 'binary separation', value: String(2 * s) }, { sym: 'a_p/a_{\\mathrm{bin}}', name: 'planets b, c', value: f1(p1 / (2 * s)) + ', ' + f1(p2 / (2 * s)) }, { sym: 'q', name: 'mass ratio', value: '1' }]; } };
     } },
 
-  { key: 'figure8', title: 'Figure-eight choreography', sub: 'Chenciner and Montgomery (2000): three equal masses on one curve', ts: 5, trail: 2600,
+  { key: 'figure8', title: 'Figure-eight choreography', sub: 'Chenciner and Montgomery (2000): three equal masses on one curve', ts: 5, trail: 13,
     tex: [String.raw`\vec r_{1}=-\vec r_{2}=(0.97000436,\,-0.24308753),\qquad \dot{\vec r}_{3}=-2\,\dot{\vec r}_{1}=(-0.93240737,\,-0.86473146)`],
     eq: ['r₁ = −r₂ = (0.97000436, −0.24308753)', 'ṙ₃ = −2ṙ₁ = (−0.93240737, −0.86473146)'],
     build: function (rnd, G, mk) {
@@ -107,7 +112,7 @@ var SCENES = [
       return { bodies: turn(B, rnd() * 6.283), info: function () { return [{ sym: 'T', name: 'period, 6.3259 s/v', value: f2(6.3259 * s / vs) }, { sym: 'm', name: 'each mass', value: String(m) }]; } };
     } },
 
-  { key: 'lagrange', title: 'Lagrange triangle', sub: 'Three masses at the corners of a turning equilateral triangle', ts: 4, trail: 1500,
+  { key: 'lagrange', title: 'Lagrange triangle', sub: 'Three masses at the corners of a turning equilateral triangle', ts: 4, trail: 10,
     tex: [String.raw`\omega^{2}=\frac{G\,(m_1+m_2+m_3)}{d^{3}},\qquad 27\,(m_1m_2+m_2m_3+m_3m_1)<(m_1+m_2+m_3)^{2}`],
     eq: ['ω² = G(m₁ + m₂ + m₃) / d³', 'Routh: 27(m₁m₂ + m₂m₃ + m₃m₁) < (Σm)²'],
     build: function (rnd, G, mk) {
@@ -120,7 +125,7 @@ var SCENES = [
       return { bodies: turn(B, rnd() * 6.283), info: function () { return [{ sym: 'd', name: 'side', value: String(d) }, { sym: 'T', name: 'period 2π/ω', value: f2(2 * Math.PI / w) }, { sym: '27\\Sigma m_im_j/M^{2}', name: 'Routh, stable < 1', value: f2(routh) }]; } };
     } },
 
-  { key: 'trojans', title: 'Trojans at L4 and L5', sub: 'Tadpole orbits, seen in the frame that turns with the planet', ts: 8, trail: 2600,
+  { key: 'trojans', title: 'Trojans at L4 and L5', sub: 'Tadpole orbits, seen in the frame that turns with the planet', ts: 8, trail: 19, style: 'line',
     tex: [String.raw`\mu=\frac{m_p}{M+m_p}<0.0385,\qquad T_{\mathrm{lib}}\approx T\sqrt{\frac{4}{27\,\mu}}`],
     eq: ['μ = m_p / (M + m_p) < 0.0385', 'T_lib ≈ T √(4 / 27μ)'],
     build: function (rnd, G, mk) {
@@ -136,7 +141,7 @@ var SCENES = [
       return { bodies: B, omega: W, info: function () { return [{ sym: '\\mu', name: 'mass ratio', value: mu.toFixed(4) }, { sym: 'T', name: 'planet period', value: f2(2 * Math.PI / W) }, { sym: 'T_{\\mathrm{lib}}', name: 'tadpole, small swing', value: f2(2 * Math.PI / W * Math.sqrt(4 / (27 * mu))) }]; } };
     } },
 
-  { key: 'assist', title: 'Gravity assist', sub: 'A probe passes behind a planet and leaves on a larger orbit', ts: 3, trail: 3000,
+  { key: 'assist', title: 'Gravity assist', sub: 'A probe passes behind a planet and leaves on a larger orbit', ts: 3, trail: 8,
     tex: [String.raw`v_\infty^{\mathrm{in}}=v_\infty^{\mathrm{out}}\ \text{(planet frame)},\qquad \Delta v=2\,v_\infty\sin\frac{\delta}{2}`],
     eq: ['|v∞ in| = |v∞ out| in the planet frame', 'Δv = 2 v∞ sin(δ/2)'],
     build: function (rnd, G, mk) {
@@ -148,7 +153,7 @@ var SCENES = [
       return { bodies: turn(B, rnd() * 6.283), info: function (B) { var p = B[2], e = 0.5 * (p.vx * p.vx + p.vy * p.vy) - G * M / Math.hypot(p.x, p.y); if (E0 === null) E0 = e; return [{ sym: '\\varepsilon', name: 'probe orbit energy', value: f1(e) }, { sym: '\\varepsilon/\\varepsilon_0', name: 'from the start', value: f2(e / E0) }, { sym: 'm_p', name: 'planet mass', value: String(mp) }]; } };
     } },
 
-  { key: 'laplace', title: 'Laplace resonance 1 : 2 : 4', sub: 'Io, Europa and Ganymede: periods in the ratio 1 : 2 : 4', ts: 3, trail: 1500,
+  { key: 'laplace', title: 'Laplace resonance 1 : 2 : 4', sub: 'Io, Europa and Ganymede: periods in the ratio 1 : 2 : 4', ts: 3, trail: 8,
     tex: [String.raw`\lambda_{\mathrm{I}}-3\lambda_{\mathrm{E}}+2\lambda_{\mathrm{G}}=180^{\circ},\qquad T\propto a^{3/2}`],
     eq: ['λ_I − 3λ_E + 2λ_G = 180°', 'T ∝ a^(3/2)'],
     build: function (rnd, G, mk) {
@@ -160,7 +165,7 @@ var SCENES = [
       return { bodies: B, info: function () { return [{ sym: 'T_I', name: 'Io period', value: f2(T1) }, { sym: 'T_E/T_I', name: 'Europa', value: '2.00' }, { sym: 'T_G/T_I', name: 'Ganymede', value: '4.00' }]; } };
     } },
 
-  { key: 'triple', title: 'Hierarchical triple', sub: 'A tight binary and a third star on a wide orbit', ts: 4, trail: 2400,
+  { key: 'triple', title: 'Hierarchical triple', sub: 'A tight binary and a third star on a wide orbit', ts: 4, trail: 10,
     tex: [String.raw`\frac{a_{\mathrm{out}}}{a_{\mathrm{in}}}>2.8\Bigl(1+\frac{m_3}{m_1+m_2}\Bigr)^{2/5}\ \text{(Mardling–Aarseth, circular)}`],
     eq: ['a_out / a_in > 2.8 (1 + m₃/(m₁ + m₂))^(2/5)'],
     build: function (rnd, G, mk) {
@@ -171,7 +176,7 @@ var SCENES = [
       return { bodies: turn(B, rnd() * 6.283), info: function () { return [{ sym: 'a_{\\mathrm{out}}/a_{\\mathrm{in}}', name: 'ratio', value: f1(R / (2 * s)) }, { sym: '\\text{limit}', name: 'Mardling–Aarseth', value: f2(lim) }, { sym: 'm_3/m_1', name: 'mass ratio', value: f2(m3 / m) }]; } };
     } },
 
-  { key: 'tidal', title: 'Tidal tails', sub: 'A passing mass pulls a disk of stars into a bridge and a tail', ts: 2, trail: 700, follow: 0, escapeOk: 0.35,
+  { key: 'tidal', title: 'Tidal tails', sub: 'A passing mass pulls a disk of stars into a bridge and a tail', ts: 2, trail: 5, style: 'line', follow: 0, escapeOk: 0.35,
     tex: [String.raw`r_{\mathrm{t}}\approx q\Bigl(\frac{M}{3\,(M+M_p)}\Bigr)^{1/3},\qquad \text{parabolic: } v^{2}=\frac{2G\,(M+M_p)}{r}`],
     eq: ['r_t ≈ q (M / 3(M + M_p))^(1/3)', 'parabolic: v² = 2G(M + M_p)/r'],
     build: function (rnd, G, mk) {

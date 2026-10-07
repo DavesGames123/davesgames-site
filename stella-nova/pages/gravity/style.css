@@ -245,3 +245,12 @@ canvas#simCanvas{display:block}
   .preset-icon{width:36px;height:36px}
   .preset-card.full .preset-icon{width:56px;height:26px}
 }
+
+/* Trail controls: a segmented button group (.seg), small inside a slider label (.seg-sm). */
+.seg{display:inline-flex;border:1px solid var(--border-b);border-radius:6px;overflow:hidden;flex-shrink:0}
+.seg button{font-family:inherit;font-size:0.74rem;font-weight:500;color:var(--text-dim);background:transparent;border:0;padding:5px 10px;cursor:pointer;min-height:30px}
+.seg button+button{border-left:1px solid var(--border-b)}
+.seg button.on{background:rgba(92,216,232,0.16);color:var(--text-bright)}
+.seg-sm{margin-left:8px}
+.seg-sm button{font-size:0.68rem;padding:2px 7px;min-height:22px}
+@media (pointer:coarse){.seg button{min-height:36px;padding:6px 12px}.seg-sm button{min-height:30px}}
