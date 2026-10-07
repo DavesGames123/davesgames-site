@@ -249,7 +249,8 @@ w.SN_NAV = [
     { h: "Image", p: [
       ["color", "Color Table", "WGSL", "color-table"],
       ["postfx", "Post-Process", "WGSL", "postfx-table"],
-      ["sampling", "Sampling Table", "WGSL", "sampling-table"]
+      ["sampling", "Sampling Table", "WGSL", "sampling-table"],
+      ["halftone", "Halftone", "WGSL"]
     ] },
     { h: "Surfaces", p: [
       ["lighting", "Lighting Table", "WGSL", "lighting-table"],

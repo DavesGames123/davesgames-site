@@ -45,6 +45,7 @@ const EXCLUDED = new Set([
   'line-art',          // Rust port of fogleman/ln
   'volume-noise',      // port of TileableVolumeNoise
   'fishdraw',          // port of LingDong-/fishdraw
+  'halftone',          // port of glslify/glsl-halftone
   'randoma11y',        // removed from the site
 ]);
 // Pages listed only in the plain directory: no featured spot, quick link,
