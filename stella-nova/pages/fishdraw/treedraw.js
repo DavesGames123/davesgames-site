@@ -15,6 +15,7 @@
 //    anc            true draws the ancestral fish at internal nodes
 //    names          true writes the names under the tip fish
 //    sel            a node id or -1; line: a Set of the ids of its lineage
+//    ancOnly        a Set of internal ids whose fish show when anc is false
 //  Growth: the elbow of a branch shows when its parent exists, the run grows
 //  from the parent time to the node time. At the growing end a small fish
 //  fades from the parent form to the child form. A node fish draws on with
@@ -155,7 +156,7 @@ export function drawTree(ctx, P) {
   for (const q of nodes) {
     const box = lay.fish[q.id];
     if (!box || tau < q.t) continue;
-    if (box.anc && !P.anc && q.id !== P.sel) continue;
+    if (box.anc && !P.anc && q.id !== P.sel && !(P.ancOnly && P.ancOnly.has(q.id))) continue;
     const f = P.fishFor(q.id);
     const prog = clamp((tau - q.t) / DRAW_T, 0, 1);
     const alpha = q.kind === 'extinct' ? 0.5 : box.anc ? 0.8 : 1;

@@ -15,6 +15,12 @@
 //            or tail; the lines are vectors through the camera each frame
 //    morph   one name, params that step from the fish to a relative and
 //            on to a second relative (blendParams), with a cross-fade
+//  Three tree shots use tree.js (a tree of 10 to 16 living tips):
+//    grow     the tree grows from the root; fish appear at the nodes
+//    radiate  a cladogram, zoomed, the camera pans along a radiation
+//             (the split with 4x speciation, else the largest clade)
+//    lineage  the camera pushes in on one living tip while the ancestor
+//             fish of its lineage appear one by one, root to tip
 //  The paper theme changes on each shot (a shuffled bag of themes).
 //  The next shot is asked of the pool while the current one plays.
 //
@@ -36,8 +42,11 @@
 import { mulberry, randomName, baseParams, mutate, blendParams } from './engine.js';
 import { THEMES, THEME_KEYS, MM_PER_PX, layoutPlate } from './plate.js';
 import { drawPlate } from './render.js';
+import { buildTree, layoutTree, lineage, cladeName, maAgo, T_MAX } from './tree.js';
+import { drawTree, GROW_OVER } from './treedraw.js';
 
-const TYPES = ['draw', 'plate', 'push', 'morph'];
+const TYPES = ['draw', 'plate', 'push', 'morph', 'grow', 'radiate', 'lineage'];
+const TREE = new Set(['grow', 'radiate', 'lineage']);
 const FOCI = [
   { name: 'the head', u: 0.22, v: 0.5 },
   { name: 'the scales', u: 0.52, v: 0.48 },
@@ -50,12 +59,15 @@ const CODE = {
   plate: ['binomen', 'end'],
   push: ['squama', 'start'],
   morph: ['rndtri', 'start'],
+  grow: ['drift', 'start', 'tree'],
+  radiate: ['buildTree', 'start', 'tree'],
+  lineage: ['paramDistance', 'start', 'tree'],
 };
 
 // The lines of `function name(` to its closing brace, the first or last n.
 function extract(src, name, from = 'start', n = 12) {
   const lines = src.split('\n');
-  const i = lines.findIndex(l => l.startsWith('function ' + name + '('));
+  const i = lines.findIndex(l => l.startsWith('function ' + name + '(') || l.startsWith('export function ' + name + '('));
   if (i < 0) return '';
   let j = i + 1;
   while (j < lines.length && lines[j] !== '}') j++;
@@ -81,6 +93,9 @@ const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
 export function installSaver(ctxIn) {
   const { S, pool, E, src, getGrain, onEnter, onExit } = ctxIn;
   let V = null;
+  // tree.js as text, for the code extract of the tree shots.
+  let treeSrc = '';
+  fetch(new URL('./tree.js', import.meta.url)).then(r => r.text()).then(t => { treeSrc = t; }).catch(() => { /* no extract */ });
 
   function shuffled(arr, rnd) {
     const a = arr.slice();
@@ -102,9 +117,40 @@ export function installSaver(ctxIn) {
   const u32 = () => (V.rnd() * 4294967295) >>> 0;
 
   // ── prepare ───────────────────────────────────────────────────────────────
+  function prepareTree(shot) {
+    const name = randomName(E, u32());
+    const tips = shot.type === 'grow' ? 10 + Math.floor(V.rnd() * 5) : 14 + Math.floor(V.rnd() * 3);
+    const tree = buildTree({ E, rootName: name, rootParams: baseParams(E, name), seed: u32(), maxTips: tips, spec: shot.type === 'radiate' ? 1.5 : 1, radiations: true });
+    shot.tree = tree; shot.fish = new Map();
+    shot.specs = [{ name, params: null }];
+    const kinds = shot.type === 'radiate' ? ['clado'] : innerWidth >= innerHeight ? ['clado', 'radial', 'fan'] : ['clado', 'radial'];
+    shot.kind = kinds[Math.floor(V.rnd() * kinds.length)];
+    const N = tree.nodes;
+    if (shot.type === 'radiate') {
+      const count = id => (N[id].children.length ? N[id].children.reduce((a, c) => a + count(c), 0) : 1);
+      const rad = N.filter(q => q.radiation);
+      shot.focus = (rad.length ? rad : N.filter(q => q.kind === 'split' && q.id > 1)).sort((a, b) => count(b.id) - count(a.id))[0] || N[1];
+      shot.sub = new Set();
+      (function walk(id) { shot.sub.add(id); N[id].children.forEach(walk); })(shot.focus.id);
+    }
+    if (shot.type === 'lineage') {
+      const living = N.filter(q => q.kind === 'tip').sort((a, b) => lineage(tree, b.id).length - lineage(tree, a.id).length);
+      shot.tip = living[0];
+      shot.line = lineage(tree, shot.tip.id);
+    }
+    shot.dur += 2;
+    const need = [];
+    for (const q of N.slice().sort((a, b) => a.t - b.t)) {
+      const job = pool.draw(q.name, q.id === 0 ? null : q.params, false, 2 + Math.round(q.t / 10), 'saver')
+        .then(f => { shot.fish.set(q.id, f); return f; }).catch(() => null);
+      if (shot.type === 'grow' ? q.t < 30 : shot.type === 'lineage' ? shot.line.includes(q.id) : !q.children.length) need.push(job);
+    }
+    shot.ready = Promise.race([Promise.all(need), new Promise(r => setTimeout(r, 7000))]);
+  }
   function prepare(type) {
     const calm = V.calm;
     const shot = { type, theme: nextTheme(), dur: 5 + 4 * calm + V.rnd() * 3, fishes: [], specs: [], t0: 0 };
+    if (TREE.has(type)) { prepareTree(shot); shot.ready.then(() => { shot.isReady = true; }); return shot; }
     const ask = (spec, i, label) => pool.draw(spec.name, spec.params, label, 2 + i, 'saver')
       .then(f => { shot.fishes[i] = f; return f; }).catch(() => null);
     if (type === 'plate') {
@@ -134,8 +180,20 @@ export function installSaver(ctxIn) {
   // ── label ─────────────────────────────────────────────────────────────────
   function labelFor(shot) {
     const f = shot.fishes[0], name = shot.specs[0].name;
-    const [fn, from] = CODE[shot.type];
-    const code = { lang: 'js', name: 'fishdraw.js · ' + fn + '()', text: extract(src, fn, from, 12) };
+    const [fn, from, file] = CODE[shot.type];
+    const code = file === 'tree'
+      ? { lang: 'js', name: 'tree.js · ' + fn + '()', text: extract(treeSrc, fn, from, 12) }
+      : { lang: 'js', name: 'fishdraw.js · ' + fn + '()', text: extract(src, fn, from, 12) };
+    if (TREE.has(shot.type)) {
+      const N = shot.tree.nodes, root = N[0];
+      const living = N.filter(q => q.kind === 'tip').length, gone = N.filter(q => q.kind === 'extinct').length;
+      const lines = [`${living} living and ${gone} extinct species over ${maAgo(0)} million made-up years`];
+      let sub = `A tree of life grown from ${root.name}`;
+      if (shot.type === 'radiate') { sub = `A radiation of ${shot.focus.genus}, ${maAgo(shot.focus.t)} Ma`; lines.push('One lineage splits four times as fast for a while; its descendants fill the tree.'); }
+      if (shot.type === 'lineage') { sub = `From ${root.name} to ${shot.tip.name}`; lines.push(`${shot.line.length - 1} steps; each ancestor is drawn from its own params.`); }
+      if (shot.type === 'grow') lines.push('Params drift down each branch; lineages split and die out. Every node is a fishdraw fish.');
+      return { title: 'The ' + cladeName(root.genus), sub, lines, code: code.text ? code : undefined };
+    }
     const seed = E.str_to_seed(name);
     if (shot.type === 'plate') {
       return { title: 'Pisces fictae', sub: `A plate of ${shot.specs.length} specimens, drawn with fishdraw`,
@@ -183,6 +241,7 @@ export function installSaver(ctxIn) {
     const inner = Object.assign({}, theme, { paper: 'rgba(0,0,0,0)', grain: 0, vignette: 0, grid: null });
     const bw = box.w * mmDev, bh = box.h * mmDev;
     const pen = 0.3 * Math.max(0.8, Math.min(1.6, Math.min(innerWidth, innerHeight) / 700));
+    if (TREE.has(shot.type)) { renderTree(x, shot, t, box, mmDev, inner, pen, dpr); return; }
     if (shot.type === 'plate') {
       const L = layoutPlate({ w: bw, h: bh, rows: shot.rows, cols: shot.cols, border: false, title: false, labels: true, screen: true, names: shot.specs.map(s => s.name) });
       const n = shot.specs.length, slot = shot.dur * 0.72 / n;
@@ -227,6 +286,37 @@ export function installSaver(ctxIn) {
       drawPlate(x, { L, theme: inner, view, fishes: [shot.fishes[k + 1]], progress: [null], pen, dpr, hiCell: -1 });
     }
     x.globalAlpha = 1;
+  }
+
+  // ── renderTree ────────────────────────────────────────────────────────────
+  function renderTree(x, shot, t, box, mmDev, theme, pen, dpr) {
+    const bw = box.w * mmDev, bh = box.h * mmDev;
+    const lay = layoutTree(shot.tree, shot.kind, { w: bw, h: bh, ox: 0, oy: 0, xMode: 'time', axis: shot.kind === 'clado' });
+    const s0 = 1 / mmDev, cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    let view = { s: s0, ox: box.x, oy: box.y }, tau = null, line = null, ancOnly = null, anc = true;
+    const e = ease(t / shot.dur);
+    if (shot.type === 'grow') tau = T_MAX * GROW_OVER * Math.min(1, t / (shot.dur * 0.85));
+    if (shot.type === 'radiate') {
+      // Pan from the radiation node to the middle of its tips, zoomed.
+      const tipsOf = [...shot.sub].filter(id => !shot.tree.nodes[id].children.length).map(id => lay.pos[id]);
+      const a = lay.pos[shot.focus.id], b = { x: tipsOf.reduce((u, p) => u + p.x, 0) / tipsOf.length, y: tipsOf.reduce((u, p) => u + p.y, 0) / tipsOf.length };
+      const z = 2.1, fx = a.x + (b.x - a.x) * e, fy = a.y + (b.y - a.y) * e, s = s0 * z;
+      view = { s, ox: cx - fx * s, oy: cy - fy * s };
+      line = shot.sub; anc = false;
+    }
+    if (shot.type === 'lineage') {
+      const p = lay.fish[shot.tip.id], fx = p.x + p.w / 2, fy = p.y + p.h / 2;
+      const z = 1 + 1.5 * e, s = s0 * z;
+      const sx = box.x + fx * s0 + (cx - box.x - fx * s0) * e, sy = box.y + fy * s0 + (cy - box.y - fy * s0) * e;
+      view = { s, ox: sx - fx * s, oy: sy - fy * s };
+      line = new Set(shot.line);
+      ancOnly = new Set(shot.line.slice(0, 1 + Math.floor(Math.min(1, t / (shot.dur * 0.8)) * shot.line.length)));
+      anc = false;
+    }
+    // The real theme (the inner copy has a clear paper), so the lineage
+    // colour matches a dark or a light paper.
+    drawTree(x, { tree: shot.tree, lay, view, theme: Object.assign({}, THEMES[shot.theme], { paper: THEMES[shot.theme].paper }), pen: pen * 0.8, dpr, tau, fishFor: id => shot.fish.get(id) || null,
+      anc, ancOnly, names: true, sel: shot.type === 'lineage' ? shot.tip.id : -1, line: line || new Set(), xMode: 'time' });
   }
 
   window.snSaver = {
