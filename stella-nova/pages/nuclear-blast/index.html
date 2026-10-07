@@ -10,141 +10,102 @@
   ═══════════════════════════════════════════════════════════════════════════
    NUCLEAR BLAST EFFECTS  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. An educational view of the effects of one nuclear
-   explosion, from the public scaling laws of Glasstone and Dolan, "The
-   Effects of Nuclear Weapons" (1977): the flash, the fireball, the shock
-   and its Mach stem, the thermal pulse, the condensation cloud, the
-   mushroom cloud, the effect rings and the fallout pattern, over made-up
-   places. effects.js is the model (no DOM; tests.mjs runs it). stage.js,
-   world.js, blast.js and plots.js draw it; main.js binds this markup.
-
-   HEAD LOAD ORDER
-     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
-     2. fonts, style.css
-     3. importmap for three r160, then main.js as a module
+   Static markup only. An educational view of the effect radii of one
+   nuclear explosion, from the public scaling laws of Glasstone and Dolan,
+   "The Effects of Nuclear Weapons" (1977). Pick a place on a map (or search
+   one), set the yield, and see the rings there; switch to the 3D scene to
+   watch the burst over that place. effects.js is the model (no DOM;
+   tests.mjs runs it). geo.js, places.js and mapview.js make the map;
+   stage.js, world.js, blast.js draw the scene; plots.js the plots; main.js
+   binds this markup.
 
    LAYOUT  (# marks an element id main.js binds to)
-     desktop ... #panel at the left (burst, scene, rings), #anaPanel at
-                 the right (the point readout, five plots, relations,
-                 about), #view fills the rest; #timebar along the base of
-                 the view; #read at the top left; #labels for the rings.
-     phone ..... #dock at the base: four tabs and play; #timebar above it.
-                 A tab opens #panel with only its .grp, as a bottom sheet
-                 (portrait) or a drawer (landscape). The analysis group
-                 moves into #panel as the Data tab.
+     top ....... #search with #results, #modeMap / #modeScene, #detailsBtn
+     view ...... #map (2D canvas) over #view (3D canvas); #legend overlay,
+                 #read (place and yield), #maptip (hover), #labels (3D)
+     bottom .... #bar: #yield with labelled stops, #air / #surface,
+                 #play (Detonate), #reset, #tslider and #tlabel, #rate
+     drawer .... #drawer, "Details", closed at first: the point readout, the
+                 plots, settings, relations, about. A bottom sheet on a phone.
 
    GREP MAP  (main.js)
-     grep -n 'const PRESETS'      the historical and reference bursts
-     grep -n 'function apply'     recompute the model for a new burst
-     grep -n 'function follow'    the camera that keeps the blast framed
-     grep -n 'function frame'     the loop
-     grep -n 'window.snSaver'     the screensaver tour
+     grep -n 'function setGZ'       place ground zero at a real point
+     grep -n 'function apply'       recompute the model for a new burst
+     grep -n 'function setMode'     map or scene
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour (made-up places)
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="The effects of a nuclear explosion from the public scaling laws of Glasstone and Dolan: fireball, shock and Mach stem, thermal pulse, prompt radiation, mushroom cloud and fallout, with live plots and historical presets.">
+<meta name="description" content="Pick a place on a map and see the effect radii of a nuclear explosion from the public scaling laws of Glasstone and Dolan: fireball, blast overpressure, thermal burns and prompt radiation, with a 3D view of the burst.">
 <link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="mode-map">
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
-<div class="topbar">
-  <div class="brand"><span class="dot"></span>Stella Nova</div>
-  <div class="pagetitle">Nuclear Blast Effects</div>
-  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
-</div>
+<header class="topbar">
+  <div class="brand"><span class="dot"></span><span class="bname">Stella Nova</span></div>
+  <div class="searchbox">
+    <input id="search" type="search" placeholder="Search a place" autocomplete="off" spellcheck="false" aria-label="Search a place" aria-controls="results">
+    <ul id="results" role="listbox" hidden></ul>
+  </div>
+  <div class="seg" role="group" aria-label="View">
+    <button id="modeMap" type="button" class="on">Map</button>
+    <button id="modeScene" type="button">Scene</button>
+  </div>
+  <button id="detailsBtn" type="button" aria-expanded="false" aria-controls="drawer">Details</button>
+</header>
 
 <main id="stage">
   <canvas id="view"></canvas>
+  <canvas id="map"></canvas>
   <div id="labels" aria-hidden="true"></div>
   <div id="read" class="pread"></div>
-  <div id="hint" class="phint">drag to orbit · scroll to zoom · click the ground to read the effects there</div>
-  <button id="anaOpen" type="button" hidden>∑ Data</button>
-  <div id="timebar">
-    <button id="play" type="button" aria-label="Detonate"><i>▶</i></button>
+  <div id="hint" class="phint">click the map to set ground zero · drag to pan · scroll to zoom</div>
+  <div id="maptip" hidden></div>
+  <button id="legendBtn" type="button" aria-expanded="true" aria-controls="legend">Legend</button>
+  <div id="legend" class="legendbox"></div>
+</main>
+<div id="nogl" hidden>WebGL 2 is not available in this browser, so the 3D scene cannot render. The map still works.</div>
+
+<div id="bar">
+  <div class="yieldwrap">
+    <div class="ylab"><span>Yield</span><b id="yieldV">100 kt</b></div>
+    <div class="yslider">
+      <input type="range" id="yield" min="-1" max="4.699" step="0.001" value="2" aria-label="Yield (log scale)">
+      <div class="stops" id="stops"></div>
+    </div>
+  </div>
+  <div class="seg small" role="group" aria-label="Burst type">
+    <button id="air" type="button" class="on" title="At the height that carries 5 psi farthest">Airburst</button>
+    <button id="surface" type="button" title="On the ground">Surface</button>
+  </div>
+  <button id="play" type="button" class="go">Detonate</button>
+  <button id="reset" type="button" aria-label="Reset to before the burst">Reset</button>
+  <div class="timewrap">
     <input type="range" id="tslider" min="-6" max="2.954" step="0.001" value="-6" aria-label="Time after the burst (log scale)">
     <span id="tlabel">armed</span>
-    <div id="rates" role="group" aria-label="Playback">
-      <button data-mode="log" type="button" class="on" title="Each power of ten of time takes 2.5 s">log</button>
-      <button data-mode="1" type="button" title="Real time">1×</button>
-      <button data-mode="0.1" type="button" title="Ten times slower">⅒</button>
-      <button data-mode="0.01" type="button" title="A hundred times slower">1/100</button>
-    </div>
-    <button id="restart" type="button" aria-label="Back to the moment before the burst">⟲</button>
+    <select id="rate" aria-label="Playback speed">
+      <option value="log" selected>log</option>
+      <option value="1">1×</option>
+      <option value="0.1">1/10</option>
+      <option value="0.01">1/100</option>
+    </select>
   </div>
-</main>
-<div id="nogl" hidden>WebGL 2 is not available in this browser, so the scene cannot render.</div>
+</div>
 
-<aside id="panel" class="open" aria-label="Controls">
-  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
-  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+<aside id="drawer" aria-label="Details">
+  <div id="sheetGrip" role="button" aria-label="Resize details"><span></span></div>
+  <div class="dhead"><b>Details</b><button id="drawerClose" type="button" aria-label="Close details">✕</button></div>
 
-  <section class="grp" data-grp="burst">
-    <div class="sec-label first">Burst</div>
-    <div id="presets" class="presets"></div>
-    <div id="engInfo">
-      <h1 id="pTitle">Reference</h1>
-      <div class="kind" id="pKind"></div>
-      <p class="lede" id="pCap"></p>
-    </div>
-    <div class="sec-label">Yield</div>
-    <div class="row"><label for="yield">Yield</label><input type="range" id="yield" min="-1" max="4.699" step="0.001" value="2"><span class="val" id="yieldV"></span></div>
-    <div class="sec-label">Height of burst</div>
-    <div class="grid3" id="hob">
-      <button data-hob="surface" type="button">Surface</button>
-      <button data-hob="opt20" type="button">Best for 20 psi</button>
-      <button data-hob="opt5" type="button" class="on">Best for 5 psi</button>
-      <button data-hob="opt1" type="button">Best for 1 psi</button>
-      <button data-hob="custom" type="button">Custom</button>
-    </div>
-    <div class="row"><label for="height">Height</label><input type="range" id="height" min="0" max="1" step="0.001" value="0.3"><span class="val" id="heightV"></span></div>
-    <div class="row"><label for="fission">Fission</label><input type="range" id="fission" min="0" max="1" step="0.01" value="0.5"><span class="val" id="fissionV"></span></div>
-    <p class="note">The fission share sets the fallout dose rates only (G&amp;D 9.94). The best height for a pressure is the one that carries it farthest along the ground (G&amp;D Fig. 3.73c).</p>
-  </section>
-
-  <section class="grp" data-grp="scene">
-    <div class="sec-label first">Place</div>
-    <div class="grid3" id="places"></div>
-    <div class="sec-label">Light</div>
-    <div class="grid3" id="tods">
-      <button data-tod="day" type="button" class="on">Day</button>
-      <button data-tod="sunset" type="button">Sunset</button>
-      <button data-tod="night" type="button">Night</button>
-    </div>
-    <div class="sec-label">Air</div>
-    <div class="row"><label for="wind">Wind</label><input type="range" id="wind" min="1" max="25" step="0.5" value="7"><span class="val" id="windV"></span></div>
-    <div class="row"><label for="windDir">Toward</label><input type="range" id="windDir" min="0" max="360" step="1" value="20"><span class="val" id="windDirV"></span></div>
-    <div class="row"><label for="vis">Visibility</label><input type="range" id="vis" min="5" max="80" step="1" value="20"><span class="val" id="visV"></span></div>
-    <div class="row"><label for="humid">Humidity</label><input type="range" id="humid" min="0" max="1" step="0.01" value="0.4"><span class="val" id="humidV"></span></div>
-    <div class="sec-label">View</div>
-    <div class="grid3" id="views">
-      <button data-view="follow" type="button" class="on">Follow</button>
-      <button data-view="wide" type="button">Wide</button>
-      <button data-view="street" type="button">Street</button>
-      <button data-view="top" type="button">From above</button>
-      <button data-view="cloud" type="button">Cloud</button>
-      <button data-view="fallout" type="button">Fallout</button>
-    </div>
-    <p class="note">Follow keeps the blast in frame as it grows from metres to tens of kilometres. Drag to turn it; any view button ends it.</p>
-  </section>
-
-  <section class="grp" data-grp="rings">
-    <div class="sec-label first">Effect rings</div>
-    <table class="readout rings" id="ringTable"></table>
-    <div class="toggles">
-      <button class="tog on" id="tReveal" type="button">Draw as they arrive</button>
-      <button class="tog on" id="tLabels" type="button">Labels</button>
-    </div>
-    <div class="sec-label">Fallout</div>
-    <div class="row"><label for="fclock">Clock</label><input type="range" id="fclock" min="0" max="24" step="0.1" value="24"><span class="val" id="fclockV"></span></div>
-    <div id="fallLegend" class="flegend"></div>
-    <p class="note" id="fallNote"></p>
-  </section>
-
-  <section class="grp ana" data-grp="ana" id="anaSec">
-    <div class="sec-label first">At the picked point</div>
+  <section>
+    <div class="sec-label first">At the point</div>
+    <p class="note" id="pointNote">In the scene, click the ground to read the effects at that point.</p>
     <div id="now" class="proc"></div>
     <table class="readout" id="nums"></table>
+  </section>
+
+  <section>
     <div class="sec-label">Pressure against range</div>
     <div class="pwrap"><canvas id="plotPress" class="plot"></canvas></div>
     <div class="legend"><span><i style="background:#c47e22"></i>peak overpressure</span><span><i style="background:#4f8ff0"></i>dynamic pressure</span></div>
@@ -159,24 +120,45 @@
     <div class="legend"><span><i style="background:#d45a78"></i>fireball</span><span><i style="background:#4f8ff0"></i>shock front</span></div>
     <div class="sec-label">Cloud top</div>
     <div class="pwrap"><canvas id="plotCloud" class="plot"></canvas></div>
+  </section>
+
+  <section>
+    <div class="sec-label">Burst</div>
+    <div class="row"><label for="height">Height</label><input type="range" id="height" min="0" max="1" step="0.001" value="0.3"><span class="val" id="heightV"></span></div>
+    <p class="note">Airburst puts the burst at the height that carries 5 psi farthest along the ground (G&amp;D Fig. 3.73c). Move the slider to set your own.</p>
+    <div class="sec-label">Scene</div>
+    <div class="grid3" id="tods">
+      <button data-tod="day" type="button" class="on">Day</button>
+      <button data-tod="sunset" type="button">Sunset</button>
+      <button data-tod="night" type="button">Night</button>
+    </div>
+    <div class="grid3" id="views">
+      <button data-view="follow" type="button" class="on">Follow</button>
+      <button data-view="wide" type="button">Wide</button>
+      <button data-view="street" type="button">Street</button>
+      <button data-view="top" type="button">From above</button>
+      <button data-view="cloud" type="button">Cloud</button>
+      <button data-view="fallout" type="button">Fallout</button>
+    </div>
+    <div class="sec-label">Air</div>
+    <div class="row"><label for="vis">Visibility</label><input type="range" id="vis" min="5" max="80" step="1" value="20"><span class="val" id="visV"></span></div>
+    <div class="row"><label for="humid">Humidity</label><input type="range" id="humid" min="0" max="1" step="0.01" value="0.4"><span class="val" id="humidV"></span></div>
+    <div class="row"><label for="wind">Wind</label><input type="range" id="wind" min="1" max="25" step="0.5" value="7"><span class="val" id="windV"></span></div>
+    <div class="row"><label for="windDir">Toward</label><input type="range" id="windDir" min="0" max="360" step="1" value="20"><span class="val" id="windDirV"></span></div>
+    <div class="sec-label">Fallout (off unless you turn it on)</div>
+    <div class="toggles"><button class="tog" id="tFall" type="button">Show the fallout model</button></div>
+    <div class="row"><label for="fission">Fission</label><input type="range" id="fission" min="0" max="1" step="0.01" value="0.5"><span class="val" id="fissionV"></span></div>
+    <div class="row"><label for="fclock">Clock</label><input type="range" id="fclock" min="0" max="24" step="0.1" value="24"><span class="val" id="fclockV"></span></div>
+    <p class="note" id="fallNote"></p>
+  </section>
+
+  <section>
     <div class="sec-label">Relations</div>
     <div id="eqs" class="eqs"></div>
     <div class="sec-label">About</div>
     <div class="about" id="about"></div>
   </section>
 </aside>
-
-<aside id="anaPanel" aria-label="Data">
-  <button id="anaClose" type="button" aria-label="Close the data panel">✕</button>
-</aside>
-
-<nav id="dock" aria-label="Controls">
-  <button class="tab" data-grp="burst" type="button"><i>✺</i><span>Burst</span></button>
-  <button class="tab" data-grp="scene" type="button"><i>◈</i><span>Scene</span></button>
-  <button class="tab" data-grp="rings" type="button"><i>◎</i><span>Rings</span></button>
-  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Data</span></button>
-  <button id="dockPlay" type="button" aria-label="Detonate"><i>▶</i><span>Detonate</span></button>
-</nav>
 
 <script type="importmap">
 { "imports": {

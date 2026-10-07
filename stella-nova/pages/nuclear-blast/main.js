@@ -1,12 +1,12 @@
 // ============================================================================
-//  NUCLEAR BLAST EFFECTS  ·  main.js — burst, time, panels, plots, saver
+//  NUCLEAR BLAST EFFECTS  ·  main.js — place, burst, time, map, scene, saver
 // ----------------------------------------------------------------------------
-//  One burst at a time: yield W (kt), height h (m), the place, the light
-//  and the air. effects.js gives every number; world.js draws the place,
-//  the rings and the fallout on the ground; blast.js draws the burst;
-//  plots.js draws the five plots. The panel code follows the Machines
-//  pages (geneva-cams): a left panel, a right data panel, and on a phone a
-//  dock with a bottom sheet that stops above the time bar.
+//  Pick a place (search or click the map), set the yield and the burst type,
+//  see the effect radii on the map, and watch the burst in the 3D scene over
+//  that place. effects.js gives every number; mapview.js draws the map;
+//  world.js draws the place (City Atlas buildings and rasters, or open land,
+//  or a made-up place) with the rings on the ground; blast.js the burst;
+//  plots.js the plots in the Details drawer.
 //
 //  TIME
 //    S.t is the time after the burst in seconds; 0 means armed (before).
@@ -15,26 +15,29 @@
 //    at real speed, or slower. The slider is log10 t, 1 µs to 15 min.
 //
 //  GREP MAP
-//    const PRESETS ............ historical and reference bursts
-//    const RINGS .............. the ground rings and their colours
+//    const PRESETS ............ made-up bursts for the screensaver
+//    const RINGS .............. the effect rings and their colours
+//    function setGZ ........... ground zero at a real place
 //    function apply ........... recompute the model and the scene
+//    function setMode ......... map or scene
+//    function fillLegend ...... the legend overlay (ring toggles)
 //    function follow .......... the camera that keeps the blast framed
-//    function setView ......... fixed camera views
-//    function pickAt .......... click the ground: the point readout
 //    function fillPoint ....... the numbers at the picked point
-//    function fillRings ....... the ring table and labels
 //    function frame ........... the loop
-//    window.snSaver ........... the screensaver tour (shot director)
+//    window.snSaver ........... the screensaver tour (made-up places only)
 // ============================================================================
 import * as THREE from 'three';
 import * as E from './effects.js';
 import { createStage } from './stage.js';
-import { createWorld, TERRAINS } from './world.js';
+import { createWorld } from './world.js';
 import { createBlast } from './blast.js';
 import { createPlot, makeCurves, fmtNum, fmtTime, fmtDist } from './plots.js';
+import { createMap, fmtKm } from './mapview.js';
+import { loadPlaces, search, atlasNear, loadAtlasCity } from './places.js';
+import * as G from './geo.js';
 
 const $ = id => document.getElementById(id);
-const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const PHONE_Q = matchMedia('(max-width:768px)');
 const COARSE = matchMedia('(pointer:coarse)').matches;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const LOW = COARSE || Math.min(screen.width, screen.height) < 700;
@@ -71,23 +74,25 @@ const PRESETS = [
 const RINGS = [
   { key: 'fireball', name: 'Fireball', col: '#ffd36b', dash: 0, what: 'largest radius of the fireball (G&D 2.127)' },
   { key: 'psi20', name: '20 psi', col: '#ff5a4f', dash: 0, what: 'heavy concrete buildings destroyed' },
-  { key: 'psi5', name: '5 psi', col: '#ff9b3d', dash: 0, what: 'most houses collapse; many deaths' },
-  { key: 'rem500', name: '500 rem', col: '#7ee08a', dash: 0, what: 'prompt radiation; without care about half of those exposed die' },
-  { key: 'burn3', name: '3rd° burns', col: '#ff7ab8', dash: 1, what: '50% chance on bare skin (G&D Fig. 12.65)' },
-  { key: 'psi1', name: '1 psi', col: '#8fc4ff', dash: 0, what: 'windows break; injuries from glass' },
-  { key: 'burn1', name: '1st° burns', col: '#ffc2a1', dash: 1, what: 'like a bad sunburn' },
+  { key: 'psi5', name: '5 psi', col: '#ff9b3d', dash: 0, what: 'most houses collapse' },
+  { key: 'rem500', name: '500 rem', col: '#7ee08a', dash: 0, what: 'prompt radiation dose in the open (G&D Ch. VIII)' },
+  { key: 'burn3', name: '3rd° burns', col: '#ff7ab8', dash: 1, what: 'third-degree burns on bare skin, 50% (G&D Fig. 12.65)' },
+  { key: 'psi1', name: '1 psi', col: '#8fc4ff', dash: 0, what: 'windows break' },
+  { key: 'burn1', name: '1st° burns', col: '#ffc2a1', dash: 1, what: 'first-degree burns on bare skin, 50%' },
 ];
 
-// ── the scene ──────────────────────────────────────────────────────────────
-const stage = createStage({ canvas: $('view'), occluders: [$('panel'), $('anaPanel'), $('timebar')], band: () => saverBand, coarse: LOW, reduced: REDUCED, onNoGL: () => { $('nogl').hidden = false; } });
+// ── the scene and the map ────────────────────────────────────────────────
+const stage = createStage({ canvas: $('view'), occluders: [$('drawer')], band: () => saverBand, coarse: LOW, reduced: REDUCED, onNoGL: () => { $('nogl').hidden = false; } });
 const world = createWorld(stage, { maxBuildings: LOW ? 7000 : 20000 });
 const blast = createBlast(stage, { low: LOW });
+const placesP = loadPlaces();
+const map = createMap({ canvas: $('map'), places: placesP, onPick: (lon, lat) => setGZ(lon, lat), onHover: hover, scaleInset: () => 16 });
 let saverOn = false, saverBand = null, saverTick = null;
 
 const S = {
   preset: 'ref', W: 100, hob: 'opt5', hCustom: 600, h: 0, place: 'metro', tod: 'day', wind: 7, dir: 20, V: 20, humid: 0.4, fission: 0.5,
   t: 0, playing: false, mode: 'log', view: 'follow', follow: true, pick: null, on: Object.fromEntries(RINGS.map(r => [r.key, true])), fallOn: false,
-  reveal: true, labels: !PHONE_Q.matches, fclock: 24, sum: null, curves: null, anaOpen: !PHONE_Q.matches,
+  reveal: true, labels: true, fclock: 24, sum: null, curves: null, gz: null, ui: 'map', legend: !PHONE_Q.matches, drawer: false,
 };
 
 // ── apply: the model for a new burst ─────────────────────────────────────
@@ -113,47 +118,78 @@ function apply(light = false) {
 }
 function applySoon(light) { clearTimeout(applyTimer); applyTimer = setTimeout(() => apply(light), light ? 60 : 30); }
 
+// ── ground zero at a real place ──────────────────────────────────────────
+// A City Atlas city within 30 km gives the scene its buildings, water and
+// land cover; anywhere else the scene is open land at the right scale.
+let gzToken = 0;
+async function setGZ(lon, lat, name = null) {
+  const tok = ++gzToken;
+  S.gz = { lon, lat, name };
+  map.setGZ(S.gz);
+  S.t = 0; S.playing = false; syncPlay();
+  S.pick = null;
+  const P = await placesP;
+  const A = atlasNear(P, lon, lat);
+  let city = null;
+  if (A) { try { city = await loadAtlasCity(A.id); } catch (e) { city = null; } }
+  if (tok !== gzToken) return;
+  map.setCity(city);
+  if (city) { const L = G.toLocal(lon, lat, city.meta.lon, city.meta.lat); world.setReal(city, L.x, -L.z); }
+  else world.setReal(null);
+  S.gz.atlas = city ? city.meta.title : null;
+  apply();
+  hideHint();
+}
+function hover(lon, lat, x, y) {
+  const tip = $('maptip');
+  if (lon == null || !S.gz) { tip.hidden = true; return; }
+  const r = G.distance(S.gz.lon, S.gz.lat, lon, lat), p = E.psi(E.overpressure(Math.max(r, 1), S.W, S.h));
+  const Q = E.thermalFluence(Math.hypot(r, S.h), S.W, S.h, S.V);
+  tip.hidden = false;
+  tip.innerHTML = `${fmtKm(r)} from ground zero<br>${fmtNum(p)} psi peak · ${fmtNum(Q)} cal/cm²`;
+  tip.style.left = Math.min(x + 14, $('stage').clientWidth - 190) + 'px'; tip.style.top = (y + 14) + 'px';
+}
+
 // ── controls ───────────────────────────────────────────────────────────────
 const yieldText = W => W >= 1000 ? `${+(W / 1000).toPrecision(3)} Mt` : W >= 1 ? `${+W.toPrecision(3)} kt` : `${Math.round(W * 1000)} t`;
+const STOPS = [[1, '1 kt'], [15, '15 kt'], [100, '100 kt'], [1000, '1 Mt'], [10000, '10 Mt'], [50000, '50 Mt']];
 function refreshControls() {
   $('yield').value = Math.log10(S.W); $('yieldV').textContent = yieldText(S.W);
-  document.querySelectorAll('#hob button').forEach(b => b.classList.toggle('on', b.dataset.hob === S.hob));
+  $('air').classList.toggle('on', S.hob === 'opt5'); $('surface').classList.toggle('on', S.hob === 'surface');
   $('height').value = Math.sqrt(clamp(S.h / 12000, 0, 1)); $('heightV').textContent = S.h < 1 ? 'ground' : fmtDist(S.h);
   $('fission').value = S.fission; $('fissionV').textContent = Math.round(S.fission * 100) + '%';
   $('wind').value = S.wind; $('windV').textContent = `${S.wind} m/s`;
   $('windDir').value = S.dir; $('windDirV').textContent = `${S.dir}°`;
   $('vis').value = S.V; $('visV').textContent = `${S.V} km`;
   $('humid').value = S.humid; $('humidV').textContent = Math.round(S.humid * 100) + '%';
+  $('tFall').classList.toggle('on', S.fallOn);
   document.querySelectorAll('#tods button').forEach(b => b.classList.toggle('on', b.dataset.tod === S.tod));
-  document.querySelectorAll('#places button').forEach(b => b.classList.toggle('on', b.dataset.place === S.place));
-  document.querySelectorAll('.pv').forEach(b => b.classList.toggle('on', b.dataset.id === S.preset));
 }
+// made-up places, for the screensaver
 function setPreset(id, keepTime = false) {
   const P = PRESETS.find(p => p.id === id); if (!P) return;
   S.preset = id; S.W = P.W; S.hob = P.hob || 'custom'; if (P.h != null) S.hCustom = P.h;
   S.wind = P.wind; S.dir = P.dir; S.humid = P.humid; S.fission = P.fission;
-  if (S.place !== P.place) { S.place = P.place; world.setPlace(P.place); }
+  S.gz = null;
+  if (world.place !== P.place) { S.place = P.place; world.setPlace(P.place); }
   setTOD(P.tod);
-  $('pTitle').textContent = P.name; $('pKind').textContent = P.kind; $('pCap').textContent = P.cap;
   S.pick = null;
   apply();
   if (!keepTime) { S.t = 0; S.playing = false; syncPlay(); }
-  if (!saverOn) { try { history.replaceState(null, '', '#' + id); } catch (e) { /* file: */ } if (S.view !== 'follow') setView('follow'); }
 }
-function custom() { if (S.preset !== 'custom') { S.preset = 'custom'; $('pTitle').textContent = 'Your burst'; $('pKind').textContent = ''; $('pCap').textContent = 'Set the yield, the height and the air. The rings and the plots follow the model as you move a slider.'; refreshControls(); } }
 function setTOD(tod) { S.tod = tod; stage.setTOD(tod); refreshControls(); }
-function buildPanels() {
-  $('presets').innerHTML = PRESETS.map(p => `<button class="pv" type="button" data-id="${p.id}"><b>${esc(p.name)}</b><span>${esc(p.kind)}</span></button>`).join('');
-  $('presets').querySelectorAll('.pv').forEach(b => b.addEventListener('click', () => { setPreset(b.dataset.id); if (PHONE_Q.matches) setOpen(false); }));
-  $('places').innerHTML = Object.entries(TERRAINS).map(([k, T]) => `<button type="button" data-place="${k}" title="${esc(T.sub)}">${esc(T.name)}</button>`).join('');
-  $('places').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.place = b.dataset.place; world.setPlace(S.place); S.pick = null; apply(); }));
+function buildStops() {
+  const lo = -1, hi = 4.699;
+  $('stops').innerHTML = STOPS.map(([w, t]) => `<button type="button" data-w="${w}" style="left:${(Math.log10(w) - lo) / (hi - lo) * 100}%">${t}</button>`).join('');
+  $('stops').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.W = +b.dataset.w; apply(); }));
 }
-$('yield').addEventListener('input', e => { S.W = Math.pow(10, +e.target.value); custom(); $('yieldV').textContent = yieldText(S.W); applySoon(true); });
+$('yield').addEventListener('input', e => { S.W = Math.pow(10, +e.target.value); $('yieldV').textContent = yieldText(S.W); applySoon(true); });
 $('yield').addEventListener('change', () => apply());
-document.querySelectorAll('#hob button').forEach(b => b.addEventListener('click', () => { S.hob = b.dataset.hob; if (S.hob === 'custom') S.hCustom = S.h; custom(); apply(); }));
-$('height').addEventListener('input', e => { S.hob = 'custom'; S.hCustom = Math.pow(+e.target.value, 2) * 12000; custom(); $('heightV').textContent = fmtDist(S.hCustom); applySoon(true); });
+$('air').addEventListener('click', () => { S.hob = 'opt5'; apply(); });
+$('surface').addEventListener('click', () => { S.hob = 'surface'; apply(); });
+$('height').addEventListener('input', e => { S.hob = 'custom'; S.hCustom = Math.pow(+e.target.value, 2) * 12000; $('heightV').textContent = fmtDist(S.hCustom); applySoon(true); });
 $('height').addEventListener('change', () => apply());
-$('fission').addEventListener('input', e => { S.fission = +e.target.value; custom(); $('fissionV').textContent = Math.round(S.fission * 100) + '%'; applySoon(true); });
+$('fission').addEventListener('input', e => { S.fission = +e.target.value; $('fissionV').textContent = Math.round(S.fission * 100) + '%'; applySoon(true); });
 $('fission').addEventListener('change', () => apply());
 $('wind').addEventListener('input', e => { S.wind = +e.target.value; $('windV').textContent = `${S.wind} m/s`; applySoon(true); });
 $('wind').addEventListener('change', () => apply());
@@ -162,20 +198,53 @@ $('windDir').addEventListener('change', () => apply());
 $('vis').addEventListener('input', e => { S.V = +e.target.value; $('visV').textContent = `${S.V} km`; applySoon(true); });
 $('vis').addEventListener('change', () => apply());
 $('humid').addEventListener('input', e => { S.humid = +e.target.value; $('humidV').textContent = Math.round(S.humid * 100) + '%'; blast.burst && (blast.burst.humid = S.humid); });
+$('tFall').addEventListener('click', () => { S.fallOn = !S.fallOn; fillRings(); refreshControls(); });
 document.querySelectorAll('#tods button').forEach(b => b.addEventListener('click', () => setTOD(b.dataset.tod)));
-document.querySelectorAll('#views button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
-$('tReveal').addEventListener('click', () => { S.reveal = !S.reveal; $('tReveal').classList.toggle('on', S.reveal); });
-$('tLabels').addEventListener('click', () => { S.labels = !S.labels; $('tLabels').classList.toggle('on', S.labels); });
+document.querySelectorAll('#views button').forEach(b => b.addEventListener('click', () => { setMode('scene'); setView(b.dataset.view); }));
 $('fclock').addEventListener('input', e => { S.fclock = +e.target.value; $('fclockV').textContent = S.fclock >= 24 ? 'H+1 map' : `${S.fclock.toFixed(1)} h`; });
 $('fclockV').textContent = 'H+1 map';
 
+// ── search ───────────────────────────────────────────────────────────────
+let hits = [], hitI = 0;
+function showResults() {
+  const ul = $('results');
+  ul.hidden = !hits.length;
+  ul.innerHTML = hits.map((h, i) => `<li role="option" data-i="${i}" class="${i === hitI ? 'on' : ''}"><b>${esc(h.name)}</b><span>${esc(h.country)}</span>${h.atlas ? '<i>3D CITY</i>' : ''}</li>`).join('');
+  ul.querySelectorAll('li').forEach(li => li.addEventListener('pointerdown', e => { e.preventDefault(); choose(hits[+li.dataset.i]); }));
+}
+function choose(h) {
+  if (!h) return;
+  $('search').value = h.name; hits = []; showResults(); $('search').blur();
+  setGZ(h.lon, h.lat, h.name);
+  map.fit(h.lon, h.lat, Math.max(heightFor(S.hob, S.W) ? E.summary(S.W, heightFor(S.hob, S.W)).psi1 : 3000, 1500));
+  if (S.ui !== 'map') setMode('map');
+}
+$('search').addEventListener('input', async e => { const P = await placesP; hits = search(P, e.target.value, 8); hitI = 0; showResults(); });
+$('search').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { hitI = Math.min(hits.length - 1, hitI + 1); showResults(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { hitI = Math.max(0, hitI - 1); showResults(); e.preventDefault(); }
+  else if (e.key === 'Enter') choose(hits[hitI]);
+  else if (e.key === 'Escape') { hits = []; showResults(); }
+});
+$('search').addEventListener('blur', () => setTimeout(() => { hits = []; showResults(); }, 150));
+
+// ── map or scene ─────────────────────────────────────────────────────────
+function setMode(m) {
+  S.ui = m;
+  document.body.classList.toggle('mode-map', m === 'map'); document.body.classList.toggle('mode-scene', m === 'scene');
+  $('modeMap').classList.toggle('on', m === 'map'); $('modeScene').classList.toggle('on', m === 'scene');
+  map.visible = m === 'map'; map.redraw();
+  $('hint').textContent = m === 'map' ? (COARSE ? 'tap the map to set ground zero · drag to pan · pinch to zoom' : 'click the map to set ground zero · drag to pan · scroll to zoom')
+    : (COARSE ? 'drag to orbit · pinch to zoom · tap the ground to read the effects there' : 'drag to orbit · scroll to zoom · click the ground to read the effects there');
+  if (m === 'scene' && S.follow) { fol.r = stage.dist(); fol.y = stage.controls.target.y; }
+}
+$('modeMap').addEventListener('click', () => setMode('map'));
+$('modeScene').addEventListener('click', () => setMode('scene'));
+
 // ── time ─────────────────────────────────────────────────────────────────
 function syncPlay() {
-  const armed = S.t <= 0, lbl = S.playing ? '❚❚' : '▶';
-  $('play').querySelector('i').textContent = lbl;
-  $('play').setAttribute('aria-label', S.playing ? 'Pause' : armed ? 'Detonate' : 'Play');
-  $('dockPlay').querySelector('i').textContent = lbl;
-  $('dockPlay').querySelector('span').textContent = S.playing ? 'Pause' : armed ? 'Detonate' : 'Play';
+  const armed = S.t <= 0;
+  $('play').textContent = S.playing ? 'Pause' : armed ? 'Detonate' : S.t >= TEND ? 'Replay' : 'Play';
 }
 function play() {
   if (S.playing) { S.playing = false; syncPlay(); return; }
@@ -183,57 +252,37 @@ function play() {
   S.playing = true; syncPlay(); hideHint();
 }
 $('play').addEventListener('click', play);
-$('dockPlay').addEventListener('click', play);
-$('restart').addEventListener('click', () => { S.t = 0; S.playing = false; syncPlay(); stage.exposure = stage.expoTarget = 1; });
+$('reset').addEventListener('click', () => { S.t = 0; S.playing = false; syncPlay(); stage.exposure = stage.expoTarget = 1; map.setFront(0); });
 $('tslider').addEventListener('input', e => { S.playing = false; syncPlay(); S.t = Math.pow(10, +e.target.value); });
-document.querySelectorAll('#rates button').forEach(b => b.addEventListener('click', () => { S.mode = b.dataset.mode; document.querySelectorAll('#rates button').forEach(q => q.classList.toggle('on', q === b)); }));
+$('rate').addEventListener('change', e => { S.mode = e.target.value; });
 addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return; if (e.code === 'Space' && !saverOn) { e.preventDefault(); play(); } });
 
-// ── panels: left controls, right data; on a phone one sheet ──────────────
-const panel = $('panel'), tabs = [...document.querySelectorAll('#dock .tab')], anaSec = $('anaSec'), anaPanel = $('anaPanel');
-let grp = 'burst';
-function placeAnalysis() {
-  if (PHONE_Q.matches) { if (anaSec.parentNode !== panel) panel.appendChild(anaSec); }
-  else if (anaSec.parentNode !== anaPanel) anaPanel.appendChild(anaSec);
-  setAna(S.anaOpen);
+// ── the Details drawer and the legend ────────────────────────────────────
+const drawer = $('drawer');
+function setDrawer(open) {
+  S.drawer = open;
+  drawer.classList.toggle('open', open);
+  if (!open) drawer.classList.remove('full');
+  $('detailsBtn').setAttribute('aria-expanded', String(open));
 }
-function setAna(open) {
-  S.anaOpen = open;
-  const desk = !PHONE_Q.matches;
-  anaPanel.classList.toggle('open', open && desk);
-  $('anaOpen').hidden = !desk || open;
-  document.body.classList.toggle('ana-open', open && desk);
-}
-$('anaClose').addEventListener('click', () => setAna(false));
-$('anaOpen').addEventListener('click', () => setAna(true));
-function setOpen(open, g = grp) {
-  grp = g;
-  panel.classList.toggle('open', open);
-  if (!open) panel.classList.remove('full');
-  document.body.classList.toggle('panel-closed', !open);
-  document.body.classList.toggle('sheet-open', open);
-  panel.querySelectorAll('.grp').forEach(el => el.classList.toggle('on', el.dataset.grp === grp));
-  for (const t of tabs) { const on = open && t.dataset.grp === grp; t.classList.toggle('on', on); t.setAttribute('aria-expanded', String(on)); }
-  if (open && PHONE_Q.matches) panel.scrollTop = 0;
-}
-for (const t of tabs) t.addEventListener('click', () => setOpen(!(panel.classList.contains('open') && grp === t.dataset.grp), t.dataset.grp));
-$('gear').addEventListener('click', () => setOpen(true));
-$('panelClose').addEventListener('click', () => setOpen(false));
+$('detailsBtn').addEventListener('click', () => setDrawer(!S.drawer));
+$('drawerClose').addEventListener('click', () => setDrawer(false));
 const grip = $('sheetGrip');
 let gripY = null;
 grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } });
 grip.addEventListener('pointerup', e => {
   if (gripY === null) return;
   const dy = e.clientY - gripY; gripY = null;
-  if (Math.abs(dy) < 8) panel.classList.toggle('full');
-  else if (dy < -40) panel.classList.add('full');
-  else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
+  if (Math.abs(dy) < 8) drawer.classList.toggle('full');
+  else if (dy < -40) drawer.classList.add('full');
+  else if (dy > 40) { if (drawer.classList.contains('full')) drawer.classList.remove('full'); else setDrawer(false); }
 });
 grip.addEventListener('pointercancel', () => { gripY = null; });
+function setLegend(on) { S.legend = on; $('legend').hidden = !on; $('legendBtn').setAttribute('aria-expanded', String(on)); }
+$('legendBtn').addEventListener('click', () => setLegend(!S.legend));
 let hintGone = false;
 function hideHint() { if (!hintGone) { hintGone = true; $('hint').classList.add('gone'); } }
-if (COARSE) $('hint').textContent = 'drag to orbit · pinch to zoom · tap the ground to read the effects there';
-setTimeout(hideHint, 10000);
+setTimeout(hideHint, 12000);
 
 // ── camera: follow and fixed views ───────────────────────────────────────
 const V3 = THREE.Vector3;
@@ -303,7 +352,6 @@ function pickAt(cx, cy) {
   ray.setFromCamera(ndc, stage.camera);
   if (!ray.ray.intersectPlane(plane, hit)) return;
   setPick(hit.x, hit.z);
-  if (PHONE_Q.matches && !panel.classList.contains('open')) { /* the label on the pin shows the headline */ }
 }
 function setPick(x, z) {
   S.pick = { x, z };
@@ -350,7 +398,7 @@ function fillPoint() {
   return { v, psi, deg };
 }
 
-// ── ring table, labels and uniforms ──────────────────────────────────────
+// ── legend, ring labels and uniforms ─────────────────────────────────────
 function ringRadius(key) { return key === 'fireball' ? S.sum.fireballRing : S.sum[key] || 0; }
 function ringArrival(key) {
   const R = ringRadius(key), W = S.W, h = S.h;
@@ -361,23 +409,21 @@ function ringArrival(key) {
 }
 function fillRings() {
   const g = world.gU;
-  $('ringTable').innerHTML = '<tr><th>Ring</th><th>Radius</th></tr>' + RINGS.map(r => {
-    const R = ringRadius(r.key);
-    return `<tr data-ring="${r.key}" class="${S.on[r.key] ? '' : 'off'}" title="${esc(r.what)}"><td><i class="sw${r.dash ? ' dash' : ''}" style="--c:${r.col}"></i>${esc(r.name)}</td><td>${R > 0 ? fmtDist(R) : '—'}</td></tr>`;
-  }).join('') + `<tr data-ring="fallout" class="${S.fallOn ? '' : 'off'}"><td><i class="sw" style="--c:#c9a24a"></i>Fallout</td><td>${world.fall ? '≥ ' + world.fall.minRate + ' rad/h' : 'none'}</td></tr>`;
-  $('ringTable').querySelectorAll('tr[data-ring]').forEach(tr => tr.addEventListener('click', () => {
-    const k = tr.dataset.ring;
-    if (k === 'fallout') S.fallOn = !S.fallOn; else S.on[k] = !S.on[k];
-    fillRings();
-  }));
+  fillLegend();
   RINGS.forEach((r, i) => { g.uRingR.value[i] = ringRadius(r.key); g.uRingC.value[i].set(r.col).convertSRGBToLinear(); g.uRingDash.value[i] = r.dash; });
-  $('labels').innerHTML = RINGS.map(r => `<div class="rl" data-ring="${r.key}" style="--c:${r.col}">${esc(r.name)} · ${fmtDist(ringRadius(r.key))}</div>`).join('') + '<div class="pin" id="pinLab"></div>';
+  map.setRings(RINGS.map(r => ({ name: r.name, col: r.col, dash: r.dash, R: ringRadius(r.key), on: S.on[r.key] })));
+  $('labels').innerHTML = RINGS.map(r => `<div class="rl" data-ring="${r.key}" style="--c:${r.col}">${esc(r.name)} · ${fmtKm(ringRadius(r.key))}</div>`).join('') + '<div class="pin" id="pinLab"></div>';
   const f = world.fall;
-  $('fallLegend').innerHTML = f ? `<span>${f.minRate}</span><span class="bar"></span><span>3000+ rad/h</span>` : '';
   $('fallNote').textContent = f
-    ? `Idealised H+1 dose rates (G&D Table 9.93) for ${fmtNum(S.wind)} m/s winds toward ${S.dir}°, ${Math.round(S.fission * 100)}% fission. Lines at each power of ten. The clock grows the plume as the cloud drifts.`
+    ? `Idealised H+1 dose rates (G&D Table 9.93) for ${fmtNum(S.wind)} m/s winds toward ${S.dir}°, ${Math.round(S.fission * 100)}% fission, drawn in the 3D scene only. Lines at each power of ten. The clock grows the plume as the cloud drifts.`
     : `No local fallout: the burst is above ${fmtDist(E.falloutCeiling(S.W))}, the height below which the fireball picks up soil (G&D 2.128).`;
   ringLabelEls = [...$('labels').querySelectorAll('.rl')];
+}
+// the legend overlay: one row per ring, a click turns the ring on or off
+function fillLegend() {
+  $('legend').innerHTML = RINGS.map(r => `<div class="lr${S.on[r.key] ? '' : ' off'}" data-ring="${r.key}" title="${esc(r.what)}"><i class="sw${r.dash ? ' dash' : ''}" style="--c:${r.col}"></i><b>${esc(r.name)}</b><span>${ringRadius(r.key) > 0 ? fmtKm(ringRadius(r.key)) : 'not reached'}</span></div>`).join('')
+    + `<div class="lnote">${yieldText(S.W)} ${S.h < 1 ? 'on the ground' : 'at ' + fmtDist(S.h)}. Radii from Glasstone &amp; Dolan scaling, for flat, open ground.</div>`;
+  $('legend').querySelectorAll('.lr').forEach(el => el.addEventListener('click', () => { S.on[el.dataset.ring] = !S.on[el.dataset.ring]; fillRings(); }));
 }
 let ringLabelEls = [];
 const projV = new V3();
@@ -397,7 +443,7 @@ function updateRings(t) {
   g.uFallOn.value = S.fallOn && world.fall ? 1 : 0;
   g.uFallFront.value = S.fclock >= 24 ? 1e9 : E.cloudRadius(S.W) + S.wind * S.fclock * 3600;
   // labels at the ring edges, on the side toward the camera's right
-  if (S.labels && !saverOn) {
+  if (S.labels && !saverOn && S.ui === 'scene') {
     const cam = stage.camera.position, a0 = Math.atan2(cam.z, cam.x) + Math.PI / 2 * 0.7;
     let lastY = -1e9;
     const order = RINGS.map((r, i) => i).sort((p, q) => ringRadius(RINGS[p].key) - ringRadius(RINGS[q].key));
@@ -433,10 +479,11 @@ function fillEqs() {
   $('eqs').innerHTML = E2.map(([hh, eq, sub]) => `<div class="eq"><span>${esc(hh)}</span><div>${esc(eq)}</div><em>${esc(sub)}</em></div>`).join('');
 }
 $('about').innerHTML = [
-  ['What this is', 'An educational view of the effects of one nuclear explosion, built from the public scaling laws of S. Glasstone and P. J. Dolan, <i>The Effects of Nuclear Weapons</i> (3rd ed., US DoD and ERDA, 1977), cited as G&amp;D. It shows effects, history and scale; it has nothing on how weapons are made or used.'],
-  ['The model', 'Blast: the DNA 1-kt free-air standard and height-of-burst fit (via NRDC 2001; equations read from the MIT-licensed <i>glasstone</i> library by E. Geist), checked against the worked examples of G&amp;D Ch. III. Thermal, fireball, cloud and fallout: G&amp;D Ch. II, VII and IX. Radiation: a fit to the summary values of G&amp;D Figs. 8.33 and 8.64. <code>tests.mjs</code> checks 77 reference values.'],
-  ['What it leaves out', 'The ground is flat and ideal; buildings do not shield one another; the air is clear apart from the visibility you set; doses are for a person in the open. Real cities, weather and terrain change every number. The fallout pattern is the idealised one of G&amp;D 9.93. The cloud is drawn to the G&amp;D rise and size, not simulated. The places are made up.'],
-  ['Inspiration', 'Made in the spirit of <a href="https://nukesimulation.com" target="_blank" rel="noopener">nukesimulation.com</a>, a 3D effects simulator on real maps; this page shares no code, art or text with it. The classic of the genre is Alex Wellerstein\'s <a href="https://nuclearsecrecy.com/nukemap/" target="_blank" rel="noopener">NUKEMAP</a> (2012–).'],
+  ['What this is', 'An educational view of the effect radii of one nuclear explosion, built from the public scaling laws of S. Glasstone and P. J. Dolan, <i>The Effects of Nuclear Weapons</i> (3rd ed., US DoD and ERDA, 1977), cited as G&amp;D. It shows effects and scale only: no population, no casualty counts, and nothing on how weapons are made or used.'],
+  ['The model', 'Blast: the DNA 1-kt free-air standard and height-of-burst fit (via NRDC 2001; equations read from the MIT-licensed <i>glasstone</i> library by E. Geist), checked against the worked examples of G&amp;D Ch. III. Thermal, fireball, cloud and fallout: G&amp;D Ch. II, VII and IX. Radiation: a fit to the summary values of G&amp;D Figs. 8.33 and 8.64. <code>tests.mjs</code> checks the model and the map scale.'],
+  ['What it leaves out', 'The ground is flat and ideal; buildings and hills do not shield one another; the air is clear apart from the visibility you set; doses are for a person in the open. Real cities, weather and terrain change every number. The fallout pattern is the idealised one of G&amp;D 9.93. The cloud is drawn to the G&amp;D rise and size, not simulated.'],
+  ['Map data', 'Coastlines, borders and place names: <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain). The 21 cities with buildings in 3D come from the City Atlas page: © OpenStreetMap contributors and Overture Maps Foundation, under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>; land cover ESA WorldCover 2021 (CC BY 4.0). Elsewhere the scene is open land.'],
+  ['Inspiration', 'Made in the spirit of <a href="https://nukesimulation.com" target="_blank" rel="noopener">nukesimulation.com</a>; this page shares no code, art or text with it. The classic of the genre is Alex Wellerstein\'s <a href="https://nuclearsecrecy.com/nukemap/" target="_blank" rel="noopener">NUKEMAP</a> (2012–).'],
 ].map(([hh, t]) => `<p><b>${hh}.</b> ${t}</p>`).join('');
 
 // ── plots ────────────────────────────────────────────────────────────────
@@ -451,8 +498,7 @@ const plots = {
   cloud: createPlot($('plotCloud'), { xfmt: v => v >= 60 ? (v / 60).toFixed(0) + ' min' : v.toFixed(0) + ' s', yfmt: v => +v.toPrecision(3) + ' km' }),
 };
 function drawPlots(t) {
-  const vis = !PHONE_Q.matches ? S.anaOpen : panel.classList.contains('open') && grp === 'ana';
-  if (!vis) return;
+  if (!S.drawer) return;
   if (!S.curves && S.pick) {
     S.curves = makeCurves({ W: S.W, h: S.h, V: S.V }, Math.hypot(S.pick.x, S.pick.z));
     for (const k in plots) plots[k].set(S.curves[k]);
@@ -477,10 +523,14 @@ function phase(t) {
   return `cloud near its top, ${fmtDist(I.top)}`;
 }
 let readT = 0;
+function placeName() {
+  if (S.gz) return S.gz.name || `${Math.abs(S.gz.lat).toFixed(3)}° ${S.gz.lat >= 0 ? 'N' : 'S'}, ${Math.abs(S.gz.lon).toFixed(3)}° ${S.gz.lon >= 0 ? 'E' : 'W'}`;
+  return S.ui === 'scene' ? 'Made-up city' : 'No place picked';
+}
 function readout(t, dt) {
   if ((readT += dt) < 0.12) return; readT = 0;
-  const P = PRESETS.find(p => p.id === S.preset);
-  $('read').innerHTML = `<span class="hi">${esc(P ? P.name : 'Your burst')}</span> <span class="lo">· ${yieldText(S.W)} · ${S.h < 1 ? 'surface' : fmtDist(S.h) + ' up'}</span><br><span class="lo">t = ${t > 0 ? fmtTime(t) : '—'} · ${esc(phase(t))}</span>`;
+  const where = S.gz ? (S.gz.atlas ? '3D buildings' : 'open land in 3D') : COARSE ? 'search, or tap the map' : 'search, or click the map';
+  $('read').innerHTML = `<span class="hi">${esc(placeName())}</span> <span class="lo">· ${yieldText(S.W)} · ${S.h < 1 ? 'surface' : fmtDist(S.h) + ' up'}</span><br><span class="lo">${t > 0 ? 't = ' + fmtTime(t) + ' · ' + esc(phase(t)) : esc(where)}</span>`;
   $('tlabel').textContent = t > 0 ? fmtTime(t) : 'armed';
   if (document.activeElement !== $('tslider')) $('tslider').value = t > 0 ? Math.log10(t) : -6;
   const r = fillPoint();
@@ -501,6 +551,14 @@ function frame(now) {
   }
   if (saverTick) saverTick(dt);
   const t = S.t;
+  if (S.ui === 'map' && !saverOn) {
+    // the map: the shock front while it is within the 1 psi ring
+    const f = t > 0 ? Math.sqrt(Math.max(0, E.shockRadius(t, S.W, S.h < 1) ** 2 - S.h * S.h)) : 0;
+    map.setFront(f < S.sum.psi1 * 1.2 ? f : 0);
+    map.frame();
+    readout(t, dt); drawPlots(t);
+    return;
+  }
   world.setTime(t, t > 0);
   blast.update(t, dt);
   const I = blast.info;
@@ -514,19 +572,15 @@ function frame(now) {
   if (!saverOn) { readout(t, dt); drawPlots(t); }
 }
 window.addEventListener('pagehide', () => { running = false; cancelAnimationFrame(raf); stage.dispose(); });
-window.__nb = { S, stage, world, blast, E, setPreset, setView, play, setPick, apply, setOpen, setAna, plots, follow: () => fol };
+window.__nb = { S, stage, world, blast, E, map, setPreset, setView, play, setPick, apply, setGZ, setMode, setDrawer, choose: q => placesP.then(P => choose(search(P, q, 1)[0])), plots, follow: () => fol };
 
 // ── boot ─────────────────────────────────────────────────────────────────
-buildPanels();
-placeAnalysis();
-setOpen(!PHONE_Q.matches);
-PHONE_Q.addEventListener('change', e => { placeAnalysis(); setOpen(!e.matches); });
-$('tLabels').classList.toggle('on', S.labels);
+buildStops();
 world.setPlace('metro');
-{
-  const start = (location.hash || '').slice(1);
-  setPreset(PRESETS.some(p => p.id === start) ? start : 'ref');
-}
+setPreset('ref');
+setLegend(S.legend);
+setDrawer(false);
+setMode('map');
 stage.place({ az: 35, el: 14, r: Math.max(S.sum.psi5 * 4, 2500), target: new V3(0, 200, 0) });
 fol.r = stage.dist(); fol.y = 200;
 syncPlay();
@@ -552,9 +606,10 @@ window.snSaver = {
     const pick = a => a[Math.floor(rnd() * a.length)];
     const label = typeof o.label === 'function' ? o.label : () => {};
     const st = document.createElement('style');
-    st.textContent = '.topbar,#panel,#anaPanel,#anaOpen,#dock,#hint,#labels,#read,#timebar,#nogl,#gear{display:none!important}#stage{top:0!important;bottom:0!important}#view{cursor:none;transition:opacity 0.8s ease}';
+    st.textContent = '.topbar,#bar,#drawer,#map,#legend,#legendBtn,#maptip,#hint,#labels,#read,#nogl{display:none!important}#stage{top:0!important;bottom:0!important}#view{visibility:visible!important;cursor:none;transition:opacity 0.8s ease}';
     document.head.appendChild(st);
-    setOpen(false); setAna(false);
+    // made-up places only: never a real place in the saver
+    setDrawer(false); setMode('scene'); S.gz = null; gzToken++;
     S.labels = false; S.follow = false; S.playing = false; S.reveal = true;
     world.gU.uPick.value = 0;
     const canvas = $('view');
@@ -655,7 +710,7 @@ window.snSaver = {
       if (shotT >= shotHold && !swapping) cut();
     };
     shot = begin(nextShot()); shotHold = hold(); show();
-    window.snSaver.debug = () => ({ kind: shot && shot.kind, preset: S.preset, W: S.W, h: S.h, t: S.t, tod: S.tod, u: shotT / shotHold, cam: stage.camera.position.toArray().map(Math.round) });
+    window.snSaver.debug = () => ({ kind: shot && shot.kind, preset: S.preset, place: world.place, real: !!world.real || !!S.gz, W: S.W, h: S.h, t: S.t, tod: S.tod, u: shotT / shotHold, cam: stage.camera.position.toArray().map(Math.round) });
     return { canvas, warmupMs: 1500 };
   },
 };
