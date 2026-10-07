@@ -35,6 +35,11 @@
 //    refract ......... (dx, dy, nx, ny, eta) -> [tx, ty] or null (TIR)
 //    waterHeight ..... (water, x) -> [h, dh/dx]
 //    mulberry ........ (seed) -> a seeded random function
+//    mediumAt ........ (scene, x, y, nm) -> index of the medium at a point
+//    emitPulse ....... (scene, count, rand, P) -> photons of one pulse
+//    advance ......... (scene, photon, D, rand) move a photon by the light
+//                      distance D: D/n in a medium of index n
+//  grep -n 'photons in flight' for the time-of-flight part.
 // ============================================================================
 
 export const TAU = Math.PI * 2;
@@ -301,6 +306,48 @@ function boxEntry(b, ox, oy, dx, dy) {
   return t1 > t0 ? t0 : -1;
 }
 
+// ── one step of a ray ───────────────────────────────────────────────────────
+// nearest: the nearest surface along the ray up to tmax. It returns the
+// distance (tmax for no hit) and writes the object, the normal, enter and
+// the detector coordinate u into HIT (HIT.o null for no hit).
+const HIT = { o: null, nx: 0, ny: 0, enter: false, u: 0 };
+function nearest(scene, ox, oy, dx, dy, tmax) {
+  let tmin = tmax; HIT.o = null;
+  for (const o of scene.objects) {
+    let t;
+    if (o.kind === 'glass') t = hitGlass(o, ox, oy, dx, dy);
+    else if (o.kind === 'water') t = hitWater(o, ox, oy, dx, dy, tmin);
+    else if (o.type === 'arc') t = hitArc(o, ox, oy, dx, dy);
+    else t = hitSeg(o, ox, oy, dx, dy);
+    if (t < tmin) { tmin = t; HIT.o = o; HIT.nx = H.nx; HIT.ny = H.ny; HIT.enter = H.enter; HIT.u = H.u; }
+  }
+  return tmin;
+}
+// bounce: reflect or refract the ray (dx, dy) at the HIT surface (a mirror
+// or a dielectric). It writes the new direction, the power factor w and
+// the index n of the medium after the event into BOUNCE (n is 0 when the
+// medium does not change: a reflection).
+const BOUNCE = { dx: 0, dy: 0, w: 1, n: 0 };
+function bounce(dx, dy, nm, rand) {
+  const hit = HIT.o;
+  let hnx = HIT.nx, hny = HIT.ny;
+  // the normal faces the incoming ray
+  if (dx * hnx + dy * hny > 0) { hnx = -hnx; hny = -hny; }
+  const cosi = -(dx * hnx + dy * hny);
+  BOUNCE.w = 1; BOUNCE.n = 0;
+  if (hit.kind === 'mirror') {
+    dx += 2 * cosi * hnx; dy += 2 * cosi * hny; BOUNCE.w = hit.refl;
+  } else {
+    const ng = indexAt(hit.n, hit.dn, nm);
+    const n1 = HIT.enter ? 1 : ng, n2 = HIT.enter ? ng : 1;
+    const R = fresnel(cosi, n1, n2);
+    const tdir = R < 1 && rand() >= R ? refract(dx, dy, hnx, hny, n1 / n2) : null;
+    if (tdir) { dx = tdir[0]; dy = tdir[1]; BOUNCE.n = n2; }
+    else { dx += 2 * cosi * hnx; dy += 2 * cosi * hny; }
+  }
+  const l = Math.hypot(dx, dy); BOUNCE.dx = dx / l; BOUNCE.dy = dy / l;
+}
+
 // ── the tracer ──────────────────────────────────────────────────────────────
 // out: Float32Array, 7 floats per segment (x0 y0 x1 y1 r g b). Returns the
 // number of segments. P.mono: 0 for white light, else one wavelength in nm.
@@ -328,15 +375,7 @@ export function trace(scene, count, rand, out, P = {}) {
     ox += dx * te; oy += dy * te;
     let w = 1;
     for (let b = 0; b <= scene.bounces && ns < maxSeg; b++) {
-      let tmin = boxExit(box, ox, oy, dx, dy), hit = null, hnx = 0, hny = 0, henter = false, hu = 0;
-      for (const o of scene.objects) {
-        let t;
-        if (o.kind === 'glass') t = hitGlass(o, ox, oy, dx, dy);
-        else if (o.kind === 'water') t = hitWater(o, ox, oy, dx, dy, tmin);
-        else if (o.type === 'arc') t = hitArc(o, ox, oy, dx, dy);
-        else t = hitSeg(o, ox, oy, dx, dy);
-        if (t < tmin) { tmin = t; hit = o; hnx = H.nx; hny = H.ny; henter = H.enter; hu = H.u; }
-      }
+      const tmin = nearest(scene, ox, oy, dx, dy, boxExit(box, ox, oy, dx, dy)), hit = HIT.o;
       const x1 = ox + dx * tmin, y1 = oy + dy * tmin, k = ns * 7;
       out[k] = ox; out[k + 1] = oy; out[k + 2] = x1; out[k + 3] = y1;
       out[k + 4] = c[0] * w; out[k + 5] = c[1] * w; out[k + 6] = c[2] * w;
@@ -344,25 +383,13 @@ export function trace(scene, count, rand, out, P = {}) {
       if (!hit) break;
       if (hit.kind === 'wall') {
         if (hit === det && det.bins) {
-          const j = Math.min(det.bins.length - 1, Math.floor(hu * det.bins.length));
+          const j = Math.min(det.bins.length - 1, Math.floor(HIT.u * det.bins.length));
           det.bins[j] += w * (c[0] + c[1] + c[2]) / 3;
         }
         break;
       }
-      // the normal faces the incoming ray
-      if (dx * hnx + dy * hny > 0) { hnx = -hnx; hny = -hny; }
-      const cosi = -(dx * hnx + dy * hny);
-      if (hit.kind === 'mirror') {
-        dx += 2 * cosi * hnx; dy += 2 * cosi * hny; w *= hit.refl;
-      } else {
-        const ng = indexAt(hit.n, hit.dn, nm);
-        const n1 = henter ? 1 : ng, n2 = henter ? ng : 1;
-        const R = fresnel(cosi, n1, n2);
-        const tdir = R < 1 && rand() >= R ? refract(dx, dy, hnx, hny, n1 / n2) : null;
-        if (tdir) { const l = Math.hypot(tdir[0], tdir[1]); dx = tdir[0] / l; dy = tdir[1] / l; }
-        else { dx += 2 * cosi * hnx; dy += 2 * cosi * hny; }
-      }
-      const l = Math.hypot(dx, dy); dx /= l; dy /= l;
+      bounce(dx, dy, nm, rand);
+      dx = BOUNCE.dx; dy = BOUNCE.dy; w *= BOUNCE.w;
       ox = x1 + dx * 1e-5; oy = y1 + dy * 1e-5;
       if (w < 0.03) break;
     }
@@ -414,4 +441,107 @@ export function outline(scene) {
     }
   }
   return { fills, lines };
+}
+
+// ── photons in flight (time of flight) ──────────────────────────────────────
+// The tracer above gives each photon its whole path at once: light is
+// instant. Here a photon is a state that moves a short way each frame.
+// In a medium of index n it goes at c/n, so in the time that light goes
+// a distance D in vacuum, the photon goes D/n. The unit of the clock L is
+// the light distance: L grows by c dt each frame, in each medium.
+//
+// photon: { x, y, dx, dy, nm, col, w, n, wait, L, end, trail }
+//   n ...... the index of the medium the photon is in
+//   wait ... light distance still to go before the photon shows (a beam
+//            pulse is a flat wave front: photons that meet the world box
+//            later wait longer)
+//   L ...... the light distance gone since the emission
+//   end .... the value of L when the photon stopped (Infinity: in flight)
+//   trail .. corners [x, y, L, ...] of the path: emission point and each
+//            reflection or refraction
+
+// The index of the medium at a point: glass or water that holds the point,
+// else air (1).
+export function mediumAt(scene, x, y, nm) {
+  for (const o of scene.objects) {
+    if (o.kind === 'glass') {
+      let inside = true;
+      for (const p of o.prims) {
+        if (p.type === 'circle') { if ((x - p.cx) ** 2 + (y - p.cy) ** 2 > p.r * p.r) { inside = false; break; } }
+        else if (p.nx * x + p.ny * y > p.d) { inside = false; break; }
+      }
+      if (inside) return indexAt(o.n, o.dn, nm);
+    } else if (o.kind === 'water') {
+      if (x > o.x0 && x < o.x1 && y < heightOnly(o, x) && y > scene.box.y0) return indexAt(o.n, o.dn, nm);
+    }
+  }
+  return 1;
+}
+
+// One pulse: count photons from the light (from scene.lamp too when the
+// scene has one, with lampShare of the count). P.mono as for trace.
+export function emitPulse(scene, count, rand, P = {}) {
+  const out = [], mono = P.mono || 0, v = scene.view;
+  const vbox = { x0: v.cx - v.w / 2, x1: v.cx + v.w / 2, y0: v.cy - v.h / 2, y1: v.cy + v.h / 2 };
+  const lights = scene.lamp ? [[scene.light, Math.round(count * (1 - (scene.lampShare ?? 0.3)))], [scene.lamp, Math.round(count * (scene.lampShare ?? 0.3))]] : [[scene.light, count]];
+  for (const [L, n] of lights) {
+    const start = out.length;
+    for (let i = 0; i < n; i++) {
+      const u = (i + rand()) / n, nm = mono || 400 + 300 * rand();
+      let ox, oy, dx, dy, te = 0;
+      if (L.type === 'beam') {
+        dx = Math.cos(L.dir); dy = Math.sin(L.dir);
+        const off = (u - 0.5) * L.width;
+        ox = L.x - dy * off - dx * 10; oy = L.y + dx * off - dy * 10;
+        // start where the beam comes into the view, so the first pulse
+        // shows at once (the world box is larger than the view)
+        te = boxEntry(vbox, ox, oy, dx, dy);
+        if (te < 0) te = boxEntry(scene.box, ox, oy, dx, dy);
+        if (te < 0) continue;
+        ox += dx * te; oy += dy * te;
+      } else {
+        const a = L.a0 + (L.a1 - L.a0) * u;
+        dx = Math.cos(a); dy = Math.sin(a); ox = L.x; oy = L.y;
+      }
+      out.push({ x: ox, y: oy, dx, dy, nm, col: spectrum(nm), w: 1, n: mediumAt(scene, ox, oy, nm), wait: te, L: 0, end: Infinity, trail: null });
+    }
+    // the wave front: the first photon to meet the box shows at once
+    let m = Infinity; for (let i = start; i < out.length; i++) m = Math.min(m, out[i].wait);
+    for (let i = start; i < out.length; i++) out[i].wait -= m;
+  }
+  return out;
+}
+
+// Move a photon by the light distance D (= c dt). Inside a medium of index
+// n it goes D/n. At a surface it reflects or refracts (as in trace), and
+// the rest of D goes on in the new medium. A wall, the world box or a
+// weak photon stops it; its clock L still runs so the trail can follow it
+// into the stop point.
+export function advance(scene, ph, D, rand = Math.random) {
+  if (ph.end < Infinity) { ph.L += D; return; }
+  if (ph.wait > 0) {
+    const k = Math.min(ph.wait, D); ph.wait -= k; ph.L += k; D -= k;
+    if (ph.wait > 0) return;
+  }
+  if (!ph.trail) ph.trail = [ph.x, ph.y, ph.L];
+  // a moving surface can pass over a photon: take the medium from the
+  // point, not from the last event
+  if (scene.animated) ph.n = mediumAt(scene, ph.x, ph.y, ph.nm);
+  for (let k = 0; k < 16 && D > 1e-9; k++) {
+    const reach = D / ph.n, tbox = boxExit(scene.box, ph.x, ph.y, ph.dx, ph.dy);
+    const t = nearest(scene, ph.x, ph.y, ph.dx, ph.dy, Math.min(reach, tbox)), hit = HIT.o;
+    ph.x += ph.dx * t; ph.y += ph.dy * t; ph.L += t * ph.n; D -= t * ph.n;
+    if (!hit) {
+      if (t >= tbox && tbox < reach) { ph.end = ph.L; ph.trail.push(ph.x, ph.y, ph.L); ph.L += D; }
+      return;
+    }
+    ph.trail.push(ph.x, ph.y, ph.L);
+    if (hit.kind === 'wall') { ph.end = ph.L; ph.L += D; return; }
+    bounce(ph.dx, ph.dy, ph.nm, rand);
+    ph.dx = BOUNCE.dx; ph.dy = BOUNCE.dy; ph.w *= BOUNCE.w;
+    if (BOUNCE.n) ph.n = BOUNCE.n;
+    // the step off the surface counts in the clock too
+    ph.x += ph.dx * 1e-5; ph.y += ph.dy * 1e-5; ph.L += 1e-5 * ph.n; D -= 1e-5 * ph.n;
+    if (ph.w < 0.03) { ph.end = ph.L; ph.L += D; return; }
+  }
 }

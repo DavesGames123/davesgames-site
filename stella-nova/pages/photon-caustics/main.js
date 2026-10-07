@@ -8,6 +8,11 @@
 //  a drag, the saver) keeps a short memory (A_LIVE in render2d.js).
 //  The 3D pool is a separate page: ../photon-caustics-3d/.
 //
+//  SLOWED LIGHT. On top of the light image, flight.js moves pulses of
+//  photons at a slowed speed of light S.c (m/s, the "Speed of light"
+//  slider), and at S.c / n in glass or water. The light image under them
+//  still adds whole paths, as if light were instant.
+//
 //  FRAMING. clearRect() gives the part of the canvas that no panel, dock
 //  or saver plate covers. The view fits the scene there.
 //
@@ -17,7 +22,8 @@
 //
 //  GREP MAP
 //     grep -n 'function clearRect'   the part of the canvas that shows
-//     grep -n 'function frame2d'     trace, accumulate, draw the view
+//     grep -n 'function frame2d'     trace, accumulate, fly, draw the view
+//     grep -n 'function setC'        the slowed speed of light
 //     grep -n 'function setScene'    load a scene and its defaults
 //     grep -n 'function renderMath'  the equations for the current scene
 //     grep -n 'function bindPointer' drag, zoom, tap
@@ -25,8 +31,9 @@
 //     grep -n 'const SHOTS'          the saver shots
 //     grep -n 'window.snSaver'       the screensaver hook
 // ============================================================================
-import { SCENES, makeScene, trace, outline, mulberry, refract as refract2d } from './optics2d.js';
+import { SCENES, makeScene, trace, outline, mulberry, refract as refract2d, advance } from './optics2d.js';
 import { createRender2D } from './render2d.js';
+import { createFlight } from './flight.js';
 import { floatCaps } from './gl.js';
 import { typeset } from '../../lib/sci-math.js';
 
@@ -40,6 +47,8 @@ const BINS = 96;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
 const ease = u => u * u * (3 - 2 * u);
+// The speed slider u in 0..1 gives c = C_MAX u^2 (m/s): fine steps near 0.
+const C_MAX = 3, C0 = 0.5, C_REAL = 299792458;
 
 const canvas = $('gl'), panel = $('panel');
 const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -48,12 +57,13 @@ const S = {
   playing: true, scene: 'cup',
   P: { ...SCENES[0].defaults, t: 0, mono: 0 },
   geom: true, curve: true, zoom: 1, pan: [0, 0], N: 4000, liveUntil: 0, viewKey: '',
+  flight: true, c: C0,
   saver: null, last: 0,
 };
 const segs = new Float32Array(7 * 24000 * 9);
 const bins = new Float32Array(BINS), curveAvg = new Float32Array(BINS);
 let curveFrames = 0, outlineCache = null, outlineKey = '';
-let r2d = null;
+let r2d = null, fly = null;
 
 // ── framing ─────────────────────────────────────────────────────────────────
 // The clear part of the canvas, as insets in CSS px from each edge.
@@ -108,23 +118,34 @@ function frame2d(now, dt, fade) {
   if (moving && !S.saver && now > S.liveUntil) r2d.reset();
   if (moving) { S.viewKey = key; S.liveUntil = Math.max(S.liveUntil, now + 300); curveFrames = 0; }
   const live = scene.animated && S.playing || now < S.liveUntil || !!S.saver;
-  // a still scene that has converged needs no more photons
-  if (!live && r2d.frames > 900) return;
-  if (scene.detector) { bins.fill(0); scene.detector.bins = bins; }
-  const t0 = performance.now();
-  const ns = trace(scene, S.N, Math.random, segs, P);
-  const ms = performance.now() - t0;
-  S.N = Math.round(clamp(S.N * clamp(Math.sqrt(TRACE_MS / Math.max(0.2, ms)), 0.8, 1.25), 800, 24000));
+  // a still scene that has converged needs no more photons; with photons
+  // in flight it shows the same light image again under them
+  const hold = !live && r2d.frames > 900;
+  if (hold && !S.flight) return;
+  let flight = null;
+  if (S.flight) {
+    if (S.playing) fly.step(scene, S.c * dt, P);
+    flight = fly.build(view.dpr / view.s);
+  }
+  let ns = 0;
+  if (!hold) {
+    if (scene.detector) { bins.fill(0); scene.detector.bins = bins; }
+    const t0 = performance.now();
+    ns = trace(scene, S.N, Math.random, segs, P);
+    const ms = performance.now() - t0;
+    S.N = Math.round(clamp(S.N * clamp(Math.sqrt(TRACE_MS / Math.max(0.2, ms)), 0.8, 1.25), 800, 24000));
+  }
   const L = scene.light, width = L.type === 'beam' ? L.width : (L.a1 - L.a0) * 0.5;
   const oKey = scene.animated ? '' : S.scene + P.ang + P.n;
   if (scene.animated || oKey !== outlineKey) { outlineCache = outline(scene); outlineKey = oKey; }
   let curve = null;
-  if (S.curve && !S.saver && scene.detector) curve = detectorCurve(scene, live);
+  if (S.curve && !S.saver && scene.detector) curve = hold ? S.lastCurve : (S.lastCurve = detectorCurve(scene, live));
   r2d.draw({ segs, ns, view, gain: width * view.s / S.N, exposure: P.exp, live, outline: outlineCache, geom: S.geom,
-    curve, fade, marker: L.type === 'point' ? [L.x, L.y] : null });
+    curve, fade, marker: L.type === 'point' ? [L.x, L.y] : null, flight, hold });
   if (!S.saver && now - (S.capAt || 0) > 400) {
     S.capAt = now;
-    $('caption').innerHTML = `<i>${def.name}</i> · <span class="n">${S.N.toLocaleString('en-US')}</span> photons a frame`;
+    const cs = S.flight ? ` · <i>c</i> = <span class="n">${S.c.toFixed(2)}</span> m/s` : '';
+    $('caption').innerHTML = `<i>${def.name}</i> · <span class="n">${S.N.toLocaleString('en-US')}</span> photons a frame${cs}`;
   }
 }
 
@@ -171,10 +192,10 @@ function setScene(id, keepParams) {
   S.scene = def.id;
   if (!keepParams) S.P = { ...def.defaults, t: S.P.t, mono: S.P.mono };
   S.zoom = 1; S.pan = [0, 0]; curveFrames = 0; curveAvg.fill(0); outlineKey = '';
-  r2d.reset();
+  r2d.reset(); fly.clear();
   document.querySelectorAll('#scenes .card').forEach(b => b.classList.toggle('on', b.dataset.id === def.id));
   $('sceneSub').textContent = def.sub;
-  syncSliders(); renderMath(); dockText();
+  syncSliders(); renderMath(); dockText(); setC(S.c);
 }
 
 function dockText() {
@@ -185,8 +206,23 @@ function dockText() {
 }
 
 function setPlaying(p) { S.playing = p; dockText(); }
+
+// The slowed speed of light: the slider, its value and the hint that
+// gives the real c and c/n in the medium of the scene.
+function setC(c) {
+  S.c = clamp(c, 0, C_MAX);
+  $('c').value = Math.sqrt(S.c / C_MAX);
+  $('cV').textContent = S.c < 0.005 ? 'stopped' : S.c.toFixed(2) + ' m/s';
+  const n = S.P.n, slow = S.c > 0.005 ? `Real light goes ${(C_REAL / 1e8).toFixed(2)} × 10⁸ m/s, ${fmtE(C_REAL / S.c)} times faster. ` : 'The photons stand still. ';
+  $('cHint').textContent = `A slowed picture of light. ${slow}In glass or water a photon goes at c/n: ${(S.c / n).toFixed(2)} m/s at n = ${n.toFixed(3)}.`;
+}
+const fmtE = v => { const e = Math.floor(Math.log10(v)); return `${(v / 10 ** e).toFixed(1)} × 10${String(e).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join('')}`; };
+function setFlight(on) {
+  S.flight = on; if (!on) fly.clear();
+  $('flightBtn').classList.toggle('on', on); $('dockFly').classList.toggle('on', on); $('dockFly').setAttribute('aria-pressed', String(on));
+}
 function setGeom(on) { S.geom = on; $('geomBtn').classList.toggle('on', on); dockText(); }
-function clearAll() { r2d.reset(); curveFrames = 0; curveAvg.fill(0); }
+function clearAll() { r2d.reset(); fly.clear(); curveFrames = 0; curveAvg.fill(0); }
 
 function bindUI() {
   const box = $('scenes');
@@ -196,12 +232,15 @@ function bindUI() {
   }
   for (const [id, f] of SLIDERS2D) $(id).addEventListener('input', () => {
     S.P[id] = +$(id).value; $(id + 'V').textContent = f(S.P[id]); S.liveUntil = performance.now() + 300; outlineKey = '';
-    if (id === 'n' || id === 'dn') renderMath();
+    if (id === 'n' || id === 'dn') { renderMath(); setC(S.c); }
   });
   document.querySelectorAll('#specSeg button').forEach(b => b.addEventListener('click', () => {
     S.P.mono = +b.dataset.mono; document.querySelectorAll('#specSeg button').forEach(x => x.classList.toggle('on', x === b)); r2d.reset();
   }));
   $('geomBtn').addEventListener('click', () => setGeom(!S.geom));
+  $('c').addEventListener('input', () => setC(C_MAX * (+$('c').value) ** 2));
+  $('flightBtn').addEventListener('click', () => setFlight(!S.flight));
+  $('dockFly').addEventListener('click', () => setFlight(!S.flight));
   $('curveBtn').addEventListener('click', () => { S.curve = !S.curve; $('curveBtn').classList.toggle('on', S.curve); });
   $('playBtn').addEventListener('click', () => setPlaying(!S.playing));
   $('dockPlay').addEventListener('click', () => setPlaying(!S.playing));
@@ -221,6 +260,7 @@ function bindKeys() {
     const k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); setPlaying(!S.playing); }
     else if (k === 'c') clearAll();
+    else if (k === 'f') setFlight(!S.flight);
     else if (/^[1-9]$/.test(k) && SCENES[+k - 1]) setScene(SCENES[+k - 1].id);
   });
 }
@@ -312,6 +352,7 @@ function bindPanel() {
 
 // ── equations ───────────────────────────────────────────────────────────────
 const TEX = {
+  fly: String.raw`v=\frac{c}{n},\qquad \Delta s=\frac{c\,\Delta t}{n}`,
   ray: String.raw`\mathbf{x}(\xi,s)=\mathbf{x}_0(\xi)+s\,\hat{\mathbf{d}}(\xi),\qquad J=\det\frac{\partial\mathbf{x}}{\partial(\xi,s)}=0`,
   snell: String.raw`n_1\sin\theta_1=n_2\sin\theta_2,\qquad E\propto\frac{1}{|J|}`,
   cup: String.raw`x=\tfrac{a}{4}\left(3\cos t-\cos 3t\right),\quad y=\tfrac{a}{4}\left(3\sin t-\sin 3t\right)`,
@@ -323,6 +364,7 @@ const TEX = {
   marbles: String.raw`f=\frac{n\,a}{2(n-1)}\quad\text{(from the centre of a ball)}`,
 };
 const EQ_TEXT = {
+  fly: 'v = c/n,  Δs = c Δt / n',
   ray: 'x(ξ, s) = x₀(ξ) + s d(ξ),  J = det ∂x/∂(ξ, s) = 0', snell: 'n₁ sin θ₁ = n₂ sin θ₂,  E ∝ 1/|J|',
   cup: 'x = a/4 (3 cos t − cos 3t),  y = a/4 (3 sin t − sin 3t)', cardioid: 'r = 2a/3 (1 + cos φ)',
   drop: 'D(θ) = π + 2θ − 4 arcsin(sin θ / n),  D ≈ 138°', lens: 'f₀ = a / (n − 1),  f(y) < f₀',
@@ -332,31 +374,40 @@ function mathKeys() { return ['ray', 'snell', S.scene]; }
 function renderMath() {
   const k = mathKeys();
   ['eqA', 'eqB', 'eqC'].forEach((id, i) => typeset($(id), TEX[k[i]], { rules: RULES }));
+  typeset($('eqFly'), TEX.fly, { rules: RULES });
 }
 
 // ── screensaver ─────────────────────────────────────────────────────────────
 // A shot: scene, zoom from-to (toward the scene focus), light angle
-// from-to, and parameter overrides.
+// from-to, and parameter overrides. fly: the slowed speed of light in m/s
+// for a shot with photons in flight (no fly: the light image only).
 const SHOTS = [
-  { scene: 'cup', zoom: [1, 1.15], ang: [-8, 8] },
+  { scene: 'cup', zoom: [1, 1.15], ang: [-8, 8], fly: 0.6, sub: 'Pulses of light at a slowed c: each wave front folds onto the nephroid' },
   { scene: 'cup', zoom: [1.5, 2.6], ang: [0, 0], sub: 'Close on the cusp: the paraxial rays meet at a / 2' },
   { scene: 'cardioid', zoom: [1, 1.2], ang: [-15, 15] },
   { scene: 'drop', zoom: [1, 1.2], ang: [-5, 5], P: { dn: 0.08 } },
+  { scene: 'drop', zoom: [1, 1.15], ang: [-3, 3], fly: 0.4, sub: 'In the water drop the photons go at c / n: the pulse slows and its front bends' },
   { scene: 'lens', zoom: [1.4, 2.5], ang: [0, 0], sub: 'The cusp of the lens caustic: edge rays cross the axis first' },
+  { scene: 'lens', zoom: [1, 1.2], ang: [0, 0], fly: 0.35, sub: 'A flat wave front goes into the glass at c / n and comes out curved' },
   { scene: 'pool', zoom: [1, 1.35], ang: [-6, 6] },
   { scene: 'prism', zoom: [1, 1.5], ang: [-3, 3] },
+  { scene: 'prism', zoom: [1, 1.3], ang: [-2, 2], fly: 0.4, P: { dn: 0.16 }, sub: 'Blue light is slower in glass than red light: the colours part' },
   { scene: 'marbles', zoom: [1, 1.2], ang: [-6, 6] },
 ];
+const FLY_CODE = (() => { const t = advance.toString(); return t.slice(t.indexOf('  for (let k')).trim(); })();
 function saverPlate() {
   const sv = S.saver; if (!sv || !sv.label || !sv.shot) return;
   const sh = sv.shot, f = (v, d = 3) => Number(v).toFixed(d);
   const def = SCENES.find(s => s.id === sh.scene), P = S.P;
   const params = [{ sym: 'n', name: 'index at 589 nm', value: f(P.n) }];
   if (P.dn > 0) params.push({ sym: '\\Delta n', name: 'index split, 400 to 700 nm', value: f(P.dn) });
-  params.push({ sym: '\\theta', name: 'light angle', value: f(P.ang, 1) + '°' }, { sym: 'N', name: 'photons a frame', value: S.N.toLocaleString('en-US') });
-  sv.label({ title: 'Photon Caustics 2D · ' + def.name, sub: sh.sub || def.sub, tex: [TEX.ray, TEX[sh.scene]], rules: RULES,
-    eq: [EQ_TEXT.ray, EQ_TEXT[sh.scene]], params,
-    code: { lang: 'js', name: 'optics2d.js · refract', text: refract2d.toString() } });
+  params.push({ sym: '\\theta', name: 'light angle', value: f(P.ang, 1) + '°' });
+  if (sh.fly) params.push({ sym: 'c', name: 'speed of light, slowed', value: f(S.c, 2) + ' m/s' }, { sym: 'c/n', name: 'speed in the medium', value: f(S.c / P.n, 2) + ' m/s' });
+  else params.push({ sym: 'N', name: 'photons a frame', value: S.N.toLocaleString('en-US') });
+  sv.label({ title: 'Photon Caustics 2D · ' + def.name, sub: sh.sub || def.sub, tex: [sh.fly ? TEX.fly : TEX.ray, TEX[sh.scene]], rules: RULES,
+    eq: [sh.fly ? EQ_TEXT.fly : EQ_TEXT.ray, EQ_TEXT[sh.scene]], params,
+    code: sh.fly ? { lang: 'js', name: 'optics2d.js · advance, a photon in flight', text: FLY_CODE }
+      : { lang: 'js', name: 'optics2d.js · refract', text: refract2d.toString() } });
 }
 
 function nextShot(now) {
@@ -366,6 +417,7 @@ function nextShot(now) {
   sv.shot = sh; sv.t0 = now;
   setScene(sh.scene);
   Object.assign(S.P, sh.P || {});
+  setFlight(!!sh.fly); if (sh.fly) setC(sh.fly);
   sh.ang0 = sh.ang[0] + (sv.rnd() - 0.5) * 6; sh.ang1 = sh.ang[1] + (sv.rnd() - 0.5) * 6;
   saverPlate();
 }
@@ -391,7 +443,7 @@ window.snSaver = {
     const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     S.saver = { label: typeof o.label === 'function' ? o.label : null, rnd, list: shuffle(SHOTS),
       i: -1, shot: null, t0: 0, hold: (7 + 3 * calm) * 1000, plateAt: 0, bandFn: null, band: null, bandAt: 0,
-      prev: { scene: S.scene, P: { ...S.P }, zoom: S.zoom, pan: S.pan.slice(), playing: S.playing, open: panel.classList.contains('open') } };
+      prev: { scene: S.scene, P: { ...S.P }, zoom: S.zoom, pan: S.pan.slice(), playing: S.playing, flight: S.flight, c: S.c, open: panel.classList.contains('open') } };
     document.documentElement.classList.add('saver');
     S.playing = true;
     import('../../lib/saver-clear.js').then(m => { if (S.saver) S.saver.bandFn = m.plateBand; }).catch(() => { /* no band: centre */ });
@@ -405,6 +457,7 @@ window.snSaver = {
     const p = sv.prev;
     S.playing = p.playing;
     setScene(p.scene); S.P = p.P; S.zoom = p.zoom; S.pan = p.pan; syncSliders(); dockText();
+    setFlight(p.flight); setC(p.c);
     setOpen(p.open);
   },
 };
@@ -415,10 +468,11 @@ if (!gl) {
 } else {
   const caps = floatCaps(gl);
   r2d = createRender2D(gl, caps);
+  fly = createFlight({ phone: PHONE_Q.matches });
   bindUI(); bindKeys(); bindPointer(); bindPanel();
   if (PHONE_Q.matches) setOpen(false);
   resize();
-  setScene('cup');
+  setScene('cup'); setFlight(S.flight); setC(S.c);
   requestAnimationFrame(frame);
-  window.__caustics = { S, setScene, SCENES, booted: true, float: caps.float };
+  window.__caustics = { S, setScene, setC, setFlight, fly, SCENES, booted: true, float: caps.float };
 }

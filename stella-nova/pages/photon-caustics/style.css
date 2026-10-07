@@ -127,6 +127,7 @@ section[hidden]{display:none}
     background:rgba(10,12,16,0.96);border-top:1px solid var(--line-b)}
   #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem}
   #dock > button.on{border-color:var(--acc);color:var(--acc);background:rgba(159,212,255,0.08)}
+  #dock > #dockFly i{font-family:var(--sci-serif);font-size:1.25rem}
   #dock > button.name{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px;font-family:var(--sci-serif);font-size:1rem;text-align:left}
   #dock > button.name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #dock > button.name i{font-style:normal;color:var(--dim);font-family:var(--sci-sans)}

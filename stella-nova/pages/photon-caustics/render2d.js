@@ -23,10 +23,15 @@
 //  Over it, with alpha: glass and water fills, outlines, mirrors as thick
 //  strips, and the detector curve (irradiance along the floor or screen).
 //
+//  FLIGHT. Last, the photons in flight (flight.js): soft strips and discs
+//  added on top (blend ONE, ONE), so where many photons cross, it is bright.
+//
 //  EXPORTS
 //    createRender2D(gl, caps) -> { resize, reset, draw, frames }
 //  draw(o): o = { scene, segs, ns, view, exposure, live, outline,
-//                 curve, fade, geom }
+//                 curve, fade, geom, flight, hold }
+//    hold: true to show the light image again with no new photons
+//    flight = { verts, count }  from flight.js build()
 //    view = { cx, cy, s, px, py }  world point (cx, cy) shows at device
 //           pixel (px, py), s device px per world unit
 // ============================================================================
@@ -66,6 +71,19 @@ const GEOM_FS = `#version 300 es
 precision mediump float; uniform vec4 u_color; out vec4 o;
 void main(){ o = vec4(u_color.rgb * u_color.a, u_color.a); }`;
 
+const FLY_VS = `#version 300 es
+layout(location=0) in vec2 a_pos; layout(location=1) in vec4 a_col; layout(location=2) in vec2 a_q;
+uniform vec4 u_view; uniform vec2 u_c;
+out vec4 v_col; out vec2 v_q;
+void main(){ v_col = a_col; v_q = a_q; gl_Position = vec4((a_pos - u_c) * u_view.xy + u_view.zw, 0.0, 1.0); }`;
+const FLY_FS = `#version 300 es
+precision mediump float;
+in vec4 v_col; in vec2 v_q; uniform float u_fade; out vec4 o;
+void main(){
+  float a = v_col.a * (1.0 - smoothstep(0.35, 1.0, length(v_q))) * u_fade;
+  o = vec4(v_col.rgb * a, a);
+}`;
+
 const STYLE = {
   fill: { glass: [0.55, 0.75, 1.0, 0.07], water: [0.15, 0.45, 0.8, 0.10] },
   line: { glass: [0.7, 0.85, 1.0, 0.42, 1.2], water: [0.55, 0.8, 1.0, 0.5, 1.4], mirror: [0.88, 0.9, 0.95, 0.9, 3.0],
@@ -75,7 +93,7 @@ const STYLE = {
 
 export function createRender2D(gl, caps) {
   const pLine = program(gl, LINE_VS, LINE_FS), pScale = program(gl, FULL_VS, SCALE_FS);
-  const pShow = program(gl, FULL_VS, SHOW_FS), pGeom = program(gl, GEOM_VS, GEOM_FS);
+  const pShow = program(gl, FULL_VS, SHOW_FS), pGeom = program(gl, GEOM_VS, GEOM_FS), pFly = program(gl, FLY_VS, FLY_FS);
   const lineVao = gl.createVertexArray(), lineBuf = gl.createBuffer();
   gl.bindVertexArray(lineVao); gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 20, 0);
@@ -83,6 +101,11 @@ export function createRender2D(gl, caps) {
   const geomVao = gl.createVertexArray(), geomBuf = gl.createBuffer();
   gl.bindVertexArray(geomVao); gl.bindBuffer(gl.ARRAY_BUFFER, geomBuf);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+  const flyVao = gl.createVertexArray(), flyBuf = gl.createBuffer();
+  gl.bindVertexArray(flyVao); gl.bindBuffer(gl.ARRAY_BUFFER, flyBuf);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 32, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 8);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 32, 24);
   gl.bindVertexArray(null);
 
   let hist = null, W = 0, H = 0, verts = new Float32Array(0), frames = 0;
@@ -110,22 +133,25 @@ export function createRender2D(gl, caps) {
         verts[j] = g[k]; verts[j + 1] = g[k + 1]; verts[j + 2] = g[k + 4] * f; verts[j + 3] = g[k + 5] * f; verts[j + 4] = g[k + 6] * f;
         verts[j + 5] = g[k + 2]; verts[j + 6] = g[k + 3]; verts[j + 7] = verts[j + 2]; verts[j + 8] = verts[j + 3]; verts[j + 9] = verts[j + 4];
       }
-      frames++;
-      const a = o.live ? A_LIVE : Math.max(A_MIN, 1 / frames);
       gl.viewport(0, 0, W, H);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, hist.fbo);
-      gl.enable(gl.BLEND);
-      // hist *= (1 - a)
-      gl.blendColor(0, 0, 0, 1 - a); gl.blendFunc(gl.ZERO, gl.CONSTANT_ALPHA);
-      gl.useProgram(pScale); drawFull(gl);
-      // hist += a * lines
-      gl.blendFunc(gl.ONE, gl.ONE);
-      gl.useProgram(pLine);
-      gl.uniform4f(pLine.u.u_view, sx, sy, ox, oy); gl.uniform2f(pLine.u.u_c, v.cx, v.cy);
-      gl.uniform1f(pLine.u.u_gain, a * o.gain);
-      gl.bindVertexArray(lineVao); gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
-      gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, ns * 10), gl.STREAM_DRAW);
-      gl.drawArrays(gl.LINES, 0, ns * 2);
+      // o.hold: a converged image, shown again with no new photons
+      if (!o.hold) {
+        frames++;
+        const a = o.live ? A_LIVE : Math.max(A_MIN, 1 / frames);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, hist.fbo);
+        gl.enable(gl.BLEND);
+        // hist *= (1 - a)
+        gl.blendColor(0, 0, 0, 1 - a); gl.blendFunc(gl.ZERO, gl.CONSTANT_ALPHA);
+        gl.useProgram(pScale); drawFull(gl);
+        // hist += a * lines
+        gl.blendFunc(gl.ONE, gl.ONE);
+        gl.useProgram(pLine);
+        gl.uniform4f(pLine.u.u_view, sx, sy, ox, oy); gl.uniform2f(pLine.u.u_c, v.cx, v.cy);
+        gl.uniform1f(pLine.u.u_gain, a * o.gain);
+        gl.bindVertexArray(lineVao); gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, ns * 10), gl.STREAM_DRAW);
+        gl.drawArrays(gl.LINES, 0, ns * 2);
+      }
       // show
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.disable(gl.BLEND);
@@ -147,6 +173,15 @@ export function createRender2D(gl, caps) {
         for (const l of o.outline.lines) { const c = STYLE.line[l.kind]; put(strip(l.pts, c[4] * (v.dpr || 1) / v.s), c); }
         if (o.curve) put(strip(o.curve, STYLE.curve[4] * (v.dpr || 1) / v.s), STYLE.curve);
         if (o.marker) { const c = [1, 0.95, 0.8, 0.95]; put(disc(o.marker[0], o.marker[1], 4 * (v.dpr || 1) / v.s), c); }
+        gl.disable(gl.BLEND);
+      }
+      if (o.flight && o.flight.count) {
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+        gl.useProgram(pFly);
+        gl.uniform4f(pFly.u.u_view, sx, sy, ox, oy); gl.uniform2f(pFly.u.u_c, v.cx, v.cy); gl.uniform1f(pFly.u.u_fade, o.fade ?? 1);
+        gl.bindVertexArray(flyVao); gl.bindBuffer(gl.ARRAY_BUFFER, flyBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, o.flight.verts.subarray(0, o.flight.count * 8), gl.STREAM_DRAW);
+        gl.drawArrays(gl.TRIANGLES, 0, o.flight.count);
         gl.disable(gl.BLEND);
       }
       gl.bindVertexArray(null);

@@ -20,7 +20,8 @@
      optics2d.js  the 2D scenes and the photon tracer (no DOM)
      gl.js        WebGL2 helpers: programs, float targets (the 3D page
                   has its own copy)
-     render2d.js  the 2D light image, tone map and overlay
+     render2d.js  the 2D light image, tone map, overlay, photons in flight
+     flight.js    pulses of photons that move at a slowed speed of light
      main.js      layout, controls, the loop, equations, the saver hook
      tests.mjs    node tests of optics2d.js
 
@@ -34,8 +35,8 @@
                  topbar. #gl fills #stage; main.js frames the subject in
                  the part that the panel does not cover.
      phone ..... (max-width 768px, or a short landscape touch screen)
-                 #dock at the base: scene (next), play, overlay,
-                 settings. #panel is a bottom sheet (portrait) or a
+                 #dock at the base: photons in flight, scene (next),
+                 play, overlay, settings. #panel is a bottom sheet (portrait) or a
                  drawer at the right (landscape).
 
    GREP MAP  (main.js)
@@ -96,6 +97,15 @@
     <p class="hint">Drag across the light to turn it. Scroll or pinch to zoom; double-click to reset.</p>
   </section>
 
+  <div class="sec-label">Speed of light</div>
+  <div class="btns">
+    <button id="flightBtn" class="on" title="Photons in flight (F)">Photons in flight</button>
+  </div>
+  <div class="prm"><div class="nm">Speed of light <span class="sci-sym" data-tex="c" data-inline>c</span> (slowed)</div><span class="val" id="cV"></span>
+    <input type="range" id="c" min="0" max="1" step="0.001" value="0.408" aria-label="Speed of light"></div>
+  <p class="hint" id="cHint"></p>
+  <div class="eq" id="eqFly"></div>
+
   <div class="btns">
     <button id="playBtn">Pause</button>
     <button id="clearBtn" title="Clear the light image (C)">Clear</button>
@@ -109,12 +119,14 @@
   <div class="sec-label">How it works</div>
   <div class="about">
     <p>Light leaves the source as photons. Each photon goes straight until it meets a surface. A mirror reflects it. At glass or water the Fresnel equations give the chance <span class="m4">R</span> that it reflects; else it refracts by Snell's law, with an index <span class="m1">n</span> that changes with the wavelength <span class="m2">λ</span>.</p>
+    <p>Real light goes 3.00 × 10⁸ m/s, too fast to see. Here the photons in flight go at a slowed speed <i>c</i> that you set, about a metre a second. In glass or water of index <span class="m1">n</span> each photon goes at <i>c</i>/<span class="m1">n</span>, so a pulse slows down and its front bends as it goes in. That change of speed is the cause of refraction.</p>
     <p>The light image adds the path of every photon, so a pixel is as bright as the number of photons that cross it. Where the rays of a family come near each other the image is bright. The edge where they touch and fold back is the caustic. On it the Jacobian <span class="m3">J</span> of the ray map is zero, and the irradiance <span class="m4">E</span> ∝ 1/|<span class="m3">J</span>| goes to a peak.</p>
     <p>In the pool each wave crest is a weak lens. Where a crest focuses at the depth <span class="m5">d</span>, the rays crowd into a bright line on the floor. <a class="xl" href="../photon-caustics-3d/index.html" target="_self">See the 3D pool</a> for the net of these lines in two dimensions of floor.</p>
   </div>
 </aside>
 
 <nav id="dock" aria-label="Quick controls">
+  <button id="dockFly" class="on" aria-label="Photons in flight" aria-pressed="true"><i class="cfly">c</i></button>
   <button id="dockScene" class="name" aria-label="Next scene"><span id="dockName">…</span><i>›</i></button>
   <button id="dockPlay" aria-label="Pause">❚❚</button>
   <button id="dockGeom" class="on" aria-label="Overlay" aria-pressed="true">◎</button>

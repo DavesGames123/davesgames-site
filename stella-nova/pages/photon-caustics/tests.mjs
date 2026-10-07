@@ -13,8 +13,10 @@
 //  8. the lens body: a ray along the axis enters at the flat face.
 //  9. the lens: rays near the edge cross the axis before paraxial rays
 //     (spherical aberration, the cause of the caustic cusp).
+// 10. time of flight: a photon goes the light distance D in air and D/n in
+//     water; a beam pulse starts as a flat wave front.
 // ============================================================================
-import { spectrum, fresnel, refract, indexAt, makeScene, trace, outline, mulberry } from './optics2d.js';
+import { spectrum, fresnel, refract, indexAt, makeScene, trace, outline, mulberry, emitPulse, advance, mediumAt } from './optics2d.js';
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } };
@@ -98,6 +100,33 @@ function axisCross(scene, y, segIndex) {
   const s = makeScene('lens', { n: 1.5, dn: 0, ang: 0 });
   const xp = axisCross(s, 0.01, -1), xe = axisCross(s, 0.4, -1);
   ok(xe < xp - 0.1, `lens: edge focus ${xe.toFixed(3)} before paraxial ${xp.toFixed(3)}`);
+}
+
+// 10
+{
+  const nW = 1.333, s = makeScene('pool', { n: nW, dn: 0, ang: 0, wave: 0, t: 0 });
+  const [ph] = emitPulse(s, 1, () => 0.5, { mono: 589.3 });
+  const top = s.view.cy + s.view.h / 2;
+  ok(near(ph.x, 0, 1e-9) && near(ph.y, top, 1e-9) && ph.n === 1 && ph.wait === 0, `flight: one photon from the view top at y = ${ph.y.toFixed(3)}`);
+  const air = ph.y - 0.35;
+  let D = 0;
+  for (let i = 0; i < 20; i++) { advance(s, ph, 0.1, always); D += 0.1; }
+  const want = 0.35 - (D - air) / nW;
+  // tolerance 1e-4: advance steps 1e-5 off a surface after each event
+  ok(near(ph.y, want, 1e-4) && near(ph.x, 0, 1e-9), `flight: y after D = 2 is ${ph.y.toFixed(5)}, D/n in water gives ${want.toFixed(5)}`);
+  ok(near(ph.L, D, 1e-4) && near(ph.n, nW, 1e-12), `flight: clock L = ${ph.L.toFixed(6)}, n = ${ph.n}`);
+  ok(mediumAt(s, 0, 0, 589.3) === nW && mediumAt(s, 0, 0.5, 589.3) === 1, 'flight: medium below and above the water');
+  // the same light time in air only goes n times further
+  const [q] = emitPulse(s, 1, () => 0.5, { mono: 589.3 }), y0 = q.y;
+  advance(s, q, 0.3, always);
+  ok(near(y0 - q.y, 0.3, 1e-9), 'flight: D in air');
+  // a slant beam: the pulse is a flat front across the beam
+  const t = makeScene('lens', { n: 1.5, dn: 0, ang: 20 });
+  const P = emitPulse(t, 9, mulberry(3), { mono: 589.3 });
+  for (const p of P) advance(t, p, 0.3, always);
+  const dir = [Math.cos(20 * Math.PI / 180), Math.sin(20 * Math.PI / 180)];
+  const fr = P.filter(p => p.n === 1 && p.trail && p.trail.length === 3 && p.x < -0.3).map(p => p.x * dir[0] + p.y * dir[1]);
+  ok(fr.length >= 3 && Math.max(...fr) - Math.min(...fr) < 1e-6, `flight: flat front, spread ${(Math.max(...fr) - Math.min(...fr)).toExponential(2)} over ${fr.length} photons`);
 }
 
 console.log(`${n - fail}/${n} passed`);
