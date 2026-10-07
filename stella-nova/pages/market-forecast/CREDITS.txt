@@ -31,11 +31,22 @@ Runtime
   stella-nova/vendor/onnxruntime-web@1.30.0/ (LICENSE, ThirdPartyNotices.txt).
 
 Data
-  Demo mode: synthetic series that the page makes with a stochastic model
-  (synth.js). They are not market data and show no real company.
+  Default: IEX Exchange HIST (TOPS feed), real trades on the IEX exchange,
+  regular session, one day behind (T+1). Data provided for free by IEX.
+  Terms: https://www.iex.io/products/market-data-connectivity/hist-terms
+  ("If you distribute ... IEX historical data, you must cite IEX as the
+  source."). tools/snapshot.mjs reads it at deploy time into data/live/;
+  data/sample/iex.json is a dated committed sample. IEX volume is only the
+  IEX part of US volume.
+  Not used, by their terms: S&P 500 and DJIA on FRED ("Reproduction ... in
+  any form is prohibited"), Twelve Data free tier (redistribution needs a
+  Redistribution Rights Add-On), Alpha Vantage (personal, non-commercial
+  use), Yahoo, Stooq (no terms reachable; a script check blocks downloads).
   Live mode: the user's own free API key for Twelve Data, Alpha Vantage or
-  Polygon. The data stays under that provider's terms. The page does not
+  Polygon. That data stays under the provider's terms. The page does not
   store, copy or send it anywhere.
+  Offline fallback: synthetic series made by synth.js, labelled as such.
+  They are not market data.
 
 Not financial advice
   The page shows probabilistic model forecasts. The models see only past

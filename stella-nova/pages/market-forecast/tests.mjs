@@ -93,5 +93,11 @@ if (fs.existsSync(data)) {
   ok(r.status === 0, 'tests-data.mjs exit code ' + r.status);
 } else console.log('SKIP tests-data.mjs is not in this tree yet');
 
+// Part 3: the IEX snapshot path (reader, bars, merge, provider parse).
+{
+  const r = spawnSync(process.execPath, [path.join(HERE, 'tests-iex.mjs')], { encoding: 'utf8' });
+  process.stdout.write(r.stdout); process.stderr.write(r.stderr);
+  ok(r.status === 0, 'tests-iex.mjs exit code ' + r.status);
+}
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
 process.exit(fails ? 1 : 0);
