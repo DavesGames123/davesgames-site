@@ -9,12 +9,16 @@
 //  new die, thrown on its own.
 //
 //  Messages in:
-//    { cmd: 'start', spec, plan, throws, seed, tray, strength }
+//    { cmd: 'start', id, spec, plan, throws, seed, tray, strength }
 //    { cmd: 'stop' }
+//  A start during a run stops that run and then starts. Every message out
+//  carries the id of its run, so the page drops the messages of a run it
+//  has replaced.
 //  Messages out (every ~150 ms and at the end):
 //    { kind: 'progress', done, throws, faces: { type: { label: n } },
 //      totals: { total: n }, cocked, rerolls, ms, dps (dice per second) }
-//    { kind: 'error', message }
+//    { kind: 'done' | 'stopped', id }
+//    { kind: 'error', id, message }
 //
 //  GREP MAP
 //    function oneThrow ... a throw of the plan, re-throws, explosions
@@ -23,7 +27,7 @@
 import { createPhysics, simulateThrow } from './physics.js';
 import { score, topValue } from './notation.js';
 
-let R = null, P = null, stop = false, running = false;
+let R = null, P = null, stop = false, running = false, pending = null;
 
 async function init(tray) {
   if (!R) {
@@ -65,11 +69,17 @@ function oneThrow(spec, plan, seed, strength, faces, counters) {
   return score(spec, items).total;
 }
 
-self.onmessage = async e => {
+self.onmessage = e => {
   const m = e.data;
-  if (m.cmd === 'stop') { stop = true; return; }
-  if (m.cmd !== 'start' || running) return;
+  if (m.cmd === 'stop') { stop = true; pending = null; return; }
+  if (m.cmd !== 'start') return;
+  // a start while a run goes on: stop that run, then start this one
+  if (running) { stop = true; pending = m; return; }
+  run(m);
+};
+async function run(m) {
   running = true; stop = false;
+  const id = m.id;
   try {
     await init(m.tray || 'medium');
     const faces = {}, totals = {}, counters = { cocked: 0, rerolls: 0 };
@@ -81,13 +91,16 @@ self.onmessage = async e => {
       const now = performance.now();
       if (now - last > 150 || k === m.throws - 1) {
         last = now;
-        self.postMessage({ kind: 'progress', done: k + 1, throws: m.throws, faces, totals, ...counters, ms: now - t0, dps: dice / ((now - t0) / 1000) });
+        self.postMessage({ kind: 'progress', id, done: k + 1, throws: m.throws, faces, totals, ...counters, ms: now - t0, dps: dice / ((now - t0) / 1000) });
         // let a stop message in
         await new Promise(r => setTimeout(r, 0));
       }
     }
-    self.postMessage({ kind: 'done' });
+    self.postMessage({ kind: stop ? 'stopped' : 'done', id });
   } catch (err) {
-    self.postMessage({ kind: 'error', message: String(err && err.message || err) });
-  } finally { running = false; }
-};
+    self.postMessage({ kind: 'error', id, message: String(err && err.message || err) });
+  } finally {
+    running = false;
+    if (pending) { const p = pending; pending = null; run(p); }
+  }
+}
