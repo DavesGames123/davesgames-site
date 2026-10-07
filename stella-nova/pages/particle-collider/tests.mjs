@@ -159,6 +159,21 @@ for (const kind of Object.keys(SCENARIOS)) {
   ok(tried >= 6 && good >= 0.8 * tried, `Z -> mu mu: ${tried} of 12 events with two muons, ${good} with m(mu mu) within 5 GeV of the true mass`);
 }
 
+// ── beams and energies ────────────────────────────────────────────────────
+{
+  const four = g => { const s = [0, 0, 0, 0]; for (const q of g.prims) { const m = PART[q.name].m, p = Math.hypot(q.px, q.py, q.pz); s[0] += Math.hypot(p, m); s[1] += q.px; s[2] += q.py; s[3] += q.pz; } return s; };
+  const z = generate('zmm', { beam: 'ee', sqrtS: 91190 }, makeRng(5)), fz = four(z);
+  ok(Math.abs(fz[0] - 91190) < 1e-6 * 91190 && Math.hypot(fz[1], fz[2], fz[3]) < 1e-3, `e+e- at 91.19 GeV, Z -> mu mu: sum E ${(fz[0] / 1000).toFixed(4)} GeV, |sum p| ${Math.hypot(fz[1], fz[2], fz[3]).toExponential(1)} MeV (the Z at rest)`);
+  const h = generate('hgg', { beam: 'ee', sqrtS: 250000 }, makeRng(6)), fh = four(h);
+  ok(Math.abs(fh[0] - 250000) < 1e-6 * 250000 && Math.hypot(fh[1], fh[2], fh[3]) < 1e-3, `e+e- at 250 GeV, ZH (Z -> nu nu, H -> gamma gamma): sum E ${(fh[0] / 1000).toFixed(4)} GeV, |sum p| ${Math.hypot(fh[1], fh[2], fh[3]).toExponential(1)} MeV`);
+  const r = generate('zee', { beam: 'ee', sqrtS: 250000 }, makeRng(7)), fr = four(r);
+  ok(Math.abs(fr[0] - 250000) < 1e-6 * 250000 && r.info.truth.isr > 0, `e+e- at 250 GeV, Z -> ee by radiative return: ISR photon ${(r.info.truth.isr / 1000).toFixed(1)} GeV, sum E ${(fr[0] / 1000).toFixed(4)} GeV`);
+  for (const [beam, kind, rts] of [['pp', 'jj', 1e8], ['pp', 'zmm', 1e9], ['mumu', 'tt', 1e7], ['PbPb', 'mb', 5.36e6]]) {
+    const g = generate(kind, { beam, sqrtS: rts }, makeRng(8)), R = DET.run(g.prims, 3), L = R.L, bal = L.in + L.borrow - (L.dep + L.esc + L.inv + L.ret);
+    ok(Math.abs(bal) < 1e-6 * L.in, `ledger, ${beam} ${kind} at ${rts / 1e6} TeV${rts > 1e8 ? ' (hypothetical)' : ''}: ${g.prims.length} primaries, in ${(L.in / 1000).toFixed(0)} GeV, imbalance ${bal.toExponential(1)} MeV (${R.stats.steps} steps, ${R.stats.ms} ms)`);
+  }
+}
+
 // ══ the accelerator model (accel.js) ══════════════════════════════════════
 {
   const A = await import('./accel.js');
