@@ -1,0 +1,64 @@
+diff --git a/src-common/aggCanvas.cpp b/src-common/aggCanvas.cpp
+index 0e9da8b..58771aa 100644
+--- a/src-common/aggCanvas.cpp
++++ b/src-common/aggCanvas.cpp
+@@ -24,6 +24,9 @@
+ // Mark Lentczner can be contacted at markl@glyphic.com or at
+ // Mark Lentczner, 1209 Villa St., Mountain View, CA 94041-1123, USA
+ //
++// Modified 2026-10-06 by davesgames.io for the WebAssembly build (patch
++// 0002-antialias-switch): aggCanvas::NoAntialias, when true, sets a
++// threshold gamma on the rasterizer, so each pixel is on or off.
+ //
+ 
+ 
+@@ -33,6 +36,7 @@
+ #include "agg2/agg_pixfmt_rgba.h"
+ #include "agg2/agg_pixfmt_rgb.h"
+ #include "agg2/agg_pixfmt_gray.h"
++#include "agg2/agg_gamma_functions.h"
+ #include "agg2/agg_renderer_base.h"
+ #include "agg2/agg_renderer_scanline.h"
+ #include "agg2/agg_rasterizer_scanline_aa.h"
+@@ -93,6 +97,8 @@ using gray16_pixel_fmt = agg::pixfmt_gray16_pre;
+ #define ADJ_SQUARE_SIZE     0.80
+ #define ADJ_TRIANGLE_SIZE   0.90
+ 
++bool aggCanvas::NoAntialias = false;
++
+ const std::map<aggCanvas::PixelFormat, int> aggCanvas::BytesPerPixel = {
+     {UnknownPixelFormat, 4},
+     { Gray8_Blend, 1 },
+@@ -184,6 +190,8 @@ class aggCanvas::impl {
+               offsetX(0), offsetY(0), cropWidth(0), cropHeight(0)
+         {
+ //            rasterizer.gamma(agg::gamma_power(1.0));
++            if (aggCanvas::NoAntialias)
++                rasterizer.gamma(agg::gamma_threshold(0.5));
+         }
+         virtual ~impl() = default;
+ 
+diff --git a/src-common/aggCanvas.h b/src-common/aggCanvas.h
+index 938ba9a..b5d996b 100644
+--- a/src-common/aggCanvas.h
++++ b/src-common/aggCanvas.h
+@@ -27,6 +27,9 @@
+ //
+ 
+ 
++// Modified 2026-10-06 by davesgames.io for the WebAssembly build (patch
++// 0002-antialias-switch): adds the NoAntialias switch.
++
+ #ifndef INCLUDE_AGGCANVAS_H
+ #define INCLUDE_AGGCANVAS_H
+ 
+@@ -66,6 +69,9 @@ class aggCanvas : public Canvas {
+             // return whether the aggCanvas can fit in byte pixels
+         
+         static PixelFormat SuggestPixelFormat(CFDG* engine);
++
++        static bool NoAntialias;
++            // true: no antialiasing (patch 0002, web build)
+         
+     protected:
+         aggCanvas(PixelFormat);

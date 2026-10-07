@@ -1,0 +1,114 @@
+CONTEXT FREE ON DAVESGAMES.IO — CREDITS AND LICENCES
+====================================================
+
+This directory is a port of Context Free to the web. It is distributed
+under the GNU General Public License, version 2 or (at your option) any
+later version. The licence text is in COPYING (byte copy of the upstream
+LICENSE.txt).
+
+
+THE PROGRAM
+-----------
+Context Free, version 3.4.3
+  by Chris Coyne, John Horigan and Mark Lentczner
+  Context Free Copyright (C) 2005-2026 Mark Lentczner and John Horigan
+  CFDG Copyright (C) 2005 Chris Coyne
+  https://www.contextfreeart.org/
+  https://github.com/MtnViewJohn/context-free
+  Licence: GPL version 2 or later ("either version 2 of the License, or
+  (at your option) any later version", from the upstream README and the
+  header of every source file).
+
+Upstream commit: 8cbef6e67054f03e6a89a4d5ae0fb356e0f5ef27 (see
+engine/UPSTREAM). Every upstream copyright notice is kept in the source
+tarball engine/context-free-8cbef6e-src.tar.gz, unchanged.
+
+
+LIBRARIES AND CODE INSIDE cf.wasm
+---------------------------------
+Anti-Grain Geometry (AGG), the subset in upstream src-agg/
+  Copyright (C) 2002-2006 Maxim Shemanarev, http://www.antigrain.com
+  agg_curves.h also: Copyright (C) 2005 Tony Juricic
+  The files carry the AGG 2.4 notice: "Permission to copy, use, modify,
+  sell and distribute this software is granted provided this copyright
+  notice appears in all copies. This software is provided "as is"
+  without express or implied warranty, and with no claim as to its
+  suitability for any purpose." The upstream src-agg/README.txt and
+  src-agg/copying put AGG 2.5 under GPL version 2 or later.
+
+AGG extras in upstream src-common/agg-extras/
+  Copyright (C) 2002-2005 Maxim Shemanarev; (C) 2006-2015 John Horigan;
+  (C) 2006 Mark Lentczner. GPL version 2 or later, as Context Free.
+
+Random number distributions, upstream src-common/myrandom.h
+  From LLVM libc++ <random>, Copyright (c) 2009-2015 the LLVM/libc++
+  contributors (upstream src-common/CREDITS.TXT). Dual licensed under the
+  MIT licence and the University of Illinois/NCSA Open Source Licence;
+  the full text is in the header of myrandom.h.
+
+backwards.h, upstream src-common/backwards.h (used by builder.cpp)
+  Copyright (c) 2018 Adam Nevraumont. Creative Commons CC BY-SA 4.0,
+  https://creativecommons.org/licenses/by-sa/4.0/ (a short reverse-range
+  adapter). Note: Creative Commons lists CC BY-SA 4.0 as one-way
+  compatible with GPL version 3, not version 2. We ship it as upstream
+  ships it.
+
+fdostream.h, upstream src-unix/fdostream.h (included by SVGCanvas.h)
+  (C) Copyright Nicolai M. Josuttis 2001. "Permission to copy, use,
+  modify, sell and distribute this software is granted provided this
+  copyright notice appears in all copies."
+
+The parser and the lexer are generated at build time:
+  GNU Bison 3.8.2 output (cfdg.tab.cpp): the Bison special exception
+  lets the output be distributed under the terms of the program.
+  flex 2.6.4 output (lex.yy.cpp) and FlexLexer.h: flex licence (BSD
+  style), Copyright (c) 1993 The Regents of the University of California.
+
+Emscripten 6.0.11 runtime, libc (musl) and libc++ in cf.js and cf.wasm:
+  Emscripten: MIT / University of Illinois NCSA. musl: MIT. LLVM libc++
+  and libc++abi: Apache 2.0 with LLVM exceptions.
+
+
+OUR CHANGES (GPL version 2 section 2a)
+--------------------------------------
+Modified by davesgames.io, 2026-10-06. Each changed upstream file has a
+notice of the change in its header.
+  engine/patches/0001-web-update-tick.patch
+      src-common/renderimpl.cpp: with CFDG_WEB, run() and drawShape() ask
+      the shim for a time tick, in place of the GUI's timer thread.
+  engine/patches/0002-antialias-switch.patch
+      src-common/aggCanvas.{h,cpp}: aggCanvas::NoAntialias, a threshold
+      gamma on the rasterizer.
+  engine/shim/cfweb.cpp (new, ours): the C API of the web build. It
+      takes the place of src-unix/main.cpp, posixSystem.cpp and
+      pngCanvas.cpp. NFKC name normalization (ICU) is left out: names are
+      compared as UTF-32.
+
+
+CORRESPONDING SOURCE (GPL version 2 section 3)
+----------------------------------------------
+cf.js and cf.wasm are object code. Their complete corresponding source is
+in this directory, at the same place as the binaries:
+  engine/context-free-8cbef6e-src.tar.gz   upstream files used (git archive)
+  engine/patches/                          our patches
+  engine/shim/cfweb.cpp                    our C API
+  engine/build.sh                          the build script
+  engine/BUILD                             tool versions and output hashes
+Build: EMSDK=<emsdk> BISON=<bison 3.x> FLEX=<GNU flex 2.6.4> engine/build.sh
+
+
+DESIGNS
+-------
+designs/*.cfdg without a prefix: the example designs of the Context Free
+  distribution (upstream input/), byte copies. GPL version 2 or later,
+  with the program.
+designs/test-*.cfdg: designs from the upstream test suite (input/tests),
+  byte copies, renamed. GPL version 2 or later, with the program.
+designs/ours-*.cfdg: written for this page. GPL version 2 or later.
+No design from the contextfreeart.org gallery is in this directory.
+
+
+THE PAGE
+--------
+index.html, style.css and the *.js files other than cf.js are our own
+code, Copyright (C) 2026 davesgames.io, GPL version 2 or later.

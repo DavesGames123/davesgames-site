@@ -1,0 +1,45 @@
+diff --git a/src-common/renderimpl.cpp b/src-common/renderimpl.cpp
+index 29c20e4..5d5288e 100644
+--- a/src-common/renderimpl.cpp
++++ b/src-common/renderimpl.cpp
+@@ -24,11 +24,22 @@
+ // Mark Lentczner can be contacted at markl@glyphic.com or at
+ // Mark Lentczner, 1209 Villa St., Mountain View, CA 94041-1123, USA
+ //
++// Modified 2026-10-06 by davesgames.io for the WebAssembly build (patch
++// 0001-web-update-tick): with CFDG_WEB defined, run() and drawShape() ask
++// cfdgWebTick() for a time tick. A web worker has one thread and no timer
++// thread to set requestUpdate, so the tick takes the place of that timer.
+ //
+ 
+ 
+ #include "renderimpl.h"
+ 
++#ifdef CFDG_WEB
++extern "C" int cfdgWebTick(void);
++#define CFDG_WEB_TICK() (cfdgWebTick() != 0)
++#else
++#define CFDG_WEB_TICK() false
++#endif
++
+ #include <iterator>
+ #include <string>
+ #include <algorithm>
+@@ -323,7 +334,7 @@ RendererImpl::run(Canvas * canvas, bool partialDraw)
+             break;
+         }
+         
+-        if (requestUpdate || (m_stats.shapeCount > reportAt)) {
++        if (requestUpdate || CFDG_WEB_TICK() || (m_stats.shapeCount > reportAt)) {
+             if (partialDraw)
+               outputPartial();
+             outputStats();
+@@ -994,7 +1005,7 @@ RendererImpl::drawShape(const FinishedShape& s)
+     if (requestStop) throw Stopped();
+     if (!mFinal  &&  requestFinishUp) throw Stopped();
+     
+-    if (requestUpdate)
++    if (requestUpdate || CFDG_WEB_TICK())
+         outputStats();
+ 
+     if (!s.mWorldState.m_time.overlaps(mFrameTimeBounds))

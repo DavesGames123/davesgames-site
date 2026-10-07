@@ -1,0 +1,5 @@
+repo: https://github.com/MtnViewJohn/context-free
+commit: 8cbef6e67054f03e6a89a4d5ae0fb356e0f5ef27
+version: 3.4.3 (README)
+fetched: 2026-10-06
+tarball: context-free-8cbef6e-src.tar.gz = git archive --format=tar.gz --prefix=context-free-8cbef6e/ 8cbef6e src-common src-agg src-unix input LICENSE.txt README Makefile ChangeLog makeexamples.py cfdg.1
