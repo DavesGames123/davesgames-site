@@ -46,6 +46,7 @@ const EXCLUDED = new Set([
   'volume-noise',      // port of TileableVolumeNoise
   'fishdraw',          // port of LingDong-/fishdraw
   'halftone',          // port of glslify/glsl-halftone
+  'context-free',      // GPL-2+ build of Context Free (Lentczner, Horigan)
   'randoma11y',        // removed from the site
 ]);
 // Pages listed only in the plain directory: no featured spot, quick link,

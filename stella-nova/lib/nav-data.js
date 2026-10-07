@@ -316,6 +316,7 @@ w.SN_NAV = [
       ["markov-junior", "MarkovJunior", "RULES"],
       ["shan-shui", "Shan Shui", "SVG"],
       ["fishdraw", "Fishdraw", "SVG"],
+      ["context-free", "Context Free", "WASM"],
       ["holocloth", "Holocloth", "CLOTH"],
       ["line-art", "Line Art", "RUST"]
     ] },
