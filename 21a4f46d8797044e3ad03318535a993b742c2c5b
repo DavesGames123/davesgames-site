@@ -1,0 +1,1 @@
+Correction to the body: the rigid-ish moon at 0.8 d_fluid logged 54 full buckets before the change; 69 was the run at 0.85 d_fluid.
