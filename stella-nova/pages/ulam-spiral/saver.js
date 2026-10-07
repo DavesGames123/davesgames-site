@@ -131,7 +131,7 @@ export function installSaver(app) {
         sh.kEnd = pick([20000, 60000, 120000]) * (0.7 + 0.3 * (1 - st.calm));
         S.walk = { k: 0, max: Infinity, follow: false, rate: 0 };
         S.cam = { x: 0, y: 0, z: 70 };
-        sh.title = shape.key === 'square' ? 'Ulam spiral' : shape.name + ' spiral';
+        sh.title = shape.key === 'square' ? 'Ulam spiral' : spiralName(shape);
         sh.sub = 'Counted out from the centre: each prime lights as the count passes it';
         sh.code = shape.kind === 'hex' ? (shape.key === 'tri' ? 'tri' : 'hex') : shape.key === 'octagon' ? 'oct' : 'sq';
       },
@@ -192,7 +192,7 @@ export function installSaver(app) {
         const c = app.homeCam(shape);
         S.cam = { x: c.x, y: c.y, z: c.z * 1.6 };
         sh.z1 = c.z * 0.55;
-        sh.title = shape.key === 'square' ? 'Ulam spiral' : shape.name + ' spiral';
+        sh.title = shape.key === 'square' ? 'Ulam spiral' : spiralName(shape);
         sh.sub = `${app.PALETTES[S.palB].name} sweeps over ${app.PALETTES[S.pal].name}: ${modeName(mode).toLowerCase()}`;
         sh.code = mode === M.divisors ? 'div' : 'gisp';
       },
@@ -239,7 +239,7 @@ export function installSaver(app) {
         const [wx, wy] = L.worldOf(shape, c.x, c.y);
         sh.from = { x: wx, y: wy, z: 110 }; sh.to = { x: 0, y: 0, z: 0.16 + 0.06 * st.calm };
         S.cam = { ...sh.from }; sh.cell = c;
-        sh.title = shape.key === 'square' ? 'Ulam spiral' : shape.name + ' spiral';
+        sh.title = shape.key === 'square' ? 'Ulam spiral' : spiralName(shape);
         sh.sub = `From ${app.fmt(c.n)} out to millions of numbers`; sh.code = 'gisp';
       },
       update(sh, u) {
@@ -260,7 +260,7 @@ export function installSaver(app) {
         const [wx, wy] = L.worldOf(shape, c.x, c.y);
         sh.from = { x: 0, y: 0, z: 0.17 }; sh.to = { x: wx, y: wy, z: 95 };
         S.cam = { ...sh.from }; sh.cell = c;
-        sh.title = shape.key === 'square' ? 'Ulam spiral' : shape.name + ' spiral';
+        sh.title = shape.key === 'square' ? 'Ulam spiral' : spiralName(shape);
         sh.sub = `From millions of numbers down to ${app.fmt(c.n)}`; sh.code = shape.key === 'octagon' ? 'oct' : 'sq';
       },
       update(sh, u) {
@@ -424,6 +424,8 @@ export function installSaver(app) {
     },
   };
   const VWv = () => app.view();
+  // 'Hexagonal' -> 'Hexagonal spiral'; 'Triangular spiral' stays as it is
+  function spiralName(shape) { return /spiral/i.test(shape.name) ? shape.name : shape.name + ' spiral'; }
 
   // --- the plate --------------------------------------------------------------------
   async function plate(sh, force) {
@@ -469,6 +471,7 @@ export function installSaver(app) {
     return a;
   }
   function frameHook(dt, v) {
+    if (!st) return;
     const sh = st.cur;
     if (!sh) return;
     sh.t += dt;
@@ -491,6 +494,7 @@ export function installSaver(app) {
     }
   }
   function composite() {
+    if (!st || !st.c2) return;
     const cv = st.cv, gl = app.gl;
     if (cv.width !== gl.width || cv.height !== gl.height) { cv.width = gl.width; cv.height = gl.height; }
     const c = st.c2;

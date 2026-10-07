@@ -95,7 +95,7 @@ const PT_CAP = () => (PHONE_Q.matches ? 1200000 : 4000000);
 const TILE_MAX = () => (PHONE_Q.matches ? 320 : 512);
 
 // --- boot ------------------------------------------------------------------------
-const cv = $('gl'), ov = $('ov'), oc = ov.getContext('2d');
+const cv = $('gl'), ov = $('ov'), oc = ov.getContext('2d'), miniCtx = $('mini').getContext('2d');
 let R = null;
 try { R = createRenderer(cv); } catch (e) { console.error(e); }
 if (!R) { $('nogl').hidden = false; }
@@ -834,7 +834,11 @@ function setOpen(o) {
   if (!o) panel.classList.remove('full');
   S.dirty = true;
 }
-let thumbCanvases = {};
+// The 2D contexts of the thumbnails and the minimap, taken once when each
+// canvas is made. The shell (index.html releaseFrame) calls
+// getContext('webgpu') on every canvas of a released page; a canvas with
+// no context yet would then give null for '2d'.
+const thumbCtx = {};
 function buildUI() {
   // gallery
   const gal = $('gallery');
@@ -842,9 +846,10 @@ function buildUI() {
     const b = document.createElement('button');
     b.dataset.key = sh.key; b.title = sh.name; b.setAttribute('role', 'option');
     const c = document.createElement('canvas'); c.width = c.height = THUMB;
+    thumbCtx[sh.key] = c.getContext('2d');
     b.append(c); const sp = document.createElement('span'); sp.textContent = sh.name; b.append(sp);
     b.addEventListener('click', () => { stopWalk(); setShape(sh); if (PHONE_Q.matches) panel.classList.remove('full'); });
-    gal.append(b); thumbCanvases[sh.key] = c;
+    gal.append(b);
   }
   // modes
   const md = $('modes');
@@ -1048,11 +1053,12 @@ function renderThumbs(budget = 3) {
     fs.dotR = 0.42; fs.ptSize = sh.kind === 'pt' ? 0.9 : 0.9;
     if (is3D(sh)) { fs.cam3 = cam3Mats(opts.cam3, v); fs.points.count = Math.min(fs.points.count, 30000); }
     const px = R.renderMini(fs, THUMB, THUMB);
-    putFlipped(thumbCanvases[sh.key], px, THUMB, THUMB);
+    putFlipped(thumbCtx[sh.key], px, THUMB, THUMB);
   }
 }
-function putFlipped(canvas, px, w, h) {
-  const ctx = canvas.getContext('2d'), img = ctx.createImageData(w, h);
+function putFlipped(ctx, px, w, h) {
+  if (!ctx || !px) return;
+  const img = ctx.createImageData(w, h);
   for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
   ctx.putImageData(img, 0, 0);
 }
@@ -1070,7 +1076,8 @@ function renderMini(v) {
   const mc = inside && span === span0 ? { x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2, span } : { x: S.cam.x, y: S.cam.y, span };
   const key = `${S.shape.key}|${JSON.stringify(S.P)}|${S.mode}|${S.pal}|${S.bg}|${mc.x.toFixed(1)}|${mc.y.toFixed(1)}|${mc.span.toPrecision(3)}|${S.quad.on}`;
   S.miniCam = mc;
-  const mini = $('mini'), ctx = mini.getContext('2d');
+  const mini = $('mini'), ctx = miniCtx;
+  if (!ctx) return;
   if (key !== S.miniKey) {
     S.miniKey = key;
     const vv = { w: MINI, h: MINI, cx: MINI / 2, cy: MINI / 2, cw: MINI, ch: MINI };
@@ -1079,7 +1086,7 @@ function renderMini(v) {
     S.miniPx = R.renderMini(fs, MINI, MINI);
   }
   if (mini.width !== MINI) { mini.width = MINI; mini.height = MINI; }
-  putFlipped(mini, S.miniPx, MINI, MINI);
+  putFlipped(ctx, S.miniPx, MINI, MINI);
   // the view rectangle
   const r = worldRect(v), k = MINI / mc.span;
   const x0 = MINI / 2 + (r[0] - mc.x) * k, x1 = MINI / 2 + (r[2] - mc.x) * k, y0 = MINI / 2 - (r[3] - mc.y) * k, y1 = MINI / 2 - (r[1] - mc.y) * k;
@@ -1088,11 +1095,17 @@ function renderMini(v) {
 }
 
 // --- the frame loop ----------------------------------------------------------------------------
-let last = 0, frames = 0, lastState = null;
+let last = 0, frames = 0, lastState = null, glLost = false;
+// The shell released the page (lib/gpu-guard.js), or the GL context is
+// lost: draw nothing more. The guard also stops requestAnimationFrame,
+// but a frame queued before the release still runs once.
+const released = () => glLost || !!(window.__snGuardStats && window.__snGuardStats().released);
+cv.addEventListener('webglcontextlost', e => { glLost = true; e.preventDefault(); });
+cv.addEventListener('webglcontextrestored', () => { location.reload(); });
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
-  if (!R) return;
+  if (!R || !oc || released()) return;
   const v = view();
   if (S.frameHook) S.frameHook(dt, v);
   let anim = !!(S.morph || S.walk || S.fly || S.sweep || S.animating);
