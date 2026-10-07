@@ -73,12 +73,12 @@ const GEOM_FS = `#version 300 es
 precision mediump float; uniform vec4 u_color; out vec4 o;
 void main(){ o = vec4(u_color.rgb * u_color.a, u_color.a); }`;
 
-const FLY_VS = `#version 300 es
+export const FLY_VS = `#version 300 es
 layout(location=0) in vec2 a_pos; layout(location=1) in vec4 a_col; layout(location=2) in vec2 a_q;
 uniform vec4 u_view; uniform vec2 u_c;
 out vec4 v_col; out vec2 v_q;
 void main(){ v_col = a_col; v_q = a_q; gl_Position = vec4((a_pos - u_c) * u_view.xy + u_view.zw, 0.0, 1.0); }`;
-const FLY_FS = `#version 300 es
+export const FLY_FS = `#version 300 es
 precision mediump float;
 in vec4 v_col; in vec2 v_q; uniform float u_fade; out vec4 o;
 void main(){

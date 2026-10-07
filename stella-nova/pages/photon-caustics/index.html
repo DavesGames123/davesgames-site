@@ -22,6 +22,8 @@
                   has its own copy)
      render2d.js  the 2D light image, tone map, overlay, photons in flight
      flight.js    pulses of photons that move at a slowed speed of light
+     topdown.js   the pool bottom from above: waves, refraction, CPU splat
+     topview.js   the pool bottom in WebGL2: mesh-area caustics, the view
      main.js      layout, controls, the loop, equations, the saver hook
      tests.mjs    node tests of optics2d.js
 
@@ -35,6 +37,8 @@
                  topbar. #gl fills #stage; main.js frames the subject in
                  the part that the panel does not cover.
      phone ..... (max-width 768px, or a short landscape touch screen)
+                 #topRows: the controls of the pool bottom only.
+                 #trace2d: the controls of the traced scenes only.
                  #labels: air, water, floor and plot names over the
                  pool cross-section, placed by main.js placeLabels.
                  #dock at the base: photons in flight, scene (next),
@@ -82,7 +86,19 @@
     <div id="secCtl" hidden>
       <div class="seg" id="mixSeg">
         <button data-mix="0">One sine wave</button>
-        <button data-mix="1" class="on">Three waves</button>
+        <button data-mix="1" class="on">Mixed waves</button>
+      </div>
+      <div id="topRows" hidden>
+        <div class="prm"><div class="nm">Wave direction</div><span class="val" id="dirV"></span>
+          <input type="range" id="dir" min="-180" max="180" step="1" value="25" aria-label="Wave direction"></div>
+        <div class="prm"><div class="nm">Sun azimuth</div><span class="val" id="azV"></span>
+          <input type="range" id="az" min="-180" max="180" step="1" value="35" aria-label="Sun azimuth"></div>
+        <div class="seg three" id="floorSeg">
+          <button data-floor="0" class="on">Pool blue</button>
+          <button data-floor="1">White</button>
+          <button data-floor="2">Sand</button>
+        </div>
+        <div class="btns"><button id="tilesBtn" class="on">Tiles</button></div>
       </div>
       <div class="prm"><div class="nm">Wave height <span class="sci-sym m5" data-tex="A" data-inline>A</span></div><span class="val" id="ampV"></span>
         <input type="range" id="amp" min="0" max="0.12" step="0.001" value="0.04" aria-label="Wave height"></div>
@@ -104,6 +120,7 @@
       <input type="range" id="wave" min="0" max="2.5" step="0.01" value="1" aria-label="Wave height"></div>
     <div class="prm"><div class="nm">Exposure</div><span class="val" id="expV"></span>
       <input type="range" id="exp" min="0.2" max="8" step="0.05" value="1" aria-label="Exposure"></div>
+    <div id="trace2d">
     <div class="seg" id="specSeg">
       <button data-mono="0" class="on">White light</button>
       <button data-mono="550">One colour, 550 nm</button>
@@ -112,7 +129,8 @@
       <button id="geomBtn" class="on">Outlines</button>
       <button id="curveBtn" class="on">Floor graph</button>
     </div>
-    <p class="hint">Drag across the light to turn it. Scroll or pinch to zoom; double-click to reset.</p>
+    </div>
+    <p class="hint">Drag across the light to turn it (from above: to turn the sun round). Scroll or pinch to zoom; double-click to reset.</p>
   </section>
 
   <div class="sec-label">Speed of light</div>
@@ -138,6 +156,7 @@
   <div class="about">
     <p>Light leaves the source as photons. Each photon goes straight until it meets a surface. A mirror reflects it. At glass or water the Fresnel equations give the chance <span class="m4">R</span> that it reflects; else it refracts by Snell's law, with an index <span class="m1">n</span> that changes with the wavelength <span class="m2">λ</span>.</p>
     <p>Real light goes 3.00 × 10⁸ m/s, too fast to see. Here the photons in flight go at a slowed speed <i>c</i> that you set, about a metre a second. In glass or water of index <span class="m1">n</span> each photon goes at <i>c</i>/<span class="m1">n</span>, so a pulse slows down and its front bends as it goes in. That change of speed is the cause of refraction.</p>
+    <p>The pool bottom looks straight down through the water. The surface is a sum of travelling waves in two directions. At each point the sunlight refracts through the surface normal by Snell's law and goes to the floor at the depth <span class="m5">d</span>. Each small patch of water sends its light to a patch of floor; where the floor patch is smaller than the water patch, the floor is brighter by the ratio of the two areas, <span class="m4">E</span> = |<i>dA</i>₀| / |<i>dA</i>|. Where a patch folds to a line, the floor gets the bright lines of the net. The tiles also wobble: each view ray bends at the same surface.</p>
     <p>The pool cross-section is a vertical slice of a pool. The surface is a sum of travelling sine waves <span class="m5">h</span>(<i>x</i>, <i>t</i>). Each crest is a weak lens: sunlight refracts at it by Snell's law and focuses at the depth <span class="m5">d</span> ≈ 1 / ((1 − 1/<span class="m1">n</span>) <span class="m5">A</span> <i>k</i>²). Where the focus is near the floor, the floor gets a bright spot that moves with the wave. The plot under the floor is the light on the floor. With the lamp below, rays that meet the surface at more than the critical angle, 48.6° in water, reflect back: total internal reflection.</p>
     <p>The light image adds the path of every photon, so a pixel is as bright as the number of photons that cross it. Where the rays of a family come near each other the image is bright. The edge where they touch and fold back is the caustic. On it the Jacobian <span class="m3">J</span> of the ray map is zero, and the irradiance <span class="m4">E</span> ∝ 1/|<span class="m3">J</span>| goes to a peak.</p>
     <p>In the pool each wave crest is a weak lens. Where a crest focuses at the depth <span class="m5">d</span>, the rays crowd into a bright line on the floor. <a class="xl" href="../photon-caustics-3d/index.html" target="_self">See the 3D pool</a> for the net of these lines in two dimensions of floor.</p>

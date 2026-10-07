@@ -25,7 +25,9 @@
 //  prisms. Water is the part below a sum of sine waves y = h(x, t).
 //
 //  EXPORTS   (grep -n "export")
-//    SCENES .......... the scene list: { id, name, sub, defaults }
+//    SCENES .......... the scene list: { id, name, sub, defaults }; a scene
+//                      with top: true (the pool bottom) is not traced
+//                      here: topdown.js and topview.js draw it
 //    makeScene ....... (id, P) -> scene: objects, light, view, focus
 //    trace ........... (scene, count, rand, out, P) -> segment count
 //    outline ......... (scene) -> polygons and lines for the overlay
@@ -106,7 +108,10 @@ export function mulberry(seed) {
 // exp exposure. view: the world rectangle that must show. focus: the
 // subject point for the saver push-ins, with the width to show there.
 export const SCENES = [
-  { id: 'section', name: 'Pool cross-section', short: 'Pool slice', sub: 'A slice of a pool: sunlight bends at the moving waves and focuses into bright spots on the floor', angMax: 60,
+  { id: 'bottom', name: 'Pool bottom (top-down)', short: 'Pool bottom', top: true, angMax: 60,
+    sub: 'Looking down through moving water at the bright net of light on the pool floor',
+    defaults: { n: 1.333, dn: 0.012, ang: 18, az: 35, dir: 25, wave: 1, exp: 1.0, amp: 0.017, lam: 1.0, wspd: 0.3, depth: 1.3, mix: 1, tiles: 1, floor: 0, sx: 0 } },
+  { id: 'section', name: 'Pool cross-section (side)', short: 'Pool slice', sub: 'A slice of a pool: sunlight bends at the moving waves and focuses into bright spots on the floor', angMax: 60,
     defaults: { n: 1.333, dn: 0, ang: 12, wave: 1, exp: 1.6, amp: 0.04, lam: 0.9, wspd: 0.5, depth: 1.4, mix: 1, tir: 0, sx: 0 } },
   { id: 'cup', name: 'Coffee cup', sub: 'Parallel light off a round mirror folds onto a nephroid', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.5 } },
   { id: 'cardioid', name: 'Cardioid', sub: 'A point source on the rim of a round mirror', defaults: { n: 1.5, dn: 0, ang: 0, wave: 1, exp: 1.0 } },

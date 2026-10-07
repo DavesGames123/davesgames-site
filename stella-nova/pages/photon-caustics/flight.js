@@ -20,8 +20,11 @@
 //              shorter by 1/n: the photon went less far in that time.
 //    head .... a soft disc at the photon.
 //
+//  The top-down pool (topdown.js) gives its own emit and advance, and a
+//  size for each head (larger is nearer the eye).
+//
 //  EXPORTS
-//    createFlight({ phone }) -> { step, build, clear, count, pulses }
+//    createFlight({ phone, per, emit, advance }) -> { step, build, clear, count, pulses }
 //      step(scene, D, P) ... emit and move the photons by the light
 //                            distance D = c dt
 //      build(px) ........... vertex data, px = world units per CSS px
@@ -32,7 +35,8 @@ export const SPACING = 0.75;   // light distance between pulses
 export const TRAIL = 0.32;     // trail length, as a light distance
 
 export function createFlight(opt = {}) {
-  const PER = opt.phone ? 70 : 100, MAX = opt.phone ? 1800 : 3000;
+  const PER = opt.per || (opt.phone ? 70 : 100), MAX = opt.phone ? 1800 : 3000;
+  const emit = opt.emit || emitPulse, move = opt.advance || advance;
   let photons = [], clock = SPACING, verts = new Float32Array(0), pulses = 0;
   return {
     get count() { return photons.length; },
@@ -42,12 +46,12 @@ export function createFlight(opt = {}) {
       clock += D;
       if (clock >= SPACING) {
         clock %= SPACING;
-        if (photons.length < MAX) { photons.push(...emitPulse(scene, PER, Math.random, P)); pulses++; }
+        if (photons.length < MAX) { photons.push(...emit(scene, PER, Math.random, P)); pulses++; }
       }
       if (D <= 0) return;
       let j = 0;
       for (const ph of photons) {
-        advance(scene, ph, D);
+        move(scene, ph, D);
         // keep a photon while any of its trail shows
         if (ph.L - TRAIL < ph.end) photons[j++] = ph;
       }
@@ -55,7 +59,7 @@ export function createFlight(opt = {}) {
     },
     // px: world units per CSS pixel. Returns { verts, count } (vertices).
     build(px) {
-      const hw = 0.8 * px, hr = 2.3 * px;
+      const hw = 0.8 * px, hr0 = 2.3 * px;
       let need = 0;
       for (const ph of photons) if (ph.trail) need += (ph.trail.length / 3 + 2) * 6 + 6;
       if (verts.length < need * 8) verts = new Float32Array(Math.ceil(need * 1.4) * 8);
@@ -83,7 +87,7 @@ export function createFlight(opt = {}) {
           hx = x; hy = y; hl = l;
         }
         if (ph.end === Infinity) {
-          const a = w;
+          const a = w, hr = hr0 * (ph.size || 1);
           put(ph.x - hr, ph.y - hr, col, a, -1, -1); put(ph.x + hr, ph.y - hr, col, a, 1, -1); put(ph.x - hr, ph.y + hr, col, a, -1, 1);
           put(ph.x + hr, ph.y - hr, col, a, 1, -1); put(ph.x + hr, ph.y + hr, col, a, 1, 1); put(ph.x - hr, ph.y + hr, col, a, -1, 1);
         }

@@ -22,7 +22,15 @@
 //     floor caustics (the folds of the ray map X(x)) are where the small-
 //     angle theory puts them: sin(k x) = 1/g, g = (1 - 1/n) d A k^2,
 //     X = x + (1 - 1/n) d A k cos(k x).
+// 13. pool bottom, from above, one sine wave at 30 deg, sun overhead: the
+//     density of the refracted rays along the wave direction (CPU splat)
+//     against the 1D closed form E = 1 / |1 + (1 - 1/n) d h''(x)| at
+//     X = x + (1 - 1/n) d h'(x); no move at right angles to the wave.
+// 14. pool bottom, energy: with wrap, the splat keeps all the power; with
+//     mixed waves and a slant sun, the mean light on a floor patch is the
+//     light of flat water (the waves move light, they do not make it).
 // ============================================================================
+import { topWaves, sunDir, floorHit, splatFloor, shift0 } from './topdown.js';
 import { spectrum, fresnel, refract, indexAt, makeScene, trace, outline, mulberry, emitPulse, advance, mediumAt, waterHeight } from './optics2d.js';
 
 let fail = 0, n = 0;
@@ -196,6 +204,49 @@ function sectionRay(P, x0) {
   for (const r of X) { let u = ((r[1] % lam) + lam) % lam; B[Math.min(249, Math.floor(u / lam * 250))]++; }
   const peaks = [...B.keys()].sort((a, b) => B[b] - B[a]).slice(0, 2).map(i => (i + 0.5) / 250 * lam).sort((a, b) => a - b);
   ok(near(peaks[0], Math.min(Xmax, Xmin), 0.004) && near(peaks[1], Math.max(Xmax, Xmin), 0.004), `section: floor light peaks at ${peaks.map(v => v.toFixed(4))}`);
+}
+
+// 13
+{
+  const nW = 1.333, A = 0.004, lam = 0.5, k = 2 * Math.PI / lam, d = 3, phi = 30;
+  const P = { amp: A, lam, dir: phi, mix: 0, sx: 0, ang: 0, az: 0 };
+  const w = topWaves(P), L = sunDir(P), e = [Math.cos(phi * Math.PI / 180), Math.sin(phi * Math.PI / 180)];
+  const NB = 50, B = new Float64Array(NB), M = 100000;
+  let side = 0;
+  for (let i = 0; i < M; i++) {
+    const sPos = (i + 0.5) / M * lam, t = 0.37;
+    const x = sPos * e[0] - t * e[1], y = sPos * e[1] + t * e[0];
+    const f = floorHit(w, x, y, L, nW, d);
+    const u = f.qx * e[0] + f.qy * e[1], v = -f.qx * e[1] + f.qy * e[0];
+    side = Math.max(side, Math.abs(v - t));
+    B[Math.floor((((u % lam) + lam) % lam) / lam * NB)] += NB / M;
+  }
+  const g = (1 - 1 / nW) * d * A * k * k, q = (1 - 1 / nW) * d * A * k;
+  let worst = 0;
+  for (let b = 0; b < NB; b++) {
+    const X = (b + 0.5) / NB * lam;
+    let x = X; for (let it = 0; it < 30; it++) x -= (x + q * Math.cos(k * x) - X) / (1 - q * k * Math.sin(k * x));
+    worst = Math.max(worst, Math.abs(B[b] - 1 / Math.abs(1 - g * Math.sin(k * x))));
+  }
+  ok(g < 1 && worst < 0.03, `bottom: one wave at 30 deg, g = ${g.toFixed(3)}, worst |E - closed form| = ${worst.toFixed(4)} (E from ${Math.min(...B).toFixed(3)} to ${Math.max(...B).toFixed(3)})`);
+  ok(side < 1e-9, `bottom: no move at right angles to the wave (${side.toExponential(1)})`);
+}
+// 14
+{
+  const nW = 1.333, d = 1.3;
+  const P1 = { amp: 0.02, lam: 0.8, dir: 0, mix: 0, sx: 0.3, ang: 0, az: 0 };
+  const r1 = splatFloor({ waves: topWaves(P1), L: sunDir(P1), n: nW, d, x0: 0, y0: 0, w: 0.8, h: 0.4, nx: 400, ny: 40,
+    bins: { x0: 0, y0: 0, w: 0.8, h: 0.4, nx: 32, ny: 8 }, wrap: true, fresnel: true });
+  ok(Math.abs(r1.total - r1.power) < 1e-9 * r1.power, `bottom: the splat keeps the power, ${r1.total.toFixed(6)} of ${r1.power.toFixed(6)}`);
+  const mean = P => {
+    const L = sunDir(P), [sx, sy] = shift0(L, nW, d);
+    // rays from a wide rect; the patch is in the middle of where they land
+    const r = splatFloor({ waves: topWaves(P), L, n: nW, d, x0: -3 - sx, y0: -3 - sy, w: 6, h: 6, nx: 900, ny: 900,
+      bins: { x0: -1.5, y0: -1.5, w: 3, h: 3, nx: 1, ny: 1 }, wrap: false, fresnel: true });
+    return r.total / 9;
+  };
+  const flat = mean({ amp: 0, lam: 0.8, mix: 0, ang: 25, az: 40 }), wavy = mean({ amp: 0.02, lam: 0.8, dir: 25, mix: 1, sx: 1.7, ang: 25, az: 40 });
+  ok(Math.abs(wavy / flat - 1) < 0.02, `bottom: mean light on a 3 m patch, waves ${wavy.toFixed(1)} against flat ${flat.toFixed(1)} rays/m2`);
 }
 
 console.log(`${n - fail}/${n} passed`);
