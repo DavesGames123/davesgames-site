@@ -347,7 +347,7 @@ export function mergeStorms(...lists) {
     if (!a.forecast.length) a.forecast = b.forecast;
     if (!a.r34) a.r34 = b.r34;
     if (!a.pmin && b.pmin) a.pmin = b.pmin;
-    a.source = [...new Set([a.source, b.source])].join(' + ');
+    a.source = [...new Set([...a.source.split(' + '), ...b.source.split(' + ')])].join(' + ');
     by.set(k, a);
   }
   const out = [...by.values()];

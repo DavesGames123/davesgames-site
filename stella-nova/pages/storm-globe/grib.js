@@ -222,8 +222,13 @@ export async function fetchGfsFrames(opt) {
   const now = opt.now || Date.now();
   let c = Math.floor(now / (6 * H)) * 6 * H, cycle = null;
   for (let k = 0; k < 6 && !cycle; k++, c -= 6 * H) {
-    // GET with a 64-byte range, not HEAD: the bucket's CORS rule lists GET only
-    try { const r = await f(cycleUrl(c, ahead) + '.idx', { headers: { Range: 'bytes=0-63' } }); if (r.ok) { cycle = c; await r.arrayBuffer(); } } catch (e) { /* next */ }
+    // a bucket listing (always 200, CORS) says whether the last file exists,
+    // so a cycle still in production makes no 404 in the console
+    try {
+      const key = cycleUrl(c, ahead).slice(GFS_BASE.length + 1) + '.idx';
+      const r = await f(`${GFS_BASE}/?list-type=2&max-keys=1&prefix=${encodeURIComponent(key)}`);
+      if (r.ok && /<KeyCount>1<\/KeyCount>/.test(await r.text())) cycle = c;
+    } catch (e) { /* next */ }
   }
   if (!cycle) throw new Error('gfs: no recent cycle with f' + ahead);
   const jobs = [];
