@@ -49,7 +49,7 @@ import { buildDie, readDie, Q, mulberry32 } from './dice.js';
 export const DT = 1 / 240;
 export const MAX_T = 12;
 export const WALL = 4.5;
-export const TRAYS = { small: [30, 22], medium: [40, 28], large: [54, 36] };
+export const TRAYS = { small: [24, 18], medium: [32, 22], large: [44, 30] };
 const MAT = {
   felt: { mu: 0.5, e: 0.3 }, wood: { mu: 0.3, e: 0.55 }, die: { mu: 0.36, e: 0.5 },
 };
@@ -68,6 +68,7 @@ export function createPhysics(R, { tray = 'medium' } = {}) {
     world.timestep = DT;
     try { world.lengthUnit = 5; } catch (e) { /* older builds */ }
     world.numSolverIterations = 6;
+    world.maxCcdSubsteps = 3;
     dice.length = 0; trayBodies = [];
     setTray();
   }
@@ -112,7 +113,7 @@ export function createPhysics(R, { tray = 'medium' } = {}) {
     const rnd = mulberry32(seed), [w, d] = dims;
     let [dx, dz] = dir; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
     // the hand sits on the side the throw comes from
-    const hx = from ? from[0] : -dx * (w / 2 - 6), hz = from ? from[1] : -dz * (d / 2 - 5);
+    const hx = from ? from[0] : -dx * (w / 2 - 5), hz = from ? from[1] : -dz * (d / 2 - 4);
     const n = types.length, cols = Math.max(1, Math.ceil(Math.cbrt(n * 1.6))), gap = 2.9;
     types.forEach((type, i) => {
       const a = i % cols, b = Math.floor(i / cols) % cols, c = Math.floor(i / (cols * cols));
@@ -123,7 +124,7 @@ export function createPhysics(R, { tray = 'medium' } = {}) {
       const py = 7 + c * gap + rnd() * 3;
       const lim = (v, L) => Math.max(-L, Math.min(L, v));
       const o = addDie(type, [lim(px, w / 2 - 1.6), py, lim(pz, d / 2 - 1.6)], Q.random(rnd));
-      const sp = 60 + 260 * strength;                       // cm/s
+      const sp = 40 + 200 * strength;                       // cm/s
       const ang = (rnd() - 0.5) * 0.5, ca = Math.cos(ang), sa = Math.sin(ang);
       const vx = (dx * ca - dz * sa) * sp * (0.85 + 0.3 * rnd()), vz = (dz * ca + dx * sa) * sp * (0.85 + 0.3 * rnd());
       o.body.setLinvel({ x: vx, y: -20 - 60 * rnd() + 40 * strength, z: vz }, true);
