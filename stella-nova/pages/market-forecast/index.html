@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Market Forecast — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MARKET FORECAST  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A stock page with a probabilistic forecast. The Chronos models by Amazon
+   Science (Chronos-Bolt, Chronos-2) run in this browser through
+   onnxruntime-web, on WebGPU or on WASM. Nothing goes to a server of ours.
+   Demo data is synthetic. Live data needs the user's own free API key.
+
+   FILES
+     main.js            state, data loading, the forecast runs, the UI
+     engine.js          the page side of worker.js (inference worker)
+     worker.js          onnxruntime-web sessions, weights, timings
+     model-io.js        Chronos pre- and post-processing (DOM-free)
+     chart.js           the price chart scene (history, volume, fan)
+     analysis-charts.js the portfolio distribution and backtest scenes
+     gfx.js             WebGPU primitives, Canvas2D fallback
+     shaders/prim.wgsl  the one chart shader
+     synth.js           the synthetic demo market (DOM-free)
+     providers.js       Twelve Data, Alpha Vantage, Polygon, keys
+     analysis.js        portfolio copula, VaR, backtest maths (DOM-free)
+     saver.js           window.snSaver (the shell screensaver)
+     models/            ONNX graphs, LICENSE, NOTICE
+     tools/             export and parity scripts, test fixtures
+     tests.mjs          node tests (runs tests-data.mjs too)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ #top  brand · Chart | Analysis · #srcBtn · #modelSel · #aboutBtn   │
+     ├──────────────┬────────────────────────────────────────────────────┤
+     │ #side        │ #chartView: #tickerHead, #chartBox (WebGPU),       │
+     │  #watch      │   #scrub (forecast replay), #stats                 │
+     │  #addForm    │ #analysisView: #pfCards, #distBox, #posTable,      │
+     │              │   #btCards, #calibBox, #relSvg                     │
+     ├──────────────┴────────────────────────────────────────────────────┤
+     │ #foot  not financial advice                                        │
+     └───────────────────────────────────────────────────────────────────┘
+   PHONE (max-width 768px): #side is a bottom sheet over #dock; main.js
+   measures the sheet and keeps the chart plot clear of it.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="../../vendor/fonts/inter.adf13477.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 L9 11 L13 14 L21 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 14 L21 9 L21 19 Z" fill="currentColor" opacity=".35"/></svg>
+    <div><b>Market Forecast</b><span class="sub">Chronos, running in your browser</span></div>
+  </div>
+  <nav class="modes" id="modes" aria-label="View">
+    <button data-mode="chart" class="on">Chart</button>
+    <button data-mode="analysis">Analysis</button>
+  </nav>
+  <div class="tools">
+    <button id="srcBtn" class="chip" title="Data source"><i class="dot"></i><span>Demo · synthetic</span></button>
+    <label class="sel"><span class="vh">Model</span>
+      <select id="modelSel" title="Forecast model">
+        <option value="bolt-tiny">Chronos-Bolt Tiny · bundled</option>
+        <option value="bolt-mini">Chronos-Bolt Mini · 85 MB</option>
+        <option value="c2-small">Chronos-2 Small · 112 MB · joint</option>
+      </select>
+    </label>
+    <button id="aboutBtn" class="chip ghost" title="About this page">About</button>
+  </div>
+</header>
+
+<main id="app">
+  <aside id="side" aria-label="Watchlist">
+    <div id="sheetGrip"><span></span></div>
+    <div class="side-head">
+      <h2>Watchlist</h2>
+      <div class="pf-mini"><span id="pfNow">—</span><em id="pfChg"></em></div>
+    </div>
+    <div class="cols"><span>Symbol</span><span>Last</span><span>Chg</span></div>
+    <div id="watch" role="list"></div>
+    <form id="addForm" autocomplete="off">
+      <input id="addSym" placeholder="Add a ticker" maxlength="12" spellcheck="false">
+      <button type="submit">Add</button>
+    </form>
+    <p class="hint">Tap a row to chart it. Shares and cost basis stay on this device (localStorage). A row with shares is a position in Analysis.</p>
+  </aside>
+
+  <div id="content">
+    <section id="chartView">
+      <div id="tickerHead">
+        <div class="th-id"><div class="sym" id="hSym">—</div><div class="nm" id="hName"></div></div>
+        <div class="th-px"><div class="px" id="hPrice">—</div><div class="chg" id="hChg"></div></div>
+        <div class="th-meta" id="hMeta"></div>
+        <div class="th-ctl">
+          <div class="seg" id="ivSeg"><button data-iv="5min" class="on">5 min</button><button data-iv="1day">Daily</button></div>
+          <div class="seg" id="hzSeg" hidden><button data-hz="5" class="on">5D</button><button data-hz="10">10D</button><button data-hz="20">20D</button></div>
+          <div class="seg" id="styleSeg"><button data-st="candles" class="on">Candles</button><button data-st="line">Line</button></div>
+        </div>
+      </div>
+      <div id="chartBox" class="gfx" aria-label="Price chart with the forecast"></div>
+      <div id="scrub">
+        <button id="playBtn" class="round" title="Replay how the forecast changed through the day" aria-label="Replay">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+        <input type="range" id="scrubR" min="0" max="0" value="0" aria-label="Forecast origin">
+        <span id="scrubL">Forecast replay: computing…</span>
+      </div>
+      <div id="stats" class="cards"></div>
+      <p class="runline" id="runLine"></p>
+    </section>
+
+    <section id="analysisView" hidden>
+      <div class="an-title"><h2>Portfolio at <span id="anHorizon">the close</span></h2><p id="anNote"></p></div>
+      <div id="pfCards" class="cards"></div>
+      <div class="an-grid">
+        <div class="card-box wide">
+          <h3>Distribution of the portfolio value <small id="distSub"></small></h3>
+          <div id="distBox" class="gfx tall"></div>
+          <p class="legend"><i class="sw up"></i>gain <i class="sw dn"></i>loss <i class="sw ln"></i>same marginals, independent positions <i class="sw now"></i>value now</p>
+        </div>
+        <div class="card-box">
+          <h3>Positions</h3>
+          <div class="tbl-wrap"><table id="posTable"></table></div>
+        </div>
+        <div class="card-box wide">
+          <h3>Backtest <small id="btSub"></small></h3>
+          <div id="btCards" class="cards small"></div>
+          <div class="bt-row">
+            <div id="calibBox" class="gfx"></div>
+            <figure class="rel"><svg id="relSvg" viewBox="0 0 160 160" aria-label="Reliability diagram"></svg>
+              <figcaption>Reliability: share of realised values at or below each forecast quantile. On the diagonal = calibrated.</figcaption></figure>
+          </div>
+        </div>
+      </div>
+    </section>
+    <footer id="foot">
+      <b>Probabilistic model forecasts, not financial advice.</b> The models see only past prices: no news, earnings or fundamentals. Bands show what the model expects, not what will happen. No buy or sell signals.
+    </footer>
+  </div>
+</main>
+
+<nav id="dock" aria-label="Phone controls">
+  <button id="dockList"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Watchlist</span></button>
+  <button data-mode="chart" class="on"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 3 8-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Chart</span></button>
+  <button data-mode="analysis"><svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span>Analysis</span></button>
+  <button id="dockSrc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Data</span></button>
+</nav>
+
+<dialog id="srcDlg">
+  <form method="dialog" id="srcForm">
+    <h2>Data source</h2>
+    <div id="provList" class="prov"></div>
+    <div id="keyRow">
+      <label for="keyIn">API key for <b id="keyFor"></b></label>
+      <div class="key"><input id="keyIn" type="password" autocomplete="off" spellcheck="false" placeholder="paste your free key"><button type="button" id="keyShow" class="chip ghost">Show</button></div>
+      <p class="fine" id="keyNote"></p>
+    </div>
+    <p class="fine">The key is kept only in this browser (localStorage, <code>mf-key-&lt;provider&gt;</code>). The page sends it only in requests to that provider. It is not logged and not sent to davesgames.io.</p>
+    <menu><button type="button" id="keyClear" class="chip ghost">Forget key</button><button value="cancel" class="chip ghost">Cancel</button><button value="ok" id="srcOk" class="chip">Use</button></menu>
+  </form>
+</dialog>
+
+<dialog id="aboutDlg">
+  <form method="dialog">
+    <h2>About Market Forecast</h2>
+    <p>The forecasts come from <b>Chronos</b>, pretrained time-series models by Amazon Science. The model reads the recent prices as a sequence and gives quantiles of the future values: the 10-90&nbsp;% band, the 25-75&nbsp;% band and the median. It runs on this device with onnxruntime-web, on the GPU (WebGPU) when the browser has one, else on the CPU (WebAssembly).</p>
+    <ul>
+      <li><b>Chronos-Bolt Tiny</b> (9M parameters) is in the page (17.6 MB, weights stored as fp16). <b>Bolt Mini</b> (21M) and <b>Chronos-2 Small</b> (28M) load their official weights from Hugging Face on first use and keep them in the browser cache.</li>
+      <li><b>Chronos-2</b> can forecast several series together (group attention). In Analysis it reads all positions as one group, so each forecast sees the other tickers. It still gives one distribution per ticker; the page joins them with a Gaussian copula fitted to recent returns.</li>
+      <li><b>Analysis</b> also backtests the model on recent history: at the same time of day on earlier sessions, it forecasts to the close and checks how often the realised close fell in the 80&nbsp;% band, and its quantile loss against naive forecasts.</li>
+    </ul>
+    <p><b>Not financial advice.</b> These are probabilistic model outputs. The models know nothing about news, earnings or fundamentals. Markets can move far outside any band. The page gives no buy or sell signals.</p>
+    <p class="fine">Credits: Ansari et al., "Chronos: Learning the Language of Time Series", TMLR 2024 (arXiv:2403.07815). Ansari et al., "Chronos-2: From Univariate to Universal Forecasting", arXiv:2510.15821 (2025). Models: Apache-2.0, Amazon.com, Inc. or its affiliates (models/LICENSE, models/NOTICE). ONNX Runtime Web: MIT, Microsoft. Demo data: synthetic, made by this page, not market data. Full list: <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
+    <menu><button value="ok" class="chip">Close</button></menu>
+  </form>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
