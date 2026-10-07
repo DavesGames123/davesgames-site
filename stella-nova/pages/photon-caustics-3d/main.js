@@ -1,5 +1,5 @@
 // ============================================================================
-//  POOL CAUSTICS 3D  ·  main.js — layout, controls, the loop, the saver hook
+//  PHOTON CAUSTICS 3D  ·  main.js — layout, controls, the loop, the saver hook
 // ----------------------------------------------------------------------------
 //  One WebGL2 canvas (#gl) shows a pool in the sun. pool3d.js steps the
 //  waves, refracts a photon grid to the floor and draws the pool and its
@@ -264,7 +264,7 @@ function saverPlate() {
   const code = sh.code === 'sim'
     ? { lang: 'glsl', name: 'pool3d.js · one wave step', text: SIM_SRC.slice(SIM_SRC.indexOf('void main')).trim() }
     : { lang: 'glsl', name: 'pool3d.js · caustic area ratio', text: CAUS_SRC.slice(CAUS_SRC.indexOf('float area')).trim() };
-  sv.label({ title: 'Pool Caustics 3D · ' + sh.name, sub: sh.sub, tex: sh.code === 'sim' ? [TEX.w3, TEX.e3] : [TEX.e3, TEX.t3], rules: RULES,
+  sv.label({ title: 'Photon Caustics 3D · ' + sh.name, sub: sh.sub, tex: sh.code === 'sim' ? [TEX.w3, TEX.e3] : [TEX.e3, TEX.t3], rules: RULES,
     eq: sh.code === 'sim' ? [EQ_TEXT.w3, EQ_TEXT.e3] : [EQ_TEXT.e3, EQ_TEXT.t3],
     params: [{ sym: '\\theta_s', name: 'sun height', value: f(q.el, 0) + '°' }, { sym: 'd', name: 'depth', value: f(q.depth, 2) },
       { sym: 'n', name: 'index of water', value: f(q.n) }, { sym: 'v', name: 'ripple speed', value: f(WAVE_V0 * q.ws * q.ts, 2) + ' m/s' }],

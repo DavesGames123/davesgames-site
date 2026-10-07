@@ -1,5 +1,5 @@
 // ============================================================================
-//  POOL CAUSTICS 3D  ·  tests.mjs — node tests of pool3d.js (no GPU)
+//  PHOTON CAUSTICS 3D  ·  tests.mjs — node tests of pool3d.js (no GPU)
 // ----------------------------------------------------------------------------
 //  Run from the repo root:  node stella-nova/pages/photon-caustics-3d/tests.mjs
 //  1. Cauchy index: the split from 400 nm to 700 nm is dn, n at 589.3 nm.

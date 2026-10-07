@@ -1,5 +1,5 @@
 // ============================================================================
-//  POOL CAUSTICS 3D  ·  pool3d.js — a pool in the sun (WebGL2)
+//  PHOTON CAUSTICS 3D  ·  pool3d.js — a pool in the sun (WebGL2)
 // ----------------------------------------------------------------------------
 //  World: the pool is x, z in [-1, 1], the still water level is y = 0, the
 //  floor is y = -depth, the rim and the deck are at y = RIM. The sun is a

@@ -1,5 +1,5 @@
 // ============================================================================
-//  POOL CAUSTICS 3D  ·  gl.js — small WebGL2 helpers for the pool
+//  PHOTON CAUSTICS 3D  ·  gl.js — small WebGL2 helpers for the pool
 // ----------------------------------------------------------------------------
 //  A copy of pages/photon-caustics/gl.js: each page loads alone, so each
 //  page has its own copy. Keep the two copies the same.
