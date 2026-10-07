@@ -1,0 +1,12 @@
+{
+  "object": {
+    "id": "cardboard-box",
+    "name": "Cardboard box",
+    "description": "CC0 model cardboard_box_01 by Rahul Chaudhary (Poly Haven), 1k textures."
+  },
+  "source": {
+    "url": "https://polyhaven.com/a/cardboard_box_01",
+    "licence": "CC0 1.0"
+  },
+  "working_dir": "worlds/sample-still-life/output/cardboard-box"
+}

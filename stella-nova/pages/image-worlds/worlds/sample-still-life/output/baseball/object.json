@@ -1,0 +1,12 @@
+{
+  "object": {
+    "id": "baseball",
+    "name": "Baseball",
+    "description": "CC0 model baseball_01 by Rico Cilliers (Poly Haven), 1k textures."
+  },
+  "source": {
+    "url": "https://polyhaven.com/a/baseball_01",
+    "licence": "CC0 1.0"
+  },
+  "working_dir": "worlds/sample-still-life/output/baseball"
+}
