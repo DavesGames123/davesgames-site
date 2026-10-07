@@ -3,7 +3,7 @@
    ----------------------------------------------------------------------------
    A dark field for the light of the event, quiet chrome around it. Space
    Grotesk for text, Instrument Serif for titles, IBM Plex Mono for numbers.
-     grep -n 'VIEWS'     the diagram grid and its layouts
+     grep -n 'VIEWS'     the view grid: the T (3D on top), other layouts
      grep -n 'STRIP'     the event card, trigger, energies under the views
      grep -n 'DETAIL'    the selected-object drawer
      grep -n 'PANEL'     the controls (desktop: left column)
@@ -12,7 +12,7 @@
 :root{
   --ink:#04060b; --ink2:#0a0d16; --ink3:#121726; --text:#e2e6f0; --dim:#8a90a6; --faint:#272d42;
   --beam:#7fd6ff; --hot:#ffb36b; --line:rgba(127,214,255,0.10); --line-b:rgba(127,214,255,0.22);
-  --panel-w:300px; --detail-w:360px; --top:52px; --dock-h:0px; --strip-h:184px;
+  --panel-w:300px; --detail-w:360px; --top:52px; --dock-h:0px; --strip-h:132px;
   --sans:'Space Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --serif:'Instrument Serif','Times New Roman',Georgia,serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
@@ -21,10 +21,12 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);overscroll-behavior:none}
-body{font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px}
 button,select{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 button:focus-visible,input:focus-visible,select:focus-visible,#views:focus-visible{outline:1px solid var(--beam);outline-offset:1px}
 a{color:var(--beam)}
+.about p,.dt-text{-webkit-user-select:text;user-select:text}
+canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
 .topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 18px;background:rgba(4,6,11,0.94);border-bottom:1px solid var(--line)}
 .brand{font-family:var(--serif);font-size:1.25rem;letter-spacing:0.06em;color:#f1f4fb;display:flex;align-items:center;gap:9px}
 .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--beam);box-shadow:0 0 10px var(--beam)}
@@ -37,8 +39,9 @@ html.in-frame{--top:0px} html.in-frame .topbar{display:none} html.in-frame #gear
 body.panel-closed #stage{left:0}
 body.detail-open #stage{right:var(--detail-w)}
 #views{position:absolute;left:10px;right:10px;top:10px;bottom:calc(var(--strip-h) + 10px);display:grid;gap:8px}
+#views.t{grid-template-columns:1fr 1fr;grid-template-rows:62fr 38fr;grid-template-areas:'d3 d3' 'rphi rz'}
+#views.t .view[data-v="3d"]{grid-area:d3} #views.t .view[data-v="rphi"]{grid-area:rphi} #views.t .view[data-v="rz"]{grid-area:rz} #views.t .view[data-v="lego"]{display:none}
 #views.split{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
-#views.quad{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
 #views.rphi,#views.rz,#views.lego,#views.d3{grid-template-columns:1fr}
 #views .view{position:relative;min-width:0;min-height:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#04060b}
 #views.split .view[data-v="lego"],#views.split .view[data-v="3d"]{display:none}
@@ -159,6 +162,10 @@ body.detail-open #stage{right:var(--detail-w)}
   #views{left:6px;right:6px;top:44px;bottom:58px;grid-template-columns:1fr!important;grid-template-rows:1fr!important}
   #views .view{display:none!important}
   #views .view.ph{display:block!important}
+  #views.t{grid-template-rows:56fr 44fr!important;grid-template-areas:'d3' 'low'}
+  #views.t .view[data-v="3d"]{display:block!important;grid-area:d3}
+  #views.t .view.ph:not([data-v="3d"]){grid-area:low}
+  #views.t ~ #vtabs button[data-v="3d"]{display:none}
   #vtabs{display:flex;position:absolute;top:6px;left:6px;right:6px;gap:4px}
   #vtabs button{flex:1;height:34px;border:1px solid var(--line);border-radius:9px;background:var(--ink2);color:var(--dim);font-size:0.74rem}
   #vtabs button.on{border-color:var(--beam);color:var(--beam)}

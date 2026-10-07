@@ -3,9 +3,10 @@
 // ----------------------------------------------------------------------------
 //  The page is the event: two chosen particles collide at a chosen energy,
 //  the transport engine (worker.js) moves every product through the
-//  detector, and the diagrams (diagram.js) show the result in the
-//  transverse and longitudinal views, with the tower map and an optional
-//  3D view (display.js on stage.js, tracks and deposits only).
+//  detector, and the page shows it in a T: the 3D view of the collision
+//  on top (display.js on stage.js, tracks and deposits only), the
+//  transverse and longitudinal diagrams (diagram.js) below, the tower map
+//  in the strip.
 //
 //  EVENTS (grep -n 'function runEvent')
 //    generate(kind, { beam, sqrtS, ... }) on the main thread -> one share
@@ -18,7 +19,10 @@
 //    brightens, the rest dims. Click (or Enter) opens the detail panel
 //    (physinfo.js). Tab or the arrow keys move through the objects.
 //  PREFERENCES  localStorage 'pc-prefs': layout, labels, outline,
-//    hardware (off by default), per viewer.
+//    hardware (off by default), per viewer. Prefs before v 2 lose their
+//    layout, so the T (layout 't') is the default for every viewer.
+//  SELECTION (grep -n 'selectstart')  no text selection outside the
+//    prose (.about p, .dt-text); a canvas pointerdown takes no default.
 //
 //  GREP MAP
 //    function runEvent / showEvent / fillCard / setFocus / openDetail
@@ -40,7 +44,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const GeV = v => (v / 1000).toFixed(Math.abs(v) < 10000 ? 2 : 1);
 
 // ── preferences (per viewer) ────────────────────────────────────────────────
-const PREF = Object.assign({ layout: 'split', labels: 'hard', outline: true, hardware: false, phoneView: 'rphi' }, (() => { try { return JSON.parse(localStorage.getItem('pc-prefs') || '{}'); } catch (e) { return {}; } })());
+const PREF = Object.assign({ v: 2, layout: 't', labels: 'hard', outline: true, hardware: false, phoneView: 'rphi' }, (() => { try { const p = JSON.parse(localStorage.getItem('pc-prefs') || '{}'); if (p.v !== 2) { delete p.layout; delete p.phoneView; p.v = 2; } return p; } catch (e) { return {}; } })());
 const savePref = () => { try { localStorage.setItem('pc-prefs', JSON.stringify(PREF)); } catch (e) { /* private mode */ } };
 
 const S = { beam: 'pp', sqrtS: 13.6e6, scen: 'zmm', t: -4, playing: true, speed: 3, auto: false, busy: false, ev: null, seed: 1, pileup: 0,
@@ -277,12 +281,12 @@ function setLayout(l) {
   PREF.layout = l; savePref();
   const views = $('views'); views.className = l === '3d' ? 'd3' : l;
   document.querySelectorAll('#layouts button').forEach(b => b.classList.toggle('on', b.dataset.l === l));
-  if (l === '3d' || l === 'quad') ensure3D();
+  if (l === '3d' || l === 't') ensure3D();
   placeLego();
 }
 // the split layout on a wide screen: the tower map goes small, into the strip
 function placeLego() {
-  const sec = document.querySelector('.view[data-v="lego"]'), inStrip = PREF.layout === 'split' && !PHONE_Q.matches;
+  const sec = document.querySelector('.view[data-v="lego"]'), inStrip = PREF.layout !== 'lego' && !PHONE_Q.matches;
   const want = inStrip ? $('legoSlot') : $('views');
   if (sec.parentElement !== want) { if (inStrip) want.appendChild(sec); else $('views').insertBefore(sec, $('views').querySelector('.view[data-v="3d"]')); }
   $('strip').classList.toggle('withlego', inStrip);
@@ -303,7 +307,7 @@ function setPhoneView(v) {
   if (v === '3d') ensure3D();
 }
 document.querySelectorAll('#vtabs button').forEach(b => b.addEventListener('click', () => setPhoneView(b.dataset.v)));
-$('dockView').addEventListener('click', () => { const L = ['rphi', 'rz', 'lego', '3d']; setPhoneView(L[(L.indexOf(PREF.phoneView) + 1) % L.length]); });
+$('dockView').addEventListener('click', () => { const L = PREF.layout === 't' ? ['rphi', 'rz'] : ['rphi', 'rz', 'lego', '3d']; setPhoneView(L[(L.indexOf(PREF.phoneView) + 1) % L.length]); });
 $('dockCard').addEventListener('click', () => { document.body.classList.toggle('card-open'); $('dockCard').classList.toggle('on', document.body.classList.contains('card-open')); });
 $('dockGo').addEventListener('click', () => runEvent(S.scen));
 
@@ -325,7 +329,7 @@ async function ensure3D() {
   const axis = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -9000), new THREE.Vector3(0, 0, 9000)]), new THREE.LineBasicMaterial({ color: 0x5f8dff, transparent: true, opacity: 0.35 }));
   scene.add(axis);
   stage.use(scene, { min: 600, max: 60000, near: 0.003, bloom: [0.7, 0.5, 0.3] }); stage.setOverlay(evScene);
-  stage.place({ az: 40, el: 22, r: 26000, target: new THREE.Vector3() });
+  stage.place({ az: 40, el: 22, r: 15000, target: new THREE.Vector3() });
   const PV = new THREE.Vector3();
   const project = (x, y, z) => { PV.set(x, y, z).project(stage.camera); if (PV.z > 1) return null; const r = canvas.getBoundingClientRect(); return [(PV.x + 1) / 2 * r.width, (1 - PV.y) / 2 * r.height]; };
   const api = {
@@ -336,7 +340,7 @@ async function ensure3D() {
     hit(x, y, t) { return S.ev ? (hitTest(S.ev.objs.objs, project, x, y, 8, t, null) || {}).obj || null : null; },
   };
   hw.visible = PREF.hardware;
-  canvas.addEventListener('pointermove', e => { if (e.buttons) return; const r = canvas.getBoundingClientRect(), o = api.hit(e.clientX - r.left, e.clientY - r.top, S.t); S.hover = o; setFocus(); showTip(o, e.clientX, e.clientY); });
+  canvas.addEventListener('pointermove', e => { if (e.buttons) return; stage.idle = Math.min(stage.idle, 1.5); const r = canvas.getBoundingClientRect(), o = api.hit(e.clientX - r.left, e.clientY - r.top, S.t); S.hover = o; setFocus(); showTip(o, e.clientX, e.clientY); });
   canvas.addEventListener('pointerleave', () => { S.hover = null; setFocus(); showTip(null); });
   canvas.addEventListener('click', e => { const r = canvas.getBoundingClientRect(); const o = api.hit(e.clientX - r.left, e.clientY - r.top, S.t); if (o) select(o); });
   v3 = api;
@@ -346,6 +350,20 @@ async function ensure3D() {
 
 // ── legend ──────────────────────────────────────────────────────────────────
 $('legend').innerHTML = ['mu', 'e', 'gamma', 'had', 'neu', 'shower'].map(k => `<span><i class="${k === 'neu' || k === 'gamma' ? 'dash' : ''}" style="color:${CLASS_COLOR[k]};background:${CLASS_COLOR[k]}"></i>${esc(CLASS_LABEL[k])}</span>`).join('') + `<span><i style="color:#ffd45c;background:#ffd45c"></i>jet</span><span><i style="color:${CLASS_COLOR.nu};background:${CLASS_COLOR.nu}"></i>missing E<sub>T</sub></span>`;
+
+// ── no accidental text selection ────────────────────────────────────────────
+// Only the prose takes a selection. A drag on a canvas or a grip takes no
+// default action, and a selection that starts during a drag is cleared.
+const PROSE = '.about p, .dt-text';
+let dragging = false;
+document.addEventListener('selectstart', e => { const t = e.target.nodeType === 1 ? e.target : e.target.parentElement; if (dragging || !t || !t.closest(PROSE)) e.preventDefault(); });
+document.addEventListener('pointerdown', e => {
+  const t = e.target;
+  if (t.closest && t.closest('canvas, #sheetGrip, .host')) { e.preventDefault(); dragging = true; try { t.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } }
+}, true);
+const endDrag = () => { if (dragging) { dragging = false; const s = getSelection(); if (s && s.toString() && !(s.anchorNode && s.anchorNode.parentElement && s.anchorNode.parentElement.closest(PROSE))) s.removeAllRanges(); } };
+window.addEventListener('pointerup', endDrag, true); window.addEventListener('pointercancel', endDrag, true);
+document.addEventListener('dragstart', e => e.preventDefault());
 
 // ── panel and sheet ─────────────────────────────────────────────────────────
 const panel = $('panel');

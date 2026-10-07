@@ -12,20 +12,25 @@
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. Two chosen particles collide at a chosen energy;
    the transport engine (transport.js, in Web Workers) moves every product
-   through a barrel detector, and the page shows the result as detector
-   diagrams: the transverse (r-phi) and longitudinal (r-z) views, large,
-   with the tower map (eta-phi) beside the event card. The detector itself
+   through a barrel detector, and the page shows the result in a T: the
+   3D view of the collision across the top, the transverse (r-phi) and
+   longitudinal (r-z) diagrams below it, the tower map (eta-phi) in the
+   strip beside the event card. The detector itself
    is a quiet outline; its hardware is off by default. Every product can be
    hovered and selected for a closer look (#detail).
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js  releases GPU contexts when the shell swaps pages
      2. fonts (Space Grotesk, IBM Plex Mono, Instrument Serif), style.css
-     3. importmap for three r160 (the optional 3D view only), main.js
+     3. importmap for three r160 (the 3D view), main.js
 
    LAYOUT  (# marks an element id main.js binds to)
-     #views ... the diagrams: layout classes split (default), quad, rphi,
-                rz, 3d; each .view has a header and a .host
+     #views ... the views: layout classes t (default: 3D on top, r-phi
+                and r-z below), d3, split, rphi, rz, lego; each .view
+                has a header and a .host. Phone: 3D on top, one
+                diagram below (#vtabs).
+   SELECTION  the chrome is user-select: none; only .about p and
+                .dt-text take a text selection (main.js 'selectstart')
      #strip ... the event card, the tower map (moved into #legoSlot in
                 the split layout on wide screens), trigger and energies
      #panel ... the controls (desktop: left column; phone: bottom sheet)
@@ -54,11 +59,11 @@
 </div>
 
 <main id="stage">
-  <div id="views" class="split" tabindex="0" aria-label="Event diagrams: arrow keys move through the objects, Enter opens one, Escape clears">
+  <div id="views" class="t" tabindex="0" aria-label="Event diagrams: arrow keys move through the objects, Enter opens one, Escape clears">
     <section class="view" data-v="rphi"><header><b>Transverse</b><span>r-φ · the beam points out of the screen</span></header><div class="host" id="hRphi"></div></section>
     <section class="view" data-v="rz"><header><b>Longitudinal</b><span>r-z · the beams come in from the left and the right</span></header><div class="host" id="hRz"></div></section>
     <section class="view" data-v="lego"><header><b>Tower map</b><span>E<sub>T</sub> over η-φ</span></header><div class="host"><canvas id="lego"></canvas></div></section>
-    <section class="view" data-v="3d"><header><b>3D</b><span>tracks and deposits only</span></header><div class="host"><canvas id="view3d"></canvas></div></section>
+    <section class="view" data-v="3d"><header><b>3D</b><span>the collision · drag to orbit, wheel to zoom</span></header><div class="host"><canvas id="view3d"></canvas></div></section>
   </div>
   <nav id="vtabs" aria-label="View">
     <button data-v="rphi" type="button">r-φ</button><button data-v="rz" type="button">r-z</button><button data-v="lego" type="button">Towers</button><button data-v="3d" type="button">3D</button>
@@ -100,8 +105,8 @@
     <div class="row"><label for="speed">Slow motion</label><input type="range" id="speed" min="0.3" max="12" step="0.1" value="3"><span class="val" id="speedV"></span></div>
     <div class="sec-label">Views</div>
     <div class="grid3" id="layouts">
-      <button data-l="split" type="button">Side by side</button><button data-l="quad" type="button">Quarter split</button><button data-l="rphi" type="button">r-φ</button>
-      <button data-l="rz" type="button">r-z</button><button data-l="3d" type="button">3D</button><button data-l="lego" type="button">Towers</button>
+      <button data-l="t" type="button">3D + diagrams</button><button data-l="3d" type="button">3D</button><button data-l="split" type="button">Side by side</button>
+      <button data-l="rphi" type="button">r-φ</button><button data-l="rz" type="button">r-z</button><button data-l="lego" type="button">Towers</button>
     </div>
     <div class="sec-label">Labels</div>
     <div class="grid3" id="labelMode"><button data-m="hard" type="button">Hard</button><button data-m="all" type="button">All</button><button data-m="off" type="button">Off</button></div>

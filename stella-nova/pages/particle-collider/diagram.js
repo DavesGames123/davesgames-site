@@ -257,7 +257,7 @@ export function createDiagram(host, mode) {
     const n = buildLight(t);
     // many overlapping filaments: lower the gain so they stay filaments, not fog
     const gain = Math.max(0.3, Math.min(1, Math.sqrt(9000 / Math.max(1, n))));
-    light.draw(buf, n, { gain, K: 1.15, glow: 0.75 });
+    light.draw(buf, n, { gain, K: 1.15, glow: 0.75, bg: [0.0002, 0.0003, 0.0006] });   // near black: a lighter field reads grey after the gamma
     drawOverlay(og, t);
   };
   V.invalidate = () => { lastKey = ''; V.ver++; cache = new Map(); };
