@@ -1,6 +1,10 @@
 // ============================================================================
 //  NUCLEAR BLAST  ·  world.js — terrain, procedural city, ground decals
 // ----------------------------------------------------------------------------
+//  A real place (world.setReal) uses the City Atlas rasters for water and
+//  land cover and its building footprints as oriented boxes, or open land
+//  where no City Atlas city covers the point (TERRAINS.neutral).
+//
 //  Five made-up places (TERRAINS): a modern metro on a river and a bay, a
 //  low wooden town on a river delta, a desert test range, a coral
 //  atoll and an arctic coast. None is a real city. Water is an analytic
@@ -34,7 +38,7 @@
 //    function buildFallout .... the dose-rate texture
 //    const GROUND_FS .......... ground shader: terrain, roads, decals
 //    const CITY_VS / CITY_FS .. buildings: collapse, windows, char, fire
-//    function createWorld ..... the factory; world.setPlace / setBurst
+//    function createWorld ..... the factory; world.setPlace / setReal / setBurst
 // ============================================================================
 import * as THREE from 'three';
 import * as E from './effects.js';
@@ -48,6 +52,8 @@ export const TERRAINS = {
   desert: { name: 'Test range', sub: 'Desert flat with a shot tower', ground: 2, water: 0, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },
   atoll: { name: 'Atoll', sub: 'Coral reef islets in a lagoon', ground: 3, water: 3, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },
   tundra: { name: 'Arctic coast', sub: 'Snow, ice and a frozen bay', ground: 4, water: 4, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },
+  // a real place with no City Atlas data: open land at the right scale
+  neutral: { name: 'Open land', sub: 'Plain ground, no buildings', ground: 5, water: 0, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },
 };
 
 // ── water: JS and GLSL twins ─────────────────────────────────────────────
@@ -245,6 +251,25 @@ ${FOG}
 ${WATER_GLSL}
 ${LUT_GLSL}
 uniform int uGround; uniform int uWater; uniform float uGrid; uniform vec2 uBlock; uniform float uCityR;
+// a real place (City Atlas): water fraction and WorldCover class rasters,
+// 64 km square, centre uRealBox.xy (scene metres), half size uRealBox.z
+uniform float uReal; uniform sampler2D uWf; uniform sampler2D uLc; uniform vec3 uRealBox;
+vec2 realUv(vec2 p){ return (p - uRealBox.xy + uRealBox.z) / (2.0 * uRealBox.z); }
+float realWater(vec2 p){
+  vec2 uv = realUv(p);
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -1.0;
+  return (texture2D(uWf, uv).r - 0.5) * 240.0;
+}
+vec3 realGround(vec2 p, vec3 fallback){
+  vec2 uv = realUv(p);
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return fallback;
+  int c = int(texture2D(uLc, uv).r * 255.0 + 0.5);
+  float n = 0.9 + 0.2 * vnoise2(p * 0.02);
+  vec3 col = c == 10 ? vec3(0.10, 0.17, 0.09) : c == 20 ? vec3(0.22, 0.24, 0.14) : c == 30 ? vec3(0.22, 0.27, 0.14)
+           : c == 40 ? vec3(0.30, 0.29, 0.17) : c == 50 ? vec3(0.27, 0.27, 0.27) : c == 60 ? vec3(0.42, 0.38, 0.30)
+           : c == 70 ? vec3(0.85, 0.88, 0.92) : c == 90 ? vec3(0.16, 0.22, 0.18) : fallback;
+  return col * n;
+}
 uniform float uTime; uniform float uBurst; uniform float uTmax; uniform float uFront; uniform float uFrontPsi; uniform float uCrater;
 uniform float uRingR[8]; uniform vec3 uRingC[8]; uniform float uRingA[8]; uniform float uRingDash[8];
 uniform sampler2D uFall; uniform float uFallOn; uniform vec4 uFallBox; uniform vec2 uWindDir; uniform float uFallFront;
@@ -259,7 +284,9 @@ vec3 terrain(vec2 p, out float wet, out float rough){
   else if (uGround == 1) c = mix(vec3(0.24, 0.23, 0.15), vec3(0.30, 0.31, 0.18), n) * (0.85 + 0.25 * n2);
   else if (uGround == 2) c = mix(vec3(0.55, 0.45, 0.33), vec3(0.64, 0.55, 0.42), n) * (0.9 + 0.15 * n2) * (0.93 + 0.1 * n3);
   else if (uGround == 3) c = vec3(0.78, 0.74, 0.62) * (0.92 + 0.12 * n2);
-  else c = mix(vec3(0.80, 0.84, 0.90), vec3(0.92, 0.94, 0.97), n) * (0.95 + 0.06 * n2);
+  else if (uGround == 4) c = mix(vec3(0.80, 0.84, 0.90), vec3(0.92, 0.94, 0.97), n) * (0.95 + 0.06 * n2);
+  else c = mix(vec3(0.21, 0.25, 0.15), vec3(0.27, 0.28, 0.18), n) * (0.88 + 0.22 * n2);
+  if (uReal > 0.5) c = realGround(p, c);
   // the city: concrete blocks and darker roads on a turned grid
   if (uCityR > 0.0) {
     float r = length(p), edge = uCityR * (1.0 + 0.12 * sin(atan(p.y, p.x) * 3.0 + 1.0)) * 1.5;
@@ -293,13 +320,13 @@ void main(){
   vec3 alb = terrain(p, wet, rough);
   vec3 N = vec3(0.0, 1.0, 0.0);
   float spec = 0.0;
-  float wat = waterAt(uWater, p);
+  float wat = uReal > 0.5 ? realWater(p) : waterAt(uWater, p);
   if (wat > 0.0) {
     float sh = smoothstep(0.0, 60.0, wat);
-    vec3 wc = uWater == 3 ? mix(vec3(0.05, 0.42, 0.48), vec3(0.02, 0.10, 0.22), smoothstep(0.0, 900.0, wat))
+    vec3 wc = uReal > 0.5 ? vec3(0.025, 0.06, 0.08) : uWater == 3 ? mix(vec3(0.05, 0.42, 0.48), vec3(0.02, 0.10, 0.22), smoothstep(0.0, 900.0, wat))
             : uWater == 4 ? vec3(0.70, 0.78, 0.86) : vec3(0.025, 0.06, 0.08);
     alb = mix(alb, wc, sh);
-    if (uWater != 4) {
+    if (uWater != 4 || uReal > 0.5) {
       N = normalize(vec3((vnoise2(p * 0.02 + uClock * 0.05) - 0.5) * 0.12, 1.0, (vnoise2(p.yx * 0.02 - uClock * 0.04) - 0.5) * 0.12));
       spec = sh;
     }
@@ -457,6 +484,11 @@ export function createWorld(st, o = {}) {
   const FNX = st.lowQ ? 160 : 256, FNY = st.lowQ ? 72 : 112;
   const fallTex = new THREE.DataTexture(new Uint8Array(FNX * FNY), FNX, FNY, THREE.RedFormat, THREE.UnsignedByteType);
   fallTex.minFilter = fallTex.magFilter = THREE.LinearFilter; fallTex.unpackAlignment = 1; fallTex.needsUpdate = true;
+  // real-place rasters: fixed sizes (WebGL2 allocates a texture once)
+  const wfTex = new THREE.DataTexture(new Uint8Array(1024 * 1024), 1024, 1024, THREE.RedFormat, THREE.UnsignedByteType);
+  wfTex.minFilter = wfTex.magFilter = THREE.LinearFilter; wfTex.unpackAlignment = 1; wfTex.needsUpdate = true;
+  const lcTex = new THREE.DataTexture(new Uint8Array(512 * 512), 512, 512, THREE.RedFormat, THREE.UnsignedByteType);
+  lcTex.minFilter = lcTex.magFilter = THREE.NearestFilter; lcTex.unpackAlignment = 1; lcTex.needsUpdate = true;
   const common = {
     uSunDir: U.uSunDir, uSunCol: U.uSunCol, uSkyAmb: U.uSkyAmb, uGndAmb: U.uGndAmb, uFbPos: U.uFbPos, uFbCol: U.uFbCol, uFbPow: U.uFbPow, uTauL: U.uTauL,
     uFogCol: U.uFogCol, uFogDen: U.uFogDen, uFogFlash: U.uFogFlash, uExpo: U.uExpo, uClock: U.uClock, uLights: U.uLights,
@@ -469,6 +501,7 @@ export function createWorld(st, o = {}) {
     uRingR: { value: new Array(8).fill(0) }, uRingC: { value: Array.from({ length: 8 }, () => new THREE.Color()) }, uRingA: { value: new Array(8).fill(0) }, uRingDash: { value: new Array(8).fill(0) },
     uFall: { value: fallTex }, uFallOn: { value: 0 }, uFallBox: { value: new THREE.Vector4(0, 1, 1, 0) }, uWindDir: { value: new THREE.Vector2(1, 0) }, uFallFront: { value: 1e9 },
     uPick: { value: 0 }, uPickP: { value: new THREE.Vector2() },
+    uReal: { value: 0 }, uWf: { value: wfTex }, uLc: { value: lcTex }, uRealBox: { value: new THREE.Vector3(0, 0, 32000) },
   };
   const groundMat = new THREE.ShaderMaterial({ vertexShader: GROUND_VS, fragmentShader: GROUND_FS, uniforms: gU, extensions: { derivatives: true } });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(4e6, 4e6).rotateX(-Math.PI / 2), groundMat);
@@ -498,16 +531,40 @@ export function createWorld(st, o = {}) {
   const W = { ground, city, gU, cityU: common, place: null, list: [], lut: null, fall: null };
   W.setPlace = key => {
     const T = TERRAINS[key];
-    W.place = key;
+    W.place = key; W.real = null; gU.uReal.value = 0;
     gU.uGround.value = T.ground; gU.uWater.value = T.water; gU.uGrid.value = T.grid; gU.uBlock.value.set(T.block || 1, T.road || 0); gU.uCityR.value = T.R;
-    W.list = genCity(key, maxN);
-    const n = W.list.length;
-    W.list.forEach((b, i) => {
+    upload(genCity(key, maxN));
+  };
+  function upload(list) {
+    W.list = list;
+    list.forEach((b, i) => {
       A.box.set([b[0], b[1], b[2], b[3]], i * 4); A.info.set([b[4], b[5], b[6], b[7]], i * 4); A.yaw[i] = b[8];
     });
-    geo.instanceCount = n;
+    geo.instanceCount = list.length;
     for (const k of ['aBox', 'aInfo', 'aYaw']) geo.attributes[k].needsUpdate = true;
     if (W.lut) applyFx();
+  }
+  // A real place. city: a loaded City Atlas city (places.js), or null for
+  // open land. gzE, gzN: ground zero in the city frame (metres east and
+  // north of its centre). Scene: x east, z south, origin at ground zero.
+  // The nearest maxN buildings are kept; kind and strength follow height
+  // and size (same rough classes as genCity).
+  W.setReal = (city, gzE = 0, gzN = 0) => {
+    const T = TERRAINS.neutral;
+    W.place = 'neutral'; W.real = city;
+    gU.uGround.value = T.ground; gU.uWater.value = 0; gU.uGrid.value = 0; gU.uCityR.value = 0;
+    if (!city) { gU.uReal.value = 0; upload([]); return; }
+    wfTex.image.data.set(city.wf); wfTex.needsUpdate = true;
+    lcTex.image.data.set(city.lc); lcTex.needsUpdate = true;
+    gU.uReal.value = 1; gU.uRealBox.value.set(-gzE, gzN, city.outer.half);
+    const rnd = mulberry(11);
+    const list = city.boxes.map(b => {
+      const x = b.x - gzE, z = -(b.y - gzN), area = b.w * b.d;
+      const kind = b.h > 45 ? 3 : b.h > 15 ? 2 : area > 150 ? 1 : 0, S2 = STRENGTH[kind];
+      return [x, z, b.w, b.d, b.h, S2[0] + (S2[1] - S2[0]) * rnd(), kind, rnd(), -b.ang, x * x + z * z];
+    });
+    list.sort((p, q) => p[9] - q[9]);
+    upload(list.slice(0, maxN));
   };
   function applyFx() {
     const n = W.list.length;
@@ -542,5 +599,6 @@ export function createWorld(st, o = {}) {
     common.uTime.value = t; common.uBurst.value = burst ? 1 : 0;
   };
   W.waterAt = (x, z) => waterJS(TERRAINS[W.place].water, x, z);
+  W.maxN = maxN;
   return W;
 }
