@@ -32,6 +32,7 @@ import { DESIGNS, SRC_LABEL, byId, loadSource } from './designs.js';
 import { createLane, compiledModule } from './client.js';
 import { createEditor } from './highlight.js';
 import { varToString, varFromString, randomVariation } from './variation.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -656,6 +657,9 @@ async function boot() {
   openDesign(first, h.d && h.v > 0 ? h.v : null);
   requestAnimationFrame(frame);
   setTimeout(fillGallery, 600);
+  installSaver({ S, lanes,
+    onEnter: () => { S.saver = true; lanes.main.cancel(); lanes.thumbs.cancel(); renderTok++; panel.classList.remove('open'); },
+    onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; render(); setTimeout(fillGallery, 400); } });
   window.__cf = { S, render, openDesign, newVariation, layout, lanes, editor, designs: DESIGNS, ready: true };
 }
 boot().catch(err => { setStatus('Context Free failed to start: ' + err.message, true); console.error(err); });
