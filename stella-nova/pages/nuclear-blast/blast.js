@@ -54,7 +54,7 @@ void main(){
   float n = fbm3(vO * 3.0 + vec3(0.0, -uClock * 0.35, uClock * 0.2));
   float n2 = fbm3(vO * 9.0 + uClock * 0.6);
   // hot ball: limb darkened, a turbulent skin; cooling: dark smoke with hot gaps
-  float lum = (0.55 + 0.45 * mu) * (0.75 + 0.5 * n) * (0.85 + 0.3 * n2);
+  float lum = (0.45 + 0.55 * mu) * (0.45 + 1.1 * n * n) * (0.8 + 0.4 * n2);
   vec3 hot = uCol * uRad * lum;
   float gap = smoothstep(0.45, 0.75, n * 0.7 + n2 * 0.5);
   vec3 cool = vec3(0.09, 0.06, 0.05) * (0.6 + 0.6 * mu) + uCol * uRad * gap * 0.6;
@@ -144,6 +144,9 @@ void main(){
   vec3 fb = uFbCol * fbIrr(vC) * (0.35 + 0.65 * max(dot(nw, toF / dF), 0.0));
   vec3 col = vCol.rgb * (uSunCol * (0.3 + 0.7 * max(dot(nw, uSunDir), 0.0)) + amb + fb) * (0.7 + 0.3 * d);
   col += vEm.rgb * (0.4 + 0.6 * d);
+  // light through the thin edges when the sun is behind the cloud
+  vec3 V = normalize(vW - cameraPosition);
+  col += vCol.rgb * uSunCol * pow(max(dot(V, uSunDir), 0.0), 6.0) * (1.0 - d) * 1.6;
   gl_FragColor = vec4(outCol(fogMix(col, vW, cameraPosition)), a);
 }`;
 
@@ -252,8 +255,10 @@ export function createBlast(st, o = {}) {
     const Yc = Math.max(h + Rfb * 0.2, topAbs - halfT);
     const form = smooth(b.tfm * 0.8, b.tfm * 4, t);                  // fireball -> cap
     const stemOn = smooth(b.tfm * 1.5, b.tfm * 8, t);
-    const stemTop = Math.max(0, Math.min(Yc - halfT * 0.55, (t - b.tfm * 1.5) * Math.max(30, riseF / 300)));
-    const surf = b.surface ? 1 : clamp(1 - (h - F.max) / (3 * F.max), 0.25, 1);
+    // the stem: dust drawn up under the rising cap; it reaches the cap
+    // about half a minute after the burst for 100 kt
+    const stemTop = Math.max(0, (Yc - halfT * 0.55) * clamp((t - b.tfm * 1.5) / (b.tfm * 1.5 + 25 * Math.cbrt(W / 100)), 0, 1));
+    const surf = b.surface ? 1 : clamp(1 - (h - F.max) / (3 * F.max), 0.45, 1);
     return { Rfb, topAbs, Rm, halfT, Yc, form, stemOn, stemTop, surf, g, roll: 2.2 * Math.log(1 + t / b.tfm) };
   }
 
@@ -263,23 +268,23 @@ export function createBlast(st, o = {}) {
   function cloudShade(x, y, z, C, rho) {
     const dy = (y - C.Yc) * 1.6, l = Math.max(1, Math.hypot(x, dy, z));
     const s = (x * sun.x + dy * sun.y + z * sun.z) / l;
-    const lit = 0.3 + 0.7 * smooth(-0.7, 0.8, s);
+    const lit = 0.32 + 0.9 * smooth(-0.7, 0.8, s);
     const under = 0.55 + 0.45 * smooth(-1, 0.45, (y - C.Yc) / Math.max(1, C.halfT));
     return lit * under * (0.72 + 0.28 * rho);
   }
   const v3 = new THREE.Vector3(), camDir = new THREE.Vector3();
   function stepParticles(t, C) {
     sun.copy(U.uSunDir.value);
-    const b = B.burst, W = b.W, h = b.h, F = b.F;
+    const b = B.burst, W = b.W, h = b.h;
     const wx = Math.cos(b.windDir) * b.wind, wz = Math.sin(b.windDir) * b.wind;
     const cool = smooth(b.tfm * 1.2, b.tfm * 40, t);
     const Tc = E.fireballTemperature(t, W);
     blackbody(Tc, col);
-    const glow = Math.min(40, Math.pow(Tc / 2000, 4) * 12) * (1 - cool * 0.97);
+    const glow = Math.min(40, Math.pow(Tc / 2000, 4) * 12) * (1 - cool * 0.97) * Math.exp(-t / (b.tfm * 8));
     // airburst caps go from a reddish brown (nitrogen oxides) to white as
     // water condenses; surface bursts carry soil and stay brown-grey
     const tw = smooth(5, 90 * Math.pow(W / 1000, 0.2), t);
-    const airC = [0.55 + 0.23 * tw, 0.42 + 0.34 * tw, 0.36 + 0.38 * tw], dirtC = [0.40 + 0.12 * tw, 0.34 + 0.13 * tw, 0.29 + 0.13 * tw];
+    const airC = [0.62 + 0.3 * tw, 0.47 + 0.43 * tw, 0.41 + 0.48 * tw], dirtC = [0.46 + 0.16 * tw, 0.39 + 0.17 * tw, 0.33 + 0.17 * tw];
     const mixS = C.surf;
     const capC = [airC[0] * (1 - mixS) + dirtC[0] * mixS, airC[1] * (1 - mixS) + dirtC[1] * mixS, airC[2] * (1 - mixS) + dirtC[2] * mixS];
     const frontR = Math.sqrt(Math.max(0, E.shockRadius(t, W, b.surface) ** 2 - h * h));
@@ -319,8 +324,8 @@ export function createBlast(st, o = {}) {
         const rr = C.Rm * (0.14 + 0.1 * s) * (0.5 + 0.5 * C.surf) * Math.sqrt(pc);
         const th = pb * Math.PI * 2 + t * 0.05;
         x = rr * Math.cos(th); z = rr * Math.sin(th); y = Math.max(yy, 10);
-        size = C.Rm * (0.09 + 0.06 * s) * (0.6 + 0.6 * ps) * (0.6 + 0.4 * C.surf);
-        alpha = 0.5 * C.stemOn * (0.4 + 0.6 * C.surf) * smooth(0, 0.08, s) * (1 - smooth(0.9, 1, s));
+        size = C.Rm * (0.15 + 0.09 * s) * (0.6 + 0.6 * ps) * (0.6 + 0.4 * C.surf);
+        alpha = 0.55 * C.stemOn * (0.55 + 0.45 * C.surf) * smooth(0, 0.08, s) * (1 - smooth(0.9, 1, s));
         cr = cr * 0.92; cg = cg * 0.9; cb = cb * 0.88;
         shade = 0.55 + 0.45 * Math.max(0, (x * sun.x + z * sun.z) / Math.max(1, Math.hypot(x, z)));
         const dr = t * clamp(y / b.topF, 0, 1) ** 0.5; x += wx * dr; z += wz * dr;
@@ -362,7 +367,7 @@ export function createBlast(st, o = {}) {
   }
 
   // pose everything for time t; armed (t < 0) hides the burst
-  B.update = (t, dt) => {
+  B.update = t => {
     const b = B.burst;
     const on = !!b && t > 0;
     root.visible = on; droot.visible = on;
@@ -380,7 +385,11 @@ export function createBlast(st, o = {}) {
     const M = Pw / (4 * Math.PI * R * R) / 1000;                      // exitance in suns
     fbU.uCol.value.setRGB(col[0], col[1], col[2]);
     const cool = smooth(b.tfm * 1.5, b.tfm * 25, t);
-    fbU.uRad.value = Math.max(M, Math.min(60, Math.pow(T / 2000, 4) * 14));
+    // The ball is shown at most ~3x display white after the exposure (40x in
+    // the first flash), so its turbulent skin is not lost in white; that is
+    // still well over the bloom threshold.
+    const capR = (t < E.tThermalMin(W) ? 40 : 3.2) / Math.max(st.exposure, 1e-9);
+    fbU.uRad.value = Math.min(Math.max(M, Math.min(60, Math.pow(T / 2000, 4) * 14)), capR);
     fbU.uCool.value = cool;
     fbU.uAlpha.value = 1 - smooth(b.tfm * 3, b.tfm * 12, t);
     fireball.visible = fbU.uAlpha.value > 0.01;
@@ -389,7 +398,8 @@ export function createBlast(st, o = {}) {
     U.uFbCol.value.setRGB(col[0], col[1], col[2]);
     U.uFbPow.value = Pw / (4 * Math.PI) / 1000;
     // the eye: irradiance at the camera target, plus glare if the ball is in view
-    const tgt = st.controls.target, dT = Math.max(1, Math.hypot(tgt.x, tgt.y - fbY, tgt.z)), dC = Math.max(1, st.camera.position.distanceTo(U.uFbPos.value));
+    // (the subject is never closer than the ground below the ball, or 3 R)
+    const tgt = st.controls.target, dT = Math.max(R * 3, fbY * 0.8, Math.hypot(tgt.x, tgt.y - fbY, tgt.z)), dC = Math.max(R * 1.5, st.camera.position.distanceTo(U.uFbPos.value));
     const tau = Math.exp(-dT / U.uTauL.value);
     st.adaptIn = U.uFbPow.value / (dT * dT) * tau * 0.6 + U.uFbPow.value / (dC * dC) * Math.exp(-dC / U.uTauL.value) * 0.4;
     // sky and haze glow around the burst
@@ -404,9 +414,10 @@ export function createBlast(st, o = {}) {
     const amp = clamp(Math.log10(pf + 1) / 1.6, 0, 1) * 0.012 * (st.lowQ ? 0.7 : 1);
     const rimA = clamp(Math.log10(pf + 1) / 2, 0, 1) * 0.25 * Math.max(1, Math.min(30, st.todSpec.level * 3 + 0.2));
     const center = b.surface ? 0 : h;
-    for (const m of S.inc) { m.position.set(0, center, 0); m.scale.setScalar(Rs); m.visible = Rs > R * 1.05; }
+    const shellOn = pf > 0.2;                                       // weaker shocks are not drawn
+    for (const m of S.inc) { m.position.set(0, center, 0); m.scale.setScalar(Rs); m.visible = shellOn && Rs > R * 1.05; }
     S.inc[0].material.uniforms.uAmp.value = amp; S.inc[1].material.uniforms.uRim.value = rimA;
-    const showRef = !b.surface && Rs > h;
+    const showRef = shellOn && !b.surface && Rs > h;
     for (const m of S.ref) { m.position.set(0, -h, 0); m.scale.setScalar(Rs); m.visible = showRef; m.material.uniforms.uCenter2.value.set(0, h, 0); m.material.uniforms.uR2.value = Rs; }
     S.ref[0].material.uniforms.uAmp.value = amp * 0.8; S.ref[1].material.uniforms.uRim.value = rimA * 0.8;
     const rFront = showRef ? Math.sqrt(Rs * Rs - h * h) : Rs;
