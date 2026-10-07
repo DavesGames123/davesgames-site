@@ -82,7 +82,7 @@ const SECTOR_TEXT = {
   sound: { at: [660, 325], tilt: 60, lead: 'chordlab',
     blurb: 'Hear the maths. A live chord detector, harmony wheels, and resonance figures and drums that turn vibration into shapes you can see.' },
   machines: { at: [895, 262], tilt: -20, lead: 'watch-movement',
-    blurb: 'Mechanisms that move, in 28 working 3D models: engines, gear trains and transmissions, linkages and cams, pumps, clocks and the Antikythera mechanism, and the machines that calculate and encipher.' },
+    blurb: 'Mechanisms that move, in 27 working 3D models: engines, gear trains and transmissions, linkages and cams, pumps, clocks and the Antikythera mechanism, and the machines that calculate and encipher.' },
   language: { at: [770, 300], tilt: 35, lead: 'lose-the-modifier',
     blurb: 'Words, weighed: tools that cut padding and find the exact word. Lose the Modifier turns “very tired” into “exhausted” and “walked slowly” into “trudged” across more than 1,100 original pairs, and marks the padding in any paragraph you paste.' },
   papers: { at: [626, 222], tilt: 0, lead: 'gravitational-imaging',
@@ -93,6 +93,8 @@ const SECTOR_TEXT = {
     blurb: 'The visual effects of the game: explosions, engine plumes, beams, fire, smoke, heat haze and frost.' },
   rendering: { at: [850, 452], tilt: -50, lead: 'supernova',
     blurb: 'Rendering techniques you can steer: ray marching, sphere tracing, a path tracer, glass and mirrors, volumes and a voxel world.' },
+  finance: { at: [745, 585], tilt: -15, lead: 'market-forecast',
+    blurb: 'Pretrained forecasters, run in your browser, honest about their odds. Market Forecast reads like a stock page, but the fan beyond the price is a probabilistic forecast from Amazon’s Chronos models on your GPU, with a portfolio analysis and a backtest of how often the 80% band held. Demo data is synthetic; your own free API key brings live tickers.' },
   craft: { at: [930, 560], tilt: 15, lead: 'photocraft',
     blurb: 'The open-source Crafting Apps by the ArtCraft Team, in pure Rust, running in your browser: image editing, raw photos, vector art, page layout, video, motion graphics and PDFs. The official web builds, unchanged, with full credits.' },
 };
@@ -102,6 +104,7 @@ const REGION_BANDS = [
   { id: 'stella', name: 'Stella Nova', at: [22, 606], edge: 'M250 30 L250 600' },
   { id: 'science', name: 'Science', at: [272, 352], edge: 'M265 368 Q 620 348 985 368' },
   { id: 'graphics', name: 'Graphics', at: [272, 394], edge: null },
+  { id: 'finance', name: 'Finance', at: [700, 606], edge: null },
   { id: 'studio', name: 'Studio', at: [880, 606], edge: null },
 ];
 

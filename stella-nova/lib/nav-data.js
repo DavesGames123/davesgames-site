@@ -317,6 +317,13 @@ w.SN_NAV = [
     ] }
   ] }
 ] },
+{ id: "finance", label: "Finance", constellations: [
+  { id: "finance", label: "Finance", short: "Finance", icon: "$", color: "#2bd685", color2: "#79acff", groups: [
+    { h: "Forecasting", p: [
+      ["market-forecast", "Market Forecast", "AI"]
+    ] }
+  ] }
+] },
 { id: "studio", label: "Studio", constellations: [
   { id: "craft", label: "Crafting Apps", short: "Craft", icon: "✎", color: "#7cc4ff", color2: "#ffb86c", groups: [
     { h: "Image", p: [
