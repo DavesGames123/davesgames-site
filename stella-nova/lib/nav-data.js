@@ -83,7 +83,8 @@ w.SN_NAV = [
       ["hohmann", "Hohmann Transfer", "SIM"],
       ["leo", "LEO Catalog", "NEW", "leo-catalog"],
       ["gravity", "Gravity Sim", "SIM"],
-      ["forge", "Planet Forge", null]
+      ["forge", "Planet Forge", null],
+      ["roche-limit", "Roche Limit", "SIM"]
     ] },
     { h: "Deep Space", p: [
       ["galaxy", "Galaxy", "SIM"],
