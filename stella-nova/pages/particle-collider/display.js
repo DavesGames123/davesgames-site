@@ -41,7 +41,7 @@ export function ramp(u) {
 export const logU = (eMeV, lo = 200, hi = 150000) => Math.log(Math.max(lo, eMeV) / lo) / Math.log(hi / lo);
 
 const SEG_VS = `
-uniform float uT, uPx, uSel, uGain, uWk; uniform vec2 uRes;
+uniform float uT, uPx, uSel, uGain, uWk, uDim; uniform vec2 uRes;
 attribute vec4 iA; attribute vec4 iB; attribute vec4 iC; attribute vec3 iD;
 varying vec3 vCol; varying float vSide, vI, vDash, vAlong, vHot;
 void main(){
@@ -58,7 +58,7 @@ void main(){
   c.xy += (nrm * position.y * w + dir * (position.x * 2.0 - 1.0) * w * 0.5) * 2.0 / uRes * c.w;
   gl_Position = c;
   float sel = uSel < 0.0 ? 1.0 : (abs(iD.z - uSel) < 0.5 ? 2.2 : 0.18);
-  vCol = iC.rgb; vSide = position.y; vI = iD.x * sel * uGain; vDash = iD.y; vAlong = position.x * length(b - iA.xyz);
+  vCol = iC.rgb; vSide = position.y; vI = iD.x * sel * uGain * uDim; vDash = iD.y; vAlong = position.x * length(b - iA.xyz);
   vHot = exp(-max(0.0, uT - mix(iA.w, iB.w, f * position.x)) / 0.7);
 }`;
 const SEG_FS = `
@@ -66,11 +66,11 @@ varying vec3 vCol; varying float vSide, vI, vDash, vAlong, vHot;
 void main(){
   if (vDash > 0.5 && fract(vAlong / 45.0) > 0.55) discard;
   float s = abs(vSide), glow = exp(-s * s * 3.0), core = smoothstep(0.55, 0.0, s);
-  vec3 col = vCol * (0.55 * glow + 0.9 * core) * vI * (1.0 + 2.4 * vHot) + vec3(1.0) * core * core * vHot * 0.35 * vI;
+  vec3 col = vCol * (0.55 * glow + 0.9 * core) * vI * (0.45 + 3.0 * vHot) + vec3(1.0) * core * core * vHot * 0.22 * vI;
   gl_FragColor = vec4(col, 1.0);
 }`;
 const PT_VS = `
-uniform float uT, uPx, uGain; uniform vec2 uRes;
+uniform float uT, uPx, uGain, uDim; uniform vec2 uRes;
 attribute vec4 iA; attribute vec4 iB; attribute vec4 iC;
 varying vec3 vCol; varying vec2 vQ; varying float vI;
 void main(){
@@ -85,21 +85,21 @@ void main(){
   float sz = iC.w * uPx * (mv ? 1.0 : (0.6 + 1.6 * fl));
   c.xy += position.xy * sz * 2.0 / uRes * c.w;
   gl_Position = c;
-  vCol = iC.rgb; vQ = position.xy; vI = mv ? uGain : iB.x + (0.4 + 1.6 * iB.x) * fl;
+  vCol = iC.rgb; vQ = position.xy; vI = (mv ? uGain : iB.x + (0.4 + 1.6 * iB.x) * fl) * uDim;
 }`;
 const PT_FS = `
 varying vec3 vCol; varying vec2 vQ; varying float vI;
-void main(){ float r2 = dot(vQ, vQ); if (r2 > 1.0) discard; float g = exp(-r2 * 4.5); gl_FragColor = vec4(vCol * g * vI + vec3(g * g * 0.6 * vI), 1.0); }`;
+void main(){ float r2 = dot(vQ, vQ); if (r2 > 1.0) discard; float g = exp(-r2 * 4.5); gl_FragColor = vec4(vCol * g * vI + vec3(g * g * 0.3 * vI), 1.0); }`;
 const CELL_VS = `
-uniform float uT, uCellGain;
+uniform float uT, uCellGain, uDim;
 attribute vec4 iCol; attribute float iT;
 varying vec3 vCol; varying vec3 vL; varying float vA;
 void main(){
-  float s = clamp((uT - iT) / 0.9, 0.0, 1.0);
+  float u = clamp((uT - iT) / 1.4, 0.0, 1.0), s = u * u * (3.0 - 2.0 * u);
   vec3 p = position; p.x *= max(0.001, s);
   vec4 w = instanceMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * modelViewMatrix * w;
-  vCol = iCol.rgb; vL = position; vA = s > 0.0 ? iCol.a * (0.65 + 0.35 * s) * uCellGain : 0.0;
+  vCol = iCol.rgb; vL = position; vA = s > 0.0 ? iCol.a * (0.65 + 0.35 * s) * uCellGain * uDim * (1.0 + 1.3 * exp(-max(0.0, uT - iT - 1.0) / 0.9)) : 0.0;
 }`;
 const CELL_FS = `
 varying vec3 vCol; varying vec3 vL; varying float vA;
@@ -111,7 +111,7 @@ void main(){
 
 export function createDisplay(THREE, o = {}) {
   const group = new THREE.Group();
-  const U = { uT: { value: 0 }, uPx: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) }, uSel: { value: -1 }, uGain: { value: 1 }, uCellGain: { value: 1 }, uWk: { value: 1 } };
+  const U = { uT: { value: 0 }, uPx: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) }, uSel: { value: -1 }, uGain: { value: 1 }, uCellGain: { value: 1 }, uWk: { value: 1 }, uDim: { value: 1 } };
   const add = { blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true };
   const segMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: SEG_VS, fragmentShader: SEG_FS, ...add });
   const ptMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: PT_VS, fragmentShader: PT_FS, ...add });
@@ -206,7 +206,7 @@ export function createDisplay(THREE, o = {}) {
     const m = new THREE.ShaderMaterial({
       uniforms: { uT: U.uT, uC: { value: new THREE.Color(color) }, uA: { value: alpha }, uT0: { value: t0 }, uL: { value: L } }, ...add, side: THREE.DoubleSide,
       vertexShader: 'varying float vY; varying vec3 vN, vV; void main(){ vY = position.y; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
-      fragmentShader: 'uniform float uT, uA, uT0, uL; uniform vec3 uC; varying float vY; varying vec3 vN, vV; void main(){ float grow = clamp((uT - uT0) * 299.79 / uL, 0.0, 1.0); if (vY / uL > grow) discard; float rim = 1.0 - abs(dot(vN, vV)); float k = uA * (0.25 + 0.75 * rim * rim) * (1.0 - 0.7 * vY / uL); gl_FragColor = vec4(uC * k, 1.0); }',
+      fragmentShader: 'uniform float uT, uA, uT0, uL; uniform vec3 uC; varying float vY; varying vec3 vN, vV; void main(){ float grow = clamp((uT - uT0) * 299.79 / uL, 0.0, 1.0); if (vY / uL > grow) discard; float rim = 1.0 - abs(dot(vN, vV)); float k = uA * (0.25 + 0.75 * rim * rim) * (1.0 - 0.7 * vY / uL) * (1.0 + 3.0 * exp(-max(0.0, uT - uT0 - uL / 299.79) / 0.6)); gl_FragColor = vec4(uC * k, 1.0); }',
     });
     m.userData.own = true;
     const mesh = new THREE.Mesh(g, m);
@@ -247,6 +247,12 @@ export function createDisplay(THREE, o = {}) {
     points(fl, 14);
   }
 
+  // the crossing flash: a rim-lit shell that runs out from the hard vertex
+  // over the first ns and fades (a visual mark of t = 0, not a physical front)
+  const shock = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 4), new THREE.ShaderMaterial({ uniforms: { uT: U.uT }, ...add, side: THREE.DoubleSide,
+    vertexShader: 'uniform float uT; varying vec3 vN, vV; varying float vA; void main(){ float r = 40.0 + 2600.0 * (1.0 - exp(-max(0.0, uT) / 0.6)); vA = uT > 0.0 ? smoothstep(0.0, 0.08, uT) * exp(-uT / 0.9) : 0.0; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position * r, 1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'varying vec3 vN, vV; varying float vA; void main(){ if (vA < 0.003) discard; float rim = 1.0 - abs(dot(vN, vV)); gl_FragColor = vec4(vec3(1.0, 0.86, 0.68) * vA * (0.04 + 1.1 * pow(rim, 3.0)), 1.0); }' }));
+  shock.frustumCulled = false; shock.renderOrder = 15; group.add(shock);
   function show(R, O, info, opt = {}) {
     clear();
     meta = { R, O, info };
@@ -277,7 +283,10 @@ export function createDisplay(THREE, o = {}) {
     // MET
     if (O && O.met.et > 15000) arrow(O.met.phi, Math.min(5200, 1400 + O.met.et / 100000 * 2600), new THREE.Color(CLASS_COLOR.nu), 9);
     bunches(info || {});
-    return { tEnd };
+    const v = (info && info.vertex) || [0, 0, 0]; shock.position.set(v[0], v[1], v[2]);
+    // how much the event shakes the camera: the calorimeter energy, log scale
+    let ec = 0; for (let c = 0; c < R.ecal.length; c++) ec += R.ecal[c]; for (let c = 0; c < R.hcalS.length; c++) ec += R.hcalS[c] * KHCAL;
+    return { tEnd, energy: ec };
   }
   function setTime(t) {
     U.uT.value = t;
@@ -287,6 +296,6 @@ export function createDisplay(THREE, o = {}) {
     const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
     U.uRes.value.copy(sz); U.uPx.value = renderer.getPixelRatio();
   }
-  return { group, show, setTime, frame, clear, setSel: k => { U.uSel.value = k; }, get tEnd() { return tEnd; }, get meta() { return meta; }, U };
+  return { group, show, setTime, frame, clear, setSel: k => { U.uSel.value = k; }, dim: k => { U.uDim.value = k; }, get tEnd() { return tEnd; }, get meta() { return meta; }, U };
 }
 function mulberry(a) { return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }

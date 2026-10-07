@@ -6,8 +6,8 @@
 //  camera limits. The camera near and far planes follow the orbit distance
 //  each frame, so both scales keep their depth precision.
 //
-//  POST  EffectComposer: RenderPass, UnrealBloomPass, OutputPass (three r160
-//  addons). The bloom runs at a lower resolution on phones (quality tier).
+//  POST  EffectComposer: RenderPass, OverlayPass (the event layer with a
+//  hue-keeping soft clip), UnrealBloomPass, OutputPass (three r160 addons). The bloom runs at a lower resolution on phones (quality tier).
 //
 //  FRAMING (grep -n 'function occlusion')
 //  Each panel that covers the canvas (o.occluders) and the saver plate band
@@ -25,6 +25,36 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+
+// The event layer renders into its own HDR target and joins the scene
+// through a soft clip that keeps the hue: o / (1 + max(o) / K). Where a
+// hundred tracks meet at the vertex the sum stays coloured, never white;
+// a faint line passes almost unchanged. The bloom then runs on the result.
+class OverlayPass extends Pass {
+  constructor(camera) {
+    super();
+    this.scene = null; this.camera = camera;
+    this.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { tBase: { value: null }, tOver: { value: null }, uK: { value: 1.5 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: 'uniform sampler2D tBase, tOver; uniform float uK; varying vec2 vUv; void main(){ vec4 b = texture2D(tBase, vUv); vec3 o = texture2D(tOver, vUv).rgb; float m = max(max(o.r, o.g), o.b); gl_FragColor = vec4(b.rgb + o / (1.0 + m / uK), b.a); }',
+      depthTest: false, depthWrite: false,
+    });
+    this.fsq = new FullScreenQuad(this.mat);
+  }
+  setSize(w, h) { this.rt.setSize(w, h); }
+  render(renderer, writeBuffer, readBuffer) {
+    const cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
+    renderer.setRenderTarget(this.rt); renderer.setClearColor(0x000000, 0); renderer.clear();
+    if (this.scene) renderer.render(this.scene, this.camera);
+    renderer.setClearColor(cc, ca);
+    this.mat.uniforms.tBase.value = readBuffer.texture; this.mat.uniforms.tOver.value = this.rt.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.fsq.render(renderer);
+  }
+}
 
 export const ease = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
 const D = Math.PI / 180, TAU = Math.PI * 2;
@@ -49,15 +79,23 @@ export function createStage(o) {
   const composer = new EffectComposer(renderer);
   const rp = new RenderPass(scene, camera);
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.95, 0.55, 0.12);
-  composer.addPass(rp); composer.addPass(bloom); composer.addPass(new OutputPass());
+  const overlay = new OverlayPass(camera);
+  composer.addPass(rp); composer.addPass(overlay); composer.addPass(bloom); composer.addPass(new OutputPass());
 
-  const st = { THREE, renderer, camera, controls, composer, bloom, tier, orbit: !o.reduced, orbitAmt: 0, orbitK: 1, idle: 99, dragging: false, fly: null, near: 0.002, onStart: null };
+  const st = { shk: 0, shkT: 0, THREE, renderer, camera, controls, composer, bloom, tier, orbit: !o.reduced, orbitAmt: 0, orbitK: 1, idle: 99, dragging: false, fly: null, near: 0.002, onStart: null };
   st.scene = () => scene;
+  // the event layer (display.js group) for the soft-clip overlay; null: none
+  st.setOverlay = (sc, k = 1.2) => { overlay.scene = sc; overlay.mat.uniforms.uK.value = k; };
+  st.overlayK = k => { overlay.mat.uniforms.uK.value = k; };
+  st.shake = a => { if (!o.reduced) { st.shk = Math.max(st.shk, a); st.shkT = 0; } };
+  // per-shot exposure and bloom, eased (no pops)
+  st.look = { exp: 1, bloom: 0.75, thr: 0.3 }; const look = { exp: 1, bloom: 0.75, thr: 0.3 };
+  st.setLook = (exp, bl, thr) => { st.look = { exp, bloom: bl, thr }; };
   st.use = (sc, lim = {}) => {
     scene = sc; rp.scene = sc;
     controls.minDistance = lim.min ?? 10; controls.maxDistance = lim.max ?? 1e5;
     st.near = lim.near ?? 0.002;
-    if (lim.bloom) { bloom.strength = lim.bloom[0]; bloom.radius = lim.bloom[1]; bloom.threshold = lim.bloom[2]; }
+    if (lim.bloom) { st.look = { exp: 1, bloom: lim.bloom[0], thr: lim.bloom[2] }; bloom.radius = lim.bloom[1]; }
   };
 
   st.flyTo = ({ az, el, r, target, t = 1.6 }) => {
@@ -134,13 +172,24 @@ export function createStage(o) {
       camera.position.setFromSpherical(sph).add(controls.target);
       if (st.fly.t >= 1) st.fly = null;
     }
+    for (const k of ['exp', 'bloom', 'thr']) look[k] += (st.look[k] - look[k]) * Math.min(1, dt * 2.5);
+    renderer.toneMappingExposure = look.exp; bloom.strength = look.bloom; bloom.threshold = look.thr;
     const want = st.orbit && !st.dragging && !st.fly && st.idle > 3 ? 1 : 0;
     st.orbitAmt += (want - st.orbitAmt) * Math.min(1, dt * (want > st.orbitAmt ? 0.5 : 4));
     controls.autoRotate = st.orbitAmt > 0.002;
     controls.autoRotateSpeed = -0.35 * st.orbitAmt * st.orbitK;
     controls.update(dt);
     resize();
+    // camera shake: a decaying jitter added for this frame only
+    let sx = 0, sy = 0, sz = 0;
+    if (st.shk > 1e-4) {
+      st.shkT += dt; st.shk *= Math.exp(-dt / 0.35);
+      const dd = camera.position.distanceTo(controls.target) * st.shk, t = st.shkT;
+      sx = dd * Math.sin(t * 61.0) * Math.sin(t * 7.3); sy = dd * Math.sin(t * 53.0 + 1.3) * Math.cos(t * 5.1); sz = dd * Math.sin(t * 47.0 + 2.1) * 0.5;
+      camera.position.x += sx; camera.position.y += sy; camera.position.z += sz;
+    }
     composer.render(dt);
+    camera.position.x -= sx; camera.position.y -= sy; camera.position.z -= sz;
   };
   st.dispose = () => { try { composer.dispose(); renderer.dispose(); renderer.forceContextLoss(); } catch (e) { /* gone */ } };
   return st;
