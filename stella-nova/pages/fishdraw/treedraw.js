@@ -14,6 +14,9 @@
 //    fishFor(id)    the pool fish of a node, or null (not drawn yet)
 //    anc            true draws the ancestral fish at internal nodes
 //    names          true writes the names under the tip fish
+//    back, paper    true puts a paper card of colour paper under each fish
+//  A natural layout (tree.js layoutNatural) has no time axis, thinner and
+//  fainter branches, and names under the ancestor fish too.
 //    sel            a node id or -1; line: a Set of the ids of its lineage
 //    ancOnly        a Set of internal ids whose fish show when anc is false
 //  Growth: the elbow of a branch shows when its parent exists, the run grows
@@ -43,11 +46,25 @@ export const hiColor = theme => (isDark(theme) ? '#ffcf5a' : '#b3412e');
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // ── drawFishBox ─────────────────────────────────────────────────────────────
+// A soft paper card under each fish (P.back): the branch lines pass behind
+// the fish, so the fish read first and the lines stay quiet.
+function backing(ctx, box, P, alpha) {
+  const s = P.view.s, x = P.view.ox + box.x * s, y = P.view.oy + box.y * s, w = box.w * s, h = box.h * s;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 0.86 * alpha; ctx.fillStyle = P.paper;
+  const r = Math.min(w, h) * 0.18, px = w * 0.04, py = h * 0.08;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x - px, y - py, w + px * 2, h + py * 2, r); else ctx.rect(x - px, y - py, w + px * 2, h + py * 2);
+  ctx.fill();
+  ctx.restore();
+}
 function drawFishBox(ctx, f, box, P, alpha, prog) {
   const s = P.view.s, k = box.w / 500 * s;
   const ox = P.view.ox + box.x * s, oy = P.view.oy + box.y * s;
   if (ox > ctx.canvas.width || oy > ctx.canvas.height || ox + box.w * s < 0 || oy + box.h * s < 0) return;
   if (box.w * s < 3) return;
+  if (P.back && P.paper) backing(ctx, box, P, alpha);
   const penF = clamp(box.w * 0.0042, 0.03, P.pen);
   ctx.save();
   ctx.globalAlpha *= alpha;
@@ -71,8 +88,9 @@ export function drawTree(ctx, P) {
 
   // Eras and the time axis.
   ctx.fillStyle = ink; ctx.strokeStyle = ink;
-  const showEras = P.xMode !== 'change';
-  if (lay.kind === 'clado') {
+  const showEras = P.xMode !== 'change' && !lay.natural;
+  if (lay.natural) { /* no time axis: columns and rings are splits */ }
+  else if (lay.kind === 'clado') {
     const top = Y(lay.top), bot = Y(lay.bottom), ax = Y(lay.axisY);
     let lastMa = -Infinity;
     if (showEras) tree.eras.forEach((e, i) => {
@@ -119,7 +137,10 @@ export function drawTree(ctx, P) {
   ctx.globalAlpha = 1; ctx.strokeStyle = ink;
 
   // Branches.
-  const bw = Math.max(0.6 * (P.dpr || 1), P.pen * 1.2 * s);
+  // Branches: thin and a little faded in the natural layout, so the fish
+  // lead; a lineage is drawn thicker in the highlight colour.
+  const bw = lay.natural ? Math.max(0.55 * (P.dpr || 1), P.pen * 0.6 * s) : Math.max(0.6 * (P.dpr || 1), P.pen * 1.2 * s);
+  const quiet = lay.natural ? 0.6 : 1;
   const grow = [];
   for (const q of nodes) {
     if (q.parent < 0) continue;
@@ -129,9 +150,9 @@ export function drawTree(ctx, P) {
     const frac = q.t > p.t ? clamp((tau - p.t) / (q.t - p.t), 0, 1) : 1;
     const on = line.has(q.id);
     const extinct = q.kind === 'extinct';
-    ctx.globalAlpha = extinct ? 0.45 : 1;
+    ctx.globalAlpha = on ? 1 : (extinct ? 0.45 : 1) * quiet;
     ctx.strokeStyle = on ? hi : ink;
-    ctx.lineWidth = on ? bw * 2.2 : bw;
+    ctx.lineWidth = on ? bw * 2.6 : bw;
     ctx.setLineDash(extinct ? [bw * 2.5, bw * 2.5] : []);
     ctx.beginPath();
     ctx.moveTo(X(b.elbow[0][0]), Y(b.elbow[0][1]));
@@ -144,7 +165,7 @@ export function drawTree(ctx, P) {
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   // Split dots and radiation rings.
   for (const q of nodes) {
-    if (q.kind !== 'split' || tau < q.t) continue;
+    if (q.kind !== 'split' || tau < q.t || (lay.natural && (P.anc || (P.ancOnly && P.ancOnly.has(q.id))))) continue;
     const r = bw * (q.radiation ? 2.2 : 1.3);
     ctx.fillStyle = line.has(q.id) ? hi : ink;
     ctx.beginPath(); ctx.arc(X(lay.pos[q.id].x), Y(lay.pos[q.id].y), r, 0, Math.PI * 2); ctx.fill();
@@ -159,13 +180,13 @@ export function drawTree(ctx, P) {
     if (box.anc && !P.anc && q.id !== P.sel && !(P.ancOnly && P.ancOnly.has(q.id))) continue;
     const f = P.fishFor(q.id);
     const prog = clamp((tau - q.t) / DRAW_T, 0, 1);
-    const alpha = q.kind === 'extinct' ? 0.5 : box.anc ? 0.8 : 1;
+    const alpha = q.kind === 'extinct' ? 0.5 : box.anc ? 0.88 : 1;
     ctx.strokeStyle = line.has(q.id) && box.anc ? hi : ink;
     if (f) drawFishBox(ctx, f, box, P, alpha, prog);
-    if (!box.anc && P.names !== false && prog > 0.2) {
-      const fs = box.h * 0.15 * s;
+    if ((!box.anc || lay.natural) && P.names !== false && prog > 0.2) {
+      const fs = box.h * (box.anc ? 0.17 : 0.15) * s;
       if (fs >= 6) {
-        ctx.globalAlpha = q.kind === 'extinct' ? 0.55 : 0.9;
+        ctx.globalAlpha = q.kind === 'extinct' ? 0.55 : box.anc ? 0.7 : 0.9;
         ctx.font = labelFont(fs, 'italic'); ctx.textAlign = 'center';
         ctx.fillText((q.kind === 'extinct' ? '† ' : '') + q.name, X(box.x + box.w / 2), Y(box.y + box.h) + fs * 0.9);
         ctx.globalAlpha = 1;
@@ -175,7 +196,7 @@ export function drawTree(ctx, P) {
   // Growing ends: the parent form fades into the child form.
   if (grow.length <= 48) for (const g of grow) {
     const fa = P.fishFor(g.p.id), fb = P.fishFor(g.q.id);
-    const w = lay.tip.w * 0.5, h = w * 0.6;
+    const w = lay.natural ? lay.anc.w : lay.tip.w * 0.5, h = w * 0.6;
     const box = lay.kind === 'clado' ? { x: g.x + w * 0.08, y: g.y - h / 2, w, h } : { x: g.x - w / 2, y: g.y - h / 2, w, h };
     ctx.strokeStyle = ink;
     if (fa) drawFishBox(ctx, fa, box, P, 0.85 * (1 - g.frac), null);
@@ -223,7 +244,8 @@ export function treeSVG(tree, lay, o, fishFor) {
   const n2 = v => (Math.round(v * 100) / 100).toString();
   const out = ['<g id="tree">'];
   const font = xmlEscape(SERIF.replace(/"/g, "'"));
-  if (lay.kind === 'clado' && o.xMode !== 'change') {
+  if (lay.natural) { /* no time axis */ }
+  else if (lay.kind === 'clado' && o.xMode !== 'change') {
     tree.eras.forEach((e, i) => {
       const x0 = lay.xOf(e.t0), x1 = lay.xOf(e.t1);
       out.push(`<rect x="${n3(x0)}" y="${n3(lay.top)}" width="${n3(x1 - x0)}" height="${n3(lay.bottom - lay.top)}" fill="${ink}" fill-opacity="${i % 2 ? 0.05 : 0.025}"/>`);
@@ -242,7 +264,7 @@ export function treeSVG(tree, lay, o, fishFor) {
       } else out.push(`<circle cx="${n3(lay.cx)}" cy="${n3(lay.cy)}" r="${n3(r)}" fill="none" stroke="${ink}" stroke-opacity="0.3" stroke-width="${n3(o.pen * 0.5)}" stroke-dasharray="0.6 1.4"/>`);
     });
   }
-  const bw = o.pen * 1.2, line = o.line || new Set();
+  const bw = o.pen * (lay.natural ? 0.6 : 1.2), line = o.line || new Set();
   for (const q of tree.nodes) {
     if (q.parent < 0) continue;
     const b = lay.branch[q.id];
@@ -257,12 +279,13 @@ export function treeSVG(tree, lay, o, fishFor) {
   for (const q of tree.nodes) {
     const box = lay.fish[q.id], f = fishFor(q.id);
     if (!box || (box.anc && !o.anc)) continue;
+    if (f && lay.natural) out.push(`<rect x="${n3(box.x - box.w * 0.04)}" y="${n3(box.y - box.h * 0.08)}" width="${n3(box.w * 1.08)}" height="${n3(box.h * 1.16)}" rx="${n3(box.h * 0.18)}" fill="${t.paper}" fill-opacity="0.86"/>`);
     if (f) {
       const pen = clamp(box.w * 0.0042, 0.03, o.pen);
       const dd = cellLines(f, { fx: box.x, fy: box.y, k: box.w / 500 }, o.jitter || 0).map(pl => 'M' + pl.map(([x, y]) => n2(x) + ' ' + n2(y)).join('L')).join('');
       out.push(`<path data-name="${xmlEscape(q.name)}" d="${dd}" fill="none" stroke="${ink}" stroke-width="${n3(pen)}" stroke-linecap="round" stroke-linejoin="round"${q.kind === 'extinct' ? ' stroke-opacity="0.5"' : box.anc ? ' stroke-opacity="0.8"' : ''}/>`);
     }
-    if (!box.anc && o.names !== false) {
+    if ((!box.anc || lay.natural) && o.names !== false) {
       out.push(`<text x="${n3(box.x + box.w / 2)}" y="${n3(box.y + box.h + box.h * 0.15 * 0.9)}" font-family="${font}" font-size="${n3(box.h * 0.15)}" font-style="italic" fill="${t.text}" text-anchor="middle"${q.kind === 'extinct' ? ' fill-opacity="0.55"' : ''}>${xmlEscape((q.kind === 'extinct' ? '† ' : '') + q.name)}</text>`);
     }
   }

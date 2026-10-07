@@ -289,34 +289,53 @@ export function installSaver(ctxIn) {
   }
 
   // ── renderTree ────────────────────────────────────────────────────────────
+  // The tree in its natural layout (tree.js layoutNatural) in mm. A tip
+  // fish is tipPx device px wide: 42% of the band height, at least 120 CSS
+  // px and at most 45% of the band width. The camera follows
+  // a focus point (eased), so the fish stay large and the view moves:
+  //   grow     the newest fish
+  //   radiate  from the radiation node across its tips, one by one
+  //   lineage  from the root down the lineage to the tip
   function renderTree(x, shot, t, box, mmDev, theme, pen, dpr) {
-    const bw = box.w * mmDev, bh = box.h * mmDev;
-    const lay = layoutTree(shot.tree, shot.kind, { w: bw, h: bh, ox: 0, oy: 0, xMode: 'time', axis: shot.kind === 'clado' });
-    const s0 = 1 / mmDev, cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-    let view = { s: s0, ox: box.x, oy: box.y }, tau = null, line = null, ancOnly = null, anc = true;
+    const N = shot.tree.nodes;
+    let tipPx = Math.max(120 * dpr, Math.min(box.h * 0.42, 300 * dpr));
+    tipPx = Math.min(tipPx, box.w * 0.45);
+    const tipMM = +(tipPx * mmDev).toFixed(1);
+    if (!shot.lay || shot.layTip !== tipMM) { shot.lay = layoutTree(shot.tree, shot.kind, { tip: tipMM }); shot.layTip = tipMM; shot.cam = null; }
+    const lay = shot.lay;
+    const s = 1 / mmDev, cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const centre = id => { const b = lay.fish[id]; return b ? [b.x + b.w / 2, b.y + b.h / 2] : [lay.pos[id].x, lay.pos[id].y]; };
     const e = ease(t / shot.dur);
-    if (shot.type === 'grow') tau = T_MAX * GROW_OVER * Math.min(1, t / (shot.dur * 0.85));
-    if (shot.type === 'radiate') {
-      // Pan from the radiation node to the middle of its tips, zoomed.
-      const tipsOf = [...shot.sub].filter(id => !shot.tree.nodes[id].children.length).map(id => lay.pos[id]);
-      const a = lay.pos[shot.focus.id], b = { x: tipsOf.reduce((u, p) => u + p.x, 0) / tipsOf.length, y: tipsOf.reduce((u, p) => u + p.y, 0) / tipsOf.length };
-      const z = 2.1, fx = a.x + (b.x - a.x) * e, fy = a.y + (b.y - a.y) * e, s = s0 * z;
-      view = { s, ox: cx - fx * s, oy: cy - fy * s };
-      line = shot.sub; anc = false;
+    let tau = null, line = null, ancOnly = null, anc = true, focus;
+    if (shot.type === 'grow') {
+      tau = T_MAX * GROW_OVER * Math.min(1, t / (shot.dur * 0.85));
+      let best = N[0];
+      for (const q of N) if (q.t <= tau && q.t >= best.t) best = q;
+      focus = centre(best.id);
+    } else if (shot.type === 'radiate') {
+      const tips = [...shot.sub].filter(id => !N[id].children.length).map(centre).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+      const path = [centre(shot.focus.id), ...tips];
+      const u = e * (path.length - 1), i = Math.min(path.length - 2, Math.floor(u)), f = u - i;
+      focus = path.length > 1 ? [path[i][0] + (path[i + 1][0] - path[i][0]) * f, path[i][1] + (path[i + 1][1] - path[i][1]) * f] : path[0];
+      line = shot.sub;
+    } else {
+      const k = Math.min(shot.line.length - 1, Math.floor(Math.min(1, t / (shot.dur * 0.8)) * shot.line.length));
+      ancOnly = new Set(shot.line.slice(0, k + 1));
+      line = new Set(shot.line); anc = false;
+      focus = centre(shot.line[k]);
     }
-    if (shot.type === 'lineage') {
-      const p = lay.fish[shot.tip.id], fx = p.x + p.w / 2, fy = p.y + p.h / 2;
-      const z = 1 + 1.5 * e, s = s0 * z;
-      const sx = box.x + fx * s0 + (cx - box.x - fx * s0) * e, sy = box.y + fy * s0 + (cy - box.y - fy * s0) * e;
-      view = { s, ox: sx - fx * s, oy: sy - fy * s };
-      line = new Set(shot.line);
-      ancOnly = new Set(shot.line.slice(0, 1 + Math.floor(Math.min(1, t / (shot.dur * 0.8)) * shot.line.length)));
-      anc = false;
-    }
-    // The real theme (the inner copy has a clear paper), so the lineage
-    // colour matches a dark or a light paper.
-    drawTree(x, { tree: shot.tree, lay, view, theme: Object.assign({}, THEMES[shot.theme], { paper: THEMES[shot.theme].paper }), pen: pen * 0.8, dpr, tau, fishFor: id => shot.fish.get(id) || null,
-      anc, ancOnly, names: true, sel: shot.type === 'lineage' ? shot.tip.id : -1, line: line || new Set(), xMode: 'time' });
+    // Ease the camera toward the focus (the first frame jumps).
+    const now = performance.now(), dt = shot.camAt ? Math.min(0.1, (now - shot.camAt) / 1000) : 1;
+    shot.camAt = now;
+    if (!shot.cam) shot.cam = focus.slice();
+    const k2 = 1 - Math.exp(-dt * 2.2);
+    shot.cam[0] += (focus[0] - shot.cam[0]) * k2; shot.cam[1] += (focus[1] - shot.cam[1]) * k2;
+    const view = { s, ox: cx - shot.cam[0] * s, oy: cy - shot.cam[1] * s };
+    shot.tipCss = +(lay.tip.w * s / dpr).toFixed(1);
+    const th = THEMES[shot.theme];
+    drawTree(x, { tree: shot.tree, lay, view, theme: th, pen, dpr, tau,
+      fishFor: id => shot.fish.get(id) || null, anc, ancOnly, names: true, sel: shot.type === 'lineage' ? shot.line[shot.line.length - 1] : -1,
+      line: line || new Set(), xMode: 'time', back: true, paper: th.paper });
   }
 
   window.snSaver = {
@@ -349,7 +368,7 @@ export function installSaver(ctxIn) {
       V = null;
       onExit();
     },
-    debug() { return V ? { type: V.shot && V.shot.type, t0: V.shot && V.shot.t0, name: V.shot && V.shot.specs[0].name, theme: V.shot && V.shot.theme, count: V.count, band: V.band } : null; },
+    debug() { return V ? { tipCss: V.shot && V.shot.tipCss, type: V.shot && V.shot.type, t0: V.shot && V.shot.t0, name: V.shot && V.shot.specs[0].name, theme: V.shot && V.shot.theme, count: V.count, band: V.band } : null; },
   };
   return window.snSaver;
 }

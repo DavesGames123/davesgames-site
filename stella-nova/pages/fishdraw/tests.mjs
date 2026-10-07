@@ -341,6 +341,24 @@ test('tree layout: no two tip slots overlap (3 layouts, 4 sizes, up to 64 tips)'
     }
   }
 });
+test('tree natural layout: tips keep their size and never overlap (3 layouts, up to 64 tips)', () => {
+  for (const seed of [2, 3, 6, 11]) for (const maxTips of [3, 10, 24, 64]) {
+    const t = treeOf(seed, { maxTips, spec: maxTips > 30 ? 2.5 : 1 });
+    for (const kind of ['clado', 'radial', 'fan']) {
+      const L = layoutTree(t, kind, { tip: 40, ox: 7, oy: 3 });
+      ok(L.natural && L.w > 0 && L.h > 0, 'natural size');
+      const B = tipBoxes(t, L);
+      for (const b of B) {
+        const living = t.nodes[b.id].kind === 'tip';
+        ok(Math.abs(b.w - (living ? 40 : 34)) < 1e-9, `${kind}: tip box width ${b.w}`);
+        ok(b.x >= 7 - 1e-6 && b.y >= 3 - 1e-6 && b.x + b.w <= 7 + L.w + 1e-6 && b.y + b.h <= 3 + L.h + 1e-6, `${kind} ${maxTips}: tip box outside the layout`);
+      }
+      for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++)
+        ok(!overlap(B[i], B[j]), `${kind} ${maxTips} tips: natural slots ${i} and ${j} overlap`);
+      for (const q of t.nodes) if (q.children.length) ok(Math.abs(L.fish[q.id].w - 28) < 1e-9, 'ancestor fish is 0.7 of a tip');
+    }
+  }
+});
 test('tree: lineage runs root to node; param changes list real changes', () => {
   const t = treeOf(4), tip = t.tips[0], L = lineage(t, tip);
   eq(L[0], 0, 'starts at root'); eq(L[L.length - 1], tip, 'ends at tip');

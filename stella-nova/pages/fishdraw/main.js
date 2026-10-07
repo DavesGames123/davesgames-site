@@ -132,8 +132,21 @@ function plateNow() {
   const grid = S.mode === 'grid', G = S.grid;
   if (S.mode === 'tree') {
     const pt = TM.plateText();
-    return layoutPlate({ w: size.w, h: size.h, rows: 1, cols: 1, screen: cfg.page === 'screen', border: cfg.border, title: cfg.title, labels: false,
+    const mk = (w, h) => layoutPlate({ w, h, rows: 1, cols: 1, screen: cfg.page === 'screen', border: cfg.border, title: cfg.title, labels: false,
       titleText: S.title || pt.title, subText: pt.sub, footRight: 'davesgames.io', names: [], plateNo: 1 });
+    if (!natural()) return mk(size.w, size.h);
+    // The 'screen' page grows to the natural size of the tree, and to the
+    // aspect of the view, so the fish keep their size and the view pans.
+    const nat = TM.natSize(), asp = view.w / view.h;
+    let W = nat.w * 1.08, H = nat.h * 1.08, L = null;
+    for (let i = 0; i < 4; i++) {
+      if (W / H < asp) W = H * asp; else H = W / asp;
+      L = mk(W, H);
+      const C = L.content;
+      if (C.w >= nat.w - 1e-6 && C.h >= nat.h - 1e-6) break;
+      W += Math.max(0, nat.w - C.w) + 1; H += Math.max(0, nat.h - C.h) + 1;
+    }
+    return L;
   }
   const names = grid ? S.gspec.map(c => c.name) : [S.name];
   const sub = grid
@@ -171,8 +184,10 @@ function draw() {
     TM.draw(ctx, L, view);
     lastPlate = { L, view };
     placeCaption(L, view);
+    drawMinimap(L, view);
     return;
   }
+  $('minimap').classList.remove('on');
   drawPlate(ctx, {
     L, theme, ink: S.ink, pen: S.pen, jitter: S.jitter, view,
     fishes: grid ? S.gfish : [S.fish], progress: grid ? S.gprog : [S.anim.p], grain: S.grain ? grain : null,
@@ -207,6 +222,73 @@ function placeCaption(L, view) {
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// ── tree sizing and camera ──────────────────────────────────────────────────
+// The smallest on-screen length of a tip fish in the tree mode, CSS px.
+const minPx = () => (PHONE_Q.matches ? 90 : 120);
+// A tip fish in mm on the 'screen' page: 1.3 x the minimum at zoom 1.
+const tipMM = () => minPx() * 1.3 * MM_PER_PX;
+const natural = () => S.mode === 'tree' && plateCfg().page === 'screen';
+// Eases the view toward TM.cameraTarget (follow while the tree grows, then
+// an overview). Returns true when the view moved.
+function followCamera(dt, L) {
+  const fit = fitView(L).fit, c = TM.cameraTarget(L, fit);
+  if (!c) return false;
+  const v = S.view, e = 1 - Math.exp(-dt * 2.4);
+  const tx = -(c.x - L.w / 2) * fit * c.z, ty = -(c.y - L.h / 2) * fit * c.z;
+  const before = v.px + v.py + v.z;
+  v.z += (c.z - v.z) * e; v.px += (tx * v.z / c.z - v.px) * e; v.py += (ty * v.z / c.z - v.py) * e;
+  return Math.abs(v.px + v.py + v.z - before) > 0.01;
+}
+// The minimap: shown in the tree mode when the plate is larger than the
+// clear area at the current zoom. A tap or a drag on it moves the view.
+function drawMinimap(L, view) {
+  const mm = $('minimap');
+  const big = S.mode === 'tree' && !S.saver && (L.w * view.s / S.dpr > S.clear.w * 1.02 || L.h * view.s / S.dpr > S.clear.h * 1.02);
+  mm.classList.toggle('on', big);
+  if (!big) return;
+  const maxW = PHONE_Q.matches ? 120 : 180, maxH = PHONE_Q.matches ? 90 : 130;
+  const k = Math.min(maxW / L.w, maxH / L.h), W = Math.round(L.w * k), H = Math.round(L.h * k);
+  mm.style.width = W + 'px'; mm.style.height = H + 'px';
+  mm.width = W * S.dpr; mm.height = H * S.dpr;
+  const x = mm.getContext('2d'), th = THEMES[S.theme], q = k * S.dpr;
+  x.fillStyle = th.paper; x.fillRect(0, 0, mm.width, mm.height);
+  const lay = TM.layoutFor(L), tree = S.tr.tree;
+  x.strokeStyle = S.ink || th.ink; x.globalAlpha = 0.6; x.lineWidth = 1;
+  x.beginPath();
+  for (const n of tree.nodes) {
+    const b = lay.branch[n.id]; if (!b) continue;
+    x.moveTo(b.elbow[0][0] * q, b.elbow[0][1] * q);
+    for (const p of b.elbow) x.lineTo(p[0] * q, p[1] * q);
+    x.moveTo(b.run[0][0] * q, b.run[0][1] * q); x.lineTo(b.run[1][0] * q, b.run[1][1] * q);
+  }
+  x.stroke();
+  x.globalAlpha = 0.8; x.fillStyle = S.ink || th.ink;
+  for (const id of tree.tips) { const b = lay.fish[id]; if (b) x.fillRect(b.x * q, b.y * q, Math.max(2, b.w * q), Math.max(1.5, b.h * q)); }
+  // The part of the plate on screen.
+  const v0x = (S.clear.x * S.dpr - view.ox) / view.s, v0y = (S.clear.y * S.dpr - view.oy) / view.s;
+  const vw = S.clear.w * S.dpr / view.s, vh = S.clear.h * S.dpr / view.s;
+  x.globalAlpha = 1; x.strokeStyle = '#e3c48a'; x.lineWidth = 2 * S.dpr;
+  x.strokeRect(v0x * q, v0y * q, vw * q, vh * q);
+  mm.dataset.k = k;
+}
+function bindMinimap() {
+  const mm = $('minimap');
+  let down = false;
+  const go = e => {
+    if (!lastPlate) return;
+    const r = mm.getBoundingClientRect(), k = +mm.dataset.k || 1;
+    const mx = (e.clientX - r.left) / k, my = (e.clientY - r.top) / k;
+    const L = lastPlate.L, fit = fitView(L).fit;
+    S.tr.follow = false;
+    S.view.px = -(mx - L.w / 2) * fit * S.view.z; S.view.py = -(my - L.h / 2) * fit * S.view.z;
+    S.dirty = true;
+  };
+  mm.addEventListener('pointerdown', e => { down = true; try { mm.setPointerCapture(e.pointerId); } catch (x) { /* synthetic */ } go(e); });
+  mm.addEventListener('pointermove', e => { if (down) go(e); });
+  mm.addEventListener('pointerup', () => { down = false; });
+  mm.addEventListener('pointercancel', () => { down = false; });
+}
+
 // ── frame ───────────────────────────────────────────────────────────────────
 // Pen speed: the slider 0..1 maps to 400..40000 fish units per second.
 function penRate() { return 400 * Math.pow(100, S.anim.speed); }
@@ -221,6 +303,7 @@ function frame(now) {
     S.dirty = true;
   }
   if (S.mode === 'tree' && TM.tick(Math.min(0.1, (now - (a.last || now)) / 1000))) S.dirty = true;
+  if (S.mode === 'tree' && lastPlate && followCamera(Math.min(0.1, (now - (a.last || now)) / 1000), lastPlate.L)) S.dirty = true;
   if (S.mode === 'grid') {
     const dt = Math.min(0.1, (now - (a.last || now)) / 1000);
     for (let i = 0; i < S.gprog.length; i++) {
@@ -362,7 +445,7 @@ function setMode(m) {
   S.mode = m; S.hiCell = -1;
   resetView();
   if (m === 'grid') buildGrid();
-  else if (m === 'tree') { S.anim.p = null; TM.onSpecimen(); }
+  else if (m === 'tree') { S.anim.p = null; S.tr.follow = true; TM.onSpecimen(); }
   else { stopDrawOn(); refetch(); }
   $('treeCard').hidden = m !== 'tree' || S.tr.sel < 0;
   syncUI(); layout(); writeHash();
@@ -666,6 +749,7 @@ function bindKeys() {
 let onTap = null;
 function resetView() { S.view.z = 1; S.view.px = 0; S.view.py = 0; S.dirty = true; }
 function zoomAt(f, cx, cy) {
+  if (S.tr) S.tr.follow = false;
   const v = S.view, z = clamp(v.z * f, 0.5, 40), k = z / v.z;
   const ox = S.clear.x + S.clear.w / 2, oy = S.clear.y + S.clear.h / 2;
   v.px = (cx - ox) - (cx - ox - v.px) * k;
@@ -688,6 +772,7 @@ function bindView() {
     if (pts.size === 1) {
       S.view.px += p[0] - q[0]; S.view.py += p[1] - q[1];
       moved += Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]);
+      if (moved > 6 && S.tr) S.tr.follow = false;
       S.dirty = true;
     } else if (pts.size === 2 && pinch) {
       pts.set(e.pointerId, p);
@@ -725,6 +810,7 @@ function bindCells() {
     if (i >= 0) openCell(i);
   };
   onHover = (x, y) => {
+    if (S.mode === 'tree' && lastPlate) { const [mx, my] = plateAt(x, y); TM.hover(mx, my, lastPlate.L, lastPlate.view); return; }
     if (S.mode !== 'grid' || !lastPlate) return;
     const [mx, my] = plateAt(x, y), i = cellAt(lastPlate.L, mx, my);
     if (i !== S.hiCell) { S.hiCell = i; canvas.classList.toggle('cell', i >= 0); S.dirty = true; }
@@ -814,11 +900,11 @@ async function boot() {
   E = makeEngine(src);
   pool = createPool(4);
   TM = createTreeMode({ S, $, E: () => E, pool: () => pool, dirty: () => { S.dirty = true; }, busy: () => { S.dirty = true; },
-    writeHash, resetView, syncPlay, edited: () => Object.keys(diffParams(S.params, S.base)).length > 0,
+    writeHash, resetView, syncPlay, minPx, tipMM, natural, clearW: () => S.clear.w, edited: () => Object.keys(diffParams(S.params, S.base)).length > 0,
     openFish: (name, params) => { setMode('single'); showFish(name, params); },
     setSpecimen: (name, params) => showFish(name, params) });
   grain = makeGrain(11);
-  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells(); bindExport(); TM.bind();
+  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells(); bindExport(); TM.bind(); bindMinimap();
   if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
   addEventListener('resize', layout);
   layout();
@@ -833,6 +919,8 @@ async function boot() {
     onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; } });
   window.__fish = { S, pool, E, showFish, newFish, mutateFish, draw, plateNow, layout, setMode, buildGrid, openCell, TM, ready: true,
     // Plate mm to client px (for tests that click a fish).
+    // On-screen CSS px of the tip and ancestor fish of the tree, and the zoom.
+    treeSizes: () => { if (!lastPlate || !S.tr.lay) return null; const k = lastPlate.view.s / S.dpr, l = S.tr.lay; return { tip: +(l.tip.w * k).toFixed(1), anc: l.anc ? +(l.anc.w * k).toFixed(1) : null, z: +S.view.z.toFixed(2), follow: S.tr.follow, natural: !!l.natural }; },
     toClient: (x, y) => { if (!lastPlate) return null; const r = canvas.getBoundingClientRect(), v = lastPlate.view; return [r.left + (v.ox + x * v.s) / S.dpr, r.top + (v.oy + y * v.s) / S.dpr]; } };
 }
 boot().catch(err => { $('caption').textContent = 'Fishdraw failed to start: ' + err.message; console.error(err); });

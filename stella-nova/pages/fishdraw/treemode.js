@@ -35,7 +35,7 @@ export function createTreeMode(M) {
   const { S, $ } = M;
   const T = S.tr = {
     seed: (Math.random() * 4294967295) >>> 0 || 1, layout: 'clado', xMode: 'time',
-    mut: 1, spec: 1, ext: 1, tips: 20, rad: true, anc: true, names: true,
+    mut: 1, spec: 1, ext: 0.6, tips: 10, rad: true, anc: true, names: true, follow: true, hover: -1,
     tau: 0, playing: false, speed: 0.5, tree: null, rootKey: '', fish: new Map(), tag: '', seq: 0,
     sel: -1, line: new Set(), layKey: '', lay: null,
   };
@@ -50,7 +50,7 @@ export function createTreeMode(M) {
     T.tree = buildTree({ E: M.E(), rootName: S.name, rootParams: S.params, seed: T.seed, mut: T.mut, spec: T.spec, ext: T.ext, maxTips: T.tips, radiations: T.rad });
     T.rootKey = keyOf(S.name, S.params);
     T.fish = new Map(); T.sel = -1; T.line = new Set(); T.lay = null; T.layKey = '';
-    T.tau = grow ? 0 : TAU_END; T.playing = grow;
+    T.tau = grow ? 0 : TAU_END; T.playing = grow; T.follow = true; T.hover = -1;
     $('treeCard').hidden = true;
     const order = T.tree.nodes.slice().sort((a, b) => a.t - b.t);
     for (const n of order) {
@@ -64,10 +64,50 @@ export function createTreeMode(M) {
   function onSpecimen() { if (S.mode === 'tree' && (!T.tree || T.rootKey !== keyOf(S.name, S.params))) build(true); }
 
   // ── layoutFor ─────────────────────────────────────────────────────────────
+  // On the 'screen' page the layout has its natural size (tree.js
+  // layoutNatural): a tip fish is M.tipMM() wide, and main.js sizes the
+  // plate around it. On a paper page the tree fits the page.
+  function natSize() {
+    if (!T.tree) return { w: 100, h: 60 };
+    const k = 'n|' + T.seq + '|' + T.layout + '|' + M.tipMM().toFixed(3);
+    if (k !== T.natKey) { T.natKey = k; const l = layoutTree(T.tree, T.layout, { tip: M.tipMM() }); T.nat = { w: l.w, h: l.h }; }
+    return T.nat;
+  }
   function layoutFor(L) {
-    const C = L.content, k = [T.seq, T.layout, T.xMode, C.x, C.y, C.w, C.h].map(v => (typeof v === 'number' ? v.toFixed(3) : v)).join('|');
-    if (k !== T.layKey) { T.layKey = k; T.lay = layoutTree(T.tree, T.layout, { w: C.w, h: C.h, ox: C.x, oy: C.y, xMode: T.xMode }); }
+    const C = L.content, nat = M.natural();
+    const k = [T.seq, T.layout, T.xMode, C.x, C.y, C.w, C.h, nat, M.tipMM()].map(v => (typeof v === 'number' ? v.toFixed(3) : v)).join('|');
+    if (k !== T.layKey) {
+      T.layKey = k;
+      if (nat) { const n = natSize(); T.lay = layoutTree(T.tree, T.layout, { tip: M.tipMM(), ox: C.x + (C.w - n.w) / 2, oy: C.y + (C.h - n.h) / 2 }); }
+      else T.lay = layoutTree(T.tree, T.layout, { w: C.w, h: C.h, ox: C.x, oy: C.y, xMode: T.xMode });
+    }
     return T.lay;
+  }
+  // ── camera ──────────────────────────────────────────────────────────────
+  // While the tree grows, the view follows the newest fish at a zoom where
+  // a tip fish is 1.3 x the minimum size. When growth ends, an overview:
+  // the whole tree if it fits at the minimum size, else the minimum size
+  // centred on the tree. A pan or zoom by the user stops the follow.
+  // Returns { x, y (plate mm), z (zoom factor) } or null.
+  function cameraTarget(L, fit) {
+    if (!T.tree || !T.follow) return null;
+    const lay = layoutFor(L), tip = lay.tip.w;
+    const zMin = M.minPx() / (tip * fit);
+    if (T.tau < TAU_END) {
+      let best = T.tree.nodes[0];
+      for (const q of T.tree.nodes) if (q.t <= T.tau && q.t >= best.t && (T.anc || !q.children.length || q.id === 0)) best = q;
+      const b = lay.fish[best.id] || { x: lay.pos[best.id].x, y: lay.pos[best.id].y, w: 0, h: 0 };
+      return { x: b.x + b.w / 2, y: b.y + b.h / 2, z: Math.max(1, zMin * 1.3) };
+    }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const b of lay.fish) if (b) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
+    const z = Math.max(1, zMin);
+    let x = (x0 + x1) / 2;
+    // A cladogram wider than the view: the living tips (the last column)
+    // stay in view, near the right edge.
+    const vw = M.clearW() * 0.95 / (fit * z);
+    if (lay.kind === 'clado' && x1 - x0 > vw) x = x1 - vw / 2;
+    return { x, y: (y0 + y1) / 2, z };
   }
   function plateText() {
     if (!T.tree) return { title: 'Tree of life', sub: '' };
@@ -79,7 +119,8 @@ export function createTreeMode(M) {
     const lay = layoutFor(L);
     drawTree(ctx, Object.assign({
       tree: T.tree, lay, view, theme: THEMES[S.theme], ink: S.ink, pen: S.pen, jitter: S.jitter, dpr: S.dpr,
-      tau: T.tau, fishFor: id => T.fish.get(id) || null, anc: T.anc, names: T.names, sel: T.sel, line: T.line, xMode: T.xMode,
+      tau: T.tau, fishFor: id => T.fish.get(id) || null, anc: T.anc, names: T.names, sel: T.sel >= 0 ? T.sel : T.hover, line: T.line, xMode: T.xMode,
+      back: true, paper: THEMES[S.theme].paper,
     }, extra));
   }
   function tick(dt) {
@@ -98,9 +139,26 @@ export function createTreeMode(M) {
     select(id);
   }
   function select(id) {
-    T.sel = id;
+    T.sel = id; T.hover = -1;
     T.line = id >= 0 ? new Set(lineage(T.tree, id)) : new Set();
-    if (id >= 0) fillCard(); else $('treeCard').hidden = true;
+    if (id >= 0) fillCard(id); else $('treeCard').hidden = true;
+    $('treeCard').classList.toggle('pinned', id >= 0);
+    M.dirty();
+  }
+  // Hover (a mouse): the card shows the fish under the cursor until the
+  // cursor leaves it, unless a click pinned another fish.
+  function hover(x, y, L, view) {
+    if (!T.tree || T.sel >= 0) return;
+    const lay = layoutFor(L);
+    let id = -1;
+    for (const q of T.tree.nodes) {
+      const b = lay.fish[q.id];
+      if (b && (!b.anc || T.anc) && T.fish.get(q.id) && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { id = q.id; break; }
+    }
+    if (id === T.hover) return;
+    T.hover = id;
+    T.line = id >= 0 ? new Set(lineage(T.tree, id)) : new Set();
+    if (id >= 0) fillCard(id); else $('treeCard').hidden = true;
     M.dirty();
   }
   function kindText(q) {
@@ -111,8 +169,8 @@ export function createTreeMode(M) {
     return `Split ${maAgo(q.t)} Ma, ${era}` + (q.radiation ? ' · a radiation' : '');
   }
   // ── fillCard ──────────────────────────────────────────────────────────────
-  function fillCard() {
-    const q = T.tree.nodes[T.sel], root = T.tree.nodes[0];
+  function fillCard(id) {
+    const q = T.tree.nodes[id], root = T.tree.nodes[0];
     $('treeCard').hidden = false;
     $('cardName').innerHTML = `<i>${esc(q.name)}</i>`;
     $('cardMeta').textContent = kindText(q) + ` · ${lineage(T.tree, q.id).length - 1} steps from the root`;
@@ -128,7 +186,8 @@ export function createTreeMode(M) {
     drawCardFish();
   }
   function drawCardFish() {
-    const c = $('cardFish'), f = T.sel >= 0 ? T.fish.get(T.sel) : null;
+    const id = T.sel >= 0 ? T.sel : T.hover;
+    const c = $('cardFish'), f = id >= 0 ? T.fish.get(id) : null;
     const r = c.getBoundingClientRect(), dpr = S.dpr;
     c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
     const x = c.getContext('2d'), th = THEMES[S.theme];
@@ -166,7 +225,7 @@ export function createTreeMode(M) {
   function togglePlay() {
     if (!T.tree) return;
     if (T.playing) T.playing = false;
-    else { if (T.tau >= TAU_END) T.tau = 0; T.playing = true; }
+    else { if (T.tau >= TAU_END) T.tau = 0; T.playing = true; T.follow = true; }
     syncPlay(); M.dirty();
   }
   let rebuildTimer = 0;
@@ -175,7 +234,7 @@ export function createTreeMode(M) {
     for (const b of $('treeLayout').children) b.addEventListener('click', () => { T.layout = b.dataset.l; T.layKey = ''; M.resetView(); syncUI(); M.dirty(); M.writeHash(); });
     for (const b of $('treeX').children) b.addEventListener('click', () => { T.xMode = b.dataset.x; T.layKey = ''; syncUI(); M.dirty(); M.writeHash(); });
     $('treePlay').addEventListener('click', togglePlay);
-    $('treeRestart').addEventListener('click', () => { T.tau = 0; T.playing = true; syncUI(); M.dirty(); });
+    $('treeRestart').addEventListener('click', () => { T.tau = 0; T.playing = true; T.follow = true; syncUI(); M.dirty(); });
     $('treeTime').addEventListener('input', e => { T.tau = +e.target.value / 1000 * TAU_END; T.playing = false; syncPlay(); syncScrub(); M.dirty(); });
     const num = (id, key, re) => $(id).addEventListener('input', e => { T[key] = +e.target.value; syncUI(); if (re) rebuildSoon(); M.writeHash(); });
     num('treeMut', 'mut', true); num('treeSpec', 'spec', true); num('treeExt', 'ext', true); num('treeTips', 'tips', true); num('treeSpeed', 'speed', false);
@@ -212,5 +271,5 @@ export function createTreeMode(M) {
     return JSON.stringify({ seed: T.seed, opts: T.tree.opts, eras: T.tree.eras,
       nodes: T.tree.nodes.map(n => ({ id: n.id, parent: n.parent, kind: n.kind, t: +n.t.toFixed(4), ma: maAgo(n.t), name: n.name, genus: n.genus, radiation: n.radiation, params: n.params })) }, null, 1);
   }
-  return { T, build, onSpecimen, layoutFor, plateText, draw, tick, tap, select, syncUI, bind, togglePlay, shareState, readShare, svgOf, json, drawCardFish };
+  return { T, build, onSpecimen, layoutFor, natSize, cameraTarget, plateText, draw, tick, tap, hover, select, syncUI, bind, togglePlay, shareState, readShare, svgOf, json, drawCardFish };
 }

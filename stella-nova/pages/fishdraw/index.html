@@ -72,6 +72,7 @@
   <canvas id="view" aria-label="Fish drawing. Drag to pan, wheel or pinch to zoom."></canvas>
   <div id="caption"></div>
   <div id="busy" hidden>Drawing…</div>
+  <canvas id="minimap" aria-label="Minimap of the tree. Tap to move the view."></canvas>
   <div id="treeCard" hidden>
     <button id="cardClose" aria-label="Close">✕</button>
     <canvas id="cardFish"></canvas>
@@ -141,7 +142,7 @@
 
   <div id="treeSec" hidden>
     <div class="sec-label">Tree of life</div>
-    <p class="hint">The specimen is the ancestor. Its params drift down each branch; lineages split and die out. Click a fish or a branch to follow its lineage.</p>
+    <p class="hint">The specimen is the ancestor. Its params drift down each branch; lineages split and die out. Each column or ring is one split. Click a fish or a branch to follow its lineage; drag to pan a large tree.</p>
     <div class="seg three" id="treeLayout">
       <button data-l="clado" class="on">Cladogram</button>
       <button data-l="radial">Radial</button>
@@ -165,9 +166,9 @@
     <div class="prm"><div class="nm">Speciation rate</div><span class="val" id="treeSpecV"></span>
       <input type="range" id="treeSpec" min="0.3" max="2.5" step="0.05" value="1" aria-label="Speciation rate"></div>
     <div class="prm"><div class="nm">Extinction rate</div><span class="val" id="treeExtV"></span>
-      <input type="range" id="treeExt" min="0" max="3" step="0.05" value="1" aria-label="Extinction rate"></div>
+      <input type="range" id="treeExt" min="0" max="3" step="0.05" value="0.6" aria-label="Extinction rate"></div>
     <div class="prm"><div class="nm">Living tips, at most</div><span class="val" id="treeTipsV"></span>
-      <input type="range" id="treeTips" min="3" max="64" step="1" value="20" aria-label="Most living tips"></div>
+      <input type="range" id="treeTips" min="3" max="64" step="1" value="10" aria-label="Most living tips"></div>
     <div class="btns">
       <button id="treeRad" class="on" title="Bursts of fast splitting">Radiations</button>
       <button id="treeAnc" class="on" title="Fish at the split points">Ancestors</button>

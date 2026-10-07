@@ -219,6 +219,7 @@ export const PARAM_LABEL = k => (PARAM_BY_KEY[k] || {}).label || k;
 // pos and fish are in mm. branch[id] runs from the parent to node id:
 // elbow is drawn as soon as the parent exists, run grows with time.
 export function layoutTree(tree, kind, o) {
+  if (o.tip) return layoutNatural(tree, kind, o);
   const { nodes } = tree, n = tree.tips.length;
   const W = o.w, H = o.h, OX = o.ox || 0, OY = o.oy || 0;
   const maxC = Math.max(1e-9, ...nodes.map(q => q.change));
@@ -315,6 +316,101 @@ export function layoutTree(tree, kind, o) {
   const as = s * 0.45;
   for (const q of nodes) if (q.children.length) fish[q.id] = { x: pos[q.id].x - as / 2, y: pos[q.id].y - as * 0.3, w: as, h: as * 0.6, anc: true };
   Object.assign(out, { tip: { w: s, h: s * 0.6 }, cx, cy, rOf, Rf, rT, fan, a0, span });
+  return out;
+}
+
+// ── layoutNatural ───────────────────────────────────────────────────────────
+// The layout for the screen: the fish set the size, not the box. o.tip is
+// the width of a tip fish in mm; the layout is as large as it must be and
+// returns its own w and h (the view pans when it does not fit). Branches
+// are short: each split is one column (cladogram) or one ring (radial,
+// fan) further out, so the fish, not the lines, fill the plate. Ancestor
+// fish are ANC of the tip size and sit on their node. Every tip (living or
+// extinct) has its own row or its own angle, so tip boxes never overlap.
+//   clado   one row per tip; columns by depth; living tips in the last
+//           column; an extinct tip at its own depth, its fish on the node
+//   radial  rings by depth; all tip fish on the outer ring, at a radius
+//           where neighbours are more than the box diagonal apart
+//   fan     the radial layout on a half circle that opens upward
+export const ANC = 0.7;
+function layoutNatural(tree, kind, o) {
+  const { nodes } = tree, n = tree.tips.length, s = o.tip, OX = o.ox || 0, OY = o.oy || 0;
+  const order = [], slot = new Array(nodes.length), post = [];
+  (function walk(id) { const q = nodes[id]; if (!q.children.length) { slot[id] = order.length; order.push(id); } q.children.forEach(walk); post.push(id); })(tree.root);
+  const pos = new Array(nodes.length), fish = new Array(nodes.length).fill(null), branch = new Array(nodes.length).fill(null);
+  const D = Math.max(1, ...nodes.filter(q => q.children.length).map(q => q.depth));
+  const aw = s * ANC, ah = aw * 0.6, fh = s * 0.6;
+  const out = { kind, pos, fish, branch, order, natural: true, tip: { w: s, h: fh }, anc: { w: aw, h: ah } };
+  if (kind === 'clado') {
+    const rowH = fh * 1.38, colW = aw * 1.22, top = fh * 0.45, x0 = aw * 0.6;
+    const tipX = x0 + (D + 1) * colW;
+    for (const id of post) {
+      const q = nodes[id];
+      if (!q.children.length) {
+        const x = q.kind === 'extinct' ? x0 + q.depth * colW : tipX;
+        pos[id] = { x: OX + x, y: OY + top + (slot[id] + 0.5) * rowH };
+      } else {
+        const ys = q.children.map(c => pos[c].y);
+        pos[id] = { x: OX + x0 + q.depth * colW, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+      }
+    }
+    const gap = s * 0.05;
+    for (const q of nodes) {
+      const p = pos[q.id];
+      if (!q.children.length) {
+        const w = q.kind === 'extinct' ? s * 0.85 : s, h = w * 0.6;
+        fish[q.id] = q.kind === 'extinct' ? { x: p.x + gap, y: p.y - h / 2, w, h } : { x: p.x + gap, y: p.y - h / 2, w, h };
+      } else fish[q.id] = { x: p.x - aw / 2, y: p.y - ah / 2, w: aw, h: ah, anc: true };
+      if (q.parent >= 0) {
+        const pp = pos[q.parent];
+        branch[q.id] = { elbow: [[pp.x, pp.y], [pp.x, p.y]], run: [[pp.x, p.y], [p.x, p.y]] };
+      }
+    }
+    // An extinct tip column can reach past the living tip column (deep
+    // extinct lineage): the width covers every fish box.
+    let maxX = 0;
+    for (const b of fish) if (b) maxX = Math.max(maxX, b.x + b.w - OX);
+    out.w = maxX + s * 0.1; out.h = top * 2 + n * rowH;
+    out.depthX = d => OX + x0 + d * colW;
+    return out;
+  }
+  const fan = kind === 'fan';
+  const span = fan ? Math.PI * 0.94 : Math.PI * 2;
+  const a0 = fan ? Math.PI + Math.PI * 0.03 : -Math.PI / 2;
+  const dA = span / Math.max(1, n);
+  const ringW = aw * 1.15;
+  const chordR = n > 1 ? 1.25 * s / (2 * Math.sin(Math.min(Math.PI / 2, dA / 2))) : s;
+  const Rf = Math.max(chordR, ringW * (D + 1) + s * 0.75);
+  const Rout = Rf + s * 0.62 + fh * 0.3;
+  const W = 2 * Rout, H = fan ? Rout + s * 0.4 : 2 * Rout;
+  const cx = OX + W / 2, cy = fan ? OY + H - s * 0.4 : OY + H / 2;
+  const tipR = Rf - s * 0.62;
+  const rOfDepth = d => (fan ? s * 0.35 : 0) + ringW * d;
+  for (const id of post) {
+    const q = nodes[id];
+    let a;
+    if (!q.children.length) a = a0 + (fan ? slot[id] + 0.5 : slot[id]) * dA;
+    else { const as = q.children.map(c => pos[c].a); a = (Math.min(...as) + Math.max(...as)) / 2; }
+    const r = q.children.length ? rOfDepth(q.depth) : q.kind === 'extinct' ? Math.min(tipR, rOfDepth(q.depth)) : tipR;
+    pos[id] = { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), a, r };
+  }
+  const arc = (r, a, b) => {
+    const k = Math.max(2, Math.ceil(Math.abs(b - a) / 0.05)), pts = [];
+    for (let i = 0; i <= k; i++) { const t = a + (b - a) * i / k; pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); }
+    return pts;
+  };
+  for (const q of nodes) {
+    const c = pos[q.id];
+    if (!q.children.length) {
+      const w = q.kind === 'extinct' ? s * 0.85 : s, h = w * 0.6;
+      fish[q.id] = { x: cx + Rf * Math.cos(c.a) - w / 2, y: cy + Rf * Math.sin(c.a) - h / 2, w, h };
+    } else fish[q.id] = { x: c.x - aw / 2, y: c.y - ah / 2, w: aw, h: ah, anc: true };
+    if (q.parent >= 0) {
+      const p = pos[q.parent];
+      branch[q.id] = { elbow: arc(p.r, p.a, c.a), run: [[cx + p.r * Math.cos(c.a), cy + p.r * Math.sin(c.a)], [c.x, c.y]] };
+    }
+  }
+  Object.assign(out, { w: W, h: H, cx, cy, Rf, fan, a0, span, rOf: t => rOfDepth(t / T_MAX * (D + 1)), ringW, rOfDepth, D });
   return out;
 }
 
