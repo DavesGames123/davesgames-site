@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex, nofollow">
+<title>Site Statistics — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SITE STATISTICS  ·  page shell, opened at davesgames.io/stella-nova/#stats
+  ───────────────────────────────────────────────────────────────────────────
+   A hidden page (SN_HIDDEN in lib/nav-data.js): no sidebar row, no home
+   card, noindex. It reads totals from the sn-stats Worker (worker/), and
+   the Worker answers only with the key. The key comes from the form, or
+   once from the route #stats/key=<key>. localStorage 'sn-stats-key' keeps
+   it on this browser. The page itself is never counted.
+
+   Files
+     main.js       fetch, key gate, range bar, every card
+     charts.js     SVG and HTML charts with hover tooltips
+     countries.js  ISO alpha-2 -> [numeric id, name] for the map
+     data/growth.json   git history (tools/stats-growth.mjs)
+     worker/       the Cloudflare Worker, D1 schema and wrangler config
+
+   grep -n targets (main.js): "function buildCards", "async function load",
+     "function gate", "const RANGES"
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link href="../../vendor/fonts/space-grotesk+ibm-plex-mono+instrument-serif.8331e2ec.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="../../lib/nav-data.js"></script>
+<script src="../../vendor/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script type="module" src="main.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="ttl">
+    <p class="kicker">// davesgames.io &middot; private</p>
+    <h1>Site <em>statistics</em></h1>
+    <p class="since" id="since">Totals only. No visitor is named or kept.</p>
+  </div>
+  <div class="live" id="live" hidden>
+    <span class="pulse"></span>
+    <div><b id="live-n">0</b><span>on the site now</span></div>
+    <ol id="live-pages"></ol>
+  </div>
+</header>
+
+<nav class="bar" id="bar" hidden>
+  <div class="ranges" id="ranges" role="tablist" aria-label="Date range"></div>
+  <div class="bar-r">
+    <span class="upd" id="upd"></span>
+    <button type="button" id="refresh" title="Fetch again">Refresh</button>
+    <label class="optout"><input type="checkbox" id="optout"> Do not count this browser</label>
+    <button type="button" id="forget" class="ghost" title="Remove the key from this browser">Lock</button>
+  </div>
+</nav>
+
+<section class="gate" id="gate" hidden>
+  <form id="gate-form">
+    <h2>Enter the stats key</h2>
+    <p>The key is the STATS_KEY secret of the sn-stats Worker. This browser keeps it after one entry.</p>
+    <input id="gate-key" type="password" autocomplete="current-password" placeholder="key" required>
+    <button type="submit">Open</button>
+    <p class="err" id="gate-err" hidden></p>
+  </form>
+</section>
+
+<section class="gate" id="nodeploy" hidden>
+  <div>
+    <h2>Counting is not on yet</h2>
+    <p>The sn-stats Worker is not deployed, so no visit is counted. Deploy it from <code>stella-nova/pages/stats/worker</code> (steps in <code>wrangler.toml</code>), then set <code>STATS_URL</code> in <code>lib/stats-beacon.js</code>.</p>
+    <p>The site growth history below comes from git and needs no Worker.</p>
+  </div>
+</section>
+
+<main id="dash"></main>
+</body>
+</html>
