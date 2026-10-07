@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { plateSVG, platePolylines } from './svg.js';
+import { buildTree, layoutTree, tipBoxes, drift, lineage, paramChanges, TIP_CAP, T_MAX } from './tree.js';
 import { THEMES } from './plate.js';
 import { layoutPlate, pageSize, PAGES, GRID_PRESETS, cellAt, MM_PER_PX } from './plate.js';
 import { makeEngine, drawFish, baseParams, PARAMS, GROUPS, sanitize, mutate, mulberry, diffParams,
@@ -238,9 +239,91 @@ test('plate polylines stay in their cells, in mm', () => {
   for (const pl of lines) for (const [x, y] of pl) ok(x >= 0 && y >= 0 && x <= L.w && y <= L.h, 'point off the plate');
 });
 
+// ── tree of life ────────────────────────────────────────────────────────────
+function treeOf(seed, extra = {}) {
+  const E = makeEngine(SRC), name = 'Colus splennita';
+  return buildTree(Object.assign({ E, rootName: name, rootParams: baseParams(E, name), seed, maxTips: 24 }, extra));
+}
+const treeKey = t => JSON.stringify(t.nodes.map(n => [n.parent, n.kind, +n.t.toFixed(9), n.name, PARAMS.map(d => n.params[d.key])]));
+test('tree: the same seed gives the same tree, names and fish', () => {
+  for (const seed of [1, 7, 99]) {
+    const a = treeOf(seed), b = treeOf(seed);
+    eq(treeKey(a), treeKey(b), 'tree ' + seed);
+    const tip = a.nodes[a.tips[a.tips.length - 1]];
+    const fa = drawFish(makeEngine(SRC), tip.name, tip.params, false).polylines;
+    const fb = drawFish(makeEngine(SRC), tip.name, tip.params, false).polylines;
+    ok(sameLines(fa, fb), 'tip fish ' + seed);
+  }
+  ok(treeKey(treeOf(1)) !== treeKey(treeOf(2)), 'seeds 1 and 2 give the same tree');
+});
+test('tree: shape rules (root, first split, tips at T, cap, living tips)', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const t = treeOf(seed, { maxTips: 4 + (seed % 5) * 12 });
+    eq(t.nodes[0].kind, 'root', 'root');
+    for (const n of t.nodes) {
+      if (n.parent >= 0) ok(n.t >= t.nodes[n.parent].t, 'child before parent');
+      if (n.kind === 'tip') eq(n.t, T_MAX, 'tip time');
+      if (n.kind === 'split') ok(n.children.length === 2, 'split with two children');
+    }
+    const alive = t.nodes.filter(n => n.kind === 'tip').length;
+    ok(alive <= Math.min(TIP_CAP, t.opts.maxTips), `seed ${seed}: ${alive} tips over the cap`);
+    ok(alive >= Math.min(3, t.opts.maxTips), `seed ${seed}: only ${alive} living tips`);
+    eq(new Set(t.nodes.map(n => n.name)).size, t.nodes.length, 'names are unique');
+  }
+});
+test('tree: drift and mutate keep every param in its valid range', () => {
+  const rnd = mulberry(5);
+  const check = (p, why) => {
+    for (const d of PARAMS) {
+      const v = p[d.key];
+      ok(Number.isFinite(v), why + ' ' + d.key + ' not finite');
+      if (d.kind === 'float') ok(v >= d.min - 1e-9 && v <= d.max + 1e-9, `${why} ${d.key}=${v}`);
+      else { ok(Number.isInteger(v) && v >= d.min && v <= d.max, `${why} ${d.key}=${v}`); }
+    }
+  };
+  for (let seed = 1; seed <= 12; seed++) for (const n of treeOf(seed, { mut: 3 }).nodes) check(n.params, 'tree node');
+  const E = makeEngine(SRC);
+  let p = baseParams(E, 'Xipola nare');
+  for (let i = 0; i < 400; i++) { p = drift(p, 60, 3, rnd); check(p, 'drift'); }
+  for (let i = 0; i < 200; i++) check(mutate(p, 1, rnd), 'mutate');
+});
+test('tree: every tip fish draws, no NaN in any polyline', () => {
+  const t = treeOf(11, { maxTips: 14, mut: 2 }), E = makeEngine(SRC);
+  for (const id of t.tips) {
+    const n = t.nodes[id], f = drawFish(E, n.name, n.params, false);
+    ok(f.polylines.length > 20, n.name + ' drew too few lines');
+    for (const pl of f.polylines) for (const pt of pl) ok(Number.isFinite(pt[0]) && Number.isFinite(pt[1]), n.name + ' has NaN');
+  }
+});
+test('tree layout: no two tip slots overlap (3 layouts, 4 sizes, up to 64 tips)', () => {
+  const sizes = [[300, 200], [120, 260], [400, 120], [90, 90]];
+  for (const seed of [2, 3, 6]) for (const maxTips of [3, 24, 64]) {
+    const t = treeOf(seed, { maxTips, spec: maxTips > 30 ? 2.5 : 1 });
+    for (const kind of ['clado', 'radial', 'fan']) for (const [w, h] of sizes) for (const xMode of ['time', 'change']) {
+      const L = layoutTree(t, kind, { w, h, ox: 10, oy: 5, xMode });
+      const B = tipBoxes(t, L);
+      for (const b of B) ok([b.x, b.y, b.w, b.h].every(Number.isFinite) && b.w > 0, 'bad box');
+      for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++)
+        ok(!overlap(B[i], B[j]), `${kind} ${w}x${h} ${maxTips} tips: slots ${i} and ${j} overlap`);
+    }
+  }
+});
+test('tree: lineage runs root to node; param changes list real changes', () => {
+  const t = treeOf(4), tip = t.tips[0], L = lineage(t, tip);
+  eq(L[0], 0, 'starts at root'); eq(L[L.length - 1], tip, 'ends at tip');
+  for (let i = 1; i < L.length; i++) eq(t.nodes[L[i]].parent, L[i - 1], 'parent chain');
+  const ch = paramChanges(t.nodes[0].params, t.nodes[tip].params);
+  for (const c of ch) ok(t.nodes[0].params[c.key] !== t.nodes[tip].params[c.key], 'listed a field that did not change');
+});
+
+// node tests.mjs <text> runs only the tests whose name holds <text>.
+const only = process.argv[2] || '';
 for (const [name, fn] of tests) {
-  try { await fn(); console.log('ok   ', name); }
+  if (only && !name.includes(only)) continue;
+  const t0 = Date.now();
+  try { await fn(); console.log('ok   ', name, `(${Date.now() - t0} ms)`); }
   catch (e) { fails++; console.log('FAIL ', name, '\n      ', e.message); }
 }
-console.log(`${tests.length - fails}/${tests.length} passed`);
+const ran = tests.filter(([n]) => !only || n.includes(only)).length;
+console.log(`${ran - fails}/${ran} passed`);
 process.exit(fails);
