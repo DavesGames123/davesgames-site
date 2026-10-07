@@ -85,8 +85,12 @@ ok(unitAt(PERIODS, 65.99)[0] === 'Paleogene' && unitAt(PERIODS, 66.01)[0] === 'C
 
 // ── 3. data files ───────────────────────────────────────────────────────────
 console.log('3. data files');
-const dem = B('data/dem.bin'), M = meta.dem;
-ok(dem.length === M.w * M.h * M.times.length, `dem.bin: ${M.times.length} frames of ${M.w}x${M.h}`, dem.length + ' bytes');
+const M = meta.dem, chunks = M.files.map(f => B('data/' + f));
+const dem = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
+chunks.reduce((o, c) => (dem.set(c, o), o + c.length), 0);
+ok(dem.length === M.w * M.h * M.times.length, `dem chunks: ${M.files.length} files, ${M.times.length} frames of ${M.w}x${M.h}`, dem.length + ' bytes');
+ok(chunks.every((c, i) => c.length === Math.min(M.chunk, M.times.length - i * M.chunk) * M.w * M.h), `each chunk holds ${M.chunk} frames (the last the rest)`);
+ok(!fs.existsSync(path.join(HERE, 'data/dem.bin')), 'no stale data/dem.bin next to the chunks');
 ok(M.times[0] === 0 && M.times[M.times.length - 1] === 540 && M.times.every((t, i) => !i || t > M.times[i - 1]), 'frame ages rise from 0 to 540 Ma');
 ok(raster.length === meta.raster.w * meta.raster.h && raster.every(v => v === 255 || v < polyJ.poly.length), `plateidx.bin: ${meta.raster.w}x${meta.raster.h}, indices < ${polyJ.poly.length} or 255`);
 const everest = elevAt(dem, M, 0, 28, 87), pacific = elevAt(dem, M, 0, -30, -130), paris = elevAt(dem, M, 0, 48.9, 2.3);
@@ -100,7 +104,8 @@ ok(over.coast.length > 100 && over.coast.every(r => r.length % 2 === 1 && r.leng
 ok(cities.rows.length > 5000 && cities.rows[0][4] >= cities.rows[100][4], `cities: ${cities.rows.length} places, sorted by population`);
 ok(bounds.times[0] === 0 && bounds.frames.length === bounds.times.length, `boundaries: ${bounds.frames.length} frames, ${bounds.times[0]}-${bounds.times[bounds.times.length - 1]} Ma`);
 let total = 0;
-for (const f of fs.readdirSync(path.join(HERE, 'data'))) total += fs.statSync(path.join(HERE, 'data', f)).size;
+const walk = d => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f), st = fs.statSync(q); if (st.isDirectory()) walk(q); else total += st.size; } };
+walk(path.join(HERE, 'data'));
 ok(total < 25e6, 'shipped data under 25 MB', (total / 1e6).toFixed(2) + ' MB');
 
 // ── 4. fossils vs PBDB PALEOMAP coordinates ─────────────────────────────────

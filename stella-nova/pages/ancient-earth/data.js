@@ -6,17 +6,19 @@
 //  the live host gzips .bin files, so content-length is the compressed
 //  size and must never size a buffer. It only drives the progress bar.
 //
-//  The DEM (data/dem.bin) is N frames of 360 x 181 uint8 codes, row 0 at
-//  90 S, column 0 at 180 W, 1 deg cells. Codes 0..127 are sea floor and
-//  128..255 land, on a square-root scale (decodeElev). prepareDem makes the
-//  RG8 texture layers: R the code, G the distance from the coast inland
+//  The DEM (data/dem/dem-NN.bin, 10 frames per file) is N frames of
+//  360 x 181 uint8 codes, row 0 at 90 S, column 0 at 180 W, 1 deg cells.
+//  Codes 0..127 are sea floor and 128..255 land, on a square-root scale
+//  (decodeElev). prepareDem and dem-worker.js make the RG8 texture layers: R the code, G the distance from the coast inland
 //  (km / 16, so 255 = 4080 km or more) for the aridity estimate.
 //
 //  grep -n targets
 //    streamed fetch ........ "export async function fetchBytes"
 //    elevation decode ...... "export function decodeElev"
 //    coast distance ........ "function coastDistance"
-//    everything at once .... "export async function loadAll"
+//    first-frame data ...... "export async function loadCore"
+//    later data ............ "export function loadLazy"
+//    DEM chunks + worker ... "export class DemStream"
 // ============================================================================
 
 export async function fetchBytes(url, onProgress) {
@@ -52,7 +54,7 @@ export function decodeElev(c, zmin = -9000, zmax = 6000) {
 // Distance from each land cell to the nearest sea cell, in km, by two
 // chamfer passes on the 1 deg grid (east-west steps shrink with cos(lat)),
 // run twice so the distance carries across the 180 deg seam.
-function coastDistance(codes, W, H, out) {
+export function coastDistance(codes, W, H, out) {
   const INF = 1e9, d = new Float32Array(W * H);
   for (let i = 0; i < W * H; i++) d[i] = codes[i] >= 128 ? INF : 0;
   const dy = 111.2;
@@ -117,19 +119,90 @@ export function elevAt(bytes, meta, t, lat, lon) {
   return bil(fr.a) * (1 - fr.f) + bil(fr.b) * fr.f;
 }
 
-export async function loadAll(base, onProgress) {
-  const parts = { meta: 0, rot: 0, poly: 0, raster: 0, dem: 0, over: 0, cities: 0, fossils: 0, bounds: 0 };
-  const weight = { meta: 0.2, rot: 0.5, poly: 1, raster: 6, dem: 40, over: 3, cities: 3, fossils: 5, bounds: 2 };
-  const total = Object.values(weight).reduce((a, b) => a + b, 0);
-  const prog = k => v => { parts[k] = v; onProgress && onProgress(Object.keys(parts).reduce((s, q) => s + parts[q] * weight[q], 0) / total); };
+// ── progressive loading ─────────────────────────────────────────────────────
+// Core: what the first frame needs besides the DEM (about 120 KB).
+export async function loadCore(base) {
   const u = f => new URL('data/' + f, base).href;
-  const [meta, rot, poly, raster, dem, over, cities, fossils, bounds] = await Promise.all([
-    fetchJSON(u('meta.json'), prog('meta')), fetchJSON(u('rotations.json'), prog('rot')), fetchJSON(u('polygons.json'), prog('poly')),
-    fetchBytes(u('plateidx.bin'), prog('raster')), fetchBytes(u('dem.bin'), prog('dem')), fetchJSON(u('overlays.json'), prog('over')),
-    fetchJSON(u('cities.json'), prog('cities')), fetchJSON(u('fossils.json'), prog('fossils')), fetchJSON(u('boundaries.json'), prog('bounds')),
-  ]);
-  const n = meta.dem.w * meta.dem.h * meta.dem.times.length;
-  if (dem.length !== n) throw new Error('dem.bin: ' + dem.length + ' bytes, expected ' + n);
-  if (raster.length !== meta.raster.w * meta.raster.h) throw new Error('plateidx.bin: wrong size ' + raster.length);
-  return { meta, rot, poly, raster, dem, over, cities, fossils, bounds };
+  const [meta, rot, poly] = await Promise.all([fetchJSON(u('meta.json')), fetchJSON(u('rotations.json')), fetchJSON(u('polygons.json'))]);
+  if (!meta.dem.files) throw new Error('meta.json: no DEM chunk list');
+  return { meta, rot, poly };
+}
+// The rest, each as a promise, started after the first frame.
+export function loadLazy(base) {
+  const u = f => new URL('data/' + f, base).href;
+  return {
+    raster: fetchBytes(u('plateidx.bin')),
+    over: fetchJSON(u('overlays.json')),
+    cities: fetchJSON(u('cities.json')),
+    fossils: fetchJSON(u('fossils.json')),
+    bounds: fetchJSON(u('boundaries.json')),
+  };
+}
+
+// DEM chunks (data/dem/dem-NN.bin, meta.dem.chunk frames each), fetched
+// in order of distance from the first age, one ahead of the decoder. The
+// coast distance (the chamfer passes) runs in dem-worker.js, so the main
+// thread never runs it; without module workers it runs here.
+//   codes   all frames' raw codes (elevAt reads these)
+//   rg      the RG8 texture layers [code, coast km / 16]
+//   loaded  1 per frame that is in both arrays
+//   first   a promise for the chunk of the first age
+// onChunk(firstFrame, nFrames) runs on the main thread after each chunk.
+export class DemStream {
+  constructor(base, meta, firstAge, onChunk) {
+    const M = meta.dem, n = M.w * M.h;
+    this.M = M; this.n = n; this.onChunk = onChunk;
+    this.codes = new Uint8Array(n * M.times.length);
+    this.rg = new Uint8Array(n * 2 * M.times.length);
+    this.loaded = new Uint8Array(M.times.length);
+    const c0 = Math.floor(framesAt(M.times, firstAge).a / M.chunk);
+    this.order = M.files.map((f, i) => i).sort((a, b) => Math.abs(a - c0) - Math.abs(b - c0) || b - a);
+    this.urls = M.files.map(f => new URL('data/' + f, base).href);
+    this.pending = new Map();
+    try {
+      this.worker = new Worker(new URL('dem-worker.js', import.meta.url), { type: 'module' });
+      this.worker.onmessage = e => { const r = this.pending.get(e.data.id); if (r) { this.pending.delete(e.data.id); r(e.data.rg); } };
+      this.worker.onerror = () => { this.worker = null; for (const [id, r] of this.pending) r(null); this.pending.clear(); };
+    } catch { this.worker = null; }
+    let firstDone;
+    this.first = new Promise((res, rej) => { firstDone = res; this.firstFail = rej; });
+    this.done = this.run(firstDone).catch(e => { this.firstFail(e); throw e; });
+  }
+  decodeHere(bytes) {
+    const { w, h } = this.M, n = this.n, k = bytes.length / n, rg = new Uint8Array(n * 2 * k), tmp = new Uint8Array(n);
+    for (let f = 0; f < k; f++) {
+      const codes = bytes.subarray(f * n, (f + 1) * n);
+      coastDistance(codes, w, h, tmp);
+      for (let i = 0; i < n; i++) { rg[(f * n + i) * 2] = codes[i]; rg[(f * n + i) * 2 + 1] = tmp[i]; }
+    }
+    return rg;
+  }
+  async decode(id, bytes) {
+    if (this.worker) {
+      const rg = await new Promise(res => { this.pending.set(id, res); this.worker.postMessage({ id, w: this.M.w, h: this.M.h, bytes: bytes.slice() }); });
+      if (rg) return rg;
+    }
+    return this.decodeHere(bytes);
+  }
+  async run(firstDone) {
+    const fetches = [];
+    const get = k => (fetches[k] = fetches[k] || fetchBytes(this.urls[this.order[k]]));
+    for (let k = 0; k < this.order.length; k++) {
+      if (this.stopped) return;
+      const c = this.order[k], f0 = c * this.M.chunk;
+      const bytes = await get(k);
+      if (k + 1 < this.order.length) get(k + 1);
+      const nf = bytes.length / this.n;
+      if (nf !== Math.min(this.M.chunk, this.M.times.length - f0)) throw new Error(this.M.files[c] + ': ' + bytes.length + ' bytes, expected ' + Math.min(this.M.chunk, this.M.times.length - f0) * this.n);
+      const rg = await this.decode(c, bytes);
+      if (this.stopped) return;
+      this.codes.set(bytes, f0 * this.n);
+      this.rg.set(rg, f0 * this.n * 2);
+      for (let f = f0; f < f0 + nf; f++) this.loaded[f] = 1;
+      this.onChunk && this.onChunk(f0, nf);
+      if (k === 0) firstDone();
+    }
+    this.stop();
+  }
+  stop() { this.stopped = true; if (this.worker) { this.worker.terminate(); this.worker = null; } }
 }

@@ -23,7 +23,9 @@
 //
 //  The polygon raster (data/plateidx.bin) gives the polygon (and so the
 //  plate) under a present-day point. A polygon has a begin age: before it,
-//  that crust is not in the model.
+//  that crust is not in the model. The page loads the raster after the
+//  first frame (setRaster); until then polyAt returns -1, so a lookup
+//  without a known polygon gives null.
 //
 //  grep -n targets
 //    pole to quaternion ...... "function poleQuat"
@@ -166,10 +168,18 @@ export class Plates {
     this.rot = new RotationModel(rotJson);
     this.poly = polyJson.poly;
     this.names = polyJson.names || {};
-    this.raster = raster; this.rw = rmeta.w; this.rh = rmeta.h; this.rstep = rmeta.step; this.none = rmeta.none;
+    this.rw = rmeta.w; this.rh = rmeta.h; this.rstep = rmeta.step; this.none = rmeta.none;
+    this.raster = null;
+    if (raster) this.setRaster(raster);
   }
-  // Polygon index under a present-day point, or -1 (old sea floor).
+  setRaster(raster) {
+    if (raster.length !== this.rw * this.rh) throw new Error('plateidx.bin: ' + raster.length + ' bytes, expected ' + this.rw * this.rh);
+    this.raster = raster;
+  }
+  // Polygon index under a present-day point, or -1 (old sea floor, or the
+  // raster is not in yet).
   polyAt(lat, lon) {
+    if (!this.raster) return -1;
     const j = Math.min(this.rh - 1, Math.max(0, Math.floor((lat + 90) / this.rstep)));
     const i = Math.floor((((lon + 180) % 360 + 360) % 360) / this.rstep) % this.rw;
     const k = this.raster[j * this.rw + i];

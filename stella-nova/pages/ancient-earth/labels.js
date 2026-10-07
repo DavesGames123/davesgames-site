@@ -40,10 +40,12 @@ export class Labels {
     this.plateLabels = [...best.entries()].filter(([pid, k]) => plates.poly[k].a > 700000 || PLATE_NAMES[pid])
       .map(([pid, k]) => ({ pid, k, name: PLATE_NAMES[pid] || plates.plateName(pid), lat: plates.poly[k].c[1] / 100, lon: plates.poly[k].c[0] / 100, area: plates.poly[k].a }))
       .filter(l => l.name);
-    this.cities = data.cities.rows.slice(0, 600);
+    this.cities = [];          // setCities, when data/cities.json is in
+    if (data.cities) this.setCities(data.cities);
     this.dpr = 1;
     this.maxCities = 140;
   }
+  setCities(c) { this.cities = c.rows.slice(0, 600); }
   resize(w, h) {
     this.dpr = Math.min(devicePixelRatio || 1, 2);
     this.cv.width = Math.round(w * this.dpr); this.cv.height = Math.round(h * this.dpr);
@@ -83,7 +85,7 @@ export class Labels {
       const lon = Math.atan2(c.x, c.z) * 180 / Math.PI;
       push(llToVec(0, lon + 12), { text: 'paleo-equator', kind: 'eq', pri: 40 });
     }
-    if (this.show.countries) for (const [name, lo, la, k, rank] of this.data.over.countries) {
+    if (this.show.countries && this.data.over) for (const [name, lo, la, k, rank] of this.data.over.countries) {
       if (k === 255) continue;
       const r = this.P.reconstruct(la / 100, lo / 100, t, k); if (!r) continue;
       push(r.v, { text: name, kind: 'country', pri: 30 - rank });

@@ -1,39 +1,61 @@
 // ============================================================================
 //  ANCIENT EARTH  ·  globe.js  ·  the three.js globe
 // ----------------------------------------------------------------------------
-//  One WebGL 2 canvas. Draw order:
-//    stars (world-fixed points) -> earth (shaders.js EARTH_FRAG) -> sky
-//    shell (in-scatter for rays that miss the planet, additive) -> overlay
-//    lines, fossil points, pins and trails (depth-tested against the earth,
-//    raised 0.15-0.4% of the radius, so nothing z-fights the surface).
-//  The globe group holds the earth and every overlay; its Y spin is the
-//  "slow rotation". The camera orbits (OrbitControls).
+//  One WebGL 2 canvas. Per frame: stars -> planet (surface.js PLANET_FRAG,
+//  reads the baked surface) -> sky shell (in-scatter where the ray misses
+//  the planet, additive) -> overlay lines, fossils, pins and trails, raised
+//  0.12-0.4% of the radius above the surface, so nothing z-fights it.
+//
+//  The surface bake renders the colour, the sea-glint weight, the slopes
+//  and the land mask into equirectangular targets, in two passes (height,
+//  then colour; surface.js). It runs only when the age, the colour mode,
+//  the tint or the data change, never per frame at rest:
+//    moving, older than PAIR_MIN Ma   the two DEM frames around the age
+//                                     each bake once into a small cached
+//                                     target (CACHE_N kept); the planet
+//                                     mixes them, so a play costs one small
+//                                     bake per 5 Myr crossed
+//    moving, younger                  one small bake of the exact age per
+//                                     frame (the ice age sea level and the
+//                                     city lights change within a frame)
+//    stopped for 250 ms               one big bake of the exact age
+//  Small: 1024 x 512 (a phone 512 x 256). Big: 2048 x 1024 (a phone
+//  1024 x 512). The cloud fields bake once.
+//
+//  Progressive data: the DEM layers arrive by chunk (data.js DemStream,
+//  uploaded layer by layer in "uploadLayers("); setAge uses the nearest
+//  frames already in. Lines, fossils, the polygon raster and the city
+//  lights attach later ("attachLazy("); each feature is off until its data
+//  is in.
+//
+//  The drawing buffer size comes from lib/render-scale.js (a pixel budget,
+//  then a factor that the frame rate lowers), through a proxy canvas.
 //
 //  Axes: a point at (lat, lon) is (cos lat sin lon, sin lat, cos lat cos
-//  lon) in the globe group. The DEM is in paleo-coordinates, so the earth
-//  shader reads it at the fragment's own lat/lon. Things on present-day
-//  crust ride their plate: a 256x1 float texture holds one quaternion per
-//  polygon (recon.js), and the vertex shaders rotate by it (RIDE).
-//
-//  The plate tint needs the polygon under each paleo point: a 720x360
-//  target gets one point per present-day 0.5 deg land cell, drawn at its
-//  reconstructed place (IDX_*). The earth shader reads that map.
+//  lon) in the globe group. Present-day things ride their plate by a
+//  256x1 float texture of one quaternion per polygon (shaders.js RIDE).
 //
 //  grep -n targets
 //    set the age ........... "setAge("
-//    quaternion texture .... "function updateQuats"
-//    overlay lines ......... "function lineGeometry"
-//    index map ............. "renderIndex("
+//    bake scheduling ....... "updateBake("
+//    one bake .............. "bakeInto("
+//    DEM layer upload ...... "uploadLayers("
+//    lazy layers ........... "attachLazy("
+//    render scale .......... "RenderScale"
+//    quaternion texture .... "updateQuats("
 //    sun direction ......... "sunDir("
 //    picking ............... "pick("
-//    screen projection ..... "project("
 //    pins and trails ....... "addPin("
+//    GPU release ........... "dispose("
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SH from './shaders.js';
-import { framesAt, prepareDem } from './data.js';
+import * as SF from './surface.js';
+import { framesAt } from './data.js';
+import { climateAt } from './world.js';
 
+const PAIR_MIN = 6, CACHE_N = 6;
 const D2R = Math.PI / 180;
 export const MODES = ['realistic', 'hypsometric', 'grey', 'magma', 'viridis', 'inferno', 'turbo', 'outline'];
 
@@ -62,20 +84,23 @@ export function plateColor(rank) {
 }
 
 function threeOf(v) { return new THREE.Vector3(v[1], v[2], v[0]); }
+const _pw = new THREE.Vector3(), _pl = new THREE.Vector3();
+export function llToThreeInto(o, lat, lon, r = 1) {
+  const la = lat * D2R, lo = lon * D2R;
+  return o.set(Math.cos(la) * Math.sin(lo) * r, Math.sin(la) * r, Math.cos(la) * Math.cos(lo) * r);
+}
 export function llToThree(lat, lon, r = 1) {
   const la = lat * D2R, lo = lon * D2R;
   return new THREE.Vector3(Math.cos(la) * Math.sin(lo) * r, Math.sin(la) * r, Math.cos(la) * Math.cos(lo) * r);
 }
 
 export class Globe {
-  constructor(canvas, data, plates, opt = {}) {
-    this.canvas = canvas; this.data = data; this.plates = plates;
+  constructor(canvas, core, plates, dem, opt = {}) {
+    this.canvas = canvas; this.core = core; this.plates = plates; this.dem = dem; this.data = core;
     this.lite = !!opt.lite;
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !this.lite, powerPreference: 'high-performance', preserveDrawingBuffer: !!opt.keep });
     r.setClearColor(0x000000, 1);
     r.outputColorSpace = THREE.LinearSRGBColorSpace;   // the shaders encode sRGB themselves
-    this.pixCap = this.lite ? 1.5 : 2;
-    r.setPixelRatio(Math.min(devicePixelRatio || 1, this.pixCap));
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.01, 200);
     this.camera.position.set(0, 0.55, 3.6);
@@ -85,23 +110,45 @@ export class Globe {
     this.scene.add(this.group);
     this.t = -1; this.state = { mode: 0, tint: 0, exag: 20, hill: 1, hillAz: 315, hillAlt: 40, clouds: 1, detail: 1, exposure: 0.3, tintK: 0.7 };
     this.sun = { mode: 'view', az: -38, el: 20, day: 172, hour: 12 };
-    this.time0 = performance.now();
-    this.buildTextures();
-    this.buildEarth();
-    this.buildStars();
-    this.buildLines();
-    this.buildIndex();
-    this.buildFossils();
-    this.pins = [];
     this.layers = { coast: true, borders: false, terranes: false, bounds: false, grid: true, fossils: true };
-    this.applyLayers();
+    this.time0 = performance.now(); this.lastFrame = this.time0;
+    this.cloudT = 0; this.ageRate = 0; this.lastAgeAt = 0;
+    this.pins = [];
+    this.fossilColors = FOSSIL_COLORS;
+    this.stats = { bakes: 0, bakeMs: 0, lastBake: '' };
+    this.buildTextures();
+    this.buildBake();
+    this.buildPlanet();
+    this.buildStars();
+    this.buildGrid();
+    this.setupScale();
+  }
+
+  // ── render scale (lib/render-scale.js) ───────────────────────────────────
+  // RenderScale sets canvas.width/height; a proxy turns that into a three.js
+  // pixel ratio, so the renderer and its viewport stay in step.
+  setupScale() {
+    const self = this, box = { w: 1, h: 1 };
+    this.cssW = 1; this.cssH = 1;
+    const proxy = { _w: 1, _h: 1,
+      get width() { return this._w; }, set width(v) { this._w = v; box.w = v; self.applyScale(box); },
+      get height() { return this._h; }, set height(v) { this._h = v; box.h = v; self.applyScale(box); } };
+    this.rs = window.RenderScale ? window.RenderScale.create({ canvas: proxy, cssSize: () => [this.cssW, this.cssH], maxDpr: 2,
+      fracDesktop: 1, fracMobile: 1, maxPixels: this.lite ? 0.9e6 : 2.4e6 }) : null;
+  }
+  applyScale(box) {
+    const pr = Math.max(0.3, box.w / Math.max(1, this.cssW));
+    this.renderer.setPixelRatio(pr);
+    this.renderer.setSize(this.cssW, this.cssH, false);
+    this.pixelRatio = pr;
+    if (this.starU) this.starU.uPix.value = pr;
+    if (this.fossilU) this.fossilU.uPix.value = pr;
   }
 
   // ── textures ──────────────────────────────────────────────────────────────
   buildTextures() {
-    const m = this.data.meta.dem;
-    const rg = prepareDem(this.data.dem, m);
-    const dem = this.demTex = new THREE.DataArrayTexture(rg, m.w, m.h, m.times.length);
+    const m = this.core.meta.dem;
+    const dem = this.demTex = new THREE.DataArrayTexture(this.dem.rg, m.w, m.h, m.times.length);
     dem.format = THREE.RGFormat; dem.type = THREE.UnsignedByteType;
     dem.minFilter = dem.magFilter = THREE.LinearFilter;
     dem.wrapS = THREE.RepeatWrapping; dem.wrapT = THREE.ClampToEdgeWrapping;
@@ -115,8 +162,7 @@ export class Globe {
     const ids = [...new Set(polys.map(p => p.p))].sort((a, b) => a - b);
     this.plateRank = new Map(ids.map((id, i) => [id, i]));
     polys.forEach((p, k) => {
-      const c = plateColor(this.plateRank.get(p.p));
-      const d = new THREE.Color(CONTINENT_COLORS[p.k] || '#888');
+      const c = plateColor(this.plateRank.get(p.p)), d = new THREE.Color(CONTINENT_COLORS[p.k] || '#888');
       pal.set([c.r * 255, c.g * 255, c.b * 255, 255], k * 4);
       pal.set([d.r * 255, d.g * 255, d.b * 255, 255], (256 + k) * 4);
     });
@@ -124,12 +170,152 @@ export class Globe {
     this.palTex.minFilter = this.palTex.magFilter = THREE.NearestFilter; this.palTex.needsUpdate = true;
     // colour maps, 256 x 4 (magma, viridis, inferno, turbo)
     const lut = new Uint8Array(256 * 4 * 4);
-    ['magma', 'viridis', 'inferno', 'turbo'].forEach((n, row) => {
-      for (let i = 0; i < 256; i++) lut.set([...cmapRGB(n, i / 255), 255], (row * 256 + i) * 4);
-    });
-    this.lutTex = new THREE.DataTexture(lut, 256, 4, THREE.RGBAFormat);
-    this.lutTex.minFilter = this.lutTex.magFilter = THREE.LinearFilter; this.lutTex.needsUpdate = true;
-    // city lights from Natural Earth places, splatted by population
+    ['magma', 'viridis', 'inferno', 'turbo'].forEach((n, row) => { for (let i = 0; i < 256; i++) lut.set([...cmapRGB(n, i / 255), 255], (row * 256 + i) * 4); });
+    this.cmapTex = new THREE.DataTexture(lut, 256, 4, THREE.RGBAFormat);
+    this.cmapTex.minFilter = this.cmapTex.magFilter = THREE.LinearFilter; this.cmapTex.needsUpdate = true;
+    // placeholders until the lazy data arrive
+    const one = (r, g, b, a) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, a]), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; return t; };
+    this.blackTex = one(0, 0, 0, 255); this.idxNone = one(255, 0, 0, 255);
+  }
+  // DEM layers [f0, f0 + n) are in this.dem.rg: copy them to the GPU. Before
+  // three.js has made the texture, a full upload carries them; after, only
+  // those layers go up (texSubImage3D), not the whole 14 MB array.
+  uploadLayers(f0, n) {
+    const r = this.renderer, gl = r.getContext(), p = r.properties.get(this.demTex), m = this.core.meta.dem;
+    if (!p.__webglTexture || this.demTex.needsUpdate) { this.demTex.needsUpdate = true; return; }
+    r.state.bindTexture(gl.TEXTURE_2D_ARRAY, p.__webglTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, f0, m.w, m.h, n, gl.RG, gl.UNSIGNED_BYTE, this.dem.rg.subarray(f0 * m.w * m.h * 2, (f0 + n) * m.w * m.h * 2));
+  }
+
+  // ── surface bake ─────────────────────────────────────────────────────────
+  buildBake() {
+    this.bigSize = this.lite ? [1024, 512] : [2048, 1024]; this.smallSize = this.lite ? [512, 256] : [1024, 512];
+    this.bakeBig = this.mrt(this.bigSize); this.bakeSmall = this.mrt(this.smallSize);
+    const hrt = ([w, h]) => new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
+    this.hBig = hrt(this.bigSize); this.hSmall = hrt(this.smallSize);
+    this.hU = { uDem: { value: this.demTex }, uLayA: { value: 0 }, uLayB: { value: 0 }, uMix: { value: 0 }, uDetail: { value: 1 } };
+    this.bakeU = {
+      uH: { value: this.hSmall.texture }, uIdx: { value: this.idxNone }, uPal: { value: this.palTex }, uCmap: { value: this.cmapTex },
+      uTeq: { value: 27 }, uDT: { value: 37.5 }, uSea: { value: 0 }, uVeg: { value: 1 }, uTall: { value: 1 }, uGrass: { value: 1 },
+      uTintK: { value: 0.7 }, uMode: { value: 0 }, uTint: { value: 0 },
+    };
+    const quad = new THREE.PlaneGeometry(2, 2);
+    const scene = (frag, uniforms) => {
+      const m = new THREE.Mesh(quad, new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, uniforms, vertexShader: SF.QUAD_VERT, fragmentShader: frag, depthTest: false, depthWrite: false }));
+      m.frustumCulled = false; const s = new THREE.Scene(); s.add(m); return s;
+    };
+    this.hScene = scene(SF.HEIGHT_FRAG, this.hU);
+    this.bakeScene = scene(SF.BAKE_FRAG, this.bakeU);
+    this.cloudScene = scene(SF.CLOUD_FRAG, {});
+    this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const cw = this.lite ? [1024, 512] : [2048, 1024];
+    this.cloudRT = new THREE.WebGLRenderTarget(cw[0], cw[1], { depthBuffer: false, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.RepeatWrapping });
+    this.cloudsBaked = false;
+    this.cache = new Map();      // DEM frame -> { rt, key, used }
+    this.bakeDirty = true; this.bakeBigDirty = true;
+  }
+  mrt([w, h]) {
+    const rt = new THREE.WebGLMultipleRenderTargets(w, h, 2, { depthBuffer: false });
+    for (const t of rt.texture) {
+      t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = true;
+      t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 4;
+    }
+    return rt;
+  }
+  // One bake: the height pass into hRt, the colour pass into rt, for DEM
+  // frames a, b mixed by f, with the climate cl.
+  bakeInto(rt, hRt, a, b, f, cl) {
+    const r = this.renderer, t0 = performance.now(), old = r.getRenderTarget(), S = this.state, H = this.hU, U = this.bakeU;
+    H.uLayA.value = a; H.uLayB.value = b; H.uMix.value = f; H.uDetail.value = S.detail;
+    U.uTeq.value = cl.teq; U.uDT.value = cl.dT; U.uSea.value = cl.sea; U.uVeg.value = cl.veg; U.uTall.value = cl.tall; U.uGrass.value = cl.grass;
+    U.uMode.value = S.mode; U.uTint.value = S.tint; U.uTintK.value = S.tintK; U.uH.value = hRt.texture;
+    r.setRenderTarget(hRt); r.render(this.hScene, this.quadCam);
+    r.setRenderTarget(rt); r.render(this.bakeScene, this.quadCam);
+    r.setRenderTarget(old);
+    this.stats.bakes++; this.stats.bakeMs = performance.now() - t0;
+  }
+  show(rtA, rtB = rtA, k = 0) {
+    const U = this.planetU;
+    U.uA.value = rtA.texture[0]; U.uB.value = rtA.texture[1]; U.uA2.value = rtB.texture[0]; U.uB2.value = rtB.texture[1]; U.uK.value = k;
+  }
+  cacheKey() { const S = this.state; return [S.mode, S.tint, S.detail, S.tintK, S.tint ? !!this.idxRT : 0].join('|'); }
+  // The cached bake of DEM frame i (made now when it is missing or stale).
+  frameBake(i) {
+    const key = this.cacheKey(), now = performance.now();
+    let e = this.cache.get(i);
+    if (e && e.key === key) { e.used = now; return e.rt; }
+    if (!e) {
+      if (this.cache.size >= CACHE_N) {
+        let old = null; for (const [k, v] of this.cache) if (!old || v.used < old[1].used) old = [k, v];
+        e = old[1]; this.cache.delete(old[0]);
+      } else e = { rt: this.mrt(this.smallSize) };
+      this.cache.set(i, e);
+    }
+    const ti = this.core.meta.dem.times[i];
+    if (this.state.tint > 0 && this.idxRT) { this.updateQuats(ti); this.renderIndex(); this.updateQuats(this.t); this.idxDirty = true; }
+    this.bakeInto(e.rt, this.hSmall, i, i, 0, climateAt(ti));
+    e.key = key; e.used = now; this.stats.lastBake = 'frame ' + i;
+    return e.rt;
+  }
+  bakeExact(big) {
+    if (this.state.tint > 0 && this.idxRT && this.idxDirty) this.renderIndex();
+    const fr = this.fr || { a: 0, b: 0, f: 0 }, rt = big ? this.bakeBig : this.bakeSmall;
+    this.bakeInto(rt, big ? this.hBig : this.hSmall, fr.a, fr.b, fr.f, this.climate || climateAt(Math.max(0, this.t)));
+    this.show(rt); this.stats.lastBake = big ? 'big' : 'small';
+  }
+  // Per frame: pick the bake work for this frame (see the header).
+  updateBake(now) {
+    const moving = now - (this.ageMovedAt || 0) < 250, fr = this.fr;
+    if (this.bakeDirty) {
+      this.bakeDirty = false;
+      if (moving && fr && this.t >= PAIR_MIN && this.dem.loaded[fr.a] && this.dem.loaded[fr.b]) {
+        const A = this.frameBake(fr.a), B = fr.b === fr.a ? A : this.frameBake(fr.b);
+        this.show(A, B, fr.f);
+      } else this.bakeExact(false);
+    } else if (this.bakeBigDirty && !moving) { this.bakeBigDirty = false; this.bakeExact(true); }
+  }
+  bakeClouds() {
+    const r = this.renderer, old = r.getRenderTarget();
+    r.setRenderTarget(this.cloudRT); r.render(this.cloudScene, this.quadCam); r.setRenderTarget(old);
+    this.cloudsBaked = true;
+  }
+
+  buildPlanet() {
+    const seg = this.lite ? [144, 72] : [192, 96];
+    this.planetU = {
+      uA: { value: this.blackTex }, uB: { value: this.blackTex }, uA2: { value: this.blackTex }, uB2: { value: this.blackTex }, uK: { value: 0 },
+      uCloud: { value: this.cloudRT.texture }, uLights: { value: this.blackTex },
+      uSun: { value: new THREE.Vector3(1, 0, 0) }, uRot: { value: new THREE.Matrix3() }, uExag: { value: 20 }, uExposure: { value: 0.3 },
+      uHill: { value: 1 }, uHillAz: { value: 315 }, uHillAlt: { value: 40 }, uCloudT: { value: 0 }, uClouds: { value: 1 }, uLightsK: { value: 0 },
+      uQuality: { value: this.lite ? 0 : 1 }, uTime: { value: 0 }, uWet: { value: 0 }, uStorm: { value: 0 }, uMode: { value: 0 },
+    };
+    this.earthU = this.planetU;   // saver.js and main.js read earthU.uExposure
+    const mat = new THREE.ShaderMaterial({ uniforms: this.planetU, vertexShader: SF.PLANET_VERT, fragmentShader: SF.PLANET_FRAG });
+    this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, seg[0], seg[1]), mat);
+    this.group.add(this.earth);
+    this.skyU = { uSun: this.planetU.uSun, uExposure: this.planetU.uExposure, uQuality: this.planetU.uQuality, uMap: { value: 0 } };
+    const sky = new THREE.ShaderMaterial({ uniforms: this.skyU, vertexShader: SH.SKY_VERT, fragmentShader: SH.SKY_FRAG, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true });
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(1.0157, 64, 32), sky);
+    this.sky.renderOrder = 1;
+    this.scene.add(this.sky);
+  }
+
+  // ── lazy layers ──────────────────────────────────────────────────────────
+  attachLazy(k, v) {
+    this.data[k] = v;
+    if (k === 'raster') { this.plates.setRaster(v); this.buildIndex(); for (const p of this.pins) this.repin(p); }
+    if (k === 'over') this.buildLines();
+    if (k === 'fossils') this.buildFossils();
+    if (k === 'cities') this.buildLights();
+    if (k === 'bounds') { this.boundGeo = new Map(); this.bounds = new THREE.LineSegments(new THREE.BufferGeometry(), this.lineMaterial('#ffffff', 0.85, 1.0022)); this.bounds.frustumCulled = false; this.bounds.renderOrder = 4; this.group.add(this.bounds); this.boundIdx = -1; }
+    this.applyLayers();
+    if (this.t >= 0) this.setAge(this.t, this.climate, true);
+  }
+  // City lights from Natural Earth places, splatted by population.
+  buildLights() {
     const cv = document.createElement('canvas'); cv.width = this.lite ? 1024 : 2048; cv.height = cv.width / 2;
     const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
     g.globalCompositeOperation = 'lighter';
@@ -143,31 +329,11 @@ export class Globe {
       gr.addColorStop(0, `rgba(255,220,170,${a})`); gr.addColorStop(0.35, `rgba(255,170,90,${a * 0.45})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr; g.fillRect(x - rad * 2.2, y - rad * 2.2, rad * 4.4, rad * 4.4);
     }
-    this.lightsTex = new THREE.CanvasTexture(cv);
-    this.lightsTex.flipY = true;   // canvas row 0 = north; the shader's v = 1 is north
-    this.lightsTex.colorSpace = THREE.NoColorSpace;
+    const t = this.lightsTex = new THREE.CanvasTexture(cv);
+    t.flipY = true;   // canvas row 0 = north; the shader's v = 1 is north
+    t.colorSpace = THREE.NoColorSpace; t.wrapS = THREE.RepeatWrapping;
+    this.planetU.uLights.value = t;
   }
-
-  buildEarth() {
-    const seg = this.lite ? [144, 72] : [256, 128];
-    this.earthU = {
-      uDem: { value: this.demTex }, uIdx: { value: null }, uPal: { value: this.palTex }, uLights: { value: this.lightsTex }, uLut: { value: this.lutTex },
-      uLayA: { value: 0 }, uLayB: { value: 0 }, uMix: { value: 0 }, uSun: { value: new THREE.Vector3(1, 0, 0) }, uRot: { value: new THREE.Matrix3() },
-      uTime: { value: 0 }, uExag: { value: 20 }, uSea: { value: 0 }, uTeq: { value: 27 }, uDT: { value: 37 }, uVeg: { value: 1 }, uTall: { value: 1 }, uGrass: { value: 1 },
-      uLightsK: { value: 0 }, uClouds: { value: 1 }, uExposure: { value: 0.3 }, uMode: { value: 0 }, uTint: { value: 0 }, uHill: { value: 1 }, uHillAz: { value: 315 },
-      uHillAlt: { value: 40 }, uTintK: { value: 0.7 }, uDetail: { value: 1 }, uQuality: { value: this.lite ? 0 : 1 },
-    };
-    const mat = new THREE.ShaderMaterial({ uniforms: this.earthU, vertexShader: SH.EARTH_VERT, fragmentShader: SH.EARTH_FRAG });
-    mat.extensions = { derivatives: true };
-    this.earth = new THREE.Mesh(new THREE.SphereGeometry(1, seg[0], seg[1]), mat);
-    this.group.add(this.earth);
-    this.skyU = { uSun: this.earthU.uSun, uExposure: this.earthU.uExposure, uQuality: this.earthU.uQuality, uMap: { value: 0 } };
-    const sky = new THREE.ShaderMaterial({ uniforms: this.skyU, vertexShader: SH.SKY_VERT, fragmentShader: SH.SKY_FRAG, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true });
-    this.sky = new THREE.Mesh(new THREE.SphereGeometry(1.0157, 96, 48), sky);
-    this.sky.renderOrder = 1;
-    this.scene.add(this.sky);
-  }
-
   buildStars() {
     // A seeded random sky: magnitudes from an exponential count law, and
     // colours from blue-white to orange.
@@ -221,33 +387,31 @@ export class Globe {
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.1);
     return g;
   }
+  buildGrid() {
+    const mk = (runs, color, op, r) => { const l = new THREE.LineSegments(this.lineGeometry(runs), this.lineMaterial(color, op, r)); l.frustumCulled = false; l.renderOrder = 3; this.group.add(l); return l; };
+    // paleo grid: every 15 deg, fixed to the globe (poly 255)
+    const grid = [], eq = [], trop = [];
+    for (let la = -75; la <= 75; la += 15) { const run = [255]; for (let lo = -180; lo <= 180; lo += 3) run.push(lo * 100, la * 100); (la === 0 ? eq : grid).push(run); }
+    for (let lo = -180; lo < 180; lo += 15) { const run = [255]; for (let la = -90; la <= 90; la += 3) run.push(lo * 100, la * 100); grid.push(run); }
+    for (const la of [23.44, -23.44, 66.56, -66.56]) for (let lo = -180; lo < 180; lo += 4) trop.push([255, lo * 100, la * 100, (lo + 2) * 100, la * 100]);
+    this.grid = mk(grid, '#a9c4e8', 0.16, 1.0012);
+    this.equator = mk(eq, '#ffb46b', 0.75, 1.0013);
+    this.tropics = mk(trop, '#ffd28a', 0.3, 1.0013);
+  }
   buildLines() {
     const o = this.data.over;
     const mk = (runs, color, op, r, closed, colorOf) => { const l = new THREE.LineSegments(this.lineGeometry(runs, closed, colorOf), this.lineMaterial(color, op, r)); l.frustumCulled = false; l.renderOrder = 3; this.group.add(l); return l; };
     this.coast = mk(o.coast, '#e8f4ff', 0.45, 1.0016);
     this.borders = mk(o.borders, '#ffd9a8', 0.38, 1.0017);
-    // terrane outlines: each ring of each polygon, in its plate colour
     const rings = [];
     this.plates.poly.forEach((p, k) => p.r.forEach(ring => rings.push([k, ...ring])));
     this.terranes = mk(rings, '#ffffff', 0.5, 1.0018, true, r => { const c = plateColor(this.plateRank.get(this.plates.poly[r[0]].p)); return [c.r, c.g, c.b]; });
-    // paleo grid: every 15 deg, fixed to the globe (poly 255)
-    const grid = [], eq = [];
-    for (let la = -75; la <= 75; la += 15) { const run = [255]; for (let lo = -180; lo <= 180; lo += 3) run.push(lo * 100, la * 100); (la === 0 ? eq : grid).push(run); }
-    for (let lo = -180; lo < 180; lo += 15) { const run = [255]; for (let la = -90; la <= 90; la += 3) run.push(lo * 100, la * 100); grid.push(run); }
-    const trop = [];
-    for (const la of [23.44, -23.44, 66.56, -66.56]) { for (let lo = -180; lo < 180; lo += 4) trop.push([255, lo * 100, la * 100, (lo + 2) * 100, la * 100]); }
-    this.grid = mk(grid, '#a9c4e8', 0.16, 1.0012);
-    this.equator = mk(eq, '#ffb46b', 0.75, 1.0013);
-    this.tropics = mk(trop, '#ffd28a', 0.3, 1.0013);
-    this.boundGeo = new Map();
-    this.bounds = new THREE.LineSegments(new THREE.BufferGeometry(), this.lineMaterial('#ffffff', 0.85, 1.0022));
-    this.bounds.frustumCulled = false; this.bounds.renderOrder = 4; this.group.add(this.bounds);
   }
   boundaryFrame(i) {
     if (this.boundGeo.has(i)) return this.boundGeo.get(i);
     const TY = [[1, 0.35, 0.3], [1, 0.82, 0.3], [0.45, 0.95, 0.6], [0.8, 0.5, 1], [0.8, 0.8, 0.85]];
-    const runs = this.data.bounds.frames[i].map(r => [255, ...r.slice(1)]);
-    const g = this.lineGeometry(runs, false, r => TY[this.data.bounds.frames[i][runs.indexOf(r)][0]] || TY[4]);
+    const runs = this.data.bounds.frames[i].map(r => { const q = [255, ...r.slice(1)]; q.type = r[0]; return q; });
+    const g = this.lineGeometry(runs, false, r => TY[r.type] || TY[4]);
     this.boundGeo.set(i, g);
     return g;
   }
@@ -271,46 +435,43 @@ export class Globe {
     const m = new THREE.ShaderMaterial({ uniforms: { uQ: { value: this.qTex } }, vertexShader: SH.RIDE + SH.IDX_VERT, fragmentShader: SH.IDX_FRAG, depthTest: false, depthWrite: false });
     this.idxPts = new THREE.Points(g, m); this.idxPts.frustumCulled = false;
     this.idxScene = new THREE.Scene(); this.idxScene.add(this.idxPts);
-    this.idxCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.idxRT = new THREE.WebGLRenderTarget(720, 360, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false, generateMipmaps: false });
-    this.earthU.uIdx.value = this.idxRT.texture;
+    this.bakeU.uIdx.value = this.idxRT.texture;
     this.idxDirty = true;
   }
   renderIndex() {
     const r = this.renderer, old = r.getRenderTarget(), oc = r.getClearColor(new THREE.Color()), oa = r.getClearAlpha();
     r.setRenderTarget(this.idxRT); r.setClearColor(0xff0000, 1); r.clear(true, false, false);
-    r.render(this.idxScene, this.idxCam);
+    r.render(this.idxScene, this.quadCam);
     r.setRenderTarget(old); r.setClearColor(oc, oa);
     this.idxDirty = false;
   }
 
   // ── fossils ──────────────────────────────────────────────────────────────
   buildFossils() {
-    const F = this.data.fossils, rows = F.rows, n = rows.length;
-    const GC = { 'dinosaur': '#ff7b54', 'bird': '#ffd166', 'pterosaur': '#f4a3ff', 'marine reptile': '#4cc9f0', 'trilobite': '#c9b37e', 'early synapsid': '#e07a5f',
-      'mammal': '#90e0a8', 'ammonite': '#b8c0ff', 'early tetrapod': '#a3d977', 'armoured fish': '#7fd1c8', 'hominid': '#ffffff' };
-    this.fossilColors = GC;
-    const ll = new Float32Array(n * 2), poly = new Float32Array(n), age = new Float32Array(n * 2), col = new Float32Array(n * 3);
+    if (this.fossils) { this.group.remove(this.fossils); this.fossils.geometry.dispose(); }
+    const rows = this.data.fossils.rows, n = rows.length, GC = this.fossilColors;
+    const ll = new Float32Array(n * 2), poly = new Float32Array(n), age = new Float32Array(n * 2), col = new Float32Array(n * 3), c = new THREE.Color();
     rows.forEach((r, i) => {
       ll[2 * i] = r[4] * D2R; ll[2 * i + 1] = r[5] * D2R; poly[i] = r[6] === 255 ? 254 : r[6];
       age[2 * i] = r[2]; age[2 * i + 1] = r[3];
-      const c = new THREE.Color(GC[r[1]] || '#fff'); col.set([c.r, c.g, c.b], 3 * i);
+      c.set(GC[r[1]] || '#fff'); col.set([c.r, c.g, c.b], 3 * i);
     });
     const g = new THREE.BufferGeometry();
     g.setAttribute('ll', new THREE.BufferAttribute(ll, 2)); g.setAttribute('poly', new THREE.BufferAttribute(poly, 1));
     g.setAttribute('age', new THREE.BufferAttribute(age, 2)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
-    this.fossilU = { uQ: { value: this.qTex }, uT: { value: 0 }, uWin: { value: 2 }, uSize: { value: 7 }, uPix: { value: 1 } };
+    this.fossilU = this.fossilU || { uQ: { value: this.qTex }, uT: { value: 0 }, uWin: { value: 2 }, uSize: { value: 7 }, uPix: { value: this.pixelRatio || 1 } };
     const m = new THREE.ShaderMaterial({ uniforms: this.fossilU, vertexShader: SH.RIDE + SH.PTS_VERT, fragmentShader: SH.PTS_FRAG, transparent: true, depthWrite: false });
     this.fossils = new THREE.Points(g, m); this.fossils.frustumCulled = false; this.fossils.renderOrder = 5;
     this.group.add(this.fossils);
   }
 
   applyLayers() {
-    const L = this.layers;
-    this.coast.visible = L.coast; this.borders.visible = L.borders; this.terranes.visible = L.terranes;
-    this.grid.visible = this.equator.visible = this.tropics.visible = L.grid;
-    this.bounds.visible = L.bounds; this.fossils.visible = L.fossils;
+    const L = this.layers, v = (o, on) => { if (o) o.visible = on; };
+    v(this.coast, L.coast); v(this.borders, L.borders); v(this.terranes, L.terranes);
+    v(this.grid, L.grid); v(this.equator, L.grid); v(this.tropics, L.grid);
+    v(this.bounds, L.bounds && this.boundsAvailable); v(this.fossils, L.fossils);
   }
   setLayer(k, on) { this.layers[k] = on; this.applyLayers(); }
 
@@ -327,34 +488,62 @@ export class Globe {
     q.set([0, 0, 0, 1], 255 * 4);   // fixed to the paleo grid
     this.qTex.needsUpdate = true;
   }
-  setAge(t, climate) {
-    const m = this.data.meta.dem, fr = framesAt(m.times, t);
-    const U = this.earthU;
-    U.uLayA.value = fr.a; U.uLayB.value = fr.b; U.uMix.value = fr.f;
-    if (climate) {
-      U.uTeq.value = climate.teq; U.uDT.value = climate.dT; U.uSea.value = climate.sea;
-      U.uVeg.value = climate.veg; U.uTall.value = climate.tall; U.uGrass.value = climate.grass;
+  // Frames for age t from those loaded; the nearest loaded frame when the
+  // pair at t is not in yet.
+  framesFor(t) {
+    const M = this.core.meta.dem, fr = framesAt(M.times, t), L = this.dem.loaded;
+    if (L[fr.a] && L[fr.b]) return fr;
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < L.length; i++) if (L[i] && Math.abs(M.times[i] - t) < bd) { bd = Math.abs(M.times[i] - t); best = i; }
+    return best < 0 ? null : { a: best, b: best, f: 0 };
+  }
+  markDirty() { this.bakeDirty = true; this.bakeBigDirty = true; }
+  setAge(t, climate, force = false) {
+    const now = performance.now();
+    if (this.t >= 0 && t !== this.t) {
+      // age speed (Myr per s), smoothed: it drives the weather churn
+      const dt = Math.max(1, now - this.lastAgeAt) / 1000;
+      this.ageRate = this.ageRate * 0.8 + 0.2 * Math.min(200, Math.abs(t - this.t) / dt);
+      this.lastAgeAt = now;
     }
-    U.uLightsK.value = Math.max(0, 1 - t / 0.004);
-    if (t !== this.t) { this.updateQuats(t); this.idxDirty = true; }
+    this.fr = this.framesFor(t);
+    if (climate) {
+      this.climate = climate;
+      // clouds: warmer worlds are wetter, storm tracks move poleward
+      this.planetU.uWet.value = Math.max(0, Math.min(1, (climate.gmst - 14) / 14));
+      this.planetU.uStorm.value = Math.max(-1, Math.min(1, (climate.gmst - 18) / 10));
+    }
+    this.planetU.uLightsK.value = this.lightsTex ? Math.max(0, 1 - t / 0.004) : 0;
+    if (t !== this.t || force) {
+      if (t !== this.t) { this.updateQuats(t); this.idxDirty = true; }
+      this.markDirty(); if (t !== this.t) this.ageMovedAt = now;
+    }
     this.t = t;
-    this.fossilU.uT.value = t;
-    // plate boundaries: the nearest 5 Myr frame, when the model has one
-    const B = this.data.bounds, bi = Math.round(t / 5);
-    const has = bi < B.times.length && Math.abs(B.times[bi] - t) <= 2.5;
-    if (has && this.boundIdx !== bi) { this.bounds.geometry = this.boundaryFrame(bi); this.boundIdx = bi; }
-    this.bounds.visible = this.layers.bounds && has;
-    this.boundsAvailable = has;
+    if (this.fossilU) this.fossilU.uT.value = t;
+    const B = this.data.bounds;
+    if (B) {
+      const bi = Math.round(t / 5), has = bi < B.times.length && Math.abs(B.times[bi] - t) <= 2.5;
+      if (has && this.boundIdx !== bi) { this.bounds.geometry = this.boundaryFrame(bi); this.boundIdx = bi; }
+      this.boundsAvailable = has;
+    } else this.boundsAvailable = false;
+    this.applyLayers();
     for (const p of this.pins) this.placePin(p);
   }
   setStyle(o) {
     Object.assign(this.state, o);
-    const S = this.state, U = this.earthU;
-    U.uMode.value = S.mode; U.uTint.value = S.tint; U.uExag.value = S.exag; U.uHill.value = S.hill; U.uHillAz.value = S.hillAz;
-    U.uHillAlt.value = S.hillAlt; U.uClouds.value = S.clouds; U.uDetail.value = S.detail; U.uExposure.value = S.exposure; U.uTintK.value = S.tintK;
+    const S = this.state, U = this.planetU;
+    if (Object.keys(o).some(k => ['mode', 'tint', 'detail', 'tintK'].includes(k))) this.markDirty();
+    U.uMode.value = S.mode; U.uExag.value = S.exag; U.uHill.value = S.hill; U.uHillAz.value = S.hillAz;
+    U.uHillAlt.value = S.hillAlt; U.uClouds.value = S.clouds; U.uExposure.value = S.exposure;
     this.skyU.uMap.value = S.mode === 0 ? 0 : 1;
   }
-
+  // A DEM chunk is in: upload its layers, drop cached bakes that used a
+  // stand-in frame, and re-bake if the age now has better frames.
+  onDemChunk(f0, n) {
+    this.uploadLayers(f0, n);
+    for (let i = f0; i < f0 + n; i++) this.cache.delete(i);
+    if (this.t >= 0) { const a = this.fr, b = this.framesFor(this.t); if (!a || !b || a.a !== b.a || a.b !== b.b) this.setAge(this.t, this.climate, true); }
+  }
   // ── sun ──────────────────────────────────────────────────────────────────
   // 'view': fixed to the camera (az left/right, el up, from the view
   // direction), so the lit face and the terminator stay in view.
@@ -387,38 +576,23 @@ export class Globe {
     p.applyQuaternion(this.group.quaternion.clone().invert());
     return { lat: Math.asin(Math.max(-1, Math.min(1, p.y))) / D2R, lon: Math.atan2(p.x, p.z) / D2R };
   }
-  // a globe-frame point (THREE.Vector3, radius ~1) -> { x, y, front } in CSS px
+  // a globe-frame point (THREE.Vector3, radius ~1) -> { x, y, front } in
+  // CSS px. Scratch vectors, no allocation: labels call this hundreds of
+  // times per draw.
   project(v, out = {}) {
-    const w = v.clone().applyQuaternion(this.group.quaternion);
+    const w = _pw.copy(v).applyQuaternion(this.group.quaternion);
     const cam = this.camera.position;
-    const front = w.dot(cam.clone().sub(w).normalize()) / w.length();
+    const front = (w.x * (cam.x - w.x) + w.y * (cam.y - w.y) + w.z * (cam.z - w.z)) / (w.length() * Math.hypot(cam.x - w.x, cam.y - w.y, cam.z - w.z));
     w.project(this.camera);
-    const r = this.canvas.getBoundingClientRect();
-    out.x = (w.x + 1) / 2 * r.width; out.y = (1 - w.y) / 2 * r.height; out.front = front;
+    out.x = (w.x + 1) / 2 * this.cssW; out.y = (1 - w.y) / 2 * this.cssH; out.front = front;
     return out;
   }
-  projectLL(lat, lon, r = 1.002) { return this.project(llToThree(lat, lon, r)); }
+  projectLL(lat, lon, r = 1.002, out = {}) { return this.project(llToThreeInto(_pl, lat, lon, r), out); }
 
   // ── pins ─────────────────────────────────────────────────────────────────
   addPin(lat, lon, color = '#ffcf5a', name = '') {
-    const P = this.plates, k = P.polyAt(lat, lon);
-    const pin = { lat, lon, poly: k, color, name, trail: null, mesh: null, path: [] };
-    const begin = k >= 0 ? Math.min(540, P.poly[k].b) : 0;
-    const pos = [], ages = [];
-    for (let t = 0; t <= begin + 1e-9; t += 1) {
-      const r = P.reconstruct(lat, lon, t, k);
-      if (!r) break;
-      pin.path.push([t, r.lat, r.lon]);
-      const v = threeOf(r.v).multiplyScalar(1.004); pos.push(v.x, v.y, v.z); ages.push(t);
-    }
-    if (pos.length > 3) {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-      g.setAttribute('age', new THREE.BufferAttribute(new Float32Array(ages), 1));
-      const m = new THREE.ShaderMaterial({ uniforms: { uColor: { value: new THREE.Color(color) }, uT: { value: this.t } }, vertexShader: SH.TRAIL_VERT, fragmentShader: SH.TRAIL_FRAG, transparent: true, depthWrite: false });
-      pin.trail = new THREE.Line(g, m); pin.trail.renderOrder = 6; pin.trail.frustumCulled = false;
-      this.group.add(pin.trail);
-    }
+    const pin = { lat, lon, poly: this.plates.polyAt(lat, lon), color, name, trail: null, mesh: null, path: [] };
+    this.buildTrail(pin);
     const mk = new THREE.Group();
     const dot = new THREE.Mesh(new THREE.SphereGeometry(0.0085, 16, 12), new THREE.MeshBasicMaterial({ color }));
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.014, 0.019, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
@@ -428,6 +602,35 @@ export class Globe {
     this.pins.push(pin);
     this.placePin(pin);
     return pin;
+  }
+  // The pin's path at every 1 Myr back to its polygon's begin age, and the
+  // trail line through it.
+  buildTrail(pin) {
+    const P = this.plates, k = pin.poly;
+    if (pin.trail) { this.group.remove(pin.trail); pin.trail.geometry.dispose(); pin.trail.material.dispose(); pin.trail = null; }
+    pin.path = [];
+    const begin = k >= 0 ? Math.min(540, P.poly[k].b) : 0;
+    const pos = [], ages = [];
+    for (let t = 0; t <= begin + 1e-9; t += 1) {
+      const r = P.reconstruct(pin.lat, pin.lon, t, k);
+      if (!r) break;
+      pin.path.push([t, r.lat, r.lon]);
+      const v = threeOf(r.v).multiplyScalar(1.004); pos.push(v.x, v.y, v.z); ages.push(t);
+    }
+    if (pos.length > 3) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+      g.setAttribute('age', new THREE.BufferAttribute(new Float32Array(ages), 1));
+      const m = new THREE.ShaderMaterial({ uniforms: { uColor: { value: new THREE.Color(pin.color) }, uT: { value: this.t } }, vertexShader: SH.TRAIL_VERT, fragmentShader: SH.TRAIL_FRAG, transparent: true, depthWrite: false });
+      pin.trail = new THREE.Line(g, m); pin.trail.renderOrder = 6; pin.trail.frustumCulled = false;
+      this.group.add(pin.trail);
+    }
+  }
+  // The raster came in after the pin: find its polygon and its trail now.
+  repin(p) {
+    const k = this.plates.polyAt(p.lat, p.lon);
+    if (k === p.poly) return;
+    p.poly = k; this.buildTrail(p); this.placePin(p);
   }
   placePin(p) {
     const r = this.plates.reconstruct(p.lat, p.lon, Math.max(0, this.t), p.poly);
@@ -446,27 +649,40 @@ export class Globe {
 
   // ── frame ────────────────────────────────────────────────────────────────
   resize(w, h) {
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, this.pixCap));
-    this.renderer.setSize(w, h, false);
+    this.cssW = w; this.cssH = h;
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
-    const px = this.renderer.getPixelRatio();
-    this.starU.uPix.value = px; this.fossilU.uPix.value = px;
+    if (this.rs) this.rs.resize(); else this.applyScale({ w: w * Math.min(devicePixelRatio || 1, 2), h });
   }
   render(now) {
+    const dt = Math.min(0.1, (now - this.lastFrame) / 1000); this.lastFrame = now;
+    if (this.rs) this.rs.tick(now);
     this.controls.update();
-    const U = this.earthU;
+    if (!this.cloudsBaked) this.bakeClouds();
+    this.updateBake(now);
+    const U = this.planetU;
     U.uTime.value = (now - this.time0) / 1000;
+    // weather: the clouds drift slowly at rest and churn while time moves
+    if (now - (this.lastAgeAt || 0) > 300) this.ageRate *= 0.9;
+    this.cloudT += dt * (0.012 + 0.05 * Math.min(60, this.ageRate));
+    U.uCloudT.value = this.cloudT;
     this.sunDir(U.uSun.value);
     this.group.updateMatrixWorld();
     U.uRot.value.setFromMatrix4(this.group.matrixWorld);
-    const needIdx = this.state.tint > 0;
-    if (needIdx && this.idxDirty) this.renderIndex();
     const pulse = 1 + 0.18 * Math.sin(now / 260);
     for (const p of this.pins) p.ring.scale.setScalar(pulse);
     this.renderer.render(this.scene, this.camera);
+    if (!this.firstFrameAt) this.firstFrameAt = performance.now();
   }
+  // Free every GPU object (targets, textures, geometry) and the context.
   dispose() {
     this.controls.dispose();
+    const rts = [this.bakeBig, this.bakeSmall, this.hBig, this.hSmall, this.cloudRT, this.idxRT, ...[...this.cache.values()].map(e => e.rt)];
+    for (const rt of rts) if (rt) rt.dispose();
+    for (const t of [this.demTex, this.qTex, this.palTex, this.cmapTex, this.blackTex, this.idxNone, this.lightsTex]) if (t) t.dispose();
+    this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 }
+const FOSSIL_COLORS = { 'dinosaur': '#ff7b54', 'bird': '#ffd166', 'pterosaur': '#f4a3ff', 'marine reptile': '#4cc9f0', 'trilobite': '#c9b37e', 'early synapsid': '#e07a5f',
+  'mammal': '#90e0a8', 'ammonite': '#b8c0ff', 'early tetrapod': '#a3d977', 'armoured fish': '#7fd1c8', 'hominid': '#ffffff' };

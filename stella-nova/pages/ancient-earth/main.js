@@ -1,9 +1,14 @@
 // ============================================================================
 //  ANCIENT EARTH  ·  main.js  ·  the GUI, the time player, search, readouts
 // ----------------------------------------------------------------------------
-//  Boot: data.js loads data/ (progress bar), recon.js builds the plate
-//  model, globe.js the scene, labels.js the label layer. Then one age is
-//  set (the URL hash, for example #240, or 240 Ma) and the loop runs.
+//  Boot, progressive: data.js loads the core files (meta, rotations,
+//  polygons, about 120 KB) and the DEM chunk of the first age (the URL
+//  hash, for example #240, or 240 Ma), decoded in a worker. Then the
+//  globe draws its first frame. The other DEM chunks, the polygon raster,
+//  lines, cities, fossils and boundaries load after it (function
+//  loadRest); each feature turns on when its file is in.
+//  AE.firstFrameAt and AE.interactiveAt (performance.now ms) time the two
+//  steps for the perf check.
 //
 //  Everything that depends on the age goes through setAge(t): the globe
 //  (frames, quaternions, climate uniforms), the top age, the time bar
@@ -21,6 +26,7 @@
 //
 //  grep -n targets
 //    boot .................. "async function boot"
+//    later data ............ "function loadRest"
 //    time bar .............. "function buildTimebar"
 //    one age change ........ "function setAge"
 //    player + frame ........ "function tick"
@@ -33,7 +39,7 @@
 //    no UI selection ....... "function noSelect"
 // ============================================================================
 import * as THREE from 'three';
-import { loadAll, elevAt } from './data.js';
+import { loadCore, loadLazy, DemStream, elevAt } from './data.js';
 import { Plates, gcKm, llToVec } from './recon.js';
 import { Globe, MODES, cmapRGB, CONTINENT_COLORS, plateColor, llToThree } from './globe.js';
 import { Labels, PLATE_NAMES } from './labels.js';
@@ -48,37 +54,56 @@ const state = {
   picked: null, lastInteract: 0,
 };
 AE.state = state;
-let G, L, P, D, phone = false;
+let G, L, P, D, DEM, phone = false;
 
 // ── boot ────────────────────────────────────────────────────────────────────
 async function boot() {
   const cv = $('view');
   if (!cv.getContext('webgl2')) { $('nogl').hidden = false; $('loading').classList.add('done'); AE.failed = 'no webgl2'; return; }
+  const h = parseFloat(location.hash.slice(1)), age0 = isFinite(h) ? Math.max(0, Math.min(MAX_AGE, h)) : 240;
+  let dem;
   try {
-    D = await loadAll(import.meta.url, p => { $('lfill').style.width = (p * 100).toFixed(0) + '%'; });
+    D = await loadCore(import.meta.url);
+    $('lfill').style.width = '35%';
+    P = new Plates(D.rot, D.poly, null, D.meta.raster);
+    dem = DEM = new DemStream(import.meta.url, D.meta, age0, (f0, n) => { if (G) G.onDemChunk(f0, n); });
+    await dem.first;
   } catch (e) {
     $('ltext').textContent = 'Could not load the data: ' + e.message; AE.failed = String(e); throw e;
   }
-  $('ltext').textContent = 'Building the globe…';
-  await new Promise(r => setTimeout(r, 20));
-  P = new Plates(D.rot, D.poly, D.raster, D.meta.raster);
+  $('lfill').style.width = '100%';
   const lite = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
-  G = new Globe(cv, D, P, { lite, keep: new URLSearchParams(location.search).has('keep') });
+  G = new Globe(cv, D, P, dem, { lite, keep: new URLSearchParams(location.search).has('keep') });
   L = new Labels($('labels'), G, P, D);
-  AE.globe = G; AE.plates = P; AE.labels = L;
+  AE.globe = G; AE.plates = P; AE.labels = L; AE.dem = dem;
   buildUI();
   buildTimebar();
-  const h = parseFloat(location.hash.slice(1));
-  setAge(isFinite(h) ? h : 240);
+  setAge(age0);
   onResize();
   addEventListener('resize', onResize);
+  addEventListener('pagehide', () => { dem.stop(); });
   requestAnimationFrame(tick);
   $('loading').classList.add('done');
+  AE.booted = true;
   // the screensaver hook (saver.js) loads after boot; the page works without it
   import('./saver.js').then(m => m.installSaver(AE)).catch(e => console.warn('saver.js', e));
-  AE.booted = true;
+  // the rest starts after the first frame is on screen
+  requestAnimationFrame(() => setTimeout(loadRest, 0));
 }
-
+// Lazy files: each attaches as it arrives. A failed file leaves its
+// feature off and says so in the console.
+function loadRest() {
+  const lazy = loadLazy(import.meta.url), jobs = [];
+  for (const [k, p] of Object.entries(lazy)) {
+    jobs.push(p.then(v => {
+      G.attachLazy(k, v);
+      if (k === 'cities') { L.setCities(v); cityIndex = null; }
+      if (k === 'raster' || k === 'fossils' || k === 'cities') setAge(state.age);
+    }).catch(e => console.warn('data/' + k, e)));
+  }
+  jobs.push(DEM.done.catch(e => console.warn('dem', e)));
+  Promise.all(jobs).then(() => { AE.interactiveAt = performance.now(); });
+}
 // ── view framing ────────────────────────────────────────────────────────────
 // The clear area: right of the panel, left of the info card, above the time
 // bar (and the sheet on a phone). The globe centres there.
@@ -200,20 +225,30 @@ function layoutEvents() {
 }
 
 // ── one age change ──────────────────────────────────────────────────────────
-let hashTimer = 0;
+let hashTimer = 0, heavyDue = false, heavyAt = 0;
+// The light part runs on every age change (the globe, the age, the cursor).
+// The DOM-heavy part (units, caption, climate card, readouts, fossil key)
+// runs at most every 120 ms while the age plays or tweens (heavyUpdate).
 function setAge(t) {
   t = Math.max(0, Math.min(MAX_AGE, t));
   state.age = t;
-  const cl = climateAt(t);
-  G.setAge(t, cl);
-  const u = describeAge(t);
+  G.setAge(t, climateAt(t));
   $('ageNum').textContent = fmtMa(t);
-  $('ageUnit').textContent = (u.epoch[0].includes(u.period[0]) ? u.epoch[0] : u.epoch[0] + ' · ' + u.period[0]) + ' · ' + u.era[0];
   $('cursor').style.left = (ageToX(t) * 100) + '%';
   $('track').setAttribute('aria-valuenow', t.toFixed(1));
+  heavyDue = true;
+  if (!(state.playing || tween || AE.saverOn)) heavyUpdate();
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(() => { try { history.replaceState(null, '', '#' + (+t.toFixed(t < 1 ? 3 : 1))); } catch { /* sandboxed frame */ } }, 300);
+}
+const ALL_UNITS = [...ERAS, ...PERIODS, ...EPOCHS];
+function heavyUpdate() {
+  heavyDue = false; heavyAt = performance.now();
+  const t = state.age, cl = climateAt(t), u = describeAge(t);
+  $('ageUnit').textContent = (u.epoch[0].includes(u.period[0]) ? u.epoch[0] : u.epoch[0] + ' · ' + u.period[0]) + ' · ' + u.era[0];
   $('track').setAttribute('aria-valuetext', fmtAge(t));
   for (const s of document.querySelectorAll('.seg')) {
-    const unit = [...ERAS, ...PERIODS, ...EPOCHS].find(q => q[0] === s.dataset.name);
+    const unit = ALL_UNITS.find(q => q[0] === s.dataset.name);
     s.classList.toggle('dim', !(t >= unit[1] && t < unit[2]) && !(t === 0 && unit[1] === 0));
   }
   $('units').innerHTML = [u.eon, u.era, u.period, u.epoch].map(q => `<span style="background:${q[3]}">${q[0]}</span>`).join('');
@@ -229,8 +264,6 @@ function setAge(t) {
   updateReadouts();
   updateFossilKey();
   if (G.state.tint === 1) updateTintKey();
-  clearTimeout(hashTimer);
-  hashTimer = setTimeout(() => { try { history.replaceState(null, '', '#' + (+t.toFixed(t < 1 ? 3 : 1))); } catch { /* sandboxed frame */ } }, 300);
 }
 AE.setAge = setAge;
 function jumpTo(t) { stopPlay(); tweenAge(t); interacted(); }
@@ -264,6 +297,7 @@ function tick(now) {
   }
   if (state.spin || (state.playing && $('tSpin').classList.contains('on'))) G.group.rotation.y += dt * 0.06;
   if (state.follow && G.pins.length) followPin(dt);
+  if (heavyDue && now - heavyAt > 120) heavyUpdate();
   frameView(0.15);
   G.render(now);
   // labels every frame on desktop, every other frame on a phone
@@ -357,7 +391,7 @@ function buildUI() {
   const qp = $('quickPlaces');
   for (const n of ['London', 'New York', 'Sydney', 'Tokyo', 'Cape Town', 'Mumbai']) {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = n;
-    b.addEventListener('click', () => { const c = D.cities.rows.find(r => r[0] === n); if (c) addPlace(c[0], c[2], c[3], c[1]); });
+    b.addEventListener('click', () => { const c = D.cities && D.cities.rows.find(r => r[0] === n); if (c) addPlace(c[0], c[2], c[3], c[1]); });
     qp.appendChild(b);
   }
   noSelect();
@@ -461,6 +495,7 @@ function updateTintKey() {
   k.innerHTML = '';
 }
 function updateFossilKey() {
+  if (!D.fossils) { $('fossilKey').innerHTML = '<span>Loading the fossil sample…</span>'; return; }
   const t = state.age, cnt = {};
   for (const r of D.fossils.rows) if (t <= r[2] + 2 && t >= r[3] - 2 && r[6] !== 255) cnt[r[1]] = (cnt[r[1]] || 0) + 1;
   const keys = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
@@ -480,6 +515,7 @@ function search(text) {
     const la = +m[1], lo = +m[2];
     if (Math.abs(la) <= 90 && Math.abs(lo) <= 180) out.push({ name: `${la.toFixed(2)}, ${lo.toFixed(2)}`, country: 'coordinates', lat: la, lon: lo });
   }
+  if (!D.cities) { list.innerHTML = '<li><i>Loading places…</i></li>'; list.hidden = false; return; }
   if (!cityIndex) cityIndex = D.cities.rows.map(r => [norm(r[0]), r]);
   for (const [n, r] of cityIndex) {
     if (out.length >= 12) break;
@@ -553,8 +589,13 @@ function updateReadouts() {
 const fmtLat = la => `${Math.abs(la).toFixed(1)}° ${la >= 0 ? 'N' : 'S'}`;
 const fmtLon = lo => `${Math.abs(lo).toFixed(1)}° ${lo >= 0 ? 'E' : 'W'}`;
 function zone(la) { const a = Math.abs(la); return a < 10 ? 'equatorial' : a < 23.5 ? 'tropical' : a < 35 ? 'subtropical' : a < 55 ? 'temperate' : a < 66.5 ? 'subpolar' : 'polar'; }
+// Height at a paleo point from the DEM frames already loaded (the nearest
+// loaded frame while the pair at t is still on its way).
 function surfaceAt(lat, lon, t) {
-  const z = elevAt(D.dem, D.meta.dem, t, lat, lon) - climateAt(t).sea;
+  const fr = G.framesFor(t);
+  if (!fr) return 'loading the elevation';
+  const M = D.meta.dem, tt = fr.a === fr.b ? M.times[fr.a] : t;
+  const z = elevAt(DEM.codes, M, tt, lat, lon) - climateAt(t).sea;
   return z >= 0 ? `land, about ${Math.round(z / 50) * 50} m` : z > -200 ? `shallow sea, about ${Math.round(-z / 10) * 10} m deep` : `ocean, about ${(Math.round(-z / 100) / 10).toFixed(1)} km deep`;
 }
 function plateLabel(k) {
@@ -600,6 +641,7 @@ async function checkGws(p, i) {
   } catch (e) { out.textContent = 'The web service did not answer (' + e.message + ').'; }
 }
 function nearestCity(lat, lon) {
+  if (!D.cities) return null;
   const v = llToVec(lat, lon); let best = null, bd = 1e9;
   for (const r of D.cities.rows) { if (r[4] < 50000) continue; const d = gcKm(v, llToVec(r[2], r[3])); if (d < bd) { bd = d; best = r; } }
   return best ? [best[0], best[1], bd] : null;
@@ -631,7 +673,7 @@ let hoverAt = 0;
 function hover(cx, cy) {
   const now = performance.now(); if (now - hoverAt < 50) return; hoverAt = now;
   const tip = $('tip');
-  if (!G.layers.fossils) { tip.hidden = true; return; }
+  if (!G.layers.fossils || !D.fossils) { tip.hidden = true; return; }
   const r = $('view').getBoundingClientRect(), x = cx - r.left, y = cy - r.top, t = state.age;
   const hits = [];
   for (const f of D.fossils.rows) {
@@ -650,6 +692,7 @@ function hover(cx, cy) {
 }
 async function fetchLive() {
   const t = state.age, b = $('pbdbLive'), note = $('pbdbNote');
+  if (!D.fossils || !P.raster) { note.textContent = 'The shipped sample is still loading.'; return; }
   b.disabled = true; note.textContent = 'Asking paleobiodb.org…';
   try {
     const lo = Math.max(0, t - 3), hi = t + 3;
@@ -705,11 +748,13 @@ function sheetGrip() {
 
 // ── self test (headless checks) ─────────────────────────────────────────────
 AE.selfTest = () => {
-  const london = P.reconstruct(51.507, -0.128, 200);
+  const london = P.raster ? P.reconstruct(51.507, -0.128, 200) : null;
   return {
     booted: AE.booted, age: state.age, canvas: [$('view').width, $('view').height],
     london200: london && [+london.lat.toFixed(4), +london.lon.toFixed(4)],
     pins: G.pins.length, mode: MODES[G.state.mode], gl: !!G.renderer.getContext(),
+    demFrames: DEM.loaded.reduce((a, b) => a + b, 0), lazy: ['raster', 'over', 'cities', 'fossils', 'bounds'].filter(k => D[k]),
+    firstFrameAt: G.firstFrameAt, interactiveAt: AE.interactiveAt, bakes: { ...G.stats },
   };
 };
 AE.D = () => D;

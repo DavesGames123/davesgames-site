@@ -30,7 +30,8 @@
 #    data/rotations.json  the rotation sequences (moving, fixed, poles)
 #    data/polygons.json   simplified present-day continental polygons
 #    data/plateidx.bin    1440x720 uint8: polygon index per 0.25 deg cell
-#    data/dem.bin         109 frames of 360x181 uint8 paleo-elevation
+#    data/dem/dem-NN.bin  109 frames of 360x181 uint8 paleo-elevation,
+#                         10 frames per file
 #    data/meta.json       frame times, encodings, sizes
 #    data/overlays.json   modern coastlines and borders, split per polygon
 #    data/cities.json     Natural Earth places with their polygon index
@@ -230,6 +231,7 @@ def lookup(raster, lat, lon):
 # scale, so the shelves and lowlands keep the finest steps.
 # ---------------------------------------------------------------------------
 ZMIN, ZMAX = -9000.0, 6000.0
+CHUNK = 10
 
 
 def enc_elev(z):
@@ -252,10 +254,20 @@ def build_dem():
         frames.append(enc_elev(z))
         times.append(age(f))
     arr = np.stack(frames)
-    arr.tofile(os.path.join(DATA, 'dem.bin'))
-    print('wrote data/dem.bin', arr.size, 'frames', len(times))
+    # Chunks of CHUNK frames (about 650 KB each), so the page can load the
+    # chunk of the first age it shows before the others.
+    os.makedirs(os.path.join(DATA, 'dem'), exist_ok=True)
+    old = os.path.join(DATA, 'dem.bin')
+    if os.path.exists(old):
+        os.remove(old)
+    files = []
+    for c in range(0, len(times), CHUNK):
+        n = 'dem/dem-%02d.bin' % (c // CHUNK)
+        arr[c:c + CHUNK].tofile(os.path.join(DATA, n))
+        files.append(n)
+    print('wrote data/dem/dem-*.bin', len(files), 'chunks', arr.size, 'bytes', len(times), 'frames')
     return {'w': 360, 'h': 181, 'lon0': -180, 'lat0': -90, 'step': 1, 'times': times,
-            'enc': 'sqrt', 'zmin': ZMIN, 'zmax': ZMAX}
+            'enc': 'sqrt', 'zmin': ZMIN, 'zmax': ZMAX, 'chunk': CHUNK, 'files': files}
 
 
 # ---------------------------------------------------------------------------
