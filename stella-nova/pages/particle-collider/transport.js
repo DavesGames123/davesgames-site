@@ -53,6 +53,7 @@
 //                dep: MeV deposited per subsystem by the track and every
 //                unregistered descendant (a photon owns its shower)
 //    segTrk .... the track index of a segment, or of its registered ancestor
+//    segOwn .... 1 when the segment is of that track itself, 0 for a descendant
 //    hits ...... silicon hits: Float32Array 6 each (x y z t e layer) + track
 //    mhits ..... muon chamber hits, same layout
 //    ecal, ecalT, hcalA, hcalS, hcalT  cell energies (MeV) and first times
@@ -167,7 +168,7 @@ export function createEngine(o = {}) {
       if (tr.fast && (tr.cls === 0 ? tr.E0 < 2000 : (tr.gen > 0 || tr.E0 < 700 || x1 * x1 + y1 * y1 > 1.44e6))) return;
       const k = R.nSeg * 9, S = R.seg;
       S[k] = x0; S[k + 1] = y0; S[k + 2] = z0; S[k + 3] = ta; S[k + 4] = x1; S[k + 5] = y1; S[k + 6] = z1; S[k + 7] = tb; S[k + 8] = E;
-      R.segCls[R.nSeg] = tr.cls; R.segTrk[R.nSeg] = tr.idx >= 0 ? tr.idx : tr.anc; R.nSeg++;
+      R.segCls[R.nSeg] = tr.cls; R.segTrk[R.nSeg] = tr.idx >= 0 ? tr.idx : tr.anc; R.segOwn[R.nSeg] = tr.idx >= 0 ? 1 : 0; R.nSeg++;
     };
     const trackIndex = tr => {
       if (tr.idx >= 0) return tr.idx;
@@ -593,7 +594,7 @@ export function newResult(opt) {
   const cap = 60000;
   const H = () => ({ n: 0, cap, f: new Float32Array(cap * 6), e: new Float32Array(cap), trk: new Int32Array(cap), vol: new Int32Array(cap) });
   return {
-    nSeg: 0, seg: new Float32Array(opt.maxSeg * 9), segCls: new Uint8Array(opt.maxSeg), segTrk: new Int32Array(opt.maxSeg),
+    nSeg: 0, seg: new Float32Array(opt.maxSeg * 9), segCls: new Uint8Array(opt.maxSeg), segTrk: new Int32Array(opt.maxSeg), segOwn: new Uint8Array(opt.maxSeg),
     tracks: [], hits: H(), mhits: H(), nu: [], vtx: [], cones: [],
     ecal: new Float32Array(ECAL.neta * ECAL.nphi), ecalT: new Float32Array(ECAL.neta * ECAL.nphi).fill(1e9),
     hcalA: new Float32Array(HCAL.neta * HCAL.nphi), hcalS: new Float32Array(HCAL.neta * HCAL.nphi), hcalT: new Float32Array(HCAL.neta * HCAL.nphi).fill(1e9),
@@ -607,10 +608,10 @@ export function newResult(opt) {
 // segment and hit track indices move by the track count before them.
 export function pack(R) {
   const H = h => ({ n: h.n, f: h.f.slice(0, h.n * 6), e: h.e.slice(0, h.n), trk: h.trk.slice(0, h.n), vol: h.vol.slice(0, h.n) });
-  return { ...R, seg: R.seg.slice(0, R.nSeg * 9), segCls: R.segCls.slice(0, R.nSeg), segTrk: R.segTrk.slice(0, R.nSeg), hits: H(R.hits), mhits: H(R.mhits) };
+  return { ...R, seg: R.seg.slice(0, R.nSeg * 9), segCls: R.segCls.slice(0, R.nSeg), segTrk: R.segTrk.slice(0, R.nSeg), segOwn: R.segOwn.slice(0, R.nSeg), hits: H(R.hits), mhits: H(R.mhits) };
 }
 export function transfers(P) {
-  return [P.seg.buffer, P.segCls.buffer, P.segTrk.buffer, P.hits.f.buffer, P.hits.e.buffer, P.hits.trk.buffer, P.hits.vol.buffer, P.mhits.f.buffer, P.mhits.e.buffer, P.mhits.trk.buffer, P.mhits.vol.buffer, P.ecal.buffer, P.ecalT.buffer, P.hcalA.buffer, P.hcalS.buffer, P.hcalT.buffer];
+  return [P.seg.buffer, P.segCls.buffer, P.segTrk.buffer, P.segOwn.buffer, P.hits.f.buffer, P.hits.e.buffer, P.hits.trk.buffer, P.hits.vol.buffer, P.mhits.f.buffer, P.mhits.e.buffer, P.mhits.trk.buffer, P.mhits.vol.buffer, P.ecal.buffer, P.ecalT.buffer, P.hcalA.buffer, P.hcalS.buffer, P.hcalT.buffer];
 }
 export function mergeResults(list) {
   const cat = (C, arrs) => { const n = arrs.reduce((s, a) => s + a.length, 0), o = new C(n); let k = 0; for (const a of arrs) { o.set(a, k); k += a.length; } return o; };
@@ -620,9 +621,9 @@ export function mergeResults(list) {
   const sum = (key) => { const o = new Float32Array(list[0][key].length); for (const r of list) for (let i = 0; i < o.length; i++) o[i] += r[key][i]; return o; };
   const mn = (key) => { const o = new Float32Array(list[0][key].length).fill(1e9); for (const r of list) for (let i = 0; i < o.length; i++) if (r[key][i] < o[i]) o[i] = r[key][i]; return o; };
   const add = key => { const o = {}; for (const r of list) for (const [k, v] of Object.entries(r[key])) o[k] = (o[k] || 0) + v; return o; };
-  const tracks = []; list.forEach((r, i) => { for (const q of r.tracks) tracks.push({ ...q, parent: q.parent, w: i }); });
+  const tracks = []; list.forEach((r, i) => { for (const q of r.tracks) tracks.push({ ...q, anc: q.anc >= 0 ? q.anc + off[i] : -1, w: i }); });
   return {
-    nSeg: list.reduce((s, r) => s + r.nSeg, 0), seg: cat(Float32Array, list.map(r => r.seg)), segCls: cat(Uint8Array, list.map(r => r.segCls)), segTrk: cat(Int32Array, shift(list.map(r => r.segTrk))),
+    nSeg: list.reduce((s, r) => s + r.nSeg, 0), seg: cat(Float32Array, list.map(r => r.seg)), segCls: cat(Uint8Array, list.map(r => r.segCls)), segTrk: cat(Int32Array, shift(list.map(r => r.segTrk))), segOwn: cat(Uint8Array, list.map(r => r.segOwn)),
     tracks, hits: H('hits'), mhits: H('mhits'), nu: list.flatMap(r => r.nu), vtx: list.flatMap(r => r.vtx), cones: list.flatMap(r => r.cones),
     ecal: sum('ecal'), ecalT: mn('ecalT'), hcalA: sum('hcalA'), hcalS: sum('hcalS'), hcalT: mn('hcalT'),
     sys: add('sys'), cher: add('cher'), scint: add('scint'), escBy: add('escBy'), L: add('L'), depEm: list.reduce((s, r) => s + r.depEm, 0),

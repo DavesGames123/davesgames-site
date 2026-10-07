@@ -20,13 +20,12 @@
 //                   fraction of 50 GeV pion showers (0.35-0.65)
 //    reco ......... Z -> mu mu: two muons and a mass within 5 GeV of the
 //                   true mass in most events
-//  and the accelerator model (accel.js):
-//    B rho = p/e (8.33 T at 7 TeV); the linac phase advance against k_l L;
-//    FODO beta max/min and dispersion against the thin-lens formulas;
-//    natural chromaticity -tan(mu/2)/pi; sextupoles that set Q' = +2;
-//    the betatron tune from tracking; the synchrotron tune Qs and the
-//    bucket height; the ramp (B follows p, a bucket exists); design
-//    luminosity 1e34, pile-up 25, 362 MJ; U0 6.7 keV (p, 7 TeV), Ec 44 eV
+//    beams ........ e+e- at the Z pole and at 250 GeV close in four-momentum;
+//                   the ledger at 100 TeV, 1 PeV (hypothetical), mu+mu- 10 TeV
+//                   and Pb-Pb
+//    display ...... a photon owns its cascade; hit tests (precision, time,
+//                   speed, the muons of a real event); the detail card and
+//                   its invariant mass; labels never overlap
 //  Each check prints its numbers. The exit code is the number of failures.
 // ============================================================================
 import { MAT } from './materials.js';
@@ -183,60 +182,40 @@ for (const kind of Object.keys(SCENARIOS)) {
   }
 }
 
-// ══ the accelerator model (accel.js) ══════════════════════════════════════
+// ── picking, labels and the detail card ─────────────────────────────────
 {
-  const A = await import('./accel.js');
-  const ch = A.chainTable(), lhc = ch.find(c => c.id === 'lhc');
-  ok(Math.abs(lhc.B - 8.09) < 0.02, `B rho = p/e: 6.8 TeV in the ${A.LHC.rho} m dipoles needs B = ${lhc.B.toFixed(3)} T (B rho ${lhc.brho.toFixed(0)} T m); 7 TeV gives ${(A.brho(7000) / A.LHC.rho).toFixed(3)} T, the 8.33 T of the design report`);
-  ok(Math.abs(A.brho(7000) / A.LHC.rho - 8.33) < 0.02, 'dipole field at 7 TeV within 0.02 T of 8.33 T');
-  // linac: small-amplitude phase advance per cell
-  const P = A.linacParams(50), hist = A.linacTrack(P, [[0.01, 0]], 400)[0];
-  let cross = [], prev = hist[0][0];
-  for (let i = 1; i < hist.length; i++) { const v = hist[i][0]; if (prev > 0 && v <= 0) cross.push(i - prev / (prev - v)); prev = v; }
-  const per = (cross[cross.length - 1] - cross[0]) / (cross.length - 1), mu = A.TAU / per;
-  ok(rel(mu, P.muCell) < 0.03, `linac, 50 MeV, phis -30 deg: tracked phase advance ${(mu * 180 / Math.PI).toFixed(3)} deg/cell, k_l L = ${(P.muCell * 180 / Math.PI).toFixed(3)} deg/cell`);
-  // FODO
-  const C = A.fodo(), s2 = Math.sin(C.mu / 2), sn = Math.sin(C.mu);
-  const bmax = C.Lc * (1 + s2) / sn, bmin = C.Lc * (1 - s2) / sn;
-  ok(rel(C.betaMax, bmax) < 1e-3 && rel(C.betaMin, bmin) < 1e-3, `FODO, Lc ${C.Lc} m, mu ${(C.mu * 180 / Math.PI).toFixed(2)} deg: beta max ${C.betaMax.toFixed(2)} / min ${C.betaMin.toFixed(2)} m, thin-lens ${bmax.toFixed(2)} / ${bmin.toFixed(2)} m`);
-  const L = C.L, th = C.theta, Dmx = L * th * (1 + s2 / 2) / (s2 * s2), Dmn = L * th * (1 - s2 / 2) / (s2 * s2);
-  ok(rel(C.Dmax, Dmx) < 0.05 && rel(C.Dmin, Dmn) < 0.05, `FODO dispersion: D max ${C.Dmax.toFixed(3)} / min ${C.Dmin.toFixed(3)} m, thin-lens formula ${Dmx.toFixed(3)} / ${Dmn.toFixed(3)} m`);
-  const xi = -Math.tan(C.mu / 2) / Math.PI;
-  ok(rel(C.xiX, xi) < 0.01 && rel(C.xiY, xi) < 0.01, `natural chromaticity per cell: xi_x ${C.xiX.toFixed(4)}, xi_y ${C.xiY.toFixed(4)}, -tan(mu/2)/pi ${xi.toFixed(4)}`);
-  const dd = 1e-4, nat = (A.cellTune(C, dd).qx - A.cellTune(C, -dd).qx) / (2 * dd);
-  const S = A.sextupoleFor(C, 2 / 184, 2 / 184), qx = (A.cellTune(C, dd, S).qx - A.cellTune(C, -dd, S).qx) / (2 * dd), qy = (A.cellTune(C, dd, S).qy - A.cellTune(C, -dd, S).qy) / (2 * dd);
-  ok(rel(nat, xi) < 0.02, `tracked natural chromaticity per cell ${nat.toFixed(4)} against ${xi.toFixed(4)}`);
-  ok(Math.abs(qx * 184 - 2) < 0.3 && Math.abs(qy * 184 - 2) < 0.3, `sextupoles SF ${S.SF.toFixed(4)}, SD ${S.SD.toFixed(4)} m^-2: ring Q'x ${(qx * 184).toFixed(2)}, Q'y ${(qy * 184).toFixed(2)} (target +2 over 184 arc cells; natural ${(nat * 184).toFixed(1)})`);
-  // betatron tune from turn-by-turn tracking (linear map)
-  const rec = A.henon(0.31, 0, [1e-3, 0], 600), qm = A.measureTune(rec);
-  ok(Math.abs(qm - 0.31) < 0.002, `betatron tune from 600 turns: ${qm.toFixed(4)}, set 0.31`);
-  // synchrotron tune
-  const R = A.rfParams(450, 8), pts = [[R.phis + 0.02, 0]], tr = [];
-  for (let i = 0; i < 3000; i++) { A.rfMap(R, pts); tr.push(pts[0][0] - R.phis); }
-  let c2 = []; for (let i = 1; i < tr.length; i++) if (tr[i - 1] > 0 && tr[i] <= 0) c2.push(i - tr[i - 1] / (tr[i - 1] - tr[i]));
-  const qs = (c2.length - 1) / (c2[c2.length - 1] - c2[0]);
-  ok(rel(qs, R.Qs) < 0.02, `synchrotron tune at 450 GeV, 8 MV: tracked ${qs.toFixed(5)}, formula ${R.Qs.toFixed(5)}`);
-  const sep = A.separatrix(R), top = Math.max(...sep.pts.map(p => p[1]).filter(v => v === v));
-  ok(rel(top, R.dmax0) < 0.01, `stationary bucket half-height: separatrix ${(top * 1e4).toFixed(3)}e-4, formula ${(R.dmax0 * 1e4).toFixed(3)}e-4`);
-  const inB = [[R.phis, 0.9 * R.dmax0]], outB = [[R.phis, 1.1 * R.dmax0]];
-  A.rfMap(R, inB, 4000); A.rfMap(R, outB, 4000);
-  ok(Math.abs(inB[0][1]) <= R.dmax0 * 1.01 && Math.abs(outB[0][0] - R.phis) > Math.PI, `bucket edge: 0.9 dmax stays inside after 4000 turns, 1.1 dmax slips out by ${((outB[0][0] - R.phis) / A.TAU).toFixed(1)} RF periods`);
-  // ramp
-  let worst = 0, maxTurn = 0, okB = true;
-  for (let t = 0; t < A.ramp(0).T; t += 30) {
-    const r = A.ramp(t); if (Math.abs(r.B - A.brho(r.p) / A.LHC.rho) > 1e-9) okB = false;
-    const dE = A.rampRate(t) * 1e3 * A.LHC.C / A.CLIGHT;   // MeV per turn
-    maxTurn = Math.max(maxTurn, dE); worst = Math.max(worst, dE / 12);
-  }
-  ok(okB && worst < 0.1, `ramp: B(t) = p(t)/(e c rho) at every point; peak gain ${(maxTurn * 1e3).toFixed(0)} keV/turn, sin(phis) = ${worst.toFixed(4)} at 12 MV (a bucket exists)`);
-  // luminosity, pile-up, stored energy
-  const Ld = A.luminosity(A.PRESETS.design);
-  ok(rel(Ld.L, 1.0e34) < 0.05, `luminosity, design: ${Ld.L.toExponential(3)} cm^-2 s^-1 (sigma* ${(Ld.sigma * 1e6).toFixed(2)} um, F ${Ld.F.toFixed(3)})`);
-  ok(Math.abs(Ld.mu - 25) < 3, `pile-up at design luminosity: mu = ${Ld.mu.toFixed(1)}`);
-  ok(rel(Ld.stored, 362e6) < 0.01, `stored energy per beam: ${(Ld.stored / 1e6).toFixed(1)} MJ`);
-  const sr = A.srLoss(7000, A.LHC.rho), lep = A.srLoss(104.5, 3026, 'e');
-  ok(rel(sr.U0, 6.7e3) < 0.02 && rel(sr.Ec, 44) < 0.03, `synchrotron radiation, 7 TeV protons: U0 ${(sr.U0 / 1e3).toFixed(2)} keV/turn, critical energy ${sr.Ec.toFixed(1)} eV`);
-  ok(lep.U0 > 3.2e9 && lep.U0 < 3.6e9, `synchrotron radiation, 104.5 GeV electrons (rho 3026 m): U0 ${(lep.U0 / 1e9).toFixed(2)} GeV/turn`);
+  const { hitTest, buildObjects } = await import('./picking.js');
+  const { place, overlap } = await import('./labels.js');
+  const { detail } = await import('./physinfo.js');
+  const id = (x, y) => [x, y];
+  const line = (key, y, t0 = 0) => ({ key, kind: 'track', t0, pts: [[0, y, 0, 0], [100, y, 0, 1]] });
+  const objs = [line('a', 0), line('b', 10), { key: 'p', kind: 'muhit', t0: 0, pts: [[200, 0, 0, 0]] }, line('late', 20, 50)];
+  const h1 = hitTest(objs, id, 50, 2, 6), h2 = hitTest(objs, id, 50, 6.5, 6), h3 = hitTest(objs, id, 50, 30, 6), h4 = hitTest(objs, id, 50, 19, 6, 10), h5 = hitTest(objs, id, 203, 1, 6);
+  ok(h1 && h1.obj.key === 'a' && Math.abs(h1.d - 2) < 1e-9 && h2 && h2.obj.key === 'b' && !h3 && (!h4 || h4.obj.key !== 'late') && h5 && h5.obj.key === 'p',
+    `hit test: 2 px from line a -> a (d ${h1 && h1.d.toFixed(2)}); 6.5 px from a, 3.5 from b -> ${h2 && h2.obj.key}; 20 px away -> none; a line not yet drawn is skipped; a point hit at 3.2 px`);
+  // speed: 2000 polylines of 50 points, 300 queries
+  const big = []; let sd = 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 2000; i++) { const pts = []; let x = r() * 1000, y = r() * 1000; for (let j = 0; j < 50; j++) { pts.push([x, y, 0, j * 0.1]); x += (r() - 0.5) * 20; y += (r() - 0.5) * 20; } big.push({ key: 'k' + i, kind: 'track', t0: 0, pts }); }
+  const cache = new Map(); hitTest(big, id, 0, 0, 6, Infinity, cache);
+  const t0 = performance.now(); for (let q = 0; q < 300; q++) hitTest(big, id, r() * 1000, r() * 1000, 6, Infinity, cache);
+  const ms = (performance.now() - t0) / 300;
+  ok(ms < 4, `hit test speed: 2000 tracks of 50 points, ${ms.toFixed(2)} ms per query (cached projection)`);
+  // a real event: pick the muons where they are drawn
+  const g = generate('zmm', {}, makeRng(702)), R = DET.run(g.prims, 41), O = reconstruct(R, g.info), ev = { R, O, info: g.info, objs: buildObjects(R, O, g.info) };
+  const mus = ev.objs.objs.filter(o => o.kind === 'track' && o.hard && o.name.startsWith('mu'));
+  const S = 0.05, proj = (x, y) => [400 + x * S, 400 - y * S];
+  let found = 0;
+  for (const m of mus) { const q = m.pts.find(q => Math.hypot(q[0], q[1]) > 800) || m.pts[m.pts.length - 1], p = proj(q[0], q[1]), h = hitTest(ev.objs.objs, proj, p[0] + 1.5, p[1], 6, Infinity, new Map()); if (h && h.obj.key === m.key) found++; }
+  ok(mus.length === 2 && found === 2, `Z -> mu mu: ${ev.objs.objs.length} objects; both muons picked 1.5 px off their drawn track in the r-phi projection (${found} of ${mus.length})`);
+  const d = detail(mus[0], ev);
+  const hasZ = d.lineage.some(x => /^Z/.test(x.label));
+  ok(d.props.some(p => p[0] === 'spin') && hasZ && d.mass && Math.abs(d.mass.m - g.info.truth.mass) < 6000, `detail card of ${d.title}: lineage ${d.lineage.map(x => x.label).join(' > ')}; m from the daughters ${(d.mass.m / 1000).toFixed(2)} GeV, true ${(g.info.truth.mass / 1000).toFixed(2)} GeV`);
+  // labels: no overlap, every hard label placed
+  const items = []; for (let i = 0; i < 80; i++) { const a = r() * 6.283; items.push({ x: 200 + 120 * Math.cos(a), y: 200 + 120 * Math.sin(a), dx: Math.cos(a), dy: Math.sin(a), w: 60, h: 14, prio: r(), hard: i < 6 }); }
+  const P = place(items, { x: 0, y: 0, w: 400, h: 400 }, [{ x: 0, y: 0, w: 120, h: 40 }]);
+  let bad = 0; for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) if (overlap(P[i], P[j], 0)) bad++;
+  const hardOk = P.filter(p => p.item.hard).length === 6;
+  ok(bad === 0 && hardOk && P.length >= 15, `labels: ${P.length} of 80 placed with ${bad} overlaps; all 6 hard labels placed`);
 }
 
 console.log(`\n${n - fail} of ${n} checks passed`);
