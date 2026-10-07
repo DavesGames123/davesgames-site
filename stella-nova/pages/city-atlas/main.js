@@ -183,6 +183,7 @@ function buildOverlay() {
 const titleCase = (s) => s.toLowerCase().replace(/(^|[\s.-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
 
 function fillParams() {
+  invalidate(3);
   if (!meta) return;
   const b = meta.buildings;
   const parts = [param(`${fmt(b.count)}`, 'buildings'), param(`<i class="sym">h</i><sub>max</sub> = ${fmt(b.tallest)} m`, 'tallest')];
@@ -207,11 +208,16 @@ function fillParams() {
   updateClockUI(true);
 }
 
-let shownHour = -1;
+let shownHour = -1, shownF = -1;
+const scrubFill = scrubEl.querySelector('.fill'), scrubKnob = scrubEl.querySelector('.knob');
 function updateClockUI(force) {
   const f = clamp(hour / lastHour(), 0, 1);
-  scrubEl.querySelector('.fill').style.transform = `scaleX(${f})`;
-  scrubEl.querySelector('.knob').style.left = (f * 100) + '%';
+  // the bar moves only when it moves a visible amount: no style work per frame
+  if (force || Math.abs(f - shownF) > 5e-4) {
+    shownF = f;
+    scrubFill.style.transform = `scaleX(${f})`;
+    scrubKnob.style.left = (f * 100) + '%';
+  }
   const h = Math.floor(hour);
   if (force || h !== shownHour) {
     shownHour = h;
@@ -459,6 +465,7 @@ function buildLayers() {
     const v = b.getAttribute('aria-checked') !== 'true';
     b.setAttribute('aria-checked', String(v));
     fn(v);
+    invalidate(3);
   });
   onSw('swTerrain', (v) => setOverlay('terrain', v));
   onSw('swOcean', (v) => setOverlay('ocean', v));
@@ -493,6 +500,7 @@ function buildLayers() {
 }
 
 function syncLayers() {
+  invalidate(3);
   if (!$('lgTerrain')) return;
   const set = (id, v) => { const b = $(id); if (b) b.setAttribute('aria-checked', String(!!v)); };
   set('swTerrain', ov.terrain.on); set('swOcean', ov.ocean.on); set('swWind', ov.wind.on);
@@ -547,7 +555,8 @@ function setOverlay(k, v) {
 }
 
 function pushWind() {
-  renderer?.wind.set({ dirFrom: ov.wind.dirFrom, speed: ov.wind.speed, slice: ov.wind.slice, seaBreeze: ov.wind.seaBreeze ? 1 : 0 });
+  renderer?.setWind({ dirFrom: ov.wind.dirFrom, speed: ov.wind.speed, slice: ov.wind.slice, seaBreeze: ov.wind.seaBreeze ? 1 : 0 });
+  invalidate(3);
 }
 
 // LIVE WIND. Open-Meteo forecast API, current 10 m wind. CORS, no key, CC BY 4.0.
@@ -669,7 +678,7 @@ function bindInput() {
 function bindOrbit() {
   const pts = new Map();
   let last = null;
-  const note = () => { lastInput = performance.now(); camGoal = null; };
+  const note = () => { lastInput = performance.now(); camGoal = null; invalidate(2); };
   const pan = (dx, dy) => {
     const k = cam.dist / Math.max(window.innerHeight, 1) * 1.1;
     const s = Math.sin(cam.yaw), c = Math.cos(cam.yaw);
@@ -722,21 +731,38 @@ function bindOrbit() {
 }
 
 // ─── layout ─────────────────────────────────────────────────────────────────
+// RENDER SIZE. lib/render-scale.js sizes the canvas: the window x dpr (at
+// most 2), then a pixel budget, then a factor that its frame-rate control
+// lowers below 45 fps. The budget (PIXELS) was 3600 px long side, MSAA 4x:
+// 2880 x 1800 x 4 samples on a 1440 x 900 Retina laptop. The GPU-time rule
+// in governor() lowers the budget too, for a browser whose rAF does not slow.
+const PIXELS = { desktop: 2.4e6, phone: 1.3e6, min: 0.7e6 };
+let pixelBudget = 0, rs = null;
+function makeScale() {
+  const { phone } = device();
+  if (!pixelBudget) pixelBudget = phone ? PIXELS.phone : PIXELS.desktop;
+  rs = window.RenderScale?.create({ canvas, maxDpr: 2, fracDesktop: 1, fracMobile: 1, maxPixels: pixelBudget }) || null;
+}
+function syncCanvas() {
+  if (renderer && (renderer.width !== canvas.width || renderer.height !== canvas.height)) {
+    renderer.resize(canvas.width, canvas.height);
+    invalidate(2);    // a new canvas size clears it
+  }
+}
 function relayout() {
-  const w = window.innerWidth, h = window.innerHeight;
-  const { phone, tablet } = device();
+  const { phone } = device();
   document.body.classList.toggle('phone', phone);
-  const dprMax = phone || tablet ? 2 : 2.5;
-  const longMax = phone ? 2200 : tablet ? 2800 : 3600;
-  const dpr = Math.min(window.devicePixelRatio || 1, dprMax);
-  let bw = Math.max(1, Math.round(w * dpr * renderScale));
-  let bh = Math.max(1, Math.round(h * dpr * renderScale));
-  const k = Math.min(1, longMax / Math.max(bw, bh));
-  bw = Math.max(1, Math.round(bw * k)); bh = Math.max(1, Math.round(bh * k));
-  if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
-  renderer?.resize(bw, bh);
+  if (!rs) makeScale();
+  if (rs) rs.resize();
+  else {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const k = Math.min(1, Math.sqrt(pixelBudget / Math.max(1, innerWidth * innerHeight * dpr * dpr)));
+    canvas.width = Math.max(1, Math.round(innerWidth * dpr * k)); canvas.height = Math.max(1, Math.round(innerHeight * dpr * k));
+  }
+  syncCanvas();
   for (const it of ui.labels || []) it.w = 0;
   keepAt = -1e9;
+  invalidate(3);
 }
 
 // ─── city view ──────────────────────────────────────────────────────────────
@@ -768,18 +794,39 @@ function defaultView() {
 }
 
 // ─── city switch ────────────────────────────────────────────────────────────
+// requestCity resolves on the worker's first stage (terrain, sea, wind
+// arrays). r.full is a promise of the second stage (building mesh and
+// raster), so a city can draw its terrain before its buildings exist.
 function requestCity(i) {
   const c = cities[i];
   if (pending.has(c.id)) return pending.get(c.id);
+  let fullOk, fullErr;
+  const full = new Promise((res, rej) => { fullOk = res; fullErr = rej; });
+  full.catch(() => {});
   const p = new Promise((resolve, reject) => {
+    let base = null;
     const onMsg = (e) => {
       if (e.data.id !== c.id) return;
-      worker.removeEventListener('message', onMsg);
-      if (e.data.ok) {
-        const r = e.data;
+      const r = e.data;
+      if (!r.ok) {
+        worker.removeEventListener('message', onMsg);
+        const err = new Error(r.error);
+        if (base) fullErr(err); else { reject(err); fullErr(err); }
+        return;
+      }
+      if (r.stage === 'base') {
+        base = r;
+        r.timing.baseAt = performance.now();
+        const tb = performance.now();
         r.meta._bearing = waterBearing(r);
+        r.timing.bearingMs = performance.now() - tb;
+        r.full = full;
         resolve(r);
-      } else reject(new Error(e.data.error));
+      } else {
+        worker.removeEventListener('message', onMsg);
+        Object.assign(base.timing, r.timing, { fullAt: performance.now() });
+        fullOk(r);
+      }
     };
     worker.addEventListener('message', onMsg);
     worker.postMessage({ id: c.id, url: new URL(`data/${c.id}.bin`, import.meta.url).href, rasterN: 1024 });
@@ -789,18 +836,55 @@ function requestCity(i) {
   return p;
 }
 
-// GPU slot of a city: upload once, keep the current and the next one.
-async function slotFor(i) {
+// GPU slot of a city: upload once, keep the current and the next one. The
+// terrain uploads at once; the buildings join the slot when the worker
+// sends them (renderer.addBuildings). opts.full: resolve only after that
+// (the saver preloads this way, so its cut never shows a bare city).
+async function slotFor(i, opts = {}) {
   const c = cities[i];
-  if (slots.has(c.id)) return slots.get(c.id);
-  const data = await requestCity(i);
-  if (slots.has(c.id)) return slots.get(c.id);
-  const s = renderer.upload(data);
-  s.data = data;
-  slots.set(c.id, s);
+  let s = slots.get(c.id);
+  if (!s) {
+    const data = await requestCity(i);
+    s = slots.get(c.id);
+    if (!s) {
+      const tu = performance.now();
+      s = renderer.upload(data);
+      data.timing.uploadMs = performance.now() - tu;
+      s.data = data;
+      slots.set(c.id, s);
+      s.built = data.full.then((f) => {
+        if (s.dropped) return;
+        const tb = performance.now();
+        renderer.addBuildings(s, f);
+        data.timing.buildUploadMs = performance.now() - tb;
+        if (loadLog.cur?.id === c.id) Object.assign(loadLog.cur, f.timing, { buildUploadMs: data.timing.buildUploadMs, buildings: performance.now() - loadLog.cur.t0 });
+        invalidate(3);
+      });
+      s.built.catch((err) => console.warn('city-atlas: buildings failed', c.id, err));
+    }
+  }
+  if (opts.full) await s.built.catch(() => {});
   return s;
 }
+// Decode the next city in the worker, but only when the page is idle: no
+// input for 2 s, and an idle callback (Safari has none: a 2 s timer). It is
+// not uploaded to the GPU until it is picked.
+function preloadWhenIdle(token, i) {
+  const go = () => {
+    if (token !== switchToken || saver) return;
+    if (performance.now() - lastInput < 2000) { setTimeout(() => preloadWhenIdle(token, i), 2000); return; }
+    requestCity(i).catch(() => {});
+  };
+  if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 4000 }); else setTimeout(go, 2000);
+}
+
+// GPU slots: the current city, the one before it (a quick way back) and
+// any ids the caller names. Decoded cities outside the slots are freed.
+const recent = [];
 function trimSlots(keepIds) {
+  const cur = keepIds[0];
+  if (cur && recent[0] !== cur) { recent.unshift(cur); recent.length = Math.min(recent.length, 2); }
+  keepIds = [...keepIds, ...recent];
   for (const [id, s] of slots) {
     if (keepIds.includes(id)) continue;
     renderer.drop(s);
@@ -811,6 +895,7 @@ function trimSlots(keepIds) {
 
 async function switchTo(i, opts = {}) {
   const token = ++switchToken;
+  const t0 = performance.now();
   locIndex = i;
   const c = cities[i];
   syncControls();
@@ -835,7 +920,10 @@ async function switchTo(i, opts = {}) {
   if (token !== switchToken) return;
   meta = s.meta;
   if (renderer) {
+    const ts = performance.now();
     renderer.show(s);
+    loadLog.cur = { id: c.id, t0, ready: performance.now(), showMs: performance.now() - ts, ...(s.data?.timing || {}), cached: !!opts.cached };
+    if (s.data?.timing?.fullAt) loadLog.cur.buildings = Math.max(0, s.data.timing.fullAt - t0);   // built before the switch
     trimSlots([c.id, ...(opts.keep || [])]);
   }
   if (!meta.current) ov.ocean.on = false;
@@ -857,39 +945,91 @@ async function switchTo(i, opts = {}) {
   await document.fonts?.ready;
   if (token !== switchToken) return;
   relayout();
-  requestAnimationFrame(() => { fadeEl.classList.add('clear'); document.body.classList.add('shown'); });
+  invalidate(40);
+  requestAnimationFrame(() => {
+    fadeEl.classList.add('clear'); document.body.classList.add('shown');
+    if (loadLog.cur && loadLog.cur.id === c.id) loadLog.cur.interactive = performance.now() - loadLog.cur.t0;
+  });
   // preload the neighbours a moment later (not in the saver: it preloads its own next city)
-  if (!saver && renderer) setTimeout(() => { if (token === switchToken) requestCity((i + 1) % cities.length).catch(() => {}); }, 1500);
+  if (!saver && renderer) preloadWhenIdle(token, (i + 1) % cities.length);
 }
 
 // ─── frame loop ─────────────────────────────────────────────────────────────
-const frameTimes = [];
-let govAt = 0;
-function governor(rawMs, t) {
-  if (rawMs <= 0 || rawMs > 250) return;
-  frameTimes.push(rawMs);
-  if (frameTimes.length < 90 || t - govAt < 3000) return;
-  const s = frameTimes.slice().sort((a, b) => a - b);
-  const med = s[s.length >> 1], best = s[2];
-  frameTimes.length = 0;
+// QUALITY GOVERNOR, aiming at 60 fps. render-scale.js handles the pixels
+// from the frame rate. This rule reads the GPU time (submit to done) every
+// 2 s: over 13 ms it lowers, in order, the wind lattice steps per frame,
+// the streak count, then the pixel budget; under 6.5 ms for 6 s it raises
+// them back in the reverse order. Level 0 is full quality.
+const QUALITY = [
+  { wind: 1, share: 1, pix: 1 },
+  { wind: 0.6, share: 1, pix: 1 },
+  { wind: 0.4, share: 0.7, pix: 1 },
+  { wind: 0.4, share: 0.6, pix: 0.75 },
+  { wind: 0.25, share: 0.5, pix: 0.55 },
+  { wind: 0.25, share: 0.4, pix: 0.4 },
+];
+let qLevel = 0, govAt = 0, govGood = 0;
+function governor(t) {
+  if (t - govAt < 2000 || !renderer) return;
   govAt = t;
-  if (med > best * 1.45 && med > 20 && renderScale > 0.55) { renderScale = Math.max(0.55, renderScale - 0.12); relayout(); }
+  const g = med(renderer.info.gpuHist);
+  if (!g) return;
+  let next = qLevel;
+  if (g > 13 && qLevel < QUALITY.length - 1) { next = qLevel + 1; govGood = 0; }
+  else if (g < 6.5) { if (++govGood >= 3 && qLevel > 0) { next = qLevel - 1; govGood = 0; } }
+  else govGood = 0;
+  if (next === qLevel) return;
+  const pixBefore = QUALITY[qLevel].pix;
+  qLevel = next;
+  renderScale = QUALITY[qLevel].pix;
+  if (QUALITY[qLevel].pix !== pixBefore) {
+    const { phone } = device();
+    pixelBudget = Math.max(PIXELS.min, (phone ? PIXELS.phone : PIXELS.desktop) * QUALITY[qLevel].pix);
+    makeScale();
+    relayout();
+  }
+  renderer.info.gpuHist.length = 0;
+}
+
+// RENDER ON DEMAND. With no overlay on, no orbit, no input and no camera
+// ease, the image does not change, so the loop skips the GPU work. Any UI
+// change calls invalidate(n) for n more frames.
+let dirtyFrames = 0;
+function invalidate(n = 2) { dirtyFrames = Math.max(dirtyFrames, n); }
+function animating(t) {
+  if (saver || camGoal || dirtyFrames > 0) return true;
+  if (renderer?.info.shadowPending) return true;
+  if (t - lastInput < 500) return true;
+  if (playing && ov.view.orbit && t - lastInput > ORBIT_IDLE_MS) return true;
+  for (const k of ['terrain', 'ocean', 'wind']) {
+    if (Math.abs(ov[k].amt - (ov[k].on ? 1 : 0)) > 1e-3) return true;
+  }
+  return (ov.ocean.on && !!meta?.current) || ov.wind.on;
 }
 
 function ease(cur, goal, dt, tau) { return cur + (goal - cur) * (1 - Math.exp(-dt / tau)); }
 
 function frame(t) {
   requestAnimationFrame(frame);
+  const tf0 = performance.now();
+  rafGaps.push(lastT == null ? 0 : t - lastT); if (rafGaps.length > 120) rafGaps.shift();
   const rawMs = lastT == null ? 0 : t - lastT;
   const dt = Math.min(0.1, Math.max(0, rawMs / 1000));
   lastT = t;
   if (!meta || !renderer || !renderer.current) return;
+  if (rs && !saver) { rs.tick(t); syncCanvas(); }
+  // the clock runs on a skipped frame too (it is only text without the currents)
   if (playing && !scrubbing) {
     hour += dt * (lastHour() / DAYS_SECONDS) * (saver ? saverRate : 1);
     if (hour >= lastHour()) hour -= lastHour();
   }
   updateClockUI();
-  for (const k of ['terrain', 'ocean', 'wind']) ov[k].amt = ease(ov[k].amt, ov[k].on ? 1 : 0, dt, 0.35);
+  if (!animating(t)) { idleFrames++; return; }
+  if (dirtyFrames > 0) dirtyFrames--;
+  for (const k of ['terrain', 'ocean', 'wind']) {
+    const goal = ov[k].on ? 1 : 0;
+    ov[k].amt = Math.abs(ov[k].amt - goal) < 2e-3 ? goal : ease(ov[k].amt, goal, dt, 0.35);   // snap: the shadow map waits for a still E
+  }
   const E = ov.terrain.exag * ov.terrain.amt;
   if (saver) saverTick(dt, t);
   else {
@@ -914,6 +1054,7 @@ function frame(t) {
       // the free-stream wind move about 6 % of the view distance per second
       oceanVis: cam.dist * 0.07, windVis: cam.dist * 0.07,
       windAlpha: saver ? 0.45 : 0.7,
+      windMult: QUALITY[qLevel].wind, particleShare: QUALITY[qLevel].share,
       fog: Math.max(22000, cam.dist * 6),
     });
   } catch (err) {
@@ -923,10 +1064,14 @@ function frame(t) {
     return;
   }
   framesDrawn++;
+  const lc = loadLog.cur;
+  if (lc && lc.firstFrame == null) { lc.firstFrame = performance.now() - lc.t0; loadLog.list.push(lc); }
+  frameCpu.push(performance.now() - tf0); if (frameCpu.length > 120) frameCpu.shift();
   placeLabels(t);
   if (saver && saverLabel && t - saverPlateT >= 1000) { saverPlateT = t; saverPlate(); }
-  governor(rawMs, t);
+  governor(t);
 }
+let idleFrames = 0;
 
 function contourStep(m) {
   const relief = Math.max(10, (m.terrain.max || 50) - (m.groundRef || 0));
@@ -941,6 +1086,7 @@ function showFallback() {
 
 // ─── start ──────────────────────────────────────────────────────────────────
 async function start() {
+  bootLog.start = performance.now();
   const mark = pageMark();
   $('cat').textContent = mark.text;
   if (mark.color) document.documentElement.style.setProperty('--c', mark.color);
@@ -957,7 +1103,9 @@ async function start() {
   requestCity(locIndex).catch(() => {});
   try {
     const mod = await import('./renderer.js');
-    renderer = await mod.createRenderer(canvas, { mobile: device().phone });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    renderer = await mod.createRenderer(canvas, { mobile: device().phone, msaa: !device().phone && dpr < 1.5, timing: /[?&]gputime\b/.test(location.search) });
+    bootLog.renderer = performance.now();
   } catch (err) {
     console.warn('city-atlas: WebGPU renderer unavailable', err?.message ?? err);
     renderer = null;
@@ -1018,7 +1166,7 @@ function saverShot(i) {
 
 async function saverStart(shot, first) {
   const c = cities[shot.i];
-  const s = await slotFor(shot.i);
+  const s = await slotFor(shot.i, { full: true });
   // fade to black, then switch
   if (!first) { fadeEl.classList.remove('clear'); await wait(650); }
   meta = s.meta;
@@ -1050,7 +1198,7 @@ async function saverStart(shot, first) {
   tour.k = (tour.k + 1) % tour.order.length;
   if (tour.k === 0) tour.order = shuffle(tour.order.slice(), tour.rnd);
   tour.next = saverShot(tour.order[tour.k]);
-  setTimeout(() => slotFor(tour.next.i).catch(() => {}), 1500);
+  setTimeout(() => slotFor(tour.next.i, { full: true }).catch(() => {}), 1500);
 }
 
 function shuffle(a, r) {
@@ -1075,7 +1223,7 @@ function saverTick(dt, t) {
   if (!tour.cutting && (t - sh.t0) / 1000 > sh.seconds && tour.next) {
     tour.cutting = true;
     const nx = tour.next;
-    slotFor(nx.i).then(() => saverStart(nx, false)).catch(() => {}).finally(() => { tour.cutting = false; });
+    slotFor(nx.i, { full: true }).then(() => saverStart(nx, false)).catch(() => {}).finally(() => { tour.cutting = false; });
   }
 }
 
@@ -1163,15 +1311,22 @@ window.snSaver = {
 
 // Debug handle for the console and the headless checks.
 let framesDrawn = 0;
+const loadLog = { cur: null, list: [] };
+const bootLog = {};
+const frameCpu = [], rafGaps = [];
+const med = (a) => { const s = a.filter((x) => x > 0).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
 window.__cityAtlas = {
   get ready() { return !!meta && document.body.classList.contains('shown') && fadeEl.classList.contains('clear'); },
   get frames() { return framesDrawn; },
   get city() { return meta?.id; },
+  get loads() { return loadLog.list; },
+  get boot() { return { ...bootLog, r: renderer?.info.boot }; },
+  get perf() { return { cpuMs: med(frameCpu), rafMs: med(rafGaps), gpuMs: med(renderer?.info.gpuHist || []), gpuMax: Math.max(0, ...(renderer?.info.gpuHist || [])), q: qLevel, pass: renderer?.info.pass, idleFrames, drawn: framesDrawn, shadowDraws: renderer?.info.shadowDraws, msaa: renderer?.info.sampleCount, tris: renderer?.info.tris, renderScale, w: canvas.width, h: canvas.height }; },
   get state() { return { ov: JSON.parse(JSON.stringify(ov)), cam: { ...cam }, hour, renderScale, gpuMs: renderer?.info.gpuMs, tris: renderer?.info.tris }; },
   overlay: (k, v) => setOverlay(k, v),
   go: (id) => { const i = cities.findIndex((c) => c.id === id); if (i >= 0) return switchTo(i); return null; },
   set: (patch) => { for (const [k, v] of Object.entries(patch)) Object.assign(ov[k], v); syncLayers(); fillParams(); pushWind(); },
-  view: (v) => { Object.assign(cam, v); lastInput = performance.now(); },
+  view: (v) => { Object.assign(cam, v); lastInput = performance.now(); invalidate(3); },
   layers: (o) => setLayers(o),
   about: (o) => setCaption(o),
   atlas: (o) => setAtlas(o),

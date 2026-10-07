@@ -8,12 +8,21 @@
 //   renderer.show(slot)     make a slot current (frees the slot it replaces
 //                           unless keep is set), hands the city to the wind
 //                           solver, reseeds the tracers
+//   renderer.addBuildings(slot, full)   the building mesh and raster
+//                           (worker.js stage 2), after the terrain is up
 //   renderer.drop(slot)     free a slot
 //   renderer.frame(s)       one frame: wind steps, tracer moves, draw.
 //                           s = { cam, aspect, light, exag, terrain, colourMode,
 //                           ocean: { on, hour }, wind: { on, heat, ... }, dt }
 //   renderer.resize(w, h)
-//   renderer.info           { gpuMs?, tris }
+//   renderer.info           { gpuMs, gpuHist, tris, pass, shadowDraws, shadowPending }
+//                           gpuHist: submit-to-done ms of every 5th frame
+//                           (main.js governor); pass: GPU ms per pass with
+//                           ?gputime in the page URL (timestamp queries)
+//   The ocean and wind overlays build their pipelines and buffers on first
+//   use (needOcean, needWind). The wind solver steps only while its overlay
+//   shows. The shadow map redraws only when the sun, the relief or the city
+//   changes (shadowKey). Buildings under 2 px drop out by the LOD prefix.
 //
 // A shadow pass first draws the buildings from the sun (sunMatrix) into a
 // depth map, which the terrain and building shaders read (shadowAt).
@@ -21,12 +30,14 @@
 // outer terrain, inner terrain (with its skirt), buildings, then the ocean
 // and wind streaks (depth test, no depth write, additive).
 //
-// grep: function createRenderer  function lightFor  upload(  show(  frame(
+// grep: function createRenderer  function lightFor  upload(  show(  frame(  function addBuildings
+//       function needWind  function needOcean  shadowKey  LOD_SIZES  const TS
 //       function sunMatrix  const LIGHTS
 
 import { viewProj, lookAt, mul } from './camera.js';
 import { createTracers } from './tracers.js';
 import { createWind } from './wind.js';
+import { LOD_SIZES } from './mesh.js';
 
 export const LIGHTS = {
   day: { elev: 38, sun: [1.0, 0.95, 0.88], sunK: 1.25, amb: 0.62, hor: [0.66, 0.74, 0.84], zen: [0.20, 0.38, 0.66], night: 0 },
@@ -46,16 +57,21 @@ export function lightFor(name, azDeg) {
 
 export async function createRenderer(canvas, opts = {}) {
   if (!navigator.gpu) throw new Error('WebGPU not available');
+  const boot = { t0: performance.now() };
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('no WebGPU adapter');
-  const device = await adapter.requestDevice();
+  // ?gputime in the page URL: GPU timestamps per pass (debug handle perf.pass)
+  const timing = !!opts.timing && adapter.features.has('timestamp-query');
+  const device = await adapter.requestDevice(timing ? { requiredFeatures: ['timestamp-query'] } : undefined);
   let lost = false;
   // 'destroyed' is the shell's release on a page swap (lib/gpu-guard.js), not a fault
   device.lost.then((i) => { lost = true; if (i?.reason !== 'destroyed') console.warn('city-atlas: device lost', i?.message); });
   const ctx = canvas.getContext('webgpu');
   const format = navigator.gpu.getPreferredCanvasFormat();
   ctx.configure({ device, format, alphaMode: 'opaque' });
-  const sampleCount = opts.mobile ? 1 : 4;
+  // MSAA only on low-density screens: at 2 device px per CSS px the edges
+  // are already fine, and 4 samples there cost 4 times the fill.
+  const sampleCount = opts.msaa ? 4 : 1;
   const depthFormat = 'depth32float';
 
   const base = new URL('./shaders/', import.meta.url);
@@ -64,6 +80,7 @@ export async function createRenderer(canvas, opts = {}) {
     if (!r.ok) throw new Error(`${n}: ${r.status}`);
     return r.text();
   };
+  boot.device = performance.now() - boot.t0;
   const [common, terrainS, buildingsS, skyS, tracersS, linesS, lbmS] = await Promise.all(
     ['common.wgsl', 'terrain.wgsl', 'buildings.wgsl', 'sky.wgsl', 'tracers.wgsl', 'lines.wgsl', 'lbm.wgsl'].map(src));
 
@@ -113,6 +130,7 @@ export async function createRenderer(canvas, opts = {}) {
     if (errs.length) throw new Error(`${label}: ` + errs.map((e) => `${e.lineNum}:${e.linePos} ${e.message}`).join('; '));
     return m;
   };
+  boot.fetch = performance.now() - boot.t0;
   const [mTerrain, mBuild, mSky] = await Promise.all([
     mod(common + '\n' + terrainS, 'terrain'), mod(common + '\n' + buildingsS, 'buildings'), mod(common + '\n' + skyS, 'sky'),
   ]);
@@ -124,6 +142,7 @@ export async function createRenderer(canvas, opts = {}) {
     { shaderLocation: 2, offset: 12, format: 'snorm8x4' },
     { shaderLocation: 3, offset: 16, format: 'unorm8x4' },
   ] }];
+  boot.modules = performance.now() - boot.t0;
   const [pSky, pTerrain, pBuild, pShadow] = await Promise.all([
     device.createRenderPipelineAsync({
       layout: pl([layouts.scene, layouts.overlay]),
@@ -160,11 +179,34 @@ export async function createRenderer(canvas, opts = {}) {
 
   const tctx = { layouts, code: { common, tracers: tracersS, lines: linesS }, format, depthFormat, sampleCount };
   const mobile = !!opts.mobile;
-  const [ocean, windT] = await Promise.all([
-    createTracers(device, tctx, { mode: 0, max: mobile ? 5000 : 12000, K: 26, label: 'ocean' }),
-    createTracers(device, tctx, { mode: 1, max: mobile ? 7000 : 18000, K: 22, label: 'wind' }),
-  ]);
-  const wind = await createWind(device, { lbm: lbmS }, { fineN: mobile ? 384 : 640, coarseN: 256, fineSteps: mobile ? 4 : 6, coarseSteps: 3 });
+  boot.pipelines = performance.now() - boot.t0;
+  // The overlays compile their pipelines and make their buffers on first use,
+  // so the first frame of the plain city does not wait for them.
+  let ocean = null, windT = null, wind = null;
+  let oceanP = null, windP = null;
+  const windFlow = { dirFrom: 270, speed: 5, slice: 12, seaBreeze: 0 };
+  function needOcean() {
+    if (!oceanP) {
+      oceanP = createTracers(device, tctx, { mode: 0, max: mobile ? 5000 : 12000, K: 26, label: 'ocean' })
+        .then((t) => { ocean = t; return t; });
+    }
+    return oceanP;
+  }
+  function needWind() {
+    if (!windP) {
+      windP = Promise.all([
+        createTracers(device, tctx, { mode: 1, max: mobile ? 7000 : 18000, K: 22, label: 'wind' }),
+        createWind(device, { lbm: lbmS }, { fineN: mobile ? 384 : 640, coarseN: 256, fineSteps: mobile ? 3 : 4, coarseSteps: 2 }),
+      ]).then(([t, w]) => {
+        windT = t; wind = w;
+        wind.set(windFlow);
+        for (const s of live) { if (!s.dropped) s.gOv = overlayGroup(s); }
+        if (cur) windCity(cur);
+        return w;
+      });
+    }
+    return windP;
+  }
 
   // ---------------------------------------------------------------- shared buffers
   const U = GPUBufferUsage, T = GPUTextureUsage;
@@ -197,6 +239,17 @@ export async function createRenderer(canvas, opts = {}) {
   const idxCache = new Map();
   const indexFor = (side) => { if (!idxCache.has(side)) idxCache.set(side, gridIndex(side)); return idxCache.get(side); };
   const emptyArr = device.createTexture({ size: [1, 1, 2], format: 'rg8snorm', usage: T.TEXTURE_BINDING, label: 'emptySea' });
+  const emptyMacro = device.createTexture({ size: [1, 1], format: 'rgba16float', usage: T.TEXTURE_BINDING, label: 'emptyWind' });
+  const live = new Set();          // uploaded slots, for the overlay group rebuild
+  function overlayGroup(s) {
+    return device.createBindGroup({ layout: layouts.overlay, entries: [
+      { binding: 0, resource: { buffer: ovBuf } },
+      { binding: 1, resource: (wind ? wind.coarseTex : emptyMacro).createView() },
+      { binding: 2, resource: (wind ? wind.fineTex : emptyMacro).createView() },
+      { binding: 3, resource: (s.seaIn || emptyArr).createView({ dimension: '2d-array' }) },
+      { binding: 4, resource: (s.seaOut || emptyArr).createView({ dimension: '2d-array' }) },
+    ] });
+  }
 
   // ---------------------------------------------------------------- city upload
   function tex(size, format, data, bpp, label) {
@@ -205,8 +258,10 @@ export async function createRenderer(canvas, opts = {}) {
     device.queue.writeTexture({ texture: t }, data, { bytesPerRow: w * bpp, rowsPerImage: h }, [w, h, l]);
     return t;
   }
-  // heights: ground and surface int16 dm, water fraction at 2x resolution u8
-  function heightTex(ground, surf, wf, n, wn, label) {
+  // heights: ground and surface int16 dm, water fraction at 2x resolution u8.
+  // worker.js packs them (packHeights) off the main thread; this is the fallback.
+  function heightTex(ground, surf, wf, n, wn, label, packed) {
+    if (packed) return tex([n, n], 'rgba32float', packed, 16, label);
     const out = new Float32Array(n * n * 4);
     const k = wn / n;
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
@@ -227,14 +282,13 @@ export async function createRenderer(canvas, opts = {}) {
     const wnIn = A.wf_in.shape[0], wnOut = A.wf_out.shape[0];
     const s = { id: m.id, meta: m, seq: ++slotSeq, textures: [], buffers: [] };
     const keep = (t) => { s.textures.push(t); return t; };
-    s.hIn = keep(heightTex(A.t_in.data, A.s_in.data, A.wf_in.data, nIn, wnIn, 'hIn'));
-    s.hOut = keep(heightTex(A.t_out.data, A.s_out.data, A.wf_out.data, nOut, wnOut, 'hOut'));
+    s.hIn = keep(heightTex(A.t_in.data, A.s_in.data, A.wf_in.data, nIn, wnIn, 'hIn', c.hInData));
+    s.hOut = keep(heightTex(A.t_out.data, A.s_out.data, A.wf_out.data, nOut, wnOut, 'hOut', c.hOutData));
     s.wIn = keep(tex([wnIn, wnIn], 'r8unorm', A.wf_in.data, 1, 'wIn'));
     s.wOut = keep(tex([wnOut, wnOut], 'r8unorm', A.wf_out.data, 1, 'wOut'));
     s.cIn = keep(tex([A.lc_in.shape[0], A.lc_in.shape[0]], 'r8uint', A.lc_in.data, 1, 'cIn'));
     s.cOut = keep(tex([A.lc_out.shape[0], A.lc_out.shape[0]], 'r8uint', A.lc_out.data, 1, 'cOut'));
     s.rough = keep(tex([A.rough.shape[0], A.rough.shape[1]], 'rg8unorm', A.rough.data, 2, 'rough'));
-    s.bTex = keep(tex([c.bN, c.bN], 'r32float', c.bRaster, 4, 'bRaster'));
     const sea = (a, label) => {
       if (!a) return null;
       const [Tn, n] = a.shape;
@@ -244,15 +298,8 @@ export async function createRenderer(canvas, opts = {}) {
     s.seaOut = sea(A.cur_out, 'seaOut');
     s.nIn = nIn; s.nOut = nOut;
     s.gHalfIn = m.grid.inner.half; s.gHalfOut = m.grid.outer.half;
-    // buildings
-    s.bCount = c.mesh.indices.length;
-    if (s.bCount) {
-      s.vb = device.createBuffer({ size: c.mesh.vertices.byteLength, usage: U.VERTEX | U.COPY_DST, label: 'bVerts' });
-      device.queue.writeBuffer(s.vb, 0, c.mesh.vertices);
-      s.ib = device.createBuffer({ size: Math.ceil(c.mesh.indices.byteLength / 4) * 4, usage: U.INDEX | U.COPY_DST, label: 'bIdx' });
-      device.queue.writeBuffer(s.ib, 0, c.mesh.indices.buffer, c.mesh.indices.byteOffset, c.mesh.indices.byteLength);
-      s.buffers.push(s.vb, s.ib);
-    }
+    s.bCount = 0;          // addBuildings() fills the buildings
+    if (c.mesh) addBuildings(s, c);
     s.meshOut = meshU(s.gHalfOut, nOut, 0, 0);
     s.meshIn = meshU(s.gHalfIn, nIn, 1, 4);
     s.buffers.push(s.meshOut, s.meshIn);
@@ -263,21 +310,38 @@ export async function createRenderer(canvas, opts = {}) {
       { binding: 6, resource: s.cIn.createView() }, { binding: 7, resource: s.cOut.createView() },
       { binding: 8, resource: shadowView }, { binding: 9, resource: cmpS },
     ] });
-    s.gOv = device.createBindGroup({ layout: layouts.overlay, entries: [
-      { binding: 0, resource: { buffer: ovBuf } },
-      { binding: 1, resource: wind.coarseTex.createView() }, { binding: 2, resource: wind.fineTex.createView() },
-      { binding: 3, resource: (s.seaIn || emptyArr).createView({ dimension: '2d-array' }) },
-      { binding: 4, resource: (s.seaOut || emptyArr).createView({ dimension: '2d-array' }) },
-    ] });
+    s.gOv = overlayGroup(s);
+    live.add(s);
     s.gMeshOut = device.createBindGroup({ layout: layouts.mesh, entries: [{ binding: 0, resource: { buffer: s.meshOut } }] });
     s.gMeshIn = device.createBindGroup({ layout: layouts.mesh, entries: [{ binding: 0, resource: { buffer: s.meshIn } }] });
     s.layers = A.cur_out ? A.cur_out.shape[0] : (A.cur_in ? A.cur_in.shape[0] : 1);
     return s;
   }
 
+  // The worker's second stage: the merged building mesh (one vertex and one
+  // index buffer for the whole city, largest buildings first) and the
+  // building height raster for the wind solver.
+  function addBuildings(s, c) {
+    if (s.dropped || s.bTex) return;
+    const keep = (t) => { s.textures.push(t); return t; };
+    s.bTex = keep(tex([c.bN, c.bN], 'r32float', c.bRaster, 4, 'bRaster'));
+    s.lod = c.mesh.lod || null;
+    const n = c.mesh.indices.length;
+    if (n) {
+      s.vb = device.createBuffer({ size: c.mesh.vertices.byteLength, usage: U.VERTEX | U.COPY_DST, label: 'bVerts' });
+      device.queue.writeBuffer(s.vb, 0, c.mesh.vertices);
+      s.ib = device.createBuffer({ size: Math.ceil(c.mesh.indices.byteLength / 4) * 4, usage: U.INDEX | U.COPY_DST, label: 'bIdx' });
+      device.queue.writeBuffer(s.ib, 0, c.mesh.indices.buffer, c.mesh.indices.byteOffset, c.mesh.indices.byteLength);
+      s.buffers.push(s.vb, s.ib);
+    }
+    s.bCount = n;
+    if (s === cur) { shadowKey = ''; windCityId = -1; }    // new shadow casters, new wind walls
+  }
+
   function drop(s) {
     if (!s || s.dropped) return;
     s.dropped = true;
+    live.delete(s);
     for (const t of s.textures) t.destroy();
     for (const b of s.buffers) b.destroy();
   }
@@ -294,8 +358,19 @@ export async function createRenderer(canvas, opts = {}) {
   let cur = null;
   const frameRaw = new Float32Array(80);
   const ovRaw = new Float32Array(20);
-  const info = { tris: 0, gpuMs: 0 };
+  const info = { tris: 0, gpuMs: 0, gpuHist: [], boot, shadowDraws: 0, sampleCount };
   let frameNo = 0, gpuBusy = false;
+  // GPU timestamps: pairs (begin, end) for wind, ocean streaks, wind streaks, shadow, main pass
+  const TS = ['wind', 'ocean', 'windT', 'shadow', 'main'];
+  let qs = null, qResolve = null, qRead = null, qBusy = false;
+  const passHist = Object.fromEntries(TS.map((k) => [k, []]));
+  info.pass = {};
+  if (timing) {
+    qs = device.createQuerySet({ type: 'timestamp', count: TS.length * 2 });
+    qResolve = device.createBuffer({ size: TS.length * 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    qRead = device.createBuffer({ size: TS.length * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  }
+  const tsPair = (k) => ({ querySet: qs, beginningOfPassWriteIndex: 2 * k, endOfPassWriteIndex: 2 * k + 1 });
 
   // Orthographic view from the sun over the building square (half side ex m),
   // centred at height z0. Depth runs 0..1 over 4 ex + 2 km along the sun ray.
@@ -311,15 +386,23 @@ export async function createRenderer(canvas, opts = {}) {
     return mul(o, v);
   }
 
-  function show(s) {
-    cur = s;
+  function windCity(s) {
     wind.setCity({
       hIn: s.hIn, hOut: s.hOut, rough: s.rough, bTex: s.bTex,
       gHalfIn: s.gHalfIn, gHalfOut: s.gHalfOut, bHalf: s.meta.bHalf, fHalf: s.meta.fHalf,
       block: (s.meta.groundRef ?? 0) + 160,
     });
-    ocean.reseed();
-    windT.reseed();
+    windCityId = s.seq;
+  }
+  let windCityId = -1, shadowKey = '', shadowAt = -100;
+
+  // A new city: the wind solver takes it the next time the wind is on.
+  function show(s) {
+    cur = s;
+    shadowKey = '';
+    windCityId = -1;
+    ocean?.reseed();
+    windT?.reseed();
   }
 
   function frame(st) {
@@ -347,41 +430,66 @@ export async function createRenderer(canvas, opts = {}) {
     // rg8snorm reads int8 / 127; curScale* is m/s per int8 unit
     ovRaw.set([oc.on, layer, s.layers, (m.curScaleIn || 0) * 127], 0);
     ovRaw.set([(m.curScaleOut || 0) * 127, m.curTop || 0.5, s.seaIn ? 1 : 0, 0], 4);
-    const d = wind.dir;
-    ovRaw.set([wd.on, wd.heat, d[0], d[1]], 8);
-    ovRaw.set([wind.fHalf, wind.cHalf, wind.scale, wd.slice], 12);
-    ovRaw.set([wd.colourTop || Math.max(wd.speed * 2.2, 2.5), wind.fineN, wind.coarseN, 0], 16);
+    const hasOcean = oc.on > 0 && !!(s.seaIn || s.seaOut);
+    if (hasOcean && !ocean) needOcean();
+    if (wd.on > 0 && !wind) needWind();
+    const windOn = wd.on > 0 && !!wind;
+    if (windOn && windCityId !== s.seq) windCity(s);
+    const d = wind ? wind.dir : [1, 0];
+    ovRaw.set([windOn ? wd.on : 0, wd.heat, d[0], d[1]], 8);
+    ovRaw.set([wind ? wind.fHalf : 1, wind ? wind.cHalf : 1, wind ? wind.scale : 0, wd.slice], 12);
+    ovRaw.set([wd.colourTop || Math.max(wd.speed * 2.2, 2.5), wind ? wind.fineN : 1, wind ? wind.coarseN : 1, 0], 16);
     device.queue.writeBuffer(ovBuf, 0, ovRaw);
 
     const enc = device.createCommandEncoder();
-    if (wd.on > 0) wind.step(enc, st.windMult ?? 1);
+    const timeIt = timing && !qBusy && frameNo % 10 === 0;
+    const wrote = [false, false, false, false, true];
+    if (windOn) { wind.step(enc, st.windMult ?? 1, timeIt ? { querySet: qs, begin: 0, end: 1 } : null); wrote[0] = wrote[2] = true; }
     const dt = Math.min(st.dt, 0.05);
-    if (oc.on > 0 && (s.seaIn || s.seaOut)) {
+    if (hasOcean && ocean) {
+      wrote[1] = true;
       ocean.update(enc, s.gScene, s.gOv, {
-        count: st.oceanCount ?? (mobile ? 4000 : 10000), nInner: Math.round((st.oceanCount ?? (mobile ? 4000 : 10000)) * 0.7),
+        count: Math.round((mobile ? 4000 : 10000) * (st.particleShare ?? 1)), nInner: Math.round((mobile ? 4000 : 10000) * (st.particleShare ?? 1) * 0.7),
         dt, speedup: (st.oceanVis ?? 300) / Math.max(m.curTop || 0.5, 0.05), lift: 2.0, lineW: mobile ? 1.1 : 1.0, alpha: 0.9,
         innerR: s.gHalfIn * 0.98, outerR: s.gHalfOut * 0.9, colourTop: m.curTop || 0.5, lifeS: 4.5,
-      });
+      }, timeIt ? tsPair(1) : null);
     }
-    if (wd.on > 0) {
-      const cnt = st.windCount ?? (mobile ? 6000 : 16000);
+    if (windOn) {
+      const cnt = Math.round((st.windCount ?? (mobile ? 6000 : 16000)) * (st.particleShare ?? 1));
       windT.update(enc, s.gScene, s.gOv, {
         count: cnt, nInner: Math.round(cnt * 0.72), dt,
         speedup: (st.windVis ?? 300) / Math.max(wd.speed, 0.5), lift: wd.slice, lineW: mobile ? 1.1 : 1.0, alpha: st.windAlpha ?? 0.7,
         innerR: m.fHalf * 0.96, outerR: s.gHalfIn * 0.97,
         colourTop: wd.colourTop || Math.max(wd.speed * 2.2, 2.5), lifeS: 3.5,
-      });
+      }, timeIt ? tsPair(2) : null);
     }
 
-    if (s.bCount && lt.night < 0.6) {
-      const sp = enc.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: shadowView, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } });
-      sp.setPipeline(pShadow);
-      sp.setBindGroup(0, gFrameOnly);
-      sp.setVertexBuffer(0, s.vb);
-      sp.setIndexBuffer(s.ib, 'uint32');
-      sp.drawIndexed(s.bCount);
+    // The shadow map depends on the sun, the exaggeration and the city only,
+    // not on the camera: draw it again only when one of them changes.
+    const sk = `${s.seq}|${lt.sun[0].toFixed(3)},${lt.sun[1].toFixed(3)},${lt.sun[2].toFixed(3)}|${st.exag.toFixed(3)}|${st.cam.target[2].toFixed(1)}`;
+    // While E eases (a terrain toggle) it changes every frame: then at most
+    // every 4th frame; the settled value always draws.
+    // No casters (night, or the buildings not here yet): clear the map once,
+    // so no shadow of the city before stays on the terrain.
+    const casters = s.bCount > 0 && lt.night < 0.6;
+    const want = casters ? sk : `none|${s.seq}`;
+    if (want !== shadowKey && (!casters || frameNo - shadowAt >= 4 || shadowKey === '' || shadowKey.startsWith('none'))) {
+      shadowKey = want;
+      shadowAt = frameNo;
+      wrote[3] = true;
+      info.shadowDraws++;
+      const sp = enc.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: shadowView, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' }, ...(timeIt ? { timestampWrites: tsPair(3) } : {}) });
+      if (casters) {
+        sp.setPipeline(pShadow);
+        sp.setBindGroup(0, gFrameOnly);
+        sp.setVertexBuffer(0, s.vb);
+        sp.setIndexBuffer(s.ib, 'uint32');
+        sp.drawIndexed(s.bCount);
+      }
       sp.end();
     }
+    // a skipped redraw (the 4-frame limit) still owes one: main.js keeps drawing
+    info.shadowPending = want !== shadowKey;
     const view = ctx.getCurrentTexture().createView();
     const pass = enc.beginRenderPass({
       colorAttachments: [{
@@ -389,6 +497,7 @@ export async function createRenderer(canvas, opts = {}) {
         loadOp: 'clear', storeOp: colorT ? 'discard' : 'store', clearValue: [0, 0, 0, 1],
       }],
       depthStencilAttachment: { view: depthT.createView(), depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' },
+      ...(timeIt ? { timestampWrites: tsPair(4) } : {}),
     });
     pass.setBindGroup(0, s.gScene);
     pass.setBindGroup(1, s.gOv);
@@ -403,33 +512,74 @@ export async function createRenderer(canvas, opts = {}) {
     pass.setBindGroup(2, s.gMeshIn);
     pass.setIndexBuffer(ii.buf, 'uint32');
     pass.drawIndexed(ii.count);
-    if (s.bCount) {
+    // Distance LOD: skip the buildings that would be under 2 px across at
+    // the nearest edge of the building disc (largest first in the buffer).
+    let bDraw = s.bCount;
+    if (s.lod) {
+      const fpx = (H / 2) / Math.tan((st.fovY || 0.75) / 2);
+      const near = Math.max(150, st.cam.dist - m.r * 1000 * 1.1);
+      const sMin = 2 * near / fpx;
+      for (let k = 0; k < LOD_SIZES.length; k++) if (LOD_SIZES[k] <= sMin) { bDraw = s.lod[k]; break; }
+    }
+    if (bDraw) {
       pass.setPipeline(pBuild);
       pass.setVertexBuffer(0, s.vb);
       pass.setIndexBuffer(s.ib, 'uint32');
-      pass.drawIndexed(s.bCount);
+      pass.drawIndexed(bDraw);
     }
-    if (oc.on > 0 && (s.seaIn || s.seaOut)) ocean.draw(pass, s.gScene, s.gOv);
-    if (wd.on > 0) windT.draw(pass, s.gScene, s.gOv);
+    if (hasOcean && ocean) ocean.draw(pass, s.gScene, s.gOv);
+    if (windOn) windT.draw(pass, s.gScene, s.gOv);
     pass.end();
+    if (timeIt) {
+      enc.resolveQuerySet(qs, 0, TS.length * 2, qResolve, 0);
+      enc.copyBufferToBuffer(qResolve, 0, qRead, 0, TS.length * 16);
+    }
     device.queue.submit([enc.finish()]);
-    info.tris = (io.count + ii.count + s.bCount) / 3;
+    if (timeIt) {
+      qBusy = true;
+      const wroteNow = wrote;
+      qRead.mapAsync(GPUMapMode.READ).then(() => {
+        const t = new BigInt64Array(qRead.getMappedRange().slice(0));
+        qRead.unmap();
+        TS.forEach((k, i) => {
+          const a = t[2 * i], b = t[2 * i + 1];
+          if (!wroteNow[i]) { passHist[k].length = 0; delete info.pass[k]; return; }   // an off pass shows no old cost
+          if (a > 0n && b > a) {
+            const h = passHist[k];
+            h.push(Number(b - a) / 1e6); if (h.length > 30) h.shift();
+            const srt = h.slice().sort((x, y) => x - y);
+            info.pass[k] = srt[srt.length >> 1];
+          }
+        });
+        qBusy = false;
+      }).catch(() => { qBusy = false; });
+    }
+    info.tris = (io.count + ii.count + bDraw) / 3;
     // submit-to-done time of every 10th frame: about the GPU cost of a frame
-    if ((++frameNo % 10) === 0 && !gpuBusy) {
+    if ((++frameNo % 5) === 0 && !gpuBusy) {
       gpuBusy = true;
       const t0 = performance.now();
-      device.queue.onSubmittedWorkDone().then(() => { info.gpuMs = performance.now() - t0; gpuBusy = false; });
+      device.queue.onSubmittedWorkDone().then(() => {
+        info.gpuMs = performance.now() - t0;
+        info.gpuHist.push(info.gpuMs); if (info.gpuHist.length > 24) info.gpuHist.shift();
+        gpuBusy = false;
+      });
     }
   }
 
   return {
-    device, info, wind, upload, drop, resize,
+    device, info, upload, addBuildings, drop, resize,
+    get wind() { return wind; },
+    // wind settings; kept until the solver exists, then passed on
+    setWind(f) { Object.assign(windFlow, f); wind?.set(windFlow); },
     show,
     get current() { return cur; },
+    get width() { return W; },
+    get height() { return H; },
     frame,
     get lost() { return lost; },
     destroy() {
-      try { wind.destroy(); ocean.destroy(); windT.destroy(); } catch { /* */ }
+      try { wind?.destroy(); ocean?.destroy(); windT?.destroy(); } catch { /* */ }
       device.destroy();
     },
   };
