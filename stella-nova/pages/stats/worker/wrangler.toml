@@ -1,0 +1,27 @@
+# Cloudflare Worker config for the site statistics (worker.js).
+# First deploy, from this folder:
+#   npx wrangler login
+#   npx wrangler d1 create sn-stats          (put the printed id below)
+#   npx wrangler d1 execute sn-stats --remote --file schema.sql
+#   npx wrangler secret put STATS_KEY        (the key for #stats)
+#   npx wrangler deploy
+# Then put the printed https://sn-stats.<you>.workers.dev URL into
+# STATS_URL in ../../../lib/stats-beacon.js and API_URL in ../main.js.
+name = "sn-stats"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sn-stats"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# 00:07 UTC each day: delete the hashes and the salt of earlier days.
+[triggers]
+crons = ["7 0 * * *"]
+
+# Workers Logs can store request headers (IP address, user agent). Keep it
+# off, so the only data Cloudflare keeps for this Worker is in agg.
+[observability]
+enabled = false
