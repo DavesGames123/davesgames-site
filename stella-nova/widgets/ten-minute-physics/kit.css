@@ -1,0 +1,36 @@
+/* ===========================================================================
+   TEN MINUTE PHYSICS KIT  ·  widgets/ten-minute-physics/kit.css
+   ---------------------------------------------------------------------------
+   The credit bar on every Ten Minute Physics page, and the screensaver
+   frame. kit.js writes the bar and sets the classes.
+
+   grep -n targets
+     credit bar ........... "#tmp-credit"
+     saver frame .......... "html.tmp-saver"
+   =========================================================================== */
+#tmp-credit {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 14px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  font: 12px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #e8ecf4; background: rgba(12, 16, 26, 0.88);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+#tmp-credit b { color: #ffd27a; font-weight: 600; }
+#tmp-credit a { color: #8cc8ff; text-decoration: none; white-space: nowrap; }
+#tmp-credit a:hover { text-decoration: underline; }
+#tmp-credit .lic { color: #9aa4b8; }
+body.tmp-has-credit { padding-bottom: 44px; }
+@media (pointer: coarse) {
+  #tmp-credit { font-size: 13px; gap: 6px 16px; }
+  #tmp-credit a { padding: 6px 2px; }
+}
+
+/* Screensaver frame: only the sim canvas shows, on the page colour, inside
+   the clear band of the shell label plate (kit.js sets top, left, size). */
+html.tmp-saver, html.tmp-saver body { overflow: hidden !important; cursor: none; }
+html.tmp-saver body { background: var(--tmp-saver-bg, #000) !important; }
+html.tmp-saver body > *:not(.tmp-saver-keep) { visibility: hidden !important; }
+html.tmp-saver body .tmp-saver-canvas { visibility: visible !important; position: fixed !important; z-index: 99; border: 0 !important; margin: 0 !important; }
+html.tmp-saver body .tmp-saver-keep { visibility: visible !important; }
