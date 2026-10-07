@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Antenna Fields — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ANTENNA FIELDS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The page shows the near and the far field of five
+   antennas on a plane: a Hertzian dipole, a centre-fed dipole, a circular
+   loop, a phased array and a Yagi-Uda. em.js computes the currents (moment
+   method) and the pattern. field-gl.js sums the exact element fields on the
+   GPU and animates Re{F e^{jwt}}. overlay.js draws the antenna, the field
+   lines that have no flux function, the Poynting arrows and the zone rings.
+   plots.js draws the polar cuts and the impedance sweep. lobe.js draws the
+   3D pattern with three.js r160.
+
+   HEAD LOAD ORDER  (order matters)
+     1. importmap   "three" -> vendor/three@0.160.0 (must stay inline)
+     2. style.css   the page stylesheet
+     3. lib/sci.css science type (STIX Two Text, Inter, system mono) and the
+                    math colours .m1 to .m6
+   Scripts at the end of body: equations.js (MathJax SVG through
+   lib/sci-math.js), then main.js (ES module; it imports the rest).
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Antenna fields                              │
+     ├────────────┬───────────────────────────────────────┬─────────────┤
+     │ #panel     │ #field  (WebGL2) + #overlay (2D)       │ #side       │
+     │  antenna   │ #eqPanel   equations, top left         │  readouts   │
+     │  geometry  │ #probe     values under the pointer    │  polar cuts │
+     │  frequency │ #legend    colour scale                │  3D lobe    │
+     │  view      │                                        │  Z sweep    │
+     │  display   │                                        │             │
+     │  playback  │                                        │             │
+     │  about     │                                        │             │
+     ├────────────┴───────────────────────────────────────┴─────────────┤
+     │ #status   field · wt · elements · GPU time                        │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: #dockPanel opens the sheet, #dockTypes
+                picks the antenna, #dockPlay pauses. All are one tap.
+     #panel     a bottom sheet above the dock (a right drawer in landscape).
+                main.js moves the #side cards into #sheetResults.
+     main.js frames the antenna in the part of the canvas that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function rebuild'     antenna -> currents, pattern, GPU upload
+     grep -n 'function frame'       the render loop
+     grep -n 'function clearRect'   the occlusion framing
+     grep -n 'function buildUI'     the controls for each antenna
+     grep -n 'snSaver'              the screensaver hook (saver.js)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Watch radio waves leave an antenna. Exact near and far fields of a dipole, a loop, a phased array and a Yagi-Uda, with moment-method currents, radiation patterns and input impedance.">
+<script type="importmap">
+{
+  "imports": {
+    "three": "../../vendor/three@0.160.0/build/three.module.js",
+    "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Antenna fields</div>
+</div>
+
+<canvas id="field"></canvas>
+<canvas id="overlay"></canvas>
+<div id="probe" class="off"></div>
+<div id="hint">drag to pan · scroll or pinch to zoom · double-click to reset</div>
+<div id="fail" class="off"></div>
+
+<section id="eqPanel" class="collapsed-init">
+  <button id="eqCollapse" title="Collapse equations" aria-label="Collapse equations">▲</button>
+  <div class="eq-head"><span class="lbl">Equations</span></div>
+  <div class="eq-block">
+    <div class="eq-sublabel">Hertzian element, all terms</div>
+    <div class="eq-row sci-eq" data-tex="E_\theta=\frac{j\eta k\,I\Delta l\,\sin\theta}{4\pi r}\Big[1+\frac{1}{jkr}-\frac{1}{(kr)^2}\Big]e^{-jkr}"></div>
+    <div class="eq-row sci-eq" data-tex="H_\phi=\frac{jk\,I\Delta l\,\sin\theta}{4\pi r}\Big[1+\frac{1}{jkr}\Big]e^{-jkr},\quad \vec E(t)=\mathrm{Re}\{\vec E\,e^{j\omega t}\}"></div>
+  </div>
+  <div class="eq-block">
+    <div class="eq-sublabel">Moment method, Galerkin, sinusoidal bases</div>
+    <div class="eq-row sci-eq" data-tex="\sum_n Z_{mn}I_n=V_m,\qquad Z_{mn}=-\int f_m(z)\,E_z^{(n)}(z)\,dz"></div>
+  </div>
+  <div class="eq-block">
+    <div class="eq-sublabel">Array factor, power, directivity</div>
+    <div class="eq-row sci-eq" data-tex="AF=\frac{\sin(N\psi/2)}{\sin(\psi/2)},\quad \psi=kd\cos\phi+\beta"></div>
+    <div class="eq-row sci-eq" data-tex="\langle\vec S\rangle=\tfrac12\mathrm{Re}\{\vec E\times\vec H^{*}\},\qquad D=\frac{4\pi U_{\max}}{P_{\mathrm{rad}}}"></div>
+  </div>
+</section>
+
+<div id="legend">
+  <div class="lg-title" id="lgTitle">E field</div>
+  <canvas id="lgBar" width="180" height="10"></canvas>
+  <div class="lg-ticks"><span id="lgLo"></span><span id="lgMid"></span><span id="lgHi"></span></div>
+</div>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+
+  <div class="sec-label">Antenna</div>
+  <div class="types" id="types">
+    <button data-type="hertz">Hertzian</button>
+    <button data-type="dipole" class="on">Dipole</button>
+    <button data-type="loop">Loop</button>
+    <button data-type="array">Array</button>
+    <button data-type="yagi">Yagi-Uda</button>
+  </div>
+  <div class="hint" id="typeHint"></div>
+
+  <div id="quick" class="quick"></div>
+
+  <div class="sec-label">Geometry</div>
+  <div id="params"></div>
+  <div class="presets" id="presets"></div>
+
+  <div class="sec-label">Frequency</div>
+  <div class="row"><label><span class="sci-sym" data-tex="f" data-inline></span> <span class="w">operating frequency</span></label><input type="range" id="freq" min="150" max="600" step="1" value="300"><span class="val" id="freqV"></span></div>
+  <div class="hint">The antenna is built for 300 MHz (λ₀ = 1 m). A new frequency keeps the metal the same size, so its electrical length changes.</div>
+
+  <div class="sec-label">View</div>
+  <div class="modes" id="views">
+    <button data-view="side" class="on">Side · xz</button>
+    <button data-view="top">Top · xy</button>
+  </div>
+  <div class="presets four" id="fields">
+    <button data-field="E" class="on">E</button>
+    <button data-field="H">B</button>
+    <button data-field="S">S(t)</button>
+    <button data-field="Savg">⟨S⟩</button>
+  </div>
+  <div class="toggles" id="toggles">
+    <button data-tog="lines" class="on">Field lines</button>
+    <button data-tog="arrows">Poynting arrows</button>
+    <button data-tog="zones" class="on">Zone rings</button>
+    <button data-tog="log">Log scale</button>
+    <button data-tog="rcomp" class="on">r compensation</button>
+    <button data-tog="grid" class="on">λ grid</button>
+  </div>
+  <div class="row"><label>Exposure</label><input type="range" id="gain" min="-2" max="2" step="0.05" value="0"><span class="val" id="gainV"></span></div>
+  <div class="hint" id="viewHint"></div>
+
+  <div class="sec-label">Playback</div>
+  <div class="row"><label>Wave speed <span class="w">(cycles per second)</span></label><input type="range" id="speed" min="0" max="1.5" step="0.01" value="0.4"><span class="val" id="speedV"></span></div>
+  <div class="modes">
+    <button id="pauseBtn">Pause</button>
+    <button id="slowBtn">Slow motion</button>
+    <button id="stepBtn" title="Advance one sixteenth of a cycle">Step T/16</button>
+  </div>
+
+  <div id="sheetResults"></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>A current that changes in time pushes on the field around it. Close to the wire the field stores energy and gives it back each cycle: the reactive near field, inside about λ/2π (or 0.62√(D³/λ) for a large antenna of size D). The cyan ring marks it. The orange ring marks the start of the far field, where the pattern no longer changes with distance: beyond 2D²/λ, 2D and λ. Farther out, closed loops of electric field break away from the wire and travel outward at the speed of light. That is radiation.</p>
+    <p>The page cuts the wire into short current elements and adds up the exact field of each one, with the 1/r, 1/r² and 1/r³ terms. The GPU does this sum for every pixel. The time animation is Re{E e<sup>jωt</sup>}.</p>
+    <p>The currents are not guessed. A dipole can use the textbook sinusoidal current, or a moment-method solution with piecewise-sinusoidal bases. A Yagi-Uda has one driven element. Its reflector and directors have no feed, and the moment method finds the currents that the near field induces in them. A loop is solved mode by mode in a Fourier series.</p>
+    <p>The field lines are exact where a flux function exists: for a dipole in the side view they are the contours of ρH<sub>φ</sub>. In the other views the page traces the field direction.</p>
+    <p>Inspired by <a href="https://github.com/rotemTsafrir/dipole_sim" target="_blank" rel="noopener">dipole_sim</a> by Rotem Tsafrir. This page shares no code with it.</p>
+  </div>
+</div>
+
+<aside id="side">
+  <div class="card" id="cardRead">
+    <div class="card-h">Readout</div>
+    <table class="readout" id="readout"></table>
+  </div>
+  <div class="card" id="cardPolar">
+    <div class="card-h">Pattern cuts <span class="card-sub">dB, normalised</span></div>
+    <canvas id="polar"></canvas>
+    <div class="leg"><span class="k k1"></span><span id="legSide">xz plane</span><span class="k k2"></span><span id="legTop">xy plane</span></div>
+  </div>
+  <div class="card" id="cardLobe">
+    <div class="card-h">3D pattern <span class="card-sub">drag to turn</span></div>
+    <div id="lobeWrap"><canvas id="lobe"></canvas></div>
+  </div>
+  <div class="card" id="cardSweep">
+    <div class="card-h" id="sweepTitle">Input impedance</div>
+    <canvas id="sweep"></canvas>
+  </div>
+</aside>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockTypes" class="seg">
+    <button data-type="dipole" class="on">Dipole</button>
+    <button data-type="loop">Loop</button>
+    <button data-type="array">Array</button>
+    <button data-type="yagi">Yagi</button>
+  </div>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+</nav>
+
+<script type="module" src="equations.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
