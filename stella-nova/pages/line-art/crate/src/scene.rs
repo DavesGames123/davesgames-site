@@ -32,6 +32,9 @@ pub struct Scene {
     pub tree: Option<Tree>,
     /// The number of visibility rays cast (for the stats line; not in ln).
     pub rays: Cell<u64>,
+    /// Not in ln: when true, `visible` says yes to every point, so the
+    /// render keeps hidden lines (a wireframe; the page "blueprint" shot).
+    pub show_hidden: Cell<bool>,
 }
 
 impl Scene {
@@ -63,6 +66,9 @@ impl Scene {
     /// eye. Each shape skips hits closer than its own small offset, so the
     /// surface that holds the point does not hide it.
     pub fn visible(&self, eye: Vector, point: Vector) -> bool {
+        if self.show_hidden.get() {
+            return true;
+        }
         self.rays.set(self.rays.get() + 1);
         let v = eye.sub(point);
         let r = Ray::new(point, v.normalize());

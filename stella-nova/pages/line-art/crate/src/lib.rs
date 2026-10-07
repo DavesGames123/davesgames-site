@@ -20,6 +20,7 @@
 //!   obj stl   the mesh loaders
 //!   rng       not in ln: the seeded random source (Go uses math/rand)
 //!   examples  the ln examples/ directory as scene builders
+//!   originals not in ln: original scenes (gyroid, carved city, gears, ...)
 //!   bin/render.rs  not in ln: a native CLI that writes one example as SVG
 //!   wasm      not in ln: the wasm-bindgen API of the web worker
 //!
@@ -44,6 +45,7 @@ pub mod hit;
 pub mod matrix;
 pub mod mesh;
 pub mod obj;
+pub mod originals;
 pub mod path;
 pub mod plane;
 pub mod ray;

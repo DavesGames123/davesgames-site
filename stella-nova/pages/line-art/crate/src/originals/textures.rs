@@ -3,7 +3,7 @@
 //! Fogleman): Paths (lat/lng), Paths2 (great circles), Paths3 (dots) and
 //! Paths4 (nested circles), one sphere each.
 
-use super::*;
+use crate::examples::*;
 use crate::sphere::{new_sphere, SphereTexture};
 
 pub const EXAMPLE: Example = Example {

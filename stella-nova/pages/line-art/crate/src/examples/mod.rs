@@ -20,12 +20,13 @@
 //!
 //! GREP MAP
 //!   grep -n 'pub static EXAMPLES'   the table: key, title, camera, params
+//!   grep -n 'pub fn all'            ln examples and crate::originals
 //!   grep -n 'pub struct ParamSpec'  one slider or one option set
 //!   grep -n 'pub struct Built'      what a builder returns
 
-use crate::path::Paths;
-use crate::scene::Scene;
-use crate::vector::{v3, Vector};
+pub use crate::path::Paths;
+pub use crate::scene::Scene;
+pub use crate::vector::{v3, Vector};
 
 pub mod beads;
 pub mod cones;
@@ -42,7 +43,6 @@ pub mod slicer;
 pub mod slices;
 pub mod suzanne;
 pub mod test;
-pub mod textures;
 pub mod voxelize;
 
 #[cfg(test)]
@@ -177,7 +177,6 @@ pub static EXAMPLES: &[Example] = &[
     skyscrapers::EXAMPLE,
     test::EXAMPLE,
     outline::EXAMPLE,
-    textures::EXAMPLE,
     function::EXAMPLE,
     graph::EXAMPLE,
     beads::EXAMPLE,
@@ -190,8 +189,18 @@ pub static EXAMPLES: &[Example] = &[
     mountain::EXAMPLE,
 ];
 
+/// The ln examples, then the original scenes (crate::originals).
+pub fn all() -> impl Iterator<Item = &'static Example> {
+    EXAMPLES.iter().chain(crate::originals::ORIGINALS.iter())
+}
+
+/// "ln" for a port of an ln example, "original" for an own scene.
+pub fn group_of(e: &Example) -> &'static str {
+    if EXAMPLES.iter().any(|x| x.key == e.key) { "ln" } else { "original" }
+}
+
 pub fn find(key: &str) -> Option<&'static Example> {
-    EXAMPLES.iter().find(|e| e.key == key)
+    all().find(|e| e.key == key)
 }
 
 /// The lines between "// <scene>" and "// </scene>", with the common

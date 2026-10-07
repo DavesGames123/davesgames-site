@@ -12,7 +12,7 @@ fn earth_eye_is_the_ln_value() {
 /// Every example builds with its defaults and renders inside the image.
 #[test]
 fn every_example_renders() {
-    for ex in EXAMPLES {
+    for ex in all() {
         let p = Params::defaults(ex.params);
         let c = ex.camera_with(&p);
         let mut built = (ex.build)(&p, &c);

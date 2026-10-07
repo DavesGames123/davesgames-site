@@ -271,6 +271,13 @@ export class Job {
         return ret;
     }
     /**
+     * Not in ln: keep the hidden lines (a wireframe render).
+     * @param {boolean} on
+     */
+    set_show_hidden(on) {
+        wasm.job_set_show_hidden(this.__wbg_ptr, on);
+    }
+    /**
      * `step_scale` multiplies the example chop step (above 1 is coarser:
      * the quick preview while the camera moves).
      * @param {string} key

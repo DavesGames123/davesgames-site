@@ -198,7 +198,7 @@ function selectExample(key, opts = {}) {
   if (!opts.keepOrbit) S.orbit = { az: 0, el: 0 };
   plot.resetView();
   $('exTitle').textContent = e.title;
-  $('exSource').textContent = e.source ? 'ln ' + e.source : 'not an ln example: ln/sphere.go textures';
+  $('exSource').textContent = e.source ? 'ln ' + e.source : 'original scene: crate/src/originals';
   $('exBlurb').textContent = e.blurb;
   $('dockName').textContent = e.title;
   $('codeName').textContent = `crate/src/examples/${e.key}.rs`;
@@ -571,9 +571,9 @@ function saverShot() {
   });
   sv.label({
     title: 'Line art',
-    sub: `${e.title}: ${e.source ? 'ln ' + e.source : 'ln sphere textures'}, in Rust`,
+    sub: `${e.title}: ${e.source ? 'ln ' + e.source : 'an original scene'}, in Rust`,
     params: shown,
-    lines: ['Hidden lines removed by casting a ray from every point to the eye.'],
+    lines: ['Hidden lines removed by casting a ray from every point to the eye.', 'ln by Michael Fogleman (MIT), ported to Rust.'],
     code: { lang: 'rust', name: `examples/${key}.rs`, text: e.code },
   });
 }

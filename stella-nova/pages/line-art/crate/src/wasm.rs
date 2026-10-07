@@ -18,7 +18,7 @@
 //!   grep -n 'pub fn next'        one slice of a render
 //!   grep -n 'pub fn render_svg'  a whole render as SVG (Paths to_svg)
 
-use crate::examples::{code_extract, find, Built, Camera, Example, Params, EXAMPLES};
+use crate::examples::{all, code_extract, find, group_of, Built, Camera, Example, Params};
 use crate::matrix::Matrix;
 use crate::path::{Path, PathsExt, SvgStyle};
 use crate::scene::{screen_matrix, Scene};
@@ -67,8 +67,9 @@ fn example_json(e: &Example) -> String {
         .collect();
     let c = e.camera;
     format!(
-        "{{\"key\":{},\"title\":{},\"source\":{},\"blurb\":{},\"width\":{},\"height\":{},\"step\":{},\"cost\":{},\"camera\":{{\"eye\":{},\"center\":{},\"up\":{},\"fovy\":{},\"near\":{},\"far\":{}}},\"cameraFromParams\":{},\"params\":[{}]}}",
+        "{{\"key\":{},\"group\":{},\"title\":{},\"source\":{},\"blurb\":{},\"width\":{},\"height\":{},\"step\":{},\"cost\":{},\"camera\":{{\"eye\":{},\"center\":{},\"up\":{},\"fovy\":{},\"near\":{},\"far\":{}}},\"cameraFromParams\":{},\"params\":[{}]}}",
         js_str(e.key),
+        js_str(group_of(e)),
         js_str(e.title),
         js_str(e.source),
         js_str(e.blurb),
@@ -91,7 +92,7 @@ fn example_json(e: &Example) -> String {
 /// and parameter specs, as one JSON array.
 #[wasm_bindgen]
 pub fn catalog() -> String {
-    let items: Vec<String> = EXAMPLES.iter().map(example_json).collect();
+    let items: Vec<String> = all().map(example_json).collect();
     format!("[{}]", items.join(","))
 }
 
@@ -175,6 +176,11 @@ impl Job {
             paths_out: 0,
             segments_out: 0.0,
         })
+    }
+
+    /// Not in ln: keep the hidden lines (a wireframe render).
+    pub fn set_show_hidden(&mut self, on: bool) {
+        self.scene.show_hidden.set(on);
     }
 
     pub fn shape_count(&self) -> u32 {
