@@ -1,0 +1,1 @@
+Validation numbers for 408f6f0 (the body pointed at the session output): node tools/saver-check.mjs nuclear-blast --port 9958 -> mode hook, motion 34.38, exceptions [], consoleErrors only the headless 'THREE.WebGLRenderer: WEBGL_lose_context extension not supported.' compiler warning.
