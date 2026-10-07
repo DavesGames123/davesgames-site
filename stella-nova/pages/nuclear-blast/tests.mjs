@@ -17,9 +17,15 @@
 //    shape ....... monotone curves, round trips of the inverse functions
 //    map ......... the 5 psi ring on the place map: its on-screen radius at
 //                  two zooms and two latitudes equals R / metresPerPixel
+//    seams ....... places.js mendSeams: a water line at a WorldCover tile
+//                  edge goes (London, 0 deg E, land cover and water); a
+//                  river four pixels wide stays
 // ============================================================================
 import * as E from './effects.js';
 import * as G from './geo.js';
+import { mendSeams } from './places.js';
+import { parseCity, inflate } from '../city-atlas/data.js';
+import fs from 'node:fs';
 
 const FT = 0.3048, MI = 1609.344;
 let fail = 0, n = 0;
@@ -149,6 +155,27 @@ check('observed cloud top, 15 MT surface burst (km)', E.cloudTopFinal(15000) / 1
   ok('map: project and unproject round trip', Math.abs(u.lon + 73.99) < 1e-9 && Math.abs(u.lat - 40.72) < 1e-9);
   const L = G.toLocal(q.lon, q.lat, 10, 45);
   check('map: local tangent plane distance at 4 km (m)', Math.hypot(L.x, L.z), R, 0.005);
+}
+
+// ── seams: one-pixel water lines in the City Atlas rasters (places.js) ──
+{
+  const N = 16, a = new Uint8Array(N * N).fill(30);
+  for (let r = 0; r < N; r++) { a[r * N + 5] = 80; for (let q = 9; q < 13; q++) a[r * N + q] = 80; }
+  const m = mendSeams(a, N, v => v === 80);
+  let col5 = 0, river = 0;
+  for (let r = 0; r < N; r++) { col5 += a[r * N + 5] === 80; for (let q = 9; q < 13; q++) river += a[r * N + q] === 80; }
+  ok(`seams: a one-pixel line of water goes, a four-pixel river stays (mended ${m}, river ${river}/${4 * N})`, m === 1 && col5 === 0 && river === 4 * N);
+  const file = new URL('../city-atlas/data/london.bin', import.meta.url);
+  const c = parseCity(await inflate(fs.readFileSync(file))), A = c.arrays, M = c.meta;
+  const half = M.grid.outer.half, x0 = (0 - M.lon) * Math.PI / 180 * G.R_EARTH * Math.cos(M.lat * Math.PI / 180);
+  const q = Math.floor((x0 + half) / (2 * half) * 512);
+  const wetCol = arr => { let k = 0; for (let r = 0; r < 512; r++) k += arr[r * 512 + q] === 80; return k / 512; };
+  const before = wetCol(A.lc_out), mended = mendSeams(A.lc_out, 512, v => v === 80), after = wetCol(A.lc_out);
+  const qw = Math.floor((x0 + half) / (2 * half) * 1024);
+  const wetW = () => { let k = 0; for (let r = 0; r < 1024; r++) k += A.wf_out[r * 1024 + qw] > 0; return k / 1024; };
+  const bw = wetW(), mw = mendSeams(A.wf_out, 1024, v => v > 0), aw = wetW();
+  ok(`seams: London water fraction at 0° E, column ${qw} wet ${(bw * 100).toFixed(0)}% -> ${(aw * 100).toFixed(0)}% (${mw} mended)`, bw > 0.85 && aw < 0.2 && mw === 1);
+  ok(`seams: London land cover at 0° E, column ${q} water ${(before * 100).toFixed(0)}% -> ${(after * 100).toFixed(0)}% (${mended} mended)`, before > 0.85 && after < 0.2 && mended >= 1 && mended <= 3);
 }
 
 console.log(`\n${n - fail}/${n} passed`);
