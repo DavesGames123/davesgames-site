@@ -1,10 +1,10 @@
 // ============================================================================
-//  PHOTON CAUSTICS 2D  ·  gl.js — small WebGL2 helpers for the light image
+//  POOL CAUSTICS 3D  ·  gl.js — small WebGL2 helpers for the pool
 // ----------------------------------------------------------------------------
-//  pages/photon-caustics-3d/gl.js is a copy of this file: each page loads
-//  alone, so each page has its own copy. Keep the two copies the same.
-//  The light image adds many small values, so it needs a float target
-//  that can blend: RGBA16F. WebGL2 can render to it
+//  A copy of pages/photon-caustics/gl.js: each page loads alone, so each
+//  page has its own copy. Keep the two copies the same.
+//  The caustic image adds many small values, so it
+//  needs a float target that can blend: RGBA16F. WebGL2 can render to it
 //  with EXT_color_buffer_float (or the half-float extension), and can
 //  filter it with no extension. With neither extension the page falls back
 //  to RGBA8, and bright caustics clip sooner.

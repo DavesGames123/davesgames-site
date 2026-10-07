@@ -1,5 +1,5 @@
 // ============================================================================
-//  PHOTON CAUSTICS  ·  tests.mjs — node tests of optics2d.js (no DOM)
+//  PHOTON CAUSTICS 2D  ·  tests.mjs — node tests of optics2d.js (no DOM)
 // ----------------------------------------------------------------------------
 //  Run from the repo root:  node stella-nova/pages/photon-caustics/tests.mjs
 //  1. white light: the spectrum averages to 1, 1, 1 over 400..700 nm.

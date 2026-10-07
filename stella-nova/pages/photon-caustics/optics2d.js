@@ -1,5 +1,5 @@
 // ============================================================================
-//  PHOTON CAUSTICS  ·  optics2d.js — the 2D photon tracer (no DOM)
+//  PHOTON CAUSTICS 2D  ·  optics2d.js — the 2D photon tracer (no DOM)
 // ----------------------------------------------------------------------------
 //  A scene is a flat world of mirrors, glass and water. A light emits
 //  photons, each with one wavelength. A photon goes in a straight line to

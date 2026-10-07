@@ -1,5 +1,5 @@
 // ============================================================================
-//  PHOTON CAUSTICS  ·  render2d.js — the 2D view in WebGL2
+//  PHOTON CAUSTICS 2D  ·  render2d.js — the 2D view in WebGL2
 // ----------------------------------------------------------------------------
 //  Input: the segments from optics2d.trace (x0 y0 x1 y1 r g b).
 //
