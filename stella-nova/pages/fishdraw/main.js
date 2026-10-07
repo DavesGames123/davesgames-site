@@ -216,6 +216,7 @@ function placeCaption(L, view) {
     cap.innerHTML = `<i>${esc(S.name)}</i> · seed <span class="n">${f.seed}</span> · <span class="n">${f.offs.length - 1}</span> lines` +
       (ed ? ` · ${ed} edited` : '');
   }
+  cap.insertAdjacentHTML('beforeend', '<span class="cr"> · fishdraw by Lingdong Huang</span>');
   const bottom = Math.min((view.oy + L.h * view.s) / S.dpr, S.clear.y + S.clear.h) + 8;
   cap.style.left = (S.clear.x + S.clear.w / 2) + 'px';
   cap.style.top = bottom + 'px';

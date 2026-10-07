@@ -259,6 +259,23 @@ test('the plate SVG is well formed, with hostile names escaped', () => {
     eq((svg.match(/<path data-cell=/g) || []).length, 4, 'one path per fish');
   }
 });
+test('every plate SVG credits Lingdong Huang, with and without a title block', () => {
+  const E = makeEngine(SRC), f = drawFish(E, 'Biggus fishus', null, false);
+  const fish = { ...flatten(f.polylines), seed: f.seed, name: f.name };
+  for (const title of [true, false]) {
+    const L = layoutPlate({ w: 297, h: 210, rows: 1, cols: 1, border: title, title, labels: false, names: [] });
+    const svg = plateSVG(L, [fish], { theme: THEMES.cream, pen: 0.3 });
+    ok(wellFormed(svg), 'not well formed');
+    ok(/<desc>[^<]*Lingdong Huang[^<]*github\.com\/LingDong-\/fishdraw/.test(svg), 'desc credit');
+    ok(/<text[^>]*>Fish by fishdraw, created by Lingdong Huang \(MIT\)/.test(svg), 'visible credit line, title ' + title);
+    eq((svg.match(/created by Lingdong Huang \(MIT\) ·/g) || []).length, 1, 'one credit line');
+  }
+});
+test('the licence file is the upstream MIT text', () => {
+  const t = fs.readFileSync(path.join(DIR, 'LICENSE-fishdraw.txt'), 'utf8');
+  ok(t.startsWith('MIT License\n\nCopyright (c) 2021 Lingdong Huang\n'), 'copyright line');
+  ok(t.includes('THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND'), 'warranty text');
+});
 test('the checker itself rejects broken SVG', () => {
   for (const bad of ['<svg><g></svg>', '<svg>a & b</svg>', '<svg x=1></svg>', '<svg></svg><svg></svg>', '<svg><text>x</tex></svg>']) {
     let threw = false; try { wellFormed(bad); } catch (e) { threw = true; }

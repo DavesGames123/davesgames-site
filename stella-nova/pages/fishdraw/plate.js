@@ -28,9 +28,24 @@
 //    grep -n 'export function pageSize' a page key and orientation to mm
 //    grep -n 'export function layoutPlate' the layout
 //    grep -n 'export function roman'    plate numbers
+//    grep -n 'export const CREDIT_LINE'  the credit of Lingdong Huang
+//    grep -n 'export function withCredit' the credit on a plate with no foot
 // ============================================================================
 
 export const MM_PER_PX = 25.4 / 96;
+// The credit of the fish on every plate and file. fishdraw is the work of
+// Lingdong Huang; the plate layout (davesgames.io) is secondary.
+export const CREDIT_LINE = 'Fish by fishdraw, created by Lingdong Huang (MIT) · github.com/LingDong-/fishdraw';
+export const CREDIT_URLS = { repo: 'https://github.com/LingDong-/fishdraw', site: 'https://lingdong.works' };
+
+// A copy of layout L with the credit line at the lower right, when L has
+// no foot text (no title block). export.js and svg.js use it, so every
+// exported plate carries the credit.
+export function withCredit(L) {
+  if (L.texts.some(t => t.role === 'foot')) return L;
+  const size = Math.min(5, Math.max(1.2, Math.min(L.w, L.h) * 0.011));
+  return Object.assign({}, L, { texts: L.texts.concat([{ x: L.w - size * 1.4, y: L.h - size * 0.9, text: CREDIT_LINE, size, style: 'italic', align: 'right', role: 'foot' }]) });
+}
 export const FISH_W = 500, FISH_H = 300;
 
 // paper: the sheet; ink: the fish; label: type; rule: the border.
@@ -123,7 +138,7 @@ export function layoutPlate(o) {
     y0 = y + tSize * 0.7;
     // The foot: credit at the left, the page note at the right.
     const fSize = clamp(S * 0.012, 1.4, 7);
-    out.texts.push({ x: x0, y: y1, text: o.foot || 'Drawn with fishdraw, by Lingdong Huang', size: fSize, style: 'italic', align: 'left', role: 'foot' });
+    out.texts.push({ x: x0, y: y1, text: o.foot || CREDIT_LINE, size: fSize, style: 'italic', align: 'left', role: 'foot' });
     if (o.footRight) out.texts.push({ x: x1, y: y1, text: o.footRight, size: fSize, style: 'italic', align: 'right', role: 'foot' });
     y1 -= fSize * 2.2;
   }

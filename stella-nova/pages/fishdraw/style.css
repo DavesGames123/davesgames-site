@@ -30,6 +30,11 @@ code{font:0.92em var(--sci-mono);color:#cfc6b2}
 .topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px 0 calc(var(--panel-w) + 20px);background:rgba(11,12,15,0.9);border-bottom:1px solid var(--line);pointer-events:none;transition:padding 0.28s cubic-bezier(0.4,0,0.2,1)}
 .brand{font-size:0.85rem;font-weight:500;color:var(--dim)}
 .pagetitle{font-family:var(--sci-serif);font-size:1.15rem;color:#f1eee6}
+.topbar .credit{margin-left:auto;font-size:0.78rem;color:var(--dim);pointer-events:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .credit a{color:#d9c79f;text-decoration:none}
+.topbar .credit a:hover{text-decoration:underline}
+.credit-box{font-size:0.78rem;line-height:1.5;color:#d8d2c4;background:rgba(227,196,138,0.06);border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:0 0 12px}
+.about .ours{font-size:0.74rem}
 html.in-frame{--top:0px}
 html.in-frame .topbar{display:none}
 body.panel-closed .topbar{padding-left:68px}
@@ -47,6 +52,7 @@ html.in-frame #gear{top:14px}
 #view.cell{cursor:pointer}
 #caption{position:absolute;left:0;top:0;transform:translateX(-50%);white-space:nowrap;background:rgba(11,12,15,0.78);padding:2px 10px;border-radius:999px;z-index:3;font-family:var(--sci-serif);font-size:0.98rem;color:#a8acb5;pointer-events:none;max-width:96%;overflow:hidden;text-overflow:ellipsis}
 #caption i{font-style:italic;color:#e7e2d6}
+#caption .cr{color:#8f8a7e;font-size:0.9em}
 #caption .n{font-variant-numeric:tabular-nums}
 #busy{position:absolute;right:14px;top:12px;font-size:0.75rem;color:var(--dim);background:rgba(14,16,20,0.82);border:1px solid var(--line);border-radius:999px;padding:4px 10px;pointer-events:none}
 
@@ -180,6 +186,7 @@ button:disabled{opacity:0.4;cursor:default}
   .topbar{padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
   .brand{font-size:0.8rem}
   .pagetitle{font-size:1rem}
+  .topbar .credit{font-size:0.7rem}
   #gear,body.panel-closed #gear{display:none}
   #desk{bottom:var(--dock-h)}
   #caption{font-size:0.86rem}
