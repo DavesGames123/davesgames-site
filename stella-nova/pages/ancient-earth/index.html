@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Ancient Earth — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ANCIENT EARTH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A globe of the Earth from 540 Ma to today: the
+   PALEOMAP plate model and PaleoDEMs (Scotese & Wright 2018, CC BY 4.0),
+   modern places from Natural Earth, fossils from the Paleobiology
+   Database. Built from open data, after the idea of Ian Webster's
+   Ancient Earth (dinosaurpictures.org); no part of that site is used.
+
+   MODULES
+     recon.js      plate rotations (GPlates port), no DOM; tests.mjs
+     timescale.js  ICS units, colours, the bar mapping, events; no DOM
+     world.js      climate estimate, captions, ancient names; no DOM
+     data.js       fetch and decode the files in data/
+     shaders.js    GLSL for the globe
+     globe.js      three.js: earth, sky, stars, lines, pins, fossils
+     labels.js     the 2D label layer
+     main.js       the GUI, the time player, search, readouts
+     saver.js      window.snSaver, the screensaver tour
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (place, surface, layers, time, about),
+                 #info at the right (the age, caption, pins, picked point),
+                 #timebar along the base (the time scale and the player).
+     phone ..... #timebar above #dock. A dock tab opens #panel with one
+                 .grp, as a bottom sheet (portrait) or a drawer
+                 (landscape). #info folds to its age line; a tap opens it.
+
+   GREP MAP  (main.js)
+     grep -n 'function buildTimebar'   the time scale bar
+     grep -n 'function setAge'         one age change, all views
+     grep -n 'function tick'           the player and the frame loop
+     grep -n 'function search'         place search
+     grep -n 'function pinReadout'     "where was this place then"
+     grep -n 'function whereNow'       "where is it now"
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A realistic globe of the Earth from 540 million years ago to today: moving plates, paleo-elevation, ice and climate estimates, fossil sites, and where any city was at any time.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Ancient Earth</div>
+  <div id="ageBig" aria-live="polite"><b id="ageNum">0 Ma</b><span id="ageUnit"></span></div>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <canvas id="labels" aria-hidden="true"></canvas>
+  <div id="tip" class="tip" hidden></div>
+  <div id="loading"><div class="lbar"><i id="lfill"></i></div><span id="ltext">Loading plates and paleo-elevation…</span></div>
+  <div id="hint">drag to turn · scroll or pinch to zoom · click the globe to ask where that crust is now</div>
+</main>
+<div id="nogl" hidden>WebGL 2 is not available in this browser, so the globe cannot render.</div>
+
+<aside id="panel" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="place">
+    <div class="sec-label first">Where was this place then?</div>
+    <div class="search">
+      <input id="q" type="search" placeholder="A city, or lat, lon" autocomplete="off" spellcheck="false" aria-label="Search a present-day place">
+      <ul id="qList" role="listbox" hidden></ul>
+    </div>
+    <div class="chips" id="quickPlaces"></div>
+    <p class="note">A pin rides its plate. Its trail is the path that ground took from its age of origin to today. Click the globe to ask where that crust is now.</p>
+    <div id="pins"></div>
+  </section>
+
+  <section class="grp" data-grp="surface">
+    <div class="sec-label first">Surface</div>
+    <div class="chips" id="modes"></div>
+    <div id="legend"></div>
+    <div class="row"><label for="exag">Relief</label><input type="range" id="exag" min="0" max="80" step="1" value="20"><span class="val" id="exagV"></span></div>
+    <div class="row"><label for="hillAz">Hillshade</label><input type="range" id="hillAz" min="0" max="360" step="5" value="315"><span class="val" id="hillAzV"></span></div>
+    <div class="toggles">
+      <button class="tog on" id="tHill" type="button">Hillshade</button>
+      <button class="tog on" id="tClouds" type="button">Clouds</button>
+    </div>
+    <div class="sec-label">Sun</div>
+    <div class="chips" id="sunModes">
+      <button type="button" data-sun="view" class="on">Over my shoulder</button>
+      <button type="button" data-sun="clock">By date and hour</button>
+    </div>
+    <div id="sunClock" hidden>
+      <div class="row"><label for="sunDay">Day</label><input type="range" id="sunDay" min="1" max="365" step="1" value="172"><span class="val" id="sunDayV"></span></div>
+      <div class="row"><label for="sunHour">Hour</label><input type="range" id="sunHour" min="0" max="24" step="0.25" value="12"><span class="val" id="sunHourV"></span></div>
+    </div>
+    <div id="sunView">
+      <div class="row"><label for="sunAz">Sun angle</label><input type="range" id="sunAz" min="-120" max="120" step="1" value="-38"><span class="val" id="sunAzV"></span></div>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="layers">
+    <div class="sec-label first">Continents</div>
+    <div class="chips" id="tints">
+      <button type="button" data-tint="0" class="on">Natural</button>
+      <button type="button" data-tint="1">By plate</button>
+      <button type="button" data-tint="2">By modern continent</button>
+    </div>
+    <div id="tintKey"></div>
+    <div class="sec-label">Lines</div>
+    <div class="grid2">
+      <button class="tog on" data-layer="coast" type="button">Modern coasts</button>
+      <button class="tog" data-layer="borders" type="button">Country borders</button>
+      <button class="tog" data-layer="terranes" type="button">Plate outlines</button>
+      <button class="tog" data-layer="bounds" type="button">Plate boundaries</button>
+      <button class="tog on" data-layer="grid" type="button">Paleo grid</button>
+      <button class="tog on" data-layer="fossils" type="button">Fossil sites</button>
+    </div>
+    <p class="note" id="boundNote">Plate boundaries (ridges, trenches, transforms) exist in this model from 100 Ma to today only.</p>
+    <div class="sec-label">Labels</div>
+    <div class="grid2">
+      <button class="tog on" data-label="names" type="button">Ancient names</button>
+      <button class="tog on" data-label="cities" type="button">Cities</button>
+      <button class="tog" data-label="countries" type="button">Countries</button>
+      <button class="tog" data-label="plates" type="button">Plate names</button>
+    </div>
+    <div class="sec-label">Fossils at this age</div>
+    <div id="fossilKey"></div>
+    <button id="pbdbLive" class="wide" type="button">Fetch more from the Paleobiology Database</button>
+    <p class="note" id="pbdbNote">Shown: a sample shipped with the page. Live fetch asks paleobiodb.org for occurrences at this age.</p>
+  </section>
+
+  <section class="grp" data-grp="time">
+    <div class="sec-label first">Play through time</div>
+    <div class="chips" id="speeds">
+      <button type="button" data-speed="1">1 Myr/s</button>
+      <button type="button" data-speed="5" class="on">5 Myr/s</button>
+      <button type="button" data-speed="20">20 Myr/s</button>
+      <button type="button" data-speed="60">60 Myr/s</button>
+    </div>
+    <div class="chips" id="dirs">
+      <button type="button" data-dir="1" class="on">Past → present</button>
+      <button type="button" data-dir="-1">Present → past</button>
+    </div>
+    <div class="sec-label">Range</div>
+    <div class="chips" id="ranges"></div>
+    <div class="row"><label for="rFrom">From</label><input type="range" id="rFrom" min="0" max="540" step="1" value="540"><span class="val" id="rFromV"></span></div>
+    <div class="row"><label for="rTo">To</label><input type="range" id="rTo" min="0" max="540" step="1" value="0"><span class="val" id="rToV"></span></div>
+    <div class="grid2">
+      <button class="tog on" id="tLoop" type="button">Loop</button>
+      <button class="tog on" id="tEase" type="button">Ease at the ends</button>
+      <button class="tog" id="tSpin" type="button">Turn the globe</button>
+      <button class="tog" id="tFollow" type="button">Follow the pin</button>
+    </div>
+    <div class="sec-label">Jump to</div>
+    <div class="chips" id="events"></div>
+  </section>
+
+  <section class="grp" data-grp="about">
+    <div class="sec-label first">About</div>
+    <div class="about">
+      <p>The continents move by the PALEOMAP plate model, and the land and sea floor come from its paleo-elevation models (Scotese and Wright 2018), one every 5 million years, blended between steps. A present-day place rides the plate that holds it; recon.js reproduces pygplates to within a metre.</p>
+      <p>The colours of land, the ice and the clouds are an <em>estimate</em> made for this page from a global temperature curve, latitude, height and distance from the sea. They show the kind of world, not a map of real forests. Land plants spread from about 470 Ma, forests from about 385 Ma, grasslands in the last 25 million years.</p>
+      <p>Longitude is not fixed by paleomagnetism, so the east–west position of old continents is a model choice.</p>
+      <p>The idea comes from Ian Webster's <a href="https://dinosaurpictures.org/ancient-earth" target="_blank" rel="noopener">Ancient Earth</a>. This page uses none of its maps, code or text.</p>
+      <p class="credits">Data: C. R. Scotese and N. Wright (2018), PALEOMAP PaleoDEMs and plate model, CC BY 4.0, doi:10.5281/zenodo.5460860, via EarthByte and GPlates. Natural Earth (public domain). Paleobiology Database (CC BY 4.0). ICS chart via Macrostrat (CC BY 4.0). Colour maps: matplotlib magma, viridis, inferno (CC0) and turbo (Google, Apache-2.0). Full list: <a href="CREDITS.txt" target="_blank">CREDITS.txt</a>.</p>
+    </div>
+  </section>
+</aside>
+
+<aside id="info" aria-label="This age">
+  <button id="infoFold" type="button" aria-label="Fold the age card">▾</button>
+  <div class="when">
+    <div class="units" id="units"></div>
+    <h2 id="capTitle"></h2>
+    <p id="capText"></p>
+    <div class="climate" id="climate"></div>
+  </div>
+  <div id="readout"></div>
+</aside>
+
+<div id="timebar" aria-label="Geological time scale">
+  <div class="tcontrols">
+    <button id="play" type="button" aria-label="Play"><i>▶</i></button>
+    <button id="speedBtn" type="button" aria-label="Speed">5×</button>
+  </div>
+  <div id="track" role="slider" tabindex="0" aria-label="Age in millions of years" aria-valuemin="0" aria-valuemax="540">
+    <div id="evRow"></div>
+    <div class="rows" id="rows"></div>
+    <div id="cursor"><span id="cursorLab"></span></div>
+    <div id="rangeMark"></div>
+  </div>
+</div>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="place" type="button"><i>⌖</i><span>Place</span></button>
+  <button class="tab" data-grp="surface" type="button"><i>◐</i><span>Surface</span></button>
+  <button class="tab" data-grp="layers" type="button"><i>◫</i><span>Layers</span></button>
+  <button class="tab" data-grp="time" type="button"><i>◷</i><span>Time</span></button>
+  <button class="tab" data-grp="about" type="button"><i>ⓘ</i><span>About</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
