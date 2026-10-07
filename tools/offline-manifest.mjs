@@ -77,6 +77,8 @@ const LAZY_DIRS = [
   /^stella-nova\/pages\/img2threejs\/models\//,   // 4 MB of model passes
   /^stella-nova\/pages\/translate\/strings\//,    // 2.7 MB of UI strings
   /^stella-nova\/vendor\/mathjax@[^/]+\/es5\/(a11y|ui)\//, // menu options only
+  /^stella-nova\/vendor\/spark@[^/]+\//,           // 2.7 MB splat renderer, image-worlds only
+  /^stella-nova\/vendor\/onnxruntime-web@[^/]+\//, // ML runtime + wasm, market-forecast only
 ];
 
 function isCore(p, size) {
