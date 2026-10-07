@@ -1,0 +1,178 @@
+/* ============================================================================
+   IMAGE WORLDS  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark shell. Type from lib/sci.css (loaded after this file): STIX Two Text
+   for the site name and the page title, Inter for the rest, the system mono
+   for file names and numbers. Labels are sentence case. The canvas fills
+   the frame. The panel is a drawer on the left.
+
+   PHONE (max-width 768px, or a short landscape touch screen). A dock at the
+   base holds the panel button, the camera mode and the sound. In portrait
+   the panel is a bottom sheet above the dock; main.js moves the view up so
+   the world stays centred in the part that the sheet does not cover. In
+   landscape the panel is a drawer on the right edge. Touch targets are at
+   least 44 px.
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block
+     grep -n 'LANDSCAPE'  the landscape overrides
+     grep -n 'sn-saver'   the screensaver mode (lib/screensaver.js)
+   ========================================================================== */
+:root{
+  --bg:#0c0e13; --bg2:#141821; --ink:#dfe3ea; --dim:#8b93a3; --faint:#3a4150;
+  --line:rgba(170,190,220,0.12); --line-b:rgba(170,190,220,0.24);
+  --warm:#f2b366; --cool:#7cc3f0; --panel-w:330px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+body{background:var(--bg);font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px}
+a{color:var(--cool)}
+code{font-family:var(--sci-mono);font-size:0.86em;color:#c9d2de;background:rgba(255,255,255,0.05);padding:0 3px;border-radius:3px;word-break:break-word}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;pointer-events:none}
+.brand{font-family:var(--sci-serif);font-size:1.15rem;color:#e8eef8}
+.pagetitle{font-size:0.8rem;color:var(--dim);margin-left:auto}
+html.in-frame .topbar{display:none}
+
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#nogl{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:50;max-width:420px;padding:18px 20px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);text-align:center}
+#hint{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);z-index:20;font-size:0.76rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;text-align:center;white-space:nowrap}
+#hint.gone{opacity:0}
+
+#gear{position:fixed;top:14px;left:14px;z-index:40;width:38px;height:38px;border:1px solid var(--line-b);background:rgba(16,19,26,0.75);color:var(--ink);border-radius:9px;font-size:1.05rem;cursor:pointer;display:none}
+body.panel-closed #gear{display:block}
+#gear:hover{border-color:var(--warm);color:var(--warm)}
+
+#panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(12,14,19,0.96);border-right:1px solid var(--line-b);
+  padding:58px 18px 40px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);scrollbar-width:thin}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{padding-top:20px}
+#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+#panel h1{font-family:var(--sci-serif);font-weight:500;font-size:1.5rem;margin-bottom:6px}
+.lede{font-size:0.86rem;line-height:1.5;color:#c3cad6;margin-bottom:14px}
+.sec-label{font-size:0.8rem;color:var(--warm);margin:20px 0 8px;font-weight:600}
+.hint{font-size:0.76rem;line-height:1.5;color:var(--dim);margin-top:7px}
+.msg{font-size:0.78rem;line-height:1.45;margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(242,179,102,0.08);border:1px solid rgba(242,179,102,0.25);color:#ecd3b0;white-space:pre-line}
+.msg.bad{background:rgba(240,110,110,0.08);border-color:rgba(240,110,110,0.3);color:#f0c0c0}
+
+#card{display:flex;gap:12px;align-items:flex-start;padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,0.02)}
+#card .src{flex:0 0 96px;height:72px;border-radius:8px;overflow:hidden;background:#090b0f;display:flex;align-items:center;justify-content:center;position:relative}
+#card img{width:100%;height:100%;object-fit:cover;display:block}
+#card img[hidden]{display:none}
+#cardNoImg{font-size:0.66rem;color:var(--faint);text-align:center;padding:4px}
+#card .txt{min-width:0}
+#card .name{font-size:0.98rem;font-weight:600;line-height:1.3}
+#card .meta{font-family:var(--sci-mono);font-size:0.7rem;color:var(--dim);margin-top:3px;line-height:1.45;word-break:break-word}
+#card .cap{font-size:0.76rem;color:#b7bfcc;margin-top:4px;line-height:1.4}
+
+.gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wcard{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0a0c10;cursor:pointer;padding:0;color:inherit;text-align:left}
+.wcard:hover{border-color:var(--line-b)}
+.wcard.on{border-color:var(--warm)}
+.wcard .th{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#07080b}
+.wcard .th.none{display:flex;align-items:center;justify-content:center;font-size:0.68rem;color:var(--faint)}
+.wcard .lb{display:block;padding:6px 8px 7px;font-size:0.76rem;line-height:1.3}
+.wcard .tag{position:absolute;top:6px;left:6px;font-size:0.62rem;padding:1px 6px;border-radius:9px;background:rgba(8,10,14,0.8);color:var(--dim);border:1px solid var(--line)}
+.wcard .tag.local{color:var(--cool)}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row2 button,.toggles button,.seg button{min-height:34px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:8px;font-size:0.8rem;cursor:pointer;padding:6px 8px}
+.row2 button:hover,.toggles button:hover{border-color:var(--warm)}
+.toggles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.toggles button{color:var(--dim)}
+.toggles button.on{color:var(--warm);border-color:rgba(242,179,102,0.55);background:rgba(242,179,102,0.08)}
+.seg{display:flex;border:1px solid var(--line-b);border-radius:9px;overflow:hidden}
+.seg button{flex:1;min-width:0;border:0;border-radius:0;border-right:1px solid var(--line);color:var(--dim)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:rgba(242,179,102,0.12);color:var(--warm)}
+.steps{font-size:0.8rem;line-height:1.5;color:#c3cad6;padding-left:20px}
+.steps li{margin-bottom:6px}
+.about p{font-size:0.76rem;line-height:1.5;color:var(--dim);margin-bottom:8px}
+
+#status{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;gap:16px;padding:7px 16px;font-size:0.74rem;color:var(--dim);background:linear-gradient(0deg,rgba(8,10,14,0.85),rgba(8,10,14,0));pointer-events:none}
+#status .right{margin-left:auto;font-family:var(--sci-mono);font-size:0.7rem}
+#stMain{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+#loading{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:25;width:min(320px,70vw);padding:12px 14px;border:1px solid var(--line-b);border-radius:12px;background:rgba(12,14,19,0.9);pointer-events:none}
+#loading .lbl{font-size:0.78rem;color:#c3cad6;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#loading .bar{height:4px;border-radius:2px;background:rgba(255,255,255,0.08);overflow:hidden}
+#loading .bar i{display:block;height:100%;width:0;background:var(--warm);transition:width 0.15s}
+
+#drop{position:fixed;inset:0;z-index:60;background:rgba(8,10,14,0.82);display:flex;align-items:center;justify-content:center;border:2px dashed rgba(242,179,102,0.6);pointer-events:none}
+#drop div{text-align:center;display:flex;flex-direction:column;gap:6px}
+#drop b{font-size:1.2rem;color:var(--warm);font-weight:600}
+#drop span{font-size:0.85rem;color:var(--dim)}
+#drop[hidden],#loading[hidden],#joy[hidden]{display:none}
+
+#joy{position:fixed;left:calc(18px + env(safe-area-inset-left));bottom:calc(var(--dock-h,0px) + 46px);z-index:26;width:116px;height:116px;border-radius:50%;
+  border:1px solid var(--line-b);background:rgba(12,14,19,0.45);touch-action:none;display:flex;align-items:center;justify-content:center}
+#joy i{width:46px;height:46px;border-radius:50%;background:rgba(242,179,102,0.35);border:1px solid rgba(242,179,102,0.7);pointer-events:none}
+#dock,#sheetGrip{display:none}
+
+@media(min-width:769px){
+  .topbar{padding-left:calc(var(--panel-w) + 20px)}
+  body.panel-closed .topbar{padding-left:64px}
+  #status{left:var(--panel-w)}
+  body.panel-closed #status{left:0}
+  #hint{left:calc(50% + var(--panel-w) / 2)}
+  body.panel-closed #hint{left:50%}
+  html.in-frame #gear{top:12px}
+}
+
+/* TOUCH: any coarse pointer, phone or tablet */
+@media (pointer:coarse){
+  .row2 button,.toggles button,.seg button{min-height:44px;font-size:0.84rem}
+  #panelClose{width:44px;height:44px}
+  .hint{font-size:0.8rem}
+  #status{font-size:0.78rem}
+}
+
+/* PHONE */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{height:calc(48px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  .pagetitle{display:none}
+  #gear,body.panel-closed #gear{display:none}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,12,16,0.95);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
+  #dock > button.on{border-color:var(--warm);color:var(--warm)}
+  #dock .seg{flex:1;height:48px;border-radius:12px}
+  #dock .seg button{min-height:0;font-size:0.84rem}
+  #status{bottom:var(--dock-h);padding:6px calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left))}
+  #status .right{display:none}
+  #hint{bottom:auto;top:calc(54px + env(safe-area-inset-top));white-space:normal;left:16px;right:16px;transform:none}
+  html.in-frame #hint{top:12px}
+  body:not(.panel-closed) #hint{opacity:0}
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(46vh,520px);height:min(46dvh,520px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #panel h1{font-size:1.25rem}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -16px;
+    background:linear-gradient(180deg,rgba(12,14,19,1) 65%,rgba(12,14,19,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  #joy{bottom:calc(var(--dock-h) + 40px)}
+  body:not(.panel-closed) #joy{display:none}
+  .gallery{grid-template-columns:1fr 1fr}
+}
+
+/* LANDSCAPE phone: the panel is a drawer on the right edge. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  .topbar,#status{display:none}
+  #panel{top:0;bottom:var(--dock-h);left:auto;right:0;width:min(360px,52vw);height:auto;border-radius:0;border-top:0;border-left:1px solid var(--line-b);transform:translateX(100%)}
+  #panel.open{transform:translateX(0)}
+  #panel.full{height:auto}
+  #dock{left:auto;width:min(360px,52vw);right:0}
+  body:not(.panel-closed) #joy{display:flex}
+  #joy[hidden]{display:none}
+}
+
+/* sn-saver: lib/screensaver.js. main.js hides every overlay itself. */
+html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #status,html.sn-saver #hint,html.sn-saver #gear,html.sn-saver #joy,html.sn-saver .topbar,html.sn-saver #loading{display:none!important}
