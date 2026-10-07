@@ -129,7 +129,8 @@ w.SN_NAV = [
     ] },
     { h: "Earth & Ocean", p: [
       ["tidal-currents", "Tidal Currents", "DATA"],
-      ["city-atlas", "City Atlas", "3D"]
+      ["city-atlas", "City Atlas", "3D"],
+      ["storm-globe", "Storm Globe", "DATA"]
     ] },
     { h: "Shock Waves", p: [
       ["nuclear-blast", "Nuclear Blast Effects", "3D"]
@@ -172,6 +173,9 @@ w.SN_NAV = [
       ["reaction-diffusion", "Reaction–Diffusion", "GPU"],
       ["lenia", "Lenia", "GPU"],
       ["game-of-life", "Game of Life", "SIM"]
+    ] },
+    { h: "Number Theory", p: [
+      ["ulam-spiral", "Ulam Spiral", "GPU"]
     ] }
   ] },
   { id: "sound", label: "Sound & Vibration", short: "Sound", icon: "♪", color: "#ff8ac2", color2: "#ffb478", groups: [
