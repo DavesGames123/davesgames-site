@@ -159,6 +159,15 @@ for (const kind of Object.keys(SCENARIOS)) {
   ok(tried >= 6 && good >= 0.8 * tried, `Z -> mu mu: ${tried} of 12 events with two muons, ${good} with m(mu mu) within 5 GeV of the true mass`);
 }
 
+// ── per-track deposits and shower rays ───────────────────────────────────
+{
+  const g = generate('gun', { particle: 'gamma', energy: 50000, eta: 0.3, phi: 0.6 }, makeRng(9)), R = DET.run(g.prims, 21);
+  const t = R.tracks.find(q => q.primary), tot = Object.values(t.dep).reduce((a, b) => a + b, 0);
+  const root = k => { let n = 0; while (k >= 0 && R.tracks[k].anc >= 0 && n++ < 60) k = R.tracks[k].anc; return k; };
+  let own = 0, rays = 0; for (let i = 0; i < R.nSeg; i++) { if (root(R.segTrk[i]) === 0) own++; if (R.segCls[i] === 6) rays++; }
+  ok(Math.abs(tot - (R.L.dep)) < 1e-6 * R.L.dep && own === R.nSeg && rays > 50, `a 50 GeV photon owns its cascade: deposits ${(tot / 1000).toFixed(3)} GeV of ${(R.L.dep / 1000).toFixed(3)} GeV deposited in the event (ECAL ${(t.dep.ecal / 1000).toFixed(2)}); ${own} of ${R.nSeg} segments trace to it, ${rays} shower segments and rays`);
+}
+
 // ── beams and energies ────────────────────────────────────────────────────
 {
   const four = g => { const s = [0, 0, 0, 0]; for (const q of g.prims) { const m = PART[q.name].m, p = Math.hypot(q.px, q.py, q.pz); s[0] += Math.hypot(p, m); s[1] += q.px; s[2] += q.py; s[3] += q.pz; } return s; };

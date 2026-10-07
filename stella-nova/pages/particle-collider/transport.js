@@ -48,7 +48,11 @@
 //  OUTPUT  createEngine(o).run(primaries, seed) -> result (grep -n 'function newResult')
 //    seg ....... Float32Array, 9 per segment: x0 y0 z0 t0 x1 y1 z1 t1 E
 //    segCls .... Uint8Array: index into CLS; segTrk: track index
-//    tracks .... [{ id, parent, name, E0, p0, v0, gen, born, end, fate }]
+//    tracks .... [{ id, parent, name, E0, v0, u0, gen, born, end, fate, anc, dep }]
+//                anc: the index of the nearest registered ancestor (-1: none);
+//                dep: MeV deposited per subsystem by the track and every
+//                unregistered descendant (a photon owns its shower)
+//    segTrk .... the track index of a segment, or of its registered ancestor
 //    hits ...... silicon hits: Float32Array 6 each (x y z t e layer) + track
 //    mhits ..... muon chamber hits, same layout
 //    ecal, ecalT, hcalA, hcalS, hcalT  cell energies (MeV) and first times
@@ -125,7 +129,7 @@ export function createEngine(o = {}) {
     const rng = makeRng(seed);
     const R = newResult(opt);
     const stack = [];
-    let nextId = 0, steps = 0, emFlag = false, curEm = false, fastFlag = false;
+    let nextId = 0, steps = 0, emFlag = false, curEm = false, fastFlag = false, curAnc = -1, curTr = null;
     const prof = ro.profile ? new Float64Array(ro.profile.n) : null;
     const L = R.L;
     const t0 = Date.now();
@@ -134,7 +138,7 @@ export function createEngine(o = {}) {
     const push = (name, x, y, z, t, u, T, parent, gen, born) => {
       const P = PART[name];
       if (!P || P.cls === 'res') return;
-      const tr = { id: nextId++, em: emFlag || name === 'pi0', fast: fastFlag, name, P, x, y, z, t, ux: u[0], uy: u[1], uz: u[2], T: Math.max(0, T), parent, gen, born, nIL: -Math.log(rng() || 1e-12), tau: P.tau > 0 ? -P.tau * Math.log(rng() || 1e-12) : Infinity, E0: T + P.m, idx: -1, lastHit: -1, lastVol: null };
+      const tr = { id: nextId++, em: emFlag || name === 'pi0', fast: fastFlag, name, P, x, y, z, t, ux: u[0], uy: u[1], uz: u[2], T: Math.max(0, T), parent, gen, born, nIL: -Math.log(rng() || 1e-12), tau: P.tau > 0 ? -P.tau * Math.log(rng() || 1e-12) : Infinity, E0: T + P.m, idx: -1, anc: curAnc, lastHit: -1, lastVol: null };
       stack.push(tr);
       return tr;
     };
@@ -163,17 +167,20 @@ export function createEngine(o = {}) {
       if (tr.fast && (tr.cls === 0 ? tr.E0 < 2000 : (tr.gen > 0 || tr.E0 < 700 || x1 * x1 + y1 * y1 > 1.44e6))) return;
       const k = R.nSeg * 9, S = R.seg;
       S[k] = x0; S[k + 1] = y0; S[k + 2] = z0; S[k + 3] = ta; S[k + 4] = x1; S[k + 5] = y1; S[k + 6] = z1; S[k + 7] = tb; S[k + 8] = E;
-      R.segCls[R.nSeg] = tr.cls; R.segTrk[R.nSeg] = tr.idx; R.nSeg++;
+      R.segCls[R.nSeg] = tr.cls; R.segTrk[R.nSeg] = tr.idx >= 0 ? tr.idx : tr.anc; R.nSeg++;
     };
     const trackIndex = tr => {
       if (tr.idx >= 0) return tr.idx;
       tr.idx = R.tracks.length;
-      R.tracks.push({ id: tr.id, parent: tr.parent, name: tr.name, E0: tr.E0, v0: [tr.x0, tr.y0, tr.z0, tr.t0], u0: [tr.ux0, tr.uy0, tr.uz0], gen: tr.gen, born: tr.born, primary: tr.primary || false, end: null, fate: '' });
+      R.tracks.push({ id: tr.id, parent: tr.parent, name: tr.name, E0: tr.E0, v0: [tr.x0, tr.y0, tr.z0, tr.t0], u0: [tr.ux0, tr.uy0, tr.uz0], gen: tr.gen, born: tr.born, primary: tr.primary || false, end: null, fate: '', anc: tr.anc, dep: {} });
+      if (tr === curTr) curAnc = tr.idx;
       return tr.idx;
     };
     const deposit = (v, x, y, z, t, e) => {
       if (e <= 0) return;
       L.dep += e;
+      // the deposit counts for the track and each registered ancestor
+      for (let a = curAnc, k = v ? v.sys : 'air', n = 0; a >= 0 && n < 40; a = R.tracks[a].anc, n++) { const dd = R.tracks[a].dep; dd[k] = (dd[k] || 0) + e; }
       if (curEm) R.depEm += e;
       if (prof) { const b = Math.floor(z / ro.profile.dz); if (b >= 0 && b < prof.length) prof[b] += e; }
       const s = v ? v.sys : 'air';
@@ -316,6 +323,9 @@ export function createEngine(o = {}) {
       if (tr.name === 'e+') L.borrow += ME;
       const tmax = Math.max(0.2, Math.log(Math.max(1.01, E / mm.Ec)) + (tr.name === 'gamma' ? 0.5 : -0.5)), b = 0.5, a = 1 + b * tmax;
       const K = Math.max(3, Math.min(24, Math.round(E / 20))), u = [tr.ux, tr.uy, tr.uz];
+      // for the display: a few spots become short rays that fork off the
+      // shower axis, so a cascade reads as a branching tree of light
+      const nRay = tr.fast || E < 8 ? 0 : Math.min(K, 2 + Math.round(E / 25)), ray = { cls: CLS_I.shower, fast: false, idx: -1, anc: tr.idx >= 0 ? tr.idx : tr.anc };
       for (let i = 0; i < K; i++) {
         const t = PH.gammaVar(rng, a) / b, r = mm.RM * 0.5 * -Math.log(rng() || 1e-9) * (0.3 + 0.7 * Math.min(1, t / tmax));
         const side = rotate(u, Math.PI / 2, 2 * Math.PI * rng()), d = t * mm.X0;
@@ -328,6 +338,7 @@ export function createEngine(o = {}) {
           const sf = (Math.abs(Zz) >= 3300 ? sfHE : sfHB) * 0.8;
           deposit(HCAL_S, X, Y, Zz, tt, e * sf); deposit(HCAL_A, X, Y, Zz, tt, e * (1 - sf));
         } else deposit(w, X, Y, Zz, tt, e);
+        if (i < nRay) { const d0 = d * (0.25 + 0.4 * rng()); segAdd(ray, tr.x + u[0] * d0, tr.y + u[1] * d0, tr.z + u[2] * d0, tr.t + d0 / C_MM_NS, X, Y, Zz, tt, E); }
       }
     }
     // a particle at rest
@@ -380,10 +391,11 @@ export function createEngine(o = {}) {
 
     // one track, from its start to its end
     function transport(tr) {
-      emFlag = curEm = tr.em; fastFlag = tr.fast;
+      emFlag = curEm = tr.em; fastFlag = tr.fast; curTr = tr; curAnc = tr.anc;
       tr.cls = tr.P.cls === 'gamma' || tr.P.cls === 'e' ? ((tr.born === 'ecal' || tr.born === 'hcal' || tr.born === 'hcalS') ? CLS_I.shower : CLS_I[tr.P.cls]) : CLS_I[tr.P.cls] ?? CLS_I.had;
       tr.x0 = tr.x; tr.y0 = tr.y; tr.z0 = tr.z; tr.t0 = tr.t; tr.ux0 = tr.ux; tr.uy0 = tr.uy; tr.uz0 = tr.uz;
       if (tr.primary || tr.E0 > 2000 || (tr.gen <= 1 && tr.E0 > 200)) trackIndex(tr);
+      curAnc = tr.idx >= 0 ? tr.idx : tr.anc;
       let v = locate(D, tr.x, tr.y, tr.z), n = 0, fate = '';
       const P = tr.P, M = P.m, q = P.q;
       const hk = HEAVY_OF[tr.name], ek = tr.name === 'e-' || tr.name === 'e+' ? tr.name : null;
