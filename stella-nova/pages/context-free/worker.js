@@ -9,13 +9,18 @@
 //  IN   { type: 'init', module? }    a compiled WebAssembly.Module (fast
 //                                     restart after a terminate)
 //       { type: 'job', id, src, files, variation, defs, opts, svg }
+//                                     opts.grow keeps the renderer for:
+//       { type: 'growFrame', id, mode, at, mask }   one replay frame
+//       { type: 'growEnd' }
 //  OUT  { id, type: 'parsed', ok, diags, messages, info }
 //       { id, type: 'progress', shapes, todo, inOutput, done, count }
 //       { id, type: 'frame', w, h, index, buf }        buf is transferred
 //       { id, type: 'done', ok, ..., buf? | svg? }
+//       { id, type: 'growFrame', bitmap, w, h, at }     bitmap is transferred
 //       { type: 'fatal', error }                       the engine failed to load
 // ============================================================================
 import { loadEngine } from './engine.js';
+import { toMask } from './look.js';
 
 let ready = null;
 
@@ -61,15 +66,33 @@ function job(E, m) {
       postMessage({ id, type: 'frame', w, h, index, buf: px.buffer }, [px.buffer]);
     },
   });
+  if (res.grow) { growInfo = res.info; growDims = { w: res.width, h: res.height }; }
   const out = Object.assign({ id, type: 'done', ms: performance.now() - t0, defsIgnored }, res);
   const buf = res.pixels ? res.pixels.buffer : null;
   delete out.pixels;
   if (buf) { out.buf = buf; postMessage(out, [buf]); } else postMessage(out);
 }
 
+let growInfo = null, growDims = null;
+
+async function growFrame(E, m) {
+  const px = E.growFrame(m.mode, m.at);
+  if (!px) { postMessage({ id: m.id, type: 'growFrame', bitmap: null }); return; }
+  if (m.mask) toMask(px, growInfo);
+  const bitmap = await createImageBitmap(new ImageData(px, growDims.w, growDims.h));
+  postMessage({ id: m.id, type: 'growFrame', bitmap, w: growDims.w, h: growDims.h, at: m.at }, [bitmap]);
+}
+
 onmessage = async e => {
   const m = e.data;
   if (m.type === 'init') { start(m.module); return; }
+  if (m.type === 'growFrame' || m.type === 'growEnd') {
+    let E2;
+    try { E2 = await ready; } catch (err) { return; }
+    if (m.type === 'growEnd') { E2.growEnd(); growInfo = growDims = null; return; }
+    try { await growFrame(E2, m); } catch (err) { postMessage({ id: m.id, type: 'growFrame', bitmap: null, error: String(err) }); }
+    return;
+  }
   if (m.type !== 'job') return;
   if (!ready) start(null);
   let E;

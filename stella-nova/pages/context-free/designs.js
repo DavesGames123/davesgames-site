@@ -18,8 +18,8 @@
 //  variation code of the first render; default random).
 // ============================================================================
 export const DESIGNS = [
-  { id: 'welcome', file: 'welcome.cfdg', title: 'Welcome', src: 'example', note: 'Letters built from LINE shapes, with vines that branch by random rule choice.' },
   { id: 'demo1', file: 'demo1.cfdg', title: 'Demo 1', src: 'example', note: 'A forest of three seeds. Each branch picks a rule by weight, so every variation grows new trees.' },
+  { id: 'welcome', file: 'welcome.cfdg', title: 'Welcome', src: 'example', note: 'Letters built from LINE shapes, with vines that branch by random rule choice.' },
   { id: 'demo2', file: 'demo2.cfdg', title: 'Demo 2', src: 'example', note: 'The CFDG letters from the dot-matrix alphabet, placed in a ring.' },
   { id: 'snowflake', file: 'snowflake.cfdg', title: 'Snowflake', src: 'example', note: 'Six-fold symmetry from one branching rule.' },
   { id: 'sierpinski', file: 'sierpinski.cfdg', title: 'Sierpinski', src: 'example', note: 'Triangles inside triangles, with circles in the holes.' },

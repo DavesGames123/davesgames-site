@@ -80,6 +80,9 @@ notice of the change in its header.
   engine/patches/0002-antialias-switch.patch
       src-common/aggCanvas.{h,cpp}: aggCanvas::NoAntialias, a threshold
       gamma on the rasterizer.
+  engine/patches/0004-grow-replay.patch
+      src-common/shape.h, renderimpl.cpp: a generation count per shape
+      and a filter hook in drawShape(), for the growth replay.
   engine/patches/0003-std-views-reverse.patch
       src-common/builder.cpp: three reverse loops use std::views::reverse
       in place of backwards() from backwards.h.

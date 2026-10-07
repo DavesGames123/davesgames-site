@@ -31,7 +31,8 @@
 import { DESIGNS, SRC_LABEL, byId, loadSource } from './designs.js';
 import { createLane, compiledModule } from './client.js';
 import { createEditor } from './highlight.js';
-import { varToString, varFromString, randomVariation } from './variation.js';
+import { varToString, varFromString, randomVariation, VAR_MAX3 } from './variation.js';
+import { THEMES, themeOf, plan, defsFor, toMask, compose, loadLook, saveLook } from './look.js';
 import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
@@ -45,7 +46,11 @@ const canvas = $('view'), ctx = canvas.getContext('2d'), panel = $('panel');
 
 const S = {
   design: null, src: '', orig: '', edited: false, variation: 1,
-  opts: { size: 'fit', max: 500000, minSize: 0.3, border: 2, bg: '', aa: true, tile: 3, frames: 48, fps: 15, animate: true },
+  opts: { size: 'fit', max: 500000, minSize: 0.3, border: 2, aa: true, tile: 3, frames: 48, fps: 15, animate: true,
+    grow: true, growMode: 'depth', growSecs: 10, drift: false },
+  look: loadLook(),       // theme, bgStyle, bg, ink, colourBg (look.js)
+  grow: null,             // the growth replay: { tok, w, h, t, playing, reqAt, inflight, doneAt }
+  artCanvas: null,        // the composed picture (look.js compose)
   info: null, defsIgnored: false,
   art: null,              // { img, w, h, final }
   result: null,           // the last finished render: { image (ImageData), shapes, ms, w, h }
@@ -157,6 +162,7 @@ function drawChecks(x, y, w, h) {
 function frame(now) {
   requestAnimationFrame(frame);
   if (S.saver) return;
+  pumpGrow(now);
   if (S.anim && S.playing && S.frames.length > 1) {
     const step = 1000 / S.opts.fps;
     if (now - S.frameAt >= step) {
@@ -205,19 +211,23 @@ function showDiags(list, okText) {
 // ── render ──────────────────────────────────────────────────────────────────
 // Ask the main lane for a render of S.src. A time design renders all its
 // frames (Animate on); others render once with partial frames.
-function render() {
+function render({ keepT = false } = {}) {
   clearTimeout(liveTimer);
   lanes.main.cancel();
   const tok = ++renderTok;
   const wantAnim = S.opts.animate && !!(S.info && (S.info.usesTime || S.info.usesFrameTime)) && S.infoFor === S.src;
+  const growOn = S.opts.grow && !wantAnim;
+  const prevT = keepT && S.grow ? S.grow.t : 0;
+  if (!keepT) S.grow = null;
   const size = targetSize();
   const zAt = S.view.z;
+  S.lastDefs = defsFor(S.look);
   const job = {
-    src: S.src, variation: S.variation, defs: S.opts.bg,
+    src: S.src, variation: S.variation, defs: S.lastDefs,
     opts: {
       width: size.w, height: size.h, maxShapes: S.opts.max, minSize: S.opts.minSize, border: S.opts.border,
-      antialias: S.opts.aa, tile: S.opts.tile, wide: true, partial: !wantAnim, tickMs: 160,
-      frames: wantAnim ? S.opts.frames : 0,
+      antialias: S.opts.aa, tile: S.opts.tile, wide: true, partial: !wantAnim && !growOn, tickMs: 160,
+      frames: wantAnim ? S.opts.frames : 0, grow: growOn,
     },
   };
   const t0 = performance.now();
@@ -243,30 +253,33 @@ function render() {
       if (S.opts.animate && timeNow && !wantAnim) { queueMicrotask(render); return; }
       if (!timeNow && S.anim) { S.anim = false; S.frames = []; }
       if (!was) layout();
-      setStatus(wantAnim ? `Rendering ${S.opts.frames} frames…` : 'Rendering…');
+      setStatus(wantAnim ? `Rendering ${S.opts.frames} frames…` : growOn ? 'Building…' : 'Rendering…');
     },
     onProgress(p) {
       if (!mine()) return;
       S.progress = p;
       if (wantAnim) return;
       const pct = p.inOutput && p.count ? ` · drawing ${Math.round(100 * p.done / p.count)}%` : (p.todo ? ` · ${fmt(p.todo)} to expand` : '');
-      setStatus(`${fmt(p.shapes)} shapes${pct}`);
+      setStatus((growOn ? 'Building · ' : '') + `${fmt(p.shapes)} shapes${pct}`);
     },
     onFrame(img, index) {
       if (!mine()) return;
       const seq = ++artSeq;
+      const p = curPlan();
+      if (p.kind === 'mask') toMask(img.data, S.info);
       createImageBitmap(img).then(bmp => {
         if (!mine()) { bmp.close && bmp.close(); return; }
         if (wantAnim) {
-          S.frames[index] = bmp;
+          // Each animation frame gets its own composed canvas.
+          S.frames[index] = compose(bmp, img.width, img.height, S.look, p, S.dpr);
+          if (bmp.close) bmp.close();
           if (!S.playing) S.fi = index;
           setStatus(`Frame ${index + 1} of ${S.opts.frames}`);
           const bar = $('bar'); bar.classList.add('det'); bar.firstChild.style.width = (100 * (index + 1) / S.opts.frames) + '%';
         } else if (seq === artSeq && !(S.art && S.art.final && S.art.tok === tok)) {
-          if (S.art && S.art.img !== bmp && S.art.img.close && !S.art.final) S.art.img.close();
-          S.art = { img: bmp, w: img.width, h: img.height, final: false, tok };
+          showBitmap(bmp, img.width, img.height, false, tok);
           S.renderedZ = zAt;
-        }
+        } else if (bmp.close) bmp.close();
         S.dirty = true;
       });
     },
@@ -284,25 +297,148 @@ function render() {
     S.result = { image: res.image || null, shapes: res.shapes, ms, w: res.width, h: res.height, info: res.info };
     if (res.info) S.info = res.info;
     updateSections();
-    $('bgHint').hidden = !(S.opts.bg && res.defsIgnored);
+    S.defsIgnored = !!res.defsIgnored;
+    $('bgHint').hidden = !(S.lastDefs && res.defsIgnored && S.info && S.info.usesColor);
     const extra = `${fmt(res.shapes)} shapes · ${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s` + (res.stopped ? ' · stopped' : '');
     setCaption(extra);
     setStatus(res.stopped ? 'Stopped.' : '');
     if (wantAnim) { S.framesDone = true; S.dirty = true; return; }
-    if (res.image) {
-      createImageBitmap(res.image).then(bmp => {
-        if (!mine()) return;
-        S.art = { img: bmp, w: res.width, h: res.height, final: true, tok };
-        S.renderedZ = zAt;
-        S.dirty = true;
-      });
+    if (growOn && res.grow) {
+      // The growth replay: frames come from pumpGrow(), drawn by the engine.
+      S.grow = { tok, w: res.width, h: res.height, t: prevT, playing: prevT < 1, reqAt: -1, inflight: false, doneAt: 0, last: 0 };
+      S.renderedZ = zAt;
+      syncGrowUI();
+      return;
     }
+    if (res.image) showFinal(tok, zAt);
   }).catch(err => {
     if (err && err.cancelled) return;
     if (!mine()) return;
     setBusy(false);
     setStatus('Engine error: ' + (err && err.message || err), true);
   });
+}
+
+// ── look and growth ─────────────────────────────────────────────────────────
+const curPlan = () => plan(S.look, S.info, S.defsIgnored);
+
+// Show an engine bitmap (masked already when the plan is 'mask') through
+// the look: one composed canvas, reused.
+function showBitmap(bmp, w, h, final, tok) {
+  S.artCanvas = compose(bmp, w, h, S.look, curPlan(), S.dpr, S.artCanvas);
+  if (bmp.close) bmp.close();
+  S.art = { img: S.artCanvas, w, h, final, tok };
+  S.dirty = true;
+}
+
+// The final image of a normal render (S.result.image keeps the engine
+// pixels; a mask is made from a copy).
+function showFinal(tok, zAt = S.renderedZ) {
+  const im = S.result && S.result.image;
+  if (!im) return;
+  const p = curPlan();
+  const src = p.kind === 'mask' ? new ImageData(toMask(new Uint8ClampedArray(im.data), S.info), im.width, im.height) : im;
+  createImageBitmap(src).then(bmp => {
+    if (tok !== renderTok) { bmp.close && bmp.close(); return; }
+    showBitmap(bmp, im.width, im.height, true, tok);
+    S.renderedZ = zAt;
+  });
+}
+
+// The look changed: draw again from what is there, or render again when
+// the define (clear background) changes.
+function applyLook() {
+  saveLook(S.look);
+  markThemes();
+  if (defsFor(S.look) !== (S.lastDefs || '') || S.anim) { render({ keepT: true }); return; }
+  if (S.grow) { S.grow.reqAt = -1; return; }
+  showFinal(renderTok);
+}
+
+// One step of the growth replay, from the frame loop. The worker draws a
+// frame with the engine (patch 0004) at the full render size; one frame is
+// asked for at a time.
+function pumpGrow(now) {
+  const g = S.grow;
+  if (!g) return;
+  const dt = g.last ? Math.min(100, now - g.last) : 0;
+  g.last = now;
+  if (g.playing) {
+    g.t = Math.min(1, g.t + dt / (S.opts.growSecs * 1000));
+    if (g.t >= 1) { g.playing = false; g.doneAt = now; }
+    syncGrowUI();
+  } else if (S.opts.drift && g.t >= 1 && g.doneAt && now - g.doneAt > 2500 && !S.busy) {
+    g.doneAt = 0;
+    drift();
+    return;
+  }
+  if (g.inflight || g.reqAt === g.t) return;
+  g.inflight = true;
+  const at = g.t, mask = curPlan().kind === 'mask';
+  // Build order finishes the largest shapes first, so most of the picture
+  // is there early: an ease (t squared) spreads it over the time.
+  const key = S.opts.growMode === 'build' && at < 1 ? at * at : at;
+  lanes.main.growFrame(S.opts.growMode, key, mask).then(f => {
+    g.inflight = false;
+    if (S.grow !== g || !f) { if (f && f.bitmap.close) f.bitmap.close(); if (!f && S.grow === g) S.grow = null; return; }
+    g.reqAt = at;
+    showBitmap(f.bitmap, f.w, f.h, at >= 1, g.tok);
+  }, () => { g.inflight = false; });
+}
+
+// Variation drift: the next code, grown again.
+function drift() {
+  S.variation = (S.variation % VAR_MAX3) + 1;
+  if (S.design) S.design._var = S.variation;
+  updateDesignRow();
+  writeHash();
+  render();
+}
+
+function replayGrow() {
+  if (!S.grow) { render(); return; }
+  S.grow.t = 0; S.grow.playing = true; S.grow.reqAt = -1;
+  syncGrowUI();
+}
+function toggleGrowPlay() {
+  const g = S.grow; if (!g) return;
+  if (g.t >= 1) { replayGrow(); return; }
+  g.playing = !g.playing;
+  syncGrowUI();
+}
+function syncGrowUI() {
+  const g = S.grow;
+  $('growbar').hidden = !g || !!S.saver;
+  if (!g) return;
+  const v = String(Math.round(g.t * 1000));
+  for (const id of ['scrub', 'scrubP']) if ($(id).value !== v) $(id).value = v;
+  const lab = g.playing ? '❚❚' : '▶';
+  $('gPlay').textContent = lab;
+  $('growPlayP').textContent = g.playing ? 'Pause' : g.t >= 1 ? 'Play again' : 'Play';
+  $('growPct').textContent = Math.round(g.t * 100) + '%';
+}
+
+function buildThemes() {
+  const host = $('themes');
+  for (const t of THEMES) {
+    const b = document.createElement('button');
+    b.dataset.id = t.id;
+    const paper = t.paper || '#ffffff', ink = t.ink || '#000000';
+    b.innerHTML = t.id === 'design' ? `<i class="rainbow"></i>${esc(t.name)}` : `<i style="--p:${paper};--k:${ink}${t.ink2 ? ';--k2:' + t.ink2 : ''}"></i>${esc(t.name)}`;
+    b.addEventListener('click', () => { S.look.theme = t.id; applyLook(); });
+    host.append(b);
+  }
+  markThemes();
+}
+function markThemes() {
+  document.querySelectorAll('#themes button').forEach(b => b.classList.toggle('on', b.dataset.id === S.look.theme));
+  document.querySelectorAll('#bgStyleSeg button').forEach(b => b.classList.toggle('on', b.dataset.s === S.look.bgStyle));
+  const t = themeOf(S.look.theme);
+  $('bgPick').value = S.look.bg || t.paper || '#ffffff';
+  $('inkPick').value = S.look.ink || t.ink || '#000000';
+  $('bgClear').classList.toggle('on', !S.look.bg);
+  $('inkClear').classList.toggle('on', !S.look.ink);
+  $('colourBgBtn').classList.toggle('on', !!S.look.colourBg);
 }
 
 // Stop: keep what is on screen.
@@ -327,6 +463,7 @@ function updateSections() {
   $('tileSec').hidden = !tiled;
   const timed = !!(i.usesTime || i.usesFrameTime);
   $('animSec').hidden = !timed;
+  $('growSec').classList.toggle('dim', timed && S.opts.animate);
   $('xSvg').disabled = S.anim;
   $('xHint').textContent = S.anim ? 'PNG saves the frame on screen. The engine writes SVG for still images only.'
     : tiled ? 'PNG has the tiles. SVG has one tile, as the command line writes it.' : '';
@@ -337,7 +474,7 @@ function updateSections() {
 async function openDesign(d, variation = null, { keepView = false } = {}) {
   S.design = d;
   S.variation = variation || d._var || (d.var ? varFromString(d.var) : randomVariation());
-  S.anim = false; S.frames = []; S.info = null; S.infoFor = '';
+  S.anim = false; S.frames = []; S.info = null; S.infoFor = ''; S.grow = null; syncGrowUI();
   if (!keepView) resetView();
   updateDesignRow();
   markThumb();
@@ -436,7 +573,7 @@ function paintThumb(cv, img) {
 function setTab(t) {
   S.tab = t;
   document.querySelectorAll('.tabs button').forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
-  for (const n of ['Gallery', 'Code', 'Render', 'About']) $('tab' + n).hidden = n !== t;
+  for (const n of ['Gallery', 'Code', 'Render', 'Look', 'About']) $('tab' + n).hidden = n !== t;
   $('dockCode').classList.toggle('on', t === 'Code' && panel.classList.contains('open'));
 }
 function setOpen(open) {
@@ -484,7 +621,7 @@ function maybeRefit() {
   if (!S.art) return;
   const r = Math.max(t.w / S.art.w, t.h / S.art.h) / (S.view.z / S.renderedZ);
   const aspect = (t.w / t.h) / (S.art.w / S.art.h);
-  if (r > 1.25 || r < 0.6 || aspect > 1.25 || aspect < 0.8) render();
+  if (r > 1.25 || r < 0.6 || aspect > 1.25 || aspect < 0.8) render({ keepT: true });
 }
 
 // ── controls ────────────────────────────────────────────────────────────────
@@ -509,7 +646,7 @@ function bindUI() {
   $('saveCfdg').addEventListener('click', () => download(new Blob([S.src], { type: 'text/plain' }), `${slug()}.cfdg`));
 
   const sel = (id, key, num = false) => $(id).addEventListener('change', e => { S.opts[key] = num ? +e.target.value : e.target.value; if (key === 'size') resetView(); render(); });
-  sel('sizeSel', 'size'); sel('maxSel', 'max', true); sel('borderSel', 'border', true); sel('bgSel', 'bg');
+  sel('sizeSel', 'size'); sel('maxSel', 'max', true); sel('borderSel', 'border', true);
   $('framesSel').addEventListener('change', e => { S.opts.frames = +e.target.value; if (S.anim) render(); });
   const minR = $('minSize');
   const showMin = () => { $('minV').textContent = (+minR.value).toFixed(1) + ' px'; };
@@ -532,7 +669,50 @@ function bindUI() {
     render();
   });
   $('playBtn').addEventListener('click', togglePlay);
+  bindGrow(); bindLook();
   bindExport();
+}
+function bindGrow() {
+  const on = () => { $('growBtn').classList.toggle('on', S.opts.grow); $('driftBtn').classList.toggle('on', S.opts.drift); };
+  $('growBtn').addEventListener('click', () => { S.opts.grow = !S.opts.grow; on(); savePrefs(); render(); });
+  $('driftBtn').addEventListener('click', () => { S.opts.drift = !S.opts.drift; on(); savePrefs(); if (S.opts.drift && S.grow && S.grow.t >= 1) S.grow.doneAt = performance.now(); });
+  $('growModeSeg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.opts.growMode = b.dataset.m; savePrefs();
+    $('growModeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    replayGrow();
+  });
+  $('growModeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.m === S.opts.growMode));
+  const sp = $('growSecs');
+  const showSp = () => { S.opts.growSecs = +sp.value; $('growSecsV').textContent = sp.value + ' s'; };
+  sp.value = S.opts.growSecs; showSp();
+  sp.addEventListener('input', showSp); sp.addEventListener('change', savePrefs);
+  $('growReplay').addEventListener('click', replayGrow); $('gReplay').addEventListener('click', replayGrow);
+  $('growPlayP').addEventListener('click', toggleGrowPlay); $('gPlay').addEventListener('click', toggleGrowPlay);
+  for (const id of ['scrub', 'scrubP']) $(id).addEventListener('input', e => {
+    const g = S.grow; if (!g) return;
+    g.playing = false; g.t = +e.target.value / 1000; syncGrowUI();
+  });
+  on();
+}
+function bindLook() {
+  buildThemes();
+  $('bgStyleSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.look.bgStyle = b.dataset.s; applyLook(); });
+  $('bgPick').addEventListener('input', e => { S.look.bg = e.target.value; applyLook(); });
+  $('inkPick').addEventListener('input', e => { S.look.ink = e.target.value; applyLook(); });
+  $('bgClear').addEventListener('click', () => { S.look.bg = ''; applyLook(); });
+  $('inkClear').addEventListener('click', () => { S.look.ink = ''; applyLook(); });
+  $('colourBgBtn').addEventListener('click', () => { S.look.colourBg = !S.look.colourBg; applyLook(); });
+}
+
+// Growth settings are remembered per viewer, as the look is.
+const PREFS = 'cf-grow-v1';
+function loadPrefs() {
+  try { const p = JSON.parse(localStorage.getItem(PREFS) || '{}');
+    for (const k of ['grow', 'drift', 'growMode', 'growSecs']) if (k in p) S.opts[k] = p[k]; } catch (e) { /* none */ }
+}
+function savePrefs() {
+  try { localStorage.setItem(PREFS, JSON.stringify({ grow: S.opts.grow, drift: S.opts.drift, growMode: S.opts.growMode, growSecs: S.opts.growSecs })); } catch (e) { /* private mode */ }
 }
 function togglePlay() {
   S.playing = !S.playing;
@@ -550,7 +730,7 @@ function download(blob, name) {
 function exportPNG() {
   let src = null, w = 0, h = 0;
   if (S.anim && S.frames.length) { src = S.frames[S.fi % S.frames.length] || S.frames.find(Boolean); w = src.width; h = src.height; }
-  else if (S.result && S.result.image) { src = S.result.image; w = src.width; h = src.height; }
+  else if (S.art && S.art.img) { src = S.art.img; w = S.art.w; h = S.art.h; }
   if (!src) return;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const x = c.getContext('2d');
@@ -562,7 +742,7 @@ function exportSVG() {
   const size = targetSize();
   $('xHint').textContent = 'The engine writes the SVG…';
   lanes.svg.cancel();
-  lanes.svg.run({ src: S.src, variation: S.variation, defs: S.opts.bg, svg: true,
+  lanes.svg.run({ src: S.src, variation: S.variation, svg: true,
     opts: { width: size.w, height: size.h, maxShapes: S.opts.max, minSize: S.opts.minSize, border: S.opts.border } })
     .then(r => {
       if (!r.ok || !r.svg) { $('xHint').textContent = 'The SVG failed.'; return; }
@@ -599,7 +779,7 @@ function bindView() {
     S.dirty = true;
     $('fitBtn').hidden = S.view.z === 1 && !S.view.px && !S.view.py;
     clearTimeout(zoomTimer);
-    if (S.opts.size === 'fit' && !S.anim) zoomTimer = setTimeout(() => { if (Math.abs(S.view.z - S.renderedZ) > 0.05) render(); }, 380);
+    if (S.opts.size === 'fit' && !S.anim) zoomTimer = setTimeout(() => { if (Math.abs(S.view.z - S.renderedZ) > 0.05) render({ keepT: true }); }, 380);
   };
   const local = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   canvas.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = local(e); zoomAt(Math.exp(-e.deltaY * 0.0016), x, y); }, { passive: false });
@@ -636,6 +816,8 @@ function bindKeys() {
     else if (e.key === 'ArrowRight') stepDesign(1);
     else if (e.key === 'ArrowLeft') stepDesign(-1);
     else if (e.key === ' ' && S.anim) { e.preventDefault(); togglePlay(); }
+    else if (e.key === ' ' && S.grow) { e.preventDefault(); toggleGrowPlay(); }
+    else if (e.key === 'r' || e.key === 'R') replayGrow();
     else if (e.key === '0') { resetView(); render(); }
   });
 }
@@ -647,19 +829,22 @@ async function boot() {
     onChange(v) { S.src = v; if (!S.edited) { S.edited = true; updateDesignRow(); } scheduleLive(); },
     onRun: render,
   });
+  loadPrefs();
   buildGallery(); bindUI(); bindPanel(); bindView(); bindKeys();
   if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
   setTab('Gallery');
   addEventListener('resize', () => { layout(); clearTimeout(S.rz); S.rz = setTimeout(maybeRefit, 450); });
   layout();
   const h = readHash();
-  const first = h.d || DESIGNS[0];
+  // The page opens on Demo 1 (the user's choice), growing.
+  const first = h.d || byId('demo1');
   openDesign(first, h.d && h.v > 0 ? h.v : null);
   requestAnimationFrame(frame);
   setTimeout(fillGallery, 600);
   installSaver({ S, lanes,
     onEnter: () => { S.saver = true; lanes.main.cancel(); lanes.thumbs.cancel(); renderTok++; panel.classList.remove('open'); },
-    onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; render(); setTimeout(fillGallery, 400); } });
-  window.__cf = { S, render, openDesign, newVariation, layout, lanes, editor, designs: DESIGNS, ready: true };
+    onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; render(); setTimeout(fillGallery, 400); },
+    look: () => S.look });
+  window.__cf = { S, render, openDesign, newVariation, layout, lanes, editor, designs: DESIGNS, applyLook, replayGrow, ready: true };
 }
 boot().catch(err => { setStatus('Context Free failed to start: ' + err.message, true); console.error(err); });

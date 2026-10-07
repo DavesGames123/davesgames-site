@@ -107,7 +107,7 @@ for s in "${SRCS[@]}"; do
   OBJS+=("$o")
 done
 
-EXPORTS='["_cf_parse","_cf_info","_cf_render","_cf_pixels","_cf_release","_cf_render_svg","_cf_variation_to_string","_cf_variation_from_string","_cf_variation_max","_malloc","_free"]'
+EXPORTS='["_cf_grow_frame","_cf_parse","_cf_info","_cf_render","_cf_pixels","_cf_release","_cf_render_svg","_cf_variation_to_string","_cf_variation_from_string","_cf_variation_max","_malloc","_free"]'
 em++ "${OBJS[@]}" -o "$WORK/cf.js" \
   -O2 -fwasm-exceptions \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createContextFree \

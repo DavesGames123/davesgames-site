@@ -75,6 +75,12 @@
     <button id="stopBtn" hidden title="Stop the render (Esc)">Stop</button>
     <button id="fitBtn" hidden title="Fit the art to the view (0)">Fit</button>
   </div>
+  <div id="growbar" hidden>
+    <button id="gPlay" title="Pause or play the growth (Space)">❚❚</button>
+    <button id="gReplay" title="Grow it again (R)">↺</button>
+    <input type="range" id="scrub" min="0" max="1000" step="1" value="0" aria-label="Growth position">
+    <span id="growPct">0%</span>
+  </div>
 </main>
 
 <aside id="panel" class="open" aria-label="Controls">
@@ -85,6 +91,7 @@
     <button role="tab" data-tab="Gallery" class="on" aria-selected="true">Gallery</button>
     <button role="tab" data-tab="Code" aria-selected="false">Code</button>
     <button role="tab" data-tab="Render" aria-selected="false">Render</button>
+    <button role="tab" data-tab="Look" aria-selected="false">Look</button>
     <button role="tab" data-tab="About" aria-selected="false">About</button>
   </div>
 
@@ -135,6 +142,27 @@ rule 1 { BRANCH [ r 30 ] BRANCH [ r -30 flip 90 ] }</pre>
   </section>
 
   <section id="tabRender" role="tabpanel" hidden>
+    <div id="growSec">
+      <div class="sec-label first">Growth</div>
+      <div class="btns">
+        <button id="growBtn" class="on" title="Draw the design as it is built, shape by shape">Grow</button>
+        <button id="driftBtn" title="When a design is grown, go on to the next variation code">Variation drift</button>
+      </div>
+      <div class="seg three" id="growModeSeg">
+        <button data-m="build" title="The order in which the engine finished the shapes: largest first">Build order</button>
+        <button data-m="depth" class="on" title="Generation by generation from the start shape">Depth</button>
+        <button data-m="radial" title="Outwards from the origin of the design">Radial</button>
+      </div>
+      <div class="prm"><div class="nm">Growth time</div><span class="val" id="growSecsV"></span>
+        <input type="range" id="growSecs" min="2" max="40" step="1" value="10" aria-label="Growth time in seconds"></div>
+      <div class="btns">
+        <button id="growPlayP">Pause</button>
+        <button id="growReplay">Replay ↺</button>
+      </div>
+      <input type="range" id="scrubP" class="scrubp" min="0" max="1000" step="1" value="0" aria-label="Growth position">
+      <p class="hint">Each frame is the engine drawing a part of the finished shapes, at the full render size. The last frame is the normal render.</p>
+      <div class="sec-label">Render</div>
+    </div>
     <div class="row2"><label class="nm" for="sizeSel">Size</label>
       <select id="sizeSel" aria-label="Render size">
         <option value="fit" selected>Fit the view</option>
@@ -160,14 +188,6 @@ rule 1 { BRANCH [ r 30 ] BRANCH [ r -30 flip 90 ] }</pre>
         <option value="0">None</option>
         <option value="-1">Crop 8 px</option>
       </select></div>
-    <div class="row2"><label class="nm" for="bgSel">Background</label>
-      <select id="bgSel" aria-label="Background">
-        <option value="" selected>From the design</option>
-        <option value="CF::Background = [b 1]">White</option>
-        <option value="CF::Background = [b -1]">Black</option>
-        <option value="CF::Background = [b 1 a -1]">Transparent</option>
-      </select></div>
-    <p class="hint" id="bgHint" hidden>A background override is a define (the <code>-D</code> of the command line), so it needs CFDG 3 syntax. This design is in the older CFDG 2 syntax and keeps its own background.</p>
     <div class="btns">
       <button id="aaBtn" class="on" title="Antialiased edges">Antialiasing</button>
     </div>
@@ -199,6 +219,23 @@ rule 1 { BRANCH [ r 30 ] BRANCH [ r -30 flip 90 ] }</pre>
       <button id="xLink" title="Copy a link to this design and variation">Copy link</button>
     </div>
     <p class="hint" id="xHint"></p>
+  </section>
+
+  <section id="tabLook" role="tabpanel" hidden>
+    <p class="hint">A theme recolours a design that sets no colour of its own: the shapes take the ink, the background takes the paper. A design with its own colours keeps them. Your choice is remembered in this browser.</p>
+    <div class="themes" id="themes"></div>
+    <div class="sec-label">Background</div>
+    <div class="seg five" id="bgStyleSeg">
+      <button data-s="theme" class="on">Theme</button><button data-s="solid">Solid</button><button data-s="gradient">Gradient</button><button data-s="grain">Grain</button><button data-s="grid">Grid</button>
+    </div>
+    <div class="row2"><label class="nm" for="bgPick">Paper</label>
+      <input type="color" id="bgPick" value="#ffffff" aria-label="Background colour">
+      <button id="bgClear" class="small" title="Use the paper of the theme">Theme paper</button></div>
+    <div class="row2"><label class="nm" for="inkPick">Ink</label>
+      <input type="color" id="inkPick" value="#000000" aria-label="Ink colour">
+      <button id="inkClear" class="small" title="Use the ink of the theme">Theme ink</button></div>
+    <div class="btns"><button id="colourBgBtn" class="on" title="Render colour designs on a clear background and put them on the paper">Paper under colour designs</button></div>
+    <p class="hint" id="bgHint" hidden>The paper goes under a colour design through a define (the <code>-D</code> of the command line), which needs CFDG 3 syntax. This design is in the older CFDG 2 syntax and keeps its own background.</p>
   </section>
 
   <section id="tabAbout" role="tabpanel" hidden>

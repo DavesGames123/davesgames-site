@@ -13,6 +13,8 @@
 //  6  tiled designs repeat; time designs animate; one frame renders alone
 //  7  SVG output, no antialiasing, the background define
 //  8  the JavaScript variation codes match Variation:: in the engine
+//  9  the growth replay (patch 0004): the final frame of every mode is
+//     the normal render, frames grow, and an added frame is a redraw
 // ============================================================================
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -166,6 +168,35 @@ console.log('8. variation codes');
   }
   for (const s of ['a', 'Zz', 'abc', 'ZZZ', '17', 'x9', '']) if (E.varFromString(s) !== varFromString(s)) bad++;
   ok(bad === 0, 'JS and engine variation codes agree', bad + ' mismatches');
+}
+
+console.log('9. growth replay');
+{
+  // Pixels that differ from the background (the first pixel of the final
+  // render) by more than 40 in some channel.
+  let bg = [255, 255, 255];
+  const ink = px => { let n = 0; for (let i = 0; i < px.length; i += 4) if (Math.abs(px[i] - bg[0]) > 40 || Math.abs(px[i + 1] - bg[1]) > 40 || Math.abs(px[i + 2] - bg[2]) > 40) n++; return n; };
+  for (const [f, tile] of [['demo1.cfdg', 0], ['snowflake.cfdg', 0], ['sierpinski.cfdg', 0], ['ours-truchet.cfdg', 3]]) {
+    E.parse(read(f), ABC);
+    const plain = E.render({ width: 240, height: 240, tile, tickMs: 0 });
+    E.parse(read(f), ABC);
+    const g = E.render({ width: 240, height: 240, tile, grow: true, tickMs: 0 });
+    const want = fnv(plain.pixels);
+    bg = [plain.pixels[0], plain.pixels[1], plain.pixels[2]];
+    ok(g.grow && g.measured === plain.shapes && fnv(g.pixels) === want, `${f}: a grow render is the normal render`, `${g.measured} shapes, depth ${g.minDepth}..${g.maxDepth}, fnv ${want}`);
+    for (const mode of ['build', 'depth', 'radial']) {
+      const counts = [0, 0.25, 0.5, 0.75].map(t => ink(E.growFrame(mode, t)));
+      const fin = E.growFrame(mode, 1);
+      const up = counts.every((c, i) => i === 0 || c >= counts[i - 1]) && ink(fin) > counts[0];
+      ok(fnv(fin) === want && up, `${f}: ${mode} grows to the normal render`, counts.concat(ink(fin)).join(' < ') + ', fnv ' + fnv(fin));
+    }
+    // An added frame (0.3 then 0.6) equals a frame drawn from clear (0.9
+    // then 0.6) in build order, where the draw order is the key order.
+    E.growFrame('build', 0.3); const added = fnv(E.growFrame('build', 0.6));
+    E.growFrame('build', 0.9); const fresh = fnv(E.growFrame('build', 0.6));
+    ok(added === fresh, `${f}: an added build frame equals a redraw`, added);
+    E.growEnd();
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

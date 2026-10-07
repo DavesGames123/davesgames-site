@@ -23,6 +23,11 @@
 //              tick; 0 = none)
 //        hooks: onProgress(p) -> 0 | 'finish' | 'stop'
 //               onFrame(pixels, w, h, index)   partial or animation frame
+//        grow: true keeps the renderer for E.growFrame (res.grow,
+//        res.measured shapes, res.minDepth, res.maxDepth)
+//    E.growFrame(mode, at) -> pixels of the replay at 0..1; mode is
+//        'build', 'depth' or 'radial'; at >= 1 is the final render
+//    E.growEnd()                          frees the kept renderer
 //    E.svg(opts)                          -> SVG text
 //    E.varToString(n), E.varFromString(s), E.varMax(letters)
 //
@@ -33,7 +38,8 @@
 // ============================================================================
 import createContextFree from './cf.js';
 
-export const FLAG = { PARTIAL: 1, NO_AA: 2, ZOOM: 4, WIDE: 8 };
+export const FLAG = { PARTIAL: 1, NO_AA: 2, ZOOM: 4, WIDE: 8, GROW: 16 };
+export const GROW_MODES = { build: 2, depth: 3, radial: 4 };
 
 export { randomVariation, varToString, varFromString } from './variation.js';
 
@@ -89,9 +95,9 @@ export async function loadEngine(init = {}) {
   }
 
   function render(o = {}, h = null) {
-    hooks = h; lastProgress = null; diags = [];
+    hooks = h; lastProgress = null; diags = []; growSize = null;
     const flags = (o.partial ? FLAG.PARTIAL : 0) | (o.antialias === false ? FLAG.NO_AA : 0) |
-      (o.zoom ? FLAG.ZOOM : 0) | (o.wide ? FLAG.WIDE : 0);
+      (o.zoom ? FLAG.ZOOM : 0) | (o.wide ? FLAG.WIDE : 0) | (o.grow && !(o.frames > 0) ? FLAG.GROW : 0);
     let res;
     try {
       res = JSON.parse(M.UTF8ToString(M._cf_render(o.width | 0 || 500, o.height | 0 || 500,
@@ -105,7 +111,8 @@ export async function loadEngine(init = {}) {
       const ptr = M._cf_pixels();
       res.pixels = ptr ? new Uint8ClampedArray(M.HEAPU8.buffer, ptr, res.width * res.height * 4).slice() : null;
     }
-    M._cf_release();
+    // With grow, the renderer and canvas stay for growFrame().
+    if (res.grow) growSize = { w: res.width, h: res.height }; else M._cf_release();
     return res;
   }
 
@@ -118,5 +125,16 @@ export async function loadEngine(init = {}) {
   function varFromString(s) { const p = cstr(String(s)); try { return M._cf_variation_from_string(p); } finally { M._free(p); } }
   function varMax(letters = 3) { return M._cf_variation_max(letters | 0); }
 
-  return { parse, render, svg, varToString, varFromString, varMax, module: M };
+  // One frame of the growth replay of the last render({ grow: true }).
+  // mode: 'build' | 'depth' | 'radial'; at: 0..1 (1 = the final render).
+  let growSize = null;
+  function growFrame(mode, at) {
+    if (!growSize) return null;
+    const ptr = M._cf_grow_frame(GROW_MODES[mode] || 2, +at);
+    if (!ptr) return null;
+    return new Uint8ClampedArray(M.HEAPU8.buffer, ptr, growSize.w * growSize.h * 4).slice();
+  }
+  function growEnd() { growSize = null; M._cf_release(); }
+
+  return { parse, render, svg, growFrame, growEnd, varToString, varFromString, varMax, module: M };
 }

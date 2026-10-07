@@ -15,6 +15,10 @@
 //        img is an ImageData (RGBA, not premultiplied)
 //  result { ok, width, height, shapes, info, diags, image (ImageData) | svg }
 //
+//  lane.growFrame(mode, at, mask) asks the worker for one frame of the
+//  growth replay of the last job with opts.grow: an ImageBitmap at the
+//  full render size, drawn by the engine (patch 0004).
+//
 //  GREP MAP
 //    grep -n 'export function compiledModule'
 //    grep -n 'export function createLane'
@@ -36,7 +40,7 @@ let nextId = 1;
 
 export function createLane(name = 'lane') {
   let worker = null, current = null, initP = null;
-  const queue = [];
+  const queue = [], frames = new Map();
 
   function spawn() {
     worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module', name: 'cf-' + name });
@@ -58,6 +62,11 @@ export function createLane(name = 'lane') {
   function onMessage(e) {
     const m = e.data;
     if (m.type === 'fatal') { fail(new Error(m.error)); return; }
+    if (m.type === 'growFrame') {
+      const f = frames.get(m.id); frames.delete(m.id);
+      if (f) f.resolve(m.bitmap ? { bitmap: m.bitmap, w: m.w, h: m.h, at: m.at } : null);
+      return;
+    }
     if (!current || m.id !== current.id) return;
     const h = current.hooks || {};
     if (m.type === 'parsed') { if (h.onParsed) h.onParsed(m); return; }
@@ -90,9 +99,23 @@ export function createLane(name = 'lane') {
     });
   }
 
+  // One growth replay frame of the last job that ran with opts.grow (see
+  // worker.js). Resolves to { bitmap, w, h, at } or null. A frame waits
+  // behind a running job in the worker.
+  function growFrame(mode, at, mask = false) {
+    if (!worker) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      frames.set(id, { resolve, reject });
+      worker.postMessage({ type: 'growFrame', id, mode, at, mask });
+    });
+  }
+
   // Stop the running job and drop the queue.
   function cancel() {
     const err = { cancelled: true };
+    for (const f of frames.values()) f.reject(err);
+    frames.clear();
     while (queue.length) queue.shift().reject(err);
     if (current) {
       const c = current; current = null;
@@ -102,7 +125,7 @@ export function createLane(name = 'lane') {
   }
 
   return {
-    run, cancel,
+    run, cancel, growFrame,
     get busy() { return !!current || queue.length > 0; },
     get pending() { return queue.length + (current ? 1 : 0); },
     destroy() { cancel(); if (worker) { worker.terminate(); worker = null; } },

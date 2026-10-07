@@ -31,6 +31,9 @@
 //                                 frames, frame, zoom). One parse gives one
 //                                 renderer, so a second one (tiles, SVG
 //                                 after a render) parses the file again.
+//   cf_grow_frame(mode, at)       draw() again with a subset of the
+//                                 finished shapes (patch 0004): the
+//                                 growth replay
 //   cf_render_svg(...)            renderer->run(nullptr), then draw() into
 //                                 the upstream SVGCanvas
 //
@@ -46,6 +49,7 @@
 //   grep -n 'class WebSystem'        the AbstractSystem of the web
 //   grep -n 'class WebCanvas'        the raster canvas (abstractPngCanvas)
 //   grep -n 'cfdgWebTick'            the time tick of patch 0001
+//   grep -n 'cfdgWebKeep'            the shape filter of patch 0004
 //   grep -n 'EMSCRIPTEN_KEEPALIVE'   every exported function
 // ---------------------------------------------------------------------------
 
@@ -66,6 +70,7 @@
 #include "abstractPngCanvas.h"
 #include "SVGCanvas.h"
 #include "variation.h"
+#include "shape.h"
 #include "astexpression.h"
 #include "agg2/agg_trans_affine.h"
 
@@ -92,6 +97,61 @@ static unsigned gTickCount = 0;
 static bool gStopped = false;           // a hook asked for a stop
 static bool gFinished = false;          // a hook asked to finish up
 static double gOutputCost = 0.0;        // ms of the last partial output
+
+// ── grow replay (patch 0004) ────────────────────────────────────────────────
+// drawShape() asks cfdgWebKeep() for each finished shape. KEEP_ALL draws
+// everything (the normal render). KEEP_MEASURE draws nothing and finds the
+// range of each key. The other modes draw the shapes with lo < key <= hi,
+// where the key is in 0..1:
+//   build    the order in which the expansion finished the shape (the
+//            engine expands the largest shape first)
+//   depth    the generation (1 = start shape), then the build order within
+//            a generation
+//   radial   the distance of the shape origin from the design origin
+enum { KEEP_ALL = 0, KEEP_MEASURE = 1, KEEP_BUILD = 2, KEEP_DEPTH = 3, KEEP_RADIAL = 4 };
+static int gKeepMode = KEEP_ALL;
+static double gKeepLo = -1.0, gKeepHi = 2.0;
+static double gMaxOrder = 0.0, gMinDepth = 0.0, gMaxDepth = 0.0, gMaxRadius = 0.0;
+static long gMeasured = 0;
+static bool gNoClear = false;           // a grow frame adds to the canvas
+
+static double keyOf(const FinishedShape& s, int mode)
+{
+    const auto& w = s.mWorldState;
+    double order = static_cast<double>(w.m_ColorAssignment);
+    double ob = gMaxOrder > 0.0 ? order / (gMaxOrder + 1.0) : 0.0;
+    switch (mode) {
+        case KEEP_BUILD:
+            return gMaxOrder > 0.0 ? order / gMaxOrder : 1.0;
+        case KEEP_DEPTH: {
+            double span = gMaxDepth - gMinDepth + 1.0;
+            return (static_cast<double>(w.m_Depth) - gMinDepth + ob) / span;
+        }
+        case KEEP_RADIAL: {
+            double r = std::hypot(w.m_transform.tx, w.m_transform.ty);
+            return gMaxRadius > 0.0 ? r / gMaxRadius : 1.0;
+        }
+    }
+    return 1.0;
+}
+
+bool cfdgWebKeep(const FinishedShape& s)
+{
+    if (gKeepMode == KEEP_ALL) return true;
+    if (gKeepMode == KEEP_MEASURE) {
+        const auto& w = s.mWorldState;
+        double d = static_cast<double>(w.m_Depth);
+        if (gMeasured == 0) { gMinDepth = gMaxDepth = d; }
+        gMaxOrder = std::max(gMaxOrder, static_cast<double>(w.m_ColorAssignment));
+        gMinDepth = std::min(gMinDepth, d);
+        gMaxDepth = std::max(gMaxDepth, d);
+        gMaxRadius = std::max(gMaxRadius, std::hypot(w.m_transform.tx, w.m_transform.ty));
+        ++gMeasured;
+        return false;
+    }
+    double k = keyOf(s, gKeepMode);
+    return k > gKeepLo && k <= gKeepHi;
+}
 
 // Patch 0001 calls this once per expansion step and once per drawn shape.
 // It reads the clock once in 256 calls, so the cost stays small.
@@ -264,7 +324,7 @@ public:
     void start(bool clear, const agg::rgba& bk, int width, int height) override
     {
         mStart = cfjs_now();
-        abstractPngCanvas::start(clear, bk, width, height);
+        abstractPngCanvas::start(clear && !gNoClear, bk, width, height);
     }
 protected:
     void output(const char*, int) override
@@ -282,6 +342,9 @@ static cfdg_ptr gDesign;
 static int gVariation = 1;
 static std::string gResult;             // JSON or SVG text for JS
 static std::unique_ptr<WebCanvas> gCanvas;
+static renderer_ptr gGrowR;              // the renderer kept for grow frames
+static int gGrowMode = -1;
+static double gGrowAt = -1.0;
 static std::string gDefs;              // the defines of the last cf_parse
 static bool gUsed = false;              // a renderer took the startshape
 
@@ -389,7 +452,8 @@ EMSCRIPTEN_KEEPALIVE const char* cf_info(void)
 //   frames          0 = still image; > 0 = animate that many frames
 //   frame           with frames > 0: 0 = every frame, k = frame k only
 //   flags           1 = partial frames, 2 = no antialiasing, 4 = zoom
-//                   (animation), 8 = 16 bit colour when the design asks
+//                   (animation), 8 = 16 bit colour when the design asks,
+//                   16 = keep the renderer for cf_grow_frame()
 //   tickMs          the progress tick in ms (0 = off): progress() runs at
 //                   each tick, and with flag 1 a partial frame too
 // Returns a JSON string: status, size, shape count, and where the final
@@ -399,6 +463,9 @@ EMSCRIPTEN_KEEPALIVE const char* cf_render(int width, int height, int maxShapes,
     int flags, double tickMs)
 {
     gCanvas.reset();
+    gGrowR.reset();
+    gKeepMode = KEEP_ALL;
+    gNoClear = false;
     if (!gDesign) { gResult = "{\"ok\":false,\"error\":\"no design\"}"; return gResult.c_str(); }
     gStopped = gFinished = false;
     gTickMs = tickMs;       // progress ticks; partial frames only with flag 1
@@ -461,6 +528,19 @@ EMSCRIPTEN_KEEPALIVE const char* cf_render(int width, int height, int maxShapes,
         gCanvas->mSendFrames = (flags & 1) != 0;
         scale = r->run(gCanvas.get(), (flags & 1) != 0);
         gCanvas->convert();
+        // Flag 16: keep the renderer for grow frames, and measure the keys.
+        // The final pixels stay in mRGBA (output() does not convert while
+        // mSendFrames is false).
+        if ((flags & 16) && !gStopped && !gSystem.mErrorMode) {
+            gCanvas->mSendFrames = false;
+            gMaxOrder = gMinDepth = gMaxDepth = gMaxRadius = 0.0;
+            gMeasured = 0;
+            gKeepMode = KEEP_MEASURE;
+            r->draw(gCanvas.get());
+            gKeepMode = KEEP_ALL;
+            gGrowMode = -1;
+            gGrowAt = -1.0;
+        }
     }
     } catch (CfdgError& e) {
         gSystem.error(); gSystem.syntaxError(e);
@@ -470,20 +550,56 @@ EMSCRIPTEN_KEEPALIVE const char* cf_render(int width, int height, int maxShapes,
         gSystem.catastrophicError("unknown engine exception");
     }
     gRenderer = nullptr;
+    if ((flags & 16) && gMeasured > 0 && gCanvas) gGrowR = std::move(r);
+    if (!gCanvas) { gResult = "{\"ok\":false,\"error\":\"render failed\"}"; return gResult.c_str(); }
 
     // The shape count is not in the result: the JS side keeps the last
     // progress() call, which run() makes at its end (outputStats).
-    char b[384];
+    char b[512];
     std::snprintf(b, sizeof b,
         "{\"ok\":%s,\"stopped\":%s,\"finished\":%s,\"width\":%d,\"height\":%d,"
-        "\"tileWidth\":%d,\"tileHeight\":%d,\"scale\":%g,\"frames\":%d,\"errors\":%d}",
+        "\"tileWidth\":%d,\"tileHeight\":%d,\"scale\":%g,\"frames\":%d,\"errors\":%d,"
+        "\"grow\":%s,\"measured\":%ld,\"maxDepth\":%g,\"minDepth\":%g}",
         gSystem.mErrorMode ? "false" : "true", gStopped ? "true" : "false",
         gFinished ? "true" : "false",
         gCanvas->mWidth * mx, gCanvas->mHeight * my, gCanvas->mWidth, gCanvas->mHeight,
-        scale, frames, gSystem.mErrors);
+        scale, frames, gSystem.mErrors, gGrowR ? "true" : "false", gMeasured, gMaxDepth, gMinDepth);
     // The full canvas includes the tile copies.
     gResult = b;
     return gResult.c_str();
+}
+
+// One frame of the growth replay of the last cf_render with flag 16.
+//   mode   2 build, 3 depth, 4 radial
+//   at     0..1: draw the shapes with key <= at; 1 or more draws every
+//          shape (the normal final output, the same pixels as cf_render)
+// A frame later than the last one in the same mode only adds the new
+// shapes to the canvas; an earlier frame or a new mode draws again from
+// a clear canvas. Returns the RGBA8 pixels (cf_pixels() layout), or null.
+EMSCRIPTEN_KEEPALIVE const unsigned char* cf_grow_frame(int mode, double at)
+{
+    if (!gGrowR || !gCanvas) return nullptr;
+    if (mode < KEEP_BUILD || mode > KEEP_RADIAL) mode = KEEP_BUILD;
+    bool add = mode == gGrowMode && at >= gGrowAt && gGrowAt >= 0.0 && at < 1.0;
+    gKeepMode = at >= 1.0 ? KEEP_ALL : mode;
+    gKeepLo = add ? gGrowAt : -1.0;
+    gKeepHi = at;
+    gNoClear = add;
+    gTickMs = 0.0;
+    gStopped = gFinished = false;
+    gRenderer = gGrowR.get();
+    try {
+        gGrowR->draw(gCanvas.get());
+    } catch (...) {
+        gSystem.catastrophicError("grow frame failed");
+    }
+    gRenderer = nullptr;
+    gKeepMode = KEEP_ALL;
+    gNoClear = false;
+    gCanvas->convert();
+    gGrowMode = at >= 1.0 ? -1 : mode;
+    gGrowAt = at >= 1.0 ? -1.0 : at;
+    return gCanvas->mRGBA.data();
 }
 
 // The final RGBA8 pixels of the last cf_render (top row first).
@@ -495,6 +611,7 @@ EMSCRIPTEN_KEEPALIVE const unsigned char* cf_pixels(void)
 // Free the canvas memory of the last render.
 EMSCRIPTEN_KEEPALIVE void cf_release(void)
 {
+    gGrowR.reset();
     gCanvas.reset();
 }
 
@@ -503,6 +620,7 @@ EMSCRIPTEN_KEEPALIVE const char* cf_render_svg(int width, int height, int maxSha
     double minSize, double border)
 {
     gCanvas.reset();
+    gGrowR.reset();
     gResult.clear();
     if (!gDesign) return "";
     gStopped = gFinished = false;
