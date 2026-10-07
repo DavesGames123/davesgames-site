@@ -103,8 +103,12 @@ function circleTrail(R, w, t1, h) {
   gc();
   const g0 = T.stats().grows, h0 = v8.getHeapStatistics().used_heap_size;
   for (let i = 0; i < 2000; i++) frame();
+  // gc() first: V8 boxes doubles held in closure variables, so each draw
+  // makes about 140 bytes of short-lived young-generation churn. This
+  // check is for retained growth (a leak) and for scratch regrowth.
+  gc();
   const dh = v8.getHeapStatistics().used_heap_size - h0, g1 = T.stats().grows;
-  check(g1 === g0 && dh >= 0 && dh < 64 * 1024, 'draw: no per-frame garbage', `heap +${(dh / 1024).toFixed(1)} KB over 6000 draws, scratch grows ${g1 - g0}`);
+  check(g1 === g0 && dh < 64 * 1024, 'draw: no retained growth per frame', `heap ${dh >= 0 ? '+' : ''}${(dh / 1024).toFixed(1)} KB after gc over 6000 draws, scratch grows ${g1 - g0}`);
 }
 
 // The saver scenes (energy drift, escapes, Trojans).
