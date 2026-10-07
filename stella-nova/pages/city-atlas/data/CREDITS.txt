@@ -1,0 +1,85 @@
+City Atlas data: sources, licences and credits
+================================================
+
+The files <id>.bin in this folder are built by ../tools/build_city.py from
+the open datasets below. Each file holds, for one city: building footprints
+and heights, water and land cover rasters, ground and sea-floor heights,
+two days of surface currents, and the 2025 wind rose.
+
+Buildings, water polygons and place names
+  Overture Maps Foundation, release 2026-09-23.1 (themes: buildings, base
+  water, divisions). https://overturemaps.org/
+  Licence: Open Database License (ODbL) 1.0,
+  https://opendatacommons.org/licenses/odbl/1-0/
+  Attribution: (c) OpenStreetMap contributors, Overture Maps Foundation,
+  and the other sources that Overture lists for these themes:
+  https://docs.overturemaps.org/attribution/
+  The building, water and label data in the .bin files are a Derivative
+  Database of that data. They are made available under ODbL 1.0, the same
+  licence. The build scripts in ../tools/ are the means to make them again.
+
+Land cover
+  ESA WorldCover 10 m 2021 v200. https://esa-worldcover.org/
+  (c) ESA WorldCover project 2021 / Contains modified Copernicus Sentinel
+  data (2021) processed by ESA WorldCover consortium.
+  Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+  Changes: resampled to 11.7 m and 62.5 m grids, water merged with the
+  Overture water polygons.
+
+Elevation and sea floor
+  Terrain Tiles on AWS Open Data (Mapzen terrarium encoding),
+  https://registry.opendata.aws/terrain-tiles/
+  Required attribution (https://github.com/tilezen/joerd/blob/master/docs/attribution.md):
+  * ArcticDEM terrain data DEM(s) were created from DigitalGlobe, Inc.,
+    imagery and funded under National Science Foundation awards 1043681,
+    1559691, and 1542736;
+  * Australia terrain data (c) Commonwealth of Australia (Geoscience
+    Australia) 2017;
+  * Austria terrain data (c) offene Daten Oesterreichs - Digitales
+    Gelaendemodell (DGM) Oesterreich;
+  * Canada terrain data contains information licensed under the Open
+    Government Licence - Canada;
+  * Europe terrain data produced using Copernicus data and information
+    funded by the European Union - EU-DEM layers;
+  * Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric
+    Administration;
+  * Mexico terrain data source: INEGI, Continental relief, 2016;
+  * New Zealand terrain data Copyright 2011 Crown copyright (c) Land
+    Information New Zealand and the New Zealand Government (All rights
+    reserved);
+  * Norway terrain data (c) Kartverket;
+  * United Kingdom terrain data (c) Environment Agency copyright and/or
+    database right 2015. All rights reserved;
+  * United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain
+    data courtesy of the U.S. Geological Survey.
+  Changes: resampled to 23.4 m and 250 m grids; isolated holes (cells far
+  below their neighbours) filled with the local median.
+
+Surface currents
+  Navy ESPC-D-V02 global HYCOM 1/12 degree analysis, hourly surface
+  velocity (ssu, ssv), 24-26 September 2026, from HYCOM.org
+  (https://www.hycom.org/dataserver/espc-d-v02). U.S. Navy / FNMOC data,
+  distributed by HYCOM.org as freely available.
+  NOAA Operational Forecast Systems (NYOFS, SFBOFS, SSCOFS), through the
+  Stella Nova Tidal Currents datasets (../../tidal-currents/data/).
+  NOAA National Ocean Service, CO-OPS. U.S. Government work, public domain.
+  Marine Institute Northeast Atlantic model (NEATL), through the same
+  Tidal Currents dataset for Dublin. (c) Irish Marine Institute, CC BY 4.0,
+  https://erddap.marine.ie/erddap/griddap/IMI_NEATL.html
+  Changes: hourly surface currents resampled to this page's grids, faded
+  to zero at the coast, quantized to 8 bits.
+
+Wind
+  Default wind (the 2025 wind rose): ERA5 reanalysis through the
+  Open-Meteo historical weather API, https://open-meteo.com/
+  Live wind on the page: the Open-Meteo forecast API.
+  Weather data by Open-Meteo.com, CC BY 4.0.
+
+Idea
+  GeoLibre by Qiusheng Wu (opengeos), MIT licence,
+  https://github.com/opengeos/GeoLibre - an open geospatial app that shows
+  open building footprints and terrarium terrain in the browser. City Atlas
+  follows the same idea with its own WebGPU renderer and uses no GeoLibre
+  code.
+
+Renderer, wind solver, streak lines and page design: Dave, for Stella Nova.
