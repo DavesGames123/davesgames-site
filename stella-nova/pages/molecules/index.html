@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Molecule Explorer — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MOLECULE EXPLORER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Each molecule shows twice, side by side: the 2D
+   skeletal formula as a chemist draws it (SVG) and the 3D structure
+   (three.js r160). A pointer on an atom or a bond in one view lights the
+   same atom or bond in the other. The library holds about 1,100 molecules
+   from PubChem (data/library.json); any SMILES string or PubChem name also
+   loads, through OpenChemLib (vendor/openchemlib@9.25.1, loaded on demand).
+     chem.js     the record format, the model, groups, molfile   (no DOM)
+     draw2d.js   the skeletal formula as SVG text                 (no DOM)
+     engine.js   OpenChemLib to a record; PubChem lookups
+     view3d.js   the three.js view: styles, halos, morph, picking, GLB
+     pane2d.js   the 2D pane: zoom, pan, hover, the Lewis morph
+     browse.js   search, the category browser with thumbnails
+     main.js     state, the panel, linking, compare, export, keys
+     saver.js    window.snSaver, the screensaver tour
+     tests.mjs   node tests.mjs        build/  fetch.py, build.mjs
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL contexts when the shell swaps
+     2. fonts (Inter, STIX Two Text), style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Molecule Explorer          (hidden in frame) │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │ #stage   .pane[data-k=a2] 2D  │ .pane[data-k=a3] 3D  │
+     │  search    │          compare adds a row: b2 (2D) and b3 (3D)     │
+     │  molecule  │          each pane: a header bar and its tools       │
+     │  display   │                                                      │
+     │  groups    │ #morphCap  the caption of the Lewis morph            │
+     │  export    │                                                      │
+     └────────────┴─────────────────────────────────────────────────────┘
+     #browse    the library browser: category tabs, thumbnail grid
+     #results   instant search results under the search box
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock      at the base: library, info, style, groups, random.
+     #panel     portrait: a bottom sheet over the dock. The stage ends at
+                the top of the sheet, so the 2D (top) and 3D (bottom)
+                panes always stay in view. landscape: a right drawer.
+
+   GREP MAP  (main.js)
+     grep -n 'function show('        load a molecule into a side (a or b)
+     grep -n 'function linkHover'    the 2D <-> 3D highlight
+     grep -n 'function renderInfo'   the info panel
+     grep -n 'function setCompare'   the compare row
+     grep -n 'function exportAs'     SVG, PNG, GLB, MOL, SDF
+     grep -n 'function occlusion'    the phone sheet and the stage
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Molecule Explorer: over a thousand molecules drawn as skeletal formulas beside their 3D structures, with linked atoms, functional groups, the Lewis-to-skeletal morph, compare, and export.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Molecule Explorer</div>
+</div>
+
+<main id="stage">
+  <section class="pane p2" data-k="a2">
+    <header class="ph"><span class="pt">Skeletal formula</span>
+      <div class="tools">
+        <button type="button" class="tb tog" data-t="lewis" title="Show how a skeletal formula works">How it works</button>
+        <button type="button" class="tb tog" data-t="h2" title="Explicit hydrogens">H</button>
+        <button type="button" class="tb tog on" data-t="color" title="Heteroatom colours">Colour</button>
+        <button type="button" class="tb" data-t="zout" aria-label="Zoom out">−</button>
+        <button type="button" class="tb" data-t="zin" aria-label="Zoom in">+</button>
+        <button type="button" class="tb" data-t="fit" aria-label="Fit">⤢</button>
+      </div>
+    </header>
+    <div class="paper"><div class="svgwrap"></div><div class="atomtip" hidden></div></div>
+  </section>
+  <section class="pane p3" data-k="a3">
+    <header class="ph"><span class="pt">3D structure</span>
+      <div class="tools">
+        <div class="seg st3">
+          <button type="button" data-s="ball" class="on" title="Ball and stick">Ball</button>
+          <button type="button" data-s="space" title="Space-filling (van der Waals radii)">Space</button>
+          <button type="button" data-s="stick" title="Sticks">Stick</button>
+          <button type="button" data-s="wire" title="Wireframe">Wire</button>
+        </div>
+        <button type="button" class="tb tog on" data-t="h3" title="Hydrogens in 3D">H</button>
+        <button type="button" class="tb" data-t="lab" title="Atom labels: off, heteroatoms, all">Labels</button>
+        <button type="button" class="tb tog" data-t="spin" title="Rotate">Spin</button>
+        <button type="button" class="tb" data-t="lift" title="Lift the 2D drawing into 3D">Lift</button>
+        <button type="button" class="tb" data-t="reset" aria-label="Reset view">⟲</button>
+      </div>
+    </header>
+    <div class="view3"><canvas aria-label="3D molecule"></canvas><div class="labels3" aria-hidden="true"></div><div class="src3"></div></div>
+  </section>
+  <section class="pane p2 cmp" data-k="b2" hidden>
+    <header class="ph"><span class="pt">Compare with</span>
+      <div class="tools"><input class="cmpq" type="search" placeholder="Search to compare" aria-label="Molecule to compare" autocomplete="off" spellcheck="false"><button type="button" class="tb" data-t="cmpx" aria-label="Close compare">✕</button></div>
+    </header>
+    <div class="paper"><div class="svgwrap"></div><div class="atomtip" hidden></div></div>
+  </section>
+  <section class="pane p3 cmp" data-k="b3" hidden>
+    <header class="ph"><span class="pt cmpname">3D</span></header>
+    <div class="view3"><canvas aria-label="3D molecule to compare"></canvas><div class="labels3" aria-hidden="true"></div><div class="src3"></div></div>
+  </section>
+  <div id="morphCap" hidden><b></b><span></span><div class="mc-steps"></div></div>
+  <div id="loading" hidden><span class="spin"></span><span id="loadingText">Loading</span></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the 3D view cannot render. The 2D formulas still work.</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<aside id="panel" class="open" aria-label="Molecule and controls">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close the panel">✕</button>
+
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="Name, formula or SMILES" aria-label="Search molecules" autocomplete="off" spellcheck="false">
+    <div id="results" role="listbox" hidden></div>
+  </div>
+  <div class="grid3 acts">
+    <button type="button" id="bBrowse">Browse library</button>
+    <button type="button" id="bRandom">Random</button>
+    <button type="button" id="bCompare">Compare</button>
+  </div>
+  <p class="note" id="qNote">Type to search the library. Press Enter on a SMILES string to build it, or on any name to ask PubChem.</p>
+
+  <div id="info"></div>
+
+  <div class="sec-label">Functional groups</div>
+  <div class="grid2">
+    <button type="button" class="tog" id="bGroups">Highlight groups</button>
+    <button type="button" id="bLewis">How skeletal formulas work</button>
+  </div>
+  <div id="groupList"></div>
+
+  <div class="sec-label">Export</div>
+  <div class="grid3 exp">
+    <button type="button" data-x="svg">2D SVG</button>
+    <button type="button" data-x="png2">2D PNG</button>
+    <button type="button" data-x="png3">3D PNG</button>
+    <button type="button" data-x="glb">3D glTF</button>
+    <button type="button" data-x="mol">MOL</button>
+    <button type="button" data-x="sdf">SDF</button>
+  </div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>The 2D view is a skeletal formula: each corner and line end is a carbon atom, and carbons carry enough hydrogens to make four bonds. A solid wedge points toward you, a hashed wedge away. The 3D view shows the same atoms in space. Point at an atom or a bond in either view to light it in both. In 3D, the bond lengths and angles at that atom show.</p>
+    <p class="note fine">Structures, names and 3D conformers: PubChem (NCBI, public domain). 2D layouts, generated conformers and properties: OpenChemLib (BSD-3). logP is the OpenChemLib estimate. Descriptions are written for this page.</p>
+  </div>
+</aside>
+
+<div id="browse" hidden role="dialog" aria-label="Molecule library">
+  <div class="bw-head">
+    <b>Library</b><span id="bwCount"></span>
+    <input id="bwq" type="search" placeholder="Filter" aria-label="Filter the library" autocomplete="off" spellcheck="false">
+    <button type="button" id="bwClose" aria-label="Close the library">✕</button>
+  </div>
+  <div id="bwCats" class="chips"></div>
+  <div id="bwGrid"></div>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Molecule and controls" aria-expanded="false"><b>☰</b><span>Info</span></button>
+  <button id="dockBrowse" type="button" aria-label="Browse the library"><b>▦</b><span>Library</span></button>
+  <button id="dockStyle" type="button" aria-label="Next 3D style"><small>3D</small><span id="dockStyleV">Ball</span></button>
+  <button id="dockGroups" type="button" aria-label="Highlight functional groups"><b>◍</b><span>Groups</span></button>
+  <button id="dockRandom" type="button" aria-label="Random molecule"><b>⚄</b><span>Random</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
