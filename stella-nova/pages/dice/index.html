@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Dice Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DICE LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Real rigid-body dice in a felt tray: pick the dice
+   (or type a roll in dice notation), throw them, and read each die from
+   its rest orientation. Live and batch statistics test the dice for
+   fairness and show the exact distribution of the total.
+
+   MODULES
+     dice.js      shapes, numbering, the face reader (no DOM)
+     notation.js  dice notation: parse, plan, score (no DOM)
+     prob.js      exact distributions and the chi-square test (no DOM)
+     physics.js   Rapier world, tray, throw, rest (no DOM)
+     batch-worker.js  many physics throws, headless, in a worker
+     facetex.js   the face atlas of each die (canvas)
+     scene.js     renderer, tray, lights, dice meshes, labels
+     recog.js     camera recognition from a top-down render
+     charts.js    the face and totals plots
+     saver.js     the screensaver director (window.snSaver)
+     main.js      state, UI, throw loop, replay, stats
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. style.css, then lib/sci.css (STIX Two Text + Inter)
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (dice, throw), #anaPanel at the right
+                 (result, camera check, statistics). #view fills the rest.
+                 #throwBtn floats at the base of the view.
+     phone ..... #dock at the base: four tabs and the throw button. A tab
+                 opens #panel with only its .grp, as a bottom sheet
+                 (portrait) or a drawer (landscape). The result and the
+                 statistics groups move into #panel. #strip shows the
+                 total at the top of the view.
+
+   GREP MAP  (main.js)
+     grep -n 'function throwNow'     a throw from the UI
+     grep -n 'function frame'        the loop: step, record, play
+     grep -n 'function settle'       read, score, explode, stats
+     grep -n 'function setCamMode'   orbit, top, low, follow, hand
+     grep -n 'function runBatch'     the worker
+     grep -n 'function runCheck'     camera recognition
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Real physics dice in a felt tray: d4 to d20, d%, Fate dice and a coin. Type a roll in dice notation, throw it, read each die from how it lands, and test the dice for fairness against the exact distribution.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Dice Lab</div>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="strip" aria-live="polite"><span class="tot" id="stripTot">–</span><span class="nt" id="stripNote">Pick dice, then throw</span></div>
+  <div id="hint">swipe across the tray to throw · drag to orbit · space throws</div>
+  <button id="throwBtn" type="button">Throw</button>
+  <div id="loading">Loading the physics engine…</div>
+  <button id="gear" type="button" aria-label="Open controls">☰</button>
+  <button id="anaOpen" type="button" hidden>∑ Results</button>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the dice cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="dice">
+    <h1 class="ttl">Dice Lab</h1>
+    <p class="lede">Real rigid-body dice. The result comes from how each die lands.</p>
+    <div class="sec-label">Dice</div>
+    <div id="picker" class="picker"></div>
+    <div class="sec-label">Notation</div>
+    <form id="notaForm" class="nota" autocomplete="off">
+      <input id="nota" type="text" spellcheck="false" value="3d6" aria-label="Dice notation">
+      <button type="submit">Roll</button>
+    </form>
+    <div id="notaMsg" class="note"></div>
+    <div id="chips" class="chips"></div>
+    <div class="sec-label">Finish</div>
+    <div id="finishes" class="grid3"></div>
+    <div class="sec-label">d6 faces</div>
+    <div class="seg" id="styleSeg"><button data-style="numbers" class="on" type="button">Numbers</button><button data-style="pips" type="button">Pips</button></div>
+  </section>
+
+  <section class="grp" data-grp="throw">
+    <div class="sec-label first">Throw</div>
+    <div class="row"><label for="strength">Strength</label><input type="range" id="strength" min="0" max="1" step="0.01" value="0.55"><span class="val" id="strengthV"></span></div>
+    <div class="sec-label">Tray</div>
+    <div class="seg" id="traySeg"><button data-tray="small" type="button">Small</button><button data-tray="medium" class="on" type="button">Medium</button><button data-tray="large" type="button">Large</button></div>
+    <div class="sec-label">Speed</div>
+    <div class="seg" id="speedSeg"><button data-speed="1" class="on" type="button">1×</button><button data-speed="0.5" type="button">½×</button><button data-speed="0.25" type="button">¼×</button><button data-speed="0.1" type="button">⅒×</button></div>
+    <div class="sec-label">Camera</div>
+    <div class="grid3" id="camSeg">
+      <button data-cam="orbit" class="on" type="button">Orbit</button>
+      <button data-cam="top" type="button">Top</button>
+      <button data-cam="low" type="button">Low</button>
+      <button data-cam="follow" type="button">Follow</button>
+      <button data-cam="hand" type="button">Hand</button>
+      <button data-cam="reset" type="button">Reset</button>
+    </div>
+    <div class="toggles">
+      <button class="tog" id="replayBtn" type="button" disabled>⟲ Replay last throw</button>
+      <button class="tog" id="shakeBtn" type="button" hidden>Shake to roll</button>
+    </div>
+    <p class="note">A swipe across the tray throws in that direction; a faster swipe throws harder. Replay plays the recorded throw again at the chosen speed, from the chosen camera.</p>
+  </section>
+
+  <section class="grp ana" data-grp="result" id="resultSec">
+    <div class="sec-label first">Result</div>
+    <div id="result" class="result"><div class="big">–</div><div class="sub">No throw yet</div></div>
+    <div id="cockedBox" class="cocked" hidden><span id="cockedTxt"></span><button id="rerollBtn" type="button">Re-roll cocked</button></div>
+    <div class="sec-label">Camera check</div>
+    <div class="toggles"><button class="tog" id="camChk" type="button">Check each throw</button><button class="tog" id="camNow" type="button">Check now</button></div>
+    <div id="checkOut" class="check"></div>
+    <p class="note">The check renders the tray from straight above and reads each die from the pixels: background difference finds the dice, and a template matcher built from the dice's own face textures reads the top face. The die type comes from the nearest body; the number does not.</p>
+  </section>
+
+  <section class="grp ana" data-grp="stats" id="statsSec">
+    <div class="sec-label first">Statistics</div>
+    <div class="seg" id="tabSeg"><button data-tab="faces" class="on" type="button">Faces</button><button data-tab="totals" type="button">Totals</button><button data-tab="odds" type="button">Odds</button></div>
+    <div class="tab" data-tab="faces">
+      <div class="seg small" id="srcSeg"><button data-src="session" class="on" type="button">This session</button><button data-src="batch" type="button">Batch</button></div>
+      <div id="faceTypes" class="chips"></div>
+      <canvas id="faceCv" class="plot"></canvas>
+      <div id="faceTxt" class="stat"></div>
+      <p class="note">Bars: rolls per face. Gold line: the count a fair die gives on average, n/k. Band: where about 95% of fair bars land. The chi-square test sums (O − E)²/E over the faces; a p-value under 0.01 would point to a biased die (or bad luck, once in a hundred tests).</p>
+    </div>
+    <div class="tab" data-tab="totals" hidden>
+      <canvas id="totCv" class="plot tall"></canvas>
+      <div id="totTxt" class="stat"></div>
+      <p class="note">Bars: the share of each total in the session (and the batch). Gold: the exact distribution, the convolution of the dice. Dashed: the normal curve with the same mean and variance. Add dice and the sum takes the bell shape (the central limit theorem).</p>
+    </div>
+    <div class="tab" data-tab="odds" hidden>
+      <div class="row"><label for="target">At least</label><input type="range" id="target" min="0" max="20" step="1" value="10"><span class="val" id="targetV"></span></div>
+      <table class="readout" id="oddsTbl"></table>
+      <div class="sec-label">A d20 check</div>
+      <table class="readout" id="advTbl"></table>
+      <p class="note">Advantage keeps the higher of two d20: P(≥ x) = 1 − ((x − 1)/20)². Disadvantage keeps the lower: ((21 − x)/20)². 4d6 drop lowest has a mean of 12.24, against 10.5 for 3d6.</p>
+    </div>
+    <div class="sec-label">Batch</div>
+    <div class="toggles"><button class="tog" id="batch1k" type="button">1,000 throws</button><button class="tog" id="batch10k" type="button">10,000 throws</button><button class="tog" id="fairBtn" type="button">Test every die</button></div>
+    <div id="batchOut" class="stat"></div>
+    <p class="note">The batch runs the same Rapier physics with no rendering, in a worker, as fast as it can. Cocked dice are thrown again; nothing is drawn from a random-number shortcut.</p>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Results">
+  <button id="anaClose" type="button" aria-label="Close the results">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="dice" type="button"><i>⚂</i><span>Dice</span></button>
+  <button class="tab" data-grp="throw" type="button"><i>↻</i><span>Throw</span></button>
+  <button id="dockThrow" type="button" aria-label="Throw"><span>Throw</span></button>
+  <button class="tab" data-grp="result" type="button"><i>Σ</i><span>Result</span></button>
+  <button class="tab" data-grp="stats" type="button"><i>▥</i><span>Stats</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
