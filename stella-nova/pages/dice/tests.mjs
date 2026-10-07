@@ -12,8 +12,18 @@
 //  reader ..... every face of every die, at 24 yaws, read flat and at 6
 //               tilts inside TILT_DEG: the right value, not cocked; at a
 //               tilt past TILT_DEG on an edge: cocked
+//  notation ... parser cases (sums, constants, keep and drop words,
+//               advantage, exploding, d%, Fate, coins, errors) and score()
+//               on hand-made reads
+//  exact ...... specPmf against brute-force enumeration of every outcome
+//               for small cases (3d6, 2d6+1d4-1, 4d6 drop lowest, 2d20
+//               keep highest and lowest, 3dF, 2dC, d%, 1d20+3), exploding
+//               d6 against a deep enumeration; moments, P(X >= x), and
+//               the chi-square p-value against table values
 // ============================================================================
 import { buildDie, readDie, orientFor, TYPE_ORDER, DIE_TYPES, TILT_DEG, Q, V } from './dice.js';
+import { specPmf, moments, atLeast, prob, gammaQ, keepPmf, diePmf } from './prob.js';
+import { parse, planDice, score } from './notation.js';
 
 const QUICK = process.argv.includes('--quick');
 let fail = 0, n = 0;
@@ -127,6 +137,85 @@ for (const t of TYPE_ORDER) {
   ok(cockFlat === 0, `${t}: ${cockFlat} flat or slightly tilted reads flagged cocked`);
   ok(notCocked === 0, `${t}: ${notCocked} tipped reads not flagged cocked`);
   console.log(`  ${t.padEnd(5)} ${reads} reads, ${wrong} wrong; tipped and flagged ${cand.length * YAWS - notCocked}/${cand.length * YAWS}`);
+}
+
+// ── notation ────────────────────────────────────────────────────────────────
+section('notation');
+{
+  const cases = [
+    ['3d6+2', '3d6 + 2'], ['4d6 drop lowest', '4d6dl1'], ['2d20 keep highest', '2d20kh1'], ['advantage', '2d20kh1'],
+    ['disadvantage', '2d20kl1'], ['3d6!', '3d6!'], ['d%', '1d%'], ['4dF', '4dF'], ['3 coins', '3dC'],
+    ['1d20 + 1d4 - 1', '1d20 + 1d4 − 1'], ['3d6 + 2d20 + 1d8', '3d6 + 2d20 + 1d8'], ['4d6k3', '4d6kh3'], ['5d10dh2', '5d10dh2'], ['D20', '1d20'],
+  ];
+  for (const [inp, want] of cases) { const r = parse(inp); ok(!r.error && r.text === want, `parse "${inp}" -> ${r.error || r.text}, want ${want}`); }
+  for (const bad of ['2d7', '4d6dl4', '', 'hello', '3dF!', '200d6']) ok(!!parse(bad).error, `parse "${bad}" gives an error (${parse(bad).error})`);
+  const sp = parse('3d6+2');
+  ok(sp.terms.length === 2 && sp.terms[0].count === 3 && sp.terms[1].value === 2, '3d6+2 terms');
+  ok(planDice(parse('2d% + 1d6')).map(p => p.type).join(',') === 'd100,d10,d100,d10,d6', 'd% plans a tens and a units die');
+  // score with hand-made reads
+  const R = (v, label = String(v)) => ({ value: v, label, cocked: false });
+  const sc = (txt, reads, chains = {}) => { const s = parse(txt), plan = planDice(s); return score(s, plan.map((p, i) => ({ ...p, read: reads[i], chain: chains[i] }))); };
+  ok(sc('4d6dl1', [R(1), R(5), R(3), R(6)]).total === 14, '4d6dl1 on 1 5 3 6 = 14');
+  ok(sc('2d20kh1+3', [R(4), R(17)]).total === 20, '2d20kh1+3 on 4 17 = 20');
+  ok(sc('2d20kl1', [R(4), R(17)]).total === 4, '2d20kl1 on 4 17 = 4');
+  ok(sc('1d10', [R(0)]).total === 10, 'a d10 0 counts 10');
+  ok(sc('1d%', [R(0, '00'), R(0)]).total === 100, 'd% 00 + 0 = 100');
+  ok(sc('1d%', [R(70, '70'), R(3)]).total === 73, 'd% 70 + 3 = 73');
+  ok(sc('2d6!', [R(6), R(2)], { 0: [R(6), R(1)] }).total === 15, '2d6! on 6(6,1) 2 = 15');
+  ok(sc('3d6-1d4', [R(1), R(2), R(3), R(4)]).total === 2, '3d6-1d4 on 1 2 3 | 4 = 2');
+}
+
+// ── exact distributions ─────────────────────────────────────────────────────
+section('exact distributions');
+{
+  // brute force: every outcome of every die, then the notation's rule
+  const faces = s => s === 'F' ? [-1, 0, 1] : s === 'C' ? [0, 1] : Array.from({ length: s }, (_, i) => i + 1);
+  function brute(txt) {
+    const sp = parse(txt), dice = [];
+    sp.terms.forEach((t, ti) => { if (t.kind === 'dice') for (let k = 0; k < t.count; k++) dice.push({ ti, f: faces(t.sides) }); });
+    const dist = new Map(); const pick = new Array(dice.length);
+    const rec = (i, w) => {
+      if (i === dice.length) {
+        let tot = 0;
+        sp.terms.forEach((t, ti) => {
+          if (t.kind === 'const') { tot += t.sign * t.value; return; }
+          let v = dice.map((d, j) => d.ti === ti ? pick[j] : null).filter(x => x !== null);
+          if (t.keep) { v.sort((a, b) => t.keep.hi ? b - a : a - b); v = v.slice(0, t.keep.n); }
+          tot += t.sign * v.reduce((a, b) => a + b, 0);
+        });
+        dist.set(tot, (dist.get(tot) || 0) + w); return;
+      }
+      for (const x of dice[i].f) { pick[i] = x; rec(i + 1, w / dice[i].f.length); }
+    };
+    rec(0, 1);
+    return dist;
+  }
+  for (const txt of ['3d6', '2d6+1d4-1', '4d6 drop lowest', '2d20kh1', '2d20kl1', '3dF', '2dC', '1d%', '1d20+3', '5d4k2', '3d8dh1']) {
+    const B = brute(txt), E = specPmf(parse(txt));
+    let err = 0, mass = 0;
+    for (const [x, p] of B) { err = Math.max(err, Math.abs(prob(E, x) - p)); mass += p; }
+    E.p.forEach((q, i) => { if (!B.has(E.lo + i)) err = Math.max(err, q); });
+    ok(err < 1e-12, `${txt}: exact vs brute force, max diff ${err.toExponential(1)}`);
+    const m = moments(E);
+    console.log(`  ${txt.padEnd(16)} support ${E.lo}..${E.lo + E.p.length - 1}  mean ${m.mean.toFixed(4)}  var ${m.var.toFixed(4)}  max diff ${err.toExponential(1)}`);
+  }
+  // exploding d6: enumerate chains to depth 8
+  const ex = diePmf(6, true); let err = 0;
+  const want = v => { let p = 0; for (let k = 0; ; k++) { const r = v - 6 * k; if (r < 1) break; if (r < 6) { p += Math.pow(1 / 6, k + 1); break; } } return p; };
+  for (let v = 1; v <= 48; v++) err = Math.max(err, Math.abs(prob(ex, v) - want(v)));
+  ok(err < 1e-15, `exploding d6 against chains, max diff ${err.toExponential(1)}`);
+  ok(Math.abs(moments(ex).mean - 4.2) < 1e-9, `exploding d6 mean 4.2 (${moments(ex).mean.toFixed(6)})`);
+  const s46 = specPmf(parse('4d6dl1'));
+  ok(Math.abs(moments(s46).mean - 15869 / 1296) < 1e-12, `4d6 drop lowest mean 15869/1296 = 12.2446 (${moments(s46).mean.toFixed(4)})`);
+  ok(Math.abs(atLeast(specPmf(parse('2d20kh1')), 15) - (1 - (14 / 20) ** 2)) < 1e-12, 'advantage: P(>= 15) = 1 - (14/20)^2 = 0.51');
+  ok(Math.abs(atLeast(specPmf(parse('2d20kl1')), 15) - (6 / 20) ** 2) < 1e-12, 'disadvantage: P(>= 15) = (6/20)^2 = 0.09');
+  ok(Math.abs(prob(specPmf(parse('3d6')), 10) - 27 / 216) < 1e-15, '3d6: P(10) = 27/216');
+  // chi-square upper tail at table values (df, x2 at p = 0.05 and 0.001)
+  for (const [df, x05, x001] of [[1, 3.841, 10.828], [3, 7.815, 16.266], [5, 11.070, 20.515], [9, 16.919, 27.877], [19, 30.144, 43.820]]) {
+    const a = gammaQ(df / 2, x05 / 2), b = gammaQ(df / 2, x001 / 2);
+    ok(Math.abs(a - 0.05) < 2e-4 && Math.abs(b - 0.001) < 2e-5, `chi-square df ${df}: p(${x05}) = ${a.toFixed(5)}, p(${x001}) = ${b.toFixed(6)}`);
+  }
+  ok(Math.abs(keepPmf(diePmf(6), 3, 3, true).p.reduce((a, b) => a + b, 0) - 1) < 1e-12, 'keep all of 3d6 sums to 1');
 }
 
 // ── summary ─────────────────────────────────────────────────────────────────
