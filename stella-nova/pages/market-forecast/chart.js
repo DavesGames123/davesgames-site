@@ -82,11 +82,13 @@ export function levelRow(fc, p) {
   return a.map((v, h) => v + (b[h] - v) * w);
 }
 
-export function createPriceChart(host, gpu) {
-  const canvas = document.createElement('canvas'), overlay = document.createElement('canvas');
-  canvas.className = 'mf-gl'; overlay.className = 'mf-ov';
-  host.append(canvas, overlay);
-  const view = createView(canvas, overlay, gpu);
+// shared: an existing { canvas, overlay, view } (the saver draws all its
+// scenes into one canvas); else the chart makes its own in host.
+export function createPriceChart(host, gpu, shared = null) {
+  let canvas, overlay;
+  if (shared) ({ canvas, overlay } = shared);
+  else { canvas = document.createElement('canvas'); overlay = document.createElement('canvas'); canvas.className = 'mf-gl'; overlay.className = 'mf-ov'; host.append(canvas, overlay); }
+  const view = shared ? shared.view : createView(canvas, overlay, gpu);
   const S = {
     series: null, fc: null, fcFrom: null, morphT0: -1, revealT0: -1, trails: [], mode: 'candles', nBars: 160,
     insets: { top: 0, bottom: 0 }, yLo: NaN, yHi: NaN, vMax: NaN, hover: null, hoverCb: null, lastT: 0, dirty: true, pan: 0,
@@ -285,7 +287,7 @@ export function createPriceChart(host, gpu) {
     // source and timestamp, on every chart
     g.textAlign = 'left'; g.font = `500 10.5px ${FONT}`; g.fillStyle = 'rgba(205,214,228,.55)';
     const src = s.source || {};
-    const asOf = src.asOf ? fmtTime(src.asOf, s.interval === '1day' ? '5min' : s.interval, true) + ' ET' : '';
+    const asOf = src.asOf ? (s.interval === '1day' ? fmtTime(src.asOf, '1day') + ' (daily bar)' : fmtTime(src.asOf, s.interval, true) + ' ET') : '';
     const maxW = R - L.left / d - 70, full = `${src.label || 'unknown source'}${asOf ? ' · as of ' + asOf : ''}`;
     let ly = L.top / d + 2;
     if (g.measureText(full).width <= maxW) g.fillText(full, L.left / d + 4, ly);

@@ -19,7 +19,8 @@
 //    in from the left when a result arrives.
 //    calib.set({ perOrigin: [{ origin, end: { y, q10, q50, q90, naive } }],
 //                base: closes, label })
-//  Both: .frame(t), .busy(), .resize(), .view
+//  Both: .frame(t), .busy(), .resize(), .view. A third argument shared =
+//  { canvas, overlay, view } draws into an existing view (the saver).
 //
 //  grep -n targets: "function buildDist", "function buildCalib"
 // ============================================================================
@@ -41,9 +42,9 @@ function bg(P, W, H) {
   P.quad([0, 0], [W, 0], [W, H], [0, H], [a, a, b, b], 0);
 }
 
-export function createDistChart(host, gpu) {
-  const { canvas, overlay } = mount(host);
-  const view = createView(canvas, overlay, gpu);
+export function createDistChart(host, gpu, shared = null) {
+  const { canvas, overlay } = shared || mount(host);
+  const view = shared ? shared.view : createView(canvas, overlay, gpu);
   let D = null, t0 = -1, lay = null;
   function buildDist(P, W, H, t) {
     bg(P, W, H);
@@ -113,9 +114,9 @@ export function createDistChart(host, gpu) {
   };
 }
 
-export function createCalibChart(host, gpu) {
-  const { canvas, overlay } = mount(host);
-  const view = createView(canvas, overlay, gpu);
+export function createCalibChart(host, gpu, shared = null) {
+  const { canvas, overlay } = shared || mount(host);
+  const view = shared ? shared.view : createView(canvas, overlay, gpu);
   let C = null, t0 = -1, lay = null;
   function rows() {
     return C.perOrigin.filter(r => r.end).map(r => {
