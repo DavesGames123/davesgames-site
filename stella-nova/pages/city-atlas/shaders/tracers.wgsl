@@ -29,7 +29,7 @@ struct TrailU {
 
 @group(2) @binding(0) var<uniform> T: TrailU;
 @group(2) @binding(1) var<storage, read_write> parts: array<vec4f>;   // x, y, age s, life s
-@group(2) @binding(2) var<storage, read_write> trail: array<vec4f>;   // x, y, speed m/s, alive
+@group(2) @binding(2) var<storage, read_write> trail: array<vec4f>;   // x, y, surface height m, speed m/s (-1: not born)
 
 // Velocity (m/s) and a usable flag at p.
 fn fieldAt(p: vec2f) -> vec3f {
@@ -97,9 +97,11 @@ fn advect(@builtin(global_invocation_id) g: vec3u) {
     // a reseed spreads the ages, so the first lives do not all end together
     let age = select(0.0, hash11(i * 13u + T.seed) * life, T.reseed == 1u);
     parts[i] = vec4f(p, age, life);
-    for (var k = 0u; k < T.K; k++) { trail[base + k] = vec4f(p, 0.0, 0.0); }
+    for (var k = 0u; k < T.K; k++) { trail[base + k] = vec4f(p, 0.0, -1.0); }
     return;
   }
   parts[i] = q;
-  trail[base + T.head] = vec4f(q.xy, speed, 1.0);
+  // the surface height goes with the point (not exaggerated), so lines.wgsl
+  // needs no height lookup per vertex
+  trail[base + T.head] = vec4f(q.xy, heightAt(q.xy).y, speed);
 }

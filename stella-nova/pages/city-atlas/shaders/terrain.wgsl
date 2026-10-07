@@ -50,11 +50,36 @@ fn vs(@builtin(vertex_index) vid: u32) -> VOut {
   }
   let cell = 2.0 * M.half / M.n;
   let p = vec2f(-M.half + (f32(gx) + 0.5) * cell, -M.half + (f32(gy) + 0.5) * cell) + out * cell;
-  let h = heightAt(p);
   let e = exag();
   let d = cell;
-  let hx = heightAt(p + vec2f(d, 0.0)).x - heightAt(p - vec2f(d, 0.0)).x;
-  let hy = heightAt(p + vec2f(0.0, d)).x - heightAt(p - vec2f(0.0, d)).x;
+  var h: vec4f;
+  var hx: f32;
+  var hy: f32;
+  // Fast path: away from the inner edge a vertex sits on a texel centre of
+  // its own raster, so 5 direct loads give the height and the normal. The
+  // blend of heightAt() (40 loads) is needed only near the inner edge.
+  let wIn = innerW(p);
+  let inner = M.level > 0.5;
+  let pure = select(innerW(p + vec2f(d, d)) <= 0.0 && innerW(p - vec2f(d, d)) <= 0.0 && wIn <= 0.0,
+                    wIn >= 1.0 && innerW(p + vec2f(d, d)) >= 1.0 && innerW(p - vec2f(d, d)) >= 1.0, inner);
+  if (pure && skirt == 0.0) {
+    let g = vec2i(gx, gy);
+    if (inner) {
+      let n = vec2i(textureDimensions(hIn)) - 1;
+      h = textureLoad(hIn, g, 0);
+      hx = textureLoad(hIn, min(g + vec2i(1, 0), n), 0).x - textureLoad(hIn, max(g - vec2i(1, 0), vec2i(0)), 0).x;
+      hy = textureLoad(hIn, min(g + vec2i(0, 1), n), 0).x - textureLoad(hIn, max(g - vec2i(0, 1), vec2i(0)), 0).x;
+    } else {
+      let n = vec2i(textureDimensions(hOut)) - 1;
+      h = textureLoad(hOut, g, 0);
+      hx = textureLoad(hOut, min(g + vec2i(1, 0), n), 0).x - textureLoad(hOut, max(g - vec2i(1, 0), vec2i(0)), 0).x;
+      hy = textureLoad(hOut, min(g + vec2i(0, 1), n), 0).x - textureLoad(hOut, max(g - vec2i(0, 1), vec2i(0)), 0).x;
+    }
+  } else {
+    h = heightAt(p);
+    hx = heightAt(p + vec2f(d, 0.0)).x - heightAt(p - vec2f(d, 0.0)).x;
+    hy = heightAt(p + vec2f(0.0, d)).x - heightAt(p - vec2f(0.0, d)).x;
+  }
   var o: VOut;
   let z = h.y * e - skirt;
   o.world = vec3f(p, z);

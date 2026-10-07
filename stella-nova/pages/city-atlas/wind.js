@@ -28,11 +28,13 @@ const U_LAT = 0.07;          // free-stream lattice speed
 const TAU = 0.51;            // molecular relaxation time (Smagorinsky adds the rest)
 const BURST_COARSE = 700;    // steps after a reset, spread over the first frames
 const BURST_FINE = 900;
+const BURST_PER_FRAME = 24;  // burst steps per frame and lattice
 
 export async function createWind(device, code, opts = {}) {
   const CN = opts.coarseN || 256;
   const FN = opts.fineN || 640;
   const stepsPerFrame = { coarse: opts.coarseSteps || 3, fine: opts.fineSteps || 6 };
+  const acc = { coarse: 0, fine: 0 };
 
   const module = device.createShaderModule({ code: code.lbm, label: 'lbm' });
   const info = await module.getCompilationInfo();
@@ -127,11 +129,11 @@ export async function createWind(device, code, opts = {}) {
     L.burst = L.fine ? BURST_FINE : BURST_COARSE;
   }
 
-  function run(L, enc, steps) {
+  function run(L, enc, steps, tsw) {
     if (steps <= 0) return;
     L.stepNo += steps;
     writeSim(L);
-    const p = enc.beginComputePass();
+    const p = enc.beginComputePass(tsw ? { timestampWrites: tsw } : undefined);
     p.setPipeline(pStep);
     for (let k = 0; k < steps; k++) {
       p.setBindGroup(0, L.groups.step[L.parity][k === steps - 1 ? 1 : 0]);
@@ -147,8 +149,8 @@ export async function createWind(device, code, opts = {}) {
     const enc = device.createCommandEncoder();
     reset(coarse, enc);
     // the fine lattice starts from the coarse field: run a short coarse burst first
-    run(coarse, enc, 200);
-    coarse.burst -= 200;
+    run(coarse, enc, 60);
+    coarse.burst -= 60;
     reset(fine, enc);
     device.queue.submit([enc.finish()]);
   }
@@ -184,14 +186,23 @@ export async function createWind(device, code, opts = {}) {
     get fHalf() { return city?.fHalf || 2500; },
     get cHalf() { return city?.gHalfIn || 6000; },
 
-    // One frame of steps. A burst after a reset runs more.
-    step(enc, mult = 1) {
+    // One frame of steps: stepsPerFrame x mult, with the fractions carried
+    // to the next frame, so mult 0.25 is one fine step every frame or so.
+    // A burst after a reset adds at most BURST_PER_FRAME steps a frame
+    // (it was 120: a 140 ms frame on an M4 Pro when the wind came on).
+    // ts: optional { querySet, begin, end } indices, for the GPU timing debug
+    step(enc, mult = 1, ts = null) {
       if (!city && !flow.closed) return;
-      const bc = Math.min(coarse.burst, 120), bf = Math.min(fine.burst, 120);
+      const bc = Math.min(coarse.burst, BURST_PER_FRAME), bf = Math.min(fine.burst, BURST_PER_FRAME);
       coarse.burst -= bc; fine.burst -= bf;
-      run(coarse, enc, Math.round(stepsPerFrame.coarse * mult) + bc);
-      run(fine, enc, Math.round(stepsPerFrame.fine * mult) + bf);
+      acc.coarse += stepsPerFrame.coarse * mult;
+      acc.fine += stepsPerFrame.fine * mult;
+      const nc = Math.floor(acc.coarse), nf = Math.floor(acc.fine);
+      acc.coarse -= nc; acc.fine -= nf;
+      run(coarse, enc, nc + bc, ts && { querySet: ts.querySet, beginningOfPassWriteIndex: ts.begin });
+      run(fine, enc, nf + bf, ts && { querySet: ts.querySet, endOfPassWriteIndex: ts.end });
     },
+    get bursting() { return coarse.burst > 0 || fine.burst > 0; },
 
     // Test hook: total mass of the coarse lattice after `steps` steps in a
     // closed box. Returns [before, after].

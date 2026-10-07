@@ -65,7 +65,7 @@ export async function createTracers(device, ctx, opts) {
   return {
     K,
     reseed() { reseed = 1; },
-    update(enc, gScene, gOv, p) {
+    update(enc, gScene, gOv, p, tsw = null) {
       count = Math.min(max, p.count | 0);
       if (!count) return;
       acc += p.dt;
@@ -78,7 +78,7 @@ export async function createTracers(device, ctx, opts) {
       f32[4] = p.dt; u32[5] = opts.mode; u32[6] = Math.min(p.nInner | 0, count); u32[7] = reseed;
       f32.set([p.speedup, p.lift, p.lineW, p.alpha, p.innerR, p.outerR, p.colourTop, p.lifeS], 8);
       device.queue.writeBuffer(ubuf, 0, raw);
-      const c = enc.beginComputePass();
+      const c = enc.beginComputePass(tsw ? { timestampWrites: tsw } : undefined);
       c.setPipeline(pAdv);
       c.setBindGroup(0, gScene); c.setBindGroup(1, gOv); c.setBindGroup(2, gC);
       c.dispatchWorkgroups(Math.ceil(count / 64));

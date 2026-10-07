@@ -4,7 +4,8 @@
 // Each instance is one particle, each 6 vertices one segment between two
 // ring points, oldest to newest. A segment is a quad T.lineW CSS px wide,
 // lifted T.lift m over the drawn surface, so it follows the terrain at any
-// exaggeration. Alpha rises toward the head; blending is additive.
+// exaggeration. Each trail point carries its surface height (tracers.wgsl),
+// so a vertex needs no texture read. Alpha rises toward the head; blending is additive.
 //
 // grep: struct TrailU  fn vsLine  fn fsLine
 
@@ -16,7 +17,7 @@ struct TrailU {
 };
 
 @group(2) @binding(0) var<uniform> T: TrailU;
-@group(2) @binding(1) var<storage, read> trail: array<vec4f>;   // x, y, speed m/s, alive
+@group(2) @binding(1) var<storage, read> trail: array<vec4f>;   // x, y, surface height m, speed m/s (-1: not born)
 
 struct LOut {
   @builtin(position) pos: vec4f,
@@ -34,9 +35,9 @@ fn vsLine(@builtin(vertex_index) vid: u32, @builtin(instance_index) inst: u32) -
   let ib = (T.head + 2u + seg) % T.K;
   let a = trail[base + ia];
   let b = trail[base + ib];
-  let alive = a.w * b.w;
-  let za = surfaceZ(a.xy) + T.lift;
-  let zb = surfaceZ(b.xy) + T.lift;
+  let alive = a.w >= 0.0 && b.w >= 0.0;
+  let za = a.z * exag() + T.lift;
+  let zb = b.z * exag() + T.lift;
   let ca = G.viewProj * vec4f(a.xy, za, 1.0);
   let cb = G.viewProj * vec4f(b.xy, zb, 1.0);
   let useB = corner == 1u || corner == 2u || corner == 4u;
@@ -49,16 +50,20 @@ fn vsLine(@builtin(vertex_index) vid: u32, @builtin(instance_index) inst: u32) -
   let nrm = normalize(vec2f(-d.y, d.x));
   let wpx = T.lineW * G.res.z;
   c = vec4f(c.xy + nrm * side * wpx / G.res.xy * c.w, c.zw);
-  if (ca.w <= 0.0 || cb.w <= 0.0 || alive < 0.5) { c = vec4f(0.0, 0.0, -2.0, 1.0); }
+  if (ca.w <= 0.0 || cb.w <= 0.0 || !alive) { c = vec4f(0.0, 0.0, -2.0, 1.0); }
   o.pos = c;
   let j = f32(seg + select(0u, 1u, useB)) / f32(T.K - 1u);
-  let sp = select(a.z, b.z, useB);
+  let sp = max(select(a.w, b.w, useB), 0.0);
   // wind: square-root colour scale, as the heat map (terrain.wgsl)
   var cs = sp / max(T.colourTop, 0.01);
   if (T.mode == 1u) { cs = sqrt(cs); }
   let tcol = ramp(cs);
   var alpha = pow(j, 1.6) * T.alpha;
-  if (T.mode == 0u) { alpha *= O.ocean.x; } else { alpha *= O.wind.x * windAt(select(a.xy, b.xy, useB)).w; }
+  if (T.mode == 0u) { alpha *= O.ocean.x; } else {
+    // the rim fade of windAt (common.wgsl), without its texture reads
+    let rr = length(select(a.xy, b.xy, useB)) / O.windB.y;
+    alpha *= O.wind.x * (1.0 - smoothstep(0.78, 0.98, rr));
+  }
   o.col = vec4f(mix(tcol, vec3f(1.0), 0.25 * j), alpha);
   o.across = side;
   return o;
