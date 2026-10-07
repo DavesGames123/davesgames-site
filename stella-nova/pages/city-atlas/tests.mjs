@@ -22,7 +22,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseCity, inflate, buildingsOf } from './data.js';
-import { buildMesh, heightRaster } from './mesh.js';
+import { buildMesh, heightRaster, LOD_SIZES } from './mesh.js';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const only = process.argv.slice(2);
@@ -113,6 +113,14 @@ async function testCity(id) {
   for (const v of mesh.indices) if (v > maxIdx) maxIdx = v;
   check(maxIdx < mesh.count, `${id}: mesh index ${maxIdx} >= vertex count ${mesh.count}`);
   check(i16.length === mesh.count * 10, `${id}: mesh vertex buffer size`);
+  // LOD: the buildings go in largest first, so lod[k] is a prefix of the index buffer
+  const lod = mesh.lod || [];
+  let mono = lod.length === LOD_SIZES.length;
+  for (let k = 1; k < lod.length; k++) if (lod[k] < lod[k - 1]) mono = false;
+  check(mono && lod[lod.length - 1] === mesh.indices.length, `${id}: LOD prefixes ${JSON.stringify(lod)} not rising to ${mesh.indices.length}`);
+  let wantIdx = 0;
+  for (let i = 0; i < b.n; i++) wantIdx += b.ntri[i] * 3;
+  check(mesh.indices.length - wantIdx === (mesh.count - b.xy.length / 2) / 4 * 6, `${id}: mesh index count after the reorder`);
   const ras = heightRaster(b, m.bHalf, 512);
   let covered = 0;
   for (const v of ras) if (v > 0) covered++;
