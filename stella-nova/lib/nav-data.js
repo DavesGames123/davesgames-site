@@ -122,7 +122,8 @@ w.SN_NAV = [
     { h: "Flow", p: [
       ["fluidlab", "Stable Fluids", "GPU"],
       ["wind-tunnel", "Wind Tunnel", "CFD"],
-      ["tidal-currents", "Tidal Currents", "DATA"]
+      ["tidal-currents", "Tidal Currents", "DATA"],
+      ["nuclear-blast", "Nuclear Blast Effects", "3D"]
     ] },
     { h: "Navier–Stokes", p: [
       ["ns-equations", "Navier–Stokes 1D", "MATH"],
