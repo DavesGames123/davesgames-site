@@ -46,12 +46,13 @@ Random number distributions, upstream src-common/myrandom.h
   MIT licence and the University of Illinois/NCSA Open Source Licence;
   the full text is in the header of myrandom.h.
 
-backwards.h, upstream src-common/backwards.h (used by builder.cpp)
-  Copyright (c) 2018 Adam Nevraumont. Creative Commons CC BY-SA 4.0,
-  https://creativecommons.org/licenses/by-sa/4.0/ (a short reverse-range
-  adapter). Note: Creative Commons lists CC BY-SA 4.0 as one-way
-  compatible with GPL version 3, not version 2. We ship it as upstream
-  ships it.
+backwards.h, upstream src-common/backwards.h: NOT in cf.wasm
+  Copyright (c) 2018 Adam Nevraumont, Creative Commons CC BY-SA 4.0.
+  Creative Commons lists CC BY-SA 4.0 as one-way compatible with GPL
+  version 3 only, not version 2. Patch 0003 makes builder.cpp use
+  std::views::reverse from the C++20 standard library instead, and
+  engine/build.sh deletes backwards.h before the compile. The file stays
+  in the unchanged upstream tarball, as part of the upstream source.
 
 fdostream.h, upstream src-unix/fdostream.h (included by SVGCanvas.h)
   (C) Copyright Nicolai M. Josuttis 2001. "Permission to copy, use,
@@ -79,6 +80,9 @@ notice of the change in its header.
   engine/patches/0002-antialias-switch.patch
       src-common/aggCanvas.{h,cpp}: aggCanvas::NoAntialias, a threshold
       gamma on the rasterizer.
+  engine/patches/0003-std-views-reverse.patch
+      src-common/builder.cpp: three reverse loops use std::views::reverse
+      in place of backwards() from backwards.h.
   engine/shim/cfweb.cpp (new, ours): the C API of the web build. It
       takes the place of src-unix/main.cpp, posixSystem.cpp and
       pngCanvas.cpp. NFKC name normalization (ICU) is left out: names are

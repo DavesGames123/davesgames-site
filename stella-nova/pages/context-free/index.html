@@ -14,7 +14,7 @@
    The engine is Context Free by Mark Lentczner and John Horigan, from CFDG
    by Chris Coyne (GPL-2.0-or-later, see COPYING and CREDITS.txt). cf.wasm
    is that engine, compiled with Emscripten by engine/build.sh from the
-   upstream source (engine/UPSTREAM) and two small patches. The page code
+   upstream source (engine/UPSTREAM) and three small patches. The page code
    is our own and has the same licence.
 
    FILES
@@ -204,7 +204,7 @@ rule 1 { BRANCH [ r 30 ] BRANCH [ r -30 flip 90 ] }</pre>
   <section id="tabAbout" role="tabpanel" hidden>
     <div class="about">
       <p><b>Context Free</b> draws pictures from a grammar. You write shapes and rules; the program expands them, largest first, until they are too small to see. It is by <b>Mark Lentczner</b> and <b>John Horigan</b>, based on <b>CFDG</b> (the Context Free Design Grammar) by <b>Chris Coyne</b>. Home: <a href="https://www.contextfreeart.org/" target="_blank" rel="noopener">contextfreeart.org</a>. Source: <a href="https://github.com/MtnViewJohn/context-free" target="_blank" rel="noopener">github.com/MtnViewJohn/context-free</a>.</p>
-      <p>This page runs the real engine: the C++ source of Context Free 3.4.3 (commit <code>8cbef6e</code>), compiled to WebAssembly with Emscripten. Our shim replaces the command-line front end, the PNG writer and the file system with a small C API, and two patches add a time tick (for live progress in a web worker) and an antialiasing switch. Every render, variation and SVG comes from the engine; the page only shows the pixels.</p>
+      <p>This page runs the real engine: the C++ source of Context Free 3.4.3 (commit <code>8cbef6e</code>), compiled to WebAssembly with Emscripten. Our shim replaces the command-line front end, the PNG writer and the file system with a small C API, and three patches add a time tick (for live progress in a web worker), an antialiasing switch, and a standard-library reverse loop in place of a CC BY-SA helper file. Every render, variation and SVG comes from the engine; the page only shows the pixels.</p>
       <p>Context Free © 2005–2026 Mark Lentczner and John Horigan. CFDG © 2005 Chris Coyne. Anti-Grain Geometry © 2002–2006 Maxim Shemanarev. Random distributions from LLVM libc++ © 2009–2015 the LLVM team (MIT / UIUC). All under the <a href="COPYING" target="_blank" rel="noopener">GNU General Public License, version 2 or later</a>, except the libc++ part. Full credits: <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
       <p>Source of this build: the upstream tarball, our patches, the shim and the build script are in <a href="engine/UPSTREAM" target="_blank" rel="noopener">engine/</a> next to this page (<a href="engine/build.sh" target="_blank" rel="noopener">build.sh</a>, <a href="engine/BUILD" target="_blank" rel="noopener">BUILD</a>). The page code is GPL-2.0-or-later too.</p>
       <p>The gallery has the example designs that ship with Context Free, five designs from its test suite (tiles, a frieze, a wallpaper group, time), and two designs of ours. Designs from the contextfreeart.org gallery belong to their authors, each under its own licence, and are not copied here.</p>

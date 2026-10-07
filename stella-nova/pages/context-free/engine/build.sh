@@ -62,6 +62,11 @@ for p in "$HERE"/patches/*.patch; do
   echo "patch: $(basename "$p")"
 done
 
+# backwards.h (CC BY-SA 4.0, upstream src-common) is not part of this
+# build: patch 0003 takes it out of builder.cpp. The file is deleted here,
+# so a compile fails if any source still includes it.
+rm -f "$SRC/src-common/backwards.h"
+
 # ── 3. the parser and the lexer ──────────────────────────────────────────────
 GEN="$WORK/gen"
 mkdir -p "$GEN"

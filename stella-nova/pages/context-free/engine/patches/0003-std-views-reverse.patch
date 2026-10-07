@@ -1,0 +1,43 @@
+diff --git a/src-common/builder.cpp b/src-common/builder.cpp
+index fcc39ae..95bc66e 100644
+--- a/src-common/builder.cpp
++++ b/src-common/builder.cpp
+@@ -24,6 +24,9 @@
+ // Mark Lentczner can be contacted at markl@glyphic.com or at
+ // Mark Lentczner, 1209 Villa St., Mountain View, CA 94041-1123, USA
+ //
++// Modified 2026-10-06 by davesgames.io for the WebAssembly build (patch
++// 0003-std-views-reverse): the three reverse loops use std::views::reverse
++// from <ranges>, and backwards.h (CC BY-SA 4.0) is not included.
+ //
+ 
+ 
+@@ -43,7 +46,7 @@
+ #include "scanner.h"
+ #include <typeinfo>
+ #include <cstddef>
+-#include "backwards.h"
++#include <ranges>
+ #include <algorithm>
+ 
+ using namespace AST;
+@@ -851,8 +854,8 @@ Builder::push_rep(ASTreplacement* r, bool global)
+ ASTparameter*
+ Builder::findExpression(int nameIndex, bool& isGlobal)
+ {
+-    for (auto&& container: backwards(mContainerStack))
+-        for (auto&& param: backwards(container->mParameters))
++    for (auto&& container: std::views::reverse(mContainerStack))
++        for (auto&& param: std::views::reverse(container->mParameters))
+             if (param.mName == nameIndex) {
+                 isGlobal = container->isGlobal;
+                 return &param;
+@@ -896,7 +899,7 @@ Builder::CheckVariableName(int index, const yy::location& loc, bool isParam)
+     
+     const ASTrepContainer* thisLevel = isParam ? &mParamDecls : mContainerStack.back();
+     
+-    for (auto&& param: backwards(thisLevel->mParameters))
++    for (auto&& param: std::views::reverse(thisLevel->mParameters))
+         if (param.mName == index) {
+             warning(loc, "Scope of name overlaps variable/parameter with same name");
+             warning(param.mLocation, "previous variable/parameter declared here");

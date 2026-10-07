@@ -20,7 +20,7 @@
 // This file is our own code. It replaces src-unix/main.cpp, posixSystem.cpp
 // and pngCanvas.cpp of Context Free (Mark Lentczner and John Horigan) with
 // a small C API for JavaScript. The engine itself (src-common, src-agg) is
-// the upstream code, with the two patches in ../patches.
+// the upstream code, with the patches in ../patches.
 //
 // FLOW (the same as the Context Free GUI, src-osx/GView.mm):
 //   cf_parse(variation, defs)     CFDG::ParseFile on /work/main.cfdg (JS
