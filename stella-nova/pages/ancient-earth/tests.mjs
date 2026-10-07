@@ -13,6 +13,8 @@
 //  4. Fossils: our reconstruction of PBDB sites against PBDB's own
 //     PALEOMAP paleo-coordinates (a different code path; median check).
 //  5. world.js: the climate curve, the ice age dip, caption coverage.
+//  6. saver.js: every journey's pins ride a plate for its whole run, and
+//     the age path runs from the start age down to today.
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +22,7 @@ import { Plates, RotationModel, poleQuat, rotate, gcKm, llToVec } from './recon.
 import { EONS, ERAS, PERIODS, EPOCHS, ageToX, xToAge, unitAt } from './timescale.js';
 import { prepareDem, decodeElev, elevAt } from './data.js';
 import { climateAt, captionAt, NAMES } from './world.js';
+import { JOURNEYS, ageAt, RUN } from './saver.js';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const J = f => JSON.parse(fs.readFileSync(path.join(HERE, f)));
@@ -141,6 +144,19 @@ let gap = [];
 for (let t = 0; t <= 540; t += 0.25) if (!captionAt(t).title) gap.push(t);
 ok(!gap.length, 'captions cover 0-540 Ma', gap.slice(0, 5).join(', '));
 ok(NAMES.every(([, , from, to]) => from > to), 'ancient names have age windows');
+
+// ── 6. saver journeys ───────────────────────────────────────────────────────
+console.log('6. saver journeys');
+const bad = [];
+for (const J of JOURNEYS) for (const [n, la, lo] of J.pins) {
+  const k = P.polyAt(la, lo);
+  for (let t = 0; t <= J.a0; t += Math.max(0.01, J.a0 / 50)) if (!P.reconstruct(la, lo, t, k)) { bad.push(`${J.title}: ${n} at ${t.toFixed(2)} Ma`); break; }
+}
+ok(JOURNEYS.length >= 12 && JOURNEYS.length <= 20 && !bad.length, `${JOURNEYS.length} journeys, every pin on a plate from its start age to today`, bad.join('; '));
+let mono = true;
+for (const J of JOURNEYS) { let last = Infinity; for (let k = 0; k <= 1; k += 0.01) { const a = ageAt(J.a0, k); mono = mono && a <= last + 1e-9; last = a; } mono = mono && ageAt(J.a0, 0) === J.a0 && ageAt(J.a0, RUN) === 0 && ageAt(J.a0, 1) === 0; }
+ok(mono, 'journey age path falls from the start age to 0 Ma and holds today');
+ok(new Set(JOURNEYS.map(j => j.title)).size === JOURNEYS.length, 'journey titles are unique');
 
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

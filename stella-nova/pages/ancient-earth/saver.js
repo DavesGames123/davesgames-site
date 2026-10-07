@@ -1,42 +1,73 @@
 // ============================================================================
-//  ANCIENT EARTH  ·  saver.js  ·  window.snSaver, the screensaver tour
+//  ANCIENT EARTH  ·  saver.js  ·  window.snSaver, the screensaver journeys
 // ----------------------------------------------------------------------------
 //  The shell (lib/screensaver.js) calls snSaver.enter(opts), opts = { calm,
-//  seconds, caption, seed, label }. enter hides the GUI, then plays shots
-//  in a seeded shuffle (a new order each run). Each shot holds 5-12 s
-//  (calm makes them longer), and a cut fades the globe through black by
-//  its exposure, so the recording (the WebGL canvas only) has the fade.
+//  seconds, caption, seed, label }. enter hides the GUI and plays curated
+//  journeys (JOURNEYS) in a seeded shuffle, a new order each run. Each
+//  journey pins named places (a pin rides its plate, its trail is the road
+//  it took), runs the age from its start to today and holds on the real
+//  present-day Earth (NASA Blue Marble) for the last part. A journey
+//  holds 10-16 s (calm makes it longer). A cut fades the globe through
+//  black by its exposure, so the recording (the WebGL canvas only) has the
+//  fade. While the age runs fast the clouds churn fast (globe.js).
 //
-//  Shots:
-//    pangea   a slow sweep from 330 to 170 Ma: Pangea joins and splits
-//    assembly a sweep from 480 to 300 Ma over the closing Iapetus and Rheic
-//    city     a modern city rides from its oldest age to today, with its
-//             trail, the camera following it
-//    kpg      68 to 65.5 Ma over the Yucatan, the K-Pg moment
-//    ice      a pole view of an icehouse (Late Ordovician, Late Paleozoic,
-//             the ice age) then of a hothouse world
-//    orbit    one age, a slow orbit with the terminator and the sun glint
-//    map      a colour-map mode (magma, viridis, turbo, atlas, outline with
-//             plate tints) with a short time sweep
+//  Camera kinds:  pin   follow the first pin
+//                 mid   the midpoint of the first two pins
+//                 at    a present-day place riding its plate (lat, lon)
+//  Only the pin names show on the label layer (the rest are off).
 //  The globe is framed in the clear band of the label plate (plateBand).
-//  Each shot sends the plate: title, the age in Ma and its period, notes,
-//  and a real extract of recon.js (slerp, the pole interpolation).
+//  Each journey sends the plate: title, the age and its period, a note,
+//  each pin's latitude then, the climate estimate, and a real extract of
+//  recon.js (slerp, the pole interpolation).
 //
 //  snSaver.debug() returns the director state for CDP checks.
 //
 //  grep -n targets
-//    shot list ........ "const SHOTS"
-//    framing .......... "function frame"
-//    the plate ........ "function plate"
+//    journey list ..... "const JOURNEYS"
+//    age path ......... "function ageAt"
+//    framing .......... "const frame"
+//    the plate ........ "const plate"
 // ============================================================================
 import { plateBand } from '../../lib/saver-clear.js';
 import { describeAge, fmtMa } from './timescale.js';
 import { climateAt, captionAt } from './world.js';
 
-const CITIES = [['London', 51.507, -0.128], ['New York', 40.713, -74.006], ['Sydney', -33.868, 151.209], ['Mumbai', 19.07, 72.88], ['Cape Town', -33.925, 18.424],
-  ['Tokyo', 35.676, 139.65], ['Buenos Aires', -34.6, -58.38], ['Moscow', 55.756, 37.617], ['Cairo', 30.04, 31.24], ['Perth', -31.95, 115.86], ['Mexico City', 19.43, -99.13], ['Beijing', 39.9, 116.4]];
-const MAPS = [{ mode: 3, tint: 0, name: 'magma' }, { mode: 4, tint: 0, name: 'viridis' }, { mode: 6, tint: 0, name: 'turbo' }, { mode: 1, tint: 0, name: 'atlas tint' },
-  { mode: 7, tint: 1, name: 'outline, plates' }, { mode: 1, tint: 2, name: 'atlas tint, modern continents' }, { mode: 5, tint: 0, name: 'inferno' }, { mode: 2, tint: 0, name: 'greyscale' }];
+const C = ['#ffcf5a', '#7ee0ff', '#ff8fa3', '#a5f28a', '#c9a2ff'];
+// { title, note, a0 (Ma), pins [[name, lat, lon]], cam, at, zoom }
+export const JOURNEYS = [
+  { title: "London's journey", a0: 450, cam: 'pin', zoom: 1.2, pins: [['London', 51.507, -0.128]],
+    note: 'London sits on Avalonia, a sliver of crust that left Gondwana near the South Pole and crossed the Iapetus Ocean.' },
+  { title: 'New York and Morocco were neighbours', a0: 300, cam: 'mid', zoom: 1.25, pins: [['New York', 40.713, -74.006], ['Casablanca', 33.57, -7.59]],
+    note: 'In Pangea the two coasts touched. From about 200 Ma the Central Atlantic opened between them.' },
+  { title: "India's sprint north", a0: 160, cam: 'pin', zoom: 1.1, pins: [['Mumbai', 19.07, 72.88], ['Delhi', 28.61, 77.21]],
+    note: 'India broke from Gondwana and moved north at up to 15 cm a year, then struck Asia and raised the Himalaya.' },
+  { title: 'Australia leaves Antarctica', a0: 130, cam: 'mid', zoom: 1.15, pins: [['Sydney', -33.87, 151.21], ['McMurdo', -77.85, 166.67]],
+    note: 'Australia and Antarctica split slowly, then fast after 45 Ma. The open Southern Ocean helped Antarctica freeze.' },
+  { title: 'Pangea from above', a0: 320, cam: 'at', at: [10, 15], zoom: 0.95, pins: [],
+    note: 'Almost all land in one supercontinent, then the slow break-up into the continents of today.' },
+  { title: 'Brazil and West Africa fit together', a0: 170, cam: 'mid', zoom: 1.25, pins: [['Recife', -8.05, -34.9], ['Lagos', 6.5, 3.4]],
+    note: 'The bulge of Brazil sat in the Gulf of Guinea. The South Atlantic unzipped from the south from about 130 Ma.' },
+  { title: 'Madagascar and India part', a0: 140, cam: 'pin', zoom: 1.15, pins: [['Antananarivo', -18.88, 47.51], ['Mumbai', 19.07, 72.88]],
+    note: 'Madagascar stayed near Africa; India split from it about 88 Ma and kept going.' },
+  { title: 'Scotland and Newfoundland, one mountain belt', a0: 430, cam: 'mid', zoom: 1.2, pins: [['Edinburgh', 55.95, -3.19], ["St John's", 47.56, -52.71]],
+    note: 'The Caledonian and Appalachian mountains formed as one range when Iapetus closed. The Atlantic later cut it in two.' },
+  { title: 'Antarctica freezes', a0: 110, cam: 'pin', zoom: 1.05, pins: [['Vostok', -78.46, 106.84]],
+    note: 'Forests grew near the Cretaceous pole. As CO2 fell and the ocean gateways opened, an ice sheet grew from about 34 Ma.' },
+  { title: "From the dinosaurs' last day", a0: 70, cam: 'pin', zoom: 1.25, pins: [['Chicxulub', 21.4, -89.5]],
+    note: 'An asteroid struck the Yucatan 66 million years ago. The same crust then rode on to where it is today.' },
+  { title: 'Cape Town and Buenos Aires', a0: 150, cam: 'mid', zoom: 1.2, pins: [['Cape Town', -33.92, 18.42], ['Buenos Aires', -34.6, -58.38]],
+    note: 'South Africa and Argentina were one coast of Gondwana before the South Atlantic opened.' },
+  { title: 'Siberia meets Europe', a0: 420, cam: 'mid', zoom: 1.1, pins: [['Moscow', 55.76, 37.62], ['Novosibirsk', 55.0, 82.9]],
+    note: 'Siberia was its own continent. It collided with Baltica about 300 Ma and the Ural Mountains rose on the seam.' },
+  { title: "Cairo's journey", a0: 520, cam: 'pin', zoom: 1.1, pins: [['Cairo', 30.04, 31.24]],
+    note: 'North Africa lay deep in the south on the edge of Gondwana, under the ice of the Late Ordovician.' },
+  { title: 'The Iapetus Ocean closes', a0: 480, cam: 'mid', zoom: 1.15, pins: [['Boston', 42.36, -71.06], ['Oslo', 59.91, 10.75]],
+    note: 'An ocean once lay between New England and Norway. It closed by about 400 Ma; the Atlantic opened near the old seam.' },
+  { title: "Tokyo's journey", a0: 240, cam: 'pin', zoom: 1.2, pins: [['Tokyo', 35.68, 139.65], ['Beijing', 39.9, 116.4]],
+    note: 'Japan grew on the edge of Asia, then swung away as the Sea of Japan opened about 20 Ma.' },
+  { title: 'The last ice age melts', a0: 0.06, cam: 'at', at: [55, -30], zoom: 1.05, pins: [['London', 51.507, -0.128], ['New York', 40.713, -74.006]],
+    note: 'Ice sheets over North America and Europe; the sea about 120 m lower; Britain joined to Europe. Then the melt.' },
+];
 
 let CODE = `export function slerp(a, b, f) {
   let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
@@ -48,6 +79,16 @@ let CODE = `export function slerp(a, b, f) {
           a[2] * ka + b[2] * kb, a[3] * ka + b[3] * kb];
 }`;
 
+// Age along a journey at k in 0..1: eased from a0 to 0 by k = RUN, then
+// today. The run is slower near today on a log-like scale, so the last
+// tens of millions of years do not flash by.
+export const RUN = 0.74;
+export function ageAt(a0, k) {
+  if (k >= RUN) return 0;
+  const u = k / RUN, e = u * u * (3 - 2 * u);
+  return Math.max(0, Math.pow(1 - e, 1.6) * a0);
+}
+
 export function installSaver(AE) {
   AE.saverOn = false;
   // the real source of slerp in recon.js (the fallback above is a copy)
@@ -55,7 +96,7 @@ export function installSaver(AE) {
     const i = t.indexOf('export function slerp'), j = t.indexOf('\n}\n', i);
     if (i >= 0 && j > i) CODE = t.slice(i, j + 2).trim();
   }).catch(() => {});
-  const G = AE.globe;
+  const G = AE.globe, Lb = AE.labels;
   let run = null;
 
   window.snSaver = {
@@ -68,20 +109,19 @@ export function installSaver(AE) {
       AE.stopPlay && AE.stopPlay();
       document.documentElement.classList.add('sn-saver');
       const st = document.createElement('style');
-      st.textContent = '#labels{display:none!important}#view{cursor:none}';
+      st.textContent = '#view{cursor:none}';
       document.head.appendChild(st);
-      const saved = { style: { ...G.state }, sun: { ...G.sun }, layers: { ...G.layers }, age: AE.state.age, cam: G.camera.position.clone(), rot: G.group.rotation.y };
-      G.setLayer('fossils', false); G.setLayer('borders', false); G.setLayer('terranes', false); G.setLayer('bounds', false);
+      const saved = { style: { ...G.state }, sun: { ...G.sun }, layers: { ...G.layers }, show: { ...Lb.show }, age: AE.state.age, cam: G.camera.position.clone(), rot: G.group.rotation.y };
+      for (const k of ['fossils', 'borders', 'terranes', 'bounds']) G.setLayer(k, false);
       G.setLayer('grid', true); G.setLayer('coast', true);
+      for (const k of Object.keys(Lb.show)) Lb.show[k] = false;
       G.controls.enabled = false;
+      G.setStyle({ mode: 0, tint: 0, clouds: 1, hill: 1 });
       const pins = [];
-      // seeded shuffle of the shot kinds (city twice: it is the best one)
-      const kinds = ['pangea', 'assembly', 'city', 'city', 'kpg', 'ice', 'orbit', 'map', 'map'];
-      for (let i = kinds.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [kinds[i], kinds[j]] = [kinds[j], kinds[i]]; }
-      const hold = () => (6 + 4 * calm + rnd() * 2.5) * 1000;
-      const cityOrder = CITIES.slice().sort(() => rnd() - 0.5), mapOrder = MAPS.slice().sort(() => rnd() - 0.5);
-      let ci = 0, mi = 0;
-      run = { kinds, i: -1, shot: null, t0: 0, fade: 1, going: false, st, saved, pins, timer: 0, plateTimer: 0, band: null, bandAt: -1e9, fit: null };
+      // seeded shuffle of all journeys
+      const order = JOURNEYS.map((j, i) => i);
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      run = { order, i: -1, shot: null, t0: 0, going: false, st, saved, pins, timer: 0, plateTimer: 0, band: null, bandAt: -1e9, fit: null };
 
       // ── framing in the plate's clear band ────────────────────────────────
       const frame = (zoom, k) => {
@@ -95,58 +135,45 @@ export function installSaver(AE) {
         const t = Math.tan(G.camera.fov * Math.PI / 360);
         G.camera.position.setLength(Math.max(1.12, Math.hypot(H / 2 / (t * run.fit.r), 1)));
       };
-      // camera direction: from lat/lon in the globe frame, eased
-      const look = (lat, lon, k) => {
+      // camera direction: toward a globe-frame unit vector [x, y, z] (recon
+      // axes, z north), eased by k
+      const lookV = (v, k) => {
         const d = G.camera.position.length();
-        const v = AE.llToThree(lat, lon).applyQuaternion(G.group.quaternion).normalize().multiplyScalar(d);
-        G.camera.position.lerp(v, k).setLength(d);
+        const w = AE.llToThree(0, 0).set(v[1], v[2], v[0]).applyQuaternion(G.group.quaternion).normalize().multiplyScalar(d);
+        G.camera.position.lerp(w, k).setLength(d);
         G.camera.lookAt(0, 0, 0);
       };
-
-      // aim at land: a present-day anchor on a big plate, where it was at t
-      const LAND = [[5, 20], [45, -95], [62, 100], [-25, 135], [-10, -55], [50, 30], [35, 105], [20, 78], [-80, 30]];
-      const ll = r => r ? { lat: r.lat * 0.7, lon: r.lon } : { lat: 10, lon: 0 };
-      const landAt = t => {
-        for (let k = 0; k < 6; k++) { const a = LAND[Math.floor(rnd() * LAND.length)], r = AE.plates.reconstruct(a[0], a[1], t); if (r) return [r.lat * 0.7, r.lon]; }
-        return [0, 0];
-      };
-      const SHOTS = {
-        pangea: () => ({ title: 'Pangea joins and splits', a0: 330, a1: 170, ...ll(AE.plates.reconstruct(5, 20, 250)), dlon: 6, zoom: 1, mode: 0, tint: 0 }),
-        assembly: () => ({ title: 'Oceans close, Pangea forms', a0: 480, a1: 300, ...ll(AE.plates.reconstruct(40, -40 + rnd() * 70, 390)), dlon: -6, zoom: 1, mode: 0, tint: 0 }),
-        city: () => {
-          const c = cityOrder[ci++ % cityOrder.length];
-          const p = G.addPin(c[1], c[2], '#ffcf5a', c[0]); pins.push(p);
-          const oldest = p.path.length ? p.path[p.path.length - 1][0] : 0;
-          return { title: c[0] + ' through time', a0: Math.min(oldest, 400 + rnd() * 140), a1: 0, pin: p, zoom: 1.25, mode: 0, tint: 0, city: c[0] };
-        },
-        kpg: () => {
-          // Chicxulub, on the Yucatan (21.4 N, 89.5 W): a red pin
-          const p = G.addPin(21.4, -89.5, '#ff5a4a', 'Chicxulub'); pins.push(p);
-          return { title: 'The K–Pg moment', a0: 68, a1: 65.5, lat: 24, lon: -80, dlon: 10, zoom: 1.35, mode: 0, tint: 0 };
-        },
-        ice: () => {
-          const ice = [[445, 'Late Ordovician ice', -70, 10], [300, 'Late Paleozoic ice', -60, 30], [0.021, 'Last Glacial Maximum', 62, -60]][Math.floor(rnd() * 3)];
-          return { title: ice[1] + ', then a hothouse', a0: ice[0], a1: ice[0], second: { age: 92, title: 'Cretaceous hothouse' }, lat: ice[2], lon: ice[3], dlon: 8, zoom: 1.05, mode: 0, tint: 0 };
-        },
-        orbit: () => { const a = [240, 150, 90, 66, 34, 0, 300, 420][Math.floor(rnd() * 8)]; const [la, lo] = landAt(a); return { title: 'Orbit at ' + fmtMa(a), a0: a, a1: a, lat: la, lon: lo, dlon: 14, zoom: 1, mode: 0, tint: 0, glint: true }; },
-        map: () => { const m = mapOrder[mi++ % mapOrder.length], a = 60 + rnd() * 400; const [la, lo] = landAt(a); return { title: 'Paleo-elevation in ' + m.name, a0: a + 25, a1: a - 25, lat: la, lon: lo, dlon: 10, zoom: 1, mode: m.mode, tint: m.tint, map: m.name }; },
+      // where the camera aims for a journey at the age now
+      const aim = s => {
+        const P = s.pins.map(p => p.now).filter(Boolean);
+        if (s.cam === 'at' || !P.length) {
+          const r = AE.plates.reconstruct(s.at ? s.at[0] : s.pinsLL[0][1], s.at ? s.at[1] : s.pinsLL[0][2], AE.state.age);
+          return r ? r.v : null;
+        }
+        if (s.cam === 'mid' && P.length > 1) {
+          const m = [0, 1, 2].map(i => P[0].v[i] + P[1].v[i]), n = Math.hypot(...m);
+          if (n > 1e-6) return m.map(x => x / n);
+        }
+        return P[0].v;
       };
 
       const start = () => {
-        run.i = (run.i + 1) % kinds.length;
+        run.i = (run.i + 1) % order.length;
         for (const p of pins.splice(0)) G.removePin(p);
-        const s = run.shot = SHOTS[kinds[run.i]]();
-        s.kind = kinds[run.i]; s.dur = hold() * (s.kind === 'city' ? 1.25 : 1);
-        G.setStyle({ mode: s.mode, tint: s.tint, clouds: 1, hill: 1 }); G.idxDirty = true;
-        G.sun.mode = 'view'; G.sun.az = s.glint ? -22 : -34 - rnd() * 10; G.sun.el = 16 + rnd() * 10;
+        const J = JOURNEYS[order[run.i]];
+        const s = run.shot = { ...J, pinsLL: J.pins, pins: [] };
+        J.pins.forEach(([n, la, lo], i) => { const p = G.addPin(la, lo, C[i % C.length], n); pins.push(p); s.pins.push(p); });
+        // never older than the oldest pin's crust
+        for (const p of s.pins) if (p.path.length) s.a0 = Math.min(s.a0, p.path[p.path.length - 1][0]);
+        s.dur = (9.5 + 4 * calm + rnd() * 2.5) * 1000;
+        G.sun.mode = 'view'; G.sun.az = -30 - rnd() * 14; G.sun.el = 14 + rnd() * 12;
         AE.setAge(s.a0);
-        if (s.pin) { const r = s.pin.now; if (r) { s.lat = r.lat; s.lon = r.lon; } }
         frame(s.zoom, 1);
-        look(s.lat ?? 0, s.lon ?? 0, 1);
+        const v = aim(s); if (v) lookV(v, 1);
         run.t0 = performance.now();
         plate();
       };
-      const fadeTo = (fn) => {
+      const fadeTo = fn => {
         if (run.going) return; run.going = true;
         const t0 = performance.now(), e0 = G.state.exposure;
         const step = () => {
@@ -162,26 +189,19 @@ export function installSaver(AE) {
       };
       const update = () => {
         const s = run.shot; if (!s) return;
-        const now = performance.now(), k = Math.min(1, (now - run.t0) / s.dur);
-        const e = k * k * (3 - 2 * k);
-        let age = s.a0 + (s.a1 - s.a0) * e;
-        if (s.second && k > 0.55) {
-          if (!s.switched) { s.switched = true; fadeTo(() => { AE.setAge(s.second.age); s.title = s.second.title; plate(); }); }
-          age = s.second.age;
-        }
-        if (!s.second || !s.switched) AE.setAge(age);
+        const k = Math.min(1, (performance.now() - run.t0) / s.dur);
+        AE.setAge(ageAt(s.a0, k));
         frame(s.zoom, 0.1);
-        if (s.pin && s.pin.now) look(s.pin.now.lat, s.pin.now.lon, 0.04);
-        else look(s.lat, (s.lon ?? 0) + (s.dlon || 0) * e, 0.05);
+        const v = aim(s); if (v) lookV(v, 0.05);
         if (k >= 1 && !run.going) fadeTo(start);
       };
       const plate = () => {
         if (!label || !run || !run.shot) return;
         const s = run.shot, t = AE.state.age, u = describeAge(t), cl = climateAt(t), cap = captionAt(t);
-        const lines = [cap.title + (s.city ? ' · ' + s.city + (s.pin && s.pin.now ? ` at ${Math.abs(s.pin.now.lat).toFixed(0)}° ${s.pin.now.lat >= 0 ? 'N' : 'S'}` : '') : '')];
-        if (s.map) lines.push('Colour: ' + s.map + ', height on a square-root scale');
-        else lines.push('Global mean ' + cl.gmst.toFixed(0) + ' °C (estimate) · ' + cl.state.toLowerCase());
-        lines.push('PALEOMAP plates and PaleoDEMs, Scotese & Wright 2018 (CC BY 4.0)');
+        const where = s.pins.filter(p => p.now).map(p => `${p.name} at ${Math.abs(p.now.lat).toFixed(0)}° ${p.now.lat >= 0 ? 'N' : 'S'}`).join(' · ');
+        const lines = [s.note];
+        lines.push(t === 0 ? 'Today: NASA Blue Marble and Black Marble' : cap.title + (where ? ' · ' + where : ''));
+        lines.push('Global mean ' + cl.gmst.toFixed(0) + ' °C (estimate) · ' + cl.state.toLowerCase() + ' · PALEOMAP, Scotese & Wright 2018 (CC BY 4.0)');
         label({
           title: s.title,
           sub: `${fmtMa(t)} · ${u.epoch[0]}${u.epoch[0].includes(u.period[0]) ? '' : ', ' + u.period[0]} · ${u.era[0]}`,
@@ -199,7 +219,8 @@ export function installSaver(AE) {
       fadeTo(() => {});
       run.timer = setInterval(update, 33);
       run.plateTimer = setInterval(plate, 1000);
-      this.debug = () => run && { kind: run.shot && run.shot.kind, title: run.shot && run.shot.title, age: +AE.state.age.toFixed(2), held: +((performance.now() - run.t0) / 1000).toFixed(1), dur: run.shot && +(run.shot.dur / 1000).toFixed(1), order: run.kinds, fit: run.fit, mode: G.state.mode, exposure: +G.earthU.uExposure.value.toFixed(2) };
+      this.debug = () => run && { journey: run.shot && run.shot.title, age: +AE.state.age.toFixed(3), held: +((performance.now() - run.t0) / 1000).toFixed(1), dur: run.shot && +(run.shot.dur / 1000).toFixed(1),
+        pins: run.shot && run.shot.pins.map(p => p.name + (p.now ? ` ${p.now.lat.toFixed(1)},${p.now.lon.toFixed(1)}` : ' gone')), order: run.order.map(i => JOURNEYS[i].title), fit: run.fit, exposure: +G.earthU.uExposure.value.toFixed(2), bakes: { ...G.stats } };
       return { canvas: G.renderer.domElement, warmupMs: 1500 };
     },
     exit() {
@@ -209,7 +230,7 @@ export function installSaver(AE) {
       run.st.remove();
       document.documentElement.classList.remove('sn-saver');
       const s = run.saved;
-      G.setStyle(s.style); Object.assign(G.sun, s.sun);
+      G.setStyle(s.style); Object.assign(G.sun, s.sun); Object.assign(Lb.show, s.show);
       for (const k of Object.keys(s.layers)) G.setLayer(k, s.layers[k]);
       G.camera.position.copy(s.cam); G.group.rotation.y = s.rot;
       G.controls.enabled = true;
