@@ -16,8 +16,17 @@
 //    last segment; it moves at S.speed ns per second (slow motion).
 //  FOCUS (grep -n 'function setFocus')
 //    hover or selection: one object, linked in every view; its cascade
-//    brightens, the rest dims. Click (or Enter) opens the detail panel
-//    (physinfo.js). Tab or the arrow keys move through the objects.
+//    (picking.js cascade) brightens, the rest dims: in the diagrams, the
+//    tower map, and in 3D (display.js setCascade with picking.js
+//    segFlags, and the halo and ring of overlay3d.js). Click (or Enter)
+//    opens the detail panel (physinfo.js). Tab or the arrow keys move
+//    through the objects.
+//  3D (grep -n 'async function ensure3D')  labels as the products enter
+//    (overlay3d.js, the label setting of the diagrams); tone per event
+//    from the deposited energy (grep -n 'function toneFor').
+//  STRIP  a slim bar; #stripMore opens the drawer (grep -n 'function setStrip').
+//  PHONE  the 3D view on top; a swipe on the lower view moves through
+//    r-phi, r-z and Towers (grep -n 'phoneList').
 //  PREFERENCES  localStorage 'pc-prefs': layout, labels, outline,
 //    hardware (off by default), per viewer. Prefs before v 2 lose their
 //    layout, so the T (layout 't') is the default for every viewer.
@@ -27,12 +36,13 @@
 //  GREP MAP
 //    function runEvent / showEvent / fillCard / setFocus / openDetail
 //    function setLayout / ensure3D / frame
-//    window.snSaver .............. the screensaver tour
+//    function toneFor / setStrip / phoneList
+//    window.snSaver .............. the screensaver tour (3D, T, wing, split)
 // ============================================================================
 import { generate, SCENARIOS, BEAMS, available } from './generators.js';
 import { createEngine, mergeResults, splitPrims, makeRng, pack } from './transport.js';
 import { reconstruct } from './reco.js';
-import { buildObjects, ancestors } from './picking.js';
+import { buildObjects, cascade, segFlags } from './picking.js';
 import { detail } from './physinfo.js';
 import { createDiagram, createLego, LABEL_OF } from './diagram.js';
 import { PART, CLASS_COLOR, CLASS_LABEL } from './particles.js';
@@ -112,21 +122,7 @@ function showEvent(E) {
 }
 
 // ── focus: hover and selection, linked across the views ─────────────────────
-function cascadeOf(o) {
-  if (!o || o.kind === 'collision') return null;
-  const R = S.ev.R, set = new Set([o.key]);
-  const addTrack = k => {
-    set.add(k); set.add('t' + k);
-    R.tracks.forEach((T, j) => { if (j !== k && ancestors(R, j).includes(k)) { set.add(j); set.add('t' + j); } });
-  };
-  if (o.kind === 'track' || o.kind === 'muhit') { if (o.k >= 0) addTrack(o.k); }
-  if (o.kind === 'jet') {
-    for (const t of o.towers) set.add('w' + t.c);
-    for (const q of S.ev.objs.objs) if (q.kind === 'track' && Math.hypot(q.eta - o.eta, Math.atan2(Math.sin(q.phi - o.phi), Math.cos(q.phi - o.phi))) < 0.4) addTrack(q.k);
-  }
-  if (o.kind === 'tower') set.add('w' + o.tower.c);
-  return set;
-}
+const cascadeOf = o => cascade(S.ev, o);
 let focusKey = '';
 function setFocus() {
   const o = S.hover || S.sel, key = o ? o.key : '';
@@ -135,7 +131,7 @@ function setFocus() {
   const set = o ? cascadeOf(o) : null;
   for (const v of VIEWS) v.setFocus(o, set);
   lego.focusSet = set;
-  if (v3) v3.focus(o);
+  if (v3) v3.focus(o, set);
   document.querySelectorAll('#card tr[data-k]').forEach(r => r.classList.toggle('sel', !!S.sel && r.dataset.k === S.sel.key));
 }
 function select(o, open = true) {
@@ -292,31 +288,54 @@ function placeLego() {
   $('strip').classList.toggle('withlego', inStrip);
 }
 document.querySelectorAll('#layouts button').forEach(b => b.addEventListener('click', () => setLayout(b.dataset.l)));
-function setLabels(m) { PREF.labels = m; savePref(); for (const v of VIEWS) v.labels = m; document.querySelectorAll('#labelMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); }
+function setLabels(m) { PREF.labels = m; savePref(); for (const v of VIEWS) v.labels = m; if (v3) v3.labels = m; document.querySelectorAll('#labelMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); }
 document.querySelectorAll('#labelMode button').forEach(b => b.addEventListener('click', () => setLabels(b.dataset.m)));
 function setOutline(on) { PREF.outline = on; savePref(); for (const v of VIEWS) v.outline = on; $('tOutline').classList.toggle('on', on); }
 function setHardware(on) { PREF.hardware = on; savePref(); for (const v of VIEWS) v.hardware = on; $('tHardware').classList.toggle('on', on); if (v3) v3.hardware(on); }
 $('tOutline').addEventListener('click', () => setOutline(!PREF.outline));
 $('tHardware').addEventListener('click', () => setHardware(!PREF.hardware));
 // phone: one view at a time
-function setPhoneView(v) {
+const phoneList = () => PREF.layout === 't' ? ['rphi', 'rz', 'lego'] : ['rphi', 'rz', 'lego', '3d'];
+function setPhoneView(v, dir = 0) {
+  if (PREF.layout === 't' && v === '3d') v = 'rphi';
   PREF.phoneView = v; savePref();
-  document.querySelectorAll('#views .view').forEach(s => s.classList.toggle('ph', s.dataset.v === v));
+  document.querySelectorAll('#views .view').forEach(s => { s.classList.toggle('ph', s.dataset.v === v); s.classList.remove('from-l', 'from-r'); });
+  if (dir) { const s = document.querySelector(`#views .view[data-v="${v}"]`); void s.offsetWidth; s.classList.add(dir > 0 ? 'from-r' : 'from-l'); }
   document.querySelectorAll('#vtabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   $('dockView').querySelector('span').textContent = { rphi: 'r-φ', rz: 'r-z', lego: 'Towers', '3d': '3D' }[v];
   if (v === '3d') ensure3D();
 }
 document.querySelectorAll('#vtabs button').forEach(b => b.addEventListener('click', () => setPhoneView(b.dataset.v)));
-$('dockView').addEventListener('click', () => { const L = PREF.layout === 't' ? ['rphi', 'rz'] : ['rphi', 'rz', 'lego', '3d']; setPhoneView(L[(L.indexOf(PREF.phoneView) + 1) % L.length]); });
-$('dockCard').addEventListener('click', () => { document.body.classList.toggle('card-open'); $('dockCard').classList.toggle('on', document.body.classList.contains('card-open')); });
+$('dockView').addEventListener('click', () => { const L = phoneList(); setPhoneView(L[(L.indexOf(PREF.phoneView) + 1) % L.length], 1); });
+// phone: a horizontal swipe on the lower view moves to the next or the last
+// view (r-phi, r-z, Towers). A diagram zoomed past its home pans instead.
+{
+  let sw = null;
+  $('views').addEventListener('touchstart', e => {
+    const sec = e.target.closest && e.target.closest('.view'); sw = null;
+    if (!PHONE_Q.matches || e.touches.length !== 1 || !sec || sec.dataset.v === '3d') return;
+    const v = sec.dataset.v === 'rphi' ? vR : sec.dataset.v === 'rz' ? vZ : null;
+    if (v && v.zoom > v.home + 1e-6) return;
+    sw = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  $('views').addEventListener('touchend', e => {
+    if (!sw) return; const q = e.changedTouches[0], dx = q.clientX - sw.x, dy = q.clientY - sw.y; sw = null;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < 1.6 * Math.abs(dy)) return;
+    const L = phoneList(), i = Math.max(0, L.indexOf(PREF.phoneView)), d = dx < 0 ? 1 : -1;
+    setPhoneView(L[(i + d + L.length) % L.length], d);
+  }, { passive: true });
+}
+$('stripMore').addEventListener('click', () => setStrip(!$('strip').classList.contains('open')));
+function setStrip(open) { $('strip').classList.toggle('open', open); $('stripMore').textContent = open ? 'Less ▾' : 'Event ▴'; $('stripMore').setAttribute('aria-expanded', String(open)); }
+$('dockCard').addEventListener('click', () => { document.body.classList.toggle('card-open'); setStrip(document.body.classList.contains('card-open')); $('dockCard').classList.toggle('on', document.body.classList.contains('card-open')); });
 $('dockGo').addEventListener('click', () => runEvent(S.scen));
 
 // ── the optional 3D view: tracks and deposits only (no housing) ─────────────
 async function ensure3D() {
   if (v3) return v3;
-  const [THREE, { createStage, gradientBackground }, { createDisplay }, { buildDetector }, { hitTest }] = await Promise.all([import('three'), import('./stage.js'), import('./display.js'), import('./geometry.js'), import('./picking.js')]);
-  const canvas = $('view3d');
-  const stage = createStage({ canvas, occluders: [], coarse: COARSE, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, onNoGL: () => {} });
+  const [THREE, { createStage, gradientBackground }, { createDisplay }, { buildDetector }, { hitTest }, { createOverlay3D }] = await Promise.all([import('three'), import('./stage.js'), import('./display.js'), import('./geometry.js'), import('./picking.js'), import('./overlay3d.js')]);
+  const canvas = $('view3d'), ov = createOverlay3D($('over3d'));
+  const stage = createStage({ canvas, occluders: [], band: () => band3D, coarse: COARSE, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, onNoGL: () => {} });
   const scene = new THREE.Scene(); scene.background = gradientBackground('#05070d', '#04060b', '#020306');
   const disp = createDisplay(THREE), evScene = new THREE.Scene(); evScene.add(disp.group);
   // detector hardware: thin outlines only (no shells), off by default
@@ -329,15 +348,38 @@ async function ensure3D() {
   const axis = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -9000), new THREE.Vector3(0, 0, 9000)]), new THREE.LineBasicMaterial({ color: 0x5f8dff, transparent: true, opacity: 0.35 }));
   scene.add(axis);
   stage.use(scene, { min: 600, max: 60000, near: 0.003, bloom: [0.7, 0.5, 0.3] }); stage.setOverlay(evScene);
-  stage.place({ az: 40, el: 22, r: 15000, target: new THREE.Vector3() });
+  stage.place({ az: 40, el: 22, r: 11000, target: new THREE.Vector3() });
   const PV = new THREE.Vector3();
-  const project = (x, y, z) => { PV.set(x, y, z).project(stage.camera); if (PV.z > 1) return null; const r = canvas.getBoundingClientRect(); return [(PV.x + 1) / 2 * r.width, (1 - PV.y) / 2 * r.height]; };
+  let cw = 1, ch = 1;
+  const project = (x, y, z) => { PV.set(x, y, z).project(stage.camera); if (PV.z > 1 || PV.z < -1) return null; return [(PV.x + 1) / 2 * cw, (1 - PV.y) / 2 * ch]; };
+  let flags = null;
   const api = {
-    show(E) { disp.show(E.R, E.O, E.info, { cones: COARSE ? 40 : 120 }); },
-    focus(o) { disp.setSel(o && o.k >= 0 ? o.k : -1); },
+    labels: PREF.labels, focusObj: null, focusSet: null, stage, ov, canvas, overlay: $('over3d'),
+    show(E) {
+      const r = disp.show(E.R, E.O, E.info, { cones: COARSE ? 40 : 120 });
+      flags = null; api.focusObj = null; api.focusSet = null;
+      toneFor(r.energy, stage, disp);
+    },
+    focus(o, set) {
+      api.focusObj = o; api.focusSet = set;
+      if (!o || !set || !S.ev) { disp.setCascade(null); return; }
+      flags = segFlags(S.ev.R, set, flags); disp.setCascade(flags);
+    },
     hardware(on) { hw.visible = on; },
-    frame(dt, t) { if (!canvas.clientWidth) return; disp.setTime(t); disp.frame(stage.renderer); stage.frame(dt); },
-    hit(x, y, t) { return S.ev ? (hitTest(S.ev.objs.objs, project, x, y, 8, t, null) || {}).obj || null : null; },
+    get hwOn() { return hw.visible; },
+    // bounds and reserved: the label area (the saver gives the 3D part of the T)
+    frame(dt, t, o = {}) {
+      if (!canvas.clientWidth) return;
+      cw = canvas.clientWidth; ch = canvas.clientHeight;
+      disp.setTime(t); disp.frame(stage.renderer); stage.frame(dt);
+      ov.draw(S.ev, t, project, { focus: api.focusObj, focusSet: api.focusSet, labels: o.labels || api.labels, bounds: o.bounds, reserved: o.reserved || [{ x: 0, y: 0, w: 330, h: 28 }], small: cw < 520 });
+    },
+    hit(x, y, t) {
+      if (!S.ev) return null;
+      const h = hitTest(S.ev.objs.objs, project, x, y, 8, t, null);
+      if (h) return h.obj;
+      const k = ov.hitLabel(x, y); return k ? S.ev.objs.byKey.get(k) : null;
+    },
   };
   hw.visible = PREF.hardware;
   canvas.addEventListener('pointermove', e => { if (e.buttons) return; stage.idle = Math.min(stage.idle, 1.5); const r = canvas.getBoundingClientRect(), o = api.hit(e.clientX - r.left, e.clientY - r.top, S.t); S.hover = o; setFocus(); showTip(o, e.clientX, e.clientY); });
@@ -347,6 +389,19 @@ async function ensure3D() {
   if (S.ev) api.show(S.ev);
   return api;
 }
+
+// Tone for one event in the 3D view. The deposited energy sets how busy the
+// event is (0: a lepton pair, 1: a dijet, ttbar or pile-up). A busy event
+// gets a lower exposure, less bloom with a higher threshold, a lower clip
+// knee and a lower cap per fragment, so jets and showers stay coloured.
+function toneFor(eMeV, stage, disp) {
+  const busy = Math.max(0, Math.min(1, Math.log10(Math.max(1, eMeV) / 40000) / 1.3));
+  stage.setLook(1.0 - 0.18 * busy, 0.75 - 0.3 * busy, 0.3 + 0.25 * busy);
+  stage.overlayK(1.25 - 0.5 * busy);
+  disp.U.uCap.value = 2.2 - 1.2 * busy;
+  return busy;
+}
+let band3D = null;   // the saver: { t, b } px the 3D subject keeps clear of
 
 // ── legend ──────────────────────────────────────────────────────────────────
 $('legend').innerHTML = ['mu', 'e', 'gamma', 'had', 'neu', 'shower'].map(k => `<span><i class="${k === 'neu' || k === 'gamma' ? 'dash' : ''}" style="color:${CLASS_COLOR[k]};background:${CLASS_COLOR[k]}"></i>${esc(CLASS_LABEL[k])}</span>`).join('') + `<span><i style="color:#ffd45c;background:#ffd45c"></i>jet</span><span><i style="color:${CLASS_COLOR.nu};background:${CLASS_COLOR.nu}"></i>missing E<sub>T</sub></span>`;
@@ -405,19 +460,28 @@ function frame(now) {
 }
 let saverTick = null;
 
-// ── screensaver ─────────────────────────────────────────────────────────────
+// ── screensaver ──────────────────────────────────────────────────────────────
 // Only collisions: a seeded shuffle of events (processes, beams and
-// energies, the hypothetical ones named so), each drawn as the transverse
-// and longitudinal diagrams in one canvas inside the plate's clear band.
-// A shot replays its event in slow motion from the beams coming in; the
-// camera of a diagram is its zoom and centre: push in on the vertex, pull
-// out, pan along the beam, or hold. A cut (a short fade) every 5-12 s.
-// No detector hardware; the layer outline stays quiet.
+// energies, the hypothetical ones named so). The main shots use the 3D
+// view: the camera orbits the vertex while the products fly out with
+// labels. Layouts of a shot (grep -n 'const LAYOUTS'):
+//   't' ..... the T: the 3D view on top, the r-phi and r-z diagrams below
+//             it, drawn in as the event plays (needs a tall clear band)
+//   'wing' .. the T for a short band: the 3D view in the middle, a diagram
+//             on each side
+//   'd3' .... the 3D view alone, in the whole band
+//   'split' . the two diagrams only (also the fallback without WebGL)
+// The 3D camera moves (MOVES3): orbit, push in, from the side along the
+// beams, down the beam axis, pull out. A cut (a short fade) every 5-12 s.
+// The 3D WebGL canvas stays in the document but hidden; each frame it is
+// drawn into the saver canvas in the same task as its render. No hardware.
 const SAVER_EVENTS = [
   ['pp', 13.6e6, 'zmm'], ['pp', 13.6e6, 'zee'], ['pp', 13.6e6, 'hgg'], ['pp', 13.6e6, 'h4l'], ['pp', 13.6e6, 'tt'], ['pp', 13.6e6, 'jj'],
   ['pp', 13.6e6, 'mb'], ['pp', 1e8, 'jj'], ['pp', 1e8, 'tt'], ['pp', 1e8, 'hgg'], ['pp', 1e9, 'jj'], ['pp', 1e9, 'zmm'],
   ['ee', 250000, 'hgg'], ['ee', 91190, 'zmm'], ['ee', 3e6, 'jj'], ['mumu', 1e7, 'tt'], ['mumu', 1e8, 'jj'], ['PbPb', 5.36e6, 'mb'], ['ppbar', 1.96e6, 'tt'],
 ];
+const LAYOUTS = ['t', 't', 'd3', 't', 'd3', 'split'];
+const MOVES3 = ['orbit', 'push', 'beam', 'axis', 'pull'];
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -426,7 +490,10 @@ window.snSaver = {
     const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     const label = typeof o.label === 'function' ? o.label : () => {};
     const st = document.createElement('style');
-    st.textContent = '.topbar,#panel,#detail,#dock,#strip,#views,#vtabs,#clock,#tip,#busy,#nogl,#gear{display:none!important}#stage{inset:0!important}';
+    // the 3D view stays laid out (full window) but hidden: the saver canvas draws it
+    st.textContent = '.topbar,#panel,#detail,#dock,#strip,#vtabs,#clock,#tip,#busy,#nogl,#gear{display:none!important}#stage{inset:0!important}'
+      + '#views{position:fixed!important;inset:0!important;display:block!important;visibility:hidden!important}#views .view{display:none!important}'
+      + '#views .view[data-v="3d"]{display:block!important;position:absolute!important;inset:0!important;border:0!important;border-radius:0!important}#views .view header{display:none!important}';
     document.head.appendChild(st);
     const cv = document.createElement('canvas'); cv.id = 'saverCanvas';
     cv.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;display:block;background:#04060b;transition:opacity 0.35s ease;z-index:1';
@@ -441,26 +508,41 @@ window.snSaver = {
     const code = n => SRC[n] || Object.values(SRC)[0];
     let bandFn = null, band = null;
     import('../../lib/saver-clear.js').then(m => { bandFn = m.plateBand; }).catch(() => {});
+    // the 3D view: made now, hardware off, no auto orbit (the shot moves the camera)
+    let td = null;
+    const ready3D = ensure3D().then(a => { td = a; a.hardware(false); a.stage.orbit = false; a.focus(null, null); }).catch(() => { td = null; });
     const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     // the first shot is a quick one; the heavy hypothetical events come later, computed during a shot
     let queue = [['pp', 13.6e6, ['zmm', 'hgg', 'h4l', 'zee'][Math.floor(rnd() * 4)]], ...shuffle(SAVER_EVENTS.slice())], next = null, nextSpec = null;
     const prepare = () => { if (!queue.length) queue = shuffle(SAVER_EVENTS.slice()); nextSpec = queue.shift(); const [beam, sqrtS, kind] = nextSpec; next = computeEvent(kind, (rnd() * 4e9) >>> 0, { beam, sqrtS, pileup: kind === 'mb' && beam === 'pp' ? 30 + Math.floor(rnd() * 20) : beam === 'pp' && rnd() < 0.3 ? 4 : 0 }); };
     prepare();
     const MOVES = ['push', 'pull', 'pan', 'hold', 'replay'];
-    let shot = null, shotT = 0, shotDur = 8000, busy = false, layout = 'split', move = 'push', ev = null, n = 0, cutA = 1;
+    let shot = null, shotT = 0, shotDur = 8000, busy = false, layout = 't', move = 'push', move3 = 'orbit', cam = null, ev = null, n = 0, cutA = 1;
     const P = (sym, name, value) => ({ sym, name, value: String(value) });
     const start = async () => {
       if (busy) return; busy = true;
       try {
         if (shot) { cutA = 0; await new Promise(r => setTimeout(r, 360)); }
+        await ready3D;
         const spec = nextSpec, E = await next; prepare();
         ev = E; S.ev = E; for (const v of VIEWS) v.setEvent(E);
+        if (td) td.show(E);
         let tEnd = 4; for (let i = 0; i < E.R.nSeg; i++) { const t1 = E.R.seg[i * 9 + 7]; if (t1 < 40 && t1 > tEnd) tEnd = t1; }
         E.tEnd = Math.min(30, Math.max(14, tEnd + 1));
         shotDur = 1000 * Math.max(5.5, Math.min(12, (6 + 5 * calm) * (0.85 + 0.3 * rnd())));
-        layout = ['split', 'split', 'rphi', 'rz'][Math.floor(rnd() * 4)];
+        layout = td ? LAYOUTS[Math.floor(rnd() * LAYOUTS.length)] : 'split';
+        if (shot && layout === shot.layout && layout !== 't') layout = 't';
         move = MOVES[Math.floor(rnd() * MOVES.length)]; if (move === shot?.move) move = MOVES[(MOVES.indexOf(move) + 1) % MOVES.length];
-        shot = { n: ++n, spec, move, layout }; shotT = 0;
+        move3 = MOVES3[Math.floor(rnd() * MOVES3.length)]; if (move3 === shot?.move3) move3 = MOVES3[(MOVES3.indexOf(move3) + 1) % MOVES3.length];
+        const sg = rnd() < 0.5 ? -1 : 1;
+        cam = {
+          orbit: { az0: rnd() * 360, dAz: sg * (45 + 35 * rnd()), el0: 16 + 16 * rnd(), dEl: 0, r0: 13500, r1: 10500 },
+          push: { az0: rnd() * 360, dAz: sg * 20, el0: 22, dEl: -8, r0: 16000, r1: 5600 },
+          beam: { az0: 90 + 180 * (rnd() < 0.5) + 10 * sg, dAz: sg * 30, el0: 4, dEl: 16, r0: 14000, r1: 11500 },
+          axis: { az0: 180 * (rnd() < 0.5) + 6 * sg, dAz: sg * 28, el0: 6, dEl: 12, r0: 12000, r1: 9500 },
+          pull: { az0: rnd() * 360, dAz: sg * 35, el0: 26, dEl: -6, r0: 5200, r1: 15000 },
+        }[move3];
+        shot = { n: ++n, spec, move, move3, layout }; shotT = 0;
         const info = E.info, tr = info.truth || {}, O = E.O, B = BEAMS[info.beam], tag = (B.E.find(e => Math.abs(e[0] * 1000 - info.sqrtS) < 1) || [0, '', ''])[2];
         const params = [P('\\sqrt{s}', tag === 'hyp' ? 'hypothetical' : tag === 'design' ? 'design study' : info.beamLabel, `${(info.sqrtS / 1e6).toPrecision(3)} TeV`)];
         const MK = { zmm: ['m_{\\mu\\mu}', 'mumu'], zee: ['m_{ee}', 'ee'], hgg: ['m_{\\gamma\\gamma}', 'gg'], h4l: ['m_{4\\ell}', 'l4'], tt: ['m_{jj}', 'jj'], jj: ['m_{jj}', 'jj'] }[E.kind];
@@ -472,16 +554,16 @@ window.snSaver = {
         label({ title: info.title, sub: `${info.process.startsWith(info.beamLabel) || info.process.startsWith('Pb') ? info.process : `${info.beamLabel} → ${info.process.replace(/^p ?p̄? → |^pp → /, '')}`}${tag === 'hyp' ? ' · hypothetical energy' : ''}`, params, code: code(['bbHeavy', 'helix', 'highland', 'sampleCompton', 'fitTrack'][n % 5]), anchor: () => anchor });
       } finally { busy = false; requestAnimationFrame(() => { cutA = 1; }); }
     };
-    let anchor = null, alpha = 0;
-    const rects = (W, H) => {
-      const top = band ? band.t : H * 0.2, bot = band ? H - band.b : H * 0.8, h = Math.max(120, bot - top), vert = W < H * 0.9;
-      if (layout === 'split' && !vert) { const s = Math.min(h, (W - 52) / 2.7), x = (W - 2.7 * s - 12) / 2; return [['rphi', x, top + (h - s) / 2, s, s], ['rz', x + s + 12, top + (h - s) / 2, 1.7 * s, s]]; }
-      if (layout === 'split' && vert) { const s = Math.min(W - 20, (h - 10) / 2); return [['rphi', (W - s) / 2, top + h / 2 - s - 5, s, s], ['rz', (W - s) / 2, top + h / 2 + 5, s, s]]; }
-      if (layout === 'rz' && !vert) { const s = Math.min(h, (W - 40) / 1.8); return [['rz', (W - 1.8 * s) / 2, top + (h - s) / 2, 1.8 * s, s]]; }
-      const s = Math.min(h, W - 20); return [[layout, (W - s) / 2, top + (h - s) / 2, s, s]];
+    let anchor = null, alpha = 0, eff = 't';
+    // the diagram rects of a layout inside [top, bot]: [mode, x, y, w, h]
+    const rects2 = (lay, W, top, bot) => {
+      const h = Math.max(80, bot - top), vert = W < (bot - top) * 1.4;
+      if (lay === 'split' && vert) { const s = Math.min(W - 20, (h - 10) / 2); return [['rphi', (W - s) / 2, top + h / 2 - s - 5, s, s], ['rz', (W - s) / 2, top + h / 2 + 5, s, s]]; }
+      if (lay === 'split') { const s = Math.min(h, (W - 52) / 2.7), x = (W - 2.7 * s - 12) / 2; return [['rphi', x, top + (h - s) / 2, s, s], ['rz', x + s + 12, top + (h - s) / 2, 1.7 * s, s]]; }
+      if (lay === 't' && W < 700) { const s = Math.min(h, (W - 30) / 2); return [['rphi', W / 2 - s - 5, top + (h - s) / 2, s, s], ['rz', W / 2 + 5, top + (h - s) / 2, s, s]]; }
+      const s = Math.min(h, (W - 52) / 2.7), x = (W - 2.7 * s - 12) / 2; return [['rphi', x, top + (h - s) / 2, s, s], ['rz', x + s + 12, top + (h - s) / 2, 1.7 * s, s]];
     };
-    let bandT = 0;
-    let fN = 0, fT = 0, fps = 0;
+    let bandT = 0, fN = 0, fT = 0, fps = 0;
     saverTick = dt => {
       fN++; fT += dt; if (fT >= 1) { fps = fN / fT; fN = 0; fT = 0; }
       if (bandFn && (bandT += dt) > 0.5) { bandT = 0; try { band = bandFn(innerHeight); } catch (e) { band = null; } }
@@ -504,23 +586,50 @@ window.snSaver = {
         else if (move === 'replay') { const k = u < 0.55 ? e : 1 - (u - 0.55) / 0.45 * 0.6; v.zoom = z0 * (1 + 1.4 * k); v.cx = 0; v.cy = 0; }
         else { v.zoom = z0 * (1.05 + 0.15 * e); v.cx = 0; v.cy = 0; }
       }
+      const top = band ? band.t : H * 0.16, bot = band ? H - band.b : H * 0.84, h = Math.max(120, bot - top);
+      // a T needs room: in a short band its diagrams go to the sides ('wing')
+      eff = layout === 't' && h < 420 && W > h * 2.2 ? 'wing' : layout;
       g.globalAlpha = alpha;
-      const R = rects(W, H); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-      for (const [m, x, y, w, h] of R) {
+      let A = null;   // the 3D part: [x, y, w, h]
+      const diag = [];
+      if (eff !== 'split' && td) {
+        const split = eff === 't' ? top + h * 0.62 : bot;
+        let side = 0;
+        if (eff === 'wing') { const s = Math.min(h, W * 0.24); side = s + 24; diag.push(['rphi', 12, top + (h - s) / 2, s, s], ['rz', W - 12 - s, top + (h - s) / 2, s, s]); }
+        else if (eff === 't') diag.push(...rects2('t', W, split + 8, bot));
+        A = [side, top, W - 2 * side, split - top];
+        band3D = { t: top, b: H - split, l: side, r: side };
+        const c = cam, k = move3 === 'pull' ? e : u;
+        const THREE = td.stage.THREE;
+        td.stage.place({ az: c.az0 + c.dAz * u, el: c.el0 + c.dEl * e, r: c.r0 * Math.pow(c.r1 / c.r0, k) * (W < H ? 1.25 : 1), target: new THREE.Vector3(vtx[0], vtx[1], vtx[2]) });
+        td.frame(dt, T, { labels: 'hard', bounds: { x: A[0] + 6, y: A[1] + 4, w: A[2] - 12, h: A[3] - 8 }, reserved: [] });
+        g.drawImage(td.canvas, 0, 0, W, H); g.drawImage(td.overlay, 0, 0, W, H);
+        // keep the 3D light inside its part: fade the rest to the field
+        g.fillStyle = '#04060b';
+        if (eff === 't') { const gr = g.createLinearGradient(0, split - 26, 0, split + 4); gr.addColorStop(0, 'rgba(4,6,11,0)'); gr.addColorStop(1, 'rgba(4,6,11,1)'); g.fillStyle = gr; g.fillRect(0, split - 26, W, 30); g.fillStyle = '#04060b'; g.fillRect(0, split + 4, W, H - split - 4); }
+        g.fillRect(0, 0, W, Math.max(0, top - 2)); g.fillRect(0, bot + 2, W, H - bot - 2);
+      } else diag.push(...rects2('split', W, top, bot));
+      // the diagrams draw in: a short fade after the cut
+      const din = Math.min(1, shotT / 900);
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const [m, x, y, w, hh] of diag) {
         const v = m === 'rphi' ? vR : vZ; v.reserved = [];
-        v.renderInto(g, x, y, w, h, T);
-        g.strokeStyle = 'rgba(127,214,255,0.12)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        g.globalAlpha = alpha * din;
+        v.renderInto(g, x, y, w, hh, T);
+        g.strokeStyle = 'rgba(127,214,255,0.12)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, hh - 1);
         g.font = '600 10px "Space Grotesk", system-ui, sans-serif'; g.fillStyle = 'rgba(207,232,255,0.75)'; g.fillText(m === 'rphi' ? 'TRANSVERSE · r-φ' : 'LONGITUDINAL · r-z', x + 10, y + 16);
-        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + h);
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + hh);
       }
+      if (A) { x0 = Math.min(x0, A[0]); y0 = Math.min(y0, A[1]); x1 = Math.max(x1, A[0] + A[2]); y1 = Math.max(y1, A[1] + A[3]); }
       g.globalAlpha = 1;
       anchor = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, lead: false };
       if (shotT >= shotDur && !busy) start();
     };
-    window.snSaver.debug = () => ({ seed: o.seed, n, shot: shot && shot.spec.join(' '), move, layout, shotT: Math.round(shotT), shotDur: Math.round(shotDur), t: +S.t.toFixed(2),
-      views: VIEWS.map(v => ({ mode: v.mode, zoom: +v.zoom.toFixed(3), cx: Math.round(v.cx), cy: Math.round(v.cy) })), rect: anchor && { x: Math.round(anchor.x), y: Math.round(anchor.y), w: Math.round(anchor.w), h: Math.round(anchor.h) }, band, H: innerHeight, W: innerWidth, hardware: VIEWS.some(v => v.hardware), fps: +fps.toFixed(1) });
+    window.snSaver.debug = () => ({ seed: o.seed, n, shot: shot && shot.spec.join(' '), layout, eff, move, move3, shotT: Math.round(shotT), shotDur: Math.round(shotDur), t: +S.t.toFixed(2), has3D: !!td,
+      cam: td && (p => ({ az: Math.round(p.az), el: Math.round(p.el), r: Math.round(p.r) }))(td.stage.pose()), labels3D: td ? td.ov.placed.map(L => L.item.txt) : [],
+      views: VIEWS.map(v => ({ mode: v.mode, zoom: +v.zoom.toFixed(3), cx: Math.round(v.cx), cy: Math.round(v.cy) })), rect: anchor && { x: Math.round(anchor.x), y: Math.round(anchor.y), w: Math.round(anchor.w), h: Math.round(anchor.h) }, band, H: innerHeight, W: innerWidth, hardware: VIEWS.some(v => v.hardware) || !!(td && td.hwOn), fps: +fps.toFixed(1) });
     Promise.race([Promise.all(grabs), new Promise(r => setTimeout(r, 1500))]).then(() => start());
-    return { canvas: cv, warmupMs: 2500 };
+    return { canvas: cv, warmupMs: 3000 };
   },
 };
 window.addEventListener('pagehide', () => { running = false; if (pool) pool.forEach(w => w.terminate()); });

@@ -28,11 +28,16 @@
      #views ... the views: layout classes t (default: 3D on top, r-phi
                 and r-z below), d3, split, rphi, rz, lego; each .view
                 has a header and a .host. Phone: 3D on top, one
-                diagram below (#vtabs).
+                diagram below (#vtabs; a horizontal swipe on the lower
+                view moves to the next one).
+     #over3d .. the 2D canvas over the 3D view: labels, the focus halo
+                (overlay3d.js)
    SELECTION  the chrome is user-select: none; only .about p and
                 .dt-text take a text selection (main.js 'selectstart')
-     #strip ... the event card, the tower map (moved into #legoSlot in
-                the split layout on wide screens), trigger and energies
+     #strip ... a slim bar under the views: the event title and masses,
+                the legend and the trigger. #stripMore opens it as a
+                drawer over the diagrams with the object table, the tower
+                map (#legoSlot) and the energies by subsystem
      #panel ... the controls (desktop: left column; phone: bottom sheet)
      #detail .. the selected object, "a deeper look" (right drawer; phone:
                 bottom sheet)
@@ -63,12 +68,13 @@
     <section class="view" data-v="rphi"><header><b>Transverse</b><span>r-φ · the beam points out of the screen</span></header><div class="host" id="hRphi"></div></section>
     <section class="view" data-v="rz"><header><b>Longitudinal</b><span>r-z · the beams come in from the left and the right</span></header><div class="host" id="hRz"></div></section>
     <section class="view" data-v="lego"><header><b>Tower map</b><span>E<sub>T</sub> over η-φ</span></header><div class="host"><canvas id="lego"></canvas></div></section>
-    <section class="view" data-v="3d"><header><b>3D</b><span>the collision · drag to orbit, wheel to zoom</span></header><div class="host"><canvas id="view3d"></canvas></div></section>
+    <section class="view" data-v="3d"><header><b>3D</b><span>the collision · drag to orbit, wheel to zoom</span></header><div class="host"><canvas id="view3d"></canvas><canvas id="over3d" class="over3d"></canvas></div></section>
   </div>
   <nav id="vtabs" aria-label="View">
     <button data-v="rphi" type="button">r-φ</button><button data-v="rz" type="button">r-z</button><button data-v="lego" type="button">Towers</button><button data-v="3d" type="button">3D</button>
   </nav>
   <div id="strip">
+    <button id="stripMore" type="button" aria-expanded="false" aria-controls="strip">Event ▴</button>
     <div id="card" class="evcard"></div>
     <div id="legoSlot" aria-label="Tower map"></div>
     <div class="trig-wrap"><div id="legend" class="plegend" aria-label="Colours"></div><div class="sec-label">Trigger</div><div id="trig" class="trig"></div><div class="sec-label">Energy by subsystem</div><div id="subs" class="subs"></div></div>

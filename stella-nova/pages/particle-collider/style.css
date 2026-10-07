@@ -4,7 +4,7 @@
    A dark field for the light of the event, quiet chrome around it. Space
    Grotesk for text, Instrument Serif for titles, IBM Plex Mono for numbers.
      grep -n 'VIEWS'     the view grid: the T (3D on top), other layouts
-     grep -n 'STRIP'     the event card, trigger, energies under the views
+     grep -n 'STRIP'     the slim event bar under the views; .open: the drawer
      grep -n 'DETAIL'    the selected-object drawer
      grep -n 'PANEL'     the controls (desktop: left column)
      grep -n 'PHONE'     dock, bottom sheets, one view at a time
@@ -12,7 +12,7 @@
 :root{
   --ink:#04060b; --ink2:#0a0d16; --ink3:#121726; --text:#e2e6f0; --dim:#8a90a6; --faint:#272d42;
   --beam:#7fd6ff; --hot:#ffb36b; --line:rgba(127,214,255,0.10); --line-b:rgba(127,214,255,0.22);
-  --panel-w:300px; --detail-w:360px; --top:52px; --dock-h:0px; --strip-h:132px;
+  --panel-w:300px; --detail-w:360px; --top:52px; --dock-h:0px; --strip-h:58px;
   --sans:'Space Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --serif:'Instrument Serif','Times New Roman',Georgia,serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
@@ -52,6 +52,10 @@ body.detail-open #stage{right:var(--detail-w)}
 .view .host{position:absolute;inset:0}
 .view .host canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .overc{cursor:crosshair}
+.view .host canvas.over3d{pointer-events:none}
+@keyframes fromR{from{transform:translateX(28%);opacity:0.2}to{transform:none;opacity:1}}
+@keyframes fromL{from{transform:translateX(-28%);opacity:0.2}to{transform:none;opacity:1}}
+#views .view.from-r{animation:fromR 0.26s cubic-bezier(0.2,0.7,0.2,1)} #views .view.from-l{animation:fromL 0.26s cubic-bezier(0.2,0.7,0.2,1)}
 #vtabs{display:none}
 .tip{position:absolute;z-index:20;pointer-events:none;font:0.7rem/1.45 var(--mono);color:var(--text);background:rgba(4,6,11,0.94);border:1px solid var(--line-b);border-radius:8px;padding:6px 9px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.5)}
 .tip b{font-family:var(--sans);font-weight:600;color:#fff;font-size:0.8rem}
@@ -70,7 +74,17 @@ body.detail-open #stage{right:var(--detail-w)}
 #nogl{position:fixed;top:calc(var(--top) + 14px);right:16px;z-index:50;padding:10px 14px;border:1px solid rgba(255,120,100,0.4);color:#ffb0a0;background:var(--ink2);border-radius:8px;max-width:50ch}
 
 /* STRIP */
-#strip{position:absolute;left:10px;right:10px;bottom:10px;height:var(--strip-h);display:grid;grid-template-columns:1.25fr 1fr;gap:8px}
+#strip{position:absolute;left:10px;right:10px;bottom:10px;height:var(--strip-h);display:grid;grid-template-columns:1.25fr 1fr;gap:8px;z-index:6;transition:height 0.24s cubic-bezier(0.4,0,0.2,1)}
+#strip.open{height:min(300px,52%)}
+#stripMore{position:absolute;right:8px;top:8px;z-index:2;height:24px;padding:0 10px;border:1px solid var(--line-b);border-radius:12px;background:var(--ink3);color:var(--beam);font-size:0.66rem;letter-spacing:0.04em}
+#strip:not(.open) > div{overflow:hidden;padding:7px 12px}
+#strip:not(.open) .evcard{display:flex;align-items:baseline;gap:12px;white-space:nowrap}
+#strip:not(.open) .evcard h1{font-size:1.25rem;margin:0}
+#strip:not(.open) .evcard .kind{order:3;font-size:0.56rem}
+#strip:not(.open) .evcard table,#strip:not(.open) .subs,#strip:not(.open) .sec-label,#strip:not(.open) #legoSlot{display:none!important}
+#strip:not(.open) .trig-wrap{display:flex;flex-direction:column;gap:5px;padding-right:86px}
+#strip:not(.open) .trig{flex-wrap:nowrap;overflow:hidden}
+#strip.withlego:not(.open){grid-template-columns:1.25fr 1fr}
 #strip > div{border:1px solid var(--line);border-radius:10px;background:var(--ink2);padding:10px 12px;overflow:auto;scrollbar-width:thin}
 #legoSlot{display:none;position:relative;padding:0!important;overflow:hidden!important;background:#04060b!important}
 #strip.withlego{grid-template-columns:1.15fr 0.8fr 1fr}
@@ -169,7 +183,7 @@ body.detail-open #stage{right:var(--detail-w)}
   #vtabs{display:flex;position:absolute;top:6px;left:6px;right:6px;gap:4px}
   #vtabs button{flex:1;height:34px;border:1px solid var(--line);border-radius:9px;background:var(--ink2);color:var(--dim);font-size:0.74rem}
   #vtabs button.on{border-color:var(--beam);color:var(--beam)}
-  #strip{display:none}
+  #strip{display:none} #stripMore{display:none}
   body.card-open #strip{display:grid;position:fixed;left:0;right:0;bottom:var(--dock-h);top:auto;height:auto;max-height:56vh;grid-template-columns:1fr;z-index:40;background:var(--ink2);border-top:1px solid var(--line-b);border-radius:16px 16px 0 0;padding:10px;overflow:auto}
   .pclock{left:8px;right:8px;width:auto;bottom:8px}
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:4px;padding:6px calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));background:rgba(4,6,11,0.97);border-top:1px solid var(--line-b)}
