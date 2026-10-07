@@ -1,0 +1,15 @@
+Spark 2.3.1 (@sparkjsdev/spark), a 3D Gaussian splat renderer for three.js
+by World Labs Technologies, Inc. MIT licence: see LICENSE in this folder.
+
+Source:    https://registry.npmjs.org/@sparkjsdev/spark/-/spark-2.3.1.tgz
+           npm integrity sha512-K+SyIbkO/dx1TLLudK8Jp3/noS13z/kdNPo6OK2waxQaGy81HBmKGnNBT/t/K9Ew3dsIXmWqsJXxGfmAu1T5Jg==
+           git head bf8aaa0dd1e0a5af6b2097e484586c60b01d3c5c (github.com/sparkjsdev/spark)
+File:      dist/spark.module.js, unchanged from the tarball
+           sha256 2de375d5e489692f976abe3199c8435ecc00f97fabaf35e489eb7d368e1f6f60
+Not kept:  the CommonJS and minified builds, the source maps, and the types.
+           The bundle ends with a sourceMappingURL comment. The map is not
+           here, so devtools shows no original sources.
+
+Imports:   "three" and "three/addons/postprocessing/Pass.js". Spark 2.x
+           needs three >= 0.180 (peerDependency). Pages map "three" to
+           vendor/three@0.185.1, not to the r160 copy.
