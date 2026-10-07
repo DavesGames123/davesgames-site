@@ -1,0 +1,26 @@
+Chronos
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+The files in this folder are derived from the Chronos models by Amazon
+Science (github.com/amazon-science/chronos-forecasting, Apache License 2.0,
+full text in LICENSE). davesgames.io made these changes:
+
+  chronos-bolt-tiny.fp16w.onnx
+      An ONNX export of the core network of amazon/chronos-bolt-tiny
+      (Hugging Face revision a0e552de83495b5c28c14c71c374f3e33280b340):
+      the patch embedding, the T5 encoder and decoder, and the output
+      head. The scaling, patching and unscaling are not in the graph
+      (the page does them in model-io.js). Each large weight is stored as
+      float16 and cast to float32 in the graph, so the file is half the
+      size. The forecasts are not bit-identical to the original model.
+
+  chronos-bolt-mini.hf.onnx, chronos-2-small.hf.onnx
+      ONNX exports of the core networks of amazon/chronos-bolt-mini
+      (revision 251268337516a88e253628c43e1d26ec577b376b) and
+      autogluon/chronos-2-small (revision
+      ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a), with no weights inside.
+      Each weight is an external-data reference into the unchanged
+      model.safetensors of that revision, which the page fetches from
+      Hugging Face at run time and checks by sha256.
+
+The export, the parity checks and the test fixtures are in ../tools/.
