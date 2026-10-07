@@ -5,34 +5,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Why a white dwarf cannot pass 1.4 Suns — the Chandrasekhar limit · Stella Nova · davesgames.io</title>
+<title>The Chandrasekhar limit — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    CHANDRASEKHAR LIMIT  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup and the text of the explainer. Six sections explain why a
-   cold star held up by electron degeneracy has a maximum mass. Every
-   figure is drawn from physics.js (the equation of state, the Lane-Emden
-   and Chandrasekhar solvers, the E(R) toy). The real images are in img/,
-   with credits in the captions and in CREDITS.txt.
+   An editorial explainer in one column: why a cold star held up by
+   electron degeneracy has a maximum mass. Every chart is drawn from
+   physics.js. The real images are in img/, with credits under each image
+   and in CREDITS.txt. Figures move only when the reader moves a control.
 
    HEAD LOAD ORDER
      1. gpu-guard   ../../lib/gpu-guard.js
-     2. style.css   then ../../lib/sci.css (fonts, maths colours)
+     2. ../../lib/sci.css (fonts), then style.css
    Script at end of body: main.js (module). It imports figures.js,
    renders.js, saver.js and ../../lib/sci-math.js (MathJax SVG).
 
    LAYOUT  (# marks an element id main.js or figures.js binds to)
-     #chips          sticky section bar
-     #s0 hero        #heroCv (WebGL 2), #heroM, #heroRate, #heroMode
-     #s1 balance     #nebCv, gallery, #dwarfCv, #dwarfM
-     #s2 Pauli       #fermiBox, #fermiMom, #fermiRho
-     #s3 slow        #polyCv, #polyM
-     #s4 fast        #epCv, #epRho, #erCv, #erM, #erMode
-     #s5 answer      #leCv, #leN, #fullCv, #fullX
-     #s6 past it     #holeCv, gallery, #hubCv, #hubL, history
-     #s7 real/toy    notes, references, credits
-     #saverCv        the screensaver canvas (saver.js)
+     opening figure   #heroCv, #heroM, #heroSirius, #heroRead
+     #s1 balance      Southern Ring, M57, Cat's Eye and Sirius B images
+     #s2 Pauli        #fermiBox, #fermiMom, #fermiRho
+     #s3 slow         #polyCv, #polyM, #polyExact
+     #s4 fast         #epCv, #epRho, #erCv, #erM, #erMode
+     #s5 answer       #leCv, #leN, #fullCv, #fullX, #fullIron
+     #s6 past it      #holeCv and its controls, images, #hubCv, #hubL
+     #s7 notes        what is computed, measured and simplified; references
+     #saverCv         the screensaver canvas (saver.js)
 
    GREP MAP
      grep -n 'id="s'      the sections
@@ -40,352 +38,280 @@
      grep -n 'credit'     image credits
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="An interactive explainer of the Chandrasekhar limit: hydrostatic balance, the Pauli exclusion principle and the Fermi sea, why relativistic electrons cannot hold a star above about 1.4 solar masses, the Lane-Emden and Chandrasekhar equations solved live, and what happens past the limit: Type Ia supernovae, neutron stars and black holes.">
-<link rel="stylesheet" href="style.css">
+<meta name="description" content="Why no white dwarf can weigh more than about 1.4 solar masses: hydrostatic balance, the Pauli principle, relativistic electrons and the Chandrasekhar equation, solved in the page, with what happens past the limit.">
 <link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
-<div class="topbar">
-  <div class="brand">Stella Nova</div>
-  <div class="pagetitle">The Chandrasekhar limit</div>
-</div>
+<main id="doc">
 
-<nav id="chips" aria-label="Sections">
+<header class="head" id="s0">
+  <p class="kicker">Stella Nova · Space and gravity</p>
+  <h1>The Chandrasekhar limit</h1>
+  <p class="dek">Why no white dwarf can weigh more than about 1.4 Suns, worked out from four ingredients: gravity, Pauli's exclusion principle, the speed of light and the mass of a proton.</p>
+</header>
+
+<figure class="fig wide" id="heroFig">
+  <canvas id="heroCv" class="cv hero" aria-label="The mass-radius relation of cold white dwarfs, with the chosen star drawn to scale beside the outline of the Earth"></canvas>
+  <div class="ctl">
+    <label><span>Mass</span><input type="range" id="heroM" min="0.15" max="1.455" step="0.0005" value="1.018"><output id="heroMOut"></output></label>
+    <button type="button" id="heroSirius">Sirius B</button>
+  </div>
+  <figcaption><b>The mass and radius of a cold white dwarf.</b> <span id="heroRead"></span> Drag along the plot or move the slider. More mass makes a smaller star, and at 1.456 solar masses the radius reaches zero. The dashed grey line is what the star would do if its electrons stayed slow. The disc on the right is the star to scale, beside the outline of the Earth.</figcaption>
+</figure>
+
+<p>When a star like the Sun runs out of fuel, its core shrinks into a <b>white dwarf</b>: about a Sun's worth of mass in a ball the size of the Earth. Nothing burns inside it. What holds it up is a rule of quantum mechanics: no two electrons may share the same state. In 1930 a nineteen-year-old Subrahmanyan Chandrasekhar showed that this support has a ceiling. Add mass, and the electrons are squeezed until they move close to the speed of light. From then on their pressure cannot keep up with gravity, and the star has no size at which it can rest.</p>
+<p>This page builds that argument one step at a time. The charts are not pictures: each one solves the equations in your browser when you move it.</p>
+
+<nav class="toc" aria-label="Contents">
   <ol>
-    <li><a href="#s1" data-target="s1"><b>01</b>A star is a balance</a></li>
-    <li><a href="#s2" data-target="s2"><b>02</b>Pauli's rule</a></li>
-    <li><a href="#s3" data-target="s3"><b>03</b>Slow electrons</a></li>
-    <li><a href="#s4" data-target="s4"><b>04</b>Fast electrons</a></li>
-    <li><a href="#s5" data-target="s5"><b>05</b>The exact answer</a></li>
-    <li><a href="#s6" data-target="s6"><b>06</b>Past the limit</a></li>
-    <li><a href="#s7" data-target="s7"><b>07</b>Real and toy</a></li>
+    <li><a href="#s1">A star is a balance</a></li>
+    <li><a href="#s2">Pauli's rule makes pressure</a></li>
+    <li><a href="#s3">Slow electrons: a star that shrinks as it grows</a></li>
+    <li><a href="#s4">Fast electrons: the key step</a></li>
+    <li><a href="#s5">The exact answer</a></li>
+    <li><a href="#s6">Past the limit</a></li>
+    <li><a href="#s7">Notes and references</a></li>
   </ol>
 </nav>
 
-<main id="doc">
+<!-- ───────────────────────────────────────────────────────────── 1 -->
+<section id="s1">
+<h2><span class="n">1</span>A star is a balance</h2>
+<p>Every layer of a star carries the weight of all the layers above it. Cut a thin shell out of a star at radius r. Gravity pulls it inward with the mass m(r) inside it. The pressure on its inner face is higher than on its outer face, and the difference pushes it out. If the two did not cancel, the shell would move within minutes. Stars last billions of years, so they are in <b>hydrostatic equilibrium</b>:</p>
+<div class="eq" data-tex="\frac{dP}{dr} = -\frac{G\,m(r)\,\rho(r)}{r^2}, \qquad \frac{dm}{dr} = 4\pi r^2 \rho(r)"></div>
+<p>Integrate it once in rough form and you get the pressure a star of mass M and radius R needs at its centre: P<sub>c</sub> ~ G M² / R⁴. Squeeze the star and the pressure it needs rises steeply.</p>
+<p>In the Sun that pressure is thermal: gas at fifteen million kelvin, kept hot by hydrogen fusion. Thermal pressure lasts only as long as something replaces the heat that leaks away. When the fuel runs out the core loses heat and shrinks. A core like the Sun's burns helium to carbon and oxygen, and then it is too light ever to become hot enough to burn carbon.</p>
+<p>The outer layers drift off as a <b>planetary nebula</b>, lit for a few tens of thousands of years by the ultraviolet light of the bare core. The core is the white dwarf. It has no fuel, it will cool for the rest of time, and yet it does not shrink. Something other than heat holds it up.</p>
 
-<header class="hero" id="s0">
-  <p class="kicker">Astrophysics · stellar structure · quantum mechanics · relativity</p>
-  <h1>Why no white dwarf can weigh more than about 1.4 Suns</h1>
-  <div class="hero-fig">
-    <canvas id="heroCv" aria-label="A white dwarf in a binary pulls gas from its companion through a stream and a disk, grows toward the Chandrasekhar mass, then explodes or collapses"></canvas>
-    <div class="hero-over">
-      <div class="big" id="heroBig">1.000 M☉<small id="heroSmall">radius 5,800 km · ρ<sub>c</sub> 3 × 10⁷ g/cm³</small></div>
-      <div class="stage" id="heroStage">accreting from the companion</div>
-    </div>
-    <div class="meter" aria-hidden="true"><i id="heroBar"></i><b id="heroMark"></b><span id="heroMarkLab">M_Ch</span></div>
-    <div class="nogl" id="heroNoGL">This render needs WebGL 2, which this browser has turned off. The figures below still work.</div>
-  </div>
-  <div class="hero-dock">
-    <div class="seg" id="heroMode" role="group" aria-label="What the dwarf is made of">
-      <button class="on" data-mode="0">Carbon-oxygen: Type Ia</button>
-      <button data-mode="1">Oxygen-neon: neutron star</button>
-      <button data-mode="2">Core past 2.3 M☉: black hole</button>
-    </div>
-    <label class="ctrl"><span class="ctrl-lab m2">accretion</span><input type="range" id="heroRate" min="0.002" max="0.05" step="0.001" value="0.012"><output id="heroRateOut"></output></label>
-    <button class="btn" id="heroReset">restart at 1.0 M☉</button>
-    <button class="btn" id="heroJump">jump near the limit</button>
-  </div>
-  <p class="lede" style="margin-top:14px">When a star like the Sun runs out of fuel, its core shrinks into a white dwarf: a Sun's worth of mass in a ball the size of the Earth, held up by nothing but the refusal of electrons to share a quantum state. In 1930 a 19-year-old Subrahmanyan Chandrasekhar showed that this support has a ceiling. Add mass, and the electrons are squeezed until they move near the speed of light; then their pressure can no longer keep up with gravity, and no size is stable. This page builds that argument one step at a time, and solves the equations live in your browser.</p>
-  <p class="cap" id="heroCap">Drag to turn the view. The companion fills its Roche lobe; gas leaves through the inner Lagrange point, swings into a disk and spirals onto the dwarf. The dwarf's radius follows the exact mass-radius curve of section 5, so it <b>shrinks as it gains mass</b>. Carbon ignites when the central density reaches about 2 × 10⁹ g/cm³, which the cold model reaches at <span id="heroIgn">1.40</span> M☉; an oxygen-neon dwarf instead starts to capture electrons near 10¹⁰ g/cm³ (<span id="heroCap2">1.43</span> M☉) and collapses. Sizes are not to scale: the real dwarf would be a dot one fiftieth of the companion's width.</p>
-  <div class="stats">
-    <div><b id="statMch">1.456 M☉</b><span>M<sub>Ch</sub> for μ<sub>e</sub> = 2 (carbon, oxygen, helium), from the formula in section 5</span></div>
-    <div><b>2.01824</b><span>ω₃, the one number of the n = 3 Lane-Emden solution that sets it</span></div>
-    <div><b>1.018 M☉</b><span>Sirius B, in a ball 5,630 km in radius</span></div>
-    <div><b>2.7 t</b><span>one cubic centimetre of Sirius B, on average</span></div>
-    <div><b>1930</b><span>Chandrasekhar's voyage from India to England</span></div>
-    <div><b>2011</b><span>Nobel Prize for the accelerating universe, found with Type Ia supernovae</span></div>
-  </div>
-</header>
+<figure class="img wide">
+  <img src="img/southern-ring.jpg" alt="The Southern Ring Nebula seen by the Webb telescope in mid-infrared light" loading="lazy" width="1306" height="1133">
+  <figcaption><b>The Southern Ring, NGC 3132</b>, in mid-infrared light. These shells are the shed envelope of a star like the Sun. The star that made them is the faint, dust-wrapped point beside the bright star at the centre: a new white dwarf. <span class="credit">Credit: <a href="https://esawebb.org/images/weic2207c/" target="_blank" rel="noopener">NASA, ESA, CSA, STScI, and the Webb ERO Production Team</a> · CC BY 4.0</span></figcaption>
+</figure>
 
-<!-- ───────────────────────────────────────────────────────────── 01 -->
-<section class="sec" id="s1">
-  <div class="sec-head"><span class="num">01</span><div><h2>A star is a balance</h2><p>Every layer of a star carries the weight of all the layers above it. It can do that only if the pressure below it is higher than the pressure above it.</p></div></div>
-  <div class="grid">
-    <article class="card span-5 prose">
-      <p>Cut a thin shell out of a star at radius r. Gravity pulls it in with the mass m(r) inside it; the pressure is larger on its inner face than on its outer face, and that difference pushes it out. If the two do not cancel, the shell moves, and in a star that happens on a time scale of minutes. Stars last billions of years, so they are in <b>hydrostatic equilibrium</b>:</p>
-      <div class="sci-eq" data-tex="\frac{dP}{dr} = -\frac{G\,m(r)\,\rho(r)}{r^2}, \qquad \frac{dm}{dr} = 4\pi r^2 \rho(r)"></div>
-      <p>Integrate it once in rough form and you get the pressure a star of mass M and radius R needs at its centre: <b>P<sub>c</sub> ~ G M² / R⁴</b>. Squeeze the star and the needed pressure rises steeply.</p>
-      <p>In the Sun that pressure is thermal: hot gas at 15 million kelvin, kept hot by hydrogen fusion. Thermal pressure has a weakness: it lasts only as long as something replaces the heat that leaks out. When the fuel runs out, the core loses heat, it shrinks, and by the virial theorem half the gravitational energy it releases heats it again. The core of a star like the Sun goes through helium burning to carbon and oxygen, and then it is too light to ever get hot enough to burn carbon.</p>
-      <p>The outer layers drift away as a <b>planetary nebula</b>, lit up for a few ten-thousand years by the ultraviolet light of the bare core. That core is a <b>white dwarf</b>: about 0.6 solar masses in a ball the size of the Earth, with no fuel at all. It will cool for the rest of time and it will not shrink. Something other than heat holds it up.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>A planetary nebula, made in a shader</h3><span class="tag toy">procedural, not a real object</span></div>
-      <div class="panel"><canvas id="nebCv" class="fig tall" aria-label="Ray-marched planetary nebula around a white dwarf"></canvas><div class="nogl" id="nebNoGL">Needs WebGL 2.</div></div>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab">age (shell size)</span><input type="range" id="nebAge" min="0" max="1" step="0.01" value="0.45"></label>
-        <label class="ctrl"><span class="ctrl-lab">waist (bipolar)</span><input type="range" id="nebPinch" min="0" max="1" step="0.01" value="0.55"></label>
-      </div>
-      <p class="cap">Drag to turn it. A thick shell of ridged noise, pinched at the waist, ray-marched in 64 steps per pixel. Gas near the hot core is ionised further and glows teal in doubly ionised oxygen; the outer gas glows red in hydrogen-alpha and ionised nitrogen. The white point at the centre is the new white dwarf. Compare the real ones below.</p>
-    </article>
-  </div>
-  <div class="gallery" style="margin-top:14px">
-    <figure><img src="img/southern-ring.jpg" alt="Southern Ring Nebula seen by Webb's MIRI" loading="lazy" width="1306" height="1133"><figcaption><b>Southern Ring, NGC 3132.</b> Webb mid-infrared. The star that shed these shells is the dim, dust-wrapped point beside the bright star at the centre. <span class="credit">Credit: <a href="https://esawebb.org/images/weic2207c/" target="_blank" rel="noopener">NASA, ESA, CSA, STScI, and the Webb ERO Production Team</a> · CC BY 4.0</span></figcaption></figure>
-    <figure><img src="img/ring-m57.jpg" alt="Ring Nebula M57 seen by Webb's NIRCam" loading="lazy" width="1577" height="1600"><figcaption><b>Ring Nebula, M57.</b> Webb near-infrared, 2023. The faint central star in the cavity is the white dwarf, at about 2,500 light years. <span class="credit">Credit: <a href="https://esawebb.org/images/weic2320b/" target="_blank" rel="noopener">ESA/Webb, NASA, CSA, M. Barlow, N. Cox, R. Wesson</a> · CC BY 4.0</span></figcaption></figure>
-    <figure><img src="img/cats-eye.jpg" alt="Cat's Eye Nebula seen by Hubble" loading="lazy" width="1417" height="1417"><figcaption><b>Cat's Eye, NGC 6543.</b> Hubble. Nested shells and rings around the dying core at the exact centre. <span class="credit">Credit: <a href="https://esahubble.org/images/heic0414a/" target="_blank" rel="noopener">ESA, NASA, HEIC and The Hubble Heritage Team (STScI/AURA)</a> · CC BY 4.0</span></figcaption></figure>
-  </div>
-  <div class="grid" style="margin-top:14px">
-    <article class="card span-5 prose">
-      <div class="card-top"><h3>Sirius B, the first one found</h3><span class="tag real">measured</span></div>
-      <img class="inset-img" src="img/sirius-b.jpg" alt="Hubble image of Sirius A with the faint white dwarf Sirius B at lower left" loading="lazy" width="369" height="403">
-      <p>Sirius, the brightest star in our sky, wobbles. In 1844 Bessel saw that it must orbit an unseen companion; in 1862 Alvan Clark saw it. In 1915 Walter Adams took its spectrum: hot and white, yet ten thousand times fainter than Sirius A. A hot star that faint must be tiny.</p>
-      <div class="facts">
-        <div><b>1.018 ± 0.011 M☉</b>mass, from the 50-year orbit</div>
-        <div><b>5,630 km</b>radius (0.008098 R☉): smaller than the Earth</div>
-        <div><b>2.7 × 10⁶ g/cm³</b>mean density</div>
-        <div><b>~430,000 g</b>surface gravity</div>
-        <div><b>25,000 K</b>surface temperature</div>
-        <div><b>80 km/s</b>gravitational redshift of its light</div>
-      </div>
-      <p class="credit" style="font-size:0.72rem;color:var(--dim);margin-top:8px">Image: Sirius A, overexposed, with Sirius B the faint dot at lower left. Credit: <a href="https://esahubble.org/images/heic0516a/" target="_blank" rel="noopener" style="color:var(--dim);text-decoration:underline">NASA, ESA, H. Bond (STScI), and M. Barstow (University of Leicester)</a> · CC BY 4.0. Mass: Bond et al. 2017; radius and redshift: Joyce et al. 2018.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>Inside a white dwarf, beside the Earth</h3><span class="tag real">solved model, μ<sub>e</sub> = 2</span></div>
-      <div class="panel"><canvas id="dwarfCv" class="fig wide" aria-label="Cutaway white dwarf coloured by density next to the Earth"></canvas><div class="nogl" id="dwarfNoGL">Needs WebGL 2.</div></div>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab m2">mass</span><input type="range" id="dwarfM" min="0.2" max="1.44" step="0.002" value="1.018"><output id="dwarfMOut"></output></label>
-        <button class="btn" id="dwarfSirius">Sirius B</button>
-      </div>
-      <div class="readout" id="dwarfRead"></div>
-      <p class="cap">The cut faces are coloured by density from the exact model of section 5, over three and a half decades (white-blue at the centre, dark red at a thousandth of it). The cyan ring marks where the Fermi momentum equals m<sub>e</sub>c: inside it the fastest electrons move faster than 0.71 c, and the speckle scrolls at the local Fermi speed. The blue rim is the thin layer of ordinary gas, drawn far too thick. <b>Slide the mass up and the star gets smaller</b>: that is the first surprise of degenerate matter.</p>
-    </article>
-  </div>
+<figure class="img two">
+  <div><img src="img/ring-m57.jpg" alt="The Ring Nebula, M57, seen by the Webb telescope in near-infrared light" loading="lazy" width="1577" height="1600"></div>
+  <div><img src="img/cats-eye.jpg" alt="The Cat's Eye Nebula, NGC 6543, seen by Hubble" loading="lazy" width="1417" height="1417"></div>
+  <figcaption><b>Two more shed envelopes.</b> Left, the Ring Nebula, M57, in near-infrared light (Webb, 2023); the white dwarf is the faint star in the central cavity. Right, the Cat's Eye, NGC 6543 (Hubble): nested shells around the dying core at the exact centre. <span class="credit">Credits: <a href="https://esawebb.org/images/weic2320b/" target="_blank" rel="noopener">ESA/Webb, NASA, CSA, M. Barlow, N. Cox, R. Wesson</a>; <a href="https://esahubble.org/images/heic0414a/" target="_blank" rel="noopener">ESA, NASA, HEIC and The Hubble Heritage Team (STScI/AURA)</a> · CC BY 4.0</span></figcaption>
+</figure>
+
+<h3>Sirius B</h3>
+<figure class="img side">
+  <img src="img/sirius-b.jpg" alt="Hubble image of Sirius A, overexposed, with the faint white dwarf Sirius B at lower left" loading="lazy" width="369" height="403">
+  <figcaption>Sirius A, overexposed; Sirius B is the faint point at lower left. <span class="credit">Credit: <a href="https://esahubble.org/images/heic0516a/" target="_blank" rel="noopener">NASA, ESA, H. Bond (STScI), and M. Barstow (University of Leicester)</a> · CC BY 4.0</span></figcaption>
+</figure>
+<p>Sirius, the brightest star in the night sky, wobbles. In 1844 Friedrich Bessel worked out that it must orbit an unseen companion; in 1862 Alvan Clark saw it. In 1915 Walter Adams took its spectrum and found it hot and white, yet ten thousand times fainter than Sirius A. A star that hot and that faint must be tiny.</p>
+<table class="facts">
+  <tr><td>Mass, from the 50-year orbit</td><td>1.018 ± 0.011 M☉</td></tr>
+  <tr><td>Radius</td><td>5,630 km (0.008098 R☉), smaller than the Earth</td></tr>
+  <tr><td>Mean density</td><td>2.7 × 10⁶ g/cm³, or 2.7 tonnes in a sugar cube</td></tr>
+  <tr><td>Surface gravity</td><td>about 430,000 times the Earth's</td></tr>
+  <tr><td>Surface temperature</td><td>about 25,000 K</td></tr>
+  <tr><td>Gravitational redshift</td><td>80 km/s</td></tr>
+</table>
+<p class="small">Mass: Bond et al. 2017. Radius and redshift: Joyce et al. 2018.</p>
 </section>
 
-<!-- ───────────────────────────────────────────────────────────── 02 -->
-<section class="sec" id="s2">
-  <div class="sec-head"><span class="num">02</span><div><h2>Pauli's rule makes pressure</h2><p>No two electrons may share one quantum state. Pack them into a small box, and most of them are forced to move fast, even at zero temperature.</p></div></div>
-  <div class="grid">
-    <article class="card span-5 prose">
-      <p>An electron in a box of side L has a wave that must fit the box, so its momentum comes in steps of 2πħ/L along each axis. Each allowed momentum is one cell of <b>momentum space</b>, and each cell takes two electrons, one spin up and one spin down. That is the <b>Pauli exclusion principle</b> (1925), and electrons, as fermions, obey it without exception.</p>
-      <p>Fill the box with N electrons at zero temperature. They take the lowest cells first, so they fill a ball in momentum space up to the <b>Fermi momentum</b> p<sub>F</sub>. Count the cells: the ball's volume over the cell volume, times two.</p>
-      <div class="sci-eq" data-tex="2\cdot\frac{\tfrac{4}{3}\pi p_F^3}{(2\pi\hbar)^3}\,V = N \quad\Longrightarrow\quad p_F = \hbar\,(3\pi^2 n)^{1/3}"></div>
-      <p>So <b>p<sub>F</sub> ∝ n<sup>1/3</sup></b>: halve the box side and every electron's top momentum doubles. Electrons moving in a box push on its walls: that is <b>degeneracy pressure</b>. It needs no heat, so it does not drain away as the star cools. The same result follows from Heisenberg's Δx Δp ≳ ħ: an electron confined to a cell of size n<sup>−1/3</sup> must carry a momentum of order ħ n<sup>1/3</sup>.</p>
-      <p>When does the zero-temperature picture hold? When the Fermi energy is far above kT. At the mean density of Sirius B, E<sub>F</sub> ≈ 260 keV; its core temperature of order 10⁷ K gives kT ≈ 1 keV. The electrons are about as cold, in this sense, as electrons can be.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>Squeeze the box, watch the Fermi sea grow</h3><span class="tag real">p<sub>F</sub> = ħ(3π²n)<sup>1/3</sup></span></div>
-      <div class="duo">
-        <div class="panel"><canvas id="fermiBox" class="fig" aria-label="Electrons in a box"></canvas><span class="lab">position space</span></div>
-        <div class="panel"><canvas id="fermiMom" class="fig" aria-label="Filled momentum states"></canvas><span class="lab">momentum space, slice p<sub>z</sub> = 0</span></div>
-      </div>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab m4">density ρ</span><input type="range" id="fermiRho" min="5" max="8.7" step="0.01" value="6.43"><output id="fermiRhoOut"></output></label>
-        <button class="btn" data-fermi="6.43">Sirius B, mean</button>
-        <button class="btn" data-fermi="7.50">Sirius B, centre</button>
-        <button class="btn" data-fermi="8.30">near the limit</button>
-      </div>
-      <div class="readout" id="fermiRead"></div>
-      <p class="cap">The box holds a fixed number of electrons, so squeezing it raises the density. Each dot pair on the right is one momentum cell with its two spins; the cells spread apart as L shrinks (spacing 2πħ/L), and the filled disc grows as ρ<sup>1/3</sup>. The gold circle is p = m<sub>e</sub>c: once the sea spills past it, the top electrons are relativistic. Γ is the pressure's response to squeezing, d ln P / d ln ρ, from the exact equation of state; watch it fall.</p>
-    </article>
+<!-- ───────────────────────────────────────────────────────────── 2 -->
+<section id="s2">
+<h2><span class="n">2</span>Pauli's rule makes pressure</h2>
+<p>An electron in a box of side L behaves as a wave that must fit the box, so its momentum comes in steps of 2πħ/L along each axis. Each allowed momentum is one cell of momentum space, and each cell holds two electrons, one with spin up and one with spin down. That is the <b>Pauli exclusion principle</b> (1925), and electrons obey it without exception.</p>
+<p>Put N electrons in the box at zero temperature. They take the lowest cells first, so they fill a ball in momentum space up to the <b>Fermi momentum</b> p<sub>F</sub>. Count the cells: the volume of the ball over the volume of one cell, times two.</p>
+<div class="eq" data-tex="2\cdot\frac{\tfrac{4}{3}\pi p_F^3}{(2\pi\hbar)^3}\,V = N \quad\Longrightarrow\quad p_F = \hbar\,(3\pi^2 n)^{1/3}"></div>
+<p>So p<sub>F</sub> grows as n<sup>1/3</sup>: halve the side of the box and the top momentum doubles. Electrons that move push on the walls of their box; this is <b>degeneracy pressure</b>. It needs no heat, so it does not drain away as the star cools.</p>
+
+<figure class="fig">
+  <div class="pair">
+    <canvas id="fermiBox" class="cv sq" aria-label="Electrons in a box whose side shrinks with density"></canvas>
+    <canvas id="fermiMom" class="cv sq" aria-label="Filled momentum cells up to the Fermi momentum"></canvas>
   </div>
+  <div class="ctl">
+    <label><span>Density</span><input type="range" id="fermiRho" min="5" max="8.7" step="0.01" value="6.43"><output id="fermiRhoOut"></output></label>
+    <button type="button" data-fermi="6.43">Sirius B, mean</button>
+    <button type="button" data-fermi="7.50">Sirius B, centre</button>
+  </div>
+  <figcaption><b>Squeezing the box.</b> Left, the box in space; right, a slice through momentum space. Each pair of dots is one momentum cell with its two electrons. As the box shrinks, the cells spread apart and the filled disc grows as ρ<sup>1/3</sup>. The dashed circle is p = m<sub>e</sub>c: electrons outside it are relativistic. <span id="fermiRead"></span></figcaption>
+</figure>
+
+<p>Is zero temperature a fair picture? It is if the Fermi energy is far above the thermal energy kT. At the mean density of Sirius B the Fermi energy is about 260 keV; a core temperature of order 10⁷ K gives kT ≈ 1 keV. In that sense the electrons are as cold as electrons can be.</p>
 </section>
 
-<!-- ───────────────────────────────────────────────────────────── 03 -->
-<section class="sec" id="s3">
-  <div class="sec-head"><span class="num">03</span><div><h2>Slow electrons: a star that shrinks as it grows</h2><p>While the electrons are slow, degeneracy pressure is stiff enough to stop any mass. But the more mass, the smaller the star.</p></div></div>
-  <div class="grid">
-    <article class="card span-5 prose">
-      <p>Pressure is momentum flux: roughly n × p × v. For slow electrons v = p / m<sub>e</sub>, so P ~ n p<sub>F</sub>² / m<sub>e</sub>, and with p<sub>F</sub> ∝ n<sup>1/3</sup>:</p>
-      <div class="sci-eq" data-tex="P = \frac{(3\pi^2)^{2/3}}{5}\,\frac{\hbar^2}{m_e}\,n_e^{5/3} \;\propto\; \rho^{5/3}"></div>
-      <p>The electrons set the pressure but the ions set the weight: each electron comes with μ<sub>e</sub> m<sub>u</sub> of mass, where μ<sub>e</sub> = 2 for helium, carbon and oxygen. So ρ = μ<sub>e</sub> m<sub>u</sub> n<sub>e</sub>. A gas with P = K ρ<sup>1+1/n</sup> is a <b>polytrope</b> of index n; here n = 1.5.</p>
-      <p>Now balance it against gravity. With ρ ~ M / R³, the pressure scales as M<sup>5/3</sup> / R⁵, and gravity needs G M² / R⁴:</p>
-      <div class="sci-eq" data-tex="\frac{\hbar^2}{m_e}\,\frac{M^{5/3}}{(\mu_e m_u)^{8/3} R^{5}} \sim \frac{G M^2}{R^4} \quad\Longrightarrow\quad R \propto M^{-1/3}"></div>
-      <p>There is always a solution. A heavier star is smaller and denser, with the electrons pushed to higher momentum; but some radius always balances it. With this law alone there is no limit. That is what Ralph Fowler found in 1926, the year Fermi-Dirac statistics was born.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>Mass and radius of an n = 1.5 white dwarf</h3><span class="tag real">Lane-Emden n = 1.5, solved here</span></div>
-      <canvas id="polyCv" class="fig chart big" aria-label="Mass-radius relation of the non-relativistic white dwarf"></canvas>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab m2">mass</span><input type="range" id="polyM" min="-1.3" max="0.3" step="0.005" value="-0.22"><output id="polyMOut"></output></label>
-        <button class="tog" id="polyExact">show the exact curve</button>
-      </div>
-      <div class="readout" id="polyRead"></div>
-      <p class="cap">Drag across the plot or move the slider. The violet line is the slow-electron law, R ∝ M<sup>−1/3</sup>, and on the right the dwarf is drawn to scale beside the Earth. Turn on the exact curve (section 5): it agrees at low mass and then falls away from the line, to zero radius at 1.456 M☉. Something breaks between 1 and 1.5 Suns.</p>
-    </article>
+<!-- ───────────────────────────────────────────────────────────── 3 -->
+<section id="s3">
+<h2><span class="n">3</span>Slow electrons: a star that shrinks as it grows</h2>
+<p>Pressure is a flow of momentum: roughly n × p × v. For slow electrons v = p / m<sub>e</sub>, so P ~ n p<sub>F</sub>² / m<sub>e</sub>, and with p<sub>F</sub> ∝ n<sup>1/3</sup>:</p>
+<div class="eq" data-tex="P = \frac{(3\pi^2)^{2/3}}{5}\,\frac{\hbar^2}{m_e}\,n_e^{5/3} \;\propto\; \rho^{5/3}"></div>
+<p>The electrons give the pressure, but the ions give the weight. Each electron comes with μ<sub>e</sub> m<sub>u</sub> of mass, where μ<sub>e</sub> = 2 for helium, carbon and oxygen, so ρ = μ<sub>e</sub> m<sub>u</sub> n<sub>e</sub>. A gas with P = K ρ<sup>1+1/n</sup> is called a polytrope of index n; this one has n = 1.5.</p>
+<p>Now balance it against gravity. With ρ ~ M / R³ the pressure scales as M<sup>5/3</sup> / R⁵, while gravity needs G M² / R⁴:</p>
+<div class="eq" data-tex="\frac{\hbar^2}{m_e}\,\frac{M^{5/3}}{(\mu_e m_u)^{8/3} R^{5}} \sim \frac{G M^2}{R^4} \quad\Longrightarrow\quad R \propto M^{-1/3}"></div>
+<p>There is always a solution. A heavier star is smaller and denser, and its electrons are pushed to higher momentum, but some radius always balances it. On this law alone there is no limit. Ralph Fowler found as much in 1926, the year Fermi-Dirac statistics was born.</p>
+
+<figure class="fig">
+  <canvas id="polyCv" class="cv chart" aria-label="Mass-radius relation for slow electrons"></canvas>
+  <div class="ctl">
+    <label><span>Mass</span><input type="range" id="polyM" min="-1.3" max="0.3" step="0.005" value="-0.22"><output id="polyMOut"></output></label>
+    <button type="button" id="polyExact" aria-pressed="false">Show the exact curve</button>
   </div>
+  <figcaption><b>The slow-electron law, R ∝ M<sup>−1/3</sup></b>, on log axes. <span id="polyRead"></span> Show the exact curve of section 5: it agrees at low mass, then falls away from the line and reaches zero radius at 1.456 M☉. Something changes between one and one and a half solar masses.</figcaption>
+</figure>
 </section>
 
-<!-- ───────────────────────────────────────────────────────────── 04 -->
-<section class="sec" id="s4">
-  <div class="sec-head"><span class="num">04</span><div><h2>Fast electrons: the key step</h2><p>Squeeze hard enough and p<sub>F</sub> passes m<sub>e</sub>c. The electrons cannot go faster than light, so their pressure grows more slowly with density, just when gravity needs it most.</p></div></div>
-  <div class="grid">
-    <article class="card span-5 prose">
-      <p>An electron's energy is √(p²c² + m<sub>e</sub>²c⁴). For p ≪ m<sub>e</sub>c the kinetic part is p²/2m<sub>e</sub>; for p ≫ m<sub>e</sub>c it is <b>pc</b>. The speed saturates at c, so the momentum flux becomes n × p × c, not n × p²/m:</p>
-      <div class="sci-eq" data-tex="P = \frac{(3\pi^2)^{1/3}}{4}\,\hbar c\,n_e^{4/3} \;\propto\; \rho^{4/3}"></div>
-      <p>The exponent falls from 5/3 to 4/3. That looks small. It is everything, and the cleanest way to see why is the energy argument that Landau gave in 1932.</p>
-      <p>Take N electrons in a ball of radius R. Each has momentum about p<sub>F</sub> ~ ħ N<sup>1/3</sup>/R. Relativistic, each carries energy p<sub>F</sub>c, so the total electron energy is N<sup>4/3</sup>ħc/R. Gravity gives −G M²/R. <b>Both scale as 1/R</b>:</p>
-      <div class="sci-eq" data-tex="E(R) \approx \frac{a\,\hbar c\,N^{4/3}}{R} - \frac{\alpha_g\,G M^2}{R} = \frac{a\,\hbar c\,N^{4/3} - \alpha_g G (\mu_e m_u)^2 N^2}{R}"></div>
-      <p>If the bracket is positive, E rises toward R = 0, so the star does not shrink that far. At large R the electrons slow down, their energy falls off as 1/R², faster than gravity's 1/R, and E turns negative. In between lies a minimum: a stable white dwarf. If the bracket is negative, E falls without bound as R → 0: <b>shrinking always releases energy, and nothing stops it</b>. The sign flips at one mass, because N² grows faster than N<sup>4/3</sup>:</p>
-      <div class="sci-eq" data-tex="M_{\rm crit} \sim \left(\frac{\hbar c}{G}\right)^{3/2}\frac{1}{(\mu_e m_u)^2}"></div>
-      <p>The radius has dropped out. The limit is built from ħ (quantum), c (relativity), G (gravity) and the proton mass, and nothing else. It is a Planck mass cubed over a proton mass squared: about 1.8 M☉ for a uniform ball, 1.46 M☉ for the real profile.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>Energy of the top electron: p²/2m becomes pc</h3><span class="tag real">exact dispersion and Γ(x)</span></div>
-      <canvas id="epCv" class="fig chart big" aria-label="Electron energy against momentum, and the pressure exponent"></canvas>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab m4">density ρ</span><input type="range" id="epRho" min="3" max="10" step="0.01" value="6.43"><output id="epRhoOut"></output></label>
-      </div>
-      <div class="readout" id="epRead"></div>
-      <p class="cap">The marker is the Fermi momentum at the chosen density. Below, Γ = d ln P / d ln ρ of the exact gas: 5/3 when slow, 4/3 when fast. A self-gravitating ball is stable only if Γ (weighted over the star) is above 4/3. At Γ = 4/3 exactly, a bigger or smaller star costs the same energy, so it has no preferred size.</p>
-    </article>
-    <article class="card span-12">
-      <div class="card-top"><h3>E(R): where is the minimum?</h3><span class="tag real">full relativistic Fermi gas in a ball</span></div>
-      <canvas id="erCv" class="fig chart big" aria-label="Total energy of a white dwarf against radius, with a rolling ball"></canvas>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab m2">mass M</span><input type="range" id="erM" min="0.2" max="2.0" step="0.002" value="1.0"><output id="erMOut"></output></label>
-        <div class="seg" id="erMode" role="group" aria-label="Binding factor"><button class="on" data-mode="profile">profile, α<sub>g</sub> = 0.677</button><button data-mode="uniform">uniform ball, α<sub>g</sub> = 3/5</button></div>
-        <button class="btn" id="erDrop">drop the ball again</button>
-        <span class="verdict" id="erVerdict"></span>
-      </div>
-      <div class="readout" id="erRead"></div>
-      <p class="cap">Green: the kinetic energy of all the electrons, from the exact Fermi-gas formula (it goes as 1/R² at large R and as 1/R at small R). Orange: gravity, −α<sub>g</sub>GM²/R. Blue: their sum, on a log-symmetric axis. The ball rolls downhill and settles where the star would sit. <b>Slide M past the critical mass and the minimum is gone</b>: the curve keeps falling to R = 0 and the ball runs off the left edge. A uniform ball binds weakly (α<sub>g</sub> = 3/5, Landau's case) and puts the limit near 1.75 M☉; a real white dwarf is centrally concentrated, and α<sub>g</sub> = 0.677 puts this toy's limit on the exact M<sub>Ch</sub>.</p>
-    </article>
+<!-- ───────────────────────────────────────────────────────────── 4 -->
+<section id="s4">
+<h2><span class="n">4</span>Fast electrons: the key step</h2>
+<p>Squeeze hard enough and p<sub>F</sub> passes m<sub>e</sub>c. An electron's energy is √(p²c² + m<sub>e</sub>²c⁴). For p ≪ m<sub>e</sub>c the kinetic part is p²/2m<sub>e</sub>; for p ≫ m<sub>e</sub>c it is pc. The speed stops growing at c, so the momentum flow becomes n × p × c instead of n × p²/m:</p>
+<div class="eq" data-tex="P = \frac{(3\pi^2)^{1/3}}{4}\,\hbar c\,n_e^{4/3} \;\propto\; \rho^{4/3}"></div>
+
+<figure class="fig">
+  <canvas id="epCv" class="cv chart tall" aria-label="Electron energy against momentum, and the pressure exponent"></canvas>
+  <div class="ctl">
+    <label><span>Density</span><input type="range" id="epRho" min="3" max="10" step="0.01" value="6.43"><output id="epRhoOut"></output></label>
   </div>
+  <figcaption><b>Left:</b> the kinetic energy of an electron against its momentum, with the slow (p²/2m) and fast (pc) limits dashed. The circle is the Fermi momentum at the chosen density. <b>Right:</b> the exponent Γ = d ln P / d ln ρ of the exact gas falls from 5/3 to 4/3. <span id="epRead"></span></figcaption>
+</figure>
+
+<p>The exponent falls from 5/3 to 4/3. That looks like a small change. It decides everything, and the cleanest way to see why is the energy argument Lev Landau gave in 1932.</p>
+<p>Take N electrons in a ball of radius R. Each has momentum of about p<sub>F</sub> ~ ħ N<sup>1/3</sup>/R. If they are relativistic, each carries energy p<sub>F</sub>c, so all of them together carry about N<sup>4/3</sup>ħc/R. Gravity contributes −G M²/R. <b>Both scale as 1/R:</b></p>
+<div class="eq" data-tex="E(R) \approx \frac{a\,\hbar c\,N^{4/3}}{R} - \frac{\alpha_g\,G M^2}{R} = \frac{a\,\hbar c\,N^{4/3} - \alpha_g G (\mu_e m_u)^2 N^2}{R}"></div>
+<p>If the bracket is positive, E rises toward R = 0, so the star does not shrink that far. At large R the electrons slow down, their energy falls off as 1/R², faster than gravity's 1/R, and E turns negative. Between the two lies a minimum: a stable white dwarf. If the bracket is negative, E falls without end as R goes to zero. Shrinking always releases energy, and nothing stops it. The sign flips at one mass, because N² grows faster than N<sup>4/3</sup>:</p>
+<div class="eq" data-tex="M_{\rm crit} \sim \left(\frac{\hbar c}{G}\right)^{3/2}\frac{1}{(\mu_e m_u)^2}"></div>
+<p>The radius has dropped out. The limit is built from ħ, c, G and the mass of a proton, and nothing else.</p>
+
+<figure class="fig">
+  <canvas id="erCv" class="cv chart" aria-label="Total energy of a white dwarf against radius"></canvas>
+  <div class="ctl">
+    <label><span>Mass</span><input type="range" id="erM" min="0.2" max="2.0" step="0.002" value="1.0"><output id="erMOut"></output></label>
+    <span class="seg" id="erMode" role="group" aria-label="Binding factor"><button type="button" data-mode="profile" aria-pressed="true">Real profile</button><button type="button" data-mode="uniform" aria-pressed="false">Uniform ball</button></span>
+  </div>
+  <figcaption><b>The energy of the star against its radius.</b> Dashed: the electrons' kinetic energy (from the exact Fermi-gas formula) and gravity. Solid: their sum, on a log scale that keeps its sign. Move the mass past the critical value and the minimum disappears. <span id="erRead"></span> A uniform ball is weakly bound (α<sub>g</sub> = 3/5, Landau's case) and puts the limit near 1.75 M☉. A real white dwarf is denser at the centre; with α<sub>g</sub> = 0.677 this simple model gives the exact limit.</figcaption>
+</figure>
 </section>
 
-<!-- ───────────────────────────────────────────────────────────── 05 -->
-<section class="sec" id="s5">
-  <div class="sec-head"><span class="num">05</span><div><h2>The exact answer</h2><p>Scaling gives the form of the limit. To get the number, solve the star: hydrostatic balance plus the equation of state, from the centre to the surface.</p></div></div>
-  <div class="grid">
-    <article class="card span-6 prose">
-      <p>For a polytrope, put ρ = ρ<sub>c</sub>θⁿ and r = aξ into the balance equation. Everything about the star folds into one equation, published by Lane (1870) and Emden (1907):</p>
-      <div class="sci-eq" data-tex="\frac{1}{\xi^2}\frac{d}{d\xi}\!\left(\xi^2\frac{d\theta}{d\xi}\right) = -\theta^n, \qquad \theta(0)=1,\ \theta'(0)=0"></div>
-      <p>Its first zero ξ₁ is the surface, and ω<sub>n</sub> = −ξ₁²θ′(ξ₁) sets the mass. For n = 3, the relativistic gas, the central density cancels out of the mass: <b>every n = 3 white dwarf has the same mass</b>, whatever its size. That mass is the limit:</p>
-      <div class="sci-eq" data-tex="M_{\rm Ch} = \frac{\sqrt{3\pi}}{2}\,\omega_3\left(\frac{\hbar c}{G}\right)^{3/2}\frac{1}{(\mu_e m_u)^2} = \frac{5.825}{\mu_e^2}\,M_\odot"></div>
-      <p>With the solver's ω₃ = 2.018236 and μ<sub>e</sub> = 2, it gives <b><span id="mchOut">1.456</span> M☉</b>. Chandrasekhar wrote the formula with the hydrogen mass m<sub>H</sub> in place of m<sub>u</sub>, and quoted 5.76/μ<sub>e</sub>² with the constants of his day; that is the textbook 1.44. The mass per electron of carbon-12 is exactly 2 m<sub>u</sub>, so m<sub>u</sub> is the right choice for a carbon-oxygen dwarf.</p>
-    </article>
-    <article class="card span-6">
-      <div class="card-top"><h3>Lane-Emden solutions, any n</h3><span class="tag real">RK4, h = 10⁻³</span></div>
-      <canvas id="leCv" class="fig chart mid" aria-label="Lane-Emden solutions"></canvas>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab">index n</span><input type="range" id="leN" min="0" max="4.9" step="0.05" value="2.25"><output id="leNOut"></output></label>
-      </div>
-      <div class="readout" id="leRead"></div>
-      <p class="cap">Dashed: n = 1.5 (slow electrons) and n = 3 (fast electrons). A higher index is softer and more centrally concentrated, and its surface lies further out. At n = 3 the mass-radius exponent (1−n)/(3−n) blows up: mass no longer depends on radius.</p>
-    </article>
-    <article class="card span-5 prose">
-      <p>A real white dwarf is neither n = 1.5 nor n = 3. Its outer layers have slow electrons, its centre fast ones. Chandrasekhar's 1935 solution uses the exact pressure of a zero-temperature electron gas at any speed, with x = p<sub>F</sub> / m<sub>e</sub>c:</p>
-      <div class="sci-eq" data-tex="P = \frac{\pi m_e^4 c^5}{3h^3}\Big[x(2x^2-3)\sqrt{1+x^2} + 3\sinh^{-1}x\Big], \qquad \rho = \mu_e m_u\frac{8\pi m_e^3c^3}{3h^3}\,x^3"></div>
-      <p>With y² = 1 + x², y = y₀φ and r = αη, balance becomes his white-dwarf equation. One number, the central x<sub>c</sub>, picks the star:</p>
-      <div class="sci-eq" data-tex="\frac{1}{\eta^2}\frac{d}{d\eta}\!\left(\eta^2\frac{d\phi}{d\eta}\right) = -\left(\phi^2 - \frac{1}{y_0^2}\right)^{3/2}, \qquad \phi(\eta_1) = \frac{1}{y_0}"></div>
-      <p>This page integrates it with RK4 for 140 central densities each time it loads, and gets the blue curve on the right. At low x<sub>c</sub> it follows the n = 1.5 law. As x<sub>c</sub> → ∞, the star becomes an n = 3 polytrope, the mass climbs to M<sub>Ch</sub>, and the radius goes to <b>zero</b>. There are no white dwarfs on the far side of that line, at any radius.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>The real mass-radius curve</h3><span class="tag real">Chandrasekhar's equation, solved here</span></div>
-      <canvas id="fullCv" class="fig chart big" aria-label="Exact white dwarf mass-radius relation with measured stars"></canvas>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab m1">central x<sub>c</sub></span><input type="range" id="fullX" min="-1.3" max="3.4" step="0.01" value="0.4"><output id="fullXOut"></output></label>
-        <button class="tog" id="fullIron">iron core, μ<sub>e</sub> = 2.15</button>
-      </div>
-      <div class="readout" id="fullRead"></div>
-      <p class="cap">Drag across the plot to pick a star. The inset shows its density profile (pink) between the n = 1.5 and n = 3 profiles. The three measured white dwarfs sit near the cold curve; Sirius B is 0.9 % larger than the cold model because it is still 25,000 K hot and has a thin hydrogen layer. An iron core has fewer electrons per unit mass (26 per 56 m<sub>u</sub>), so its limit is lower: 1.26 M☉ in this ideal model.</p>
-    </article>
-    <article class="card span-12 prose">
-      <div class="card-top"><h3>Which number? 1.46, 1.44, 1.39</h3><span class="tag">corrections</span></div>
-      <div class="t1-wrap"><table class="t1">
-        <tr><th>Value (M☉)</th><th>What it includes</th></tr>
-        <tr><td class="n">1.456</td><td>The ideal, cold formula above with today's constants, m<sub>u</sub> and μ<sub>e</sub> = 2. This page's curve ends here.</td></tr>
-        <tr><td class="n">1.44</td><td>Chandrasekhar's own coefficient, 5.76/μ<sub>e</sub>² (written with m<sub>H</sub> and older constants). The number in most textbooks.</td></tr>
-        <tr><td class="n">about 1.40</td><td>Plus the electrostatic (Coulomb) energy of the ion lattice, which lowers the pressure by a few percent (Salpeter 1961).</td></tr>
-        <tr><td class="n">about 1.38 to 1.39</td><td>Plus general relativity, which makes the star unstable at a finite central density, and electron capture at the highest densities. In a carbon-oxygen dwarf, carbon ignites near 2 × 10⁹ g/cm³ before that point. This is the mass at which Type Ia supernovae are thought to start.</td></tr>
-      </table></div>
-      <p style="margin-top:10px">The last two rows are approximate values from the literature, not computed on this page: the curve above is the ideal cold model, and the hero's trigger masses come from it. The answer to "why" is the same in every row: <b>the electrons of the core become relativistic, the pressure index falls to 4/3, and gravity, which never softens, wins</b>.</p>
-    </article>
+<!-- ───────────────────────────────────────────────────────────── 5 -->
+<section id="s5">
+<h2><span class="n">5</span>The exact answer</h2>
+<p>Scaling gives the form of the limit. To get the number, solve the star: hydrostatic balance plus the equation of state, from the centre to the surface. For a polytrope, put ρ = ρ<sub>c</sub>θⁿ and r = aξ into the balance equation. Everything about the star then folds into one equation, published by Lane in 1870 and by Emden in 1907:</p>
+<div class="eq" data-tex="\frac{1}{\xi^2}\frac{d}{d\xi}\!\left(\xi^2\frac{d\theta}{d\xi}\right) = -\theta^n, \qquad \theta(0)=1,\ \theta'(0)=0"></div>
+
+<figure class="fig">
+  <canvas id="leCv" class="cv chart short" aria-label="Lane-Emden solutions"></canvas>
+  <div class="ctl">
+    <label><span>Index n</span><input type="range" id="leN" min="0" max="4.9" step="0.05" value="2.25"><output id="leNOut"></output></label>
   </div>
+  <figcaption><b>Solutions of the Lane-Emden equation</b>, by RK4 with step 10⁻³. Dashed: n = 1.5 (slow electrons) and n = 3 (fast electrons). <span id="leRead"></span></figcaption>
+</figure>
+
+<p>The first zero ξ₁ is the surface, and ω<sub>n</sub> = −ξ₁²θ′(ξ₁) sets the mass. For n = 3, the relativistic gas, the central density cancels out of the mass: <b>every n = 3 star has the same mass</b>, whatever its size. That mass is the limit:</p>
+<div class="eq" data-tex="M_{\rm Ch} = \frac{\sqrt{3\pi}}{2}\,\omega_3\left(\frac{\hbar c}{G}\right)^{3/2}\frac{1}{(\mu_e m_u)^2} = \frac{5.825}{\mu_e^2}\,M_\odot"></div>
+<p>With ω₃ = 2.018236 from the solver above and μ<sub>e</sub> = 2, it gives <b><span id="mchOut">1.456</span> M☉</b>. Chandrasekhar wrote the formula with the hydrogen mass m<sub>H</sub> in place of m<sub>u</sub> and quoted 5.76/μ<sub>e</sub>² with the constants of his day; that is where the familiar 1.44 comes from. The mass per electron of carbon-12 is exactly 2 m<sub>u</sub>, so m<sub>u</sub> is the right choice for a carbon-oxygen dwarf.</p>
+<p>A real white dwarf is neither n = 1.5 nor n = 3: its outer layers have slow electrons, its centre fast ones. Chandrasekhar's 1935 solution uses the exact pressure of a zero-temperature electron gas at any speed, with x = p<sub>F</sub> / m<sub>e</sub>c:</p>
+<div class="eq" data-tex="P = \frac{\pi m_e^4 c^5}{3h^3}\Big[x(2x^2-3)\sqrt{1+x^2} + 3\sinh^{-1}x\Big], \qquad \rho = \mu_e m_u\frac{8\pi m_e^3c^3}{3h^3}\,x^3"></div>
+<p>With y² = 1 + x², y = y₀φ and r = αη, the balance becomes his white-dwarf equation. One number, the central x, picks the star:</p>
+<div class="eq" data-tex="\frac{1}{\eta^2}\frac{d}{d\eta}\!\left(\eta^2\frac{d\phi}{d\eta}\right) = -\left(\phi^2 - \frac{1}{y_0^2}\right)^{3/2}, \qquad \phi(\eta_1) = \frac{1}{y_0}"></div>
+<p>The page integrates this equation with RK4 for 140 central densities when it loads; the result is the curve in the opening figure. At low central density it follows the n = 1.5 law. As the central density grows without limit, the star turns into an n = 3 polytrope, the mass climbs to M<sub>Ch</sub> and the radius goes to zero. There are no white dwarfs beyond that line, at any radius.</p>
+
+<figure class="fig">
+  <canvas id="fullCv" class="cv chart tall" aria-label="Exact mass-radius relation with measured white dwarfs, and the density profile of the chosen star"></canvas>
+  <div class="ctl">
+    <label><span>Centre</span><input type="range" id="fullX" min="-1.3" max="3.4" step="0.01" value="0.4"><output id="fullXOut"></output></label>
+    <button type="button" id="fullIron" aria-pressed="false">Add an iron core</button>
+  </div>
+  <figcaption><b>Composition and structure.</b> Left: the exact curve with three measured white dwarfs (1σ mass bars). Right: the density profile of the chosen star, between the n = 1.5 and n = 3 profiles (dashed). <span id="fullRead"></span> Sirius B lies 0.9 % above the cold curve because it is still 25,000 K hot and has a thin hydrogen layer. An iron core has fewer electrons per unit mass (26 per 56 m<sub>u</sub>), so its limit is lower: 1.26 M☉ in this ideal model.</figcaption>
+</figure>
+
+<h3>Which number: 1.46, 1.44 or 1.39?</h3>
+<table class="facts">
+  <tr><td>1.456</td><td>The ideal cold formula with today's constants, m<sub>u</sub> and μ<sub>e</sub> = 2. The curve on this page ends here.</td></tr>
+  <tr><td>1.44</td><td>Chandrasekhar's own coefficient, 5.76/μ<sub>e</sub>², written with m<sub>H</sub> and older constants. The number in most textbooks.</td></tr>
+  <tr><td>about 1.40</td><td>Adds the electrostatic energy of the ion lattice, which lowers the pressure by a few percent (Salpeter 1961).</td></tr>
+  <tr><td>about 1.38–1.39</td><td>Adds general relativity, which makes the star unstable at a finite central density, and electron capture. In a carbon-oxygen dwarf, carbon ignites near 2 × 10⁹ g/cm³ before that point; the cold model reaches that density at <span id="ignOut">1.396</span> M☉.</td></tr>
+</table>
+<p class="small">The last two rows are approximate values from the literature, not computed here.</p>
+<p>The answer to "why" is the same in every row: the electrons in the core become relativistic, the pressure exponent falls to 4/3, and gravity, which never weakens, wins.</p>
 </section>
 
-<!-- ───────────────────────────────────────────────────────────── 06 -->
-<section class="sec" id="s6">
-  <div class="sec-head"><span class="num">06</span><div><h2>Past the limit</h2><p>A core that crosses the line has three ways out: it burns, it turns into neutrons, or nothing at all stops it.</p></div></div>
-  <div class="grid">
-    <article class="card span-6 prose">
-      <p><b>Electron capture.</b> As the core shrinks the Fermi energy climbs to several MeV. Then it pays for an electron to vanish into a proton, p + e⁻ → n + ν. Each capture removes an electron and its pressure, the core shrinks faster, captures speed up: a runaway. Near 10¹⁰ g/cm³ that happens in an oxygen-neon core; in the iron core of a massive star it happens when the core grows to its own Chandrasekhar mass.</p>
-      <p><b>Neutron stars.</b> The collapse stops only when the core reaches nuclear density, 2.8 × 10¹⁴ g/cm³, about 1.4 M☉ in a ball 12 km in radius. Neutrons are fermions too, and their degeneracy pressure plus the repulsion of the strong force hold it up. Neutrons hit the same wall at a higher mass: the <b>Tolman-Oppenheimer-Volkoff limit</b>, about 2.2 to 2.3 M☉ in current estimates. The heaviest pulsar weighed well, PSR J0740+6620, has 2.08 ± 0.07 M☉. The Crab Nebula below holds one, spinning 30 times a second.</p>
-      <p><b>Black holes.</b> Above the TOV limit no known pressure is enough. In general relativity pressure itself has weight, so pushing harder only adds to gravity. The core falls inside its Schwarzschild radius r<sub>s</sub> = 2GM/c², 7 km for 2.5 M☉, and becomes a black hole.</p>
-    </article>
-    <article class="card span-6">
-      <div class="card-top"><h3>A black hole, ray traced along real geodesics</h3><span class="tag real">Schwarzschild null geodesics, RK4</span></div>
-      <div class="panel"><canvas id="holeCv" class="fig tall" aria-label="Ray-traced Schwarzschild black hole with an accretion disk and lensed stars"></canvas><div class="nogl" id="holeNoGL">Needs WebGL 2.</div></div>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab">view above disk</span><input type="range" id="holeInc" min="0.02" max="1.3" step="0.01" value="0.16"></label>
-        <label class="ctrl"><span class="ctrl-lab">distance</span><input type="range" id="holeDist" min="16" max="60" step="0.5" value="34"></label>
-        <button class="tog on" id="holeLens">bend light</button>
-        <button class="tog on" id="holeShift">Doppler and redshift</button>
-        <button class="tog on" id="holeDisk">disk</button>
-      </div>
-      <p class="cap">Every pixel follows one photon backwards from the camera with x″ = −(3/2) r<sub>s</sub> h² x / r⁵, the Cartesian form of the Schwarzschild orbit equation. The disk runs from the innermost stable orbit, 3 r<sub>s</sub>, to 9 r<sub>s</sub>, with a thin-disk temperature profile. Its colour and brightness carry g = √(1 − 3M/r) / (1 − Ωλ): the side moving toward us is bluer and much brighter. The arc over the top is the far side of the disk, bent up by the hole; the black shadow has a radius of 2.6 r<sub>s</sub>. Turn off "bend light" to see what straight-line optics would show.</p>
-    </article>
-    <article class="card span-12">
-      <div class="sci-eq" data-tex="\frac{d^2u}{d\phi^2} + u = \frac{3}{2}\,r_s u^2 \quad (u = 1/r), \qquad b_{\rm shadow} = \frac{3\sqrt{3}}{2}\,r_s, \qquad g = \frac{\sqrt{1 - 3M/r}}{1 - \Omega\lambda}"></div>
-    </article>
+<!-- ───────────────────────────────────────────────────────────── 6 -->
+<section id="s6">
+<h2><span class="n">6</span>Past the limit</h2>
+<p>A core that crosses the line has three ways out: it burns, it turns into neutrons, or nothing at all stops it.</p>
+<p><b>Electron capture.</b> As the core shrinks, the Fermi energy climbs to several MeV. Then it pays for an electron to merge with a proton, p + e⁻ → n + ν. Each capture removes an electron and its pressure, so the core shrinks faster and the captures speed up. In an oxygen-neon core this happens near 10¹⁰ g/cm³ (<span id="capOut">1.433</span> M☉ in the cold model). In the iron core of a massive star it happens when the core grows to its own Chandrasekhar mass.</p>
+<p><b>Neutron stars.</b> The collapse stops only at nuclear density, about 3 × 10¹⁴ g/cm³: some 1.4 M☉ in a ball 12 km in radius. Neutrons are fermions too, and their degeneracy pressure, with the repulsion of the strong force, holds the star up. Neutrons meet the same wall at a higher mass, the <b>Tolman-Oppenheimer-Volkoff limit</b>, about 2.2 to 2.3 M☉ in current estimates. The heaviest accurately weighed pulsar, PSR J0740+6620, has 2.08 ± 0.07 M☉.</p>
+
+<figure class="img wide">
+  <img src="img/crab.jpg" alt="The Crab Nebula, a Hubble mosaic" loading="lazy" width="1600" height="1600">
+  <figcaption><b>The Crab Nebula</b>, debris of the supernova seen in 1054. A neutron star near its centre spins 30 times a second; its wind lights the blue glow. <span class="credit">Credit: <a href="https://esahubble.org/images/heic0515a/" target="_blank" rel="noopener">NASA, ESA and Allison Loll/Jeff Hester (Arizona State University). Acknowledgement: Davide De Martin (ESA/Hubble)</a> · CC BY 4.0</span></figcaption>
+</figure>
+
+<p><b>Black holes.</b> Above the TOV limit no known pressure is enough. In general relativity pressure itself has weight, so pushing harder adds to gravity. The core falls inside its Schwarzschild radius r<sub>s</sub> = 2GM/c², 7 km for 2.5 M☉, and becomes a black hole.</p>
+
+<figure class="fig wide">
+  <canvas id="holeCv" class="cv hole" aria-label="Ray-traced Schwarzschild black hole with a thin disk"></canvas>
+  <div class="nogl" id="holeNoGL">This figure needs WebGL 2, which this browser has turned off.</div>
+  <div class="ctl">
+    <label><span>View angle</span><input type="range" id="holeInc" min="0.02" max="1.3" step="0.01" value="0.16"></label>
+    <label><span>Distance</span><input type="range" id="holeDist" min="16" max="60" step="0.5" value="38"></label>
+    <button type="button" id="holeLens" aria-pressed="true">Bend light</button>
+    <button type="button" id="holeShift" aria-pressed="true">Doppler and redshift</button>
   </div>
-  <div class="gallery" style="margin-top:14px">
-    <figure><img src="img/crab.jpg" alt="Crab Nebula mosaic by Hubble" loading="lazy" width="1600" height="1600"><figcaption><b>Crab Nebula, M1.</b> Debris of the supernova seen in 1054. The blue glow is powered by the pulsar, a neutron star near the centre, left when an iron core crossed its limit. <span class="credit">Credit: <a href="https://esahubble.org/images/heic0515a/" target="_blank" rel="noopener">NASA, ESA and Allison Loll/Jeff Hester (Arizona State University). Acknowledgement: Davide De Martin (ESA/Hubble)</a> · CC BY 4.0</span></figcaption></figure>
-    <figure><img src="img/tycho.jpg" alt="Tycho's supernova remnant in X-rays" loading="lazy" width="864" height="865"><figcaption><b>Tycho's supernova, 1572.</b> A Type Ia remnant: no star is left at the centre. Chandra X-rays; the thin outer rim is the blast wave. <span class="credit">Credit: <a href="https://chandra.harvard.edu/photo/2019/tycho/more.html" target="_blank" rel="noopener">X-ray: NASA/CXC/RIKEN &amp; GSFC/T. Sato et al.</a> · NASA image use policy</span></figcaption></figure>
-    <figure><img src="img/sn1006.jpg" alt="SN 1006 supernova remnant in X-rays" loading="lazy" width="1600" height="1600"><figcaption><b>SN 1006.</b> The brightest supernova in recorded history, a white dwarf that exploded about 7,000 light years away. Chandra X-ray mosaic. <span class="credit">Credit: <a href="https://chandra.harvard.edu/photo/2013/sn1006/" target="_blank" rel="noopener">NASA/CXC/Middlebury College/F.Winkler</a> · NASA image use policy</span></figcaption></figure>
+  <figcaption><b>A black hole with a thin disk, ray traced.</b> Each pixel follows one photon backwards along a Schwarzschild null geodesic, x″ = −(3/2) r<sub>s</sub> h² x / r⁵, integrated by RK4. The disk runs from the innermost stable orbit, 3 r<sub>s</sub>, outward. Its colour and brightness carry the shift g = √(1 − 3M/r) / (1 − Ωλ): the side moving toward us is brighter and bluer. The arc over the shadow is the far side of the disk, bent into view; the shadow has a radius of 2.6 r<sub>s</sub>. Drag to turn it. Turn off "Bend light" to see what straight-line optics would show.</figcaption>
+</figure>
+
+<h3>Type Ia supernovae</h3>
+<p>A carbon-oxygen white dwarf that gains mass from a companion is squeezed and heated as it nears M<sub>Ch</sub>. Carbon ignites at its centre. In degenerate matter the pressure hardly depends on temperature, so the star cannot expand to cool itself, and the burning runs away. In about a second the whole star burns, much of it to nickel-56, and is torn apart; the decay of that nickel powers the light for weeks. Nothing is left behind.</p>
+
+<figure class="img two">
+  <div><img src="img/tycho.jpg" alt="Tycho's supernova remnant in X-rays" loading="lazy" width="864" height="865"></div>
+  <div><img src="img/sn1006.jpg" alt="The SN 1006 supernova remnant in X-rays" loading="lazy" width="1600" height="1600"></div>
+  <figcaption><b>Two Type Ia remnants in X-rays.</b> Left, Tycho's supernova of 1572; right, SN 1006, the brightest supernova in recorded history. Neither has a star at its centre. <span class="credit">Credits: <a href="https://chandra.harvard.edu/photo/2019/tycho/more.html" target="_blank" rel="noopener">X-ray: NASA/CXC/RIKEN &amp; GSFC/T. Sato et al.</a>; <a href="https://chandra.harvard.edu/photo/2013/sn1006/" target="_blank" rel="noopener">NASA/CXC/Middlebury College/F.Winkler</a> · NASA image use policy</span></figcaption>
+</figure>
+
+<p>Because these explosions happen in similar stars near a similar mass, their peak brightness is similar. After a correction for the width of the light curve (Phillips 1993) they become <b>standard candles</b>, visible across billions of light years. In 1998 two teams found that distant Type Ia supernovae are fainter than a decelerating universe allows: the expansion of the universe is speeding up. Saul Perlmutter, Brian Schmidt and Adam Riess shared the 2011 Nobel Prize in Physics for the discovery.</p>
+
+<figure class="fig">
+  <canvas id="hubCv" class="cv chart short" aria-label="Brightness of a standard candle against redshift"></canvas>
+  <div class="ctl">
+    <label><span>Dark energy Ω<sub>Λ</sub></span><input type="range" id="hubL" min="0" max="0.95" step="0.01" value="0.7"><output id="hubLOut"></output></label>
   </div>
-  <div class="grid" style="margin-top:14px">
-    <article class="card span-5 prose">
-      <div class="card-top"><h3>Type Ia supernovae and the accelerating universe</h3><span class="tag real">2011 Nobel Prize</span></div>
-      <p>A carbon-oxygen white dwarf that gains mass from a companion, as in the render at the top, compresses and heats as it nears M<sub>Ch</sub>. Carbon ignites in its centre; in degenerate matter the pressure does not rise with temperature, so the star cannot expand to cool itself, and the burning runs away. In about a second the whole star burns, much of it to nickel-56, and it is torn apart. The radioactive decay of that nickel powers the light for weeks.</p>
-      <p>Because these explosions happen in similar stars near a similar mass, their peak brightness is similar. After a correction for the width of the light curve (Phillips 1993) they are <b>standard candles</b>, visible across billions of light years. In 1998 two teams found that distant Type Ia supernovae are fainter than a decelerating universe allows: the expansion is speeding up. Saul Perlmutter, Brian Schmidt and Adam Riess shared the 2011 Nobel Prize in Physics for it.</p>
-      <p>An honest note: many Type Ia supernovae may come from white dwarfs below M<sub>Ch</sub> (double detonations) or from merging pairs. The calibration of the candle is empirical, so the cosmology does not depend on which path is right, but "they all explode at exactly 1.4" is too simple.</p>
-    </article>
-    <article class="card span-7">
-      <div class="card-top"><h3>How much dimmer are distant supernovae?</h3><span class="tag real">flat ΛCDM distances, H₀ = 70</span></div>
-      <canvas id="hubCv" class="fig chart mid" aria-label="Distance modulus difference against redshift"></canvas>
-      <div class="ctrls">
-        <label class="ctrl"><span class="ctrl-lab">dark energy</span><input type="range" id="hubL" min="0" max="0.95" step="0.01" value="0.7"><output id="hubLOut"></output></label>
-      </div>
-      <div class="readout" id="hubRead"></div>
-      <p class="cap">Brightness of a standard candle against redshift, relative to an empty coasting universe. Orange: a universe of matter only, which decelerates; candles there look brighter. Blue: a flat universe with the chosen share of dark energy. The 1998 data sat above the zero line, which matter alone cannot do. No data points are drawn here; this shows the model curves only.</p>
-    </article>
-    <article class="card span-7 prose">
-      <div class="card-top"><h3>The voyage, and the argument with Eddington</h3><span class="tag">history</span></div>
-      <p>In July 1930 Chandrasekhar, nineteen, sailed from Bombay to Venice on his way to study at Cambridge with Ralph Fowler. Fowler had shown in 1926 that degeneracy pressure holds up white dwarfs. On the ship Chandrasekhar asked how fast the electrons in Sirius B move, found speeds close to light, and put special relativity into Fowler's theory. The pressure law turned to n<sup>4/3</sup>, and a maximum mass appeared. Wilhelm Anderson (1929) and Edmund Stoner (1930) had found limits for uniform stars; Chandrasekhar's 1931 paper, <em>The maximum mass of ideal white dwarfs</em>, gave it with the polytrope, and his 1935 papers gave the full curve on this page. Lev Landau reached the energy argument independently in 1932.</p>
-      <p>On 11 January 1935, at the Royal Astronomical Society, Arthur Eddington, the most famous astronomer of the day, rose after Chandrasekhar's talk and ridiculed the result: <span class="callout" style="display:block">"I think there should be a law of Nature to prevent a star from behaving in this absurd way!"</span> Eddington argued that relativistic degeneracy was a misuse of physics. Most physicists privately sided with Chandrasekhar, but few said so in public, and the limit was slow to be accepted. Chandrasekhar shared the 1983 Nobel Prize in Physics, with William Fowler, for his work on the structure and evolution of stars.</p>
-    </article>
-    <article class="card span-5">
-      <div class="card-top"><h3>A real black hole</h3><span class="tag real">Event Horizon Telescope, 2019</span></div>
-      <img src="img/m87-eht.jpg" alt="The Event Horizon Telescope image of the M87 black hole" loading="lazy" width="800" height="800" style="display:block;width:100%;border-radius:10px;aspect-ratio:1/1">
-      <p class="cap">M87*, 6.5 billion solar masses: light bent around the shadow, brighter on the side where the gas moves toward us, as in the ray tracer above. Stellar black holes from collapsed cores are far too small to image like this. <span class="credit" style="display:block;font-size:0.72rem;color:var(--dim);margin-top:4px">Credit: <a href="https://www.eso.org/public/images/eso1907a/" target="_blank" rel="noopener" style="color:var(--dim);text-decoration:underline">EHT Collaboration</a> · CC BY 4.0</span></p>
-    </article>
-  </div>
-  <div class="gallery two" style="margin-top:14px">
-    <figure><img src="img/helix.jpg" alt="Helix Nebula from the ESO 2.2 metre telescope" loading="lazy" width="1600" height="1481"><figcaption><b>Helix Nebula, NGC 7293.</b> The future of the Sun: a shed envelope around a white dwarf (the small star in the blue centre), well under the limit, which will cool forever. <span class="credit">Credit: <a href="https://www.eso.org/public/images/eso0907a/" target="_blank" rel="noopener">ESO</a> · CC BY 4.0</span></figcaption></figure>
-    <figure class="prose" style="padding:14px">
-      <p class="callout">The limit is a fight between two kinds of growth. The electrons' pressure energy grows as N<sup>4/3</sup> once they are relativistic; gravity grows as N². Above about 10⁵⁷ electrons, gravity wins at every radius.</p>
-      <p style="color:var(--ink2);font-size:0.9rem">That number of electrons, (ħc/Gm<sub>u</sub>²)<sup>3/2</sup> ≈ 2 × 10⁵⁷, is also roughly the number of protons in any star. It is why stars of all kinds weigh between a tenth and a hundred Suns: the same three constants set the scale.</p>
-    </figure>
-  </div>
+  <figcaption><b>How bright a standard candle looks at each redshift</b>, relative to an empty, coasting universe, for a flat universe with the chosen share of dark energy (H₀ = 70). Dashed: matter only, where candles look brighter. <span id="hubRead"></span> Model curves only; no data are drawn.</figcaption>
+</figure>
+
+<p>A note of care: many Type Ia supernovae may come from white dwarfs below M<sub>Ch</sub>, or from two white dwarfs that merge. The calibration of the candle is empirical, so the cosmology does not depend on which path is right, but "they all explode at exactly 1.4" is too simple.</p>
+
+<h3>The voyage, and the argument with Eddington</h3>
+<p>In July 1930 Chandrasekhar, nineteen, sailed from Bombay to Venice on his way to Cambridge to work with Ralph Fowler. On the ship he asked how fast the electrons in Sirius B move, found speeds close to that of light, and put special relativity into Fowler's theory. The pressure law turned to n<sup>4/3</sup>, and a maximum mass appeared. Wilhelm Anderson (1929) and Edmund Stoner (1930) had found limits for uniform stars. Chandrasekhar's 1931 paper, <em>The maximum mass of ideal white dwarfs</em>, derived it with the polytrope, and his 1935 papers gave the full curve. Landau reached the energy argument on his own in 1932.</p>
+<p>On 11 January 1935, at the Royal Astronomical Society, Arthur Eddington rose after Chandrasekhar's talk and dismissed the result:</p>
+<blockquote>“I think there should be a law of Nature to prevent a star from behaving in this absurd way!”</blockquote>
+<p>Eddington argued that relativistic degeneracy was a misuse of physics. Many physicists privately sided with Chandrasekhar, but few said so in public, and the limit was slow to be accepted. Chandrasekhar shared the 1983 Nobel Prize in Physics, with William Fowler, for his work on the structure and evolution of stars.</p>
+
+<figure class="img side">
+  <img src="img/m87-eht.jpg" alt="The Event Horizon Telescope image of the M87 black hole" loading="lazy" width="800" height="800">
+  <figcaption><b>M87*</b>, 6.5 billion solar masses, imaged by the Event Horizon Telescope in 2019. The ring is brighter on the side where the gas moves toward us, as in the ray tracer. <span class="credit">Credit: <a href="https://www.eso.org/public/images/eso1907a/" target="_blank" rel="noopener">EHT Collaboration</a> · CC BY 4.0</span></figcaption>
+</figure>
+<p>A black hole made from a collapsed stellar core is a few kilometres across and far too small to image. The one we can see is the giant at the centre of the galaxy M87.</p>
+<p>The limit itself comes down to two ways of growing. Once the electrons are relativistic, their energy grows as N<sup>4/3</sup>; gravity grows as N². Above about 10⁵⁷ electrons, gravity wins at every radius. That number, (ħc/Gm<sub>u</sub>²)<sup>3/2</sup> ≈ 2 × 10⁵⁷, is also roughly the number of protons in a star. The same three constants set the scale of stars of every kind.</p>
+
+<figure class="img wide">
+  <img src="img/helix.jpg" alt="The Helix Nebula from the ESO 2.2 metre telescope" loading="lazy" width="1600" height="1481">
+  <figcaption><b>The Helix Nebula, NGC 7293</b>: the future of the Sun. A white dwarf, well under the limit, sits at the centre of its shed envelope and will cool for ever. <span class="credit">Credit: <a href="https://www.eso.org/public/images/eso0907a/" target="_blank" rel="noopener">ESO</a> · CC BY 4.0</span></figcaption>
+</figure>
 </section>
 
-<!-- ───────────────────────────────────────────────────────────── 07 -->
-<section class="sec" id="s7">
-  <div class="sec-head"><span class="num">07</span><div><h2>What is real here, and what is a toy</h2><p>The figures run small, exact solvers in your browser. The renders are made to look right, not to be simulations.</p></div></div>
-  <div class="grid">
-    <article class="card span-6 prose">
-      <p><b>Computed exactly.</b> The Fermi momentum and pressure of a cold electron gas at any density; Γ; the Lane-Emden solutions (ω₃ = 2.018236, checked against 2.01824); M<sub>Ch</sub> from the formula; the Chandrasekhar white-dwarf equation for 140 central densities; the radius of each mass; the density profiles in the cutaway; the flat-universe distance moduli. tests.mjs in this folder checks them.</p>
-      <p><b>Measured.</b> Sirius B (Bond et al. 2017; Joyce et al. 2018), Procyon B (Bond et al. 2015), 40 Eridani B (Bond et al. 2017), as quoted in those papers.</p>
-    </article>
-    <article class="card span-6 prose">
-      <p><b>Toy.</b> The E(R) argument uses a uniform ball; its binding factor is set so its limit matches M<sub>Ch</sub> (or 3/5, Landau's uniform case). The hero render is an illustration: its sizes, speeds and the flash are not to scale or in real time, and the black-hole path shown there would in nature need a massive star's core, not an accreting white dwarf. The planetary nebula is procedural. The black-hole disk is a thin, optically thick toy with a Novikov-Thorne-like temperature profile; the geodesics are exact.</p>
-      <p><b>Not modelled.</b> Finite temperature, the Coulomb lattice, general relativity in the white dwarf, rotation, magnetic fields. The table in section 5 gives their effect on the limit.</p>
-    </article>
-    <article class="card span-12">
-      <div class="refs">
-        <div>Chandrasekhar S. 1931, ApJ 74, 81, <em>The maximum mass of ideal white dwarfs</em>; 1935, MNRAS 95, 207; 1939, <em>An Introduction to the Study of Stellar Structure</em>; 1983 Nobel lecture.</div>
-        <div>Fowler R. H. 1926, MNRAS 87, 114. Landau L. 1932, Phys. Z. Sowjetunion 1, 285. Stoner E. C. 1930, Phil. Mag. 9, 944.</div>
-        <div>Shapiro S. L. &amp; Teukolsky S. A. 1983, <em>Black Holes, White Dwarfs, and Neutron Stars</em>, ch. 2-3 (M<sub>Ch</sub> = 5.836 μ<sub>e</sub><sup>−2</sup> M☉). Salpeter E. E. 1961, ApJ 134, 669.</div>
-        <div>Bond H. E. et al. 2017, ApJ 840, 70 (Sirius B mass). Joyce S. R. G. et al. 2018, MNRAS 481, 2361 (Sirius B radius, redshift). Bond H. E. et al. 2015, ApJ 813, 106 (Procyon B). Bond H. E. et al. 2017, ApJ 848, 16 (40 Eri B).</div>
-        <div>Perlmutter S. et al. 1999, ApJ 517, 565. Riess A. G. et al. 1998, AJ 116, 1009. Phillips M. M. 1993, ApJ 413, L105. Fonseca E. et al. 2021, ApJL 915, L12 (PSR J0740+6620).</div>
-        <div>Images: credits under each image and in CREDITS.txt in this folder. ESA/Hubble, ESA/Webb and ESO images are CC BY 4.0; Chandra images per the NASA/CXC image use policy.</div>
-      </div>
-    </article>
-  </div>
+<!-- ───────────────────────────────────────────────────────────── 7 -->
+<section id="s7">
+<h2><span class="n">7</span>Notes and references</h2>
+<p class="small"><b>Computed in the page.</b> The Fermi momentum and pressure of a cold electron gas; Γ; the Lane-Emden solutions (ω₃ = 2.018236); M<sub>Ch</sub> from the formula; the Chandrasekhar white-dwarf equation for 140 central densities and the density profiles; the flat-universe distances. tests.mjs in this folder checks them against published values.</p>
+<p class="small"><b>Measured.</b> Sirius B (Bond et al. 2017; Joyce et al. 2018), Procyon B (Bond et al. 2015), 40 Eridani B (Bond et al. 2017), as quoted in those papers.</p>
+<p class="small"><b>Simplified.</b> The E(R) argument uses a uniform ball; its binding factor is either 3/5 (Landau's case) or the value that matches M<sub>Ch</sub>. The black-hole disk is a thin, opaque model with a Novikov-Thorne-like temperature profile; the light paths are exact. Not modelled: finite temperature, the Coulomb lattice, general relativity inside the white dwarf, rotation, magnetic fields.</p>
+<ol class="refs">
+  <li>Chandrasekhar S. 1931, ApJ 74, 81, <em>The maximum mass of ideal white dwarfs</em>; 1935, MNRAS 95, 207; 1939, <em>An Introduction to the Study of Stellar Structure</em>.</li>
+  <li>Fowler R. H. 1926, MNRAS 87, 114. Stoner E. C. 1930, Phil. Mag. 9, 944. Landau L. 1932, Phys. Z. Sowjetunion 1, 285.</li>
+  <li>Shapiro S. L. &amp; Teukolsky S. A. 1983, <em>Black Holes, White Dwarfs, and Neutron Stars</em>, chapters 2–3. Salpeter E. E. 1961, ApJ 134, 669.</li>
+  <li>Bond H. E. et al. 2017, ApJ 840, 70. Joyce S. R. G. et al. 2018, MNRAS 481, 2361. Bond H. E. et al. 2015, ApJ 813, 106. Bond H. E. et al. 2017, ApJ 848, 16.</li>
+  <li>Riess A. G. et al. 1998, AJ 116, 1009. Perlmutter S. et al. 1999, ApJ 517, 565. Phillips M. M. 1993, ApJ 413, L105. Fonseca E. et al. 2021, ApJL 915, L12.</li>
+  <li>Images: credits under each image and in CREDITS.txt in this folder.</li>
+</ol>
 </section>
 
 </main>

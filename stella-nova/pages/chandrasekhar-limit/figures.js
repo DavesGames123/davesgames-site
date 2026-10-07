@@ -2,42 +2,47 @@
 //  CHANDRASEKHAR LIMIT  ·  figures.js — the 2D canvas figures
 // ----------------------------------------------------------------------------
 //  Each init function binds one figure to its elements (ids in index.html)
-//  and draws it from physics.js. Canvases size to their CSS box times the
-//  device pixel ratio and redraw on resize (ResizeObserver).
+//  and draws it from physics.js. A figure redraws only on a control change
+//  or a resize: nothing moves unless the reader moves it.
+//
+//  STYLE: thin lines, one blue for the model, one warm colour for the
+//  limit, greys for references and axes. No glows, no gradients.
 //
 //  FIGURES   (jump with grep -n "<anchor>" figures.js)
+//    palette .......... "export const COL"
 //    chart helper ..... "function chart"         canvas sizing, axes
-//    Fermi sea ........ "export function initFermi"    section 2
-//    n = 1.5 M-R ...... "export function initPoly"     section 3
-//    electron energy .. "export function initEnergyP"  section 4, eps(p), Gamma
-//    E(R) ............. "export function initER"       section 4, the ball
-//    E(R) painter ..... "export function drawER"       also used by saver.js
-//    Lane-Emden ....... "export function initLE"       section 5
-//    exact M-R ........ "export function initFull"     section 5
-//    Hubble diagram ... "export function initHubble"   section 6
-//
-//  COLOURS: the m1..m6 maths colours of lib/sci.css. m1 blue = electrons,
-//  momentum; m2 orange = gravity, mass; m3 green = pressure, kinetic;
-//  m4 pink = density; m5 gold = the limit; m6 violet = radius.
+//    hero curve ....... "export function drawHero"    also used by saver.js
+//    hero ............. "export function initHero"    the opening figure
+//    Fermi sea ........ "export function initFermi"   section 2
+//    n = 1.5 M-R ...... "export function initPoly"    section 3
+//    electron energy .. "export function initEnergyP" section 4
+//    E(R) painter ..... "export function drawER"      also used by saver.js
+//    E(R) ............. "export function initER"      section 4
+//    Lane-Emden ....... "export function initLE"      section 5
+//    composition ...... "export function initFull"    section 5
+//    Hubble diagram ... "export function initHubble"  section 6
 // ============================================================================
 import * as P from './physics.js';
 
-export const COL = { m1: '#62c4ff', m2: '#ff9a62', m3: '#86dc7c', m4: '#e889dc', m5: '#ffd666', m6: '#a8a4ff',
-  ink: '#e8eaf0', ink2: '#c2c7d4', dim: '#8a91a5', faint: 'rgba(255,255,255,0.08)', grid: 'rgba(255,255,255,0.06)', red: '#ff5f57', wd: '#cfe3ff' };
-const FONT = '12px Inter, system-ui, sans-serif', FONT_S = '11px Inter, system-ui, sans-serif';
+export const COL = {
+  ink: '#e7e5e0', ink2: '#b9b8b3', dim: '#86878b', faint: '#55575c',
+  axis: 'rgba(255,255,255,0.22)', grid: 'rgba(255,255,255,0.055)',
+  blue: '#9ec1ff', warm: '#d9a45b', bg: '#0e0f11',
+};
+const FONT = '12.5px Inter, system-ui, sans-serif', FONT_S = '11.5px Inter, system-ui, sans-serif';
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
 export const fmtE = (v, d = 2) => {
   if (!isFinite(v)) return '—';
   const e = Math.floor(Math.log10(Math.abs(v)));
   if (e >= -2 && e < 4) return v.toFixed(Math.max(0, d - Math.max(0, e)));
-  const m = v / 10 ** e;
-  return `${m.toFixed(d - 1)} × 10${String(e).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+c] || (c === '-' ? '⁻' : c)).join('')}`;
+  return `${(v / 10 ** e).toFixed(d - 1)} × 10${String(e).split('').map(c => SUP[c] ?? c).join('')}`;
 };
+const km = m => Math.round(m / 1e3).toLocaleString('en');
 const MCH = P.massChandra(2).Msun;
 
 // ── chart helper ───────────────────────────────────────────────────────────
-// chart(cv, draw): draw(ctx, w, h) in CSS px. Returns redraw().
 function chart(cv, draw) {
   const ctx = cv.getContext('2d');
   let queued = false;
@@ -46,17 +51,17 @@ function chart(cv, draw) {
     requestAnimationFrame(() => {
       queued = false;
       const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = Math.max(10, r.width), h = Math.max(10, r.height);
-      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+      if (r.width < 20 || r.height < 20) return;          // hidden or not laid out
+      const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr);
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      draw(ctx, w, h);
+      ctx.clearRect(0, 0, r.width, r.height);
+      draw(ctx, r.width, r.height);
     });
   };
   new ResizeObserver(redraw).observe(cv);
   return redraw;
 }
-// Axes in a box {x, y, w, h}. sx, sy: data -> px. Returns {sx, sy, ix}.
 function axes(ctx, box, xr, yr, o = {}) {
   const lx = o.xlog, ly = o.ylog;
   const fx = v => lx ? Math.log10(v) : v, fy = v => ly ? Math.log10(v) : v;
@@ -65,40 +70,42 @@ function axes(ctx, box, xr, yr, o = {}) {
   const sy = v => box.y + box.h - (fy(v) - y0) / (y1 - y0) * box.h;
   const ix = px => { const u = x0 + (px - box.x) / box.w * (x1 - x0); return lx ? 10 ** u : u; };
   ctx.save();
-  ctx.font = FONT_S; ctx.fillStyle = COL.dim; ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+  ctx.font = FONT_S; ctx.fillStyle = COL.dim; ctx.lineWidth = 1;
   for (const t of o.xt || []) {
-    const X = sx(t); if (X < box.x - 1 || X > box.x + box.w + 1) continue;
-    ctx.beginPath(); ctx.moveTo(X, box.y); ctx.lineTo(X, box.y + box.h); ctx.stroke();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xf ? o.xf(t) : String(t), X, box.y + box.h + 5);
+    const X = Math.round(sx(t)) + 0.5; if (X < box.x - 1 || X > box.x + box.w + 1) continue;
+    if (o.grid !== false) { ctx.strokeStyle = COL.grid; ctx.beginPath(); ctx.moveTo(X, box.y); ctx.lineTo(X, box.y + box.h); ctx.stroke(); }
+    ctx.strokeStyle = COL.axis; ctx.beginPath(); ctx.moveTo(X, box.y + box.h); ctx.lineTo(X, box.y + box.h + 4); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(o.xf ? o.xf(t) : String(t), X, box.y + box.h + 7);
   }
   for (const t of o.yt || []) {
-    const Y = sy(t); if (Y < box.y - 1 || Y > box.y + box.h + 1) continue;
-    ctx.beginPath(); ctx.moveTo(box.x, Y); ctx.lineTo(box.x + box.w, Y); ctx.stroke();
-    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(o.yf ? o.yf(t) : String(t), box.x - 6, Y);
+    const Y = Math.round(sy(t)) + 0.5; if (Y < box.y - 1 || Y > box.y + box.h + 1) continue;
+    if (o.grid !== false) { ctx.strokeStyle = COL.grid; ctx.beginPath(); ctx.moveTo(box.x, Y); ctx.lineTo(box.x + box.w, Y); ctx.stroke(); }
+    ctx.strokeStyle = COL.axis; ctx.beginPath(); ctx.moveTo(box.x - 4, Y); ctx.lineTo(box.x, Y); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(o.yf ? o.yf(t) : String(t), box.x - 7, Y);
   }
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-  ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
-  ctx.fillStyle = COL.ink2; ctx.font = FONT;
-  if (o.xl) { ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(o.xl, box.x + box.w - 6, box.y + box.h - 5); }
-  if (o.yl) { ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(o.yl, box.x + 6, box.y + 5); }
+  // Two axis lines only (left and bottom).
+  ctx.strokeStyle = COL.axis;
+  ctx.beginPath(); ctx.moveTo(box.x + 0.5, box.y); ctx.lineTo(box.x + 0.5, box.y + box.h + 0.5); ctx.lineTo(box.x + box.w, box.y + box.h + 0.5); ctx.stroke();
+  ctx.fillStyle = COL.ink2; ctx.font = FONT_S;
+  if (o.xl) { ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText(o.xl, box.x + box.w, box.y + box.h + 22); }
+  if (o.yl) { ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(o.yl, box.x - (o.ylx ?? 0), box.y - 8); }
   ctx.restore();
   return { sx, sy, ix };
 }
-function line(ctx, pts, color, width = 2, dash = null) {
-  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+function line(ctx, pts, color, width = 1.5, dash = null) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
   ctx.beginPath(); let pen = false;
   for (const [x, y] of pts) { if (!isFinite(x) || !isFinite(y)) { pen = false; continue; } if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y); }
   ctx.stroke(); ctx.restore();
 }
-function label(ctx, text, x, y, color, align = 'left', base = 'middle', font = FONT) {
-  ctx.save(); ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = base;
-  ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.fillText(text, x, y); ctx.restore();
+function text(ctx, s, x, y, color = COL.ink2, align = 'left', base = 'middle', font = FONT_S) {
+  ctx.save(); ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = base; ctx.fillText(s, x, y); ctx.restore();
 }
-function dot(ctx, x, y, r, color, ring = null) {
-  ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  if (ring) { ctx.strokeStyle = ring; ctx.lineWidth = 2; ctx.stroke(); }
-  ctx.restore();
+function ring(ctx, x, y, r, color, fill = COL.bg) {
+  ctx.save(); ctx.fillStyle = fill; ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
 }
+function dot(ctx, x, y, r, color) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
 function bindRange(id, fn) {
   const el = $(id); if (!el) return () => {};
   const f = () => fn(+el.value);
@@ -106,9 +113,7 @@ function bindRange(id, fn) {
   return v => { el.value = v; f(); };
 }
 const out = (id, html) => { const el = $(id); if (el && el.innerHTML !== html) el.innerHTML = html; };
-const isPhone = () => window.matchMedia('(max-width: 640px)').matches;
-function boxOf(w, h, l = 52, r = 14, t = 14, b = 30) { return { x: l, y: t, w: w - l - r, h: h - t - b }; }
-// Horizontal drag on a canvas -> callback(px). Vertical drags scroll.
+// Pointer drag on a canvas (horizontal moves; vertical drags still scroll).
 function hdrag(cv, fn) {
   let id = null;
   cv.addEventListener('pointerdown', e => { id = e.pointerId; cv.setPointerCapture(id); fn(e.offsetX, e.offsetY); });
@@ -116,84 +121,162 @@ function hdrag(cv, fn) {
   const up = e => { if (e.pointerId === id) id = null; };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 }
+// Model of mass M from a precomputed curve: interpolate ln x_c in M, then
+// solve that one star (fast enough for a drag).
+function modelOfMass(curve, M, mue = 2) {
+  if (M <= curve[0].M) return P.whiteDwarf(curve[0].xc, mue, { keep: 160 });
+  for (let i = 1; i < curve.length; i++) if (curve[i].M >= M) {
+    const a = curve[i - 1], b = curve[i], f = (M - a.M) / (b.M - a.M);
+    return P.whiteDwarf(Math.exp(Math.log(a.xc) + f * Math.log(b.xc / a.xc)), mue, { keep: 160 });
+  }
+  return P.whiteDwarf(curve[curve.length - 1].xc, mue, { keep: 160 });
+}
+
+// ── hero: the mass-radius curve and the dwarf to scale ────────────────────
+// st = { curve, model, trace (0..1, share of the curve drawn; saver) }.
+// Wide: plot on the left, the disc on the right. Narrow: plot above.
+export function heroLayout(w, h) {
+  const wide = w >= 640;
+  if (wide) {
+    const pw = Math.round(w * 0.62);
+    return { wide, plot: { x: 64, y: 26, w: pw - 84, h: h - 26 - 52 }, disc: { x: pw, y: 0, w: w - pw, h } };
+  }
+  const ph = Math.round(h * 0.6);
+  return { wide, plot: { x: 54, y: 26, w: w - 54 - 14, h: ph - 26 - 50 }, disc: { x: 0, y: ph, w, h: h - ph } };
+}
+// Limb-darkened disc: I(mu) = 1 - 0.6 (1 - mu), colour of a 25,000 K
+// photosphere (pale blue-white). One radial gradient sampled from I(mu),
+// so the disc has no bands. No blur, no halo.
+function dwarfDisc(ctx, cx, cy, r) {
+  if (r < 0.6) { dot(ctx, cx, cy, 0.8, '#dfe8ff'); return; }
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  for (let i = 0; i <= 16; i++) {
+    const s = i / 16, mu = Math.sqrt(Math.max(0, 1 - s * s)), I = 1 - 0.6 * (1 - mu);
+    g.addColorStop(s, `rgb(${Math.round(205 * I + 20)},${Math.round(220 * I + 18)},${Math.round(255 * I)})`);
+  }
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+}
+export function drawHero(ctx, w, h, st) {
+  const L = heroLayout(w, h), b = L.plot, m = st.model;
+  const A = axes(ctx, b, [0, 1.6], [0, 20000], { xt: [0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6], yt: [0, 5000, 10000, 15000, 20000], yf: v => v ? (v / 1000) + ',000' : '0', xl: 'mass (solar masses)', yl: 'radius (km)', ylx: 52 });
+  // n = 1.5 law: what slow electrons alone would give.
+  const R1 = P.radiusNR(1), nr = [];
+  for (let i = 0; i <= 120; i++) { const M = 0.03 + 1.57 * i / 120; nr.push([A.sx(M), A.sy(R1 * M ** (-1 / 3) / 1e3)]); }
+  ctx.save(); ctx.beginPath(); ctx.rect(b.x, b.y - 2, b.w + 2, b.h + 4); ctx.clip();
+  line(ctx, nr, COL.faint, 1, [4, 4]);
+  // The limit.
+  line(ctx, [[A.sx(MCH), b.y], [A.sx(MCH), b.y + b.h]], COL.warm, 1, [3, 4]);
+  // The exact curve, drawn up to st.trace of its length.
+  const C = st.curve, nDraw = Math.max(2, Math.round((st.trace ?? 1) * C.length));
+  line(ctx, C.slice(0, nDraw).map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), COL.blue, 2);
+  ctx.restore();
+  // The label runs along the dashed line, above it, so the line never
+  // crosses the text.
+  const nrAt = M => [A.sx(M), A.sy(R1 * M ** (-1 / 3) / 1e3)];
+  const [ax, ay] = nrAt(1.0), [bx, by] = nrAt(1.4);
+  ctx.save(); ctx.translate((ax + bx) / 2, (ay + by) / 2); ctx.rotate(Math.atan2(by - ay, bx - ax));
+  text(ctx, 'slow electrons only', 0, -5, COL.dim, 'center', 'bottom'); ctx.restore();
+  text(ctx, `${MCH.toFixed(3)}`, A.sx(MCH) + 5, b.y + 6, COL.warm, 'left', 'top');
+  // Sirius B, measured.
+  const s = P.STARS[0], X = A.sx(s.M), Y = A.sy(s.R * P.K.Rsun / 1e3);
+  ctx.save(); ctx.strokeStyle = COL.ink; ctx.lineWidth = 1;
+  const ex = (A.sx(s.M + s.dM) - A.sx(s.M - s.dM)) / 2;
+  ctx.beginPath(); ctx.moveTo(X - ex, Y); ctx.lineTo(X + ex, Y); ctx.stroke(); ctx.restore();
+  dot(ctx, X, Y, 2.5, COL.ink);
+  text(ctx, 'Sirius B', X - 8, Y + 12, COL.ink2, 'right', 'top');
+  // The chosen star on the curve.
+  if (m) ring(ctx, A.sx(m.M), A.sy(m.R / 1e3), 5.5, COL.blue);
+
+  // Disc panel: the dwarf and the Earth, same scale.
+  const d = L.disc, cx = d.x + d.w / 2, cy = d.y + d.h * (L.wide ? 0.42 : 0.38);
+  const room = Math.min(d.w * 0.4, d.h * (L.wide ? 0.32 : 0.3));
+  const R = m ? m.R : 0, Re = P.K.Rearth, sc = room / Math.max(R, Re);
+  ctx.save(); ctx.strokeStyle = COL.faint; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.arc(cx, cy, Re * sc, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+  dwarfDisc(ctx, cx, cy, R * sc);
+  text(ctx, 'Earth, outline', cx, cy - Re * sc - 8, COL.dim, 'center', 'bottom');
+  if (m) text(ctx, `${m.M.toFixed(3)} M☉ · radius ${km(m.R)} km`, cx, cy + room + 20, COL.ink, 'center', 'middle', FONT);
+  // Scale bar under the label: 1,000 or 5,000 km, whichever fits.
+  const len = 5e6 * sc > d.w * 0.5 ? 1e6 : 5e6, bar = len * sc;
+  if (bar > 6) {
+    const bx = cx - bar / 2, by = cy + room + 48;
+    ctx.save(); ctx.strokeStyle = COL.dim; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(bx, by - 3); ctx.lineTo(bx, by); ctx.lineTo(bx + bar, by); ctx.lineTo(bx + bar, by - 3); ctx.stroke(); ctx.restore();
+    text(ctx, (len / 1e3).toLocaleString('en') + ' km', cx, by + 5, COL.dim, 'center', 'top');
+  }
+  return A;
+}
+export function initHero() {
+  const cv = $('heroCv'); if (!cv) return null;
+  const st = { curve: P.massRadiusCurve(2, { n: 160, x0: 0.04, x1: 4000 }), model: null };
+  const draw = chart(cv, (ctx, w, h) => drawHero(ctx, w, h, st));
+  const set = bindRange('heroM', v => {
+    st.model = modelOfMass(st.curve, Math.min(v, MCH * 0.9995));
+    const m = st.model;
+    $('heroMOut').textContent = `${m.M.toFixed(3)} M☉`;
+    out('heroRead', `At ${m.M.toFixed(3)} solar masses the cold model has a radius of <b>${km(m.R)} km</b> (${(m.R / P.K.Rearth).toFixed(2)} Earth radii) and a central density of <b>${fmtE(m.rhoc / 1e3)} g/cm³</b>.` +
+      (m.M > 1.3 ? ` It is ${(m.M / MCH * 100).toFixed(1)} % of the limit; the radius falls toward zero.` : ''));
+    draw();
+  });
+  hdrag(cv, px => {
+    const r = cv.getBoundingClientRect(), b = heroLayout(r.width, r.height).plot;
+    if (px < b.x - 10 || px > b.x + b.w + 10) return;
+    set(clamp((px - b.x) / b.w * 1.6, 0.15, MCH * 0.9995).toFixed(4));
+  });
+  $('heroSirius')?.addEventListener('click', () => set(1.018));
+  return st;
+}
 
 // ── Fermi sea (section 2) ──────────────────────────────────────────────────
-// Left: a box of electrons, side L proportional to rho^(-1/3); dots move
-// at speeds up to v_F. Right: the k_z = 0 slice of momentum space. Each
-// lattice point (spacing 2 pi hbar / L) holds two electrons (spin up and
-// down). The filled disc has radius p_F = hbar (3 pi^2 n)^(1/3).
+// Left: the box, side proportional to rho^(-1/3), with a fixed set of
+// electrons. Right: the p_z = 0 slice of momentum space. Each cell
+// (spacing 2 pi hbar / L) holds two electrons; the filled disc has radius
+// p_F = hbar (3 pi^2 n)^(1/3). The dashed circle is p = m_e c.
 export function initFermi() {
   const cvB = $('fermiBox'), cvP = $('fermiMom');
   if (!cvB || !cvP) return;
-  const AX = 5;                 // momentum axis: +-5 m_e c
-  const NR = 5.2;               // p_F / dp: fixed electron number in the box
-  const st = { lr: 6.43, x: 1, parts: [] };
-  for (let i = 0; i < 90; i++) st.parts.push({ x: Math.random(), y: Math.random(), a: Math.random() * 6.283, s: Math.cbrt(Math.random()) });
+  const AX = 5, NR = 5.2;
+  const st = { lr: 6.43, x: 1 };
+  let seed = 7; const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const pts = Array.from({ length: 80 }, () => [rnd(), rnd()]);
   const drawBox = chart(cvB, (ctx, w, h) => {
-    const F = P.fermi(10 ** st.lr * 1e3);
-    const side = Math.min(w, h) - 30;
-    if (side < 12) return;
+    const side = Math.min(w, h) - 36;
     const L = side * clamp((10 ** (5 - st.lr)) ** (1 / 3) * 2.2, 0.16, 1);
-    const x0 = (w - L) / 2, y0 = (h - L) / 2;
-    ctx.fillStyle = '#05070c'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, L, L);
-    for (const p of st.parts) dot(ctx, x0 + 3 + p.x * (L - 6), y0 + 3 + p.y * (L - 6), 2.1, COL.m1);
-    label(ctx, `box side ∝ ρ^(−1/3)`, 8, h - 10, COL.dim, 'left', 'middle', FONT_S);
-    label(ctx, `v_F = ${F.v.toFixed(2)} c`, w - 8, h - 10, COL.m1, 'right', 'middle', FONT_S);
+    const x0 = (w - L) / 2, y0 = (h - L) / 2 - 6;
+    ctx.strokeStyle = COL.ink2; ctx.lineWidth = 1; ctx.strokeRect(Math.round(x0) + 0.5, Math.round(y0) + 0.5, Math.round(L), Math.round(L));
+    for (const [u, v] of pts) dot(ctx, x0 + 3 + u * (L - 6), y0 + 3 + v * (L - 6), 1.6, COL.blue);
+    text(ctx, `side ∝ ρ^(−1/3)`, w / 2, h - 8, COL.dim, 'center', 'bottom');
   });
   const drawMom = chart(cvP, (ctx, w, h) => {
-    const x = st.x, s = Math.min(w, h) / 2 - 16, cx = w / 2, cy = h / 2, k = s / AX;
-    if (s < 12) return;                       // hidden (saver) or not laid out yet
-    ctx.fillStyle = '#05070c'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = COL.grid; ctx.beginPath(); ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy); ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s); ctx.stroke();
-    // Filled sea, shaded by energy.
-    const R = x * k;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, R));
-    g.addColorStop(0, 'rgba(98,196,255,0.05)'); g.addColorStop(1, 'rgba(98,196,255,0.28)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.fill();
-    // Lattice: spacing dp = p_F / NR in this slice.
-    const dp = x / NR * k;
+    const x = st.x, s = Math.min(w, h) / 2 - 16, cx = w / 2, cy = h / 2 - 4, k = s / AX;
+    ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy); ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s); ctx.stroke();
+    const R = x * k, dp = x / NR * k;
     if (dp > 2.2) {
       const n = Math.ceil(s / dp);
       for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
-        const X = cx + i * dp, Y = cy + j * dp; const r = Math.hypot(i * dp, j * dp);
+        const X = cx + i * dp, Y = cy + j * dp;
         if (Math.abs(X - cx) > s || Math.abs(Y - cy) > s) continue;
-        if (r <= R) { dot(ctx, X - 1.6, Y, 1.5, COL.m1); dot(ctx, X + 1.6, Y, 1.5, '#b9e4ff'); }
-        else dot(ctx, X, Y, 0.9, 'rgba(255,255,255,0.18)');
+        if (Math.hypot(i * dp, j * dp) <= R) { dot(ctx, X - 1.3, Y, 1.1, COL.blue); dot(ctx, X + 1.3, Y, 1.1, COL.blue); }
+        else dot(ctx, X, Y, 0.7, COL.faint);
       }
     }
-    ctx.strokeStyle = COL.m1; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();
-    ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = COL.m5; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(cx, cy, k, 0, 6.283); ctx.stroke(); ctx.restore();
-    label(ctx, 'p = mₑc', cx + k * 0.72 + 4, cy - k * 0.72 - 4, COL.m5, 'left', 'bottom', FONT_S);
-    label(ctx, `p_F = ${x.toFixed(2)} mₑc`, cx + Math.min(R, s - 4) * 0.71 + 6, cy + Math.min(R, s - 4) * 0.71 + 6, COL.m1, 'left', 'top', FONT_S);
-    label(ctx, 'pₓ', cx + s - 2, cy - 8, COL.dim, 'right', 'bottom', FONT_S);
-    label(ctx, 'p_y', cx + 6, cy - s + 2, COL.dim, 'left', 'top', FONT_S);
+    ctx.strokeStyle = COL.blue; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.save(); ctx.setLineDash([3, 4]); ctx.strokeStyle = COL.warm; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, k, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    text(ctx, 'p = mₑc', cx + k * 0.71 + 4, cy - k * 0.71 - 3, COL.warm, 'left', 'bottom');
+    text(ctx, `p_F = ${x.toFixed(2)} mₑc`, w / 2, h - 8, COL.blue, 'center', 'bottom');
   });
   bindRange('fermiRho', v => {
     st.lr = v;
     const F = P.fermi(10 ** v * 1e3);
     st.x = F.x;
     $('fermiRhoOut').textContent = `${fmtE(10 ** v)} g/cm³`;
-    out('fermiRead', `<span>n<sub>e</sub><b>${fmtE(F.n * 1e-6)} cm⁻³</b></span><span>p<sub>F</sub><b>${F.x.toFixed(3)} mₑc</b></span><span>E<sub>F</sub><b>${(F.EFMeV * 1e3).toFixed(1)} keV</b></span><span>v<sub>F</sub><b>${F.v.toFixed(3)} c</b></span><span>P<b>${fmtE(F.P)} Pa</b></span><span>Γ<b>${F.Gamma.toFixed(3)}</b></span>`);
+    out('fermiRead', `Electron density ${fmtE(F.n * 1e-6)} per cm³. Fermi momentum ${F.x.toFixed(2)} mₑc, Fermi energy ${(F.EFMeV * 1e3).toFixed(0)} keV, top speed ${F.v.toFixed(2)} c. Pressure ${fmtE(F.P)} Pa, with Γ = ${F.Gamma.toFixed(3)}.`);
     drawBox(); drawMom();
   });
   document.querySelectorAll('[data-fermi]').forEach(b => b.addEventListener('click', () => {
     const el = $('fermiRho'); el.value = b.dataset.fermi; el.dispatchEvent(new Event('input'));
   }));
-  // The electrons move: speed share s of v_F, bouncing off the walls.
-  let last = performance.now(), vis = false;
-  new IntersectionObserver(es => { vis = es[0].isIntersecting; if (vis) requestAnimationFrame(tick); }).observe(cvB);
-  function tick(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    const v = P.fermi(10 ** st.lr * 1e3).v;
-    for (const p of st.parts) {
-      p.x += Math.cos(p.a) * p.s * v * dt * 0.9; p.y += Math.sin(p.a) * p.s * v * dt * 0.9;
-      if (p.x < 0 || p.x > 1) { p.a = Math.PI - p.a; p.x = clamp(p.x, 0, 1); }
-      if (p.y < 0 || p.y > 1) { p.a = -p.a; p.y = clamp(p.y, 0, 1); }
-    }
-    drawBox();
-    if (vis) requestAnimationFrame(tick);
-  }
 }
 
 // ── n = 1.5 mass-radius (section 3) ────────────────────────────────────────
@@ -201,44 +284,34 @@ export function initPoly() {
   const cv = $('polyCv'); if (!cv) return;
   const st = { M: 0.6, exact: false };
   const R1 = P.radiusNR(1);
-  const curve = P.massRadiusCurve(2, { n: 80 });
+  const curve = P.massRadiusCurve(2, { n: 90 });
+  const boxOf = (w, h) => ({ x: 60, y: 26, w: w - 60 - 16, h: h - 26 - 46 });
   const draw = chart(cv, (ctx, w, h) => {
-    const phone = w < 520;
-    const box = boxOf(w, h, 54, phone ? 12 : 150, 12, 30);
-    const A = axes(ctx, box, [0.05, 2], [1e3, 6e4], { xlog: true, ylog: true, xt: [0.05, 0.1, 0.2, 0.5, 1, 2], yt: [1e3, 2e3, 5e3, 1e4, 2e4, 5e4], yf: v => (v / 1e3) + 'k', xl: 'M / M☉', yl: 'R (km)' });
-    // Earth radius line.
-    line(ctx, [[box.x, A.sy(6371)], [box.x + box.w, A.sy(6371)]], 'rgba(120,170,255,0.35)', 1, [3, 4]);
-    label(ctx, 'Earth', box.x + 6, A.sy(6371) - 8, 'rgba(150,190,255,0.8)', 'left', 'middle', FONT_S);
-    if (st.exact) line(ctx, curve.map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), 'rgba(255,214,102,0.7)', 2, [6, 4]);
-    const pts = []; for (let i = 0; i <= 80; i++) { const M = 0.05 * (40) ** (i / 80); pts.push([A.sx(M), A.sy(R1 * M ** (-1 / 3) / 1e3)]); }
-    line(ctx, pts, COL.m6, 2.4);
-    label(ctx, 'R ∝ M^(−1/3)', A.sx(0.09), A.sy(R1 * 0.09 ** (-1 / 3) / 1e3) - 12, COL.m6, 'left', 'bottom');
-    const R = R1 * st.M ** (-1 / 3) / 1e3;
-    dot(ctx, A.sx(st.M), A.sy(R), 6, COL.m6, '#fff');
-    if (st.exact) { label(ctx, 'exact (section 5)', A.sx(1.2), A.sy(2500), COL.m5, 'right', 'middle', FONT_S); line(ctx, [[A.sx(MCH), box.y], [A.sx(MCH), box.y + box.h]], 'rgba(255,214,102,0.35)', 1, [2, 3]); }
-    // Size comparison: the dwarf and the Earth, to scale.
-    if (!phone) {
-      const cx = w - 72, cy = box.y + box.h * 0.5, sc = 58 / 12000;
-      ctx.save();
-      const g = ctx.createRadialGradient(cx, cy - 40, 0, cx, cy - 40, R * 1e3 * sc / 1e3 + 6);
-      g.addColorStop(0, '#ffffff'); g.addColorStop(0.7, '#cfe3ff'); g.addColorStop(1, 'rgba(160,200,255,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy - 40, R * sc + 4, 0, 6.283); ctx.fill();
-      ctx.fillStyle = '#2b5fb0'; ctx.beginPath(); ctx.arc(cx, cy + 62, 6371 * sc, 0, 6.283); ctx.fill();
-      ctx.restore();
-      label(ctx, 'dwarf', cx, cy - 40 - R * sc - 10, COL.ink2, 'center', 'bottom', FONT_S);
-      label(ctx, 'Earth', cx, cy + 62 + 6371 * sc + 12, COL.ink2, 'center', 'top', FONT_S);
+    const box = boxOf(w, h);
+    const A = axes(ctx, box, [0.05, 2], [1e3, 6e4], { xlog: true, ylog: true, xt: [0.05, 0.1, 0.2, 0.5, 1, 2], yt: [1e3, 2e3, 5e3, 1e4, 2e4, 5e4], yf: v => (v / 1e3) + ',000', xl: 'mass (solar masses, log)', yl: 'radius (km, log)', ylx: 50 });
+    line(ctx, [[box.x, A.sy(6371)], [box.x + box.w, A.sy(6371)]], COL.faint, 1, [2, 4]);
+    text(ctx, 'Earth', box.x + box.w - 2, A.sy(6371) - 6, COL.dim, 'right', 'bottom');
+    ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip();
+    if (st.exact) {
+      line(ctx, curve.map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), COL.ink2, 1.2, [5, 4]);
+      line(ctx, [[A.sx(MCH), box.y], [A.sx(MCH), box.y + box.h]], COL.warm, 1, [3, 4]);
     }
+    const pts = []; for (let i = 0; i <= 80; i++) { const M = 0.05 * 40 ** (i / 80); pts.push([A.sx(M), A.sy(R1 * M ** (-1 / 3) / 1e3)]); }
+    line(ctx, pts, COL.blue, 2);
+    ctx.restore();
+    text(ctx, 'R ∝ M^(−1/3)', A.sx(0.075), A.sy(R1 * 0.075 ** (-1 / 3) / 1e3) - 10, COL.blue, 'left', 'bottom');
+    if (st.exact) text(ctx, 'exact (section 5)', A.sx(1.25), A.sy(2600), COL.ink2, 'right', 'middle');
+    ring(ctx, A.sx(st.M), A.sy(R1 * st.M ** (-1 / 3) / 1e3), 5.5, COL.blue);
   });
-  hdrag(cv, px => { const r = cv.getBoundingClientRect(); const box = boxOf(r.width, r.height, 54, r.width < 520 ? 12 : 150); const M = clamp(10 ** (Math.log10(0.05) + (px - box.x) / box.w * Math.log10(40)), 0.05, 2); setM(Math.log10(M)); });
+  hdrag(cv, px => { const r = cv.getBoundingClientRect(), b = boxOf(r.width, r.height); setM(clamp(Math.log10(0.05) + (px - b.x) / b.w * Math.log10(40), -1.3, 0.3)); });
   const setM = bindRange('polyM', v => {
     st.M = 10 ** v;
     $('polyMOut').textContent = `${st.M.toFixed(3)} M☉`;
     const Rn = P.radiusNR(st.M), ex = P.dwarfOfMass(st.M);
-    const rhoMean = st.M * P.K.Msun / (4 / 3 * Math.PI * Rn ** 3);
-    out('polyRead', `<span>R (n = 1.5)<b>${(Rn / 1e3).toFixed(0)} km</b></span><span>mean ρ<b>${fmtE(rhoMean / 1e3)} g/cm³</b></span><span>R (exact)<b>${ex ? (ex.R / 1e3).toFixed(0) + ' km' : 'none: past M_Ch'}</b></span><span>error of n = 1.5<b>${ex ? ((Rn / ex.R - 1) * 100).toFixed(1) + ' %' : '∞'}</b></span>`);
+    out('polyRead', `The slow-electron law gives ${km(Rn)} km. ` + (ex ? `The exact model gives ${km(ex.R)} km, so the law is off by ${((Rn / ex.R - 1) * 100).toFixed(1)} %.` : 'The exact model has no star of this mass.'));
     draw();
   });
-  $('polyExact')?.addEventListener('click', e => { st.exact = !st.exact; e.currentTarget.classList.toggle('on', st.exact); draw(); });
+  $('polyExact')?.addEventListener('click', e => { st.exact = !st.exact; e.currentTarget.setAttribute('aria-pressed', st.exact); draw(); });
 }
 
 // ── electron energy and Gamma (section 4) ──────────────────────────────────
@@ -247,104 +320,87 @@ export function initEnergyP() {
   const st = { x: 1 };
   const E = P.eos(2);
   const draw = chart(cv, (ctx, w, h) => {
-    const split = h * 0.62;
-    const b1 = { x: 52, y: 12, w: w - 66, h: split - 40 };
-    const A = axes(ctx, b1, [0, 5], [0, 5], { xt: [0, 1, 2, 3, 4, 5], yt: [0, 1, 2, 3, 4, 5], xl: 'p / mₑc', yl: 'kinetic energy / mₑc²' });
+    const wide = w >= 600;
+    const b1 = wide ? { x: 56, y: 26, w: w * 0.55 - 70, h: h - 72 } : { x: 50, y: 26, w: w - 64, h: h * 0.55 - 60 };
+    const b2 = wide ? { x: w * 0.55 + 44, y: 26, w: w * 0.45 - 58, h: h - 72 } : { x: 50, y: h * 0.55 + 22, w: w - 64, h: h * 0.45 - 66 };
+    const A = axes(ctx, b1, [0, 5], [0, 5], { xt: [0, 1, 2, 3, 4, 5], yt: [0, 1, 2, 3, 4, 5], xl: 'momentum p / mₑc', yl: 'kinetic energy / mₑc²', ylx: 44 });
     const ex = [], nr = [], ur = [];
     for (let i = 0; i <= 200; i++) { const p = 5 * i / 200; ex.push([A.sx(p), A.sy(Math.sqrt(1 + p * p) - 1)]); nr.push([A.sx(p), A.sy(p * p / 2)]); ur.push([A.sx(p), A.sy(p)]); }
     ctx.save(); ctx.beginPath(); ctx.rect(b1.x, b1.y, b1.w, b1.h); ctx.clip();
-    line(ctx, nr, COL.m3, 1.6, [5, 4]); line(ctx, ur, COL.m2, 1.6, [5, 4]); line(ctx, ex, COL.m1, 2.6);
+    line(ctx, nr, COL.faint, 1, [4, 4]); line(ctx, ur, COL.faint, 1, [1.5, 3]); line(ctx, ex, COL.blue, 2);
     ctx.restore();
-    label(ctx, 'p²/2mₑ', A.sx(2.6), A.sy(3.6), COL.m3, 'right', 'middle');
-    label(ctx, 'pc', A.sx(4.4), A.sy(4.4) - 10, COL.m2, 'right', 'bottom');
-    label(ctx, '√(p²c² + mₑ²c⁴) − mₑc²', A.sx(4.9), A.sy(Math.sqrt(1 + 4.9 ** 2) - 1) + 14, COL.m1, 'right', 'top');
+    text(ctx, 'p²/2mₑ', A.sx(2.85), A.sy(4.4), COL.dim, 'right', 'middle');
+    text(ctx, 'pc', A.sx(4.6), A.sy(4.6) - 8, COL.dim, 'right', 'bottom');
     const xs = Math.min(st.x, 5);
-    dot(ctx, A.sx(xs), A.sy(Math.sqrt(1 + xs * xs) - 1), 6, COL.m1, '#fff');
-    // Gamma(x).
-    const b2 = { x: 52, y: split, w: w - 66, h: h - split - 28 };
-    const B = axes(ctx, b2, [0.01, 100], [1.3, 1.7], { xlog: true, xt: [0.01, 0.1, 1, 10, 100], yt: [4 / 3, 5 / 3], yf: v => v > 1.5 ? '5/3' : '4/3', xl: 'x = p_F / mₑc', yl: 'Γ = d ln P / d ln ρ' });
+    ring(ctx, A.sx(xs), A.sy(Math.sqrt(1 + xs * xs) - 1), 5, COL.blue);
+    const B = axes(ctx, b2, [0.01, 100], [1.3, 1.7], { xlog: true, xt: [0.01, 0.1, 1, 10, 100], yt: [4 / 3, 1.5, 5 / 3], yf: v => v > 1.6 ? '5/3' : v < 1.4 ? '4/3' : '1.5', xl: 'p_F / mₑc (log)', yl: 'Γ = d ln P / d ln ρ', ylx: 44 });
     const g = []; for (let i = 0; i <= 160; i++) { const x = 0.01 * 1e4 ** (i / 160); g.push([B.sx(x), B.sy(E.Gamma(x))]); }
-    line(ctx, g, COL.m3, 2.4);
+    line(ctx, [[b2.x, B.sy(4 / 3)], [b2.x + b2.w, B.sy(4 / 3)]], COL.warm, 1, [3, 4]);
+    line(ctx, g, COL.blue, 2);
     const xg = clamp(st.x, 0.01, 100);
-    dot(ctx, B.sx(xg), B.sy(E.Gamma(xg)), 5, COL.m3, '#fff');
+    ring(ctx, B.sx(xg), B.sy(E.Gamma(xg)), 5, COL.blue);
   });
   bindRange('epRho', v => {
     const F = P.fermi(10 ** v * 1e3);
     st.x = F.x;
     $('epRhoOut').textContent = `${fmtE(10 ** v)} g/cm³`;
-    out('epRead', `<span>x<b>${F.x.toFixed(2)}</b></span><span>Γ<b>${F.Gamma.toFixed(3)}</b></span><span>P ∝ ρ<sup>Γ</sup><b>${F.Gamma > 1.6 ? 'soft, n^(5/3)' : F.Gamma < 1.37 ? 'n^(4/3): too soft' : 'in between'}</b></span>`);
+    out('epRead', `p_F = ${F.x.toFixed(2)} mₑc and Γ = ${F.Gamma.toFixed(3)}.`);
     draw();
   });
 }
 
 // ── E(R) (section 4) ───────────────────────────────────────────────────────
-// Plot E in units of G Msun^2 / R_earth on a symmetric log axis, against
-// log R. A ball rolls on the curve: damped motion in the plot's own
-// coordinates, so it settles in the minimum or runs off to R -> 0.
+// E in units of G Msun^2 / R_earth on a symmetric log axis, against log R.
 const R0 = 10e3, R1 = 6e7, EU = P.K.G * P.K.Msun ** 2 / P.K.Rearth;
 const sl = (v, k = 0.03) => Math.sign(v) * Math.log10(1 + Math.abs(v) / k);
 const isl = (y, k = 0.03) => Math.sign(y) * k * (10 ** Math.abs(y) - 1);
-export function drawER(ctx, w, h, M, model, ball, o = {}) {
-  const box = o.box || boxOf(w, h, 58, 14, 14, 30);
+export function drawER(ctx, w, h, M, model, o = {}) {
+  const box = o.box || { x: 62, y: 26, w: w - 62 - 16, h: h - 26 - 46 };
   const yr = [sl(-200), sl(300)];
-  const yt = [-100, -10, -1, -0.1, 0, 0.1, 1, 10].map(v => sl(v));
-  const A = axes(ctx, box, [R0, R1], yr, { xlog: true, xt: [1e4, 1e5, 1e6, 1e7], xf: v => v >= 1e6 ? (v / 1e6) + '000 km' : (v / 1e3) + ' km', yt, yf: y => { const v = isl(y); return Math.abs(v) < 1e-9 ? '0' : (Math.abs(v) >= 1 ? v.toFixed(0) : v.toFixed(1)); }, xl: o.xl ?? 'radius R', yl: o.yl ?? 'E / (G M☉² / R⊕)' });
+  const yt = [-100, -10, -1, 0, 1, 10, 100].map(v => sl(v));
+  const A = axes(ctx, box, [R0, R1], yr, { xlog: true, xt: [1e4, 1e5, 1e6, 1e7], xf: v => (v / 1e3).toLocaleString('en') + ' km', yt, yf: y => { const v = isl(y); return Math.abs(v) < 1e-9 ? '0' : v.toFixed(0); }, xl: 'radius R (log)', yl: 'energy (symmetric log scale)', ylx: 54 });
   const kin = [], grav = [], tot = [];
   for (let i = 0; i <= 260; i++) {
     const R = R0 * (R1 / R0) ** (i / 260), e = model.at(M, R);
     kin.push([A.sx(R), A.sy(sl(e.Ek / EU))]); grav.push([A.sx(R), A.sy(sl(e.Eg / EU))]); tot.push([A.sx(R), A.sy(sl(e.E / EU))]);
   }
   ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip();
-  line(ctx, [[box.x, A.sy(0)], [box.x + box.w, A.sy(0)]], 'rgba(255,255,255,0.3)', 1);
-  line(ctx, kin, COL.m3, 1.6, [5, 4]); line(ctx, grav, COL.m2, 1.6, [5, 4]);
-  line(ctx, tot, M >= model.Mcrit ? COL.red : COL.m1, 3);
+  line(ctx, [[box.x, A.sy(0)], [box.x + box.w, A.sy(0)]], COL.axis, 1);
+  line(ctx, kin, COL.faint, 1, [4, 4]); line(ctx, grav, COL.faint, 1, [1.5, 3]);
+  const past = M >= model.Mcrit;
+  line(ctx, tot, past ? COL.warm : COL.blue, 2);
   const mn = model.minimum(M);
   if (mn) {
     const X = A.sx(mn.R), Y = A.sy(sl(mn.E / EU));
-    line(ctx, [[X, Y], [X, box.y + box.h]], 'rgba(98,196,255,0.4)', 1, [3, 3]);
-    label(ctx, `minimum at R = ${(mn.R / 1e3).toFixed(0)} km`, X + 8, Y + 16, COL.m1, 'left', 'top');
+    ring(ctx, X, Y, 5, COL.blue);
+    // A page-colour outline under the label cuts the curve where they
+    // cross on a narrow chart (no glow: it is the background colour).
+    const s = `minimum at ${km(mn.R)} km`;
+    ctx.save(); ctx.font = FONT_S; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = COL.bg; ctx.strokeText(s, X, Y - 10); ctx.restore();
+    text(ctx, s, X, Y - 10, COL.blue, 'center', 'bottom');
   } else {
-    label(ctx, 'no minimum: E falls without end as R → 0', box.x + box.w * 0.35, A.sy(sl(-0.3)), COL.red, 'center', 'middle');
-  }
-  if (ball) {
-    const R = Math.exp(ball.u), e = model.at(M, R);
-    dot(ctx, A.sx(R), A.sy(sl(e.E / EU)) - 7, 7, '#fff', M >= model.Mcrit ? COL.red : COL.m1);
+    text(ctx, 'no minimum: the energy keeps falling as R → 0', box.x + box.w * 0.36, A.sy(sl(-0.3)), COL.warm, 'center', 'middle', FONT);
   }
   ctx.restore();
-  { const R = 3e6, e = model.at(M, R); label(ctx, 'kinetic (electrons)', A.sx(R), A.sy(sl(e.Ek / EU)) - 10, COL.m3, 'left', 'bottom', FONT_S); label(ctx, 'gravity', A.sx(R), A.sy(sl(e.Eg / EU)) + 10, COL.m2, 'left', 'top', FONT_S); }
+  { const R = 3e6, e = model.at(M, R);
+    text(ctx, 'electrons', A.sx(R), A.sy(sl(e.Ek / EU)) - 8, COL.dim, 'left', 'bottom');
+    text(ctx, 'gravity', A.sx(R), A.sy(sl(e.Eg / EU)) + 8, COL.dim, 'left', 'top'); }
   return A;
 }
 export function initER() {
   const cv = $('erCv'); if (!cv) return;
-  const st = { M: 1.0, mode: 'profile', model: P.energyModel(2, 'profile'), ball: { u: Math.log(3e6), v: 0 } };
-  const draw = chart(cv, (ctx, w, h) => drawER(ctx, w, h, st.M, st.model, st.ball));
+  const st = { M: 1.0, mode: 'profile', model: P.energyModel(2, 'profile') };
+  const draw = chart(cv, (ctx, w, h) => drawER(ctx, w, h, st.M, st.model));
   const read = () => {
     const mn = st.model.minimum(st.M);
-    out('erRead', `<span>M<b>${st.M.toFixed(3)} M☉</b></span><span>M / M<sub>crit</sub><b>${(st.M / st.model.Mcrit).toFixed(3)}</b></span><span>M<sub>crit</sub> of this toy<b>${st.model.Mcrit.toFixed(3)} M☉</b></span><span>equilibrium<b>${mn ? (mn.R / 1e3).toFixed(0) + ' km, p_F = ' + mn.x.toFixed(2) + ' mₑc' : 'none'}</b></span>`);
-    const v = $('erVerdict');
-    if (v) { v.className = 'verdict ' + (mn ? 'yes' : 'no'); v.textContent = mn ? 'Stable: the ball settles in the minimum.' : 'Collapse: the ball rolls to R = 0.'; }
+    out('erRead', `Critical mass of this model: ${st.model.Mcrit.toFixed(3)} M☉. ` + (mn ? `At ${st.M.toFixed(3)} M☉ the minimum is at ${km(mn.R)} km, where p_F = ${mn.x.toFixed(2)} mₑc. The star is stable.` : `At ${st.M.toFixed(3)} M☉ there is no minimum. The star collapses.`));
   };
   bindRange('erM', v => { st.M = v; $('erMOut').textContent = `${v.toFixed(3)} M☉`; read(); draw(); });
   document.querySelectorAll('#erMode button').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('#erMode button').forEach(q => q.classList.toggle('on', q === b));
+    document.querySelectorAll('#erMode button').forEach(q => q.setAttribute('aria-pressed', q === b));
     st.mode = b.dataset.mode; st.model = P.energyModel(2, st.mode); read(); draw();
   }));
-  $('erDrop')?.addEventListener('click', () => { st.ball.u = Math.log(3e7); st.ball.v = 0; });
-  // Ball dynamics in plot units: u = ln R, force -dE_plot/du.
-  let last = performance.now(), vis = false;
-  new IntersectionObserver(es => { vis = es[0].isIntersecting; if (vis) { last = performance.now(); requestAnimationFrame(tick); } }).observe(cv);
-  function tick(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    const f = u => sl(st.model.at(st.M, Math.exp(u)).E / EU);
-    const b = st.ball, du = 0.01;
-    const g = -(f(b.u + du) - f(b.u - du)) / (2 * du);
-    b.v += (g * 6 - b.v * 1.6) * dt;
-    b.u += b.v * dt;
-    if (b.u < Math.log(R0)) { b.u = Math.log(3e7); b.v = 0; }
-    if (b.u > Math.log(R1)) { b.u = Math.log(R1); b.v = 0; }
-    draw();
-    if (vis) requestAnimationFrame(tick);
-  }
 }
 
 // ── Lane-Emden (section 5) ─────────────────────────────────────────────────
@@ -353,91 +409,83 @@ export function initLE() {
   const ref = [1.5, 3].map(n => ({ n, L: P.laneEmden(n, { keep: 300 }) }));
   const st = { n: 2.25, L: null };
   const draw = chart(cv, (ctx, w, h) => {
-    const box = boxOf(w, h, 46, 14, 12, 30);
-    const A = axes(ctx, box, [0, 16], [0, 1], { xt: [0, 2, 4, 6, 8, 10, 12, 14, 16], yt: [0, 0.25, 0.5, 0.75, 1], xl: 'ξ', yl: 'θ  (ρ/ρc = θⁿ)' });
+    const box = { x: 50, y: 26, w: w - 50 - 16, h: h - 26 - 46 };
+    const A = axes(ctx, box, [0, 16], [0, 1], { xt: [0, 2, 4, 6, 8, 10, 12, 14, 16], yt: [0, 0.5, 1], xl: 'ξ (scaled radius)', yl: 'θ (ρ/ρc = θⁿ)', ylx: 40 });
     const put = (L, color, wd, dash) => line(ctx, L.prof.map(([x, y]) => [A.sx(x), A.sy(y)]), color, wd, dash);
-    put(ref[0].L, COL.m6, 1.6, [5, 4]); put(ref[1].L, COL.m5, 1.6, [5, 4]);
-    label(ctx, 'n = 1.5', A.sx(ref[0].L.xi1) + 4, A.sy(0) - 10, COL.m6, 'left', 'bottom', FONT_S);
-    label(ctx, 'n = 3', A.sx(ref[1].L.xi1) + 4, A.sy(0) - 24, COL.m5, 'left', 'bottom', FONT_S);
-    if (st.L) {
-      put(st.L, COL.m1, 2.6);
-      dot(ctx, A.sx(Math.min(16, st.L.xi1)), A.sy(0), 5, COL.m1, '#fff');
-    }
+    put(ref[0].L, COL.faint, 1, [4, 4]); put(ref[1].L, COL.faint, 1, [1.5, 3]);
+    text(ctx, 'n = 1.5', A.sx(ref[0].L.xi1), A.sy(0) - 8, COL.dim, 'center', 'bottom');
+    text(ctx, 'n = 3', A.sx(ref[1].L.xi1), A.sy(0) - 8, COL.dim, 'center', 'bottom');
+    if (st.L) { put(st.L, COL.blue, 2); ring(ctx, A.sx(Math.min(16, st.L.xi1)), A.sy(0), 4.5, COL.blue); }
   });
   bindRange('leN', v => {
     st.n = v;
     st.L = v < 4.95 ? P.laneEmden(v, { keep: 300, h: v > 4 ? 4e-3 : 1e-3 }) : null;
     $('leNOut').textContent = `n = ${v.toFixed(2)}`;
-    out('leRead', st.L ? `<span>ξ₁<b>${st.L.xi1.toFixed(4)}</b></span><span>ω<sub>n</sub> = −ξ₁²θ′(ξ₁)<b>${st.L.omega.toFixed(4)}</b></span><span>R ∝ M<sup>(1−n)/(3−n)</sup><b>${Math.abs(v - 3) < 0.01 ? 'M fixed: M_Ch' : 'exponent ' + ((1 - v) / (3 - v)).toFixed(3)}</b></span>` : '<span>n ≥ 5: no surface</span>');
+    out('leRead', st.L ? `Surface at ξ₁ = ${st.L.xi1.toFixed(4)}; ω = ${st.L.omega.toFixed(4)}. ` + (Math.abs(v - 3) < 0.01 ? 'At n = 3 the mass does not depend on the radius.' : `Mass-radius exponent (1 − n)/(3 − n) = ${((1 - v) / (3 - v)).toFixed(3)}.`) : 'At n ≥ 5 there is no surface.');
     draw();
   });
 }
 
-// ── exact mass-radius (section 5) ──────────────────────────────────────────
-export function initFull({ onModel } = {}) {
+// ── composition and structure (section 5) ──────────────────────────────────
+// Left: the exact curves for mu_e = 2 and for iron (mu_e = 2.15), with the
+// three measured dwarfs. Right: rho/rho_c against r/R for the chosen star,
+// between the n = 1.5 and n = 3 profiles.
+export function initFull() {
   const cv = $('fullCv'); if (!cv) return;
   const C2 = P.massRadiusCurve(2, { n: 140, x0: 0.05, x1: 3000 });
   const CFe = P.massRadiusCurve(56 / 26, { n: 140, x0: 0.05, x1: 3000 });
-  const R1 = P.radiusNR(1), R1Fe = P.radiusNR(1, 56 / 26);
   const MFe = P.massChandra(56 / 26).Msun;
-  const st = { lx: 0.4, iron: false, model: null, prof: null };
+  const L15 = P.laneEmden(1.5, { keep: 120 }), L3 = P.laneEmden(3, { keep: 120 });
+  const st = { lx: 0.4, iron: false, model: null };
+  const layout = (w, h) => {
+    const wide = w >= 640;
+    return wide
+      ? { a: { x: 64, y: 26, w: w * 0.6 - 84, h: h - 72 }, b: { x: w * 0.6 + 40, y: 26, w: w * 0.4 - 56, h: h - 72 } }
+      : { a: { x: 56, y: 26, w: w - 72, h: h * 0.58 - 66 }, b: { x: 56, y: h * 0.58 + 22, w: w - 72, h: h * 0.42 - 68 } };
+  };
   const draw = chart(cv, (ctx, w, h) => {
-    const phone = w < 520;
-    const box = boxOf(w, h, 56, 14, 12, 30);
-    const A = axes(ctx, box, [0, 1.6], [0, 22000], { xt: [0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6], yt: [0, 5000, 10000, 15000, 20000], yf: v => v ? (v / 1000) + 'k' : '0', xl: 'M / M☉', yl: 'R (km)' });
+    const Lo = layout(w, h), box = Lo.a;
+    const A = axes(ctx, box, [0, 1.6], [0, 22000], { xt: [0, 0.4, 0.8, 1.2, 1.6], yt: [0, 10000, 20000], yf: v => v ? (v / 1000) + ',000' : '0', xl: 'mass (solar masses)', yl: 'radius (km)', ylx: 52 });
     ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip();
-    const nr = []; for (let i = 0; i <= 120; i++) { const M = 0.02 + 1.6 * i / 120; nr.push([A.sx(M), A.sy(R1 * M ** (-1 / 3) / 1e3)]); }
-    line(ctx, nr, COL.m6, 1.6, [5, 4]);
-    line(ctx, [[A.sx(MCH), box.y], [A.sx(MCH), box.y + box.h]], COL.m5, 1.6, [5, 4]);
+    line(ctx, [[A.sx(MCH), box.y], [A.sx(MCH), box.y + box.h]], COL.warm, 1, [3, 4]);
     if (st.iron) {
-      const nf = []; for (let i = 0; i <= 120; i++) { const M = 0.02 + 1.6 * i / 120; nf.push([A.sx(M), A.sy(R1Fe * M ** (-1 / 3) / 1e3)]); }
-      line(ctx, CFe.map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), 'rgba(255,154,98,0.9)', 2.2);
-      line(ctx, [[A.sx(MFe), box.y], [A.sx(MFe), box.y + box.h]], 'rgba(255,154,98,0.6)', 1.2, [2, 3]);
+      line(ctx, CFe.map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), COL.ink2, 1.2, [5, 3]);
+      line(ctx, [[A.sx(MFe), box.y], [A.sx(MFe), box.y + box.h]], COL.ink2, 1, [1.5, 3]);
     }
-    line(ctx, C2.map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), COL.m1, 3);
+    line(ctx, C2.map(c => [A.sx(c.M), A.sy(c.R / 1e3)]), COL.blue, 2);
     ctx.restore();
-    label(ctx, 'n = 1.5: R ∝ M^(−1/3)', A.sx(0.42), A.sy(R1 * 0.42 ** (-1 / 3) / 1e3) - 10, COL.m6, 'left', 'bottom', FONT_S);
-    label(ctx, `n = 3: M_Ch = ${MCH.toFixed(3)} M☉`, A.sx(MCH) - 6, box.y + box.h * 0.5, COL.m5, 'right', 'middle', FONT_S);
-    if (st.iron) label(ctx, `iron, μₑ = 2.15: ${MFe.toFixed(3)}`, A.sx(MFe) - 6, box.y + box.h * 0.58, COL.m2, 'right', 'middle', FONT_S);
-    // Measured dwarfs with 1 sigma bars.
+    if (st.iron) text(ctx, `iron ${MFe.toFixed(2)}`, A.sx(MFe) - 5, box.y + 6, COL.ink2, 'right', 'top');
+    text(ctx, MCH.toFixed(3), A.sx(MCH) + 5, box.y + 6, COL.warm, 'left', 'top');
     for (const s of P.STARS) {
       const X = A.sx(s.M), Y = A.sy(s.R * P.K.Rsun / 1e3);
-      const ex = (A.sx(s.M + s.dM) - A.sx(s.M - s.dM)) / 2, ey = Math.abs(A.sy((s.R + s.dR) * P.K.Rsun / 1e3) - A.sy((s.R - s.dR) * P.K.Rsun / 1e3)) / 2;
-      ctx.save(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(X - ex, Y); ctx.lineTo(X + ex, Y); ctx.moveTo(X, Y - ey); ctx.lineTo(X, Y + ey); ctx.stroke(); ctx.restore();
-      dot(ctx, X, Y, 3.5, '#fff');
-      label(ctx, s.name, X + 7, Y - (s.id === 'eri40B' ? 10 : -10), COL.ink, 'left', 'middle', FONT_S);
+      const ex = (A.sx(s.M + s.dM) - A.sx(s.M - s.dM)) / 2;
+      ctx.save(); ctx.strokeStyle = COL.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X - ex, Y); ctx.lineTo(X + ex, Y); ctx.stroke(); ctx.restore();
+      dot(ctx, X, Y, 2.5, COL.ink);
+      const up = s.id === 'eri40B';
+      text(ctx, s.name, X + (up ? -6 : 6), Y + (up ? -10 : 10), COL.ink2, up ? 'right' : 'left', 'middle');
     }
-    if (st.model) {
-      const X = A.sx(st.model.M), Y = A.sy(st.model.R / 1e3);
-      dot(ctx, X, Y, 7, COL.m1, '#fff');
-    }
-    // Inset: rho / rho_c against r / R for the chosen model.
-    if (st.prof && !phone) {
-      const ib = { x: box.x + box.w * 0.5, y: box.y + box.h * 0.06, w: box.w * 0.34, h: box.h * 0.32 };
-      ctx.fillStyle = 'rgba(6,8,14,0.82)'; ctx.fillRect(ib.x - 34, ib.y - 6, ib.w + 40, ib.h + 30);
-      const B = axes(ctx, ib, [0, 1], [0, 1], { xt: [0, 0.5, 1], yt: [0, 0.5, 1], xl: 'r / R', yl: 'ρ / ρc' });
-      const p15 = P.leCached(1.5), L15 = P.laneEmden(1.5, { keep: 100 }), L3 = P.laneEmden(3, { keep: 100 });
-      line(ctx, L15.prof.map(([x, y]) => [B.sx(x / p15.xi1), B.sy(Math.max(0, y) ** 1.5)]), COL.m6, 1.2, [4, 3]);
-      line(ctx, L3.prof.map(([x, y]) => [B.sx(x / L3.xi1), B.sy(Math.max(0, y) ** 3)]), COL.m5, 1.2, [4, 3]);
-      line(ctx, st.prof.map(p => [B.sx(p.s), B.sy(p.rho)]), COL.m4, 2.4);
-    }
+    if (st.model) ring(ctx, A.sx(st.model.M), A.sy(st.model.R / 1e3), 5.5, COL.blue);
+    // Profile.
+    const B = axes(ctx, Lo.b, [0, 1], [0, 1], { xt: [0, 0.5, 1], yt: [0, 0.5, 1], xl: 'r / R', yl: 'ρ / ρc', ylx: 40 });
+    line(ctx, L15.prof.map(([x, y]) => [B.sx(x / L15.xi1), B.sy(Math.max(0, y) ** 1.5)]), COL.faint, 1, [4, 4]);
+    line(ctx, L3.prof.map(([x, y]) => [B.sx(x / L3.xi1), B.sy(Math.max(0, y) ** 3)]), COL.faint, 1, [1.5, 3]);
+    if (st.model) line(ctx, st.model.prof.map(p => [B.sx(p.s), B.sy(p.rho)]), COL.blue, 2);
+    text(ctx, 'n = 1.5', B.sx(0.62), B.sy(0.62), COL.dim, 'left', 'bottom');
+    text(ctx, 'n = 3', B.sx(0.08), B.sy(0.12), COL.dim, 'left', 'bottom');
   });
-  const read = () => {
-    const m = st.model;
-    out('fullRead', `<span>x<sub>c</sub> = p<sub>F</sub>/mₑc<b>${m.xc.toFixed(3)}</b></span><span>M<b>${m.M.toFixed(4)} M☉</b></span><span>M / M<sub>Ch</sub><b>${(m.M / P.massChandra(m.mue).Msun).toFixed(4)}</b></span><span>R<b>${(m.R / 1e3).toFixed(0)} km</b></span><span>ρ<sub>c</sub><b>${fmtE(m.rhoc / 1e3)} g/cm³</b></span><span>mean ρ<b>${fmtE(m.rhoMean / 1e3)} g/cm³</b></span>`);
-  };
   const setX = bindRange('fullX', v => {
     st.lx = v;
     st.model = P.whiteDwarf(10 ** v, st.iron ? 56 / 26 : 2, { keep: 160 });
-    st.prof = st.model.prof;
-    $('fullXOut').textContent = `x_c = ${fmtE(10 ** v)}`;
-    read(); draw(); onModel && onModel(st.model);
+    const m = st.model;
+    $('fullXOut').textContent = `p_F = ${fmtE(10 ** v)} mₑc`;
+    out('fullRead', `Central Fermi momentum ${m.xc.toFixed(2)} mₑc: mass ${m.M.toFixed(4)} M☉ (${(m.M / P.massChandra(m.mue).Msun * 100).toFixed(2)} % of the limit), radius ${km(m.R)} km, central density ${fmtE(m.rhoc / 1e3)} g/cm³.`);
+    draw();
   });
-  $('fullIron')?.addEventListener('click', e => { st.iron = !st.iron; e.currentTarget.classList.toggle('on', st.iron); setX(st.lx); });
-  // Drag across the plot picks the model nearest in M.
-  hdrag(cv, px => {
-    const r = cv.getBoundingClientRect(), box = boxOf(r.width, r.height, 56, 14, 12, 30);
-    const M = clamp((px - box.x) / box.w * 1.6, 0.05, MCH * 0.9999);
+  $('fullIron')?.addEventListener('click', e => { st.iron = !st.iron; e.currentTarget.setAttribute('aria-pressed', st.iron); setX(st.lx); });
+  hdrag(cv, (px, py) => {
+    const r = cv.getBoundingClientRect(), a = layout(r.width, r.height).a;
+    if (px < a.x || px > a.x + a.w || py > a.y + a.h + 10) return;
+    const M = clamp((px - a.x) / a.w * 1.6, 0.05, (st.iron ? MFe : MCH) * 0.9999);
     const curve = st.iron ? CFe : C2; let best = curve[0];
     for (const c of curve) if (Math.abs(c.M - M) < Math.abs(best.M - M)) best = c;
     setX(clamp(Math.log10(best.xc), -1.3, 3.4));
@@ -449,17 +497,17 @@ export function initHubble() {
   const cv = $('hubCv'); if (!cv) return;
   const st = { L: 0.7 };
   const draw = chart(cv, (ctx, w, h) => {
-    const box = boxOf(w, h, 52, 14, 12, 30);
-    const A = axes(ctx, box, [0, 1.6], [-0.9, 0.5], { xt: [0, 0.4, 0.8, 1.2, 1.6], yt: [-0.8, -0.4, 0, 0.4], yf: v => (v > 0 ? '+' : '') + v.toFixed(1), xl: 'redshift z', yl: 'Δ magnitude (fainter ↑)' });
+    const box = { x: 56, y: 26, w: w - 56 - 16, h: h - 26 - 46 };
+    const A = axes(ctx, box, [0, 1.6], [-0.9, 0.5], { xt: [0, 0.4, 0.8, 1.2, 1.6], yt: [-0.8, -0.4, 0, 0.4], yf: v => (v > 0 ? '+' : '') + v.toFixed(1), xl: 'redshift z', yl: 'magnitude difference (fainter up)', ylx: 48 });
     const curve = L => { const pts = []; for (let i = 1; i <= 80; i++) { const z = 1.6 * i / 80; pts.push([A.sx(z), A.sy(P.distanceModulus(z, L) - P.distanceModulusEmpty(z))]); } return pts; };
-    line(ctx, [[box.x, A.sy(0)], [box.x + box.w, A.sy(0)]], 'rgba(255,255,255,0.35)', 1);
-    line(ctx, curve(0), COL.m2, 1.6, [5, 4]);
-    line(ctx, curve(st.L), COL.m1, 3);
-    label(ctx, 'no dark energy (Ωm = 1)', A.sx(1.55), A.sy(P.distanceModulus(1.55, 0) - P.distanceModulusEmpty(1.55)) - 10, COL.m2, 'right', 'bottom', FONT_S);
-    label(ctx, 'coasting, empty universe', A.sx(1.55), A.sy(0) - 8, COL.dim, 'right', 'bottom', FONT_S);
+    line(ctx, [[box.x, A.sy(0)], [box.x + box.w, A.sy(0)]], COL.axis, 1);
+    line(ctx, curve(0), COL.faint, 1.2, [4, 4]);
+    line(ctx, curve(st.L), COL.blue, 2);
+    text(ctx, 'matter only', A.sx(1.55), A.sy(P.distanceModulus(1.55, 0) - P.distanceModulusEmpty(1.55)) - 8, COL.dim, 'right', 'bottom');
+    text(ctx, 'empty, coasting', A.sx(1.55), A.sy(0) - 6, COL.dim, 'right', 'bottom');
     const d = P.distanceModulus(0.5, st.L) - P.distanceModulus(0.5, 0);
-    dot(ctx, A.sx(0.5), A.sy(P.distanceModulus(0.5, st.L) - P.distanceModulusEmpty(0.5)), 5, COL.m1, '#fff');
-    out('hubRead', `<span>Ω<sub>Λ</sub><b>${st.L.toFixed(2)}</b></span><span>Ω<sub>m</sub><b>${(1 - st.L).toFixed(2)}</b></span><span>at z = 0.5, vs Ω<sub>m</sub> = 1<b>${d >= 0 ? '+' : ''}${d.toFixed(2)} mag, ${((10 ** (0.4 * d) - 1) * 100).toFixed(0)} % dimmer</b></span>`);
+    ring(ctx, A.sx(0.5), A.sy(P.distanceModulus(0.5, st.L) - P.distanceModulusEmpty(0.5)), 4.5, COL.blue);
+    out('hubRead', `With Ω_Λ = ${st.L.toFixed(2)}, a candle at z = 0.5 is ${d.toFixed(2)} magnitudes (${((10 ** (0.4 * d) - 1) * 100).toFixed(0)} %) fainter than in a matter-only universe.`);
   });
-  bindRange('hubL', v => { st.L = v; $('hubLOut').textContent = `Ω_Λ = ${v.toFixed(2)}`; draw(); });
+  bindRange('hubL', v => { st.L = v; $('hubLOut').textContent = v.toFixed(2); draw(); });
 }
