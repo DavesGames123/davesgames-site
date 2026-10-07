@@ -68,7 +68,8 @@ const GEO = buildDetector();
 const det = createDetector(THREE, GEO, { cut: 'wedge' });
 detScene.add(det.group);
 const disp = createDisplay(THREE);
-detScene.add(disp.group);
+const evScene = new THREE.Scene();   // the event layer: drawn by the stage overlay pass
+evScene.add(disp.group);
 { // the beam line
   const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -9000), new THREE.Vector3(0, 0, 9000)]);
   detScene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x5f8dff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })));
@@ -122,6 +123,7 @@ async function runEvent(kind = S.scen, o = {}) {
 function showEvent(E) {
   S.ev = E; S.sel = -1; disp.setSel(-1);
   const r = disp.show(E.R, E.O, E.g.info, { cones: COARSE ? 60 : 160 });
+  E.energy = r.energy;
   views.show(E.R, E.O);
   $('tSlide').max = Math.ceil(r.tEnd);
   S.t = -4; S.playing = true; S.holdT = 0; setPlay(true);
@@ -141,10 +143,10 @@ function setMode(m, o = {}) {
   $('dockGo').querySelector('span').textContent = m === 'ring' ? 'Collide' : 'Event';
   buildLabels();
   if (m === 'ring') {
-    stage.use(ring.scene, { min: 4, max: 42000, near: 0.0015, bloom: [0.85, 0.5, 0.25] });
+    stage.use(ring.scene, { min: 4, max: 42000, near: 0.0015, bloom: [0.85, 0.5, 0.25] }); stage.setOverlay(null);
     if (!o.keep) selectStation(S.station, { soft: true });
   } else {
-    stage.use(detScene, { min: 600, max: 60000, near: 0.003, bloom: [0.75, 0.5, 0.3] });
+    stage.use(detScene, { min: 600, max: 60000, near: 0.003, bloom: [0.75, 0.5, 0.3] }); stage.setOverlay(evScene);
     if (!o.keep) { stage.place({ ...DET_VIEW, r: 52000 }); stage.flyTo({ ...DET_VIEW, t: 2.2 }); }
     if (!S.ev && !o.noEvent) runEvent(S.scen);
   }
@@ -226,9 +228,9 @@ $('tPlay').addEventListener('click', () => { if (!S.playing && S.t >= disp.tEnd)
 $('tSlide').addEventListener('input', e => { setPlay(false); S.t = +e.target.value; });
 document.querySelectorAll('#cuts button').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.cut) { det.setCut(b.dataset.cut); document.querySelectorAll('#cuts [data-cut]').forEach(q => q.classList.toggle('on', q === b)); }
-  if (b.dataset.v === 'side') { det.setOpacity(1); stage.flyTo({ az: 90, el: 4, r: 21000, target: new THREE.Vector3(), t: 1.6 }); }
-  if (b.dataset.v === 'end') { det.setOpacity(0.35); stage.flyTo({ az: 0, el: 0.5, r: 19000, target: new THREE.Vector3(), t: 1.6 }); }
-  if (b.dataset.cut) det.setOpacity(1);
+  if (b.dataset.v === 'side') { endLook(false); stage.flyTo({ az: 90, el: 4, r: 21000, target: new THREE.Vector3(), t: 1.6 }); }
+  if (b.dataset.v === 'end') { endLook(true); stage.flyTo({ az: 0, el: 0.5, r: 19000, target: new THREE.Vector3(), t: 1.6 }); }
+  if (b.dataset.cut) endLook(false);
 }));
 document.querySelector('#cuts [data-cut="wedge"]').classList.add('on');
 document.querySelectorAll('#shows button').forEach(b => b.addEventListener('click', () => {
@@ -237,6 +239,15 @@ document.querySelectorAll('#shows button').forEach(b => b.addEventListener('clic
 }));
 $('dockMode').addEventListener('click', () => setMode(S.mode === 'ring' ? 'det' : 'ring'));
 $('dockGo').addEventListener('click', () => { if (S.mode === 'ring') collide(); else runEvent(S.scen); });
+
+// end-on views stack every shell and every cell on the same rings: lower
+// the exposure and bloom, dim the event and the shells (eased in stage.js)
+function endLook(on) {
+  det.setOpacity(on ? 0.35 : 1);
+  disp.dim(on ? 0.4 : 1);
+  stage.setLook(on ? 0.8 : 1, on ? 0.4 : 0.75, on ? 0.5 : 0.3);
+  stage.overlayK(on ? 0.8 : 1.2);
+}
 
 // ── legend and labels ───────────────────────────────────────────────────────
 $('legend').innerHTML = ['mu', 'e', 'gamma', 'had', 'neu', 'shower'].map(k => `<span><i class="${k === 'neu' || k === 'gamma' ? 'dash' : ''}" style="color:${CLASS_COLOR[k]};background:${CLASS_COLOR[k]}"></i>${esc(CLASS_LABEL[k])}</span>`).join('') + `<span><i style="color:${CLASS_COLOR.nu};background:${CLASS_COLOR.nu}"></i>missing E<sub>T</sub></span>`;
@@ -370,10 +381,14 @@ function frame(now) {
   stage.renderer.getDrawingBufferSize(RES);
   if (S.mode === 'ring') {
     acc.tick(dt);
+    ring.setField(rampAt(acc.S.t).B / 8.33);
     ring.frame(dt, stage.camera, RES, stage.renderer.getPixelRatio());
   } else {
     if (S.ev && S.playing) {
+      const t0 = S.t;
       S.t += dt * S.speed;
+      // the crossing: a short camera shake, larger for more calorimeter energy
+      if (t0 < 0 && S.t >= 0 && S.ev) stage.shake(Math.min(0.012, 0.0035 * Math.log10(1 + (S.ev.energy || 0) / 15000)));
       if (S.t > disp.tEnd) {
         S.t = disp.tEnd; S.holdT += dt;
         if (!saverOn && S.holdT > 4 && S.auto && !S.busy) runEvent(S.scen);
@@ -416,7 +431,7 @@ window.snSaver = {
     const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
     const label = typeof o.label === 'function' ? o.label : () => {};
     const st = document.createElement('style');
-    st.textContent = '.topbar,#panel,#anaPanel,#anaOpen,#dock,#hint,#labels,#read,#legend,#clock,#busy,#nogl,#gear{display:none!important}#stage{top:0!important;bottom:0!important}#view{cursor:none}';
+    st.textContent = '.topbar,#panel,#anaPanel,#anaOpen,#dock,#hint,#labels,#read,#legend,#clock,#busy,#nogl,#gear{display:none!important}#stage{top:0!important;bottom:0!important}#view{cursor:none;transition:opacity 0.35s ease!important}';
     document.head.appendChild(st);
     setOpen(false); setAna(false); S.labels = false;
     stage.orbit = false;
@@ -439,12 +454,13 @@ window.snSaver = {
 
     const hold = () => 1000 * Math.max(5, Math.min(12, (5.5 + 5 * calm) * (0.85 + 0.3 * rnd())));
     const EV = ['zmm', 'zee', 'hgg', 'h4l', 'tt', 'jj'];
-    const SHOTS = ['ring', 'fodo', 'ramp', 'chain', 'ipfly', 'ev', 'ev', 'ev', 'shower', 'pileup', 'rf'];
+    const SHOTS = ['ring', 'fodo', 'ramp', 'chain', 'ipfly', 'ev', 'evclose', 'ev', 'shower', 'pileup', 'rf', 'crossing'];
+    let curAnchor = null, curSubj = null;
     let queue = [], shot = null, shotT = 0, shotDur = 6000, cam = null, next = null, nextKind = null;
     const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     const prepare = () => {
       // compute the next event shot ahead
-      const r = rnd(); nextKind = r < 0.7 ? EV[Math.floor(rnd() * EV.length)] : 'mb';
+      const r = rnd(); nextKind = r < 0.9 ? EV[Math.floor(rnd() * EV.length)] : 'mb';
       next = computeEvent(nextKind, (rnd() * 4e9) >>> 0, nextKind === 'mb' ? { pileup: 28 + Math.floor(rnd() * 20) } : { pileup: rnd() < 0.4 ? 3 : 0 });
     };
     let shower = null;
@@ -465,12 +481,13 @@ window.snSaver = {
     const ringShot = (id, title, sub, params, cd, kind) => {
       if (S.mode !== 'ring') setMode('ring', { keep: true });
       const stn = ring.stations[id];
-      stage.bloom.strength = 0.85;
+      stage.setLook(1, 0.85, 0.25);
       ring.setSpeed(SPEED[id] * (0.7 + 0.6 * rnd()));
       ring.setCloseUp(id === 'fodo' || id === 'tune');
       const base = { az: stn.az + (rnd() - 0.5) * 50, el: stn.el + (rnd() - 0.5) * 12, r: stn.r * (0.85 + 0.3 * rnd()), target: stn.target };
-      stage.flyTo({ ...base, t: 1.4 }); cam = move(base, kind);
-      label({ title, sub, params, code: cd, anchor: () => anchorAt(stn.target, stn.r * 0.18) });
+      cam = move(base, kind); stage.fly = null; applyCam(0);
+      curAnchor = () => anchorAt(stn.target, stn.r * 0.18); curSubj = { kind: 'ring', target: stn.target };
+      label({ title, sub, params, code: cd, anchor: curAnchor });
     };
     const P = (sym, name, value) => ({ sym, name, value: String(value) });
     const evShot = async (E, look) => {
@@ -480,15 +497,18 @@ window.snSaver = {
       showEvent(E);
       S.speed = (2.2 + 2.5 * (1 - calm)) * (0.8 + 0.4 * rnd()); S.t = -3.5;
       // end-on, every cell along z lands on the same ring: dim cells and lines
-      if (look === 'end') { disp.U.uCellGain.value *= 0.25; disp.U.uGain.value *= 0.6; }
-      stage.bloom.strength = look === 'end' ? 0.35 : 0.75;
-      const base = look === 'end' ? { az: (rnd() - 0.5) * 6, el: (rnd() - 0.5) * 4, r: 46000, target: new THREE.Vector3() }
-        : look === 'shower' ? showerPose(E) : { az: 20 + rnd() * 60, el: 12 + rnd() * 26, r: 22000 + rnd() * 6000, target: new THREE.Vector3() };
-      stage.flyTo({ ...base, t: 1.2 }); cam = move(base, look === 'end' ? 'push' : null);
+      endLook(look === 'end');
+      if (look === 'shower') det.setOpacity(0.5);   // the camera sits close to the yoke: thin the shells
+      const base = look === 'end' ? { az: (rnd() - 0.5) * 6, el: (rnd() - 0.5) * 4, r: 38000, target: new THREE.Vector3() }
+        : look === 'shower' ? showerPose(E) : look === 'close' ? { az: 28 + rnd() * 34, el: 14 + rnd() * 22, r: 8000 + rnd() * 3500, target: new THREE.Vector3(250, 250, 0) }
+        : { az: 20 + rnd() * 60, el: 12 + rnd() * 26, r: 22000 + rnd() * 6000, target: new THREE.Vector3() };
+      cam = move(base, look === 'end' ? 'push' : null); stage.fly = null; applyCam(0);
       const info = E.g.info, tr = info.truth || {}, O = E.O;
       const params = [P('\\sqrt{s}', 'collision energy', '13.6 TeV')];
       if (tr.mass && E.kind !== 'jj') params.push(P('m', 'true mass', `${GeV(tr.mass)} GeV`));
-      const mk = O.masses.mumu ? ['m_{\\mu\\mu}', O.masses.mumu] : O.masses.ee ? ['m_{ee}', O.masses.ee] : O.masses.gg ? ['m_{\\gamma\\gamma}', O.masses.gg] : O.masses.l4 ? ['m_{4\\ell}', O.masses.l4] : O.masses.jj ? ['m_{jj}', O.masses.jj] : null;
+      // the mass that belongs to the scenario (a conversion e+e- pair in H -> gamma gamma is not news)
+      const MK = { zmm: ['m_{\\mu\\mu}', 'mumu'], zee: ['m_{ee}', 'ee'], hgg: ['m_{\\gamma\\gamma}', 'gg'], h4l: ['m_{4\\ell}', 'l4'], tt: ['m_{jj}', 'jj'], jj: ['m_{jj}', 'jj'] }[E.kind];
+      const mk = MK && O.masses[MK[1]] ? [MK[0], O.masses[MK[1]]] : null;
       if (mk && E.kind !== 'mb') params.push(P(mk[0], 'reconstructed', `${GeV(mk[1])} GeV`));
       const lead = [...O.muons, ...O.electrons, ...O.photons, ...O.jets].sort((a, b) => b.pT - a.pT)[0];
       if (lead) params.push(P('p_T', 'leading object', `${GeV(lead.pT)} GeV`));
@@ -496,12 +516,17 @@ window.snSaver = {
       if (E.kind === 'gun') params.push(P('E', PART[tr.particle].label, `${GeV(tr.E)} GeV`));
       const cd = E.kind === 'gun' ? code(tr.particle === 'e-' || tr.particle === 'gamma' ? 'sampleBremK' : 'bbHeavy', 'highland') : code(['bbHeavy', 'helix', 'highland', 'sampleCompton'][Math.floor(rnd() * 4)], 'bbHeavy');
       const sub = E.kind === 'gun' ? `${PART[tr.particle].label} shower in the ${Math.abs(tr.eta) < 1.4 ? 'barrel' : 'endcap'} calorimeters` : E.kind === 'mb' ? 'Minimum-bias collisions, one bunch crossing' : `${info.process}${tr.channel ? ' · ' + tr.channel : ''}`;
-      label({ title: E.kind === 'gun' ? 'Calorimeter shower' : info.title, sub, params, code: cd, anchor: () => anchorAt(base.target, look === 'shower' ? 900 : 5200) });
+      curAnchor = () => anchorAt(base.target, look === 'shower' ? 900 : look === 'close' ? 1600 : 5200); curSubj = { kind: 'det', target: base.target };
+      label({ title: E.kind === 'gun' ? 'Calorimeter shower' : info.title, sub, params, code: cd, anchor: curAnchor });
     };
     const showerPose = E => {
       const tr = E.g.info.truth, th = 2 * Math.atan(Math.exp(-tr.eta)), r = Math.abs(tr.eta) < 1.4 ? 1700 : 3300 / Math.abs(Math.cos(th));
       const tg = new THREE.Vector3(Math.sin(th) * Math.cos(tr.phi), Math.sin(th) * Math.sin(tr.phi), Math.cos(th)).multiplyScalar(Math.min(r, 3600));
-      return { az: 90 + (rnd() - 0.5) * 80, el: 8 + rnd() * 30, r: 4200 + rnd() * 1800, target: tg };
+      // the camera sits out through the open wedge (at the middle of the
+      // cut, outside the yoke radius) and looks back at the shower
+      const R = det.range(), ac = (R.a0 + R.a1) / 2 + Math.PI + (rnd() - 0.5) * 0.5;   // the open side
+      const cp = new THREE.Vector3(7900 * Math.cos(ac), 7900 * Math.sin(ac), tg.z + (rnd() - 0.5) * 3000), dv = cp.clone().sub(tg), rr = dv.length();
+      return { az: Math.atan2(dv.x, dv.z) * 180 / Math.PI, el: Math.asin(dv.y / rr) * 180 / Math.PI, r: rr, target: tg };
     };
     const anchorAt = (p, rad) => {
       const cv = $('view'), rc = cv.getBoundingClientRect();
@@ -510,7 +535,12 @@ window.snSaver = {
       const q = p.clone().add(stage.camera.up.clone().multiplyScalar(rad)).project(stage.camera);
       return { x: c.x, y: c.y, r: Math.max(30, Math.abs((q.y - PV.y) / 2 * rc.height)) };
     };
+    const view = $('view');
     const startShot = async kind => {
+      // a cut: fade out, set the shot up with the camera at the first pose
+      // of its move, fade in (no flight across the scene, no pop)
+      if (shot) { view.style.opacity = '0'; await new Promise(r => setTimeout(r, 380)); }
+      cam = null;
       shot = kind; shotT = 0; shotDur = hold();
       const P4 = PRESETS.design, L = luminosity(P4), r = rampAt(acc.S.t);
       switch (kind) {
@@ -525,11 +555,14 @@ window.snSaver = {
           shotDur = Math.max(shotDur, 9500);
           break;
         }
+        case 'evclose': { const E = await next; prepare(); await evShot(E, E.kind === 'mb' ? 'wide' : 'close'); shotDur = Math.max(shotDur, 1000 * (disp.tEnd + 4) / S.speed * 0.8); break; }
+        case 'crossing': ringShot('ip', 'Bunch crossing', 'Two bunches of 1.15×10¹¹ protons meet at IP5 every 25 ns', [P('\\sigma^*', 'beam size', `${(L.sigma * 1e6).toFixed(1)} μm`), P('F', 'crossing factor', L.F.toFixed(3)), P('\\mu', 'collisions per crossing', L.mu.toFixed(0))], code('luminosity'), 'push'); break;
         case 'ev': { const E = await next; prepare(); await evShot(E, E.kind === 'mb' ? 'end' : 'wide'); shotDur = Math.max(shotDur, 1000 * (disp.tEnd + 4) / S.speed * 0.8); break; }
         case 'pileup': { const E = await computeEvent('mb', (rnd() * 4e9) >>> 0, { pileup: 30 + Math.floor(rnd() * 25) }); await evShot(E, 'end'); break; }
         case 'shower': { const E = await shower; prepShower(); await evShot(E, 'shower'); break; }
       }
       shotDur = Math.max(5000, Math.min(13000, shotDur));
+      requestAnimationFrame(() => { view.style.opacity = '1'; });
     };
     let busyShot = false;
     const advance = async () => {
@@ -540,7 +573,15 @@ window.snSaver = {
         await startShot(k);
       } finally { busyShot = false; shotT = 0; }
     };
-    window.snSaver.debug = () => ({ shot, shotT, shotDur, mode: S.mode, t: S.t, cam: cam && cam.kind, ev: S.ev && S.ev.kind });
+    // probe for the checks: the shot, its clock, the camera, the subject
+    // (projected centre and radius, page px) and the plate band
+    window.snSaver.debug = () => {
+      const c = stage.camera, tg = stage.controls.target, a = curAnchor ? curAnchor() : null;
+      const R = det.range();
+      return { cut: det.cut, open: [R.a0, R.a1].map(v => +v.toFixed(3)), seed: o.seed, shot, shotT: Math.round(shotT), shotDur: Math.round(shotDur), mode: S.mode, t: +S.t.toFixed(2), move: cam && cam.kind, ev: S.ev && S.ev.kind, fly: !!stage.fly,
+        pos: c.position.toArray().map(v => +v.toFixed(2)), target: tg.toArray().map(v => +v.toFixed(2)), fov: c.fov, zoom: +c.zoom.toFixed(3),
+        subj: a && { x: Math.round(a.x), y: Math.round(a.y), r: Math.round(a.r) }, band: saverBand, h: $('view').clientHeight, w: $('view').clientWidth, dist: +c.position.distanceTo(tg).toFixed(2) };
+    };
     let bandT = 0;
     saverTick = dt => {
       if (bandFn && (bandT += dt) > 0.5) { bandT = 0; try { saverBand = bandFn($('view').clientHeight); } catch (e) { saverBand = null; } }
