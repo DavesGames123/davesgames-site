@@ -1,0 +1,1 @@
+Shell-free path checked after this commit (headless Chrome, pages/hohmann/index.html opened alone, same rig as 417ff60): snStats.enabled true; totals pv hohmann +1, entry hohmann +1, ctx page +1, mode page +1, load hohmann +1. exit hohmann +0: the test left by CDP navigation with no hidden state, and pagehide did not deliver, as found in 8833e19.
