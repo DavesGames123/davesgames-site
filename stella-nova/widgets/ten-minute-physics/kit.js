@@ -117,6 +117,10 @@ function saver(spec) {
     const W = innerWidth, H = innerHeight;
     let band = null;
     try { const m = await import(new URL('../../lib/saver-clear.js', KIT_SRC || location.href).href); band = m.plateBand(H); } catch (e) { band = null; }
+    // The plate drops its "on" class while a new label fades in, and
+    // plateBand() is null then. Keep the last box until the plate is back;
+    // the 750 ms call after each label applies the new band.
+    if (!band && box && opts && typeof opts.label === 'function') return;
     const t = band ? band.t : 0, b = band ? band.b : 0;
     const bw = W, bh = Math.max(80, H - t - b);
     let w = bw, h = bh;
