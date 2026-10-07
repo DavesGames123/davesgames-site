@@ -9,16 +9,18 @@
 //
 //  IN   { id, seed }
 //  OUT  { id, stage, at }               before each step (progress)
-//       { id, seed, token, type, par, painting, bg, hash, ms }
+//       { id, seed, token, type, par, focus, base, painting, bg, hash, ms }
 //         painting  ImageBitmap 600 x 600 (transfer)
 //         bg        ImageBitmap 512 x 512, the page paper (transfer)
 //         par       engine.js plainPAR(PAR)
 //         hash      FNV-1a of the painting RGBA (for the parity check)
+//         focus     engine.js flowerFocus(): where the petals are, or null
+//         base      the root of the plant in painting px
 //       { id, error, noCanvas }         noCanvas: no OffscreenCanvas 2D
 //
 //  pool.js makes two of these workers and keeps the queue.
 // ============================================================================
-import { paint, plainPAR, rgbaHash } from './engine.js';
+import { paint, plainPAR, rgbaHash, flowerFocus } from './engine.js';
 
 const has2D = (() => {
   try { return typeof OffscreenCanvas !== 'undefined' && !!new OffscreenCanvas(1, 1).getContext('2d'); } catch (e) { return false; }
@@ -38,9 +40,9 @@ self.onmessage = async e => {
     const t0 = performance.now();
     const r = paint(src, seed, env, stage => self.postMessage({ id, stage, at: performance.now() - t0 }));
     const hash = rgbaHash(r.ctx.getImageData(0, 0, r.ctx.canvas.width, r.ctx.canvas.height).data);
-    const par = plainPAR(r.PAR);
+    const par = plainPAR(r.PAR), focus = flowerFocus(r.blits);
     const [painting, bg] = await Promise.all([bitmap(r.ctx.canvas), bitmap(r.bg)]);
-    self.postMessage({ id, seed, token: r.E.token, type: r.type, par, painting, bg, hash, ms: r.ms }, [painting, bg]);
+    self.postMessage({ id, seed, token: r.E.token, type: r.type, par, focus, base: r.base, painting, bg, hash, ms: r.ms }, [painting, bg]);
   } catch (err) {
     self.postMessage({ id, error: String(err && err.message || err) });
   }

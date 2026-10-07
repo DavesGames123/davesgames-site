@@ -55,7 +55,9 @@
 //    2. our copy of upstream generate(): CTX = Layer.empty(); a white fill;
 //       paper({col: PAPER_COL1}) in 512 px tiles; then
 //       Math.random() <= 0.5 ? woody(...) : herbal(...); Layer.border().
-//  So paint() also knows the plant type (woody or herbal). genParams()
+//  So paint() also knows the plant type (woody or herbal). It also wraps
+//  Layer.blit (same call, same pixels) to keep the petal layer for
+//  flowerFocus(). genParams()
 //  runs inside woody() or herbal(); the console shim keeps its PAR.
 //
 //  NO DOM. The worker (worker.js), the main-thread fallback (pool.js) and
@@ -73,6 +75,7 @@
 //    grep -n 'export function makeEngine'   the new Function() shim
 //    grep -n 'function stubElement'         the inert DOM stub
 //    grep -n 'export function paint'        upstream load() order
+//    grep -n 'export function flowerFocus'  where the petals are (saver)
 //    grep -n 'export function plainPAR'     PAR -> plain data
 //    grep -n 'export function hsvToRgb'     the upstream hsv(), as numbers
 //    grep -n 'export function recorderCanvas' the node canvas (tests)
@@ -199,6 +202,10 @@ export function paint(src, seed, env, onStage = () => {}) {
   for (let i = 0; i < ctx.canvas.width; i += TILE) {
     for (let j = 0; j < ctx.canvas.height; j += TILE) ctx.drawImage(ppr, i, j);
   }
+  // Record the two blits of woody() / herbal() (lay0 multiply, lay1 normal)
+  // for flowerFocus(). The wrapper calls the upstream blit unchanged.
+  const blits = [], blit0 = E.Layer.blit;
+  E.Layer.blit = function (c0, c1, a) { blits.push({ ctx: c1, ble: a && a.ble, xof: a && a.xof, yof: a && a.yof }); return blit0.apply(this, arguments); };
   const type = E.random() <= 0.5 ? 'woody' : 'herbal';
   onStage(type);
   if (type === 'woody') E.woody({ ctx, xof: 300, yof: 550 });
@@ -207,7 +214,45 @@ export function paint(src, seed, env, onStage = () => {}) {
   E.Layer.border(ctx, E.squircle(0.98, 3));
   const t2 = now();
   const PAR = E.pars[E.pars.length - 1] || null;
-  return { E, ctx, bg, type, PAR, ms: { bg: t1 - t0, plant: t2 - t1, total: t2 - t0 } };
+  E.Layer.blit = blit0;
+  return { E, ctx, bg, type, PAR, blits, base: type === 'woody' ? [300, 550] : [300, 600], ms: { bg: t1 - t0, plant: t2 - t1, total: t2 - t0 } };
+}
+
+// ── flowerFocus ─────────────────────────────────────────────────────────────
+// Where the flowers are. woody() and herbal() draw the petals on their own
+// layer (lay1) and blit it with blend "normal". This sums its alpha in
+// cells of CELL painting px, then finds the WIN x WIN cell window with the
+// most petal ink. Returns { x, y, r, ink } in painting px (r: half the
+// window size; ink: the share of all petal alpha in the window), or null
+// when the plant has no flower (a woody plant can have none).
+export function flowerFocus(blits, size = SIZE, CELL = 20, WIN = 6) {
+  const b = blits.find(q => q.ble === 'normal');
+  if (!b || !b.ctx || !b.ctx.getImageData) return null;
+  const W = b.ctx.canvas.width, H = b.ctx.canvas.height, d = b.ctx.getImageData(0, 0, W, H).data;
+  if (!d.length) return null;
+  const n = Math.ceil(size / CELL), acc = new Float64Array(n * n);
+  let total = 0;
+  const xo = Math.round(b.xof), yo = Math.round(b.yof);
+  for (let y = 0; y < H; y++) {
+    const py = y + yo;
+    if (py < 0 || py >= size) continue;
+    const row = Math.floor(py / CELL) * n;
+    for (let x = 0; x < W; x++) {
+      const a = d[(y * W + x) * 4 + 3];
+      if (!a) continue;
+      const px = x + xo;
+      if (px < 0 || px >= size) continue;
+      acc[row + Math.floor(px / CELL)] += a; total += a;
+    }
+  }
+  if (total < 255 * 40) return null;
+  let best = -1, bi = 0, bj = 0;
+  for (let j = 0; j + WIN <= n; j++) for (let i = 0; i + WIN <= n; i++) {
+    let s = 0;
+    for (let v = 0; v < WIN; v++) for (let u = 0; u < WIN; u++) s += acc[(j + v) * n + i + u];
+    if (s > best) { best = s; bi = i; bj = j; }
+  }
+  return { x: (bi + WIN / 2) * CELL, y: (bj + WIN / 2) * CELL, r: WIN * CELL / 2, ink: best / total };
 }
 
 // ── PAR as plain data ───────────────────────────────────────────────────────

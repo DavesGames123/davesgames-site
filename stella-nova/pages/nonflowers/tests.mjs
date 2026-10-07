@@ -16,7 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { UPSTREAM, makeEngine, paint, plainPAR, hsvToRgb, recorderCanvas, seedToken, cleanSeed, randomSeed } from './engine.js';
+import { UPSTREAM, makeEngine, paint, plainPAR, hsvToRgb, recorderCanvas, seedToken, cleanSeed, randomSeed, flowerFocus } from './engine.js';
 import { layoutGrid, fitScale, parseSeedFrom, pngWithText, crc32 } from './view.js';
 
 const DIR = path.dirname(new URL(import.meta.url).pathname);
@@ -88,6 +88,21 @@ test('the engine sees the seed token as upstream SEED', () => {
   const E = makeEngine(SRC, 'a b', env({ h: 0, n: 0 }));
   eq(E.getSEED(), 'a%20b', 'SEED');
   ok(Number.isFinite(E.Prng.s) && E.Prng.s > 1, 'Prng state');
+});
+
+test('paint() records the two plant blits and puts Layer.blit back', () => {
+  const r = run('blits').r;
+  eq(r.blits.map(b => b.ble).join(','), 'multiply,normal', 'blend order');
+  ok(!/blits\.push/.test(String(r.E.Layer.blit)), 'Layer.blit is the upstream function again');
+  eq(flowerFocus(r.blits), null, 'the recorder canvas has no pixels: no focus');
+});
+test('flowerFocus finds a synthetic petal patch', () => {
+  const W = 200, data = new Uint8ClampedArray(W * W * 4);
+  for (let y = 120; y < 160; y++) for (let x = 30; x < 70; x++) data[(y * W + x) * 4 + 3] = 255;
+  const ctx = { canvas: { width: W, height: W }, getImageData: () => ({ data }) };
+  const f = flowerFocus([{ ble: 'multiply' }, { ble: 'normal', ctx, xof: 100, yof: 200 }]);
+  ok(f && Math.abs(f.x - 150) <= 40 && Math.abs(f.y - 340) <= 40, 'focus near (150, 340): ' + JSON.stringify(f));
+  ok(f.ink > 0.99, 'all ink in the window');
 });
 
 // ── PAR ─────────────────────────────────────────────────────────────────────

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Nonflowers — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   NONFLOWERS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Nonflowers by Lingdong Huang, 2018 (MIT, see LICENSE-nonflowers.txt):
+   procedural paintings of plants that do not exist, in the Gongbi style.
+   https://github.com/LingDong-/nonflowers. upstream/main.js is the
+   upstream engine, byte for byte. This page is a wrapper by davesgames.io:
+   a seed field, history, a share link, PNG export, a summary of the plant
+   parameters, a herbarium grid and a screensaver tour. A seed paints the
+   same plant here as upstream index.html?seed=<seed> does.
+
+   FILES
+     upstream/main.js        the upstream engine (Lingdong Huang, MIT)
+     LICENSE-nonflowers.txt  the upstream licence
+     engine.js               the shim: runs upstream/main.js with local state
+     worker.js               one painting per message (OffscreenCanvas)
+     pool.js                 two workers, queue, cache, main-thread fallback
+     view.js                 DOM-free helpers: crisp scale, grid, PNG text
+     main.js                 the mat, the controls, summary, herbarium, export
+     saver.js                the screensaver tour (window.snSaver)
+     tests.mjs               node tests (sha256 pin, determinism, PAR)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #desk fills the rest. #mat is one
+                 canvas: the tiled background paper of the seed, with
+                 the 600 px painting in the middle at a crisp scale.
+                 #caption is one line under it. #prog shows the stages
+                 while a plant paints. #tools holds Herbarium and
+                 New flower. #herb covers #desk with the grid.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: back, new flower (the seed), forward,
+                 herbarium, settings. #panel is a bottom sheet (portrait)
+                 or a drawer at the right (landscape). The mat fits in
+                 the part of #desk that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'       fit the mat in the clear area
+     grep -n 'function show'         paint a seed and show it
+     grep -n 'function drawMat'      paper tiles and the painting
+     grep -n 'function progress'     the stage line and bar
+     grep -n 'function renderSummary' PAR as rows, swatches and curves
+     grep -n 'function openHerb'     the herbarium grid
+     grep -n 'function exportPNG'    paper + painting, with tEXt credit
+     grep -n 'function shareLink'    ?seed= link
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Nonflowers by Lingdong Huang: procedurally generated Gongbi paintings of flowers that do not exist. Seeds, history, share links, PNG export, a parameter summary and a herbarium.">
+<meta name="author" content="Lingdong Huang (Nonflowers); page wrapper by davesgames.io">
+<meta property="og:title" content="Nonflowers by Lingdong Huang">
+<meta property="og:description" content="Procedural Gongbi paintings of flowers that do not exist. Nonflowers by Lingdong Huang (MIT), on davesgames.io.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Nonflowers <span class="by">by Lingdong Huang</span></div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="desk">
+  <canvas id="mat" aria-label="The painting on its paper"></canvas>
+  <div id="prog" aria-live="polite"><div class="pl" id="progLine">Painting…</div><div class="bar"><i id="progBar"></i></div></div>
+  <div id="caption"></div>
+  <div id="tools">
+    <button id="herbBtn" title="A grid of plants (H)">Herbarium</button>
+    <button id="newBtn" class="acc" title="A new plant (N)">New flower</button>
+  </div>
+  <section id="herb" aria-label="Herbarium" hidden>
+    <header>
+      <div class="hb-title">Herbarium <span id="herbCount"></span></div>
+      <button id="herbMore">Twelve more</button>
+      <button id="herbClose" aria-label="Close the herbarium">✕</button>
+    </header>
+    <p class="hint hb-hint">Each sheet is one seed. Tap a sheet to open it.</p>
+    <div id="herbGrid"></div>
+  </section>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="credit">
+    <b>Nonflowers</b> by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a>, 2018, MIT licence.
+    <a href="https://github.com/LingDong-/nonflowers" target="_blank" rel="noopener">Source</a> ·
+    <a href="https://lingdong-.github.io/nonflowers/" target="_blank" rel="noopener">Original page</a>
+  </div>
+
+  <div class="sec-label first">Plant</div>
+  <form class="seedrow" id="seedForm">
+    <label for="seed">Seed</label>
+    <input id="seed" type="text" maxlength="48" autocomplete="off" spellcheck="false" aria-label="Seed">
+    <button type="submit">Paint</button>
+  </form>
+  <div class="btns">
+    <button id="backBtn" title="The plant before (←)" aria-label="Back">‹ Back</button>
+    <button id="newBtn2" class="acc" title="A new plant (N)">New flower</button>
+    <button id="fwdBtn" title="The next plant in the history (→)" aria-label="Forward">Forward ›</button>
+  </div>
+  <p class="hint" id="plantInfo"></p>
+
+  <div class="sec-label">Share and save</div>
+  <div class="btns">
+    <button id="linkBtn">Copy link</button>
+    <button id="pngBtn">Download PNG</button>
+  </div>
+  <input id="linkOut" class="linkout" readonly aria-label="Share link" hidden>
+  <p class="hint">The PNG is the 600 px painting on its paper, as upstream saves it. Its text fields name Lingdong Huang and the seed.</p>
+
+  <div class="sec-label">Plant summary</div>
+  <p class="hint" id="sumHint">The numbers that genParams() picked for this seed. A woody plant uses the branch group, a herbal plant the stem group.</p>
+  <div id="summary"></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p><b>Nonflowers</b> is by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a> (2018, MIT). It paints plants that do not exist in the manner of Gongbi, the fine-line Chinese flower painting. Every shape is a polygon from a seeded random source and Perlin noise, and two filters work on the pixels. No image or library goes in. This page runs the upstream file without a change.</p>
+    <p>A plant is woody or herbal, with even odds. A woody plant grows fractal branches; leaves and flowers go at random points on them. A herbal plant grows a few stems from one root, each with a sheath and shoots that end in a flower. Each petal is a leaf() with no veins, bent by an open curve and shaded by a colour curve.</p>
+    <div class="eq" id="eqBorder"></div>
+    <p>The edge of the painting is a squircle: the border keeps pixels inside this radius, with angle θ and a = 3.</p>
+    <div class="eq" id="eqColour"></div>
+    <p>The petal colour runs along the petal through this sigmoid, with the two colours of the summary at its ends.</p>
+    <p>The page wrapper is by davesgames.io: a worker shim that keeps the engine state local, the history, the summary, the herbarium and the screensaver. A seed here paints the same pixels as the upstream page with <code>?seed=</code> and that seed (checked in headless Chrome).</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockBack" aria-label="Back">‹</button>
+  <button id="dockName" class="name" aria-label="New flower"><span id="dockTitle">…</span><i>new</i></button>
+  <button id="dockFwd" aria-label="Forward">›</button>
+  <button id="dockHerb" aria-label="Herbarium"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
