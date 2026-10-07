@@ -128,7 +128,8 @@ w.SN_NAV = [
       ["wind-tunnel", "Wind Tunnel", "CFD"]
     ] },
     { h: "Earth & Ocean", p: [
-      ["tidal-currents", "Tidal Currents", "DATA"]
+      ["tidal-currents", "Tidal Currents", "DATA"],
+      ["city-atlas", "City Atlas", "3D"]
     ] },
     { h: "Shock Waves", p: [
       ["nuclear-blast", "Nuclear Blast Effects", "3D"]
