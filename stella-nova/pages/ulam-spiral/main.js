@@ -1199,7 +1199,7 @@ async function selfTest() {
 // --- boot ------------------------------------------------------------------------------------------
 const app = {
   S, R: () => R, L, T, MODES, PALETTES, BGS, view, toScreen, toWorld, frameState, setShape, setMode, startMorph, startWalk, stopWalk,
-  flyTo, homeCam, home3, fitCam, bboxOf, cam3Mats, project3, nSpan, isPrimeN, fmt, fmtS, setOpen, drawOverlay, computeRays,
+  flyTo, homeCam, home3, n3Count, fitCam, bboxOf, cam3Mats, project3, nSpan, isPrimeN, fmt, fmtS, setOpen, drawOverlay, computeRays,
   updateQuad, worker, get dpr() { return dpr; }, gl: cv, ov, is3D, PHONE_Q, homeCount, shapeChanged,
 };
 window.__ulam = { S, app, selfTest, gotoNumber, setShape, setMode, L, T, frames: () => frames, ready: () => !!(S.bits && R) };
