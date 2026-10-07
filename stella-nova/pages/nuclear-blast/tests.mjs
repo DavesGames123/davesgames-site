@@ -15,8 +15,11 @@
 //    fallout ..... the G&D 9.98 worked example (10 MT, 30 mph)
 //    cloud ....... G&D Table 2.12 (rise of a 1 Mt cloud)
 //    shape ....... monotone curves, round trips of the inverse functions
+//    map ......... the 5 psi ring on the place map: its on-screen radius at
+//                  two zooms and two latitudes equals R / metresPerPixel
 // ============================================================================
 import * as E from './effects.js';
+import * as G from './geo.js';
 
 const FT = 0.3048, MI = 1609.344;
 let fail = 0, n = 0;
@@ -121,6 +124,31 @@ check('observed cloud top, 15 MT surface burst (km)', E.cloudTopFinal(15000) / 1
   const x = 1.7; ok('pulse peaks at t_max', E.pulseShape(1) > E.pulseShape(0.95) && E.pulseShape(1) > E.pulseShape(1.05) && Math.abs(E.pulseShape(1) - 1) < 1e-12 && E.pulseShape(x) < 1);
   const S = E.summary(300, E.optimumHeight(5 * E.PSI, 300));
   ok('summary: 20 psi < 5 psi < 1 psi and 3° burn < 1° burn', S.psi20 < S.psi5 && S.psi5 < S.psi1 && S.burn3 < S.burn1);
+}
+
+
+// ── map: the ring on screen (geo.js) ─────────────────────────────────────
+// A 100 kt burst at the best height for 5 psi. On the map the ring is a
+// geodesic circle; its mean screen radius (north, east, south, west points,
+// projected) must equal R / metresPerPixel. The equator check also compares
+// with the plain scale 2 pi R_E / 256 / 2^z.
+{
+  const W = 100, R = E.rangeFor(5 * E.PSI, W, E.optimumHeight(5 * E.PSI, W));
+  for (const lat of [0, 60]) for (const z of [9, 13]) {
+    const lon = 10, c = G.project(lon, lat, z);
+    let sum = 0;
+    for (const b of [0, 90, 180, 270]) { const q = G.destination(lon, lat, R, b), p = G.project(q.lon, q.lat, z); sum += Math.hypot(p.x - c.x, p.y - c.y); }
+    const want = R / G.metresPerPixel(lat, z);
+    check(`map: 5 psi ring (${(R / 1000).toFixed(2)} km) on screen, lat ${lat}°, zoom ${z} (px)`, sum / 4, want, 0.01);
+  }
+  check('map: metres per pixel at the equator, zoom 0', G.metresPerPixel(0, 0), 2 * Math.PI * 6378137 / 256, 1e-9);
+  check('map: 60° N doubles the screen size of a ring', (R / G.metresPerPixel(60, 11)) / (R / G.metresPerPixel(0, 11)), 2, 0.001);
+  const q = G.destination(10, 45, R, 37), back = G.distance(10, 45, q.lon, q.lat);
+  check('map: destination and distance round trip (m)', back, R, 1e-6);
+  const p = G.project(-73.99, 40.72, 12), u = G.unproject(p.x, p.y, 12);
+  ok('map: project and unproject round trip', Math.abs(u.lon + 73.99) < 1e-9 && Math.abs(u.lat - 40.72) < 1e-9);
+  const L = G.toLocal(q.lon, q.lat, 10, 45);
+  check('map: local tangent plane distance at 4 km (m)', Math.hypot(L.x, L.z), R, 0.005);
 }
 
 console.log(`\n${n - fail}/${n} passed`);
