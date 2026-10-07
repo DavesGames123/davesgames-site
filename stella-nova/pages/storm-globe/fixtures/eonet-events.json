@@ -1,0 +1,434 @@
+{
+ "title": "EONET Events",
+ "events": [
+  {
+   "id": "EONET_25046",
+   "title": "Tropical Storm Koguma",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_25046",
+   "closed": null,
+   "categories": [
+    {
+     "id": "severeStorms",
+     "title": "Severe Storms"
+    }
+   ],
+   "sources": [
+    {
+     "id": "JTWC",
+     "url": "https://www.metoc.navy.mil/jtwc/products/wp2726.tcw"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": 35.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-05T12:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      168,
+      11.5
+     ]
+    },
+    {
+     "magnitudeValue": 40.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-05T18:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      167.6,
+      12.2
+     ]
+    },
+    {
+     "magnitudeValue": 45.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T00:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      167,
+      12.8
+     ]
+    },
+    {
+     "magnitudeValue": 45.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T06:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      166.4,
+      13.4
+     ]
+    },
+    {
+     "magnitudeValue": 45.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T12:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      165.8,
+      14
+     ]
+    },
+    {
+     "magnitudeValue": 50.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T18:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      164.5,
+      14.7
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_24962",
+   "title": "Super Typhoon Choi-wan",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_24962",
+   "closed": null,
+   "categories": [
+    {
+     "id": "severeStorms",
+     "title": "Severe Storms"
+    }
+   ],
+   "sources": [
+    {
+     "id": "JTWC",
+     "url": "https://www.metoc.navy.mil/jtwc/products/wp2626.tcw"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": 110.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-05T12:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      145.9,
+      27.3
+     ]
+    },
+    {
+     "magnitudeValue": 105.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-05T18:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      145.5,
+      28.4
+     ]
+    },
+    {
+     "magnitudeValue": 95.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T00:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      145.8,
+      29.8
+     ]
+    },
+    {
+     "magnitudeValue": 85.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T06:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      146.4,
+      31.6
+     ]
+    },
+    {
+     "magnitudeValue": 80.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T12:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      147.6,
+      33.7
+     ]
+    },
+    {
+     "magnitudeValue": 75.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-10-06T18:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      149.5,
+      36.3
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_24909",
+   "title": "Tropical Storm Hanna",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_24909",
+   "closed": null,
+   "categories": [
+    {
+     "id": "severeStorms",
+     "title": "Severe Storms"
+    }
+   ],
+   "sources": [
+    {
+     "id": "NOAA_NHC",
+     "url": "https://www.nhc.noaa.gov/archive/2026/HANNA.shtml"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": 40.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-09-29T09:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -46.2,
+      35.2
+     ]
+    },
+    {
+     "magnitudeValue": 35.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-09-29T15:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -45.5,
+      34.6
+     ]
+    },
+    {
+     "magnitudeValue": 35.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-09-29T21:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -44.5,
+      34
+     ]
+    },
+    {
+     "magnitudeValue": 35.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-09-30T03:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -43.6,
+      33.7
+     ]
+    },
+    {
+     "magnitudeValue": 35.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-09-30T09:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -43.9,
+      33.5
+     ]
+    },
+    {
+     "magnitudeValue": 30.0,
+     "magnitudeUnit": "kts",
+     "date": "2026-09-30T15:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -43.6,
+      33.4
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_20710",
+   "title": "Nevados del Chillan Volcano, Chile",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_20710",
+   "closed": null,
+   "categories": [
+    {
+     "id": "volcanoes",
+     "title": "Volcanoes"
+    }
+   ],
+   "sources": [
+    {
+     "id": "SIVolcano",
+     "url": "https://volcano.si.edu/volcano.cfm?vn=357070"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": null,
+     "magnitudeUnit": null,
+     "date": "2026-06-15T00:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -71.378,
+      -36.868
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_20409",
+   "title": "Telica Volcano, Nicaragua",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_20409",
+   "closed": null,
+   "categories": [
+    {
+     "id": "volcanoes",
+     "title": "Volcanoes"
+    }
+   ],
+   "sources": [
+    {
+     "id": "SIVolcano",
+     "url": "https://volcano.si.edu/volcano.cfm?vn=344040"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": null,
+     "magnitudeUnit": null,
+     "date": "2026-05-30T00:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      -86.84,
+      12.606
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_20392",
+   "title": "Ivao Group Volcano, Russia",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_20392",
+   "closed": null,
+   "categories": [
+    {
+     "id": "volcanoes",
+     "title": "Volcanoes"
+    }
+   ],
+   "sources": [
+    {
+     "id": "SIVolcano",
+     "url": "https://volcano.si.edu/volcano.cfm?vn=290111"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": null,
+     "magnitudeUnit": null,
+     "date": "2026-05-29T00:00:00Z",
+     "type": "Point",
+     "coordinates": [
+      149.6762,
+      45.7593
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_25043",
+   "title": "Prescribed Fire D3 Bear RX, Greenlee, Arizona",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_25043",
+   "closed": null,
+   "categories": [
+    {
+     "id": "wildfires",
+     "title": "Wildfires"
+    }
+   ],
+   "sources": [
+    {
+     "id": "IRWIN",
+     "url": "https://irwin.doi.gov/observer/incidents/2026-AZASF-000967"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": 5072.0,
+     "magnitudeUnit": "acres",
+     "date": "2026-10-02T17:58:00Z",
+     "type": "Point",
+     "coordinates": [
+      -109.401883,
+      33.447133
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_25042",
+   "title": "Wildfire Bull, Washoe, Nevada",
+   "description": "15 Miles W from Reno, NV",
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_25042",
+   "closed": null,
+   "categories": [
+    {
+     "id": "wildfires",
+     "title": "Wildfires"
+    }
+   ],
+   "sources": [
+    {
+     "id": "IRWIN",
+     "url": "https://irwin.doi.gov/observer/incidents/2026-NVTMFX-030869"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": 1529.0,
+     "magnitudeUnit": "acres",
+     "date": "2026-10-02T14:26:00Z",
+     "type": "Point",
+     "coordinates": [
+      -119.987683,
+      39.539067
+     ]
+    }
+   ]
+  },
+  {
+   "id": "EONET_25045",
+   "title": "Prescribed Fire Starvation 11A Rx, Wallowa, Oregon",
+   "description": null,
+   "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_25045",
+   "closed": null,
+   "categories": [
+    {
+     "id": "wildfires",
+     "title": "Wildfires"
+    }
+   ],
+   "sources": [
+    {
+     "id": "IRWIN",
+     "url": "https://irwin.doi.gov/observer/incidents/2026-ORWWF-000669"
+    }
+   ],
+   "geometry": [
+    {
+     "magnitudeValue": 719.0,
+     "magnitudeUnit": "acres",
+     "date": "2026-09-30T15:52:00Z",
+     "type": "Point",
+     "coordinates": [
+      -117.251676,
+      45.701354
+     ]
+    }
+   ]
+  }
+ ]
+}
