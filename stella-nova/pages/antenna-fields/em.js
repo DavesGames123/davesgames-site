@@ -486,7 +486,7 @@ function wireElems(Lst, x, y, z, Ir, Ii, sub, scale, draw) {
 
 export function buildAntenna(st) {
   const L = elemList(256), wires = [];
-  let Zin = null, extent = 0, note = '', psi = { side: null, top: null };
+  let Zin = null, extent = 0, note = '', psi = { side: null, top: null }, nonUniform = 0;
   const budget = st.budget || 260;
   if (st.type === 'hertz') {
     pushElem(L, 0, 0, 0, 0, 0, 1, st.dl, 0);
@@ -538,11 +538,14 @@ export function buildAntenna(st) {
     }
     for (let i = 0; i <= 64; i++) { const ph = 2 * Math.PI * i / 64; pts.push([b * Math.cos(ph), b * Math.sin(ph), 0]); cur.push(cmul(lp.Iat(ph), sc)); }
     wires.push({ pts, I: cur });
-    // The small loop has a uniform current, so the side view has a flux
-    // function for B. A larger loop does not.
-    let spread = 0;
-    for (let i = 0; i < 16; i++) { const v = cmul(lp.Iat(2 * Math.PI * i / 16), sc); spread = Math.max(spread, Math.hypot(v[0] - 1, v[1])); }
-    psi = { side: spread < 0.05 ? 'Bloop' : null, top: null };
+    // A uniform current has a flux function for B in the side view. Here the
+    // other modes are measured against the uniform one: sum_{n>=1} 2|I_n| / |I_0|.
+    // Under 0.12 the contours of rho A_phi are drawn as the B lines.
+    const a0 = Math.hypot(lp.In[0][0], lp.In[0][1]);
+    let rest = 0;
+    for (let n = 1; n < lp.In.length; n++) rest += 2 * Math.hypot(lp.In[n][0], lp.In[n][1]);
+    psi = { side: rest / a0 < 0.12 ? 'Bloop' : null, top: null };
+    nonUniform = rest / a0;
     note = (st.modes || 40) + ' Fourier modes';
   } else if (st.type === 'array') {
     const N = st.N, d = st.d, h = st.Le / 2;
@@ -587,5 +590,5 @@ export function buildAntenna(st) {
     note = r.n + ' PWS bases on ' + W.length + ' wires';
     wires.forEach((w, i) => { w.role = i === 0 ? 'reflector' : i === 1 ? 'driven' : 'director'; });
   }
-  return { elems: L, wires, Zin, extent, note, psi };
+  return { elems: L, wires, Zin, extent, note, psi, nonUniform };
 }
