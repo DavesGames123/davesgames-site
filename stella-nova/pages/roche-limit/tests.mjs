@@ -240,7 +240,7 @@ async function gpuTest() {
     const dU = Math.abs(eg.Us - ec.Us) / Math.abs(ec.Us), dK = Math.abs((eg.K + eg.Kr + eg.Up) - (ec.K + ec.Kr + ec.Up)) / Math.abs(ec.Us);
     let Wc = 0; for (const q of cpu.work) Wc += q;
     ok('GPU energy terms = CPU (self potential, orbit)', dU < 1e-5 && dK < 1e-3, `|dU_self|/|U_self| ${dU.toExponential(2)}, |d(K + U_planet)|/|U_self| ${dK.toExponential(2)}, contact work GPU ${rb.W.toExponential(4)} CPU ${Wc.toExponential(4)}`); }
-  ok('no grid bucket overflow', rb.overflow === 0, `${rb.overflow} grains found a full bucket`);
+  ok('no grid bucket or neighbour list overflow', rb.overflow === 0 && rb.listFull === 0, `${rb.overflow} grains found a full bucket, ${rb.listFull} a full list`);
   ok('no WebGPU validation errors', errs.length === 0, errs.join(' | ') || 'none');
   gpu.destroy(); device.destroy();
 }

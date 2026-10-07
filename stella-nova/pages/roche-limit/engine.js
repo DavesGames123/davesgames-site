@@ -47,7 +47,7 @@ export class SimGPU {
   constructor(device, N, code, K = K_STEP) {
     this.dev = device; this.N = N; this.K = K;
     this.np = Math.ceil(N / 256) * 256;
-    this.H = 1 << Math.max(12, Math.ceil(Math.log2(4 * N)));
+    this.H = 1 << Math.max(12, Math.ceil(Math.log2(8 * N)));
     this.params = new ArrayBuffer(96);
     this.cur = 0;           // which neighbour list (0: A, 1: B) is current
     this.synced = true;     // v at the same time as x
@@ -183,18 +183,23 @@ export class SimGPU {
     enc.copyBufferToBuffer(this.bufBody, 0, this.stBody, 0, this.stBody.size);
     enc.copyBufferToBuffer(this.bufGrav, 0, this.stGrav, 0, this.stGrav.size);
     enc.copyBufferToBuffer(this.bufLedger, 0, this.stLedger, 0, this.stLedger.size);
-    enc.copyBufferToBuffer(this.bufCount, this.H * 4, this.stCount, 0, 16);
+    enc.copyBufferToBuffer(this.bufCount, this.H * 4, this.stCount, 0, 16);   // [H] bucket full, [H+1] list full
     enc.clearBuffer(this.bufLedger);
     dev.queue.submit([enc.finish()]);
-    await Promise.all([this.stBody.mapAsync(GPUMapMode.READ), this.stGrav.mapAsync(GPUMapMode.READ), this.stLedger.mapAsync(GPUMapMode.READ), this.stCount.mapAsync(GPUMapMode.READ)]);
-    this.overflow = new Uint32Array(this.stCount.getMappedRange())[0]; this.stCount.unmap();
+    // a run that is replaced while the copy is in flight destroys the
+    // buffers; the map then rejects, and the readback gives null
+    try {
+      await Promise.all([this.stBody.mapAsync(GPUMapMode.READ), this.stGrav.mapAsync(GPUMapMode.READ), this.stLedger.mapAsync(GPUMapMode.READ), this.stCount.mapAsync(GPUMapMode.READ)]);
+    } catch (e) { this.busy = false; return null; }
+    if (this.destroyed) { this.busy = false; return null; }
+    { const c = new Uint32Array(this.stCount.getMappedRange()); this.overflow = c[0]; this.listFull = c[1]; } this.stCount.unmap();
     const body = new Float32Array(this.stBody.getMappedRange().slice(0));
     const grav = new Float32Array(this.stGrav.getMappedRange().slice(0));
     const led = new Float32Array(this.stLedger.getMappedRange().slice(0));
     this.stBody.unmap(); this.stGrav.unmap(); this.stLedger.unmap();
     for (let i = 0; i < this.N; i++) { this.Llost[0] += led[4 * i]; this.Llost[1] += led[4 * i + 1]; this.Llost[2] += led[4 * i + 2]; this.W += led[4 * i + 3]; }
     this.busy = false;
-    return { body, grav, X, V, t, W: this.W, Llost: this.Llost.slice(), overflow: this.overflow };
+    return { body, grav, X, V, t, W: this.W, Llost: this.Llost.slice(), overflow: this.overflow, listFull: this.listFull };
   }
   // Read the fast acceleration and angular acceleration (tests).
   async readAccs() {
@@ -206,7 +211,7 @@ export class SimGPU {
     const a = new Float32Array(st.getMappedRange().slice(0)); st.unmap(); st.destroy();
     return a;
   }
-  destroy() { for (const b of this.all) b.destroy(); }
+  destroy() { this.destroyed = true; for (const b of this.all) b.destroy(); }
 }
 
 function makeBuffers(s) {

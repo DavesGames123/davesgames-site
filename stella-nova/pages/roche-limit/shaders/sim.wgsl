@@ -25,7 +25,8 @@
 //    diag    |tide| · |self g| · contact pressure · contact count
 //    nbr     NB slots per grain, then np counts; xi: tangential springs
 //    gcount, gitems   the hashed grid, CAP grains per bucket; gcount[H]
-//            counts the grains that found their bucket full
+//            counts the grains that found their bucket full, gcount[H+1]
+//            the neighbours that found a full list (NB)
 //
 //  grep -n targets: "fn cs_kick", "fn cs_forces", "fn tide", "fn cs_gravity", "fn cs_potential",
 //  "fn cs_gridScatter", "fn cs_nlist", "fn cellHash"
@@ -354,7 +355,8 @@ fn cs_nlist(@builtin(global_invocation_id) gid: vec3u) {
           if (any(cellOf(bj.pos.xyz) != cc)) { continue; }
           let d = xi0 - bj.pos.xyz;
           let s = b.pos.w + bj.pos.w + P.skin;
-          if (dot(d, d) >= s * s || c >= NB) { continue; }
+          if (dot(d, d) >= s * s) { continue; }
+          if (c >= NB) { atomicAdd(&gcount[P.hmask + 2u], 1u); continue; }   // list full (counted)
           var sp = vec4f(0.0);
           for (var o = 0u; o < oldCnt; o++) {
             if (nbrA[i * NB + o] == j) { sp = xiA[i * NB + o]; break; }
