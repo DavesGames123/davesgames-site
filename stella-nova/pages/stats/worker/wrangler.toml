@@ -6,7 +6,7 @@
 #   npx wrangler secret put STATS_KEY        (the key for #stats)
 #   npx wrangler deploy
 # Then put the printed https://sn-stats.<you>.workers.dev URL into
-# STATS_URL in ../../../lib/stats-beacon.js and API_URL in ../main.js.
+# STATS_URL in ../../../lib/stats-beacon.js (the #stats page reads it too).
 name = "sn-stats"
 main = "worker.js"
 compatibility_date = "2026-10-01"

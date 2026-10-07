@@ -64,6 +64,10 @@ check(has(r, 'wl', 'gravity', 'chip'), 'steam click is a wishlist row');
 check(has(rows({ t: 'out', host: 'discord.gg' }), 'out', 'discord.gg'), 'other outbound host');
 check(has(rows({ t: 'end', p: 'gravity', depth: 4 }), 'depth', '3-4') && has(rows({ t: 'end', p: 'gravity', depth: 4 }), 'exit', 'gravity'), 'end rows');
 check(rows({ t: 'nope' }).length === 0, 'unknown event type dropped');
+r = rows({ t: 'end', p: 'gravity', depth: 4, undo: 1 });
+check(r.some(x => x[0] === 'exit' && x[3] === -1) && r.some(x => x[0] === 'depth' && x[1] === '3-4' && x[3] === -1), 'end undo takes the exit and depth away', r);
+r = rows({ t: 'eng', p: 'gravity', s: 0, undo: 1, tot: 42 });
+check(r.length === 1 && r[0][0] === 'engb' && r[0][1] === '30-60s' && r[0][3] === -1, 'eng undo takes only the time bin away', r);
 
 const et = W.errText('Failed to fetch https://x.io/a?q=dave@mail.com at /stella-nova/pages/x/main.js:120:7 "secret text"');
 check(!/x\.io|dave|mail|secret|120|stella-nova/.test(et), 'errText strips URLs, paths, numbers and quotes', et);

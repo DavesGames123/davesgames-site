@@ -27,7 +27,7 @@
 //    pv     page, -         a pageview (saver runs are not counted)
 //    upv    page, -         first view of a page by a hash that day
 //    entry  page, -         first page of a session
-//    exit   page, -         page shown when the session ends
+//    exit   page, -         page shown when the session ends (undo: n -1)
 //    flow   from, to        page to page in one session
 //    how    weekday, hour   local time of the visitor (0 = Sunday)
 //    hr     UTC hour, -     pageviews by UTC hour
@@ -37,7 +37,7 @@
 //    load   page, -         load ms in v
 //    loadb  bin, -          load time histogram
 //    ttfb   page, -         time to first byte ms in v
-//    depth  bin, -          pages per session at its end
+//    depth  bin, -          pages per session at its end (undo: n -1)
 //    err    page, kind      kind: js | promise | gpu
 //    errm   kind, text      short error text (URLs and numbers removed)
 //    wl     page, medium    a click on a Steam store link
@@ -192,6 +192,8 @@ function rowsFor(e, ctx) {
     case 'eng': {
       const s = num(e.s, 0, 7200);
       if (!p || s === null) break;
+      // undo: the tab came back, so the bin sent at hide is taken away.
+      if (e.undo) { add('engb', bin(num(e.tot, 0, 1e6) ?? 0, ENG_EDGES, ENG_LABELS), '', -1); break; }
       add('eng', p, '', e.first ? 1 : 0, s);
       if (e.last) add('engb', bin(num(e.tot, 0, 1e6) ?? s, ENG_EDGES, ENG_LABELS));
       break;
@@ -219,9 +221,12 @@ function rowsFor(e, ctx) {
       break;
     }
     case 'end': {
-      if (p) add('exit', p);
+      // The beacon sends 'end' when the tab hides, and the same event with
+      // undo: 1 when the tab comes back. n = -1 takes the end away.
+      const n = e.undo ? -1 : 1;
+      if (p) add('exit', p, '', n);
       const d = num(e.depth, 1, 10000);
-      if (d !== null) add('depth', bin(d, DEPTH_EDGES, DEPTH_LABELS));
+      if (d !== null) add('depth', bin(d, DEPTH_EDGES, DEPTH_LABELS), '', n);
       break;
     }
     case 'saver': add('saver', '', '', e.start ? 1 : 0, num(e.s, 0, 86400) || 0); break;
