@@ -31,9 +31,12 @@
 //              total not below 0 (a dashpot does not pull)
 //    friction  tangential spring xi (Cundall-Strack), F_t = -k_t xi - g_t v_t,
 //              capped at mu (F_n + C); xi is kept per contact in the neighbour
-//              list and copied when the list is rebuilt
+//              list and copied when the list is rebuilt. Lever arms reach
+//              the middle of the overlap (a_i = r_i - delta/2), so the
+//              torques keep the angular momentum.
 //    rolling   torque -mu_r R_eff F_n w_perp / sqrt(|w_perp|^2 + w0^2)
-//    cohesion  a pull of C along -n while the gap is below COH_GAP
+//    cohesion  a pull of C along -n while the grains touch, falling
+//              linearly to 0 at a gap of COH_GAP
 //
 //  INTEGRATOR. Kick-drift-kick (velocity Verlet) at the contact step dt.
 //  Self-gravity is the slow force: the direct sum runs once every K steps
@@ -410,12 +413,17 @@ export class CpuSim {
         if (gap >= reach) { xi[q] = xi[q + 1] = xi[q + 2] = 0; continue; }
         const nx = dx / dist, ny = dy / dist, nz = dz / dist;
         let Fn = 0, Fx = 0, Fy = 0, Fz = 0;
-        const coh = C.coh > 0 && gap < C.cohGap ? C.coh : 0;
+        // cohesion: C while touching, falling linearly to 0 at a gap of
+        // cohGap (shaders/sim.wgsl does the same)
+        const coh = C.coh > 0 ? C.coh * Math.min(1, Math.max(0, 1 - gap / C.cohGap)) : 0;
         if (gap < 0) {
           const mj = mass[j], meff = mi * mj / (mi + mj);
           const delta = -gap;
-          // relative velocity of the contact point: v_i - v_j - (r_i w_i + r_j w_j) x n
-          const wx = ri * w[o] + rad[j] * w[3 * j], wy = ri * w[o + 1] + rad[j] * w[3 * j + 1], wz = ri * w[o + 2] + rad[j] * w[3 * j + 2];
+          // lever arms to the middle of the overlap (a_i + a_j = |d|), so the
+          // friction torques and the pair's orbital torque cancel exactly
+          const ai = ri + 0.5 * gap, aj = rad[j] + 0.5 * gap;
+          // relative velocity of the contact point: v_i - v_j - (a_i w_i + a_j w_j) x n
+          const wx = ai * w[o] + aj * w[3 * j], wy = ai * w[o + 1] + aj * w[3 * j + 1], wz = ai * w[o + 2] + aj * w[3 * j + 2];
           const cxw = wy * nz - wz * ny, cyw = wz * nx - wx * nz, czw = wx * ny - wy * nx;
           const vx = v[o] - v[3 * j] - cxw, vy = v[o + 1] - v[3 * j + 1] - cyw, vz = v[o + 2] - v[3 * j + 2] - czw;
           const vn = vx * nx + vy * ny + vz * nz;
@@ -436,12 +444,13 @@ export class CpuSim {
             const ft = Math.sqrt(ftx * ftx + fty * fty + ftz * ftz), cap = C.mu * (Fn + coh);
             if (ft > cap) {
               const k = cap / ft; ftx *= k; fty *= k; ftz *= k;
-              sx = -ftx / C.kt; sy = -fty / C.kt; sz = -ftz / C.kt;
+              // sliding: the spring keeps the elastic part only (Luding 2008)
+              sx = -(ftx + gt * vtx) / C.kt; sy = -(fty + gt * vty) / C.kt; sz = -(ftz + gt * vtz) / C.kt;
             }
             xi[q] = sx; xi[q + 1] = sy; xi[q + 2] = sz;
             Fx += ftx; Fy += fty; Fz += ftz;
-            // torque on i: (-r_i n) x F_t
-            tx += -ri * (ny * ftz - nz * fty); ty += -ri * (nz * ftx - nx * ftz); tz += -ri * (nx * fty - ny * ftx);
+            // torque on i: (-a_i n) x F_t
+            tx += -ai * (ny * ftz - nz * fty); ty += -ai * (nz * ftx - nx * ftz); tz += -ai * (nx * fty - ny * ftx);
           }
           if (C.muR > 0) {
             const rx = w[o] - w[3 * j], ry = w[o + 1] - w[3 * j + 1], rz = w[o + 2] - w[3 * j + 2];

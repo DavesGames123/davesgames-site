@@ -160,11 +160,18 @@ fn cs_forces(@builtin(global_invocation_id) gid: vec3u) {
     }
     let n = d / dist;
     var F = vec3f(0.0);
-    let coh = select(0.0, P.coh, P.coh > 0.0 && gap < P.cohGap);
+    // cohesion: C while the grains touch, falling linearly to 0 at a gap of
+    // cohGap, so the force has no jump at the edge of its reach
+    let coh = P.coh * clamp(1.0 - gap / max(P.cohGap, 1e-6), 0.0, 1.0);
     if (gap < 0.0) {
       let mj = bj.vel.w;
       let sm = sqrt(mi * mj / (mi + mj));
-      let wsum = ri * wi + rj * bj.spin.xyz;
+      // lever arms to the middle of the overlap: the two torques and the
+      // pair's orbital torque then cancel exactly, so the friction keeps
+      // the angular momentum (arms of r_i, r_j leave -delta n x F_t)
+      let ai = ri + 0.5 * gap;
+      let aj = rj + 0.5 * gap;
+      let wsum = ai * wi + aj * bj.spin.xyz;
       let vrel = vi - bj.vel.xyz - cross(wsum, n);
       let vn = dot(vrel, n);
       let vt = vrel - vn * n;
@@ -184,11 +191,14 @@ fn cs_forces(@builtin(global_invocation_id) gid: vec3u) {
         let cap = P.mu * (Fn + coh);
         if (fm > cap) {
           ft = ft * (cap / fm);
-          sp = -ft / P.kt;
+          // sliding: the spring holds the elastic part of the capped force
+          // only, not the dashpot part (Luding 2008), so it stores no
+          // energy that the dashpot took
+          sp = -(ft + P.gtK * sm * vt) / P.kt;
         }
         xiA[q] = vec4f(sp, 0.0);
         F = F + ft;
-        t = t - ri * cross(n, ft);
+        t = t - ai * cross(n, ft);
       }
       if (P.muR > 0.0) {
         let wr = wi - bj.spin.xyz;

@@ -12,7 +12,8 @@
 //     and the period over 10 orbits; Kepler conic prediction closes
 //  4  a gravitating pair (extrapolated self-gravity): energy over 10 orbits
 //  5  the energy ledger E - W of an isolated pile; the bound mass search
-//     when no grain stays bound
+//     when no grain stays bound; the friction spring of a sliding contact;
+//     the torque balance of one contact
 //  6  disruption at low N (CPU): a fluid pile at 0.6 d_fluid loses most of
 //     its mass in 3 orbits, at 1.5 d_fluid it keeps it
 //  7  GPU (Deno WebGPU): forces of shaders/sim.wgsl against CpuSim for a
@@ -127,6 +128,37 @@ function cpuTests() {
   { const pos = [0, 0, 0, 2.0, 0, 0], vel = [0, 0, 0, 0, 500, 0], mass = [7, 7], rad = [1, 1];
     const an = P.analyzeBound(pos, vel, mass, rad, 3, [100, 0, 0], 1e6);
     ok('bound mass search: an unbound pair gives M = 0 and a finite centre', an.M === 0 && an.com.every(Number.isFinite), `M = ${an.M}, com = ${an.com.map(q => +q.toFixed(3)).join(', ')}`); }
+
+  // 5c ─ a sliding contact: after the Coulomb cap, the friction spring
+  // holds only the elastic part of the force (Luding 2008). The first
+  // version stored the dashpot part too; a rough pile then gained energy
+  // and angular momentum (rigid moon at 0.8 d_fluid: ledger 0.3 |U_self|).
+  { const mat = P.MATERIALS.rigid, C = P.contactParams(400, mat);
+    const m = P.RHO_GRAIN * 4 / 3 * Math.PI;
+    const g = new P.CpuSim(2, [1, 1], [m, m], C, { GM: 0, Rp: 1 });
+    g.x.set([0, 0, 0, 1.95, 0, 0]); g.v.set([0, 0, 0, 0, 40, 0]);
+    g.buildNeighbors(); g.fast(C.dt, 0);
+    const q = 0, xi = Math.hypot(g.xi[q], g.xi[q + 1], g.xi[q + 2]);
+    const meff = m / 2, Fn = C.kn * 0.05, gt = C.gtK * Math.sqrt(meff), vt = 40;
+    const want = Math.abs(C.mu * Fn - gt * vt) / C.kt;
+    ok('sliding contact: the spring keeps the elastic part only', Math.abs(xi - want) < 1e-9 * Math.max(1, want), `k_t |xi| = ${(C.kt * xi).toFixed(3)}, mu F_n - g_t v_t = ${(C.kt * want).toFixed(3)}, mu F_n = ${(C.mu * Fn).toFixed(3)}`); }
+
+  // 5d ─ angular momentum of one contact: x_i x F_i + x_j x F_j + tau_i +
+  // tau_j = 0. Lever arms of r_i, r_j left -delta n x F_t, and a cohesive
+  // pile (which keeps an overlap) drifted in L_z.
+  { const mat = P.MATERIALS.cohesive, C = P.contactParams(400, mat);
+    const m = P.RHO_GRAIN * 4 / 3 * Math.PI;
+    const g = new P.CpuSim(2, [1, 0.9], [m, m * 0.729], C, { GM: 0, Rp: 1 });
+    g.x.set([0, 0, 0, 1.75, 0.3, 0]); g.v.set([0, 0, 0, 0.2, 3, 1]); g.w.set([0.5, 0, 2, 0, -1, 0]);
+    g.buildNeighbors(); g.fast(C.dt, 0);
+    let T = [0, 0, 0], F = 0;
+    for (let i = 0; i < 2; i++) {
+      const x = [g.x[3 * i], g.x[3 * i + 1], g.x[3 * i + 2]], f = [g.fc[6 * i], g.fc[6 * i + 1], g.fc[6 * i + 2]];
+      T[0] += x[1] * f[2] - x[2] * f[1] + g.fc[6 * i + 3]; T[1] += x[2] * f[0] - x[0] * f[2] + g.fc[6 * i + 4]; T[2] += x[0] * f[1] - x[1] * f[0] + g.fc[6 * i + 5];
+      F = Math.max(F, Math.hypot(...f));
+    }
+    const rel = Math.hypot(...T) / F;
+    ok('one contact keeps the angular momentum (torque sum / |F|)', rel < 1e-12, `${rel.toExponential(2)} (overlap ${(1.9 - Math.hypot(1.75, 0.3)).toFixed(3)})`); }
 
   // 6 ─ disruption at low N
   { const N = 400, { C, cl, sim } = settledPile(N, P.MATERIALS.fluid, 7);
