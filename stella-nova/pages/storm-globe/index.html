@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Storm Globe — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STORM GLOBE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A fluid solver on the sphere (WebGPU), nudged toward
+   the NOAA GFS 10 m winds, carries the current tropical cyclones as
+   vortices. Colour is wind speed on the magma map, with the
+   Saffir-Simpson thresholds on the legend. Storms come from NHC and JTWC,
+   other extreme events from NASA EONET. A tour flies from event to event.
+
+   MODULES
+     sources.js   feed parsers (NHC, JTWC, EONET), categories, cones
+     grib.js      GRIB2 decoder and GFS frame fetch
+     data.js      snapshot load (data/live/, data/sample/), live refresh
+     solver.js    the flow solver (shaders/solver.wgsl)
+     render.js    globe, particles, tracks, markers (shaders/globe.wgsl,
+                  shaders/overlay.wgsl)
+     camera.js    orbit camera, projection, eased great-circle flights
+     timeline.js  time slider maths, storms in time, the sun
+     detect.js    deep lows and wind maxima in a GFS frame
+     colour.js    magma and the other maps, Saffir-Simpson marks
+     main.js      the GUI, the frame loop, the tour
+     saver.js     window.snSaver, the screensaver tour
+     tools/snapshot.mjs   the deploy-time snapshot writer
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (events list, layers, about), #card at
+                 the right (the selected storm or event), #timebar along
+                 the base (play, speed, the slider), #legend above it.
+     phone ..... #timebar above #dock. A dock tab opens #panel with one
+                 .grp as a bottom sheet (portrait) or a drawer (landscape).
+                 #card folds to one line at the top; a tap opens it.
+
+   GREP MAP  (main.js)
+     grep -n 'function boot'        device, data, solver, renderer
+     grep -n 'function setTime'     one time change, all views
+     grep -n 'function frame'       the frame loop
+     grep -n 'function buildStops'  the tour list
+     grep -n 'function flyTo'       eased flights
+     grep -n 'function tourTick'    the tour director
+     grep -n 'function occlusion'   framing around the panels
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A fluid simulation on the globe that follows today's hurricanes, typhoons and other extreme weather: real NOAA GFS winds, NHC and JTWC storm tracks and forecast cones, NASA EONET events, coloured by wind speed on the magma scale.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Storm Globe</div>
+</div>
+
+<main id="stage">
+  <canvas id="view" aria-label="Globe with the simulated wind field and current storms"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="loading"><div class="lbar"><i id="lfill"></i></div><span id="ltext">Loading winds and storms…</span></div>
+  <div id="hint">drag to turn · scroll or pinch to zoom · tap a storm</div>
+</main>
+<div id="nogpu" hidden>
+  <h2>WebGPU is not available</h2>
+  <p>This page runs a fluid solver on the GPU with WebGPU. Use a recent Chrome, Edge or Safari (18 or later) to see it.</p>
+  <div id="nogpuList"></div>
+</div>
+
+<aside id="panel" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="events">
+    <div class="sec-label first">Storms and extreme events</div>
+    <div class="tourrow">
+      <button id="tourBtn" class="wide" type="button">▶ Tour every event</button>
+    </div>
+    <ul id="stops" role="listbox" aria-label="Storms and events"></ul>
+    <p class="note" id="dataNote"></p>
+  </section>
+
+  <section class="grp" data-grp="layers">
+    <div class="sec-label first">Colour</div>
+    <div class="chips" id="fieldModes">
+      <button type="button" data-field="0" class="on">Wind speed</button>
+      <button type="button" data-field="1">Vorticity</button>
+      <button type="button" data-field="2">Pressure</button>
+      <button type="button" data-field="3">Off</button>
+    </div>
+    <div class="sec-label">Layers</div>
+    <div class="grid2">
+      <button class="tog on" data-layer="particles" type="button">Wind particles</button>
+      <button class="tog" data-layer="dye" type="button">Tracer dye</button>
+      <button class="tog on" data-layer="tracks" type="button">Storm tracks</button>
+      <button class="tog on" data-layer="cones" type="button">Forecast cones</button>
+      <button class="tog on" data-layer="events" type="button">EONET events</button>
+      <button class="tog on" data-layer="labels" type="button">Labels</button>
+      <button class="tog" data-layer="magmaParticles" type="button">Magma particles</button>
+      <button class="tog on" data-layer="coast" type="button">Coastlines</button>
+    </div>
+    <div class="row"><label for="strength">Colour strength</label><input type="range" id="strength" min="0" max="100" value="85"><span class="val" id="strengthV"></span></div>
+    <div class="sec-label">Solver</div>
+    <div class="row"><label for="nudge">Pull to GFS winds</label><input type="range" id="nudge" min="1" max="48" value="6"><span class="val" id="nudgeV"></span></div>
+    <p class="note">The solver carries the flow by itself between the 6-hourly GFS frames. A longer pull time lets the vortices drift by their own dynamics; a short one keeps it on the observed winds.</p>
+    <div id="solverStats" class="mono"></div>
+  </section>
+
+  <section class="grp" data-grp="about">
+    <div class="sec-label first">About</div>
+    <div class="about" id="about">
+      <p>The colours are a live fluid simulation on the sphere. A 2D incompressible solver runs on your GPU: semi-Lagrangian advection along great circles, a direct pressure projection (FFT in longitude, a tridiagonal solve per wavenumber), Coriolis with f = 2Ω sin φ, and a vorticity correction that keeps vortices from smearing. It is nudged toward the NOAA GFS 10 m winds, 6-hourly from two days ago to five days ahead, and each named storm adds a vortex built from its advisory (position, maximum wind, 34 kt radii). The flow between frames is the solver's own.</p>
+      <p>This is a picture of the weather, not a forecast. The grid is 0.7° on a computer and 1.4° on a phone, so a storm's eye is wider here than in reality; the storm vortex is enlarged to at least 1.6 grid cells.</p>
+      <p>Colour scale: wind speed on the magma map, with the Saffir-Simpson thresholds (1-minute sustained wind) marked on the legend. Vorticity is shown as cyclonic (red, turning with the storm) or anticyclonic (blue) in both hemispheres. Pressure is the GFS sea-level pressure, with the storm cores from the advisories.</p>
+      <p class="credits">Data: NOAA National Hurricane Center (CurrentStorms, GIS cones and tracks), Joint Typhoon Warning Center (warnings), NOAA GFS via AWS open data, NASA EONET v3, Natural Earth land. All public domain. Colour map: matplotlib magma (CC0). Cones for storms outside the NHC basins are derived here from the NHC 2025 track-error radii; they are not agency products.</p>
+    </div>
+  </section>
+</aside>
+
+<aside id="card" aria-label="Selected event" hidden>
+  <button id="cardFold" type="button" aria-label="Fold the card">▾</button>
+  <div id="cardBody"></div>
+</aside>
+
+<div id="legend" aria-label="Colour scale">
+  <div class="lg-title" id="lgTitle">Wind speed</div>
+  <div class="lg-bar" id="lgBar"><div id="lgMarks"></div></div>
+  <div class="lg-ticks" id="lgTicks"></div>
+  <div class="lg-ticks sub" id="lgTicks2"></div>
+</div>
+
+<div id="timebar" aria-label="Time">
+  <div class="tcontrols">
+    <button id="play" type="button" aria-label="Play"><i>▶</i></button>
+    <button id="speedBtn" type="button" aria-label="Speed">3 h/s</button>
+  </div>
+  <div id="track" role="slider" tabindex="0" aria-label="Time" aria-valuemin="0" aria-valuemax="1000">
+    <div id="tShade"></div>
+    <div id="tTicks"></div>
+    <div id="tNow"><span>data time</span></div>
+    <div id="cursor"><span id="cursorLab"></span></div>
+  </div>
+  <div id="timeLab"><b id="timeAbs"></b><span id="timeRel"></span></div>
+</div>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="events" type="button"><i>◎</i><span>Storms</span></button>
+  <button class="tab" data-grp="layers" type="button"><i>◫</i><span>Layers</span></button>
+  <button class="tab" id="dockTour" type="button"><i>✈</i><span>Tour</span></button>
+  <button class="tab" data-grp="about" type="button"><i>ⓘ</i><span>About</span></button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
