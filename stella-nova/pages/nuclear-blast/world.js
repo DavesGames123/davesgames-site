@@ -2,7 +2,7 @@
 //  NUCLEAR BLAST  ·  world.js — terrain, procedural city, ground decals
 // ----------------------------------------------------------------------------
 //  Five made-up places (TERRAINS): a modern metro on a river and a bay, a
-//  low wooden river-delta city of the 1940s, a desert test range, a coral
+//  low wooden town on a river delta, a desert test range, a coral
 //  atoll and an arctic coast. None is a real city. Water is an analytic
 //  function, written twice (waterJS and WATER_GLSL) so the buildings and
 //  the ground shader agree.
@@ -44,7 +44,7 @@ import { NOISE, LIGHT, FOG } from './glsl.js';
 export const KIND_NAMES = ['wood-frame house', 'masonry building', 'concrete mid-rise', 'high-rise', 'industrial shed', 'steel test tower'];
 export const TERRAINS = {
   metro: { name: 'Metro', sub: 'Modern city on a river and a bay', ground: 0, water: 1, grid: 0.38, block: 120, road: 20, R: 8500, sub2: 13000 },
-  delta: { name: 'River city', sub: '1940s low wooden city on a delta', ground: 1, water: 2, grid: 0.12, block: 70, road: 9, R: 4200, sub2: 6500 },
+  delta: { name: 'River city', sub: 'Low wooden town on a delta', ground: 1, water: 2, grid: 0.12, block: 70, road: 9, R: 4200, sub2: 6500 },
   desert: { name: 'Test range', sub: 'Desert flat with a shot tower', ground: 2, water: 0, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },
   atoll: { name: 'Atoll', sub: 'Coral reef islets in a lagoon', ground: 3, water: 3, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },
   tundra: { name: 'Arctic coast', sub: 'Snow, ice and a frozen bay', ground: 4, water: 4, grid: 0, block: 0, road: 0, R: 0, sub2: 0 },

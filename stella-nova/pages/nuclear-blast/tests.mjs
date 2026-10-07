@@ -105,7 +105,7 @@ check('G&D 9.15 seven-ten rule', E.doseRateAt(1000, 7) / 1000, 0.1, 0.05);
 // ── cloud: G&D Table 2.12 (1 MT, height above the burst) ────────────────
 for (const [mi, min] of [[2, 0.3], [4, 0.7], [6, 1.1], [10, 2.5], [12, 3.8]]) check(`G&D Table 2.12 1 MT cloud at ${min} min (mi)`, E.cloudTop(min * 60, 1000, 0) / MI, mi, 0.2);
 check('G&D 9.98 / Fig. 2.16 cloud radius, 10 MT (mi)', E.cloudRadius(1e4) / MI, 21, 0.001);
-check('Castle Bravo cloud top, 15 MT (km)', E.cloudTopFinal(15000) / 1000, 40, 0.1);
+check('observed cloud top, 15 MT surface burst (km)', E.cloudTopFinal(15000) / 1000, 40, 0.1);
 
 // ── shape ────────────────────────────────────────────────────────────────
 {

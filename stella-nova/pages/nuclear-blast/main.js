@@ -44,24 +44,27 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 // ── presets ────────────────────────────────────────────────────────────────
-// Facts for scale and history. h: metres, or a 'best height' rule.
+// Bursts named by yield and height only, for scale. h: metres, or a 'best
+// height' rule. The places are made up.
 const PRESETS = [
-  { id: 'ref', name: 'Reference', kind: '100 kt airburst', W: 100, hob: 'opt5', place: 'metro', tod: 'day', wind: 7, dir: 20, humid: 0.4, fission: 0.5,
-    cap: 'A 100 kt burst at the height that carries 5 psi farthest, over a made-up city. Use it to compare the others.' },
-  { id: 'littleboy', name: 'Little Boy', kind: '15 kt · 600 m · 1945', W: 15, h: 600, place: 'delta', tod: 'day', wind: 3, dir: 60, humid: 0.6, fission: 1,
-    cap: 'Hiroshima, 6 August 1945, 08:15. A uranium gun-type bomb of about 15 kt burst about 600 m over the city. By the end of 1945 an estimated 90,000 to 140,000 people had died. The city here is a made-up one of the same kind: low and wooden.' },
-  { id: 'fatman', name: 'Fat Man', kind: '21 kt · 503 m · 1945', W: 21, h: 503, place: 'delta', tod: 'day', wind: 4, dir: 120, humid: 0.6, fission: 1,
-    cap: 'Nagasaki, 9 August 1945, 11:02. A plutonium implosion bomb of about 21 kt burst about 500 m over the Urakami valley. An estimated 60,000 to 80,000 people had died by the end of 1945.' },
-  { id: 'trinity', name: 'Trinity', kind: '21 kt · 30 m tower · 1945', W: 21, h: 30, place: 'desert', tod: 'night', wind: 5, dir: 40, humid: 0.05, fission: 1,
-    cap: 'Alamogordo Bombing Range, New Mexico, 16 July 1945, 05:29, before dawn. The first nuclear test, on a 30 m steel tower; about 21 kt (a 2021 re-analysis gives about 25 kt). Its fallout drifted over ranches and towns to the north-east.' },
-  { id: 'bravo', name: 'Castle Bravo', kind: '15 Mt · surface · 1954', W: 15000, h: 2, place: 'atoll', tod: 'day', wind: 9, dir: 80, humid: 0.85, fission: 0.67,
-    cap: 'Bikini Atoll, 1 March 1954. The largest US test: 15 Mt, about two and a half times the expected yield, fired at the surface on the reef. Its fallout fell on the inhabited atolls of Rongelap and Utirik and on the crew of the fishing boat Daigo Fukuryū Maru.' },
-  { id: 'tsar', name: 'Tsar Bomba', kind: '50 Mt · 4 km · 1961', W: 50000, h: 4000, place: 'tundra', tod: 'day', wind: 8, dir: 200, humid: 0.2, fission: 0.03,
-    cap: 'Novaya Zemlya, 30 October 1961. The largest explosion ever made: about 50 Mt, dropped by parachute and burst about 4 km up. Its cloud rose to about 64 km. Almost all of the yield came from fusion, so it made little fallout for its size.' },
-  { id: 'modern', name: 'Modern 300 kt', kind: '300 kt airburst', W: 300, hob: 'opt5', place: 'metro', tod: 'sunset', wind: 8, dir: 330, humid: 0.4, fission: 0.5,
-    cap: 'For scale: 300 kt is in the range of many modern strategic warheads. Burst at the height that carries 5 psi farthest.' },
-  { id: 'surface', name: 'Surface 1 Mt', kind: '1 Mt ground burst', W: 1000, hob: 'surface', place: 'metro', tod: 'day', wind: 10, dir: 20, humid: 0.3, fission: 0.5,
-    cap: 'A 1 Mt burst on the ground: a smaller blast reach than the airburst, but a crater, a dirty cloud and a long fallout plume down the wind (G&D Table 9.93).' },
+  { id: 'ref', name: '100 kt airburst', kind: 'best height for 5 psi', W: 100, hob: 'opt5', place: 'metro', tod: 'day', wind: 7, dir: 20, humid: 0.4, fission: 0.5,
+    cap: 'A 100 kt burst at the height that carries 5 psi farthest along the ground. Use it to compare the others.' },
+  { id: 'kt15', name: '15 kt airburst', kind: '15 kt · 600 m', W: 15, h: 600, place: 'delta', tod: 'day', wind: 3, dir: 60, humid: 0.6, fission: 1,
+    cap: 'A small burst 600 m up, over a low town of light, wooden buildings. Most of them fall at 3 to 5 psi.' },
+  { id: 'kt21', name: '21 kt airburst', kind: '21 kt · 500 m', W: 21, h: 500, place: 'delta', tod: 'day', wind: 4, dir: 120, humid: 0.6, fission: 1,
+    cap: 'A 21 kt burst 500 m up. Compare it with 15 kt: the radii grow only as the cube root of the yield.' },
+  { id: 'kt21low', name: '21 kt low burst', kind: '21 kt · 30 m', W: 21, h: 30, place: 'desert', tod: 'night', wind: 5, dir: 40, humid: 0.05, fission: 1,
+    cap: 'The same yield only 30 m up, over open desert at night. The fireball touches the ground, so it lifts soil into the cloud.' },
+  { id: 'modern', name: '300 kt airburst', kind: 'best height for 5 psi', W: 300, hob: 'opt5', place: 'metro', tod: 'sunset', wind: 8, dir: 330, humid: 0.4, fission: 0.5,
+    cap: 'A 300 kt burst at the height that carries 5 psi farthest along the ground.' },
+  { id: 'mt1', name: '1 Mt airburst', kind: 'best height for 5 psi', W: 1000, hob: 'opt5', place: 'metro', tod: 'day', wind: 10, dir: 20, humid: 0.3, fission: 0.5,
+    cap: 'A 1 Mt burst at the height that carries 5 psi farthest. Its cloud rises through the tropopause.' },
+  { id: 'surface', name: '1 Mt surface burst', kind: '1 Mt on the ground', W: 1000, hob: 'surface', place: 'metro', tod: 'day', wind: 10, dir: 20, humid: 0.3, fission: 0.5,
+    cap: 'A 1 Mt burst on the ground: a smaller blast reach than the airburst, a crater, and a cloud full of soil.' },
+  { id: 'mt15', name: '15 Mt surface burst', kind: '15 Mt on the ground', W: 15000, h: 2, place: 'atoll', tod: 'day', wind: 9, dir: 80, humid: 0.85, fission: 0.67,
+    cap: 'A 15 Mt burst on a coral reef. The fireball is several kilometres across and the cloud rises to about 40 km.' },
+  { id: 'mt50', name: '50 Mt airburst', kind: '50 Mt · 4 km', W: 50000, h: 4000, place: 'tundra', tod: 'day', wind: 8, dir: 200, humid: 0.2, fission: 0.03,
+    cap: 'A 50 Mt burst 4 km up over an arctic coast. The cloud rises to about 64 km, far into the stratosphere.' },
 ];
 
 // ── rings ──────────────────────────────────────────────────────────────────
@@ -83,7 +86,7 @@ let saverOn = false, saverBand = null, saverTick = null;
 
 const S = {
   preset: 'ref', W: 100, hob: 'opt5', hCustom: 600, h: 0, place: 'metro', tod: 'day', wind: 7, dir: 20, V: 20, humid: 0.4, fission: 0.5,
-  t: 0, playing: false, mode: 'log', view: 'follow', follow: true, pick: null, on: Object.fromEntries(RINGS.map(r => [r.key, true])), fallOn: true,
+  t: 0, playing: false, mode: 'log', view: 'follow', follow: true, pick: null, on: Object.fromEntries(RINGS.map(r => [r.key, true])), fallOn: false,
   reveal: true, labels: !PHONE_Q.matches, fclock: 24, sum: null, curves: null, anaOpen: !PHONE_Q.matches,
 };
 
@@ -273,6 +276,8 @@ function setView(name) {
   }
   if (name === 'cloud') { const I = blast.info, cy = t > 0 ? (I.top || Z.top) * 0.75 : Z.top * 0.7, R = t > 0 ? (I.cap || 1000) : E.cloudRadius(S.W); stage.flyTo({ az: 60, el: 6, r: R * 3.4, target: new V3(0, cy, 0) }); }
   if (name === 'fallout') {
+    // the fallout layer is opt-in: this view turns it on
+    if (!S.fallOn) { S.fallOn = true; fillRings(); }
     const f = world.fall, d = S.dir * DEG;
     if (!f) { stage.flyTo({ az: 0, el: 88, r: Z.ring * 2.9, target: new V3(0, 0, 0) }); return; }
     const L = Math.min(f.x1, 2e6) * 0.5;
@@ -302,7 +307,7 @@ function pickAt(cx, cy) {
 }
 function setPick(x, z) {
   S.pick = { x, z };
-  world.gU.uPick.value = 1; world.gU.uPickP.value.set(x, z);
+  world.gU.uPick.value = saverOn ? 0 : 1; world.gU.uPickP.value.set(x, z);   // no marker in the saver
   S.curves = null;
 }
 
@@ -330,7 +335,8 @@ function fillPoint() {
     + row('Positive phase', fmtTime(v.dur)) + row('Thermal exposure', `${fmtNum(v.Q)} cal/cm² · ${fmtNum(v.Q * 4.184)} J/cm²`)
     + row('Burns, bare skin', deg ? `${deg}${['', 'st', 'nd', 'rd'][deg]} degree likely` : 'none expected')
     + row('Prompt radiation', `${fmtNum(v.dose)} rem`);
-  if (world.fall && v.R1 > 0) html += row('Fallout at H+1', `${fmtNum(v.R1)} rad/h`) + row('Fallout arrives', `${fmtNum(v.fa)} h`) + row('Dose, 24 h outdoors', `${fmtNum(E.falloutDose(v.R1, v.fa, v.fa + 24))} rad`);
+  if (!S.fallOn) { /* the fallout layer is off: no fallout rows */ }
+  else if (world.fall && v.R1 > 0) html += row('Fallout at H+1', `${fmtNum(v.R1)} rad/h`) + row('Fallout arrives', `${fmtNum(v.fa)} h`) + row('Dose, 24 h outdoors', `${fmtNum(E.falloutDose(v.R1, v.fa, v.fa + 24))} rad`);
   else if (world.fall) html += row('Fallout', 'outside the drawn plume');
   else html += row('Local fallout', 'little: the fireball does not touch the ground');
   if (html !== lastNums) { $('nums').innerHTML = html; lastNums = html; }
@@ -431,7 +437,6 @@ $('about').innerHTML = [
   ['The model', 'Blast: the DNA 1-kt free-air standard and height-of-burst fit (via NRDC 2001; equations read from the MIT-licensed <i>glasstone</i> library by E. Geist), checked against the worked examples of G&amp;D Ch. III. Thermal, fireball, cloud and fallout: G&amp;D Ch. II, VII and IX. Radiation: a fit to the summary values of G&amp;D Figs. 8.33 and 8.64. <code>tests.mjs</code> checks 77 reference values.'],
   ['What it leaves out', 'The ground is flat and ideal; buildings do not shield one another; the air is clear apart from the visibility you set; doses are for a person in the open. Real cities, weather and terrain change every number. The fallout pattern is the idealised one of G&amp;D 9.93. The cloud is drawn to the G&amp;D rise and size, not simulated. The places are made up.'],
   ['Inspiration', 'Made in the spirit of <a href="https://nukesimulation.com" target="_blank" rel="noopener">nukesimulation.com</a>, a 3D effects simulator on real maps; this page shares no code, art or text with it. The classic of the genre is Alex Wellerstein\'s <a href="https://nuclearsecrecy.com/nukemap/" target="_blank" rel="noopener">NUKEMAP</a> (2012–).'],
-  ['Remembering', 'Two of these weapons have been used in war, on Hiroshima and Nagasaki in 1945. The tests left lasting harm too, to the people of the Marshall Islands, of the American Southwest and of Kazakhstan, among others.'],
 ].map(([hh, t]) => `<p><b>${hh}.</b> ${t}</p>`).join('');
 
 // ── plots ────────────────────────────────────────────────────────────────
@@ -529,14 +534,14 @@ requestAnimationFrame(frame);
 
 // ── screensaver ──────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI and plays
-// a seeded shuffle of shots, a cut every 5-12 s (calm 1 = the longest):
+// a seeded shuffle of neutral physics shots over the made-up places, a cut
+// every 5-12 s (calm 1 = the longest):
 //   rise ..... a wide shot of the cloud going up, day, sunset or night
-//   shock .... a low camera in the city; the shock crosses it, slowed
-//   map ...... from above: the rings drawn as each effect arrives
-//   fallout .. a surface burst: the plume grows down the wind for 24 h
-//   flash .... the fireball close: microseconds to seconds
-// Each shot names itself on the plate with the burst, its numbers and a
-// real extract of the scaling function behind it. No exit(): the shell
+//   shock .... a raised camera over the city; the shock crosses it, slowed
+//   flash .... the fireball close: from the first minimum to its full size
+// The saver draws no rings, no fallout and no dose: the ground decals are
+// off. Each shot names itself on the plate with the yield, its numbers and
+// a real extract of the scaling function behind it. No exit(): the shell
 // reloads the page.
 window.snSaver = {
   enter(o = {}) {
@@ -556,13 +561,10 @@ window.snSaver = {
     let bandFn = null, bandT = 0;
     import('../../lib/saver-clear.js').then(m => { bandFn = m.plateBand; }).catch(() => { /* no band */ });
     // shot kinds, each with the bursts that suit it
-    const air = ['ref', 'littleboy', 'fatman', 'tsar', 'modern'], all = PRESETS.map(p => p.id);
     const KINDS = {
-      rise: { presets: all, tods: ['day', 'sunset', 'night', 'sunset'] },
-      shock: { presets: ['ref', 'modern', 'littleboy', 'fatman', 'surface'], tods: ['day', 'sunset', 'day'] },
-      map: { presets: all, tods: ['day', 'sunset', 'day'] },
-      fallout: { presets: ['bravo', 'surface', 'surface'], tods: ['day', 'sunset'] },
-      flash: { presets: air.concat(['trinity']), tods: ['sunset', 'day', 'night'] },
+      rise: { presets: ['ref', 'kt15', 'kt21', 'kt21low', 'modern', 'mt1', 'surface', 'mt15', 'mt50'], tods: ['day', 'sunset', 'night', 'sunset'] },
+      shock: { presets: ['ref', 'modern', 'kt15', 'kt21', 'mt1', 'surface'], tods: ['day', 'sunset', 'day'] },
+      flash: { presets: ['ref', 'kt15', 'kt21', 'kt21low', 'modern', 'mt1', 'mt50'], tods: ['sunset', 'day', 'night'] },
     };
     const code = (fn, name) => ({ lang: 'js', name, text: fn.toString() });
     const P = (sym, name, value, cls) => ({ sym, name, value, cls });
@@ -571,7 +573,7 @@ window.snSaver = {
     // a shuffled deck of shots, refilled when used up: varied per run
     let deck = [], lastKind = null;
     const nextShot = () => {
-      if (!deck.length) { deck = ['rise', 'shock', 'map', 'fallout', 'flash', 'rise', 'shock', 'flash']; for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
+      if (!deck.length) { deck = ['rise', 'shock', 'flash', 'rise', 'shock', 'flash']; for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
       // never the same kind twice in a row
       if (deck.length > 1 && deck[deck.length - 1] === lastKind) { const k = deck.findIndex(q => q !== lastKind); if (k >= 0) [deck[k], deck[deck.length - 1]] = [deck[deck.length - 1], deck[k]]; }
       lastKind = deck.pop();
@@ -590,11 +592,11 @@ window.snSaver = {
       if (id === S.preset && K.presets.length > 1) id = pick(K.presets);
       setPreset(id, true);
       // sometimes a random yield instead of the preset's
-      if (kind !== 'fallout' && rnd() < 0.3) { S.W = Math.pow(10, -0.3 + rnd() * 4.3); S.preset = 'custom'; S.hob = kind === 'shock' ? 'opt5' : pick(['opt5', 'opt1', 'opt20', 'surface']); apply(); }
-      if (kind === 'fallout') { S.hob = 'surface'; S.hCustom = 0; apply(); }
+      if (rnd() < 0.3) { S.W = Math.pow(10, -0.3 + rnd() * 4.3); S.preset = 'custom'; S.hob = kind === 'shock' ? 'opt5' : pick(['opt5', 'opt1', 'opt20', 'surface']); apply(); }
       setTOD(pick(K.tods));
-      S.fallOn = kind === 'fallout' || kind === 'map';
-      for (const k in S.on) S.on[k] = kind === 'map' || kind === 'fallout';
+      // no decals in the saver: no rings, no fallout
+      S.fallOn = false;
+      for (const k in S.on) S.on[k] = false;
       const W = S.W, h = S.h, sum = S.sum, top = E.cloudTopFinal(W), az0 = rnd() * 360;
       const sh = { kind, t0: 1e-3, t1: 300, log: true, cam: null, drift: (rnd() < 0.5 ? -1 : 1) * (1.2 + 2 * (1 - calm)) };
       if (kind === 'rise') {
@@ -610,18 +612,6 @@ window.snSaver = {
         sh.cam = { az: az0, el: 11 + 6 * rnd(), r: r1 * 1.05, ty, tx: Math.sin(a) * r1 * 0.45, tz: Math.cos(a) * r1 * 0.45 };
         sh.r1 = r1;
         sh.lab = () => { const pk = E.psi(E.overpressure(r1, W, h)); return { title: 'The shock front', sub: `${pName()} · ${fmtDist(r1)} from ground zero · ${fmtNum(shotHold / 1000 / (sh.t1 - sh.t0))}× slower`, params: params().concat([P('p', 'peak here', `${fmtNum(pk)} psi`, 'm4'), P('u', 'peak wind', `${fmtNum(E.windSpeed(pk * E.PSI))} m/s`, 'm5')]), eq: ['t_a = t₁(r / W^⅓) · W^⅓', 'u = 5p c₀ / 7P₀ √(1 + 6p/7P₀)'], code: code(E.arrivalTime, 'effects.js · arrivalTime'), anchor: anchorAt(ty, r1 * 0.3) }; };
-      } else if (kind === 'map') {
-        sh.t0 = 0.3; sh.t1 = 60;
-        const R = Math.max(sum.psi1, sum.burn1);
-        sh.cam = { az: az0, el: 80 + 6 * rnd(), r: R * 2.7, ty: 0 };
-        sh.lab = () => ({ title: 'Rings of effect', sub: `${pName()} · 5 psi ${fmtDist(sum.psi5)} · 3rd° burns ${fmtDist(sum.burn3)}`, params: params().concat([P('p', '1 psi', fmtDist(sum.psi1), 'm4'), P('Q', '1st° burns', fmtDist(sum.burn1), 'm5')]), eq: ['d = d₁ W^⅓', 'Q = f W τ / 4πD²'], code: code(E.rangeFor, 'effects.js · rangeFor'), anchor: anchorAt(0, R) });
-      } else if (kind === 'fallout') {
-        sh.t0 = 200; sh.t1 = 300; S.fclock = 0;
-        const f = world.fall, d = S.dir * DEG, L = f ? Math.min(f.x1, 1.2e6) * 0.5 : sum.psi1;
-        // from upwind and above, looking down the plume as it grows
-        const az = Math.atan2(-Math.cos(d), -Math.sin(d)) / DEG + 20 * (rnd() - 0.5);
-        sh.cam = { az, el: 24 + 10 * rnd(), r: L * 1.25, ty: 0, tx: Math.cos(d) * L * 0.55, tz: Math.sin(d) * L * 0.55 };
-        sh.lab = () => ({ title: 'Fallout down the wind', sub: `${pName()} · ${S.fclock.toFixed(1)} h after the burst · H+1 dose rates`, params: params().concat([P('v', 'wind', `${S.wind} m/s`, 'm4'), P('f', 'fission', Math.round(S.fission * 100) + '%', 'm5')]), eq: ['R(t) = R₁ t^−1.2', 'F = 1 + (v − 15 mph)/60'], code: code(E.falloutContour, 'effects.js · falloutContour'), anchor: () => { const c = project(sh.cam.tx, 0, sh.cam.tz), rc = canvas.getBoundingClientRect(); return c ? { x: rc.left + c.x, y: rc.top + c.y, r: rc.width * 0.3 } : null; } });
       } else {
         const F = E.fireballSizes(W, h);
         // from the end of the first flash: the ball grows and brightens again
@@ -654,7 +644,6 @@ window.snSaver = {
       const u = clamp(shotT / shotHold, 0, 1);
       if (!swapping) {
         S.t = shot.log ? shot.t0 * Math.pow(shot.t1 / shot.t0, u) : shot.t0 + (shot.t1 - shot.t0) * u;
-        if (shot.kind === 'fallout') S.fclock = 24 * u;
         // a slow turn of the camera about the target
         const c = stage.controls, p = stage.camera.position;
         sph.setFromVector3(tmpV.copy(p).sub(c.target)); sph.theta += shot.drift * DEG * dt;

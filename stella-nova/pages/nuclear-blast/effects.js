@@ -40,7 +40,7 @@
 //                  180 W^0.4 ft)
 //    cloud ....... G&D Table 2.12 (rise of a 1 Mt cloud) and Fig. 2.16
 //                  (stabilised height and radius), with the tops seen at
-//                  Trinity, Castle Bravo and Tsar Bomba as anchors
+//                  15 Mt and 50 Mt test clouds as anchors
 //
 //  GREP MAP
 //    function freeAir1kt ......... DNA free-air overpressure, 1 kt
@@ -288,8 +288,8 @@ export function firstPulse(t, W) {
   return u < 0.25 ? pk * u / 0.25 : pk * Math.exp(-(u - 0.25) * 3.2);
 }
 export const thermalPowerTotal = (t, W) => thermalPower(t, W) + firstPulse(t, W);
-// Wilson (condensation) cloud in humid air (G&D 2.48-2.50): at Bikini
-// (about 23 kt) it formed 1 to 2 s after the burst, a dome that became a
+// Wilson (condensation) cloud in humid air (G&D 2.48-2.50): over a
+// lagoon (about 23 kt) it formed 1 to 2 s after the burst, a dome that became a
 // ring and was gone a second or so later. Times scale as W^(1/3).
 export function wilsonWindow(W) { const k = cbrt(W / 23); return { t0: 1.2 * k, life: 1.5 * k }; }
 // Thermal partition f: 0.35 for an air burst (G&D 7.04, Table 7.88), 0.18
