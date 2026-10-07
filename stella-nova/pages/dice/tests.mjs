@@ -20,9 +20,15 @@
 //               keep highest and lowest, 3dF, 2dC, d%, 1d20+3), exploding
 //               d6 against a deep enumeration; moments, P(X >= x), and
 //               the chi-square p-value against table values
+//  physics .... (Rapier, vendor/rapier3d-compat@0.21.0) one seed gives one
+//               throw; every die ends in the tray; throws come to rest
+//               before MAX_T; and a batch of physical throws per die type
+//               passes a chi-square fairness test (p > 0.001). Cocked dice
+//               are thrown again on their own, as a player would.
 // ============================================================================
 import { buildDie, readDie, orientFor, TYPE_ORDER, DIE_TYPES, TILT_DEG, Q, V } from './dice.js';
-import { specPmf, moments, atLeast, prob, gammaQ, keepPmf, diePmf } from './prob.js';
+import { createPhysics, simulateThrow, MAX_T, TRAYS } from './physics.js';
+import { chiSquare, specPmf, moments, atLeast, prob, gammaQ, keepPmf, diePmf } from './prob.js';
 import { parse, planDice, score } from './notation.js';
 
 const QUICK = process.argv.includes('--quick');
@@ -217,6 +223,52 @@ section('exact distributions');
   }
   ok(Math.abs(keepPmf(diePmf(6), 3, 3, true).p.reduce((a, b) => a + b, 0) - 1) < 1e-12, 'keep all of 3d6 sums to 1');
 }
+
+// ── physics: determinism, containment, rest, fairness ──────────────────────
+section('physics');
+const RAPIER = (await import('../../vendor/rapier3d-compat@0.21.0/rapier.mjs')).default;
+await RAPIER.init({});
+const PH = createPhysics(RAPIER, { tray: 'medium' });
+{
+  const mix = ['d4', 'd6', 'd8', 'd10', 'd100', 'd12', 'd20', 'dF', 'coin'];
+  const a = simulateThrow(PH, mix, { seed: 4242, strength: 0.6 }).reads.map(r => r.label).join(' ');
+  const b = simulateThrow(PH, mix, { seed: 4242, strength: 0.6 }).reads.map(r => r.label).join(' ');
+  ok(a === b, `one seed, one throw (${a} | ${b})`);
+  const c = simulateThrow(PH, mix, { seed: 4243, strength: 0.6 }).reads.map(r => r.label).join(' ');
+  console.log(`  seed 4242: ${a}\n  seed 4243: ${c}`);
+}
+{
+  const [w, d] = TRAYS.medium; let outside = 0, late = 0, throws = 0;
+  for (let s = 0; s < (QUICK ? 10 : 40); s++) {
+    const r = simulateThrow(PH, Array(12).fill(0).map((_, i) => TYPE_ORDER[i % TYPE_ORDER.length]), { seed: 900 + s, strength: 1 });
+    throws++; if (!r.rest) late++;
+    for (const o of PH.dice) { const p = o.body.translation(); if (Math.abs(p.x) > w / 2 || Math.abs(p.z) > d / 2 || p.y < -0.05) outside++; }
+  }
+  ok(outside === 0, `${outside} dice ended outside the tray (hard throws of 12 dice)`);
+  ok(late <= 1, `${late}/${throws} hard throws did not rest by ${MAX_T} s`);
+}
+const FAIR_N = QUICK ? 300 : 2400;
+for (const t of TYPE_ORDER) {
+  const die = buildDie(t), labels = [...new Set(die.valued.map(f => f.label))];
+  const share = labels.map(l => die.valued.filter(f => f.label === l).length / die.valued.length);
+  const cnt = Object.fromEntries(labels.map(l => [l, 0]));
+  let rolls = 0, cocked = 0, seed = 7000, tsum = 0, throws = 0;
+  const t0 = performance.now();
+  while (rolls < FAIR_N) {
+    const r = simulateThrow(PH, [t, t, t, t], { seed: ++seed * 31, strength: 0.25 + ((seed * 0.618) % 1) * 0.6 });
+    tsum += r.t; throws++;
+    for (let rd of r.reads) {
+      let k = 0;
+      while (rd.cocked && k++ < 6) { cocked++; rd = simulateThrow(PH, [t], { seed: ++seed * 31 + 7, strength: 0.35 }).reads[0]; }
+      if (!rd.cocked) { cnt[rd.label]++; rolls++; }
+    }
+  }
+  const X = chiSquare(labels.map(l => cnt[l]), share);
+  ok(X.p > 0.001, `${t}: chi-square p = ${X.p.toFixed(4)} over ${rolls} physical rolls`);
+  console.log(`  ${t.padEnd(5)} n ${rolls}  X2 ${X.x2.toFixed(2)} df ${X.df}  p ${X.p.toFixed(3)}  cocked ${(100 * cocked / (rolls + cocked)).toFixed(1)}%  mean rest ${(tsum / throws).toFixed(2)} s  ${((performance.now() - t0) / 1000).toFixed(1)} s wall`);
+  console.log('        ' + labels.map(l => `${l || '·'}:${cnt[l]}`).join(' '));
+}
+PH.free();
 
 // ── summary ─────────────────────────────────────────────────────────────────
 console.log(`\n${n - fail}/${n} checks passed`);
