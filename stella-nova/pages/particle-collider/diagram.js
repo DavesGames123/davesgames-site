@@ -37,7 +37,7 @@
 import { createLight } from './lightfield.js';
 import { CLASS_COLOR, PART } from './particles.js';
 import { CLS } from './transport.js';
-import { hitTest, atRadius } from './picking.js';
+import { hitTest, atRadius, entryPoint } from './picking.js';
 import { place } from './labels.js';
 import { buildDetector } from './geometry.js';
 
@@ -142,12 +142,7 @@ export function createDiagram(host, mode) {
   }
 
   // ── labels: the objects worth naming, anchored where they enter ──
-  function entry(o) {
-    if (o.kind === 'jet') return o.pts[1].slice(0, 3).map(v => v * 1770 / 2950).concat([4]);
-    if (o.kind === 'met') return o.pts[1];
-    const rIn = o.name === 'gamma' ? 1290 : 300;
-    return o.pts.find(q => Math.hypot(q[0], q[1]) >= rIn || Math.abs(q[2]) >= (o.name === 'gamma' ? 3000 : 900)) || o.pts[o.pts.length - 1];
-  }
+  const entry = entryPoint;
   function labelItems(t) {
     const ev = V.ev; if (!ev || V.labels === 'off') return [];
     const out = [], g = og;

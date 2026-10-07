@@ -11,7 +11,7 @@
 //
 //  FRAMING (grep -n 'function occlusion')
 //  Each panel that covers the canvas (o.occluders) and the saver plate band
-//  (o.band()) pushes the view centre into the clear part with
+//  (o.band() -> { t, b, l?, r? } px) pushes the view centre into the clear part with
 //  camera.setViewOffset, as on the wave-membrane and geneva-cams pages.
 //
 //  GREP MAP
@@ -30,7 +30,10 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 // The event layer renders into its own HDR target and joins the scene
 // through a soft clip that keeps the hue: o / (1 + max(o) / K). Where a
 // hundred tracks meet at the vertex the sum stays coloured, never white;
-// a faint line passes almost unchanged. The bloom then runs on the result.
+// a faint line passes almost unchanged. Where the clipped light is hot, the
+// weaker channels fall (a power on the normalised colour), so the sum
+// keeps its hue. The bloom then runs on the result. main.js sets uK, the
+// exposure and the bloom per event (st.overlayK, st.setLook).
 class OverlayPass extends Pass {
   constructor(camera) {
     super();
@@ -39,7 +42,10 @@ class OverlayPass extends Pass {
     this.mat = new THREE.ShaderMaterial({
       uniforms: { tBase: { value: null }, tOver: { value: null }, uK: { value: 1.5 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-      fragmentShader: 'uniform sampler2D tBase, tOver; uniform float uK; varying vec2 vUv; void main(){ vec4 b = texture2D(tBase, vUv); vec3 o = texture2D(tOver, vUv).rgb; float m = max(max(o.r, o.g), o.b); gl_FragColor = vec4(b.rgb + o / (1.0 + m / uK), b.a); }',
+      // After the clip, where the light is hot, the normalised colour is raised
+      // to a power above 1: the strongest channel stays, the weaker ones fall,
+      // so a sum of many colours stays a colour and not white.
+      fragmentShader: 'uniform sampler2D tBase, tOver; uniform float uK; varying vec2 vUv; void main(){ vec4 b = texture2D(tBase, vUv); vec3 o = texture2D(tOver, vUv).rgb; float m = max(max(o.r, o.g), o.b); vec3 c = o / (1.0 + m / uK); float cm = m / (1.0 + m / uK); if (cm > 1e-4) { float hot = smoothstep(0.3, 0.95, cm / uK); c = cm * pow(c / cm, vec3(1.0 + 1.8 * hot)); } gl_FragColor = vec4(b.rgb + c, b.a); }',
       depthTest: false, depthWrite: false,
     });
     this.fsq = new FullScreenQuad(this.mat);
@@ -129,7 +135,7 @@ export function createStage(o) {
       else { if (x0 + x1 < cr.left * 2 + w) out.l = Math.max(out.l, x1 - cr.left); else out.r = Math.max(out.r, cr.right - x0); }
     }
     const band = o.band && o.band();
-    if (band) { out.t = Math.max(out.t, band.t); out.b = Math.max(out.b, band.b); }
+    if (band) { out.t = Math.max(out.t, band.t); out.b = Math.max(out.b, band.b); if (band.l) out.l = Math.max(out.l, band.l); if (band.r) out.r = Math.max(out.r, band.r); }
     return out;
   }
   st.clear = () => ({ ...occ });

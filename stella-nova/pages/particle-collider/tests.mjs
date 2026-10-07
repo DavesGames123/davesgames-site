@@ -216,6 +216,17 @@ for (const kind of Object.keys(SCENARIOS)) {
   let bad = 0; for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) if (overlap(P[i], P[j], 0)) bad++;
   const hardOk = P.filter(p => p.item.hard).length === 6;
   ok(bad === 0 && hardOk && P.length >= 15, `labels: ${P.length} of 80 placed with ${bad} overlaps; all 6 hard labels placed`);
+  // sticky labels: the boxes of the last frame as preferences, the anchors moved 3 px
+  const items2 = P.map(p => ({ ...p.item, x: p.item.x + 3, y: p.item.y - 2, pref: { ox: p.x - p.item.x, oy: p.y - p.item.y } }));
+  const P2 = place(items2, { x: 0, y: 0, w: 400, h: 400 }, [{ x: 0, y: 0, w: 120, h: 40 }]);
+  let bad2 = 0, kept = 0; for (let i = 0; i < P2.length; i++) { for (let j = i + 1; j < P2.length; j++) if (overlap(P2[i], P2[j], 0)) bad2++; if (Math.abs(P2[i].x - P2[i].item.x - P2[i].item.pref.ox) < 1e-9) kept++; }
+  ok(bad2 === 0 && kept >= P2.length * 0.8, `sticky labels: ${kept} of ${P2.length} keep their last offset, ${bad2} overlaps`);
+  // the cascade of a hard muon: its own track and every registered descendant; the per-segment flags follow it
+  const { cascade, segFlags, ancestors } = await import('./picking.js');
+  const m0 = mus[0], set = cascade(ev, m0);
+  let desc = 0; ev.R.tracks.forEach((T, j) => { if (j !== m0.k && ancestors(ev.R, j).includes(m0.k)) desc++; });
+  const fl = segFlags(ev.R, set); let nf = 0, nOwn = 0; for (let i = 0; i < ev.R.nSeg; i++) { if (fl[i]) nf++; if (ev.R.segTrk[i] === m0.k) nOwn++; }
+  ok(set.has(m0.key) && set.has(m0.k) && set.size >= 2 + 2 * desc && nf >= nOwn && nOwn > 0, `cascade of ${m0.name}: ${desc} descendants, ${nf} flagged segments (${nOwn} its own)`);
 }
 
 console.log(`\n${n - fail} of ${n} checks passed`);

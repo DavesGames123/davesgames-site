@@ -22,7 +22,17 @@
 //    1.5 px. Projected polylines are cached per view version, so a
 //    hover costs one distance pass.
 //
+//  CASCADE (grep -n 'export function cascade')
+//    cascade(ev, o) -> Set of the focused object and its whole cascade: the
+//    track index and key 't' + k of the object and of every registered
+//    track whose ancestor chain holds it; for a jet its towers and the
+//    cascades of the tracks in its cone. segFlags(R, set) -> Uint8Array,
+//    1 for each segment whose track is in the set (the 3D view reads it).
+//  ENTRY (grep -n 'export function entryPoint')  where an object enters
+//    the detector: the label anchor in every view.
+//
 //  GREP MAP  function buildObjects · function hitTest · function distSeg
+//            function cascade · function segFlags · function entryPoint
 // ============================================================================
 import { PART } from './particles.js';
 import { CLS } from './transport.js';
@@ -145,4 +155,38 @@ export function ancestors(R, k) {
   const out = []; let a = k >= 0 && R.tracks[k] ? R.tracks[k].anc : -1, n = 0;
   while (a >= 0 && n++ < 60) { out.push(a); a = R.tracks[a].anc; }
   return out;
+}
+
+// the focused object and its whole cascade (see the header)
+export function cascade(ev, o) {
+  if (!o || o.kind === 'collision') return null;
+  const R = ev.R, set = new Set([o.key]);
+  const addTrack = k => {
+    set.add(k); set.add('t' + k);
+    R.tracks.forEach((T, j) => { if (j !== k && ancestors(R, j).includes(k)) { set.add(j); set.add('t' + j); } });
+  };
+  if (o.kind === 'track' || o.kind === 'muhit') { if (o.k >= 0) addTrack(o.k); }
+  if (o.kind === 'jet') {
+    for (const t of o.towers) set.add('w' + t.c);
+    for (const q of ev.objs.objs) if (q.kind === 'track' && Math.hypot(q.eta - o.eta, Math.atan2(Math.sin(q.phi - o.phi), Math.cos(q.phi - o.phi))) < 0.4) addTrack(q.k);
+  }
+  if (o.kind === 'tower') set.add('w' + o.tower.c);
+  return set;
+}
+export function segFlags(R, set, out = null) {
+  const f = out && out.length >= R.nSeg ? out : new Uint8Array(R.nSeg);
+  for (let i = 0; i < R.nSeg; i++) f[i] = set && set.has(R.segTrk[i]) ? 1 : 0;
+  return f;
+}
+// where the object enters the detector: a charged track at r = 300 mm, a
+// photon at the crystal face, a jet at the hadron calorimeter, MET at its tip
+export function entryPoint(o) {
+  if (o._entry !== undefined) return o._entry;
+  let p;
+  if (o.kind === 'jet') p = o.pts[1].slice(0, 3).map(v => v * 1770 / 2950).concat([4]);
+  else if (o.kind === 'met') p = o.pts[1];
+  else if (o.kind === 'track') { const rIn = o.name === 'gamma' ? 1290 : 300; p = o.pts.find(q => Math.hypot(q[0], q[1]) >= rIn || Math.abs(q[2]) >= (o.name === 'gamma' ? 3000 : 900)) || o.pts[o.pts.length - 1]; }
+  else p = o.pts[0];
+  o._entry = p;
+  return p;
 }

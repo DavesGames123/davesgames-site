@@ -17,7 +17,7 @@
 //  The caller draws a leader line from the anchor to the label box.
 //
 //  place(items, bounds, reserved) -> [{ item, x, y, w, h }] (box top left)
-//    item: { x, y (anchor px), dx, dy (outward unit), w, h, prio, hard }
+//    item: { x, y (anchor px), dx, dy (outward unit), w, h, prio, hard, pref }
 // ============================================================================
 const overlap = (a, b, pad = 2) => a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 
@@ -27,7 +27,11 @@ export function place(items, bounds, reserved = []) {
   const DIST = [16, 30, 48, 72], ANG = [0, 0.44, -0.44, 0.87, -0.87];
   for (const it of order) {
     let first = null, done = null;
-    for (const D of DIST) {
+    if (it.pref) {
+      const box = { x: it.x + it.pref.ox, y: it.y + it.pref.oy, w: it.w, h: it.h };
+      if (box.x >= bounds.x && box.y >= bounds.y && box.x + box.w <= bounds.x + bounds.w && box.y + box.h <= bounds.y + bounds.h && !taken.some(t => overlap(t, box))) done = box;
+    }
+    if (!done) for (const D of DIST) {
       for (const a of ANG) {
         const c = Math.cos(a), s = Math.sin(a), dx = it.dx * c - it.dy * s, dy = it.dx * s + it.dy * c;
         const px = it.x + dx * D, py = it.y + dy * D;
