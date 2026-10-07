@@ -15,12 +15,12 @@
 //      psiMode 2  uniform loop, side plane: B lines = contours of Re{x A_y e^{jwt}}
 //      psiMode 3  z currents, top plane:   B lines = contours of Re{A_z e^{jwt}}
 //  The same pass also renders a small probe grid that the CPU reads back
-//  (readProbe) for the field-line tracer, the Poynting arrows and the
+//  (readProbe) for the field-line tracer and the
 //  colour scale.
 //
 //  DISPLAY PASS (every frame). Re{F e^{jwt}} = F_re cos wt - F_im sin wt,
 //  then a colour map (signed component, in-plane magnitude, or the
-//  instantaneous or the time-average Poynting magnitude), the psi contours,
+//  instantaneous Poynting magnitude), the psi contours,
 //  a faint wavelength grid, and, in the screensaver, the 2D overlay canvas as
 //  a texture so the returned canvas holds the whole picture.
 //  The float targets are read with texelFetch and a manual bilinear filter,
@@ -112,7 +112,7 @@ uniform vec3 uAxU;
 uniform vec3 uAxV;
 uniform vec3 uCentre;
 uniform float uPhase;
-uniform int uMode;         // 0 E, 1 H, 2 S(t), 3 <S>, 4 lines on dark
+uniform int uMode;         // 0 E, 1 H, 2 S(t)
 uniform vec4 uComp;        // xyz: signed component axis; w > 0.5: in-plane magnitude
 uniform float uGain;
 uniform int uLog;
@@ -179,15 +179,10 @@ void main(){
       float v = dot(F, uComp.xyz) * uGain * w;
       col = diverge(compress(v), neg, pos);
     }
-  } else if (uMode <= 3) {
-    vec3 S = uMode == 2 ? cross(E, H) : 0.5 * (cross(Er, Hr) + cross(Ei, Hi));
-    float m = length(S) * uGain * w * w;
+  } else {
+    float m = length(cross(E, H)) * uGain * w * w;
     float t = uLog == 1 ? log(1.0 + 60.0 * m) / log(61.0) : m / (1.0 + m) * 1.4;
     col = inferno(t * 0.95);
-  } else {
-    float m = length(E) * uGain * w;
-    float t = compress(m);
-    col = mix(bg, vec3(0.10, 0.22, 0.32), clamp(t, 0.0, 1.0));
   }
   // faint wavelength grid
   if (uGrid > 0.0) {
@@ -200,7 +195,7 @@ void main(){
   // flux-function contours: exact field lines
   if (uPsiOn == 1) {
     float ps = (p3.x * c - p3.y * s) * uPsiScale;
-    float f = uPsiLog == 1 ? asinh(ps) * 1.25 : ps;
+    float f = uPsiLog == 1 ? asinh(ps) * 0.9 : ps;
     float fw = fwidth(f);
     float d = abs(fract(f + 0.5) - 0.5) / max(fw, 1e-6);
     float line = 1.0 - smoothstep(0.35, 1.35, d);
@@ -373,7 +368,7 @@ export function createField(canvas) {
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   }
 
-  // p: { phase, mode, comp [x y z w], gain, log, rcomp, rref, psiOn, psiScale,
+  // p: { phase, mode (0 E, 1 H, 2 S), comp [x y z w], gain, log, rcomp, rref, psiOn, psiScale,
   //      psiLog, lineAlpha, grid, overlay (bool), fade }
   function draw(p) {
     if (!main) return;
