@@ -68,29 +68,56 @@ export function pathAt(PT, s) {
   return { x: P[i * 4] + (P[j * 4] - P[i * 4]) * w, z: P[i * 4 + 1] + (P[j * 4 + 1] - P[i * 4 + 1]) * w, h: P[i * 4 + 2], sep: P[i * 4 + 3] };
 }
 
+// The fill pattern as a function, shared by the GPU and the CPU: trains of
+// 72 bunches 7.4948 m apart, 8 empty buckets between trains (a period of
+// 599.58 m) and the 900 m abort gap. trainGlow(u) is near 1 where a bunch
+// sits at offset u from the start of the fill, 0 between bunches and trains.
+const TRAIN_GLSL = `
+float trainGlow(float u, float C){
+  u = mod(u, C); if (u > C - 900.0) return 0.0;
+  float k = mod(u, 599.5840); if (k > 539.6256) return 0.0;
+  return pow(0.5 + 0.5 * cos(6.2831853 * k / 7.4948), 10.0);
+}`;
+export function trainGlow(u) {
+  u = ((u % C) + C) % C; if (u > C - 900) return 0;
+  const k = u % 599.584; if (k > 539.6256) return 0;
+  return Math.pow(0.5 + 0.5 * Math.cos(2 * Math.PI * k / 7.4948), 10);
+}
+
+// A bunch is a streak: its head at s (beam 1: s0 + D, beam 2: s0 - D, with
+// D the distance travelled so far, integrated on the CPU so that a change
+// of speed never makes the bunches jump) and a tail uTrail behind it.
+// Its width follows sqrt(beta_x(s)) at the FODO station (uBreath), so a
+// bunch swells at each focusing quadrupole and slims at each defocusing one.
 const BUNCH_VS = `
-uniform sampler2D uPath; uniform float uT, uSpeed, uC, uN, uSep, uPx, uMinPx; uniform vec2 uRes;
+uniform sampler2D uPath, uBeta; uniform float uD, uTrail, uC, uN, uSep, uPx, uMinPx, uBreath, uCell0, uLc; uniform vec2 uRes;
 attribute vec2 iS;      // s0 (m), beam (+1 / -1)
-varying float vB; varying vec2 vQ;
+varying float vB, vAlong, vSide;
 vec4 at(float s){ float f = mod(s, uC) / uC * uN; float i0 = floor(f); float w = f - i0;
   vec4 a = texture2D(uPath, vec2((mod(i0, uN) + 0.5) / uN, 0.5)), b = texture2D(uPath, vec2((mod(i0 + 1.0, uN) + 0.5) / uN, 0.5));
   return vec4(mix(a.xy, b.xy, w), a.z, mix(a.w, b.w, w)); }
+vec3 world(float s, float beam){ vec4 p = at(s); vec2 n = vec2(-sin(p.z), cos(p.z));
+  return vec3(p.x + n.x * uSep * beam * p.w, 0.6, p.y + n.y * uSep * beam * p.w); }
 void main(){
-  float s = iS.x + iS.y * uSpeed * uT;
-  vec4 p = at(s);
-  vec2 n = vec2(-sin(p.z), cos(p.z));
-  vec3 w = vec3(p.x + n.x * uSep * iS.y * p.w, 0.6, p.y + n.y * uSep * iS.y * p.w);
-  vec4 c = projectionMatrix * modelViewMatrix * vec4(w, 1.0);
-  vec4 c2 = projectionMatrix * modelViewMatrix * vec4(w + vec3(0.0, 0.25, 0.0), 1.0);
-  float px = max(uMinPx * uPx, abs(c2.y / c2.w - c.y / c.w) * uRes.y * 0.5);
-  c.xy += position.xy * px * 2.0 / uRes * c.w;
-  gl_Position = c; vB = iS.y; vQ = position.xy;
+  float s = iS.x + iS.y * uD;
+  vec3 h = world(s, iS.y), t = world(s - iS.y * uTrail, iS.y);
+  vec4 ch = projectionMatrix * modelViewMatrix * vec4(h, 1.0), ct = projectionMatrix * modelViewMatrix * vec4(t, 1.0);
+  if (ch.w <= 0.0 || ct.w <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec4 cu = projectionMatrix * modelViewMatrix * vec4(h + vec3(0.0, 0.22, 0.0), 1.0);
+  float bt = texture2D(uBeta, vec2(fract((s - uCell0) / uLc), 0.5)).r;
+  float px = max(uMinPx * uPx, abs(cu.y / cu.w - ch.y / ch.w) * uRes.y * 0.5) * mix(1.0, sqrt(bt / 90.0), uBreath);
+  vec2 d = (ch.xy / ch.w - ct.xy / ct.w) * uRes; float l = length(d);
+  vec2 dir = l > 1e-3 ? d / l : vec2(1.0, 0.0), nrm = vec2(-dir.y, dir.x);
+  vec4 c = mix(ct, ch, position.x);
+  c.xy += (nrm * position.y * px + dir * max(0.0, position.x * 2.0 - 1.0) * px) * 2.0 / uRes * c.w;
+  gl_Position = c; vB = iS.y; vAlong = position.x; vSide = position.y;
 }`;
 const BUNCH_FS = `
-varying float vB; varying vec2 vQ; uniform float uI;
-void main(){ float r2 = dot(vQ, vQ); if (r2 > 1.0) discard; float g = exp(-r2 * 4.0);
-  vec3 c = vB > 0.0 ? vec3(1.0, 0.42, 0.22) : vec3(0.30, 0.62, 1.0);
-  gl_FragColor = vec4((c * g + vec3(g * g) * 0.5) * uI, 1.0); }`;
+varying float vB, vAlong, vSide; uniform float uI;
+void main(){
+  float side = exp(-vSide * vSide * 3.5), tail = pow(clamp(vAlong, 0.0, 1.0), 2.2), head = smoothstep(0.82, 1.0, vAlong);
+  vec3 c = vB > 0.0 ? vec3(1.0, 0.42, 0.20) : vec3(0.28, 0.60, 1.0);
+  gl_FragColor = vec4((c * side * (0.10 + 0.9 * tail) + vec3(side * side * head) * 0.9) * uI, 1.0); }`;
 
 export function createRing(THREE, o = {}) {
   const scene = new THREE.Scene();
@@ -127,14 +154,25 @@ export function createRing(THREE, o = {}) {
   // ── magnets ──
   const cell = fodo();
   const Q = new THREE.Quaternion(), M = new THREE.Matrix4(), V = new THREE.Vector3(), Sc = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
-  const cryo = (color, len, r, n) => {
+  // Magnets light up as a train passes: each instance carries its s (aS),
+  // and the shader adds trainGlow for both beams (uGlowK fades the effect
+  // when the bunches move too fast to read). Dipoles also glow with the
+  // ramp field (uField = B / 8.33 T).
+  const MU = { uD: { value: 0 }, uGlowK: { value: 1 }, uField: { value: 0.07 }, uS2: { value: 0 } };
+  const cryo = (color, len, r, n, dipole) => {
     const g = new THREE.CylinderGeometry(r, r, len, 20, 1); g.rotateZ(Math.PI / 2);   // axis on x
+    g.setAttribute('aS', new THREE.InstancedBufferAttribute(new Float32Array(n), 1));
     const m = new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.35, emissive: color, emissiveIntensity: 0.12, transparent: true, opacity: 1 });
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, MU, { uC: { value: C } });
+      sh.vertexShader = 'attribute float aS; uniform float uD, uC, uS2; varying float vGlow;\n' + TRAIN_GLSL + '\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGlow = trainGlow(aS - uD, uC) + trainGlow(uS2 - aS - uD, uC);');
+      sh.fragmentShader = 'uniform float uGlowK, uField; varying float vGlow;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= ' + (dipole ? '1.0 + 9.0 * uField * uField' : '1.0') + ';\n  totalEmissiveRadiance += (diffuseColor.rgb * 1.6 + vec3(0.25)) * min(1.0, vGlow) * uGlowK;');
+    };
     const im = new THREE.InstancedMesh(g, m, n); im.frustumCulled = false; scene.add(im); return im;
   };
   const arcCells = Math.round(RA * Math.PI / 4 / cell.Lc), nCell = arcCells * 8;
-  const DIP = cryo(0x2f6fe0, 14.3, 0.46, nCell * 6), QF = cryo(0xe8453c, 3.1, 0.46, nCell), QD = cryo(0xf2b33d, 3.1, 0.46, nCell), SX = cryo(0x3fd27a, 0.9, 0.42, nCell * 2);
-  const place = (im, k, s) => { const p = pathAt(PT, s); V.set(p.x, 0.6, p.z); Q.setFromAxisAngle(Y, -p.h); M.compose(V, Q, Sc.set(1, 1, 1)); im.setMatrixAt(k, M); };
+  const DIP = cryo(0x2f6fe0, 14.3, 0.46, nCell * 6, true), QF = cryo(0xe8453c, 3.1, 0.46, nCell), QD = cryo(0xf2b33d, 3.1, 0.46, nCell), SX = cryo(0x3fd27a, 0.9, 0.42, nCell * 2);
+  const place = (im, k, s) => { const p = pathAt(PT, s); V.set(p.x, 0.6, p.z); Q.setFromAxisAngle(Y, -p.h); M.compose(V, Q, Sc.set(1, 1, 1)); im.setMatrixAt(k, M); im.geometry.attributes.aS.array[k] = s; };
   const cells = [];
   function magnets() {
     let kd = 0, kq = 0, ks = 0;
@@ -149,14 +187,17 @@ export function createRing(THREE, o = {}) {
         kq++;
       }
     }
-    for (const im of [DIP, QF, QD, SX]) im.instanceMatrix.needsUpdate = true;
+    for (const im of [DIP, QF, QD, SX]) { im.instanceMatrix.needsUpdate = true; im.geometry.attributes.aS.needsUpdate = true; }
   }
   magnets();
 
   // ── the beams: bunch sprites on the GPU ──
   const tex = new THREE.DataTexture(new Float32Array(PT.P), NPATH, 1, THREE.RGBAFormat, THREE.FloatType);
   tex.needsUpdate = true; tex.magFilter = tex.minFilter = THREE.NearestFilter;
-  const BU = { uPath: { value: tex }, uT: { value: 0 }, uSpeed: { value: 40 }, uC: { value: C }, uN: { value: NPATH }, uSep: { value: 0.097 }, uPx: { value: 1 }, uMinPx: { value: 1.6 }, uRes: { value: new THREE.Vector2(1, 1) }, uI: { value: 1 } };
+  // beta_x over one cell (64 samples) for the breathing bunch width
+  const bt = new Float32Array(64 * 4); for (let i = 0; i < 64; i++) bt[i * 4] = cell.X.pts[Math.round(i / 63 * (cell.X.pts.length - 1))][1];
+  const betaTex = new THREE.DataTexture(bt, 64, 1, THREE.RGBAFormat, THREE.FloatType); betaTex.needsUpdate = true; betaTex.magFilter = betaTex.minFilter = THREE.NearestFilter;
+  const BU = { uPath: { value: tex }, uBeta: { value: betaTex }, uD: { value: 0 }, uTrail: { value: 4 }, uC: { value: C }, uN: { value: NPATH }, uSep: { value: 0.097 }, uPx: { value: 1 }, uMinPx: { value: 1.6 }, uRes: { value: new THREE.Vector2(1, 1) }, uI: { value: 1 }, uBreath: { value: 0 }, uCell0: { value: 0 }, uLc: { value: cell.Lc } };
   const fill = [];
   {
     // 2808 bunches: trains of 72 at 7.49 m, 8 empty buckets between trains, 3 us abort gap
@@ -164,9 +205,13 @@ export function createRing(THREE, o = {}) {
     while (n < 2808 && s < C - gap) { for (let k = 0; k < 72 && n < 2808; k++, n++) { fill.push(s); s += sp; } s += 8 * sp; }
   }
   const bg = new THREE.InstancedBufferGeometry();
-  bg.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+  bg.setAttribute('position', new THREE.Float32BufferAttribute([0, -1, 0, 1, -1, 0, 1, 1, 0, 0, -1, 0, 1, 1, 0, 0, 1, 0], 3));
+  // beam 2 is phased so that its bunches meet beam 1 bunch for bunch at
+  // IP5 (and at IP1, the opposite point): s2 = 2 s_IP5 - s_i - D
+  const S2 = 2 * PT.ipS[4];
   const iS = new Float32Array(fill.length * 4);
-  fill.forEach((s, i) => { iS.set([s, 1], i * 2); iS.set([C - s, -1], (fill.length + i) * 2); });
+  fill.forEach((s, i) => { iS.set([s, 1], i * 2); iS.set([S2 - s, -1], (fill.length + i) * 2); });
+  MU.uS2.value = S2;
   bg.setAttribute('iS', new THREE.InstancedBufferAttribute(iS, 2)); bg.instanceCount = fill.length * 2;
   const bunchMat = new THREE.ShaderMaterial({ uniforms: BU, vertexShader: BUNCH_VS, fragmentShader: BUNCH_FS, ...add, depthTest: true });
   const bunches = new THREE.Mesh(bg, bunchMat); bunches.frustumCulled = false; bunches.renderOrder = 5; scene.add(bunches);
@@ -215,7 +260,8 @@ export function createRing(THREE, o = {}) {
       det.rotation.z = Math.PI / 2; const holder = new THREE.Group(); holder.add(det); holder.position.set(p.x, 0.6, p.z); holder.rotation.y = -pa.h; scene.add(holder);
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: big ? 0xff8a6a : 0x8fb6ff, ...add, opacity: 0.85 })); halo.position.set(p.x, 1, p.z); halo.scale.setScalar(big ? 380 : 240); scene.add(halo); pmats.push(halo);
     } else if (kind === 'rf') {
-      const im = new THREE.InstancedMesh(new THREE.SphereGeometry(0.9, 18, 12), new THREE.MeshStandardMaterial({ color: 0xd88a4a, metalness: 0.95, roughness: 0.25, emissive: 0x8a3a12, emissiveIntensity: 0.5 }), 16);
+      const im = new THREE.InstancedMesh(new THREE.SphereGeometry(0.9, 18, 12), new THREE.MeshStandardMaterial({ color: 0xd88a4a, metalness: 0.95, roughness: 0.25, emissive: 0xff6a20, emissiveIntensity: 0.5 }), 16);
+      rfCav = im;
       for (let j = 0; j < 16; j++) { const q = pathAt(PT, PT.ipS[k - 1] - 40 + j * 5.3); M.compose(V.set(q.x, 0.6, q.z), Q.identity(), Sc.set(1.4, 1, 1)); im.setMatrixAt(j, M); }
       scene.add(im);
     } else if (kind === 'col') {
@@ -230,7 +276,7 @@ export function createRing(THREE, o = {}) {
       dumpBlock.position.copy(end).setY(2); dumpBlock.lookAt(p.x, 2, p.z); scene.add(dumpBlock); dumpPos = end;
     }
   };
-  let dumpLine = null, dumpBlock = null, dumpPos = null, dumpT = 99;
+  let dumpLine = null, dumpBlock = null, dumpPos = null, dumpT = 99, rfCav = null;
   for (const q of IPS) marker(q.n, q.kind);
 
   // ── the FODO close-up: envelope and betatron particles ──
@@ -268,6 +314,7 @@ export function createRing(THREE, o = {}) {
     return { bx, by, N, k, eps };
   }
   const CV = cellView();
+  BU.uCell0.value = CELL_S;
   // phase advance through the cell, for the particles
   const psiAt = (pl, u) => { const pts = pl.pts, i = Math.round(u * (pts.length - 1)); return pts[i][3]; };
   function betatron(dt) {
@@ -308,10 +355,25 @@ export function createRing(THREE, o = {}) {
     dump: { target: (dumpPos || new THREE.Vector3()).clone().lerp(ip(6), 0.4), az: 160, el: 35, r: 1100 },
   };
 
-  let time = 0, near = 1, closeUp = 0;
+  // the crossing flash at IP5: lights when a bunch pair meets there
+  const ipFlash = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xfff0d8, ...add, opacity: 0, depthTest: false }));
+  { const q = pathAt(PT, PT.ipS[4]); ipFlash.position.set(q.x, 0.6, q.z); ipFlash.renderOrder = 9; scene.add(ipFlash); }
+  let time = 0, near = 1, closeUp = 0, speed = 40, speedT = 40, D = 0;
   function frame(dt, cam, res, pxr) {
     time += dt;
-    BU.uT.value = time; BU.uRes.value.copy(res); BU.uPx.value = pxr;
+    // ease the speed; integrate the distance (no jump when the speed changes)
+    speed += (speedT - speed) * Math.min(1, dt * 1.8);
+    D = (D + speed * dt) % (C * 4);
+    BU.uD.value = D; MU.uD.value = D; BU.uRes.value.copy(res); BU.uPx.value = pxr;
+    const trail = Math.max(1.5, Math.min(140, speed * 0.22));
+    BU.uTrail.value = trail;
+    // overlapping streaks add up: keep the light per metre of beam constant
+    const tk = Math.min(1, 2.2 / (trail / 7.4948));
+    // the per-bunch glow reads only while a bunch takes > 0.08 s per spacing
+    MU.uGlowK.value = Math.max(0, Math.min(1, (95 - speed) / 60));
+    const gIP = trainGlow(PT.ipS[4] - D);
+    ipFlash.scale.setScalar(2 + 9 * gIP); ipFlash.material.opacity = 0.85 * gIP * MU.uGlowK.value;
+    if (rfCav) { const g = trainGlow(PT.ipS[3] - D) + trainGlow(S2 - PT.ipS[3] - D); rfCav.material.emissiveIntensity = 0.35 + 2.6 * Math.min(1, g) * Math.max(0.25, MU.uGlowK.value); }
     const d = cam.position.length() > 0 ? cam.position.distanceTo(o.target ? o.target() : new THREE.Vector3()) : 1e4;
     // far: the ribbon glows; near: the tunnel, magnets and the cell close-up
     near = Math.max(0, Math.min(1, (1500 - d) / 1200));
@@ -327,7 +389,8 @@ export function createRing(THREE, o = {}) {
     envMesh.material.uniforms.uA.value = cu;
     betaPts.material.opacity = cu;
     for (const im of [DIP, QF, QD, SX]) { im.material.opacity = 1 - 0.6 * cu; im.material.depthWrite = cu < 0.5; }
-    BU.uI.value = 0.6 + 0.4 * (1 - close);
+    BU.uI.value = (0.6 + 0.4 * (1 - close)) * tk;
+    BU.uBreath.value = cu;
     if (close * closeUp > 0.01) betatron(dt);
     if (dumpBlock) { dumpT += dt; dumpBlock.material.emissiveIntensity = Math.max(0, 3 * Math.exp(-dumpT / 1.8)); dumpLine.material.opacity = 0.4 + 1.5 * Math.exp(-dumpT / 1.2); }
   }
@@ -335,7 +398,9 @@ export function createRing(THREE, o = {}) {
     scene, stations, labels, frame, PT, cell, cells, CELL_S, ip, BU,
     setBeams(on) { bunches.visible = on; },
     setCloseUp(on) { closeUp = on ? 1 : 0; },
-    setSpeed(v) { BU.uSpeed.value = v; },
+    setSpeed(v, now) { speedT = v; if (now) speed = v; },
+    setField(k) { MU.uField.value = Math.max(0, Math.min(1.2, k)); },
+    get speed() { return speed; },
     dumpFlash() { dumpT = 0; },
     pathAt: s => pathAt(PT, s),
     sps, ps, psb, linac,
