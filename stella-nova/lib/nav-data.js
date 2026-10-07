@@ -159,7 +159,8 @@ w.SN_NAV = [
       ["diffraction", "Aperture Diffraction", "NEW", "diffraction-lab"],
       ["double-slit", "Double-Slit Diffraction", "NEW"],
       ["polarization", "Circular Polarization", "NEW", "circular-polarization"],
-      ["photon-caustics", "Photon Caustics", "GPU"]
+      ["photon-caustics", "Photon Caustics 2D", "GPU"],
+      ["photon-caustics-3d", "Pool Caustics 3D", "GPU"]
     ] }
   ] },
   { id: "patterns", label: "Patterns & Chaos", short: "Patterns", icon: "∞", color: "#9db4ff", color2: "#c490ff", groups: [
