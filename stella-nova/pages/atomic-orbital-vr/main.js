@@ -29,9 +29,10 @@
 //      dirty? rebuild : spawnChunk ▶ evolve colors ▶ animateFlow ▶ tracers
 //      ▶ periodic B recompute ▶ nucleus spin ▶ XR input ▶ AR panel ▶ render
 //
-//  OPENING LOOK  pickLook(rng) draws one orbital from LOOKS plus a color mode
-//  and a camera angle. A normal visit draws from Math.random; the screensaver
-//  draws from opts.seed. A URL that names an orbital (#n=4&l=2&m=1, see
+//  OPENING LOOK  pickLook(rng, mode) draws one orbital from LOOKS and a camera
+//  angle. A normal visit draws from Math.random and always opens on |psi|^2
+//  (mode 0); the screensaver draws from opts.seed and also draws the color
+//  mode. A URL that names an orbital (#n=4&l=2&m=1, see
 //  readQNHash in ui.js) wins over the random draw.
 //
 //  VIEW AND TONE  Each state is drawn with its r99 (the radius that holds 99
@@ -160,11 +161,13 @@ const LOOK_MODES=[0,0,3,3,1,2];
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
 // Draw one look: an orbital from LOOKS (the sign of m is random), a color
-// mode, and a camera azimuth and elevation on the default orbit radius.
-function pickLook(rng){
+// mode (the given one, else a draw from LOOK_MODES), and a camera azimuth and
+// elevation on the default orbit radius.
+function pickLook(rng, fixedMode){
   const q=LOOKS[Math.floor(rng()*LOOKS.length)];
   const m=rng()<0.5?q[2]:-q[2];
-  const mode=LOOK_MODES[Math.floor(rng()*LOOK_MODES.length)];
+  const drawn=LOOK_MODES[Math.floor(rng()*LOOK_MODES.length)];
+  const mode=fixedMode==null?drawn:fixedMode;
   const az=rng()*Math.PI*2, el=0.08+rng()*0.32;
   const R=Math.hypot(camera.position.x,camera.position.y,camera.position.z);
   applyQN(q[0],q[1],m); S.dirty=true;
@@ -173,10 +176,11 @@ function pickLook(rng){
   controls.target.set(0,0,0); controls.update();
 }
 
-// First view. A URL that names an orbital wins; other visits get a random look.
+// First view. A URL that names an orbital wins; other visits get a random
+// orbital. The page always opens on |psi|^2 (mode 0).
 const linked=readQNHash();
-if(linked){applyQN(linked[0],linked[1],linked[2]);S.dirty=true;}
-else pickLook(Math.random);
+if(linked){applyQN(linked[0],linked[1],linked[2]);S.dirty=true;setColorMode(0);}
+else pickLook(Math.random,0);
 
 // The shell sets the page hash on back, forward and a pasted link.
 window.addEventListener('hashchange',()=>{
