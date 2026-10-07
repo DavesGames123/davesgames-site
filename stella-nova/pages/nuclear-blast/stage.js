@@ -189,7 +189,7 @@ export function createStage(o) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
   controls.minDistance = 4; controls.maxDistance = 6e5;
-  controls.maxPolarAngle = Math.PI / 2 - 0.004;
+  controls.maxPolarAngle = Math.PI * 0.94;   // may look up from street level; main.js keeps y > 2 m
   controls.zoomSpeed = 1.2;
 
   // shared uniforms (glsl.js LIGHT and FOG)
