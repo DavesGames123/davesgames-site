@@ -2,8 +2,8 @@
 //  PARTICLE COLLIDER  ·  geometry.js — the barrel detector, navigator, field
 // ----------------------------------------------------------------------------
 //  No DOM. One description of the detector serves the transport engine
-//  (navigation, field, readout) and the 3D model (detector.js draws the
-//  same tubes). The sizes are near those of a large LHC barrel detector
+//  (navigation, field, readout) and the diagrams (diagram.js draws the
+//  same radii as outlines). The sizes are near those of a large LHC barrel detector
 //  with a 3.8 T solenoid, rounded and simplified. Units: mm, T.
 //
 //  SHAPES

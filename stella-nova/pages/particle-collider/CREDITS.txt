@@ -2,7 +2,7 @@ PARTICLE COLLIDER — credits and sources
 =======================================
 
 This page is an original work for davesgames.io (Stella Nova). It is a
-teaching model of a hadron collider and a barrel detector.
+teaching model of particle collisions seen in a barrel detector.
 
 Geant4
 ------
@@ -33,18 +33,15 @@ Other physics sources
 - ESTAR (NIST): the shape of the low-energy radiative stopping power.
 - R. D. Field and R. P. Feynman, Nucl. Phys. B136 (1978) 1: independent
   fragmentation of jets.
-- T. P. Wangler, RF Linear Accelerators; S. Y. Lee, Accelerator Physics;
-  H. Wiedemann, Particle Accelerator Physics: linac phase stability, FODO
-  optics, chromaticity, synchrotron motion, synchrotron radiation.
-- LHC Design Report, Vol. I (CERN-2004-003) and the LHC Run 3 configuration
-  papers: machine parameters in accel.js (circumference, bending radius,
-  harmonic number, momentum compaction, bunch parameters, beam dump).
+- Published machine parameters (LHC Run 3 and Pb-Pb, Tevatron, LEP, and the
+  HL-LHC, HE-LHC, FCC-hh, Higgs factory, linear collider, CLIC and muon
+  collider design studies): the collision energies in generators.js. The
+  energies marked "hypothetical" belong to no machine or plan.
 
 Detector
 --------
 The detector dimensions are near those of a large LHC barrel detector with a
-3.8 T solenoid, rounded and simplified. The layout of the accelerator complex
-is a schematic, not survey data. No experiment or organisation endorses this
+3.8 T solenoid, rounded and simplified. No experiment or organisation endorses this
 page.
 
 Third-party code in the page

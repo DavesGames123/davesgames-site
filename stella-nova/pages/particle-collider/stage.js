@@ -1,10 +1,10 @@
 // ============================================================================
 //  PARTICLE COLLIDER  ·  stage.js — renderer, bloom, camera, framing
 // ----------------------------------------------------------------------------
-//  One WebGL renderer draws one of two scenes: the accelerator ring (metres)
-//  or the detector (millimetres). st.use(scene, o) swaps the scene and the
-//  camera limits. The camera near and far planes follow the orbit distance
-//  each frame, so both scales keep their depth precision.
+//  One WebGL renderer draws the optional 3D view of the event (millimetres):
+//  tracks and deposits, with thin hardware outlines when the viewer turns
+//  them on. st.use(scene, o) sets the scene and the camera limits. The camera near and far planes follow the orbit distance
+//  each frame, so near and far views keep their depth precision.
 //
 //  POST  EffectComposer: RenderPass, OverlayPass (the event layer with a
 //  hue-keeping soft clip), UnrealBloomPass, OutputPass (three r160 addons). The bloom runs at a lower resolution on phones (quality tier).

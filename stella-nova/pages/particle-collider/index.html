@@ -10,35 +10,37 @@
   ═══════════════════════════════════════════════════════════════════════════
    PARTICLE COLLIDER  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. Two linked views of one machine:
-     Accelerator  the CERN-style chain from the ion source to the beam dump,
-                  ten stations, each with live plots from accel.js
-     Detector     a barrel detector at the interaction point; events from
-                  generators.js go through the Monte Carlo transport engine
-                  (transport.js, in Web Workers) and show in 3D (display.js)
-                  and in 2D (views2d.js)
-   The physics follows the Geant4 Physics Reference Manual and the PDG; the
-   page is not Geant4 (see CREDITS.txt and the About section).
+   Static markup only. Two chosen particles collide at a chosen energy;
+   the transport engine (transport.js, in Web Workers) moves every product
+   through a barrel detector, and the page shows the result as detector
+   diagrams: the transverse (r-phi) and longitudinal (r-z) views, large,
+   with the tower map (eta-phi) beside the event card. The detector itself
+   is a quiet outline; its hardware is off by default. Every product can be
+   hovered and selected for a closer look (#detail).
 
    HEAD LOAD ORDER
-     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     1. lib/gpu-guard.js  releases GPU contexts when the shell swaps pages
      2. fonts (Space Grotesk, IBM Plex Mono, Instrument Serif), style.css
-     3. importmap for three r160, then main.js as a module
+     3. importmap for three r160 (the optional 3D view only), main.js
 
    LAYOUT  (# marks an element id main.js binds to)
-     desktop ... #panel left (mode, stations or scenarios, controls),
-                 #anaPanel right (plots, 2D views, numbers), #view between
-     phone ..... #dock at the base; a tab opens #panel as a bottom sheet
-                 (portrait) or a right drawer (landscape) with one .grp
+     #views ... the diagrams: layout classes split (default), quad, rphi,
+                rz, 3d; each .view has a header and a .host
+     #strip ... the event card, the tower map (moved into #legoSlot in
+                the split layout on wide screens), trigger and energies
+     #panel ... the controls (desktop: left column; phone: bottom sheet)
+     #detail .. the selected object, "a deeper look" (right drawer; phone:
+                bottom sheet)
 
    GREP MAP  (main.js)
-     grep -n 'function setMode'     accelerator or detector
-     grep -n 'function runEvent'    generate, transport in workers, reco, show
+     grep -n 'function runEvent'    generate, transport in workers, show
+     grep -n 'function setFocus'    hover and selection, linked views
+     grep -n 'function openDetail'  the detail panel
      grep -n 'function frame'       the loop
      grep -n 'window.snSaver'       the screensaver tour
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A particle collider from the ion source to the event display: linac, booster, synchrotron, FODO optics, RF buckets, the energy ramp and luminosity, then a barrel detector with a Monte Carlo transport engine that tracks every particle step by step through silicon, crystals, brass and iron.">
+<meta name="description" content="Collide two particles at a chosen energy and watch the products fly out through a detector, drawn as transverse and longitudinal event diagrams with labels. Every particle is a Monte Carlo track; hover and click any product for a closer look.">
 <link href="../../vendor/fonts/space-grotesk+ibm-plex-mono+instrument-serif.e9f187bf.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -52,115 +54,77 @@
 </div>
 
 <main id="stage">
-  <canvas id="view"></canvas>
-  <div id="labels" aria-hidden="true"></div>
-  <div id="read" class="pread"></div>
-  <div id="legend" class="plegend" aria-label="Track colours"></div>
-  <div id="clock" class="pclock" hidden>
+  <div id="views" class="split" tabindex="0" aria-label="Event diagrams: arrow keys move through the objects, Enter opens one, Escape clears">
+    <section class="view" data-v="rphi"><header><b>Transverse</b><span>r-φ · the beam points out of the screen</span></header><div class="host" id="hRphi"></div></section>
+    <section class="view" data-v="rz"><header><b>Longitudinal</b><span>r-z · the beams come in from the left and the right</span></header><div class="host" id="hRz"></div></section>
+    <section class="view" data-v="lego"><header><b>Tower map</b><span>E<sub>T</sub> over η-φ</span></header><div class="host"><canvas id="lego"></canvas></div></section>
+    <section class="view" data-v="3d"><header><b>3D</b><span>tracks and deposits only</span></header><div class="host"><canvas id="view3d"></canvas></div></section>
+  </div>
+  <nav id="vtabs" aria-label="View">
+    <button data-v="rphi" type="button">r-φ</button><button data-v="rz" type="button">r-z</button><button data-v="lego" type="button">Towers</button><button data-v="3d" type="button">3D</button>
+  </nav>
+  <div id="strip">
+    <div id="card" class="evcard"></div>
+    <div id="legoSlot" aria-label="Tower map"></div>
+    <div class="trig-wrap"><div id="legend" class="plegend" aria-label="Colours"></div><div class="sec-label">Trigger</div><div id="trig" class="trig"></div><div class="sec-label">Energy by subsystem</div><div id="subs" class="subs"></div></div>
+  </div>
+  <div id="clock" class="pclock">
     <button id="tPlay" type="button" aria-label="Pause">❚❚</button>
     <input type="range" id="tSlide" min="-4" max="30" step="0.01" value="0" aria-label="Time after the crossing, ns">
     <span id="tVal">0.0 ns</span>
   </div>
-  <div id="busy" class="pbusy" hidden><i></i><span>Transporting particles</span></div>
-  <div id="hint" class="phint">drag to orbit · scroll or pinch to zoom</div>
-  <button id="anaOpen" type="button" hidden>∑ Analysis</button>
+  <div id="busy" class="pbusy" hidden><i></i><span>Colliding</span></div>
+  <div id="tip" class="tip" hidden></div>
 </main>
-<div id="nogl" hidden>WebGL is not available in this browser, so the collider cannot render.</div>
+<div id="nogl" hidden>This browser cannot draw the light buffer (WebGL2); the diagrams use plain lines.</div>
 
 <aside id="panel" class="open" aria-label="Controls">
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" type="button" aria-label="Close controls">✕</button>
-
-  <section class="grp" data-grp="mode">
-    <div class="modes" role="tablist">
-      <button class="mode" data-mode="ring" type="button" role="tab"><b>Accelerator</b><span>source → ring → dump</span></button>
-      <button class="mode" data-mode="det" type="button" role="tab"><b>Detector</b><span>collisions at IP5</span></button>
+  <section class="grp" data-grp="ctl">
+    <div class="sec-label first">Collide</div>
+    <div class="row"><label for="beam">Beams</label><select id="beam"></select></div>
+    <div class="row"><label for="energy">√s</label><select id="energy"></select></div>
+    <p class="note" id="energyNote"></p>
+    <div class="sec-label">Process</div>
+    <div id="scenarios" class="cards two"></div>
+    <div id="gunBox" hidden>
+      <div class="row"><label for="gunP">Particle</label><select id="gunP"></select></div>
+      <div class="row"><label for="gunE">Energy</label><input type="range" id="gunE" min="0" max="3" step="0.01" value="1.7"><span class="val" id="gunEV"></span></div>
+      <div class="row"><label for="gunEta">η</label><input type="range" id="gunEta" min="-2.8" max="2.8" step="0.01" value="0.3"><span class="val" id="gunEtaV"></span></div>
+      <div class="row"><label for="gunPhi">φ</label><input type="range" id="gunPhi" min="-3.14" max="3.14" step="0.01" value="0.6"><span class="val" id="gunPhiV"></span></div>
     </div>
-    <div id="ringCtl">
-      <div class="sec-label">Stations</div>
-      <div id="stations" class="cards"></div>
-      <div class="sec-label">Machine</div>
-      <div class="row"><label for="preset">Settings</label><select id="preset"></select></div>
-      <div class="row"><label for="clockK">Cycle clock</label><input type="range" id="clockK" min="0" max="3" step="0.01" value="1.78"><span class="val" id="clockKV"></span></div>
-      <div class="row"><label for="qp">Q′ target</label><input type="range" id="qp" min="-10" max="20" step="1" value="2"><span class="val" id="qpV"></span></div>
-      <div class="row"><label for="qh">Hénon Q</label><input type="range" id="qh" min="0.20" max="0.40" step="0.001" value="0.31"><span class="val" id="qhV"></span></div>
-      <div class="toggles"><button class="tog" id="dumpBtn" type="button">Dump the beam</button><button class="tog accent" id="collide" type="button">Collide at IP5 →</button></div>
+    <div class="row" id="puRow"><label for="pu">Pile-up</label><input type="range" id="pu" min="0" max="60" step="1" value="0"><span class="val" id="puV"></span></div>
+    <div class="toggles"><button class="tog accent" id="fire" type="button">Collide</button><button class="tog" id="auto" type="button">Auto</button></div>
+    <div class="sec-label">Time</div>
+    <div class="row"><label for="speed">Slow motion</label><input type="range" id="speed" min="0.3" max="12" step="0.1" value="3"><span class="val" id="speedV"></span></div>
+    <div class="sec-label">Views</div>
+    <div class="grid3" id="layouts">
+      <button data-l="split" type="button">Side by side</button><button data-l="quad" type="button">Quarter split</button><button data-l="rphi" type="button">r-φ</button>
+      <button data-l="rz" type="button">r-z</button><button data-l="3d" type="button">3D</button><button data-l="lego" type="button">Towers</button>
     </div>
-    <div id="detCtl" hidden>
-      <div class="sec-label">Event</div>
-      <div id="scenarios" class="cards two"></div>
-      <div id="gunBox">
-        <div class="sec-label">Particle gun</div>
-        <div class="row"><label for="gunP">Particle</label><select id="gunP"></select></div>
-        <div class="row"><label for="gunE">Energy</label><input type="range" id="gunE" min="0" max="3" step="0.01" value="1.7"><span class="val" id="gunEV"></span></div>
-        <div class="row"><label for="gunEta">η</label><input type="range" id="gunEta" min="-2.8" max="2.8" step="0.01" value="0.3"><span class="val" id="gunEtaV"></span></div>
-        <div class="row"><label for="gunPhi">φ</label><input type="range" id="gunPhi" min="-3.14" max="3.14" step="0.01" value="0.6"><span class="val" id="gunPhiV"></span></div>
-        <div class="row"><label for="gunN">Count</label><input type="range" id="gunN" min="1" max="10" step="1" value="1"><span class="val" id="gunNV"></span></div>
-      </div>
-      <div class="row"><label for="pu">Pile-up μ</label><input type="range" id="pu" min="0" max="60" step="1" value="0"><span class="val" id="puV"></span></div>
-      <div class="toggles"><button class="tog accent" id="fire" type="button">New event</button><button class="tog" id="auto" type="button">Auto</button></div>
-      <div class="sec-label">Time</div>
-      <div class="row"><label for="speed">Slow motion</label><input type="range" id="speed" min="0.3" max="12" step="0.1" value="3"><span class="val" id="speedV"></span></div>
-      <p class="note">Speed in ns of event time per second. The bunches cross at t = 0; light crosses the detector in about 25 ns.</p>
-      <div class="sec-label">View</div>
-      <div class="grid3" id="cuts">
-        <button data-cut="wedge" type="button">Wedge</button><button data-cut="half" type="button">Half</button><button data-cut="quarter" type="button">Quarter</button>
-        <button data-cut="none" type="button">Closed</button><button data-v="side" type="button">Side</button><button data-v="end" type="button">End-on</button>
-      </div>
-      <div class="grid3" id="shows">
-        <button class="tog on" data-show="pix" type="button">Pixels</button><button class="tog on" data-show="sct" type="button">Strips</button><button class="tog on" data-show="ecal" type="button">ECAL</button>
-        <button class="tog on" data-show="hcal" type="button">HCAL</button><button class="tog on" data-show="sol" type="button">Coil</button><button class="tog on" data-show="yoke" type="button">Yoke</button>
-        <button class="tog on" data-show="mu" type="button">Muon</button><button class="tog on" data-show="labels" type="button">Labels</button><button class="tog on" data-show="orbit" type="button">Orbit</button>
-      </div>
-    </div>
+    <div class="sec-label">Labels</div>
+    <div class="grid3" id="labelMode"><button data-m="hard" type="button">Hard</button><button data-m="all" type="button">All</button><button data-m="off" type="button">Off</button></div>
+    <div class="toggles"><button class="tog" id="tOutline" type="button">Layer outline</button><button class="tog" id="tHardware" type="button">Show detector hardware</button></div>
+    <p class="note">Hover or tap any product; click it for a closer look. Tab or the arrow keys move through the objects, Enter opens one, Esc clears.</p>
     <div class="sec-label">About</div>
-    <div class="about" id="about">
-      <p>The accelerator side computes the beam optics, RF and ramp from formulas (accel.js). The detector side generates proton-proton events and moves every particle step by step through the detector materials: ionisation (Bethe-Bloch with the density effect), multiple scattering (Highland), bremsstrahlung, pair production, Compton scattering, photoelectric absorption, decays with real lifetimes, and a parametrised hadronic cascade. A 3.8 T solenoid bends the tracks; tracks are fitted from their silicon hits.</p>
-      <p class="fine">The physics models follow the Geant4 Physics Reference Manual and the Geant4 Application Developer guides, and the PDG review of particle physics. This page is not Geant4, contains no Geant4 code, and is not endorsed by the Geant4 Collaboration. Details in <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
+    <div class="about">
+      <p>Each event is a Monte Carlo simulation: the generator makes the hard process at the chosen energy, and the transport engine follows every particle step by step through silicon, lead tungstate, brass and iron in a 3.8 T field (ionisation, multiple scattering, bremsstrahlung, pair production, Compton scattering, decays, a parametrised hadronic cascade). Energies marked "design" are proposed machines; "hypothetical" ones exist on no plan.</p>
+      <p class="fine">The physics models follow the Geant4 Physics Reference Manual and Application Developer guides and the PDG review. This page is not Geant4, contains no Geant4 code and is not endorsed by the Geant4 Collaboration. See <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
     </div>
   </section>
 </aside>
 
-<aside id="anaPanel" aria-label="Analysis">
-  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
-  <section class="grp ana" data-grp="ana" id="anaSec">
-    <div id="anaRing">
-      <div class="kind" id="stKind"></div>
-      <h1 id="stTitle"></h1>
-      <p class="lede" id="stLede"></p>
-      <canvas class="plot" id="plotA"></canvas>
-      <canvas class="plot" id="plotB"></canvas>
-      <div class="sec-label">Numbers</div>
-      <table class="readout" id="stNums"></table>
-      <div class="sec-label">Relations</div>
-      <div id="stEqs" class="eqs"></div>
-    </div>
-    <div id="anaDet" hidden>
-      <div class="kind" id="evKind"></div>
-      <h1 id="evTitle"></h1>
-      <div id="evMass" class="mass"></div>
-      <div class="views2">
-        <canvas class="v2" id="vRphi"></canvas>
-        <canvas class="v2" id="vRz"></canvas>
-      </div>
-      <div class="legowrap"><canvas class="plot lego" id="vLego"></canvas><div id="legoTip" class="ltip" hidden></div></div>
-      <div class="sec-label">Trigger</div>
-      <div id="trig" class="trig"></div>
-      <div class="sec-label">Objects</div>
-      <table class="readout objs" id="objs"></table>
-      <div class="sec-label">Energy by subsystem</div>
-      <div id="subs" class="subs"></div>
-      <div class="sec-label">Engine</div>
-      <table class="readout" id="eng"></table>
-    </div>
-  </section>
+<aside id="detail" aria-label="Selected object" hidden>
+  <button id="detailClose" type="button" aria-label="Close">✕</button>
+  <div id="detailBody"></div>
 </aside>
 
 <nav id="dock" aria-label="Controls">
-  <button class="tab" data-grp="mode" type="button"><i>◎</i><span>Controls</span></button>
-  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Analysis</span></button>
-  <button id="dockMode" type="button"><i>⇄</i><span>Detector</span></button>
-  <button id="dockGo" type="button"><i>✦</i><span>Event</span></button>
+  <button class="tab" data-grp="ctl" type="button"><i>◎</i><span>Collide</span></button>
+  <button id="dockView" type="button"><i>◐</i><span>r-φ</span></button>
+  <button id="dockCard" type="button"><i>∑</i><span>Event</span></button>
+  <button id="dockGo" type="button"><i>✦</i><span>New</span></button>
 </nav>
 
 <script type="importmap">
