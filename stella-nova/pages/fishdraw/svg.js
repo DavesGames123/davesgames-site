@@ -25,7 +25,7 @@ export function xmlEscape(s) {
 const n3 = v => (Math.round(v * 1000) / 1000).toString();
 
 // Each polyline of fish f in cell c as [[x, y], ..] in plate mm.
-function cellLines(f, c, jitter) {
+export function cellLines(f, c, jitter) {
   const xy = fishPoints(f, jitter).xy, out = [];
   for (let i = 0; i + 1 < f.offs.length; i++) {
     const pl = [];

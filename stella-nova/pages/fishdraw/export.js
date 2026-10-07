@@ -33,8 +33,11 @@ export function slug(s) {
   return String(s || 'fish').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'fish';
 }
 
-export function exportPlateSVG(L, fishes, o, name) {
-  download(new Blob([plateSVG(L, fishes, o)], { type: 'image/svg+xml' }), name + '.svg');
+// extra (tree mode): { svg: elements to add, draw(ctx, view) for the PNG }.
+export function exportPlateSVG(L, fishes, o, name, extra = null) {
+  let svg = plateSVG(L, fishes, o);
+  if (extra) svg = svg.replace(/<\/svg>\n$/, extra.svg + '\n</svg>\n');
+  download(new Blob([svg], { type: 'image/svg+xml' }), name + '.svg');
 }
 
 // { w, h, dpi, clamped } in px for a plate of L.w x L.h mm at dpi.
@@ -44,12 +47,13 @@ export function pngSize(L, dpi) {
   while (d > 24 && (px(L.w) * px(L.h) > MAX_AREA || px(L.w) > MAX_SIDE || px(L.h) > MAX_SIDE)) d = Math.floor(d * 0.9);
   return { w: px(L.w), h: px(L.h), dpi: d, clamped: d !== dpi };
 }
-export function exportPNG(L, fishes, o, dpi, name) {
+export function exportPNG(L, fishes, o, dpi, name, extra = null) {
   const z = pngSize(L, dpi);
   const c = document.createElement('canvas'); c.width = z.w; c.height = z.h;
   const x = c.getContext('2d');
   drawPlate(x, { L, theme: o.theme, ink: o.ink, pen: o.pen, jitter: o.jitter, view: { s: z.w / L.w, ox: 0, oy: 0 },
     fishes, progress: fishes.map(() => null), grain: o.grain, marker: false, hiCell: -1, paperOut: false, dpr: z.dpi / 96 });
+  if (extra) extra.draw(x, { s: z.w / L.w, ox: 0, oy: 0 });
   return new Promise(res => c.toBlob(b => { if (b) download(b, `${name}-${z.dpi}dpi.png`); res(z); }, 'image/png'));
 }
 

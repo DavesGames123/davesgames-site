@@ -21,7 +21,7 @@
 // ============================================================================
 import { makeEngine, drawFish, flatten, PARAMS } from './engine.js';
 
-const CACHE_MAX = 240;
+const CACHE_MAX = 480;
 
 export function keyOf(name, params, label) {
   return name + '|' + (label ? 1 : 0) + '|' + (params ? PARAMS.map(d => params[d.key]).join(',') : '-');

@@ -65,7 +65,7 @@ export function fishPoints(f, jitter) {
   m.set(key, out);
   return out;
 }
-function fishPath(f, jitter) {
+export function fishPath(f, jitter) {
   const P = fishPoints(f, jitter);
   if (P.path) return P.path;
   const p = new Path2D(), xy = P.xy;
@@ -81,7 +81,7 @@ function fishPath(f, jitter) {
 // The path of the first `len` units of line, in drawing order (the upstream
 // order of the polylines, as the upstream SMIL animation). Returns the pen
 // tip [x, y] or null when the fish is done.
-function tracePartial(ctx, f, xy, len) {
+export function tracePartial(ctx, f, xy, len) {
   let acc = 0, tip = null;
   ctx.beginPath();
   for (let i = 0; i + 1 < f.offs.length; i++) {

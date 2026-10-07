@@ -31,7 +31,9 @@
 //  GREP MAP
 //    grep -n 'function layout'      the canvas size and the clear area
 //    grep -n 'function buildGrid'   the cell specs and the progressive fill
-//    grep -n 'function setMode'     single or grid
+//    grep -n 'function setMode'     single, grid or tree
+//  TREE. The tree of life mode is in treemode.js (TM). main.js gives it the
+//  plate, the view and the taps; TM draws the tree in the plate content.
 //    grep -n 'function plateNow'    the layout of the plate on screen
 //    grep -n 'function fitView'     plate mm to device px
 //    grep -n 'function draw'        one frame
@@ -56,7 +58,8 @@ import { createPool } from './pool.js';
 import { THEMES, THEME_KEYS, PAGES, MM_PER_PX, GRID_PRESETS, pageSize, layoutPlate, cellAt } from './plate.js';
 import { drawPlate, makeGrain } from './render.js';
 import { installSaver } from './saver.js';
-import { exportPlateSVG, exportPNG, exportUpstream, copyLink, pngSize, slug } from './export.js';
+import { createTreeMode } from './treemode.js';
+import { exportPlateSVG, exportPNG, exportUpstream, copyLink, pngSize, slug, download } from './export.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -77,6 +80,7 @@ const S = {
   plates: {
     single: { page: 'screen', orient: 'landscape', border: false, title: false, labels: false, hershey: true },
     grid: { page: 'screen', orient: 'landscape', border: true, title: true, labels: true, hershey: false },
+    tree: { page: 'screen', orient: 'landscape', border: false, title: true, labels: false, hershey: false },
   },
   anim: { auto: !REDUCED, tip: true, speed: 0.5, p: null, last: 0 },
   view: { z: 1, px: 0, py: 0 },
@@ -91,6 +95,7 @@ let pool = null;
 let grain = null;
 let token = 0;           // the latest showFish request
 let gridSeq = 0;         // the latest grid (pool cancel tag)
+let TM = null;           // the tree mode (treemode.js)
 
 // ── layout ──────────────────────────────────────────────────────────────────
 // The canvas covers the desk at device px. The clear area is the part of
@@ -125,6 +130,11 @@ function plateNow() {
   const view = { w: S.clear.w * MM_PER_PX, h: S.clear.h * MM_PER_PX };
   const size = pageSize(cfg.page, cfg.orient, view);
   const grid = S.mode === 'grid', G = S.grid;
+  if (S.mode === 'tree') {
+    const pt = TM.plateText();
+    return layoutPlate({ w: size.w, h: size.h, rows: 1, cols: 1, screen: cfg.page === 'screen', border: cfg.border, title: cfg.title, labels: false,
+      titleText: S.title || pt.title, subText: pt.sub, footRight: 'davesgames.io', names: [], plateNo: 1 });
+  }
   const names = grid ? S.gspec.map(c => c.name) : [S.name];
   const sub = grid
     ? (G.family ? 'The family of ' + (S.name.split(' ')[0] || 'Pisces') + ', ' + (G.rows * G.cols) + ' specimens' : (G.rows * G.cols) + ' specimens, plate seed ' + G.seed)
@@ -155,6 +165,14 @@ function draw() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const grid = S.mode === 'grid';
+  if (S.mode === 'tree') {
+    drawPlate(ctx, { L: Object.assign({}, L, { cells: [] }), theme, ink: S.ink, pen: S.pen, jitter: S.jitter, view, fishes: [], progress: [],
+      grain: S.grain ? grain : null, marker: false, hiCell: -1, paperOut: cfg.page !== 'screen', dpr: S.dpr });
+    TM.draw(ctx, L, view);
+    lastPlate = { L, view };
+    placeCaption(L, view);
+    return;
+  }
   drawPlate(ctx, {
     L, theme, ink: S.ink, pen: S.pen, jitter: S.jitter, view,
     fishes: grid ? S.gfish : [S.fish], progress: grid ? S.gprog : [S.anim.p], grain: S.grain ? grain : null,
@@ -169,7 +187,10 @@ let lastPlate = null;
 function placeCaption(L, view) {
   const cap = $('caption');
   const f = S.fish;
-  if (S.mode === 'grid') {
+  if (S.mode === 'tree') {
+    const t = S.tr.tree;
+    cap.innerHTML = t ? `Tree of <i>${esc(t.nodes[0].name)}</i> · <span class="n">${S.tr.fish.size}/${t.nodes.length}</span> fish drawn · click a fish or branch` : '';
+  } else if (S.mode === 'grid') {
     const n = S.gspec.length, done = S.gfish.filter(Boolean).length;
     const hi = S.hiCell >= 0 && S.gspec[S.hiCell];
     cap.innerHTML = hi ? `${S.hiCell + 1}. <i>${esc(hi.name)}</i> · click to open`
@@ -199,6 +220,7 @@ function frame(now) {
     if (a.p >= f.total) { a.p = null; syncPlay(); }
     S.dirty = true;
   }
+  if (S.mode === 'tree' && TM.tick(Math.min(0.1, (now - (a.last || now)) / 1000))) S.dirty = true;
   if (S.mode === 'grid') {
     const dt = Math.min(0.1, (now - (a.last || now)) / 1000);
     for (let i = 0; i < S.gprog.length; i++) {
@@ -213,12 +235,13 @@ function frame(now) {
   if (S.dirty) { S.dirty = false; draw(); }
 }
 function startDrawOn() {
+  if (S.mode === 'tree') { TM.togglePlay(); return; }
   if (S.mode === 'grid') { S.gprog = S.gfish.map(f => (f ? 0 : null)); S.dirty = true; syncPlay(); return; }
   if (!S.fish) return;
   S.anim.p = 0; S.anim.last = 0; S.dirty = true; syncPlay();
 }
-function drawing() { return S.mode === 'grid' ? S.gprog.some(p => p != null) : S.anim.p != null; }
-function stopDrawOn() { S.anim.p = null; S.gprog = S.gprog.map(() => null); S.dirty = true; syncPlay(); }
+function drawing() { return S.mode === 'tree' ? S.tr.playing : S.mode === 'grid' ? S.gprog.some(p => p != null) : S.anim.p != null; }
+function stopDrawOn() { if (S.mode === 'tree') { TM.togglePlay(); return; } S.anim.p = null; S.gprog = S.gprog.map(() => null); S.dirty = true; syncPlay(); }
 function syncPlay() {
   $('playBtn').textContent = drawing() ? 'Finish' : 'Draw on';
   $('dockDraw').classList.toggle('on', drawing());
@@ -238,10 +261,11 @@ function showFish(name, params, { push = true, animate = S.anim.auto } = {}) {
   const label = plateCfg().hershey;
   const p = Object.keys(diffParams(S.params, S.base)).length ? S.params : null;
   S.pending++; busy();
+  if (S.mode === 'tree') TM.onSpecimen();
   pool.draw(name, p, label, 0).then(f => {
     if (my !== token) return;
     S.fish = f;
-    if (animate) startDrawOn(); else { S.anim.p = null; syncPlay(); }
+    if (animate && S.mode !== 'tree') startDrawOn(); else { S.anim.p = null; syncPlay(); }
     S.dirty = true; syncCaptionOnly();
     if (S.mode === 'grid' && S.grid.family) buildGrid();
   }).catch(err => {
@@ -338,9 +362,13 @@ function setMode(m) {
   S.mode = m; S.hiCell = -1;
   resetView();
   if (m === 'grid') buildGrid();
+  else if (m === 'tree') { S.anim.p = null; TM.onSpecimen(); }
   else { stopDrawOn(); refetch(); }
+  $('treeCard').hidden = m !== 'tree' || S.tr.sel < 0;
   syncUI(); layout(); writeHash();
 }
+const MODES = ['single', 'grid', 'tree'];
+const nextMode = () => MODES[(MODES.indexOf(S.mode) + 1) % MODES.length];
 function openCell(i) {
   const c = S.gspec[i]; if (!c) return;
   S.mode = 'single'; S.hiCell = -1; resetView();
@@ -445,9 +473,12 @@ function syncUI() {
   const cfg = plateCfg(), G = S.grid, grid = S.mode === 'grid';
   for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === S.mode);
   $('gridSec').hidden = !grid;
-  $('dockMode').textContent = grid ? '◧' : '▦';
-  $('dockMode').setAttribute('aria-label', grid ? 'Single fish' : 'Grid');
-  $('dockMode').classList.toggle('on', grid);
+  $('treeSec').hidden = S.mode !== 'tree';
+  const nm = nextMode();
+  $('dockMode').textContent = { single: '◧', grid: '▦', tree: '⟟' }[nm];
+  $('dockMode').setAttribute('aria-label', { single: 'Single fish', grid: 'Grid', tree: 'Tree of life' }[nm]);
+  $('dockMode').classList.toggle('on', S.mode !== 'single');
+  if (TM) TM.syncUI();
   $('rows').value = G.rows; $('cols').value = G.cols; $('rowsV').textContent = G.rows; $('colsV').textContent = G.cols;
   for (const b of $('presets').children) b.classList.toggle('on', b.dataset.id === G.preset);
   for (const b of $('srcSeg').children) b.classList.toggle('on', +b.dataset.f === (G.family ? 1 : 0));
@@ -493,6 +524,7 @@ function shareState() {
     pg: cfg.page, or: cfg.orient === 'portrait' ? 'p' : 'l',
     fl: [cfg.border ? 'b' : '', cfg.title ? 't' : '', cfg.labels ? 'l' : '', cfg.hershey ? 'h' : '', S.grain ? 'g' : ''].join('') || '-',
     ti: S.title,
+    ...(S.mode === 'tree' ? TM.shareState() : {}),
     ...(S.mode === 'grid' ? { gs: S.grid.seed, r: S.grid.rows, c: S.grid.cols, fam: S.grid.family ? 1 : '', sp: S.grid.family ? S.grid.spread : '', no: S.grid.no } : {}),
   };
 }
@@ -506,7 +538,8 @@ function writeHash() {
 // Applies a decoded hash to S. Returns { name, params } of the fish.
 function readHash() {
   const q = decodeShare(location.hash);
-  if (q.m === 'single' || q.m === 'grid') S.mode = q.m;
+  if (q.m === 'single' || q.m === 'grid' || q.m === 'tree') S.mode = q.m;
+  TM.readShare(q);
   if (q.t && THEMES[q.t]) S.theme = q.t;
   if (q.ink && /^[0-9a-f]{6}$/i.test(q.ink)) S.ink = '#' + q.ink;
   if (q.pen && Number.isFinite(+q.pen)) S.pen = clamp(+q.pen, 0.05, 1.2);
@@ -577,7 +610,7 @@ function bindUI() {
   });
 
   for (const b of $('modeSeg').children) b.addEventListener('click', () => setMode(b.dataset.mode));
-  $('dockMode').addEventListener('click', () => setMode(S.mode === 'grid' ? 'single' : 'grid'));
+  $('dockMode').addEventListener('click', () => setMode(nextMode()));
   for (const p of GRID_PRESETS) {
     const b = document.createElement('button');
     b.dataset.id = p.id; b.textContent = p.label || p.rows + ' × ' + p.cols;
@@ -598,7 +631,7 @@ function bindUI() {
 
   $('dockBack').addEventListener('click', () => goHist(-1));
   $('dockFwd').addEventListener('click', () => goHist(1));
-  $('dockNew').addEventListener('click', newFish);
+  $('dockNew').addEventListener('click', () => (S.mode === 'tree' ? $('treeNew').click() : newFish()));
   $('dockDraw').addEventListener('click', () => $('playBtn').click());
 }
 // The pen name is part of the drawing (reframe), so a change draws again.
@@ -613,7 +646,10 @@ function bindKeys() {
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
     const k = e.key.toLowerCase();
-    if (k === 'n' || k === ' ') { e.preventDefault(); newFish(); }
+    if (S.mode === 'tree' && k === ' ') { e.preventDefault(); TM.togglePlay(); }
+    else if (S.mode === 'tree' && k === 'n') $('treeNew').click();
+    else if (k === 't') setMode(S.mode === 'tree' ? 'single' : 'tree');
+    else if (k === 'n' || k === ' ') { e.preventDefault(); newFish(); }
     else if (k === 'm') mutateFish();
     else if (k === 'd') $('playBtn').click();
     else if (k === '[') goHist(-1);
@@ -683,6 +719,7 @@ function bindView() {
 let onHover = null;
 function bindCells() {
   onTap = (x, y) => {
+    if (S.mode === 'tree' && lastPlate) { const [mx, my] = plateAt(x, y); TM.tap(mx, my, lastPlate.L, lastPlate.view); return; }
     if (S.mode !== 'grid' || !lastPlate) return;
     const [mx, my] = plateAt(x, y), i = cellAt(lastPlate.L, mx, my);
     if (i >= 0) openCell(i);
@@ -697,26 +734,36 @@ function bindCells() {
 
 // ── bindExport ──────────────────────────────────────────────────────────────
 // The files use the plate on show (lastPlate) at its own size in mm.
-function exportOpts() { return { theme: THEMES[S.theme], ink: S.ink, pen: S.pen, jitter: S.jitter, grain: S.grain ? grain : null, title: S.mode === 'grid' ? (S.title || 'Pisces fictae') : S.name }; }
-function exportName() { return S.mode === 'grid' ? 'fishdraw-plate-' + S.grid.seed : 'fishdraw-' + slug(S.name); }
-function exportFishes() { return S.mode === 'grid' ? S.gfish : [S.fish]; }
+function exportOpts() { return { theme: THEMES[S.theme], ink: S.ink, pen: S.pen, jitter: S.jitter, grain: S.grain ? grain : null, title: S.mode === 'grid' ? (S.title || 'Pisces fictae') : S.mode === 'tree' ? TM.plateText().title : S.name }; }
+function exportName() { return S.mode === 'grid' ? 'fishdraw-plate-' + S.grid.seed : S.mode === 'tree' ? 'fishdraw-tree-' + slug(S.name) + '-' + S.tr.seed : 'fishdraw-' + slug(S.name); }
+function exportFishes() { return S.mode === 'grid' ? S.gfish : S.mode === 'tree' ? [] : [S.fish]; }
 function syncExport() {
   const L = plateNow(), z = pngSize(L, +$('dpiSel').value);
   $('pngHint').textContent = `PNG ${z.w} × ${z.h} px` + (z.clamped ? `, lowered to ${z.dpi} dpi (the browser canvas limit)` : '') +
     `. Plate ${L.w.toFixed(0)} × ${L.h.toFixed(0)} mm.`;
-  const grid = S.mode === 'grid';
+  const grid = S.mode !== 'single';
   $('xUpSvg').disabled = $('xSmil').disabled = grid;
+  $('xCsv').disabled = S.mode === 'tree';
 }
 function bindExport() {
-  $('xSvg').addEventListener('click', () => exportPlateSVG(plateNow(), exportFishes(), exportOpts(), exportName()));
+  // A tree plate: the plate frame with no cells, then the tree on top.
+  const treeExtra = (L, o) => (S.mode === 'tree' ? {
+    svg: TM.svgOf(L, o),
+    draw: (x, view) => TM.draw(x, L, view, { tau: null, sel: S.tr.sel, dpr: view.s / (96 / 25.4) }),
+  } : null);
+  $('xSvg').addEventListener('click', () => {
+    const L = plateNow(), o = exportOpts();
+    exportPlateSVG(S.mode === 'tree' ? Object.assign({}, L, { cells: [] }) : L, exportFishes(), o, exportName(), treeExtra(L, o));
+  });
   $('xPng').addEventListener('click', async () => {
     $('xPng').disabled = true;
-    try { await exportPNG(plateNow(), exportFishes(), exportOpts(), +$('dpiSel').value, exportName()); } finally { $('xPng').disabled = false; }
+    const L = plateNow(), o = exportOpts();
+    try { await exportPNG(S.mode === 'tree' ? Object.assign({}, L, { cells: [] }) : L, exportFishes(), o, +$('dpiSel').value, exportName(), treeExtra(L, o)); } finally { $('xPng').disabled = false; }
   });
   $('dpiSel').addEventListener('change', syncExport);
-  const up = fmt => () => exportUpstream(fmt, E, S.mode === 'grid'
+  const up = fmt => () => (S.mode === 'tree' && fmt === 'json' ? download(new Blob([TM.json()], { type: 'application/json' }), exportName() + '.json') : exportUpstream(fmt, E, S.mode === 'grid'
     ? { fish: null, L: plateNow(), fishes: S.gfish, jitter: S.jitter, name: exportName() }
-    : { fish: S.fish, speed: 1 / penRate(), name: exportName() });
+    : { fish: S.fish, speed: 1 / penRate(), name: exportName() }));
   $('xUpSvg').addEventListener('click', up('svg'));
   $('xSmil').addEventListener('click', up('smil'));
   $('xJson').addEventListener('click', up('json'));
@@ -766,8 +813,12 @@ async function boot() {
   const src = await (await fetch(new URL('./fishdraw.js', import.meta.url))).text();
   E = makeEngine(src);
   pool = createPool(4);
+  TM = createTreeMode({ S, $, E: () => E, pool: () => pool, dirty: () => { S.dirty = true; }, busy: () => { S.dirty = true; },
+    writeHash, resetView, syncPlay, edited: () => Object.keys(diffParams(S.params, S.base)).length > 0,
+    openFish: (name, params) => { setMode('single'); showFish(name, params); },
+    setSpecimen: (name, params) => showFish(name, params) });
   grain = makeGrain(11);
-  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells(); bindExport();
+  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindCells(); bindExport(); TM.bind();
   if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
   addEventListener('resize', layout);
   layout();
@@ -780,6 +831,8 @@ async function boot() {
   installSaver({ S, pool, E, src, getGrain: () => grain,
     onEnter: () => { S.saver = true; panel.classList.remove('open'); },
     onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; } });
-  window.__fish = { S, pool, E, showFish, newFish, mutateFish, draw, plateNow, layout, setMode, buildGrid, openCell, ready: true };
+  window.__fish = { S, pool, E, showFish, newFish, mutateFish, draw, plateNow, layout, setMode, buildGrid, openCell, TM, ready: true,
+    // Plate mm to client px (for tests that click a fish).
+    toClient: (x, y) => { if (!lastPlate) return null; const r = canvas.getBoundingClientRect(), v = lastPlate.view; return [r.left + (v.ox + x * v.s) / S.dpr, r.top + (v.oy + y * v.s) / S.dpr]; } };
 }
 boot().catch(err => { $('caption').textContent = 'Fishdraw failed to start: ' + err.message; console.error(err); });

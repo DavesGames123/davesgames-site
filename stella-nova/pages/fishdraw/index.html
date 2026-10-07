@@ -23,7 +23,12 @@
      render.js    the plate on a canvas, as vectors, and the pen draw-on
      svg.js       the plate as SVG in mm, the plate polylines (no DOM)
      export.js    the file downloads, PNG at a DPI, the share link
-     saver.js     window.snSaver: the screensaver tour (draw, plate, push, morph)
+     saver.js     window.snSaver: the screensaver tour (draw, plate, push, morph,
+                  and the tree shots grow, radiate, lineage)
+     tree.js      the tree of life: birth-death model, trait drift, names,
+                  the three layouts (no DOM)
+     treedraw.js  the tree on a canvas and as SVG, hit test
+     treemode.js  the tree mode: state, playback, card, controls
      main.js      the controls, history, modes, view, and the boot
      tests.mjs    node tests (engine, share link, layout, SVG)
 
@@ -67,15 +72,27 @@
   <canvas id="view" aria-label="Fish drawing. Drag to pan, wheel or pinch to zoom."></canvas>
   <div id="caption"></div>
   <div id="busy" hidden>Drawing…</div>
+  <div id="treeCard" hidden>
+    <button id="cardClose" aria-label="Close">✕</button>
+    <canvas id="cardFish"></canvas>
+    <div id="cardName"></div>
+    <div id="cardMeta"></div>
+    <div class="btns">
+      <button id="cardOpen" title="Open this fish in single mode">Open as specimen</button>
+      <button id="cardEvolve" title="Grow a new tree from this fish">Evolve from here</button>
+    </div>
+    <div id="cardDiff"></div>
+  </div>
 </main>
 
 <aside id="panel" class="open" aria-label="Controls">
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" aria-label="Close controls">✕</button>
 
-  <div class="seg first" id="modeSeg">
+  <div class="seg first three" id="modeSeg">
     <button data-mode="single" class="on">Single fish</button>
     <button data-mode="grid">Grid</button>
+    <button data-mode="tree">Tree of life</button>
   </div>
 
   <div class="sec-label">Specimen</div>
@@ -120,6 +137,43 @@
       <input type="range" id="spread" min="0.02" max="1" step="0.01" value="0.3" aria-label="Mutation spread"></div>
     <div class="btns"><button id="gridNew" title="A new plate (N)">New plate</button></div>
     <p class="hint">Click or tap a fish to open it as the specimen. Locked fields hold in every cell.</p>
+  </div>
+
+  <div id="treeSec" hidden>
+    <div class="sec-label">Tree of life</div>
+    <p class="hint">The specimen is the ancestor. Its params drift down each branch; lineages split and die out. Click a fish or a branch to follow its lineage.</p>
+    <div class="seg three" id="treeLayout">
+      <button data-l="clado" class="on">Cladogram</button>
+      <button data-l="radial">Radial</button>
+      <button data-l="fan">Fan</button>
+    </div>
+    <div class="seg" id="treeX">
+      <button data-x="time" class="on" title="Branch length is time">Time</button>
+      <button data-x="change" title="Branch length is the amount of change">Change</button>
+    </div>
+    <div class="btns">
+      <button id="treePlay">Play</button>
+      <button id="treeRestart">Restart</button>
+      <button id="treeNew" title="Same ancestor, new history (N)">New tree</button>
+    </div>
+    <div class="prm"><div class="nm">Time</div><span class="val" id="treeTimeV"></span>
+      <input type="range" id="treeTime" min="0" max="1000" step="1" value="0" aria-label="Scrub the time"></div>
+    <div class="prm"><div class="nm">Growth time</div><span class="val" id="treeSpeedV"></span>
+      <input type="range" id="treeSpeed" min="0" max="1" step="0.01" value="0.5" aria-label="Growth speed"></div>
+    <div class="prm"><div class="nm">Mutation rate</div><span class="val" id="treeMutV"></span>
+      <input type="range" id="treeMut" min="0.1" max="3" step="0.05" value="1" aria-label="Mutation rate"></div>
+    <div class="prm"><div class="nm">Speciation rate</div><span class="val" id="treeSpecV"></span>
+      <input type="range" id="treeSpec" min="0.3" max="2.5" step="0.05" value="1" aria-label="Speciation rate"></div>
+    <div class="prm"><div class="nm">Extinction rate</div><span class="val" id="treeExtV"></span>
+      <input type="range" id="treeExt" min="0" max="3" step="0.05" value="1" aria-label="Extinction rate"></div>
+    <div class="prm"><div class="nm">Living tips, at most</div><span class="val" id="treeTipsV"></span>
+      <input type="range" id="treeTips" min="3" max="64" step="1" value="20" aria-label="Most living tips"></div>
+    <div class="btns">
+      <button id="treeRad" class="on" title="Bursts of fast splitting">Radiations</button>
+      <button id="treeAnc" class="on" title="Fish at the split points">Ancestors</button>
+      <button id="treeNames" class="on" title="Names under the tips">Names</button>
+    </div>
+    <p class="hint" id="treeInfo"></p>
   </div>
 
   <div class="sec-label">Plate</div>

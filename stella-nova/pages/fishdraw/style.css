@@ -50,6 +50,20 @@ html.in-frame #gear{top:14px}
 #caption .n{font-variant-numeric:tabular-nums}
 #busy{position:absolute;right:14px;top:12px;font-size:0.75rem;color:var(--dim);background:rgba(14,16,20,0.82);border:1px solid var(--line);border-radius:999px;padding:4px 10px;pointer-events:none}
 
+/* TREE CARD. The fish under the cursor of the tree mode, large. */
+#treeCard{position:absolute;right:14px;top:44px;width:300px;max-height:calc(100% - 60px);overflow-y:auto;z-index:5;
+  background:rgba(14,16,20,0.94);border:1px solid var(--line-b);border-radius:12px;padding:12px 12px 10px;font-size:0.76rem;color:var(--dim);
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#treeCard[hidden]{display:none}
+#cardClose{position:absolute;top:8px;right:8px;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--bg2);color:var(--dim)}
+#cardFish{display:block;width:100%;aspect-ratio:5/3;border-radius:6px;margin-top:22px}
+#cardName{font:italic 1.1rem var(--sci-serif);color:#f1eee6;margin:8px 0 2px}
+#cardMeta{margin-bottom:6px}
+#cardDiff .ch{color:var(--ink);margin:8px 0 3px}
+#cardDiff ul,#cardDiff ol{margin:0 0 0 18px;line-height:1.5}
+#cardDiff i{font-family:var(--sci-serif);font-size:0.86rem;color:#d8d2c4}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+
 /* PANEL */
 #panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:#0e1014;border-right:1px solid var(--line-b);
   padding:66px 18px 40px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
@@ -167,6 +181,9 @@ button:disabled{opacity:0.4;cursor:default}
   #gear,body.panel-closed #gear{display:none}
   #desk{bottom:var(--dock-h)}
   #caption{font-size:0.86rem}
+  #treeCard{left:8px;right:8px;top:8px;width:auto;max-height:46%;padding:10px}
+  #cardFish{width:46%;float:left;margin:0 10px 4px 0}
+  #cardName{margin-top:0;padding-right:30px}
 
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:7px;align-items:center;
     padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
