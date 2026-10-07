@@ -176,6 +176,9 @@ w.SN_NAV = [
     ] },
     { h: "Number Theory", p: [
       ["ulam-spiral", "Ulam Spiral", "GPU"]
+    ]},
+    { h: "Probability", p: [
+      ["dice", "Dice Lab", "3D"]
     ] }
   ] },
   { id: "sound", label: "Sound & Vibration", short: "Sound", icon: "♪", color: "#ff8ac2", color2: "#ffb478", groups: [
