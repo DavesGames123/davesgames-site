@@ -98,6 +98,7 @@ export function installSaver(ctx) {
         const last = origin; let i0 = last; while (i0 > 0 && s.t[i0] - s.t[i0 - 1] < 3 * 3600e3) i0--;
         if (last - i0 < 10) { let j = i0 - 1; while (j > 0 && s.t[j] - s.t[j - 1] < 3 * 3600e3) j--; i0 = j; }
         const origins = []; for (let k = i0 + 4; k <= last; k += 2) origins.push(k);
+        if (!origins.length) origins.push(last);   // short history (one session): replay from the last bar
         const Hs = origins.map(o => horizonFor(s, o, days)), Hmax = Math.max(...Hs.map(h => h.H));
         const r = await engine.forecast(model, origins.map(o => s.c.subarray(Math.max(0, o - 1023), o + 1)), Hmax, origins.map((_, i) => i));
         shot.fcs = origins.map((o, i) => ({ origin: o, H: Hs[i].H, levels: r.levels, q: r.q[i].map(a => a.subarray(0, Hs[i].H)), times: Hs[i].times,
@@ -138,7 +139,9 @@ export function installSaver(ctx) {
     const pct = (v, b) => `${v >= b ? '+' : ''}${((v / b - 1) * 100).toFixed(2)} %`;
     let info;
     if (shot.type === 'fan' || shot.type === 'replay') {
-      const s = shot.series, fc = shot.type === 'fan' ? shot.fc : shot.fcs[shot.idx || 0], e = fc.H - 1, base = s.c[fc.origin];
+      const s = shot.series, fc = shot.type === 'fan' ? shot.fc : (shot.fcs || [])[Math.min(shot.idx || 0, (shot.fcs || []).length - 1)];
+      if (!fc) return;   // no forecast for this shot (short history or a failed run): keep the previous plate
+      const e = fc.H - 1, base = s.c[fc.origin];
       const q10 = levelRow(fc, 0.1)[e], q50 = levelRow(fc, 0.5)[e], q90 = levelRow(fc, 0.9)[e];
       info = {
         title: shot.type === 'fan' ? `${s.sym} · forecast fan` : `${s.sym} · the forecast through the day`,
