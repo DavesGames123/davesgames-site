@@ -10,6 +10,7 @@
 //    grep -n "section('film"     thin film: Airy, matrix method, energy, colour
 // ============================================================================
 import { Cloth, FABRICS } from './xpbd.js';
+import { filmReflectance, spectralRGB, buildLUT, thinnedThickness, indexOf, complex, SOAP } from './film.js';
 
 let fails = 0, passes = 0;
 const ok = (cond, name, info = '') => { if (cond) passes++; else fails++; console.log(`${cond ? 'pass' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
@@ -162,6 +163,107 @@ section('solver: grab, throw, tear');
   const cut = new Cloth({ nx: 12, ny: 12, size: [1, 1], center: [0, 1, 0] });
   const hit = cut.cut(0, 1, 0, 0.1);
   ok(hit > 0 && cut.triangles().length < 11 * 11 * 6, 'cut breaks the edges near a point', `${hit} edges`);
+}
+
+// ── film ───────────────────────────────────────────────────────────────────
+section('film: Airy sum against the real closed form (dielectric on dielectric)');
+{
+  // For real indices the Airy intensity is
+  //   R = (r01^2 + r12^2 + 2 r01 r12 cos 2b) / (1 + r01^2 r12^2 + 2 r01 r12 cos 2b)
+  const n0 = 1, n1 = 1.38, n2 = 1.52;
+  const closed = (lambda, d, th, pol) => {
+    const s0 = Math.sin(th), c0 = Math.cos(th), c1 = Math.sqrt(1 - (s0 / n1) ** 2), c2 = Math.sqrt(1 - (s0 / n2) ** 2);
+    const r = pol === 's' ? (a, ca, b, cb) => (a * ca - b * cb) / (a * ca + b * cb) : (a, ca, b, cb) => (b * ca - a * cb) / (b * ca + a * cb);
+    const r01 = r(n0, c0, n1, c1), r12 = r(n1, c1, n2, c2), b = 2 * Math.PI * n1 * d * c1 / lambda;
+    const cs = Math.cos(2 * b);
+    return (r01 * r01 + r12 * r12 + 2 * r01 * r12 * cs) / (1 + r01 * r01 * r12 * r12 + 2 * r01 * r12 * cs);
+  };
+  let worst = 0, cases = 0;
+  for (const d of [0, 50, 137, 300, 612, 1100]) for (const deg of [0, 20, 45, 70, 85]) for (const lambda of [400, 532, 650, 780]) {
+    const th = deg * Math.PI / 180, F = filmReflectance(lambda, d, Math.cos(th), n1, [[380, n2, 0], [780, n2, 0]], n0);
+    worst = Math.max(worst, Math.abs(F.Rs - closed(lambda, d, th, 's')), Math.abs(F.Rp - closed(lambda, d, th, 'p'))); cases++;
+  }
+  ok(worst < 1e-12, `Rs and Rp match the closed form in ${cases} cases (6 thicknesses, 5 angles, 4 wavelengths)`, `max |dR| ${worst.toExponential(2)}`);
+}
+
+section('film: Airy sum against the characteristic matrix (metal substrate)');
+{
+  // An independent method: the 2x2 characteristic matrix of the layer
+  // (Born and Wolf), with the n + ik sign convention:
+  //   [B; C] = [[cos b, -i sin b / eta1], [-i eta1 sin b, cos b]] [1; eta2]
+  //   r = (eta0 B - C) / (eta0 B + C),  eta = n cos (s) or n / cos (p)
+  const { C, add, sub, mul, div, abs2, csqrt } = complex;
+  const matrixR = (lambda, d, cos0, n1, subst, pol) => {
+    const N0 = C(1), N1 = C(n1), N2 = indexOf(subst, lambda), s0 = C(Math.sqrt(1 - cos0 * cos0));
+    const cosIn = N => csqrt(sub(C(1), mul(div(s0, N), div(s0, N))));
+    const c0 = C(cos0), c1 = cosIn(N1), c2 = cosIn(N2);
+    const eta = (N, c) => pol === 's' ? mul(N, c) : div(N, c);
+    const e0 = eta(N0, c0), e1 = eta(N1, c1), e2 = eta(N2, c2);
+    const b = mul(C(2 * Math.PI * d / lambda), mul(N1, c1));
+    const cb = C(Math.cos(b[0])), sb = C(Math.sin(b[0]));
+    const mI = x => [x[1], -x[0]];                       // multiply by -i
+    const B = add(cb, mul(mI(div(sb, e1)), e2));
+    const Cc = add(mI(mul(e1, sb)), mul(cb, e2));
+    return abs2(div(sub(mul(e0, B), Cc), add(mul(e0, B), Cc)));
+  };
+  let worst = 0, cases = 0;
+  for (const subst of ['aluminium', 'steel', 'dye']) for (const d of [0, 80, 260, 640]) for (const deg of [0, 35, 60, 80]) for (const lambda of [410, 550, 700]) {
+    const c0 = Math.cos(deg * Math.PI / 180), F = filmReflectance(lambda, d, c0, 1.5, subst);
+    worst = Math.max(worst, Math.abs(F.Rs - matrixR(lambda, d, c0, 1.5, subst, 's')), Math.abs(F.Rp - matrixR(lambda, d, c0, 1.5, subst, 'p'))); cases++;
+  }
+  ok(worst < 1e-10, `Airy and matrix agree on absorbing substrates in ${cases} cases`, `max |dR| ${worst.toExponential(2)}`);
+}
+
+section('film: limits and energy');
+{
+  // d = 0: the bare substrate interface.
+  const N = indexOf('aluminium', 550), c0 = 1;
+  const r = complex.div(complex.sub(complex.C(1), N), complex.add(complex.C(1), N));
+  const bare = complex.abs2(r), z = filmReflectance(550, 0, c0, 1.4, 'aluminium').R;
+  ok(Math.abs(z - bare) < 1e-12, 'zero thickness gives the bare aluminium reflectance', `R ${z.toFixed(5)}`);
+  // Lossless free film (soap): R + T = 1, with the Airy transmission.
+  const { C, add, mul, div, abs2, expi } = complex;
+  let worst = 0;
+  for (const d of [30, 120, 333, 800]) for (const deg of [0, 30, 60, 80]) for (const l of [420, 560, 700]) {
+    const n1 = 1.33, s = Math.sin(deg * Math.PI / 180), c0 = Math.cos(deg * Math.PI / 180), c1 = Math.sqrt(1 - (s / n1) ** 2);
+    const b = 2 * Math.PI * n1 * d * c1 / l, ph = expi(2 * b);
+    for (const pol of ['s', 'p']) {
+      const r01 = pol === 's' ? (c0 - n1 * c1) / (c0 + n1 * c1) : (n1 * c0 - c1) / (n1 * c0 + c1);
+      const t01 = pol === 's' ? 2 * c0 / (c0 + n1 * c1) : 2 * c0 / (n1 * c0 + c1);
+      const t12 = pol === 's' ? 2 * n1 * c1 / (n1 * c1 + c0) : 2 * n1 * c1 / (c1 + n1 * c0);
+      const r12 = -r01;
+      const t = div(mul(C(t01 * t12), expi(b)), add(C(1), mul(C(r01 * r12), ph)));
+      const T = abs2(t);
+      const F = filmReflectance(l, d, c0, n1, 'air');
+      worst = Math.max(worst, Math.abs((pol === 's' ? F.Rs : F.Rp) + T - 1));
+    }
+  }
+  ok(worst < 1e-12, 'lossless soap film: R + T = 1 for s and p', `max |R+T-1| ${worst.toExponential(2)}`);
+  // Soap film first maximum: 2 n d cos1 = lambda / 2 (one pi shift), so
+  // lambda_max = 4 n d cos1.
+  const peak = (d, deg) => { let bl = 0, br = -1; for (let l = 380; l <= 780; l += 0.25) { const R = filmReflectance(l, d, Math.cos(deg * Math.PI / 180), 1.33, 'air').R; if (R > br) { br = R; bl = l; } } return bl; };
+  const p0 = peak(110, 0), p60 = peak(130, 60), c1 = Math.sqrt(1 - (Math.sin(Math.PI / 3) / 1.33) ** 2);
+  ok(Math.abs(p0 - 4 * 1.33 * 110) < 1, 'soap film 110 nm: reflectance peak at 4 n d', `${p0} nm, expected ${(4 * 1.33 * 110).toFixed(1)} nm`);
+  ok(Math.abs(p60 - 4 * 1.33 * 130 * c1) < 1, 'soap film 130 nm at 60 deg: the peak moves to 4 n d cos(theta1)', `${p60} nm, expected ${(4 * 1.33 * 130 * c1).toFixed(1)} nm`);
+}
+
+section('film: colour');
+{
+  const one = spectralRGB(0, 1, { n: 1, sub: [[380, 1e6, 0], [780, 1e6, 0]] });
+  ok(one.every(c => Math.abs(c - 1) < 1e-3), 'a perfect mirror maps to white (1, 1, 1)', one.map(c => c.toFixed(4)).join(', '));
+  const black = spectralRGB(5, 1, SOAP);
+  ok(Math.max(...black) < 0.005, 'a 5 nm soap film is black (no reflection)', black.map(c => c.toFixed(4)).join(', '));
+  // A thick film: the fringes are finer than the colour functions, so the
+  // colour is grey at the incoherent sum (r^2 + r^2 - 2 r^4)/(1 - r^4).
+  const r2 = ((1 - 1.33) / (1 + 1.33)) ** 2, inc = (2 * r2 - 2 * r2 * r2) / (1 - r2 * r2);
+  const thick = spectralRGB(20000, 1, SOAP, 0.25), chroma = Math.max(...thick) - Math.min(...thick);
+  ok(chroma < 0.02 * inc * 3 && Math.abs(thick[1] - inc) < 0.05 * inc, 'a 20 um soap film is grey at the incoherent sum', `rgb ${thick.map(c => c.toFixed(4)).join(', ')}, incoherent ${inc.toFixed(4)}`);
+  const thin = spectralRGB(250, 1, { n: 1.52, sub: 'dye' }), thinned = spectralRGB(thinnedThickness(250, 1.4), 1, { n: 1.52, sub: 'dye' });
+  ok(Math.hypot(...thin.map((c, i) => c - thinned[i])) > 0.01, 'a 40% area stretch changes the film colour', `rgb ${thin.map(c => c.toFixed(3))} -> ${thinned.map(c => c.toFixed(3))}`);
+  ok(Math.abs(thinnedThickness(300, 1.5) * 1.5 - 300) < 1e-9, 'thinning keeps the film volume d A');
+  const t0 = performance.now(), L = buildLUT({ n: 1.38, sub: 'aluminium' });
+  const ms = performance.now() - t0, bad = L.data.some(v => !Number.isFinite(v) || v < 0);
+  ok(!bad && L.data.length === L.nd * L.nc * 4, 'the LUT is finite and non-negative', `${L.nd} x ${L.nc}, built in ${ms.toFixed(0)} ms`);
 }
 
 // ── summary ────────────────────────────────────────────────────────────────
