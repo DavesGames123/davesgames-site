@@ -4,9 +4,9 @@
 //  The shell screensaver (lib/screensaver.js) calls snSaver.enter(opts),
 //  opts = { calm 0..1, seconds, caption, seed, label }. The hook hides the
 //  page, puts one stage canvas in the document, and plays a seeded shuffle
-//  of shots. It uses the synthetic demo market only (no key, no network
-//  past the page) and Chronos-Bolt Tiny (bundled). The market seed comes
-//  from opts.seed, so each run shows other series.
+//  of shots. It uses the real IEX snapshot (data/live/iex.json, else the
+//  dated committed sample; no key, same origin) and Chronos-Bolt Tiny
+//  (bundled). The seed picks the order and the tickers.
 //
 //  Shots (each one forecast or computed live, in the worker):
 //    fan        a ticker with its fan unfurling to the close (5-min) or N
@@ -22,7 +22,7 @@
 //  plus its text overlay), framed in the plate's clear band (plateBand,
 //  lib/saver-clear.js), read 4 times a second.
 //  The plate gets the title, the series and its forecast numbers (all
-//  marked synthetic), and a short code extract read at run time from the
+//  with the source line), and a short code extract read at run time from the
 //  page's own source files.
 //  snSaver.debug() returns the director state for CDP probes.
 //
@@ -32,7 +32,7 @@
 import { createView } from './gfx.js';
 import { createPriceChart, levelRow, fmtPrice, fmtTime } from './chart.js';
 import { createDistChart, createCalibChart } from './analysis-charts.js';
-import { synthMarket } from './synth.js';
+import { PROVIDERS } from './providers.js';
 import { portfolio, corrMatrix, logReturns, backtest } from './analysis.js';
 import { MODELS } from './model-io.js';
 import { plateBand } from '../../lib/saver-clear.js';
@@ -74,15 +74,17 @@ export function installSaver(ctx) {
     }
   }
 
-  async function makeShot(type) {
+  async function makeShot(type0) {
+    let type = type0;
     const R = D.rnd, M = D.market, U = M.universe;
     let sym = U[Math.floor(R() * U.length)].sym;
     if (D.shot && sym === D.shot.sym) sym = U[(U.findIndex(u => u.sym === sym) + 1 + Math.floor(R() * (U.length - 1))) % U.length].sym;
     const calm = D.calm;
     const shot = { type, sym, t0: 0, dur: (5 + 3 * calm + (3 + calm) * R()) * 1000 };
     const model = 'bolt-tiny', label = MODELS[model].label;
+    if (type === 'backtest' && !M.intraday[sym]) type = shot.type = 'fan';
     if (type === 'fan' || type === 'replay') {
-      const iv = type === 'replay' || R() < 0.7 ? '5min' : '1day';
+      const iv = type === 'replay' || R() < 0.7 || !M.daily[sym] ? '5min' : '1day';
       const s = (iv === '5min' ? M.intraday : M.daily)[sym];
       const days = [5, 10, 20][Math.floor(R() * 3)];
       const origin = s.c.length - 1, hz = horizonFor(s, origin, days);
@@ -110,20 +112,21 @@ export function installSaver(ctx) {
       const hz = horizonFor(ss[0], ss[0].c.length - 1);
       const r = await engine.forecast(model, ss.map(s => s.c.subarray(Math.max(0, s.c.length - 2048))), hz.H, ss.map((_, i) => i));
       const positions = ss.map((s, i) => { const px = s.c[s.c.length - 1]; return { sym: s.sym, shares: Math.max(1, Math.round((8000 + 40000 * R()) / px)), price: px, levels: r.levels, endQ: r.levels.map((_, j) => r.q[i][j][hz.H - 1]) }; });
-      const corr = corrMatrix(ss.map(s => logReturns(s.c.subarray(s.c.length - 781))), 0.1);
+      const corr = corrMatrix(ss.map(s => logReturns(s.c.subarray(Math.max(0, s.c.length - 781)))), 0.1);
       const res = portfolio({ positions, corr, n: 20000, seed: Math.floor(R() * 1e6), compareIndependent: true });
       const hist = res.histogram(56);
       shot.dist = { edges: hist.edges, counts: hist.counts, indep: res.indep.histogram(56, hist.lo, hist.hi), now: res.now, q: res.q,
-        label: `Synthetic portfolio of ${positions.length} · total value at ${hz.what}`, source: 'Synthetic demo market, not market data · Gaussian copula, 20,000 draws' };
+        label: `Example portfolio of ${positions.length} · total value at ${hz.what}`, source: 'IEX trades, T+1 · Data provided for free by IEX · Gaussian copula, 20,000 draws' };
       shot.res = res; shot.positions = positions; shot.hz = hz; shot.ms = r.timings.runMs; shot.ep = r.ep;
     } else {
       const s = M.intraday[sym], n = s.c.length - 1, hz = horizonFor(s, n), H = hz.H;
       const starts = []; for (let i = 1; i <= n; i++) if (s.t[i] - s.t[i - 1] > 3 * 3600e3) starts.push(i);
       const origins = []; for (const a of starts) { const o = a + 78 - H - 1; if (o + H <= n && o > 200) origins.push(o); }
       const os = origins.slice(-20);
+      if (!os.length) return makeShot('fan');
       const r = await engine.forecast(model, os.map(o => s.c.subarray(Math.max(0, o - 1023), o + 1)), H, os.map((_, i) => i));
       shot.bt = backtest({ closes: s.c, origins: os, H, levels: r.levels, forecasts: r.q, season: 78 });
-      shot.calib = { perOrigin: shot.bt.perOrigin, base: s.c, label: `${sym} · 10–90 % band at the close vs the realised close, ${os.length} sessions`, source: 'Synthetic demo market, not market data · rolling-origin backtest', axis: 'earlier sessions at the same time of day, oldest left' };
+      shot.calib = { perOrigin: shot.bt.perOrigin, base: s.c, label: `${sym} · 10–90 % band at the close vs the realised close, ${os.length} sessions`, source: 'IEX trades, T+1 · Data provided for free by IEX · rolling-origin backtest', axis: 'earlier sessions at the same time of day, oldest left' };
       shot.ms = r.timings.runMs; shot.ep = r.ep; shot.H = H;
     }
     return shot;
@@ -139,14 +142,14 @@ export function installSaver(ctx) {
       const q10 = levelRow(fc, 0.1)[e], q50 = levelRow(fc, 0.5)[e], q90 = levelRow(fc, 0.9)[e];
       info = {
         title: shot.type === 'fan' ? `${s.sym} · forecast fan` : `${s.sym} · the forecast through the day`,
-        sub: `${s.name} — synthetic series, not a market · Chronos-Bolt Tiny`,
+        sub: `${s.name} — IEX trades, T+1 · Chronos-Bolt Tiny`,
         params: [
           { sym: 'p_0', name: 'price at origin', value: fmtPrice(base), cls: 'm1' },
           { sym: 'q_{50}', name: `median at ${fc.endLabel}`, value: `${fmtPrice(q50)} (${pct(q50, base)})`, cls: 'm2' },
           { sym: 'q_{10}, q_{90}', name: '80 % band', value: `${fmtPrice(q10)} – ${fmtPrice(q90)}`, cls: 'm4' },
           { sym: 'H', name: 'steps ahead', value: String(fc.H), cls: 'm6' },
         ],
-        lines: [shot.type === 'fan' ? `Ran in this browser on ${ep} in ${shot.ms} ms · demo data, not advice` : `${shot.fcs.length} origins in one batch on ${ep}, ${shot.ms} ms · ${fc.label}`],
+        lines: [shot.type === 'fan' ? `Ran in this browser on ${ep} in ${shot.ms} ms · Data provided for free by IEX · not advice` : `${shot.fcs.length} origins in one batch on ${ep}, ${shot.ms} ms · ${fc.label}`],
         code: shot.type === 'fan' ? await codeFrom('shaders/prim.wgsl', 'let front = mix(', 5, 'wgsl', 'shaders/prim.wgsl · the fan reveal')
           : await codeFrom('model-io.js', 'for (let j = 0; j < Q; j++) for (let k = 0; k < Q; k++) buf', 3, 'js', 'model-io.js · Bolt unroll past 64 steps'),
       };
@@ -154,7 +157,7 @@ export function installSaver(ctx) {
       const r = shot.res;
       info = {
         title: 'Portfolio at the close',
-        sub: `${shot.positions.map(p => p.sym).join(' · ')} — synthetic, not a market`,
+        sub: `${shot.positions.map(p => p.sym).join(' · ')} — example shares, IEX trades`,
         params: [
           { sym: 'V_0', name: 'value now', value: '$' + fmtPrice(r.now), cls: 'm1' },
           { sym: 'P(V > V_0)', name: 'probability up', value: `${(r.pUp * 100).toFixed(0)} %`, cls: 'm2' },
@@ -168,7 +171,7 @@ export function installSaver(ctx) {
       const b = shot.bt;
       info = {
         title: `${shot.sym} · backtest`,
-        sub: 'Rolling origins at the same time of day — synthetic, not a market',
+        sub: 'Rolling origins at the same time of day — IEX trades, T+1',
         params: [
           { sym: 'c_{80}', name: 'inside 80 % band', value: `${(b.coverage80 * 100).toFixed(0)} %`, cls: 'm2' },
           { sym: '\\mathrm{WQL}', name: 'model', value: b.wqlModel.toFixed(4), cls: 'm4' },
@@ -252,7 +255,7 @@ export function installSaver(ctx) {
       const rnd = lcg(seed);
       D = {
         stage, box, view, calm: Math.min(1, Math.max(0, opts.calm ?? 0.7)), rnd, label: typeof opts.label === 'function' ? opts.label : null,
-        market: synthMarket({ seed: 1 + (seed % 997) }), band: null, bandAt: -1e9, boxKey: '', k: 0, cutting: false, shot: null, scene: null,
+        market: null, band: null, bandAt: -1e9, boxKey: '', k: 0, cutting: false, shot: null, scene: null,
         pc: createPriceChart(null, gpu, shared), dc: createDistChart(null, gpu, shared), cc: createCalibChart(null, gpu, shared),
       };
       D.pc.setCompactAxis(innerWidth < 700);
@@ -260,6 +263,13 @@ export function installSaver(ctx) {
       fitStage();
       D.raf = requestAnimationFrame(frame);
       await engine.ready; await ensureModel('bolt-tiny');
+      // the real snapshot: every ticker at 5 min, daily only with 30+ bars
+      const P = PROVIDERS.iex, uni = await P.universe(), intraday = {}, daily = {};
+      for (const u of uni) {
+        try { intraday[u.sym] = await P.fetchSeries(u.sym, '5min'); } catch (e) { continue; }
+        try { const dd = await P.fetchSeries(u.sym, '1day'); if (dd.c.length >= 30) daily[u.sym] = dd; } catch (e) { /* short history */ }
+      }
+      D.market = { universe: uni.filter(u => intraday[u.sym]), intraday, daily };
       await cut();
       return { canvas, warmupMs: 900 };
     },

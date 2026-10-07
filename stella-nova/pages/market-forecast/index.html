@@ -13,7 +13,7 @@
    A stock page with a probabilistic forecast. The Chronos models by Amazon
    Science (Chronos-Bolt, Chronos-2) run in this browser through
    onnxruntime-web, on WebGPU or on WASM. Nothing goes to a server of ours.
-   Demo data is synthetic. Live data needs the user's own free API key.
+   Default data: IEX HIST real trades, T+1, no key. Other tickers or same-day data need the user's own free API key.
 
    FILES
      main.js            state, data loading, the forecast runs, the UI
@@ -61,7 +61,7 @@
     <button data-mode="analysis">Analysis</button>
   </nav>
   <div class="tools">
-    <button id="srcBtn" class="chip" title="Data source"><i class="dot"></i><span>Demo · synthetic</span></button>
+    <button id="srcBtn" class="chip" title="Data source"><i class="dot"></i><span>Real · IEX (T+1)</span></button>
     <label class="sel"><span class="vh">Model</span>
       <select id="modelSel" title="Forecast model">
         <option value="bolt-tiny">Chronos-Bolt Tiny · bundled</option>
@@ -173,7 +173,7 @@
       <li><b>Analysis</b> also backtests the model on recent history: at the same time of day on earlier sessions, it forecasts to the close and checks how often the realised close fell in the 80&nbsp;% band, and its quantile loss against naive forecasts.</li>
     </ul>
     <p><b>Not financial advice.</b> These are probabilistic model outputs. The models know nothing about news, earnings or fundamentals. Markets can move far outside any band. The page gives no buy or sell signals.</p>
-    <p class="fine">Credits: Ansari et al., "Chronos: Learning the Language of Time Series", TMLR 2024 (arXiv:2403.07815). Ansari et al., "Chronos-2: From Univariate to Universal Forecasting", arXiv:2510.15821 (2025). Models: Apache-2.0, Amazon.com, Inc. or its affiliates (models/LICENSE, models/NOTICE). ONNX Runtime Web: MIT, Microsoft. Demo data: synthetic, made by this page, not market data. Full list: <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
+    <p class="fine">Credits: Ansari et al., "Chronos: Learning the Language of Time Series", TMLR 2024 (arXiv:2403.07815). Ansari et al., "Chronos-2: From Univariate to Universal Forecasting", arXiv:2510.15821 (2025). Models: Apache-2.0, Amazon.com, Inc. or its affiliates (models/LICENSE, models/NOTICE). ONNX Runtime Web: MIT, Microsoft. Default data: real trades on the IEX exchange, one day behind (T+1). Data provided for free by IEX (IEX HIST terms). An offline synthetic set is only an explicit option in Data. Full list: <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
     <menu><button value="ok" class="chip">Close</button></menu>
   </form>
 </dialog>

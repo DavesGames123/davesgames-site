@@ -41,7 +41,7 @@
 // ============================================================================
 import { makeSeries, etParts, etLocalToUtc, sessionOpenUtc, synthMarket, BAR_MS } from './synth.js';
 
-const HOSTS = { twelvedata: 'api.twelvedata.com', alphavantage: 'www.alphavantage.co', polygon: 'api.polygon.io', synthetic: null };
+const HOSTS = { twelvedata: 'api.twelvedata.com', alphavantage: 'www.alphavantage.co', polygon: 'api.polygon.io', synthetic: null, iex: null };
 export function providerHost(id) { return HOSTS[id] ?? null; }
 
 // ── key store ───────────────────────────────────────────────────────────────
@@ -213,8 +213,48 @@ const polygon = {
 
 // ── synthetic (no key, no network) ──────────────────────────────────────────
 const synthCache = new Map();
+// IEX Exchange HIST snapshot (tools/snapshot.mjs, deploy time, T+1).
+// Same-origin files: data/live/iex.json, else the committed, dated
+// data/sample/iex.json. No key, no third-party request from the browser.
+let iexP = null;
+async function loadIex(fetchImpl = globalThis.fetch) {
+  if (!iexP) iexP = (async () => {
+    for (const f of ['data/live/iex.json', 'data/sample/iex.json']) {
+      try {
+        const r = await fetchImpl.call(globalThis, new URL('./' + f, import.meta.url), { cache: 'no-cache' });
+        if (r.ok) { const j = await r.json(); j.file = f; return j; }
+      } catch (e) { /* next */ }
+    }
+    throw new ProviderError('The IEX market snapshot is not available', 'network');
+  })().catch(e => { iexP = null; throw e; });
+  return iexP;
+}
+export function iexSeries(snap, sym, interval, now = Date.now()) {
+  const v = snap.symbols[sym];
+  if (!v) throw new ProviderError(`${sym} is not in the IEX snapshot (use a key-based provider for other tickers)`, 'arg');
+  const rows = interval === '5min' ? v.sessions.flatMap(s => s.bars) : v.daily;
+  const last = snap.sessions[snap.sessions.length - 1];
+  const s = toSeries(sym, interval, rows.map(r => r.slice()), {
+    id: 'iex', synthetic: false, fetchedAt: snap.generatedAt || now,
+    label: `IEX trades · ${interval === '5min' ? '5 min' : 'daily'} · T+1 (session ${last})${snap.file === 'data/sample/iex.json' ? ' · committed sample' : ''} · Data provided for free by IEX`,
+    note: snap.source ? snap.source.note : '',
+  });
+  s.name = v.name || sym;
+  return s;
+}
+const iex = {
+  id: 'iex', label: 'Real market · IEX (no key)', needsKey: false, keyUrl: null,
+  intervals: ['5min', '1day'],
+  limits: 'Real trades on the IEX exchange, regular session, one day behind (T+1). Data provided for free by IEX. Fixed ticker list.',
+  async universe({ fetchImpl } = {}) { const j = await loadIex(fetchImpl); return Object.entries(j.symbols).map(([sym, v]) => ({ sym, name: v.name })); },
+  async fetchSeries(sym, interval, { fetchImpl, now } = {}) {
+    checkInterval(this, interval);
+    return iexSeries(await loadIex(fetchImpl), sym, interval, now);
+  },
+};
+
 const synthetic = {
-  id: 'synthetic', label: 'Synthetic demo', needsKey: false, keyUrl: null,
+  id: 'synthetic', label: 'Offline synthetic (not market data)', needsKey: false, keyUrl: null,
   intervals: ['5min', '1day'],
   limits: 'No network. Values come from a stochastic model, not from a market.',
   market(seed = 1) {
@@ -230,5 +270,5 @@ const synthetic = {
   },
 };
 
-export const PROVIDERS = { synthetic, twelvedata, alphavantage, polygon };
+export const PROVIDERS = { iex, twelvedata, alphavantage, polygon, synthetic };
 export { ProviderError, BAR_MS };

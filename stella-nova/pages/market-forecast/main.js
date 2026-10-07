@@ -52,11 +52,18 @@ import { etParts, sessionOpenUtc } from './synth.js';
 import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
-const STORE = 'mf-state-v1';
+const STORE = 'mf-state-v2';   // v2: real IEX data is the default (v1 opened on synthetic data)
+// The default watchlist: real tickers from the IEX snapshot. Rows with
+// shares are the default Analysis portfolio.
+const REAL_LIST = [
+  { sym: 'SPY', shares: 20, cost: 0 }, { sym: 'QQQ', shares: 0, cost: 0 }, { sym: 'DIA', shares: 0, cost: 0 },
+  { sym: 'AAPL', shares: 30, cost: 0 }, { sym: 'MSFT', shares: 10, cost: 0 }, { sym: 'NVDA', shares: 40, cost: 0 },
+  { sym: 'AMZN', shares: 0, cost: 0 }, { sym: 'GOOGL', shares: 0, cost: 0 }, { sym: 'META', shares: 0, cost: 0 },
+  { sym: 'TSLA', shares: 0, cost: 0 }, { sym: 'BRK.B', shares: 0, cost: 0 }, { sym: 'JPM', shares: 15, cost: 0 },
+];
 const DEMO_LIST = [
   { sym: 'ORIN.SYN', shares: 40, cost: 0 }, { sym: 'VEGA.SYN', shares: 120, cost: 0 }, { sym: 'LYRA.SYN', shares: 15, cost: 0 },
-  { sym: 'CYGN.SYN', shares: 0, cost: 0 }, { sym: 'ALTR.SYN', shares: 60, cost: 0 }, { sym: 'DENB.SYN', shares: 0, cost: 0 },
-  { sym: 'RIGL.SYN', shares: 0, cost: 0 }, { sym: 'POLX.SYN', shares: 200, cost: 0 },
+  { sym: 'ALTR.SYN', shares: 60, cost: 0 }, { sym: 'POLX.SYN', shares: 200, cost: 0 },
 ];
 const params = new URLSearchParams(location.search);
 
@@ -70,9 +77,9 @@ let replay = null, playing = 0, runId = 0, needAnalysis = true;
 function loadState() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { s = null; }
-  const d = { provider: 'synthetic', interval: '5min', model: 'bolt-tiny', hz: 5, style: 'candles', view: 'chart', lists: { synthetic: DEMO_LIST.map(r => ({ ...r })) }, sel: { synthetic: 'ORIN.SYN' } };
+  const d = { provider: 'iex', interval: '5min', model: 'bolt-tiny', hz: 5, style: 'candles', view: 'chart', lists: { iex: REAL_LIST.map(r => ({ ...r })), synthetic: DEMO_LIST.map(r => ({ ...r })) }, sel: { iex: 'SPY', synthetic: 'ORIN.SYN' } };
   s = s && typeof s === 'object' ? { ...d, ...s, lists: { ...d.lists, ...(s.lists || {}) }, sel: { ...d.sel, ...(s.sel || {}) } } : d;
-  if (!PROVIDERS[s.provider]) s.provider = 'synthetic';
+  if (!PROVIDERS[s.provider]) s.provider = 'iex';
   if (!MODELS[s.model]) s.model = 'bolt-tiny';
   if (params.get('model') && MODELS[params.get('model')]) s.model = params.get('model');
   if (params.get('view')) s.view = params.get('view') === 'analysis' ? 'analysis' : 'chart';
@@ -93,7 +100,7 @@ async function getSeries(sym, iv = st.interval) {
   const k = `${st.provider}|${sym}|${iv}`;
   if (series.has(k)) return series.get(k);
   const p = prov();
-  const s = await p.fetchSeries(sym, iv, st.provider === 'synthetic' ? { seed: 1 } : { key: keys.get(st.provider) });
+  const s = await p.fetchSeries(sym, iv, st.provider === 'synthetic' ? { seed: 1 } : st.provider === 'iex' ? {} : { key: keys.get(st.provider) });
   series.set(k, s);
   return s;
 }
@@ -424,7 +431,7 @@ function openSource() {
     if (m2 && m2 !== st.model) { st.model = m2; $('modelSel').value = m2; needAnalysis = true; if (dlg.querySelector('input[name=prov]:checked').value === st.provider) { save(); runForecast(); if (st.view === 'analysis') runAnalysis(); return; } }
     const id = dlg.querySelector('input[name=prov]:checked').value, p = PROVIDERS[id];
     if (p.needsKey) { const k = $('keyIn').value.trim(); if (!k) { toast('This provider needs your own free API key.'); return; } keys.set(id, k); }
-    st.provider = id; st.lists[id] = st.lists[id] || (id === 'synthetic' ? DEMO_LIST.map(r => ({ ...r })) : [{ sym: 'AAPL', shares: 0, cost: 0 }]);
+    st.provider = id; st.lists[id] = st.lists[id] || (id === 'synthetic' ? DEMO_LIST.map(r => ({ ...r })) : id === 'iex' ? REAL_LIST.map(r => ({ ...r })) : [{ sym: 'AAPL', shares: 0, cost: 0 }]);
     save(); series.clear(); replay = null; needAnalysis = true; syncSourceChip();
     renderWatch(); runForecast(); if (st.view === 'analysis') runAnalysis();
   };
@@ -433,7 +440,7 @@ function openSource() {
 function syncSourceChip() {
   const p = prov(), b = $('srcBtn');
   b.classList.toggle('live', st.provider !== 'synthetic');
-  b.querySelector('span').textContent = st.provider === 'synthetic' ? 'Demo · synthetic' : p.label;
+  b.querySelector('span').textContent = st.provider === 'synthetic' ? 'Offline · synthetic' : st.provider === 'iex' ? 'Real · IEX (T+1)' : p.label;
 }
 
 // ── views, controls ─────────────────────────────────────────────────────────
@@ -448,6 +455,11 @@ function bindControls() {
   document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { setView(b.dataset.mode); closeSheet(); }));
   $('ivSeg').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.iv === '1day') {
+      // Chronos needs a history: the IEX snapshot grows by one daily bar a session
+      getSeries(selSym(), '1day').then(d => { if (d.c.length < 30) { toast(`Daily needs 30 sessions; this source has ${d.c.length} so far. Use 5 min.`); } else { st.interval = '1day'; save(); needAnalysis = true; syncSegs(); renderWatch(); runForecast(); if (st.view === 'analysis') runAnalysis(); } }).catch(err => toast(String(err.message || err)));
+      return;
+    }
     st.interval = b.dataset.iv; save(); needAnalysis = true; syncSegs(); renderWatch(); runForecast(); if (st.view === 'analysis') runAnalysis();
   });
   $('hzSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.hz = +b.dataset.hz; save(); needAnalysis = true; syncSegs(); runForecast(); if (st.view === 'analysis') runAnalysis(); });
