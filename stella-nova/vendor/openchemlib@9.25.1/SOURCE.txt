@@ -1,0 +1,24 @@
+OpenChemLib JS 9.25.1 (openchemlib), a cheminformatics library: SMILES and
+molfile parse and write, 2D coordinate generation, stereo perception, ring
+and aromaticity perception, molecule properties, 3D conformer generation and
+the MMFF94 force field. By cheminfo and Idorsia Pharmaceuticals (the Java
+OpenChemLib, compiled to JavaScript with GWT). BSD 3-Clause licence: see
+LICENSE in this folder.
+
+Source:    https://registry.npmjs.org/openchemlib/-/openchemlib-9.25.1.tgz
+           npm integrity sha512-nt/apU8pSAH55WmWgUR5CBw61LfL7/barRRAbn2qm4G6Q/9xdW33o5tHzgQDCeaHMyQdr03R1aJiJjvpZA6AUw==
+           git head 6acb6f82e9a2863746837d9da4dc19d22b4859fc
+           (github.com/cheminfo/openchemlib-js)
+Files:     unchanged from the tarball
+           dist/openchemlib.js     sha256 6c4e3e30f6b13f1cdfbf200a85556ec432ac02a344a985530c5b08297e6d0b30
+           dist/resources.json     sha256 d2741130d5a5546aeebebc43eb3dac937881b04755fefe5925e4b228a56bee14
+           LICENSE                 from the tarball
+Build:     the minified ES module bundle (no imports, no WASM). It runs in
+           the browser and in Node. The conformer generator and the MMFF94
+           force field need resources.json: call
+           Resources.registerFromUrl(<url of dist/resources.json>) in the
+           browser, or Resources.register(<file text>) in Node, before use.
+Not kept:  dist/openchemlib.debug.js (the unminified bundle), the types
+           (dist/openchemlib.d.ts) and the README.
+Users:     stella-nova/pages/molecules (engine.js loads it on demand; the
+           library build and tests.mjs load it in Node).
