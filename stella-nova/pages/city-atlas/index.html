@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>City Atlas — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CITY ATLAS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Twenty-one cities in 3D: extruded buildings on real land cover, with
+   three overlays that turn on and off one at a time or together:
+     Terrain    real elevation and sea floor, with a vertical exaggeration
+     Currents   two days of surface currents as moving streaks on the water
+     Wind       a 2D lattice Boltzmann wind simulation around the buildings
+                and the hills, from a set or a live wind
+   The page is the sibling of Tidal Currents: the same head, foot, atlas,
+   about sheet and phone layout. In the shell screensaver the camera orbits
+   one city after another (main.js "window.snSaver").
+
+   HEAD LOAD ORDER
+     1. gpu-guard.js  frees the WebGPU device when the shell swaps the page
+     2. style.css     the page stylesheet
+     3. sci.css       STIX Two Text and Inter
+     4. nav-data.js, screensaver-catalog.js   page number and section colour
+
+   FILES
+     main.js       head, foot, labels, controls, layers, atlas, about, orbit input, saver
+     renderer.js   WebGPU device, pipelines, city upload, one frame
+     camera.js     orbit camera and matrices (reversed depth)
+     wind.js       the two nested wind lattices (shaders/lbm.wgsl)
+     tracers.js    streak lines for the ocean and the wind (tracers.wgsl, lines.wgsl)
+     data.js       city file decode (also used by worker.js and tests.mjs)
+     mesh.js       building mesh and building height raster
+     worker.js     fetch + decode + mesh off the main thread
+     shaders/      WGSL: common, terrain, buildings, sky, tracers, lines, lbm
+     data/         <id>.bin per city, index.json, CREDITS.txt
+     tools/        the Python build (fetch_*.py, build_city.py), wind-check.js
+     tests.mjs     node tests.mjs (data checks; GPU checks through deno)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────── #stage ─────────────────────────────────┐
+     │ #map      WebGPU canvas, the whole window                           │
+     │ #veil     dark bands behind the head and the foot                   │
+     │ #overlay  place labels (projected each frame)                       │
+     │ #head     No. · section  /  city  /  rule  /  country · region      │
+     │ #foot     #params / #notes / #scrub (two days) / #chips / #controls │
+     │           #chips    = Terrain  Currents  Wind (overlay toggles)     │
+     │           #controls = ‹ [ city ] ›  play  layers  i                 │
+     │ #fade  #loading  #fallback                                          │
+     ├─────────────────────────────────────────────────────────────────────┤
+     │ #layers   overlay settings: a drawer on the left, a sheet on phones │
+     │ #atlas    city menu: a drawer on the right, a sheet on a phone      │
+     │ #caption  about sheet; same placement                               │
+     └─────────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'function buildOverlay'   head, foot, labels
+     grep -n 'function buildLayers'    the overlay control groups
+     grep -n 'function switchTo'       fade and city load
+     grep -n 'function frame'          clock, orbit, render loop
+     grep -n 'function bindOrbit'      drag, pinch, wheel
+     grep -n 'function liveWind'       Open-Meteo current wind
+     grep -n 'window.snSaver'          screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Twenty-one cities in 3D with real terrain, two days of ocean currents, and a live wind simulation that flows around the buildings and the hills.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<script src="../../lib/nav-data.js"></script>
+<script src="../../lib/screensaver-catalog.js"></script>
+</head>
+<body>
+<main id="stage">
+  <canvas id="map" aria-label="3D view of the city"></canvas>
+  <div id="veil"></div>
+  <div id="overlay"></div>
+  <header id="head">
+    <div id="cat"></div>
+    <h1 id="ttl"></h1>
+    <i class="rule"></i>
+    <div id="sub"></div>
+  </header>
+  <footer id="foot">
+    <div id="params"></div>
+    <div id="notes"></div>
+    <div id="scrub" role="slider" aria-label="Time of the current data" aria-valuemin="0"><i class="fill"></i><i class="knob"></i></div>
+    <div id="chips" role="group" aria-label="Overlays">
+      <button class="chip" id="chipTerrain" type="button" aria-pressed="false" title="Real terrain and sea floor (T)"><i class="dot"></i>Terrain</button>
+      <button class="chip" id="chipOcean" type="button" aria-pressed="false" title="Ocean currents (C)"><i class="dot"></i>Currents</button>
+      <button class="chip" id="chipWind" type="button" aria-pressed="false" title="Wind simulation (W)"><i class="dot"></i>Wind</button>
+    </div>
+    <nav id="controls" aria-label="City">
+      <button id="prev" type="button" aria-label="Previous city" title="Previous city (Left)">‹</button>
+      <button id="where" type="button" aria-haspopup="dialog" aria-expanded="false" title="All cities (M)">
+        <span class="br">[</span><span id="locName"></span><span id="locCount"></span><span class="br">]</span>
+      </button>
+      <button id="next" type="button" aria-label="Next city" title="Next city (Right)">›</button>
+      <span class="sep"></span>
+      <button id="play" type="button" aria-label="Pause" title="Play / pause the clock and the orbit (Space)"></button>
+      <button id="layersBtn" type="button" aria-label="Overlay settings" aria-expanded="false" title="Overlay settings (L)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 1.5 5 8 8.5 14.5 5z"/><path d="M1.5 8 8 11.5 14.5 8" fill="none"/><path d="M1.5 11 8 14.5 14.5 11" fill="none"/></svg></button>
+      <button id="info" type="button" aria-label="About this map" aria-pressed="false" title="About this map (I)">i</button>
+    </nav>
+  </footer>
+  <div id="fade"></div>
+  <div id="loading" hidden><span></span>Loading</div>
+  <div id="fallback" hidden></div>
+</main>
+
+<div id="scrim" hidden></div>
+
+<aside id="layers" class="sheet left" hidden aria-label="Overlay settings">
+  <div id="layersGrip" class="grip" aria-hidden="true"></div>
+  <header>
+    <h2>Overlays</h2>
+    <button id="layersClose" class="close" type="button" aria-label="Close overlay settings">×</button>
+  </header>
+  <div id="layersBody"></div>
+</aside>
+
+<aside id="caption" class="sheet" hidden aria-live="polite">
+  <div id="capGrip" class="grip" aria-hidden="true"></div>
+  <button id="capClose" class="close" type="button" aria-label="Close about">×</button>
+  <h2 id="capTitle"></h2>
+  <div id="capBody"></div>
+</aside>
+
+<aside id="atlas" class="sheet" hidden aria-label="Cities">
+  <div id="atlasGrip" class="grip" aria-hidden="true"></div>
+  <header>
+    <h2>Atlas</h2>
+    <span id="atlasCount"></span>
+    <button id="atlasClose" class="close" type="button" aria-label="Close atlas">×</button>
+  </header>
+  <div id="atlasBody"></div>
+</aside>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
