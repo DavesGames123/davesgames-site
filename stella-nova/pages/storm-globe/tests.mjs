@@ -1,7 +1,8 @@
 // ============================================================================
 //  STORM GLOBE  ·  tests.mjs
 // ----------------------------------------------------------------------------
-//    node tests.mjs           parsers (fixtures/), GRIB2, pack, sample
+//    node tests.mjs           parsers (fixtures/), GRIB2, pack, sample,
+//                             time slider maths, camera, detectors
 //    deno run -A tests.mjs    the same, plus the GPU solver tests in
 //                             tests-solver.mjs (Deno has navigator.gpu)
 //  No test fetches a live source: every input is a file in fixtures/.
@@ -136,6 +137,68 @@ section('Committed sample snapshot (data/sample/)');
   check('winds.bin size = frames x 3 x nx x ny', bin.length === w.times.length * 3 * w.grid.nx * w.grid.ny, bin.length + ' B');
   check('frame times 6 h apart, ascending', w.times.every((t, i) => !i || Date.parse(t) - Date.parse(w.times[i - 1]) === 6 * 3600e3));
   check('at least one storm with a track and a forecast', meta.storms.some(s => s.track.length > 1 && s.forecast.length > 1));
+}
+
+// ── time slider, storms in time, sun, camera, detectors ──────────────────
+section('Time slider maths, storms in time, the sun, the camera, the detectors');
+{
+  const { bracket, sliderToTime, timeToSlider, ticks, stormAt, stormPath, vortexFor, subsolar, relLabel, SLIDER_MAX } = await import('./timeline.js');
+  const CAM = await import('./camera.js');
+  const { findLows, findJets } = await import('./detect.js');
+  const COL = await import('./colour.js');
+  const h = 3600e3, T0 = Date.UTC(2026, 9, 6, 0);
+  const times = [0, 6, 12, 18].map(k => T0 + k * h);
+  const b1 = bracket(times, T0 + 9 * h), b2 = bracket(times, T0 - h), b3 = bracket(times, T0 + 30 * h);
+  check('bracket: 09 h -> frames 1, 2, f 0.5', b1.a === 1 && b1.b === 2 && near(b1.f, 0.5, 1e-12));
+  check('bracket clamps before and after', b2.a === 0 && b2.f === 0 && b3.a === 2 && b3.b === 3 && b3.f === 1);
+  check('bracket at a frame time: f 0', bracket(times, T0 + 12 * h).a === 2 && bracket(times, T0 + 12 * h).f === 0);
+  const t0 = times[0], t1 = times[3];
+  check('slider 0 / max -> ends', sliderToTime(0, t0, t1) === t0 && sliderToTime(SLIDER_MAX, t0, t1) === t1);
+  check('slider round trip within one step (64.8 s)', [0, 1, 333, 999].every(v => timeToSlider(sliderToTime(v, t0, t1), t0, t1) === v));
+  check('slider clamps out-of-range values', sliderToTime(-50, t0, t1) === t0 && timeToSlider(t1 + h, t0, t1) === SLIDER_MAX);
+  const tk = ticks(T0 - 3 * h, T0 + 27 * h);
+  check('ticks: every 6 h, a day mark at 00 UTC', tk.length === 5 && tk.filter(k => k.kind === 'day').length === 2 && tk[0].t === T0, tk.map(k => k.kind).join(','));
+  check('relative labels', relLabel(T0, T0) === 'data time' && relLabel(T0 + 18 * h, T0) === '+18 h' && relLabel(T0 - 6 * h, T0) === '−6 h');
+  const s = S.mergeStorms([S.parseTcw(fxt('wp2726.tcw'), 'wp2726')])[0];
+  const p = stormPath(s), tLast = s.time;
+  const a = stormAt(s, tLast);
+  check('stormAt at the warning time = the warning fix', near(a.lat, 14.7, 1e-6) && near(a.lon, 164.5, 1e-6) && a.vmax === 50 && !a.fc);
+  const m = stormAt(s, tLast + 6 * h);
+  check('stormAt +6 h: between tau 0 and tau 12, forecast flag on', m.fc && m.lat > 14.7 && m.lat < 15.6 && m.lon < 164.5 && m.lon > 163.1 && near(m.vmax, 52.5, 1e-9), `${m.lat.toFixed(2)}N ${m.lon.toFixed(2)}E ${m.vmax} kt`);
+  check('stormAt: motion toward WNW at about 9 kt', m.dir > 280 && m.dir < 310 && m.spdKt > 7 && m.spdKt < 11, `${m.dir.toFixed(0)} deg ${m.spdKt.toFixed(1)} kt`);
+  const end = p[p.length - 1].t;
+  check('stormAt fades out over 6 h after the last point, then null', near(stormAt(s, end + 3 * h).w, 0.5, 1e-9) && stormAt(s, end + 7 * h) === null);
+  check('stormAt before the first fix - 6 h: null', stormAt(s, p[0].t - 7 * h) === null);
+  const cell = 2 * Math.PI / 512, v = vortexFor(a, s, cell);
+  check('vortex: rmax >= 1.6 cells, rout from the R34 radii, alpha in 0.3..0.9', v.rmax >= 1.6 * cell - 1e-12 && v.rout > v.rmax * 2 && v.alpha >= 0.3 && v.alpha <= 0.9, `rmax ${(v.rmax * 6371).toFixed(0)} km, rout ${(v.rout * 6371).toFixed(0)} km, alpha ${v.alpha.toFixed(2)}`);
+  check('vortex: pressure from the warning (995 hPa)', v.pc === 995);
+  const sol = subsolar(Date.UTC(2026, 5, 21, 12)), eq = subsolar(Date.UTC(2026, 2, 20, 12));
+  check('subsolar point, 21 June 12 UTC: 23.4N near 0E', near(sol.lat, 23.44, 0.3) && Math.abs(sol.lon) < 1.5, `${sol.lat.toFixed(2)} ${sol.lon.toFixed(2)}`);
+  // equinox 2026-03-20 14:46 UTC; equation of time that day about -7.5 min -> +1.9 deg
+  check('subsolar point, 20 March 12 UTC: within 0.1 deg of the equator, lon +1.9 +- 0.3', Math.abs(eq.lat) < 0.1 && near(eq.lon, 1.9, 0.3), `${eq.lat.toFixed(2)} ${eq.lon.toFixed(2)}`);
+  const A = { lat: 20, lon: -120, alt: 0.3, tilt: 40, heading: 0 }, B = { lat: 15, lon: 165, alt: 0.4, tilt: 30, heading: 20 };
+  const f = CAM.flight(A, B);
+  const fa = f.at(0), fb = f.at(1), fm = f.at(0.5);
+  check('flight starts at a and ends at b', near(fa.lat, 20, 1e-9) && near(fa.lon, -120, 1e-9) && near(fb.lat, 15, 1e-6) && near(fb.lon, 165, 1e-6) && near(fb.alt, 0.4, 1e-9));
+  check('flight midpoint is on the great circle and higher than both ends', near(CAM.arc(A, fm) + CAM.arc(fm, B), CAM.arc(A, B), 1e-6) && fm.alt > 0.4, `alt ${fm.alt.toFixed(2)}, arc ${(CAM.arc(A, B) / Math.PI * 180).toFixed(0)} deg, ${f.dur.toFixed(1)} s`);
+  check('flight eases: no speed at the ends', CAM.arc(f.at(0), f.at(0.01)) < CAM.arc(f.at(0.5), f.at(0.51)) / 50);
+  const bs = CAM.basis(A, 16 / 10, { x: 0.2, y: -0.1 }), q = CAM.project(bs, CAM.unit(A.lat, A.lon));
+  check('the camera target projects to the principal point', near(q.x, 0.2, 1e-9) && near(q.y, -0.1, 1e-9) && q.front);
+  const pk = CAM.pick(bs, 0.5, 0.3), back = pk && CAM.project(bs, CAM.unit(pk.lat, pk.lon));
+  check('pick and project are inverse', back && near(back.x, 0.5, 1e-9) && near(back.y, 0.3, 1e-9));
+  check('altForRadius: a wider cap needs more altitude', CAM.altForRadius(0.1) < CAM.altForRadius(0.5));
+  const meta = JSON.parse(fs.readFileSync(path.join(HERE, 'data/sample/snapshot.json'), 'utf8'));
+  const bin = fs.readFileSync(path.join(HERE, 'data/sample/winds.bin'));
+  const fr = G.unpackFrames(new Int8Array(bin.buffer, bin.byteOffset, bin.length), meta.winds.grid, meta.winds.times.length);
+  const k0 = meta.winds.times.findIndex(t => Date.parse(t) >= Date.parse(meta.winds.cycle));
+  const here = meta.storms.map(q => stormAt(q, Date.parse(meta.winds.cycle)) || q);
+  const lows = findLows(fr[k0], meta.winds.grid, here), jets = findJets(fr[k0], meta.winds.grid, here);
+  const km = (x, y) => Math.acos(Math.min(1, Math.sin(x.lat * Math.PI / 180) * Math.sin(y.lat * Math.PI / 180) + Math.cos(x.lat * Math.PI / 180) * Math.cos(y.lat * Math.PI / 180) * Math.cos((x.lon - y.lon) * Math.PI / 180))) * 6371;
+  check('detector: lows below 990 hPa, none within 900 km of a storm', lows.length > 0 && lows.every(l => l.hpa < 990 && here.every(s2 => km(l, s2) > 900)), lows.map(l => `${l.hpa}hPa@${l.lat},${l.lon}`).join(' '));
+  check('detector: wind maxima above 20 m/s', jets.every(j => j.wind > 20));
+  const xs = COL.SS_MARKS.map(q => COL.speedToX(q.ms));
+  check('legend: Saffir-Simpson marks in order inside the bar', xs.every((x, i) => x > 0 && x < 1 && (!i || x > xs[i - 1])), xs.map(x => x.toFixed(2)).join(' '));
+  check('colour LUT: 4 rows of 256 RGBA, magma ends black to pale yellow', COL.lutBytes().length === 4096 && COL.magma(0).join() === '0,0,4' && COL.magma(1).join() === '252,253,191');
 }
 
 // ── GPU solver (Deno) ────────────────────────────────────────────────────
