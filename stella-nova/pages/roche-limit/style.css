@@ -1,0 +1,202 @@
+/* ============================================================================
+   ROCHE LIMIT  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark shell on a full-frame WebGPU canvas. Type comes from lib/sci.css
+   (loaded after this file): STIX Two Text for the site name and maths,
+   Inter for text, the system mono for numbers only. Sentence case labels.
+   Desktop: the panel at the left, the plots (#hud) at the right, the status
+   bar at the base. main.js frames the subject in the part they leave clear.
+     grep -n 'HUD'        the plot column
+     grep -n 'LABELS'     the projected ring and point names
+     grep -n 'TOUCH'      44 px targets for any touch screen
+     grep -n 'PHONE'      dock, bottom sheet, the gauge strip
+     grep -n 'LANDSCAPE'  short landscape phones
+     grep -n 'sn-saver'   the screensaver mode (lib/screensaver.js)
+   ========================================================================== */
+:root{
+  --bg:#03050a; --bg2:#0b1018; --ink:#d8dfe8; --dim:#7d8796; --faint:#283240;
+  --line:rgba(150,190,240,0.10); --line-b:rgba(150,200,255,0.22);
+  --warm:#ffb46a; --cool:#62c4ff; --panel-w:300px; --hud-w:300px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:inherit}
+
+#gpu{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gpu:active{cursor:grabbing}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;pointer-events:none}
+.brand{font-family:var(--sci-serif);font-size:1.15rem;color:#e8eef8}
+.pagetitle{font-size:0.8rem;color:var(--dim);margin-left:auto;margin-right:calc(var(--hud-w) + 10px)}
+html.in-frame .topbar{display:none}
+
+#gear{position:fixed;top:14px;left:14px;z-index:40;width:38px;height:38px;border:1px solid var(--line-b);background:rgba(10,14,22,0.75);color:var(--ink);border-radius:9px;font-size:1.05rem;cursor:pointer;display:none}
+
+/* the control panel */
+#panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(7,10,16,0.94);
+  border-right:1px solid var(--line-b);padding:64px 18px 28px;overflow-y:auto;scrollbar-width:thin;
+  transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{padding-top:20px}
+#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+#panelClose:hover{color:var(--warm);border-color:var(--warm)}
+.sec-label{font-size:0.8rem;font-weight:600;color:var(--ink);margin:20px 0 9px}
+.sec-label:first-of-type{margin-top:0}
+.sec-sub{font-size:0.76rem;color:var(--dim);margin:12px 0 6px}
+.hint{font-size:0.76rem;line-height:1.5;color:var(--dim);margin:8px 0 2px}
+
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cards button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 9px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:8px;cursor:pointer;text-align:left}
+.cards button b{font-size:0.8rem;color:var(--ink);font-weight:600}
+.cards button span{font-size:0.7rem;line-height:1.3}
+.cards button:hover{border-color:var(--line-b)}
+.cards button.on{border-color:var(--warm);background:rgba(255,180,106,0.07)}
+.cards button.on b{color:var(--warm)}
+.presets{display:grid;grid-template-columns:1fr;gap:5px}
+.presets button{padding:7px 9px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:7px;cursor:pointer;font-size:0.76rem;text-align:left}
+.presets button.on{border-color:var(--warm);color:var(--warm)}
+.seg3{display:flex;border:1px solid var(--line-b);border-radius:8px;overflow:hidden}
+.seg3 button{flex:1;min-width:0;padding:8px 4px;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-size:0.74rem;cursor:pointer}
+.seg3 button:last-child{border-right:0}
+.seg3 button.on{background:rgba(255,180,106,0.12);color:var(--warm)}
+.seg3.dim{opacity:0.45;pointer-events:none}
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 8px;margin:10px 0}
+.row label{grid-row:1;grid-column:1;font-size:0.78rem;color:var(--ink)}
+.row label .sci-sym{font-size:0.95rem;margin-right:3px}
+.row label .w{color:var(--dim)}
+.row input[type=range]{grid-row:2;grid-column:1/3;width:100%;accent-color:var(--warm);height:3px;margin:4px 0}
+.row .val{grid-row:1;grid-column:2;text-align:right;font:0.76rem var(--sci-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.row select{grid-row:1;grid-column:2;background:var(--bg2);color:var(--ink);border:1px solid var(--line-b);border-radius:6px;padding:4px 6px;font:0.76rem var(--sci-sans)}
+.modes{display:flex;gap:8px;margin-top:10px}
+.modes button{flex:1;padding:9px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;cursor:pointer;font-size:0.78rem}
+.modes button.on{border-color:var(--warm);color:var(--warm)}
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:12px 0 4px}
+.toggles label{font-size:0.76rem;color:var(--dim);display:flex;align-items:center;gap:6px;cursor:pointer}
+.toggles input{accent-color:var(--warm)}
+.readout{width:100%;border-collapse:collapse;font-size:0.76rem}
+.readout td{padding:3px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.readout td:first-child{color:var(--dim);padding-right:8px}
+.readout td:last-child{text-align:right;color:var(--ink);font-family:var(--sci-mono);font-variant-numeric:tabular-nums}
+.readout .sci-sym{font-size:0.9rem}
+.eqs .eq-sublabel{font-size:0.74rem;color:var(--dim);margin:10px 0 3px}
+.eqs .sci-eq{font-size:0.98rem}
+.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
+
+/* HUD: the plots at the right */
+#hud{position:fixed;top:14px;right:14px;width:var(--hud-w);z-index:25;display:flex;flex-direction:column;gap:8px;
+  max-height:calc(100% - 60px);overflow-y:auto;scrollbar-width:none;transition:transform 0.28s}
+html.in-frame #hud{top:10px}
+#hud::-webkit-scrollbar{display:none}
+.hud-card{background:rgba(7,10,16,0.82);border:1px solid var(--line);border-radius:9px;padding:8px 10px 6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.hud-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:0.74rem;color:var(--dim);margin-bottom:4px}
+.hud-h .sci-sym{font-size:0.82rem}
+.hud-v{font:0.74rem var(--sci-mono);color:var(--ink);white-space:nowrap}
+.hud-card canvas{display:block;width:100%}
+#plotsHud{display:flex;flex-direction:column;gap:8px}
+#hudToggle{align-self:flex-end;width:30px;height:24px;border:1px solid var(--line);background:rgba(7,10,16,0.8);color:var(--dim);border-radius:6px;cursor:pointer}
+#hud.min{transform:translateX(calc(var(--hud-w) - 32px))}
+#hud.min .hud-card{opacity:0}
+#plotsHome .hud-card{background:transparent;border:0;padding:6px 0;backdrop-filter:none;-webkit-backdrop-filter:none}
+
+#status{position:fixed;left:var(--panel-w);right:0;bottom:0;z-index:24;display:flex;gap:16px;align-items:center;padding:9px 18px;
+  font-size:0.78rem;color:var(--ink);background:linear-gradient(0deg,rgba(3,5,10,0.92),rgba(3,5,10,0));pointer-events:none}
+#status .fn{color:var(--warm)}
+#status .right{margin-left:auto;color:var(--dim);font-family:var(--sci-mono);font-size:0.74rem}
+body.panel-closed #status{left:0}
+
+#legend{position:fixed;left:calc(var(--panel-w) + 20px);bottom:44px;z-index:22;padding:8px 11px 6px;background:rgba(7,10,16,0.8);
+  border:1px solid var(--line);border-radius:8px;pointer-events:none}
+body.panel-closed #legend{left:20px}
+#legend.off{display:none}
+.lg-title{font-size:0.74rem;color:var(--dim);margin-bottom:6px}
+#lgBar{display:block;width:220px;height:10px;border-radius:2px}
+.lg-ticks{display:flex;justify-content:space-between;font:0.72rem var(--sci-mono);color:var(--ink);margin-top:4px}
+
+#busy{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;min-width:260px;padding:12px 16px;background:rgba(7,10,16,0.85);
+  border:1px solid var(--line-b);border-radius:10px;pointer-events:none;transition:opacity 0.3s}
+#busy.off{opacity:0}
+.busy-t{font-size:0.78rem;color:var(--ink);margin-bottom:8px}
+.busy-bar{height:4px;border-radius:2px;background:var(--faint);overflow:hidden}
+.busy-bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cool),var(--warm));transition:width 0.15s}
+#nogpu{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:var(--bg)}
+#nogpu.off{display:none}
+#nogpu h2{font-family:var(--sci-serif);font-weight:500;font-size:1.4rem}
+#nogpu p{max-width:520px;color:var(--dim);font-size:0.86rem;line-height:1.6}
+
+/* LABELS: names on the Roche circles and at L1 */
+#labels{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;left:0;top:0;font-size:0.72rem;white-space:nowrap;padding:1px 6px;border-radius:4px;background:rgba(3,5,10,0.55);
+  color:var(--ink);transform-origin:0 0;will-change:transform;margin-left:6px}
+.lbl.ring-rigid{color:#ff9a62}
+.lbl.ring-sync{color:#ffd666}
+.lbl.ring-fluid{color:#62c4ff}
+.lbl.pt{color:#c8f6ff;font-weight:600}
+
+#dock,#sheetGrip{display:none}
+
+/* TOUCH: any touch screen or narrow window */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:320px}
+  #panelClose{width:44px;height:44px}
+  .seg3 button,.cards button,.presets button,.modes button{min-height:44px}
+  .row{min-height:44px;margin:4px 0}
+  .toggles label{min-height:36px}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:40px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border-radius:50%;background:var(--warm);border:3px solid #10141c}
+  .readout td{padding:6px 0}
+}
+
+/* PHONE */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{display:none}
+  #gear,body.panel-closed #gear{display:none}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(6,9,14,0.95);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
+  #dock > button.on{border-color:var(--warm);color:var(--warm)}
+  .seg{flex:1;display:flex;align-items:center;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
+  .seg button{flex:0 0 48px;height:100%;border:0;background:var(--bg2);color:var(--ink);font-size:1.2rem;cursor:pointer}
+  .seg span{flex:1;text-align:center;font:0.8rem var(--sci-mono);color:var(--warm)}
+  #status{left:0;right:0;bottom:var(--dock-h);padding:5px calc(14px + env(safe-area-inset-right)) 5px calc(14px + env(safe-area-inset-left));white-space:nowrap;overflow:hidden}
+  #status .fn{display:none}
+  #status .right{margin-left:0;overflow:hidden;text-overflow:ellipsis}
+  /* the HUD is a slim gauge strip at the top; the plots move into the sheet */
+  #hud{top:calc(8px + env(safe-area-inset-top));left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));width:auto;max-height:none}
+  #hud .hud-card{padding:5px 9px 2px}
+  #gaugeC{height:46px}
+  #hudToggle{display:none}
+  #legend{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 30px)}
+  body.panel-closed #legend{left:calc(10px + env(safe-area-inset-left))}
+  #lgBar{width:100%}
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(50vh,540px);height:min(50dvh,540px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 24px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px;
+    background:linear-gradient(180deg,rgba(7,10,16,1) 65%,rgba(7,10,16,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .lbl{font-size:0.7rem}
+}
+/* LANDSCAPE phone: the sheet is a drawer on the right */
+@media (max-height:500px) and (orientation:landscape){
+  #status{display:none}
+  #hud{right:auto;width:min(300px,40vw)}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;transform:translateX(100%)}
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:2;background:var(--bg2)}
+}
+
+/* screensaver (lib/screensaver.js): the scene alone fills the frame */
+html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #status,html.sn-saver #legend,html.sn-saver #hud,
+html.sn-saver #labels,html.sn-saver #gear,html.sn-saver .topbar,html.sn-saver #busy{display:none}
+html.sn-saver #gpu{cursor:none}

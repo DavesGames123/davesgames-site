@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Roche Limit — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ROCHE LIMIT  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js runs a self-gravitating rubble pile of N
+   grains on the GPU (engine.js, shaders/sim.wgsl), next to a planet, and
+   draws it (render.js) in #gpu. It compares the run with the analytic
+   Roche limits, the Kepler conic of the satellite centre and the tidal
+   gauge, and plots the bound mass and the energy ledger.
+
+   MODULES
+     physics.js   model, CPU reference, bound mass, Kepler conics (no DOM)
+     engine.js    SimGPU: the compute pipelines for one satellite
+     render.js    Renderer: sky, planet, grains, ring layer, field, lines,
+                  bloom
+     worker.js    bound mass and energy for each readback (module worker)
+     scenarios.js the scenarios and the real bodies
+     plots.js     the four live plots (canvas 2D)
+     main.js      boot, frame loop, camera, panel, labels, screensaver
+     tests.mjs    node tests.mjs (CPU tests, then the GPU test in Deno)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Roche limit                                 │
+     ├────────────┬───────────────────────────────────────┬─────────────┤
+     │ #panel     │ #gpu  the scene (drag, pinch, wheel)  │ #hud plots  │
+     │  scenario  │ #labels  ring and point names          │  gauge      │
+     │  body      │ #legend  field colour scale            │  bound mass │
+     │  orbit     │ #busy    pile settling progress        │  energy     │
+     │  material  │                                         │  runs vs d  │
+     │  time      │                                         │             │
+     │  view      │                                         │             │
+     │  readout   │                                         │             │
+     │  equations │                                         │             │
+     ├────────────┴───────────────────────────────────────┴─────────────┤
+     │ #status  scenario · t · d/R_p · bound mass                       │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock    at the base: #dockPanel (sheet), #dockPlay, the time warp
+              stepper, #dockHeat (field overlay), #dockCam (camera mode)
+     #panel   a bottom sheet above the dock (#sheetGrip: half / full)
+     #hud     a slim strip under the top edge: the gauge and the bound
+              mass only; the full plots are in the sheet (#plotsHome)
+     main.js measures the overlays and frames the subject in the clear part
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A rubble-pile moon of thousands of grains, simulated on the GPU with self-gravity and contact forces, meets the tide of its planet. Inside the Roche limit it stretches, sheds and winds into a ring.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Roche limit</div>
+</div>
+
+<canvas id="gpu"></canvas>
+<div id="labels" aria-hidden="true"></div>
+<div id="busy" class="off"><div class="busy-t" id="busyT">Settling the rubble pile</div><div class="busy-bar"><span id="busyBar"></span></div></div>
+<div id="nogpu" class="off">
+  <h2>WebGPU is not available</h2>
+  <p>This page runs a simulation of thousands of grains on the GPU. It needs WebGPU: Chrome or Edge 113+, Safari 26+, or Firefox 141+ on Windows.</p>
+  <p id="nogpuWhy"></p>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<div id="legend" class="off">
+  <div class="lg-title" id="lgTitle">Roche potential</div>
+  <canvas id="lgBar" width="220" height="10"></canvas>
+  <div class="lg-ticks"><span id="lgLo"></span><span id="lgMid"></span><span id="lgHi"></span></div>
+</div>
+
+<aside id="hud">
+  <div class="hud-card" id="gaugeCard">
+    <div class="hud-h"><span>Tide against self-gravity</span><span class="hud-v" id="gaugeV"></span></div>
+    <canvas id="gaugeC" height="58"></canvas>
+  </div>
+  <div id="plotsHud">
+    <div class="hud-card">
+      <div class="hud-h"><span>Bound mass</span><span class="hud-v" id="boundV"></span></div>
+      <canvas id="boundC" height="96"></canvas>
+    </div>
+    <div class="hud-card">
+      <div class="hud-h"><span>Energy ledger <span class="sci-sym" data-tex="|\Delta(E - W)|/|U_s|" data-inline></span></span><span class="hud-v" id="energyV"></span></div>
+      <canvas id="energyC" height="80"></canvas>
+    </div>
+    <div class="hud-card">
+      <div class="hud-h"><span>Bound mass after 3 orbits</span><span class="hud-v" id="runsV"></span></div>
+      <canvas id="runsC" height="120"></canvas>
+    </div>
+  </div>
+  <button id="hudToggle" aria-label="Hide plots">▸</button>
+</aside>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">Scenario</div>
+  <div class="cards" id="scenarios"></div>
+  <div class="hint" id="scenHint"></div>
+
+  <div id="bodyBox">
+    <div class="sec-label">Body</div>
+    <div class="presets" id="bodies"></div>
+  </div>
+
+  <div class="sec-label">Orbit</div>
+  <div class="row" id="rowD"><label><span class="sci-sym" data-tex="d" data-inline></span> <span class="w">distance / R<sub>p</sub></span></label><input type="range" id="d" min="1.1" max="5" step="0.01" value="1.9"><span class="val" id="dV"></span></div>
+  <div class="row" id="rowPeri"><label><span class="sci-sym" data-tex="q" data-inline></span> <span class="w">pericentre / R<sub>p</sub></span></label><input type="range" id="peri" min="1.05" max="4" step="0.01" value="1.6"><span class="val" id="periV"></span></div>
+  <div class="row" id="rowEcc"><label><span class="sci-sym" data-tex="e" data-inline></span> <span class="w">eccentricity</span></label><input type="range" id="ecc" min="0.5" max="1.2" step="0.01" value="1"><span class="val" id="eccV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\rho_p/\rho_s" data-inline></span> <span class="w">density ratio</span></label><input type="range" id="q" min="-1.2" max="1.4" step="0.01" value="0"><span class="val" id="qV"></span></div>
+  <div class="row" id="rowJ2"><label><span class="sci-sym" data-tex="J_2" data-inline></span> <span class="w">planet oblateness</span></label><input type="range" id="j2" min="0" max="0.02" step="0.0005" value="0"><span class="val" id="j2V"></span></div>
+
+  <div class="sec-label">Satellite</div>
+  <div class="seg3" id="materials">
+    <button data-m="fluid">Fluid</button><button data-m="rigid">Rigid-ish</button><button data-m="cohesive">Cohesive</button>
+  </div>
+  <div class="hint" id="matHint"></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\mu" data-inline></span> <span class="w">friction</span></label><input type="range" id="mu" min="0" max="1" step="0.05" value="0"><span class="val" id="muV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="C" data-inline></span> <span class="w">cohesion / P<sub>c</sub></span></label><input type="range" id="coh" min="0" max="1.5" step="0.05" value="0"><span class="val" id="cohV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="N" data-inline></span> <span class="w">grains</span></label><select id="nSel"></select></div>
+  <div class="modes"><button id="restartBtn" class="on">Restart</button><button id="pauseBtn">Pause</button></div>
+
+  <div class="sec-label">Time warp</div>
+  <div class="row"><label><span class="w">steps per frame</span></label><input type="range" id="warp" min="0" max="8" step="1" value="4"><span class="val" id="warpV"></span></div>
+  <div class="hint" id="warpHint"></div>
+
+  <div class="sec-label">View</div>
+  <div class="seg3" id="cams"><button data-c="follow">Satellite</button><button data-c="planet">Planet</button><button data-c="top">Top-down</button></div>
+  <div class="sec-sub">Grain colour</div>
+  <div class="seg3" id="colors"><button data-k="0">Bound / shed</button><button data-k="1">Speed</button><button data-k="2">Tidal stress</button></div>
+  <div class="sec-sub">Force field on the orbit plane</div>
+  <div class="seg3" id="fields"><button data-f="0">Off</button><button data-f="1">Roche potential</button><button data-f="2">Tidal stretch</button></div>
+  <div class="toggles">
+    <label><input type="checkbox" id="tRings" checked> Roche limits</label>
+    <label><input type="checkbox" id="tHill" checked> Hill sphere</label>
+    <label><input type="checkbox" id="tPred" checked> Predicted orbits</label>
+    <label><input type="checkbox" id="tTrack" checked> Past track</label>
+    <label><input type="checkbox" id="tRing" checked> Ring glow</label>
+    <label><input type="checkbox" id="tBlur" checked> Motion blur</label>
+  </div>
+  <div class="row"><label><span class="w">ring glow gain</span></label><input type="range" id="ringGain" min="0.25" max="12" step="0.25" value="2"><span class="val" id="ringGainV"></span></div>
+
+  <div class="sec-label">Readout</div>
+  <table class="readout">
+    <tr><td>Time</td><td id="rdT"></td></tr>
+    <tr><td>Distance <span class="sci-sym" data-tex="d/R_p" data-inline></span></td><td id="rdD"></td></tr>
+    <tr><td><span class="sci-sym" data-tex="d/d_\mathrm{rigid}" data-inline></span></td><td id="rdDr"></td></tr>
+    <tr><td><span class="sci-sym" data-tex="d/d_\mathrm{fluid}" data-inline></span></td><td id="rdDf"></td></tr>
+    <tr><td>Bound mass</td><td id="rdB"></td></tr>
+    <tr><td>Fragments</td><td id="rdG"></td></tr>
+    <tr><td>Hill radius / <span class="sci-sym" data-tex="R_s" data-inline></span></td><td id="rdH"></td></tr>
+    <tr><td>Bulk <span class="sci-sym" data-tex="\rho_s" data-inline></span> (pile)</td><td id="rdRho"></td></tr>
+    <tr><td>Energy ledger</td><td id="rdE"></td></tr>
+    <tr><td><span class="sci-sym" data-tex="L_z" data-inline></span> drift</td><td id="rdL"></td></tr>
+    <tr><td>Hit the planet</td><td id="rdAcc"></td></tr>
+    <tr><td>Step <span class="sci-sym" data-tex="\Delta t" data-inline></span></td><td id="rdDt"></td></tr>
+    <tr><td>GPU frame</td><td id="rdGpu"></td></tr>
+  </table>
+
+  <div class="sec-label">Equations</div>
+  <div class="eqs">
+    <div class="eq-sublabel">Rigid sphere, no spin: tide = surface gravity</div>
+    <div class="sci-eq" data-tex="d_\mathrm{rigid} = R_p\left(\frac{2\rho_p}{\rho_s}\right)^{1/3} \approx 1.26\,R_p\left(\frac{\rho_p}{\rho_s}\right)^{1/3}"></div>
+    <div class="eq-sublabel">Fluid satellite (Roche 1849; Chandrasekhar: 2.455)</div>
+    <div class="sci-eq" data-tex="d_\mathrm{fluid} \approx 2.44\,R_p\left(\frac{\rho_p}{\rho_s}\right)^{1/3}"></div>
+    <div class="eq-sublabel">The gauge at the surface point under the planet</div>
+    <div class="sci-eq" data-tex="a_\mathrm{tide} = \frac{2 G M_p r}{d^3} \quad\text{vs}\quad g = \frac{G m}{r^2}"></div>
+    <div class="eq-sublabel">Hill sphere of the bound mass</div>
+    <div class="sci-eq" data-tex="r_H = d\left(\frac{m}{3 M_p}\right)^{1/3}"></div>
+    <div class="eq-sublabel">Contacts: spring-dashpot, Coulomb friction, cohesion</div>
+    <div class="sci-eq" data-tex="F_n = k_n\delta - \gamma_n v_n,\quad |F_t| \le \mu\,(F_n + C)"></div>
+  </div>
+
+  <div id="plotsHome"></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>The satellite is a pile of grains that touch. Each grain feels the gravity of every other grain, the planet, and the push, friction and cement of the grains it touches. Nothing else holds the pile together, so the run, not a formula, decides if it survives.</p>
+    <p>Roche's limit compares two pulls at the satellite: the tide, the difference of the planet's gravity across the body, and the body's own gravity. A rigid sphere comes apart where the tide at its surface equals its surface gravity, at 1.26 R<sub>p</sub>(ρ<sub>p</sub>/ρ<sub>s</sub>)<sup>1/3</sup>. A fluid body stretches first, which makes the tide stronger, so it fails farther out, at 2.44. A real rubble pile has friction and some cement, so its limit falls between the two.</p>
+    <p>Inside the limit the satellite stretches along the line to the planet and sheds grains from its two tips (the Lagrange points L1 and L2). The grains go onto orbits a little faster or slower than the satellite, and the difference winds the stream into a ring. Outside the limit, shed grains fall back together: this is how the comet Shoemaker-Levy 9 became a string of fragments after Jupiter pulled it apart in 1992.</p>
+    <p>Method. N up to 32k grains in WebGPU compute. Contacts every step (spring-dashpot, a friction spring with a Coulomb cap, rolling resistance, cohesion), self-gravity by a direct sum every 32 steps with a linear extrapolation between sums, the planet as a point mass with J<sub>2</sub>, kick-drift-kick steps. tests.mjs checks the GPU forces against a CPU reference and checks the formulas against published values. The satellite is drawn larger than real moons (R<sub>s</sub>/R<sub>p</sub> = 0.12); the Roche limit does not depend on its size. The ring glow multiplies the optical depth of the few thousand shed grains by the gain above.</p>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <div class="seg" id="dockWarp"><button data-d="-1" aria-label="Slower">−</button><span id="dockWarpV">1×</span><button data-d="1" aria-label="Faster">+</button></div>
+  <button id="dockHeat" aria-label="Force field overlay">◎</button>
+  <button id="dockCam" aria-label="Camera">⌖</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
