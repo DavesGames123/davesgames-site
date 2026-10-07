@@ -1,0 +1,15 @@
+three.js 0.139.2, files unchanged from the npm package, fetched from unpkg.
+The Ten Minute Physics ports load these as classic scripts (global THREE).
+
+https://unpkg.com/three@0.139.2/build/three.min.js
+  sha256 6bae6112e3c69c3ed2fe32d68eebb1bb41492484aed467b155bd4570aa10b914
+https://unpkg.com/three@0.139.2/examples/js/controls/OrbitControls.js
+  sha256 84e74621b76f7c063dd04dfa6aa8d09b55c8b1c774532ebe0edbe0ce778bab85
+https://unpkg.com/three@0.139.2/examples/js/geometries/TextGeometry.js
+  sha256 2f9357fff2407e43aa61d533c0dc3356f74912fa59fd3bf99ba47680f804efeb
+https://unpkg.com/three@0.139.2/examples/js/loaders/FontLoader.js
+  sha256 5898f04ca355fbd9938e073beb6601d14c21cded10ef609caa2431f2990d7d34
+https://unpkg.com/three@0.139.2/examples/fonts/helvetiker_regular.typeface.json
+  sha256 d5c5467690f74061179a292af83bd85c4c551e0f106b2af99714f11184c96981
+https://unpkg.com/three@0.139.2/LICENSE
+  sha256 fbf3943930dacbf56aabb8dc5d816440bd16aa6f4cc78ddbdf12106ee1807832
