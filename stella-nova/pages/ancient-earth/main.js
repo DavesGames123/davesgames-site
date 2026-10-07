@@ -30,6 +30,7 @@
 //    legend ................ "function drawLegend"
 //    view framing .......... "function frameView"
 //    phone sheet ........... "function openGroup"
+//    no UI selection ....... "function noSelect"
 // ============================================================================
 import * as THREE from 'three';
 import { loadAll, elevAt } from './data.js';
@@ -167,7 +168,7 @@ function buildTimebar() {
   const tr = $('track');
   let drag = false;
   const setX = cx => { const r = tr.getBoundingClientRect(); setAge(snapAge(xToAge((cx - r.left) / r.width))); };
-  tr.addEventListener('pointerdown', e => { if (e.target.closest('#evRow button')) return; drag = true; tr.setPointerCapture(e.pointerId); stopPlay(); setX(e.clientX); interacted(); });
+  tr.addEventListener('pointerdown', e => { if (e.target.closest('#evRow button')) return; e.preventDefault(); drag = true; tr.setPointerCapture(e.pointerId); stopPlay(); setX(e.clientX); interacted(); });
   tr.addEventListener('pointermove', e => { if (drag) setX(e.clientX); });
   const end = () => { drag = false; };
   tr.addEventListener('pointerup', end); tr.addEventListener('pointercancel', end);
@@ -359,10 +360,11 @@ function buildUI() {
     b.addEventListener('click', () => { const c = D.cities.rows.find(r => r[0] === n); if (c) addPlace(c[0], c[2], c[3], c[1]); });
     qp.appendChild(b);
   }
+  noSelect();
   // globe clicks: where is it now
   const cv = $('view');
   let down = null;
-  cv.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; interacted(); });
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); down = { x: e.clientX, y: e.clientY, t: performance.now() }; interacted(); });
   cv.addEventListener('pointerup', e => {
     if (!down) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
@@ -380,6 +382,23 @@ function buildUI() {
   if (matchMedia('(max-width: 760px)').matches) $('info').classList.add('fold');
   setMode(0);
   updateTintKey();
+}
+// No text selection or native drag outside .prose (the user kept
+// highlighting the UI while dragging the globe and the controls). A drag
+// that starts in the chrome also clears any selection it would make.
+function noSelect() {
+  const prose = t => { const el = t && (t.nodeType === 3 ? t.parentElement : t); return !!(el && el.closest && el.closest('.prose, input[type=search]')); };
+  document.addEventListener('selectstart', e => { if (!prose(e.target)) e.preventDefault(); });
+  document.addEventListener('dragstart', e => { if (!prose(e.target)) e.preventDefault(); });
+  let chromeDrag = false;
+  document.addEventListener('pointerdown', e => { chromeDrag = !prose(e.target); }, true);
+  document.addEventListener('pointerup', () => { chromeDrag = false; }, true);
+  document.addEventListener('selectionchange', () => {
+    if (!chromeDrag) return;
+    const s = getSelection();
+    if (s && s.rangeCount && !s.isCollapsed) s.removeAllRanges();
+  });
+  document.querySelectorAll('img').forEach(i => { i.draggable = false; });
 }
 function dayName(d) { const dt = new Date(2001, 0, d); return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
 function setRange(from, to, fromSliders) {
@@ -555,7 +574,7 @@ function pinReadout(p) {
     for (let i = 1; i < p.path.length && p.path[i][0] <= t + 1e-6; i++) path += gcKm(llToVec(p.path[i - 1][1], p.path[i - 1][2]), llToVec(p.path[i][1], p.path[i][2]));
     const a = P.reconstruct(p.lat, p.lon, Math.max(0, t - 1), p.poly), b = P.reconstruct(p.lat, p.lon, t + 1, p.poly);
     const speed = a && b ? gcKm(a.v, b.v) / 2 / 10 : null;     // km/Myr = mm/yr; /10 = cm/yr
-    body = `<dl><dt>Then</dt><dd>${fmtLat(p.now.lat)}, ${fmtLon(p.now.lon)} · ${zone(p.now.lat)}</dd>` +
+    body = `<dl class="prose"><dt>Then</dt><dd>${fmtLat(p.now.lat)}, ${fmtLon(p.now.lon)} · ${zone(p.now.lat)}</dd>` +
       `<dt>Today</dt><dd>${fmtLat(p.lat)}, ${fmtLon(p.lon)}</dd>` +
       `<dt>Moved</dt><dd>${Math.round(net).toLocaleString('en')} km from where it is now</dd>` +
       `<dt>Road</dt><dd>${Math.round(path).toLocaleString('en')} km travelled since then</dd>` +
@@ -596,7 +615,7 @@ function whereNow(cx, cy) {
 AE.whereNow = whereNow;
 function pickedCard(k) {
   const t = k.age;
-  let body = `<dl><dt>Then</dt><dd>${fmtLat(k.paleo.lat)}, ${fmtLon(k.paleo.lon)} · ${fmtMa(t)}</dd><dt>Ground</dt><dd>${surfaceAt(k.paleo.lat, k.paleo.lon, t)}</dd>`;
+  let body = `<dl class="prose"><dt>Then</dt><dd>${fmtLat(k.paleo.lat)}, ${fmtLon(k.paleo.lon)} · ${fmtMa(t)}</dd><dt>Ground</dt><dd>${surfaceAt(k.paleo.lat, k.paleo.lon, t)}</dd>`;
   if (k.now) {
     body += `<dt>Today</dt><dd>${fmtLat(k.now.lat)}, ${fmtLon(k.now.lon)}</dd>` +
       (k.near ? `<dt>Near</dt><dd>${esc(k.near[0])}, ${esc(k.near[1])} (${Math.round(k.near[2])} km)</dd>` : '') +
