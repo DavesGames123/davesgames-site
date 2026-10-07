@@ -160,12 +160,14 @@ export class Renderer {
     this.msaaTex = dev.createTexture({ size: [w, h], format: HDR, sampleCount: MSAA, usage: T.RENDER_ATTACHMENT });
     this.depthTex = dev.createTexture({ size: [w, h], format: DEPTH, sampleCount: MSAA, usage: T.RENDER_ATTACHMENT });
     this.hdrTex = dev.createTexture({ size: [w, h], format: HDR, usage: T.RENDER_ATTACHMENT | T.TEXTURE_BINDING });
+    this.msaaView = this.msaaTex.createView(); this.depthView = this.depthTex.createView(); this.hdrView = this.hdrTex.createView();
     this.bloom = [];
     let bw = w, bh = h;
     for (let i = 0; i < BLOOM_LEVELS; i++) {
       bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
       this.bloom.push(dev.createTexture({ size: [bw, bh], format: HDR, usage: T.RENDER_ATTACHMENT | T.TEXTURE_BINDING }));
     }
+    this.bloomViews = this.bloom.map(t => t.createView());
     const mk = (buf, src, bl) => dev.createBindGroup({ layout: this.bglPost, entries: [
       { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.samp }, { binding: 3, resource: (bl || this.dummy).createView() }] });
     this.downBG = this.bloom.map((t, i) => mk(this.postBufs[i], i === 0 ? this.hdrTex : this.bloom[i - 1]));
@@ -246,72 +248,129 @@ export class Renderer {
   // One frame. f: camera and overlay state; sims: [{ e, frame:[x,y,z,k],
   // refV:[vx,vy,vz, sim time of one frame], opts:[mode, stressMix, bright,
   // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing] }].
-  render(f, sims) {
+  // The stages of a frame, each encoded into enc. draws (optional) picks
+  // the scene draws, for profiling: { sky, surface, part, disk, field,
+  // lines, atmo }.
+  // GPU timestamps for profiling: when this.tsw is set, every pass writes
+  // its begin and end into the next two queries, tagged with a stage name.
+  _tw(stage) {
+    const t = this.tsw; if (!t || t.n + 2 > t.cap) return undefined;
+    const i = t.n; t.n += 2; t.tags.push(stage);
+    return { querySet: t.qs, beginningOfPassWriteIndex: i, endOfPassWriteIndex: i + 1 };
+  }
+  _uniforms(f, sims) {
     const dev = this.dev;
     this.writeCam(f);
     for (const s of sims) {
-      const a = new Float32Array(20);
+      const a = this._instData || (this._instData = new Float32Array(20));
       const m = s.motion || [0, 0, 0.1, 0];
       a.set(s.frame, 0); a.set(s.refV, 4); a.set(s.opts, 8); a.set(s.tint || [0.80, 0.88, 1.0, 1], 12);
-      a.set([m[0], m[1], s.e.fresh ? 1 : m[2], 0], 16);
+      a[16] = m[0]; a[17] = m[1]; a[18] = s.e.fresh ? 1 : m[2]; a[19] = 0;
       s.e.fresh = false;
       dev.queue.writeBuffer(s.e.inst, 0, a);
     }
-    const enc = dev.createCommandEncoder();
-    // ring optical depth
+  }
+  _compute(enc, f, sims) {
     const cur = this.ping = 1 - this.ping;
     enc.clearBuffer(this.grid);
-    {
-      const pass = enc.beginComputePass();
-      pass.setPipeline(this.pSplat); pass.setBindGroup(0, this.bg0[1 - cur]);
-      for (const s of sims) { if (!s.ring) continue; pass.setBindGroup(1, s.e.bgSplat); pass.dispatchWorkgroups(Math.ceil(s.e.sim.np / 64)); }
-      pass.setPipeline(this.pSmooth); pass.setBindGroup(0, this.bg0[1 - cur]);
-      for (const s of sims) { pass.setBindGroup(1, s.e.bgSmooth); pass.dispatchWorkgroups(Math.ceil(s.e.sim.np / 64)); }
-      pass.setPipeline(this.pResolve); pass.setBindGroup(0, this.bg0[1 - cur]); pass.setBindGroup(1, this.resolveBG[cur]);
-      pass.dispatchWorkgroups(Math.ceil(this.gridN / 8), Math.ceil(this.gridN / 8));
-      pass.end();
-    }
-    const bg0 = this.bg0[cur];
-    {
-      const pass = enc.beginRenderPass({
-        colorAttachments: [{ view: this.msaaTex.createView(), resolveTarget: this.hdrTex.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
-        depthStencilAttachment: { view: this.depthTex.createView(), depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' },
-      });
-      pass.setBindGroup(0, bg0);
-      pass.setPipeline(this.pSky); pass.draw(3);
-      pass.setPipeline(this.pSurface); pass.draw(3);
-      pass.setPipeline(this.pPart);
-      for (const s of sims) { pass.setBindGroup(1, s.e.bgPart); pass.draw(6, s.e.sim.N); }
-      if (f.ringOn) { pass.setPipeline(this.pDisk); pass.draw(6); }
-      if (f.fieldMode && f.fieldAlpha > 0) { pass.setPipeline(this.pField); pass.draw(6); }
-      if (this.segCount) { pass.setPipeline(this.pLine); pass.setBindGroup(1, this.segBG); pass.draw(6, this.segCount); }
-      pass.setPipeline(this.pAtmo); pass.draw(3);
-      pass.end();
-    }
-    // bloom
-    const pb = new Float32Array(8);
+    const pass = enc.beginComputePass({ timestampWrites: this._tw('ringCompute') });
+    pass.setPipeline(this.pSplat); pass.setBindGroup(0, this.bg0[1 - cur]);
+    for (const s of sims) { if (!s.ring) continue; pass.setBindGroup(1, s.e.bgSplat); pass.dispatchWorkgroups(Math.ceil(s.e.sim.np / 64)); }
+    pass.setPipeline(this.pSmooth); pass.setBindGroup(0, this.bg0[1 - cur]);
+    for (const s of sims) { pass.setBindGroup(1, s.e.bgSmooth); pass.dispatchWorkgroups(Math.ceil(s.e.sim.np / 64)); }
+    pass.setPipeline(this.pResolve); pass.setBindGroup(0, this.bg0[1 - cur]); pass.setBindGroup(1, this.resolveBG[cur]);
+    pass.dispatchWorkgroups(Math.ceil(this.gridN / 8), Math.ceil(this.gridN / 8));
+    pass.end();
+  }
+  _scene(enc, f, sims, draws) {
+    const on = k => !draws || draws[k];
+    const pass = enc.beginRenderPass({
+      colorAttachments: [{ view: this.msaaView, resolveTarget: this.hdrView, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
+      depthStencilAttachment: { view: this.depthView, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' },
+      timestampWrites: this._tw('scene'),
+    });
+    pass.setBindGroup(0, this.bg0[this.ping]);
+    if (on('sky')) { pass.setPipeline(this.pSky); pass.draw(3); }
+    if (on('surface')) { pass.setPipeline(this.pSurface); pass.draw(3); }
+    if (on('part')) { pass.setPipeline(this.pPart); for (const s of sims) { pass.setBindGroup(1, s.e.bgPart); pass.draw(6, s.e.sim.N); } }
+    if (on('disk') && f.ringOn) { pass.setPipeline(this.pDisk); pass.draw(6); }
+    if (on('field') && f.fieldMode && f.fieldAlpha > 0) { pass.setPipeline(this.pField); pass.draw(6); }
+    if (on('lines') && this.segCount) { pass.setPipeline(this.pLine); pass.setBindGroup(1, this.segBG); pass.draw(6, this.segCount); }
+    if (on('atmo')) { pass.setPipeline(this.pAtmo); pass.draw(3); }
+    pass.end();
+  }
+  _bloom(enc, f) {
+    const dev = this.dev, pb = this._pb || (this._pb = new Float32Array(8));
     let sw = this.W, sh = this.H;
-    for (let i = 0; i < BLOOM_LEVELS; i++) {
-      pb.set([1 / sw, 1 / sh, i === 0 ? (f.bloomThreshold ?? 1.0) : 0, 0.5, 0, 0, 0, 0]);
+    const levels = f.bloom > 0 ? this.bloom.length : 0;
+    for (let i = 0; i < levels; i++) {
+      pb[0] = 1 / sw; pb[1] = 1 / sh; pb[2] = i === 0 ? (f.bloomThreshold ?? 1.0) : 0; pb[3] = 0.5;
       dev.queue.writeBuffer(this.postBufs[i], 0, pb);
       const t = this.bloom[i];
-      const pass = enc.beginRenderPass({ colorAttachments: [{ view: t.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
+      const pass = enc.beginRenderPass({ colorAttachments: [{ view: this.bloomViews[i], loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }], timestampWrites: this._tw('bloom') });
       pass.setPipeline(this.pDown); pass.setBindGroup(0, this.downBG[i]); pass.draw(3); pass.end();
       sw = t.width; sh = t.height;
     }
-    for (let i = BLOOM_LEVELS - 2; i >= 0; i--) {
+    for (let i = levels - 2; i >= 0; i--) {
       const small = this.bloom[i + 1];
-      pb.set([1 / small.width, 1 / small.height, 0, 0, 0, 0, 0, 0]);
+      pb[0] = 1 / small.width; pb[1] = 1 / small.height; pb[2] = 0; pb[3] = 0;
       dev.queue.writeBuffer(this.postBufs[BLOOM_LEVELS + i], 0, pb);
-      const pass = enc.beginRenderPass({ colorAttachments: [{ view: this.bloom[i].createView(), loadOp: 'load', storeOp: 'store' }] });
+      const pass = enc.beginRenderPass({ colorAttachments: [{ view: this.bloomViews[i], loadOp: 'load', storeOp: 'store' }], timestampWrites: this._tw('bloom') });
       pass.setPipeline(this.pUp); pass.setBindGroup(0, this.upBG[i]); pass.draw(3); pass.end();
     }
-    pb.set([1 / this.W, 1 / this.H, 0, 0, f.bloom ?? 0.08, f.exposure ?? 1, f.vignette ?? 0.35, (f.time || 0) % 100]);
-    dev.queue.writeBuffer(this.postBufs[2 * BLOOM_LEVELS], 0, pb);
-    {
-      const pass = enc.beginRenderPass({ colorAttachments: [{ view: this.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
-      pass.setPipeline(this.pFinal); pass.setBindGroup(0, this.finalBG); pass.draw(3); pass.end();
+  }
+  _final(enc, f) {
+    const pb = this._pb || (this._pb = new Float32Array(8));
+    pb[0] = 1 / this.W; pb[1] = 1 / this.H; pb[2] = 0; pb[3] = 0;
+    pb[4] = f.bloom > 0 ? f.bloom : 0; pb[5] = f.exposure ?? 1; pb[6] = f.vignette ?? 0.35; pb[7] = (f.time || 0) % 100;
+    this.dev.queue.writeBuffer(this.postBufs[2 * BLOOM_LEVELS], 0, pb);
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: this.ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }], timestampWrites: this._tw('final') });
+    pass.setPipeline(this.pFinal); pass.setBindGroup(0, this.finalBG); pass.draw(3); pass.end();
+  }
+  // One frame. f: camera and overlay state; sims: [{ e, frame:[x,y,z,k],
+  // refV:[vx,vy,vz, sim time of one frame], opts:[mode, stressMix, bright,
+  // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing] }].
+  render(f, sims) {
+    this._uniforms(f, sims);
+    const enc = this.dev.createCommandEncoder();
+    this._compute(enc, f, sims); this._scene(enc, f, sims); this._bloom(enc, f); this._final(enc, f);
+    this.dev.queue.submit([enc.finish()]);
+  }
+  // The same frame, one submit per stage, each timed to its completion on
+  // the queue (ms). Profiling only: it stalls on the GPU after each stage.
+  async renderTimed(f, sims, draws) {
+    const dev = this.dev, out = {};
+    this._uniforms(f, sims);
+    const run = async (name, fn) => { await dev.queue.onSubmittedWorkDone(); const t0 = performance.now(); const enc = dev.createCommandEncoder(); fn(enc); dev.queue.submit([enc.finish()]); await dev.queue.onSubmittedWorkDone(); out[name] = performance.now() - t0; };
+    await run('ringCompute', enc => this._compute(enc, f, sims));
+    await run('scene', enc => this._scene(enc, f, sims, draws));
+    await run('bloom', enc => this._bloom(enc, f));
+    await run('final', enc => this._final(enc, f));
+    return out;
+  }
+  // GPU time per stage from timestamp queries (needs the device feature
+  // 'timestamp-query'). extra(enc): more passes to time in the same
+  // submit (the sim), tagged through this._tw.
+  async renderGPU(f, sims, draws, extra) {
+    const dev = this.dev;
+    if (!this.tsQS) {
+      this.tsQS = dev.createQuerySet({ type: 'timestamp', count: 64 });
+      this.tsBuf = dev.createBuffer({ size: 64 * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      this.tsRead = dev.createBuffer({ size: 64 * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     }
+    this.tsw = { qs: this.tsQS, n: 0, cap: 64, tags: [] };
+    this._uniforms(f, sims);
+    const enc = dev.createCommandEncoder();
+    if (extra) extra(enc);
+    this._compute(enc, f, sims); this._scene(enc, f, sims, draws); this._bloom(enc, f); this._final(enc, f);
+    const t = this.tsw; this.tsw = null;
+    enc.resolveQuerySet(this.tsQS, 0, t.n, this.tsBuf, 0);
+    enc.copyBufferToBuffer(this.tsBuf, 0, this.tsRead, 0, t.n * 8);
     dev.queue.submit([enc.finish()]);
+    await this.tsRead.mapAsync(GPUMapMode.READ);
+    const v = new BigUint64Array(this.tsRead.getMappedRange().slice(0, t.n * 8)); this.tsRead.unmap();
+    const out = {};
+    for (let i = 0; i < t.tags.length; i++) { const ms = Number(v[2 * i + 1] - v[2 * i]) / 1e6; out[t.tags[i]] = (out[t.tags[i]] || 0) + ms; }
+    return out;
   }
 }

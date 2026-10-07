@@ -238,8 +238,13 @@ fn fs_sky(in: VOut) -> @location(0) vec4f {
   // a faint galactic band
   let gn = normalize(vec3f(0.3, -0.5, 0.81));
   let band = exp(-pow(dot(d, gn) / 0.22, 2.0));
-  let neb = fbm(d * 3.0 + vec3f(2.0));
-  col = col + band * (0.010 + 0.022 * neb) * mix(vec3f(0.55, 0.45, 0.70), vec3f(0.40, 0.55, 0.75), neb);
+  // the band noise only where the band shows (it was the costliest part
+  // of the sky: 5 octaves on every pixel); 3 octaves of value noise
+  if (band > 0.02) {
+    let q = d * 3.0 + vec3f(2.0);
+    let neb = 0.5 * vnoise(q) + 0.25 * vnoise(q * 2.03 + vec3f(1.7, 9.2, 3.1)) + 0.125 * vnoise(q * 4.1 + vec3f(3.3, 1.1, 7.7));
+    col = col + band * (0.010 + 0.022 * neb) * mix(vec3f(0.55, 0.45, 0.70), vec3f(0.40, 0.55, 0.75), neb);
+  }
   // the sun
   let cs = dot(d, cam.sun.xyz);
   col = col + vec3f(1.0, 0.92, 0.80) * (smoothstep(0.99996, 0.99999, cs) * 60.0 + pow(max(cs, 0.0), 900.0) * 1.5 + pow(max(cs, 0.0), 40.0) * 0.04);

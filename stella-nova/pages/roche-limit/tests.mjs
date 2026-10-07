@@ -225,14 +225,16 @@ async function gpuTest() {
   ok('GPU torques = CPU reference', eA < 1e-3, `rms rel err of the angular acceleration ${eA.toExponential(2)}`);
   // two blocks of motion
   for (let b = 0; b < 2; b++) cpu.block(C.dt, P.K_STEP, refC);
-  const enc = device.createCommandEncoder(); gpu.encode(enc, 2, true); device.queue.submit([enc.finish()]);
+  // the 64 steps go in three part-block encodes (24 + 24 + 16), as the page
+  // does at a low time warp (engine.js encodeSteps)
+  for (const [n, sync] of [[24, false], [24, false], [16, true]]) { const enc = device.createCommandEncoder(); gpu.encodeSteps(enc, n, sync); device.queue.submit([enc.finish()]); }
   const rb = await gpu.readback();
   let dx = 0, dv = 0, vs = 0;
   for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) {
     dx = Math.max(dx, Math.abs(rb.body[12 * i + k] - cpu.x[3 * i + k]));
     dv += (rb.body[12 * i + 4 + k] - cpu.v[3 * i + k]) ** 2; vs += cpu.v[3 * i + k] ** 2;
   }
-  ok('GPU = CPU after 2 blocks (64 steps)', dx < 1e-2 && Math.sqrt(dv / vs) < 1e-3, `max |dx| ${dx.toExponential(2)} grain radii, rms rel dv ${Math.sqrt(dv / vs).toExponential(2)}, ref dX ${Math.abs(rb.X[0] - refC.X[0]).toExponential(1)}`);
+  ok('GPU = CPU after 2 blocks (64 steps, encoded as 24 + 24 + 16)', dx < 1e-2 && Math.sqrt(dv / vs) < 1e-3, `max |dx| ${dx.toExponential(2)} grain radii, rms rel dv ${Math.sqrt(dv / vs).toExponential(2)}, ref dX ${Math.abs(rb.X[0] - refC.X[0]).toExponential(1)}`);
   // energy from the GPU readback (cs_potential) against the CPU energy
   { const N3 = N * 3, gx = new Float64Array(N3), gv = new Float64Array(N3), gw = new Float64Array(N3), gm = new Float64Array(N), gp = new Float64Array(N);
     for (let i = 0; i < N; i++) { for (let k = 0; k < 3; k++) { gx[3 * i + k] = rb.body[12 * i + k]; gv[3 * i + k] = rb.body[12 * i + 4 + k]; gw[3 * i + k] = rb.body[12 * i + 8 + k]; } gm[i] = rb.body[12 * i + 7]; gp[i] = rb.grav[8 * i + 3]; }

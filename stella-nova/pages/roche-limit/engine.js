@@ -28,7 +28,7 @@
 //    parameters ......... "setParams("
 //    upload ............. "setState("
 //    first forces ....... "prime()"
-//    blocks ............. "encode("
+//    blocks ............. "encode(", "encodeSteps("
 //    readback ........... "async readback"
 // ============================================================================
 import { NB, K_STEP, KNL, SKIN, R_MAX, PARK } from './physics.js';
@@ -90,7 +90,7 @@ export class SimGPU {
     this.rad = Float32Array.from(rad); this.mass = Float32Array.from(mass);
     for (const buf of [this.bufAcc, this.bufGrav, this.bufLedger, this.bufDiag, this.bufXi[0], this.bufXi[1]]) q.writeBuffer(buf, 0, new Uint8Array(buf.size));
     const z = new Uint32Array(np * NB + np); q.writeBuffer(this.bufNbr[0], 0, z); q.writeBuffer(this.bufNbr[1], 0, z);
-    this.cur = 0; this.synced = true; this.W = 0; this.Llost = [0, 0, 0];
+    this.cur = 0; this.synced = true; this.sIn = 0; this.W = 0; this.Llost = [0, 0, 0];
   }
   // Record one Step entry; returns its byte offset.
   _step(k, dt, cF, frac, drift) {
@@ -132,41 +132,49 @@ export class SimGPU {
   }
   // Encode nBlocks blocks of K steps. sync: end with the half kick, so a
   // readback sees x and v at the same time.
-  encode(enc, nBlocks, sync = false) {
+  encode(enc, nBlocks, sync = false) { this.encodeSteps(enc, nBlocks * this.K, sync); }
+  // Encode nSteps steps, going on from where the last encode stopped in
+  // the current block (this.sIn): a frame can run part of a block, so the
+  // gravity sum (the costly pass) falls on one frame in K / nSteps and the
+  // frame time stays even. The block's gravity sum runs after its K-th step.
+  encodeSteps(enc, nSteps, sync = false) {
     const K = this.K, dt = this.dt;
-    const total = nBlocks * K + (sync ? 1 : 0);
-    if (total > MAX_STEPS) throw new Error('too many steps in one encode');
-    const offs = [];
-    let k = 0;
-    for (let b = 0; b < nBlocks; b++) for (let s = 0; s < K; s++) {
+    if (!(nSteps > 0)) return;
+    if (nSteps + 1 > MAX_STEPS) throw new Error('too many steps in one encode');
+    const offs = [], fr = [];
+    let k = 0, sIn = this.sIn || 0;
+    for (let i = 0; i < nSteps; i++) {
       const cF = this.synced ? 0.5 * dt : dt;
       this.synced = false;
       if (this.ref) this.ref.step(dt);
-      offs.push(this._step(k++, dt, cF, (s + 1) / K, true));
+      offs.push(this._step(k++, dt, cF, (sIn + 1) / K, true));
+      fr.push(sIn);
+      sIn = (sIn + 1) % K;
     }
     let syncOff = -1;
     if (sync && !this.synced) { syncOff = this._step(k++, dt, 0.5 * dt, 0, false); }
     this.dev.queue.writeBuffer(this.bufStep, 0, this.stepData, 0, k * STEP_BYTES);
-    const pass = enc.beginComputePass();
-    let q = 0;
-    for (let b = 0; b < nBlocks; b++) {
-      for (let s = 0; s < K; s++) {
-        const off = offs[q++];
-        this._dispatch(pass, 'kick', this.bg.kick, off, this.N);
-        if ((s + 1) % KNL === 0) this._rebuild(pass, off);
-        this._dispatch(pass, 'forces', this.bg.forces[this.cur], off, this.N);
-      }
-      this._dispatch(pass, 'gravity', this.bg.gravity, null, this.np);
+    // tw: optional timestamp writes (profiling)
+    const pass = enc.beginComputePass(this.tw ? { timestampWrites: this.tw() } : undefined);
+    for (let i = 0; i < nSteps; i++) {
+      const off = offs[i], s = fr[i];
+      this._dispatch(pass, 'kick', this.bg.kick, off, this.N);
+      if ((s + 1) % KNL === 0) this._rebuild(pass, off);
+      this._dispatch(pass, 'forces', this.bg.forces[this.cur], off, this.N);
+      if (s === K - 1) this._dispatch(pass, 'gravity', this.bg.gravity, null, this.np);
     }
     if (syncOff >= 0) { this._dispatch(pass, 'kick', this.bg.kick, syncOff, this.N); this.synced = true; }
     pass.end();
-    this.t += nBlocks * K * dt;
+    this.sIn = sIn;
+    this.t += nSteps * dt;
   }
   // Copy the state out (call after an encode with sync = true, in the same
   // submit or later). Returns f32 arrays: body (12 per row), grav (8 per
   // row), and the f64 ledger totals. The ledger buffer is cleared after the
   // copy, and its sum goes into this.W and this.Llost.
-  async readback() {
+  // potential false: skip the O(N^2) potential pass (phi stays stale; the
+  // result says so with fresh: false).
+  async readback(potential = true) {
     if (this.busy) return null;
     this.busy = true;
     const dev = this.dev, enc = dev.createCommandEncoder();
@@ -177,7 +185,7 @@ export class SimGPU {
       this._dispatch(pass, 'kick', this.bg.kick, off, this.N);
       this.synced = true;
     }
-    this._dispatch(pass, 'potential', this.bg.potential, null, this.np);
+    if (potential) this._dispatch(pass, 'potential', this.bg.potential, null, this.np);
     pass.end();
     const X = this.ref ? this.ref.X.slice() : [0, 0, 0], V = this.ref ? this.ref.V.slice() : [0, 0, 0], t = this.t;
     enc.copyBufferToBuffer(this.bufBody, 0, this.stBody, 0, this.stBody.size);
@@ -199,7 +207,7 @@ export class SimGPU {
     this.stBody.unmap(); this.stGrav.unmap(); this.stLedger.unmap();
     for (let i = 0; i < this.N; i++) { this.Llost[0] += led[4 * i]; this.Llost[1] += led[4 * i + 1]; this.Llost[2] += led[4 * i + 2]; this.W += led[4 * i + 3]; }
     this.busy = false;
-    return { body, grav, X, V, t, W: this.W, Llost: this.Llost.slice(), overflow: this.overflow, listFull: this.listFull };
+    return { body, grav, X, V, t, W: this.W, Llost: this.Llost.slice(), overflow: this.overflow, listFull: this.listFull, fresh: potential };
   }
   // Read the fast acceleration and angular acceleration (tests).
   async readAccs() {

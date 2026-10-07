@@ -62,11 +62,24 @@ const REF_SWEEP = [
   ...[[0.55, 0.135], [0.60, 0.261], [0.65, 0.360], [0.70, 1.0], [0.75, 1.0]].map(([f, y]) => ({ x: f * P.K_FLUID, y, mat: 'cohesive' })),
 ];
 
+// Quality presets. Auto starts at Medium (Low on a phone) and the governor
+// (function governQuality) lowers the render scale, then the bloom, then
+// the steps per frame when frames run long, and raises them back when
+// there is room. The grain count changes only between runs.
+const QUALITY = {
+  high:   { N: 16384, maxPx: 3.6e6, bloom: true, gridN: 1024 },
+  medium: { N: 8192,  maxPx: 1.8e6, bloom: true, gridN: 512 },
+  low:    { N: 4096,  maxPx: 0.9e6, bloom: false, gridN: 512 },
+};
+const Q = { preset: (PHONE_Q.matches || COARSE) ? 'low' : 'medium', scale: 1, bloom: true, win: { n: 0, t0: 0, slow: 0, good: 0 }, cool: 0, note: '' };
+Q.bloom = QUALITY[Q.preset].bloom;
+
 const UI = {
   scen: 'moon', body: 'phobos',
   d: 1.9, peri: 1.6, e: 1, qLog: 0, J2: 0,
   material: 'fluid', mu: 0, coh: 0,
-  N: (PHONE_Q.matches || COARSE) ? 4096 : 16384,
+  N: (PHONE_Q.matches || COARSE) ? 4096 : 8192,
+  quality: 'auto', showFps: false,
   warp: 2, paused: false,
   cam: 'planet', color: 0, field: 0,
   rings: true, hill: true, pred: true, track: true, ringOn: true, blur: false, ringGain: 2,
@@ -77,9 +90,10 @@ let dev = null, ctx = null, ren = null, simCode = null, worker = null;
 let run = null;            // the current run
 let runSerial = 0;
 const pileCache = new Map();
-let gpuMs = 0, gpuPending = false, blocksMax = 8, warpCarry = 0;
+let gpuMs = 0, gpuPending = false, stepsMax = 128, warpCarry = 0;
 let lastT = performance.now(), fps = 60;
 let saverOn = false;
+let profiling = false;
 let bootDone; const bootReady = new Promise(r => { bootDone = r; });
 const workerJobs = new Map(); let jobId = 0;
 
@@ -90,7 +104,8 @@ async function boot() {
   if (!navigator.gpu) return fail(new Error('navigator.gpu is missing'));
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) return fail(new Error('no GPU adapter'));
-  dev = await adapter.requestDevice();
+  // timestamp-query, when the adapter has it, is only used by profile()
+  dev = await adapter.requestDevice({ requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [] });
   dev.lost.then(i => { if (i.reason !== 'destroyed') fail(new Error('GPU device lost: ' + i.message)); });
   dev.addEventListener('uncapturederror', e => { console.error('WebGPU:', e.error.message); });
   const canvas = $('gpu');
@@ -99,12 +114,12 @@ async function boot() {
   ctx.configure({ device: dev, format, alphaMode: 'opaque' });
   const [sc, rc] = await Promise.all([loadSimCode(), loadRenderCode()]);
   simCode = sc;
-  ren = new Renderer(dev, ctx, format, rc, { gridN: (PHONE_Q.matches || COARSE) ? 512 : 1024 });
+  ren = new Renderer(dev, ctx, format, rc, { gridN: QUALITY[Q.preset].gridN });
   worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
   worker.onmessage = e => { const j = workerJobs.get(e.data.id); workerJobs.delete(e.data.id); if (j) j(e.data); };
   worker.onerror = e => console.error('worker:', e.message);
   resize(); window.addEventListener('resize', resize);
-  window.__roche = { state: () => debugState(), ren, cam, UI, camStats, resetCamStats, get run() { return run; } };
+  window.__roche = { state: () => debugState(), ren, cam, UI, camStats, resetCamStats, profile, get run() { return run; }, fps: () => fps, gpuMs: () => gpuMs, cpuMs: () => cpuMs };
   requestAnimationFrame(frame);
   bootDone();
   if (!saverOn) await startRun();
@@ -119,7 +134,7 @@ function resize() {
   const c = $('gpu');
   const dpr = Math.min(window.devicePixelRatio || 1, PHONE_Q.matches ? 1.5 : 2);
   let w = c.clientWidth * dpr, h = c.clientHeight * dpr;
-  const maxPx = PHONE_Q.matches ? 1.6e6 : 3.6e6, k = Math.min(1, Math.sqrt(maxPx / (w * h)));
+  const maxPx = QUALITY[Q.preset].maxPx * Q.scale * Q.scale, k = Math.min(1, Math.sqrt(maxPx / (w * h)));
   w = Math.round(w * k); h = Math.round(h * k);
   c.width = w; c.height = h;
   ren.resize(w, h);
@@ -148,6 +163,9 @@ async function startRun(specIn) {
   const sc = spec.scen || SCENARIOS.find(s => s.key === spec.key);
   if (run) { for (const s of run.sats) s.gpu.destroy(); ren.removeSims(); }
   const two = spec.kind === 'compare';
+  // Auto quality: when the governor has already gone down to its floor
+  // (60% render scale, no bloom), the next run takes half the grains
+  if (UI.quality === 'auto' && Q.scale <= 0.65 && !Q.bloom && UI.N > 4096) { UI.N = UI.N / 2; $('nSel').value = UI.N; Q.note = 'fewer grains for speed'; }
   let N = UI.N;
   if (sc && sc.nScale) N = Math.max(4096, Math.round(N * sc.nScale / 1024) * 1024);
   if (saverOn) N = Math.min(N, run && run.saverN || 8192);
@@ -310,32 +328,43 @@ function setBusy(on, text, frac = 0) {
 }
 
 // ── frame loop ────────────────────────────────────────────────────────────
+let cpuMs = 0;   // main-thread time of one frame (ms, smoothed)
 function frame(now) {
   requestAnimationFrame(frame);
+  const tCpu = performance.now();
+  try { frameBody(now); } finally { cpuMs = 0.9 * cpuMs + 0.1 * (performance.now() - tCpu); }
+}
+function frameBody(now) {
   const dtReal = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   fps = 0.95 * fps + 0.05 / Math.max(dtReal, 1e-3);
-  if (!run || !ren || run.phase === 'init' || run.phase === 'placing') return;
+  if (!run || !ren || run.phase === 'init' || run.phase === 'placing' || profiling) return;
   const cssW = $('gpu').clientWidth, cssH = $('gpu').clientHeight;
   if (cssW < 2 || cssH < 2) return;
   let blocks = 0;
   if (run.phase === 'settle') {
-    if (settleStep(saverOn ? 24 : 12)) { run.phase = 'placing'; placeSats(run.serial); }
+    if (settleStep(Math.max(2, Math.min(saverOn ? 24 : 12, Math.floor(stepsMax / 32))))) { run.phase = 'placing'; placeSats(run.serial); }
   } else if (run.phase === 'orbit' && !UI.paused) {
     // the spiral ends at d1: the drag stops there
     if (run.spec.kind === 'spiral') for (const s of run.sats) if (s.pl.drag > 0 && Math.hypot(...s.ref.X) < run.spec.d1 * s.Rp) { s.pl.drag = 0; s.gpu.setParams(s.C, s.pl, 0); }
-    warpCarry += WARP[warpIndex()];
-    blocks = Math.min(Math.floor(warpCarry), blocksMax);
-    warpCarry -= Math.floor(warpCarry);
-    if (blocks > 0) {
-      const due = now - (run.lastRead || 0) > 240 && run.sats.every(s => !s.gpu.busy && !s.waiting);
+    // steps this frame: the warp in steps (32 per block), carried over
+    // frames, capped by the GPU budget; part blocks are fine
+    // (engine.js encodeSteps), so the load is even from frame to frame
+    warpCarry += WARP[warpIndex()] * 32;
+    const steps = Math.min(Math.floor(warpCarry), stepsMax);
+    warpCarry = Math.min(warpCarry - Math.floor(warpCarry), 1);
+    blocks = steps / 32;
+    // analysis readback once a second; the O(N^2) potential (energy) every
+    // second one
+    const due = now - (run.lastRead || 0) > 1000 && run.sats.every(s => !s.gpu.busy && !s.waiting);
+    if (steps > 0) {
       const enc = dev.createCommandEncoder();
-      for (const s of run.sats) s.gpu.encode(enc, blocks, due);
+      for (const s of run.sats) s.gpu.encodeSteps(enc, steps, due);
       dev.queue.submit([enc.finish()]);
       run.t = run.sats[0].gpu.t;
-      if (due) { run.lastRead = now; for (const s of run.sats) readAndAnalyze(s); }
-    } else if (now - (run.lastRead || 0) > 600 && run.sats.every(s => !s.gpu.busy && !s.waiting)) {
-      run.lastRead = now; for (const s of run.sats) readAndAnalyze(s);
     }
+    if (due) { run.lastRead = now; run.reads = (run.reads || 0) + 1; for (const s of run.sats) readAndAnalyze(s, run.reads % 2 === 1); }
+  } else if (run.phase === 'orbit' && now - (run.lastRead || 0) > 2000 && run.sats.every(s => !s.gpu.busy && !s.waiting)) {
+    run.lastRead = now; run.reads = (run.reads || 0) + 1; for (const s of run.sats) readAndAnalyze(s, true);
   }
   // GPU time of the whole frame (sim + draw)
   const tSub = performance.now();
@@ -345,20 +374,55 @@ function frame(now) {
     dev.queue.onSubmittedWorkDone().then(() => {
       const ms = performance.now() - tSub;
       gpuMs = 0.8 * gpuMs + 0.2 * ms; gpuPending = false;
-      const target = Math.max(1, Math.ceil(WARP[warpIndex()]));
-      if (gpuMs > 26 && blocksMax > 1) blocksMax = Math.max(1, Math.floor(blocksMax * 0.75));
-      else if (gpuMs < 14 && blocksMax < target) blocksMax++;
-      else if (blocksMax > target) blocksMax = target;
+      const target = Math.max(8, Math.ceil(WARP[warpIndex()] * 32));
+      if (gpuMs > 14 && stepsMax > 8) stepsMax = Math.max(8, Math.floor(stepsMax * 0.8));
+      else if (gpuMs < 9 && stepsMax < target) stepsMax += 8;
+      else if (stepsMax > target) stepsMax = target;
     });
   }
+  governQuality(now);
   run.frames++;
   if (run.frames % 15 === 0) refreshReadout(false);
+  if (UI.showFps && run.frames % 20 === 0) $('fpsChip').textContent = `${fps.toFixed(0)} fps · GPU ${gpuMs.toFixed(1)} ms · ${(ren.W * ren.H / 1e6).toFixed(1)} MP · ${Q.preset}${Q.bloom ? '' : ', no bloom'}`;
+}
+// The Auto quality governor, once a second: frames that run long (under
+// 52 fps, or a GPU frame over 15 ms) lower the render scale by 10% (down
+// to 60%), then switch off the bloom, then halve the steps per frame.
+// Three good seconds (59 fps, GPU under 9 ms) step back up. A change waits
+// 2 s for the next one.
+function governQuality(now) {
+  const w = Q.win;
+  if (!w.t0) { w.t0 = now; w.n = 0; }
+  w.n++;
+  if (now - w.t0 < 1000) return;
+  const f = w.n * 1000 / (now - w.t0); w.t0 = now; w.n = 0;
+  if (UI.quality !== 'auto' || now < Q.cool || saverOn && saver && saver.fade < 0.5) return;
+  const slow = f < 52 || gpuMs > 15, good = f >= 59 && gpuMs < 9;
+  w.good = good ? w.good + 1 : 0;
+  if (slow) {
+    if (Q.scale > 0.65) { Q.scale = Math.round((Q.scale - 0.1) * 10) / 10; resize(); }
+    else if (Q.bloom) Q.bloom = false;
+    else stepsMax = Math.max(8, stepsMax >> 1);
+    Q.cool = now + 2000; Q.slowRuns = (Q.slowRuns || 0) + 1;
+  } else if (w.good >= 3) {
+    if (!Q.bloom && QUALITY[Q.preset].bloom) Q.bloom = true;
+    else if (Q.scale < 1) { Q.scale = Math.min(1, Math.round((Q.scale + 0.1) * 10) / 10); resize(); }
+    w.good = 0; Q.cool = now + 2000;
+  }
+}
+// A quality preset: grain count (for the next run), pixel budget, bloom.
+function setQuality(name) {
+  UI.quality = name;
+  Q.preset = name === 'auto' ? ((PHONE_Q.matches || COARSE) ? 'low' : 'medium') : name;
+  const P0 = QUALITY[Q.preset];
+  Q.scale = 1; Q.bloom = P0.bloom; UI.N = P0.N; $('nSel').value = UI.N;
+  resize();
 }
 
-async function readAndAnalyze(s) {
+async function readAndAnalyze(s, potential = true) {
   const serial = run.serial;
   s.waiting = true;
-  const rb = await s.gpu.readback();
+  const rb = await s.gpu.readback(potential);
   if (!rb) { s.waiting = false; return; }
   if (serial !== runSerial) return;
   const res = await workerCall({ type: 'analyze', N: s.N, np: s.gpu.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24, seed: run.frames }, [rb.body.buffer, rb.grav.buffer]);
@@ -370,10 +434,16 @@ function onAnalysis(s, a, rb) {
   ren.setTags(s.e, a.tags);
   const T0 = run.T0, tt = a.t / T0;
   const f = a.M / s.M0;
-  // energy ledger: E - W, relative to |U_self| at the start
-  const ledger = a.E - rb.W;
-  if (s.E0 === null) { s.E0 = ledger; s.Us0 = Math.abs(a.Us); s.L0 = a.L[2]; }
-  const drift = Math.abs(ledger - s.E0) / s.Us0;
+  // energy ledger: E - W, relative to |U_self| at the start; only from a
+  // readback with a fresh potential (every second one)
+  const prevDrift = s.an ? s.an.drift : NaN;
+  let drift = prevDrift;
+  if (rb.fresh) {
+    const ledger = a.E - rb.W;
+    if (s.E0 === null) { s.E0 = ledger; s.Us0 = Math.abs(a.Us); }
+    drift = Math.abs(ledger - s.E0) / s.Us0;
+  }
+  if (s.L0 === null || s.L0 === undefined) s.L0 = a.L[2];
   const Ldrift = (a.L[2] + rb.Llost[2] - s.L0) / Math.abs(s.L0);
   // once the bound mass is small, the centre to follow is that of all grains
   // once the bound mass is small, the camera and the field use the frame
@@ -382,7 +452,7 @@ function onAnalysis(s, a, rb) {
   s.an = { f, live, com: live ? a.com : [0, 0, 0], vcm: live ? a.vcm : [0, 0, 0], rH: live ? a.rH : NaN, comAll: a.comAll, vcmAll: a.vcmAll, spread: a.spread, groups: a.groups, M: a.M, X: a.X, V: a.V, t: a.t, drift, Ldrift, accreted: a.accreted, wall: performance.now() };
   if (run.spec.drag || (s.pl.drag > 0)) s.an.drift = NaN;
   s.hist.push([tt, f]); if (s.hist.length > 2000) s.hist.splice(0, s.hist.length - 2000);
-  if (Number.isFinite(s.an.drift)) { s.ehist.push([tt, Math.max(drift, 1e-12)]); if (s.ehist.length > 2000) s.ehist.splice(0, 1); }
+  if (rb.fresh && Number.isFinite(s.an.drift)) { s.ehist.push([tt, Math.max(drift, 1e-12)]); if (s.ehist.length > 2000) s.ehist.splice(0, 1); }
   // shed-grain conics
   s.frag = [];
   const fr = a.frag;
@@ -675,7 +745,7 @@ function drawFrame(now, cssW, cssH, blocks) {
     GMs: fp ? fp.GMs : 0, GMp: fp ? fp.GMp : 0, omega: fp ? fp.omega : 0, phiL1: fp ? fp.phiL1 : 0,
     fieldMode: fp ? UI.field : 0, fieldExt: fp ? fp.ext : 4, fieldScale: fp ? fp.scale : 1, fieldAlpha: 0.62,
     ringExt: 3.6, ringGain: UI.ringGain, ringBlend: blocks > 0 ? (UI.calm ? 0.94 : Math.min(0.92, 0.6 + 0.08 * blocks)) : 0.97, ringOn: UI.ringOn,
-    exposure: 0.88 * (saverOn ? saverFade(dtReal) : 1), bloom: 0.08, bloomThreshold: 1.0, vignette: 0.32,
+    exposure: 0.88 * (saverOn ? saverFade(dtReal) : 1), bloom: Q.bloom ? 0.08 : 0, bloomThreshold: 1.0, vignette: 0.32,
     grainR: s0.k,   // the mean grain radius (1) in world units
   };
   if (run.spec.key === 'ring' || (saver && saver.longRing)) frame.ringBlend = blocks > 0 ? Math.max(frame.ringBlend, 0.92) : 0.97;
@@ -698,6 +768,7 @@ function drawFrame(now, cssW, cssH, blocks) {
     tint: s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1],
   }));
   if (run.phase === 'settle') for (const s of sims) s.frame = [s.frame[0], s.frame[1], s.frame[2], s.frame[3]];
+  run.lastFrame = { frame, sims };
   ren.render(frame, sims);
   placeLabels(cssW, cssH, fp);
 }
@@ -763,7 +834,7 @@ function refreshReadout(force) {
   $('rdAcc').textContent = s.an ? String(s.an.accreted) : '—';
   $('rdDt').textContent = `${s.C.dt.toExponential(2)} (${Math.round(run.T0 / s.C.dt).toLocaleString()} per orbit)`;
   $('camHint').textContent = cam.fastFollow ? 'The moon goes round faster than 8 degrees per second at this time warp, so the view stays on the orbit centre. Lower the time warp to follow the moon.' : (UI.cam === 'follow' ? 'The view follows the moon, with its direction fixed in space.' : '');
-  $('rdGpu').textContent = `${gpuMs.toFixed(1)} ms · ${blocksMax} blocks max · ${fps.toFixed(0)} fps`;
+  $('rdGpu').textContent = `${gpuMs.toFixed(1)} ms · ${stepsMax} steps max · ${fps.toFixed(0)} fps · ${(ren.W * ren.H / 1e6).toFixed(1)} MP`;
   // gauge: a_tide / g at the surface of the bound mass
   const fB = s.an ? Math.max(s.an.f, 1e-3) : 1;
   const ratio = 2 * spec.q * Math.pow(1 / dNow, 3) * (1 / 1);   // = 2 (M_p/m)(r/d)^3 with rho_s fixed
@@ -834,6 +905,8 @@ function buildUI() {
     const c = $(id); c.checked = UI[key]; c.addEventListener('change', () => { UI[key] = c.checked; });
   }
   $('restartBtn').addEventListener('click', () => startRun());
+  $('qualSel').addEventListener('change', () => setQuality($('qualSel').value));
+  $('tFps').addEventListener('change', () => { UI.showFps = $('tFps').checked; $('fpsChip').classList.toggle('off', !UI.showFps); });
   const setPaused = p => { UI.paused = p; $('pauseBtn').textContent = p ? 'Play' : 'Pause'; $('dockPlay').textContent = p ? '▶' : '❚❚'; $('dockPlay').classList.toggle('on', p); };
   $('pauseBtn').addEventListener('click', () => setPaused(!UI.paused));
   $('dockPlay').addEventListener('click', () => setPaused(!UI.paused));
@@ -866,7 +939,7 @@ function buildUI() {
   bindPointer();
   applyScenario(UI.scen, true);
 }
-function syncWarp() { $('dockWarpV').textContent = WARP[UI.warp] >= 1 ? WARP[UI.warp] + '×' : WARP[UI.warp] ? '¼–½' : '0'; blocksMax = Math.max(blocksMax, 1); $('warpHint').textContent = warpHint(); }
+function syncWarp() { $('dockWarpV').textContent = WARP[UI.warp] >= 1 ? WARP[UI.warp] + '×' : WARP[UI.warp] ? '¼–½' : '0'; stepsMax = Math.max(stepsMax, 8); $('warpHint').textContent = warpHint(); }
 function warpHint() {
   const w = WARP[UI.warp];
   if (!run || !run.sats.length || !w) return w ? '' : 'Paused.';
@@ -969,10 +1042,58 @@ function occlusion(w, h) {
   return o;
 }
 
+// Per-stage GPU time (ms, median of n): each stage is submitted alone and
+// timed to its completion on the queue (onSubmittedWorkDone). The frame
+// loop stops while it runs. Stages: sim blocks (1 and 4), the gravity sum
+// alone, a readback, the worker analysis, then the render stages and each
+// scene draw alone.
+async function profile(n = 7) {
+  profiling = true;
+  await new Promise(r => setTimeout(r, 100));
+  const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
+  const q = dev.queue, s = run.sats[0], g = s.gpu, out = {};
+  const time = async fn => { await q.onSubmittedWorkDone(); const t0 = performance.now(); await fn(); await q.onSubmittedWorkDone(); return performance.now() - t0; };
+  const rep = async (name, fn) => { const a = []; for (let i = 0; i < n; i++) a.push(await time(fn)); out[name] = +med(a).toFixed(2); };
+  await rep('sim 1 block', () => { const e = dev.createCommandEncoder(); for (const x of run.sats) x.gpu.encode(e, 1, false); q.submit([e.finish()]); });
+  await rep('sim 4 blocks', () => { const e = dev.createCommandEncoder(); for (const x of run.sats) x.gpu.encode(e, 4, false); q.submit([e.finish()]); });
+  await rep('gravity sum', () => { const e = dev.createCommandEncoder(); const p = e.beginComputePass(); for (const x of run.sats) x.gpu._dispatch(p, 'gravity', x.gpu.bg.gravity, null, x.gpu.np); p.end(); q.submit([e.finish()]); });
+  await rep('readback', async () => { await g.readback(); });
+  { const a = []; for (let i = 0; i < 3; i++) { const rb = await g.readback(); const t0 = performance.now(); await workerCall({ type: 'analyze', N: s.N, np: g.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24 }, [rb.body.buffer, rb.grav.buffer]); a.push(performance.now() - t0); } out['analysis (worker, CPU)'] = +med(a).toFixed(2); }
+  const { frame, sims } = run.lastFrame;
+  if (dev.features.has('timestamp-query')) {
+    // GPU timestamps: the sim steps of one frame at the current warp, and
+    // a gravity block, then each render stage, all in one submit
+    const steps = Math.max(1, Math.round(WARP[warpIndex()] * 32));
+    const runs = [];
+    for (let i = 0; i < n; i++) runs.push(await ren.renderGPU(frame, sims, null, enc => {
+      for (const x of run.sats) { x.gpu.tw = () => ren._tw('sim ' + steps + ' steps'); x.gpu.encodeSteps(enc, steps, false); x.gpu.tw = null; }
+      for (const x of run.sats) { const sIn = x.gpu.sIn; x.gpu.tw = () => ren._tw('sim 1 block (32 steps + gravity)'); x.gpu.encodeSteps(enc, 32 - 0, false); x.gpu.tw = null; void sIn; }
+    }));
+    for (const k of Object.keys(runs[0])) out['GPU ' + k] = +med(runs.map(x => x[k] || 0)).toFixed(3);
+    out['GPU frame at this warp'] = +med(runs.map(x => Object.entries(x).filter(([k]) => !k.startsWith('sim 1 block')).reduce((a, [, v]) => a + v, 0))).toFixed(3);
+    for (const d of ['sky', 'surface', 'part', 'disk', 'field', 'lines', 'atmo']) {
+      const a = []; for (let i = 0; i < n; i++) a.push((await ren.renderGPU(frame, sims, { [d]: true })).scene);
+      out['GPU scene: ' + d + ' alone'] = +med(a).toFixed(3);
+    }
+  }
+  const st = []; for (let i = 0; i < n; i++) st.push(await ren.renderTimed(frame, sims));
+  for (const k of Object.keys(st[0])) out['render ' + k] = +med(st.map(x => x[k])).toFixed(2);
+  for (const d of ['sky', 'surface', 'part', 'disk', 'field', 'lines', 'atmo']) {
+    const a = []; for (let i = 0; i < n; i++) a.push((await ren.renderTimed(frame, sims, { [d]: true })).scene);
+    out['scene: ' + d + ' alone'] = +med(a).toFixed(2);
+  }
+  { const a = []; for (let i = 0; i < n; i++) a.push((await ren.renderTimed(frame, sims, {})).scene); out['scene: empty pass'] = +med(a).toFixed(2); }
+  { const t0 = performance.now(); for (let i = 0; i < 20; i++) buildSegments(ren.W / $('gpu').clientWidth); out['CPU buildSegments'] = +((performance.now() - t0) / 20).toFixed(2); }
+  { const t0 = performance.now(); for (let i = 0; i < 10; i++) refreshReadout(false); out['CPU readout + plots'] = +((performance.now() - t0) / 10).toFixed(2); }
+  out.canvas = `${ren.W}x${ren.H}`; out.N = run.sats.map(x => x.N).join('+'); out.field = UI.field; out.warp = WARP[warpIndex()];
+  profiling = false;
+  return out;
+}
+
 function debugState() {
   if (!run) return null;
   return {
-    phase: run.phase, scen: UI.scen, cam: Object.assign({}, camStats, { prev: undefined }), calm: UI.calm, warp: WARP[warpIndex()], t: run.t, T0: run.T0, orbits: run.t / run.T0, gpuMs, blocksMax, fps,
+    phase: run.phase, scen: UI.scen, quality: { preset: Q.preset, scale: Q.scale, bloom: Q.bloom, stepsMax, px: ren.W * ren.H }, cam: Object.assign({}, camStats, { prev: undefined }), calm: UI.calm, warp: WARP[warpIndex()], t: run.t, T0: run.T0, orbits: run.t / run.T0, gpuMs, stepsMax, fps,
     sats: run.sats.filter(s => s.ref).map(s => ({ N: s.N, mat: s.matName, f: s.an && s.an.f, drift: s.an && s.an.drift, Ldrift: s.an && s.an.Ldrift, groups: s.an && s.an.groups, accreted: s.an && s.an.accreted, overflow: s.gpu.overflow, d: Math.hypot(...satState(s).r) / s.Rp })),
   };
 }

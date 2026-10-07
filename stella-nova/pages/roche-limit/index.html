@@ -67,6 +67,7 @@
 
 <canvas id="gpu"></canvas>
 <div id="labels" aria-hidden="true"></div>
+<div id="fpsChip" class="off" aria-live="off"></div>
 <div id="busy" class="off"><div class="busy-t" id="busyT">Settling the rubble pile</div><div class="busy-bar"><span id="busyBar"></span></div></div>
 <div id="nogpu" class="off">
   <h2>WebGPU is not available</h2>
@@ -138,6 +139,8 @@
   <div class="hint" id="warpHint"></div>
 
   <div class="sec-label">View</div>
+  <div class="row"><label><span class="w">quality</span></label><select id="qualSel"><option value="auto">Auto</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+  <div class="toggles"><label><input type="checkbox" id="tFps"> Show frame rate</label></div>
   <div class="seg3" id="cams"><button data-c="planet">Planet</button><button data-c="top">Top-down</button><button data-c="follow">Follow moon</button></div>
   <div class="hint" id="camHint"></div>
   <div class="sec-sub">Grain colour</div>

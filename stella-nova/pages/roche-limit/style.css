@@ -124,6 +124,12 @@ body.panel-closed #legend{left:20px}
 #nogpu h2{font-family:var(--sci-serif);font-weight:500;font-size:1.4rem}
 #nogpu p{max-width:520px;color:var(--dim);font-size:0.86rem;line-height:1.6}
 
+#fpsChip{position:fixed;left:calc(var(--panel-w) + 14px);top:12px;z-index:26;padding:3px 8px;border-radius:6px;background:rgba(3,5,10,0.6);
+  font:0.7rem var(--sci-mono);color:var(--dim);pointer-events:none}
+body.panel-closed #fpsChip{left:60px}
+#fpsChip.off{display:none}
+html.sn-saver #fpsChip{display:none}
+
 /* LABELS: names on the Roche circles and at L1 */
 #labels{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
 .lbl{position:absolute;left:0;top:0;font-size:0.72rem;white-space:nowrap;padding:1px 6px;border-radius:4px;background:rgba(3,5,10,0.55);
