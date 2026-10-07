@@ -61,7 +61,7 @@ w.SN_NAV = [
     ] }
   ] },
   { id: "community", label: "Community & Tools", short: "Community", icon: "☉", color: "#64dcc8", color2: "#64c8f0", groups: [
-    { h: null, p: [
+    { h: "From the Community", p: [
       ["fortom", "For Tom", null, "for-tom"],
       ["starward-belt", "Starward Belt", "MAP"]
     ] },
@@ -125,8 +125,12 @@ w.SN_NAV = [
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
     { h: "Flow", p: [
       ["fluidlab", "Stable Fluids", "GPU"],
-      ["wind-tunnel", "Wind Tunnel", "CFD"],
-      ["tidal-currents", "Tidal Currents", "DATA"],
+      ["wind-tunnel", "Wind Tunnel", "CFD"]
+    ] },
+    { h: "Earth & Ocean", p: [
+      ["tidal-currents", "Tidal Currents", "DATA"]
+    ] },
+    { h: "Shock Waves", p: [
       ["nuclear-blast", "Nuclear Blast Effects", "3D"]
     ] },
     { h: "Navier–Stokes", p: [
@@ -227,7 +231,7 @@ w.SN_NAV = [
     ] }
   ] },
   { id: "language", label: "Language", short: "Language", icon: "❝", color: "#f2d16b", color2: "#7ee0c3", groups: [
-    { h: null, p: [
+    { h: "Writing", p: [
       ["lose-the-modifier", "Lose the Modifier", "WORDS"]
     ] }
   ] },
