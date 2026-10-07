@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Context Free — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT FREE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Context Free renders pictures from a context-free design grammar (CFDG).
+   The engine is Context Free by Mark Lentczner and John Horigan, from CFDG
+   by Chris Coyne (GPL-2.0-or-later, see COPYING and CREDITS.txt). cf.wasm
+   is that engine, compiled with Emscripten by engine/build.sh from the
+   upstream source (engine/UPSTREAM) and two small patches. The page code
+   is our own and has the same licence.
+
+   FILES
+     cf.js, cf.wasm   the engine (built by engine/build.sh; see engine/BUILD)
+     engine/          the corresponding source: upstream tarball, patches,
+                      shim/cfweb.cpp (our C API), build.sh
+     engine.js        the JavaScript API of cf.wasm (no DOM)
+     variation.js     the variation codes (A .. ZZZ)
+     worker.js        one engine in a module worker
+     client.js        render lanes: a queue per worker, cancel = terminate
+     designs.js       the gallery list; designs/ holds the .cfdg files
+     highlight.js     CFDG syntax colours and the code editor
+     main.js          the page: gallery, editor, render controls, view
+     saver.js         window.snSaver: the screensaver tour
+     tests.mjs        node tests of the engine and the API
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops the frame loop when the shell swaps pages
+     2. style.css, then lib/sci.css (Inter and STIX Two Text)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left with four tabs (#tabGallery, #tabCode,
+                 #tabRender, #tabAbout). #desk fills the rest. #view is one
+                 canvas over the desk; the art sits in the clear part.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base. #panel is a bottom sheet (portrait) or
+                 a drawer at the right (landscape). The art fits in the
+                 part of #desk that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'       the canvas size and the clear area
+     grep -n 'function draw'         one frame of the view
+     grep -n 'function render'       a render of the current source
+     grep -n 'function openDesign'   load a gallery design
+     grep -n 'function buildGallery' the thumbnails
+     grep -n 'function setTab'       the panel tabs
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Context Free in the browser: the real Context Free engine by Mark Lentczner and John Horigan, compiled to WebAssembly. A gallery of the example designs with variations, a CFDG editor with live render, tiles, animation, and PNG and SVG export.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Context Free</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="desk">
+  <canvas id="view" aria-label="The rendered design. Drag to pan, wheel or pinch to zoom, double-click to fit."></canvas>
+  <div id="bar" hidden><i></i></div>
+  <div id="caption"></div>
+  <div id="status" role="status"></div>
+  <div class="deskbtns">
+    <button id="stopBtn" hidden title="Stop the render (Esc)">Stop</button>
+    <button id="fitBtn" hidden title="Fit the art to the view (0)">Fit</button>
+  </div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="Gallery" class="on" aria-selected="true">Gallery</button>
+    <button role="tab" data-tab="Code" aria-selected="false">Code</button>
+    <button role="tab" data-tab="Render" aria-selected="false">Render</button>
+    <button role="tab" data-tab="About" aria-selected="false">About</button>
+  </div>
+
+  <div class="design">
+    <div class="dname"><b id="dTitle">…</b><span id="dSrc"></span></div>
+    <div class="varrow">
+      <label for="varInp">Variation</label>
+      <input id="varInp" type="text" maxlength="6" autocomplete="off" spellcheck="false" autocapitalize="characters" aria-label="Variation code">
+      <button id="varGo" title="Render this variation (Enter)">Go</button>
+      <button id="varNew" class="acc" title="A new random variation (V)">New variation ↻</button>
+    </div>
+  </div>
+
+  <section id="tabGallery" role="tabpanel">
+    <p class="hint">The example designs of Context Free, a few from its test suite, and two of ours. Each thumbnail is a live render. The same grammar gives a new picture for each variation code.</p>
+    <div id="gallery" class="thumbs"></div>
+  </section>
+
+  <section id="tabCode" role="tabpanel" hidden>
+    <div class="coderow">
+      <button id="runBtn" class="acc" title="Render the code (Ctrl+Enter or Cmd+Enter)">Render ▶</button>
+      <button id="liveBtn" class="on" title="Render again when you stop typing">Live</button>
+      <button id="revertBtn" title="Back to the design as it was loaded">Revert</button>
+      <button id="saveCfdg" title="Save the code as a .cfdg file">Save .cfdg</button>
+    </div>
+    <div id="editor"></div>
+    <ul id="diags" aria-live="polite"></ul>
+    <details class="primer" id="primer">
+      <summary>CFDG in five minutes</summary>
+      <div class="pbody">
+        <p>A design is a set of <b>shapes</b> and the <b>rules</b> that draw them. Rendering starts from the <code>startshape</code>. Each rule draws primitives (<code>CIRCLE</code>, <code>SQUARE</code>, <code>TRIANGLE</code>) and calls other shapes, often itself.</p>
+<pre class="ex">startshape SPIRAL
+shape SPIRAL {
+  CIRCLE [ ]
+  SPIRAL [ y 1.2 s 0.95 r 12 ]
+}</pre>
+        <p>The part in <code>[ ]</code> is an <b>adjustment</b>, applied to the shape before it is drawn: <code>x</code> and <code>y</code> move, <code>s</code> scales, <code>r</code> rotates (degrees), <code>flip</code> mirrors, <code>skew</code> shears. Colour is <code>h</code> (hue), <code>sat</code>, <code>b</code> (brightness) and <code>a</code> (alpha). Use <code>[[ ]]</code> to apply the parts in the order you write them.</p>
+        <p>The recursion stops by itself: when a shape gets smaller than about 0.3 pixel, the renderer drops it. That is why a rule can call itself with <code>s 0.95</code> and still finish.</p>
+        <p>A shape can have more than one rule. Each time it is drawn, one rule is picked at random, by <b>weight</b>:</p>
+<pre class="ex">shape BRANCH
+rule 9 { SQUARE [ ] BRANCH [ y 1 s 0.97 r 3 ] }
+rule 1 { BRANCH [ r 30 ] BRANCH [ r -30 flip 90 ] }</pre>
+        <p>The <b>variation code</b> (A to ZZZ) seeds every random pick, so the same code always gives the same picture. <b>New variation</b> picks a new code.</p>
+        <p>More: <code>loop 12 [ r 30 ] { … }</code> repeats with a growing adjustment; <code>path</code> draws your own outlines with <code>MOVETO</code>, <code>LINETO</code>, <code>ARCTO</code>, then <code>FILL</code> or <code>STROKE</code>; <code>CF::Background = [ b -1 ]</code> sets a black background; <code>CF::Tile = [ s 10 ]</code> makes a tiled design; <code>CF::Time</code> with <code>ftime()</code> makes an animation.</p>
+        <p>The full language: the <a href="https://github.com/MtnViewJohn/context-free/wiki" target="_blank" rel="noopener">Context Free wiki</a>: <a href="https://github.com/MtnViewJohn/context-free/wiki/Shape-Rules" target="_blank" rel="noopener">rules</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Shape-Adjustments" target="_blank" rel="noopener">adjustments</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Primitive-Shapes" target="_blank" rel="noopener">primitives</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Path-Declarations" target="_blank" rel="noopener">paths</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Control-Flow" target="_blank" rel="noopener">loops and if</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Expressions" target="_blank" rel="noopener">expressions</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Configuration-Variables" target="_blank" rel="noopener">CF:: settings</a>, <a href="https://github.com/MtnViewJohn/context-free/wiki/Tiled-Rendering" target="_blank" rel="noopener">tiles</a>. Thousands of designs by other people are in the <a href="https://www.contextfreeart.org/gallery/" target="_blank" rel="noopener">contextfreeart.org gallery</a>.</p>
+      </div>
+    </details>
+  </section>
+
+  <section id="tabRender" role="tabpanel" hidden>
+    <div class="row2"><label class="nm" for="sizeSel">Size</label>
+      <select id="sizeSel" aria-label="Render size">
+        <option value="fit" selected>Fit the view</option>
+        <option value="600">600 × 600</option>
+        <option value="1200">1200 × 1200</option>
+        <option value="2400">2400 × 2400</option>
+        <option value="4096">4096 × 4096</option>
+      </select></div>
+    <div class="row2"><label class="nm" for="maxSel">Max shapes</label>
+      <select id="maxSel" aria-label="Maximum shapes">
+        <option value="50000">50 000</option>
+        <option value="200000">200 000</option>
+        <option value="500000" selected>500 000</option>
+        <option value="1000000">1 000 000</option>
+        <option value="2000000">2 000 000</option>
+      </select></div>
+    <div class="prm"><div class="nm">Minimum shape size</div><span class="val" id="minV"></span>
+      <input type="range" id="minSize" min="0.1" max="3" step="0.1" value="0.3" aria-label="Minimum shape size in pixels"></div>
+    <div class="row2"><label class="nm" for="borderSel">Border</label>
+      <select id="borderSel" aria-label="Border">
+        <option value="2" selected>Variable (default)</option>
+        <option value="1">8 px</option>
+        <option value="0">None</option>
+        <option value="-1">Crop 8 px</option>
+      </select></div>
+    <div class="row2"><label class="nm" for="bgSel">Background</label>
+      <select id="bgSel" aria-label="Background">
+        <option value="" selected>From the design</option>
+        <option value="CF::Background = [b 1]">White</option>
+        <option value="CF::Background = [b -1]">Black</option>
+        <option value="CF::Background = [b 1 a -1]">Transparent</option>
+      </select></div>
+    <p class="hint" id="bgHint" hidden>A background override is a define (the <code>-D</code> of the command line), so it needs CFDG 3 syntax. This design is in the older CFDG 2 syntax and keeps its own background.</p>
+    <div class="btns">
+      <button id="aaBtn" class="on" title="Antialiased edges">Antialiasing</button>
+    </div>
+    <div id="tileSec">
+      <div class="sec-label">Tiles</div>
+      <div class="seg four" id="tileSeg">
+        <button data-t="1">1 ×</button><button data-t="2">2 ×</button><button data-t="3" class="on">3 ×</button><button data-t="4">4 ×</button>
+      </div>
+      <p class="hint">A design with <code>CF::Tile</code> repeats with no seam. This is the tile multiplier of the command line (<code>-T</code>).</p>
+    </div>
+    <div id="animSec">
+      <div class="sec-label">Animation</div>
+      <div class="btns">
+        <button id="animBtn" class="on" title="Play the animation of a design with CF::Time">Animate</button>
+        <button id="playBtn" title="Pause or play (Space)">Pause</button>
+      </div>
+      <div class="row2"><label class="nm" for="framesSel">Frames</label>
+        <select id="framesSel" aria-label="Frames">
+          <option value="24">24</option><option value="48" selected>48</option><option value="96">96</option>
+        </select></div>
+      <div class="prm"><div class="nm">Frame rate</div><span class="val" id="fpsV"></span>
+        <input type="range" id="fps" min="4" max="30" step="1" value="15" aria-label="Frames per second"></div>
+      <p class="hint" id="animHint">A design that uses <code>CF::Time</code> or <code>ftime()</code> renders frame by frame, as the <code>-a</code> option of the command line.</p>
+    </div>
+    <div class="sec-label">Export</div>
+    <div class="btns">
+      <button id="xPng" title="The render as PNG">PNG</button>
+      <button id="xSvg" title="The design as SVG (the engine's SVG canvas)">SVG</button>
+      <button id="xLink" title="Copy a link to this design and variation">Copy link</button>
+    </div>
+    <p class="hint" id="xHint"></p>
+  </section>
+
+  <section id="tabAbout" role="tabpanel" hidden>
+    <div class="about">
+      <p><b>Context Free</b> draws pictures from a grammar. You write shapes and rules; the program expands them, largest first, until they are too small to see. It is by <b>Mark Lentczner</b> and <b>John Horigan</b>, based on <b>CFDG</b> (the Context Free Design Grammar) by <b>Chris Coyne</b>. Home: <a href="https://www.contextfreeart.org/" target="_blank" rel="noopener">contextfreeart.org</a>. Source: <a href="https://github.com/MtnViewJohn/context-free" target="_blank" rel="noopener">github.com/MtnViewJohn/context-free</a>.</p>
+      <p>This page runs the real engine: the C++ source of Context Free 3.4.3 (commit <code>8cbef6e</code>), compiled to WebAssembly with Emscripten. Our shim replaces the command-line front end, the PNG writer and the file system with a small C API, and two patches add a time tick (for live progress in a web worker) and an antialiasing switch. Every render, variation and SVG comes from the engine; the page only shows the pixels.</p>
+      <p>Context Free © 2005–2026 Mark Lentczner and John Horigan. CFDG © 2005 Chris Coyne. Anti-Grain Geometry © 2002–2006 Maxim Shemanarev. Random distributions from LLVM libc++ © 2009–2015 the LLVM team (MIT / UIUC). All under the <a href="COPYING" target="_blank" rel="noopener">GNU General Public License, version 2 or later</a>, except the libc++ part. Full credits: <a href="CREDITS.txt" target="_blank" rel="noopener">CREDITS.txt</a>.</p>
+      <p>Source of this build: the upstream tarball, our patches, the shim and the build script are in <a href="engine/UPSTREAM" target="_blank" rel="noopener">engine/</a> next to this page (<a href="engine/build.sh" target="_blank" rel="noopener">build.sh</a>, <a href="engine/BUILD" target="_blank" rel="noopener">BUILD</a>). The page code is GPL-2.0-or-later too.</p>
+      <p>The gallery has the example designs that ship with Context Free, five designs from its test suite (tiles, a frieze, a wallpaper group, time), and two designs of ours. Designs from the contextfreeart.org gallery belong to their authors, each under its own licence, and are not copied here.</p>
+    </div>
+  </section>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockPrev" aria-label="Previous design">‹</button>
+  <button id="dockVar" class="name" aria-label="New variation"><span id="dockName">…</span><i>↻</i></button>
+  <button id="dockNext" aria-label="Next design">›</button>
+  <button id="dockCode" aria-label="Code">{ }</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
