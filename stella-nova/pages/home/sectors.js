@@ -200,7 +200,6 @@ const BLURBS = {
   'sdf-solids': '78 signed-distance solids, glass to gold.',
   'liquid-metal': 'Chrome blobs that melt and merge.',
   'sdf-lab': 'Model with distance fields, Forge style.',
-  img2threejs: 'Everyday objects rebuilt in code from one drawing.',
   explosion: 'The game’s explosion effects.',
   flare: 'Engine plumes and thruster flares.',
   'tidal-currents': 'Real tidal current data, animated.',

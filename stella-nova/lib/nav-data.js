@@ -327,7 +327,6 @@ w.SN_NAV = [
       ["line-art", "Line Art", "RUST"]
     ] },
     { h: "Image to 3D", p: [
-      ["img2threejs", "Image to Three.js", "3D"],
       ["image-worlds", "Image Worlds", "3D"]
     ] }
   ] }
@@ -364,7 +363,7 @@ w.SN_NAV = [
 // Pages that may start a WebXR session (VR or AR). The shell gives their
 // iframe allow="xr-spatial-tracking". Without it, a page in the shell cannot
 // ask for a session. tools/nav-sync.js checks that each key is registered.
-w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'forge', 'attractorlab', 'resonance-3d', 'img2threejs'];
+w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'forge', 'attractorlab', 'resonance-3d'];
 
 // Craft Suite pages (lib/craft-host.js). Each one holds an upstream app in a
 // child iframe. The shell gives their iframe allow="fullscreen;

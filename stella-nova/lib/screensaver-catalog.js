@@ -170,7 +170,6 @@ window.SN_SAVER_CATALOG = {
     'branched-flow': { tier: 3, default: true, hook: true, note: 'Seeded look per run: palette, field shape, start time, camera;' },
     'orbs': { tier: 3, default: true, hook: true, note: 'Grid of 66 small WebGPU canvases;' },
     'voxel': { tier: 2, default: true, hook: true, note: 'Already an autopilot: fly mode cruises a planned loop (loop() stella-nova/pages/voxel-flythrough/main.js:652).' },
-    'img2threejs': { tier: 3, default: true, hook: true, note: 'On-demand: loop() (stella-nova/pages/img2threejs/main.js:281) renders only when S.dirty or controls.update() returns true, so idle is static.' },
     'mandelbulber': { tier: 'excluded', note: 'Port of code we did not write; the home page leaves it out too.' },
     'shan-shui': { tier: 'excluded', note: 'Port of code we did not write; the home page leaves it out too.' },
     'markov-junior': { tier: 'excluded', note: 'Port of code we did not write; the home page leaves it out too.' },
