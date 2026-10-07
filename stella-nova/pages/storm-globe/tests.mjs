@@ -2,6 +2,8 @@
 //  STORM GLOBE  ·  tests.mjs
 // ----------------------------------------------------------------------------
 //    node tests.mjs           parsers (fixtures/), GRIB2, pack, sample
+//    deno run -A tests.mjs    the same, plus the GPU solver tests in
+//                             tests-solver.mjs (Deno has navigator.gpu)
 //  No test fetches a live source: every input is a file in fixtures/.
 //
 //  grep -n targets: "section('", "function check"
@@ -136,6 +138,13 @@ section('Committed sample snapshot (data/sample/)');
   check('at least one storm with a track and a forecast', meta.storms.some(s => s.track.length > 1 && s.forecast.length > 1));
 }
 
+// ── GPU solver (Deno) ────────────────────────────────────────────────────
+let gpuNote = '';
+if (typeof navigator !== 'undefined' && navigator.gpu) {
+  const { runSolverTests } = await import('./tests-solver.mjs');
+  await runSolverTests({ section, check, near });
+} else gpuNote = '  (GPU solver tests skipped: no navigator.gpu; run deno run -A tests.mjs)';
+
 // ── summary ──────────────────────────────────────────────────────────────
-console.log(`\n${pass} passed, ${fail} failed`);
+console.log(`\n${pass} passed, ${fail} failed${gpuNote}`);
 if (fail) process.exitCode = 1;
