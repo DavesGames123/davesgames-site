@@ -116,6 +116,9 @@ w.SN_NAV = [
     { h: "Anatomy", p: [
       ["human-skull", "Human Skull", "3D"],
       ["human-skeleton", "Human Skeleton", "3D"]
+    ] },
+    { h: "Deep Time", p: [
+      ["ancient-earth", "Ancient Earth", "3D"]
     ] }
   ] },
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [

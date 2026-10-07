@@ -72,7 +72,7 @@ const SECTOR_TEXT = {
   quantum: { at: [565, 82], tilt: 30, lead: 'orbital',
     blurb: 'Atoms and qubits: hydrogen orbitals in 3D, two atoms that share an electron, and quantum circuits that encode and decode data and images.' },
   life: { at: [730, 165], tilt: -40, lead: 'protein-viewer',
-    blurb: 'Real protein structures, a chain that folds, and a human skull and skeleton you can pull apart.' },
+    blurb: 'Real protein structures, a chain that folds, a human skull and skeleton you can pull apart, and the Earth itself through 540 million years of drifting continents.' },
   fluids: { at: [890, 95], tilt: 10, lead: 'fluidlab',
     blurb: 'Stable fluids, a wind tunnel, real tidal currents, and the Navier-Stokes equations from 1D to the open blowup question.' },
   fields: { at: [375, 290], tilt: 40, lead: 'magnetlab',
