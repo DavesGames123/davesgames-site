@@ -6,10 +6,20 @@
 //  direction u_sun (toward the sun); light travels along L = -u_sun.
 //
 //  WAVES. A height field on a SIM x SIM half-float texture (r height,
-//  g velocity) steps the discrete wave equation at a fixed rate:
-//    v += 2 (mean of 4 neighbours - h);  v *= damp;  h += v
+//  g velocity) steps the discrete wave equation:
+//    v += K (mean of 4 neighbours - h);  v *= damp;  h += v
 //  Clamp-to-edge sampling makes the walls reflect. Drops add a cosine bump
 //  (rain: many small ones, swell: a few wide soft ones, or a tap).
+//  SPEED (waveSteps). Two controls set how fast the water moves:
+//    wave speed s (0..1) ... K = 2 s^2, so the ripples go s times the
+//                            speed of K = 2 (WAVE_V0 m/s at time scale 1).
+//                            damp = 1 - (1 - damp0) s keeps the decay per
+//                            metre; the drop height times sqrt(s) keeps
+//                            the mean wave height (less decay per second).
+//    time scale T .......... the steps run at 120 T Hz and the drops come
+//                            T times as often: all motion is slower.
+//  The caustic pass reads the height field each frame, so at any speed
+//  the caustics are those of the waves on the screen.
 //
 //  CAUSTICS (the photon grid). A G x G grid of photons covers the water.
 //  The vertex shader refracts the sun ray at each grid point through the
@@ -39,8 +49,13 @@
 //                                            flatten }
 //    CAUS_SRC ..... the caustic fragment shader source (the saver plate
 //                   shows an extract of it)
+//    SIM_SRC ...... the wave step shader source (also on the plate)
+//    waveSteps .... (s, T, mode) -> { k, damp, rate, drop, drops, v }
+//    WAVE_V0 ...... ripple speed in m/s at s = 1, T = 1
+//    indexAt, camera  (also used by the node tests)
 //    draw(o): o = { dt, cam, shift, sun, depth, n, dn, mode, amp, rays,
-//                   exposure, fade }
+//                   exposure, fade, wspeed, tscale }
+//      wspeed 0..1 (1: the old speed), tscale >= 0: see SPEED above
 //      cam = { yaw, pitch, dist, ty }  orbit about (0, ty, 0)
 //      shift = [sx, sy]  NDC shift of the centre (clear band of the plate)
 //      sun = { el, az } radians;  mode 'rain' | 'swell' | 'calm'
@@ -53,12 +68,12 @@ const NM = [650, 550, 450];
 // ── shaders ─────────────────────────────────────────────────────────────────
 const SIM_FS = `#version 300 es
 precision highp float;
-in vec2 v_uv; uniform sampler2D u_s; uniform vec2 u_px; uniform float u_damp; out vec4 o;
+in vec2 v_uv; uniform sampler2D u_s; uniform vec2 u_px; uniform float u_damp, u_k; out vec4 o;
 void main(){
   vec4 c = texture(u_s, v_uv);
   float avg = 0.25 * (texture(u_s, v_uv + vec2(u_px.x, 0.0)).r + texture(u_s, v_uv - vec2(u_px.x, 0.0)).r
                     + texture(u_s, v_uv + vec2(0.0, u_px.y)).r + texture(u_s, v_uv - vec2(0.0, u_px.y)).r);
-  c.g += (avg - c.r) * 2.0;
+  c.g += (avg - c.r) * u_k;
   c.g *= u_damp;
   c.r += c.g;
   c.r *= 0.9995;
@@ -118,6 +133,21 @@ void main(){
 }`;
 
 export const CAUS_SRC = CAUS_FS;
+export const SIM_SRC = SIM_FS;
+
+// The ripple speed at K = 2 and time scale 1, in m/s (the pool is 2 m
+// wide, SIM / 2 cells a metre): the discrete wave goes sqrt(K / 4) cells
+// a step, at 120 steps a second.
+export const WAVE_V0 = Math.sqrt(2 / 4) * 120 / 128;
+
+// The step parameters for a wave speed s (0..1) and a time scale T.
+//   k: coupling, damp: velocity factor each step, rate: steps a second,
+//   drop: factor on the drop height, drops: factor on the drop rate
+export function waveSteps(s, T, mode) {
+  s = Math.max(0.01, Math.min(1, s)); T = Math.max(0, T);
+  const damp0 = mode === 'swell' ? 0.997 : 0.993;
+  return { k: 2 * s * s, damp: 1 - (1 - damp0) * s, rate: 120 * T, drop: Math.sqrt(s), drops: T, v: WAVE_V0 * s * T };
+}
 
 // Shading of the pool and the sky, shared by the view passes.
 const SCENE_GLSL = `
@@ -397,23 +427,22 @@ export function createPool3D(gl, caps, opt = {}) {
     draw(o) {
       const dt = Math.min(0.1, o.dt || 0.016);
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
-      // waves: auto drops, then fixed steps at 120 Hz
-      const amp = o.amp ?? 1;
+      // waves: auto drops, then fixed steps at 120 T Hz
+      const amp = (o.amp ?? 1), ws = waveSteps(o.wspeed ?? 1, o.tscale ?? 1, o.mode), ah = amp * ws.drop;
       if (o.mode === 'rain') {
-        rainAcc += dt * 14;
-        while (rainAcc >= 1) { rainAcc--; queue.push([Math.random() * 2 - 1, Math.random() * 2 - 1, 0.025 + Math.random() * 0.03, (Math.random() < 0.5 ? -1 : 1) * 0.012 * amp]); }
+        rainAcc += dt * 14 * ws.drops;
+        while (rainAcc >= 1) { rainAcc--; queue.push([Math.random() * 2 - 1, Math.random() * 2 - 1, 0.025 + Math.random() * 0.03, (Math.random() < 0.5 ? -1 : 1) * 0.012 * ah]); }
       } else if (o.mode === 'swell') {
-        swellAcc += dt * 3.0;
-        while (swellAcc >= 1) { swellAcc--; queue.push([Math.random() * 2 - 1, Math.random() * 2 - 1, 0.07 + Math.random() * 0.06, (Math.random() < 0.5 ? -1 : 1) * 0.022 * amp]); }
+        swellAcc += dt * 3.0 * ws.drops;
+        while (swellAcc >= 1) { swellAcc--; queue.push([Math.random() * 2 - 1, Math.random() * 2 - 1, 0.07 + Math.random() * 0.06, (Math.random() < 0.5 ? -1 : 1) * 0.022 * ah]); }
       }
       while (queue.length) {
         const [x, z, r, s] = queue.shift();
         simPass(pDrop, p => { gl.uniform3f(p.u.u_drop, x, z, r); gl.uniform1f(p.u.u_str, s); });
       }
-      const damp = o.mode === 'swell' ? 0.997 : 0.993;
-      acc += dt * 120;
+      acc += dt * ws.rate;
       let steps = 0;
-      while (acc >= 1 && steps < 6) { acc--; steps++; simT += 1 / 120; simPass(pSim, p => { gl.uniform2fv(p.u.u_px, px); gl.uniform1f(p.u.u_damp, damp); }); }
+      while (acc >= 1 && steps < 6) { acc--; steps++; simT += 1 / 120; simPass(pSim, p => { gl.uniform2fv(p.u.u_px, px); gl.uniform1f(p.u.u_damp, ws.damp); gl.uniform1f(p.u.u_k, ws.k); }); }
       if (acc > 3) acc = 0;
 
       // light

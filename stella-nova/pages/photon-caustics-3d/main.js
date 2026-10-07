@@ -9,9 +9,13 @@
 //  or saver plate covers. frame() shifts the projection centre there and
 //  widens the field of view, so the pool is centred in that part.
 //
-//  SAVER. window.snSaver plays pool shots with camera moves, sun moves and
-//  wave modes, shuffled by the seed. A shot holds 7 to 10 s (calm 0 to 1)
-//  and cuts through black.
+//  SLOW WAVES. S.q.ws (wave speed, 0..1 of the old speed) and S.q.ts (time
+//  scale) go to pool3d.waveSteps. The defaults WS0 and TS0 make the water
+//  move at about a fifth of the old speed.
+//
+//  SAVER. window.snSaver plays calm pool shots with slow camera moves, sun
+//  moves and wave modes, shuffled by the seed. A shot holds 7 to 10 s
+//  (calm 0 to 1) and cuts through black.
 //
 //  GREP MAP
 //     grep -n 'function clearRect'   the part of the canvas that shows
@@ -22,7 +26,7 @@
 //     grep -n 'const SHOTS'          the saver shots
 //     grep -n 'window.snSaver'       the screensaver hook
 // ============================================================================
-import { createPool3D, CAUS_SRC } from './pool3d.js';
+import { createPool3D, CAUS_SRC, SIM_SRC, WAVE_V0 } from './pool3d.js';
 import { floatCaps } from './gl.js';
 import { typeset } from '../../lib/sci-math.js';
 
@@ -35,13 +39,15 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
 const ease = u => u * u * (3 - 2 * u);
 const CAM0 = { yaw: 0.6, pitch: 0.85, dist: 2.8, ty: -0.35 };
+// the default wave speed and time scale: 0.3 x 0.6 = 0.18 of the old speed
+const WS0 = 0.3, TS0 = 0.6;
 
 const canvas = $('gl'), panel = $('panel');
 const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
 
 const S = {
   playing: true,
-  q: { el: 58, az: 135, depth: 1, amp: 1, n: 1.333, dn: 0.02, exp: 1, mode: 'rain', rays: false },
+  q: { el: 58, az: 135, depth: 1, amp: 1, n: 1.333, dn: 0.02, exp: 1, mode: 'rain', rays: false, ws: WS0, ts: TS0 },
   cam: { ...CAM0 },
   saver: null, last: 0,
 };
@@ -63,7 +69,8 @@ function clearRect() {
       else l = Math.max(0, pr.right - cr.left);
     }
     const dock = $('dock');
-    if (dock.offsetParent) { const dr = dock.getBoundingClientRect(); if (dr.top < cr.bottom - 1) b = Math.max(b, cr.bottom - dr.top); }
+    // the dock is position: fixed, so offsetParent is null: test the box
+    if (dock.getClientRects().length) { const dr = dock.getBoundingClientRect(); if (dr.top < cr.bottom - 1) b = Math.max(b, cr.bottom - dr.top); }
   }
   // a panel never leaves less than a third of the canvas (the saver
   // plate band can be smaller: about 240 px of 800)
@@ -93,16 +100,17 @@ function frame(now) {
   if (S.saver && S.saver.band) tv *= 0.55;
   pool.draw({ dt: S.playing ? dt : 0, cam: { ...S.cam, fov: 2 * Math.atan(tv) }, shift,
     sun: { el: q.el * DEG, az: q.az * DEG }, depth: q.depth, n: q.n, dn: q.dn,
-    mode: S.playing ? q.mode : 'calm', amp: q.amp, rays: q.rays, exposure: q.exp, fade });
+    mode: S.playing ? q.mode : 'calm', amp: q.amp, rays: q.rays, exposure: q.exp, fade, wspeed: q.ws, tscale: q.ts });
   if (!S.saver && now - (S.capAt || 0) > 400) {
     S.capAt = now;
-    $('caption').innerHTML = `<i>Pool</i> · sun <span class="n">${q.el.toFixed(0)}°</span> · depth <span class="n">${q.depth.toFixed(2)}</span>`;
+    $('caption').innerHTML = `<i>Pool</i> · sun <span class="n">${q.el.toFixed(0)}°</span> · depth <span class="n">${q.depth.toFixed(2)}</span> · ripples <span class="n">${(WAVE_V0 * q.ws * q.ts).toFixed(2)}</span> m/s`;
   }
 }
 
 // ── controls ────────────────────────────────────────────────────────────────
 const SLIDERS = [['el', 'el', v => v.toFixed(1) + '°'], ['az', 'az', v => v.toFixed(0) + '°'], ['depth', 'depth', v => v.toFixed(2)],
-  ['amp', 'amp', v => v.toFixed(2)], ['n3', 'n', v => v.toFixed(3)], ['dn3', 'dn', v => v.toFixed(3)], ['exp3', 'exp', v => v.toFixed(2)]];
+  ['amp', 'amp', v => v.toFixed(2)], ['n3', 'n', v => v.toFixed(3)], ['dn3', 'dn', v => v.toFixed(3)], ['exp3', 'exp', v => v.toFixed(2)],
+  ['ws', 'ws', v => (WAVE_V0 * v).toFixed(2) + ' m/s'], ['ts', 'ts', v => v.toFixed(2) + '×']];
 const MODES = { rain: 'Rain', swell: 'Swell', calm: 'Calm' };
 
 function syncSliders() { for (const [id, k, f] of SLIDERS) { $(id).value = S.q[k]; $(id + 'V').textContent = f(S.q[k]); } }
@@ -121,6 +129,7 @@ const splash = () => pool.drop((Math.random() - 0.5) * 1.2, (Math.random() - 0.5
 
 function bindUI() {
   for (const [id, k, f] of SLIDERS) $(id).addEventListener('input', () => { S.q[k] = +$(id).value; $(id + 'V').textContent = f(S.q[k]); });
+  $('slowBtn').addEventListener('click', () => { S.q.ws = WS0; S.q.ts = TS0; syncSliders(); });
   document.querySelectorAll('#waveSeg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
   $('raysBtn').addEventListener('click', () => setRays(!S.q.rays));
   $('splashBtn').addEventListener('click', splash);
@@ -224,34 +233,42 @@ function bindPanel() {
 
 // ── equations ───────────────────────────────────────────────────────────────
 const TEX = {
+  w3: String.raw`v\leftarrow\gamma\left(v+K(\bar h-h)\right),\quad h\leftarrow h+v,\quad K=2s^2`,
   t3: String.raw`\mathbf{T}=\eta\,\mathbf{L}+\left(\eta\cos\theta_i-\cos\theta_t\right)\mathbf{N},\qquad \eta=\frac{1}{n}`,
   e3: String.raw`E=E_0\,T_F(\theta_i)\,\frac{|dA_0|}{|dA|}`,
-  w3: String.raw`v\leftarrow\gamma\left(v+2(\bar h-h)\right),\qquad h\leftarrow h+v`,
 };
 const EQ_TEXT = {
-  t3: 'T = η L + (η cos θi − cos θt) N,  η = 1/n', e3: 'E = E₀ T_F(θi) |dA₀| / |dA|', w3: 'v ← γ(v + 2(h̄ − h)),  h ← h + v',
+  t3: 'T = η L + (η cos θi − cos θt) N,  η = 1/n', e3: 'E = E₀ T_F(θi) |dA₀| / |dA|', w3: 'v ← γ(v + K(h̄ − h)),  h ← h + v,  K = 2s²',
 };
 function renderMath() { ['t3', 'e3', 'w3'].forEach((k, i) => typeset($(['eqA', 'eqB', 'eqC'][i]), TEX[k], { rules: RULES })); }
 
 // ── screensaver ─────────────────────────────────────────────────────────────
 // A shot: camera from-to [yaw, pitch, dist, ty], sun from-to [el, az]
 // (degrees, az added to a seeded bearing), waves, photon paths, dispersion.
+// The moves are calm: small camera and sun turns, and slow water (ws, ts
+// default to WS0, TS0). code: 'sim' shows the wave step on the plate.
 const SHOTS = [
-  { name: 'The net of light', sub: 'Each wave crest is a weak lens; where it focuses at the floor, a bright line', cam: [[0, 0.95, 2.9, -0.35], [0.35, 0.85, 2.5, -0.4]], sun: [[58, 0], [58, 15]], mode: 'rain' },
-  { name: 'On the floor', sub: 'Close in: the folds of the light sheet, as lines and cusps', cam: [[0, 1.25, 2.0, -0.85], [0.15, 1.3, 1.35, -0.9]], sun: [[70, 0], [70, 10]], mode: 'rain' },
-  { name: 'Low sun', sub: 'A low sun stretches the net and the wall throws a long shadow', cam: [[0, 0.62, 2.9, -0.35], [-0.3, 0.6, 2.7, -0.4]], sun: [[30, 0], [24, 20]], mode: 'rain' },
-  { name: 'Photon paths', sub: 'Each ray from the sun bends at the surface, by Snell’s law, toward the floor', cam: [[0, 0.42, 3.1, -0.3], [0.3, 0.46, 2.9, -0.35]], sun: [[55, -20], [55, 20]], mode: 'swell', rays: true },
-  { name: 'Colour fringes', sub: 'Each colour has its own index: the lines split into colour at their edges', cam: [[0, 1.3, 1.5, -0.9], [0.1, 1.32, 1.15, -0.95]], sun: [[62, 0], [62, 8]], mode: 'rain', dn: 0.09 },
-  { name: 'High noon', sub: 'The sun nearly overhead: no wall shadow, the whole floor in play', cam: [[0, 1.0, 2.6, -0.4], [0.4, 1.05, 2.3, -0.45]], sun: [[85, 0], [84, 30]], mode: 'rain' },
+  { name: 'The net of light', sub: 'Each wave crest is a weak lens; where it focuses at the floor, a bright line', cam: [[0, 0.95, 2.9, -0.35], [0.18, 0.9, 2.65, -0.38]], sun: [[58, 0], [58, 8]], mode: 'rain' },
+  { name: 'On the floor', sub: 'Close in: the folds of the light sheet, as lines and cusps', cam: [[0, 1.25, 1.9, -0.85], [0.08, 1.28, 1.55, -0.88]], sun: [[70, 0], [70, 5]], mode: 'rain' },
+  { name: 'Low sun', sub: 'A low sun stretches the net and the wall throws a long shadow', cam: [[0, 0.62, 2.9, -0.35], [-0.15, 0.61, 2.8, -0.38]], sun: [[30, 0], [27, 10]], mode: 'rain' },
+  { name: 'Photon paths', sub: 'Each ray from the sun bends at the surface, by Snell’s law, toward the floor', cam: [[0, 0.42, 3.1, -0.3], [0.15, 0.44, 3.0, -0.33]], sun: [[55, -10], [55, 10]], mode: 'swell', rays: true },
+  { name: 'Colour fringes', sub: 'Each colour has its own index: the lines split into colour at their edges', cam: [[0, 1.3, 1.5, -0.9], [0.05, 1.31, 1.3, -0.92]], sun: [[62, 0], [62, 4]], mode: 'rain', dn: 0.09 },
+  { name: 'High noon', sub: 'The sun nearly overhead: no wall shadow, the whole floor in play', cam: [[0, 1.0, 2.6, -0.4], [0.2, 1.02, 2.45, -0.42]], sun: [[85, 0], [84, 15]], mode: 'rain' },
+  { name: 'A slow swell', sub: 'Long soft waves at a slow pace: the net of light drifts', cam: [[0, 0.8, 2.8, -0.4], [0.12, 0.78, 2.6, -0.42]], sun: [[50, 0], [52, 8]], mode: 'swell', ws: 0.22, ts: 0.5, code: 'sim' },
+  { name: 'Nearly still', sub: 'The water almost stops; the caustics hold their shape and creep', cam: [[0, 1.15, 2.2, -0.7], [0.06, 1.17, 2.0, -0.72]], sun: [[64, 0], [64, 4]], mode: 'rain', ws: 0.12, ts: 0.35, code: 'sim' },
 ];
 
 function saverPlate() {
   const sv = S.saver; if (!sv || !sv.label || !sv.shot) return;
-  const sh = sv.shot, q = S.q, f = (v, d = 3) => Number(v).toFixed(d), body = CAUS_SRC.slice(CAUS_SRC.indexOf('float area'));
-  sv.label({ title: 'Pool Caustics 3D · ' + sh.name, sub: sh.sub, tex: [TEX.e3, TEX.t3], rules: RULES, eq: [EQ_TEXT.e3, EQ_TEXT.t3],
+  const sh = sv.shot, q = S.q, f = (v, d = 3) => Number(v).toFixed(d);
+  const code = sh.code === 'sim'
+    ? { lang: 'glsl', name: 'pool3d.js · one wave step', text: SIM_SRC.slice(SIM_SRC.indexOf('void main')).trim() }
+    : { lang: 'glsl', name: 'pool3d.js · caustic area ratio', text: CAUS_SRC.slice(CAUS_SRC.indexOf('float area')).trim() };
+  sv.label({ title: 'Pool Caustics 3D · ' + sh.name, sub: sh.sub, tex: sh.code === 'sim' ? [TEX.w3, TEX.e3] : [TEX.e3, TEX.t3], rules: RULES,
+    eq: sh.code === 'sim' ? [EQ_TEXT.w3, EQ_TEXT.e3] : [EQ_TEXT.e3, EQ_TEXT.t3],
     params: [{ sym: '\\theta_s', name: 'sun height', value: f(q.el, 0) + '°' }, { sym: 'd', name: 'depth', value: f(q.depth, 2) },
-      { sym: 'n', name: 'index of water', value: f(q.n) }, { sym: '\\Delta n', name: 'index split (shown large)', value: f(q.dn) }],
-    code: { lang: 'glsl', name: 'pool3d.js · caustic area ratio', text: body.trim() } });
+      { sym: 'n', name: 'index of water', value: f(q.n) }, { sym: 'v', name: 'ripple speed', value: f(WAVE_V0 * q.ws * q.ts, 2) + ' m/s' }],
+    code });
 }
 
 function nextShot(now) {
@@ -261,6 +278,7 @@ function nextShot(now) {
   sv.shot = sh; sv.t0 = now;
   sh.yaw0 = sv.rnd() * Math.PI * 2; sh.az0 = sv.rnd() * 360;
   S.q.mode = sh.mode; S.q.rays = !!sh.rays; S.q.dn = sh.dn ?? 0.02; S.q.depth = 1; S.q.amp = 1; S.q.n = 1.333; S.q.exp = 1;
+  S.q.ws = sh.ws ?? WS0; S.q.ts = sh.ts ?? TS0;
   saverPlate();
 }
 
