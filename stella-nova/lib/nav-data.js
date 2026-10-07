@@ -143,7 +143,8 @@ w.SN_NAV = [
       ["biot-savart", "Biot–Savart Law", "NEW"],
       ["maxwell", "Maxwell's Equations", "NEW", "maxwells-equations"],
       ["twenty-to-four", "Twenty to Four", "NEW"],
-      ["smith-chart", "Smith Chart", "NEW"]
+      ["smith-chart", "Smith Chart", "NEW"],
+      ["antenna-fields", "Antenna Fields", "NEW"]
     ] },
     { h: "Optics", p: [
       ["diffraction", "Aperture Diffraction", "NEW", "diffraction-lab"],
