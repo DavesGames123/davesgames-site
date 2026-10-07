@@ -37,6 +37,14 @@ jobs:
       - name: Write storm-globe snapshot
         run: node stella-nova/pages/storm-globe/tools/snapshot.mjs
         continue-on-error: true
+      # Market Forecast: IEX HIST real trades (T+1, IEX cited). The browser
+      # cannot read IEX files, so this step builds data/live/iex.json. It
+      # reads only sessions the deployed snapshot does not have yet. A
+      # failure keeps the committed sample (the step writes nothing).
+      - name: Write market-forecast IEX snapshot
+        run: node stella-nova/pages/market-forecast/tools/snapshot.mjs --max-days 1 --budget-min 25 --streams 6
+        timeout-minutes: 30
+        continue-on-error: true
       # The Craft Suite pages host upstream web builds that are not in git.
       # Download the pinned release zips and check each sha256.
       - name: Fetch pinned Craft builds
