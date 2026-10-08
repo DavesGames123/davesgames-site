@@ -50,7 +50,8 @@
 //    turns each wheel forward to 0 as it passes.
 //
 //  TIMELINE. A job is a list of actions (set, lift, turn, shift, clear, rev).
-//  plan(U, actions) gives timed events in seconds at 1x; at(plan, t) gives
+//  plan(U, actions) gives timed events in seconds at 1x (an action may
+//  carry dur, and each event keeps ai, its index in actions); at(plan, t) gives
 //  the pose of every part at time t. Planners for the operations
 //  (add, sub, mul, div, sqrt) write the action lists.
 //
@@ -73,8 +74,8 @@ export const UNITS = [
 export const unit = id => UNITS.find(u => u.id === id) || UNITS[0];
 
 // crank angles (degrees in one turn)
-export const TOOTH0 = 10, TOOTH_P = 7, WIN = 6;
-export const CNT_DRIVE = 20, CNT_CARRY = 75, RES_CARRY = 80;
+export const TOOTH0 = 10, TOOTH_P = 9, WIN = 6;
+export const CNT_DRIVE = 20, CNT_CARRY = 75, RES_CARRY = 92;
 export const SUB_REARM = 340;      // the subtraction carry slide goes down again
 export const RESET_LAG = 3, RESET_W = 10, ARM_W = 5;
 // durations at 1x (s)
@@ -94,21 +95,21 @@ export function geo(U) {
   const pitch = 360 / (U.NR + U.NC - 1);
   const Rb = U.dia / 2;
   const RS = 17 * k;                              // station shafts
-  const gear = { root: 1.9, tip: 2.6, w: 1.4, n: 10, hub: 1.25, sq: 0.62 };
+  const gear = { root: 1.6, tip: 2.7, w: 1.4, n: 10, hub: 1.25, sq: 0.62 };
   const drumR = RS - gear.tip - 0.25, toothR = RS - gear.root - 0.15;
   const Lp = 3.6 * kv, y0 = y(12);                 // setting levels
   const levelY = s => y0 + s * Lp;
   const TW = 1.4;                                  // tooth segment height
   // result wheels and the counter wheels in the carriage
   const sh = Math.sin(pitch / 2 * Math.PI / 180);
-  const RW = 21 * k, hlw = 2.2, rw = Math.min(3, (RW - hlw) * sh - 0.6);
+  const RW = 20.3 * k, hlw = 1.6, rw = Math.min(3, (RW - hlw) * sh - 0.6);
   const hlc = 1.5, rc = 1.8, RCw = hlc + 2.1 / sh;
   const RQ = RCw - hlc - 1.4;                      // counter stations
   const cpin = { root: 1.3, tip: 1.9, w: 1.0 };
   const hubR = RQ - cpin.tip - 0.25, hubTooth = RQ - cpin.root - 0.15;
   const A0 = (U.NS - 1) * pitch / 2;               // the sliders centre on the front (a = 0)
   return {
-    k, kv, pitch, Rb, RS, gear, drumR, toothR, Lp, y0, levelY, TW, A0,
+    k, kv, pitch, Rb, Rc: Rb - 1.8, RS, gear, drumR, toothR, Lp, y0, levelY, TW, A0,
     shell: { y0: y(4), y1: y(56), t: 1.6 * k, slotY0: y(9.4), slotY1: y(47.2), slotW: 1.7 },
     base: { y0: 0, y1: y(4) },
     sleeve: { y0: y(8.4), y1: y(46.6), lift: Lp / 2 },
@@ -117,7 +118,7 @@ export function geo(U) {
     core: { r: 5 * k, y0: y(5), disc0: y(48.8), disc1: y(51.0) },
     hub: { r: hubR, tooth: hubTooth, y0: y(51.0), y1: y(55.9), drive: [y(51.6), y(52.6)], ccarry: [y(53.4), y(54.4)], cidle: y(54.95), detent: [y(55.0), y(55.8)] },
     deck: { y0: y(56), y1: y(58), dog: y(58) },
-    car: { y0: y(59.2), plate1: y(60.2), wheelY: y(66.6), cwheelY: y(66.8), top0: y(70), top1: y(71.6), lift: 2.6 },
+    car: { y0: y(59.2), plate1: y(60.2), wheelY: y(66.6), cwheelY: y(66.8), top0: y(70.6), top1: y(71.6), lift: 2.6 },
     RW, rw, hlw, RCw, rc, hlc, RQ, cpin,
     crank: { y0: y(72), boss1: y(76), arm1: y(79), r: 21 * k, knob1: y(92), lift: Lp / 2, shaftR: 2.1 },
     stationAz: p => A0 - p * pitch,
@@ -225,34 +226,34 @@ export function plan(U, actions, start = null, steps = []) {
   let s = start ? copyState(start) : initState(U), t = 0, step = 0;
   const ev = [];
   let carries = 0, turns = 0, overR = 0;
-  for (const A of actions) {
+  actions.forEach((A, ai) => {
     if (A.step != null) step = A.step;
-    const e = { a: A.a, t0: t, s: copyState(s), step, A };
+    const e = { a: A.a, t0: t, s: copyState(s), step, A, ai };
     if (A.a === 'set') {
       const to = typeof A.v === 'number' ? digitsOf(A.v, U.NS) : A.v.slice();
-      if (to.every((d, i) => d === s.S[i])) continue;
-      e.to = to; e.dur = DUR.set; s.S = to;
+      if (to.every((d, i) => d === s.S[i])) return;
+      e.to = to; e.dur = A.dur || DUR.set; s.S = to;
     } else if (A.a === 'lift') {
-      if (A.up === s.up) continue;
+      if (A.up === s.up) return;
       e.dur = DUR.lift; e.up = A.up; s.up = A.up;
     } else if (A.a === 'rev') {
-      if (A.on === s.rev) continue;
+      if (A.on === s.rev) return;
       e.dur = DUR.rev; e.on = A.on; s.rev = A.on;
     } else if (A.a === 'turn') {
       const T = turnPlan(s, U);
-      e.T = T; e.dur = DUR.turn; e.turn = turns++;
+      e.T = T; e.dur = A.dur || DUR.turn; e.turn = turns++;
       carries += T.carries; overR += T.overflowR;
       s.R = T.R1; s.C = T.C1; s.st = T.st1; s.cq = T.cq1; s.turns++;
     } else if (A.a === 'shift') {
       const to = Math.max(0, Math.min(U.NC - 1, A.to));
-      if (to === s.c) continue;
+      if (to === s.c) return;
       e.from = s.c; e.to = to; e.dur = 2 * DUR.shiftLift + DUR.shiftStep * (Math.abs(to - s.c) + 0.5); s.c = to;
     } else if (A.a === 'clear') {
       e.dur = 2 * DUR.clearLift + DUR.clearSweep;
       s.R = s.R.map(() => 0); s.C = s.C.map(() => 0);
-    } else continue;
+    } else return;
     ev.push(e); t += e.dur;
-  }
+  });
   return { U, G: geo(U), events: ev, T: t, end: copyState(s), steps, carries, turns, overflow: overR };
 }
 function findEvent(ev, t) {
