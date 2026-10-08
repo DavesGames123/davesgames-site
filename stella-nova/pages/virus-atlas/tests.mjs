@@ -23,6 +23,8 @@
 //   14  tube spline: passes through every bead of a run, breaks at chain
 //       ends and gaps; burial and chain fraction in range
 //   15  subunit blobs: every bead inside its ellipsoid; axes orthogonal
+//   16  lattice cage: icosahedron nodes on the 5-, 3- and 2-fold axes;
+//       subunit nets with one node per unit and no lonely nodes
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -39,6 +41,7 @@ const K = await import(join(HERE, 'pack.js'));
 const CO = await import(join(HERE, 'colors.js'));
 const TR = await import(join(HERE, 'trace.js'));
 const BL = await import(join(HERE, 'blobs.js'));
+const CG = await import(join(HERE, 'cage.js'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.log('  FAIL ' + msg); } };
@@ -380,6 +383,44 @@ for (const id of ids) {
 {
   const J = BL.jacobi3([4, 1, 0, 3, 0, 2]), tr = J.val.reduce((a, v) => a + v, 0);
   ok(near(tr, 9, 1e-9) && J.val.every(v => v > 1.3 && v < 4.7), 'jacobi3: eigenvalues keep the trace');
+}
+
+// ── 16 lattice cage ──────────────────────────────────────────────────────
+section('16 lattice cage');
+{
+  const u3 = v => { const l = Math.hypot(...v); return [v[0] / l, v[1] / l, v[2] / l]; };
+  const onAxis = (p, axes, o) => axes.filter(a => a.order === o).some(a => Math.abs(Math.abs(u3(p)[0] * a.dir[0] + u3(p)[1] * a.dir[1] + u3(p)[2] * a.dir[2]) - 1) < 1e-6);
+  for (const e of icosa) {
+    const ops = opsOf(e.pdb), ax = S.axesOf(ops), R = 20, c = CG.icosaCage(ax, R);
+    const V = c.nodes.filter(q => q.kind === 5), T = c.nodes.filter(q => q.kind === 3), W2 = c.nodes.filter(q => q.kind === 2);
+    const deg = new Array(c.nodes.length).fill(0);
+    c.edges.forEach(([i, j]) => { deg[i]++; deg[j]++; });
+    ok(V.length === 12 && T.length === 20 && W2.length === 30, e.pdb + ' icosahedron: 12 vertices, 20 faces, 30 edge nodes');
+    ok(V.every(q => onAxis(q.p, ax, 5)) && T.every(q => onAxis(q.p, ax, 3)) && W2.every(q => onAxis(q.p, ax, 2)), e.pdb + ' vertices on 5-fold, faces on 3-fold, edge nodes on 2-fold axes');
+    ok(c.edges.length === 30 && deg.slice(0, 12).every(v => v === 5), e.pdb + ' 30 edges, 5 at each vertex');
+    // each edge's midpoint points down a 2-fold axis
+    ok(c.edges.every(([i, j]) => onAxis([c.nodes[i].p[0] + c.nodes[j].p[0], c.nodes[i].p[1] + c.nodes[j].p[1], c.nodes[i].p[2] + c.nodes[j].p[2]], ax, 2)), e.pdb + ' every edge midpoint on a 2-fold axis');
+    ok(c.nodes.every(q => near(Math.hypot(...q.p), R, 1e-6)), e.pdb + ' cage nodes on the sphere of radius R');
+    const d = D[e.pdb], nc = d.info.chains.length, keep = d.info.chains.map(ch => d.info.entities[ch[2]].role === 'main');
+    const net = CG.unitNet(S.unitCentroids(d, ops), nc, keep), nk = keep.filter(Boolean).length;
+    const dg = new Array(net.nodes.length).fill(0);
+    net.edges.forEach(([i, j]) => { dg[i]++; dg[j]++; });
+    ok(net.nodes.length === 60 * nk && dg.every(v => v >= 1), e.pdb + ' subunit net: ' + net.nodes.length + ' nodes (60 x ' + nk + '), ' + net.edges.length + ' edges, none alone');
+  }
+  for (const [id, n, look] of [['4UDV', 2130, 'rod'], ['3J3Q', 1356, 'cone'], ['7LNA', 60, 'fibril']]) {
+    const d = D[id], ops = F.copyOps(d.info, id === '7LNA' ? 60 : undefined), nc = d.info.chains.length;
+    const keep = d.info.chains.map(ch => d.info.entities[ch[2]].role === 'main');
+    const net = CG.unitNet(S.unitCentroids(d, ops), nc, keep);
+    const dg = new Array(net.nodes.length).fill(0);
+    net.edges.forEach(([i, j]) => { dg[i]++; dg[j]++; });
+    console.log('  ' + id + ' ' + look + ': ' + net.nodes.length + ' nodes, ' + net.edges.length + ' edges, mean degree ' + (2 * net.edges.length / net.nodes.length).toFixed(2));
+    ok(net.nodes.length === n && dg.every(v => v >= 1), id + ' ' + look + ' net: ' + n + ' nodes, none alone');
+  }
+  // a fibril net joins each layer to the next: edges along the axis
+  const d7 = D['7LNA'], o7 = F.copyOps(d7.info, 60), n7 = CG.unitNet(S.unitCentroids(d7, o7), 1, [true]);
+  ok(n7.edges.every(([i, j]) => Math.abs(i - j) === 1), '7LNA net joins each layer to the next one only');
+  const sp = CG.unitNet(new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 5, 1, 0, 5]), 2, [true, true], { perCopy: true });
+  ok(sp.nodes.length === 2 && near(sp.nodes[0].p[0], 0.5, 1e-9) && sp.nodes[1].unit === 2, 'per-copy nodes: the mean of a copy, moved by its first unit');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
