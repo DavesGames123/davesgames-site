@@ -55,15 +55,20 @@ export function installSaver(api) {
 
   // ── the plant buffer ─────────────────────────────────────────────────────
   function feed() {
-    while (S && S.inflight < AHEAD && S.plants.length + S.inflight < BUF) {
+    // BUF counts the plants not shown yet, so new plants keep coming for
+    // the whole run. Shown plants go when the list passes BUF + 6.
+    while (S && S.inflight < AHEAD && S.plants.filter(q => !q.shown).length + S.inflight < BUF) {
       const seed = S.seeds[S.si++ % S.seeds.length];
       S.inflight++;
       api.pool.paint(seed, { prio: 2, tag: 'saver' }).then(p => {
         if (!S) return;
         S.inflight--;
         S.plants.push({ p, shown: 0 });
-        const old = S.plants.findIndex(q => q.shown > 0);
-        if (S.plants.length > BUF + 6 && old >= 0) S.plants.splice(old, 1);
+        while (S.plants.length > BUF + 6) {
+          const old = S.plants.findIndex(q => q.shown > 0);
+          if (old < 0) break;
+          S.plants.splice(old, 1);
+        }
         feed();
         if (!S.shot && S.phase === 'wait') direct();
       }).catch(() => { if (S) { S.inflight--; setTimeout(feed, 200); } });
@@ -97,7 +102,7 @@ export function installSaver(api) {
     }
     const calmS = Math.max(5, Math.min(12, 5 + 7 * S.calm + (S.rng() * 2 - 1) * 1.2));
     const dur = 1000 * (type === 'herb' ? Math.min(12, calmS + 2) : calmS);
-    const n = type === 'herb' ? (S.plants.length >= 6 && S.rng() < 0.6 ? 6 : 4) : NEED[type];
+    const n = type === 'herb' ? (S.plants.length >= 6 && (isShort() || S.rng() < 0.6) ? 6 : 4) : NEED[type];
     const plants = take(n, type === 'pair' ? 'mixed' : null);
     const shot = { type, plants, dur, t0: performance.now(), wob: S.rng() * 6.28, beat: '' };
     if (type === 'herb') shot.pick = Math.floor(S.rng() * plants.length);
@@ -115,12 +120,14 @@ export function installSaver(api) {
       ? `A woody plant: fractal branches, depth ${num('branchDepth')}, up to ${num('branchFork')} forks each.`
       : `A herbal plant: ${num('stemCount')} stems from one root, each with shoots that end in a flower.`;
     const lines = {
-      grow: [plantLine, 'The brush grows the painting from the root up, then the camera goes to the flower head.'],
-      detail: [plantLine, 'A close look: each petal is a leaf() with no veins, bent by the open curve.'],
+      grow: [plantLine, 'The brush grows the painting from the root up.'],
+      detail: [plantLine, 'Each petal is a leaf() with no veins, bent by the open curve.'],
       herb: [`A herbarium of ${shot.plants.length} sheets. Each plant is woody or herbal with even odds.`, `Sheet ${shot.pick + 1}: seed ${p.seed}, ${p.type}.`],
       pair: [`Seed ${shot.plants[0].seed} (${shot.plants[0].type}) and seed ${shot.plants[1] ? shot.plants[1].seed + ' (' + shot.plants[1].type + ')' : ''}.`, 'Two plants from two seeds; each seed gives the same painting every time.'],
     }[shot.type];
-    lines.push(`Same seed, same painting: lingdong-.github.io/nonflowers/?seed=${p.token}`);
+    // Two note lines and a 6-line code extract keep the base plate short,
+    // so the clear band stays as tall as it can at 1280 x 800.
+    if (shot.type !== 'herb') lines.push(`Same plant: lingdong-.github.io/nonflowers/?seed=${p.token}`);
     const fn = { grow: p.type, detail: 'leaf', herb: 'generate', pair: 'genParams' }[shot.type];
     S.label({
       title: 'Nonflowers',
@@ -132,7 +139,7 @@ export function installSaver(api) {
         { name: 'flower chance', value: chance == null ? '-' : chance.toFixed(3) },
       ],
       lines,
-      code: src ? { lang: 'js', name: `upstream/main.js · ${fn}()`, text: codeExtract(src, fn, fn === 'generate' ? 10 : 9) } : undefined,
+      code: src ? { lang: 'js', name: `upstream/main.js · ${fn}()`, text: codeExtract(src, fn, 6) } : undefined,
       anchor: () => null,
     });
   }
@@ -150,9 +157,13 @@ export function installSaver(api) {
     const m = SIZE + 2 * PAD, k0 = Math.min(KMAX, Math.min(r.w, r.h) / m), s = m * k0;
     return { x: r.x + (r.w - s) / 2, y: r.y + (r.h - s) / 2, w: s, h: s, k0 };
   }
-  // A window of aspect at most 2.1 : 1 inside the band, for the detail shot.
-  function wideIn(r) {
-    const w = Math.min(r.w, r.h * 2.1);
+  // A short band (wider than 2.6 : 1, for example 1280 x 800 with the
+  // plate on): a square mat there is small, so grow and detail use a wide
+  // window and pan along the plant at a scale that fills the window width.
+  function isShort() { const B = band(Math.min(2, devicePixelRatio || 1)); return B.w > 2.6 * B.h; }
+  // A window of aspect at most asp : 1 inside the band.
+  function wideIn(r, asp = 2.1) {
+    const w = Math.min(r.w, r.h * asp);
     return { x: r.x + (r.w - w) / 2, y: r.y, w, h: r.h };
   }
 
@@ -224,6 +235,7 @@ export function installSaver(api) {
 
   // ── shots ────────────────────────────────────────────────────────────────
   function drawGrow(g, s, el, B, dpr) {
+    if (B.w > 2.6 * B.h) { drawGrowStrip(g, s, el, B, dpr); return; }
     const p = s.plants[0], M = matIn(B), u = el / s.dur;
     shadow(g, M, dpr);
     const T = ease(u / 0.45), f = flowerOf(p) || leafOf(p) || { x: SIZE / 2, y: SIZE * 0.5, r: 160 };
@@ -233,21 +245,41 @@ export function installSaver(api) {
     s.beat = u < 0.45 ? 'grow' : flowerOf(p) ? 'push flower' : 'push leaves'; s.k = k; s.F = M;
     view(g, p, M, k, cx, cy, T, s.wob, el);
   }
+  // The grow shot in a short band: a wide window at a scale that fills its
+  // width. The camera tilts from the root up with the brush, then pushes
+  // in on the flower head (or the leaves).
+  function drawGrowStrip(g, s, el, B, dpr) {
+    const p = s.plants[0], F = wideIn(B, 3.4), u = el / s.dur;
+    shadow(g, F, dpr);
+    const kW = Math.min(KMAX, F.w / (SIZE * 0.92));
+    // The brush starts a little open, so the first frame already shows ink.
+    const T = ease(0.12 + u / 0.6), f = flowerOf(p) || leafOf(p) || { x: SIZE / 2, y: SIZE * 0.4, r: 160 };
+    const tilt = ease(u / 0.6), zt = ease((u - 0.6) / 0.4);
+    const k = Math.max(kW, kW + (Math.min(KMAX, closeK(F, f.r) * 1.6) - kW) * zt);
+    const cy0 = Math.min(SIZE, p.base[1]) - 130, cy = cy0 + (f.y - cy0) * tilt;
+    const [cx, cyc] = clampCam(F, k, SIZE / 2 + (f.x - SIZE / 2) * zt, cy);
+    s.beat = u < 0.6 ? 'grow tilt' : flowerOf(p) ? 'push flower' : 'push leaves'; s.k = k; s.F = F;
+    view(g, p, F, k, cx, cyc, T, s.wob, el);
+  }
   function drawDetail(g, s, el, B, dpr) {
-    const p = s.plants[0], F = wideIn(B), u = el / s.dur;
+    s.short = B.w > 2.6 * B.h;
+    const p = s.plants[0], F = wideIn(B, s.short ? 3.4 : 2.1), u = el / s.dur;
     shadow(g, F, dpr);
     const kFit = Math.min(KMAX, F.h / (SIZE + 2 * PAD));
+    // In a short band no view goes below the width-fill scale kW.
+    const kW = s.short ? Math.min(KMAX, F.w / (SIZE * 0.92)) : 0;
     const fl = flowerOf(p), lf = leafOf(p);
     // Beats: the whole plant, then a close look at each focus there is
     // (flower head, stems and leaves). With one focus, a second, closer
     // look at it from a little higher.
-    const close = (f, z, dy) => q => { const k = Math.min(KMAX, closeK(F, f.r) * z * (0.92 + 0.08 * q)); const [cx, cy] = clampCam(F, k, f.x + 8 * q, f.y + dy * (1 - q)); return { k, cx, cy }; };
+    const close = (f, z, dy) => q => { const k = Math.max(kW, Math.min(KMAX, closeK(F, f.r) * z * (s.short ? 1.6 : 1) * (0.92 + 0.08 * q))); const [cx, cy] = clampCam(F, k, f.x + 8 * q, f.y + dy * (1 - q)); return { k, cx, cy }; };
     const foci = [fl && ['flower', fl], lf && ['leaves', lf]].filter(Boolean);
     if (!foci.length) foci.push(['middle', { x: SIZE / 2, y: SIZE * 0.5, r: 150 }]);
     const looks = foci.length > 1 ? [[foci[0][0], close(foci[0][1], 1, 0)], [foci[1][0], close(foci[1][1], 0.85, 0)]]
       : [[foci[0][0], close(foci[0][1], 0.7, 0)], [foci[0][0] + ' closer', close(foci[0][1], 1.15, -30)]];
     const beats = [
-      { name: 'whole', t: 0.32, cam: q => ({ k: kFit * (1 + 0.06 * q), cx: SIZE / 2, cy: SIZE / 2 }) },
+      s.short ? { name: 'pan down', t: 0.32, cam: q => { const [cx, cy] = clampCam(F, kW, SIZE / 2, SIZE * (0.2 + 0.6 * q)); return { k: kW, cx, cy }; } }
+        : { name: 'whole', t: 0.32, cam: q => ({ k: kFit * (1 + 0.06 * q), cx: SIZE / 2, cy: SIZE / 2 }) },
       { name: looks[0][0], t: 0.66, cam: looks[0][1] },
       { name: looks[1][0], t: 1, cam: looks[1][1] },
     ];
@@ -299,6 +331,7 @@ export function installSaver(api) {
     g.restore();
   }
   function drawPair(g, s, el, B, dpr) {
+    if (B.w > 2.6 * B.h) { drawPairStrip(g, s, el, B, dpr); return; }
     // Two mats side by side, close together in the middle of the band.
     const gap = 28 * dpr, side = Math.min((B.w - gap) / 2, B.h), x0 = B.x + (B.w - 2 * side - gap) / 2, u = el / s.dur;
     s.beat = u < 0.5 ? 'grow' : 'hold'; s.F = B;
@@ -311,6 +344,21 @@ export function installSaver(api) {
     });
   }
 
+  // The pair in a short band: two wide windows, each at the scale that
+  // fills its width, tilt from the stems up to the flower heads.
+  function drawPairStrip(g, s, el, B, dpr) {
+    const gap = 28 * dpr, w = Math.min((B.w - gap) / 2, B.h * 1.8), x0 = B.x + (B.w - 2 * w - gap) / 2, u = el / s.dur;
+    s.beat = u < 0.55 ? 'grow tilt' : 'hold'; s.F = B;
+    s.plants.forEach((p, i) => {
+      const F = { x: x0 + i * (w + gap), y: B.y, w, h: B.h }, k = Math.min(KMAX, w / (SIZE * 0.92));
+      shadow(g, F, dpr);
+      const f = flowerOf(p) || leafOf(p) || { x: SIZE / 2, y: SIZE * 0.4 };
+      const T = ease(0.12 + (u - i * 0.08) / 0.5), q = ease((u - i * 0.08) / 0.6);
+      const cy0 = Math.min(SIZE, p.base[1]) - 130, [cx, cy] = clampCam(F, k, SIZE / 2, cy0 + (f.y - cy0) * q);
+      if (!i) s.k = k;
+      view(g, p, F, k, cx, cy, T, s.wob + i * 2, el);
+    });
+  }
   function frame(now) {
     if (!S) return;
     S.raf = requestAnimationFrame(frame);
