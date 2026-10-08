@@ -25,11 +25,13 @@
 //    grep -n 'function openHerb'       the herbarium grid
 //    grep -n 'function exportPNG'      paper + painting, with tEXt credit
 //    grep -n 'function shareLink'      ?seed= link
+//    saver ........................... saver.js (installSaver)
 // ============================================================================
 import { createPool } from './pool.js';
 import { UPSTREAM, SIZE, TILE, cleanSeed, seedToken, randomSeed, hsvToRgb } from './engine.js';
 import { fitScale, layoutGrid, parseSeedFrom, pngWithText, FIELDS, GROUPS } from './view.js';
 import { typeset } from '../../lib/sci-math.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -59,6 +61,8 @@ function layout() {
     else if (PHONE_Q.matches) { const top = desk.bottom - panel.offsetHeight; if (top - T > 170) B = top; }
     else L = Math.max(L, panel.offsetWidth);
   }
+  // Landscape phone: the dock is a tab over the base of the desk.
+  if (LAND_Q.matches) B = Math.min(B, $('dock').getBoundingClientRect().top);
   const phone = PHONE_Q.matches, cap = phone ? 26 : 36, top = phone ? 10 : 64, m = phone ? 12 : 30;
   const aw = R - L - 2 * m, ah = B - T - top - m - cap, dpr = devicePixelRatio || 1;
   const box = Math.max(60, Math.min(aw, ah));
@@ -366,6 +370,12 @@ layout();
 show(parseSeedFrom(location.search, location.hash) || randomSeed());
 equations();
 
+installSaver({
+  pool,
+  recent: () => st.hist.slice(-4).reverse(),
+  enter() { st.saverOn = true; closeHerb(); progress(false); },
+  exit() { st.saverOn = false; layout(); },
+});
 window.__nf = {
   st, pool, show, newFlower, back, forward, openHerb, closeHerb, exportPNG, layout, setOpen, thumbs,
   get ready() { return !!st.plant && st.plant.seed === st.want; },

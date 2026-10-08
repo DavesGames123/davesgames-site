@@ -75,7 +75,7 @@
 //    grep -n 'export function makeEngine'   the new Function() shim
 //    grep -n 'function stubElement'         the inert DOM stub
 //    grep -n 'export function paint'        upstream load() order
-//    grep -n 'export function flowerFocus'  where the petals are (saver)
+//    grep -n 'export function inkFocus'     where the petals / leaves are (saver)
 //    grep -n 'export function plainPAR'     PAR -> plain data
 //    grep -n 'export function hsvToRgb'     the upstream hsv(), as numbers
 //    grep -n 'export function recorderCanvas' the node canvas (tests)
@@ -180,8 +180,10 @@ export function makeEngine(src, seed, env) {
 
 // ── paint ───────────────────────────────────────────────────────────────────
 // The upstream load() order for one seed (see THE ORDER above).
-// Returns { ctx, bg, type, PAR, ms: { bg, plant, total } }. ctx is the 600 px
-// painting context, bg the 512 px paper canvas of the page background.
+// Returns { E, ctx, bg, blank, type, PAR, blits, base, ms }. ctx is the 600 px
+// painting context, bg the 512 px paper canvas of the page background,
+// blank the bare sheet before the plant (with the same border), blits the
+// two plant layers (see flowerFocus), base the root in painting px.
 // onStage(name) is called before each step (for a progress line).
 export function paint(src, seed, env, onStage = () => {}) {
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -206,27 +208,35 @@ export function paint(src, seed, env, onStage = () => {}) {
   // for flowerFocus(). The wrapper calls the upstream blit unchanged.
   const blits = [], blit0 = E.Layer.blit;
   E.Layer.blit = function (c0, c1, a) { blits.push({ ctx: c1, ble: a && a.ble, xof: a && a.xof, yof: a && a.yof }); return blit0.apply(this, arguments); };
+  // A copy of the bare sheet (white and paper, no plant) for the saver
+  // brush wipe. Copying and Layer.border use no random numbers.
+  const blank = E.Layer.empty();
+  blank.drawImage(ctx.canvas, 0, 0);
   const type = E.random() <= 0.5 ? 'woody' : 'herbal';
   onStage(type);
   if (type === 'woody') E.woody({ ctx, xof: 300, yof: 550 });
   else E.herbal({ ctx, xof: 300, yof: 600 });
   onStage('border');
   E.Layer.border(ctx, E.squircle(0.98, 3));
+  E.Layer.border(blank, E.squircle(0.98, 3));
   const t2 = now();
   const PAR = E.pars[E.pars.length - 1] || null;
   E.Layer.blit = blit0;
-  return { E, ctx, bg, type, PAR, blits, base: type === 'woody' ? [300, 550] : [300, 600], ms: { bg: t1 - t0, plant: t2 - t1, total: t2 - t0 } };
+  return { E, ctx, bg, blank: blank.canvas, type, PAR, blits, base: type === 'woody' ? [300, 550] : [300, 600], ms: { bg: t1 - t0, plant: t2 - t1, total: t2 - t0 } };
 }
 
-// ── flowerFocus ─────────────────────────────────────────────────────────────
-// Where the flowers are. woody() and herbal() draw the petals on their own
-// layer (lay1) and blit it with blend "normal". This sums its alpha in
-// cells of CELL painting px, then finds the WIN x WIN cell window with the
-// most petal ink. Returns { x, y, r, ink } in painting px (r: half the
-// window size; ink: the share of all petal alpha in the window), or null
-// when the plant has no flower (a woody plant can have none).
-export function flowerFocus(blits, size = SIZE, CELL = 20, WIN = 6) {
-  const b = blits.find(q => q.ble === 'normal');
+// ── inkFocus / flowerFocus ──────────────────────────────────────────────────
+// Where the ink of one layer is. woody() and herbal() draw the petals on
+// their own layer (lay1, blit with blend "normal") and the stems, branches
+// and leaves on lay0 (blend "multiply"). inkFocus() sums the alpha of the
+// layer with blend `ble` in cells of CELL painting px, then finds the
+// WIN x WIN cell window with the most ink. A window whose centre is nearer
+// than avoid.d to avoid.{x, y} is skipped. Returns { x, y, r, ink } in
+// painting px (r: half the window size; ink: the share of all the layer
+// alpha in the window), or null when the layer is (almost) empty: a woody
+// plant can have no flower.
+export function inkFocus(blits, ble, { size = SIZE, CELL = 20, WIN = 6, avoid = null } = {}) {
+  const b = blits.find(q => q.ble === ble);
   if (!b || !b.ctx || !b.ctx.getImageData) return null;
   const W = b.ctx.canvas.width, H = b.ctx.canvas.height, d = b.ctx.getImageData(0, 0, W, H).data;
   if (!d.length) return null;
@@ -248,11 +258,21 @@ export function flowerFocus(blits, size = SIZE, CELL = 20, WIN = 6) {
   if (total < 255 * 40) return null;
   let best = -1, bi = 0, bj = 0;
   for (let j = 0; j + WIN <= n; j++) for (let i = 0; i + WIN <= n; i++) {
+    const cx = (i + WIN / 2) * CELL, cy = (j + WIN / 2) * CELL;
+    if (avoid && Math.hypot(cx - avoid.x, cy - avoid.y) < avoid.d) continue;
     let s = 0;
     for (let v = 0; v < WIN; v++) for (let u = 0; u < WIN; u++) s += acc[(j + v) * n + i + u];
     if (s > best) { best = s; bi = i; bj = j; }
   }
+  if (best <= 0) return null;
   return { x: (bi + WIN / 2) * CELL, y: (bj + WIN / 2) * CELL, r: WIN * CELL / 2, ink: best / total };
+}
+// The petal window, then the stem and leaf window away from it.
+export function flowerFocus(blits) { return inkFocus(blits, 'normal'); }
+export function plantFoci(blits) {
+  const flower = flowerFocus(blits);
+  const leaf = inkFocus(blits, 'multiply', { avoid: flower ? { x: flower.x, y: flower.y, d: 150 } : null });
+  return { flower, leaf };
 }
 
 // ── PAR as plain data ───────────────────────────────────────────────────────

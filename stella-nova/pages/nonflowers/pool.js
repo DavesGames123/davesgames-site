@@ -2,7 +2,7 @@
 //  NONFLOWERS  ·  pool.js — two painting workers, a queue and a cache
 // ----------------------------------------------------------------------------
 //  paint(seed, { prio, tag, onStage }) returns a Promise of a plant:
-//    { seed, token, type, par, focus, base, painting, bg, hash, ms, where }
+//    { seed, token, type, par, focus, leaf, base, painting, bg, blank, hash, ms, where }
 //  painting and bg are ImageBitmaps (worker) or canvases (main thread).
 //  where is 'worker' or 'main'.
 //
@@ -25,7 +25,7 @@
 //    grep -n 'function pump'                give queued jobs to free workers
 //    grep -n 'function useFallback'         the main-thread path
 // ============================================================================
-import { paint as paintNow, plainPAR, rgbaHash, cleanSeed, flowerFocus } from './engine.js';
+import { paint as paintNow, plainPAR, rgbaHash, cleanSeed, plantFoci } from './engine.js';
 
 const CACHE_MAX = 24;   // about 2.5 MB of bitmaps per plant
 
@@ -42,7 +42,7 @@ export function createPool(n = 2) {
   function finish(job, msg) {
     inflight.delete(job.seed);
     if (msg.error) { job.reject(new Error(msg.error)); return; }
-    const plant = { seed: job.seed, token: msg.token, type: msg.type, par: msg.par, focus: msg.focus, base: msg.base, painting: msg.painting, bg: msg.bg, hash: msg.hash, ms: msg.ms, where: msg.where || 'worker' };
+    const plant = { seed: job.seed, token: msg.token, type: msg.type, par: msg.par, focus: msg.focus, leaf: msg.leaf, base: msg.base, painting: msg.painting, bg: msg.bg, blank: msg.blank, hash: msg.hash, ms: msg.ms, where: msg.where || 'worker' };
     remember(job.seed, plant);
     job.resolve(plant);
   }
@@ -85,7 +85,8 @@ export function createPool(n = 2) {
         try {
           const r = paintNow(src, job.seed, env, s => stage(job, s, 0));
           const hash = rgbaHash(r.ctx.getImageData(0, 0, r.ctx.canvas.width, r.ctx.canvas.height).data);
-          finish(job, { token: r.E.token, type: r.type, par: plainPAR(r.PAR), focus: flowerFocus(r.blits), base: r.base, painting: r.ctx.canvas, bg: r.bg, hash, ms: r.ms, where: 'main' });
+          const f = plantFoci(r.blits);
+          finish(job, { token: r.E.token, type: r.type, par: plainPAR(r.PAR), focus: f.flower, leaf: f.leaf, base: r.base, painting: r.ctx.canvas, bg: r.bg, blank: r.blank, hash, ms: r.ms, where: 'main' });
         } catch (err) { finish(job, { error: String(err && err.message || err) }); }
       })).finally(() => { fallback.busy = false; pump(); });
       return;

@@ -16,7 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { UPSTREAM, makeEngine, paint, plainPAR, hsvToRgb, recorderCanvas, seedToken, cleanSeed, randomSeed, flowerFocus } from './engine.js';
+import { UPSTREAM, makeEngine, paint, plainPAR, hsvToRgb, recorderCanvas, seedToken, cleanSeed, randomSeed, flowerFocus, inkFocus } from './engine.js';
 import { layoutGrid, fitScale, parseSeedFrom, pngWithText, crc32 } from './view.js';
 
 const DIR = path.dirname(new URL(import.meta.url).pathname);
@@ -103,6 +103,10 @@ test('flowerFocus finds a synthetic petal patch', () => {
   const f = flowerFocus([{ ble: 'multiply' }, { ble: 'normal', ctx, xof: 100, yof: 200 }]);
   ok(f && Math.abs(f.x - 150) <= 40 && Math.abs(f.y - 340) <= 40, 'focus near (150, 340): ' + JSON.stringify(f));
   ok(f.ink > 0.99, 'all ink in the window');
+  // avoid: a second patch far from the first is found instead.
+  for (let y = 20; y < 50; y++) for (let x = 150; x < 190; x++) data[(y * W + x) * 4 + 3] = 128;
+  const g = inkFocus([{ ble: 'normal', ctx, xof: 100, yof: 200 }], 'normal', { avoid: { x: f.x, y: f.y, d: 150 } });
+  ok(g && Math.hypot(g.x - f.x, g.y - f.y) >= 150 && Math.abs(g.x - 270) <= 40 && Math.abs(g.y - 235) <= 40, 'second patch: ' + JSON.stringify(g));
 });
 
 // ── PAR ─────────────────────────────────────────────────────────────────────
