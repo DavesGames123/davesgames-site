@@ -14,10 +14,14 @@
 //              streaks keep a steady screen speed. Particles live in the
 //              visible cap and respawn there. A ring of H positions per
 //              particle makes the streak; "pvs" draws H-1 segments.
+//  coast       "cvs": one quad per coastline segment (coast.js points,
+//              height 1.0006), 1 px wider each side than the line; "cfs"
+//              ramps the alpha over that pixel, so the line is
+//              anti-aliased at any width (CS.x = width in device px)
 //  tracks      "svs": one screen-space quad per great-circle piece
 //  markers     "mvs": one quad per marker, shapes by signed distance
 //
-//  grep -n targets: "fn advance", "fn pvs", "fn svs", "fn mvs", "fn mfs"
+//  grep -n targets: "fn advance", "fn pvs", "fn cvs", "fn svs", "fn mvs", "fn mfs"
 // ============================================================================
 struct Frame {
   eye: vec4f, right: vec4f, up: vec4f, fwd: vec4f,
@@ -172,6 +176,32 @@ struct PV { @builtin(position) pos: vec4f, @location(0) col: vec4f, };
   return o;
 }
 @fragment fn pfs(i: PV) -> @location(0) vec4f { return i.col * FR.look2.w; }
+
+// ── coastlines: anti-aliased lines between consecutive points ───────────
+// CP[i].w = 1: a segment from point i to point i + 1; 0: the end of a run
+@group(1) @binding(9) var<storage, read> CP: array<vec4f>;
+@group(1) @binding(10) var<uniform> CS: vec4f;   // width (device px), alpha
+struct CV { @builtin(position) pos: vec4f, @location(0) d: f32, @location(1) a: f32, };
+@vertex fn cvs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> CV {
+  let A = CP[ii]; let B = CP[ii + 1u];
+  let ca = toClip(A.xyz * 1.0006); let cb = toClip(B.xyz * 1.0006);
+  let corner = vi % 6u;
+  let w = CS.x + 2.0;
+  var side = 1.0;
+  if (corner == 0u || corner == 2u || corner == 3u) { side = -1.0; }
+  var o: CV;
+  o.pos = segCorner(ca, cb, w, corner);
+  o.d = side * w * 0.5;
+  let vis = min(facing(A.xyz), facing(B.xyz)) * select(1.0, 0.0, A.w < 0.5 || ca.w <= 0.0 || cb.w <= 0.0);
+  o.a = CS.y * vis;
+  if (vis <= 0.0) { o.pos = vec4f(0.0, 0.0, -1.0, 1.0); }
+  return o;
+}
+@fragment fn cfs(i: CV) -> @location(0) vec4f {
+  let cov = clamp(CS.x * 0.5 + 0.5 - abs(i.d), 0.0, 1.0);
+  let a = i.a * cov * FR.look2.w;
+  return vec4f(vec3f(0.84, 0.92, 1.0) * a, a);
+}
 
 // ── tracks: great-circle pieces ─────────────────────────────────────────
 struct Seg { a: vec4f, b: vec4f, col: vec4f, };   // a.w = width px

@@ -25,6 +25,10 @@
 //  and the altitude floor follow it through springs, so a sheet or a
 //  card that opens moves the globe smoothly, not in a jump.
 //
+//  Coastlines: data/coast-50m.bin at boot (land fill + far lines),
+//  data/coast-10m.bin after the first frames (near lines); coast.js
+//  picks the level of detail by altitude and culls by cell.
+//
 //  grep -n targets
 //    boot ............. "async function boot"
 //    time ............. "function setTime", "function solverFollow"
@@ -33,6 +37,7 @@
 //    card ............. "function showCard"
 //    flights, tour .... "function flyTo", "function tourTick"
 //    framing .......... "function occlusion", "function clearArea", "function frameAltFor"
+//    coastlines ....... "async function loadCoast"
 //    particle speed ... "WIND_VIS"
 //    input ............ "function bindPointer"
 //    live refresh ..... "async function liveRefresh"
@@ -47,6 +52,7 @@ import * as TL from './timeline.js';
 import { findLows, findJets, regionName } from './detect.js';
 import * as COL from './colour.js';
 import { installSaver } from './saver.js';
+import { decodeCoast, buildLines, visibleRanges, pickLod, coastStyle } from './coast.js';
 
 const $ = id => document.getElementById(id);
 const H = 3600e3, D = Math.PI / 180;
@@ -86,13 +92,14 @@ async function boot() {
   progress(0.08, 'Loading winds and storms…');
   snap = await loadSnapshot(['data/live/', 'data/sample/'], fetch, p => progress(0.08 + 0.6 * p));
   progress(0.72, 'Building the globe…');
-  const world = await (await fetch('data/world.json')).json();
+  const coast50 = await loadCoast('data/coast-50m.bin');
   const nx = LITE ? 256 : 512;
   const w = snap.meta.winds;
   solver = await createSolver(device, { nx, ny: nx / 2, fnx: w.grid.nx, fny: w.grid.ny });
   solver.set({ dyeRelax: 4 * 86400, tauBg: ST.nudgeH * 3600, tauStorm: 1800 });
   renderer = await createRenderer({ device, canvas, solver, lite: LITE });
-  renderer.setWorld(world);
+  renderer.setLand(coast50);
+  COAST.lines[0] = buildLines(coast50); renderer.setCoast(0, COAST.lines[0]);
   adoptSnapshot();
   buildUI();
   resize();
@@ -109,6 +116,33 @@ async function boot() {
   // #offline: no live requests (headless checks); #livegfs: force the
   // browser GFS path even with a fresh snapshot
   if (!location.hash.includes('offline')) liveRefresh();
+  // the near coastline: after the first frames, not on the boot path
+  setTimeout(async () => {
+    try {
+      const r10 = await loadCoast('data/coast-10m.bin');
+      COAST.lines[1] = buildLines(r10); renderer.setCoast(1, COAST.lines[1]);
+      // the land fill keeps the 50m rings: a Canvas 2D fill of the 10m
+      // rings blocks the main thread for seconds (3.4 s measured at 4096 px)
+    } catch (e) { console.info('storm-globe: near coastline not loaded: ' + e.message); }
+  }, 1500);
+}
+// ── coastlines ───────────────────────────────────────────────────────────
+// arrayBuffer() reads the whole body: never sized from content-length,
+// because the live site gzips data files
+const COAST = { lines: [null, null], lod: 0 };
+async function loadCoast(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  return decodeCoast(await r.arrayBuffer());
+}
+function coastLook(b) {
+  if (!ST.layers.coast) return null;
+  COAST.lod = pickLod(ST.cam.alt, COAST.lod, !!COAST.lines[1]);
+  const L = COAST.lines[COAST.lod]; if (!L) return null;
+  // the cap the camera can see: the horizon, or the field of view
+  const horizon = Math.acos(1 / (1 + ST.cam.alt));
+  const capR = Math.min(horizon, Math.atan(ST.cam.alt * Math.max(b.tanX, b.tanY) * (1 + Math.abs(ST.off.x) + Math.abs(ST.off.y)) * 1.8) + 0.08);
+  return { lod: COAST.lod, ranges: visibleRanges(L.cells, CAM.unit(ST.cam.lat, ST.cam.lon), capR), ...coastStyle(ST.cam.alt) };
 }
 function noGpu(msg) {
   $('loading').classList.add('done');
@@ -507,7 +541,7 @@ function frame(now) {
   renderer.draw(b, {
     mode: ST.field, strength: ST.field === 3 ? 0 : ST.strength, dye: ST.layers.dye ? 1 : 0, cones: ST.layers.cones ? 1 : 0,
     grid: 1, coast: ST.layers.coast ? 1 : 0, fade: ST.fade, sun: CAM.unit(sun.lat, sun.lon), night: 0.25,
-    tracks: ST.layers.tracks, markers: true,
+    tracks: ST.layers.tracks, markers: true, lines: coastLook(b),
   }, {
     on: ST.layers.particles, colour: ST.layers.magmaParticles, cap: [...T, Math.cos(capR)],
     // WIND_VIS, per second (not per frame), so a 120 Hz screen streams
@@ -782,7 +816,7 @@ async function liveRefresh() {
 const SG = window.__stormGlobe = {
   ST, CAM, TL, COL, get solver() { return solver; }, get renderer() { return renderer; }, get snap() { return snap; }, get device() { return device; },
   canvas: () => canvas, setTime, select, flyTo, startTour, stopTour, stopPos, stopTitle, stopCam, wideAlt, buildLegend, catLabel, setPlaying,
-  followStop, frameAltFor, clearArea, zoomBy, get frameDt() { return frameDt; },
+  followStop, frameAltFor, clearArea, zoomBy, get frameDt() { return frameDt; }, coast: COAST,
   setField(m) { ST.field = m; buildLegend(); },
   booted: false, failed: null,
 };

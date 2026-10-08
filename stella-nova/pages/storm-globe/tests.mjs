@@ -3,7 +3,8 @@
 // ----------------------------------------------------------------------------
 //    node tests.mjs           parsers (fixtures/), GRIB2, pack, sample,
 //                             time slider maths, camera, detectors, the
-//                             camera framing rule and smoothing limits
+//                             camera framing rule and smoothing limits,
+//                             the coastline files and culling
 //    deno run -A tests.mjs    the same, plus the GPU solver tests in
 //                             tests-solver.mjs (Deno has navigator.gpu)
 //  No test fetches a live source: every input is a file in fixtures/.
@@ -254,6 +255,37 @@ section('Camera: the minimum altitude rule, flight limits, springs');
   const fz = CAM.follower({ lat: 10, lon: 10 }); let lastD = 1e9, mono = true;
   for (let i = 0; i < 400; i++) { const c = CAM.follow(fz, CAM.unit(0, 0), 1.8, 1 / 60); const d = CAM.arc(c, { lat: 0, lon: 0 }); if (d > lastD + 1e-12) mono = false; lastD = d; }
   check('follow: a still target is reached without overshoot', mono && lastD < 0.01 * D, (lastD / D).toExponential(1) + ' deg');
+}
+
+// ── coastlines ───────────────────────────────────────────────────────────
+section('Coastlines: file format, line runs, culling, level of detail');
+{
+  const C = await import('./coast.js');
+  const ring = { kind: 0, pts: Float64Array.from([10, 0, 12.5, 1.25, 11, 3, -179.999, -89.5, 10, 0]) };
+  const back = C.decodeCoast(C.encodeCoast([ring, { kind: 1, pts: Float64Array.from([1, 1, 2, 2, 1, 1]) }]));
+  check('encode / decode round trip to 0.001 deg, kinds kept', back.length === 2 && back[1].kind === 1 && [...back[0].pts].every((v, i) => near(v, ring.pts[i], 6e-4)));
+  for (const [f, minPts, maxBytes] of [['coast-50m.bin', 30000, 200e3], ['coast-10m.bin', 150000, 600e3]]) {
+    const buf = fs.readFileSync(path.join(HERE, 'data', f)), rs = C.decodeCoast(new Uint8Array(buf));
+    const n = rs.reduce((a, r) => a + r.pts.length / 2, 0), lakes = rs.filter(r => r.kind === 1).length;
+    check(`${f}: decodes, ${minPts}+ points, lakes present, size <= ${maxBytes / 1e3} kB`, n >= minPts && lakes > 10 && buf.length <= maxBytes, `${rs.length} rings, ${n} points, ${lakes} lakes, ${buf.length} bytes`);
+  }
+  const rs = C.decodeCoast(new Uint8Array(fs.readFileSync(path.join(HERE, 'data', 'coast-50m.bin'))));
+  const L = C.buildLines(rs);
+  let segs = 0; for (let i = 0; i < L.points; i++) segs += L.pts[i * 4 + 3];
+  const want = rs.reduce((a, r) => a + r.pts.length / 2 - 1, 0);
+  check('buildLines: every ring segment once, cells contiguous', segs === want && L.cells.every((c, i) => !i || c.start === L.cells[i - 1].start + L.cells[i - 1].count), `${segs} segments, ${L.cells.length} cells`);
+  check('buildLines: a last dummy point after the runs', L.pts.length / 4 === L.points + 1);
+  const all = C.visibleRanges(L.cells, [1, 0, 0], Math.PI);
+  const cap = C.visibleRanges(L.cells, [1, 0, 0], 0.15);
+  const count = rr => rr.reduce((a, r) => a + r[1], 0);
+  check('visibleRanges: the whole sphere is one range; a small cap keeps a small part', all.length === 1 && count(all) === L.points && count(cap) < L.points * 0.15, `${count(cap)} of ${L.points} points in ${cap.length} ranges`);
+  // every point within the small cap is in a kept range
+  const kept = new Uint8Array(L.points); for (const [s0, n0] of cap) kept.fill(1, s0, s0 + n0);
+  let miss = 0; for (let i = 0; i < L.points; i++) if (L.pts[i * 4] > Math.cos(0.15) && !kept[i]) miss++;
+  check('visibleRanges: no point inside the cap is culled', miss === 0, miss + ' missed');
+  check('pickLod: hysteresis between LOD_ALT.in and LOD_ALT.out', C.pickLod(1.1, 1, true) === 1 && C.pickLod(1.1, 0, true) === 0 && C.pickLod(0.9, 0, true) === 1 && C.pickLod(1.3, 1, true) === 0 && C.pickLod(0.5, 0, false) === 0);
+  const s0 = C.coastStyle(0.4), s1 = C.coastStyle(4);
+  check('coastStyle: thinner and fainter far out', s0.width > s1.width && s0.alpha > s1.alpha && s1.width >= 0.8);
 }
 
 // ── GPU solver (Deno) ────────────────────────────────────────────────────

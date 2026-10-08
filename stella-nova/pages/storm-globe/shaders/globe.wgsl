@@ -10,12 +10,17 @@
 //  are drawn after it in overlay.wgsl, at fixed small heights, with a
 //  horizon test instead of a depth test.)
 //
-//  Layers, bottom up: ocean and land (land.r) lit by the real sun at the
-//  slider time (terminator), the field (speed | cyclonic vorticity |
-//  pressure with 4 hPa isobars) through the LUT, the dye, the cones
-//  (cone.r fill, cone.g the selected storm), the coast
-//  (land.g) and the graticule (land.b), then the atmosphere rim. Rays that
-//  miss get stars and the limb glow.
+//  Layers, bottom up: ocean and land lit by the real sun at the slider
+//  time (terminator), the field (speed | cyclonic vorticity | pressure
+//  with 4 hPa isobars) through the LUT, the dye, the cones (cone.r fill,
+//  cone.g the selected storm), the graticule (analytic, every 30 deg,
+//  1 px wide from the pixel footprint), then the atmosphere rim. Rays
+//  that miss get stars and the limb glow.
+//  The land mask (landT.r) is a one-channel texture; "landMask" sharpens
+//  its 0.5 contour with fwidth, so the land edge stays crisp under
+//  magnification and falls back to the plain filtered mask when the
+//  texture is minified. The coastline itself is a vector line drawn
+//  after this pass (overlay.wgsl "fn cvs").
 //
 //  grep -n targets: "struct Frame", "fn surface", "fn sky", "fn fs"
 // ============================================================================
@@ -27,7 +32,7 @@ struct Frame {
   view: vec4f,    // principal point offset x, y (NDC), width, height (px)
   sun: vec4f,     // xyz, w = night floor
   look: vec4f,    // field mode (0 speed, 1 vorticity, 2 pressure, 3 off), field strength, dye, cones
-  look2: vec4f,   // graticule, coast, unused, fade (0..1)
+  look2: vec4f,   // graticule, unused, unused, fade (0..1)
 };
 @group(0) @binding(0) var<uniform> FR: Frame;
 @group(0) @binding(1) var samp: sampler;
@@ -80,13 +85,26 @@ fn sky(d: vec3f) -> vec3f {
   let K = textureSampleLevel(coneT, samp, vec2f(u, 1.0 - v), 0.0);
   let q = (F.z + 1000.0) / 4.0;
   let fw = max(fwidth(q), 1e-4);
+  // landMask: the sharpened 0.5 contour of the filtered mask
+  let lw = max(fwidth(L.r), 1e-3);
+  let land = clamp((L.r - 0.5) / lw * 0.5 + 0.5, 0.0, 1.0);
+  // graticule: degrees of arc to the nearest 30 deg line over the pixel
+  // footprint (deg per px from the derivative of the surface normal)
+  let pxDeg = max(length(fwidth(n)) * 57.29578, 1e-4);
+  let latD = asin(clamp(n.z, -1.0, 1.0)) * 57.29578;
+  let lonD = atan2(n.y, n.x) * 57.29578;
+  let gLat = abs(fract(latD / 30.0 + 0.5) - 0.5) * 30.0;
+  let gLon = abs(fract(lonD / 30.0 + 0.5) - 0.5) * 30.0 * cos(latD / 57.29578);
+  let gLonOn = select(0.0, 1.0, abs(latD) < 75.0);
+  let grat = max((1.0 - smoothstep(0.0, pxDeg * 1.1, gLat)) * select(0.0, 1.0, abs(latD) < 75.0),
+                 (1.0 - smoothstep(0.0, pxDeg * 1.1, gLon)) * gLonOn);
+
 
   // ── surface ───────────────────────────────────────────────────────────
   let sunD = FR.sun.xyz;
   let ndl = dot(n, sunD);
   let day = smoothstep(-0.15, 0.25, ndl);
   let lit = mix(FR.sun.w, 1.0, day);
-  let land = L.r;
   let ocean = mix(vec3f(0.010, 0.022, 0.050), vec3f(0.035, 0.085, 0.165), day);
   let ground = mix(vec3f(0.030, 0.032, 0.038), vec3f(0.20, 0.205, 0.19) * (0.55 + 0.45 * max(ndl, 0.0)), day);
   var col = mix(ocean, ground, land);
@@ -116,9 +134,8 @@ fn sky(d: vec3f) -> vec3f {
   col = mix(col, vec3f(0.62, 0.93, 1.0) * (0.45 + 0.55 * lit), FR.look.z * F.w * 0.42);
   // cones
   col = mix(col, vec3f(1.0, 0.97, 0.93), FR.look.w * (K.r * 0.06 + K.g * 0.12));
-  // coast and graticule
-  col = col + vec3f(0.62, 0.72, 0.86) * L.g * FR.look2.y * (0.35 + 0.4 * lit);
-  col = col + vec3f(0.5, 0.6, 0.8) * L.b * FR.look2.x * 0.07;
+  // graticule (the coastline is a vector line in overlay.wgsl)
+  col = col + vec3f(0.5, 0.6, 0.8) * grat * FR.look2.x * 0.06;
   // atmosphere rim on the disc
   let rim = pow(1.0 - max(dot(n, -d), 0.0), 3.0);
   col = col + vec3f(0.22, 0.42, 0.95) * rim * (0.08 + 0.42 * day);
