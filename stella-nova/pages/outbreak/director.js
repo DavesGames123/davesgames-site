@@ -134,7 +134,7 @@ const SCENARIOS = [
 ];
 function on(p, id, strength, trigger) { if (p[id]) Object.assign(p[id], { on: true, strength, trigger }); }
 
-const styleIds = styles => (styles && styles.length ? styles : ['night', 'marble', 'dots', 'flat', 'holo'])
+const styleIds = styles => (styles && styles.length ? styles : ['night', 'marble', 'dots', 'flat', 'equalearth', 'holo'])
   .map(s => (typeof s === 'string' ? s : s.id));
 
 export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor = null, rules = null } = {}) {

@@ -110,7 +110,8 @@ export default async function (ok) {
   ok('globe: pose mode maps flat projections', poseMode('globe', 'equalearth') === 'globe' && poseMode('flat') === 'equirect' && poseMode('flat', 'equalearth') === 'equalearth');
   const p = nodeWorld({ lat: 0, lon: 90 }, 'globe');
   ok('globe: node (0, 90) is on -z', Math.abs(p[2] + 1) < 1e-12 && Math.abs(p[0]) < 1e-12);
-  ok('globe: five styles listed', STYLE_LIST.map(s => s.id).join() === 'night,marble,dots,flat,holo');
+  ok('globe: six styles listed', STYLE_LIST.map(s => s.id).join() === 'night,marble,dots,flat,equalearth,holo');
+  ok('globe: the flat styles name their projection', STYLE_LIST.find(s => s.id === 'flat').proj === 'equirect' && STYLE_LIST.find(s => s.id === 'equalearth').proj === 'equalearth');
 
   // createGlobe against the stub
   const G = stubThree();

@@ -49,7 +49,9 @@ export const STYLE_LIST = [
   { id: 'night', label: 'Night', file: null },
   { id: 'marble', label: 'Marble', file: './style-marble.js' },
   { id: 'dots', label: 'Dots', file: './style-dots.js' },
-  { id: 'flat', label: 'Flat map', file: './style-flat.js' },
+  { id: 'flat', label: 'Flat map', file: './style-flat.js', proj: 'equirect' },
+  // the same flat module in the Equal Earth projection (ctx.proj at create)
+  { id: 'equalearth', label: 'Equal Earth', file: './style-flat.js', proj: 'equalearth' },
   { id: 'holo', label: 'Hologram', file: null },
 ];
 export const WORLD_URL = new URL('../../map-projections/data/world.json', import.meta.url);
@@ -124,9 +126,13 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
     if (cur) { try { cur.dispose(); } catch (e) { console.warn('outbreak globe: style dispose', e); } }
     const m = mods[id];
     curMode = m.mode === 'flat' ? 'flat' : 'globe';
+    // the flat projection of this style: the arcs and city glows read it
+    // from the shared ctx, so set it before the style and the layers build
+    const prevProj = base.proj, def = STYLE_LIST.find(s => s.id === id);
+    base.proj = (def && def.proj) || 'equirect';
     try { cur = m.create({ ...base, mode: curMode, root: styleRoot }); curId = id; }
     catch (e) { console.warn(`outbreak globe: style ${id} failed`, e); cur = null; curId = null; failed.add(id); if (id !== 'night') { want = 'night'; applyStyle(); } return; }
-    if (base.mode !== curMode) { base.mode = curMode; for (const l of layers) if (l.setMode) l.setMode(curMode); }
+    if (base.mode !== curMode || base.proj !== prevProj) { base.mode = curMode; for (const l of layers) if (l.setMode) l.setMode(curMode); }
     applyPose();
   }
 
