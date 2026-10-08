@@ -611,11 +611,16 @@ function capItems(C, K) {
   // Silhouette fill: the star hull of dense surface samples about the cap
   // centre (the projected cap is star-shaped about that point).
   const pts = [];
-  for (const [path, nu] of [[cap.top, 40], [cap.under, 14]]) {
-    for (let i = 0; i <= nu; i++) for (let k = 0; k < 144; k++) pts.push(cproj(surf(path, i / nu, k / 144 * TAU).p));
+  // The rim and the outer top get the densest angle samples: more samples
+  // than hull bins, so no bin sees only inner points.
+  for (const [path, nu, nk] of [[cap.top, 40, 144], [cap.under, 14, 144]]) {
+    for (let i = 0; i <= nu; i++) {
+      const k1 = path === cap.top && i >= nu * 0.6 ? nk * 3 : nk;
+      for (let k = 0; k < k1; k++) pts.push(cproj(surf(path, i / nu, k / k1 * TAU).p));
+    }
   }
   const c2 = cproj([0, (cap.hmax + cap.hmin) / 2, 0]);
-  const NBN = 288, d = new Float64Array(NBN);
+  const NBN = 240, d = new Float64Array(NBN);
   for (const [x, y] of pts) {
     const a = Math.atan2(y - c2[1], x - c2[0]), r = Math.hypot(x - c2[0], y - c2[1]);
     const k = ((Math.round((a / TAU) * NBN) % NBN) + NBN) % NBN;
@@ -626,6 +631,12 @@ function capItems(C, K) {
     while (!d[a]) a = (a - 1 + NBN) % NBN;
     while (!d[bk]) bk = (bk + 1) % NBN;
     d[k] = (d[a] + d[bk]) / 2;
+  }
+  // Fill notches: a bin lower than both neighbours (two bins out) takes
+  // the lower of them.
+  for (let pass = 0; pass < 2; pass++) for (let k = 0; k < NBN; k++) {
+    const a = Math.min(d[(k + NBN - 1) % NBN], d[(k + 1) % NBN]), b = Math.min(d[(k + NBN - 2) % NBN], d[(k + 2) % NBN]);
+    d[k] = Math.max(d[k], a, b);
   }
   const sil = [];
   for (let k = 0; k < NBN; k++) { const a = k / NBN * TAU; sil.push([c2[0] + Math.cos(a) * d[k], c2[1] + Math.sin(a) * d[k]]); }
