@@ -142,6 +142,61 @@ const natEarth = (l, p) => {
     p * (1.007226 + p2 * (0.015085 + p4 * (-0.044475 + 0.028874 * p2 - 0.005916 * p4)))];
 };
 
+// ── unusual maps ───────────────────────────────────────────────────────────
+// Kept for their outline or their history (the guide's "Odd maps"). Sphere
+// formulas from Snyder (1987, 1993) and PROJ (vandg, august, larr).
+// Werner: Bonne with phi1 = 90 deg, so the parallels are arcs round the
+// pole and the world is a heart. Equal-area.
+const werner = (l, p) => { const r = HALF - p, E = r > 1e-12 ? l * cos(p) / r : l; return [r * sin(E), -r * cos(E)]; };
+const wernerInv = (x, y) => {
+  const r = hypot(x, y); if (r > PI + 1e-12) return null;
+  const p = HALF - r, c = cos(p); if (r < 1e-12) return [0, HALF];
+  if (c < 1e-12) return null;
+  const l = atan2(x, -y) * r / c; return abs(l) > PI + 1e-9 ? null : [l, p];
+};
+// Van der Grinten (1898): the world in a circle of radius pi. Snyder
+// (1987) eq. 29-1 .. 29-8; the equator and the central meridian are special.
+function vanDerGrinten(l, p) {
+  const sg = v => v < 0 ? -1 : 1;
+  if (abs(p) < 1e-12) return [l, 0];
+  const th = asinC(abs(2 * p / PI));
+  if (abs(l) < 1e-12 || abs(abs(p) - HALF) < 1e-12) return [0, sg(p) * PI * tan(th / 2)];
+  const A = 0.5 * abs(PI / l - l / PI), G = cos(th) / (sin(th) + cos(th) - 1), P = G * (2 / sin(th) - 1), Q = A * A + G;
+  const P2 = P * P, A2 = A * A, den = P2 + A2;
+  const x = PI * abs(A * (G - P2) + sqrt(Math.max(0, A2 * (G - P2) ** 2 - den * (G * G - P2)))) / den;
+  const y = PI * abs(P * Q - A * sqrt(Math.max(0, (A2 + 1) * den - Q * Q))) / den;
+  return [sg(l) * x, sg(p) * y];
+}
+// The inverse in closed form (Snyder 1987, eq. 29-9 .. 29-19): a cubic in
+// the latitude, solved by the trigonometric method. The Newton inverse of
+// makeMap missed points near the equator and the central meridian, where
+// the forward formula changes branch.
+function vanDerGrintenInv(x, y) {
+  const X = x / PI, Y = y / PI, X2 = X * X, Y2 = Y * Y, r2 = X2 + Y2;
+  if (r2 > 1 + 1e-12) return null;
+  const c1 = -abs(Y) * (1 + r2), c2 = c1 - 2 * Y2 + X2, c3 = -2 * c1 + 1 + 2 * Y2 + r2 * r2;
+  let p = 0;
+  if (abs(Y) > 1e-14) {
+    const d = Y2 / c3 + (2 * c2 ** 3 / c3 ** 3 - 9 * c1 * c2 / (c3 * c3)) / 27;
+    const a1 = (c1 - c2 * c2 / (3 * c3)) / c3, m1 = 2 * sqrt(Math.max(0, -a1 / 3));
+    const t1 = acosC(3 * d / (a1 * m1)) / 3;
+    p = (Y < 0 ? -1 : 1) * PI * (-m1 * cos(t1 + PI / 3) - c2 / (3 * c3));
+  }
+  const l = abs(X) < 1e-14 ? 0 : PI * (r2 - 1 + sqrt(Math.max(0, 1 + 2 * (X2 - Y2) + r2 * r2))) / (2 * X);
+  return abs(l) > PI + 1e-9 ? null : [l, Math.max(-HALF, Math.min(HALF, p))];
+}
+// August epicycloidal (1874): conformal. w = x1 + i y1 maps the sphere
+// to a disc; then z = 4w + (4/3) w^3 gives the four-cusped outline.
+function august(l, p) {
+  const t = tan(p / 2), c1 = sqrt(Math.max(0, 1 - t * t)), c = 1 + c1 * cos(l / 2);
+  const x1 = sin(l / 2) * c1 / c, y1 = t / c, k = 4 / 3;
+  return [k * x1 * (3 + x1 * x1 - 3 * y1 * y1), k * y1 * (3 + 3 * x1 * x1 - y1 * y1)];
+}
+// Larrivee (1988): poles as lines half the equator, parallels bent up away
+// from the central meridian by 1 / cos(lambda / 6).
+const larrivee = (l, p) => [0.5 * l * (1 + sqrt(cos(p))), p / (cos(p / 2) * cos(l / 6))];
+const HOBO = cos(37.5 * D);
+
 // Eckert IV.
 const E4K = (2 + HALF);
 function eck4Theta(p) {
@@ -233,7 +288,7 @@ function polyconic(p0) {
 }
 
 // ── the table ──────────────────────────────────────────────────────────────
-// family: cylindrical | pseudocylindrical | conic | azimuthal | interrupted
+// family: cylindrical | pseudocylindrical | conic | azimuthal | interrupted | unusual
 // prop:   conformal | equal-area | equidistant | compromise | perspective
 // build(par) -> { raw, inv?, rects, Q? }. par holds lat0, lat1, lat2 (rad)
 // and clip (rad, the azimuthal edge). rects are [lon0, lon1, lat0, lat1, cm]
@@ -276,6 +331,8 @@ export const PROJ = [
     build: () => ({ raw: eckert4, inv: eckert4Inv, rects: R_ALL }) },
   { key: 'sinusoidal', name: 'Sinusoidal', family: 'pseudocylindrical', prop: 'equal-area',
     build: () => ({ raw: (l, p) => [l * cos(p), p], inv: (x, y) => { const c = cos(y); return abs(y) > HALF || c < 1e-12 || abs(x / c) > PI + 1e-9 ? null : [x / c, y]; }, rects: R_ALL }) },
+  { key: 'hobo-dyer', name: 'Hobo–Dyer', family: 'cylindrical', prop: 'equal-area',
+    build: () => ({ raw: (l, p) => [l * HOBO, sin(p) / HOBO], inv: (x, y) => abs(y * HOBO) > 1 ? null : [x / HOBO, asin(y * HOBO)], rects: R_ALL }) },
   { key: 'goode', name: 'Goode homolosine', family: 'interrupted', prop: 'equal-area', noAspect: true,
     build: () => ({ raw: homolosine, inv: homolosineInv,
       rects: deg([[-180, -40, 0, 90, -100], [-40, 180, 0, 90, 30], [-180, -100, -90, 0, -160], [-100, -20, -90, 0, -60], [-20, 80, -90, 0, 20], [80, 180, -90, 0, 140]]) }) },
@@ -300,6 +357,14 @@ export const PROJ = [
     build: par => { const c = eqdc(par.lat0, par.lat1, par.lat2); return { raw: c.f, inv: c.i, rects: R_ALL, n: c.n }; } },
   { key: 'bonne', name: 'Bonne', family: 'conic', prop: 'equal-area', conic: 'one',
     build: par => { const c = bonne(abs(par.lat1) < 1 * D ? 1 * D : par.lat1); return { raw: c.f, inv: c.i, rects: R_ALL }; } },
+  { key: 'werner', name: 'Werner (heart)', short: 'Werner', family: 'unusual', prop: 'equal-area',
+    build: () => ({ raw: werner, inv: wernerInv, rects: R_ALL }) },
+  { key: 'van-der-grinten', name: 'Van der Grinten', family: 'unusual', prop: 'compromise',
+    build: () => ({ raw: vanDerGrinten, inv: vanDerGrintenInv, rects: R_ALL }) },
+  { key: 'august', name: 'August epicycloidal', short: 'August', family: 'unusual', prop: 'conformal',
+    build: () => ({ raw: august, rects: R_ALL }) },
+  { key: 'larrivee', name: 'Larrivée', family: 'unusual', prop: 'compromise',
+    build: () => ({ raw: larrivee, rects: R_ALL }) },
   { key: 'polyconic', name: 'American polyconic', short: 'Polyconic', family: 'conic', prop: 'compromise', conic: 'zero',
     build: par => ({ raw: polyconic(par.lat0), rects: R_ALL }) },
 ];

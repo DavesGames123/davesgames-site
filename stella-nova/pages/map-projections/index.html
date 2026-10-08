@@ -171,6 +171,7 @@
         <a href="#s-mercator">Mercator and the Greenland problem</a>
         <a href="#s-area">Equal-area vs conformal</a>
         <a href="#s-compromise">The compromise maps</a>
+        <a href="#s-odd">Odd maps</a>
         <a href="#s-nav">Maps for navigation and for airlines</a>
         <a href="#s-web">Web Mercator and why your phone uses it</a>
       </nav>
@@ -201,7 +202,7 @@
         <div class="sci-eq" data-tex="q = \int_0^{\varphi}\frac{d\varphi'}{\cos\varphi'}, \qquad \frac{\partial x}{\partial\lambda} = \frac{\partial y}{\partial q}, \qquad \frac{\partial x}{\partial q} = -\frac{\partial y}{\partial\lambda}."></div>
         <p>For a cylinder, <span class="sci-sym" data-tex="x = \lambda" data-inline></span> and <span class="sci-sym" data-tex="y" data-inline></span> depends on <span class="sci-sym" data-tex="\varphi" data-inline></span> alone, so <span class="sci-sym m2" data-tex="k = \sec\varphi" data-inline></span>, <span class="sci-sym m1" data-tex="h = y'(\varphi)" data-inline></span> and <span class="sci-sym" data-tex="\theta' = 90^\circ" data-inline></span>. Each condition is then one line of calculus, and each answer is a map on this page:</p>
         <div class="sci-eq" data-tex="h = k:\ \ y' = \sec\varphi \ \Rightarrow\ y = \ln\tan\!\left(\frac{\pi}{4} + \frac{\varphi}{2}\right) \ \ (\text{Mercator}), \qquad hk = 1:\ \ y' = \cos\varphi \ \Rightarrow\ y = \sin\varphi \ \ (\text{Lambert})."></div>
-        <p>The same two lines with <span class="sci-sym" data-tex="x = \lambda\cos\varphi_s" data-inline></span> give Gall–Peters (<span class="sci-sym" data-tex="\varphi_s = 45^\circ" data-inline></span>). The tests of this page compute every <span class="sci-sym m1" data-tex="h" data-inline></span>, <span class="sci-sym m2" data-tex="k" data-inline></span> and <span class="sci-sym" data-tex="s" data-inline></span> on the cards from these derivatives, by finite differences, and compare.</p>
+        <p>The same two lines with <span class="sci-sym" data-tex="x = \lambda\cos\varphi_s" data-inline></span> give Gall–Peters (<span class="sci-sym" data-tex="\varphi_s = 45^\circ" data-inline></span>) and Hobo–Dyer (<span class="sci-sym" data-tex="\varphi_s = 37.5^\circ" data-inline></span>). The tests of this page compute every <span class="sci-sym m1" data-tex="h" data-inline></span>, <span class="sci-sym m2" data-tex="k" data-inline></span> and <span class="sci-sym" data-tex="s" data-inline></span> on the cards from these derivatives, by finite differences, and compare.</p>
         <div class="gos">
           <button type="button" class="go" data-go='{"key":"mercator","heat":"area","tissot":"off","tool":"pan"}'>Mercator: h = k, area grows</button>
           <button type="button" class="go" data-go='{"key":"lambert-cylindrical","tissot":30,"heat":"off","tool":"pan"}'>Lambert cylindrical: hk = 1</button>
@@ -244,6 +245,23 @@
           <button type="button" class="go" data-go='{"key":"robinson","heat":"angle","tissot":"off","tool":"pan"}'>Robinson, angle heatmap</button>
           <button type="button" class="go" data-go='{"key":"winkel-tripel","heat":"angle","tissot":"off"}'>Winkel tripel, angle heatmap</button>
           <button type="button" class="go" data-go='{"key":"equal-earth","heat":"area","tissot":"off"}'>Equal Earth, area heatmap</button>
+        </div>
+      </article>
+
+      <article id="s-odd">
+        <h2>Odd maps</h2>
+        <p>Some maps are chosen for their outline or their story more than for what they keep. Randall Munroe's <a href="https://xkcd.com/977/" target="_blank" rel="noopener">xkcd 977, "Map Projections"</a>, jokes that your favourite projection says something about you. Five of the stranger ones are here.</p>
+        <p><b>Hobo–Dyer</b> (2002) is the Lambert cylinder with its true-scale parallels moved to 37.5°, an equal-area answer to Mercator that is often printed south-up. <b>Van der Grinten</b> (1898) puts the whole world in a circle; it was National Geographic's world map for 66 years. <b>Werner</b> (about 1500) is a Bonne map with its standard parallel at the pole, so every parallel curls round the North Pole and the world becomes a heart:</p>
+        <div class="sci-eq" data-tex="\rho = \frac{\pi}{2} - \varphi, \qquad E = \frac{\lambda\cos\varphi}{\rho}, \qquad (x, y) = \rho\,(\sin E,\ -\cos E)."></div>
+        <p><b>August</b> (1874) shows that a conformal world map need not run off to infinity. It maps the sphere to a disc, then bends the disc with a cubic. A polynomial in a complex number is analytic, so the result keeps every angle, and the outline gets four cusps:</p>
+        <div class="sci-eq" data-tex="z = x + iy = 4w + \tfrac{4}{3}\,w^{3}, \qquad z'(w) = 4\,(1 + w^{2})."></div>
+        <p>The cusps are where <span class="sci-sym" data-tex="z'(w) = 0" data-inline></span>, at <span class="sci-sym" data-tex="w = \pm i" data-inline></span>: the two poles. <b>Larrivée</b> (1988) draws each pole as a line half the length of the equator and bends the parallels up toward the edges. The Dymaxion and the AuthaGraph are still left out, for the reason at the end of the gallery.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"werner","tissot":"off","heat":"off","tool":"pan"}'>The Werner heart</button>
+          <button type="button" class="go" data-go='{"key":"august","tissot":30,"heat":"off","tool":"pan"}'>August: Tissot circles stay round</button>
+          <button type="button" class="go" data-go='{"key":"van-der-grinten","heat":"area","tissot":"off","tool":"pan"}'>Van der Grinten, area heatmap</button>
+          <button type="button" class="go" data-go='{"key":"hobo-dyer","tissot":30,"heat":"off","tool":"pan"}'>Hobo–Dyer with Tissot circles</button>
+          <button type="button" class="go" data-go='{"key":"larrivee","heat":"angle","tissot":"off","tool":"pan"}'>Larrivée, angle heatmap</button>
         </div>
       </article>
 

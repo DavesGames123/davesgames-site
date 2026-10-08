@@ -35,7 +35,8 @@ import { pointAt } from './geo.js';
 import * as T from './tools.js';
 import { CARDS, PROPS, FAMILY } from './cards.js';
 
-const WORLD = ['mercator', 'equirectangular', 'mollweide', 'hammer', 'winkel-tripel', 'robinson', 'equal-earth', 'natural-earth', 'eckert-iv', 'sinusoidal', 'goode', 'lambert-cylindrical', 'gall-peters', 'aitoff'];
+const WORLD = ['mercator', 'equirectangular', 'mollweide', 'hammer', 'winkel-tripel', 'robinson', 'equal-earth', 'natural-earth', 'eckert-iv', 'sinusoidal', 'goode', 'lambert-cylindrical', 'gall-peters', 'aitoff',
+  'hobo-dyer', 'van-der-grinten', 'august', 'werner', 'larrivee'];
 const UNROLL_TO = ['equirectangular', 'mollweide', 'winkel-tripel', 'equal-earth', 'natural-earth', 'hammer'];
 const SPIN = ['orthographic', 'lambert-azimuthal', 'azimuthal-equidistant', 'stereographic', 'winkel-tripel', 'mollweide', 'equal-earth', 'hammer'];
 const TISSOT_ON = ['mercator', 'mercator', 'mercator', 'mercator', 'equirectangular', 'sinusoidal', 'stereographic'];

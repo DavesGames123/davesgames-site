@@ -11,6 +11,8 @@
 //  7. the card math: every h, k and s that cards.js states as TeX, written
 //     here again as JS, against the numerical Jacobian (proj.js
 //     distortion), to 1e-5 relative, on a 30 x 15 degree grid
+//  8. the outlines of the unusual maps (van der Grinten circle, August
+//     pole, Larrivee pole line, the Werner heart)
 //  Each check prints one line; the run exits 1 on any failure.
 // ============================================================================
 import fs from 'node:fs';
@@ -249,6 +251,8 @@ console.log('# the card math (cards.js scale) vs the numerical Jacobian');
     equirectangular: cyl((l, p) => ({ h: 1, k: sec(p), s: sec(p) })),
     'lambert-cylindrical': cyl((l, p) => ({ h: cos(p), k: sec(p), s: 1 })),
     'gall-peters': cyl((l, p) => ({ h: cos(p) / c45, k: c45 / cos(p), s: 1 })),
+    'hobo-dyer': cyl((l, p) => { const c = cos(37.5 * D); return { h: cos(p) / c, k: c / cos(p), s: 1 }; }),
+    werner: cyl(() => ({ k: 1, s: 1 })),
     mollweide: cyl((l, p) => ({ k: 2 * Math.SQRT2 * cos(mollTheta(p)) / (PI * cos(p)), s: 1 })),
     hammer: cyl(() => ({ s: 1 })),
     'equal-earth': cyl(() => ({ s: 1 })),
@@ -279,6 +283,24 @@ console.log('# the card math (cards.js scale) vs the numerical Jacobian');
     }
     ok(n > 20 && worst < 1e-5, `${key}: card scale factors at ${n} points, max relative error ${e(worst)}`);
   }
+}
+
+// ── 8. the outlines of the unusual maps ────────────────────────────────────
+console.log('# unusual maps: outlines');
+{
+  const raw = key => P.BY_KEY[key].build({}).raw;
+  const vdg = raw('van-der-grinten'), aug = raw('august'), lar = raw('larrivee'), wer = raw('werner');
+  let rim = 0; for (let la = -89; la <= 89; la += 1) for (const s of [-1, 1]) { const [x, y] = vdg(s * Math.PI, la * D); rim = Math.max(rim, Math.abs(Math.hypot(x, y) - Math.PI)); }
+  ok(rim < 1e-9, `van der grinten: the meridians at +-180 lie on the circle of radius pi (max off ${e(rim)})`);
+  const eq = [-170, -90, -30, 45, 120].every(lo => { const [x, y] = vdg(lo * D, 0); return Math.abs(x - lo * D) < 1e-12 && y === 0; });
+  ok(eq, 'van der grinten: the equator is x = lambda, y = 0');
+  const pole = aug(1.3, Math.PI / 2);
+  ok(Math.abs(pole[0]) < 1e-12 && Math.abs(pole[1] - 8 / 3) < 1e-12, `august: the North Pole maps to (0, 8/3) (${pole.map(v => v.toFixed(12)).join(', ')})`);
+  const lp = lar(2, Math.PI / 2);
+  // cos(pi/2) is 6e-17 in floats, and its square root 8e-9
+  ok(Math.abs(lp[0] - 1) < 1e-7, `larrivee: the pole is a line with x = lambda / 2 (off ${e(Math.abs(lp[0] - 1))})`);
+  const wp = wer(2, Math.PI / 2), ws = wer(0, -Math.PI / 2);
+  ok(Math.hypot(...wp) < 1e-12 && Math.abs(ws[1] + Math.PI) < 1e-12, 'werner: the North Pole is the notch of the heart, the South Pole its tip at y = -pi');
 }
 
 console.log(`\n${checks - fails}/${checks} checks passed`);

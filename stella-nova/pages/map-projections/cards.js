@@ -24,6 +24,7 @@ export const FAMILY = {
   conic: { name: 'Conic', note: 'A cone on the globe: parallels are arcs, meridians are spokes. Best for mid-latitude bands.' },
   azimuthal: { name: 'Azimuthal', note: 'A plane that touches the globe at one point: every direction from that point is true.' },
   interrupted: { name: 'Interrupted', note: 'The globe is cut into lobes, so each lobe has little distortion.' },
+  unusual: { name: 'Unusual', note: 'Hearts, circles and cusps: maps with an outline of their own, kept for their look or their history.' },
 };
 export const PROPS = {
   conformal: { name: 'Conformal', cls: 'm1', note: 'keeps angles and small shapes' },
@@ -155,6 +156,14 @@ export const CARDS = {
     tex: 'x = \\lambda\\cos\\varphi,\\quad y = \\varphi',
     scale: 'h = \\sqrt{1 + \\lambda^2\\sin^2\\varphi},\\quad k = 1,\\quad s = 1',
   },
+  'hobo-dyer': {
+    who: 'Mick Dyer, 2002, for Howard Bronstein and Bob Abramms (ODT Maps); after Lambert\'s cylinder, 1772',
+    keeps: 'Areas, like Gall–Peters. The scale is true along the parallels at 37.5° north and south, so the stretch moves closer to the equator.',
+    bends: 'Shapes. Land near the equator is drawn tall and narrow, less so than on Gall–Peters; land near the poles is squashed flat.',
+    use: 'Wall maps sold as a fair alternative to Mercator, often printed with south at the top.',
+    tex: 'x = \\lambda\\cos 37.5^\\circ,\\quad y = \\frac{\\sin\\varphi}{\\cos 37.5^\\circ}',
+    scale: 'h = \\frac{\\cos\\varphi}{\\cos 37.5^\\circ},\\quad k = \\frac{\\cos 37.5^\\circ}{\\cos\\varphi},\\quad s = hk = 1',
+  },
   goode: {
     who: 'J. Paul Goode, 1923',
     keeps: 'Area. Sinusoidal below 40°44′ and Mollweide above, joined where their parallels have the same length; cut in the oceans so each continent sits on its own lobe.',
@@ -234,6 +243,38 @@ export const CARDS = {
     use: 'Topographic maps of France and other European countries in the 1800s; atlas maps of continents.',
     tex: '\\rho = \\cot\\varphi_1 + \\varphi_1 - \\varphi,\\quad E = \\frac{\\lambda\\cos\\varphi}{\\rho}',
     scale: 'x = \\rho\\sin E,\\quad y = \\cot\\varphi_1 - \\rho\\cos E,\\quad k = 1,\\quad s = 1',
+  },
+  werner: {
+    who: 'Johannes Stabius about 1500; made known by Johannes Werner, 1514',
+    keeps: 'Areas, and true distances along every parallel and along the central meridian. Every parallel is an arc round the North Pole, so the world becomes a heart.',
+    bends: 'Shapes far from the central meridian: the southern continents at the edges are sheared and stretched along the outline.',
+    use: 'Sixteenth-century world maps, among them Oronce Finé (1531) and the young Mercator\'s double heart map (1538).',
+    tex: '\\rho = \\frac{\\pi}{2} - \\varphi,\\quad E = \\frac{\\lambda\\cos\\varphi}{\\rho},\\quad x = \\rho\\sin E,\\quad y = -\\rho\\cos E',
+    scale: '\\text{Bonne with } \\varphi_1 = 90^\\circ:\\quad k = 1,\\quad s = 1',
+  },
+  'van-der-grinten': {
+    who: 'Alphons J. van der Grinten, 1898 (US patent 1904)',
+    keeps: 'Nothing exactly. The whole world fits in a circle, the equator and the central meridian are straight, and the map looks like a rounded Mercator.',
+    bends: 'Area, much as Mercator does: Greenland and Antarctica grow large toward the rim, though the poles are points on the circle, not infinitely far away.',
+    use: 'The National Geographic Society\'s reference world map from 1922 to 1988, until Robinson replaced it.',
+    tex: '\\theta = \\arcsin\\left|\\tfrac{2\\varphi}{\\pi}\\right|,\\quad A = \\tfrac12\\left|\\tfrac{\\pi}{\\lambda} - \\tfrac{\\lambda}{\\pi}\\right|,\\quad G = \\frac{\\cos\\theta}{\\sin\\theta + \\cos\\theta - 1},\\quad P = G\\left(\\tfrac{2}{\\sin\\theta} - 1\\right),\\quad Q = A^2 + G',
+    scale: 'x = \\pm\\pi\\,\\frac{A(G-P^2) + \\sqrt{A^2(G-P^2)^2 - (P^2+A^2)(G^2-P^2)}}{P^2 + A^2},\\quad y = \\pm\\pi\\,\\frac{PQ - A\\sqrt{(A^2+1)(P^2+A^2) - Q^2}}{P^2 + A^2}',
+  },
+  august: {
+    who: 'F. August, 1874',
+    keeps: 'Angles: it is conformal over the whole world, with no edge at infinity. The outline has four cusps, like the curve a point on a rolling circle draws.',
+    bends: 'Area: the scale grows toward the four cusps, so the poles and the far meridians swell.',
+    use: 'Mostly a demonstration that a conformal world map can be closed and finite.',
+    tex: 't = \\tan\\frac{\\varphi}{2},\\quad c = 1 + \\sqrt{1-t^2}\\cos\\frac{\\lambda}{2},\\quad w = \\frac{\\sqrt{1-t^2}\\,\\sin\\frac{\\lambda}{2}}{c} + i\\,\\frac{t}{c}',
+    scale: 'x + iy = 4w + \\tfrac{4}{3}w^{3},\\quad \\text{an analytic function of } w \\;\\Rightarrow\\; h = k,\\ \\omega = 0',
+  },
+  larrivee: {
+    who: 'Léo Larrivée, 1988',
+    keeps: 'Nothing exactly. Each pole is a line half as long as the equator, and the parallels bend upward away from the central meridian.',
+    bends: 'Everything a little: areas, angles and distances all change, and the corners of the map bulge out like a pillow.',
+    use: 'Rarely used; it shows how freely a compromise map can be shaped.',
+    tex: 'x = \\frac{\\lambda}{2}\\left(1 + \\sqrt{\\cos\\varphi}\\right),\\quad y = \\frac{\\varphi}{\\cos\\frac{\\varphi}{2}\\,\\cos\\frac{\\lambda}{6}}',
+    scale: '\\text{poles: } x = \\frac{\\lambda}{2},\\ y = \\pm\\frac{\\pi}{2\\cos\\frac{\\pi}{4}\\cos\\frac{\\lambda}{6}}',
   },
   polyconic: {
     who: 'Ferdinand Rudolph Hassler, about 1820 (US Coast Survey)',
