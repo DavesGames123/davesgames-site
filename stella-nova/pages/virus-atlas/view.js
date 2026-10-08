@@ -11,10 +11,17 @@
 //    uUnits   RGBA32F, 2 texels per unit (copy k, chain c -> k nChains + c):
 //             centroid + assembly delay, then flight direction + sway phase
 //    uChainCol RGBA8 per chain: colour, alpha 0 hides the chain
+//    uAux     RGBA8 per bead (trace.js): burial, place along the chain,
+//             break count, ribbon weight
 //  Each bead is a camera-facing quad with a sphere drawn in the fragment
-//  shader (normal, depth, light, rim, fog). The vertex shader moves whole
-//  units for the assembly (uAsm), explode, peel and breathing, and bends
-//  spikes for the sway; a fragment test cuts the slice.
+//  shader (glsl.js BEAD_VS, BEAD_FS). The vertex shader moves whole units
+//  for the assembly (uAsm), explode, peel and breathing, and bends spikes
+//  for the sway; a fragment test cuts the slice. The same quads draw
+//  space-filling (uRadMul, uAO) and toon (uToon); reps.js adds the glow,
+//  tube, blob and cage meshes on the same textures.
+//
+//  PALETTE AND LIGHT  setPalette(key) and setLight(key) (colors.js) write
+//  shared uniform objects that every material holds.
 //
 //  OTHER OBJECTS  membrane shell (an illustration), spike stalks, the
 //  symmetry axes with 5-, 3- and 2-fold markers, a soft dust field.
@@ -24,124 +31,24 @@
 //  texture, geometry and material and loses the WebGL context; main.js
 //  calls it on pagehide.
 //
-//  grep -n targets: "const BEAD_VS", "const BEAD_FS", "export function createView",
-//    "function makePart", "function setColors", "function makeMembrane",
-//    "function makeAxes", "function makeStalks", "const PAL"
+//  grep -n targets: "export function createView", "function setPalette",
+//    "function setLight", "function makePart", "function setColors",
+//    "function makeMembrane", "function makeAxes", "function makeStalks"
 // ============================================================================
 import * as THREE from 'three';
 import { unitCentroids, assemblyDelays, explodeDirs, axesOf, ASM_SPREAD } from './symmetry.js';
 import { canvasBudget } from './budget.js';
 import { ROW, packBeads, packOps, packUnits } from './pack.js';
+import { packAux, opsKey } from './trace.js';
+import { SCHEMES, MODE, LIGHTS, hex01, chainColors, paletteUniforms } from './colors.js';
+import { BEAD_VS, BEAD_FS } from './glsl.js';
+import { addReps } from './reps.js';
 
 const W = ROW;   // texture row width
 
-const BEAD_VS = /* glsl */`
-precision highp float; precision highp int; precision highp sampler2D;
-uniform sampler2D uBeads, uOps, uUnits, uChainCol;
-uniform int uNB, uStride, uNChains, uColMode, uHiK, uNCopies;
-uniform float uRad, uAsm, uSpread, uFly, uJitter, uExplode, uPeelD, uPeelW, uPeelOn,
-  uSliceD, uSliceOn, uBreath, uTime, uSway, uSwayH, uSwayBase, uDim, uRadialR, uFade;
-uniform vec3 uPeelN, uSliceN, uOffset;
-out vec2 vUV; out vec3 vCol; out vec3 vVC; out float vR; out float vClip; out float vShade;
-
-vec4 fetchT(sampler2D t, int i) { return texelFetch(t, ivec2(i & 2047, i >> 11), 0); }
-float hash(int n) { return fract(sin(float(n % 100003) * 12.9898 + float(n / 100003) * 78.233) * 43758.5453); }
-vec3 hsv(float h, float s, float v) { vec3 k = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); return v * mix(vec3(1.0), k, s); }
-vec3 radial(float t) {
-  // deep blue -> teal -> straw -> warm white, the radial colour of capsid maps
-  vec3 a = vec3(0.13, 0.22, 0.62), b = vec3(0.16, 0.66, 0.74), c = vec3(0.93, 0.80, 0.45), d = vec3(1.0, 0.95, 0.88);
-  return t < 0.4 ? mix(a, b, t / 0.4) : t < 0.8 ? mix(b, c, (t - 0.4) / 0.4) : mix(c, d, (t - 0.8) / 0.2);
-}
-void main() {
-  int i = gl_InstanceID;
-  int k = i / uNB;
-  int b = (i - k * uNB) * uStride;
-  vec4 bd = fetchT(uBeads, b);
-  int code = int(bd.w + 0.5);
-  int ch = code & 4095, fl = code >> 12, cls = (fl >> 2) & 7, ss = fl & 3;
-  int u = k * uNChains + ch;
-  vec4 U0 = fetchT(uUnits, 2 * u), U1 = fetchT(uUnits, 2 * u + 1);
-  vec4 r0 = fetchT(uOps, 3 * k), r1 = fetchT(uOps, 3 * k + 1), r2 = fetchT(uOps, 3 * k + 2);
-  vec3 p = bd.xyz;
-  if (uSway > 0.0) {
-    // a spike bends on its stalk: more at the top, phase per copy
-    float h = clamp((p.y - uSwayBase) / uSwayH, 0.0, 1.4);
-    vec2 bend = uSway * vec2(sin(uTime * 0.83 + U1.w), sin(uTime * 0.61 + 1.7 * U1.w));
-    p.xz += bend * h * h * uSwayH;
-  }
-  vec3 w = vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w);
-  vec3 c = U0.xyz, dir = U1.xyz;
-  float a = clamp((uAsm - U0.w * uSpread) / (1.0 - uSpread), 0.0, 1.0);
-  float e = a < 0.5 ? 4.0 * a * a * a : 1.0 - pow(-2.0 * a + 2.0, 3.0) / 2.0;
-  vec3 off = dir * ((1.0 - e) * uFly + uExplode);
-  vec3 jv = vec3(hash(b * 3 + k * 7919 + 1), hash(b * 3 + k * 7919 + 2), hash(b * 3 + k * 7919 + 3)) - 0.5;
-  off += jv * uJitter * (1.0 - e) * (1.0 - e);
-  float s = 0.0;
-  if (uPeelOn > 0.5) { s = smoothstep(uPeelD, uPeelD + uPeelW, dot(c, uPeelN)); off += dir * s * uRadialR * 0.7; }
-  w += off + c * uBreath;
-  vec4 cc = fetchT(uChainCol, ch);
-  float rad = uRad * (cls == 6 ? 0.72 : 1.0) * smoothstep(0.0, 0.2, e) * (1.0 - s) * uFade;
-  if (cc.a < 0.5) rad = 0.0;
-  vec3 col = cc.rgb;
-  if (uColMode == 1) col = hsv(fract(float(k) * 0.618034 + 0.08), 0.5, 0.95);
-  else if (uColMode == 2) col = ss == 1 ? vec3(0.93, 0.36, 0.45) : ss == 2 ? vec3(0.98, 0.80, 0.30) : vec3(0.62, 0.68, 0.78);
-  else if (uColMode == 3) col = cls == 0 ? vec3(0.92, 0.90, 0.84) : cls == 1 ? vec3(0.45, 0.80, 0.55) : cls == 2 ? vec3(0.35, 0.55, 0.98)
-    : cls == 3 ? vec3(0.95, 0.35, 0.32) : cls == 4 ? vec3(0.62, 0.62, 0.66) : cls == 5 ? vec3(1.0, 0.62, 0.25) : vec3(0.85, 0.95, 0.80);
-  else if (uColMode == 4) col = radial(clamp((length(w - c * uBreath) / uRadialR - 0.45) / 0.55, 0.0, 1.0));
-  if (cls == 6 && uColMode != 3) col = vec3(0.86, 0.95, 0.78);
-  if (cls == 5 && uColMode != 3) col = vec3(1.0, 0.63, 0.28);
-  if (uHiK >= 0 && k != uHiK) col *= uDim;
-  else if (uHiK >= 0) col = mix(col, vec3(1.0), 0.18);
-  vCol = col;
-  vShade = mix(0.5, 1.0, smoothstep(0.35, 1.0, length(w) / max(uRadialR, 1e-3)));
-  vec3 world = w + uOffset;
-  vClip = uSliceOn > 0.5 ? dot(w, uSliceN) - uSliceD : -1.0;
-  vec4 vc = modelViewMatrix * vec4(world, 1.0);
-  vVC = vc.xyz; vR = rad;
-  vec3 q = vc.xyz + vec3(position.xy * rad * 1.08, rad);
-  gl_Position = projectionMatrix * vec4(q, 1.0);
-  vUV = position.xy * 1.08;
-}`;
-
-const BEAD_FS = /* glsl */`
-precision highp float;
-uniform mat4 projectionMatrix;
-uniform vec3 uBg; uniform vec2 uFog; uniform float uSliceOn;
-in vec2 vUV; in vec3 vCol; in vec3 vVC; in float vR; in float vClip; in float vShade;
-out vec4 outColor;
-void main() {
-  if (vClip > 0.0 || vR <= 0.0) discard;
-  float r2 = dot(vUV, vUV);
-  if (r2 > 1.0) discard;
-  float z = sqrt(1.0 - r2);
-  vec3 n = vec3(vUV, z);
-  vec3 vp = vVC + n * vR;
-  vec4 cp = projectionMatrix * vec4(vp, 1.0);
-  gl_FragDepth = clamp(cp.z / cp.w * 0.5 + 0.5, 0.0, 1.0);
-  vec3 L = normalize(vec3(-0.45, 0.65, 0.62)), F = normalize(vec3(0.6, -0.2, 0.5));
-  float dif = max(dot(n, L), 0.0), fill = max(dot(n, F), 0.0);
-  float spec = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 28.0);
-  float rim = pow(1.0 - z, 2.2);
-  // a cut bead near the slice plane glows a little, so the cut reads
-  float cut = uSliceOn > 0.5 ? smoothstep(-0.9, 0.0, vClip) * 0.35 : 0.0;
-  vec3 col = vCol * (0.22 + 0.68 * dif + 0.18 * fill) * vShade + vec3(0.9, 0.95, 1.0) * spec * 0.22 + vCol * rim * 0.32 + vec3(1.0, 0.85, 0.6) * cut;
-  float f = smoothstep(uFog.x, uFog.y, -vp.z);
-  outColor = vec4(mix(col, uBg, f * 0.88), 1.0);
-}`;
-
-// role and entity colours
-export const PAL = {
-  main: ['#ec7a5c', '#f2c14e', '#5fb7ea', '#8fd17f', '#c592f0', '#f193b8', '#79d8c9', '#e0a35b', '#9db4ff', '#d6e36a'],
-  antibody: '#8e97ab', receptor: '#e7c45d', glycan: '#dcefc6', nucleic: '#ff9f43',
-};
-// '#rrggbb' -> [r, g, b] bytes; hsl (0..1) -> bytes
-const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-function hsl(h, s, l) {
-  const f = n => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
-  return [f(0), f(8), f(4)];
-}
-const srgb = h => { const c = hex(h); return new THREE.Vector3(c[0] / 255, c[1] / 255, c[2] / 255); };
-export const COLOR_MODES = ['protein', 'copy', 'structure', 'residue', 'radius', 'chain'];
+export { PALETTES as PALS } from './colors.js';
+const srgb = h => { const c = hex01(h); return new THREE.Vector3(c[0], c[1], c[2]); };
+export const COLOR_MODES = SCHEMES.map(x => x.id);
 
 function tex32(data) {
   const t = new THREE.DataTexture(data, ROW, data.length / 4 / ROW, THREE.RGBAFormat, THREE.FloatType);
@@ -151,7 +58,7 @@ function tex32(data) {
 
 export function createView(canvas, opts = {}) {
   const coarse = !!opts.coarse;
-  const bud = canvasBudget(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+  const bud = canvasBudget(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1, { coarse });
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: bud.antialias, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
   renderer.setPixelRatio(bud.pr);
   renderer.setClearColor(0x05070c, 1);
@@ -161,20 +68,46 @@ export function createView(canvas, opts = {}) {
   camera.position.set(0, 0, 120);
   scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x221a14, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-0.5, 0.8, 0.7); scene.add(sun);
-  const bg = srgb('#05070c');   // raw sRGB: the bead shader writes it as is
+  const bg = srgb('#05070c');   // raw sRGB: the shaders write it as is
   const quad = new THREE.InstancedBufferGeometry();
   quad.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
   quad.setIndex([0, 1, 2, 0, 2, 3]);
   const fog = new THREE.Vector2(100, 400);
   let budget = bud;
+  // shared uniform objects: every material of every part holds these, so
+  // one write changes the light, the palette or the fog everywhere
+  const v3 = a => new THREE.Vector3(a[0], a[1], a[2]);
+  const LIGHT = { uKey: { value: v3(LIGHTS.studio.key) }, uKeyCol: { value: v3(LIGHTS.studio.keyCol) }, uFill: { value: v3(LIGHTS.studio.fill) },
+    uAmb: { value: LIGHTS.studio.amb }, uRimK: { value: LIGHTS.studio.rim }, uSpecK: { value: LIGHTS.studio.spec }, uBg: { value: bg }, uFog: { value: fog } };
+  const PU = paletteUniforms('atlas');
+  const PALU = { uRamp: { value: PU.ramp.map(v3) }, uDiv: { value: PU.div.map(v3) }, uSS: { value: PU.ss.map(v3) }, uCls: { value: PU.cls.map(v3) }, uCopy: { value: v3(PU.copy) } };
+  let palKey = 'atlas', lightKey = 'studio';
+  const parts = new Set();
+  function setPalette(key) {
+    palKey = key; const u = paletteUniforms(key);
+    for (const n of ['ramp', 'div', 'ss', 'cls']) u[n].forEach((c, i) => PALU['u' + n[0].toUpperCase() + n.slice(1)].value[i].set(c[0], c[1], c[2]));
+    PALU.uCopy.value.set(...u.copy);
+  }
+  function setLight(key) {
+    const L = LIGHTS[key] || LIGHTS.studio; lightKey = key;
+    LIGHT.uKey.value.set(...L.key).normalize(); LIGHT.uKeyCol.value.set(...L.keyCol); LIGHT.uFill.value.set(...L.fill).normalize();
+    LIGHT.uAmb.value = L.amb; LIGHT.uRimK.value = L.rim; LIGHT.uSpecK.value = L.spec;
+    const c = hex01(L.bg); bg.set(c[0], c[1], c[2]); renderer.setClearColor(new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace), 1);
+  }
 
   // ── a part ───────────────────────────────────────────────────────────
-  // d: decoded data, ops: Float32Array 3x4 rows (nm), o: { stride, kind,
-  // fibril, phase (per copy), sway {h, base}, radius (nm), offset }
+  // d: decoded data, ops: Float32Array 3x4 rows (nm), o: { stride,
+  // tubeStride, kind, fibril, phase (per copy), sway {h, base}, radius
+  // (nm), offset }. The bead quads draw beads, space and toon (by
+  // uniforms) and the glow; reps.js adds the tube, blob and cage meshes
+  // when a view first needs them.
   function makePart(d, ops, o = {}) {
     const stride = Math.max(1, o.stride || 1), nc = d.info.chains.length, m = ops.length / 12;
     const nb = Math.ceil(d.n / stride);
     const beads = tex32(packBeads(d)), opsT = tex32(packOps(ops));
+    const auxData = packAux(d, ops, d._bur && d._bur.key === opsKey(ops) ? d._bur.v : null);
+    const aux = new THREE.DataTexture(auxData, ROW, auxData.length / 4 / ROW, THREE.RGBAFormat, THREE.UnsignedByteType);
+    aux.minFilter = aux.magFilter = THREE.NearestFilter; aux.generateMipmaps = false; aux.needsUpdate = true;
     const kind = o.kind || d.info.sym.type;
     const cent = unitCentroids(d, ops);
     const axes = kind === 'icosa' ? axesOf(ops) : [];
@@ -184,51 +117,50 @@ export function createView(canvas, opts = {}) {
     const ccData = new Uint8Array(W * Math.ceil(nc / W) * 4);
     const chainCol = new THREE.DataTexture(ccData, W, Math.ceil(nc / W), THREE.RGBAFormat, THREE.UnsignedByteType);
     chainCol.minFilter = chainCol.magFilter = THREE.NearestFilter; chainCol.generateMipmaps = false;
-    const uniforms = {
-      uBeads: { value: beads }, uOps: { value: opsT }, uUnits: { value: units }, uChainCol: { value: chainCol },
-      uNB: { value: nb }, uStride: { value: stride }, uNChains: { value: nc }, uNCopies: { value: m }, uColMode: { value: 0 }, uHiK: { value: -1 },
+    const base = {
+      uBeads: { value: beads }, uAux: { value: aux }, uOps: { value: opsT }, uUnits: { value: units }, uChainCol: { value: chainCol },
+      uNB: { value: nb }, uStride: { value: stride }, uNChains: { value: nc }, uNCopies: { value: m }, uNBead: { value: d.n }, uColMode: { value: 0 }, uHiK: { value: -1 },
       uRad: { value: 0.3 * (1 + 0.3 * (stride - 1)) }, uAsm: { value: 1 }, uSpread: { value: ASM_SPREAD }, uFly: { value: 0 }, uJitter: { value: 0 },
-      uExplode: { value: 0 }, uPeelD: { value: 0 }, uPeelW: { value: 1 }, uPeelOn: { value: 0 }, uPeelN: { value: new THREE.Vector3(0, 0, 1) },
-      uSliceD: { value: 0 }, uSliceOn: { value: 0 }, uSliceN: { value: new THREE.Vector3(0, 0, 1) }, uBreath: { value: 0 }, uTime: { value: 0 },
+      uExplode: { value: 0 }, uExMode: { value: 0 }, uNAx: { value: 0 }, uAx: { value: Array.from({ length: 15 }, () => new THREE.Vector3(0, 1, 0)) },
+      uPeelD: { value: 0 }, uPeelW: { value: 1 }, uPeelOn: { value: 0 }, uPeelN: { value: new THREE.Vector3(0, 0, 1) }, uPeelMode: { value: 0 }, uSpiral: { value: 5 },
+      uSliceD: { value: 0 }, uSliceOn: { value: 0 }, uSlab: { value: 0 }, uSliceN: { value: new THREE.Vector3(0, 0, 1) }, uBreath: { value: 0 }, uTime: { value: 0 },
       uSway: { value: 0 }, uSwayH: { value: o.sway ? o.sway.h : 1 }, uSwayBase: { value: o.sway ? o.sway.base : 0 },
-      uDim: { value: 0.35 }, uRadialR: { value: o.radius || 10 }, uFade: { value: 1 }, uOffset: { value: new THREE.Vector3() },
-      uBg: { value: bg }, uFog: { value: fog },
+      uDim: { value: 0.35 }, uRadialR: { value: o.radius || 10 }, uFade: { value: 1 }, uOffset: { value: new THREE.Vector3() }, uGather: { value: 0 },
+      ...LIGHT, ...PALU,
     };
+    const uniforms = { ...base, uRadMul: { value: 1 }, uRepScale: { value: 1 }, uSprite: { value: 1 }, uAO: { value: 0 }, uToon: { value: 0 } };
     const mat = new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: BEAD_VS, fragmentShader: BEAD_FS, uniforms });
     const geo = quad.clone();
     geo.instanceCount = nb * m;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.frustumCulled = false;
-    if (o.offset) uniforms.uOffset.value.set(...o.offset);
-    const part = { d, ops, mesh, uniforms, stride, nb, m, nc, cent, dirs, delays, axes, kind, instances: nb * m,
-      gpuBytes: (beads.image.data.byteLength + opsT.image.data.byteLength + units.image.data.byteLength + ccData.byteLength),
-      dispose() { scene.remove(mesh); geo.dispose(); mat.dispose(); beads.dispose(); opsT.dispose(); units.dispose(); chainCol.dispose(); } };
+    if (o.offset) base.uOffset.value.set(...o.offset);
+    const part = { d, ops, mesh, uniforms, base, stride, nb, m, nc, cent, dirs, delays, axes, kind, instances: nb * m, auxData, aux,
+      tubeStride: Math.max(1, o.tubeStride || stride), radius: o.radius || 10, coarse, palKey: () => palKey,
+      gpuBytes: (beads.image.data.byteLength + opsT.image.data.byteLength + units.image.data.byteLength + ccData.byteLength + auxData.byteLength),
+      extra: [],
+      dispose() { parts.delete(part); scene.remove(mesh); geo.dispose(); mat.dispose(); beads.dispose(); opsT.dispose(); units.dispose(); chainCol.dispose(); aux.dispose(); part.extra.forEach(f => f()); } };
     part.setColors = (mode, hide = {}) => setColors(part, mode, hide);
+    addReps(THREE, part, { scene, quad, coarse, budget: () => budget });
     part.setColors('protein');
     scene.add(mesh);
+    parts.add(part);
     return part;
   }
 
-  // Colour per chain: by entity role (protein mode) or one hue per chain.
-  // hide: { antibody: true, glycan: true } drops those roles (alpha 0).
+  // Colour per chain (protein and chain schemes) into the chain texture,
+  // and the shader mode of the other schemes. hide: { antibody: true,
+  // glycan: true } drops those roles (alpha 0). part.tint: one main colour
+  // index for every chain (the spikes of a virion).
   function setColors(part, mode, hide = {}) {
-    const { d } = part, ents = d.info.entities, a = part.uniforms.uChainCol.value.image.data;
-    const mainIx = {}; let nMain = 0;
-    ents.forEach((e, i) => { if (e.role === 'main') mainIx[i] = nMain++; });
-    // raw sRGB bytes: the shader writes them out as they are
-    d.info.chains.forEach((c, i) => {
-      const e = ents[c[2]];
-      let col;
-      if (mode === 'chain') col = hsl((i * 0.618034 + 0.05) % 1, 0.55, 0.62);
-      else if (part.tint) col = hex(part.tint);
-      else if (e.role === 'main') col = hex(PAL.main[mainIx[c[2]] % PAL.main.length]);
-      else col = hex(PAL[e.role] || '#cccccc');
-      a[4 * i] = col[0]; a[4 * i + 1] = col[1]; a[4 * i + 2] = col[2];
-      a[4 * i + 3] = hide[e.role] ? 0 : 255;
+    const a = part.uniforms.uChainCol.value.image.data;
+    chainColors(part.d.info, mode, palKey, { hide, tint: part.tint, shift: part.shift || 0 }).forEach((c, i) => {
+      a[4 * i] = Math.round(c[0] * 255); a[4 * i + 1] = Math.round(c[1] * 255); a[4 * i + 2] = Math.round(c[2] * 255); a[4 * i + 3] = c[3] ? 255 : 0;
     });
     part.uniforms.uChainCol.value.needsUpdate = true;
-    const m = { protein: 0, chain: 0, copy: 1, structure: 2, residue: 3, radius: 4 }[mode];
-    part.uniforms.uColMode.value = m == null ? 0 : m;
+    part.uniforms.uColMode.value = MODE[mode] ?? 0;
+    part.scheme = mode;
+    if (mode === 'burial') part.needBurial();
   }
 
   // ── membrane (an illustration) ────────────────────────────────────────
@@ -319,7 +251,7 @@ export function createView(canvas, opts = {}) {
   scene.add(dust);
 
   function resize(w, h) {
-    budget = canvasBudget(w, h, window.devicePixelRatio || 1);
+    budget = canvasBudget(w, h, window.devicePixelRatio || 1, { coarse });
     renderer.setPixelRatio(budget.pr);
     renderer.setSize(w, h, false);
     camera.aspect = w / Math.max(1, h);
@@ -343,5 +275,6 @@ export function createView(canvas, opts = {}) {
     renderer.dispose();
     try { renderer.forceContextLoss(); } catch (e) { /* already lost */ }
   }
-  return { renderer, scene, camera, makePart, makeMembrane, makeStalks, makeAxes, resize, frameScale, render, dispose, get budget() { return budget; }, coarse };
+  return { renderer, scene, camera, makePart, makeMembrane, makeStalks, makeAxes, resize, frameScale, render, dispose, setPalette, setLight,
+    get palette() { return palKey; }, get light() { return lightKey; }, get budget() { return budget; }, coarse };
 }

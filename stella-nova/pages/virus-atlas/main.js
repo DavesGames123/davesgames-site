@@ -11,6 +11,16 @@
 //    breathe    a slow swell of the whole particle
 //    sway       spikes bend on their stalks (virions)
 //    orbit      the camera turns slowly when idle
+//  The peel has six orders (A.peelMode, glsl.js peelKey) and the explode
+//  four axis sets (A.exOrder). The slice can keep a slab (A.slab).
+//
+//  VIEWS  seven ways to draw the same beads (budget.js REPS): beads,
+//  space-filling, tube, blobs, cage, glow, toon (reps.js). A.W holds a
+//  weight per view; setRep() eases it to the next view, so a change is a
+//  cross-fade or a morph, never a swap. 'auto' (G.rep) picks repFor()
+//  of the entry: space for capsids, rods and virions, blobs for the HIV
+//  cone, a tube for single proteins and fibrils. The hash keeps a fixed
+//  view: #polio/cage.
 //  Changing entries: the old parts fade and fly out, the camera flies (log
 //  distance, slerp of the direction) to frame the new particle.
 //
@@ -26,6 +36,8 @@
 //    'function frame'        the frame loop
 //    'function fillCard'     the info card and credit
 //    'function buildUI'      the controls
+//    'function setRep'       ease to another view ('function stepRep')
+//    'function peelRange'    the peel threshold path of each peel order
 //    'const app'             the api that saver.js drives
 // ============================================================================
 import * as THREE from 'three';
@@ -34,7 +46,8 @@ import { ENTRIES, GROUPS, CREDIT, LADDER_KEYS, entryByKey, pdbsOf } from './cata
 import { decode, copyOps, fetchBin } from './format.js';
 import { bounds, envelopeOps, makeRng, lineupLayout, ladderView, ladderX, niceRuler, LADDER_MARKS, LADDER_FIT, smooth, easeInOut, axesOf } from './symmetry.js';
 import { createView } from './view.js';
-import { maxInstances, strideFor } from './budget.js';
+import { maxInstances, strideFor, tubeCap, REPS } from './budget.js';
+import { SCHEMES, PALETTES } from './colors.js';
 import { installSaver } from './saver.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -45,13 +58,26 @@ const $ = id => document.getElementById(id);
 const G = {
   key: 'polio', color: 'auto', axes: false, hideAb: false, hideGly: false,
   orbit: true, breathe: true, sway: true, bead: 1, mode: 'entry',
+  rep: 'auto', pal: 'atlas',
 };
+// the views (budget.js REPS) and their names on the page and the plate
+export const REP_LABEL = { beads: 'Beads (one per residue)', space: 'Space-filling', tube: 'Backbone tube', blob: 'Subunit blobs', cage: 'Lattice cage', glow: 'Glow points', toon: 'Outline (toon)' };
+const REP_SHORT = { auto: 'Auto', beads: 'Beads', space: 'Space', tube: 'Tube', blob: 'Blobs', cage: 'Cage', glow: 'Glow', toon: 'Toon' };
+// the best view of each kind of entry
+function repFor(e) { return { capsid: 'space', rod: 'space', virion: 'space', cone: 'blob', protein: 'tube', fibril: 'tube' }[e.look] || 'beads'; }
+const oneHot = r => Object.fromEntries(REPS.map(k => [k, k === r ? 1 : 0]));
 // animation state (not the user's)
 const A = {
   asm: 1, asmDur: 4, explode: 0, explodeT: 0, peel: 0, peelT: 0, slice: 0, sliceT: 0,
   peelN: new THREE.Vector3(0, 0, 1), sliceN: new THREE.Vector3(0, 0, 1), time: 0,
   ladderU: 0, ladderPlay: false, hiK: -1,
   camLock: false,   // saver.js drives the camera
+  // the view cross-fade: weights go from W0 to the one-hot of repTo
+  W: oneHot('space'), W0: oneHot('space'), repTo: 'space', repX: 1, repDur: 1.2,
+  // peel: mode (glsl.js peelKey), reach (the part that lifts off),
+  // explode: axis order (0 stored 5-fold, 5, 3, 2, -1 radial), slab: a
+  // slice keeps only a slab of this half thickness (nm), 0 = half space
+  peelMode: 0, peelReach: 0.5, exOrder: 0, slab: 0, spiral: 5,
 };
 
 const canvas = $('view');
@@ -87,12 +113,13 @@ async function buildEntry(e, opt = {}) {
     let top = 0;
     const totalInst = e.parts.reduce((a, p, i) => a + p.count * datas[i].n, 0);
     const stride = Math.max(1, Math.ceil(totalInst / cap));
+    const tStride = Math.max(1, Math.ceil(totalInst / (opt.tubeCap || tubeCap(COARSE))));
     e.parts.forEach((p, i) => {
       const d = datas[i], an = d.info.anchor, h = (an.top - an.base) / 10;
       top = Math.max(top, e.membrane.r + p.stalk + h);
       const vd = virionDelays(env.ops[i]), nc = d.info.chains.length, del = new Float32Array(vd.length * nc);
       for (let k = 0; k < vd.length; k++) del.fill(vd[k], k * nc, (k + 1) * nc);
-      const part = V.makePart(d, env.ops[i], { kind: 'none', stride, phase: env.phase[i], sway: { h, base: an.base / 10 }, radius: e.membrane.r + p.stalk + h, offset: off, delays: del });
+      const part = V.makePart(d, env.ops[i], { kind: 'none', stride, tubeStride: tStride, phase: env.phase[i], sway: { h, base: an.base / 10 }, radius: e.membrane.r + p.stalk + h, offset: off, delays: del });
       part.uniforms.uSway.value = 0;
       B.parts.push(part);
     });
@@ -106,7 +133,8 @@ async function buildEntry(e, opt = {}) {
     const stride = strideFor(d.n, m, cap);
     const kind = d.info.sym.type === 'none' ? 'single' : d.info.sym.type;
     const b = bounds(d, ops, Math.max(1, Math.floor(d.n * m / 200000)));
-    const part = V.makePart(d, ops, { kind, stride, fibril: !!d.info.sym.fibril, radius: b.r, offset: off });
+    const tStride = strideFor(d.n, m, opt.tubeCap || tubeCap(COARSE));
+    const part = V.makePart(d, ops, { kind, stride, tubeStride: tStride, fibril: !!d.info.sym.fibril, radius: b.r, offset: off });
     B.parts.push(part);
     B.r = b.r; B.size = Math.max(...b.size); B.kind = kind; B.bounds = b;
     if (kind === 'icosa' || kind === 'cyclic') B.axes = part.axes.length ? part.axes : axesOf(ops);
@@ -134,10 +162,47 @@ function colorModeFor(B) {
   if (B.entry.look === 'fibril') return 'copy';
   return 'protein';
 }
+// the peel threshold path of a part: uPeelD runs d0 -> d1 as A.peel goes
+// 0 -> 1; a unit is off when its key (glsl.js peelKey) passes d + w.
+function peelRange(p) {
+  const mode = A.peelMode, reach = A.peelReach;
+  if (mode === 0) return { d0: 1, d1: 1 - 1.15 * Math.min(1.3, reach * 2), w: 0.35 };
+  if (mode === 3) {
+    const k = 'shell' + reach;
+    if (!p._pk || p._pk.k !== k) {
+      const U = p.cent.length / 3, keys = new Float32Array(U), R = p.uniforms.uRadialR.value || 1;
+      for (let u = 0; u < U; u++) keys[u] = Math.hypot(p.cent[3 * u], p.cent[3 * u + 1], p.cent[3 * u + 2]) / R;
+      keys.sort();
+      const T = keys[Math.min(U - 1, Math.floor((1 - reach) * U))];
+      p._pk = { k, v: { d0: keys[U - 1] + 0.01, d1: T - 0.03, w: 0.03 } };
+    }
+    return p._pk.v;
+  }
+  const w = mode === 2 ? Math.max(0.02, 2 / Math.max(1, p.m)) : 0.07;
+  return { d0: 1, d1: 1 - reach - w, w };
+}
+function effRep(B) { return G.rep !== 'auto' ? G.rep : B && B.entry ? repFor(B.entry) : 'beads'; }
+// ease the views of every shown part toward rep (dur 0: at once)
+function setRep(rep, dur = 1.2) {
+  if (!REPS.includes(rep)) return;
+  A.W0 = { ...A.W }; A.repTo = rep; A.repX = dur > 0 ? 0 : 1; A.repDur = Math.max(0.01, dur);
+  if (dur <= 0) A.W = oneHot(rep);
+  syncRepUI();
+}
+function stepRep(dt) {
+  if (A.repX < 1) {
+    A.repX = Math.min(1, A.repX + dt / A.repDur);
+    const s = easeInOut(A.repX), to = oneHot(A.repTo);
+    for (const k of REPS) A.W[k] = A.W0[k] + (to[k] - A.W0[k]) * s;
+  }
+  const W = A.W;
+  if (cur) cur.parts.forEach(p => p.setRepWeights(W));
+  for (const L of lineup) L.parts.forEach(p => p.setRepWeights(W));
+}
 function applyLook(B) {
   const mode = colorModeFor(B);
   B.parts.forEach((p, i) => {
-    if (B.entry.look === 'virion') p.tint = ['#e86f5a', '#f2c14e'][i] || null;
+    if (B.entry.look === 'virion') p.tint = i;
     p.setColors(mode, { antibody: G.hideAb, glycan: G.hideGly });
     p.uniforms.uRad.value = 0.3 * G.bead * (1 + 0.3 * (p.stride - 1)) * (B.entry.look === 'fibril' ? 1.1 : 1);
   });
@@ -171,6 +236,8 @@ async function show(key, opt = {}) {
   lineup = [];
   cur = B;
   A.explode = A.explodeT = 0; A.peel = A.peelT = 0; A.slice = A.sliceT = 0; A.hiK = -1;
+  setRep(opt.rep || effRep(B), 0);
+  B.parts.forEach(p => p.setRepWeights(A.W));
   syncAnimButtons();
   startAssembly(opt.instant || REDUCED ? 1 : 0);
   fillCard(e, B);
@@ -221,13 +288,14 @@ async function enterLadder(opt = {}) {
     });
     ladderLayout = lineupLayout(items.map((e, i) => ({ key: e.key, size: sizes[i] })));
     if (token !== showToken) return;
-    built = await Promise.all(items.map((e, i) => buildEntry(e, { cap: capEach, offset: [ladderLayout[i].x, 0, 0], seed: 5 })));
+    built = await Promise.all(items.map((e, i) => buildEntry(e, { cap: capEach, tubeCap: Math.round(capEach * 0.2), offset: [ladderLayout[i].x, 0, 0], seed: 5 })));
   } catch (err) { setLoading(null); toast('Could not load the ladder: ' + err.message); return; }
   if (token !== showToken) { built.forEach(b => b.dispose()); return; }
   setLoading(null);
   if (cur) leaving.push({ B: cur, t: 0 });
   for (const L of lineup) leaving.push({ B: L, t: 0 });
   cur = null; lineup = built;
+  setRep(G.rep === 'auto' ? 'beads' : G.rep, 0);
   for (const B of lineup) for (const p of B.parts) {
     p.uniforms.uAsm.value = 1;
     p.uniforms.uRadialR.value = B.r;
@@ -360,13 +428,16 @@ function frame(now) {
     const R = cur.r;
     for (const p of cur.parts) {
       const u = p.uniforms;
+      if (p._ex !== A.exOrder) { p.setExplodeAxes(A.exOrder); p._ex = A.exOrder; }
       u.uAsm.value = A.asm; u.uTime.value = A.time; u.uBreath.value = breath;
       u.uExplode.value = A.explode * R * (cur.entry.look === 'fibril' ? 0.9 : cur.entry.look === 'rod' ? 0.15 : 0.45);
       u.uPeelOn.value = A.peel > 0.002 ? 1 : 0; u.uPeelN.value.copy(A.peelN);
-      // the plane sweeps from in front of the particle to just behind its centre
-      u.uPeelD.value = R * (1 - 1.15 * A.peel); u.uPeelW.value = R * 0.35;
+      u.uPeelMode.value = A.peelMode; u.uSpiral.value = A.spiral;
+      const pk = peelRange(p);
+      u.uPeelD.value = pk.d0 + (pk.d1 - pk.d0) * A.peel; u.uPeelW.value = pk.w;
       u.uSliceOn.value = A.slice > 0.002 ? 1 : 0; u.uSliceN.value.copy(A.sliceN);
-      u.uSliceD.value = R * 1.05 * (1 - A.slice) + (cur.entry.look === 'rod' ? -R * 0.0 : 0);
+      // the plane sweeps in from the front; past 1 it goes on out the back
+      u.uSliceD.value = R * 1.05 * (1 - A.slice); u.uSlab.value = A.slab;
       u.uSway.value = cur.entry.look === 'virion' && G.sway && !REDUCED ? 0.09 : 0;
       u.uHiK.value = A.hiK; u.uRadialR.value = R;
     }
@@ -379,6 +450,7 @@ function frame(now) {
     if (cur.stalks) cur.stalks.mesh.visible = A.asm > 0.3;
     controls.autoRotate = G.orbit && !REDUCED && !fly && performance.now() - userAt > 5000;
   }
+  stepRep(dt);
   if (G.mode === 'ladder') ladderCamera(dt);
   else if (!A.camLock) { stepFly(dt); if (!fly) controls.update(); }
   const dist = V.camera.position.distanceTo(controls.target);
@@ -513,7 +585,21 @@ function buildUI() {
   tog('axesBtn', 'axes', () => cur && applyLook(cur));
   tog('abBtn', 'hideAb', () => cur && applyLook(cur));
   tog('glyBtn', 'hideGly', () => cur && applyLook(cur));
-  $('colorSel').onchange = ev => { G.color = ev.target.value; cur && applyLook(cur); };
+  $('colorSel').innerHTML = '<option value="auto">Best for this structure</option>' + SCHEMES.map(x => `<option value="${x.id}">${esc(x.label)}</option>`).join('');
+  $('colorSel').onchange = ev => { G.color = ev.target.value; cur && applyLook(cur); lineup.forEach(applyLook); };
+  $('palSel').innerHTML = Object.entries(PALETTES).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('');
+  $('palSel').onchange = ev => { G.pal = ev.target.value; V.setPalette(G.pal); cur && applyLook(cur); lineup.forEach(applyLook); };
+  $('peelSel').onchange = ev => { A.peelMode = +ev.target.value; if (A.peelT > 0) { A.peel = 0; } };
+  $('exSel').onchange = ev => { A.exOrder = +ev.target.value; };
+  const seg = $('repSeg');
+  for (const r of ['auto', ...REPS]) {
+    const b = document.createElement('button'); b.dataset.rep = r; b.textContent = REP_SHORT[r];
+    b.title = r === 'auto' ? 'The best view for this structure' : REP_LABEL[r];
+    b.onclick = () => pickRep(r);
+    seg.appendChild(b);
+  }
+  $('dockRep').onclick = () => { const list = ['auto', ...REPS], i = list.indexOf(G.rep); pickRep(list[(i + 1) % list.length]); toast('View: ' + (G.rep === 'auto' ? 'auto (' + REP_SHORT[effRep(cur || lineup[0])] + ')' : REP_LABEL[G.rep])); };
+  syncRepUI();
   $('bead').oninput = ev => { G.bead = +ev.target.value; $('beadV').textContent = G.bead.toFixed(2) + '×'; cur && applyLook(cur); };
   $('beadV').textContent = G.bead.toFixed(2) + '×';
   $('ladderPlay').onclick = () => { if (A.ladderU >= 1) A.ladderU = 0; A.ladderPlay = !A.ladderPlay; syncLadderPlay(); };
@@ -536,7 +622,17 @@ function buildUI() {
     if (ev.key === 'ArrowRight') step(1); else if (ev.key === 'ArrowLeft') step(-1);
     else if (ev.key === 'e') toggleExplode(); else if (ev.key === 'p') togglePeel(); else if (ev.key === 's') toggleSlice();
     else if (ev.key === 'a') replay();
+    else if (ev.key === 'v') { const list = ['auto', ...REPS]; pickRep(list[(list.indexOf(G.rep) + 1) % list.length]); }
   });
+}
+function pickRep(r) {
+  G.rep = r;
+  setRep(G.mode === 'ladder' ? (r === 'auto' ? 'beads' : r) : effRep(cur));
+  writeHash();
+}
+function syncRepUI() {
+  document.querySelectorAll('#repSeg button').forEach(b => { const on = b.dataset.rep === G.rep; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  const v = $('dockRepV'); if (v) v.textContent = REP_SHORT[G.rep === 'auto' ? A.repTo : G.rep];
 }
 function step(d) {
   const i = Math.max(0, ENTRIES.findIndex(e => e.key === G.key));
@@ -608,11 +704,12 @@ function sheetDrag() {
 
 // URL hash: #<entry key> or #ladder
 function writeHash() {
-  const h = G.mode === 'ladder' ? '#ladder' : '#' + G.key;
+  const h = (G.mode === 'ladder' ? '#ladder' : '#' + G.key) + (G.rep !== 'auto' ? '/' + G.rep : '');
   if (location.hash !== h) history.replaceState(null, '', h);
 }
 function readHash() {
-  const k = decodeURIComponent(location.hash.slice(1));
+  const [k, r] = decodeURIComponent(location.hash.slice(1)).split('/');
+  if (r && REPS.includes(r)) G.rep = r;
   if (k === 'ladder') return 'ladder';
   return entryByKey(k) ? k : null;
 }
@@ -626,6 +723,9 @@ const app = {
   setPeel(on, n) { if (n) A.peelN.copy(n); A.peelT = on ? 1 : 0; syncAnimButtons(); },
   setSlice(on, n) { if (n) A.sliceN.copy(n); A.sliceT = on ? 1 : 0; syncAnimButtons(); },
   setExplode(on) { A.explodeT = on ? 1 : 0; syncAnimButtons(); },
+  setRep, repFor, effRep, REP_LABEL,
+  setPalette(k) { G.pal = k; V.setPalette(k); if (cur) applyLook(cur); },
+  setLight(k) { V.setLight(k); },
   applyLook: () => cur && applyLook(cur),
 };
 window.__va = app;
@@ -640,7 +740,7 @@ if (first === 'ladder') enterLadder({ u: 0 });
 else show(first || 'polio', { dir: new THREE.Vector3(0.35, 0.3, 1).normalize() });
 V.camera.position.set(0, 0, 400);
 requestAnimationFrame(frame);
-window.addEventListener('hashchange', () => { const k = readHash(); if (k === 'ladder') { if (G.mode !== 'ladder') enterLadder(); } else if (k && (k !== G.key || G.mode !== 'entry')) show(k); });
+window.addEventListener('hashchange', () => { const k = readHash(); syncRepUI(); if (cur && G.mode === 'entry') setRep(effRep(cur)); if (k === 'ladder') { if (G.mode !== 'ladder') enterLadder(); } else if (k && (k !== G.key || G.mode !== 'entry')) show(k); });
 // free the GPU when the page goes away (the shell also releases it)
 window.addEventListener('pagehide', () => {
   running = false;

@@ -25,6 +25,8 @@
 //   15  subunit blobs: every bead inside its ellipsoid; axes orthogonal
 //   16  lattice cage: icosahedron nodes on the 5-, 3- and 2-fold axes;
 //       subunit nets with one node per unit and no lonely nodes
+//   17  views on the GPU: data bytes of every view of every entry, and
+//       the draw counts on a phone and a desktop profile
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -421,6 +423,59 @@ section('16 lattice cage');
   ok(n7.edges.every(([i, j]) => Math.abs(i - j) === 1), '7LNA net joins each layer to the next one only');
   const sp = CG.unitNet(new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 5, 1, 0, 5]), 2, [true, true], { perCopy: true });
   ok(sp.nodes.length === 2 && near(sp.nodes[0].p[0], 0.5, 1e-9) && sp.nodes[1].unit === 2, 'per-copy nodes: the mean of a copy, moved by its first unit');
+}
+
+// ── 17 views on the GPU ──────────────────────────────────────────────────
+section('17 views on the GPU (phone and desktop)');
+{
+  const blobN = {}, netN = {};
+  const sizes = e => {
+    // the same totals main.js buildEntry uses (a virion: all its spikes)
+    if (e.look === 'virion') return e.parts.map(p => ({ id: p.pdb, n: D[p.pdb].n, m: p.count }));
+    return [{ id: e.pdb, n: D[e.pdb].n, m: F.copyOps(D[e.pdb].info, e.layers).length / 12 }];
+  };
+  let worst = { b: 0 }, peak = {};
+  for (const coarse of [true, false]) {
+    const tri = { beads: 0, tube: 0, blob: 0 };
+    for (const e of C.ENTRIES) {
+      const ps = sizes(e), tot = ps.reduce((a, p) => a + p.n * p.m, 0);
+      const bs = Math.max(1, Math.ceil(tot / B.maxInstances(coarse))), ts = Math.max(1, Math.ceil(tot / B.tubeCap(coarse)));
+      let inst = 0, segs = 0, blobs = 0, bytes = 0;
+      for (const p of ps) {
+        const d = D[p.id], nc = d.info.chains.length;
+        blobN[p.id] = blobN[p.id] || BL.chainBlobs(d).n;
+        inst += Math.ceil(p.n / (e.look === 'virion' ? bs : B.strideFor(p.n, p.m, B.maxInstances(coarse)))) * p.m;
+        segs += Math.ceil(p.n / (e.look === 'virion' ? ts : B.strideFor(p.n, p.m, B.tubeCap(coarse)))) * p.m;
+        blobs += blobN[p.id] * p.m;
+        for (const rep of B.REPS) {
+          const z = { nBeads: p.n, nOps: p.m, nUnits: p.m * nc, nChains: nc, nBlobs: blobN[p.id], nNodes: p.m * nc, nEdges: 3 * p.m * nc, coarse };
+          const by = B.repGpuBytes(rep, z);
+          if (by > worst.b) worst = { b: by, rep, key: e.key };
+          bytes = Math.max(bytes, by);
+        }
+      }
+      const m = (ps.reduce((a, p) => a + p.m, 0));
+      ok(inst <= B.maxInstances(coarse) + m, (coarse ? 'phone ' : 'desktop ') + e.key + ': ' + inst + ' bead quads <= ' + B.maxInstances(coarse));
+      ok(segs <= B.tubeCap(coarse) + m, (coarse ? 'phone ' : 'desktop ') + e.key + ': ' + segs + ' tube segments <= ' + B.tubeCap(coarse));
+      ok(blobs <= B.blobCap(coarse), (coarse ? 'phone ' : 'desktop ') + e.key + ': ' + blobs + ' blobs <= ' + B.blobCap(coarse));
+      ok(bytes < B.DATA_BUDGET, (coarse ? 'phone ' : 'desktop ') + e.key + ': view data ' + (bytes / 1e6).toFixed(2) + ' MB < ' + B.DATA_BUDGET / 1e6 + ' MB');
+      const mesh = B.tubeMesh(coarse);
+      tri.beads = Math.max(tri.beads, 2 * inst); tri.tube = Math.max(tri.tube, segs * (mesh.rings - 1) * mesh.sides * 2); tri.blob = Math.max(tri.blob, blobs * 12);
+    }
+    peak[coarse ? 'phone' : 'desktop'] = tri;
+    console.log('  ' + (coarse ? 'phone  ' : 'desktop') + ' peak triangles: beads ' + (tri.beads / 1e6).toFixed(2) + ' M, tube ' + (tri.tube / 1e6).toFixed(2) + ' M, blobs ' + (tri.blob / 1e6).toFixed(2) + ' M');
+  }
+  console.log('  largest view data: ' + worst.rep + ' of ' + worst.key + ', ' + (worst.b / 1e6).toFixed(2) + ' MB');
+  ok(peak.phone.tube <= 1.5e6 && peak.phone.beads <= 0.6e6 && peak.phone.blob <= 1.0e6, 'phone: at most 1.5 M tube, 0.6 M bead and 1.0 M blob triangles a frame');
+  const hiv = B.repGpuBytes('blob', { nBeads: 313236, nOps: 1, nUnits: 1356, nChains: 1356, nBlobs: blobN['3J3Q'], coarse: true });
+  ok(hiv < 12e6, 'HIV cone in the blob view on a phone: ' + (hiv / 1e6).toFixed(2) + ' MB of data');
+  // phone canvases: no MSAA at a high pixel ratio, pixel ratio at most 2
+  for (const [w, h, dpr] of [[360, 640, 3], [390, 844, 3], [640, 360, 3], [844, 390, 3], [412, 915, 2.625], [768, 1024, 2], [1024, 768, 2]]) {
+    const b = B.canvasBudget(w, h, dpr, { coarse: true });
+    ok(b.px <= B.PHONE_PX * 1.002 && b.pr <= 2 && !(b.samples && b.pr >= 1.5) && b.bytes < 30e6, 'phone ' + w + 'x' + h + ' @' + dpr + ': pixel ratio ' + b.pr + ', ' + (b.samples ? 'MSAA' : 'no MSAA') + ', ' + (b.bytes / 1e6).toFixed(1) + ' MB');
+  }
+  ok(B.tubeMesh(true).rings * B.tubeMesh(true).sides < B.tubeMesh(false).rings * B.tubeMesh(false).sides, 'phone tube mesh is lighter than the desktop one');
+  ok(B.REPS.length === 7 && new Set(B.REPS).size === 7, 'seven views');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

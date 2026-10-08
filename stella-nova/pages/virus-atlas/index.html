@@ -32,7 +32,14 @@
                   scale ladder, ruler, seeded random (node-tested)
      budget.js    the GPU memory budget of the canvas (node-tested)
      shots.js     the screensaver plan (node-tested)
-     view.js      three.js: bead impostor shaders, membrane, stalks, axes
+     colors.js    colour schemes, palettes, light rigs (node-tested)
+     trace.js     chain runs, burial, the tube spline in JS (node-tested)
+     blobs.js     one ellipsoid per piece of chain (node-tested)
+     cage.js      the lattice: icosahedron and subunit net (node-tested)
+     glsl.js      every shader of every view (strings)
+     reps.js      the tube, blob, cage and glow meshes; view cross-fades
+     view.js      three.js: the bead part, palette and light, membrane,
+                  stalks, axes
      main.js      state, loading, animation, camera flights, controls
      saver.js     the screensaver tour (window.snSaver)
      tests.mjs    node tests
@@ -46,8 +53,8 @@
                  particle in the clear part between them. #ruler at the
                  base left. #ladder at the base in the ladder mode.
      phone ..... (max-width 768px, or a short landscape touch screen)
-                 #dock at the base: previous, name (next), build, explode,
-                 settings. #panel is a bottom sheet (portrait) or a drawer
+                 #dock at the base: previous, name (next), build, view
+                 (cycles the views), explode, settings. #panel is a bottom sheet (portrait) or a drawer
                  at the right (landscape). #card shrinks to its title bar
                  at the top; tap it to open.
 
@@ -118,20 +125,32 @@
     <button id="peelBtn" aria-pressed="false" title="Lift off the near half (P)">Peel</button>
     <button id="sliceBtn" aria-pressed="false" title="Cut with a plane (S)">Slice</button>
   </div>
+  <div class="prm"><div class="nm">Peel by</div>
+    <select id="peelSel" aria-label="How the peel lifts the subunits">
+      <option value="0">The side you look from</option>
+      <option value="1">Latitude, from the pole</option>
+      <option value="2">Symmetry copy, one at a time</option>
+      <option value="3">Outer shell first</option>
+      <option value="4">A spiral</option>
+      <option value="5">Random tiles</option>
+    </select></div>
+  <div class="prm"><div class="nm">Explode along</div>
+    <select id="exSel" aria-label="Which axes the explode follows">
+      <option value="0">5-fold axes</option>
+      <option value="3">3-fold axes</option>
+      <option value="2">2-fold axes</option>
+      <option value="-1">Radial lines</option>
+    </select></div>
   <div class="btns"><button id="orbitBtn">Orbit</button><button id="breatheBtn">Breathe</button><button id="swayBtn">Spike sway</button></div>
   <p class="hint">Peel and slice cut from the side you look from. Tap a subunit to light up one copy. The build of a capsid follows its 5-fold axes, one vertex region at a time; this order is a way to show the symmetry, not the measured path of assembly.</p>
 
   <div class="sec-label">View</div>
+  <div class="seg rep" id="repSeg" role="group" aria-label="How to draw the structure"></div>
+  <p class="hint">Beads: one sphere per residue. Space-filling: larger beads with buried ones shaded, for a surface look. Tube: a smooth line along each chain, wider on helices and strands. Blobs: each chain as a few smooth bodies, so the subunits read as tiles. Cage: the symmetry lattice, subunit centres joined to their neighbours, and the icosahedron on capsids. Glow: soft points. Toon: flat shades with ink outlines. A change of view is a change of drawing style, not a change in the virus. Key V.</p>
   <div class="prm"><div class="nm">Colour</div>
-    <select id="colorSel" aria-label="Colour">
-      <option value="auto">Best for this structure</option>
-      <option value="protein">By protein</option>
-      <option value="chain">By chain</option>
-      <option value="copy">By copy</option>
-      <option value="radius">By radius</option>
-      <option value="structure">By secondary structure</option>
-      <option value="residue">By residue type</option>
-    </select></div>
+    <select id="colorSel" aria-label="Colour"></select></div>
+  <div class="prm"><div class="nm">Palette</div>
+    <select id="palSel" aria-label="Palette"></select></div>
   <div class="btns"><button id="axesBtn">Symmetry axes</button><button id="abBtn">Hide antibodies</button><button id="glyBtn">Hide sugars</button></div>
   <div class="prm"><div class="nm">Bead size</div><span class="val" id="beadV"></span>
     <input type="range" id="bead" min="0.6" max="1.8" step="0.05" value="1" aria-label="Bead size"></div>
@@ -153,6 +172,7 @@
   <button id="dockPrev" aria-label="Previous structure">‹</button>
   <button id="dockName" class="name" aria-label="Next structure"><span id="dockTitle">…</span><i>›</i></button>
   <button id="dockAsm" aria-label="Build again"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/><circle cx="12" cy="12" r="2.5"/></svg></button>
+  <button id="dockRep" class="rep" aria-label="Next view"><small>View</small><span id="dockRepV">Auto</span></button>
   <button id="dockExplode" aria-label="Explode or close" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 2l3 5h-6zM12 22l-3-5h6zM2 12l5-3v6zM22 12l-5 3V9z"/></svg></button>
   <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
 </nav>

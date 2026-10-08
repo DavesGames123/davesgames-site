@@ -13,6 +13,7 @@
      grep -n 'CONTROLS'   buttons, segments, chips, select, slider
      grep -n 'TOUCH'      target and text sizes for any touch screen
      grep -n 'PHONE'      dock, bottom sheet, the small card
+     grep -n 'NARROW'     the dock at 360 px and in the landscape tab
      grep -n 'LANDSCAPE'  the phone drawer at the right edge
      grep -n 'SAVER'      the screensaver hides all overlays
    ========================================================================== */
@@ -117,6 +118,7 @@ html.in-frame #panel{padding-top:20px}
 .seg button,.btns button{padding:8px 4px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;font-size:0.76rem;transition:border-color 0.2s,color 0.2s}
 .seg button:hover,.btns button:hover{border-color:var(--acc)}
 .seg button.on,.btns button.on{border-color:var(--acc);color:var(--acc);background:rgba(240,163,122,0.07)}
+.seg.rep button{padding:8px 2px}
 .btns{display:flex;gap:6px;margin:8px 0}
 .btns button{flex:1}
 .prm{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;margin:10px 0}
@@ -171,6 +173,8 @@ html.in-frame #panel{padding-top:20px}
   #dock > button.name{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px;font-family:var(--sci-serif);font-size:1rem;text-align:left}
   #dock > button.name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #dock > button.name i{font-style:normal;color:var(--dim);font-family:var(--sci-sans)}
+  #dock > button.rep{flex:0 0 58px;flex-direction:column;gap:1px;font-size:0.74rem;line-height:1.1}
+  #dock > button.rep small{font-size:0.56rem;color:var(--dim);letter-spacing:0.04em;text-transform:uppercase}
 
   #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(52vh,540px);height:min(52dvh,540px);
     border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
@@ -197,6 +201,14 @@ html.in-frame #panel{padding-top:20px}
   #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2;background:var(--bg2)}
   #card{right:auto;width:min(46vw,360px)}
   #ladder{left:auto;width:min(56vw,460px)}
+}
+/* NARROW dock: 360 px portrait, or the landscape dock tab. Six buttons
+   must leave the name at least 80 px. */
+@media (max-width:400px), (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #dock{gap:6px}
+  #dock > button{flex-basis:44px;height:46px}
+  #dock > button.rep{flex-basis:50px}
+  #dock > button.name{padding:0 10px;font-size:0.92rem}
 }
 @media(prefers-reduced-motion:reduce){#panel,.topbar,#toast,#hero{transition:none}}
 
