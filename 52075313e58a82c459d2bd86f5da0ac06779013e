@@ -1,0 +1,6 @@
+Correction: the validation lines in this commit body give wrong dock widths (96, 94, 150 px). The body was written before the test run printed them. The real tests.mjs output at this commit is:
+  360 px portrait: dock name 84 px, buttons 44 px
+  landscape tab at 640 x 360: dock name 82 px, buttons 44 px
+  landscape tab at 740 x 360: dock name 138 px, buttons 44 px
+  801 passed, 0 failed
+All three are still at or above the 80 px limit that the test checks.
