@@ -1,0 +1,1 @@
+Addition to the body: this commit also adds the file header (provenance and GREP list) to the top of GLTFLoader.js. The header is a comment only.
