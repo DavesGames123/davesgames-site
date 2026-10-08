@@ -1,883 +1,333 @@
 // ============================================================================
-//  PLANET FORGE  ·  procedural planet texture generator (CPU noise → PBR maps)
+//  PLANET FORGE  ·  main.js — the GUI, the camera, the frame loop, downloads
 // ----------------------------------------------------------------------------
-//  Everything but the atmosphere is computed on the CPU. For each planet type
-//  a generator samples a 3D simplex-noise stack on the unit sphere, once per
-//  texel of a 2:1 equirectangular map, producing height, albedo, specular and
-//  emissive. Those become five canvases (albedo, depth, normal, specular,
-//  emissive) that feed a Three.js MeshStandardMaterial on a sphere. A thin
-//  fresnel shell adds the atmosphere (shaders/atmosphere.*.glsl).
+//  boot: presets + UI -> worker pool -> WebGPU (else the no-GPU note; the
+//  maps still generate and download) -> first planet -> frame loop.
 //
-//  GENERATION PIPELINE
-//  ───────────────────
-//      type + temp + seed ─▶ seedN() permutation ─▶ GEN[type](u,v,temp)
-//                                                        │  per texel
-//                                   ┌────────────────────┴───────────────┐
-//                                   ▼                                     ▼
-//                       height / specular / emissive              albedo RGB
-//                                   │                                     │
-//               genNorm() from height ─▶ normal map                       │
-//                                   ▼                                     ▼
-//                    5 canvases: depth · normal · specular · emissive · albedo
-//                                   │
-//                                   ▼
-//              setAct('render') binds them to MeshStandardMaterial (pmat)
-//                                   ▼
-//                    Three.js sphere + atmosphere shell ─▶ <canvas>
+//  Generation: any recipe change regenerates. A slider drag first makes a
+//  quick preview (512 wide, or less than the chosen width), then the
+//  chosen width after 700 ms of quiet. pool.js cancels stale jobs. The
+//  chosen width is capped by budget.js pickWidth (phones: 2k at most).
 //
-//  NOISE STACK
-//  ───────────
-//      n3()  3D simplex          fbm()  fractal sum      rig()  ridged
-//      wrp() single domain warp  mw()   multi warp       uv2s() uv → sphere
+//  Camera: an orbit (yaw, pitch, distance) about the planet, drag to turn,
+//  wheel or pinch to zoom. The planet spins about its tilted axis; the sun
+//  moves slowly unless "moving sun" is off. The planet is framed in the
+//  clear area beside the panel or above the sheet: the view shifts its
+//  principal point (render.js cam.offX / offY), it does not resize.
 //
-//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
-//  ────────────────────────────────────────────────────────────────────────
-//      shader fetch ....... "fetch(new URL"     load atmosphere .glsl
-//      simplex ............ "SIMPLEX 3D"         seedN + n3 noise
-//      noise utils ........ "NOISE UTILS"        fbm / ridged / warp / helpers
-//      palettes ........... "TEMPERATURE-SHIFTED" per-type gradient stops
-//      atmosphere colour .. "atmoColor"          rim tint per type+temp
-//      generators ......... "GENERATORS"         GEN[type](u,v,temp) per texel
-//      map build .......... "MAP BUILD"          normals, float→canvas, generate
-//      three scene ........ "THREE.JS SCENE"     renderer, sphere, stars, sun
-//      placeholder globe .. "const holo"         wire rings before first planet
-//      animation .......... "function tween"     intro, scan ring, shockwave
-//      framing ............ "function fitCam"    fit planet to the clear viewport
-//      controls ........... "// CONTROLS"        orbit, zoom, sun, toggles
-//      sidebar ............ "// SIDEBAR"         map switch, download, generate
-//      batch .............. "BATCH GENERATION"   queue → ZIP of many planets
-//      xr hook ............ "window.__forge"     objects xr.js reads (VR, AR)
-//      screensaver ........ "window.snSaver"     shell saver: generate-a-planet tour
+//  window.__forge exposes the state for saver.js and for debugging.
+//
+//  grep -n targets: "async function boot", "function regenerate",
+//  "function buildShape", "function buildMaps", "function frame",
+//  "function clearArea", "function bindPointer", "function downloadZip",
+//  "window.__forge"
 // ============================================================================
-(async () => {
-"use strict";
-// Fetch the atmosphere shell shader source before building the scene.
-const V_atmosphere = await (await fetch(new URL('shaders/atmosphere.vert.glsl', document.baseURI))).text();
-const F_atmosphere = await (await fetch(new URL('shaders/atmosphere.frag.glsl', document.baseURI))).text();
+import * as PR from './presets.js';
+import { MAP_INFO, mapIds, mapImage, shrinkMaps } from './maps.js';
+import { encodePNG } from './png.js';
+import { createPool } from './pool.js';
+import { createRenderer } from './render.js';
+import * as BG from './budget.js';
 
-"use strict";
-// Topbar clock: refresh the HH:MM:SS readout once a second.
-setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SIMPLEX 3D
-// ═══════════════════════════════════════════════════════════════════════════════
-// GR: the 12 gradient directions for 3D simplex noise. PP is the doubled
-// permutation table; PM is the same indices folded into 0..11 to pick a GR row.
-const GR=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
-const PP=new Uint8Array(512),PM=new Uint8Array(512);
-// Seed the permutation tables. A deterministic LCG shuffles 0..255 so the same
-// seed always yields the same planet; PP/PM are rebuilt from that shuffle.
-function seedN(sd){const p=Array.from({length:256},(_,i)=>i);let s=(sd^0xdeadbeef)|0;const r=()=>{s=Math.imul(s,1103515245)+12345|0;return(s>>>16)&0x7fff};for(let i=255;i>0;i--){const j=r()%(i+1);[p[i],p[j]]=[p[j],p[i]]}for(let i=0;i<512;i++){PP[i]=p[i&255];PM[i]=PP[i]%12}}
-// 3D simplex noise, one value in roughly [-1,1]. Skew the point into the simplex
-// grid, find its enclosing tetrahedron corners, sum the gradient contributions
-// weighted by the radial falloff at each corner. This is the base of every map.
-function n3(x,y,z){const F=1/3,G=1/6,s=(x+y+z)*F,i=Math.floor(x+s),j=Math.floor(y+s),k=Math.floor(z+s),t=(i+j+k)*G,x0=x-i+t,y0=y-j+t,z0=z-k+t;let i1,j1,k1,i2,j2,k2;if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+G*2,y2=y0-j2+G*2,z2=z0-k2+G*2,x3=x0-.5,y3=y0-.5,z3=z0-.5,ii=i&255,jj=j&255,kk=k&255;let n=0,t0=.6-x0*x0-y0*y0-z0*z0;if(t0>0){t0*=t0;const g=GR[PM[ii+PP[jj+PP[kk]]]];n+=t0*t0*(g[0]*x0+g[1]*y0+g[2]*z0)}let t1=.6-x1*x1-y1*y1-z1*z1;if(t1>0){t1*=t1;const g=GR[PM[ii+i1+PP[jj+j1+PP[kk+k1]]]];n+=t1*t1*(g[0]*x1+g[1]*y1+g[2]*z1)}let t2=.6-x2*x2-y2*y2-z2*z2;if(t2>0){t2*=t2;const g=GR[PM[ii+i2+PP[jj+j2+PP[kk+k2]]]];n+=t2*t2*(g[0]*x2+g[1]*y2+g[2]*z2)}let t3=.6-x3*x3-y3*y3-z3*z3;if(t3>0){t3*=t3;const g=GR[PM[ii+1+PP[jj+1+PP[kk+1]]]];n+=t3*t3*(g[0]*x3+g[1]*y3+g[2]*z3)}return 32*n}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// NOISE UTILS
-// ═══════════════════════════════════════════════════════════════════════════════
-const PI=Math.PI,TAU=PI*2;
-// Fractal Brownian motion: sum o octaves of n3, each at lacunarity l higher
-// frequency and gain p lower amplitude, starting at base frequency f. Gives the
-// soft, cloud-like relief used for continents and broad terrain.
-function fbm(x,y,z,o,l,p,f){let v=0,a=1,ff=f;for(let i=0;i<o;i++){v+=n3(x*ff,y*ff,z*ff)*a;ff*=l;a*=p}return v}
-// Ridged multifractal: fold each octave with 1-|noise| so ridges form sharp
-// crests, and weight later octaves by the previous one. Used for craters, ice
-// cracks, and mountain ridge lines.
-function rig(x,y,z,o,l,p,f){let v=0,a=1,ff=f,w=1;for(let i=0;i<o;i++){let s=1-Math.abs(n3(x*ff,y*ff,z*ff));s*=s*w;w=Math.min(1,Math.max(0,s*2));v+=s*a;ff*=l;a*=p}return v}
-// Domain warp: displace a point by noise sampled at large fixed offsets, so the
-// following noise looks pushed and swirled instead of grid-aligned.
-function wrp(x,y,z,f,a){return[x+n3(x*f+137,y*f+253,z*f+319)*a,y+n3(x*f+467,y*f+541,z*f+631)*a,z+n3(x*f+743,y*f+853,z*f+929)*a]}
-// Multi-warp: apply wrp n times at rising frequency and falling amplitude for a
-// mistier, more organic distortion (used by the ice giant).
-function mw(x,y,z,f,a,n){let p=[x,y,z],ff=f,aa=a;for(let i=0;i<n;i++){p=wrp(p[0],p[1],p[2],ff,aa);ff*=1.5;aa*=.6}return p}
-// Map equirectangular (u,v) in [0,1] to a point on the unit sphere. u is
-// longitude, v is latitude; sampling noise here avoids seams and pole pinching.
-function uv2s(u,v){const p=u*TAU,t=v*PI,st=Math.sin(t);return[st*Math.cos(p),Math.cos(t),st*Math.sin(p)]}
-// Small math helpers: clamp, scalar lerp, colour (vec3) lerp, and smoothstep.
-const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
-const lp=(a,b,t)=>a+(b-a)*t;
-const lc=(a,b,t)=>[lp(a[0],b[0],t),lp(a[1],b[1],t),lp(a[2],b[2],t)];
-const sm=(e,s,t)=>{const x=cl((t-e)/(s-e));return x*x*(3-2*x)};
-// Sample a gradient: find the stop pair bracketing t and lerp between them.
-function grd(stops,t){t=cl(t);for(let i=0;i<stops.length-1;i++){if(t<=stops[i+1][0]){const f=(t-stops[i][0])/(stops[i+1][0]-stops[i][0]);return lc(stops[i][1],stops[i+1][1],f)}}return stops[stops.length-1][1]}
-// Desaturate helper: mix colour c toward its luminance grey by amount a.
-function desat(c,a){const g=c[0]*.3+c[1]*.59+c[2]*.11;return lc(c,[g,g,g],a)}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TEMPERATURE-SHIFTED PALETTES
-// Each is a function(temp) returning gradient stops. temp 0=hot,1=warm,2=comfort,3=cool,4=cold
-// ═══════════════════════════════════════════════════════════════════════════════
-// Blend a hot palette toward a cold one by temperature t (0..4). Each PALS entry
-// keeps two gradients and interpolates per stop, so one type spans hot to cold.
-function mkPal(hot,cold,t){return hot.map((s,i)=>([s[0],lc(s[1],cold[i][1],t/4)]))}
-
-// Per-type palettes. Each is a function(temp) returning gradient stops used by
-// grd() to colour that surface; hot and cold variants blend by temperature.
-const PALS={
-  selena(t){
-    const hot=[[0,[.12,.04,.02]],[.2,[.22,.10,.06]],[.4,[.35,.18,.10]],[.6,[.44,.28,.18]],[.8,[.52,.36,.26]],[1,[.60,.44,.34]]];
-    const cold=[[0,[.08,.08,.08]],[.2,[.16,.16,.15]],[.4,[.26,.26,.25]],[.6,[.36,.35,.34]],[.8,[.46,.45,.44]],[1,[.55,.54,.53]]];
-    return mkPal(hot,cold,t);
-  },
-  desert(t){
-    const hot=[[0,[.18,.06,.02]],[.15,[.32,.12,.04]],[.3,[.48,.22,.08]],[.5,[.58,.30,.12]],[.7,[.65,.40,.18]],[.85,[.72,.50,.28]],[1,[.78,.58,.36]]];
-    const cold=[[0,[.14,.10,.08]],[.15,[.24,.18,.14]],[.3,[.36,.28,.22]],[.5,[.46,.38,.30]],[.7,[.56,.48,.40]],[.85,[.64,.58,.50]],[1,[.72,.66,.60]]];
-    return mkPal(hot,cold,t);
-  },
-  ocean(t){
-    const hot=[[0,[.003,.012,.06]],[.25,[.008,.035,.14]],[.5,[.02,.07,.22]],[.75,[.035,.11,.30]],[1,[.05,.16,.36]]];
-    const cold=[[0,[.01,.02,.06]],[.25,[.02,.05,.12]],[.5,[.04,.10,.20]],[.75,[.08,.16,.28]],[1,[.12,.22,.34]]];
-    return mkPal(hot,cold,t);
-  },
-  land(t){
-    const hot=[[0,[.50,.46,.30]],[.07,[.15,.28,.08]],[.2,[.10,.22,.05]],[.35,[.13,.20,.06]],[.5,[.24,.20,.13]],[.65,[.36,.32,.24]],[.82,[.48,.45,.40]],[1,[.60,.58,.55]]];
-    const cold=[[0,[.38,.36,.30]],[.07,[.16,.24,.14]],[.2,[.14,.22,.12]],[.35,[.18,.22,.16]],[.5,[.28,.26,.22]],[.65,[.40,.38,.34]],[.82,[.52,.50,.48]],[1,[.62,.61,.60]]];
-    return mkPal(hot,cold,t);
-  },
-  ice(t){
-    const warm=[[0,[.48,.42,.34]],[.15,[.56,.52,.46]],[.3,[.64,.62,.58]],[.5,[.72,.71,.68]],[.7,[.80,.79,.77]],[.85,[.86,.85,.84]],[1,[.90,.90,.89]]];
-    const cold=[[0,[.30,.32,.38]],[.15,[.42,.44,.50]],[.3,[.54,.56,.62]],[.5,[.65,.67,.72]],[.7,[.76,.78,.82]],[.85,[.84,.86,.90]],[1,[.90,.92,.95]]];
-    return mkPal(warm,cold,t);
-  },
-  gas(t){
-    const hot=[[0,[.46,.28,.10]],[.12,[.60,.40,.16]],[.25,[.74,.56,.30]],[.38,[.52,.30,.10]],[.5,[.78,.64,.38]],[.62,[.58,.36,.14]],[.75,[.80,.68,.45]],[.88,[.56,.34,.12]],[1,[.86,.74,.52]]];
-    const cold=[[0,[.18,.16,.22]],[.12,[.28,.26,.34]],[.25,[.38,.36,.44]],[.38,[.24,.22,.30]],[.5,[.42,.40,.48]],[.62,[.30,.28,.36]],[.75,[.46,.44,.52]],[.88,[.26,.24,.32]],[1,[.50,.48,.56]]];
-    return mkPal(hot,cold,t);
-  },
-  ice_giant(t){
-    const hot=[[0,[.36,.30,.24]],[.2,[.48,.42,.36]],[.4,[.56,.52,.46]],[.6,[.50,.44,.38]],[.8,[.58,.54,.48]],[1,[.62,.58,.52]]];
-    const cold=[[0,[.12,.16,.30]],[.2,[.18,.24,.42]],[.4,[.24,.32,.52]],[.6,[.20,.28,.46]],[.8,[.28,.36,.56]],[1,[.34,.42,.62]]];
-    return mkPal(hot,cold,t);
-  },
+const $ = id => document.getElementById(id);
+const MOBILE = matchMedia('(max-width:760px), (max-height:520px) and (pointer:coarse)').matches;
+const ENV = { mobile: MOBILE, deviceMemory: navigator.deviceMemory, cores: navigator.hardwareConcurrency || 4 };
+const S = {
+  P: PR.fromPreset(MOBILE ? 'earth' : 'earth'), width: BG.defaultWidth(ENV), M: null, Mw: 0,
+  cam: { yaw: 0.6, pitch: 0.22, dist: 3.4 }, sunAz: 50, sunEl: 12, exposure: 0.65,
+  moveSun: true, spin: true, clouds: true, atmo: true, spinAngle: 0, t: 0,
+  busy: false, tab: 'planet', saver: false, override: null,
 };
+let pool, device = null, ctx = null, R = null, canvas, format;
+let genTimer = 0, fullTimer = 0, lastFrame = 0;
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ATMOSPHERE COLORS per type+temp
-// ═══════════════════════════════════════════════════════════════════════════════
-// Atmosphere rim tint per planet type, blended by temperature. Feeds the shell
-// shader's uColor so each world gets a believable sky colour.
-function atmoColor(type,t){
-  const T=t/4;
-  if(type==='selena')return lc([.15,.08,.04],[.10,.10,.14],T);
-  if(type==='desert')return lc([.3,.14,.06],[.18,.16,.20],T);
-  if(type==='terra')return lc([.15,.3,.6],[.2,.3,.55],T);
-  if(type==='water')return lc([.12,.25,.55],[.15,.28,.5],T);
-  if(type==='ice')return lc([.3,.35,.5],[.35,.4,.6],T);
-  if(type==='gas_giant')return lc([.4,.25,.1],[.15,.15,.25],T);
-  if(type==='ice_giant')return lc([.15,.2,.4],[.2,.25,.5],T);
-  return[.2,.25,.4];
-}
+const loadText = name => fetch(new URL('shaders/' + name, import.meta.url)).then(r => { if (!r.ok) throw new Error(name + ' ' + r.status); return r.text(); });
+const status = t => { $('status').textContent = t; };
+const progress = f => { const el = $('progFill'); el.style.width = Math.round(f * 100) + '%'; el.style.opacity = f >= 1 ? '0' : '1'; };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// GENERATORS
-// ═══════════════════════════════════════════════════════════════════════════════
-// Surface generators, one per planet type. Each takes equirectangular (u,v) and
-// temperature t and returns one texel: {height, albedo, specular, emissive}. The
-// generate() loop calls the chosen entry for every texel of the map.
-const GEN={
-  // Moon (selena): ridged craters over broad relief, dust-grey palette.
-  selena(u,v,t){
-    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.8,.06);
-    const r1=rig(wx,wy,wz,8,2,.48,3.5),r2=fbm(x,y,z,6,2.3,.4,12)*.14;
-    const h=r1*.7+r2+.3,cv=n3(x*5,y*5,z*5)*.03;
-    const pal=PALS.selena(t);
-    const col=desat(grd(pal,cl(h+cv)),.12);
-    return{height:h,albedo:col,specular:.03+cl(h)*.02,emissive:0};
-  },
-
-  // Desert: broad dunes plus a fine grain, warm sand palette darkened in hollows.
-  desert(u,v,t){
-    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.5,.1);
-    const broad=fbm(wx,wy,wz,7,2,.48,2)*.5+.5;
-    const dune=Math.abs(fbm(wx*2.2,wy*.8,wz,5,2.2,.48,7))*.35;
-    const fine=fbm(x,y,z,5,2.5,.36,18)*.05;
-    const dark=cl(fbm(x*1.5,y*1.5,z*1.5,4,2,.5,1)*.5+.4);
-    const h=broad*.4+dune*.42+fine+.18;
-    const pal=PALS.desert(t);
-    let col=grd(pal,cl(h));
-    col=lc(col,[.06,.04,.02],(1-dark)*.4);
-    col=desat(col,.08);
-    return{height:h,albedo:col,specular:.03,emissive:0};
-  },
-
-  // Earth-like: continents from warped fBm split at a sea level, latitude-banded
-  // biomes above water, ocean palette below, and city lights baked into emissive.
-  terra(u,v,t){
-    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.2,.18);
-    const cont=fbm(wx,wy,wz,6,2.05,.44,1.6);
-    const det=fbm(x,y,z,5,2.3,.38,7)*.12;
-    const h=(cont+det)*.42+.5;
-    const sea=.56+t*.015; // colder = slightly more ice/land ratio shift
-    const lat=Math.abs(y);
-    const latN=cl(lat+fbm(x*6,y*6,z*6,3,2,.5,4)*.05);
-
-    // City lights (emissive): only on land, denser near coasts and mid-latitudes,
-    // clustered by a low-frequency mask; poles and deep interiors stay dark.
-    let em=0;
-    if(h>=sea){
-      const cn=fbm(x*14,y*14,z*14,4,2,.5,9);
-      const coast=cl(1-((h-sea)/.06));
-      const pop=cl((cn+.25)*2)*coast*.7+cl((cn+.05)*1.5)*.25;
-      const cluster=cl(fbm(x*4,y*4,z*4,3,2,.5,3)*.5+.5);
-      em=cl(pop*cluster)*cl(1-latN*1.4)*.85;
-    }
-    // Clouds
-
-    // Below sea level: colour by depth from the ocean palette, high specular.
-    if(h<sea){
-      const d=(sea-h)/sea;
-      const opal=PALS.ocean(t);
-      return{height:h,albedo:grd(opal,d),specular:.9,emissive:em};
-    }
-    // Above sea level: land fraction lt drives biome and snow blending below.
-    const lt=cl((h-sea)/(1-sea));
-    const moist=cl(fbm(x*2.5,y*2.5,z*2.5,4,2,.5,1.2)*.5+.5);
-    const lpal=PALS.land(t);
-
-    // Smooth biome blending with temperature influence
-    const tropW=t<2?lc([.06,.16,.04],[.12,.24,.07],moist):lc([.10,.18,.08],[.16,.22,.12],moist);
-    const subW=lc([.10,.20,.06],[.44,.36,.22],cl((1-moist)*1.2+t*.1));
-    const tempW=lc([.18,.22,.12],[.06,.17,.04],moist);
-    const borW=lc([.26,.24,.18],[.14,.18,.10],moist*.4);
-    const b1=sm(.12,.30,latN),b2=sm(.30,.50,latN),b3=sm(.50,.72,latN);
-    let col=lc(tropW,subW,b1);col=lc(col,tempW,b2);col=lc(col,borW,b3);
-
-    if(lt>.72){const sn=cl((lt-.72)/.28);
-      const snowC=t<2?[.66,.64,.60]:[.72,.72,.70];
-      col=lc(col,snowC,sn*.5);
-    }
-    if(lt<.03)col=lc(grd(PALS.ocean(t),0),col,cl(lt/.03));
-    col=desat(col,.06);
-    return{height:h,albedo:col,specular:.04+moist*.05,emissive:em};
-  },
-
-  // Ocean world: mostly water with rare shoals rising to sandy shallows.
-  water(u,v,t){
-    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1,.2);
-    const h=fbm(wx,wy,wz,5,2,.45,1.5)*.3+.5;
-    const sea=.72;
-    const opal=PALS.ocean(t);
-    if(h<sea){const d=(sea-h)/sea;return{height:h,albedo:grd(opal,d),specular:.92,emissive:0}}
-    const lt=cl((h-sea)/(1-sea));
-    const sand=lc([.48,.44,.32],[.36,.34,.28],t/4);
-    const col=lc(grd(opal,0),sand,cl(lt*4));
-    return{height:h,albedo:col,specular:.3,emissive:0};
-  },
-
-  // Ice world: bright plains veined by ridged cracks, high glossy specular.
-  ice(u,v,t){
-    const[x,y,z]=uv2s(u,v);
-    const base=fbm(x,y,z,6,2,.48,2)*.5+.5;
-    const cr=1-rig(x,y,z,6,2.3,.46,5);
-    const fine=fbm(x,y,z,5,2.5,.38,16)*.05;
-    const h=base*.5+cr*.5+fine;
-    const ipal=PALS.ice(t);
-    const surf=grd(ipal,cl(h));
-    const crD=cl((1-cr)*1.6);
-    const crackC=t<2?[.32,.26,.18]:[.22,.24,.30];
-    let col=lc(surf,crackC,crD*.4);
-    col=desat(col,.1);
-    return{height:h,albedo:col,specular:.3+cl(h)*.4,emissive:0};
-  },
-
-  // Gas giant: latitude-locked bands (a sine of latitude), turbulence only at the
-  // band edges, longitudinal streaks, and occasional storm spots.
-  gas_giant(u,v,t){
-    const[x,y,z]=uv2s(u,v);
-    // PROPER BANDING: regular latitude-locked bands
-    const lat=y; // -1 to 1
-    const bandCount=14+Math.floor(n3(0.1,0.2,0.3)*4);
-    const bandPhase=lat*bandCount*PI;
-    const bandRaw=Math.sin(bandPhase);
-    // Only turbulence at band EDGES (where sin crosses zero)
-    const edgeDist=Math.abs(bandRaw); // 0 at edge, 1 at center
-    const edgeTurb=cl(1-edgeDist*3); // strong only near edges
-    const turb=fbm(x*2,y*2,z*2,5,2,.42,3)*edgeTurb*.18;
-    // Fine longitudinal streaks within bands
-    const streak=fbm(x*1.5,y*.3,z*1.5,4,2.2,.4,6)*.06;
-    const t1=cl(bandRaw*.5+.5+turb+streak);
-    // Occasional storm spots
-    const stormN=fbm(x*5,y*5,z*5,4,2,.5,2.5);
-    const storm=cl((stormN-.55)*6)*.12;
-    const val=cl(t1+storm);
-    const pal=PALS.gas(t);
-    let col=grd(pal,val);
-    col=desat(col,.05);
-    return{height:val,albedo:col,specular:.08+storm*.1,emissive:0};
-  },
-
-  // Ice giant: fewer, softer bands under heavy domain warp for a hazy blue look.
-  ice_giant(u,v,t){
-    const[x,y,z]=uv2s(u,v);
-    const lat=y;
-    const bandCount=8+Math.floor(n3(0.5,0.6,0.7)*3);
-    const bandRaw=Math.sin(lat*bandCount*PI);
-    const edgeDist=Math.abs(bandRaw);
-    const edgeTurb=cl(1-edgeDist*2.5);
-    // More domain warp for smoother, mistier appearance
-    const[wx,wy,wz]=mw(x,y,z,1.2,.2,3);
-    const atm=fbm(wx,wy,wz,6,2,.46,1.6)*.25;
-    const turb=fbm(x*1.8,y*1.8,z*1.8,4,2,.4,3)*edgeTurb*.12;
-    const val=cl(bandRaw*.3+.5+atm+turb);
-    const pal=PALS.ice_giant(t);
-    let col=grd(pal,val);
-    // Subtle cloud wisps
-    const wisp=cl((fbm(x*3,y*3,z*3,4,2,.5,3)-.2)*2)*.08;
-    col=lc(col,[.7,.75,.82],wisp);
-    col=desat(col,.08);
-    return{height:val,albedo:col,specular:.06+wisp*.08,emissive:0};
-  },
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAP BUILD
-// ═══════════════════════════════════════════════════════════════════════════════
-// Build a tangent-space normal map from the height map with a Sobel filter. The
-// X gradient wraps in longitude (seamless) and clamps in latitude; encode the
-// slope vector into RGB. s scales the bump strength.
-function genNorm(hm,w,h,s){s=s||2.5;const d=new Uint8ClampedArray(w*h*4);const g=(px,py)=>{px=((px%w)+w)%w;py=Math.max(0,Math.min(h-1,py));return hm[py*w+px]};for(let y=0;y<h;y++)for(let x=0;x<w;x++){const l=g(x-1,y-1)+g(x-1,y)*2+g(x-1,y+1),r=g(x+1,y-1)+g(x+1,y)*2+g(x+1,y+1),t=g(x-1,y-1)+g(x,y-1)*2+g(x+1,y-1),b=g(x-1,y+1)+g(x,y+1)*2+g(x+1,y+1),dx=(r-l)*s,dy=(b-t)*s,ln=Math.sqrt(dx*dx+dy*dy+1),i=(y*w+x)*4;d[i]=(-dx/ln*.5+.5)*255|0;d[i+1]=(-dy/ln*.5+.5)*255|0;d[i+2]=(1/ln*.5+.5)*255|0;d[i+3]=255}return d}
-// Float array → grayscale RGBA bytes (depth and specular maps).
-function f2g(a,w,h){const d=new Uint8ClampedArray(w*h*4);for(let i=0;i<a.length;i++){const v=cl(a[i])*255|0,j=i*4;d[j]=v;d[j+1]=v;d[j+2]=v;d[j+3]=255}return d}
-// RGBA bytes → a canvas element via putImageData.
-function d2c(r,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').putImageData(new ImageData(r,w,h),0,0);return c}
-// Canvas → Three.js texture. Repeat in longitude, clamp in latitude to match the
-// seam handling in the maps.
-function c2t(c){const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;return t}
-
-// Generate all five maps for one planet. Loop every texel in latitude bands of B
-// rows, yield to the browser between bands (so the progress bar animates, and the
-// optional live(albedo,w,h,rowsDone) callback can paint the sphere), then
-// normalize height, derive the normal map, and pack emissive with a warm tint.
-async function generate(type,temp,seed,width,prog,live){
-  const H=width/2;seedN(seed);const gen=GEN[type];
-  const hm=new Float32Array(width*H),sp=new Float32Array(width*H),em=new Float32Array(width*H),al=new Uint8ClampedArray(width*H*4);
-  const B=4;
-  for(let sy=0;sy<H;sy+=B){const ey=Math.min(sy+B,H);
-    for(let y=sy;y<ey;y++)for(let x=0;x<width;x++){
-      const u=(x+.5)/width,v=(y+.5)/H,r=gen(u,v,temp),i=y*width+x;
-      hm[i]=r.height;sp[i]=r.specular;em[i]=r.emissive;
-      const p=i*4;al[p]=r.albedo[0]*255|0;al[p+1]=r.albedo[1]*255|0;al[p+2]=r.albedo[2]*255|0;al[p+3]=255;
-    }
-    prog(ey/H);if(live)live(al,width,H,ey);await new Promise(r=>requestAnimationFrame(r));
+// ── boot ────────────────────────────────────────────────────────────────
+async function boot() {
+  canvas = $('view');
+  buildPlanetTab(); buildShape(); buildSky(); bindTabs(); bindPointer(); bindView();
+  pool = createPool(Math.max(1, Math.min(MOBILE ? 3 : 8, (navigator.hardwareConcurrency || 4) - 1)));
+  try {
+    if (!navigator.gpu) throw new Error('no navigator.gpu');
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) throw new Error('no adapter');
+    device = await adapter.requestDevice();
+    device.lost.then(i => { if (i.reason !== 'destroyed') console.warn('forge: GPU device lost: ' + i.message); });
+    ctx = canvas.getContext('webgpu');
+    format = navigator.gpu.getPreferredCanvasFormat();
+    ctx.configure({ device, format, alphaMode: 'opaque' });
+    R = await createRenderer({ device, format, loadText });
+  } catch (e) {
+    console.warn('forge: no WebGPU view:', e.message);
+    device = null; R = null; $('nogpu').hidden = false;
   }
-  // Normalize the raw height range to 0..1 so the depth/normal maps use the full
-  // dynamic range regardless of the generator's absolute output.
-  let mn=1e9,mx=-1e9;for(let i=0;i<hm.length;i++){if(hm[i]<mn)mn=hm[i];if(hm[i]>mx)mx=hm[i]}
-  const rng=mx-mn||1,hmN=new Float32Array(hm.length);for(let i=0;i<hm.length;i++)hmN[i]=(hm[i]-mn)/rng;
-  const emD=new Uint8ClampedArray(width*H*4);
-  for(let i=0;i<em.length;i++){const e=cl(em[i]),j=i*4;emD[j]=(e*.92)*255|0;emD[j+1]=(e*.68)*255|0;emD[j+2]=(e*.22)*255|0;emD[j+3]=255}
-  prog(1);
-  return{width,height:H,albedo:d2c(al,width,H),depth:d2c(f2g(hmN,width,H),width,H),normal:d2c(genNorm(hmN,width,H),width,H),specular:d2c(f2g(sp,width,H),width,H),emissive:d2c(emD,width,H)};
+  addEventListener('resize', resize); resize();
+  await regenerate(true);
+  requestAnimationFrame(frame);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// THREE.JS SCENE
-// ═══════════════════════════════════════════════════════════════════════════════
-// Renderer: ACES filmic tone mapping and a dark clear colour so the lit planet
-// reads against space. Mounted inside #three-mount, sized to that element.
-const mount=document.getElementById('three-mount');
-const ren=new THREE.WebGLRenderer({antialias:true});
-ren.setSize(mount.clientWidth||1,mount.clientHeight||1);
-ren.setPixelRatio(Math.min(window.devicePixelRatio,2));
-ren.setClearColor(new THREE.Color('#0a0d14'));
-ren.toneMapping=THREE.ACESFilmicToneMapping;
-ren.toneMappingExposure=1.0;
-mount.appendChild(ren.domElement);
-
-// Scene and camera. The camera sits on +Z looking at the origin; wheel zoom
-// moves it along Z between fixed limits.
-const scn=new THREE.Scene();
-const cam=new THREE.PerspectiveCamera(38,mount.clientWidth/mount.clientHeight,.1,200);
-cam.position.z=3;
-
-// Planet mesh. A high-tessellation sphere with a standard PBR material; setAct()
-// swaps in the generated albedo / normal / roughness / emissive maps.
-const pgeo=new THREE.SphereGeometry(1,256,128);
-const pmat=new THREE.MeshStandardMaterial({color:0x05070c,roughness:.9,metalness:0});
-const pmsh=new THREE.Mesh(pgeo,pmat);scn.add(pmsh);
-
-// Atmosphere shell: a slightly larger sphere drawn additively with the fresnel
-// rim shader. Hidden until a planet exists; uColor/uIntensity/uPow are set per
-// type after generate() finishes.
-const ageo=new THREE.SphereGeometry(1.025,64,32);
-const amat=new THREE.ShaderMaterial({
-  uniforms:{
-    uSunDir:{value:new THREE.Vector3(1,0.5,1).normalize()},
-    uColor:{value:new THREE.Color(.15,.3,.6)},
-    uIntensity:{value:1.0},
-    uPow:{value:3.2},
-  },
-  vertexShader:V_atmosphere,
-  fragmentShader:F_atmosphere,
-  transparent:true,depthWrite:false,side:THREE.FrontSide,blending:THREE.AdditiveBlending,
-});
-const amsh=new THREE.Mesh(ageo,amat);amsh.visible=false;scn.add(amsh);
-
-// Placeholder globe: lat/lon wire rings drawn additively over the dark planet
-// sphere until the first planet exists. The sphere hides the far-side rings.
-const holo=(()=>{
-  const v=[],N=96,seg=(a,b)=>v.push(a[0],a[1],a[2],b[0],b[1],b[2]),R=1.004;
-  for(let la=-75;la<=75;la+=15){const t=la*PI/180,y=Math.sin(t)*R,r=Math.cos(t)*R;
-    for(let i=0;i<N;i++){const a0=i/N*TAU,a1=(i+1)/N*TAU;seg([r*Math.cos(a0),y,r*Math.sin(a0)],[r*Math.cos(a1),y,r*Math.sin(a1)])}}
-  for(let lo=0;lo<180;lo+=15){const p=lo*PI/180,c=Math.cos(p)*R,s=Math.sin(p)*R;
-    for(let i=0;i<N;i++){const a0=i/N*TAU,a1=(i+1)/N*TAU;seg([c*Math.sin(a0),Math.cos(a0)*R,s*Math.sin(a0)],[c*Math.sin(a1),Math.cos(a1)*R,s*Math.sin(a1)])}}
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
-  const m=new THREE.LineBasicMaterial({color:0x96c8ff,transparent:true,opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false});
-  const l=new THREE.LineSegments(g,m);scn.add(l);return l;
-})();
-
-// Lighting: a faint blue ambient fill plus a warm directional sun; the sun is
-// the key light whose angle the sliders control.
-const amb=new THREE.AmbientLight(0x121828,0.06);scn.add(amb);
-const sun=new THREE.DirectionalLight(0xfff0d0,3.0);scn.add(sun);
-
-// Starfield: 5000 points scattered on random shells around the scene.
-const sbuf=new THREE.BufferGeometry(),sv=[];
-for(let i=0;i<5000;i++){const r=15+Math.random()*80,t=Math.random()*TAU,p=Math.acos(2*Math.random()-1);sv.push(r*Math.sin(p)*Math.cos(t),r*Math.sin(p)*Math.sin(t),r*Math.cos(p))}
-sbuf.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
-scn.add(new THREE.Points(sbuf,new THREE.PointsMaterial({color:0xb0b8d0,size:.06,sizeAttenuation:true})));
-
-// Sun direction from the two spherical angles (azimuth phi, polar theta). Places
-// the directional light and updates the atmosphere shader's sun uniform together.
-let sunPhi=40*PI/180,sunTh=65*PI/180;
-function updSun(){
-  const st=Math.sin(sunTh);
-  const dir=new THREE.Vector3(st*Math.cos(sunPhi),Math.cos(sunTh),st*Math.sin(sunPhi));
-  sun.position.copy(dir.clone().multiplyScalar(5));
-  amat.uniforms.uSunDir.value.copy(dir);
-}
-updSun();
-
-// Drag state: d=dragging, lx/ly=last pointer, rx/ry=planet rotation. When not
-// dragging the planet spins slowly on its own.
-const dr={d:false,lx:0,ly:0,rx:.2,ry:0};
-// ANIMATION. tween(dur,fn) calls fn(e) each frame with eased progress e in
-// [0,1] until dur ms pass. RM (reduced motion) makes every tween jump to its end.
-const RM=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-const tweens=[];
-const ease=t=>1-Math.pow(1-t,3);
-function tween(dur,fn){if(RM){fn(1);return}tweens.push({t0:performance.now(),dur,fn})}
-function runTweens(now){for(let i=tweens.length-1;i>=0;i--){const w=tweens[i],t=Math.min(1,(now-w.t0)/w.dur);w.fn(ease(t),t);if(t>=1)tweens.splice(i,1)}}
-
-// Scan ring: a thin torus on the planet surface at the latitude that
-// generate() has reached. It rides with the planet rotation (scanG).
-const scanG=new THREE.Group();scn.add(scanG);
-const scan=new THREE.Mesh(new THREE.TorusGeometry(1,.006,6,160),new THREE.MeshBasicMaterial({color:0xffd060,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
-scan.rotation.x=PI/2;scan.visible=false;scanG.add(scan);
-function setScan(frac){const th=frac*PI,r=Math.sin(th)*1.012;scan.scale.set(Math.max(r,.001),Math.max(r,.001),Math.max(r,.001));scan.position.y=Math.cos(th)*1.012}
-
-// Shockwave: a flat ring facing the camera that grows and fades when a
-// planet finishes.
-const shock=new THREE.Mesh(new THREE.RingGeometry(.97,1,160),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-scn.add(shock);
-function pulse(color){shock.material.color.set(color);tween(1400,e=>{const k=1.02+e*.9;shock.scale.set(k,k,k);shock.material.opacity=.7*(1-e)})}
-
-// Intro: the wire globe grows in from a point and its rings brighten.
-holo.scale.setScalar(.01);holo.material.opacity=0;
-tween(1300,(e,t)=>{const b=1+2.2*Math.pow(t-1,3)+1.2*Math.pow(t-1,2);holo.scale.setScalar(Math.max(.01,b));holo.material.opacity=.3*e});
-
-// FRAMING. fitCam() moves the camera back until the planet (radius RFIT with
-// the atmosphere) fills FILL of the clear part of the viewport. On phones the
-// Maps sheet and the button dock cover the bottom, so occ() measures them and
-// the view shifts up to centre the planet in the clear part. zoom is the wheel
-// and pinch multiplier. The distance and the shift ease, so they follow the
-// sliding sheet.
-const PHONE_Q=window.matchMedia('(max-width:768px)');
-const FILL=.72,RFIT=1.06,DOCK_H=64;
-let zoom=1,offY=0;
-function occ(){
-  const o={t:0,b:0};if(!PHONE_Q.matches)return o;
-  const vr=mount.getBoundingClientRect(),sb=document.getElementById('sidebar').getBoundingClientRect();
-  if(sb.top<vr.bottom-1&&sb.width>vr.width*.5)o.b=vr.bottom-sb.top;
-  o.b=Math.max(o.b,DOCK_H);
-  return o;
-}
-function fitCam(snap){
-  const w=mount.clientWidth,h=mount.clientHeight;if(!w||!h)return;
-  const o=occ(),ch=Math.max(120,h-o.t-o.b);
-  const fpx=(h/2)/Math.tan(cam.fov*PI/360);
-  const a=Math.atan(FILL*Math.min(w,ch)/2/fpx);
-  const d=Math.max(1.3,RFIT/Math.sin(a)*zoom),k=snap?1:.18;
-  cam.position.z+=(d-cam.position.z)*k;
-  offY+=((o.b-o.t)/2-offY)*k;
-  cam.setViewOffset(w,h,0,offY,w,h);
-}
-// Keep the renderer and camera aspect matched to the mount element. A
-// ResizeObserver catches layout changes that are not window resizes (for
-// example the batch panel or a wrapped toolbar row).
-function resize(){const w=mount.clientWidth,h=mount.clientHeight;if(!w||!h)return;cam.aspect=w/h;cam.updateProjectionMatrix();ren.setSize(w,h);fitCam(true)}
-new ResizeObserver(resize).observe(mount);
-resize();
-
-// Render loop: idle auto-spin, apply rotation to planet, atmosphere, the
-// placeholder globe and the scan ring, run tweens, frame the camera, draw.
-let spin=.0008; // idle spin per frame; the screensaver hook scales it by calm
-function anim(now){requestAnimationFrame(anim);if(!dr.d)dr.ry+=spin;for(const m of [pmsh,amsh,holo,scanG]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}runTweens(now||performance.now());fitCam(false);ren.render(scn,cam)}
-anim();
-// xr.js (a module, lib/xr-view.js) reads these for the VR and AR view. They
-// are set here, after the shader fetch, so xr.js waits for them.
-window.__forge={ren,scn,cam,dr};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CONTROLS
-// ═══════════════════════════════════════════════════════════════════════════════
-// Viewport pointer + wheel: drag rotates the planet (pitch clamped), wheel zooms
-// the camera along Z within limits.
-const vp=document.getElementById('viewport');
-// Two touch points pinch the zoom multiplier; one drags the rotation.
-const pts=new Map();let pinch0=0,zoom0=1;
-const pdist=()=>{const [a,b]=[...pts.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
-vp.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){pinch0=pdist();zoom0=zoom;dr.d=false;return}dr.d=true;dr.lx=e.clientX;dr.ly=e.clientY});
-vp.addEventListener('pointermove',e=>{if(pts.has(e.pointerId))pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2&&pinch0){zoom=cl(zoom0*pinch0/Math.max(1,pdist()),.45,2.5);return}if(!dr.d)return;dr.ry+=(e.clientX-dr.lx)*.005;dr.rx+=(e.clientY-dr.ly)*.005;dr.rx=Math.max(-1.4,Math.min(1.4,dr.rx));dr.lx=e.clientX;dr.ly=e.clientY});
-const pend=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch0=0;dr.d=false};
-vp.addEventListener('pointerup',pend);vp.addEventListener('pointercancel',pend);vp.addEventListener('pointerleave',pend);
-vp.addEventListener('wheel',e=>{e.preventDefault();zoom=cl(zoom*Math.exp(e.deltaY*.0015),.45,2.5)},{passive:false});
-
-// Sun angle sliders (degrees → radians), each re-derives the sun direction.
-document.getElementById('rng-phi').oninput=function(){sunPhi=+this.value*PI/180;updSun()};
-document.getElementById('rng-theta').oninput=function(){sunTh=+this.value*PI/180;updSun()};
-
-// Normal-map strength slider, applied live to the material's normalScale.
-let normStr=0.4;
-document.getElementById('rng-norm').oninput=function(){normStr=+this.value/10;if(pmat.normalMap){pmat.normalScale.set(normStr,normStr);pmat.needsUpdate=true}};
-
-// Toggles: city lights (emissive intensity) and atmosphere shell visibility.
-// btn-rand rolls a new seed into both desktop and mobile seed inputs.
-let showCities=true,showAtmo=true;
-document.getElementById('btn-cities').onclick=function(){showCities=!showCities;this.textContent=showCities?'On':'Off';this.classList.toggle('active',showCities);if(curMaps&&actMap==='render'){pmat.emissiveIntensity=showCities?2:0;pmat.needsUpdate=true}};
-document.getElementById('btn-atmo').onclick=function(){showAtmo=!showAtmo;this.textContent=showAtmo?'On':'Off';this.classList.toggle('active',showAtmo);amsh.visible=showAtmo&&!!curMaps};
-document.getElementById('btn-rand').onclick=()=>{var s=Math.floor(Math.random()*99999);document.getElementById('inp-seed').value=s;if(document.getElementById('m-inp-seed'))document.getElementById('m-inp-seed').value=s};
-
-// Mobile generate button: copy the mobile control values into the desktop
-// controls, then click the desktop Generate so one code path does the work.
-if(document.getElementById('m-btn-gen')){
-  document.getElementById('m-btn-gen').onclick=function(){
-    // Sync mobile → desktop
-    document.getElementById('sel-type').value=document.getElementById('m-sel-type').value;
-    document.getElementById('sel-temp').value=document.getElementById('m-sel-temp').value;
-    document.getElementById('inp-seed').value=document.getElementById('m-inp-seed').value;
-    if(document.getElementById('m-sel-res'))document.getElementById('sel-res').value=document.getElementById('m-sel-res').value;
-    document.getElementById('btn-gen').click();
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SIDEBAR
-// ═══════════════════════════════════════════════════════════════════════════════
-// Map list and temperature labels. curMaps holds the last generated set of
-// canvases; actMap is the currently displayed output ('render' or a map name).
-const MAPS=['albedo','depth','normal','specular','emissive'];
-const TNAMES=['Hot','Warm','Comfort','Cool','Cold'];
-let curMaps=null,actMap='render';
-
-// Build one sidebar button and preview slot per map output.
-const mbC=document.getElementById('map-buttons');
-MAPS.forEach(n=>{
-  const w=document.createElement('div');
-  const b=document.createElement('button');b.className='map-btn';b.disabled=true;b.dataset.map=n;
-  b.innerHTML='<span>'+n.toUpperCase()+'</span><span class="dl" style="display:none" title="Download">⬇</span>';
-  w.appendChild(b);
-  const p=document.createElement('div');p.className='preview';p.style.display='none';p.innerHTML='<img/>';w.appendChild(p);
-  mbC.appendChild(w);
+addEventListener('pagehide', () => {
+  try { pool && pool.terminate(); } catch (e) {}
+  try { R && R.destroy(); } catch (e) {}
+  try { device && device.destroy(); } catch (e) {}
 });
 
-// Switch what the sphere shows. 'render' binds the full PBR material (albedo,
-// normal, inverted-specular as roughness, emissive city lights, atmosphere). Any
-// other name shows that single map flat, with lighting effects stripped off.
-function setAct(name){
-  actMap=name;
-  document.querySelectorAll('.map-btn').forEach(b=>b.classList.toggle('active',b.dataset.map===name));
-  if(!curMaps)return;
-  if(name==='render'){
-    pmat.map=c2t(curMaps.albedo);pmat.map.colorSpace=THREE.SRGBColorSpace;
-    pmat.normalMap=c2t(curMaps.normal);pmat.normalScale.set(normStr,normStr);
-    const rc=document.createElement('canvas');rc.width=curMaps.width;rc.height=curMaps.height;
-    // Roughness is the inverse of specular, so invert the specular map's pixels
-    // before using it as the roughness map.
-    const rx=rc.getContext('2d');rx.drawImage(curMaps.specular,0,0);
-    const rd=rx.getImageData(0,0,curMaps.width,curMaps.height);
-    for(let i=0;i<rd.data.length;i+=4){rd.data[i]=255-rd.data[i];rd.data[i+1]=255-rd.data[i+1];rd.data[i+2]=255-rd.data[i+2]}
-    rx.putImageData(rd,0,0);
-    pmat.roughnessMap=c2t(rc);pmat.roughness=1;pmat.metalness=0;
-    pmat.emissiveMap=c2t(curMaps.emissive);pmat.emissive=new THREE.Color(0xffffff);pmat.emissiveIntensity=showCities?2:0;
-    pmat.color=new THREE.Color(0xffffff);
-    amsh.visible=showAtmo;
-  }else{
-    pmat.map=curMaps[name]?c2t(curMaps[name]):null;
-    if(pmat.map)pmat.map.colorSpace=THREE.SRGBColorSpace;
-    pmat.normalMap=null;pmat.roughnessMap=null;pmat.emissiveMap=null;pmat.emissive=new THREE.Color(0);pmat.roughness=.9;pmat.metalness=0;
-    pmat.color=new THREE.Color(curMaps[name]?0xffffff:0x05070c);
-    amsh.visible=false;
-  }
-  pmat.needsUpdate=true;
+// ── generation ──────────────────────────────────────────────────────────
+async function regenerate(full, width) {
+  const W = width || (full ? BG.pickWidth(S.width, ENV) : Math.min(512, BG.pickWidth(S.width, ENV)));
+  const P = PR.clone(S.P), t0 = performance.now();
+  S.busy = true; status(`generating ${W} × ${W / 2}…`); progress(0.02);
+  let M;
+  try { M = await pool.generate(P, W, progress); }
+  catch (e) { if (e.message !== 'stale') { console.error(e); status('generation failed: ' + e.message); } return null; }
+  S.M = M; S.Mw = W; S.Pgen = P; S.busy = false;
+  if (R) R.setPlanet(P, M, ENV);
+  status(`${P.name} · seed ${P.seed} · ${W} × ${W / 2} · ${Math.round(performance.now() - t0)} ms`);
+  $('mapNote').textContent = `${W} × ${W / 2} equirect, ${pool.size || 1} worker${pool.size === 1 ? '' : 's'}. Heights span ${M.reliefKm.toFixed(1)} km. Normals: tangent space, OpenGL (+Y north).`;
+  if (S.tab === 'maps' || !MOBILE) buildMaps();
+  return M;
+}
+// Recipe changed: quick preview now, full width after a quiet moment.
+function changed() {
+  clearTimeout(genTimer); clearTimeout(fullTimer);
+  genTimer = setTimeout(() => regenerate(false), 120);
+  fullTimer = setTimeout(() => regenerate(true), 800);
 }
 
-// Wire the PBR render button and each map button to switch the active output.
-document.getElementById('btn-render').onclick=()=>setAct('render');
-mbC.querySelectorAll('.map-btn').forEach(b=>{b.onclick=()=>{if(curMaps)setAct(b.dataset.map)}});
-
-// Download one map as a PNG named type_seed_map.
-function dl(name){if(!curMaps||!curMaps[name])return;const a=document.createElement('a');a.download=document.getElementById('sel-type').value+'_'+document.getElementById('inp-seed').value+'_'+name+'.png';a.href=curMaps[name].toDataURL('image/png');a.click()}
-// Per-map download icons (stop the click from also switching the map) and the
-// download-all button.
-mbC.querySelectorAll('.dl').forEach(el=>{el.onclick=e=>{e.stopPropagation();dl(el.closest('.map-btn').dataset.map)}});
-document.getElementById('btn-dl-all').onclick=()=>MAPS.forEach(m=>dl(m));
-
-// Main Generate handler: read the controls, run generate() with a progress
-// callback, populate the sidebar previews, set the atmosphere colour per type,
-// and show the PBR render.
-document.getElementById('btn-gen').onclick=async function(){
-  const type=document.getElementById('sel-type').value;
-  const temp=parseInt(document.getElementById('sel-temp').value);
-  const seed=parseInt(document.getElementById('inp-seed').value)||0;
-  const res=parseInt(document.getElementById('sel-res').value);
-  this.disabled=true;this.textContent='Generating...';
-  const mg=document.getElementById('m-btn-gen');
-  for(const b of [this,mg])if(b)b.classList.add('working');
-  // Live paint: copy the old albedo (or the dark base) into a canvas, bind it
-  // as the only map, and let each generated band overwrite its rows. The
-  // sphere shows the new planet as the scan ring sweeps from pole to pole.
-  const lc=document.createElement('canvas');lc.width=res;lc.height=res/2;
-  const lx=lc.getContext('2d');
-  if(curMaps)lx.drawImage(curMaps.albedo,0,0,res,res/2);else{lx.fillStyle='#05070c';lx.fillRect(0,0,res,res/2)}
-  const ltex=c2t(lc);
-  pmat.map=ltex;pmat.normalMap=null;pmat.roughnessMap=null;pmat.emissiveMap=null;
-  pmat.emissive=new THREE.Color(0);pmat.color=new THREE.Color(0xffffff);pmat.roughness=.85;pmat.needsUpdate=true;
-  amsh.visible=false;scan.visible=true;setScan(0);
-  let img=null,rowY=0,band=0;
-  const holoA=holo.visible?holo.material.opacity:0;
-  const live=(al,w,h,ey)=>{
-    setScan(ey/h);holo.material.opacity=holoA*(1-ey/h);
-    if(++band%4&&ey<h)return;
-    if(!img)img=new ImageData(al,w,h);
-    lx.putImageData(img,0,0,0,rowY,w,ey-rowY);rowY=ey;ltex.needsUpdate=true;
+// ── planet tab ──────────────────────────────────────────────────────────
+function buildPlanetTab() {
+  const kindBtns = [...$('kind').children];
+  const draw = () => {
+    kindBtns.forEach(b => b.classList.toggle('on', b.dataset.kind === S.P.kind));
+    $('presets').innerHTML = '';
+    for (const pr of PR.PRESETS.filter(p => p.kind === S.P.kind)) {
+      const b = document.createElement('button');
+      b.textContent = pr.name; b.classList.toggle('on', pr.id === S.P.preset);
+      b.onclick = () => choosePreset(pr.id);
+      $('presets').appendChild(b);
+    }
+    const pr = PR.presetById(S.P.preset);
+    $('blurb').textContent = pr ? pr.blurb : '';
+    $('seed').value = S.P.seed;
   };
-  document.getElementById('prog-wrap').style.display='block';
-  document.getElementById('empty-state').style.display='none';
-  document.getElementById('i-type').textContent=type.charAt(0).toUpperCase()+type.slice(1).replace('_',' ');
-  document.getElementById('i-temp').textContent=TNAMES[temp];
-  document.getElementById('i-seed').textContent=seed;
-  document.getElementById('i-size').textContent=res+'×'+(res/2);
-
-  curMaps=await generate(type,temp,seed,res,p=>{document.getElementById('prog-bar').style.width=(p*100)+'%'},live);
-  scan.visible=false;
-
-  mbC.querySelectorAll('.map-btn').forEach(b=>{b.disabled=false;b.querySelector('.dl').style.display='inline'});
-  // Previews develop in one after another (style.css .preview.dev).
-  mbC.querySelectorAll('.preview').forEach((p,i)=>{const n=p.previousElementSibling.dataset.map;if(curMaps[n]){p.style.display='block';p.querySelector('img').src=curMaps[n].toDataURL();p.classList.remove('dev');void p.offsetWidth;p.style.animationDelay=(i*90)+'ms';p.classList.add('dev')}});
-  document.getElementById('btn-dl-all').style.display='block';
-
-  // Set atmosphere color
-  const ac=atmoColor(type,temp);
-  amat.uniforms.uColor.value.set(ac[0],ac[1],ac[2]);
-  const aI=(type==='selena'?.3:type==='desert'?.5:1.0);
-  amat.uniforms.uIntensity.value=0;tween(1600,e=>{amat.uniforms.uIntensity.value=aI*e});
-  amat.uniforms.uPow.value=(type==='gas_giant'||type==='ice_giant')?2.2:3.2;
-
-  holo.visible=false;
-  setAct('render');
-  pulse(new THREE.Color(ac[0],ac[1],ac[2]).lerp(new THREE.Color(0xffffff),.35));
-  document.getElementById('prog-wrap').style.display='none';
-  for(const b of [this,mg])if(b)b.classList.remove('working');
-  this.disabled=false;this.textContent='▶ Generate';
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BATCH GENERATION
-// ═══════════════════════════════════════════════════════════════════════════════
-// Batch queue: a list of {type,temp,seed,res} jobs to generate in one run.
-const TNAMES_B=['Hot','Warm','Comfort','Cool','Cold'];
-const batchQueue=[];
-
-// Redraw the queue list and update the count and the enabled state of Go.
-function renderQueue(){
-  const list=document.getElementById('batch-list');
-  list.innerHTML='';
-  batchQueue.forEach((item,i)=>{
-    const el=document.createElement('div');el.className='batch-item';
-    el.innerHTML='<span class="bi-type">'+item.type+'</span><span class="bi-temp">'+TNAMES_B[item.temp]+'</span><span class="bi-seed">#'+item.seed+'</span><span class="bi-rm" onclick="batchQueue.splice('+i+',1);renderQueue()">✕</span>';
-    list.appendChild(el);
-  });
-  document.getElementById('batch-count').textContent=batchQueue.length+' planet'+(batchQueue.length!==1?'s':'');
-  document.getElementById('batch-go').disabled=batchQueue.length===0;
-}
-
-// Queue editing: add the current settings, add five random seeds, or clear.
-document.getElementById('batch-add').onclick=function(){
-  batchQueue.push({
-    type:document.getElementById('sel-type').value,
-    temp:parseInt(document.getElementById('sel-temp').value),
-    seed:parseInt(document.getElementById('inp-seed').value)||0,
-    res:parseInt(document.getElementById('sel-res').value)
-  });
-  renderQueue();
-};
-
-document.getElementById('batch-add5').onclick=function(){
-  const type=document.getElementById('sel-type').value;
-  const temp=parseInt(document.getElementById('sel-temp').value);
-  const res=parseInt(document.getElementById('sel-res').value);
-  for(let i=0;i<5;i++){
-    batchQueue.push({type,temp,seed:Math.floor(Math.random()*99999),res});
+  S.drawPlanetTab = draw;
+  kindBtns.forEach(b => b.onclick = () => { if (b.dataset.kind !== S.P.kind) choosePreset(PR.PRESETS.find(p => p.kind === b.dataset.kind).id); });
+  $('seed').onchange = () => { S.P.seed = (+$('seed').value >>> 0); changed(); };
+  const dice = () => { S.P.seed = Math.floor(Math.random() * 1e6); $('seed').value = S.P.seed; changed(); };
+  $('dice').onclick = dice; $('dockDice').onclick = dice;
+  for (const w of BG.WIDTHS) {
+    const o = document.createElement('option'); o.value = w; o.textContent = `${w >= 1024 ? w / 1024 + 'k' : w} (${w} × ${w / 2})`;
+    if (BG.pickWidth(w, ENV) < w) { o.disabled = true; o.textContent += ' · over memory budget'; }
+    $('res').appendChild(o);
   }
-  renderQueue();
-};
-
-document.getElementById('batch-clear').onclick=function(){batchQueue.length=0;renderQueue()};
-
-// Promise wrapper around canvas.toBlob for the ZIP writer.
-function canvasToBlob(canvas){
-  return new Promise(r=>canvas.toBlob(b=>r(b),'image/png'));
+  $('res').value = S.width;
+  $('res').onchange = () => { S.width = +$('res').value; regenerate(true); };
+  $('gen').onclick = () => regenerate(true);
+  $('resNote').textContent = `Budget: ${Math.round(BG.cpuBudget(ENV) / 1e6)} MB for maps; the view uploads at most ${BG.gpuWidth(4096, ENV)} wide.`;
+  draw();
+}
+function choosePreset(id, seed) {
+  S.P = PR.fromPreset(id, seed);
+  S.drawPlanetTab(); buildShape(); buildSky();
+  regenerate(false).then(() => regenerate(true));
 }
 
-// Batch run: generate every queued planet, write each map into a per-planet
-// folder in a JSZip archive, then download the whole archive as one ZIP.
-document.getElementById('batch-go').onclick=async function(){
-  if(batchQueue.length===0)return;
-  this.disabled=true;this.textContent='Working...';
-  const bp=document.getElementById('batch-progress');bp.style.display='block';
-  const bpText=document.getElementById('bp-text');
-  const bpFill=document.getElementById('bp-fill');
-  const zip=new JSZip();
-  const total=batchQueue.length;
-  const MAP_NAMES=['albedo','depth','normal','specular','emissive'];
+// ── shape and sky sliders (from presets.js SCHEMA) ─────────────────────
+function sliders(host, rows, onInput) {
+  host.innerHTML = '';
+  let group = null, box = null;
+  for (const [g, path, label, lo, hi, step] of rows) {
+    if (g !== group) { group = g; box = document.createElement('details'); box.open = !MOBILE && host.children.length < 2; box.innerHTML = `<summary>${g}</summary>`; host.appendChild(box); }
+    const d = document.createElement('div'); d.className = 'ctl';
+    const v = PR.getPath(S.P, path);
+    d.innerHTML = `<label>${label} <output></output></label><input type="range" min="${lo}" max="${hi}" step="${step}">`;
+    const inp = d.querySelector('input'), out = d.querySelector('output');
+    inp.value = v; out.textContent = fmt(v, step);
+    inp.oninput = () => { const x = +inp.value; PR.setPath(S.P, path, x); out.textContent = fmt(x, step); onInput(path); };
+    box.appendChild(d);
+  }
+}
+const fmt = (v, step) => step >= 1 ? String(Math.round(v)) : (+v).toFixed(step < 0.01 ? 3 : 2);
+function buildShape() {
+  sliders($('shapeCtl'), PR.SCHEMA[S.P.kind], path => {
+    // rings and the view-only spin do not need new maps
+    if (path === 'spin') return;
+    if (path.startsWith('rings.') && S.M && R) { R.setPlanet(S.P, S.M, ENV); return; }
+    changed();
+  });
+  $('resetShape').onclick = () => choosePreset(S.P.preset, S.P.seed);
+}
+function buildSky() {
+  sliders($('skyCtl'), PR.SCHEMA.atmo, () => { if (R) R.setAtmo(S.P, S.M ? S.M.stats.meanAlbedo : 0.3); });
+}
+function bindView() {
+  const bind = (id, out, key, f = v => v) => { const el = $(id); const set = () => { S[key] = f(+el.value); $(out).textContent = el.value; }; el.oninput = set; set(); };
+  bind('exp', 'oExp', 'exposure'); bind('sunAz', 'oSun', 'sunAz'); bind('sunEl', 'oSunEl', 'sunEl');
+  $('tSun').onchange = e => S.moveSun = e.target.checked;
+  $('tSpin').onchange = e => S.spin = e.target.checked;
+  $('tClouds').onchange = e => S.clouds = e.target.checked;
+  $('tAtmo').onchange = e => { S.atmo = e.target.checked; if (R) R.setAtmo(S.atmo ? S.P : PR.merge(S.P, { atmo: { on: 0 } }), S.M ? S.M.stats.meanAlbedo : 0.3); };
+}
 
-  for(let i=0;i<total;i++){
-    const item=batchQueue[i];
-    const prefix=item.type+'_'+TNAMES_B[item.temp].toLowerCase()+'_'+item.seed;
-    bpText.textContent='Generating '+(i+1)+'/'+total+': '+prefix;
-    bpFill.style.width=((i/total)*100)+'%';
+// ── tabs, sheet ─────────────────────────────────────────────────────────
+function bindTabs() {
+  const open = (tab, toggle) => {
+    const panel = $('panel');
+    if (MOBILE && toggle && S.tab === tab && panel.classList.contains('open')) { panel.classList.remove('open'); markDock(null); return; }
+    S.tab = tab;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    document.querySelectorAll('#panel section').forEach(s => s.classList.toggle('on', s.dataset.pane === tab));
+    panel.classList.add('open'); markDock(tab);
+    if (tab === 'maps') buildMaps();
+  };
+  const markDock = tab => document.querySelectorAll('#dock button[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => open(b.dataset.tab));
+  document.querySelectorAll('#dock button[data-tab]').forEach(b => b.onclick = () => open(b.dataset.tab, true));
+  $('sheetGrip').onclick = () => { $('panel').classList.remove('open'); markDock(null); };
+}
 
-    const maps=await generate(item.type,item.temp,item.seed,item.res,()=>{});
-    const folder=zip.folder(prefix);
-    for(const name of MAP_NAMES){
-      if(maps[name]){
-        const blob=await canvasToBlob(maps[name]);
-        folder.file(name+'.png',blob);
-      }
+// ── maps tab ────────────────────────────────────────────────────────────
+function toRGBA(img) {
+  const n = img.width * img.height, d = new Uint8ClampedArray(n * 4), s = img.data, c = img.channels;
+  for (let i = 0; i < n; i++) {
+    if (c === 1) { const v = img.depth === 16 ? s[i] >> 8 : s[i]; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+    else if (c === 3) { d[i * 4] = s[i * 3]; d[i * 4 + 1] = s[i * 3 + 1]; d[i * 4 + 2] = s[i * 3 + 2]; d[i * 4 + 3] = 255; }
+    else { // RGBA (clouds): show alpha over dark blue so white-on-white reads
+      const a = s[i * 4 + 3] / 255;
+      d[i * 4] = s[i * 4] * a + 12 * (1 - a); d[i * 4 + 1] = s[i * 4 + 1] * a + 20 * (1 - a); d[i * 4 + 2] = s[i * 4 + 2] * a + 40 * (1 - a); d[i * 4 + 3] = 255;
     }
   }
-
-  bpText.textContent='Compressing ZIP...';
-  bpFill.style.width='100%';
-  const blob=await zip.generateAsync({type:'blob'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download='planets_batch_'+Date.now()+'.zip';a.click();
-  URL.revokeObjectURL(url);
-
-  bp.style.display='none';bpFill.style.width='0';
-  this.disabled=false;this.textContent='▶ Generate All & ZIP';
+  return new ImageData(d, img.width, img.height);
+}
+function buildMaps() {
+  const grid = $('mapGrid'); if (!S.M) return;
+  grid.innerHTML = '';
+  const small = shrinkMaps(S.M, 256), P = S.Pgen;
+  for (const id of mapIds(P)) {
+    const info = MAP_INFO.find(m => m.id === id);
+    const f = document.createElement('figure');
+    const c = document.createElement('canvas');
+    const img = mapImage(small, P, id);
+    c.width = img.width; c.height = img.height;
+    c.getContext('2d').putImageData(toRGBA(img), 0, 0);
+    f.appendChild(c);
+    const cap = document.createElement('figcaption');
+    cap.innerHTML = `<b>${info.label}</b><span>${info.note}</span>`;
+    const b = document.createElement('button'); b.textContent = 'PNG'; b.title = 'Download ' + info.label;
+    b.onclick = e => { e.stopPropagation(); downloadMap(id); };
+    cap.appendChild(b); f.appendChild(cap);
+    c.onclick = () => showMap(id);
+    grid.appendChild(f);
+  }
+}
+const fileBase = () => `${S.Pgen.preset || S.Pgen.kind}-${S.Pgen.seed}-${S.Mw}`;
+function save(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+async function downloadMap(id) {
+  status('encoding ' + id + '…');
+  const png = await encodePNG(mapImage(S.M, S.Pgen, id));
+  save(new Blob([png], { type: 'image/png' }), `${fileBase()}-${id}.png`);
+  status(`${id}.png saved (${(png.length / 1e6).toFixed(1)} MB)`);
+}
+async function downloadZip() {
+  if (!window.JSZip) return status('ZIP library missing');
+  const zip = new window.JSZip(), ids = mapIds(S.Pgen);
+  for (let i = 0; i < ids.length; i++) {
+    status(`encoding ${ids[i]} (${i + 1}/${ids.length})…`); progress(i / ids.length);
+    zip.file(`${fileBase()}-${ids[i]}.png`, await encodePNG(mapImage(S.M, S.Pgen, ids[i])));
+  }
+  zip.file(`${fileBase()}.json`, PR.toJSON(S.Pgen, S.Mw));
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  progress(1); save(blob, fileBase() + '.zip'); status('ZIP saved');
+}
+$('dlZip').onclick = downloadZip;
+$('dlJson').onclick = () => save(new Blob([PR.toJSON(S.Pgen || S.P, S.Mw || S.width)], { type: 'application/json' }), fileBase() + '.json');
+$('loadJson').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const { width, planet } = PR.fromJSON(await f.text());
+    S.P = planet; if (BG.WIDTHS.includes(width)) { S.width = width; $('res').value = width; }
+    S.drawPlanetTab(); buildShape(); buildSky(); regenerate(true);
+  } catch (err) { status('could not load: ' + err.message); }
+  e.target.value = '';
 };
-// Expose these two on window so the inline remove handler in each queue row
-// (onclick in renderQueue's markup) can reach them.
-window.batchQueue=batchQueue;window.renderQueue=renderQueue;
+function showMap(id) {
+  const img = mapImage(S.M, S.Pgen, id), c = $('mvCanvas');
+  c.width = img.width; c.height = img.height; c.getContext('2d').putImageData(toRGBA(img), 0, 0);
+  const info = MAP_INFO.find(m => m.id === id);
+  $('mvTitle').textContent = info.label; $('mvNote').textContent = `${img.width} × ${img.height}, ${img.channels} ch, ${img.depth}-bit · ${info.note}`;
+  $('mvSave').onclick = () => downloadMap(id);
+  $('mapView').hidden = false;
+}
+$('mvClose').onclick = () => { $('mapView').hidden = true; };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SCREENSAVER  (window.snSaver, the shell hook in lib/screensaver.js)
-// ═══════════════════════════════════════════════════════════════════════════════
-// enter() hides the topbar, both control bars, the sidebar and the overlays,
-// and makes #main and #viewport fill the window. The ResizeObserver on
-// #three-mount then sizes the renderer to the window. The autopilot clicks
-// #btn-gen with a seeded type, temperature and seed at 1024 x 512, about
-// three planets per dwell. Before each one it eases the atmosphere, the
-// city lights and the normal map down over 1.5 s, so the live paint starts
-// on a plain sphere. pulse() is a no-op: no shockwave flash. The spin, a
-// slow tilt sway and a sun drift scale by opts.calm (1 = slowest). Each
-// planet also goes on the label plate with its height field. No
-// exit(): the shell reloads the page on stop.
-window.snSaver={enter(opts){
-  const calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?+opts.calm:0.7));
-  const secs=Math.max(20,+(opts&&opts.seconds)||60);
-  let s=((opts&&opts.seed)|0)||7;
-  const rnd=()=>{s=(s+0x6D2B79F5)|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296};
-  const st=document.createElement('style');
-  st.textContent='body>*:not(#app),#app>*:not(#main),#sidebar,#empty-state,#mob-sidebar-btn,#prog-wrap{display:none!important}'+
-    '#main,#viewport{position:fixed!important;inset:0!important}#viewport{cursor:none!important}';
-  document.head.appendChild(st);
-  pulse=function(){};
-  spin=.0008*(1.3-0.8*calm);
-  const TYPES=['terra','water','desert','gas_giant','ice','selena','ice_giant'];
-  const TEMPS={terra:[1,2,3],water:[1,2,3],desert:[0,1,2],gas_giant:[0,1,2,3,4],ice:[3,4],selena:[1,2,3],ice_giant:[2,3,4]};
-  let ti=Math.floor(rnd()*TYPES.length),busy=false;
-  const btn=document.getElementById('btn-gen');
-  // The plate (opts.label) names the planet that the autopilot asked for:
-  // type, temperature, seed and map size, and the height field that
-  // GEN[type] computes per texel. Fₒ is fbm() and Rₒ is rig() with o
-  // octaves; "f l g" are the base frequency, lacunarity and gain from the
-  // code. The giants' band count N reads n3() after seedN(seed), so the
-  // plate fills it in when generate() is done.
-  const label=opts&&opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
-  const NAME={selena:'Selena (moon)',desert:'Desert world',terra:'Terra',water:'Water world',ice:'Ice world',gas_giant:'Gas giant',ice_giant:'Ice giant'};
-  const SPEC={
-    selena:t=>({tex:'h = 0.7\\,R_8(p^{\\prime}) + 0.14\\,F_6(p) + 0.3',eq:'h = 0.7 R₈(p′) + 0.14 F₆(p) + 0.3',lines:['R₈ ridged: f 3.5 · l 2 · g 0.48 on p′ = warp(p, 1.8, 0.06)','F₆ fBm: f 12 · l 2.3 · g 0.4 · specular 0.03 + 0.02h']}),
-    desert:t=>({tex:'h = 0.4\\,B + 0.42\\,D + 0.05\\,F_5(p) + 0.18',eq:'h = 0.4 B + 0.42 D + 0.05 F₅(p) + 0.18',lines:['B = ½F₇(p′) + ½ (f 2) · D = 0.35 |F₅(p′)| dunes (f 7)','p′ = warp(p, 1.5, 0.1) · fine grain F₅ f 18 · specular 0.03']}),
-    terra:t=>({tex:'h = 0.42\\bigl(F_6(p^{\\prime}) + 0.12\\,F_5(p)\\bigr) + 0.5, \\quad h_{\\text{sea}} = 0.56 + 0.015\\,t',eq:'h = 0.42 (F₆(p′) + 0.12 F₅(p)) + 0.5,   sea = 0.56 + 0.015 t',lines:['F₆ continents: f 1.6 · l 2.05 · g 0.44 on p′ = warp(p, 1.2, 0.18)',
-      'sea level '+(0.56+t*0.015).toFixed(3)+' · ocean specular 0.9 · biomes by |lat| · snow above 72 % land height','city lights (emissive) on land near coasts']}),
-    water:t=>({tex:'h = 0.3\\,F_5(p^{\\prime}) + 0.5, \\quad h_{\\text{sea}} = 0.72',eq:'h = 0.3 F₅(p′) + 0.5,   sea = 0.72',lines:['F₅: f 1.5 · l 2 · g 0.45 on p′ = warp(p, 1, 0.2)','ocean specular 0.92 · sandy shoals above sea level']}),
-    ice:t=>({tex:'h = 0.5\\bigl(\\tfrac12 F_6(p) + \\tfrac12\\bigr) + 0.5\\bigl(1 - R_6(p)\\bigr) + 0.05\\,F_5(p)',eq:'h = 0.5 (½F₆(p) + ½) + 0.5 (1 − R₆(p)) + 0.05 F₅(p)',lines:['F₆ plains f 2 · R₆ cracks f 5, l 2.3, g 0.46 · fine F₅ f 16','specular 0.3 + 0.4h']}),
-    gas_giant:t=>({tex:'h = \\tfrac12\\sin(N\\pi y) + \\tfrac12 + \\text{turb}\\cdot\\text{edge} + \\text{streak} + \\text{storm}',eq:'h = ½ sin(N π y) + ½ + turb·edge + streak + storm',lines:['N = 14 + ⌊4 n3(0.1, 0.2, 0.3)⌋'+(nBand('gas_giant')?' = '+nBand('gas_giant'):'')+' bands · turbulence F₅ only at band edges','storm spots where F₄ > 0.55']}),
-    ice_giant:t=>({tex:'h = 0.3\\sin(N\\pi y) + 0.5 + 0.25\\,F_6(p^{\\prime}) + \\text{turb}\\cdot\\text{edge}',eq:'h = 0.3 sin(N π y) + 0.5 + 0.25 F₆(p′) + turb·edge',lines:['N = 8 + ⌊3 n3(0.5, 0.6, 0.7)⌋'+(nBand('ice_giant')?' = '+nBand('ice_giant'):'')+' bands · p′ = 3 domain warps','cloud wisps F₄ · specular 0.06 + 0.08 wisp']}),
-  };
-  let done=false;
-  function nBand(type){
-    if(!done)return 0;
-    return type==='gas_giant'?14+Math.floor(n3(0.1,0.2,0.3)*4):8+Math.floor(n3(0.5,0.6,0.7)*3);
-  }
-  // The page has no TeX or math colour classes of its own, so the plate TeX
-  // has no rules. eq stays as the plain fallback. The anchor is planetAnchor.
-  function plate(){
-    if(!label)return;
-    const type=document.getElementById('sel-type').value,t=parseInt(document.getElementById('sel-temp').value);
-    const seed=parseInt(document.getElementById('inp-seed').value)||0,res=parseInt(document.getElementById('sel-res').value);
-    const sp=SPEC[type](t),params=[{sym:'t',name:'temperature',value:TNAMES[t]+' ('+t+')'},
-      {sym:'s',name:'seed',value:'#'+seed},{sym:'W \\times H',name:'maps',value:res+' × '+res/2}];
-    if(type==='terra')params.push({sym:'h_{\\text{sea}}',name:'sea level',value:(0.56+t*0.015).toFixed(3)});
-    if(type==='water')params.push({sym:'h_{\\text{sea}}',name:'sea level',value:'0.720'});
-    if((type==='gas_giant'||type==='ice_giant')&&nBand(type))params.push({sym:'N',name:'bands',value:String(nBand(type))});
-    label({title:NAME[type]+', seed #'+seed,
-      sub:(done?'Height field, done':'Height field, generating'),
-      params,
-      lines:[sp.lines[0]],
-      tex:[sp.tex,'F_o(p) = \\sum_k g^k\\,n_3\\!\\left(f\\,l^k p\\right) \\quad\\text{(fBm)}',
-        'R_o(p) = \\sum_k g^k\\,w_k\\,\\bigl(1 - |n_3|\\bigr)^2 \\quad\\text{(ridged)}'],
-      eq:[sp.eq,'Fₒ(p) = Σₖ gᵏ n3(f lᵏ p)   (fBm)','Rₒ(p) = Σₖ gᵏ wₖ (1 − |n3|)²   (ridged)'],
-      anchor:planetAnchor});
-  }
-  // The planet on screen, for the shell's label plate. The sphere has radius
-  // 1 at the origin. The page camera (with the view offset of fitCam)
-  // projects the centre to canvas px. The silhouette radius is
-  // fpx tan(asin(1 / d)), with fpx = (h / 2) / tan(fov / 2) and d the camera
-  // distance, plus 3 percent for the atmosphere rim. The key point is the
-  // centre.
-  const _pc=new THREE.Vector3();
-  function planetAnchor(){
-    const b=ren.domElement.getBoundingClientRect(),d=cam.position.length();
-    if(d<=1.01)return null;
-    _pc.set(0,0,0).project(cam);
-    const x=b.left+(_pc.x+1)/2*b.width,y=b.top+(1-_pc.y)/2*b.height;
-    const fpx=(b.height/2)/Math.tan(cam.fov*Math.PI/360),r=1.03*fpx*Math.tan(Math.asin(1/d));
-    return {x,y,r,pts:[{x,y}]};
-  }
-  const next=()=>{
-    if(busy)return;busy=true;
-    const type=TYPES[ti=(ti+1+Math.floor(rnd()*2))%TYPES.length],tl=TEMPS[type];
-    document.getElementById('sel-type').value=type;
-    document.getElementById('sel-temp').value=String(tl[Math.floor(rnd()*tl.length)]);
-    document.getElementById('inp-seed').value=String(1+Math.floor(rnd()*99998));
-    document.getElementById('sel-res').value='1024';
-    const a0=amat.uniforms.uIntensity.value,e0=pmat.emissiveIntensity,n0=pmat.normalScale.x;
-    tween(1500,e=>{amat.uniforms.uIntensity.value=a0*(1-e);pmat.emissiveIntensity=e0*(1-e);pmat.normalScale.set(n0*(1-e),n0*(1-e))});
-    done=false;plate();
-    setTimeout(async()=>{try{await btn.onclick.call(btn);done=true;plate()}finally{busy=false}},curMaps?1600:0);
-  };
-  const t0=performance.now();let tp=t0;
-  (function drift(now){requestAnimationFrame(drift);const t=(now-t0)/1000,dt=Math.min(.1,(now-tp)/1000);tp=now;
-    dr.rx=.2+.18*Math.sin(t*.05*(1.2-.6*calm));sunPhi+=dt*.04*(1.2-.8*calm);updSun()})(t0);
-  next();
-  setInterval(next,Math.max(18,secs/3)*1000);
-  return {canvas:ren.domElement,warmupMs:1000};
-}};
-})();
+// ── camera, view ────────────────────────────────────────────────────────
+let VB = { pr: 1, w: 1, h: 1 };
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  VB = BG.viewBudget(w, h, devicePixelRatio || 1, ENV);
+  canvas.width = VB.w; canvas.height = VB.h;
+}
+// The clear area of the window (CSS px): beside the panel or above the sheet.
+function clearArea() {
+  const w = innerWidth, h = innerHeight;
+  if (S.saver) return { x0: 0, y0: 0, x1: w, y1: h };
+  let x0 = 0, y1 = h;
+  const p = $('panel').getBoundingClientRect();
+  if (!MOBILE) x0 = p.right;
+  else if ($('panel').classList.contains('open')) { if (p.width < w * 0.7) { return { x0: 0, y0: 0, x1: p.left, y1: h - ($('dock').offsetHeight || 0) }; } y1 = p.top; }
+  else y1 = h - ($('dock').offsetHeight || 0);
+  return { x0, y0: 40, x1: w, y1 };
+}
+function bindPointer() {
+  const pts = new Map(); let pinch0 = 0, dist0 = 0;
+  canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); canvas.classList.add('drag'); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = S.cam.dist; } });
+  canvas.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    const prev = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); S.cam.dist = clampDist(dist0 * pinch0 / Math.max(d, 1)); return; }
+    const k = 0.005 * Math.min(1, (S.cam.dist - 1) * 0.8);
+    S.cam.yaw -= (e.clientX - prev[0]) * k; S.cam.pitch = Math.max(-1.45, Math.min(1.45, S.cam.pitch + (e.clientY - prev[1]) * k));
+  });
+  const up = e => { pts.delete(e.pointerId); if (!pts.size) canvas.classList.remove('drag'); };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); S.cam.dist = clampDist(1 + (S.cam.dist - 1) * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+}
+const clampDist = d => Math.max(1.08, Math.min(14, d));
+
+function camState() {
+  const o = S.override;
+  if (o) return o;
+  const { yaw, pitch, dist } = S.cam;
+  const pos = [dist * Math.cos(pitch) * Math.sin(yaw), dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(yaw)];
+  return { pos, target: [0, 0, 0], up: [0, 1, 0], fov: 35 * Math.PI / 180 };
+}
+function sunDir() {
+  const a = S.sunAz * Math.PI / 180, e = S.sunEl * Math.PI / 180;
+  return [Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a)];
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000); lastFrame = now;
+  S.t += dt;
+  if (S.spin && S.P) S.spinAngle += dt * 0.02 * S.P.spin;
+  if (S.moveSun && !S.override) { S.sunAz = (S.sunAz + dt * 1.2) % 360; }
+  if (!R || !S.M) return;
+  const c = camState(), ca = clearArea();
+  // the principal point moves to the centre of the clear area
+  const offX = ((ca.x0 + ca.x1) / 2 - innerWidth / 2) * VB.pr, offY = ((ca.y0 + ca.y1) / 2 - innerHeight / 2) * VB.pr;
+  // the planet should fit the clear area's narrow side
+  const fitH = Math.min(1, (ca.y1 - ca.y0) / innerHeight, (ca.x1 - ca.x0) / innerWidth * innerHeight / innerWidth * 1.6);
+  const fov = c.fov / Math.max(0.35, fitH);
+  R.render({
+    pos: c.pos, target: c.target, up: c.up, fov: Math.min(fov, 1.6), w: VB.w, h: VB.h, offX, offY,
+    t: S.t, exposure: S.exposure, sunDir: c.sunDir || sunDir(), spin: S.spinAngle,
+    steps: MOBILE ? 14 : 24, cloudsOn: S.clouds, flowSpeed: 1,
+  }, ctx.getCurrentTexture().createView());
+}
+
+window.__forge = { S, regenerate, choosePreset, get R() { return R; }, sunDir, camState, ENV, get canvas() { return canvas; }, clearArea, buildMaps };
+boot();

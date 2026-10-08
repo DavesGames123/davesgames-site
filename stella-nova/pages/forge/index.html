@@ -5,162 +5,87 @@
 <script src="../../lib/wishlist.js"></script>
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
 <title>Planet Forge // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    PLANET FORGE  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js generates the planet textures on the CPU and
-   renders the sphere into #three-mount. This file lays out two parallel sets
-   of controls (mobile row and desktop bar) that write into the same inputs,
-   the batch queue panel, the viewport, and the outputs sidebar. main.js binds
-   everything by id.
+   Static markup only. A procedural planet generator with two paths
+   (rocky and gas giant) that makes a full PBR map set, and a WebGPU view
+   with a physically based atmosphere.
 
-   LOAD ORDER
-     1. fonts + style.css
-     2. three.js r128 (global THREE), then JSZip (global JSZip)
-     3. main.js (classic script, async IIFE)
+   MODULES
+     noise.js    seeded sphere noise (simplex, fBm, ridged, warp, curl)
+     presets.js  recipe defaults, presets, slider schema, JSON
+     rocky.js    terrestrial generator      gas.js   gas / ice giants
+     maps.js     map stripes, normals, AO, export images
+     png.js      PNG encoder                budget.js memory guards
+     worker.js + pool.js   generation across module workers
+     atmo.js + shaders/atmo-*.wgsl   atmosphere LUTs
+     render.js + shaders/planet.wgsl the view
+     main.js     the GUI, camera, downloads   saver.js window.snSaver
 
-   LAYOUT  (# marks an element id)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · Planet Forge                     #clock     │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ control bar: type · temp · seed · res · sun · toggles · Generate  │
-     ├──────────────────────────────────────────────┬──────────────────┤
-     │ #viewport                                     │ #sidebar         │
-     │   #three-mount  (planet)                      │   PBR render btn  │
-     │   #empty-state / #mob-sidebar-btn             │   #map-buttons ▶ │
-     │                                               │   info readouts   │
-     └──────────────────────────────────────────────┴──────────────────┘
-
-   Many inline onchange/onclick handlers mirror a mobile control into its
-   desktop twin, so main.js only reads the desktop ids.
+   LAYOUT  (# marks an element id main.js binds to)
+     #view (canvas) fills the window. #panel: a left column on a desktop,
+     a bottom sheet above #dock on a phone (portrait) or a right drawer
+     (landscape). Tabs: planet, shape, sky, maps. #mapView shows one map
+     large. #nogpu replaces the view without WebGPU (maps still work).
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="../../vendor/fonts/cormorant-garamond+jetbrains-mono+libre-barcode-128-text.2b488e52.css" rel="stylesheet">
+<link href="../../vendor/fonts/inter.adf13477.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- In-frame guard: tag the page when embedded in the site shell iframe. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
-<div id="app">
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Planet Forge</span></div>
-  <div class="topbar-r"><span>SYS // <strong>TEXGEN</strong></span><span id="clock">00:00:00</span></div>
-</div>
-<!-- MOBILE CONTROLS -->
-<div class="mob-row primary">
-  <div class="ctrl-group"><span class="ctrl-label">Type</span>
-    <select id="m-sel-type" onchange="document.getElementById('sel-type').value=this.value">
-      <option value="selena">Selena</option><option value="desert">Desert</option><option value="terra" selected>Terra</option><option value="water">Water</option><option value="ice">Ice</option><option value="ice_giant">Ice Giant</option><option value="gas_giant">Gas Giant</option>
-    </select>
-  </div>
-  <div class="ctrl-group"><span class="ctrl-label">Temp</span>
-    <select id="m-sel-temp" onchange="document.getElementById('sel-temp').value=this.value">
-      <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
-    </select>
-  </div>
-  <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="m-inp-seed" value="42" style="width:54px" onchange="document.getElementById('inp-seed').value=this.value"/><button class="bot-btn" onclick="var s=Math.floor(Math.random()*99999);document.getElementById('m-inp-seed').value=s;document.getElementById('inp-seed').value=s">⟳</button></div>
-  <button class="mob-toggle" id="btn-settings" onclick="this.classList.toggle('active');document.getElementById('settings-panel').classList.toggle('open')">⚙</button>
-  <button class="bot-btn" onclick="document.getElementById('batch-panel').classList.toggle('open')" style="font-size:0.4rem;padding:5px 8px">Batch</button>
-  <button class="bot-btn gen-btn" id="m-btn-gen">▶ GO</button>
-</div>
-<div id="settings-panel">
-  <div class="ctrl-group"><span class="ctrl-label">Res</span>
-    <select id="m-sel-res" style="width:56px" onchange="document.getElementById('sel-res').value=this.value">
-      <option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option>
-    </select>
-  </div>
-  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn active" id="m-btn-cities" onclick="document.getElementById('btn-cities').click();this.textContent=this.textContent==='On'?'Off':'On';this.classList.toggle('active')">On</button></div>
-  <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" min="0" max="360" value="40" oninput="var e=document.getElementById('rng-phi');e.value=this.value;e.oninput()"/></div>
-  <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" min="10" max="170" value="65" style="width:60px" oninput="var e=document.getElementById('rng-theta');e.value=this.value;e.oninput()"/></div>
-  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" min="0" max="50" value="4" oninput="var e=document.getElementById('rng-norm');e.value=this.value;e.oninput()"/></div>
-  <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="m-btn-atmo" onclick="document.getElementById('btn-atmo').click();this.textContent=this.textContent==='On'?'Off':'On';this.classList.toggle('active')">On</button></div>
-</div>
-<!-- DESKTOP CONTROLS -->
-<div class="ctrl-bar">
-  <div class="ctrl-group"><span class="ctrl-label">Type</span>
-    <select id="sel-type">
-      <option value="selena">Selena</option>
-      <option value="desert">Desert</option>
-      <option value="terra" selected>Terra</option>
-      <option value="water">Water World</option>
-      <option value="ice">Ice World</option>
-      <option value="ice_giant">Ice Giant</option>
-      <option value="gas_giant">Gas Giant</option>
-    </select>
-  </div>
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Temp</span>
-    <select id="sel-temp" style="width:72px">
-      <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
-    </select>
-  </div>
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="inp-seed" value="42"/><button class="bot-btn" id="btn-rand">⟳</button></div>
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Res</span><select id="sel-res" style="width:56px"><option value="512">512</option><option value="1024">1024</option><option value="2048" selected>2048</option></select></div>
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn active" id="btn-cities">On</button></div>
+<canvas id="view"></canvas>
+<div id="nogpu" hidden><b>WebGPU is not available here.</b><span>The generator and the map downloads still work. The 3D view needs a browser with WebGPU (Chrome, Edge, Safari 26).</span></div>
 
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" id="rng-phi" min="0" max="360" value="40" style="width:60px"/></div>
-  <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" id="rng-theta" min="10" max="170" value="65" style="width:50px"/></div>
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" id="rng-norm" min="0" max="50" value="4" style="width:50px"/></div>
-  <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="btn-atmo">On</button></div>
-  <span id="xrSec" hidden><span class="ctrl-sep"></span><span class="ctrl-group"><span class="ctrl-label">Headset</span><button class="bot-btn" id="bVR" hidden>VR</button><button class="bot-btn" id="bAR" hidden>AR</button></span></span>
-  <div style="flex:1"></div>
-  <button class="bot-btn" id="btn-batch" onclick="document.getElementById('batch-panel').classList.toggle('open');this.classList.toggle('active')">Batch</button>
-  <button class="bot-btn gen-btn" id="btn-gen">▶ Generate</button>
-</div>
-<div id="prog-wrap"><div id="prog-bar"></div></div>
-<div id="batch-panel">
-  <div class="batch-header">
-    <span class="batch-title">Batch Queue</span>
-    <span class="batch-count" id="batch-count">0 planets</span>
-  </div>
-  <div id="batch-list"></div>
-  <div style="display:flex;gap:6px;margin-top:8px" class="batch-actions">
-    <button class="bot-btn" id="batch-add" title="Add current settings to queue">+ Add Current</button>
-    <button class="bot-btn" id="batch-add5" title="Add 5 random seeds with current type/temp">+ 5 Random</button>
-    <button class="bot-btn" id="batch-clear">Clear</button>
-    <div style="flex:1"></div>
-    <button class="bot-btn gen-btn" id="batch-go" disabled>▶ Generate All &amp; ZIP</button>
-  </div>
-  <div id="batch-progress"><span id="bp-text">Generating...</span><div class="bp-bar"><div class="bp-fill" id="bp-fill"></div></div></div>
-</div>
-<div id="main">
-  <div id="viewport">
-    <div id="three-mount"></div>
-    <div id="empty-state"><div class="empty-title">select parameters and generate</div><div class="empty-desc">albedo · depth · normal · specular · emissive</div></div>
-    <button id="mob-sidebar-btn" onclick="document.getElementById('sidebar').classList.toggle('open');this.textContent=document.getElementById('sidebar').classList.contains('open')?'✕ Close':'Maps ▸'">Maps ▸</button>
-  </div>
-  <div id="sidebar">
-    <div class="side-head"><span>Outputs</span><span class="tag">2:1 Equirect</span></div>
-    <div class="side-section"><button class="map-btn active" data-map="render" id="btn-render">◉ PBR Render</button></div>
-    <div class="side-section" id="map-buttons"></div>
-    <button id="btn-dl-all">⬇ Download All</button>
-    <div id="side-info">
-      <div class="barcode">PLANET-FORGE</div>
-      <div class="info-row"><span class="info-label">Type</span><span class="info-val" id="i-type">Terra</span></div>
-      <div class="info-row"><span class="info-label">Temp</span><span class="info-val yellow" id="i-temp">Comfort</span></div>
-      <div class="info-row"><span class="info-label">Seed</span><span class="info-val" id="i-seed">42</span></div>
-      <div class="info-row"><span class="info-label">Size</span><span class="info-val" id="i-size">2048×1024</span></div>
+<header id="top"><span class="brand">Stella Nova</span><span class="sep">/</span><span class="name">Planet Forge</span><span id="status"></span></header>
+<div id="prog"><i id="progFill"></i></div>
+
+<aside id="panel">
+  <div id="sheetGrip"><span></span></div>
+  <nav id="tabs">
+    <button data-tab="planet" class="on">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button>
+  </nav>
+  <section data-pane="planet" class="on">
+    <div class="seg" id="kind"><button data-kind="rocky" class="on">Rocky</button><button data-kind="gas">Gas giant</button></div>
+    <div id="presets" class="presets"></div>
+    <p id="blurb" class="blurb"></p>
+    <div class="row"><label for="seed">Seed</label><input id="seed" type="number" min="0" step="1"><button id="dice" title="New seed">New seed</button></div>
+    <div class="row"><label for="res">Maps</label><select id="res"></select><button id="gen" class="primary">Generate</button></div>
+    <p id="resNote" class="note"></p>
+  </section>
+  <section data-pane="shape"><div id="shapeCtl"></div><button id="resetShape" class="wide">Reset to preset</button></section>
+  <section data-pane="sky">
+    <div id="skyCtl"></div>
+    <h4>View</h4>
+    <div class="ctl"><label>exposure <output id="oExp"></output></label><input id="exp" type="range" min="0.1" max="3" step="0.01" value="0.65"></div>
+    <div class="ctl"><label>sun azimuth <output id="oSun"></output></label><input id="sunAz" type="range" min="0" max="360" step="0.5" value="50"></div>
+    <div class="ctl"><label>sun elevation <output id="oSunEl"></output></label><input id="sunEl" type="range" min="-60" max="60" step="0.5" value="12"></div>
+    <div class="toggles">
+      <label><input id="tSun" type="checkbox" checked> moving sun</label>
+      <label><input id="tSpin" type="checkbox" checked> spin</label>
+      <label><input id="tClouds" type="checkbox" checked> clouds</label>
+      <label><input id="tAtmo" type="checkbox" checked> atmosphere</label>
     </div>
-  </div>
-</div>
-</div>
+  </section>
+  <section data-pane="maps">
+    <p class="note" id="mapNote"></p>
+    <div id="mapGrid" class="mapgrid"></div>
+    <div class="row wrap"><button id="dlZip" class="primary">Download all (ZIP)</button><button id="dlJson">Recipe JSON</button><label class="file">Load JSON<input id="loadJson" type="file" accept=".json,application/json"></label></div>
+  </section>
+</aside>
 
-<!-- three.js (global THREE) for the sphere, JSZip (global JSZip) for batch export,
-     then main.js which uses both. Load order matters. -->
-<script src="../../vendor/three@0.128.0/build/three.min.js"></script>
+<nav id="dock">
+  <button data-tab="planet">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button><button id="dockDice" title="New seed">⟳</button>
+</nav>
+
+<div id="mapView" hidden><header><b id="mvTitle"></b><span id="mvNote"></span><button id="mvSave">Download PNG</button><button id="mvClose">Close</button></header><canvas id="mvCanvas"></canvas></div>
+
 <script src="../../vendor/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="main.js"></script>
-<!-- xr.js: VR and AR view (a module; it passes the global THREE to lib/xr-view.js) -->
-<script type="module" src="xr.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>

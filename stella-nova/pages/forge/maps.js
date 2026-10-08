@@ -38,7 +38,7 @@
 //  grep -n targets: "export const MAP_INFO", "export function prepare",
 //  "export function sampleRows", "export function finish", "function normals",
 //  "function ambient", "export function generate", "export function mapImage",
-//  "export function hashMaps"
+//  "export function hashMaps", "export function shrinkMaps"
 // ============================================================================
 import { prepareRocky } from './rocky.js';
 import { prepareGas, ringProfile } from './gas.js';
@@ -279,4 +279,16 @@ export function shrink(data, W, H, f) {
     d[(y * nw + x) * 4 + c] = Math.round(s / k);
   }
   return d;
+}
+
+// A nearest-sample copy of a map set at width tw (preview thumbnails).
+export function shrinkMaps(M, tw) {
+  const th = tw / 2, n = tw * th, s = M.W / tw;
+  const o = { W: tw, H: th, height: new Float32Array(n), albedo: new Uint8Array(n * 4), mat: new Uint8Array(n * 4), emissive: new Uint8Array(n * 4), cloud: new Uint8Array(n * 4), normal: new Uint8Array(n * 4), ao: new Uint8Array(n), cloudRGB: M.cloudRGB };
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+    const i = y * tw + x, j = Math.floor(y * s + s / 2) * M.W + Math.floor(x * s + s / 2);
+    o.height[i] = M.height[j]; o.ao[i] = M.ao[j];
+    for (const k of ['albedo', 'mat', 'emissive', 'cloud', 'normal']) for (let c = 0; c < 4; c++) o[k][i * 4 + c] = M[k][j * 4 + c];
+  }
+  return o;
 }
