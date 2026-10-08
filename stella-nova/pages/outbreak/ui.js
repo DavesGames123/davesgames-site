@@ -45,7 +45,7 @@ export const SPEEDS = [1, 3, 10, 30, 90];                // days per second
 export const TRIGGERS = [0, 100, 1000, 1e4, 1e5, 1e6];   // detected cases worldwide
 export const STYLES = [
   { id: 'night', label: 'Night' }, { id: 'marble', label: 'Blue Marble' },
-  { id: 'dots', label: 'Dots' }, { id: 'flat', label: 'Flat map' }, { id: 'holo', label: 'Hologram' },
+  { id: 'dots', label: 'Dots' }, { id: 'flat', label: 'Flat map' }, { id: 'equalearth', label: 'Equal Earth' }, { id: 'holo', label: 'Hologram' },
 ];
 export const ROUTE_NAMES = {
   resp: 'Respiratory (air and droplets)', contact: 'Close contact with body fluids',
@@ -336,7 +336,7 @@ export function createUI(api) {
     sel.textContent = '';
     sel.append(el('option', { value: '-1', text: 'A random large city' }));
     for (const c of seedChoices(st.D)) sel.append(el('option', { value: String(c.i), text: c.country ? `${c.name}, ${c.country}` : c.name }));
-    sel.addEventListener('change', () => { if (+sel.value >= 0) api.seedAt(+sel.value); else api.restart(); sync(); }, sig);
+    sel.addEventListener('change', () => { api.seedAt(+sel.value); sync(); }, sig);
     $('newRun').addEventListener('click', () => { api.restart((Math.random() * 4294967296) >>> 0); sync(); }, sig);
   }
 
