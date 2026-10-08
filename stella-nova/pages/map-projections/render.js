@@ -116,6 +116,15 @@ export class MapView {
     this.frames = [frameOf(a, sa, 1 - t, rectsA), frameOf(b, sb, t, rectsB)];
     this.cache.clear(); this.stKey = null;
   }
+  // A fixed screen transform instead of the fit (the saver's crops).
+  setStateScreen(st, screen) {
+    const key = JSON.stringify([st, screen, this.W, this.H]);
+    if (key === this.stKey && this.frames && this.frames.length === 1) return this.map;
+    this.stKey = key; this.state = st; this.map = makeMap(st.key, st);
+    this.screen = screen; this.frames = [frameOf(this.map, screen)];
+    this.cache.clear();
+    return this.map;
+  }
   setFrames(frames, map) { this.frames = frames; this.map = map; this.cache.clear(); }
 
   // Geometry for the current frames, cached by level of detail.
@@ -145,6 +154,8 @@ export class MapView {
     const G = this.geom(lod), heat = o.heat && this.heat;
     const alpha = o.alpha ?? 1;
     g.globalAlpha = alpha;
+    // o.clipRect [x, y, w, h]: draw the map only in this window (a crop).
+    if (o.clipRect) { g.save(); g.beginPath(); g.rect(...o.clipRect); g.clip(); }
     // ocean
     const edge = new Path2D(); addPieces(edge, G.edge, true);
     const grd = g.createRadialGradient(this.box.x + this.box.w / 2, this.box.y + this.box.h / 2, 0, this.box.x + this.box.w / 2, this.box.y + this.box.h / 2, Math.max(this.box.w, this.box.h) * 0.6);
@@ -171,6 +182,7 @@ export class MapView {
     // edge
     const rim = new Path2D(); addPieces(rim, G.rim, false);
     g.strokeStyle = o.edge || T.edge; g.lineWidth = 1.2; g.stroke(rim);
+    if (o.clipRect) g.restore();
     g.globalAlpha = 1;
     this.edgePath = edge;
   }

@@ -401,14 +401,17 @@ export function outline(frames, opt = {}) {
 }
 // The visible edge of the map, for a stroke: the outline without the
 // edges that lie inside the map. In an azimuthal clip frame the cut
-// (lon = +-pi) is a radius and the pole edge is the centre point.
+// (lon = +-pi) is a radius and the +pi/2 pole edge is the centre point.
 export function edgeLines(frames, opt = {}) {
   const runs = [];
   const hidden = (a, b) => {
     const k = a.b; if (k < 0) return false;
-    const F = frames[k]; if (!F.m.def || F.m.def.family !== 'azimuthal') return false;
+    const F = frames[k]; if (!F.m.def) return false;
+    // an interrupted map: the equator between its north and south lobes
+    if (F.rects.length > 1 && abs(a.P[k]) < 1e-9 && abs(b.P[k]) < 1e-9) return true;
+    if (F.m.def.family !== 'azimuthal') return false;
     const onCut = abs(abs(a.L[k]) - PI) < 1e-9 && abs(abs(b.L[k]) - PI) < 1e-9;
-    const onPole = abs(abs(a.P[k]) - HALF) < 1e-9 && abs(abs(b.P[k]) - HALF) < 1e-9;
+    const onPole = abs(a.P[k] - HALF) < 1e-9 && abs(b.P[k] - HALF) < 1e-9;   // the centre point; the antipode edge (-pi/2) is the rim
     return onCut || onPole;
   };
   for (const pc of outline(frames, Object.assign({}, opt, { raw: true }))) {

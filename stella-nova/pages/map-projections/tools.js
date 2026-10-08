@@ -13,7 +13,7 @@
 //  HEATMAP. Each cell of a grid at 1/3 of the canvas is inverted (proj.js
 //  invWorld) and distortion() gives the area scale a b or the angle
 //  distortion w. Area is shown as log2(s / s0), with s0 the area scale at
-//  the map centre. Isolines come from marching squares on the same grid.
+//  the map centre (the raw origin). Isolines come from marching squares on the same grid.
 //  TRUE SIZE. A country is turned on the sphere about the axis that takes
 //  its label point to the target point, then drawn through the map. The
 //  shape on the ground does not change; the map changes its drawn size.
@@ -115,7 +115,9 @@ export function legendColor(mode, v) { const c = ramp(HEAT_LEGEND[mode].stops, v
 export async function buildHeat(m, scr, W, H, mode, token = {}, cell = 3) {
   const gw = Math.ceil(W / cell) + 1, gh = Math.ceil(H / cell) + 1;
   const val = new Float32Array(gw * gh).fill(NaN);
-  const c0 = distortion(m, (m.st.lon ?? 0) * D, 0) || distortion(m, 0.01, 0.01);
+  // s0: the area scale at the map centre (the raw origin). (lon, 0) is not
+  // the centre of a polar map; on a polar orthographic map it is the rim.
+  const o = m.inv(0, 0), c0 = (o && distortion(m, o[0], Math.max(-1.5691, Math.min(1.5691, o[1])))) || distortion(m, (m.st.lon ?? 0) * D, 0);
   const s0 = c0 ? c0.s : 1;
   let t0 = performance.now();
   for (let j = 0; j < gh; j++) {

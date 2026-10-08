@@ -1,0 +1,48 @@
+MAP PROJECTIONS — data sources, licences and credits
+=====================================================
+
+Geography
+---------
+Natural Earth (https://www.naturalearthdata.com), public domain.
+  - data/world.json: ne_50m_land (simplified, Douglas-Peucker 0.04 deg),
+    ne_110m_land and ne_110m_admin_0_countries, from
+    https://github.com/nvkelso/natural-earth-vector (geojson/), written by
+    tools/build-data.py.
+  - Country borders on the main map: ne_50m_admin_0_boundary_lines_land,
+    read from ../ancient-earth/data/overlays.json (the copy that page
+    ships), not duplicated here.
+
+Globe image
+-----------
+NASA Blue Marble: Next Generation (Reto Stockli, NASA Earth Observatory),
+public domain, read from ../ancient-earth/data/present/color-2k.jpg.
+
+Formulas and facts
+------------------
+All projection code is written for this page. The formulas follow:
+  - John P. Snyder, Map Projections: A Working Manual, USGS Professional
+    Paper 1395 (1987), and Flattening the Earth (1993).
+  - Charles F. F. Karney, Transverse Mercator with an accuracy of a few
+    nanometers, J. Geodesy 85 (2011): the Kruger series to n^6.
+  - Bojan Savric, Tom Patterson, Bernhard Jenny, The Equal Earth map
+    projection, Int. J. Geographical Information Science (2018).
+  - Bojan Savric, Bernhard Jenny, Tom Patterson, Dusan Petrovic, Lorenz
+    Hurni, A polynomial equation for the Natural Earth projection,
+    Cartography and Geographic Information Science (2011).
+  - Arthur H. Robinson's table (1963), as printed by Snyder (1993).
+  - T. Vincenty, Direct and inverse solutions of geodesics on the
+    ellipsoid, Survey Review (1975).
+tests/proj-ref.json holds reference values computed with PROJ 9.8.1
+(https://proj.org, MIT licence) through pyproj 3.8.0; only the numbers
+are stored, no PROJ code.
+
+Left out
+--------
+Dymaxion (Buckminster Fuller) and AuthaGraph (Hajime Narukawa): see the
+note under the gallery. Waterman butterfly: not made.
+
+Software
+--------
+three.js r160 (MIT), vendored in vendor/three@0.160.0.
+MathJax 3.2.2 (Apache 2.0), vendored, through lib/sci-math.js.
+Fonts: Inter and STIX Two Text (SIL OFL 1.1), vendored, through lib/sci.css.
