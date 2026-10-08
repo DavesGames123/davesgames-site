@@ -11,7 +11,7 @@
 //            land or ocean. Land dots take their colour and size from
 //            field.texture: R = prevalence glow, G = deaths share. Ocean
 //            dots are small and dim, so the sphere outline stays visible.
-//            Infected dots pulse slowly.
+//            Infected dots hold a steady colour (no pulse).
 //    atmos   back-face sphere at r = ATMOS_R, additive, a thin rim glow.
 //  The dot size follows the camera distance: the shader gets uScale, the
 //  drawing-buffer height over 2 tan(fov / 2), so a dot covers a fixed part
@@ -113,7 +113,7 @@ void main() {
   c = mix(c, vec3(1.0, 0.16, 0.10), smoothstep(0.35, 0.8, g));
   c = mix(c, vec3(1.0, 0.85, 0.75), smoothstep(0.9, 1.0, g) * 0.5);
   c = mix(c, vec3(0.30, 0.27, 0.32), d * 0.6);
-  float pulse = 1.0 + 0.25 * g * sin(uTime * 2.4 + aPhase);
+  float pulse = 1.0;
   vec3 ocean = vec3(0.10, 0.20, 0.30);
   vColor = mix(ocean, c * (0.75 + 0.6 * g) * pulse, land);
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -133,7 +133,7 @@ void main() {
   vec2 q = gl_PointCoord * 2.0 - 1.0;
   float r2 = dot(q, q);
   if (r2 > 1.0) discard;
-  float a = vAlpha * (1.0 - smoothstep(0.55, 1.0, r2));
+  float a = vAlpha * (1.0 - smoothstep(0.78, 1.0, r2));
   gl_FragColor = vec4(vColor, a);
 }`;
 

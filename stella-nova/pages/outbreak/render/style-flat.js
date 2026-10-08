@@ -14,7 +14,7 @@
 //    map      ShaderMaterial on a lat-lon grid mesh (GRID_STEP deg). Deep
 //             navy sea, slate land (field.landMask) with a bright coast edge,
 //             NASA city lights in amber, and the prevalence field
-//             (field.texture R) as a red haze that pulses. Deaths (G) dim
+//             (field.texture R) as a flat red tint. Deaths (G) dim
 //             the lights. It writes depth at z = 0.
 //    grid     LineSegments of the graticule every 30 deg, z = LINE_Z.
 //    edge     LineSegments of the map outline (the lon +-180 meridians and
@@ -202,9 +202,8 @@ void main() {
   float lights = texture2D(uLights, vUv).r;
   col += vec3(1.0, 0.72, 0.38) * lights * lights * 0.9 * (1.0 - 0.7 * dead) * (1.0 - 0.6 * prev);
 
-  float pulse = 0.82 + 0.18 * sin(uTime * 2.2 - prev * 6.0);
   vec3 hot = mix(vec3(0.95, 0.35, 0.12), vec3(1.0, 0.1, 0.3), smoothstep(0.1, 0.7, prev));
-  col += hot * prev * pulse * (0.3 + 0.7 * land);
+  col += hot * 0.6 * smoothstep(0.05, 0.7, prev) * (0.3 + 0.7 * land);
   col += vec3(1.0, 0.65, 0.4) * lights * prev * 0.8;
   gl_FragColor = vec4(col, 1.0);
 }`;

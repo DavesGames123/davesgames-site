@@ -3,16 +3,17 @@
 // ----------------------------------------------------------------------------
 //  A dark globe seen at night. Five layers, all in the style group:
 //    globe   ShaderMaterial on a unit SphereGeometry. Dark ocean, slightly
-//            lighter land (field.landMask), a soft glow on the ocean side of
-//            each coast (a ring of landMask taps), NASA city lights tinted
-//            amber, and a red shift of the lights where the prevalence field
-//            (field.texture R) is high. The deaths share (field.texture G)
-//            dims the lights of a place. A fresnel rim lights the limb.
+//            lighter land (field.landMask, one tap, no halo), NASA city
+//            lights tinted amber, and a red shift of the lights where the
+//            prevalence field (field.texture R) is high, plus a flat, quiet
+//            red tint of infected land. The deaths share (field.texture G)
+//            dims the lights of a place. A thin fresnel rim at the limb.
+//            Nothing in the globe moves with time.
 //    coast   LineSegments of the Natural Earth coast rings at r = 1.0012,
-//            additive teal, faded at the limb. Lakes at half brightness.
-//    atmos   back-face sphere at r = 1.08, additive; its glow peaks at the
-//            limb and fades out. Its colour moves from blue to rose as the
-//            world prevalence rises.
+//            thin grey-blue hairlines, faded at the limb. Lakes at half.
+//    atmos   back-face sphere at r = 1.08, additive; a thin, faint band at
+//            the limb. Its colour moves from blue to rose as the world
+//            prevalence rises.
 //    stars   Points drawn at infinity (depth = far plane), so they do not
 //            depend on the camera far plane and the globe hides them.
 //  The style draws no city glows and no arcs: render/nodes.js and
@@ -151,38 +152,26 @@ varying vec3 vV;
 float landAt(vec2 o) { return texture2D(uLand, vUv + o * uTexel).r; }
 void main() {
   float land = mix(0.0, landAt(vec2(0.0)), uHasLand);
-  // coast halo: the mean of two rings of taps; it is near 0.5 at a coast
-  float m = 0.0;
-  for (int k = 0; k < 8; k++) {
-    float a = float(k) * 0.785398;
-    vec2 d = vec2(cos(a), sin(a));
-    m += landAt(d * 2.5) + landAt(d * 6.0);
-  }
-  m /= 16.0;
-  float coast = uHasLand * (1.0 - abs(2.0 * m - 1.0));
-  vec3 ocean = vec3(0.006, 0.014, 0.034);
-  vec3 ground = vec3(0.022, 0.030, 0.048);
+  vec3 ocean = vec3(0.010, 0.018, 0.036);
+  vec3 ground = vec3(0.040, 0.050, 0.068);
   vec3 col = mix(ocean, ground, land);
-  col += vec3(0.05, 0.32, 0.46) * coast * coast * (1.0 - 0.6 * land) * 0.55;
 
   vec4 f = texture2D(uField, vUv);
   float prev = clamp(f.r, 0.0, 1.0);
   float dead = clamp(f.g, 0.0, 1.0);
-  float pulse = 0.82 + 0.18 * sin(uTime * 2.2 + vUv.x * 40.0 + vUv.y * 23.0);
 
   float li = texture2D(uLights, vUv).r;
-  li = pow(li, 1.5) * 1.9 * (1.0 - 0.65 * dead);
-  vec3 warm = vec3(1.0, 0.70, 0.36);
-  vec3 sick = vec3(1.0, 0.17, 0.24);
-  vec3 lightCol = mix(warm, sick, smoothstep(0.02, 0.5, prev));
-  col += lightCol * li * mix(1.0, pulse, step(0.02, prev));
-  // a red haze over infected land, so places with few lights still show
-  col += vec3(0.85, 0.06, 0.12) * prev * (0.25 + 0.35 * pulse) * (0.3 + 0.7 * land);
+  li = pow(li, 1.6) * 1.5 * (1.0 - 0.65 * dead);
+  vec3 warm = vec3(1.0, 0.74, 0.44);
+  vec3 sick = vec3(1.0, 0.30, 0.26);
+  col += mix(warm, sick, smoothstep(0.05, 0.5, prev)) * li;
+  // a flat, quiet tint of infected land (no pulse, no haze)
+  col = mix(col, vec3(0.30, 0.06, 0.06), 0.55 * smoothstep(0.05, 0.6, prev) * land);
 
   float mu = max(dot(vN, vV), 0.0);
-  float rim = pow(1.0 - mu, 3.0);
-  vec3 rimCol = mix(vec3(0.20, 0.50, 1.0), vec3(1.0, 0.32, 0.40), uTint * 0.7);
-  col += rimCol * rim * 0.55;
+  float rim = pow(1.0 - mu, 6.0);
+  vec3 rimCol = mix(vec3(0.30, 0.55, 1.0), vec3(1.0, 0.40, 0.45), uTint * 0.6);
+  col += rimCol * rim * 0.22;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -208,8 +197,7 @@ void main() {
   float g = clamp(-dot(vN, vV) / uLimb, 0.0, 1.0);
   g = g * g * g;
   vec3 c = mix(vec3(0.18, 0.46, 1.0), vec3(1.0, 0.28, 0.42), uTint * 0.75);
-  float breathe = 1.0 + 0.12 * uTint * sin(uTime * 1.3);
-  gl_FragColor = vec4(c * g * 0.85 * breathe, 1.0);
+  gl_FragColor = vec4(c * g * g * 0.35, 1.0);
 }`;
 
 const COAST_VERT = /* glsl */`
@@ -324,7 +312,7 @@ function create(ctx) {
   group.add(stars);
 
   // coast lines (async)
-  const cU = { uColor: { value: new THREE.Color(0.25, 0.85, 1.0) }, uGain: { value: 0.55 } };
+  const cU = { uColor: { value: new THREE.Color(0.55, 0.68, 0.82) }, uGain: { value: 0.5 } };
   const cMat = own(new THREE.ShaderMaterial({
     uniforms: cU, vertexShader: COAST_VERT, fragmentShader: COAST_FRAG,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,

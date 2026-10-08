@@ -73,6 +73,7 @@ export default function (ok) {
   // shader sources
   let bal = true;
   for (const [v, fr] of Object.values(SHADERS)) for (const s of [v, fr]) if ((s.match(/{/g) || []).length !== (s.match(/}/g) || []).length) bal = false;
+  ok('style-dots: calm, no pulse over time in any shader', !/sin\(uTime/.test(Object.values(SHADERS).flat().join('\n')));
   ok('style-dots: shader braces balance', bal);
   ok('style-dots: each fragment shader sets gl_FragColor', Object.values(SHADERS).every(([, fr]) => fr.includes('gl_FragColor')));
   ok('style-dots: dot shader reads the land mask and the field', /uLand/.test(SHADERS.dots[0]) && /uField/.test(SHADERS.dots[0]));

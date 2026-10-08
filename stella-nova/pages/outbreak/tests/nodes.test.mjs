@@ -5,16 +5,23 @@ import * as THREE from '../../../vendor/three@0.160.0/build/three.module.js';
 import * as geo from '../geo.js';
 import { parseNodes } from '../data.js';
 import { buildNetwork } from '../network.js';
-import { glowLevel, nodeSize, approach, ringState, createRingPool, createNodes, RING_DUR } from '../render/nodes.js';
+import { glowLevel, markerPx, approach, ringState, createRingPool, createNodes, RING_DUR, RING_PX, MARK_HOT, RING_POOL } from '../render/nodes.js';
 
 export default function (ok) {
   ok('glow: 0 at and below 1e-7, 1 at 10 %', glowLevel(0) === 0 && glowLevel(1e-7) === 0 && glowLevel(0.1) === 1 && glowLevel(0.5) === 1);
   ok('glow: monotone on the log scale', glowLevel(1e-5) < glowLevel(1e-3) && Math.abs(glowLevel(1e-4) - 0.5) < 1e-9);
-  ok('size: big cities are larger, bounded', nodeSize(1e5) < nodeSize(2e7) && nodeSize(1e9) <= 0.017 + 1e-12 && nodeSize(0) >= 0.006);
+  const lv = [0, 0.05, 0.2, 0.4, 0.6, 0.8, 1];
+  let mono = true;
+  for (const cp of [1e4, 1e6, 3e7]) for (let k = 1; k < lv.length; k++) if (!(markerPx(lv[k], cp) > markerPx(lv[k - 1], cp))) mono = false;
+  ok('marker: size in px grows with prevalence for every city size', mono);
+  ok('marker: an idle city is a 1.8-3 px dot, larger cities larger', markerPx(0, 1e5) >= 1.8 && markerPx(0, 1e9) <= 3 && markerPx(0, 1e5) < markerPx(0, 2e7));
+  ok('marker: an infected city is at least 3.5 px and at most 12 px', markerPx(1e-6, 1) >= 3.5 && markerPx(1, 1e9) === MARK_HOT[1]);
+  ok('marker: the size is in CSS px, not world units', markerPx(0.5) > 1 && markerPx(0.5) < 20);
   let g = 0; for (let i = 0; i < 60; i++) g = approach(g, 1, 1 / 60);
   ok('approach: smooth, no overshoot', g > 0.9 && g < 1 && approach(0, 1, 0) === 0);
   const r0 = ringState(0), r1 = ringState(RING_DUR * 0.5);
-  ok('ring: grows and fades, ends at RING_DUR', r0.alpha === 1 && r1.scale > r0.scale && r1.alpha < 1 && ringState(RING_DUR) === null);
+  ok('ring: one thin ring grows and fades, ends at RING_DUR', r0.alpha === 1 && r1.px > r0.px && r1.alpha < 1 && ringState(RING_DUR) === null);
+  ok('ring: at most RING_PX px wide and short', ringState(RING_DUR * 0.999).px <= RING_PX && RING_DUR <= 2);
   const rp = createRingPool(3);
   rp.start(5, 0); rp.start(6, 1); rp.start(7, 2);
   ok('ring pool: full pool reuses the oldest', rp.start(8, 3) === 0 && rp.node[0] === 8);
@@ -42,7 +49,10 @@ export default function (ok) {
     }
   } catch (e) { threw = e; }
   ok('layer: 4 s of frames run without error', !threw, threw && threw.stack);
-  ok('nodes: the glow approaches the prevalence', nodes.glow[a0] > 0.6 && nodes.glow[b0] === 0, nodes.glow[a0].toFixed(3));
+  ok('nodes: the level approaches the prevalence', nodes.glow[a0] > 0.6 && nodes.glow[b0] === 0, nodes.glow[a0].toFixed(3));
+  ok('nodes: the infected marker is larger in px', nodes.px[a0] > nodes.px[b0] && nodes.px[a0] <= MARK_HOT[1]);
+  ok('nodes: rings expire (no leak)', nodes.pool.live === 0 && nodes.pool.n === RING_POOL);
+  ok('nodes: markers and rings are point sprites', nodes.group.children.map(o => o.name).join() === 'nodes-markers,nodes-rings');
   try { nodes.setMode('flat'); for (let f = 0; f < 30; f++) nodes.update({ t: 6 + f / 60, dt: 1 / 60, sim, prev, events: evs, mode: 'flat' }); threw = null; } catch (e) { threw = e; }
   ok('layer: flat mode runs without error', !threw, threw && threw.stack);
   nodes.dispose();

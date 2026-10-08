@@ -6,7 +6,7 @@
 //            day side with Lambert light from the sun and a specular glint on
 //            the ocean (field.landMask selects the ocean). The night side
 //            shows the NASA city lights, dim. The prevalence field
-//            (field.texture R) lays a red pulse over infected land on both
+//            (field.texture R) lays a flat red tint over infected land on both
 //            sides; the deaths share (field.texture G) darkens it to maroon.
 //            A soft terminator band goes orange at dusk.
 //    atmos   back-face sphere at r = 1.06, additive; it glows at the limb and
@@ -135,20 +135,19 @@ void main() {
   float li = texture2D(uLights, vUv).r;
   col += vec3(1.0, 0.72, 0.40) * pow(li, 1.6) * 1.1 * (1.0 - lit);
 
-  // prevalence: a red pulse over infected land, seen by day and by night
+  // prevalence: a flat red tint over infected land, by day and by night
   vec4 f = texture2D(uField, vUv);
   float prev = clamp(f.r, 0.0, 1.0);
   float dead = clamp(f.g, 0.0, 1.0);
-  float pulse = 0.80 + 0.20 * sin(uTime * 2.0 + vUv.x * 37.0 + vUv.y * 19.0);
   vec3 sick = mix(vec3(1.0, 0.12, 0.16), vec3(0.45, 0.02, 0.06), dead);
-  float a = clamp(prev * (0.55 + 0.35 * pulse) * (0.35 + 0.65 * land), 0.0, 0.85);
+  float a = clamp(0.7 * smoothstep(0.05, 0.7, prev) * (0.25 + 0.75 * land), 0.0, 0.7);
   col = mix(col, sick * (0.35 + 0.75 * max(lit, 0.45)), a);
 
   // fresnel rim, toward the sun side
   float mu = max(dot(n, v), 0.0);
-  float rim = pow(1.0 - mu, 3.0) * (0.25 + 0.75 * lit);
+  float rim = pow(1.0 - mu, 5.0) * (0.25 + 0.75 * lit);
   vec3 rimCol = mix(vec3(0.35, 0.62, 1.0), vec3(1.0, 0.36, 0.44), uTint * 0.7);
-  col += rimCol * rim * 0.6;
+  col += rimCol * rim * 0.3;
   gl_FragColor = vec4(col, 1.0);
 }`;
 

@@ -108,6 +108,7 @@ export default async function (ok) {
   // shaders
   let bal = true;
   for (const [v, f] of Object.values(SHADERS)) for (const s of [v, f]) if ((s.match(/{/g) || []).length !== (s.match(/}/g) || []).length) bal = false;
+  ok('style-flat: calm, no pulse over time in any shader', !/sin\(uTime/.test(Object.values(SHADERS).flat().join('\n')));
   ok('style-flat: shader braces balance', bal);
   ok('style-flat: each fragment shader sets gl_FragColor', Object.values(SHADERS).every(([, f]) => f.includes('gl_FragColor')));
 

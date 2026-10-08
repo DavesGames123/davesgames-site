@@ -58,6 +58,7 @@ export default function (ok) {
   // data paths and shaders
   ok('style-marble: Blue Marble and lights files exist', existsSync(COLOR_URL) && existsSync(LIGHTS_URL));
   ok('style-marble: three shader pairs', Object.keys(SHADERS).length === 3 && Object.values(SHADERS).every(p => p.length === 2 && p.every(s => /void main\(\)/.test(s))));
+  ok('style-marble: calm, no pulse over time in any shader', !/sin\(uTime/.test(Object.values(SHADERS).flat().join('\n')));
 
   // create / update / dispose
   const st = stubThree(), root = new st.T.Group();

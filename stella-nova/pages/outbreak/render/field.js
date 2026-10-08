@@ -3,8 +3,8 @@
 // ----------------------------------------------------------------------------
 //  Two DataTextures in the equirectangular layout of THREE.SphereGeometry:
 //  u = (lon + 180) / 360, v = (lat + 90) / 180, row 0 = the south edge.
-//    landMask  1024 x 512 RGBA8. R = G = B = 255 on land, else 0.
-//    texture   512 x 256 RGBA8. R = prevalence glow 0..1 (land only),
+//    landMask  2048 x 1024 RGBA8. R = G = B = 255 on land, else 0.
+//    texture   1024 x 512 RGBA8. R = prevalence glow 0..1 (land only),
 //              G = deaths share 0..1 (land only), B = 0, A = 255.
 //
 //  The land mask is a scanline fill of the Natural Earth land rings in
@@ -14,8 +14,10 @@
 //
 //  The field is a point source with a falloff for each node, not a fill of
 //  the full country. Each land texel keeps the K nearest nodes inside the
-//  cutoff, with the weight w = exp(-(d / sigma_j)^2). sigma_j grows with the
-//  fourth root of the node population. The texel value is
+//  cutoff, with the weight w = exp(-(d / sigma_j)^4): a flat top and a
+//  short edge, so each city reads as a sharp patch and not a soft blur.
+//  sigma_j grows with the fourth root of the node population. The cutoff
+//  is CUT sigma. The texel value is
 //  sum(w g_j) / max(1, sum w), so land near a node shows its full value and
 //  land far from all nodes stays dark. g_j is glowFor(I/N) for R and
 //  deadFor(D/N) for G, both on the node.
@@ -32,7 +34,8 @@
 //                   "export function fillField", "export function createField"
 // ============================================================================
 
-export const MASK_W = 1024, MASK_H = 512, FIELD_W = 512, FIELD_H = 256;
+export const MASK_W = 2048, MASK_H = 1024, FIELD_W = 1024, FIELD_H = 512;
+export const CUT = 2;                    // cutoff in sigma
 export const K = 4;                      // nodes per texel
 export const SIGMA_KM = 450;             // falloff of a node of SIGMA_POP people
 export const SIGMA_POP = 5e6;
@@ -114,7 +117,7 @@ export function buildWeights(nodes, mask, w = FIELD_W, h = FIELD_H, k = K) {
     sg[i] = sigmaKm(nodes[i].pop) / EARTH_KM;
     if (sg[i] > sgMax) sgMax = sg[i];
   }
-  const cosCut = Math.cos(3 * sgMax);
+  const cosCut = Math.cos(CUT * sgMax);
   const tex = [], nd = [], wt = [];
   const bi = new Int32Array(k), bw = new Float64Array(k);
   for (let j = 0; j < h; j++) {
@@ -127,8 +130,8 @@ export function buildWeights(nodes, mask, w = FIELD_W, h = FIELD_H, k = K) {
         const d = x * nx[n] + y * ny[n] + z * nz[n];
         if (d < cosCut) continue;
         const ang = Math.acos(Math.min(1, d)), r = ang / sg[n];
-        if (r > 3) continue;
-        const wv = Math.exp(-r * r);
+        if (r > CUT) continue;
+        const wv = Math.exp(-(r * r) * (r * r));
         if (wv <= bw[k - 1]) continue;
         let q = k - 1;
         while (q > 0 && bw[q - 1] < wv) { bw[q] = bw[q - 1]; bi[q] = bi[q - 1]; q--; }

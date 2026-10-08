@@ -1,7 +1,7 @@
 // style-holo (G5): the pure helpers, and create/update/dispose against a
 // stub THREE (no GPU). The coast file is the real storm-globe 50m data.
 import { readFileSync } from 'node:fs';
-import holo, { graticuleSegments, ringSegments, scanY, flicker, holoColor, SHADERS, GRID_R, COAST_R, RING_R } from '../render/style-holo.js';
+import holo, { graticuleSegments, ringSegments, holoColor, SHADERS, GRID_R, COAST_R, RING_R } from '../render/style-holo.js';
 import { tintFor } from '../render/style-night.js';
 
 function stubThree() {
@@ -65,13 +65,10 @@ export default async function (ok) {
   ok('style-holo: 36 ticks, 4 long at the quarters', ticks === 36 && longTicks === 4, `${ticks} / ${longTicks}`);
   ok('style-holo: rings sit outside the globe', RING_R.every(v => v > 1.1));
 
-  // scan band, flicker, colour
-  ok('style-holo: scan starts at the top, at the base mid-period', Math.abs(scanY(0) - 1.1) < 1e-12 && Math.abs(scanY(4.5) + 1.1) < 1e-12);
-  ok('style-holo: scan is periodic and works for t < 0', Math.abs(scanY(2) - scanY(11)) < 1e-12 && Math.abs(scanY(-2) - scanY(7)) < 1e-12);
-  let fmin = 1, fmax = 0, jump = 0;
-  for (let k = 0; k <= 6000; k++) { const t = k / 60, f = flicker(t); fmin = Math.min(fmin, f); fmax = Math.max(fmax, f); if (k) jump = Math.max(jump, Math.abs(f - flicker(t - 1 / 60))); }
-  ok('style-holo: flicker in [0.9, 1]', fmin >= 0.9 && fmax <= 1, `${fmin.toFixed(3)}..${fmax.toFixed(3)}`);
-  ok('style-holo: flicker has no snaps at 60 fps', jump < 0.03, `max step ${jump.toFixed(4)}`);
+  // calm: no scanlines, no scan band, no flicker, no moving bands
+  const allSrc = Object.values(SHADERS).flat().join('\n');
+  ok('style-holo: no scanlines, scan band, flicker or moving bands', !/uScan|uFlick|gl_FragCoord|uTime/.test(allSrc));
+  // colour
   const cA = holoColor(0), cB = holoColor(1);
   ok('style-holo: colour cyan at tint 0, rose side at tint 1', cA[2] > cA[0] && cB[0] > cB[2] && cB[0] > cA[0]);
   ok('style-holo: colour clamps the tint', holoColor(-1).join() === cA.join() && holoColor(9).join() === cB.join());
@@ -106,9 +103,8 @@ export default async function (ok) {
     ok('style-holo: tint moves toward the world prevalence', s.tint > 0 && s.tint < tintFor(0.05), s.tint.toFixed(3));
     const col = core.material.uniforms.uColor.value;
     ok('style-holo: all layers share the moving colour', coast.material.uniforms.uColor.value === col && col.r > holoColor(0)[0]);
-    ok('style-holo: scan uniform shared and live', coast.material.uniforms.uScan.value === scanY(119 / 60) && core.material.uniforms.uScan.value === scanY(119 / 60));
     const ringLine = s.group.children.find(c => c.name === 'holo-rings').children[0].children[0];
-    ok('style-holo: rings turn', ringLine.rotation.y > 0);
+    ok('style-holo: rings turn slowly (under 2 deg/s)', ringLine.rotation.y > 0 && ringLine.rotation.y / (119 / 60) < 2 * Math.PI / 180, (ringLine.rotation.y / (119 / 60) * 180 / Math.PI).toFixed(2));
     s.update(null);
     s.dispose();
     const leaks = [...st.live].filter(o => !fieldOwned.has(o));

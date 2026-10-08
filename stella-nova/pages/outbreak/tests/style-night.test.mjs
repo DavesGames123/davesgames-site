@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { decodeCoast } from '../../storm-globe/coast.js';
 import night, { toSphere, coastSegments, starField, worldPrevalence, tintFor, approach, COAST_R, COAST_URL } from '../render/style-night.js';
+import { SHADERS as NIGHT_SHADERS } from '../render/style-night.js';
 
 // a stub THREE: counts what was made and what was disposed
 function stubThree() {
@@ -29,6 +30,7 @@ function stubThree() {
 }
 
 export default async function (ok) {
+  ok('style-night: calm, no pulse, no breathing, no coast halo', !/sin\(uTime|landAt\(d \*/.test(Object.values(NIGHT_SHADERS).flat().join('\n')));
   // axes: the contract's globe convention
   const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-12);
   ok('style-night: toSphere (0,0) = +x', near(toSphere(0, 0), [1, 0, 0]));

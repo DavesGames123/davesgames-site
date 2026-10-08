@@ -1,7 +1,7 @@
 // render (F): budget arithmetic, the land raster, the node-to-texel
 // weights of the field, and createGlobe against a stub THREE (no GPU).
 import { readFileSync } from 'node:fs';
-import { MAX_PX, canvasBudget, canvasBytes } from '../budget.js';
+import { MAX_PX, MAX_PR, PHONE_MAX_PX, canvasBudget, canvasBytes, phoneView } from '../budget.js';
 import { rasterLand, landFraction, downMask, buildWeights, glowFor, deadFor, fillField, createField, sigmaKm, MASK_W, MASK_H, FIELD_W, FIELD_H } from '../render/field.js';
 import { createGlobe, viewOffsetFor, poseMode, nodeWorld, STYLE_LIST } from '../render/globe.js';
 import { parseNodes } from '../data.js';
@@ -51,6 +51,15 @@ export default async function (ok) {
   ok('budget: dpr 3 phone capped at 2', canvasBudget(390, 844, 3).pr === 2);
   ok('budget: bytes = px x (4 x 8 + 12)', canvasBytes(100) === 4400 && a.bytes === a.px * 44);
   ok('budget: zero size gives a valid ratio', canvasBudget(0, 0, 0).pr === 1);
+  let capOk = true;
+  for (const [w, h] of [[390, 844], [430, 932], [820, 1180], [1280, 720], [1920, 1080], [3840, 2160]]) for (const dpr of [1, 2, 3]) for (const phone of [false, true]) {
+    const q = canvasBudget(w, h, dpr, { phone });
+    if (!(q.pr <= MAX_PR && q.pr <= dpr && q.px <= (phone ? PHONE_MAX_PX : MAX_PX) * 1.003)) capOk = false;
+  }
+  ok('budget: the pixel ratio never passes the cap, the dpr or the pixel budget', capOk);
+  ok('budget: a dpr 3 phone draws at 2x within the phone budget', canvasBudget(390, 844, 3, { phone: true }).pr === 2 && canvasBudget(390, 844, 3, { phone: true }).px <= PHONE_MAX_PX);
+  ok('budget: a large touch screen gets a lower ratio on the phone budget', canvasBudget(1024, 1366, 2, { phone: true }).pr < 2);
+  ok('budget: phoneView reads the media query', phoneView({ matchMedia: () => ({ matches: true }) }) && !phoneView({ matchMedia: () => ({ matches: false }) }) && !phoneView(null));
 
   // land raster
   const sq = rasterLand([[0, 0, 1000, 0, 1000, 1000, 0, 1000]], 360, 180);
@@ -89,12 +98,16 @@ export default async function (ok) {
   ok('fill: a node at glow 1 lights its texel', data[o] > 240 && data[o + 1] < 20, `${data[o]} ${data[o + 1]}`);
   ok('fill: the deaths share goes to G', data[o2] < 20 && data[o2 + 1] > 120, `${data[o2]} ${data[o2 + 1]}`);
   ok('fill: texels with no node stay 0', data[tx(60, 120) * 4] === 0);
+  // sharp edge: the weight stays near 1 out to 0.6 sigma, then falls to under 0.05 by 1.5 sigma
+  const deg = s => s * 450 / 6371 * 180 / Math.PI;
+  const wAt = dl => { const q = at(5, 5 + dl); return q && q.n[0] === 0 ? q.w[0] : 0; };
+  ok('weights: a flat top and a short edge (not a soft blur)', wAt(deg(0.55)) > 0.85 && wAt(deg(1.5)) < 0.05, `${wAt(deg(0.55)).toFixed(2)} ${wAt(deg(1.5)).toFixed(3)}`);
 
   // createField with a stub THREE and the real nodes
   const S = stubThree();
   const D = parseNodes(JSON.parse(readFileSync(new URL('../data/nodes.json', import.meta.url))));
   const f = createField(D, S.T);
-  ok('field: the textures have the contract sizes', f.landMask.image.width === 1024 && f.landMask.image.height === 512 && f.texture.image.width === 512 && f.texture.image.height === 256);
+  ok('field: the textures have the contract sizes (2048 mask, 1024 field)', f.landMask.image.width === 2048 && f.landMask.image.height === 1024 && f.texture.image.width === 1024 && f.texture.image.height === 512);
   f.update(new Float32Array(D.nodes.length).fill(0.01));
   ok('field: no update before the land arrives', !f.ready && f.texture.image.data[0] === 0);
   f.setWorld(world);

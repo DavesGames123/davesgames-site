@@ -7,17 +7,17 @@
 //            it writes depth, so the arcs and city glows of package H on the
 //            far side stay hidden. Land (field.landMask) shows as a cyan dot
 //            grid with a bright edge at the coast. The prevalence field
-//            (field.texture R) fills infected land amber to magenta, with
-//            moving interference bands. A fresnel rim, screen scanlines and a
-//            scan band that sweeps the latitudes complete the look.
+//            (field.texture R) fills infected land amber to magenta, flat
+//            and steady. A thin fresnel rim completes the look. No
+//            scanlines, no scan band, no flicker: the style is calm.
 //    grid    LineSegments of the graticule (every 15 deg) at r = GRID_R.
 //            Equator and prime meridian are brighter.
 //    coast   LineSegments of the Natural Earth coast rings at r = COAST_R.
-//    rings   two tilted orbit rings with ticks, which turn slowly.
+//    rings   two tilted orbit rings with ticks, which turn very slowly
+//            (about 1.2 and 0.8 deg per second).
 //    halo    back-face shell at r = HALO_R, additive, thin glow at the limb.
 //  The line layers do not test depth: the far half shows as a dim ghost
-//  through the globe (the shader dims each vertex by its facing). The
-//  scan band brightens every layer where it passes.
+//  through the globe (the shader dims each vertex by its facing).
 //  The holo colour moves from cyan to rose as the world prevalence rises
 //  (the same log tint as the night style).
 //
@@ -34,7 +34,6 @@
 //  comes from ctx, so node can import this file and test the helpers.
 //
 //  grep -n targets: "export function graticuleSegments", "export function ringSegments",
-//                   "export function scanY", "export function flicker",
 //                   "export function holoColor", "const CORE_FRAG", "const LINE_VERT",
 //                   "const HALO_FRAG", "create(ctx)", "dispose()"
 // ============================================================================
@@ -47,7 +46,6 @@ export const SOURCES = [
 
 export const CORE_R = 0.985, GRID_R = 1.0, COAST_R = 1.0015, HALO_R = 1.06;
 export const RING_R = [1.16, 1.24], RING_TILT = [18, -27];  // degrees about x, then z
-export const SCAN_PERIOD = 9;                                 // s for one sweep down and up
 
 const DEG = Math.PI / 180;
 
@@ -91,20 +89,6 @@ export function ringSegments(r, n = 256, tickDeg = 10, tick = 0.025) {
   return { pos: Float32Array.from(pos), bright: Float32Array.from(bright), n: bright.length / 2 };
 }
 
-// World y of the scan band at time t (s): a smooth sweep from +1.1 down to
-// -1.1 and back in `period` s, so it rests a moment past each pole.
-export function scanY(t, period = SCAN_PERIOD) {
-  const ph = ((t / period) % 1 + 1) % 1;
-  return 1.1 * Math.cos(2 * Math.PI * ph);
-}
-
-// Projector flicker in [0.9, 1]: a sum of incommensurate sines, so it never
-// shows a period and never snaps. Deterministic in t (no RNG).
-export function flicker(t) {
-  const s = Math.sin(t * 7.3) * 0.5 + Math.sin(t * 13.1 + 1.7) * 0.3 + Math.sin(t * 29.7 + 4.1) * 0.2;
-  return 0.95 + 0.05 * s;
-}
-
 // The line colour for a tint 0 (cyan) .. 1 (rose). Returns [r, g, b].
 export function holoColor(tint) {
   const k = Math.min(1, Math.max(0, tint || 0)) * 0.8;
@@ -133,9 +117,6 @@ uniform sampler2D uLand;
 uniform sampler2D uField;
 uniform vec2 uTexel;
 uniform vec3 uColor;
-uniform float uTime;
-uniform float uScan;
-uniform float uFlick;
 uniform float uHasLand;
 varying vec2 vUv;
 varying vec3 vN;
@@ -160,21 +141,16 @@ void main() {
   col += uColor * land * (0.035 + 0.16 * dotv);
   col += uColor * edge * 0.22;
 
-  // infected land: amber to magenta, with bands that move up the globe
+  // infected land: amber to magenta, flat
   vec4 f = texture2D(uField, vUv);
   float prev = clamp(f.r, 0.0, 1.0);
   float dead = clamp(f.g, 0.0, 1.0);
-  float band = 0.7 + 0.3 * sin(vY * 160.0 - uTime * 5.0);
   vec3 hot = mix(vec3(1.0, 0.62, 0.18), vec3(1.0, 0.16, 0.42), smoothstep(0.05, 0.6, prev));
-  col += hot * prev * band * (0.25 + 0.6 * dotv) * (0.35 + 0.65 * land) * (1.0 - 0.5 * dead);
+  col += hot * 0.8 * smoothstep(0.05, 0.7, prev) * (0.25 + 0.6 * dotv) * (0.35 + 0.65 * land) * (1.0 - 0.5 * dead);
 
   float mu = max(dot(vN, vV), 0.0);
-  col += uColor * pow(1.0 - mu, 2.5) * 0.5;
-  float sd = (vY - uScan) / 0.035;   // pow() of a negative base is undefined in GLSL ES
-  float scan = exp(-sd * sd);
-  col += uColor * scan * (0.10 + 0.35 * land);
-  col *= 0.86 + 0.14 * sin(gl_FragCoord.y * 1.5708);
-  gl_FragColor = vec4(col * uFlick, 1.0);
+  col += uColor * pow(1.0 - mu, 4.0) * 0.3;
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 // Lines: the facing of each vertex is the dot of its outward direction
@@ -198,14 +174,10 @@ void main() {
 const LINE_FRAG = /* glsl */`
 uniform vec3 uColor;
 uniform float uGain;
-uniform float uScan;
-uniform float uFlick;
 varying float vA;
 varying float vY;
 void main() {
-  float sd = (vY - uScan) / 0.03;
-  float scan = exp(-sd * sd);
-  gl_FragColor = vec4(uColor * vA * uGain * (uFlick + 1.6 * scan), 1.0);
+  gl_FragColor = vec4(uColor * vA * uGain, 1.0);
 }`;
 
 const HALO_VERT = /* glsl */`
@@ -224,13 +196,12 @@ void main() {
 const HALO_FRAG = /* glsl */`
 uniform vec3 uColor;
 uniform float uLimb;
-uniform float uFlick;
 varying vec3 vN;
 varying vec3 vV;
 void main() {
   float x = clamp(-dot(vN, vV) / uLimb, 0.0, 1.0);
   float g = pow(x, 6.0);
-  gl_FragColor = vec4(uColor * g * 0.6 * uFlick, 1.0);
+  gl_FragColor = vec4(uColor * g * 0.35, 1.0);
 }`;
 
 // ── the style ────────────────────────────────────────────────────────────
@@ -254,7 +225,7 @@ function create(ctx) {
 
   const c0 = holoColor(0);
   const color = new THREE.Color(c0[0], c0[1], c0[2]);   // shared by every layer
-  const shared = { uColor: { value: color }, uScan: { value: scanY(0) }, uFlick: { value: 1 } };
+  const shared = { uColor: { value: color } };
 
   // core
   const coreU = {
@@ -262,7 +233,6 @@ function create(ctx) {
     uLand: { value: landTex },
     uField: { value: field && field.texture ? field.texture : blank },
     uTexel: { value: new THREE.Vector2(1 / lw, 1 / lh) },
-    uTime: { value: 0 },
     uHasLand: { value: landTex === blank ? 0 : 1 },
   };
   const core = new THREE.Mesh(
@@ -332,9 +302,6 @@ function create(ctx) {
     update(frame) {
       if (disposed || !frame) return;
       const t = frame.t || 0, dt = frame.dt || 0;
-      coreU.uTime.value = t;
-      shared.uScan.value = scanY(t);
-      shared.uFlick.value = flicker(t);
       if (field) {
         if (field.texture && coreU.uField.value !== field.texture) coreU.uField.value = field.texture;
         if (field.landMask && coreU.uLand.value !== field.landMask) { coreU.uLand.value = field.landMask; coreU.uHasLand.value = 1; }
@@ -342,8 +309,8 @@ function create(ctx) {
       tint = approach(tint, tintFor(worldPrevalence(frame.sim, pop)), dt, 1.5);
       const c = holoColor(tint);
       color.r = c[0]; color.g = c[1]; color.b = c[2];
-      // the rings turn in opposite senses, about 6 and 4 deg per second
-      if (ringObjs[0].rotation) { ringObjs[0].rotation.y = t * 0.105; ringObjs[1].rotation.y = -t * 0.07; }
+      // the rings turn in opposite senses, about 1.2 and 0.8 deg per second
+      if (ringObjs[0].rotation) { ringObjs[0].rotation.y = t * 0.021; ringObjs[1].rotation.y = -t * 0.014; }
     },
     get tint() { return tint; },
     dispose() {

@@ -26,7 +26,9 @@
 //  The deaths share for the field comes from frame.sim.D / node pop.
 //
 //  GPU rules: no EffectComposer and no render targets. budget.js caps the
-//  pixel ratio at 2 and the drawing buffer at 2560 x 1440 device px. The
+//  pixel ratio at 2 and the drawing buffer at 2560 x 1440 device px (1.6
+//  million device px on a phone, ctx.phone). The canvas draws at that
+//  ratio with antialias on, so lines and markers stay sharp. The
 //  fade (setFade) is a full-screen black quad in the scene, drawn last.
 //  On pagehide, dispose() releases every GPU object and calls
 //  renderer.forceContextLoss().
@@ -37,7 +39,7 @@
 //                   "function applyPose", "function resize", "pick(x, y)",
 //                   "project(i)", "dispose()"
 // ============================================================================
-import { canvasBudget } from '../budget.js';
+import { canvasBudget, phoneView } from '../budget.js';
 import { createField } from './field.js';
 import night from './style-night.js';
 import holo from './style-holo.js';
@@ -94,7 +96,8 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
   scene.add(styleRoot); scene.add(layerRoot);
 
   const field = createField(D, THREE);
-  const base = { THREE, scene, renderer, camera, D, net, geo, field, mode: 'globe', root: layerRoot };
+  // phone: read once at boot; the arcs layer sizes its flight pool by it
+  const base = { THREE, scene, renderer, camera, D, net, geo, field, mode: 'globe', root: layerRoot, phone: phoneView(win) };
 
   // fade quad: clip-space, black, alpha = 1 - fade
   const fadeU = { uA: { value: 0 } };
@@ -155,7 +158,7 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
   function resize() {
     if (disposed) return;
     const w = canvas.clientWidth || (win ? win.innerWidth : 1), h = canvas.clientHeight || (win ? win.innerHeight : 1);
-    const bud = canvasBudget(w, h, win ? win.devicePixelRatio : 1);
+    const bud = canvasBudget(w, h, win ? win.devicePixelRatio : 1, { phone: phoneView(win) });
     cssW = w; cssH = h;
     renderer.setPixelRatio(bud.pr);
     renderer.setSize(w, h, false);
