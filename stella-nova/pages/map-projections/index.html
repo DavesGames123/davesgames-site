@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Map Projections — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MAP PROJECTIONS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   An interactive guide to map projections: 26 projections with formulas
+   written for this page (checked against PROJ), a 3D globe linked to the
+   map, Tissot's indicatrix, distortion heatmaps, a true-size tool, great
+   circles against rhumb lines, distance measure, and six short stories.
+     proj.js     the projection engine, distortion, ellipsoid, geodesy (no DOM)
+     geo.js      clipping, pole closure, resampling              (no DOM)
+     render.js   MapView: the map on a canvas
+     tools.js    Tissot, heatmaps, true size, routes, measure
+     globe.js    the three.js globe
+     gallery.js  the picker with live thumbnails
+     cards.js    the text of each projection card
+     main.js     state, panel, dock and sheet, pointer input, linking
+     saver.js    window.snSaver, the screensaver tour
+     tests.mjs   node tests.mjs        tools/  build-data.py, proj-ref.py
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. lib/sci.css (Inter, STIX Two Text, math colours), style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────┬───────────────────────────────────────────────┐
+     │ #panel       │ #stage  #hud: name, family, property, aspect   │
+     │  tabs:       │         #map (canvas), #over (tools canvas)   │
+     │  Projections │         #card (desktop)        #globeBox      │
+     │  About       │         #legend   #readout   #hint            │
+     │  View        │                                               │
+     │  Tools       │                                               │
+     │  Guide       │                                               │
+     └──────────────┴───────────────────────────────────────────────┘
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock      at the base: Projections, View, Tools, Guide, About,
+                Globe. #panel is a bottom sheet above the dock; the map
+                fits in the part above the sheet. Landscape: a right drawer.
+
+   SELECTION. Only .prose (the stories and the card) can be selected.
+   Everything else has user-select: none, and the map, globe and gallery
+   call preventDefault on pointerdown.
+
+   GREP MAP  (main.js)
+     grep -n 'function setProjection'   pick a projection (with a morph)
+     grep -n 'function frameBox'        the clear part of the stage
+     grep -n 'function drawOverlay'     tools over the map
+     grep -n 'function onPointer'       drag, hover, tools
+     grep -n 'function runGo'           story buttons
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Map Projections: an interactive guide to 26 map projections, with Tissot's indicatrix, distortion heatmaps, a true-size tool, great circles and rhumb lines, a linked 3D globe, and the stories behind Mercator, Gall–Peters, Winkel and Web Mercator.">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js"
+} }
+</script>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Map Projections</div>
+</div>
+
+<div id="app">
+  <aside id="panel" aria-label="Controls and guide">
+    <div id="sheetGrip" aria-hidden="true"><span></span></div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="proj" class="on">Projections</button>
+      <button type="button" role="tab" data-tab="about" class="phone-only">About</button>
+      <button type="button" role="tab" data-tab="view">View</button>
+      <button type="button" role="tab" data-tab="tools">Tools</button>
+      <button type="button" role="tab" data-tab="guide">Guide</button>
+    </nav>
+
+    <section class="tab" data-tab="proj">
+      <div id="gallery"></div>
+      <p class="note prose" id="leftOut"></p>
+    </section>
+
+    <section class="tab" data-tab="about" hidden>
+      <div class="cardBody prose" id="cardPhone"></div>
+    </section>
+
+    <section class="tab" data-tab="view" hidden>
+      <h3>Aspect</h3>
+      <div class="seg" id="aspectSeg" role="group" aria-label="Aspect">
+        <button type="button" data-aspect="normal" class="on">Normal</button>
+        <button type="button" data-aspect="transverse">Transverse</button>
+        <button type="button" data-aspect="oblique">Oblique</button>
+      </div>
+      <p class="hint" id="aspectHint">Drag the map or the globe to turn the globe under the map.</p>
+      <div class="row"><label for="lon">Centre longitude</label><input type="range" id="lon" min="-180" max="180" step="1" value="0"><output id="lonV">0°</output></div>
+      <div class="row"><label for="lat">Centre latitude</label><input type="range" id="lat" min="-90" max="90" step="1" value="0"><output id="latV">0°</output></div>
+      <div class="row"><label for="roll">Roll</label><input type="range" id="roll" min="-180" max="180" step="1" value="0"><output id="rollV">0°</output></div>
+      <div id="conicRows">
+        <h3>Standard parallels</h3>
+        <div class="row"><label for="lat1" class="m2">First, <span class="sci-sym" data-tex="\varphi_1" data-inline></span></label><input type="range" id="lat1" min="-85" max="85" step="0.5" value="30"><output id="lat1V">30°</output></div>
+        <div class="row" id="lat2Row"><label for="lat2" class="m2">Second, <span class="sci-sym" data-tex="\varphi_2" data-inline></span></label><input type="range" id="lat2" min="-85" max="85" step="0.5" value="60"><output id="lat2V">60°</output></div>
+        <div class="row" id="lat0Row"><label for="lat0">Origin latitude</label><input type="range" id="lat0" min="-85" max="85" step="0.5" value="0"><output id="lat0V">0°</output></div>
+      </div>
+      <div class="row" id="clipRow"><label for="clip">Edge, degrees from centre</label><input type="range" id="clip" min="20" max="180" step="1" value="90"><output id="clipV">90°</output></div>
+      <h3>Map</h3>
+      <div class="toggles">
+        <label><input type="checkbox" id="optMorph" checked> Morph between projections</label>
+        <label><input type="checkbox" id="optGrat" checked> Graticule</label>
+        <label><input type="checkbox" id="optBorders" checked> Country borders</label>
+        <label><input type="checkbox" id="optGlobe" checked> Globe</label>
+      </div>
+      <div class="btnrow"><button type="button" class="btn" id="resetView">Reset view</button><button type="button" class="btn" id="zoomOut" aria-label="Zoom out">−</button><button type="button" class="btn" id="zoomIn" aria-label="Zoom in">+</button></div>
+    </section>
+
+    <section class="tab" data-tab="tools" hidden>
+      <h3>Tissot's indicatrix</h3>
+      <p class="hint">Circles of the same size on the ground. Their size on the map shows the area scale, their shape the angle distortion.</p>
+      <div class="seg" id="tissotSeg" role="group" aria-label="Tissot">
+        <button type="button" data-tissot="off" class="on">Off</button>
+        <button type="button" data-tissot="30">Every 30°</button>
+        <button type="button" data-tissot="15">Every 15°</button>
+      </div>
+      <h3>Distortion heatmap</h3>
+      <div class="seg" id="heatSeg" role="group" aria-label="Heatmap">
+        <button type="button" data-heat="off" class="on">Off</button>
+        <button type="button" data-heat="area">Area</button>
+        <button type="button" data-heat="angle">Angle</button>
+      </div>
+      <h3>Pointer tool</h3>
+      <div class="seg tools4" id="toolSeg" role="group" aria-label="Pointer tool">
+        <button type="button" data-tool="pan" class="on">Turn</button>
+        <button type="button" data-tool="truesize">True size</button>
+        <button type="button" data-tool="routes">Routes</button>
+        <button type="button" data-tool="measure">Measure</button>
+      </div>
+      <div class="toolbox" data-for="truesize" hidden>
+        <div class="row"><label for="country">Country</label><select id="country"></select></div>
+        <p class="hint">Drag the country on the map. It keeps its size on the ground; the map changes how big it looks.</p>
+        <div class="btnrow"><button type="button" class="btn" id="tsHome">Back home</button><button type="button" class="btn" id="tsEquator">To the equator</button></div>
+        <div class="readbox" id="tsRead"></div>
+      </div>
+      <div class="toolbox" data-for="routes" hidden>
+        <div class="row"><label for="from">From</label><select id="from"></select></div>
+        <div class="row"><label for="to">To</label><select id="to"></select></div>
+        <p class="hint">Drag either end on the map. <b class="gcol">Great circle</b>: the shortest path. <b class="rcol">Rhumb line</b>: one compass bearing all the way.</p>
+        <div class="btnrow"><button type="button" class="btn" id="rtGnom">Show on gnomonic</button><button type="button" class="btn" id="rtMerc">Show on Mercator</button></div>
+        <div class="readbox" id="rtRead"></div>
+      </div>
+      <div class="toolbox" data-for="measure" hidden>
+        <p class="hint">Tap two points on the map. The true distance is on the WGS84 ellipsoid; the map distance is the straight line on the map at its nominal scale.</p>
+        <div class="readbox" id="msRead">No points yet.</div>
+      </div>
+    </section>
+
+    <section class="tab prose" data-tab="guide" hidden>
+      <nav class="toc" aria-label="Stories">
+        <a href="#s-lie">Why every flat map lies</a>
+        <a href="#s-mercator">Mercator and the Greenland problem</a>
+        <a href="#s-area">Equal-area vs conformal</a>
+        <a href="#s-compromise">The compromise maps</a>
+        <a href="#s-nav">Maps for navigation and for airlines</a>
+        <a href="#s-web">Web Mercator and why your phone uses it</a>
+      </nav>
+
+      <article id="s-lie">
+        <h2>Why every flat map lies</h2>
+        <p>Peel an orange and press the peel flat: it tears or stretches. A map has the same problem, and in 1827 Carl Friedrich Gauss proved that no cleverness can fix it. His <i>Theorema Egregium</i> ("remarkable theorem") says that the curvature of a surface can be measured from inside the surface, by distances alone. A map that kept every distance would also keep the curvature. A sphere of radius <span class="sci-sym" data-tex="R" data-inline></span> has curvature</p>
+        <div class="sci-eq" data-tex="K = \frac{1}{R^2}, \qquad K_{\text{plane}} = 0,"></div>
+        <p>so no flat map can keep all distances. You can see the curvature in a triangle: on a globe the angles of a triangle of area <span class="sci-sym" data-tex="A" data-inline></span> add up to more than 180°,</p>
+        <div class="sci-eq" data-tex="\alpha + \beta + \gamma = \pi + \frac{A}{R^2}."></div>
+        <p>A triangle from the North Pole down two meridians 90° apart to the equator has three right angles. On paper that is impossible.</p>
+        <p>So every map chooses what to keep. In 1859 Nicolas Auguste Tissot found a way to see the choice: draw small circles of equal size on the globe and look at them on the map. Each becomes an ellipse with half-axes <span class="sci-sym m1" data-tex="a" data-inline></span> and <span class="sci-sym m2" data-tex="b" data-inline></span> (the largest and smallest scale at that point). The area scale and the worst angle error are</p>
+        <div class="sci-eq" data-tex="s = a\,b, \qquad \omega = 2\arcsin\frac{a - b}{a + b}."></div>
+        <p>A conformal map has <span class="sci-sym" data-tex="a = b" data-inline></span> everywhere (circles stay circles). An equal-area map has <span class="sci-sym" data-tex="a\,b = 1" data-inline></span> everywhere (circles keep their area). Gauss's theorem says no map can have <span class="sci-sym" data-tex="a = b = 1" data-inline></span> everywhere.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"equirectangular","tissot":30,"heat":"off"}'>Tissot circles on the equirectangular map</button>
+          <button type="button" class="go" data-go='{"key":"orthographic","tissot":15,"heat":"off"}'>The same circles on a globe view</button>
+        </div>
+      </article>
+
+      <article id="s-mercator">
+        <h2>Mercator and the Greenland problem</h2>
+        <p>In 1569 Gerardus Mercator drew a world map for sailors. He spaced the parallels so that the map is conformal: at every point the north-south scale equals the east-west scale, which is stretched by <span class="sci-sym" data-tex="1/\cos\varphi" data-inline></span>. The result is</p>
+        <div class="sci-eq" data-tex="y = R\ln\tan\!\left(\frac{\pi}{4} + \frac{\varphi}{2}\right), \qquad h = k = \sec\varphi, \qquad s = \sec^2\varphi."></div>
+        <p>The area scale <span class="sci-sym" data-tex="\sec^2\varphi" data-inline></span> is 1 at the equator, 2 at 45°, 4 at 60° and about 10.5 at 72°, the middle of Greenland. Greenland covers about 2.2 million km²; Africa covers about 30.4 million km², fourteen times more. On Mercator they look about the same size. Russia looks bigger than all of Africa (17.1 against 30.4 million km²), and Antarctica becomes an endless white band, because the pole is infinitely far away. Web maps stop at 85.05°.</p>
+        <p>None of this was a mistake. Mercator's map was made to keep angles, and it does that perfectly. The problem starts when a navigation chart is used as a picture of the world.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"mercator","tool":"truesize","country":"Greenland","target":[20,5],"tissot":"off","heat":"off"}'>Slide Greenland to the equator</button>
+          <button type="button" class="go" data-go='{"key":"mercator","heat":"area","tissot":"off","tool":"pan"}'>Area heatmap on Mercator</button>
+          <button type="button" class="go" data-go='{"key":"mercator","tool":"truesize","country":"Russia","target":[20,0],"tissot":"off","heat":"off"}'>Russia at the equator</button>
+        </div>
+      </article>
+
+      <article id="s-area">
+        <h2>Equal-area vs conformal</h2>
+        <p>Because no map can keep both angles and areas, the two big families of maps choose one. A <b class="m1">conformal</b> map keeps angles, so small shapes look right: a city block is square, a coastline has its true wiggles. An <b class="m3">equal-area</b> map keeps areas, so every square kilometre gets the same space on the paper:</p>
+        <div class="sci-eq" data-tex="\text{conformal: } a = b, \qquad \text{equal-area: } a\,b = 1."></div>
+        <p>Use a conformal map when direction and local shape matter: navigation, weather fronts, street maps, surveying grids (UTM, State Plane). Use an equal-area map when the map shows how much of something there is: population density, forests, crops, election results. A density map on Mercator makes northern countries look far more important than they are.</p>
+        <p>Turn on the angle heatmap to see the price each family pays. A conformal map is dark everywhere (no angle error) but its area heatmap changes colour. An equal-area map is the reverse.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"gall-peters","tissot":30,"heat":"off","tool":"pan"}'>Gall–Peters with Tissot circles</button>
+          <button type="button" class="go" data-go='{"key":"lambert-conformal","heat":"area","tissot":"off"}'>Lambert conformal conic: area changes</button>
+          <button type="button" class="go" data-go='{"key":"mollweide","heat":"angle","tissot":"off"}'>Mollweide: angles change</button>
+        </div>
+      </article>
+
+      <article id="s-compromise">
+        <h2>The compromise maps</h2>
+        <p>For a general world map, most cartographers now prefer to keep nothing exactly and spread the error out instead. In 1963 Arthur Robinson drew a map by eye: he adjusted the length and spacing of the parallels until the continents "looked right", then published the result as a table every 5°. National Geographic used it from 1988 to 1998, then changed to the Winkel tripel (Oswald Winkel, 1921), which averages two simpler maps:</p>
+        <div class="sci-eq" data-tex="x = \tfrac12\left(\lambda\cos\varphi_1 + x_{\mathrm{Aitoff}}\right), \qquad y = \tfrac12\left(\varphi + y_{\mathrm{Aitoff}}\right)."></div>
+        <p>Studies that score world maps on area, angle and distance errors together put the Winkel tripel near the top. Tom Patterson's Natural Earth map (2007, polynomials 2011) aims for the same balance with flat poles. Equal Earth (2018) takes the Robinson look and makes it exactly equal-area, so a thematic map can look familiar and be fair.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"robinson","heat":"angle","tissot":"off","tool":"pan"}'>Robinson, angle heatmap</button>
+          <button type="button" class="go" data-go='{"key":"winkel-tripel","heat":"angle","tissot":"off"}'>Winkel tripel, angle heatmap</button>
+          <button type="button" class="go" data-go='{"key":"equal-earth","heat":"area","tissot":"off"}'>Equal Earth, area heatmap</button>
+        </div>
+      </article>
+
+      <article id="s-nav">
+        <h2>Maps for navigation and for airlines</h2>
+        <p>Two lines matter to a navigator. A <b class="rcol">rhumb line</b> crosses every meridian at the same angle, so you can follow it with one compass setting. On Mercator it is straight, which is why Mercator made his map. A <b class="gcol">great circle</b> is the shortest path on the sphere; its bearing changes all the way. On the gnomonic map, a plane touching the globe and lit from its centre, every great circle is straight.</p>
+        <div class="sci-eq" data-tex="d = R\,\arccos\!\left(\sin\varphi_1\sin\varphi_2 + \cos\varphi_1\cos\varphi_2\cos\Delta\lambda\right)"></div>
+        <p>The classic method combines them: draw the straight route on a gnomonic chart, copy points along it onto a Mercator chart, and steer the short rhumb lines between them. From New York to Tokyo the great circle is 10,849 km on a sphere (10,873 km on the WGS84 ellipsoid) and passes near Alaska; the rhumb line is 12,787 km. Airlines fly close to great circles, adjusted for winds; that is why a flight path looks curved on a flat map.</p>
+        <p>The azimuthal equidistant map centred on a city gives true distance and direction from that city to everywhere on Earth: the reason it is used for radio, range rings and the United Nations emblem.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"gnomonic","aspect":"oblique","lon":-150,"lat":62,"tool":"routes","route":["New York","Tokyo"],"tissot":"off","heat":"off"}'>New York to Tokyo on the gnomonic map</button>
+          <button type="button" class="go" data-go='{"key":"mercator","tool":"routes","route":["New York","Tokyo"],"tissot":"off","heat":"off"}'>The same routes on Mercator</button>
+          <button type="button" class="go" data-go='{"key":"azimuthal-equidistant","aspect":"oblique","lon":-74,"lat":40.7,"tool":"measure","tissot":"off","heat":"off"}'>Distances from New York</button>
+        </div>
+      </article>
+
+      <article id="s-web">
+        <h2>Web Mercator and why your phone uses it</h2>
+        <p>When Google Maps launched in 2005 it chose a Mercator map of a sphere, and nearly every web map followed. The reasons are practical. It is conformal, so streets meet at their true angles and a roundabout is round at every zoom. North is always up. And cut at 85.0511° (where <span class="sci-sym" data-tex="\varphi = \arctan\sinh\pi" data-inline></span>) the world is a perfect square, which splits into four tiles, then sixteen, and so on: at zoom <span class="sci-sym m5" data-tex="z" data-inline></span> the world is <span class="sci-sym" data-tex="256\cdot 2^{z}" data-inline></span> pixels wide, and one pixel covers</p>
+        <div class="sci-eq" data-tex="\frac{2\pi R\cos\varphi}{256\cdot 2^{\class{m5}{z}}} \approx \frac{156\,543\ \text{m}\cdot\cos\varphi}{2^{\class{m5}{z}}}."></div>
+        <p>The cost is area: at street level nobody notices, but zoomed out, Greenland and Canada swell. A small detail: Web Mercator puts GPS latitudes (on the WGS84 ellipsoid) into the sphere formula. The map is then not exactly conformal on the real Earth; at the equator the two scales differ by 0.67%. That is why EPSG gave it its own code, 3857, apart from the true ellipsoidal Mercator.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"web-mercator","heat":"area","tissot":"off","tool":"pan"}'>Web Mercator, area heatmap</button>
+          <button type="button" class="go" data-go='{"key":"web-mercator","tool":"truesize","country":"Canada","target":[-60,0],"tissot":"off","heat":"off"}'>Canada at the equator</button>
+        </div>
+      </article>
+      <p class="credit">Data: Natural Earth (public domain). Globe image: NASA Blue Marble (public domain). Formulas follow Snyder (USGS Professional Paper 1395, 1987) and the original papers, written for this page and checked against PROJ 9.8.</p>
+    </section>
+  </aside>
+
+  <main id="stage">
+    <canvas id="map" aria-label="Map"></canvas>
+    <canvas id="over" aria-hidden="true"></canvas>
+    <div id="hud">
+      <div class="hname"><span id="pname">Mercator</span><span class="chips" id="pchips"></span></div>
+      <div class="hbtns">
+        <button type="button" class="hb" id="prevP" aria-label="Previous projection">‹</button>
+        <button type="button" class="hb" id="nextP" aria-label="Next projection">›</button>
+      </div>
+    </div>
+    <div id="card" class="prose"><button type="button" id="cardToggle" aria-label="Hide card">–</button><div class="cardBody" id="cardDesk"></div></div>
+    <div id="globeBox"><canvas id="globe" aria-label="Globe"></canvas></div>
+    <div id="legend" hidden></div>
+    <div id="readout" hidden></div>
+    <div id="hint"></div>
+    <div id="loading"><span class="spin"></span>Loading the world</div>
+  </main>
+
+  <nav id="dock" aria-label="Panels">
+    <button type="button" data-open="proj" aria-label="Projections">▦<small>Maps</small></button>
+    <button type="button" data-open="about" aria-label="About this projection">i<small>About</small></button>
+    <button type="button" data-open="view" aria-label="View">◎<small>View</small></button>
+    <button type="button" data-open="tools" aria-label="Tools">◍<small>Tools</small></button>
+    <button type="button" data-open="guide" aria-label="Guide">¶<small>Guide</small></button>
+    <button type="button" id="dockGlobe" aria-label="Globe" class="on">◐<small>Globe</small></button>
+  </nav>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
