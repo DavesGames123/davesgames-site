@@ -259,3 +259,11 @@ body.panel-closed{--panel-w:0px}
   body.sheet-open #card{display:none}
 }
 @media(prefers-reduced-motion:reduce){#panel,.phint,#card,#toast{transition:none;animation:none}}
+
+/* TOUCH TEXT. On a coarse pointer the small uppercase labels are 12 px
+   (they were 9-10.6 px), and the other small text is 12 px or more. */
+@media (pointer:coarse){
+  .eyebrow,.kicker,.sec-label,.specs .k,.c-sub,.pread .meta,.rg-t .n,#dock > button small{font-size:0.75rem}
+  .pread,.specs,#tip,.c-acts button{font-size:0.8rem}
+  .c-foot{font-size:0.75rem}
+}

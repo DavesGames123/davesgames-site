@@ -17,7 +17,9 @@ export const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (po
 export const COARSE = matchMedia('(pointer:coarse)').matches;
 export const HOVER = matchMedia('(hover:hover) and (pointer:fine)').matches;
 export const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-export const DPR = () => Math.min(window.devicePixelRatio || 1, 2);
+// 1.75 on a touch screen: the glass bones are transparent, so a phone GPU
+// shades many layers per pixel (the other mechanism pages cap the same).
+export const DPR = () => Math.min(window.devicePixelRatio || 1, COARSE ? 1.75 : 2);
 export const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 export const clamp01 = t => (t <= 0 ? 0 : t >= 1 ? 1 : t);
 export const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
