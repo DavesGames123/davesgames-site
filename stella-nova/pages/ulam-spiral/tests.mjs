@@ -8,6 +8,8 @@
 import * as T from './numtheory.js';
 import * as L from './layouts.js';
 import { densestRays, cellFamilies } from './diagonals.js';
+import { fieldPlan, tentCells, TOUCH_CELLS } from './glsl.js';
+import { fit3Step } from './saver.js';
 
 let fails = 0, passes = 0;
 function check(name, ok, detail = '') {
@@ -206,6 +208,46 @@ console.log(`sieve to 1e8: ${Date.now() - t0} ms`);
     worst = Math.max(worst, sd(st)); if (sd(st) > sd(sb) + 1e-9) sumBad++;
   }
   check('zoomed-out filter: the tent keeps the checkerboard bands under 0.02', worst <= 0.02 && sumBad === 0, `worst tent spread ${worst.toFixed(3)}; ${rows.join(', ')}`);
+}
+
+// The field cost on phones (glsl.js fieldPlan). The tent reads up to
+// tentCells(boxMax) cells for a pixel. A touch device gets boxMax 3 and a
+// pixel ratio of 1.5 to 2, so pixels x cells stay near TOUCH_CELLS (the
+// box filter before f2e3ed5: 25 cells x 1.3 M px = 33 M on a 390 x 844
+// phone at ratio 2). A desktop keeps ratio 2 and boxMax 6.
+{
+  const wantCells = [[2, 25], [3, 49], [4, 81], [6, 169]].every(([b, n]) => tentCells(b) === n);
+  const rows = [], frames = [[360, 640, 3], [390, 844, 3], [844, 390, 3], [820, 1180, 2]];
+  let ok = wantCells;
+  for (const [w, h, d] of frames) {
+    const p = fieldPlan({ w, h, dpr: d, touch: true }), px = w * h * p.dpr * p.dpr, cells = px * tentCells(p.boxMax);
+    rows.push(`${w}x${h}@${d}: dpr ${p.dpr.toFixed(2)} boxMax ${p.boxMax} ${(cells / 1e6).toFixed(0)} M cells`);
+    if (p.boxMax !== 3 || p.dpr < 1.5 || p.dpr > 2) ok = false;
+    if (p.dpr > 1.5 && cells > TOUCH_CELLS * 1.001) ok = false;
+  }
+  const dk = fieldPlan({ w: 1920, h: 1080, dpr: 2, touch: false }), lo = fieldPlan({ w: 390, h: 844, dpr: 1, touch: true });
+  if (dk.dpr !== 2 || dk.boxMax !== 6 || lo.dpr !== 1) ok = false;
+  check('field cost: touch devices read at most 49 cells a pixel, about 40 M a frame', ok, rows.join(', ') + `; desktop dpr ${dk.dpr} boxMax ${dk.boxMax}`);
+}
+
+// The 3D saver framing (saver.js fit3Step). A model projection: the box
+// scales as 1 / zoom and moves by -shift / wpp. Start too large and off
+// centre (the cone hangs under the target): the loop must bring the box
+// inside 86% of the clear band and centre it, and zoom must stay in 1 .. 4.
+{
+  const v = { cx: 195, cy: 442, cw: 390, ch: 300 };
+  const rows = [];
+  let ok = true;
+  for (const [bw, bh, ox, oy] of [[520, 300, 0, 90], [300, 420, -40, 60], [100, 80, 0, 0]]) {
+    let f = { zoom: 1, sx: 0, uy: 0 };
+    const wpp = 0.5;
+    const boxOf = () => { const w = bw / f.zoom, hh = bh / f.zoom, cx = v.cx + ox - f.sx / wpp, cy = v.cy + oy + f.uy / wpp; return [cx - w / 2, cy - hh / 2, cx + w / 2, cy + hh / 2]; };
+    for (let i = 0; i < 300; i++) f = fit3Step(f, boxOf(), v, wpp, 1 / 60);
+    const b = boxOf(), fitW = (b[2] - b[0]) / v.cw, fitH = (b[3] - b[1]) / v.ch, dx = (b[0] + b[2]) / 2 - v.cx, dy = (b[1] + b[3]) / 2 - v.cy;
+    rows.push(`${bw}x${bh}: zoom ${f.zoom.toFixed(2)} fill ${Math.max(fitW, fitH).toFixed(3)} off ${dx.toFixed(1)},${dy.toFixed(1)}`);
+    if (Math.max(fitW, fitH) > 0.87 || Math.abs(dx) > 2 || Math.abs(dy) > 2 || f.zoom < 1 || f.zoom > 4) ok = false;
+  }
+  check('3D saver framing: fit3Step puts the subject inside the clear band', ok, rows.join(', '));
 }
 
 console.log(`\n${passes} passed, ${fails} failed`);

@@ -25,6 +25,7 @@
 //    TF_VS      transform feedback of gPos for the self-test
 //
 //  GREP MAP
+//    grep -n 'function fieldPlan' the pixel ratio and uBoxMax (phones)
 //    grep -n 'MODE_'              the class byte per highlight mode
 //    grep -n 'ivec2 gSqPos'       square spiral (and every other gXxxPos)
 //    grep -n 'vec3 gPos'          n -> world position, any shape
@@ -36,6 +37,24 @@
 //    grep -n 'vec4 boxJitter'     the stratified fallback
 //    grep -n 'PYR_FS'             the pyramid level-0 pass
 // ============================================================================
+
+// --- the field cost plan (not GLSL) -----------------------------------------------
+// tentCells(boxMax): the most cells boxCells reads for one pixel. The tent
+// has half-width w = max(pxW, 2) cells, and pxW <= boxMax in boxCells, so
+// it spans floor(2 w) + 1 cells per axis (the loop cap is 16).
+export function tentCells(boxMax) { const n = Math.min(16, Math.floor(2 * Math.max(boxMax, 2)) + 1); return n * n; }
+// fieldPlan: the canvas pixel ratio and uBoxMax for a CSS canvas w x h.
+// A touch device (a phone or a tablet) gets boxMax 3 (49 cells a pixel at
+// most, against 81 at boxMax 4), and a pixel ratio from 1.5 to 2 that keeps
+// pixels x tentCells under TOUCH_CELLS. Before the tent (f2e3ed5) a phone
+// read 25 cells a pixel at most, over 1.3 M pixels: about 33 M a frame.
+// A desktop keeps ratio 2 and boxMax 6.
+export const TOUCH_CELLS = 40e6;
+export function fieldPlan({ w, h, dpr = 1, touch = false }) {
+  if (!touch) return { dpr: Math.min(dpr, 2), boxMax: 6 };
+  const boxMax = 3, fit = Math.sqrt(TOUCH_CELLS / Math.max(1, w * h * tentCells(boxMax)));
+  return { dpr: Math.min(dpr, 2, Math.max(1.5, fit)), boxMax };
+}
 
 export const HEAD = `#version 300 es
 precision highp float;

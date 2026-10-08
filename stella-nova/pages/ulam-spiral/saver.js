@@ -25,6 +25,7 @@
 //    grep -n 'const BUILDS'       the shapes and their counts
 //    grep -n 'const SHOTS'        the build shot
 //    grep -n 'function plate'     the label plate payload
+//    grep -n 'function fit3Step'  the 3D framing step (the clear band)
 //    grep -n 'async function extract'   code extracts from the sources
 //    grep -n 'enter(opts'         the hook
 // ============================================================================
@@ -75,6 +76,20 @@ const CODE = {
   oct: ['layouts.js', 'function octCnt(r, c, d)', 'js', 'octCnt · layouts.js'],
   tri: ['layouts.js', 'export function triPos(k)', 'js', 'triPos · layouts.js'],
 };
+
+// One step of the 3D framing loop (saver frame3). f = { zoom, sx, uy }:
+// zoom multiplies the camera distance (1 .. 4, only to back off), sx and
+// uy move the camera target along the screen x and up axes (world units).
+// box = [x0, y0, x1, y1] is the projected box of the subject in view px,
+// v the view (cx, cy, cw, ch), wpp the world units per px at the target.
+// The step eases toward a box that fills 86% of the clear band at most,
+// centred on (cx, cy).
+export function fit3Step(f, box, v, wpp, dt) {
+  const a = 1 - Math.exp(-dt * 4);
+  const r = Math.max((box[2] - box[0]) / (0.86 * v.cw), (box[3] - box[1]) / (0.86 * v.ch), 1e-3);
+  const dx = (box[0] + box[2]) / 2 - v.cx, dy = (box[1] + box[3]) / 2 - v.cy;
+  return { zoom: clamp(f.zoom * r ** a, 1, 4), sx: f.sx + dx * wpp * a, uy: f.uy - dy * wpp * a };
+}
 
 export function installSaver(app) {
   const { S, L, T } = app;
@@ -139,6 +154,31 @@ export function installSaver(app) {
     pyramid: { P: () => ({}), code: 'sq' },
     cone: { P: () => ({}), code: 'pt' },
   };
+  // The 3D shapes do not sit on the camera target: the cone and the
+  // pyramid hang under it, and a portrait frame is narrower than the shape.
+  // So each frame projects up to 240 of the numbers counted so far, and
+  // fit3Step backs the camera off and moves the target until the box of
+  // those numbers is in the clear band. The shift is along the screen axes.
+  // update() sets c.tz again each frame before this, but not c.tx or c.ty,
+  // so the shift adds to c.tz and replaces c.tx and c.ty.
+  function frame3(sh, c, k, dt, v) {
+    const cp = Math.cos(c.pitch), f = [-cp * Math.cos(c.yaw), -cp * Math.sin(c.yaw), -Math.sin(c.pitch)];
+    const sl = Math.hypot(f[1], f[0]) || 1, sx = [f[1] / sl, -f[0] / sl, 0];
+    const up = [sx[1] * f[2] - sx[2] * f[1], sx[2] * f[0] - sx[0] * f[2], sx[0] * f[1] - sx[1] * f[0]];
+    c.tx = sh.c0.tx + sx[0] * sh.fz.sx + up[0] * sh.fz.uy; c.ty = sh.c0.ty + sx[1] * sh.fz.sx + up[1] * sh.fz.uy; c.tz += sx[2] * sh.fz.sx + up[2] * sh.fz.uy;
+    if (k < 8) return;
+    const { mvp } = app.cam3Mats(c, v), st0 = L.startOf(S.shape, S.P);
+    const p0 = app.project3(mvp, [c.tx, c.ty, c.tz], v), p1 = app.project3(mvp, [c.tx + sx[0], c.ty + sx[1], c.tz + sx[2]], v);
+    if (!p0 || !p1) return;
+    const box = [Infinity, Infinity, -Infinity, -Infinity], step = Math.max(1, k / 240);
+    for (let j = 0; j <= k; j += step) {
+      const p = L.posOf(S.shape, st0 + Math.round(j), S.P), q = p && app.project3(mvp, p, v);
+      if (!q) continue;
+      box[0] = Math.min(box[0], q[0]); box[1] = Math.min(box[1], q[1]); box[2] = Math.max(box[2], q[0]); box[3] = Math.max(box[3], q[1]);
+    }
+    if (!(box[2] > box[0])) return;
+    sh.fz = fit3Step(sh.fz, box, v, 1 / Math.max(1e-6, Math.hypot(p1[0] - p0[0], p1[1] - p0[1])), dt);
+  }
   const SHOTS = {
     build: {
       setup(sh) {
@@ -153,6 +193,7 @@ export function installSaver(app) {
           sh.kEnd = shape.key === 'helix' ? Math.round(2 * h.tz * S.P.w) : app.n3Count(shape, h);
           sh.spin = (st.rnd() < 0.5 ? -1 : 1) * (0.5 + 0.4 * (1 - st.calm));
           S.cam3 = { ...h, dist: h.dist * 0.05 };
+          sh.fz = { zoom: 1, sx: 0, uy: 0 };
         } else {
           sh.kEnd = Math.round(B.kEnd(VWv(), S.P) * (0.7 + 0.3 * (1 - st.calm)));
           S.cam = { x: 0, y: 0, z: 70 };
@@ -174,9 +215,10 @@ export function installSaver(app) {
           const f = S.shape.key === 'helix' ? k / sh.kEnd : Math.sqrt(k / sh.kEnd);
           // (the helix starts on a ring of radius w / 2 pi, so not as close)
           const c = S.cam3, g = clamp(1.5 * f, S.shape.key === 'helix' ? 0.25 : 0.05, 1), fit = clamp(v.h / v.ch, 1, 4);
-          c.dist = sh.c0.dist * g * fit; c.tz = S.shape.key === 'helix' ? 0.5 * k / S.P.w : sh.c0.tz * g;
+          c.dist = sh.c0.dist * g * fit * sh.fz.zoom; c.tz = S.shape.key === 'helix' ? 0.5 * k / S.P.w : sh.c0.tz * g;
           c.yaw = sh.c0.yaw + sh.spin * u * 1.4;
           c.pitch = sh.c0.pitch + 0.12 * Math.sin(u * Math.PI);
+          frame3(sh, c, k, dt, v);
           return;
         }
         const stt = L.startOf(S.shape, S.P), b = app.bboxOf(S.shape, stt, stt + Math.max(9, Math.ceil(k * 1.12)), 120);

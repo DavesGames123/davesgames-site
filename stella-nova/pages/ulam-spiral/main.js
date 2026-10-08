@@ -32,11 +32,13 @@
 import * as T from './numtheory.js';
 import * as L from './layouts.js';
 import { createRenderer } from './render.js';
+import { fieldPlan } from './glsl.js';
 import { densestRays, cellFamilies } from './diagonals.js';
 import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const TOUCH_Q = matchMedia('(pointer:coarse)');
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeIO = t => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -102,10 +104,12 @@ let R = null;
 try { R = createRenderer(cv); } catch (e) { console.error(e); }
 if (!R) { $('nogl').hidden = false; }
 const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-let dpr = 1;
+let dpr = 1, boxMax = 6;
+// The pixel ratio and the cell-loop cap come from fieldPlan (glsl.js): a
+// phone or a tablet reads fewer cells per frame than a desktop.
 function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, PHONE_Q.matches ? 2 : 2);
   const w = cv.clientWidth, h = cv.clientHeight;
+  ({ dpr, boxMax } = fieldPlan({ w, h, dpr: window.devicePixelRatio || 1, touch: PHONE_Q.matches || TOUCH_Q.matches }));
   cv.width = Math.max(1, Math.round(w * dpr)); cv.height = Math.max(1, Math.round(h * dpr));
   ov.width = cv.width; ov.height = cv.height;
   S.dirty = true;
@@ -376,7 +380,7 @@ function frameState(v, opts = {}) {
     walk: S.walk ? S.walk.k : null, ignite: S.walk ? Math.max(6, S.walk.k * 0.04) : 30,
     style: S.style, dotR: S.dotR, ptSize: S.dotR * 2, bg: BGS[S.bg].c.map(rgb), bloom: S.bloom, exposure: 1,
     dpr: opts.dpr || dpr, cam, center: [v.cx * (opts.dpr || dpr), (v.h - v.cy) * (opts.dpr || dpr)],
-    renderer: 'none', points: null, path: null, cam3: null, tileOn: false, boxMax: opts.thumb ? 3 : PHONE_Q.matches ? 4 : 6,
+    renderer: 'none', points: null, path: null, cam3: null, tileOn: false, boxMax: opts.thumb ? 3 : boxMax,
   };
   if (opts.walk !== undefined) s.walk = opts.walk;
   const pxW = 1 / (cam.z * s.dpr);
