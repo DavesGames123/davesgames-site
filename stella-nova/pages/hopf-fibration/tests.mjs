@@ -14,8 +14,10 @@
 //    pierce     one fibre crosses the disc of the other exactly once
 //    colour     colours in 0..1, no NaN, poles grey
 //    presets    deterministic, finite, under the cap
+//    budget     GPU bytes of the 3D view stay under a hard limit
 // ============================================================================
 import * as H from './hopf.js';
+import * as BG from './budget.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { console.log(`${cond ? 'ok  ' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); if (!cond) fails++; };
@@ -168,6 +170,23 @@ const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
   ok('presets: unit, finite, under the cap', good, H.PRESETS.map(p => `${p.id} ${H.sampleItems(p.make(24, H.makeRng(7)).items, 24).length}`).join(' · '));
   const curve = H.sampleItems([{ kind: 'curve', pts: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] }], 24);
   ok('curve: resampled ends on the painted ends', dist(curve[0].b, [1, 0, 0]) < 1e-12 && dist(curve[curve.length - 1].b, [0, 0, 1]) < 1e-12, `${curve.length} fibres`);
+}
+// budget: the GPU memory of the 3D view (budget.js)
+{
+  const MB = v => (v / 1e6).toFixed(0) + ' MB';
+  let worst = 0, okPx = true;
+  for (const [w, h] of [[1440, 900], [2560, 1440], [3840, 2160]]) {
+    const B = BG.postBudget(w, h, 2), old = BG.legacyBytes(w, h, 2);
+    worst = Math.max(worst, B.bytes.total);
+    if (B.px > BG.MAX_PX * 1.002) okPx = false;
+    console.log(`      ${w}x${h} css at dpr 2: old ${MB(old)}  new ${MB(B.bytes.total)}  (pr ${B.pr}, ${B.samples}x MSAA, ${(B.px / 1e6).toFixed(2)} Mpx)`);
+  }
+  ok('budget: device px at most 2560x1440', okPx);
+  ok('budget: total GPU bytes under 256 MB', worst < 256e6, MB(worst));
+  const small = BG.postBudget(1280, 720, 1);
+  ok('budget: a small window keeps dpr and 4x MSAA', small.pr === 1 && small.samples === 4, `pr ${small.pr}, ${small.samples}x`);
+  const huge = BG.postBudget(7680, 4320, 2);
+  ok('budget: a huge window stays in budget', huge.bytes.total < 256e6 && Number.isFinite(huge.pr), `pr ${huge.pr}, ${MB(huge.bytes.total)}`);
 }
 console.log(fails ? `\n${fails} check(s) failed` : '\nall checks passed');
 process.exit(fails ? 1 : 0);

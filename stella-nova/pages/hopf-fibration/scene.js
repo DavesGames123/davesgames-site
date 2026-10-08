@@ -23,9 +23,13 @@
 //
 //  The material is MeshStandardMaterial with onBeforeCompile, so the
 //  fibres get the three.js lights, the room environment map, the fog and
-//  the tone mapping. Desktop renders through an EffectComposer: a 4x MSAA
+//  the tone mapping. Desktop renders through an EffectComposer: one MSAA
 //  target, a soft bloom, and OutputPass (ACES tone map, sRGB). A touch
 //  screen renders direct with antialias and no bloom.
+//
+//  MEMORY  resize() takes the pixel ratio and the MSAA sample count from
+//  postBudget (budget.js): at most 2560 x 1440 device px, and at most
+//  160 MB for the scene target. Nothing in this file allocates per frame.
 //
 //  EXPORTS  createScene(canvas, opts) -> api   (grep -n "export function")
 //  FIBRE_GLSL is also the code extract on the saver plate.
@@ -40,6 +44,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { postBudget } from './budget.js';
 
 // The fibre and the projection, as in hopf.js (fibrePoint, stereo).
 export const FIBRE_GLSL = `// the fibre over b in S2 at parameter t: a point of S3
@@ -149,7 +154,7 @@ export function createScene(canvas, opts = {}) {
   const BG = new THREE.Color(0x06070b);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: coarse, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserve });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setPixelRatio(1);   // resize() sets the budget ratio
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -217,21 +222,43 @@ export function createScene(canvas, opts = {}) {
   });
 
   // ---- post
-  let composer = null, bloom = null;
+  // The GPU memory has a hard budget (budget.js). No pass swaps, so the
+  // scene always draws into composer.readBuffer, the one MSAA target. The
+  // write buffer is never bound, so WebGL never allocates it. The bloom
+  // chain runs at half the size the composer gives it.
+  let composer = null, bloom = null, sceneRT = null;
   if (!coarse) {
-    const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 0 });
     composer = new EffectComposer(renderer, rt);
+    sceneRT = composer.readBuffer;
+    composer.writeBuffer.samples = 0;
     composer.addPass(new RenderPass(scene, camera));
     bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.32, 0.55, 0.86);
+    const bloomSize = bloom.setSize.bind(bloom);
+    bloom.setSize = (w, h) => bloomSize(Math.max(2, Math.round(w / 2)), Math.max(2, Math.round(h / 2)));
     composer.addPass(bloom);
-    composer.addPass(new OutputPass());
+    const out = new OutputPass();
+    out.needsSwap = false;
+    composer.addPass(out);
   }
 
-  const view = { w: 1, h: 1, ox: 0, oy: 0 };
+  const view = { w: 1, h: 1, ox: 0, oy: 0, pr: 0, samples: -1 };
+  // Called only on a real change of the window size (main.js).
   function resize(w, h) {
     view.w = w; view.h = h;
+    const B = postBudget(w, h, window.devicePixelRatio || 1);
+    view.budget = B;
+    if (B.pr !== view.pr) { view.pr = B.pr; renderer.setPixelRatio(B.pr); }
     renderer.setSize(w, h, false);
-    if (composer) composer.setSize(w, h);
+    if (composer) {
+      if (B.samples !== view.samples) {
+        // a new sample count needs a new allocation: free the old one
+        view.samples = B.samples; sceneRT.samples = B.samples; sceneRT.dispose();
+      }
+      // one setSize, one allocation (setPixelRatio would size twice)
+      composer._pixelRatio = B.pr;
+      composer.setSize(w, h);
+    }
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   // Shift the view so the origin sits at the centre of the clear part.
@@ -290,5 +317,6 @@ export function createScene(canvas, opts = {}) {
   return {
     THREE, renderer, scene, camera, controls, uniforms, dots, CAP, coarse,
     resize, setOffset, setBand, setFibres, setRotation, setDisc, setDot, render,
+    budget: () => view.budget,
   };
 }
