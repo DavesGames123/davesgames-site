@@ -160,6 +160,39 @@
     vertexColors: true, side: THREE.DoubleSide, shininess: 40, specular: 0x3a3a3a,
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   });
+  // Per-pixel contour and nodal lines (saver styles). The vertex colours
+  // sample the 96 grid, so lines drawn into them were never sharper than a
+  // grid cell, and they broke into dots on the drum. Now each vertex also
+  // carries v = u / running max (aVal); the fragment shader draws the lines
+  // from the interpolated v with fwidth, so a line has a constant width in
+  // screen pixels at any zoom and is antialiased. uLineMode 0 is off (the
+  // page view), 1 contour bands, 2 nodal lines.
+  const lineU = {
+    uLineMode: { value: 0 }, uBands: { value: 10 }, uLinePx: { value: 1.6 },
+    uNodePx: { value: 2.4 }, uNodeCol: { value: new THREE.Color(1, 1, 0.75) },
+  };
+  memMat.extensions = { derivatives: true };
+  memMat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, lineU);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aVal;\nvarying float vVal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vVal = aVal;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vVal;\nuniform float uLineMode, uBands, uLinePx, uNodePx;\nuniform vec3 uNodeCol;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  if (uLineMode > 0.5 && uLineMode < 1.5) {
+    // band edges of (0.5 + 0.5 v) * uBands: dark lines uLinePx wide
+    float b = (0.5 + 0.5 * vVal) * uBands, fb = fract(b), d = min(fb, 1.0 - fb);
+    float w = max(fwidth(b), 1e-5);
+    float k = smoothstep(0.5 * uLinePx - 0.5, 0.5 * uLinePx + 0.5, d / w);
+    diffuseColor.rgb *= mix(0.3, 1.0, k);
+  } else if (uLineMode > 1.5) {
+    // the zero set of u: the nodal lines, uNodePx wide
+    float w = max(fwidth(vVal), 1e-6);
+    float t = 1.0 - smoothstep(0.5 * uNodePx - 0.5, 0.5 * uNodePx + 0.5, abs(vVal) / w);
+    diffuseColor.rgb = mix(diffuseColor.rgb, uNodeCol, t);
+  }`);
+  };
   const membrane = new THREE.Mesh(new THREE.BufferGeometry(), memMat);
   scene.add(membrane);
   // Saver only: a wire overlay that shares the membrane geometry, and a
@@ -236,10 +269,10 @@
   // vertex outside the disk on the rim. Those nodes are fixed at u = 0, so
   // the move is only visual. It gives a round edge with no gaps, in place of
   // a staircase.
-  let POS = null, COL = null;
+  let POS = null, COL = null, VAL = null;
   function buildMesh() {
     const N = GRID, h = 1 / (N - 1), circ = G.shape === 'circle';
-    const pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3);
+    const pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3), val = new Float32Array(N * N);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
         let x = i * h, y = j * h;
@@ -265,10 +298,11 @@
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aVal', new THREE.BufferAttribute(val, 1));
     geo.setIndex(idx);
     membrane.geometry.dispose();
     membrane.geometry = geo;
-    POS = geo.attributes.position; COL = geo.attributes.color;
+    POS = geo.attributes.position; COL = geo.attributes.color; VAL = geo.attributes.aVal;
 
     if (rim) { scene.remove(rim); rim.geometry.dispose(); }
     const rp = [];
@@ -300,16 +334,17 @@
     for (let k = 0; k < n; k++) if (mask[k]) { const a = Math.abs(f[k]); if (a > fmax) fmax = a; }
     runMax = Math.max(fmax, runMax * 0.998, 1e-9);
     const inv = 1 / runMax;
-    const sv = saverOn ? saverScene : null;
+    const sv = saverOn ? saverScene : null, val = VAL.array;
     for (let k = 0; k < n; k++) {
       const v = f[k] * inv;
+      val[k] = v;
       if (sv) saverColor(sv, v);
       else if (G.color === 'accmag') ramp(MAGMA, Math.abs(v), _c);
       else if (G.color === 'accsgn') ramp(DIVERGE, 0.5 + 0.5 * v, _c);
       else ramp(HEIGHTR, 0.5 + 0.5 * v, _c);
       col[k * 3] = _c[0]; col[k * 3 + 1] = _c[1]; col[k * 3 + 2] = _c[2];
     }
-    COL.needsUpdate = true;
+    COL.needsUpdate = true; VAL.needsUpdate = true;
   }
 
   // --------------------------------------------------------------- legend
@@ -666,17 +701,8 @@
   function saverColor(sv, v) {
     ramp(sv.look.ramp, 0.5 + 0.5 * v, _c);
     _c[0] *= SAVER_EXPOSURE; _c[1] *= SAVER_EXPOSURE; _c[2] *= SAVER_EXPOSURE;
-    if (sv.style === 'contour') {
-      // 6 bands with a line 0.36 of a band wide, centred on each band edge.
-      // The vertex colours sample a 96 grid, so a thinner line breaks into
-      // dots where the slope is steep. The line darkens to 0.3 at its centre.
-      const b = (0.5 + 0.5 * v) * 6, f = b - Math.floor(b), d = Math.min(f, 1 - f);
-      if (d < 0.18) { const k = 0.3 + 0.7 * d / 0.18; _c[0] *= k; _c[1] *= k; _c[2] *= k; }
-    } else if (sv.style === 'nodal') {
-      // the zero set of u: the nodal lines of the sum, which move as it beats
-      const a = Math.abs(v);
-      if (a < 0.07) { const t = 1 - a / 0.07, nc = sv.look.node; _c[0] += (nc[0] - _c[0]) * t; _c[1] += (nc[1] - _c[1]) * t; _c[2] += (nc[2] - _c[2]) * t; }
-    }
+    // The contour and nodal lines are drawn per pixel in memMat (lineU),
+    // not into these vertex colours.
   }
   function pickScene(rnd, prev, calm) {
     const pick = a => a[Math.floor(rnd() * a.length)];
@@ -719,6 +745,8 @@
     renderer.setClearColor(L.bg, 1);
     rimMat.color.setHex(L.rim); nodalMat.color.setRGB(L.node[0], L.node[1], L.node[2]);
     wireMat.color.setHex(L.wire); wire.visible = sc.style === 'wire';
+    lineU.uLineMode.value = sc.style === 'contour' ? 1 : sc.style === 'nodal' ? 2 : 0;
+    lineU.uNodeCol.value.setRGB(L.node[0], L.node[1], L.node[2]);
     // the grid keeps its own vertex colours on the page; the saver tints it
     floor.visible = sc.floor; floor.material.vertexColors = false; floor.material.color.setHex(L.floor); floor.material.needsUpdate = true;
     amb.intensity = R.amb;
@@ -826,7 +854,7 @@
     exit() {
       band = null;
       saverLabel = null; saverOn = false; saverScene = null; clearInterval(saverTimer); saverTimer = 0;
-      fadePlane.visible = false; wire.visible = false; heightK = 1;
+      fadePlane.visible = false; wire.visible = false; heightK = 1; lineU.uLineMode.value = 0;
     },
     enter(o) {
       import('../../lib/saver-clear.js').then(m => { plateBandFn = m.plateBand; }).catch(() => { /* no band: the frame centre */ });
