@@ -67,14 +67,22 @@ const VDW = { H: 1.20, He: 1.40, Li: 1.82, Be: 1.53, B: 1.92, C: 1.70, N: 1.55, 
   Si: 2.10, P: 1.80, S: 1.80, Cl: 1.75, Ar: 1.88, K: 2.75, Ca: 2.31, Se: 1.90, Br: 1.85, Kr: 2.02, I: 1.98, Xe: 2.16, As: 1.85,
   Fe: 2.04, Co: 2.00, Ni: 1.97, Cu: 1.96, Zn: 2.01, Pt: 2.13, Pd: 2.10, Hg: 2.23, Pb: 2.02, Sn: 2.17, Cr: 2.06, Ti: 2.11, Ru: 2.13 };
 
-// Standard atomic weights (IUPAC conventional values, as PubChem prints
-// molar masses); molarMass() uses them for any model.
-const WEIGHT = { H: 1.008, He: 4.0026, Li: 6.94, Be: 9.0122, B: 10.81, C: 12.011, N: 14.007, O: 15.999, F: 18.998, Ne: 20.18, Na: 22.99,
-  Mg: 24.305, Al: 26.982, Si: 28.085, P: 30.974, S: 32.07, Cl: 35.45, Ar: 39.95, K: 39.098, Ca: 40.078, Ti: 47.867, V: 50.942, Cr: 51.996,
-  Mn: 54.938, Fe: 55.845, Co: 58.933, Ni: 58.693, Cu: 63.546, Zn: 65.38, Ga: 69.723, Ge: 72.63, As: 74.922, Se: 78.97, Br: 79.904, Kr: 83.798,
-  Rb: 85.468, Sr: 87.62, Zr: 91.224, Mo: 95.95, Ru: 101.07, Rh: 102.91, Pd: 106.42, Ag: 107.87, Cd: 112.41, Sn: 118.71, Sb: 121.76, Te: 127.6,
-  I: 126.9, Xe: 131.29, Cs: 132.91, Ba: 137.33, Gd: 157.25, W: 183.84, Os: 190.23, Ir: 192.22, Pt: 195.08, Au: 196.97, Hg: 200.59, Tl: 204.38,
-  Pb: 207.2, Bi: 208.98, Rn: 222.018, U: 238.03 };
+// Standard atomic weights at full precision, as PubChem uses them. For an
+// element that IUPAC changed to an interval in 2009-2011 (H, Li, B, C, N,
+// O, Si, S, Cl, Tl), PubChem keeps the last single value, from the 2007
+// table (Wieser and Berglund 2009). For Se (78.971) and Mo (95.95) it uses
+// the IUPAC 2013 value: the Se8 and Mo(CO)6 records need them. With this
+// table, the sum for each of the 749 PubChem records of the build cache
+// with a 2-decimal mass and no isotope label is within 0.0093 g/mol of
+// PubChem. The 5-figure conventional values (C 12.011, H 1.008, S 32.07,
+// I 126.9) gave differences up to 0.014. molarMass() uses this table.
+const WEIGHT = { H: 1.00794, He: 4.002602, Li: 6.941, Be: 9.012182, B: 10.811, C: 12.0107, N: 14.0067, O: 15.9994, F: 18.9984032,
+  Ne: 20.1797, Na: 22.98976928, Mg: 24.305, Al: 26.9815386, Si: 28.0855, P: 30.973762, S: 32.065, Cl: 35.453, Ar: 39.948, K: 39.0983,
+  Ca: 40.078, Ti: 47.867, V: 50.9415, Cr: 51.9961, Mn: 54.938045, Fe: 55.845, Co: 58.933195, Ni: 58.6934, Cu: 63.546, Zn: 65.38,
+  Ga: 69.723, Ge: 72.63, As: 74.9216, Se: 78.971, Br: 79.904, Kr: 83.798, Rb: 85.4678, Sr: 87.62, Zr: 91.224, Mo: 95.95, Ru: 101.07,
+  Rh: 102.9055, Pd: 106.42, Ag: 107.8682, Cd: 112.411, Sn: 118.71, Sb: 121.76, Te: 127.6, I: 126.90447, Xe: 131.293, Cs: 132.9054519,
+  Ba: 137.327, Gd: 157.25, W: 183.84, Os: 190.23, Ir: 192.217, Pt: 195.084, Au: 196.966569, Hg: 200.59, Tl: 204.3833, Pb: 207.2,
+  Bi: 208.9804, Rn: 222.018, U: 238.02891 };
 export const ELEMENTS = SYMS.map((s, i) => ({ z: i + 1, sym: s, color: COLOR[s] || '#ff1493', cov: COV[s] || 1.5, vdw: VDW[s] || 2.0 }));
 export const Z = Object.fromEntries(SYMS.map((s, i) => [s, i + 1]));
 export const el = z => ELEMENTS[z - 1] || { z, sym: '?', color: '#ff1493', cov: 1.5, vdw: 2.0 };

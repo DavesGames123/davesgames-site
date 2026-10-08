@@ -96,6 +96,27 @@ const hill = f => { const c = {}; for (const [, s, n] of strip(f).matchAll(/([A-
   ok(!badEZ.length, '2D double-bond geometry gives the PubChem E/Z stereo', `${nEZ - badEZ.length}/${nEZ}${badEZ.length ? ' differ: ' + badEZ.slice(0, 10).join(', ') : ''}`);
 }
 
+// ── molar mass of known molecules (the weight table, not the library) ──────
+// PubChem's printed molar masses for the eight records that failed the
+// 0.01 g/mol check with the 5-figure weights (I 126.9, S 32.07, C 12.011).
+{
+  const cases = [
+    ['thyroxine', 'C1=C(C=C(C(=C1I)OC2=CC(=C(C(=C2)I)O)I)I)C[C@@H](C(=O)O)N', 776.87],
+    ['tramadol', 'CN(C)C[C@H]1CCCC[C@@]1(C2=CC(=CC=C2)OC)O', 263.37],
+    ['albendazole', 'CCCSC1=CC2=C(C=C1)N=C(N2)NC(=O)OC', 265.33],
+    ['atomoxetine', 'CC1=CC=CC=C1O[C@H](CCNC)C2=CC=CC=C2', 255.35],
+    ['diphenhydramine', 'CN(C)CCOC(C1=CC=CC=C1)C2=CC=CC=C2', 255.35],
+    ['cicutoxin', 'CCC[C@H](/C=C/C=C/C=C/C#CC#CCCCO)O', 258.35],
+    ['dapi', 'C1=CC(=CC=C1C2=CC3=C(N2)C=C(C=C3)C(=N)N)C(=N)N', 277.32],
+    ['s-adenosylhomocysteine', 'C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)CSCC[C@@H](C(=O)O)N)O)O)N', 384.41],
+  ];
+  for (const [id, smi, w] of cases) {
+    const M = decode(recordFrom(OCL, OCL.Molecule.fromSmiles(smi), { meta: { n: id, s: smi }, keepInput: true }));
+    const m = molarMass(M);
+    ok(Math.abs(m - w) <= 0.01, `molar mass ${id} = PubChem ${w} within 0.01`, m.toFixed(4));
+  }
+}
+
 // ── 3D ──────────────────────────────────────────────────────────────────────
 {
   const no3 = [], badLen = [];
