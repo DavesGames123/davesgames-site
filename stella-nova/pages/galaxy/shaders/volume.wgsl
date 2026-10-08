@@ -7,8 +7,8 @@
 //       C += T j (1 - e^(-sigma dt)) / sigma,   T *= e^(-sigma dt)
 //   sigma = kappa * REDDEN, so dust dims blue light more than red. The step
 //   is short near the disk plane and near the centre, and long elsewhere;
-//   the count is bounded by U.off.w. A fixed per-pixel offset (interleaved
-//   gradient noise) breaks up the banding of the steps.
+//   the count is bounded by U.off.w. A fixed per-pixel offset (an integer
+//   hash) breaks up the banding of the steps.
 //
 //   Density terms (sampleGal):
 //     halo          (1 + r/r_h)^-3.5
@@ -177,7 +177,11 @@ struct VOut { @builtin(position) pos: vec4f }
   let dtMin = seg / (f32(nsteps) * 8.0);
   let dtMax = seg * 2.5 / f32(nsteps);
   let pxAng = 2.0 * U.up.w / U.res.w;
-  let jit = fract(52.9829189 * fract(dot(fc.xy, vec2f(0.06711056, 0.00583715))));
+  // per-pixel start offset: a static integer hash (white noise). The
+  // interleaved-gradient pattern showed as a grid at long steps.
+  var hq = vec2u(fc.xy) * vec2u(1664525u, 1013904223u);
+  hq = hq ^ (hq.yx >> vec2u(13u));
+  let jit = f32((hq.x * 747796405u + hq.y) >> 8u) / 16777216.0;
 
   var T = vec3f(1.0);
   var col = vec3f(0.0);
