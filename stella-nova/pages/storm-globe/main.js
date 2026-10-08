@@ -26,6 +26,7 @@
 //    framing .......... "function occlusion"
 //    input ............ "function bindPointer"
 //    live refresh ..... "async function liveRefresh"
+//    particle speed ... "WIND_VIS"
 //    debug API ........ "window.__stormGlobe"
 // ============================================================================
 import { loadSnapshot, fetchLiveStorms, fetchLiveEvents, fetchLiveWinds, snapshotAgeH, STALE_H } from './data.js';
@@ -44,6 +45,11 @@ const PHONE_Q = matchMedia('(max-width:760px), (max-height:520px) and (pointer:c
 const LITE = PHONE_Q.matches || (navigator.hardwareConcurrency || 8) <= 4;
 const SPEEDS = [1, 3, 6, 12];          // model hours per second
 const HOLD_S = 7;                      // tour: seconds on each stop
+// WIND_VIS: the particle streak speed on screen, as a share of the old
+// look (2600 model s per frame at 60 fps); 2/3 keeps the flow calm. The
+// solver and the data are not scaled. P_H (render.js) grew from 8 to 11
+// positions, so the streaks keep their old length at the lower speed.
+const WIND_VIS = 2 / 3;
 
 const ST = {
   t: 0, t0: 0, t1: 0, dataTime: 0, playing: false, speed: 3,
@@ -463,7 +469,9 @@ function frame(now) {
     tracks: ST.layers.tracks, markers: true,
   }, {
     on: ST.layers.particles, colour: ST.layers.magmaParticles, cap: [...T, Math.cos(capR)],
-    secPerFrame: 2600 * Math.max(0.06, Math.min(3, ST.cam.alt)), life: 80, alpha: 0.32,
+    // WIND_VIS, per second (not per frame), so a 120 Hz screen streams
+    // at the same speed as a 60 Hz one
+    secPerFrame: 2600 * WIND_VIS * Math.max(0.06, Math.min(3, ST.cam.alt)) * Math.max(0.5, Math.min(2, dt * 60)), life: 80, alpha: 0.32,
   }, enc);
   stats.ms = stats.ms * 0.95 + (performance.now() - t0) * 0.05;
   placeLabels(b);

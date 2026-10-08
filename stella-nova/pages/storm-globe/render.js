@@ -22,8 +22,9 @@
 // ============================================================================
 import { lutBytes } from './colour.js';
 
-// PARTICLES: the buffer size and the trail length (positions per particle)
-export const P_MAX = 26000, P_MAX_LITE = 11000, P_H = 8;
+// PARTICLES: the buffer size and the trail length (positions per particle;
+// 11 since the streaks move at 2/3 of the old speed, main.js WIND_VIS)
+export const P_MAX = 26000, P_MAX_LITE = 11000, P_H = 11;
 
 async function shader(device, name) {
   const r = await fetch(new URL('shaders/' + name, import.meta.url));
