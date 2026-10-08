@@ -29,6 +29,8 @@
 //       subunit nets with one node per unit and no lonely nodes
 //   17  views on the GPU: data bytes of every view of every entry, and
 //       the draw counts on a phone and a desktop profile
+//   18  phone layout: 44 px targets, the dock fits at 360 px and in the
+//       landscape tab, selects cannot widen the sheet
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -524,6 +526,29 @@ section('17 views on the GPU (phone and desktop)');
   }
   ok(B.tubeMesh(true).rings * B.tubeMesh(true).sides < B.tubeMesh(false).rings * B.tubeMesh(false).sides, 'phone tube mesh is lighter than the desktop one');
   ok(B.REPS.length === 7 && new Set(B.REPS).size === 7, 'seven views');
+}
+
+// ── 18 phone layout ──────────────────────────────────────────────────────
+section('18 phone layout (style.css and index.html)');
+{
+  const css = readFileSync(join(HERE, 'style.css'), 'utf8'), html = readFileSync(join(HERE, 'index.html'), 'utf8');
+  const block = q => { const i = css.indexOf(q); if (i < 0) return ''; let d = 0, j = css.indexOf('{', i); const s0 = j; for (; j < css.length; j++) { if (css[j] === '{') d++; else if (css[j] === '}' && --d === 0) break; } return css.slice(s0, j); };
+  const touch = block('@media (pointer:coarse), (max-width:768px)');
+  ok(/\.seg button,\.btns button\{min-height:44px/.test(touch) && /\.chips button\{min-height:44px/.test(touch) && /\.prm select\{min-height:44px/.test(touch), 'touch block: view buttons, chips and selects are 44 px or more');
+  const narrow = block('@media (max-width:400px), (max-height:500px) and (orientation:landscape) and (pointer:coarse)');
+  const px = re => +(re.exec(narrow) || [])[1];
+  const btn = px(/#dock > button\{flex-basis:(\d+)px/), rep = px(/#dock > button\.rep\{flex-basis:(\d+)px/), gap = px(/#dock\{gap:(\d+)px/);
+  const nBtn = (html.match(/<nav id="dock"[\s\S]*?<\/nav>/)[0].match(/<button /g) || []).length;
+  ok(nBtn === 6, 'the dock has 6 buttons (' + nBtn + ')');
+  for (const [w, label] of [[360, '360 px portrait'], [Math.min(440, 0.56 * 640), 'landscape tab at 640 x 360'], [Math.min(440, 0.56 * 740), 'landscape tab at 740 x 360']]) {
+    const name = w - 20 - (nBtn - 2) * btn - rep - (nBtn - 1) * gap;
+    console.log('  ' + label + ': dock name ' + name.toFixed(0) + ' px, buttons ' + btn + ' px');
+    ok(name >= 80 && btn >= 44, label + ': dock name gets ' + name.toFixed(0) + ' px, buttons ' + btn + ' px');
+  }
+  ok(/\.prm select\{[^}]*max-width:min\(62vw/.test(css), 'selects are capped, so a long option cannot widen the sheet');
+  ok(/#view\{[^}]*touch-action:none/.test(css), 'the canvas takes every touch (pinch, drag, tap)');
+  ok(/html\{overflow-x:hidden\}/.test(css) && !/body\{[^}]*overflow-x/.test(css), 'overflow-x on html only (sticky bars keep working)');
+  ok(/id="repSeg"/.test(html) && /id="dockRep"/.test(html) && /id="palSel"/.test(html), 'view row, dock view button and palette select are in the page');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

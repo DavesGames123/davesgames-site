@@ -125,7 +125,7 @@ html.in-frame #panel{padding-top:20px}
 .prm .nm{font-size:0.82rem;color:var(--ink)}
 .prm .val{font:0.74rem var(--sci-mono);color:var(--ink);text-align:right}
 .prm input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--acc);height:3px;margin-top:4px}
-.prm select{background:var(--bg2);color:var(--ink);border:1px solid var(--line-b);border-radius:7px;padding:6px 8px;font-size:0.78rem}
+.prm select{background:var(--bg2);color:var(--ink);border:1px solid var(--line-b);border-radius:7px;padding:6px 8px;font-size:0.78rem;min-width:0;max-width:min(62vw,230px);text-overflow:ellipsis}
 .about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
 .about i{font-family:var(--sci-serif);font-size:0.92rem}
 
