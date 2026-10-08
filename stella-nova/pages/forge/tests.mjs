@@ -5,6 +5,12 @@
 //  Each check prints one line. The process exits 1 if a check fails.
 // ============================================================================
 import * as N from './noise.js';
+import * as PR from './presets.js';
+import { craterList } from './rocky.js';
+import { prepareGas, bandProfile, windProfile } from './gas.js';
+import * as MP from './maps.js';
+import { encodePNG, decodePNGRaw } from './png.js';
+import * as BG from './budget.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { console.log(`${cond ? 'ok  ' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); if (!cond) fails++; };
@@ -46,7 +52,105 @@ const ok = (name, cond, extra = '') => { console.log(`${cond ? 'ok  ' : 'FAIL'} 
   ok('texelDir: row 0 is near the north pole', N.texelDir(5, 0, W, H)[1] > 0.99);
 }
 
-// @@MORE@@
+// generators: every preset at 128 x 64, finite values, ranges in [0, 1]
+const W = 128, H = 64, made = {};
+for (const pr of PR.PRESETS) {
+  const P = PR.fromPreset(pr.id), M = MP.generate(P, W);
+  made[pr.id] = { P, M };
+  let bad = 0;
+  for (let i = 0; i < W * H; i++) if (!(M.height[i] >= 0 && M.height[i] <= 1)) bad++;
+  ok(`${pr.id}: height in [0, 1], roughness/metallic/specular bytes`, bad === 0 && M.mat.length === W * H * 4 && M.ao.length === W * H);
+}
+{
+  // roughness, metallic, specular in [0, 1] after decoding; metallic stays 0
+  let rmin = 1, rmax = 0, metal = 0;
+  for (const { M } of Object.values(made)) for (let i = 0; i < W * H; i++) { const r = M.mat[i * 4] / 255; rmin = Math.min(rmin, r); rmax = Math.max(rmax, r); metal = Math.max(metal, M.mat[i * 4 + 1]); }
+  ok('materials: roughness in [0, 1], metallic 0', rmin >= 0 && rmax <= 1 && metal === 0, `roughness ${rmin.toFixed(2)}..${rmax.toFixed(2)}`);
+}
+// seams: the first and last columns are neighbours, so they differ like any
+// two neighbouring columns (not like a cut)
+for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
+  const { M } = made[id];
+  let seam = 0, inner = 0;
+  for (let y = 0; y < H; y++) { seam += Math.abs(M.height[y * W] - M.height[y * W + W - 1]); inner += Math.abs(M.height[y * W + 40] - M.height[y * W + 41]); }
+  ok(`${id}: no seam at the date line`, seam <= inner * 1.6 + 1e-3, `seam ${(seam / H).toFixed(4)} vs inner ${(inner / H).toFixed(4)}`);
+}
+// normals: unit length, and they lean down the height gradient
+{
+  // a strong bump so 128 px texels (300 km) still tilt the normals
+  const P = PR.merge(made.earth.P, { bump: 40 }), M = MP.generate(P, W);
+  let worst = 0, agree = 0, tested = 0;
+  for (let y = 4; y < H - 4; y++) for (let x = 0; x < W; x++) {
+    const j = (y * W + x) * 4, nx = M.normal[j] / 127.5 - 1, ny = M.normal[j + 1] / 127.5 - 1, nz = M.normal[j + 2] / 127.5 - 1;
+    worst = Math.max(worst, Math.abs(Math.hypot(nx, ny, nz) - 1));
+    const dx = M.height[y * W + (x + 1) % W] - M.height[y * W + (x + W - 1) % W];
+    if (Math.abs(dx) > 0.01 && Math.abs(nx) > 0.02) { tested++; if (Math.sign(nx) === -Math.sign(dx)) agree++; }
+  }
+  ok('normals: unit length (8-bit)', worst < 0.02, `max | |n| - 1 | ${worst.toFixed(4)}`);
+  ok('normals: x leans against the east height slope', tested > 50 && agree / tested > 0.98, `${agree}/${tested}`);
+}
+// craters: power law N(>r) ~ r^-alpha
+{
+  const P = PR.fromPreset('moon'), rs = craterList(P).sort((a, b) => b - a);
+  const lo = Math.log(P.craters.rMin * 1.5), hi = Math.log(P.craters.rMax * 0.3);
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0;
+  for (let k = 0; k < 12; k++) {
+    const r = Math.exp(lo + (hi - lo) * k / 11), c = rs.filter(v => v > r).length;
+    const x = Math.log(r), yy = Math.log(c); sx += x; sy += yy; sxx += x * x; sxy += x * yy; n++;
+  }
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  ok('craters: cumulative size distribution follows the power law', Math.abs(-slope - P.craters.slope) < 0.25, `fit alpha ${(-slope).toFixed(2)} vs ${P.craters.slope} over ${rs.length} craters`);
+  ok('craters: radii inside [rMin, rMax]', rs[0] <= P.craters.rMax && rs[rs.length - 1] >= P.craters.rMin * 0.95);
+}
+// gas giants: symmetric bands and winds when asked
+{
+  const P = PR.fromPreset('jupiter'); P.turbulence.amount = 0; P.storms = { spot: 0, spotLat: 0, spotLon: 0, spotSize: 0.1, ovals: 0, ovalLat: 0, small: 0, polar: 0 };
+  P.bands.symmetric = 1;
+  const ctx = prepareGas(P);
+  let worst = 0, wworst = 0;
+  for (let i = 0; i <= 90; i++) { const l = i / 90 * 1.5; worst = Math.max(worst, Math.abs(bandProfile(ctx, l) - bandProfile(ctx, -l))); wworst = Math.max(wworst, Math.abs(windProfile(ctx, l) - windProfile(ctx, -l))); }
+  ok('gas: band profile mirror-symmetric', worst < 1e-9, `max diff ${worst.toExponential(1)}`);
+  ok('gas: wind profile mirror-symmetric', wworst < 1e-9, `max diff ${wworst.toExponential(1)}`);
+  ok('gas: edges mirror', ctx.edges.every((e, i) => Math.abs(e + ctx.edges[ctx.edges.length - 1 - i]) < 1e-12));
+  const M = MP.generate(P, W);
+  let rows = 0;
+  for (let y = 0; y < H / 2; y++) for (let x = 0; x < W; x++) rows = Math.max(rows, Math.abs(M.albedo[(y * W + x) * 4] - M.albedo[((H - 1 - y) * W + x) * 4]));
+  ok('gas: albedo rows mirror north/south (no turbulence, no storms)', rows <= 1, `max byte diff ${rows}`);
+  const P2 = PR.merge(P, { bands: { symmetric: 0 } }), c2 = prepareGas(PR.normalize(P2));
+  ok('gas: asymmetric bands when not asked', c2.edges.some((e, i) => Math.abs(e + c2.edges[c2.edges.length - 1 - i]) > 1e-3));
+}
+// JSON round trip reproduces identical maps
+{
+  const P = PR.fromPreset('earth', 77), h1 = MP.hashMaps(MP.generate(P, 64));
+  const back = PR.fromJSON(PR.toJSON(P, 64)), h2 = MP.hashMaps(MP.generate(back.planet, back.width));
+  ok('json: round trip gives the same map hash', h1 === h2, h1 + ' = ' + h2);
+  const h3 = MP.hashMaps(MP.generate(PR.fromPreset('earth', 78), 64));
+  ok('json: another seed gives another hash', h3 !== h1);
+  // workers split rows: stripes give the same maps as one pass
+  const ctx = MP.prepare(P), parts = [MP.sampleRows(ctx, 64, 16, 32), MP.sampleRows(MP.prepare(P), 64, 0, 16)];
+  const M = MP.finish(MP.assemble(64, parts), P, ctx);
+  ok('stripes: split rows hash the same as one pass', MP.hashMaps(M) === h1);
+}
+// PNG export: every map encodes and decodes to the same pixels
+{
+  const { M, P } = made.saturn;
+  let good = 0, ids = MP.mapIds(P);
+  for (const id of ids) {
+    const img = MP.mapImage(M, P, id), back = await decodePNGRaw(await encodePNG(img));
+    if (back.width === img.width && back.depth === img.depth && back.channels === img.channels && back.data.every((v, i) => v === img.data[i])) good++;
+  }
+  ok('png: every map round-trips through the encoder', good === ids.length, `${good}/${ids.length} (${ids.join(' ')})`);
+  ok('png: rocky worlds have no flow or rings map', !MP.mapIds(made.earth.P).includes('flow') && !MP.mapIds(made.earth.P).includes('rings'));
+}
+// memory guard
+{
+  ok('budget: 4k fits a desktop with unknown memory', BG.pickWidth(4096, {}) === 4096);
+  ok('budget: a phone gets at most 2k', BG.pickWidth(4096, { mobile: true }) <= 2048 && BG.mapBytes(BG.pickWidth(4096, { mobile: true })) <= BG.cpuBudget({ mobile: true }));
+  ok('budget: 4 GB desktop drops to 2k', BG.pickWidth(4096, { deviceMemory: 4 }) === 2048);
+  ok('budget: GPU textures stay under 60 MB on a phone', BG.gpuBytes(BG.gpuWidth(4096, { mobile: true })) < 60e6);
+  const v = BG.viewBudget(1920, 1080, 2), ph = BG.viewBudget(430, 932, 3, { mobile: true });
+  ok('budget: view px capped (desktop DPR 2, phone DPR 3)', v.px <= BG.MAX_PX * 1.01 && ph.px <= BG.PHONE_PX * 1.01 && ph.pr <= 1.5, `${v.w}x${v.h}, ${ph.w}x${ph.h}`);
+}
 
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);
