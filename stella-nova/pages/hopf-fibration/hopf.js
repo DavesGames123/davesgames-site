@@ -42,7 +42,7 @@
 //    hopf, fibrePoint, seifertPoint, stereo, project, fibreCurve,
 //    baseFromAngles
 //    qmul, qconj, leftMat, rightMat, planeMat, matMul, matVec, ident,
-//    rotationFor, MODES, baseColor, toSRGB, hexOf,
+//    rotationFor, MODES, baseColor, PALETTES, paletteColor, toSRGB, hexOf,
 //    sampleItems, PRESETS, PRESET_GROUPS, makeRng, fibonacciSphere,
 //    loopPoint, polyhedron, torusArea,
 //    ident3, mat3Mul, mat3Vec, mat3T, axisAngle3, orthonormal3, nlerp3
@@ -214,18 +214,12 @@ export function nlerp3(a, b, u) {
 // The colour of a base point: hue from the longitude, lightness from the
 // height Z (dark south, light north), in OKLCH. The chroma falls to zero at
 // the poles, where the longitude has no value, so the map is continuous.
+// fitLCh keeps it continuous at the edge of the sRGB gamut too.
 // Returns linear-light RGB in 0..1.
 export function baseColor(b) {
   const z = Math.max(-1, Math.min(1, b[2])), r = Math.hypot(b[0], b[1]);
   const L = 0.52 + 0.36 * (z + 1) / 2;
-  let C = 0.16 * Math.min(1, 1.7 * r);
-  const h = Math.atan2(b[1], b[0]);
-  for (let k = 0; k < 24; k++) {
-    const rgb = oklchLinear(L, C, h);
-    if (rgb.every(v => v >= -1e-4 && v <= 1.0001)) return rgb.map(v => Math.max(0, Math.min(1, v)));
-    C *= 0.88;
-  }
-  return oklchLinear(L, 0, h).map(v => Math.max(0, Math.min(1, v)));
+  return fitLCh(L, 0.16 * Math.min(1, 1.7 * r), Math.atan2(b[1], b[0]));
 }
 function oklchLinear(L, C, h) {
   const a = C * Math.cos(h), b = C * Math.sin(h);
@@ -237,6 +231,42 @@ function oklchLinear(L, C, h) {
     -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
     -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
   ];
+}
+// OKLCH to linear RGB. When the colour is out of the sRGB gamut, the
+// chroma falls to the largest value that fits (by bisection), so the
+// colour changes continuously with L, C and h.
+const inGamut = rgb => rgb.every(v => v >= -1e-6 && v <= 1.000001);
+function fitLCh(L, C, h) {
+  let rgb = oklchLinear(L, C, h);
+  if (!inGamut(rgb)) {
+    let lo = 0, hi = C;
+    for (let k = 0; k < 22; k++) { const m = (lo + hi) / 2; if (inGamut(oklchLinear(L, m, h))) lo = m; else hi = m; }
+    rgb = oklchLinear(L, lo, h);
+  }
+  return rgb.map(v => Math.max(0, Math.min(1, v)));
+}
+// The palettes of the page. Each colours a base point b. 'spectrum' is
+// baseColor. The others map the longitude to a hue span by
+// u = (1 + cos(ph - ph0)) / 2, so the colour is continuous all around,
+// and the height to the lightness. The chroma falls to zero at the poles.
+//   bg: the top and base of the background gradient, fog: its fog colour,
+//   irid: iridescence of the tubes, bloom: the bloom strength.
+const deg = Math.PI / 180;
+export const PALETTES = [
+  { id: 'spectrum', name: 'Spectrum', bg: ['#0b0e18', '#030407'], fog: '#06070b', irid: 0.3, bloom: 0.36 },
+  { id: 'aurora', name: 'Aurora', h: [150, 300], L: [0.5, 0.9], C: 0.16, bg: ['#06161a', '#020509'], fog: '#040b0e', irid: 0.45, bloom: 0.44 },
+  { id: 'ember', name: 'Ember', h: [18, 88], L: [0.46, 0.92], C: 0.17, bg: ['#1a0c08', '#050203'], fog: '#0b0505', irid: 0.25, bloom: 0.46 },
+  { id: 'ice', name: 'Ice', h: [195, 265], L: [0.56, 0.96], C: 0.1, bg: ['#0a1422', '#03050a'], fog: '#060a12', irid: 0.6, bloom: 0.4 },
+  { id: 'orchid', name: 'Orchid', h: [290, 400], L: [0.52, 0.92], C: 0.15, bg: ['#150a1a', '#040306'], fog: '#09050c', irid: 0.5, bloom: 0.42 },
+  { id: 'pearl', name: 'Pearl', h: [200, 320], L: [0.62, 0.97], C: 0.035, bg: ['#11131a', '#040406'], fog: '#08090c', irid: 1.0, bloom: 0.3 },
+];
+export function paletteColor(b, id = 'spectrum') {
+  const P = PALETTES.find(p => p.id === id);
+  if (!P || !P.h) return baseColor(b);
+  const z = Math.max(-1, Math.min(1, b[2])), r = Math.hypot(b[0], b[1]);
+  const u = (1 + Math.cos(Math.atan2(b[1], b[0]) - 0.6)) / 2;
+  const h = (P.h[0] + (P.h[1] - P.h[0]) * u) * deg;
+  return fitLCh(P.L[0] + (P.L[1] - P.L[0]) * (z + 1) / 2, P.C * Math.min(1, 1.7 * r), h);
 }
 // Linear 0..1 to sRGB 0..255.
 export function toSRGB(rgb) {

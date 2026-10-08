@@ -1,10 +1,14 @@
 // ============================================================================
 //  HOPF FIBRATION  ·  main.js — state, controls, picking, framing, the loop
 // ----------------------------------------------------------------------------
+//  LOOK  G.palette picks one of H.PALETTES: the fibre colours (colorOf),
+//  the background gradient, fog, iridescence and bloom (S.setLook), and
+//  the colour key of the base sphere. G.taper thins tubes toward infinity.
+//
 //  STATE  G holds what the user set. G.items are the things on the base
 //  sphere (points, latitudes, great circles, painted curves, clouds; see
 //  sampleItems in hopf.js). rebuild() turns the items into fibres (one base
-//  point each, coloured by baseColor) and writes them to the instanced
+//  point each, coloured by colorOf) and writes them to the instanced
 //  mesh. A rebuild costs one pass over at most a few thousand fibres, so a
 //  drag on the base sphere or a latitude sweep can rebuild each frame.
 //
@@ -51,13 +55,14 @@
 //    grep -n 'function updateLink'     discs, pierce points, Gauss integral
 //    grep -n 'function occlusion'      the overlay margins for the framing
 //    grep -n 'function fitDistance'    camera distance for the clear part
+//    grep -n 'function applyLook'      the palette
 //    grep -n 'function frame'          the frame loop
 //    grep -n 'function buildUI'        the controls
 //    grep -n 'const app'               the api that saver.js drives
 // ============================================================================
 import * as H from './hopf.js';
 import { createScene } from './scene.js';
-import { createBaseSphere, createGauge } from './insets.js';
+import { createBaseSphere, createGauge, setInsetColors } from './insets.js';
 import { typesetPage, typesetRotation, typesetLive } from './equations.js';
 import { installSaver } from './saver.js';
 
@@ -73,7 +78,10 @@ const G = {
   sel: [], trace: null, thin: false, custom: false,
   pq: [1, 1],             // weights of the circle action; [1, 1] is the Hopf fibration
   flow: 'spin', flowRate: 0.16, breathe: true, pulse: true,
+  palette: 'spectrum', taper: true,
 };
+// The colour of a base point in the palette of G.
+const colorOf = b => H.paletteColor(b, G.palette);
 // Animation state that is not the user's (not saved by the saver).
 //   R      the flow: a 3x3 turn of every base point on S2 (uBaseRot)
 //   morph  { from, t, dur }: the base points go from 'from' to the fibres
@@ -110,16 +118,16 @@ const toHex = rgb => H.hexOf(rgb);
 function rebuild() {
   const cap = S.CAP;
   const list = H.sampleItems(G.items, G.density, cap).map(f => {
-    const rgb = H.baseColor(f.b);
+    const rgb = colorOf(f.b);
     return { b: f.b, rgb, hex: toHex(rgb), item: f.item };
   });
   if (G.trace) {
     const T = G.trace;
     T.trail.forEach((b, i) => {
-      const age = (T.trail.length - i) / T.trail.length, rgb = H.baseColor(b);
+      const age = (T.trail.length - i) / T.trail.length, rgb = colorOf(b);
       list.push({ b, rgb: rgb.map(v => v * (0.25 + 0.65 * (1 - age))), hex: toHex(rgb), item: -1, rad: 0.5 + 0.4 * (1 - age), trail: true });
     });
-    const rgb = H.baseColor(T.b);
+    const rgb = colorOf(T.b);
     list.push({ b: T.b, rgb, hex: toHex(rgb), item: -2, rad: 1.9, glow: 0.35, head: true });
   }
   fibres = list.slice(0, cap);
@@ -253,7 +261,7 @@ function baseState(M) {
     if (it.kind === 'lat') {
       const r = Math.sqrt(Math.max(0, 1 - it.z * it.z)), span = it.span || H.TAU, ph0 = it.ph0 || 0;
       const pts = Array.from({ length: 73 }, (_, i) => { const ph = ph0 + span * i / 72; return [r * Math.cos(ph), r * Math.sin(ph), it.z]; });
-      curves.push({ pts, hex: H.hexOf(H.baseColor([r, 0, it.z]).map(v => v * 0.9)), closed: false });
+      curves.push({ pts, hex: H.hexOf(colorOf([r, 0, it.z]).map(v => v * 0.9)), closed: false });
     } else if (it.kind === 'great') {
       const pts = H.sampleItems([Object.assign({}, it, { n: 96 })], 96).map(f => f.b);
       curves.push({ pts, hex: '#c9d3e6', closed: true });
@@ -398,6 +406,7 @@ function frame(now) {
   S.uniforms.uPulse.value = A.pT; S.uniforms.uPulseOn.value = A.pK;
   S.uniforms.uRad.value = G.rad;
   S.uniforms.uConf.value = G.conf ? 1 : 0;
+  S.uniforms.uTaper.value = G.taper ? 1 : 0;
   S.controls.autoRotate = G.orbit;
   S.controls.autoRotateSpeed = 0.35;
   S.controls.update();
@@ -469,6 +478,18 @@ function animate(dt) {
   return any && dt > 0;
 }
 
+// The palette: fibre colours, the background, the fog, the base sphere
+// key and the colour strip of the panel.
+function applyLook() {
+  const P = H.PALETTES.find(p => p.id === G.palette) || H.PALETTES[0];
+  G.palette = P.id;
+  S.setLook(P);
+  setInsetColors(b => H.paletteColor(b, P.id));
+  rebuild();
+  drawWheel();
+  baseDirty = true;
+}
+
 // --------------------------------------------------------------------- UI
 let toastT = 0;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200); }
@@ -532,7 +553,7 @@ function drawWheel() {
   for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
     // across: longitude; down: from north (top) to south
     const ph = -Math.PI + 2 * Math.PI * x / W, z = 0.9 - 1.8 * y / (Hh - 1), r = Math.sqrt(1 - z * z);
-    const s = H.toSRGB(H.baseColor([r * Math.cos(ph), r * Math.sin(ph), z])), k = (y * W + x) * 4;
+    const s = H.toSRGB(colorOf([r * Math.cos(ph), r * Math.sin(ph), z])), k = (y * W + x) * 4;
     img.data[k] = s[0]; img.data[k + 1] = s[1]; img.data[k + 2] = s[2]; img.data[k + 3] = 255;
   }
   g.putImageData(img, 0, 0);
@@ -645,7 +666,7 @@ function resetView() {
 // function for the framing, and add frame hooks.
 const app = {
   G, S, H, applyPreset, rebuild, syncPresetUI, setMode, setPlaying, setDistance, fitDistance, occ,
-  fibres: () => fibres, linking: () => lastLk, curveOf, curveAt, effBase, regrow, setWeights, A,
+  fibres: () => fibres, linking: () => lastLk, curveOf, curveAt, effBase, regrow, setWeights, A, applyLook,
   // the rotation of the state in G now (not the last frame's)
   rotation: () => H.matMul(H.planeMat(2, 3, G.pole), H.rotationFor(G.mode, G.a, { tilt: G.tilt })),
   setBand(fn) { saverBand = fn; },
@@ -662,7 +683,7 @@ setMode(G.mode);
 setPlaying(true);
 applyPreset(G.preset);
 $('dens').value = String(G.density); $('densV').textContent = String(G.density);
-drawWheel();
+applyLook();
 resetView();
 typesetPage().then(() => { window.__hopfReady = true; });
 installSaver(app);

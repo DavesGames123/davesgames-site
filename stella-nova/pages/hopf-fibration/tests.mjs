@@ -12,7 +12,7 @@
 //    circles    the projected fibre lies on a round circle
 //    linking    random pairs of fibres have linking number +-1
 //    pierce     one fibre crosses the disc of the other exactly once
-//    colour     colours in 0..1, no NaN, poles grey
+//    colour     colours in 0..1, no NaN, poles grey; palettes continuous
 //    seifert    (p,q) orbits: on S3, Hopf at (1,1), torus knots, Lk = p q
 //    hopf tori  preimages map back onto the curve; area = pi * length
 //    polyhedra  vertex counts, regular, clear of the south pole, Lk = +-1
@@ -160,6 +160,17 @@ const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
   const n = H.baseColor([0, 0, 1]), s = H.baseColor([0, 0, -1]);
   ok('colour: in 0..1, no NaN', bad === 0, `${bad} bad`);
   ok('colour: poles grey, north lighter', Math.abs(n[0] - n[2]) < 1e-3 && Math.abs(s[0] - s[2]) < 1e-3 && n[1] > s[1], `N ${H.hexOf(n)} S ${H.hexOf(s)}`);
+  // the palettes
+  let pbad = 0, cont = 0;
+  for (const P of H.PALETTES) for (let k = 0; k < 1500; k++) {
+    const b = randS2(), c = H.paletteColor(b, P.id);
+    if (c.some(v => !(v >= 0 && v <= 1))) pbad++;
+    // a small step on S2 gives a small change of colour (no seam)
+    const b2 = H.nlerp3(b, randS2(), 0.002), c2 = H.paletteColor(b2, P.id), db = dist(b, b2);
+    if (db > 1e-6) cont = Math.max(cont, dist(c, c2) / db);
+  }
+  const same = Math.max(...Array.from({ length: 200 }, () => { const b = randS2(); return dist(H.paletteColor(b, 'spectrum'), H.baseColor(b)); }));
+  ok('palettes: in 0..1, continuous, spectrum = baseColor', pbad === 0 && cont < 6 && same === 0, `${H.PALETTES.length} palettes, ${pbad} bad, max |dc|/|db| ${cont.toFixed(2)}`);
 }
 // seifert: the weighted action t -> (e^{ipt} z0, e^{iqt} z1)
 {

@@ -4,9 +4,8 @@
 //  Two small 2D canvases over the 3D view.
 //
 //  BASE SPHERE  createBaseSphere(canvas, hooks). An orthographic view of
-//  S2, north pole up. The surface shows the colour map of the page (hue
-//  from longitude, lightness from height), dimmed, so it is also the colour
-//  key. On it: the circles and curves of the items, one dot for each fibre
+//  S2, north pole up. The surface shows the colour map of the page (the
+//  palette set by setInsetColors), dimmed, so it is also the colour key. On it: the circles and curves of the items, one dot for each fibre
 //  in the 3D view, and rings where the 4D rotation has carried a fibre (the
 //  image base points, for the rotations that keep fibres).
 //  Pointer: a press outside the disc, or with the Turn tool, turns the
@@ -18,10 +17,15 @@
 //  perspective from the x4 direction, then drawn. The edge colour gives its
 //  axis: x1 blue, x2 orange, x3 green, x4 pink (the .m1 to .m4 colours).
 //
-//  grep -n targets: "export function createBaseSphere", "function paintSurface",
+//  grep -n targets: "export function setInsetColors",
+//                   "export function createBaseSphere", "function paintSurface",
 //                   "export function createGauge"
 // ============================================================================
 import { baseColor, toSRGB } from './hopf.js';
+
+// The colour map of the surface: the palette of the page (setInsetColors).
+let COLOR = baseColor, colorVer = 0;
+export function setInsetColors(fn) { COLOR = fn || baseColor; LUT = null; colorVer++; }
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // A colour table over (height, longitude), so the surface paints fast.
@@ -32,7 +36,7 @@ function lut() {
   LUT = new Float32Array(LUT_Z * LUT_P * 3);
   for (let i = 0; i < LUT_Z; i++) for (let j = 0; j < LUT_P; j++) {
     const z = -1 + 2 * i / (LUT_Z - 1), r = Math.sqrt(Math.max(0, 1 - z * z)), ph = -Math.PI + 2 * Math.PI * j / LUT_P;
-    const c = baseColor([r * Math.cos(ph), r * Math.sin(ph), z]), k = (i * LUT_P + j) * 3;
+    const c = COLOR([r * Math.cos(ph), r * Math.sin(ph), z]), k = (i * LUT_P + j) * 3;
     LUT[k] = c[0]; LUT[k + 1] = c[1]; LUT[k + 2] = c[2];
   }
   return LUT;
@@ -81,7 +85,7 @@ export function createBaseSphere(canvas, hooks = {}) {
 
   // The dimmed colour map on the front half, with a soft light.
   function paintSurface() {
-    const key = `${W}x${Hh}|${V.yaw.toFixed(4)}|${V.pitch.toFixed(4)}`;
+    const key = `${W}x${Hh}|${V.yaw.toFixed(4)}|${V.pitch.toFixed(4)}|${colorVer}`;
     if (key === surfKey && surf) return surf;
     surfKey = key;
     const img = g.createImageData(W, Hh), d = img.data, { fwd, right, up } = basis();

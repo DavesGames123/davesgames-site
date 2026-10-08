@@ -32,7 +32,11 @@
 //  or on a segment longer than uSegMax, sets vFar = 1, and the fragment
 //  shader discards each triangle that touches it.
 //
-//  The material is MeshStandardMaterial with onBeforeCompile, so the
+//  LOOK  setLook(palette) sets the background gradient, the fog colour,
+//  the iridescence and the bloom strength. uRim adds a rim light in the
+//  colour of the tube; uTaper thins a tube toward infinity.
+//
+//  The material is MeshPhysicalMaterial with onBeforeCompile, so the
 //  fibres get the three.js lights, the room environment map, the fog and
 //  the tone mapping. Desktop renders through an EffectComposer: one MSAA
 //  target, a soft bloom, and OutputPass (ACES tone map, sRGB). A touch
@@ -47,6 +51,7 @@
 //  grep -n targets: "FIBRE_GLSL", "function patchMaterial", "function setFibres",
 //                   "function setDiscs", "function setBand", "BAND_GLSL",
 //                   "function setMorphFrom", "function setBaseRotation",
+//                   "function setLook",
 //                   "function render", "function resize"
 // ============================================================================
 import * as THREE from 'three';
@@ -93,7 +98,7 @@ attribute vec3 aBase0;
 attribute vec4 aAux;
 uniform mat4 uRot;
 uniform mat3 uBaseRot;
-uniform float uMorph, uGrow;
+uniform float uMorph, uGrow, uTaper;
 varying float vGrow;
 uniform vec4 uPQ;
 uniform float uPQMix;
@@ -120,6 +125,8 @@ const VERT_TUBE = `
   vec3 Bn = cross(Tg, Nn);
   vec3 ringN = cos(ang) * Nn + sin(ang) * Bn;
   float rad = uRad * aAux.x * mix(1.0, clamp(1.0 / max(d0, 1e-3), 0.5, 30.0), uConf);
+  // taper: a tube thins as its fibre runs out toward infinity
+  rad *= mix(1.0, clamp(3.2 / max(length(P), 3.2), 0.2, 1.0), uTaper);
   vec3 hopfPos = P + rad * ringN;
   vFar = (length(P) > uFar || segL > uSegMax || d0 < 1e-4) ? 1.0 : 0.0;
   vT = position.x;
@@ -132,7 +139,7 @@ const FRAG_HEAD = `
 uniform float uStripes;
 uniform vec3 uBand;
 uniform float uBandOn;
-uniform float uPulse, uPulseOn;
+uniform float uPulse, uPulseOn, uRim;
 varying float vGrow;
 varying float vT;
 varying float vFar;
@@ -181,6 +188,9 @@ function patchMaterial(mat, uniforms) {
   diffuseColor.rgb *= mix(1.0, 0.5 + 0.62 * band, vAux.z);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   totalEmissiveRadiance += diffuseColor.rgb * vAux.y;
+  // rim light: the edges of a tube glow in its own colour
+  float rimF = 1.0 - abs(dot(normalize(normal), normalize(vViewPosition)));
+  totalEmissiveRadiance += diffuseColor.rgb * uRim * rimF * rimF * rimF;
   // the bright tip of a fibre that is being drawn
   if (vGrow < 0.9999) totalEmissiveRadiance += diffuseColor.rgb * 2.2 * smoothstep(vGrow - 0.04, vGrow, vT);
   // light pulses that run along each fibre, out of step from fibre to fibre
@@ -249,10 +259,16 @@ export function createScene(canvas, opts = {}) {
     uSeg: { value: SEG }, uConf: { value: 0 }, uStripes: { value: 6 },
     uPQ: { value: new THREE.Vector4(1, 1, 1, 1) }, uPQMix: { value: 0 },
     uBaseRot: { value: new THREE.Matrix3() }, uMorph: { value: 1 }, uGrow: { value: 1 },
-    uPulse: { value: 0 }, uPulseOn: { value: 0 },
+    uPulse: { value: 0 }, uPulseOn: { value: 0 }, uRim: { value: 0.6 }, uTaper: { value: 1 },
     uBand: { value: new THREE.Vector3(0, 1e5, 1) }, uBandOn: { value: 0 },
   };
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.08, envMapIntensity: 0.75 });
+  // A thin-film (iridescent) clear coat on desktop; a touch screen gets
+  // the plain standard terms (no iridescence or clear coat passes).
+  const mat = new THREE.MeshPhysicalMaterial({
+    vertexColors: true, roughness: 0.3, metalness: 0.08, envMapIntensity: 0.8,
+    clearcoat: coarse ? 0 : 0.35, clearcoatRoughness: 0.28,
+    iridescence: coarse ? 0 : 0.3, iridescenceIOR: 1.32, iridescenceThicknessRange: [160, 480],
+  });
   patchMaterial(mat, uniforms);
   const fibres = new THREE.Mesh(tmpl, mat);
   fibres.frustumCulled = false;
@@ -369,13 +385,31 @@ export function createScene(canvas, opts = {}) {
     m.userData.halo.material.color.setRGB(...rgb);
   }
 
+  // The look of a palette: { bg: [top, base], fog, irid, bloom }.
+  // The background is a vertical gradient on a 2 x 256 canvas texture; the
+  // old texture is disposed, so a change of palette frees its memory.
+  let bgTex = null;
+  function setLook(L) {
+    const c = document.createElement('canvas'); c.width = 2; c.height = 256;
+    const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, L.bg[0]); gr.addColorStop(1, L.bg[1]);
+    g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    scene.background = tex;
+    if (bgTex) bgTex.dispose();
+    bgTex = tex;
+    scene.fog.color.set(L.fog);
+    if (!coarse) mat.iridescence = Math.max(0.05, L.irid);
+    if (bloom) bloom.strength = L.bloom;
+  }
+
   function render() {
     if (composer) composer.render(); else renderer.render(scene, camera);
   }
 
   return {
     THREE, renderer, scene, camera, controls, uniforms, dots, CAP, coarse,
-    resize, setOffset, setBand, setFibres, setRotation, setDisc, setDot, render, setMorphFrom, setBaseRotation,
+    resize, setOffset, setBand, setFibres, setRotation, setDisc, setDot, render, setMorphFrom, setBaseRotation, setLook,
     budget: () => view.budget,
   };
 }
