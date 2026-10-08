@@ -225,6 +225,7 @@ export function drawAnatomy(g, r, rows, o) {
     g.beginPath(); g.moveTo(x, t0 - 6); g.lineTo(x, axY); g.stroke();
     drawPow(g, '', v, x, axY + 16, fsz - 1, SERIF, INK.dim, 'center');
   }
+  let prevLeft = Infinity;   // the left end of the bar above, with its arrow head
   steps.forEach((s, i) => {
     const y = t0 + rowH * (i + 0.5), x1 = X(s.from), x2 = X(s.to), hgt = Math.max(6, rowH * 0.42);
     text(g, s.name, r.x + lab - 10, y, `italic ${fsz + 1}px ${SERIF}`, s.cls, 'right', 'middle');
@@ -241,7 +242,14 @@ export function drawAnatomy(g, r, rows, o) {
     const vy = y - hgt / 2 - 5, up = x2 >= x1, px = fsz + 1;
     g.font = `${px}px ${SERIF}`;
     const tw = g.measureText(pre + '10' + ex + after).width, ok = up ? x1 + tw < R + 8 : x1 - tw > L - lab + 8;
-    drawPow(g, pre, ex, ok ? x1 : up ? x1 - 4 : x1 + 4, vy, px, SERIF, INK.dim, (up === ok) ? 'left' : 'right', 'bottom', after);
+    // The label of a step to the left ends at x1, under the bar above,
+    // which also ends at x1. Move the label left of that bar, so that the
+    // two do not touch.
+    const alignR = up !== ok;
+    let lx = ok ? x1 : up ? x1 - 4 : x1 + 4;
+    if (!up && ok) lx = Math.min(lx, prevLeft - 6);
+    drawPow(g, pre, ex, lx, vy, px, SERIF, INK.dim, alignR ? 'right' : 'left', 'bottom', after);
+    prevLeft = Math.min(x1, x2) - 8;
   });
   // the result
   const yR = t0 + rowH * 4.5, xR = X(a.lt);
