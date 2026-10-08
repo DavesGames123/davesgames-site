@@ -9,7 +9,7 @@
 //    one frame ........ "function drawFrame"
 // ============================================================================
 import { norm, sub } from '../render.js';
-import { saverFade } from '../main.js';
+import { saverFade } from './saver.js';
 import { cameraFrame } from './camera.js';
 import { UI, Q } from './env.js';
 import { smoothField, fieldParams } from './field.js';

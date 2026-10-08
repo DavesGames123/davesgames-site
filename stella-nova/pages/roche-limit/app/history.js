@@ -12,7 +12,7 @@
 //    truncate ............ "function truncateHistory"
 // ============================================================================
 import * as P from '../physics.js';
-import { syncScrub } from '../main.js';
+import { syncScrub } from './controls.js';
 import { SNAP_CAP, RUNS_KEY } from './env.js';
 import { workerCall } from './jobs.js';
 import { allFree } from './loop.js';

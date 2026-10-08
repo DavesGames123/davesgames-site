@@ -12,7 +12,7 @@
 // ============================================================================
 import * as P from '../physics.js';
 import { drawGauge, drawBound, drawEnergy, drawRuns } from '../plots.js';
-import { syncPlayButtons } from '../main.js';
+import { syncPlayButtons } from './controls.js';
 import { $, UI, SPEED_STOPS, KM_SATURN, REF_SWEEP } from './env.js';
 import { loadRuns } from './history.js';
 import { orbitsPerMin } from './loop.js';

@@ -10,7 +10,7 @@
 // ============================================================================
 import { S } from './state.js';
 
-export const workerJobs = new Map();let jobId = 0;
+export const workerJobs = new Map(); let jobId = 0;
 export function workerCall(msg, transfer = []) {
   return new Promise(res => { const id = ++jobId; workerJobs.set(id, res); S.worker.postMessage(Object.assign({ id }, msg), transfer); });
 }

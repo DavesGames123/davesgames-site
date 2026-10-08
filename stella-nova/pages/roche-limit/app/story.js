@@ -11,7 +11,7 @@
 //    seek ............ "function seekPhase"
 // ============================================================================
 import { STORY } from '../scenarios.js';
-import { setPaused } from '../main.js';
+import { setPaused } from './controls.js';
 import { $ } from './env.js';
 import { restoreSnap } from './history.js';
 import { satState } from './sat.js';
