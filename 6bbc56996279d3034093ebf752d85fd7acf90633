@@ -1,0 +1,1 @@
+Correction to the validation line: deno lint (no-undef) on main.js saver.js drawlift.js reported 46 findings, all browser globals (document 27, requestAnimationFrame 12, innerHeight 3, cancelAnimationFrame, history, Image, innerWidth 1 each). It found no undefined names beyond browser globals, not 'no findings'.
