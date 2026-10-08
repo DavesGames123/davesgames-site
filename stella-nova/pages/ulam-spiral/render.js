@@ -4,7 +4,14 @@
 //  One frame:
 //    1. scene FBO (RGBA16F when the GPU can render to it, else RGBA8):
 //       lattice shapes  FIELD_FS, one full-screen pass; each pixel finds
-//                       its cell, the number and its class
+//                       its cell, the number and its class. Zoomed out
+//                       it box-filters the cells under it; past
+//                       s.boxMax cells per pixel it reads the pyramid
+//       pyramid         PYR_FS: the mean colour of each B0 x B0 block of
+//                       the region with known numbers, drawn in bands
+//                       over a few frames, then mip levels (exact 2 x 2
+//                       means). Built again when the shape, the mode or
+//                       the colours change, not when the camera moves.
 //       point shapes    POINT_VS / POINT_FS, n = n0 + gl_VertexID, additive
 //       morphs          points for every shape, two maps mixed per n
 //       path            the same vertex shader as a LINE_STRIP
@@ -19,6 +26,8 @@
 //    uArith   R8, the class bytes of one arithmetic mode for n < 2^23
 //    uTile    RG8, a CPU tile (worker.js): class byte and quadratic flag
 //             per cell, for regions past the bitset (Miller-Rabin)
+//    uPyr     R16F (density modes, the light only) or RGBA16F, with mips:
+//             the block means of the pyramid
 //
 //  GREP MAP
 //    grep -n 'export function createRenderer'
@@ -27,6 +36,9 @@
 //    grep -n 'function shapeUniforms' the uniforms every pass shares
 //    grep -n 'function tfPositions'   transform feedback (self-test)
 //    grep -n 'function readIndex'     the debug index pass (self-test)
+//    grep -n 'function pyrPlan'       pyramid block size and texture size
+//    grep -n 'function pyrEnsure'     build the pyramid (a cell budget)
+//    grep -n 'function pyrUsable'     may this frame read the pyramid
 //    grep -n 'function renderMini'    the minimap image
 // ============================================================================
 import * as G from './glsl.js';
@@ -70,6 +82,7 @@ export function createRenderer(canvas) {
     down: program(G.FULL_VS, G.DOWN_FS),
     blur: program(G.FULL_VS, G.BLUR_FS),
     comp: program(G.FULL_VS, G.COMP_FS),
+    pyr: program(G.FULL_VS, G.PYR_FS),
   };
   let tfProg = null;
   const vao = gl.createVertexArray();
@@ -89,6 +102,8 @@ export function createRenderer(canvas) {
   const primes = { t: tex(gl.R32UI, gl.RED_INTEGER, gl.UNSIGNED_INT, 1, 1, new Uint32Array(1)), W: 1, limit: 0 };
   const arith = { t: tex(gl.R8, gl.RED, gl.UNSIGNED_BYTE, 1, 1, new Uint8Array(1)), W: 1, N: 0, mode: -1 };
   const tile = { t: tex(gl.RG8, gl.RG, gl.UNSIGNED_BYTE, 1, 1, new Uint8Array(2)), on: false, org: [0, 0], size: [1, 1] };
+  const dummy = tex(gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, 1, 1, new Uint8Array(4));
+  let primesVer = 0, arithVer = 0;
 
   function target(w, h, fmt) {
     const hf = fmt === 'half' && half;
@@ -116,14 +131,14 @@ export function createRenderer(canvas) {
     const data = bits.length === W * H ? bits : (() => { const d = new Uint32Array(W * H); d.set(bits); return d; })();
     gl.deleteTexture(primes.t);
     primes.t = tex(gl.R32UI, gl.RED_INTEGER, gl.UNSIGNED_INT, W, H, data);
-    primes.W = W; primes.limit = limit;
+    primes.W = W; primes.limit = limit; primesVer++;
   }
   function setArith(bytes, mode) {
     const W = 4096, H = Math.ceil(bytes.length / W);
     const data = bytes.length === W * H ? bytes : (() => { const d = new Uint8Array(W * H); d.set(bytes); return d; })();
     gl.deleteTexture(arith.t);
     arith.t = tex(gl.R8, gl.RED, gl.UNSIGNED_BYTE, W, H, data);
-    arith.W = W; arith.N = bytes.length; arith.mode = mode;
+    arith.W = W; arith.N = bytes.length; arith.mode = mode; arithVer++;
   }
   function setTile(data, org, size) {
     gl.deleteTexture(tile.t);
@@ -188,12 +203,19 @@ export function createRenderer(canvas) {
       u2f(pr, 'uLocal', s.cam.x - s.base.wx, s.cam.y - s.base.wy);
       u2f(pr, 'uCenter', s.center[0], s.center[1]);
       u1f(pr, 'uPxW', pxW);
-      u1i(pr, 'uSS', Math.max(1, Math.min(s.maxSS || 4, Math.ceil(pxW))));
+      u1f(pr, 'uBoxMax', s.boxMax || 6);
       u1i(pr, 'uStyle', s.style); u1f(pr, 'uDotR', s.dotR);
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, tile.t); u1i(pr, 'uTile', 2);
       u1i(pr, 'uTileOn', s.tileOn && tile.on ? 1 : 0);
       u2i(pr, 'uTileOrg', tile.org[0], tile.org[1]); u2i(pr, 'uTileSize', tile.size[0], tile.size[1]);
       u1i(pr, 'uDebug', s.debug | 0);
+      const on = pyrUsable(s);
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, on ? pyr.t : dummy); u1i(pr, 'uPyr', 3);
+      u1i(pr, 'uPyrOn', on ? 1 : 0);
+      if (on) {
+        u1i(pr, 'uPyrAlpha', pyr.alpha ? 1 : 0); u1i(pr, 'uPyrB0', pyr.B0); u1i(pr, 'uPyrLevels', pyr.levels);
+        u2i(pr, 'uPyrOrg', pyr.org[0], pyr.org[1]); u2i(pr, 'uPyrSize', pyr.w, pyr.h);
+      }
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
     if (s.points) drawPoints(s, s.points, dw, dh, pxW, false);
@@ -222,6 +244,86 @@ export function createRenderer(canvas) {
     gl.disable(gl.BLEND);
   }
 
+  // --- the density pyramid ---------------------------------------------------------
+  // s.pyr = { box: [x0, y0, x1, y1] lattice cells with known numbers,
+  // alpha: the density modes (only the light is read), cap: the texture
+  // side for RGBA (R16F gets twice the side, the same bytes) }. The key
+  // holds every input of cellColor that PYR_FS reads, so a change of
+  // shape, mode, quadratic, colours or sieve starts a new build.
+  const pyr = { key: null, t: null, f: null, w: 0, h: 0, B0: 1, org: [0, 0], levels: 1, alpha: true, row: 0, done: false, ms: 0 };
+  const pow2 = n => 2 ** Math.ceil(Math.log2(Math.max(1, n)));
+  function pyrPlan(box, alpha, cap) {
+    const sx = box[2] - box[0] + 1, sy = box[3] - box[1] + 1;
+    const side = alpha ? 2 * cap : cap, maxSide = Math.min(maxTex, 16384);
+    for (let B0 = 1; B0 <= 32; B0 *= 2) {
+      const w = pow2(Math.ceil(sx / B0)), h = pow2(Math.ceil(sy / B0));
+      if (w * h <= side * side && w <= maxSide && h <= maxSide) return { B0, w, h, org: [box[0] - Math.floor((w * B0 - sx) / 2), box[1] - Math.floor((h * B0 - sy) / 2)] };
+    }
+    return null;
+  }
+  function pyrKey(s) {
+    const p = s.pyr, q = s.quad || {};
+    return [s.shape.id, JSON.stringify(s.P), s.mode, q.on ? [q.a, q.b, q.c, q.max] : 0, s.compA, primesVer, primes.limit,
+      arith.mode === s.mode ? arithVer : 0, p.alpha ? 1 : [...s.palA, ...s.quadCol].map(v => v.toFixed(3)), p.box, p.cap].join('|');
+  }
+  const pxWOf = s => 1 / (s.cam.z * s.dpr);
+  // Does this frame want the pyramid (lattice field, footprint past boxMax)?
+  function pyrWants(s) { return half && s.renderer === 'field' && !!s.pyr && !s.tileOn && pxWOf(s) > (s.boxMax || 6); }
+  // May it read the pyramid? Not with the walk (it hides cells past the
+  // front), and not with the palette sweep for an RGBA pyramid.
+  function pyrUsable(s) {
+    return pyrWants(s) && pyr.done && pyr.key === pyrKey(s) && s.walk == null && (pyr.alpha || !s.sweep);
+  }
+  function pyrFree() { if (pyr.t) { gl.deleteTexture(pyr.t); gl.deleteFramebuffer(pyr.f); } pyr.t = pyr.f = null; pyr.done = false; pyr.key = null; }
+  // Build (or go on with) the pyramid for s, at most `budget` cell
+  // evaluations in this call. Returns true when it is ready.
+  function pyrEnsure(s, budget = 2e7) {
+    if (!pyrWants(s)) return false;
+    const key = pyrKey(s);
+    if (pyr.key !== key) {
+      pyrFree();
+      pyr.key = key;
+      const pl = pyrPlan(s.pyr.box, !!s.pyr.alpha, s.pyr.cap || 1024);
+      if (!pl) return false;
+      Object.assign(pyr, pl, { alpha: !!s.pyr.alpha, row: 0, done: false, ms: 0, levels: Math.log2(Math.max(pl.w, pl.h)) + 1 });
+      pyr.t = tex(pyr.alpha ? gl.R16F : gl.RGBA16F, pyr.alpha ? gl.RED : gl.RGBA, gl.HALF_FLOAT, pl.w, pl.h, null);
+      pyr.f = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, pyr.f);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pyr.t, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { gl.deleteTexture(pyr.t); gl.deleteFramebuffer(pyr.f); pyr.t = pyr.f = null; return false; }
+    }
+    if (!pyr.t) return false;
+    const t0 = performance.now();
+    const pr = P.pyr;
+    while (!pyr.done && budget > 0) {
+      const perRow = pyr.w * pyr.B0 * pyr.B0, rows = Math.max(1, Math.min(pyr.h - pyr.row, Math.floor(Math.min(budget, 4e7) / perRow)));
+      gl.bindFramebuffer(gl.FRAMEBUFFER, pyr.f);
+      gl.viewport(0, 0, pyr.w, pyr.h);
+      gl.enable(gl.SCISSOR_TEST); gl.scissor(0, pyr.row, pyr.w, rows);
+      gl.disable(gl.BLEND); gl.useProgram(pr.p); gl.bindVertexArray(vao);
+      shapeUniforms(pr, s);
+      u1i(pr, 'uShape', s.shape.id); u1i(pr, 'uStyle', s.style); u1f(pr, 'uDotR', s.dotR);
+      u1f(pr, 'uWalk', -1); u1i(pr, 'uTileOn', 0);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, tile.t); u1i(pr, 'uTile', 2);
+      u2i(pr, 'uPyrOrg', pyr.org[0], pyr.org[1]); u1i(pr, 'uPyrB0', pyr.B0); u1i(pr, 'uPyrAlpha', pyr.alpha ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disable(gl.SCISSOR_TEST);
+      pyr.row += rows; budget -= rows * perRow;
+      if (pyr.row >= pyr.h) {
+        gl.bindTexture(gl.TEXTURE_2D, pyr.t);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+        pyr.done = true;
+      }
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    pyr.ms += performance.now() - t0;
+    return pyr.done;
+  }
+  // true while a frame wants the pyramid and it is not ready (main.js
+  // keeps drawing frames until it is)
+  let pyrBusy = false;
+
   // --- one frame --------------------------------------------------------------------
   function pass(pr, dst, w, h) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : null);
@@ -232,6 +334,8 @@ export function createRenderer(canvas) {
   function draw(s) {
     const dw = canvas.width, dh = canvas.height;
     ensureTargets(dw, dh);
+    pyrBusy = false;
+    if (s.pyrBuild && pyrWants(s)) pyrBusy = !pyrEnsure(s, s.pyrBudget || 2e7) && !!pyr.t;
     sceneInto(s, T.scene.f, dw, dh);
     gl.bindVertexArray(vao);
     gl.disable(gl.BLEND);
@@ -326,5 +430,6 @@ export function createRenderer(canvas) {
     return px;
   }
 
-  return { gl, half, readClass, maxTex, setPrimes, setArith, setTile, clearTile, draw, renderMini, tfPositions, readIndex, primes, arith, tile };
+  const pyrInfo = () => ({ done: pyr.done, B0: pyr.B0, w: pyr.w, h: pyr.h, org: pyr.org, alpha: pyr.alpha, levels: pyr.levels, ms: +pyr.ms.toFixed(1), busy: pyrBusy });
+  return { gl, half, readClass, maxTex, setPrimes, setArith, setTile, clearTile, draw, renderMini, tfPositions, readIndex, primes, arith, tile, pyrEnsure, pyrInfo, pyrBusy: () => pyrBusy };
 }

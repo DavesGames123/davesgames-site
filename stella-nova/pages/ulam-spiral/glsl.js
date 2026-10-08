@@ -13,8 +13,11 @@
 //
 //  Programs (render.js builds them):
 //    FIELD_FS   one pass per pixel for the lattice shapes: pixel -> cell
-//               -> n -> class -> colour, with up to 8 x 8 samples when a
-//               pixel covers many cells (one sample per cell)
+//               -> n -> class -> colour. Zoomed out, a box filter over
+//               the cells under the pixel (exact up to uBoxMax cells per
+//               side, then over the pyramid blocks)
+//    PYR_FS     level 0 of the density pyramid: the mean colour of each
+//               block of B0 x B0 cells (render.js makes the mip levels)
 //    POINT_VS   the point shapes, the 3D shapes and every morph: n from
 //               gl_VertexID, position from the shape map, colour from n
 //    POINT_FS   dot, glow and square sprites
@@ -28,6 +31,10 @@
 //    grep -n 'int gIdx'           lattice cell -> index k, any shape
 //    grep -n 'vec4 shade'         class -> colour and strength
 //    grep -n 'FIELD_FS'           the per-pixel lattice pass
+//    grep -n 'vec4 boxCells'      the exact box filter over the cells
+//    grep -n 'vec4 boxPyr'        the box filter over the pyramid blocks
+//    grep -n 'vec4 boxJitter'     the stratified fallback
+//    grep -n 'PYR_FS'             the pyramid level-0 pass
 // ============================================================================
 
 export const HEAD = `#version 300 es
@@ -515,17 +522,14 @@ vec4 shadeV(float v, vec2 w) {
 `;
 
 // --- the per-pixel lattice pass ---------------------------------------------
-export const FIELD_FS = HEAD + SHAPES_GLSL + CLASSES_GLSL + `
+// FIELD_LIB: the uniforms and the cell helpers that FIELD_FS and PYR_FS
+// share. cellColor(c, off, 1.0) is the solid mark of cell c (m = 1): the
+// value that the box filter and the pyramid average.
+const FIELD_LIB = HEAD + SHAPES_GLSL + CLASSES_GLSL + `
 uniform int uShape;
-uniform ivec2 uBase;          // the lattice cell next to the camera
-uniform vec2 uLocal;          // camera world position minus world(uBase)
-uniform vec2 uCenter;         // the camera position on the canvas, device px
-uniform float uPxW;           // world units per device px
-uniform int uSS;              // samples per pixel side (1..8): one per cell up to 8 cells
 uniform int uStyle;           // 0 cell, 1 dot, 2 glow, 3 soft
 uniform float uWalk, uIgnite; // walk: index front (k), ignite length; uWalk < 0: off
 uniform int uTileOn; uniform sampler2D uTile; uniform ivec2 uTileOrg, uTileSize;
-uniform int uDebug;           // 1: the index k as colour, 2: the class byte (self-test)
 uniform float uDotR;
 out vec4 frag;
 
@@ -591,6 +595,110 @@ vec4 cellColor(ivec2 c, vec2 off, float pxW) {
   m = mix(m, 1.0, smoothstep(0.3, 0.7, pxW));
   return vec4(col * a * m, a * m);
 }
+`;
+
+// FIELD_FS: one pass per pixel. The pixel footprint is a square of side
+// uPxW (world units). Three regimes, by the footprint size:
+//   pxW < 0.7          one sample at the pixel centre, with the mark shape
+//                      and the halo of the neighbours
+//   0.7 .. uBoxMax     boxCells: every cell under the footprint, weighted
+//                      by the area it shares with the footprint (an exact
+//                      box filter, no sample stride)
+//   > uBoxMax          boxPyr: the same box filter over the blocks of the
+//                      pyramid (PYR_FS), exact sums of B0 x B0 cells, or
+//                      boxJitter (stratified cell pairs) while the pyramid
+//                      is not ready and outside its region
+// A fixed sample stride of 2 or 4 cells would read one parity of the
+// checkerboard only (all odd n sit on one parity), so the old sub-pixel
+// grid lost the prime diagonals or doubled them as the zoom changed.
+// The box filter keeps the mean light of a region the same at every zoom.
+// Lattice coordinates: square shapes use the cell (x, y); hex shapes use
+// axial (q, r), where a cell is a unit square and the footprint is the
+// sheared square of the same area (pxW wide, pxW / SQ3 high).
+export const FIELD_FS = FIELD_LIB + `
+uniform ivec2 uBase;          // the lattice cell next to the camera
+uniform vec2 uLocal;          // camera world position minus world(uBase)
+uniform vec2 uCenter;         // the camera position on the canvas, device px
+uniform float uPxW;           // world units per device px
+uniform float uBoxMax;        // largest pxW for the exact cell loop
+uniform int uDebug;           // 1: the index k as colour, 2: the class byte, 3: the density (self-test)
+uniform int uPyrOn, uPyrAlpha, uPyrB0, uPyrLevels;
+uniform sampler2D uPyr; uniform ivec2 uPyrOrg, uPyrSize;
+
+// world offset from world(uBase) -> lattice offset from uBase
+vec2 latOf(vec2 wl) {
+  if (!gHexKind(uShape)) return wl;
+  float r = wl.y / SQ3;
+  return vec2(wl.x - 0.5 * r, r);
+}
+vec4 boxCells(vec2 lc, vec2 h) {
+  vec2 lo = lc - h, hi = lc + h;
+  ivec2 c0 = ivec2(floor(lo + 0.5)), c1 = ivec2(floor(hi + 0.5));
+  vec4 acc = vec4(0.0);
+  for (int j = 0; j < 16; j++) {
+    int y = c0.y + j; if (y > c1.y) break;
+    float wy = min(hi.y, float(y) + 0.5) - max(lo.y, float(y) - 0.5);
+    for (int i = 0; i < 16; i++) {
+      int x = c0.x + i; if (x > c1.x) break;
+      float wx = min(hi.x, float(x) + 0.5) - max(lo.x, float(x) - 0.5);
+      acc += cellColor(uBase + ivec2(x, y), vec2(0.0), 1.0) * (wx * wy);
+    }
+  }
+  return acc / (4.0 * h.x * h.y);
+}
+vec2 hash2(ivec2 p) {
+  uint n = uint(p.x + 1073741824) * 1597334673u ^ uint(p.y + 1073741824) * 3812015801u;
+  n ^= n >> 16; n *= 2246822519u; n ^= n >> 13; n *= 3266489917u; n ^= n >> 16;
+  return vec2(float(n & 65535u), float(n >> 16)) / 65536.0;
+}
+// 4 x 4 strata over the footprint, one cell pair per stratum at an offset
+// from a hash of the lattice cell under the stratum centre: no fixed
+// stride, so no parity lock, and the same cells while the camera stands
+// still. Each sample takes the cell and its right neighbour. Where the
+// path of n steps from cell to neighbour cell (the square spiral, Hilbert,
+// rows), the pair holds one odd and one even n, so the odd-only marks
+// (primes, unknown n past the sieve) lose most of the parity noise.
+vec4 boxJitter(vec2 lc, vec2 h) {
+  vec4 acc = vec4(0.0);
+  vec2 st = 2.0 * h / 4.0;
+  for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+    vec2 o = lc - h + vec2(float(i), float(j)) * st;
+    ivec2 key = uBase + ivec2(floor(o + 0.5 * st));
+    ivec2 c = uBase + ivec2(floor(o + hash2(key * 7 + ivec2(i, j)) * st + 0.5));
+    acc += cellColor(c, vec2(0.0), 1.0) + cellColor(c + ivec2(1, 0), vec2(0.0), 1.0);
+  }
+  return acc / 32.0;
+}
+// The box filter over pyramid blocks: level L has blocks of B0 2^L cells;
+// the footprint covers at most 4 blocks per side. A part of the footprint
+// outside the pyramid gets boxJitter.
+vec4 boxPyr(vec2 lc, vec2 h) {
+  float hm = max(h.x, h.y);
+  int L = int(clamp(ceil(log2(2.0 * hm / (4.0 * float(uPyrB0)))), 0.0, float(uPyrLevels - 1)));
+  ivec2 sz = max(uPyrSize >> L, ivec2(1));
+  vec2 blk = vec2(uPyrSize * uPyrB0) / vec2(sz);
+  vec2 p = vec2(uBase - uPyrOrg) + lc + 0.5;
+  vec2 u0 = (p - h) / blk, u1 = (p + h) / blk;
+  ivec2 t0 = max(ivec2(floor(u0)), ivec2(0)), t1 = min(ivec2(floor(u1)), sz - 1);
+  vec4 acc = vec4(0.0);
+  float win = 0.0;
+  for (int j = 0; j < 7; j++) {
+    int y = t0.y + j; if (y > t1.y) break;
+    float wy = min(u1.y, float(y + 1)) - max(u0.y, float(y));
+    for (int i = 0; i < 7; i++) {
+      int x = t0.x + i; if (x > t1.x) break;
+      float wx = min(u1.x, float(x + 1)) - max(u0.x, float(x));
+      vec4 v = texelFetch(uPyr, ivec2(x, y), L);
+      if (uPyrAlpha == 1) v = vec4(0.0, 0.0, 0.0, v.r);
+      acc += v * (wx * wy); win += wx * wy;
+    }
+  }
+  float area = (u1.x - u0.x) * (u1.y - u0.y);
+  float wout = 1.0 - win / area;
+  acc /= area;
+  if (wout > 0.002) acc += boxJitter(lc, h) * wout;
+  return acc;
+}
 
 void main() {
   vec2 px = gl_FragCoord.xy - uCenter;
@@ -608,28 +716,28 @@ void main() {
     return;
   }
   vec4 acc = vec4(0.0);
-  int S = uSS;
   float pxW = uPxW;
-  for (int i = 0; i < 8; i++) {
-    if (i >= S) break;
-    for (int j = 0; j < 8; j++) {
-      if (j >= S) break;
-      vec2 sp = px + (vec2(float(i), float(j)) + 0.5) / float(S) - 0.5;
-      vec2 wl = uLocal + sp * pxW, off;
-      ivec2 c = cellOf(wl, off) + uBase;
-      vec4 col = cellColor(c, off, pxW);
-      if (uStyle >= 2 && pxW < 0.25) {
-        // the halo of the neighbours spills into this cell
-        for (int n = 0; n < 6; n++) {
-          ivec2 dc = gHexKind(uShape) ? HD[n] : (n < 4 ? ivec2(n == 0 ? 1 : n == 1 ? -1 : 0, n == 2 ? 1 : n == 3 ? -1 : 0) : ivec2(0));
-          if (dc == ivec2(0)) continue;
-          vec2 o2 = off - (gWorld(uShape, c + dc) - gWorld(uShape, c));
-          vec4 nb = cellColor(c + dc, o2, pxW);
-          acc.rgb += nb.rgb * 0.35 / float(S * S);
-        }
+  vec2 wl = uLocal + px * pxW;
+  if (pxW < 0.7) {
+    vec2 off;
+    ivec2 c = cellOf(wl, off) + uBase;
+    acc = cellColor(c, off, pxW);
+    if (uStyle >= 2 && pxW < 0.25) {
+      // the halo of the neighbours spills into this cell
+      for (int n = 0; n < 6; n++) {
+        ivec2 dc = gHexKind(uShape) ? HD[n] : (n < 4 ? ivec2(n == 0 ? 1 : n == 1 ? -1 : 0, n == 2 ? 1 : n == 3 ? -1 : 0) : ivec2(0));
+        if (dc == ivec2(0)) continue;
+        vec2 o2 = off - (gWorld(uShape, c + dc) - gWorld(uShape, c));
+        vec4 nb = cellColor(c + dc, o2, pxW);
+        acc.rgb += nb.rgb * 0.35;
       }
-      acc += col / float(S * S);
     }
+  } else {
+    vec2 lc = latOf(wl);
+    vec2 h = 0.5 * pxW * (gHexKind(uShape) ? vec2(1.0, 1.0 / SQ3) : vec2(1.0));
+    if (pxW <= uBoxMax) acc = boxCells(lc, h);
+    else if (uPyrOn == 1) acc = boxPyr(lc, h);
+    else acc = boxJitter(lc, h);
   }
   // Zoomed out, a pixel holds many cells: its mark strength is the local
   // density. d = ln(n) times it is about 1 where the primes are as dense
@@ -637,7 +745,7 @@ void main() {
   // palette with d; the light is linear in d (so the mean light does not
   // jump with the zoom) plus the raw density (the brighter centre).
   if (pxW > 0.8 && uMode <= MODE_EISEN && uTileOn == 0) {
-    vec2 off0; ivec2 c0 = cellOf(uLocal + px * pxW, off0) + uBase;
+    vec2 off0; ivec2 c0 = cellOf(wl, off0) + uBase;
     int k0 = gIdx(uShape, c0);
     float nC = k0 < 0 ? 3.0 : float(gStartOf(uShape)) + float(k0);
     if (uMode == MODE_GAUSS || uMode == MODE_EISEN) nC = float(c0.x * c0.x + c0.y * c0.y) + 3.0;
@@ -649,6 +757,28 @@ void main() {
     if (uDebug == 3) { frag = vec4(acc.a, d / 16.0, nC / 1e8, 1.0); return; }
   }
   frag = vec4(acc.rgb, min(acc.a, 1.0));
+}
+`;
+
+// PYR_FS: level 0 of the density pyramid. One texel = the mean of
+// cellColor over B0 x B0 cells, from the lattice cell uPyrOrg + B0 * texel.
+// uPyrAlpha 1: the mean light only (R16F, the density modes); 0: RGBA.
+// render.js draws it in bands of rows (a budget per frame) and then calls
+// generateMipmap: each level halves the side by exact 2 x 2 means.
+export const PYR_FS = FIELD_LIB + `
+uniform ivec2 uPyrOrg; uniform int uPyrB0, uPyrAlpha;
+void main() {
+  ivec2 c0 = uPyrOrg + ivec2(gl_FragCoord.xy) * uPyrB0;
+  vec4 acc = vec4(0.0);
+  for (int j = 0; j < 32; j++) {
+    if (j >= uPyrB0) break;
+    for (int i = 0; i < 32; i++) {
+      if (i >= uPyrB0) break;
+      acc += cellColor(c0 + ivec2(i, j), vec2(0.0), 1.0);
+    }
+  }
+  acc /= float(uPyrB0 * uPyrB0);
+  frag = uPyrAlpha == 1 ? vec4(acc.a, 0.0, 0.0, 1.0) : acc;
 }
 `;
 

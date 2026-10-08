@@ -25,6 +25,8 @@
 //    grep -n 'function buildUI'        the panel
 //    grep -n 'function renderThumbs'   the gallery thumbnails
 //    grep -n 'function selfTest'       GPU maps against layouts.js
+//    grep -n 'function boxTest'        zoomed-out density against a count
+//    grep -n 'function pyrRegion'      the cells the density pyramid holds
 //    grep -n 'function loop'           the frame loop
 // ============================================================================
 import * as T from './numtheory.js';
@@ -335,6 +337,34 @@ function afterNumbers() {
   computeRays(); updateQuad(); thumbsDirty = true; S.dirty = true;
 }
 
+// --- the pyramid region ---------------------------------------------------------------
+// The lattice cells (x0, y0, x1, y1) that hold the numbers the sieve
+// knows (n <= S.limit), with a margin; null before the sieve. Outside it
+// every cell is unknown or empty, and the shader samples them directly.
+const pyrBoxes = new Map();
+function pyrRegion(sh) {
+  if (!S.bits) return null;
+  const key = `${sh.key}|${JSON.stringify(S.P)}|${S.limit}`;
+  if (pyrBoxes.has(key)) return pyrBoxes.get(key);
+  let box = null;
+  const st = L.startOf(sh, S.P);
+  if (sh.lattice) {
+    const r = Math.ceil(1.16 * Math.sqrt(S.limit)) + 2;
+    box = [-r, -r, r, r];
+  } else if (st <= S.limit) {
+    const b = bboxOf(sh, st, Math.min(S.limit, 4294967295), 2000);
+    // world -> lattice (hex: axial q = x - r / 2, r = y / SQ3)
+    const pts = [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]].map(([x, y]) => sh.kind === 'hex' ? [x - y / (2 * L.SQ3), y / L.SQ3] : [x, y]);
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const m = 0.02 * Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 2;
+    box = [Math.floor(Math.min(...xs) - m), Math.floor(Math.min(...ys) - m), Math.ceil(Math.max(...xs) + m), Math.ceil(Math.max(...ys) + m)];
+  }
+  if (box) box = box.map(v => clamp(v, -23001, 23001));
+  if (pyrBoxes.size > 40) pyrBoxes.clear();
+  pyrBoxes.set(key, box);
+  return box;
+}
+
 // --- frame state --------------------------------------------------------------------------
 function frameState(v, opts = {}) {
   const sh = opts.shape || S.shape, cam = opts.cam || S.cam;
@@ -346,7 +376,7 @@ function frameState(v, opts = {}) {
     walk: S.walk ? S.walk.k : null, ignite: S.walk ? Math.max(6, S.walk.k * 0.04) : 30,
     style: S.style, dotR: S.dotR, ptSize: S.dotR * 2, bg: BGS[S.bg].c.map(rgb), bloom: S.bloom, exposure: 1,
     dpr: opts.dpr || dpr, cam, center: [v.cx * (opts.dpr || dpr), (v.h - v.cy) * (opts.dpr || dpr)],
-    renderer: 'none', points: null, path: null, cam3: null, tileOn: false, maxSS: opts.thumb ? 4 : PHONE_Q.matches ? 5 : 8,
+    renderer: 'none', points: null, path: null, cam3: null, tileOn: false, boxMax: opts.thumb ? 3 : PHONE_Q.matches ? 4 : 6,
   };
   if (opts.walk !== undefined) s.walk = opts.walk;
   const pxW = 1 / (cam.z * s.dpr);
@@ -371,6 +401,13 @@ function frameState(v, opts = {}) {
     s.base = { x: bx, y: by, wx, wy };
     s.tileOn = opts.tileOn != null ? opts.tileOn : S.tileOn;
     s.gain = 0.9;
+    // the density pyramid (render.js): its region, and only the main view
+    // builds it (the thumbnails of other shapes would rebuild it each time)
+    const box = pyrRegion(sh);
+    if (box) {
+      s.pyr = { box, alpha: s.mode <= M.eisen, cap: PHONE_Q.matches ? 1024 : 2048 };
+      s.pyrBuild = !opts.thumb; s.pyrBudget = PHONE_Q.matches ? 1e7 : 4e7;
+    }
     // Zoomed out the field is a density map: a soft, high-floor bloom only.
     const zo = clamp((pxW - 0.3) / 1.2, 0, 1);
     s.bloomT = 0.3 * zo * zo * (3 - 2 * zo); s.bloom = S.bloom * lerp(1, 0.35, zo);
@@ -1118,7 +1155,7 @@ function loop(now) {
   R.draw(fs);
   lastState = fs; frames++;
   drawOverlay(v);
-  S.dirty = false; S.overlayDirty = false;
+  S.dirty = R.pyrBusy(); S.overlayDirty = false;
   if (!S.saver) { updatePi(v); renderMini(v); if (now - (S.statusAt || 0) > 200) { S.statusAt = now; statusRight(v); } }
   if (S.saverComposite) S.saverComposite();
 }
@@ -1133,8 +1170,9 @@ function statusRight(v) {
 // 1. gPos (glsl.js) against posOf (layouts.js) for every shape: n from
 //    the start, and spread to 10^6.  2. the debug index pass against nAt
 //    for every lattice shape.  3. the class pass against classify().
+//    4. boxTest: the zoomed-out density against an exact count.
 async function selfTest() {
-  const out = { pos: {}, idx: {}, cls: {}, ok: true };
+  const out = { pos: {}, idx: {}, cls: {}, box: {}, ok: true };
   const v = { w: 96, h: 96, cx: 48, cy: 48, cw: 96, ch: 96 };
   const P0 = { ...S.P };
   for (const sh of L.SHAPES) {
@@ -1191,9 +1229,70 @@ async function selfTest() {
       if (bad > tot * 0.002) out.ok = false;
     }
   }
+  if (S.bits) {
+    const bt = boxTest();
+    out.box = bt.res;
+    if (!bt.ok) out.ok = false;
+  }
   S.P = P0;
   S.dirty = true;
   return out;
+}
+// The density d = (mean light) ln(n) gain of the field pass (debug 3, G =
+// d / 16) against an exact box count on the CPU: the light of each cell
+// (1 for 1 and the primes, 0 else) times the area it shares with the
+// pixel footprint (hex: in axial q, r, a footprint pxW by pxW / SQ3). Up
+// to boxMax the GPU loops the cells (exact but for 8-bit rounding); past
+// it, it reads the pyramid (exact block sums, partial blocks spread
+// evenly). Where a block is more than half the footprint (pxW < 2 B0, on
+// phones B0 = 8), the pyramid is coarser than the pixel: the mean stays
+// exact, the pixels are softer, so that tier checks the bias only.
+// pxW 16 and 32 were the old strides of 2 and 4 cells per sample (one
+// parity of the checkerboard). pan: the mean d at pxW 16 for camera
+// shifts of 0, 0.5, 1 and 1.5 cells (old: 1.8, 0, 0, 1.8).
+function boxTest() {
+  const res = {}, v = { w: 64, h: 64, cx: 32, cy: 32, cw: 64, ch: 64 };
+  let ok = true;
+  const run = (sh, pxW, cx, cy) => {
+    const cam = { x: cx, y: cy, z: 1 / pxW };
+    const fs = frameState(v, { shape: sh, cam, dpr: 1, tileOn: false, walk: null, mode: M.primes });
+    fs.debug = 3;
+    R.pyrEnsure(fs, Infinity);
+    const px = R.readClass(fs, v.w, v.h);
+    const hex = sh.kind === 'hex', hx = pxW / 2, hy = hex ? pxW / (2 * L.SQ3) : pxW / 2;
+    let sg = 0, sw = 0, se = 0;
+    for (let py = 0; py < v.h; py++) for (let qx = 0; qx < v.w; qx++) {
+      const wx = cx + (qx + 0.5 - fs.center[0]) * pxW, wy = cy + (py + 0.5 - fs.center[1]) * pxW;
+      const r = hex ? wy / L.SQ3 : wy, q = hex ? wx - r / 2 : wx;
+      let acc = 0;
+      for (let y = Math.round(r - hy); y <= Math.round(r + hy); y++) {
+        const oy = Math.min(r + hy, y + 0.5) - Math.max(r - hy, y - 0.5); if (oy <= 0) continue;
+        for (let x = Math.round(q - hx); x <= Math.round(q + hx); x++) {
+          const ox = Math.min(q + hx, x + 0.5) - Math.max(q - hx, x - 0.5); if (ox <= 0) continue;
+          const n = L.nAt(sh, S.P, x, y);
+          if (n === 1 || (n > 1 && isPrimeN(n))) acc += ox * oy;
+        }
+      }
+      const c0 = L.cellAt(sh, wx, wy), nC = Math.max(L.nAt(sh, S.P, c0[0], c0[1]), 3);
+      const want = acc / (4 * hx * hy) * Math.log(nC) * fs.gain, got = 16 * px[4 * (py * v.w + qx) + 1] / 255;
+      sg += got; sw += want; se += Math.abs(got - want);
+    }
+    const tier = pxW <= fs.boxMax ? 'cells' : pxW >= 2 * R.pyrInfo().B0 ? 'pyramid' : 'coarse';
+    return { mean: sg / (v.w * v.h), bias: (sg - sw) / sw, err: se / sw, tier };
+  };
+  for (const [key, cx, cy, list] of [['square', 1500.3, -900.7, [1.5, 2, 4, 6, 16, 32]], ['hex', 1200.3, 700.6, [2, 5, 16]]]) {
+    for (const pxW of list) {
+      const r = run(L.SHAPE[key], pxW, cx, cy);
+      const pass = Math.abs(r.bias) < (r.tier === 'cells' ? 0.01 : 0.03) && r.err < (r.tier === 'cells' ? 0.05 : r.tier === 'pyramid' ? 0.15 : 1);
+      res[`${key} ${pxW}`] = `${r.tier}: bias ${r.bias.toFixed(3)} err ${r.err.toFixed(3)}${pass ? '' : ' FAIL'}`;
+      if (!pass) ok = false;
+    }
+  }
+  const pan = [0, 0.5, 1, 1.5].map(dx => run(L.SHAPE.square, 16, 1500 + dx, -900).mean);
+  const spread = (Math.max(...pan) - Math.min(...pan)) / (pan.reduce((a, b) => a + b) / pan.length);
+  res.pan16 = `${pan.map(m => m.toFixed(3)).join(' ')} spread ${spread.toFixed(3)}${spread < 0.03 ? '' : ' FAIL'}`;
+  if (!(spread < 0.03)) ok = false;
+  return { res, ok };
 }
 
 // --- boot ------------------------------------------------------------------------------------------
