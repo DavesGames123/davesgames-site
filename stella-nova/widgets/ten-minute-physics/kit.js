@@ -108,7 +108,7 @@ function rngFrom(seed) {
 const KIT_SRC = document.currentScript && document.currentScript.src;
 
 function saver(spec) {
-  let on = false, savedStyle = null, opts = null, rng = null, order = [], pos = 0, cur = null, stopShot = null, timer = 0, raf = 0, last = 0, box = null, ctx = null;
+  let hist = [], on = false, savedStyle = null, opts = null, rng = null, order = [], pos = 0, cur = null, stopShot = null, timer = 0, raf = 0, last = 0, box = null, ctx = null;
   const calmOf = () => Math.max(0, Math.min(1, opts && opts.calm != null ? +opts.calm : 0.7));
 
   async function frame() {
@@ -157,7 +157,7 @@ function saver(spec) {
     setTimeout(frame, 80); setTimeout(frame, 750);
   }
 
-  function nextShot(force) {
+  function nextShot(force, why) {
     if (!on) return;
     if (stopShot) { try { stopShot(); } catch (e) { console.error(e); } stopShot = null; }
     if (!order.length || pos >= order.length) {
@@ -168,6 +168,7 @@ function saver(spec) {
     }
     cur = force ? (spec.shots.find(s => s.key === force) || spec.shots[order[pos++]]) : spec.shots[order[pos++]];
     ctx = { rng, calm: calmOf(), w: box ? box.w : innerWidth, h: box ? box.h : innerHeight, shot: cur.key, t: 0 };
+    hist.push({ shot: cur.key, why: why || (force ? 'cut' : 'timer'), ms: Math.round(performance.now()) }); if (hist.length > 40) hist.shift();
     label(cur);
     try { stopShot = cur.run ? cur.run(ctx) || null : null; } catch (e) { console.error(e); }
     clearTimeout(timer);
@@ -192,7 +193,7 @@ function saver(spec) {
       document.documentElement.classList.add('tmp-saver');
       if (spec.enter) { try { spec.enter(opts); } catch (e) { console.error(e); } }
       addEventListener('resize', onResize);
-      return frame().then(() => { nextShot(); last = 0; raf = requestAnimationFrame(loop); return { canvas: spec.canvas(), warmupMs: spec.warmupMs || 600 }; });
+      return frame().then(() => { nextShot(null, 'enter'); last = 0; raf = requestAnimationFrame(loop); return { canvas: spec.canvas(), warmupMs: spec.warmupMs || 600 }; });
     },
     exit() {
       on = false; clearTimeout(timer); cancelAnimationFrame(raf); removeEventListener('resize', onResize);
@@ -201,7 +202,7 @@ function saver(spec) {
       else location.reload();
     },
     cut(key) { nextShot(key); },
-    debug() { return { on, shot: cur && cur.key, t: ctx && ctx.t, box, shots: spec.shots.map(s => s.key) }; },
+    debug() { return { on, shot: cur && cur.key, t: ctx && ctx.t, box, shots: spec.shots.map(s => s.key), hist: hist.slice() }; },
   };
 }
 

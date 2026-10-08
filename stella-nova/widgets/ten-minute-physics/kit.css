@@ -30,7 +30,9 @@ body.tmp-has-credit { padding-bottom: 44px; }
 /* Screensaver frame: only the sim canvas shows, on the page colour, inside
    the clear band of the shell label plate (kit.js sets top, left, size). */
 html.tmp-saver, html.tmp-saver body { overflow: hidden !important; cursor: none; }
-html.tmp-saver body { background: var(--tmp-saver-bg, #000) !important; }
+html.tmp-saver body { background: var(--tmp-saver-bg, #000) !important; color: transparent !important; }
+/* Upstream labels such as "Restitution" are bare text nodes in <body>, so
+   visibility on elements cannot hide them; the transparent colour does. */
 html.tmp-saver body > *:not(.tmp-saver-keep) { visibility: hidden !important; }
 html.tmp-saver body .tmp-saver-canvas { visibility: visible !important; position: fixed !important; z-index: 99; border: 0 !important; margin: 0 !important; }
-html.tmp-saver body .tmp-saver-keep { visibility: visible !important; }
+html.tmp-saver body .tmp-saver-keep { visibility: visible !important; color: #e8ecf4 !important; }
