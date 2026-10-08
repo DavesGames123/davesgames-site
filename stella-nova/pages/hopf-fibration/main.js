@@ -14,6 +14,23 @@
 //  as uRot (scene.setRotation). For the modes that keep fibres, the base
 //  sphere shows rings at the images p(M q) of the base points.
 //
+//  ANIMATION  animate(dt) runs once per frame (state A, not saved):
+//    flow      G.flow 'spin' (about the polar axis) or 'tumble' (about an
+//              axis that precesses) turns every base point on S2 by A.R;
+//              the shader reads it as uBaseRot, effBase(i) gives the same
+//              point to picking, linking and the base sphere
+//    breathe   G.breathe: each latitude rocks by up to 0.2 rad, a flower
+//              curve swells and its waves travel, a seam twists, a small
+//              circle grows and shrinks (eased in and out by A.bK)
+//    pulse     G.pulse: light pulses run along the fibres (uPulse)
+//    morph     a preset in the same group: the old base points slide to the
+//              new ones (uMorph); other presets: the fibres are drawn on
+//              as growing arcs (uGrow)
+//    weights   setWeights(pq, from) blends the orbits from the old to the
+//              new (p, q) on S3 (uPQ, uPQMix)
+//  Pause stops the rotation, the flow, the breathing and the pulses; the
+//  transitions always finish.
+//
 //  LINKING  Two selected fibres (a tap on a tube picks one; the 'linked'
 //  preset picks two) get a disc each: the flat disc that the projected
 //  circle bounds. The other fibre crosses that disc at one point, which
@@ -26,7 +43,9 @@
 //
 //  GREP MAP
 //    grep -n 'function rebuild'        items -> fibres -> instance attributes
-//    grep -n 'function applyPreset'    the presets
+//    grep -n 'function applyPreset'    the presets and their transitions
+//    grep -n 'function animate'        flow, breathing, pulses, morphs
+//    grep -n 'function effBase'        the base point the shader draws
 //    grep -n 'function onBasePointer'  tools on the base sphere
 //    grep -n 'function pickFibre'      tap a tube in 3D
 //    grep -n 'function updateLink'     discs, pierce points, Gauss integral
@@ -53,10 +72,29 @@ const G = {
   rad: COARSE ? 0.04 : 0.032, conf: false, pole: 0, tool: 'point', seed: 1,
   sel: [], trace: null, thin: false, custom: false,
   pq: [1, 1],             // weights of the circle action; [1, 1] is the Hopf fibration
+  flow: 'spin', flowRate: 0.16, breathe: true, pulse: true,
 };
+// Animation state that is not the user's (not saved by the saver).
+//   R      the flow: a 3x3 turn of every base point on S2 (uBaseRot)
+//   morph  { from, t, dur }: the base points go from 'from' to the fibres
+//   grow   0..1: the fibres are drawn on as arcs (uGrow)
+//   pqFrom, pqT  a change of weights in progress (uPQ, uPQMix)
+//   bK, bT the breathing: strength (eased to G.breathe) and time
+//   pK, pT the light pulses: strength and phase
+const A = { R: H.ident3(), flowT: 0, morph: null, grow: 1, growDur: 1.9, pqFrom: [1, 1], pqT: 1, bK: 0, bT: 0, pK: 0, pT: 0 };
+const ease = t => { t = Math.max(0, Math.min(1, t)); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
 const isHopf = () => G.pq[0] === 1 && G.pq[1] === 1;
 // The projected curve of the fibre over b at the weights in G.pq.
 const curveOf = (b, M, n) => H.fibreCurve(b, M, n, G.pq);
+// The base point of fibre i as the shader draws it now: the morph, then
+// the flow.
+function effBase(i) {
+  const f = fibres[i]; if (!f) return [0, 0, 1];
+  let b = f.b;
+  if (A.morph && A.morph.from[i]) b = H.nlerp3(A.morph.from[i], b, ease(A.morph.t / A.morph.dur));
+  return H.mat3Vec(A.R, b);
+}
+const curveAt = (i, M, n) => curveOf(effBase(i), M, n);
 
 // ------------------------------------------------------------------ scene
 const canvas = $('view');
@@ -85,6 +123,11 @@ function rebuild() {
     list.push({ b: T.b, rgb, hex: toHex(rgb), item: -2, rad: 1.9, glow: 0.35, head: true });
   }
   fibres = list.slice(0, cap);
+  // fibres that appear during a morph (the trace trail) start in place
+  if (A.morph && A.morph.from.length < fibres.length) {
+    while (A.morph.from.length < fibres.length) A.morph.from.push(fibres[A.morph.from.length].b);
+    S.setMorphFrom(A.morph.from);
+  }
   G.sel = G.sel.filter(i => i < fibres.length);
   const thin = G.thin ? 0.45 : 1;
   // G.focus (saver) dims every fibre that is not selected
@@ -94,27 +137,56 @@ function rebuild() {
     rad: (f.rad || 1) * thin * (G.sel.includes(i) ? (dim ? 2.4 : 1.7) : dim ? 0.7 : 1),
     glow: (f.glow || 0) + (G.sel.includes(i) ? 0.45 : 0),
     stripe: G.stripes ? (G.thin ? 0.5 : 1) : 0,
+    order: fibres.length > 1 ? i / (fibres.length - 1) : 0,
   })));
   $('roCount').textContent = String(fibres.length);
   baseDirty = true; linkDirty = true;
 }
 
 // ----------------------------------------------------------------- presets
+// o.transition: 'morph' (the old fibres slide over S2 to the new ones),
+// 'grow' (the new fibres are drawn on), 'none'. The default morphs within
+// one preset group and grows across groups.
+const groupOf = id => (H.PRESETS.find(p => p.id === id) || {}).group || 'hopf';
 function applyPreset(id, o = {}) {
   const P = H.PRESETS.find(p => p.id === id) || H.PRESETS[0];
   if (o.seed) G.seed = o.seed;
   if (o.density) G.density = o.density;
   const made = P.make(G.density, H.makeRng(G.seed));
+  const old = fibres.map((_, i) => effBase(i)), oldPq = G.pq.slice();
+  const tr = o.transition || (old.length && !G.custom && groupOf(G.preset) === P.group ? 'morph' : old.length && G.custom ? 'morph' : 'grow');
   G.preset = P.id; G.custom = false;
-  G.items = made.items.map(it => Object.assign({}, it, it.kind === 'lat' ? { beta0: Math.asin(it.z) } : {}));
+  G.items = made.items.map(it => Object.assign({}, it, it.kind === 'lat' ? { beta0: Math.asin(it.z) } : {},
+    it.kind === 'loop' ? { rest: { amp: it.amp, a: it.a, rho: it.rho } } : {}));
   G.thin = !!made.thin;
   G.pq = made.pq ? made.pq.slice() : [1, 1];
   G.trace = made.trace ? { u: 0, b: H.loxodrome(0), trail: [], acc: 0 } : null;
   G.sel = made.discs ? [0, 1] : [];
   G.sweepPhase = 0;
   rebuild();
+  startTransition(tr, old, oldPq);
   syncPresetUI();
 }
+function startTransition(tr, old, oldPq) {
+  A.R = H.ident3();
+  A.morph = null;
+  if (tr === 'morph' && old.length && fibres.length) {
+    const from = fibres.map((_, i) => old[i % old.length]);
+    A.morph = { from, t: 0, dur: 1.4 };
+    S.setMorphFrom(from);
+    A.grow = 1;
+  } else A.grow = tr === 'grow' ? 0 : 1;
+  setWeights(G.pq, tr === 'morph' ? oldPq : null);
+}
+// New weights. from: the old weights to blend from (null: at once).
+function setWeights(pq, from) {
+  G.pq = pq.slice();
+  if (from && (from[0] !== pq[0] || from[1] !== pq[1])) { A.pqFrom = from.slice(); A.pqT = 0; }
+  else { A.pqFrom = pq.slice(); A.pqT = 1; }
+  linkDirty = true;
+}
+// Draw the fibres on again.
+function regrow() { A.morph = null; A.grow = 0; }
 function syncPresetUI() {
   const P = H.PRESETS.find(p => p.id === G.preset);
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', !G.custom && b.dataset.id === G.preset));
@@ -128,6 +200,8 @@ function markCustom() { if (!G.custom) { G.custom = true; G.trace = null; syncPr
 // paint (a curve). 'turn' is handled in insets.js.
 let edit = null;
 function onBasePointer(type, b, info) {
+  // the items live in the frame before the flow: undo the flow turn
+  if (b) b = H.mat3Vec(H.mat3T(A.R), b);
   if (type === 'down') {
     markCustom();
     if (G.tool === 'point') {
@@ -135,7 +209,7 @@ function onBasePointer(type, b, info) {
       let hit = -1, best = 16 * (info.dpr || 1);
       G.items.forEach((it, k) => {
         if (it.kind !== 'point') return;
-        const p = base.toScreen(it.b); if (p.z < 0) return;
+        const p = base.toScreen(H.mat3Vec(A.R, it.b)); if (p.z < 0) return;
         const d = Math.hypot(p.x - info.px, p.y - info.py); if (d < best) { best = d; hit = k; }
       });
       if (hit < 0) { G.items.push({ kind: 'point', b }); hit = G.items.length - 1; }
@@ -143,7 +217,7 @@ function onBasePointer(type, b, info) {
       edit = { k: hit };
     } else if (G.tool === 'lat') {
       // beta0 holds the height without the sweep phase, as in the 'move' case
-      G.items.push({ kind: 'lat', z: b[2], beta0: Math.asin(Math.max(-1, Math.min(1, b[2]))) - G.sweepPhase });
+      G.items.push({ kind: 'lat', z: b[2], beta0: Math.asin(Math.max(-1, Math.min(1, b[2]))) - G.sweepPhase, bo: 0 });
       edit = { k: G.items.length - 1 };
     } else if (G.tool === 'paint') {
       G.items.push({ kind: 'curve', pts: [b] });
@@ -157,7 +231,7 @@ function onBasePointer(type, b, info) {
     const it = G.items[edit.k];
     if (!it) return;
     if (it.kind === 'point') it.b = b;
-    else if (it.kind === 'lat') { it.z = b[2]; it.beta0 = Math.asin(Math.max(-1, Math.min(1, b[2]))) - G.sweepPhase; }
+    else if (it.kind === 'lat') { it.z = b[2]; it.beta0 = Math.asin(Math.max(-1, Math.min(1, b[2]))) - G.sweepPhase - (it.bo || 0); }
     else if (it.kind === 'curve') {
       const last = it.pts[it.pts.length - 1];
       if (Math.acos(Math.max(-1, Math.min(1, last[0] * b[0] + last[1] * b[1] + last[2] * b[2]))) > 0.035) it.pts.push(b);
@@ -174,7 +248,7 @@ function setTool(t) {
 }
 // What the base sphere shows: item curves, fibre dots, image rings.
 function baseState(M) {
-  const curves = [];
+  const curves = [], R = A.R, turn = pts => pts.map(p => H.mat3Vec(R, p));
   G.items.forEach(it => {
     if (it.kind === 'lat') {
       const r = Math.sqrt(Math.max(0, 1 - it.z * it.z)), span = it.span || H.TAU, ph0 = it.ph0 || 0;
@@ -188,13 +262,14 @@ function baseState(M) {
     } else if (it.kind === 'curve' && it.pts.length > 1) curves.push({ pts: it.pts, hex: '#c9d3e6', closed: false });
   });
   if (G.trace) curves.push({ pts: Array.from({ length: 200 }, (_, i) => H.loxodrome(G.trace.u - 0.5 + i / 200)), hex: 'rgba(200,210,230,0.5)', closed: false });
+  curves.forEach(c => { c.pts = turn(c.pts); });
   const many = fibres.length > 400, step = many ? Math.ceil(fibres.length / 400) : 1;
   const dots = [];
-  for (let i = 0; i < fibres.length; i += step) dots.push({ b: fibres[i].b, hex: fibres[i].hex, sel: G.sel.includes(i) });
-  G.sel.forEach(i => { if (fibres[i] && i % step) dots.push({ b: fibres[i].b, hex: fibres[i].hex, sel: true }); });
+  for (let i = 0; i < fibres.length; i += step) dots.push({ b: effBase(i), hex: fibres[i].hex, sel: G.sel.includes(i) });
+  G.sel.forEach(i => { if (fibres[i] && i % step) dots.push({ b: effBase(i), hex: fibres[i].hex, sel: true }); });
   const images = [];
   if (isHopf() && H.MODES[G.mode].keepsFibres && G.mode !== 'still' && G.mode !== 'along' && fibres.length <= 120) {
-    for (const f of fibres) images.push({ b: H.hopf(H.matVec(M, H.fibrePoint(f.b, 0))), hex: f.hex });
+    fibres.forEach((f, i) => images.push({ b: H.hopf(H.matVec(M, H.fibrePoint(effBase(i), 0))), hex: f.hex }));
   }
   return { curves, dots, images };
 }
@@ -208,7 +283,7 @@ function pickFibre(cx, cy, Mfull) {
   const step = fibres.length > 900 ? Math.ceil(fibres.length / 900) : 1;
   for (let i = 0; i < fibres.length; i += step) {
     if (fibres[i].trail) continue;
-    const C = curveOf(fibres[i].b, Mfull, n);
+    const C = curveAt(i, Mfull, n);
     for (let k = 0; k < n; k++) {
       const x = C[k * 3], y = C[k * 3 + 1], z = C[k * 3 + 2];
       if (x * x + y * y + z * z > 900) continue;
@@ -228,7 +303,7 @@ function updateLink(Mfull) {
   const pair = G.sel.length === 2 && fibres[G.sel[0]] && fibres[G.sel[1]];
   $('roLinkRow').hidden = !pair;
   if (!pair) { S.setDisc(0, null); S.setDisc(1, null); S.setDot(0, null); S.setDot(1, null); return; }
-  const n = isHopf() ? 240 : 720, A = curveOf(fibres[G.sel[0]].b, Mfull, n), B = curveOf(fibres[G.sel[1]].b, Mfull, n);
+  const n = isHopf() ? 240 : 720, A = curveAt(G.sel[0], Mfull, n), B = curveAt(G.sel[1], Mfull, n);
   const curves = [A, B], fs = [fibres[G.sel[0]], fibres[G.sel[1]]];
   for (let k = 0; k < 2; k++) {
     const C = curves[k], P = i => [C[i * 3], C[i * 3 + 1], C[i * 3 + 2]];
@@ -298,12 +373,12 @@ function frame(now) {
   for (const f of hooks) f(dt, now);
 
   if (G.playing && G.mode !== 'still') G.a += dt * G.speed;
-  let need = false;
+  let need = animate(G.playing ? dt : 0);
   if (G.sweep && G.items.some(it => it.kind === 'lat')) {
     G.sweepPhase += dt * (G.sweepRate || 0.35);
-    G.items.forEach(it => { if (it.kind === 'lat') it.z = Math.sin(it.beta0 + G.sweepPhase); });
     need = true;
   }
+  if (need) G.items.forEach(it => { if (it.kind === 'lat' && it.beta0 != null) it.z = Math.max(-0.995, Math.min(0.995, Math.sin(it.beta0 + G.sweepPhase + (it.bo || 0)))); });
   if (G.trace) {
     const T = G.trace; T.u += dt * 0.035; T.b = H.loxodrome(T.u); T.acc += dt;
     if (T.acc > 0.2) { T.acc = 0; T.trail.push(T.b); if (T.trail.length > (COARSE ? 18 : 30)) T.trail.shift(); }
@@ -315,7 +390,12 @@ function frame(now) {
   const Mfull = H.matMul(H.planeMat(2, 3, G.pole), M);
   Mcur = M; MfullCur = Mfull;
   S.setRotation(Mfull);
-  S.uniforms.uPQ.value.set(G.pq[0], G.pq[1], G.pq[0], G.pq[1]);
+  if (A.pqT < 1) { S.uniforms.uPQ.value.set(A.pqFrom[0], A.pqFrom[1], G.pq[0], G.pq[1]); S.uniforms.uPQMix.value = ease(A.pqT); }
+  else { S.uniforms.uPQ.value.set(G.pq[0], G.pq[1], G.pq[0], G.pq[1]); S.uniforms.uPQMix.value = 0; }
+  S.uniforms.uMorph.value = A.morph ? ease(A.morph.t / A.morph.dur) : 1;
+  S.uniforms.uGrow.value = ease(A.grow);
+  S.setBaseRotation(A.R);
+  S.uniforms.uPulse.value = A.pT; S.uniforms.uPulseOn.value = A.pK;
   S.uniforms.uRad.value = G.rad;
   S.uniforms.uConf.value = G.conf ? 1 : 0;
   S.controls.autoRotate = G.orbit;
@@ -342,6 +422,51 @@ function frame(now) {
     $('roSelRow').hidden = !s0;
     if (s0) { $('roSw').style.background = s0.hex; typesetLive($('roSel'), s0.b); }
   }
+}
+
+// One step of the page animations. dt is 0 while paused, except for the
+// transitions (morph, draw-on, weights), which always finish. Returns true
+// when the items changed and the fibres need a rebuild.
+const TUMBLE_TILT = 1.1;
+function animate(dt) {
+  const dtr = Math.min(0.05, (performance.now() - (animate.last || 0)) / 1000); animate.last = performance.now();
+  if (A.morph) { A.morph.t += dtr; if (A.morph.t >= A.morph.dur) A.morph = null; }
+  if (A.grow < 1) A.grow = Math.min(1, A.grow + dtr / A.growDur);
+  if (A.pqT < 1) { A.pqT = Math.min(1, A.pqT + dtr / 1.3); if (A.pqT >= 1) linkDirty = true; }
+  // the flow
+  if (G.flow !== 'off' && dt > 0) {
+    const s = dt * G.flowRate;
+    let axis = [0, 0, 1];
+    if (G.flow === 'tumble') {
+      A.flowT += s;
+      const w = 0.37 * A.flowT;
+      axis = [Math.sin(TUMBLE_TILT) * Math.cos(w), Math.sin(TUMBLE_TILT) * Math.sin(w), Math.cos(TUMBLE_TILT)];
+    }
+    A.R = H.orthonormal3(H.mat3Mul(H.axisAngle3(axis, s), A.R));
+    baseDirty = true;
+  }
+  // the light pulses
+  A.pK += ((G.pulse ? 1 : 0) - A.pK) * Math.min(1, dtr * 2);
+  if (A.pK < 0.002 && !G.pulse) A.pK = 0;
+  A.pT += dt * 0.22;
+  // the breathing of the latitudes and closed curves
+  const bGoal = G.breathe ? 1 : 0;
+  A.bK += (bGoal - A.bK) * Math.min(1, dtr * 1.5);
+  if (Math.abs(A.bK - bGoal) < 0.002) A.bK = bGoal;
+  if (A.bK <= 0 && !G.items.some(it => it.bo)) return false;
+  A.bT += dt;
+  const T = A.bT, K = A.bK;
+  let any = false;
+  G.items.forEach((it, k) => {
+    if (it.kind === 'lat') { it.bo = 0.2 * K * Math.sin(1.25 * T + 1.7 * k); any = true; }
+    else if (it.kind === 'loop' && it.rest) {
+      if (it.shape === 'flower') { it.amp = it.rest.amp * (1 + 0.5 * K * Math.sin(1.1 * T)); it.ph1 = (it.ph1 || 0) + dt * 0.45 * K; }
+      else if (it.shape === 'seam') it.a = it.rest.a + 0.1 * K * Math.sin(0.9 * T);
+      else if (it.shape === 'tilt') it.rho = it.rest.rho * (1 + 0.3 * K * Math.sin(1.2 * T + 2 * k));
+      any = true;
+    }
+  });
+  return any && dt > 0;
 }
 
 // --------------------------------------------------------------------- UI
@@ -439,7 +564,7 @@ function buildUI() {
   $('zeroBtn').addEventListener('click', () => { G.a = 0; });
   toggleBtn('sweepBtn', 'sweep', () => {
     if (G.sweep && !G.items.some(it => it.kind === 'lat')) applyPreset('nested');
-    if (!G.sweep) G.items.forEach(it => { if (it.kind === 'lat') it.beta0 = Math.asin(Math.max(-1, Math.min(1, it.z))) - G.sweepPhase; });
+    if (!G.sweep) G.items.forEach(it => { if (it.kind === 'lat') it.beta0 = Math.asin(Math.max(-1, Math.min(1, it.z))) - G.sweepPhase - (it.bo || 0); });
   });
   toggleBtn('orbitBtn', 'orbit');
   toggleBtn('stripeBtn', 'stripes', rebuild);
@@ -520,7 +645,7 @@ function resetView() {
 // function for the framing, and add frame hooks.
 const app = {
   G, S, H, applyPreset, rebuild, syncPresetUI, setMode, setPlaying, setDistance, fitDistance, occ,
-  fibres: () => fibres, linking: () => lastLk, curveOf,
+  fibres: () => fibres, linking: () => lastLk, curveOf, curveAt, effBase, regrow, setWeights, A,
   // the rotation of the state in G now (not the last frame's)
   rotation: () => H.matMul(H.planeMat(2, 3, G.pole), H.rotationFor(G.mode, G.a, { tilt: G.tilt })),
   setBand(fn) { saverBand = fn; },

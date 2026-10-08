@@ -17,6 +17,7 @@
 //    hopf tori  preimages map back onto the curve; area = pi * length
 //    polyhedra  vertex counts, regular, clear of the south pole, Lk = +-1
 //    knots      the orbits of a knot preset are distinct; same torus Lk = p q
+//    flow       3x3 turns: orthogonal, fixed axis, angle; morph blend on S2
 //    presets    deterministic, finite, under the cap
 //    budget     GPU bytes of the 3D view stay under a hard limit
 // ============================================================================
@@ -260,6 +261,29 @@ const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
   const lat = H.sampleItems([{ kind: 'lat', z: 0.05, n: 4, span: H.TAU / 3, open: true }], 24);
   const L = H.linkingNumber(H.fibreCurve(lat[0].b, null, 1500, [2, 3]), H.fibreCurve(lat[2].b, null, 1500, [2, 3]));
   ok('knots: two trefoils on one torus link 6 times', Math.abs(Math.abs(L) - 6) < 0.05, `Lk ${L.toFixed(3)}`);
+}
+// flow: the 3x3 turns of the base sphere, and the morph blend
+{
+  let orth = 0, axis = 0, ang = 0, drift = 0, unit = 0, ends = 0;
+  let R = H.ident3();
+  for (let k = 0; k < 300; k++) {
+    const a = randS2(), s = rng.range(-3, 3), M = H.axisAngle3(a, s), P = H.mat3Mul(M, H.mat3T(M));
+    orth = Math.max(orth, ...P.map((v, i) => Math.abs(v - (i % 4 === 0 ? 1 : 0))));
+    axis = Math.max(axis, dist(H.mat3Vec(M, a), a));
+    // a vector at right angles to a turns by |s|
+    const w0 = Math.hypot(a[0], a[1]) > 1e-6 ? [a[1], -a[0], 0] : [1, 0, 0], wl = Math.hypot(...w0), vp = w0.map(x => x / wl);
+    const img = H.mat3Vec(M, vp);
+    ang = Math.max(ang, Math.abs(Math.acos(Math.max(-1, Math.min(1, img.reduce((q, x, i) => q + x * vp[i], 0)))) - Math.abs(s)));
+    R = H.orthonormal3(H.mat3Mul(H.axisAngle3(a, 0.013), R));
+    const b = randS2(), c = randS2(), t = rng.next(), m = H.nlerp3(b, c, t);
+    unit = Math.max(unit, Math.abs(Math.hypot(...m) - 1));
+    ends = Math.max(ends, dist(H.nlerp3(b, c, 0), b), dist(H.nlerp3(b, c, 1), c));
+  }
+  const P = H.mat3Mul(R, H.mat3T(R));
+  drift = Math.max(...P.map((v, i) => Math.abs(v - (i % 4 === 0 ? 1 : 0))));
+  ok('flow: axisAngle3 is a turn about its axis by s', orth < 1e-12 && axis < 1e-12 && ang < 1e-9, `orth ${orth.toExponential(1)} axis ${axis.toExponential(1)} angle ${ang.toExponential(1)}`);
+  ok('flow: 300 small turns stay orthogonal', drift < 1e-12, `err ${drift.toExponential(2)}`);
+  ok('flow: morph blend stays on S2 and hits its ends', unit < 1e-12 && ends < 1e-12, `unit ${unit.toExponential(1)} ends ${ends.toExponential(1)}`);
 }
 // presets
 {

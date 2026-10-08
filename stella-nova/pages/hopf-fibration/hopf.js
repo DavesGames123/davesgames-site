@@ -45,6 +45,7 @@
 //    rotationFor, MODES, baseColor, toSRGB, hexOf,
 //    sampleItems, PRESETS, PRESET_GROUPS, makeRng, fibonacciSphere,
 //    loopPoint, polyhedron, torusArea,
+//    ident3, mat3Mul, mat3Vec, mat3T, axisAngle3, orthonormal3, nlerp3
 //    circleFrom3, pierce, linkingNumber, loxodrome
 // ============================================================================
 
@@ -177,6 +178,36 @@ export function rotationFor(mode, s, opts = {}) {
   if (mode === 'plane') return planeMat(0, 3, s);
   if (mode === 'double') return matMul(planeMat(0, 3, s), planeMat(1, 2, s / GOLD));
   return ident();
+}
+
+// ------------------------------------------------------- turns of S2 (3x3)
+// The flow turns the base points on S2. Row-major 9 numbers, as uBaseRot.
+export function ident3() { return [1, 0, 0, 0, 1, 0, 0, 0, 1]; }
+export function mat3Mul(A, B) {
+  const C = new Array(9);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) C[r * 3 + c] = A[r * 3] * B[c] + A[r * 3 + 1] * B[3 + c] + A[r * 3 + 2] * B[6 + c];
+  return C;
+}
+export function mat3Vec(R, v) { return [R[0] * v[0] + R[1] * v[1] + R[2] * v[2], R[3] * v[0] + R[4] * v[1] + R[5] * v[2], R[6] * v[0] + R[7] * v[1] + R[8] * v[2]]; }
+export function mat3T(R) { return [R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]]; }
+// A turn by s about the unit axis a (Rodrigues).
+export function axisAngle3(a, s) {
+  const [x, y, z] = a, c = Math.cos(s), n = Math.sin(s), k = 1 - c;
+  return [c + x * x * k, x * y * k - z * n, x * z * k + y * n,
+          y * x * k + z * n, c + y * y * k, y * z * k - x * n,
+          z * x * k - y * n, z * y * k + x * n, c + z * z * k];
+}
+// Gram-Schmidt on the rows, so a product of many small turns stays a turn.
+export function orthonormal3(R) {
+  const a = norm3([R[0], R[1], R[2]]), b0 = [R[3], R[4], R[5]], d = dot3(a, b0);
+  const b = norm3([b0[0] - d * a[0], b0[1] - d * a[1], b0[2] - d * a[2]]), c = cross3(a, b);
+  return [...a, ...b, ...c];
+}
+// The base point of a morph at u in 0..1: a blend, put back on S2. The
+// vertex shader does the same (uMorph). Near-opposite ends jump to b.
+export function nlerp3(a, b, u) {
+  const m = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u], l = Math.hypot(m[0], m[1], m[2]);
+  return l > 1e-3 ? [m[0] / l, m[1] / l, m[2] / l] : b.slice();
 }
 
 // ------------------------------------------------------------------ colour

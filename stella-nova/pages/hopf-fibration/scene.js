@@ -6,7 +6,16 @@
 //  the fibre parameter t / 2 pi, position.y the angle around the tube. Each
 //  instance has a base point aBase on S2, a colour, and aAux:
 //      aAux.x  tube radius scale     aAux.y  glow (emissive)
-//      aAux.z  stripe weight         aAux.w  unused
+//      aAux.z  stripe weight         aAux.w  order 0..1 (draw-in, pulses)
+//  and aBase0, the start of a morph.
+//
+//  ANIMATION  (all uniforms; no geometry rebuild)
+//      uMorph    0..1: the base point goes from aBase0 to aBase (normalised
+//                blend), so each tube is a true fibre all the way
+//      uBaseRot  3x3 turn of every base point on S2 (the flow)
+//      uGrow     0..1: each fibre is drawn on as a growing arc, in the
+//                order aAux.w, with a bright tip
+//      uPulse    the phase of light pulses along the fibres (uPulseOn)
 //  The vertex shader (FIBRE_GLSL) puts each vertex on the fibre over aBase,
 //  rotates it by uRot (4x4), projects it from e4 to R3, and builds the tube
 //  frame from three points of the circle (tangent, and normal to the
@@ -37,6 +46,7 @@
 //  FIBRE_GLSL is also the code extract on the saver plate.
 //  grep -n targets: "FIBRE_GLSL", "function patchMaterial", "function setFibres",
 //                   "function setDiscs", "function setBand", "BAND_GLSL",
+//                   "function setMorphFrom", "function setBaseRotation",
 //                   "function render", "function resize"
 // ============================================================================
 import * as THREE from 'three';
@@ -79,8 +89,12 @@ vec3 hopfStereo(vec4 q, out float d) {
 
 const VERT_HEAD = `
 attribute vec3 aBase;
+attribute vec3 aBase0;
 attribute vec4 aAux;
 uniform mat4 uRot;
+uniform mat3 uBaseRot;
+uniform float uMorph, uGrow;
+varying float vGrow;
 uniform vec4 uPQ;
 uniform float uPQMix;
 uniform float uRad, uFar, uSegMax, uSeg, uConf;
@@ -91,10 +105,15 @@ ${FIBRE_GLSL}
 `;
 const VERT_TUBE = `
   float tt = position.x * 6.28318530718, ang = position.y, h = 6.28318530718 / uSeg;
+  // the base point: on its way from aBase0 to aBase (a preset morph),
+  // then turned on S2 by the flow
+  vec3 bb = aBase;
+  if (uMorph < 1.0) { vec3 bm = mix(aBase0, aBase, uMorph); float bl = length(bm); bb = bl > 1e-3 ? bm / bl : aBase; }
+  bb = uBaseRot * bb;
   float d0, d1, d2;
-  vec3 P  = hopfStereo(hopfFibre(aBase, tt), d0);
-  vec3 Pa = hopfStereo(hopfFibre(aBase, tt + h), d1);
-  vec3 Pb = hopfStereo(hopfFibre(aBase, tt - h), d2);
+  vec3 P  = hopfStereo(hopfFibre(bb, tt), d0);
+  vec3 Pa = hopfStereo(hopfFibre(bb, tt + h), d1);
+  vec3 Pb = hopfStereo(hopfFibre(bb, tt - h), d2);
   vec3 Tg = Pa - Pb; float segL = length(Tg); Tg /= max(segL, 1e-12);
   vec3 K = Pa + Pb - 2.0 * P; K -= dot(K, Tg) * Tg; float kl = length(K);
   vec3 Nn = kl > 1e-6 * segL ? K / kl : normalize(cross(Tg, abs(Tg.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
@@ -105,12 +124,16 @@ const VERT_TUBE = `
   vFar = (length(P) > uFar || segL > uSegMax || d0 < 1e-4) ? 1.0 : 0.0;
   vT = position.x;
   vAux = aAux;
+  // the drawn part of the fibre, 0..1: fibres start in the order aAux.w
+  vGrow = clamp(uGrow * 1.5 - aAux.w * 0.5, 0.0, 1.0);
   vec3 objectNormal = ringN;
 `;
 const FRAG_HEAD = `
 uniform float uStripes;
 uniform vec3 uBand;
 uniform float uBandOn;
+uniform float uPulse, uPulseOn;
+varying float vGrow;
 varying float vT;
 varying float vFar;
 varying vec4 vAux;
@@ -151,12 +174,20 @@ function patchMaterial(mat, uniforms) {
       .replace('#include <begin_vertex>', 'vec3 transformed = hopfPos;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + FRAG_HEAD)
-      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if (vFar > 0.0005) discard;')
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if (vFar > 0.0005) discard;\n  if (vGrow < 0.9999 && vT > vGrow) discard;')
       .replace('#include <color_fragment>', `#include <color_fragment>
   float ph = fract(vT * uStripes);
   float band = smoothstep(0.0, 0.08, ph) * (1.0 - smoothstep(0.42, 0.5, ph));
   diffuseColor.rgb *= mix(1.0, 0.5 + 0.62 * band, vAux.z);`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * vAux.y;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  totalEmissiveRadiance += diffuseColor.rgb * vAux.y;
+  // the bright tip of a fibre that is being drawn
+  if (vGrow < 0.9999) totalEmissiveRadiance += diffuseColor.rgb * 2.2 * smoothstep(vGrow - 0.04, vGrow, vT);
+  // light pulses that run along each fibre, out of step from fibre to fibre
+  if (uPulseOn > 0.0) {
+    float pp = fract(vT * 2.0 - uPulse + vAux.w * 3.7) - 0.5;
+    totalEmissiveRadiance += diffuseColor.rgb * uPulseOn * 1.6 * exp(-pp * pp * 180.0);
+  }`)
       .replace('#include <fog_fragment>', '#include <fog_fragment>\n' + BAND_GLSL);
   };
   mat.customProgramCacheKey = () => 'hopf-tube-v3';
@@ -208,6 +239,8 @@ export function createScene(canvas, opts = {}) {
   const aBase = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3).setUsage(THREE.DynamicDrawUsage);
   const aCol = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3).setUsage(THREE.DynamicDrawUsage);
   const aAux = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4).setUsage(THREE.DynamicDrawUsage);
+  const aBase0 = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3).setUsage(THREE.DynamicDrawUsage);
+  tmpl.setAttribute('aBase0', aBase0);
   tmpl.setAttribute('aBase', aBase); tmpl.setAttribute('color', aCol); tmpl.setAttribute('aAux', aAux);
   tmpl.instanceCount = 0;
 
@@ -215,6 +248,8 @@ export function createScene(canvas, opts = {}) {
     uRot: { value: new THREE.Matrix4() }, uRad: { value: 0.035 }, uFar: { value: 34 }, uSegMax: { value: 5 },
     uSeg: { value: SEG }, uConf: { value: 0 }, uStripes: { value: 6 },
     uPQ: { value: new THREE.Vector4(1, 1, 1, 1) }, uPQMix: { value: 0 },
+    uBaseRot: { value: new THREE.Matrix3() }, uMorph: { value: 1 }, uGrow: { value: 1 },
+    uPulse: { value: 0 }, uPulseOn: { value: 0 },
     uBand: { value: new THREE.Vector3(0, 1e5, 1) }, uBandOn: { value: 0 },
   };
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.08, envMapIntensity: 0.75 });
@@ -300,12 +335,20 @@ export function createScene(canvas, opts = {}) {
       const f = list[i];
       B[i * 3] = f.b[0]; B[i * 3 + 1] = f.b[1]; B[i * 3 + 2] = f.b[2];
       C[i * 3] = f.rgb[0]; C[i * 3 + 1] = f.rgb[1]; C[i * 3 + 2] = f.rgb[2];
-      A[i * 4] = f.rad ?? 1; A[i * 4 + 1] = f.glow ?? 0; A[i * 4 + 2] = f.stripe ?? 1; A[i * 4 + 3] = 0;
+      A[i * 4] = f.rad ?? 1; A[i * 4 + 1] = f.glow ?? 0; A[i * 4 + 2] = f.stripe ?? 1; A[i * 4 + 3] = f.order ?? 0;
     }
     aBase.needsUpdate = aCol.needsUpdate = aAux.needsUpdate = true;
     tmpl.instanceCount = n;
     return n;
   }
+  // The start points of a morph: list of unit 3-vectors, one per instance.
+  function setMorphFrom(list) {
+    const B0 = aBase0.array, n = Math.min(CAP, list.length);
+    for (let i = 0; i < n; i++) { B0[i * 3] = list[i][0]; B0[i * 3 + 1] = list[i][1]; B0[i * 3 + 2] = list[i][2]; }
+    aBase0.needsUpdate = true;
+  }
+  // R: row-major 9 numbers, the flow on S2.
+  function setBaseRotation(R) { uniforms.uBaseRot.value.set(...R); }
   // M: row-major 16 numbers.
   function setRotation(M) { uniforms.uRot.value.set(...M); }
 
@@ -332,7 +375,7 @@ export function createScene(canvas, opts = {}) {
 
   return {
     THREE, renderer, scene, camera, controls, uniforms, dots, CAP, coarse,
-    resize, setOffset, setBand, setFibres, setRotation, setDisc, setDot, render,
+    resize, setOffset, setBand, setFibres, setRotation, setDisc, setDot, render, setMorphFrom, setBaseRotation,
     budget: () => view.budget,
   };
 }
