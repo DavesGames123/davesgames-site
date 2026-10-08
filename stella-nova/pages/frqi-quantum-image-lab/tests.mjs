@@ -11,10 +11,12 @@
 //                  page run ends inside TARGET_MS; every flight ends inside
 //                  the flight window and lands on its target cell; the saver
 //                  finishes an image inside SAVER_TARGET_MS
+//    phone ...... the 3D stack draws at <= 1.5x on a touch screen; the
+//                 recon type is >= 12 px below 520 px
 //  -v prints each passed check.
 // ============================================================================
 import { encodeFRQI, stateProbs, reconstruct, decodeP1, buildCdf, sampleCdf, shotsAt, runMs, PAGE_SAMPLE_MS, PAGE_FLIGHT_MS, TARGET_MS,
-  flightWindow, flightU, flightPos, tapeCols, saverPlan, SAVER_TARGET_MS } from './frqi-core.js';
+  flightWindow, flightU, flightPos, tapeCols, saverPlan, SAVER_TARGET_MS, glPixelRatio, reconTypeScale } from './frqi-core.js';
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } else if (process.argv.includes('-v')) console.log('ok  ', msg); };
@@ -84,6 +86,19 @@ ok(near(decodeP1(0.25, 'linear'), 63.75, 1e-12), 'linear decode is 255·P₁');
   for (const calm of [0, 0.5, 0.7, 1]) for (const layers of [2, 6, 12, 22, 40]) worst = Math.max(worst, saverPlan(calm, layers).finishMs);
   ok(worst <= SAVER_TARGET_MS, `saver finishes an image in <= ${worst} ms (target ${SAVER_TARGET_MS})`);
   console.log(`  saver: worst fade-in to finished image ${worst} ms (target ${SAVER_TARGET_MS})`);
+}
+
+// phone profile
+{
+  ok(glPixelRatio(3, true) === 1.5 && glPixelRatio(2, true) === 1.5 && glPixelRatio(1, true) === 1, 'touch stack: pixel ratio <= 1.5');
+  ok(glPixelRatio(2, false) === 2 && glPixelRatio(3, false) === 2 && glPixelRatio(undefined, false) === 1, 'desktop stack: pixel ratio <= 2');
+  const rows = [];
+  for (const W of [328, 358, 390, 519, 520, 800]) { const fs = reconTypeScale(W); rows.push(`${W}px: ${(9 * fs).toFixed(1)}px`); ok(W < 520 ? 9 * fs >= 12 : fs === 1, `recon type at ${W}px`); }
+  console.log('  recon title size ' + rows.join(', '));
+  // a full-window phone stack: device px under 1.6 Mpx at 1.5x
+  const px = Math.round(390 * glPixelRatio(3, true)) * Math.round(460 * glPixelRatio(3, true));
+  ok(px < 1.6e6, `phone stack canvas ${(px / 1e6).toFixed(2)} Mpx`);
+  console.log(`  phone stack 390x460 at 3x: ${(px / 1e6).toFixed(2)} Mpx (was ${((390 * 2) * (460 * 2) / 1e6).toFixed(2)} Mpx at 2x)`);
 }
 
 console.log(`${n - fail}/${n} checks passed`);

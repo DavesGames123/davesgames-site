@@ -107,7 +107,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .stack-ctrl{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;padding:6px 11px 8px;background:rgba(9,12,20,0.9);z-index:6}
 .stack-ctrl button{background:rgba(150,200,255,0.08);border:1px solid var(--border-b);color:var(--blue);min-width:28px;height:24px;font-size:0.7rem;cursor:pointer;border-radius:4px;font-family:var(--f-mono)}
 .stack-ctrl button:hover{background:rgba(150,200,255,0.18)}
-.stack-ctrl .st-lbl{margin-left:auto;font:500 0.78rem/1 var(--f-sans);color:var(--amber);white-space:nowrap}
+.stack-ctrl .st-lbl{margin-left:auto;font:500 0.78rem/1 var(--f-sans);color:var(--amber);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.stack-ctrl button{flex-shrink:0}
 /* recon: sampling controls footer */
 #recon-foot{flex-shrink:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto;align-items:center;gap:8px 14px;padding:7px 11px 9px;background:rgba(9,12,20,0.92);border-top:1px solid var(--border)}
 #recon-foot .rf-sl{display:flex;align-items:center;gap:7px;min-width:0}
@@ -145,7 +146,11 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   #dock #dock-sample{color:var(--amber);border-color:rgba(255,185,72,0.5)}
   #grid{display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--border-b);gap:1px;padding-bottom:var(--dock-h)}
   .module{flex:0 0 auto}
-  #m-field{min-height:380px}#m-stack{min-height:460px}#m-recon{min-height:440px}#m-circuit{min-height:200px}
+  #m-field{min-height:380px}#m-stack{min-height:460px}#m-recon{min-height:500px}#m-circuit{min-height:200px}
+  /* the paint canvas keeps the finger; the score strip gives vertical swipes to the page */
+  #src-cv{touch-action:none}#score-cv{touch-action:pan-y}
+  .topbar{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  #grid{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
   #field-body{flex-direction:column}.fld-src{flex:0 0 206px}.fld-amp{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) auto}.fld-amp .amp-cell{min-width:0}.fld-amp .amp-cell+.amp-cell{border-top:none;border-left:1px solid var(--border)}.amp-foot{grid-column:1 / -1}}
 /* Landscape phone: the panel is a drawer on the right edge. */
 @media (max-height:500px) and (pointer:coarse) and (orientation:landscape){
@@ -159,7 +164,17 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   .sw{width:28px;height:28px}
   .stack-ctrl button{min-width:44px;height:40px}
   #run-shots{min-height:44px}
-  .p-fold>summary,.p-more>summary{min-height:40px;display:flex;align-items:center}}
+  .p-fold>summary,.p-more>summary{min-height:40px;display:flex;align-items:center}
+  /* sliders: a 32 px touch strip with a 24 px thumb */
+  input[type=range]{height:32px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%)) center/100% 4px no-repeat}
+  input[type=range]::-webkit-slider-thumb{width:24px;height:24px}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px}
+  #recon-foot .rf-chk{min-height:44px;padding:0 4px}
+  #recon-foot .rf-chk input{width:20px;height:20px}
+  .stack-ctrl button{font-size:0.8rem}
+  .note{font-size:0.78rem}
+  .legend .lg-ends{font-size:0.7rem}
+  .cmap-btn{height:36px}}
 @media(max-width:600px){
   .topbar{height:auto;min-height:36px;flex-wrap:wrap;padding:5px 12px;row-gap:2px}
   .topbar-l{gap:0.7rem}.sys-name{font-size:0.95rem}.topbar-r{display:none}

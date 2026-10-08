@@ -70,13 +70,16 @@
 // ============================================================================
 import * as THREE from 'three';
 import { EQ_STATE } from './equation.js';
-import { buildCdf, sampleCdf, shotsAt, reconstruct, tapeCols, flightU, flightPos, PAGE_FLIGHT_MS, saverPlan } from './frqi-core.js';
+import { buildCdf, sampleCdf, shotsAt, reconstruct, tapeCols, flightU, flightPos, PAGE_FLIGHT_MS, saverPlan, glPixelRatio, reconTypeScale } from './frqi-core.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+// The phone query matches the phone block of style.css. COARSE: a touch screen.
+const PHONE_Q=matchMedia('(max-width:820px),(max-height:500px) and (pointer:coarse)');
+const COARSE=matchMedia('(pointer:coarse)').matches;
 
 /* ===== QAV COLOUR LANGUAGE ===== */
 // Shared palette and colour maps (ported from the Quantum Algorithm Visualizer).
@@ -224,7 +227,8 @@ function paintAt(e){const rct=srcCv.getBoundingClientRect();const i=srcCellAt(e.
   measured=null;drawField();updateReadout();markCustom();dirty=true;}
 // Paint on drag; on release, rebuild the expensive stack/circuit/recon once.
 srcCv.addEventListener('pointerdown',e=>{painting=true;paintAt(e);});
-addEventListener('pointerup',()=>{painting=false;if(dirty){dirty=false;buildStack();drawCircuit();drawRecon();}});
+const endPaint=()=>{painting=false;if(dirty){dirty=false;buildStack();drawCircuit();drawRecon();}};
+addEventListener('pointerup',endPaint);addEventListener('pointercancel',endPaint);
 // Hover (when not painting) shows the per-pixel tooltip.
 srcCv.addEventListener('pointermove',e=>{
   if(painting){paintAt(e);return;}
@@ -274,11 +278,17 @@ function initGL(){
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0d14);
   camera=new THREE.PerspectiveCamera(46,W/H,0.1,9000);camera.position.set(8,8,14);
   renderer=new THREE.WebGLRenderer({canvas:document.getElementById('stack-gl'),antialias:true});
-  renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));renderer.setSize(W,H,false);
+  renderer.setPixelRatio(glPixelRatio(devicePixelRatio,COARSE));renderer.setSize(W,H,false);
   renderer.setClearColor(0x0a0d14,1);renderer.toneMapping=THREE.NoToneMapping;renderer.outputColorSpace=THREE.SRGBColorSpace;
   controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.08;
   controls.autoRotate=true;controls.autoRotateSpeed=0.5;
   document.getElementById('stack-gl').addEventListener('pointerdown',()=>controls.autoRotate=false);
+  // On a phone the modules are one scroll column. OrbitControls sets
+  // touch-action none, so a swipe on the stack could not scroll the page.
+  // pan-y gives a vertical swipe to the page; a sideways drag still turns
+  // the stack, and two fingers still pinch.
+  const panY=()=>{renderer.domElement.style.touchAction=PHONE_Q.matches?'pan-y':'none';};
+  panY();PHONE_Q.addEventListener('change',panY);
   scene.add(new THREE.AmbientLight(0x556682,1.1));
   composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(W,H),0.3,0.5,0.2));  // slightly softer glow
@@ -739,7 +749,7 @@ function drawRecon(){
   const key=W+'x'+H+'@'+dpr;
   if(key!==rSize){rSize=key;rcv.width=W*dpr;rcv.height=H*dpr;rcv.style.width=W+'px';rcv.style.height=H+'px';}
   rctx.setTransform(dpr,0,0,dpr,0,0);rctx.clearRect(0,0,W,H);
-  paintRecon(rctx,W,H,{err:W>=520,fs:1});
+  paintRecon(rctx,W,H,{err:W>=520,fs:reconTypeScale(W)});
 }
 // Grey level of an intensity as a CSS colour.
 const grey=v=>{v=Math.max(0,Math.min(255,Math.round(v)));return `rgb(${v},${v},${v})`;};

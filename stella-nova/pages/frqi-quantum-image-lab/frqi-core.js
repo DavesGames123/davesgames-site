@@ -26,6 +26,7 @@
 //      register tape .... "export function tapeCols"
 //      flight ........... "export function flightWindow"
 //      saver plan ....... "export function saverPlan"
+//      phone profile .... "export function glPixelRatio", "export function reconTypeScale"
 // ============================================================================
 
 export const HALF_PI = Math.PI / 2;
@@ -146,3 +147,12 @@ export function saverPlan(calm, layers) {
   const sampleMs = 1000 + 600 * calm, flightMs = 1200 + 800 * calm;
   return { stepMs, buildMs, holdMs, sampleMs, flightMs, finishMs: buildMs + holdMs + sampleMs + flightMs };
 }
+
+// The pixel ratio of the 3D stack. A touch screen draws at most 1.5x,
+// because the bloom chain runs at the full canvas size. A desktop keeps 2x.
+export function glPixelRatio(dpr, coarse) { return Math.min(dpr || 1, coarse ? 1.5 : 2); }
+
+// The type scale of the reconstruction panel at a width of W CSS px. Below
+// 520 px (a phone) the 9 px titles and tape label become 12 px.
+export const RECON_PHONE_W = 520;
+export function reconTypeScale(W) { return W < RECON_PHONE_W ? 4 / 3 : 1; }
