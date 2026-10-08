@@ -294,3 +294,12 @@ html[data-theme=light] .seg button.on{background:#fffdf9}
 }
 @keyframes grpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){#panel,.phint,.card-in,.tip-in,#bar,#plate,#backdrop i{transition:none}.card-in.swap>*,#leader .pulse{animation:none}}
+
+/* TOUCH TEXT. On a coarse pointer the small labels are 12 px or more
+   (they were 9.6-10.9 px). The search input is 16 px: iOS Safari zooms
+   the page in on focus when an input font is smaller. */
+@media (pointer:coarse){
+  .search input{font-size:16px}
+  #plate .acc,.eyebrow,#labels .rl,.bar-l,.sec-label,.lg-h,#dock > button span{font-size:0.75rem}
+  .phint,#credit,.no,.c-specs,.arrlist button span,.it .n,#plate .count{font-size:0.78rem}
+}
