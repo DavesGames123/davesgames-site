@@ -19,12 +19,18 @@
 //         centre; a hapto ring lies flat across its site; a macrocycle
 //         keeps its own shape with the metal at the centre of its donors.
 //     Returns { mol, mol3d, after } or null (the normal path).
+//  1b. HAND: seven PubChem records (H2, ferrocene, ruthenocene, Fe(CO)5,
+//     n-butyllithium, diethylzinc, OsO4) that OpenChemLib misreads. Each
+//     gets a SMILES with the PubChem formula, a 3D geometry from measured
+//     bond lengths and, for the sandwiches and Fe(CO)5, a textbook 2D
+//     layout. handNote(cid) is its note, the record field dn.
 //  2. builtRecords(OCL)  records with no PubChem entry: the Watson-Crick
 //     G-C and A-T base pairs, from the 3DNA standard base frames (Olson
 //     et al. 2001), with the hydrogen bonds in the record field "hb".
 //
 //  grep -n targets: "function connectMetal", "function build3D",
-//  "function vsepr", "function placeLigand", "function basePair"
+//  "function vsepr", "function placeLigand", "function basePair",
+//  "const HAND", "const GEO", "const LAY2", "function handRecord"
 // ============================================================================
 import { isMetal, el, encodeI16 } from '../chem.js';
 import { recordFrom, conformerOf } from '../engine.js';
@@ -275,8 +281,146 @@ function centre(m) {
   return best;
 }
 
+// ── hand-built entries ──────────────────────────────────────────────────────
+// PubChem stores these seven compounds with radical bracket atoms ([CH],
+// [CH2], [C], [HH]) or with Os-O single bonds. OpenChemLib reads those
+// as radicals or as OH groups, so the formula came out wrong (ferrocene
+// C10H8Fe, H2 as H). Each entry here gives a structure with the PubChem
+// formula: s is its SMILES (it replaces the record's SMILES), geo names a
+// 3D builder (else build3D), lay2 a 2D layout (else the CoordinateInventor),
+// note goes to the record field dn (build.mjs, handNote) and tells how
+// the bonding is drawn. None of these CIDs has a PubChem 3D conformer.
+const CP2 = m => `[CH-]1C=CC=C1.[CH-]1C=CC=C1.[${m}+2]`;
+const CO5 = '[C-]#[O+].'.repeat(5) + '[Fe]';
+const HAND = {
+  783: { s: '[H][H]', geo: 'h2', lay2: 'h2', note: '3D: H-H 0.741 Å.' },
+  10219726: { s: CP2('Fe'), geo: 'sandwich', mc: 2.064, cc: 1.440, lay2: 'sandwich', iu: 'bis(η5-cyclopentadienyl)iron',
+    note: 'Drawn in the ionic form: Fe2+ between two cyclopentadienide (C5H5−) rings. Each ring bonds through all five carbons (η5), shown as five dashed Fe–C bonds; the 2D rings are drawn in perspective, and the charge drawn on one carbon is spread over the ring. 3D: eclipsed rings from gas electron diffraction (Fe–C 2.064 Å, C–C 1.440 Å).' },
+  11020720: { s: CP2('Ru'), geo: 'sandwich', mc: 2.20, cc: 1.43, lay2: 'sandwich', iu: 'bis(η5-cyclopentadienyl)ruthenium',
+    note: 'Drawn in the ionic form: Ru2+ between two cyclopentadienide (C5H5−) rings. Each ring bonds through all five carbons (η5), shown as five dashed Ru–C bonds; the 2D rings are drawn in perspective, and the charge drawn on one carbon is spread over the ring. 3D: eclipsed rings, as in the crystal; Ru–C 2.20 Å, C–C 1.43 Å.' },
+  26040: { s: CO5, geo: 'tbp', mc: 1.81, co: 1.15, lay2: 'tbp', iu: 'pentacarbonyliron',
+    note: 'Each CO binds iron through carbon, drawn as a dashed Fe–C bond with the carbon monoxide as C≡O (formal charges C− and O+). 3D: trigonal bipyramid, Fe–C 1.81 Å, C–O 1.15 Å (gas electron diffraction).' },
+  53627823: { s: 'CCCC[Li]', iu: 'butyllithium',
+    note: 'Drawn and built as one C–Li molecule; the real reagent is a cluster of these units (a hexamer in hexane, a tetramer in ether).' },
+  101667988: { s: 'CC[Zn]CC', iu: 'diethylzinc', note: '3D: built with a linear C–Zn–C axis.' },
+  30318: { s: 'O=[Os](=O)(=O)=O', geo: 'td', mc: 1.711, lay2: 'cross',
+    note: 'Drawn with four Os=O double bonds. 3D: a regular tetrahedron, Os–O 1.711 Å (gas electron diffraction).' },
+};
+export const handNote = cid => HAND[cid] ? HAND[cid].note : '';
+
+// The atoms of the ring through atom a0, in ring order (carbons only).
+function ringOrder(m, a0) {
+  const out = [a0];
+  for (let prev = -1, cur = a0; out.length <= 6;) {
+    let next = -1;
+    for (let k = 0; k < m.getConnAtoms(cur); k++) { const b = m.getConnAtom(cur, k); if (m.getAtomicNo(b) === 6 && b !== prev) { next = b; break; } }
+    if (next < 0 || next === a0) break;
+    out.push(next); prev = cur; cur = next;
+  }
+  if (out.length !== 5) throw new Error('not a 5-ring at atom ' + a0);
+  return out;
+}
+const metalOf = m => { for (let i = 0; i < m.getAllAtoms(); i++) if (isMetal(m.getAtomicNo(i))) return i; return -1; };
+const T4 = Math.sqrt(1 / 3);
+
+// 3D builders: full (explicit H) -> one [x, y, z] per atom
+const GEO = {
+  h2: () => [[-0.3705, 0, 0], [0.3705, 0, 0]],
+  // two eclipsed C5 rings on the z axis, the metal at the origin, each H
+  // 1.08 Å out from its carbon in the ring plane
+  sandwich: (full, H) => {
+    const pos = new Array(full.getAllAtoms()).fill(null), mt = metalOf(full);
+    const r = H.cc / (2 * Math.sin(Math.PI / 5)), h = Math.sqrt(H.mc * H.mc - r * r);
+    pos[mt] = [0, 0, 0];
+    const starts = []; for (let i = 0; i < full.getAtoms(); i++) if (full.getAtomCharge(i) < 0) starts.push(i);
+    starts.forEach((a0, ri) => ringOrder(full, a0).forEach((a, k) => { const t = 2 * Math.PI * k / 5; pos[a] = [r * Math.cos(t), r * Math.sin(t), ri ? -h : h]; }));
+    for (let i = 0; i < full.getAllAtoms(); i++) if (full.getAtomicNo(i) === 1) {
+      const p = pos[full.getConnAtom(i, 0)], u = unit([p[0], p[1], 0]);
+      pos[i] = [p[0] + 1.08 * u[0], p[1] + 1.08 * u[1], p[2]];
+    }
+    return pos;
+  },
+  // M(CO)5: axial along z, equatorial in the xy plane
+  tbp: (full, H) => {
+    const pos = new Array(full.getAllAtoms()).fill(null), mt = metalOf(full);
+    const dirs = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-0.5, Math.sqrt(3) / 2, 0], [-0.5, -Math.sqrt(3) / 2, 0]];
+    pos[mt] = [0, 0, 0];
+    let k = 0;
+    for (let i = 0; i < full.getAllAtoms(); i++) if (full.getAtomicNo(i) === 6) {
+      const d = dirs[k++], o = full.getConnAtom(i, 0) === mt ? full.getConnAtom(i, 1) : full.getConnAtom(i, 0);
+      pos[i] = mul(d, H.mc); pos[o] = mul(d, H.mc + H.co);
+    }
+    return pos;
+  },
+  td: (full, H) => {
+    const pos = new Array(full.getAllAtoms()).fill(null), mt = metalOf(full);
+    const dirs = [[T4, T4, T4], [-T4, -T4, T4], [-T4, T4, -T4], [T4, -T4, -T4]];
+    pos[mt] = [0, 0, 0];
+    let k = 0;
+    for (let i = 0; i < full.getAllAtoms(); i++) if (i !== mt) pos[i] = mul(dirs[k++], H.mc);
+    return pos;
+  },
+};
+
+// 2D layouts (bond length 1, y down): one [x, y] per shown atom
+const LAY2 = {
+  // H-H level, long enough to show the bond between the two labels
+  h2: () => [[-0.7, 0], [0.7, 0]],
+  // the textbook sandwich: each ring in perspective, one above and one
+  // below the metal, with a vertex toward the viewer, so the five dashed
+  // bonds fan out at 0, about 15 and about 30 degrees. The charged
+  // carbon is a back vertex, where its label is clear of the bonds.
+  sandwich: (c) => {
+    const n = c.getAllAtoms(), out = new Array(n).fill(null), mt = metalOf(c);
+    const R = 1.0, k = 0.62, cy = 1.9;
+    out[mt] = [0, 0];
+    const starts = []; for (let i = 0; i < n; i++) if (c.getAtomCharge(i) < 0) starts.push(i);
+    starts.forEach((a0, ri) => {
+      const sg = ri ? 1 : -1;
+      ringOrder(c, a0).forEach((a, j) => { const t = (234 + 72 * j) * Math.PI / 180; out[a] = [R * Math.cos(t), sg * (cy - k * R * Math.sin(t))]; });
+    });
+    return out;
+  },
+  // MO4: the metal at the centre of a cross, long bonds for the labels
+  cross: (c) => { const mt = metalOf(c); let j = 0; const d = [[0, -1.3], [1.3, 0], [0, 1.3], [-1.3, 0]]; return Array.from({ length: c.getAllAtoms() }, (_, i) => i === mt ? [0, 0] : d[j++]); },
+  // M(CO)5: axial up and down, equatorial left, upper right, lower right
+  tbp: (c) => {
+    const n = c.getAllAtoms(), out = new Array(n).fill(null), mt = metalOf(c);
+    const dirs = [[0, -1], [0, 1], [-1, 0], [Math.cos(Math.PI / 6), -0.5], [Math.cos(Math.PI / 6), 0.5]];
+    out[mt] = [0, 0];
+    let j = 0;
+    for (let i = 0; i < n; i++) if (c.getAtomicNo(i) === 6) {
+      const d = dirs[j++], o = c.getConnAtom(i, 0) === mt ? c.getConnAtom(i, 1) : c.getConnAtom(i, 0);
+      out[i] = [1.6 * d[0], 1.6 * d[1]]; out[o] = [2.75 * d[0], 2.75 * d[1]];   // long bonds: the labels take room
+    }
+    return out;
+  },
+};
+
+function handRecord(OCL, H, meta) {
+  const M = OCL.Molecule;
+  const m = M.fromSmiles(H.s);
+  connectMetal(OCL, m);                       // CO and C5H5- get dative bonds
+  const full = m.getCompactCopy(); full.addImplicitHydrogens(); full.ensureHelperArrays(M.cHelperRings);
+  const pos = H.geo ? GEO[H.geo](full, H) : build3D(OCL, full, centre(full));
+  if (!pos || pos.some(p => !p)) throw new Error('hand 3D failed');
+  const mol3d = full.getCompactCopy();
+  pos.forEach((p, i) => { mol3d.setAtomX(i, p[0]); mol3d.setAtomY(i, p[1]); mol3d.setAtomZ(i, p[2]); });
+  const rec = recordFrom(OCL, full, { mol3d, meta: Object.assign({}, meta, { s: H.s, iu: H.iu || meta.iu }), keepInput: true });
+  rec.g3 = 'built';
+  if (H.lay2) {
+    const c = full.getCompactCopy(); c.removeExplicitHydrogens(); c.ensureHelperArrays(M.cHelperRings);
+    const pts = LAY2[H.lay2](c);
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    rec.p2 = encode2D(pts.map(([x, y]) => [(x - cx) * 100, (y - cy) * 100]));
+  }
+  return rec;
+}
+
 export function fixRecord(OCL, cid, mol, meta, has3d) {
   void cid;
+  if (HAND[cid]) return { rec: handRecord(OCL, HAND[cid], meta) };
   const M = OCL.Molecule;
   const m = mol.getCompactCopy();
   const fixed = connectMetal(OCL, m);

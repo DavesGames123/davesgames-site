@@ -129,6 +129,7 @@ gases	Dimethyl ether	dimethyl ether	Simplest ether; an aerosol propellant and ca
 gases	Cyclopropane	cyclopropane	Strained three-membered carbon ring with bent bonds; a former general anesthetic.	
 gases	Neopentane	neopentane	2,2-Dimethylpropane; a highly symmetric C5 alkane that boils just below room temperature.	
 gases	Silicon tetrafluoride	silicon tetrafluoride	Tetrahedral SiF4 gas released when hydrofluoric acid etches glass and by volcanoes.	
+elements	Hydrogen	hydrogen	H2; the lightest molecule, a clean-burning fuel and the most abundant element in the universe.	
 elements	Deuterium	deuterium	D2; molecular heavy hydrogen, used as a fusion fuel and an isotopic tracer.	
 elements	Nitrogen	nitrogen	N2; held together by a strong triple bond, it makes up 78 percent of air.	
 elements	Oxygen	oxygen	O2; a diradical diatomic gas that makes up 21 percent of air and powers respiration.	
@@ -522,6 +523,7 @@ metabolism	Bilirubin	bilirubin	Yellow-orange breakdown product of heme made from
 metabolism	Coenzyme Q10 (ubiquinone)	coenzyme Q10	Lipid-soluble quinone with ten isoprene units; carries electrons from complexes I and II to complex III.	
 metabolism	Ubiquinol	ubiquinol	Reduced form of coenzyme Q10; the electron carrier in membranes and a lipid antioxidant.	
 metabolism	S-Adenosylmethionine	S-adenosyl-L-methionine	Universal methyl donor made from methionine and ATP; methylates DNA, proteins and small molecules.	
+metabolism	S-Adenosylhomocysteine	S-adenosyl-L-homocysteine	Product left after S-adenosylmethionine donates its methyl group; hydrolyzed to homocysteine.	
 metabolism	Glutathione	glutathione	Tripeptide of glutamate, cysteine and glycine; the main thiol antioxidant inside cells.	
 metabolism	Glutathione disulfide	glutathione disulfide	Oxidized glutathione dimer; reduced back to glutathione by glutathione reductase with NADPH.	
 metabolism	Phosphocreatine	phosphocreatine	Phosphorylated creatine that buffers ATP in muscle and brain during short bursts of activity.	
@@ -544,6 +546,7 @@ hormones	Androstenedione	androstenedione	Steroid intermediate made in the adrena
 hormones	Pregnenolone	pregnenolone	First steroid made from cholesterol in the steroid pathway; the precursor of all other steroid hormones.	
 hormones	17-Hydroxyprogesterone	17alpha-hydroxyprogesterone	Steroid intermediate on the path to cortisol; measured in newborn screening for adrenal hyperplasia.	
 hormones	Allopregnanolone	allopregnanolone	Neurosteroid made from progesterone that enhances GABA-A receptor signaling in the brain.	
+hormones	Thyroxine	levothyroxine	T4, the main hormone secreted by the thyroid gland; an iodinated tyrosine derivative that sets metabolic rate.	
 hormones	Triiodothyronine	liothyronine	T3, the active thyroid hormone formed from thyroxine; binds nuclear receptors to regulate metabolism.	
 hormones	Melatonin	melatonin	Hormone of the pineal gland released in darkness; signals night and helps regulate the sleep-wake cycle.	1
 hormones	Adrenaline	epinephrine	Epinephrine, the fight-or-flight hormone of the adrenal medulla; raises heart rate and blood glucose.	1
@@ -604,6 +607,7 @@ drugs	Methadone	methadone	Long-acting synthetic opioid used for chronic pain and
 drugs	Buprenorphine	buprenorphine	Partial opioid agonist from thebaine, used for pain and to treat opioid use disorder.	
 drugs	Naloxone	naloxone	Opioid receptor antagonist that rapidly reverses opioid overdose; brand Narcan.	
 drugs	Naltrexone	naltrexone	Long-acting opioid antagonist used to treat alcohol and opioid use disorders.	
+drugs	Tramadol	tramadol	Weak opioid analgesic that also blocks serotonin and noradrenaline reuptake; used for moderate pain.	
 drugs	Penicillin G	benzylpenicillin	Benzylpenicillin, the first penicillin used clinically (1940s), from Fleming's 1928 mold discovery.	1
 drugs	Amoxicillin	amoxicillin	Broad-spectrum aminopenicillin antibiotic for ear, throat, chest and urinary infections.	
 drugs	Ampicillin	ampicillin	Early broad-spectrum aminopenicillin antibiotic (1961) active against many gram-negative bacteria.	
@@ -651,6 +655,7 @@ drugs	Nystatin	cid:6433272	Polyene antifungal discovered in 1950 by two New York
 drugs	Griseofulvin	griseofulvin	Antifungal from Penicillium molds, taken orally for ringworm of the scalp, skin and nails.	
 drugs	Ivermectin B1a	cid:6321424	Major component of ivermectin, an antiparasitic for river blindness; its discovery won a 2015 Nobel Prize.	
 drugs	Praziquantel	praziquantel	Anthelmintic used for schistosomiasis and tapeworm infections.	
+drugs	Albendazole	albendazole	Benzimidazole anthelmintic that blocks worm tubulin; used for many intestinal worm infections.	
 drugs	Mefloquine	mefloquine	Quinoline antimalarial used for treatment and prevention of malaria.	
 drugs	Chloroquine	chloroquine	Synthetic 4-aminoquinoline antimalarial widely used from the 1940s; resistance is now common.	
 drugs	Hydroxychloroquine	hydroxychloroquine	Antimalarial derivative of chloroquine, now mainly used for lupus and rheumatoid arthritis.	
@@ -716,6 +721,7 @@ drugs	Quetiapine	quetiapine	Atypical antipsychotic used for schizophrenia, bipol
 drugs	Aripiprazole	aripiprazole	Atypical antipsychotic that is a dopamine D2 partial agonist; used for schizophrenia and bipolar disorder.	
 drugs	Methylphenidate	methylphenidate	Central nervous system stimulant that blocks dopamine reuptake; an ADHD medicine, brand Ritalin.	
 drugs	Amphetamine	amphetamine	Central nervous system stimulant used as an ADHD and narcolepsy medicine; first made in 1887.	
+drugs	Atomoxetine	atomoxetine	Non-stimulant ADHD medicine that selectively inhibits noradrenaline reuptake.	
 drugs	Modafinil	modafinil	Wakefulness-promoting agent used for narcolepsy and shift work sleep disorder.	
 drugs	Carbamazepine	carbamazepine	Anticonvulsant that blocks sodium channels; used for epilepsy, trigeminal neuralgia and bipolar disorder.	
 drugs	Valproic acid	valproic acid	Branched fatty acid anticonvulsant for epilepsy and bipolar disorder; its activity was found by chance in 1962.	
@@ -747,6 +753,7 @@ drugs	Metoclopramide	metoclopramide	Dopamine antagonist that speeds stomach empt
 drugs	Loratadine	loratadine	Non-sedating H1 antihistamine for hay fever and hives; brand Claritin.	
 drugs	Cetirizine	cetirizine	Second-generation H1 antihistamine for allergies and hives; a metabolite of hydroxyzine.	
 drugs	Fexofenadine	fexofenadine	Non-sedating H1 antihistamine, the active metabolite of terfenadine; brand Allegra.	
+drugs	Diphenhydramine	diphenhydramine	First-generation sedating H1 antihistamine (1946) for allergies and short-term sleep aid.	
 drugs	Salbutamol	salbutamol	Albuterol, a short-acting beta-2 agonist inhaler that relieves asthma bronchospasm.	
 drugs	Montelukast	montelukast	Leukotriene receptor antagonist taken orally for asthma and allergic rhinitis.	
 drugs	Pseudoephedrine	pseudoephedrine	Sympathomimetic nasal decongestant, a stereoisomer of ephedrine; brand Sudafed.	
@@ -800,6 +807,7 @@ toxins	Oleandrin	oleandrin	Cardiac glycoside in all parts of the oleander shrub;
 toxins	Batrachotoxin	batrachotoxin	Steroidal alkaloid in the skin of Colombian poison dart frogs that holds sodium channels open.	
 toxins	Tubocurarine	tubocurarine	Alkaloid of curare arrow poison that blocks nicotinic receptors at muscles; once used in anesthesia.	
 toxins	Coniine	coniine	Piperidine alkaloid of poison hemlock that blocks nicotinic receptors; it killed Socrates in 399 BC.	
+toxins	Cicutoxin	cicutoxin	Polyacetylene alcohol of water hemlock that blocks GABA-A receptors, causing seizures.	
 toxins	Grayanotoxin I	grayanotoxin I	Diterpene of rhododendron nectar, cause of mad honey poisoning; holds sodium channels open.	
 toxins	Microcystin-LR	microcystin-LR	Cyclic peptide toxin of cyanobacterial blooms in lakes that inhibits protein phosphatases in the liver.	
 toxins	Anatoxin-a	anatoxin-a	Cyanobacterial alkaloid in freshwater blooms that strongly activates nicotinic receptors; harms dogs.	
@@ -953,6 +961,7 @@ dyes	Brazilin	brazilin	Natural red dye from brazilwood that oxidizes to the colo
 dyes	Safranin O	safranin O	Red phenazinium dye used as the counterstain in the Gram stain.	
 dyes	Acridine orange	acridine orange	Cationic acridine dye that stains DNA green and RNA red-orange under blue light.	
 dyes	Ethidium bromide	ethidium bromide	Phenanthridinium dye that intercalates into DNA; a classic stain for nucleic acids in gels.	
+dyes	DAPI	DAPI	Blue fluorescent dye that binds the minor groove of AT-rich DNA, used to stain cell nuclei.	
 dyes	Hoechst 33258	hoechst 33258	Bis-benzimidazole dye that binds the DNA minor groove and fluoresces blue.	
 dyes	Nile red	nile red	Benzophenoxazone dye that fluoresces strongly in fat droplets and weakly in water.	
 dyes	Nile blue	nile blue	Benzophenoxazinium dye used to stain cell nuclei and lipids in histology.	
@@ -1027,6 +1036,8 @@ nano	Triamantane	triamantane	Three fused adamantane cages; a diamondoid found in
 nano	Dodecahedrane	dodecahedrane	C20H20 hydrocarbon with twenty carbons at the vertices of a regular dodecahedron.	
 nano	Prismane	prismane	C6H6 valence isomer of benzene with carbons at the corners of a triangular prism.	
 nano	Twistane	twistane	Chiral C10H16 cage with all six-membered rings in twist-boat shapes.	
+inorganic	Ferrocene	ferrocene	Iron atom sandwiched between two cyclopentadienyl rings; its discovery in 1951 began modern organometallics.	
+inorganic	Ruthenocene	ruthenocene	Ruthenium sandwich analog of ferrocene with eclipsed cyclopentadienyl rings.	
 inorganic	Cobaltocene	cobaltocene	19-electron cobalt sandwich compound that is a strong one-electron reducing agent.	
 inorganic	Bis(benzene)chromium	bis(benzene)chromium	Chromium atom sandwiched between two parallel benzene rings; an 18-electron complex.	
 inorganic	Titanocene dichloride	titanocene dichloride	Bent metallocene of titanium with two chlorides; a precursor of olefin polymerization catalysts.	
@@ -1035,6 +1046,7 @@ inorganic	Cisplatin	cisplatin	Square planar cis-diamminedichloroplatinum(II), an
 inorganic	Carboplatin	carboplatin	Platinum(II) anticancer drug with a cyclobutanedicarboxylate leaving group.	
 inorganic	Oxaliplatin	oxaliplatin	Platinum(II) anticancer drug with a diaminocyclohexane ligand and an oxalate leaving group.	
 inorganic	Nickel tetracarbonyl	nickel tetracarbonyl	Tetrahedral, very toxic Ni(CO)4, the volatile intermediate of the Mond nickel refining process.	
+inorganic	Iron pentacarbonyl	iron pentacarbonyl	Trigonal bipyramidal Fe(CO)5, a yellow liquid and a source of iron nanoparticles.	
 inorganic	Chromium hexacarbonyl	chromium hexacarbonyl	Octahedral Cr(CO)6, a stable white solid that obeys the 18-electron rule.	
 inorganic	Molybdenum hexacarbonyl	molybdenum hexacarbonyl	Octahedral Mo(CO)6, a volatile solid used as a molybdenum source in synthesis.	
 inorganic	Tungsten hexacarbonyl	tungsten hexacarbonyl	Octahedral W(CO)6, used to deposit tungsten films by decomposition.	
@@ -1049,6 +1061,8 @@ inorganic	Tris(bipyridine)ruthenium(II) chloride	tris(bipyridine)ruthenium(II) c
 inorganic	Trimethylaluminium	trimethylaluminum	Pyrophoric organoaluminium that exists as a dimer with bridging methyl groups.	
 inorganic	Tetraethyllead	tetraethyllead	Tetrahedral organolead compound formerly added to gasoline as an antiknock agent.	
 inorganic	Methylmagnesium bromide	methylmagnesium bromide	Simple Grignard reagent that adds methyl groups to carbonyl compounds.	
+inorganic	n-Butyllithium	n-butyllithium	Organolithium reagent used as a strong base; it forms hexamers in hydrocarbon solvents.	
+inorganic	Diethylzinc	diethylzinc	Linear, pyrophoric organozinc compound used in the Simmons-Smith cyclopropanation.	
 inorganic	Tetramethylsilane	tetramethylsilane	Tetrahedral Si(CH3)4, the zero reference for 1H and 13C NMR chemical shifts.	
 inorganic	Hexamethyldisiloxane	hexamethyldisiloxane	Two trimethylsilyl groups joined by oxygen with a wide Si-O-Si angle; a simple silicone fluid.	
 inorganic	Octamethylcyclotetrasiloxane	octamethylcyclotetrasiloxane	Cyclic siloxane D4, an eight-membered Si-O ring used to make silicone polymers.	
@@ -1071,6 +1085,7 @@ inorganic	Xenon difluoride	xenon difluoride	Linear XeF2 with three equatorial lo
 inorganic	Xenon tetrafluoride	xenon tetrafluoride	Square planar XeF4 with two lone pairs above and below the plane.	
 inorganic	Xenon hexafluoride	xenon hexafluoride	XeF6 with a distorted octahedral shape caused by a stereochemically active lone pair.	
 inorganic	Uranium hexafluoride	uranium hexafluoride	Octahedral, volatile UF6, used in the gas centrifuge enrichment of uranium.	
+inorganic	Osmium tetroxide	osmium tetroxide	Tetrahedral OsO4, a volatile and toxic oxidant that converts alkenes to cis-diols.	
 inorganic	Chromyl chloride	chromyl chloride	Tetrahedral CrO2Cl2, a dark red liquid used in the Etard oxidation.	
 inorganic	Potassium permanganate	potassium permanganate	Purple salt of the tetrahedral MnO4- ion, a strong oxidizing agent.	
 inorganic	Potassium dichromate	potassium dichromate	Orange salt of the Cr2O7 2- ion, two CrO4 tetrahedra sharing one oxygen.	

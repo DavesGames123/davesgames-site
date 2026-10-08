@@ -185,7 +185,7 @@ function renderInfo(rec, M) {
     <button type="button" class="i-cat" data-c="${esc(rec.c)}">${esc(CAT_NAME[rec.c] || rec.c)}${rec.fam ? ' · famous' : ''}</button>
     <h1 class="i-name">${esc(rec.n)}</h1>
     <div class="i-form">${formulaHTML(rec.f)}<span class="i-mw">${(+rec.w).toFixed(2)} g/mol</span></div>
-    ${rec.d ? `<p class="i-desc">${esc(rec.d)}</p>` : ''}
+    ${rec.d ? `<p class="i-desc">${esc(rec.d)}${rec.dn ? ` ${esc(rec.dn)}` : ''}</p>` : ''}
     ${rec.iu ? `<div class="i-iu"><b>IUPAC</b> ${esc(rec.iu)}</div>` : ''}
     ${rec.s ? `<div class="i-smi"><code id="smi">${esc(rec.s)}</code><button type="button" id="bCopy">Copy</button></div>` : ''}
     <table class="readout">${rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>

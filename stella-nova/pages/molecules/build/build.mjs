@@ -16,6 +16,8 @@
 //       (the G-C base pair) come from special.mjs alone
 //    4. engine.js recordFrom: the 2D layout, the 3D coordinates (PubChem's,
 //       else an OpenChemLib conformer), rings, properties
+//  For the hand-built entries of special.mjs, the record field dn holds
+//  the note on how the bonding is drawn; the page shows it after d.
 //  A row whose CID repeats an earlier row is dropped (the list order is
 //  the category priority). A row that fails is reported and dropped.
 //  Each record is also kept in <cache>/rec/<cid>.json; MOL_REUSE=1 reuses
@@ -27,7 +29,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { recordFrom } from '../engine.js';
 import { slug, decode } from '../chem.js';
-import { fixRecord, builtRecords } from './special.mjs';
+import { fixRecord, builtRecords, handNote } from './special.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const VENDOR = path.join(HERE, '../../../vendor/openchemlib@9.25.1/dist/');
@@ -73,6 +75,7 @@ function main() {
     if (process.env.MOL_REUSE && fs.existsSync(rc)) {
       const rec = Object.assign(JSON.parse(fs.readFileSync(rc, 'utf8')), { id, n: name, c: cat, d: desc });
       if (fam === '1') rec.fam = 1; else delete rec.fam;
+      if (handNote(cid)) rec.dn = handNote(cid); else delete rec.dn;
       out.push(rec); seenCid.set(cid, name); seenId.add(id); continue;
     }
     if (process.env.MOL_TRACE) console.error(`> ${name}`);
@@ -84,6 +87,7 @@ function main() {
       if (fx && fx.rec) rec = fx.rec;
       else { if (fx && fx.mol) { mol = fx.mol; mol3d = fx.mol3d || null; } rec = recordFrom(OCL, mol, { mol3d, meta, inputLayout: !fx, keepInput: !!fx }); }
       if (fx && fx.after) fx.after(rec);
+      if (handNote(cid)) rec.dn = handNote(cid);   // how the bonding is drawn (shown after d)
       out.push(rec); seenCid.set(cid, name); seenId.add(id);
       fs.mkdirSync(path.dirname(rc), { recursive: true }); fs.writeFileSync(rc, JSON.stringify(rec));
       if (process.env.MOL_TRACE) console.error(`  ${out.length} ${name} ${Date.now() - tr} ms ${rec.g3}`);

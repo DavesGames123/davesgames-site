@@ -20,6 +20,9 @@
 //                   render2D gives SVG for every record
 //    groups ....... the functional-group finder on known molecules
 //    molfile ...... toMolfile and toSDF read back in the engine
+//    restored ..... the 15 entries back in the library since ce8de08:
+//                   formula, molar mass, the drawn metal bonds, 3D shape
+//    molar mass ... chem.js molarMass of eight molecules from SMILES
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { decode, findGroups, toMolfile, toSDF, el, isMetal, formulaCounts, molarMass } from './chem.js';
@@ -94,6 +97,52 @@ const hill = f => { const c = {}; for (const [, s, n] of strip(f).matchAll(/([A-
   ok(true, 'OpenChemLib relativeWeight vs PubChem (information)', `${within}/${recs.length} within 0.01; largest ${oclDev.slice(0, 3).map(d => d[1] + ' ' + d[0].toFixed(3)).join(', ')}`);
   ok(!badT.length, '2D wedges give the PubChem tetrahedral stereo', `${nT - badT.length}/${nT}${badT.length ? ' differ: ' + badT.slice(0, 10).join(', ') : ''}`);
   ok(!badEZ.length, '2D double-bond geometry gives the PubChem E/Z stereo', `${nEZ - badEZ.length}/${nEZ}${badEZ.length ? ' differ: ' + badEZ.slice(0, 10).join(', ') : ''}`);
+}
+
+// ── restored entries (hand-built in build/special.mjs, or back after the
+//    weight fix) ────────────────────────────────────────────────────────────
+{
+  const by = id => { const k = recs.findIndex(r => r.id === id); return k < 0 ? null : [recs[k], MODELS[k]]; };
+  const wTol = w => { const dec = (String(w).split('.')[1] || '').length; return Math.max(0.01, dec < 2 ? 10 ** -dec : 0); };
+  const engineF = M => hill(OCL.Molecule.fromMolfile(toMolfile(M, { dim: 2, noH: true })).getMolecularFormula().formula);
+  const dist = (M, a, b) => Math.hypot(M.xyz[3 * a] - M.xyz[3 * b], M.xyz[3 * a + 1] - M.xyz[3 * b + 1], M.xyz[3 * a + 2] - M.xyz[3 * b + 2]);
+  const want = { hydrogen: 'H2', ferrocene: 'C10H10Fe', ruthenocene: 'C10H10Ru', 'iron-pentacarbonyl': 'C5FeO5', 'n-butyllithium': 'C4H9Li',
+    diethylzinc: 'C4H10Zn', 'osmium-tetroxide': 'O4Os', thyroxine: 'C15H11I4NO4', tramadol: 'C16H25NO2', albendazole: 'C12H15N3O2S',
+    atomoxetine: 'C17H21NO', diphenhydramine: 'C17H21NO', cicutoxin: 'C17H22O2', dapi: 'C16H15N5', 's-adenosylhomocysteine': 'C14H20N6O5S' };
+  for (const [id, f] of Object.entries(want)) {
+    const x = by(id);
+    ok(x && hill(x[0].f) === hill(f) && engineF(x[1]) === hill(f) && Math.abs(molarMass(x[1]) - x[0].w) <= wTol(x[0].w) + 1e-9,
+      `restored ${id}: formula ${f}, molar mass within 0.01 (or PubChem's last digit)`, x ? `${engineF(x[1])} ${molarMass(x[1]).toFixed(4)}/${x[0].w}` : 'missing');
+  }
+  // the bonding drawn for each organometallic, and its 3D geometry (the
+  // record stores coordinates in steps of 0.01 Å, so a length can be
+  // up to about 0.01 Å off)
+  const metalBonds = M => M.bonds.slice(0, M.nShown).filter(b => isMetal(M.z[b.a]) || isMetal(M.z[b.b]));
+  for (const [id, n, d] of [['ferrocene', 10, 2.064], ['ruthenocene', 10, 2.20], ['iron-pentacarbonyl', 5, 1.81]]) {
+    const x = by(id); if (!x) { ok(false, `${id} bonds`, 'missing'); continue; }
+    const mb = metalBonds(x[1]), ds = mb.map(b => dist(x[1], b.a, b.b));
+    ok(mb.length === n && mb.every(b => b.ml) && ds.every(v => Math.abs(v - d) < 0.012), `${id}: ${n} dashed metal-ligand bonds of ${d} Å`, ds.map(v => v.toFixed(3)).join(' '));
+  }
+  {
+    const x = by('osmium-tetroxide'), M = x && x[1], mb = M ? metalBonds(M) : [];
+    const os = M ? M.z.indexOf(76) : -1, v = b => { const o = b.a === os ? b.b : b.a; return [0, 1, 2].map(k => M.xyz[3 * o + k] - M.xyz[3 * os + k]); };
+    const ang = mb.length === 4 ? Math.acos(v(mb[0]).reduce((s, c, k) => s + c * v(mb[1])[k], 0) / Math.hypot(...v(mb[0])) / Math.hypot(...v(mb[1]))) * 180 / Math.PI : 0;
+    ok(mb.length === 4 && mb.every(b => b.o === 2 && Math.abs(dist(M, b.a, b.b) - 1.711) < 0.012) && Math.abs(ang - 109.47) < 0.5, 'osmium-tetroxide: four Os=O, 1.711 Å, tetrahedral', ang.toFixed(2) + ' deg');
+  }
+  {
+    // ferrocene: the two rings parallel and the metal on their common axis
+    const x = by('ferrocene'), M = x && x[1];
+    let okR = false, info = 'missing';
+    if (M) {
+      const rings = M.rings.filter(r => r.atoms.length === 5), fe = M.z.indexOf(26);
+      const cen = r => [0, 1, 2].map(k => r.atoms.reduce((s, a) => s + M.xyz[3 * a + k], 0) / 5);
+      const [c1, c2] = rings.map(cen), f = [0, 1, 2].map(k => M.xyz[3 * fe + k]);
+      const mid = [0, 1, 2].map(k => (c1[k] + c2[k]) / 2), off = Math.hypot(...mid.map((v, k) => v - f[k])), sep = Math.hypot(...c1.map((v, k) => v - c2[k]));
+      okR = rings.length === 2 && off < 0.01 && Math.abs(sep - 2 * 1.661) < 0.01;
+      info = `ring centroids ${sep.toFixed(3)} Å apart, Fe ${off.toFixed(3)} Å off centre`;
+    }
+    ok(okR, 'ferrocene: a sandwich, Fe midway between parallel rings', info);
+  }
 }
 
 // ── molar mass of known molecules (the weight table, not the library) ──────
