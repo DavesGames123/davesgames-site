@@ -335,9 +335,6 @@ w.SN_NAV = [
       ["context-free", "Context Free", "WASM"],
       ["holocloth", "Holocloth", "CLOTH"],
       ["line-art", "Line Art", "RUST"]
-    ] },
-    { h: "Image to 3D", p: [
-      ["image-worlds", "Image Worlds", "3D"]
     ] }
   ] }
 ] },

@@ -76,7 +76,6 @@ const CORE_MAX_BYTES = 48 * 1024;
 const LAZY_DIRS = [
   /^stella-nova\/pages\/translate\/strings\//,    // 2.7 MB of UI strings
   /^stella-nova\/vendor\/mathjax@[^/]+\/es5\/(a11y|ui)\//, // menu options only
-  /^stella-nova\/vendor\/spark@[^/]+\//,           // 2.7 MB splat renderer, image-worlds only
   /^stella-nova\/vendor\/onnxruntime-web@[^/]+\//, // ML runtime + wasm, market-forecast only
   /^stella-nova\/vendor\/rapier3d-compat@[^/]+\//, // physics wasm, dice only
   /^stella-nova\/vendor\/openchemlib@[^/]+\//,     // chemistry engine, molecules only
