@@ -15,6 +15,14 @@
 //  It is the orbit of one point under q -> e^{it} q (left product with a
 //  unit complex number), so it is a great circle of S3.
 //
+//  SEIFERT ORBITS  The weighted circle action t -> (e^{ipt} z0, e^{iqt} z1)
+//  with p, q > 0 coprime. The orbit through (cos(th/2) e^{i ph}, sin(th/2))
+//  is seifertPoint(b, t, p, q). It stays on the torus |z0| = cos(th/2), so
+//  it is a (p, q) torus knot: in the 3D view it winds p times about the
+//  axis x1 = x2 = 0 and q times about the unit circle (the orbit z1 = 0).
+//  Two orbits off the two core circles link p q times. At (1, 1) the orbit
+//  is the Hopf fibre, point for point.
+//
 //  STEREOGRAPHIC PROJECTION  from the pole e4 = (0, 0, 0, 1):
 //      (x1, x2, x3, x4) -> (x1, x2, x3) / (1 - x4)
 //  It sends each great circle to a circle of R3, or to a line when the
@@ -31,7 +39,8 @@
 //  A change here must also go there (grep 'hopfFibre').
 //
 //  EXPORTS  (grep -n "export function <name>")
-//    hopf, fibrePoint, stereo, project, fibreCurve, baseFromAngles
+//    hopf, fibrePoint, seifertPoint, stereo, project, fibreCurve,
+//    baseFromAngles
 //    qmul, qconj, leftMat, rightMat, planeMat, matMul, matVec, ident,
 //    rotationFor, MODES, baseColor, toSRGB, hexOf,
 //    sampleItems, PRESETS, makeRng, fibonacciSphere,
@@ -55,6 +64,16 @@ export function fibrePoint(b, t) {
   return [c * (ct * ex - st * ey), c * (st * ex + ct * ey), s * ct, s * st];
 }
 
+// The orbit of the weighted action through the base point b: at t,
+// (z0, z1) = (cos(th/2) e^{i(ph + p t)}, sin(th/2) e^{i q t}).
+export function seifertPoint(b, t, p = 1, q = 1) {
+  const c = Math.sqrt(Math.max(0, (1 + b[2]) / 2)), s = Math.sqrt(Math.max(0, (1 - b[2]) / 2));
+  const r = Math.hypot(b[0], b[1]);
+  const ex = r > 1e-9 ? b[0] / r : 1, ey = r > 1e-9 ? b[1] / r : 0;
+  const ca = Math.cos(p * t), sa = Math.sin(p * t);
+  return [c * (ca * ex - sa * ey), c * (sa * ex + ca * ey), s * Math.cos(q * t), s * Math.sin(q * t)];
+}
+
 // Stereographic projection from e4. d = 1 - x4 (0 at the pole).
 export function stereo(q) {
   const d = 1 - q[3], k = 1 / Math.max(d, 1e-9);
@@ -65,10 +84,11 @@ export function stereo(q) {
 export function project(q, M) { return stereo(M ? matVec(M, q) : q); }
 
 // n points of the projected fibre over b, as a flat Float64Array (x, y, z).
-export function fibreCurve(b, M, n = 128) {
-  const out = new Float64Array(n * 3);
+// pq = [p, q] gives the weighted orbit (default the Hopf fibre).
+export function fibreCurve(b, M, n = 128, pq = null) {
+  const out = new Float64Array(n * 3), hopfOnly = !pq || (pq[0] === 1 && pq[1] === 1);
   for (let i = 0; i < n; i++) {
-    const p = project(fibrePoint(b, TAU * i / n), M);
+    const t = TAU * i / n, p = project(hopfOnly ? fibrePoint(b, t) : seifertPoint(b, t, pq[0], pq[1]), M);
     out[i * 3] = p[0]; out[i * 3 + 1] = p[1]; out[i * 3 + 2] = p[2];
   }
   return out;

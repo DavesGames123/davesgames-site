@@ -10,7 +10,9 @@
 //  The vertex shader (FIBRE_GLSL) puts each vertex on the fibre over aBase,
 //  rotates it by uRot (4x4), projects it from e4 to R3, and builds the tube
 //  frame from three points of the circle (tangent, and normal to the
-//  centre). No geometry is rebuilt when the rotation or the base points
+//  centre). uPQ holds the weights (p, q) of the circle action (1, 1 is the
+//  Hopf fibration) and the weights of a change in progress, uPQMix how far
+//  it has gone. No geometry is rebuilt when the rotation or the base points
 //  change: only uniforms and the instance attributes.
 //
 //  In the saver, setBand(band) fades each tube, disc and dot fragment to the fog colour
@@ -47,15 +49,26 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { postBudget } from './budget.js';
 
 // The fibre and the projection, as in hopf.js (fibrePoint, stereo).
-export const FIBRE_GLSL = `// the fibre over b in S2 at parameter t: a point of S3
-vec4 hopfFibre(vec3 b, float t) {
+export const FIBRE_GLSL = `// the orbit of t -> (e^{ipt} z0, e^{iqt} z1) through b in S2 (seifertPoint)
+vec4 seifert(vec3 b, float t, vec2 w) {
   float c = sqrt(max(0.0, 0.5 * (1.0 + b.z)));   // cos(theta/2)
   float s = sqrt(max(0.0, 0.5 * (1.0 - b.z)));   // sin(theta/2)
   float r = length(b.xy);
   vec2 e = r > 1e-6 ? b.xy / r : vec2(1.0, 0.0);  // e^{i phi}
-  float ct = cos(t), st = sin(t);
-  // (z0, z1) = e^{it} (cos(theta/2) e^{i phi}, sin(theta/2))
-  return vec4(c * (ct * e.x - st * e.y), c * (st * e.x + ct * e.y), s * ct, s * st);
+  float ca = cos(w.x * t), sa = sin(w.x * t);
+  return vec4(c * (ca * e.x - sa * e.y), c * (sa * e.x + ca * e.y), s * cos(w.y * t), s * sin(w.y * t));
+}
+// the fibre at weights uPQ.xy; during a change of weights, a blend on S3
+// toward the orbit at uPQ.zw. At (1, 1) it is the Hopf fibre:
+// (z0, z1) = e^{it} (cos(theta/2) e^{i phi}, sin(theta/2))
+vec4 hopfFibre(vec3 b, float t) {
+  vec4 q = seifert(b, t, uPQ.xy);
+  if (uPQMix > 0.0) {
+    vec4 m = mix(q, seifert(b, t, uPQ.zw), uPQMix);
+    float l = length(m);
+    q = l > 1e-4 ? m / l : seifert(b, t, uPQ.zw);
+  }
+  return q;
 }
 // rotate in R4, then project from the pole e4 to R3
 vec3 hopfStereo(vec4 q, out float d) {
@@ -68,6 +81,8 @@ const VERT_HEAD = `
 attribute vec3 aBase;
 attribute vec4 aAux;
 uniform mat4 uRot;
+uniform vec4 uPQ;
+uniform float uPQMix;
 uniform float uRad, uFar, uSegMax, uSeg, uConf;
 varying float vT;
 varying float vFar;
@@ -144,7 +159,7 @@ function patchMaterial(mat, uniforms) {
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * vAux.y;')
       .replace('#include <fog_fragment>', '#include <fog_fragment>\n' + BAND_GLSL);
   };
-  mat.customProgramCacheKey = () => 'hopf-tube-v2';
+  mat.customProgramCacheKey = () => 'hopf-tube-v3';
 }
 
 export function createScene(canvas, opts = {}) {
@@ -199,6 +214,7 @@ export function createScene(canvas, opts = {}) {
   const uniforms = {
     uRot: { value: new THREE.Matrix4() }, uRad: { value: 0.035 }, uFar: { value: 34 }, uSegMax: { value: 5 },
     uSeg: { value: SEG }, uConf: { value: 0 }, uStripes: { value: 6 },
+    uPQ: { value: new THREE.Vector4(1, 1, 1, 1) }, uPQMix: { value: 0 },
     uBand: { value: new THREE.Vector3(0, 1e5, 1) }, uBandOn: { value: 0 },
   };
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.08, envMapIntensity: 0.75 });

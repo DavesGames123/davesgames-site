@@ -13,6 +13,7 @@
 //    linking    random pairs of fibres have linking number +-1
 //    pierce     one fibre crosses the disc of the other exactly once
 //    colour     colours in 0..1, no NaN, poles grey
+//    seifert    (p,q) orbits: on S3, Hopf at (1,1), torus knots, Lk = p q
 //    presets    deterministic, finite, under the cap
 //    budget     GPU bytes of the 3D view stay under a hard limit
 // ============================================================================
@@ -155,6 +156,46 @@ const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
   const n = H.baseColor([0, 0, 1]), s = H.baseColor([0, 0, -1]);
   ok('colour: in 0..1, no NaN', bad === 0, `${bad} bad`);
   ok('colour: poles grey, north lighter', Math.abs(n[0] - n[2]) < 1e-3 && Math.abs(s[0] - s[2]) < 1e-3 && n[1] > s[1], `N ${H.hexOf(n)} S ${H.hexOf(s)}`);
+}
+// seifert: the weighted action t -> (e^{ipt} z0, e^{iqt} z1)
+{
+  let unit = 0, same = 0, closed = 0;
+  for (let k = 0; k < 500; k++) {
+    const b = randS2(), t = rng.range(0, H.TAU), p = rng.int(1, 5), q = rng.int(1, 5);
+    unit = Math.max(unit, Math.abs(Math.hypot(...H.seifertPoint(b, t, p, q)) - 1));
+    same = Math.max(same, dist(H.seifertPoint(b, t, 1, 1), H.fibrePoint(b, t)));
+    closed = Math.max(closed, dist(H.seifertPoint(b, 0, p, q), H.seifertPoint(b, H.TAU, p, q)));
+  }
+  ok('seifert: orbits stay on S3', unit < 1e-12, `max err ${unit.toExponential(2)}`);
+  ok('seifert: at (1,1) the orbit is the Hopf fibre', same < 1e-12, `max err ${same.toExponential(2)}`);
+  ok('seifert: orbits close at t = 2 pi', closed < 1e-12, `max err ${closed.toExponential(2)}`);
+  // the projected orbit is a (p, q) torus knot: p turns about the x3 axis,
+  // q turns about the unit circle (the orbit z1 = 0)
+  const ring = new Float64Array(400 * 3);
+  for (let i = 0; i < 400; i++) { ring[i * 3] = Math.cos(H.TAU * i / 400); ring[i * 3 + 1] = Math.sin(H.TAU * i / 400); }
+  const res = [];
+  let good = true;
+  for (const [p, q] of [[2, 3], [3, 2], [2, 5], [3, 4]]) {
+    const b = H.baseFromAngles(1.2, 0.4), C = H.fibreCurve(b, null, 1600, [p, q]);
+    let turn = 0;
+    for (let i = 0; i < 1600; i++) {
+      const j = (i + 1) % 1600, a0 = Math.atan2(C[i * 3 + 1], C[i * 3]), a1 = Math.atan2(C[j * 3 + 1], C[j * 3]);
+      let d = a1 - a0; if (d > Math.PI) d -= H.TAU; if (d < -Math.PI) d += H.TAU; turn += d;
+    }
+    const wz = turn / H.TAU, lk = H.linkingNumber(C, ring);
+    res.push(`(${p},${q}) turns ${wz.toFixed(3)} Lk ${lk.toFixed(3)}`);
+    if (Math.abs(wz - p) > 1e-6 || Math.abs(Math.abs(lk) - q) > 0.02) good = false;
+  }
+  ok('seifert: projected orbit is a (p,q) torus knot', good, res.join(' · '));
+  // two orbits on different tori link p q times
+  const lks = [];
+  let lkGood = true;
+  for (const [p, q] of [[1, 1], [2, 3], [3, 2], [2, 5]]) {
+    const A = H.fibreCurve(H.baseFromAngles(1.1, 0.3), null, 1500, [p, q]), B = H.fibreCurve(H.baseFromAngles(1.9, 2.2), null, 1500, [p, q]);
+    const L = H.linkingNumber(A, B); lks.push(`(${p},${q}) ${L.toFixed(3)}`);
+    if (Math.abs(Math.abs(L) - p * q) > 0.03) lkGood = false;
+  }
+  ok('seifert: two orbits link p q times', lkGood, lks.join(' · '));
 }
 // presets
 {

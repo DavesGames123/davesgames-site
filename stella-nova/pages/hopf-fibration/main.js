@@ -52,7 +52,11 @@ const G = {
   sweep: false, sweepPhase: 0, orbit: true, stripes: true, discs: true,
   rad: COARSE ? 0.04 : 0.032, conf: false, pole: 0, tool: 'point', seed: 1,
   sel: [], trace: null, thin: false, custom: false,
+  pq: [1, 1],             // weights of the circle action; [1, 1] is the Hopf fibration
 };
+const isHopf = () => G.pq[0] === 1 && G.pq[1] === 1;
+// The projected curve of the fibre over b at the weights in G.pq.
+const curveOf = (b, M, n) => H.fibreCurve(b, M, n, G.pq);
 
 // ------------------------------------------------------------------ scene
 const canvas = $('view');
@@ -186,7 +190,7 @@ function baseState(M) {
   for (let i = 0; i < fibres.length; i += step) dots.push({ b: fibres[i].b, hex: fibres[i].hex, sel: G.sel.includes(i) });
   G.sel.forEach(i => { if (fibres[i] && i % step) dots.push({ b: fibres[i].b, hex: fibres[i].hex, sel: true }); });
   const images = [];
-  if (H.MODES[G.mode].keepsFibres && G.mode !== 'still' && G.mode !== 'along' && fibres.length <= 120) {
+  if (isHopf() && H.MODES[G.mode].keepsFibres && G.mode !== 'still' && G.mode !== 'along' && fibres.length <= 120) {
     for (const f of fibres) images.push({ b: H.hopf(H.matVec(M, H.fibrePoint(f.b, 0))), hex: f.hex });
   }
   return { curves, dots, images };
@@ -201,7 +205,7 @@ function pickFibre(cx, cy, Mfull) {
   const step = fibres.length > 900 ? Math.ceil(fibres.length / 900) : 1;
   for (let i = 0; i < fibres.length; i += step) {
     if (fibres[i].trail) continue;
-    const C = H.fibreCurve(fibres[i].b, Mfull, n);
+    const C = curveOf(fibres[i].b, Mfull, n);
     for (let k = 0; k < n; k++) {
       const x = C[k * 3], y = C[k * 3 + 1], z = C[k * 3 + 2];
       if (x * x + y * y + z * z > 900) continue;
@@ -221,12 +225,13 @@ function updateLink(Mfull) {
   const pair = G.sel.length === 2 && fibres[G.sel[0]] && fibres[G.sel[1]];
   $('roLinkRow').hidden = !pair;
   if (!pair) { S.setDisc(0, null); S.setDisc(1, null); S.setDot(0, null); S.setDot(1, null); return; }
-  const n = 240, A = H.fibreCurve(fibres[G.sel[0]].b, Mfull, n), B = H.fibreCurve(fibres[G.sel[1]].b, Mfull, n);
+  const n = isHopf() ? 240 : 720, A = curveOf(fibres[G.sel[0]].b, Mfull, n), B = curveOf(fibres[G.sel[1]].b, Mfull, n);
   const curves = [A, B], fs = [fibres[G.sel[0]], fibres[G.sel[1]]];
   for (let k = 0; k < 2; k++) {
     const C = curves[k], P = i => [C[i * 3], C[i * 3 + 1], C[i * 3 + 2]];
     const circ = H.circleFrom3(P(0), P(n / 3), P(2 * n / 3));
-    const ok = G.discs && circ && circ.radius < 40 && Math.hypot(...circ.centre) < 40;
+    // a weighted orbit is a knot, not a circle: no disc
+    const ok = G.discs && isHopf() && circ && circ.radius < 40 && Math.hypot(...circ.centre) < 40;
     S.setDisc(k, ok ? Object.assign(circ, { rgb: fs[k].rgb }) : null);
     const hits = ok ? H.pierce(circ, curves[1 - k]) : [];
     S.setDot(k, hits[0] || null, fs[1 - k].rgb, G.rad * 2.6);
@@ -307,6 +312,7 @@ function frame(now) {
   const Mfull = H.matMul(H.planeMat(2, 3, G.pole), M);
   Mcur = M; MfullCur = Mfull;
   S.setRotation(Mfull);
+  S.uniforms.uPQ.value.set(G.pq[0], G.pq[1], G.pq[0], G.pq[1]);
   S.uniforms.uRad.value = G.rad;
   S.uniforms.uConf.value = G.conf ? 1 : 0;
   S.controls.autoRotate = G.orbit;
@@ -511,7 +517,7 @@ function resetView() {
 // function for the framing, and add frame hooks.
 const app = {
   G, S, H, applyPreset, rebuild, syncPresetUI, setMode, setPlaying, setDistance, fitDistance, occ,
-  fibres: () => fibres, linking: () => lastLk,
+  fibres: () => fibres, linking: () => lastLk, curveOf,
   // the rotation of the state in G now (not the last frame's)
   rotation: () => H.matMul(H.planeMat(2, 3, G.pole), H.rotationFor(G.mode, G.a, { tilt: G.tilt })),
   setBand(fn) { saverBand = fn; },

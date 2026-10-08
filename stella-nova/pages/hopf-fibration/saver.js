@@ -165,7 +165,7 @@ export function installSaver(app) {
   function extent(pct = 0.95) {
     const F = app.fibres(), M = app.rotation(), step = Math.max(1, Math.ceil(F.length / 90)), P = [];
     for (let i = 0; i < F.length; i += step) {
-      const C = H.fibreCurve(F[i].b, M, 40);
+      const C = app.curveOf(F[i].b, M, 40);
       for (let k = 0; k < 40; k++) { const x = C[k * 3], y = C[k * 3 + 1], z = C[k * 3 + 2]; if (x * x + y * y + z * z < 625) P.push([x, y, z]); }
     }
     if (!P.length) return { c: [0, 0, 0], r: 2.5 };
