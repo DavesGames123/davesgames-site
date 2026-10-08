@@ -2,8 +2,10 @@
 // sdf.frag.glsl — ray-marched solid, fragment stage
 //
 //   Ray-marches the scene signed-distance field and shades it. The scene is a
-//   rounded cube (an 8-power superquadric, s8) with a torus subtracted from it,
-//   both spun by the shared rotation gR. The surface is shaded as a glowing
+//   central body (body(): u_shape picks the shape, the rounded cube s8 by
+//   default) with folded rings subtracted from it, both spun by the shared
+//   rotation gR. u_fold is 1 on each mirrored axis: 3 axes give 8 rings, 2
+//   give 4, 1 gives 2, 0 gives one ring at the centre. The surface is shaded as a glowing
 //   metal: a soft diffuse term, a fresnel-weighted reflection that mixes a
 //   second (low-step) march with the filament reflection texture, and a glow
 //   that grows as rays pass near the torus (tracked in g_gd).
@@ -15,18 +17,20 @@
 //        u_mode==0  ─▶ shade: normal, fresnel, reflect march, filament reflect
 //                       + accumulate torus glow ─▶ ACES tonemap ─▶ sqrt (gamma)
 //
-//   SCENE SDF   df(p) = box  carved by  torus
+//   SCENE SDF   df(p) = body  carved by  rings
 //     ┌───────────────┐        the torus both subtracts from the cube (px with
 //     │   rounded      │        -(d1 - cD)) and is drawn as its own thin ring
 //     │   cube  s8   ()│◀─ torus (min with d1); g_gd tracks nearest torus dist
 //     └───────────────┘        for the volumetric glow.
 //
 //   Uniforms come from main.js (u_ro camera, u_ta the point it looks at,
-//   u_foc the focal length in screen heights, torus/box shape, glow,
+//   u_foc the focal length in screen heights, u_shape and u_fold, ring and
+//   body size, glow,
 //   material, spin, u_filTex the filament reflection texture, u_vp shared
 //   view-proj). The page sets u_ta 0 and u_foc tan(60 deg).
 precision highp float;
 uniform vec2 u_res;uniform float u_time;uniform vec3 u_ro,u_ta;
+uniform int u_shape;uniform vec3 u_fold;
 uniform float u_foc,u_sR,u_pK,u_tO,u_tM,u_tm,u_cD,u_pM,u_rS,u_gP,u_gH,u_mode;
 uniform float u_mBase,u_mMetal,u_mFres,u_mEnv,u_mRough,u_mBrush;
 uniform float u_rA,u_rB,u_rC,u_pulse,u_pulseR;
@@ -50,14 +54,27 @@ vec3 pa3(vec3 a,float k){return-pm3(a,-a,k);}
 // Rounded cube (8-power superquadric) and a torus, the two scene primitives.
 float s8(vec3 p,float r){p*=p;p*=p;return pow(dot(p,p),.125)-r;}
 float tor(vec3 p,vec2 t){return length(vec2(length(p.xz)-t.x,p.y))-t.y;}
+// The central body, size r. The CPU copy is bodyDist in flow.js; keep the
+// shape order in step with BODIES there.
+//   0 cube (L8 ball)  1 sphere  2 octahedron (L1 ball, a bound)
+//   3 cylinder (axis y)  4 pillow (L4 ball)
+float body(vec3 p,float r){
+  if(u_shape==1)return length(p)-1.2*r;
+  if(u_shape==2){vec3 a=abs(p);return (a.x+a.y+a.z-1.8*r)*.57735027;}
+  if(u_shape==3){vec2 d=vec2(length(p.xz),abs(p.y))-vec2(1.05*r);
+    return min(max(d.x,d.y),0.)+length(max(d,vec2(0)));}
+  if(u_shape==4){vec3 q=p*p;return pow(dot(q,q),.25)-1.05*r;}
+  return s8(p,r);}
 mat3 rX(float a){float c=cos(a),s=sin(a);return mat3(1,0,0,0,c,s,0,-s,c);}
 mat3 rY(float a){float c=cos(a),s=sin(a);return mat3(c,0,s,0,1,0,-s,0,c);}
 mat3 rZ(float a){float c=cos(a),s=sin(a);return mat3(c,s,0,-s,c,0,0,0,1);}
-// The scene distance field: rotate into scene space, build the cube (d0) and a
-// space-folded torus (d1), carve the torus out of the cube (smooth subtract),
-// union the torus itself, and remember the nearest torus distance for the glow.
-float df(vec3 p){p*=gR;vec3 p0=p,p1=p*gR;p1=pa3(p1,u_pK);p1-=u_tO+sin(u_time*u_pulseR)*u_pulse;p1*=gR;
-  float d0=s8(p0,u_sR),d1=tor(p1,vec2(u_tM,u_tm));float d=d0;d=px(d,-(d1-u_cD),u_pM);
+// The scene distance field: rotate into scene space, build the body (d0) and
+// the space-folded rings (d1), carve the rings out of the body (smooth
+// subtract), union the rings, and remember the nearest ring distance for the
+// glow. Only the axes in u_fold are mirrored and offset.
+float df(vec3 p){p*=gR;vec3 p0=p,p1=p*gR;p1=mix(p1,pa3(p1,u_pK),u_fold);
+  p1-=(u_tO+sin(u_time*u_pulseR)*u_pulse)*u_fold;p1*=gR;
+  float d0=body(p0,u_sR),d1=tor(p1,vec2(u_tM,u_tm));float d=d0;d=px(d,-(d1-u_cD),u_pM);
   d=min(d,d1);g_gd=min(g_gd,d1);return d;}
 // Surface normal by central differences of the distance field.
 vec3 calcN(vec3 p){vec2 e=vec2(.005,0);return normalize(vec3(

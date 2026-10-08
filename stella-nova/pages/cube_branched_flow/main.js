@@ -2,7 +2,8 @@
 //  CUBE SDF + BRANCHED FLOW  ·  ray-marched solid crossed with flowing filaments
 // ----------------------------------------------------------------------------
 //  Two renderers share one scene. A ray-marched signed-distance surface (a
-//  rounded cube with a torus carved through it) is the solid body; thousands of
+//  central body, the rounded cube by default, with folded rings carved through
+//  it) is the solid; thousands of
 //  thin filaments are traced on the CPU through a 3D "branched flow" vector
 //  field, then drawn as instanced screen-space ribbons. The filaments reflect in
 //  the metallic surface, and the surface occludes the filaments behind it, so
@@ -24,7 +25,7 @@
 //
 //  FILAMENT TRACE   (CPU, traceAll)
 //  ---------------------------------------------------------------------------
-//      seed on torus rings ─▶ step along velocity v:
+//      (flow.js) seed on the rings ─▶ step along velocity v:
 //        v += field3D(p)              branched-flow sinusoidal field
 //        v -= (v·n) n                 project off the SDF gradient (hug surface)
 //        v -= curve · dist · n        pull toward / push off the surface
@@ -37,16 +38,18 @@
 //      C_   checkbox defs (visibility + baked toggles)
 //      cur  live numeric values (P_ -> cur); chk  live booleans (C_ -> chk)
 //
+//  CPU GEOMETRY lives in flow.js (DOM-free): body shapes, ring fold, ring
+//  SDF, flow field, seeds and trace. main.js imports it as F.
+//
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ---------------------------------------------------------------------------
 //      shader load .......... "await fetch"        fetch .glsl before build
-//      math ................. "MATH"               3x3 / 4x4, persp, lookAt
-//      cpu sdf .............. "TORUS SDF ON CPU"    torus distance + gradient
+//      cpu geometry ......... "import(new URL"     flow.js as F
+//      math ................. "MATH"               persp, lookAt, mM4
 //      parameters ........... "const P_"           tunables and their metadata
+//      shape + rings ........ "function setRings"  page Shape / Rings controls
 //      webgl setup .......... "WEBGL"              programs, uniforms, VAOs
 //      fbo .................. "function mkFBO"      distance + reflection targets
-//      flow field ........... "function field3D"    the branched-flow field
-//      seeds + tracing ...... "function genSeeds"   seed and integrate filaments
 //      buffer build ......... "function buildBuf"   filaments -> instanced edges
 //      camera ............... "let resScale"        orbit state + resize
 //      ui ................... "function buildUI"    sliders, toggles, shuffle
@@ -61,26 +64,14 @@ const SDF_VS = await (await fetch(new URL('shaders/sdf.vert.glsl', document.base
 const SDF_FS = await (await fetch(new URL('shaders/sdf.frag.glsl', document.baseURI))).text();
 const FIL_VS = await (await fetch(new URL('shaders/filament.vert.glsl', document.baseURI))).text();
 const FIL_FS = await (await fetch(new URL('shaders/filament.frag.glsl', document.baseURI))).text();
-// ═══════════════ SHADERS ═══════════════
-
-// u_mode: 0=color output, 1=distance output (t/500 in red channel)
-
-
+// The CPU geometry (flow field, rings, body, trace) is the DOM-free module
+// flow.js.
+const F=await import(new URL('flow.js',document.baseURI).href);
+const{PI,nrm}=F;
 
 // ═══════════════ MATH ═══════════════
-// Small linear-algebra kit used by the CPU trace and camera. rX3/rY3/rZ3 build
-// 3x3 axis rotations; mM3/mV3 multiply; tM3 transposes; nrm normalizes; persp
-// and lookAt build the 4x4 projection and view matrices; mM4 multiplies them.
-const PI=Math.PI,TAU=PI*2;
-function rX3(a){const c=Math.cos(a),s=Math.sin(a);return[1,0,0,0,c,-s,0,s,c];}
-function rY3(a){const c=Math.cos(a),s=Math.sin(a);return[c,0,-s,0,1,0,s,0,c];}
-function rZ3(a){const c=Math.cos(a),s=Math.sin(a);return[c,-s,0,s,c,0,0,0,1];}
-function mM3(a,b){const r=[];for(let i=0;i<3;i++)for(let j=0;j<3;j++)
-  r[i*3+j]=a[i*3]*b[j]+a[i*3+1]*b[3+j]+a[i*3+2]*b[6+j];return r;}
-function mV3(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],
-  m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
-function tM3(m){return[m[0],m[3],m[6],m[1],m[4],m[7],m[2],m[5],m[8]];}
-function nrm(v){const l=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])||1e-8;return[v[0]/l,v[1]/l,v[2]/l];}
+// persp and lookAt build the 4x4 projection and view matrices; mM4 multiplies
+// them. The 3x3 kit for the trace is in flow.js.
 function persp(f,a,n,r){const t=1/Math.tan(f/2),nf=1/(n-r);
   return new Float32Array([t/a,0,0,0,0,t,0,0,0,0,(r+n)*nf,-1,0,0,2*r*n*nf,0]);}
 function lookAt(e,t,u){let zx=e[0]-t[0],zy=e[1]-t[1],zz=e[2]-t[2];
@@ -94,28 +85,11 @@ function lookAt(e,t,u){let zx=e[0]-t[0],zy=e[1]-t[1],zz=e[2]-t[2];
 function mM4(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)
   r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r;}
 
-// ═══════════════ TORUS SDF ON CPU ═══════════════
-// A CPU copy of the torus distance field the shader carves with, so the trace
-// can steer filaments along the same surface. pmF is a smooth-min, paF/pa3J are
-// smooth-abs (rounded mirror folds). torDist returns signed distance to the
-// carved torus; torGrad is its numeric gradient (surface normal direction).
-function pmF(a,b,k){const h=Math.max(0,Math.min(1,.5+.5*(b-a)/k));return b+(a-b)*h-k*h*(1-h);}
-function paF(a,k){return -pmF(a,-a,k);}
-function pa3J(v,k){return[paF(v[0],k),paF(v[1],k),paF(v[2],k)];}
-function torDist(wp,R,C,t){
-  let p=mV3(R,wp);p=mV3(R,p);p=pa3J(p,C.pK);
-  const off=pOff(C,t);
-  p=[p[0]-off,p[1]-off,p[2]-off];p=mV3(R,p);
-  const q=Math.sqrt(p[0]*p[0]+p[2]*p[2])-C.tM;
-  return Math.sqrt(q*q+p[1]*p[1])-C.tm;}
-function torGrad(wp,R,C,t){const e=.02,d0=torDist(wp,R,C,t);
-  return nrm([torDist([wp[0]+e,wp[1],wp[2]],R,C,t)-d0,
-    torDist([wp[0],wp[1]+e,wp[2]],R,C,t)-d0,torDist([wp[0],wp[1],wp[2]+e],R,C,t)-d0]);}
-
 // ═══════════════ PARAMETERS ═══════════════
 // Visible controls — everything else baked. Spin params shuffle-only (no sliders).
 // Each entry: v default, mn/mx range, s step, l label, g group. A group of '_'
 // and a label of '_' mean the value has no slider (baked or shuffle-only).
+// An entry with o (a list of [value, text]) gets a select, not a slider.
 const P_={
 // ── Playback ──
 timeScale:{v:1,mn:0,mx:3,s:.05,l:'Time Scale',g:'_'},
@@ -133,13 +107,14 @@ mFres:{v:2.5,mn:.5,mx:6,s:.1,l:'Fresnel',g:'mat'},
 // ── Structure ──
 sN:{v:78,mn:4,mx:120,s:1,l:'Density',g:'struct'},
 rCw:{v:10,mn:.5,mx:16,s:.5,l:'Width',g:'struct'},
+bShape:{v:0,mn:0,mx:F.BODIES.length-1,s:1,l:'Shape',g:'struct',o:F.BODIES.map((b,i)=>[i,b.l])},
+sRings:{v:8,mn:1,mx:8,s:1,l:'Rings',g:'struct',o:F.RING_COUNTS.map(n=>[n,String(n)])},
 // ── Shuffle-only (no UI, randomized by shuffle) ──
 rS:{v:.5,mn:.1,mx:1.5,s:.05,l:'_',g:'_'},
 moRA:{v:0,mn:0,mx:2,s:.01,l:'_',g:'_'},
 moRB:{v:.5,mn:0,mx:2,s:.01,l:'_',g:'_'},
 moRC:{v:.23,mn:0,mx:2,s:.01,l:'_',g:'_'},
 // ── Locked (no UI, not shuffled) ──
-sRings:{v:8,mn:1,mx:24,s:1,l:'_',g:'_'},
 sR:{v:20,mn:5,mx:35,s:.5,l:'_',g:'_'},pK:{v:10,mn:.1,mx:20,s:.1,l:'_',g:'_'},
 tO:{v:12,mn:0,mx:30,s:.5,l:'_',g:'_'},tM:{v:10,mn:.5,mx:20,s:.5,l:'_',g:'_'},
 tm:{v:.125,mn:.01,mx:2,s:.01,l:'_',g:'_'},cD:{v:2,mn:0,mx:10,s:.1,l:'_',g:'_'},
@@ -196,7 +171,7 @@ function mkP(vs,fs){const cs=(s,t)=>{const o=gl.createShader(t);gl.shaderSource(
 const sdfP=mkP(SDF_VS,SDF_FS),filP=mkP(FIL_VS,FIL_FS);
 // Cache every uniform location for each program, keyed by name.
 const sU={},fU={};
-['u_res','u_time','u_ro','u_ta','u_foc','u_sR','u_pK','u_tO','u_tM','u_tm','u_cD','u_pM','u_rS','u_gP','u_gH','u_mode','u_filTex','u_vp','u_mBase','u_mMetal','u_mFres','u_mEnv','u_mRough','u_mBrush','u_rA','u_rB','u_rC','u_pulse','u_pulseR']
+['u_res','u_time','u_ro','u_ta','u_foc','u_shape','u_fold','u_sR','u_pK','u_tO','u_tM','u_tm','u_cD','u_pM','u_rS','u_gP','u_gH','u_mode','u_filTex','u_vp','u_mBase','u_mMetal','u_mFres','u_mEnv','u_mRough','u_mBrush','u_rA','u_rB','u_rC','u_pulse','u_pulseR']
   .forEach(n=>sU[n]=gl.getUniformLocation(sdfP,n));
 ['u_vp','u_res','u_width','u_taper','u_eStep','u_rootHue','u_tipHue','u_sat','u_val','u_hotHue','u_hotThresh','u_hotInt','u_ringSpread','u_grad','u_bright','u_sdfDist','u_cam']
   .forEach(n=>fU[n]=gl.getUniformLocation(filP,n));
@@ -248,114 +223,16 @@ function mkFBO(w,h){
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
 }
 
-// ═══════════════ FLOW FIELD ═══════════════
-// The branched-flow velocity field a filament follows. It sums three fixed
-// sinusoidal "gradient" directions (curl-noise style) at the sample point, each
-// animated by time, then optionally adds a radial standing wave. This is what
-// makes the filaments branch and braid instead of running straight.
-function field3D(p,seed,time,C){
-  const s1=seed*17,s2=seed*39,fr=C.fFr,fz=C.fFrZ;
-  const q=[p[0]*fr,p[1]*fr,p[2]*fz];
-  const a=[1.9,1.3,.7],b=[-1.1,2.7,-1.5],c=[.8,-2.1,3.3];
-  const pa_=s1+time*.05*C.fMo,pb_=s2-time*.035*C.fMo,pc_=s1*1.7+time*.05;
-  const sA=Math.sin(a[0]*q[0]+a[1]*q[1]+a[2]*q[2]+pa_);
-  const sB=Math.sin(b[0]*q[0]+b[1]*q[1]+b[2]*q[2]+pb_);
-  const sC=Math.sin(c[0]*q[0]+c[1]*q[1]+c[2]*q[2]+pc_);
-  const F=[
-    (a[0]*sA+b[0]*sB*C.fO2+c[0]*sC*C.fO3)*fr,
-    (a[1]*sA+b[1]*sB*C.fO2+c[1]*sC*C.fO3)*fr,
-    (a[2]*sA+b[2]*sB*C.fO2+c[2]*sC*C.fO3)*fz];
-  if(chk.sWave){const r=Math.sqrt(p[0]*p[0]+p[1]*p[1]+p[2]*p[2])+1e-6;
-    const w=Math.sin(r*C.fWf-time*C.fWs+s1);
-    F[0]+=p[0]/r*w*C.fWa;F[1]+=p[1]/r*w*C.fWa;F[2]+=p[2]/r*w*C.fWa;}
-  return F;}
+// ═══════════════ SHAPE + RINGS ═══════════════
+// The Rings control sets the ring count and lays the rings out with the page
+// ring radius (F.PAGE_RR) and share (F.PAGE_B): 8 rings give the old tO 12,
+// tM 10. The Shape control only picks the body; sdf.frag.glsl body() and
+// F.bodyDist draw it.
+function setRings(n){cur.sRings=n;Object.assign(cur,F.ringLayout(n,F.PAGE_RR,F.PAGE_B));}
+// The fold mask uniform: 1 on each folded axis (see F.foldMask).
+const foldOf=()=>F.foldMask(Math.round(cur.sRings));
 
-// ═══════════════ SEEDS + TRACING ═══════════════
-// The global spin: build the animated rotation matrix and its transpose so the
-// CPU trace and the shader agree on the scene's orientation over time.
-function computeGRot(t,sp){const tm=t*sp;
-  const g=mM3(rX3(cur.moRA*tm),mM3(rZ3(cur.moRB*tm),rY3(cur.moRC*tm)));
-  return{R:tM3(g),Rt:g};}
-// Torus radial offset, pulsing over time (matches the shader's carve motion).
-function pOff(C,t){return C.tO+Math.sin(t*C.moPulseR)*C.moPulse;}
-// Integer hash in [0,1): deterministic jitter for seed placement.
-function jH(i){let x=Math.imul(i,2654435761)>>>0;x^=x>>>15;x=Math.imul(x,0x846ca68b)>>>0;return(x>>>8)/16777216;}
-// Map a torus angle to a world position for one cube-corner sign octant.
-function torusToWorld(theta,s,Rt,C,t){
-  const tp=[C.tM*Math.cos(theta),0,C.tM*Math.sin(theta)];
-  const off=pOff(C,t);
-  let p=mV3(Rt,tp);p=[s[0]*(p[0]+off),s[1]*(p[1]+off),s[2]*(p[2]+off)];
-  return mV3(Rt,mV3(Rt,p));}
-// Build the filament start points: rings of seeds laid around tori attached to
-// the eight cube-corner octants, jittered along and across the ring. Each seed
-// carries its position, tangent, outward direction, and a per-seed noise seed.
-function genSeeds(C,R,Rt,t){
-  const seeds=[],
-    ALL=[[-1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,1,1],[1,-1,-1],[1,-1,1],[1,1,-1],[1,1,1]];
-  const nRings=Math.round(C.sRings),density=Math.round(C.sN),spread=C.sSp;
-  for(let ring=0;ring<nRings;ring++){
-    const sign=ALL[ring%8],layer=Math.floor(ring/8);
-    const ea=layer*2.399;
-    const eR=layer>0?mM3(rX3(ea*.7),rZ3(ea)):null;
-    for(let i=0;i<density;i++){
-      const jt=(jH(ring*10000+i*7+1)-.5)*spread*.04;
-      const theta=(i/density+jt)*TAU;
-      let pw=torusToWorld(theta,sign,Rt,C,t);
-      let p1=torusToWorld(theta+.01,sign,Rt,C,t),p0=torusToWorld(theta-.01,sign,Rt,C,t);
-      if(eR){pw=mV3(eR,pw);p1=mV3(eR,p1);p0=mV3(eR,p0);}
-      const tn=nrm([p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]]);
-      const ot=nrm(pw);
-      const px=tn[1]*ot[2]-tn[2]*ot[1],py=tn[2]*ot[0]-tn[0]*ot[2],pz=tn[0]*ot[1]-tn[1]*ot[0];
-      const pj=(jH(ring*10000+i*7+2)-.5)*spread*.4;
-      pw=[pw[0]+px*pj,pw[1]+py*pj,pw[2]+pz*pj];
-      seeds.push({pos:pw,tan:tn,out:ot,
-        seed:theta*.1+i*.01+(sign[0]+sign[1]+sign[2])*.001+layer*.1});}}
-  return seeds;}
-// Integrate every seed into a polyline. At each node the velocity is nudged by
-// the flow field, projected off the SDF gradient so filaments hug the surface,
-// pulled toward or off the surface by distance, and given a curl swirl; the
-// resulting node positions become the filament's points.
-function traceAll(seeds,C,R,Rt,time){
-  const nodes=Math.round(C.sNd),sub=Math.round(C.sSub),maxFils=2000;
-  const step=C.sSl*C.tM*.03/sub;
-  const gain=C.fGa*C.fCu*step;
-  const oa=chk.fObj,cf=C.sCf,pr=C.sPr,dt=C.sDt,curS=C.sCur;
-  const fils=[];
-  for(const sd of seeds){
-    if(fils.length>=maxFils)break;
-    const v=[...sd.tan];
-    const x=[...sd.pos];
-    const pts=new Float32Array(nodes*3);
-    pts[0]=x[0];pts[1]=x[1];pts[2]=x[2];
-    let grad=[0,0,0];
-    for(let j=1;j<nodes;j++){
-      const along=j/(nodes-1);
-      const cfj=cf*(1-along*dt);
-      if(j%3===1||j===1)grad=torGrad(x,R,C,time);
-      const dist=torDist(x,R,C,time);
-      for(let s=0;s<sub;s++){
-        const fp=oa?mV3(R,x):x;
-        const F=field3D(fp,sd.seed,time,C);
-        const fW=oa?mV3(Rt,F):F;
-        // Remove the component along the surface normal so flow runs tangentially.
-        if(pr>.01){const nd=grad[0]*fW[0]+grad[1]*fW[1]+grad[2]*fW[2];
-          fW[0]-=nd*grad[0]*pr;fW[1]-=nd*grad[1]*pr;fW[2]-=nd*grad[2]*pr;}
-        // Attract toward the surface (distance-proportional pull along -normal).
-        const cd=Math.max(-5,Math.min(5,dist));
-        if(cfj>.01){fW[0]-=cfj*cd*grad[0];fW[1]-=cfj*cd*grad[1];fW[2]-=cfj*cd*grad[2];}
-        // Add a curl swirl about the axis toward the scene centre.
-        if(curS>.01){const cx=-x[0],cy=-x[1],cz=-x[2];
-          const cl=Math.sqrt(cx*cx+cy*cy+cz*cz)||1e-8;
-          const tx=grad[1]*(cz/cl)-grad[2]*(cy/cl),ty=grad[2]*(cx/cl)-grad[0]*(cz/cl),tz=grad[0]*(cy/cl)-grad[1]*(cx/cl);
-          const tl=Math.sqrt(tx*tx+ty*ty+tz*tz)||1e-8;
-          fW[0]+=tx/tl*curS;fW[1]+=ty/tl*curS;fW[2]+=tz/tl*curS;}
-        v[0]+=fW[0]*gain;v[1]+=fW[1]*gain;v[2]+=fW[2]*gain;
-        const vl=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])||1e-8;
-        v[0]/=vl;v[1]/=vl;v[2]/=vl;
-        x[0]+=v[0]*step;x[1]+=v[1]*step;x[2]+=v[2]*step;}
-      pts[j*3]=x[0];pts[j*3+1]=x[1];pts[j*3+2]=x[2];}
-    fils.push(pts);}
-  return fils;}
+// ═══════════════ BUFFER BUILD ═══════════════
 // Flatten the traced polylines into the instanced edge buffer: one 8-float
 // record per edge (endpoint A, endpoint B, along-length t, tapering brightness).
 function buildBuf(fils,nodes){const edges=nodes-1,tot=fils.length*edges;
@@ -402,6 +279,12 @@ function buildUI(){pb.innerHTML='';
     d.onclick=()=>{d.classList.toggle('collapsed');gp.classList.toggle('hidden');};
     for(const[k,p]of Object.entries(P_)){if(p.g!==g.k)continue;
       const r=document.createElement('div');r.className='pr';
+      if(p.o){const lb=document.createElement('label');lb.textContent=p.l;lb.htmlFor='p_'+k;
+        const sel=document.createElement('select');sel.id='p_'+k;
+        for(const[v,t]of p.o){const op=document.createElement('option');op.value=v;op.textContent=t;sel.appendChild(op);}
+        sel.value=cur[k];
+        sel.onchange=()=>{const v=parseFloat(sel.value);if(k==='sRings')setRings(v);else cur[k]=v;};
+        r.append(lb,sel);gp.appendChild(r);continue;}
       const lb=document.createElement('label');lb.textContent=p.l;
       const inp=document.createElement('input');inp.type='range';inp.min=p.mn;inp.max=p.mx;inp.step=p.s;inp.value=cur[k];inp.id='p_'+k;
       const vl=document.createElement('span');vl.className='v';vl.id='v_'+k;vl.textContent=fmt(cur[k]);
@@ -424,7 +307,7 @@ function buildUI(){pb.innerHTML='';
   // Reset restores every default value, toggle, and camera pose.
   const rst=document.createElement('button');rst.className='btn';rst.textContent='Reset';
   rst.onclick=()=>{for(const[k,p]of Object.entries(P_)){cur[k]=p.v;
-    const el=document.getElementById('p_'+k);if(el){el.value=p.v;document.getElementById('v_'+k).textContent=fmt(p.v);}}
+    const el=document.getElementById('p_'+k),vl=document.getElementById('v_'+k);if(el)el.value=p.v;if(vl)vl.textContent=fmt(p.v);}
     for(const[k,c]of Object.entries(C_)){chk[k]=c.v;const el=document.getElementById('c_'+k);if(el)el.checked=c.v;}
     resScale=.85;camT=.5;camP=.25;camD=homeCamD();resize();};
   btns.append(shuf,rst);pb.appendChild(btns);
@@ -457,10 +340,11 @@ const infoEl=document.getElementById('info');
 let fc=0,lt_=0,simTime=0,lastNow=0;
 
 // Push all SDF-program uniforms for this frame: resolution, sim time, camera
-// origin, torus/box shape, glow, material, and spin parameters.
+// origin, body shape and fold, ring shape, glow, material, and spin parameters.
 function setSdfUniforms(ro){
   gl.uniform2f(sU.u_res,canvas.width,canvas.height);gl.uniform1f(sU.u_time,simTime);
   gl.uniform3f(sU.u_ro,ro[0],ro[1],ro[2]);gl.uniform3f(sU.u_ta,camTa[0],camTa[1],camTa[2]);gl.uniform1f(sU.u_foc,camF);
+  const fo=foldOf();gl.uniform1i(sU.u_shape,Math.round(cur.bShape));gl.uniform3f(sU.u_fold,fo[0],fo[1],fo[2]);
   gl.uniform1f(sU.u_sR,cur.sR);gl.uniform1f(sU.u_pK,cur.pK);gl.uniform1f(sU.u_tO,cur.tO);
   gl.uniform1f(sU.u_tM,cur.tM);gl.uniform1f(sU.u_tm,cur.tm);gl.uniform1f(sU.u_cD,cur.cD);
   gl.uniform1f(sU.u_pM,cur.pM);gl.uniform1f(sU.u_rS,cur.rS);gl.uniform1f(sU.u_gP,cur.gP);
@@ -490,9 +374,9 @@ function render(now){requestAnimationFrame(render);
   // CPU: trace filaments once
   let filData=null,filCount=0,filN=0,nFils=0;
   if(chk.sFil){
-    const{R,Rt}=computeGRot(simTime,cur.rS);
-    const seeds=genSeeds(cur,R,Rt,simTime);
-    const fils=traceAll(seeds,cur,R,Rt,simTime);
+    const{R,Rt}=F.computeGRot(simTime,cur);
+    const seeds=F.genSeeds(cur,R,Rt,simTime);
+    const fils=F.traceAll(seeds,cur,R,Rt,simTime,chk);
     nFils=fils.length;filN=Math.round(cur.sNd);
     const bb=buildBuf(fils,filN);filData=bb.data;filCount=bb.count;
     if(filCount>0){gl.bindBuffer(gl.ARRAY_BUFFER,filBuf);gl.bufferData(gl.ARRAY_BUFFER,filData,gl.DYNAMIC_DRAW);}
