@@ -13,6 +13,8 @@
 //     distortion), to 1e-5 relative, on a 30 x 15 degree grid
 //  8. the outlines of the unusual maps (van der Grinten circle, August
 //     pole, Larrivee pole line, the Werner heart)
+//  9. phones: the canvas pixel ratio cap (render.js mapDpr), and the
+//     phone rules in style.css and index.html (no browser: text checks)
 //  Each check prints one line; the run exits 1 on any failure.
 // ============================================================================
 import fs from 'node:fs';
@@ -301,6 +303,28 @@ console.log('# unusual maps: outlines');
   ok(Math.abs(lp[0] - 1) < 1e-7, `larrivee: the pole is a line with x = lambda / 2 (off ${e(Math.abs(lp[0] - 1))})`);
   const wp = wer(2, Math.PI / 2), ws = wer(0, -Math.PI / 2);
   ok(Math.hypot(...wp) < 1e-12 && Math.abs(ws[1] + Math.PI) < 1e-12, 'werner: the North Pole is the notch of the heart, the South Pole its tip at y = -pi');
+}
+
+// ── 9. phones ──────────────────────────────────────────────────────────────
+console.log('# phones: pixel ratio, targets, overflow');
+{
+  const { mapDpr } = await import('./render.js');
+  ok([[3, 2], [2.625, 2], [2, 2], [1.5, 1.5], [1, 1], [0.5, 1], [undefined, 1]].every(([d, w]) => mapDpr(d) === w),
+    'mapDpr: a DPR 3 phone draws at 2, so the map canvas has 4/9 of the pixels; DPR below 1 draws at 1');
+  // 430 x 932 css px phone, DPR 3: two full-stage canvases (map, tools) at 4 B a pixel
+  const mb = d => 2 * 430 * 932 * d * d * 4 / 1e6;
+  ok(mb(mapDpr(3)) < 14, `mapDpr: the two stage canvases on a 430 x 932 DPR 3 phone hold ${mb(mapDpr(3)).toFixed(1)} MB, not ${mb(3).toFixed(1)} MB`);
+  const css = fs.readFileSync(HERE + 'style.css', 'utf8'), html = fs.readFileSync(HERE + 'index.html', 'utf8');
+  const bodyRules = [...css.matchAll(/(^|\})\s*body\s*\{([^}]*)\}/g)].map(m => m[2]).join(';');
+  ok(!/overflow-x/.test(bodyRules) && /html\{overflow-x:hidden\}/.test(css), 'style.css: overflow-x is on html only, never on body (sticky elements)');
+  const touch = css.slice(css.indexOf('/* TOUCH'), css.indexOf('/* PHONE'));
+  const mins = [...touch.matchAll(/min-height:(\d+)px/g)].map(m => +m[1]), hs = [...touch.matchAll(/(?:^|[;{])\s*(?:width|height):(\d+)px/g)].map(m => +m[1]).filter(v => v > 30);
+  ok(mins.length >= 8 && mins.every(v => v >= 40) && hs.every(v => v >= 44), `style.css TOUCH: every min-height is 40 px or more (${mins.join(', ')}), button sizes 44 px`);
+  const rems = [...css.slice(css.indexOf('/* TOUCH')).matchAll(/font-size:([\d.]+)rem/g)].map(m => +m[1]);
+  ok(rems.every(v => v * 16 >= 12), `style.css TOUCH and PHONE: all text 12 px or more (smallest ${(Math.min(...rems) * 16).toFixed(1)} px)`);
+  const vp = (html.match(/<meta name="viewport" content="([^"]*)"/) || [])[1] || '';
+  ok(/width=device-width/.test(vp) && /viewport-fit=cover/.test(vp) && !/user-scalable=no|maximum-scale=1\b/.test(vp), `index.html viewport: "${vp}"`);
+  ok(/touch-action:none/.test(css.match(/#stage\{[^}]*\}/)[0]) && /touch-action:none/.test(css.match(/#globeBox\{[^}]*\}/)[0]), 'style.css: the stage and the globe set touch-action: none (pinch goes to the map)');
 }
 
 console.log(`\n${checks - fails}/${checks} checks passed`);

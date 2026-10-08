@@ -20,9 +20,15 @@
 //    grep -n 'export function loadData'  world.json + the borders file
 //    grep -n 'class MapView'            the view: setState, fit, draw
 //    grep -n 'fitFrame'                 raw bounds -> screen transform
+//    grep -n 'export function mapDpr'   the pixel ratio cap (2)
 // ============================================================================
 import { makeMap, BY_KEY, D, vec } from './proj.js';
 import { frameOf, clipPolygon, clipLine, outline, edgeLines, graticule, ringsFromFlat, seamlessLines } from './geo.js';
+
+// The canvas pixel ratio. A cap of 2 keeps a phone at DPR 3 to 4/9 of the
+// pixels, for the map, the tool canvas and the heatmap grid (1/3 of it).
+// Lines at DPR 2 are still sharp on a 3x screen.
+export function mapDpr(dpr) { return Math.max(1, Math.min(2, +dpr || 1)); }
 
 export const THEME = {
   bg: '#06080d',
@@ -82,7 +88,7 @@ export class MapView {
     this.grat = graticule(15); this.gratMajor = [];
     this.opts = { borders: true, graticule: true };
   }
-  resize(w, h, dpr = Math.min(3, window.devicePixelRatio || 1)) {
+  resize(w, h, dpr = mapDpr(globalThis.devicePixelRatio)) {
     this.W = w; this.H = h; this.dpr = dpr;
     const cw = Math.round(w * dpr), ch = Math.round(h * dpr);
     if (this.c.width !== cw || this.c.height !== ch) { this.c.width = cw; this.c.height = ch; }

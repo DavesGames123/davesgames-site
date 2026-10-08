@@ -149,20 +149,27 @@ h3{font:600 0.8rem var(--sci-sans);color:var(--dim);margin:18px 0 8px}
 #cardPhone .more{display:block}
 #cardPhone dt.more{display:block}
 
-/* TOUCH. Any touch screen or narrow window: 44 px targets, 11 px text or more. */
+/* TOUCH. Any touch screen or narrow window: 44 px targets, 12 px text or more. */
 @media (pointer:coarse), (max-width:768px){
   .tabs button{min-height:44px;font-size:0.82rem}
-  .chip{min-height:36px;padding:4px 12px;font-size:0.78rem}
+  .chip{min-height:44px;padding:4px 12px;font-size:0.78rem}
   .seg button{min-height:44px;font-size:0.8rem}
   .row{min-height:44px}
   .row input[type=range]{height:44px}
   .row select{min-height:44px}
   .btn{min-height:44px;padding:8px 14px}
   .go{min-height:44px;font-size:0.84rem}
-  .toggles label{min-height:36px;display:flex;align-items:center}
+  .toggles label{min-height:44px;display:flex;align-items:center}
+  .toggles input{width:20px;height:20px}
+  .moreBtn{min-height:44px;padding:6px 12px}
+  .toc a{display:flex;align-items:center;min-height:40px}
+  .hint,.fam-note,.note,.credit{font-size:0.8rem}
+  .chips span,#legend,#readout{font-size:0.78rem}
+  .thumb .tn{font-size:0.82rem}
+  .cardBody dt{font-size:0.78rem}
   .hb{width:44px;height:44px}
   #cardToggle{width:44px;height:44px;top:0;right:0;border:0}
-  .thumb .tp{font-size:0.72rem}
+  .thumb .tp{font-size:0.75rem}
 }
 
 /* PHONE. The query matches PHONE_Q in main.js. */
@@ -180,16 +187,19 @@ h3{font:600 0.8rem var(--sci-sans);color:var(--dim);margin:18px 0 8px}
   .chips span:nth-child(n+2){display:none}
   #globeBox{--globe:min(30vw,128px);right:8px;bottom:8px;top:auto}
   body.sheet-open #globeBox{bottom:calc(var(--sheet-h) + 8px)}
-  #readout{top:auto;bottom:8px;left:8px;right:auto;min-width:0;max-width:60%;font-size:0.72rem}
+  #readout{top:auto;bottom:8px;left:8px;right:auto;min-width:0;max-width:60%;font-size:0.76rem}
   body.sheet-open #readout{bottom:calc(var(--sheet-h) + 8px)}
   #legend{bottom:8px;min-width:0;width:calc(100% - 16px - min(30vw,128px) - 8px);left:8px;transform:none}
   body.sheet-open #legend{bottom:calc(var(--sheet-h) + 8px)}
+  /* the readout sits above the heatmap legend, not on it */
+  #legend:not([hidden]) ~ #readout{bottom:76px}
+  body.sheet-open #legend:not([hidden]) ~ #readout{bottom:calc(var(--sheet-h) + 76px)}
   #hint{display:none}
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:center;justify-content:space-between;
     padding:7px calc(8px + env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
     background:rgba(9,12,18,0.96);border-top:1px solid var(--line-b)}
   #dock > button{flex:1 1 0;max-width:62px;height:50px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);font-size:1.05rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}
-  #dock > button small{font-size:0.7rem;color:var(--dim)}
+  #dock > button small{font-size:0.75rem;color:var(--dim)}
   #dock > button.on small{color:var(--acc)}
   #dock > button.on{border-color:var(--acc);color:var(--acc)}
   #panel{position:fixed;left:0;right:0;bottom:var(--dock-h);top:auto;width:auto;height:var(--sheet-h);z-index:40;
@@ -220,6 +230,7 @@ h3{font:600 0.8rem var(--sci-sans);color:var(--dim);margin:18px 0 8px}
   #sheetGrip{display:none}
   .tabs{top:0}
   body.sheet-open #globeBox,body.sheet-open #readout,body.sheet-open #legend{bottom:8px}
+  body.sheet-open #legend:not([hidden]) ~ #readout{bottom:76px}
   .grid{grid-template-columns:repeat(2,1fr)}
 }
 

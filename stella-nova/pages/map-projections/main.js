@@ -498,7 +498,7 @@ function bindUI() {
   document.querySelectorAll('.toc a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(a.getAttribute('href')); if (t) $('panel').scrollTo({ top: t.offsetTop - 60, behavior: 'smooth' }); }));
   $('leftOut').textContent = LEFT_OUT;
   for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) mapC.addEventListener(t, onPointer);
-  mapC.addEventListener('pointerleave', () => { if (!drag) { S.hover = null; readout(); if (globe) globe.setMarker(null); drawOverlay(); } });
+  mapC.addEventListener('pointerleave', e => { if (!drag && e.pointerType === 'mouse') { S.hover = null; readout(); if (globe) globe.setMarker(null); drawOverlay(); } });
   mapC.addEventListener('wheel', e => { e.preventDefault(); S.zoom = Math.max(0.6, Math.min(12, S.zoom * Math.exp(-e.deltaY * 0.0015))); view.zoom = S.zoom; refresh(); }, { passive: false });
   mapC.addEventListener('dblclick', () => { S.zoom = 1; view.zoom = 1; refresh(); });
   mapC.addEventListener('contextmenu', e => e.preventDefault());
@@ -541,9 +541,16 @@ async function initGlobe() {
       const ll = globe.pick(e.clientX - r.left, e.clientY - r.top);
       S.hover = ll; readout(); globe.setMarker(ll); drawOverlay();
     });
-    box.addEventListener('pointerup', () => { gd = null; queueDraw('full'); });
+    // A tap (touch or pen, no drag) marks the point, as a hover does with a mouse.
+    box.addEventListener('pointerup', e => {
+      if (gd && e.pointerType !== 'mouse' && Math.hypot(e.clientX - gd.x, e.clientY - gd.y) < 6) {
+        const r = box.getBoundingClientRect(), ll = globe.pick(e.clientX - r.left, e.clientY - r.top);
+        S.hover = ll; readout(); globe.setMarker(ll); drawOverlay();
+      }
+      gd = null; queueDraw('full');
+    });
     box.addEventListener('pointercancel', () => { gd = null; });
-    box.addEventListener('pointerleave', () => { if (!gd) { S.hover = null; readout(); globe.setMarker(null); drawOverlay(); } });
+    box.addEventListener('pointerleave', e => { if (!gd && e.pointerType === 'mouse') { S.hover = null; readout(); globe.setMarker(null); drawOverlay(); } });
   } catch (e) {
     console.warn('globe unavailable', e && e.message);
     $('globeBox').classList.add('off');
@@ -565,7 +572,9 @@ async function boot() {
   routeRead();
   $('loading').classList.add('gone');
   setTimeout(() => $('hint').classList.add('gone'), 6000);
-  $('hint').textContent = 'Drag to turn the globe under the map · scroll to zoom · arrow keys change projection';
+  $('hint').textContent = matchMedia('(pointer:coarse)').matches
+    ? 'Drag to turn the globe under the map · pinch to zoom · tap a point to read its distortion'
+    : 'Drag to turn the globe under the map · scroll to zoom · arrow keys change projection';
   typesetAll(document.querySelector('section[data-tab="guide"]'));
   typesetAll($('conicRows'));
   initGlobe();

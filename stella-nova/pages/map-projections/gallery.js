@@ -12,7 +12,7 @@
 //    grep -n 'function drawThumbs'            the idle-slice painter
 // ============================================================================
 import { PROJ, HOME } from './proj.js';
-import { MapView } from './render.js';
+import { MapView, mapDpr } from './render.js';
 import { FAMILY, PROPS } from './cards.js';
 
 export function buildGallery(root, data, onPick) {
@@ -65,7 +65,7 @@ export function buildGallery(root, data, onPick) {
         const r = cv.getBoundingClientRect(); if (r.width < 4) { continue; }
         let v = views.get(key);
         if (!v) { v = new MapView(cv, data); v.opts = { borders: false, graticule: true }; v.grat = v.grat.filter((_, i) => i % 2 === 0); views.set(key, v); }
-        v.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1));
+        v.resize(r.width, r.height, mapDpr(window.devicePixelRatio));
         v.setBox({ x: 0, y: 0, w: r.width, h: r.height });
         const h = HOME[key] || {};
         const st = Object.assign({ key }, h);
