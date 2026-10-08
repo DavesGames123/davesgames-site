@@ -195,6 +195,9 @@ export function installSaver(app) {
   window.snSaver = {
     enter(o = {}) {
       if (S) this.exit();
+      // Stop the page's own play first: its frame loop ends while the
+      // saver runs, and the button would show Pause after exit.
+      if (app.st.playing && app.setPlaying) app.setPlaying(false);
       app.st.saver = true;
       const calm = clamp(o.calm ?? 0.7, 0, 1), rng = mulberry((o.seed >>> 0) || ((Date.now() & 0xffffff) + 1));
       const st = document.createElement('style'); st.id = 'rpSaverStyle';

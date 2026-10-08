@@ -282,19 +282,27 @@ async function compute() {
   const D = st.compD, sid = st.compS, S = byId(sid);
   $('compBtn').disabled = true; $('compStop').hidden = false; $('compSave').disabled = true;
   $('compBar').style.width = '0%';
-  $('compInfo').textContent = `Summing ${fmtInt(Math.ceil(D / S.rate) + 2)} terms of ${S.name} by binary splitting…`;
+  // The stage text and the time since the start. The last stages (the
+  // root, the division, the decimals) send no progress of their own, and
+  // can take minutes for 1M digits, so a clock shows that the run is live.
+  let stageMsg = `Summing ${fmtInt(Math.ceil(D / S.rate) + 2)} terms of ${S.name} by binary splitting…`;
   const t0 = performance.now();
+  const showInfo = () => { $('compInfo').textContent = `${stageMsg} ${Math.floor((performance.now() - t0) / 1000)} s`; };
+  showInfo();
+  const clock = setInterval(showInfo, 500);
   try {
     const res = await computeRunner.run('compute', { sid, D }, p => {
       const f = p.stage === 'series' ? 0.75 * p.f : p.stage === 'root' ? 0.8 : 0.9;
       $('compBar').style.width = (100 * f).toFixed(1) + '%';
-      if (p.stage !== 'series') $('compInfo').textContent = p.stage === 'root' ? 'Square root and the one big division…' : 'Writing the decimals…';
+      if (p.stage !== 'series') { stageMsg = p.stage === 'root' ? 'Square root and the one big division…' : 'Writing the decimals…'; showInfo(); }
     });
+    clearInterval(clock);
     st.comp = res;
     $('compBar').style.width = '100%';
     $('compInfo').textContent = `${fmtInt(D)} decimals in ${fmtInt(res.ms)} ms (${fmtInt(performance.now() - t0)} ms with the copy). Last ten: ${res.digits.slice(-10)}.`;
     $('compSave').disabled = false;
   } catch (e) {
+    clearInterval(clock);
     $('compInfo').textContent = e.message === 'stopped' ? 'Stopped.' : 'Failed: ' + e.message;
     $('compBar').style.width = '0%';
   }
@@ -423,6 +431,6 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw
 load('race').then(() => load('digits')).then(() => load('anatomy')).catch(() => { /* drawn on demand */ });
 
 // For the screensaver and for CDP checks.
-const app = { st, runner, load, draw, layout, NAMES, SHORT, RS };
+const app = { st, runner, load, draw, layout, setPlaying, NAMES, SHORT, RS };
 installSaver(app);
 window.__rpi = { st, ready: () => !!st.race[st.raceT] && !!$('eqbar').querySelector('svg'), app };
