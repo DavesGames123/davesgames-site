@@ -7,6 +7,7 @@
 //  3. equal-area maps keep the area scale a b constant to 1e-6 (relative)
 //  4. conformal maps have a = b to 1e-6, on the sphere and the ellipsoid
 //  5. ellipsoid formulas (Mercator, UTM, Lambert conic) and Vincenty
+//  6. clipping: antimeridian cut, pole closure, small-circle edge (geo.js)
 //  Each check prints one line; the run exits 1 on any failure.
 // ============================================================================
 import fs from 'node:fs';
@@ -162,6 +163,62 @@ const caseOf = k => ref.cases.find(c => c.key === k);
   for (let i = 0; i < 360; i++) cap.push(-i * D, -60 * D);   // walk west at 60 S: the cap around the pole
   const exact = 2 * Math.PI * (1 - Math.sin(60 * D));
   ok(Math.abs(P.sphArea(cap) / exact - 1) < 2e-3, `sphArea of the cap south of 60 S: ${P.sphArea(cap).toFixed(5)} sr (exact ${exact.toFixed(5)}; chords cut the small circle)`);
+}
+
+// ── 6. clipping ────────────────────────────────────────────────────────────
+const G = await import('./geo.js').catch(err => { console.log('FAIL geo.js did not load: ' + err.message); fails++; return null; });
+if (G) {
+  console.log('# clipping (geo.js)');
+  const ringDeg = pts => pts.map(([lo, la]) => P.vec(lo * D, la * D));
+  const areaOf = pieces => pieces.reduce((s, pc) => { let a = 0; const q = pc.xy; for (let i = 0, n = q.length / 2; i < n; i++) { const j = (i + 1) % n; a += q[2 * i] * q[2 * j + 1] - q[2 * j] * q[2 * i + 1]; } return s + a / 2; }, 0);
+  const frame = (key, st) => G.frameOf(P.makeMap(key, st), { k: 1, x: 0, y: 0, sy: 1 });   // raw units, y up
+  // A box across the antimeridian, 170 E to 170 W, 10 S to 10 N.
+  const box = ringDeg([[170, -10], [180, -10], [-170, -10], [-170, 10], [180, 10], [170, 10]]);
+  {
+    const f = frame('equirectangular', {});
+    const out = G.clipPolygon([box], [f]);
+    const xs = out.map(pc => { let lo = Infinity, hi = -Infinity; for (let i = 0; i < pc.xy.length; i += 2) { lo = Math.min(lo, pc.xy[i]); hi = Math.max(hi, pc.xy[i]); } return [lo, hi]; });
+    const a = areaOf(out), exact = 20 * D * 20 * D;
+    ok(out.length === 2 && xs.some(([lo, hi]) => Math.abs(hi - Math.PI) < 1e-9) && xs.some(([lo]) => Math.abs(lo + Math.PI) < 1e-9),
+      `a box over the antimeridian is cut into ${out.length} pieces that end at x = +-pi`);
+    ok(Math.abs(a / exact - 1) < 0.01, `the two pieces keep the area: ${a.toFixed(5)} vs ${exact.toFixed(5)} (great-circle edges vs parallels)`);
+    const f2 = frame('equirectangular', { lon: 180 });
+    const out2 = G.clipPolygon([box], [f2]);
+    ok(out2.length === 1, `centred on 180 the same box is one piece (${out2.length})`);
+    const lines = G.clipLine(box.concat([box[0]]), [f]);
+    const jump = lines.some(l => { for (let i = 2; i < l.xy.length; i += 2) if (Math.abs(l.xy[i] - l.xy[i - 2]) > Math.PI) return true; return false; });
+    ok(lines.length >= 2 && !jump, `the box outline as a line: ${lines.length} runs (the east side splits at the start point), no segment jumps across the map`);
+  }
+  {
+    // A ring around the south pole (walks west at 70 S): Antarctica's case.
+    const ring = []; for (let lo = 180; lo > -180; lo -= 5) ring.push([lo, -70]);
+    const f = frame('equirectangular', { lon: 37 });
+    const out = G.clipPolygon([ringDeg(ring)], [f]);
+    const a = areaOf(out), exact = 2 * Math.PI * (Math.PI / 2 - 70 * D);   // the strip below -70 in plate carree
+    ok(out.length <= 2 && Math.abs(a / exact - 1) < 0.01, `a pole ring is closed along the pole: ${out.length} piece(s) side by side, area ${a.toFixed(4)} vs ${exact.toFixed(4)}`);
+    const f2 = frame('mollweide', { lon: 0 });
+    const o2 = G.clipPolygon([ringDeg(ring)], [f2]);
+    ok(o2.length === 1 && areaOf(o2) > 0, `on Mollweide, a ring that starts on the cut gives one piece and no slivers: ${o2.length}, area ${areaOf(o2).toFixed(4)} > 0`);
+    const fo = frame('orthographic', { lon: 0, lat: -90, aspect: 'normal' });
+    const o3 = G.clipPolygon([ringDeg(ring)], [fo]);
+    const r3 = Math.cos(70 * D), disc = Math.PI * r3 * r3;
+    ok(o3.length >= 1 && Math.abs(areaOf(o3) / disc - 1) < 0.01, `seen from below the south pole it is a disc: area ${areaOf(o3).toFixed(4)} vs ${disc.toFixed(4)}`);
+  }
+  {
+    // Small-circle edge: a big box on the orthographic map from (0, 0) is
+    // cut by the horizon; every point of the result lies inside the disc.
+    const big = ringDeg([[-120, -30], [120, -30], [120, 30], [-120, 30]]);
+    const f = frame('orthographic', { lon: 0, lat: 0, aspect: 'oblique' });
+    const out = G.clipPolygon([big], [f]);
+    let rmax = 0; for (const pc of out) for (let i = 0; i < pc.xy.length; i += 2) rmax = Math.max(rmax, Math.hypot(pc.xy[i], pc.xy[i + 1]));
+    ok(out.length >= 1 && rmax <= 1 + 1e-9, `the horizon cut keeps the polygon in the disc: ${out.length} piece(s), max radius ${rmax.toFixed(9)}`);
+  }
+  {
+    // Interrupted map: a box over the lobe edge at 40 W (north) is cut in two.
+    const b = ringDeg([[-50, 10], [-30, 10], [-30, 30], [-50, 30]]);
+    const out = G.clipPolygon([b], [frame('goode', {})]);
+    ok(out.length === 2, `Goode: a box over the 40 W interruption becomes ${out.length} pieces`);
+  }
 }
 
 console.log(`\n${checks - fails}/${checks} checks passed`);
