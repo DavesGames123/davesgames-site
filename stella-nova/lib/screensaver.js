@@ -88,6 +88,7 @@ const DEFAULTS = {
   caption: true,        // page name at the lower left for a few seconds
   labels: true,         // the page's own label plate (names, equations)
   display: 'screen',   // 'screen' = browser full screen | 'window' = fill the browser window
+                        // | 'pane' = fill the page area only; the sidebar and top bar stay
   frame: 'fill',        // 'fill' = the whole display | 'vertical' = a centred 9:16 column, for short video
   hideCursor: true,
   exitOnInput: false,   // true = any key or mouse move stops it
@@ -196,9 +197,17 @@ if (wrap) {
 // ── styles ─────────────────────────────────────────────────────────────────
 const css = document.createElement('style');
 css.textContent = `
-body.sn-saver-on #sidebar, body.sn-saver-on #topbar, body.sn-saver-on #overlay { display: none !important; }
-body.sn-saver-on #content { width: 100vw; height: 100vh; }
-body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { cursor: none !important; }
+body.sn-saver-on:not(.sn-saver-pane) #sidebar, body.sn-saver-on:not(.sn-saver-pane) #topbar, body.sn-saver-on:not(.sn-saver-pane) #overlay { display: none !important; }
+body.sn-saver-on:not(.sn-saver-pane) #content { width: 100vw; height: 100vh; }
+body.sn-saver-on.sn-saver-nocursor:not(.sn-saver-pane), body.sn-saver-on.sn-saver-nocursor:not(.sn-saver-pane) *,
+body.sn-saver-on.sn-saver-nocursor.sn-saver-pane #frame-wrap, body.sn-saver-on.sn-saver-nocursor.sn-saver-pane #frame-wrap * { cursor: none !important; }
+/* Pane display. paneRect() writes the #frame-wrap box to --sx, --sy, --sw and
+   --sh on <body>. The cover, plate, caption and HUD then sit on that box, so
+   the sidebar and the top bar stay in view and usable. */
+body.sn-saver-pane #sn-saver-cover { inset: auto; left: var(--sx); top: var(--sy); width: var(--sw); height: var(--sh); }
+body.sn-saver-pane #sn-saver-label { --fw: var(--sw); --fh: var(--sh); top: var(--sy); bottom: auto; height: var(--sh); left: calc(var(--sx) + var(--sw) / 2); }
+body.sn-saver-pane #sn-saver-cap { left: calc(var(--sx) + 40px); }
+body.sn-saver-pane #sn-saver-hud { top: calc(var(--sy) + 14px); }
 #sn-saver-cover { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 9000; transition: opacity var(--fade, 1.2s) ease; }
 #sn-saver-cover.on { opacity: 1; }
 #sn-saver-cap { position: fixed; left: 40px; bottom: 34px; z-index: 9001; pointer-events: none; font-family: 'Inter', var(--f-sans, system-ui), sans-serif; color: #eef3fb; opacity: 0; transition: opacity 1.6s ease; text-shadow: 0 1px 12px rgba(0,0,0,.8); }
@@ -413,7 +422,7 @@ function buildMenu() {
       <div class="row"><span>Calm</span><output data-o="calm"></output><input type="range" data-k="calm" min="0" max="1" step="0.05"></div>
       ${sw('loop', 'Loop the list')}
       <h3>Display</h3>
-      <div class="row">${seg('display', [['screen', 'Full screen'], ['window', 'Browser window']])}</div>
+      <div class="row">${seg('display', [['screen', 'Full screen'], ['window', 'Browser window'], ['pane', 'Page area']])}</div>
       <div class="row"><span>Frame</span><span></span>${seg('frame', [['fill', 'Fill'], ['vertical', '9:16 vertical']])}</div>
       ${sw('caption', 'Show the page name')}
       ${sw('labels', 'Show labels and equations')}
@@ -584,9 +593,14 @@ async function startSaver(cap, paint) {
   const cover = el('sn-saver-cover');
   cover.style.setProperty('--fade', S.fade + 's');
   cover.classList.add('on');
+  // The 9:16 column centres #content in the shell, so it needs the whole
+  // window. The pane display keeps the sidebar and always fills the pane.
+  const pane = S.display === 'pane';
+  if (pane) { paneRect(); window.addEventListener('resize', paneRect); }
+  document.body.classList.toggle('sn-saver-pane', pane);
   document.body.classList.add('sn-saver-on');
   document.body.classList.toggle('sn-saver-nocursor', !!S.hideCursor);
-  document.body.classList.toggle('sn-saver-vert', S.frame === 'vertical');
+  document.body.classList.toggle('sn-saver-vert', S.frame === 'vertical' && !pane);
   el('sn-saver-hud').hidden = true;
   if (S.display === 'screen' && !fsElement()) {
     // After the share prompt the click that pressed Start can be too old for
@@ -600,6 +614,18 @@ async function startSaver(cap, paint) {
   document.addEventListener('webkitfullscreenchange', onFullscreen);
   next(1);
 }
+// The #frame-wrap box in CSS px, for the pane display rules.
+function paneRect() {
+  const w = document.getElementById('frame-wrap'); if (!w) return;
+  const r = w.getBoundingClientRect(), b = document.body.style;
+  b.setProperty('--sx', r.left + 'px'); b.setProperty('--sy', r.top + 'px');
+  b.setProperty('--sw', r.width + 'px'); b.setProperty('--sh', r.height + 'px');
+}
+// In the pane display the sidebar and the top bar stay live. A press there
+// stops the run, so a nav click goes to the page that the user picked.
+window.addEventListener('pointerdown', e => {
+  if (run && S.display === 'pane' && e.target.closest && e.target.closest('#sidebar, #topbar, #overlay')) stopSaver();
+}, true);
 // Leaving full screen (Esc in the browser) stops the run.
 function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
 function goFullscreen() {
@@ -1024,13 +1050,18 @@ async function stopSaver() {
   document.removeEventListener('webkitfullscreenchange', onFullscreen);
   const ex = document.exitFullscreen || document.webkitExitFullscreen;
   if (fsElement() && ex) Promise.resolve(ex.call(document)).catch(() => {});
-  document.body.classList.remove('sn-saver-on', 'sn-saver-nocursor', 'sn-saver-vert');
+  document.body.classList.remove('sn-saver-on', 'sn-saver-nocursor', 'sn-saver-vert', 'sn-saver-pane');
+  window.removeEventListener('resize', paneRect);
   el('sn-saver-cap').classList.remove('on');
   setLabel(null);
   el('sn-saver-hud').hidden = true;
-  // Reload the page the run stopped on, so the page GUI comes back.
+  // Reload the page the run stopped on, so the page GUI comes back. A nav
+  // click in the pane display can change the page while the recording
+  // ends; then that page stays.
   const key = r.order[r.i] || r.back || 'home';
-  window.switchTab(key, '', 'replace');
+  // activeTab is a top-level let in the shell script, so not on window.
+  const cur = typeof activeTab === 'string' ? activeTab : null;
+  if (!cur || cur === key) window.switchTab(key, '', 'replace');
   setTimeout(() => el('sn-saver-cover').classList.remove('on'), 300);
 }
 
@@ -1045,6 +1076,9 @@ async function stopSaver() {
 // fallback: a file without the GUI is of no use, so a failed share starts
 // nothing (startFromMenu) and the menu says why. One stream serves the run.
 // Each page gets its own MediaRecorder on it (startRecording).
+// The recorded box: #content, or #frame-wrap in the pane display, so the
+// file does not hold the top bar.
+function recRegion() { return el(S.display === 'pane' ? 'frame-wrap' : 'content'); }
 async function askCapture() {
   const md = navigator.mediaDevices;
   if (!canTabCapture()) return { stream: null, why: 'This browser cannot share a tab. Nothing was recorded.' };
@@ -1059,7 +1093,7 @@ async function askCapture() {
     return { stream: null, why: 'The tab share was cancelled, so nothing plays and nothing is recorded. Press Start and choose Share.' };
   }
   try {
-    await stream.getVideoTracks()[0].cropTo(await CropTarget.fromElement(el('content')));
+    await stream.getVideoTracks()[0].cropTo(await CropTarget.fromElement(recRegion()));
   } catch (e) {
     stream.getTracks().forEach(t => t.stop());
     return { stream: null, why: 'That share was not this tab. Press Start and choose this tab.' };
@@ -1090,7 +1124,7 @@ function startRecording(r, key, canvas, warmup, token) {
     if (run !== r || token !== r.token || r.rec) return;
     let comp = null, stream = r.cap;
     if (!stream) {
-      try { comp = window.snSaverPaint.composite({ region: el('content'), source: canvas, fps: S.recordFps }); stream = comp.stream; }
+      try { comp = window.snSaverPaint.composite({ region: recRegion(), source: canvas, fps: S.recordFps }); stream = comp.stream; }
       catch (e) { hud(`${key}: the painter failed (${e && e.message})`); return; }
     }
     const chunks = [];
