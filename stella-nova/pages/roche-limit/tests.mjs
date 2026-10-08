@@ -25,6 +25,10 @@
 //     node tests.mjs --pace runs test 8 only; --pace-old adds the old run.
 //  10 story camera: the default run's trace through app/director.js (node,
 //     DOM stubbed): view turn rate, the moon in frame, the pull-out
+//  11 screensaver: the reel is seeded (same seed, same reel; seeds differ),
+//     no run twice in a row, every shot lasts 5-12 s, every spiral run
+//     starts outside its fluid limit and sheds within 4 s at the saver's
+//     speed (pacing model, cached pile)
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
 //     for desktop and phone profiles, against budget.js LIMIT; phones get
 //     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
@@ -38,6 +42,7 @@ import * as P from './physics.js';
 import * as PC from './pacing.js';
 import { SCENARIOS, REAL, limitsOf } from './scenarios.js';
 import * as BG from './budget.js';
+import * as SP from './saver-plan.js';
 
 const GPU_ONLY = typeof Deno !== 'undefined' && Deno.args.includes('--gpu');
 let fails = 0;
@@ -329,6 +334,7 @@ async function paceTests(old) {
   const sv = paceRun(Object.assign({}, cur, { speed: PC.SAVER_SPEED, settleTime: 0 }));
   ok('pacing: screensaver run (cached pile) sheds within 4 s', sv.tShed !== null && sv.tShed - sv.cloudS < 4, `first shed ${(sv.tShed - sv.cloudS).toFixed(2)} s after the start (no cloud, no settle)`);
   if (CAMERA) await cameraTests(a, sc);
+  saverTests(cur);
   if (old) {
     const b = paceRun(Object.assign({}, base, { d0: 2.7, d1: 1.7, orbits: 4, director: false, settleTime: 6, readMs: 1000, settlePerFrame: 64 }));
     console.log(`INFO  old pacing (2.7 -> 1.7 in 4 orbits, one speed, settle 6 at 64 steps/frame): ${fmt(b)}`);
@@ -375,6 +381,37 @@ async function cameraTests(run, sc) {
   ok('story camera: the view turns at most 10 deg/s', rotMax <= 10, `largest turn of the view axis ${rotMax.toFixed(1)} deg/s over ${run.trace.length} frames`);
   ok('story camera: the moon stays in frame through the breakup', moonFrames > 30 && worstMoon < FOVH, `${moonFrames} frames in slow motion; the moon at most ${(worstMoon * 180 / Math.PI).toFixed(1)} deg off the view axis (half the view is ${(FOVH * 180 / Math.PI).toFixed(1)})`);
   ok('story camera: after the breakup it pulls out to the planet', endPlanet < FOVH && endDist > 3, `at the end the planet is ${(endPlanet * 180 / Math.PI).toFixed(1)} deg off axis, the eye ${endDist.toFixed(2)} R_p from it`);
+}
+
+// 11 ─ the screensaver reel (saver-plan.js)
+function saverTests(cur) {
+  const keys = seed => { const r = SP.rng(seed); return [0, 1, 2].flatMap(() => SP.makeReel(r).map(x => x.key)).join(' '); };
+  ok('saver: the reel is seeded', keys(7) === keys(7) && keys(7) !== keys(8), `seed 7: ${keys(7).split(' ').slice(0, 6).join(' ')}; seed 8: ${keys(8).split(' ').slice(0, 6).join(' ')}`);
+  let twice = 0, lens = [], minL = Infinity, maxL = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const r = SP.rng(seed); let last = null;
+    for (let k = 0; k < 3; k++) { const reel = SP.makeReel(r, last); if (reel[0].key === last) twice++; last = reel[reel.length - 1].key; }
+    // play the shots of one run against a breakup at 0.5-3 s and a ring
+    // phase 4-9 s after it, in 50 ms ticks
+    const plan = SP.shotPlan(r), tB = 0.5 + 2.5 * r(), tR = tB + 4 + 5 * r();
+    let t = 0;
+    for (const sh of plan) {
+      const t0 = t; let el = 0, bAt = null;
+      while (true) { el = t - t0; if (bAt === null && t >= tB) bAt = el; if (SP.shotDone(sh, el, { breakupAt: bAt, ring: t >= tR })) break; t += 0.05; }
+      lens.push(el); minL = Math.min(minL, el); maxL = Math.max(maxL, el);
+    }
+  }
+  ok('saver: no run plays twice in a row', twice === 0, `${twice} repeats over 200 seeds x 3 reels`);
+  ok('saver: every shot lasts 5-12 s (cuts every 5-12 s)', minL >= SP.CUT_MIN - 1e-9 && maxL <= SP.CUT_MAX + 0.05, `${lens.length} shots, ${minL.toFixed(2)} to ${maxL.toFixed(2)} s, mean ${(lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(2)} s`);
+  for (const run of SP.RUNS) {
+    const sc = SCENARIOS.find(x => x.key === run.scen);
+    if (sc.kind !== 'spiral') continue;
+    const spec = Object.assign({ q: sc.q, d: sc.d, d1: sc.d1, orbits: sc.orbits, J2: sc.J2 || 0 }, run.spec);
+    const dF = limitsOf(spec.q).fluid;
+    const r = paceRun(Object.assign({}, cur, { q: spec.q, J2: spec.J2, s: sc.s || 0.12, d0: spec.d, d1: spec.d1, orbits: spec.orbits, speed: PC.SAVER_SPEED, settleTime: 0 }));
+    const tS = r.tShed === null ? Infinity : r.tShed - r.cloudS;
+    ok(`saver run "${run.key}": starts outside the limit, sheds within 4 s`, spec.d > dF && spec.d < 1.1 * dF && spec.d1 < 0.8 * dF && tS < 4, `start ${(spec.d / dF).toFixed(3)} d_fluid, end ${(spec.d1 / dF).toFixed(3)}; first shed ${tS.toFixed(2)} s after the start (${r.oShed?.toFixed(3)} orbit)`);
+  }
 }
 
 // 9 ─ the GPU memory budget

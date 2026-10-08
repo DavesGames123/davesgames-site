@@ -115,11 +115,12 @@ export function cameraFrame(dtReal, cssW, cssH) {
     if (S.saverOn && S.saver) saverCamera(sg, dtReal);
     const want = poseOf(sg, cssW, cssH);
     cam.pose = { eye: want.eye, target: want.target };
-    return finishPose(dtReal, false, user);
+    // a screensaver cut is a jump on purpose: not counted as motion
+    const cut = !!cam.cut; cam.cut = false;
+    return finishPose(dtReal, cut, user);
   }
   cam.story = null;
   const g = camGoal(cssW, cssH);
-  if (S.saverOn && S.saver) saverCamera(g, dtReal);
   const want = poseOf(g, cssW, cssH);
   const P0 = cam.pose;
   if (!P0 || ![...P0.eye, ...P0.target].every(Number.isFinite)) { cam.pose = { eye: want.eye.slice(), target: want.target.slice() }; return finishPose(dtReal, true); }

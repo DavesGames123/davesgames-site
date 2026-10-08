@@ -1,86 +1,72 @@
 // ============================================================================
 //  ROCHE LIMIT  ·  app/saver.js — the screensaver
 // ----------------------------------------------------------------------------
-//  window.snSaver implements the lib/screensaver.js protocol: a
-//  seeded queue of shots, each planet-fixed, with a fade between them.
-//  S.saver holds the state of the screensaver while it runs.
+//  window.snSaver implements the lib/screensaver.js protocol. It plays the
+//  reel of saver-plan.js: a seeded shuffle of runs (Saturn and an icy
+//  moon, Mars and Phobos, Earth and the Moon, an ice giant, a comet at
+//  Jupiter, a loose and a rough moon). Each run is one take of the story
+//  clock (pacing.js: the breakup within about 2 s, then slow motion) and
+//  the story camera (app/director.js), cut into four shots of 5-12 s:
+//  wide (the approach and push in), close (the breakup from a second
+//  angle), stream (low over the ring plane), ring (high above it).
+//  A cut is hard (the offsets jump); a new run fades through black.
+//  The subject is framed in the clear band of the plate (plateBand, in
+//  app/occlusion.js). The plate has the Roche limits and the tide as TeX
+//  and no code. S.saver holds the state while it runs.
 //
 //  grep -n targets
-//    shots ............... "const SHOTS"
-//    camera of a shot .... "function saverCamera"
+//    shot offsets ........ "export function saverCamera"
 //    plate label ......... "function saverLabel"
-//    next shot ........... "function saverScenario"
-//    fade ................ "function saverFade"
+//    next run ............ "function saverScenario"
+//    shot clock .......... "function saverTick"
+//    fade ................ "export function saverFade"
 //    protocol ............ "window.snSaver"
 // ============================================================================
+import { SAVER_SPEED, timeWarp } from '../pacing.js';
+import { makeReel, shotPlan, shotDone, rng } from '../saver-plan.js';
 import { cam, resetCamStats, camStats } from './camera.js';
 import { applyScenario, openPanel } from './controls.js';
 import { debugState } from './debug.js';
 import { $, UI, RM_Q } from './env.js';
+import { orbitsPerMin } from './loop.js';
 import { resize } from './quality.js';
+import { fmtTime } from './readout.js';
 import { limitsFor, currentSpec, startRun } from './runs.js';
 import { satState } from './sat.js';
 import { S, bootReady } from './state.js';
 import { storyText } from './story.js';
 
-// lib/screensaver.js has the protocol. enter() hides the page UI (CSS
-// under html.sn-saver), takes N = 8192 and plays a seeded shuffle of
-// SHOTS. Every shot is planet-fixed: the camera looks at the planet from a
-// slowly turning direction and never follows the moon; the page's camera
-// governor caps the turn (ROT_MAX). A new shot fades to black, settles,
-// runs its warm-up in the dark at full speed, then fades in over 2 s.
-//   saturn   the main shot: the Saturn story from the start, slow, until
-//            the ring phase plus some time (at most 80 s)
-//   rings    a fly-by of today's rings at their true size, with a moon
-//            torn up in them: the run starts near the limit and warms up
-//            in the dark; the camera rises slowly from the ring plane
-//   comet    the comet pass of Jupiter
-// The subject is framed in the clear band of the plate (plateBand).
-const SHOTS = [
-  { key: 'saturn', scen: 'saturn', title: 'How Saturn may have got its rings', warm: () => 0, speed: 5, hold: 80,
-    until: r => r.story.ring !== undefined && (r.t - r.story.ring) / r.T0 > 1.5,
-    cam: { zoom: 1, el: 0.22, az: 0.9, spin: 0.6 } },
-  { key: 'rings', scen: 'saturn', title: 'Today’s rings of Saturn, at their true size', spec: { d: 2.2, d1: 1.75, orbits: 1.5 }, warm: () => 1.6, speed: 3, hold: 45,
-    cam: { zoom: 0.92, el: 0.05, elTo: 0.42, az: 0.5, spin: 1.6, zoomTo: 0.7, backlit: true } },
-  { key: 'comet', scen: 'flyby', title: 'A comet torn into a string of pearls', warm: r => r.tPeri !== undefined ? (r.tPeri / r.T0 - 0.8) : 0, speed: 2, hold: 40,
-    until: r => r.t / r.T0 > r.tPeri / r.T0 + 5, cam: { zoom: 0.9, el: 0.6, az: 1.2, spin: 0.5 } },
-];
-const WGSL_EXTRACT = `// shaders/sim.wgsl · cs_forces: one contact
-let Fn = max(0.0, P.kn * (-gap) - P.gnK * sm * vn);
-F = Fn * n;
-var ft = -P.kt * sp - P.gtK * sm * vt;
-let cap = P.mu * (Fn + coh);
-if (length(ft) > cap) { ft = ft * (cap / length(ft)); }
-// then the tide, relative to the frame point X
-td = tide(S.X, xi0);`;
-export function saverCamera(g, dt) {
-  const sh = S.saver.cur; if (!sh) return;
-  const c = sh.cam;
-  S.saver.az += dt * S.saver.spin;
-  const prog = Math.min(1, (performance.now() - S.saver.shotAt) / (S.saver.hold * 1000));
-  const ease = prog * prog * (3 - 2 * prog);
-  g.az = (c.az ?? 0.9) + S.saver.az;
-  g.el = c.elTo !== undefined ? c.el + (c.elTo - c.el) * ease : (c.el ?? g.el);
-  const z = c.zoomTo !== undefined ? c.zoom + (c.zoomTo - c.zoom) * ease : c.zoom * (1 - 0.06 * ease);
-  g.dist = g.dist / (cam.zoom || 1) * z;
+// The offsets of the current shot on the story camera's goal g (after its
+// springs, so a cut is a cut). prog: 0..1 through the shot (slow push).
+export function saverCamera(g) {
+  const sv = S.saver; if (!sv || !sv.shot) return;
+  const sh = sv.shot, prog = Math.min(1, (performance.now() - sv.shotAt) / 1000 / sh.len);
+  g.az += sh.side * sh.dAz;
+  if (sh.el !== null) g.el = sh.el;
+  g.dist *= sh.zoom * (1 - sh.push * prog * (1 - 0.5 * sv.calm));
 }
 function saverLabel() {
   if (!S.saver || !S.saver.opts.label || !S.run || S.run.phase !== 'orbit' || !S.run.sats[0].ref) return;
   const s = S.run.sats[0], L = S.run.limits || limitsFor(S.run.spec);
   const st = satState(s), dNow = Math.hypot(...st.r) / s.Rp;
   const bnd = S.run.sats.map(x => x.an ? (100 * x.an.f).toFixed(0) + '%' : '100%').join(' / ');
+  const w = S.run.tUnitSec ? timeWarp(orbitsPerMin(), S.run.T0, S.run.tUnitSec) : 0;
+  const slow = S.run.pace && S.run.pace.mode === 'breakup' && S.run.pace.factor < 0.7;
   S.saver.opts.label({
-    title: 'Roche limit', sub: S.saver.cur ? S.saver.cur.title : '',
+    title: 'Roche limit', sub: S.saver.run ? S.saver.run.title : '',
     params: [
-      { sym: 'd/R_p', name: 'distance', value: dNow.toFixed(2), cls: 'm5' },
-      { sym: 'd_\\mathrm{fluid}', name: 'Roche limit', value: L.fluid.toFixed(2) + ' R_p', cls: 'm1' },
+      { sym: 'd/R_M', name: 'distance', value: dNow.toFixed(2), cls: 'm5' },
+      { sym: 'd_\\mathrm{fluid}', name: 'Roche limit', value: L.fluid.toFixed(2) + ' R_M', cls: 'm1' },
       { sym: 'f_b', name: 'in one piece', value: bnd, cls: 'm3' },
     ],
-    tex: ['d_\\mathrm{fluid} \\approx 2.44\\,R_p\\left(\\rho_p/\\rho_s\\right)^{1/3}'],
-    rules: [['d_\\mathrm{fluid}', 'm1'], ['R_p', 'm5']],
-    eq: ['d_fluid ≈ 2.44 R_p (ρ_p/ρ_s)^(1/3)'],
-    lines: [storyText(S.run.storyKey), `${s.N.toLocaleString()} grains · self-gravity, contacts, tide on the GPU`],
-    code: { lang: 'wgsl', name: 'sim.wgsl · cs_forces', text: WGSL_EXTRACT },
+    tex: [
+      'd_\\mathrm{rigid} = R_M\\left(\\frac{2\\rho_M}{\\rho_m}\\right)^{1/3}',
+      'd_\\mathrm{fluid} \\approx 2.44\\,R_M\\left(\\frac{\\rho_M}{\\rho_m}\\right)^{1/3}',
+      'a_\\mathrm{tide} \\approx \\frac{2\\,G M\\,r}{d^{3}}',
+    ],
+    rules: [['d_\\mathrm{fluid}', 'm1'], ['R_M', 'm5']],
+    eq: ['d_rigid = R_M (2 ρ_M/ρ_m)^(1/3)', 'd_fluid ≈ 2.44 R_M (ρ_M/ρ_m)^(1/3)', 'a_tide ≈ 2GMr/d³'],
+    lines: [storyText(S.run.storyKey), `${s.N.toLocaleString()} grains · self-gravity and contacts on the GPU${w ? ` · 1 s = ${fmtTime(w)}${slow ? ' (slow motion)' : ''}` : ''}`],
     anchor: () => {
       const cs = $('gpu');
       const q = S.ren.project([0, 0, 0], cs.clientWidth, cs.clientHeight);
@@ -89,35 +75,57 @@ function saverLabel() {
     },
   });
 }
+// The next run of the reel, with a fresh shot plan.
 function saverScenario() {
   const sv = S.saver;
-  if (!sv.queue.length) {
-    // the Saturn story first in each round, then the other two in a seeded
-    // order; never the same shot twice in a row
-    const rest = SHOTS.slice(1);
-    if (sv.rnd() < 0.5) rest.reverse();
-    sv.queue = [SHOTS[0], ...rest];
-    if (sv.last && sv.queue[0] === sv.last) sv.queue.push(sv.queue.shift());
-  }
-  const shot = sv.queue.shift(); sv.last = shot;
-  sv.cur = { shot, title: shot.title, cam: shot.cam };
+  if (!sv.queue.length) sv.queue = makeReel(sv.rnd, sv.run && sv.run.key);
+  const run = sv.queue.shift();
+  sv.run = run; sv.shots = shotPlan(sv.rnd); sv.si = 0; sv.shot = null; sv.breakupAt = null;
+  // the view azimuth of this run: the sun stays where it is, so the
+  // breakup is lit from the side by a seeded amount
+  sv.cur = { key: run.key, az: 0.35 + 1.1 * sv.rnd() };
   UI.ringGain = 2; UI.rings = true; UI.real = true; UI.pred = false; UI.hill = false; UI.track = false; UI.blur = false; UI.ringOn = true;
-  applyScenario(shot.scen);
-  UI.cam = 'planet'; UI.color = 4; UI.field = 0;
+  applyScenario(run.scen);
+  // cam.az stays at its scenario value (0.9): the story camera reads it
+  // as the user's offset; runs.js hands sv.cur.az to planShots instead
+  UI.cam = 'story'; UI.color = 4; UI.field = 0;
   const spec = currentSpec();
-  if (shot.spec) Object.assign(spec, shot.spec);
-  sv.speed = 100;
+  Object.assign(spec, run.spec);
+  sv.speed = SAVER_SPEED * (sv.calm > 0.85 ? 0.8 : 1);
   sv.state = 'warm'; sv.warmAt = performance.now();
-  sv.spin = (sv.rnd() < 0.5 ? -1 : 1) * (shot.cam.spin || 0.6) * (1 - 0.5 * sv.calm) * Math.PI / 180;
-  sv.backlit = !!shot.cam.backlit;
-  sv.hold = shot.hold * (1 + 0.3 * sv.calm);
-  sv.shotAt = performance.now(); sv.az = 0;
+  sv.fadeTarget = 0;
   startRun(spec);
+}
+function cutTo(i) {
+  const sv = S.saver;
+  sv.si = i; sv.shot = sv.shots[i]; sv.shotAt = performance.now(); sv.breakupAt = null;
+  if (S.run && S.run.pace && S.run.pace.mode !== 'approach') sv.breakupAt = 0;
+  cam.cut = true;
+}
+// Twice a second: the warm-up, the shot clock and the plate.
+function saverTick() {
+  if (!S.saverOn) return;
+  const sv = S.saver;
+  if (sv.state === 'fadeout') { if (sv.fade <= 0.001) saverScenario(); return; }
+  if (!S.run || S.run.phase !== 'orbit') return;
+  if (sv.state === 'warm') {
+    // the run starts at once (no fast-forward in the dark): the fade-in
+    // shows the approach
+    sv.state = 'show'; sv.fadeTarget = 1; cutTo(0);
+    cam.pose = null; cam.story = null;
+  }
+  const el = (performance.now() - sv.shotAt) / 1000;
+  if (sv.breakupAt === null && S.run.pace && S.run.pace.mode !== 'approach') sv.breakupAt = el;
+  if (shotDone(sv.shot, el, { breakupAt: sv.breakupAt, ring: S.run.story.ring !== undefined })) {
+    if (sv.si + 1 < sv.shots.length) cutTo(sv.si + 1);
+    else { sv.state = 'fadeout'; sv.fadeTarget = 0; return; }
+  }
+  saverLabel();
 }
 // Called each frame by drawFrame: the fade, as an exposure factor.
 export function saverFade(dt) {
   const sv = S.saver; if (!sv) return 1;
-  const rate = sv.fadeTarget > sv.fade ? 0.5 : 0.7;   // 2 s in, 1.4 s out
+  const rate = sv.fadeTarget > sv.fade ? 0.7 : 0.9;   // 1.4 s in, 1.1 s out
   sv.fade += Math.sign(sv.fadeTarget - sv.fade) * Math.min(Math.abs(sv.fadeTarget - sv.fade), rate * dt);
   return sv.fade;
 }
@@ -127,34 +135,17 @@ window.snSaver = {
     await bootReady;
     document.documentElement.classList.add('sn-saver');
     openPanel(null);
-    let seed = (opts.seed >>> 0) || 1;
-    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     const calm = Math.max(Math.min(1, Math.max(0, opts.calm ?? 0.7)), RM_Q.matches ? 1 : 0);
-    S.saver = { opts, rnd, calm, queue: [], cur: null, az: 0, spin: 0, hold: 40, shotAt: performance.now(), fade: 0, fadeTarget: 0, state: 'warm', speed: 100 };
+    S.saver = { opts, rnd: rng(opts.seed), calm, queue: [], run: null, cur: null, shots: [], si: 0, shot: null, shotAt: performance.now(), fade: 0, fadeTarget: 0, state: 'warm', speed: SAVER_SPEED };
+    // Reduce motion: the story camera gives way to the planet view
     if (RM_Q.matches) UI.calm = true;
     UI.paused = false;
     resetCamStats();
     UI.N = Math.min(UI.N, 8192);
     resize();
     saverScenario();
-    S.saver.tick = setInterval(() => {
-      if (!S.saverOn) return;
-      const sv = S.saver;
-      if (sv.state === 'fadeout') { if (sv.fade <= 0.001) saverScenario(); return; }
-      if (!S.run || S.run.phase !== 'orbit') return;
-      if (sv.state === 'warm') {
-        // the warm-up runs in the dark at full speed; then the view fades
-        // in (at most 12 s of dark: a slow GPU fades in early)
-        if (S.run.t / S.run.T0 < sv.cur.shot.warm(S.run) && performance.now() - sv.warmAt < 12000) { sv.speed = 100; sv.shotAt = performance.now(); return; }
-        sv.speed = sv.cur.shot.speed * (sv.calm > 0.85 ? 0.75 : 1);
-        cam.pose = null; sv.az = 0;
-        sv.state = 'show'; sv.fadeTarget = 1; sv.shotAt = performance.now();
-      }
-      const until = sv.cur.shot.until;
-      if ((until && until(S.run)) || (performance.now() - sv.shotAt) / 1000 > sv.hold) { sv.state = 'fadeout'; sv.fadeTarget = 0; return; }
-      saverLabel();
-    }, 500);
-    return { canvas: $('gpu'), warmupMs: 2500 };
+    S.saver.tick = setInterval(saverTick, 250);
+    return { canvas: $('gpu'), warmupMs: 1500 };
   },
   exit() {
     S.saverOn = false;
@@ -163,5 +154,7 @@ window.snSaver = {
     document.documentElement.classList.remove('sn-saver');
     resize();
   },
-  debug() { return S.saver ? { shot: S.saver.cur && S.saver.cur.shot.key, cam: S.saver.cur && S.saver.cur.cam, hold: S.saver.hold, state: S.saver.state, fade: S.saver.fade, camStats: Object.assign({}, camStats, { prev: undefined }), state2: debugState() } : null; },
+  // force the next shot (probes)
+  cut() { const sv = S.saver; if (!sv || sv.state !== 'show') return false; if (sv.si + 1 < sv.shots.length) cutTo(sv.si + 1); else { sv.state = 'fadeout'; sv.fadeTarget = 0; } return true; },
+  debug() { return S.saver ? { run: S.saver.run && S.saver.run.key, shot: S.saver.shot && S.saver.shot.kind, len: S.saver.shot && S.saver.shot.len, si: S.saver.si, state: S.saver.state, fade: S.saver.fade, pace: S.run && S.run.pace, camStats: Object.assign({}, camStats, { prev: undefined }), state2: debugState() } : null; },
 };
