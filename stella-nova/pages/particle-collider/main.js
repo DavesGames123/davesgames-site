@@ -543,7 +543,9 @@ window.snSaver = {
     saverTick = dt => {
       fN++; fT += dt; if (fT >= 1) { fps = fN / fT; fN = 0; fT = 0; }
       if (bandFn && (bandT += dt) > 0.5) { bandT = 0; try { band = bandFn(innerHeight); } catch (e) { band = null; } }
-      const d = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+      // A touch screen draws at 1.6 at most, the same cap as the 3D stage
+      // (stage.js dpr): a sharper composite only scales up the 3D canvas.
+      const d = Math.min(COARSE ? 1.6 : 2, devicePixelRatio || 1), W = innerWidth, H = innerHeight;
       if (cv.width !== Math.round(W * d) || cv.height !== Math.round(H * d)) { cv.width = Math.round(W * d); cv.height = Math.round(H * d); }
       alpha += (cutA - alpha) * Math.min(1, dt * 7);
       g.setTransform(d, 0, 0, d, 0, 0); g.globalAlpha = 1; g.fillStyle = '#04060b'; g.fillRect(0, 0, W, H);

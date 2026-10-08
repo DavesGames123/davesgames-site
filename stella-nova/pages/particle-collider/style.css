@@ -193,11 +193,26 @@ body.detail-open #stage{right:var(--detail-w)}
   #dockGo{border-color:rgba(255,179,107,0.5)!important;color:var(--hot)!important}
   #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;max-height:min(58vh,540px);border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;padding:0 14px 22px;transform:translateY(calc(100% + var(--dock-h)))}
   #panel.open{transform:none}
-  #panel.full{max-height:calc(100vh - var(--dock-h) - var(--top) - 8px)}
+  #panel.full{max-height:calc(100vh - var(--dock-h) - var(--top) - 8px);max-height:calc(100dvh - var(--dock-h) - var(--top) - 8px)}
   #panelClose{display:none}
   #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:36px;margin:0 -14px;background:linear-gradient(180deg,rgba(10,13,22,1) 70%,rgba(10,13,22,0));touch-action:none}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
   #detail{top:auto;left:0;width:auto;bottom:var(--dock-h);max-height:62vh;border-left:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0}
   body.detail-open #stage{right:0}
+}
+/* PHONE TOUCH: the view tabs are 44 px tall, as the other touch targets */
+@media (max-width:768px) and (pointer:coarse) and (orientation:portrait){
+  #vtabs button{height:44px}
+  #views{top:54px}
+}
+/* PHONE LANDSCAPE: a short screen. The T sets the 3D view beside the lower
+   view, not over it: stacked, the 3D view got about 110 px of height. The
+   controls open as a right drawer (the wave-membrane pattern), so the 3D
+   view on the left stays in sight. */
+@media (max-height:500px) and (pointer:coarse) and (orientation:landscape){
+  #views.t{grid-template-columns:56fr 44fr!important;grid-template-rows:1fr!important;grid-template-areas:'d3 low'}
+  #panel,#panel.full{top:var(--top);left:auto;right:0;bottom:var(--dock-h);width:min(340px,46vw);max-height:none;border-top:0;border-left:1px solid var(--line-b);border-radius:18px 0 0 18px;padding-top:12px;transform:translateX(100%)}
+  #panel.open{transform:none}
+  #sheetGrip{display:none}
 }
 @media(prefers-reduced-motion:reduce){#panel,#stage,.pbusy i{transition:none;animation:none}}
