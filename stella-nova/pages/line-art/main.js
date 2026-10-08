@@ -545,7 +545,7 @@ window.__lineArt = { S, plot, render, selectExample, layout, requestSVG };
 // defaults, a random orbit, a plot of about half the shot, then a hold and
 // a fade. The camera aims at the clear band of the shell plate (full
 // width, band height); the lines go on under the plate to the window
-// edges.
+// edges. The plate shows the title, the parameters and notes, no code.
 function mulberry(seed) {
   return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
@@ -585,8 +585,7 @@ function saverShot() {
     title: 'Line art',
     sub: `${e.title}: ${e.source ? 'ln ' + e.source : 'an original scene'}, in Rust`,
     params: shown,
-    lines: ['Hidden lines removed by casting a ray from every point to the eye.', 'ln by Michael Fogleman (MIT), ported to Rust.'],
-    code: { lang: 'rust', name: `examples/${key}.rs`, text: e.code },
+    lines: ['Hidden lines removed by casting a ray from every point to the eye.', 'The pen draws near lines first.', 'ln by Michael Fogleman (MIT), ported to Rust.'],
   });
 }
 function saverStep(now, dt) {
