@@ -4,8 +4,10 @@
 //  The screensaver (saver.js, in the shell) and the on-page Auto button
 //  use the same director. The director selects a disease, a seed city and
 //  a public-health response for each run. Then it cuts the run into shots
-//  of 5-12 s of wall time. Each shot has a kind, a style, a camera state
-//  (camera.js) and a simulation speed in days per second.
+//  of SHOT_S (8-12 s) of wall time. Each shot has one clear subject, a
+//  kind, a style, a camera state (camera.js) and a simulation speed in
+//  days per second. The motion is calm: a shot turns or drifts at most
+//  CALM_DEG_S degrees per second, and the style holds for the full run.
 //
 //  createDirector({ seed, calm = 0.7, styles, D, texFor, rules }) -> Director
 //    seed     uint32. The director stream is makeRng(seed ^ 0x9e3779b9),
@@ -27,16 +29,17 @@
 //  view = { day, burnedOut, totals, reff, hottest, newestFirst, topRegion,
 //           active, D }
 //  shot = { kind, dur, style, cam, follow, simSpeed, title, spin, drift }
-//    spin    degrees of heading per second (main.js may ignore it)
-//    drift   degrees of longitude per second (main.js may ignore it)
+//    spin    degrees of heading per second, |spin| <= CALM_DEG_S
+//    drift   degrees of longitude per second, |drift| <= CALM_DEG_S
 //
 //  Rules of the cut:
 //    - The first shot of a run is 'origin' (the seed city).
 //    - A burned-out view, or a run longer than maxShots, gives the
 //      'aftermath' shot. When the aftermath shot ends, tick returns
 //      restart = true until the caller calls newRun().
-//    - A new active policy gives a 'policy' shot. A new first infection
-//      of a city gives an 'export' shot. The other kinds come from a
+//    - A new active policy gives a 'policy' shot. The first infection of
+//      a new region (not every new city) gives one 'export' shot: one
+//      deliberate flight to the new region. The other kinds come from a
 //      seeded weighted choice. The same kind never comes two times in a
 //      row (except 'aftermath', which holds).
 //    - Two runs in a row never have the same disease (seeded bag).
@@ -55,6 +58,8 @@ import { makeRng } from './rng.js';
 import { POLICY_DEFS, defaultPolicies } from './policies.js';
 
 export const SHOT_KINDS = ['origin', 'export', 'erupt', 'network', 'region', 'flat', 'policy', 'aftermath'];
+export const SHOT_S = [8, 12];       // s, the length of every shot
+export const CALM_DEG_S = 1.5;       // deg/s, the largest spin or drift of a shot
 
 // The preset ids are fixed by CONTRACT.md (diseases.js). The route of each
 // preset is also fixed there; the director uses it to select a plausible
@@ -150,7 +155,7 @@ export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor 
   const st = {
     run: 0, shots: 0, maxShots: 0, shot: null, t0: 0, end: 0, done: false,
     diseaseId: null, seedNode: -1, style: globes[0], scenario: null,
-    seenPolicies: new Set(), seenFirst: new Set(), lastKind: null, forced: null, log: [],
+    seenPolicies: new Set(), seenFirst: new Set(), seenRegions: new Set(), lastKind: null, forced: null, log: [],
   };
 
   // Seeded bag: a shuffled copy of every preset; a refill never starts
@@ -196,10 +201,11 @@ export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor 
     let w = rng.next() * weights.reduce((a, b) => a + b, 0), style = cand[0];
     for (let i = 0; i < cand.length; i++) { if ((w -= weights[i]) < 0) { style = cand[i]; break; } }
     lastStyle = style;
+    const seedN = D && D.nodes ? D.nodes[seedNode] : null;
     Object.assign(st, {
       run: st.run + 1, shots: 0, maxShots: 12 + rng.int(6), shot: null, t0: 0, end: 0, done: false,
       diseaseId, seedNode, style, scenario: sc.id, seenPolicies: new Set(), seenFirst: new Set(),
-      lastKind: null, forced: null,
+      seenRegions: new Set(seedN ? [seedN.region] : []), lastKind: null, forced: null,
     });
     return { diseaseId, seedNode, policies, startDayOfYear: rng.int(365), style, scenario: sc.id, scenarioName: sc.name };
   }
@@ -213,8 +219,11 @@ export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor 
     const cases = (view.totals && view.totals.cases) || 0;
     const active = view.active || {};
     if (Object.keys(active).some(id => !st.seenPolicies.has(id)) && st.lastKind !== 'policy') return 'policy';
-    const ev = view.newestFirst;
-    if (ev && !st.seenFirst.has(firstKey(ev)) && st.lastKind !== 'export' && rng.next() < 0.7) return 'export';
+    const ev = view.newestFirst, to = ev ? node(view, ev.to) : null;
+    if (ev && !st.seenFirst.has(firstKey(ev))) {
+      st.seenFirst.add(firstKey(ev));
+      if (to && !st.seenRegions.has(to.region)) { st.seenRegions.add(to.region); if (st.lastKind !== 'export') return 'export'; }
+    }
     const c = [];
     if (cases < 300) c.push(['origin', 1.5]);
     if (view.hottest >= 0) c.push(['erupt', cases > 100 ? 2 : 0.6]);
@@ -232,9 +241,9 @@ export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor 
   const node = (view, i) => { const d = view.D || D; return d && d.nodes && i >= 0 ? d.nodes[i] : null; };
 
   function makeShot(kind, view) {
-    const dur = clamp(5.5 + 4.5 * calm + 2 * rng.next() + (kind === 'origin' || kind === 'aftermath' ? 1 : 0), 5, 12);
+    const dur = clamp(8 + 2 * calm + 1.5 * rng.next() + (kind === 'origin' || kind === 'aftermath' ? 0.5 : 0), SHOT_S[0], SHOT_S[1]);
     const speed = SPEED[kind] * (1.3 - 0.6 * calm);
-    const turn = (rng.next() < 0.5 ? -1 : 1) * (1.5 + 2 * (1 - calm));
+    const turn = (rng.next() < 0.5 ? -1 : 1) * (0.5 + 0.7 * (1 - calm));
     const s = { kind, dur, style: st.style, cam: null, follow: null, simSpeed: speed, title: '', spin: 0, drift: 0 };
     const regions = (view.D || D || {}).regions || [];
     if (kind === 'origin') {
@@ -263,8 +272,7 @@ export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor 
       s.spin = turn; s.title = n ? `Most infections now: ${n.name}` : 'The epidemic grows';
     } else if (kind === 'network') {
       s.cam = { lat: (rng.next() - 0.5) * 60, lon: rng.next() * 360 - 180, alt: 2.2 + 0.6 * rng.next(), tilt: 0, heading: 0 };
-      s.drift = turn * 1.5; s.title = 'The travel network carries it';
-      if (globes.length > 1 && rng.next() < 0.3) s.style = globes.filter(g => g !== st.style)[rng.int(globes.length - 1)];
+      s.drift = turn; s.title = 'The travel network carries it';
     } else if (kind === 'region') {
       const ri = clamp(view.topRegion | 0, 0, REGION_VIEW.length - 1), v = REGION_VIEW[ri];
       s.cam = { lat: v.lat, lon: v.lon, alt: v.alt, tilt: 15 + 10 * rng.next(), heading: (rng.next() - 0.5) * 30 };
@@ -287,6 +295,8 @@ export function createDirector({ seed = 1, calm = 0.7, styles, D = null, texFor 
       s.title = `After the epidemic: day ${Math.floor(view.day || 0)}`;
     }
     s.cam.lon = wrapLon(s.cam.lon);
+    s.spin = clamp(s.spin, -CALM_DEG_S, CALM_DEG_S);
+    s.drift = clamp(s.drift, -CALM_DEG_S, CALM_DEG_S);
     return s;
   }
 

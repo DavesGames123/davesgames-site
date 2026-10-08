@@ -21,8 +21,9 @@
 //  in lat and lon (no antimeridian wrap). The position eases by
 //  smootherstep, whose peak rate is 1.875 x the mean rate, so
 //    dur = max(minDur, 1.875 * angle / maxDegPerSec)
-//  keeps the angular speed under the cap. The altitude rises by
-//  hop * angle (radians) at mid flight, so a long jump pulls back.
+//  keeps the angular speed under the cap. The heading and the tilt also
+//  keep under maxTurnDegPerSec (the same 1.875 factor). The altitude
+//  rises by hop * angle (radians) at mid flight, so a long jump pulls back.
 //
 //  spring(cur, target, vel, dt, k) -> { x, v }: the exact critically damped
 //  step (rate k per second). It never overshoots from rest and never snaps.
@@ -74,10 +75,11 @@ export function pathDeg(a, b, mode = 'globe') {
 }
 
 export function flight(from, to, opts = {}) {
-  const { maxDegPerSec = 45, minDur = 1.2, hop = 0.35, mode = 'globe' } = opts;
+  const { maxDegPerSec = 45, minDur = 1.2, hop = 0.35, mode = 'globe', maxTurnDegPerSec = 30 } = opts;
   const globe = mode === 'globe';
   const deg = pathDeg(from, to, mode);
-  const dur = Math.max(minDur, 1.875 * deg / maxDegPerSec);
+  const turn = Math.max(Math.abs(wrapLon((to.heading || 0) - (from.heading || 0))), Math.abs((to.tilt || 0) - (from.tilt || 0)));
+  const dur = Math.max(minDur, 1.875 * deg / maxDegPerSec, 1.875 * turn / maxTurnDegPerSec);
   const a = { lat: from.lat, lon: from.lon }, b = { lat: to.lat, lon: to.lon };
   const lift = hop * deg * R;
   const tiltA = from.tilt || 0, tiltB = to.tilt || 0, hA = from.heading || 0, hB = to.heading || 0;

@@ -18,9 +18,12 @@
 //  with a frame step capped at MAX_DT, so a slow frame does not jump.
 //
 //  Camera: the user drags and zooms the camera.js state. After IDLE_S
-//  seconds without input, the globe turns slowly. In Auto and in the
-//  screensaver, the director shots set the camera (an eased flight for a
-//  near cut, a jump behind a fade for a far cut) and add spin and drift.
+//  seconds without input, the globe turns slowly (IDLE_DRIFT). In Auto
+//  and in the screensaver, the director shots set the camera (an eased
+//  flight at FLY.maxDegPerSec for a near cut, a jump behind a fade for a
+//  far cut) and add spin and drift. The spin and drift rates ease to
+//  each new shot's values (MOVE_RATE), so a cut never starts a turn at
+//  full speed.
 //  Any user edit of the disease, policies, style or run stops Auto.
 //
 //  Framing: occlusion() is the area that the panel, HUD, base bar and dock
@@ -52,8 +55,10 @@ import { installSaver } from './saver.js';
 
 export const DEFAULT_DISEASE = 'covid-ancestral';
 export const MAX_DT = 0.1;         // s, the largest frame step
-export const IDLE_S = 6;           // s without input before the slow turn
-export const IDLE_DRIFT = 2.5;     // degrees of longitude per second
+export const IDLE_S = 8;           // s without input before the slow turn
+export const IDLE_DRIFT = 1.2;     // degrees of longitude per second
+export const FLY = { maxDegPerSec: 18, maxTurnDegPerSec: 20, minDur: 2.5, hop: 0.2 };   // calm camera flights
+export const MOVE_RATE = 0.8;      // 1/s, the ease of spin and drift to a new shot
 export const CHART_EVERY = 0.25;   // s between chart redraws
 export const ALT = { globe: [0.12, 5], flat: [0.25, 6] };
 const SEED_POOL = 60;              // the random seed city is one of the largest 60
@@ -93,7 +98,7 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
   };
   let sim = null, cursor = 0, events = [], newestFirst = null, runSeedNode = -1;
   let cam = { lat: 20, lon: 10, alt: 2.2, tilt: 0, heading: 0 };
-  let fl = null, flT = 0, move = { spin: 0, drift: 0 };
+  let fl = null, flT = 0, move = { spin: 0, drift: 0 }, vel = { spin: 0, drift: 0, idle: 0 };
   let ui = null, chart = null, ctl = null, saverRect = null;
   let lastT = null, now = 0, idleAt = 0, chartAt = -1e9;
 
@@ -113,7 +118,7 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     const n = D.nodes[i];
     if (!n || autoMode()) return;
     const to = { lat: n.lat, lon: n.lon, alt: mode() === 'flat' ? Math.max(alt, 1.2) : alt, tilt: 0, heading: 0 };
-    fl = flight(cam, to, { mode: mode() }); flT = 0; move = { spin: 0, drift: 0 };
+    fl = flight(cam, to, { ...FLY, mode: mode() }); flT = 0; move = { spin: 0, drift: 0 };
   }
 
   function stopAuto() {
@@ -123,20 +128,23 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
   function setShot(s, { fly = false } = {}) {
     const to = { lat: 20, lon: 0, alt: 2, tilt: 0, heading: 0, ...(s && s.cam) };
     move = { spin: +(s && s.spin) || 0, drift: +(s && s.drift) || 0 };
-    if (fly) { fl = flight(cam, to, { mode: mode() }); flT = 0; }
-    else { fl = null; cam = to; }
+    if (fly) { fl = flight(cam, to, { ...FLY, mode: mode() }); flT = 0; }
+    else { fl = null; cam = to; vel = { spin: 0, drift: 0, idle: 0 }; }
     globe.setCamera(cam);
   }
 
   function updateCamera(dt) {
+    const k = 1 - Math.exp(-MOVE_RATE * dt);
+    const auto = !!autoMode(), idle = !auto && now - idleAt > IDLE_S && mode() === 'globe';
+    vel.spin += ((auto && !fl ? move.spin : 0) - vel.spin) * k;
+    vel.drift += ((auto && !fl ? move.drift : 0) - vel.drift) * k;
+    vel.idle += ((idle && !fl ? IDLE_DRIFT : 0) - vel.idle) * k;
     if (fl) {
       flT += dt; cam = fl.at(Math.min(flT, fl.dur));
       if (flT >= fl.dur) fl = null;
-    } else if (autoMode()) {
-      cam.heading = ((cam.heading || 0) + move.spin * dt) % 360;
-      if (mode() === 'globe') cam.lon = wrapLon(cam.lon + move.drift * dt);
-    } else if (now - idleAt > IDLE_S && mode() === 'globe') {
-      cam.lon = wrapLon(cam.lon + IDLE_DRIFT * dt);
+    } else {
+      cam.heading = ((cam.heading || 0) + vel.spin * dt) % 360;
+      if (mode() === 'globe') cam.lon = wrapLon(cam.lon + (vel.drift + vel.idle) * dt);
     }
     globe.setCamera(cam);
   }
@@ -257,10 +265,10 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
       layout();
     },
     // pointer input: dx, dy in CSS px, h = the view height in CSS px
-    touch() { idleAt = now; stopAuto(); fl = null; },
+    touch() { idleAt = now; stopAuto(); fl = null; vel = { spin: 0, drift: 0, idle: 0 }; },
     drag(dx, dy, h) {
       if (autoMode() === 'saver') return;
-      idleAt = now; stopAuto(); fl = null;
+      idleAt = now; stopAuto(); fl = null; vel = { spin: 0, drift: 0, idle: 0 };
       const k = (mode() === 'flat' ? 57 : 45) * cam.alt / Math.max(1, h);
       const hd = (cam.heading || 0) * Math.PI / 180, ch = Math.cos(hd), sh = Math.sin(hd);
       const dE = k * (-dx * ch + dy * sh), dN = k * (dx * sh + dy * ch);
@@ -271,7 +279,7 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     },
     zoom(f) {
       if (autoMode() === 'saver' || !(f > 0)) return;
-      idleAt = now; stopAuto(); fl = null;
+      idleAt = now; stopAuto(); fl = null; vel = { spin: 0, drift: 0, idle: 0 };
       const [lo, hi] = ALT[mode()];
       cam.alt = clamp(cam.alt * f, lo, hi);
     },

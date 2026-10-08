@@ -48,8 +48,8 @@
 import { plateBand } from '../../lib/saver-clear.js';
 import { createDirector } from './director.js';
 
-const FADE_S = 0.6;       // fade out, and again fade in, in seconds
-const NEAR_DEG = 70;      // a camera move nearer than this is a flight
+const FADE_S = 0.9;       // fade out, and again fade in, in seconds
+const NEAR_DEG = 50;      // a camera move nearer than this is a flight
 const PLATE_EVERY = 1;    // seconds between plate refreshes (same title)
 const BAND_EVERY = 0.25;  // seconds between plateBand reads
 

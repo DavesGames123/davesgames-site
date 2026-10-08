@@ -3,7 +3,7 @@
 // determinism; the Auto runner with a stub app (no DOM, no GPU)
 import { readFileSync } from 'node:fs';
 import { parseNodes } from '../data.js';
-import { createDirector, SHOT_KINDS, DISEASE_IDS } from '../director.js';
+import { createDirector, SHOT_KINDS, DISEASE_IDS, SHOT_S, CALM_DEG_S } from '../director.js';
 import { createAuto, installSaver } from '../saver.js';
 
 const D = parseNodes(JSON.parse(readFileSync(new URL('../data/nodes.json', import.meta.url), 'utf8')));
@@ -50,7 +50,17 @@ export default function (ok) {
 
   ok('director: shots happen', A.shots.length > 20, `${A.shots.length} shots`);
   const durs = A.shots.concat(C.shots).map(s => s.dur);
-  ok('director: every shot lasts 5-12 s', durs.every(d => d >= 5 && d <= 12), `${Math.min(...durs).toFixed(1)}..${Math.max(...durs).toFixed(1)}`);
+  ok('director: every shot lasts 8-12 s', SHOT_S[0] === 8 && SHOT_S[1] === 12 && durs.every(d => d >= 8 && d <= 12), `${Math.min(...durs).toFixed(1)}..${Math.max(...durs).toFixed(1)}`);
+  const all = A.shots.concat(C.shots);
+  ok('director: spin and drift stay under the calm limit', CALM_DEG_S <= 2 && all.every(s => Math.abs(s.spin) <= CALM_DEG_S && Math.abs(s.drift) <= CALM_DEG_S),
+    `max ${Math.max(...all.map(s => Math.max(Math.abs(s.spin), Math.abs(s.drift)))).toFixed(2)} deg/s`);
+  // the style holds for a run (the flat shot is the one planned change of look)
+  let styleJumps = 0;
+  for (let i = 1; i < A.shots.length; i++) { const p = A.shots[i - 1], q = A.shots[i]; if (q.kind !== 'origin' && q.kind !== 'flat' && p.kind !== 'flat' && q.style !== p.style) styleJumps++; }
+  ok('director: the style holds inside a run', styleJumps === 0, `${styleJumps}`);
+  // one export shot per new region, not one per new city
+  const exportsA = A.shots.filter(s => s.kind === 'export').length;
+  ok('director: export shots only for a new region (few, not one per city)', exportsA <= A.runs.length * 6, `${exportsA} export shots, ${A.runs.length} runs`);
   ok('director: every shot kind is known', A.shots.every(s => SHOT_KINDS.includes(s.kind)));
   ok('director: every shot has a camera and a style', A.shots.every(s => s.cam && Number.isFinite(s.cam.lat) && Number.isFinite(s.cam.lon) && s.cam.alt > 0 && s.style));
   ok('director: a run starts with the origin shot', A.shots[0].kind === 'origin');
