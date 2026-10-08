@@ -11,6 +11,10 @@
 //  ctx.infect = { uniforms } holds the uniforms of the infection chunk
 //  (render/infect.js): every surface style links the same objects, so the
 //  core sets uFieldMix, uAny, uBeat and uIgn once per frame for all.
+//  ctx.ignite is the ignition bus (render/ignite.js): the core sets its
+//  clock (frame.t), fires the seed cities of a new sim (and the first
+//  events when no arcs layer took them), and fills uIgn from it. uBeat is
+//  the heartbeat of render/infect.js, from the new cases of the last day.
 //  A style gets a copy with root = the style group and mode = its own mode.
 //  The layers share one ctx with root = the layer group, and get
 //  setMode(mode) when a style switch changes globe <-> flat.
@@ -47,7 +51,8 @@
 // ============================================================================
 import { canvasBudget, phoneView } from '../budget.js';
 import { createField } from './field.js';
-import { infectUniforms } from './infect.js';
+import { infectUniforms, heartbeat, beatShape } from './infect.js';
+import { createIgnition } from './ignite.js';
 import night from './style-night.js';
 import holo from './style-holo.js';
 
@@ -105,7 +110,12 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
   const field = createField(D, THREE);
   // phone: read once at boot; the arcs layer sizes its flight pool by it
   const infect = { uniforms: infectUniforms(THREE, null) };
-  const base = { THREE, scene, renderer, camera, D, net, geo, field, mode: 'globe', root: layerRoot, phone: phoneView(win), infect };
+  const phone0 = phoneView(win);
+  const ignite = createIgnition({ phone: phone0 });
+  const base = { THREE, scene, renderer, camera, D, net, geo, field, mode: 'globe', root: layerRoot, phone: phone0, infect, ignite };
+  const unitPt = Array.from(nodes, n => geo.sphere(n.lat, n.lon));
+  let beatPh = 0, igniteSim = null, worldPop = 0;
+  for (const n of nodes) worldPop += n.pop || 0;
   const IU = infect.uniforms;
 
   // fade quad: clip-space, black, alpha = 1 - fade
@@ -225,7 +235,20 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
       const w = canvas.clientWidth, h = canvas.clientHeight;
       if ((w && w !== cssW) || (h && h !== cssH)) resize();
       applyPose();
-      const t = frame.t || 0, sim = frame.sim || null;
+      const t = frame.t || 0, sim = frame.sim || null, dt = Math.max(0, Math.min(0.1, +frame.dt || 0));
+      // ignitions: the seeds of a new sim, first events with no arcs layer
+      ignite.now = t; ignite.expire();
+      if (sim !== igniteSim) {
+        igniteSim = sim; ignite.clear();
+        if (sim && sim.firstDay) for (let i = 0; i < N; i++) if (sim.firstDay[i] >= 0) ignite.fire(i, 1);
+      }
+      if (!layers.some(l => l.ignites) && frame.events) for (const ev of frame.events) if (ev.first && !ev.blocked) ignite.fire(ev.to, 1);
+      ignite.slots(i => unitPt[i], IU.uIgn.value);
+      // heartbeat: the rate and depth follow the new cases of the last day
+      const inc = sim && sim.history && sim.history.inc && sim.history.inc.length ? sim.history.inc[sim.history.inc.length - 1] : 0;
+      const hb = heartbeat(worldPop > 0 ? inc / worldPop : 0);
+      beatPh = (beatPh + hb.bpm / 60 * dt) % 1;
+      IU.uBeat.value = hb.amp * beatShape(beatPh);
       if (field.ready && (sim !== lastSim || lastField < 0 || t - lastField >= 1 / FIELD_HZ || t < lastField)) {
         if (sim !== lastSim) field.reset();
         if (sim && sim.D) for (let i = 0; i < N; i++) dead[i] = sim.D[i] / pop[i];

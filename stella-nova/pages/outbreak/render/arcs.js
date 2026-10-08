@@ -29,6 +29,12 @@
 //  one city, and an edge carries one flight at a time, so planes do not
 //  pile at the hubs. A first arrival always flies; it can evict a lower
 //  flight. A gated infected event still heats its edge.
+//  Ignition: when an infected plane lands, the layer fires the ignition
+//  bus (ctx.ignite, render/ignite.js) at the destination: a first arrival
+//  at full power, an arrival in a city that has cases at ARRIVAL_POWER.
+//  So the flash, the shockwave and the red bloom of the land come when
+//  the plane arrives, not when it takes off. A first event that gets no
+//  flight fires at once. Without ctx.ignite the layer fires nothing.
 //
 //  Phone: limitsFor({ phone }) gives a smaller flight cap, a lower ambient
 //  rate and smaller planes. render/globe.js sets ctx.phone.
@@ -54,6 +60,7 @@
 //                   "dispose()"
 // ============================================================================
 import { makeRng } from '../rng.js';
+import { ARRIVAL_POWER } from './ignite.js';
 
 export const SOURCES = [];
 
@@ -517,7 +524,8 @@ export function createArcs(ctx) {
         else if (kind === KIND.first) heat.bump(e, HEAT_FIRST);
       }
       if (kind !== KIND.first) { if (n >= MAX_EVENTS_FRAME) continue; n++; }
-      spawn(kind, ev.from, ev.to, e, isLand, now);
+      const s = spawn(kind, ev.from, ev.to, e, isLand, now);
+      if (s < 0 && kind === KIND.first && ctx.ignite) ctx.ignite.fire(ev.to, 1);
     }
   }
 
@@ -584,7 +592,7 @@ export function createArcs(ctx) {
   }
 
   const layer = {
-    group, heat, pool, limits, busy,
+    group, heat, pool, limits, busy, ignites: !!ctx.ignite,
     get trailAlpha() { return tA; },
     get planeAlpha() { return pA; },
     setMode(m) {
@@ -614,7 +622,13 @@ export function createArcs(ctx) {
       // advance
       for (let s = 0; s < PS; s++) {
         if (!pool.live[s]) continue;
+        const t0 = pool.t[s];
         pool.t[s] += dt / pool.dur[s];
+        if (t0 < 1 && pool.t[s] >= 1 && ctx.ignite) {
+          const k = pool.kind[s];
+          if (k === KIND.first) ctx.ignite.fire(pool.b[s], 1);
+          else if (k === KIND.infected) ctx.ignite.fire(pool.b[s], ARRIVAL_POWER);
+        }
         if (flightDone(pool.t[s], pool.dur[s])) release(s);
       }
       heat.decay(dt);

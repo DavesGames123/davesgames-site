@@ -22,7 +22,10 @@
 //  UI = { update(sim, now?), sync(), setOpen(grp), clearRect(),
 //         chartLog, dispose() }
 //    update(sim)  refreshes the HUD, the region table and the policy
-//                 states, at most four times a second (now in ms)
+//                 states, at most four times a second (now in ms). The
+//                 four HUD counters (infected, cases, deaths, detected)
+//                 tick up toward those values every frame (stats.js
+//                 tickCounter), so they count and do not jump.
 //    sync()       re-reads api.getState(); call it after Auto or the
 //                 director changes the disease, policies or style
 //    clearRect()  { l, r, t, b } in CSS px from the top-left: the area
@@ -40,6 +43,7 @@
 // ============================================================================
 import { POLICY_DEFS, defaultPolicies } from './policies.js';
 import { PRESETS, SCHEMA, customDisease } from './diseases.js';
+import { tickCounter } from './stats.js';
 
 export const SPEEDS = [1, 3, 10, 30, 90];                // days per second
 export const TRIGGERS = [0, 100, 1000, 1e4, 1e5, 1e6];   // detected cases worldwide
@@ -229,7 +233,19 @@ export function createUI(api) {
   const sig = { signal: ac.signal };
   const ui = { chartLog: true };
   let st = api.getState();
-  let lastHud = -1e9, customBase = null, lastSim = null;
+  let lastHud = -1e9, customBase = null, lastSim = null, lastTick = null;
+  // ticking counters: id -> { shown, target, text }
+  const counters = { hudInfected: { shown: 0, target: 0, text: '' }, hudCases: { shown: 0, target: 0, text: '' },
+    hudDeaths: { shown: 0, target: 0, text: '' }, hudDetected: { shown: 0, target: 0, text: '' } };
+  function tickHud(now) {
+    const dt = lastTick === null ? 0 : Math.max(0, Math.min(0.25, (now - lastTick) / 1000));
+    lastTick = now;
+    for (const [id, c] of Object.entries(counters)) {
+      c.shown = tickCounter(c.shown, c.target, dt);
+      const txt = fmtCount(c.shown);
+      if (txt !== c.text) { c.text = txt; const e = $(id); if (e) e.textContent = txt; }
+    }
+  }
   const layout = () => { if (api.onLayout) api.onLayout(); };
 
   const el = (tag, props = {}, kids = []) => {
@@ -452,10 +468,12 @@ export function createUI(api) {
     const h = hudValues(sim);
     $('hudDisease').textContent = st.disease ? st.disease.name : '—';
     $('hudDay').textContent = `Day ${Math.floor(h.day)}`;
-    $('hudInfected').textContent = fmtCount(h.infected);
-    $('hudCases').textContent = fmtCount(h.cases);
-    $('hudDeaths').textContent = fmtCount(h.deaths);
-    $('hudDetected').textContent = fmtCount(h.detected);
+    counters.hudInfected.target = h.infected;
+    counters.hudCases.target = h.cases;
+    counters.hudDeaths.target = h.deaths;
+    counters.hudDetected.target = h.detected;
+    // infected now can fall: it does not tick down, it snaps
+    if (h.infected < counters.hudInfected.shown) counters.hudInfected.shown = h.infected;
     $('hudCities').textContent = `${h.cities} / ${sim ? sim.N : 0}`;
     const r = $('hudReff');
     r.textContent = h.reff === null ? '—' : h.reff.toFixed(2);
@@ -592,6 +610,7 @@ export function createUI(api) {
 
   ui.update = (sim, now = performance.now()) => {
     lastSim = sim;
+    tickHud(now);
     if (now - lastHud < HUD_EVERY_MS) return;
     lastHud = now;
     const s = api.getState();

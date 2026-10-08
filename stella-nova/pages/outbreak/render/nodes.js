@@ -15,11 +15,18 @@
 //             antialiased edge, no halo and no pulse. The shown level
 //             follows the target with a smooth approach, so a jump in
 //             prevalence does not snap.
-//    rings    Points, RING_POOL slots. A `first` event in frame.events
-//             starts one thin ring at the destination: it grows from the
-//             marker to RING_PX CSS px and fades out in RING_DUR wall
-//             seconds. A new sim starts a ring at each node that is
-//             already infected (the seed).
+//    rings    Points, RING_POOL slots (RING_POOL_PHONE on a phone). Each
+//             ignition starts one slot at the city: a sharp white-hot
+//             flash disc for IGNITE.flash s, and a shockwave ring (1.8 px
+//             line) that grows from the marker to RING_PX CSS px (44 on
+//             a phone) and fades out in RING_DUR wall seconds. Additive,
+//             so it burns over the red land. The ring and flash size
+//             follow the ignition power (a plane into a city that already
+//             has cases rings smaller).
+//             With ctx.ignite (render/ignite.js) the rings come from the
+//             bus: render/arcs.js fires it when an infected plane lands,
+//             render/globe.js at the seeds. Without it, the layer starts
+//             rings itself at `first` events and at the seeds.
 //  On the globe, both shaders hide a node on the far side of the unit
 //  sphere, so the layer is correct also on a style that writes no depth.
 //
@@ -37,11 +44,12 @@
 // ============================================================================
 
 import { needThree } from './arcs.js';
+import { IGNITE, igniteLimits } from './ignite.js';
 
 export const SOURCES = [];
 
 export const NODE_H = 0.003;           // height of the markers above the surface
-export const RING_POOL = 32, RING_DUR = 1.6, RING_PX = 30;
+export const RING_POOL = 32, RING_POOL_PHONE = 12, RING_DUR = 1.8, RING_PX = IGNITE.ringPx;
 export const GLOW_RATE = 2.5;          // 1/s, approach rate of the shown level
 export const PREV_LO = 1e-7, PREV_HI = 1e-1;
 export const MARK_IDLE = [1.8, 3], MARK_HOT = [3.5, 12];   // CSS px ranges
@@ -69,24 +77,28 @@ export function approach(cur, target, dt, rate = GLOW_RATE) {
   return target + (cur - target) * Math.exp(-rate * Math.max(0, dt));
 }
 
-// Ring at age (s): { px (CSS px diameter), alpha }, or null when it is over.
-export function ringState(age, dur = RING_DUR, from = 6) {
+// Ring at age (s): { px (CSS px diameter), alpha, flash 0..1, flashPx },
+// or null when it is over. power 0..1 scales the ring; maxPx the phone cap.
+export function ringState(age, dur = RING_DUR, from = 6, power = 1, maxPx = RING_PX) {
   if (!(age >= 0) || age >= dur) return null;
-  const u = age / dur;
-  return { px: from + (RING_PX - from) * (1 - (1 - u) ** 3), alpha: (1 - u) ** 2 };
+  const u = age / dur, p = Math.max(0, Math.min(1, power));
+  const fl = Math.max(0, 1 - age / IGNITE.flash);
+  const top = Math.max(from, maxPx * (0.35 + 0.65 * p));
+  return { px: from + (top - from) * (1 - (1 - u) ** 3), alpha: (1 - u) ** 2 * (0.45 + 0.55 * p),
+    flash: fl * fl * (0.4 + 0.6 * p), flashPx: from + 14 * p * fl };
 }
 
-// Fixed ring pool: start(node, now) takes a free slot or the oldest one.
+// Fixed ring pool: start(node, now, power) takes a free slot or the oldest one.
 export function createRingPool(n = RING_POOL) {
   const p = {
-    n, node: new Int32Array(n).fill(-1), t0: new Float64Array(n),
-    start(node, now) {
+    n, node: new Int32Array(n).fill(-1), t0: new Float64Array(n), power: new Float32Array(n).fill(1),
+    start(node, now, power = 1) {
       let s = -1, old = Infinity;
       for (let i = 0; i < n; i++) {
         if (p.node[i] < 0) { s = i; break; }
         if (p.t0[i] < old) { old = p.t0[i]; s = i; }
       }
-      p.node[s] = node; p.t0[s] = now;
+      p.node[s] = node; p.t0[s] = now; p.power[s] = power;
       return s;
     },
     expire(now, dur = RING_DUR) { for (let i = 0; i < n; i++) if (p.node[i] >= 0 && now - p.t0[i] >= dur) p.node[i] = -1; },
@@ -147,31 +159,43 @@ void main() {
 const RING_VERT = /* glsl */`
 attribute float aPx;
 attribute float aA;
+attribute float aF;
+attribute float aFr;
 uniform float uPr;
 varying float vA;
 varying float vR;
 varying float vS;
+varying float vF;
+varying float vFr;
 ${VIS}
 void main() {
   vec4 w = modelMatrix * vec4(position, 1.0);
-  vA = aA * vis(w.xyz);
+  float v = vis(w.xyz);
+  vA = aA * v; vF = aF * v;
   vR = aPx * uPr * 0.5;
-  vS = ceil(aPx * uPr) + 3.0;
-  gl_PointSize = vA > 0.0 ? vS : 0.0;
+  vFr = aFr * uPr * 0.5;
+  vS = ceil(max(aPx, aFr) * uPr) + 4.0;
+  gl_PointSize = (vA > 0.0 || vF > 0.0) ? vS : 0.0;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
+// the shockwave ring (1.8 px line) and the white-hot flash disc
 const RING_FRAG = /* glsl */`
 uniform float uPr;
 uniform vec3 uColor;
 varying float vA;
 varying float vR;
 varying float vS;
+varying float vF;
+varying float vFr;
 void main() {
   float r = length(gl_PointCoord - 0.5) * vS;
-  float half_w = 0.65 * uPr;
-  float a = vA * clamp(half_w - abs(r - vR) + 0.5, 0.0, 1.0);
+  float half_w = 0.9 * uPr;
+  float ring = vA * clamp(half_w - abs(r - vR) + 0.5, 0.0, 1.0);
+  float disc = vF * clamp(vFr - r + 0.5, 0.0, 1.0);
+  float a = max(ring, disc);
   if (a <= 0.003) discard;
-  gl_FragColor = vec4(uColor, a);
+  vec3 col = mix(uColor, vec3(1.0, 0.93, 0.86), disc / max(a, 1e-3));
+  gl_FragColor = vec4(col * a, a);
 }`;
 
 // ── the layer ────────────────────────────────────────────────────────────
@@ -201,20 +225,27 @@ export function createNodes(ctx) {
   const points = new THREE.Points(g, mat);
   points.frustumCulled = false; points.renderOrder = 14; points.name = 'nodes-markers';
 
-  const rPos = new Float32Array(RING_POOL * 3), rPx = new Float32Array(RING_POOL), rA = new Float32Array(RING_POOL);
+  const RP = ctx.phone ? RING_POOL_PHONE : RING_POOL, ringMax = igniteLimits(!!ctx.phone).ringPx;
+  const rPos = new Float32Array(RP * 3), rPx = new Float32Array(RP), rA = new Float32Array(RP), rF = new Float32Array(RP), rFr = new Float32Array(RP);
   const rg = new THREE.BufferGeometry();
   const rPosAttr = new THREE.BufferAttribute(rPos, 3), rPxAttr = new THREE.BufferAttribute(rPx, 1), rAAttr = new THREE.BufferAttribute(rA, 1);
+  const rFAttr = new THREE.BufferAttribute(rF, 1), rFrAttr = new THREE.BufferAttribute(rFr, 1);
   rg.setAttribute('position', rPosAttr);
   rg.setAttribute('aPx', rPxAttr);
   rg.setAttribute('aA', rAAttr);
+  rg.setAttribute('aF', rFAttr);
+  rg.setAttribute('aFr', rFrAttr);
   const RU = { uPr: U.uPr, uGlobe: U.uGlobe, uColor: { value: new THREE.Color(1.0, 0.46, 0.32) } };
   const ringMat = new THREE.ShaderMaterial({
     uniforms: RU, vertexShader: RING_VERT, fragmentShader: RING_FRAG,
     transparent: true, depthWrite: false, depthTest: true,
+    blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
   });
   const rings = new THREE.Points(rg, ringMat);
   rings.frustumCulled = false; rings.renderOrder = 15; rings.name = 'nodes-rings';
-  const pool = createRingPool(RING_POOL);
+  const pool = createRingPool(RP);
+  const bus = ctx.ignite || null;
+  let busCursor = bus ? bus.since(0).cursor : 0;
 
   const group = new THREE.Group(); group.name = 'nodes';
   group.add(points); group.add(rings);
@@ -231,7 +262,7 @@ export function createNodes(ctx) {
   place();
 
   let now = 0, lastSim = null;
-  function burst(i) { if (i >= 0 && i < N) pool.start(i, now); }
+  function burst(i, power = 1) { if (i >= 0 && i < N) pool.start(i, now, power); }
 
   const layer = {
     group, pool, glow, px,
@@ -249,9 +280,10 @@ export function createNodes(ctx) {
       const sim = frame.sim || null, prev = frame.prev || null;
       if (sim !== lastSim) {
         lastSim = sim; pool.clear(); glow.fill(0); past.fill(0);
-        if (sim && sim.firstDay) for (let i = 0; i < N; i++) if (sim.firstDay[i] >= 0) burst(i);
+        if (!bus && sim && sim.firstDay) for (let i = 0; i < N; i++) if (sim.firstDay[i] >= 0) burst(i);
       }
-      if (frame.events) for (const ev of frame.events) if (ev.first && !ev.blocked) burst(ev.to);
+      if (bus) { const r = bus.since(busCursor); busCursor = r.cursor; for (const f of r.list) burst(f.node, f.power); }
+      else if (frame.events) for (const ev of frame.events) if (ev.first && !ev.blocked) burst(ev.to);
       for (let i = 0; i < N; i++) {
         const tg = prev ? glowLevel(prev[i]) : 0;
         glow[i] = tg > 0 ? approach(glow[i], tg, dt) : (glow[i] < 0.01 ? 0 : approach(glow[i], 0, dt));
@@ -266,15 +298,15 @@ export function createNodes(ctx) {
       // rings
       pool.expire(now);
       const pm = projMode();
-      for (let s = 0; s < RING_POOL; s++) {
+      for (let s = 0; s < RP; s++) {
         const i = pool.node[s];
-        const st = i >= 0 ? ringState(now - pool.t0[s], RING_DUR, px[i] + 2) : null;
-        if (!st) { rA[s] = 0; continue; }
+        const st = i >= 0 ? ringState(now - pool.t0[s], RING_DUR, px[i] + 2, pool.power[s], ringMax) : null;
+        if (!st) { rA[s] = 0; rF[s] = 0; continue; }
         const p = geo.project(nodes[i].lat, nodes[i].lon, NODE_H, pm);
         rPos[3 * s] = p[0]; rPos[3 * s + 1] = p[1]; rPos[3 * s + 2] = p[2];
-        rPx[s] = st.px; rA[s] = 0.9 * st.alpha;
+        rPx[s] = st.px; rA[s] = 0.95 * st.alpha; rF[s] = st.flash; rFr[s] = st.flashPx;
       }
-      rPosAttr.needsUpdate = true; rPxAttr.needsUpdate = true; rAAttr.needsUpdate = true;
+      rPosAttr.needsUpdate = true; rPxAttr.needsUpdate = true; rAAttr.needsUpdate = true; rFAttr.needsUpdate = true; rFrAttr.needsUpdate = true;
     },
     dispose() {
       root.remove(group);
