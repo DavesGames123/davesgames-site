@@ -24,6 +24,7 @@
 //    function drawTurn .......... the turn timeline plot
 //    function fillLearn ......... history and the linked diagrams
 //    function frame ............. step, pose, explode, follow, stage, cards
+//    window.snSaver ............. the screensaver tour (lib/mech-tour.js)
 // ============================================================================
 import * as THREE from 'three';
 import { UNITS, unit, geo, plan, at, makeJob, parseJob, turnPlan, teethMet, initState, digitsOf, valueOf, fmt, TOOTH0, TOOTH_P, RES_CARRY, CNT_CARRY, CNT_DRIVE } from './mech.js';
@@ -32,6 +33,7 @@ import { build } from './scene.js';
 import { createStage } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
+import { createTour } from '../../lib/mech-tour.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -665,3 +667,192 @@ stage.place({ az: -30, el: 22, r: 400, target: new THREE.Vector3(0, 44, 0) });
 const start = (location.hash || '').slice(1);
 swapTo(UNITS.some(v => v.id === start) ? start : 'I');
 requestAnimationFrame(frame);
+
+// ── saver plate anchor ──────────────────────────────────────────────────────
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const b = m.geometry.boundingBox; if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(Math.max(rc.left, Math.min(rc.right, q.x)) - C.x, Math.max(rc.top, Math.min(rc.bottom, q.y)) - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  return { x: C.x, y: C.y, r, pts: [] };
+}
+
+// ── screensaver ─────────────────────────────────────────────────────────────
+// Hook for the shell (lib/screensaver.js). enter() hides the GUI and runs a
+// seeded tour of shots, each about seconds/10 (at least 6 s):
+//   product .. a seeded multiplication with carriage shifts, whole machine
+//   carry .... the cutaway at the carry chain, a ripple at slow speed
+//   drum ..... the cutaway at the stepped drum during a subtraction turn
+//   exploded . the spread machine, still turning
+//   part ..... close-ups of single parts (lib/mech-tour.js), the job running
+//   top ...... the registers from above while the product builds
+// The order is shuffled per seed, and every few shots it changes the type.
+// The plate shows the operation, the registers and a code extract of
+// mech.js turnPlan. No exit(): the shell reloads the page.
+const CODE = `// one crank turn: tooth windows, then carries
+for (const k of teethMet(s_p, up)) {
+  const m = TOOTH0 + (k - 1) * TOOTH_P + pitch * p;
+  wins.push({ p, t0: m - WIN/2, t1: m + WIN/2, d: 1 });
+}
+// a wheel that passes 9 -> 0 drops the next carry gear;
+// the carry tooth meets station p at RES_CARRY + p * pitch
+if (from === 9) carryR(w + 1 - c, t1);`;
+window.snSaver = {
+  enter(o = {}) {
+    saverOn = true;
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
+    let seed = (o.seed >>> 0) || ((Math.random() * 4294967296) >>> 0) || 1;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const label = typeof o.label === 'function' ? o.label : () => {};
+    const st = document.createElement('style');
+    st.textContent = '.topbar,#panel,#anaPanel,#anaOpen,#dock,#hint,#labels,#leader,#regs,.tip,#nogl,#gear,#toast{display:none!important}#stage{top:0!important;bottom:0!important}#view{cursor:none;transition:opacity 0.9s ease}';
+    document.head.appendChild(st);
+    setOpen(false); setAna(false); setShow('labels', false);
+    const g = document.createElement('canvas'); g.width = 512; g.height = 320;
+    const c2 = g.getContext('2d'), rg = c2.createRadialGradient(256, 150, 0, 256, 150, 420);
+    rg.addColorStop(0, '#171a28'); rg.addColorStop(0.7, '#08090f'); rg.addColorStop(1, '#08090f');
+    c2.fillStyle = rg; c2.fillRect(0, 0, 512, 320);
+    const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
+    stage.scene.background = bg;
+    stage.orbit = false;
+    S.ekRate = 2.0 - 0.6 * calm;
+    const SPEED = Math.round((1.3 - 0.6 * calm) * 100) / 100;
+    const hold = Math.max(6, (o.seconds || 60) / 10) * 1000;
+    const canvas = $('view');
+    // close-ups only of parts that read at saver size; shots cut (fly 0.05 s)
+    // behind a short fade, so the camera never flies through the housing
+    const READ = ['sleeve', 'carrygear', 'slider', 'drum'];
+    const tour = createTour({ THREE, stage, cards, cur: () => S.cur, rnd, hold, fly: 0.05, fill: 2.0, prefer: READ, skip: Object.keys(partsFor('I')).filter(k => !READ.includes(k)) });
+    window.__mechTour = tour;
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const params = () => {
+      const Q = S.Q; if (!Q) return [];
+      return [P('S', 'setting', fmt(Q.setting), 'm1'), P('R', 'result', fmt(Q.value), 'm3'), P('C', 'counter', fmt(Q.count), 'm4'), P('c', 'carriage place', String(Math.round(Q.car) + 1), 'm2')];
+    };
+    const opText = () => (S.job ? `${exprOf(S.job.op, S.job.a, S.job.b)} = ${answerOf(S.job)}` : '');
+    const TEX = [String.raw`R \leftarrow R + S\cdot 10^{c}`, String.raw`R - S = R + (10^{n} - 1 - S) + 1 - 10^{n}`];
+    const EQ = ['R ← R + S · 10^c', 'R − S = R + (nines’ complement of S) + 1'];
+    const lab = (title, sub, anchor) => () => ({ title, sub: [sub, opText()].filter(Boolean).join(' · '), params: params(), tex: TEX, eq: EQ, code: { lang: 'js', name: 'curta/mech.js · turnPlan', text: CODE }, anchor });
+    const all = () => Object.values(S.cur.B.parts).filter(q => q.info !== 'base').map(q => q.holder);
+    const carryParts = () => S.cur.sc.meshesOf(['sleeve', 'drum', 'cgear_0', 'cgear_1', 'cgear_2', 'slide_0', 'slide_1', 'slide_2', 'shaft_0', 'shaft_1']);
+    // saver framing: (az, el, k, key, explode); k is a share of the whole-view distance
+    const SV = { product: [24, 24, 0.36, 'top', 0], top: [0, 56, 0.27, 'top', 0], carry: [96, 20, 0.24, 'carry', 0], drum: [92, 10, 0.4, 'drum', 0], exploded: [30, 6, 0.72, null, 0.85] };
+    const saverView = name => {
+      const [az, el, k, key, ex] = SV[name], c = key ? S.cur.sc.keys[key] : S.cur.sc.box.c;
+      stage.flyTo({ az, el, r: fitDist(k), target: new THREE.Vector3(c[0], c[1] + (ex ? S.cur.sc.box.R * 0.28 : 0), c[2]), t: 0.05 });
+      setExplode(ex); setSection(name === 'carry' || name === 'drum');
+    };
+    // a new job on a machine that is already clear starts at its first set
+    const runFresh = (op, a, b, oo) => { const clear = S.P && S.P.end.R.every(v => !v) && S.P.end.C.every(v => !v); runJob(op, a, b, oo); if (clear) { const e = S.P.events.find(x => x.a === 'set' && x.t0 >= S.jobT0 - 1e-9); if (e) S.t = e.t0; } };
+    // seeded jobs
+    const mulJob = () => { const a = 1000 + Math.floor(rnd() * 98999), b = [23, 47, 365, 1729, 314, 271, 89, 196][Math.floor(rnd() * 8)]; return ['×', a, b, { short: rnd() < 0.5 }]; };
+    const ripJob = () => [['+', 99999999, 1, {}], ['+', 9999999, 1, {}], ['−', 10000000, 1, {}], ['+', 9999990, 10, {}]][Math.floor(rnd() * 4)];
+    // jump t to just before the last turn of the job, so the carry shows now
+    const toLastTurn = () => { const turnsE = S.P.events.filter(e => e.a === 'turn'); const e = turnsE[turnsE.length - 1]; if (e) S.t = Math.max(S.jobT0, e.t0 - 0.35); };
+    const SHOTS = {
+      product: { setup: () => { const [op, a, b, oo] = mulJob(); runFresh(op, a, b, oo); saverView('product'); return { speed: SPEED * 1.4 }; }, lab: () => lab('Curta · multiplication', 'Turns and carriage shifts', () => plateAnchor(all()))(), kind: 'view' },
+      top: { setup: () => { if (!S.job || S.job.op !== '×' || S.t >= S.P.T) { const [op, a, b, oo] = mulJob(); runFresh(op, a, b, oo); } saverView('top'); return { speed: SPEED * 1.2 }; }, lab: () => lab('The registers', 'Result outside, turn counter inside', () => plateAnchor(S.cur.sc.meshesOf(['carriage'])))(), kind: 'view' },
+      carry: { setup: () => { const [op, a, b, oo] = ripJob(); runJob(op, a, b, oo); toLastTurn(); saverView('carry'); return { speed: 0.22 + 0.12 * (1 - calm), slow: true }; }, lab: () => lab('The tens carry', 'Cutaway: carry gears drop, the carry tooth passes', () => plateAnchor(carryParts()))(), kind: 'view' },
+      drum: { setup: () => { const [op, a, b, oo] = [['−', 1000 + Math.floor(rnd() * 90000), 1 + Math.floor(rnd() * 900), {}], ['×', 4711, 9, { short: true }]][Math.floor(rnd() * 2)]; runJob(op, a, b, oo); toLastTurn(); saverView('drum'); return { speed: 0.35 }; }, lab: () => lab('The stepped drum', 'Cutaway: add teeth (steel), complement teeth (blued)', () => plateAnchor(S.cur.sc.meshesOf(['sleeve', 'drum'])))(), kind: 'view' },
+      exploded: { setup: () => { if (!S.job || S.t >= S.P.T) { const [op, a, b, oo] = mulJob(); runFresh(op, a, b, oo); } saverView('exploded'); return { speed: SPEED * 0.8, exploded: true }; }, lab: () => lab('Exploded view', `Curta Type ${S.cur.id}`, () => plateAnchor(all()))(), kind: 'view' },
+    };
+    let plan2 = [], n = 0, stepT = 0, now = null, lastLab = '', labT = 0, sinceSwap = 0;
+    const makePlan = () => {
+      tour.unit();
+      const views = ['product', 'carry', 'exploded', 'drum', 'top'];
+      for (let i = views.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [views[i], views[j]] = [views[j], views[i]]; }
+      // the product first or second, so the plate opens on an operation
+      if (views.indexOf('product') > 1) { views.splice(views.indexOf('product'), 1); views.splice(Math.floor(rnd() * 2), 0, 'product'); }
+      const parts = tour.pick(3);
+      plan2 = [];
+      views.forEach((v, i) => { plan2.push({ shot: v }); if (i % 2 === 1 && parts.length) plan2.push({ focus: parts.shift() }); });
+      for (const f of parts) plan2.push({ focus: f });
+    };
+    const show = s => {
+      if (s.focus) {
+        if (S.explodeTarget < 0.3) setExplode(0.55 + 0.3 * rnd());
+        setSection(false);
+        if (!S.job || S.t >= S.P.T) { const [op, a, b, oo] = mulJob(); runFresh(op, a, b, oo); }
+        setSpeed(SPEED);
+        tour.show(s.focus);
+        // no glow in the saver: the gold tint reads as plastic on a close-up
+        cards.C.hover = null;
+        const t = tour.plate(s.focus, `Curta Type ${S.cur.id}`);
+        s.lab = () => ({ ...t, sub: [t.sub, opText()].filter(Boolean).join(' · '), params: params(), tex: TEX, eq: EQ, code: { lang: 'js', name: 'curta/mech.js · turnPlan', text: CODE }, anchor: () => plateAnchor(t.meshes) });
+      } else {
+        tour.clear();
+        const sh = SHOTS[s.shot], r = sh.setup();
+        setSpeed(r.speed);
+        // moves that keep the whole subject in the band (no truck or graze)
+        const MV = { product: ['orbit', 'push', 'pull', 'crane'], top: ['orbit', 'push'], exploded: ['orbit', 'pull', 'push'], carry: ['push', 'orbit', 'pull'], drum: ['push', 'orbit', 'pull'] }[s.shot];
+        const mv = MV[Math.floor(rnd() * MV.length)];
+        tour.fromFly({ kind: 'view', exploded: !!r.exploded, move: mv, azRange: s.shot === 'carry' || s.shot === 'drum' ? [S.cutAz - 30, S.cutAz + 40] : null });
+        s.lab = sh.lab;
+      }
+      const l = s.lab(); lastLab = JSON.stringify(l); label(l);
+    };
+    const fadeSwap = async (id, then) => {
+      canvas.style.opacity = '0';
+      await new Promise(r => setTimeout(r, 950));
+      setExplode(0); S.explode = 0;
+      await swapTo(id);
+      setTimeout(() => { canvas.style.opacity = '1'; then(); }, 250);
+    };
+    const advance = () => {
+      if (n >= plan2.length) {
+        sinceSwap++;
+        const go = () => { makePlan(); n = 0; stepT = 0; now = plan2[n++]; show(now); };
+        if (sinceSwap >= 1 && rnd() < 0.6) { tour.clear(); now = null; fadeSwap(S.cur.id === 'I' ? 'II' : 'I', go); sinceSwap = 0; }
+        else go();
+        return;
+      }
+      // a short fade hides the cut to the next shot
+      const nx = plan2[n++]; now = nx;
+      canvas.style.transition = 'opacity 0.28s ease'; canvas.style.opacity = '0';
+      setTimeout(() => { if (now !== nx) return; show(nx); fadeIn = 3; }, 300);
+    };
+    let bandFn = null, bandT = 0;
+    import('../../lib/saver-clear.js').then(m => { bandFn = m.plateBand; }).catch(() => { /* no band */ });
+    let fadeIn = 0;
+    saverTick = dt => {
+      // fade in after three rendered frames: the camera has its new pose
+      if (fadeIn > 0 && !stage.fly && --fadeIn === 0) canvas.style.opacity = '1';
+      if (bandFn && (bandT += dt) > 0.5) {
+        bandT = 0;
+        // keep the last band while the plate swaps its text (plateBand is null then)
+        try { saverBand = bandFn($('view').clientHeight) || saverBand; } catch (e) { /* keep */ }
+        // fade the view out under the plate text: the subject stays in the band
+        const h = canvas.clientHeight, m = saverBand ? `linear-gradient(to bottom, transparent ${Math.max(0, saverBand.t - 26)}px, #000 ${saverBand.t + 18}px, #000 ${h - saverBand.b - 18}px, transparent ${h - saverBand.b + 26}px)` : 'none';
+        if (canvas.style.maskImage !== m) { canvas.style.maskImage = m; canvas.style.webkitMaskImage = m; }
+      }
+      tour.tick(dt);
+      stepT += dt * 1000; labT += dt;
+      if (stepT >= hold && !S.swapping && now) { stepT = 0; advance(); }
+      if (labT > 0.5 && now && now.lab) { labT = 0; const l = now.lab(), js = JSON.stringify(l); if (js !== lastLab) { lastLab = js; label(l); } }
+    };
+    window.__curtaSaver = { get shot() { return now ? (now.shot || 'part:' + now.focus) : null; }, get plan() { return plan2.map(p => p.shot || 'part:' + p.focus); }, next() { stepT = hold; }, cut(k) { stepT = 0; if (SHOTS[k]) { now = { shot: k }; show(now); } else { now = { focus: k }; show(now); } } };
+    (async () => {
+      const first = rnd() < 0.5 ? 'I' : 'II';
+      if (!S.cur || S.cur.id !== first) await swapTo(first);
+      makePlan(); n = 0; now = plan2[n++]; show(now);
+    })();
+    return { canvas, warmupMs: 1500 };
+  },
+};
