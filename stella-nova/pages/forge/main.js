@@ -15,7 +15,8 @@
 //  clear area beside the panel or above the sheet: the view shifts its
 //  principal point (render.js cam.offX / offY), it does not resize.
 //
-//  window.__forge exposes the state for saver.js and for debugging.
+//  window.__forge exposes the state for saver.js (window.snSaver) and for
+//  debugging; adopt(P, M, W) shows a planet the saver generated ahead.
 //
 //  grep -n targets: "async function boot", "function regenerate",
 //  "function buildShape", "function buildMaps", "function frame",
@@ -28,6 +29,7 @@ import { encodePNG } from './png.js';
 import { createPool } from './pool.js';
 import { createRenderer } from './render.js';
 import * as BG from './budget.js';
+import './saver.js';
 
 const $ = id => document.getElementById(id);
 const MOBILE = matchMedia('(max-width:760px), (max-height:520px) and (pointer:coarse)').matches;
@@ -273,7 +275,7 @@ function resize() {
 // The clear area of the window (CSS px): beside the panel or above the sheet.
 function clearArea() {
   const w = innerWidth, h = innerHeight;
-  if (S.saver) return { x0: 0, y0: 0, x1: w, y1: h };
+  if (S.saver) return { x0: 0, y0: S.band ? S.band.t : 0, x1: w, y1: h - (S.band ? S.band.b : 0) };
   let x0 = 0, y1 = h;
   const p = $('panel').getBoundingClientRect();
   if (!MOBILE) x0 = p.right;
@@ -329,5 +331,11 @@ function frame(now) {
   }, ctx.getCurrentTexture().createView());
 }
 
-window.__forge = { S, regenerate, choosePreset, get R() { return R; }, sunDir, camState, ENV, get canvas() { return canvas; }, clearArea, buildMaps };
+// Show a planet that was generated elsewhere (the saver preloads the next).
+function adopt(P, M, W) {
+  S.P = P; S.Pgen = P; S.M = M; S.Mw = W;
+  if (R) R.setPlanet(P, M, ENV);
+}
+
+window.__forge = { S, regenerate, choosePreset, adopt, get pool() { return pool; }, get VB() { return VB; }, get R() { return R; }, sunDir, camState, ENV, get canvas() { return canvas; }, clearArea, buildMaps };
 boot();

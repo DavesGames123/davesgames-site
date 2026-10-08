@@ -113,6 +113,14 @@ export function bodyFrame(v, tiltDeg, spin) {
   return [x * cs + z * ss, y, -x * ss + z * cs];
 }
 
+// Body -> world: the spin (about y), then the tilt (about x).
+export function worldFrame(v, tiltDeg, spin) {
+  const cs = Math.cos(spin), ss = Math.sin(spin);
+  const x = v[0] * cs + v[2] * ss, z = -v[0] * ss + v[2] * cs, y = v[1];
+  const t = tiltDeg * Math.PI / 180, ct = Math.cos(t), st = Math.sin(t);
+  return [x, y * ct - z * st, y * st + z * ct];
+}
+
 export function packView(cam, P, shellR) {
   const tilt = P ? P.tilt : 0;
   const fwdW = norm(sub(cam.target || [0, 0, 0], cam.pos));
