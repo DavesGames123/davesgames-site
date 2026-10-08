@@ -20,7 +20,7 @@
 // ============================================================================
 import * as M from './model.js';
 import { createEngine } from './engine.js';
-import { galaxyBudget } from './budget.js';
+import { galaxyBudget, defaultQuality } from './budget.js';
 import * as C from './camera.js';
 import { shotCamera } from './saverplan.js';
 import { typesetAll } from '../../lib/sci-math.js';
@@ -28,8 +28,11 @@ import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const COARSE_Q = matchMedia('(pointer:coarse)');
+// A tablet is a touch screen that is not a phone: it gets its own budget.
+const profile = () => ({ phone: PHONE_Q.matches, tablet: !PHONE_Q.matches && COARSE_Q.matches });
 const canvas = $('c');
-let quality = PHONE_Q.matches ? 'low' : 'high';
+let quality = defaultQuality(profile());
 let bud = null, E = null, built = null, P = M.presetParams('m51');
 const st = { time: 520, speed: 6, playing: true, ev: 0, sky: true, bg: true, frame: 0, fps: 60 };
 const cam = { target: [0, 0, 0], yaw: 0.6, pitch: C.inclToPitch(P.incl), dist: 60, fov: 40 };
@@ -98,7 +101,7 @@ function occlusion() {
 }
 
 function resize() {
-  bud = galaxyBudget(innerWidth, innerHeight, devicePixelRatio || 1, { phone: PHONE_Q.matches, quality });
+  bud = galaxyBudget(innerWidth, innerHeight, devicePixelRatio || 1, { ...profile(), quality });
   canvas.width = bud.w; canvas.height = bud.h;
   if (E) E.resize(bud);
 }
@@ -173,7 +176,13 @@ function bindUI() {
   $('panelClose').onclick = () => setOpen(false);
   dockPanel.onclick = () => setOpen(!panel.classList.contains('open'));
   setOpen(!PHONE_Q.matches && innerWidth > 900);
-  PHONE_Q.addEventListener('change', e => { setOpen(!e.matches); quality = e.matches ? 'low' : quality; $('quality').value = quality; resize(); });
+  // A window that becomes a phone (or stops being one) gets that profile's
+  // level; the star count changes with it, so rebuild.
+  PHONE_Q.addEventListener('change', e => { setOpen(!e.matches); quality = defaultQuality(profile()); $('quality').value = quality; resize(); if (E) rebuild(); });
+  // Touch has no keys and no wheel: say what works.
+  if (COARSE_Q.matches) $('hint').textContent = 'Drag to orbit · pinch to zoom · ⤓ flies into the disk';
+  // On a phone the equations start folded, so they do not cover the galaxy.
+  if (PHONE_Q.matches) { $('eqPanel').classList.add('collapsed'); $('eqCollapse').textContent = '+'; }
   const grip = $('sheetGrip'); let gy = null;
   grip.addEventListener('pointerdown', e => { gy = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) {} });
   grip.addEventListener('pointerup', e => {
@@ -271,7 +280,7 @@ async function boot() {
   catch (e) {
     console.error(e);
     $('msg').hidden = false;
-    $('msg').textContent = 'This page needs WebGPU. Use a current Safari, Chrome or Edge.';
+    $('msg').textContent = 'This page needs WebGPU. Use a current Safari, Chrome or Edge (on iPhone and iPad: iOS 26 or later).';
     return;
   }
   E.onLost = info => { if (info && info.reason !== 'destroyed') { $('msg').hidden = false; $('msg').textContent = 'The GPU device was lost. Reload the page.'; } };

@@ -12,11 +12,18 @@
 //    canvas    two swap buffers and one in flight    12 B/px
 //  Fixed: the 3D noise tile (N^3 x 4 B) and the star buffer (64 B a star).
 //
-//  galaxyBudget(cssW, cssH, dpr, { phone, quality }) gives the pixel ratio,
-//  the target sizes, the ray steps and the star count. The pixel ratio
-//  falls until the render size is at most maxPx and all bytes fit.
+//  galaxyBudget(cssW, cssH, dpr, { phone, tablet, quality }) gives the
+//  pixel ratio, the target sizes, the ray steps and the star count. The
+//  pixel ratio falls until the render size is at most maxPx and all bytes
+//  fit.
 //
-//  EXPORTS  QUALITY, LIMITS, NOISE_N, bloomLevels, galaxyBudget
+//  Three device profiles. A phone matches PHONE_Q in main.js. A tablet is
+//  a coarse pointer that is not a phone (an iPad): it gets its own, lower
+//  limit and the medium level, because an iPad at DPR 2 is 5.6 M px.
+//  defaultQuality({ phone, tablet }) gives the start level for a profile.
+//
+//  EXPORTS  QUALITY, LIMITS, NOISE_N, bloomLevels, defaultQuality,
+//           galaxyBudget
 // ============================================================================
 
 export const NOISE_N = 96;
@@ -27,8 +34,13 @@ export const QUALITY = {
 };
 export const LIMITS = {
   desktop: { maxPx: 2560 * 1600, bytes: 150e6 },
+  tablet: { maxPx: 2048 * 1536, bytes: 96e6 },
   phone: { maxPx: 1300 * 900, bytes: 56e6 },
 };
+
+export function defaultQuality({ phone = false, tablet = false } = {}) {
+  return phone ? 'low' : tablet ? 'medium' : 'high';
+}
 
 // Bloom levels: halve until the short side is under 24 px, at most 6.
 export function bloomLevels(w, h) {
@@ -43,9 +55,9 @@ export function frameBytes(w, h, vol) {
   return { stars: px * 8, volume: vw * vh * 8, bloom, canvas: px * 12, exposure: 2 * 8 };
 }
 
-export function galaxyBudget(cssW, cssH, dpr = 1, { phone = false, quality } = {}) {
-  const Q = QUALITY[quality || (phone ? 'low' : 'high')] || QUALITY.medium;
-  const lim = phone ? LIMITS.phone : LIMITS.desktop;
+export function galaxyBudget(cssW, cssH, dpr = 1, { phone = false, tablet = false, quality } = {}) {
+  const Q = QUALITY[quality || defaultQuality({ phone, tablet })] || QUALITY.medium;
+  const lim = phone ? LIMITS.phone : tablet ? LIMITS.tablet : LIMITS.desktop;
   const area = Math.max(1, cssW * cssH);
   const stars = Q.stars, fixed = NOISE_N ** 3 * 4 + stars * 1.06 * 64;
   let pr = Math.min(dpr || 1, Q.pr, Math.sqrt(lim.maxPx / area));

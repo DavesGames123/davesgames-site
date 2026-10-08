@@ -13,7 +13,8 @@
 //    colour ....... blackbody blue/red rises with temperature
 //    presets ...... every preset and type builds, with finite numbers
 //    saver ........ shots last 5-12 s, the order changes with the seed
-//    budget ....... every display fits the GPU memory limit
+//    budget ....... every display fits the GPU memory limit; phones and
+//                   tablets start at a lower level and stay small
 // ============================================================================
 import * as M from './model.js';
 import * as B from './budget.js';
@@ -160,13 +161,22 @@ for (const pitch of [10, 18, 30]) {
 
 // ── budget ──
 {
-  const screens = [[1280, 800, 1, false], [1440, 900, 2, false], [2560, 1440, 2, false], [5120, 2880, 2, false], [3840, 2160, 1.5, false], [390, 844, 3, true], [430, 932, 3, true], [844, 390, 3, true], [1024, 1366, 2, true]];
-  for (const [w, h, d, ph] of screens) for (const q of ['low', 'medium', 'high']) {
-    const b = B.galaxyBudget(w, h, d, { phone: ph, quality: q });
+  // [w, h, dpr, profile]: d desktop, p phone, t tablet (coarse, not a phone)
+  const screens = [[1280, 800, 1, 'd'], [1440, 900, 2, 'd'], [2560, 1440, 2, 'd'], [5120, 2880, 2, 'd'], [3840, 2160, 1.5, 'd'], [360, 640, 3, 'p'], [390, 844, 3, 'p'], [430, 932, 3, 'p'], [844, 390, 3, 'p'], [640, 360, 3, 'p'], [1024, 1366, 2, 't'], [1366, 1024, 2, 't'], [820, 1180, 2, 't']];
+  let cases = 0;
+  for (const [w, h, d, pf] of screens) for (const q of ['low', 'medium', 'high']) {
+    const b = B.galaxyBudget(w, h, d, { phone: pf === 'p', tablet: pf === 't', quality: q }); cases++;
     if (!(b.total <= b.limit)) ok(false, `budget ${w}x${h}@${d} ${q}: ${(b.total / 1e6).toFixed(1)} MB > ${(b.limit / 1e6)} MB`);
   }
   const big = B.galaxyBudget(5120, 2880, 2, { quality: 'high' }), ph = B.galaxyBudget(430, 932, 3, { phone: true });
-  ok(true, `budget: 27 screen x quality cases fit; 5K at DPR 2 renders ${big.w}x${big.h} in ${(big.total / 1e6).toFixed(0)} MB; phone ${ph.w}x${ph.h}, ${ph.stars} stars, ${ph.steps} steps, ${(ph.total / 1e6).toFixed(0)} MB`);
+  ok(B.defaultQuality({ phone: true }) === 'low' && B.defaultQuality({ tablet: true }) === 'medium' && B.defaultQuality({}) === 'high', 'budget: start quality is low on a phone, medium on a tablet, high on a desktop');
+  for (const [w, h] of [[360, 640], [390, 844], [844, 390]]) {
+    const b = B.galaxyBudget(w, h, 3, { phone: true });
+    ok(b.pr <= 1 && b.stars <= 45000 && b.total <= 40e6, `budget: phone ${w}x${h}@3 draws at DPR ${b.pr}, ${b.stars} stars, ${(b.total / 1e6).toFixed(0)} MB (DPR <= 1, <= 45k stars, <= 40 MB)`);
+  }
+  const ipad = B.galaxyBudget(1024, 1366, 2, { tablet: true }), ipadH = B.galaxyBudget(1024, 1366, 2, { tablet: true, quality: 'high' });
+  ok(ipad.stars === B.QUALITY.medium.stars && ipad.total <= B.LIMITS.tablet.bytes && ipadH.w * ipadH.h <= B.LIMITS.tablet.maxPx, `budget: iPad 1024x1366@2 starts at medium, ${ipad.w}x${ipad.h} in ${(ipad.total / 1e6).toFixed(0)} MB; high stays at ${ipadH.w}x${ipadH.h} in ${(ipadH.total / 1e6).toFixed(0)} MB`);
+  ok(true, `budget: ${cases} screen x quality cases fit; 5K at DPR 2 renders ${big.w}x${big.h} in ${(big.total / 1e6).toFixed(0)} MB; phone ${ph.w}x${ph.h}, ${ph.stars} stars, ${ph.steps} steps, ${(ph.total / 1e6).toFixed(0)} MB`);
   const old = 5120 * 2 * 2880 * 2 * (8 + 8 * 4 + 12);
   ok(big.total < old / 3, `budget: 5K is ${(big.total / 1e6).toFixed(0)} MB, not the ${(old / 1e6).toFixed(0)} MB of full-DPR 4x MSAA HalfFloat`);
 }

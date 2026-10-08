@@ -65,18 +65,19 @@ input[type=number]{width:84px}
 #eqPanel.collapsed .eq-block{display:none}
 body:not(.panel-closed) #eqPanel{left:20px}
 
-/* TOUCH. Any touch screen or narrow window: 44 px targets, 11 px text. */
+/* TOUCH. Any touch screen or narrow window: 44 px targets, 12.8 px text. */
 @media (pointer:coarse), (max-width:768px){
   :root{--panel-w:330px}
   #panelClose,#eqCollapse{width:44px;height:44px}
-  .presets button,.modes button{min-height:46px;font-size:0.76rem;border-radius:10px}
+  .presets button,.modes button{min-height:46px;font-size:0.8rem;border-radius:10px}
   select,input[type=number],#reroll{min-height:44px;font-size:0.8rem}
   #reroll{width:48px}
   .row{min-height:44px;margin:4px 0}
   .row input[type=range]{height:44px}
   .tog{min-height:44px}
   .tog input{width:22px;height:22px}
-  #hint,#hudStat{font-size:0.72rem}
+  #hint,#hudStat,.eq-sublabel,.eq-head .lbl,.tog,.row label,.row label .w,.row2 .w,.row .val{font-size:0.8rem}
+  .about p{font-size:0.85rem}
 }
 
 /* PHONE. Matches PHONE_Q in main.js. */
@@ -92,7 +93,7 @@ body:not(.panel-closed) #eqPanel{left:20px}
   #dock > button.on{border-color:var(--warm);color:var(--warm)}
   .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
   .seg button{flex:0 0 44px;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
-  .seg #dockName{flex:1;min-width:0;font-size:0.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .seg #dockName{flex:1;min-width:0;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .seg button:last-child{border-right:0}
   #eqPanel{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 34px);max-width:none;padding:6px 12px 8px}
   body:not(.panel-closed) #eqPanel{display:none}
