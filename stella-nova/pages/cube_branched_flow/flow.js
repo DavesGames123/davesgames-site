@@ -2,7 +2,8 @@
 //  flow.js  ·  DOM-free scene geometry for the cube SDF + branched flow page
 // ----------------------------------------------------------------------------
 //  This module holds the CPU half of the scene. main.js imports it for the
-//  filament trace. It has no DOM, no WebGL and no global state.
+//  filament trace and the saver. tests.mjs imports it to check the saver
+//  ranges in node. It has no DOM, no WebGL and no global state.
 //
 //  THE SCENE
 //      body    the central shape (BODIES, index C.bShape). The default is the
@@ -13,6 +14,15 @@
 //              rings carve the body and the filaments start on them.
 //      flow    filaments seeded on the rings and traced through field3D.
 //
+//  THE RING-INTERSECTING REGIME   (ringCheck, flowCheck)
+//      ringCheck   each ring centre line goes at least 0.05 sR into the body
+//                  and 0.05 sR out of it, at every time of a shot.
+//      flowCheck   the traced filaments stay near the rings: most filament
+//                  nodes are within a band of the ring tube, and the mean
+//                  turn per node stays small (no zigzag).
+//      saverScene  draws a scene from the seed in the derived ranges and
+//                  keeps only a scene that passes both (with margins).
+//
 //  SECTION MAP   (grep -n "<anchor>" flow.js)
 //      math ................. "MATH"
 //      body shapes .......... "BODIES"          shape list + bodyDist + bodyRadii
@@ -20,6 +30,8 @@
 //      ring sdf ............. "TORUS SDF"       torDist, torGrad
 //      flow field ........... "function field3D"
 //      seeds + trace ........ "function genSeeds", "function traceAll"
+//      checks ............... "CHECKS"          ringCheck, flowCheck
+//      saver scenes ......... "SAVER SCENES"    SAVER_SHOTS, saverScene
 // ============================================================================
 
 // ═══════════════ MATH ═══════════════
@@ -213,3 +225,146 @@ export function traceAll(seeds,C,R,Rt,time,flags){
       pts[j*3]=x[0];pts[j*3+1]=x[1];pts[j*3+2]=x[2];}
     fils.push(pts);}
   return fils;}
+
+// ═══════════════ CHECKS ═══════════════
+// ringCheck: the rings cross the body. At each of nT times in [t0, t1], for
+// each ring, sample the ring centre line and take bodyDist at each point.
+// The ring crosses the body if it goes at least tau = RING_DEPTH x sR inside
+// (min bodyDist <= -tau) and at least tau outside (max bodyDist >= tau). A
+// ring that floats free of the body, or is buried in it, or only touches its
+// surface, fails. worst is the smallest of the two depths over all rings and
+// times. extra raises the need to tau + extra (the guard margin).
+export const RING_DEPTH=.05;
+export function ringCheck(C,t0,t1,nT=12,extra=0){let worst=1e9;const N=48;
+  const signs=ringSigns(Math.round(C.sRings));
+  for(let k=0;k<nT;k++){const t=t0+(t1-t0)*k/Math.max(1,nT-1);const{R,Rt}=computeGRot(t,C);
+    for(const s of signs){let mn=1e9,mx=-1e9;
+      for(let i=0;i<N;i++){const d=bodyDist(mV3(R,torusToWorld(i/N*TAU,s,Rt,C,t)),C);
+        if(d<mn)mn=d;if(d>mx)mx=d;}
+      worst=Math.min(worst,-mn,mx);}}
+  const tau=RING_DEPTH*C.sR;
+  return{ok:worst>=tau+extra,worst,tau};}
+// ringSamples: the sample count and the guard margin for a window of length
+// span. The spin is rX(a t) rZ(b t) rY(c t) with t = time x rS, so its
+// angular speed is at most w = rS (|a| + |b| + |c|). In the body frame a ring
+// point is Rt (s (off + Rt q)), so it moves at most w (r + tM), with r the
+// scene radius. bodyDist changes no faster than the point moves. With nT
+// samples the most it can change between two samples is delta. A ring that
+// passes tau + delta at every sample passes tau at every time between. nT
+// keeps delta near tau / 4 x k.
+export function ringSamples(C,span,k=1){
+  const w=C.rS*(Math.abs(C.moRA)+Math.abs(C.moRB)+Math.abs(C.moRC));
+  const v=w*(sceneRadius(C)+C.tM),tau=RING_DEPTH*C.sR;
+  const nT=Math.min(4000,Math.max(8,Math.ceil(v*span/(.25*tau*k))+1));
+  return{nT,delta:v*span/(nT-1)};}
+// flowCheck: the filaments follow the rings. Trace every 5th seed at time t.
+// near is the part of all filament nodes within a band of the ring tube
+// (|torDist| < max(2, tM/4)). turn is the mean angle in degrees between two
+// segments of a filament. The page default gives near 0.95, turn 6.3.
+export const FLOW_NEAR_MIN=.8,FLOW_TURN_MAX=8.5;
+// m tightens both limits by that share (the saver guard uses a margin).
+export function flowCheck(C,t,flags={fObj:true,sWave:true},m=0){
+  const{R,Rt}=computeGRot(t,C);const seeds=genSeeds(C,R,Rt,t).filter((_,i)=>i%5===0);
+  const fils=traceAll(seeds,C,R,Rt,t,flags),n=Math.round(C.sNd),band=Math.max(2,.25*C.tM);
+  let near=0,tot=0,ang=0,cnt=0;
+  for(const f of fils){
+    for(let j=0;j<n;j++){tot++;if(Math.abs(torDist([f[j*3],f[j*3+1],f[j*3+2]],R,C,t))<band)near++;}
+    for(let j=1;j<n-1;j++){
+      const ux=f[j*3]-f[j*3-3],uy=f[j*3+1]-f[j*3-2],uz=f[j*3+2]-f[j*3-1];
+      const vx=f[j*3+3]-f[j*3],vy=f[j*3+4]-f[j*3+1],vz=f[j*3+5]-f[j*3+2];
+      const c=(ux*vx+uy*vy+uz*vz)/(Math.hypot(ux,uy,uz)*Math.hypot(vx,vy,vz)+1e-12);
+      ang+=Math.acos(Math.max(-1,Math.min(1,c)));cnt++;}}
+  near/=tot||1;const turn=cnt?ang/cnt*180/PI:0;
+  return{ok:near>=FLOW_NEAR_MIN*(1+m)&&turn<=FLOW_TURN_MAX*(1-m),near,turn};}
+
+// ═══════════════ SAVER SCENES ═══════════════
+// BODY_RANGES: the ring layout ranges per body (BODIES order) where the rings
+// cross the body (ringCheck) in most shot windows. b is tM / rr. c is rr
+// over the mid surface radius (rMin + rMax) / 2. A larger b gives each ring a
+// wider spread of distances from the centre, so it crosses in more windows;
+// bMaxFor caps b. The ranges come from a sweep of 30 seeded shot windows per
+// (body, ring count, b, c) cell; the cells in these ranges pass in 50 % to
+// 100 % of the windows, and the saver guard draws again for the rest.
+export const BODY_RANGES=[
+  {b:[.45,.7],c:[.93,1.05]},   // cube
+  {b:[.42,.7],c:[.95,1.05]},   // sphere
+  {b:[.45,.7],c:[.8,.9]},      // octahedron
+  {b:[.45,.7],c:[.95,1.05]},   // cylinder
+  {b:[.45,.7],c:[.95,1.05]},   // pillow
+];
+// The ring counts the saver draws. One centred ring is a great circle at
+// the constant distance tM from the centre. As the body spins, that circle
+// lies fully in or fully out of the body for long stretches, so it passed
+// ringCheck in 0 % to 40 % of the swept windows. The page still offers it.
+export const SAVER_RINGS=[2,4,8];
+// The largest b that keeps each ring off the fold planes. With k folded axes
+// the ring centre is tO from each plane and tO^2 = (rr^2 - tM^2) / k. The
+// ring stays off the planes if tM < tO, that is b < 1 / sqrt(k + 1). Past
+// that, mirror rings merge and the trace zigzags across the seam. The 0.95
+// keeps a margin for the tube and the smooth fold.
+export function bMaxFor(n){const m=foldMask(n),k=m[0]+m[1]+m[2];return k?.95/Math.sqrt(k+1):1;}
+// [name, values, rk]. A [min, max] pair is a seeded value. A shot sets the
+// look and the filament regime, never the ring layout. rk scales the fit
+// radius (sceneRadius) for the camera; rk 0: no fit (Macro).
+// The regimes keep flowCheck true. Field gain fCu stays near 0.2: the gain
+// multiplies the field, the pull and the wave, so at 0.7 the mean turn is
+// 16 deg and at 2 it is 25 deg. The tube radius tm stays at its default:
+// the seeds start on the ring centre line, so a thick tube starts each
+// filament inside the tube and the pull zigzags it out.
+export const SAVER_SHOTS=[
+  ['Lantern',      {}, 1],
+  ['Silhouette',   {mMetal:0,mBase:0,gP:[.3,.5],rCb:1.2}, 1.06],
+  ['Fused',        {pK:[14,20],cD:[3,4]}, .9],
+  ['Constellation',{pK:.1,tm:[.3,.5]}, 1],
+  ['Burst',        {sNd:30,sSl:2,sN:40,gP:.6}, 1.08],
+  ['Fur',          {fCu:[.2,.25],sN:110,sNd:14,rCw:4,rHw:10,gP:.5,mMetal:.6}, 1],
+  ['Hollow',       {sRings:2,cD:4}, 1],
+  ['Macro',        {mBrush:.6}, 0],
+];
+// Seeded in each shot before the shot values, which win. These ranges keep
+// flowCheck true. At the top corner of the old ranges (fFr 0.9, fO2 1.2,
+// fO3 1) the mean turn was 10 to 11 deg against 6.3 for the default.
+export const SAVER_JITTER=[['fFr',.15,.4],['fFrZ',.15,.4],['fO2',0,.8],['fO3',0,.6]];
+// The spin, drawn again on each guard try with the layout: a slow spin keeps
+// a crossing layout crossing for the whole shot.
+export const SAVER_SPIN=[['rS',.3,.5],['moRA',0,.5],['moRB',0,.5],['moRC',0,.5]];
+export const SAVER_TRIES=32;
+// The radius that holds the body and the rings: the far body surface or the
+// far ring edge.
+export function sceneRadius(C){const m=foldMask(Math.round(C.sRings)),k=m[0]+m[1]+m[2];
+  return Math.max(bodyRadii(C).max,C.tO*Math.sqrt(k)+C.tM+C.tm);}
+// The seeded seed-to-scene map. rnd returns [0,1). D is the page defaults.
+// It draws the jitter, the shot values, the ring count, the body and its
+// size, then the ring layout and the start time until the scene passes the
+// guard: ringCheck over the shot window [simTime, simTime + dur * timeScale]
+// at ringSamples times with the margin delta (so the rings cross at every
+// time of the shot, not only at the samples), and flowCheck at the start and
+// the end of the window with a 4 % margin. A try draws the spin, the layout
+// and the start time again. tests.mjs checks each scene at 2x the samples
+// with no margin.
+// Returns {C, simTime, dur, r, tries, ok, name}.
+export function saverScene(rnd,i,calm,D){
+  const[name,vals,rk]=SAVER_SHOTS[i];
+  const C={...D};
+  for(const[k,a,b]of SAVER_JITTER)C[k]=a+(b-a)*rnd();
+  for(const[k,v]of Object.entries(vals))C[k]=Array.isArray(v)?v[0]+(v[1]-v[0])*rnd():v;
+  const n=vals.sRings??SAVER_RINGS[Math.floor(rnd()*SAVER_RINGS.length)];
+  C.sRings=n;C.bShape=Math.floor(rnd()*BODIES.length);
+  C.sR=18+4*rnd();
+  C.timeScale=1-.5*calm;
+  const dur=6+5*rnd()+1.5*calm,span=dur*C.timeScale;
+  const g=BODY_RANGES[C.bShape],rd=bodyRadii(C),mid=(rd.min+rd.max)/2,cr=g.c;
+  let simTime=0,tries=0,ok=false;
+  while(!ok&&tries<SAVER_TRIES){tries++;
+    for(const[k,a,b]of SAVER_SPIN)C[k]=a+(b-a)*rnd();
+    const bh=Math.min(g.b[1],bMaxFor(n)),c=cr[0]+(cr[1]-cr[0])*rnd(),b=g.b[0]+(bh-g.b[0])*rnd();
+    Object.assign(C,ringLayout(n,mid*c,b));
+    simTime=300*rnd();
+    const rs=ringSamples(C,span);
+    ok=ringCheck(C,simTime,simTime+span,rs.nT,rs.delta).ok&&
+      flowCheck(C,simTime,undefined,.04).ok&&flowCheck(C,simTime+span,undefined,.04).ok;}
+  return{C,simTime,dur,r:rk*sceneRadius(C),tries,ok,name};}
+
+// Seeded generator: the same step as the saver rnd in main.js, for tests.
+export function makeRnd(seed){let s=(seed>>>0)||1;
+  return()=>{s=Math.imul(s^s>>>15,0x2c1b3c6d)+0x6d2b79f5>>>0;s^=s>>>12;return(s>>>0)/4294967296;};}

@@ -38,8 +38,9 @@
 //      C_   checkbox defs (visibility + baked toggles)
 //      cur  live numeric values (P_ -> cur); chk  live booleans (C_ -> chk)
 //
-//  CPU GEOMETRY lives in flow.js (DOM-free): body shapes, ring fold, ring
-//  SDF, flow field, seeds and trace. main.js imports it as F.
+//  CPU GEOMETRY lives in flow.js (DOM-free, also used by tests.mjs): body
+//  shapes, ring fold, ring SDF, flow field, seeds, trace, the saver scenes
+//  and the ring-intersecting checks. main.js imports it as F.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ---------------------------------------------------------------------------
@@ -64,8 +65,8 @@ const SDF_VS = await (await fetch(new URL('shaders/sdf.vert.glsl', document.base
 const SDF_FS = await (await fetch(new URL('shaders/sdf.frag.glsl', document.baseURI))).text();
 const FIL_VS = await (await fetch(new URL('shaders/filament.vert.glsl', document.baseURI))).text();
 const FIL_FS = await (await fetch(new URL('shaders/filament.frag.glsl', document.baseURI))).text();
-// The CPU geometry (flow field, rings, body, trace) is the DOM-free module
-// flow.js.
+// The CPU geometry (flow field, rings, body, trace, saver scenes) is the
+// DOM-free module flow.js, shared with tests.mjs.
 const F=await import(new URL('flow.js',document.baseURI).href);
 const{PI,nrm}=F;
 
@@ -451,15 +452,17 @@ function render(now){requestAnimationFrame(render);
 // The saver plays SHOTS of 6 to 12.5 s (longer at a high calm) with hard
 // cuts. A seeded shuffle of SAVER_SHOTS sets the order, so each run is a new
 // sequence.
-// A shot sets the parts of the picture that the eye reads first: the body
-// shape (fold pK, torus offset tO, torus radii tM and tm, cube size sR), the
-// glow gP, the metal, and the filament regime (field gain fCu, surface pull
-// sCf, length sNd x sSl, count sN). Each shot also gets a palette, a new sim
-// time (a new spin state), a camera angle, an orbit and a slow dolly.
-// The values of the field shape (frequencies, waves, spin rates) are seeded
-// in each shot too, but alone they change the picture too little to see.
+// A shot sets the look (glow gP, metal, fold pK, carve cD) and a calm
+// filament regime. F.saverScene (flow.js) maps the seed to the scene: the
+// field and spin jitter, the body (F.BODIES), the ring count (1, 2, 4 or 8),
+// the body size sR and a ring layout (tO, tM) with a start time. It keeps a
+// layout only if every ring crosses the body over the whole shot
+// (F.ringCheck). tests.mjs checks that every seeded scene also passes
+// F.flowCheck (the filaments stay on the rings). Each shot also gets a
+// palette, a camera angle, an orbit and a slow dolly.
 // FRAMING. The body sits in the clear band of the label plate (plateBand,
-// lib/saver-clear.js). The focal length camF makes the body radius 0.5 of
+// lib/saver-clear.js). The focal length camF makes the scene radius r
+// (F.sceneRadius times the shot rk: the far body surface or ring edge) 0.5 of
 // the band at a distance near 200, and camTa pans the view to the band
 // centre. Macro has no fit: its camera is in the filaments.
 // The dolly changes the distance by 16 % over a shot with camF fixed to the
@@ -478,21 +481,6 @@ const SAVER_LOOKS=[
   ['Lagoon',  {cRH:.47,cTH:.62,cSat:1,  cGrad:.9, gH:.52}],
   ['Prism',   {cRH:0,  cTH:.66,cSat:.9, cGrad:1,  gH:.80}],
 ];
-// [name, values, r]. A [min, max] pair is a seeded value. r is the body
-// radius in world units: the 95th percentile radius of the lit pixels in
-// renders at 3 spin states, for the band fit. r 0: no fit (Macro).
-const SAVER_SHOTS=[
-  ['Lantern',      {}, 31],
-  ['Silhouette',   {mMetal:0,mBase:0,gP:[.3,.5],fCu:1.5,sCf:1,rCb:1.2}, 33],
-  ['Fused',        {pK:20,tm:[2,3],tO:[7,9],cD:4}, 26],
-  ['Constellation',{pK:.1,tO:[17,20],sR:[7,10],tM:[6,8],tm:[.3,.5]}, 40],
-  ['Burst',        {sCf:0,sPr:0,fCu:[.2,.5],sNd:40,sSl:5,sN:40,gP:.6}, 33],
-  ['Fur',          {fCu:[2.5,4],sCf:0,sPr:0,fFr:[.5,.8],fFrZ:[.5,.8],sN:110,sRings:16,sNd:14,rCw:4,rHw:10,gP:.5,mMetal:.6}, 31],
-  ['Hollow',       {tO:0,pK:5,tM:[19,22],tm:[1.5,2.5],cD:4}, 30],
-  ['Macro',        {mBrush:.6}, 0],
-];
-// Seeded in each shot before the shot values, which win.
-const SAVER_JITTER=[['fFr',.2,.9],['fFrZ',.2,.9],['fO2',0,1.2],['fO3',0,1],['rS',.2,.8],['moRA',0,1],['moRB',0,1],['moRC',0,1]];
 let saverTick=null;
 window.snSaver={
   enter(opts){
@@ -500,7 +488,6 @@ window.snSaver={
     ['panel','info'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
     let seed=(opts.seed>>>0)||1;
     const rnd=()=>{seed=Math.imul(seed^seed>>>15,0x2c1b3c6d)+0x6d2b79f5>>>0;seed^=seed>>>12;return(seed>>>0)/4294967296;};
-    const val=v=>Array.isArray(v)?v[0]+(v[1]-v[0])*rnd():v;
     let band=null,bandAt=-1e9,plateBand=null;
     import('../../lib/saver-clear.js').then(m=>{plateBand=m.plateBand;}).catch(()=>{});
     // The clear band in CSS px: its height and width, and the offset of its
@@ -512,11 +499,11 @@ window.snSaver={
     let order=[],shot=null,li=0;
     const nextShot=()=>{
       if(!order.length){
-        order=SAVER_SHOTS.map((_,i)=>i);
+        order=F.SAVER_SHOTS.map((_,i)=>i);
         for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
         if(shot&&order[0]===shot.i)order.push(order.shift());
       }
-      const i=order.shift(),[name,vals,r]=SAVER_SHOTS[i];
+      const i=order.shift();
       for(const[k,p]of Object.entries(P_))cur[k]=p.v;
       // A palette, turned by up to 0.08 of the hue circle. Half the shots
       // take a tip hue across the circle from the root hue.
@@ -525,12 +512,12 @@ window.snSaver={
       for(const k of['cRH','cTH','gH'])look[k]=((look[k]+turn)%1+1)%1;
       if(rnd()<.5){look.cTH=(look.cRH+.35+.15*rnd())%1;look.cGrad=1;}
       Object.assign(cur,look);
-      for(const[k,a,b]of SAVER_JITTER)cur[k]=a+(b-a)*rnd();
-      for(const[k,v]of Object.entries(vals))cur[k]=val(v);
-      cur.timeScale=1-.5*calm;
-      simTime=300*rnd();
+      const sc=F.saverScene(rnd,i,calm,cur);
+      Object.assign(cur,sc.C);
+      simTime=sc.simTime;
       camT=6.2832*rnd();camP=-.3+.9*rnd();
-      shot={i,name,r,t:0,dur:6+5*rnd()+1.5*calm,
+      const r=sc.r;
+      shot={i,name:sc.name,r,t:0,dur:sc.dur,
         orbit:(.08-.04*calm)*(.6+.4*rnd())*(rnd()<.5?-1:1),
         rise:(rnd()-.5)*.03,
         // dolly: the distance goes from 1 to k over the shot.
@@ -552,7 +539,7 @@ window.snSaver={
       const f=(v,d=2)=>Number(v).toFixed(d);
       label({
         title:'Branched flow · '+shot.name,
-        sub:SAVER_LOOKS[li][0]+' · filaments traced through a sinusoidal field over a carved SDF body',
+        sub:SAVER_LOOKS[li][0]+' · '+F.BODIES[Math.round(cur.bShape)].l+' · '+Math.round(cur.sRings)+(cur.sRings>1?' rings':' ring')+' · filaments traced through a sinusoidal field over a carved SDF body',
         tex:[String.raw`\vec F(\vec p)=-\nabla\bigl[\cos(\vec a\cdot\vec q)+g_2\cos(\vec b\cdot\vec q)+g_3\cos(\vec c\cdot\vec q)\bigr]`,
           String.raw`\vec v\leftarrow\vec v+\vec F-(\vec v\cdot\hat n)\,\hat n,\qquad \vec q=(f\,x,\;f\,y,\;f_z\,z)`],
         eq:['F(p) = −∇[cos(a·q) + g₂ cos(b·q) + g₃ cos(c·q)]','v ← v + F − (v·n̂) n̂,  q = (f x, f y, f_z z)'],
