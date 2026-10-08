@@ -214,8 +214,13 @@ body.sn-saver-pane #sn-saver-hud { top: calc(var(--sy) + 14px); }
 #sn-saver-cap.on { opacity: .85; }
 #sn-saver-cap b { display: block; font: 400 1.6rem/1.2 'STIX Two Text', Georgia, serif; }
 #sn-saver-cap i { display: block; font: 400 .8rem/1.6 'Inter', system-ui, sans-serif; font-style: normal; color: var(--c, #7f91ad); }
-#sn-saver-label { --fw: 100vw; --fh: 100vh; --fs: min(var(--fw), calc(var(--fh) * .8)); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(22px, calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(18px, calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
-body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
+#sn-saver-label { --fw: 100vw; --fh: 100vh; --fs: min(calc(var(--fw) * .75), calc(var(--fh) * .6)); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(22px, calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(18px, calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
+/* --fs is the type scale: 60% of the frame height, or 75% of its width in
+   a frame narrower than 4:5. One rule for every frame shape, so the type
+   does not jump at an aspect breakpoint. Before, a frame under 5:4 (a
+   square window) took 80% of its height and the plate covered the subject.
+   The 9:16 column keeps its own scale: the full column width. */
+body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); --fs: min(var(--fw), calc(var(--fh) * .8)); }
 /* A 9:16 file plays full screen on a phone. The status bar and the camera
    cut-out (Dynamic Island) cover about the top 6% of the frame, and the
    recording has no safe-area inset, so the column top pad is 8% of its height. */
@@ -276,14 +281,13 @@ body.sn-saver-on.sn-saver-vert #content { flex: 0 0 auto; width: min(100vw, 56.2
 body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125vh) + 24px); }
 #sn-saver-label .slot-bot { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 #sn-saver-label .col { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
-/* Landscape frame. .slot-bot takes the full width: as a shrink-to-fit item
+/* Landscape and square frames (1:1 or wider). .slot-bot takes the full width: as a shrink-to-fit item
    its 48% columns resolved against its own content and came out a few
    hundred px wide, so the TeX scaled down and the notes wrapped. The
    equations then set out in a row, larger, and wrap when they must. */
-@media (min-aspect-ratio: 5/4) {
-  /* A wide frame sizes the plate from 60% of its height, not 80%: at 80% the
-     title, the site mark and the equations covered too much of the subject. */
-  body:not(.sn-saver-vert) #sn-saver-label { --fs: min(var(--fw), calc(var(--fh) * .6)); }
+@media (min-aspect-ratio: 1/1) {
+  /* A square frame also sets the code beside the bottom text, so the
+     plate does not stack equations, notes and code in one tall column. */
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot { width: 100%; flex-direction: row; align-items: flex-end; justify-content: center; gap: 3.5em; }
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot .col { max-width: 92%; }
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot:has(.code) .col { max-width: 52%; }
@@ -709,12 +713,12 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 //                         screen; pts are key points (nuclei, a gear
 //                         centre): the leader goes to the nearest one
 // The plate is a specimen poster across the frame, all text centred. Type
-// scales with --fs: the frame width, capped at 80vh for a landscape frame.
+// scales with --fs: 60% of the frame height, or 75% of its width when narrower.
 //   top     catalogue line (number, constellation), title, a rule that draws
 //           from the centre, sub in italics, then the site mark
 //           [ www.davesgames.io ] boxed inside a second full rule
 //   bottom  equations, then the parameters, then notes and code
-// Code always goes last. In a landscape frame (wider than 5:4, not
+// Code always goes last. In a landscape or square frame (1:1 or wider, not
 // the 9:16 column) the bottom text and the code sit side by side. A page
 // with no label gets a poster with its nav name only (see "function
 // fallbackPoster"). The padding keeps clear of the safe-area insets (a
