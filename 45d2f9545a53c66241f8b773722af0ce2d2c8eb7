@@ -1,0 +1,1 @@
+Correction to the body of 45d2f95: the validation line for the pole ring reads '1 piece(s) side by side, area 2.1932 vs 2.1932' in the real run, not '2 piece(s)'. The ring restarts on the cut, so it gives one piece. The horizon cut test also gives 1 piece, not 2.
