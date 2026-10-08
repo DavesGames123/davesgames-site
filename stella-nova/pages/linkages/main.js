@@ -279,7 +279,7 @@ function drawPlot() {
     line(C.o, C.oMax, COL.o, C.oBase);
     // P off the line is zero: draw it at the true scale, not at its peak
     line(C.w, C.wScale ? 1 / C.wScale * 1 : C.wMax, COL.w, !!C.wBase);
-    o.fillStyle = 'rgba(141,144,166,0.9)'; o.font = `${10 * dpr}px ui-monospace,Menlo,monospace`;
+    o.fillStyle = 'rgba(141,144,166,0.9)'; o.font = `${(COARSE ? 12 : 10) * dpr}px ui-monospace,Menlo,monospace`;
     ['0°', '90°', '180°', '270°'].forEach((t, k) => o.fillText(t, X(k * 90) + 3 * dpr, h - pad - 3 * dpr));
     $('legend').innerHTML = C.lab.map(([k, t]) => `<span class="${k}"><i></i>${t}</span>`).join('');
     plotCache = { off, X, C };

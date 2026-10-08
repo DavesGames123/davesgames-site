@@ -136,12 +136,23 @@ export function createCards(o) {
     rayAt = [e.clientX, e.clientY];
   });
   canvas.addEventListener('pointerleave', () => { rayAt = null; C.hover = null; hideHover(); canvas.style.cursor = ''; });
-  canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; if (o.onTap) o.onTap(); });
+  // A tap pins a part. A finger moves more than a mouse, so a touch tap may
+  // move 12 px. A second finger (pinch or two-finger pan) cancels the tap,
+  // so lifting the last finger of a pinch does not pin a part.
+  const fingers = new Set();
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') fingers.clear();
+    fingers.add(e.pointerId);
+    down = fingers.size > 1 ? null : { x: e.clientX, y: e.clientY, t: performance.now(), slop: e.pointerType === 'mouse' ? 6 : 12 };
+    if (o.onTap) o.onTap();
+  });
+  canvas.addEventListener('pointercancel', e => { fingers.delete(e.pointerId); down = null; });
   canvas.addEventListener('pointerup', e => {
+    fingers.delete(e.pointerId);
     if (!down) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
-    down = null;
-    if (moved > 6 || dt > 600) return;
+    const slop = down.slop; down = null;
+    if (moved > slop || dt > 600) return;
     setPin(pick(e.clientX, e.clientY));
   });
 
