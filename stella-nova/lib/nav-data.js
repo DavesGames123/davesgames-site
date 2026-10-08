@@ -117,6 +117,9 @@ w.SN_NAV = [
       ["protein-viewer", "Protein Structure", "3D"],
       ["protein-folding", "Protein Folding", "SIM"]
     ] },
+    { h: "Viruses & Prions", p: [
+      ["virus-atlas", "Virus Atlas", "3D"]
+    ] },
     { h: "Anatomy", p: [
       ["human-skull", "Human Skull", "3D"],
       ["human-skeleton", "Human Skeleton", "3D"]
