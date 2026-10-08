@@ -8,6 +8,9 @@
 //  4. conformal maps have a = b to 1e-6, on the sphere and the ellipsoid
 //  5. ellipsoid formulas (Mercator, UTM, Lambert conic) and Vincenty
 //  6. clipping: antimeridian cut, pole closure, small-circle edge (geo.js)
+//  7. the card math: every h, k and s that cards.js states as TeX, written
+//     here again as JS, against the numerical Jacobian (proj.js
+//     distortion), to 1e-5 relative, on a 30 x 15 degree grid
 //  Each check prints one line; the run exits 1 on any failure.
 // ============================================================================
 import fs from 'node:fs';
@@ -218,6 +221,63 @@ if (G) {
     const b = ringDeg([[-50, 10], [-30, 10], [-30, 30], [-50, 30]]);
     const out = G.clipPolygon([b], [frame('goode', {})]);
     ok(out.length === 2, `Goode: a box over the 40 W interruption becomes ${out.length} pieces`);
+  }
+}
+
+// ── 7. the card math ───────────────────────────────────────────────────────
+// Cylinders and world maps: normal aspect on lon 0, so l is the longitude.
+// Azimuthals: polar aspect on the north pole, so c = pi/2 - phi, h is the
+// radial scale and k the scale round the centre. Conics: the HOME view, so
+// l is the longitude from its centre and n, rho come from its parallels.
+console.log('# the card math (cards.js scale) vs the numerical Jacobian');
+{
+  const { cos, sin, tan, sqrt, log, PI, pow } = Math, sec = x => 1 / cos(x), c45 = cos(PI / 4);
+  const mollTheta = p => { let t = p; for (let i = 0; i < 60; i++) { const f = 2 * t + sin(2 * t) - PI * sin(p), d = 2 + 2 * cos(2 * t); if (Math.abs(d) < 1e-14) break; t -= f / d; } return t; };
+  const conicOf = key => {
+    const H = P.HOME[key], p1 = H.lat1 * D, p2 = H.lat2 * D, tq = p => tan(PI / 4 + p / 2);
+    if (key === 'albers') { const n = (sin(p1) + sin(p2)) / 2, C = cos(p1) ** 2 + 2 * n * sin(p1); return { n, rho: p => sqrt(C - 2 * n * sin(p)) / n }; }
+    if (key === 'lambert-conformal') { const n = log(cos(p1) / cos(p2)) / log(tq(p2) / tq(p1)), F = cos(p1) * pow(tq(p1), n) / n; return { n, rho: p => F / pow(tq(p), n) }; }
+    const n = (cos(p1) - cos(p2)) / (p2 - p1), G = cos(p1) / n + p1; return { n, rho: p => G - p };
+  };
+  const cyl = (f) => ({ st: { aspect: 'normal', lon: 0, lat: 0 }, f });
+  const az = (f) => ({ st: { aspect: 'normal', lon: 0, lat: 90 }, az: true, f: (l, p) => f(PI / 2 - p) });
+  const con = (key, f) => ({ st: Object.assign({}, P.HOME[key], { aspect: 'normal' }), conic: true, f: (l, p) => { const c = conicOf(key); return f(c.n * c.rho(p) / cos(p)); } });
+  const EXP = {
+    mercator: cyl((l, p) => ({ h: sec(p), k: sec(p), s: sec(p) ** 2 })),
+    'web-mercator': cyl((l, p) => ({ h: sec(p), k: sec(p), s: sec(p) ** 2 })),
+    'transverse-mercator': cyl((l, p) => { const B = cos(p) * sin(l), k = 1 / sqrt(1 - B * B); return { h: k, k }; }),
+    equirectangular: cyl((l, p) => ({ h: 1, k: sec(p), s: sec(p) })),
+    'lambert-cylindrical': cyl((l, p) => ({ h: cos(p), k: sec(p), s: 1 })),
+    'gall-peters': cyl((l, p) => ({ h: cos(p) / c45, k: c45 / cos(p), s: 1 })),
+    mollweide: cyl((l, p) => ({ k: 2 * Math.SQRT2 * cos(mollTheta(p)) / (PI * cos(p)), s: 1 })),
+    hammer: cyl(() => ({ s: 1 })),
+    'equal-earth': cyl(() => ({ s: 1 })),
+    'eckert-iv': cyl(() => ({ s: 1 })),
+    sinusoidal: cyl((l, p) => ({ h: sqrt(1 + l * l * sin(p) ** 2), k: 1, s: 1 })),
+    goode: cyl(() => ({ s: 1 })),
+    orthographic: az(c => ({ h: cos(c), k: 1 })),
+    stereographic: az(c => ({ h: sec(c / 2) ** 2, k: sec(c / 2) ** 2 })),
+    gnomonic: az(c => ({ h: sec(c) ** 2, k: sec(c) })),
+    'azimuthal-equidistant': az(c => ({ h: 1, k: c / sin(c) })),
+    'lambert-azimuthal': az(c => ({ h: cos(c / 2), k: sec(c / 2), s: 1 })),
+    albers: con('albers', k => ({ h: 1 / k, k, s: 1 })),
+    'lambert-conformal': con('lambert-conformal', k => ({ h: k, k })),
+    'equidistant-conic': con('equidistant-conic', k => ({ h: 1, k })),
+    bonne: cyl(() => ({ k: 1, s: 1 })),
+    polyconic: cyl(() => ({ k: 1 })),
+  };
+  EXP.bonne.st = Object.assign({}, P.HOME.bonne, { aspect: 'normal' });
+  for (const [key, X] of Object.entries(EXP)) {
+    const m = P.makeMap(key, X.st), lon0 = X.st.lon || 0;
+    let worst = 0, n = 0;
+    for (let lo = -150; lo <= 150; lo += 30) for (let la = X.az ? 30 : -75; la <= 75; la += 15) {
+      if (key === 'gnomonic' && la < 35) continue;
+      const L = (lon0 + lo) * D, p = la * D, t = P.distortion(m, L, p); if (!t) continue;
+      const want = X.f(lo * D, p);
+      for (const q of ['h', 'k', 's']) if (q in want) worst = Math.max(worst, Math.abs(t[q] - want[q]) / want[q]);
+      n++;
+    }
+    ok(n > 20 && worst < 1e-5, `${key}: card scale factors at ${n} points, max relative error ${e(worst)}`);
   }
 }
 

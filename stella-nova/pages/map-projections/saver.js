@@ -20,7 +20,7 @@
 //  lines are sharp at any device pixel ratio and the recording holds the
 //  overlays.
 //  The plate names the projection, its property and family, and gives the
-//  formula as code: { lang: 'js', name, text }.
+//  forward formula and its scale factors as TeX (cards.js tex and scale).
 //
 //  Probes for CDP: snSaver.debug() (shot, key, phase, frame times),
 //  snSaver.cut(kind) to force a shot.
@@ -56,7 +56,8 @@ export function installSaver(api) {
       title: def.name,
       sub: `${P.name} · ${FAMILY[def.family].name.toLowerCase()} · ${c.who}`,
       lines: [extra.line || `${P.name}: ${P.note}.`],
-      code: { lang: 'js', name: `${key}.js`, text: c.code },
+      // the forward formula and its scale factors as TeX (no code)
+      tex: [c.tex, c.scale],
     }, extra.plate || {}));
   }
   // The clear band between the plate's top and bottom text. While the

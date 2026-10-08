@@ -167,6 +167,7 @@
     <section class="tab prose" data-tab="guide" hidden>
       <nav class="toc" aria-label="Stories">
         <a href="#s-lie">Why every flat map lies</a>
+        <a href="#s-math">The math under every card</a>
         <a href="#s-mercator">Mercator and the Greenland problem</a>
         <a href="#s-area">Equal-area vs conformal</a>
         <a href="#s-compromise">The compromise maps</a>
@@ -187,6 +188,24 @@
         <div class="gos">
           <button type="button" class="go" data-go='{"key":"equirectangular","tissot":30,"heat":"off"}'>Tissot circles on the equirectangular map</button>
           <button type="button" class="go" data-go='{"key":"orthographic","tissot":15,"heat":"off"}'>The same circles on a globe view</button>
+        </div>
+      </article>
+
+      <article id="s-math">
+        <h2>The math under every card</h2>
+        <p>Every card gives two lines of math: the forward formula, from longitude <span class="sci-sym" data-tex="\lambda" data-inline></span> and latitude <span class="sci-sym" data-tex="\varphi" data-inline></span> to the map point <span class="sci-sym" data-tex="(x, y)" data-inline></span>, and the scale factors that say how much it stretches. Both come from the partial derivatives of the forward formula. On a sphere of radius 1, a step <span class="sci-sym" data-tex="d\varphi" data-inline></span> along a meridian has length <span class="sci-sym" data-tex="d\varphi" data-inline></span>, and a step <span class="sci-sym" data-tex="d\lambda" data-inline></span> along a parallel has length <span class="sci-sym" data-tex="\cos\varphi\,d\lambda" data-inline></span>. The scale along the meridian <span class="sci-sym m1" data-tex="h" data-inline></span> and along the parallel <span class="sci-sym m2" data-tex="k" data-inline></span> are the map lengths of those steps:</p>
+        <div class="sci-eq" data-tex="h = \sqrt{\left(\frac{\partial x}{\partial\varphi}\right)^{2} + \left(\frac{\partial y}{\partial\varphi}\right)^{2}}, \qquad k = \frac{1}{\cos\varphi}\sqrt{\left(\frac{\partial x}{\partial\lambda}\right)^{2} + \left(\frac{\partial y}{\partial\lambda}\right)^{2}}."></div>
+        <p>The meridian and the parallel cross on the map at an angle <span class="sci-sym" data-tex="\theta'" data-inline></span>, which need not be 90°. The area scale is the Jacobian determinant over <span class="sci-sym" data-tex="\cos\varphi" data-inline></span>, and Tissot's half-axes follow from <span class="sci-sym m1" data-tex="h" data-inline></span>, <span class="sci-sym m2" data-tex="k" data-inline></span> and <span class="sci-sym" data-tex="\theta'" data-inline></span>:</p>
+        <div class="sci-eq" data-tex="s = \frac{1}{\cos\varphi}\left|\frac{\partial(x, y)}{\partial(\lambda, \varphi)}\right| = h\,k\sin\theta', \qquad a \pm b = \sqrt{h^{2} + k^{2} \pm 2hk\sin\theta'}."></div>
+        <p>The two families are two conditions on these derivatives. An equal-area map needs <span class="sci-sym" data-tex="s = 1" data-inline></span>. A conformal map needs <span class="sci-sym" data-tex="h = k" data-inline></span> and <span class="sci-sym" data-tex="\theta' = 90^\circ" data-inline></span>; in the isometric latitude <span class="sci-sym" data-tex="q" data-inline></span> that is the Cauchy–Riemann pair, so <span class="sci-sym" data-tex="x + iy" data-inline></span> is an analytic function of <span class="sci-sym" data-tex="\lambda + iq" data-inline></span>:</p>
+        <div class="sci-eq" data-tex="q = \int_0^{\varphi}\frac{d\varphi'}{\cos\varphi'}, \qquad \frac{\partial x}{\partial\lambda} = \frac{\partial y}{\partial q}, \qquad \frac{\partial x}{\partial q} = -\frac{\partial y}{\partial\lambda}."></div>
+        <p>For a cylinder, <span class="sci-sym" data-tex="x = \lambda" data-inline></span> and <span class="sci-sym" data-tex="y" data-inline></span> depends on <span class="sci-sym" data-tex="\varphi" data-inline></span> alone, so <span class="sci-sym m2" data-tex="k = \sec\varphi" data-inline></span>, <span class="sci-sym m1" data-tex="h = y'(\varphi)" data-inline></span> and <span class="sci-sym" data-tex="\theta' = 90^\circ" data-inline></span>. Each condition is then one line of calculus, and each answer is a map on this page:</p>
+        <div class="sci-eq" data-tex="h = k:\ \ y' = \sec\varphi \ \Rightarrow\ y = \ln\tan\!\left(\frac{\pi}{4} + \frac{\varphi}{2}\right) \ \ (\text{Mercator}), \qquad hk = 1:\ \ y' = \cos\varphi \ \Rightarrow\ y = \sin\varphi \ \ (\text{Lambert})."></div>
+        <p>The same two lines with <span class="sci-sym" data-tex="x = \lambda\cos\varphi_s" data-inline></span> give Gall–Peters (<span class="sci-sym" data-tex="\varphi_s = 45^\circ" data-inline></span>). The tests of this page compute every <span class="sci-sym m1" data-tex="h" data-inline></span>, <span class="sci-sym m2" data-tex="k" data-inline></span> and <span class="sci-sym" data-tex="s" data-inline></span> on the cards from these derivatives, by finite differences, and compare.</p>
+        <div class="gos">
+          <button type="button" class="go" data-go='{"key":"mercator","heat":"area","tissot":"off","tool":"pan"}'>Mercator: h = k, area grows</button>
+          <button type="button" class="go" data-go='{"key":"lambert-cylindrical","tissot":30,"heat":"off","tool":"pan"}'>Lambert cylindrical: hk = 1</button>
+          <button type="button" class="go" data-go='{"key":"sinusoidal","heat":"angle","tissot":"off","tool":"pan"}'>Sinusoidal: θ′ ≠ 90°</button>
         </div>
       </article>
 
