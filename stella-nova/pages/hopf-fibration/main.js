@@ -509,7 +509,7 @@ function resetView() {
 // What saver.js drives. It may change G, call applyPreset, set a band
 // function for the framing, and add frame hooks.
 const app = {
-  G, S, H, applyPreset, rebuild, setMode, setPlaying, setDistance, fitDistance, occ,
+  G, S, H, applyPreset, rebuild, syncPresetUI, setMode, setPlaying, setDistance, fitDistance, occ,
   fibres: () => fibres, linking: () => lastLk,
   // the rotation of the state in G now (not the last frame's)
   rotation: () => H.matMul(H.planeMat(2, 3, G.pole), H.rotationFor(G.mode, G.a, { tilt: G.tilt })),

@@ -27,6 +27,9 @@
 //  grow or shrink keeps them inside the band. cut(kind) forces a shot and
 //  debug() reports the shot, its extent and the band, for CDP probes.
 //
+//  EXIT  enter() keeps a copy of G and the camera; exit() puts them back,
+//  so the user gets their own fibres, sliders and view again.
+//
 //  PLATE  Title and sub per shot, the Hopf map and the fibre as TeX, the
 //  live values (fibres, rotation, linking number), and the shader extract
 //  FIBRE_GLSL from scene.js.
@@ -255,7 +258,9 @@ export function installSaver(app) {
       const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
       document.documentElement.classList.add('sn-saver');
       V = { calm, rng: H.makeRng((o.seed >>> 0) || ((Date.now() & 0xffffff) + 1)), order: [], lastKind: null, shot: null, plateT: 0,
-        label: o.labels !== false && typeof o.label === 'function' ? o.label : null };
+        label: o.labels !== false && typeof o.label === 'function' ? o.label : null,
+        // the state of the page before the tour, for exit()
+        keep: { G: structuredClone(G), cam: S.camera.position.clone(), tgt: S.controls.target.clone() } };
       import('../../lib/saver-clear.js').then(m => {
         if (!V) return;
         let band = null, at = -1e9;
@@ -280,13 +285,19 @@ export function installSaver(app) {
       try { V.label && V.label(null); } catch (e) { /* the shell is gone */ }
       app.removeHook(tick);
       app.setBand(null);
-      V = null;
       document.documentElement.classList.remove('sn-saver');
       S.renderer.toneMappingExposure = 1.05;
       S.controls.maxDistance = 40;
-      G.sweep = false; G.sweepRate = 0.35; G.focus = false; G.orbit = true; G.tilt = 0; G.a = 0; G.pole = 0; G.stripes = true; G.discs = true; G.fogK = 1;
-      app.setMode('along'); app.setPlaying(true);
-      app.applyPreset('nested');
+      // put back what the user had: the fibres, density, speed, mode and the
+      // camera (the shots change all of them, and the sliders still show
+      // the old values)
+      const k = V.keep;
+      V = null;
+      G.focus = false; G.sweepRate = 0.35; G.fogK = 1;
+      Object.assign(G, k.G);
+      app.setMode(G.mode); app.setPlaying(G.playing);
+      app.rebuild(); app.syncPresetUI();
+      S.controls.target.copy(k.tgt); S.camera.position.copy(k.cam); S.controls.update();
     },
     // For checks over CDP: the shot on screen.
     debug() { return V && V.shot ? { kind: V.shot.kind, t: +V.shot.t.toFixed(2), dur: +V.shot.dur.toFixed(2), fibres: app.fibres().length, mode: G.mode, ext: +V.ext.toFixed(2), dist: +S.camera.position.distanceTo(S.controls.target).toFixed(2), occ: Object.fromEntries(Object.entries(app.occ).map(([k, v]) => [k, Math.round(v)])), queue: V.order.slice() } : null; },
