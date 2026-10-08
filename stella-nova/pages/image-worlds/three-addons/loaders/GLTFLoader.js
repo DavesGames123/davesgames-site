@@ -4,7 +4,6 @@ import {
 	Box3,
 	BufferAttribute,
 	BufferGeometry,
-	ClampToEdgeWrapping,
 	Color,
 	ColorManagement,
 	DirectionalLight,
@@ -17,7 +16,6 @@ import {
 	InterleavedBuffer,
 	InterleavedBufferAttribute,
 	Interpolant,
-	InterpolateDiscrete,
 	InterpolateLinear,
 	Line,
 	LineBasicMaterial,
@@ -25,7 +23,6 @@ import {
 	LineSegments,
 	LinearFilter,
 	LinearMipmapLinearFilter,
-	LinearMipmapNearestFilter,
 	LinearSRGBColorSpace,
 	Loader,
 	LoaderUtils,
@@ -36,10 +33,7 @@ import {
 	MeshBasicMaterial,
 	MeshPhysicalMaterial,
 	MeshStandardMaterial,
-	MirroredRepeatWrapping,
 	NearestFilter,
-	NearestMipmapLinearFilter,
-	NearestMipmapNearestFilter,
 	NumberKeyframeTrack,
 	Object3D,
 	OrthographicCamera,
@@ -67,6 +61,18 @@ import {
 } from 'three';
 import { toTrianglesDrawMode } from '../utils/BufferGeometryUtils.js';
 import { clone } from '../utils/SkeletonUtils.js';
+import {
+	EXTENSIONS,
+	WEBGL_CONSTANTS,
+	WEBGL_COMPONENT_TYPES,
+	WEBGL_FILTERS,
+	WEBGL_WRAPPINGS,
+	WEBGL_TYPE_SIZES,
+	ATTRIBUTES,
+	PATH_PROPERTIES,
+	INTERPOLATION,
+	ALPHA_MODES
+} from './gltf/constants.js';
 
 /**
  * A loader for the glTF 2.0 format.
@@ -624,32 +630,6 @@ function getMaterialExtension( parser, materialIndex, extensionName ) {
 	return null;
 
 }
-
-const EXTENSIONS = {
-	KHR_BINARY_GLTF: 'KHR_binary_glTF',
-	KHR_DRACO_MESH_COMPRESSION: 'KHR_draco_mesh_compression',
-	KHR_LIGHTS_PUNCTUAL: 'KHR_lights_punctual',
-	KHR_MATERIALS_CLEARCOAT: 'KHR_materials_clearcoat',
-	KHR_MATERIALS_DISPERSION: 'KHR_materials_dispersion',
-	KHR_MATERIALS_IOR: 'KHR_materials_ior',
-	KHR_MATERIALS_SHEEN: 'KHR_materials_sheen',
-	KHR_MATERIALS_SPECULAR: 'KHR_materials_specular',
-	KHR_MATERIALS_TRANSMISSION: 'KHR_materials_transmission',
-	KHR_MATERIALS_IRIDESCENCE: 'KHR_materials_iridescence',
-	KHR_MATERIALS_ANISOTROPY: 'KHR_materials_anisotropy',
-	KHR_MATERIALS_UNLIT: 'KHR_materials_unlit',
-	KHR_MATERIALS_VOLUME: 'KHR_materials_volume',
-	KHR_TEXTURE_BASISU: 'KHR_texture_basisu',
-	KHR_TEXTURE_TRANSFORM: 'KHR_texture_transform',
-	KHR_MESH_QUANTIZATION: 'KHR_mesh_quantization',
-	KHR_MATERIALS_EMISSIVE_STRENGTH: 'KHR_materials_emissive_strength',
-	EXT_MATERIALS_BUMP: 'EXT_materials_bump',
-	EXT_TEXTURE_WEBP: 'EXT_texture_webp',
-	EXT_TEXTURE_AVIF: 'EXT_texture_avif',
-	EXT_MESHOPT_COMPRESSION: 'EXT_meshopt_compression',
-	KHR_MESHOPT_COMPRESSION: 'KHR_meshopt_compression',
-	EXT_MESH_GPU_INSTANCING: 'EXT_mesh_gpu_instancing'
-};
 
 /**
  * Punctual Lights Extension
@@ -1335,7 +1315,6 @@ class GLTFMaterialsSpecularExtension {
 	}
 
 }
-
 
 /**
  * Materials bump Extension
@@ -2156,102 +2135,6 @@ class GLTFCubicSplineQuaternionInterpolant extends GLTFCubicSplineInterpolant {
 	}
 
 }
-
-
-/*********************************/
-/********** INTERNALS ************/
-/*********************************/
-
-/* CONSTANTS */
-
-const WEBGL_CONSTANTS = {
-	FLOAT: 5126,
-	//FLOAT_MAT2: 35674,
-	FLOAT_MAT3: 35675,
-	FLOAT_MAT4: 35676,
-	FLOAT_VEC2: 35664,
-	FLOAT_VEC3: 35665,
-	FLOAT_VEC4: 35666,
-	LINEAR: 9729,
-	REPEAT: 10497,
-	SAMPLER_2D: 35678,
-	POINTS: 0,
-	LINES: 1,
-	LINE_LOOP: 2,
-	LINE_STRIP: 3,
-	TRIANGLES: 4,
-	TRIANGLE_STRIP: 5,
-	TRIANGLE_FAN: 6,
-	UNSIGNED_BYTE: 5121,
-	UNSIGNED_SHORT: 5123
-};
-
-const WEBGL_COMPONENT_TYPES = {
-	5120: Int8Array,
-	5121: Uint8Array,
-	5122: Int16Array,
-	5123: Uint16Array,
-	5125: Uint32Array,
-	5126: Float32Array
-};
-
-const WEBGL_FILTERS = {
-	9728: NearestFilter,
-	9729: LinearFilter,
-	9984: NearestMipmapNearestFilter,
-	9985: LinearMipmapNearestFilter,
-	9986: NearestMipmapLinearFilter,
-	9987: LinearMipmapLinearFilter
-};
-
-const WEBGL_WRAPPINGS = {
-	33071: ClampToEdgeWrapping,
-	33648: MirroredRepeatWrapping,
-	10497: RepeatWrapping
-};
-
-const WEBGL_TYPE_SIZES = {
-	'SCALAR': 1,
-	'VEC2': 2,
-	'VEC3': 3,
-	'VEC4': 4,
-	'MAT2': 4,
-	'MAT3': 9,
-	'MAT4': 16
-};
-
-const ATTRIBUTES = {
-	POSITION: 'position',
-	NORMAL: 'normal',
-	TANGENT: 'tangent',
-	TEXCOORD_0: 'uv',
-	TEXCOORD_1: 'uv1',
-	TEXCOORD_2: 'uv2',
-	TEXCOORD_3: 'uv3',
-	COLOR_0: 'color',
-	WEIGHTS_0: 'skinWeight',
-	JOINTS_0: 'skinIndex',
-};
-
-const PATH_PROPERTIES = {
-	scale: 'scale',
-	translation: 'position',
-	rotation: 'quaternion',
-	weights: 'morphTargetInfluences'
-};
-
-const INTERPOLATION = {
-	CUBICSPLINE: undefined, // We use a custom interpolant (GLTFCubicSplineInterpolation) for CUBICSPLINE tracks. Each
-		                        // keyframe track will be initialized with a default interpolation type, then modified.
-	LINEAR: InterpolateLinear,
-	STEP: InterpolateDiscrete
-};
-
-const ALPHA_MODES = {
-	OPAQUE: 'OPAQUE',
-	MASK: 'MASK',
-	BLEND: 'BLEND'
-};
 
 /**
  * Specification: https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#default-material
@@ -4528,7 +4411,6 @@ class GLTFParser {
 
 		}
 
-
 		if ( PATH_PROPERTIES[ target.path ] === PATH_PROPERTIES.weights ) {
 
 			collectMorphTargets( node );
@@ -4587,7 +4469,6 @@ class GLTFParser {
 		}
 
 		const interpolation = sampler.interpolation !== undefined ? INTERPOLATION[ sampler.interpolation ] : InterpolateLinear;
-
 
 		const outputArray = this._getArrayFromAccessor( outputAccessor );
 
@@ -4735,7 +4616,6 @@ function computeBounds( geometry, primitiveDef, parser ) {
 					vector.setX( Math.max( Math.abs( min[ 0 ] ), Math.abs( max[ 0 ] ) ) );
 					vector.setY( Math.max( Math.abs( min[ 1 ] ), Math.abs( max[ 1 ] ) ) );
 					vector.setZ( Math.max( Math.abs( min[ 2 ] ), Math.abs( max[ 2 ] ) ) );
-
 
 					if ( accessor.normalized ) {
 
