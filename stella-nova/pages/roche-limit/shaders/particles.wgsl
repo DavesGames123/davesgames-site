@@ -2,9 +2,28 @@
 //  ROCHE LIMIT  ·  shaders/particles.wgsl — the grains as lit sphere impostors
 // ----------------------------------------------------------------------------
 //  One instanced quad per grain, read straight from the simulation buffer
-//  (engine.js bufBody). The scene pass is 4x MSAA with alpha-to-coverage:
-//  a grain smaller than a pixel writes a coverage, not a blend, so it needs
-//  no sort and the depth test stays exact.
+//  (engine.js bufBody). With 4x MSAA the grains use alpha-to-coverage
+//  (fs_main): a grain smaller than a pixel writes a coverage, not a blend,
+//  so it needs no sort and the depth test stays exact. With one sample
+//  (budget.js: pixel ratio over 1.25, or a touch screen) fs_blend writes
+//  the same colour premultiplied, blended, with depth.
+//
+//  STRAIN. In the default colour mode (ice and heat) the grains of the
+//  bound moon take the tide-to-self-gravity ratio of the force kernel:
+//  steel blue while self-gravity wins, through red to amber where the
+//  tide wins (inst.heatP.w sets the share). Shed grains stay ice.
+//
+//  GLINTS. A shed ice grain has a facet that turns with the grain's real
+//  spin (body spin, times the sim time). When the facet's normal lines up
+//  with the half vector of the sun and the eye, the grain flashes. When a
+//  frame turns the facet by more than 0.8 rad (fast forward), the glint is
+//  its steady mean, so it never strobes.
+//
+//  IMPACTS. A grain that hit the planet has mass 0 and keeps the impact
+//  point and time in its spin row (sim.wgsl cs_kick). For inst.heatP.z of
+//  sim time after the hit it draws a flash there: white, then orange,
+//  then dull red, growing from 2 to 8 grain radii, lifted 0.4% off the
+//  surface so the planet's depth hides it only on the far side.
 //
 //  MOTION. Streaks are off unless inst.motion.x is 1. A grain that moves
 //  more than inst.motion.y px in a frame dims (no strobing at high warp).
@@ -21,8 +40,9 @@
 //  Colour: bound rock / shed ice, speed, or tidal stress (the ratio
 //  |tide| / |self-gravity| per grain, from the force kernel's diag).
 //
-//  grep -n targets: "fn vs_main", "fn fs_main", "fn sunShadow", "fn heat",
-//  "fn cs_smooth", "fn plasma"
+//  grep -n targets: "fn vs_main", "fn fs_main", "fn fs_blend", "fn shade",
+//  "fn sunShadow", "fn heat", "fn cs_smooth", "fn plasma", "fn glint",
+//  "fn flashQuad"
 // ============================================================================
 
 struct Cam {
@@ -39,7 +59,9 @@ struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 // which a grain dims (anti-strobe, 0 = off), z the stress smoothing factor,
 // w the heat decay factor of this frame, exp(-dt_frame / tau)
 // heatP: x 1 / reference heat (energy per mass), the colour runs over
-// log10(heat x) in [-3, 1]
+// log10(heat x) in [-3, 1]; y the sim time now; z how long an impact
+// flash lasts (sim time, 0 = none); w the strain share of the default
+// colour mode (0..1)
 struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f, heatP: vec4f };
 
 @group(0) @binding(0) var<uniform> cam: Cam;
@@ -138,6 +160,43 @@ fn ringTau(p: vec3f) -> f32 {
   return textureSampleLevel(tauTex, linSamp, uv, 0.0).r;
 }
 
+// A tumbling ice grain: a facet normal (from its index) turned by the
+// grain's spin over the sim time, against the half vector h. The lobe is
+// narrow (about 4 degrees), so few grains flash at once.
+fn glint(ii: u32, spin: vec3f, h: vec3f) -> f32 {
+  let fi = f32(ii);
+  let z = 2.0 * hash11(fi + 11.7) - 1.0;
+  let a = 6.2831853 * hash11(fi + 23.1);
+  let f0 = vec3f(sqrt(max(0.0, 1.0 - z * z)) * vec2f(cos(a), sin(a)), z);
+  let wl = length(spin);
+  if (wl * inst.refV.w > 0.8) { return 0.004; }   // a blur of turns: the mean of the lobe
+  var f = f0;
+  if (wl > 1e-6) {
+    let ax = spin / wl;
+    let th = wl * inst.heatP.y;
+    let c = cos(th); let s = sin(th);
+    f = f0 * c + cross(ax, f0) * s + ax * dot(ax, f0) * (1.0 - c);
+  }
+  return pow(max(dot(f, h), 0.0), 900.0);
+}
+// The disc of an impact flash at world point wp, radius r (world), with
+// emission em. Same varyings as a grain: no albedo, full cover.
+fn flashQuad(vi: u32, wp: vec3f, r: f32, em: vec3f) -> VOut {
+  var o: VOut;
+  o.pos = vec4f(2.0, 2.0, 2.0, 1.0);
+  let c = cam.vp * vec4f(wp, 1.0);
+  if (c.w <= 0.01) { return o; }
+  let half = 0.5 * cam.vpSize.xy;
+  let sa = (c.xy / c.w) * half;
+  let rpx = max(r * cam.misc.x / c.w, 1.5);
+  var corner = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let sp = sa + corner[vi] * (rpx + 1.0);
+  o.pos = vec4f(sp / half * c.w, c.z, c.w);
+  o.a = sa; o.b = sa; o.rpx = rpx;
+  o.color = vec3f(0.0); o.cover = 1.0; o.world = wp; o.emis = em; o.vz = vec2f(c.w, r);
+  return o;
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VOut {
   var o: VOut;
@@ -145,7 +204,15 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   let k = inst.frame.w;
   let m = bd.vel.w;
   o.pos = vec4f(2.0, 2.0, 2.0, 1.0);
-  if (m == 0.0) { return o; }
+  if (m == 0.0) {
+    // an impact flash (the spin row holds the point and the time)
+    let age = inst.heatP.y - bd.spin.w;
+    if (bd.spin.w <= 0.0 || inst.heatP.z <= 0.0 || age < 0.0 || age > inst.heatP.z) { return o; }
+    let u = age / inst.heatP.z;
+    let col = mix(mix(vec3f(1.0, 0.95, 0.85), vec3f(1.0, 0.55, 0.18), smoothstep(0.0, 0.35, u)), vec3f(0.45, 0.10, 0.04), smoothstep(0.35, 1.0, u));
+    let wp = bd.spin.xyz * k * 1.004;
+    return flashQuad(vi, wp, k * (2.0 + 6.0 * sqrt(u)), col * (9.0 * (1.0 - u) * (1.0 - u) + 0.3));
+  }
   let wp = (inst.frame.xyz + bd.pos.xyz * k);
   let r = bd.pos.w * k;
   let vel = (inst.refV.xyz + bd.vel.xyz * k);
@@ -222,6 +289,19 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
     // ice and heat: icy grains; the ones that collide glow in plasma
     alb = vec3f(0.80, 0.86, 0.95) * (0.85 + 0.3 * hash11(fi + 3.3));
     em = plasma(hn) * (1.3 * pow(smoothstep(0.3, 1.0, hn), 1.5));
+    // the bound moon shows its tidal strain (|tide| / |self-gravity|):
+    // st 0.12 is a ratio of 0.07, st 0.45 a ratio of 0.7
+    if (tg > 0.5) {
+      let ts = smoothstep(0.12, 0.45, st);
+      alb = mix(alb, heat(ts) * 0.9, inst.heatP.w * (0.25 + 0.6 * ts));
+      em = em + heat(ts) * (0.22 * inst.heatP.w * ts * ts);
+    }
+  }
+  // glints of shed ice in the sunlight (modes 0 and 4)
+  if ((mode < 0.5 || mode > 3.5) && tg < 0.5 && tg > -0.5) {
+    let hv = normalize(cam.sun.xyz + normalize(cam.eye.xyz - wp));
+    let sh0 = sunShadow(wp);
+    em = em + vec3f(1.0, 0.97, 0.9) * (6.0 * cam.sun.w * glint(ii, bd.spin.xyz, hv)) * sh0;
   }
   let hcol = heat(st);
   let mixS = select(inst.opts.y, 1.0, mode > 1.5 && mode < 2.5);
@@ -235,7 +315,15 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
 struct FOut { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
 
 @fragment
-fn fs_main(in: VOut) -> FOut {
+fn fs_main(in: VOut) -> FOut { return shade(in); }
+// one sample (no alpha-to-coverage): the same colour, premultiplied
+@fragment
+fn fs_blend(in: VOut) -> FOut {
+  var o = shade(in);
+  o.color = vec4f(o.color.rgb * o.color.a, o.color.a);
+  return o;
+}
+fn shade(in: VOut) -> FOut {
   var o: FOut;
   let half = 0.5 * cam.vpSize.xy;
   // fragment in the same px space as a, b (y up)

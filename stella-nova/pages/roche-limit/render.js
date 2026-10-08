@@ -9,9 +9,11 @@
 //    compute   particles.wgsl cs_smooth (the stress colour, smoothed in
 //              time), ring.wgsl cs_splat for each satellite (shed grains ->
 //              grid), cs_resolve (grid -> tau texture, blurred, blended)
-//    scene     4x MSAA, rgba16float, reversed-Z depth (clear 0, 'greater'):
-//              sky, planet surface, grains (alpha-to-coverage), ring layer,
-//              field heatmap, lines, atmosphere (additive)
+//    scene     rgba16float, reversed-Z depth (clear 0, 'greater'): sky,
+//              planet surface, grains, ring layer, field heatmap, lines,
+//              atmosphere (additive). budget.js picks the sample count:
+//              4x MSAA (grains by alpha-to-coverage) at a pixel ratio up
+//              to 1.25, else one sample (grains blend, fs_blend)
 //    bloom     6 half-size levels down (threshold on the first), then up
 //    final     scene + bloom, ACES, vignette, grain, sRGB -> canvas
 //  The tau texture ping-pongs: the resolve reads the texture of the frame
@@ -21,13 +23,14 @@
 //  grep -n targets
 //    camera uniform ...... "function writeCam"
 //    targets ............. "resize("
+//    sample count ........ "_makeScene("
 //    per-satellite ....... "addSim("
 //    lines ............... "setSegments("
 //    one frame ........... "render("
 //    math ................ "export const M4"
 // ============================================================================
 
-const MSAA = 4;
+const MSAA = 4;   // the most samples; resize(w, h, samples) sets the count
 const HDR = 'rgba16float';
 const DEPTH = 'depth32float';
 const BLOOM_LEVELS = 6;
@@ -140,7 +143,30 @@ export class Renderer {
     this.pSplat = dev.createComputePipeline({ layout: pl(this.bgl0, this.bglSplat), compute: { module: M.ring, entryPoint: 'cs_splat' } });
     this.pSmooth = dev.createComputePipeline({ layout: pl(this.bgl0, this.bglSmooth), compute: { module: M.particles, entryPoint: 'cs_smooth' } });
     this.pResolve = dev.createComputePipeline({ layout: pl(this.bgl0, this.bglResolve), compute: { module: M.ring, entryPoint: 'cs_resolve' } });
-    const ms = { count: MSAA };
+    this._mods = { M, pl };
+    this.samples = 0;
+    this._makeScene(MSAA);
+    // post
+    this.bglPost = dev.createBindGroupLayout({ entries: [
+      { binding: 0, visibility: S.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 2, visibility: S.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 3, visibility: S.FRAGMENT, texture: { sampleType: 'float' } }] });
+    const pp = (fs, fmt, blend) => dev.createRenderPipeline({ layout: pl(this.bglPost), vertex: { module: M.post, entryPoint: 'vs_post' },
+      fragment: { module: M.post, entryPoint: fs, targets: [blend ? { format: fmt, blend } : { format: fmt }] }, primitive: { topology: 'triangle-list' } });
+    this.pDown = pp('fs_down', HDR, null);
+    this.pUp = pp('fs_up', HDR, { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } });
+    this.pFinal = pp('fs_final', this.format, null);
+    this.postBufs = Array.from({ length: 2 * BLOOM_LEVELS + 1 }, () => dev.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST }));
+    this.dummy = dev.createTexture({ size: [1, 1], format: HDR, usage: T.TEXTURE_BINDING });
+  }
+  // The scene pipelines for a sample count (4 or 1). With one sample the
+  // grains cannot use alpha-to-coverage: they blend (premultiplied, depth
+  // still written), from fs_blend.
+  _makeScene(samples) {
+    if (samples === this.samples) return;
+    this.samples = samples;
+    const dev = this.dev, { M, pl } = this._mods, ms = { count: samples };
     const premul = { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
     const add = { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } };
     const depthW = { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' };
@@ -153,34 +179,25 @@ export class Renderer {
     this.pSky = rp(M.planet, 'vs_full', 'fs_sky', pl(this.bgl0), null, depthNone);
     this.pSurface = rp(M.planet, 'vs_full', 'fs_surface', pl(this.bgl0), null, depthW);
     this.pAtmo = rp(M.planet, 'vs_full', 'fs_atmo', pl(this.bgl0), add, depthT);
-    this.pPart = rp(M.particles, 'vs_main', 'fs_main', pl(this.bgl0, this.bglPart), null, depthW, { alphaToCoverageEnabled: true });
+    this.pPart = samples > 1
+      ? rp(M.particles, 'vs_main', 'fs_main', pl(this.bgl0, this.bglPart), null, depthW, { alphaToCoverageEnabled: true })
+      : rp(M.particles, 'vs_main', 'fs_blend', pl(this.bgl0, this.bglPart), premul, depthW);
     this.pDisk = rp(M.ring, 'vs_disk', 'fs_disk', pl(this.bgl0), premul, depthT);
     this.pField = rp(M.field, 'vs_field', 'fs_field', pl(this.bgl0), premul, depthT);
     this.pLine = rp(M.lines, 'vs_line', 'fs_line', pl(this.bgl0, this.bglSeg), premul, depthT);
-    // post
-    this.bglPost = dev.createBindGroupLayout({ entries: [
-      { binding: 0, visibility: S.FRAGMENT, buffer: { type: 'uniform' } },
-      { binding: 1, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
-      { binding: 2, visibility: S.FRAGMENT, sampler: { type: 'filtering' } },
-      { binding: 3, visibility: S.FRAGMENT, texture: { sampleType: 'float' } }] });
-    const pp = (fs, fmt, blend) => dev.createRenderPipeline({ layout: pl(this.bglPost), vertex: { module: M.post, entryPoint: 'vs_post' },
-      fragment: { module: M.post, entryPoint: fs, targets: [blend ? { format: fmt, blend } : { format: fmt }] }, primitive: { topology: 'triangle-list' } });
-    this.pDown = pp('fs_down', HDR, null);
-    this.pUp = pp('fs_up', HDR, add);
-    this.pFinal = pp('fs_final', this.format, null);
-    this.postBufs = Array.from({ length: 2 * BLOOM_LEVELS + 1 }, () => dev.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST }));
-    this.dummy = dev.createTexture({ size: [1, 1], format: HDR, usage: T.TEXTURE_BINDING });
   }
-  resize(w, h) {
+  // w, h: the drawing buffer; samples: 4 or 1 (budget.js renderBudget)
+  resize(w, h, samples = this.samples || MSAA) {
     w = Math.max(2, Math.floor(w)); h = Math.max(2, Math.floor(h));
-    if (w === this.W && h === this.H) return;
+    if (w === this.W && h === this.H && samples === this.samples) return;
+    this._makeScene(samples);
     this.W = w; this.H = h;
     const dev = this.dev, T = GPUTextureUsage;
     for (const t of [this.msaaTex, this.depthTex, this.hdrTex, ...(this.bloom || [])]) if (t) t.destroy();
-    this.msaaTex = dev.createTexture({ size: [w, h], format: HDR, sampleCount: MSAA, usage: T.RENDER_ATTACHMENT });
-    this.depthTex = dev.createTexture({ size: [w, h], format: DEPTH, sampleCount: MSAA, usage: T.RENDER_ATTACHMENT });
+    this.msaaTex = samples > 1 ? dev.createTexture({ size: [w, h], format: HDR, sampleCount: samples, usage: T.RENDER_ATTACHMENT }) : null;
+    this.depthTex = dev.createTexture({ size: [w, h], format: DEPTH, sampleCount: samples, usage: T.RENDER_ATTACHMENT });
     this.hdrTex = dev.createTexture({ size: [w, h], format: HDR, usage: T.RENDER_ATTACHMENT | T.TEXTURE_BINDING });
-    this.msaaView = this.msaaTex.createView(); this.depthView = this.depthTex.createView(); this.hdrView = this.hdrTex.createView();
+    this.msaaView = this.msaaTex ? this.msaaTex.createView() : null; this.depthView = this.depthTex.createView(); this.hdrView = this.hdrTex.createView();
     this.bloom = [];
     let bw = w, bh = h;
     for (let i = 0; i < BLOOM_LEVELS; i++) {
@@ -272,7 +289,9 @@ export class Renderer {
   // One frame. f: camera and overlay state; sims: [{ e, frame:[x,y,z,k],
   // refV:[vx,vy,vz, sim time of one frame], opts:[mode, stressMix, bright,
   // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing,
-  // heat decay], heatInv: 1 / the reference collision heat }].
+  // heat decay], heatInv: 1 / the reference collision heat, simT: the sim
+  // time now, flashT: how long an impact flash lasts (sim time), strain:
+  // the strain share of the default colour mode }].
   // The stages of a frame, each encoded into enc. draws (optional) picks
   // the scene draws, for profiling: { sky, surface, part, disk, field,
   // lines, atmo }.
@@ -291,7 +310,7 @@ export class Renderer {
       const m = s.motion || [0, 0, 0.1, 1];
       a.set(s.frame, 0); a.set(s.refV, 4); a.set(s.opts, 8); a.set(s.tint || [0.80, 0.88, 1.0, 1], 12);
       a[16] = m[0]; a[17] = m[1]; a[18] = s.e.fresh ? 1 : m[2]; a[19] = s.e.fresh ? 0 : (m[3] ?? 1);
-      a[20] = s.heatInv || 1; a[21] = 0; a[22] = 0; a[23] = 0;
+      a[20] = s.heatInv || 1; a[21] = s.simT || 0; a[22] = s.flashT || 0; a[23] = s.strain ?? 1;
       s.e.fresh = false;
       dev.queue.writeBuffer(s.e.inst, 0, a);
     }
@@ -311,7 +330,9 @@ export class Renderer {
   _scene(enc, f, sims, draws) {
     const on = k => !draws || draws[k];
     const pass = enc.beginRenderPass({
-      colorAttachments: [{ view: this.msaaView, resolveTarget: this.hdrView, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
+      colorAttachments: [this.msaaView
+        ? { view: this.msaaView, resolveTarget: this.hdrView, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'discard' }
+        : { view: this.hdrView, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
       depthStencilAttachment: { view: this.depthView, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' },
       timestampWrites: this._tw('scene'),
     });

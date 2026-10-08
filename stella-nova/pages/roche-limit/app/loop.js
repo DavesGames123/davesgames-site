@@ -102,7 +102,7 @@ function frameBody(now) {
   governQuality(now);
   S.run.frames++;
   if (S.run.frames % 10 === 0) refreshReadout(false);
-  if (UI.showFps && S.run.frames % 20 === 0) $('fpsChip').textContent = `${S.fps.toFixed(0)} fps · GPU ${S.gpuMs.toFixed(1)} ms · CPU ${S.cpuMs.toFixed(1)} ms · ${(S.ren.W * S.ren.H / 1e6).toFixed(1)} MP · ${Q.preset}${Q.bloom ? '' : ', no bloom'} · ${S.stepsMax} steps max`;
+  if (UI.showFps && S.run.frames % 20 === 0) $('fpsChip').textContent = `${S.fps.toFixed(0)} fps · GPU ${S.gpuMs.toFixed(1)} ms · CPU ${S.cpuMs.toFixed(1)} ms · ${(S.ren.W * S.ren.H / 1e6).toFixed(1)} MP · ${Q.preset}${Q.bloom ? '' : ', no bloom'} · ${Q.samples || 4}x · pr ${(Q.pr || 1).toFixed(2)} · ${S.stepsMax} steps max`;
 }
 // steps per frame the speed asks for, at 60 fps
 export function stepsWanted() {

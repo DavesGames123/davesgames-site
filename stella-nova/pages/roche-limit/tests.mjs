@@ -23,6 +23,9 @@
 //     of the frame loop that drives a CPU pile (N = 800) with the director
 //     of pacing.js; it must be under 5 s. The screensaver's budget too.
 //     node tests.mjs --pace runs test 8 only; --pace-old adds the old run.
+//  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
+//     for desktop and phone profiles, against budget.js LIMIT; phones get
+//     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 //  Published values: Wikipedia "Roche limit", revision of 2020-12 (tables
@@ -32,6 +35,7 @@
 import * as P from './physics.js';
 import * as PC from './pacing.js';
 import { SCENARIOS, REAL, limitsOf } from './scenarios.js';
+import * as BG from './budget.js';
 
 const GPU_ONLY = typeof Deno !== 'undefined' && Deno.args.includes('--gpu');
 let fails = 0;
@@ -317,6 +321,34 @@ function paceTests(old) {
   }
 }
 
+// 9 ─ the GPU memory budget
+function budgetTests() {
+  const prof = [
+    ['laptop 1440x900 @2, medium', 1440, 900, 2, 'medium', false, 1],
+    ['desktop 1920x1080 @1, medium', 1920, 1080, 1, 'medium', false, 1],
+    ['desktop 2560x1440 @2, high', 2560, 1440, 2, 'high', false, 1],
+    ['desktop 2560x1440 @2, high, two moons', 2560, 1440, 2, 'high', false, 2],
+    ['phone 390x844 @3, portrait', 390, 844, 3, 'low', true, 1],
+    ['phone 844x390 @3, landscape', 844, 390, 3, 'low', true, 1],
+    ['tablet 1024x1366 @2', 1024, 1366, 2, 'low', true, 1],
+  ];
+  for (const [name, w, h, dpr, preset, touch, sats] of prof) {
+    const Qp = BG.QUALITY[preset], N = sats > 1 ? Qp.N / 2 : Qp.N;
+    const b = BG.pageBytes({ cssW: w, cssH: h, dpr, touch, maxPx: Qp.maxPx, N, sats, gridN: Qp.gridN });
+    const lim = touch ? BG.LIMIT.touch : BG.LIMIT.desktop;
+    const legacy = b.total - b.r.bytes.total + legacyScene(w, h, dpr, touch, Qp.maxPx);
+    const rules = b.r.samples === 1 || b.r.pr <= BG.MSAA_PR_MAX;
+    const phone = !touch || (N <= 4096 && b.r.pr <= 1.5 && b.r.samples === 1);
+    ok(`memory: ${name}`, b.total <= lim && rules && phone, `${(b.total / 1e6).toFixed(0)} MB of ${(lim / 1e6).toFixed(0)} (scene ${(b.r.bytes.total / 1e6).toFixed(0)}, ${sats} x ${N} grains ${(b.sims / 1e6).toFixed(1)}, ring ${(b.ring / 1e6).toFixed(1)}); pr ${b.r.pr.toFixed(2)}, ${b.r.samples}x; before: ${(legacy / 1e6).toFixed(0)} MB`);
+  }
+}
+// The page before budget.js: 4x MSAA at the preset's pixels, always.
+function legacyScene(w, h, dpr, touch, maxPx) {
+  const d = Math.min(dpr, touch ? 1.5 : 2); let W = w * d, H = h * d; const k = Math.min(1, Math.sqrt(maxPx / (W * H)));
+  const px = Math.round(W * k) * Math.round(H * k);
+  return BG.sceneBytes(px, 4).total;
+}
+
 // 7 ─ GPU against CPU (Deno WebGPU)
 async function gpuTest() {
   if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  GPU test: no navigator.gpu here'); return; }
@@ -399,7 +431,7 @@ const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
 if (!GPU_ONLY) {
   const t0 = Date.now();
-  if (!PACE_ONLY) cpuTests();
+  if (!PACE_ONLY) { cpuTests(); budgetTests(); }
   paceTests(ARGS.includes('--pace-old'));
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }

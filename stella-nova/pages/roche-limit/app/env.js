@@ -40,11 +40,9 @@ export const REF_SWEEP = [
 // (function governQuality) lowers the render scale, then the bloom, then
 // the steps per frame when frames run long, and raises them back when
 // there is room. The grain count changes only between runs.
-export const QUALITY = {
-  high:   { N: 16384, maxPx: 3.6e6, bloom: true, gridN: 1024 },
-  medium: { N: 8192,  maxPx: 1.8e6, bloom: true, gridN: 512 },
-  low:    { N: 4096,  maxPx: 0.9e6, bloom: false, gridN: 512 },
-};
+// The table lives in budget.js (tests.mjs checks its memory).
+export { QUALITY } from '../budget.js';
+import { QUALITY } from '../budget.js';
 export const Q = { preset: (PHONE_Q.matches || COARSE) ? 'low' : 'medium', scale: 1, bloom: true, win: { n: 0, t0: 0, slow: 0, good: 0 }, cool: 0, note: '' };
 Q.bloom = QUALITY[Q.preset].bloom;
 

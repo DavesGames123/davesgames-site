@@ -12,6 +12,7 @@ import { norm, sub } from '../render.js';
 import { saverFade } from './saver.js';
 import { cameraFrame } from './camera.js';
 import { UI, Q } from './env.js';
+import { orbitsPerMin } from './loop.js';
 import { smoothField, fieldParams } from './field.js';
 import { placeLabels } from './labels.js';
 import { buildSegments, segs, segN } from './lines.js';
@@ -58,6 +59,10 @@ export function drawFrame(now, cssW, cssH, steps) {
   // (time constant 1/20 orbit; frozen while paused)
   const decay = frameT > 0 ? Math.exp(-frameT / (S.run.T0 / 20)) : 1;
   const motion = [UI.blur && !UI.calm ? 1 : 0, UI.calm ? 3 : 6, UI.calm ? 0.04 : 0.08, decay];
+  // an impact flash lasts 0.02 orbit of sim time, or 0.35 s on screen at
+  // the current speed if that is longer (at fast forward 0.02 orbit is
+  // one or two frames)
+  const flashT = Math.max(0.02 * S.run.T0, 0.35 * orbitsPerMin() / 60 * S.run.T0);
   const sims = S.run.sats.map(s => ({
     e: s.e, ring: S.run.phase === 'orbit',
     frame: [s.ref.X[0] * s.k, s.ref.X[1] * s.k, s.ref.X[2] * s.k, s.k],
@@ -65,6 +70,7 @@ export function drawFrame(now, cssW, cssH, steps) {
     opts: [UI.color, UI.color === 2 ? 1 : 0, 1.0, s.C.vesc],
     tint: s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1],
     heatInv: 1 / (S.run.heatRef || 0.006 * s.C.vesc * s.C.vesc),
+    simT: s.gpu.t, flashT: S.run.phase === 'orbit' ? flashT : 0, strain: 1,
   }));
   S.run.lastFrame = { frame, sims };
   S.ren.render(frame, sims);

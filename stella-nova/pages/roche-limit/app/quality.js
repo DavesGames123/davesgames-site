@@ -1,8 +1,9 @@
 // ============================================================================
 //  ROCHE LIMIT  ·  app/quality.js — canvas size and the Auto quality governor
 // ----------------------------------------------------------------------------
-//  resize() sizes the canvas to the pixel budget of the preset and the
-//  render scale. governQuality() changes the scale, the bloom and the
+//  resize() sizes the canvas and picks the MSAA sample count with
+//  budget.js renderBudget (the pixel budget of the preset, the render
+//  scale, the touch profile). governQuality() changes the scale, the bloom and the
 //  step budget once a second.
 //
 //  grep -n targets
@@ -10,18 +11,17 @@
 //    governor ....... "function governQuality"
 //    preset ......... "function setQuality"
 // ============================================================================
+import { renderBudget } from '../budget.js';
 import { $, PHONE_Q, QUALITY, Q, UI, COARSE } from './env.js';
 import { S } from './state.js';
 
 export function resize() {
   if (!S.ren) return;
   const c = $('gpu');
-  const dpr = Math.min(window.devicePixelRatio || 1, PHONE_Q.matches ? 1.5 : 2);
-  let w = c.clientWidth * dpr, h = c.clientHeight * dpr;
-  const maxPx = QUALITY[Q.preset].maxPx * Q.scale * Q.scale, k = Math.min(1, Math.sqrt(maxPx / (w * h)));
-  w = Math.round(w * k); h = Math.round(h * k);
-  c.width = w; c.height = h;
-  S.ren.resize(w, h);
+  const b = renderBudget(c.clientWidth, c.clientHeight, window.devicePixelRatio || 1, { maxPx: QUALITY[Q.preset].maxPx, scale: Q.scale, touch: PHONE_Q.matches || COARSE });
+  c.width = b.w; c.height = b.h;
+  S.ren.resize(b.w, b.h, b.samples);
+  Q.samples = b.samples; Q.pr = b.pr;
 }
 // The Auto quality governor, once a second: frames that run long (under
 // 52 fps, or a GPU frame over 15 ms) lower the render scale by 10% (down
