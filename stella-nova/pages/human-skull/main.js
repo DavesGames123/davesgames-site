@@ -40,6 +40,7 @@ import { createStage, KEY_DIR } from './stage.js';
 import { loadSkull, disposeSkull } from './skull.js';
 import { layoutFor, createMotion, REGIONS, TRAY_Y } from './arrange.js';
 import { createTray, shortName } from './tray.js';
+import { SKULL_MID as SKULL_MID_MM, liftVec, liftBox } from './saver-lift.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -736,7 +737,7 @@ function partAnchor() {
 // the midline (sphenoid, vomer, palatines) is seen from the side, through
 // the ghosts. A seeded turn of up to 25 deg is added, and the angle moves by
 // 40 deg when it is near the last one. az 0 is the face (+z), az 90 the left.
-const SKULL_MID = new THREE.Vector3(0, -10, 15);
+const SKULL_MID = new THREE.Vector3(...SKULL_MID_MM);
 function partView(p, rnd, last) {
   const v = p.home.clone().sub(SKULL_MID), h = Math.hypot(v.x, v.z), side = rnd() < 0.5 ? 1 : -1;
   let az = Math.atan2(v.x, v.z) / D2R, el = Math.atan2(v.y, h) / D2R;
@@ -755,9 +756,7 @@ const D2R = Math.PI / 180;
 // hold, back from 62% to 82%, through the motion anchors (createMotion), so
 // the springs ease it. The part keeps its turn; no arc (lift 0).
 function saverLift(p, d, isCur) {
-  const v = p.home.clone().sub(SKULL_MID);
-  if (v.lengthSq() < 1) v.set(0, 1, 0);
-  const out = p.home.clone().addScaledVector(v.normalize(), Math.min(40, Math.max(12, 0.35 * Math.max(...p.m.ext))));
+  const out = p.home.clone().add(new THREE.Vector3(...liftVec(p.home.toArray(), p.m.ext)));
   const move = (to, at, dur) => setTimeout(() => {
     if (!isCur() || !motion) return;
     const m = motion.M[p.i];
@@ -848,7 +847,10 @@ window.snSaver = {
         if (S.e > 0.02) { setExplodeUI(0); motion.go(targetsAt(0), performance.now() / 1000, { order: 'in', stagger: 0.3, dur: 0.9 * pace }); }
         cur.view = partView(p, rnd, last); last = cur.view;
         isolate(p.i, { fly: false });
-        const b = new THREE.Box3().setFromCenterAndSize(p.home, new THREE.Vector3(...p.m.ext));
+        // the box round the part at home and at the full lift (saver-lift.js),
+        // so the lift stays in the clear band, also across a portrait phone
+        const lb = liftBox(p.home.toArray(), p.m.ext);
+        const b = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(...lb.c), new THREE.Vector3(...lb.size));
         const v = cur.view;
         cur.fit = () => stage.fitFrac(b, v.az, v.el, FIT.bone);
         stage.flyTo(cur.fit(), 1.5 * pace);
