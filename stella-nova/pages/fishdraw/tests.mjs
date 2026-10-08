@@ -384,6 +384,60 @@ test('tree: lineage runs root to node; param changes list real changes', () => {
   for (const c of ch) ok(t.nodes[0].params[c.key] !== t.nodes[tip].params[c.key], 'listed a field that did not change');
 });
 
+// ── saver camera ────────────────────────────────────────────────────────────
+// The radiate shot, run at 60 fps for 12 s over 40 trees in each layout.
+// Speed is in tip widths per second. A reversal is a change of sign of the
+// camera velocity on one axis, at more than 0.1 tip widths per second.
+// The old camera (tips sorted by y, one segment per tip, an exponential
+// ease) is the control: the check must reject it, or the check is blind.
+function radiateCam(kind, seed, mode, cam) {
+  const { radiatePath, pathAt, camFollow } = cam;
+  const E = makeEngine(SRC), name = 'Colus splennita';
+  const tree = buildTree({ E, rootName: name, rootParams: baseParams(E, name), seed, maxTips: 10 + seed % 5, spec: 1.5, ext: 0.8, mut: 1, radiations: true });
+  const N = tree.nodes, count = id => N[id].children.length ? N[id].children.reduce((a, c) => a + count(c), 0) : 1;
+  const rad = N.filter(q => q.radiation), focus = (rad.length ? rad : N.filter(q => q.kind === 'split' && q.id > 1)).sort((a, b) => count(b.id) - count(a.id))[0] || N[1];
+  const sub = new Set(); (function w(id) { sub.add(id); N[id].children.forEach(w); })(focus.id);
+  const s = 50, lay = layoutTree(tree, kind, { tip: s }), dur = 12, dt = 1 / 60;
+  const ease = t => t * t * (3 - 2 * t), centre = id => { const b = lay.fish[id]; return [b.x + b.w / 2, b.y + b.h / 2]; };
+  let c = null, prev = null, vmax = 0, rev = 0;
+  const sign = [0, 0];
+  for (let t = 0; t <= dur; t += dt) {
+    const e = ease(t / dur);
+    let p;
+    if (mode === 'old') {
+      const path = [centre(focus.id), ...[...sub].filter(id => !N[id].children.length).map(centre).sort((a, b) => a[1] - b[1] || a[0] - b[0])];
+      const u = e * (path.length - 1), i = Math.min(path.length - 2, Math.floor(u)), g = u - i;
+      const f = [path[i][0] + (path[i + 1][0] - path[i][0]) * g, path[i][1] + (path[i + 1][1] - path[i][1]) * g];
+      if (!c) c = f.slice();
+      const k = 1 - Math.exp(-dt * 2.2); c[0] += (f[0] - c[0]) * k; c[1] += (f[1] - c[1]) * k; p = c.slice();
+    } else {
+      const f = pathAt(radiatePath(lay, sub, focus.id, 5.76 * s), e, s * dur / 1.5);
+      if (!c) c = { x: f[0], y: f[1], vx: 0, vy: 0 };
+      camFollow(c, f, dt); p = [c.x, c.y];
+    }
+    if (prev) {
+      const v = [(p[0] - prev[0]) / dt / s, (p[1] - prev[1]) / dt / s];
+      vmax = Math.max(vmax, Math.hypot(v[0], v[1]));
+      for (const k of [0, 1]) if (Math.abs(v[k]) > 0.1) { const g = Math.sign(v[k]); if (sign[k] && g !== sign[k]) rev++; sign[k] = g; }
+    }
+    prev = p;
+  }
+  return { vmax, rev };
+}
+test('saver radiate camera: calm speed, no zigzag (old camera fails the same check)', async () => {
+  const cam = await import('./saver.js');
+  const LIMIT = { clado: 0, radial: 4, fan: 4 };
+  let oldBad = 0;
+  for (const kind of ['clado', 'radial', 'fan']) for (let seed = 1; seed <= 40; seed++) {
+    const r = radiateCam(kind, seed, 'new', cam);
+    ok(r.vmax <= 1.3, `${kind} seed ${seed}: top speed ${r.vmax.toFixed(2)} tip widths/s`);
+    ok(r.rev <= LIMIT[kind], `${kind} seed ${seed}: ${r.rev} reversals`);
+    const o = radiateCam(kind, seed, 'old', cam);
+    if (o.vmax > 1.3 || o.rev > LIMIT[kind]) oldBad++;
+  }
+  ok(oldBad >= 60, `the old camera failed only ${oldBad} of 120 runs`);
+});
+
 // node tests.mjs <text> runs only the tests whose name holds <text>.
 const only = process.argv[2] || '';
 for (const [name, fn] of tests) {

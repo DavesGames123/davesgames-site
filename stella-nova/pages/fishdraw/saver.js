@@ -113,6 +113,52 @@ function fitCell(fs, bw, bh, fill = 0.94) {
 
 const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
 
+// The radiate pan, in layout mm. The tips of the clade come in tree order
+// (lay.order), so two points in a row are neighbours in the tree. Sorted
+// by y, a radial or fan path went from side to side of the circle. In the
+// cladogram, the extinct tips sit left of the living column, so the tips
+// in order go left, right, left. There the pan is vertical only, at the
+// centre of the clade box. When the clade is wider than 92% of the view
+// (viewW), the x keeps the living column in view.
+export function radiatePath(lay, sub, focusId, viewW) {
+  const centre = id => { const b = lay.fish[id]; return b ? [b.x + b.w / 2, b.y + b.h / 2] : [lay.pos[id].x, lay.pos[id].y]; };
+  const tips = lay.order.filter(id => sub.has(id)).map(centre);
+  if (lay.kind !== 'clado' || !tips.length) return [centre(focusId), ...tips];
+  let x0 = Infinity, x1 = -Infinity;
+  for (const id of sub) { const b = lay.fish[id]; if (b) { x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x + b.w); } }
+  const x = Math.max((x0 + x1) / 2, x1 - viewW * 0.46);
+  return [[x, tips[0][1]], [x, tips[tips.length - 1][1]]];
+}
+// The point at u (0..1) of the arc length of a polyline. A path longer
+// than maxLen is walked only over its middle maxLen, so a wide clade does
+// not make the camera fast.
+export function pathAt(path, u, maxLen = Infinity) {
+  if (path.length < 2) return path[0].slice();
+  const seg = [];
+  let L = 0;
+  for (let i = 1; i < path.length; i++) { const d = Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]); seg.push(d); L += d; }
+  const m = Math.min(L, maxLen);
+  let s = (L - m) / 2 + Math.min(1, Math.max(0, u)) * m;
+  for (let i = 0; i < seg.length; i++) {
+    if (s <= seg[i] || i === seg.length - 1) { const f = seg[i] > 0 ? Math.min(1, s / seg[i]) : 1; return [path[i][0] + (path[i + 1][0] - path[i][0]) * f, path[i][1] + (path[i + 1][1] - path[i][1]) * f]; }
+    s -= seg[i];
+  }
+  return path[path.length - 1].slice();
+}
+// The tree camera: a critically damped spring toward the focus, rate w per
+// second. The velocity is continuous, so a focus that jumps (a new fish, the
+// next ancestor) or turns a corner gives a smooth start, not a snap. The
+// exponential ease that this replaces had its top speed at each jump.
+export function camFollow(cam, focus, dt, w = 2.2) {
+  const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    cam.vx += (w * w * (focus[0] - cam.x) - 2 * w * cam.vx) * h;
+    cam.vy += (w * w * (focus[1] - cam.y) - 2 * w * cam.vy) * h;
+    cam.x += cam.vx * h; cam.y += cam.vy * h;
+  }
+  return cam;
+}
+
 export function installSaver(ctxIn) {
   const { S, pool, E, src, getGrain, onEnter, onExit } = ctxIn;
   let V = null;
@@ -373,7 +419,12 @@ export function installSaver(ctxIn) {
     let tipPx = Math.max(120 * dpr, Math.min(box.h * 0.42, 300 * dpr));
     tipPx = Math.min(tipPx, box.w * 0.45);
     const tipMM = +(tipPx * mmDev).toFixed(1);
-    if (!tv.lay || tv.layTip !== tipMM) { tv.lay = layoutTree(tv.tree, shot.kind, { tip: tipMM }); tv.layTip = tipMM; shot.cam = null; }
+    if (!tv.lay || tv.layTip !== tipMM) {
+      // The natural layout scales with the tip size, so a new band size
+      // scales the camera with it and does not snap it to the focus.
+      if (shot.cam && shot.camTv === tv && tv.layTip) { const r = tipMM / tv.layTip; shot.cam.x *= r; shot.cam.y *= r; shot.cam.vx *= r; shot.cam.vy *= r; }
+      tv.lay = layoutTree(tv.tree, shot.kind, { tip: tipMM }); tv.layTip = tipMM;
+    }
     if (shot.camTv !== tv) { shot.camTv = tv; shot.cam = null; }
     const lay = tv.lay;
     const s = 1 / mmDev, cx = box.x + box.w / 2, cy = box.y + box.h / 2;
@@ -386,10 +437,9 @@ export function installSaver(ctxIn) {
       tau = T_MAX * GROW_OVER * Math.min(1, q);
       focus = newest(tau);
     } else if (shot.type === 'radiate') {
-      const tips = [...shot.sub].filter(id => !N[id].children.length).map(centre).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
-      const path = [centre(shot.focus.id), ...tips];
-      const u = e * (path.length - 1), i = Math.min(path.length - 2, Math.floor(u)), f = u - i;
-      focus = path.length > 1 ? [path[i][0] + (path[i + 1][0] - path[i][0]) * f, path[i][1] + (path[i + 1][1] - path[i][1]) * f] : path[0];
+      // The smoothstep peaks at 1.5x the mean speed: a walk of dur / 1.5 tip
+      // widths keeps the top speed at one tip width per second.
+      focus = pathAt(radiatePath(lay, shot.sub, shot.focus.id, box.w * mmDev), e, lay.tip.w * shot.dur / 1.5);
       line = shot.sub;
     } else {
       const span = shot.type === 'evolve' ? shot.dur * 0.36 : shot.dur * 0.8;
@@ -398,13 +448,12 @@ export function installSaver(ctxIn) {
       line = new Set(shot.line); anc = false; sel = shot.line[shot.line.length - 1];
       focus = centre(shot.line[k]);
     }
-    // Ease the camera toward the focus (the first frame jumps).
-    const now = performance.now(), dt = shot.camAt ? Math.min(0.1, (now - shot.camAt) / 1000) : 1;
+    // The camera follows the focus on a spring (the first frame jumps).
+    const now = performance.now(), dt = shot.camAt ? Math.min(0.1, (now - shot.camAt) / 1000) : 0;
     shot.camAt = now;
-    if (!shot.cam) shot.cam = focus.slice();
-    const k2 = 1 - Math.exp(-dt * 2.2);
-    shot.cam[0] += (focus[0] - shot.cam[0]) * k2; shot.cam[1] += (focus[1] - shot.cam[1]) * k2;
-    const view = { s, ox: cx - shot.cam[0] * s, oy: cy - shot.cam[1] * s };
+    if (!shot.cam) shot.cam = { x: focus[0], y: focus[1], vx: 0, vy: 0 };
+    camFollow(shot.cam, focus, dt);
+    const view = { s, ox: cx - shot.cam.x * s, oy: cy - shot.cam.y * s };
     shot.tipCss = +(lay.tip.w * s / dpr).toFixed(1);
     const th = THEMES[shot.theme];
     drawTree(x, { tree: tv.tree, lay, view, theme: th, ink: shot.ink, jitter: shot.jitter, pen, dpr, tau,
