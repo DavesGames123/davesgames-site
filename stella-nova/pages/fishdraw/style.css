@@ -154,7 +154,8 @@ button:disabled{opacity:0.4;cursor:default}
 /* TOUCH. Any touch screen or narrow window: targets are 44px or more. */
 @media (pointer:coarse), (max-width:768px){
   :root{--panel-w:340px}
-  #panelClose{width:44px;height:44px}
+  #panelClose,#cardClose{width:44px;height:44px}
+  #cardFish{margin-top:46px}
   .seg button,.btns button,.namerow button,.small{min-height:44px;font-size:0.8rem;border-radius:10px}
   .namerow input{min-height:44px;font-size:1.08rem}
   .row2 select{min-height:44px}
@@ -191,9 +192,9 @@ button:disabled{opacity:0.4;cursor:default}
   #desk{bottom:var(--dock-h)}
   #caption{font-size:0.86rem}
   #treeCard{left:8px;right:8px;top:8px;width:auto;max-height:62%;padding:10px}
-  #cardFish{width:100%;margin:22px 0 4px}
+  #cardFish{width:100%;margin:46px 0 4px}
   #minimap{left:8px;bottom:36px}
-  #cardName{margin-top:0;padding-right:30px}
+  #cardName{margin-top:0;padding-right:48px}
 
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:7px;align-items:center;
     padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));

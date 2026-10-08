@@ -34,7 +34,9 @@
 //
 //  FRAMING. The subject sits in the clear band of the shell label plate
 //  (lib/saver-clear.js plateBand), checked each 250 ms. With no plate, a
-//  band of 76% of the height.
+//  band of 76% of the height. The band is never under 30% of the height
+//  (clearBox), and the plate grid fits the band shape (gridOptions), so a
+//  phone in landscape gets one row of large fish.
 //
 //  LABEL. opts.label({ title, sub, lines, code }): the title (the Latin
 //  name, the plate or the clade), the sub line CREDIT ("fishdraw by
@@ -48,6 +50,8 @@
 //    grep -n 'function render'               one frame of the active shot
 //    grep -n 'function extract'              a code extract by function name
 //    grep -n 'function boxOf'                the subject box in the band
+//    grep -n 'export function clearBox'      the band floor (pure, tested)
+//    grep -n 'export function gridOptions'   plate grids for a band (tested)
 // ============================================================================
 import { mulberry, randomName, relativeName, baseParams, mutate, blendParams } from './engine.js';
 import { THEMES, THEME_KEYS, MM_PER_PX, layoutPlate, isDark } from './plate.js';
@@ -159,6 +163,35 @@ export function camFollow(cam, focus, dt, w = 2.2) {
   return cam;
 }
 
+// The subject box in CSS px: the clear band of the plate (t, b from the
+// top and the bottom), 90% of the width. On a short phone frame the plate
+// text can leave almost no band. Then t and b shrink in proportion, so the
+// band is at least 30% of the height and stays centred between the texts.
+// (The old box was max(80, band) high from t, so it ran off the bottom.)
+export function clearBox(iw, ih, band) {
+  let t = band ? band.t : ih * 0.12, b = band ? band.b : ih * 0.12;
+  const minH = ih * 0.3;
+  if (ih - t - b < minH && t + b > 0) { const k = Math.max(0, ih - minH) / (t + b); t *= k; b *= k; }
+  const w = iw * 0.9;
+  return { x: (iw - w) / 2, y: t, w, h: Math.max(1, ih - t - b) };
+}
+// The grids of the plate and family shots for a band of bw x bh CSS px.
+// The fish width that fits a cell is min(cell w, 1.33 x cell h): a fish is
+// 5:3, and the name takes about 20% of the cell. A grid is kept when that
+// width is 110 px or more. The band shape picks the list, not the window:
+// on a landscape phone the band is a strip (about 760 x 120 px), and a
+// 3 x 4 grid there drew fish 50 px wide. With no grid of the list kept,
+// the one-row and one-column grids of FEW are tried, then the best grid.
+const FEW = [[1, 2], [1, 3], [2, 1]];
+export function gridOptions(bw, bh) {
+  const fishW = ([r, c]) => Math.min(bw / c, bh / r * 1.33);
+  const list = bw >= bh ? GRIDS_LAND : GRIDS_PORT;
+  let keep = list.filter(g => fishW(g) >= 110);
+  if (!keep.length) keep = FEW.filter(g => fishW(g) >= 110);
+  if (!keep.length) keep = [list.concat(FEW).reduce((a, g) => fishW(g) > fishW(a) ? g : a)];
+  return keep;
+}
+
 export function installSaver(ctxIn) {
   const { S, pool, E, src, getGrain, onEnter, onExit } = ctxIn;
   let V = null;
@@ -251,7 +284,7 @@ export function installSaver(ctxIn) {
     const ask = (spec, i, label) => pool.draw(spec.name, spec.params, label, 2 + i, 'saver')
       .then(f => { shot.fishes[i] = f; return f; }).catch(() => null);
     if (type === 'plate' || type === 'family') {
-      const opts = innerWidth >= innerHeight ? GRIDS_LAND : GRIDS_PORT;
+      const cb = clearBox(innerWidth, innerHeight, V.band), opts = gridOptions(cb.w, cb.h);
       const [rows, cols] = opts[Math.floor(V.rnd() * opts.length)];
       shot.rows = rows; shot.cols = cols; shot.dur += 2;
       if (type === 'family') {
@@ -316,11 +349,8 @@ export function installSaver(ctxIn) {
   // ── boxOf ─────────────────────────────────────────────────────────────────
   // The subject box in device px: the clear band, with side margins.
   function boxOf(W, H, dpr) {
-    const b = V.band;
-    const t = b ? b.t : innerHeight * 0.12, bb = b ? b.b : innerHeight * 0.12;
-    const h = Math.max(80, innerHeight - t - bb);
-    const w = innerWidth * 0.9;
-    return { x: (innerWidth - w) / 2 * dpr, y: t * dpr, w: w * dpr, h: h * dpr };
+    const b = clearBox(innerWidth, innerHeight, V.band);
+    return { x: b.x * dpr, y: b.y * dpr, w: b.w * dpr, h: b.h * dpr };
   }
 
   // ── render ────────────────────────────────────────────────────────────────

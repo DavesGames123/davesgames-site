@@ -438,6 +438,38 @@ test('saver radiate camera: calm speed, no zigzag (old camera fails the same che
   ok(oldBad >= 60, `the old camera failed only ${oldBad} of 120 runs`);
 });
 
+// ── saver framing on phones ───────────────────────────────────────────────
+// The band of the plate on a phone can be tiny. clearBox keeps 30% of the
+// height, centred, and gridOptions keeps plate fish 110 px wide or more.
+test('saver clearBox: phone frames keep a centred band of 30% or more', async () => {
+  const { clearBox } = await import('./saver.js');
+  const frames = [[360, 640, { t: 251, b: 204 }], [390, 844, { t: 302, b: 234 }], [844, 390, { t: 186, b: 160 }],
+    [844, 390, { t: 300, b: 200 }], [390, 844, null], [1280, 800, { t: 270, b: 272 }]];
+  for (const [w, h, band] of frames) {
+    const b = clearBox(w, h, band);
+    ok(b.h >= h * 0.3 - 1e-6, `${w}x${h}: band ${b.h.toFixed(0)} px`);
+    ok(b.y >= 0 && b.y + b.h <= h + 1e-6, `${w}x${h}: box ${b.y.toFixed(0)}..${(b.y + b.h).toFixed(0)} inside the frame`);
+    ok(b.x >= 0 && b.x + b.w <= w, `${w}x${h}: box inside the width`);
+    if (band && h - band.t - band.b >= h * 0.3) eq(b.y, band.t, `${w}x${h}: a wide band is used as it is`);
+    if (band && h - band.t - band.b < h * 0.3) ok(Math.abs(b.y / (h - b.y - b.h) - band.t / band.b) < 1e-6, `${w}x${h}: t:b ratio kept`);
+  }
+});
+test('saver gridOptions: plate fish stay 110 px wide on phone bands', async () => {
+  const { gridOptions } = await import('./saver.js');
+  const bands = { 'desktop 1152x258': [1152, 258], 'phone 351x308': [351, 308], 'phone 324x185': [324, 185],
+    'landscape 760x117': [760, 117], 'tiny 300x60': [300, 60] };
+  for (const [k, [bw, bh]] of Object.entries(bands)) {
+    const g = gridOptions(bw, bh);
+    ok(g.length >= 1, `${k}: a grid`);
+    for (const [r, c] of g) {
+      const fw = Math.min(bw / c, bh / r * 1.33);
+      if (k !== 'tiny 300x60') ok(fw >= 110, `${k}: ${r}x${c} fish ${fw.toFixed(0)} px`);
+    }
+  }
+  ok(gridOptions(760, 117).every(([r]) => r === 1), 'landscape phone strip: one row only');
+  ok(gridOptions(1152, 258).some(([r, c]) => r * c >= 8), 'desktop keeps the large grids');
+});
+
 // node tests.mjs <text> runs only the tests whose name holds <text>.
 const only = process.argv[2] || '';
 for (const [name, fn] of tests) {
