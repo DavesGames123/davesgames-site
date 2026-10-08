@@ -28,6 +28,7 @@ import { readFileSync } from 'node:fs';
 import { decode, findGroups, toMolfile, toSDF, el, isMetal, formulaCounts, molarMass } from './chem.js';
 import { render2D } from './draw2d.js';
 import { recordFrom } from './engine.js';
+import { timingFor, drawLiftAt } from './drawlift.js';
 
 const here = new URL('.', import.meta.url).pathname;
 const V = here + '../../vendor/openchemlib@9.25.1/dist/';
@@ -246,6 +247,37 @@ const hill = f => { const c = {}; for (const [, s, n] of strip(f).matchAll(/([A-
     void formulaCounts;
   }
   ok(!bad.length, 'MOL and SDF export read back (every 7th record)', bad.slice(0, 5).join(', '));
+}
+
+// ── draw then lift (drawlift.js) ────────────────────────────────────────────
+// The view state over time: the bonds reveal in order, the ink stays 1
+// while drawing and falls to 0, the morph rises 0 -> 1, and nothing goes
+// backwards. Saver shots (saver.js: 1.2 x hold, so 6.6-12 s) keep at least
+// 40 % of their time for the 3D view, and a family molecule (1.5 x hold
+// over 3, so 2.75-4.67 s) at least a third.
+{
+  let bad = [];
+  for (const D of [timingFor(), timingFor(5), timingFor(12), timingFor(3.2, true), timingFor(5, true)]) {
+    const T = D.draw + D.hold + D.lift, nb = 23;
+    let prev = { reveal: -1, ink: 1, morph: 0 }, sawFull = false;
+    for (let t = 0; t <= T + 0.5; t += 0.01) {
+      const s = drawLiftAt(t, nb, D);
+      if (s.reveal != null && s.reveal < prev.reveal - 1e-9) bad.push('reveal back at ' + t.toFixed(2));
+      if (s.reveal != null && s.reveal >= nb) sawFull = true;
+      if (s.ink > prev.ink + 1e-9) bad.push('ink up at ' + t.toFixed(2));
+      if (s.morph < prev.morph - 1e-9) bad.push('morph back at ' + t.toFixed(2));
+      if (s.ink < 0 || s.ink > 1 || s.morph < 0 || s.morph > 1) bad.push('out of range at ' + t.toFixed(2));
+      prev = { reveal: s.reveal ?? prev.reveal, ink: s.ink, morph: s.morph };
+    }
+    const e = drawLiftAt(T + 0.01, nb, D);
+    if (!sawFull) bad.push('the drawing never finished');
+    if (!(e.done && e.ink === 0 && e.morph === 1 && e.reveal === null)) bad.push('not done at the end');
+  }
+  ok(!bad.length, 'draw then lift: reveal, ink and morph move one way and end in 3D', bad.slice(0, 4).join('; '));
+  const share = (dur, quick) => { const D = timingFor(dur, quick); return 1 - (D.draw + D.hold + D.lift) / dur; };
+  const shots = [6.6, 8, 10, 12].map(d => share(d)), fam = [2.75, 3.5, 4.67].map(d => share(d, true));
+  ok(Math.min(...shots) >= 0.4 && Math.min(...fam) >= 1 / 3, 'draw then lift: the 3D view keeps most of each saver shot',
+    `shots ${shots.map(x => x.toFixed(2)).join(' ')}, family ${fam.map(x => x.toFixed(2)).join(' ')}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

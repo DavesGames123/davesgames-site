@@ -15,7 +15,7 @@
 //    groups .......... "function applyGroups"
 //    search .......... "function runQuery" "function renderResults"
 //    compare ......... "function setCompare"
-//    morph ........... "function openLewis" "function lift"
+//    morph ........... "function openLewis" "function drawLift" (drawlift.js)
 //    export .......... "function exportAs"
 //    phone sheet ..... "function setOpen" "function occlusion"
 //    frame loop ...... "function frame"
@@ -24,8 +24,10 @@ import { View3D } from './view3d.js';
 import { Pane2D, MORPH } from './pane2d.js';
 import { LIB, loadLibrary, model, search, isomers, thumb, Browser, addRecord } from './browse.js';
 import { findGroups, GROUP_INFO, CAT_NAME, formulaHTML, toMolfile, toSDF, el, lonePairs } from './chem.js';
+import { timingFor, drawLiftAt } from './drawlift.js';
 
 const $ = id => document.getElementById(id);
+const REDUCED_Q = window.matchMedia('(prefers-reduced-motion: reduce)');
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const STYLES = [['ball', 'Ball'], ['space', 'Space'], ['stick', 'Stick'], ['wire', 'Wire']];
@@ -87,6 +89,9 @@ function show(sideKey, rec, opts = {}) {
     side.view.showH = S.h3; side.view.style = S.style; side.view.labelMode = S.labels;
     side.view.morph = 1; side.view.reveal = null; side.view.ink = 0;
     side.view.setModel(side.M); side.view.setSpin(S.spin);
+    // each molecule that loads draws itself, then lifts into 3D (not in
+    // the saver, which runs its own, or with reduced motion)
+    if (!opts.noAnim && !REDUCED_Q.matches && !document.documentElement.classList.contains('sn-saver')) drawLift(side);
     side.p3.querySelector('.src3').textContent = rec.g3 === 'ocl' ? '3D: OpenChemLib conformer (MMFF94s+)' : rec.g3 === 'built' ? '3D: built geometry' : '3D: PubChem conformer';
   }
   applyGroups(side);
@@ -272,14 +277,37 @@ function stopLewis() {
   const p = sides.a.pane; p.stopMorph();
   Object.assign(p.state, S.h2 ? { hC: 1, hX: 1, cL: 0, lp: 0 } : { hC: 0, hX: 0, cL: 0, lp: 0 }); p.render();
 }
-function lift(side) {
-  const v = side.view; if (!v) return;
-  const t0 = performance.now(), dur = 2600;
-  v.setMorph(0); v.fit(false);
+// The skeletal formula draws itself bond by bond as thin ink, face on,
+// then lifts into 3D while the ink grows into the chosen style and the
+// camera eases from the drawing's frame to the 3D fit (drawlift.js). A new
+// molecule or the saver stops a running one; a drag of the view keeps the
+// animation but stops the camera move.
+function drawLift(side) {
+  const v = side.view; if (!v || !side.M) return;
+  const tok = side.liftTok = (side.liftTok || 0) + 1, D = timingFor();
+  const nb = side.M.nShown;
+  v.setSpin(false); v.setReveal(0); v.setInk(1); v.setMorph(0);
+  v.fit(true);
+  const d0 = v.camera.position.length();
+  v.morph = 1; v.fit(false); const d1 = v.camera.position.length(); v.morph = 0;
+  v.camera.position.setLength(d0); v.dirty = true;
+  const ease = u => u * u * (3 - 2 * u), t0 = performance.now();
+  let user = false;
+  const stopUser = () => { user = true; };
+  v.controls.addEventListener('start', stopUser);
+  const end = () => {
+    v.controls.removeEventListener('start', stopUser);
+    if (side.liftTok !== tok) return;
+    v.setReveal(null); v.setInk(0); v.setMorph(1); v.setSpin(S.spin);
+  };
   const step = now => {
-    const t = Math.min(1, (now - t0 - 500) / dur);
-    v.setMorph(Math.max(0, t));
-    if (t < 1) requestAnimationFrame(step); else v.fit(false);
+    if (side.liftTok !== tok || document.documentElement.classList.contains('sn-saver')) { end(); return; }
+    const st = drawLiftAt((now - t0) / 1000, nb, D);
+    v.setReveal(st.reveal); v.setInk(st.ink); v.setMorph(st.morph);
+    // the camera follows the lift unless the user has taken it
+    if (!user) { v.camera.position.setLength(d0 + (d1 - d0) * ease(st.morph)); v.dirty = true; }
+    if (st.done) { end(); return; }
+    requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
 }
@@ -375,7 +403,7 @@ function wire() {
     else if (t === 'h3') { S.h3 = !S.h3; document.querySelectorAll('[data-t=h3]').forEach(x => x.classList.toggle('on', S.h3)); for (const k in sides) sides[k].view && sides[k].view.setShowH(S.h3); }
     else if (t === 'lab') { S.labels = { none: 'hetero', hetero: 'all', all: 'none' }[S.labels]; b.textContent = { none: 'Labels', hetero: 'Labels: N O S', all: 'Labels: all' }[S.labels]; for (const k in sides) sides[k].view && sides[k].view.setLabels(S.labels); }
     else if (t === 'spin') { S.spin = !S.spin; document.querySelectorAll('[data-t=spin]').forEach(x => x.classList.toggle('on', S.spin)); for (const k in sides) sides[k].view && sides[k].view.setSpin(S.spin); }
-    else if (t === 'lift') { for (const k in sides) lift(sides[k]); }
+    else if (t === 'lift') { for (const k in sides) drawLift(sides[k]); }
     else if (t === 'reset') { for (const k in sides) sides[k].view && sides[k].view.fit(true); }
     else if (t === 'cmpx') setCompare(false);
   });

@@ -8,10 +8,12 @@
 //  longer). A cut fades the canvas through black by the tone-mapping
 //  exposure, so a recording of the canvas alone has the fade too.
 //
+//  Every shot opens the same way (the user asked for it on every
+//  animation): the skeletal formula draws itself bond by bond as thin
+//  white ink, then lifts into 3D while the ink grows into the shot's style
+//  (drawlift.js; a family montage draws each of its molecules). Then:
 //  Shots (the molecule: a seeded shuffle of the famous ones)
-//    draw     the skeletal formula draws itself bond by bond as thin white
-//             ink (heteroatom labels as sprites), then lifts into the 3D
-//             ball-and-stick model and turns
+//    draw     ball and stick, turning
 //    ball     a slow orbit in ball and stick
 //    space    a slow orbit of the van der Waals surface (space-filling)
 //    groups   ball and stick with the functional groups pulsing
@@ -35,6 +37,7 @@
 import { plateBand } from '../../lib/saver-clear.js';
 import { CAT_NAME, findGroups, GROUP_INFO, formulaParts } from './chem.js';
 import { model } from './browse.js';
+import { timingFor, drawLiftAt } from './drawlift.js';
 
 let CODE = `export function drawOrder(M) {
   const seen = new Uint8Array(M.n), used = new Uint8Array(M.nShown), out = [];
@@ -154,15 +157,17 @@ export function installSaver(api) {
         },
       };
       const apply = (s, rec) => {
-        show('a', rec, { noHash: true });
+        show('a', rec, { noHash: true, noAnim: true });
         v.setStyle(s.style); v.setShowH(true);
         api.setGroups(!!s.groups);
         v.controls.autoRotateSpeed = (0.9 - 0.45 * calm) * (rnd() < 0.5 ? 1 : -1);
-        if (s.draw) { v.setMorph(0); v.setInk(1); v.setReveal(0); v.setSpin(false); }
-        else { v.setMorph(1); v.setInk(0); v.setReveal(null); v.setSpin(true); }
+        // every shot (and each molecule of a family) opens with the draw
+        // and the lift; the timer restarts here
+        s.draw = true; s.tA = performance.now();
+        s.D = s.fam && s.fam.length > 1 ? timingFor(s.dur / 1000 / s.fam.length, true) : timingFor(s.dur / 1000);
+        v.setMorph(0); v.setInk(1); v.setReveal(0); v.setSpin(false);
         frameRect(true); v.fit(true);
-        if (s.draw) { s.rk = run.rectKey; s.d0 = drawDist(); s.d1 = fitDist(); setDist(s.d0); }
-        else tilt(s.elev ?? null);
+        s.rk = run.rectKey; s.d0 = drawDist(); s.d1 = fitDist(); setDist(s.d0);
       };
       // a start view from a random side, a little above the plane
       const tilt = elev => {
@@ -191,7 +196,9 @@ export function installSaver(api) {
       const start = () => {
         run.i = (run.i + 1) % kinds.length;
         const s = run.shot = SHOTS[kinds[run.i]]();
-        s.kind = kinds[run.i]; s.dur = hold() * (s.kind === 'draw' ? 1.35 : s.kind === 'family' ? 1.4 : 1);
+        // every shot draws and lifts first, so each is 20 % longer (at most
+        // 12 s); a family montage draws three molecules
+        s.kind = kinds[run.i]; s.dur = s.kind === 'family' ? Math.min(14000, hold() * 1.5) : Math.min(12000, hold() * 1.2);
         s.fi = 0;
         apply(s, s.rec);
         run.t0 = performance.now();
@@ -208,7 +215,7 @@ export function installSaver(api) {
           const now = performance.now(), on = !label || !!plateBand(innerHeight);
           if (on) { frameRect(true); if (run.rectKey !== key) { key = run.rectKey; since = now; } } else since = now;
           if (now - since < 200 && now - ts < 1500) { requestAnimationFrame(settle); return; }
-          t1 = performance.now(); run.t0 += t1 - ts; requestAnimationFrame(up);
+          t1 = performance.now(); run.t0 += t1 - ts; if (run.shot && run.shot.tA) run.shot.tA += t1 - ts; requestAnimationFrame(up);
         };
         run.going = true; run.fade = 0;
         requestAnimationFrame(settle);
@@ -255,17 +262,15 @@ export function installSaver(api) {
         const s = run.shot; if (!s) return;
         const t = (now - run.t0) / s.dur;
         if (s.draw) {
-          const nb = side.M.nShown, drawEnd = 0.45, liftEnd = 0.68;
+          const st = drawLiftAt((now - s.tA) / 1000, side.M.nShown, s.D);
           // the band moves when the plate text changes: frame again
-          if (s.rk !== run.rectKey && t < liftEnd) { s.rk = run.rectKey; s.d0 = drawDist(); s.d1 = fitDist(); }
-          if (t < drawEnd) { v.setReveal(Math.max(0, t / drawEnd) * (nb + 0.5) - 0.2); v.setInk(1); v.setMorph(0); setDist(s.d0); }
-          else if (t < liftEnd) {
-            // the drawing lifts and the camera eases from the drawing's
-            // frame to the 3D frame: no jump at the end of the lift
-            const u = (t - drawEnd) / (liftEnd - drawEnd);
-            v.setReveal(null); v.setInk(Math.max(0, 1 - u * 1.6)); v.setMorph(u);
-            setDist(s.d0 + (s.d1 - s.d0) * ease(u));
-          } else { if (v.morph !== 1) { v.setMorph(1); v.setInk(0); setDist(s.d1); } if (!v.controls.autoRotate) v.setSpin(true); }
+          if (s.rk !== run.rectKey && !st.done) { s.rk = run.rectKey; s.d0 = drawDist(); s.d1 = fitDist(); }
+          if (!st.done) {
+            v.setReveal(st.reveal); v.setInk(st.ink); v.setMorph(st.morph);
+            // the camera eases from the drawing's frame to the 3D frame with
+            // the lift: no jump at its end
+            setDist(s.d0 + (s.d1 - s.d0) * ease(st.morph));
+          } else { if (v.morph !== 1) { v.setReveal(null); v.setMorph(1); v.setInk(0); setDist(s.d1); } if (!v.controls.autoRotate) v.setSpin(true); }
         }
         if (s.groups) v.haloMat.opacity = 0.22 + 0.22 * (0.5 + 0.5 * Math.sin(now / 1000 * Math.PI * 0.8));
         else v.haloMat.opacity = 0.38;
@@ -296,7 +301,7 @@ export function installSaver(api) {
         v.setStyle(api.S.style); v.setSpin(api.S.spin); v.setLabels(api.S.labels);
       }
       api.setGroups(saved.groups);
-      if (saved.rec) show('a', saved.rec, { noHash: true });
+      if (saved.rec) show('a', saved.rec, { noHash: true, noAnim: true });
     },
     debug() {
       const side = sides.a;
