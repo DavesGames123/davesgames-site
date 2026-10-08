@@ -133,7 +133,8 @@ w.SN_NAV = [
     { h: "Earth & Ocean", p: [
       ["tidal-currents", "Tidal Currents", "DATA"],
       ["city-atlas", "City Atlas", "3D"],
-      ["storm-globe", "Storm Globe", "DATA"]
+      ["storm-globe", "Storm Globe", "DATA"],
+      ["map-projections", "Map Projections", "MATH"]
     ] },
     { h: "Shock Waves", p: [
       ["nuclear-blast", "Nuclear Blast Effects", "3D"]
