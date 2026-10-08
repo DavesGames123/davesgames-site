@@ -257,6 +257,9 @@ w.SN_NAV = [
       ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"],
       ["4d-codebench", "4DCodeBench", "NEW"],
       ["enzyme-design", "De Novo Enzyme Design", "NEW"]
+    ] },
+    { h: "Medicine", p: [
+      ["mrna-vaccine", "The mRNA Vaccine", "NEW"]
     ] }
   ] }
 ] },
