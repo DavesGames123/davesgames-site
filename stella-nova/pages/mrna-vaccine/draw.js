@@ -76,7 +76,7 @@ export function drawStrand(g, w, h, { T, offset = 0, mod = true, hover = -1, tim
     if (t.k === 'gap') {
       const y = yAt(x0 + GAPW / 2);
       g.strokeStyle = PAL.dim; g.setLineDash([3, 5]); g.beginPath(); g.moveTo(x0 + 4, y); g.lineTo(x0 + GAPW - 10, y); g.stroke(); g.setLineDash([]);
-      g.fillStyle = PAL.dim; g.font = '11px Inter, sans-serif';
+      g.fillStyle = PAL.dim; g.font = '12px Inter, sans-serif';
       g.fillText(`… ${t.n} ${t.unit} …`, x0 + GAPW / 2 - 3, y - r * 2.1);
       boxes.push({ k, x: x0, w: GAPW, y: y - r * 2, h: r * 4 });
       return;
@@ -97,7 +97,7 @@ export function drawStrand(g, w, h, { T, offset = 0, mod = true, hover = -1, tim
       g.lineWidth = 1.5; g.beginPath(); g.moveTo(x0 + 2, yb - 6); g.lineTo(x0 + 2, yb); g.lineTo(x0 + 3 * STEP - 6, yb); g.lineTo(x0 + 3 * STEP - 6, yb - 6); g.stroke();
       g.fillStyle = t.aa === '*' ? '#ff8d7a' : PAL.ink; g.font = '600 13px Inter, sans-serif';
       g.fillText(t.aa === '*' ? 'stop' : t.aa, x0 + 1.5 * STEP - 2, yb + 13);
-      g.fillStyle = PAL.dim; g.font = '10px Inter, sans-serif';
+      g.fillStyle = PAL.dim; g.font = '11px Inter, sans-serif';
       if (t.aa !== '*') g.fillText(String(t.res), x0 + 1.5 * STEP - 2, yb + 27);
     }
   });
@@ -352,7 +352,7 @@ export function drawSpike(g, w, h, { m = 0, p2 = true, shake = 0, t = 0, labels 
     }
   }
   if (labels) {
-    g.font = `${Math.max(11, Math.round(u * 3.4))}px Inter, sans-serif`; g.textBaseline = 'middle';
+    g.font = `${Math.max(12, Math.round(u * 3.4))}px Inter, sans-serif`; g.textBaseline = 'middle';
     const lab = (txt, x, y, col, al = 'left') => { const [X, Y] = P(x, y); g.fillStyle = col; g.textAlign = al; g.fillText(txt, X, Y); };
     if (mk < 0.5) { lab('S1 head', 18, 60, PAL.s1); lab('RBD up', 17, 78, PAL.rbd); lab('HR1, folded', 16, 34, PAL.hr1); if (p2) lab('K986P · V987P', -16, 44, '#fff', 'right'); }
     else { lab('HR1 + central helix: one long helix', 6, 96, PAL.hr1); lab('fusion peptide', 6, 108, '#ff6b6b'); }
@@ -377,7 +377,7 @@ export function drawTitre(g, w, h, { gap = 21, days = 150, cursor = -1, second =
   g.strokeStyle = 'rgba(255,255,255,0.07)';
   for (let e = -2; e <= 1; e++) { g.beginPath(); g.moveTo(pad.l, Y(10 ** e)); g.lineTo(w - pad.r, Y(10 ** e)); g.stroke(); }
   axes(g, w, h, pad);
-  g.fillStyle = PAL.dim; g.font = '11px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillStyle = PAL.dim; g.font = '12px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
   for (let d = 0; d <= days; d += 30) g.fillText(String(d), X(d), h - pad.b + 6);
   g.fillText('days after dose 1', pad.l + W / 2, h - 14);
   g.save(); g.translate(12, pad.t + H / 2); g.rotate(-Math.PI / 2); g.textBaseline = 'middle'; g.fillText('antibody level (log, arbitrary)', 0, 0); g.restore();
@@ -408,7 +408,7 @@ export function drawDecay(g, w, h, { half = 10, hours = 72 } = {}) {
   const pad = { l: 40, r: 12, t: 12, b: 30 }, W = w - pad.l - pad.r, H = h - pad.t - pad.b;
   const X = t => pad.l + t / hours * W, Y = f => pad.t + H * (1 - f);
   axes(g, w, h, pad);
-  g.fillStyle = PAL.dim; g.font = '11px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillStyle = PAL.dim; g.font = '12px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
   for (let t = 0; t <= hours; t += 12) g.fillText(String(t), X(t), h - pad.b + 6);
   g.fillText('hours', pad.l + W / 2, h - 13);
   g.textAlign = 'right'; g.textBaseline = 'middle';
@@ -428,7 +428,7 @@ export function drawCharge(g, w, h, { pKa = 6.4, pH = 7.4 } = {}) {
   g.fillStyle = 'rgba(255,154,98,0.10)'; g.fillRect(X(5), pad.t, X(6.5) - X(5), H);
   g.fillStyle = 'rgba(98,196,255,0.10)'; g.fillRect(X(7.3), pad.t, X(7.5) - X(7.3), H);
   axes(g, w, h, pad);
-  g.fillStyle = PAL.dim; g.font = '11px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillStyle = PAL.dim; g.font = '12px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
   for (let p = 4; p <= 8; p++) g.fillText(String(p), X(p), h - pad.b + 6);
   g.fillText('pH', pad.l + W / 2, h - 13);
   g.fillStyle = '#ffb48a'; g.fillText('endosome', X(5.75), pad.t + 2);

@@ -24,6 +24,7 @@
 //      titre .......... "export function titre"    illustrative antibody curve
 //      journey ........ "export function journey"  LNP scene phases
 //      shotPlan ....... "export function shotPlan" saver shots, seeded
+//      nearest ........ "export function nearest"  tap to the closest mark
 // ============================================================================
 
 // ---------------------------------------------------------------- sources
@@ -206,6 +207,15 @@ export const LNP = {
 // Henderson-Hasselbalch: the fraction of an ionizable amine that carries a
 // proton (charge +1) at a given pH.
 export function protonated(pH, pKa) { return 1 / (1 + Math.pow(10, pH - pKa)); }
+
+// Index of the x in xs closest to x, or -1 if none is within maxD. The day
+// bar and the timeline strip use it, so a finger tap need not hit a small
+// dot. Entries that are null (hidden marks) are skipped.
+export function nearest(xs, x, maxD = Infinity) {
+  let best = -1, bd = maxD;
+  xs.forEach((v, i) => { if (v == null) return; const d = Math.abs(v - x); if (d <= bd) { bd = d; best = i; } });
+  return best;
+}
 
 // ---------------------------------------------------------------- scenes
 // The LNP journey, p in 0..1. Phase names in order; pH goes down in the

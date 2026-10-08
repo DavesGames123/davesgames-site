@@ -23,7 +23,7 @@
 //      grep -n 'function loop'          the one rAF loop
 // ============================================================================
 import { SOURCES, TIMELINE, ERAS, TRIALS, CONSTRUCT, LNP, PEPTIDES, JOURNEY,
-  ve, dayNum, fmtDate, precision, buildStrand, gcFraction, protonated } from './data.js';
+  ve, dayNum, fmtDate, precision, buildStrand, gcFraction, protonated, nearest } from './data.js';
 import { PAL, drawStrand, strandWidth, drawJourney, drawTranslate, drawSpike, drawTitre, drawDecay, drawCharge } from './draw.js';
 import { typeset, typesetAll } from '../../lib/sci-math.js';
 import './saver.js';
@@ -283,8 +283,12 @@ function initTitre() {
   const S = { gap: 21, second: true, cursor: -1 };
   const v = view(cv, () => { const { g, w, h } = fit(cv); drawTitre(g, w, h, { gap: S.gap, second: S.second, cursor: S.cursor }); });
   seg($('titreSeg'), val => { S.gap = +val || 21; S.second = +val > 0; v.dirty = true; });
-  cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); S.cursor = clamp((e.clientX - r.left - 44) / (r.width - 56) * 150, 0, 150); v.dirty = true; });
-  cv.addEventListener('pointerleave', () => { S.cursor = -1; v.dirty = true; });
+  // A mouse reads the curve on hover. A finger has no hover: a tap or a
+  // sideways drag sets the cursor, and the cursor stays after the lift.
+  const at = e => { const r = cv.getBoundingClientRect(); S.cursor = clamp((e.clientX - r.left - 44) / (r.width - 56) * 150, 0, 150); v.dirty = true; };
+  cv.addEventListener('pointerdown', at);
+  cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' || e.buttons) at(e); });
+  cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { S.cursor = -1; v.dirty = true; } });
 }
 
 // ---------------------------------------------------------------- 08
@@ -338,7 +342,14 @@ function initDays() {
     bar.querySelectorAll('.ev').forEach((b, k) => b.classList.toggle('on', k === i));
     info.innerHTML = `<b>${fmtDate(e.date)} · day ${dayNum(e.date) - d0}.</b> <b>${esc(e.title)}.</b> ${esc(e.text)} ${cite(e.src)}`;
   };
-  bar.addEventListener('click', e => { const b = e.target.closest('.ev'); if (b) pick(+b.dataset.i); });
+  // A tap anywhere on the bar picks the closest event (within 44 px), so a
+  // finger need not hit the 12 px dot.
+  const evX = ev.map(e => (dayNum(e.date) - d0) / span);
+  bar.addEventListener('click', e => {
+    const r = bar.getBoundingClientRect(); if (!r.width) return;
+    const i = nearest(evX.map(f => f * r.width), e.clientX - r.left, 44);
+    if (i >= 0) pick(i);
+  });
   pick(0);
 }
 
@@ -361,9 +372,15 @@ function initTimeline() {
     s += `<circle data-i="${i}" cx="${X(e.date)}" cy="${y}" r="${precision(e.date) === 3 ? 5 : 7}" fill="${ERAS[e.era].col}" style="cursor:pointer"><title>${esc(fmtDate(e.date) + ': ' + e.title)}</title></circle>`;
   });
   strip.innerHTML = s;
+  // A tap picks the closest dot in its lane (within 30 px on the
+  // screen), so a finger need not hit a 5 px dot.
+  const lanesOf = TIMELINE.map(e => lanes.indexOf(e.era));
   strip.addEventListener('click', e => {
-    const c = e.target.closest('circle'); if (!c) return;
-    const li = $('tl-' + c.dataset.i);
+    const r = strip.getBoundingClientRect(); if (!r.width) return;
+    const sx = r.width / 1000, sy = r.height / 120, lane = clamp(Math.round(((e.clientY - r.top) / sy - 14) / 20), 0, lanes.length - 1);
+    const xs = TIMELINE.map((ev, i) => lanesOf[i] === lane ? X(ev.date) * sx : null);
+    const i = nearest(xs, e.clientX - r.left, 30); if (i < 0) return;
+    const li = $('tl-' + i);
     list.querySelectorAll('li').forEach(x => x.classList.toggle('on', x === li));
     li.style.display = ''; li.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'center' });
   });

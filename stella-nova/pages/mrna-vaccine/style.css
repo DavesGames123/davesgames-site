@@ -11,8 +11,11 @@
    The same values are in draw.js PAL for the canvases.
 
    PHONE (max-width 860px): cards go to one column, the chip bar scrolls
-   sideways, canvases take the full width. A pointer:coarse block sets
-   44px targets on any touch screen.
+   sideways, canvases take the full width, the timeline strip scrolls
+   sideways in its box and small labels go up to 12px. A pointer:coarse
+   block sets 44px targets on any touch screen. A landscape phone block
+   (max-height 500px) keeps each canvas shorter than the screen. Hover
+   colours apply only where (hover:hover), so a tap does not leave them on.
      grep -n 'CHIPS'      the sticky section bar
      grep -n 'CARDS'      grid, cards, figures
      grep -n 'CONTROLS'   segmented buttons, toggles, sliders
@@ -21,6 +24,7 @@
      grep -n 'TIMELINE'   the day bar, the strip and the list
      grep -n 'TOUCH'      target sizes for any touch screen
      grep -n 'PHONE'      the phone block
+     grep -n 'LANDSCAPE'  the landscape phone block
    ========================================================================== */
 :root{
   --bg:#05070c; --card:#0c0f17; --card2:#121725;
@@ -41,7 +45,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14p
 html.in-frame{--top:0px;scroll-padding-top:60px}
 button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 a{color:var(--acc);text-decoration:none}
-a:hover{text-decoration:underline}
+@media (hover:hover){a:hover{text-decoration:underline}}
 sub,sup{font-size:0.72em;line-height:0}
 .mi{font-family:var(--serif);font-style:italic;font-size:1.06em}
 
@@ -58,7 +62,7 @@ html.in-frame .topbar{display:none}
 #chips ol::-webkit-scrollbar{display:none}
 #chips a{display:flex;gap:7px;align-items:baseline;white-space:nowrap;padding:6px 11px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);font-size:0.8rem}
 #chips a b{font:500 0.7rem var(--mono);color:var(--dim)}
-#chips a:hover{text-decoration:none;border-color:var(--acc)}
+@media (hover:hover){#chips a:hover{text-decoration:none;border-color:var(--acc)}}
 #chips a.on{background:var(--acc-bg);border-color:var(--acc-line);color:#fff}
 #chips a.on b{color:var(--acc)}
 
@@ -133,7 +137,7 @@ html.in-frame .topbar{display:none}
 .seg button.on{background:var(--acc-bg);color:#fff}
 .tgl{background:transparent;border:1px solid var(--line2);color:var(--ink2);border-radius:999px;padding:6px 12px;font-size:0.8rem}
 .tgl.on{background:var(--acc-bg);border-color:var(--acc-line);color:#fff}
-.tgl:hover,.seg button:hover{color:#fff}
+@media (hover:hover){.tgl:hover,.seg button:hover{color:#fff}}
 
 /* ---------------------------------------------------------------- STRAND */
 .fig.strand{aspect-ratio:auto;height:230px;cursor:grab;touch-action:pan-y}
@@ -160,6 +164,7 @@ html.in-frame .topbar{display:none}
 .daybar .ev::after{content:'';position:absolute;left:-5px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--C);box-shadow:0 0 0 3px var(--card)}
 .daybar .ev.auth{background:var(--M)} .daybar .ev.auth::after{background:var(--M)}
 .daybar .ev.on::after{background:#fff}
+.strip-scroll{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .strip{display:block;width:100%;height:120px;margin:6px 0 4px}
 .tl{list-style:none;display:grid;gap:8px;margin-top:8px}
 .tl li{display:grid;grid-template-columns:9.5em minmax(0,1fr);gap:4px 14px;padding:10px 12px;border:1px solid var(--line);border-left:3px solid var(--c,#fff);border-radius:10px;background:var(--card2);scroll-margin-top:120px}
@@ -176,6 +181,7 @@ html.in-frame .topbar{display:none}
 @media (pointer:coarse){
   .seg button,.tgl,.regions button{min-height:44px;padding:10px 14px}
   .ctrl input[type=range],#strandPos{min-height:44px}
+  .daybar{cursor:pointer}
   .daybar .ev{width:20px;margin-left:-9px;background:transparent}
   .daybar .ev::after{left:4px}
   #chips a{padding:10px 13px}
@@ -194,4 +200,17 @@ html.in-frame .topbar{display:none}
   .tl p,.tl .src{grid-column:1}
   .seg{display:flex;width:100%}
   .seg button{flex:1 1 0}
+  .strip{min-width:760px}
+  .strip text{font-size:13px}
+  .tag,#chips a b,.daybar .mo,.stats span,.legend{font-size:0.75rem}
+  .pep span small{font-size:0.7rem}
+}
+
+/* ---------------------------------------------------------------- LANDSCAPE */
+@media (max-height:500px) and (orientation:landscape){
+  html{scroll-padding-top:70px}
+  .topbar{height:40px} :root{--top:40px} html.in-frame{--top:0px}
+  .fig{max-height:calc(100vh - 110px)}
+  .fig.wide{aspect-ratio:16/9}
+  .fig.strand{height:200px}
 }

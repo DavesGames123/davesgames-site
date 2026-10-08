@@ -6,7 +6,8 @@
 //  values, the strand encodes the real spike stretches with both codon
 //  sets, the LNP phases and pH are in order, the titre model peaks after
 //  the boost, and the saver plan shuffles, varies by seed and cuts every
-//  5 to 12 s. Exit code 1 on any failure.
+//  5 to 12 s, and nearest() picks the closest mark for a tap. Exit code 1
+//  on any failure.
 // ============================================================================
 import * as D from './data.js';
 
@@ -97,6 +98,17 @@ for (const seed of [1, 7, 42, 12345]) for (const calm of [0, 0.7, 1]) {
 const orders = new Set([1, 2, 3, 4, 5, 6, 7, 8].map(s => D.shotPlan(s, 8).map(x => x.id).join()));
 ok(orders.size >= 4, `plans vary with the seed (${orders.size} distinct of 8)`);
 ok(D.shotPlan(9, 12).map(x => x.id + x.sec).join() === D.shotPlan(9, 12).map(x => x.id + x.sec).join(), 'plan is deterministic per seed');
+
+// tap picking: nearest mark within the reach, null marks skipped
+ok(D.nearest([0, 100, 200], 140, 44) === 1, 'nearest picks the closest mark in reach');
+ok(D.nearest([0, 100, 200], 150, 44) === -1, 'nearest gives -1 out of reach');
+ok(D.nearest([null, 100, 120], 5, 200) === 1, 'nearest skips null marks');
+ok(D.nearest([], 5) === -1, 'nearest on no marks gives -1');
+{ // the 2020 day bar at 330 px: every event can be picked by a tap on it
+  const ev = D.TIMELINE.filter(e => e.era === '2020'), a = D.dayNum('2020-01-11'), span = D.dayNum('2020-12-31') - a;
+  const xs = ev.map(e => (D.dayNum(e.date) - a) / span * 330);
+  ok(xs.every((x, i) => D.nearest(xs, x, 44) === i || xs[D.nearest(xs, x, 44)] === x), 'day bar: a tap on each event picks it at 330 px');
+}
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
