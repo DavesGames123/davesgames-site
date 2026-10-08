@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Ramanujan–Sato Series — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   RAMANUJAN–SATO SERIES  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Series for 1/pi of the form
+       1/pi = sum s(k) (A k + B) / C^k
+   from the Wikipedia article "Ramanujan–Sato series", summed exactly in
+   BigInt. Four views of one canvas: the race of correct digits against
+   terms, the digits of pi as each term fixes them, the anatomy of one
+   term, and a large computation by binary splitting. No GPU is used.
+
+   FILES
+     engine.js     series table, exact sequences, isqrt, partial sums,
+                   digit locks, binary splitting, Machin  (DOM-free)
+     pi10k.js      pi to 10000 decimals, the stored reference
+     worker.js     runs engine.js jobs off the main thread
+     charts.js     the canvas 2D views (race, digits, anatomy, compute)
+     main.js       state, panel, series list, play, hover, layout
+     saver.js      the screensaver director (window.snSaver)
+     tests.mjs     node tests of engine.js against the reference
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left. #stage fills the rest: #tabs and
+                 #playBtn at the top, #eqbar (the formula of the series),
+                 #plot with the canvas #cv, and #caption under it.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: controls, the series name (next),
+                 play. #panel is a bottom sheet (portrait) or a drawer at
+                 the right (landscape); main.js "function layout" keeps
+                 #stage in the part of the screen that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'       stage size and the clear area
+     grep -n 'function draw'         paint the view on #cv
+     grep -n 'function load'         ask the worker for the data of a view
+     grep -n 'function selectSeries' the series list and the formula
+     grep -n 'function setView'      the four tabs
+     grep -n 'function hover'        tooltips
+     grep -n 'function compute'      the big run and its progress
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Ramanujan–Sato series for pi, summed exactly: race eight series from Ramanujan's 1914 formula to Chudnovsky against Leibniz and Machin, watch each term fix about 8 or 14 digits, take one term apart, and compute up to a million digits in your browser.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Ramanujan–Sato series</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="stage">
+  <header id="stagebar">
+    <div id="tabs" class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" data-v="race" class="on">Race</button>
+      <button role="tab" data-v="digits">Digits</button>
+      <button role="tab" data-v="anatomy">Anatomy</button>
+      <button role="tab" data-v="compute">Compute</button>
+    </div>
+    <button id="playBtn" class="play" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg><span>Play</span></button>
+  </header>
+  <div id="eqbar" class="sci-eq" aria-live="polite"></div>
+  <div id="plot"><canvas id="cv" aria-label="Chart"></canvas><div id="tip" role="tooltip"></div></div>
+  <div id="caption" aria-live="polite"></div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+  <h1 class="ptitle">Ramanujan–Sato series</h1>
+  <p class="lede">In 1914 Ramanujan wrote down series for 1/π that gain about eight digits with each term. They all have one shape: an integer sequence <i>s</i>(<i>k</i>), a linear part and a power.</p>
+  <div class="sci-eq general" data-tex="\frac{1}{\pi}=\sum_{k=0}^{\infty}\class{m1}{s(k)}\,\frac{\class{m2}{A\,k+B}}{\class{m3}{C^{k}}}"></div>
+
+  <div class="sec-label">Series <span class="sec-sub">digits per term</span></div>
+  <div id="seriesList" class="slist" role="listbox" aria-label="Series"></div>
+  <div id="seriesInfo" class="sinfo">
+    <div class="who" id="sWho"></div>
+    <div class="sci-eq small" id="sSeq"></div>
+    <p class="hint" id="sNote"></p>
+  </div>
+
+  <div class="sec-label" id="ctlLabel">Race</div>
+  <div id="ctlRace" class="ctl">
+    <div class="seg" id="raceT"><button data-v="10">10 terms</button><button data-v="40" class="on">40</button><button data-v="120">120</button><button data-v="400">400</button></div>
+    <p class="hint">Correct digits are −log₁₀ |π<sub>n</sub> − π|, rounded down, for the value π<sub>n</sub> after <i>n</i> terms. The chart stops a series at 3000 digits (the dot).</p>
+  </div>
+  <div id="ctlDigits" class="ctl" hidden>
+    <div class="seg" id="digitsD"><button data-v="100">100 decimals</button><button data-v="300" class="on">300</button><button data-v="1000">1000</button></div>
+    <div class="row"><label for="kSlider">Terms summed</label><span class="val" id="kVal"></span>
+      <input type="range" id="kSlider" min="0" max="10" step="1" value="1" aria-label="Terms summed"></div>
+    <p class="hint">A decimal is fixed by term <i>t</i> when the value after <i>t</i> terms, and after every later term, agrees with π up to that decimal. Blue and gold change at each term; the orange mark is the first decimal not fixed yet. The faint digits are the current value, still wrong.</p>
+  </div>
+  <div id="ctlAnatomy" class="ctl" hidden>
+    <div class="row"><label for="aSlider">Term <i>k</i></label><span class="val" id="aVal"></span>
+      <input type="range" id="aSlider" min="0" max="40" step="1" value="3" aria-label="Term k"></div>
+    <p class="hint">Each bar multiplies or divides by a power of ten. <span class="m1"><i>s</i>(<i>k</i>)</span> grows by a fixed factor per term, <span class="m3"><i>C</i><sup><i>k</i></sup></span> grows faster, and the term is what is left. Hollow dots are negative terms.</p>
+  </div>
+  <div id="ctlCompute" class="ctl" hidden>
+    <div class="seg" id="compS"><button data-v="l1a" class="on">Chudnovsky</button><button data-v="l2a">Ramanujan 1914</button><button data-v="l3a">Level 3A</button></div>
+    <div class="seg" id="compD"><button data-v="1000">1k</button><button data-v="10000" class="on">10k</button><button data-v="100000">100k</button><button data-v="1000000">1M</button></div>
+    <div class="btns"><button id="compBtn" class="acc">Compute π</button><button id="compStop" hidden>Stop</button><button id="compSave" disabled>Save digits</button></div>
+    <div class="bar"><i id="compBar"></i></div>
+    <p class="hint" id="compInfo">Binary splitting: the terms are multiplied in a balanced tree of exact integers, then one division and one square root give all the digits.</p>
+  </div>
+
+  <div class="sec-label">Why so few terms</div>
+  <div class="about">
+    <p>Each term is smaller than the one before by an almost fixed factor. The ratio <span class="sci-sym" data-tex="\class{m1}{s(k+1)}/\class{m1}{s(k)}" data-inline></span> tends to a constant <i>g</i>, so each term adds about <span class="sci-sym" data-tex="\log_{10}(\class{m3}{C}/g)" data-inline></span> correct digits. For the Chudnovsky series <i>C</i> = 640320³ and <i>g</i> = 12³ = 1728, which gives 14.18 digits per term. Ramanujan’s 1914 series has <i>C</i> = 396⁴ and <i>g</i> = 256: 7.98 digits per term.</p>
+    <p>The constants are not chosen by search. <i>C</i> is the value of a modular function at a special point τ. At level 1 the function is Klein’s <i>j</i>-invariant,</p>
+    <div class="sci-eq small" data-tex="j(\tau)=\frac{1}{q}+744+196884\,q+21493760\,q^{2}+\cdots,\qquad q=e^{2\pi i\tau}"></div>
+    <p>and at τ = (1 + √−163)/2 it is exactly −640320³. It is an integer because 163 is a Heegner number: the field ℚ(√−163) has class number one. There <i>q</i> = −e<sup>−π√163</sup> is tiny, so the series for <i>j</i> almost stops after 744:</p>
+    <div class="sci-eq small" data-tex="e^{\pi\sqrt{163}}=262537412640768743.99999999999925\ldots\approx 640320^{3}+744"></div>
+    <p>The higher levels use other modular functions (eta quotients for levels 2 to 11) and other integer sequences: binomial products, the Apéry, Franel and Domb numbers, and sums of fourth powers. A larger <i>C</i> gives a faster series.</p>
+    <p>Ramanujan gave levels 1 to 4A in 1914 without proofs and spoke of “corresponding theories”. The Borweins and Bailey proved his family in 1989; the Chudnovsky brothers proved theirs in 1989, and it later gave 10 trillion digits (2011). H. H. Chan and S. Cooper found a general method in 2012.</p>
+  </div>
+
+  <div class="sec-label">How this page computes</div>
+  <div class="about">
+    <p>Every number is an exact integer (JavaScript BigInt). A value with <i>W</i> decimals is kept as the integer value × 10<sup><i>W</i></sup>. Square roots come from an integer square root with Newton steps. Every series is summed term by term with twelve guard digits, and the value of π after each term is compared with a stored copy of the first 10000 decimals.</p>
+    <p>That copy is checked in the page tests against two computations that share no code: the Chudnovsky series by binary splitting and Machin’s arctangent formula. Compute runs in a worker, so the page stays live.</p>
+  </div>
+
+  <div class="sec-label">Source</div>
+  <div class="about">
+    <p>Formulas, sequences and dates: <a href="https://en.wikipedia.org/wiki/Ramanujan%E2%80%93Sato_series" target="_blank" rel="noopener">Ramanujan–Sato series</a>, Wikipedia (checked 7 Oct 2026). The article writes most series with (−<i>C</i>)<sup><i>k</i>+½</sup> and a factor <i>i</i>; this page shows the same series after the square root is taken, so all terms are real. Each formula here is tested to 400 digits or more.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockName" class="name" aria-label="Next series"><span id="dockTitle">…</span><i>›</i></button>
+  <button id="dockPlay" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

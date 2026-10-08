@@ -93,7 +93,7 @@ export const SERIES = [
     split: { p: k => -(6n * k - 5n) * (2n * k - 1n) * (6n * k - 1n), q: k => k * k * k * 10939058860032000n },
     rate: 14.181647462725477,
     tex: `\\frac{1}{\\pi}=\\class{m5}{\\frac{12}{640320^{3/2}}}${SUM}${SGN}\\class{m1}{\\frac{(6k)!}{(3k)!\\,(k!)^{3}}}\\,\\frac{\\class{m2}{545140134\\,k+13591409}}{\\class{m3}{640320^{3k}}}`,
-    seqTex: 's_{1A}(k)=\\binom{2k}{k}\\binom{3k}{k}\\binom{6k}{3k}=\\frac{(6k)!}{(3k)!\\,(k!)^{3}}',
+    seqTex: 's_{1A}(k)=\\binom{2k}{k}\\binom{3k}{k}\\binom{6k}{3k}',
     note: '545140134 = 163 · 3344418 and j((1 + √−163)/2) = −640320³.',
   },
   {
@@ -104,7 +104,7 @@ export const SERIES = [
     split: { p: k => (4n * k - 3n) * (2n * k - 1n) * (4n * k - 1n), q: k => k * k * k * 3073907232n },
     rate: 7.982541746,
     tex: `\\frac{1}{\\pi}=\\class{m5}{\\frac{2\\sqrt{2}}{9801}}${SUM}\\class{m1}{\\frac{(4k)!}{(k!)^{4}}}\\,\\frac{\\class{m2}{26390\\,k+1103}}{\\class{m3}{396^{4k}}}`,
-    seqTex: 's_{2A}(k)=\\binom{2k}{k}^{2}\\binom{4k}{2k}=\\frac{(4k)!}{(k!)^{4}}',
+    seqTex: 's_{2A}(k)=\\binom{2k}{k}^{2}\\binom{4k}{2k}',
     note: '9801 = 99², 26390 = 58 · 455 and j₂A(√−58 / 2) = 396⁴.',
   },
   {
