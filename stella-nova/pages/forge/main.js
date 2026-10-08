@@ -18,6 +18,11 @@
 //  window.__forge exposes the state for saver.js (window.snSaver) and for
 //  debugging; adopt(P, M, W) shows a planet the saver generated ahead.
 //
+//  Phone layout: PHONE_Q is the same media query as the PHONE block of
+//  style.css. phone() reads it live, so a tablet in split view or a turned
+//  window gets the sheet logic that matches the CSS. ENV.mobile follows it;
+//  ENV.coarse (any touch screen) selects the tablet budget.
+//
 //  grep -n targets: "async function boot", "function regenerate",
 //  "function buildShape", "function buildMaps", "function frame",
 //  "function clearArea", "function bindPointer", "function downloadZip",
@@ -32,10 +37,12 @@ import * as BG from './budget.js';
 import './saver.js';
 
 const $ = id => document.getElementById(id);
-const MOBILE = matchMedia('(max-width:760px), (max-height:520px) and (pointer:coarse)').matches;
-const ENV = { mobile: MOBILE, deviceMemory: navigator.deviceMemory, cores: navigator.hardwareConcurrency || 4 };
+const PHONE_Q = matchMedia('(max-width:760px), (max-height:520px) and (pointer:coarse)');
+const phone = () => PHONE_Q.matches;
+const MOBILE = phone();
+const ENV = { mobile: MOBILE, coarse: matchMedia('(pointer:coarse)').matches, deviceMemory: navigator.deviceMemory, cores: navigator.hardwareConcurrency || 4 };
 const S = {
-  P: PR.fromPreset(MOBILE ? 'earth' : 'earth'), width: BG.defaultWidth(ENV), M: null, Mw: 0,
+  P: PR.fromPreset('earth'), width: BG.defaultWidth(ENV), M: null, Mw: 0,
   cam: { yaw: 0.6, pitch: 0.22, dist: 3.4 }, sunAz: 50, sunEl: 12, exposure: 0.65,
   moveSun: true, spin: true, clouds: true, atmo: true, spinAngle: 0, t: 0,
   busy: false, tab: 'planet', saver: false, override: null,
@@ -51,7 +58,7 @@ const progress = f => { const el = $('progFill'); el.style.width = Math.round(f 
 async function boot() {
   canvas = $('view');
   buildPlanetTab(); buildShape(); buildSky(); bindTabs(); bindPointer(); bindView();
-  pool = createPool(Math.max(1, Math.min(MOBILE ? 3 : 8, (navigator.hardwareConcurrency || 4) - 1)));
+  pool = createPool(Math.max(1, Math.min(MOBILE ? 3 : ENV.coarse ? 4 : 8, (navigator.hardwareConcurrency || 4) - 1)));
   try {
     if (!navigator.gpu) throw new Error('no navigator.gpu');
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
@@ -67,6 +74,7 @@ async function boot() {
     device = null; R = null; $('nogpu').hidden = false;
   }
   addEventListener('resize', resize); resize();
+  PHONE_Q.addEventListener('change', () => { ENV.mobile = phone(); resize(); });
   await regenerate(true);
   requestAnimationFrame(frame);
 }
@@ -89,7 +97,7 @@ async function regenerate(full, width) {
   if (R) R.setPlanet(P, M, ENV);
   status(`${P.name} · seed ${P.seed} · ${W} × ${W / 2} · ${Math.round(performance.now() - t0)} ms`);
   $('mapNote').textContent = `${W} × ${W / 2} equirect, ${pool.size || 1} worker${pool.size === 1 ? '' : 's'}. Heights span ${M.reliefKm.toFixed(1)} km. Normals: tangent space, OpenGL (+Y north).`;
-  if (S.tab === 'maps' || !MOBILE) buildMaps();
+  if (S.tab === 'maps' || !phone()) buildMaps();
   return M;
 }
 // Recipe changed: quick preview now, full width after a quiet moment.
@@ -142,7 +150,7 @@ function sliders(host, rows, onInput) {
   host.innerHTML = '';
   let group = null, box = null;
   for (const [g, path, label, lo, hi, step] of rows) {
-    if (g !== group) { group = g; box = document.createElement('details'); box.open = !MOBILE && host.children.length < 2; box.innerHTML = `<summary>${g}</summary>`; host.appendChild(box); }
+    if (g !== group) { group = g; box = document.createElement('details'); box.open = !phone() && host.children.length < 2; box.innerHTML = `<summary>${g}</summary>`; host.appendChild(box); }
     const d = document.createElement('div'); d.className = 'ctl';
     const v = PR.getPath(S.P, path);
     d.innerHTML = `<label>${label} <output></output></label><input type="range" min="${lo}" max="${hi}" step="${step}">`;
@@ -178,7 +186,7 @@ function bindView() {
 function bindTabs() {
   const open = (tab, toggle) => {
     const panel = $('panel');
-    if (MOBILE && toggle && S.tab === tab && panel.classList.contains('open')) { panel.classList.remove('open'); markDock(null); return; }
+    if (phone() && toggle && S.tab === tab && panel.classList.contains('open')) { panel.classList.remove('open'); markDock(null); return; }
     S.tab = tab;
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     document.querySelectorAll('#panel section').forEach(s => s.classList.toggle('on', s.dataset.pane === tab));
@@ -278,7 +286,7 @@ function clearArea() {
   if (S.saver) return { x0: 0, y0: S.band ? S.band.t : 0, x1: w, y1: h - (S.band ? S.band.b : 0) };
   let x0 = 0, y1 = h;
   const p = $('panel').getBoundingClientRect();
-  if (!MOBILE) x0 = p.right;
+  if (!phone()) x0 = p.right;
   else if ($('panel').classList.contains('open')) { if (p.width < w * 0.7) { return { x0: 0, y0: 0, x1: p.left, y1: h - ($('dock').offsetHeight || 0) }; } y1 = p.top; }
   else y1 = h - ($('dock').offsetHeight || 0);
   return { x0, y0: 40, x1: w, y1 };
@@ -327,7 +335,7 @@ function frame(now) {
   R.render({
     pos: c.pos, target: c.target, up: c.up, fov: Math.min(fov, 1.6), w: VB.w, h: VB.h, offX, offY,
     t: S.t, exposure: S.exposure, sunDir: c.sunDir || sunDir(), spin: S.spinAngle,
-    steps: MOBILE ? 14 : 24, cloudsOn: S.clouds, flowSpeed: 1,
+    steps: BG.viewSteps(ENV), cloudsOn: S.clouds, flowSpeed: 1,
   }, ctx.getCurrentTexture().createView());
 }
 

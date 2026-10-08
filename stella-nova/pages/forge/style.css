@@ -6,7 +6,12 @@
    base; #panel is a bottom sheet above it in portrait, a right drawer in
    landscape. main.js reads the panel box to frame the planet in the clear
    area (the principal point shift of the view).
-   (pointer:coarse) gets 44 px targets.
+   (pointer:coarse) gets 44 px targets, 12 px small text, and 16 px in
+   number and select boxes (iOS Safari zooms the page on focus below 16 px).
+   #mapView sits over the sheet on a phone (z-index 7), so a tapped map
+   shows in full.
+   grep -n 'PHONE'      dock + sheet       grep -n 'LANDSCAPE'  right drawer
+   grep -n 'TOUCH'      coarse pointer sizes
    ========================================================================== */
 :root {
   --bg: #07090d; --bg2: rgba(14, 18, 26, 0.92); --line: rgba(255, 255, 255, 0.09);
@@ -23,7 +28,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 
 #top { position: fixed; top: 0; left: var(--panel-w); right: 0; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; pointer-events: none; font-size: 12px; letter-spacing: 0.04em; }
 #top .brand { color: var(--dim); } #top .sep { color: #444; } #top .name { font-weight: 600; }
-#status { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+#status { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-variant-numeric: tabular-nums; }
 #prog { position: fixed; top: 0; left: var(--panel-w); right: 0; height: 2px; }
 #prog i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--acc2), var(--acc)); transition: width 0.15s, opacity 0.6s; }
 
@@ -31,7 +36,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 #tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
 #tabs button { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--dim); padding: 12px 0 10px; font: inherit; font-weight: 500; cursor: pointer; }
 #tabs button.on { color: var(--ink); border-bottom-color: var(--acc); }
-#panel section { display: none; padding: 14px 16px 24px; overflow-y: auto; flex: 1; }
+#panel section { display: none; padding: 14px 16px 24px; overflow-y: auto; flex: 1; overscroll-behavior: contain; }
 #panel section.on { display: block; }
 #panel h4 { margin: 16px 0 6px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 details { border-top: 1px solid var(--line); padding: 6px 0; }
@@ -71,9 +76,11 @@ label.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 #dock, #sheetGrip { display: none; }
 
+/* PHONE: matches PHONE_Q in main.js. */
 @media (max-width: 760px), (max-height: 520px) and (pointer: coarse) {
   :root { --panel-w: 0px; --dock-h: calc(58px + env(safe-area-inset-bottom)); }
-  #top { left: 0; padding-top: env(safe-area-inset-top); }
+  #top { left: 0; padding: env(safe-area-inset-top) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left)); height: calc(40px + env(safe-area-inset-top)); }
+  #top .brand, #top .sep { display: none; }
   #prog { left: 0; }
   #nogpu { padding-left: 24px; }
   #dock { display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: var(--dock-h); padding: 6px 10px env(safe-area-inset-bottom); gap: 6px; background: var(--bg2); border-top: 1px solid var(--line); z-index: 6; }
@@ -83,19 +90,33 @@ label.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   #tabs { display: none; }
   #panel { top: auto; left: 0; right: 0; bottom: var(--dock-h); width: auto; height: 46vh; height: 46dvh; border-right: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; transform: translateY(calc(100% + var(--dock-h))); transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
   #panel.open { transform: none; }
-  #sheetGrip { display: flex; justify-content: center; padding: 8px 0 2px; flex: none; }
+  #sheetGrip { display: flex; justify-content: center; align-items: center; height: 32px; flex: none; cursor: pointer; }
   #sheetGrip span { width: 44px; height: 5px; border-radius: 3px; background: var(--dim); opacity: 0.5; }
-  #mapView { left: 0; bottom: var(--dock-h); }
+  #mapView { left: 0; bottom: var(--dock-h); z-index: 7; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+  #mapView header { flex-wrap: wrap; gap: 6px 10px; }
+  #mapView header span { order: 3; flex: 1 0 100%; margin-right: 0; font-size: 12px; }
+  #mapView header button:first-of-type { margin-left: auto; }
+  #panel section { padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right)); }
   .presets { grid-template-columns: repeat(3, 1fr); }
 }
+/* LANDSCAPE phone: the panel is a right drawer, the dock a tab at the left. */
 @media (max-height: 520px) and (pointer: coarse) and (orientation: landscape) {
+  body:has(#panel.open) #top { right: min(360px, 48vw); }
   #panel { top: 0; left: auto; right: 0; width: min(360px, 48vw); height: auto; bottom: var(--dock-h); border-radius: 14px 0 0 0; transform: translateX(105%); }
   #dock { right: auto; width: min(440px, 56vw); border-radius: 0 14px 0 0; }
 }
+/* TOUCH: any coarse pointer, tablets too. */
 @media (pointer: coarse) {
   button, select, input[type=number] { min-height: 44px; }
-  .ctl input[type=range] { height: 32px; }
-  .mapgrid figcaption button { min-height: 32px; }
+  select, input[type=number] { font-size: 16px; }
+  .ctl input[type=range] { height: 40px; }
+  .mapgrid figcaption button { min-height: 44px; min-width: 52px; }
+  .mapgrid figcaption, .note, #panel h4, details > summary { font-size: 12px; }
+  details > summary { display: flex; align-items: center; min-height: 44px; padding: 0; }
+  .toggles label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+  .toggles input { width: 20px; height: 20px; }
+  label.file { display: inline-flex; align-items: center; min-height: 44px; }
+  #sheetGrip { height: 44px; }
 }
 html.sn-saver #panel, html.sn-saver #dock, html.sn-saver #top, html.sn-saver #prog, html.sn-saver #mapView, html.sn-saver #sn-wishlist-chip { display: none !important; }
 html.sn-saver #view { cursor: none; }

@@ -151,6 +151,18 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('budget: GPU textures stay under 60 MB on a phone', BG.gpuBytes(BG.gpuWidth(4096, { mobile: true })) < 60e6);
   const v = BG.viewBudget(1920, 1080, 2), ph = BG.viewBudget(430, 932, 3, { mobile: true });
   ok('budget: view px capped (desktop DPR 2, phone DPR 3)', v.px <= BG.MAX_PX * 1.01 && ph.px <= BG.PHONE_PX * 1.01 && ph.pr <= 1.5, `${v.w}x${v.h}, ${ph.w}x${ph.h}`);
+  // phone profiles: 360x640 and 390x844 portrait, 844x390 landscape at DPR 3
+  for (const [w, h] of [[360, 640], [390, 844], [844, 390]]) {
+    const b = BG.viewBudget(w, h, 3, { mobile: true });
+    ok(`budget: phone ${w}x${h}@3 renders at DPR <= 1.5 and <= 13 MB`, b.pr <= 1.5 && b.bytes <= 13e6, `${b.w}x${b.h} pr ${b.pr}, ${(b.bytes / 1e6).toFixed(1)} MB`);
+  }
+  const phone = { mobile: true, coarse: true }, pW = BG.pickWidth(BG.defaultWidth(phone), phone);
+  ok('budget: phone default is 1k maps, 1k textures, 14 steps', pW === 1024 && BG.gpuWidth(pW, phone) === 1024 && BG.viewSteps(phone) === 14);
+  // a tablet (iPad: touch, no deviceMemory in Safari) must not get 4k
+  const tab = { coarse: true }, tW = BG.pickWidth(4096, tab), tv = BG.viewBudget(1024, 1366, 2, tab);
+  ok('budget: a tablet gets at most 2k maps and 2k textures', tW === 2048 && BG.mapBytes(tW) <= BG.cpuBudget(tab) && BG.gpuWidth(4096, { ...tab, deviceMemory: 8 }) === 2048, `${tW}, ${(BG.mapBytes(tW) / 1e6).toFixed(0)} MB`);
+  ok('budget: a 12.9 inch tablet view stays under TABLET_PX, 18 steps', tv.px <= BG.TABLET_PX * 1.01 && BG.viewSteps(tab) === 18, `${tv.w}x${tv.h} pr ${tv.pr}`);
+  ok('budget: a desktop with 8 GB still gets 4k textures', BG.gpuWidth(4096, { deviceMemory: 8 }) === 4096 && BG.viewSteps({}) === 24);
 }
 
 // atmosphere: units and transmittance
