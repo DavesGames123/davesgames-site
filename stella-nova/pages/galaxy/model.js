@@ -257,7 +257,9 @@ export function packGalaxy(gal, out = new Float32Array(GAL_FLOATS), o = 0) {
   // dust: kappa_0 from the face-on optical depth through the centre,
   // tau = 2 kappa_0 h_d.
   const dHz = P.dustHz * k, dRd = P.dustRd * k;
-  v(10, P.tau / (2 * dHz), 1 / dRd, 1 / dHz, P.lane);
+  // DUST_LEGIBLE: the lanes read at page size (a shown, not hidden, effect)
+  const DUST_LEGIBLE = 1.7;
+  v(10, DUST_LEGIBLE * P.tau / (2 * dHz), 1 / dRd, 1 / dHz, P.lane);
   v(11, (P.ringR || 0) * k, 1 / Math.max(0.1, (P.ringW || 1) * k), (P.ringTau || 0) / (2 * dHz), P.filament);
   v(12, P.laneOff, P.sharp * 0.8, (P.hole || 0) * k, omP);
   v(13, P.hii * rhoY / (4 * Math.PI) * 6, 1 / (0.9 * k), 0, P.Rt * k);
@@ -268,7 +270,7 @@ export function packGalaxy(gal, out = new Float32Array(GAL_FLOATS), o = 0) {
   v(17, cY[0], cY[1], cY[2], 0);
   v(18, HII_RGB[0], HII_RGB[1], HII_RGB[2], 0);
   // box: half sizes of the bounding cylinder, the vertical step scale, on.
-  const zBox = Math.max(4 * P.thickHz * k, 3.5 * re * P.c, 1.2);
+  const zBox = Math.max(5 * P.thickHz * k, 5 * re * P.c, 0.25 * Rmax, 1.5);
   const zStep = P.BT > 0.6 ? re * 0.5 : Math.max(0.12, hz * 0.8);
   v(19, Rmax, zBox, zStep, 1);
   v(20, P.minor || 0, P.bar ? 1 : 0, (P.pa || 0), 0);
@@ -441,7 +443,7 @@ function fillStars(W, P, gi, budget, r, k = 1, L = 1, seedOff = 0) {
     if (gc) rr = Math.max(rr, re * 0.6);
     const u = unitVec(r);
     const c = starRGB(gc ? 4700 + 900 * r() : 4200 + 1000 * r());
-    const Ls = gc ? L * 2.5e-4 * (0.4 + 1.6 * r() ** 2) * (k < 1 ? 0.5 : 1) : L * (P.halo || 0.02) * 0.3 / Math.max(1, nHalo);
+    const Ls = gc ? L * 6e-5 * (0.4 + 1.6 * r() ** 2) * (k < 1 ? 0.5 : 1) : L * (P.halo || 0.02) * 0.3 / Math.max(1, nHalo);
     pushRot(W, gi, u[0] * rr, u[1] * rr, u[2] * rr, 0, gc ? 0.25 : 0.15, tw(), c, Ls, gc ? 1.5 : 1, gc ? 0.004 : 0);
   }
 }
@@ -479,7 +481,7 @@ function fillJet(W, gi, r, re) {
 // Two softened point masses on a parabolic orbit; massless stars start on
 // circular orbits in a disk round each mass. Units G = M1 = 1, length
 // unit UL kpc. Returns centres, normals, and star positions (in kpc).
-export function tidalPair(seed, { n = 12000, mass2 = 0.8, rp = 1.0, incl1 = 15, incl2 = 60, tEnd = 4.2, UL = 9 } = {}) {
+export function tidalPair(seed, { n = 12000, mass2 = 0.8, rp = 0.8, incl1 = 15, incl2 = 60, tEnd = 5.4, UL = 8 } = {}) {
   const r = rng(seed * 104729 + 7), eps2 = 0.04;
   const M = [1, mass2], Mt = 1 + mass2;
   // parabolic relative orbit, start at true anomaly f0 before pericentre.
@@ -583,8 +585,10 @@ export function buildGalaxy(P, { stars = 120000, sky = true, bg = true } = {}) {
     const rest = stars - W.n;
     fillStars(W, list[0].P, 0, Math.round(rest * 0.55), r, 1, 1, 0);
     fillStars(W, list[1].P, 1, Math.round(rest * 0.4), r, 1, 0.7, 3.7);
-    let ext = 0; for (const c of T.centres) ext = Math.max(ext, Math.hypot(...c));
-    meta = { R: ext + 14, centre: [0, 0, 0], centres: T.centres };
+    // fit radius: the 92nd percentile of the star distances from the centre
+    const ds = []; for (let i = 0; i < T.n; i++) ds.push(Math.hypot(T.pos[i * 3], T.pos[i * 3 + 1], T.pos[i * 3 + 2]));
+    ds.sort((a, b) => a - b);
+    meta = { R: ds[Math.floor(ds.length * 0.92)] + 3, centre: [0, 0, 0], centres: T.centres };
   } else {
     const rot = frameFromNormal([0, 0, 1], pa);
     list.push({ P, rot, centre: [0, 0, 0], L: 1, scale: 1, seedOff: 0 });
