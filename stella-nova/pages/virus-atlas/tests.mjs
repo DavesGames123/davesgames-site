@@ -16,7 +16,9 @@
 //    8  envelope illustration: spikes stand on the membrane
 //    9  ladder and ruler
 //   10  GPU budget
-//   11  saver plan: shots of 5 to 12 s, seeded shuffle
+//   11  saver plan: weighted bags with no back-to-back repeats over
+//       thousands of shots, every effect, view, scheme, palette, light,
+//       camera move, peel order and explode axis; shots of 5 to 12 s
 //   12  GPU expansion: the shader's instance arithmetic (pack.js) gives each
 //       copy of each bead once, at the position of its operator
 //   13  colour schemes: every scheme, palette and light maps into [0, 1]
@@ -250,13 +252,59 @@ section('11 saver plan');
 for (const seed of [1, 2, 99, 12345]) for (const calm of [0, 0.7, 1]) {
   const plan = P.plan(seed, calm, 40);
   ok(plan.every(s => s.dur >= 5 && s.dur <= 12), 'seed ' + seed + ' calm ' + calm + ': 40 shots of 5..12 s');
-  ok(plan.every((s, i) => i === 0 || s.kind !== plan[i - 1].kind || s.entry !== plan[i - 1].entry), 'seed ' + seed + ': no shot repeats back to back');
-  ok(plan.every(s => P.SHOTS[s.kind] && C.entryByKey(s.entry)), 'seed ' + seed + ': known shots and entries');
+  ok(plan.every(s => P.EFFECTS[s.kind] && C.entryByKey(s.entry) && P.EFFECTS[s.kind].pool.includes(s.entry)), 'seed ' + seed + ': known effects, entries from their pools');
 }
-const a = P.plan(1, 0.7, 12).map(s => s.kind + s.entry).join(), b2 = P.plan(2, 0.7, 12).map(s => s.kind + s.entry).join();
+const a = P.plan(1, 0.7, 12).map(s => s.kind + s.entry + s.rep).join(), b2 = P.plan(2, 0.7, 12).map(s => s.kind + s.entry + s.rep).join();
 ok(a !== b2, 'two seeds give two orders');
-ok(P.plan(5, 0.7, 12).map(s => s.kind + s.entry).join() === P.plan(5, 0.7, 12).map(s => s.kind + s.entry).join(), 'one seed gives one order');
-ok(new Set(P.plan(3, 0.7, 60).map(s => s.kind)).size === Object.keys(P.SHOTS).length, 'every shot kind plays in 60 shots');
+ok(P.plan(5, 0.7, 12).map(s => JSON.stringify(s)).join() === P.plan(5, 0.7, 12).map(s => JSON.stringify(s)).join(), 'one seed gives one plan');
+{
+  // a weighted bag on its own: thousands of draws, no back-to-back repeat,
+  // every key, and counts that follow the weights
+  const r = S.makeRng(77), bag = P.makeBag(r, { a: 3, b: 1, c: 1, d: 0.2 }), cnt = { a: 0, b: 0, c: 0, d: 0 };
+  let prev = null, rep = 0;
+  for (let i = 0; i < 6000; i++) { const k = bag.next(); cnt[k]++; if (k === prev) rep++; prev = k; }
+  ok(rep === 0 && cnt.d > 0, 'bag: 6000 draws, ' + rep + ' back-to-back repeats, every key drawn');
+  ok(cnt.a > 2 * cnt.b && cnt.b > cnt.d, 'bag: counts follow the weights (a ' + cnt.a + ', b ' + cnt.b + ', c ' + cnt.c + ', d ' + cnt.d + ')');
+  let forced = 0; prev = null;
+  for (let i = 0; i < 500; i++) { const k = bag.next(x => x === 'a' || x === 'b'); if (k === prev) forced++; prev = k; if (k !== 'a' && k !== 'b') forced += 1000; }
+  ok(forced === 0, 'bag with a filter: only allowed keys, still no repeats');
+}
+{
+  // 3000 shots over 4 seeds: no dimension repeats in two shots in a row
+  // unless the shot allows one value only; every value shows up
+  const seen = { kind: new Set(), rep: new Set(), scheme: new Set(), pal: new Set(), light: new Set(), cam: new Set(), peel: new Set(), ex: new Set(), slice: new Set() };
+  const bad = { kind: 0, entry: 0, rep: 0, scheme: 0, pal: 0, light: 0, cam: 0 };
+  let n = 0, morphs = 0, peels = 0, durBad = 0, repBad = 0;
+  for (const seed of [3, 41, 2024, 987654]) {
+    const plan = P.plan(seed, 0.6, 750);
+    plan.forEach((s, i) => {
+      n++;
+      for (const k of Object.keys(seen)) if (s[k] != null) seen[k].add(String(s[k]));
+      if (s.repTo) { seen.rep.add(s.repTo); morphs++; if (s.repTo === s.rep) repBad++; }
+      if (s.kind === 'peel' || s.kind === 'inside') peels++;
+      if (!(s.dur >= 5 && s.dur <= 12)) durBad++;
+      if (!P.okRep(s.kind, s.entry, s.rep) || (s.repTo && !P.okRep(s.kind, s.entry, s.repTo)) || !P.okScheme(s.entry, s.scheme) || !P.okCam(s.kind, s.cam)) repBad++;
+      const q = plan[i - 1];
+      if (!q) return;
+      for (const k of ['kind', 'entry', 'pal', 'light']) if (s[k] === q[k]) bad[k]++;
+      if (s.rep === (q.repTo || q.rep)) bad.rep++;
+      if (s.scheme === q.scheme) bad.scheme++;
+      if (s.cam === q.cam && P.CAMS.filter(c => P.okCam(s.kind, c)).length > 1) bad.cam++;
+    });
+  }
+  ok(Object.values(bad).every(v => v === 0), n + ' shots: no back-to-back repeat of effect, entry, view, scheme, palette, light or camera move (' + JSON.stringify(bad) + ')');
+  ok(durBad === 0, n + ' shots of 5..12 s');
+  ok(repBad === 0, 'every view, scheme and camera suits its shot; a morph changes the view');
+  ok(Object.keys(P.EFFECTS).every(k => seen.kind.has(k)), 'every effect plays: ' + [...seen.kind].join(' '));
+  ok(B.REPS.every(k => seen.rep.has(k)), 'every view plays: ' + [...seen.rep].join(' '));
+  ok(CO.SCHEMES.every(x => seen.scheme.has(x.id)), 'every colour scheme plays (' + seen.scheme.size + ')');
+  ok(Object.keys(CO.PALETTES).every(k => seen.pal.has(k)) && Object.keys(CO.LIGHTS).every(k => seen.light.has(k)), 'every palette and light rig plays');
+  ok(P.CAMS.every(k => seen.cam.has(k)), 'every camera move plays: ' + [...seen.cam].join(' '));
+  ok(['0', '1', '2', '3', '4', '5'].every(k => seen.peel.has(k)), 'all six peel orders play');
+  ok(['5', '3', '2', '-1'].every(k => seen.ex.has(k)) && seen.slice.size === 2, 'explode on 5-, 3-, 2-fold and radial; slice and slab');
+  console.log('  ' + n + ' shots: ' + morphs + ' with a view morph, ' + peels + ' peels (' + (100 * peels / n).toFixed(0) + ' %)');
+  ok(peels / n > 0.2, 'the peel is the most common effect family (' + (100 * peels / n).toFixed(0) + ' % of shots)');
+}
 
 // ── 12 GPU expansion ─────────────────────────────────────────────────────
 section('12 GPU expansion');
