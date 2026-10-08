@@ -205,8 +205,7 @@ w.SN_NAV = [
       ["stirling-engine", "Stirling Engine", "3D"],
       ["four-stroke-engine", "Four-Stroke Engine", "3D"],
       ["wankel-engine", "Wankel Rotary Engine", "3D"],
-      ["radial-engine", "Radial Engine", "3D"],
-      ["steam-locomotive", "Steam Locomotive", "3D"]
+      ["radial-engine", "Radial Engine", "3D"]
     ] },
     { h: "Gears & Transmissions", p: [
       ["differential", "Differential", "3D"],

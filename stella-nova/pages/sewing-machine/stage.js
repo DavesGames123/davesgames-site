@@ -1,6 +1,6 @@
 // ============================================================================
 //  LOCKSTITCH SEWING MACHINE  ·  stage.js — a copy of differential/stage.js (same API)
-//  As on steam-locomotive, setShadowExtent scales the shadow normal bias
+//  setShadowExtent scales the shadow normal bias
 //  with the model radius as well as the near plane.
 //  One addition: o.band(), the saver plate band, counts as an occluder.
 // ────────────────────────────────────────────────────────────────────────────
