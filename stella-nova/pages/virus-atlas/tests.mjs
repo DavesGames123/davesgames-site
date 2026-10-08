@@ -22,6 +22,7 @@
 //   13  colour schemes: every scheme, palette and light maps into [0, 1]
 //   14  tube spline: passes through every bead of a run, breaks at chain
 //       ends and gaps; burial and chain fraction in range
+//   15  subunit blobs: every bead inside its ellipsoid; axes orthogonal
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -37,6 +38,7 @@ const P = await import(join(HERE, 'shots.js'));
 const K = await import(join(HERE, 'pack.js'));
 const CO = await import(join(HERE, 'colors.js'));
 const TR = await import(join(HERE, 'trace.js'));
+const BL = await import(join(HERE, 'blobs.js'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.log('  FAIL ' + msg); } };
@@ -354,6 +356,30 @@ for (const id of ['1HXS', '6CGV', '6VSB', '7LNA', '4UDV', '3J3Q', '1QLX']) {
   const mean = a => a.reduce((x, v) => x + v[1], 0) / Math.max(1, a.length);
   if (['1HXS', '6CGV', '4UDV', '3J3Q'].includes(id)) ok(mean(top) < mean(rest), id + ' outer 10% of beads less buried (' + mean(top).toFixed(2) + ' < ' + mean(rest).toFixed(2) + ')');
   ok(aux.every(v => v >= 0 && v <= 255), id + ' aux bytes in range');
+}
+
+// ── 15 subunit blobs ─────────────────────────────────────────────────────
+section('15 subunit blobs');
+for (const id of ids) {
+  const d = D[id], b = BL.chainBlobs(d);
+  let out = 0, orth = 0, wrongChain = 0, maxAx = 0;
+  for (let i = 0; i < d.n; i++) {
+    if (!BL.insideBlob(b.data, b.owner[i], d.pos[3 * i], d.pos[3 * i + 1], d.pos[3 * i + 2])) out++;
+    if (b.data[16 * b.owner[i] + 3] !== d.chain[i]) wrongChain++;
+  }
+  for (let q = 0; q < b.n; q++) {
+    const v = k => [b.data[16 * q + 4 + 4 * k], b.data[16 * q + 5 + 4 * k], b.data[16 * q + 6 + 4 * k]];
+    const L = k => Math.hypot(...v(k));
+    for (const [x, y] of [[0, 1], [0, 2], [1, 2]]) orth = Math.max(orth, Math.abs(v(x)[0] * v(y)[0] + v(x)[1] * v(y)[1] + v(x)[2] * v(y)[2]) / (L(x) * L(y)));
+    maxAx = Math.max(maxAx, L(0), L(1), L(2));
+  }
+  ok(out === 0 && wrongChain === 0, id + ' ' + b.n + ' blobs: every bead inside the blob of its own chain');
+  ok(orth < 1e-4, id + ' blob axes orthogonal (worst cos ' + orth.toExponential(1) + ')');
+  if (['1HXS', '6CGV', '3J3Q', '6VSB'].includes(id)) console.log('  ' + id.padEnd(5) + String(b.n).padStart(6) + ' blobs, ' + (d.n / b.n).toFixed(1) + ' residues each, longest semi-axis ' + maxAx.toFixed(2) + ' nm');
+}
+{
+  const J = BL.jacobi3([4, 1, 0, 3, 0, 2]), tr = J.val.reduce((a, v) => a + v, 0);
+  ok(near(tr, 9, 1e-9) && J.val.every(v => v > 1.3 && v < 4.7), 'jacobi3: eigenvalues keep the trace');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
