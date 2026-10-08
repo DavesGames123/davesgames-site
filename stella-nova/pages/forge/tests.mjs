@@ -11,6 +11,7 @@ import { prepareGas, bandProfile, windProfile } from './gas.js';
 import * as MP from './maps.js';
 import { encodePNG, decodePNGRaw } from './png.js';
 import * as BG from './budget.js';
+import { packAtmo, transmittanceRef } from './atmo.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { console.log(`${cond ? 'ok  ' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); if (!cond) fails++; };
@@ -150,6 +151,18 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('budget: GPU textures stay under 60 MB on a phone', BG.gpuBytes(BG.gpuWidth(4096, { mobile: true })) < 60e6);
   const v = BG.viewBudget(1920, 1080, 2), ph = BG.viewBudget(430, 932, 3, { mobile: true });
   ok('budget: view px capped (desktop DPR 2, phone DPR 3)', v.px <= BG.MAX_PX * 1.01 && ph.px <= BG.PHONE_PX * 1.01 && ph.pr <= 1.5, `${v.w}x${v.h}, ${ph.w}x${ph.h}`);
+}
+
+// atmosphere: units and transmittance
+{
+  const U = packAtmo(PR.ATMO.earth);
+  ok('atmo: Earth Rayleigh packs to 1/km', Math.abs(U[2] - 0.0331) < 1e-6 && U[16] === 6360 && U[17] === 6460);
+  const z = transmittanceRef(PR.ATMO.earth, 6360, 1), h = transmittanceRef(PR.ATMO.earth, 6360, 0.02);
+  ok('atmo: Earth zenith transmittance is about 0.9 red, 0.75 blue', z[0] > 0.9 && z[0] < 0.97 && z[2] > 0.7 && z[2] < 0.8, z.map(v => v.toFixed(3)).join(' '));
+  ok('atmo: the horizon is redder than the zenith (sunset)', h[0] / h[2] > z[0] / z[2] * 3, h.map(v => v.toExponential(1)).join(' '));
+  const n = transmittanceRef(PR.ATMO.neptune, 7000, 1);
+  ok('atmo: methane absorbs red on Neptune (blue passes)', n[2] > n[0], n.map(v => v.toFixed(3)).join(' '));
+  ok('atmo: an off atmosphere packs on = 0', packAtmo(PR.ATMO.none)[23] === 0);
 }
 
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
