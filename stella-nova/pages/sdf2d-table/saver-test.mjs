@@ -20,6 +20,13 @@
 //                camera fits (radius + 0.05), so the view holds the shape
 //    solid ..... some point is inside (d < 0)
 //    ops ....... no more than MAX_OPS ops
+//  Chain mail only:
+//    woven ..... at each of the 8 crossings of the centre ring A with the
+//                corner rings B, and at the same place in cells (1, 0)
+//                and (1, 1) of the grid: the over wire is solid through
+//                the crossing, the under wire has a gap 0.064 to each side
+//                of it, and is solid again 0.12 away. The old recipe (two
+//                rings in a union, then an onion) had no gap at all.
 // ============================================================================
 import { SAVER } from './saver.js';
 const { RECIPES, prep, steps, extent, mapM, MAX_OPS } = SAVER;
@@ -62,6 +69,22 @@ for (const rec of RECIPES) {
   if (!inside) fail(`${rec.name}: no point is inside`);
   if (outside) fail(`${rec.name}: ${outside} inside points lie outside the camera extent`);
   console.log(`${rec.name.padEnd(18)} ops ${String(ops.length).padStart(2)}  steps ${ord.length}  worst pop ${worstPop.toFixed(4)}  spread ${worstSpread.toFixed(2)}  inside ${inside}  extent r ${ex.r.toFixed(2)}`);
+}
+{
+  const rec = RECIPES.find(r => r.name === 'Chain mail'), ops = rec.ops.map(prep);
+  ops.forEach(o => { o.pr = 1; });
+  const D = Math.PI / 180, R = 0.23;
+  let woven = 0;
+  for (const [cx, cy] of [[0, 0], [0.6, 0], [0.6, 0.6]]) for (let k = 0; k < 4; k++) for (const [ang, aOver] of [[22.27 + 90 * k, true], [67.73 + 90 * k, false]]) {
+    const P = [R * Math.cos(ang * D), R * Math.sin(ang * D)];
+    const tA = [-Math.sin(ang * D), Math.cos(ang * D)];
+    const rb = [P[0] - Math.sign(P[0]) * 0.3, P[1] - Math.sign(P[1]) * 0.3], lb = Math.hypot(rb[0], rb[1]), tB = [-rb[1] / lb, rb[0] / lb];
+    const [tO, tU] = aOver ? [tA, tB] : [tB, tA];
+    const at = (t, s) => mapM(ops, [cx + P[0] + t[0] * s, cy + P[1] + t[1] * s]);
+    const ok = [0, 0.064, -0.064].every(s => at(tO, s) < 0) && [0.064, -0.064].every(s => at(tU, s) > 0) && [0.12, -0.12].every(s => at(tU, s) < 0);
+    if (ok) woven++; else fail(`Chain mail: crossing at ${ang.toFixed(2)}° in cell (${cx}, ${cy}) is not woven`);
+  }
+  console.log(`Chain mail weave   ${woven}/24 crossings: over wire solid, under wire gapped`);
 }
 console.log(fails ? `${fails} failure(s)` : 'all recipe checks pass');
 process.exit(fails ? 1 : 0);

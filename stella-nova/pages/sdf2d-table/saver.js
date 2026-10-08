@@ -84,11 +84,25 @@ const RECIPES = [
     { t: 'star', c: 'union', b: [5, 0.26, 0.11], pos: [0.36, 0.06], turn: 18, cap: 'A five-point star' },
     { t: 'round', b: [0.01], cap: 'Rounding every corner' },
   ] },
-  { name: 'Chain mail', note: 'Two rings, repeated on a grid', ops: [
-    { t: 'grid', b: [0.66, 2, 2], at: 2, cap: 'Tiling it on a grid' },
-    { t: 'ring', c: 'union', b: [0.24, 0.065], at: 0, cap: 'A ring' },
-    { t: 'ring', c: 'union', b: [0.24, 0.065], pos: [0.33, 0], k: 0.01, at: 1, cap: 'A second ring overlaps it' },
-    { t: 'onion', b: [0.02], at: 3, cap: 'Splitting every wire in two' },
+  // 4-in-1 mail: a ring A in each cell links the four rings B at the cell
+  // corners. A distance field has no depth, so the weave is cut in: a gap
+  // in the lower wire where one wire passes over another. The over and
+  // under order is that of real mail, where the A rings lean one way and
+  // the B rings the other. With R 0.23 and B at (±0.3, ±0.3), A crosses
+  // each B at 22.27° and 67.73° (+90° k) round A, at radius R, at 45.5°.
+  // A passes over at 22.27°, B at 67.73°. A cut is 0.072 (the 0.056 that
+  // the other wire covers along this one, plus a 0.016 gap). Every cut
+  // stays 0.015 inside the 0.6 cell: the grid repeats each cell alone, so
+  // a cut over the cell edge was missing in the next cell and the gap
+  // closed at the seam. The B rings come in by polar repetition (four, at
+  // 45°). The A wire over a cut is a short rounded box on the ring line.
+  { name: 'Chain mail', note: '4-in-1 mail: every ring links four', ops: [
+    { t: 'grid', b: [0.6, 2, 2], at: 5, cap: 'Tiling it: 4-in-1 chain mail' },
+    { t: 'ring', c: 'union', b: [0.23, 0.04], at: 0, cap: 'A ring' },
+    { t: 'circle', c: 'sub', b: [0.072], rep: 4, repR: 0.23, turn: 67.73, lerp: 0.036, at: 1, cap: 'Gaps where the next rings pass over it' },
+    { t: 'ring', c: 'union', b: [0.23, 0.04], rep: 4, repR: 0.4243, turn: 45, at: 2, cap: 'Four rings link through it' },
+    { t: 'circle', c: 'sub', b: [0.072], rep: 4, repR: 0.23, turn: 22.27, lerp: 0.036, at: 3, cap: 'Gaps where it passes over them' },
+    { t: 'box', c: 'union', b: [0.04, 0.076, 0.035], rep: 4, repR: 0.23, turn: 22.27, k: 0.006, at: 4, cap: 'Its wire bridges each gap' },
   ] },
   { name: 'Hex nut', note: 'A hexagon, chamfered and tapped', ops: [
     { t: 'poly', c: 'union', b: [6, 0.7, 0.03], cap: 'A hexagon' },
