@@ -12,10 +12,11 @@
 //
 //  Layers, bottom up: ocean and land lit by the real sun at the slider
 //  time (terminator), the field (speed | cyclonic vorticity | pressure
-//  with 4 hPa isobars) through the LUT, the dye, the cones (cone.r fill,
-//  cone.g the selected storm), the graticule (analytic, every 30 deg,
-//  1 px wide from the pixel footprint), then the atmosphere rim. Rays
-//  that miss get stars and the limb glow.
+//  with 4 hPa isobars) through the LUT, the land tint again on top (so
+//  land stays lighter than water under strong colour), the dye, the
+//  cones (cone.r fill, cone.g the selected storm), the graticule
+//  (analytic, every 30 deg, 1 px wide from the pixel footprint), then the
+//  atmosphere rim. Rays that miss get stars and the limb glow.
 //  The land mask (landT.r) is a one-channel texture; "landMask" sharpens
 //  its 0.5 contour with fwidth, so the land edge stays crisp under
 //  magnification and falls back to the plain filtered mask when the
@@ -99,14 +100,13 @@ fn sky(d: vec3f) -> vec3f {
   let grat = max((1.0 - smoothstep(0.0, pxDeg * 1.1, gLat)) * select(0.0, 1.0, abs(latD) < 75.0),
                  (1.0 - smoothstep(0.0, pxDeg * 1.1, gLon)) * gLonOn);
 
-
   // ── surface ───────────────────────────────────────────────────────────
   let sunD = FR.sun.xyz;
   let ndl = dot(n, sunD);
   let day = smoothstep(-0.15, 0.25, ndl);
   let lit = mix(FR.sun.w, 1.0, day);
-  let ocean = mix(vec3f(0.010, 0.022, 0.050), vec3f(0.035, 0.085, 0.165), day);
-  let ground = mix(vec3f(0.030, 0.032, 0.038), vec3f(0.20, 0.205, 0.19) * (0.55 + 0.45 * max(ndl, 0.0)), day);
+  let ocean = mix(vec3f(0.006, 0.014, 0.034), vec3f(0.018, 0.052, 0.112), day);
+  let ground = mix(vec3f(0.062, 0.062, 0.068), vec3f(0.27, 0.26, 0.225) * (0.6 + 0.4 * max(ndl, 0.0)), day);
   var col = mix(ocean, ground, land);
   // sun glint on the water
   let rr = reflect(d, n);
@@ -118,18 +118,20 @@ fn sky(d: vec3f) -> vec3f {
   if (mode == 0) {
     let x = sqrt(clamp(F.x / 75.0, 0.0, 1.0));
     let fc2 = lut(0.0, x);
-    let a = k * (0.18 + 0.82 * smoothstep(0.12, 0.55, x));
+    let a = k * (0.18 + 0.82 * smoothstep(0.12, 0.55, x)) * (1.0 - 0.3 * land);
     col = mix(col, fc2 * (0.62 + 0.38 * lit), a);
   } else if (mode == 1) {
     let x = 0.5 + 0.5 * sign(F.y) * sqrt(min(1.0, abs(F.y) / 40.0));
-    let a = k * smoothstep(0.02, 0.3, abs(x - 0.5) * 2.0);
+    let a = k * smoothstep(0.02, 0.3, abs(x - 0.5) * 2.0) * (1.0 - 0.3 * land);
     col = mix(col, lut(1.0, x) * (0.62 + 0.38 * lit), a);
   } else if (mode == 2) {
     let x = clamp((F.z + 1000.0 - 950.0) / 90.0, 0.0, 1.0);
-    col = mix(col, lut(2.0, x) * (0.6 + 0.4 * lit), k * 0.78);
+    col = mix(col, lut(2.0, x) * (0.6 + 0.4 * lit), k * 0.78 * (1.0 - 0.25 * land));
     let iso = 1.0 - smoothstep(0.0, fw * 1.3, abs(fract(q + 0.5) - 0.5));
     col = mix(col, vec3f(0.92, 0.95, 1.0), iso * 0.45 * k);
   }
+  // the land tint again, on top of the field: land lighter, water darker
+  col = col * (1.0 - 0.08 * (1.0 - land)) + vec3f(0.050, 0.048, 0.040) * land * (0.7 + 0.3 * lit);
   // dye
   col = mix(col, vec3f(0.62, 0.93, 1.0) * (0.45 + 0.55 * lit), FR.look.z * F.w * 0.42);
   // cones
