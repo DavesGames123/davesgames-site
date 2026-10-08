@@ -101,9 +101,9 @@ export function slerpUnit(a, b, t) {
   let d = pa[0] * pb[0] + pa[1] * pb[1] + pa[2] * pb[2];
   d = d > 1 ? 1 : d < -1 ? -1 : d;
   const w = Math.acos(d);
-  if (w < 1e-9) return pa;
+  if (w < 1e-6) return pa;   // same point (sin(w) < 1e-6 below means antipodal only when w is near pi)
   const s = sin(w);
-  if (s < 1e-6) {
+  if (s < 1e-6 && w > 1) {
     // Antipodal: rotate pa about an axis perpendicular to it.
     let ax = abs(pa[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
     const k = ax[0] * pa[0] + ax[1] * pa[1] + ax[2] * pa[2];
