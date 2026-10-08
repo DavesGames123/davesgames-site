@@ -178,6 +178,26 @@ test('every form key has a label and only known params', () => {
   }
 });
 
+// From above, the front rim is the cap silhouette; the contour does not
+// draw it, so the rim crease must (before the fix the cap was open there).
+test('a camera above the cap draws the front rim', () => {
+  const capI = 0;
+  for (const f of ['bolete', 'chanterelle', 'bonnet', 'fly']) {
+    const p = Object.assign(formParams(f, 11), { elev: 0.42, count: 1 });
+    const s = buildSpecimen(p, 11);
+    const w = s.washes.find(q => q.part === capI || q.part === 'cap');
+    ok(w, f + ': no cap wash');
+    let bx = 0, by = -Infinity, x0 = Infinity, x1 = -Infinity;
+    for (let i = 0; i < w.xy.length; i += 2) { if (w.xy[i + 1] > by) { by = w.xy[i + 1]; bx = w.xy[i]; } x0 = Math.min(x0, w.xy[i]); x1 = Math.max(x1, w.xy[i]); }
+    const tol = (x1 - x0) * 0.03;
+    let hit = false;
+    for (let i = 0; i + 1 < s.offs.length && !hit; i++) {
+      if (s.part[i] !== capI || s.kinds[i] !== 0) continue;
+      for (let k = s.offs[i]; k < s.offs[i + 1]; k++) if (Math.hypot(s.xy[k * 2] - bx, s.xy[k * 2 + 1] - by) < tol) { hit = true; break; }
+    }
+    ok(hit, f + ': no outline at the lowest point of the cap silhouette');
+  }
+});
 test('every saver code extract resolves in the shipped source', () => {
   const src = { engine: fs.readFileSync(new URL('./engine.js', import.meta.url), 'utf8'), geom: fs.readFileSync(new URL('./geom.js', import.meta.url), 'utf8') };
   for (const [key, [fn, from, file]] of Object.entries(CODE)) {

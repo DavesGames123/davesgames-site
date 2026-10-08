@@ -701,13 +701,16 @@ function capItems(C, K) {
     runs(p.map(q => q.pt), p.map(q => q.vis), 0, 'cap', lines);
   }
 
-  // The rim crease, where it is not on the contour.
+  // The rim crease, where it is not on the contour. The contour is on the
+  // rim only where n . c of the top changes sign near u = 1. Where the top
+  // faces the camera and the underside does not (a camera above the
+  // cap), the rim is the silhouette, and the contour does not draw it.
   {
     const p = [], v = [];
     for (let k = 0; k <= 200; k++) {
-      const phi = k / 200 * TAU, a = surf(cap.top, 1, phi), u = surf(cap.under, 0, phi);
-      const edge = facing(a.n) !== facing(u.n);
-      p.push(cproj(a.p)); v.push(!edge && !rayHit(off(a)));
+      const phi = k / 200 * TAU, a = surf(cap.top, 1, phi), a2 = surf(cap.top, 0.97, phi);
+      const onContour = facing(a.n) !== facing(a2.n);
+      p.push(cproj(a.p)); v.push(!onContour && !rayHit(off(a)));
     }
     runs(p, v, 0, 'cap', lines);
   }
