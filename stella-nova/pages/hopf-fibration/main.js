@@ -108,6 +108,7 @@ function applyPreset(id, o = {}) {
   G.preset = P.id; G.custom = false;
   G.items = made.items.map(it => Object.assign({}, it, it.kind === 'lat' ? { beta0: Math.asin(it.z) } : {}));
   G.thin = !!made.thin;
+  G.pq = made.pq ? made.pq.slice() : [1, 1];
   G.trace = made.trace ? { u: 0, b: H.loxodrome(0), trail: [], acc: 0 } : null;
   G.sel = made.discs ? [0, 1] : [];
   G.sweepPhase = 0;
@@ -182,6 +183,8 @@ function baseState(M) {
     } else if (it.kind === 'great') {
       const pts = H.sampleItems([Object.assign({}, it, { n: 96 })], 96).map(f => f.b);
       curves.push({ pts, hex: '#c9d3e6', closed: true });
+    } else if (it.kind === 'loop') {
+      curves.push({ pts: Array.from({ length: 160 }, (_, i) => H.loopPoint(it, i / 160)), hex: '#c9d3e6', closed: true });
     } else if (it.kind === 'curve' && it.pts.length > 1) curves.push({ pts: it.pts, hex: '#c9d3e6', closed: false });
   });
   if (G.trace) curves.push({ pts: Array.from({ length: 200 }, (_, i) => H.loxodrome(G.trace.u - 0.5 + i / 200)), hex: 'rgba(200,210,230,0.5)', closed: false });

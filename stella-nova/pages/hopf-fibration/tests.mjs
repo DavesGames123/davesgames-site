@@ -14,6 +14,9 @@
 //    pierce     one fibre crosses the disc of the other exactly once
 //    colour     colours in 0..1, no NaN, poles grey
 //    seifert    (p,q) orbits: on S3, Hopf at (1,1), torus knots, Lk = p q
+//    hopf tori  preimages map back onto the curve; area = pi * length
+//    polyhedra  vertex counts, regular, clear of the south pole, Lk = +-1
+//    knots      the orbits of a knot preset are distinct; same torus Lk = p q
 //    presets    deterministic, finite, under the cap
 //    budget     GPU bytes of the 3D view stay under a hard limit
 // ============================================================================
@@ -196,6 +199,67 @@ const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
     if (Math.abs(Math.abs(L) - p * q) > 0.03) lkGood = false;
   }
   ok('seifert: two orbits link p q times', lkGood, lks.join(' · '));
+}
+// hopf tori: the fibres over a closed curve
+{
+  const shapes = [{ shape: 'flower', th0: 1.15, amp: 0.32, k: 5 }, { shape: 'seam', a: 0.7, lift: 0.9 }, { shape: 'tilt', rho: 0.42, tl: 2.2 }];
+  let back = 0, onCurve = 0;
+  const flower = shapes[0];
+  for (const f of H.sampleItems([Object.assign({ kind: 'loop', n: 90 }, flower)], 24)) {
+    for (const t of [0.3, 2.9, 5.1]) back = Math.max(back, dist(H.hopf(H.fibrePoint(f.b, t)), f.b));
+    const th = Math.acos(f.b[2]), ph = Math.atan2(f.b[1], f.b[0]);
+    onCurve = Math.max(onCurve, Math.abs(th - (flower.th0 + flower.amp * Math.sin(flower.k * ph))));
+  }
+  ok('hopf tori: p(fibre) lands back on the base curve', back < 1e-12 && onCurve < 1e-9, `map err ${back.toExponential(2)}, curve err ${onCurve.toExponential(2)}`);
+  const rows = [];
+  let worst = 0;
+  for (const sh of shapes) {
+    const { area, length } = H.torusArea(u => H.loopPoint(sh, u), 500, 160);
+    const rel = Math.abs(area / (Math.PI * length) - 1); worst = Math.max(worst, rel);
+    rows.push(`${sh.shape} A ${area.toFixed(3)} pi L ${(Math.PI * length).toFixed(3)}`);
+  }
+  ok('hopf tori: area = pi * length (Pinkall)', worst < 2e-4, rows.join(' · ') + `  max rel ${worst.toExponential(1)}`);
+}
+// polyhedra
+{
+  const rows = [];
+  let good = true;
+  for (const [name, n] of [['octa', 6], ['cube', 8], ['icosa', 12], ['dodeca', 20]]) {
+    const V = H.polyhedron(name);
+    const angs = [];
+    for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) angs.push(Math.acos(Math.max(-1, Math.min(1, V[i].reduce((q, v, k) => q + v * V[j][k], 0)))));
+    const minA = Math.min(...angs), edges = angs.filter(a => a < minA + 1e-9).length, south = Math.min(...V.map(v => v[2]));
+    rows.push(`${name} ${V.length} v ${edges} e`);
+    if (V.length !== n || V.some(v => Math.abs(Math.hypot(...v) - 1) > 1e-12) || south < -0.97) good = false;
+    if (edges !== { octa: 12, cube: 12, icosa: 30, dodeca: 30 }[name]) good = false;
+  }
+  ok('polyhedra: vertices, edges, unit, no vertex at the south pole', good, rows.join(' · '));
+  const V = H.polyhedron('icosa'), lk = [];
+  for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) {
+    const A = H.fibreCurve(V[i], null, 240), B = H.fibreCurve(V[j], null, 240);
+    if (Math.max(...A.map(Math.abs), ...B.map(Math.abs)) > 60) continue;
+    lk.push(H.linkingNumber(A, B));
+  }
+  const err = Math.max(...lk.map(v => Math.abs(Math.abs(v) - 1)));
+  ok('polyhedra: icosahedron fibres link once in pairs', lk.length >= 55 && err < 0.03, `${lk.length} of 66 pairs, max | |Lk| - 1 | = ${err.toFixed(4)}`);
+}
+// knots: the orbits of the knot presets
+{
+  const rows = [];
+  let good = true;
+  for (const id of ['trefoils', 'seifert', 'cinquefoil']) {
+    const P = H.PRESETS.find(p => p.id === id), made = P.make(24, H.makeRng(1)), F = H.sampleItems(made.items, 24);
+    const [p, q] = made.pq, curves = F.map(f => Array.from({ length: 120 }, (_, i) => H.seifertPoint(f.b, H.TAU * i / 120, p, q)));
+    let minD = Infinity;
+    for (let i = 0; i < curves.length; i++) for (let j = i + 1; j < curves.length; j++)
+      for (const a of curves[i]) for (const b of curves[j]) minD = Math.min(minD, dist(a, b));
+    rows.push(`${id} (${p},${q}) ${F.length} orbits, min gap ${minD.toFixed(3)}`);
+    if (!(minD > 0.02)) good = false;
+  }
+  ok('knots: the orbits of a knot preset are distinct', good, rows.join(' · '));
+  const lat = H.sampleItems([{ kind: 'lat', z: 0.05, n: 4, span: H.TAU / 3, open: true }], 24);
+  const L = H.linkingNumber(H.fibreCurve(lat[0].b, null, 1500, [2, 3]), H.fibreCurve(lat[2].b, null, 1500, [2, 3]));
+  ok('knots: two trefoils on one torus link 6 times', Math.abs(Math.abs(L) - 6) < 0.05, `Lk ${L.toFixed(3)}`);
 }
 // presets
 {

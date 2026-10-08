@@ -43,7 +43,8 @@
 //    baseFromAngles
 //    qmul, qconj, leftMat, rightMat, planeMat, matMul, matVec, ident,
 //    rotationFor, MODES, baseColor, toSRGB, hexOf,
-//    sampleItems, PRESETS, makeRng, fibonacciSphere,
+//    sampleItems, PRESETS, PRESET_GROUPS, makeRng, fibonacciSphere,
+//    loopPoint, polyhedron, torusArea,
 //    circleFrom3, pierce, linkingNumber, loxodrome
 // ============================================================================
 
@@ -243,9 +244,76 @@ export function loxodrome(u) {
   return [r * Math.cos(ph), r * Math.sin(ph), z];
 }
 
+// ---------------------------------------------------------- closed curves
+// A point of a closed curve on S2 at u in [0, 1). The fibres over a closed
+// curve fill a Hopf torus (Pinkall 1985). It is flat in S3, with area
+// pi * L for a curve of length L on the unit S2 (torusArea checks this).
+//   flower  th = th0 + amp sin(k ph): a latitude with k waves
+//   seam    the tennis-ball seam (a cos s + b cos 3s, a sin s - b sin 3s,
+//           2 sqrt(ab) sin 2s), a + b = 1, lifted toward the north by
+//           lift and put back on S2 (so no fibre goes near infinity)
+//   tilt    a circle of radius rho about the axis (sin tl, 0, cos tl)
+export function loopPoint(it, u) {
+  const ph = TAU * u;
+  if (it.shape === 'seam') {
+    const a = it.a ?? 0.7, b = 1 - a, l = it.lift ?? 0.9, k = 2 * Math.sqrt(a * b);
+    const v = [a * Math.cos(ph) + b * Math.cos(3 * ph), a * Math.sin(ph) - b * Math.sin(3 * ph), k * Math.sin(2 * ph) + l];
+    const c = Math.cos(it.ph0 || 0), s = Math.sin(it.ph0 || 0);
+    return norm3([c * v[0] - s * v[1], s * v[0] + c * v[1], v[2]]);
+  }
+  if (it.shape === 'tilt') {
+    const rho = it.rho ?? 0.5, tl = it.tl ?? 0.6, ax = [Math.sin(tl), 0, Math.cos(tl)], e1 = [Math.cos(tl), 0, -Math.sin(tl)], e2 = [0, 1, 0];
+    const cr = Math.cos(rho), sr = Math.sin(rho);
+    return [0, 1, 2].map(j => cr * ax[j] + sr * (Math.cos(ph) * e1[j] + Math.sin(ph) * e2[j]));
+  }
+  const th = (it.th0 ?? 1.2) + (it.amp ?? 0.25) * Math.sin((it.k ?? 5) * ph + (it.ph1 || 0));
+  return baseFromAngles(Math.max(1e-3, Math.min(Math.PI - 1e-3, th)), ph + (it.ph0 || 0));
+}
+// The area in S3 of the surface of fibres over the curve P(u), u in [0,1),
+// by the midpoint rule; and the length of the curve on S2. For a closed
+// curve, area = pi * length.
+export function torusArea(P, nu = 400, nt = 200) {
+  let A = 0, L = 0;
+  const h = 1e-5;
+  for (let i = 0; i < nu; i++) {
+    const u = (i + 0.5) / nu, a = P(u - 0.5 / nu), b = P(u + 0.5 / nu);
+    L += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const bu = P(u), bp = P(u + h), bm = P(u - h);
+    for (let j = 0; j < nt; j++) {
+      const t = TAU * (j + 0.5) / nt, f0 = fibrePoint(bp, t), f1 = fibrePoint(bm, t), g0 = fibrePoint(bu, t + h), g1 = fibrePoint(bu, t - h);
+      const Pu = f0.map((v, k) => (v - f1[k]) / (2 * h)), Pt = g0.map((v, k) => (v - g1[k]) / (2 * h));
+      const E = Pu.reduce((q, v) => q + v * v, 0), Gt = Pt.reduce((q, v) => q + v * v, 0), F = Pu.reduce((q, v, k) => q + v * Pt[k], 0);
+      A += Math.sqrt(Math.max(0, E * Gt - F * F)) / nu * TAU / nt;
+    }
+  }
+  return { area: A, length: L };
+}
+
+// ------------------------------------------------------------- polyhedra
+// The vertices of a regular solid as unit vectors, turned by a fixed
+// rotation so that no vertex sits on the south pole (whose fibre is the
+// line through infinity).
+export function polyhedron(name) {
+  const g = GOLD, ig = 1 / GOLD, V = [];
+  const cyc = (a, b, c) => { V.push([a, b, c], [c, a, b], [b, c, a]); };
+  if (name === 'octa') { for (const s of [1, -1]) { V.push([s, 0, 0], [0, s, 0], [0, 0, s]); } }
+  else if (name === 'cube') { for (const x of [1, -1]) for (const y of [1, -1]) for (const z of [1, -1]) V.push([x, y, z]); }
+  else if (name === 'dodeca') {
+    for (const x of [1, -1]) for (const y of [1, -1]) for (const z of [1, -1]) V.push([x, y, z]);
+    for (const a of [ig, -ig]) for (const b of [g, -g]) cyc(0, a, b);
+  } else { for (const a of [1, -1]) for (const b of [g, -g]) cyc(0, a, b); }
+  // a turn by 0.5 rad about the axis (1, 2, 3)
+  const ax = norm3([1, 2, 3]), c = Math.cos(0.5), sn = Math.sin(0.5);
+  return V.map(v => { v = norm3(v); const d = dot3(ax, v), x = cross3(ax, v); return norm3([0, 1, 2].map(j => v[j] * c + x[j] * sn + ax[j] * d * (1 - c))); });
+}
+
 // Items are what the user puts on the base sphere:
 //   { kind: 'point', b }                   one fibre
-//   { kind: 'lat', z, n?, ph0?, span? }    n fibres over a circle of latitude
+//   { kind: 'lat', z, n?, ph0?, span?, open? }  n fibres over a circle of
+//                                          latitude (open: the end of the
+//                                          span gets no fibre)
+//   { kind: 'loop', shape, ..., n? }       n fibres over a closed curve
+//                                          (loopPoint)
 //   { kind: 'great', axis, n? }            n fibres over a great circle
 //   { kind: 'curve', pts }                 fibres along a painted curve
 //   { kind: 'cloud', pts }                 a fixed set of points
@@ -259,7 +327,7 @@ export function sampleItems(items, density = 24, cap = 2000) {
     else if (it.kind === 'lat') {
       const n = it.n || density, z = Math.max(-0.999, Math.min(0.999, it.z)), r = Math.sqrt(1 - z * z);
       const span = it.span || TAU, ph0 = it.ph0 || 0;
-      const full = span >= TAU - 1e-9;
+      const full = span >= TAU - 1e-9 || it.open;
       for (let i = 0; i < n; i++) { const ph = ph0 + span * (full ? i / n : i / Math.max(1, n - 1)); push([r * Math.cos(ph), r * Math.sin(ph), z], k); }
     } else if (it.kind === 'great') {
       const a = norm3(it.axis), u = norm3(Math.abs(a[2]) < 0.9 ? cross3(a, [0, 0, 1]) : cross3(a, [1, 0, 0])), v = cross3(a, u);
@@ -279,6 +347,9 @@ export function sampleItems(items, density = 24, cap = 2000) {
         const a = P[j], b = P[j + 1];
         push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], k);
       }
+    } else if (it.kind === 'loop') {
+      const n = it.n || Math.round(density * 1.5);
+      for (let i = 0; i < n; i++) push(loopPoint(it, i / n), k);
     } else if (it.kind === 'cloud') it.pts.forEach(b => push(b, k));
   });
   return out;
@@ -303,6 +374,36 @@ export const PRESETS = [
     make: (d) => ({ items: [{ kind: 'cloud', pts: fibonacciSphere(Math.round(d * d * 0.75)) }], thin: true }) },
   { id: 'trace', name: 'Trace a moving point', blurb: 'A point moves on S² from pole to pole. Its fibre moves with it and leaves a trail of fibres.',
     make: () => ({ items: [], trace: true }) },
+  // ---- Hopf tori: the fibres over a closed curve
+  { id: 'flower', group: 'tori', name: 'Flower torus', blurb: 'The fibres over a wavy latitude fill a Hopf torus with five bulges. Pinkall showed that every Hopf torus is flat in S³, with area π times the length of its curve.',
+    make: (d) => ({ items: [{ kind: 'loop', shape: 'flower', th0: 1.15, amp: 0.32, k: 5, n: Math.max(30, Math.round(d * 2.2)) }] }) },
+  { id: 'seam', group: 'tori', name: 'Tennis-ball torus', blurb: 'A curve like the seam of a tennis ball. Its fibres fill a Hopf torus that twists in and out. Fibres over distinct points never meet, so the torus does not cut itself.',
+    make: (d) => ({ items: [{ kind: 'loop', shape: 'seam', a: 0.7, lift: 0.9, n: Math.max(36, Math.round(d * 2.4)) }] }) },
+  { id: 'twin', group: 'tori', name: 'Two linked tori', blurb: 'Two small circles on S², far apart. Their Hopf tori are linked: each fibre of one torus links each fibre of the other once.',
+    make: (d) => ({ items: [{ kind: 'loop', shape: 'tilt', rho: 0.42, tl: 0.55, n: Math.max(18, Math.round(d * 1.1)) }, { kind: 'loop', shape: 'tilt', rho: 0.42, tl: 2.2, ph0: 0, n: Math.max(18, Math.round(d * 1.1)) }] }) },
+  { id: 'spiral', group: 'tori', name: 'Spiral ribbon', blurb: 'The fibres along a spiral from the south to the north of S². An arc of the base lifts to a band of circles that winds down to the unit circle.',
+    make: (d) => ({ items: [{ kind: 'curve', pts: Array.from({ length: 160 }, (_, i) => { const z = -0.55 + 1.45 * i / 159, r = Math.sqrt(1 - z * z), ph = 3 * TAU * i / 159; return [r * Math.cos(ph), r * Math.sin(ph), z]; }), n: Math.max(40, Math.round(d * 3)) }] }) },
+  // ---- links: fibres over finite sets
+  { id: 'icosa', group: 'links', name: 'Icosahedron', blurb: 'The 12 vertices of an icosahedron on S² give 12 great circles of S³. Each pair links once: 66 linked pairs.',
+    make: () => ({ items: polyhedron('icosa').map(b => ({ kind: 'point', b })) }) },
+  { id: 'dodeca', group: 'links', name: 'Dodecahedron', blurb: 'The 20 vertices of a dodecahedron give 20 circles and 190 linked pairs. Opposite vertices give circles that are as far apart as two fibres can be.',
+    make: () => ({ items: polyhedron('dodeca').map(b => ({ kind: 'point', b })) }) },
+  { id: 'necklace', group: 'links', name: 'Necklace', blurb: 'Points along a tilted great circle of S². Their fibres lie on one Clifford torus, and each pair links once.',
+    make: (d) => ({ items: [{ kind: 'great', axis: [Math.sin(0.5), 0, Math.cos(0.5)], n: Math.max(7, Math.round(d * 0.45)) }] }) },
+  // ---- torus knots: the weighted action t -> (e^{ipt} z0, e^{iqt} z1)
+  { id: 'trefoils', group: 'knots', name: 'Trefoil torus', blurb: 'Weights (2, 3): the circle action t ↦ (e²ⁱᵗ z₀, e³ⁱᵗ z₁). Its orbits over one latitude are trefoil knots that fill a torus. Any two orbits link 6 times.',
+    make: (d) => ({ items: [{ kind: 'lat', z: 0.05, n: Math.max(6, Math.round(d * 0.5)), span: TAU / 3, open: true }], pq: [2, 3] }) },
+  { id: 'seifert', group: 'knots', name: 'Seifert tori', blurb: 'Weights (3, 2) on three nested tori. Each orbit is a (3, 2) torus knot. Only the two core circles z₀ = 0 and z₁ = 0 are shorter orbits: the exceptional fibres.',
+    make: (d) => ({ items: [0.62, 0.05, -0.45].map((z, i) => ({ kind: 'lat', z, n: Math.max(4, Math.round(d * (0.25 + 0.08 * i))), span: TAU / 2, open: true, ph0: 0.9 * i })), pq: [3, 2] }) },
+  { id: 'cinquefoil', group: 'knots', name: 'Cinquefoil', blurb: 'Weights (2, 5): each orbit is a (2, 5) torus knot, a cinquefoil, that winds 2 times about the axis and 5 times about the core circle.',
+    make: (d) => ({ items: [{ kind: 'lat', z: 0.2, n: Math.max(3, Math.round(d * 0.2)), span: TAU / 5, open: true }], pq: [2, 5] }) },
+  { id: 'knotpair', group: 'knots', name: 'Two trefoils', blurb: 'Two orbits of the (2, 3) action on two different tori. They link p·q = 6 times: the readout gives the Gauss integral.',
+    make: () => ({ items: [{ kind: 'point', b: baseFromAngles(1.05, 0.2) }, { kind: 'point', b: baseFromAngles(1.95, 1.4) }], pq: [2, 3], discs: true }) },
+];
+// The groups of the preset gallery. A preset with no group is 'hopf'.
+export const PRESET_GROUPS = [
+  { id: 'hopf', name: 'Hopf fibres' }, { id: 'tori', name: 'Hopf tori' },
+  { id: 'links', name: 'Links' }, { id: 'knots', name: 'Torus knots' },
 ];
 
 // ---------------------------------------------------------- circle and link
