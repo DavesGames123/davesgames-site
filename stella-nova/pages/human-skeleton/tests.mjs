@@ -25,7 +25,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { decodeBone, decodeGroup } from './decode.js';
 import { prep, radial, regional, catalogue, liftToFloor, bounds, delays } from './layout.js';
-import { treeDepths, buildDelays, liftDir, liftAmount, liftProfile, neighbours } from './saver-plan.js';
+import { treeDepths, buildDelays, liftDir, liftAmount, liftProfile, liftFit, neighbours } from './saver-plan.js';
 
 const here = new URL('.', import.meta.url).pathname;
 const M = JSON.parse(readFileSync(here + 'data/manifest.json', 'utf8'));
@@ -220,6 +220,37 @@ const bufs = {};
   ok(badN.length === 0, 'saver neighbours name real bones', badN.join(','));
   const amts = bones.filter(b => liftDir(b)).map(b => liftAmount(b)), still = bones.filter(b => liftDir(b) && liftAmount(b) <= 0.004).map(b => b.id);
   console.log(`  saver: tree depth max ${Math.max(...d)}, lift up to ${(Math.max(...amts) * 1000).toFixed(1)} mm; no lift (floor) ${still.length}: ${still.join(' ')}`);
+  // Push-in framing on a portrait phone band (m = 360 px short side). A
+  // worst case lift runs across the screen. Over the shot (u = 0..1) the
+  // zoom goes 1.15 -> 0.92 (smoothstep) and the lift follows liftProfile.
+  // The bone must stay within m/2 of the aim. Two views: the long side of
+  // the bone on screen (hs = longest qsize / 2, the usual case) and the
+  // bone end-on (hs = middle qsize / 2). Old framing: aim at the rest
+  // centre, px = 0.6 m / 2. New: aim at half the lift, px from liftFit.
+  const m = 360, push = bones.filter(b => b.counted && b.len >= 20 && b.type !== 'tooth' && b.type !== 'cartilage' && liftDir(b) && liftAmount(b) > 0.004);
+  const sm = x => x * x * (3 - 2 * x);
+  const run = side => {
+    let worst = 0, oldWorst = 0, oldOut = 0, capped = 0;
+    for (const b of push) {
+      const q = b.qsize.slice().sort((x, y) => x - y), hs = q[side] / 2, L = liftAmount(b), hl = L / 2;
+      const px = liftFit(hs, hl, m);
+      let wN = 0, wO = 0;
+      for (let k = 0; k <= 200; k++) {
+        const u = k / 200, z = 1.15 - 0.23 * sm(u), p = liftProfile(u);
+        wN = Math.max(wN, (hs + Math.abs(p - 0.5) * L) * px / hs / z / (m / 2));
+        wO = Math.max(wO, (hs + p * L) * 0.3 * m / hs / z / (m / 2));
+      }
+      worst = Math.max(worst, wN); oldWorst = Math.max(oldWorst, wO);
+      if (wO > 1) oldOut++;
+      if (px < 0.3 * m - 1e-9) capped++;
+    }
+    return { worst, oldWorst, oldOut, capped };
+  };
+  const A = run(2), B = run(1), pc = x => (x * 100).toFixed(1) + '%';
+  ok(push.length > 100 && A.worst <= 0.95 && B.worst <= 0.95, 'saver push-in: a lifted bone stays inside a portrait band',
+    `${push.length} bones; far end now ${pc(A.worst)} (long side on screen) and ${pc(B.worst)} (end-on) of the half width, ` +
+    `was ${pc(A.oldWorst)} and ${pc(B.oldWorst)} (out of the band: ${A.oldOut} and ${B.oldOut} bones); framed smaller now ${A.capped} and ${B.capped}`);
+  ok(liftFit(0.01, 0, 360) === 0.6 * 180, 'saver push-in: no lift keeps BONE_FIT');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

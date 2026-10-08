@@ -74,7 +74,7 @@ import { setOpen } from './app/panel.js';
 import { setTheme, setShow, buildUI } from './app/controls.js';
 import { frame } from './app/loop.js';
 import * as L from './layout.js';
-import { buildDelays, liftDir, liftAmount, liftProfile, neighbours } from './saver-plan.js';
+import { buildDelays, liftDir, liftAmount, liftProfile, liftFit, neighbours } from './saver-plan.js';
 
 // debug and headless checks
 window.__hs = {
@@ -254,6 +254,7 @@ function plateClear(w, h) {
 }
 // The half width, half height and depth of a box seen along dir.
 const _p = new THREE.Vector3();
+const _lv = new THREE.Vector3();
 function extentOf(lo, hi, dir) {
   const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize(), up = dir.clone().cross(right).normalize();
   const mid = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
@@ -447,9 +448,13 @@ window.snSaver = {
       // A bone: the middle band, with the larger side of the box at 60% of
       // the short side of the band (BONE_FIT), over the near face of the
       // box. The zoom moves it from about 52% to 65% in the hold.
+      // With a lift, the aim is the middle of the lift and liftFit keeps
+      // the bone in the band at both ends of it (saver-plan.js).
       if (one >= 0) {
-        const [cw, ch] = size(band), px = BONE_FIT * Math.min(cw, ch) / 2;
-        return { c: e.mid, d: e.hd + Math.max(e.hw, e.hh) * Hc / (2 * fy() * px) * z, az, el, occ: band };
+        const [cw, ch] = size(band), hs = Math.max(e.hw, e.hh), hl = lift && lift.i === one ? lift.amt / 2 : 0;
+        if (hl) e.mid.add(_lv.set(lift.dir[0], lift.dir[1], lift.dir[2]).multiplyScalar(hl));
+        const px = liftFit(hs, hl, Math.min(cw, ch), BONE_FIT);
+        return { c: e.mid, d: e.hd + hs * Hc / (2 * fy() * px) * z, az, el, occ: band };
       }
       // The full view, a region shot and a whole-body shot: the middle band,
       // when the subject is FULL_MIN px tall or more there at SHOT_FIT. Else

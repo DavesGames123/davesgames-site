@@ -22,6 +22,7 @@
 //    export function liftDir ....... unit vector joint -> centre, or null
 //    export function liftAmount .... the lift distance in m
 //    export function liftProfile ... 0 .. 1 .. 0 over the shot
+//    export function liftFit ....... push-in size that keeps the lift in the band
 //    export function neighbours .... indices of the bones it articulates with
 // ============================================================================
 
@@ -78,6 +79,20 @@ export function liftAmount(b, dir = liftDir(b)) {
 export function liftProfile(u) {
   const s = (a, b) => { const t = Math.min(1, Math.max(0, (u - a) / (b - a))); return t * t * (3 - 2 * t); };
   return s(0.22, 0.42) - s(0.62, 0.82);
+}
+
+// The push-in framing of a lifted bone (main.js goal). The camera aims at
+// the middle of the lift (the bone centre plus half the lift), so the bone
+// swings by hl to each side of the aim. The return is the screen size in
+// px of hs, the half-size of the bone box: fit of the half short side m/2,
+// as before, but never so large that hs + hl passes edge of m/2. The
+// shot zoom ends at 0.92, which makes the bone 1/0.92 larger, so edge
+// 0.84 keeps the bone within 0.457 m of the aim, inside the band. A
+// portrait phone has its short side across, so a sideways lift needs it.
+// Bones under 27 mm lift 8 mm, more than 30% of their length; without
+// the half-lift aim, a lift across the screen took them out of the band.
+export function liftFit(hs, hl, m, fit = 0.6, edge = 0.84) {
+  return Math.min(fit * m / 2, edge * m / 2 * hs / Math.max(1e-9, hs + hl));
 }
 
 // Indices of the bones that bone b articulates with (manifest art).
