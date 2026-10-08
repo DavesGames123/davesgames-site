@@ -84,6 +84,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .amp-foot .legend .lg-bar{width:72px;margin:0}
 .amp-foot .legend .lg-ends{gap:6px}
 .fld-src .src-canvas-wrap{flex:1;position:relative;min-height:0}
+/* the paint canvas keeps the finger on any touch screen */
+#src-cv{touch-action:none}
 #paint-bar{flex-shrink:0;display:flex;align-items:center;gap:6px 12px;padding:6px 9px;background:rgba(9,12,20,0.9);border-top:1px solid var(--border);flex-wrap:wrap}
 .pb-grp{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .sw{width:18px;height:18px;border-radius:3px;border:1px solid var(--border-b);cursor:pointer;flex-shrink:0}
@@ -147,8 +149,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   #grid{display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--border-b);gap:1px;padding-bottom:var(--dock-h)}
   .module{flex:0 0 auto}
   #m-field{min-height:380px}#m-stack{min-height:460px}#m-recon{min-height:500px}#m-circuit{min-height:200px}
-  /* the paint canvas keeps the finger; the score strip gives vertical swipes to the page */
-  #src-cv{touch-action:none}#score-cv{touch-action:pan-y}
+  /* the score strip gives vertical swipes to the page */
+  #score-cv{touch-action:pan-y}
   .topbar{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
   #grid{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
   #field-body{flex-direction:column}.fld-src{flex:0 0 206px}.fld-amp{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) auto}.fld-amp .amp-cell{min-width:0}.fld-amp .amp-cell+.amp-cell{border-top:none;border-left:1px solid var(--border)}.amp-foot{grid-column:1 / -1}}
