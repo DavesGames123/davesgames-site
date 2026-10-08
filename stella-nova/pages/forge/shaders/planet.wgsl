@@ -126,12 +126,18 @@ fn ringShadow(p: vec3f) -> f32 {
   return 1.0 - ringAt(length(q.xz)).a * 0.9;
 }
 
+// The cloud map (0..1 coverage, also an exported PBR map) to the rendered
+// opacity: thin cloud lets most of the ground through, and the thickest
+// cloud stays at most CLOUD_MAX opaque, as real cloud decks do from orbit.
+const CLOUD_MAX: f32 = 0.75;
+fn cloudOpacity(a: f32) -> f32 { return CLOUD_MAX * pow(clamp(a, 0.0, 1.0), 1.6); }
+
 fn cloudAlpha(uv: vec2f, g: Grad, lat: f32) -> f32 {
   let drift = V.flow.x * (0.55 + 0.45 * cos(2.0 * lat));
   let f = flowUV(uv, vec2f(drift, 0.0), V.camPos.w, 40.0);
   let a = sampleG(tCloud, f.a, g).r;
   let b = sampleG(tCloud, f.b, g).r;
-  return mix(a, b, f.w) * V.flow.z;
+  return cloudOpacity(mix(a, b, f.w)) * V.flow.z;
 }
 
 // Cloud shadow at surface point p: the sun ray meets the cloud shell.
@@ -145,7 +151,7 @@ fn cloudShadow(p: vec3f) -> f32 {
   let drift = V.flow.x * (0.55 + 0.45 * cos(2.0 * asin(q.y)));
   let f = flowUV(uv, vec2f(drift, 0.0), V.camPos.w, 40.0);
   let a = mix(textureSampleLevel(tCloud, sMap, f.a, 2.0).r, textureSampleLevel(tCloud, sMap, f.b, 2.0).r, f.w);
-  return 1.0 - 0.8 * a;
+  return 1.0 - 0.8 * cloudOpacity(a) / CLOUD_MAX;
 }
 
 // Sky irradiance on the ground (a cheap fit: scattered sun over one scale
