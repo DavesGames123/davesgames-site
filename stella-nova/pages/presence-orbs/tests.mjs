@@ -13,9 +13,10 @@
 //                 and tones are finite and in 0..1
 //    layout ..... every cell square is inside the rect, and no two overlap
 //    label ...... every shot has a title, a sub and a line
+//    dpr ........ the saver pixel ratio stays under the phone and desktop caps
 // ============================================================================
 import { readFileSync } from 'node:fs';
-import { makeDirector, sampleShot, layoutShot, shotLabel, STATES, SHOT_MIN, SHOT_MAX } from './director.js';
+import { makeDirector, sampleShot, layoutShot, shotLabel, saverDpr, SAVER_PHONE_PX, SAVER_MAX_PX, STATES, SHOT_MIN, SHOT_MAX } from './director.js';
 
 const STYLES = JSON.parse(readFileSync(new URL('styles.json', import.meta.url), 'utf8'));
 const OUT = new Set(['tempest', 'opal', 'glimmer', 'abyss']);
@@ -83,6 +84,19 @@ for (const calm of [0, 0.5, 1]) {
   console.log('calm', calm.toFixed(1), `shots ${lo.toFixed(2)}..${hi.toFixed(2)} s; non-idle frames ${(frac * 100).toFixed(1)}%; state changes ${(changes / time).toFixed(2)}/s; kinds ${JSON.stringify(kinds)}`);
 }
 ok(changesPerSec[1] < changesPerSec[0] && changesPerSec[1] > 0.5, 'calm 1 is not slower than calm 0, or it is static');
+
+// dpr: the saver canvas on phones, a tablet and desktops
+{
+  const px = (w, h, n, d, c) => { const r = saverDpr(w, h, n, d, c); return Math.round(w * r) * Math.round(h * r); };
+  for (const [w, h] of [[360, 640], [390, 844], [844, 390], [1024, 1366]]) for (const n of [1, 12]) {
+    const r = saverDpr(w, h, n, 3, true);
+    ok(r <= (n > 1 ? 1.25 : 1.5) && px(w, h, n, 3, true) <= SAVER_PHONE_PX * 1.01, `phone saver dpr ${w}x${h} n ${n}: ${r}`);
+    console.log(`  saver dpr ${w}x${h} n=${n} touch: ${r.toFixed(3)}, ${(px(w, h, n, 3, true) / 1e6).toFixed(2)} Mpx`);
+  }
+  ok(saverDpr(1440, 900, 1, 2, false) === 2 && saverDpr(1440, 900, 12, 2, false) === 1.5, 'desktop saver keeps dpr 2 (one orb) and 1.5 (grid)');
+  ok(px(3840, 2160, 1, 2, false) <= SAVER_MAX_PX * 1.01, 'a 4K desktop saver stays under 3840x2160 device px');
+  ok(saverDpr(390, 844, 1, 1, true) === 1, 'a 1x screen keeps dpr 1');
+}
 
 console.log(fails ? `${fails} checks FAILED` : 'all checks pass');
 process.exit(fails ? 1 : 0);

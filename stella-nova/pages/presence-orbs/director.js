@@ -27,6 +27,7 @@
 //      layoutShot(sh, r, t)  cell squares { x, y, s } (centre, side) in a rect
 //      shotLabel(sh) ..... { title, sub, line } for the label plate
 //      speech(t, s) ...... a voice envelope 0..1 (phrases and syllables)
+//      saverDpr(w, h, n, dpr, coarse)  the pixel ratio of the saver canvas
 //
 //  Timing: a shot lasts 5 to 12 s. calm 0..1 stretches the shot and every
 //  script time by k = 1 + 0.7 calm, so calm 1 is slower but never static.
@@ -269,4 +270,17 @@ export function shotLabel(sh) {
     default: return { title: `Presence orbs · ${sh.family || 'mixed'} relay`, sub: `a baton of speech passes along ${n} species and back`,
       line: 'the holder responds, the next orb listens, the last one ends in success' };
   }
+}
+
+// The pixel ratio of the saver canvas: w x h CSS px, n orbs in the shot,
+// dpr the device ratio, coarse true on a touch screen. One orb draws at up
+// to 2 (1.5 on a touch screen). A grid shot draws at up to 1.5 (1.25 on a
+// touch screen), because each orb is small. The canvas also stays under a
+// device px cap: 3840 x 2160 on a desktop, 1.6 Mpx on a touch screen, so a
+// phone never fills a full 3x canvas.
+export const SAVER_MAX_PX = 3840 * 2160, SAVER_PHONE_PX = 1.6e6;
+export function saverDpr(w, h, n, dpr, coarse) {
+  const top = n > 1 ? (coarse ? 1.25 : 1.5) : (coarse ? 1.5 : 2);
+  const area = Math.max(1, w * h), cap = Math.sqrt((coarse ? SAVER_PHONE_PX : SAVER_MAX_PX) / area);
+  return Math.max(0.5, Math.min(dpr || 1, top, cap));
 }

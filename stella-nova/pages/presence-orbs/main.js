@@ -44,7 +44,7 @@ import { initControls } from './controls.js';
 import { fitTable, maxDpr, initMobile } from '../../lib/table-mobile.js';
 import { initGPU, device, msurf, visible, stats, makeSurface } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
-import { makeDirector, sampleShot, layoutShot, shotLabel } from './director.js';
+import { makeDirector, sampleShot, layoutShot, shotLabel, saverDpr } from './director.js';
 import { plateBand } from '../../lib/saver-clear.js';
 
 // Pack source lives in real .wgsl files under shaders/. Fetch it all up front.
@@ -151,8 +151,10 @@ if (await initGPU(STYLES, PACKS)) {
   // sparkles (glimmer), no near-black (abyss). G.tempo follows opts.calm.
   // Each orb of a shot writes its own tile uniform buffer (t.surf) and draws
   // into a scissor square of the one saver canvas, so the fragment count
-  // stays near one full-window orb. A grid shot caps the DPR at 1.5.
+  // stays near one full-window orb. saverDpr (director.js) caps the DPR.
   const SAVER_OUT = ['tempest', 'opal', 'glimmer', 'abyss'];
+  // a touch screen gets a lower saver pixel ratio (director.js, saverDpr)
+  const SAVER_COARSE = matchMedia('(pointer:coarse)').matches;
   const FADE = 0.45;
   let saver = null;
   function saverEnter(opts) {
@@ -268,7 +270,7 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
       t.live.level = ap(t.live.level, c.level); t.live.activity = ap(t.live.activity, c.activity); t.tone = c.tone;
     });
     if (now - s.plateAt >= 1) saverPlate(now);
-    const cv = s.canvas, r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, s.cells.length > 1 ? 1.5 : 2);
+    const cv = s.canvas, r = cv.getBoundingClientRect(), dpr = saverDpr(r.width, r.height, s.cells.length, devicePixelRatio || 1, SAVER_COARSE);
     const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     s.layout = layoutShot(s.shot, saverRect(now, dt), tau);
