@@ -14,7 +14,8 @@
 //    motion stats ...... "function finishPose"
 // ============================================================================
 import { cross, norm, sub } from '../render.js';
-import { orbitsPerMin, saverCamera } from '../main.js';
+import { saverCamera } from '../main.js';
+import { orbitsPerMin } from './loop.js';
 import { UI } from './env.js';
 import { occlusion } from './occlusion.js';
 import { satState, satCentre } from './sat.js';

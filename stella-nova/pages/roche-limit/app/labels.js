@@ -10,7 +10,7 @@
 // ============================================================================
 import { norm } from '../render.js';
 import { SATURN_RINGS } from '../scenarios.js';
-import { limitsFor } from '../main.js';
+import { limitsFor } from './runs.js';
 import { cam } from './camera.js';
 import { $, UI, KM_SATURN } from './env.js';
 import { satCentre, satState } from './sat.js';

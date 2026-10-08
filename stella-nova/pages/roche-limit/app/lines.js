@@ -13,7 +13,7 @@
 // ============================================================================
 import * as P from '../physics.js';
 import { norm, cross } from '../render.js';
-import { limitsFor } from '../main.js';
+import { limitsFor } from './runs.js';
 import { UI } from './env.js';
 import { satCentre, satState } from './sat.js';
 import { S } from './state.js';
