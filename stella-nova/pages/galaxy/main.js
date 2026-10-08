@@ -256,7 +256,7 @@ function frame(now) {
   else { const o = occlusion(); off = [(o.l - o.r) / innerWidth, (o.b - o.t) / innerHeight]; }
   E.render({
     cam: C.frameUniform(c, bud.w / bud.h), off, time: st.time, wall: now / 1000, frame: st.frame++,
-    exposure: Math.pow(2, st.ev) * (api.saving ? api.fade ?? 1 : 1), sbRef: M.refSB(P), skyGain: 1, autoKey: 0.11, autoRate: Math.min(1, dt * 2.5), bloom: 0.06,
+    exposure: Math.pow(2, st.ev) * (api.saving ? api.fade ?? 1 : 1), sbRef: M.refSB(P), skyGain: 1, autoKey: 0.09, autoRate: Math.min(1, dt * 2.5), bloom: 0.06,
     snapExposure: api.snap ? (api.snap = false, true) : false,
   });
 }

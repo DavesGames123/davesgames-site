@@ -45,7 +45,7 @@ fn sampleGal(g: Gal, p: vec3f, fp: f32) -> Med {
   // fade to zero at the box walls, so the box never shows as an edge
   let win = 1.0 - smoothstep(0.6, 1.0, max(R / g.box.x, az / g.box.y));
   e += win * g.halo.x * pow(1.0 + r3 * g.halo.y, -3.5) * g.cBulge.rgb;
-  let m = max(length(p * vec3f(1.0, g.bulge2.x, g.bulge2.y)) / g.bulge.y, 0.012);
+  let m = max(length(p * vec3f(1.0, g.bulge2.x, g.bulge2.y)) / g.bulge.y, 0.04);
   e += win * g.bulge.x * pow(m, -g.bulge2.z) * exp(-g.bulge.w * pow(m, g.bulge.z)) * g.cBulge.rgb;
   if (g.disk.x <= 0.0 && g.dust.x <= 0.0) { return Med(e, 0.0); }
 
@@ -92,7 +92,7 @@ fn sampleGal(g: Gal, p: vec3f, fp: f32) -> Med {
   e += young * g.cYoung.rgb;
   // HII knots: 1 - F1 Worley cells, raised to a high power, in the arms
   let cell = tex(qw * g.hii.y * 0.125 + vec3f(0.5, 0.2, 0.7)).g;
-  let knot = pow(cell, 7.0) * mix(youngMod, 1.0, 0.1) * ex * yz * g.hii.x * clump * (0.4 + n2r);
+  let knot = pow(cell, 5.0) * mix(youngMod, 1.0, 0.1) * ex * yz * g.hii.x * clump * (0.4 + n2r);
   e += knot * g.cHii.rgb;
 
   // bar: turns with the pattern; dust lanes on its leading edges

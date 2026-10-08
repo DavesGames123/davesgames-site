@@ -34,7 +34,7 @@ export const KMS_KPC = 1.0227e-3;          // 1 km/s/kpc in rad/Myr
 export const GAL_VEC4 = 24, GAL_FLOATS = GAL_VEC4 * 4;
 export const STAR_FLOATS = 16;             // four vec4 per star
 // Float offsets inside one galaxy block that the engine patches per frame.
-export const OFF = { phase: 9 * 4 + 1 };   // arms2.y = Omega_p t
+export const OFF = { phase: 8 * 4 + 1 };   // arms2.y = Omega_p t (block 8 is arms2)
 
 // ── random numbers ──────────────────────────────────────────────────────────
 export function rng(seed) {
@@ -258,11 +258,11 @@ export function packGalaxy(gal, out = new Float32Array(GAL_FLOATS), o = 0) {
   // tau = 2 kappa_0 h_d.
   const dHz = P.dustHz * k, dRd = P.dustRd * k;
   // DUST_LEGIBLE: the lanes read at page size (a shown, not hidden, effect)
-  const DUST_LEGIBLE = 1.7;
+  const DUST_LEGIBLE = 2.4;
   v(10, DUST_LEGIBLE * P.tau / (2 * dHz), 1 / dRd, 1 / dHz, P.lane);
   v(11, (P.ringR || 0) * k, 1 / Math.max(0.1, (P.ringW || 1) * k), (P.ringTau || 0) / (2 * dHz), P.filament);
-  v(12, P.laneOff, P.sharp * 0.8, (P.hole || 0) * k, omP);
-  v(13, P.hii * rhoY / (4 * Math.PI) * 6, 1 / (0.9 * k), 0, P.Rt * k);
+  v(12, P.laneOff * 2, P.sharp * 1.5, (P.hole || 0) * k, omP);
+  v(13, P.hii * rhoY / (4 * Math.PI) * 30, 1 / (0.9 * k), 0, P.Rt * k);
   v(14, (P.halo || 0) * L / (haloNorm(P.rh * k)) / (4 * Math.PI), 1 / (P.rh * k), P.irr || 0, (gal.seedOff ?? 0));
   const cB = blackbodyRGB(T_OLD), cD = blackbodyRGB(T_DISK), cY = blackbodyRGB(T_YOUNG);
   v(15, cB[0], cB[1], cB[2], 0);
@@ -412,10 +412,10 @@ function fillStars(W, P, gi, budget, r, k = 1, L = 1, seedOff = 0) {
     if (P.irr || P.armAmp <= 0.05) phase = r() * 6.283185307;   // no arms: any azimuth
     let z = laplace(r, Math.max(0.05, hz * 0.45));
     let pop = 2, rec;
-    const life = hii ? 6 + 10 * r() : 40 + 140 * r();
+    const life = hii ? 3 + 5 * r() : 3 + 8 * r();
     const T = hii ? 0 : Math.exp(Math.log(8000) + r() * Math.log(36000 / 8000));
     const c = hii ? HII_RGB : starRGB(T);
-    const Ls = hii ? C.Lyoung * 0.06 / Math.max(1, nH) * (P.hii || 0) * (0.5 + 1.5 * r() ** 2) : C.Lyoung * RESOLVED.young / nY * Math.pow(T / 12000, 1.6) * (0.3 + 1.4 * r() ** 2);
+    const Ls = hii ? C.Lyoung * 0.2 / Math.max(1, nH) * (P.hii || 0) * (0.5 + 1.5 * r() ** 2) : C.Lyoung * RESOLVED.young / nY * Math.pow(T / 12000, 1.6) * (0.3 + 1.4 * r() ** 2);
     if (P.irr) {
       // irregular: young stars in a few big clumps at random places.
       const nc = 7, ci = Math.floor(r() * nc), cr = rng(P.seed * 31 + ci + seedOff * 101);

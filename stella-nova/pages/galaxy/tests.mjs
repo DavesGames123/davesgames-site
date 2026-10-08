@@ -120,6 +120,9 @@ for (const pitch of [10, 18, 30]) {
   const P = M.presetParams('m51'), g = M.packGalaxy({ P, rot: M.frameFromNormal([0, 0, 1]), centre: [0, 0, 0], L: 1 });
   const Cm = M.components(P, 1), rhoD = g[5 * 4] * 4 * Math.PI;
   ok(rel(M.diskTotal(rhoD, P.Rd, P.hz), Cm.Lthin * (1 - M.RESOLVED.disk)) < 1e-6, 'pack: the thin disk rho0 gives its unresolved light');
+  // the engine writes Omega_p t at OFF.phase: it must be arms2.y, the
+  // float after the arm sharpness (a wrong offset froze the arms and broke the bar)
+  ok(g[M.OFF.phase - 1] === Math.fround(P.sharp) && g[M.OFF.phase] === 0 && g[M.OFF.phase + 1] === Math.fround(P.flocc), `pack: OFF.phase = ${M.OFF.phase} is arms2.y`);
 }
 
 // ── saver plan ──

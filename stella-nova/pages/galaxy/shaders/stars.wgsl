@@ -103,7 +103,7 @@ const CORNER = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 
     pw = toWorld(g, vec3f(R * cos(phi), R * sin(phi), a.w));
     let x = age / life;
     if (b.w > 0.5) { bright = smoothstep(0.0, 0.12, x) * (1.0 - x) * 2.2; }
-    else { bright = smoothstep(0.0, 0.05, x) * pow(1.0 - x, 1.5) * 1.9; }
+    else { bright = smoothstep(0.0, 0.05, x) * pow(1.0 - x, 3.0) * 3.2; }
   } else if (pop == 3) {
     let cs = cos(g.arms2.y);
     let sn = sin(g.arms2.y);

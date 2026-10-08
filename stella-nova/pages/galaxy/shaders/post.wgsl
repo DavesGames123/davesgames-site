@@ -76,7 +76,7 @@ fn lum(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
   let avg = exp(s / max(n, 1.0));
   // the subject's mean maps to the key; the peak may not go far past white
   var tgt = P.look.z / max(avg, 1e-12);
-  tgt = min(tgt, 5.0 / max(mx, 1e-12));
+  tgt = min(tgt, 3.0 / max(mx, 1e-12));
   let last = textureLoad(srcB, vec2i(0, 0), 0).r;
   let e = select(exp(mix(log(max(last, 1e-12)), log(tgt), P.look.w)), tgt, last <= 0.0 || P.look.w >= 1.0);
   return vec4f(e, avg, mx, 1.0);

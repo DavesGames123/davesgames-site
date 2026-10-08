@@ -183,13 +183,13 @@ export async function createEngine({ canvas = null, device = null, format = null
     put(4, f.off ? f.off[0] : 0, f.off ? f.off[1] : 0, f.frame || 0, T.steps);
     put(5, T.w, T.h, T.vw, T.vh);
     put(6, 1, f.bloom ?? 0.06, f.starGain ?? 1, f.twinkle ?? 1);
-    put(7, f.sbRef || 1e-3, f.skyGain ?? 1, f.autoKey ?? 0.11, f.autoRate ?? 0.05);
+    put(7, f.sbRef || 1e-3, f.skyGain ?? 1, f.autoKey ?? 0.09, f.autoRate ?? 0.05);
     put(8, f.detail ?? T.detail, f.peakClamp ?? 400, f.wall || 0, 0);
     device.queue.writeBuffer(uniBuf, 0, uni);
     for (let g = 0; g < nGal; g++) gals[g * GAL_FLOATS + OFF.phase] = patternSpeed(gals, g) * f.time;
     device.queue.writeBuffer(galBuf, 0, gals);
 
-    const pu = (slot, texel, mix = 1) => device.queue.writeBuffer(ubuf(slot), 0, new Float32Array([texel[0], texel[1], mix, 0, f.exposure ?? 1, f.bloom ?? 0.06, f.autoKey ?? 0.11, (firstExpo || f.snapExposure) ? 1 : (f.autoRate ?? 0.05), f.frame || 0, 0, f.vignette ?? 0.35, T.lv.length]));
+    const pu = (slot, texel, mix = 1) => device.queue.writeBuffer(ubuf(slot), 0, new Float32Array([texel[0], texel[1], mix, 0, f.exposure ?? 1, f.bloom ?? 0.06, f.autoKey ?? 0.09, (firstExpo || f.snapExposure) ? 1 : (f.autoRate ?? 0.05), f.frame || 0, 0, f.vignette ?? 0.35, T.lv.length]));
     const S = T.passes;
     pu(S.down0.u, S.down0.texel);
     S.down.forEach(p => pu(p.u, p.texel));
