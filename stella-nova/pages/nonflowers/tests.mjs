@@ -33,6 +33,16 @@ function run(seed) {
   return { type: r.type, calls: log.n, hash: log.h, par: JSON.stringify(plainPAR(r.PAR)), r };
 }
 
+// ── one raster path ─────────────────────────────────────────────────────────
+test('every engine 2D context asks for willReadFrequently (CPU raster, one result per seed)', () => {
+  const asks = [];
+  const log = { h: 2166136261, n: 0 };
+  const canvas = () => { const c = recorderCanvas(log), g = c.getContext; c.getContext = (t, o) => { asks.push([t, o && o.willReadFrequently]); return g(t, o); }; return c; };
+  paint(SRC, '1', { canvas });
+  ok(asks.length > 3, 'too few getContext calls: ' + asks.length);
+  ok(asks.every(([t, w]) => t === '2d' && w === true), 'a 2D context without willReadFrequently: ' + JSON.stringify(asks.find(([, w]) => w !== true)));
+});
+
 // ── upstream file ───────────────────────────────────────────────────────────
 test('upstream/main.js is the pinned copy (sha256)', () => {
   eq(createHash('sha256').update(fs.readFileSync(path.join(DIR, 'upstream/main.js'))).digest('hex'), UPSTREAM.sha256, 'sha256');

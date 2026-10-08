@@ -33,7 +33,9 @@
 //    window   { btoa, location: { href: 'nonflowers?seed=' + token } }
 //    document createElement('canvas') -> env.canvas() (an OffscreenCanvas in
 //             a worker, a real canvas on the main thread, a recorder in
-//             node). Any other element and getElementById -> an inert stub
+//             node). cpuCanvas() makes its 2D context willReadFrequently,
+//             so the raster is always the CPU one. Any other element and
+//             getElementById -> an inert stub
 //             (a Proxy: a get returns the stub, a set does nothing, a call
 //             returns the stub, innerHTML reads '').
 //    console  log() keeps the PAR object (it has flowerChance); the rest of
@@ -74,6 +76,7 @@
 //    grep -n 'export function cleanSeed'    trim and cut a typed seed
 //    grep -n 'export function makeEngine'   the new Function() shim
 //    grep -n 'function stubElement'         the inert DOM stub
+//    grep -n 'function cpuCanvas'           willReadFrequently: one raster path
 //    grep -n 'export function paint'        upstream load() order
 //    grep -n 'export function inkFocus'     where the petals / leaves are (saver)
 //    grep -n 'export function plainPAR'     PAR -> plain data
@@ -139,6 +142,20 @@ function stubElement() {
   return proxy;
 }
 
+// Every engine canvas gets willReadFrequently: true, so the browser draws
+// it on the CPU. Without it, Chrome draws a canvas on the GPU or on the CPU
+// by its own budget (live GPU canvases in the process, readback count),
+// and the two rasters differ at the edges of the shapes. Then one seed gave
+// two different pixel results on the same machine (2 of 16 loads in our
+// check). upstream Layer.filter and Layer.bound read every pixel back, and
+// the CPU raster does not depend on the GPU budget.
+function cpuCanvas(c) {
+  if (!c || typeof c.getContext !== 'function') return c;
+  const get = c.getContext.bind(c);
+  c.getContext = (type, opts) => get(type, type === '2d' ? Object.assign({ willReadFrequently: true }, opts || {}) : opts);
+  return c;
+}
+
 // ── makeEngine ──────────────────────────────────────────────────────────────
 // src: the text of upstream/main.js. seed: our seed string. env.canvas():
 // a new canvas-like object with width, height and getContext('2d').
@@ -148,7 +165,7 @@ export function makeEngine(src, seed, env) {
   if (!token) throw new Error('empty seed');
   const stub = stubElement();
   const doc = {
-    createElement: tag => (String(tag).toLowerCase() === 'canvas' ? env.canvas() : stub),
+    createElement: tag => (String(tag).toLowerCase() === 'canvas' ? cpuCanvas(env.canvas()) : stub),
     getElementById: () => stub,
     body: stub,
   };
