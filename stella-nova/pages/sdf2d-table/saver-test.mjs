@@ -27,9 +27,18 @@
 //                the crossing, the under wire has a gap 0.064 to each side
 //                of it, and is solid again 0.12 away. The old recipe (two
 //                rings in a union, then an onion) had no gap at all.
+//  Phones:
+//    ray ....... rayMarch (the CPU march for the sphere-tracing demo) ends
+//                on the surface of every shape, with at most 16 steps, and
+//                rayDemo in shaders/saver.wgsl calls no mapM (each pixel
+//                used to march the ray itself: up to 14 more mapM)
+//    band ...... frameView puts a shape of radius 1 inside the plate clear
+//                band, at 85% of the width at most, on 360 x 640,
+//                390 x 844, 844 x 390 and 1280 x 800 frames
 // ============================================================================
 import { SAVER } from './saver.js';
-const { RECIPES, prep, steps, extent, mapM, MAX_OPS } = SAVER;
+const { RECIPES, prep, steps, extent, mapM, rayMarch, frameView, MAX_OPS } = SAVER;
+import { readFileSync } from 'node:fs';
 
 const PTS = [];
 for (let x = -3; x <= 3; x += 0.025) for (let y = -3; y <= 3; y += 0.025) PTS.push([x, y]);
@@ -85,6 +94,40 @@ for (const rec of RECIPES) {
     if (ok) woven++; else fail(`Chain mail: crossing at ${ang.toFixed(2)}° in cell (${cx}, ${cy}) is not woven`);
   }
   console.log(`Chain mail weave   ${woven}/24 crossings: over wire solid, under wire gapped`);
+}
+{
+  // ray: the demo march on the CPU, as saver.js frame() runs it (14 steps
+  // at most, from 1.15 r outside the shape, aimed near its centre)
+  let worst = 0, most = 0;
+  for (const rec of RECIPES) {
+    const ops = rec.ops.map(prep); ops.forEach(o => { o.pr = 1; });
+    const ex = extent(ops, steps(ops), -1);
+    for (let a = 0; a < 6.28; a += 0.7) {
+      const ro = [ex.c[0] + Math.cos(a) * ex.r * 1.15, ex.c[1] + Math.sin(a) * ex.r * 1.15];
+      const rs = rayMarch(ops, ro, a + Math.PI + 0.1, 14), last = rs[rs.length - 1];
+      most = Math.max(most, rs.length);
+      const dEnd = Math.abs(mapM(ops, [ro[0] + Math.cos(a + Math.PI + 0.1) * last[3], ro[1] + Math.sin(a + Math.PI + 0.1) * last[3]]));
+      if (rs.some((q, i) => i && q[3] < rs[i - 1][3])) fail(`${rec.name}: the ray reach goes back`);
+      if (rs.length < 14) worst = Math.max(worst, dEnd);
+    }
+  }
+  const wgsl = readFileSync(new URL('shaders/saver.wgsl', import.meta.url), 'utf8');
+  const demo = wgsl.slice(wgsl.indexOf('fn rayDemo'), wgsl.indexOf('@fragment'));
+  if (/mapM\(/.test(demo)) fail('rayDemo in saver.wgsl still calls mapM for each pixel');
+  if (most > 16) fail(`rayMarch made ${most} steps (u.rs holds 16)`);
+  if (worst > 0.0041) fail(`a ray that stopped early is ${worst.toFixed(4)} from the surface`);
+  console.log(`Ray demo           CPU march: at most ${most} steps, stops within ${worst.toFixed(4)} of the edge; rayDemo has no mapM`);
+}
+{
+  // band: plate bands like the shell plate on phones (t, b in CSS px)
+  let ok = 0, n = 0;
+  for (const [W, H, t, b] of [[360, 640, 230, 190], [390, 844, 290, 250], [844, 390, 150, 110], [1280, 800, 270, 270], [390, 844, 0, 0]]) {
+    const band = t || b ? { t, b } : null, v = frameView(1, W / H, band, H);
+    const cy = H / 2 * (1 - v.lift), rp = H / 2 / v.hh;
+    const inBand = !band || (cy - rp >= t - 0.5 && cy + rp <= H - b + 0.5), inW = 2 * rp <= 0.85 * W + 0.5;
+    n++; if (inBand && inW) ok++; else fail(`frameView ${W}x${H} band ${t}/${b}: shape ${(cy - rp).toFixed(0)}..${(cy + rp).toFixed(0)} px, width ${(2 * rp).toFixed(0)} of ${W}`);
+  }
+  console.log(`Clear band         ${ok}/${n} frames hold the shape in the plate clear band`);
 }
 console.log(fails ? `${fails} failure(s)` : 'all recipe checks pass');
 process.exit(fails ? 1 : 0);

@@ -24,9 +24,13 @@
 //    const PALETTES ..... inside, outside, zero line, accent, backdrop
 //    function packOp .... op -> 4 vec4 (the WGSL Op layout)
 //    function extent .... the box of the shape built so far (camera fit)
+//    function rayMarch .. the sphere-tracing demo steps (CPU, to u.rs)
+//    function frameView . the view in the plate clear band (plateBand)
 //    function plate ..... opts.label: shape, step, formula, live values
 //    export const SAVER . setCtx, install, and the JS port for saver-test.mjs
 // ============================================================================
+
+import { plateBand } from '../../lib/saver-clear.js';
 
 const D2R = Math.PI / 180;
 const T = { circle: 0, box: 1, capsule: 2, ring: 3, poly: 4, star: 5, half: 6, ellipse: 7, onion: 20, round: 21, swirl: 22, grid: 23 };
@@ -238,6 +242,35 @@ function extent(ops, ord, s) {
   return { c: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2], r: Math.max(0.35, 0.5 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1])) };
 }
 
+// The sphere-tracing demo steps, on the CPU (the same walk as the old
+// per-pixel loop in rayDemo). Step i shows when i < shown; its circle grows
+// in with k = clamp(shown - i, 0, 1). Returns up to RAY_MAX steps
+// [x, y, r k, reach]: the point, the circle radius, and the ray length so
+// far. The march stops on the surface (d < 0.004).
+const RAY_MAX = 16;
+function rayMarch(ops, ro, rd, shown) {
+  const out = [], dx = Math.cos(rd), dy = Math.sin(rd);
+  let t = 0;
+  for (let i = 0; i < RAY_MAX && i < shown; i++) {
+    const q = [ro[0] + dx * t, ro[1] + dy * t], r = Math.abs(mapM(ops, q)), k = Math.min(1, Math.max(0, shown - i));
+    t += r * k;
+    out.push([q[0], q[1], r * k, t]);
+    if (r < 0.004) break;
+  }
+  return out;
+}
+// The view: half height hh (units) and lift (the shape centre above the
+// frame centre, in half heights) for a shape of radius r in a frame of
+// aspect asp. band is the plate clear band from plateBand, with the frame
+// height H in the same CSS px, or null. Without a band the shape fills 42%
+// of the half height, as before. With one, the shape sits in the middle of
+// the band and fills 90% of it, and 85% of the width.
+function frameView(r, asp, band, H) {
+  if (!band || !(H > 0)) return { hh: Math.max(r / 0.42, r / (0.85 * asp)), lift: asp >= 1 ? 0.05 : 0.12 };
+  const half = Math.max(0.2, (H - band.t - band.b) / H);
+  return { hh: Math.max(r / (0.9 * half), r / (0.85 * asp)), lift: (band.b - band.t) / H };
+}
+
 // ---------------------------------------------------------------- the hook
 let CTX = null, ctxWait = [];
 function setCtx(ctx) { CTX = ctx; ctxWait.forEach(f => f(ctx)); ctxWait = []; }
@@ -259,7 +292,7 @@ async function enter(opts = {}) {
   const bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }] });
   const pipe = await device.createRenderPipelineAsync({ layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
     vertex: { module, entryPoint: 'vs_main' }, fragment: { module, entryPoint: 'fs_saver', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
-  const HEAD = 40, FLOATS = HEAD + MAX_OPS * 16, buf = device.createBuffer({ size: FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const HEAD = 40, RS = HEAD + MAX_OPS * 16, FLOATS = RS + RAY_MAX * 4, buf = device.createBuffer({ size: FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const data = new Float32Array(FLOATS), bind = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: buf } }] });
 
   const style = document.createElement('style');
@@ -276,7 +309,7 @@ html.sdf2-saver body > :not(.sdf2-saver-canvas) { display: none !important; }
   for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   const STEP = 0.75 + 0.6 * calm, SHOW = 2.6, FADE = 0.5, RAYN = 14;
   const label = typeof opts.label === 'function' && opts.labels !== false ? opts.label : null;
-  let ri = -1, rec = null, ops = null, ord = null, nBuild = 0, clock = 0, pal = null, look = null, view = null, last = 0, labAt = 0, labKey = '', raf = 0, mode = 'ray', ray = null;
+  let band = null, bandAt = -1e9, ri = -1, rec = null, ops = null, ord = null, nBuild = 0, clock = 0, pal = null, look = null, view = null, last = 0, labAt = 0, labKey = '', raf = 0, mode = 'ray', ray = null;
 
   // A new shape: the next recipe, a palette and a field look. The end show is
   // a sphere-tracing demo, or (half the time, when the recipe has no grid of
@@ -323,21 +356,25 @@ html.sdf2-saver body > :not(.sdf2-saver-canvas) { display: none !important; }
     view.t = Math.min(1, view.t + dt / 0.9);
     const e = ease(view.t);
     view.c = view.from.c.map((v, j) => v + (view.to.c[j] - v) * e); view.r = view.from.r + (view.to.r - view.from.r) * e;
-    const asp = w / h, hh = Math.max(view.r / 0.42, view.r / (0.85 * asp)), lift = asp >= 1 ? 0.05 : 0.12;
+    // the plate clear band (lib/saver-clear.js), read four times a second
+    if (now - bandAt > 250) { bandAt = now; band = plateBand(canvas.clientHeight); }
+    const asp = w / h, { hh, lift } = frameView(view.r, asp, band, canvas.clientHeight);
     // the sphere-tracing demo ray: from outside the shape, aimed near its centre
     const ex = extent(ops, ord, -1), rd = ray.a + Math.PI + ray.off, rr = ex.r * 1.15;
     const ro = [ex.c[0] + Math.cos(ray.a) * rr, ex.c[1] + Math.sin(ray.a) * rr];
     const rayOn = showing && mode === 'ray', shown = rayOn ? Math.min(RAYN, (clock - buildT) / (SHOW * 0.7) * RAYN) : 0;
     const op = !showing ? ops.find(q => q.at === ord[step]) : null;
     const act = op && op.ti < 20 && op.ci !== 0 ? ops.indexOf(op) : -1, ghost = act >= 0 ? Math.sin(Math.PI * Math.min(1, f * 1.1)) : 0;
+    const rs = rayOn ? rayMarch(ops, ro, rd, shown) : [];
     look.glint += dt * 0.9;
     data.set([w, h, clock, Math.min(1, clock / FADE, Math.max(0, (total + FADE - clock) / FADE)),
       view.c[0], view.c[1], hh, lift,
       look.sp, look.flow, look.grad, ((look.glint + Math.PI) % (2 * Math.PI)) - Math.PI,
-      act, ghost, shown, 0.7,
+      act, ghost, rs.length, 0.7,
       ro[0], ro[1], rd, rayOn ? Math.min(1, (clock - buildT) / 0.4) : 0,
       ...pal[0], 0, ...pal[1], 0, ...pal[2], 0, ...pal[3], 0, ...pal[4], ops.length], 0);
     ops.forEach((o, j) => packOp(o, data, HEAD + j * 16));
+    rs.forEach((q, j) => data.set(q, RS + j * 4));
     device.queue.writeBuffer(buf, 0, data);
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: gpu.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
@@ -387,4 +424,4 @@ function exit() {
 }
 function install() { window.snSaver = { enter, exit }; }
 
-export const SAVER = { setCtx, install, RECIPES, prep, steps, timeline, extent, mapM, opDist, MAX_OPS };
+export const SAVER = { setCtx, install, RECIPES, prep, steps, timeline, extent, mapM, opDist, rayMarch, frameView, MAX_OPS };

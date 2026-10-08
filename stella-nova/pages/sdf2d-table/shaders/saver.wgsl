@@ -28,7 +28,7 @@
 //                   6 half-plane (inside above y = b.x) 7 ellipse (approx)
 //    fn opDist .... one op in its local frame (slide, scale, repetition)
 //    fn mapM ...... the op list walk
-//    fn rayDemo ... sphere-tracing circles along the demo ray
+//    fn rayDemo ... sphere-tracing circles along the demo ray (u.rs)
 //    @fragment fs_saver
 // ============================================================================
 struct Op { a: vec4f, b: vec4f, c: vec4f, s: vec4f };
@@ -36,12 +36,13 @@ struct U {
   res: vec4f,                // width, height, time, fade
   view: vec4f,               // centre xy, half height in units, lift
   look: vec4f,               // band spacing, band flow speed, gradient colour, glint angle
-  act: vec4f,                // active op, ghost strength, ray steps shown, glint strength
+  act: vec4f,                // active op, ghost strength, ray step count (rs), glint strength
   ray: vec4f,                // demo ray origin xy, direction angle, demo strength
   cIn: vec4f, cOut: vec4f,   // inside and outside colour
   cLine: vec4f, cAcc: vec4f, // zero line, accent (ghost, ray)
   bg: vec4f,                 // backdrop; w: op count
   ops: array<Op, 24>,
+  rs: array<vec4f, 16>,      // demo ray steps from saver.js rayMarch: point xy, radius, reach
 };
 @group(0) @binding(0) var<uniform> u: U;
 
@@ -168,28 +169,25 @@ fn mapM(p0: vec2f) -> f32 {
   return d;
 }
 
-// The sphere-tracing demo: steps along the ray from u.ray.xy. Returns the
+// The sphere-tracing demo: the circles along the ray from u.ray.xy. The
+// steps do not depend on the pixel, so saver.js (rayMarch) marches them on
+// the CPU and writes them to u.rs. Before, each pixel marched them itself:
+// up to 14 more mapM a pixel, three times the cost of the field. Returns the
 // cover of the circle outlines, the dots and the ray line at p (px: one
 // pixel in units).
 fn rayDemo(p: vec2f, px: f32) -> f32 {
   let ro = u.ray.xy;
   let rd = vec2f(cos(u.ray.z), sin(u.ray.z));
-  let shown = u.act.z;
-  var t = 0.0;
+  let n = i32(u.act.z);
   var cov = 0.0;
   var reach = 0.0;
-  for (var i = 0; i < 24; i++) {
-    let fi = f32(i);
-    if (fi >= shown) { break; }
-    let q = ro + rd * t;
-    let r = abs(mapM(q));
-    let k = clamp(shown - fi, 0.0, 1.0);
-    let ring = abs(length(p - q) - r * k);
+  for (var i = 0; i < 16; i++) {
+    if (i >= n) { break; }
+    let s = u.rs[i];
+    let ring = abs(length(p - s.xy) - s.z);
     cov = max(cov, (1.0 - smoothstep(0.6 * px, 2.2 * px, ring)) * 0.8);
-    cov = max(cov, 1.0 - smoothstep(3.0 * px, 4.5 * px, length(p - q)));
-    t += r * k;
-    reach = t;
-    if (r < 0.004) { break; }
+    cov = max(cov, 1.0 - smoothstep(3.0 * px, 4.5 * px, length(p - s.xy)));
+    reach = s.w;
   }
   // the ray up to the last point
   let h = clamp(dot(p - ro, rd), 0.0, reach);
