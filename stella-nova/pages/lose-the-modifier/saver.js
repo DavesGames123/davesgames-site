@@ -469,7 +469,11 @@ export function installSaver({ onEnter, onExit }) {
       onEnter && onEnter();
       const canvas = document.createElement('canvas');
       canvas.id = 'saverCanvas';
-      canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:1000;background:' + C.bg;
+      // The canvas box is the window (inset 0), the same box as innerWidth x
+      // innerHeight that sizes its pixels. 100vh is taller than the window in
+      // iOS Safari while its toolbar shows, so the frame stretched down and
+      // the bottom of the clear band went under the toolbar.
+      canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:1000;background:' + C.bg;
       const st = document.createElement('style'); st.id = 'saverStyle';
       st.textContent = '#bar,#dock,.view,#toast,#about{visibility:hidden!important}body{overflow:hidden!important;cursor:none}';
       document.head.append(st); document.body.append(canvas);
