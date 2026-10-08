@@ -27,11 +27,15 @@
 //  SCREENSAVER  (grep "window.snSaver", "function saverEnter", "function saverFrame")
 //  ----------------------------------------------------------------------------
 //      The shell screensaver (lib/screensaver.js) calls snSaver.enter(opts).
-//      One full-window canvas shows one calm species at a time, centered on the
-//      ink ground. The species changes 3 times per dwell behind a fade to ink.
-//      Each species goes idle -> listening -> idle. Nothing else draws.
-//      saverPlate() sends opts.label the species record and the shared drive
-//      equations, refreshed once a second.
+//      One full-window canvas shows a sequence of shots from director.js:
+//      activity waves across a grid, colour waves, a push-in on one orb
+//      through all six states, a conversation, and a relay along one family.
+//      A shot lasts 5 to 12 s; opts.seed sets the order and opts.calm the pace.
+//      Each orb in a shot draws into its own scissor square with its own tile
+//      uniform buffer, so the cost is close to one full-window orb. The
+//      squares sit in the clear band of the label plate (plateBand).
+//      saverPlate() sends opts.label the shot text, the focus orb values and
+//      the shared drive equations, refreshed once a second.
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 import { $, STATES, SEED, ENTRY, ease, sstep, ACT_LIFT, LVL_LIFT, ATTACK, RELEASE, G, stage, clock, tiles, hexToRgb } from './state.js';
@@ -40,6 +44,8 @@ import { initControls } from './controls.js';
 import { fitTable, maxDpr, initMobile } from '../../lib/table-mobile.js';
 import { initGPU, device, msurf, visible, stats, makeSurface } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
+import { makeDirector, sampleShot, layoutShot, shotLabel } from './director.js';
+import { plateBand } from '../../lib/saver-clear.js';
 
 // Pack source lives in real .wgsl files under shaders/. Fetch it all up front.
 // The hook is defined before the awaits, so the shell finds it at once.
@@ -67,12 +73,14 @@ if (await initGPU(STYLES, PACKS)) {
   initInspector(PACKS);
 
   let last = clock(), fpsT = 0, frames = 0;
+  // t.live and t.tone are per-orb values that the saver sets; the grid
+  // uses the shared G.live and G.tone
   function fill(t, surf, rect, dpr, now, ox, oy) {
-    const tau = now - t.changedAt;
+    const tau = now - t.changedAt, lv = t.live || G.live, tone = t.tone || G.tone, tone2 = t.tone || G.tone2;
     const from = SEED[t.prev], to = SEED[t.cur], k = ease(tau), entry = ENTRY[to.entry];
     const speed = from.speed * (1 - k) + to.speed * k;
-    const quick = speed * entry.speed(tau) * (1 + ACT_LIFT * G.live.activity) * G.tempo;
-    const glow = (from.glow * (1 - k) + to.glow * k) * entry.glow(tau) * (1 + LVL_LIFT * G.live.level);
+    const quick = speed * entry.speed(tau) * (1 + ACT_LIFT * lv.activity) * G.tempo;
+    const glow = (from.glow * (1 - k) + to.glow * k) * entry.glow(tau) * (1 + LVL_LIFT * lv.level);
     let tilt = [0, 0];
     if (G.pointer && t.s.family === 'glass') {
       const cx = (rect.left + rect.right) / 2, cy = (rect.top + rect.bottom) / 2, R = Math.max(rect.width, 1);
@@ -80,13 +88,13 @@ if (await initGPU(STYLES, PACKS)) {
     }
     const d = surf.data;
     d[0] = rect.width; d[1] = rect.height; d[2] = ox || 0; d[3] = oy || 0;
-    d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([G.tone[0], G.tone[1], G.tone[2], 1], 8); d.set([G.tone2[0], G.tone2[1], G.tone2[2], 1], 12);
+    d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([tone[0], tone[1], tone[2], 1], 8); d.set([tone2[0], tone2[1], tone2[2], 1], 12);
     d[16] = tilt[0]; d[17] = tilt[1];
     d[18] = Math.max(t.phase + entry.phase(tau) * to.speed, 0) / Math.max(quick, 1e-6); d[19] = dpr;
     d[20] = from.hue * (1 - k) + to.hue * k; d[21] = 1; d[22] = quick; d[23] = from.depth * (1 - k) + to.depth * k;
     d[24] = glow; d[25] = t.knobs[0]; d[26] = t.knobs[1]; d[27] = t.knobs[2];
     d[28] = t.knobs[3]; d[29] = 0; d[30] = STATES.indexOf(t.cur); d[31] = Math.max(tau, 0);
-    d[32] = G.live.level; d[33] = G.live.activity; d.set(t.sig, 34);
+    d[32] = lv.level; d[33] = lv.activity; d.set(t.sig, 34);
     device.queue.writeBuffer(surf.buf, 0, d);
   }
   function drawTo(enc, t, surf, rect, dpr, now) {
@@ -117,11 +125,11 @@ if (await initGPU(STYLES, PACKS)) {
     const inspected = currentInspected();
     const modalOpen = !!inspected;
     for (const t of tiles) {
-      const tau = now - t.changedAt, from = SEED[t.prev], to = SEED[t.cur], k = ease(tau);
-      const dp = dt * (from.speed * (1 - k) + to.speed * k) * ENTRY[to.entry].speed(tau) * (1 + ACT_LIFT * G.live.activity) * G.tempo;
+      const tau = now - t.changedAt, from = SEED[t.prev], to = SEED[t.cur], k = ease(tau), lv = t.live || G.live;
+      const dp = dt * (from.speed * (1 - k) + to.speed * k) * ENTRY[to.entry].speed(tau) * (1 + ACT_LIFT * lv.activity) * G.tempo;
       t.phase += dp;
       // integrate the signals over the shader's own clock, shaped exactly as the packs shape them
-      { const L = G.live.level, A = G.live.activity;
+      { const L = lv.level, A = lv.activity;
         const voice = Math.pow(L, 0.65) * (t.cur === 'listening' ? 1.0 : 0.55);
         const pace = Math.pow(A, 0.85) * ((t.cur === 'thinking' || t.cur === 'responding') ? 1.0 : 0.60);
         const drive = t.cur === 'responding' ? sstep(tau / 0.55) : 0;
@@ -133,24 +141,23 @@ if (await initGPU(STYLES, PACKS)) {
       if (rect.width < 1) continue;
       drawTo(enc, t, t.surf, rect, dpr, now);
     }
-    if (saver) saverFrame(enc, now);
+    if (saver) saverFrame(enc, now, dt);
     device.queue.submit([enc.finish()]);
   }
 
   // ── screensaver ──────────────────────────────────────────────────────────
-  // Calm species only: no lightning (tempest), no colour flashes (opal), no
-  // counted sparkles (glimmer), no near-black (abyss). Order, tones and the
-  // first species come from opts.seed. G.tempo follows opts.calm.
-  const SAVER_CELLS = ['aura', 'nebula', 'fathom', 'duet', 'helix', 'flux', 'sol', 'still', 'eddy', 'tide', 'meander', 'confluence',
-    'marbling', 'strata', 'halation', 'caustic', 'aurora', 'lantern', 'eclipse', 'murmuration', 'veil', 'breathe', 'orbit', 'daybreak', 'skein', 'nucleus', 'braid'];
-  const SAVER_TONES = ['#5a8cc0', '#7a72c8', '#4fa39a', '#c0905a', '#8fb0d8', '#b07aa8'];
-  const FADE = 1.6;
+  // director.js plans the shots from opts.seed and opts.calm. Four species
+  // stay out: no lightning (tempest), no colour flashes (opal), no counted
+  // sparkles (glimmer), no near-black (abyss). G.tempo follows opts.calm.
+  // Each orb of a shot writes its own tile uniform buffer (t.surf) and draws
+  // into a scissor square of the one saver canvas, so the fragment count
+  // stays near one full-window orb. A grid shot caps the DPR at 1.5.
+  const SAVER_OUT = ['tempest', 'opal', 'glimmer', 'abyss'];
+  const FADE = 0.45;
   let saver = null;
   function saverEnter(opts) {
-    const calm = Math.min(1, Math.max(0, opts.calm ?? 0.7)), secs = Math.max(20, +opts.seconds || 60);
-    let r = (opts.seed >>> 0) || 1; const rnd = () => { r = (r + 0x6D2B79F5) >>> 0; let x = Math.imul(r ^ (r >>> 15), 1 | r); x ^= x + Math.imul(x ^ (x >>> 7), 61 | x); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
-    const list = tiles.filter(t => SAVER_CELLS.includes(t.s.name));
-    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    const calm = Math.min(1, Math.max(0, opts.calm ?? 0.7));
+    const pool = tiles.filter(t => !SAVER_OUT.includes(t.s.name)).map(t => t.s);
     const style = document.createElement('style');
     style.textContent = `html.orb-saver, html.orb-saver body { background: #0e1118 !important; overflow: hidden !important; cursor: none !important; }
 html.orb-saver body > :not(#orb-saver) { display: none !important; }
@@ -158,8 +165,8 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
     document.head.appendChild(style);
     const canvas = document.createElement('canvas'); canvas.id = 'orb-saver';
     document.body.appendChild(canvas); document.documentElement.classList.add('orb-saver');
-    G.ink = hexToRgb('#0e1118'); G.pointer = null; G.paused = false; G.tempo = 1 - 0.55 * calm;
-    // the fade draws the ink colour over the orb with blend constant a: out = ink * a + orb * (1 - a)
+    G.ink = hexToRgb('#0e1118'); G.pointer = null; G.paused = false; G.tempo = 1 - 0.4 * calm;
+    // the fade draws the ink colour over the orbs with blend constant a: out = ink * a + orb * (1 - a)
     const k = G.ink.map(v => v.toFixed(4)).join(', ');
     const mod = device.createShaderModule({ code: `@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)); return vec4f(p[i], 0.0, 1.0); }
@@ -167,39 +174,43 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
     const format = navigator.gpu.getPreferredCanvasFormat();
     const fade = device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'vs' }, primitive: { topology: 'triangle-list' },
       fragment: { module: mod, entryPoint: 'fs', targets: [{ format, blend: { color: { srcFactor: 'constant', dstFactor: 'one-minus-constant' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } } }] } });
-    saver = { canvas, surf: makeSurface(canvas), fade, list, i: -1, t: null, t0: 0, per: Math.max(14, secs / 3), rnd, step: 0,
-      label: typeof opts.label === 'function' ? opts.label : null, plateAt: 0, tone: SAVER_TONES[0] };
+    saver = { canvas, surf: makeSurface(canvas), fade, dir: makeDirector({ seed: (opts.seed >>> 0) || 1, calm, pool }),
+      byName: new Map(tiles.map(t => [t.s.name, t])), shot: null, cells: [], samp: null, layout: [], t0: 0,
+      band: null, bandAt: -1e9, rect: null, label: typeof opts.label === 'function' ? opts.label : null, plateAt: 0 };
     saverNext(clock());
     return { canvas, warmupMs: 1200 };
   }
-  // the next species starts idle from a fresh phase, under a full ink fade
+  // the next shot: its orbs start idle from a fresh phase, under the ink fade
   function saverNext(now) {
-    const s = saver; s.i = (s.i + 1) % s.list.length; s.t = s.list[s.i]; s.t0 = now; s.step = 0;
-    const t = s.t; t.prev = t.cur = 'idle'; t.changedAt = now - 5; t.phase = 0; t.sig.fill(0);
-    s.tone = SAVER_TONES[Math.floor(s.rnd() * SAVER_TONES.length)];
-    G.tone = G.tone2 = hexToRgb(s.tone);
+    const s = saver;
+    for (const t of s.cells) { t.live = null; t.tone = null; }
+    s.shot = s.dir.next(); s.t0 = now; s.samp = null; s.layout = [];
+    s.cells = s.shot.cells.map(c => s.byName.get(c.name));
+    for (const t of s.cells) { t.prev = t.cur = 'idle'; t.changedAt = now - 5; t.phase = 0; t.sig.fill(0); t.live = { level: 0, activity: 0 }; t.tone = null; }
     saverPlate(now);
   }
-  // The plate: the species record from styles.json (name, description, WGSL
-  // function, knobs) and the shared drive that fill() and frame() compute for
-  // every orb (state crossfade, phase rate, glow lift, voice signal). The
-  // per-species WGSL body is not restated. One title per species, so the
+  // The plate: the shot text from director.js, the values of the focus orb
+  // (the speaker, or the newest orb a wave woke), and the shared drive that
+  // fill() and frame() compute for every orb. One title per shot, so the
   // live values refresh in place.
   function saverPlate(now) {
-    const s = saver; if (!s.label || !s.t) return;
+    const s = saver; if (!s.label || !s.shot) return;
     s.plateAt = now;
-    const t = s.t, tau = now - t.changedAt, from = SEED[t.prev], to = SEED[t.cur], k = ease(tau);
+    const L = shotLabel(s.shot), fi = s.samp ? s.samp.focus : 0, t = s.cells[fi] || s.cells[0];
+    const tau = now - t.changedAt, from = SEED[t.prev], to = SEED[t.cur], k = ease(tau);
     const mix = f => from[f] * (1 - k) + to[f] * k, f2 = v => v.toFixed(2);
-    // Colours: time and phase (tau, phi) m1, glow g m2, the crossfade k m4,
-    // the voice inputs (L, A) m5, the rates (v, T) m6.
-    s.label({ title: 'Presence orb · ' + t.s.name, sub: t.s.species,
-      params: [{ sym: 'L', name: 'voice level', value: f2(G.live.level), cls: 'm5' },
-        { sym: 'A', name: 'voice activity', value: f2(G.live.activity), cls: 'm5' },
+    const awake = s.samp ? s.samp.cells.filter(c => c.st !== 'idle').length : 0, lv = t.live || G.live;
+    // Colours: time and phase (tau, phi) m1, glow g m2, awake count m3, the
+    // crossfade k m4, the voice inputs (L, A) m5, the rates (v, T) m6.
+    s.label({ title: L.title, sub: L.sub,
+      params: [{ sym: 'n', name: 'orbs awake', value: awake + ' / ' + s.cells.length, cls: 'm3' },
+        { sym: 'L', name: 'voice level', value: f2(lv.level), cls: 'm5' },
+        { sym: 'A', name: 'voice activity', value: f2(lv.activity), cls: 'm5' },
         { sym: 'v', name: 'phase speed', value: f2(mix('speed')), cls: 'm6' },
         { sym: 'g', name: 'glow', value: f2(mix('glow')), cls: 'm2' },
         { sym: 'T', name: 'tempo', value: f2(G.tempo), cls: 'm6' }],
-      lines: ['State ' + (t.prev === t.cur ? t.cur : t.prev + ' → ' + t.cur) + '; listening from ' + Math.round(s.per * 0.34) + ' s to ' + Math.round(s.per * 0.7) + ' s of ' + Math.round(s.per) + ' s',
-        'fn ' + t.s.fn + ', ' + t.s.family + ' pack: ' + t.s.knobs.map((q, i) => q[0] + ' ' + f2(t.knobs[i])).join(', ')],
+      lines: [L.line,
+        t.s.name + ' (' + t.s.family + ' pack, fn ' + t.s.fn + '): ' + (t.prev === t.cur ? t.cur : t.prev + ' → ' + t.cur)],
       tex: ['k = \\operatorname{smoothstep}(\\tau / 0.6), \\qquad x = (1 - k)\\,x_{\\text{from}} + k\\,x_{\\text{to}}',
         '\\varphi \\leftarrow \\varphi + \\Delta t\\, v\\,(1 + 0.25\\,A)\\,T',
         'g = g_{\\text{state}}\\,(1 + 0.35\\,L)',
@@ -213,34 +224,66 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
         'fade: out = ink·a + orb·(1 − a)'],
       anchor: saverAnchor });
   }
-  // The orb on screen, for the shell's label plate. saverFrame draws the
-  // species in a centred square of side S = 0.78 min(w, h), and the orb
-  // shaders put the disc near radius 0.335 S (MG_ORB_R, uv spans -0.5..0.5);
-  // the drawn discs measure 0.27 to 0.33 S, and the orb pack (mo_*) about
-  // 0.38 S, so r is 0.38 S for that pack and 0.33 S for the rest. No key
-  // points: one orb.
+  // The orbs on screen, for the shell's label plate. Each orb draws in a
+  // square of side s; the orb shaders put the disc near radius 0.33 s, and
+  // the orb pack (mo_*) about 0.38 s. One orb: a circle. More orbs: the box
+  // round all discs, with the focus orb as the key point for the leader.
   function saverAnchor() {
-    if (!saver || !saver.canvas) return null;
-    const r = saver.canvas.getBoundingClientRect(), S = Math.min(r.width, r.height) * 0.78;
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: (saver.t && saver.t.s.family === 'orb' ? 0.38 : 0.33) * S };
+    const s = saver; if (!s || !s.layout.length) return null;
+    const rad = (c, i) => (s.cells[i] && s.cells[i].s.family === 'orb' ? 0.38 : 0.33) * c.s;
+    if (s.layout.length === 1) { const c = s.layout[0]; return { x: c.x, y: c.y, r: rad(c, 0) }; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    s.layout.forEach((c, i) => { const r = rad(c, i); x0 = Math.min(x0, c.x - r); y0 = Math.min(y0, c.y - r); x1 = Math.max(x1, c.x + r); y1 = Math.max(y1, c.y + r); });
+    const f = s.layout[Math.min(s.samp ? s.samp.focus : 0, s.layout.length - 1)];
+    return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, pts: [{ x: f.x, y: f.y }], lead: true };
   }
-  function saverState(t, st, now) { if (t.cur !== st) { t.prev = t.cur; t.cur = st; t.changedAt = now; } }
-  function saverFrame(enc, now) {
+  // a state change as controls.js setState makes it: an arc species restarts
+  // its arc on thinking and success
+  function saverState(t, st, now) {
+    if (t.cur === st) return;
+    t.prev = t.cur; t.cur = st; t.changedAt = now;
+    if ((st === 'thinking' || st === 'success') && t.s.arc) { t.phase = 0; t.sig.fill(0); }
+  }
+  // The clear band of the plate, read 3 times a second. Between two shots the
+  // plate swaps its text and plateBand gives null for a moment: keep the last
+  // band. The rect eases to a new band, so the orbs never jump.
+  function saverRect(now, dt) {
+    const s = saver;
+    if (now - s.bandAt > 0.3) { s.bandAt = now; const b = plateBand(innerHeight); if (b) s.band = b; }
+    const W = innerWidth, H = innerHeight, b = s.band;
+    const top = b ? b.t : 0.06 * H, bot = b ? b.b : 0.06 * H, w = b ? Math.min(W, b.w) : W;
+    const tgt = { x: (W - w) / 2 + 0.04 * w, y: top, w: 0.92 * w, h: Math.max(0.3 * H, H - top - bot) };
+    if (!s.rect) s.rect = tgt;
+    else { const a = 1 - Math.exp(-dt / 0.3); for (const q of ['x', 'y', 'w', 'h']) s.rect[q] += (tgt[q] - s.rect[q]) * a; }
+    return s.rect;
+  }
+  function saverFrame(enc, now, dt) {
     const s = saver; let tau = now - s.t0;
-    if (tau >= s.per) { saverNext(now); tau = 0; }
-    const t = s.t;
-    saverState(t, tau > s.per * 0.34 && tau < s.per * 0.7 ? 'listening' : 'idle', now);
+    if (tau >= s.shot.dur) { saverNext(now); tau = 0; }
+    const sm = sampleShot(s.shot, tau); s.samp = sm;
+    const ap = (v, g) => v + (g - v) * (1 - Math.exp(-dt / (g > v ? ATTACK : RELEASE)));
+    s.cells.forEach((t, i) => {
+      const c = sm.cells[i];
+      saverState(t, c.st, now);
+      t.live.level = ap(t.live.level, c.level); t.live.activity = ap(t.live.activity, c.activity); t.tone = c.tone;
+    });
     if (now - s.plateAt >= 1) saverPlate(now);
-    if (!t.pipeline) return;
-    const cv = s.canvas, r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    const cv = s.canvas, r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, s.cells.length > 1 ? 1.5 : 2);
     const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-    const S = Math.round(Math.min(r.width, r.height) * 0.78);
-    fill(t, s.surf, { width: S, height: S, left: 0, right: S, top: 0, bottom: S }, dpr, now, (w - S * dpr) / 2, (h - S * dpr) / 2);
-    const a = 1 - sstep(Math.min(tau, s.per - tau) / FADE);
+    s.layout = layoutShot(s.shot, saverRect(now, dt), tau);
+    const a = 1 - sstep(Math.min(tau, s.shot.dur - tau) / FADE);
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: s.surf.ctx.getCurrentTexture().createView(), clearValue: { r: G.ink[0], g: G.ink[1], b: G.ink[2], a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
-    pass.setPipeline(t.pipeline); pass.setBindGroup(0, s.surf.bind); pass.draw(3);
-    if (a > 0.001) { pass.setPipeline(s.fade); pass.setBlendConstant({ r: a, g: a, b: a, a }); pass.draw(3); }
+    s.cells.forEach((t, i) => {
+      const c = s.layout[i]; if (!t.pipeline || !c) return;
+      const S = c.s, ox = (c.x - S / 2) * dpr, oy = (c.y - S / 2) * dpr;
+      const sx = Math.max(0, Math.floor(ox)), sy = Math.max(0, Math.floor(oy)), ex = Math.min(w, Math.ceil(ox + S * dpr)), ey = Math.min(h, Math.ceil(oy + S * dpr));
+      if (ex <= sx || ey <= sy) return;
+      fill(t, t.surf, { width: S, height: S, left: 0, right: S, top: 0, bottom: S }, dpr, now, ox, oy);
+      pass.setScissorRect(sx, sy, ex - sx, ey - sy);
+      pass.setPipeline(t.pipeline); pass.setBindGroup(0, t.surf.bind); pass.draw(3);
+    });
+    if (a > 0.001) { pass.setScissorRect(0, 0, w, h); pass.setPipeline(s.fade); pass.setBlendConstant({ r: a, g: a, b: a, a }); pass.draw(3); }
     pass.end();
   }
   saverBoot(saverEnter);
