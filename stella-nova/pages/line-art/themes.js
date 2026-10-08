@@ -2,8 +2,9 @@
 //  LINE ART  ·  themes.js — paper and ink palettes (no DOM)
 // ----------------------------------------------------------------------------
 //  Each theme: paper color, ink color, the paper texture, an optional glow
-//  (neon and amber: a soft halo under the ink), and dark (true when the UI
-//  chrome must be light-on-dark). The paper texture is drawn by plotter.js
+//  color (neon, amber, violet: a soft blurred halo under the ink, see
+//  plotter.js softGlow), and dark (true when the UI chrome must be
+//  light-on-dark). The paper texture is drawn by plotter.js
 //  function drawPaper:
 //    grain      fine noise and soft clouds (paper)
 //    grid       a drafting grid (blueprint)

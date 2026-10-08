@@ -16,11 +16,14 @@
 //    - after a 'swap' render all paths show at once (camera previews).
 //  Layers, all at device pixels and the size of the view canvas:
 //    paper  (theme fill and texture, drawn once per resize or theme)
-//    glow   (a wide soft stroke under the ink, for themes with glow)
+//    glow   (themes with glow: an opaque mask of the strokes, so crossing
+//            lines do not add up)
+//    soft   (the glow mask blurred with a canvas shadow, at device pixels;
+//            made again at most every GLOW_MS while the pen moves)
 //    ink    (the strokes; new ink is added each frame)
-//  frame() puts paper, glow, ink and the pen head on the view canvas.
-//  Zoom and pan never scale a raster: they change the transform and draw
-//  all vectors again (function redrawInk).
+//  frame() puts paper, soft (at GLOW_ALPHA), ink and the pen head on the
+//  view canvas. Zoom and pan never scale a raster: they change the
+//  transform and draw all vectors again (function redrawInk).
 //
 //  GREP MAP
 //    grep -n 'function toScreen'     image units -> device pixels
@@ -28,14 +31,18 @@
 //    grep -n 'add(buf'               decode one engine chunk
 //    grep -n 'advancePen'            the plotter step of one frame
 //    grep -n 'emitRange'             one part of one path, with jitter
+//    grep -n 'softGlow('             the blurred glow layer
 //    grep -n 'redrawInk'             all vectors again (zoom, theme, width)
 //    grep -n 'function drawPaper'    paper textures
 //    grep -n 'exportPNG'             a large still of the sheet
 // ============================================================================
 
-import { TRAVEL_SPEEDUP, DOT_COST, orderPaths, clampPan } from './geom.js';
+import { TRAVEL_SPEEDUP, DOT_COST, orderPaths, clampPan, hexA } from './geom.js';
 
 const JITTER_STEP = 5;       // jitter subdivision, image units
+const GLOW_MS = 120;         // the soft glow is made again at most this often while plotting
+const GLOW_BLUR = 7;         // the glow blur, CSS px (canvas shadowBlur)
+const GLOW_ALPHA = 0.5;      // the strength of the soft glow on the view
 
 function mulberry(seed) {
   return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -78,8 +85,11 @@ export class Plotter {
     this.paper = document.createElement('canvas');
     this.ink = document.createElement('canvas');
     this.glow = document.createElement('canvas');
+    this.soft = document.createElement('canvas');
     this.ix = this.ink.getContext('2d');
     this.gx = this.glow.getContext('2d');
+    this.sx = this.soft.getContext('2d');
+    this.glowDirty = false; this.glowAt = 0;
     this.dpr = 1; this.cw = 0; this.ch = 0;
     this.frameRect = { x: 0, y: 0, w: 100, h: 100 };
     this.zoom = 1; this.panX = 0; this.panY = 0;
@@ -103,7 +113,7 @@ export class Plotter {
     const w = Math.max(1, Math.round(cssW * dpr)), h = Math.max(1, Math.round(cssH * dpr));
     if (w === this.cw && h === this.ch && dpr === this.dpr) return false;
     this.dpr = dpr; this.cw = w; this.ch = h;
-    for (const c of [this.view, this.paper, this.ink, this.glow]) { c.width = w; c.height = h; }
+    for (const c of [this.view, this.paper, this.ink, this.glow, this.soft]) { c.width = w; c.height = h; }
     this.drawPaper();
     this.inkDirty = true; this.dirty = true;
     return true;
@@ -249,7 +259,8 @@ export class Plotter {
   strokeStyle(ctx, kind) {
     const th = this.theme, w = this.style.width * this.dpr * this.thinNow;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    if (kind === 'glow') { ctx.strokeStyle = th.glow; ctx.lineWidth = w * 4 + 3 * this.dpr; ctx.globalAlpha = 0.16; }
+    // the glow mask is opaque: where lines cross, the mask does not add up
+    if (kind === 'glow') { ctx.strokeStyle = th.glow; ctx.lineWidth = w * 1.8 + this.dpr; ctx.globalAlpha = 1; }
     else { ctx.strokeStyle = th.ink; ctx.lineWidth = w; ctx.globalAlpha = 1; }
   }
   // Add the part [d0, d1] of path p to the current canvas path.
@@ -321,6 +332,7 @@ export class Plotter {
     this.strokeSpan(0, this.pen.i, this.pen.d);
     this.pen.x = px; this.pen.y = py;
     this.inkDirty = false;
+    this.glowDirty = true; this.glowAt = 0;
   }
   // The plotter step of one frame: move the pen by the time `dt` (s).
   advancePen(now, dt) {
@@ -385,6 +397,20 @@ export class Plotter {
     return this.drawnFast;
   }
 
+  // The soft glow: the opaque mask blurred by a canvas shadow. The mask is
+  // drawn one canvas width to the left, off the canvas; the shadow offset
+  // puts only the blur on it. shadowBlur is in device pixels, so the glow
+  // is smooth at every pixel ratio, and it never reads a scaled raster.
+  softGlow(ctx, mask, w, h, blur, color) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, w, h);
+    ctx.shadowColor = color; ctx.shadowBlur = blur;
+    ctx.shadowOffsetX = w + 64; ctx.shadowOffsetY = 0;
+    ctx.drawImage(mask, -(w + 64), 0);
+    ctx.restore();
+  }
   frame(now) {
     const dt = Math.min(0.1, (now - (this.lastT || now)) / 1000);
     this.lastT = now;
@@ -392,11 +418,15 @@ export class Plotter {
     let moving = false;
     if (this.mode === 'plot') {
       moving = this.advancePen(now, dt);
-      if (moving) this.dirty = true;
+      if (moving) { this.dirty = true; this.glowDirty = true; }
       else if (this.sheet.done && !this.idleSent) { this.idleSent = true; if (this.onIdle) this.onIdle(); }
     } else if (this.mode === 'instant' && this.pen.i < this.sheet.paths.length) {
       this.strokeSpan(this.pen.i, this.sheet.paths.length, 0);
-      this.pen.i = this.sheet.paths.length; this.dirty = true;
+      this.pen.i = this.sheet.paths.length; this.dirty = true; this.glowDirty = true;
+    }
+    if (this.theme.glow && this.glowDirty && (!moving || now - this.glowAt >= GLOW_MS)) {
+      this.softGlow(this.sx, this.glow, this.cw, this.ch, GLOW_BLUR * this.dpr, this.theme.glow);
+      this.glowDirty = false; this.glowAt = now; this.dirty = true;
     }
     if (!this.dirty) return;
     this.dirty = false;
@@ -405,7 +435,7 @@ export class Plotter {
     v.globalAlpha = 1;
     v.drawImage(this.paper, 0, 0);
     v.globalAlpha = this.alpha;
-    if (this.theme.glow) { v.globalCompositeOperation = this.theme.dark ? 'lighter' : 'source-over'; v.drawImage(this.glow, 0, 0); v.globalCompositeOperation = 'source-over'; }
+    if (this.theme.glow) { v.globalAlpha = this.alpha * GLOW_ALPHA; v.drawImage(this.soft, 0, 0); v.globalAlpha = this.alpha; }
     v.drawImage(this.ink, 0, 0);
     v.globalAlpha = 1;
     if (moving && this.style.penHead) this.drawPenHead(v);
@@ -451,8 +481,11 @@ export class Plotter {
       let n = 0;
       for (const p of s.paths) { this.emitRange(lx, t, p, 0, p.len); if (++n === 4000) { lx.stroke(); lx.beginPath(); n = 0; } }
       lx.stroke();
-      ctx.globalCompositeOperation = kind === 'glow' && this.theme.dark ? 'lighter' : 'source-over';
-      ctx.drawImage(layer, 0, 0);
+      if (kind === 'glow') {
+        const soft = document.createElement('canvas'); soft.width = w; soft.height = h;
+        this.softGlow(soft.getContext('2d'), layer, w, h, GLOW_BLUR * scale, this.theme.glow);
+        ctx.globalAlpha = GLOW_ALPHA; ctx.drawImage(soft, 0, 0); ctx.globalAlpha = 1;
+      } else ctx.drawImage(layer, 0, 0);
     }
     this.pen = save.pen; this.zoom = save.zoom;
     void f;
@@ -542,6 +575,8 @@ export function drawThumb(canvas, sheetBufs, W, H, th) {
     }
     ctx.stroke(); ctx.globalAlpha = 1;
   };
-  if (th.glow) pass(th.glow, 3, 0.18);
+  // the glow of a thumbnail: a small shadow blur under the one ink stroke
+  if (th.glow) { ctx.shadowColor = hexA(th.glow, 0.7); ctx.shadowBlur = 3; }
   pass(th.ink, Math.max(0.6, Math.min(1.1, w / 260)), 1);
+  ctx.shadowColor = 'rgba(0,0,0,0)'; ctx.shadowBlur = 0;
 }
