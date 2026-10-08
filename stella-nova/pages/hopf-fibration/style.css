@@ -139,7 +139,11 @@ html.in-frame #panel{padding-top:20px}
   #panelClose{width:44px;height:44px}
   .seg button,.btns button{min-height:44px;font-size:0.8rem;border-radius:10px}
   .chips button{min-height:44px;padding:8px 13px;font-size:0.8rem}
-  .tools button{min-height:36px;padding:6px 10px}
+  .tools button{min-height:44px;padding:6px 12px;font-size:0.8rem}
+  .gallery .grp{font-size:0.78rem}
+  .cwheel{font-size:0.76rem}
+  #gaugeFig small{font-size:0.76rem}
+  #readout{font-size:0.8rem}
   .prm{margin:4px 0 6px}
   .prm .nm{font-size:0.86rem}
   .prm .val{font-size:0.8rem}
@@ -166,7 +170,7 @@ html.in-frame #panel{padding-top:20px}
 #hero h1{font-size:1.3rem}
   #hero .sub,#hero .hero-eq,#hero .cap{display:none}
   html:not(.in-frame) #hero{display:none}
-  #readout{top:auto;bottom:calc(var(--dock-h) + 10px);right:calc(12px + env(safe-area-inset-right));font-size:0.74rem;gap:3px}
+  #readout{top:auto;bottom:calc(var(--dock-h) + 10px);right:calc(12px + env(safe-area-inset-right));font-size:0.78rem;gap:3px}
   #insets{right:calc(10px + env(safe-area-inset-right));top:calc(var(--top) + 10px);bottom:auto;flex-direction:column;align-items:flex-end;gap:8px}
   #insets figure{padding:5px;border-radius:12px}
   #base{width:118px;height:118px}

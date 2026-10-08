@@ -67,6 +67,7 @@ import { createScene } from './scene.js';
 import { createBaseSphere, createGauge, setInsetColors } from './insets.js';
 import { typesetPage, typesetRotation, typesetLive } from './equations.js';
 import { installSaver } from './saver.js';
+import { rebuildDue } from './budget.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const COARSE = window.matchMedia('(pointer:coarse)').matches;
@@ -395,7 +396,10 @@ function frame(now) {
     if (T.acc > 0.2) { T.acc = 0; T.trail.push(T.b); if (T.trail.length > (COARSE ? 18 : 30)) T.trail.shift(); }
     need = true;
   }
-  if (need) rebuild();
+  // a touch screen writes the instance data on every second frame only
+  // (budget.js, rebuildDue): the breathing moves slowly, and the write
+  // and the base sphere redraw are the main CPU cost of a frame
+  if (need && rebuildDue(frameNo, COARSE)) rebuild();
 
   const M = H.rotationFor(G.mode, G.a, { tilt: G.tilt });
   const Mfull = H.matMul(H.planeMat(2, 3, G.pole), M);
@@ -419,7 +423,7 @@ function frame(now) {
   S.render();
 
   // insets at about 30 fps
-  if (++frameNo % 2 === 0 || baseDirty) {
+  if (++frameNo % 2 === 0 || (baseDirty && !COARSE)) {
     if (!document.body.classList.contains('no-sphere')) base.draw(baseState(M));
     baseDirty = false;
     const showGauge = G.mode !== 'still' && !PHONE_Q.matches;

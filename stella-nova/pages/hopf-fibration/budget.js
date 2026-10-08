@@ -15,17 +15,33 @@
 //  most MAX_PX (the area of 2560 x 1440 at 1x). The sample count is the
 //  largest of 4, 2, 0 whose scene target fits in MS_BYTES.
 //
-//  EXPORTS  MAX_PX, MS_BYTES, postBudget, targetBytes, legacyBytes
+//  A touch screen (opts.coarse) gets the phone profile: at most PHONE_MAX_PX
+//  device px (1920 x 1080) and a pixel ratio of at most 2. A coarse pointer
+//  draws no composer, so this profile sets the fill cost of the canvas only.
+//
+//  rebuildDue(frameNo, coarse) tells main.js when the per-frame animation
+//  (breathing, sweep, trace) may write the instance data again. A touch
+//  screen writes it on every PHONE_REBUILD_EVERY-th frame only.
+//
+//  EXPORTS  MAX_PX, MS_BYTES, PHONE_MAX_PX, PHONE_REBUILD_EVERY, postBudget,
+//           targetBytes, legacyBytes, rebuildDue
 // ============================================================================
 
 export const MAX_PX = 2560 * 1440;
 export const MS_BYTES = 160e6;
+export const PHONE_MAX_PX = 1920 * 1080;
+export const PHONE_REBUILD_EVERY = 2;
+
+// True when the animation may rebuild the instance data on this frame.
+export function rebuildDue(frameNo, coarse) {
+  return !coarse || frameNo % PHONE_REBUILD_EVERY === 0;
+}
 
 // One scene target: MSAA colour + depth per sample, plus the resolve.
 export function targetBytes(px, samples) { return px * (samples * 12 + 12); }
 
 export function postBudget(cssW, cssH, dpr = 1, opts = {}) {
-  const maxPx = opts.maxPx || MAX_PX, msBytes = opts.msBytes || MS_BYTES;
+  const maxPx = opts.maxPx || (opts.coarse ? PHONE_MAX_PX : MAX_PX), msBytes = opts.msBytes || MS_BYTES;
   const area = Math.max(1, cssW * cssH);
   let pr = Math.min(dpr || 1, 2, Math.sqrt(maxPx / area));
   pr = Math.max(0.25, Math.floor(pr * 1000) / 1000);

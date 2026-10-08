@@ -44,7 +44,8 @@
 //
 //  MEMORY  resize() takes the pixel ratio and the MSAA sample count from
 //  postBudget (budget.js): at most 2560 x 1440 device px, and at most
-//  160 MB for the scene target. Nothing in this file allocates per frame.
+//  160 MB for the scene target. A touch screen gets the phone profile:
+//  at most 1920 x 1080 device px. Nothing in this file allocates per frame.
 //
 //  EXPORTS  createScene(canvas, opts) -> api   (grep -n "export function")
 //  FIBRE_GLSL is exported for checks; the saver plate shows TeX, not code.
@@ -313,7 +314,7 @@ export function createScene(canvas, opts = {}) {
   // Called only on a real change of the window size (main.js).
   function resize(w, h) {
     view.w = w; view.h = h;
-    const B = postBudget(w, h, window.devicePixelRatio || 1);
+    const B = postBudget(w, h, window.devicePixelRatio || 1, { coarse });
     view.budget = B;
     if (B.pr !== view.pr) { view.pr = B.pr; renderer.setPixelRatio(B.pr); }
     renderer.setSize(w, h, false);

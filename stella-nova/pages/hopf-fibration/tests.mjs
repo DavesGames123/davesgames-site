@@ -325,6 +325,18 @@ const dist = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
   ok('budget: total GPU bytes under 256 MB', worst < 256e6, MB(worst));
   const small = BG.postBudget(1280, 720, 1);
   ok('budget: a small window keeps dpr and 4x MSAA', small.pr === 1 && small.samples === 4, `pr ${small.pr}, ${small.samples}x`);
+  // the phone profile: a touch screen draws at most 1920 x 1080 device px
+  const rows = []; let phoneOk = true;
+  for (const [w, h, d] of [[360, 640, 3], [390, 844, 3], [844, 390, 3], [1024, 1366, 2], [1366, 1024, 2]]) {
+    const B = BG.postBudget(w, h, d, { coarse: true });
+    if (B.px > BG.PHONE_MAX_PX * 1.002 || B.pr > 2) phoneOk = false;
+    rows.push(`${w}x${h}@${d} pr ${B.pr}`);
+  }
+  const ph = BG.postBudget(390, 844, 3, { coarse: true });
+  ok('budget: phone keeps pr 2 on a small screen', ph.pr === 2, `pr ${ph.pr}, ${(ph.px / 1e6).toFixed(2)} Mpx`);
+  ok('budget: touch screens stay under 1920x1080 device px', phoneOk, rows.join(' · '));
+  const due = [0, 1, 2, 3].map(f => BG.rebuildDue(f, true)), dueD = [0, 1, 2, 3].every(f => BG.rebuildDue(f, false));
+  ok('budget: phone rebuilds the animation every 2nd frame', due.join() === 'true,false,true,false' && dueD, due.join());
   const huge = BG.postBudget(7680, 4320, 2);
   ok('budget: a huge window stays in budget', huge.bytes.total < 256e6 && Number.isFinite(huge.pr), `pr ${huge.pr}, ${MB(huge.bytes.total)}`);
 }
