@@ -27,7 +27,7 @@
 //    grep -n 'export function makeGrain'   the paper noise tile
 // ============================================================================
 import { mulberry, brushPoly } from './geom.js';
-import { fitSpec, scaleBar } from './plate.js';
+import { fitSpec, scaleBar, specExtras } from './plate.js';
 
 export const SERIF = '"STIX Two Text", "Times New Roman", Georgia, serif';
 export function labelFont(size, style) {
@@ -272,7 +272,10 @@ export function drawPlate(ctx, P) {
   ctx.strokeStyle = theme.rule;
   for (const r of L.rules) { ctx.lineWidth = r.lw * s; ctx.strokeRect(X(r.x), Y(r.y), r.w * s, r.h * s); }
   ctx.fillStyle = theme.text; ctx.textBaseline = 'alphabetic';
-  for (const t of L.texts) {
+  // One cell: the figure label sits just under the specimen.
+  const one = L.cells.length === 1 && P.specs[0] ? specExtras(P.specs[0], L.cells[0], (P.fits && P.fits[0]) || fitSpec(P.specs[0], L.cells[0])) : null;
+  for (const t0 of L.texts) {
+    const t = one && t0.role === 'num' ? Object.assign({}, t0, { y: one.labelY }) : t0;
     if (t.role === 'num') {
       const fN = labelFont(t.size * s, 'normal'), fI = labelFont(t.size * s, 'italic');
       ctx.font = fN; const wN = ctx.measureText(t.text + ' ').width;
@@ -305,14 +308,14 @@ export function drawPlate(ctx, P) {
     const fit = P.fits && P.fits[c.i] || fitSpec(f, c);
     drawSpec(ctx, f, fit, view, { theme, ink: P.ink, style: P.style, pen: P.pen, jitter: P.jitter, prog: P.progress ? P.progress[c.i] : null, marker: P.marker, dpr });
     if (P.scale) {
-      const sb = scaleBar(fit.k, c.aw * 0.14), bx = c.ax + c.aw * 0.04, by = c.ay + c.ah - c.ah * 0.02;
+      const ex = specExtras(f, c, fit), sb = scaleBar(fit.k, Math.min(c.aw * 0.14, f.bbox.w * fit.k * 0.3)), bx = ex.barX, by = ex.barY;
       const th = Math.max(0.15, Math.min(c.aw, c.ah) * 0.002);
       ctx.strokeStyle = theme.text; ctx.lineWidth = th * 2 * s;
       ctx.beginPath();
       ctx.moveTo(X(bx), Y(by)); ctx.lineTo(X(bx + sb.len), Y(by));
-      for (const t of [0, 0.5, 1]) { ctx.moveTo(X(bx + sb.len * t), Y(by)); ctx.lineTo(X(bx + sb.len * t), Y(by - (t === 0.5 ? 0.6 : 1) * c.ah * 0.012)); }
+      for (const t of [0, 0.5, 1]) { ctx.moveTo(X(bx + sb.len * t), Y(by)); ctx.lineTo(X(bx + sb.len * t), Y(by - (t === 0.5 ? 0.6 : 1) * ex.fs * 0.45)); }
       ctx.stroke();
-      ctx.fillStyle = theme.text; ctx.font = labelFont(Math.max(1.6, c.ah * 0.03) * s, 'normal'); ctx.textAlign = 'left';
+      ctx.fillStyle = theme.text; ctx.font = labelFont(ex.fs * s, 'normal'); ctx.textAlign = 'left';
       ctx.fillText(sb.text, X(bx + sb.len + c.aw * 0.012), Y(by));
     }
   }

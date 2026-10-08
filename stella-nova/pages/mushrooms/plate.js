@@ -165,3 +165,13 @@ export function pngSize(L, dpi) {
   while (d > 24 && (px(L.w) * px(L.h) > MAX_AREA || px(L.w) > MAX_SIDE || px(L.h) > MAX_SIDE)) d = Math.floor(d * 0.9);
   return { w: px(L.w), h: px(L.h), dpi: d, clamped: d !== dpi };
 }
+
+// ── specExtras ──────────────────────────────────────────────────────────────
+// Where the scale bar and a single figure label go: just under the drawn
+// specimen, not at the base of a tall cell. Returns plate mm.
+export function specExtras(f, c, fit) {
+  const b = f.bbox, x0 = fit.ox + b.x * fit.k, bottom = fit.oy + (b.y + b.h) * fit.k;
+  const fs = Math.max(1.6, Math.min(c.aw, c.ah) * 0.03);
+  return { barX: Math.max(c.ax + c.aw * 0.03, x0), barY: Math.min(c.ay + c.ah - c.ah * 0.02, bottom + fs * 1.2), fs,
+    labelY: Math.min(c.ly, bottom + fs * 1.2 + c.ls * 2.2) };
+}

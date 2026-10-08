@@ -13,7 +13,7 @@
 //    grep -n 'export function xmlEscape'  text and attribute escape
 // ============================================================================
 import { specPoints, brushPolys, washFill, PEN_K, SERIF } from './render.js';
-import { withCredit, fitSpec, scaleBar } from './plate.js';
+import { withCredit, fitSpec, scaleBar, specExtras } from './plate.js';
 
 export function xmlEscape(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
@@ -38,7 +38,9 @@ export function plateSVG(L0, specs, o) {
   }
   for (const r of L.rules) out.push(`<rect x="${n3(r.x)}" y="${n3(r.y)}" width="${n3(r.w)}" height="${n3(r.h)}" fill="none" stroke="${t.rule}" stroke-width="${n3(r.lw)}"/>`);
   const font = xmlEscape(SERIF.replace(/"/g, "'"));
-  for (const x of L.texts) {
+  const one = L.cells.length === 1 && specs[0] ? specExtras(specs[0], L.cells[0], fitSpec(specs[0], L.cells[0])) : null;
+  for (const x0 of L.texts) {
+    const x = one && x0.role === 'num' ? Object.assign({}, x0, { y: one.labelY }) : x0;
     if (x.role === 'num') {
       out.push(`<text x="${n3(x.x)}" y="${n3(x.y)}" font-family="${font}" font-size="${n3(x.size)}" fill="${t.text}" text-anchor="middle">${xmlEscape(x.text)} <tspan font-style="italic">${xmlEscape(x.name)}</tspan></text>`);
       continue;
@@ -85,10 +87,10 @@ export function plateSVG(L0, specs, o) {
     }
     out.push('</g>');
     if (o.scale) {
-      const sb = scaleBar(k, c.aw * 0.14), bx = c.ax + c.aw * 0.04, by = c.ay + c.ah - c.ah * 0.02, tick = c.ah * 0.012;
+      const ex = specExtras(f, c, fit), sb = scaleBar(k, Math.min(c.aw * 0.14, f.bbox.w * k * 0.3)), bx = ex.barX, by = ex.barY, tick = ex.fs * 0.45;
       const th = Math.max(0.15, Math.min(c.aw, c.ah) * 0.002) * 2;
       out.push(`<path d="M${n3(bx)} ${n3(by)}H${n3(bx + sb.len)}M${n3(bx)} ${n3(by)}V${n3(by - tick)}M${n3(bx + sb.len / 2)} ${n3(by)}V${n3(by - tick * 0.6)}M${n3(bx + sb.len)} ${n3(by)}V${n3(by - tick)}" stroke="${t.text}" stroke-width="${n3(th)}" fill="none"/>`);
-      out.push(`<text x="${n3(bx + sb.len + c.aw * 0.012)}" y="${n3(by)}" font-family="${font}" font-size="${n3(Math.max(1.6, c.ah * 0.03))}" fill="${t.text}">${xmlEscape(sb.text)}</text>`);
+      out.push(`<text x="${n3(bx + sb.len + c.aw * 0.012)}" y="${n3(by)}" font-family="${font}" font-size="${n3(ex.fs)}" fill="${t.text}">${xmlEscape(sb.text)}</text>`);
     }
   }
   out.push('</svg>');

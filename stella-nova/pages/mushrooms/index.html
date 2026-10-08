@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Mushroom Draw — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MUSHROOM DRAW  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Procedural mushrooms in pen lines: one specimen with every parameter,
+   or a natural-history plate of many. Original code by davesgames.io, in
+   the spirit of fishdraw and shan-shui-inf by Lingdong Huang
+   (https://github.com/LingDong-/fishdraw, https://github.com/LingDong-/shan-shui-inf).
+   No code of those programs is copied here, so no licence file is needed;
+   the About text credits both as the inspiration.
+
+   FILES
+     geom.js     PRNG, noise, point in polygon, the hidden-line clipper,
+                 RDP simplify, the brush stroke polygon (no DOM)
+     engine.js   params, forms, random species, binomen, the mushroom
+                 geometry, hidden lines, share link (no DOM)
+     plate.js    themes, styles, page sizes, the plate layout, PNG clamp
+     render.js   the plate on a canvas, as vectors, and the pen draw-on
+     svg.js      the plate as SVG in mm (no DOM)
+     export.js   the file downloads and the clipboard
+     saver.js    window.snSaver: the screensaver tour
+     main.js     the controls, history, modes, view, and the boot
+     tests.mjs   node tests (engine, clipper, layout, SVG)
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. style.css, then lib/sci.css (Inter and STIX Two Text)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #desk fills the rest. #view is one
+                 canvas over the whole desk. #caption is the line under
+                 the plate: the name, the form, the seed, the line count.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base. #panel is a bottom sheet (portrait)
+                 or a drawer at the right (landscape). The plate fits in
+                 the part of #desk that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'      the canvas size and the clear area
+     grep -n 'function plateNow'    the layout of the plate on screen
+     grep -n 'function draw'        one frame
+     grep -n 'function showSpec'    build a specimen, then show it
+     grep -n 'function buildGrid'   the specs of every cell, then the fill
+     grep -n 'function buildParams' the parameter panel
+     grep -n 'function setOpen'     the panel, the phone sheet, the dock
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Mushroom Draw: procedural mushrooms as pen-plotter lines. Fly agaric, parasol, bolete, chanterelle, ink cap, bonnet, morel, puffball and random species, with hidden-line removal, hatching, ink brush and colour wash styles, plates, and SVG or PNG export.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Mushroom Draw</div>
+  <div class="credit">After <a href="https://github.com/LingDong-/fishdraw" target="_blank" rel="noopener">fishdraw</a> and <a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">shan-shui-inf</a> by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a></div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="desk">
+  <canvas id="view" aria-label="Mushroom drawing. Drag to pan, wheel or pinch to zoom."></canvas>
+  <div id="caption"></div>
+  <div id="busy" hidden>Drawing…</div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <p class="credit-box">Original code in the spirit of <a href="https://github.com/LingDong-/fishdraw" target="_blank" rel="noopener">fishdraw</a> and <a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">shan-shui-inf</a> by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a>.</p>
+  <div class="seg first" id="modeSeg">
+    <button data-mode="single" class="on">Single specimen</button>
+    <button data-mode="grid">Plate grid</button>
+  </div>
+
+  <div class="sec-label">Specimen</div>
+  <div class="chips" id="forms"></div>
+  <div class="namerow">
+    <input id="seedInp" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="Seed">
+    <button id="seedGo" title="Draw this seed (Enter)">Draw</button>
+  </div>
+  <div class="hint" id="seedLine"></div>
+  <div class="btns">
+    <button id="newBtn" title="The same form with a new seed (N)">New seed</button>
+    <button id="randBtn" title="A random species and seed. Locked fields stay (R)">Randomise</button>
+    <button id="mutBtn" title="Change the params a little (M)">Mutate</button>
+  </div>
+  <div class="prm"><div class="nm">Mutation size</div><span class="val" id="mutAmtV"></span>
+    <input type="range" id="mutAmt" min="0.02" max="0.6" step="0.01" value="0.15" aria-label="Mutation size"></div>
+  <div class="btns">
+    <button id="backBtn" title="Back in history ([)">‹ Back</button>
+    <button id="fwdBtn" title="Forward in history (])">Forward ›</button>
+    <button id="resetBtn" title="Remove all edits of this form">Reset edits</button>
+  </div>
+
+  <div class="sec-label">Style</div>
+  <div class="seg three" id="styleSeg"></div>
+
+  <div class="sec-label">Pen draw-on</div>
+  <div class="btns">
+    <button id="playBtn" title="Draw the specimen again with the pen (D)">Draw on</button>
+    <button id="autoBtn" class="on" title="Draw each new specimen with the pen">Each new</button>
+    <button id="tipBtn" class="on" title="Show the pen tip">Pen tip</button>
+  </div>
+  <div class="prm"><div class="nm">Pen speed</div><span class="val" id="speedV"></span>
+    <input type="range" id="speed" min="0" max="1" step="0.001" value="0.5" aria-label="Pen speed"></div>
+
+  <div id="gridSec" hidden>
+    <div class="sec-label">Plate grid</div>
+    <div class="chips" id="presets"></div>
+    <div class="prm"><div class="nm">Rows</div><span class="val" id="rowsV"></span>
+      <input type="range" id="rows" min="1" max="6" step="1" value="3" aria-label="Rows"></div>
+    <div class="prm"><div class="nm">Columns</div><span class="val" id="colsV"></span>
+      <input type="range" id="cols" min="1" max="8" step="1" value="3" aria-label="Columns"></div>
+    <div class="seg three" id="srcSeg">
+      <button data-f="random" class="on" title="Each cell is a new random species">Random</button>
+      <button data-f="form" title="The form of the specimen, a new seed per cell">Same form</button>
+      <button data-f="family" title="Mutations of the specimen">Family</button>
+    </div>
+    <div class="prm" id="spreadRow"><div class="nm">Family spread</div><span class="val" id="spreadV"></span>
+      <input type="range" id="spread" min="0.02" max="1" step="0.01" value="0.3" aria-label="Mutation spread"></div>
+    <div class="btns"><button id="gridNew" title="A new plate (N)">New plate</button></div>
+    <p class="hint">Click or tap a specimen to open it on its own. Locked fields hold in every cell.</p>
+  </div>
+
+  <div class="sec-label">Plate</div>
+  <div class="themes" id="themes"></div>
+  <div class="row2">
+    <label class="nm" for="inkInp">Ink</label>
+    <input type="color" id="inkInp" value="#2a2118" aria-label="Ink color">
+    <button id="inkReset" class="small" title="Use the ink of the theme">Theme ink</button>
+  </div>
+  <div class="prm"><div class="nm">Pen width</div><span class="val" id="penV"></span>
+    <input type="range" id="pen" min="0.05" max="1.2" step="0.01" value="0.3" aria-label="Pen width"></div>
+  <div class="prm"><div class="nm">Hand wobble</div><span class="val" id="jitterV"></span>
+    <input type="range" id="jitter" min="0" max="1" step="0.01" value="0" aria-label="Hand-drawn wobble"></div>
+  <div class="row2">
+    <label class="nm" for="pageSel">Page</label>
+    <select id="pageSel" aria-label="Page size"></select>
+  </div>
+  <div class="seg" id="orientSeg">
+    <button data-o="portrait">Portrait</button>
+    <button data-o="landscape" class="on">Landscape</button>
+  </div>
+  <div class="btns wrap">
+    <button id="borderBtn" title="Double rule around the plate">Border</button>
+    <button id="titleBtn" title="Plate number, title and credit line">Title block</button>
+    <button id="labelsBtn" title="Number and name under each specimen">Labels</button>
+    <button id="scaleBtn" title="A scale bar in each cell (one unit is 0.5 mm)">Scale bar</button>
+    <button id="grainBtn" class="on" title="Paper grain and vignette">Grain</button>
+  </div>
+  <div class="namerow">
+    <input id="titleInp" type="text" autocomplete="off" spellcheck="false" placeholder="Plate title" aria-label="Plate title">
+  </div>
+
+  <div class="sec-label">Parameters</div>
+  <p class="hint">A lock keeps a field when you randomise, mutate or roll a group. A form button sets every field.</p>
+  <div class="btns">
+    <button id="unlockBtn">Unlock all</button>
+    <button id="openAllBtn">Open all</button>
+  </div>
+  <div id="params"></div>
+
+  <div class="sec-label">Export</div>
+  <div class="btns">
+    <button id="xSvg" title="The plate as SVG, in mm, hidden lines removed">SVG</button>
+    <button id="xPng" title="The plate as PNG at the DPI below">PNG</button>
+    <button id="xJson" title="The visible polylines in plate mm, as JSON">JSON</button>
+    <button id="xLink" title="Copy a link to this specimen or plate">Copy link</button>
+  </div>
+  <div class="row2">
+    <label class="nm" for="dpiSel">PNG</label>
+    <select id="dpiSel" aria-label="PNG resolution">
+      <option value="96">96 dpi (screen)</option>
+      <option value="150">150 dpi</option>
+      <option value="300" selected>300 dpi (print)</option>
+      <option value="600">600 dpi</option>
+    </select>
+  </div>
+  <p class="hint" id="pngHint"></p>
+  <div class="namerow" id="linkRow" hidden><input id="linkInp" type="text" readonly aria-label="Share link"></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>Each specimen is a set of pen lines made from a form and a seed. The same form, seed and edits always give the same drawing. The Latin name comes from the seed, through syllable tables of our own.</p>
+    <p>The cap is a surface of revolution on a bent stem. Its outline (the meridian) is a superellipse from the apex to the rim, with an umbo, a central dip, an upturned or inrolled margin, and an underside back to the stem. The age slider moves a cap from button to convex to plane to upturned. A camera at height <span class="m1">e</span> projects a cap point at height <span class="m2">h</span>, radius <span class="m3">r</span> and angle <span class="m4">φ</span> to</p>
+    <div class="eq" data-tex="Y = y_m - h\cos e + r\sin\varphi\,\sin e"></div>
+    <p>so from below (<span class="m1">e</span> &lt; 0) the rim is a full ellipse and the gills, pores, teeth or ridges show.</p>
+    <p>Hidden lines are removed in the engine. Each line point of the cap is tested by a ray march toward the camera, and every line is cut where a part drawn after it covers it. The SVG holds only visible strokes, ready for a pen plotter.</p>
+    <p>The page is our own code, made in the spirit of two programs by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a>: <a href="https://github.com/LingDong-/fishdraw" target="_blank" rel="noopener">fishdraw</a> (fish as noise-wobbled pen lines with hatching and clipped parts) and <a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">shan-shui-inf</a> (Chinese landscape painting with brush strokes of varying width and light washes). Both have pages on this site. No code of theirs is used here.</p>
+    <p class="ours">The forms are shapes of real mushroom groups, for drawing only. This is not a field guide: never eat a wild mushroom on the strength of a picture.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+  <button id="dockBack" aria-label="Back">‹</button>
+  <button id="dockNew" class="name" aria-label="New seed"><span id="dockName">…</span><i>↻</i></button>
+  <button id="dockFwd" aria-label="Forward">›</button>
+  <button id="dockDraw" aria-label="Draw on">✎</button>
+  <button id="dockMode" aria-label="Plate grid">▦</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
