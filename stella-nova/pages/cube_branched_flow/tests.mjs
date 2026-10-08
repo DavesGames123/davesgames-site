@@ -118,5 +118,23 @@ for (let s = 1; s <= OLD_SEEDS; s++) {
 info(`old ranges, failing scenes per shot of ${OLD_SEEDS}: ${JSON.stringify(oldBad)}`);
 check(oldRing > 0 && oldFlow > 0, `old ranges fail: ringCheck ${oldRing} of ${oldN}, flowCheck ${oldFlow} of ${oldN}`);
 
+// 6. Saver camera framing (main.js saverTick). Every shot is fitted: the
+// radius r (sc.r, or sceneRadius for Macro, where rk is 0) has a positive
+// size, and the camera at its nearest (distance 200 x 0.92) stays at least
+// 3 r from the centre, so it is never in or next to the body. The fit is
+// at most 0.62 of the band. Macro once put the camera 40 to 55 units out.
+{
+  let worst = 1e9, zero = 0, n = 0;
+  for (let s = 1; s <= 60; s++) {
+    const rnd = F.makeRnd(Math.imul(s, 2246822519));
+    for (let i = 0; i < F.SAVER_SHOTS.length; i++) {
+      const sc = F.saverScene(rnd, i, rnd(), D), r = sc.r || F.sceneRadius(sc.C);
+      if (!(r > 0)) zero++;
+      worst = Math.min(worst, 200 * 0.92 / r); n++;
+    }
+  }
+  check(zero === 0 && worst >= 3, `saver camera: ${n} shots, every radius > 0, nearest camera at ${worst.toFixed(2)} scene radii (need 3)`);
+}
+
 console.log(fail ? `${fail} FAILED` : 'all passed');
 process.exitCode = fail ? 1 : 0;

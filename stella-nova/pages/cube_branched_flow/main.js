@@ -464,9 +464,15 @@ function render(now){requestAnimationFrame(render);
 // lib/saver-clear.js). The focal length camF makes the scene radius r
 // (F.sceneRadius times the shot rk: the far body surface or ring edge) 0.5 of
 // the band at a distance near 200, and camTa pans the view to the band
-// centre. Macro has no fit: its camera is in the filaments.
-// The dolly changes the distance by 16 % over a shot with camF fixed to the
-// fit, so a push-in grows the body and a pull-out shrinks it.
+// centre. Every shot is fitted, Macro too: it fits the scene radius to 0.62
+// of the band, not 0.5. (Macro once put the camera 40 to 55 units out with
+// a 60 deg lens, in or on the body: the user found it zoomed in far too much.)
+// MOTION. The camera does not jump at a cut. The next shot starts from the
+// current angle and turns 35 to 80 deg in azimuth (and the elevation moves
+// toward a new value in -0.15 .. 0.45 rad) over a 1.6 s smoothstep glide.
+// The lens camF eases toward the fit (rate 2.5 /s), so a change of the band
+// size (a new plate text) does not jump the zoom. The dolly changes the
+// distance by 8 % over a shot.
 const SAVER_LOOKS=[
   ['Indigo',  {cRH:.65,cTH:.56,cSat:1,  cGrad:.6, gH:.675}],
   ['Ember',   {cRH:.02,cTH:.11,cSat:1,  cGrad:.7, gH:.05}],
@@ -515,22 +521,24 @@ window.snSaver={
       const sc=F.saverScene(rnd,i,calm,cur);
       Object.assign(cur,sc.C);
       simTime=sc.simTime;
-      camT=6.2832*rnd();camP=-.3+.9*rnd();
-      const r=sc.r;
+      // a glide from the current angle, not a jump to a random one
+      const dir=rnd()<.5?-1:1,swing=dir*(.61+.79*rnd());
+      const r=sc.r||F.sceneRadius(cur);
       shot={i,name:sc.name,r,t:0,dur:sc.dur,
-        orbit:(.08-.04*calm)*(.6+.4*rnd())*(rnd()<.5?-1:1),
-        rise:(rnd()-.5)*.03,
+        t0:camT,t1:camT+swing,p0:camP,p1:-.15+.6*rnd(),
+        orbit:(.06-.03*calm)*(.6+.4*rnd())*dir,
         // dolly: the distance goes from 1 to k over the shot.
-        k:rnd()<.5?.84:1.16,
-        macro:r?0:40+15*rnd()};
+        k:rnd()<.5?.92:1.08,
+        fit:sc.r?.5:.62};
       plate();
     };
     // The focal length that makes the body radius f of the band. A body of
     // radius r at distance d is camF r / d canvas heights tall (sdf.frag.glsl
     // and persp() share camF). The distance stays near 200, inside the march
     // range (MD 500 in sdf.frag.glsl), and the lens does the framing.
-    const fitF=(r,d)=>{const bx=bandBox(),H=innerHeight,f=.5;
+    const fitF=(r,d,f)=>{const bx=bandBox(),H=innerHeight;
       return Math.min(f*bx.h,f*bx.w)*d/(r*H);};
+    let fEase=null;
     const label=typeof opts.label==='function'?opts.label:null;
     // The plate: field3D with the live frequencies and gains. q is p scaled
     // by fFr (fFrZ on z); a, b, c are the three fixed wave vectors.
@@ -558,9 +566,14 @@ window.snSaver={
       shot.t+=dt;
       if(shot.t>shot.dur)nextShot();
       const s=Math.min(1,shot.t/shot.dur),e=s*s*(3-2*s);
-      camT+=shot.orbit*dt;camP=Math.max(-.6,Math.min(.8,camP+shot.rise*dt));
-      camD=(shot.macro||200)*(1+(shot.k-1)*e);
-      camF=shot.macro?Math.tan(PI/3):fitF(shot.r,200);
+      // the glide (1.6 s), then a slow orbit from where the glide ends
+      const g=Math.min(1,shot.t/1.6),ge=g*g*(3-2*g);
+      camT=shot.t0+(shot.t1-shot.t0)*ge+shot.orbit*Math.max(0,shot.t-1.6);
+      camP=shot.p0+(shot.p1-shot.p0)*ge;
+      camD=200*(1+(shot.k-1)*e);
+      const fGoal=fitF(shot.r,200,shot.fit);
+      fEase=fEase==null?fGoal:fEase+(fGoal-fEase)*Math.min(1,dt*2.5);
+      camF=fEase;
       // Pan to the band centre: move the orbit and its target together along
       // the camera up vector. oy CSS px down is oy / H canvas heights, which
       // is camF delta / d at the target.
