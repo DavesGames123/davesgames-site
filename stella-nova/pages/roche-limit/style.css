@@ -230,17 +230,27 @@ html.in-frame #bar{top:8px}
   .modal{align-items:flex-end;padding:0}
   .sheet{border-radius:16px 16px 0 0;max-height:85vh;max-height:85dvh;padding:14px 14px calc(18px + env(safe-area-inset-bottom))}
   #cards{grid-template-columns:1fr 1fr;gap:8px}
-  .seg button,.chips button,.toggles label{min-height:40px}
+  .seg button,.chips button,.toggles label{min-height:44px}
   .toggles label{font-size:0.82rem}
 }
 @media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
   #readouts{right:auto;width:260px}
-  #story{left:280px}
+  /* a short screen: the strip keeps the caption, the time warp and the
+     scrubber on one line each; the phase buttons go (the caption names
+     the phase, and the scrubber seeks) */
+  #story{left:280px;padding:6px 10px 4px}
+  #caption{font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #phases{display:none}
+  #warp{font-size:0.62rem}
   .pop:not(#moreMenu),.drawer{left:auto;width:min(420px,60vw);top:10px;bottom:var(--dock-h);max-height:none;border-radius:14px 0 0 0}
 }
+/* touch: 44 px targets (Apple HIG), on phones and tablets alike */
 @media (pointer:coarse){
-  .ib,.tb{min-height:40px;min-width:40px}
-  #scrub{height:28px}
+  .ib,.tb{min-height:44px;min-width:44px}
+  .seg button,.chips button,.toggles label{min-height:44px}
+  #phases button{min-height:44px}
+  #scrub{height:32px}
+  #warp{font-size:0.64rem}
 }
 
 /* ── sn-saver ────────────────────────────────────────────────────────── */

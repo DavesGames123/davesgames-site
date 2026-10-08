@@ -29,6 +29,9 @@
 //     no run twice in a row, every shot lasts 5-12 s, every spiral run
 //     starts outside its fluid limit and sheds within 4 s at the saver's
 //     speed (pacing model, cached pile)
+//  12 phone layout (style.css, read as text): 44 px touch targets on a
+//     coarse pointer, the dock and bottom sheets on a phone, the short
+//     landscape strip, no page scroll, the canvas takes every touch
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
 //     for desktop and phone profiles, against budget.js LIMIT; phones get
 //     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
@@ -414,6 +417,23 @@ function saverTests(cur) {
   }
 }
 
+// 12 ─ the phone layout, from the stylesheet text
+async function layoutTests() {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('./style.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  // the body of the first @media block whose query contains q
+  const block = q => { const i = css.indexOf(q); if (i < 0) return ''; let k = css.indexOf('{', i) + 1, depth = 1, j = k; while (depth && j < css.length) { if (css[j] === '{') depth++; else if (css[j] === '}') depth--; j++; } return css.slice(k, j - 1); };
+  const rule = (b, sel) => { const m = b.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\#]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); return m ? m[1] : ''; };
+  const px = (r, prop) => { const m = r.match(new RegExp(prop + ':(\\d+)px')); return m ? +m[1] : 0; };
+  const coarse = block('@media (pointer:coarse)'), phone = block('@media (max-width:768px)'), land = block('@media (max-height:500px) and (orientation:landscape) and (pointer:coarse)');
+  const t = [['.ib,.tb', 'min-height'], ['.seg button,.chips button,.toggles label', 'min-height'], ['#phases button', 'min-height']].map(([sel, pr]) => [sel, px(rule(coarse, sel), pr)]);
+  ok('phone: touch targets are 44 px on a coarse pointer', t.every(x => x[1] >= 44), t.map(x => `${x[0]} ${x[1]} px`).join('; '));
+  const dockB = px(rule(phone, '#dock > button'), 'height');
+  ok('phone: dock buttons 48 px, sheets above the dock', dockB >= 44 && /bottom:var\(--dock-h\)/.test(rule(phone, '.pop:not(#moreMenu),.drawer')), `dock button ${dockB} px`);
+  ok('phone landscape: the strip drops the phase buttons and keeps one-line text', /display:none/.test(rule(land, '#phases')) && /nowrap/.test(rule(land, '#caption')), 'checked #phases, #caption');
+  ok('no page scroll; the canvas takes every touch (pinch, drag)', /overflow:hidden/.test(rule(css, 'html,body')) && /touch-action:none/.test(rule(css, '#gpu')) && /nowrap/.test(rule(css, '#warp')) && /ellipsis/.test(rule(css, '#warp')), 'html,body overflow hidden; #gpu touch-action none; #warp one line');
+}
+
 // 9 ─ the GPU memory budget
 function budgetTests() {
   const prof = [
@@ -525,7 +545,7 @@ const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
 const CAMERA = typeof Deno === 'undefined';   // the camera test imports app/ with DOM stubs: node only
 if (!GPU_ONLY) {
   const t0 = Date.now();
-  if (!PACE_ONLY) { cpuTests(); budgetTests(); }
+  if (!PACE_ONLY) { cpuTests(); budgetTests(); if (CAMERA) await layoutTests(); }
   await paceTests(ARGS.includes('--pace-old'));
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
