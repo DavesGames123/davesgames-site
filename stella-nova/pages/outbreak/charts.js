@@ -37,7 +37,7 @@ export const SOURCES = [];
 export const SERIES = [
   { key: 'S', label: 'Susceptible', color: '#8fa3bf', width: 1.1 },
   { key: 'E', label: 'Exposed', color: '#d9b45a', width: 1.1 },
-  { key: 'I', label: 'Infectious', color: '#ef5a47', width: 2.0 },
+  { key: 'I', label: 'Infectious', color: '#ff0512', width: 2.0 },
   { key: 'R', label: 'Recovered', color: '#7cc79a', width: 1.1 },
   { key: 'D', label: 'Deaths', color: '#c7c0d4', width: 1.3 },
   { key: 'V', label: 'Vaccinated', color: '#6fb3ae', width: 1.1 },
@@ -216,7 +216,7 @@ export function createChart(canvas, { log = true, dprCap = 2, names = {} } = {})
     ctx.lineWidth = 1.4;
     for (let i = st; i < r.length; i += st) {
       const j = i - st;
-      ctx.strokeStyle = (r[i] + r[j]) / 2 > 1 ? '#ef5a47' : '#7cc79a';
+      ctx.strokeStyle = (r[i] + r[j]) / 2 > 1 ? '#ff0512' : '#7cc79a';
       ctx.beginPath(); ctx.moveTo(sx(history.day[j]), sr(r[j])); ctx.lineTo(sx(history.day[i]), sr(r[i])); ctx.stroke();
     }
     ctx.fillStyle = TICK; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';

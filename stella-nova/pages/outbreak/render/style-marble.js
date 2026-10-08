@@ -144,7 +144,7 @@ void main() {
   // fresnel rim, toward the sun side
   float mu = max(dot(n, v), 0.0);
   float rim = pow(1.0 - mu, 5.0) * (0.25 + 0.75 * lit);
-  vec3 rimCol = mix(vec3(0.35, 0.62, 1.0), vec3(1.0, 0.36, 0.44), uTint * 0.7);
+  vec3 rimCol = mix(vec3(0.35, 0.62, 1.0), vec3(1.0, 0.08, 0.12), uTint * 0.7);
   col += rimCol * rim * 0.3;
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -172,7 +172,7 @@ void main() {
   float g = clamp(-dot(n, normalize(vV)) / uLimb, 0.0, 1.0);
   g = g * g * g;
   float lit = smoothstep(-0.35, 0.4, dot(-n, uSun));
-  vec3 c = mix(vec3(0.30, 0.58, 1.0), vec3(1.0, 0.32, 0.45), uTint * 0.7);
+  vec3 c = mix(vec3(0.30, 0.58, 1.0), vec3(1.0, 0.06, 0.10), uTint * 0.7);
   gl_FragColor = vec4(c * g * (0.12 + 0.95 * lit), 1.0);
 }`;
 

@@ -23,7 +23,7 @@
 :root{
   --bg:#040509; --panel:rgba(10,12,17,0.88); --panel-solid:#0b0d13; --ink:#e9ecf1; --ink2:#b9bfca; --dim:#8a92a0; --faint:#555d6b;
   --line:rgba(255,255,255,0.08); --line-b:rgba(255,255,255,0.16); --sel:rgba(255,255,255,0.08);
-  --hot:#ef5a47; --hot-ink:#ff9a8a; --ok:#7cc79a; --teal:#6fb3ae;
+  --hot:#ff0512; --hot-ink:#ff4a55; --ok:#7cc79a; --teal:#6fb3ae;
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --r:10px;
   --panel-w:304px; --hud-w:288px; --base-h:112px; --dock-h:0px; --top:52px;
   --serif:var(--sci-serif,'STIX Two Text',Georgia,serif); --sans:var(--sci-sans,Inter,system-ui,sans-serif); --mono:var(--sci-mono,ui-monospace,Menlo,monospace)}

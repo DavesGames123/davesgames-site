@@ -162,7 +162,7 @@ varying vec3 vN;
 varying vec3 vV;
 void main() {
   float fr = pow(1.0 - clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 3.0);
-  vec3 rim = mix(vec3(0.10, 0.35, 0.50), vec3(0.55, 0.18, 0.15), uHeat);
+  vec3 rim = mix(vec3(0.10, 0.35, 0.50), vec3(0.60, 0.02, 0.05), uHeat);
   gl_FragColor = vec4(vec3(0.012, 0.02, 0.035) + rim * fr * 0.6, 1.0);
 }`;
 
@@ -183,7 +183,7 @@ varying vec3 vV;
 void main() {
   float c = clamp(-dot(normalize(vN), normalize(vV)), 0.0, 1.0);
   float a = pow(c, 6.0) * 0.55;
-  vec3 col = mix(vec3(0.20, 0.60, 0.85), vec3(0.95, 0.35, 0.25), uHeat);
+  vec3 col = mix(vec3(0.20, 0.60, 0.85), vec3(1.0, 0.06, 0.10), uHeat);
   gl_FragColor = vec4(col * a, 1.0);
 }`;
 

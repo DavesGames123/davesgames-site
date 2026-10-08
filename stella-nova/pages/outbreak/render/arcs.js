@@ -76,7 +76,8 @@ export const VISUAL_SEED = 0xa4c5f1;
 export const KIND = { ambient: 0, infected: 1, first: 2, blocked: 3 };
 export const PRIO = [0, 1, 2, 1];
 // colour, plane alpha, trail alpha and trail width factor by kind
-export const KIND_COL = [[0.58, 0.68, 0.86], [1.0, 0.34, 0.27], [1.0, 0.62, 0.36], [0.42, 0.84, 1.0]];
+// infected = PAL.arterial and first = PAL.core of render/infect.js (one red on the page)
+export const KIND_COL = [[0.58, 0.68, 0.86], [1.0, 0.02, 0.07], [1.0, 0.46, 0.32], [0.42, 0.84, 1.0]];
 const PLANE_A = [0.55, 1, 1, 0.9];
 const TRAIL_A = [0.22, 0.9, 1, 0.6];
 const TRAIL_W = [0.8, 1, 1.3, 0.9];

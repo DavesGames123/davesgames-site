@@ -8,7 +8,8 @@
 //             comes from markerPx(level, cityPop): a city with no
 //             infection is a small dim grey dot; the prevalence I/N
 //             (frame.prev, log scale by glowLevel) makes it larger and
-//             red. A thin lighter outline rims an infected marker. A city
+//             arterial red (PAL.arterial of render/infect.js), with a thin
+//             hot-core rim (PAL.core). A city
 //             that had its epidemic and is now low (sim.firstDay >= 0)
 //             turns muted teal. Flat colour, normal blending, a 1 px
 //             antialiased edge, no halo and no pulse. The shown level
@@ -134,11 +135,11 @@ void main() {
   float rim = clamp(r - (vR - 1.1 * uPr) + 0.5, 0.0, 1.0);
   vec3 idle = vec3(0.70, 0.74, 0.80);
   vec3 past = vec3(0.42, 0.70, 0.68);
-  vec3 hot = vec3(0.94, 0.27, 0.22);
+  vec3 hot = vec3(1.0, 0.02, 0.07);
   float k = step(0.001, vGlow);
   vec3 base = mix(idle, past, vPast);
   vec3 col = mix(base, hot, k);
-  col = mix(col, vec3(1.0, 0.80, 0.74), rim * k * 0.85);
+  col = mix(col, vec3(1.0, 0.46, 0.32), rim * k * 0.9);
   float a = mix(0.42 + 0.3 * vPast, 0.95, k);
   gl_FragColor = vec4(col, a * disc);
 }`;
@@ -206,7 +207,7 @@ export function createNodes(ctx) {
   rg.setAttribute('position', rPosAttr);
   rg.setAttribute('aPx', rPxAttr);
   rg.setAttribute('aA', rAAttr);
-  const RU = { uPr: U.uPr, uGlobe: U.uGlobe, uColor: { value: new THREE.Color(1.0, 0.55, 0.45) } };
+  const RU = { uPr: U.uPr, uGlobe: U.uGlobe, uColor: { value: new THREE.Color(1.0, 0.46, 0.32) } };
   const ringMat = new THREE.ShaderMaterial({
     uniforms: RU, vertexShader: RING_VERT, fragmentShader: RING_FRAG,
     transparent: true, depthWrite: false, depthTest: true,

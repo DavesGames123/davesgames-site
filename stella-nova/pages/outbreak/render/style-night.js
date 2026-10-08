@@ -14,7 +14,7 @@
 //    coast   LineSegments of the Natural Earth coast rings at r = 1.0012,
 //            thin grey-blue hairlines, faded at the limb. Lakes at half.
 //    atmos   back-face sphere at r = 1.08, additive; a thin, faint band at
-//            the limb. Its colour moves from blue to rose as the world
+//            the limb. Its colour moves from blue to blood red as the world
 //            prevalence rises.
 //    stars   Points drawn at infinity (depth = far plane), so they do not
 //            depend on the camera far plane and the globe hides them.
@@ -174,7 +174,7 @@ void main() {
 
   float mu = max(dot(vN, vV), 0.0);
   float rim = pow(1.0 - mu, 6.0);
-  vec3 rimCol = mix(vec3(0.30, 0.55, 1.0), vec3(1.0, 0.40, 0.45), uTint * 0.6);
+  vec3 rimCol = mix(vec3(0.30, 0.55, 1.0), vec3(1.0, 0.08, 0.12), uTint * 0.6);
   col += rimCol * rim * 0.22;
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -200,7 +200,7 @@ varying vec3 vV;
 void main() {
   float g = clamp(-dot(vN, vV) / uLimb, 0.0, 1.0);
   g = g * g * g;
-  vec3 c = mix(vec3(0.18, 0.46, 1.0), vec3(1.0, 0.28, 0.42), uTint * 0.75);
+  vec3 c = mix(vec3(0.18, 0.46, 1.0), vec3(1.0, 0.05, 0.10), uTint * 0.75);
   gl_FragColor = vec4(c * g * g * 0.35, 1.0);
 }`;
 

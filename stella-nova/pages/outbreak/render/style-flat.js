@@ -196,7 +196,7 @@ void main() {
   float lat = (vUv.y - 0.5) * 3.14159;
   vec3 sea = mix(vec3(0.006, 0.016, 0.04), vec3(0.012, 0.035, 0.075), cos(lat));
   vec3 col = mix(sea, vec3(0.05, 0.065, 0.085), land);
-  vec3 coastC = mix(vec3(0.25, 0.8, 1.0), vec3(1.0, 0.45, 0.55), uTint);
+  vec3 coastC = mix(vec3(0.25, 0.8, 1.0), vec3(1.0, 0.10, 0.16), uTint);
   col += coastC * edge * 0.18;
 
   vec4 f = texture2D(uField, vUv);

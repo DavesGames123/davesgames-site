@@ -93,7 +93,7 @@ export function ringSegments(r, n = 256, tickDeg = 10, tick = 0.025) {
 // The line colour for a tint 0 (cyan) .. 1 (rose). Returns [r, g, b].
 export function holoColor(tint) {
   const k = Math.min(1, Math.max(0, tint || 0)) * 0.8;
-  const c0 = [0.25, 0.9, 1.0], c1 = [1.0, 0.38, 0.62];
+  const c0 = [0.25, 0.9, 1.0], c1 = [1.0, 0.10, 0.16];
   return c0.map((v, i) => v + (c1[i] - v) * k);
 }
 
