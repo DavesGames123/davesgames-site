@@ -39,7 +39,7 @@ import { decodeCoast } from '../../storm-globe/coast.js';
 import { makeRng } from '../rng.js';
 
 export const SOURCES = [
-  { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2012', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
+  { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2016', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
   { ref: 'Natural Earth 1:50m land and lakes', url: 'https://www.naturalearthdata.com/', note: 'coast rings, public domain, via storm-globe/data/coast-50m.bin' },
 ];
 

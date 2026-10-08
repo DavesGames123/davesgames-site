@@ -51,7 +51,7 @@ import { worldPrevalence, tintFor, approach, COAST_URL, LIGHTS_URL } from './sty
 export const SOURCES = [
   { ref: 'Savric, Patterson, Jenny 2018, The Equal Earth map projection, Int J Geogr Inf Sci 33(3):454', url: 'https://doi.org/10.1080/13658816.2018.1504949', note: 'Equal Earth forward formulas, via geo.js flat()' },
   { ref: 'Natural Earth 1:50m land and lakes', url: 'https://www.naturalearthdata.com/', note: 'coast rings, public domain, via storm-globe/data/coast-50m.bin' },
-  { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2012', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
+  { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2016', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
 ];
 
 export const PROJS = [

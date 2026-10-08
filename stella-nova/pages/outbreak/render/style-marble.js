@@ -41,7 +41,7 @@ import { starField, worldPrevalence, tintFor, approach } from './style-night.js'
 
 export const SOURCES = [
   { ref: 'NASA Earth Observatory, Blue Marble Next Generation (Stockli et al. 2005)', url: 'https://earthobservatory.nasa.gov/features/BlueMarble', note: 'day colour texture, public domain, via ancient-earth/data/present/color-2k.jpg' },
-  { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2012', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
+  { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2016', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
 ];
 
 export const COLOR_URL = new URL('../../ancient-earth/data/present/color-2k.jpg', import.meta.url);
