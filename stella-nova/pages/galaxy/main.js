@@ -4,7 +4,7 @@
 //  model.js builds a galaxy (in worker.js, off the main thread); engine.js
 //  draws it. The orbit camera eases toward a goal with springs; drag,
 //  wheel, pinch and W A S D move the goal. "Fly into the disk" plays the
-//  saver's dive shot.
+//  saver's dive shot. saver.js is the screensaver hook (window.snSaver).
 //
 //  Sliders with data-p set one model parameter. Those with data-rebuild
 //  change the stars, so they rebuild on release; the others repack the
@@ -24,6 +24,7 @@ import { galaxyBudget } from './budget.js';
 import * as C from './camera.js';
 import { shotCamera } from './saverplan.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -289,5 +290,6 @@ Object.assign(api, {
   setPreset, setType, rebuild, setParams(p) { P = p; return rebuild(); },
   canvas, resize, fitGoal, showHud,
 });
+installSaver(api);
 window.__galaxy = api;
 boot();
