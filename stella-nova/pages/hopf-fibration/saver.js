@@ -18,6 +18,19 @@
 //    trace    a point moves on S2 and its fibre moves with it
 //    villarceau  one torus with one fibre lit, and a push-in on it
 //    clifford the fibres over a great circle near the equator
+//    knots    torus knots: the weights step through coprime pairs, and
+//             the orbits blend on S3 from one knot type to the next
+//    hopftorus  a breathing Hopf torus (flower, seam or two linked tori)
+//             on a spinning base
+//    solid    the fibres over the vertices of an icosahedron or a
+//             dodecahedron, the base tumbling
+//    morph    presets of one group, one after another; the base points
+//             slide from one set to the next
+//    tumble   nested tori on a tumbling base: they open through infinity
+//
+//  Each shot also picks a palette and the light pulses from the seeded
+//  random source. The old shots run with no flow and no breathing, so
+//  their framing stays as authored.
 //
 //  FRAME  The shell plate covers a band at the top and the base. main.js
 //  adds that band (plateBand, lib/saver-clear.js) to its occlusion, so the
@@ -30,14 +43,13 @@
 //  EXIT  enter() keeps a copy of G and the camera; exit() puts them back,
 //  so the user gets their own fibres, sliders and view again.
 //
-//  PLATE  Title and sub per shot, the Hopf map and the fibre as TeX, the
-//  live values (fibres, rotation, linking number), and the shader extract
-//  FIBRE_GLSL from scene.js.
+//  PLATE  Title and sub per shot, the maths of the shot as TeX (shot.tex,
+//  or the Hopf map, the fibre and the rotation), the live values (fibres,
+//  weights, rotation, linking number). No code on the plate.
 //
 //  grep -n targets: "const SHOTS", "function nextShot", "function tick",
 //                   "function plate", "window.snSaver"
 // ============================================================================
-import { FIBRE_GLSL } from './scene.js';
 import { TEX, ROT_TEX, RULES } from './equations.js';
 
 const FADE = 0.6;
@@ -60,7 +72,8 @@ export function installSaver(app) {
       const n = r.int(3, 5), zs = Array.from({ length: n }, (_, i) => 0.84 - 1.25 * i / (n - 1) + r.range(-0.04, 0.04));
       const span = r.next() < 0.6 ? H.TAU * r.range(0.72, 0.82) : H.TAU, ph0 = r.range(0, H.TAU);
       const counts = zs.map((_, k) => Math.round((COARSE() ? 10 : 16) + (COARSE() ? 4 : 7) * k));
-      app.applyPreset('nested'); G.items = zs.map(() => ({ kind: 'cloud', pts: [] })); app.rebuild();
+      // this shot draws its own reveal: no morph or draw-on
+      app.applyPreset('nested', { transition: 'none' }); G.items = zs.map(() => ({ kind: 'cloud', pts: [] })); app.rebuild();
       G.mode = 'along'; G.speed = r.range(0.25, 0.45);
       let shown = -1;
       return {
@@ -155,6 +168,67 @@ export function installSaver(app) {
         cam: cam(r, { el0: r.range(0.5, 0.9), el1: r.range(0.0, 0.3), zoom0: 1.05, zoom1: 0.8 }) };
     },
   };
+  // ---- the new shots
+  const PQ_TOUR = [[2, 3], [3, 2], [2, 5], [3, 4], [1, 1], [3, 5], [2, 3]];
+  Object.assign(SHOTS, {
+    knots(r) {
+      const id = r.pick(['trefoils', 'seifert', 'cinquefoil', 'trefoils']);
+      app.applyPreset(id, { density: COARSE() ? 16 : 24, transition: 'grow' });
+      G.mode = 'along'; G.speed = r.range(0.25, 0.45);
+      // after the draw-on, step to other weights at even times
+      const start = r.int(0, PQ_TOUR.length - 1), seq = [G.pq.slice()];
+      for (let k = 0; k < 3; k++) { const pq = PQ_TOUR[(start + k) % PQ_TOUR.length]; if (pq.join() !== seq[seq.length - 1].join()) seq.push(pq); }
+      let at = 0;
+      return {
+        title: 'Torus knots', sub: 'each orbit of the weighted circle action is a (p, q) torus knot, and two orbits link p·q times',
+        tex: [TEX.seifert, TEX.linkpq], cam: cam(r, { zoom0: 1.05, zoom1: 0.85 }),
+        update(t, dur) {
+          const k = Math.min(seq.length - 1, Math.floor((t / dur) * seq.length * 0.999));
+          if (k > at) { at = k; app.setWeights(seq[k], G.pq); }
+        },
+      };
+    },
+    hopftorus(r) {
+      const id = r.pick(['flower', 'seam', 'twin', 'flower']);
+      app.applyPreset(id, { density: COARSE() ? 16 : 26, transition: 'grow' });
+      G.breathe = true; G.flow = 'spin'; G.flowRate = r.range(0.12, 0.3);
+      G.mode = r.pick(['along', 'still']); G.speed = 0.3;
+      const name = { flower: 'A flower torus', seam: 'A tennis-ball torus', twin: 'Two linked Hopf tori' }[id];
+      return { title: name, sub: 'the fibres over a closed curve on S² fill a flat torus in S³; its area is π times the length of the curve',
+        tex: [TEX.torus, TEX.fibre], pct: 0.85, cam: cam(r, { zoom0: 1.05, zoom1: 0.88 }) };
+    },
+    solid(r) {
+      const id = r.pick(['icosa', 'dodeca']);
+      app.applyPreset(id, { transition: 'grow' });
+      G.flow = 'tumble'; G.flowRate = r.range(0.18, 0.32);
+      G.mode = 'along'; G.speed = 0.3;
+      app.rebuild();
+      const n = app.fibres().length;
+      return { title: id === 'icosa' ? 'An icosahedron of circles' : 'A dodecahedron of circles',
+        sub: `the fibres over the ${n} vertices of a regular solid: ${n * (n - 1) / 2} pairs, each linked once`,
+        tex: [TEX.map, TEX.link], pct: 0.8, fog: 1.6, cam: cam(r, { zoom0: 1.05, zoom1: 0.9 }) };
+    },
+    morph(r) {
+      const groups = { tori: ['flower', 'seam', 'twin', 'necklace'], hopf: ['nested', 'torus', 'meridian', 'random'], links: ['icosa', 'dodeca', 'necklace'] };
+      const g = r.pick(Object.keys(groups)), list = r.shuffle(groups[g].slice());
+      app.applyPreset(list[0], { density: COARSE() ? 16 : 22, seed: r.int(1, 9999), transition: 'grow' });
+      G.mode = 'along'; G.speed = 0.3; G.breathe = r.next() < 0.5;
+      let at = 0;
+      return { title: 'One fibration, many shapes', sub: 'each base point slides on S², and its fibre moves with it: every frame is a true Hopf fibration',
+        tex: [TEX.map, TEX.fibre], pct: 0.85, cam: cam(r, { zoom0: 1.05, zoom1: 0.9 }),
+        update(t, dur) {
+          const k = Math.min(list.length - 1, Math.floor(t / Math.max(2.6, dur / list.length)));
+          if (k > at) { at = k; app.applyPreset(list[k], { transition: 'morph', seed: r.int(1, 9999) }); G.mode = 'along'; }
+        } };
+    },
+    tumble(r) {
+      app.applyPreset(r.pick(['nested', 'torus', 'seifert']), { density: COARSE() ? 14 : 20, transition: 'grow' });
+      G.flow = 'tumble'; G.flowRate = r.range(0.25, 0.45); G.breathe = true;
+      G.mode = 'along'; G.speed = 0.25;
+      return { title: 'Tumbling tori', sub: 'the base sphere turns; a torus whose circle crosses the south pole opens through infinity',
+        tex: [TEX.map, TEX.stereo.split(',\\qquad')[0]], pct: 0.8, fog: 1.8, cam: cam(r, { zoom0: 1.1, zoom1: 0.95 }) };
+    },
+  });
   const COARSE = () => S.coarse;
 
   // A robust centre and size of what is on screen. The centre is the mean
@@ -180,6 +254,10 @@ export function installSaver(app) {
     V.lastKind = kind;
     G.sweep = false; G.sweepRate = 0.35; G.focus = false; G.sel = []; G.tilt = 0; G.pole = 0; G.a = 0; G.discs = true;
     G.stripes = V.rng.next() < 0.7;
+    // the old shots keep their authored framing: no flow, no breathing
+    G.flow = 'off'; G.breathe = false; G.pulse = V.rng.next() < 0.6;
+    G.palette = V.rng.next() < 0.35 ? 'spectrum' : V.rng.pick(H.PALETTES).id;
+    app.applyLook();
     const shot = SHOTS[kind](V.rng);
     G.playing = true; G.orbit = false;
     shot.kind = kind;
@@ -232,17 +310,16 @@ export function installSaver(app) {
     if (!V || !V.label || !V.shot) return;
     const sh = V.shot, lk = app.linking();
     const params = [{ sym: 'N', name: 'fibres', value: String(app.fibres().length) }];
+    if (G.pq[0] !== 1 || G.pq[1] !== 1) params.push({ sym: '(\\mathsf{p},\\mathsf{q})', name: 'weights', value: `(${G.pq[0]}, ${G.pq[1]})` });
     if (G.mode !== 'still') params.push({ sym: 'a', name: H.MODES[G.mode].label.toLowerCase(), value: (G.a % H.TAU).toFixed(2) + ' rad', cls: 'm6' });
     if (sh.kind === 'link' && lk != null) params.push({ sym: '\\mathrm{Lk}', name: 'linking number', value: (lk >= 0 ? '+' : '−') + Math.abs(lk).toFixed(3) });
-    const tex = [TEX.map, TEX.fibre];
-    if (G.mode !== 'still') tex.push(ROT_TEX[G.mode]);
-    else tex.push(TEX.stereo.split(',\\qquad')[0]);
+    const tex = sh.tex ? sh.tex.slice() : [TEX.map, TEX.fibre];
+    if (!sh.tex) tex.push(G.mode !== 'still' ? ROT_TEX[G.mode] : TEX.stereo.split(',\\qquad')[0]);
     try {
       V.label({
         title: sh.title, sub: sh.sub, params, tex, rules: RULES,
         eq: ['p(z₀, z₁) = (2 z₀ z̄₁, |z₀|² − |z₁|²)', '(z₀, z₁) = e^{it} (cos(θ/2) e^{iφ}, sin(θ/2))'],
-        lines: ['Stereographic projection from (0, 0, 0, 1). Colour: hue from longitude, lightness from latitude.'],
-        code: { lang: 'glsl', name: 'scene.js · hopfFibre', text: FIBRE_GLSL.split('\n').slice(0, 10).join('\n') },
+        lines: ['Stereographic projection from (0, 0, 0, 1). Colour (' + (H.PALETTES.find(p => p.id === G.palette) || H.PALETTES[0]).name.toLowerCase() + '): hue from longitude, lightness from latitude.'],
         anchor: () => {
           const { w, h } = app.size(), o = app.occ;
           const cw = w - o.l - o.r, ch = h - o.t - o.b;
@@ -295,8 +372,11 @@ export function installSaver(app) {
       V = null;
       G.focus = false; G.sweepRate = 0.35; G.fogK = 1;
       Object.assign(G, k.G);
+      // the saver's flow, morph and draw-on end with it
+      app.A.R = H.ident3(); app.A.morph = null; app.A.grow = 1;
+      app.setWeights(G.pq, null);
       app.setMode(G.mode); app.setPlaying(G.playing);
-      app.rebuild(); app.syncPresetUI();
+      app.applyLook(); app.syncPresetUI(); app.syncControls();
       S.controls.target.copy(k.tgt); S.camera.position.copy(k.cam); S.controls.update();
     },
     // For checks over CDP: the shot on screen.

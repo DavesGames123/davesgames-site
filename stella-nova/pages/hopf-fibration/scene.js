@@ -47,7 +47,7 @@
 //  160 MB for the scene target. Nothing in this file allocates per frame.
 //
 //  EXPORTS  createScene(canvas, opts) -> api   (grep -n "export function")
-//  FIBRE_GLSL is also the code extract on the saver plate.
+//  FIBRE_GLSL is exported for checks; the saver plate shows TeX, not code.
 //  grep -n targets: "FIBRE_GLSL", "function patchMaterial", "function setFibres",
 //                   "function setDiscs", "function setBand", "BAND_GLSL",
 //                   "function setMorphFrom", "function setBaseRotation",
