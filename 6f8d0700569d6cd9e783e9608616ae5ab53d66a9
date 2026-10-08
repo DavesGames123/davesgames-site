@@ -1,0 +1,1 @@
+Correction to the body: the importer list is empty because of a script error. The file that imports gltf/constants.js at this commit is GLTFLoader.js.
