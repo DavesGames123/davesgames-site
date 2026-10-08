@@ -22,7 +22,7 @@ const angDist = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if
 // strain wave
 {
   const u = UNITS[0];
-  ok(near(wave(u, 1).ratio, 30, 1e-12), 'harmonic: ratio 30');
+  ok(near(wave(u, 1).ratio, 15, 1e-12), 'harmonic: ratio 15');
   ok(wave(u, 1).out < 0, 'harmonic: output turns backward');
   let worst = 0;
   for (let j = 0; j < 3 * u.Nc; j++) {
@@ -72,7 +72,7 @@ const angDist = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if
   ok(worstTouch < 0.02, `cycloidal: the nearest pin touches (worst gap ${worstTouch.toFixed(4)} mm)`);
   ok(minTouching >= 3, `cycloidal: at least ${minTouching} pins touch at once`);
   ok(holeErr < 1e-9, `cycloidal: output pins tangent in their holes (err ${holeErr.toExponential(2)})`);
-  ok(near(cycloPose(u, TAU, 0).rot, -TAU / 11, 1e-12), 'cycloidal: ratio 11, backward');
+  ok(near(cycloPose(u, TAU, 0).rot, -TAU / 9, 1e-12), 'cycloidal: ratio 9, backward');
 }
 console.log(`${n - fail}/${n} passed`);
 process.exit(fail ? 1 : 0);

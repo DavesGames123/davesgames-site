@@ -82,17 +82,17 @@ async function swapTo(id) {
 
 // ── panel content ───────────────────────────────────────────────────────────
 const INFO = {
-  harmonic: { title: 'Strain wave gear', kind: 'Harmonic drive · 30 : 1', lede: 'Three parts and a 30 : 1 reduction. An oval wave generator bends a thin flexspline cup so that its teeth mesh with a rigid ring at two places. The ring has two teeth more, so each input turn walks the flexspline back by two teeth. No backlash, very compact: robot joints and satellite pointing use it.' },
-  cycloidal: { title: 'Cycloidal drive', kind: 'Two discs · 11 : 1', lede: 'An eccentric shaft wobbles a disc with 11 lobes inside a ring of 12 pins. Each input turn the disc rolls round the pins and turns back by one lobe. Pins through oversized holes take the slow turn out to the flange. Many lobes share the load, so it takes shocks well: industrial robot arms use it.' },
+  harmonic: { title: 'Strain wave gear', kind: 'Harmonic drive · 15 : 1', lede: 'Three parts and a 15 : 1 reduction. An oval wave generator bends a thin flexspline cup so that its teeth mesh with a rigid ring at two places. The ring has two teeth more, so each input turn walks the flexspline back by two teeth. No backlash, very compact: robot joints and satellite pointing use it.' },
+  cycloidal: { title: 'Cycloidal drive', kind: 'Two discs · 9 : 1', lede: 'An eccentric shaft wobbles a disc with 9 lobes inside a ring of 10 pins. Each input turn the disc rolls round the pins and turns back by one lobe. Pins through oversized holes take the slow turn out to the flange. Many lobes share the load, so it takes shocks well: industrial robot arms use it.' },
 };
 const ABOUT = {
   harmonic: [
-    ['Two teeth short', 'The flexspline has Nf = 60 teeth, the circular spline Nc = 62. In one input turn the two engaged zones go round once, and the flexspline falls behind by Nc − Nf = 2 teeth: 2/60 of a turn. Ratio Nf / (Nc − Nf) = 30, output turning backward.'],
+    ['Two teeth short', 'The flexspline has Nf = 30 teeth, the circular spline Nc = 32. In one input turn the two engaged zones go round once, and the flexspline falls behind by Nc − Nf = 2 teeth: 2/30 of a turn. Ratio Nf / (Nc − Nf) = 15, output turning backward. Watch the red tooth against the red mark on the ring. The teeth are drawn large so that you can see them: a real unit has 100 to 200.'],
     ['Why no backlash', 'Many teeth are in mesh at the same time near each end of the long axis, preloaded by the bending. There is no gap to cross when the torque reverses.'],
     ['The wave', 'A point of the flexspline at angle φ is pushed out by d cos 2(φ − θ). The page bends the mesh this way every frame; the cup bends less toward its closed end.'],
   ],
   cycloidal: [
-    ['One lobe less', 'With Np pins and Np − 1 lobes, one input turn makes the disc roll back by one lobe: ratio Np − 1 = 11, output turning backward.'],
+    ['One lobe less', 'With Np pins and Np − 1 lobes, one input turn makes the disc roll back by one lobe: ratio Np − 1 = 9, output turning backward. Watch the red lobe pass the red pin.'],
     ['The outline', 'Seen from the disc, each pin centre traces an epitrochoid with Np − 1 lobes. The disc outline is that curve moved in by the pin radius, so every pin touches it or clears it.'],
     ['Two discs', 'One wobbling disc would shake the drive. A second disc on a cam 180° round balances it and shares the load.'],
   ],
@@ -277,12 +277,12 @@ function fillNums() {
 }
 function fillEqs() {
   const E = S.cur.id === 'harmonic' ? [
-    ['Ratio', 'i = N_f / (N_c − N_f) = 60 / 2 = 30', 'output turns backward'],
+    ['Ratio', 'i = N_f / (N_c − N_f) = 30 / 2 = 15', 'output turns backward'],
     ['Strain wave', 'Δr(φ) = d cos 2(φ − θ)', 'two lobes, turning with the input'],
     ['Pitch radii', 'r_c − r_f = m (N_c − N_f) / 2 = d', 'the push closes the gap'],
   ] : [
-    ['Ratio', 'i = N_p − 1 = 11', 'output turns backward'],
-    ['Disc outline', 'pin path in the disc frame, moved in by R_r', 'an epitrochoid with 11 lobes'],
+    ['Ratio', 'i = N_p − 1 = 9', 'output turns backward'],
+    ['Disc outline', 'pin path in the disc frame, moved in by R_r', 'an epitrochoid with 9 lobes'],
     ['Output holes', 'r_hole = r_pin + E', 'pins stay tangent in the holes'],
   ];
   $('eqs').innerHTML = E.map(([hh, eq, sub]) => `<div class="eq"><span>${hh}</span><div>${eq}</div><em>${sub}</em></div>`).join('');
@@ -416,10 +416,10 @@ window.snSaver = {
     const RULES = [['i', 'm1'], ['N_f', 'm2'], ['N_c', 'm3'], ['N_p', 'm3'], ['d', 'm4'], ['E', 'm4']];
     const P = (sym, name, value, cls) => ({ sym, name, value, cls });
     const TEXS = {
-      harmonic: [String.raw`i = \frac{N_f}{N_c - N_f} = \frac{60}{62-60} = 30`, String.raw`\Delta r(\varphi) = d\cos 2(\varphi-\theta)`],
-      cycloidal: [String.raw`i = N_p - 1 = 11`, String.raw`r_{hole} = r_{pin} + E`],
+      harmonic: [String.raw`i = \frac{N_f}{N_c - N_f} = \frac{30}{32-30} = 15`, String.raw`\Delta r(\varphi) = d\cos 2(\varphi-\theta)`],
+      cycloidal: [String.raw`i = N_p - 1 = 9`, String.raw`r_{hole} = r_{pin} + E`],
     };
-    const EQS = { harmonic: ['i = N_f / (N_c − N_f) = 30', 'Δr = d cos 2(φ − θ)'], cycloidal: ['i = N_p − 1 = 11', 'r_hole = r_pin + E'] };
+    const EQS = { harmonic: ['i = N_f / (N_c − N_f) = 15', 'Δr = d cos 2(φ − θ)'], cycloidal: ['i = N_p − 1 = 9', 'r_hole = r_pin + E'] };
     const tex = () => TEXS[S.cur.id], eq = () => EQS[S.cur.id];
     const params = () => [P('i', 'ratio', `${S.Q ? S.Q.ratio : '—'} : 1`, 'm1'), P('\\omega_{in}', 'input', `${S.rpm} rpm`, ''), P('\\omega_{out}', 'output', `${S.Q ? (-S.rpm / S.Q.ratio).toFixed(2) : 0} rpm`, '')];
     const all = () => Object.values(S.cur.B.parts).filter(q => q.info !== 'base').map(q => q.holder);

@@ -9,7 +9,7 @@
 //  cup; the elliptical wave generator (WG, input, angle th) pushes it out
 //  by d at the two ends of the major axis, where its teeth engage the CS.
 //  Each WG turn shifts the FS by Nc - Nf teeth against the CS, backward:
-//      out = -th (Nc - Nf) / Nf           ratio Nf / (Nc - Nf) = 30
+//      out = -th (Nc - Nf) / Nf           ratio Nf / (Nc - Nf) = 15
 //  A point of the FS at its own angle phi sits at world angle phi + out
 //  and radius r + d cos 2 (phi + out - th).
 //  Phase: CS gap k at 2 pi k / Nc, FS tooth k at 2 pi k / Nf (FS frame).
@@ -18,7 +18,7 @@
 //
 //  CYCLOIDAL. Np ring pins (radius Rr) sit fixed on a circle R. The input
 //  eccentric (angle th, throw E) carries a disc with Np - 1 lobes; the pins
-//  make it turn backward:  disc = -th / (Np - 1)        ratio Np - 1 = 11
+//  make it turn backward:  disc = -th / (Np - 1)        ratio Np - 1 = 9
 //  The disc outline is the path of a pin centre seen from the disc (an
 //  epitrochoid), moved in by Rr along its normal. A second disc runs at
 //  th + pi (balance). Output pins on a flange (at disc speed, on the axis)
@@ -34,9 +34,15 @@
 
 export const TAU = Math.PI * 2;
 
+// The numbers are for teaching, not for a real unit. A real strain wave
+// gear has 100 to 200 teeth and a wave of about one module, and a real
+// cycloid disc a throw of a few mm. At those sizes the page showed a
+// smooth ring and no visible motion. Here the teeth are large (module 3,
+// 30 teeth), the wave is 3 mm, and the cycloid has 9 lobes 10 mm deep.
+// The proportions stay true: d = m (Nc - Nf) / 2, and E Np / R = 0.83 < 1.
 export const UNITS = [
-  { id: 'harmonic', name: 'Strain wave', kind: 'Harmonic drive · 30 : 1', m: 1.5, Nf: 60, Nc: 62, d: 1.5 },
-  { id: 'cycloidal', name: 'Cycloidal', kind: 'Two discs · 11 : 1', Np: 12, R: 60, Rr: 5, E: 2.5, nOut: 6, rOut: 32, rp: 5 },
+  { id: 'harmonic', name: 'Strain wave', kind: 'Harmonic drive · 15 : 1', m: 3, Nf: 30, Nc: 32, d: 3 },
+  { id: 'cycloidal', name: 'Cycloidal', kind: 'Two discs · 9 : 1', Np: 10, R: 60, Rr: 6, E: 5, nOut: 6, rOut: 32, rp: 5 },
 ];
 export const unit = id => UNITS.find(u => u.id === id);
 
