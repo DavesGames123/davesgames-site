@@ -6,8 +6,11 @@
 //  LOOK. ACES tone mapping, a studio room baked to a PMREM for reflections
 //  (a warm softbox above, side strips, a cool rim), one key light with a
 //  PCF soft shadow map sized to the tray, a warm fill. The tray is felt
-//  (a canvas fibre texture, bump mapped) in a wood rim (a canvas grain
-//  texture on rounded boxes) on a dark table.
+//  (a canvas fibre texture, bump mapped, with sheen) in a wood rim (a
+//  canvas grain texture on rounded boxes) on a dark table. The grain is
+//  box mapped in cm (grainUV), so it runs along each rail at one scale.
+//  A shade overlay on the felt (feltShade) darkens the felt next to the
+//  rails, as the rails block the light from low angles.
 //
 //  DICE. One mesh per die: buildDie(type).mesh, one material per (type,
 //  finish, style). The numbers are in the face texture (facetex.js), not
@@ -28,6 +31,8 @@
 //    function studioRoom ........ the reflection room
 //    function feltTexture ....... the felt
 //    function woodTexture ....... the rim grain
+//    function grainUV ........... box-mapped UVs in cm along a rail
+//    function feltShade ......... the dark border of the felt
 //    export function createScene  the factory
 //      sc.setTray ............... felt, rim and shadow box for a tray size
 //      sc.dieMaterial ........... one finish of one die type
@@ -89,18 +94,61 @@ function feltTexture(rgb, bump) {
     }
   }, !bump);
 }
+// The grain runs along u. The texture tiles in both directions, so every
+// wave in it has a whole number of periods across the 1024 x 256 canvas.
+// A ring is a thin dark line where the warped row position crosses a
+// whole number. Pores are short dark dashes along the grain.
 function woodTexture() {
-  return canvasTex(1024, 128, (g, w, h) => {
-    const img = g.createImageData(w, h), d = img.data;
+  return canvasTex(1024, 256, (g, w, h) => {
+    const img = g.createImageData(w, h), d = img.data, TAU = Math.PI * 2;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const ring = Math.sin(y * 0.22 + Math.sin(x * 0.006) * 4 + Math.sin(x * 0.031 + y * 0.05) * 0.8) * 0.5 + 0.5;
-      const fine = Math.sin(x * 0.9 + y * 3.1) * 0.03 + (Math.sin(y * 1.7 + x * 0.02) * 0.5 + 0.5) * 0.08;
-      const k = 0.62 + ring * 0.28 + fine;
+      const u = x / w, v = y / h;
+      const warp = 0.9 * Math.sin(TAU * (u * 2 + v)) + 0.45 * Math.sin(TAU * (u * 5 - v * 2) + 1.3) + 0.2 * Math.sin(TAU * (u * 13 + v * 3) + 0.4);
+      const r = v * 9 + warp, f = r - Math.floor(r);
+      const ring = Math.exp(-((f - 0.5) ** 2) / 0.012);
+      const fig = 0.5 + 0.5 * Math.sin(TAU * (v * 23 + u * 3) + warp * 2);
+      const k = 0.92 + 0.08 * fig - 0.22 * ring;
       const i = (y * w + x) * 4;
-      d[i] = 118 * k + 20; d[i + 1] = 70 * k + 8; d[i + 2] = 38 * k + 4; d[i + 3] = 255;
+      d[i] = 150 * k; d[i + 1] = 98 * k; d[i + 2] = 60 * k; d[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
+    let s = 987654321;
+    const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    g.fillStyle = 'rgba(40,22,10,0.35)';
+    for (let i = 0; i < 2600; i++) g.fillRect(rnd() * w, rnd() * h, 3 + rnd() * 9, 1);
   });
+}
+// Box-mapped UVs in cm for a rail long along x (alongX) or z. The faces
+// along the rail take u along its length, so the grain follows the rail.
+// The end faces take the end grain. One texture repeat is 30 x 7.5 cm.
+function grainUV(geo, alongX) {
+  const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+    const L = alongX ? x : z, C = alongX ? z : x, end = alongX ? ax : az, side = alongX ? az : ax;
+    let u, v;
+    if (end >= ay && end >= side) { u = C; v = y; }
+    else if (ay >= side) { u = L; v = C + 3.1; }
+    else { u = L; v = y + 1.7; }
+    uv.setXY(i, u / 30, v / 7.5);
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+// The felt border: black with an alpha that falls off over about 1.4 cm
+// from each rail, a little more in the corners.
+function feltShade(w, d) {
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), img = g.createImageData(N, N), D = img.data;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const ex = Math.min(i + 0.5, N - i - 0.5) / N * w, ez = Math.min(j + 0.5, N - j - 0.5) / N * d;
+    const a = 1 - (1 - 0.5 * Math.exp(-ex / 1.4)) * (1 - 0.5 * Math.exp(-ez / 1.4));
+    const k = (j * N + i) * 4; D[k] = D[k + 1] = D[k + 2] = 0; D[k + 3] = Math.round(255 * a);
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 function causticTexture() {
   const t = canvasTex(256, 256, (g, w, h) => {
@@ -169,10 +217,16 @@ export function createScene({ canvas, coarse = false, onNoGL } = {}) {
   table.rotation.x = -Math.PI / 2; table.position.y = -1.2; table.receiveShadow = true;
   scene.add(table);
 
-  const feltMap = feltTexture([22, 74, 58], false), feltBump = feltTexture(null, true);
-  const feltMat = new THREE.MeshStandardMaterial({ map: feltMap, bumpMap: feltBump, bumpScale: 0.6, roughness: 0.96, metalness: 0, envMapIntensity: 0.35 });
+  // Felt: a deep green with sheen (cloth lights up at grazing angles), so
+  // it is not one flat mint colour under the key light.
+  const feltMap = feltTexture([14, 56, 42], false), feltBump = feltTexture(null, true);
+  const feltMat = new THREE.MeshPhysicalMaterial({ map: feltMap, bumpMap: feltBump, bumpScale: 0.6, roughness: 1, metalness: 0, envMapIntensity: 0.2,
+    sheen: 1, sheenRoughness: 0.75, sheenColor: new THREE.Color(0x4f9a7c) });
+  // Wood: an oiled satin finish. A gloss clearcoat put a hard white line
+  // along the top of each rail.
   const woodMap = woodTexture();
-  const woodMat = new THREE.MeshPhysicalMaterial({ map: woodMap, roughness: 0.42, clearcoat: 0.55, clearcoatRoughness: 0.28, envMapIntensity: 0.8 });
+  const woodMat = new THREE.MeshPhysicalMaterial({ map: woodMap, roughness: 0.55, clearcoat: 0.18, clearcoatRoughness: 0.5, envMapIntensity: 0.6 });
+  const shadeMat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const tray = new THREE.Group(); scene.add(tray);
   let dims = TRAYS.medium;
 
@@ -185,10 +239,15 @@ export function createScene({ canvas, coarse = false, onNoGL } = {}) {
     feltMap.repeat.set(w / 12, d / 12); feltBump.repeat.set(w / 12, d / 12);
     felt.name = 'felt';
     tray.add(felt);
-    const base = new THREE.Mesh(new RoundedBoxGeometry(w + 2 * t + 0.4, 1.2, d + 2 * t + 0.4, 3, 0.5), woodMat);
+    if (shadeMat.map) shadeMat.map.dispose();
+    shadeMat.map = feltShade(w, d); shadeMat.needsUpdate = true;
+    const shade = new THREE.Mesh(new THREE.PlaneGeometry(w, d), shadeMat);
+    shade.rotation.x = -Math.PI / 2; shade.position.y = 0.01; shade.renderOrder = 1; shade.name = 'feltShade';
+    tray.add(shade);
+    const base = new THREE.Mesh(grainUV(new RoundedBoxGeometry(w + 2 * t + 0.4, 1.2, d + 2 * t + 0.4, 3, 0.5), true), woodMat);
     base.position.y = -0.8; base.receiveShadow = true; tray.add(base);
     const rail = (x, z, lx, lz) => {
-      const m = new THREE.Mesh(new RoundedBoxGeometry(lx, H + 0.4, lz, 4, 0.7), woodMat);
+      const m = new THREE.Mesh(grainUV(new RoundedBoxGeometry(lx, H + 0.4, lz, 4, 0.7), lx > lz), woodMat);
       m.position.set(x, H / 2 - 0.2, z); m.castShadow = true; m.receiveShadow = true; tray.add(m);
     };
     rail(-(w / 2 + t / 2), 0, t, d + 2 * t);
