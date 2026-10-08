@@ -181,8 +181,15 @@ export function installSaver(ctxIn) {
       }
       shot.dur = Math.max(shot.dur, 8 + 3 * calm);
     } else if (type === 'plate') {
-      const bx = boxOf(1), land = bx.w >= bx.h * 1.6;
-      const opts = land ? [[2, 3], [2, 4], [3, 3], [2, 2]] : [[3, 2], [4, 2], [2, 2], [3, 3]];
+      // Rows and columns from the band shape: each cell 0.6 to 1.15 as wide
+      // as it is tall, 4 to 9 cells. The shell band at 1280 x 800 is about
+      // 5 times as wide as it is tall, so one row of 5 to 8 cells.
+      const bx = boxOf(1), A = bx.w / bx.h, opts = [];
+      for (let r = 1; r <= 4; r++) for (let c = 2; c <= 9; c++) {
+        const ca = A * r / c;
+        if (r * c >= 4 && r * c <= 9 && ca >= 0.6 && ca <= 1.15) opts.push([r, c]);
+      }
+      if (!opts.length) opts.push(A >= 1 ? [1, Math.max(4, Math.min(9, Math.round(A)))] : [Math.max(2, Math.min(4, Math.round(1 / A) + 1)), 2]);
       const [rows, cols] = opts[Math.floor(R() * opts.length)];
       shot.rows = rows; shot.cols = cols; shot.dur += 2;
       shot.same = R() < 0.4 ? V.formBag() : null;
@@ -197,7 +204,9 @@ export function installSaver(ctxIn) {
       shot.form = form; shot.seed = seed; shot.style = 'pen';
       job(formParams(form, seed), seed);
       shot.dur = Math.max(shot.dur, 9 + 2 * calm);
-      shot.theme = V.rnd() < 0.5 ? 'rice' : shot.theme;
+      // A new paper needs an ink picked for it: a pale ink on rice paper
+      // was nearly invisible.
+      if (V.rnd() < 0.5 && shot.theme !== 'rice') { shot.theme = 'rice'; delete shot.ink; delete shot.inkName; styleOf(shot); }
     }
     const timeout = new Promise(res => setTimeout(() => res(null), 25000));
     Promise.race([Promise.all(jobs), timeout]).then(specs => {
