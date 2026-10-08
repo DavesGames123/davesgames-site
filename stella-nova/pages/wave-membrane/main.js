@@ -171,12 +171,18 @@
     uLineMode: { value: 0 }, uBands: { value: 10 }, uLinePx: { value: 1.6 },
     uNodePx: { value: 2.4 }, uNodeCol: { value: new THREE.Color(1, 1, 0.75) },
   };
+  // fwidth is core in WebGL2. A WebGL1 context needs OES_standard_derivatives,
+  // and three r128 leaves out the #extension line when the GPU does not have
+  // it, so the shader would not compile and the membrane would go blank on
+  // the page too. Without derivatives the saver draws no lines.
+  const HAS_DERIV = renderer.capabilities.isWebGL2 || renderer.extensions.has('OES_standard_derivatives');
   memMat.extensions = { derivatives: true };
   memMat.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, lineU);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aVal;\nvarying float vVal;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vVal = aVal;');
+    if (!HAS_DERIV) return;
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vVal;\nuniform float uLineMode, uBands, uLinePx, uNodePx;\nuniform vec3 uNodeCol;')
       .replace('#include <color_fragment>', `#include <color_fragment>
