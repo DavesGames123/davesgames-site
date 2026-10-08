@@ -293,13 +293,13 @@ function centre(m) {
 const CP2 = m => `[CH-]1C=CC=C1.[CH-]1C=CC=C1.[${m}+2]`;
 const CO5 = '[C-]#[O+].'.repeat(5) + '[Fe]';
 const HAND = {
-  783: { s: '[H][H]', geo: 'h2', lay2: 'h2', note: '3D: H-H 0.741 Å.' },
+  783: { s: '[H][H]', geo: 'h2', lay2: 'h2', note: '3D: H–H 0.741 Å.' },
   10219726: { s: CP2('Fe'), geo: 'sandwich', mc: 2.064, cc: 1.440, lay2: 'sandwich', iu: 'bis(η5-cyclopentadienyl)iron',
     note: 'Drawn in the ionic form: Fe2+ between two cyclopentadienide (C5H5−) rings. Each ring bonds through all five carbons (η5), shown as five dashed Fe–C bonds; the 2D rings are drawn in perspective, and the charge drawn on one carbon is spread over the ring. 3D: eclipsed rings from gas electron diffraction (Fe–C 2.064 Å, C–C 1.440 Å).' },
   11020720: { s: CP2('Ru'), geo: 'sandwich', mc: 2.20, cc: 1.43, lay2: 'sandwich', iu: 'bis(η5-cyclopentadienyl)ruthenium',
     note: 'Drawn in the ionic form: Ru2+ between two cyclopentadienide (C5H5−) rings. Each ring bonds through all five carbons (η5), shown as five dashed Ru–C bonds; the 2D rings are drawn in perspective, and the charge drawn on one carbon is spread over the ring. 3D: eclipsed rings, as in the crystal; Ru–C 2.20 Å, C–C 1.43 Å.' },
   26040: { s: CO5, geo: 'tbp', mc: 1.81, co: 1.15, lay2: 'tbp', iu: 'pentacarbonyliron',
-    note: 'Each CO binds iron through carbon, drawn as a dashed Fe–C bond with the carbon monoxide as C≡O (formal charges C− and O+). 3D: trigonal bipyramid, Fe–C 1.81 Å, C–O 1.15 Å (gas electron diffraction).' },
+    note: 'Each CO binds iron through carbon, drawn as a dashed Fe–C bond with the carbon monoxide as C≡O (formal charges C− and O+). 3D: trigonal bipyramid, mean Fe–C 1.81 Å, C–O 1.15 Å (gas electron diffraction).' },
   53627823: { s: 'CCCC[Li]', iu: 'butyllithium',
     note: 'Drawn and built as one C–Li molecule; the real reagent is a cluster of these units (a hexamer in hexane, a tetramer in ether).' },
   101667988: { s: 'CC[Zn]CC', iu: 'diethylzinc', note: '3D: built with a linear C–Zn–C axis.' },

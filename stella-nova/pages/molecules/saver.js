@@ -143,7 +143,10 @@ export function installSaver(api) {
           while (findGroups(model(rec)).length < 2 && tries++ < 6) rec = nextMol();
           return { rec, style: 'ball', title: 'Functional groups', groups: true };
         },
-        metal: () => ({ rec: metals[run.ki++ % metals.length], style: 'ball', title: 'Metal complex', side: true }),
+        // a sandwich reads from the side, just above the ring plane; a
+        // tetrahedron or an octahedron seen that low lines up its atoms on
+        // the 2D cross and reads as square planar, so it starts higher
+        metal: () => { const rec = metals[run.ki++ % metals.length]; return { rec, style: 'ball', title: 'Metal complex', elev: /ocene$/.test(rec.id) ? 0.12 : 0.55 }; },
         family: () => {
           const [cat, name] = FAMILIES[Math.floor(rnd() * FAMILIES.length)];
           const pool = shuffle(LIB.recs.filter(r => r.c === cat && r.p3 && model(r).n >= 5 && model(r).n <= 45));
@@ -159,7 +162,7 @@ export function installSaver(api) {
         else { v.setMorph(1); v.setInk(0); v.setReveal(null); v.setSpin(true); }
         frameRect(true); v.fit(true);
         if (s.draw) { s.rk = run.rectKey; s.d0 = drawDist(); s.d1 = fitDist(); setDist(s.d0); }
-        else tilt(s.side ? 0.12 : null);
+        else tilt(s.elev ?? null);
       };
       // a start view from a random side, a little above the plane
       const tilt = elev => {
@@ -235,7 +238,7 @@ export function installSaver(api) {
         if (s.kind === 'family') lines.push(`${s.famName}: ${s.fam.map(r => r.n).join(', ')}`);
         label({
           title: rec.n,
-          sub: `${s.title} · ${CAT_NAME[rec.c] || ''}`,
+          sub: [s.title, CAT_NAME[rec.c]].filter((t, i, a) => t && a.indexOf(t) === i).join(' · '),
           params, lines,
           eq: [uniFormula(rec.f) + ' · ' + (+rec.w).toFixed(2) + ' g/mol'],
           code: s.draw ? { lang: 'js', name: 'draw2d.js · drawOrder, the order the bonds are drawn', text: CODE }

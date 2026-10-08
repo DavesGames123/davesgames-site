@@ -67,11 +67,15 @@ const VDW = { H: 1.20, He: 1.40, Li: 1.82, Be: 1.53, B: 1.92, C: 1.70, N: 1.55, 
   Si: 2.10, P: 1.80, S: 1.80, Cl: 1.75, Ar: 1.88, K: 2.75, Ca: 2.31, Se: 1.90, Br: 1.85, Kr: 2.02, I: 1.98, Xe: 2.16, As: 1.85,
   Fe: 2.04, Co: 2.00, Ni: 1.97, Cu: 1.96, Zn: 2.01, Pt: 2.13, Pd: 2.10, Hg: 2.23, Pb: 2.02, Sn: 2.17, Cr: 2.06, Ti: 2.11, Ru: 2.13 };
 
-// Standard atomic weights at full precision, as PubChem uses them. For an
+// Standard atomic weights at full precision: the table that fits the
+// PubChem masses best. It is not the table that PubChem uses. For an
 // element that IUPAC changed to an interval in 2009-2011 (H, Li, B, C, N,
-// O, Si, S, Cl, Tl), PubChem keeps the last single value, from the 2007
-// table (Wieser and Berglund 2009). For Se (78.971) and Mo (95.95) it uses
-// the IUPAC 2013 value: the Se8 and Mo(CO)6 records need them. With this
+// O, Si, S, Cl, Tl), it keeps the last single value, from the 2007 table
+// (Wieser and Berglund 2009). For Se (78.971) and Mo (95.95) it uses the
+// IUPAC 2013 value: the Se8 and Mo(CO)6 records need them. A review found
+// that the rounded sum agrees with 506 of 546 C/H/N/O/S/Cl/I/Se records
+// (CS2: 76.1407 against PubChem 76.15). Small molecules that PubChem
+// prints to 3 decimals can differ by about 0.0005. With this
 // table, the sum for each of the 749 PubChem records of the build cache
 // with a 2-decimal mass and no isotope label is within 0.0093 g/mol of
 // PubChem. The 5-figure conventional values (C 12.011, H 1.008, S 32.07,
