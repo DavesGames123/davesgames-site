@@ -37,7 +37,7 @@
 //                                  in cells. sx, sy: the circular standard
 //                                  deviation of A about it, in cells.
 //   engine.readState()             Promise<Float32Array(W * H)>
-//   engine.setView({mode, palette, zoom, cx, cy, ox, oy, blend})
+//   engine.setView({mode, palette, zoom, cx, cy, ox, oy, blend, cubicMin})
 //                                  mode 'world' | 'potential' | 'growth';
 //                                  palette: 256 x rgb Float32Array or a name
 //                                  from PALETTES; zoom: screen px per cell as
@@ -46,7 +46,10 @@
 //                                  view center minus the canvas center, in
 //                                  CSS px (a sheet over part of the canvas);
 //                                  blend 0..1: render mix of the state one
-//                                  step back (0) and the current state (1)
+//                                  step back (0) and the current state (1);
+//                                  cubicMin: device px per cell under which
+//                                  the render takes the bilinear sample
+//                                  (default 3; budget.js)
 //   engine.cellPx()                screen px per cell (CSS px)
 //   engine.resize(pixelW, pixelH, dpr)
 //   engine.render()
@@ -275,6 +278,7 @@ struct View {
   canvas: vec2f, center: vec2f,
   world: vec2f, cellPx: f32, mode: u32,
   m: f32, blend: f32, offset: vec2f,
+  cubicMin: f32,
 }
 @group(0) @binding(0) var<uniform> v: View;
 @group(0) @binding(1) var<storage, read> world: array<f32>;
@@ -302,8 +306,9 @@ fn cellValue(k: u32) -> f32 {
 
 fn wrapi(a: i32, n: i32) -> i32 { return ((a % n) + n) % n; }
 
-// Bilinear over 2 x 2 cells: used when a cell is under 3 device px, where
-// the cubic adds nothing that the eye can see but costs 4x the reads.
+// Bilinear over 2 x 2 cells: used when a cell is under v.cubicMin device
+// px (3 on a desktop, 6 on a phone: budget.js), where the cubic adds
+// nothing that the eye can see but costs 4x the reads.
 fn sampleLin(p: vec2f) -> f32 {
   let W = i32(v.world.x);
   let H = i32(v.world.y);
@@ -332,7 +337,7 @@ fn crw(t: f32) -> vec4f {
 // cubic is smooth across cells and keeps edges sharp. It can overshoot
 // 0..1 a little; fs() clamps it.
 fn sampleAt(p: vec2f) -> f32 {
-  if (v.cellPx < 3.0) { return sampleLin(p); }
+  if (v.cellPx < v.cubicMin) { return sampleLin(p); }
   let W = i32(v.world.x);
   let H = i32(v.world.y);
   let q = p - 0.5;
@@ -431,7 +436,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
 
   const ruleBuf = buf(32, GPUBufferUsage.UNIFORM | CD, 'rule');
   const stampBuf = buf(32, GPUBufferUsage.UNIFORM | CD, 'stamp');
-  const viewBuf = buf(48, GPUBufferUsage.UNIFORM | CD, 'view');
+  const viewBuf = buf(64, GPUBufferUsage.UNIFORM | CD, 'view');
   const palBuf = buf(256 * 16, SU | CD, 'palette');
   const partBuf = buf(REDUCE_GROUPS * 32, SU | CS, 'partials');
   const readBuf = buf(REDUCE_GROUPS * 32, GPUBufferUsage.MAP_READ | CD, 'partials-read');
@@ -441,7 +446,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   let reading = false;
 
   const rule = { R: 13, T: 10, m: 0.15, s: 0.015, b: [1], kn: 1, gn: 1 };
-  const view = { mode: 'world', zoom: 1, cx: 0, cy: 0, ox: 0, oy: 0, blend: 1 };
+  const view = { mode: 'world', zoom: 1, cx: 0, cy: 0, ox: 0, oy: 0, blend: 1, cubicMin: 3 };
   let px = { w: 1, h: 1, dpr: 1 };
   engine.view = view;
 
@@ -631,7 +636,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   };
 
   engine.setView = o => {
-    for (const k of ['mode', 'zoom', 'cx', 'cy', 'ox', 'oy', 'blend']) if (o[k] !== undefined && o[k] !== null) view[k] = o[k];
+    for (const k of ['mode', 'zoom', 'cx', 'cy', 'ox', 'oy', 'blend', 'cubicMin']) if (o[k] !== undefined && o[k] !== null) view[k] = o[k];
     if (o.palette) device.queue.writeBuffer(palBuf, 0, typeof o.palette === 'string' ? paletteData(o.palette) : o.palette);
   };
   engine.setView({ palette: 'lenia' });
@@ -649,11 +654,11 @@ export async function createEngine(canvas, { mobile = false } = {}) {
 
   engine.render = () => {
     if (!context || !A[0] || info.lost) return;
-    const d = new ArrayBuffer(48), f = new Float32Array(d), u = new Uint32Array(d);
+    const d = new ArrayBuffer(64), f = new Float32Array(d), u = new Uint32Array(d);
     f[0] = px.w; f[1] = px.h; f[2] = view.cx; f[3] = view.cy;
     f[4] = info.W; f[5] = info.H; f[6] = engine.cellPx() * px.dpr;
     u[7] = view.mode === 'potential' ? 1 : view.mode === 'growth' ? 2 : 0;
-    f[8] = rule.m; f[9] = Math.max(0, Math.min(1, view.blend)); f[10] = view.ox * px.dpr; f[11] = view.oy * px.dpr;
+    f[8] = rule.m; f[9] = Math.max(0, Math.min(1, view.blend)); f[10] = view.ox * px.dpr; f[11] = view.oy * px.dpr; f[12] = view.cubicMin;
     device.queue.writeBuffer(viewBuf, 0, d);
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({

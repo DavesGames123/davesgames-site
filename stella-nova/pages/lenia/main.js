@@ -35,6 +35,7 @@
      grep -n 'function buildBrowser'    the grouped, searchable catalog
      grep -n 'function drawThumb'       catalog thumbnails
      grep -n 'function sizeWorld'       world size from the canvas aspect
+     grep -n 'function observeSize'     canvas px ratio (budget.js renderBudget)
      grep -n 'function frame'           the render loop and follow camera
      grep -n 'function bindPointer'     tools, zoom and pan
      grep -n 'function bindKeys'        keyboard shortcuts
@@ -43,6 +44,7 @@
    ========================================================================== */
 import { createEngine, kernelShell, GROWTH, resample, PALETTES, paletteData } from './engine.js';
 import { typeset } from '../../lib/sci-math.js';
+import { renderBudget } from './budget.js';
 
 const $ = id => document.getElementById(id);
 // The phone layout. This query matches the PHONE block in style.css.
@@ -685,12 +687,14 @@ function observeSize() {
   const cv = $('gl');
   let sizeT = 0;
   const apply = () => {
-    // The bicubic cells (engine.js sampleAt) have detail below one cell, so
-    // the screensaver also draws at the device ratio (up to 2). Each frame is
-    // copied into #saver-cv, so the canvas keeps to 8.3 M px (a 4K frame).
+    // The pixel ratio and the bicubic start come from budget.js: a desktop
+    // saver draws at the device ratio up to 2 (8.3 M px at most), a phone
+    // saver at 1.5 (1.2 M px at most), and a phone takes the bilinear path
+    // for cells under 6 device px.
     const cw = Math.max(1, cv.clientWidth), ch = Math.max(1, cv.clientHeight);
-    const dpr = Math.min(devicePixelRatio || 1, 2, S.saver ? Math.max(1, Math.sqrt(8.3e6 / (cw * ch))) : 2);
-    S.engine.resize(Math.round(cw * dpr), Math.round(ch * dpr), dpr);
+    const b = renderBudget({ dpr: devicePixelRatio || 1, cssW: cw, cssH: ch, saver: !!S.saver, phone: PHONE_Q.matches || !FINE_Q.matches });
+    S.engine.setView({ cubicMin: b.cubicMin });
+    S.engine.resize(Math.round(cw * b.dpr), Math.round(ch * b.dpr), b.dpr);
   };
   new ResizeObserver(() => {
     apply();
