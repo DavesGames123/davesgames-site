@@ -126,6 +126,9 @@ w.SN_NAV = [
     ] },
     { h: "Deep Time", p: [
       ["ancient-earth", "Ancient Earth", "3D"]
+    ] },
+    { h: "Epidemiology", p: [
+      ["outbreak", "Outbreak", "SIM"]
     ] }
   ] },
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
