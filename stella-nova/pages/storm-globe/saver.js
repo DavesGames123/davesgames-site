@@ -33,8 +33,8 @@
 //    event   a NASA EONET event (a volcano, a fire, a flood, ...)
 //  With no active storms the list is lows, wind maxima and events.
 //  The globe is framed in the clear band of the label plate (plateBand).
-//  The plate names the subject with its numbers and the data time, and
-//  shows a real extract of shaders/solver.wgsl (advection or Coriolis).
+//  The plate names the subject with its numbers and the data time. It
+//  shows no code: the user wants the storms alone on the plate.
 //
 //  snSaver.debug() returns the director state for CDP checks;
 //  snSaver.cut(kind) starts the next shot of that kind (CDP probes).
@@ -49,19 +49,6 @@ import { KT } from './sources.js';
 // clear band; NEAR_DEG: a flight joins two shots closer than this
 const SHOT_KM = { eye: 1000, track: 1600, low: 1700, event: 1100, vort: 2400 };
 const NEAR_DEG = 100;
-
-// fallback extracts (the real source replaces them at load, see EXTRACTS)
-const CODE = {
-  advect: { name: 'solver.wgsl · advection along great circles', start: 'fn back(', end: 'fn transport(' },
-  coriolis: { name: 'solver.wgsl · absolute vorticity, Coriolis', start: '  // absolute vorticity at the corner', end: '// ── corner vorticity' },
-};
-const EXTRACTS = {};
-fetch(new URL('shaders/solver.wgsl', import.meta.url)).then(r => r.text()).then(t => {
-  for (const [k, c] of Object.entries(CODE)) {
-    const i = t.indexOf(c.start), j = t.indexOf(c.end, i + 1);
-    if (i >= 0 && j > i) EXTRACTS[k] = { lang: 'wgsl', name: c.name, text: t.slice(i, j).replace(/\n{2,}/g, '\n').trim().split('\n').slice(0, 12).join('\n') };
-  }
-}).catch(() => {});
 
 export function installSaver(SG) {
   const ST = SG.ST, CAM = SG.CAM, TL = SG.TL;
@@ -93,7 +80,7 @@ export function installSaver(SG) {
       if (!storms.length) KINDS.push({ kind: 'vort', o: null });
       shuffle(KINDS);
       const hold = () => (9 + 5 * calm + rnd() * 3) * 1000;
-      run = { KINDS, i: -1, shot: null, t0: 0, fading: 0, fadeT0: 0, next: null, saved, label, calm, band: null, bandAt: -1e9, code: rnd() < 0.5 ? 'advect' : 'coriolis', shots: 0 };
+      run = { KINDS, i: -1, shot: null, t0: 0, fading: 0, fadeT0: 0, next: null, saved, label, calm, band: null, bandAt: -1e9, shots: 0 };
 
       const frameBand = () => {
         const now = performance.now();
@@ -165,7 +152,6 @@ export function installSaver(SG) {
       };
       const begin = (s, viaFlight) => {
         run.shot = s; run.t0 = performance.now(); run.shots++; run.fol = null; run.bandFresh = false;
-        if (run.shots > 1) run.code = run.code === 'advect' ? 'coriolis' : 'advect';
         ST.field = s.field; SG.buildLegend();
         ST.speed = s.speed;
         // track: its own start; the others: near data time (eye shots up to
@@ -243,14 +229,10 @@ export function installSaver(SG) {
           title: s.title,
           sub: TL.fmtTime(ST.t) + (ST.t > ST.dataTime + 60e3 ? ' · forecast' : ' · observed'),
           params, lines,
-          code: EXTRACTS[run.code] || null,
           anchor: () => { const v = ST.viewOverride; return v ? { x: (v.l + v.r) / 2, y: (v.t + v.b) / 2, r: (v.b - v.t) * 0.35 } : null; },
         });
       };
       run.plateTimer = setInterval(plate, 1000);
-      // the code extract changes with the shot (begin), not on a timer: a
-      // taller extract mid-shot grew the plate over the subject
-      run.codeTimer = 0;
       ST.fade = 0;
       next();
       if (!run.shot && run.next) { begin(run.next, false); run.next = null; run.fading = 2; run.fadeT0 = performance.now(); }
@@ -268,13 +250,12 @@ export function installSaver(SG) {
         cam: { lat: +ST.cam.lat.toFixed(2), lon: +ST.cam.lon.toFixed(2), alt: +ST.cam.alt.toFixed(3), tilt: +ST.cam.tilt.toFixed(1), heading: +ST.cam.heading.toFixed(1) },
         kinds: [...new Set(run.KINDS.map(k => k.kind))],
         flying: !!ST.fly, fade: +ST.fade.toFixed(2), field: ST.field, t: new Date(ST.t).toISOString(), band: ST.viewOverride,
-        code: (EXTRACTS[run.code] || {}).name || null,
       };
       return { canvas: SG.canvas(), warmupMs: 1200 };
     },
     exit() {
       if (!run) return;
-      clearInterval(run.plateTimer); clearInterval(run.codeTimer);
+      clearInterval(run.plateTimer);
       const s = run.saved;
       document.documentElement.classList.remove('sn-saver');
       ST.saver = false; ST.viewOverride = null; ST.fade = 1; ST.fly = null;
