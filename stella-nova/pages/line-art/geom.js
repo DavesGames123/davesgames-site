@@ -22,6 +22,7 @@
 //    grep -n 'function orderPaths'   sort a sheet and set the pen costs
 //    grep -n 'function viewFit'      fovy and lens shift for a frame
 //    grep -n 'function clampPan'     keep the image over the whole view
+//    grep -n 'function viewDpr'      the pixel ratio of the five view canvases
 // ============================================================================
 
 export const TRAVEL_SPEEDUP = 6;    // pen-up moves are this much faster
@@ -96,3 +97,17 @@ export function hexA(hex, a) {
   const n = parseInt(String(hex).slice(1, 7), 16);
   return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
 }
+
+// PHONE PROFILE. The plotter keeps five canvases at the window size (view,
+// paper, ink, glow mask, soft glow): 20 bytes per device px. viewDpr caps
+// the ratio at 2, and on a touch screen also caps the device px at
+// PHONE_MAX_PX, so a touch tablet does not hold 110 MB of canvas. A touch
+// screen also makes the soft glow again at most every PHONE_GLOW_MS while
+// the pen moves (the canvas shadow blur covers the whole window).
+export const PHONE_MAX_PX = 2.2e6, PHONE_GLOW_MS = 250, GLOW_MS = 120;
+export function viewDpr(cssW, cssH, dpr, coarse) {
+  let r = Math.min(2, dpr || 1);
+  if (coarse) r = Math.min(r, Math.sqrt(PHONE_MAX_PX / Math.max(1, cssW * cssH)));
+  return Math.max(0.5, Math.floor(r * 1000) / 1000);
+}
+export const glowMs = coarse => (coarse ? PHONE_GLOW_MS : GLOW_MS);

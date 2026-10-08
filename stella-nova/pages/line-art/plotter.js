@@ -19,7 +19,8 @@
 //    glow   (themes with glow: an opaque mask of the strokes, so crossing
 //            lines do not add up)
 //    soft   (the glow mask blurred with a canvas shadow, at device pixels;
-//            made again at most every GLOW_MS while the pen moves)
+//            made again at most every this.glowMs while the pen moves:
+//            geom.js glowMs, 120 ms, or 250 ms on a touch screen)
 //    ink    (the strokes; new ink is added each frame)
 //  frame() puts paper, soft (at GLOW_ALPHA), ink and the pen head on the
 //  view canvas. Zoom and pan never scale a raster: they change the
@@ -37,10 +38,9 @@
 //    grep -n 'exportPNG'             a large still of the sheet
 // ============================================================================
 
-import { TRAVEL_SPEEDUP, DOT_COST, orderPaths, clampPan, hexA } from './geom.js';
+import { TRAVEL_SPEEDUP, DOT_COST, orderPaths, clampPan, hexA, GLOW_MS } from './geom.js';
 
 const JITTER_STEP = 5;       // jitter subdivision, image units
-const GLOW_MS = 120;         // the soft glow is made again at most this often while plotting
 const GLOW_BLUR = 7;         // the glow blur, CSS px (canvas shadowBlur)
 const GLOW_ALPHA = 0.5;      // the strength of the soft glow on the view
 
@@ -90,6 +90,7 @@ export class Plotter {
     this.gx = this.glow.getContext('2d');
     this.sx = this.soft.getContext('2d');
     this.glowDirty = false; this.glowAt = 0;
+    this.glowMs = GLOW_MS;   // the soft glow is made again at most this often while plotting (geom.js glowMs)
     this.dpr = 1; this.cw = 0; this.ch = 0;
     this.frameRect = { x: 0, y: 0, w: 100, h: 100 };
     this.zoom = 1; this.panX = 0; this.panY = 0;
@@ -424,7 +425,7 @@ export class Plotter {
       this.strokeSpan(this.pen.i, this.sheet.paths.length, 0);
       this.pen.i = this.sheet.paths.length; this.dirty = true; this.glowDirty = true;
     }
-    if (this.theme.glow && this.glowDirty && (!moving || now - this.glowAt >= GLOW_MS)) {
+    if (this.theme.glow && this.glowDirty && (!moving || now - this.glowAt >= this.glowMs)) {
       this.softGlow(this.sx, this.glow, this.cw, this.ch, GLOW_BLUR * this.dpr, this.theme.glow);
       this.glowDirty = false; this.glowAt = now; this.dirty = true;
     }

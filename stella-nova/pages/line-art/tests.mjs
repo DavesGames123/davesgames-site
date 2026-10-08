@@ -11,11 +11,13 @@
 //     depth per path; a scene with a near and a far object sorts near
 //     first; the lens shift moves the subject with the frame; every point
 //     is in the whole image and lines go past the frame.
+//  4. geom.js viewDpr and glowMs: the phone profile keeps the five view
+//     canvases of a touch screen under PHONE_MAX_PX device px each.
 //  No browser runs here (the user does not allow headless browsers).
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { depthOrder, orderPaths, viewFit, clampPan, TRAVEL_SPEEDUP, DOT_COST, MAX_FOVY } from './geom.js';
+import { depthOrder, orderPaths, viewFit, clampPan, TRAVEL_SPEEDUP, DOT_COST, MAX_FOVY, viewDpr, glowMs, PHONE_MAX_PX } from './geom.js';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 let fails = 0, passes = 0;
@@ -183,6 +185,20 @@ for (const key of ['example0', 'skyscrapers', 'city', 'stairs']) {
     const r = renderAll('graph', 900, 600, null);
     ok(r.depthOk && r.paths.length > 0, 'graph: depths for the scene and the overlay');
   }
+}
+
+// ── 4. phone profile ─────────────────────────────────────────────────────
+{
+  const rows = [];
+  for (const [w, h, d] of [[360, 640, 3], [390, 844, 3], [844, 390, 3], [1024, 1366, 2], [1366, 1024, 2]]) {
+    const r = viewDpr(w, h, d, true), px = Math.round(w * r) * Math.round(h * r);
+    ok(px <= PHONE_MAX_PX * 1.002 && r <= 2, `phone view ${w}x${h}@${d}`, `${px} px`);
+    rows.push(`${w}x${h}@${d}: ratio ${r}, ${(5 * 4 * px / 1e6).toFixed(0)} MB`);
+  }
+  console.log('  phone canvases (5 x 4 B/px): ' + rows.join(' · '));
+  ok(viewDpr(390, 844, 3, true) === 2, 'a phone keeps ratio 2');
+  ok(viewDpr(1440, 900, 2, false) === 2 && viewDpr(2560, 1440, 3, false) === 2, 'a desktop keeps min(2, dpr)');
+  ok(glowMs(true) > glowMs(false) && glowMs(false) === 120, 'touch screens make the glow less often', `${glowMs(true)} / ${glowMs(false)} ms`);
 }
 
 console.log(`${passes} passed, ${fails} failed`);

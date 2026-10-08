@@ -135,7 +135,9 @@ html[data-ui=dark] .code .cm{color:#77808e} html[data-ui=dark] .code .st{color:#
   .prm{margin:4px 0 6px}
   .prm .nm{font-size:0.86rem}
   .prm .val{font-size:0.8rem}
-  .themes button{min-height:56px}
+  .themes button{min-height:56px;font-size:0.76rem}
+  .sec-label .mini{min-height:44px}
+  .card span{font-size:0.76rem}
   .hint{font-size:0.76rem}
   .about p{font-size:0.84rem;line-height:1.65}
   #tools button{width:46px;height:46px}
@@ -157,7 +159,7 @@ html[data-ui=dark] .code .cm{color:#77808e} html[data-ui=dark] .code .st{color:#
   #gear,body.panel-closed #gear{display:none}
   #hud{right:12px;top:calc(var(--top) + 6px)}
   #hudTitle{font-size:0.95rem}
-  #hudStats{font-size:0.64rem;white-space:normal;max-width:62vw;margin-left:auto}
+  #hudStats{font-size:0.74rem;white-space:normal;max-width:62vw;margin-left:auto}
   #tools{display:none}
   #gallery{position:static;margin:0 -18px 6px}
   #gallery .cards{border-radius:0;border-left:0;border-right:0;background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;padding:4px 14px 8px}

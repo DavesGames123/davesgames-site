@@ -41,10 +41,13 @@
 // ============================================================================
 import { Plotter, drawThumb } from './plotter.js';
 import { THEMES, themeByKey } from './themes.js';
+import { viewDpr, glowMs } from './geom.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const LAND_Q = matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)');
+// A touch screen gets the phone profile of geom.js: viewDpr and glowMs.
+const COARSE = matchMedia('(pointer:coarse)').matches;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'k' : Math.round(n).toLocaleString('en-US');
@@ -53,6 +56,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem('line-art:' + k
 
 const view = $('view'), panel = $('panel');
 const plot = new Plotter(view);
+plot.glowMs = glowMs(COARSE);
 
 const S = {
   cat: [], byKey: new Map(), key: null, params: {}, orbit: { az: 0, el: 0 },
@@ -132,7 +136,7 @@ function layout() {
   document.documentElement.style.setProperty('--gal-h', (!phone && !S.saver ? $('gallery').offsetHeight + 12 : 0) + 'px');
   const m = phone ? 10 : 22, mx = S.saver ? 0 : m, my = S.saver ? 10 : m;
   const fr = { x: L + mx, y: T + my, w: Math.max(80, R - L - 2 * mx), h: Math.max(80, B - T - 2 * my) };
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = viewDpr(w, h, window.devicePixelRatio, COARSE);
   plot.resize(w, h, dpr);
   plot.setFrame(fr);
   const o = S.frame, moved = (a, b) => Math.abs(a - b) > 2;
