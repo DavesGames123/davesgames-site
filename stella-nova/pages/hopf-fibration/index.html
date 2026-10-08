@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Hopf Fibration — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HOPF FIBRATION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The page shows the Hopf fibration S3 -> S2: the
+   3-sphere as a union of great circles, one circle (a fibre) over each
+   point of the 2-sphere. A stereographic projection from S3 to R3 makes
+   each fibre a round circle, or a line through infinity. The user picks
+   points, circles and curves on the base sphere S2, and the fibres over
+   them show in 3D in the colour of their base point. A 4D rotation of S3
+   moves the fibres, and they pass through infinity.
+
+   HEAD LOAD ORDER
+     1. gpu-guard, wishlist, stats-beacon (shared, in this order)
+     2. importmap   "three" -> ../../vendor/three@0.160.0 (as atomic-orbital-vr)
+     3. style.css, then ../../lib/sci.css (STIX Two Text, Inter, .m1-.m6)
+   Scripts at end of body: main.js (module).
+
+   FILES
+     hopf.js       the geometry: Hopf map, fibres, projection, 4D rotations,
+                   colours, presets, linking number (no DOM, node-tested)
+     scene.js      three.js: the instanced tube mesh and its vertex shader,
+                   discs, lights, bloom (FIBRE_GLSL)
+     insets.js     the base sphere S2 and the 4D gauge (2D canvases)
+     equations.js  the TeX and its colour rules (lib/sci-math.js)
+     main.js       state, controls, picking, framing, the frame loop
+     saver.js      the screensaver tour (window.snSaver)
+     tests.mjs     node tests for hopf.js
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left. #view (WebGL canvas) fills the window.
+                 #hero (title, map) at the top left of the clear part,
+                 #readout at the top right, #insets at the base right:
+                 #baseFig (the S2 picker and its tools) and #gaugeFig
+                 (the 4D rotation as a turning tesseract).
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: preset name (next), play, sphere,
+                 settings. #panel is a bottom sheet (portrait) or a drawer
+                 at the right (landscape). #baseFig sits small at the top
+                 right. main.js frames the fibres in the clear area
+                 (occlusion + camera.setViewOffset, as wave-membrane).
+
+   GREP MAP  (main.js)
+     grep -n 'function rebuild'       items -> fibres -> instance attributes
+     grep -n 'function applyPreset'   the presets
+     grep -n 'function onBasePointer' tools on the base sphere
+     grep -n 'function pickFibre'     tap a tube in 3D
+     grep -n 'function updateLink'    discs, pierce points, Gauss integral
+     grep -n 'function occlusion'     the overlay margins for the framing
+     grep -n 'function frame'         the frame loop
+     grep -n 'function buildUI'       the controls
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The Hopf fibration in 3D: the 3-sphere as linked circles over the 2-sphere. Pick points on S², see their fibres, rotate S³ in four dimensions, and watch the circles pass through infinity.">
+<script type="importmap">
+{
+  "imports": {
+    "three": "../../vendor/three@0.160.0/build/three.module.js",
+    "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Hopf Fibration</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<canvas id="view" aria-label="Fibres of the Hopf map in 3D"></canvas>
+<div id="vignette" aria-hidden="true"></div>
+
+<header id="hero">
+  <h1>Hopf fibration</h1>
+  <p class="sub">The 3-sphere as circles, one over each point of the 2-sphere</p>
+  <div class="sci-eq hero-eq" data-eq="map"></div>
+  <p id="modeCap" class="cap"></p>
+</header>
+
+<div id="readout" aria-live="polite">
+  <div><span class="k">Fibres</span> <b id="roCount">0</b></div>
+  <div id="roLinkRow" hidden><span class="k">Linking number</span> <b id="roLink">–</b></div>
+  <div id="roSelRow" hidden><span class="sw" id="roSw"></span><span id="roSel" class="sci-sym"></span></div>
+</div>
+
+<div id="insets">
+  <figure id="gaugeFig" hidden>
+    <canvas id="gauge" aria-label="The 4D rotation shown on a tesseract"></canvas>
+    <figcaption><span id="gaugeTex" class="sci-sym"></span><small id="gaugeNote"></small></figcaption>
+  </figure>
+  <figure id="baseFig">
+    <canvas id="base" aria-label="Base sphere S². Tap to add a point."></canvas>
+    <figcaption>
+      <span class="ttl">Base space <i>S</i>²</span>
+      <span class="tools" id="tools">
+        <button data-tool="point" class="on" title="Add a point, or drag a point">Point</button>
+        <button data-tool="lat" title="Add a circle of latitude, drag to move it">Latitude</button>
+        <button data-tool="paint" title="Paint a curve">Paint</button>
+        <button data-tool="turn" title="Turn the sphere">Turn</button>
+        <button id="clearBtn" class="clr" title="Remove every fibre">Clear</button>
+      </span>
+    </figcaption>
+  </figure>
+</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label first">Fibres</div>
+  <div id="presets" class="chips"></div>
+  <p class="hint" id="presetBlurb"></p>
+
+  <div class="sec-label">Base sphere</div>
+  <div class="seg four" id="toolSeg">
+    <button data-tool="point" class="on">Point</button>
+    <button data-tool="lat">Latitude</button>
+    <button data-tool="paint">Paint</button>
+    <button data-tool="turn">Turn</button>
+  </div>
+  <p class="hint">Tap the small sphere to add the fibre over a point. Drag a point to move its fibre. A latitude gives a torus of fibres. A painted curve gives a surface of fibres.</p>
+  <div class="prm"><div class="nm">Fibre density</div><span class="val" id="densV"></span>
+    <input type="range" id="dens" min="4" max="48" step="1" value="24" aria-label="Fibre density"></div>
+  <div class="btns"><button id="clearBtn2">Clear the sphere</button><button id="reseedBtn">New random points</button></div>
+
+  <div class="sec-label">4D rotation of <i>S</i>³</div>
+  <div class="seg five" id="modeSeg">
+    <button data-mode="still">Still</button>
+    <button data-mode="along">Along</button>
+    <button data-mode="isoclinic">Fibre to fibre</button>
+    <button data-mode="plane">One plane</button>
+    <button data-mode="double">Two planes</button>
+  </div>
+  <div class="rot-eq sci-eq" id="rotTex"></div>
+  <p class="hint" id="modeHint"></p>
+  <div class="prm"><div class="nm"><span class="m6">Speed of <i>a</i></span></div><span class="val" id="speedV"></span>
+    <input type="range" id="speed" min="0" max="1.2" step="0.01" value="0.25" aria-label="Rotation speed"></div>
+  <div class="prm" id="tiltRow"><div class="nm">Axis tilt <i>β</i></div><span class="val" id="tiltV"></span>
+    <input type="range" id="tilt" min="0" max="180" step="1" value="0" aria-label="Axis tilt"></div>
+  <div class="btns"><button id="playBtn" class="on">Pause</button><button id="zeroBtn">Back to a = 0</button></div>
+
+  <div class="sec-label">Animate</div>
+  <div class="btns"><button id="sweepBtn" aria-pressed="false">Latitude sweep</button><button id="orbitBtn" aria-pressed="true" class="on">Orbit camera</button></div>
+  <div class="btns"><button id="stripeBtn" aria-pressed="true" class="on">Stripes along t</button><button id="discBtn" aria-pressed="true" class="on">Linking discs</button></div>
+  <p class="hint">The stripes mark the parameter <span class="m3"><i>t</i></span> on each fibre, so they show how the 4D rotation moves points along and across the circles. Tap two tubes in the 3D view to see their discs and linking number.</p>
+
+  <div class="sec-label">View</div>
+  <div class="prm"><div class="nm">Tube radius</div><span class="val" id="radV"></span>
+    <input type="range" id="rad" min="0.008" max="0.09" step="0.001" value="0.032" aria-label="Tube radius"></div>
+  <div class="prm"><div class="nm">Projection point</div><span class="val" id="poleV"></span>
+    <input type="range" id="pole" min="0" max="180" step="1" value="0" aria-label="Projection point"></div>
+  <p class="hint">The projection point is the point of <i>S</i>³ that goes to infinity. It turns from (0, 0, 0, 1) toward (0, 0, 1, 0) as the slider moves.</p>
+  <div class="btns"><button id="confBtn" aria-pressed="false">Conformal thickness</button><button id="resetView">Reset view</button></div>
+
+  <div class="sec-label">The map</div>
+  <div class="eqs">
+    <div class="eq-l">The Hopf map. <span class="m1"><i>z</i>₀</span> and <span class="m2"><i>z</i>₁</span> are complex, with |<i>z</i>₀|² + |<i>z</i>₁|² = 1.</div>
+    <div class="sci-eq" data-eq="map"></div>
+    <div class="sci-eq small" data-eq="where"></div>
+    <div class="eq-l">The base point. Its longitude <span class="m4"><i>φ</i></span> gives the hue of a fibre, its polar angle <span class="m5"><i>θ</i></span> the lightness.</div>
+    <div class="sci-eq" data-eq="base"></div>
+    <div class="cwheel" aria-hidden="true"><canvas id="cwheel" width="240" height="24"></canvas><span>south</span><span>north</span></div>
+    <div class="eq-l">The fibre over that point: a great circle of <i>S</i>³, swept by <span class="m3"><i>t</i></span>.</div>
+    <div class="sci-eq" data-eq="fibre"></div>
+    <div class="eq-l">Stereographic projection to the 3D view, from the pole (0, 0, 0, 1).</div>
+    <div class="sci-eq small" data-eq="stereo"></div>
+    <div class="eq-l">The linking number, as a Gauss integral. The readout computes it from the two tubes on screen.</div>
+    <div class="sci-eq small" data-eq="link"></div>
+  </div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>The 3-sphere <i>S</i>³ is the set of unit vectors in ℂ², a sphere in four dimensions. The Hopf map <i>p</i> sends each of its points to a point of the ordinary sphere <i>S</i>². The points that go to one point of <i>S</i>² make a great circle, the fibre over that point. Each point of <i>S</i>³ is on exactly one fibre, so <i>S</i>³ is a union of disjoint circles, one for each point of <i>S</i>². Near any fibre it looks like a product of a disc and a circle. As a whole it is not <i>S</i>² × <i>S</i>¹.</p>
+    <p>Stereographic projection keeps circles as circles, so each fibre shows as a round circle in the view. The fibre through the projection point goes through infinity and shows as a straight line. Any two fibres are linked once, as two links of a chain. The fibres over one circle of latitude fill a torus, and each of them is a Villarceau circle of that torus. The latitudes give a family of nested tori that fills space. The equator gives the Clifford torus |<i>z</i>₀| = |<i>z</i>₁| = 1/√2.</p>
+    <p>The 4D rotation turns <i>S</i>³ before the projection. <b>Along</b> multiplies by e<sup><i>ia</i></sup>: each fibre turns on itself and the picture keeps its shape, only the stripes move. <b>Fibre to fibre</b> multiplies by a unit quaternion on the right: it sends every fibre onto another fibre, and the base sphere turns with it (the rings on the small sphere). The circles move through the projection point and come back from infinity on the other side. <b>One plane</b> and <b>Two planes</b> are general rotations of ℝ⁴: the circles stay circles and stay linked, but they are no longer fibres of this map.</p>
+    <p>Heinz Hopf described the map in 1931, in <i>Über die Abbildungen der dreidimensionalen Sphäre auf die Kugelfläche</i> (Mathematische Annalen 104). He proved that it cannot be deformed to a constant map. In modern terms it has Hopf invariant 1 and generates π₃(<i>S</i>²) ≅ ℤ.</p>
+    <p>In physics: the pure states of a qubit are unit vectors (<i>z</i>₀, <i>z</i>₁) in ℂ², and a global phase e<sup><i>it</i></sup> changes no measurement. So the states that are physically the same are a fibre, and the Hopf map sends a state to its point on the Bloch sphere (up to a reflection of one axis, by convention). The same circle bundle carries the field of a Dirac magnetic monopole of the lowest charge. With <i>S</i>³ as the unit quaternions, which cover the rotations of 3D space twice, the fibre over a direction is the set of rotations that take one fixed axis to that direction.</p>
+    <p>The tubes are drawn on the GPU: a vertex shader puts each vertex on its fibre, rotates it in four dimensions and projects it. The 3D view uses three.js r160 (MIT licence). The maths and the code of this page are original.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockName" class="name" aria-label="Next preset"><span id="dockTitle">…</span><i>›</i></button>
+  <button id="dockPlay" aria-label="Play or pause the 4D rotation" class="on"><svg viewBox="0 0 24 24"><path id="dockPlayIcon" d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg></button>
+  <button id="dockMode" aria-label="Next 4D rotation"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M12 4.5a7.5 7.5 0 0 1 0 15M4.5 12h15"/></svg></button>
+  <button id="dockSphere" aria-label="Show or hide the base sphere" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/><circle cx="15" cy="9" r="1.6"/></svg></button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

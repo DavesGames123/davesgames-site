@@ -1,0 +1,212 @@
+/* ============================================================================
+   HOPF FIBRATION  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A dark desk with the 3D view under everything. Type comes from
+   lib/sci.css: Inter for the controls, STIX Two Text for titles and math.
+   Labels are sentence case with no letter-spacing. On a wide screen the
+   control panel is a column at the left; main.js frames the fibres in the
+   part of the view that stays clear.
+
+     grep -n 'VIEW'       the canvas, vignette, hero, readout
+     grep -n 'INSETS'     the base sphere and the 4D gauge
+     grep -n 'PANEL'      the control column
+     grep -n 'CONTROLS'   sliders, segments, chips, equations
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      dock and bottom sheet
+     grep -n 'LANDSCAPE'  the phone drawer at the right edge
+     grep -n 'SAVER'      the screensaver hides all overlays
+   ========================================================================== */
+:root{
+  --bg:#06070b; --bg2:#13161c; --ink:#d9dbe0; --dim:#8a8f99; --faint:#2b2f37;
+  --line:rgba(170,190,235,0.10); --line-b:rgba(170,190,235,0.24);
+  --acc:#9ec3ff; --panel-w:340px; --top:52px; --dock-h:0px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:hidden}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,select,input{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:1px solid var(--acc);outline-offset:1px}
+[hidden]{display:none!important}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px 0 calc(var(--panel-w) + 20px);background:rgba(6,7,11,0.88);border-bottom:1px solid var(--line);pointer-events:none;transition:padding 0.28s cubic-bezier(0.4,0,0.2,1)}
+.brand{font-size:0.85rem;font-weight:500;color:var(--dim)}
+.pagetitle{font-family:var(--sci-serif);font-size:1.15rem;color:#f1eee6}
+html.in-frame{--top:0px}
+html.in-frame .topbar{display:none}
+body.panel-closed .topbar{padding-left:68px}
+
+#gear{position:fixed;top:7px;left:14px;z-index:40;width:38px;height:38px;border:1px solid var(--line-b);background:rgba(20,22,27,0.85);color:var(--ink);border-radius:9px;font-size:1rem;display:none}
+html.in-frame #gear{top:14px}
+#gear:hover{border-color:var(--acc);color:var(--acc)}
+@media(min-width:769px){ body.panel-closed #gear{display:block} }
+
+/* VIEW */
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(120% 95% at 55% 50%,transparent 55%,rgba(0,0,0,0.45) 100%)}
+#hero{position:fixed;z-index:5;text-shadow:0 1px 12px rgba(0,0,0,0.9),0 0 3px rgba(0,0,0,0.8);top:calc(var(--top) + 20px);left:calc(var(--panel-w) + 28px);max-width:min(520px,calc(100vw - var(--panel-w) - 300px));pointer-events:none;transition:left 0.28s cubic-bezier(0.4,0,0.2,1)}
+body.panel-closed #hero{left:72px}
+#hero::before{content:'';position:absolute;z-index:-1;inset:-40px -60px -30px -50px;background:radial-gradient(closest-side,rgba(6,7,11,0.72),rgba(6,7,11,0));pointer-events:none}
+#hero h1{font-family:var(--sci-serif);font-weight:400;font-size:2rem;line-height:1.1;color:#f6f3ec}
+#hero .sub{font-family:var(--sci-serif);font-style:italic;font-size:1rem;color:#b9bdc6;margin:4px 0 12px}
+#hero .hero-eq{font-size:1.15rem;pointer-events:auto}
+#hero .cap{font-size:0.8rem;line-height:1.5;color:#9aa1ad;margin-top:10px;max-width:440px}
+#readout{position:fixed;z-index:5;top:calc(var(--top) + 18px);right:20px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-size:0.8rem;color:var(--dim);text-align:right;pointer-events:none}
+#readout b{font-weight:500;color:#eef0f4;font-variant-numeric:tabular-nums}
+#readout .k{color:var(--dim)}
+#readout .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:8px;vertical-align:middle;box-shadow:0 0 0 1px rgba(255,255,255,0.3)}
+#roSel{color:#eef0f4;font-size:0.95rem}
+#toast{position:fixed;left:50%;bottom:calc(var(--dock-h) + 18px);transform:translate(-50%,20px);padding:8px 14px;border-radius:9px;background:#1a1d24;border:1px solid var(--line-b);color:var(--ink);font-size:0.8rem;opacity:0;pointer-events:none;transition:opacity 0.25s,transform 0.25s;z-index:60;max-width:90vw}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* INSETS */
+#insets{position:fixed;z-index:6;right:18px;bottom:18px;display:flex;align-items:flex-end;gap:14px;pointer-events:none}
+#insets figure{pointer-events:auto;background:rgba(10,12,17,0.72);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+#base{display:block;width:230px;height:230px;touch-action:none;cursor:crosshair}
+#base[data-tool="turn"]{cursor:grab}
+#baseFig figcaption{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+#baseFig .ttl{font-family:var(--sci-serif);font-size:0.95rem;color:#e9e7e1;padding-left:4px}
+.tools{display:flex;flex-wrap:wrap;gap:4px;max-width:230px}
+.tools button{padding:4px 8px;border:1px solid var(--line-b);background:var(--bg2);color:var(--dim);border-radius:999px;font-size:0.72rem}
+.tools button:hover{color:var(--ink);border-color:var(--acc)}
+.tools button.on{color:var(--acc);border-color:var(--acc);background:rgba(158,195,255,0.08)}
+.tools .clr{margin-left:auto}
+#gauge{display:block;width:150px;height:150px}
+#gaugeFig figcaption{display:flex;flex-direction:column;align-items:center;gap:4px;max-width:170px;text-align:center;font-size:0.92rem;color:#e9e7e1}
+#gaugeFig small{font-size:0.68rem;line-height:1.35;color:var(--dim)}
+
+/* PANEL */
+#panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(10,12,16,0.97);border-right:1px solid var(--line-b);
+  padding:66px 18px 40px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#panel.open{transform:none}
+html.in-frame #panel{padding-top:20px}
+#panelClose{position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px}
+#panelClose:hover{color:var(--acc);border-color:var(--acc)}
+#sheetGrip,#dock{display:none}
+
+.sec-label{font-size:0.8rem;font-weight:600;color:#ecebe6;margin:22px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.sec-label.first{margin-top:0;padding-top:0;border-top:0}
+.sec-label i{font-family:var(--sci-serif);font-weight:400;font-size:0.95rem}
+.hint{font-size:0.74rem;line-height:1.55;color:var(--dim);margin:8px 0 2px}
+
+/* CONTROLS */
+.prm{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;margin:10px 0 10px}
+.prm .nm{font-size:0.82rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prm .nm i{font-family:var(--sci-serif);font-size:0.95rem}
+.prm .val{font:0.74rem var(--sci-mono);color:var(--ink);text-align:right}
+.prm input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--acc);height:3px;margin-top:4px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.seg.four{grid-template-columns:repeat(4,1fr)}
+.seg.five{grid-template-columns:repeat(6,1fr)}
+.seg.five button{grid-column:span 2}
+.seg.five button:nth-child(n+4){grid-column:span 3}
+.seg button,.btns button{padding:8px 4px;border:1px solid var(--line-b);background:var(--bg2);color:var(--dim);border-radius:7px;font-size:0.76rem;transition:border-color 0.2s,color 0.2s}
+.seg button:hover,.btns button:hover{border-color:var(--acc);color:var(--ink)}
+.seg button.on,.btns button.on{border-color:var(--acc);color:var(--acc);background:rgba(158,195,255,0.07)}
+.btns{display:flex;gap:6px;margin:6px 0}
+.btns button{flex:1;color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{padding:6px 10px;border:1px solid var(--line-b);background:var(--bg2);color:var(--dim);border-radius:999px;font-size:0.76rem;transition:border-color 0.2s,color 0.2s}
+.chips button:hover{border-color:var(--acc);color:var(--ink)}
+.chips button.on{border-color:var(--acc);color:var(--acc);background:rgba(158,195,255,0.07)}
+.rot-eq{margin:10px 0 2px;font-size:1rem;min-height:22px}
+.eqs{display:flex;flex-direction:column;gap:8px}
+.eqs .sci-eq{font-size:1rem;padding:4px 0}
+.eqs .sci-eq.small{font-size:0.86rem}
+.eq-l{font-size:0.76rem;line-height:1.5;color:var(--dim);margin-top:6px}
+.eq-l i{font-family:var(--sci-serif);font-size:0.9rem}
+.cwheel{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 8px;font-size:0.68rem;color:var(--dim)}
+.cwheel canvas{grid-column:1 / -1;width:100%;height:18px;border-radius:4px}
+.cwheel span:last-child{grid-column:3}
+.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
+.about i{font-family:var(--sci-serif);font-size:0.92rem}
+.about b{color:#d9dbe0;font-weight:600}
+
+/* TOUCH. Any touch screen or narrow window: targets are 44px or more. */
+@media (pointer:coarse), (max-width:768px){
+  #panelClose{width:44px;height:44px}
+  .seg button,.btns button{min-height:44px;font-size:0.8rem;border-radius:10px}
+  .chips button{min-height:44px;padding:8px 13px;font-size:0.8rem}
+  .tools button{min-height:36px;padding:6px 10px}
+  .prm{margin:4px 0 6px}
+  .prm .nm{font-size:0.86rem}
+  .prm .val{font-size:0.8rem}
+  .hint{font-size:0.78rem}
+  .about p{font-size:0.84rem;line-height:1.65}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:40px!important;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--acc);border:3px solid #0d1118;box-shadow:0 0 0 1px var(--acc)}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid #0d1118}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(64px + env(safe-area-inset-bottom));--panel-w:0px}
+  html.in-frame{--top:0px}
+  html,body{height:100dvh}
+  .topbar{padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  .brand{font-size:0.8rem}
+  .pagetitle{font-size:1rem}
+  #gear,body.panel-closed #gear{display:none}
+  #hero,body.panel-closed #hero{left:calc(14px + env(safe-area-inset-left));top:calc(var(--top) + 12px);max-width:calc(100vw - 170px)}
+  #hero::before{content:'';position:absolute;z-index:-1;inset:-40px -60px -30px -50px;background:radial-gradient(closest-side,rgba(6,7,11,0.72),rgba(6,7,11,0));pointer-events:none}
+#hero h1{font-size:1.3rem}
+  #hero .sub,#hero .hero-eq,#hero .cap{display:none}
+  html:not(.in-frame) #hero{display:none}
+  #readout{top:auto;bottom:calc(var(--dock-h) + 10px);right:calc(12px + env(safe-area-inset-right));font-size:0.74rem;gap:3px}
+  #insets{right:calc(10px + env(safe-area-inset-right));top:calc(var(--top) + 10px);bottom:auto;flex-direction:column;align-items:flex-end;gap:8px}
+  #insets figure{padding:5px;border-radius:12px}
+  #base{width:118px;height:118px}
+  #baseFig .tools{display:none}
+  #baseFig .ttl{font-size:0.78rem;text-align:center;padding:0}
+  #gaugeFig{display:none}
+  body.no-sphere #baseFig{display:none}
+
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,12,16,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;display:flex;align-items:center;justify-content:center}
+  #dock > button.on{border-color:var(--acc);color:var(--acc);background:rgba(158,195,255,0.08)}
+  #dock svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6}
+  #dock #dockPlay svg path{fill:currentColor;stroke:none}
+  #dock > button.name{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px;font-family:var(--sci-serif);font-size:1rem;text-align:left}
+  #dock > button.name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dock > button.name i{font-style:normal;color:var(--dim);font-family:var(--sci-sans)}
+
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(46vh,500px);height:min(46dvh,500px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 28px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+  #panel.open{transform:none}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px - env(safe-area-inset-top))}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -18px 2px;background:linear-gradient(180deg,#0a0c10 70%,rgba(10,12,16,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .seg.five{grid-template-columns:repeat(6,1fr)}
+}
+
+/* LANDSCAPE phone. The panel is a drawer at the right edge, the dock a
+   tab at the lower left, and the topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--top:0px}
+  .topbar{display:none}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;transform:translateX(100%)}
+  #panel.open{transform:none}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2;background:var(--bg2)}
+  #insets{left:calc(10px + env(safe-area-inset-left));right:auto}
+  #hero{display:none}
+  #readout{bottom:10px}
+}
+@media(prefers-reduced-motion:reduce){#panel,.topbar,#toast,#hero{transition:none}}
+
+/* SAVER. lib/screensaver.js runs the hook; the page shows the canvas only. */
+html.sn-saver .topbar,html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #gear,html.sn-saver #hero,
+html.sn-saver #readout,html.sn-saver #insets,html.sn-saver #toast,html.sn-saver #vignette{display:none!important}
+html.sn-saver,html.sn-saver body{cursor:none}

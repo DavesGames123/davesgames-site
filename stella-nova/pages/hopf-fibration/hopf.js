@@ -31,7 +31,7 @@
 //  A change here must also go there (grep 'hopfFibre').
 //
 //  EXPORTS  (grep -n "export function <name>")
-//    hopf, fibrePoint, stereo, project, fibreCurve, baseFromAngles, angles
+//    hopf, fibrePoint, stereo, project, fibreCurve, baseFromAngles
 //    qmul, qconj, leftMat, rightMat, planeMat, matMul, matVec, ident,
 //    rotationFor, MODES, baseColor, toSRGB, hexOf,
 //    sampleItems, PRESETS, makeRng, fibonacciSphere,
@@ -76,7 +76,6 @@ export function fibreCurve(b, M, n = 128) {
 
 // th: polar angle from +Z (0 at the north pole); ph: longitude.
 export function baseFromAngles(th, ph) { return [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)]; }
-export function angles(b) { return { th: Math.acos(Math.max(-1, Math.min(1, b[2]))), ph: Math.atan2(b[1], b[0]) }; }
 
 // --------------------------------------------------------------- quaternions
 // [w, x, y, z] = w + x i + y j + z k
