@@ -26,11 +26,10 @@
 //    "function shotEdit"     "function shotMontage"  "function shotRedline"
 //    "function shotCloud"    "function shotKinetic"
 //    "function director"     the seeded shot order and the cuts
-//    "function plate"        the label payload (title, pair, family, code)
+//    "function plate"        the label payload (title, pair, family)
 //    "window.snSaver"        enter and exit
 // ============================================================================
 import { PHRASES } from './phrases.js';
-import { stem } from './matcher.js';
 import { famLabel, weakParts } from './stage.js';
 
 const C = { bg: '#0b0c0f', ink: '#f3f1ea', dim: '#8d929c', faint: '#3a3e47', hi: '#ffd23f', cut: '#ff5b4d' };
@@ -427,18 +426,14 @@ function director(seed, calm) {
 }
 
 // ── label plate ────────────────────────────────────────────────────────────
-const CODE = [
-  { lang: 'js', name: 'matcher.js · stem', text: stem.toString().split('\n').slice(0, 8).join('\n') + '\n  // ...' },
-  { lang: 'js', name: 'saver.js · typed, erased', text: typed.toString() + '\n' + erased.toString() },
-];
-function plate(e, shot, n) {
+// The plate has no code extract: the user wants the words alone.
+function plate(e) {
   const p = weakParts(e);
   const left = !e.base ? e.mod : e.modFirst ? `${e.mod} + ${e.base}` : `${e.base} + ${e.mod}`;
   return {
     title: 'Lose the Modifier',
     sub: `${left} = ${e.targets[0]}`,
     lines: [`${famLabel(e.family)} family · ${e.pos} · ${e.reg}`, `${p.text.slice(p.a, p.b)} goes, one word stays`],
-    code: CODE[n % CODE.length],
   };
 }
 
@@ -466,7 +461,7 @@ export function installSaver({ onEnter, onExit }) {
     R.shot.draw(t, box);
     if (t < 0.12) { X.fillStyle = C.bg; X.globalAlpha = 1 - t / 0.12; X.fillRect(0, 0, W, H); X.globalAlpha = 1; }
     const e = R.shot.pair(t);
-    if (e && e !== R.lastE) { R.lastE = e; R.label(plate(e, R.shot, R.n)); }
+    if (e && e !== R.lastE) { R.lastE = e; R.label(plate(e)); }
   }
   window.snSaver = {
     enter(o = {}) {
