@@ -178,8 +178,12 @@ w.SN_NAV = [
       ["game-of-life", "Game of Life", "SIM"]
     ] },
     { h: "Number Theory", p: [
-      ["ulam-spiral", "Ulam Spiral", "GPU"]
+      ["ulam-spiral", "Ulam Spiral", "GPU"],
+      ["ramanujan-pi", "Ramanujan–Sato Series", "MATH"]
     ]},
+    { h: "Geometry & Topology", p: [
+      ["hopf-fibration", "Hopf Fibration", "GPU"]
+    ] },
     { h: "Probability", p: [
       ["dice", "Dice Lab", "3D"]
     ] }
@@ -328,6 +332,8 @@ w.SN_NAV = [
       ["markov-junior", "MarkovJunior", "RULES"],
       ["shan-shui", "Shan Shui", "SVG"],
       ["fishdraw", "Fishdraw", "SVG"],
+      ["mushrooms", "Mushroom Draw", "SVG"],
+      ["nonflowers", "Nonflowers", "CANVAS"],
       ["context-free", "Context Free", "WASM"],
       ["holocloth", "Holocloth", "CLOTH"],
       ["line-art", "Line Art", "RUST"]
