@@ -240,6 +240,7 @@ w.SN_NAV = [
     ] },
     { h: "Calculating & Cipher", p: [
       ["calculators", "Pascaline & Curta", "3D"],
+      ["curta", "Curta Calculator", "3D"],
       ["enigma-rotors", "Enigma Rotors", "3D"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"]
     ] },
