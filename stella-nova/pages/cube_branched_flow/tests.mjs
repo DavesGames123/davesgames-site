@@ -13,6 +13,10 @@
 //       checks only the start).
 //    5. The old saver ranges (frozen copy below) fail those checks for some
 //       seeds. This is the bug the new ranges fix.
+//    6. The saver camera framing.
+//    7. The phone profile: renderScale keeps a touch canvas under
+//       PHONE_MAX_PX, PHONE_SN cuts the trace, and panOffset puts the body
+//       centre at the asked screen offset.
 // ============================================================================
 import fs from 'fs';
 import * as F from './flow.js';
@@ -134,6 +138,37 @@ check(oldRing > 0 && oldFlow > 0, `old ranges fail: ringCheck ${oldRing} of ${ol
     }
   }
   check(zero === 0 && worst >= 3, `saver camera: ${n} shots, every radius > 0, nearest camera at ${worst.toFixed(2)} scene radii (need 3)`);
+}
+
+// 7. The phone profile.
+{
+  const rows = []; let okPx = true;
+  for (const [w, h, d] of [[360, 640, 3], [390, 844, 3], [844, 390, 3], [1024, 1366, 2]]) {
+    const s = F.renderScale(w, h, d, true), px = Math.floor(w * s) * Math.floor(h * s);
+    if (px > F.PHONE_MAX_PX) okPx = false;
+    rows.push(`${w}x${h}@${d} ${Math.floor(w * s)}x${Math.floor(h * s)}`);
+  }
+  check(okPx, `phone canvas <= ${F.PHONE_MAX_PX / 1e6} Mpx: ${rows.join(', ')}`);
+  check(F.renderScale(1440, 900, 2, false) === 2 * .85 && F.renderScale(1440, 900, 1, false) === .85, 'desktop render scale is unchanged (min(dpr, 2) x 0.85)');
+  // the trace cost at PHONE_SN against the page density
+  const C = { ...D }, cost = sN => { C.sN = sN; let t = 0, n = 0;
+    for (let f = 0; f < 20; f++) { const tm = f / 20, { R, Rt } = F.computeGRot(tm, C), t0 = performance.now(); n = F.traceAll(F.genSeeds(C, R, Rt, tm), C, R, Rt, tm, FLAGS).length; t += performance.now() - t0; }
+    return { ms: t / 20, n }; };
+  const a = cost(D.sN), b = cost(F.PHONE_SN);
+  check(b.n < a.n * 0.6, `phone trace: ${b.n} filaments at sN ${F.PHONE_SN}, ${a.n} at sN ${D.sN}`);
+  info(`trace time in node: ${a.ms.toFixed(1)} ms at sN ${D.sN}, ${b.ms.toFixed(1)} ms at sN ${F.PHONE_SN}`);
+  // panOffset: project the origin through the sdf.frag.glsl camera
+  let worst = 0;
+  for (const [ox, oy, t, p] of [[0, -150, .5, .25], [-160, 0, 2.1, -.4], [40, 90, -1.2, 1.1]]) {
+    const d = 135, f = Math.tan(Math.PI / 3), H = 800, ta = F.panOffset(ox, oy, t, p, d, f, H);
+    const o = [Math.sin(t) * Math.cos(p), Math.sin(p), Math.cos(t) * Math.cos(p)], ro = ta.map((v, i) => v + d * o[i]);
+    const ww = F.nrm(ta.map((v, i) => v - ro[i])), uu = F.nrm([ww[2], 0, -ww[0]]);
+    const vv = [ww[1] * uu[2] - ww[2] * uu[1], ww[2] * uu[0] - ww[0] * uu[2], ww[0] * uu[1] - ww[1] * uu[0]];
+    const rel = ro.map(v => -v), z = rel[0] * ww[0] + rel[1] * ww[1] + rel[2] * ww[2];
+    const sx = f * (rel[0] * uu[0] + rel[1] * uu[1] + rel[2] * uu[2]) / z * H, sy = -f * (rel[0] * vv[0] + rel[1] * vv[1] + rel[2] * vv[2]) / z * H;
+    worst = Math.max(worst, Math.abs(sx - ox), Math.abs(sy - oy));
+  }
+  check(worst < 1.5, `panOffset puts the body centre at the clear-area centre (max err ${worst.toFixed(2)} px)`);
 }
 
 console.log(fail ? `${fail} FAILED` : 'all passed');

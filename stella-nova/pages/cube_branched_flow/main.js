@@ -54,7 +54,8 @@
 //      buffer build ......... "function buildBuf"   filaments -> instanced edges
 //      camera ............... "let resScale"        orbit state + resize
 //      ui ................... "function buildUI"    sliders, toggles, shuffle
-//      input ................ "canvas.onmousedown"  drag / wheel / touch
+//      phone ................ "PHONE"              sheet, drawer, framing, quality
+//      input ................ "INPUT"              pointer orbit, pinch, wheel
 //      render ............... "function render"     the four-pass frame loop
 //      screensaver hook ..... "SCREENSAVER HOOK"     window.snSaver for the shell
 // ============================================================================
@@ -69,6 +70,10 @@ const FIL_FS = await (await fetch(new URL('shaders/filament.frag.glsl', document
 // DOM-free module flow.js, shared with tests.mjs.
 const F=await import(new URL('flow.js',document.baseURI).href);
 const{PI,nrm}=F;
+// PHONE: the query matches the phone block of style.css. COARSE is a touch
+// screen: it gets the phone profile of flow.js (renderScale, PHONE_SN).
+const PHONE_Q=matchMedia('(max-width:700px),(max-height:500px) and (pointer:coarse)');
+const COARSE=matchMedia('(pointer:coarse)').matches;
 
 // ═══════════════ MATH ═══════════════
 // persp and lookAt build the 4x4 projection and view matrices; mM4 multiplies
@@ -153,6 +158,9 @@ const GROUPS=[
 ];
 // Flatten the defs into live state: cur holds numbers, chk holds booleans.
 const cur={};for(const[k,p]of Object.entries(P_))cur[k]=p.v;
+// A touch screen traces fewer filaments (flow.js, PHONE_SN). Reset keeps it.
+const phoneDefaults=()=>{if(COARSE)cur.sN=Math.min(cur.sN,F.PHONE_SN);};
+phoneDefaults();
 const chk={};for(const[k,c]of Object.entries(C_))chk[k]=c.v;
 
 // ═══════════════ WEBGL ═══════════════
@@ -257,8 +265,8 @@ function homeCamD(){return Math.min(500,135*Math.max(1,innerHeight/Math.max(1,in
 // camF is the focal length in canvas heights: tan(60 deg) on the page, the
 // fov that the SDF pass and persp() share. The saver changes it to frame.
 let resScale=.85,camT=.5,camP=.25,camD=homeCamD(),camTa=[0,0,0],camF=Math.tan(PI/3),drg=false,lmx,lmy;
-function resize(){const d=Math.min(devicePixelRatio||1,2);
-  canvas.width=Math.floor(innerWidth*d*resScale);canvas.height=Math.floor(innerHeight*d*resScale);
+function resize(){const d=F.renderScale(innerWidth,innerHeight,devicePixelRatio,COARSE,resScale);
+  canvas.width=Math.floor(innerWidth*d);canvas.height=Math.floor(innerHeight*d);
   gl.viewport(0,0,canvas.width,canvas.height);mkFBO(canvas.width,canvas.height);}
 addEventListener('resize',resize);resize();
 // 1x1 red fallback occlusion texture: its red channel decodes to t=500, so with
@@ -303,12 +311,13 @@ function buildUI(){pb.innerHTML='';
   shuf.onclick=()=>{const ks=['cRH','cTH','cSat','cGrad','gH','gP','mBase','mMetal','mFres','rS','moRA','moRB','moRC','sN','rCw'];
     for(const k of ks){const p=P_[k];if(!p)continue;
       cur[k]=Math.round((p.mn+Math.random()*(p.mx-p.mn))/p.s)*p.s;
-      cur[k]=Math.max(p.mn,Math.min(p.mx,cur[k]));
+      cur[k]=Math.max(p.mn,Math.min(p.mx,cur[k]));if(k==='sN')phoneDefaults();
       const el=document.getElementById('p_'+k);if(el){el.value=cur[k];document.getElementById('v_'+k).textContent=fmt(cur[k]);}}};
   // Reset restores every default value, toggle, and camera pose.
   const rst=document.createElement('button');rst.className='btn';rst.textContent='Reset';
-  rst.onclick=()=>{for(const[k,p]of Object.entries(P_)){cur[k]=p.v;
-    const el=document.getElementById('p_'+k),vl=document.getElementById('v_'+k);if(el)el.value=p.v;if(vl)vl.textContent=fmt(p.v);}
+  rst.onclick=()=>{for(const[k,p]of Object.entries(P_))cur[k]=p.v;
+    phoneDefaults();
+    for(const k of Object.keys(P_)){const el=document.getElementById('p_'+k),vl=document.getElementById('v_'+k);if(el)el.value=cur[k];if(vl)vl.textContent=fmt(cur[k]);}
     for(const[k,c]of Object.entries(C_)){chk[k]=c.v;const el=document.getElementById('c_'+k);if(el)el.checked=c.v;}
     resScale=.85;camT=.5;camP=.25;camD=homeCamD();resize();};
   btns.append(shuf,rst);pb.appendChild(btns);
@@ -320,21 +329,51 @@ function buildUI(){pb.innerHTML='';
   tsi.oninput=()=>{cur.timeScale=parseFloat(tsi.value);tsv.textContent=fmt(cur.timeScale);};
   tsd.append(tsl,tsi,tsv);pb.appendChild(tsd);}
 buildUI();
-// Panel header toggles the whole control panel open/closed.
-document.getElementById('ph').onclick=()=>{const c=pb.classList.toggle('collapsed');
-  document.getElementById('tog').textContent=c?'▶':'▼';};
+// ═══════════════ PHONE ═══════════════
+// The panel header toggles the control panel. On a phone (style.css) the
+// panel is a bottom sheet in portrait and a drawer at the right edge in
+// landscape, and it starts closed so the scene is clear. occlusion() gives
+// the centre of the part of the window the panel leaves clear, and render()
+// pans the camera target there (F.panOffset), as the saver does for its band.
+function setPanel(open){pb.classList.toggle('collapsed',!open);
+  document.getElementById('tog').textContent=open?'▼':'▶';
+  document.getElementById('ph').setAttribute('aria-expanded',String(open));}
+document.getElementById('ph').onclick=()=>setPanel(pb.classList.contains('collapsed'));
+document.getElementById('ph').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setPanel(pb.classList.contains('collapsed'));}};
+if(PHONE_Q.matches)setPanel(false);
+PHONE_Q.addEventListener('change',e=>setPanel(!e.matches));
+if(COARSE)document.querySelector('.hint').textContent='drag to orbit · pinch to zoom';
+const panelEl=document.getElementById('panel');
+function occlusion(){
+  if(!PHONE_Q.matches)return{x:0,y:0};
+  const r=panelEl.getBoundingClientRect(),W=innerWidth,H=innerHeight;
+  if(r.width>=W*.9)return{x:0,y:-Math.max(0,H-r.top)/2};    // the bottom sheet
+  if(r.height>H*.5)return{x:-Math.max(0,W-r.left)/2,y:0};   // the drawer
+  return{x:0,y:0};}
+const occ={x:0,y:0};
 
-// Input: drag orbits (theta/phi), wheel dollies, one-finger touch mirrors drag.
-// Mouse
-canvas.onmousedown=e=>{drg=true;lmx=e.clientX;lmy=e.clientY;canvas.style.cursor='grabbing';};
-onmousemove=e=>{if(!drg)return;camT-=(e.clientX-lmx)*.005;camP+=(e.clientY-lmy)*.005;
-  camP=Math.max(-1.45,Math.min(1.45,camP));lmx=e.clientX;lmy=e.clientY;};
-onmouseup=()=>{drg=false;canvas.style.cursor='grab';};canvas.style.cursor='grab';
-canvas.onwheel=e=>{camD*=1+e.deltaY*.001;camD=Math.max(25,Math.min(500,camD));e.preventDefault();};
-canvas.ontouchstart=e=>{if(e.touches.length===1){drg=true;lmx=e.touches[0].clientX;lmy=e.touches[0].clientY;}e.preventDefault();};
-canvas.ontouchmove=e=>{if(!drg||e.touches.length!==1)return;const tx=e.touches[0].clientX,ty=e.touches[0].clientY;
-  camT-=(tx-lmx)*.005;camP+=(ty-lmy)*.005;camP=Math.max(-1.45,Math.min(1.45,camP));lmx=tx;lmy=ty;e.preventDefault();};
-canvas.ontouchend=()=>{drg=false;};
+// ═══════════════ INPUT ═══════════════
+// Pointer events for mouse, pen and touch. One pointer orbits (theta, phi),
+// two pointers pinch the distance, the wheel dollies. The canvas has
+// touch-action none (style.css), so the browser does not scroll or zoom.
+const ptrs=new Map();let pinch0=0,pinchD0=0;
+const pinchLen=()=>{const[a,b]=[...ptrs.values()];return Math.hypot(a.x-b.x,a.y-b.y)||1;};
+canvas.style.cursor='grab';
+canvas.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+  if(ptrs.size===2){pinch0=pinchLen();pinchD0=camD;}
+  drg=ptrs.size===1;lmx=e.clientX;lmy=e.clientY;canvas.style.cursor='grabbing';e.preventDefault();});
+canvas.addEventListener('pointermove',e=>{const q=ptrs.get(e.pointerId);if(!q)return;q.x=e.clientX;q.y=e.clientY;
+  if(ptrs.size>=2){camD=Math.max(25,Math.min(500,pinchD0*pinch0/pinchLen()));return;}
+  if(!drg)return;
+  camT-=(e.clientX-lmx)*.005;camP+=(e.clientY-lmy)*.005;camP=Math.max(-1.45,Math.min(1.45,camP));
+  lmx=e.clientX;lmy=e.clientY;});
+const ptrEnd=e=>{ptrs.delete(e.pointerId);
+  // after a pinch, the finger that stays starts a new drag from where it is
+  if(ptrs.size===1){const[q]=ptrs.values();drg=true;lmx=q.x;lmy=q.y;}
+  else{drg=false;canvas.style.cursor='grab';}};
+canvas.addEventListener('pointerup',ptrEnd);canvas.addEventListener('pointercancel',ptrEnd);
+canvas.addEventListener('wheel',e=>{camD*=1+e.deltaY*.001;camD=Math.max(25,Math.min(500,camD));e.preventDefault();},{passive:false});
 
 // ═══════════════ RENDER ═══════════════
 const infoEl=document.getElementById('info');
@@ -362,6 +401,9 @@ function render(now){requestAnimationFrame(render);
   const dt=(now-lastNow)/1000;lastNow=now;if(!chk.sPause)simTime+=dt*cur.timeScale;
   if(saverTick)saverTick(Math.min(dt,.1),now);
   fc++;if(now-lt_>1000){infoEl.textContent=Math.round(fc*1000/(now-lt_))+' fps';fc=0;lt_=now;}
+  // the phone panel: ease the camera target to the clear part (not in the saver)
+  if(!saverTick){const o=occlusion(),a=Math.min(1,dt*8)||0;occ.x+=(o.x-occ.x)*a;occ.y+=(o.y-occ.y)*a;
+    camTa=F.panOffset(occ.x,occ.y,camT,camP,camD,camF,innerHeight);}
   const ro=[camTa[0]+camD*Math.sin(camT)*Math.cos(camP),camTa[1]+camD*Math.sin(camP),camTa[2]+camD*Math.cos(camT)*Math.cos(camP)];
   const W=canvas.width,H=canvas.height;
 
@@ -520,6 +562,7 @@ window.snSaver={
       Object.assign(cur,look);
       const sc=F.saverScene(rnd,i,calm,cur);
       Object.assign(cur,sc.C);
+      phoneDefaults();   // a touch screen keeps the lower trace density
       simTime=sc.simTime;
       // a glide from the current angle, not a jump to a random one
       const dir=rnd()<.5?-1:1,swing=dir*(.61+.79*rnd());

@@ -5,7 +5,7 @@
 <script src="../../lib/wishlist.js"></script>
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Cube SDF + Branched Flow</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
@@ -18,7 +18,7 @@
    LAYOUT  (# marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
      │ #gl  full-screen WebGL canvas (cube + filaments)                 │
-     │  #panel                                                          │
+     │  #panel  (phone: a bottom sheet; landscape phone: right drawer)  │
      │    #ph  title + collapse toggle (#tog)                           │
      │    #pb  generated sliders, toggles, Shuffle / Reset              │
      │                                              #info  fps + counts │
@@ -37,7 +37,7 @@
 <canvas id="gl"></canvas>
 <!-- Control panel: header toggles it; #pb is filled by main.js buildUI(). -->
 <div id="panel">
-  <div class="ph" id="ph"><h1>SDF + Branched Flow</h1><span class="t" id="tog">▼</span></div>
+  <div class="ph" id="ph" role="button" tabindex="0" aria-expanded="true"><h1>SDF + Branched Flow</h1><span class="t" id="tog">▼</span></div>
   <div class="hint">drag orbit · scroll zoom</div>
   <div id="pb"></div>
 </div>

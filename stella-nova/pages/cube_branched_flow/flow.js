@@ -32,6 +32,7 @@
 //      seeds + trace ........ "function genSeeds", "function traceAll"
 //      checks ............... "CHECKS"          ringCheck, flowCheck
 //      saver scenes ......... "SAVER SCENES"    SAVER_SHOTS, saverScene
+//      phone profile ........ "PHONE PROFILE"   renderScale, PHONE_SN, panOffset
 // ============================================================================
 
 // ═══════════════ MATH ═══════════════
@@ -368,3 +369,28 @@ export function saverScene(rnd,i,calm,D){
 // Seeded generator: the same step as the saver rnd in main.js, for tests.
 export function makeRnd(seed){let s=(seed>>>0)||1;
   return()=>{s=Math.imul(s^s>>>15,0x2c1b3c6d)+0x6d2b79f5>>>0;s^=s>>>12;return(s>>>0)/4294967296;};}
+
+// ═══════════════ PHONE PROFILE ═══════════════
+// A touch screen gets a lower cost. The SDF ray march runs twice per frame
+// (depth and colour) over every canvas px, so renderScale caps a touch
+// canvas at PHONE_MAX_PX device px. The filament trace runs on the CPU each
+// frame and its cost grows with the seed density sN: a touch screen starts
+// at PHONE_SN. The filament width is in canvas heights (filament.vert.glsl),
+// so a lower scale does not change the look of the ribbons.
+export const PHONE_MAX_PX=6e5,PHONE_SN=40;
+// Canvas px per CSS px for a w x h CSS window at device ratio dpr, with the
+// page render scale rs (0.85).
+export function renderScale(w,h,dpr,coarse,rs=.85){
+  let s=Math.min(dpr||1,2)*rs;
+  if(coarse)s=Math.min(s,Math.sqrt(PHONE_MAX_PX/Math.max(1,w*h)));
+  return Math.max(.25,s);}
+// The camera target shift that puts the body centre at (ox, oy) CSS px from
+// the canvas centre (right and down are +), for camera angles t, p, distance
+// d, focal length f (canvas heights) and canvas height H in CSS px. It uses
+// the camera basis of sdf.frag.glsl: uu is screen right, vv is screen up.
+export function panOffset(ox,oy,t,p,d,f,H){
+  const o=[Math.sin(t)*Math.cos(p),Math.sin(p),Math.cos(t)*Math.cos(p)];
+  const ww=[-o[0],-o[1],-o[2]],uu=nrm([ww[2],0,-ww[0]]);
+  const vv=[ww[1]*uu[2]-ww[2]*uu[1],ww[2]*uu[0]-ww[0]*uu[2],ww[0]*uu[1]-ww[1]*uu[0]];
+  const k=d/(f*H);
+  return[(vv[0]*oy-uu[0]*ox)*k,(vv[1]*oy-uu[1]*ox)*k,(vv[2]*oy-uu[2]*ox)*k];}
