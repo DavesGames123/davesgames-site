@@ -63,16 +63,18 @@
 // ============================================================================
 import * as P from './physics.js';
 import { SimGPU, loadSimCode } from './engine.js';
-import { Renderer, loadRenderCode, norm, cross, sub } from './render.js';
-import { SCENARIOS, REAL, STORY, SATURN_RINGS, specFor, flybyStart } from './scenarios.js';
+import { Renderer, loadRenderCode } from './render.js';
+import { SCENARIOS, REAL, STORY, specFor, flybyStart } from './scenarios.js';
 import { drawGauge, drawBound, drawEnergy, drawRuns, MAT_COLOR } from './plots.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import { cam, camStats, resetCamStats } from './app/camera.js';
 import { cardArt } from './app/card-art.js';
-import { $, QUALITY, Q, UI, PHONE_Q, G_SI, CALM_SPEED, COARSE, SNAP_CAP, RUNS_KEY, KM_SATURN, SPEED_STOPS, REF_SWEEP, SPEED_MIN, SPEED_MAX, N_OPTS, RM_Q } from './app/env.js';
+import { drawFrame } from './app/draw.js';
+import { $, QUALITY, Q, UI, PHONE_Q, G_SI, CALM_SPEED, COARSE, SNAP_CAP, RUNS_KEY, SPEED_STOPS, KM_SATURN, REF_SWEEP, SPEED_MIN, SPEED_MAX, N_OPTS, RM_Q } from './app/env.js';
 import { workerJobs, workerCall } from './app/jobs.js';
 import { drawLegend } from './app/legend.js';
-import { occlusion } from './app/occlusion.js';
-import { satState, satCentre } from './app/sat.js';
+import { buildSegments } from './app/lines.js';
+import { satState } from './app/sat.js';
 import { S, bootDone, pileCache, bootReady } from './app/state.js';
 
 let gpuPending = false;
@@ -320,7 +322,7 @@ function timeToPeri(X, V, GM, el) {
   let H = Math.acosh(Math.max(1, (1 + r / a) / e)); if (rv < 0) H = -H;
   return -(e * Math.sinh(H) - H) / n;
 }
-function limitsFor(spec) {
+export function limitsFor(spec) {
   const c = Math.cbrt(spec.q);
   return { rigid: P.K_RIGID * c, sync: P.K_RIGID_SYNC * c, fluid: P.K_FLUID * c, chandra: P.K_FLUID_CH * c };
 }
@@ -337,7 +339,7 @@ function frame(now) {
 }
 // The speed in orbits per minute of wall time. Reduce motion caps it at
 // Normal; the screensaver sets its own.
-function orbitsPerMin() {
+export function orbitsPerMin() {
   if (S.saverOn && S.saver) return S.saver.speed;
   return Math.pow(10, UI.calm ? Math.min(UI.speedLog, CALM_SPEED) : UI.speedLog);
 }
@@ -616,348 +618,6 @@ function seekPhase(key) {
   if (i < 0) i = S.run.snaps.length - 1;
   setPaused(true);
   restoreSnap(i);
-}
-
-// ── camera ────────────────────────────────────────────────────────────────
-// The user found the first version nauseating and asked for the planet to
-// stay still while the moon goes round. Now:
-//   - the default is the planet view: the planet at the centre, a fixed
-//     direction and a fixed distance for the run (run.viewD); the camera
-//     never follows the moon unless the user picks Follow
-//   - every view is inertial (az and el fixed in space) with +z up: no roll
-//   - a governor moves the camera: an ease toward the goal with a speed
-//     limit and an acceleration limit, for the turn of the view, for the
-//     target (as a fraction of the distance) and for the zoom. A drag or a
-//     pinch moves it at once; a button choice gets at most 6 deg/s; all
-//     else stays under ROT_MAX
-//   - camStats keeps the largest view rotation (deg/s, deg/frame) and the
-//     largest shift of the planet centre on screen (deg/frame), user moves
-//     not counted
-
-const FOLLOW_MAX_DEG = 8;        // deg/s of the moon about the planet, real time
-const ROT_MAX = { calm: 2.5, normal: 4 };        // deg/s, view turn
-const ROT_BOOST = 6;                              // deg/s, after a button choice
-const LIN_MAX = { calm: 0.025, normal: 0.035 };  // target speed / distance, 1/s
-const ZOOM_MAX = { calm: 0.08, normal: 0.12 };   // d(ln dist)/dt, 1/s
-const cam = { az: 0.9, el: 0.22, zoom: 1, pose: null, user: false, dragging: false, boostUntil: 0, vr: 0, vl: 0, vz: 0, fastFollow: false };
-const camStats = { rotDegS: 0, rotDegFrame: 0, planetDegFrame: 0, planetDegS: 0, frames: 0, userFrames: 0, prev: null };
-function resetCamStats() { Object.assign(camStats, { rotDegS: 0, rotDegFrame: 0, planetDegFrame: 0, planetDegS: 0, frames: 0, userFrames: 0, prev: null }); }
-// sim time per real second at the current speed
-function simRate() { return UI.paused ? 0 : orbitsPerMin() / 60 * S.run.T0; }
-function camGoal(cssW, cssH) {
-  const s = S.run.sats[0];
-  const Rw = (s.Rs || s.C.Rs) * s.k;
-  let target, dist, el = cam.el;
-  let mode = UI.cam;
-  cam.fastFollow = false;
-  if (mode === 'follow' && S.run.phase === 'orbit') {
-    // how fast does the moon go round the planet, in real time?
-    const st = satState(s), r = Math.hypot(...st.r), h = Math.hypot(...cross(st.r, st.v));
-    const degS = h / (r * r) * simRate() * 180 / Math.PI;
-    if (degS > FOLLOW_MAX_DEG) { cam.fastFollow = true; mode = 'planet'; }
-  }
-  const vd = S.run.viewD || 2.5;
-  if (mode === 'follow') {
-    target = satCentre(s);
-    dist = 9 * Rw;
-    if (S.run.spec.kind === 'flyby' && s.an && s.an.comAll) {
-      const dt = s.gpu.t - s.an.t;
-      if (!s.an.live) target = [0, 1, 2].map(i => (s.ref.X[i] + s.an.comAll[i] + s.an.vcmAll[i] * dt) * s.k);
-      dist = Math.min(Math.max(dist, 1.2 * s.an.spread * s.k), 30 * Rw);
-    }
-  } else if (mode === 'planet') {
-    target = [0, 0, 0]; dist = 2.35 * vd;
-  } else {
-    target = [0, 0, 0]; dist = 2.6 * vd; el = 1.42;
-  }
-  if (mode !== 'follow') dist *= Math.max(1, 0.8 * cssH / cssW);
-  return { target, dist: dist * cam.zoom, az: cam.az, el };
-}
-// The eye and target for a goal, framed in the clear part of the canvas.
-function poseOf(g, cssW, cssH) {
-  const o = occlusion(cssW, cssH);
-  const clearW = Math.max(80, cssW - o.l - o.r), clearH = Math.max(80, cssH - o.t - o.b);
-  const fit = Math.min(1.9, Math.max(cssW / clearW * 0.85, cssH / clearH, 1));
-  const dist = g.dist * fit;
-  const ce = Math.cos(g.el), dir = [ce * Math.cos(g.az), ce * Math.sin(g.az), Math.sin(g.el)];
-  const eye = [0, 1, 2].map(i => g.target[i] + dist * dir[i]), target = g.target.slice();
-  const f = norm(sub(target, eye)), r = norm(cross(f, [0, 0, 1])), u = cross(r, f);
-  const focal = 0.5 * cssH / Math.tan(FOV / 2);
-  const ox = (o.l - o.r) / 2, oy = (o.b - o.t) / 2;
-  const sx = -ox * dist / focal, sy = -oy * dist / focal;
-  for (let i = 0; i < 3; i++) { const d = sx * r[i] + sy * u[i]; eye[i] += d; target[i] += d; }
-  const re = Math.hypot(...eye);
-  if (re < 1.3) for (let i = 0; i < 3; i++) eye[i] *= 1.3 / re;
-  return { eye, target };
-}
-const FOV = 0.62;
-// rotate unit vector a toward unit vector b by at most ang (radians)
-function turnToward(a, b, ang) {
-  const c = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])), full = Math.acos(c);
-  if (full < 1e-9) return b.slice();
-  if (ang >= full) return b.slice();
-  let ax = cross(a, b); const l = Math.hypot(...ax);
-  ax = l < 1e-9 ? [0, 0, 1] : ax.map(q => q / l);
-  const cs = Math.cos(ang), sn = Math.sin(ang), d = ax[0] * a[0] + ax[1] * a[1] + ax[2] * a[2], x = cross(ax, a);
-  return [0, 1, 2].map(i => a[i] * cs + x[i] * sn + ax[i] * d * (1 - cs));
-}
-function cameraFrame(dtReal, cssW, cssH) {
-  const g = camGoal(cssW, cssH);
-  if (S.saverOn && S.saver) saverCamera(g, dtReal);
-  const want = poseOf(g, cssW, cssH);
-  const P0 = cam.pose;
-  if (!P0 || ![...P0.eye, ...P0.target].every(Number.isFinite)) { cam.pose = { eye: want.eye.slice(), target: want.target.slice() }; return finishPose(dtReal, true); }
-  const dt = Math.max(1e-3, Math.min(0.1, dtReal));
-  const user = cam.dragging || performance.now() < (cam.userUntil || 0), boost = performance.now() < cam.boostUntil;
-  const calm = UI.calm ? 'calm' : 'normal';
-  const rotMax = (user ? 720 : boost && !UI.calm ? ROT_BOOST : ROT_MAX[calm]) * Math.PI / 180;
-  const linMax = user ? 50 : boost ? 0.2 : LIN_MAX[calm];
-  const zoomMax = user ? 50 : boost ? 0.3 : ZOOM_MAX[calm];
-  const acc = user ? 1e9 : 2.0;            // speed limits are reached in about 0.5 s
-  const ease = 1 - Math.exp(-dt * (user ? 40 : 1.4));
-  // the offset of the eye from the target: direction and length
-  const oC = sub(P0.eye, P0.target), oW = sub(want.eye, want.target);
-  const lC = Math.hypot(...oC), lW = Math.hypot(...oW);
-  const dC = oC.map(q => q / lC), dW2 = oW.map(q => q / lW);
-  const ang = Math.acos(Math.max(-1, Math.min(1, dC[0] * dW2[0] + dC[1] * dW2[1] + dC[2] * dW2[2])));
-  cam.vr = Math.min(Math.min(rotMax, ang * ease / dt), cam.vr + acc * rotMax * dt);
-  const dir = turnToward(dC, dW2, cam.vr * dt);
-  const lz = Math.log(lW / lC);
-  cam.vz = Math.min(Math.min(zoomMax, Math.abs(lz) * ease / dt), cam.vz + acc * zoomMax * dt);
-  const len = lC * Math.exp(Math.sign(lz) * Math.min(Math.abs(lz), cam.vz * dt));
-  const dT = sub(want.target, P0.target), lT = Math.hypot(...dT);
-  const vmax = linMax * len;
-  cam.vl = Math.min(Math.min(vmax, lT * ease / dt), cam.vl + acc * vmax * dt);
-  const stepT = lT > 1e-12 ? Math.min(lT, cam.vl * dt) / lT : 0;
-  const target = [0, 1, 2].map(i => P0.target[i] + dT[i] * stepT);
-  let eye = [0, 1, 2].map(i => target[i] + dir[i] * len);
-  const re = Math.hypot(...eye);
-  if (re < 1.3) eye = eye.map(q => q * 1.3 / re);
-  cam.pose = { eye, target };
-  return finishPose(dtReal, false, user);
-}
-// The frame for the renderer, and the motion statistics. Only user moves
-// (drag, pinch, wheel) are exempt from camStats; the 6 deg/s button boost
-// is counted.
-function finishPose(dtReal, snapped, exempt = false) {
-  const { eye, target } = cam.pose;
-  const dist = Math.hypot(...sub(eye, target));
-  const f = norm(sub(target, eye)), r = norm(cross(f, [0, 0, 1])), u = cross(r, f);
-  const pc = norm(sub([0, 0, 0], eye));
-  const pcCam = [dot3(pc, r), dot3(pc, u), dot3(pc, f)];
-  const pv = camStats.prev;
-  if (pv && !snapped && dtReal > 0 && dtReal < 0.1) {
-    // the turn between the two camera bases: angle of B_prev^T B_now
-    const tr = dot3(pv.r, r) + dot3(pv.u, u) + dot3(pv.f, f);
-    const rot = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2))) * 180 / Math.PI;
-    const pl = Math.acos(Math.max(-1, Math.min(1, dot3(pv.pc, pcCam)))) * 180 / Math.PI;
-    if (exempt || (S.saverOn && S.saver && S.saver.fade < 0.05)) camStats.userFrames++;
-    else {
-      camStats.frames++;
-      camStats.rotDegFrame = Math.max(camStats.rotDegFrame, rot); camStats.rotDegS = Math.max(camStats.rotDegS, rot / dtReal);
-      camStats.planetDegFrame = Math.max(camStats.planetDegFrame, pl); camStats.planetDegS = Math.max(camStats.planetDegS, pl / dtReal);
-    }
-  }
-  camStats.prev = { r, u, f, pc: pcCam };
-  return { eye, target, fov: FOV, near: Math.max(1e-4, dist * 0.02), subject: target };
-}
-function dot3(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
-
-// ── overlays: lines ───────────────────────────────────────────────────────
-let segs = new Float32Array(16 * 8192), segN = 0;
-function seg(a, b, ca, cb, w) {
-  if (segN >= 8192) return;
-  const o = segN++ * 16;
-  segs[o] = a[0]; segs[o + 1] = a[1]; segs[o + 2] = a[2]; segs[o + 3] = w;
-  segs[o + 4] = b[0]; segs[o + 5] = b[1]; segs[o + 6] = b[2];
-  segs.set(ca, o + 8); segs.set(cb, o + 12);
-}
-function circle(c, r, col, w, dash = 0, n = 192) {
-  for (let i = 0; i < n; i++) {
-    if (dash && (i % 4) >= 2) continue;
-    const a0 = 2 * Math.PI * i / n, a1 = 2 * Math.PI * (i + 1) / n;
-    seg([c[0] + r * Math.cos(a0), c[1] + r * Math.sin(a0), c[2]], [c[0] + r * Math.cos(a1), c[1] + r * Math.sin(a1), c[2]], col, col, w);
-  }
-}
-function hex(h, a) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255, a]; }
-// The Roche limit (fluid) bright, the solid-moon limit faint, the path
-// ahead, the past track, the drag arrow on the moon while the drag is on,
-// and (paused only) short paths of shed grains.
-function buildSegments(dpr) {
-  segN = 0;
-  const s0 = S.run.sats[0], L = S.run.limits || limitsFor(S.run.spec);
-  const W = 1.6 * dpr;
-  if (UI.rings) {
-    circle([0, 0, 0], L.fluid, hex('#ff7a59', 0.8), W, 0, 256);
-    circle([0, 0, 0], L.rigid, hex('#9aa6b8', 0.35), W * 0.7, 1);
-  }
-  if (S.run.phase !== 'orbit') return;
-  for (const s of S.run.sats) {
-    const c = satCentre(s);
-    if (UI.hill && s.an && s.an.live && Number.isFinite(s.an.rH)) circle(c, s.an.rH * s.k, [1, 1, 1, 0.45], W * 0.8, 1, 96);
-    if (UI.pred && (!s.an || s.an.live)) {
-      const st = satState(s);
-      const T = S.run.spec.kind === 'flyby' ? 2.5 * S.run.T0 : 0.6 * S.run.T0;
-      const pts = P.keplerPath(st.r, st.v, s.pl.GM, T, 120).pts;
-      for (let i = 0; i < 119; i++) {
-        const a0 = 0.55 * (1 - i / 119), a1 = 0.55 * (1 - (i + 1) / 119);
-        seg([pts[3 * i] * s.k, pts[3 * i + 1] * s.k, pts[3 * i + 2] * s.k], [pts[3 * i + 3] * s.k, pts[3 * i + 4] * s.k, pts[3 * i + 5] * s.k], [1, 0.95, 0.85, a0], [1, 0.95, 0.85, a1], W * 0.8);
-      }
-    }
-    if (UI.pred && UI.paused && !S.saverOn) {
-      for (const fp of s.frag) {
-        for (let i = 0; i < 23; i++) {
-          const a0 = 0.32 * (1 - i / 23), a1 = 0.32 * (1 - (i + 1) / 23);
-          seg([fp[3 * i] * s.k, fp[3 * i + 1] * s.k, fp[3 * i + 2] * s.k], [fp[3 * i + 3] * s.k, fp[3 * i + 4] * s.k, fp[3 * i + 5] * s.k], [0.55, 0.85, 1, a0], [0.55, 0.85, 1, a1], W * 0.55);
-        }
-      }
-    }
-    // the drag: an arrow against the motion, from the moon's edge
-    if (s.pl.drag > 0 && (!s.an || s.an.live)) {
-      const st = satState(s), v = norm(st.v), Rw = (s.Rs || s.C.Rs) * s.k;
-      const a = [0, 1, 2].map(i => c[i] - v[i] * 1.3 * Rw), b = [0, 1, 2].map(i => c[i] - v[i] * (1.3 * Rw + 0.32));
-      const col = [1, 0.62, 0.3, 0.85];
-      seg(a, b, col, col, W * 1.1);
-      const sd = norm(cross(v, [0, 0, 1]));
-      for (const sg of [1, -1]) seg(b, [0, 1, 2].map(i => b[i] + v[i] * 0.07 + sd[i] * sg * 0.045), col, col, W * 1.1);
-    }
-  }
-  if (UI.track && S.run.track.length > 1) {
-    const tr = S.run.track, n = tr.length;
-    for (let i = 1; i < n; i++) { const a = 0.45 * i / n; seg(tr[i - 1], tr[i], [1, 0.75, 0.35, a * 0.9], [1, 0.75, 0.35, a], W * 0.8); }
-    if (s0.an && s0.an.live) seg(tr[n - 1], satCentre(s0), [1, 0.75, 0.35, 0.45], [1, 0.75, 0.35, 0.45], W * 0.8);
-  }
-}
-
-// ── field overlay ─────────────────────────────────────────────────────────
-// World units: lengths in R_p, GM scaled by k^3, Omega in 1/sim time.
-function fieldParams() {
-  const s = S.run.sats[0];
-  const k = s.k, c = satCentre(s);
-  // the bound mass while the moon lives; after that, the start mass at the
-  // frame point (the lobe a moon of that mass would have there)
-  const fM = s.an && s.an.live ? s.an.f : 1;
-  const GMs = P.G * (s.M0 || 1) * fM * k ** 3, GMp = s.pl.GM * k ** 3;
-  const st = satState(s);
-  const r = Math.hypot(...st.r), h = Math.hypot(...cross(st.r, st.v));
-  const omega = h / (r * r);
-  const satR = (s.Rs || s.C.Rs) * k * Math.cbrt(fM);
-  const phi = p => { const rp = Math.max(Math.hypot(...p), 1), rs = Math.max(Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]), satR); return -GMp / rp - GMs / rs - 0.5 * omega * omega * (p[0] * p[0] + p[1] * p[1]); };
-  // L1: the highest Phi on the line from the planet to the moon
-  const dc = Math.hypot(...c), u = c.map(q => q / dc);
-  let best = -Infinity, bx = 0;
-  for (let i = 0; i <= 400; i++) { const x = dc * (0.55 + 0.45 * i / 400) - satR * 0.2; const v = phi(u.map(q => q * x)); if (x < dc - satR && v > best) { best = v; bx = x; } }
-  // colour scale: the depth of the moon's lobe below L1
-  const depth = Math.abs(best - phi([c[0] + u[0] * satR, c[1] + u[1] * satR, c[2] + u[2] * satR]));
-  return { GMs, GMp, omega, phiL1: best, L1: u.map(q => q * bx), satR, c, scale: Math.max(depth, 1e-9), ext: Math.max(2.2, dc + 1.2) };
-}
-// The field values change in steps when an analysis lands (bound mass,
-// L1): ease them over about a second, so the contours never jump.
-let fieldS = null;
-function smoothField(f, dt) {
-  if (!fieldS || fieldS.serial !== S.run.serial) { fieldS = Object.assign({ serial: S.run.serial }, f); return f; }
-  const k = 1 - Math.exp(-Math.min(0.1, dt || 0.016) / (UI.calm ? 1.2 : 0.6));
-  for (const key of ['GMs', 'omega', 'phiL1', 'scale', 'satR', 'ext']) fieldS[key] += (f[key] - fieldS[key]) * k;
-  fieldS.L1 = fieldS.L1.map((q, i) => q + (f.L1[i] - q) * k);
-  return Object.assign({}, f, fieldS, { c: f.c });
-}
-
-// ── draw ──────────────────────────────────────────────────────────────────
-// The sun behind the planet as seen from the eye, and below the ring
-// plane while the eye is above it: the ring is seen in transmitted,
-// forward-scattered light, and the atmosphere rim glows.
-function backlitSun(cf) { const d = norm(sub([0, 0, 0], cf.eye)); return norm([d[0] + 0.14, d[1] - 0.06, -Math.abs(d[2]) - 0.10]); }
-// the sun: about 40 degrees from the default view and 34 degrees above the
-// orbit plane, so a moon beyond 1.8 R_p is never in the planet's shadow
-const SUN = norm([-0.024, 0.825, 0.565]);
-function drawFrame(now, cssW, cssH, steps) {
-  const dtReal = Math.min(0.1, (now - (S.run.lastDraw || now)) / 1000); S.run.lastDraw = now;
-  const cf = cameraFrame(dtReal || 0.016, cssW, cssH);
-  const dpr = S.ren.W / cssW;
-  const spec = S.run.spec;
-  const fp = S.run.phase === 'orbit' ? smoothField(fieldParams(), dtReal) : null;
-  const s0 = S.run.sats[0];
-  const style = spec.style === 5 && !S.ren.planetTexW ? 1 : (spec.style ?? 0);
-  const frameT = steps > 0 ? steps * s0.C.dt : 0;
-  const frame = {
-    eye: cf.eye, target: cf.target, fov: cf.fov, near: cf.near, time: now / 1000,
-    sun: S.saverOn && S.saver && S.saver.backlit ? backlitSun(cf) : SUN, sunI: 1.45,
-    atm: spec.style === 3 ? 0.035 : 0.05, spin: now / 1000 * 0.02, style, shine: 0.25,
-    flattening: spec.flattening || 0, realRings: UI.real && spec.rings ? 1 : 0,
-    sat: fp ? fp.c : satCentre(s0), satR: fp ? fp.satR : (s0.C.Rs * s0.k),
-    GMs: fp ? fp.GMs : 0, GMp: fp ? fp.GMp : 0, omega: fp ? fp.omega : 0, phiL1: fp ? fp.phiL1 : 0,
-    fieldMode: fp ? UI.field : 0, fieldExt: fp ? fp.ext : 4, fieldScale: fp ? fp.scale : 1, fieldAlpha: 0.62,
-    ringExt: 3.6, ringGain: UI.ringOn ? UI.ringGain : 0, ringBlend: steps > 0 ? (UI.calm ? 0.94 : Math.min(0.92, 0.6 + 0.08 * steps / 32)) : 0.97, ringOn: UI.ringOn || frameRealRings(spec),
-    exposure: 0.88 * (S.saverOn ? saverFade(dtReal) : 1), bloom: Q.bloom ? 0.08 : 0, bloomThreshold: 1.0, vignette: 0.32,
-    grainR: s0.k,   // the mean grain radius (1) in world units
-  };
-  // the past track of the bound centre: one point per 0.01 R_p of travel
-  if (S.run.phase === 'orbit' && s0.an && s0.an.live) {
-    const c = satCentre(s0), tr = S.run.track, l = tr[tr.length - 1];
-    if (!l || Math.hypot(c[0] - l[0], c[1] - l[1], c[2] - l[2]) > 0.01) { tr.push(c); if (tr.length > 600) tr.shift(); }
-  }
-  buildSegments(dpr);
-  S.ren.setSegments(segs, segN);
-  // the grains' screen motion (streaks if on, and the dimming of grains
-  // that jump more than a few px), and the decay of the collision heat
-  // (time constant 1/20 orbit; frozen while paused)
-  const decay = frameT > 0 ? Math.exp(-frameT / (S.run.T0 / 20)) : 1;
-  const motion = [UI.blur && !UI.calm ? 1 : 0, UI.calm ? 3 : 6, UI.calm ? 0.04 : 0.08, decay];
-  const sims = S.run.sats.map(s => ({
-    e: s.e, ring: S.run.phase === 'orbit',
-    frame: [s.ref.X[0] * s.k, s.ref.X[1] * s.k, s.ref.X[2] * s.k, s.k],
-    refV: [s.ref.V[0] * s.k, s.ref.V[1] * s.k, s.ref.V[2] * s.k, frameT], motion,
-    opts: [UI.color, UI.color === 2 ? 1 : 0, 1.0, s.C.vesc],
-    tint: s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1],
-    heatInv: 1 / (S.run.heatRef || 0.006 * s.C.vesc * s.C.vesc),
-  }));
-  S.run.lastFrame = { frame, sims };
-  S.ren.render(frame, sims);
-  placeLabels(cssW, cssH, fp);
-}
-// The real-ring picture is drawn by the ring pass, so that pass runs when
-// it is on even if the debris glow is off.
-function frameRealRings(spec) { return UI.real && !!spec.rings; }
-
-// ── DOM labels ────────────────────────────────────────────────────────────
-const labelEls = {};
-function label(key, text, cls) {
-  let el = labelEls[key];
-  if (!el) { el = labelEls[key] = document.createElement('div'); el.className = 'lbl ' + (cls || ''); $('labels').appendChild(el); }
-  if (el.textContent !== text) el.textContent = text;
-  return el;
-}
-function hideLabel(key) { const el = labelEls[key]; if (el) el.style.display = 'none'; }
-function placeLabels(cssW, cssH, fp) {
-  const show = (key, text, p, cls, dy = 0) => {
-    const el = label(key, text, cls);
-    const q = p && S.ren.project(p, cssW, cssH);
-    if (!q || q.x < 0 || q.y < 0 || q.x > cssW || q.y > cssH) { el.style.display = 'none'; return; }
-    el.style.display = ''; el.style.transform = `translate(${q.x.toFixed(1)}px, ${(q.y + dy).toFixed(1)}px)`;
-  };
-  const L = S.run.limits || limitsFor(S.run.spec);
-  // names on the side of the circles nearest the viewer
-  // (at az +- 1 rad: off to the sides, so no name sits on the planet)
-  const a = cam.az + 1.0;
-  const on = !S.saverOn;
-  if (on && UI.rings) show('r_fluid', 'Roche limit', [L.fluid * Math.cos(a), L.fluid * Math.sin(a), 0], 'ring-fluid', -10);
-  else hideLabel('r_fluid');
-  if (on && UI.rings && L.rigid * Math.sin(1.0) > 1.35) show('r_rigid', 'limit for a solid moon', [L.rigid * Math.cos(a), L.rigid * Math.sin(a), 0], 'ring-rigid', -8);
-  else hideLabel('r_rigid');
-  // today's rings of Saturn: one name for the rings, one for the gap
-  const realOn = on && UI.real && S.run.spec.rings;
-  const A = SATURN_RINGS.find(r => r.name === 'A ring'), CD = SATURN_RINGS.find(r => r.name === 'Cassini Division');
-  const b1 = cam.az - 1.15, b2 = cam.az - 1.6;
-  if (realOn) show('sr_rings', 'today’s rings', [A.r1 / KM_SATURN * Math.cos(b1), A.r1 / KM_SATURN * Math.sin(b1), 0], 'ring-real', 8); else hideLabel('sr_rings');
-  const cdr = (CD.r0 + CD.r1) / 2 / KM_SATURN;
-  if (realOn && cssW >= 600) show('sr_cd', 'Cassini Division', [cdr * Math.cos(b2), cdr * Math.sin(b2), 0], 'ring-real', -14); else hideLabel('sr_cd');
-  const s = S.run.sats[0];
-  if (on && S.run.phase === 'orbit' && s.pl.drag > 0 && (!s.an || s.an.live)) {
-    const c = satCentre(s), st = satState(s), v = norm(st.v), Rw = (s.Rs || s.C.Rs) * s.k;
-    show('drag', 'drag (tides, sped up)', [0, 1, 2].map(i => c[i] - v[i] * (1.3 * Rw + 0.4)), 'drag', 0);
-  } else hideLabel('drag');
-  const showL1 = fp && UI.field === 1 && !S.saverOn && s.an && s.an.live;
-  if (showL1) show('L1', 'L1', fp.L1, 'pt'); else hideLabel('L1');
 }
 
 // ── readouts ──────────────────────────────────────────────────────────────
@@ -1360,7 +1020,7 @@ let cap = P.mu * (Fn + coh);
 if (length(ft) > cap) { ft = ft * (cap / length(ft)); }
 // then the tide, relative to the frame point X
 td = tide(S.X, xi0);`;
-function saverCamera(g, dt) {
+export function saverCamera(g, dt) {
   const sh = S.saver.cur; if (!sh) return;
   const c = sh.cam;
   S.saver.az += dt * S.saver.spin;
@@ -1422,7 +1082,7 @@ function saverScenario() {
   startRun(spec);
 }
 // Called each frame by drawFrame: the fade, as an exposure factor.
-function saverFade(dt) {
+export function saverFade(dt) {
   const sv = S.saver; if (!sv) return 1;
   const rate = sv.fadeTarget > sv.fade ? 0.5 : 0.7;   // 2 s in, 1.4 s out
   sv.fade += Math.sign(sv.fadeTarget - sv.fade) * Math.min(Math.abs(sv.fadeTarget - sv.fade), rate * dt);
