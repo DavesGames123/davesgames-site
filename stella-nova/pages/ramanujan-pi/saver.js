@@ -31,7 +31,7 @@
 //    grep -n 'window.snSaver'        the hook
 // ============================================================================
 import { byId } from './engine.js';
-import { drawRace, drawStream, drawAnatomy, fmtInt, sup } from './charts.js';
+import { drawRace, drawStream, drawAnatomy, fmtInt } from './charts.js';
 
 function mulberry(a) {
   a = (a >>> 0) || 0x9e3779b9;
@@ -137,7 +137,7 @@ export function installSaver(app) {
       params = [{ name: 'terms', value: `${info ? info.k : 0} of ${shot.data.K}` }, { name: 'decimals fixed', value: String(info ? info.locked : 0) }, { name: 'digits per term', value: Sx.rate.toFixed(2) }];
     } else {
       const a = info ? info.a : shot.data[0];
-      params = [{ sym: 'k', value: String(a.k) }, { name: 's(k)', value: `${a.sLen} digits` }, { name: 'term', value: `${a.neg ? '−' : ''}10${sup(a.lt.toFixed(1))}` }];
+      params = [{ sym: 'k', value: String(a.k) }, { name: 's(k)', value: `${a.sLen} digits` }, { sym: `${a.neg ? '-' : ''}10^{${a.lt.toFixed(1)}}`, name: 'term' }];
     }
     const key = JSON.stringify(params);
     if (key === shot.live) return;

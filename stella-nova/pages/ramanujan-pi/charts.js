@@ -32,10 +32,22 @@ const SANS = 'Inter, system-ui, -apple-system, sans-serif';
 const SERIF = "'STIX Two Text', 'Times New Roman', Georgia, serif";
 const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻', '.': '·' };
-export const sup = s => String(s).split('').map(c => SUP[c] || c).join('');
 export const fmtInt = n => Math.round(n).toLocaleString('en-US');
 
+// A power of ten with a real raised exponent: pre + '10' + exp. A minus
+// sign in exp is the true minus (U+2212); the superscript minus glyph
+// was missing in some fonts. after: plain text after the power.
+export function drawPow(g, pre, exp, x, y, px, family, color, align = 'left', base = 'alphabetic', after = '') {
+  const e = String(exp).replace('-', '−'), big = `${px}px ${family}`, small = `${Math.round(px * 0.72 * 10) / 10}px ${family}`;
+  g.font = big; const w1 = g.measureText(pre + '10').width, w3 = after ? g.measureText(after).width : 0;
+  g.font = small; const w2 = g.measureText(e).width;
+  const W = w1 + w2 + w3, x0 = align === 'right' ? x - W : align === 'center' ? x - W / 2 : x;
+  g.fillStyle = color; g.textAlign = 'left'; g.textBaseline = base;
+  g.font = big; g.fillText(pre + '10', x0, y);
+  g.font = small; g.fillText(e, x0 + w1 + 0.5, y - px * 0.42);
+  if (after) { g.font = big; g.fillText(after, x0 + w1 + w2 + 1, y); }
+  return W;
+}
 function text(g, s, x, y, font, color, align = 'left', base = 'alphabetic') {
   g.font = font; g.fillStyle = color; g.textAlign = align; g.textBaseline = base; g.fillText(s, x, y);
 }
@@ -211,7 +223,7 @@ export function drawAnatomy(g, r, rows, o) {
     const x = Math.round(X(v)) + 0.5;
     g.strokeStyle = v === 0 ? 'rgba(200,210,230,0.35)' : INK.grid;
     g.beginPath(); g.moveTo(x, t0 - 6); g.lineTo(x, axY); g.stroke();
-    text(g, '10' + sup(v), x, axY + 14, `${fsz - 1}px ${SERIF}`, INK.dim, 'center');
+    drawPow(g, '', v, x, axY + 16, fsz - 1, SERIF, INK.dim, 'center');
   }
   steps.forEach((s, i) => {
     const y = t0 + rowH * (i + 0.5), x1 = X(s.from), x2 = X(s.to), hgt = Math.max(6, rowH * 0.42);
@@ -224,20 +236,19 @@ export function drawAnatomy(g, r, rows, o) {
     g.beginPath(); g.moveTo(ax + dir * 1, y); g.lineTo(ax - dir * ah, y - hgt / 2 - 3); g.lineTo(ax - dir * ah, y + hgt / 2 + 3); g.closePath(); g.fill();
     // the dotted link to the next row
     if (i < steps.length - 1) { g.strokeStyle = INK.faint; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x2, y); g.lineTo(x2, y + rowH); g.stroke(); g.setLineDash([]); }
-    const val = `${s.to - s.from >= 0 ? '×' : '÷'} 10${sup(Math.abs(s.to - s.from).toFixed(1))}` + (s.v && !compact && !walkOnly ? `   ${s.v}` : '');
+    const pre = `${s.to - s.from >= 0 ? '×' : '÷'} `, ex = Math.abs(s.to - s.from).toFixed(1), after = s.v && !compact && !walkOnly ? `   ${s.v}` : '';
     // the value above the bar, from its start point in its direction
-    const vy = y - hgt / 2 - 5, up = x2 >= x1;
-    const vf = `${fsz + 1}px ${SERIF}`;
-    g.font = vf;
-    const tw = g.measureText(val).width, ok = up ? x1 + tw < R + 8 : x1 - tw > L - lab + 8;
-    text(g, val, ok ? x1 : up ? x1 - 4 : x1 + 4, vy, vf, INK.dim, (up === ok) ? 'left' : 'right', 'bottom');
+    const vy = y - hgt / 2 - 5, up = x2 >= x1, px = fsz + 1;
+    g.font = `${px}px ${SERIF}`;
+    const tw = g.measureText(pre + '10' + ex + after).width, ok = up ? x1 + tw < R + 8 : x1 - tw > L - lab + 8;
+    drawPow(g, pre, ex, ok ? x1 : up ? x1 - 4 : x1 + 4, vy, px, SERIF, INK.dim, (up === ok) ? 'left' : 'right', 'bottom', after);
   });
   // the result
   const yR = t0 + rowH * 4.5, xR = X(a.lt);
   text(g, 'term', r.x + lab - 10, yR, `italic ${fsz + 1}px ${SERIF}`, INK.hi, 'right', 'middle');
   g.fillStyle = INK.hi; g.beginPath(); g.arc(xR, yR, 5, 0, 7); g.fill();
-  const res = `${a.neg ? '−' : '+'}10${sup(a.lt.toFixed(1))}`;
-  text(g, res, xR + (xR > (L + R) / 2 ? -12 : 12), yR, `600 ${fsz + 2}px ${SERIF}`, INK.hi, xR > (L + R) / 2 ? 'right' : 'left', 'middle');
+  const right = xR > (L + R) / 2;
+  drawPow(g, a.neg ? '−' : '+', a.lt.toFixed(1), xR + (right ? -12 : 12), yR, fsz + 2, SERIF, INK.hi, right ? 'right' : 'left', 'middle');
 
   if (walkOnly) return { kAt: null, P: { T: Infinity } };
   // --- the sizes of all terms ---
