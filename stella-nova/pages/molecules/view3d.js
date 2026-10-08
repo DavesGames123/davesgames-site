@@ -18,7 +18,8 @@
 //  match the 2D drawing, so both views open in the same orientation.
 //  setMorph(t) moves the atoms from the flat drawing (t = 0) to the 3D
 //  structure (t = 1); setReveal(k) shows the first k bonds of the drawing
-//  order (draw2d.js drawOrder); setInk(v) blends to a thin white drawing.
+//  order (draw2d.js drawOrder); setInk(v) blends to a thin white drawing
+//  in which the hidden H atoms (counted in the labels) shrink away.
 //
 //  grep -n targets
 //    fit of 3D to 2D ...... "function hornRotation"
@@ -283,7 +284,9 @@ export class View3D {
     const ink = this.ink;
     this.atomIdx.forEach((i, k) => {
       const rv = this.atomRevealed(i);
-      const r = this.radius(i) * rv;
+      // the ink drawing is a skeletal formula: hidden H atoms (their count
+      // is in the label) grow in only as the ink fades
+      const r = this.radius(i) * rv * (i >= M.n ? 1 - ink : 1);
       _m.compose(_v.set(P[3 * i], P[3 * i + 1], P[3 * i + 2]), _q.identity(), _s.set(r, r, r));
       this.atoms.setMatrixAt(k, _m);
     });
@@ -297,7 +300,7 @@ export class View3D {
       let br = lines === 1 ? st.bond : lines === 2 ? st.multi[0] : st.tri[0];
       if (b.h && this.style === 'ball') br *= 0.85;
       if (b.ml) br *= 0.55;                     // a metal-ligand bond: thinner
-      if (ink) br = br * (1 - ink) + 0.035 * ink;
+      if (ink) br = b.h ? br * (1 - ink) : br * (1 - ink) + 0.035 * ink;
       const off = offsets(lines, lines === 3 ? st.tri : st.multi)[l] * (ink ? 1 - 0.45 * ink : 1);
       const { d, n } = fr(k);
       const a0 = new THREE.Vector3(P[3 * b.a], P[3 * b.a + 1], P[3 * b.a + 2]).addScaledVector(n, off);
