@@ -184,5 +184,29 @@ console.log(`sieve to 1e8: ${Date.now() - t0} ms`);
   check('Klauber: the densest column is n^2 + n + 41 shifted', k[0].a === 1 && k[0].b === 81 && k[0].c0 === 1681, T.quadText(k[0].a, k[0].b, k[0].c0, 'm'));
 }
 
+// The zoomed-out filter (glsl.js boxCells, a JS port of one axis). The odd
+// n sit on one parity of the checkerboard, so along a row the marks have
+// period 2 cells. Pixels pxW cells apart sample that row; the spread of the
+// filtered values across pixels is the band strength (0 = no bands). The
+// tent (half-width max(pxW, 2), exact integral per cell, tentCdf) must cut
+// the band spread to at most 0.02 (the box: up to 0.34) and below the box
+// at every zoom, and its weights must sum to 1.
+{
+  const cdf = (x, w) => { const u = Math.max(-1, Math.min(1, x / w)); return u < 0 ? 0.5 * (u + 1) ** 2 : 1 - 0.5 * (1 - u) ** 2; };
+  const mark = x => ((x % 2) + 2) % 2;
+  const box = (c, h) => { let a = 0; for (let x = Math.floor(c - h + 0.5); x <= Math.floor(c + h + 0.5); x++) a += mark(x) * Math.max(0, Math.min(c + h, x + 0.5) - Math.max(c - h, x - 0.5)); return a / (2 * h); };
+  const tent = (c, w) => { let a = 0, ws = 0; for (let x = Math.floor(c - w + 0.5); x <= Math.floor(c + w + 0.5); x++) { const k = cdf(x + 0.5 - c, w) - cdf(x - 0.5 - c, w); a += mark(x) * k; ws += k; } return [a / ws, ws]; };
+  let worst = 0, sumBad = 0;
+  const rows = [];
+  for (const pxW of [0.8, 1.1, 1.5, 1.9, 2.5, 3.3, 4.5, 5.7]) {
+    const sb = [], st = [];
+    for (let k = 0; k < 400; k++) { const c = 0.37 + k * pxW; sb.push(box(c, pxW / 2)); const [v, ws] = tent(c, Math.max(pxW, 2)); st.push(v); if (Math.abs(ws - 1) > 1e-9) sumBad++; }
+    const sd = a => { const m = a.reduce((x, y) => x + y) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+    rows.push(`${pxW}: box ${sd(sb).toFixed(3)} tent ${sd(st).toFixed(3)}`);
+    worst = Math.max(worst, sd(st)); if (sd(st) > sd(sb) + 1e-9) sumBad++;
+  }
+  check('zoomed-out filter: the tent keeps the checkerboard bands under 0.02', worst <= 0.02 && sumBad === 0, `worst tent spread ${worst.toFixed(3)}; ${rows.join(', ')}`);
+}
+
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

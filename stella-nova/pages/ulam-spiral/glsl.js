@@ -31,7 +31,7 @@
 //    grep -n 'int gIdx'           lattice cell -> index k, any shape
 //    grep -n 'vec4 shade'         class -> colour and strength
 //    grep -n 'FIELD_FS'           the per-pixel lattice pass
-//    grep -n 'vec4 boxCells'      the exact box filter over the cells
+//    grep -n 'vec4 boxCells'      the exact tent filter over the cells
 //    grep -n 'vec4 boxPyr'        the box filter over the pyramid blocks
 //    grep -n 'vec4 boxJitter'     the stratified fallback
 //    grep -n 'PYR_FS'             the pyramid level-0 pass
@@ -601,9 +601,9 @@ vec4 cellColor(ivec2 c, vec2 off, float pxW) {
 // uPxW (world units). Three regimes, by the footprint size:
 //   pxW < 0.7          one sample at the pixel centre, with the mark shape
 //                      and the halo of the neighbours
-//   0.7 .. uBoxMax     boxCells: every cell under the footprint, weighted
-//                      by the area it shares with the footprint (an exact
-//                      box filter, no sample stride)
+//   0.7 .. uBoxMax     boxCells: every cell under the filter, weighted by
+//                      the exact integral of a tent filter over the cell
+//                      (no sample stride)
 //   > uBoxMax          boxPyr: the same box filter over the blocks of the
 //                      pyramid (PYR_FS), exact sums of B0 x B0 cells, or
 //                      boxJitter (stratified cell pairs) while the pyramid
@@ -612,6 +612,15 @@ vec4 cellColor(ivec2 c, vec2 off, float pxW) {
 // checkerboard only (all odd n sit on one parity), so the old sub-pixel
 // grid lost the prime diagonals or doubled them as the zoom changed.
 // The box filter keeps the mean light of a region the same at every zoom.
+// But a box one pixel wide still aliased: the odd n (all primes past 2) sit
+// on one parity of the checkerboard, a pattern of period 2 cells, and a box
+// of 1.5 or 2.5 cells takes a share of it that changes from pixel to pixel.
+// The user saw bands while the saver zoomed out. The filter is now a tent
+// (area 1), separable, integrated exactly over each cell or block
+// (tentCdf), with half-width max(pxW, 2) cells. Its response at the
+// checkerboard frequency (1/2 per cell) is sinc^2(w / 2), zero at w = 2, so
+// the bands near pxW 0.7 .. 1.1 (the pattern near the pixel spacing) go
+// too; a one-pixel tent left them (0.26 against the box 0.34 at pxW 0.8).
 // Lattice coordinates: square shapes use the cell (x, y); hex shapes use
 // axial (q, r), where a cell is a unit square and the footprint is the
 // sheared square of the same area (pxW wide, pxW / SQ3 high).
@@ -631,20 +640,27 @@ vec2 latOf(vec2 wl) {
   float r = wl.y / SQ3;
   return vec2(wl.x - 0.5 * r, r);
 }
+// The integral of the tent of half-width w (area 1) from -infinity to x.
+vec2 tentCdf(vec2 x, vec2 w) {
+  vec2 u = clamp(x / w, -1.0, 1.0);
+  return mix(0.5 * (u + 1.0) * (u + 1.0), 1.0 - 0.5 * (1.0 - u) * (1.0 - u), step(0.0, u));
+}
 vec4 boxCells(vec2 lc, vec2 h) {
-  vec2 lo = lc - h, hi = lc + h;
+  vec2 w = max(2.0 * h, vec2(2.0)), lo = lc - w, hi = lc + w;
   ivec2 c0 = ivec2(floor(lo + 0.5)), c1 = ivec2(floor(hi + 0.5));
   vec4 acc = vec4(0.0);
+  float wsum = 0.0;
   for (int j = 0; j < 16; j++) {
     int y = c0.y + j; if (y > c1.y) break;
-    float wy = min(hi.y, float(y) + 0.5) - max(lo.y, float(y) - 0.5);
+    float wy = tentCdf(vec2(float(y) + 0.5 - lc.y), w).y - tentCdf(vec2(float(y) - 0.5 - lc.y), w).y;
     for (int i = 0; i < 16; i++) {
       int x = c0.x + i; if (x > c1.x) break;
-      float wx = min(hi.x, float(x) + 0.5) - max(lo.x, float(x) - 0.5);
+      float wx = tentCdf(vec2(float(x) + 0.5 - lc.x), w).x - tentCdf(vec2(float(x) - 0.5 - lc.x), w).x;
       acc += cellColor(uBase + ivec2(x, y), vec2(0.0), 1.0) * (wx * wy);
+      wsum += wx * wy;
     }
   }
-  return acc / (4.0 * h.x * h.y);
+  return acc / max(wsum, 1e-6);
 }
 vec2 hash2(ivec2 p) {
   uint n = uint(p.x + 1073741824) * 1597334673u ^ uint(p.y + 1073741824) * 3812015801u;
@@ -673,29 +689,30 @@ vec4 boxJitter(vec2 lc, vec2 h) {
 // the footprint covers at most 4 blocks per side. A part of the footprint
 // outside the pyramid gets boxJitter.
 vec4 boxPyr(vec2 lc, vec2 h) {
-  float hm = max(h.x, h.y);
-  int L = int(clamp(ceil(log2(2.0 * hm / (4.0 * float(uPyrB0)))), 0.0, float(uPyrLevels - 1)));
+  // the tent spans 2w = 4h cells: the level keeps that within 4 blocks
+  vec2 w = max(2.0 * h, vec2(2.0));
+  float wm = max(w.x, w.y);
+  int L = int(clamp(ceil(log2(2.0 * wm / (4.0 * float(uPyrB0)))), 0.0, float(uPyrLevels - 1)));
   ivec2 sz = max(uPyrSize >> L, ivec2(1));
   vec2 blk = vec2(uPyrSize * uPyrB0) / vec2(sz);
   vec2 p = vec2(uBase - uPyrOrg) + lc + 0.5;
-  vec2 u0 = (p - h) / blk, u1 = (p + h) / blk;
+  vec2 u0 = (p - w) / blk, u1 = (p + w) / blk;
   ivec2 t0 = max(ivec2(floor(u0)), ivec2(0)), t1 = min(ivec2(floor(u1)), sz - 1);
   vec4 acc = vec4(0.0);
   float win = 0.0;
   for (int j = 0; j < 7; j++) {
     int y = t0.y + j; if (y > t1.y) break;
-    float wy = min(u1.y, float(y + 1)) - max(u0.y, float(y));
+    float wy = tentCdf(vec2(float(y + 1) * blk.y - p.y), w).y - tentCdf(vec2(float(y) * blk.y - p.y), w).y;
     for (int i = 0; i < 7; i++) {
       int x = t0.x + i; if (x > t1.x) break;
-      float wx = min(u1.x, float(x + 1)) - max(u0.x, float(x));
+      float wx = tentCdf(vec2(float(x + 1) * blk.x - p.x), w).x - tentCdf(vec2(float(x) * blk.x - p.x), w).x;
       vec4 v = texelFetch(uPyr, ivec2(x, y), L);
       if (uPyrAlpha == 1) v = vec4(0.0, 0.0, 0.0, v.r);
+      // a texel is the mean colour of its block (PYR_FS)
       acc += v * (wx * wy); win += wx * wy;
     }
   }
-  float area = (u1.x - u0.x) * (u1.y - u0.y);
-  float wout = 1.0 - win / area;
-  acc /= area;
+  float wout = 1.0 - win;
   if (wout > 0.002) acc += boxJitter(lc, h) * wout;
   return acc;
 }
