@@ -1,6 +1,14 @@
 OUTBREAK — data sources, licences and credits
 =============================================
 
+This page is a toy metapopulation model of natural diseases and
+public-health policy. It is not a forecast. Every disease value and
+every policy effect is approximate and illustrative, picked from the
+ranges in the studies below. Package P checked each citation (authors,
+year, journal, volume, pages) against Crossref and Europe PMC records on
+2026-10-08. The "Fact-check" section at the end lists the notes that the
+cited text does not support.
+
 Population nodes
 ----------------
 Natural Earth (https://www.naturalearthdata.com), public domain.
@@ -12,3 +20,259 @@ Natural Earth (https://www.naturalearthdata.com), public domain.
     largest cities, so a node is a catchment, not the city alone.
     Left out: countries under 150,000 people, and N. Cyprus and
     S. Sudan (no city matched the country code in the 1:50m places).
+
+Shared map data (other pages own these files; this page reads them)
+-------------------------------------------------------------------
+  - ../map-projections/data/world.json: Natural Earth ne_50m_land and
+    others, public domain (see map-projections/CREDITS.txt). Land mask
+    for render/field.js and the dot globe.
+    https://www.naturalearthdata.com/
+  - ../storm-globe/data/coast-50m.bin: Natural Earth ne_50m_land and
+    ne_50m_lakes, public domain (see storm-globe/tools/coast.mjs).
+    Coast rings for the night, hologram and flat styles.
+  - ../ancient-earth/data/present/color-2k.jpg: NASA Blue Marble: Next
+    Generation, August 2004 (Reto Stockli, NASA Earth Observatory).
+    Public domain, credit requested. Day texture of the marble style.
+    https://earthobservatory.nasa.gov/features/BlueMarble
+  - ../ancient-earth/data/present/lights-2k.jpg: NASA Black Marble 2016
+    (NASA Earth Observatory, Suomi NPP VIIRS, NASA GSFC). Public domain,
+    credit requested. City lights of the night, marble and flat styles.
+    https://earthobservatory.nasa.gov/features/NightLights
+
+Code libraries (vendored, same origin)
+--------------------------------------
+  - three.js r160 (../../vendor/three@0.160.0), MIT licence,
+    Copyright 2010-2023 three.js authors.
+  - MathJax 3.2.2 (../../vendor/mathjax@3.2.2, through lib/sci-math.js),
+    Apache License 2.0.
+
+Disease presets (diseases.js)
+-----------------------------
+Influenza
+  - Biggerstaff M, Cauchemez S, Reed C, Gambhir M, Finelli L 2014.
+    Estimates of the reproduction number for seasonal, pandemic, and
+    zoonotic influenza: a systematic review of the literature. BMC
+    Infect Dis 14:480. https://doi.org/10.1186/1471-2334-14-480
+    Supports: seasonal R0 1.3 (median 1.28, IQR 1.19-1.37); 1918
+    median R 1.80 (IQR 1.47-2.27).
+  - Carrat F, Vergu E, Ferguson NM, et al. 2008. Time lines of infection
+    and disease in human influenza: a review of volunteer challenge
+    studies. Am J Epidemiol 167(7):775-785.
+    https://doi.org/10.1093/aje/kwm375
+    Supports: latent 2 d, infectious 3 d (shedding about 4-5 days).
+  - Mills CE, Robins JM, Lipsitch M 2004. Transmissibility of 1918
+    pandemic influenza. Nature 432:904-906.
+    https://doi.org/10.1038/nature03063
+    Supports: 1918 R0 2.0 (median R less than 3 in 45 US cities;
+    median R0 less than 4 after prior immunity).
+  - Taubenberger JK, Morens DM 2006. 1918 influenza: the mother of all
+    pandemics. Emerg Infect Dis 12(1):15-22.
+    https://doi.org/10.3201/eid1201.050979
+    Supports: 1918 fatality 0.02 (case fatality above 2.5 %).
+Measles
+  - Guerra FM, Bolotin S, Lim G, et al. 2017. The basic reproduction
+    number (R0) of measles: a systematic review. Lancet Infect Dis
+    17(12):e420-e428. https://doi.org/10.1016/S1473-3099(17)30307-9
+    Supports: R0 15 (the often quoted 12-18).
+  - World Health Organization. Measles fact sheet.
+    https://www.who.int/news-room/fact-sheets/detail/measles
+    Supports: latent and infectious periods, vaccine efficacy 0.97.
+COVID-19
+  - Liu Y, Gayle AA, Wilder-Smith A, Rocklov J 2020. The reproductive
+    number of COVID-19 is higher compared to SARS coronavirus. J Travel
+    Med 27(2):taaa021. https://doi.org/10.1093/jtm/taaa021
+    Supports: R0 2.8 (median 2.79).
+  - Brazeau NF, Verity R, Jenks S, et al. 2020. Report 34: COVID-19
+    infection fatality ratio estimates from seroprevalence. Imperial
+    College London. https://doi.org/10.25561/83545
+    Supports: IFR 0.006 (population IFR about 0.2 % to above 1 %).
+  - Liu Y, Rocklov J 2021. The reproductive number of the Delta variant
+    of SARS-CoV-2 is far higher compared to the ancestral SARS-CoV-2
+    virus. J Travel Med 28(7):taab124.
+    https://doi.org/10.1093/jtm/taab124
+    Supports: variant R0 6 (mean 5.08, range 3.2-8).
+  - Lauer SA, Grantz KH, Bi Q, et al. 2020. The incubation period of
+    coronavirus disease 2019 (COVID-19) from publicly reported
+    confirmed cases: estimation and application. Ann Intern Med
+    172(9):577-582. https://doi.org/10.7326/M20-0504
+    Supports: incubation median 5.1 d, so latent 3 d with
+    presymptomatic spread.
+SARS
+  - Riley S, Fraser C, Donnelly CA, et al. 2003. Transmission dynamics
+    of the etiological agent of SARS in Hong Kong: impact of public
+    health interventions. Science 300:1961-1966.
+    https://doi.org/10.1126/science.1086478
+    Supports: R0 2.5 (2.7 at the start, without superspreading events).
+  - Lipsitch M, Cohen T, Cooper B, et al. 2003. Transmission dynamics
+    and control of severe acute respiratory syndrome. Science
+    300:1966-1970. https://doi.org/10.1126/science.1086616
+    Supports: R0 about 3 without control.
+  - World Health Organization 2003. Summary of probable SARS cases with
+    onset of illness from 1 November 2002 to 31 July 2003.
+    https://www.who.int/publications/m/item/summary-of-probable-sars-cases-with-onset-of-illness-from-1-november-2002-to-31-july-2003
+    Supports: fatality 0.10 (774 deaths in 8096 probable cases, 9.6 %).
+Ebola virus disease
+  - WHO Ebola Response Team 2014. Ebola virus disease in West Africa:
+    the first 9 months of the epidemic and forward projections. N Engl
+    J Med 371(16):1481-1495. https://doi.org/10.1056/NEJMoa1411100
+    Supports: R0 1.8 (1.71-2.02 by country); incubation 11.4 d; case
+    fatality 70.8 % with known outcome.
+  - Uyeki TM, Mehta AK, Davey RT, et al. 2016. Clinical management of
+    Ebola virus disease in the United States and Europe. N Engl J Med
+    374(7):636-646. https://doi.org/10.1056/NEJMoa1504874
+    Supports: lower fatality with intensive care (18.5 %).
+Cholera
+  - Mukandavire Z, Liao S, Wang J, et al. 2011. Estimating the
+    reproductive numbers for the 2008-2009 cholera outbreaks in
+    Zimbabwe. PNAS 108(21):8767-8772.
+    https://doi.org/10.1073/pnas.1019712108
+    Supports: R0 range 1.1-2.7 by province.
+  - Codeco CT 2001. Endemic and epidemic dynamics of cholera: the role
+    of the aquatic reservoir. BMC Infect Dis 1:1.
+    https://doi.org/10.1186/1471-2334-1-1
+    Supports: the water reservoir form of the model.
+Dengue
+  - Favier C, Degallier N, Rosa-Freitas MG, et al. 2006. Early
+    determination of the reproductive number for vector-borne diseases:
+    the case of dengue in Brazil. Trop Med Int Health 11(3):332-340.
+    https://doi.org/10.1111/j.1365-3156.2006.01560.x
+  - World Health Organization. Dengue and severe dengue fact sheet.
+    https://www.who.int/news-room/fact-sheets/detail/dengue-and-severe-dengue
+Malaria
+  - Smith DL, McKenzie FE, Snow RW, Hay SI 2007. Revisiting the basic
+    reproductive number for malaria and its implications for malaria
+    control. PLoS Biol 5(3):e42.
+    https://doi.org/10.1371/journal.pbio.0050042
+  - World Health Organization 2023. World Malaria Report 2023.
+    https://www.who.int/teams/global-malaria-programme/reports/world-malaria-report-2023
+    Supports: about 249 million cases and 608 000 deaths in 2022.
+Plague
+  - Dean KR, Krauer F, Walloe L, et al. 2018. Human ectoparasites and the
+    spread of plague in Europe during the Second Pandemic. PNAS
+    115(6):1304-1309. https://doi.org/10.1073/pnas.1715640115
+    Supports: the flea and louse route ('flea').
+  - World Health Organization. Plague fact sheet.
+    https://www.who.int/news-room/fact-sheets/detail/plague
+    Supports: incubation 1-7 d; untreated bubonic fatality 30-60 %.
+
+Policies (policies.js)
+----------------------
+  - Flaxman S, Mishra S, Gandy A, et al. 2020. Estimating the effects of
+    non-pharmaceutical interventions on COVID-19 in Europe. Nature
+    584:257-261. https://doi.org/10.1038/s41586-020-2405-7
+  - Brauner JM, Mindermann S, Sharma M, et al. 2021. Inferring the
+    effectiveness of government interventions against COVID-19. Science
+    371(6531):eabd9338. https://doi.org/10.1126/science.abd9338
+  - Chu DK, Akl EA, Duda S, et al. 2020. Physical distancing, face
+    masks, and eye protection to prevent person-to-person transmission
+    of SARS-CoV-2 and COVID-19. Lancet 395:1973-1987.
+    https://doi.org/10.1016/S0140-6736(20)31142-9
+  - Fraser C, Riley S, Anderson RM, Ferguson NM 2004. Factors that make
+    an infectious disease outbreak controllable. PNAS 101(16):6146-6151.
+    https://doi.org/10.1073/pnas.0307506101
+  - Chinazzi M, Davis JT, Ajelli M, et al. 2020. The effect of travel
+    restrictions on the spread of the 2019 novel coronavirus (COVID-19)
+    outbreak. Science 368:395-400.
+    https://doi.org/10.1126/science.aba9757
+  - Mateus ALP, Otete HE, Beck CR, Dolan GP, Nguyen-Van-Tam JS 2014.
+    Effectiveness of travel restrictions in the rapid containment of
+    human influenza: a systematic review. Bull World Health Organ
+    92:868-880D. https://doi.org/10.2471/BLT.14.135590
+  - Quilty BJ, Clifford S, CMMID nCoV working group, Flasche S, Eggo RM
+    2020. Effectiveness of airport screening at detecting travellers
+    infected with novel coronavirus (2019-nCoV). Euro Surveill
+    25(5):2000080.
+    https://doi.org/10.2807/1560-7917.ES.2020.25.5.2000080
+  - Bhatt S, Weiss DJ, Cameron E, et al. 2015. The effect of malaria
+    control on Plasmodium falciparum in Africa between 2000 and 2015.
+    Nature 526:207-211. https://doi.org/10.1038/nature15535
+  - Wolf J, Hunter PR, Freeman MC, et al. 2018. Impact of drinking
+    water, sanitation and handwashing with soap on childhood diarrhoeal
+    disease: updated meta-analysis and meta-regression. Trop Med Int
+    Health 23(5):508-525. https://doi.org/10.1111/tmi.13051
+  - Mathieu E, Ritchie H, Ortiz-Ospina E, et al. 2021. A global database
+    of COVID-19 vaccinations. Nat Hum Behav 5:947-953.
+    https://doi.org/10.1038/s41562-021-01122-8
+
+Model and travel network (model.js, network.js, equations.js)
+-------------------------------------------------------------
+  - Kermack WO, McKendrick AG 1927. A contribution to the mathematical
+    theory of epidemics. Proc R Soc Lond A 115:700-721.
+    https://doi.org/10.1098/rspa.1927.0118
+  - Keeling MJ, Rohani P 2008. Modeling Infectious Diseases in Humans
+    and Animals. Princeton University Press.
+    https://press.princeton.edu/books/hardcover/9780691116174/modeling-infectious-diseases-in-humans-and-animals
+  - Smith DL, Battle KE, Hay SI, et al. 2012. Ross, Macdonald, and a
+    theory for the dynamics and control of mosquito-transmitted
+    pathogens. PLoS Pathog 8(4):e1002588.
+    https://doi.org/10.1371/journal.ppat.1002588
+  - Colizza V, Barrat A, Barthelemy M, Vespignani A 2006. The role of the
+    airline transportation network in the prediction and predictability
+    of global epidemics. PNAS 103(7):2015-2020.
+    https://doi.org/10.1073/pnas.0510525103
+  - Balcan D, Colizza V, Goncalves B, et al. 2009. Multiscale mobility
+    networks and the spatial spreading of infectious diseases. PNAS
+    106(51):21484-21489. https://doi.org/10.1073/pnas.0906910106
+  - Shaman J, Kohn M 2009. Absolute humidity modulates influenza
+    survival, transmission, and seasonality. PNAS 106(9):3243-3248.
+    https://doi.org/10.1073/pnas.0806852106
+  - Zipf GK 1946. The P1 P2 / D hypothesis: on the intercity movement of
+    persons. American Sociological Review 11(6):677-686.
+    https://doi.org/10.2307/2087063
+  - Viboud C, Bjornstad ON, Smith DL, et al. 2006. Synchrony, waves, and
+    spatial hierarchies in the spread of influenza. Science 312:447-451.
+    https://doi.org/10.1126/science.1125237
+  - Xia Y, Bjornstad ON, Grenfell BT 2004. Measles metapopulation
+    dynamics: a gravity model for epidemiological coupling and dynamics.
+    American Naturalist 164(2):267-281. https://doi.org/10.1086/422341
+  - ICAO 2019. The World of Air Transport in 2019 (Annual Report of the
+    Council). About 4.5 billion passengers on scheduled services.
+    https://www.icao.int/annual-report-2019/Pages/the-world-of-air-transport-in-2019.aspx
+    No airline route data is used. The flights come from a gravity
+    model, not from OpenFlights or schedules.
+
+Projections and the dot lattice (geo.js, render/)
+-------------------------------------------------
+  - Savric B, Patterson T, Jenny B 2019 (online 2018). The Equal Earth
+    map projection. Int J Geogr Inf Sci 33(3):454-465.
+    https://doi.org/10.1080/13658816.2018.1504949
+  - Gonzalez A 2010. Measurement of areas on a sphere using Fibonacci
+    and latitude-longitude lattices. Math Geosci 42:49-64.
+    https://doi.org/10.1007/s11004-009-9257-x
+
+Fact-check (package P, 2026-10-08)
+----------------------------------
+Every preset value is inside its stated range, and the ranges agree with
+the sources above, except for the items below. Package P does not own
+diseases.js or render/*.js, so the owners must change the notes.
+  1. diseases.js SOURCES[9] (Riley 2003): the note says "case fatality
+     in Hong Kong about 13 %". The Riley paper does not give this value.
+     It is from Donnelly CA, Ghani AC, Leung GM, et al. 2003. Lancet
+     361:1761-1766, https://doi.org/10.1016/S0140-6736(03)13410-1
+     (13.2 % under 60 years, 43.3 % at 60 or more). The title also
+     leaves out ": impact of public health interventions".
+  2. diseases.js SOURCES[21] (Lauer 2020): the note says "infectiousness
+     starts about 2 days before symptoms". Lauer gives only the
+     incubation period. The presymptomatic part is from He X, Lau EHY,
+     Wu P, et al. 2020. Nat Med 26:672-675,
+     https://doi.org/10.1038/s41591-020-0869-5 (infectiousness peaks on
+     or before symptom onset; 44 % of transmission before symptoms).
+  3. plague R0 1.8, range [1.3, 3]: neither cited source (Dean 2018,
+     WHO fact sheet) gives an R0. The nearest primary value is Gani R,
+     Leach S 2004. Emerg Infect Dis 10(4):608-614,
+     https://doi.org/10.3201/eid1004.030509 (pneumonic plague R0 1.3,
+     latent 4.3 d, infectious 2.5 d). Keep 1.8 as illustrative for the
+     ectoparasite route, but cite Gani and Leach for the lower bound.
+  4. diseases.js SOURCES[2] (Mills 2004): the note says "median about
+     2-3 (range 2-4)". The abstract says the median R is less than 3,
+     and the median R0 is less than 4 after prior immunity.
+  5. diseases.js SOURCES[15] (Favier 2006): the abstract gives no R0
+     values. The note "mostly about 2-6" is not verified from the
+     abstract.
+  6. render/style-night.js, style-marble.js, style-flat.js SOURCES: the
+     city lights are "Black Marble 2012" in the notes, but
+     ancient-earth/CREDITS.txt says that lights-2k.jpg is Black Marble
+     2016. Change "2012" to "2016".
+  7. Ebola preset: vaccine exists false, lagDays 365. This is correct for
+     2014. rVSV-ZEBOV (Ervebo) has had a licence since 2019, so the
+     preset shows the 2014 epidemic. Not an error.
