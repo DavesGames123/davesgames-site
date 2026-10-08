@@ -7,9 +7,16 @@
 //  (orbits per minute of wall time) and the planet's real size (for times
 //  and speeds in physical units).
 //  The gallery on the page shows SCENARIOS in this order; the first is the
-//  default: "How Saturn got its rings". Its moon starts at 2.7 Saturn radii
-//  and the drag takes it to 1.7 in 4 orbits, so it crosses the fluid limit
-//  (2.15) after about 2 orbits: about 20 s at the default 6 orbits a minute.
+//  default: "How Saturn got its rings". Its moon starts at 2.24 Saturn
+//  radii, 4% outside the fluid limit (2.15), and the drag takes it to 1.65
+//  in 0.8 orbit. It crosses the limit after 0.24 orbit and starts to shed
+//  after 0.56 orbit (Deno probe, N = 8192, 2026-10-08). pacing.js runs the
+//  approach at 4x the set speed, so the breakup starts about 3 s after the
+//  start on a fast GPU (tests.mjs, test 8). Before 2026-10-08 the moon
+//  started at 2.7 and took 4 orbits to reach 1.7: about 25 s to the first
+//  shed grains.
+//  The drag stands in for tidal decay. It is far faster than in nature
+//  (millions of years); the page says so next to the time warp.
 //  flattening: the drawn shape of the planet (Saturn 0.098); the physics
 //  uses J2 only.
 //  Every scenario starts in an inertial planet view, slightly above the
@@ -45,14 +52,14 @@ export const STORY = [
 
 export const SCENARIOS = [
   { key: 'saturn', name: 'Saturn’s rings', blurb: 'How an icy moon may have become Saturn’s rings.',
-    kind: 'spiral', d: 2.7, d1: 1.7, orbits: 4, q: B.saturn.rho / 1.0, J2: B.saturn.J2, s: 0.08, material: 'fluid',
+    kind: 'spiral', d: 2.24, d1: 1.65, orbits: 0.8, q: B.saturn.rho / 1.0, J2: B.saturn.J2, s: 0.08, material: 'fluid',
     style: 5, flattening: 0.098, planetName: 'Saturn', Rkm: B.saturn.R, rhoS: 1.0, rings: true, speed: 6, el: 0.22, color: 4,
-    hint: 'A Titan-class icy moon (density 1.0 g/cm³) spirals in, as tides and the young ring’s pull drain its orbit. Inside the Roche limit (2.15 Saturn radii for this density) Saturn’s tide tears it apart, and the ice spreads into a ring where the real rings are.' },
+    hint: 'A Titan-class icy moon (density 1.0 g/cm³) spirals in, as tides and the young ring’s pull drain its orbit (here millions of times faster than in nature). Inside the Roche limit (2.15 Saturn radii for this density) Saturn’s tide tears it apart, and the ice spreads into a ring where the real rings are.' },
   { key: 'close', name: 'A moon too close', blurb: 'A moon spirals inward and crosses its Roche limit.',
-    kind: 'spiral', d: 3.2, d1: 1.4, orbits: 5, q: 1, material: 'fluid', style: 0, planetName: 'the planet', speed: 6, color: 4,
+    kind: 'spiral', d: 2.55, d1: 1.75, orbits: 0.9, q: 1, material: 'fluid', style: 0, planetName: 'the planet', speed: 6, color: 4,
     hint: 'A loose moon as dense as its planet starts outside the Roche limit (2.44 planet radii) and spirals in. Watch it stretch, cross the limit, shed from both ends and wind into a ring.' },
   { key: 'flyby', name: 'A comet’s close pass', blurb: 'A loose comet swings past Jupiter and breaks into a string of pearls.',
-    kind: 'flyby', peri: 1.6, e: 1, q: 2.65, material: 'fluid', style: 2, planetName: 'Jupiter', Rkm: B.jupiter.R, rhoS: 0.5, speed: 2, color: 4,
+    kind: 'flyby', peri: 1.6, e: 1, q: 2.65, material: 'fluid', style: 2, planetName: 'Jupiter', Rkm: B.jupiter.R, rhoS: 0.5, speed: 3, color: 4,
     hint: 'A comet passes 1.6 Jupiter radii from the centre, as Shoemaker-Levy 9 did in July 1992. The tide pulls it into a stream; the stream’s own gravity then gathers it into a chain of clumps.' },
   { key: 'compare', name: 'Fluid vs solid moon', blurb: 'Two moons on one orbit: one flows, one holds.',
     kind: 'compare', d: 2.0, q: 1, materials: ['fluid', 'rigid'], style: 0, planetName: 'the planet', speed: 4, color: 0,
@@ -99,5 +106,7 @@ function pick(ui, kind) {
   else if (ui.d !== undefined) o.d = ui.d;
   return o;
 }
-// The start distance of a flyby: well outside the fluid limit.
-export function flybyStart(spec) { return Math.max(1.5 * K_FLUID * Math.cbrt(spec.q), spec.peri + 2.5); }
+// The start distance of a flyby: 25% outside the fluid limit, so the
+// comet starts whole and reaches the limit in about 0.3 T_q (it was 1.5
+// d_fluid and at least peri + 2.5 before 2026-10-08).
+export function flybyStart(spec) { return Math.max(1.25 * K_FLUID * Math.cbrt(spec.q), spec.peri + 1.0); }

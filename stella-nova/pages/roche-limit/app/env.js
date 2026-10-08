@@ -50,7 +50,7 @@ Q.bloom = QUALITY[Q.preset].bloom;
 
 export const UI = {
   scen: 'saturn', body: 'phobos',
-  d: 2.7, peri: 1.6, e: 1, qLog: 0, J2: 0,
+  d: 2.24, peri: 1.6, e: 1, qLog: 0, J2: 0,
   material: 'fluid', mu: 0, coh: 0,
   N: (PHONE_Q.matches || COARSE) ? 4096 : 8192,
   quality: 'auto', showFps: false,

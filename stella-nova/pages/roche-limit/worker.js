@@ -9,11 +9,13 @@
 //    tags     Float32Array, 1 bound, 0 shed (render colour, ring splat)
 //    M, com, vcm, rH, groups    physics.js analyzeBound
 //    E, K, Us, Up, L            physics.js energyOf, in the planet frame
+//    el, axis   physics.js boundShape: the elongation of the bound pile
+//               (pacing.js starts the slow motion on it) and its long axis
 //  A module worker: physics.js is the same module the page and tests use.
 //
 //  grep -n targets: "onmessage"
 // ============================================================================
-import { analyzeBound, energyOf, makeCloud } from './physics.js';
+import { analyzeBound, boundShape, energyOf, makeCloud } from './physics.js';
 
 self.onmessage = e => {
   const q = e.data;
@@ -31,6 +33,7 @@ self.onmessage = e => {
   }
   const an = analyzeBound(pos, vel, mass, rad, 3, X, GMp, N);
   const en = energyOf(pos, vel, spin, rad, mass, phi, X, V, GMp);
+  const sh = boundShape(pos, mass, an.mask, an.com, 3, N);
   const tags = new Float32Array(q.np);
   for (let i = 0; i < N; i++) tags[i] = mass[i] === 0 ? -1 : an.mask[i];
   // a sample of shed grains for the fragment conics: state in the planet frame
@@ -51,5 +54,5 @@ self.onmessage = e => {
   let s2 = 0; for (let i = 0; i < N; i++) { const m = mass[i]; if (!m) continue; s2 += m * ((pos[3 * i] - ca[0]) ** 2 + (pos[3 * i + 1] - ca[1]) ** 2 + (pos[3 * i + 2] - ca[2]) ** 2); }
   const spread = Ma > 0 ? Math.sqrt(s2 / Ma) : 0;
   self.postMessage({ id: q.id, tags, M: an.M, com: an.com, vcm: an.vcm, rH: an.rH, groups: an.groups, largest: an.largest,
-    E: en.E, K: en.K + en.Kr, Us: en.Us, Up: en.Up, L: en.L, frag: new Float64Array(frag), accreted, comAll: ca, vcmAll: va, spread, t: q.t, X, V }, [tags.buffer]);
+    el: sh.el, axis: sh.axis, E: en.E, K: en.K + en.Kr, Us: en.Us, Up: en.Up, L: en.L, frag: new Float64Array(frag), accreted, comAll: ca, vcmAll: va, spread, t: q.t, X, V }, [tags.buffer]);
 };

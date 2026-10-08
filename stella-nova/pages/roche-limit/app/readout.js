@@ -15,7 +15,8 @@ import { drawGauge, drawBound, drawEnergy, drawRuns } from '../plots.js';
 import { syncPlayButtons } from './controls.js';
 import { $, UI, SPEED_STOPS, KM_SATURN, REF_SWEEP } from './env.js';
 import { loadRuns } from './history.js';
-import { orbitsPerMin } from './loop.js';
+import { orbitsPerMin, paceFactor } from './loop.js';
+import { timeWarp } from '../pacing.js';
 import { limitsFor } from './runs.js';
 import { satState } from './sat.js';
 import { S } from './state.js';
@@ -47,6 +48,7 @@ export function refreshReadout(force) {
   const slow = orbit && !UI.paused && got < 0.8 * opm;
   $('speedV').textContent = `${opm < 1 ? opm.toFixed(2) : opm.toFixed(opm < 10 ? 1 : 0)} orbits/min${slow ? ` (GPU: ${got.toFixed(1)})` : ''}`;
   $('speedV').title = S.run.tUnitSec ? `1 s on screen = ${fmtTime(opm / 60 * S.run.T0 * S.run.tUnitSec)} at ${planetName(spec)}` : '';
+  refreshWarp(opm, orbit);
   $('dockSpeedV').textContent = SPEED_STOPS.reduce((b, x) => Math.abs(x.v - UI.speedLog) < Math.abs(b.v - UI.speedLog) ? x : b).name;
   // distance bar: from the surface (1) to a little past the start
   const maxD = Math.max(S.run.viewD * 1.15, L.fluid * 1.3);
@@ -74,6 +76,23 @@ export function refreshReadout(force) {
   $('sentence').textContent = sent;
   if (!$('details').classList.contains('off') || force) refreshDetails(dNow, tt, L);
   syncPlayButtons();
+}
+// The time warp line: how much sim time one wall second shows, and the
+// pace of the story (fast approach, slow motion at the breakup). The inward
+// drift of a spiral is a drag that is far faster than real tides.
+function refreshWarp(opm, orbit) {
+  const el = $('warp'); if (!el) return;
+  if (!orbit || !S.run.tUnitSec) { el.textContent = ''; return; }
+  const w = timeWarp(opm, S.run.T0, S.run.tUnitSec), f = paceFactor();
+  const pc = S.run.pace, slow = pc && pc.mode === 'breakup' && f < 0.7;
+  const mode = UI.paused ? 'paused' : slow ? '<b>slow motion</b>' : f > 1.5 ? 'fast forward' : '';
+  const drift = S.run.spec.kind === 'spiral' && S.run.sats[0].pl.drag > 0 ? ' · inward drift sped up' : '';
+  el.innerHTML = `1 s = ${fmtTime(w)} · time ×${fmtWarp(w)}${mode ? ' · ' + mode : ''}${drift}`;
+}
+function fmtWarp(w) {
+  if (w < 1000) return w.toFixed(0);
+  const e = Math.floor(Math.log10(w)), m = w / 10 ** e;
+  return `${m.toFixed(1)}×10${String(e).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+c]).join('')}`;
 }
 function drawSpark() {
   const c = $('spark'); if (!c || !c.clientWidth) return;

@@ -59,6 +59,9 @@ html.in-frame #bar{top:8px}
 #story{position:fixed;z-index:20;bottom:14px;left:calc(50% - 300px + 160px);width:600px;max-width:calc(100vw - 360px);
   background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px 8px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 #caption{font-size:0.95rem;line-height:1.35;min-height:1.35em;color:#eef2f7}
+/* the time warp of the story clock (pacing.js): sim time per wall second */
+#warp{font:0.7rem var(--sci-mono);color:var(--dim);margin-top:3px;min-height:1.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+#warp b{font-weight:600;color:var(--warm)}
 #phases{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:9px 0 6px}
 #phases button{display:flex;align-items:center;gap:6px;border:0;background:transparent;padding:4px 2px;cursor:pointer;color:var(--dim);font-size:0.74rem;text-align:left;border-top:2px solid var(--faint)}
 #phases button i{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}

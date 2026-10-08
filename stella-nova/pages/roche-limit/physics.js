@@ -64,6 +64,7 @@
 //    tide (stable form) .... "export function tideAccel"
 //    CPU reference ......... "export class CpuSim"
 //    bound mass ............ "export function analyzeBound"
+//    pile shape ............ "export function boundShape"
 //    Kepler conic .......... "export function keplerPath"
 //    energy ledger ......... "export function energyOf"
 // ============================================================================
@@ -170,26 +171,28 @@ export function makeCloud(N, seed = 1, phi = 0.3) {
   for (let i = 0; i < N; i++) { rad[i] = R_MIN + (R_MAX - R_MIN) * r(); vol += rad[i] ** 3; }
   const R = Math.cbrt(vol / phi);
   const pos = new Float64Array(N * 3);
+  // a dense cell grid (head/next chains) over twice the cloud radius; a
+  // Map of hashed keys gave the same cloud 2.4x slower (0.47 s at N = 8192)
   const cell = 2 * R_MAX, inv = 1 / cell;
-  const grid = new Map();
-  const key = (a, b, c) => (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
+  const M = Math.ceil(2 * R * inv) + 2, D = 2 * M + 1;
+  const head = new Int32Array(D * D * D).fill(-1), next = new Int32Array(N);
+  const cid = (a, b, c) => ((a + M) * D + (b + M)) * D + (c + M);
   let placed = 0, tries = 0, Rcur = R;
   while (placed < N) {
-    if (++tries > N * 400) { Rcur *= 1.02; tries = 0; }   // never seen; a guard
+    if (++tries > N * 400) { Rcur *= 1.02; tries = 0; if (Rcur > 1.9 * R) throw new Error('makeCloud: no room'); }   // never seen; a guard
     let x, y, z;
     do { x = (2 * r() - 1) * Rcur; y = (2 * r() - 1) * Rcur; z = (2 * r() - 1) * Rcur; } while (x * x + y * y + z * z > (Rcur - R_MAX) ** 2);
     const ci = Math.floor(x * inv), cj = Math.floor(y * inv), ck = Math.floor(z * inv);
     let ok = true;
     for (let a = -1; a <= 1 && ok; a++) for (let b = -1; b <= 1 && ok; b++) for (let c = -1; c <= 1 && ok; c++) {
-      const list = grid.get(key(ci + a, cj + b, ck + c)); if (!list) continue;
-      for (const j of list) {
+      for (let j = head[cid(ci + a, cj + b, ck + c)]; j >= 0; j = next[j]) {
         const dx = x - pos[3 * j], dy = y - pos[3 * j + 1], dz = z - pos[3 * j + 2], s = rad[placed] + rad[j];
         if (dx * dx + dy * dy + dz * dz < s * s) { ok = false; break; }
       }
     }
     if (!ok) continue;
     pos[3 * placed] = x; pos[3 * placed + 1] = y; pos[3 * placed + 2] = z;
-    const k = key(ci, cj, ck); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(placed);
+    const k = cid(ci, cj, ck); next[placed] = head[k]; head[k] = placed;
     placed++;
   }
   const mass = new Float64Array(N);
@@ -654,6 +657,40 @@ export function analyzeBound(pos, vel, mass, rad, stride, X, GMp, N = mass.lengt
 // state (r, v) about a point mass at the origin, over tAhead. Ellipse and
 // hyperbola from the elements, by the mean anomaly. Returns a Float64Array
 // of n*3, and the elements.
+// The shape of the bound pile: the eigenvalues of the second moment of
+// the grains with mask[i] about com, and el = sqrt(l_max / l_min), the
+// axis ratio of the equivalent ellipsoid (1 for a sphere). pacing.js uses
+// el to start the slow motion before the pile sheds. Also returns the
+// unit long axis. Closed form for a symmetric 3x3 (trigonometric).
+export function boundShape(pos, mass, mask, com, stride = 3, N = mass.length) {
+  let m0 = 0, xx = 0, yy = 0, zz = 0, xy = 0, xz = 0, yz = 0;
+  for (let i = 0; i < N; i++) {
+    if (!mask[i] || !mass[i]) continue;
+    const o = i * stride, m = mass[i], x = pos[o] - com[0], y = pos[o + 1] - com[1], z = pos[o + 2] - com[2];
+    m0 += m; xx += m * x * x; yy += m * y * y; zz += m * z * z; xy += m * x * y; xz += m * x * z; yz += m * y * z;
+  }
+  if (m0 <= 0) return { el: 1, lam: [0, 0, 0], axis: [1, 0, 0] };
+  xx /= m0; yy /= m0; zz /= m0; xy /= m0; xz /= m0; yz /= m0;
+  const q = (xx + yy + zz) / 3, p1 = xy * xy + xz * xz + yz * yz;
+  const p2 = (xx - q) ** 2 + (yy - q) ** 2 + (zz - q) ** 2 + 2 * p1, p = Math.sqrt(p2 / 6);
+  let l1 = q, l3 = q;
+  if (p > 1e-12 * Math.max(q, 1e-300)) {
+    const b = [(xx - q) / p, xy / p, xz / p, (yy - q) / p, yz / p, (zz - q) / p];
+    const det = b[0] * (b[3] * b[5] - b[4] * b[4]) - b[1] * (b[1] * b[5] - b[4] * b[2]) + b[2] * (b[1] * b[4] - b[3] * b[2]);
+    const phi = Math.acos(Math.max(-1, Math.min(1, det / 2))) / 3;
+    l1 = q + 2 * p * Math.cos(phi); l3 = q + 2 * p * Math.cos(phi + 2 * Math.PI / 3);
+  }
+  const l2 = 3 * q - l1 - l3;
+  // the long axis: a row of (A - l2)(A - l3) that is not zero
+  const A = [[xx, xy, xz], [xy, yy, yz], [xz, yz, zz]];
+  const B = A.map((r, i) => r.map((v, j) => v - (i === j ? l2 : 0))), Cm = A.map((r, i) => r.map((v, j) => v - (i === j ? l3 : 0)));
+  let axis = [1, 0, 0], best = 0;
+  for (let j = 0; j < 3; j++) {
+    const col = [0, 1, 2].map(i => B[i][0] * Cm[0][j] + B[i][1] * Cm[1][j] + B[i][2] * Cm[2][j]);
+    const l = Math.hypot(...col); if (l > best) { best = l; axis = col.map(v => v / l); }
+  }
+  return { el: Math.sqrt(l1 / Math.max(l3, 1e-30)), lam: [l1, l2, l3], axis };
+}
 export function keplerElements(r, v, GM) {
   const rm = Math.hypot(r[0], r[1], r[2]), v2 = v[0] ** 2 + v[1] ** 2 + v[2] ** 2;
   const h = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];

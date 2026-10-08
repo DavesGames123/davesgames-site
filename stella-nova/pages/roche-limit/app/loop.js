@@ -11,6 +11,7 @@
 // ============================================================================
 import { drawFrame } from './draw.js';
 import { UI, CALM_SPEED, $, Q } from './env.js';
+import { READ_MS, stepFactor } from '../pacing.js';
 import { restoreSnap, readAll } from './history.js';
 import { governQuality } from './quality.js';
 import { refreshReadout } from './readout.js';
@@ -25,11 +26,21 @@ export function frame(now) {
   const tCpu = performance.now();
   try { frameBody(now); } finally { S.cpuMs = 0.9 * S.cpuMs + 0.1 * (performance.now() - tCpu); }
 }
-// The speed in orbits per minute of wall time. Reduce motion caps it at
-// Normal; the screensaver sets its own.
+// The speed in orbits per minute of wall time: the base speed (the user's,
+// or the screensaver's) times the story factor of pacing.js (fast in, slow
+// at the breakup). Reduce motion caps the base at Normal and the factor
+// at 1.5. The screensaver's dark warm-up runs at its own base, unpaced.
 export function orbitsPerMin() {
+  return baseOrbitsPerMin() * paceFactor();
+}
+export function baseOrbitsPerMin() {
   if (S.saverOn && S.saver) return S.saver.speed;
   return Math.pow(10, UI.calm ? Math.min(UI.speedLog, CALM_SPEED) : UI.speedLog);
+}
+export function paceFactor() {
+  const pc = S.run && S.run.pace;
+  if (!pc || (S.saverOn && S.saver && S.saver.state === 'warm')) return 1;
+  return UI.calm ? Math.min(1.5, pc.factor) : pc.factor;
 }
 export function allFree() { return S.run.sats.every(s => !s.gpu.busy && !s.waiting); }
 function frameBody(now) {
@@ -40,13 +51,14 @@ function frameBody(now) {
   if (cssW < 2 || cssH < 2) return;
   let steps = 0;
   if (S.run.phase === 'settle') {
-    if (settleStep(Math.max(2, Math.min(S.saverOn ? 24 : 12, Math.floor(S.stepsMax / 32))))) { S.run.phase = 'placing'; placeSats(S.run.serial); }
+    if (settleStep(Math.max(2, Math.min(24, Math.floor(S.stepsMax / 32))))) { S.run.phase = 'placing'; placeSats(S.run.serial); }
   } else if (S.run.phase === 'orbit') {
     if (S.run.pendingRestore !== undefined && S.run.pendingRestore !== null && allFree()) { const i = S.run.pendingRestore; S.run.pendingRestore = null; restoreSnap(i); }
     const s0 = S.run.sats[0];
     // the spiral ends at d1: the drag stops there
     if (S.run.spec.kind === 'spiral') for (const s of S.run.sats) if (s.pl.drag > 0 && Math.hypot(...s.ref.X) < S.run.spec.d1 * s.Rp) { s.pl.drag = 0; s.gpu.setParams(s.C, s.pl, 0); }
     const playing = !UI.paused && !S.run.scrubbing;
+    if (playing && S.run.pace) stepFactor(S.run.pace, dtReal);
     if (playing) {
       // steps this frame: the speed in steps, carried over frames, capped
       // by the GPU budget; part blocks are fine (engine.js encodeSteps)
@@ -60,16 +72,18 @@ function frameBody(now) {
       S.run.stepLeft -= steps;
       if (S.run.stepLeft <= 0) S.run.forceRead = true;
     }
-    // a readback once a second while it plays; the O(N^2) potential
-    // (energy) every second one
-    const due = allFree() && (playing ? now - (S.run.lastRead || 0) > 1000 : (S.run.forceRead || now - (S.run.lastRead || 0) > 2000));
+    // readbacks: every READ_MS.story ms while the story runs (the pace
+    // needs the shape of the pile), once a second after the ring forms;
+    // the O(N^2) potential (energy) on about one read a second
+    const every = S.run.pace && S.run.story.ring === undefined ? READ_MS.story : READ_MS.slow;
+    const due = allFree() && (playing ? now - (S.run.lastRead || 0) > every : (S.run.forceRead || now - (S.run.lastRead || 0) > 2000));
     if (steps > 0) {
       const enc = S.dev.createCommandEncoder();
       for (const s of S.run.sats) s.gpu.encodeSteps(enc, steps, due);
       S.dev.queue.submit([enc.finish()]);
       S.run.t = s0.gpu.t;
     }
-    if (due && !S.run.scrubbing) { S.run.lastRead = now; S.run.forceRead = false; S.run.reads = (S.run.reads || 0) + 1; readAll(!playing || S.run.reads % 2 === 1); }
+    if (due && !S.run.scrubbing) { S.run.lastRead = now; S.run.forceRead = false; S.run.reads = (S.run.reads || 0) + 1; readAll(!playing || S.run.reads % Math.max(2, Math.round(1000 / every)) === 1); }
   }
   // GPU time of the whole frame (sim + draw)
   const tSub = performance.now();
@@ -92,6 +106,7 @@ function frameBody(now) {
 }
 // steps per frame the speed asks for, at 60 fps
 export function stepsWanted() {
+  if (S.run && S.run.phase === 'settle') return 24 * 32;
   if (!S.run || !S.run.sats.length || !S.run.T0) return 64;
   return orbitsPerMin() / 60 * S.run.T0 / S.run.sats[0].C.dt / 60;
 }

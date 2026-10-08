@@ -18,6 +18,11 @@
 //     its mass in 3 orbits, at 1.5 d_fluid it keeps it
 //  7  GPU (Deno WebGPU): forces of shaders/sim.wgsl against CpuSim for a
 //     pile of 300 grains with every force term on, then 2 blocks of motion
+//  8  pacing: the wall time from the start of the default run (Saturn,
+//     Normal speed, desktop budget) to the first shed grains, from a model
+//     of the frame loop that drives a CPU pile (N = 800) with the director
+//     of pacing.js; it must be under 5 s. The screensaver's budget too.
+//     node tests.mjs --pace runs test 8 only; --pace-old adds the old run.
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 //  Published values: Wikipedia "Roche limit", revision of 2020-12 (tables
@@ -25,6 +30,8 @@
 //  136,775 km (NASA Saturnian rings fact sheet).
 // ============================================================================
 import * as P from './physics.js';
+import * as PC from './pacing.js';
+import { SCENARIOS } from './scenarios.js';
 
 const GPU_ONLY = typeof Deno !== 'undefined' && Deno.args.includes('--gpu');
 let fails = 0;
@@ -185,6 +192,81 @@ function cpuTests() {
   }
 }
 
+// 8 ─ pacing: wall time to the first shed grains
+// The page's numbers come from N_page grains (pacing.js DESKTOP or PHONE):
+// the orbit in steps (T0 / dt at that N), the settle in steps, the cloud
+// build (timed here, in node). The CPU pile (N = cfg.N) stands in for the
+// moon: it runs the same orbit, so its shape and its bound mass give the
+// director the same signals as the worker's analysis on the page. Frames
+// run at 60 fps; each frame runs the orbits that the speed asks for,
+// capped by the step budget of the profile.
+function paceRun(cfg) {
+  const prof = cfg.profile || PC.DESKTOP, N = cfg.N || 800, mat = P.MATERIALS.fluid;
+  const { C, cl, sim } = settledPile(N, mat, 7, PC.SETTLE_TIME);
+  const st = P.pileStats(sim.x, sim.mass);
+  const spec = { kind: 'circular', q: cfg.q, s: cfg.s, J2: cfg.J2 || 0 };
+  const pl = P.planetFor(st, spec);
+  const o = P.orbitStart(pl, { kind: 'circular', d: cfg.d0 });
+  const T0 = P.orbitalPeriod(pl.GM, cfg.d0 * pl.Rp);
+  const Tm = P.orbitalPeriod(pl.GM, Math.sqrt(cfg.d0 * cfg.d1) * pl.Rp);
+  pl.drag = Math.log(cfg.d0 / cfg.d1) / (2 * cfg.orbits * Tm);
+  const s2 = new P.CpuSim(N, cl.rad, cl.mass, C, pl);
+  s2.x.set(sim.x); P.placeOnOrbit(s2.x, s2.v, s2.w, s2.mass, o.Omega);
+  const ref = new P.RefOrbit(pl, o.X, o.V); s2.init(ref);
+  const dF = P.rocheFluid(pl.Rp, pl.rhoP, pl.rhoS) / pl.Rp;
+  // the page: steps per orbit and per settle at N_page (T0 / dt does not
+  // depend on R_p: T0 = 2 pi sqrt(d^3 / (G q rho_s 4 pi / 3)))
+  const Cp = P.contactParams(prof.N, mat);
+  const stepsOrbit = T0 / Cp.dt;
+  const settleSteps = Math.ceil(cfg.settleTime / (Cp.dt * P.K_STEP)) * P.K_STEP;
+  let t0 = Date.now(); P.makeCloud(prof.N, 3); const cloudS = (Date.now() - t0) / 1000;
+  const settleS = settleSteps / (cfg.settlePerFrame || prof.stepsPerFrame) / prof.fps;
+  const pace = cfg.director ? PC.newPace() : null;
+  const frameS = 1 / prof.fps, cpuStepOrbit = C.dt / T0;
+  let wall = cloudS + settleS, carryO = 0, carryCpu = 0, lastRead = 0, orbits = 0;
+  const out = { cloudS, settleS, stepsOrbit, dF, tShed: null, tTorn: null, oShed: null, oTorn: null, dShed: null, slowAt: null };
+  while (wall < 60) {
+    const factor = pace ? PC.stepFactor(pace, frameS) : 1;
+    if (pace && pace.mode === 'breakup' && out.slowAt === null) out.slowAt = wall;
+    const want = cfg.speed * factor / 60 * frameS;                    // orbits this frame
+    const cap = prof.stepsPerFrame / stepsOrbit;
+    const run = Math.min(want, cap);
+    carryCpu += run / cpuStepOrbit;
+    const blocks = Math.floor(carryCpu / P.K_STEP);
+    for (let b = 0; b < blocks; b++) s2.block(C.dt, P.K_STEP, ref);
+    carryCpu -= blocks * P.K_STEP; orbits += blocks * P.K_STEP * cpuStepOrbit;
+    if (pl.drag > 0 && Math.hypot(...ref.X) < cfg.d1 * pl.Rp) pl.drag = 0;
+    wall += frameS;
+    if ((wall - lastRead) * 1000 >= cfg.readMs) {
+      lastRead = wall;
+      const an = P.analyzeBound(s2.x, s2.v, s2.mass, s2.rad, 3, ref.X, pl.GM);
+      const f = an.M / st.M, el = P.boundShape(s2.x, s2.mass, an.mask, an.com).el;
+      if (pace) PC.updatePace(pace, { f, el }, orbits * T0, T0);
+      const d = Math.hypot(...ref.X) / pl.Rp;
+      if (out.tShed === null && f < 0.97) { out.tShed = wall; out.oShed = orbits; out.dShed = d / dF; }
+      if (out.tTorn === null && f < 0.75) { out.tTorn = wall; out.oTorn = orbits; break; }
+    }
+  }
+  return out;
+}
+function paceTests(old) {
+  const sc = SCENARIOS.find(x => x.key === 'saturn');
+  const base = { q: sc.q, s: sc.s, J2: sc.J2, speed: sc.speed };
+  const cur = Object.assign({}, base, { d0: sc.d, d1: sc.d1, orbits: sc.orbits, director: true, settleTime: PC.SETTLE_TIME, readMs: PC.READ_MS.story });
+  const fmt = r => `cloud ${r.cloudS.toFixed(2)} s + settle ${r.settleS.toFixed(2)} s; first shed at ${r.tShed?.toFixed(2)} s (${r.oShed?.toFixed(3)} orbit, d = ${r.dShed?.toFixed(3)} d_fluid), slow motion from ${r.slowAt?.toFixed(2) ?? '-'} s, 25% shed at ${r.tTorn?.toFixed(2)} s (${r.oTorn?.toFixed(3)} orbit)`;
+  const a = paceRun(cur);
+  ok('pacing: default run (Saturn, Normal, desktop budget) sheds within 5 s', a.tShed !== null && a.tShed < 5, fmt(a));
+  ok('pacing: the slow motion starts before the first shed grains', a.slowAt !== null && a.slowAt <= a.tShed, `slow motion at ${a.slowAt?.toFixed(2)} s, first shed at ${a.tShed?.toFixed(2)} s`);
+  // the screensaver: its base speed (pacing.js SAVER_SPEED); the pile is
+  // in the cache after the first run, so no settle
+  const sv = paceRun(Object.assign({}, cur, { speed: PC.SAVER_SPEED, settleTime: 0 }));
+  ok('pacing: screensaver run (cached pile) sheds within 4 s', sv.tShed !== null && sv.tShed - sv.cloudS < 4, `first shed ${(sv.tShed - sv.cloudS).toFixed(2)} s after the start (no cloud, no settle)`);
+  if (old) {
+    const b = paceRun(Object.assign({}, base, { d0: 2.7, d1: 1.7, orbits: 4, director: false, settleTime: 6, readMs: 1000, settlePerFrame: 64 }));
+    console.log(`INFO  old pacing (2.7 -> 1.7 in 4 orbits, one speed, settle 6 at 64 steps/frame): ${fmt(b)}`);
+  }
+}
+
 // 7 ─ GPU against CPU (Deno WebGPU)
 async function gpuTest() {
   if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  GPU test: no navigator.gpu here'); return; }
@@ -247,12 +329,16 @@ async function gpuTest() {
   gpu.destroy(); device.destroy();
 }
 
+const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
+const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
 if (!GPU_ONLY) {
   const t0 = Date.now();
-  cpuTests();
+  if (!PACE_ONLY) cpuTests();
+  paceTests(ARGS.includes('--pace-old'));
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 if (typeof Deno !== 'undefined') await gpuTest();
+else if (PACE_ONLY) {}
 else {
   // Node has no WebGPU: run the GPU test in Deno when it is installed.
   const { spawnSync } = await import('node:child_process');

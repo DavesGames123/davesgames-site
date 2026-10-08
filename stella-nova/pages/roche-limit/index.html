@@ -35,7 +35,7 @@
      │                                                                   │
      │ #gpu  the scene: the planet stays still, the moon goes round      │
      │                                                                   │
-     │ #readouts (distance bar,      #story  caption, phase strip,       │
+     │ #readouts (distance bar,      #story  caption, time warp, phases, │
      │  one-piece share)                     time scrubber               │
      └──────────────────────────────────────────────────────────────────┘
      #gallery   the scenario gallery (modal)
@@ -93,6 +93,7 @@
 
 <section id="story">
   <div id="caption"></div>
+  <div id="warp" aria-live="off"></div>
   <div id="phases" role="group" aria-label="Phases"></div>
   <div class="scrubrow">
     <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub back in time">

@@ -16,8 +16,9 @@
 import * as P from '../physics.js';
 import { SimGPU } from '../engine.js';
 import { MAT_COLOR } from '../plots.js';
+import { SETTLE_TIME, DESKTOP, PHONE, directed, newPace } from '../pacing.js';
 import { SCENARIOS, specFor, flybyStart } from '../scenarios.js';
-import { UI, Q, $, G_SI } from './env.js';
+import { UI, Q, $, G_SI, PHONE_Q, COARSE } from './env.js';
 import { workerCall } from './jobs.js';
 import { refreshReadout } from './readout.js';
 import { S, pileCache } from './state.js';
@@ -81,7 +82,7 @@ export async function startRun(specIn) {
     s.gpu.ref = null;
     s.gpu.setState(s.cloud.pos, z, z, s.cloud.rad, s.cloud.mass);
     s.gpu.prime();
-    s.settleBlocks = Math.ceil(6 / (s.C.dt * s.gpu.K));
+    s.settleBlocks = Math.ceil(SETTLE_TIME / (s.C.dt * s.gpu.K));
     s.settleDone = 0;
     s.rad = s.cloud.rad; s.mass = s.cloud.mass;
   }
@@ -90,7 +91,12 @@ export async function startRun(specIn) {
   S.run.limits = limitsFor(spec);
   S.run.viewD = viewDistance(spec, S.run.limits);
   if (S.run.sats.every(s => s.pile)) await placeSats(serial);
-  else if (serial === S.runSerial) S.run.phase = 'settle';
+  else if (serial === S.runSerial) {
+    // the settle has no story to show: give it a large step budget at
+    // once; the GPU-time governor (loop.js) cuts it on a slow GPU
+    S.run.phase = 'settle';
+    S.stepsMax = Math.max(S.stepsMax, 32 * ((PHONE_Q.matches || COARSE) ? PHONE : DESKTOP).settleBlocks);
+  }
 }
 // The distance (planet radii) the planet view frames: the start orbit or
 // the closest pass, and the rings of Saturn, fixed for the whole run so
@@ -184,6 +190,7 @@ export async function placeSats(serial) {
   const rhoReal = spec.rhoS || 1.0;
   S.run.tUnitSec = Math.sqrt(s0.pile.st.rho / (G_SI * rhoReal * 1000));
   S.run.heatRef = 0.006 * s0.C.vesc * s0.C.vesc;
+  S.run.pace = directed(spec.kind) ? newPace() : null;
   S.run.phase = 'orbit'; S.run.t = 0; S.run.recorded = false; S.run.track = [];
   S.run.lastRead = 0;
   setBusy(false);

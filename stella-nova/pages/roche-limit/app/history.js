@@ -12,6 +12,7 @@
 //    truncate ............ "function truncateHistory"
 // ============================================================================
 import * as P from '../physics.js';
+import { updatePace } from '../pacing.js';
 import { syncScrub } from './controls.js';
 import { SNAP_CAP, RUNS_KEY } from './env.js';
 import { workerCall } from './jobs.js';
@@ -26,9 +27,11 @@ export async function readAll(potential) {
   const parts = await Promise.all(S.run.sats.map(s => readAndAnalyze(s, potential, epoch)));
   if (serial !== S.runSerial || epoch !== S.run.epoch || parts.some(p => !p)) return;
   updatePhase(parts[0].t);
+  const s0 = S.run.sats[0];
+  if (S.run.pace && s0.an) updatePace(S.run.pace, { f: s0.an.f, el: s0.an.el }, parts[0].t, S.run.T0);
   const t = parts[0].t, last = S.run.snaps[S.run.snaps.length - 1];
   if (last && t <= last.t + 1e-9) return;
-  S.run.snaps.push({ t, sats: parts, story: Object.assign({}, S.run.story) });
+  S.run.snaps.push({ t, sats: parts, story: Object.assign({}, S.run.story), pace: S.run.pace ? Object.assign({}, S.run.pace) : null });
   if (S.run.snaps.length > SNAP_CAP) {
     // drop the record whose neighbours are closest in time
     let best = 1, gap = Infinity;
@@ -76,7 +79,7 @@ function onAnalysis(s, a, rb) {
   // once the bound mass is small, the field and the labels use the frame
   // point (the start orbit of the moon) instead of the remnant
   const live = f > 0.2 && a.M > 0;
-  s.an = { f, live, com: live ? a.com : [0, 0, 0], vcm: live ? a.vcm : [0, 0, 0], rH: live ? a.rH : NaN, comAll: a.comAll, vcmAll: a.vcmAll, spread: a.spread, groups: a.groups, M: a.M, X: a.X, V: a.V, t: a.t, drift, Ldrift, accreted: a.accreted, wall: performance.now() };
+  s.an = { f, live, el: live ? a.el : 1, axis: a.axis, com: live ? a.com : [0, 0, 0], vcm: live ? a.vcm : [0, 0, 0], rH: live ? a.rH : NaN, comAll: a.comAll, vcmAll: a.vcmAll, spread: a.spread, groups: a.groups, M: a.M, X: a.X, V: a.V, t: a.t, drift, Ldrift, accreted: a.accreted, wall: performance.now() };
   // the ledger E - W holds only without the drag: it starts again when
   // the drag stops
   if (s.pl.drag > 0) { s.an.drift = NaN; s.E0 = null; }
@@ -124,6 +127,7 @@ export function restoreSnap(i) {
   });
   S.run.t = rec.t; S.run.viewIdx = i; S.run.track = []; S.warpCarry = 0; S.run.stepLeft = 0;
   S.run.story = Object.assign({}, rec.story);
+  if (rec.pace) S.run.pace = Object.assign({}, rec.pace);
   S.run.storyKey = storyKeyAt(S.run.story);
   syncScrub(); syncStory(); refreshReadout(true);
 }
