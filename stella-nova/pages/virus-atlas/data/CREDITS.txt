@@ -1,0 +1,144 @@
+VIRUS ATLAS - data credits
+==========================
+
+Every file in this folder is derived from an entry of the Protein Data Bank
+(wwPDB, https://www.wwpdb.org; downloaded from RCSB PDB, https://www.rcsb.org).
+PDB data are released under CC0 1.0 (public domain dedication). We credit
+each entry and its primary citation below.
+
+What the files keep: one bead per residue (the CA atom of an amino acid, the
+P atom of a nucleotide, the C1 atom of a sugar), model 1 only, rounded to
+0.1 A; the chain and entity names; the operators of the first biological
+assembly (or, for TMV and the fibrils, a screw fitted from the deposited
+model). tools/build-data.py makes them from the mmCIF files.
+
+Illustrations made by the page, not in any PDB entry: the membranes, the
+spike stalks and spike layouts of the two virions, the extra fibril layers
+and rod subunits beyond the deposited ones (made with the fitted screw),
+and every build, peel, explode, slice and sway animation.
+
+PDB 1HXS  Crystal structure of Mahoney strain of poliovirus at 2.2 Å resolution
+  Miller, S.T., Hogle, J.M., Filman, D.J. (2001)  https://doi.org/10.1006/jmbi.2001.4485
+  https://www.rcsb.org/structure/1HXS
+  Used for: Poliovirus
+
+PDB 4RHV  The use of molecular-replacement phases for the refinement of the human rhinovirus 14 structure
+  Arnold, E., Rossmann, M.G. (1988)  https://doi.org/10.1107/S0108767387011875
+  https://www.rcsb.org/structure/4RHV
+  Used for: Rhinovirus 14
+
+PDB 1IHM  Crystal structure analysis of Norwalk virus capsid
+  Prasad, B.V., Hardy, M.E., Dokland, T., et al. (1999)  https://doi.org/10.1126/science.286.5438.287
+  https://www.rcsb.org/structure/1IHM
+  Used for: Norovirus (Norwalk)
+
+PDB 1QGT  Human hepatitis B viral capsid (HBcAg)
+  Wynne, S.A., Crowther, R.A., Leslie, A.G. (1999)  https://doi.org/10.1016/S1097-2765(01)80009-5
+  https://www.rcsb.org/structure/1QGT
+  Used for: Hepatitis B core
+
+PDB 3J6R  Electron cryo-microscopy of human papillomavirus type 16 capsid
+  Cardone, G., Moyer, A.L., Cheng, N., et al. (2014)  https://doi.org/10.1128/mBio.01104-14
+  https://www.rcsb.org/structure/3J6R
+  Used for: Human papillomavirus 16
+
+PDB 6CGV  Revised crystal structure of human adenovirus
+  Kundhavai Natchiar, S., Venkataraman, S., Mullen, T.M., et al. (2018)  https://doi.org/10.1016/j.jmb.2018.08.011
+  https://www.rcsb.org/structure/6CGV
+  Used for: Human adenovirus 5
+
+PDB 5IRE  The cryo-EM structure of Zika virus
+  Sirohi, D., Chen, Z., Sun, L., et al. (2016)  https://doi.org/10.1126/science.aaf5316
+  https://www.rcsb.org/structure/5IRE
+  Used for: Zika virus
+
+PDB 1OHG  Structure of the dsDNA bacteriophage HK97 mature empty capsid
+  Helgstrand, C., Wikoff, W.R., Duda, R.L., et al. (2003)  https://doi.org/10.1016/j.jmb.2003.09.035
+  https://www.rcsb.org/structure/1OHG
+  Used for: Bacteriophage HK97
+
+PDB 4UDV  Cryo-EM structure of TMV at 3.35 Å resolution
+  Fromm, S.A., Bharat, T.A.M., Jakobi, A.J., et al. (2015)  https://doi.org/10.1016/j.jsb.2014.12.002
+  https://www.rcsb.org/structure/4UDV
+  Used for: Tobacco mosaic virus
+
+PDB 3J3Q  Atomic-level structure of the entire HIV-1 capsid
+  Zhao, G., Perilla, J.R., Yufenyuy, E.L., et al. (2013)  https://doi.org/10.1038/nature12162
+  https://www.rcsb.org/structure/3J3Q
+  Used for: HIV-1 capsid cone
+
+PDB 6VSB  Prefusion 2019-nCoV spike glycoprotein with a single receptor-binding domain up
+  Wrapp, D., Wang, N., Corbett, K.S., et al. (2020)  https://doi.org/10.1126/science.abb2507
+  https://www.rcsb.org/structure/6VSB
+  Used for: SARS-CoV-2 virion; SARS-CoV-2 spike
+
+PDB 6M0J  Crystal structure of SARS-CoV-2 spike receptor-binding domain bound with ACE2
+  Lan, J., Ge, J., Yu, J., et al. (2020)  https://doi.org/10.1038/s41586-020-2180-5
+  https://www.rcsb.org/structure/6M0J
+  Used for: Spike RBD on ACE2
+
+PDB 1RUZ  1918 H1 hemagglutinin
+  Gamblin, S.J., Haire, L.F., Russell, R.J., et al. (2004)  https://doi.org/10.1126/science.1093155
+  https://www.rcsb.org/structure/1RUZ
+  Used for: Influenza A virion; Influenza hemagglutinin (1918)
+
+PDB 2HTY  N1 neuraminidase
+  Russell, R.J., Haire, L.F., Stevens, D.J., et al. (2006)  https://doi.org/10.1038/nature05114
+  https://www.rcsb.org/structure/2HTY
+  Used for: Influenza A virion; Influenza neuraminidase N1
+
+PDB 4TVP  Crystal structure of the HIV-1 BG505 SOSIP.664 Env trimer ectodomain
+  Pancera, M., Zhou, T., Druz, A., et al. (2014)  https://doi.org/10.1038/nature13808
+  https://www.rcsb.org/structure/4TVP
+  Used for: HIV-1 Env trimer
+
+PDB 3H47  X-ray structure of hexameric HIV-1 CA
+  Pornillos, O., Ganser-Pornillos, B.K., Kelly, B.N., et al. (2009)  https://doi.org/10.1016/j.cell.2009.04.063
+  https://www.rcsb.org/structure/3H47
+  Used for: HIV-1 CA hexamer
+
+PDB 5JQ3  Crystal structure of Ebola glycoprotein
+  Zhao, Y., Ren, J., Harlos, K., et al. (2016)  https://doi.org/10.1038/nature18615
+  https://www.rcsb.org/structure/5JQ3
+  Used for: Ebola glycoprotein
+
+PDB 7U9G  Rabies virus glycoprotein pre-fusion trimer in complex with neutralizing antibody RVA122
+  Callaway, H.M., Zyla, D., Larrous, F., et al. (2022)  https://doi.org/10.1126/sciadv.abp9151
+  https://www.rcsb.org/structure/7U9G
+  Used for: Rabies glycoprotein
+
+PDB 2ZB6  Crystal structure of the measles virus hemagglutinin (oligo-sugar type)
+  Hashiguchi, T., Kajikawa, M., Maita, N., et al. (2007)  https://doi.org/10.1073/pnas.0707830104
+  https://www.rcsb.org/structure/2ZB6
+  Used for: Measles hemagglutinin
+
+PDB 1QLX  Human prion protein
+  Zahn, R., Liu, A., Luhrs, T., et al. (2000)  https://doi.org/10.1073/pnas.97.1.145
+  https://www.rcsb.org/structure/1QLX
+  Used for: Human prion protein (PrPᶜ)
+
+PDB 7LNA  Infectious mammalian prion fibril (263K scrapie)
+  Kraus, A., Hoyt, F., Schwartz, C.L., et al. (2021)  https://doi.org/10.1016/j.molcel.2021.08.011
+  https://www.rcsb.org/structure/7LNA
+  Used for: 263K prion fibril
+
+PDB 7QIG  Infectious mouse-adapted RML scrapie prion fibril purified from terminally-infected mouse brains
+  Manka, S.W., Zhang, W., Wenborn, A., et al. (2022)  https://doi.org/10.1038/s41467-022-30457-7
+  https://www.rcsb.org/structure/7QIG
+  Used for: RML prion fibril
+
+PDB 6LNI  Cryo-EM structure of amyloid fibril formed by full-length human prion protein
+  Wang, L.Q., Zhao, K., Yuan, H.Y., et al. (2020)  https://doi.org/10.1038/s41594-020-0441-5
+  https://www.rcsb.org/structure/6LNI
+  Used for: Human PrP fibril (in vitro)
+
+PDB 5O3L  Paired helical filament in Alzheimer's disease brain
+  Fitzpatrick, A.W.P., Falcon, B., He, S., et al. (2017)  https://doi.org/10.1038/nature23002
+  https://www.rcsb.org/structure/5O3L
+  Used for: Tau paired helical filament
+
+PDB 6A6B  Cryo-EM structure of alpha-synuclein fiber
+  Li, Y., Zhao, C., Luo, F., et al. (2018)  https://doi.org/10.1038/s41422-018-0075-x
+  https://www.rcsb.org/structure/6A6B
+  Used for: α-Synuclein fibril
+
