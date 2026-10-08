@@ -1,17 +1,19 @@
 // ============================================================================
 //  LINE ART  ·  plotter.js — the pen plotter view (canvas 2D)
 // ----------------------------------------------------------------------------
-//  The engine gives 2D paths in image units (0..W, 0..H, y up). This module
-//  keeps them as vectors and draws them like a pen plotter:
-//    - a "sheet" is one render: the path list in engine order, with the
-//      length of each path.
-//    - in 'plot' mode a pen moves along the paths in order and lays ink.
-//      The pen speed adapts, so the sheet finishes near `plotTime` seconds
-//      after the start. A move from the end of one path to the start of
-//      the next is a pen-up travel at six times the speed (no ink).
-//    - in 'instant' mode each chunk is drawn when it arrives.
-//    - in 'swap' mode the chunks go to a hidden sheet; the shown sheet
-//      changes only when the render is done (camera previews).
+//  The engine gives 2D paths in image units (0..W, 0..H, y up) and a
+//  camera depth for each path. The image is the whole view canvas (the
+//  frame rectangle only aims the camera, see geom.js viewFit). This module
+//  keeps the paths as vectors and draws them like a pen plotter:
+//    - a "sheet" is one render: the path list in depth order (near paths
+//      first, geom.js orderPaths), with the length of each path.
+//    - 'plot' and 'swap' renders fill a hidden sheet. When the render is
+//      done (finish), the sheet is sorted by depth and shown.
+//    - in 'plot' mode a pen then moves along the paths in order and lays
+//      ink. The pen speed adapts, so the sheet finishes near `plotTime`
+//      seconds after the start. A move from the end of one path to the
+//      start of the next is a pen-up travel at six times the speed.
+//    - after a 'swap' render all paths show at once (camera previews).
 //  Layers, all at device pixels and the size of the view canvas:
 //    paper  (theme fill and texture, drawn once per resize or theme)
 //    glow   (a wide soft stroke under the ink, for themes with glow)
@@ -31,8 +33,8 @@
 //    grep -n 'exportPNG'             a large still of the sheet
 // ============================================================================
 
-const TRAVEL_SPEEDUP = 6;    // pen-up moves are this much faster
-const DOT_COST = 1.5;        // pen time of a path of zero length, image units
+import { TRAVEL_SPEEDUP, DOT_COST, orderPaths, clampPan } from './geom.js';
+
 const JITTER_STEP = 5;       // jitter subdivision, image units
 
 function mulberry(seed) {
@@ -44,7 +46,8 @@ function newSheet(W, H) {
   return { W, H, paths: [], total: 0, ink: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, done: false };
 }
 
-function decode(buf, sheet) {
+// depth: one camera depth per path of buf (worker chunk), or none.
+function decode(buf, sheet, depth) {
   const n = buf[0];
   let i = 1;
   for (let k = 0; k < n; k++) {
@@ -63,7 +66,7 @@ function decode(buf, sheet) {
     let tc = 0;
     if (idx > 0) { const q = sheet.paths[idx - 1].pts, l = q.length - 2; tc = Math.hypot(pts[0] - q[l], pts[1] - q[l + 1]) / TRAVEL_SPEEDUP; }
     const cost = Math.max(len, DOT_COST) + tc;
-    sheet.paths.push({ pts, len, cost, phase: (idx * 0.618034) % 1 * 100 });
+    sheet.paths.push({ pts, len, cost, depth: depth ? depth[k] : idx, phase: (idx * 0.618034) % 1 * 100 });
     sheet.total += cost;
   }
 }
@@ -83,9 +86,10 @@ export class Plotter {
     this.theme = null;
     this.style = { width: 1.2, jitter: 0, penHead: true, plotTime: 6 };
     this.sheet = newSheet(1, 1);
-    this.incoming = null;    // the hidden sheet of a 'swap' render
+    this.incoming = null;    // the hidden sheet of a 'plot' or 'swap' render
     this.thinNow = 1;        // the line width factor of the shown sheet (function thin)
     this.mode = 'instant';
+    this.nextMode = 'instant';  // the mode after finish(): 'plot' or 'instant'
     this.pen = { i: 0, d: 0, travel: 0, x: 0, y: 0, down: false };
     this.t0 = 0;
     this.dirty = true;
@@ -104,21 +108,26 @@ export class Plotter {
     this.inkDirty = true; this.dirty = true;
     return true;
   }
-  // The clear area of the screen, in CSS px. The image is fitted into it.
+  // The clear area of the screen, in CSS px. The camera aims the example
+  // view into it (worker frame); fitContent fills it. The image itself
+  // covers the whole view.
   setFrame(r) {
     const f = this.frameRect;
     if (f.x === r.x && f.y === r.y && f.w === r.w && f.h === r.h) return;
     this.frameRect = { ...r };
     this.inkDirty = true; this.dirty = true;
   }
+  get viewW() { return this.cw / this.dpr; }
+  get viewH() { return this.ch / this.dpr; }
+  // CSS px per image unit at zoom 1: 1 when the sheet was made for this
+  // view size; a stale sheet (before the render for a new size) fits.
   baseScale(s = this.sheet) {
-    const f = this.frameRect;
-    return Math.min(f.w / s.W, f.h / s.H);
+    return Math.min(this.viewW / s.W, this.viewH / s.H);
   }
   // image units -> device pixels: returns [a, b, c, d] with X = a + x*b, Y = c - y*d
   xform(s = this.sheet) {
-    const f = this.frameRect, k = this.baseScale(s) * this.zoom, dpr = this.dpr;
-    const cx = f.x + f.w / 2 + this.panX, cy = f.y + f.h / 2 + this.panY;
+    const k = this.baseScale(s) * this.zoom, dpr = this.dpr;
+    const cx = this.viewW / 2 + this.panX, cy = this.viewH / 2 + this.panY;
     return [(cx - s.W / 2 * k) * dpr, k * dpr, (cy + s.H / 2 * k) * dpr, k * dpr];
   }
   toScreen(x, y) { const t = this.xform(); return [(t[0] + x * t[1]) / this.dpr, (t[2] - y * t[3]) / this.dpr]; }
@@ -127,13 +136,15 @@ export class Plotter {
   zoomAt(px, py, factor) {
     const z = Math.max(0.25, Math.min(40, this.zoom * factor));
     factor = z / this.zoom;
-    const f = this.frameRect, cx = f.x + f.w / 2 + this.panX, cy = f.y + f.h / 2 + this.panY;
+    const cx = this.viewW / 2 + this.panX, cy = this.viewH / 2 + this.panY;
     this.panX += (px - cx) * (1 - factor);
     this.panY += (py - cy) * (1 - factor);
     this.zoom = z;
     this.inkDirty = true; this.dirty = true;
   }
   // Zoom and pan so the drawn paths fill `fill` of the frame (the saver).
+  // The pan is clamped so the image still covers the whole view: no edge
+  // of the render shows as a cut line.
   fitContent(fill = 0.9, maxZoom = 4) {
     const s = this.sheet; if (!s.paths.length) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -144,8 +155,9 @@ export class Plotter {
     const f = this.frameRect, k = this.baseScale(s);
     const z = Math.max(1, Math.min(maxZoom, fill * f.w / Math.max(1, (x1 - x0) * k), fill * f.h / Math.max(1, (y1 - y0) * k)));
     this.zoom = z;
-    this.panX = -((x0 + x1) / 2 - s.W / 2) * k * z;
-    this.panY = ((y0 + y1) / 2 - s.H / 2) * k * z;
+    const px = f.x + f.w / 2 - this.viewW / 2 - ((x0 + x1) / 2 - s.W / 2) * k * z;
+    const py = f.y + f.h / 2 - this.viewH / 2 + ((y0 + y1) / 2 - s.H / 2) * k * z;
+    [this.panX, this.panY] = clampPan(px, py, s.W * k * z, s.H * k * z, this.viewW, this.viewH);
     this.inkDirty = true; this.dirty = true;
   }
   panBy(dx, dy) { this.panX += dx; this.panY += dy; this.inkDirty = true; this.dirty = true; }
@@ -160,10 +172,12 @@ export class Plotter {
   }
 
   // ── sheets ───────────────────────────────────────────────────────────────
-  // mode 'plot' | 'instant' start a new shown sheet; 'swap' fills a hidden one.
+  // 'plot' and 'swap' fill a hidden sheet; finish() sorts it by depth and
+  // shows it (and starts the pen for 'plot'). 'instant' starts a new shown
+  // sheet in engine order (not used by the page).
   begin(W, H, mode) {
+    if (mode === 'swap' || mode === 'plot') { this.incoming = newSheet(W, H); this.nextMode = mode === 'plot' ? 'plot' : 'instant'; return; }
     this.mode = mode;
-    if (mode === 'swap') { this.incoming = newSheet(W, H); return; }
     this.incoming = null;
     this.sheet = newSheet(W, H);
     this.pen = { i: 0, d: 0, travel: 0, x: W / 2, y: H / 2, down: false };
@@ -171,18 +185,27 @@ export class Plotter {
     this.inkDirty = true; this.dirty = true;
     this.idleSent = false;
   }
-  add(buf) {
-    if (this.mode === 'swap') { if (this.incoming) decode(buf, this.incoming); return; }
-    decode(buf, this.sheet);
+  add(buf, depth) {
+    if (this.incoming) { decode(buf, this.incoming, depth); return; }
+    decode(buf, this.sheet, depth);
     if (this.mode === 'instant') { this.pen.i = this.sheet.paths.length; this.pen.d = 0; this.inkDirty = true; }
     this.dirty = true;
   }
   finish() {
-    if (this.mode === 'swap' && this.incoming) {
-      this.sheet = this.incoming; this.incoming = null;
-      this.sheet.done = true;
-      this.pen = { i: this.sheet.paths.length, d: 0, travel: 0, x: 0, y: 0, down: false };
-      this.mode = 'instant';
+    if (this.incoming) {
+      const s = this.incoming;
+      this.incoming = null;
+      const o = orderPaths(s.paths);
+      s.paths = o.paths; s.total = o.total; s.done = true;
+      this.sheet = s;
+      if (this.nextMode === 'plot') {
+        this.mode = 'plot';
+        this.pen = { i: 0, d: 0, travel: 0, x: s.W / 2, y: s.H / 2, down: false };
+        this.t0 = performance.now(); this.idleSent = false;
+      } else {
+        this.mode = 'instant';
+        this.pen = { i: s.paths.length, d: 0, travel: 0, x: 0, y: 0, down: false };
+      }
       this.inkDirty = true; this.dirty = true;
       return;
     }

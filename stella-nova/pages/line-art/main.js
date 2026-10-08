@@ -5,8 +5,10 @@
 //  it for renders and gives the paths to the plotter view (plotter.js).
 //
 //  RENDER KINDS (function render)
-//    plot     a new example, a replay, the saver: the pen draws the paths
-//             in engine order as they arrive.
+//    plot     a new example, a replay: the render fills a hidden sheet;
+//             when it is done, the pen draws the paths in depth order,
+//             near paths first (plotter.js finish, geom.js orderPaths).
+//    saver    the same hidden render; the saver then fits and plots it.
 //    preview  while the camera or a slider moves: a coarse chop step, and
 //             the shown lines change only when the preview is done (swap).
 //             When a preview ends and the input moved again, the next one
@@ -18,6 +20,11 @@
 //  CAMERA. Each example has its ln camera (worker camera_for). The page
 //  adds an orbit { az, el }: drag to turn, or the slow orbit. Zoom and pan
 //  are 2D on the vectors (plotter.js), they do not render again.
+//
+//  FRAMING. The engine image is the whole window, so lines go to the
+//  window edges (under the panel, the HUD and the saver plate). The clear
+//  area (S.frame) only aims the camera: the worker fits the example view
+//  into it with a wider fovy and a lens shift (geom.js viewFit).
 //
 //  GREP MAP
 //    grep -n 'function layout'         the clear area, the image size
@@ -78,7 +85,7 @@ function onWorker(m) {
   const L = S.live;
   if (!L || m.id !== L.id) return;
   if (m.type === 'chunk') {
-    plot.add(m.buf);
+    plot.add(m.buf, m.depth);
     L.stats = m;
     setProgress(m.progress);
     if (L.kind === 'plot') updateHud(m, false);
@@ -98,7 +105,9 @@ function onWorker(m) {
 // ── layout ─────────────────────────────────────────────────────────────────
 // The clear part of the window: the panel covers the left (desktop), the
 // base (phone portrait) or the right (phone landscape) while it is open;
-// the gallery strip and the dock cover the base. The image is fitted there.
+// the gallery strip and the dock cover the base. The camera aims the
+// example view there; the image itself is the whole window. In the saver
+// the clear part is the full width and the band between the plate lines.
 function layout() {
   const w = innerWidth, h = innerHeight, bar = document.querySelector('.topbar');
   const top = bar && getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().bottom : 0;
@@ -107,7 +116,6 @@ function layout() {
   if (S.saver) {
     const band = S.saver.band;
     T = band ? band.t : 0; B = band ? h - band.b : h;
-    if (band && band.w && band.w < w) { L = (w - band.w) / 2; R = L + band.w; }
   } else if (phone) {
     const dock = $('dock').offsetHeight || 0;
     B = h - dock;
@@ -122,13 +130,14 @@ function layout() {
     T = top + 36;  // the HUD line
   }
   document.documentElement.style.setProperty('--gal-h', (!phone && !S.saver ? $('gallery').offsetHeight + 12 : 0) + 'px');
-  const m = S.saver ? 10 : phone ? 10 : 22;
-  const fr = { x: L + m, y: T + m, w: Math.max(80, R - L - 2 * m), h: Math.max(80, B - T - 2 * m) };
+  const m = phone ? 10 : 22, mx = S.saver ? 0 : m, my = S.saver ? 10 : m;
+  const fr = { x: L + mx, y: T + my, w: Math.max(80, R - L - 2 * mx), h: Math.max(80, B - T - 2 * my) };
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   plot.resize(w, h, dpr);
   plot.setFrame(fr);
-  const changed = Math.abs(fr.w - S.frame.w) > 2 || Math.abs(fr.h - S.frame.h) > 2;
-  S.frame = fr;
+  const o = S.frame, moved = (a, b) => Math.abs(a - b) > 2;
+  const changed = moved(fr.x, o.x) || moved(fr.y, o.y) || moved(fr.w, o.w) || moved(fr.h, o.h) || moved(w, S.W) || moved(h, S.H);
+  S.frame = fr; S.W = w; S.H = h;
   return changed;
 }
 function placeGallery() {
@@ -160,15 +169,16 @@ function render(kind) {
   if (!S.ready || !S.key) return;
   if (kind === 'preview' && S.live && S.live.kind === 'preview') { S.wantPreview = true; return; }
   const e = S.byKey.get(S.key);
-  const W = Math.round(S.frame.w), H = Math.round(S.frame.h);
+  const W = Math.round(S.W), H = Math.round(S.H);
   const id = ++S.id;
   // A coarse chop for previews: fewer rays, the same lines.
   const stepScale = kind === 'preview' ? (e.cost >= 3 ? 6 : 4) : 1;
   S.live = { id, kind, key: S.key };
+  // 'plot' renders hidden, then the pen draws the sheet in depth order.
   // 'saver' renders hidden, then plots the whole sheet framed to the band.
   plot.begin(W, H, kind === 'plot' ? 'plot' : 'swap');
   if (kind === 'plot') plot.setStyle({ plotTime: S.saver ? S.saver.plotTime : plotTimeNow() });
-  worker.postMessage({ type: 'render', id, key: S.key, params: paramsOf(S.key), orbit: cameraFor(), width: W, height: H, stepScale });
+  worker.postMessage({ type: 'render', id, key: S.key, params: paramsOf(S.key), orbit: cameraFor(), width: W, height: H, frame: { ...S.frame }, stepScale });
 }
 function plotTimeNow() { return REDUCED ? 0.01 : Math.max(0.01, +$('plotTime').value); }
 function scheduleFull(delay = 260) {
@@ -460,10 +470,10 @@ function download(blob, name) {
 // The SVG comes from the engine: the same render, written by Paths to_svg
 // (path.rs to_svg_styled) with the paper and ink of the theme.
 function requestSVG() {
-  const id = ++S.id + 1e6, W = Math.round(S.frame.w), H = Math.round(S.frame.h);
+  const id = ++S.id + 1e6, W = Math.round(S.W), H = Math.round(S.H);
   return new Promise((resolve, reject) => {
     S.svgWait.set(id, { resolve, reject });
-    worker.postMessage({ type: 'svg', id, key: S.key, params: paramsOf(S.key), orbit: cameraFor(), width: W, height: H, stepScale: 1, stroke: S.theme.ink, background: S.theme.paper, lineWidth: +$('lineW').value });
+    worker.postMessage({ type: 'svg', id, key: S.key, params: paramsOf(S.key), orbit: cameraFor(), width: W, height: H, frame: { ...S.frame }, stepScale: 1, stroke: S.theme.ink, background: S.theme.paper, lineWidth: +$('lineW').value });
   });
 }
 function exportSVG() {
@@ -533,7 +543,9 @@ window.__lineArt = { S, plot, render, selectExample, layout, requestSVG };
 // ── screensaver ────────────────────────────────────────────────────────────
 // A seeded shuffle of the examples. Each shot: random parameters near the
 // defaults, a random orbit, a plot of about half the shot, then a hold and
-// a fade. The drawing frames in the clear band of the shell plate.
+// a fade. The camera aims at the clear band of the shell plate (full
+// width, band height); the lines go on under the plate to the window
+// edges.
 function mulberry(seed) {
   return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }

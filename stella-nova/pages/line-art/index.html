@@ -136,7 +136,7 @@
   <div class="about">
     <p>Each shape gives two things: a solid that blocks the view (a ray test) and some 3D polylines on its surface, its vector texture. Only the polylines can show. A cube gives its twelve edges; a sphere gives rings of latitude and longitude.</p>
     <p>The engine chops every polyline into steps of 0.01 world units. For each point it casts a ray toward the eye. If a shape is hit before the eye, the point is hidden and the line breaks there. A k-d tree over the shape boxes keeps the ray test fast.</p>
-    <p>Visible runs are projected with the camera, simplified, and drawn in the order the engine made them. That order is the pen path you see.</p>
+    <p>Visible runs are projected with the camera and simplified. Each run keeps its mean distance from the eye, and the pen draws the runs in that order, nearest first, from the front of the scene to the back.</p>
     <p>Solids can be combined: an intersection keeps lines inside both, a difference cuts one out of another. Outline spheres, cylinders and cones draw only their silhouette for the current eye.</p>
   </div>
 

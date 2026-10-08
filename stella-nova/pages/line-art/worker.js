@@ -13,20 +13,26 @@
 //
 //  The camera: camera_for(key, params) gives the example camera. The
 //  orbit { az, el } (radians) turns the eye about the up axis and tilts it
-//  toward up. When the image is narrower than the Go image, fovy grows so
-//  the horizontal view stays the same (function cameraArray).
+//  toward up. The image is the whole view; `frame` is the clear part of it
+//  (CSS px, y down). geom.js viewFit sets fovy and a lens shift so the
+//  example view fits the frame and the ln clip box is the whole image
+//  (function cameraArray). Without a frame, the frame is the whole image.
 //
-//  Messages in:  { type:'render', id, key, params, orbit, width, height, stepScale }
+//  Each chunk also carries `depth`: one camera depth per path (wasm.rs
+//  Job::depths). The page sorts the paths by it (geom.js orderPaths).
+//
+//  Messages in:  { type:'render', id, key, params, orbit, width, height, frame, stepScale }
 //                { type:'cancel', id }
-//                { type:'svg', id, key, params, orbit, width, height, stepScale, stroke, background, lineWidth }
+//                { type:'svg', id, key, params, orbit, width, height, frame, stepScale, stroke, background, lineWidth }
 //  Messages out: { type:'ready', catalog, version } | { type:'fail', message }
-//                { type:'chunk', id, buf, progress, rays, paths, segments, ms }
+//                { type:'chunk', id, buf, depth, progress, rays, paths, segments, ms }
 //                { type:'done', id, rays, paths, segments, ms, shapes }
 //                { type:'svg', id, text } | { type:'error', id, message }
 //
 //  grep -n targets: "function run", "function slice", "onmessage"
 // ============================================================================
 import init, { Job, catalog, code, camera_for, render_svg, version } from './pkg/line_art.js';
+import { viewFit } from './geom.js';
 
 const SLICE_MS = 14;
 let current = 0;       // the id of the live render; 0 = none
@@ -51,8 +57,8 @@ function turn(v, k, a) {
 }
 const unit = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 
-// The camera array for the job: [eye, center, up, fovy].
-export function cameraArray(key, params, orbit, width, height) {
+// The camera array for the job: [eye, center, up, fovy, shift x, shift y].
+export function cameraArray(key, params, orbit, width, height, frame) {
   const c = Array.from(camera_for(key, new Float64Array(params || [])));
   if (c.length < 10) return [];
   const center = c.slice(3, 6), up = unit(c.slice(6, 9));
@@ -65,10 +71,9 @@ export function cameraArray(key, params, orbit, width, height) {
     const k = unit([n[1] * up[2] - n[2] * up[1], n[2] * up[0] - n[0] * up[2], n[0] * up[1] - n[1] * up[0]]);
     if (Math.hypot(...k) > 0.5) d = turn(d, k, ang - target);
   }
-  let fovy = c[9];
-  const e = byKey.get(key), a0 = e ? e.width / e.height : 1, a = width / height;
-  if (a < a0) fovy = 2 * Math.atan(Math.tan(fovy * Math.PI / 360) * a0 / a) * 180 / Math.PI;
-  return [center[0] + d[0], center[1] + d[1], center[2] + d[2], ...center, ...up, Math.min(160, fovy)];
+  const e = byKey.get(key), a0 = e ? e.width / e.height : 1;
+  const fit = viewFit({ w: width, h: height }, frame, a0, c[9]);
+  return [center[0] + d[0], center[1] + d[1], center[2] + d[2], ...center, ...up, fit.fovy, fit.sx, fit.sy];
 }
 
 function free() { if (job) { try { job.free(); } catch (e) { /* freed */ } job = null; } }
@@ -79,7 +84,7 @@ async function run(m) {
   free();
   const t0 = performance.now();
   try {
-    const cam = cameraArray(m.key, m.params, m.orbit, m.width, m.height);
+    const cam = cameraArray(m.key, m.params, m.orbit, m.width, m.height, m.frame);
     job = new Job(m.key, new Float64Array(m.params || []), new Float64Array(cam), m.width, m.height, m.stepScale || 1);
   } catch (e) {
     postMessage({ type: 'error', id: m.id, message: String(e && e.message || e) });
@@ -88,13 +93,13 @@ async function run(m) {
   let budget = 4000;
   while (m.id === current && job && !job.done()) {
     const s0 = performance.now();
-    const parts = [];
+    const parts = [], depths = [];
     let total = 0;
     // One slice: several next() calls, the budget tuned to the slice time.
     while (performance.now() - s0 < SLICE_MS && !job.done()) {
       const c0 = performance.now();
       const buf = job.next(budget);
-      if (buf[0] > 0) { parts.push(buf); total += buf.length - 1; }
+      if (buf[0] > 0) { parts.push(buf); depths.push(job.depths()); total += buf.length - 1; }
       const dt = performance.now() - c0;
       if (dt < SLICE_MS / 4) budget = Math.min(budget * 2, 400000);
       else if (dt > SLICE_MS) budget = Math.max(500, budget >> 1);
@@ -104,12 +109,15 @@ async function run(m) {
       let o = 1, n = 0;
       for (const b of parts) { n += b[0]; out.set(b.subarray(1), o); o += b.length - 1; }
       out[0] = n;
-      postMessage({ type: 'chunk', id: m.id, buf: out, progress: job.progress(), rays: job.rays(), paths: job.paths_out(), segments: job.segments_out(), ms: performance.now() - t0 }, [out.buffer]);
+      const depth = new Float32Array(n);
+      o = 0;
+      for (const d of depths) { depth.set(d, o); o += d.length; }
+      postMessage({ type: 'chunk', id: m.id, buf: out, depth, progress: job.progress(), rays: job.rays(), paths: job.paths_out(), segments: job.segments_out(), ms: performance.now() - t0 }, [out.buffer, depth.buffer]);
     }
     await yieldNow();
   }
   if (m.id === current && job) {
-    postMessage({ type: 'done', id: m.id, camera: cameraArray(m.key, m.params, m.orbit, m.width, m.height), rays: job.rays(), paths: job.paths_out(), segments: job.segments_out(), shapes: job.shape_count(), ms: performance.now() - t0 });
+    postMessage({ type: 'done', id: m.id, camera: cameraArray(m.key, m.params, m.orbit, m.width, m.height, m.frame), rays: job.rays(), paths: job.paths_out(), segments: job.segments_out(), shapes: job.shape_count(), ms: performance.now() - t0 });
     free();
   }
 }
@@ -121,7 +129,7 @@ onmessage = async e => {
   else if (m.type === 'svg') {
     await ready;
     try {
-      const cam = cameraArray(m.key, m.params, m.orbit, m.width, m.height);
+      const cam = cameraArray(m.key, m.params, m.orbit, m.width, m.height, m.frame);
       const text = render_svg(m.key, new Float64Array(m.params || []), new Float64Array(cam), m.width, m.height, m.stepScale || 1, m.stroke, m.background, m.lineWidth);
       postMessage({ type: 'svg', id: m.id, text });
     } catch (err) { postMessage({ type: 'error', id: m.id, message: String(err && err.message || err) }); }
