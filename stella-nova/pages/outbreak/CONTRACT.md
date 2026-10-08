@@ -91,7 +91,7 @@ One line per file: what it owns. "DONE" files exist now.
 | `model.js` | The simulation engine. | D |
 | `geo.js` | Sphere and flat-map projections, great-circle arcs. | E |
 | `camera.js` | Camera state, poses, eased flights (no DOM). | E |
-| `budget.js` | GPU memory budget (pixel ratio cap). | F |
+| `budget.js` | GPU memory budget (pixel ratio cap, phone budget, `phoneView`). | F |
 | `render/globe.js` | three.js renderer core, style switch, layers, picking, pagehide release. | F |
 | `render/field.js` | Land mask and the prevalence field texture. | F |
 | `render/style-night.js` | Style 1: dark globe, city lights, glowing coasts (default). | G1 |
@@ -99,8 +99,8 @@ One line per file: what it owns. "DONE" files exist now.
 | `render/style-dots.js` | Style 3: dot-matrix globe coloured by local prevalence. | G3 |
 | `render/style-flat.js` | Style 4: flat map (equirectangular and Equal Earth). | G4 |
 | `render/style-holo.js` | Style 5: wireframe or holographic globe. | G5 |
-| `render/arcs.js` | Air-route arcs, comets and planes, the lit network. | H |
-| `render/nodes.js` | City glows, first-infection ring bursts. | H |
+| `render/arcs.js` | The air network (hairlines), planes (point sprites) and the trail ribbon that lights the route behind each plane. | H |
+| `render/nodes.js` | City markers in screen px, one thin ring at a first infection. | H |
 | `index.html`, `style.css`, `ui.js` | Page markup, panel, phone dock and sheet, HUD, region table. | J |
 | `charts.js` | The S/E/I/R/D/V curves canvas and the R_eff strip. | K |
 | `equations.js` | TeX strings and colour rules for the page and the plate. | L |
@@ -344,31 +344,57 @@ frame = { t, dt, sim, prev: Float32Array(N) /* I/N per node */, events: Event[] 
 the scene, and the shared context it hands to each style and layer:
 
 ```js
-ctx = { THREE, scene, renderer, camera, D, net, geo, field, mode, root /* THREE.Group the style adds to */ }
+ctx = { THREE, scene, renderer, camera, D, net, geo, field, mode, root /* THREE.Group the style adds to */,
+        proj /* flat projection */, phone /* bool, budget.js phoneView at boot */ }
 // every style module (G1-G5):
 export default { id, label, mode: 'globe' | 'flat',
                  create(ctx) -> { group, update(frame), dispose() } }
 // render/field.js (F):
 export function createField(D, THREE, worldJson) -> {
-  texture,        // DataTexture 512x256, R = prevalence glow 0..1 (land only), G = deaths share
-  landMask,       // DataTexture 1024x512, 1 on land
+  texture,        // DataTexture 1024x512, R = prevalence glow 0..1 (land only), G = deaths share;
+                  // weight exp(-(d/sigma)^4), cutoff 2 sigma: sharp patches, not a blur
+  landMask,       // DataTexture 2048x1024, 1 on land
   update(prev),   // per node I/N -> texels, about 4 times a second
   dispose() }
 // render/arcs.js and render/nodes.js (H):
-export function createArcs(ctx) -> { setMode(mode), update(frame), dispose() }
-export function createNodes(ctx) -> { setMode(mode), update(frame), dispose() }
+export function createArcs(ctx) -> { setMode(mode), update(frame), dispose(), heat, pool, limits }
+export function createNodes(ctx) -> { setMode(mode), update(frame), dispose(), pool, glow, px }
 ```
 
-GPU rules: no EffectComposer and no HalfFloat multisample targets (glow
-comes from additive sprites and shaders). `budget.js` caps the drawing
-buffer at 2560 x 1440 device px and the pixel ratio at 2 (as
-hopf-fibration/budget.js). On `pagehide`, `dispose()` everything and call
-`renderer.forceContextLoss()`. Comet and plane pool fixed (512 comets, 12
-trail points each). Infected flights come from `frame.events`; ambient
-flights are drawn from `net.air.flow` with a visual RNG. A `first` event
-gets a brighter comet and a ring burst at the destination. Arcs keep a
-per-edge heat that rises with each infected flight and decays, so the
-network lights up.
+GPU rules: no EffectComposer, no render targets, no bloom. `budget.js`
+caps the drawing buffer at 2560 x 1440 device px and the pixel ratio at 2
+(as hopf-fibration/budget.js); a phone (`phoneView`, the ui.js media
+query) gets 1.6 million device px. The canvas draws at that ratio with
+antialias on. On `pagehide`, `dispose()` everything and call
+`renderer.forceContextLoss()`.
+
+Look (redesign of 2026-10-08, after the user said the page was "too soft
+and extremely vibecoded", then "i like the densely connected network it
+doesn't glow appropriately behind planes as they fly"): restrained,
+crisp and calm. No time pulse, breathing, scanline or flicker in any
+style.
+
+- Network: always on. One low arch per air edge (lift 0.07), hairlines
+  at alpha 0.07-0.18 by flow. A per-edge heat (tau 10 s) turns a used
+  edge to the infection colour. No pulse along the lines.
+- Flights: a fixed pool, `limitsFor({ phone })`: 72 flights and 3.2
+  ambient starts per second on desktop, 32 and 1.4 on a phone. A city
+  waits `HUB_GAP` (0.45 s) between departures, an edge carries one
+  ordinary flight at a time, and a frame takes at most 4 ordinary
+  events. A `first` event always flies and can evict a lower flight. A
+  gated infected event still heats its edge. Flights take 2.6-6.8 s.
+- Trail: a ribbon of 16 points behind each plane, constant screen width
+  (2.2 CSS px, 1 px antialiased edge), bright at the plane and fading
+  back over `TRAIL_S` (1.2 s) of path; it drains into the destination.
+  Infected flights glow in the infection colour, ambient ones are dim.
+- Planes: point sprites, an airliner distance field turned along the
+  screen direction of travel, thin dark outline, 10 CSS px (9 on a
+  phone).
+- Cities: crisp circles in CSS px (`markerPx`): 1.8-3 px grey when idle,
+  3.5-12 px flat red by log prevalence, muted teal after the epidemic.
+  A first infection starts one 1.3 px ring that grows to 30 px in 1.6 s.
+- Labels: main.js labels only the largest current outbreaks
+  (`topOutbreaks`, 4 on desktop, 2 on a phone).
 
 ### UI (packages J, K, L)
 
@@ -405,9 +431,18 @@ Director = {
 }
 view = { day, burnedOut, totals, reff, hottest /* node index */, newestFirst /* Event | null */,
          topRegion, active, D }
-shot = { kind, dur /* seconds, 5..12 */, style, cam /* camera.js state */,
-         follow: { kind: 'event' | 'node', id } | null, simSpeed /* days per second */, title }
+shot = { kind, dur /* seconds, SHOT_S = 8..12 */, style, cam /* camera.js state */,
+         follow: { kind: 'event' | 'node', id } | null, simSpeed /* days per second */, title,
+         spin, drift /* deg/s, |x| <= CALM_DEG_S = 1.5 */ }
 ```
+
+Calm motion: one subject per shot; the style holds for a run; an
+`export` shot only when the disease reaches a new region. main.js
+flies the camera with `FLY` (18 deg/s, heading and tilt 20 deg/s,
+camera.js `maxTurnDegPerSec`), and eases spin, drift and the idle turn
+(1.2 deg/s after 8 s) to their rates. saver.js flies moves under 50 deg
+and fades (0.9 s) for the rest. tests/motion.test.mjs drives the Auto
+camera for six minutes and checks the limits.
 
 `saver.js` installs `window.snSaver = { enter(opts), exit(), debug(), cut(kind) }`
 (protocol in `lib/screensaver.js`; `enter` returns `{ canvas, warmupMs }`
@@ -421,6 +456,7 @@ same director without the shell plate. No code on the plate.
 |---|---|---|
 | d8487a5 | `tools/build-nodes.py`, `data/nodes.json` (395 nodes, 7.66 bn), `data.js`, `CREDITS.txt` | data: nodes load; valid coordinates, pop, region, income; world population 7-8.5 billion; every region has nodes; hubs exist |
 | (this commit) | `rng.js`, `tests.mjs` runner, `tests/data.test.mjs`, `tests/rng.test.mjs`, this contract | rng: same seed, same stream; poisson mean; binom mean |
+| fbd9ff9..1640fec | Redesign: crisp network, planes and trails; pixel markers; sharp field; calm styles and camera; editorial layout and phone dock | arcs, nodes, render, style-*, director, motion, layout |
 
 ## Left: work packages
 
@@ -482,15 +518,19 @@ Wave 2 (needs E):
   subdivided plane with forward projection per vertex). Holo: graticule,
   coasts and arcs in cyan lines with scanlines.
 - **H. Arcs, planes and city glows.** Files: `render/arcs.js`,
-  `render/nodes.js`, `tests/arcs.test.mjs` (pool and heat decay logic,
-  no GPU).
+  `render/nodes.js`, `tests/arcs.test.mjs` (pool, gate, phone limits,
+  trail span, heat decay, cap under bursts, no leak; no GPU) and
+  `tests/nodes.test.mjs` (marker px, rings). The redesign added
+  `tests/motion.test.mjs` (Auto camera limits) and
+  `tests/layout.test.mjs` (shell and HUD rules, topOutbreaks).
 
 Wave 2 (needs only the API shapes):
 
 - **K. Charts.** Files: `charts.js`, `tests/charts.test.mjs` (scale and
   tick helpers).
 - **M. Director and saver.** Files: `director.js`, `saver.js`,
-  `tests/director.test.mjs`. Tests: every shot lasts 5-12 s; a burned-out
+  `tests/director.test.mjs`. Tests: every shot lasts 8-12 s (5-12 before
+  the 2026-10-08 redesign); spin and drift stay under CALM_DEG_S; a burned-out
   view yields `restart` after the aftermath shot; two runs never pick the
   same disease in a row; the plate has `tex` and no `code`; the same seed
   gives the same shot list. Test with a stub `view` sequence; a real
