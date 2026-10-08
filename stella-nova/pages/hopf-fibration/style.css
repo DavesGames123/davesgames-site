@@ -112,6 +112,16 @@ html.in-frame #panel{padding-top:20px}
 .chips button:hover{border-color:var(--acc);color:var(--ink)}
 .chips button.on{border-color:var(--acc);color:var(--acc);background:rgba(158,195,255,0.07)}
 .rot-eq{margin:10px 0 2px;font-size:1rem;min-height:22px}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.sf{font-family:var(--sci-sans);font-style:normal}
+/* the preset gallery: one row of chips per group */
+.gallery{display:flex;flex-direction:column;gap:8px}
+.gallery .grp{font-size:0.7rem;color:var(--dim);margin:2px 0 -2px}
+.gallery .chips button{position:relative;padding-left:22px}
+.gallery .chips button::before{content:'';position:absolute;left:9px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--g,#9ec3ff);opacity:0.8}
+/* palette swatches */
+.swatches button{display:inline-flex;align-items:center;gap:7px}
+.swatches i{display:inline-block;width:26px;height:10px;border-radius:5px;background:var(--sw);box-shadow:0 0 0 1px rgba(255,255,255,0.18)}
 .eqs{display:flex;flex-direction:column;gap:8px}
 .eqs .sci-eq{font-size:1rem;padding:4px 0}
 .eqs .sci-eq.small{font-size:0.86rem}

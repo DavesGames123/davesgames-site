@@ -27,8 +27,10 @@
    Scripts at end of body: main.js (module).
 
    FILES
-     hopf.js       the geometry: Hopf map, fibres, projection, 4D rotations,
-                   colours, presets, linking number (no DOM, node-tested)
+     hopf.js       the geometry: Hopf map, fibres, (p, q) orbits, projection,
+                   4D and S2 rotations, palettes, presets, Hopf tori,
+                   polyhedra, linking number (no DOM, node-tested)
+     budget.js     the GPU memory budget of the 3D view (node-tested)
      scene.js      three.js: the instanced tube mesh and its vertex shader,
                    discs, lights, bloom (FIBRE_GLSL)
      insets.js     the base sphere S2 and the 4D gauge (2D canvases)
@@ -38,6 +40,10 @@
      tests.mjs     node tests for hopf.js
 
    LAYOUT  (# marks an element id main.js binds to)
+     panel ..... #presets (grouped gallery), #pqChips (weights), #modeSeg
+                 (4D rotation), #flowSeg + #breatheBtn + #pulseBtn
+                 (animation), #palettes (look), #shareBtn (copy link).
+                 The URL hash holds the state (main.js, readHash).
      desktop ... #panel at the left. #view (WebGL canvas) fills the window.
                  #hero (title, map) at the top left of the clear part,
                  #readout at the top right, #insets at the base right:
@@ -61,7 +67,7 @@
      grep -n 'function buildUI'       the controls
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="The Hopf fibration in 3D: the 3-sphere as linked circles over the 2-sphere. Pick points on S², see their fibres, rotate S³ in four dimensions, and watch the circles pass through infinity.">
+<meta name="description" content="The Hopf fibration in 3D: the 3-sphere as linked circles over the 2-sphere. Pick points on S², see their fibres, Hopf tori, linked polyhedra and torus knots, rotate S³ in four dimensions, and watch the circles pass through infinity.">
 <script type="importmap">
 {
   "imports": {
@@ -123,8 +129,13 @@
   <button id="panelClose" aria-label="Close controls">✕</button>
 
   <div class="sec-label first">Fibres</div>
-  <div id="presets" class="chips"></div>
+  <div id="presets" class="gallery"></div>
   <p class="hint" id="presetBlurb"></p>
+
+  <div class="sec-label">Weights (<span class="sf">p</span>, <span class="sf">q</span>) of the circle action</div>
+  <div id="pqChips" class="chips"></div>
+  <div class="rot-eq sci-eq" data-eq="seifert"></div>
+  <p class="hint" id="pqHint">At (1, 1) the orbits are the Hopf fibres. Other weights turn each fibre into a (p, q) torus knot. The change blends on S³.</p>
 
   <div class="sec-label">Base sphere</div>
   <div class="seg four" id="toolSeg">
@@ -155,9 +166,24 @@
   <div class="btns"><button id="playBtn" class="on">Pause</button><button id="zeroBtn">Back to a = 0</button></div>
 
   <div class="sec-label">Animate</div>
+  <div class="seg three" id="flowSeg">
+    <button data-flow="off">No flow</button>
+    <button data-flow="spin">Spin</button>
+    <button data-flow="tumble">Tumble</button>
+  </div>
+  <p class="hint" id="flowHint"></p>
+  <div class="prm"><div class="nm">Flow speed</div><span class="val" id="flowRateV"></span>
+    <input type="range" id="flowRate" min="0.02" max="0.8" step="0.01" value="0.16" aria-label="Flow speed"></div>
+  <div class="btns"><button id="breatheBtn" aria-pressed="true" class="on">Breathe</button><button id="pulseBtn" aria-pressed="true" class="on">Light pulses</button></div>
   <div class="btns"><button id="sweepBtn" aria-pressed="false">Latitude sweep</button><button id="orbitBtn" aria-pressed="true" class="on">Orbit camera</button></div>
+  <div class="btns"><button id="regrowBtn">Draw the fibres again</button></div>
+  <p class="hint">Breathe rocks each latitude and swells each closed curve on the base sphere, so the tori over them grow and shrink. A preset in the same group morphs from the last one; a preset in another group draws its fibres on.</p>
+
+  <div class="sec-label">Look</div>
+  <div id="palettes" class="chips swatches"></div>
   <div class="btns"><button id="stripeBtn" aria-pressed="true" class="on">Stripes along t</button><button id="discBtn" aria-pressed="true" class="on">Linking discs</button></div>
-  <p class="hint">The stripes mark the parameter <span class="m3"><i>t</i></span> on each fibre, so they show how the 4D rotation moves points along and across the circles. Tap two tubes in the 3D view to see their discs and linking number.</p>
+  <div class="btns"><button id="taperBtn" aria-pressed="true" class="on">Taper to infinity</button><button id="shareBtn">Copy link</button></div>
+  <p class="hint">The stripes mark the parameter <span class="m3"><i>t</i></span> on each fibre, so they show how the 4D rotation moves points along and across the circles. Tap two tubes in the 3D view to see their discs and linking number. The address bar keeps the preset, weights, palette, flow and rotation, so a link opens the same view.</p>
 
   <div class="sec-label">View</div>
   <div class="prm"><div class="nm">Tube radius</div><span class="val" id="radV"></span>
@@ -181,6 +207,11 @@
     <div class="sci-eq small" data-eq="stereo"></div>
     <div class="eq-l">The linking number, as a Gauss integral. The readout computes it from the two tubes on screen.</div>
     <div class="sci-eq small" data-eq="link"></div>
+    <div class="eq-l">A Hopf torus: the fibres over a closed curve <i>γ</i> on <i>S</i>². Its area in <i>S</i>³ is π times the length of <i>γ</i>.</div>
+    <div class="sci-eq small" data-eq="torus"></div>
+    <div class="eq-l">The weighted circle action. Its orbits are (<span class="sf">p</span>, <span class="sf">q</span>) torus knots, and two of them link <span class="sf">p</span><span class="sf">q</span> times.</div>
+    <div class="sci-eq small" data-eq="seifert"></div>
+    <div class="sci-eq small" data-eq="linkpq"></div>
   </div>
 
   <div class="sec-label">About</div>
@@ -188,6 +219,8 @@
     <p>The 3-sphere <i>S</i>³ is the set of unit vectors in ℂ², a sphere in four dimensions. The Hopf map <i>p</i> sends each of its points to a point of the ordinary sphere <i>S</i>². The points that go to one point of <i>S</i>² make a great circle, the fibre over that point. Each point of <i>S</i>³ is on exactly one fibre, so <i>S</i>³ is a union of disjoint circles, one for each point of <i>S</i>². Near any fibre it looks like a product of a disc and a circle. As a whole it is not <i>S</i>² × <i>S</i>¹.</p>
     <p>Stereographic projection keeps circles as circles, so each fibre shows as a round circle in the view. The fibre through the projection point goes through infinity and shows as a straight line. Any two fibres are linked once, as two links of a chain. The fibres over one circle of latitude fill a torus, and each of them is a Villarceau circle of that torus. The latitudes give a family of nested tori that fills space. The equator gives the Clifford torus |<i>z</i>₀| = |<i>z</i>₁| = 1/√2.</p>
     <p>The 4D rotation turns <i>S</i>³ before the projection. <b>Along</b> multiplies by e<sup><i>ia</i></sup>: each fibre turns on itself and the picture keeps its shape, only the stripes move. <b>Fibre to fibre</b> multiplies by a unit quaternion on the right: it sends every fibre onto another fibre, and the base sphere turns with it (the rings on the small sphere). The circles move through the projection point and come back from infinity on the other side. <b>One plane</b> and <b>Two planes</b> are general rotations of ℝ⁴: the circles stay circles and stay linked, but they are no longer fibres of this map.</p>
+    <p>The fibres over a closed curve on <i>S</i>² make a torus in <i>S</i>³, a Hopf torus. Ulrich Pinkall showed in 1985 that each Hopf torus is flat, and that its area is π times the length of the curve (with this map onto the unit sphere). A latitude gives a round torus, a wavy curve a torus with bulges. The fibres over the vertices of a regular solid are a set of great circles in which every pair links once.</p>
+    <p>Change the weights and the circle action becomes t ↦ (e<sup><i>ipt</i></sup><i>z</i>₀, e<sup><i>iqt</i></sup><i>z</i>₁). For coprime <i>p</i>, <i>q</i> it is a Seifert fibration of <i>S</i>³. Each orbit off the two core circles lies on a torus |<i>z</i>₀| = constant and is a (<i>p</i>, <i>q</i>) torus knot; (2, 3) gives trefoils. Two such orbits link <i>pq</i> times. The core circles <i>z</i>₀ = 0 and <i>z</i>₁ = 0 are shorter orbits, the exceptional fibres.</p>
     <p>Heinz Hopf described the map in 1931, in <i>Über die Abbildungen der dreidimensionalen Sphäre auf die Kugelfläche</i> (Mathematische Annalen 104). He proved that it cannot be deformed to a constant map. In modern terms it has Hopf invariant 1 and generates π₃(<i>S</i>²) ≅ ℤ.</p>
     <p>In physics: the pure states of a qubit are unit vectors (<i>z</i>₀, <i>z</i>₁) in ℂ², and a global phase e<sup><i>it</i></sup> changes no measurement. So the states that are physically the same are a fibre, and the Hopf map sends a state to its point on the Bloch sphere (up to a reflection of one axis, by convention). The same circle bundle carries the field of a Dirac magnetic monopole of the lowest charge. With <i>S</i>³ as the unit quaternions, which cover the rotations of 3D space twice, the fibre over a direction is the set of rotations that take one fixed axis to that direction.</p>
     <p>The tubes are drawn on the GPU: a vertex shader puts each vertex on its fibre, rotates it in four dimensions and projects it. The 3D view uses three.js r160 (MIT licence). The maths and the code of this page are original.</p>

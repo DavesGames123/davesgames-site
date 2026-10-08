@@ -11,6 +11,9 @@
 //  fibration" (complex form of p, fibres as great circles, stereographic
 //  projection) and against the node tests in tests.mjs.
 //
+//  The weights of the circle action are set upright (\mathsf{p}, \mathsf{q})
+//  so they do not take the colour rule of t or read as the map p.
+//
 //  EXPORTS  TEX, RULES, ROT_TEX, typesetPage(), typesetRotation(mode),
 //           typesetLive(el, b)        (grep -n "export")
 // ============================================================================
@@ -25,6 +28,11 @@ export const TEX = {
   fibre: String.raw`(z_0,z_1)=e^{it}\big(\cos\tfrac{\theta}{2}\,e^{i\varphi},\ \sin\tfrac{\theta}{2}\big),\quad 0\le t<2\pi`,
   stereo: String.raw`(x_1,x_2,x_3,x_4)\mapsto\frac{(x_1,\,x_2,\,x_3)}{1-x_4},\qquad z_0=x_1+i x_2,\ z_1=x_3+i x_4`,
   link: String.raw`\mathrm{Lk}(A,B)=\frac{1}{4\pi}\oint_A\!\oint_B\frac{(\mathbf{r}_A-\mathbf{r}_B)\cdot(d\mathbf{r}_A\times d\mathbf{r}_B)}{|\mathbf{r}_A-\mathbf{r}_B|^3}=\pm1`,
+  // the weighted circle action and its orbits (seifertPoint in hopf.js)
+  seifert: String.raw`(z_0,z_1)\mapsto\big(e^{i\mathsf{p}t}z_0,\ e^{i\mathsf{q}t}z_1\big),\qquad \gcd(\mathsf{p},\mathsf{q})=1`,
+  linkpq: String.raw`\mathrm{Lk}(A,B)=\mathsf{p}\,\mathsf{q}`,
+  // the Hopf torus over a closed curve gamma of length L on S2 (torusArea)
+  torus: String.raw`T_\gamma=p^{-1}(\gamma),\qquad \mathrm{Area}(T_\gamma)=\pi\,L(\gamma)`,
 };
 
 // The 4D rotation of each mode. q = z_0 + z_1 j is the same point as a unit

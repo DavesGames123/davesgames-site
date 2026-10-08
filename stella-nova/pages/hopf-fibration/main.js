@@ -58,6 +58,8 @@
 //    grep -n 'function applyLook'      the palette
 //    grep -n 'function frame'          the frame loop
 //    grep -n 'function buildUI'        the controls
+//    grep -n 'function syncControls'   put the controls in line with G
+//    grep -n 'function readHash'       the state in the URL hash
 //    grep -n 'const app'               the api that saver.js drives
 // ============================================================================
 import * as H from './hopf.js';
@@ -200,6 +202,7 @@ function syncPresetUI() {
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', !G.custom && b.dataset.id === G.preset));
   $('presetBlurb').textContent = G.custom ? 'Your own set of fibres. Each fibre has the colour of its point on the small sphere.' : P.blurb;
   $('dockTitle').textContent = G.custom ? 'Your own set' : P.name;
+  syncControls();
 }
 function markCustom() { if (!G.custom) { G.custom = true; G.trace = null; syncPresetUI(); } }
 
@@ -423,6 +426,7 @@ function frame(now) {
     $('gaugeFig').hidden = !showGauge;
     if (showGauge) gauge.draw(Mcur);
   }
+  if (frameNo % 30 === 0) writeHash();
   // the live base point of the first selected fibre
   const s0 = G.sel.length ? fibres[G.sel[G.sel.length - 1]] : null;
   const key = s0 ? s0.b.map(v => v.toFixed(3)).join(',') : '';
@@ -531,10 +535,12 @@ function setPlaying(p) {
   $('dockPlay').classList.toggle('on', p);
   $('dockPlayIcon').setAttribute('d', p ? 'M8 5h3v14H8zM13 5h3v14h-3z' : 'M8 5l11 7-11 7z');
 }
+const toggleSyncs = [];
 function toggleBtn(id, key, after) {
   const b = $(id);
   const sync = () => { b.classList.toggle('on', !!G[key]); b.setAttribute('aria-pressed', String(!!G[key])); };
   b.addEventListener('click', () => { G[key] = !G[key]; sync(); if (after) after(); });
+  toggleSyncs.push(sync);
   sync();
 }
 function bindRange(id, key, fmt, after) {
@@ -561,13 +567,122 @@ function drawWheel() {
   spans[0].textContent = 'hue: longitude φ'; spans[1].textContent = 'light: north on top';
 }
 
+// The weights the panel offers (coprime pairs).
+const PQ_CHOICES = [[1, 1], [1, 2], [2, 1], [2, 3], [3, 2], [2, 5], [3, 4], [3, 5], [4, 5]];
+const GROUP_HUE = { hopf: '#9ec3ff', tori: '#7fe0c0', links: '#ffc27a', knots: '#e59cff' };
+const FLOW_HINT = {
+  off: 'The base points stay where they are.',
+  spin: 'Every base point turns about the polar axis of S². Each torus over a latitude keeps its place while its fibres slide around it.',
+  tumble: 'The base sphere turns about an axis that itself turns. When a curve crosses the south pole, its torus opens through infinity and closes again.',
+};
+function setFlow(f) {
+  G.flow = FLOW_HINT[f] ? f : 'off';
+  document.querySelectorAll('#flowSeg button').forEach(b => b.classList.toggle('on', b.dataset.flow === G.flow));
+  $('flowHint').textContent = FLOW_HINT[G.flow];
+}
+function pickWeights(pq) {
+  setWeights(pq, G.pq);
+  syncControls();
+  toast(pq[0] === 1 && pq[1] === 1 ? 'Weights (1, 1): the Hopf fibres' : `Weights (${pq[0]}, ${pq[1]}): (${pq[0]}, ${pq[1]}) torus knots, Lk = ${pq[0] * pq[1]}`);
+}
+function setPalette(id) { G.palette = id; applyLook(); syncControls(); }
+// Put every control in line with G (after the saver, a hash change, a
+// preset).
+function syncControls() {
+  toggleSyncs.forEach(f => f());
+  setFlow(G.flow);
+  document.querySelectorAll('#pqChips button').forEach(b => b.classList.toggle('on', b.dataset.pq === G.pq.join(',')));
+  document.querySelectorAll('#palettes button').forEach(b => b.classList.toggle('on', b.dataset.id === G.palette));
+  const fr = $('flowRate'); if (fr) { fr.value = String(G.flowRate); $('flowRateV').textContent = G.flowRate.toFixed(2) + ' rad/s'; }
+}
+
+// ------------------------------------------------------------ URL hash
+// #p=preset&pq=2,3&pal=aurora&flow=tumble&m=isoclinic&br=0&pu=0
+// The hash follows the state (checked twice a second, replaceState, so
+// no history entries). A custom set of items has no preset key.
+const hashKey = () => {
+  const q = new URLSearchParams();
+  if (!G.custom) q.set('p', G.preset);
+  q.set('pq', G.pq.join(',')); q.set('pal', G.palette); q.set('flow', G.flow); q.set('m', G.mode);
+  if (!G.breathe) q.set('br', '0');
+  if (!G.pulse) q.set('pu', '0');
+  return '#' + q.toString();
+};
+let hashSeen = '';
+function writeHash() {
+  if (document.documentElement.classList.contains('sn-saver')) return;
+  const h = hashKey();
+  if (h === hashSeen) return;
+  hashSeen = h;
+  try { history.replaceState(null, '', location.pathname + location.search + h); } catch (e) { /* sandboxed frame */ }
+}
+// Read the hash into G. Returns the preset id to apply, or null.
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  let preset = null;
+  if (q.has('p') && H.PRESETS.some(p => p.id === q.get('p'))) preset = q.get('p');
+  if (q.has('pal') && H.PALETTES.some(p => p.id === q.get('pal'))) G.palette = q.get('pal');
+  if (q.has('flow') && FLOW_HINT[q.get('flow')]) G.flow = q.get('flow');
+  if (q.has('m') && H.MODES[q.get('m')]) G.mode = q.get('m');
+  G.breathe = q.get('br') !== '0'; G.pulse = q.get('pu') !== '0';
+  let pq = null;
+  if (q.has('pq')) {
+    const v = q.get('pq').split(',').map(Number);
+    if (v.length === 2 && v.every(x => Number.isInteger(x) && x >= 1 && x <= 7)) pq = v;
+  }
+  return { preset, pq };
+}
+function applyHash(first) {
+  const r = readHash();
+  if (r.preset && (first || r.preset !== G.preset || G.custom)) applyPreset(r.preset);
+  if (r.pq && r.pq.join(',') !== G.pq.join(',')) setWeights(r.pq, first ? null : G.pq);
+  if (!first) { setMode(G.mode); applyLook(); syncControls(); }
+  hashSeen = hashKey();
+}
+
 function buildUI() {
   const pc = $('presets');
-  H.PRESETS.forEach(p => {
-    const b = document.createElement('button'); b.textContent = p.name; b.dataset.id = p.id;
-    b.addEventListener('click', () => { if (p.id === 'random' && G.preset === 'random') G.seed++; applyPreset(p.id); });
-    pc.append(b);
+  H.PRESET_GROUPS.forEach(g => {
+    const lab = document.createElement('div'); lab.className = 'grp'; lab.textContent = g.name;
+    const row = document.createElement('div'); row.className = 'chips';
+    row.style.setProperty('--g', GROUP_HUE[g.id] || '#9ec3ff');
+    H.PRESETS.filter(p => (p.group || 'hopf') === g.id).forEach(p => {
+      const b = document.createElement('button'); b.textContent = p.name; b.dataset.id = p.id;
+      b.addEventListener('click', () => { if (p.id === 'random' && G.preset === 'random') G.seed++; applyPreset(p.id); syncControls(); });
+      row.append(b);
+    });
+    pc.append(lab, row);
   });
+  const pqc = $('pqChips');
+  PQ_CHOICES.forEach(pq => {
+    const b = document.createElement('button'); b.dataset.pq = pq.join(',');
+    b.textContent = pq[0] === 1 && pq[1] === 1 ? '1, 1 Hopf' : pq.join(', ');
+    b.addEventListener('click', () => pickWeights(pq));
+    pqc.append(b);
+  });
+  const pal = $('palettes');
+  H.PALETTES.forEach(P => {
+    const b = document.createElement('button'); b.dataset.id = P.id;
+    const stops = [0, 0.25, 0.5, 0.75, 1].map(u => H.hexOf(H.paletteColor(H.baseFromAngles(1.1, 0.6 + Math.PI * u), P.id)));
+    const sw = document.createElement('i'); sw.style.setProperty('--sw', `linear-gradient(90deg, ${stops.join(', ')})`);
+    b.append(sw, document.createTextNode(P.name));
+    b.addEventListener('click', () => setPalette(P.id));
+    pal.append(b);
+  });
+  document.querySelectorAll('#flowSeg button').forEach(b => b.addEventListener('click', () => { setFlow(b.dataset.flow); if (G.flow !== 'off') setPlaying(true); }));
+  bindRange('flowRate', 'flowRate', v => v.toFixed(2) + ' rad/s');
+  toggleBtn('breatheBtn', 'breathe');
+  toggleBtn('pulseBtn', 'pulse');
+  toggleBtn('taperBtn', 'taper');
+  $('regrowBtn').addEventListener('click', regrow);
+  $('shareBtn').addEventListener('click', () => {
+    writeHash();
+    const url = location.href;
+    const done = () => toast('Link copied: it opens this preset, weights, palette and flow');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => toast(url));
+    else toast(url);
+  });
+  addEventListener('hashchange', () => { if (location.hash !== hashSeen) applyHash(false); });
   document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
   const clear = () => { G.items = []; G.trace = null; G.sel = []; markCustom(); rebuild(); toast('Tap the small sphere to add fibres'); };
   $('clearBtn').addEventListener('click', clear); $('clearBtn2').addEventListener('click', clear);
@@ -666,7 +781,7 @@ function resetView() {
 // function for the framing, and add frame hooks.
 const app = {
   G, S, H, applyPreset, rebuild, syncPresetUI, setMode, setPlaying, setDistance, fitDistance, occ,
-  fibres: () => fibres, linking: () => lastLk, curveOf, curveAt, effBase, regrow, setWeights, A, applyLook,
+  fibres: () => fibres, linking: () => lastLk, curveOf, curveAt, effBase, regrow, setWeights, A, applyLook, syncControls,
   // the rotation of the state in G now (not the last frame's)
   rotation: () => H.matMul(H.planeMat(2, 3, G.pole), H.rotationFor(G.mode, G.a, { tilt: G.tilt })),
   setBand(fn) { saverBand = fn; },
@@ -679,9 +794,13 @@ window.__hopf = app;
 resize();
 buildUI();
 setTool('point');
+const hashed = readHash();
 setMode(G.mode);
 setPlaying(true);
-applyPreset(G.preset);
+applyPreset(hashed.preset || G.preset);
+if (hashed.pq) setWeights(hashed.pq, null);
+syncControls();
+hashSeen = hashKey();
 $('dens').value = String(G.density); $('densV').textContent = String(G.density);
 applyLook();
 resetView();
