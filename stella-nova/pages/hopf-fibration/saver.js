@@ -9,13 +9,11 @@
 //
 //  SHOTS
 //    build    nested tori grow in, fibre by fibre, latitude by latitude
-//    flow     a fibre-to-fibre 4D rotation: circles pass through infinity
 //    link     a push-in on two linked circles, their discs and the points
 //             where each crosses the disc of the other
-//    sweep    one torus sweeps from the south pole to the north pole: a line
-//             opens into a fat torus and closes onto the unit circle
+//    sweep    one torus sweeps from latitude -20 deg toward the north pole:
+//             a fat torus that closes onto the unit circle
 //    dense    the fibres over a polar cap: a solid torus filled with circles
-//    trace    a point moves on S2 and its fibre moves with it
 //    villarceau  one torus with one fibre lit, and a push-in on it
 //    clifford the fibres over a great circle near the equator
 //    knots    torus knots: the weights step through coprime pairs, and
@@ -23,10 +21,22 @@
 //    hopftorus  a breathing Hopf torus (flower, seam or two linked tori)
 //             on a spinning base
 //    solid    the fibres over the vertices of an icosahedron or a
-//             dodecahedron, the base tumbling
+//             dodecahedron, the base spinning about the polar axis
 //    morph    presets of one group, one after another; the base points
 //             slide from one set to the next
-//    tumble   nested tori on a tumbling base: they open through infinity
+//
+//  CHOICE  The user wants visually strong shots with closed loops to look
+//  at. The order is a seeded bag of WEIGHTS (knots, Hopf tori and the
+//  nested build three times each, sweep once), never the same kind twice
+//  in a row. Shots whose point was a fibre through the point at infinity
+//  (flow: an isoclinic 4D rotation; tumble: a tumbling base; trace: a
+//  loxodrome over the south pole) are gone. No shot puts a base point
+//  near the south pole: its fibre would open into a huge circle or a line.
+//
+//  PLATE  The title is always "Hopf fibration". The sub line is the
+//  configuration: the shot, its set-up (cfg), the fibre count, the
+//  weights, the motion and the palette. The old descriptive sub line is
+//  the first note.
 //
 //  Each shot also picks a palette and the light pulses from the seeded
 //  random source. The old shots run with no flow and no breathing, so
@@ -77,7 +87,7 @@ export function installSaver(app) {
       G.mode = 'along'; G.speed = r.range(0.25, 0.45);
       let shown = -1;
       return {
-        title: 'Nested Hopf tori', sub: 'fibres over ' + n + ' circles of latitude fill ' + n + ' nested tori',
+        title: 'Nested Hopf tori', cfg: n + ' latitudes', sub: 'fibres over ' + n + ' circles of latitude fill ' + n + ' nested tori',
         cam: cam(r, { zoom0: 1.04, zoom1: 0.96 }),
         // the largest torus: its outer radius is cos/(1 - sin) of the half-angle
         fixedExtent: Math.max(...zs.map(z => Math.sqrt((1 + z) / 2) / (1 - Math.sqrt((1 - z) / 2)))) * 0.95,
@@ -94,18 +104,6 @@ export function installSaver(app) {
           app.rebuild();
         },
       };
-    },
-    flow(r) {
-      const src = r.pick(['random', 'nested', 'torus', 'random']);
-      app.applyPreset(src, { seed: r.int(1, 9999), density: COARSE() ? 14 : 22 });
-      G.sel = [];
-      G.mode = 'isoclinic'; G.speed = r.range(0.45, 0.7); G.tilt = r.range(0, Math.PI); G.a = r.range(0, H.TAU);
-      app.rebuild();
-      return { title: 'Through infinity', sub: 'a 4D rotation of S³ carries each fibre onto another fibre, through the point at infinity',
-        // the tails through infinity are the point of this shot: a lower
-        // percentile keeps them from pulling the camera back, and a
-        // denser fog fades them
-        pct: 0.8, fog: 2.2, cam: cam(r, { zoom0: 1.1, zoom1: 0.95 }) };
     },
     link(r) {
       app.applyPreset('linked');
@@ -132,10 +130,11 @@ export function installSaver(app) {
     },
     sweep(r) {
       app.applyPreset('torus', { density: COARSE() ? 18 : 28 });
-      G.items[0].beta0 = -0.75; G.items[0].z = Math.sin(-0.75); G.sweep = true; G.sweepPhase = 0; G.sweepRate = 2.4 / 9;
+      // start at -20 deg: further south the torus grows past the frame
+      G.items[0].beta0 = -0.35; G.items[0].z = Math.sin(-0.35); G.sweep = true; G.sweepPhase = 0; G.sweepRate = 2.4 / 9;
       G.mode = r.pick(['still', 'along']); G.speed = 0.25;
       app.rebuild();
-      return { title: 'A latitude sweep', sub: 'the torus over one circle of latitude, from the southern half to near the north pole',
+      return { title: 'A latitude sweep', sub: 'the torus over one circle of latitude, from 20° south to near the north pole',
         cam: cam(r, { zoom0: 1.0, zoom1: 0.95 }), fixedExtent: 2.7 };
     },
     dense(r) {
@@ -146,15 +145,6 @@ export function installSaver(app) {
       app.rebuild();
       return { title: 'Filling space with circles', sub: 'the fibres over a polar cap of S² fill a solid torus; over all of S², all of space',
         cam: cam(r, { zoom0: 1.0, zoom1: 0.8 }) };
-    },
-    trace(r) {
-      app.applyPreset('trace');
-      G.trace.u = r.range(0, 1);
-      for (let i = 0; i < 24; i++) G.trace.trail.push(H.loxodrome(G.trace.u - (24 - i) * 0.007));
-      G.mode = 'still';
-      app.rebuild();
-      return { title: 'The fibre over a moving point', sub: 'a point runs from pole to pole on S², and its circle follows',
-        cam: cam(r, { zoom0: 1.0, zoom1: 0.9 }) };
     },
     clifford(r) {
       // a great circle near the equator: its fibres make a Clifford torus
@@ -200,7 +190,9 @@ export function installSaver(app) {
     solid(r) {
       const id = r.pick(['icosa', 'dodeca']);
       app.applyPreset(id, { transition: 'grow' });
-      G.flow = 'tumble'; G.flowRate = r.range(0.18, 0.32);
+      // spin about the polar axis: a tumble swept vertices past the south
+      // pole, where their circles open through infinity
+      G.flow = 'spin'; G.flowRate = r.range(0.18, 0.32);
       G.mode = 'along'; G.speed = 0.3;
       app.rebuild();
       const n = app.fibres().length;
@@ -209,7 +201,9 @@ export function installSaver(app) {
         tex: [TEX.map, TEX.link], pct: 0.8, fog: 1.6, cam: cam(r, { zoom0: 1.05, zoom1: 0.9 }) };
     },
     morph(r) {
-      const groups = { tori: ['flower', 'seam', 'twin', 'necklace'], hopf: ['nested', 'torus', 'meridian', 'random'], links: ['icosa', 'dodeca', 'necklace'] };
+      // no 'meridian' or 'random': a great circle through the poles, or a
+      // random point near the south pole, gives a fibre through infinity
+      const groups = { tori: ['flower', 'seam', 'twin', 'necklace'], hopf: ['nested', 'torus', 'twin'], links: ['icosa', 'dodeca', 'necklace'] };
       const g = r.pick(Object.keys(groups)), list = r.shuffle(groups[g].slice());
       app.applyPreset(list[0], { density: COARSE() ? 16 : 22, seed: r.int(1, 9999), transition: 'grow' });
       G.mode = 'along'; G.speed = 0.3; G.breathe = r.next() < 0.5;
@@ -220,13 +214,6 @@ export function installSaver(app) {
           const k = Math.min(list.length - 1, Math.floor(t / Math.max(2.6, dur / list.length)));
           if (k > at) { at = k; app.applyPreset(list[k], { transition: 'morph', seed: r.int(1, 9999) }); G.mode = 'along'; }
         } };
-    },
-    tumble(r) {
-      app.applyPreset(r.pick(['nested', 'torus', 'seifert']), { density: COARSE() ? 14 : 20, transition: 'grow' });
-      G.flow = 'tumble'; G.flowRate = r.range(0.25, 0.45); G.breathe = true;
-      G.mode = 'along'; G.speed = 0.25;
-      return { title: 'Tumbling tori', sub: 'the base sphere turns; a torus whose circle crosses the south pole opens through infinity',
-        tex: [TEX.map, TEX.stereo.split(',\\qquad')[0]], pct: 0.8, fog: 1.8, cam: cam(r, { zoom0: 1.1, zoom1: 0.95 }) };
     },
   });
   const COARSE = () => S.coarse;
@@ -248,9 +235,21 @@ export function installSaver(app) {
     return { c, r: Math.max(0.9, Math.min(6, d[Math.floor(d.length * pct)] * 1.05)) };
   }
 
+  // The bag: the strong closed-loop shots come more often.
+  const WEIGHTS = { build: 3, knots: 3, hopftorus: 3, solid: 2, villarceau: 2, link: 2, clifford: 2, dense: 2, morph: 2, sweep: 1 };
   function nextShot() {
-    if (!V.order.length) V.order = V.rng.shuffle(Object.keys(SHOTS).filter(k => k !== V.lastKind));
-    const kind = V.order.shift();
+    // cut(kind) puts a forced kind first in V.order
+    let kind = V.order.shift();
+    if (!kind) {
+      const fill = () => { for (const [k, w] of Object.entries(WEIGHTS)) if (SHOTS[k]) for (let i = 0; i < w; i++) V.bag.push(k); };
+      if (!V.bag) V.bag = [];
+      // draw from the bag, never the kind just shown: a bag that holds only
+      // that kind gets the next bag added first
+      if (!V.bag.some(k => k !== V.lastKind)) fill();
+      const pool = V.bag.map((k, i) => i).filter(i => V.bag[i] !== V.lastKind);
+      const i = pool[V.rng.int(0, pool.length - 1)];
+      kind = V.bag.splice(i, 1)[0];
+    }
     V.lastKind = kind;
     G.sweep = false; G.sweepRate = 0.35; G.focus = false; G.sel = []; G.tilt = 0; G.pole = 0; G.a = 0; G.discs = true;
     G.stripes = V.rng.next() < 0.7;
@@ -315,11 +314,14 @@ export function installSaver(app) {
     if (sh.kind === 'link' && lk != null) params.push({ sym: '\\mathrm{Lk}', name: 'linking number', value: (lk >= 0 ? '+' : '−') + Math.abs(lk).toFixed(3) });
     const tex = sh.tex ? sh.tex.slice() : [TEX.map, TEX.fibre];
     if (!sh.tex) tex.push(G.mode !== 'still' ? ROT_TEX[G.mode] : TEX.stereo.split(',\\qquad')[0]);
+    const pal = (H.PALETTES.find(p => p.id === G.palette) || H.PALETTES[0]).name;
+    const motion = G.flow === 'spin' ? 'base spinning' : G.mode === 'still' ? 'still' : H.MODES[G.mode].label.toLowerCase();
+    const cfg = [sh.title, sh.cfg, app.fibres().length + ' fibres', G.pq[0] !== 1 || G.pq[1] !== 1 ? `weights (${G.pq[0]}, ${G.pq[1]})` : '', motion, pal].filter(Boolean).join(' · ');
     try {
       V.label({
-        title: sh.title, sub: sh.sub, params, tex, rules: RULES,
+        title: 'Hopf fibration', sub: cfg, params, tex, rules: RULES,
         eq: ['p(z₀, z₁) = (2 z₀ z̄₁, |z₀|² − |z₁|²)', '(z₀, z₁) = e^{it} (cos(θ/2) e^{iφ}, sin(θ/2))'],
-        lines: ['Stereographic projection from (0, 0, 0, 1). Colour (' + (H.PALETTES.find(p => p.id === G.palette) || H.PALETTES[0]).name.toLowerCase() + '): hue from longitude, lightness from latitude.'],
+        lines: [sh.sub[0].toUpperCase() + sh.sub.slice(1) + '.', 'Stereographic projection from (0, 0, 0, 1). Colour (' + pal.toLowerCase() + '): hue from longitude, lightness from latitude.'],
         anchor: () => {
           const { w, h } = app.size(), o = app.occ;
           const cw = w - o.l - o.r, ch = h - o.t - o.b;
