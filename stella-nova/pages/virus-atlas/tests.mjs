@@ -20,6 +20,8 @@
 //   12  GPU expansion: the shader's instance arithmetic (pack.js) gives each
 //       copy of each bead once, at the position of its operator
 //   13  colour schemes: every scheme, palette and light maps into [0, 1]
+//   14  tube spline: passes through every bead of a run, breaks at chain
+//       ends and gaps; burial and chain fraction in range
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -34,6 +36,7 @@ const B = await import(join(HERE, 'budget.js'));
 const P = await import(join(HERE, 'shots.js'));
 const K = await import(join(HERE, 'pack.js'));
 const CO = await import(join(HERE, 'colors.js'));
+const TR = await import(join(HERE, 'trace.js'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.log('  FAIL ' + msg); } };
@@ -301,6 +304,56 @@ section('13 colour schemes');
   for (const [k, L] of Object.entries(CO.LIGHTS)) {
     ok(Math.hypot(...L.key) > 0.1 && Math.hypot(...L.fill) > 0.1 && in01(L.keyCol) && in01(CO.hex01(L.bg)) && L.amb >= 0 && L.amb < 0.5, 'light ' + k + ': directions, colours in range');
   }
+}
+
+// ── 14 tube spline ───────────────────────────────────────────────────────
+section('14 tube spline, chain runs, burial');
+for (const id of ['1HXS', '6CGV', '6VSB', '7LNA', '4UDV', '3J3Q', '1QLX']) {
+  const d = D[id], ops = opsOf(id), t0 = Date.now();
+  const aux = TR.packAux(d, ops), ms = Date.now() - t0;
+  const brk = TR.breaks(d), runs = brk.reduce((a, v) => a + v, 0);
+  const P = i => [d.pos[3 * i], d.pos[3 * i + 1], d.pos[3 * i + 2]];
+  const { segs } = TR.tubeSegments(d, aux, 1);
+  let worstEnd = 0, worstMid = 0, spans = 0;
+  const endpoint = new Uint8Array(d.n);
+  for (const g of segs) {
+    const a = TR.catmull(g.p0, g.p1, g.p2, g.p3, 0), b = TR.catmull(g.p0, g.p1, g.p2, g.p3, 1), mid = TR.catmull(g.p0, g.p1, g.p2, g.p3, 0.5);
+    const A0 = P(g.b1), B0 = P(g.b2);
+    worstEnd = Math.max(worstEnd, Math.hypot(a[0] - A0[0], a[1] - A0[1], a[2] - A0[2]), Math.hypot(b[0] - B0[0], b[1] - B0[1], b[2] - B0[2]));
+    worstMid = Math.max(worstMid, Math.hypot(mid[0] - (A0[0] + B0[0]) / 2, mid[1] - (A0[1] + B0[1]) / 2, mid[2] - (A0[2] + B0[2]) / 2));
+    if (d.chain[g.b1] !== d.chain[g.b2] || brk[g.b2]) spans++;
+    endpoint[g.b1] = endpoint[g.b2] = 1;
+  }
+  // every bead with a neighbour in its run is on the tube
+  let missed = 0;
+  for (let i = 0; i < d.n; i++) { const linked = (i + 1 < d.n && !brk[i + 1]) || (i > 0 && !brk[i]); if (linked && !endpoint[i]) missed++; }
+  console.log('  ' + id.padEnd(5) + String(d.n).padStart(7) + ' beads ' + String(runs).padStart(5) + ' runs ' + String(segs.length).padStart(7) + ' segments  burial ' + ms + ' ms');
+  ok(segs.length === d.n - runs, id + ' one segment per joined pair: ' + segs.length + ' = ' + d.n + ' - ' + runs + ' runs');
+  ok(worstEnd < 1e-5, id + ' the spline passes through every bead (worst ' + worstEnd.toExponential(1) + ' nm)');
+  ok(spans === 0, id + ' no segment spans a chain end or a gap');
+  ok(missed === 0, id + ' every bead with a neighbour is on the tube');
+  ok(worstMid < 0.25, id + ' the curve stays near its chord (worst ' + worstMid.toFixed(3) + ' nm at t = 0.5)');
+  // the shader test (break counts mod 256) agrees with the breaks, at any stride
+  let wrong = 0;
+  for (const st of [1, 2, 3, 5, 8]) for (let i = 0; i + st < d.n; i += st) {
+    let clean = d.chain[i] === d.chain[i + st];
+    for (let q = i + 1; q <= i + st && clean; q++) if (brk[q]) clean = false;
+    if (TR.sameRun(aux, d, i, i + st) !== clean) wrong++;
+  }
+  ok(wrong === 0, id + ' break counts give the runs at strides 1, 2, 3, 5, 8');
+  // chain fraction: 0 at the first bead of a chain, 255 at its last
+  let fr = true;
+  for (let i = 0; i < d.n; i++) {
+    if ((i === 0 || d.chain[i] !== d.chain[i - 1]) && aux[4 * i + 1] !== 0) fr = false;
+    if ((i === d.n - 1 || d.chain[i] !== d.chain[i + 1]) && aux[4 * i + 1] !== 255 && (i === 0 || d.chain[i - 1] === d.chain[i])) fr = false;
+  }
+  ok(fr, id + ' chain fraction runs 0 -> 255 along each chain');
+  // burial: outer beads are less buried than the rest
+  const r = Array.from({ length: d.n }, (_, i) => [Math.hypot(...F.applyOp(ops, 0, ...P(i))), aux[4 * i] / 255]).sort((x, y) => y[0] - x[0]);
+  const top = r.slice(0, Math.max(1, Math.floor(d.n * 0.1))), rest = r.slice(Math.floor(d.n * 0.1));
+  const mean = a => a.reduce((x, v) => x + v[1], 0) / Math.max(1, a.length);
+  if (['1HXS', '6CGV', '4UDV', '3J3Q'].includes(id)) ok(mean(top) < mean(rest), id + ' outer 10% of beads less buried (' + mean(top).toFixed(2) + ' < ' + mean(rest).toFixed(2) + ')');
+  ok(aux.every(v => v >= 0 && v <= 255), id + ' aux bytes in range');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
