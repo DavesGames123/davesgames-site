@@ -177,5 +177,29 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('atmo: an off atmosphere packs on = 0', packAtmo(PR.ATMO.none)[23] === 0);
 }
 
+// ── pool failures (pool.js) ─────────────────────────────────────────────────
+// Stub workers run worker.js's work on the main thread. One kind crashes
+// (an error event), one never answers. The job must still finish (other
+// workers, or the main thread) with the same maps as a plain run, and it
+// must not wait forever.
+{
+  const { createPool } = await import('./pool.js');
+  const MP = await import('./maps.js'), PRM = await import('./presets.js');
+  const good = () => { const w = { postMessage(m) { setTimeout(() => {
+    try { const ctx = MP.prepare(m.planet);
+      if (m.cmd === 'rows') w.onmessage({ data: { id: m.id, part: MP.sampleRows(ctx, m.W, m.y0, m.y1) } });
+      else { const M = MP.finish(m.M, m.planet, ctx); w.onmessage({ data: { id: m.id, normal: M.normal, ao: M.ao, stats: M.stats, reliefKm: M.reliefKm } }); }
+    } catch (e) { w.onmessage({ data: { id: m.id, error: String(e) } }); } }, 0); }, terminate() {} }; return w; };
+  const crash = () => { const w = { postMessage() { setTimeout(() => w.onerror({ message: 'boom' }), 5); }, terminate() {} }; return w; };
+  const silent = () => ({ postMessage() {}, terminate() {} });
+  const P = PRM.fromPreset('mars'), W = 128, ref = MP.hashMaps(MP.generate(JSON.parse(JSON.stringify(P)), W));
+  const warn = console.warn; console.warn = () => {};
+  const t0 = Date.now();
+  const mixed = await createPool(3, { stallMs: 300, makeWorker: i => (i === 0 ? crash() : i === 1 ? silent() : good()) }).generate(P, W);
+  const allDead = await createPool(2, { stallMs: 300, makeWorker: i => (i ? silent() : crash()) }).generate(P, W);
+  console.warn = warn;
+  ok('pool: a crashed and a silent worker still give the same planet', MP.hashMaps(mixed) === ref && MP.hashMaps(allDead) === ref, `${Date.now() - t0} ms`);
+}
+
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);
