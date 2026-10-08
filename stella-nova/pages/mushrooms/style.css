@@ -54,6 +54,12 @@ html.in-frame #gear{top:14px}
 #caption i{font-style:italic;color:#e7e2d6}
 #caption .cr{color:#8f8a7e;font-size:0.9em}
 #caption .n{font-variant-numeric:tabular-nums}
+/* Colour toggle: a small pill at the top right of the desk. On it shows
+   a cap-red dot; off, a hollow ring. main.js colourOn() reads S.style. */
+#colorTog{position:absolute;top:14px;right:16px;z-index:4;display:flex;align-items:center;gap:7px;padding:6px 12px 6px 9px;border:1px solid var(--line-b);border-radius:999px;background:rgba(20,22,27,0.88);color:var(--ink);font-size:0.8rem}
+#colorTog:hover{border-color:var(--acc);color:var(--acc)}
+#colorTog i,#dockColor i{display:inline-block;width:12px;height:12px;border-radius:50%;border:1.5px solid currentColor;background:transparent}
+#colorTog[aria-pressed="true"] i,#dockColor[aria-pressed="true"] i{border-color:#e06a55;background:#e06a55}
 #busy{position:absolute;right:14px;top:12px;font-size:0.75rem;color:var(--dim);background:rgba(14,16,20,0.82);border:1px solid var(--line);border-radius:999px;padding:4px 10px;pointer-events:none}
 
 .seg.three{grid-template-columns:repeat(3,1fr)}
@@ -224,3 +230,5 @@ button:disabled{opacity:0.4;cursor:default}
   body.panel-closed .topbar{padding-left:calc(16px + env(safe-area-inset-left))}
 }
 @media (max-width:520px){ .topbar .credit{display:none} }
+/* The phone dock has its own colour button. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){ #colorTog{display:none} }

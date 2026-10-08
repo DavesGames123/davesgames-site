@@ -26,6 +26,7 @@
 //    grep -n 'function buildGrid'   the cell specs and the progressive fill
 //    grep -n 'function buildParams' the parameter panel
 //    grep -n 'function syncUI'      the controls from the state
+//    grep -n 'function toggleColour' the colour on/off pill and dock button
 //    grep -n 'function writeHash'   the share link
 //    grep -n 'function readHash'    the boot state from the link
 //    grep -n 'function bindView'    pan, zoom and pinch
@@ -382,6 +383,18 @@ function syncParamRows() {
   }
 }
 
+// ── colour toggle ─────────────────────────────────────────────────────────────
+// The desk pill (#colorTog) and the dock button (#dockColor) switch colour
+// on and off. On is the colour wash style; off is the last black-and-white
+// style used (pen or ink brush, pen at first).
+let monoStyle = 'pen';
+function colourOn() { return S.style === 'wash'; }
+function toggleColour() {
+  if (colourOn()) S.style = monoStyle;
+  else { monoStyle = S.style; S.style = 'wash'; }
+  syncUI(); writeHash();
+}
+
 // ── syncUI ──────────────────────────────────────────────────────────────────
 function syncUI() {
   const cfg = plateCfg(), G = S.grid, grid = S.mode === 'grid';
@@ -392,6 +405,7 @@ function syncUI() {
   $('dockMode').classList.toggle('on', grid);
   for (const b of $('forms').children) b.classList.toggle('on', b.dataset.f === S.form);
   for (const b of $('styleSeg').children) b.classList.toggle('on', b.dataset.s === S.style);
+  for (const id of ['colorTog', 'dockColor']) $(id).setAttribute('aria-pressed', String(colourOn()));
   $('rows').value = G.rows; $('cols').value = G.cols; $('rowsV').textContent = G.rows; $('colsV').textContent = G.cols;
   for (const b of $('presets').children) b.classList.toggle('on', b.dataset.id === G.preset);
   for (const b of $('srcSeg').children) b.classList.toggle('on', b.dataset.f === G.src);
@@ -486,9 +500,11 @@ function bindUI() {
   for (const k of STYLE_KEYS) {
     const b = document.createElement('button');
     b.dataset.s = k; b.textContent = STYLES[k].label;
-    b.addEventListener('click', () => { S.style = k; syncUI(); writeHash(); });
+    b.addEventListener('click', () => { S.style = k; if (k !== 'wash') monoStyle = k; syncUI(); writeHash(); });
     $('styleSeg').append(b);
   }
+  $('colorTog').addEventListener('click', toggleColour);
+  $('dockColor').addEventListener('click', toggleColour);
   const goSeed = () => { const v = parseInt($('seedInp').value, 10); if (Number.isFinite(v)) showSpec(S.form, v >>> 0, null); $('seedInp').blur(); };
   $('seedGo').addEventListener('click', goSeed);
   $('seedInp').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); goSeed(); } });
@@ -570,6 +586,7 @@ function bindKeys() {
     else if (k === ']') goHist(1);
     else if (k === '0') resetView();
     else if (k === 'g') setMode(S.mode === 'grid' ? 'single' : 'grid');
+    else if (k === 'c') toggleColour();
   });
 }
 
