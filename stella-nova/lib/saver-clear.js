@@ -11,7 +11,11 @@
 //      t   the bottom of the top text, plus a margin (px from the top)
 //      b   the top of the bottom text, plus a margin (px from the bottom)
 //      w   the plate width: the visible column (100vw, or the 9:16 column)
+//      The band h - t - b is 30% of h or more (see bandFloor).
 //  null: no shell, no plate on, or no text yet.
+//
+//  bandFloor(t, b, h, min = 0.3) -> { t, b }   the floor, a pure function
+//  (node test: tools/saver-plate-check.mjs).
 //  The boxes are the text and logo boxes, not the plate boxes: the plate
 //  boxes span the full width and height of their flex column.
 //
@@ -39,5 +43,18 @@ export function plateBand(h, margin = 14) {
   };
   const top = band('.top'), bot = band('.bot');
   if (!top && !bot) return null;
-  return { t: top ? Math.max(0, top.y1 + margin) : 0, b: bot ? Math.max(0, h - bot.y0 + margin) : 0, w: p.getBoundingClientRect().width };
+  const f = bandFloor(top ? Math.max(0, top.y1 + margin) : 0, bot ? Math.max(0, h - bot.y0 + margin) : 0, h);
+  return { t: f.t, b: f.b, w: p.getBoundingClientRect().width };
+}
+
+// The clear band never goes under min of h. A short phone frame or a long
+// label can leave a band of a few px (or none), and a page that sizes its
+// subject from the band then draws a dot. bandFloor cuts t and b in their
+// own ratio, so the subject stays centred between the two text blocks and
+// overlaps the inner edges of the text a little.
+export function bandFloor(t, b, h, min = 0.3) {
+  const room = h * (1 - min);
+  if (!(h > 0) || t + b <= room) return { t, b };
+  const k = room / (t + b);
+  return { t: t * k, b: b * k };
 }

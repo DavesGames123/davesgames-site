@@ -214,7 +214,7 @@ body.sn-saver-pane #sn-saver-hud { top: calc(var(--sy) + 14px); }
 #sn-saver-cap.on { opacity: .85; }
 #sn-saver-cap b { display: block; font: 400 1.6rem/1.2 'STIX Two Text', Georgia, serif; }
 #sn-saver-cap i { display: block; font: 400 .8rem/1.6 'Inter', system-ui, sans-serif; font-style: normal; color: var(--c, #7f91ad); }
-#sn-saver-label { --fw: 100vw; --fh: 100vh; --fs: min(calc(var(--fw) * .75), calc(var(--fh) * .6)); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(22px, calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(18px, calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
+#sn-saver-label { --fw: 100vw; --fh: 100vh; --fs: min(calc(var(--fw) * .75), calc(var(--fh) * .6)); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(min(22px, calc(var(--fh) * .045)), calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(min(18px, calc(var(--fh) * .04)), calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
 /* --fs is the type scale: 60% of the frame height, or 75% of its width in
    a frame narrower than 4:5. One rule for every frame shape, so the type
    does not jump at an aspect breakpoint. Before, a frame under 5:4 (a
@@ -230,22 +230,22 @@ body.sn-saver-vert #sn-saver-label .mark { width: 94%; }
 body.sn-saver-vert #sn-saver-label .logo { letter-spacing: .12em; }
 #sn-saver-label.on { opacity: 1; }
 #sn-saver-label .top, #sn-saver-label .bot { width: 100%; display: flex; flex-direction: column; align-items: center; }
-#sn-saver-label .cat { font: 500 clamp(9px, calc(var(--fs) * .017), 14px)/1 'Inter', system-ui, sans-serif; letter-spacing: .34em; text-transform: uppercase; color: var(--c, #8ec5ff); margin: 0 0 1.1em; padding-left: .34em; }
-#sn-saver-label .ttl { display: block; max-width: 30ch; font: 400 clamp(28px, calc(var(--fs) * .082), 84px)/1.04 'STIX Two Text', Georgia, serif; color: #f8f5ee; text-wrap: balance; }
-#sn-saver-label .rule { display: block; width: min(78%, 560px); height: 1px; margin: .95em 0 .85em; font-size: clamp(14px, calc(var(--fs) * .03), 26px); background: linear-gradient(90deg, transparent, rgba(244,240,230,.92) 16%, rgba(244,240,230,.92) 84%, transparent); transform: scaleX(0); transition: transform 1.7s cubic-bezier(.22,.7,.12,1) .35s; }
+#sn-saver-label .cat { font: 500 clamp(min(9px, calc(var(--fh) * .02)), calc(var(--fs) * .017), 14px)/1 'Inter', system-ui, sans-serif; letter-spacing: .34em; text-transform: uppercase; color: var(--c, #8ec5ff); margin: 0 0 1.1em; padding-left: .34em; }
+#sn-saver-label .ttl { display: block; max-width: 30ch; font: 400 clamp(min(28px, calc(var(--fh) * .052)), calc(var(--fs) * .082), 84px)/1.04 'STIX Two Text', Georgia, serif; color: #f8f5ee; text-wrap: balance; }
+#sn-saver-label .rule { display: block; width: min(78%, 560px); height: 1px; margin: .95em 0 .85em; font-size: clamp(min(14px, calc(var(--fh) * .028)), calc(var(--fs) * .03), 26px); background: linear-gradient(90deg, transparent, rgba(244,240,230,.92) 16%, rgba(244,240,230,.92) 84%, transparent); transform: scaleX(0); transition: transform 1.7s cubic-bezier(.22,.7,.12,1) .35s; }
 #sn-saver-label.on .rule { transform: scaleX(1); }
-#sn-saver-label .sub { max-width: 30em; font: italic 400 clamp(14px, calc(var(--fs) * .032), 28px)/1.3 'STIX Two Text', Georgia, serif; color: #e2ddd1; text-wrap: balance; }
-#sn-saver-label .pp { display: flex; flex-wrap: wrap; justify-content: center; gap: .7em 1.5em; max-width: 34em; margin-top: 1em; font-size: clamp(13px, calc(var(--fs) * .026), 21px); }
+#sn-saver-label .sub { max-width: 30em; font: italic 400 clamp(min(14px, calc(var(--fh) * .031)), calc(var(--fs) * .032), 28px)/1.3 'STIX Two Text', Georgia, serif; color: #e2ddd1; text-wrap: balance; }
+#sn-saver-label .pp { display: flex; flex-wrap: wrap; justify-content: center; gap: .7em 1.5em; max-width: 34em; margin-top: 1em; font-size: clamp(min(13px, calc(var(--fh) * .03)), calc(var(--fs) * .026), 21px); }
 #sn-saver-label .p { display: inline-flex; flex-direction: column; align-items: center; }
 #sn-saver-label .p .v { font-style: italic; font-variant-numeric: tabular-nums; white-space: nowrap; color: #f4f1ea; }
 #sn-saver-label .p .v .sym { display: inline-block; font-style: italic; }
 #sn-saver-label .p .v .sym svg { vertical-align: -.2em; }
 #sn-saver-label .p small { margin-top: .3em; font: 400 .56em/1.2 'Inter', system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: #a4acb8; text-shadow: none; }
-#sn-saver-label .eqs { display: grid; gap: .6em; justify-items: center; max-width: 100%; margin-top: 1em; font-size: clamp(17px, calc(var(--fs) * .036), 30px); color: #f4f1ea; }
+#sn-saver-label .eqs { display: grid; gap: .6em; justify-items: center; max-width: 100%; margin-top: 1em; font-size: clamp(min(17px, calc(var(--fh) * .036)), calc(var(--fs) * .036), 30px); color: #f4f1ea; }
 #sn-saver-label .eq { max-width: 100%; line-height: 0; overflow: hidden; }
 #sn-saver-label .eq svg { max-width: 100%; height: auto; overflow: visible; }
 #sn-saver-label .eq.raw { line-height: 1.35; font-style: italic; white-space: pre-wrap; }
-#sn-saver-label .notes { max-width: 32em; margin-top: .9em; font: italic 400 clamp(12px, calc(var(--fs) * .024), 19px)/1.4 'STIX Two Text', Georgia, serif; color: #cfc9bc; }
+#sn-saver-label .notes { max-width: 32em; margin-top: .9em; font: italic 400 clamp(min(12px, calc(var(--fh) * .028)), calc(var(--fs) * .024), 19px)/1.4 'STIX Two Text', Georgia, serif; color: #cfc9bc; }
 #sn-saver-label .notes p { margin: 0; } #sn-saver-label .notes p + p { margin-top: .25em; }
 #sn-saver-label .code { max-width: 100%; margin-top: 1.1em; box-sizing: border-box; text-align: left; font: 400 clamp(8.5px, calc(var(--fs) * .0185), 14px)/1.55 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace; font-variant-ligatures: none; color: #cdd5df; background: rgba(5,7,11,.7); border: 1px solid rgba(255,255,255,.09); border-radius: 6px; padding: .85em 1.1em .95em; text-shadow: none; overflow: hidden; }
 #sn-saver-label .code header { margin-bottom: .7em; font: 500 .8em/1 'Inter', system-ui, sans-serif; letter-spacing: .24em; text-transform: uppercase; color: var(--c, #8ec5ff); }
@@ -262,7 +262,7 @@ body.sn-saver-vert #sn-saver-label .logo { letter-spacing: .12em; }
 /* The site mark is the attribution of every page and every recording, so it
    is the largest line after the title: about 1.75x the old size, weight 600,
    a 2px stroke and a dark box behind it. */
-#sn-saver-label .mark { display: flex; align-items: center; width: min(90%, 760px); margin-top: 1.3em; font-size: clamp(20px, calc(var(--fs) * .052), 44px); }
+#sn-saver-label .mark { display: flex; align-items: center; width: min(90%, 760px); margin-top: 1.3em; font-size: clamp(min(20px, calc(var(--fh) * .037)), calc(var(--fs) * .052), 44px); }
 #sn-saver-label .mark .ln { flex: 1; height: 2px; background: rgba(244,240,230,.9); transform: scaleX(0); transition: transform 1.5s cubic-bezier(.22,.7,.12,1) 1.1s; }
 #sn-saver-label .mark .ln.l { transform-origin: 100% 50%; } #sn-saver-label .mark .ln.r { transform-origin: 0 50%; }
 #sn-saver-label.on .mark .ln { transform: scaleX(1); }
@@ -292,8 +292,30 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot .col { max-width: 92%; }
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot:has(.code) .col { max-width: 52%; }
   body:not(.sn-saver-vert) #sn-saver-label .slot-bot .code { margin-top: 0; max-width: 44%; }
-  body:not(.sn-saver-vert) #sn-saver-label .eqs { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .7em 2.4em; font-size: clamp(19px, calc(var(--fs) * .0432), 36px); }
+  body:not(.sn-saver-vert) #sn-saver-label .eqs { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .7em 2.4em; font-size: clamp(min(19px, calc(var(--fh) * .038)), calc(var(--fs) * .0432), 36px); }
   body:not(.sn-saver-vert) #sn-saver-label .notes { max-width: 46em; }
+}
+/* Phone frames. The px floors of the type clamps above go down with the
+   frame height (min(Npx, k * --fh)): at 390 px tall the title is 20 px,
+   not 28 px. A short frame also drops the lines that matter least, so the
+   clear band keeps 30% of the height or more (tools/saver-plate-check.mjs
+   computes the sizes and the band for each frame). */
+@media (max-height: 520px) {
+  #sn-saver-label .cat, #sn-saver-label .notes { display: none; }
+}
+@media (max-width: 760px) and (max-height: 700px) {
+  #sn-saver-label .notes { display: none; }
+}
+/* A narrow frame: tighter letters keep the site mark inside its rule. */
+@media (max-width: 480px) {
+  #sn-saver-label .mark { width: 94%; }
+  #sn-saver-label .logo { letter-spacing: .12em; }
+}
+/* iPhone Safari: 100vh is the height with the toolbar hidden, so the frame
+   and the type scale use the dynamic viewport height when it exists. */
+@supports (height: 100dvh) {
+  #sn-saver-label { --fh: 100dvh; }
+  body.sn-saver-on:not(.sn-saver-pane) #content { height: 100dvh; }
 }
 @media (max-width: 760px), (max-height: 520px) {
   #sn-saver-label .code { display: none; }
@@ -714,6 +736,8 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 //                         centre): the leader goes to the nearest one
 // The plate is a specimen poster across the frame, all text centred. Type
 // scales with --fs: 60% of the frame height, or 75% of its width when narrower.
+// On a short phone frame the px floors of the clamps go down with the frame
+// height, and the catalogue line and the notes hide (tools/saver-plate-check.mjs).
 //   top     catalogue line (number, constellation), title, a rule that draws
 //           from the centre, sub in italics, then the site mark
 //           [ www.davesgames.io ] boxed inside a second full rule
