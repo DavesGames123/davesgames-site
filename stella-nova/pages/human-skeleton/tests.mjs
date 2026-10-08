@@ -14,11 +14,18 @@
 //    layout ..... radial, regional and catalogue give finite offsets; no
 //                 bone under the floor; no two tray items overlap
 //    size ....... shipped data under 15 MB
+//    saver ...... (saver-plan.js) the build starts at the sacrum, a child
+//                 never starts before its parent, every delay is inside
+//                 the span; every bone but the sacrum has a unit lift
+//                 line; no lifted bone goes under the floor; the lift
+//                 profile starts and ends at 0 and reaches 1; every
+//                 neighbour list names real bones
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { decodeBone, decodeGroup } from './decode.js';
 import { prep, radial, regional, catalogue, liftToFloor, bounds, delays } from './layout.js';
+import { treeDepths, buildDelays, liftDir, liftAmount, liftProfile, neighbours } from './saver-plan.js';
 
 const here = new URL('.', import.meta.url).pathname;
 const M = JSON.parse(readFileSync(here + 'data/manifest.json', 'utf8'));
@@ -193,6 +200,26 @@ const bufs = {};
   ok(tot < 15 * 1048576, 'shipped data under 15 MB', `${(tot / 1048576).toFixed(2)} MB (${M.files.length} files + manifest ${(man / 1024).toFixed(0)} KB)`);
   const tris = bones.reduce((s, b) => s + b.t, 0);
   console.log(`  triangles: ${tris} total, bones ${bones.filter(b => b.counted).reduce((s, b) => s + b.t, 0)}`);
+}
+
+// ── saver ───────────────────────────────────────────────────────────────────
+{
+  const vis = new Uint8Array(bones.length).fill(1), span = 5;
+  const d = treeDepths(bones, byId), dl = buildDelays(bones, byId, vis, span);
+  const root = bones.find(b => !b.parent);
+  ok(d[root.i] === 0 && dl[root.i] === 0, 'saver build starts at the sacrum', `${root.id} depth ${d[root.i]} delay ${dl[root.i]}`);
+  const early = bones.filter(b => b.parent && dl[b.i] < dl[byId.get(b.parent).i]);
+  ok(early.length === 0, 'saver build: no bone starts before its parent', early.slice(0, 6).map(b => b.id).join(','));
+  ok(bones.every(b => dl[b.i] >= 0 && dl[b.i] < span), 'saver build: every delay inside the span', `max ${Math.max(...dl).toFixed(2)} s`);
+  const noDir = bones.filter(b => { const v = liftDir(b); return !v || Math.abs(Math.hypot(...v) - 1) > 1e-9; }).map(b => b.id);
+  ok(noDir.length === 1 && noDir[0] === root.id, 'saver lift: a unit line for every bone but the sacrum', noDir.join(','));
+  const under = bones.filter(b => { const v = liftDir(b); return v && b.qmin[1] + v[1] * liftAmount(b, v) < 0; }).map(b => b.id);
+  ok(under.length === 0, 'saver lift: no bone goes under the floor', under.slice(0, 6).join(','));
+  ok(liftProfile(0) === 0 && liftProfile(1) === 0 && Math.abs(liftProfile(0.5) - 1) < 1e-12, 'saver lift profile 0 -> 1 -> 0');
+  const badN = bones.filter(b => neighbours(b, byId).length !== (b.art || []).length).map(b => b.id);
+  ok(badN.length === 0, 'saver neighbours name real bones', badN.join(','));
+  const amts = bones.filter(b => liftDir(b)).map(b => liftAmount(b)), still = bones.filter(b => liftDir(b) && liftAmount(b) <= 0.004).map(b => b.id);
+  console.log(`  saver: tree depth max ${Math.max(...d)}, lift up to ${(Math.max(...amts) * 1000).toFixed(1)} mm; no lift (floor) ${still.length}: ${still.join(' ')}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

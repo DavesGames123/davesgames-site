@@ -50,7 +50,8 @@
 //    window.__hs                                     debug and headless checks
 //    window.snSaver                                  screensaver tour (lib/screensaver.js)
 //    const SHOTS                                     screensaver shots: region, move, explode
-//    function saverTour                              screensaver order: full view, bones, region
+//    function saverTour                              screensaver order: full view or build, bones, region, whole
+//    saver-plan.js                                   build delays, the lift of a bone, its neighbours
 //    function boneView                               screensaver: the camera side for one bone
 //    function plateClear                             screensaver: the clear part beside the plate
 //    function saverPlate                             screensaver plate: layout, region, bone in focus
@@ -73,6 +74,7 @@ import { setOpen } from './app/panel.js';
 import { setTheme, setShow, buildUI } from './app/controls.js';
 import { frame } from './app/loop.js';
 import * as L from './layout.js';
+import { buildDelays, liftDir, liftAmount, liftProfile, neighbours } from './saver-plan.js';
 
 // debug and headless checks
 window.__hs = {
@@ -93,11 +95,15 @@ window.__hs = {
 // canvas is transparent). The tour (saverTour) always opens on the full
 // view: the assembled skeleton from the front, with a slow turn. Then come
 // push-ins on single bones (a seeded shuffle, one region at a time): the
-// bone glows, the other bones turn to glass, and the camera comes in from
-// the side that shows the bone (boneView) at a new angle each time. After
-// three bones there is a region shot (SHOTS: a set of regions, maybe
-// exploded, with an orbit, a push in, a pan up the spine or a look down),
-// then the full view again from a new angle. Shots last 5 to 9 s (calm 0
+// bone glows, the bones it articulates with stay solid, the rest turn to
+// glass, and the camera comes in from the side that shows the bone
+// (boneView) at a new angle each time. In the shot the bone lifts out of
+// its joint and settles back (saver-plan.js liftProfile). After two bones
+// there is a region shot (SHOTS: a set of regions, maybe exploded, with an
+// orbit, a push in, a pan up the spine or a look down), then a whole-body
+// shot (radial, regional or the catalogue tray, in turn). The next round
+// opens on a build (the skeleton assembles from the sacrum outward, in the
+// order of the parent tree) or the full view, in turn. Shots last 5 to 9 s (calm 0
 // to 1). loopHook.tick drives the camera every frame, so the page's own
 // flights do not run.
 //
@@ -148,8 +154,9 @@ function saverPlate(shot, mode, lit, focus) {
   }
   const params = [{ name: 'counted bones', value: String(counted) }, { name: 'teeth', value: String(teeth) }, { name: 'costal cartilages', value: String(cart) }];
   const per = S.M.groups.filter(g => g.id !== 'cartilage').map(g => `${g.label} ${S.bones.filter(b => b.group === g.id && b.counted).length}`);
-  const full = mode === 'full';
-  return { title: full ? 'Human skeleton' : `Human skeleton · ${MODE_NAME[mode] || 'Exploded'}`, sub: full ? 'Assembled · front view' : 'Exploded view',
+  const full = mode === 'full', build = mode === 'build';
+  return { title: full ? 'Human skeleton' : build ? 'Human skeleton · assembly' : `Human skeleton · ${MODE_NAME[mode] || 'Exploded'}`,
+    sub: full ? 'Assembled · front view' : build ? 'Built from the sacrum outward, bone by bone down the tree' : mode === 'catalogue' ? 'Every bone laid out on the tray' : 'Exploded view',
     params, lines: [per.join(', ') + '.'].concat(ear && ear.count < ear.expected ? [`The ${ear.expected} ear ossicles are not in the set.`] : []),
     anchor: () => boneAnchor(-1, null) };
 }
@@ -215,7 +222,7 @@ const SHOTS = [
   { id: 'knee', title: 'Knee', noun: 'at the left knee', move: 'orbit of the joint', regions: ['leg-l'], joint: /patella/i, half: 0.13, az: 70, daz: -90, el: 6, zoom: [1.15, 0.95] },
   { id: 'hip', title: 'Hip joints', noun: 'in the pelvis and thighs', move: 'push in', regions: ['pelvis', 'leg-l', 'leg-r'], hip: true, az: 0, daz: 20, el: 10, zoom: [1.2, 0.95] },
 ];
-const WHOLE = [{ mode: 'radial', az: -30, daz: 60, el: 8 }, { mode: 'regional', az: 30, daz: -60, el: 10 }];
+const WHOLE = [{ mode: 'radial', az: -30, daz: 60, el: 8 }, { mode: 'catalogue', az: 0, daz: 24, el: 62 }, { mode: 'regional', az: 30, daz: -60, el: 10 }];
 // The text boxes of the shell plate in this page's CSS px, and the three
 // clear parts round them as insets {l, r, t, b}. Null with no plate on.
 function plateClear(w, h) {
@@ -276,20 +283,24 @@ function saverBones(rnd) {
   }
   return out;
 }
-// The tour: the full view first, then three bones, a region shot, the full
-// view from a new angle, and so on. Every second round also has an
-// exploded whole-body shot (WHOLE) after the region shot. az 0 is the front.
+// The tour: the full view first, then two bones, a region shot and a
+// whole-body shot (WHOLE in turn: radial, the tray, regional). Each later
+// round opens on a build or the full view from a new angle, in turn. az 0
+// is the front.
 function saverTour(rnd) {
   const bones = saverBones(rnd), regs = SHOTS.slice();
   for (let i = regs.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [regs[i], regs[j]] = [regs[j], regs[i]]; }
   const tour = [], turn = rnd() < 0.5 ? 1 : -1;
   const fulls = [{ az: -12 * turn, daz: 24 * turn, el: 6 }, { az: 35, daz: -30, el: 12 }, { az: -35, daz: 30, el: 10 }, { az: 160, daz: 40, el: 14 }];
-  let bi = 0, ri = 0, fi = 0;
+  const builds = [{ az: 25 * turn, daz: -40 * turn, el: 10 }, { az: -150, daz: 50, el: 16 }];
+  let bi = 0, ri = 0, fi = 0, wi = 0, round = 0;
   while (bi < bones.length) {
-    tour.push({ full: fulls[fi++ % fulls.length] });
-    for (let k = 0; k < 3 && bi < bones.length; k++) tour.push({ bone: bones[bi++] });
+    if (round % 2 === 1) tour.push({ build: builds[(round >> 1) % builds.length] });
+    else tour.push({ full: fulls[fi++ % fulls.length] });
+    round++;
+    for (let k = 0; k < 2 && bi < bones.length; k++) tour.push({ bone: bones[bi++] });
     tour.push({ shot: regs[ri++ % regs.length] });
-    if (fi % 2 === 0) tour.push({ whole: WHOLE[(fi / 2 - 1) % WHOLE.length] });
+    tour.push({ whole: WHOLE[wi++ % WHOLE.length] });
   }
   return tour;
 }
@@ -344,12 +355,31 @@ window.snSaver = {
       for (const g of S.groups.values()) g.ghost.visible = any;
       S.state.dirty(); S.dirty = true;
     };
+    // the lift of the bone in a push-in: S.dOff of that bone, set each tick
+    let lift = null;
+    const setLift = k => {
+      if (!lift) return;
+      for (let a = 0; a < 3; a++) S.dOff[lift.i * 3 + a] = lift.dir[a] * lift.amt * k;
+      loopHook.upload = true;
+    };
+    const BUILD_SPAN = 4.2 + 1.6 * calm;
     const start = () => {
       if (!tour) tour = saverTour(rnd);
+      setLift(0); lift = null;
       ti = (ti + 1) % tour.length; t = 0; cur = tour[ti];
-      dur = cur.shot ? hold : holdLong;
+      dur = cur.shot ? hold : cur.build ? Math.max(holdLong, BUILD_SPAN + 2.2) : holdLong;
       setFocus(-1);
-      if (cur.full) {
+      if (cur.build) {
+        // every shown bone dissolves in again, at its delay down the tree
+        // (the loop runs the dissolve from b.appearAt, as at load)
+        S.mode = S.lastMode = 'radial';
+        S.amt.fill(0);
+        retargetSaver();
+        ghost(() => true);
+        const now = performance.now(), dl = buildDelays(S.bones, S.P.byId, S.vis, BUILD_SPAN);
+        for (const b of S.bones) if (S.vis[b.i]) { S.appear[b.i] = 0; b.appearAt = now + 1000 * dl[b.i]; }
+        lit = []; label(saverPlate(null, 'build', lit, -1));
+      } else if (cur.full) {
         // the primary view: the assembled skeleton, nothing ghosted
         S.mode = S.lastMode = 'radial';
         S.amt.fill(0);
@@ -362,10 +392,14 @@ window.snSaver = {
         S.mode = S.lastMode = 'radial';
         S.amt.fill(0);
         retargetSaver();
-        ghost(q => q.i === i);
+        // the bone and the bones it articulates with stay solid
+        const nb = new Set(neighbours(b, S.P.byId));
+        ghost(q => q.i === i || nb.has(q.i));
+        const dir = liftDir(b);
+        if (dir && liftAmount(b, dir) > 0.004) lift = { i, dir, amt: liftAmount(b, dir) };
         lit = [i]; setFocus(i);
         const name = b.side ? SIDE_NAME[b.side] + ' ' + b.name.toLowerCase() : b.name;
-        label(saverPlate({ title: name, noun: `in focus, ${reg ? reg.label.toLowerCase() : b.region}`, move: 'push in' }, null, lit, i));
+        label(saverPlate({ title: name, noun: `in focus, ${reg ? reg.label.toLowerCase() : b.region}`, move: lift ? `push in · lifts from its joint, ${nb.size} neighbour${nb.size === 1 ? '' : 's'} solid` : 'push in' }, null, lit, i));
       } else if (cur.whole) {
         const m = cur.whole.mode;
         S.mode = S.lastMode = m;
@@ -391,7 +425,7 @@ window.snSaver = {
     const retargetSaver = () => { retarget(true, false, false); S.fly = null; };
     // the box that the camera frames now (u = 0..1 through the shot)
     const goal = u => {
-      const sh = cur.shot, wh = cur.whole || cur.full, spec = sh || wh || cur.view;
+      const sh = cur.shot, wh = cur.whole || cur.full || cur.build, spec = sh || wh || cur.view;
       const az = THREE.MathUtils.degToRad(spec.az + (spec.daz || 0) * u), el = THREE.MathUtils.degToRad(spec.el + (spec.del || 0) * u);
       const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
       const want = sh ? new Set(sh.regions) : null;
@@ -435,6 +469,7 @@ window.snSaver = {
       t += dt; clearT += dt;
       if (clearT > 0.25) { clearT = 0; parts = plateClear(canvas.clientWidth, canvas.clientHeight); }
       if (t >= dur) start();
+      if (lift) setLift(liftProfile(Math.min(1, t / dur)));
       // the plate names the next bone of the shot every 2 s
       if (cur.shot && lit.length > 1 && (focusT += dt) > 2) { focusT = 0; focusK++; const f = lit[focusK % lit.length]; setFocus(f); label(saverPlate(cur.shot, null, lit, f)); }
       const g = goal(Math.min(1, t / dur));
@@ -453,8 +488,8 @@ window.snSaver = {
       S.dirty = true;
     };
     // the tour state, for the headless probe
-    window.snSaver.debug = () => cur && { k: ti, kind: cur.full ? 'full' : cur.bone != null ? 'bone' : cur.shot ? 'region' : 'whole',
-      what: cur.bone != null ? S.bones[cur.bone].name : cur.shot ? cur.shot.id : cur.whole ? cur.whole.mode : 'full', t: +t.toFixed(1), dur: +dur.toFixed(1),
+    window.snSaver.debug = () => cur && { k: ti, kind: cur.build ? 'build' : cur.full ? 'full' : cur.bone != null ? 'bone' : cur.shot ? 'region' : 'whole', lift: lift ? +(liftProfile(Math.min(1, t / dur)) * lift.amt).toFixed(4) : 0,
+      what: cur.bone != null ? S.bones[cur.bone].name : cur.shot ? cur.shot.id : cur.whole ? cur.whole.mode : cur.build ? 'build' : 'full', t: +t.toFixed(1), dur: +dur.toFixed(1),
       ...frameStats() };
     // the subject box on the screen and the clear part, in canvas CSS px
     const frameStats = () => {

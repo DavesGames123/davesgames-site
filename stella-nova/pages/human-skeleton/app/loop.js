@@ -24,7 +24,8 @@ import { dVelZero, hoverPick } from './pointer.js';
 
 let last = performance.now(), raf = 0, running = true;
 // The screensaver sets tick(dt): it runs after the occ ease, before the fly.
-export const loopHook = { tick: null };
+// It sets upload when it moves a bone through S.dOff (the lift of a push-in).
+export const loopHook = { tick: null, upload: false };
 const _q = new Float32Array(4);
 export function frame(now) {
   if (!running) return;
@@ -75,7 +76,7 @@ export function frame(now) {
       if (e < 1e-5) { S.dOff.fill(0, i * 3, i * 3 + 3); dVelZero(i); S.springing.delete(i); }
       upload = true;
     }
-    if (S.drag) upload = true;
+    if (S.drag || loopHook.upload) { upload = true; loopHook.upload = false; }
     // dissolve in as groups arrive
     for (const b of S.bones) {
       if (!S.loaded[b.i] || S.appear[b.i] >= 1) continue;
