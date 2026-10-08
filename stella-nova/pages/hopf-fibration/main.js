@@ -137,7 +137,8 @@ function onBasePointer(type, b, info) {
       else G.items[hit].b = b;
       edit = { k: hit };
     } else if (G.tool === 'lat') {
-      G.items.push({ kind: 'lat', z: b[2], beta0: Math.asin(Math.max(-1, Math.min(1, b[2]))) });
+      // beta0 holds the height without the sweep phase, as in the 'move' case
+      G.items.push({ kind: 'lat', z: b[2], beta0: Math.asin(Math.max(-1, Math.min(1, b[2]))) - G.sweepPhase });
       edit = { k: G.items.length - 1 };
     } else if (G.tool === 'paint') {
       G.items.push({ kind: 'curve', pts: [b] });
