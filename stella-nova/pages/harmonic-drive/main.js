@@ -232,7 +232,8 @@ function drawPlot() {
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   const g = c.getContext('2d'), pad = 10 * dpr, u = unit(S.cur.id);
   g.clearRect(0, 0, w, h);
-  g.font = `${10 * dpr}px ui-monospace,Menlo,monospace`; g.fillStyle = 'rgba(141,144,166,0.9)';
+  // 12 px axis text on a touch screen (10 px with a mouse)
+  g.font = `${(COARSE ? 12 : 10) * dpr}px ui-monospace,Menlo,monospace`; g.fillStyle = 'rgba(141,144,166,0.9)';
   if (S.cur.id === 'harmonic') {
     const X = a => pad + (w - 2 * pad) * a / 360, mid = h / 2, A = h / 2 - pad;
     g.strokeStyle = 'rgba(217,179,106,0.12)'; g.beginPath(); g.moveTo(pad, mid); g.lineTo(w - pad, mid); g.stroke();
@@ -246,7 +247,7 @@ function drawPlot() {
     $('legend').innerHTML = `<span class="lw"><i></i>flexspline push (±${u.d} mm)</span><span class="lo"><i></i>mesh zones</span>`;
   } else {
     const st = pinState(), bw = (w - 2 * pad) / st.length;
-    st.forEach((o, j) => { const bh = (h - 2 * pad - 12 * dpr) * o.load; g.fillStyle = o.load > 0.02 ? '#e2c27a' : 'rgba(143,176,255,0.35)'; g.fillRect(pad + j * bw + 2 * dpr, h - pad - 12 * dpr - Math.max(2 * dpr, bh), bw - 4 * dpr, Math.max(2 * dpr, bh)); g.fillStyle = 'rgba(141,144,166,0.9)'; g.fillText(String(j + 1), pad + j * bw + bw / 2 - 3 * dpr, h - pad); });
+    st.forEach((o, j) => { const bh = (h - 2 * pad - 12 * dpr) * o.load; g.fillStyle = o.load > 0.02 ? '#e2c27a' : 'rgba(143,176,255,0.35)'; g.fillRect(pad + j * bw + 2 * dpr, h - pad - 12 * dpr - Math.max(2 * dpr, bh), bw - 4 * dpr, Math.max(2 * dpr, bh)); g.fillStyle = 'rgba(141,144,166,0.9)'; const t = String(j + 1); g.fillText(t, pad + j * bw + bw / 2 - g.measureText(t).width / 2, h - pad); });
     $('legend').innerHTML = '<span class="lo"><i></i>load share of each pin</span><span class="lw"><i></i>touching, no load</span>';
   }
 }

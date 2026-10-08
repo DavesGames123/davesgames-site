@@ -291,3 +291,17 @@ body.ana-open .phint{right:calc(var(--ana-w) + 14px)}
 /* the long page title must not wrap the brand on a phone */
 .brand{white-space:nowrap}
 .pagetitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+/* TOUCH TEXT AND TARGETS. On a coarse pointer every text is 12 px or more
+   and every button is 44 px tall. The desktop sizes above stay for a mouse.
+   This block is last, so it wins over the template rules above. */
+@media (pointer:coarse){
+  .sec-label,.mv span,.kind,.legend,.barlab,.eqs .eq span,#dock > button span{font-size:0.75rem}
+  .eyebrow{font-size:0.7rem}
+  .specs,.eqs .eq em,.pread,.phint,#partList button,#gear,#anaOpen{font-size:0.78rem}
+  #labels .lb{font-size:0.75rem}
+  .proc span{font-size:0.8rem}
+  #tipPinClose,#anaClose{width:44px;height:44px}
+  .tip-head{padding-right:44px}
+  #partList button,#gear,#anaOpen{min-height:44px}
+}
