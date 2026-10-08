@@ -11,8 +11,11 @@
 //                   the nearest pin touches it (gap < 0.02 mm); several pins
 //                   touch at once; each output pin stays tangent inside its
 //                   hole (centre gap = E); ratio 11 and backward
+//    flexKernel ... the trig-free vertex push matches the direct formula
+//                   (turn by out, r + d w cos 2 (a - th)) and the turned
+//                   normals; a repeated pose is skipped
 // ============================================================================
-import { UNITS, wave, cycloPose, discProfile, holeAngles, TAU } from './drive.js';
+import { UNITS, wave, cycloPose, discProfile, holeAngles, flexKernel, TAU } from './drive.js';
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } };
@@ -73,6 +76,32 @@ const angDist = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if
   ok(minTouching >= 3, `cycloidal: at least ${minTouching} pins touch at once`);
   ok(holeErr < 1e-9, `cycloidal: output pins tangent in their holes (err ${holeErr.toExponential(2)})`);
   ok(near(cycloPose(u, TAU, 0).rot, -TAU / 9, 1e-12), 'cycloidal: ratio 9, backward');
+}
+// flexKernel against the direct formula (scene.js flexMesh before)
+{
+  let seed = 7; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const N = 500, pos = new Float32Array(N * 3), nor = new Float32Array(N * 3), w = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = 5 + 40 * rnd(), a = TAU * rnd(), na = TAU * rnd();
+    pos[i * 3] = r * Math.cos(a); pos[i * 3 + 1] = 60 * rnd(); pos[i * 3 + 2] = -r * Math.sin(a);
+    nor[i * 3] = Math.cos(na) * 0.6; nor[i * 3 + 1] = 0.8; nor[i * 3 + 2] = Math.sin(na) * 0.6;
+    w[i] = rnd();
+  }
+  const step = flexKernel(pos, nor, w), px = new Float32Array(N * 3), nx = new Float32Array(N * 3);
+  let errP = 0, errN = 0;
+  for (const [out, th, d] of [[0, 0, 3], [-0.3, 4.5, 3], [1.7, -2.2, 1.5], [-12.4, 186.1, 3]]) {
+    ok(step(px, nx, out, th, d) === true, `flexKernel: a new pose writes (out ${out})`);
+    const c = Math.cos(out), s = Math.sin(out);
+    for (let i = 0; i < N; i++) {
+      const x = pos[i * 3], z = pos[i * 3 + 2], a = Math.atan2(-z, x) + out, r = Math.hypot(x, z) + d * Math.cos(2 * (a - th)) * w[i];
+      errP = Math.max(errP, Math.abs(px[i * 3] - r * Math.cos(a)), Math.abs(px[i * 3 + 1] - pos[i * 3 + 1]), Math.abs(px[i * 3 + 2] + r * Math.sin(a)));
+      const ux = nor[i * 3], uz = nor[i * 3 + 2];
+      errN = Math.max(errN, Math.abs(nx[i * 3] - (ux * c + uz * s)), Math.abs(nx[i * 3 + 1] - nor[i * 3 + 1]), Math.abs(nx[i * 3 + 2] - (-ux * s + uz * c)));
+    }
+  }
+  ok(errP < 1e-3, `flexKernel: positions match the direct formula (err ${errP.toExponential(2)} mm)`);
+  ok(errN < 1e-5, `flexKernel: normals match (err ${errN.toExponential(2)})`);
+  ok(step(px, nx, -12.4, 186.1, 3) === false, 'flexKernel: the same pose again is skipped');
 }
 console.log(`${n - fail}/${n} passed`);
 process.exit(fail ? 1 : 0);

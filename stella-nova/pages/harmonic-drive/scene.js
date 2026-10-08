@@ -37,35 +37,32 @@
 import * as THREE from 'three';
 import { slab, rod, tube, lathe, circle, merge } from './kit.js';
 import { outline, toothPoly } from './teeth.js';
-import { unit, wave, cycloPose, discProfile, holeAngles, TAU } from './drive.js';
+import { unit, wave, cycloPose, discProfile, holeAngles, flexKernel, TAU } from './drive.js';
 
 const shapeOf = (pts, holes = []) => { const s = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], p[1]))); for (const h of holes) s.holes.push(h); return s; };
 // a red dot: a short rod at radius r, angle a (drive plane), y0 .. y1
 const dot = (r, a, y0, y1, rr = 1.6) => { const g = rod(rr, y0, y1, 20); g.translate(r * Math.cos(a), 0, -r * Math.sin(a)); return g; };
 const ring = (r, n = 96) => Array.from({ length: n }, (_, i) => [r * Math.cos(TAU * i / n), r * Math.sin(TAU * i / n)]);
 
-// A geometry that the wave deforms. Base positions are kept in polar form;
-// taper(y) scales the push along the cup.
-function flexMesh(geom, taper) {
+// A geometry that the wave deforms. drive.js flexKernel keeps the base
+// positions and does the per-vertex push; taper(y) scales the push along
+// the cup. The bounding sphere is set once, on the axis, large enough for
+// any pose (the push is at most d), so a frame does not recompute it.
+function flexMesh(geom, taper, dMax) {
   const pos = geom.attributes.position, nor = geom.attributes.normal, N = pos.count;
-  const r0 = new Float32Array(N), a0 = new Float32Array(N), y0 = new Float32Array(N), n0 = new Float32Array(N * 3);
+  const w = new Float32Array(N);
+  let rMax = 0, yLo = Infinity, yHi = -Infinity;
   for (let i = 0; i < N; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    r0[i] = Math.hypot(x, z); a0[i] = Math.atan2(-z, x); y0[i] = pos.getY(i);
-    n0[i * 3] = nor.getX(i); n0[i * 3 + 1] = nor.getY(i); n0[i * 3 + 2] = nor.getZ(i);
+    const r = Math.hypot(pos.getX(i), pos.getZ(i)), y = pos.getY(i);
+    w[i] = r > 1 ? taper(y) : 0;
+    rMax = Math.max(rMax, r); yLo = Math.min(yLo, y); yHi = Math.max(yHi, y);
   }
+  const step = flexKernel(pos.array, nor.array, w);
   pos.setUsage(THREE.DynamicDrawUsage); nor.setUsage(THREE.DynamicDrawUsage);
+  geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, (yLo + yHi) / 2, 0), Math.hypot(rMax + dMax, (yHi - yLo) / 2));
   return (out, th, d) => {
-    const c = Math.cos(out), s = Math.sin(out);
-    for (let i = 0; i < N; i++) {
-      const a = a0[i] + out, r = r0[i] + d * Math.cos(2 * (a - th)) * taper(y0[i]) * (r0[i] > 1 ? 1 : 0);
-      pos.setXYZ(i, r * Math.cos(a), y0[i], -r * Math.sin(a));
-      // a turn about +y by out: (x, z) -> (x c + z s, -x s + z c)
-      const nx = n0[i * 3], nz = n0[i * 3 + 2];
-      nor.setXYZ(i, nx * c + nz * s, n0[i * 3 + 1], -nx * s + nz * c);
-    }
+    if (!step(pos.array, nor.array, out, th, d)) return;
     pos.needsUpdate = true; nor.needsUpdate = true;
-    geom.computeBoundingSphere();
   };
 }
 
@@ -100,7 +97,7 @@ function harmonic(B, u) {
   // fold back on one arc, and the cap outline crossed itself there.
   const capPts = toothPoly(u.Nf, m, { ha: 1, hf: 1.25 }).filter(([r]) => r > rf + 1.2).map(([r, p]) => [(r - 0.25) * Math.cos(p * 0.8), (r - 0.25) * Math.sin(p * 0.8)]);
   const cap = slab(shapeOf(capPts), 14.45, 0.85, 0.15), capN = cap.index ? cap.toNonIndexed() : cap; capN.computeVertexNormals();
-  const flexT = flexMesh(tgN, () => 1), flexC = flexMesh(cup, y => Math.max(0, 1 - (y - 14) / 46)), flexM = flexMesh(capN, () => 1);
+  const flexT = flexMesh(tgN, () => 1, u.d), flexC = flexMesh(cup, y => Math.max(0, 1 - (y - 14) / 46), u.d), flexM = flexMesh(capN, () => 1, u.d);
   B.mesh(fs, tgN, 'gear'); B.mesh(fs, cup, 'plate'); B.mesh(fs, capN, 'red');
   const outp = B.part('outShaft', { info: 'out', label: 'Output shaft', labelAt: [0, 92, 0], explode: [0, 110, 0], st: 0.3, en: 0.9 });
   B.mesh(outp, lathe([[[24, 60], [24, 68], [10, 68], [10, 96], [0, 96], [0, 60]]], 48), 'steel');
@@ -115,7 +112,7 @@ function harmonic(B, u) {
   for (const a of [0, Math.PI]) B.mesh(wg, dot(24, a, 12.05, 12.9, 1.8), 'red');
   const brg = B.part('bearing', { info: 'bearing', label: 'Flexible bearing', labelAt: [0, 16, 0], explode: [0, -80, 0], st: 0.25, en: 0.9 });
   const race = lathe([[[rIn - 0.2, 2], [rIn - 0.2, 12], [33.2, 12], [33.2, 2]]], 160);
-  const flexB = flexMesh(race, () => 1);
+  const flexB = flexMesh(race, () => 1, u.d);
   B.mesh(brg, race, 'steel');
 
   return {

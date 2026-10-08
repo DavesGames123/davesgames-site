@@ -27,6 +27,7 @@
 //  GREP MAP
 //    export const UNITS ......... the two units and their numbers
 //    export function wave ....... FS deflection and angles at input th
+//    export function flexKernel . the per-frame vertex push of a flex mesh
 //    export function pinPath .... a pin centre in the disc frame
 //    export function discProfile  the cycloid disc outline
 //    export function cycloPose .. disc centre and angle for disc k
@@ -50,6 +51,41 @@ export const unit = id => UNITS.find(u => u.id === id);
 export function wave(u, th) {
   const out = -th * (u.Nc - u.Nf) / u.Nf;
   return { th, out, ratio: u.Nf / (u.Nc - u.Nf), defl: phi => u.d * Math.cos(2 * (phi + out - th)) };
+}
+
+// The flexspline vertex push (scene.js flexMesh), per frame. pos and nor
+// hold the base (x, y, z) of N vertices at the call; w[i] is the push
+// weight of vertex i (the cup taper, 0 on the axis). The returned
+// function writes the posed vertices into px and nx:
+//   a = a0 + out,  r = r0 + d w cos 2 (a - th),  (x, z) = (r cos a, -r sin a)
+// and turns each normal about +y by out. The base angles are kept as cos
+// and sin of a0 and 2 a0, so a frame needs no trig per vertex (the
+// strain wave flexspline has about 45 000 of them). It skips a frame with
+// the same (out, th, d) and returns false then.
+export function flexKernel(pos, nor, w) {
+  const N = w.length, r0 = new Float32Array(N), ca = new Float32Array(N), sa = new Float32Array(N), c2 = new Float32Array(N), s2 = new Float32Array(N);
+  const y0 = new Float32Array(N), n0 = Float32Array.from(nor);
+  for (let i = 0; i < N; i++) {
+    const x = pos[i * 3], z = pos[i * 3 + 2], a = Math.atan2(-z, x);
+    r0[i] = Math.hypot(x, z); y0[i] = pos[i * 3 + 1];
+    ca[i] = Math.cos(a); sa[i] = Math.sin(a); c2[i] = Math.cos(2 * a); s2[i] = Math.sin(2 * a);
+  }
+  let last = null;
+  return (px, nx, out, th, d) => {
+    const key = out + ',' + th + ',' + d;
+    if (key === last) return false;
+    last = key;
+    const c = Math.cos(out), s = Math.sin(out), C = Math.cos(2 * (out - th)), S = Math.sin(2 * (out - th));
+    for (let i = 0; i < N; i++) {
+      const cos = ca[i] * c - sa[i] * s, sin = sa[i] * c + ca[i] * s;
+      const r = r0[i] + d * w[i] * (c2[i] * C - s2[i] * S);
+      const k = i * 3;
+      px[k] = r * cos; px[k + 1] = y0[i]; px[k + 2] = -r * sin;
+      const ux = n0[k], uz = n0[k + 2];
+      nx[k] = ux * c + uz * s; nx[k + 1] = n0[k + 1]; nx[k + 2] = -ux * s + uz * c;
+    }
+    return true;
+  };
 }
 
 // ── cycloidal ───────────────────────────────────────────────────────────────
