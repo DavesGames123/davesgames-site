@@ -41,6 +41,7 @@
 //    export function createPhysics . the world, tray and step
 //    function addDie ............... one body and its hull collider
 //    function throwDice ............ the hand, the seed, the launch
+//    export function throwDir ...... a seeded throw direction
 //    function stepRest ............. the rest test per die
 //    export function simulateThrow . a whole throw to rest (worker, tests)
 // ============================================================================
@@ -189,6 +190,15 @@ export function createPhysics(R, { tray = 'medium' } = {}) {
     get t() { return t; }, get dims() { return dims; },
     free() { try { world.free(); } catch (e) { /* freed */ } },
   };
+}
+
+// throwDir: a unit [x, z] throw direction from a seed, uniform over the
+// full circle. The page throw button uses it, so the hand is not always at
+// the -x end of the tray. throwDice() puts the hand on the side opposite
+// the direction, so a diagonal throw starts near a corner.
+export function throwDir(seed) {
+  const a = mulberry32((seed ^ 0x2545f491) >>> 0)() * Math.PI * 2;
+  return [Math.cos(a), Math.sin(a)];
 }
 
 // simulateThrow: one throw to rest. Returns the reads, the rest time and,

@@ -39,7 +39,7 @@ import * as THREE from 'three';
 import { buildDie, DIE_TYPES, TYPE_ORDER, mulberry32, Q } from './dice.js';
 import { parse, planDice, score, topValue } from './notation.js';
 import { specPmf, moments, atLeast, atMost, prob, chiSquare } from './prob.js';
-import { createPhysics, DT, MAX_T, TRAYS } from './physics.js';
+import { createPhysics, throwDir, DT, MAX_T, TRAYS } from './physics.js';
 import { createScene } from './scene.js';
 import { MATERIALS, MATERIAL_ORDER } from './facetex.js';
 import { createRecognizer } from './recog.js';
@@ -52,7 +52,7 @@ const COARSE = matchMedia('(pointer:coarse)').matches;
 
 const S = {
   counts: { d6: 3 }, text: '3d6', spec: parse('3d6'), finish: 'resin', style: 'numbers',
-  strength: 0.55, tray: 'medium', speed: 1, cam: 'orbit', camCheck: false,
+  strength: 0.35, tray: 'medium', speed: 1, cam: 'orbit', camCheck: false,
   tab: 'faces', src: 'session', faceType: 'd6', target: 10,
   faces: {}, totals: {}, check: { agree: 0, total: 0 },
   batch: { faces: {}, totals: {}, text: '', running: false },
@@ -120,7 +120,10 @@ function throwNow(o = {}) {
   if (!S.ready) return;
   if (!S.spec || S.spec.error) { $('notaMsg').textContent = S.spec ? S.spec.error : 'Nothing to roll.'; return; }
   S.throws++;
-  startThrow(S.spec, planDice(S.spec), { strength: o.strength, dir: o.dir, from: o.from, tray: S.tray });
+  // A throw with no swipe comes from a seeded direction, with 0.75 of the
+  // physics spin, so the default throw is calm and varies.
+  const seed = (Math.random() * 2 ** 32) >>> 0;
+  startThrow(S.spec, planDice(S.spec), { seed, strength: o.strength, dir: o.dir || throwDir(seed), from: o.from, spin: o.spin ?? 0.75, tray: S.tray });
   $('replayBtn').disabled = true;
   hideHint();
   if (PHONE_Q.matches && $('panel').classList.contains('open') && grp !== 'result') setOpen(false);

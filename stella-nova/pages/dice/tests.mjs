@@ -27,7 +27,7 @@
 //               are thrown again on their own, as a player would.
 // ============================================================================
 import { buildDie, readDie, orientFor, TYPE_ORDER, DIE_TYPES, TILT_DEG, Q, V } from './dice.js';
-import { createPhysics, simulateThrow, MAX_T, TRAYS } from './physics.js';
+import { createPhysics, simulateThrow, throwDir, MAX_T, TRAYS } from './physics.js';
 import { chiSquare, specPmf, moments, atLeast, prob, gammaQ, keepPmf, diePmf } from './prob.js';
 import { parse, planDice, score } from './notation.js';
 
@@ -246,6 +246,30 @@ const PH = createPhysics(RAPIER, { tray: 'medium' });
   }
   ok(outside === 0, `${outside} dice ended outside the tray (hard throws of 12 dice)`);
   ok(late <= 1, `${late}/${throws} hard throws did not rest by ${MAX_T} s`);
+}
+{
+  // the page throw: a seeded direction over the full circle; every die
+  // still ends in the tray from any side, at the default strength (0.35)
+  // and the spin of 0.75, and at full strength
+  const [w, d] = TRAYS.medium, quad = [0, 0, 0, 0];
+  let outside = 0, late = 0, same = 0, prev = null;
+  for (let s = 0; s < 200; s++) {
+    const v = throwDir(s);
+    ok(Math.abs(Math.hypot(v[0], v[1]) - 1) < 1e-9, `throwDir(${s}) is a unit vector`);
+    quad[(v[0] >= 0 ? 0 : 1) + (v[1] >= 0 ? 0 : 2)]++;
+    if (prev && Math.hypot(v[0] - prev[0], v[1] - prev[1]) < 1e-6) same++;
+    prev = v;
+  }
+  ok(Math.min(...quad) >= 30, `throwDir covers each quadrant (${quad.join(' ')})`);
+  ok(same === 0, `${same} seeds in a row gave the same direction`);
+  ok(throwDir(77)[0] === throwDir(77)[0], 'throwDir: one seed, one direction');
+  for (let s = 0; s < (QUICK ? 8 : 24); s++) {
+    const r = simulateThrow(PH, ['d6', 'd6', 'd6', 'd20', 'd4', 'coin'], { seed: 3100 + s, strength: s % 2 ? 1 : 0.35, spin: 0.75, dir: throwDir(3100 + s) });
+    if (!r.rest) late++;
+    for (const o of PH.dice) { const p = o.body.translation(); if (Math.abs(p.x) > w / 2 || Math.abs(p.z) > d / 2 || p.y < -0.05) outside++; }
+  }
+  ok(outside === 0, `${outside} dice ended outside the tray (throws from every side)`);
+  ok(late <= 1, `${late} throws from every side did not rest by ${MAX_T} s`);
 }
 const FAIR_N = QUICK ? 300 : 2400;
 for (const t of TYPE_ORDER) {
