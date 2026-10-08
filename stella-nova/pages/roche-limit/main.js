@@ -68,6 +68,7 @@ import { SCENARIOS, REAL, STORY, SATURN_RINGS, specFor, flybyStart } from './sce
 import { drawGauge, drawBound, drawEnergy, drawRuns, MAT_COLOR } from './plots.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { plateBand } from '../../lib/saver-clear.js';
+import { S, pileCache, bootDone, bootReady } from './app/state.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -115,15 +116,8 @@ const UI = {
   calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches,   // Reduce motion
 };
 
-let dev = null, ctx = null, ren = null, simCode = null, worker = null;
-let run = null;            // the current run
-let runSerial = 0;
-const pileCache = new Map();
-let gpuMs = 0, gpuPending = false, stepsMax = 128, warpCarry = 0;
-let lastT = performance.now(), fps = 60;
-let saverOn = false;
-let profiling = false;
-let bootDone; const bootReady = new Promise(r => { bootDone = r; });
+let gpuPending = false;
+let lastT = performance.now();
 const workerJobs = new Map(); let jobId = 0;
 
 // ── boot (called at the end of the module, after every const is set) ─────
@@ -134,25 +128,25 @@ async function boot() {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) return fail(new Error('no GPU adapter'));
   // timestamp-query, when the adapter has it, is only used by profile()
-  dev = await adapter.requestDevice({ requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [] });
-  dev.lost.then(i => { if (i.reason !== 'destroyed') fail(new Error('GPU device lost: ' + i.message)); });
-  dev.addEventListener('uncapturederror', e => { console.error('WebGPU:', e.error.message); });
+  S.dev = await adapter.requestDevice({ requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [] });
+  S.dev.lost.then(i => { if (i.reason !== 'destroyed') fail(new Error('GPU device lost: ' + i.message)); });
+  S.dev.addEventListener('uncapturederror', e => { console.error('WebGPU:', e.error.message); });
   const canvas = $('gpu');
-  ctx = canvas.getContext('webgpu');
+  S.ctx = canvas.getContext('webgpu');
   const format = navigator.gpu.getPreferredCanvasFormat();
-  ctx.configure({ device: dev, format, alphaMode: 'opaque' });
+  S.ctx.configure({ device: S.dev, format, alphaMode: 'opaque' });
   const [sc, rc] = await Promise.all([loadSimCode(), loadRenderCode()]);
-  simCode = sc;
-  ren = new Renderer(dev, ctx, format, rc, { gridN: QUALITY[Q.preset].gridN });
+  S.simCode = sc;
+  S.ren = new Renderer(S.dev, S.ctx, format, rc, { gridN: QUALITY[Q.preset].gridN });
   loadPlanetMap().catch(e => console.warn('planet map:', e.message));
-  worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-  worker.onmessage = e => { const j = workerJobs.get(e.data.id); workerJobs.delete(e.data.id); if (j) j(e.data); };
-  worker.onerror = e => console.error('worker:', e.message);
+  S.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  S.worker.onmessage = e => { const j = workerJobs.get(e.data.id); workerJobs.delete(e.data.id); if (j) j(e.data); };
+  S.worker.onerror = e => console.error('worker:', e.message);
   resize(); window.addEventListener('resize', resize);
-  window.__roche = { state: () => debugState(), ren, cam, UI, camStats, resetCamStats, profile, restoreSnap, get run() { return run; }, fps: () => fps, gpuMs: () => gpuMs, cpuMs: () => cpuMs };
+  window.__roche = { state: () => debugState(), ren: S.ren, cam, UI, camStats, resetCamStats, profile, restoreSnap, get run() { return S.run; }, fps: () => S.fps, gpuMs: () => S.gpuMs, cpuMs: () => S.cpuMs };
   requestAnimationFrame(frame);
   bootDone();
-  if (!saverOn) await startRun();
+  if (!S.saverOn) await startRun();
 }
 // The Saturn map (tex/saturn_2k.jpg, Solar System Scope, CC BY 4.0) and
 // its mip levels, made here by halving down to 16 px wide. Until it is in,
@@ -164,7 +158,7 @@ async function loadPlanetMap() {
   const levels = [b0];
   let w = b0.width, h = b0.height;
   while (w > 16) { w >>= 1; h = Math.max(1, h >> 1); levels.push(await createImageBitmap(b0, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' })); }
-  if (ren) ren.setPlanetTexture(levels);
+  if (S.ren) S.ren.setPlanetTexture(levels);
   for (const b of levels) b.close();
 }
 function fail(e) {
@@ -173,17 +167,17 @@ function fail(e) {
   $('nogpuWhy').textContent = String(e && e.message || e);
 }
 function resize() {
-  if (!ren) return;
+  if (!S.ren) return;
   const c = $('gpu');
   const dpr = Math.min(window.devicePixelRatio || 1, PHONE_Q.matches ? 1.5 : 2);
   let w = c.clientWidth * dpr, h = c.clientHeight * dpr;
   const maxPx = QUALITY[Q.preset].maxPx * Q.scale * Q.scale, k = Math.min(1, Math.sqrt(maxPx / (w * h)));
   w = Math.round(w * k); h = Math.round(h * k);
   c.width = w; c.height = h;
-  ren.resize(w, h);
+  S.ren.resize(w, h);
 }
 function workerCall(msg, transfer = []) {
-  return new Promise(res => { const id = ++jobId; workerJobs.set(id, res); worker.postMessage(Object.assign({ id }, msg), transfer); });
+  return new Promise(res => { const id = ++jobId; workerJobs.set(id, res); S.worker.postMessage(Object.assign({ id }, msg), transfer); });
 }
 
 // ── runs ──────────────────────────────────────────────────────────────────
@@ -201,44 +195,44 @@ function matFor(name, spec, custom) {
 }
 
 async function startRun(specIn) {
-  const serial = ++runSerial;
+  const serial = ++S.runSerial;
   const spec = specIn || currentSpec();
   const sc = spec.scen || SCENARIOS.find(s => s.key === spec.key);
-  if (run) { for (const s of run.sats) s.gpu.destroy(); ren.removeSims(); }
+  if (S.run) { for (const s of S.run.sats) s.gpu.destroy(); S.ren.removeSims(); }
   const two = spec.kind === 'compare';
   // Auto quality: when the governor has already gone down to its floor
   // (60% render scale, no bloom), the next run takes half the grains
   if (UI.quality === 'auto' && Q.scale <= 0.65 && !Q.bloom && UI.N > 4096) { UI.N = UI.N / 2; $('nSel').value = UI.N; Q.note = 'fewer grains for speed'; }
   let N = UI.N;
   if (sc && sc.nScale) N = Math.max(4096, Math.round(N * sc.nScale / 1024) * 1024);
-  if (saverOn) N = Math.min(N, 8192);
+  if (S.saverOn) N = Math.min(N, 8192);
   const nEach = two ? Math.max(4096, N / 2) : N;
   const mats = two ? spec.materials : [spec.material];
-  run = { serial, spec, sats: [], phase: 'init', t: 0, T0: 1, frames: 0, started: performance.now(), recorded: false, track: [],
+  S.run = { serial, spec, sats: [], phase: 'init', t: 0, T0: 1, frames: 0, started: performance.now(), recorded: false, track: [],
     snaps: [], viewIdx: -1, epoch: 0, stepLeft: 0, rate: 0, story: { approach: 0 }, storyKey: 'approach' };
   for (let k = 0; k < mats.length; k++) {
     const mat = matFor(mats[k], spec, !two);
     const C = P.contactParams(nEach, mat);
-    const gpu = new SimGPU(dev, nEach, simCode);
-    const e = ren.addSim(gpu);
-    run.sats.push({ idx: k, matName: mats[k], mat, C, gpu, e, N: nEach, color: MAT_COLOR[mats[k]] || '#d8dfe8', hist: [], ehist: [], an: null, E0: null, L0: null, frag: [], phase: two ? k * Math.PI : 0 });
+    const gpu = new SimGPU(S.dev, nEach, S.simCode);
+    const e = S.ren.addSim(gpu);
+    S.run.sats.push({ idx: k, matName: mats[k], mat, C, gpu, e, N: nEach, color: MAT_COLOR[mats[k]] || '#d8dfe8', hist: [], ehist: [], an: null, E0: null, L0: null, frag: [], phase: two ? k * Math.PI : 0 });
   }
   setBusy(true, 'Building the moon', 0);
   syncStory(true);
   // the cloud or the cached pile
-  for (const s of run.sats) {
+  for (const s of S.run.sats) {
     const key = `${s.N}|${s.matName}|${s.mat.mu}|${s.mat.coh}`;
     s.cacheKey = key;
     if (pileCache.has(key)) { s.pile = pileCache.get(key); continue; }
     const cl = await workerCall({ type: 'cloud', N: s.N, seed: 3 + s.idx });
-    if (serial !== runSerial) return;
+    if (serial !== S.runSerial) return;
     s.cloud = cl;
   }
-  if (serial !== runSerial) return;
+  if (serial !== S.runSerial) return;
   // planet (R_p from the expected pile radius, so the scale does not jump)
-  for (const s of run.sats) { s.Rp = s.C.Rs / spec.s; s.k = 1 / s.Rp; }
+  for (const s of S.run.sats) { s.Rp = s.C.Rs / spec.s; s.k = 1 / s.Rp; }
   // settle each moon that has no cached pile
-  for (const s of run.sats) {
+  for (const s of S.run.sats) {
     if (s.pile) continue;
     const z = new Float64Array(s.N * 3);
     s.gpu.setParams(s.C, { GM: 0, Rp: 1 }, 1.5);
@@ -251,10 +245,10 @@ async function startRun(specIn) {
   }
   // start positions for the display during the settle
   prepareOrbit();
-  run.limits = limitsFor(spec);
-  run.viewD = viewDistance(spec, run.limits);
-  if (run.sats.every(s => s.pile)) await placeSats(serial);
-  else if (serial === runSerial) run.phase = 'settle';
+  S.run.limits = limitsFor(spec);
+  S.run.viewD = viewDistance(spec, S.run.limits);
+  if (S.run.sats.every(s => s.pile)) await placeSats(serial);
+  else if (serial === S.runSerial) S.run.phase = 'settle';
 }
 // The distance (planet radii) the planet view frames: the start orbit or
 // the closest pass, and the rings of Saturn, fixed for the whole run so
@@ -266,8 +260,8 @@ function viewDistance(spec, L) {
 // Planet and start orbit for each moon (from the spec; the pile stats
 // replace the expected density once the pile is settled).
 function prepareOrbit() {
-  const spec = run.spec;
-  for (const s of run.sats) {
+  const spec = S.run.spec;
+  for (const s of S.run.sats) {
     const rhoS = s.pile ? s.pile.st.rho : P.RHO_GRAIN * P.PHI0;
     const rhoP = spec.q * rhoS;
     const GM = P.G * rhoP * 4 / 3 * Math.PI * s.Rp ** 3;
@@ -285,8 +279,8 @@ function orbitFor(spec, pl) {
 }
 function settleStep(budgetBlocks) {
   let all = true, done = 0, total = 0;
-  const enc = dev.createCommandEncoder();
-  for (const s of run.sats) {
+  const enc = S.dev.createCommandEncoder();
+  for (const s of S.run.sats) {
     if (s.pile) continue;
     const left = s.settleBlocks - s.settleDone;
     if (left > 0) {
@@ -299,16 +293,16 @@ function settleStep(budgetBlocks) {
     }
     done += Math.min(s.settleDone, s.settleBlocks); total += s.settleBlocks;
   }
-  dev.queue.submit([enc.finish()]);
+  S.dev.queue.submit([enc.finish()]);
   setBusy(true, 'Letting the rubble settle under its own gravity', total ? done / total : 1);
   return all;
 }
 async function placeSats(serial) {
-  run.phase = 'placing';
-  for (const s of run.sats) {
+  S.run.phase = 'placing';
+  for (const s of S.run.sats) {
     if (!s.pile) {
       const rb = await s.gpu.readback();
-      if (serial !== runSerial) return;
+      if (serial !== S.runSerial) return;
       const N = s.N, pos = new Float64Array(N * 3);
       for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) pos[3 * i + k] = rb.body[12 * i + k];
       const st = P.pileStats(pos, s.mass);
@@ -318,7 +312,7 @@ async function placeSats(serial) {
     }
   }
   prepareOrbit();
-  for (const s of run.sats) {
+  for (const s of S.run.sats) {
     const N = s.N, pos = Float64Array.from(s.pile.pos), vel = new Float64Array(N * 3), spin = new Float64Array(N * 3);
     s.rad = s.pile.rad; s.mass = s.pile.mass; s.M0 = s.pile.st.M; s.Rs = s.pile.st.R;
     P.placeOnOrbit(pos, vel, spin, s.mass, s.o.Omega);
@@ -326,30 +320,30 @@ async function placeSats(serial) {
     s.gpu.ref = s.ref; s.gpu.t = 0;
     s.gpu.setState(pos, vel, spin, s.rad, s.mass);
     s.gpu.prime();
-    ren.setTags(s.e, new Float32Array(s.gpu.np).fill(1));
+    S.ren.setTags(s.e, new Float32Array(s.gpu.np).fill(1));
     s.e.fresh = true;
     s.hist = [[0, 1]]; s.ehist = []; s.an = null; s.E0 = null; s.L0 = null; s.frag = [];
   }
-  const s0 = run.sats[0], spec = run.spec;
+  const s0 = S.run.sats[0], spec = S.run.spec;
   // the time unit: one orbit (circular, spiral: the start orbit) or the
   // period of a circular orbit at the pericentre (flyby)
   const a0 = spec.kind === 'flyby' ? spec.peri * s0.Rp : spec.d * s0.Rp;
-  run.T0 = P.orbitalPeriod(s0.pl.GM, a0);
+  S.run.T0 = P.orbitalPeriod(s0.pl.GM, a0);
   if (spec.kind === 'spiral') {
     const d0 = spec.d, d1 = spec.d1, Tm = P.orbitalPeriod(s0.pl.GM, Math.sqrt(d0 * d1) * s0.Rp);
     const kappa = Math.log(d0 / d1) / (2 * spec.orbits * Tm);
-    for (const s of run.sats) { s.pl.drag = kappa; s.gpu.setParams(s.C, s.pl, 0); }
+    for (const s of S.run.sats) { s.pl.drag = kappa; s.gpu.setParams(s.C, s.pl, 0); }
   }
   if (spec.kind === 'flyby') {
     // time from the start to the pericentre, by the Kepler equation
     const el = P.keplerElements(s0.o.X, s0.o.V, s0.pl.GM);
-    run.tPeri = timeToPeri(s0.o.X, s0.o.V, s0.pl.GM, el);
+    S.run.tPeri = timeToPeri(s0.o.X, s0.o.V, s0.pl.GM, el);
   }
   const rhoReal = spec.rhoS || 1.0;
-  run.tUnitSec = Math.sqrt(s0.pile.st.rho / (G_SI * rhoReal * 1000));
-  run.heatRef = 0.006 * s0.C.vesc * s0.C.vesc;
-  run.phase = 'orbit'; run.t = 0; run.recorded = false; run.track = [];
-  run.lastRead = 0;
+  S.run.tUnitSec = Math.sqrt(s0.pile.st.rho / (G_SI * rhoReal * 1000));
+  S.run.heatRef = 0.006 * s0.C.vesc * s0.C.vesc;
+  S.run.phase = 'orbit'; S.run.t = 0; S.run.recorded = false; S.run.track = [];
+  S.run.lastRead = 0;
   setBusy(false);
   syncStory();
   refreshReadout(true);
@@ -381,81 +375,80 @@ function setBusy(on, text, frac = 0) {
 }
 
 // ── frame loop ────────────────────────────────────────────────────────────
-let cpuMs = 0;   // main-thread time of one frame (ms, smoothed)
 function frame(now) {
   requestAnimationFrame(frame);
   const tCpu = performance.now();
-  try { frameBody(now); } finally { cpuMs = 0.9 * cpuMs + 0.1 * (performance.now() - tCpu); }
+  try { frameBody(now); } finally { S.cpuMs = 0.9 * S.cpuMs + 0.1 * (performance.now() - tCpu); }
 }
 // The speed in orbits per minute of wall time. Reduce motion caps it at
 // Normal; the screensaver sets its own.
 function orbitsPerMin() {
-  if (saverOn && saver) return saver.speed;
+  if (S.saverOn && S.saver) return S.saver.speed;
   return Math.pow(10, UI.calm ? Math.min(UI.speedLog, CALM_SPEED) : UI.speedLog);
 }
-function allFree() { return run.sats.every(s => !s.gpu.busy && !s.waiting); }
+function allFree() { return S.run.sats.every(s => !s.gpu.busy && !s.waiting); }
 function frameBody(now) {
   const dtReal = Math.min(0.1, (now - lastT) / 1000); lastT = now;
-  fps = 0.95 * fps + 0.05 / Math.max(dtReal, 1e-3);
-  if (!run || !ren || run.phase === 'init' || run.phase === 'placing' || profiling) return;
+  S.fps = 0.95 * S.fps + 0.05 / Math.max(dtReal, 1e-3);
+  if (!S.run || !S.ren || S.run.phase === 'init' || S.run.phase === 'placing' || S.profiling) return;
   const cssW = $('gpu').clientWidth, cssH = $('gpu').clientHeight;
   if (cssW < 2 || cssH < 2) return;
   let steps = 0;
-  if (run.phase === 'settle') {
-    if (settleStep(Math.max(2, Math.min(saverOn ? 24 : 12, Math.floor(stepsMax / 32))))) { run.phase = 'placing'; placeSats(run.serial); }
-  } else if (run.phase === 'orbit') {
-    if (run.pendingRestore !== undefined && run.pendingRestore !== null && allFree()) { const i = run.pendingRestore; run.pendingRestore = null; restoreSnap(i); }
-    const s0 = run.sats[0];
+  if (S.run.phase === 'settle') {
+    if (settleStep(Math.max(2, Math.min(S.saverOn ? 24 : 12, Math.floor(S.stepsMax / 32))))) { S.run.phase = 'placing'; placeSats(S.run.serial); }
+  } else if (S.run.phase === 'orbit') {
+    if (S.run.pendingRestore !== undefined && S.run.pendingRestore !== null && allFree()) { const i = S.run.pendingRestore; S.run.pendingRestore = null; restoreSnap(i); }
+    const s0 = S.run.sats[0];
     // the spiral ends at d1: the drag stops there
-    if (run.spec.kind === 'spiral') for (const s of run.sats) if (s.pl.drag > 0 && Math.hypot(...s.ref.X) < run.spec.d1 * s.Rp) { s.pl.drag = 0; s.gpu.setParams(s.C, s.pl, 0); }
-    const playing = !UI.paused && !run.scrubbing;
+    if (S.run.spec.kind === 'spiral') for (const s of S.run.sats) if (s.pl.drag > 0 && Math.hypot(...s.ref.X) < S.run.spec.d1 * s.Rp) { s.pl.drag = 0; s.gpu.setParams(s.C, s.pl, 0); }
+    const playing = !UI.paused && !S.run.scrubbing;
     if (playing) {
       // steps this frame: the speed in steps, carried over frames, capped
       // by the GPU budget; part blocks are fine (engine.js encodeSteps)
-      const want = orbitsPerMin() / 60 * run.T0 / s0.C.dt * dtReal;
-      warpCarry += want;
-      steps = Math.min(Math.floor(warpCarry), stepsMax);
-      warpCarry = Math.min(warpCarry - steps, 1);
-      run.rate = 0.9 * run.rate + 0.1 * (steps / Math.max(dtReal, 1e-3));
-    } else if (run.stepLeft > 0) {
-      steps = Math.min(run.stepLeft, stepsMax);
-      run.stepLeft -= steps;
-      if (run.stepLeft <= 0) run.forceRead = true;
+      const want = orbitsPerMin() / 60 * S.run.T0 / s0.C.dt * dtReal;
+      S.warpCarry += want;
+      steps = Math.min(Math.floor(S.warpCarry), S.stepsMax);
+      S.warpCarry = Math.min(S.warpCarry - steps, 1);
+      S.run.rate = 0.9 * S.run.rate + 0.1 * (steps / Math.max(dtReal, 1e-3));
+    } else if (S.run.stepLeft > 0) {
+      steps = Math.min(S.run.stepLeft, S.stepsMax);
+      S.run.stepLeft -= steps;
+      if (S.run.stepLeft <= 0) S.run.forceRead = true;
     }
     // a readback once a second while it plays; the O(N^2) potential
     // (energy) every second one
-    const due = allFree() && (playing ? now - (run.lastRead || 0) > 1000 : (run.forceRead || now - (run.lastRead || 0) > 2000));
+    const due = allFree() && (playing ? now - (S.run.lastRead || 0) > 1000 : (S.run.forceRead || now - (S.run.lastRead || 0) > 2000));
     if (steps > 0) {
-      const enc = dev.createCommandEncoder();
-      for (const s of run.sats) s.gpu.encodeSteps(enc, steps, due);
-      dev.queue.submit([enc.finish()]);
-      run.t = s0.gpu.t;
+      const enc = S.dev.createCommandEncoder();
+      for (const s of S.run.sats) s.gpu.encodeSteps(enc, steps, due);
+      S.dev.queue.submit([enc.finish()]);
+      S.run.t = s0.gpu.t;
     }
-    if (due && !run.scrubbing) { run.lastRead = now; run.forceRead = false; run.reads = (run.reads || 0) + 1; readAll(!playing || run.reads % 2 === 1); }
+    if (due && !S.run.scrubbing) { S.run.lastRead = now; S.run.forceRead = false; S.run.reads = (S.run.reads || 0) + 1; readAll(!playing || S.run.reads % 2 === 1); }
   }
   // GPU time of the whole frame (sim + draw)
   const tSub = performance.now();
   drawFrame(now, cssW, cssH, steps);
   if (!gpuPending) {
     gpuPending = true;
-    dev.queue.onSubmittedWorkDone().then(() => {
+    S.dev.queue.onSubmittedWorkDone().then(() => {
       const ms = performance.now() - tSub;
-      gpuMs = 0.8 * gpuMs + 0.2 * ms; gpuPending = false;
+      S.gpuMs = 0.8 * S.gpuMs + 0.2 * ms; gpuPending = false;
       const target = Math.max(8, Math.ceil(stepsWanted() * 1.25));
-      if (gpuMs > 14 && stepsMax > 8) stepsMax = Math.max(8, Math.floor(stepsMax * 0.8));
-      else if (gpuMs < 9 && stepsMax < target) stepsMax += 8;
-      else if (stepsMax > target) stepsMax = target;
+      if (S.gpuMs > 14 && S.stepsMax > 8) S.stepsMax = Math.max(8, Math.floor(S.stepsMax * 0.8));
+      else if (S.gpuMs < 9 && S.stepsMax < target) S.stepsMax += 8;
+      else if (S.stepsMax > target) S.stepsMax = target;
     });
   }
   governQuality(now);
-  run.frames++;
-  if (run.frames % 10 === 0) refreshReadout(false);
-  if (UI.showFps && run.frames % 20 === 0) $('fpsChip').textContent = `${fps.toFixed(0)} fps · GPU ${gpuMs.toFixed(1)} ms · CPU ${cpuMs.toFixed(1)} ms · ${(ren.W * ren.H / 1e6).toFixed(1)} MP · ${Q.preset}${Q.bloom ? '' : ', no bloom'} · ${stepsMax} steps max`;
+  S.run.frames++;
+  if (S.run.frames % 10 === 0) refreshReadout(false);
+  if (UI.showFps && S.run.frames % 20 === 0) $('fpsChip').textContent = `${S.fps.toFixed(0)} fps · GPU ${S.gpuMs.toFixed(1)} ms · CPU ${S.cpuMs.toFixed(1)} ms · ${(S.ren.W * S.ren.H / 1e6).toFixed(1)} MP · ${Q.preset}${Q.bloom ? '' : ', no bloom'} · ${S.stepsMax} steps max`;
 }
 // steps per frame the speed asks for, at 60 fps
 function stepsWanted() {
-  if (!run || !run.sats.length || !run.T0) return 64;
-  return orbitsPerMin() / 60 * run.T0 / run.sats[0].C.dt / 60;
+  if (!S.run || !S.run.sats.length || !S.run.T0) return 64;
+  return orbitsPerMin() / 60 * S.run.T0 / S.run.sats[0].C.dt / 60;
 }
 // The Auto quality governor, once a second: frames that run long (under
 // 52 fps, or a GPU frame over 15 ms) lower the render scale by 10% (down
@@ -468,13 +461,13 @@ function governQuality(now) {
   w.n++;
   if (now - w.t0 < 1000) return;
   const f = w.n * 1000 / (now - w.t0); w.t0 = now; w.n = 0;
-  if (UI.quality !== 'auto' || now < Q.cool || saverOn && saver && saver.fade < 0.5) return;
-  const slow = f < 52 || gpuMs > 15, good = f >= 59 && gpuMs < 9;
+  if (UI.quality !== 'auto' || now < Q.cool || S.saverOn && S.saver && S.saver.fade < 0.5) return;
+  const slow = f < 52 || S.gpuMs > 15, good = f >= 59 && S.gpuMs < 9;
   w.good = good ? w.good + 1 : 0;
   if (slow) {
     if (Q.scale > 0.65) { Q.scale = Math.round((Q.scale - 0.1) * 10) / 10; resize(); }
     else if (Q.bloom) Q.bloom = false;
-    else stepsMax = Math.max(8, stepsMax >> 1);
+    else S.stepsMax = Math.max(8, S.stepsMax >> 1);
     Q.cool = now + 2000; Q.slowRuns = (Q.slowRuns || 0) + 1;
   } else if (w.good >= 3) {
     if (!Q.bloom && QUALITY[Q.preset].bloom) Q.bloom = true;
@@ -494,28 +487,28 @@ function setQuality(name) {
 // ── readback, analysis, history ───────────────────────────────────────────
 // Read every moon, analyse, then keep one history record for the read.
 async function readAll(potential) {
-  const serial = run.serial, epoch = run.epoch;
-  const parts = await Promise.all(run.sats.map(s => readAndAnalyze(s, potential, epoch)));
-  if (serial !== runSerial || epoch !== run.epoch || parts.some(p => !p)) return;
+  const serial = S.run.serial, epoch = S.run.epoch;
+  const parts = await Promise.all(S.run.sats.map(s => readAndAnalyze(s, potential, epoch)));
+  if (serial !== S.runSerial || epoch !== S.run.epoch || parts.some(p => !p)) return;
   updatePhase(parts[0].t);
-  const t = parts[0].t, last = run.snaps[run.snaps.length - 1];
+  const t = parts[0].t, last = S.run.snaps[S.run.snaps.length - 1];
   if (last && t <= last.t + 1e-9) return;
-  run.snaps.push({ t, sats: parts, story: Object.assign({}, run.story) });
-  if (run.snaps.length > SNAP_CAP) {
+  S.run.snaps.push({ t, sats: parts, story: Object.assign({}, S.run.story) });
+  if (S.run.snaps.length > SNAP_CAP) {
     // drop the record whose neighbours are closest in time
     let best = 1, gap = Infinity;
-    for (let i = 1; i < run.snaps.length - 1; i++) { const g = run.snaps[i + 1].t - run.snaps[i - 1].t; if (g < gap) { gap = g; best = i; } }
-    run.snaps.splice(best, 1);
+    for (let i = 1; i < S.run.snaps.length - 1; i++) { const g = S.run.snaps[i + 1].t - S.run.snaps[i - 1].t; if (g < gap) { gap = g; best = i; } }
+    S.run.snaps.splice(best, 1);
   }
-  run.viewIdx = run.snaps.length - 1;
+  S.run.viewIdx = S.run.snaps.length - 1;
   syncScrub();
 }
 async function readAndAnalyze(s, potential, epoch) {
-  const serial = run.serial;
+  const serial = S.run.serial;
   s.waiting = true;
   const rb = await s.gpu.readback(potential);
   if (!rb) { s.waiting = false; return null; }
-  if (serial !== runSerial) return null;
+  if (serial !== S.runSerial) return null;
   // the compact copy for the history: position, velocity, spin
   const N = s.N, st = new Float32Array(N * 9), b = rb.body;
   for (let i = 0; i < N; i++) {
@@ -524,15 +517,15 @@ async function readAndAnalyze(s, potential, epoch) {
     st[q + 3] = b[o + 4]; st[q + 4] = b[o + 5]; st[q + 5] = b[o + 6];
     st[q + 6] = b[o + 8]; st[q + 7] = b[o + 9]; st[q + 8] = b[o + 10];
   }
-  const res = await workerCall({ type: 'analyze', N: s.N, np: s.gpu.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24, seed: run.frames }, [rb.body.buffer, rb.grav.buffer]);
+  const res = await workerCall({ type: 'analyze', N: s.N, np: s.gpu.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24, seed: S.run.frames }, [rb.body.buffer, rb.grav.buffer]);
   s.waiting = false;
-  if (serial !== runSerial || epoch !== run.epoch) return null;
+  if (serial !== S.runSerial || epoch !== S.run.epoch) return null;
   onAnalysis(s, res, rb);
   return { t: rb.t, X: rb.X, V: rb.V, W: rb.W, Llost: rb.Llost, drag: s.pl.drag, st, tags: res.tags, an: s.an, E0: s.E0, Us0: s.Us0, L0: s.L0 };
 }
 function onAnalysis(s, a, rb) {
-  ren.setTags(s.e, a.tags);
-  const T0 = run.T0, tt = a.t / T0;
+  S.ren.setTags(s.e, a.tags);
+  const T0 = S.run.T0, tt = a.t / T0;
   const f = a.M / s.M0;
   // energy ledger: E - W, relative to |U_self| at the start; only from a
   // readback with a fresh potential
@@ -562,9 +555,9 @@ function onAnalysis(s, a, rb) {
     s.frag.push(P.keplerPath(r, v, s.pl.GM, 0.1 * T0, 24).pts);
   }
   // a run point after 3 orbits (circular kinds only)
-  if (!run.recorded && tt >= 3 && (run.spec.kind === 'circular' || run.spec.kind === 'compare' || run.spec.kind === 'real')) {
-    if (s.idx === run.sats.length - 1) run.recorded = true;
-    addRunPoint({ x: run.spec.d / Math.cbrt(run.spec.q), y: f, mat: s.matName });
+  if (!S.run.recorded && tt >= 3 && (S.run.spec.kind === 'circular' || S.run.spec.kind === 'compare' || S.run.spec.kind === 'real')) {
+    if (s.idx === S.run.sats.length - 1) S.run.recorded = true;
+    addRunPoint({ x: S.run.spec.d / Math.cbrt(S.run.spec.q), y: f, mat: s.matName });
   }
 }
 function addRunPoint(p) {
@@ -576,12 +569,12 @@ function loadRuns() { try { return JSON.parse(localStorage.getItem(RUNS_KEY) || 
 // Put history record i back onto the GPU: the grains, the frame point, the
 // drag, the tags and the analysis. The run stays paused on it.
 function restoreSnap(i) {
-  if (!run || run.phase !== 'orbit' || !run.snaps.length) return;
-  i = Math.max(0, Math.min(run.snaps.length - 1, i | 0));
-  if (!allFree()) { run.pendingRestore = i; return; }
-  const rec = run.snaps[i];
-  run.epoch++;
-  run.sats.forEach((s, k) => {
+  if (!S.run || S.run.phase !== 'orbit' || !S.run.snaps.length) return;
+  i = Math.max(0, Math.min(S.run.snaps.length - 1, i | 0));
+  if (!allFree()) { S.run.pendingRestore = i; return; }
+  const rec = S.run.snaps[i];
+  S.run.epoch++;
+  S.run.sats.forEach((s, k) => {
     const sn = rec.sats[k], N = s.N;
     const pos = new Float64Array(N * 3), vel = new Float64Array(N * 3), spin = new Float64Array(N * 3);
     for (let j = 0; j < N; j++) for (let c = 0; c < 3; c++) { pos[3 * j + c] = sn.st[9 * j + c]; vel[3 * j + c] = sn.st[9 * j + 3 + c]; spin[3 * j + c] = sn.st[9 * j + 6 + c]; }
@@ -591,21 +584,21 @@ function restoreSnap(i) {
     s.gpu.setState(pos, vel, spin, s.rad, s.mass);
     s.gpu.t = sn.t; s.gpu.W = sn.W; s.gpu.Llost = sn.Llost.slice();
     s.gpu.prime();
-    ren.setTags(s.e, sn.tags); s.e.fresh = true;
+    S.ren.setTags(s.e, sn.tags); s.e.fresh = true;
     s.an = sn.an; s.E0 = sn.E0; s.Us0 = sn.Us0; s.L0 = sn.L0;
   });
-  run.t = rec.t; run.viewIdx = i; run.track = []; warpCarry = 0; run.stepLeft = 0;
-  run.story = Object.assign({}, rec.story);
-  run.storyKey = storyKeyAt(run.story);
+  S.run.t = rec.t; S.run.viewIdx = i; S.run.track = []; S.warpCarry = 0; S.run.stepLeft = 0;
+  S.run.story = Object.assign({}, rec.story);
+  S.run.storyKey = storyKeyAt(S.run.story);
   syncScrub(); syncStory(); refreshReadout(true);
 }
 // Play or step after a scrub: the records after the current one, and the
 // plot points after its time, are gone.
 function truncateHistory() {
-  if (!run || run.viewIdx < 0 || run.viewIdx >= run.snaps.length - 1) return;
-  run.snaps.length = run.viewIdx + 1;
-  const tt = run.t / run.T0;
-  for (const s of run.sats) { s.hist = s.hist.filter(p => p[0] <= tt + 1e-9); s.ehist = s.ehist.filter(p => p[0] <= tt + 1e-9); }
+  if (!S.run || S.run.viewIdx < 0 || S.run.viewIdx >= S.run.snaps.length - 1) return;
+  S.run.snaps.length = S.run.viewIdx + 1;
+  const tt = S.run.t / S.run.T0;
+  for (const s of S.run.sats) { s.hist = s.hist.filter(p => p[0] <= tt + 1e-9); s.ehist = s.ehist.filter(p => p[0] <= tt + 1e-9); }
   syncScrub();
 }
 
@@ -613,18 +606,18 @@ function truncateHistory() {
 // Called after each read of all moons (sat 0 decides). Times are in sim
 // time; run.story holds the start time of each phase reached.
 function updatePhase(t) {
-  const s = run.sats[0], st = run.story, L = run.limits;
+  const s = S.run.sats[0], st = S.run.story, L = S.run.limits;
   if (!s.an) return;
   const d = Math.hypot(...satState(s).r) / s.Rp;
   if (st.cross === undefined && (d < L.fluid)) st.cross = t;
   if (st.cross !== undefined && st.torn === undefined && s.an.f < 0.75) st.torn = t;
-  if (st.torn !== undefined && st.ring === undefined && t - st.torn > (s.an.f < 0.25 ? 0.75 : 1.5) * run.T0) st.ring = t;
+  if (st.torn !== undefined && st.ring === undefined && t - st.torn > (s.an.f < 0.25 ? 0.75 : 1.5) * S.run.T0) st.ring = t;
   const k = storyKeyAt(st);
-  if (k !== run.storyKey) { run.storyKey = k; syncStory(); }
+  if (k !== S.run.storyKey) { S.run.storyKey = k; syncStory(); }
 }
 function storyKeyAt(st) { return st.ring !== undefined ? 'ring' : st.torn !== undefined ? 'torn' : st.cross !== undefined ? 'cross' : 'approach'; }
 function storyText(key) {
-  const spec = run.spec, Pn = spec.planetName || 'the planet';
+  const spec = S.run.spec, Pn = spec.planetName || 'the planet';
   const subj = spec.kind === 'flyby' ? 'comet' : 'moon';
   let tx = STORY.find(x => x.key === key).text;
   if (key === 'approach') {
@@ -632,7 +625,7 @@ function storyText(key) {
     else if (spec.kind === 'compare') tx = 'Two moons circle {P}: one loose, one rough.';
     else if (spec.kind !== 'spiral') tx = `The ${subj} circles {P}, outside its Roche limit: the tide only stretches it a little.`;
     else if (spec.key !== 'saturn') tx = 'A moon spirals toward {P}, pulled in by a drag.';
-  } else if (key === 'cross' && spec.kind !== 'spiral' && run.story.cross < 0.05 * run.T0) tx = `The ${subj} starts inside the Roche limit: {P}’s tide beats its own gravity.`;
+  } else if (key === 'cross' && spec.kind !== 'spiral' && S.run.story.cross < 0.05 * S.run.T0) tx = `The ${subj} starts inside the Roche limit: {P}’s tide beats its own gravity.`;
   else if (key === 'torn' && spec.kind === 'flyby') tx = 'The comet is pulled into a long stream of rubble.';
   else if (key === 'ring' && spec.kind === 'flyby') tx = 'The stream’s own gravity gathers it into a chain of clumps.';
   else if (key === 'ring' && spec.key !== 'saturn') tx = 'The debris spreads into a ring around {P}.';
@@ -650,22 +643,22 @@ function syncStory(reset) {
       box.appendChild(b);
     }
   }
-  if (!run) return;
-  const order = STORY.map(x => x.key), cur = order.indexOf(run.storyKey);
+  if (!S.run) return;
+  const order = STORY.map(x => x.key), cur = order.indexOf(S.run.storyKey);
   for (const b of box.children) {
-    const i = order.indexOf(b.dataset.p), reached = run.story[b.dataset.p] !== undefined || i === 0;
+    const i = order.indexOf(b.dataset.p), reached = S.run.story[b.dataset.p] !== undefined || i === 0;
     b.classList.toggle('now', i === cur); b.classList.toggle('done', i < cur); b.disabled = !reached;
     b.title = reached ? 'Go back to: ' + b.textContent : 'Not reached yet';
   }
-  $('caption').textContent = run.phase === 'orbit' || run.phase === 'placing' ? storyText(run.storyKey) : 'Building the moon from thousands of grains…';
+  $('caption').textContent = S.run.phase === 'orbit' || S.run.phase === 'placing' ? storyText(S.run.storyKey) : 'Building the moon from thousands of grains…';
 }
 // Jump to the first record at or after the start of a phase.
 function seekPhase(key) {
-  if (!run || run.phase !== 'orbit') return;
-  const t0 = run.story[key] ?? (key === 'approach' ? 0 : undefined);
-  if (t0 === undefined || !run.snaps.length) return;
-  let i = run.snaps.findIndex(r => r.t >= t0 - 1e-9);
-  if (i < 0) i = run.snaps.length - 1;
+  if (!S.run || S.run.phase !== 'orbit') return;
+  const t0 = S.run.story[key] ?? (key === 'approach' ? 0 : undefined);
+  if (t0 === undefined || !S.run.snaps.length) return;
+  let i = S.run.snaps.findIndex(r => r.t >= t0 - 1e-9);
+  if (i < 0) i = S.run.snaps.length - 1;
   setPaused(true);
   restoreSnap(i);
 }
@@ -710,24 +703,24 @@ const cam = { az: 0.9, el: 0.22, zoom: 1, pose: null, user: false, dragging: fal
 const camStats = { rotDegS: 0, rotDegFrame: 0, planetDegFrame: 0, planetDegS: 0, frames: 0, userFrames: 0, prev: null };
 function resetCamStats() { Object.assign(camStats, { rotDegS: 0, rotDegFrame: 0, planetDegFrame: 0, planetDegS: 0, frames: 0, userFrames: 0, prev: null }); }
 // sim time per real second at the current speed
-function simRate() { return UI.paused ? 0 : orbitsPerMin() / 60 * run.T0; }
+function simRate() { return UI.paused ? 0 : orbitsPerMin() / 60 * S.run.T0; }
 function camGoal(cssW, cssH) {
-  const s = run.sats[0];
+  const s = S.run.sats[0];
   const Rw = (s.Rs || s.C.Rs) * s.k;
   let target, dist, el = cam.el;
   let mode = UI.cam;
   cam.fastFollow = false;
-  if (mode === 'follow' && run.phase === 'orbit') {
+  if (mode === 'follow' && S.run.phase === 'orbit') {
     // how fast does the moon go round the planet, in real time?
     const st = satState(s), r = Math.hypot(...st.r), h = Math.hypot(...cross(st.r, st.v));
     const degS = h / (r * r) * simRate() * 180 / Math.PI;
     if (degS > FOLLOW_MAX_DEG) { cam.fastFollow = true; mode = 'planet'; }
   }
-  const vd = run.viewD || 2.5;
+  const vd = S.run.viewD || 2.5;
   if (mode === 'follow') {
     target = satCentre(s);
     dist = 9 * Rw;
-    if (run.spec.kind === 'flyby' && s.an && s.an.comAll) {
+    if (S.run.spec.kind === 'flyby' && s.an && s.an.comAll) {
       const dt = s.gpu.t - s.an.t;
       if (!s.an.live) target = [0, 1, 2].map(i => (s.ref.X[i] + s.an.comAll[i] + s.an.vcmAll[i] * dt) * s.k);
       dist = Math.min(Math.max(dist, 1.2 * s.an.spread * s.k), 30 * Rw);
@@ -770,7 +763,7 @@ function turnToward(a, b, ang) {
 }
 function cameraFrame(dtReal, cssW, cssH) {
   const g = camGoal(cssW, cssH);
-  if (saverOn && saver) saverCamera(g, dtReal);
+  if (S.saverOn && S.saver) saverCamera(g, dtReal);
   const want = poseOf(g, cssW, cssH);
   const P0 = cam.pose;
   if (!P0 || ![...P0.eye, ...P0.target].every(Number.isFinite)) { cam.pose = { eye: want.eye.slice(), target: want.target.slice() }; return finishPose(dtReal, true); }
@@ -818,7 +811,7 @@ function finishPose(dtReal, snapped, exempt = false) {
     const tr = dot3(pv.r, r) + dot3(pv.u, u) + dot3(pv.f, f);
     const rot = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2))) * 180 / Math.PI;
     const pl = Math.acos(Math.max(-1, Math.min(1, dot3(pv.pc, pcCam)))) * 180 / Math.PI;
-    if (exempt || (saverOn && saver && saver.fade < 0.05)) camStats.userFrames++;
+    if (exempt || (S.saverOn && S.saver && S.saver.fade < 0.05)) camStats.userFrames++;
     else {
       camStats.frames++;
       camStats.rotDegFrame = Math.max(camStats.rotDegFrame, rot); camStats.rotDegS = Math.max(camStats.rotDegS, rot / dtReal);
@@ -852,26 +845,26 @@ function hex(h, a) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255)
 // and (paused only) short paths of shed grains.
 function buildSegments(dpr) {
   segN = 0;
-  const s0 = run.sats[0], L = run.limits || limitsFor(run.spec);
+  const s0 = S.run.sats[0], L = S.run.limits || limitsFor(S.run.spec);
   const W = 1.6 * dpr;
   if (UI.rings) {
     circle([0, 0, 0], L.fluid, hex('#ff7a59', 0.8), W, 0, 256);
     circle([0, 0, 0], L.rigid, hex('#9aa6b8', 0.35), W * 0.7, 1);
   }
-  if (run.phase !== 'orbit') return;
-  for (const s of run.sats) {
+  if (S.run.phase !== 'orbit') return;
+  for (const s of S.run.sats) {
     const c = satCentre(s);
     if (UI.hill && s.an && s.an.live && Number.isFinite(s.an.rH)) circle(c, s.an.rH * s.k, [1, 1, 1, 0.45], W * 0.8, 1, 96);
     if (UI.pred && (!s.an || s.an.live)) {
       const st = satState(s);
-      const T = run.spec.kind === 'flyby' ? 2.5 * run.T0 : 0.6 * run.T0;
+      const T = S.run.spec.kind === 'flyby' ? 2.5 * S.run.T0 : 0.6 * S.run.T0;
       const pts = P.keplerPath(st.r, st.v, s.pl.GM, T, 120).pts;
       for (let i = 0; i < 119; i++) {
         const a0 = 0.55 * (1 - i / 119), a1 = 0.55 * (1 - (i + 1) / 119);
         seg([pts[3 * i] * s.k, pts[3 * i + 1] * s.k, pts[3 * i + 2] * s.k], [pts[3 * i + 3] * s.k, pts[3 * i + 4] * s.k, pts[3 * i + 5] * s.k], [1, 0.95, 0.85, a0], [1, 0.95, 0.85, a1], W * 0.8);
       }
     }
-    if (UI.pred && UI.paused && !saverOn) {
+    if (UI.pred && UI.paused && !S.saverOn) {
       for (const fp of s.frag) {
         for (let i = 0; i < 23; i++) {
           const a0 = 0.32 * (1 - i / 23), a1 = 0.32 * (1 - (i + 1) / 23);
@@ -889,8 +882,8 @@ function buildSegments(dpr) {
       for (const sg of [1, -1]) seg(b, [0, 1, 2].map(i => b[i] + v[i] * 0.07 + sd[i] * sg * 0.045), col, col, W * 1.1);
     }
   }
-  if (UI.track && run.track.length > 1) {
-    const tr = run.track, n = tr.length;
+  if (UI.track && S.run.track.length > 1) {
+    const tr = S.run.track, n = tr.length;
     for (let i = 1; i < n; i++) { const a = 0.45 * i / n; seg(tr[i - 1], tr[i], [1, 0.75, 0.35, a * 0.9], [1, 0.75, 0.35, a], W * 0.8); }
     if (s0.an && s0.an.live) seg(tr[n - 1], satCentre(s0), [1, 0.75, 0.35, 0.45], [1, 0.75, 0.35, 0.45], W * 0.8);
   }
@@ -899,7 +892,7 @@ function buildSegments(dpr) {
 // ── field overlay ─────────────────────────────────────────────────────────
 // World units: lengths in R_p, GM scaled by k^3, Omega in 1/sim time.
 function fieldParams() {
-  const s = run.sats[0];
+  const s = S.run.sats[0];
   const k = s.k, c = satCentre(s);
   // the bound mass while the moon lives; after that, the start mass at the
   // frame point (the lobe a moon of that mass would have there)
@@ -922,7 +915,7 @@ function fieldParams() {
 // L1): ease them over about a second, so the contours never jump.
 let fieldS = null;
 function smoothField(f, dt) {
-  if (!fieldS || fieldS.serial !== run.serial) { fieldS = Object.assign({ serial: run.serial }, f); return f; }
+  if (!fieldS || fieldS.serial !== S.run.serial) { fieldS = Object.assign({ serial: S.run.serial }, f); return f; }
   const k = 1 - Math.exp(-Math.min(0.1, dt || 0.016) / (UI.calm ? 1.2 : 0.6));
   for (const key of ['GMs', 'omega', 'phiL1', 'scale', 'satR', 'ext']) fieldS[key] += (f[key] - fieldS[key]) * k;
   fieldS.L1 = fieldS.L1.map((q, i) => q + (f.L1[i] - q) * k);
@@ -938,48 +931,48 @@ function backlitSun(cf) { const d = norm(sub([0, 0, 0], cf.eye)); return norm([d
 // orbit plane, so a moon beyond 1.8 R_p is never in the planet's shadow
 const SUN = norm([-0.024, 0.825, 0.565]);
 function drawFrame(now, cssW, cssH, steps) {
-  const dtReal = Math.min(0.1, (now - (run.lastDraw || now)) / 1000); run.lastDraw = now;
+  const dtReal = Math.min(0.1, (now - (S.run.lastDraw || now)) / 1000); S.run.lastDraw = now;
   const cf = cameraFrame(dtReal || 0.016, cssW, cssH);
-  const dpr = ren.W / cssW;
-  const spec = run.spec;
-  const fp = run.phase === 'orbit' ? smoothField(fieldParams(), dtReal) : null;
-  const s0 = run.sats[0];
-  const style = spec.style === 5 && !ren.planetTexW ? 1 : (spec.style ?? 0);
+  const dpr = S.ren.W / cssW;
+  const spec = S.run.spec;
+  const fp = S.run.phase === 'orbit' ? smoothField(fieldParams(), dtReal) : null;
+  const s0 = S.run.sats[0];
+  const style = spec.style === 5 && !S.ren.planetTexW ? 1 : (spec.style ?? 0);
   const frameT = steps > 0 ? steps * s0.C.dt : 0;
   const frame = {
     eye: cf.eye, target: cf.target, fov: cf.fov, near: cf.near, time: now / 1000,
-    sun: saverOn && saver && saver.backlit ? backlitSun(cf) : SUN, sunI: 1.45,
+    sun: S.saverOn && S.saver && S.saver.backlit ? backlitSun(cf) : SUN, sunI: 1.45,
     atm: spec.style === 3 ? 0.035 : 0.05, spin: now / 1000 * 0.02, style, shine: 0.25,
     flattening: spec.flattening || 0, realRings: UI.real && spec.rings ? 1 : 0,
     sat: fp ? fp.c : satCentre(s0), satR: fp ? fp.satR : (s0.C.Rs * s0.k),
     GMs: fp ? fp.GMs : 0, GMp: fp ? fp.GMp : 0, omega: fp ? fp.omega : 0, phiL1: fp ? fp.phiL1 : 0,
     fieldMode: fp ? UI.field : 0, fieldExt: fp ? fp.ext : 4, fieldScale: fp ? fp.scale : 1, fieldAlpha: 0.62,
     ringExt: 3.6, ringGain: UI.ringOn ? UI.ringGain : 0, ringBlend: steps > 0 ? (UI.calm ? 0.94 : Math.min(0.92, 0.6 + 0.08 * steps / 32)) : 0.97, ringOn: UI.ringOn || frameRealRings(spec),
-    exposure: 0.88 * (saverOn ? saverFade(dtReal) : 1), bloom: Q.bloom ? 0.08 : 0, bloomThreshold: 1.0, vignette: 0.32,
+    exposure: 0.88 * (S.saverOn ? saverFade(dtReal) : 1), bloom: Q.bloom ? 0.08 : 0, bloomThreshold: 1.0, vignette: 0.32,
     grainR: s0.k,   // the mean grain radius (1) in world units
   };
   // the past track of the bound centre: one point per 0.01 R_p of travel
-  if (run.phase === 'orbit' && s0.an && s0.an.live) {
-    const c = satCentre(s0), tr = run.track, l = tr[tr.length - 1];
+  if (S.run.phase === 'orbit' && s0.an && s0.an.live) {
+    const c = satCentre(s0), tr = S.run.track, l = tr[tr.length - 1];
     if (!l || Math.hypot(c[0] - l[0], c[1] - l[1], c[2] - l[2]) > 0.01) { tr.push(c); if (tr.length > 600) tr.shift(); }
   }
   buildSegments(dpr);
-  ren.setSegments(segs, segN);
+  S.ren.setSegments(segs, segN);
   // the grains' screen motion (streaks if on, and the dimming of grains
   // that jump more than a few px), and the decay of the collision heat
   // (time constant 1/20 orbit; frozen while paused)
-  const decay = frameT > 0 ? Math.exp(-frameT / (run.T0 / 20)) : 1;
+  const decay = frameT > 0 ? Math.exp(-frameT / (S.run.T0 / 20)) : 1;
   const motion = [UI.blur && !UI.calm ? 1 : 0, UI.calm ? 3 : 6, UI.calm ? 0.04 : 0.08, decay];
-  const sims = run.sats.map(s => ({
-    e: s.e, ring: run.phase === 'orbit',
+  const sims = S.run.sats.map(s => ({
+    e: s.e, ring: S.run.phase === 'orbit',
     frame: [s.ref.X[0] * s.k, s.ref.X[1] * s.k, s.ref.X[2] * s.k, s.k],
     refV: [s.ref.V[0] * s.k, s.ref.V[1] * s.k, s.ref.V[2] * s.k, frameT], motion,
     opts: [UI.color, UI.color === 2 ? 1 : 0, 1.0, s.C.vesc],
     tint: s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1],
-    heatInv: 1 / (run.heatRef || 0.006 * s.C.vesc * s.C.vesc),
+    heatInv: 1 / (S.run.heatRef || 0.006 * s.C.vesc * s.C.vesc),
   }));
-  run.lastFrame = { frame, sims };
-  ren.render(frame, sims);
+  S.run.lastFrame = { frame, sims };
+  S.ren.render(frame, sims);
   placeLabels(cssW, cssH, fp);
 }
 // The real-ring picture is drawn by the ring pass, so that pass runs when
@@ -998,32 +991,32 @@ function hideLabel(key) { const el = labelEls[key]; if (el) el.style.display = '
 function placeLabels(cssW, cssH, fp) {
   const show = (key, text, p, cls, dy = 0) => {
     const el = label(key, text, cls);
-    const q = p && ren.project(p, cssW, cssH);
+    const q = p && S.ren.project(p, cssW, cssH);
     if (!q || q.x < 0 || q.y < 0 || q.x > cssW || q.y > cssH) { el.style.display = 'none'; return; }
     el.style.display = ''; el.style.transform = `translate(${q.x.toFixed(1)}px, ${(q.y + dy).toFixed(1)}px)`;
   };
-  const L = run.limits || limitsFor(run.spec);
+  const L = S.run.limits || limitsFor(S.run.spec);
   // names on the side of the circles nearest the viewer
   // (at az +- 1 rad: off to the sides, so no name sits on the planet)
   const a = cam.az + 1.0;
-  const on = !saverOn;
+  const on = !S.saverOn;
   if (on && UI.rings) show('r_fluid', 'Roche limit', [L.fluid * Math.cos(a), L.fluid * Math.sin(a), 0], 'ring-fluid', -10);
   else hideLabel('r_fluid');
   if (on && UI.rings && L.rigid * Math.sin(1.0) > 1.35) show('r_rigid', 'limit for a solid moon', [L.rigid * Math.cos(a), L.rigid * Math.sin(a), 0], 'ring-rigid', -8);
   else hideLabel('r_rigid');
   // today's rings of Saturn: one name for the rings, one for the gap
-  const realOn = on && UI.real && run.spec.rings;
+  const realOn = on && UI.real && S.run.spec.rings;
   const A = SATURN_RINGS.find(r => r.name === 'A ring'), CD = SATURN_RINGS.find(r => r.name === 'Cassini Division');
   const b1 = cam.az - 1.15, b2 = cam.az - 1.6;
   if (realOn) show('sr_rings', 'today’s rings', [A.r1 / KM_SATURN * Math.cos(b1), A.r1 / KM_SATURN * Math.sin(b1), 0], 'ring-real', 8); else hideLabel('sr_rings');
   const cdr = (CD.r0 + CD.r1) / 2 / KM_SATURN;
   if (realOn && cssW >= 600) show('sr_cd', 'Cassini Division', [cdr * Math.cos(b2), cdr * Math.sin(b2), 0], 'ring-real', -14); else hideLabel('sr_cd');
-  const s = run.sats[0];
-  if (on && run.phase === 'orbit' && s.pl.drag > 0 && (!s.an || s.an.live)) {
+  const s = S.run.sats[0];
+  if (on && S.run.phase === 'orbit' && s.pl.drag > 0 && (!s.an || s.an.live)) {
     const c = satCentre(s), st = satState(s), v = norm(st.v), Rw = (s.Rs || s.C.Rs) * s.k;
     show('drag', 'drag (tides, sped up)', [0, 1, 2].map(i => c[i] - v[i] * (1.3 * Rw + 0.4)), 'drag', 0);
   } else hideLabel('drag');
-  const showL1 = fp && UI.field === 1 && !saverOn && s.an && s.an.live;
+  const showL1 = fp && UI.field === 1 && !S.saverOn && s.an && s.an.live;
   if (showL1) show('L1', 'L1', fp.L1, 'pt'); else hideLabel('L1');
 }
 
@@ -1037,27 +1030,27 @@ function fmtTime(sec) {
 function fmtKm(km) { return km >= 1e4 ? Math.round(km / 100) * 100 : Math.round(km); }
 function planetName(spec, cap) { const n = spec.planetName || 'the planet'; return cap ? n.charAt(0).toUpperCase() + n.slice(1) : n; }
 function refreshReadout(force) {
-  if (!run || !run.sats.length) return;
-  const s = run.sats[0], spec = run.spec, L = run.limits || limitsFor(spec);
+  if (!S.run || !S.run.sats.length) return;
+  const s = S.run.sats[0], spec = S.run.spec, L = S.run.limits || limitsFor(spec);
   if (!s.ref) return;
   const st = satState(s);
   const dNow = Math.hypot(...st.r) / s.Rp;
-  const tt = run.t / run.T0;
-  const orbit = run.phase === 'orbit';
+  const tt = S.run.t / S.run.T0;
+  const orbit = S.run.phase === 'orbit';
   // clock: hours and orbits
-  const secs = run.tUnitSec ? run.t * run.tUnitSec : 0;
+  const secs = S.run.tUnitSec ? S.run.t * S.run.tUnitSec : 0;
   const unitsNote = spec.unitsNote ? ' (for a Saturn-size planet)' : '';
   $('clock').textContent = orbit ? `${fmtTime(secs)} · ${tt.toFixed(2)} orbits` : '';
-  $('clock').title = orbit ? `Time since the start${unitsNote}; one orbit is the start orbit (${fmtTime(run.T0 * run.tUnitSec)}).` : '';
+  $('clock').title = orbit ? `Time since the start${unitsNote}; one orbit is the start orbit (${fmtTime(S.run.T0 * S.run.tUnitSec)}).` : '';
   // the speed label: what it asks for and what the GPU gives
   const opm = orbitsPerMin();
-  const got = run.rate > 0 && orbit && !UI.paused ? run.rate * s.C.dt / run.T0 * 60 : opm;
+  const got = S.run.rate > 0 && orbit && !UI.paused ? S.run.rate * s.C.dt / S.run.T0 * 60 : opm;
   const slow = orbit && !UI.paused && got < 0.8 * opm;
   $('speedV').textContent = `${opm < 1 ? opm.toFixed(2) : opm.toFixed(opm < 10 ? 1 : 0)} orbits/min${slow ? ` (GPU: ${got.toFixed(1)})` : ''}`;
-  $('speedV').title = run.tUnitSec ? `1 s on screen = ${fmtTime(opm / 60 * run.T0 * run.tUnitSec)} at ${planetName(spec)}` : '';
+  $('speedV').title = S.run.tUnitSec ? `1 s on screen = ${fmtTime(opm / 60 * S.run.T0 * S.run.tUnitSec)} at ${planetName(spec)}` : '';
   $('dockSpeedV').textContent = SPEED_STOPS.reduce((b, x) => Math.abs(x.v - UI.speedLog) < Math.abs(b.v - UI.speedLog) ? x : b).name;
   // distance bar: from the surface (1) to a little past the start
-  const maxD = Math.max(run.viewD * 1.15, L.fluid * 1.3);
+  const maxD = Math.max(S.run.viewD * 1.15, L.fluid * 1.3);
   const x = v => Math.max(0, Math.min(100, (v - 1) / (maxD - 1) * 100));
   $('distTitle').textContent = `Distance from ${planetName(spec)}`;
   document.querySelector('#distBar .zone.in').style.width = x(L.fluid) + '%';
@@ -1065,16 +1058,16 @@ function refreshReadout(force) {
   $('distLim').style.left = x(L.fluid) + '%';
   $('distMark').style.left = x(dNow) + '%';
   // one-piece share
-  const fs = run.sats.map(q => q.an ? q.an.f : 1);
-  $('pieceV').textContent = run.sats.length > 1 ? fs.map((f, i) => `${run.sats[i].matName === 'rigid' ? 'rough' : 'loose'} ${Math.round(100 * f)}%`).join(' · ') : `${Math.round(100 * fs[0])}%`;
-  $('pieceV').classList.toggle('two', run.sats.length > 1);
+  const fs = S.run.sats.map(q => q.an ? q.an.f : 1);
+  $('pieceV').textContent = S.run.sats.length > 1 ? fs.map((f, i) => `${S.run.sats[i].matName === 'rigid' ? 'rough' : 'loose'} ${Math.round(100 * f)}%`).join(' · ') : `${Math.round(100 * fs[0])}%`;
+  $('pieceV').classList.toggle('two', S.run.sats.length > 1);
   drawSpark();
   // the live sentence
-  const subj = spec.kind === 'flyby' ? 'The comet' : run.sats.length > 1 ? 'The moons' : 'The moon';
+  const subj = spec.kind === 'flyby' ? 'The comet' : S.run.sats.length > 1 ? 'The moons' : 'The moon';
   const Pn = planetName(spec), km = dNow * (spec.Rkm || KM_SATURN);
   let sent;
   if (!orbit) sent = 'Building the moon: thousands of grains settle together under their own gravity.';
-  else if (fs[0] < 0.25 && run.sats.length === 1 && run.storyKey === 'ring') sent = `${subj} is gone: its pieces now circle ${Pn}${spec.kind === 'flyby' ? ' in a stream' : ' as a ring'}.`;
+  else if (fs[0] < 0.25 && S.run.sats.length === 1 && S.run.storyKey === 'ring') sent = `${subj} is gone: its pieces now circle ${Pn}${spec.kind === 'flyby' ? ' in a stream' : ' as a ring'}.`;
   else if (dNow < L.fluid) {
     const holds = s.matName !== 'fluid' && fs[0] > 0.9;
     sent = `${subj} is ${dNow.toFixed(2)} ${Pn} radii out, inside the Roche limit (${L.fluid.toFixed(2)}): ${holds ? 'friction still holds it together, for now.' : `${Pn}’s tide is stronger than its own gravity, so it comes apart.`}`;
@@ -1088,23 +1081,23 @@ function drawSpark() {
   const dpr = Math.min(2, window.devicePixelRatio || 1), w = c.clientWidth, h = c.clientHeight || 40;
   if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
   const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  const tNow = run.t / run.T0, tMax = Math.max(1, tNow * 1.1);
+  const tNow = S.run.t / S.run.T0, tMax = Math.max(1, tNow * 1.1);
   g.strokeStyle = 'rgba(160,180,210,0.18)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, h - 1); g.lineTo(w, h - 1); g.moveTo(0, 2); g.lineTo(w, 2); g.stroke();
-  for (const s of run.sats) {
-    g.strokeStyle = run.sats.length > 1 ? s.color : '#ffb46a'; g.lineWidth = 1.6; g.beginPath();
+  for (const s of S.run.sats) {
+    g.strokeStyle = S.run.sats.length > 1 ? s.color : '#ffb46a'; g.lineWidth = 1.6; g.beginPath();
     let first = true;
     for (const [t, f] of s.hist) { if (t > tNow + 1e-9) break; const X = t / tMax * w, Y = 2 + (1 - f) * (h - 4); if (first) { g.moveTo(X, Y); first = false; } else g.lineTo(X, Y); }
     g.stroke();
   }
 }
 function refreshDetails(dNow, tt, L) {
-  const s = run.sats[0], spec = run.spec;
-  const tStr = spec.kind === 'flyby' && run.tPeri !== undefined ? `${(run.t - run.tPeri) / run.T0 >= 0 ? '+' : '−'}${Math.abs((run.t - run.tPeri) / run.T0).toFixed(2)} from the closest pass` : `${tt.toFixed(2)} orbits`;
-  $('rdT').textContent = `${tStr} · ${fmtTime(run.t * (run.tUnitSec || 0))}`;
+  const s = S.run.sats[0], spec = S.run.spec;
+  const tStr = spec.kind === 'flyby' && S.run.tPeri !== undefined ? `${(S.run.t - S.run.tPeri) / S.run.T0 >= 0 ? '+' : '−'}${Math.abs((S.run.t - S.run.tPeri) / S.run.T0).toFixed(2)} from the closest pass` : `${tt.toFixed(2)} orbits`;
+  $('rdT').textContent = `${tStr} · ${fmtTime(S.run.t * (S.run.tUnitSec || 0))}`;
   $('rdD').textContent = dNow.toFixed(3);
   $('rdDr').textContent = (dNow / L.rigid).toFixed(3);
   $('rdDf').textContent = (dNow / L.fluid).toFixed(3);
-  const bnd = run.sats.map(x => x.an ? (100 * x.an.f).toFixed(1) + '%' : '—').join(' · ');
+  const bnd = S.run.sats.map(x => x.an ? (100 * x.an.f).toFixed(1) + '%' : '—').join(' · ');
   $('rdB').textContent = bnd;
   $('rdG').textContent = s.an ? String(s.an.groups) : '—';
   $('rdH').textContent = s.an && s.an.live && Number.isFinite(s.an.rH) ? (s.an.rH / (s.Rs * Math.cbrt(s.an.f))).toFixed(2) : '—';
@@ -1112,17 +1105,17 @@ function refreshDetails(dNow, tt, L) {
   $('rdE').textContent = s.an && Number.isFinite(s.an.drift) ? s.an.drift.toExponential(1) + ' |U_s|' : (s.pl && s.pl.drag ? 'drag on: not tracked' : '—');
   $('rdL').textContent = s.an && Number.isFinite(s.an.Ldrift) && !(s.pl && s.pl.drag) ? s.an.Ldrift.toExponential(1) : '—';
   $('rdAcc').textContent = s.an ? String(s.an.accreted) : '—';
-  $('rdDt').textContent = `${s.C.dt.toExponential(2)} (${Math.round(run.T0 / s.C.dt).toLocaleString()} per orbit)`;
-  $('rdGpu').textContent = `${gpuMs.toFixed(1)} ms · ${stepsMax} steps max · ${fps.toFixed(0)} fps · ${(ren.W * ren.H / 1e6).toFixed(1)} MP`;
+  $('rdDt').textContent = `${s.C.dt.toExponential(2)} (${Math.round(S.run.T0 / s.C.dt).toLocaleString()} per orbit)`;
+  $('rdGpu').textContent = `${S.gpuMs.toFixed(1)} ms · ${S.stepsMax} steps max · ${S.fps.toFixed(0)} fps · ${(S.ren.W * S.ren.H / 1e6).toFixed(1)} MP`;
   // gauge: a_tide / g at the surface = 2 (rho_p/rho_s) (R_p/d)^3
   const ratio = 2 * spec.q * Math.pow(1 / dNow, 3);
   drawGauge($('gaugeC'), ratio);
   $('gaugeV').textContent = ratio.toFixed(2);
   const tMax = Math.max(1, Math.ceil(Math.max(tt, 0.5) * 1.15));
   const tu = spec.kind === 'flyby' ? 'T_q' : 'orbits';
-  drawBound($('boundC'), run.sats.map(x => ({ pts: x.hist, color: x.color })), tMax, tu);
+  drawBound($('boundC'), S.run.sats.map(x => ({ pts: x.hist, color: x.color })), tMax, tu);
   $('boundV').textContent = bnd;
-  drawEnergy($('energyC'), run.sats.map(x => ({ pts: x.ehist, color: x.color })), tMax, tu);
+  drawEnergy($('energyC'), S.run.sats.map(x => ({ pts: x.ehist, color: x.color })), tMax, tu);
   $('energyV').textContent = s.an && Number.isFinite(s.an.drift) ? s.an.drift.toExponential(1) : '—';
   const xCur = (spec.kind === 'flyby' ? spec.peri : dNow) / Math.cbrt(spec.q);
   drawRuns($('runsC'), loadRuns(), REF_SWEEP, xCur);
@@ -1131,9 +1124,9 @@ function refreshDetails(dNow, tt, L) {
 
 // ── UI ────────────────────────────────────────────────────────────────────
 function setPaused(p) {
-  if (!p && UI.paused && run) truncateHistory();
+  if (!p && UI.paused && S.run) truncateHistory();
   UI.paused = p;
-  if (run) run.scrubbing = false;
+  if (S.run) S.run.scrubbing = false;
   syncPlayButtons();
 }
 function syncPlayButtons() {
@@ -1143,24 +1136,24 @@ function syncPlayButtons() {
   document.body.classList.toggle('paused', p);
 }
 function stepBy(frac) {
-  if (!run || run.phase !== 'orbit') return;
+  if (!S.run || S.run.phase !== 'orbit') return;
   if (!UI.paused) setPaused(true);
   truncateHistory();
-  run.stepLeft += Math.max(1, Math.round(frac * run.T0 / run.sats[0].C.dt));
+  S.run.stepLeft += Math.max(1, Math.round(frac * S.run.T0 / S.run.sats[0].C.dt));
 }
 function setSpeed(v) {
   UI.speedLog = Math.max(SPEED_MIN, Math.min(SPEED_MAX, v));
   $('speed').value = UI.speedLog;
-  stepsMax = Math.max(stepsMax, 8);
+  S.stepsMax = Math.max(S.stepsMax, 8);
   for (const b of $('stops').querySelectorAll('button')) b.classList.toggle('on', Math.abs(+b.dataset.s - UI.speedLog) < 0.02);
   refreshReadout(false);
 }
 function syncScrub() {
-  const sc = $('scrub'), n = run ? run.snaps.length : 0;
+  const sc = $('scrub'), n = S.run ? S.run.snaps.length : 0;
   sc.max = Math.max(0, n - 1); sc.disabled = n < 2;
-  if (!run || !run.scrubbing) sc.value = run && run.viewIdx >= 0 ? run.viewIdx : 0;
-  const live = !run || run.viewIdx >= n - 1;
-  $('scrubInfo').textContent = n < 2 ? 'history fills as it runs' : live ? (UI.paused ? 'paused' : 'live') : `back in time: ${fmtTime(run.snaps[run.viewIdx].t * run.tUnitSec)} · press play to go on from here`;
+  if (!S.run || !S.run.scrubbing) sc.value = S.run && S.run.viewIdx >= 0 ? S.run.viewIdx : 0;
+  const live = !S.run || S.run.viewIdx >= n - 1;
+  $('scrubInfo').textContent = n < 2 ? 'history fills as it runs' : live ? (UI.paused ? 'paused' : 'live') : `back in time: ${fmtTime(S.run.snaps[S.run.viewIdx].t * S.run.tUnitSec)} · press play to go on from here`;
   $('story').classList.toggle('past', !live);
 }
 // open one panel (drawer, popover, modal); null closes them all
@@ -1169,7 +1162,7 @@ function openPanel(id) {
   for (const p of PANELS) { const el = $(p), on = p === id && el.classList.contains('off'); el.classList.toggle('off', !on); }
   for (const [b, p] of [['scenBtn', 'gallery'], ['dispBtn', 'display'], ['advBtn', 'advanced'], ['detBtn', 'details'], ['helpBtn', 'explain'], ['dockDisp', 'display'], ['dockMore', 'moreMenu']]) $(b).classList.toggle('on', !$(p).classList.contains('off'));
   document.body.classList.toggle('drawer-open', !$('advanced').classList.contains('off') || !$('details').classList.contains('off'));
-  if (id === 'details' && run) refreshReadout(true);
+  if (id === 'details' && S.run) refreshReadout(true);
 }
 function buildUI() {
   // the gallery
@@ -1239,13 +1232,13 @@ function buildUI() {
   // the scrubber: drag to go back; it pauses
   const sc = $('scrub');
   sc.addEventListener('input', () => {
-    if (!run || run.phase !== 'orbit') return;
+    if (!S.run || S.run.phase !== 'orbit') return;
     if (!UI.paused) setPaused(true);
-    run.scrubbing = true;
+    S.run.scrubbing = true;
     const i = +sc.value;
-    if (allFree()) restoreSnap(i); else run.pendingRestore = i;
+    if (allFree()) restoreSnap(i); else S.run.pendingRestore = i;
   });
-  sc.addEventListener('change', () => { if (run) run.scrubbing = false; syncScrub(); });
+  sc.addEventListener('change', () => { if (S.run) S.run.scrubbing = false; syncScrub(); });
   // panels
   $('scenBtn').addEventListener('click', () => openPanel('gallery'));
   $('dispBtn').addEventListener('click', () => openPanel('display'));
@@ -1385,7 +1378,7 @@ function bindPointer() {
 let band = null, bandAt = -1e9;
 function occlusion(w, h) {
   const o = { l: 0, r: 0, t: 0, b: 0 };
-  if (saverOn) {
+  if (S.saverOn) {
     const now = performance.now();
     if (now - bandAt > 250) { bandAt = now; band = plateBand(h); }
     if (band) { let t = band.t, b = band.b; const k = (t + b) / (0.65 * h); if (k > 1) { t /= k; b /= k; } o.t = t; o.b = b; }
@@ -1409,57 +1402,57 @@ function occlusion(w, h) {
 // alone, a readback, the worker analysis, then the render stages and each
 // scene draw alone.
 async function profile(n = 7) {
-  profiling = true;
+  S.profiling = true;
   await new Promise(r => setTimeout(r, 100));
   const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
-  const q = dev.queue, s = run.sats[0], g = s.gpu, out = {};
+  const q = S.dev.queue, s = S.run.sats[0], g = s.gpu, out = {};
   const time = async fn => { await q.onSubmittedWorkDone(); const t0 = performance.now(); await fn(); await q.onSubmittedWorkDone(); return performance.now() - t0; };
   const rep = async (name, fn) => { const a = []; for (let i = 0; i < n; i++) a.push(await time(fn)); out[name] = +med(a).toFixed(2); };
   const steps = Math.max(1, Math.round(stepsWanted()));
-  await rep('sim 1 block', () => { const e = dev.createCommandEncoder(); for (const x of run.sats) x.gpu.encode(e, 1, false); q.submit([e.finish()]); });
-  await rep(`sim ${steps} steps (one frame at this speed)`, () => { const e = dev.createCommandEncoder(); for (const x of run.sats) x.gpu.encodeSteps(e, steps, false); q.submit([e.finish()]); });
-  await rep('gravity sum', () => { const e = dev.createCommandEncoder(); const p = e.beginComputePass(); for (const x of run.sats) x.gpu._dispatch(p, 'gravity', x.gpu.bg.gravity, null, x.gpu.np); p.end(); q.submit([e.finish()]); });
+  await rep('sim 1 block', () => { const e = S.dev.createCommandEncoder(); for (const x of S.run.sats) x.gpu.encode(e, 1, false); q.submit([e.finish()]); });
+  await rep(`sim ${steps} steps (one frame at this speed)`, () => { const e = S.dev.createCommandEncoder(); for (const x of S.run.sats) x.gpu.encodeSteps(e, steps, false); q.submit([e.finish()]); });
+  await rep('gravity sum', () => { const e = S.dev.createCommandEncoder(); const p = e.beginComputePass(); for (const x of S.run.sats) x.gpu._dispatch(p, 'gravity', x.gpu.bg.gravity, null, x.gpu.np); p.end(); q.submit([e.finish()]); });
   await rep('readback', async () => { await g.readback(); });
   { const a = []; for (let i = 0; i < 3; i++) { const rb = await g.readback(); const t0 = performance.now(); await workerCall({ type: 'analyze', N: s.N, np: g.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24 }, [rb.body.buffer, rb.grav.buffer]); a.push(performance.now() - t0); } out['analysis (worker, CPU)'] = +med(a).toFixed(2); }
-  run.t = run.sats[0].gpu.t;
-  const { frame, sims } = run.lastFrame;
-  if (dev.features.has('timestamp-query')) {
+  S.run.t = S.run.sats[0].gpu.t;
+  const { frame, sims } = S.run.lastFrame;
+  if (S.dev.features.has('timestamp-query')) {
     // GPU timestamps: the sim steps of one frame at this speed, then each
     // render stage, all in one submit
     const runs = [];
-    for (let i = 0; i < n; i++) runs.push(await ren.renderGPU(frame, sims, null, enc => {
-      for (const x of run.sats) { x.gpu.tw = () => ren._tw('sim ' + steps + ' steps'); x.gpu.encodeSteps(enc, steps, false); x.gpu.tw = null; }
+    for (let i = 0; i < n; i++) runs.push(await S.ren.renderGPU(frame, sims, null, enc => {
+      for (const x of S.run.sats) { x.gpu.tw = () => S.ren._tw('sim ' + steps + ' steps'); x.gpu.encodeSteps(enc, steps, false); x.gpu.tw = null; }
     }));
     for (const k of Object.keys(runs[0])) out['GPU ' + k] = +med(runs.map(x => x[k] || 0)).toFixed(3);
     out['GPU frame at this speed'] = +med(runs.map(x => Object.values(x).reduce((a, v) => a + v, 0))).toFixed(3);
     for (const d of ['sky', 'surface', 'part', 'disk', 'field', 'lines', 'atmo']) {
-      const a = []; for (let i = 0; i < n; i++) a.push((await ren.renderGPU(frame, sims, { [d]: true })).scene);
+      const a = []; for (let i = 0; i < n; i++) a.push((await S.ren.renderGPU(frame, sims, { [d]: true })).scene);
       out['GPU scene: ' + d + ' alone'] = +med(a).toFixed(3);
     }
   }
-  const st = []; for (let i = 0; i < n; i++) st.push(await ren.renderTimed(frame, sims));
+  const st = []; for (let i = 0; i < n; i++) st.push(await S.ren.renderTimed(frame, sims));
   for (const k of Object.keys(st[0])) out['render ' + k] = +med(st.map(x => x[k])).toFixed(2);
   for (const d of ['sky', 'surface', 'part', 'disk', 'field', 'lines', 'atmo']) {
-    const a = []; for (let i = 0; i < n; i++) a.push((await ren.renderTimed(frame, sims, { [d]: true })).scene);
+    const a = []; for (let i = 0; i < n; i++) a.push((await S.ren.renderTimed(frame, sims, { [d]: true })).scene);
     out['scene: ' + d + ' alone'] = +med(a).toFixed(2);
   }
-  { const a = []; for (let i = 0; i < n; i++) a.push((await ren.renderTimed(frame, sims, {})).scene); out['scene: empty pass'] = +med(a).toFixed(2); }
-  { const t0 = performance.now(); for (let i = 0; i < 20; i++) buildSegments(ren.W / $('gpu').clientWidth); out['CPU buildSegments'] = +((performance.now() - t0) / 20).toFixed(2); }
+  { const a = []; for (let i = 0; i < n; i++) a.push((await S.ren.renderTimed(frame, sims, {})).scene); out['scene: empty pass'] = +med(a).toFixed(2); }
+  { const t0 = performance.now(); for (let i = 0; i < 20; i++) buildSegments(S.ren.W / $('gpu').clientWidth); out['CPU buildSegments'] = +((performance.now() - t0) / 20).toFixed(2); }
   { const t0 = performance.now(); for (let i = 0; i < 10; i++) refreshReadout(false); out['CPU readouts'] = +((performance.now() - t0) / 10).toFixed(2); }
-  out.canvas = `${ren.W}x${ren.H}`; out.N = run.sats.map(x => x.N).join('+'); out.field = UI.field; out['steps per frame'] = steps;
-  profiling = false;
+  out.canvas = `${S.ren.W}x${S.ren.H}`; out.N = S.run.sats.map(x => x.N).join('+'); out.field = UI.field; out['steps per frame'] = steps;
+  S.profiling = false;
   return out;
 }
 
 function debugState() {
-  if (!run) return null;
+  if (!S.run) return null;
   return {
-    phase: run.phase, scen: UI.scen, story: run.storyKey, storyT: Object.fromEntries(Object.entries(run.story).map(([k, v]) => [k, +(v / run.T0).toFixed(3)])),
-    quality: { preset: Q.preset, scale: Q.scale, bloom: Q.bloom, stepsMax, px: ren.W * ren.H }, cam: Object.assign({}, camStats, { prev: undefined }), calm: UI.calm,
-    orbitsPerMin: orbitsPerMin(), gotOrbitsPerMin: run.sats[0] ? run.rate * run.sats[0].C.dt / run.T0 * 60 : 0, paused: UI.paused,
-    t: run.t, T0: run.T0, orbits: run.t / run.T0, hours: run.t * (run.tUnitSec || 0) / 3600, snaps: run.snaps.length, viewIdx: run.viewIdx, wallS: (performance.now() - run.started) / 1000,
-    gpuMs, cpuMs, stepsMax, fps,
-    sats: run.sats.filter(s => s.ref).map(s => ({ N: s.N, mat: s.matName, f: s.an && s.an.f, drift: s.an && s.an.drift, Ldrift: s.an && s.an.Ldrift, groups: s.an && s.an.groups, accreted: s.an && s.an.accreted, overflow: s.gpu.overflow, d: Math.hypot(...satState(s).r) / s.Rp, drag: s.pl.drag })),
+    phase: S.run.phase, scen: UI.scen, story: S.run.storyKey, storyT: Object.fromEntries(Object.entries(S.run.story).map(([k, v]) => [k, +(v / S.run.T0).toFixed(3)])),
+    quality: { preset: Q.preset, scale: Q.scale, bloom: Q.bloom, stepsMax: S.stepsMax, px: S.ren.W * S.ren.H }, cam: Object.assign({}, camStats, { prev: undefined }), calm: UI.calm,
+    orbitsPerMin: orbitsPerMin(), gotOrbitsPerMin: S.run.sats[0] ? S.run.rate * S.run.sats[0].C.dt / S.run.T0 * 60 : 0, paused: UI.paused,
+    t: S.run.t, T0: S.run.T0, orbits: S.run.t / S.run.T0, hours: S.run.t * (S.run.tUnitSec || 0) / 3600, snaps: S.run.snaps.length, viewIdx: S.run.viewIdx, wallS: (performance.now() - S.run.started) / 1000,
+    gpuMs: S.gpuMs, cpuMs: S.cpuMs, stepsMax: S.stepsMax, fps: S.fps,
+    sats: S.run.sats.filter(s => s.ref).map(s => ({ N: s.N, mat: s.matName, f: s.an && s.an.f, drift: s.an && s.an.drift, Ldrift: s.an && s.an.Ldrift, groups: s.an && s.an.groups, accreted: s.an && s.an.accreted, overflow: s.gpu.overflow, d: Math.hypot(...satState(s).r) / s.Rp, drag: s.pl.drag })),
   };
 }
 
@@ -1486,7 +1479,6 @@ const SHOTS = [
   { key: 'comet', scen: 'flyby', title: 'A comet torn into a string of pearls', warm: r => r.tPeri !== undefined ? (r.tPeri / r.T0 - 0.8) : 0, speed: 2, hold: 40,
     until: r => r.t / r.T0 > r.tPeri / r.T0 + 5, cam: { zoom: 0.9, el: 0.6, az: 1.2, spin: 0.5 } },
 ];
-let saver = null;
 const WGSL_EXTRACT = `// shaders/sim.wgsl · cs_forces: one contact
 let Fn = max(0.0, P.kn * (-gap) - P.gnK * sm * vn);
 F = Fn * n;
@@ -1496,23 +1488,23 @@ if (length(ft) > cap) { ft = ft * (cap / length(ft)); }
 // then the tide, relative to the frame point X
 td = tide(S.X, xi0);`;
 function saverCamera(g, dt) {
-  const sh = saver.cur; if (!sh) return;
+  const sh = S.saver.cur; if (!sh) return;
   const c = sh.cam;
-  saver.az += dt * saver.spin;
-  const prog = Math.min(1, (performance.now() - saver.shotAt) / (saver.hold * 1000));
+  S.saver.az += dt * S.saver.spin;
+  const prog = Math.min(1, (performance.now() - S.saver.shotAt) / (S.saver.hold * 1000));
   const ease = prog * prog * (3 - 2 * prog);
-  g.az = (c.az ?? 0.9) + saver.az;
+  g.az = (c.az ?? 0.9) + S.saver.az;
   g.el = c.elTo !== undefined ? c.el + (c.elTo - c.el) * ease : (c.el ?? g.el);
   const z = c.zoomTo !== undefined ? c.zoom + (c.zoomTo - c.zoom) * ease : c.zoom * (1 - 0.06 * ease);
   g.dist = g.dist / (cam.zoom || 1) * z;
 }
 function saverLabel() {
-  if (!saver || !saver.opts.label || !run || run.phase !== 'orbit' || !run.sats[0].ref) return;
-  const s = run.sats[0], L = run.limits || limitsFor(run.spec);
+  if (!S.saver || !S.saver.opts.label || !S.run || S.run.phase !== 'orbit' || !S.run.sats[0].ref) return;
+  const s = S.run.sats[0], L = S.run.limits || limitsFor(S.run.spec);
   const st = satState(s), dNow = Math.hypot(...st.r) / s.Rp;
-  const bnd = run.sats.map(x => x.an ? (100 * x.an.f).toFixed(0) + '%' : '100%').join(' / ');
-  saver.opts.label({
-    title: 'Roche limit', sub: saver.cur ? saver.cur.title : '',
+  const bnd = S.run.sats.map(x => x.an ? (100 * x.an.f).toFixed(0) + '%' : '100%').join(' / ');
+  S.saver.opts.label({
+    title: 'Roche limit', sub: S.saver.cur ? S.saver.cur.title : '',
     params: [
       { sym: 'd/R_p', name: 'distance', value: dNow.toFixed(2), cls: 'm5' },
       { sym: 'd_\\mathrm{fluid}', name: 'Roche limit', value: L.fluid.toFixed(2) + ' R_p', cls: 'm1' },
@@ -1521,18 +1513,18 @@ function saverLabel() {
     tex: ['d_\\mathrm{fluid} \\approx 2.44\\,R_p\\left(\\rho_p/\\rho_s\\right)^{1/3}'],
     rules: [['d_\\mathrm{fluid}', 'm1'], ['R_p', 'm5']],
     eq: ['d_fluid ≈ 2.44 R_p (ρ_p/ρ_s)^(1/3)'],
-    lines: [storyText(run.storyKey), `${s.N.toLocaleString()} grains · self-gravity, contacts, tide on the GPU`],
+    lines: [storyText(S.run.storyKey), `${s.N.toLocaleString()} grains · self-gravity, contacts, tide on the GPU`],
     code: { lang: 'wgsl', name: 'sim.wgsl · cs_forces', text: WGSL_EXTRACT },
     anchor: () => {
       const cs = $('gpu');
-      const q = ren.project([0, 0, 0], cs.clientWidth, cs.clientHeight);
+      const q = S.ren.project([0, 0, 0], cs.clientWidth, cs.clientHeight);
       if (!q) return null;
-      return { x: q.x, y: q.y, r: Math.max(8, ren.focal / q.w / (ren.H / cs.clientHeight)) };
+      return { x: q.x, y: q.y, r: Math.max(8, S.ren.focal / q.w / (S.ren.H / cs.clientHeight)) };
     },
   });
 }
 function saverScenario() {
-  const sv = saver;
+  const sv = S.saver;
   if (!sv.queue.length) {
     // the Saturn story first in each round, then the other two in a seeded
     // order; never the same shot twice in a row
@@ -1558,54 +1550,54 @@ function saverScenario() {
 }
 // Called each frame by drawFrame: the fade, as an exposure factor.
 function saverFade(dt) {
-  const sv = saver; if (!sv) return 1;
+  const sv = S.saver; if (!sv) return 1;
   const rate = sv.fadeTarget > sv.fade ? 0.5 : 0.7;   // 2 s in, 1.4 s out
   sv.fade += Math.sign(sv.fadeTarget - sv.fade) * Math.min(Math.abs(sv.fadeTarget - sv.fade), rate * dt);
   return sv.fade;
 }
 window.snSaver = {
   async enter(opts) {
-    saverOn = true;
+    S.saverOn = true;
     await bootReady;
     document.documentElement.classList.add('sn-saver');
     openPanel(null);
     let seed = (opts.seed >>> 0) || 1;
     const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     const calm = Math.max(Math.min(1, Math.max(0, opts.calm ?? 0.7)), RM_Q.matches ? 1 : 0);
-    saver = { opts, rnd, calm, queue: [], cur: null, az: 0, spin: 0, hold: 40, shotAt: performance.now(), fade: 0, fadeTarget: 0, state: 'warm', speed: 100 };
+    S.saver = { opts, rnd, calm, queue: [], cur: null, az: 0, spin: 0, hold: 40, shotAt: performance.now(), fade: 0, fadeTarget: 0, state: 'warm', speed: 100 };
     if (RM_Q.matches) UI.calm = true;
     UI.paused = false;
     resetCamStats();
     UI.N = Math.min(UI.N, 8192);
     resize();
     saverScenario();
-    saver.tick = setInterval(() => {
-      if (!saverOn) return;
-      const sv = saver;
+    S.saver.tick = setInterval(() => {
+      if (!S.saverOn) return;
+      const sv = S.saver;
       if (sv.state === 'fadeout') { if (sv.fade <= 0.001) saverScenario(); return; }
-      if (!run || run.phase !== 'orbit') return;
+      if (!S.run || S.run.phase !== 'orbit') return;
       if (sv.state === 'warm') {
         // the warm-up runs in the dark at full speed; then the view fades
         // in (at most 12 s of dark: a slow GPU fades in early)
-        if (run.t / run.T0 < sv.cur.shot.warm(run) && performance.now() - sv.warmAt < 12000) { sv.speed = 100; sv.shotAt = performance.now(); return; }
+        if (S.run.t / S.run.T0 < sv.cur.shot.warm(S.run) && performance.now() - sv.warmAt < 12000) { sv.speed = 100; sv.shotAt = performance.now(); return; }
         sv.speed = sv.cur.shot.speed * (sv.calm > 0.85 ? 0.75 : 1);
         cam.pose = null; sv.az = 0;
         sv.state = 'show'; sv.fadeTarget = 1; sv.shotAt = performance.now();
       }
       const until = sv.cur.shot.until;
-      if ((until && until(run)) || (performance.now() - sv.shotAt) / 1000 > sv.hold) { sv.state = 'fadeout'; sv.fadeTarget = 0; return; }
+      if ((until && until(S.run)) || (performance.now() - sv.shotAt) / 1000 > sv.hold) { sv.state = 'fadeout'; sv.fadeTarget = 0; return; }
       saverLabel();
     }, 500);
     return { canvas: $('gpu'), warmupMs: 2500 };
   },
   exit() {
-    saverOn = false;
-    if (saver) clearInterval(saver.tick);
-    saver = null;
+    S.saverOn = false;
+    if (S.saver) clearInterval(S.saver.tick);
+    S.saver = null;
     document.documentElement.classList.remove('sn-saver');
     resize();
   },
-  debug() { return saver ? { shot: saver.cur && saver.cur.shot.key, cam: saver.cur && saver.cur.cam, hold: saver.hold, state: saver.state, fade: saver.fade, camStats: Object.assign({}, camStats, { prev: undefined }), state2: debugState() } : null; },
+  debug() { return S.saver ? { shot: S.saver.cur && S.saver.cur.shot.key, cam: S.saver.cur && S.saver.cur.cam, hold: S.saver.hold, state: S.saver.state, fade: S.saver.fade, camStats: Object.assign({}, camStats, { prev: undefined }), state2: debugState() } : null; },
 };
 
 boot().catch(e => fail(e));
