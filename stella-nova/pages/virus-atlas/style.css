@@ -1,0 +1,206 @@
+/* ============================================================================
+   VIRUS ATLAS  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A dark desk with the 3D view under everything. Type comes from
+   lib/sci.css: Inter for the controls, STIX Two Text for titles. The
+   control panel is a column at the left, the fact card a column at the
+   right; main.js frames the particle in the clear part between them.
+
+     grep -n 'VIEW'       the canvas, vignette, hero, ruler, loading
+     grep -n 'CARD'       the fact card and its credit
+     grep -n 'LADDER'     the scale ladder bar and labels
+     grep -n 'PANEL'      the control column
+     grep -n 'CONTROLS'   buttons, segments, chips, select, slider
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      dock, bottom sheet, the small card
+     grep -n 'LANDSCAPE'  the phone drawer at the right edge
+     grep -n 'SAVER'      the screensaver hides all overlays
+   ========================================================================== */
+:root{
+  --bg:#05070c; --bg2:#12151c; --ink:#d9dbe0; --dim:#8a8f99; --faint:#2b2f37;
+  --line:rgba(170,190,235,0.10); --line-b:rgba(170,190,235,0.24);
+  --acc:#f0a37a; --acc2:#7cc7ff; --panel-w:330px; --card-w:330px; --top:52px; --dock-h:0px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:hidden}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,select,input{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:1px solid var(--acc);outline-offset:1px}
+[hidden]{display:none!important}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px 0 calc(var(--panel-w) + 20px);background:rgba(5,7,12,0.88);border-bottom:1px solid var(--line);pointer-events:none;transition:padding 0.28s cubic-bezier(0.4,0,0.2,1)}
+.brand{font-size:0.85rem;font-weight:500;color:var(--dim)}
+.pagetitle{font-family:var(--sci-serif);font-size:1.15rem;color:#f1eee6}
+html.in-frame{--top:0px}
+html.in-frame .topbar{display:none}
+body.panel-closed .topbar{padding-left:68px}
+#gear{position:fixed;top:7px;left:14px;z-index:40;width:38px;height:38px;border:1px solid var(--line-b);background:rgba(20,22,27,0.85);color:var(--ink);border-radius:9px;font-size:1rem;display:none}
+html.in-frame #gear{top:14px}
+@media(min-width:769px){ body.panel-closed #gear{display:block} }
+
+/* VIEW */
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(120% 95% at 50% 50%,transparent 55%,rgba(0,0,0,0.5) 100%)}
+#hero{position:fixed;z-index:5;top:calc(var(--top) + 18px);left:calc(var(--panel-w) + 26px);pointer-events:none;text-shadow:0 1px 12px rgba(0,0,0,0.9);transition:left 0.28s cubic-bezier(0.4,0,0.2,1);max-width:calc(100vw - var(--panel-w) - var(--card-w) - 80px)}
+body.panel-closed #hero{left:72px}
+#hero h1{font-family:var(--sci-serif);font-weight:400;font-size:1.9rem;line-height:1.1;color:#f6f3ec}
+#hero .sub{font-family:var(--sci-serif);font-style:italic;font-size:1rem;color:#b9bdc6;margin-top:4px}
+#ruler{position:fixed;z-index:5;left:calc(var(--panel-w) + 26px);bottom:22px;display:flex;flex-direction:column;gap:5px;pointer-events:none;font-size:0.76rem;color:#cfd3db;text-shadow:0 1px 6px #000}
+body.panel-closed #ruler{left:26px}
+#ruler i{display:block;height:6px;border:1.5px solid #e9e5da;border-top:0;transition:width 0.15s}
+#loading{position:fixed;z-index:20;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:8px;font-size:0.8rem;color:var(--dim);pointer-events:none}
+#loading i{display:block;width:160px;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--acc) calc(var(--f,0) * 100%),var(--faint) 0)}
+#toast{position:fixed;left:50%;bottom:calc(var(--dock-h) + 18px);transform:translate(-50%,20px);padding:8px 14px;border-radius:9px;background:#1a1d24;border:1px solid var(--line-b);color:var(--ink);font-size:0.8rem;opacity:0;pointer-events:none;transition:opacity 0.25s,transform 0.25s;z-index:60;max-width:90vw}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* CARD */
+#card{position:fixed;z-index:6;top:calc(var(--top) + 14px);right:14px;width:var(--card-w);max-height:calc(100% - var(--top) - 28px);overflow-y:auto;
+  background:rgba(10,12,17,0.82);border:1px solid var(--line);border-radius:14px;padding:14px 16px 16px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#card .grp{font-size:0.72rem;color:var(--dim)}
+#card .illus{font-weight:500;color:#ffcf8a;border:1px solid rgba(255,207,138,0.4);border-radius:999px;padding:1px 7px;margin-left:4px;font-size:0.66rem}
+#card h2{font-family:var(--sci-serif);font-weight:400;font-size:1.45rem;line-height:1.15;color:#f6f3ec;margin:4px 0 10px}
+#card dl{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:0.78rem;line-height:1.4}
+#card dt{color:var(--dim)}
+#card dd{color:#e6e7ea}
+#card dd small{color:var(--dim)}
+#card .tex{font-size:0.95rem}
+#card .blurb{font-size:0.8rem;line-height:1.55;color:#c9ccd3;margin:12px 0 6px}
+#card .note{font-size:0.74rem;line-height:1.5;color:var(--dim);font-style:italic;margin-bottom:8px}
+.cred{font-size:0.7rem;line-height:1.45;color:var(--dim);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+.cred a{color:var(--acc2);text-decoration:none}
+.cred a:hover{text-decoration:underline}
+#cardToggle{display:none}
+
+/* LADDER */
+#ladder{position:fixed;z-index:7;left:calc(var(--panel-w) + 18px);right:calc(var(--card-w) + 28px);bottom:16px;padding:10px 14px 12px;background:rgba(10,12,17,0.86);border:1px solid var(--line);border-radius:14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+body.panel-closed #ladder{left:18px}
+#ladder .row{display:flex;align-items:center;gap:10px}
+#ladder .row button{padding:6px 12px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:8px;font-size:0.76rem}
+#ladderScrub{flex:1;accent-color:var(--acc)}
+#ladderRead{font:0.74rem var(--sci-mono);color:var(--ink);min-width:9em;text-align:right}
+#ladderBar .track{position:relative;height:46px;margin:14px 10px 0;border-top:1px solid var(--line-b)}
+#ladderBar i{position:absolute;top:0;transform:translateX(-50%)}
+#ladderBar .tick{height:7px;border-left:1px solid var(--dim)}
+#ladderBar .tick b{position:absolute;top:9px;left:0;transform:translateX(-50%);font-weight:400;font-size:0.64rem;color:var(--dim);white-space:nowrap}
+#ladderBar .mark{top:-4px;width:7px;height:7px;border-radius:50%;background:#7c8496}
+#ladderBar .mark span{position:absolute;top:26px;left:50%;transform:translateX(-50%) rotate(0deg);font-size:0.6rem;color:#a4abb8;white-space:nowrap;opacity:0;transition:opacity 0.2s}
+#ladderBar .mark:hover span{opacity:1}
+#ladderBar .item{top:-3px;width:5px;height:5px;border-radius:50%;background:var(--acc)}
+#ladderBar .cur{top:-9px;width:3px;height:18px;border-radius:2px;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.7)}
+#ladderLabels{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+#ladderLabels .ll{position:absolute;left:0;top:0;font-family:var(--sci-serif);font-size:0.86rem;color:#ece8de;text-shadow:0 1px 8px #000;white-space:nowrap;transition:opacity 0.3s}
+body.laddering #hero .sub{display:none}
+
+/* PANEL */
+#panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(10,12,16,0.97);border-right:1px solid var(--line-b);
+  padding:66px 18px 40px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#panel.open{transform:none}
+html.in-frame #panel{padding-top:20px}
+#panelClose{position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px}
+#sheetGrip,#dock{display:none}
+.sec-label{font-size:0.8rem;font-weight:600;color:#ecebe6;margin:22px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.sec-label.first{margin-top:0;padding-top:0;border-top:0}
+.hint{font-size:0.74rem;line-height:1.55;color:var(--dim);margin:8px 0 2px}
+
+/* CONTROLS */
+.gallery{display:flex;flex-direction:column;gap:6px}
+.gallery .grp{font-size:0.7rem;color:var(--dim);margin:6px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips button{padding:5px 10px;border:1px solid var(--line-b);background:var(--bg2);color:#b9bec8;border-radius:999px;font-size:0.75rem;transition:border-color 0.2s,color 0.2s}
+.chips button:hover{border-color:var(--acc);color:var(--ink)}
+.chips button.on{border-color:var(--acc);color:var(--acc);background:rgba(240,163,122,0.08)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0}
+.seg button,.btns button{padding:8px 4px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;font-size:0.76rem;transition:border-color 0.2s,color 0.2s}
+.seg button:hover,.btns button:hover{border-color:var(--acc)}
+.seg button.on,.btns button.on{border-color:var(--acc);color:var(--acc);background:rgba(240,163,122,0.07)}
+.btns{display:flex;gap:6px;margin:8px 0}
+.btns button{flex:1}
+.prm{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 8px;margin:10px 0}
+.prm .nm{font-size:0.82rem;color:var(--ink)}
+.prm .val{font:0.74rem var(--sci-mono);color:var(--ink);text-align:right}
+.prm input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--acc);height:3px;margin-top:4px}
+.prm select{background:var(--bg2);color:var(--ink);border:1px solid var(--line-b);border-radius:7px;padding:6px 8px;font-size:0.78rem}
+.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
+.about i{font-family:var(--sci-serif);font-size:0.92rem}
+
+/* TOUCH. Any touch screen or narrow window: targets are 44px or more. */
+@media (pointer:coarse), (max-width:768px){
+  #panelClose{width:44px;height:44px}
+  .seg button,.btns button{min-height:44px;font-size:0.8rem;border-radius:10px}
+  .chips button{min-height:44px;padding:8px 13px;font-size:0.8rem}
+  .prm select{min-height:44px;font-size:0.86rem}
+  .hint{font-size:0.78rem}
+  .about p{font-size:0.84rem;line-height:1.65}
+  #ladder .row button{min-height:44px;min-width:44px}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:40px!important;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--acc);border:3px solid #0d1118;box-shadow:0 0 0 1px var(--acc)}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid #0d1118}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(64px + env(safe-area-inset-bottom));--panel-w:0px;--card-w:0px}
+  html.in-frame{--top:0px}
+  html,body{height:100dvh}
+  .topbar{padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  #gear,body.panel-closed #gear{display:none}
+  #hero{display:none}
+  #ruler,body.panel-closed #ruler{left:calc(14px + env(safe-area-inset-left));bottom:calc(var(--dock-h) + 12px)}
+  #card{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));width:auto;top:calc(var(--top) + 8px);max-height:min(58vh,520px);padding:10px 14px 12px}
+  body.card-min #card{max-height:none;overflow:hidden;padding:8px 52px 8px 14px}
+  body.card-min #card > :not(h2):not(.grp){display:none}
+  body.card-min #card h2{font-size:1.1rem;margin:2px 0 0}
+  #cardToggle{display:block;position:fixed;z-index:8;top:calc(var(--top) + 14px);right:calc(18px + env(safe-area-inset-right));width:36px;height:36px;border-radius:50%;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);font-family:var(--sci-serif);font-style:italic;font-size:1.05rem}
+  #ladder,body.panel-closed #ladder{left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 8px);padding:8px 10px}
+  #ladderBar .tick b{font-size:0.58rem}
+  #ladderRead{min-width:0;font-size:0.68rem}
+
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,12,16,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.15rem;display:flex;align-items:center;justify-content:center}
+  #dock > button.on{border-color:var(--acc);color:var(--acc);background:rgba(240,163,122,0.08)}
+  #dock svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6}
+  #dock #dockExplode svg path{fill:currentColor;stroke:none}
+  #dock > button.name{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px;font-family:var(--sci-serif);font-size:1rem;text-align:left}
+  #dock > button.name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dock > button.name i{font-style:normal;color:var(--dim);font-family:var(--sci-sans)}
+
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(52vh,540px);height:min(52dvh,540px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 28px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain;z-index:46}
+  #panel.open{transform:none}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px - env(safe-area-inset-top))}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -18px 2px;background:linear-gradient(180deg,#0a0c10 70%,rgba(10,12,16,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+}
+
+/* LANDSCAPE phone. The panel is a drawer at the right edge, the dock a
+   tab at the lower left, and the topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--top:0px}
+  .topbar{display:none}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;transform:translateX(100%)}
+  #panel.open{transform:none}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2;background:var(--bg2)}
+  #card{right:auto;width:min(46vw,360px)}
+  #ladder{left:auto;width:min(56vw,460px)}
+}
+@media(prefers-reduced-motion:reduce){#panel,.topbar,#toast,#hero{transition:none}}
+
+/* SAVER. lib/screensaver.js runs the hook; the page shows the canvas only. */
+html.sn-saver .topbar,html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #gear,html.sn-saver #hero,html.sn-saver #card,html.sn-saver #cardToggle,
+html.sn-saver #ruler,html.sn-saver #ladder,html.sn-saver #ladderLabels,html.sn-saver #toast,html.sn-saver #loading,html.sn-saver #vignette{display:none!important}
+html.sn-saver,html.sn-saver body{cursor:none}

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Virus Atlas — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   VIRUS ATLAS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The page shows real structures from the Protein Data
+   Bank in 3D: whole virus capsids (icosahedral shells, the TMV rod, the
+   HIV cone), spike and surface proteins, two enveloped virions drawn from
+   real spikes on a membrane (illustrations), and prions with other
+   amyloid fibrils. One bead per residue; the GPU makes every copy from
+   the asymmetric unit and the symmetry operators.
+
+   HEAD LOAD ORDER
+     1. gpu-guard, wishlist, stats-beacon (shared, in this order)
+     2. importmap   "three" -> ../../vendor/three@0.160.0
+     3. style.css, then ../../lib/sci.css (STIX Two Text, Inter, .m1-.m6)
+   Scripts at end of body: main.js (module).
+
+   FILES
+     catalog.js   the entries, their facts and PDB credits (node-tested)
+     format.js    the bead file reader and the copy operators (node-tested)
+     symmetry.js  axes, unit centroids, animation timing, envelope layout,
+                  scale ladder, ruler, seeded random (node-tested)
+     budget.js    the GPU memory budget of the canvas (node-tested)
+     shots.js     the screensaver plan (node-tested)
+     view.js      three.js: bead impostor shaders, membrane, stalks, axes
+     main.js      state, loading, animation, camera flights, controls
+     saver.js     the screensaver tour (window.snSaver)
+     tests.mjs    node tests
+     tools/build-data.py  mmCIF -> data/<pdb>.bin (see its header)
+     data/        the bead files and CREDITS.txt
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (entries, animate, view, scale,
+                 credits). #card at the right (facts and the PDB credit).
+                 #view (WebGL) fills the window; main.js frames the
+                 particle in the clear part between them. #ruler at the
+                 base left. #ladder at the base in the ladder mode.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: previous, name (next), build, explode,
+                 settings. #panel is a bottom sheet (portrait) or a drawer
+                 at the right (landscape). #card shrinks to its title bar
+                 at the top; tap it to open.
+
+   GREP MAP  (main.js)
+     grep -n 'function buildEntry'  grep -n 'function show'
+     grep -n 'function enterLadder' grep -n 'function frame'
+     grep -n 'function fillCard'    grep -n 'function buildUI'
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A 3D atlas of viruses and disease proteins from the Protein Data Bank: poliovirus, rhinovirus, norovirus, hepatitis B, HPV, adenovirus, Zika, HIV, TMV, SARS-CoV-2 and influenza spikes, and prion fibrils. Capsids assemble, peel, explode and slice; a scale ladder runs from one protein to a 300 nm rod.">
+<script type="importmap">
+{
+  "imports": {
+    "three": "../../vendor/three@0.160.0/build/three.module.js",
+    "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Virus Atlas</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<canvas id="view" aria-label="A virus or protein structure in 3D"></canvas>
+<div id="vignette" aria-hidden="true"></div>
+<div id="ladderLabels" aria-hidden="true"></div>
+
+<header id="hero">
+  <h1 id="heroName">Virus Atlas</h1>
+  <p class="sub" id="heroSub"></p>
+</header>
+
+<div id="ruler" hidden><i></i><span></span></div>
+<div id="loading" hidden><i></i><span>Loading structure…</span></div>
+
+<aside id="card" hidden aria-live="polite"></aside>
+<button id="cardToggle" aria-label="Show or hide the facts">i</button>
+
+<div id="ladder" hidden>
+  <div class="row">
+    <button id="ladderPlay">Pause</button>
+    <input type="range" id="ladderScrub" min="0" max="1000" step="1" value="0" aria-label="Zoom along the scale ladder">
+    <span id="ladderRead">View width</span>
+    <button id="ladderClose" aria-label="Close the scale ladder">✕</button>
+  </div>
+  <div id="ladderBar"></div>
+</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label first">Structures</div>
+  <div id="entries" class="gallery"></div>
+  <div class="btns"><button id="ladderBtn">Scale ladder: 4 nm to 300 nm</button></div>
+
+  <div class="sec-label">Animate</div>
+  <div class="seg four">
+    <button id="asmBtn" title="Build the particle again from its subunits (A)">Build</button>
+    <button id="explodeBtn" aria-pressed="false" title="Open the shell along its axes (E)">Explode</button>
+    <button id="peelBtn" aria-pressed="false" title="Lift off the near half (P)">Peel</button>
+    <button id="sliceBtn" aria-pressed="false" title="Cut with a plane (S)">Slice</button>
+  </div>
+  <div class="btns"><button id="orbitBtn">Orbit</button><button id="breatheBtn">Breathe</button><button id="swayBtn">Spike sway</button></div>
+  <p class="hint">Peel and slice cut from the side you look from. Tap a subunit to light up one copy. The build of a capsid follows its 5-fold axes, one vertex region at a time; this order is a way to show the symmetry, not the measured path of assembly.</p>
+
+  <div class="sec-label">View</div>
+  <div class="prm"><div class="nm">Colour</div>
+    <select id="colorSel" aria-label="Colour">
+      <option value="auto">Best for this structure</option>
+      <option value="protein">By protein</option>
+      <option value="chain">By chain</option>
+      <option value="copy">By copy</option>
+      <option value="radius">By radius</option>
+      <option value="structure">By secondary structure</option>
+      <option value="residue">By residue type</option>
+    </select></div>
+  <div class="btns"><button id="axesBtn">Symmetry axes</button><button id="abBtn">Hide antibodies</button><button id="glyBtn">Hide sugars</button></div>
+  <div class="prm"><div class="nm">Bead size</div><span class="val" id="beadV"></span>
+    <input type="range" id="bead" min="0.6" max="1.8" step="0.05" value="1" aria-label="Bead size"></div>
+  <p class="hint">One bead for each residue: the α-carbon of an amino acid, the phosphorus of a nucleotide, one carbon of each sugar. Axes: red pentagons mark 5-fold axes, yellow triangles 3-fold, blue lenses 2-fold.</p>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>A virus is a genome in a protein shell. A small genome codes for few proteins, so the shell is made of many copies of one or a few proteins. The most economical closed shell is an icosahedron: 60 identical copies, related by 5-fold, 3-fold and 2-fold rotation axes. Larger shells put 60 <i>T</i> subunits on a lattice where each copy has almost the same contacts (quasi-equivalence, Caspar and Klug 1962). <i>T</i> = <i>h</i>² + <i>hk</i> + <i>k</i>² takes the values 1, 3, 4, 7, 9, 12, 13 …</p>
+    <p>Other viruses are helical (tobacco mosaic virus, a rod of 2130 copies), or build a cone (the HIV capsid, closed by 12 pentamers), or wrap their capsid in a lipid membrane studded with spike proteins (coronaviruses, influenza, HIV, Ebola, rabies, measles). The spikes bind receptors on cells and fuse the membranes, and most vaccines and neutralising antibodies target them.</p>
+    <p>Prions are not viruses: they are proteins with no genome. The prion protein PrP folds into a small helical domain in healthy cells. In prion diseases (Creutzfeldt–Jakob disease, kuru, fatal familial insomnia; scrapie, BSE and chronic wasting disease in animals) it refolds into flat layers that stack into cross-β fibrils, and the fibril ends recruit and convert more PrP. Tau and α-synuclein form similar fibrils in Alzheimer's and Parkinson's disease, but these diseases do not spread between people in daily life.</p>
+    <p>Sizes for scale: a C–C bond is 0.15 nm, a folded protein 3–10 nm, a small capsid 30 nm, an enveloped virus about 100 nm, a bacterium about 2 µm, a red blood cell 7.5 µm.</p>
+  </div>
+
+  <div class="sec-label">Credits</div>
+  <div class="about" id="credits"></div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPrev" aria-label="Previous structure">‹</button>
+  <button id="dockName" class="name" aria-label="Next structure"><span id="dockTitle">…</span><i>›</i></button>
+  <button id="dockAsm" aria-label="Build again"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/><circle cx="12" cy="12" r="2.5"/></svg></button>
+  <button id="dockExplode" aria-label="Explode or close" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 2l3 5h-6zM12 22l-3-5h6zM2 12l5-3v6zM22 12l-5 3V9z"/></svg></button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
