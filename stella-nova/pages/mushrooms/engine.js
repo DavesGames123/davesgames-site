@@ -857,7 +857,7 @@ function capItems(C, K) {
 // Morel: wavy vertical ribs, cross ribs between them, and dark pits with
 // short strokes inside.
 function morelNet(C, K, thr) {
-  const { P, colors } = C;
+  const { P } = C;
   const { cap, surf, visTop, cproj, litL, rnd, nz, capIt } = K;
   const nRib = clamp(10 + Math.round(P.markN / 14), 8, 26), nRow = clamp(5 + Math.round(P.markN / 22), 4, 14);
   const ribPhi = (k, u) => TAU * k / nRib + 0.32 * (TAU / nRib) * nz(k * 2.3, u * 3.2);
@@ -913,7 +913,6 @@ function morelNet(C, K, thr) {
       }
     }
   }
-  void colors;
 }
 
 // ── underItems ──────────────────────────────────────────────────────────────
@@ -1007,7 +1006,7 @@ function underItems(C, K) {
 // is ray-marched through the cap of the same body, and the stem fill is cut
 // at the height where the cap starts to hide its front.
 function stemItems(C, K) {
-  const { P, se, ce, colors } = C;
+  const { P, colors } = C;
   const { b, spine, rho, proj, toL, rayHit, cap, rnd, nz, R } = K;
   const H = b.H, below = C.e < 0;
   const hidden = w => {
@@ -1191,7 +1190,6 @@ function stemItems(C, K) {
     }
     back.push(vBack); front.push(vFront);
   }
-  void se; void ce;
   return { stem, back, front };
 }
 
