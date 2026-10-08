@@ -10,11 +10,13 @@
 //    speed limits ...... "const ROT_MAX"
 //    goal of a mode .... "function camGoal"
 //    framing ........... "function poseOf"
+//    story camera ...... "function storyActive" (app/director.js)
 //    governor .......... "function cameraFrame"
 //    motion stats ...... "function finishPose"
 // ============================================================================
 import { cross, norm, sub } from '../render.js';
 import { saverCamera } from './saver.js';
+import { storyGoal, smoothStory } from './director.js';
 import { orbitsPerMin } from './loop.js';
 import { UI } from './env.js';
 import { occlusion } from './occlusion.js';
@@ -40,7 +42,7 @@ const ROT_MAX = { calm: 2.5, normal: 4 };        // deg/s, view turn
 const ROT_BOOST = 6;                              // deg/s, after a button choice
 const LIN_MAX = { calm: 0.025, normal: 0.035 };  // target speed / distance, 1/s
 const ZOOM_MAX = { calm: 0.08, normal: 0.12 };   // d(ln dist)/dt, 1/s
-export const cam = { az: 0.9, el: 0.22, zoom: 1, pose: null, user: false, dragging: false, boostUntil: 0, vr: 0, vl: 0, vz: 0, fastFollow: false };
+export const cam = { az: 0.9, el: 0.22, zoom: 1, pose: null, user: false, dragging: false, boostUntil: 0, vr: 0, vl: 0, vz: 0, fastFollow: false, story: null };
 export const camStats = { rotDegS: 0, rotDegFrame: 0, planetDegFrame: 0, planetDegS: 0, frames: 0, userFrames: 0, prev: null };
 export function resetCamStats() { Object.assign(camStats, { rotDegS: 0, rotDegFrame: 0, planetDegFrame: 0, planetDegS: 0, frames: 0, userFrames: 0, prev: null }); }
 // sim time per real second at the current speed
@@ -49,7 +51,7 @@ function camGoal(cssW, cssH) {
   const s = S.run.sats[0];
   const Rw = (s.Rs || s.C.Rs) * s.k;
   let target, dist, el = cam.el;
-  let mode = UI.cam;
+  let mode = UI.cam === 'story' ? 'planet' : UI.cam;
   cam.fastFollow = false;
   if (mode === 'follow' && S.run.phase === 'orbit') {
     // how fast does the moon go round the planet, in real time?
@@ -102,7 +104,20 @@ function turnToward(a, b, ang) {
   const cs = Math.cos(ang), sn = Math.sin(ang), d = ax[0] * a[0] + ax[1] * a[1] + ax[2] * a[2], x = cross(ax, a);
   return [0, 1, 2].map(i => a[i] * cs + x[i] * sn + ax[i] * d * (1 - cs));
 }
+// The story camera (app/director.js) runs in place of the governor: its
+// motion is planned and sprung, not a chase. Reduce motion and the
+// settle phase use the planet view.
+export function storyActive() { return UI.cam === 'story' && !UI.calm && S.run && S.run.phase === 'orbit' && !!S.run.shot && !!S.run.pace; }
 export function cameraFrame(dtReal, cssW, cssH) {
+  if (storyActive()) {
+    const user = cam.dragging || performance.now() < (cam.userUntil || 0);
+    const sg = smoothStory(storyGoal(dtReal), dtReal, user);
+    if (S.saverOn && S.saver) saverCamera(sg, dtReal);
+    const want = poseOf(sg, cssW, cssH);
+    cam.pose = { eye: want.eye, target: want.target };
+    return finishPose(dtReal, false, user);
+  }
+  cam.story = null;
   const g = camGoal(cssW, cssH);
   if (S.saverOn && S.saver) saverCamera(g, dtReal);
   const want = poseOf(g, cssW, cssH);

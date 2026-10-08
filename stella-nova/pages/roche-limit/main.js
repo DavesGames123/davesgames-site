@@ -11,7 +11,9 @@
 //
 //  TIME. The speed is in orbits (of the start orbit) per minute of wall
 //  time, on a log slider with three labelled stops (Slow 1.5, Normal 6,
-//  Fast 24). Each frame runs the steps that the speed asks for, capped by
+//  Fast 24). The story clock (pacing.js) multiplies it: x4 on the
+//  approach, down to x0.3 (slow motion) at the breakup, x3 as the ring
+//  spreads. The story strip prints the time warp. Each frame runs the steps that the speed asks for, capped by
 //  a GPU budget (queue.onSubmittedWorkDone). Pause (Space) stops the steps;
 //  the camera, the drag and the drawing stay live. Step (. and ,) runs
 //  1/100 or 1/10 of an orbit while paused.
@@ -33,12 +35,14 @@
 //  phase has a one-line caption; the phase strip marks the phases reached
 //  and seeks to them.
 //
-//  CAMERA. Planet-fixed and calm: the default view looks at the planet from
-//  a fixed direction and distance (run.viewD) and never follows the moon.
-//  A governor caps the turn of the view at ROT_MAX (4 deg/s, 2.5 with
-//  Reduce motion; 6 deg/s for a button choice), with no roll (up is +z).
-//  Follow is opt-in and falls back to the planet view when the moon goes
-//  round faster than FOLLOW_MAX_DEG per real second.
+//  CAMERA. The default is the story camera (app/director.js): a wide shot,
+//  a push in to the moon as it breaks up, a pull out to the ring, on
+//  springs, with the view turning at most a few degrees a second. The
+//  start orbit is turned about the planet's axis so the breakup happens
+//  in front of the view. Planet, From above and Follow are as before: a
+//  governor caps the turn at ROT_MAX (4 deg/s, 2.5 with Reduce motion;
+//  6 deg/s for a button choice), with no roll (up is +z). Reduce motion
+//  puts the story camera on the planet view.
 //
 //  MODULE TREE (app/, one concern per file; each file has its own grep list)
 //    env.js        $, device queries, constants, QUALITY, Q, UI
@@ -51,6 +55,7 @@
 //    story.js      updatePhase / storyText / syncStory / seekPhase
 //    sat.js        satCentre / satState
 //    camera.js     cam / camStats / camGoal / poseOf / cameraFrame
+//    director.js   planShots / storyGoal / smoothStory (the story camera)
 //    lines.js      segs / buildSegments
 //    field.js      fieldParams / smoothField
 //    draw.js       drawFrame

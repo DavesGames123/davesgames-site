@@ -22,7 +22,9 @@
      engine.js    SimGPU: the compute pipelines for one moon
      render.js    Renderer: sky, planet, grains, ring layer, field, lines,
                   bloom
-     worker.js    bound mass and energy for each readback (module worker)
+     worker.js    bound mass, energy and shape for each readback (worker)
+     pacing.js    the story clock: fast approach, slow motion at the breakup
+     budget.js    pixel ratio, MSAA and the GPU memory of the page
      scenarios.js the scenarios, the real bodies, the story lines
      plots.js     the plots (canvas 2D)
      main.js      boot, frame loop, time controls, camera, story, UI, saver
@@ -33,7 +35,7 @@
      │ #bar [scenario ▾] [⟲ ❚❚ › »] [Slow Normal Fast ──●──] clock [Display │
      │      Advanced Details ?]                                          │
      │                                                                   │
-     │ #gpu  the scene: the planet stays still, the moon goes round      │
+     │ #gpu  the scene, filmed by the story camera (or a fixed view)     │
      │                                                                   │
      │ #readouts (distance bar,      #story  caption, time warp, phases, │
      │  one-piece share)                     time scrubber               │
@@ -127,7 +129,7 @@
 
 <div id="display" class="pop off" role="dialog" aria-label="Display">
   <div class="pg"><div class="ph">View</div>
-    <div class="seg" id="cams"><button data-c="planet">Planet</button><button data-c="top">From above</button><button data-c="follow">Follow moon</button></div>
+    <div class="seg" id="cams"><button data-c="story">Story</button><button data-c="planet">Planet</button><button data-c="top">From above</button><button data-c="follow">Follow moon</button></div>
     <p class="hint" id="camHint"></p></div>
   <div class="pg"><div class="ph">Colour the grains by</div>
     <div class="seg" id="colors"><button data-k="4">Ice &amp; heat</button><button data-k="3">Heat</button><button data-k="0">In one piece?</button><button data-k="2">Tide strain</button></div></div>

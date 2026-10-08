@@ -53,7 +53,7 @@ export const UI = {
   N: (PHONE_Q.matches || COARSE) ? 4096 : 8192,
   quality: 'auto', showFps: false,
   speedLog: 0.78, paused: false,
-  cam: 'planet', color: 4, field: 0,
+  cam: 'story', color: 4, field: 0,
   rings: true, real: true, hill: false, pred: true, track: true, ringOn: true, blur: false, ringGain: 2,
   calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches,   // Reduce motion
 };

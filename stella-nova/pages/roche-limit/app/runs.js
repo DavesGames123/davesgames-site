@@ -23,6 +23,7 @@ import { workerCall } from './jobs.js';
 import { refreshReadout } from './readout.js';
 import { S, pileCache } from './state.js';
 import { syncStory } from './story.js';
+import { planShots } from './director.js';
 
 export function currentSpec() {
   const sc = SCENARIOS.find(s => s.key === UI.scen);
@@ -191,6 +192,10 @@ export async function placeSats(serial) {
   S.run.tUnitSec = Math.sqrt(s0.pile.st.rho / (G_SI * rhoReal * 1000));
   S.run.heatRef = 0.006 * s0.C.vesc * s0.C.vesc;
   S.run.pace = directed(spec.kind) ? newPace() : null;
+  // the story camera turns the start orbit about the planet's axis (no
+  // change to the physics); the first forces are then found again
+  planShots(S.saverOn && S.saver && S.saver.cur ? { az: S.saver.cur.az } : {});
+  for (const s of S.run.sats) s.gpu.prime();
   S.run.phase = 'orbit'; S.run.t = 0; S.run.recorded = false; S.run.track = [];
   S.run.lastRead = 0;
   setBusy(false);

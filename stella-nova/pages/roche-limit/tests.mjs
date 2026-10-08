@@ -23,6 +23,8 @@
 //     of the frame loop that drives a CPU pile (N = 800) with the director
 //     of pacing.js; it must be under 5 s. The screensaver's budget too.
 //     node tests.mjs --pace runs test 8 only; --pace-old adds the old run.
+//  10 story camera: the default run's trace through app/director.js (node,
+//     DOM stubbed): view turn rate, the moon in frame, the pull-out
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
 //     for desktop and phone profiles, against budget.js LIMIT; phones get
 //     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
@@ -278,8 +280,10 @@ function paceRun(cfg) {
   const pace = cfg.director ? PC.newPace() : null;
   const frameS = 1 / prof.fps, cpuStepOrbit = C.dt / T0;
   let wall = cloudS + settleS, carryO = 0, carryCpu = 0, lastRead = 0, orbits = 0;
-  const out = { cloudS, settleS, stepsOrbit, dF, tShed: null, tTorn: null, oShed: null, oTorn: null, dShed: null, slowAt: null };
-  while (wall < 60) {
+  const out = { cloudS, settleS, stepsOrbit, dF, tShed: null, tTorn: null, oShed: null, oTorn: null, dShed: null, slowAt: null,
+    trace: cfg.trace ? [] : null, meta: { pl: Object.assign({}, pl), o, T0, Rs: st.R, M0: st.M, kappa: pl.drag } };
+  let an = null, f = 1, el = 1, spread = st.R, comAll = [0, 0, 0], tRead = 0, stopAt = Infinity;
+  while (wall < 60 && wall < stopAt) {
     const factor = pace ? PC.stepFactor(pace, frameS) : 1;
     if (pace && pace.mode === 'breakup' && out.slowAt === null) out.slowAt = wall;
     const want = cfg.speed * factor / 60 * frameS;                    // orbits this frame
@@ -293,32 +297,84 @@ function paceRun(cfg) {
     wall += frameS;
     if ((wall - lastRead) * 1000 >= cfg.readMs) {
       lastRead = wall;
-      const an = P.analyzeBound(s2.x, s2.v, s2.mass, s2.rad, 3, ref.X, pl.GM);
-      const f = an.M / st.M, el = P.boundShape(s2.x, s2.mass, an.mask, an.com).el;
+      an = P.analyzeBound(s2.x, s2.v, s2.mass, s2.rad, 3, ref.X, pl.GM);
+      f = an.M / st.M; el = P.boundShape(s2.x, s2.mass, an.mask, an.com).el; tRead = orbits * T0;
+      if (cfg.trace) { // as worker.js: the centre and the rms spread of all grains left
+        let Ma = 0, s2s = 0; comAll = [0, 0, 0];
+        for (let i = 0; i < N; i++) { const m = s2.mass[i]; if (!m) continue; Ma += m; for (let k = 0; k < 3; k++) comAll[k] += m * s2.x[3 * i + k]; }
+        comAll = comAll.map(q => q / Ma);
+        for (let i = 0; i < N; i++) { const m = s2.mass[i]; if (!m) continue; s2s += m * ((s2.x[3 * i] - comAll[0]) ** 2 + (s2.x[3 * i + 1] - comAll[1]) ** 2 + (s2.x[3 * i + 2] - comAll[2]) ** 2); }
+        spread = Math.sqrt(s2s / Ma);
+      }
       if (pace) PC.updatePace(pace, { f, el }, orbits * T0, T0);
       const d = Math.hypot(...ref.X) / pl.Rp;
       if (out.tShed === null && f < 0.97) { out.tShed = wall; out.oShed = orbits; out.dShed = d / dF; }
-      if (out.tTorn === null && f < 0.75) { out.tTorn = wall; out.oTorn = orbits; break; }
+      if (out.tTorn === null && f < 0.75) { out.tTorn = wall; out.oTorn = orbits; stopAt = cfg.trace ? wall + cfg.trace : wall; }
     }
+    if (cfg.trace) out.trace.push({ wall, X: ref.X.slice(), V: ref.V.slice(), t: orbits * T0, pace: pace ? Object.assign({}, pace) : null, drag: pl.drag,
+      an: an ? { f, el, live: f > 0.2 && an.M > 0, com: an.com.slice(), vcm: an.vcm.slice(), t: tRead, spread, comAll: comAll.slice(), vcmAll: [0, 0, 0] } : null });
   }
   return out;
 }
-function paceTests(old) {
+async function paceTests(old) {
   const sc = SCENARIOS.find(x => x.key === 'saturn');
   const base = { q: sc.q, s: sc.s, J2: sc.J2, speed: sc.speed };
   const cur = Object.assign({}, base, { d0: sc.d, d1: sc.d1, orbits: sc.orbits, director: true, settleTime: PC.SETTLE_TIME, readMs: PC.READ_MS.story });
   const fmt = r => `cloud ${r.cloudS.toFixed(2)} s + settle ${r.settleS.toFixed(2)} s; first shed at ${r.tShed?.toFixed(2)} s (${r.oShed?.toFixed(3)} orbit, d = ${r.dShed?.toFixed(3)} d_fluid), slow motion from ${r.slowAt?.toFixed(2) ?? '-'} s, 25% shed at ${r.tTorn?.toFixed(2)} s (${r.oTorn?.toFixed(3)} orbit)`;
-  const a = paceRun(cur);
+  const a = paceRun(Object.assign({ trace: CAMERA ? 7 : 0 }, cur));
   ok('pacing: default run (Saturn, Normal, desktop budget) sheds within 5 s', a.tShed !== null && a.tShed < 5, fmt(a));
   ok('pacing: the slow motion starts before the first shed grains', a.slowAt !== null && a.slowAt <= a.tShed, `slow motion at ${a.slowAt?.toFixed(2)} s, first shed at ${a.tShed?.toFixed(2)} s`);
   // the screensaver: its base speed (pacing.js SAVER_SPEED); the pile is
   // in the cache after the first run, so no settle
   const sv = paceRun(Object.assign({}, cur, { speed: PC.SAVER_SPEED, settleTime: 0 }));
   ok('pacing: screensaver run (cached pile) sheds within 4 s', sv.tShed !== null && sv.tShed - sv.cloudS < 4, `first shed ${(sv.tShed - sv.cloudS).toFixed(2)} s after the start (no cloud, no settle)`);
+  if (CAMERA) await cameraTests(a, sc);
   if (old) {
     const b = paceRun(Object.assign({}, base, { d0: 2.7, d1: 1.7, orbits: 4, director: false, settleTime: 6, readMs: 1000, settlePerFrame: 64 }));
     console.log(`INFO  old pacing (2.7 -> 1.7 in 4 orbits, one speed, settle 6 at 64 steps/frame): ${fmt(b)}`);
   }
+}
+
+// 10 ─ the story camera (app/director.js) on the default run, replayed in
+// node with stubs for the DOM: the view turns slowly, it keeps the moon
+// in frame through the breakup, and it pulls out to the planet after it.
+async function cameraTests(run, sc) {
+  const mq = () => ({ matches: false, addEventListener() {} });
+  globalThis.window = globalThis.window || { matchMedia: mq, devicePixelRatio: 1 };
+  globalThis.document = globalThis.document || { getElementById: () => null, documentElement: { classList: { add() {}, remove() {}, toggle() {} } } };
+  const { S } = await import('./app/state.js');
+  const C = await import('./app/camera.js');
+  const D = await import('./app/director.js');
+  const { UI } = await import('./app/env.js');
+  const m = run.meta, Rp = m.pl.Rp, k = 1 / Rp;
+  const pl = Object.assign({}, m.pl, { drag: m.kappa });
+  const sat = { k, Rp, Rs: m.Rs, C: { Rs: m.Rs }, pl, o: { X: m.o.X.slice(), V: m.o.V.slice() }, ref: new P.RefOrbit(pl, m.o.X, m.o.V), an: null, gpu: { t: 0 } };
+  S.run = { phase: 'orbit', serial: 1, spec: { kind: 'spiral', d1: sc.d1, key: 'saturn' }, T0: m.T0, limits: limitsOf(sc.q), viewD: 2.3, t: 0, story: {}, sats: [sat], pace: PC.newPace() };
+  UI.cam = 'story'; UI.calm = false; UI.paused = false; UI.scen = 'saturn'; UI.speedLog = Math.log10(sc.speed);
+  C.cam.az = 0.9; C.cam.el = sc.el; C.cam.zoom = 1; C.cam.pose = null; C.resetCamStats();
+  D.planShots();
+  const psi = S.run.shot.psi, rz = v => [Math.cos(psi) * v[0] - Math.sin(psi) * v[1], Math.sin(psi) * v[0] + Math.cos(psi) * v[1], v[2]];
+  const FOVH = 0.31;
+  let worstMoon = 0, moonFrames = 0, endPlanet = null, endDist = 0, rotMax = 0, prevF = null;
+  const W = 1280, H = 800;
+  for (let i = 0; i < run.trace.length; i++) {
+    const fr = run.trace[i], dt = i ? fr.wall - run.trace[i - 1].wall : 1 / 60;
+    sat.ref.X = rz(fr.X); sat.ref.V = rz(fr.V); sat.gpu.t = fr.t; S.run.t = fr.t;
+    S.run.pace = fr.pace;
+    if (fr.an) sat.an = Object.assign({}, fr.an, { com: rz(fr.an.com), vcm: rz(fr.an.vcm), comAll: rz(fr.an.comAll) });
+    const p = C.cameraFrame(dt, W, H);
+    const f = [0, 1, 2].map(q => p.target[q] - p.eye[q]), fl = Math.hypot(...f);
+    if (prevF) { const c = (f[0] * prevF[0] + f[1] * prevF[1] + f[2] * prevF[2]) / (fl * Math.hypot(...prevF)); const rr = Math.acos(Math.min(1, c)) * 180 / Math.PI / dt; rotMax = Math.max(rotMax, rr); }
+    prevF = f;
+    const moon = sat.an && sat.an.live ? [0, 1, 2].map(q => (sat.ref.X[q] + sat.an.com[q]) * k) : sat.ref.X.map(q => q * k);
+    const toM = [0, 1, 2].map(q => moon[q] - p.eye[q]), ang = Math.acos(Math.min(1, (toM[0] * f[0] + toM[1] * f[1] + toM[2] * f[2]) / (fl * Math.hypot(...toM))));
+    if (fr.pace && fr.pace.mode === 'breakup' && sat.an && sat.an.live) { worstMoon = Math.max(worstMoon, ang); moonFrames++; }
+    const toP = p.eye.map(q => -q), angP = Math.acos(Math.min(1, (toP[0] * f[0] + toP[1] * f[1] + toP[2] * f[2]) / (fl * Math.hypot(...toP))));
+    endPlanet = angP; endDist = Math.hypot(...p.eye);
+  }
+  ok('story camera: the view turns at most 10 deg/s', rotMax <= 10, `largest turn of the view axis ${rotMax.toFixed(1)} deg/s over ${run.trace.length} frames`);
+  ok('story camera: the moon stays in frame through the breakup', moonFrames > 30 && worstMoon < FOVH, `${moonFrames} frames in slow motion; the moon at most ${(worstMoon * 180 / Math.PI).toFixed(1)} deg off the view axis (half the view is ${(FOVH * 180 / Math.PI).toFixed(1)})`);
+  ok('story camera: after the breakup it pulls out to the planet', endPlanet < FOVH && endDist > 3, `at the end the planet is ${(endPlanet * 180 / Math.PI).toFixed(1)} deg off axis, the eye ${endDist.toFixed(2)} R_p from it`);
 }
 
 // 9 ─ the GPU memory budget
@@ -429,10 +485,11 @@ async function gpuTest() {
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
+const CAMERA = typeof Deno === 'undefined';   // the camera test imports app/ with DOM stubs: node only
 if (!GPU_ONLY) {
   const t0 = Date.now();
   if (!PACE_ONLY) { cpuTests(); budgetTests(); }
-  paceTests(ARGS.includes('--pace-old'));
+  await paceTests(ARGS.includes('--pace-old'));
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 if (typeof Deno !== 'undefined') await gpuTest();

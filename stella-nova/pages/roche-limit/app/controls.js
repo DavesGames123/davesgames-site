@@ -183,7 +183,7 @@ export function applyScenario(key) {
   UI.qLog = Math.log10(src.q ?? 1); UI.J2 = src.J2 || 0;
   UI.material = src.material || (sc.materials ? sc.materials[0] : 'fluid');
   const m = P.MATERIALS[UI.material]; UI.mu = m.mu; UI.coh = m.coh;
-  UI.cam = 'planet'; cam.zoom = 1; cam.el = sc.el ?? 0.42; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
+  UI.cam = 'story'; cam.zoom = 1; cam.el = sc.el ?? 0.42; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
   UI.color = sc.color ?? 4; UI.field = 0;
   if (sc.speed) setSpeed(Math.log10(sc.speed));
   UI.paused = false;
@@ -209,6 +209,6 @@ function syncButtons() {
   for (const b of $('fields').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.f === UI.field);
   for (const b of $('quals').querySelectorAll('button')) b.classList.toggle('on', b.dataset.q === UI.quality);
   $('matHint').textContent = UI.scen === 'compare' ? 'This story runs one loose and one rough moon.' : P.MATERIALS[UI.material].note;
-  $('camHint').textContent = UI.cam === 'follow' ? 'The view follows the moon, with its direction fixed in space. At high speed it stays on the planet instead.' : UI.cam === 'planet' ? 'The planet stays still; the moon goes round it.' : '';
+  $('camHint').textContent = UI.cam === 'story' ? (UI.calm ? 'Reduce motion is on: the story view stays on the planet.' : 'The camera tells the story: a wide shot, a push in to the moon as it breaks up (in slow motion), then a pull out to the ring. Drag or pinch to adjust it.') : UI.cam === 'follow' ? 'The view follows the moon, with its direction fixed in space. At high speed it stays on the planet instead.' : UI.cam === 'planet' ? 'The planet stays still; the moon goes round it.' : '';
   drawLegend();
 }
