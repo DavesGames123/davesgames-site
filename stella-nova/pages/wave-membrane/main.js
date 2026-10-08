@@ -667,8 +667,11 @@
     ramp(sv.look.ramp, 0.5 + 0.5 * v, _c);
     _c[0] *= SAVER_EXPOSURE; _c[1] *= SAVER_EXPOSURE; _c[2] *= SAVER_EXPOSURE;
     if (sv.style === 'contour') {
-      const b = (0.5 + 0.5 * v) * 9, f = b - Math.floor(b);
-      if (f < 0.14) { _c[0] *= 0.3; _c[1] *= 0.3; _c[2] *= 0.3; }
+      // 6 bands with a line 0.36 of a band wide, centred on each band edge.
+      // The vertex colours sample a 96 grid, so a thinner line breaks into
+      // dots where the slope is steep. The line darkens to 0.3 at its centre.
+      const b = (0.5 + 0.5 * v) * 6, f = b - Math.floor(b), d = Math.min(f, 1 - f);
+      if (d < 0.18) { const k = 0.3 + 0.7 * d / 0.18; _c[0] *= k; _c[1] *= k; _c[2] *= k; }
     } else if (sv.style === 'nodal') {
       // the zero set of u: the nodal lines of the sum, which move as it beats
       const a = Math.abs(v);
