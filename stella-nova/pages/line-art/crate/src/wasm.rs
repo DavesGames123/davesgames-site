@@ -5,13 +5,19 @@
 //! about `budget` visibility rays were cast, and returns the new 2D paths.
 //! The worker posts each slice to the page, so lines show while the render
 //! runs, and a new request can stop the old job between two slices. The
-//! order of the paths is the order of ln Scene.Render.
+//! order of the paths is the order of ln Scene.Render. After each `next`,
+//! `depths()` gives the camera depth of each path of that slice (the mean
+//! distance of its points along the view axis; 0 for the flat overlay).
+//! The page sorts the paths by this depth, so the pen draws near first.
 //!
 //! The path buffer (Float32Array): [count, n0, x, y, x, y, ..., n1, ...]
 //! with x, y in image units (0..width, 0..height), y up, as ln gives them.
 //!
-//! The camera array: [eye x y z, center x y z, up x y z, fovy]. An empty
-//! array takes the camera of the example.
+//! The camera array: [eye x y z, center x y z, up x y z, fovy] and an
+//! optional lens shift [sx, sy] in clip units (-1..1). The shift moves
+//! the image of the view axis off the image center, so the subject can
+//! sit in the clear part of a page while the clip box is the whole image.
+//! An empty array takes the camera of the example.
 //!
 //! GREP MAP
 //!   grep -n 'pub fn catalog'     the example table as JSON
@@ -114,9 +120,18 @@ pub fn camera_for(key: &str, params: &[f64]) -> Vec<f64> {
     }
 }
 
+/// The lens shift of a camera array (0, 0 when it has none).
+fn shift_of(cam: &[f64]) -> (f64, f64) {
+    if cam.len() >= 12 && cam[10].is_finite() && cam[11].is_finite() {
+        (cam[10].clamp(-4.0, 4.0), cam[11].clamp(-4.0, 4.0))
+    } else {
+        (0.0, 0.0)
+    }
+}
+
 fn camera_of(e: &Example, p: &Params, cam: &[f64]) -> Camera {
     let mut c = e.camera_with(p);
-    if cam.len() >= 10 && cam.iter().all(|x| x.is_finite()) {
+    if cam.len() >= 10 && cam[..10].iter().all(|x| x.is_finite()) {
         c.eye = v3(cam[0], cam[1], cam[2]);
         c.center = v3(cam[3], cam[4], cam[5]);
         c.up = v3(cam[6], cam[7], cam[8]);
@@ -135,6 +150,12 @@ pub struct Job {
     overlay_k: f64,
     matrix: Matrix,
     eye: Vector,
+    /// The unit view direction (eye to center), for the path depth.
+    forward: Vector,
+    /// The lens shift in clip units (see the camera array).
+    shift: (f64, f64),
+    /// The depth of each path of the last `next` output.
+    depths: Vec<f32>,
     width: f64,
     height: f64,
     step: f64,
@@ -159,13 +180,17 @@ impl Job {
         let overlay_k = (base.to_radians() / 2.0).tan() / (c.fovy.to_radians() / 2.0).tan();
         let Built { mut scene, overlay } = (e.build)(&p, &c);
         scene.compile();
-        let matrix = Scene::camera_matrix(c.eye, c.center, c.up, width, height, c.fovy, c.near, c.far);
+        let shift = shift_of(camera);
+        let matrix = Scene::camera_matrix(c.eye, c.center, c.up, width, height, c.fovy, c.near, c.far).translate(v3(shift.0, shift.1, 0.0));
         Ok(Job {
             scene,
             overlay,
             overlay_k,
             matrix,
             eye: c.eye,
+            forward: c.center.sub(c.eye).normalize(),
+            shift,
+            depths: Vec::new(),
             width,
             height,
             step: e.step * step_scale.max(0.1),
@@ -213,15 +238,23 @@ impl Job {
         self.segments_out
     }
 
+    /// The depth of each path of the last `next` output, in the same order.
+    pub fn depths(&self) -> Vec<f32> {
+        self.depths.clone()
+    }
+
     /// Render until about `budget` rays are cast (at least one path).
     pub fn next(&mut self, budget: u32) -> Vec<f32> {
         let start = self.scene.rays.get();
         let mut out: Vec<Path> = Vec::new();
+        let mut depths: Vec<f32> = Vec::new();
         loop {
             if self.pending_i < self.pending.len() {
                 let path = std::mem::take(&mut self.pending[self.pending_i]);
                 self.pending_i += 1;
-                out.extend(self.scene.render_paths(std::slice::from_ref(&path), &self.matrix, self.eye, self.width, self.height, self.step));
+                let (paths, d) = self.scene.render_paths_depth(std::slice::from_ref(&path), &self.matrix, self.eye, self.forward, self.width, self.height, self.step);
+                out.extend(paths);
+                depths.extend(d.iter().map(|&x| x as f32));
             } else if self.shape < self.scene.shapes.len() {
                 self.pending = self.scene.shapes[self.shape].paths();
                 self.pending_i = 0;
@@ -230,9 +263,11 @@ impl Job {
                 self.overlay_done = true;
                 let aspect = self.width / self.height;
                 let k = self.overlay_k;
+                let (sx, sy) = self.shift;
                 let screen = screen_matrix(self.width, self.height);
                 for q in &self.overlay {
-                    out.push(q.iter().map(|v| screen.mul_position(v3(v.x * k / aspect, v.y * k, 0.0))).collect());
+                    out.push(q.iter().map(|v| screen.mul_position(v3(v.x * k / aspect + sx, v.y * k + sy, 0.0))).collect());
+                    depths.push(0.0);
                 }
             } else {
                 break;
@@ -241,6 +276,7 @@ impl Job {
                 break;
             }
         }
+        self.depths = depths;
         self.paths_out += out.len() as u32;
         self.segments_out += out.segment_count() as f64;
         encode(&out)

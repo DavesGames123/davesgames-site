@@ -328,6 +328,16 @@ export class Job {
         return ret;
     }
     /**
+     * The depth of each path of the last `next` output, in the same order.
+     * @returns {Float32Array}
+     */
+    depths() {
+        const ret = wasm.job_depths(this.__wbg_ptr);
+        var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v1;
+    }
+    /**
      * 0..1: the part of the shapes that is done.
      * @returns {number}
      */

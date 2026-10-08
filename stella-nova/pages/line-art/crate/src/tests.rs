@@ -261,3 +261,34 @@ fn streamed_render_equals_batch() {
     }
     assert_eq!(batch, streamed);
 }
+
+/// Not in ln: render_paths_depth gives the same paths as render_paths, one
+/// depth per path, and the depth grows with the distance from the eye.
+#[test]
+fn depth_render_matches_paths_and_orders_by_distance() {
+    let mut s = Scene::new();
+    s.add(Box::new(new_cube(v3(-0.5, -0.5, -0.5), v3(0.5, 0.5, 0.5))));
+    s.add(Box::new(new_cube(v3(-0.5, 5.5, -0.5), v3(0.5, 6.5, 0.5))));
+    s.compile();
+    let (eye, center, up) = (v3(0.0, -6.0, 0.5), v3(0.0, 0.0, 0.0), v3(0.0, 0.0, 1.0));
+    let m = Scene::camera_matrix(eye, center, up, 800.0, 500.0, 40.0, 0.1, 100.0);
+    let fwd = center.sub(eye).normalize();
+    let mut plain = Vec::new();
+    let mut with = Vec::new();
+    let mut near = Vec::new();
+    let mut far = Vec::new();
+    for (i, sh) in s.shapes.iter().enumerate() {
+        for p in sh.paths() {
+            plain.extend(s.render_paths(&[p.clone()], &m, eye, 800.0, 500.0, 0.01));
+            let (q, d) = s.render_paths_depth(&[p], &m, eye, fwd, 800.0, 500.0, 0.01);
+            assert_eq!(q.len(), d.len());
+            if i == 0 { near.extend(d.iter().copied()); } else { far.extend(d.iter().copied()); }
+            with.extend(q);
+        }
+    }
+    assert_eq!(plain, with);
+    assert!(!near.is_empty() && !far.is_empty());
+    let near_max = near.iter().cloned().fold(f64::MIN, f64::max);
+    let far_min = far.iter().cloned().fold(f64::MAX, f64::min);
+    assert!(near_max < far_min, "near {} far {}", near_max, far_min);
+}
