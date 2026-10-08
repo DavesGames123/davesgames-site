@@ -302,7 +302,9 @@ fn cellValue(k: u32) -> f32 {
 
 fn wrapi(a: i32, n: i32) -> i32 { return ((a % n) + n) % n; }
 
-fn sampleAt(p: vec2f) -> f32 {
+// Bilinear over 2 x 2 cells: used when a cell is under 3 device px, where
+// the cubic adds nothing that the eye can see but costs 4x the reads.
+fn sampleLin(p: vec2f) -> f32 {
   let W = i32(v.world.x);
   let H = i32(v.world.y);
   let q = p - 0.5;
@@ -316,6 +318,38 @@ fn sampleAt(p: vec2f) -> f32 {
   let c = cellValue(u32(y1 * W + x0));
   let d = cellValue(u32(y1 * W + x1));
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Catmull-Rom weights of the four cells round a point at fraction t.
+fn crw(t: f32) -> vec4f {
+  let t2 = t * t;
+  let t3 = t2 * t;
+  return vec4f(-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2);
+}
+
+// Bicubic (Catmull-Rom) over 4 x 4 cells. Bilinear showed the cell grid as
+// soft diamonds when a cell was 8 px or more (the saver push-ins). The
+// cubic is smooth across cells and keeps edges sharp. It can overshoot
+// 0..1 a little; fs() clamps it.
+fn sampleAt(p: vec2f) -> f32 {
+  if (v.cellPx < 3.0) { return sampleLin(p); }
+  let W = i32(v.world.x);
+  let H = i32(v.world.y);
+  let q = p - 0.5;
+  let b = vec2i(floor(q));
+  let f = q - floor(q);
+  let wx = crw(f.x);
+  let wy = crw(f.y);
+  var s = 0.0;
+  for (var j = 0; j < 4; j++) {
+    let y = wrapi(b.y + j - 1, H);
+    var row = 0.0;
+    for (var i = 0; i < 4; i++) {
+      row += wx[i] * cellValue(u32(y * W + wrapi(b.x + i - 1, W)));
+    }
+    s += wy[j] * row;
+  }
+  return s;
 }
 
 // Blue for decay, black at zero, amber for growth.

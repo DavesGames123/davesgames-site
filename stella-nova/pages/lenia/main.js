@@ -685,11 +685,12 @@ function observeSize() {
   const cv = $('gl');
   let sizeT = 0;
   const apply = () => {
-    // The screensaver draws at 1 px per CSS px. The bilinear cells are 8 CSS
-    // px or more, so a 2x canvas adds no detail but 4x the fill and the copy
-    // into #saver-cv.
-    const dpr = Math.min(devicePixelRatio || 1, S.saver ? 1 : 2);
-    S.engine.resize(Math.round(cv.clientWidth * dpr), Math.round(cv.clientHeight * dpr), dpr);
+    // The bicubic cells (engine.js sampleAt) have detail below one cell, so
+    // the screensaver also draws at the device ratio (up to 2). Each frame is
+    // copied into #saver-cv, so the canvas keeps to 8.3 M px (a 4K frame).
+    const cw = Math.max(1, cv.clientWidth), ch = Math.max(1, cv.clientHeight);
+    const dpr = Math.min(devicePixelRatio || 1, 2, S.saver ? Math.max(1, Math.sqrt(8.3e6 / (cw * ch))) : 2);
+    S.engine.resize(Math.round(cw * dpr), Math.round(ch * dpr), dpr);
   };
   new ResizeObserver(() => {
     apply();
