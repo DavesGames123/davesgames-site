@@ -284,6 +284,8 @@ function frame(now) {
   const w = lastW, h = lastH, o = occlusion(w, h);
   for (const k in occ) occ[k] += (o[k] - occ[k]) * 0.2;
   S.setOffset((occ.l - occ.r) / -2, (occ.t - occ.b) / -2);
+  // the saver fades the tubes outside the clear band of its plate
+  S.setBand(saverBand ? { t: occ.t, b: occ.b } : null);
   for (const f of hooks) f(dt, now);
 
   if (G.playing && G.mode !== 'still') G.a += dt * G.speed;

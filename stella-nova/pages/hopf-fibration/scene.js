@@ -13,6 +13,10 @@
 //  centre). No geometry is rebuilt when the rotation or the base points
 //  change: only uniforms and the instance attributes.
 //
+//  In the saver, setBand(band) fades each tube, disc and dot fragment to the fog colour
+//  above and below the clear band of the plate (BAND_GLSL), so a tail
+//  through infinity or a push-in never shows under the plate text.
+//
 //  Near infinity a tube vertex can go very far. A vertex farther than uFar,
 //  or on a segment longer than uSegMax, sets vFar = 1, and the fragment
 //  shader discards each triangle that touches it.
@@ -26,7 +30,8 @@
 //  EXPORTS  createScene(canvas, opts) -> api   (grep -n "export function")
 //  FIBRE_GLSL is also the code extract on the saver plate.
 //  grep -n targets: "FIBRE_GLSL", "function patchMaterial", "function setFibres",
-//                   "function setDiscs", "function render", "function resize"
+//                   "function setDiscs", "function setBand", "BAND_GLSL",
+//                   "function render", "function resize"
 // ============================================================================
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -84,10 +89,38 @@ const VERT_TUBE = `
 `;
 const FRAG_HEAD = `
 uniform float uStripes;
+uniform vec3 uBand;
+uniform float uBandOn;
 varying float vT;
 varying float vFar;
 varying vec4 vAux;
 `;
+
+// The saver band: a tube fades to the fog colour above and below the clear
+// band of the plate, so no tube shows under the plate text. uBand is
+// (lo, hi, soft) in drawing-buffer pixels from the base of the view.
+const BAND_GLSL = `  if (uBandOn > 0.5) {
+    float yb = gl_FragCoord.y;
+    float kb = smoothstep(uBand.x - uBand.z, uBand.x + uBand.z, yb) * (1.0 - smoothstep(uBand.y - uBand.z, uBand.y + uBand.z, yb));
+#ifdef USE_FOG
+    gl_FragColor.rgb = mix(fogColor, gl_FragColor.rgb, kb);
+#else
+    gl_FragColor.rgb *= kb;
+#endif
+  }`;
+
+// The same band fade for the discs and the pierce dots (MeshBasicMaterial).
+function bandPatch(mat, uniforms) {
+  mat.fog = true;
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uBand = uniforms.uBand; sh.uniforms.uBandOn = uniforms.uBandOn;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uBand;\nuniform float uBandOn;')
+      .replace('#include <fog_fragment>', '#include <fog_fragment>\n' + BAND_GLSL);
+  };
+  mat.customProgramCacheKey = () => 'hopf-band-v1';
+  return mat;
+}
 
 function patchMaterial(mat, uniforms) {
   mat.onBeforeCompile = sh => {
@@ -103,9 +136,10 @@ function patchMaterial(mat, uniforms) {
   float ph = fract(vT * uStripes);
   float band = smoothstep(0.0, 0.08, ph) * (1.0 - smoothstep(0.42, 0.5, ph));
   diffuseColor.rgb *= mix(1.0, 0.5 + 0.62 * band, vAux.z);`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * vAux.y;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * vAux.y;')
+      .replace('#include <fog_fragment>', '#include <fog_fragment>\n' + BAND_GLSL);
   };
-  mat.customProgramCacheKey = () => 'hopf-tube-v1';
+  mat.customProgramCacheKey = () => 'hopf-tube-v2';
 }
 
 export function createScene(canvas, opts = {}) {
@@ -160,6 +194,7 @@ export function createScene(canvas, opts = {}) {
   const uniforms = {
     uRot: { value: new THREE.Matrix4() }, uRad: { value: 0.035 }, uFar: { value: 34 }, uSegMax: { value: 5 },
     uSeg: { value: SEG }, uConf: { value: 0 }, uStripes: { value: 6 },
+    uBand: { value: new THREE.Vector3(0, 1e5, 1) }, uBandOn: { value: 0 },
   };
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.08, envMapIntensity: 0.75 });
   patchMaterial(mat, uniforms);
@@ -170,13 +205,13 @@ export function createScene(canvas, opts = {}) {
   // ---- linking discs and the pierce points
   const discGeo = new THREE.CircleGeometry(1, 128);
   const discs = [0, 1].map(() => {
-    const m = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
+    const m = new THREE.Mesh(discGeo, bandPatch(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }), uniforms));
     m.visible = false; m.renderOrder = 2; scene.add(m); return m;
   });
   const dotGeo = new THREE.SphereGeometry(1, 24, 16);
   const dots = [0, 1].map(() => {
-    const m = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    const halo = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.28, depthWrite: false }));
+    const m = new THREE.Mesh(dotGeo, bandPatch(new THREE.MeshBasicMaterial({ color: 0xffffff }), uniforms));
+    const halo = new THREE.Mesh(dotGeo, bandPatch(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.28, depthWrite: false }), uniforms));
     halo.scale.setScalar(2.4); m.add(halo); m.userData.halo = halo;
     m.visible = false; m.renderOrder = 3; scene.add(m); return m;
   });
@@ -203,6 +238,15 @@ export function createScene(canvas, opts = {}) {
   function setOffset(ox, oy) {
     view.ox = ox; view.oy = oy;
     camera.setViewOffset(view.w, view.h, ox, oy, view.w, view.h);
+  }
+
+  // The clear band of the saver plate, in CSS px from the top (t) and from
+  // the base (b) of the view. null turns the fade off.
+  function setBand(band) {
+    if (!band) { uniforms.uBandOn.value = 0; return; }
+    const pr = renderer.getPixelRatio();
+    uniforms.uBand.value.set(band.b * pr, (view.h - band.t) * pr, 0.035 * view.h * pr);
+    uniforms.uBandOn.value = 1;
   }
 
   // fibres: [{ b, rgb, rad, glow, stripe }]
@@ -245,6 +289,6 @@ export function createScene(canvas, opts = {}) {
 
   return {
     THREE, renderer, scene, camera, controls, uniforms, dots, CAP, coarse,
-    resize, setOffset, setFibres, setRotation, setDisc, setDot, render,
+    resize, setOffset, setBand, setFibres, setRotation, setDisc, setDot, render,
   };
 }
