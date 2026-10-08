@@ -12,9 +12,27 @@
 //  flight(a, b, opt) -> { at(k) -> cam, dur }  a great-circle flight with
 //  an eased arc: the camera rises with the angle to cross and comes down
 //  at the far end (after van Wijk and Nuij's zoom-and-pan, simplified).
+//  flightDur(w) sets the duration from FLY: the smootherstep peak angular
+//  speed (1.875 w / T) stays at or below FLY.omega and the peak angular
+//  acceleration (5.774 w / T^2) at or below FLY.alpha.
+//
+//  Framing rule (minimum altitude): frameAlt(rKm, clear) is the altitude
+//  at which a ground radius rKm fills the narrow side of the clear area
+//  (the screen less the panels or the saver plate). A portrait phone has
+//  a narrow horizontal field, so the same radius needs more altitude
+//  there. minAlt(clear, who) applies MIN_R_KM: 'auto' for the tour, the
+//  flights and the saver, 'user' for the pinch and wheel limit.
+//
+//  Smoothing: spring(s, target, omega, dt) is a critically damped spring
+//  (no overshoot) on a number; follow(f, p, omega, dt, vmax) is the same
+//  on the sphere, with the angular speed limited to vmax (rad/s). The
+//  tour and the saver follow a moving storm through it, so a storm that
+//  turns at a track fix does not jerk the camera.
 //
 //  grep -n targets: "export function basis", "export function flight",
-//                   "export function project", "export function pick"
+//                   "export function project", "export function pick",
+//                   "export function frameAlt", "export const FLY",
+//                   "export function spring", "export function follow"
 // ============================================================================
 const D = Math.PI / 180;
 export const FOV = 34;                  // vertical field of view, deg
@@ -76,13 +94,58 @@ export function altForRadius(r, fill = 0.9) {
   return Math.max(0.02, Math.sin(r) / t - 1 + Math.cos(r));
 }
 
+// ── framing rule ─────────────────────────────────────────────────────────
+export const R_KM = 6371;
+// the smallest ground radius (km) on the narrow side of the clear area
+export const MIN_R_KM = { auto: 900, user: 450 };
+// clear = { w, h, H }: the clear area (CSS px) and the view height
+export function frameAlt(rKm, clear) {
+  const fill = Math.max(0.12, Math.min(clear.w, clear.h) / Math.max(1, clear.H));
+  return altForRadius(rKm / R_KM, fill);
+}
+export function minAlt(clear, who = 'auto') { return frameAlt(MIN_R_KM[who] || MIN_R_KM.auto, clear); }
+
+// ── smoothing ────────────────────────────────────────────────────────────
+// s = { x, v }; critically damped toward target; sub-steps keep it stable
+export function spring(s, target, omega, dt) {
+  const n = Math.max(1, Math.ceil(dt * omega * 4)), h = dt / n;
+  for (let i = 0; i < n; i++) { const a = omega * omega * (target - s.x) - 2 * omega * s.v; s.v += a * h; s.x += s.v * h; }
+  return s.x;
+}
+// f = { p: [x,y,z] unit, v: [x,y,z] tangent (rad/s) }; p -> target unit
+// vector; |v| <= vmax. Returns { lat, lon }.
+export function follow(f, target, omega, dt, vmax = 0.35) {
+  const n = Math.max(1, Math.ceil(dt * omega * 4)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    const d = v3.sub(target, v3.mul(f.p, v3.dot(target, f.p)));          // tangent toward the target
+    const dl = v3.len(d), ang = Math.atan2(dl, v3.dot(target, f.p));
+    const e = dl > 1e-12 ? v3.mul(d, ang / dl) : [0, 0, 0];               // log map: the tangent of length ang
+    let v = v3.add(f.v, v3.mul(v3.sub(v3.mul(e, omega * omega), v3.mul(f.v, 2 * omega)), h));
+    v = v3.sub(v, v3.mul(f.p, v3.dot(v, f.p)));
+    const sp = v3.len(v); if (sp > vmax) v = v3.mul(v, vmax / sp);
+    f.p = v3.norm(v3.add(f.p, v3.mul(v, h)));
+    f.v = v3.sub(v, v3.mul(f.p, v3.dot(v, f.p)));
+  }
+  return toLatLon(f.p);
+}
+export function follower(cam) { return { p: unit(cam.lat, cam.lon), v: [0, 0, 0] }; }
+
 export const ease = k => (k < 0 ? 0 : k > 1 ? 1 : k * k * k * (k * (6 * k - 15) + 10));   // smootherstep
 function lerpAngle(a, b, k) { let d = ((b - a + 540) % 360) - 180; return a + d * k; }
 
+// FLY: omega peak angular speed (rad/s), alpha peak angular acceleration
+// (rad/s^2), climb the peak rate of altitude change (Earth radii/s)
+export const FLY = { omega: 0.5, alpha: 0.4, climb: 0.9, minDur: 2.6, maxDur: 12 };
+export function flightDur(w, dAlt = 0, minDur = FLY.minDur) {
+  const t = Math.max(minDur, 1.875 * w / FLY.omega, Math.sqrt(5.774 * w / FLY.alpha), 1.875 * Math.abs(dAlt) / FLY.climb);
+  return Math.min(FLY.maxDur, t);
+}
 export function flight(a, b, opt = {}) {
   const w = arc(a, b);
   const peak = Math.max(a.alt, b.alt, Math.min(3.2, 0.35 + w * 1.25));
-  const dur = opt.dur ?? Math.min(7, 2.2 + w * 2.4);
+  // the climb to the peak and back down counts as altitude change
+  const dAlt = Math.max(Math.abs(b.alt - a.alt), 2 * (peak - Math.max(a.alt, b.alt)));
+  const dur = Math.max(opt.dur ?? 0, flightDur(w, dAlt, opt.minDur));
   return {
     dur, w, peak,
     at(k) {

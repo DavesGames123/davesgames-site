@@ -2,7 +2,8 @@
 //  STORM GLOBE  ·  tests.mjs
 // ----------------------------------------------------------------------------
 //    node tests.mjs           parsers (fixtures/), GRIB2, pack, sample,
-//                             time slider maths, camera, detectors
+//                             time slider maths, camera, detectors, the
+//                             camera framing rule and smoothing limits
 //    deno run -A tests.mjs    the same, plus the GPU solver tests in
 //                             tests-solver.mjs (Deno has navigator.gpu)
 //  No test fetches a live source: every input is a file in fixtures/.
@@ -199,6 +200,60 @@ section('Time slider maths, storms in time, the sun, the camera, the detectors')
   const xs = COL.SS_MARKS.map(q => COL.speedToX(q.ms));
   check('legend: Saffir-Simpson marks in order inside the bar', xs.every((x, i) => x > 0 && x < 1 && (!i || x > xs[i - 1])), xs.map(x => x.toFixed(2)).join(' '));
   check('colour LUT: 4 rows of 256 RGBA, magma ends black to pale yellow', COL.lutBytes().length === 4096 && COL.magma(0).join() === '0,0,4' && COL.magma(1).join() === '252,253,191');
+}
+
+// ── camera framing rule and smoothing limits ─────────────────────────────
+section('Camera: the minimum altitude rule, flight limits, springs');
+{
+  const CAM = await import('./camera.js');
+  const D = Math.PI / 180;
+  const portrait = { w: 390, h: 550, H: 844 }, landscape = { w: 844, h: 300, H: 390 }, desk = { w: 624, h: 551, H: 800 };
+  const aP = CAM.minAlt(portrait), aD = CAM.minAlt(desk);
+  check('minimum altitude: a portrait phone needs more than a computer', aP > aD * 1.3, `phone ${aP.toFixed(2)}, computer ${aD.toFixed(2)} Earth radii`);
+  // the rule itself: at minAlt the edge of the narrow side is MIN_R_KM away
+  const r = CAM.MIN_R_KM.auto / CAM.R_KM, a = aP, fill = portrait.w / portrait.H;
+  const seen = Math.atan2(Math.sin(r), 1 + a - Math.cos(r));
+  check('minimum altitude: MIN_R_KM.auto reaches the edge of the narrow side', near(Math.tan(seen), Math.tan(CAM.FOV * D / 2) * fill, 1e-9), `${CAM.MIN_R_KM.auto} km`);
+  check('minimum altitude: the user floor is lower than the automatic floor', CAM.minAlt(portrait, 'user') < aP && CAM.minAlt(portrait, 'user') > 0.3, CAM.minAlt(portrait, 'user').toFixed(2));
+  check('minimum altitude: landscape phone uses the clear height', near(CAM.minAlt(landscape), CAM.frameAlt(CAM.MIN_R_KM.auto, { w: 300, h: 300, H: 390 }), 1e-12));
+  // flights: sample the angular speed and acceleration of the target point
+  const worst = (A, B) => {
+    const f = CAM.flight(A, B), n = 2000; let vmax = 0, amax = 0, prev = null;
+    for (let i = 1; i < n; i++) {
+      const v = CAM.arc(f.at((i - 1) / n), f.at(i / n)) * n / f.dur;
+      if (prev != null) amax = Math.max(amax, Math.abs(v - prev) * n / f.dur);
+      vmax = Math.max(vmax, v); prev = v;
+    }
+    return { vmax, amax, dur: f.dur };
+  };
+  const cases = [[{ lat: 20, lon: -120, alt: 0.8, tilt: 34, heading: 0 }, { lat: 15, lon: 60, alt: 0.9, tilt: 30, heading: 20 }],
+    [{ lat: 20, lon: -60, alt: 1, tilt: 30, heading: 0 }, { lat: 25, lon: -45, alt: 1.1, tilt: 30, heading: 0 }],
+    [{ lat: -60, lon: 120, alt: 1.2, tilt: 20, heading: 0 }, { lat: 40, lon: -170, alt: 2.8, tilt: 0, heading: 0 }]];
+  const ws = cases.map(([A, B]) => worst(A, B));
+  check('flights: peak angular speed <= FLY.omega', ws.every(w => w.vmax <= CAM.FLY.omega * 1.01), ws.map(w => (w.vmax / D).toFixed(1) + ' deg/s').join(', ') + ` (limit ${(CAM.FLY.omega / D).toFixed(1)})`);
+  check('flights: peak angular acceleration <= FLY.alpha', ws.every(w => w.amax <= CAM.FLY.alpha * 1.02), ws.map(w => w.amax.toFixed(3)).join(', ') + ` rad/s^2 (limit ${CAM.FLY.alpha})`);
+  check('flights: durations inside FLY.minDur..maxDur', ws.every(w => w.dur >= CAM.FLY.minDur && w.dur <= CAM.FLY.maxDur), ws.map(w => w.dur.toFixed(1) + ' s').join(', '));
+  // spring: a step answer without overshoot, settled in about 6 / omega
+  const sp = { x: 0, v: 0 }; let over = 0;
+  for (let i = 0; i < 240; i++) { CAM.spring(sp, 1, 5, 1 / 60); over = Math.max(over, sp.x - 1); }
+  check('spring: no overshoot, settles', over <= 1e-9 && near(sp.x, 1, 1e-3), `overshoot ${over.toExponential(1)}, x ${sp.x.toFixed(5)}`);
+  const sp2 = { x: 0, v: 0 }; CAM.spring(sp2, 1, 5, 0.1); CAM.spring(sp2, 1, 5, 0.1);
+  check('spring: a long frame (0.1 s) stays stable', sp2.x > 0 && sp2.x < 1);
+  // follow: a storm that turns 90 deg at a fix. main.js followStop aims
+  // ahead by the spring lag (2 / omega s of motion); the same here
+  const at = i => (i < 300 ? { lat: 0, lon: i * 0.02 } : { lat: (i - 300) * 0.02, lon: 6 });
+  const fo = CAM.follower({ lat: 0, lon: 0 }); let vm = 0, maxErr = 0, tgt = at(0);
+  for (let i = 0; i < 600; i++) {
+    tgt = at(i); const aim = at(i + Math.round(2 / 1.8 * 60));
+    const before = fo.p; const c = CAM.follow(fo, CAM.unit(aim.lat, aim.lon), 1.8, 1 / 60, 0.35);
+    vm = Math.max(vm, Math.acos(Math.min(1, CAM.v3.dot(before, fo.p))) * 60);
+    if (i > 120) maxErr = Math.max(maxErr, CAM.arc(c, tgt));
+  }
+  check('follow: angular speed <= vmax', vm <= 0.35 + 1e-6, (vm / D).toFixed(2) + ' deg/s');
+  check('follow: with the lead, cuts the 90 deg turn by under 0.75 deg (smooth, no jerk)', maxErr < 0.75 * D, (maxErr / D).toFixed(2) + ' deg');
+  const fz = CAM.follower({ lat: 10, lon: 10 }); let lastD = 1e9, mono = true;
+  for (let i = 0; i < 400; i++) { const c = CAM.follow(fz, CAM.unit(0, 0), 1.8, 1 / 60); const d = CAM.arc(c, { lat: 0, lon: 0 }); if (d > lastD + 1e-12) mono = false; lastD = d; }
+  check('follow: a still target is reached without overshoot', mono && lastD < 0.01 * D, (lastD / D).toExponential(1) + ' deg');
 }
 
 // ── GPU solver (Deno) ────────────────────────────────────────────────────

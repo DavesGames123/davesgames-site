@@ -11,10 +11,19 @@
 //  target wind at the new time (then 4 spin-up steps). Paused, the field
 //  holds still and the particles keep streaming through it.
 //
-//  The tour (tourTick) flies from stop to stop on eased great circles
-//  (camera.js flight), holds 7 s on each with a slow orbit, and follows a
-//  storm that moves while the time plays. A drag, a pinch or a list tap
-//  stops it.
+//  The tour (tourTick) visits the stops in a nearest-neighbour order, so
+//  the flights stay short. It flies on eased great circles with limited
+//  angular speed and acceleration (camera.js flight, FLY), holds HOLD_S
+//  on each with a slow turn, and follows a storm that moves while the
+//  time plays through a critically damped spring (camera.js follow).
+//  A drag, a pinch or a list tap stops it.
+//
+//  Framing: every automatic camera (tour, list tap, saver) frames at
+//  least camera.js MIN_R_KM.auto of ground on the narrow side of the
+//  clear area (frameAlt), and a pinch or the wheel stops at
+//  MIN_R_KM.user. The clear area comes from occlusion(); the view offset
+//  and the altitude floor follow it through springs, so a sheet or a
+//  card that opens moves the globe smoothly, not in a jump.
 //
 //  grep -n targets
 //    boot ............. "async function boot"
@@ -23,10 +32,10 @@
 //    stops ............ "function buildStops"
 //    card ............. "function showCard"
 //    flights, tour .... "function flyTo", "function tourTick"
-//    framing .......... "function occlusion"
+//    framing .......... "function occlusion", "function clearArea", "function frameAltFor"
+//    particle speed ... "WIND_VIS"
 //    input ............ "function bindPointer"
 //    live refresh ..... "async function liveRefresh"
-//    particle speed ... "WIND_VIS"
 //    debug API ........ "window.__stormGlobe"
 // ============================================================================
 import { loadSnapshot, fetchLiveStorms, fetchLiveEvents, fetchLiveWinds, snapshotAgeH, STALE_H } from './data.js';
@@ -44,7 +53,7 @@ const H = 3600e3, D = Math.PI / 180;
 const PHONE_Q = matchMedia('(max-width:760px), (max-height:520px) and (pointer:coarse)');
 const LITE = PHONE_Q.matches || (navigator.hardwareConcurrency || 8) <= 4;
 const SPEEDS = [1, 3, 6, 12];          // model hours per second
-const HOLD_S = 7;                      // tour: seconds on each stop
+const HOLD_S = 10;                     // tour: seconds on each stop
 // WIND_VIS: the particle streak speed on screen, as a share of the old
 // look (2600 model s per frame at 60 fps); 2/3 keeps the flow calm. The
 // solver and the data are not scaled. P_H (render.js) grew from 8 to 11
@@ -206,12 +215,12 @@ function select(id, fly = false, opt = {}) {
   dirtyOverlays = true;
   if (o && fly) flyTo(stopCam(o), opt.dur);
 }
+// STOP_KM: the ground radius each kind of stop frames on the narrow side
+// of the clear area (a storm and its surroundings, a low and its fronts)
+const STOP_KM = { storm: 1200, event: 1100, low: 1700, jet: 1900 };
 function stopCam(o, k = 0) {
   const p = stopPos(o);
-  const alt = o.kind === 'storm' ? 0.34 : o.kind === 'low' ? 0.62 : o.kind === 'jet' ? 0.75 : 0.42;
-  // a tall narrow screen (phone) sees less width: go higher
-  const narrow = Math.min(2, Math.max(1, 0.95 / aspect()));
-  return { lat: p.lat, lon: p.lon, alt: (ST.saver ? alt * 1.15 : alt) * narrow, tilt: o.kind === 'storm' ? 40 : 28, heading: (k * 37) % 50 - 25 };
+  return { lat: p.lat, lon: p.lon, alt: frameAltFor(STOP_KM[o.kind] || 800), tilt: o.kind === 'storm' ? 34 : 24, heading: (k * 37) % 40 - 20 };
 }
 
 // ── the card ─────────────────────────────────────────────────────────────
@@ -363,19 +372,41 @@ function buildOverlays() {
 // ── camera, flights, tour ────────────────────────────────────────────────
 function aspect() { return canvas.clientWidth / Math.max(1, canvas.clientHeight); }
 function clearFill() { const r = occlusion(); return Math.max(0.3, (r.b - r.t) / innerHeight); }
+// the clear area in the form camera.js frameAlt reads
+// In the saver the height is at least half the view: the subject sits in
+// the plate's clear band, and its surroundings may run on under the plate.
+function clearArea() {
+  const r = occlusion(), H = canvas.clientHeight || innerHeight;
+  return { w: Math.max(1, r.r - r.l), h: Math.max(1, r.b - r.t, ST.saver ? 0.5 * H : 0), H };
+}
+// the altitude that frames rKm, never below the automatic floor
+function frameAltFor(rKm, clear = clearArea()) { return Math.max(CAM.frameAlt(rKm, clear), CAM.minAlt(clear, 'auto')); }
 // the altitude at which the whole globe fits the clear area
 function wideAlt(fill = clearFill() * 0.86) {
   const k = Math.tan(CAM.FOV * D / 2) * fill, s = k / Math.sqrt(1 + k * k);
   return 1 / s - 1;
 }
-function flyTo(target, dur) {
-  const f = CAM.flight({ ...ST.cam }, target, dur ? { dur } : {});
+function flyTo(target, dur, minDur) {
+  const f = CAM.flight({ ...ST.cam }, target, { dur, minDur });
   ST.fly = { f, t0: performance.now(), target };
   return f.dur;
 }
+// the tour order: the strongest stop first, then always the nearest
+// stop not yet visited (short, calm flights instead of zig-zags)
+function tourOrder() {
+  const n = ST.stops.length; if (!n) return [];
+  const pos = ST.stops.map(o => stopPos(o)), left = new Set(ST.stops.map((_, i) => i)), out = [0];
+  left.delete(0);
+  while (left.size) {
+    const a = pos[out[out.length - 1]]; let best = -1, bd = 1e9;
+    for (const i of left) { const d = CAM.arc(a, pos[i]); if (d < bd) { bd = d; best = i; } }
+    out.push(best); left.delete(best);
+  }
+  return out;
+}
 function startTour() {
   if (!ST.stops.length) return;
-  ST.tour = { on: true, i: -1, phase: 'next', t0: performance.now(), order: ST.stops.map((_, i) => i) };
+  ST.tour = { on: true, i: -1, phase: 'next', t0: performance.now(), order: tourOrder(), fol: null };
   $('tourBtn').classList.add('on'); $('tourBtn').textContent = '■ Stop the tour';
   $('dockTour').classList.add('on');
 }
@@ -391,21 +422,26 @@ function tourTick(now) {
     T.i = (T.i + 1) % T.order.length;
     const o = ST.stops[T.order[T.i]]; if (!o) { stopTour(); return; }
     select(o.id, false);
-    const d = flyTo(stopCam(o, T.i));
+    const d = flyTo(stopCam(o, T.i), 0, 3.2);
     T.phase = 'fly'; T.t0 = now; T.dur = d * 1000;
   } else if (T.phase === 'fly') {
-    if (!ST.fly) { T.phase = 'hold'; T.t0 = now; }
+    if (!ST.fly) { T.phase = 'hold'; T.t0 = now; T.fol = CAM.follower(ST.cam); }
   } else if (T.phase === 'hold') {
     const o = ST.stops[T.order[T.i]];
-    if (o) followStop(o, 0.04);
-    ST.cam.heading += 0.05;
+    if (o) followStop(o, T);
+    ST.cam.heading += 1.6 * frameDt;
     if (now - T.t0 > HOLD_S * 1000) T.phase = 'next';
   }
 }
-// keep a moving storm in the centre while the time plays
-function followStop(o, k) {
-  const p = stopPos(o);
-  const c = CAM.slerp(ST.cam, p, k);
+// keep a moving storm in the centre while the time plays: a critically
+// damped spring toward the storm, aimed ahead by the spring lag (2 / omega
+// seconds of model time), so the camera neither trails nor jerks at a fix
+const FOLLOW_W = 1.8;
+function followStop(o, holder, omega = FOLLOW_W) {
+  const lead = ST.playing ? (2 / omega) * ST.speed * H : 0;
+  const p = stopPos(o, Math.min(ST.t1, ST.t + lead));
+  holder.fol = holder.fol || CAM.follower(ST.cam);
+  const c = CAM.follow(holder.fol, CAM.unit(p.lat, p.lon), omega, frameDt);
   ST.cam.lat = c.lat; ST.cam.lon = c.lon;
 }
 
@@ -432,11 +468,12 @@ function occlusion() {
 }
 
 // ── the frame loop ───────────────────────────────────────────────────────
-let lastNow = 0, userTouched = false;
+let lastNow = 0, userTouched = false, frameDt = 1 / 60;
+const offS = { x: { x: 0, v: 0 }, y: { x: 0, v: 0 } };
 function frame(now) {
   requestAnimationFrame(frame);
   if (!solver) return;
-  const dt = Math.min(0.1, (now - (lastNow || now)) / 1000); lastNow = now;
+  const dt = Math.min(0.1, (now - (lastNow || now)) / 1000); lastNow = now; frameDt = dt;
   if (ST.playing) {
     let t = ST.t + dt * ST.speed * H;
     if (t > ST.t1) t = ST.t0;
@@ -451,10 +488,14 @@ function frame(now) {
   tourTick(now);
   SG.saverTick && SG.saverTick(now);
   inertia(dt);
-  // framing
+  // framing: the view offset follows the clear area through a critically
+  // damped spring (about 0.8 s), and the altitude floor of the clear area
+  // pushes the camera out softly when a panel or the plate grows
   const W = canvas.clientWidth, Hh = canvas.clientHeight, r = occlusion();
   const goal = { x: ((r.l + r.r) / 2 / W) * 2 - 1, y: -(((r.t + r.b) / 2 / Hh) * 2 - 1) };
-  ST.off.x += (goal.x - ST.off.x) * 0.12; ST.off.y += (goal.y - ST.off.y) * 0.12;
+  ST.off.x = CAM.spring(offS.x, goal.x, 5, dt); ST.off.y = CAM.spring(offS.y, goal.y, 5, dt);
+  const floor = CAM.minAlt(clearArea(), 'user');
+  if (!ST.fly && ST.cam.alt < floor) ST.cam.alt += (floor - ST.cam.alt) * (1 - Math.exp(-dt * 3));
   const b = CAM.basis(ST.cam, aspect(), ST.off);
   const enc = device.createCommandEncoder();
   const t0 = performance.now();
@@ -525,7 +566,8 @@ function turnBy(dx, dy) {
   ST.cam.lat = Math.max(-85, Math.min(85, ST.cam.lat + dn * k));
   ST.cam.lon = ((ST.cam.lon + de * k / Math.max(0.2, Math.cos(ST.cam.lat * D)) + 540) % 360) - 180;
 }
-function zoomBy(f) { ST.cam.alt = Math.max(0.05, Math.min(4.5, ST.cam.alt * f)); }
+// the pinch and wheel limit: MIN_R_KM.user on the narrow side of the clear area
+function zoomBy(f) { ST.cam.alt = Math.max(CAM.minAlt(clearArea(), 'user'), Math.min(4.5, ST.cam.alt * f)); }
 function inertia(dt) {
   if (drag.on || (Math.abs(drag.vx) < 0.05 && Math.abs(drag.vy) < 0.05)) return;
   turnBy(drag.vx * dt * 60, drag.vy * dt * 60);
@@ -733,13 +775,14 @@ async function liveRefresh() {
   detectExtremes(); buildStops();
   renderer.setCones(ST.layers.cones ? ST.storms : [], selStormId());
   dirtyOverlays = true; updateDataNote();
-  if (ST.tour.on) ST.tour.order = ST.stops.map((_, i) => i);
+  if (ST.tour.on) ST.tour.order = tourOrder();
 }
 
 // ── debug and saver API ──────────────────────────────────────────────────
 const SG = window.__stormGlobe = {
   ST, CAM, TL, COL, get solver() { return solver; }, get renderer() { return renderer; }, get snap() { return snap; }, get device() { return device; },
   canvas: () => canvas, setTime, select, flyTo, startTour, stopTour, stopPos, stopTitle, stopCam, wideAlt, buildLegend, catLabel, setPlaying,
+  followStop, frameAltFor, clearArea, zoomBy, get frameDt() { return frameDt; },
   setField(m) { ST.field = m; buildLegend(); },
   booted: false, failed: null,
 };
