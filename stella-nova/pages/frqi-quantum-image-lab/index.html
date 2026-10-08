@@ -208,17 +208,19 @@
       </div>
     </div>
 
-    <!-- Module 3: reconstruction. #recon-cv shows original, decoded, and error
-         panels; the footer controls shots, sampling gap, labels, and Sample. -->
+    <!-- Module 3: reconstruction. #recon-cv shows the target image as a cell
+         grid, the reconstruction grid beside it, |error| when wide, and the
+         register tape whose cells move into the reconstruction after the
+         shots. The footer controls shots, sampling time, labels, and Sample. -->
     <div class="module" id="m-recon">
       <div class="mod-head"><span class="mod-title">Reconstruction</span><span class="mod-sub">sample · decode · compare</span><span class="mod-tag" id="recon-tag">idle</span></div>
-      <div class="mod-body" id="recon-body"><canvas id="recon-cv"></canvas><span class="cap">original → P(|1⟩) → decode → |error|</span></div>
+      <div class="mod-body" id="recon-body"><canvas id="recon-cv"></canvas><span class="cap">shots → P(|1⟩) → tape |i⟩ → image</span></div>
       <!-- Sampling footer: two sliders, the label toggle and Sample. Each
            slider row has its own grid cell, so a value never overlaps the
            next label. -->
       <div id="recon-foot">
         <div class="rf-sl"><span>Shots</span><input type="range" id="shots" min="64" max="20000" value="4000" step="64"><span class="val" id="shots-v">4000</span></div>
-        <div class="rf-sl"><span>Gap</span><input type="range" id="gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="gap-v">0.70s</span></div>
+        <div class="rf-sl"><span>Time</span><input type="range" id="stime" min="0.3" max="4" value="1.2" step="0.1"><span class="val" id="stime-v">1.2s</span></div>
         <label class="rf-chk"><input type="checkbox" id="show-labels" checked><span>Labels</span></label>
         <button id="run-shots">Sample</button>
       </div>

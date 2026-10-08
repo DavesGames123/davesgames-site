@@ -20,7 +20,14 @@
 //              │                                      ▲ score strip + circuit
 //              │                                      │ share the playhead
 //              ▼
-//      runSampling() ─▶ shots ─▶ P(|1⟩) ─▶ decodeP1 ─▶ Reconstruction + MAE
+//      runSampling() ─▶ shots ─▶ P(|1⟩) ─▶ reconstruct ─▶ register tape
+//              │  flight: each pixel cell moves tape → (row, col)
+//              ▼
+//      Reconstruction grid beside the Target grid, + |error| and MAE
+//
+//  RUN TIMING  (frqi-core.js, pure; node tests.mjs checks it)
+//      sample for the Time slider (default 1.2 s), then fly for 1.3 s: an
+//      image is finished 2.5 s after Sample. The saver uses saverPlan().
 //
 //  ρ STACK CELL  (one slab per circuit step, y = layer)
 //  ----------------------------------------------------------------------------
@@ -46,19 +53,24 @@
 //      build stack .......... "function buildStack"  full tower rebuild
 //      init picker .......... "function ensurePicker" pick the start state
 //      score strip .......... "function drawScore"   playhead notation
-//      sampling ............. "function runSampling" Gaussian-paced shots
+//      sampling ............. "function runSampling" timed shots (shotsAt)
+//      run phase ............ "function reconPhase"  none / sample / flight / done
 //      circuit view ......... "function drawCircuit" gate diagram + scrub
 //      RY editor ............ "function openRyEd"     retune a pixel
-//      reconstruction ....... "function drawRecon"   original/recon/error
+//      reconstruction ....... "function drawRecon"   sizes #recon-cv, calls paintRecon
+//      recon painter ........ "function paintRecon"  target grid, recon, tape, flight
 //      orchestration ........ "function renderAll"   repaint everything
 //      controls ............. "function setPos"      register + control bindings
 //      phone dock ........... "PHONE DOCK"           sheet toggle, play, sample
 //      init ................. "buildCmapButtons"     first paint
 //      screensaver .......... "window.snSaver"       autopilot for lib/screensaver.js
 //      saver plate .......... "function saverPlate"  opts.label: |I⟩, qubits, step, MAE
+//      saver image panel .... "function hudRender"   paintRecon on a plane over the GL
+//      saver layout ......... "function saverLayout" stack and image panel in the band
 // ============================================================================
 import * as THREE from 'three';
 import { EQ_STATE } from './equation.js';
+import { buildCdf, sampleCdf, shotsAt, reconstruct, tapeCols, flightU, flightPos, PAGE_FLIGHT_MS, saverPlan } from './frqi-core.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -125,9 +137,8 @@ let nPos=4,side=4,rows=4,cols=4,img=null,a0re,a0im,a1re,a1im,decodeMode='frqi',m
 const N=()=>rows*cols;
 // FRQI angle: intensity 0..255 maps to θ in [0, π/2].
 const theta=v=>(v/255)*HALF_PI;
-// Invert P(|1⟩) back to intensity: arcsin√P undoes the sinθ encoding exactly;
-// linear treats P directly as brightness.
-const decodeP1=p=>{p=clamp01(p);return decodeMode==='linear'?p*255:(Math.asin(Math.sqrt(p))/HALF_PI)*255;};
+// The P(|1⟩) → intensity decode (arcsin√P or linear) is decodeP1 in
+// frqi-core.js; reconFromSampling calls it through reconstruct().
 // Rebuild the amplitude arrays from img: a0=cosθ (|0⟩), a1=sinθ (|1⟩), phase 0.
 function rebuildAmpFromImg(){const n=N();a0re=new Float64Array(n);a0im=new Float64Array(n);a1re=new Float64Array(n);a1im=new Float64Array(n);for(let i=0;i<n;i++){const th=theta(img[i]);a0re[i]=Math.cos(th);a1re[i]=Math.sin(th);}}
 // P(|1⟩) for a pixel: the |1⟩ probability normalised over both branches.
@@ -247,6 +258,9 @@ let scene,camera,renderer,composer,controls,grp,glReady=false;
 let cellMesh,floorMesh,floorGrid,labelGroup,sampleMesh,histGroup,histBars,histMarks,labelSprites=[];
 let DIM=32,layerStates=[],layerLabel=[],layerGate=[],layerGIdx=[],totalLayers=1,builtStage=-1,layerEndArr=[];
 let gateList=[],activePix=[],stackStage=0,stackPlaying=false,stackTimer=null,sampleAnim=null,initBasis=0;
+// Saver state, declared here because the render loop (animateGL) reads it
+// from the first frame: hud is the saver image panel, saverOn the mode flag.
+let hud=null,saverOn=false;
 // Reusable scratch objects for writing instance matrices and colours.
 const dummy=new THREE.Object3D(),_col=new THREE.Color();
 // Cells dimmer than this heat cut are skipped; driven by the threshold slider.
@@ -399,10 +413,13 @@ function buildStack(){
   rebuildMeshes();stackStage=totalLayers-1;
   buildStackUpTo(totalLayers-1);setStage(stackStage);ensurePicker();updateDiagGuide();if(!_framed){_framed=true;frameCamera();}
 }
-let _framed=false;
-// Position the camera to frame the whole tower (and the sampling histogram).
-function frameCamera(){const span=DIM*PITCH,towerH=totalLayers*LAYER_GAP+(sampleAnim?BARMAX+LAYER_GAP*1.4:0);
-  const d=Math.max(span,towerH)*1.15+span*0.5+5;camera.position.set(span*0.85+4,towerH*0.62+span*0.35,d);controls.target.set(0,towerH*0.45,0);controls.update();}
+let _framed=false,camZoom=1;
+// Position the camera to frame the whole tower (and the sampling histogram,
+// while sampling or when hist is true). camZoom > 1 moves the camera back
+// from the target; the saver sets it so the tower fits its part of the band.
+function frameCamera(hist){const span=DIM*PITCH,towerH=totalLayers*LAYER_GAP+((hist||sampleAnim)?BARMAX+LAYER_GAP*1.4:0);
+  const d=Math.max(span,towerH)*1.15+span*0.5+5,ty=towerH*0.45;
+  camera.position.set((span*0.85+4)*camZoom,ty+(towerH*0.62+span*0.35-ty)*camZoom,d*camZoom);controls.target.set(0,ty,0);controls.update();}
 // Move the playhead to step s: reveal slabs up to s, update the label, and
 // resync the score and circuit views.
 function setStage(s){stackStage=Math.max(0,Math.min(totalLayers-1,s|0));buildStackUpTo(stackStage);cellMesh.count=layerEnd(stackStage);
@@ -420,11 +437,11 @@ function stopPlay(){stackPlaying=false;const b=document.getElementById('st-play'
 function animateGL(){if(!glReady)return;requestAnimationFrame(animateGL);controls.update();
   if(sampleAnim)updateSampling(Math.min(0.05,clockDt()));
   for(const s of labelSprites)s.quaternion.copy(camera.quaternion);
-  composer.render();}
+  composer.render();hudRender();}
 // Real seconds since the previous frame, for the sampling animation.
 let _lastT=performance.now();function clockDt(){const t=performance.now(),d=(t-_lastT)/1000;_lastT=t;return d;}
 // Match the GL camera and render targets to the wrapper size.
-function resizeGL(){if(!glReady)return;const wrap=document.getElementById('stack-gl-wrap'),W=wrap.clientWidth,H=wrap.clientHeight;if(W<2||H<2)return;camera.aspect=W/H;camera.updateProjectionMatrix();renderer.setSize(W,H,false);composer.setSize(W,H);}
+function resizeGL(){if(!glReady)return;const wrap=document.getElementById('stack-gl-wrap'),W=wrap.clientWidth,H=wrap.clientHeight;if(W<2||H<2)return;camera.aspect=W/H;camera.updateProjectionMatrix();renderer.setSize(W,H,false);composer.setSize(W,H);if(saverOn)saverLayout();}
 
 /* ===== init-state picker — hover the bottom grid (layer 0) to read |b⟩, click to start there ===== */
 // Raycasts the layer-0 floor so a diagonal cell can be picked as the start
@@ -541,13 +558,9 @@ scoreCv.addEventListener('pointermove',e=>{if(scoreScrub)scoreScrubTo(e.clientX)
 scoreCv.addEventListener('pointerup',()=>scoreScrub=false);
 scoreCv.addEventListener('pointercancel',()=>scoreScrub=false);
 
-/* ---- Gaussian-paced sampling (QAV port) ---- */
-// Abramowitz-Stegun error function approximation (for the shot-pacing ramp).
-function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+/* ---- timed sampling, then the flight into the image (frqi-core.js) ---- */
 // Seedable mulberry32 PRNG so each sampling run is reproducible.
 function makeRng(seed){let a=(seed>>>0)||1;return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
-// Draw one outcome from a probability array by linear-scan inverse CDF.
-function sampleOutcome(rng,probs){const u=rng();let acc=0;for(let i=0;i<probs.length;i++){acc+=probs[i];if(u<acc)return i;}return probs.length-1;}
 // Place the additive sample-glow cubes along the diagonal of the final slab.
 function placeSampleGlow(L){for(let i=0;i<DIM;i++){const x=(i-(DIM-1)/2)*PITCH,y=L*LAYER_GAP+CUBE*0.5;dummy.position.set(x,y,x);dummy.scale.set(1,1,1);dummy.updateMatrix();sampleMesh.setMatrixAt(i,dummy.matrix);}sampleMesh.instanceMatrix.needsUpdate=true;sampleMesh.count=DIM;}
 // Update the histogram bars (measured frequencies) and the marks (true P) above
@@ -565,39 +578,50 @@ function paintSampleGlow(A){if(!sampleMesh||sampleMesh.count!==A.D)return;const 
     if(b<=0.001)_col.setRGB(0,0,0);else{const col=heatColor(0.01+0.99*curveEval(norm));_col.setRGB(col[0]/255*b,col[1]/255*b,col[2]/255*b);}
     sampleMesh.setColorAt(i,_col);}
   if(sampleMesh.instanceColor)sampleMesh.instanceColor.needsUpdate=true;}
-// Draw a single measurement shot and record its outcome.
-function oneShot(A){const idx=sampleOutcome(A.rng,A.probs);A.counts[idx]++;A.pulses[idx]=1;A.drawn++;if(A.counts[idx]>A.maxc)A.maxc=A.counts[idx];}
+// Draw one measurement shot (binary search on the CDF) and record it. The
+// outcome |c⟩|i⟩ pulses its histogram bar and the tape cell of pixel i.
+function oneShot(A){const idx=sampleCdf(A.cdf,A.rng());A.counts[idx]++;A.pulses[idx]=1;A.pix[idx%A.n]=1;A.drawn++;if(A.counts[idx]>A.maxc)A.maxc=A.counts[idx];}
 // Start a sampling run on the final state: read its outcome probabilities and
-// set up the animation state the loop advances.
-function runSampling(){
+// set up the run that the GL loop advances. A run is sampleMs of shots, then
+// flightMs of cells that move from the register tape into the image grid.
+// opt: { sampleMs, flightMs, reframe } (the saver passes its own plan).
+function runSampling(opt={}){
   if(!glReady)return;stopPlay();setStage(totalLayers-1);
-  const L=totalLayers-1,st=layerStates[L],D=DIM,probs=new Array(D);let sm=0;
+  const L=totalLayers-1,st=layerStates[L],D=DIM,n=N(),probs=new Float64Array(D);let sm=0;
   for(let i=0;i<D;i++){const p=st.re[i]*st.re[i]+st.im[i]*st.im[i];probs[i]=p;sm+=p;}
   if(sm>0)for(let i=0;i<D;i++)probs[i]/=sm;
-  const shots=Math.max(1,Math.round(+document.getElementById('shots').value)),gap=Math.max(0,+document.getElementById('gap').value);
-  sampleAnim={probs,D,layer:L,counts:new Array(D).fill(0),pulses:new Float32Array(D),maxc:1,drawn:0,shots,gap,acc:gap,gp:0,done:false,rng:makeRng(0x51EE),reconAcc:0};
+  const shots=Math.max(1,Math.round(+document.getElementById('shots').value));
+  const sampleMs=opt.sampleMs??Math.round(+document.getElementById('stime').value*1000),flightMs=opt.flightMs??PAGE_FLIGHT_MS;
+  sampleAnim={probs,cdf:buildCdf(probs),D,n,layer:L,counts:new Float64Array(D),pulses:new Float32Array(D),pix:new Float32Array(n),maxc:1,drawn:0,shots,t:0,sampleMs,flightMs,gp:0,done:false,rng:makeRng(0x51EE)};
   placeSampleGlow(L);histBars.count=D;histMarks.count=D;for(let i=0;i<D;i++)histMarks.setColorAt(i,_col.setRGB(1,0.72,0.28));if(histMarks.instanceColor)histMarks.instanceColor.needsUpdate=true;
-  histGroup.visible=true;frameCamera();document.getElementById('recon-tag').textContent='sampling…';
+  histGroup.visible=true;if(opt.reframe!==false)frameCamera();reconFromSampling(sampleAnim);
 }
-// Advance the sampling animation each frame: draw shots at a Gaussian-eased
-// pace (fast in the middle, slow at the ends), then refresh the reconstruction.
+// Advance the run each frame: draw the shots that shotsAt() asks for by now,
+// refresh the estimate, and end the run when the flight is over. One frame
+// draws at most shots/(frames in sampleMs) shots, so the thread stays free.
 function updateSampling(dt){const A=sampleAnim;if(!A)return;A.gp+=dt*5;
-  if(!A.done){
-    // gap 0 = draw all shots at once; otherwise pace them with the ramp.
-    if(A.gap<=0.001){while(A.drawn<A.shots)oneShot(A);}
-    else{A.acc+=dt;while(A.drawn<A.shots){const e=Math.min(A.drawn,A.shots-1-A.drawn),r=e/4,ramp=Math.exp(-0.5*r*r),g=0.006+(A.gap-0.006)*ramp;if(A.acc<g)break;A.acc-=g;oneShot(A);}}
-    if(A.drawn>=A.shots)A.done=true;
-    A.reconAcc+=dt;if(A.reconAcc>0.12||A.done){A.reconAcc=0;reconFromSampling(A);}}
+  if(!A.done){A.t+=dt*1000;
+    const want=shotsAt(A.t,A.sampleMs,A.shots);while(A.drawn<want)oneShot(A);
+    if(A.t>=A.sampleMs+A.flightMs){A.done=true;if(hud)hud.dirty=true;}
+    reconFromSampling(A);}
   const decay=Math.exp(-dt*4);for(let i=0;i<A.D;i++)A.pulses[i]*=decay;
+  const pd=Math.exp(-dt*7);for(let i=0;i<A.n;i++)A.pix[i]*=pd;
   paintSampleGlow(A);updateHistBars(A);}
-// Turn accumulated shot counts into a reconstructed image: per pixel, P(|1⟩) is
-// the |1⟩ share of its two branch counts, decoded back to intensity.
-function reconFromSampling(A){const n=N(),ve=new Float32Array(n),per=new Int32Array(n);
-  for(let p=0;p<n;p++){const c0=A.counts[p],c1=A.counts[n+p],tot=c0+c1,ph=tot>0?c1/tot:0;ve[p]=decodeP1(ph);per[p]=tot;}
-  measured={vest:ve,shots:Math.round(A.drawn),per};drawRecon();
-  document.getElementById('recon-tag').textContent=A.done?(A.drawn+' shots'):('… '+A.drawn);}
-// Cancel any sampling run and hide its glow, bars, and marks.
-function stopSampling(){if(!sampleAnim)return;sampleAnim=null;if(sampleMesh)sampleMesh.count=0;if(histGroup)histGroup.visible=false;if(histBars)histBars.count=0;if(histMarks)histMarks.count=0;}
+// Turn accumulated shot counts into a reconstructed image (frqi-core.js
+// reconstruct): per pixel, P(|1⟩) is the |1⟩ share of its two branch counts,
+// decoded back to intensity.
+function reconFromSampling(A){const r=reconstruct(A.counts,A.n,decodeMode);
+  measured={vest:r.vest,shots:Math.round(A.drawn),per:r.per};drawRecon();
+  document.getElementById('recon-tag').textContent=A.done?(A.drawn+' shots'):A.t<A.sampleMs?('… '+A.drawn):'to the grid';}
+// The phase of the current run, for the painters.
+function reconPhase(){const A=sampleAnim;if(!measured)return {kind:'none'};
+  if(!A||A.done)return {kind:'done'};
+  if(A.t<A.sampleMs)return {kind:'sample',A};
+  return {kind:'flight',A,tf:A.t-A.sampleMs};}
+// Cancel any sampling run and hide its glow, bars, and marks. A run that has
+// not finished leaves no reconstruction.
+function stopSampling(){if(!sampleAnim)return;if(!sampleAnim.done){measured=null;drawRecon();if(hud)hud.dirty=true;}
+  sampleAnim=null;if(sampleMesh)sampleMesh.count=0;if(histGroup)histGroup.visible=false;if(histBars)histBars.count=0;if(histMarks)histMarks.count=0;}
 
 /* ===== CIRCUIT (synced playhead + scrub) ===== */
 // The encoding-circuit diagram: qubit wires, H gates, one controlled-RY column
@@ -700,37 +724,90 @@ ccv.addEventListener('pointercancel',()=>circScrub=false);
 ccv.style.cursor='ew-resize';
 
 /* ===== RECON ===== */
-// The reconstruction panel: three grids side by side — the original image, the
-// sampled/decoded image, and the absolute error — plus the mean absolute error.
+// The reconstruction panel: the Target image as a cell grid, the
+// Reconstruction grid beside it, and |error| on a wide panel. Under them is
+// the register tape: the N measured pixels in index order |i⟩. After the
+// shots, each tape cell moves on an eased arc to its (row, col) cell, so the
+// readout visibly reorganizes into the image. paintRecon draws on any 2D
+// context: #recon-cv on the page, the saver image panel (hud) in the saver.
 const rcv=document.getElementById('recon-cv'),rctx=rcv.getContext('2d');
-// Draw the three panels; the recon and error panels stay blank until sampled.
+let rSize='';
+// Size #recon-cv to its body (only when the size changes) and paint it.
 function drawRecon(){
   const body=document.getElementById('recon-body'),W=body.clientWidth,H=body.clientHeight,dpr=Math.min(2,devicePixelRatio||1);
   if(W<2||H<2)return;
-  rcv.width=W*dpr;rcv.height=H*dpr;rcv.style.width=W+'px';rcv.style.height=H+'px';rctx.setTransform(dpr,0,0,dpr,0,0);rctx.clearRect(0,0,W,H);
-  const gap=Math.max(10,W*0.018),panels=3,padX=14,cell=Math.max(2,Math.floor(Math.min((W-padX*2-gap*(panels-1))/(panels*cols),(H-54)/rows)));
-  const pw=cell*cols,ph=cell*rows,totalW=panels*pw+gap*(panels-1),x0=(W-totalW)/2,y0=(H-ph)/2-4;
-  // Mean absolute error between the original and the reconstruction.
-  const rec=measured?measured.vest:null,titles=['Original',rec?`Reconstruction · ${measured.shots} shots`:'Reconstruction (sample →)','|error|'];
-  let mae=0,maxE=0;if(rec){for(let i=0;i<N();i++){const e=Math.abs(img[i]-rec[i]);mae+=e;if(e>maxE)maxE=e;}mae/=N();}
-  const gl=cell>5?1:0;
-  for(let p=0;p<panels;p++){const px=x0+p*(pw+gap);
-    rctx.fillStyle='rgba(90,140,192,0.85)';rctx.font='9px ui-monospace, Menlo, monospace';rctx.textAlign='center';rctx.textBaseline='alphabetic';rctx.fillText(titles[p],px+pw/2,y0-8);
-    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c,x=px+c*cell,y=y0+r*cell;let v=0;
-      if(p===0)v=Math.round(img[i]);
-      else if(p===1)v=rec?Math.round(rec[i]):-1;
-      else{const e=rec?Math.abs(img[i]-rec[i]):0,t=maxE>0?e/maxE:0;rctx.fillStyle=rec?`rgb(${Math.round(20+t*200)},${Math.round(20+t*10)},${Math.round(28+t*10)})`:'rgba(20,26,38,0.6)';rctx.fillRect(x,y,cell-gl,cell-gl);continue;}
-      rctx.fillStyle=v<0?'rgba(20,26,38,0.6)':`rgb(${v},${v},${v})`;rctx.fillRect(x,y,cell-gl,cell-gl);
-      if(p===1&&rec&&measured.per&&showShotLabels&&cell>=14){       // per-pixel shot count — light gray fill + dark halo reads on white AND black cells
-        const s=String(measured.per[i]),tx=x+(cell-gl)/2,ty=y+(cell-gl)/2;
-        rctx.font='600 '+Math.max(7,Math.round(cell*0.30))+'px ui-monospace, Menlo, monospace';rctx.textAlign='center';rctx.textBaseline='middle';
-        rctx.lineWidth=Math.max(2,cell*0.11);rctx.lineJoin='round';rctx.strokeStyle='rgba(6,9,15,0.92)';rctx.strokeText(s,tx,ty);
-        rctx.fillStyle='rgba(214,221,234,0.96)';rctx.fillText(s,tx,ty);
-      }}
-    rctx.strokeStyle='rgba(150,200,255,0.12)';rctx.lineWidth=1;rctx.strokeRect(px,y0,pw,ph);}
-  rctx.textAlign='center';rctx.textBaseline='alphabetic';
-  if(rec){rctx.fillStyle='rgba(255,185,72,0.95)';rctx.font='600 11px ui-monospace, Menlo, monospace';rctx.fillText(`MAE ${mae.toFixed(2)} · ${decodeMode==='frqi'?'arcsin√P₁':'linear P₁'}`,W/2,y0+ph+18);}
-  else{rctx.fillStyle='rgba(128,144,176,0.8)';rctx.font='10px ui-monospace, Menlo, monospace';rctx.fillText('Sample to reconstruct →',W/2,y0+ph+18);}
+  const key=W+'x'+H+'@'+dpr;
+  if(key!==rSize){rSize=key;rcv.width=W*dpr;rcv.height=H*dpr;rcv.style.width=W+'px';rcv.style.height=H+'px';}
+  rctx.setTransform(dpr,0,0,dpr,0,0);rctx.clearRect(0,0,W,H);
+  paintRecon(rctx,W,H,{err:W>=520,fs:1});
+}
+// Grey level of an intensity as a CSS colour.
+const grey=v=>{v=Math.max(0,Math.min(255,Math.round(v)));return `rgb(${v},${v},${v})`;};
+const SLOT='rgb(20,26,38)',LINE='rgba(150,200,255,0.26)';
+// Paint the panel in a W×H box. o.err adds the |error| panel; o.fs scales
+// the type; o.idle is the footer text before a run. Layout, top to bottom: titles, grids, tape label, tape, footer.
+function paintRecon(ctx,W,H,o){
+  const n=N(),ph=reconPhase(),rec=measured?measured.vest:null,P=o.err?3:2,fs=o.fs||1;
+  const titleH=16*fs,footH=24*fs,tlabH=15*fs,gapY=10*fs,padX=12*fs,gap=Math.max(12*fs,W*0.025);
+  const tc=tapeCols(n,cols),tl=Math.ceil(n/tc),availH=H-titleH-footH-tlabH-gapY*2;
+  let tcell=Math.min((W-padX*2)/tc,availH*0.24/tl);
+  const cell=Math.max(2,Math.floor(Math.min((W-padX*2-gap*(P-1))/(P*cols),(availH-tcell*tl)/rows)));
+  tcell=Math.max(1.5,Math.min(tcell,cell));
+  const pw=cell*cols,phh=cell*rows,totalW=P*pw+gap*(P-1),tw=tc*tcell,tapeH=tcell*tl;
+  const top=Math.max(0,(H-(titleH+phh+gapY+tlabH+tapeH+gapY+footH))/2);
+  const x0=(W-totalW)/2,y0=top+titleH,tx0=(W-tw)/2,ty0=y0+phh+gapY+tlabH;
+  const gl=cell>=5?1:0,tg=tcell>=5?1:0,px=p=>x0+p*(pw+gap);
+  const font=(w,sz)=>`${w} ${Math.round(sz*fs)}px ui-monospace, Menlo, monospace`;
+  // Flight progress per pixel (0 = on the tape, 1 = in its grid cell).
+  const u=new Float32Array(n);
+  if(ph.kind==='flight')for(let i=0;i<n;i++)u[i]=flightU(i,n,ph.A.flightMs,ph.tf);
+  else if(ph.kind==='done')u.fill(1);
+  // Grid back: the line colour shows through a 1 px gap round each cell, so
+  // every cell boundary is visible.
+  const back=x=>{ctx.fillStyle=LINE;ctx.fillRect(x-1,y0-1,pw+(gl?1:2),phh+(gl?1:2));};
+  // Titles
+  let maxE=0,mae=0;if(rec&&ph.kind==='done'){for(let i=0;i<n;i++){const e=Math.abs(img[i]-rec[i]);mae+=e;if(e>maxE)maxE=e;}mae/=n;}
+  const titles=['Target · '+rows+'×'+cols,ph.kind==='done'?'Reconstruction · '+measured.shots+' shots':ph.kind==='flight'?'Reconstruction · building':'Reconstruction','|error|'];
+  ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font=font(500,9);
+  for(let p=0;p<P;p++){ctx.fillStyle=p===0?'rgba(150,200,255,0.9)':p===1?'rgba(255,185,72,0.9)':'rgba(90,140,192,0.85)';ctx.fillText(titles[p],px(p)+pw/2,y0-6*fs);}
+  // Target grid
+  back(px(0));
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){ctx.fillStyle=grey(img[r*cols+c]);ctx.fillRect(px(0)+c*cell,y0+r*cell,cell-gl,cell-gl);}
+  // Reconstruction grid: a cell shows its value once its flight has landed.
+  back(px(1));
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c;ctx.fillStyle=(rec&&u[i]>=1)?grey(rec[i]):SLOT;ctx.fillRect(px(1)+c*cell,y0+r*cell,cell-gl,cell-gl);}
+  if(ph.kind==='done'&&measured.per&&showShotLabels&&cell>=14*fs){
+    ctx.font=font(600,Math.max(7,cell*0.30/fs));ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';ctx.lineWidth=Math.max(2,cell*0.11);
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c,s=String(Math.round(measured.per[i])),cx=px(1)+c*cell+(cell-gl)/2,cy=y0+r*cell+(cell-gl)/2;
+      ctx.strokeStyle='rgba(6,9,15,0.92)';ctx.strokeText(s,cx,cy);ctx.fillStyle='rgba(214,221,234,0.96)';ctx.fillText(s,cx,cy);}
+    ctx.textBaseline='alphabetic';}
+  // Error grid
+  if(P===3){back(px(2));
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c;let f=SLOT;
+      if(rec&&ph.kind==='done'){const t=maxE>0?Math.abs(img[i]-rec[i])/maxE:0;f=`rgb(${Math.round(20+t*200)},${Math.round(20+t*10)},${Math.round(28+t*10)})`;}
+      ctx.fillStyle=f;ctx.fillRect(px(2)+c*cell,y0+r*cell,cell-gl,cell-gl);}}
+  // Register tape: the measured pixels in index order.
+  ctx.textAlign='left';ctx.font=font(500,9);ctx.fillStyle='rgba(128,144,176,0.9)';
+  ctx.fillText(tl>1?`measured |i⟩, i = 0 … ${n-1}, ${tc} per line`:`measured |i⟩, i = 0 … ${n-1}`,tx0,ty0-5*fs);
+  const tapeAt=i=>({x:tx0+(i%tc)*tcell,y:ty0+Math.floor(i/tc)*tcell});
+  for(let i=0;i<n;i++){const t=tapeAt(i);let f=SLOT;
+    if(rec&&ph.kind==='sample'&&measured.per[i]>0)f=grey(rec[i]);
+    else if(rec&&ph.kind==='flight'&&u[i]<=0)f=grey(rec[i]);
+    else if(u[i]>0)f='rgba(20,26,38,0.55)';
+    ctx.fillStyle=f;ctx.fillRect(t.x,t.y,tcell-tg,tcell-tg);
+    if(ph.kind==='sample'&&ph.A.pix[i]>0.05&&tcell>=3){ctx.strokeStyle=`rgba(255,185,72,${(ph.A.pix[i]*0.9).toFixed(3)})`;ctx.lineWidth=1;ctx.strokeRect(t.x+0.5,t.y+0.5,tcell-tg-1,tcell-tg-1);}}
+  // Cells in flight, drawn over everything: tape cell → grid cell.
+  if(ph.kind==='flight'){const ts=tcell-tg,gs=cell-gl;
+    for(let i=0;i<n;i++){if(u[i]<=0||u[i]>=1)continue;const t=tapeAt(i),r=Math.floor(i/cols),c=i%cols;
+      const q=flightPos(u[i],{x:t.x+ts/2,y:t.y+ts/2,s:ts},{x:px(1)+c*cell+gs/2,y:y0+r*cell+gs/2,s:gs});
+      ctx.fillStyle=grey(rec[i]);ctx.fillRect(q.x-q.s/2,q.y-q.s/2,q.s,q.s);
+      if(q.s>=3){ctx.strokeStyle=`rgba(255,185,72,${(0.85*Math.sin(Math.PI*u[i])).toFixed(3)})`;ctx.lineWidth=1;ctx.strokeRect(q.x-q.s/2+0.5,q.y-q.s/2+0.5,q.s-1,q.s-1);}}}
+  // Footer line
+  ctx.textAlign='center';const fy=ty0+tapeH+gapY+footH*0.62;
+  if(ph.kind==='done'){ctx.fillStyle='rgba(255,185,72,0.95)';ctx.font=font(600,11);ctx.fillText(`MAE ${mae.toFixed(2)} · ${decodeMode==='frqi'?'arcsin√P₁':'linear P₁'}`,W/2,fy);}
+  else if(ph.kind==='sample'){ctx.fillStyle='rgba(255,185,72,0.85)';ctx.font=font(500,10);ctx.fillText(`${ph.A.drawn} of ${ph.A.shots} shots`,W/2,fy);}
+  else if(ph.kind==='flight'){ctx.fillStyle='rgba(255,185,72,0.85)';ctx.font=font(500,10);ctx.fillText('each |i⟩ moves to its cell (row, col)',W/2,fy);}
+  else{ctx.fillStyle='rgba(128,144,176,0.8)';ctx.font=font(400,10);ctx.fillText(o.idle||'Sample to reconstruct →',W/2,fy);}
 }
 
 /* ===== ORCHESTRATION ===== */
@@ -766,8 +843,9 @@ function markCustom(){document.querySelectorAll('.preset-btn').forEach(b=>b.clas
 document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');img=makePreset(b.dataset.preset);rebuildAmpFromImg();measured=null;stopSampling();renderAll();}));
 // Shots slider: set the shot count and repaint its fill.
 const shots=document.getElementById('shots');shots.addEventListener('input',()=>{document.getElementById('shots-v').textContent=shots.value;shots.style.setProperty('--pct',((shots.value-64)/19936*100)+'%');});
-// Gap slider: the sampling pace; live-updates a running run.
-const gap=document.getElementById('gap');gap.addEventListener('input',()=>{document.getElementById('gap-v').textContent=(+gap.value).toFixed(2)+'s';gap.style.setProperty('--pct',(gap.value/1.5*100)+'%');if(sampleAnim)sampleAnim.gap=+gap.value;});
+// Time slider: seconds of shots before the flight (0.3 to 4 s). It sets
+// the next run; a run in progress keeps its own time.
+const stime=document.getElementById('stime');stime.addEventListener('input',()=>{document.getElementById('stime-v').textContent=(+stime.value).toFixed(1)+'s';stime.style.setProperty('--pct',((stime.value-0.3)/3.7*100)+'%');});
 // Heat threshold: hide dim ρ cells; rebuilding the tower re-applies the cut.
 const thr=document.getElementById('thresh');thr.addEventListener('input',()=>{threshold=+thr.value;document.getElementById('thresh-v').textContent=threshold.toFixed(2);thr.style.setProperty('--pct',(threshold/0.5*100)+'%');builtStage=-1;layerEndArr=[];buildStackUpTo(totalLayers-1);setStage(stackStage);});
 // Toggle the per-pixel spin-percentage labels on the source grid.
@@ -824,7 +902,7 @@ addEventListener('resize',drawScore);
 
 // Seed the slider fills, build the colour picker, and start the scene at 4
 // position qubits (a 4×4 image). setPos triggers the first full render.
-shots.style.setProperty('--pct',((4000-64)/19936*100)+'%');gap.style.setProperty('--pct',(0.7/1.5*100)+'%');thr.style.setProperty('--pct','0%');
+shots.style.setProperty('--pct',((4000-64)/19936*100)+'%');stime.style.setProperty('--pct',((1.2-0.3)/3.7*100)+'%');thr.style.setProperty('--pct','0%');
 buildCmapButtons();setTag();renderEquation();initGL();setPos(4);
 
 /* ===== SCREENSAVER ===== */
@@ -857,7 +935,8 @@ function saverPlate(){
     if(rec){for(let i=0;i<n;i++)mae+=Math.abs(img[i]-rec[i]);mae/=n;}
     params.push({sym:'S',name:'shots drawn',value:A.drawn+' of '+A.shots});
     if(rec)params.push({sym:'\\varepsilon',name:'mean abs. error',value:mae.toFixed(2)});
-    lines.push('Sampling the final state.');
+    const k=reconPhase().kind;
+    lines.push(k==='sample'?'Sampling the final state.':k==='flight'?'Each measured pixel |i⟩ moves to its cell.':'Reconstruction beside the target grid.');
   }else lines.push('Step '+stackStage+' of '+(totalLayers-1)+': '+stepText(layerLabel[stackStage]||''));
   const dec=decodeMode==='frqi'?'P_1(i) = \\sin^2\\theta_i, \\qquad \\text{pixel}_i = \\frac{510}{\\pi}\\arcsin\\sqrt{P_1}'
     :'\\text{pixel}_i \\approx 255\\,P_1(i)';
@@ -900,15 +979,60 @@ function stackAnchor(){
   return {x:cx,y:cy,r,pts};
 }
 
+// The saver image panel: paintRecon draws into an off-screen 2D canvas, and
+// a plane in its own orthographic scene shows that canvas over the GL frame
+// after the bloom pass. So the recorded canvas (#stack-gl) holds the target
+// grid and the flight, in tab capture and in paint mode. hud.rect is in CSS
+// px; the canvas is redrawn every frame of a run and once on hud.dirty.
+function ensureHud(){if(hud)return hud;
+  const cv=document.createElement('canvas'),mat=new THREE.MeshBasicMaterial({transparent:true,depthTest:false,depthWrite:false,toneMapped:false});
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),mat),scene2=new THREE.Scene();scene2.add(mesh);
+  hud={cv,ctx:cv.getContext('2d'),tex:null,mat,mesh,scene:scene2,cam:new THREE.OrthographicCamera(-1,1,1,-1,-1,1),rect:null,dpr:1,fs:1,dirty:true,fade:()=>0};
+  return hud;}
+// Place the panel at rect (CSS px) in a W×H frame. A new canvas size needs a
+// new texture, so the old one is disposed.
+function hudPlace(rect,W,H){const h=ensureHud(),d=Math.min(1.5,devicePixelRatio||1);
+  h.rect=rect;h.dpr=d;h.fs=Math.max(1,Math.min(2.2,rect.h/300));
+  h.cv.width=Math.max(2,Math.round(rect.w*d));h.cv.height=Math.max(2,Math.round(rect.h*d));
+  if(h.tex)h.tex.dispose();h.tex=new THREE.CanvasTexture(h.cv);h.tex.colorSpace=THREE.SRGBColorSpace;h.tex.minFilter=THREE.LinearFilter;h.tex.generateMipmaps=false;
+  h.mat.map=h.tex;h.mat.needsUpdate=true;
+  h.cam.left=-W/2;h.cam.right=W/2;h.cam.top=H/2;h.cam.bottom=-H/2;h.cam.updateProjectionMatrix();
+  h.mesh.scale.set(rect.w,rect.h,1);h.mesh.position.set(rect.x+rect.w/2-W/2,H/2-(rect.y+rect.h/2),0);h.dirty=true;}
+// Draw the panel over the frame (called by animateGL after composer.render).
+// Its opacity follows the saver fade, so it fades with the scene.
+function hudRender(){if(!hud||!hud.rect||!hud.tex)return;
+  if((sampleAnim&&!sampleAnim.done)||hud.dirty){hud.dirty=false;const c=hud.ctx,d=hud.dpr;
+    c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,hud.rect.w,hud.rect.h);paintRecon(c,hud.rect.w,hud.rect.h,{err:false,fs:hud.fs,idle:'the circuit builds |φ⟩, then shots'});hud.tex.needsUpdate=true;}
+  hud.mat.opacity=1-hud.fade();
+  renderer.autoClear=false;renderer.render(hud.scene,hud.cam);renderer.autoClear=true;}
+// Split the clear band between the label plate's top and bottom text
+// (plateBand, lib/saver-clear.js) into a stack part and an image part. Wide
+// frame: stack left, images right. Tall frame: stack above, images below.
+// A view offset moves the tower centre into its part, and camZoom moves
+// the camera back so the tower fits. Called on each image change (under the
+// fade) and on resize.
+let bandFn=null;
+function saverLayout(){if(!saverOn||!glReady)return;
+  const W=innerWidth,H=innerHeight,band=bandFn?bandFn(H):null;
+  const t=band?band.t:H*0.2,b=band?band.b:H*0.26,mid=Math.max(H*0.3,H-t-b);
+  let rect,cx,cy,partH;
+  if(W>=H*1.05){rect={x:W*0.53,y:t,w:W*0.43,h:mid};cx=W*0.28;cy=t+mid/2;partH=mid;}
+  else{const hh=mid*0.5;rect={x:W*0.04,y:t+mid-hh,w:W*0.92,h:hh};cx=W/2;cy=t+(mid-hh)/2;partH=mid-hh;}
+  camZoom=Math.max(1,Math.min(3,H/partH*0.9));
+  camera.setViewOffset(W,H,W/2-cx,H/2-cy,W,H);hudPlace(rect,W,H);}
+
 // Hook for the shell screensaver (lib/screensaver.js). It moves #stack-gl-wrap
 // to <body> and hides all other content, so the rho stack fills the window
-// through resizeGL (the ResizeObserver calls it). Each image runs two parts:
-// the circuit builds the tower one slab at a time, then the final state is
-// sampled and the histogram grows. A full-screen quad in the scene fades to
-// the background colour across each camera reframe and image change, so the
-// recorded canvas has no hard cut. opts.calm (1 = slowest) sets the spin and
-// the step pace; opts.seed sets the order of the images. No exit(): the
-// shell reloads the page on stop.
+// through resizeGL (the ResizeObserver calls it). Each image runs in order:
+// the circuit builds the tower one slab at a time, the final state is
+// sampled (the histogram grows), and then each measured pixel moves from the
+// register tape into the reconstruction grid beside the target grid (the
+// saver image panel). saverPlan (frqi-core.js) sets the times: an image is
+// finished at most 8.2 s after its fade-in, and then holds. A full-screen
+// quad in the scene fades to the background colour across each image
+// change, so the recorded canvas has no hard cut. opts.calm (1 = slowest)
+// sets the spin and the pace; opts.seed sets the order of the images. No
+// exit(): the shell reloads the page on stop.
 window.snSaver={enter(o={}){
   const calm=Math.max(0,Math.min(1,o.calm??0.7)),secs=Math.max(20,+o.seconds||60);
   let r=(o.seed>>>0)||1;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;
@@ -917,33 +1041,40 @@ window.snSaver={enter(o={}){
   st.textContent='body>*:not(#stack-gl-wrap){display:none!important}#stack-gl-wrap>*:not(#stack-gl){display:none!important}'+
     '#stack-gl-wrap{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:1}#stack-gl{cursor:none!important}';
   document.head.appendChild(st);
+  saverOn=true;import('../../lib/saver-clear.js').then(m=>{bandFn=m.plateBand;}).catch(()=>{/* no band */});
   resizeGL();
   controls.autoRotate=true;controls.autoRotateSpeed=0.5*(1-0.5*calm);
   const fadeMat=new THREE.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,uniforms:{a:{value:1}},
     vertexShader:'void main(){gl_Position=vec4(position.xy,0.0,1.0);}',
     fragmentShader:'uniform float a;void main(){gl_FragColor=vec4(0.0392,0.051,0.0784,a);}'});
   const fadeQ=new THREE.Mesh(new THREE.PlaneGeometry(2,2),fadeMat);fadeQ.frustumCulled=false;fadeQ.renderOrder=9999;scene.add(fadeQ);
+  ensureHud().fade=()=>fadeMat.uniforms.a.value;
   const names=['cross','gradient','checker','phantom','rings'];
   for(let i=names.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[names[i],names[j]]=[names[j],names[i]];}
-  const cycle=Math.max(16,secs/2)*1000,fadeMs=(0.7+1.0*calm)*1000;
+  const cycle=Math.max(12,secs/3)*1000,fadeMs=(0.7+1.0*calm)*1000;
   const wait=ms=>new Promise(res=>setTimeout(res,ms));
+  // Resolve when test() is true (checked each 100 ms) or after maxMs.
+  const until=(test,maxMs)=>new Promise(res=>{const t0=performance.now();const k=()=>{if(test()||performance.now()-t0>maxMs)res();else setTimeout(k,100);};k();});
   const fadeTo=to=>new Promise(res=>{const from=fadeMat.uniforms.a.value,t0=performance.now();
     const step=now=>{const k=Math.min(1,(now-t0)/fadeMs);fadeMat.uniforms.a.value=from+(to-from)*k*k*(3-2*k);if(k<1)requestAnimationFrame(step);else res();};
     requestAnimationFrame(step);});
   let n=0;
   (async function run(){
     for(;;){
-      // image change and reframe, under the fade
+      // image change, layout and reframe, under the fade
       const b=document.querySelector('.preset-btn[data-preset="'+names[n++%names.length]+'"]');
-      stopSampling();b.click();setStage(0);frameCamera();
+      stopSampling();b.click();setStage(0);saverLayout();frameCamera(true);
+      const plan=saverPlan(calm,totalLayers);
       await fadeTo(0);
-      // build: one slab per step, about half the cycle
-      const stepMs=Math.max(350,(cycle*0.45-fadeMs)/Math.max(1,totalLayers-1));
-      while(stackStage<totalLayers-1){await wait(stepMs);setStage(stackStage+1);}
-      await wait(Math.max(1500,cycle*0.08));
-      // sample the final state, with the camera reframed for the histogram
-      await fadeTo(1);runSampling();await fadeTo(0);
-      await wait(Math.max(3000,cycle*0.47-3*fadeMs));
+      const t0=performance.now();
+      // build: one slab per step
+      while(stackStage<totalLayers-1){await wait(plan.stepMs);setStage(stackStage+1);}
+      await wait(plan.holdMs);
+      // sample, then the flight into the image; the camera already has room
+      runSampling({sampleMs:plan.sampleMs,flightMs:plan.flightMs,reframe:false});
+      await until(()=>!sampleAnim||sampleAnim.done,plan.sampleMs+plan.flightMs+2000);
+      // hold the finished image for the rest of the cycle
+      await wait(Math.max(2500,cycle-2*fadeMs-(performance.now()-t0)));
       await fadeTo(1);
     }
   })();

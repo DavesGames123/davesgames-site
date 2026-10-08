@@ -53,7 +53,7 @@ window.SN_SAVER_CATALOG = {
     'qave': { tier: 2, default: true, hook: true, note: 'Already plays and orbits idle: VS.playing=true, speed 2, autoRotate true speed 0.55 (core.js:29-31,50).' },
     'qft-flow': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02). Its hook stays in the page.' },
     'qft-store': { tier: 5, note: 'Exclude. Page is a form: payload textarea #payload, register steppers, SVG dials built in buildDials (main.js:123), decoded text and badge.' },
-    'frqi': { tier: 3, default: true, hook: true, note: 'Stack autorotates idle (initGL, main.js:264, autoRotateSpeed 0.5) but layers do not advance.' },
+    'frqi': { tier: 3, default: true, hook: true, note: 'Stack autorotates idle (initGL, autoRotateSpeed 0.5) but layers do not advance.' },
     'protein-viewer': { tier: 3, default: true, hook: true, note: 'Draws only when S.dirty (app/loop.js);' },
     'protein-folding': { tier: 2, default: true, hook: true, note: 'Sim workers run idle (S.running=true) and camera orbits after 2 s idle (S.orbit=!REDUCED, main.js:541).' },
     'alphafold': { tier: 3, default: true, hook: true, note: 'Long scrolling explainer;' },

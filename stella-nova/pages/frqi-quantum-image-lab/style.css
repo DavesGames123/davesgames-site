@@ -145,7 +145,7 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
   #dock #dock-sample{color:var(--amber);border-color:rgba(255,185,72,0.5)}
   #grid{display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--border-b);gap:1px;padding-bottom:var(--dock-h)}
   .module{flex:0 0 auto}
-  #m-field{min-height:380px}#m-stack{min-height:460px}#m-recon{min-height:380px}#m-circuit{min-height:200px}
+  #m-field{min-height:380px}#m-stack{min-height:460px}#m-recon{min-height:440px}#m-circuit{min-height:200px}
   #field-body{flex-direction:column}.fld-src{flex:0 0 206px}.fld-amp{flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) auto}.fld-amp .amp-cell{min-width:0}.fld-amp .amp-cell+.amp-cell{border-top:none;border-left:1px solid var(--border)}.amp-foot{grid-column:1 / -1}}
 /* Landscape phone: the panel is a drawer on the right edge. */
 @media (max-height:500px) and (pointer:coarse) and (orientation:landscape){
