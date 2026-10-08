@@ -76,7 +76,7 @@
       '.w{display:flex;flex-direction:column;align-items:center;gap:2px;padding:3px 3px 3px 0;border-radius:0 14px 14px 0;background:rgba(10,12,18,.82);' +
       'box-shadow:0 6px 22px -8px rgba(0,0,0,.7);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}' +
       'a{display:inline-flex;align-items:center;gap:6px;writing-mode:vertical-rl;transform:rotate(180deg);min-width:28px;padding:12px 0;border-radius:11px 0 0 11px;' +
-      'background:linear-gradient(135deg,#ffd65c,#ffb31a 55%,#ff8a3d);color:#1a1204;text-decoration:none;' +
+      'background:#ffb31a linear-gradient(135deg,#ffd65c,#ffb31a 55%,#ff8a3d);color:#1a1204;text-decoration:none;' +
       'font:600 13px/1 "Space Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;white-space:nowrap}' +
       'a:hover{filter:brightness(1.08)}' +
       'button{all:unset;cursor:pointer;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;' +
