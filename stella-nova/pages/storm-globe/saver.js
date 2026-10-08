@@ -99,7 +99,10 @@ export function installSaver(SG) {
         const top = b ? b.t : 0, bot = b ? b.b : 0;
         const w = b ? Math.min(W, b.w) : W, l = (W - w) / 2;
         ST.viewOverride = { l, r: l + w, t: top, b: Math.max(top + 0.3 * Hh, Hh - bot) };
-        return (ST.viewOverride.b - ST.viewOverride.t) / Hh;
+        // the narrow side: in a portrait frame the wide shot fits the globe
+        // to the band width, not to the band height
+        const V = ST.viewOverride;
+        return Math.min(V.b - V.t, V.r - V.l) / Hh;
       };
       // the live refresh rebuilds ST.stops (new storm records, new
       // forecasts): read a stop through its id, so the camera follows the

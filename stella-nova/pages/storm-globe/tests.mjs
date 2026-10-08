@@ -216,6 +216,12 @@ section('Camera: the minimum altitude rule, flight limits, springs');
   const seen = Math.atan2(Math.sin(r), 1 + a - Math.cos(r));
   check('minimum altitude: MIN_R_KM.auto reaches the edge of the narrow side', near(Math.tan(seen), Math.tan(CAM.FOV * D / 2) * fill, 1e-9), `${CAM.MIN_R_KM.auto} km`);
   check('minimum altitude: the user floor is lower than the automatic floor', CAM.minAlt(portrait, 'user') < aP && CAM.minAlt(portrait, 'user') > 0.3, CAM.minAlt(portrait, 'user').toFixed(2));
+  // the whole globe: on a portrait phone it fits the width (the narrow side)
+  const globePx = (a, H) => Math.tan(Math.asin(1 / (1 + a))) / Math.tan(CAM.FOV * D / 2) * H;
+  for (const [nm, c] of [['390x844 portrait', { w: 390, h: 760, H: 844 }], ['360x640 portrait', { w: 360, h: 600, H: 640 }], ['844x390 landscape', { w: 844, h: 300, H: 390 }]]) {
+    const px = globePx(CAM.globeAlt(CAM.narrowFill(c) * 0.86), c.H);
+    check(`whole globe fits the narrow side: ${nm}`, px <= Math.min(c.w, c.h) + 1e-6 && px > 0.8 * Math.min(c.w, c.h), `${px.toFixed(0)} px of ${Math.min(c.w, c.h)}`);
+  }
   check('minimum altitude: landscape phone uses the clear height', near(CAM.minAlt(landscape), CAM.frameAlt(CAM.MIN_R_KM.auto, { w: 300, h: 300, H: 390 }), 1e-12));
   // flights: sample the angular speed and acceleration of the target point
   const worst = (A, B) => {

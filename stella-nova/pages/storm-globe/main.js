@@ -405,7 +405,7 @@ function buildOverlays() {
 
 // ── camera, flights, tour ────────────────────────────────────────────────
 function aspect() { return canvas.clientWidth / Math.max(1, canvas.clientHeight); }
-function clearFill() { const r = occlusion(); return Math.max(0.3, (r.b - r.t) / innerHeight); }
+function clearFill() { const r = occlusion(); return CAM.narrowFill({ w: r.r - r.l, h: r.b - r.t, H: innerHeight }); }
 // the clear area in the form camera.js frameAlt reads
 // In the saver the height is at least half the view: the subject sits in
 // the plate's clear band, and its surroundings may run on under the plate.
@@ -416,10 +416,7 @@ function clearArea() {
 // the altitude that frames rKm, never below the automatic floor
 function frameAltFor(rKm, clear = clearArea()) { return Math.max(CAM.frameAlt(rKm, clear), CAM.minAlt(clear, 'auto')); }
 // the altitude at which the whole globe fits the clear area
-function wideAlt(fill = clearFill() * 0.86) {
-  const k = Math.tan(CAM.FOV * D / 2) * fill, s = k / Math.sqrt(1 + k * k);
-  return 1 / s - 1;
-}
+function wideAlt(fill = clearFill() * 0.86) { return CAM.globeAlt(fill); }
 function flyTo(target, dur, minDur) {
   const f = CAM.flight({ ...ST.cam }, target, { dur, minDur });
   ST.fly = { f, t0: performance.now(), target };

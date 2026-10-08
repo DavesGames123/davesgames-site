@@ -159,7 +159,7 @@ html.in-frame #card{top:12px}
   #hint{display:none}
   #timebar{left:6px;right:6px;bottom:calc(var(--dock-h) + 4px);height:calc(var(--tb-h) - 6px);padding:6px 8px 6px 6px;border-radius:12px;gap:8px}
   .tcontrols{gap:4px}
-  #play,#speedBtn{width:44px;height:30px;min-height:30px}
+  #play,#speedBtn{width:44px;height:44px;min-height:44px}
   #timeLab{display:none}
   #cursorLab{font-size:.66rem}
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--dock-h);z-index:40;padding:6px 8px calc(6px + env(safe-area-inset-bottom));gap:6px;

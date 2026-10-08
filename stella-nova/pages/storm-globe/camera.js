@@ -94,6 +94,16 @@ export function altForRadius(r, fill = 0.9) {
   return Math.max(0.02, Math.sin(r) / t - 1 + Math.cos(r));
 }
 
+// The share of the view height that the whole globe may span: the narrow
+// side of the clear area, so a portrait phone fits the globe to its width.
+// clear = { w, h, H } as frameAlt reads it; 0.3 at least.
+export function narrowFill(clear) { return Math.max(0.3, Math.min(clear.w, clear.h) / Math.max(1, clear.H)); }
+// The altitude at which the whole globe spans fill of the view height.
+export function globeAlt(fill) {
+  const k = Math.tan(FOV * D / 2) * fill, s = k / Math.sqrt(1 + k * k);
+  return 1 / s - 1;
+}
+
 // ── framing rule ─────────────────────────────────────────────────────────
 export const R_KM = 6371;
 // the smallest ground radius (km) on the narrow side of the clear area
