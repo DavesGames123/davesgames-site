@@ -1,0 +1,14 @@
+OUTBREAK — data sources, licences and credits
+=============================================
+
+Population nodes
+----------------
+Natural Earth (https://www.naturalearthdata.com), public domain.
+  - data/nodes.json: ne_50m_populated_places_simple (city names,
+    positions, pop_max) and ne_50m_admin_0_countries (POP_EST,
+    REGION_WB, INCOME_GRP), from
+    https://github.com/nvkelso/natural-earth-vector (geojson/), written
+    by tools/build-nodes.py. Each country population is split over its
+    largest cities, so a node is a catchment, not the city alone.
+    Left out: countries under 150,000 people, and N. Cyprus and
+    S. Sudan (no city matched the country code in the 1:50m places).
