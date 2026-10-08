@@ -817,6 +817,13 @@ const SG = window.__stormGlobe = {
   ST, CAM, TL, COL, get solver() { return solver; }, get renderer() { return renderer; }, get snap() { return snap; }, get device() { return device; },
   canvas: () => canvas, setTime, select, flyTo, startTour, stopTour, stopPos, stopTitle, stopCam, wideAlt, buildLegend, catLabel, setPlaying,
   followStop, frameAltFor, clearArea, zoomBy, get frameDt() { return frameDt; }, coast: COAST,
+  // the saver calls this at black, between a fade out and a fade in, so a
+  // new plate band does not slide the subject while it fades in
+  snapOffset() {
+    const W = canvas.clientWidth, Hh = canvas.clientHeight, r = occlusion();
+    const gx = ((r.l + r.r) / 2 / W) * 2 - 1, gy = -(((r.t + r.b) / 2 / Hh) * 2 - 1);
+    offS.x.x = ST.off.x = gx; offS.y.x = ST.off.y = gy; offS.x.v = offS.y.v = 0;
+  },
   setField(m) { ST.field = m; buildLegend(); },
   booted: false, failed: null,
 };

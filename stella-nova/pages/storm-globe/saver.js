@@ -4,9 +4,23 @@
 //  The shell (lib/screensaver.js) calls snSaver.enter(opts), opts = { calm,
 //  seconds, caption, seed, label }. enter hides the GUI (html.sn-saver),
 //  then plays shots in a seeded shuffle (a new order each run). A shot
-//  holds 5-12 s (calm makes it longer). Two shots near each other are
-//  joined by an eased great-circle flight; others by a fade through black
-//  (the globe and the overlays both fade, so a recording has the fade).
+//  holds 9-17 s after the camera lands (calm makes it longer). Two shots
+//  within NEAR_DEG of each other are joined by an eased great-circle
+//  flight (camera.js FLY limits its angular speed and acceleration);
+//  others by a fade through black (the globe and the overlays both fade,
+//  so a recording has the fade).
+//
+//  Camera: every shot frames a ground radius (SHOT_KM) on the narrow side
+//  of the plate's clear band, never below the automatic floor
+//  (main.js frameAltFor, camera.js MIN_R_KM), so a portrait phone gets
+//  more altitude. Turns and drifts are in degrees per second (not per
+//  frame); a storm is followed through the critically damped spring of
+//  main.js followStop; the eye shot pushes in by one smootherstep from
+//  1.18x to 1x of its altitude over the hold. The altitude reads the
+//  band at least half the view high (main.js clearArea): the subject
+//  sits in the band, and its surroundings may run on under the plate.
+//  The band is held for a shot (frameBand), so the view offset moves
+//  only between shots.
 //
 //  Shots:
 //    eye     a storm: the camera comes down over it and circles the eye
@@ -22,13 +36,19 @@
 //  The plate names the subject with its numbers and the data time, and
 //  shows a real extract of shaders/solver.wgsl (advection or Coriolis).
 //
-//  snSaver.debug() returns the director state for CDP checks.
+//  snSaver.debug() returns the director state for CDP checks;
+//  snSaver.cut(kind) starts the next shot of that kind (CDP probes).
 //
-//  grep -n targets: "const KINDS", "function shotFor", "function plate",
-//                   "function frameBand"
+//  grep -n targets: "const KINDS", "const shotFor", "const plate",
+//                   "const frameBand", "SHOT_KM", "NEAR_DEG"
 // ============================================================================
 import { plateBand } from '../../lib/saver-clear.js';
 import { KT } from './sources.js';
+
+// SHOT_KM: the ground radius each shot frames on the narrow side of the
+// clear band; NEAR_DEG: a flight joins two shots closer than this
+const SHOT_KM = { eye: 1000, track: 1600, low: 1700, event: 1100, vort: 2400 };
+const NEAR_DEG = 100;
 
 // fallback extracts (the real source replaces them at load, see EXTRACTS)
 const CODE = {
@@ -72,30 +92,46 @@ export function installSaver(SG) {
       KINDS.push({ kind: 'wide', o: null }, { kind: 'wide', o: null });
       if (!storms.length) KINDS.push({ kind: 'vort', o: null });
       shuffle(KINDS);
-      const hold = () => (5 + 5 * calm + rnd() * 2) * 1000;
+      const hold = () => (9 + 5 * calm + rnd() * 3) * 1000;
       run = { KINDS, i: -1, shot: null, t0: 0, fading: 0, fadeT0: 0, next: null, saved, label, calm, band: null, bandAt: -1e9, code: rnd() < 0.5 ? 'advect' : 'coriolis', shots: 0 };
 
       const frameBand = () => {
         const now = performance.now();
         // keep the last band while the plate cross-fades (plateBand is
         // null then), so the subject does not jump to the full frame
-        if (now - run.bandAt > 250) { run.bandAt = now; const pb = plateBand(innerHeight); if (pb) run.band = pb; }
+        // the band holds for the whole shot: it only grows its covers (a
+        // longer plate text), so the view offset does not wander while
+        // the plate text changes; begin() clears it for the next shot
+        if (now - run.bandAt > 250) {
+          run.bandAt = now; const pb = plateBand(innerHeight), ob = run.band;
+          if (pb) run.band = !ob || run.bandShot !== run.shots ? pb : { t: Math.max(ob.t, pb.t), b: Math.max(ob.b, pb.b), w: Math.min(ob.w, pb.w) };
+          if (pb && now - run.t0 > 150) run.bandFresh = true;
+          run.bandShot = run.shots;
+        }
         const b = run.band, W = innerWidth, Hh = innerHeight;
         const top = b ? b.t : 0, bot = b ? b.b : 0;
         const w = b ? Math.min(W, b.w) : W, l = (W - w) / 2;
         ST.viewOverride = { l, r: l + w, t: top, b: Math.max(top + 0.3 * Hh, Hh - bot) };
         return (ST.viewOverride.b - ST.viewOverride.t) / Hh;
       };
-      const posOf = o => o ? SG.stopPos(o) : null;
+      // the live refresh rebuilds ST.stops (new storm records, new
+      // forecasts): read a stop through its id, so the camera follows the
+      // storm the globe draws, not the record the shot list was made from
+      const cur = o => (o && ST.stops.find(q => q.id === o.id)) || o;
+      const posOf = o => o ? SG.stopPos(cur(o)) : null;
+      const altFor = kind => SG.frameAltFor(SHOT_KM[kind]);
 
       // shotFor: the camera, time and colour of one shot
       const shotFor = k => {
-        const fill = frameBand(), o = k.o;
+        const fill = frameBand(), o = cur(k.o);
         const s = { kind: k.kind, o, dur: hold(), field: 0, speed: 1, play: true, title: '', follow: !!(o && o.kind === 'storm') };
+        // spin, drift: degrees per second; the time of the shot is set in
+        // begin(), and the camera position is taken again there
         if (k.kind === 'eye') {
-          const p = posOf(o);
-          s.cam = { lat: p.lat, lon: p.lon, alt: 0.2 + 0.12 * rnd() + 0.08 * (1 - fill), tilt: 42 + rnd() * 14, heading: rnd() * 360 };
-          s.spin = (rnd() < 0.5 ? -1 : 1) * (4 + 3 * (1 - calm));
+          const p = posOf(o), alt = altFor('eye');
+          s.cam = { lat: p.lat, lon: p.lon, alt: alt * 1.18, tilt: 34 + rnd() * 12, heading: rnd() * 360 };
+          s.altA = alt * 1.18; s.altB = alt;
+          s.spin = (rnd() < 0.5 ? -1 : 1) * (2.2 + 1.5 * (1 - calm));
           s.t12 = rnd();
           s.title = SG.stopTitle(o);
         } else if (k.kind === 'track') {
@@ -104,31 +140,32 @@ export function installSaver(SG) {
           s.tEnd = Math.min(ST.t1, path[path.length - 1].t);
           s.speed = Math.max(3, (s.tEnd - s.tStart) / 3600e3 / (s.dur / 1000));
           const p = SG.stopPos(o, s.tStart);
-          s.cam = { lat: p.lat, lon: p.lon, alt: 0.55 + 0.2 * rnd(), tilt: 20 + 15 * rnd(), heading: 0 };
+          s.cam = { lat: p.lat, lon: p.lon, alt: altFor('track'), tilt: 18 + 12 * rnd(), heading: 0 };
           s.title = SG.stopTitle(o) + ', track';
         } else if (k.kind === 'wide') {
           const lat = (rnd() - 0.5) * 50, lon = rnd() * 360 - 180;
-          s.cam = { lat, lon, alt: SG.wideAlt(fill * 0.8), tilt: 0, heading: 0 };
-          s.drift = (rnd() < 0.5 ? -1 : 1) * (3 + 2 * (1 - calm));
+          s.cam = { lat, lon, alt: SG.wideAlt(fill * 0.9), tilt: 0, heading: 0 };
+          s.drift = (rnd() < 0.5 ? -1 : 1) * (2 + 1.5 * (1 - calm));
           s.title = 'The global circulation';
           s.field = rnd() < 0.3 ? 1 : 0; s.follow = false;
         } else if (k.kind === 'vort') {
           const p = o ? posOf(o) : { lat: 45 * (rnd() < 0.5 ? -1 : 1), lon: rnd() * 360 - 180 };
-          s.cam = { lat: p.lat, lon: p.lon, alt: 0.9, tilt: 15, heading: 0 };
-          s.field = 1; s.drift = 2; s.title = o ? SG.stopTitle(o) : 'Vortices of the westerlies';
+          s.cam = { lat: p.lat, lon: p.lon, alt: Math.max(0.9, altFor('vort')), tilt: 12, heading: 0 };
+          s.field = 1; s.drift = 1.5; s.title = o ? SG.stopTitle(o) : 'Vortices of the westerlies';
         } else if (k.kind === 'low') {
           const p = posOf(o);
-          s.cam = { lat: p.lat, lon: p.lon, alt: 0.55 + 0.15 * rnd(), tilt: 25 + 10 * rnd(), heading: rnd() * 40 - 20 };
-          s.field = 2; s.spin = 2; s.title = SG.stopTitle(o);
+          s.cam = { lat: p.lat, lon: p.lon, alt: altFor('low'), tilt: 22 + 10 * rnd(), heading: rnd() * 40 - 20 };
+          s.field = 2; s.spin = 1.5; s.title = SG.stopTitle(o);
         } else {
           const p = posOf(o);
-          s.cam = { lat: p.lat, lon: p.lon, alt: 0.35 + 0.15 * rnd(), tilt: 30 + 15 * rnd(), heading: rnd() * 360 };
-          s.spin = 3; s.title = SG.stopTitle(o);
+          s.cam = { lat: p.lat, lon: p.lon, alt: altFor('event'), tilt: 26 + 12 * rnd(), heading: rnd() * 360 };
+          s.spin = 2; s.title = SG.stopTitle(o);
         }
         return s;
       };
       const begin = (s, viaFlight) => {
-        run.shot = s; run.t0 = performance.now(); run.shots++;
+        run.shot = s; run.t0 = performance.now(); run.shots++; run.fol = null; run.bandFresh = false;
+        if (run.shots > 1) run.code = run.code === 'advect' ? 'coriolis' : 'advect';
         ST.field = s.field; SG.buildLegend();
         ST.speed = s.speed;
         // track: its own start; the others: near data time (eye shots up to
@@ -136,16 +173,19 @@ export function installSaver(SG) {
         if (s.kind === 'track') SG.setTime(s.tStart);
         else if (s.kind === 'eye') { const p = s.o.s._path || TL.stormPath(s.o.s); SG.setTime(Math.max(p[0].t, Math.min(p[p.length - 1].t - 3 * 3600e3, ST.dataTime + (s.t12 - 0.5) * 24 * 3600e3))); }
         else SG.setTime(ST.dataTime);
+        // the subject where it is at the shot's own time
+        if (s.o && s.kind !== 'track') { const p = posOf(s.o); s.cam.lat = p.lat; s.cam.lon = p.lon; }
         SG.setPlaying(s.play);
         if (s.o) SG.select(s.o.id, false); else SG.select(null);
-        if (viaFlight) { s.flyDur = SG.flyTo(s.cam, Math.min(5, 2.2 + 2 * CAM.arc(ST.cam, s.cam))) * 1000; s.dur += s.flyDur * 0.6; }
+        s.flyDur = 0;
+        if (viaFlight) { s.flyDur = SG.flyTo(s.cam, 0, 3) * 1000; s.dur += s.flyDur; }
         else { ST.fly = null; Object.assign(ST.cam, s.cam); }
         plate();
       };
-      const next = () => {
+      const next = (force = false) => {
         run.i = (run.i + 1) % run.KINDS.length;
         const s = shotFor(run.KINDS[run.i]);
-        const near = run.shot && CAM.arc(ST.cam, s.cam) < 70 * Math.PI / 180 && s.kind !== 'track';
+        const near = !force && run.shot && CAM.arc(ST.cam, s.cam) < NEAR_DEG * Math.PI / 180 && s.kind !== 'track';
         if (near) begin(s, true);
         else { run.next = s; run.fading = 1; run.fadeT0 = performance.now(); }
       };
@@ -157,22 +197,25 @@ export function installSaver(SG) {
         if (run.fading) {
           const k = (now - run.fadeT0) / 650;
           if (run.fading === 1) { ST.fade = Math.max(0, 1 - k); if (k >= 1) { begin(run.next, false); run.next = null; run.fading = 2; run.fadeT0 = now; } }
-          else { ST.fade = Math.min(1, k); if (k >= 1) { run.fading = 0; ST.fade = 1; } }
+          // at black, wait (up to 0.9 s) for the new plate band, then put
+          // the view offset on it at once and fade in
+          else if (!run.bandFresh && now - run.t0 < 900) { ST.fade = 0; run.fadeT0 = now; }
+          else { if (k < 0.05) { frameBand(); SG.snapOffset(); } ST.fade = Math.min(1, k); if (k >= 1) { run.fading = 0; ST.fade = 1; } }
         }
         const s = run.shot; if (!s) return;
-        const e = (now - run.t0) / 1000;
+        const e = (now - run.t0) / 1000, dt = SG.frameDt;
         if (!ST.fly) {
-          if (s.spin) ST.cam.heading += s.spin / 60;
-          if (s.drift) ST.cam.lon += s.drift / 60;
-          if (s.follow && s.o) { const p = SG.stopPos(s.o); const c = CAM.slerp(ST.cam, p, 0.06); ST.cam.lat = c.lat; ST.cam.lon = c.lon; }
-          if (s.kind === 'eye') ST.cam.alt += (s.cam.alt * 0.82 - ST.cam.alt) * 0.002;   // a slow push in
+          if (s.spin) ST.cam.heading += s.spin * dt;
+          if (s.drift) ST.cam.lon = ((ST.cam.lon + s.drift * dt + 540) % 360) - 180;
+          if (s.follow && s.o) SG.followStop(cur(s.o), run);
+          if (s.kind === 'eye') { const k = Math.max(0, (e * 1000 - s.flyDur) / Math.max(1, s.dur - s.flyDur)); ST.cam.alt = s.altA + (s.altB - s.altA) * CAM.ease(k); }
         }
         if (s.kind === 'track' && ST.t >= s.tEnd) SG.setPlaying(false);
         if (e * 1000 > s.dur && !run.fading) next();
       };
       const plate = () => {
         if (!label || !run || !run.shot) return;
-        const s = run.shot, o = s.o, lines = [], params = [];
+        const s = run.shot, o = cur(s.o), lines = [], params = [];
         const p = o ? SG.stopPos(o) : null;
         if (o && o.kind === 'storm') {
           const st = p.st, kt = st ? st.vmax : o.s.vmax;
@@ -205,15 +248,25 @@ export function installSaver(SG) {
         });
       };
       run.plateTimer = setInterval(plate, 1000);
-      run.codeTimer = setInterval(() => { if (run) run.code = run.code === 'advect' ? 'coriolis' : 'advect'; }, 15000);
+      // the code extract changes with the shot (begin), not on a timer: a
+      // taller extract mid-shot grew the plate over the subject
+      run.codeTimer = 0;
       ST.fade = 0;
       next();
       if (!run.shot && run.next) { begin(run.next, false); run.next = null; run.fading = 2; run.fadeT0 = performance.now(); }
+      this.cut = kind => {
+        if (!run) return false;
+        const j = run.KINDS.findIndex(k => k.kind === kind);
+        if (j < 0) return false;
+        run.i = j - 1; run.fading = 0; ST.fade = 1; next(true);
+        return true;
+      };
       this.debug = () => run && {
         shot: run.shot && run.shot.kind, title: run.shot && run.shot.title, i: run.i, n: run.KINDS.length, shots: run.shots,
         order: run.KINDS.map(k => k.kind + (k.o ? ':' + k.o.id : '')),
         held: +((performance.now() - run.t0) / 1000).toFixed(1), dur: run.shot && +(run.shot.dur / 1000).toFixed(1),
-        cam: { lat: +ST.cam.lat.toFixed(2), lon: +ST.cam.lon.toFixed(2), alt: +ST.cam.alt.toFixed(3), tilt: +ST.cam.tilt.toFixed(1) },
+        cam: { lat: +ST.cam.lat.toFixed(2), lon: +ST.cam.lon.toFixed(2), alt: +ST.cam.alt.toFixed(3), tilt: +ST.cam.tilt.toFixed(1), heading: +ST.cam.heading.toFixed(1) },
+        kinds: [...new Set(run.KINDS.map(k => k.kind))],
         flying: !!ST.fly, fade: +ST.fade.toFixed(2), field: ST.field, t: new Date(ST.t).toISOString(), band: ST.viewOverride,
         code: (EXTRACTS[run.code] || {}).name || null,
       };
