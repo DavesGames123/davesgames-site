@@ -17,7 +17,7 @@ import * as P from '../physics.js';
 import { SimGPU } from '../engine.js';
 import { MAT_COLOR } from '../plots.js';
 import { SETTLE_TIME, DESKTOP, PHONE, directed, newPace } from '../pacing.js';
-import { SCENARIOS, specFor, flybyStart } from '../scenarios.js';
+import { SCENARIOS, specFor, flybyStart, limitsOf } from '../scenarios.js';
 import { UI, Q, $, G_SI, PHONE_Q, COARSE } from './env.js';
 import { workerCall } from './jobs.js';
 import { refreshReadout } from './readout.js';
@@ -214,10 +214,7 @@ function timeToPeri(X, V, GM, el) {
   let H = Math.acosh(Math.max(1, (1 + r / a) / e)); if (rv < 0) H = -H;
   return -(e * Math.sinh(H) - H) / n;
 }
-export function limitsFor(spec) {
-  const c = Math.cbrt(spec.q);
-  return { rigid: P.K_RIGID * c, sync: P.K_RIGID_SYNC * c, fluid: P.K_FLUID * c, chandra: P.K_FLUID_CH * c };
-}
+export function limitsFor(spec) { return limitsOf(spec.q); }
 function setBusy(on, text, frac = 0) {
   $('busy').classList.toggle('off', !on);
   if (on) { $('busyT').textContent = text; $('busyBar').style.width = (100 * frac).toFixed(0) + '%'; }

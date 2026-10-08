@@ -14,7 +14,8 @@
 //
 //  STEP UNIFORM. Each dispatch reads one 256-byte Step record (dynamic
 //  offset): the frame point X(t), V(t), dt, the kick factor cF, the gravity
-//  extrapolation fraction and the drift flag. encode() writes the records
+//  extrapolation fraction, the drift flag and the sim time at the end of
+//  the step (the time stamp of a grain that hits the planet). encode() writes the records
 //  for a frame in one writeBuffer, then encodes every dispatch in one
 //  compute pass. The CPU steps the reference orbit (f64) as it writes them.
 //
@@ -93,12 +94,12 @@ export class SimGPU {
     this.cur = 0; this.synced = true; this.sIn = 0; this.W = 0; this.Llost = [0, 0, 0];
   }
   // Record one Step entry; returns its byte offset.
-  _step(k, dt, cF, frac, drift) {
+  _step(k, dt, cF, frac, drift, t = this.t) {
     const o = k * 64, X = this.ref ? this.ref.X : [1e30, 0, 0], V = this.ref ? this.ref.V : [0, 0, 0];
     const f = this.stepF, u = this.stepU;
     f[o] = X[0]; f[o + 1] = X[1]; f[o + 2] = X[2]; f[o + 3] = dt;
     f[o + 4] = V[0]; f[o + 5] = V[1]; f[o + 6] = V[2]; f[o + 7] = cF;
-    f[o + 8] = frac; u[o + 9] = drift ? 1 : 0;
+    f[o + 8] = frac; u[o + 9] = drift ? 1 : 0; f[o + 10] = t;
     return k * STEP_BYTES;
   }
   _dispatch(pass, name, bg, off, n) {
@@ -147,7 +148,7 @@ export class SimGPU {
       const cF = this.synced ? 0.5 * dt : dt;
       this.synced = false;
       if (this.ref) this.ref.step(dt);
-      offs.push(this._step(k++, dt, cF, (sIn + 1) / K, true));
+      offs.push(this._step(k++, dt, cF, (sIn + 1) / K, true, this.t + (i + 1) * dt));
       fr.push(sIn);
       sIn = (sIn + 1) % K;
     }

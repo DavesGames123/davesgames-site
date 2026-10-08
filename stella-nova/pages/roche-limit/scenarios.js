@@ -26,9 +26,10 @@
 //  for Saturn): the Roche limit does not depend on the moon's size.
 //
 //  grep -n targets: "export const SCENARIOS", "export const REAL",
-//  "export const SATURN_RINGS", "export function specFor", "STORY"
+//  "export const SATURN_RINGS", "export function specFor", "STORY",
+//  "export function limitsOf", "export function flybyStart"
 // ============================================================================
-import { BODIES, K_FLUID } from './physics.js';
+import { BODIES, K_FLUID, K_FLUID_CH, K_RIGID, K_RIGID_SYNC } from './physics.js';
 
 const B = BODIES;
 export const S_RATIO = 0.12;     // R_s / R_p on screen and in the sim
@@ -72,7 +73,7 @@ export const REAL = {
   phobos: { name: 'Phobos at Mars', kind: 'circular', d: B.phobos.a / B.mars.R, q: B.mars.rho / B.phobos.rho, J2: B.mars.J2, style: 3, material: 'rigid', rhoS: B.phobos.rho, planetName: 'Mars', Rkm: B.mars.R,
     note: 'Phobos orbits at 2.76 Mars radii, inside its fluid Roche limit (3.12) but outside the rigid one (1.61). A loose pile would shed; friction and strength hold the real moon. Tides bring it inward by about 2 m per century.' },
   pan: { name: 'Pan in the rings of Saturn', kind: 'circular', d: B.pan.a / B.saturn.R, q: B.saturn.rho / B.pan.rho, J2: B.saturn.J2, style: 5, material: 'rigid', rhoS: B.pan.rho, planetName: 'Saturn', Rkm: B.saturn.R, rings: true,
-    note: 'Pan orbits in the Encke gap at 2.22 Saturn radii, at 70% of its fluid Roche limit. At that density only a body with friction or cement can hold; ring particles that stray here cannot gather into a moon.' },
+    note: 'Pan orbits in the Encke gap at 2.22 Saturn radii, at 77% of its fluid Roche limit. At that density only a body with friction or cement can hold; ring particles that stray here cannot gather into a moon.' },
   io: { name: 'Io at Jupiter', kind: 'circular', d: B.io.a / B.jupiter.R, q: B.jupiter.rho / B.io.rho, J2: B.jupiter.J2, style: 2, material: 'fluid', rhoS: B.io.rho, planetName: 'Jupiter', Rkm: B.jupiter.R,
     note: 'Io is denser than Jupiter and orbits at 5.9 Jupiter radii, three times its fluid Roche limit (1.76). Even a fluid Io keeps its shape; the tide only raises a bulge.' },
   sl9: { name: 'Shoemaker-Levy 9 at Jupiter', kind: 'flyby', peri: B.sl9.peri / B.jupiter.R, e: 1, q: B.jupiter.rho / B.sl9.rho, J2: B.jupiter.J2, style: 2, material: 'fluid', rhoS: B.sl9.rho, planetName: 'Jupiter', Rkm: B.jupiter.R,
@@ -105,6 +106,13 @@ function pick(ui, kind) {
   if (kind === 'flyby') { if (ui.peri !== undefined) o.peri = ui.peri; if (ui.e !== undefined) o.e = ui.e; }
   else if (ui.d !== undefined) o.d = ui.d;
   return o;
+}
+// The Roche limits of a density ratio q = rho_p / rho_s, in planet radii:
+// rigid R_p (2 q)^(1/3), rigid and spinning R_p (3 q)^(1/3), fluid
+// 2.44 R_p q^(1/3) (Roche) and 2.455 (Chandrasekhar).
+export function limitsOf(q) {
+  const c = Math.cbrt(q);
+  return { rigid: K_RIGID * c, sync: K_RIGID_SYNC * c, fluid: K_FLUID * c, chandra: K_FLUID_CH * c };
 }
 // The start distance of a flyby: 25% outside the fluid limit, so the
 // comet starts whole and reaches the limit in about 0.3 T_q (it was 1.5

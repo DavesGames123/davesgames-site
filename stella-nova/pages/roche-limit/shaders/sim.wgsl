@@ -48,7 +48,7 @@ struct Params {
 struct Step {
   X: vec3f, dt: f32,
   V: vec3f, cF: f32,
-  frac: f32, flags: u32, s0: f32, s1: f32,
+  frac: f32, flags: u32, t: f32, s1: f32,   // t: sim time at the end of the step
 };
 struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 struct Acc { acc: vec4f, alpha: vec4f, fcF: vec4f, fcT: vec4f };
@@ -71,7 +71,9 @@ struct Grav { g: vec4f, gp: vec4f };
 // ── kick and drift ──────────────────────────────────────────────────────────
 // v += cF acc, w += cF alpha, then x += dt v when flags bit 0 is set.
 // A grain inside the planet leaves: its energy and angular momentum go to
-// the ledger, it gets mass 0 and is parked far away.
+// the ledger, it gets mass 0 and is parked far away. Its spin row keeps
+// the impact: xyz the point (planet frame, sim units), w the sim time
+// (render.js draws a flash there; a parked grain has no spin).
 @compute @workgroup_size(64)
 fn cs_kick(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
@@ -93,7 +95,7 @@ fn cs_kick(@builtin(global_invocation_id) gid: vec3u) {
     let e = 0.5 * m * dot(VV, VV) + 0.2 * m * ri * ri * dot(w, w) - P.GM * m / length(R) + m * grav[i].g.w;
     let L = m * cross(R, VV) + 0.4 * m * ri * ri * w;
     ledger[i] = ledger[i] + vec4f(L, -e);
-    body[i] = Body(vec4f(P.park, P.park, P.park, ri), vec4f(0.0), vec4f(0.0));
+    body[i] = Body(vec4f(P.park, P.park, P.park, ri), vec4f(0.0), vec4f(R, max(S.t, 1e-6)));
     return;
   }
   body[i] = Body(vec4f(x, b.pos.w), vec4f(v, m), vec4f(w, 0.0));

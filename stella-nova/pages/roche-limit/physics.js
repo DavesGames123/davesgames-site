@@ -324,7 +324,10 @@ export function orbitStart(P, spec) {
     const V = [vr * Math.cos(nu) - vt * Math.sin(nu), vr * Math.sin(nu) + vt * Math.cos(nu), 0];
     return { X, V, Omega: spec.spin || 0 };
   }
-  const d = spec.d * P.Rp, vc = Math.sqrt(P.GM / d);
+  // circular in the equator of an oblate planet: the J2 term adds a pull
+  // of 1.5 J2 GM R_p^2 / d^4 (the speed of a point mass left an
+  // eccentricity of about J2 (R_p/d)^2 and a wobble of the distance)
+  const d = spec.d * P.Rp, vc = Math.sqrt(P.GM / d * (1 + 1.5 * (P.J2 || 0) * (P.Rp / d) ** 2));
   return { X: [d, 0, 0], V: [0, vc, 0], Omega: vc / d };
 }
 // Move a settled pile (pos relative to its centre, at rest) onto the start
@@ -360,6 +363,9 @@ export class CpuSim {
     this.ref = [1e30, 0, 0];              // frame point X for the tide (GM 0: no planet)
     this.settleDrag = 0;
     this.overflow = 0;
+    this.t = 0;                           // sim time (the impact stamps)
+    this.Llost = [0, 0, 0];               // angular momentum of the grains that hit the planet
+    this.impact = new Float64Array(N * 4); // impact point (planet frame) and time, as the GPU's spin row
   }
   buildNeighbors() {
     const { N, x, rad } = this;
@@ -521,6 +527,7 @@ export class CpuSim {
     for (let s = 0; s < K; s++) {
       for (let i = 0; i < 3 * N; i++) { v[i] += 0.5 * dt * aF[i]; w[i] += 0.5 * dt * al[i]; x[i] += dt * v[i]; }
       if (ref) { ref.step(dt); this.ref = ref.X.slice(); this.refV = ref.V.slice(); }
+      this.t += dt;
       this.accrete();
       if ((s + 1) % KNL === 0) this.buildNeighbors();
       this.fast(dt, (s + 1) / K);
@@ -549,6 +556,9 @@ export class CpuSim {
       const e = 0.5 * m * (vx * vx + vy * vy + vz * vz) + 0.2 * m * rad[i] * rad[i] * (w[o] ** 2 + w[o + 1] ** 2 + w[o + 2] ** 2)
         - this.P.GM * m / Math.sqrt(r2) + m * this.phi[i];
       this.work[i] -= e;
+      const I = 0.4 * m * rad[i] * rad[i];
+      this.Llost[0] += m * (Y * vz - Z * vy) + I * w[o]; this.Llost[1] += m * (Z * vx - X * vz) + I * w[o + 1]; this.Llost[2] += m * (X * vy - Y * vx) + I * w[o + 2];
+      this.impact[4 * i] = X; this.impact[4 * i + 1] = Y; this.impact[4 * i + 2] = Z; this.impact[4 * i + 3] = Math.max(this.t, 1e-6);
       mass[i] = 0; x[o] = x[o + 1] = x[o + 2] = PARK; v[o] = v[o + 1] = v[o + 2] = 0; w[o] = w[o + 1] = w[o + 2] = 0;
       this.accreted = (this.accreted || 0) + 1;
     }

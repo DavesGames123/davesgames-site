@@ -116,10 +116,13 @@ export function restoreSnap(i) {
     const sn = rec.sats[k], N = s.N;
     const pos = new Float64Array(N * 3), vel = new Float64Array(N * 3), spin = new Float64Array(N * 3);
     for (let j = 0; j < N; j++) for (let c = 0; c < 3; c++) { pos[3 * j + c] = sn.st[9 * j + c]; vel[3 * j + c] = sn.st[9 * j + 3 + c]; spin[3 * j + c] = sn.st[9 * j + 6 + c]; }
+    // a grain that had hit the planet (tag -1) stays out: mass 0. Before
+    // 2026-10-08 it came back with its mass at the park point
+    const mass = Float64Array.from(s.mass); for (let j = 0; j < N; j++) if (sn.tags[j] < -0.5) mass[j] = 0;
     s.ref.X = sn.X.slice(); s.ref.V = sn.V.slice(); s.ref.t = sn.t;
     s.pl.drag = sn.drag;
     s.gpu.setParams(s.C, s.pl, 0);
-    s.gpu.setState(pos, vel, spin, s.rad, s.mass);
+    s.gpu.setState(pos, vel, spin, s.rad, mass);
     s.gpu.t = sn.t; s.gpu.W = sn.W; s.gpu.Llost = sn.Llost.slice();
     s.gpu.prime();
     S.ren.setTags(s.e, sn.tags); s.e.fresh = true;

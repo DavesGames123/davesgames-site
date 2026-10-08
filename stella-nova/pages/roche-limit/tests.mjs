@@ -31,7 +31,7 @@
 // ============================================================================
 import * as P from './physics.js';
 import * as PC from './pacing.js';
-import { SCENARIOS } from './scenarios.js';
+import { SCENARIOS, REAL, limitsOf } from './scenarios.js';
 
 const GPU_ONLY = typeof Deno !== 'undefined' && Deno.args.includes('--gpu');
 let fails = 0;
@@ -66,6 +66,50 @@ function cpuTests() {
   { const Rp = 1, rhoP = 3, rhoS = 1.5, d = P.rocheRigid(Rp, rhoP, rhoS), r = 0.01;
     const g = P.tideGauge(rhoP * 4 / 3 * Math.PI * Rp ** 3, rhoS * 4 / 3 * Math.PI * r ** 3, r, d);
     ok('gauge ratio is 1 at d_rigid', Math.abs(g.ratio - 1) < 1e-12, g.ratio.toFixed(12)); }
+
+  // 1b ─ the Roche distance of each scenario: limitsOf (the page) against
+  // the formulas written out here, and the numbers that the notes print
+  { let worst = 0;
+    const all = [...SCENARIOS.filter(x => x.kind !== 'real'), ...Object.values(REAL)];
+    for (const sc of all) {
+      const q = sc.q, L = limitsOf(q);
+      const rigid = Math.pow(2 * q, 1 / 3), fluid = 2.44 * Math.pow(q, 1 / 3);
+      worst = Math.max(worst, Math.abs(L.rigid - rigid) / rigid, Math.abs(L.fluid - fluid) / fluid);
+    }
+    ok('Roche distance of every scenario = R (2 rho_p/rho_s)^(1/3) and 2.44 R (rho_p/rho_s)^(1/3)', worst < 1e-12, `${all.length} scenarios, worst rel diff ${worst.toExponential(1)}`);
+    const sat = SCENARIOS.find(x => x.key === 'saturn'), close = SCENARIOS.find(x => x.key === 'close');
+    const claims = [
+      ['Saturn story: fluid limit 2.15 R_S', limitsOf(sat.q).fluid, 2.15],
+      ['"A moon too close": fluid limit 2.44 R_p', limitsOf(close.q).fluid, 2.44],
+      ['Phobos: fluid 3.12, rigid 1.61 Mars radii', limitsOf(REAL.phobos.q).fluid, 3.12, limitsOf(REAL.phobos.q).rigid, 1.61],
+      ['Io: fluid 1.76 Jupiter radii', limitsOf(REAL.io.q).fluid, 1.76],
+      ['Shoemaker-Levy 9: fluid 3.4 Jupiter radii', limitsOf(REAL.sl9.q).fluid, 3.4],
+      ['the Moon: fluid 2.88 Earth radii', limitsOf(REAL.moon.q).fluid, 2.88],
+      ['Pan at 77% of its fluid limit (the note said 70% before 2026-10-08)', REAL.pan.d / limitsOf(REAL.pan.q).fluid, 0.77],
+    ];
+    for (const c of claims) {
+      const okk = Math.abs(c[1] - c[2]) <= 0.006 * c[2] + 0.005 && (c.length < 5 || Math.abs(c[3] - c[4]) <= 0.006 * c[4] + 0.005);
+      ok('note: ' + c[0], okk, `${c[1].toFixed(3)}${c.length > 3 ? ', ' + c[3].toFixed(3) : ''}`);
+    }
+    // the default story starts outside the fluid limit; its drag ends
+    // under 0.8 d_fluid, where a fluid pile sheds fast
+    ok('Saturn story starts outside the fluid limit and ends well inside it', sat.d > limitsOf(sat.q).fluid && sat.d1 < 0.8 * limitsOf(sat.q).fluid, `start ${sat.d} R_S = ${(sat.d / limitsOf(sat.q).fluid).toFixed(3)} d_fluid, end ${sat.d1} R_S = ${(sat.d1 / limitsOf(sat.q).fluid).toFixed(3)} d_fluid`);
+  }
+
+  // 1c ─ a grain that hits the planet: the CPU keeps the impact point and
+  // time (the GPU puts them in the spin row of the parked grain)
+  { const C = P.contactParams(400, P.MATERIALS.fluid), pl = { GM: 5e6, Rp: 100, J2: 0, drag: 0 };
+    const g = new P.CpuSim(1, [1], [1], C, pl);
+    // the frame point on a circular orbit at 1.5 R_p; the grain falls
+    // straight in from 30 units inside it at 300 units per time
+    const o = P.orbitStart(pl, { kind: 'circular', d: 1.5 }), ref = new P.RefOrbit(pl, o.X, o.V);
+    g.x.set([-30, 0, 0]); g.v.set([-300, 0, 0]); g.init(ref);
+    const dt = 1e-3; let n = 0;
+    while (g.mass[0] > 0 && n < 400) { g.block(dt, 1, ref); n++; }
+    const p = [g.impact[0], g.impact[1], g.impact[2]], r = Math.hypot(...p), tHit = g.impact[3];
+    const speed = 300;   // the radial speed; the frame moves along its orbit
+    ok('impact record: point on the surface, time of the step', g.mass[0] === 0 && r <= pl.Rp && r > pl.Rp - 1.5 * speed * dt && Math.abs(tHit - n * dt) < 1e-12, `|p| = ${r.toFixed(3)} (R_p 100, one step ${(speed * dt).toFixed(2)}), t = ${tHit.toFixed(4)} after ${n} steps, L lost ${g.Llost[2].toExponential(2)}`);
+  }
 
   // 2 ─ tide formula
   { const GM = 7.3, X = [1234.5, -321.2, 40.1], x = [3.2, -1.1, 0.7], o = [0, 0, 0];
@@ -184,11 +228,17 @@ function cpuTests() {
       const an = P.analyzeBound(s2.x, s2.v, s2.mass, s2.rad, 3, ref.X, pl.GM);
       const e1 = P.energyOf(s2.x, s2.v, s2.w, s2.rad, s2.mass, s2.phi, ref.X, ref.V, pl.GM);
       let W = 0; for (const q of s2.work) W += q;
-      return { f, d: spec.d, bound: an.M / st.M, drift: (e1.E - W - e0.E) / Math.abs(e0.Us), acc: s2.accreted || 0 };
+      const Ld = (e1.L[2] + s2.Llost[2] - e0.L[2]) / Math.abs(e0.L[2]);
+      return { f, d: spec.d, bound: an.M / st.M, drift: (e1.E - W - e0.E) / Math.abs(e0.Us), Ld, acc: s2.accreted || 0 };
     };
     const a = run(0.6), b = run(1.5);
     ok('disruption at 0.6 d_fluid (fluid pile, N = 400)', a.bound < 0.5, `d = ${a.d.toFixed(2)} R_p, bound ${(100 * a.bound).toFixed(1)}% after 3 orbits, ledger drift ${a.drift.toExponential(2)} |U_self|, ${a.acc} grains hit the planet`);
     ok('survival at 1.5 d_fluid (fluid pile, N = 400)', b.bound > 0.95, `d = ${b.d.toFixed(2)} R_p, bound ${(100 * b.bound).toFixed(1)}% after 3 orbits, ledger drift ${b.drift.toExponential(2)} |U_self|`);
+    // the books over a whole breakup: energy (E - W, the grains that hit
+    // the planet included) and the angular momentum about the spin axis
+    // (L_z + the L_z that the hits took)
+    ok('breakup run: energy ledger drift over 3 orbits', Math.abs(a.drift) < 2e-3 && Math.abs(b.drift) < 2e-3, `|d(E - W)| / |U_self| ${Math.abs(a.drift).toExponential(2)} (torn), ${Math.abs(b.drift).toExponential(2)} (whole)`);
+    ok('breakup run: angular momentum drift over 3 orbits', Math.abs(a.Ld) < 1e-5 && Math.abs(b.Ld) < 1e-5, `|dL_z| / L_z ${Math.abs(a.Ld).toExponential(2)} (torn, ${a.acc} hits), ${Math.abs(b.Ld).toExponential(2)} (whole)`);
   }
 }
 
@@ -324,6 +374,22 @@ async function gpuTest() {
     const dU = Math.abs(eg.Us - ec.Us) / Math.abs(ec.Us), dK = Math.abs((eg.K + eg.Kr + eg.Up) - (ec.K + ec.Kr + ec.Up)) / Math.abs(ec.Us);
     let Wc = 0; for (const q of cpu.work) Wc += q;
     ok('GPU energy terms = CPU (self potential, orbit)', dU < 1e-5 && dK < 1e-3, `|dU_self|/|U_self| ${dU.toExponential(2)}, |d(K + U_planet)|/|U_self| ${dK.toExponential(2)}, contact work GPU ${rb.W.toExponential(4)} CPU ${Wc.toExponential(4)}`); }
+  // a grain that hits the planet on the GPU: its spin row holds the
+  // impact point and time, as the CPU's impact record
+  { const pl2 = { GM: 5e6, Rp: 100, J2: 0, drag: 0 }, C2 = P.contactParams(400, P.MATERIALS.fluid);
+    const o2 = P.orbitStart(pl2, { kind: 'circular', d: 1.5 });
+    const cpu2 = new P.CpuSim(1, [1], [1], C2, pl2); cpu2.x.set([-30, 0, 0]); cpu2.v.set([-300, 0, 0]);
+    const rc = new P.RefOrbit(pl2, o2.X, o2.V); cpu2.init(rc);
+    const g2 = new SimGPU(device, 1, await loadSimCode());
+    g2.setParams(Object.assign({}, C2, { dt: 1e-3 }), pl2, 0); g2.ref = new P.RefOrbit(pl2, o2.X, o2.V);
+    g2.setState([-30, 0, 0], [-300, 0, 0], [0, 0, 0], [1], [1]); g2.prime();
+    for (let k = 0; k < 120; k++) cpu2.block(1e-3, 1, rc);
+    const enc = device.createCommandEncoder(); g2.encodeSteps(enc, 120, true); device.queue.submit([enc.finish()]);
+    const rb2 = await g2.readback(false);
+    const gs = [rb2.body[8], rb2.body[9], rb2.body[10], rb2.body[11]], cs = Array.from(cpu2.impact);
+    const dp = Math.hypot(gs[0] - cs[0], gs[1] - cs[1], gs[2] - cs[2]);
+    ok('GPU impact stamp = CPU impact record', rb2.body[7] === 0 && dp < 1e-2 && Math.abs(gs[3] - cs[3]) < 1e-5, `|dp| ${dp.toExponential(2)}, t GPU ${gs[3].toFixed(5)} CPU ${cs[3].toFixed(5)}`);
+    g2.destroy(); }
   ok('no grid bucket or neighbour list overflow', rb.overflow === 0 && rb.listFull === 0, `${rb.overflow} grains found a full bucket, ${rb.listFull} a full list`);
   ok('no WebGPU validation errors', errs.length === 0, errs.join(' | ') || 'none');
   gpu.destroy(); device.destroy();
