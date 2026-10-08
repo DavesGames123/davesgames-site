@@ -6,7 +6,11 @@
 //  the field (render/field.js), one style at a time (render/style-*.js) and
 //  the layers of package H (render/arcs.js, render/nodes.js), which draw on
 //  top of every style. Each style and layer gets the shared context:
-//    ctx = { THREE, scene, renderer, camera, D, net, geo, field, mode, root }
+//    ctx = { THREE, scene, renderer, camera, D, net, geo, field, mode, root,
+//            proj, phone, infect }
+//  ctx.infect = { uniforms } holds the uniforms of the infection chunk
+//  (render/infect.js): every surface style links the same objects, so the
+//  core sets uFieldMix, uAny, uBeat and uIgn once per frame for all.
 //  A style gets a copy with root = the style group and mode = its own mode.
 //  The layers share one ctx with root = the layer group, and get
 //  setMode(mode) when a style switch changes globe <-> flat.
@@ -23,7 +27,9 @@
 //  Frame: update(frame) sets the camera pose, updates the field at most
 //  FIELD_HZ times a second, then the style and the layers, then renders.
 //    frame = { t, dt, sim, prev: Float32Array(N) I/N, events, mode }
-//  The deaths share for the field comes from frame.sim.D / node pop.
+//  The deaths share for the field comes from frame.sim.D / node pop, and
+//  the front from frame.sim.firstDay. A new sim resets the front. Between
+//  two field updates uFieldMix runs 0 -> 1, so the front crawls smoothly.
 //
 //  GPU rules: no EffectComposer and no render targets. budget.js caps the
 //  pixel ratio at 2 and the drawing buffer at 2560 x 1440 device px (1.6
@@ -41,6 +47,7 @@
 // ============================================================================
 import { canvasBudget, phoneView } from '../budget.js';
 import { createField } from './field.js';
+import { infectUniforms } from './infect.js';
 import night from './style-night.js';
 import holo from './style-holo.js';
 
@@ -97,7 +104,9 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
 
   const field = createField(D, THREE);
   // phone: read once at boot; the arcs layer sizes its flight pool by it
-  const base = { THREE, scene, renderer, camera, D, net, geo, field, mode: 'globe', root: layerRoot, phone: phoneView(win) };
+  const infect = { uniforms: infectUniforms(THREE, null) };
+  const base = { THREE, scene, renderer, camera, D, net, geo, field, mode: 'globe', root: layerRoot, phone: phoneView(win), infect };
+  const IU = infect.uniforms;
 
   // fade quad: clip-space, black, alpha = 1 - fade
   const fadeU = { uA: { value: 0 } };
@@ -218,11 +227,17 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
       applyPose();
       const t = frame.t || 0, sim = frame.sim || null;
       if (field.ready && (sim !== lastSim || lastField < 0 || t - lastField >= 1 / FIELD_HZ || t < lastField)) {
+        if (sim !== lastSim) field.reset();
         if (sim && sim.D) for (let i = 0; i < N; i++) dead[i] = sim.D[i] / pop[i];
         else dead.fill(0);
-        field.update(frame.prev || null, dead);
+        const step = sim === lastSim && lastField >= 0 && t >= lastField ? t - lastField : 0;
+        field.update(frame.prev || null, dead, sim && sim.firstDay ? sim.firstDay : null, step);
+        let any = false;
+        for (let i = 0; i < N && !any; i++) if (field.reach[i] > 0) any = true;
+        IU.uAny.value = any ? 1 : 0;
         lastField = t; lastSim = sim;
       }
+      IU.uFieldMix.value = lastField < 0 ? 1 : Math.min(1, Math.max(0, (t - lastField) * FIELD_HZ));
       const f = { ...frame, mode: curMode };
       if (cur && cur.update) cur.update(f);
       for (const l of layers) l.update(f);

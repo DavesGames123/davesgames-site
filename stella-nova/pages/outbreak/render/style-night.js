@@ -3,12 +3,14 @@
 // ----------------------------------------------------------------------------
 //  A dark globe seen at night. Five layers, all in the style group:
 //    globe   ShaderMaterial on a unit SphereGeometry. Dark ocean, slightly
-//            lighter land (field.landMask, one tap, no halo), NASA city
-//            lights tinted amber, and a red shift of the lights where the
-//            prevalence field (field.texture R) is high, plus a flat, quiet
-//            red tint of infected land. The deaths share (field.texture G)
-//            dims the lights of a place. A thin fresnel rim at the limb.
-//            Nothing in the globe moves with time.
+//            lighter land (field.landMask, one tap, no halo), and the
+//            infection texture of render/infect.js on infected land: a
+//            hard front with a bright edge, blood-red ground, colonies,
+//            stipple and veins, crimson-black where people died. NASA city
+//            lights in amber on top, red-hot where the prevalence field
+//            (field.texture R) is high; the deaths share (G) dims them.
+//            A thin fresnel rim at the limb. Only the front (it crawls),
+//            the ignitions and the heartbeat move.
 //    coast   LineSegments of the Natural Earth coast rings at r = 1.0012,
 //            thin grey-blue hairlines, faded at the limb. Lakes at half.
 //    atmos   back-face sphere at r = 1.08, additive; a thin, faint band at
@@ -38,6 +40,7 @@
 // ============================================================================
 import { decodeCoast } from '../../storm-globe/coast.js';
 import { makeRng } from '../rng.js';
+import { INFECT_GLSL, INFECT_EXT, infectUniforms, infectDefines } from './infect.js';
 
 export const SOURCES = [
   { ref: 'NASA Earth Observatory, Earth at Night (Black Marble) 2016', url: 'https://earthobservatory.nasa.gov/features/NightLights', note: 'city lights texture, public domain, via ancient-earth/data/present/lights-2k.jpg' },
@@ -149,6 +152,7 @@ uniform float uHasLand;
 varying vec2 vUv;
 varying vec3 vN;
 varying vec3 vV;
+${INFECT_GLSL}
 float landAt(vec2 o) { return texture2D(uLand, vUv + o * uTexel).r; }
 void main() {
   float land = mix(0.0, landAt(vec2(0.0)), uHasLand);
@@ -159,14 +163,14 @@ void main() {
   vec4 f = texture2D(uField, vUv);
   float prev = clamp(f.r, 0.0, 1.0);
   float dead = clamp(f.g, 0.0, 1.0);
+  // the infection texture: front, colonies, stipple, veins, scar
+  col = infectApply(col, vUv, land, f);
 
   float li = texture2D(uLights, vUv).r;
   li = pow(li, 1.6) * 1.5 * (1.0 - 0.65 * dead);
   vec3 warm = vec3(1.0, 0.74, 0.44);
-  vec3 sick = vec3(1.0, 0.30, 0.26);
+  vec3 sick = vec3(1.0, 0.16, 0.10);
   col += mix(warm, sick, smoothstep(0.05, 0.5, prev)) * li;
-  // a flat, quiet tint of infected land (no pulse, no haze)
-  col = mix(col, vec3(0.30, 0.06, 0.06), 0.55 * smoothstep(0.05, 0.6, prev) * land);
 
   float mu = max(dot(vN, vV), 0.0);
   float rim = pow(1.0 - mu, 6.0);
@@ -272,10 +276,12 @@ function create(ctx) {
     uTime: { value: 0 },
     uTint: { value: 0 },
     uHasLand: { value: landTex === blank ? 0 : 1 },
+    ...infectUniforms(THREE, ctx),
   };
   const globe = new THREE.Mesh(
     own(new THREE.SphereGeometry(1, 160, 80)),
-    own(new THREE.ShaderMaterial({ uniforms: gU, vertexShader: GLOBE_VERT, fragmentShader: GLOBE_FRAG })),
+    own(new THREE.ShaderMaterial({ uniforms: gU, vertexShader: GLOBE_VERT, fragmentShader: GLOBE_FRAG,
+      defines: infectDefines(ctx.phone), extensions: INFECT_EXT })),
   );
   globe.name = 'night-globe';
   globe.renderOrder = 0;

@@ -6,9 +6,9 @@
 //    core    ShaderMaterial on a SphereGeometry at r = CORE_R. Nearly black,
 //            it writes depth, so the arcs and city glows of package H on the
 //            far side stay hidden. Land (field.landMask) shows as a cyan dot
-//            grid with a bright edge at the coast. The prevalence field
-//            (field.texture R) fills infected land amber to magenta, flat
-//            and steady. A thin fresnel rim completes the look. No
+//            grid with a bright edge at the coast. Infected land carries
+//            the infection texture of render/infect.js (the same red as
+//            every style). A thin fresnel rim completes the look. No
 //            scanlines, no scan band, no flicker: the style is calm.
 //    grid    LineSegments of the graticule (every 15 deg) at r = GRID_R.
 //            Equator and prime meridian are brighter.
@@ -39,6 +39,7 @@
 // ============================================================================
 import { decodeCoast } from '../../storm-globe/coast.js';
 import { toSphere, coastSegments, worldPrevalence, tintFor, approach, COAST_URL } from './style-night.js';
+import { INFECT_GLSL, INFECT_EXT, infectUniforms, infectDefines } from './infect.js';
 
 export const SOURCES = [
   { ref: 'Natural Earth 1:50m land and lakes', url: 'https://www.naturalearthdata.com/', note: 'coast rings, public domain, via storm-globe/data/coast-50m.bin' },
@@ -122,6 +123,7 @@ varying vec2 vUv;
 varying vec3 vN;
 varying vec3 vV;
 varying float vY;
+${INFECT_GLSL}
 float landAt(vec2 o) { return texture2D(uLand, vUv + o * uTexel).r; }
 void main() {
   float land = uHasLand * landAt(vec2(0.0));
@@ -141,12 +143,8 @@ void main() {
   col += uColor * land * (0.035 + 0.16 * dotv);
   col += uColor * edge * 0.22;
 
-  // infected land: amber to magenta, flat
-  vec4 f = texture2D(uField, vUv);
-  float prev = clamp(f.r, 0.0, 1.0);
-  float dead = clamp(f.g, 0.0, 1.0);
-  vec3 hot = mix(vec3(1.0, 0.62, 0.18), vec3(1.0, 0.16, 0.42), smoothstep(0.05, 0.6, prev));
-  col += hot * 0.8 * smoothstep(0.05, 0.7, prev) * (0.25 + 0.6 * dotv) * (0.35 + 0.65 * land) * (1.0 - 0.5 * dead);
+  // infected land: the infection texture
+  col = infectApply(col, vUv, land, texture2D(uField, vUv));
 
   float mu = max(dot(vN, vV), 0.0);
   col += uColor * pow(1.0 - mu, 4.0) * 0.3;
@@ -234,10 +232,12 @@ function create(ctx) {
     uField: { value: field && field.texture ? field.texture : blank },
     uTexel: { value: new THREE.Vector2(1 / lw, 1 / lh) },
     uHasLand: { value: landTex === blank ? 0 : 1 },
+    ...infectUniforms(THREE, ctx),
   };
   const core = new THREE.Mesh(
     own(new THREE.SphereGeometry(CORE_R, 160, 80)),
-    own(new THREE.ShaderMaterial({ uniforms: coreU, vertexShader: CORE_VERT, fragmentShader: CORE_FRAG })),
+    own(new THREE.ShaderMaterial({ uniforms: coreU, vertexShader: CORE_VERT, fragmentShader: CORE_FRAG,
+      defines: infectDefines(ctx.phone), extensions: INFECT_EXT })),
   );
   core.name = 'holo-core';
   core.renderOrder = 0;

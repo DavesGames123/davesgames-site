@@ -13,9 +13,10 @@
 //  Layers, all in the style group:
 //    map      ShaderMaterial on a lat-lon grid mesh (GRID_STEP deg). Deep
 //             navy sea, slate land (field.landMask) with a bright coast edge,
-//             NASA city lights in amber, and the prevalence field
-//             (field.texture R) as a flat red tint. Deaths (G) dim
-//             the lights. It writes depth at z = 0.
+//             NASA city lights in amber, and the infection texture of
+//             render/infect.js on infected land (the same pattern as the
+//             globes: the uv gives the point on the sphere). Deaths (G)
+//             dim the lights. It writes depth at z = 0.
 //    grid     LineSegments of the graticule every 30 deg, z = LINE_Z.
 //    edge     LineSegments of the map outline (the lon +-180 meridians and
 //             the pole lines), z = LINE_Z.
@@ -47,6 +48,7 @@
 import { decodeCoast } from '../../storm-globe/coast.js';
 import { flat, EE_SCALE } from '../geo.js';
 import { worldPrevalence, tintFor, approach, COAST_URL, LIGHTS_URL } from './style-night.js';
+import { INFECT_GLSL, INFECT_EXT, infectUniforms, infectDefines } from './infect.js';
 
 export const SOURCES = [
   { ref: 'Savric, Patterson, Jenny 2018, The Equal Earth map projection, Int J Geogr Inf Sci 33(3):454', url: 'https://doi.org/10.1080/13658816.2018.1504949', note: 'Equal Earth forward formulas, via geo.js flat()' },
@@ -178,6 +180,7 @@ uniform float uTime;
 uniform float uTint;
 uniform float uHasLand;
 varying vec2 vUv;
+${INFECT_GLSL}
 float landAt(vec2 o) { return texture2D(uLand, vUv + o * uTexel).r; }
 void main() {
   float land = uHasLand * landAt(vec2(0.0));
@@ -199,12 +202,10 @@ void main() {
   vec4 f = texture2D(uField, vUv);
   float prev = clamp(f.r, 0.0, 1.0);
   float dead = clamp(f.g, 0.0, 1.0);
+  col = infectApply(col, vUv, land, f);
   float lights = texture2D(uLights, vUv).r;
   col += vec3(1.0, 0.72, 0.38) * lights * lights * 0.9 * (1.0 - 0.7 * dead) * (1.0 - 0.6 * prev);
-
-  vec3 hot = mix(vec3(0.95, 0.35, 0.12), vec3(1.0, 0.1, 0.3), smoothstep(0.1, 0.7, prev));
-  col += hot * 0.6 * smoothstep(0.05, 0.7, prev) * (0.3 + 0.7 * land);
-  col += vec3(1.0, 0.65, 0.4) * lights * prev * 0.8;
+  col += vec3(1.0, 0.16, 0.10) * lights * prev * 0.8;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -259,8 +260,10 @@ function create(ctx) {
     uTime: { value: 0 },
     uTint: { value: 0 },
     uHasLand: { value: landTex === blank ? 0 : 1 },
+    ...infectUniforms(THREE, ctx),
   };
-  const map = new THREE.Mesh(mGeo, own(new THREE.ShaderMaterial({ uniforms: mU, vertexShader: MAP_VERT, fragmentShader: MAP_FRAG })));
+  const map = new THREE.Mesh(mGeo, own(new THREE.ShaderMaterial({ uniforms: mU, vertexShader: MAP_VERT, fragmentShader: MAP_FRAG,
+    defines: infectDefines(ctx.phone), extensions: INFECT_EXT })));
   map.name = 'flat-map';
   map.renderOrder = 0;
   map.frustumCulled = false;

@@ -5,9 +5,10 @@
 //    globe   ShaderMaterial on a unit SphereGeometry. NASA Blue Marble on the
 //            day side with Lambert light from the sun and a specular glint on
 //            the ocean (field.landMask selects the ocean). The night side
-//            shows the NASA city lights, dim. The prevalence field
-//            (field.texture R) lays a flat red tint over infected land on both
-//            sides; the deaths share (field.texture G) darkens it to maroon.
+//            shows the NASA city lights, dim. Infected land carries the
+//            infection texture of render/infect.js on both sides (hard
+//            front, blood-red ground, colonies, stipple, veins); the deaths
+//            share (field.texture G) turns it crimson-black.
 //            A soft terminator band goes orange at dusk.
 //    atmos   back-face sphere at r = 1.06, additive; it glows at the limb and
 //            is bright only on the sun side. It moves to rose as the world
@@ -38,6 +39,7 @@
 //                   "dispose()", "export const SHADERS"
 // ============================================================================
 import { starField, worldPrevalence, tintFor, approach } from './style-night.js';
+import { INFECT_GLSL, INFECT_EXT, infectUniforms, infectDefines } from './infect.js';
 
 export const SOURCES = [
   { ref: 'NASA Earth Observatory, Blue Marble Next Generation (Stockli et al. 2005)', url: 'https://earthobservatory.nasa.gov/features/BlueMarble', note: 'day colour texture, public domain, via ancient-earth/data/present/color-2k.jpg' },
@@ -110,6 +112,7 @@ uniform float uHasLand;
 varying vec2 vUv;
 varying vec3 vW;
 varying vec3 vV;
+${INFECT_GLSL}
 void main() {
   vec3 n = normalize(vW);
   vec3 v = normalize(vV);
@@ -135,13 +138,8 @@ void main() {
   float li = texture2D(uLights, vUv).r;
   col += vec3(1.0, 0.72, 0.40) * pow(li, 1.6) * 1.1 * (1.0 - lit);
 
-  // prevalence: a flat red tint over infected land, by day and by night
-  vec4 f = texture2D(uField, vUv);
-  float prev = clamp(f.r, 0.0, 1.0);
-  float dead = clamp(f.g, 0.0, 1.0);
-  vec3 sick = mix(vec3(1.0, 0.12, 0.16), vec3(0.45, 0.02, 0.06), dead);
-  float a = clamp(0.7 * smoothstep(0.05, 0.7, prev) * (0.25 + 0.75 * land), 0.0, 0.7);
-  col = mix(col, sick * (0.35 + 0.75 * max(lit, 0.45)), a);
+  // the infection texture, by day and by night (it glows: no sun term)
+  col = infectApply(col, vUv, land, texture2D(uField, vUv));
 
   // fresnel rim, toward the sun side
   float mu = max(dot(n, v), 0.0);
@@ -236,10 +234,12 @@ function create(ctx) {
     uTint: { value: 0 },
     uHasDay: { value: 0 },
     uHasLand: { value: landTex === blank ? 0 : 1 },
+    ...infectUniforms(THREE, ctx),
   };
   const globe = new THREE.Mesh(
     own(new THREE.SphereGeometry(1, 160, 80)),
-    own(new THREE.ShaderMaterial({ uniforms: gU, vertexShader: GLOBE_VERT, fragmentShader: GLOBE_FRAG })),
+    own(new THREE.ShaderMaterial({ uniforms: gU, vertexShader: GLOBE_VERT, fragmentShader: GLOBE_FRAG,
+      defines: infectDefines(ctx.phone), extensions: INFECT_EXT })),
   );
   globe.name = 'marble-globe';
   globe.renderOrder = 0;

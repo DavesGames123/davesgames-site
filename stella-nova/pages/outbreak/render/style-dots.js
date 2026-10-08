@@ -9,7 +9,11 @@
 //    dots    THREE.Points at r = DOT_R. The vertex shader samples
 //            field.landMask at the dot (vertex texture fetch) and decides
 //            land or ocean. Land dots take their colour and size from
-//            field.texture: R = prevalence glow, G = deaths share. Ocean
+//            field.texture: R = prevalence glow, G = deaths share, B/A =
+//            the front: a dot turns red only inside the front, so the
+//            infection crawls dot by dot. The ramp is the infection
+//            palette of render/infect.js (teal -> blood -> arterial ->
+//            hot core; deaths -> crimson-black). Ocean
 //            dots are small and dim, so the sphere outline stays visible.
 //            Infected dots hold a steady colour (no pulse).
 //    atmos   back-face sphere at r = ATMOS_R, additive, a thin rim glow.
@@ -40,6 +44,8 @@ export const SOURCES = [
 export const FIB_N = 72000, BASE_R = 0.996, DOT_R = 1.002, ATMOS_R = 1.05;
 export const DOT_FILL = 0.62;            // dot diameter / dot spacing on land
 export const SIZE_MIN = 1.0, SIZE_MAX = 14;
+
+import { PAL, infectUniforms } from './infect.js';
 
 const DEG = Math.PI / 180;
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
@@ -79,18 +85,19 @@ export function landAt(mask, W, H, u, v) {
 }
 
 // The land dot colour of DOT_VERT, in JS: glow 0..1 (prevalence), dead 0..1.
-// Calm teal -> amber -> hot red-white; the deaths share greys it out.
+// Calm teal -> blood -> arterial red -> hot core; the deaths share pulls
+// it to crimson-black (PAL of render/infect.js).
 export function dotColor(glow, dead = 0) {
   const g = Math.min(1, Math.max(0, glow)), d = Math.min(1, Math.max(0, dead));
-  const base = [0.22, 0.52, 0.62], amber = [1.0, 0.62, 0.18], hot = [1.0, 0.16, 0.10], white = [1.0, 0.85, 0.75];
+  const base = [0.22, 0.52, 0.62];
   const mix = (a, b, t) => a.map((x, k) => x + (b[k] - x) * t);
   const s = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-  let c = mix(base, amber, s(0.0, 0.35, g));
-  c = mix(c, hot, s(0.35, 0.8, g));
-  c = mix(c, white, s(0.9, 1.0, g) * 0.5);
-  const grey = [0.30, 0.27, 0.32];
-  return mix(c, grey, d * 0.6);
+  let c = mix(base, PAL.blood, s(0.0, 0.15, g));
+  c = mix(c, PAL.arterial, s(0.15, 0.7, g));
+  c = mix(c, PAL.core, s(0.9, 1.0, g) * 0.5);
+  return mix(c, PAL.scar, d * 0.6);
 }
+const g3 = c => `vec3(${c.map(x => x.toFixed(3)).join(', ')})`;
 
 // ── shaders ──────────────────────────────────────────────────────────────
 const DOT_VERT = /* glsl */`
@@ -99,6 +106,7 @@ uniform sampler2D uField;
 uniform float uScale;
 uniform float uWorld;
 uniform float uTime;
+uniform float uFieldMix;
 attribute vec2 aUv;
 attribute float aPhase;
 varying vec3 vColor;
@@ -106,13 +114,14 @@ varying float vAlpha;
 void main() {
   float land = step(0.5, textureLod(uLand, aUv, 0.0).r);
   vec4 f = textureLod(uField, aUv, 0.0);
-  float g = f.r * land;
+  float inside = step(0.5, mix(f.a, f.b, uFieldMix));
+  float g = f.r * land * inside;
   float d = f.g * land;
   vec3 base = vec3(0.22, 0.52, 0.62);
-  vec3 c = mix(base, vec3(1.0, 0.62, 0.18), smoothstep(0.0, 0.35, g));
-  c = mix(c, vec3(1.0, 0.16, 0.10), smoothstep(0.35, 0.8, g));
-  c = mix(c, vec3(1.0, 0.85, 0.75), smoothstep(0.9, 1.0, g) * 0.5);
-  c = mix(c, vec3(0.30, 0.27, 0.32), d * 0.6);
+  vec3 c = mix(base, ${g3(PAL.blood)}, smoothstep(0.0, 0.15, g) + 0.6 * inside * land * (1.0 - step(0.001, g)));
+  c = mix(c, ${g3(PAL.arterial)}, smoothstep(0.15, 0.7, g));
+  c = mix(c, ${g3(PAL.core)}, smoothstep(0.9, 1.0, g) * 0.5);
+  c = mix(c, ${g3(PAL.scar)}, d * 0.6);
   float pulse = 1.0;
   vec3 ocean = vec3(0.10, 0.20, 0.30);
   vColor = mix(ocean, c * (0.75 + 0.6 * g) * pulse, land);
@@ -218,6 +227,7 @@ function create(ctx) {
     uScale: { value: 500 },
     uWorld: { value: dotSpacing(FIB_N, DOT_R) * DOT_FILL },
     uTime: { value: 0 },
+    uFieldMix: infectUniforms(THREE, ctx).uFieldMix,
   };
   const dots = new THREE.Points(dGeo, own(new THREE.ShaderMaterial({
     uniforms: dU, vertexShader: DOT_VERT, fragmentShader: DOT_FRAG,
