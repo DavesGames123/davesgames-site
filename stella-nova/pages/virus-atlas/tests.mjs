@@ -19,6 +19,7 @@
 //   11  saver plan: shots of 5 to 12 s, seeded shuffle
 //   12  GPU expansion: the shader's instance arithmetic (pack.js) gives each
 //       copy of each bead once, at the position of its operator
+//   13  colour schemes: every scheme, palette and light maps into [0, 1]
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -32,6 +33,7 @@ const C = await import(join(HERE, 'catalog.js'));
 const B = await import(join(HERE, 'budget.js'));
 const P = await import(join(HERE, 'shots.js'));
 const K = await import(join(HERE, 'pack.js'));
+const CO = await import(join(HERE, 'colors.js'));
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) pass++; else { fail++; console.log('  FAIL ' + msg); } };
@@ -265,6 +267,41 @@ for (const [id, stride] of [['1QGT', 1], ['7LNA', 1], ['6CGV', 3], ['5IRE', 2]])
 }
 const units = K.packUnits(new Float32Array([1, 2, 3, 4, 5, 6]), new Float32Array([0.1, 0.2]), new Float32Array([0, 1, 0, 1, 0, 0]), 1, new Float32Array([0.5, 0.7]));
 ok(units[3] === Float32Array.of(0.1)[0] && units[8 + 4] === 1 && units[8 + 7] === Float32Array.of(0.7)[0], 'unit texels: centroid + delay, direction + phase');
+
+// ── 13 colour schemes ────────────────────────────────────────────────────
+section('13 colour schemes');
+{
+  const in01 = c => c.length === 3 && c.every(v => Number.isFinite(v) && v >= 0 && v <= 1);
+  let worst = 0, calls = 0, bad = 0;
+  const rr = S.makeRng(13);
+  for (const pk of Object.keys(CO.PALETTES)) {
+    const P = CO.PALETTES[pk];
+    ok(P.main.length >= 10 && P.ramp.length === 5 && P.div.length === 3 && P.ss.length === 3 && P.cls.length === 8, pk + ' palette has every table');
+    for (const id of ['1HXS', '6CGV', '6VSB', '7LNA']) {
+      for (const sc of CO.SCHEMES) {
+        const chains = CO.chainColors(D[id].info, sc.id, pk, { hide: { glycan: true } });
+        if (!chains.every(c => in01(c.slice(0, 3)) && (c[3] === 0 || c[3] === 1))) bad++;
+        for (let t = 0; t < 40; t++) {
+          const ctx = { chainRgb: chains[Math.floor(rr.next() * chains.length)], k: Math.floor(rr.next() * 60), ss: Math.floor(rr.next() * 3), cls: Math.floor(rr.next() * 8),
+            frac: rr.range(-0.2, 1.2), burial: rr.next(), radiusT: rr.range(-0.5, 1.5) };
+          const c = CO.beadColor(sc.id, pk, ctx), v = CO.schemeValue(sc.id, ctx);
+          calls++;
+          if (!in01(c) || !(v >= 0 && v <= 1)) { bad++; worst = Math.max(worst, ...c.map(Math.abs)); }
+        }
+      }
+    }
+  }
+  ok(bad === 0, calls + ' bead colours over ' + CO.SCHEMES.length + ' schemes x ' + Object.keys(CO.PALETTES).length + ' palettes are in [0, 1]');
+  ok(CO.SCHEMES.every(x => CO.MODE[x.id] != null) && new Set(Object.values(CO.MODE)).size === 8, 'every scheme has a shader mode (8 modes)');
+  ok(CO.HYDRO.length === 8 && CO.HYDRO.every(v => v >= 0 && v <= 1), 'hydropathy of every residue class in [0, 1]');
+  ok(CO.HYDRO[0] > CO.HYDRO[1] && CO.HYDRO[1] > CO.HYDRO[2], 'hydrophobic > polar > charged');
+  const h = [CO.hsv(0, 1, 1), CO.hsv(1 / 3, 1, 1), CO.hsv(2 / 3, 1, 1)];
+  ok(near(h[0][0], 1, 1e-9) && near(h[1][1], 1, 1e-9) && near(h[2][2], 1, 1e-9), 'hsv: red, green, blue at 0, 1/3, 2/3');
+  ok(near(CO.ramp([[0, 0, 0], [1, 1, 1]], 0.25)[0], 0.25, 1e-9) && CO.ramp([[0, 0, 0], [1, 1, 1]], 7)[0] === 1, 'ramp interpolates and clamps');
+  for (const [k, L] of Object.entries(CO.LIGHTS)) {
+    ok(Math.hypot(...L.key) > 0.1 && Math.hypot(...L.fill) > 0.1 && in01(L.keyCol) && in01(CO.hex01(L.bg)) && L.amb >= 0 && L.amb < 0.5, 'light ' + k + ': directions, colours in range');
+  }
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
