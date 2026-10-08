@@ -61,6 +61,7 @@ import {
 } from 'three';
 import { toTrianglesDrawMode } from '../utils/BufferGeometryUtils.js';
 import { clone } from '../utils/SkeletonUtils.js';
+import { GLTFRegistry } from './gltf/registry.js';
 import {
 	EXTENSIONS,
 	WEBGL_CONSTANTS,
@@ -574,42 +575,6 @@ class GLTFLoader extends Loader {
 		} );
 
 	}
-
-}
-
-/* GLTFREGISTRY */
-
-function GLTFRegistry() {
-
-	let objects = {};
-
-	return	{
-
-		get: function ( key ) {
-
-			return objects[ key ];
-
-		},
-
-		add: function ( key, object ) {
-
-			objects[ key ] = object;
-
-		},
-
-		remove: function ( key ) {
-
-			delete objects[ key ];
-
-		},
-
-		removeAll: function () {
-
-			objects = {};
-
-		}
-
-	};
 
 }
 
