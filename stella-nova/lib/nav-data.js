@@ -136,9 +136,6 @@ w.SN_NAV = [
       ["storm-globe", "Storm Globe", "DATA"],
       ["map-projections", "Map Projections", "MATH"]
     ] },
-    { h: "Shock Waves", p: [
-      ["nuclear-blast", "Nuclear Blast Effects", "3D"]
-    ] },
     { h: "Navier–Stokes", p: [
       ["ns-equations", "Navier–Stokes 1D", "MATH"],
       ["ns-burgers", "Burgers Equation", "SIM"],
