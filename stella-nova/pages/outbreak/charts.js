@@ -32,15 +32,18 @@
 
 export const SOURCES = [];
 
-// Series colors follow style.css (--cool, --warm, --hot, --ok).
+// Series colors follow style.css (--hot for the infectious line, muted
+// tones for the rest, so the one curve that matters leads).
 export const SERIES = [
-  { key: 'S', label: 'Susceptible', color: '#7fd1ff', width: 1.2 },
-  { key: 'E', label: 'Exposed', color: '#ffd166', width: 1.2 },
-  { key: 'I', label: 'Infectious', color: '#ff4d5e', width: 2.0 },
-  { key: 'R', label: 'Recovered', color: '#86dc7c', width: 1.2 },
-  { key: 'D', label: 'Deaths', color: '#c9b8d8', width: 1.4 },
-  { key: 'V', label: 'Vaccinated', color: '#5ce0c6', width: 1.2 },
+  { key: 'S', label: 'Susceptible', color: '#8fa3bf', width: 1.1 },
+  { key: 'E', label: 'Exposed', color: '#d9b45a', width: 1.1 },
+  { key: 'I', label: 'Infectious', color: '#ef5a47', width: 2.0 },
+  { key: 'R', label: 'Recovered', color: '#7cc79a', width: 1.1 },
+  { key: 'D', label: 'Deaths', color: '#c7c0d4', width: 1.3 },
+  { key: 'V', label: 'Vaccinated', color: '#6fb3ae', width: 1.1 },
 ];
+const FONT = '500 10px Inter, system-ui, sans-serif';
+const TICK = '#6b7382', GRID = 'rgba(255,255,255,0.06)', MARK = 'rgba(255,255,255,0.28)';
 
 // A 1, 2 or 5 x 10^k step so that `span` holds about `n` steps.
 export function niceStep(span, n = 5) {
@@ -160,30 +163,31 @@ export function createChart(canvas, { log = true, dprCap = 2, names = {} } = {})
     const [lo, hi] = yRange(history, keys, chart.log);
     const sx = makeScale(0, dMax, x0, x1), sy = makeScale(lo, hi, y1, y0, chart.log);
 
-    ctx.font = '10px ui-monospace, Menlo, monospace';
+    ctx.font = FONT;
+    if ('fontVariantNumeric' in ctx) ctx.fontVariantNumeric = 'tabular-nums';
     ctx.lineWidth = 1;
     // y grid and labels
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     const yt = chart.log ? logTicks(lo, hi) : linTicks(lo, hi, 4);
     for (const v of yt) {
       const y = Math.round(sy(v)) + 0.5;
-      ctx.strokeStyle = 'rgba(200,180,220,0.10)';
+      ctx.strokeStyle = GRID;
       ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
-      ctx.fillStyle = '#4a5262'; ctx.fillText(fmtCount(v), x0 - 4, y);
+      ctx.fillStyle = TICK; ctx.fillText(fmtCount(v), x0 - 4, y);
     }
     // x labels (days)
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (const d of linTicks(0, dMax, Math.max(2, Math.floor((x1 - x0) / 70)))) {
-      ctx.fillStyle = '#4a5262'; ctx.fillText(String(d), sx(d), s1 + 2);
+      ctx.fillStyle = TICK; ctx.fillText(String(d), sx(d), s1 + 2);
     }
     // policy marks
     ctx.setLineDash([3, 3]); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     let lastLabelX = -1e9;
     for (const m of marks) {
       const x = Math.round(sx(m.day)) + 0.5;
-      ctx.strokeStyle = 'rgba(255,138,92,0.45)';
+      ctx.strokeStyle = MARK;
       ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, s1); ctx.stroke();
-      if (x - lastLabelX > 60) { ctx.fillStyle = '#ff8a5c'; ctx.fillText(m.label, x + 3, y0); lastLabelX = x; }
+      if (x - lastLabelX > 70) { ctx.fillStyle = '#a3aab6'; ctx.fillText(m.label, x + 3, y0); lastLabelX = x; }
     }
     ctx.setLineDash([]);
     // curves
@@ -202,28 +206,34 @@ export function createChart(canvas, { log = true, dprCap = 2, names = {} } = {})
     }
     // R_eff strip: 0 .. max(3, peak), line at 1
     const r = history.reff || [];
-    ctx.fillStyle = 'rgba(20,24,34,0.6)'; ctx.fillRect(x0, s0, x1 - x0, STRIP_H);
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(x0, s0, x1 - x0, STRIP_H);
     let rMax = 3;
     for (let i = 0; i < r.length; i++) if (r[i] > rMax) rMax = r[i];
     const sr = makeScale(0, rMax, s1, s0);
     const y1r = Math.round(sr(1)) + 0.5;
-    ctx.strokeStyle = 'rgba(230,233,240,0.35)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x0, y1r); ctx.lineTo(x1, y1r); ctx.stroke();
     ctx.lineWidth = 1.4;
     for (let i = st; i < r.length; i += st) {
       const j = i - st;
-      ctx.strokeStyle = (r[i] + r[j]) / 2 > 1 ? '#ff4d5e' : '#86dc7c';
+      ctx.strokeStyle = (r[i] + r[j]) / 2 > 1 ? '#ef5a47' : '#7cc79a';
       ctx.beginPath(); ctx.moveTo(sx(history.day[j]), sr(r[j])); ctx.lineTo(sx(history.day[i]), sr(r[i])); ctx.stroke();
     }
-    ctx.fillStyle = '#919aab'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = TICK; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.fillText('R', x0 - 4, (s0 + s1) / 2);
     if (r.length) { ctx.textAlign = 'left'; ctx.fillText(r[r.length - 1].toFixed(2), x0 + 3, s0 + 6); }
-    // legend
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    // legend: a short swatch and the name when the chart is wide enough
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const wide = x1 - x0 > 420;
     let lx = x0 + 4;
+    const ly = y0 + (marks.length ? 18 : 6);
     for (const s of SERIES) {
       if (!keys.includes(s.key)) continue;
-      ctx.fillStyle = s.color; ctx.fillText(s.key, lx, y0 + 12); lx += 14;
+      ctx.fillStyle = s.color; ctx.fillRect(lx, ly - 1, 8, 2);
+      const name = wide ? s.label : s.key;
+      ctx.fillStyle = '#a3aab6'; ctx.fillText(name, lx + 11, ly);
+      const tm = ctx.measureText ? ctx.measureText(name) : null;
+      lx += 11 + ((tm && tm.width) || name.length * 6) + 10;
     }
     return true;
   }

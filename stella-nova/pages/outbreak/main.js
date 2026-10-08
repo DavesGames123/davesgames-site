@@ -30,11 +30,17 @@
 //  leave clear (ui.clearRect). The globe centres in it by setViewOffset.
 //  In the screensaver, saver.js gives the plate band instead.
 //
+//  Labels: only the few largest current outbreaks get a city label
+//  (topOutbreaks, LABELS_DESKTOP or LABELS_PHONE). The set changes every
+//  LABEL_EVERY seconds; the positions follow the globe each frame. A
+//  label that would overlap another, or leave the clear rect, hides.
+//
 //  Release: render/globe.js disposes every GPU object and calls
 //  forceContextLoss on pagehide. main.js also stops the frame loop there.
 //
 //  grep -n targets: "export function createApp", "export function pickSeedNode",
 //    "export function hottestNode", "export function topRegion",
+//    "export function topOutbreaks", "function bindLabels",
 //    "function newSim", "function setShot", "function updateCamera",
 //    "function frame", "function occlusion", "async function boot",
 //    "function bindPointer", "const api", "const saverApp"
@@ -62,6 +68,9 @@ export const MOVE_RATE = 0.8;      // 1/s, the ease of spin and drift to a new s
 export const CHART_EVERY = 0.25;   // s between chart redraws
 export const ALT = { globe: [0.12, 5], flat: [0.25, 6] };
 const SEED_POOL = 60;              // the random seed city is one of the largest 60
+export const LABELS_DESKTOP = 4, LABELS_PHONE = 2;   // city labels on the globe
+export const LABEL_MIN_PREV = 1e-4;                  // I/N below this gets no label
+export const LABEL_EVERY = 0.75;                     // s between label set changes
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -86,6 +95,22 @@ export function topRegion(sim) {
   let best = -1, bv = 0;
   for (let k = 0; k < ri.length; k++) if (ri[k] > bv) { bv = ri[k]; best = k; }
   return best;
+}
+
+// The k nodes with the most infectious people, among the nodes whose
+// prevalence I/N is at least minPrev. Sorted by I, largest first.
+export function topOutbreaks(sim, pop, k = LABELS_DESKTOP, minPrev = LABEL_MIN_PREV) {
+  const out = [];
+  if (!sim || !(k > 0)) return out;
+  for (let i = 0; i < sim.N; i++) {
+    const v = sim.I[i];
+    if (!(v > 0) || v / pop[i] < minPrev) continue;
+    if (out.length < k) out.push(i);
+    else if (v > sim.I[out[k - 1]]) out[k - 1] = i;
+    else continue;
+    out.sort((a, b) => sim.I[b] - sim.I[a] || a - b);
+  }
+  return out;
 }
 
 export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISEASE, seed = 1, startDayOfYear = 0 }) {
@@ -328,6 +353,44 @@ function bindPointer(canvas, app, onTap) {
   return () => ac.abort();
 }
 
+// City labels for the largest current outbreaks. Returns frame(nowSec).
+function bindLabels(box, app, globe, D) {
+  const phone = matchMedia('(max-width:760px), (max-height:520px) and (pointer:coarse)').matches;
+  const K = phone ? LABELS_PHONE : LABELS_DESKTOP;
+  const pop = Float64Array.from(D.nodes, n => n.pop || 1);
+  const pool = [];
+  for (let k = 0; k < K; k++) {
+    const e = document.createElement('div'); e.className = 'lbl fade';
+    const name = document.createElement('span'), sub = document.createElement('small');
+    e.append(name, sub); box.append(e); pool.push({ e, name, sub, i: -1 });
+  }
+  let setAt = -1e9, ids = [];
+  return function frame(t) {
+    const sim = app.sim;
+    if (t - setAt >= LABEL_EVERY || t < setAt) { setAt = t; ids = topOutbreaks(sim, pop, K); }
+    const r = app.occlusion() || { l: 0, r: innerWidth, t: 0, b: innerHeight };
+    const placed = [];
+    for (let k = 0; k < K; k++) {
+      const L = pool[k], i = ids[k] ?? -1;
+      let show = false;
+      if (i >= 0) {
+        const p = globe.project(i);
+        const w = 110, h = 26, x = p.x + 6, y = p.y - 8;
+        show = p.visible && x > r.l && x + w < r.r && y > r.t && y + h < r.b
+          && !placed.some(q => Math.abs(q.x - x) < w && Math.abs(q.y - y) < h);
+        if (show) {
+          placed.push({ x, y });
+          L.e.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
+          if (L.i !== i) { L.i = i; L.name.textContent = D.nodes[i].name; }
+          const txt = `${(sim.I[i] / pop[i] * 100).toFixed(sim.I[i] / pop[i] < 0.001 ? 3 : 2)} % infected`;
+          if (L.txt !== txt) { L.txt = txt; L.sub.textContent = txt; }
+        }
+      }
+      L.e.classList.toggle('fade', !show);
+    }
+  };
+}
+
 async function boot() {
   const $ = id => document.getElementById(id);
   const say = (txt, f) => { if ($('ltext')) $('ltext').textContent = txt; if ($('lfill')) $('lfill').style.width = `${Math.round(f * 100)}%`; };
@@ -358,23 +421,28 @@ async function boot() {
 
   // a tap on a city: its name and counts for a few seconds
   const labels = $('labels');
-  let tipT = 0;
+  const cityLabels = bindLabels(labels, app, globe, D);
+  let tipT = 0, tip = null;
   const onTap = (x, y) => {
     const i = app.pick(x, y);
-    labels.textContent = '';
+    if (tip) { tip.remove(); tip = null; }
     if (i < 0) return;
-    const n = D.nodes[i], s = app.sim, tip = document.createElement('div');
+    const n = D.nodes[i], s = app.sim;
+    tip = document.createElement('div');
     tip.className = 'tip';
-    tip.style.cssText = `position:absolute;left:${x + 12}px;top:${y - 8}px;padding:4px 8px;border-radius:6px;background:rgba(10,12,20,.85);color:#e6e9f0;font-size:12px;white-space:nowrap`;
+    const W = innerWidth;
+    tip.style.left = `${Math.min(x + 12, W - 220)}px`; tip.style.top = `${Math.max(8, y - 34)}px`;
     const pct = s.I[i] / n.pop * 100;
-    tip.textContent = `${n.name}, ${n.country} · ${pct < 0.01 ? pct.toFixed(4) : pct.toFixed(2)} % infected now`;
+    const b = document.createElement('b'); b.textContent = `${n.name}, ${n.country} `;
+    const sp = document.createElement('span'); sp.textContent = `· ${pct < 0.01 ? pct.toFixed(4) : pct.toFixed(2)} % infected now`;
+    tip.append(b, sp);
     labels.append(tip);
-    clearTimeout(tipT); tipT = setTimeout(() => { labels.textContent = ''; }, 3500);
+    clearTimeout(tipT); tipT = setTimeout(() => { if (tip) { tip.remove(); tip = null; } }, 3500);
   };
   const unbind = bindPointer(canvas, app, onTap);
 
   let raf = 0, live = true;
-  const loop = ms => { if (!live) return; raf = requestAnimationFrame(loop); app.frame(ms / 1000); };
+  const loop = ms => { if (!live) return; raf = requestAnimationFrame(loop); app.frame(ms / 1000); cityLabels(ms / 1000); };
   addEventListener('resize', () => { globe.resize(); app.layout(); });
   addEventListener('pagehide', () => {
     live = false; cancelAnimationFrame(raf); unbind();

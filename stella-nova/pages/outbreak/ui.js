@@ -432,9 +432,9 @@ export function createUI(api) {
     $('speedBtn').textContent = `${st.speed} d/s`;
     const play = !!st.playing;
     $('play').classList.toggle('on', play);
-    $('play').firstElementChild.textContent = play ? '❚❚' : '▶';
+    $('play').firstElementChild.textContent = play ? '❚❚' : '\u25B6\uFE0E';
     $('play').setAttribute('aria-label', play ? 'Pause' : 'Play');
-    $('dockPlay').firstElementChild.textContent = play ? '❚❚' : '▶';
+    $('dockPlay').firstElementChild.textContent = play ? '❚❚' : '\u25B6\uFE0E';
     $('dockPlay').lastElementChild.textContent = play ? 'Pause' : 'Play';
     const auto = !!st.auto;
     $('autoBtn').classList.toggle('on', auto);
