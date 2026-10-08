@@ -16,7 +16,9 @@
 //  the guard also runs it on pagehide. A device that resolves after release
 //  is destroyed at once. Pages need no change and keep their own cleanup.
 //
-//  grep: function release  requestDevice  getContext  requestAnimationFrame
+//  It also stops text selection on canvas, svg and video (see the end).
+//
+//  grep: function release  requestDevice  getContext  requestAnimationFrame  selectstart
 // ============================================================================
 (function () {
   if (window.__snGuard) return;
@@ -71,4 +73,17 @@
   window.__snRelease = release;
   window.__snGuardStats = function () { return { devices: devices.size, contexts: contexts.size, released: released }; };
   window.addEventListener('pagehide', release);
+
+  // No highlight on visualizations. A drag or double-click on a canvas,
+  // svg or video must not start a text selection, and a long press must
+  // not open the iOS callout. The guard loads first in every page, so
+  // this rule reaches every visualization. Text in inputs is not changed.
+  var css = document.createElement('style');
+  css.textContent = 'canvas,svg,video{-webkit-user-select:none;user-select:none;' +
+    '-webkit-touch-callout:none;-webkit-user-drag:none;-webkit-tap-highlight-color:transparent}';
+  (document.head || document.documentElement).appendChild(css);
+  document.addEventListener('selectstart', function (e) {
+    var t = e.target && e.target.nodeType === 1 ? e.target : e.target && e.target.parentElement;
+    if (t && t.closest && t.closest('canvas,svg,video')) e.preventDefault();
+  }, true);
 })();
