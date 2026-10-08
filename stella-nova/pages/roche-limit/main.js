@@ -67,58 +67,16 @@ import { Renderer, loadRenderCode, norm, cross, sub } from './render.js';
 import { SCENARIOS, REAL, STORY, SATURN_RINGS, specFor, flybyStart } from './scenarios.js';
 import { drawGauge, drawBound, drawEnergy, drawRuns, MAT_COLOR } from './plots.js';
 import { typesetAll } from '../../lib/sci-math.js';
-import { plateBand } from '../../lib/saver-clear.js';
-import { S, pileCache, bootDone, bootReady } from './app/state.js';
-
-const $ = id => document.getElementById(id);
-const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
-const COARSE = window.matchMedia('(pointer:coarse)').matches;
-const N_OPTS = [4096, 8192, 16384, 24576, 32768];
-const G_SI = 6.674e-11;
-const RUNS_KEY = 'roche-limit-runs-v1';
-const SPEED_STOPS = [{ name: 'Slow', v: 0.18 }, { name: 'Normal', v: 0.78 }, { name: 'Fast', v: 1.38 }];   // log10 orbits/min
-const SPEED_MIN = -1.3, SPEED_MAX = 2, CALM_SPEED = 0.78;
-const SNAP_CAP = 60;
-const KM_SATURN = 60268;
-
-// Bound mass after 3 orbits, measured with this code: N = 16384, q = 1,
-// circular orbits, 2026-10-06, shaders/sim.wgsl run from Deno (a scratch
-// sweep script; readbacks every 1/6 orbit). x = d / (R_p q^(1/3)).
-// Disruption (bound < 50%): fluid 0.92-0.95 d_fluid, rigid-ish 0.70-0.75,
-// cohesive 0.65-0.70; d_rigid is 0.52 d_fluid.
-const REF_SWEEP = [
-  ...[[0.80, 0.011], [0.85, 0.010], [0.88, 0.049], [0.90, 0.154], [0.92, 0.008], [0.95, 1.0], [1.00, 1.0], [1.05, 1.0]].map(([f, y]) => ({ x: f * P.K_FLUID, y, mat: 'fluid' })),
-  ...[[0.65, 0.007], [0.70, 0.006], [0.75, 1.0], [0.80, 1.0]].map(([f, y]) => ({ x: f * P.K_FLUID, y, mat: 'rigid' })),
-  ...[[0.55, 0.135], [0.60, 0.261], [0.65, 0.360], [0.70, 1.0], [0.75, 1.0]].map(([f, y]) => ({ x: f * P.K_FLUID, y, mat: 'cohesive' })),
-];
-
-// Quality presets. Auto starts at Medium (Low on a phone) and the governor
-// (function governQuality) lowers the render scale, then the bloom, then
-// the steps per frame when frames run long, and raises them back when
-// there is room. The grain count changes only between runs.
-const QUALITY = {
-  high:   { N: 16384, maxPx: 3.6e6, bloom: true, gridN: 1024 },
-  medium: { N: 8192,  maxPx: 1.8e6, bloom: true, gridN: 512 },
-  low:    { N: 4096,  maxPx: 0.9e6, bloom: false, gridN: 512 },
-};
-const Q = { preset: (PHONE_Q.matches || COARSE) ? 'low' : 'medium', scale: 1, bloom: true, win: { n: 0, t0: 0, slow: 0, good: 0 }, cool: 0, note: '' };
-Q.bloom = QUALITY[Q.preset].bloom;
-
-const UI = {
-  scen: 'saturn', body: 'phobos',
-  d: 2.7, peri: 1.6, e: 1, qLog: 0, J2: 0,
-  material: 'fluid', mu: 0, coh: 0,
-  N: (PHONE_Q.matches || COARSE) ? 4096 : 8192,
-  quality: 'auto', showFps: false,
-  speedLog: 0.78, paused: false,
-  cam: 'planet', color: 4, field: 0,
-  rings: true, real: true, hill: false, pred: true, track: true, ringOn: true, blur: false, ringGain: 2,
-  calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches,   // Reduce motion
-};
+import { cardArt } from './app/card-art.js';
+import { $, QUALITY, Q, UI, PHONE_Q, G_SI, CALM_SPEED, COARSE, SNAP_CAP, RUNS_KEY, KM_SATURN, SPEED_STOPS, REF_SWEEP, SPEED_MIN, SPEED_MAX, N_OPTS, RM_Q } from './app/env.js';
+import { workerJobs, workerCall } from './app/jobs.js';
+import { drawLegend } from './app/legend.js';
+import { occlusion } from './app/occlusion.js';
+import { satState, satCentre } from './app/sat.js';
+import { S, bootDone, pileCache, bootReady } from './app/state.js';
 
 let gpuPending = false;
 let lastT = performance.now();
-const workerJobs = new Map(); let jobId = 0;
 
 // ── boot (called at the end of the module, after every const is set) ─────
 async function boot() {
@@ -175,9 +133,6 @@ function resize() {
   w = Math.round(w * k); h = Math.round(h * k);
   c.width = w; c.height = h;
   S.ren.resize(w, h);
-}
-function workerCall(msg, transfer = []) {
-  return new Promise(res => { const id = ++jobId; workerJobs.set(id, res); S.worker.postMessage(Object.assign({ id }, msg), transfer); });
 }
 
 // ── runs ──────────────────────────────────────────────────────────────────
@@ -663,21 +618,6 @@ function seekPhase(key) {
   restoreSnap(i);
 }
 
-// The bound centre now, in world units (planet radii), extrapolated from
-// the last analysis with its velocity.
-function satCentre(s) {
-  const X = s.ref.X;
-  if (!s.an) return [X[0] * s.k, X[1] * s.k, X[2] * s.k];
-  const dt = s.gpu.t - s.an.t;
-  return [0, 1, 2].map(i => (X[i] + s.an.com[i] + s.an.vcm[i] * dt) * s.k);
-}
-function satState(s) {
-  const X = s.ref.X, V = s.ref.V;
-  if (!s.an) return { r: X.slice(), v: V.slice() };
-  const dt = s.gpu.t - s.an.t;
-  return { r: [0, 1, 2].map(i => X[i] + s.an.com[i] + s.an.vcm[i] * dt), v: [0, 1, 2].map(i => V[i] + s.an.vcm[i]) };
-}
-
 // ── camera ────────────────────────────────────────────────────────────────
 // The user found the first version nauseating and asked for the planet to
 // stay still while the moon goes round. Now:
@@ -693,7 +633,7 @@ function satState(s) {
 //   - camStats keeps the largest view rotation (deg/s, deg/frame) and the
 //     largest shift of the planet centre on screen (deg/frame), user moves
 //     not counted
-const RM_Q = window.matchMedia('(prefers-reduced-motion: reduce)');
+
 const FOLLOW_MAX_DEG = 8;        // deg/s of the moon about the planet, real time
 const ROT_MAX = { calm: 2.5, normal: 4 };        // deg/s, view turn
 const ROT_BOOST = 6;                              // deg/s, after a button choice
@@ -1307,49 +1247,6 @@ function syncButtons() {
   drawLegend();
 }
 
-// matplotlib "plasma" (the polynomial fit in shaders/particles.wgsl)
-function plasma(t) {
-  const C = [[0.05873234392399702, 0.02333670892565664, 0.5433401826748754], [2.176514634195958, 0.2383834171260182, 0.7539604599784036], [-2.689460476458034, -7.455851135738909, 3.110799939717086],
-    [6.130348345893603, 42.3461881477227, -28.51885465332158], [-11.10743619062271, -82.66631109428045, 60.13984767418263], [10.02306557647065, 71.41361770095349, -54.07218655560067], [-3.658713842777788, -22.93153465461149, 18.19190778539828]];
-  return [0, 1, 2].map(k => { let v = C[6][k]; for (let i = 5; i >= 0; i--) v = C[i][k] + t * v; return Math.round(255 * Math.max(0, Math.min(1, v))); });
-}
-function drawLegend() {
-  const lg = $('legend');
-  const heat = UI.color === 3 || UI.color === 4;
-  lg.classList.toggle('off', UI.field === 0 && UI.color !== 2 && !heat);
-  const c = $('lgBar'), g = c.getContext('2d'), w = c.width, h = c.height;
-  const grad = g.createLinearGradient(0, 0, w, 0);
-  if (UI.field === 1) {
-    $('lgTitle').textContent = 'Force map: who holds a grain (bright line: the moon’s grip)';
-    [[0, '#1a8cd9'], [0.35, '#0f3d5e'], [0.5, '#080a12'], [0.65, '#9b3b2c'], [1, '#ffd173']].forEach(([o, col]) => grad.addColorStop(o, col));
-    $('lgLo').textContent = 'the moon'; $('lgMid').textContent = 'L1'; $('lgHi').textContent = 'the planet';
-  } else if (UI.field === 2) {
-    $('lgTitle').textContent = 'Force map: tide against the moon’s pull (bright line: equal)';
-    [[0, '#05051a'], [0.25, '#4d1a8c'], [0.5, '#d94059'], [0.75, '#ff9e26'], [1, '#fff8bf']].forEach(([o, col]) => grad.addColorStop(o, col));
-    $('lgLo').textContent = '0.01×'; $('lgMid').textContent = 'equal'; $('lgHi').textContent = '100×';
-  } else if (heat) {
-    $('lgTitle').textContent = UI.color === 4 ? 'Ice; grains that collide glow by the heat of their collisions' : 'Heat from collisions (energy per kilogram, log scale)';
-    for (let i = 0; i <= 10; i++) { const p = plasma(i / 10); grad.addColorStop(i / 10, `rgb(${p[0]},${p[1]},${p[2]})`); }
-    $('lgLo').textContent = 'cool'; $('lgMid').textContent = 'warm'; $('lgHi').textContent = 'hot';
-  } else {
-    $('lgTitle').textContent = 'Tide strain on each grain: tide / the moon’s own pull';
-    [[0, '#05051a'], [0.25, '#4d1a8c'], [0.5, '#d94059'], [0.75, '#ff9e26'], [1, '#fff8bf']].forEach(([o, col]) => grad.addColorStop(o, col));
-    $('lgLo').textContent = '0.03×'; $('lgMid').textContent = 'equal'; $('lgHi').textContent = '30×';
-  }
-  g.clearRect(0, 0, w, h); g.fillStyle = grad; g.fillRect(0, 0, w, h);
-}
-
-// Small pictures for the gallery cards (inline SVG, 160 x 90).
-function cardArt(key) {
-  const sv = body => `<svg viewBox="0 0 160 90" aria-hidden="true"><rect width="160" height="90" fill="#070b13"/>${body}</svg>`;
-  const stars = '<g fill="#9fb3d1" opacity="0.5"><circle cx="12" cy="14" r="0.8"/><circle cx="140" cy="20" r="0.7"/><circle cx="128" cy="76" r="0.8"/><circle cx="30" cy="70" r="0.6"/><circle cx="96" cy="8" r="0.6"/></g>';
-  if (key === 'saturn') return sv(`${stars}<ellipse cx="80" cy="47" rx="60" ry="13" fill="none" stroke="#cdb98e" stroke-opacity="0.5" stroke-width="7"/><ellipse cx="80" cy="45" rx="20" ry="18" fill="#d9c08a"/><path d="M60 45 a20 18 0 0 1 40 0" fill="#e6d3a6"/><ellipse cx="80" cy="47" rx="60" ry="13" fill="none" stroke="#e8dcc0" stroke-opacity="0.7" stroke-width="3" stroke-dasharray="0 0 60 200"/><path d="M128 40 q8 6 2 12" fill="none" stroke="#bfe0ff" stroke-width="2" stroke-dasharray="2 3"/><circle cx="131" cy="36" r="3.4" fill="#cfe4ff"/>`);
-  if (key === 'close') return sv(`${stars}<circle cx="80" cy="45" r="16" fill="#6f9cc8"/><ellipse cx="80" cy="45" rx="46" ry="22" fill="none" stroke="#ff7a59" stroke-opacity="0.75" stroke-dasharray="3 3"/><path d="M146 45 C146 10 40 8 30 40 C24 60 60 74 96 66" fill="none" stroke="#ffd7a0" stroke-opacity="0.6" stroke-width="1.4"/><ellipse cx="100" cy="65" rx="5" ry="3.5" fill="#cfe4ff"/>`);
-  if (key === 'flyby') return sv(`${stars}<circle cx="64" cy="48" r="20" fill="#c99a6a"/><path d="M64 51 h20" stroke="#a87650" stroke-width="2"/><path d="M150 6 Q70 40 150 86" fill="none" stroke="#ffd7a0" stroke-opacity="0.5" stroke-width="1.2"/>${[0, 1, 2, 3, 4, 5, 6].map(i => `<circle cx="${108 + i * 5.5}" cy="${62 + i * 3.4}" r="${2.2 - i * 0.18}" fill="#e8eef8"/>`).join('')}`);
-  if (key === 'compare') return sv(`${stars}<circle cx="80" cy="45" r="15" fill="#6f9cc8"/><ellipse cx="80" cy="45" rx="54" ry="24" fill="none" stroke="#9aa6b8" stroke-opacity="0.35"/><ellipse cx="30" cy="40" rx="7.5" ry="4" fill="#62c4ff"/><circle cx="21" cy="40" r="1.2" fill="#62c4ff"/><circle cx="39" cy="41" r="1.2" fill="#62c4ff"/><circle cx="131" cy="50" r="5" fill="#ff9a62"/>`);
-  return sv(`${stars}<circle cx="58" cy="46" r="22" fill="#b5603f"/><circle cx="58" cy="46" r="46" fill="none" stroke="#ff7a59" stroke-opacity="0.6" stroke-dasharray="3 3"/><circle cx="96" cy="36" r="3.5" fill="#a59c90"/><text x="104" y="40" fill="#9fb3d1" font-size="9" font-family="Inter, system-ui, sans-serif">Phobos</text>`);
-}
-
 // pointer: drag to orbit, pinch or wheel to zoom, double-click to reset
 function bindPointer() {
   const c = $('gpu'), pts = new Map();
@@ -1370,30 +1267,6 @@ function bindPointer() {
   c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
   c.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = Math.max(0.08, Math.min(8, cam.zoom * Math.exp(e.deltaY * 0.0012))); cam.userUntil = performance.now() + 250; }, { passive: false });
   c.addEventListener('dblclick', () => { const sc = SCENARIOS.find(s => s.key === UI.scen); cam.zoom = 1; cam.az = 0.9; cam.el = sc.el ?? 0.42; cam.boostUntil = performance.now() + 3000; });
-}
-
-// Overlay margins in CSS px. The bar covers the top; the story strip and
-// the readout card (and the dock on a phone) cover the bottom; an open
-// drawer covers its side. The saver uses the plate band instead.
-let band = null, bandAt = -1e9;
-function occlusion(w, h) {
-  const o = { l: 0, r: 0, t: 0, b: 0 };
-  if (S.saverOn) {
-    const now = performance.now();
-    if (now - bandAt > 250) { bandAt = now; band = plateBand(h); }
-    if (band) { let t = band.t, b = band.b; const k = (t + b) / (0.65 * h); if (k > 1) { t /= k; b /= k; } o.t = t; o.b = b; }
-    return o;
-  }
-  const rect = id => { const el = $(id); if (!el || el.classList.contains('off') || el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return null; const q = el.getBoundingClientRect(); return q.width > 1 && q.height > 1 ? q : null; };
-  const bar = rect('bar'); if (bar) o.t = Math.max(o.t, Math.min(h * 0.3, bar.bottom));
-  const ro = rect('readouts'); if (ro && ro.width < w * 0.6 && !PHONE_Q.matches) { /* a corner card: the moon may pass behind it, the planet stays clear */ }
-  else if (ro && PHONE_Q.matches) o.t = Math.max(o.t, Math.min(h * 0.4, ro.bottom));
-  for (const id of ['story', 'dock']) { const q = rect(id); if (q && q.top > h * 0.4) o.b = Math.max(o.b, Math.min(h * 0.45, h - q.top)); }
-  for (const id of ['advanced', 'details']) {
-    const q = rect(id); if (!q || PHONE_Q.matches) continue;
-    if (q.left > w / 2) o.r = Math.max(o.r, w - q.left); else o.l = Math.max(o.l, q.right);
-  }
-  return o;
 }
 
 // Per-stage GPU time (ms, median of n): each stage is submitted alone and
