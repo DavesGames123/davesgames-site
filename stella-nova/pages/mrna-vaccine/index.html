@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>The mRNA vaccine: decades of science that met in 2020 — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MRNA VACCINE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and the text. The page tells how the COVID-19 mRNA
+   vaccines BNT162b2 (Pfizer-BioNTech) and mRNA-1273 (Moderna) became
+   possible: modified nucleosides, ionizable lipid nanoparticles, the
+   prefusion-stabilized spike, then the trials of 2020.
+
+   FACTS
+     Every date, number and reference comes from data.js. Each fact there
+     names its source id. The page draws its own schematic art; no figure
+     is copied. "Illustrative" tags mark toy models (titre curves, decay,
+     UTR letters, codon choices).
+
+   NO GPU
+     The page makes no WebGL or WebGPU context. All scenes draw on 2D
+     canvases. gpu-guard still loads first, because every page loads it.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module). It imports data.js,
+   draw.js, saver.js and ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips   sticky section bar
+     hero     #heroStats
+     #s1 problem     #decayCv #halfIn #halfOut
+     #s2 fix         #baseSeg #baseSvg #baseNote
+     #s3 message     #strandCv #strandPos #modBtn #optSeg #p2Btn #gcOut
+                     #strandInfo #regionList
+     #s4 delivery    #lipidBar #lipidList #chargeCv #phIn #phOut
+                     #journeyCv #journeyIn #journeyPlay #journeyRead #journeyNote
+     #s5 translate   #transCv #transPlay #transRead
+     #s6 antigen     #spikeCv #spike2P #spikeFire #spikeReset #spikeNote #pepView
+     #s7 response    #titreCv #titreSeg
+     #s8 proof       #trialSeg #trialTag #dotsCv #veIn #veOut #veTex #trialFacts
+     #s9 2020        #dayBar #dayInfo #coldFacts
+     #s10 decades    #eraSeg #tlStrip #tlList
+     sources         #srcList
+
+   GREP MAP  (main.js)
+     grep -n 'function initStats'     hero numbers
+     grep -n 'function initDecay'     section 01
+     grep -n 'function initBase'      section 02
+     grep -n 'function initStrand'    section 03
+     grep -n 'function initDelivery'  section 04
+     grep -n 'function initTranslate' section 05
+     grep -n 'function initSpike'     section 06
+     grep -n 'function initTitre'     section 07
+     grep -n 'function initProof'     section 08
+     grep -n 'function initDays'      section 09
+     grep -n 'function initTimeline'  section 10
+     grep -n 'function initSources'   references
+     grep -n 'function loop'          one rAF loop, visible canvases only
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How the COVID-19 mRNA vaccines were possible: modified nucleosides, ionizable lipid nanoparticles, the two-proline prefusion spike and the trials of 2020. Interactive mRNA strand, lipid nanoparticle, translation, spike and efficacy diagrams, with sources.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">The mRNA vaccine</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>The problem</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>A quieter uridine</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>The message</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Delivery</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Inside the cell</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>The spike</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>The response</a></li>
+    <li><a href="#s8" data-target="s8"><b>08</b>The proof</a></li>
+    <li><a href="#s9" data-target="s9"><b>09</b>Why so fast</a></li>
+    <li><a href="#s10" data-target="s10"><b>10</b>Sixty years</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Medicine · molecular biology · 1961 to 2023</p>
+  <h1>The mRNA vaccine: sixty years of science that met in 2020</h1>
+  <p class="lede">In January 2020 a genome sequence went online. Within days a vaccine had been designed from it, within weeks it was being made, and within eleven months it had been shown to prevent about 95% of symptomatic cases in a trial of more than forty thousand people. That speed was not luck and it was not corner cutting. It was three separate lines of research, each decades long and each nearly abandoned at some point, that happened to be ready at the same moment: a way to make messenger RNA that the body does not attack, a fat bubble that gets it into cells, and a trick to freeze the virus's spike protein in the shape that antibodies need to see.</p>
+  <div class="stats" id="heroStats"></div>
+  <p class="note">Every date and number on this page links to a published source, listed at the end. Diagrams are our own schematic drawings, not to scale. Curves and sequences marked <b>illustrative</b> are toy models that show a shape, not data.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The problem: a perfect idea that did not work</h2><p>The idea is simple. Instead of injecting a protein, inject the instructions for it, and let the body's own cells make the protein. Messenger RNA is exactly that instruction: a copy of one gene that ribosomes read into protein. It never enters the nucleus and cannot become part of DNA. For decades, though, injected mRNA had two fatal flaws.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Flaw one: it falls apart</h3><span class="tag toy">illustrative half-life</span></div>
+      <canvas class="fig chart" id="decayCv" aria-label="Fraction of mRNA left against time"></canvas>
+      <div class="ctrls"><label class="ctrl grow">half-life <input type="range" id="halfIn" min="2" max="40" step="1" value="8"><output id="halfOut">8 h</output></label></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="N(t) = N_0\, e^{-k t}, \qquad t_{1/2} = \frac{\ln 2}{k}"></div><p>A textbook first-order decay: each molecule has the same chance per hour of being cut. Enzymes that cut RNA (RNases) are everywhere, on skin and in blood, so naked mRNA lasts a short time. Everything the vaccine designers did to the molecule, the cap, the tail, the modified bases, the lipid shell, pushes <span class="mi">k</span> down so that each copy makes more protein before it is gone.</p></div>
+      </div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Flaw two: it sets off the alarm</h3><span class="tag real">Karikó et al. 2005</span></div>
+      <p class="body">Cells treat RNA arriving from outside as a sign of a virus. Sensors such as the Toll-like receptors TLR3, TLR7 and TLR8 detect it and switch on an inflammatory response. That response makes the injection feel like an infection, and it also shuts down translation, so the cell makes little of the protein the mRNA encodes.</p>
+      <p class="body">Katalin Karikó and Drew Weissman, at the University of Pennsylvania, asked why the cell's own RNA does not set off the same alarm. Their answer, published in <i>Immunity</i> in 2005: our RNA is full of chemically modified nucleosides, and RNA made in a test tube is not.</p>
+      <ul class="facts">
+        <li>Unmodified in-vitro-transcribed mRNA strongly activated human dendritic cells and TLR3, TLR7 and TLR8.</li>
+        <li>The same RNA with modified nucleosides, such as pseudouridine, largely did not.</li>
+        <li>In 2008 the same group showed pseudouridine mRNA was also translated better and lasted longer.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>The fix: a quieter uridine</h2><p>RNA has four bases: A, C, G and U. Pseudouridine (Ψ) is a natural isomer of uridine: the same atoms, but the ring is attached to the sugar through a carbon instead of a nitrogen. N1-methylpseudouridine (m1Ψ) adds one methyl group to the nitrogen that is left free. Both vaccines replace every U in the mRNA with m1Ψ. The ribosome still reads it as U, so the protein does not change.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>One base, three versions</h3><span class="tag toy">our own schematic, H atoms on ring carbons left out</span></div>
+      <div class="seg" id="baseSeg" role="group" aria-label="Base">
+        <button data-v="U" class="on">Uridine (U)</button><button data-v="P">Pseudouridine (Ψ)</button><button data-v="M">N1-methyl-Ψ (m1Ψ)</button>
+      </div>
+      <svg id="baseSvg" class="basefig" viewBox="0 0 420 260" aria-label="Ring of the base and its bond to the ribose"></svg>
+      <p class="cap" id="baseNote"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>From an ignored paper to a Nobel Prize</h3><span class="tag real">nobelprize.org</span></div>
+      <p class="body">The 2005 result drew little attention at first. In 2015 another group showed that m1Ψ beat Ψ: more protein and less immune activation in cell lines and mice. m1Ψ became the base that both COVID-19 vaccines use.</p>
+      <p class="body">On 2 October 2023, Karikó and Weissman were awarded the Nobel Prize in Physiology or Medicine for their discoveries concerning nucleoside base modifications that enabled the development of effective mRNA vaccines against COVID-19.</p>
+      <p class="body dim">A note on what the modification does not do: it does not change which amino acid a codon encodes, and it does not make the mRNA permanent. The message is still degraded within days.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>The message: five parts of one molecule</h2><p>The BNT162b2 mRNA is one strand a little over four thousand nucleotides long. Every part of it was chosen from earlier work. Drag the strand, or use the slider, to move from the 5' cap to the poly(A) tail. Tap a base for what it is.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Scroll along the strand</h3><span class="tag toy">region order and spike residues real; UTR letters and codon choices illustrative</span></div>
+      <canvas class="fig strand" id="strandCv" aria-label="The mRNA strand, scrollable"></canvas>
+      <input type="range" id="strandPos" min="0" max="1000" value="0" aria-label="Position along the strand">
+      <div class="ctrls">
+        <button class="tgl on" id="modBtn" aria-pressed="true">U → m1Ψ</button>
+        <div class="seg" id="optSeg" role="group" aria-label="Codons"><button data-v="0">AU-rich codons</button><button data-v="1" class="on">GC-rich (optimized)</button></div>
+        <button class="tgl on" id="p2Btn" aria-pressed="true">2P at 986–987</button>
+        <span class="readout" id="gcOut"></span>
+      </div>
+      <div class="regions" id="regionList"></div>
+      <p class="cap" id="strandInfo">Tap a base, a codon or a region.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>Delivery: a fat bubble that changes charge</h2><p>mRNA is large and negatively charged, and it cannot cross a cell membrane alone. The answer came from a different field. Pieter Cullis and many others spent decades on lipid nanoparticles (LNPs) for small interfering RNA, and in 2018 patisiran (Onpattro), an siRNA in an ionizable LNP, became an approved drug. The COVID-19 vaccines use the same four-lipid recipe with new ionizable lipids.</p></div></div>
+  <div class="grid">
+    <article class="card span-5">
+      <div class="card-top"><h3>Four lipids</h3><span class="tag real">approximate mol %, both vaccines</span></div>
+      <div class="lipidbar" id="lipidBar"></div>
+      <div class="lipids" id="lipidList"></div>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>Why "ionizable": the charge follows the pH</h3><span class="tag toy">pKa 6.4 illustrative</span></div>
+      <canvas class="fig chart" id="chargeCv" aria-label="Share of charged lipid against pH"></canvas>
+      <div class="ctrls"><label class="ctrl grow">pH <input type="range" id="phIn" min="4.5" max="8" step="0.05" value="7.4"><output id="phOut"></output></label></div>
+      <div class="eqs"><div class="eq-row"><div class="sci-eq" data-tex="f_{+} = \frac{1}{1 + 10^{\,\mathrm{pH} - \mathrm{p}K_a}}"></div><p>The Henderson–Hasselbalch relation gives the share <span class="mi">f</span><sub>+</sub> of the lipid's amine head groups that carry a proton. With an apparent p<i>K</i><sub>a</sub> a little below 7 (a 2012 screen found the best potency between about 6.2 and 6.5), the lipid is nearly neutral in blood at pH 7.4 and mostly positive at the pH 5 to 6 of a late endosome. Permanently charged lipids, used before, were toxic. The switch is the whole point.</p></div></div>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>The journey into a cell</h3><span class="tag toy">schematic, not to scale</span></div>
+      <canvas class="fig wide" id="journeyCv" aria-label="A lipid nanoparticle enters a cell, escapes the endosome and releases mRNA"></canvas>
+      <div class="ctrls">
+        <button class="tgl" id="journeyPlay">Pause</button>
+        <label class="ctrl grow">step <input type="range" id="journeyIn" min="0" max="1000" value="0"></label>
+        <span class="readout" id="journeyRead"></span>
+      </div>
+      <p class="cap" id="journeyNote"></p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Inside the cell: ribosomes do the manufacturing</h2><p>Once in the cytosol, the mRNA is read like any of the cell's own messages. Ribosomes bind near the cap, move along the coding sequence three bases at a time, and add one amino acid per codon. Several ribosomes read one strand at once. The signal peptide at the start sends the growing chain into the endoplasmic reticulum, where three chains fold together into a spike trimer that travels to the cell surface.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Translation to display</h3><span class="tag toy">schematic; the ER and Golgi are left out</span></div>
+      <canvas class="fig wide" id="transCv" aria-label="Ribosomes translate the mRNA and spikes appear on the cell surface"></canvas>
+      <div class="ctrls"><button class="tgl" id="transPlay">Pause</button><span class="readout" id="transRead"></span></div>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>What happens next</h3></div>
+      <ul class="facts">
+        <li>The cell shows the spike on its surface and also breaks some of it into short peptides that it presents to T cells.</li>
+        <li>B cells whose antibodies fit the spike are activated and, with help from T cells, make antibodies and memory cells.</li>
+        <li>The mRNA itself is degraded by the cell's normal machinery. The lipids are broken down too.</li>
+        <li>Much of the uptake is at and near the injection site and in the draining lymph nodes.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>The spike, frozen before it fires</h2><p>The spike is a spring-loaded fusion machine. Before it meets a cell it sits in a compact prefusion shape. When triggered, it throws off its S1 head and refolds into a long, stable postfusion shape that pulls the virus and cell membranes together. The best neutralizing antibodies recognize the prefusion shape, but on its own the protein tends to spring into postfusion. Jason McLellan, Barney Graham and colleagues learned to lock such proteins: first the RSV F protein in 2013, then coronavirus spikes with two prolines, published for MERS in 2017.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Pull the trigger</h3><span class="tag toy">our own schematic of one spike</span></div>
+      <canvas class="fig" id="spikeCv" aria-label="A spike in prefusion and postfusion shapes"></canvas>
+      <div class="ctrls">
+        <button class="tgl on" id="spike2P" aria-pressed="true">2P staple on</button>
+        <button class="tgl" id="spikeFire">Trigger</button>
+        <button class="tgl" id="spikeReset">Reset</button>
+      </div>
+      <p class="cap" id="spikeNote"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Why two prolines work</h3><span class="tag real">Pallesen 2017 · Wrapp 2020</span></div>
+      <p class="body">Proline is the one amino acid whose side chain loops back onto its own backbone. It cannot sit in the middle of an α-helix. To fire, the spike must turn the bent region between heptad repeat 1 (HR1) and the central helix into one continuous helix. Putting prolines at residues 986 and 987 (K986P and V987P) blocks that helix, so the spike stays prefusion.</p>
+      <div class="pep" id="pepView"></div>
+      <p class="body">Because the 2P design was already known for related coronaviruses, it could be applied to the SARS-CoV-2 spike as soon as the sequence appeared. In February 2020 the cryo-EM structure of this stabilized spike, S-2P, confirmed it held the prefusion shape. Both mRNA-1273 and BNT162b2 encode the full-length spike with the two prolines.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>The response: prime, then boost</h2><p>The first dose primes the immune system. The second dose, three or four weeks later, meets memory cells that the first dose made and gives a much larger and more lasting response. The schedules in the trials were 30 µg twice, 21 days apart, for BNT162b2, and 100 µg twice, 28 days apart, for mRNA-1273.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Antibody level over time</h3><span class="tag toy">illustrative model, not trial data</span></div>
+      <div class="seg" id="titreSeg" role="group" aria-label="Schedule">
+        <button data-v="21" class="on">2 doses, 21 days</button><button data-v="28">2 doses, 28 days</button><button data-v="0">1 dose only</button>
+      </div>
+      <canvas class="fig chart tall" id="titreCv" aria-label="Illustrative antibody curves"></canvas>
+      <div class="legend"><span><i style="background:var(--m1)"></i>antibodies (illustrative)</span><span><i class="dash" style="border-color:var(--m3)"></i>T-cell response (illustrative)</span></div>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Reading the curve</h3></div>
+      <ul class="facts">
+        <li>The rise takes days to weeks: B cells must be selected and expand before antibody levels climb.</li>
+        <li>The boost peak is drawn about ten times the prime peak. Real ratios vary by person, assay and vaccine.</li>
+        <li>Antibody levels fall over months. Memory B and T cells last longer than the antibodies, which is why protection against severe disease outlasts protection against infection.</li>
+        <li>The trials measured protection directly, by counting cases. That is the next section.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8">
+  <div class="sec-head"><span class="num">08</span><div><h2>The proof: counting cases</h2><p>A phase 3 trial gives half the volunteers the vaccine and half a saline placebo, then waits for the virus to do the rest. Nobody knows who got what until enough people have fallen ill. Efficacy compares the attack rate in the vaccine arm, ARV, with that in the unvaccinated (placebo) arm, ARU.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Every dot is one confirmed case</h3><span class="tag real" id="trialTag"></span></div>
+      <div class="seg" id="trialSeg" role="group" aria-label="Trial"></div>
+      <canvas class="fig chart" id="dotsCv" aria-label="Cases in the vaccine and placebo arms"></canvas>
+      <div class="ctrls"><label class="ctrl grow">vaccine-arm cases (what if) <input type="range" id="veIn" min="0" max="185" step="1" value="8"><output id="veOut"></output></label></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The arithmetic</h3></div>
+      <div class="sci-eq big" id="veTex"></div>
+      <p class="body">The two arms were randomized 1:1 and followed for nearly the same time, so the group sizes almost cancel and efficacy is close to one minus the ratio of the case counts. The papers compute it with the person-time of each arm, and report 95.0% for BNT162b2 and 94.1% for mRNA-1273. Move the slider to see how few vaccine-arm cases it takes to change the answer.</p>
+      <div class="trials" id="trialFacts"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 09 -->
+<section class="sec" id="s9">
+  <div class="sec-head"><span class="num">09</span><div><h2>Why it was fast, and what was not skipped</h2><p>From the posted genome to the first authorization took under a year. The usual answer to "how" is not one breakthrough but the removal of waiting time.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>2020, day by day</h3><span class="tag real">days counted from 11 January 2020</span></div>
+      <div class="daybar" id="dayBar"></div>
+      <p class="cap" id="dayInfo"></p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>What made it fast</h3></div>
+      <ul class="facts">
+        <li><b>A platform.</b> An mRNA vaccine is the same cap, UTRs, tail, lipids and process with a different coding sequence. Moderna settled the mRNA-1273 sequence two days after the genome was posted.</li>
+        <li><b>A known antigen design.</b> The 2P spike came from earlier work on SARS-CoV, MERS-CoV and HKU1 spikes.</li>
+        <li><b>Phases overlapped.</b> Phase 2 and 3 started on the strength of early phase 1 data, rather than after each phase was finished and reviewed.</li>
+        <li><b>Manufacturing at risk.</b> Companies and governments paid to make doses before anyone knew if they worked.</li>
+        <li><b>Big trials in a pandemic.</b> With high transmission, enough cases accrued in months, not years.</li>
+      </ul>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>What was not skipped</h3></div>
+      <ul class="facts">
+        <li>Randomized, placebo-controlled, observer-blinded phase 3 trials of 43,548 and 30,420 people.</li>
+        <li>A pre-set case count and statistical plan for the efficacy analysis.</li>
+        <li>FDA guidance of October 2020 asked for a median of at least two months of safety follow-up after the final dose before an emergency use authorization.</li>
+        <li>Independent data and safety monitoring boards and regulator review of the full data.</li>
+      </ul>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The cold chain</h3></div>
+      <div class="trials" id="coldFacts"></div>
+      <p class="body dim">The lipid particles and the mRNA both degrade faster when warm, so the first vaccines shipped frozen. Later formulation and stability data relaxed these limits.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 10 -->
+<section class="sec" id="s10">
+  <div class="sec-head"><span class="num">10</span><div><h2>Sixty years in one strip</h2><p>Three lines of research, RNA biology, delivery and antigen design, ran mostly apart until 2020. Tap a dot or a filter.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="seg" id="eraSeg" role="group" aria-label="Filter"></div>
+      <svg id="tlStrip" class="strip" viewBox="0 0 1000 120" preserveAspectRatio="none" aria-label="Timeline 1960 to 2024"></svg>
+      <ol class="tl" id="tlList"></ol>
+    </article>
+  </div>
+</section>
+
+<section class="sec" id="refs">
+  <div class="sec-head"><span class="num">¶</span><div><h2>Sources</h2><p>Primary papers and official records. Numbers on this page are taken from these; when we could not confirm a figure, we left it out.</p></div></div>
+  <ol class="refs" id="srcList"></ol>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>

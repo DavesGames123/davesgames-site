@@ -1,0 +1,197 @@
+/* ============================================================================
+   MRNA VACCINE  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark page, one column of sections, each a grid of cards. A sticky chip
+   bar at the top jumps between sections. Fonts and math colours come from
+   ../../lib/sci.css. The layout follows pages/enzyme-design.
+
+   COLOURS. --acc (warm orange) marks the chips and the toggles. The four
+   bases and m1Ψ keep one colour everywhere (strand, base figure, legend):
+     A --A   U --U   G --G   C --C   m1Ψ --M
+   The same values are in draw.js PAL for the canvases.
+
+   PHONE (max-width 860px): cards go to one column, the chip bar scrolls
+   sideways, canvases take the full width. A pointer:coarse block sets
+   44px targets on any touch screen.
+     grep -n 'CHIPS'      the sticky section bar
+     grep -n 'CARDS'      grid, cards, figures
+     grep -n 'CONTROLS'   segmented buttons, toggles, sliders
+     grep -n 'STRAND'     strand canvas and region chips
+     grep -n 'LIPIDS'     the composition bar
+     grep -n 'TIMELINE'   the day bar, the strip and the list
+     grep -n 'TOUCH'      target sizes for any touch screen
+     grep -n 'PHONE'      the phone block
+   ========================================================================== */
+:root{
+  --bg:#05070c; --card:#0c0f17; --card2:#121725;
+  --ink:#e8eaf0; --ink2:#c2c7d4; --dim:#8a91a5; --faint:#394155;
+  --line:rgba(255,255,255,0.075); --line2:rgba(255,255,255,0.15);
+  --acc:#ff9a62; --acc-bg:rgba(255,154,98,0.14); --acc-line:rgba(255,154,98,0.55);
+  --A:#ff9a62; --U:#62c4ff; --G:#86dc7c; --C:#ffd666; --M:#e889dc;
+  --serif:var(--sci-serif,'STIX Two Text',Georgia,serif);
+  --sans:var(--sci-sans,Inter,system-ui,-apple-system,sans-serif);
+  --mono:var(--sci-mono,ui-monospace,'SF Mono',Menlo,monospace);
+  --top:52px;
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* overflow-x stays on html only: on the body it breaks position:sticky. */
+html{background:var(--bg);overflow-x:hidden;scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+html.in-frame{--top:0px;scroll-padding-top:60px}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+a{color:var(--acc);text-decoration:none}
+a:hover{text-decoration:underline}
+sub,sup{font-size:0.72em;line-height:0}
+.mi{font-family:var(--serif);font-style:italic;font-size:1.06em}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;
+  padding:0 calc(20px + var(--sr)) 0 calc(20px + var(--sl));background:rgba(5,7,12,0.94);border-bottom:1px solid var(--line);pointer-events:none}
+.brand{font:500 0.85rem/1 var(--sans);color:var(--dim);white-space:nowrap}
+.pagetitle{font:400 1.1rem/1 var(--serif);color:var(--ink);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.in-frame .topbar{display:none}
+
+/* ---------------------------------------------------------------- CHIPS */
+#chips{position:sticky;top:var(--top);z-index:20;background:rgba(5,7,12,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:8px calc(20px + var(--sr)) 8px calc(20px + var(--sl))}
+#chips ol{list-style:none;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;max-width:1320px;margin:0 auto}
+#chips ol::-webkit-scrollbar{display:none}
+#chips a{display:flex;gap:7px;align-items:baseline;white-space:nowrap;padding:6px 11px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);font-size:0.8rem}
+#chips a b{font:500 0.7rem var(--mono);color:var(--dim)}
+#chips a:hover{text-decoration:none;border-color:var(--acc)}
+#chips a.on{background:var(--acc-bg);border-color:var(--acc-line);color:#fff}
+#chips a.on b{color:var(--acc)}
+
+/* ---------------------------------------------------------------- page */
+#doc{max-width:1320px;margin:0 auto;padding:calc(var(--top) + 6px) calc(22px + var(--sr)) 60px calc(22px + var(--sl))}
+.hero{padding:26px 0 22px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.kicker{font-size:0.82rem;font-weight:500;color:var(--acc)}
+.hero h1{font:400 clamp(1.7rem,4.2vw,2.7rem)/1.15 var(--serif);margin:6px 0 12px;max-width:30ch}
+.lede{font:400 1.12rem/1.6 var(--serif);color:var(--ink2);max-width:78ch}
+.note{margin-top:14px;font-size:0.8rem;color:var(--dim);max-width:100ch;border-left:3px solid var(--line2);padding-left:11px}
+.note b{color:var(--ink2);font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:20px 0 4px}
+.stats div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 12px 10px;min-width:0}
+.stats b{display:block;font:400 1.45rem/1.1 var(--serif);color:#fff}
+.stats span{display:block;font-size:0.74rem;color:var(--dim);margin-top:4px;line-height:1.35}
+
+.sec{padding:34px 0 8px}
+.sec-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.num{font:500 0.8rem var(--mono);color:var(--acc);border:1px solid var(--acc-line);border-radius:8px;padding:4px 7px;margin-top:6px}
+.sec-head h2{font:400 1.65rem/1.2 var(--serif)}
+.sec-head p{color:var(--ink2);margin-top:4px;max-width:86ch}
+
+/* ---------------------------------------------------------------- CARDS */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;min-width:0}
+.span-12{grid-column:span 12} .span-8{grid-column:span 8} .span-7{grid-column:span 7}
+.span-5{grid-column:span 5} .span-4{grid-column:span 4}
+.card-top{display:flex;align-items:baseline;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
+.card h3{font:500 0.98rem/1.3 var(--sans)}
+.tag{font-size:0.7rem;color:var(--dim);border:1px solid var(--line2);border-radius:999px;padding:2px 8px}
+.tag.toy{color:#ffd28a;border-color:rgba(255,210,138,0.35)}
+.tag.real{color:#9de8b6;border-color:rgba(157,232,182,0.35)}
+.fig{display:block;width:100%;aspect-ratio:1/1;max-height:560px;border-radius:10px;background:#03040a;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.fig.wide{aspect-ratio:16/9}
+.fig.chart{aspect-ratio:auto;height:240px;background:transparent}
+.fig.chart.tall{height:300px}
+.cap{font-size:0.84rem;color:var(--ink2);margin-top:10px;max-width:90ch;min-height:2.6em}
+.body{color:var(--ink2);margin-bottom:10px}
+.body.dim{color:var(--dim);font-size:0.84rem}
+.facts{list-style:none;display:grid;gap:8px;color:var(--ink2)}
+.facts li{padding-left:14px;position:relative}
+.facts li::before{content:'';position:absolute;left:0;top:0.62em;width:6px;height:6px;border-radius:50%;background:var(--acc)}
+.facts b{color:var(--ink);font-weight:500}
+.eqs{margin-top:12px;display:grid;gap:10px}
+.eq-row{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:16px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
+.eq-row p{font-size:0.84rem;color:var(--ink2)}
+.sci-eq.big{font-size:1.15rem;padding:6px 0 12px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:0.76rem;color:var(--ink2);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px}
+.legend i.dash{height:0;border-top:2px dashed;background:none}
+.basefig{display:block;width:100%;max-width:520px;margin:6px auto 0}
+.basefig text{font-family:var(--serif);font-size:17px;fill:var(--ink)}
+.basefig .lbl{font-family:var(--sans);font-size:12px;fill:var(--dim)}
+.pep{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 12px}
+.pep span{display:inline-grid;place-items:center;min-width:30px;padding:3px 4px;border-radius:6px;background:var(--card2);border:1px solid var(--line2);font:500 0.9rem var(--mono)}
+.pep span small{font:0.62rem var(--sans);color:var(--dim)}
+.pep span.hit{border-color:#fff;background:rgba(255,255,255,0.1)}
+.trials{display:grid;gap:8px;margin-top:6px}
+.trials div{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:0.82rem;color:var(--ink2)}
+.trials b{color:var(--ink);font-weight:500}
+
+/* ---------------------------------------------------------------- CONTROLS */
+.ctrls{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:10px}
+.ctrl{display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--ink2)}
+.ctrl.grow{flex:1 1 260px}
+.ctrl input[type=range]{flex:1;min-width:0;accent-color:var(--acc)}
+.ctrl output,.readout{font:0.8rem var(--mono);color:var(--ink);min-width:4.5em}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin-bottom:8px}
+.seg button{background:transparent;border:0;border-right:1px solid var(--line2);color:var(--ink2);padding:6px 11px;font-size:0.8rem}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc-bg);color:#fff}
+.tgl{background:transparent;border:1px solid var(--line2);color:var(--ink2);border-radius:999px;padding:6px 12px;font-size:0.8rem}
+.tgl.on{background:var(--acc-bg);border-color:var(--acc-line);color:#fff}
+.tgl:hover,.seg button:hover{color:#fff}
+
+/* ---------------------------------------------------------------- STRAND */
+.fig.strand{aspect-ratio:auto;height:230px;cursor:grab;touch-action:pan-y}
+#strandPos{width:100%;margin-top:8px;accent-color:var(--acc)}
+.regions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.regions button{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line2);color:var(--ink2);border-radius:999px;padding:5px 11px;font-size:0.78rem}
+.regions button i{width:10px;height:10px;border-radius:50%}
+.regions button.on{border-color:#fff;color:#fff}
+
+/* ---------------------------------------------------------------- LIPIDS */
+.lipidbar{display:flex;height:26px;border-radius:8px;overflow:hidden;margin:4px 0 12px}
+.lipidbar div{height:100%}
+.lipids{display:grid;gap:10px}
+.lipids div{display:grid;grid-template-columns:12px minmax(0,1fr);gap:4px 10px;font-size:0.82rem;color:var(--ink2)}
+.lipids i{width:12px;height:12px;border-radius:3px;margin-top:4px}
+.lipids b{color:var(--ink);font-weight:500}
+.lipids small{grid-column:2;color:var(--dim);font-size:0.76rem}
+
+/* ---------------------------------------------------------------- TIMELINE */
+.daybar{position:relative;height:96px;margin:6px 10px 0}
+.daybar .axis{position:absolute;left:0;right:0;top:44px;height:2px;background:var(--line2)}
+.daybar .mo{position:absolute;top:58px;font-size:0.68rem;color:var(--dim);transform:translateX(-50%)}
+.daybar .ev{position:absolute;top:34px;width:2px;height:22px;background:var(--C);border:0;padding:0}
+.daybar .ev::after{content:'';position:absolute;left:-5px;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--C);box-shadow:0 0 0 3px var(--card)}
+.daybar .ev.auth{background:var(--M)} .daybar .ev.auth::after{background:var(--M)}
+.daybar .ev.on::after{background:#fff}
+.strip{display:block;width:100%;height:120px;margin:6px 0 4px}
+.tl{list-style:none;display:grid;gap:8px;margin-top:8px}
+.tl li{display:grid;grid-template-columns:9.5em minmax(0,1fr);gap:4px 14px;padding:10px 12px;border:1px solid var(--line);border-left:3px solid var(--c,#fff);border-radius:10px;background:var(--card2);scroll-margin-top:120px}
+.tl li.on{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset}
+.tl .d{font:500 0.8rem var(--mono);color:var(--c)}
+.tl h4{font:500 0.92rem var(--sans);color:var(--ink)}
+.tl p{grid-column:2;font-size:0.84rem;color:var(--ink2)}
+.tl .src{grid-column:2;font-size:0.74rem;color:var(--dim)}
+.refs{list-style:decimal;padding-left:2em;display:grid;gap:7px;font-size:0.82rem;color:var(--dim)}
+.refs li{scroll-margin-top:120px}
+.refs li:target{color:var(--ink)}
+
+/* ---------------------------------------------------------------- TOUCH */
+@media (pointer:coarse){
+  .seg button,.tgl,.regions button{min-height:44px;padding:10px 14px}
+  .ctrl input[type=range],#strandPos{min-height:44px}
+  .daybar .ev{width:20px;margin-left:-9px;background:transparent}
+  .daybar .ev::after{left:4px}
+  #chips a{padding:10px 13px}
+}
+
+/* ---------------------------------------------------------------- PHONE */
+@media (max-width:860px){
+  #doc{padding-left:calc(14px + var(--sl));padding-right:calc(14px + var(--sr))}
+  .span-12,.span-8,.span-7,.span-5,.span-4{grid-column:span 12}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sec-head h2{font-size:1.35rem}
+  .eq-row{grid-template-columns:minmax(0,1fr)}
+  .fig.wide{aspect-ratio:4/3}
+  .fig{max-height:none}
+  .tl li{grid-template-columns:minmax(0,1fr)}
+  .tl p,.tl .src{grid-column:1}
+  .seg{display:flex;width:100%}
+  .seg button{flex:1 1 0}
+}
