@@ -1,0 +1,1 @@
+engine.js in this commit: the seqTex of 1A and 2A lost their factorial forms, which the series formula already shows, so the panel box fits without a scroll. The saver-check recordings in the body ran before the last saver.js edits (plate column in the 9:16 frame, serif superscripts); a later run checks them.
