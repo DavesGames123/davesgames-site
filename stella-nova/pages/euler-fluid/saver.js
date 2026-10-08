@@ -29,8 +29,11 @@ TMP.page({ n: '17', title: 'Euler Fluid', file: '17-fluidSim.html', video: 'iKAV
     shots: [
       { key: 'tunnel', label: { title: 'Wind Tunnel', lines: ['Smoke shows vortex shedding behind a moving disc.'], eq: EQ },
         run(c) { setupScene(1); view({ smoke: true, stream: c.rng() < 0.4 }); path = { ax: 0.12, ay: 0.18, fx: 0.11, fy: 0.23, cx: 0.35 + 0.15 * c.rng(), ph: c.rng() * 6 }; warm(90); } },
-      { key: 'hires', label: { title: 'High-Resolution Tunnel', lines: ['200 cells high; the pressure field around a moving disc.'], eq: EQ },
-        run(c) { setupScene(3); view({ pressure: true, stream: c.rng() < 0.5 }); path = { ax: 0.08, ay: 0.12, fx: 0.07, fy: 0.15, cx: 0.4, ph: c.rng() * 6 }; warm(20); } },
+      // Upstream "Hires Tunnel" (200 cells high, 100 iterations) is too slow
+      // at band width for a saver: frames took seconds in headless Chrome.
+      // The pressure view of the 100-cell tunnel shows the same field.
+      { key: 'pressure', label: { title: 'Pressure Around a Moving Disc', lines: ['Red is high pressure, blue is low, behind a disc in a wind tunnel.'], eq: EQ },
+        run(c) { setupScene(1); view({ pressure: true, stream: c.rng() < 0.5 }); path = { ax: 0.1, ay: 0.16, fx: 0.09, fy: 0.19, cx: 0.4 + 0.1 * c.rng(), ph: c.rng() * 6 }; warm(60); } },
       { key: 'tank', label: { title: 'Pressure in a Tank', lines: ['Gravity on: hydrostatic pressure rises with depth.'], eq: ['p = ρ g h', '∇·u = 0'] },
         run(c) { setupScene(0); view({ pressure: true }); path = { ax: 0.3 * domainW(), ay: 0.25, fx: 0.13, fy: 0.21, cx: 0.5 * domainW(), cy: 0.45, ph: c.rng() * 6 }; } },
       { key: 'paint', label: { title: 'Paint', lines: ['A moving disc stirs coloured smoke; overrelaxation off.'], eq: EQ },
