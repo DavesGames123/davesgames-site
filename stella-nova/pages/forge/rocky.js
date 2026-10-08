@@ -332,7 +332,7 @@ const VAR_O = { freq: 7, octaves: 4, lacunarity: 2.2, gain: 0.5 };
 const MOIST_O = { freq: 2.2, octaves: 4, lacunarity: 2.1, gain: 0.5 };
 const CITY_O = { freq: 16, octaves: 3, lacunarity: 2.3, gain: 0.5 };
 const SULF_O = { freq: 2.5, octaves: 4, lacunarity: 2.2, gain: 0.55 };
-const CLOUD_O = { freq: 2.2, octaves: 6, lacunarity: 2.15, gain: 0.52 };
+const CLOUD_O = { freq: 2.2, octaves: 6, lacunarity: 2.1, gain: 0.45 };
 
 // out: { h (0..1), r, g, b (0..1 sRGB), rough, metal, spec, er, eg, eb, night, cloud, fu, fv, fb }
 function sampleRocky(ctx, p, out) {
@@ -433,8 +433,8 @@ function sampleRocky(ctx, p, out) {
       const hab = smooth(-2, 8, T) * smooth(32, 24, T) * smooth(0.12, 0.35, M) * smooth(2.5, 0.2, hk) * smooth(0.4, 0.1, st.mtn);
       if (hab > 0) {
         const n = fbm(p, CITY_O, ctx.sCity);
-        const dots = smooth(0.25, 0.75, simplex3(p[0] * 140, p[1] * 140, p[2] * 140, ctx.sCity + 2));
-        const pop = hab * smooth(0.0, 0.45, n + 0.2) * (0.35 + 0.65 * dots) * P.climate.cities;
+        const dots = smooth(0.35, 0.85, simplex3(p[0] * 140, p[1] * 140, p[2] * 140, ctx.sCity + 2));
+        const pop = hab * smooth(0.1, 0.5, n) * (0.15 + 0.85 * dots) * P.climate.cities * 0.45;
         out.er += 1.0 * pop * 0.9; out.eg += 0.72 * pop * 0.9; out.eb += 0.38 * pop * 0.9;
         out.night = pop > 0.01 ? 1 : 0;
       }
@@ -470,17 +470,17 @@ function cloudAlpha(ctx, p) {
   }
   curl(_cp, 3, ctx.sCloud + 9, _v);
   _cp[0] += _v[0] * 0.02 * P.clouds.swirl; _cp[1] += _v[1] * 0.02 * P.clouds.swirl; _cp[2] += _v[2] * 0.02 * P.clouds.swirl;
-  warp(_cp, 0.25, 2.5, ctx.sCloud, _t);
+  warp(_cp, 0.18, 1.4, ctx.sCloud, _t);
   CLOUD_O.freq = P.clouds.freq;
   // stretch along the east-west direction a little (y gets more frequency)
-  _t[1] *= 1.6;
+  _t[1] *= 1.6; CLOUD_O.stretch = 1.6;
   const n = fbm(_t, CLOUD_O, ctx.sCloud + 1);
   const lat = Math.asin(clamp(p[1], -1, 1));
   const band = 0.12 * Math.cos(6 * lat) + 0.08 * Math.cos(2 * lat);
   const cov = P.clouds.cover;
   const thr = 0.35 - cov * 0.9 - band;
-  const a = smooth(thr, thr + 0.32, n);
-  return clamp(a * (0.75 + 0.25 * smooth(thr + 0.1, thr + 0.6, n)));
+  const a = smooth(thr - 0.05, thr + 0.4, n);
+  return clamp(a * a * (0.7 + 0.3 * smooth(thr + 0.1, thr + 0.6, n)));
 }
 
 // Rodrigues rotation of v about unit axis k by angle a (in place).

@@ -18,7 +18,7 @@
 //    fbm(p, o, seed)          sum of octaves. o = { freq, octaves, lacunarity, gain }
 //    fbmEroded(p, o, seed, k) octaves damped by 1 / (1 + k |sum of gradients|^2)
 //    ridged(p, o, seed, sharp) Musgrave ridged multifractal, crest power sharp
-//    warp(p, amount, freq, seed, out)  two-level domain warp
+//    warp(p, amount, freq, seed, out)  two-level domain warp (inner factor 0.8)
 //    curl(p, freq, seed, out) divergence-free tangent flow: grad(psi) x p
 //    mulberry(seed)           seeded RNG in [0, 1)
 //    onSphere(rnd, out)       uniform random unit vector
@@ -36,6 +36,13 @@
 // ============================================================================
 
 export const TAU = Math.PI * 2;
+
+// Band limit: an octave whose frequency (times o.stretch) passes BAND
+// fades out by 2 x BAND, so a map never holds detail finer than its
+// texels (no aliasing speckle). maps.js sets it from the map width.
+let BAND = Infinity;
+export function setBand(f) { BAND = f > 0 ? f : Infinity; }
+const fade = f => f <= BAND ? 1 : f >= 2 * BAND ? 0 : 2 - f / BAND;
 const F3 = 1 / 3, G3 = 1 / 6;
 // The 12 edge gradients of the cube, plus 4 repeats so that h & 15 picks one.
 const GX = [1, -1, 1, -1, 1, -1, 1, -1, 0, 0, 0, 0, 1, -1, 0, 0];
@@ -108,10 +115,11 @@ const R = ROT;
 // Fractal Brownian motion: sum gain^i * n(freq * lac^i * p), rotated per octave.
 export function fbm(p, o, seed) {
   let x = p[0] * o.freq, y = p[1] * o.freq, z = p[2] * o.freq;
-  let v = 0, a = 1, norm = 0;
+  let v = 0, a = 1, norm = 0, f = o.freq * (o.stretch || 1);
   const oct = o.octaves | 0;
-  for (let i = 0; i < oct; i++) {
-    v += a * simplex3(x, y, z, (seed + i * 1013) | 0);
+  for (let i = 0; i < oct; i++, f *= o.lacunarity) {
+    const k = fade(f);
+    if (k > 0) v += k * a * simplex3(x, y, z, (seed + i * 1013) | 0);
     norm += a; a *= o.gain;
     const nx = (R[0] * x + R[1] * y + R[2] * z) * o.lacunarity;
     const ny = (R[3] * x + R[4] * y + R[5] * z) * o.lacunarity;
@@ -120,7 +128,7 @@ export function fbm(p, o, seed) {
   }
   // Fractional octaves fade in the last one, so the slider is continuous.
   const fr = o.octaves - oct;
-  if (fr > 0) { v += fr * a * simplex3(x, y, z, (seed + oct * 1013) | 0); norm += fr * a; }
+  if (fr > 0 && fade(f) > 0) { v += fade(f) * fr * a * simplex3(x, y, z, (seed + oct * 1013) | 0); norm += fr * a; }
   return norm > 0 ? v / Math.sqrt(norm) / 1.1 : 0;
 }
 
@@ -136,8 +144,8 @@ export function fbmEroded(p, o, seed, k) {
   let M = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   const oct = Math.ceil(o.octaves);
   for (let i = 0; i < oct; i++) {
-    const w = i < (o.octaves | 0) ? 1 : o.octaves - (o.octaves | 0);
-    const n = simplex3(x, y, z, (seed + i * 1013) | 0, _g);
+    const w = (i < (o.octaves | 0) ? 1 : o.octaves - (o.octaves | 0)) * fade(sc);
+    const n = w > 0 ? simplex3(x, y, z, (seed + i * 1013) | 0, _g) : (_g[0] = _g[1] = _g[2] = 0);
     // d n / d p = sc M^T grad
     const gx = (M[0] * _g[0] + M[3] * _g[1] + M[6] * _g[2]) * sc;
     const gy = (M[1] * _g[0] + M[4] * _g[1] + M[7] * _g[2]) * sc;
@@ -163,10 +171,10 @@ export function fbmEroded(p, o, seed, k) {
 // and the lowlands stay smooth. Result in about [0, 1].
 export function ridged(p, o, seed, sharp) {
   let x = p[0] * o.freq, y = p[1] * o.freq, z = p[2] * o.freq;
-  let v = 0, a = 1, w = 1, norm = 0;
+  let v = 0, a = 1, w = 1, norm = 0, fq = o.freq;
   const oct = Math.ceil(o.octaves);
-  for (let i = 0; i < oct; i++) {
-    const f = i < (o.octaves | 0) ? 1 : o.octaves - (o.octaves | 0);
+  for (let i = 0; i < oct; i++, fq *= o.lacunarity) {
+    const f = (i < (o.octaves | 0) ? 1 : o.octaves - (o.octaves | 0)) * fade(fq);
     let s = 1 - Math.abs(simplex3(x, y, z, (seed + i * 7919) | 0));
     s = Math.pow(Math.max(s, 0), sharp) * w;
     w = Math.min(1, Math.max(0, s * 1.6));
@@ -179,7 +187,7 @@ export function ridged(p, o, seed, sharp) {
   return norm > 0 ? v / norm : 0;
 }
 
-// Two-level domain warp (q = fbm3(p), out = p + amount * fbm3(p + 2.6 q)).
+// Two-level domain warp (q = fbm3(p), out = p + amount * fbm3(p + 0.8 q)).
 // The second level folds the first, which gives the swirled, sheared
 // coastlines that one warp alone cannot make.
 const WO = { freq: 1, octaves: 3, lacunarity: 2.1, gain: 0.5 };
@@ -187,7 +195,7 @@ export function warp(p, amount, freq, seed, out) {
   if (!(amount > 0)) { out[0] = p[0]; out[1] = p[1]; out[2] = p[2]; return out; }
   WO.freq = freq;
   const qx = fbm(p, WO, seed + 11), qy = fbm(p, WO, seed + 23), qz = fbm(p, WO, seed + 37);
-  const t = [p[0] + 2.6 * qx, p[1] + 2.6 * qy, p[2] + 2.6 * qz];
+  const t = [p[0] + 0.8 * qx, p[1] + 0.8 * qy, p[2] + 0.8 * qz];
   out[0] = p[0] + amount * fbm(t, WO, seed + 41);
   out[1] = p[1] + amount * fbm(t, WO, seed + 53);
   out[2] = p[2] + amount * fbm(t, WO, seed + 67);

@@ -42,7 +42,7 @@
 // ============================================================================
 import { prepareRocky } from './rocky.js';
 import { prepareGas, ringProfile } from './gas.js';
-import { texelDir, texelFrame, clamp } from './noise.js';
+import { texelDir, texelFrame, clamp, setBand } from './noise.js';
 
 export const MAP_INFO = [
   { id: 'albedo', label: 'Base colour', note: 'sRGB' },
@@ -61,7 +61,8 @@ export const MAP_INFO = [
   { id: 'rings', label: 'Rings', note: 'RGBA strip' },
 ];
 
-export function prepare(P) { return P.kind === 'gas' ? prepareGas(P) : prepareRocky(P); }
+// The height quantiles use the full band, whatever the last map width was.
+export function prepare(P) { setBand(0); return P.kind === 'gas' ? prepareGas(P) : prepareRocky(P); }
 
 // Per-texel buffers for rows y0..y1 of a W x W/2 map.
 export function sampleRows(ctx, W, y0, y1) {
@@ -72,6 +73,8 @@ export function sampleRows(ctx, W, y0, y1) {
     emissive: new Uint8Array(n * 4), cloud: new Uint8Array(n * 4),
   };
   const p = [0, 0, 0], s = {};
+  // octaves above about W / 10 cycles per radian alias at this width
+  setBand(W / 24);
   const cc = ctx.P.clouds && ctx.P.clouds.color || [1, 1, 1];
   const cr = Math.round(clamp(cc[0]) * 255), cg = Math.round(clamp(cc[1]) * 255), cb = Math.round(clamp(cc[2]) * 255);
   let i = 0;

@@ -215,7 +215,7 @@ function sampleGas(ctx, p, out) {
   }
   // 3. latitude lookup, nudged by zonally stretched noise
   _s[0] = _p[0]; _s[1] = _p[1] * T.streak; _s[2] = _p[2];
-  STREAK_O.freq = T.freq;
+  STREAK_O.freq = T.freq; STREAK_O.stretch = T.streak; DET_O.stretch = T.streak;
   const streak = T.amount > 0 ? fbm(_s, STREAK_O, ctx.sStreak) : 0;
   const lat = Math.asin(clamp(_p[1], -1, 1)) + streak * 0.05 * T.amount * (0.3 + shearW);
   const band = bandValue(ctx, lat);
@@ -250,7 +250,8 @@ function sampleGas(ctx, p, out) {
   // haze: pull toward the mean colour (lower contrast)
   const mean = ramp(pal.stops, 0.55, [0, 0, 0]);
   mixIn(_c, mean, P.haze.amount * 0.45);
-  out.r = clamp(_c[0]); out.g = clamp(_c[1]); out.b = clamp(_c[2]);
+  // cloud decks reflect about half the light (geometric albedo ~0.5)
+  out.r = clamp(_c[0] * 0.72); out.g = clamp(_c[1] * 0.72); out.b = clamp(_c[2] * 0.72);
   // cloud-top height: zones high, belts low, storms domed
   out.h = clamp(0.5 + 0.28 * band * P.bands.contrast + 0.1 * T.amount * turb + 0.15 * dome);
   out.rough = clamp(0.9 - 0.12 * val, 0, 1);
@@ -264,7 +265,7 @@ function sampleGas(ctx, p, out) {
   } else { out.er = 0; out.eg = 0; out.eb = 0; }
   // high cirrus: bright zonal streaks, more in zones
   if (P.clouds.cover > 0) {
-    _s[1] = _p[1] * T.streak * 1.4;
+    _s[1] = _p[1] * T.streak; CIRRUS_O.stretch = T.streak;
     const n = fbm(_s, CIRRUS_O, ctx.sCirrus);
     const thr = 0.55 - P.clouds.cover * 0.8;
     out.cloud = clamp(smooth(thr, thr + 0.25, n) * (0.6 + 0.4 * smooth(-0.2, 0.6, band)) + mOval * 0.0);

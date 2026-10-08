@@ -58,12 +58,12 @@ export const ROCKY_DEFAULT = {
   erosion: { strength: 1.5, detail: 0.16, freq: 6, octaves: 6 },
   craters: { density: 0, rMin: 0.006, rMax: 0.2, slope: 2.0, depth: 1, rim: 1, ejecta: 0.6, maria: 0 },
   ocean: { level: 0.6, liquid: 0 },   // liquid: 0 water, 1 lava, 2 methane
-  climate: { equatorC: 28, poleC: -34, lapse: 6.5, moisture: 0.55, life: 1, iceC: -12, cities: 0 },
+  climate: { equatorC: 28, poleC: -28, lapse: 6.5, moisture: 0.55, life: 1, iceC: -12, cities: 0 },
   rivers: { amount: 0 },
   dunes: { amount: 0, freq: 40 },
   cracks: { amount: 0, freq: 2.5, glow: 0 },
   volcanoes: { count: 0, glow: 0 },
-  clouds: { cover: 0.5, freq: 2.2, swirl: 0.6, cyclones: 6, height: 0.012, color: [1, 1, 1] },
+  clouds: { cover: 0.5, freq: 1.5, swirl: 0.6, cyclones: 6, height: 0.012, color: [1, 1, 1] },
   relief: 12, radiusKm: 6371, bump: 1, tilt: 23, spin: 1,
   palette: {
     deep: [0.03, 0.07, 0.17], shallow: [0.06, 0.2, 0.32], beach: [0.62, 0.56, 0.42],
