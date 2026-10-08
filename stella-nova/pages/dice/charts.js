@@ -20,14 +20,14 @@ function prep(cv) {
   const w = Math.max(10, Math.round(r.width)), h = Math.max(10, Math.round(r.height));
   if (cv.width !== w * dp || cv.height !== h * dp) { cv.width = w * dp; cv.height = h * dp; }
   const g = cv.getContext('2d'); g.setTransform(dp, 0, 0, dp, 0, 0); g.clearRect(0, 0, w, h);
-  g.font = '11px Inter, system-ui, sans-serif'; g.textBaseline = 'middle';
+  g.font = '12px Inter, system-ui, sans-serif'; g.textBaseline = 'middle';
   return { g, w, h };
 }
 
 export function faceChart(cv, { labels, counts, shares, colour = '#7fb2ff' }) {
   const { g, w, h } = prep(cv);
   const n = counts.reduce((a, b) => a + b, 0), k = labels.length;
-  const L = 30, R = 6, T = 8, B = 20, pw = w - L - R, ph = h - T - B;
+  const L = 34, R = 6, T = 8, B = 20, pw = w - L - R, ph = h - T - B;
   const exp = shares.map(p => n * p), sd = shares.map(p => 2 * Math.sqrt(n * p * (1 - p)));
   const raw = Math.max(1, ...counts, ...exp.map((e, i) => e + sd[i])) * 1.08;
   // whole-number ticks: a step of 1, 2, 5 x 10^k

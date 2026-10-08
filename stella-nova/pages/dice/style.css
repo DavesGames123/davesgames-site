@@ -149,13 +149,22 @@ html.in-frame .topbar{display:none}
   .grp{display:block}
 }
 
-/* TOUCH. Any coarse pointer: 44px targets, 11px text or more. */
+/* TOUCH. Any coarse pointer: 44px targets, 12px text or more. The
+   picker buttons share the card width (about 36-43 px at 360-390 px) and
+   are 44 px tall. The notation input is 16px: iOS Safari zooms the page
+   in on focus when an input font is smaller. */
 @media (pointer:coarse){
-  .pk .ct button{width:36px;height:36px;font-size:1.1rem}
-  .seg button,.grid3 button,.tog,.chips button{min-height:44px}
+  .pk{padding:6px 3px 4px}
+  .pk .ct{justify-self:stretch;gap:2px}
+  .pk .ct button{flex:1 1 0;min-width:0;width:auto;height:44px;font-size:1.2rem}
+  .seg button,.seg.small button,.grid3 button,.tog,.chips button,.cocked button,#gear,#anaOpen{min-height:44px}
   .nota input,.nota button{height:44px}
+  .nota input{font-size:16px}
   #panelClose,#anaClose{width:44px;height:44px}
-  .row input[type=range]{height:36px}
+  .row input[type=range]{height:44px}
+  .note,.lede,.pk .nm,.chips button,.grid3 button,.seg button,.seg.small button,.tog,.row label,.row .val,.cocked,.cocked button,
+  .check,.stat,.readout,.result .term,.result .term .tn,.result .pr,#hint{font-size:0.8rem}
+  .check td,.stat td{font-size:0.75rem}
 }
 
 /* PHONE. The query matches PHONE_Q in main.js. */
@@ -171,7 +180,7 @@ html.in-frame .topbar{display:none}
     background:rgba(14,13,16,0.96);border-top:1px solid var(--line-b)}
   #dock .tab{flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:0;background:transparent;color:var(--dim);border-radius:10px}
   #dock .tab i{font-style:normal;font-size:1.15rem;line-height:1}
-  #dock .tab span{font-size:0.7rem}
+  #dock .tab span{font-size:0.75rem}
   #dock .tab.on{color:var(--cream);background:rgba(216,179,106,0.08)}
   #dockThrow{flex:0 0 74px;height:54px;border-radius:27px;border:1px solid rgba(255,225,172,0.55);background:linear-gradient(180deg,#e7c27a,#b98b3f);color:#1b140a;font-weight:700;font-size:0.9rem}
   #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(46vh,500px);height:min(46dvh,500px);

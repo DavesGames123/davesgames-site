@@ -326,23 +326,36 @@ $('throwBtn').addEventListener('click', () => throwNow());
 $('dockThrow').addEventListener('click', () => throwNow());
 function hideLabelsTemp(h) { sc.labelGroup.visible = !h; }
 
-// shake to roll: only after a tap that grants the permission
+// shake to roll: only after a tap that grants the permission. iOS asks
+// in requestPermission, which must run in the tap (it is the first await).
+// Some touch devices have the event but no sensor: when no reading comes
+// in 2 s, the button says so and turns off.
 if (COARSE && 'DeviceMotionEvent' in window) {
-  $('shakeBtn').hidden = false;
-  let on = false, last = 0;
+  const btn = $('shakeBtn');
+  btn.hidden = false;
+  let on = false, last = 0, seen = 0, probe = 0;
   const onMotion = e => {
-    const a = e.accelerationIncludingGravity || e.acceleration; if (!a) return;
+    const a = e.accelerationIncludingGravity || e.acceleration; if (!a || a.x == null) return;
+    seen++;
+    if (saverState.on || document.hidden) return;
     const g = Math.hypot(a.x || 0, a.y || 0, a.z || 0);
     const now = performance.now();
     if (Math.abs(g - 9.81) > 13 && now - last > 1600) { last = now; throwNow({ strength: Math.min(1, 0.45 + (Math.abs(g - 9.81) - 13) / 20) }); }
   };
-  $('shakeBtn').addEventListener('click', async () => {
-    if (on) { window.removeEventListener('devicemotion', onMotion); on = false; $('shakeBtn').classList.remove('on'); return; }
+  const stop = text => {
+    window.removeEventListener('devicemotion', onMotion); on = false; clearTimeout(probe);
+    btn.classList.remove('on'); btn.setAttribute('aria-pressed', 'false');
+    if (text) btn.textContent = text;
+  };
+  btn.addEventListener('click', async () => {
+    if (on) { stop('Shake to roll'); return; }
     try {
       const D = window.DeviceMotionEvent;
-      if (D && typeof D.requestPermission === 'function') { const r = await D.requestPermission(); if (r !== 'granted') { $('shakeBtn').textContent = 'Motion not allowed'; return; } }
-      window.addEventListener('devicemotion', onMotion); on = true; $('shakeBtn').classList.add('on');
-    } catch (e) { $('shakeBtn').textContent = 'Motion not available'; }
+      if (D && typeof D.requestPermission === 'function') { const r = await D.requestPermission(); if (r !== 'granted') { stop('Motion not allowed'); return; } }
+      window.addEventListener('devicemotion', onMotion); on = true; seen = 0;
+      btn.classList.add('on'); btn.setAttribute('aria-pressed', 'true'); btn.textContent = 'Shake to roll: on';
+      clearTimeout(probe); probe = setTimeout(() => { if (on && !seen) stop('Motion not available'); }, 2000);
+    } catch (e) { stop('Motion not available'); }
   });
 }
 
@@ -358,8 +371,12 @@ let swipe = null;
 const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
 $('view').addEventListener('pointerdown', e => {
   if (saverState.on) return;
+  // a second finger (two-finger orbit or pinch) cancels the swipe; it does
+  // not start a new one, so lifting it last cannot throw
+  if (swipe && e.pointerId !== swipe.id && performance.now() - swipe.t < 1500) { swipe.multi = true; return; }
   swipe = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, type: e.pointerType, n: 0 };
 });
+$('view').addEventListener('pointercancel', () => { swipe = null; });
 $('view').addEventListener('pointermove', e => { if (swipe && e.pointerId !== swipe.id) swipe.multi = true; });
 $('view').addEventListener('pointerup', e => {
   if (!swipe || e.pointerId !== swipe.id || swipe.multi) { swipe = null; return; }
@@ -500,8 +517,11 @@ $('panelClose').addEventListener('click', () => setOpen(false));
 $('anaOpen').addEventListener('click', () => setAna(true));
 $('anaClose').addEventListener('click', () => setAna(false));
 placeAnalysis();
-setOpen(!PHONE_Q.matches); setAna(!PHONE_Q.matches);
-PHONE_Q.addEventListener('change', e => { placeAnalysis(); setOpen(!e.matches); setAna(!e.matches); });
+// A tablet in portrait (769-1099 px) has room for one column and the
+// tray, not two: the results start closed there, behind #anaOpen.
+const anaRoom = () => !PHONE_Q.matches && innerWidth >= 1100;
+setOpen(!PHONE_Q.matches); setAna(anaRoom());
+PHONE_Q.addEventListener('change', e => { placeAnalysis(); setOpen(!e.matches); setAna(anaRoom()); });
 {
   const grip = $('sheetGrip'); let gy = null;
   grip.addEventListener('pointerdown', e => { gy = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } });
@@ -514,6 +534,8 @@ PHONE_Q.addEventListener('change', e => { placeAnalysis(); setOpen(!e.matches); 
   });
   grip.addEventListener('pointercancel', () => { gy = null; });
 }
+// one finger throws on a touch screen; two fingers orbit and zoom
+if (COARSE) $('hint').textContent = 'swipe across the tray to throw · two fingers orbit and zoom';
 let hintGone = false;
 function hideHint() { if (!hintGone) { hintGone = true; $('hint').classList.add('gone'); } }
 setTimeout(hideHint, 12000);
