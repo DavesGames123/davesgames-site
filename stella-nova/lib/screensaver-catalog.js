@@ -57,6 +57,7 @@ window.SN_SAVER_CATALOG = {
     'protein-viewer': { tier: 3, default: true, hook: true, note: 'Draws only when S.dirty (app/loop.js);' },
     'protein-folding': { tier: 2, default: true, hook: true, note: 'Sim workers run idle (S.running=true) and camera orbits after 2 s idle (S.orbit=!REDUCED, main.js:541).' },
     'alphafold': { tier: 3, default: true, hook: true, note: 'Long scrolling explainer;' },
+    'mrna-vaccine': { tier: 3, default: true, hook: true, note: 'Long scrolling explainer; saver.js plays a seeded shuffle of four 2D scenes (LNP journey, translation, 2P spike, strand), 5-12 s cuts, TeX plates.' },
     'human-skull': { tier: 3, default: true, hook: true, note: 'Intro flies parts in and opens Anatomy layout;' },
     'human-skeleton': { tier: 3, default: true, hook: true, note: 'Loads eight groups with dissolve-in, then static: S.show.spin=false (app/state.js:24), loop draws only when dirty.' },
     'fluidlab': { tier: 2, default: true, hook: true, note: 'Classic IIFE in pages/fluidlab/main.js;' },

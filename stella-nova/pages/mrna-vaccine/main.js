@@ -26,6 +26,7 @@ import { SOURCES, TIMELINE, ERAS, TRIALS, CONSTRUCT, LNP, PEPTIDES, JOURNEY,
   ve, dayNum, fmtDate, precision, buildStrand, gcFraction, protonated } from './data.js';
 import { PAL, drawStrand, strandWidth, drawJourney, drawTranslate, drawSpike, drawTitre, drawDecay, drawCharge } from './draw.js';
 import { typeset, typesetAll } from '../../lib/sci-math.js';
+import './saver.js';
 
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
