@@ -644,7 +644,9 @@ window.__skull = {
 // shuffle, facial and cranial in turn; no teeth, no part under 30 mm, no
 // small deep part): the rest turn to ghosts
 // and the camera comes in from the outer face of the bone (partView) at a
-// new angle each time. After three bones one layout opens, then the full
+// new angle each time. In the hold the bone lifts out of the skull, along
+// the line from the skull middle through it, and settles back into place
+// (saverLift), so it shows where it sits. After three bones one layout opens, then the full
 // view comes back from a new angle. A shot lasts 6 to 9 s (calm 0 to 1).
 // Part moves and camera flights take 1.6 to 2.8 times longer, and the slow
 // orbit runs at 1.2 to 0.4 of its speed. The subject sits in the clear band
@@ -748,6 +750,23 @@ function partView(p, rnd, last) {
   return { az, el };
 }
 const D2R = Math.PI / 180;
+// The lift of part p in a push-in: out from SKULL_MID through its home, by
+// 35% of its largest mesh side (12 to 40 mm). Out from 30% to 50% of the
+// hold, back from 62% to 82%, through the motion anchors (createMotion), so
+// the springs ease it. The part keeps its turn; no arc (lift 0).
+function saverLift(p, d, isCur) {
+  const v = p.home.clone().sub(SKULL_MID);
+  if (v.lengthSq() < 1) v.set(0, 1, 0);
+  const out = p.home.clone().addScaledVector(v.normalize(), Math.min(40, Math.max(12, 0.35 * Math.max(...p.m.ext))));
+  const move = (to, at, dur) => setTimeout(() => {
+    if (!isCur() || !motion) return;
+    const m = motion.M[p.i];
+    m.from.copy(m.anchor); m.qFrom.copy(m.quat); m.to.copy(to); m.qTo.copy(m.quat);
+    m.t0 = performance.now() / 1000; m.dur = dur; m.lift = 0;
+  }, at * 1000);
+  move(out, 0.3 * d, 0.2 * d);
+  move(p.home.clone(), 0.62 * d, 0.2 * d);
+}
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
@@ -834,6 +853,8 @@ window.snSaver = {
         cur.fit = () => stage.fitFrac(b, v.az, v.el, FIT.bone);
         stage.flyTo(cur.fit(), 1.5 * pace);
         stage.hold = false;   // keep the orbit
+        const me = cur;
+        saverLift(p, d, () => cur === me);
       } else {
         // an open layout, from its own view
         if (S.iso >= 0) isolate(-1, { fly: false });
