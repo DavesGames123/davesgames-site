@@ -1,246 +1,293 @@
 // ============================================================================
-//  GALAXY  ·  procedural spiral galaxy on the GPU
+//  GALAXY  ·  main.js — the page: UI, camera, frame loop
 // ----------------------------------------------------------------------------
-//  Two draw passes composite a galaxy: a fullscreen quad paints the smooth core
-//  and disk glow, then one GL_POINTS draw scatters every star as an additive
-//  point sprite. Stars are generated once on the CPU into a packed vertex buffer
-//  (10 floats each: orbit and appearance), and the star vertex shader advances
-//  each orbit analytically per frame, so the whole galaxy turns with no CPU work
-//  after generation. Mouse drag rotates the view; the wheel zooms.
+//  model.js builds a galaxy (in worker.js, off the main thread); engine.js
+//  draws it. The orbit camera eases toward a goal with springs; drag,
+//  wheel, pinch and W A S D move the goal. "Fly into the disk" plays the
+//  saver's dive shot.
 //
-//  RENDER PIPELINE
-//  ---------------
-//      generateStars() ─▶ VBO 10 floats/star ─▶ starVAO
-//                                                  │
-//      per frame:                                  ▼
-//        coreProg   fullscreen quad, BLEND off   draw bulge + disk glow
-//                                        source: shaders/core.*.glsl
-//        starProg   GL_POINTS, additive BLEND    one sprite per star
-//                                        source: shaders/star.*.glsl
-//                              │
-//                              ▼
-//                           <canvas>
+//  Sliders with data-p set one model parameter. Those with data-rebuild
+//  change the stars, so they rebuild on release; the others repack the
+//  galaxy blocks at once (E.setGals).
 //
-//  STAR RECORD  (per vertex, STRIDE = 10 floats)
-//  --------------------------------------------------------------------------
-//      radius speed phase ecc radScatter spiralOff specHash briHash incl node
-//      └─ orbit geometry ──────────────┘ └─ arm ─┘ └ color/brightness ┘└ 3D tilt
-//
-//  DISTRIBUTION  (generateStars)
-//  --------------------------------------------------------------------------
-//      first 25% ─ bulge   large-radius, old red population, high inclination
-//      rest      ─ disk    log radius, snapped to numArms spiral arms, thin
-//
-//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
-//  ----------------------------------------------------------------------------
-//      shader load .......... "await fetch"        fetch .glsl before build
-//      program build ........ "function makeProgram" compile + link a program
-//      uniform lookup ....... "const coreU"         cache uniform/attr locations
-//      rng .................. "function hash"        deterministic hash + gauss
-//      star gen ............. "function generateStars" build the packed VBO
-//      input ................ "addEventListener('mousedown'" drag + wheel
-//      resize ............... "function resize"      match canvas to viewport
-//      params ............... "let timescale"        tunables + slider wiring
-//      frame loop ........... "function frame"        the per-frame two-pass draw
+//  grep -n targets
+//    "function rebuild"    build in the worker, upload
+//    "function repack"     new uniforms only
+//    "function occlusion"  the panel and dock margins that frame the view
+//    "function frame"      the frame loop
+//    "function bindUI"     every control
+//    "const api"           what saver.js gets
 // ============================================================================
-(async () => {
-// Shader source lives in real .glsl files. Fetch all four before building any
-// program, so the rest of init runs in its original synchronous order.
-const CORE_VS = await (await fetch(new URL('shaders/core.vert.glsl', document.baseURI))).text();
-const CORE_FS = await (await fetch(new URL('shaders/core.frag.glsl', document.baseURI))).text();
-const STAR_VS = await (await fetch(new URL('shaders/star.vert.glsl', document.baseURI))).text();
-const STAR_FS = await (await fetch(new URL('shaders/star.frag.glsl', document.baseURI))).text();
+import * as M from './model.js';
+import { createEngine } from './engine.js';
+import { galaxyBudget } from './budget.js';
+import * as C from './camera.js';
+import { shotCamera } from './saverplan.js';
+import { typesetAll } from '../../lib/sci-math.js';
 
-// WebGL2 is required: the star shader uses many vertex attributes and a VAO.
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance' });
-if (!gl) { document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>'; throw ''; }
-// The tab shell removes this iframe on a page swap. Drop the context so the
-// browser does not run out of live WebGL contexts during heavy swapping.
-window.addEventListener('pagehide', function () { try { if (gl) gl.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} });
+const $ = id => document.getElementById(id);
+const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const canvas = $('c');
+let quality = PHONE_Q.matches ? 'low' : 'high';
+let bud = null, E = null, built = null, P = M.presetParams('m51');
+const st = { time: 520, speed: 6, playing: true, ev: 0, sky: true, bg: true, frame: 0, fps: 60 };
+const cam = { target: [0, 0, 0], yaw: 0.6, pitch: C.inclToPitch(P.incl), dist: 60, fov: 40 };
+const goal = { ...cam, target: [0, 0, 0] };
+const vel = { yaw: 0, pitch: 0, dist: 0, fov: 0, t: [0, 0, 0] };
+let anim = null;              // a camera move (fly into the disk)
+const api = { saverCam: null, saverOff: null, saving: false };
 
-// Compile a vertex + fragment pair into a linked program. Compile and link
-// errors are logged, not thrown, so a bad shader shows in the console.
-function makeProgram(vsSrc, fsSrc) {
-  function compile(src,type) { const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
-  const p=gl.createProgram(); gl.attachShader(p,compile(vsSrc,gl.VERTEX_SHADER)); gl.attachShader(p,compile(fsSrc,gl.FRAGMENT_SHADER)); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p)); return p;
+// ── build ──────────────────────────────────────────────────────────────────
+let worker = null;
+try { worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' }); } catch (e) { worker = null; }
+let wid = 0; const waits = new Map();
+if (worker) {
+  worker.onmessage = e => { const w = waits.get(e.data.id); if (!w) return; waits.delete(e.data.id); e.data.error ? w.reject(new Error(e.data.error)) : w.resolve(e.data.built); };
+  worker.onerror = () => { worker = null; for (const w of waits.values()) w.retry(); waits.clear(); };
+}
+function buildAsync(Pb, opts) {
+  const local = () => Promise.resolve(M.buildGalaxy(Pb, opts));
+  if (!worker) return local();
+  return new Promise((resolve, reject) => { const id = ++wid; waits.set(id, { resolve, reject, retry: () => local().then(resolve, reject) }); worker.postMessage({ id, P: Pb, opts }); });
+}
+let buildN = 0;
+async function rebuild({ refit = false } = {}) {
+  const n = ++buildN;
+  $('hudStat').textContent = 'building…';
+  let b;
+  try { b = await buildAsync(JSON.parse(JSON.stringify(P)), { stars: bud.stars, sky: st.sky, bg: st.bg }); }
+  catch (e) { console.error(e); b = M.buildGalaxy(P, { stars: bud.stars, sky: st.sky, bg: st.bg }); }
+  if (n !== buildN) return built;
+  built = b;
+  E.setGalaxy(b);
+  if (refit) fitGoal(true);
+  showHud();
+  return b;
+}
+// New galaxy blocks from P, the stars unchanged.
+function repack() {
+  if (!built) return;
+  built.list[0].P = P;
+  if (built.list.length > 1 && P.type === 'pair') built.list[1].P = Object.assign({}, built.list[1].P, { pitch: P.pitch, armAmp: P.armAmp, tau: P.tau, hii: P.hii, vflat: P.vflat, flocc: P.flocc });
+  built.list.forEach((g, i) => M.packGalaxy(g, built.gals, i * M.GAL_FLOATS));
+  E.setGals(built.gals, built.nGal);
+  showHud();
 }
 
-// Two programs: the core glow (fullscreen quad) and the stars (points).
-const coreProg=makeProgram(CORE_VS,CORE_FS), starProg=makeProgram(STAR_VS,STAR_FS);
-
-// The fullscreen quad the core pass draws over, as a triangle strip.
-const quadBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);
-gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-
-// Cache uniform and attribute locations once so the frame loop never queries.
-const coreU={}; ['u_res','u_mouse','u_zoom','u_tilt'].forEach(n=>coreU[n]=gl.getUniformLocation(coreProg,n));
-const coreAttrPos=gl.getAttribLocation(coreProg,'a_pos');
-
-// Star uniforms and the 10 per-vertex attributes, in the same order they pack
-// into the VBO (see STRIDE in generateStars).
-const starU={}; ['u_time','u_timescale','u_res','u_mouse','u_zoom','u_tilt','u_spiral'].forEach(n=>starU[n]=gl.getUniformLocation(starProg,n));
-const ATTRS=['a_radius','a_speed','a_phase','a_ecc','a_radScatter','a_spiralOff','a_specHash','a_briHash','a_incl','a_node'];
-const starAttr={}; ATTRS.forEach(n=>starAttr[n]=gl.getAttribLocation(starProg,n));
-
-// Deterministic hash in [0,1): same seed always yields the same star, so a
-// regenerate at a new density reproduces the earlier stars exactly.
-function hash(n){return((Math.sin(n)*43758.5453123)%1+1)%1}
-// Box-Muller normal draw from two hashes, for scatter that clusters near zero.
-function gaussRand(s1,s2){const u1=Math.max(hash(s1),0.0001),u2=hash(s2);return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2)}
-
-let starVAO=null, starBuf=null, starCount=0;
-
-// Build the whole star population into one packed vertex buffer. Each star gets
-// deterministic orbit and appearance values from its seed; the first quarter
-// form the round old bulge, the rest the thin spiral disk. Called at start and
-// whenever the density slider changes.
-function generateStars(count,numArms){
-  const STRIDE=10, data=new Float32Array(count*STRIDE);
-  const TAU=Math.PI*2, PI=Math.PI;
-  const bulgeCount=Math.floor(count*0.25);
-
-  // Ten independent hashes per star, from one seed, drive every random field.
-  for(let i=0;i<count;i++){
-    const seed=i*7.31+0.5;
-    const h0=hash(seed),h1=hash(seed+41),h2=hash(seed+73),h3=hash(seed+109);
-    const h4=hash(seed+157),h5=hash(seed+199),h6=hash(seed+241),h7=hash(seed+283);
-    const h8=hash(seed+317),h9=hash(seed+359);
-
-    let radius,speed,phase,ecc,radScatter,spiralOff,specHash,briHash,incl,node;
-
-    if(i<bulgeCount){
-      // Bulge stars: exponential radius falloff, slow near-solid-body spin, a
-      // large inclination range (a round bulge), and a red specHash bias.
-      // ── BULGE: larger radius range, old red/orange population ──
-      const rNorm=-0.7*Math.log(1.0-h0*0.97);
-      radius=6+rNorm*65;  // bigger bulge
-      speed=(0.3+h1*0.7)/Math.pow(radius/6,0.8);
-      phase=h2*TAU;
-      ecc=h3*0.55;
-      radScatter=0.5+h4*1.0;
-      spiralOff=0.0;
-      specHash=h5*0.50; // very red: max t = 0.5^4 = 0.0625 → deep M-class
-      briHash=h7;
-      incl=(0.3+Math.abs(gaussRand(seed+401,seed+433))*0.35)*PI*0.5;
-      incl=Math.min(incl,PI*0.48);
-      if(h8<0.5) incl=-incl;
-      node=h9*TAU;
-    } else {
-      // Disk stars: wider log radius, speed falling with radius (flat-ish
-      // rotation curve), phase snapped to one of numArms arms with scatter,
-      // and a near-zero inclination so the disk stays thin.
-      const rNorm=-1.2*Math.log(1.0-h0*0.985);
-      radius=18+rNorm*85;
-      speed=1.0/Math.pow(radius/18,1.15);
-      const armIdx=Math.floor(h6*numArms);
-      phase=(armIdx/numArms)*TAU+gaussRand(seed+331,seed+367)*(0.45+rNorm*0.25);
-      spiralOff=rNorm*1.0+(h5-0.5)*0.5;
-      ecc=h2*0.35;
-      radScatter=0.55+h3*0.9;
-      specHash=Math.min(h4+Math.min(rNorm*0.04,0.12),1.0);
-      briHash=h7;
-      incl=gaussRand(seed+401,seed+433)*(0.02+0.04/(1.0+rNorm*0.5))*PI*0.5;
-      node=h9*TAU;
-    }
-
-    // Pack the ten fields for this star at its stride offset.
-    const off=i*STRIDE;
-    data[off]=radius;data[off+1]=speed;data[off+2]=phase;data[off+3]=ecc;
-    data[off+4]=radScatter;data[off+5]=spiralOff;data[off+6]=specHash;
-    data[off+7]=briHash;data[off+8]=incl;data[off+9]=node;
+// ── view ───────────────────────────────────────────────────────────────────
+function ctx() { const R = built ? built.meta.R : P.Rd * 5.5; return { R, Rd: P.Rd, re: P.re, fit: C.fitDistance(R, 40, innerWidth / innerHeight) }; }
+function fitGoal(snap) {
+  const c = ctx();
+  Object.assign(goal, { target: [0, 0, 0], dist: c.fit, pitch: C.inclToPitch(P.incl), fov: 40 });
+  if (snap) { Object.assign(cam, goal, { target: [0, 0, 0] }); }
+  syncView();
+}
+// Overlay margins (CSS px) that the view should avoid: the open panel and
+// the phone dock. The galaxy centres in the clear part.
+function occlusion() {
+  const o = { l: 0, r: 0, t: 0, b: 0 }, W = innerWidth, H = innerHeight;
+  if (api.saving) return o;
+  const panel = $('panel'), dock = $('dock');
+  if (panel.classList.contains('open')) {
+    const q = panel.getBoundingClientRect();
+    if (q.width < W * 0.9 && q.left > W * 0.4) o.r = Math.max(0, W - q.left); else if (q.top > H * 0.2) o.b = Math.max(0, H - q.top);
   }
-
-  // Upload the buffer and point every attribute at its float within the stride.
-  if(!starBuf) starBuf=gl.createBuffer();
-  if(!starVAO) starVAO=gl.createVertexArray();
-  gl.bindVertexArray(starVAO);
-  gl.bindBuffer(gl.ARRAY_BUFFER,starBuf);
-  gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
-  const BYTES=STRIDE*4;
-  ATTRS.forEach((name,idx)=>{const loc=starAttr[name];if(loc<0)return;gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,1,gl.FLOAT,false,BYTES,idx*4);});
-  gl.bindVertexArray(null);
-  starCount=count;
-  document.getElementById('starcount').textContent=count.toLocaleString()+' stars';
+  if (dock.offsetParent) o.b = Math.max(o.b, H - dock.getBoundingClientRect().top);
+  return o;
 }
 
-// Drag to orbit: accumulate pointer delta into dragX/dragY, which the shaders
-// read as view rotation and tilt. Touch mirrors the mouse handlers.
-let dragX=0,dragY=0,dragging=false,lmx=0,lmy=0;
-canvas.addEventListener('mousedown',e=>{dragging=true;lmx=e.clientX;lmy=e.clientY});
-window.addEventListener('mouseup',()=>dragging=false);
-window.addEventListener('mousemove',e=>{if(!dragging)return;dragX+=(e.clientX-lmx)*0.006;dragY+=(e.clientY-lmy)*0.006;lmx=e.clientX;lmy=e.clientY;document.getElementById('hint').style.opacity='0'});
-canvas.addEventListener('touchstart',e=>{dragging=true;const t=e.touches[0];lmx=t.clientX;lmy=t.clientY},{passive:true});
-window.addEventListener('touchend',()=>dragging=false);
-window.addEventListener('touchmove',e=>{if(!dragging)return;const t=e.touches[0];dragX+=(t.clientX-lmx)*0.006;dragY+=(t.clientY-lmy)*0.006;lmx=t.clientX;lmy=t.clientY},{passive:true});
+function resize() {
+  bud = galaxyBudget(innerWidth, innerHeight, devicePixelRatio || 1, { phone: PHONE_Q.matches, quality });
+  canvas.width = bud.w; canvas.height = bud.h;
+  if (E) E.resize(bud);
+}
 
-// Wheel zoom, clamped to a wide range so the galaxy never inverts or vanishes.
-// zoom is relative to the default view. The shaders get zoom*fitZoom():
-// FIT_ZOOM at an 800 px tall CSS viewport, scaled with the shorter canvas
-// side, so the galaxy fills the same part of the frame at any size and DPR.
-const FIT_ZOOM=1.45, FIT_REF=800;
-let zoom=1.0;
-function fitZoom(){return FIT_ZOOM*Math.min(canvas.width,canvas.height*1.6)/(FIT_REF*1.6)}
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoom*=e.deltaY>0?0.92:1.08;zoom=Math.max(0.03,Math.min(20,zoom))},{passive:false});
+// ── HUD ────────────────────────────────────────────────────────────────────
+function showHud() {
+  const t = M.TYPES.find(x => x.key === P.type);
+  $('hudType').textContent = (P.name || (t && t.name) || '') + (t ? ' · ' + t.hubble : '');
+  const n = built ? built.count.toLocaleString('en') : '…';
+  $('hudStat').textContent = `${n} stars · ${bud.w}×${bud.h} · ${st.fps} fps`;
+  $('dockName').textContent = (M.PRESETS.find(p => p.key === P.preset) || { label: t ? t.name : 'Galaxy' }).label;
+  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.key === P.preset));
+  $('type').value = P.type; $('seed').value = P.seed || 1;
+  syncSliders();
+}
+const fmt = { m: v => String(v), pitch: v => v.toFixed(1) + '°', armAmp: v => v.toFixed(2), flocc: v => v.toFixed(2), bar: v => (100 * v).toFixed(1) + ' %', BT: v => v.toFixed(2), n: v => v.toFixed(1), Rd: v => v.toFixed(1) + ' kpc', tau: v => v.toFixed(2), hii: v => v.toFixed(2), vflat: v => v.toFixed(0) + ' km/s' };
+function syncSliders() {
+  document.querySelectorAll('[data-p]').forEach(inp => { const k = inp.dataset.p; inp.value = P[k] ?? 0; inp.parentElement.querySelector('.val').textContent = fmt[k] ? fmt[k](+inp.value) : inp.value; });
+}
+function syncView() {
+  const i = 90 - goal.pitch / C.DEG, a = ((goal.yaw / C.DEG + 540) % 360) - 180;
+  $('incl').value = i; $('incl').parentElement.querySelector('.val').textContent = i.toFixed(0) + '°';
+  $('azim').value = a; $('azim').parentElement.querySelector('.val').textContent = a.toFixed(0) + '°';
+}
 
-// Size the drawing buffer to the viewport at up to 2x device pixels.
-function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=window.innerWidth*dpr;canvas.height=window.innerHeight*dpr;gl.viewport(0,0,canvas.width,canvas.height);document.getElementById('res').textContent=canvas.width+'×'+canvas.height}
-window.addEventListener('resize',resize);resize();
+// ── controls ───────────────────────────────────────────────────────────────
+function setPreset(key) { P = M.presetParams(key); return rebuild({ refit: true }); }
+function setType(type, seed) { P = M.randomParams(type, seed); return rebuild({ refit: true }); }
+function bindUI() {
+  const pre = $('presets');
+  for (const p of M.PRESETS) { const b = document.createElement('button'); b.textContent = p.label; b.dataset.key = p.key; b.onclick = () => setPreset(p.key); pre.appendChild(b); }
+  for (const t of M.TYPES) { const o = document.createElement('option'); o.value = t.key; o.textContent = t.name; $('type').appendChild(o); }
+  $('type').onchange = () => setType($('type').value, +$('seed').value || 1);
+  $('seed').onchange = () => setType($('type').value, Math.max(1, Math.round(+$('seed').value || 1)));
+  $('reroll').onclick = () => setType($('type').value, 1 + Math.floor(Math.random() * 99999));
+  let reb = 0;
+  document.querySelectorAll('[data-p]').forEach(inp => {
+    const k = inp.dataset.p;
+    inp.addEventListener('input', () => {
+      P[k] = +inp.value; P.preset = null;
+      inp.parentElement.querySelector('.val').textContent = fmt[k] ? fmt[k](+inp.value) : inp.value;
+      if ('rebuild' in inp.dataset) { clearTimeout(reb); reb = setTimeout(() => rebuild(), 250); } else repack();
+    });
+  });
+  $('incl').oninput = () => { goal.pitch = C.inclToPitch(+$('incl').value); anim = null; syncView(); };
+  $('azim').oninput = () => { goal.yaw = +$('azim').value * C.DEG; anim = null; syncView(); };
+  const val = (id, f) => { const i = $(id); const s = () => { i.parentElement.querySelector('.val').textContent = f(+i.value); }; i.addEventListener('input', s); s(); };
+  $('speed').addEventListener('input', () => { st.speed = +$('speed').value; });
+  val('speed', v => v.toFixed(1));
+  $('ev').addEventListener('input', () => { st.ev = +$('ev').value; });
+  val('ev', v => (v > 0 ? '+' : '') + v.toFixed(1));
+  $('sky').onchange = () => { st.sky = $('sky').checked; rebuild(); };
+  $('bg').onchange = () => { st.bg = $('bg').checked; rebuild(); };
+  $('quality').value = quality;
+  $('quality').onchange = () => { quality = $('quality').value; resize(); rebuild(); };
+  $('fly').onclick = $('dockFly').onclick = fly;
+  $('reset').onclick = () => { anim = null; fitGoal(false); };
+  $('dockPrev').onclick = () => cyclePreset(-1);
+  $('dockNext').onclick = () => cyclePreset(1);
+  $('dockName').onclick = () => cyclePreset(1);
+  $('dockPlay').onclick = () => { st.playing = !st.playing; $('dockPlay').textContent = st.playing ? '❚❚' : '▶'; };
+  $('eqCollapse').onclick = () => { const c = $('eqPanel').classList.toggle('collapsed'); $('eqCollapse').textContent = c ? '+' : '–'; };
 
-// Live tunables. arms and TIME_OFFSET are randomized once per page load so each
-// visit starts a different galaxy at a different point in its rotation.
-let timescale=0.5,density=10000,spiral=0.7,tilt=2.0;
-const arms=Math.floor(Math.random()*4)+2;
-const TIME_OFFSET=500+Math.random()*800;
-// The density slider cannot rebuild the VBO mid-draw; it sets this flag and the
-// frame loop regenerates at the top of the next frame.
-let needsRegen=false;
+  // panel, phone sheet, dock (the wave-membrane pattern)
+  const panel = $('panel'), dockPanel = $('dockPanel');
+  const setOpen = open => {
+    panel.classList.toggle('open', open); if (!open) panel.classList.remove('full');
+    document.body.classList.toggle('panel-closed', !open);
+    dockPanel.classList.toggle('on', open); dockPanel.setAttribute('aria-expanded', String(open));
+  };
+  $('gear').onclick = () => setOpen(true);
+  $('panelClose').onclick = () => setOpen(false);
+  dockPanel.onclick = () => setOpen(!panel.classList.contains('open'));
+  setOpen(!PHONE_Q.matches && innerWidth > 900);
+  PHONE_Q.addEventListener('change', e => { setOpen(!e.matches); quality = e.matches ? 'low' : quality; $('quality').value = quality; resize(); });
+  const grip = $('sheetGrip'); let gy = null;
+  grip.addEventListener('pointerdown', e => { gy = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) {} });
+  grip.addEventListener('pointerup', e => {
+    if (gy === null) return; const dy = e.clientY - gy; gy = null;
+    if (Math.abs(dy) < 8) panel.classList.toggle('full');
+    else if (dy < -40) panel.classList.add('full');
+    else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
+  });
+  grip.addEventListener('pointercancel', () => { gy = null; });
 
-// Wire one slider to its callback and live readout.
-function bind(id,valId,cb){const s=document.getElementById(id),l=document.getElementById(valId);s.addEventListener('input',()=>cb(s,l))}
-bind('timescale','tsVal',(s,l)=>{timescale=parseInt(s.value)/100;l.textContent=timescale.toFixed(2)+'×'});
-bind('density','densityVal',(s,l)=>{density=parseInt(s.value);l.textContent=density;needsRegen=true});
-bind('spiral','spiralVal',(s,l)=>{spiral=parseInt(s.value)/100;l.textContent=spiral.toFixed(2)});
-bind('tilt','tiltVal',(s,l)=>{tilt=parseInt(s.value)/10;l.textContent=tilt.toFixed(1)});
+  // orbit: one pointer drags, two pinch
+  const pts = new Map(); let pinch0 = 0, dist0 = 0;
+  canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); anim = null; $('hint').classList.add('gone'); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = goal.dist; } });
+  canvas.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    if (pts.size === 1) {
+      goal.yaw -= (e.clientX - p[0]) * 0.006;
+      goal.pitch = Math.max(-1.55, Math.min(1.55, goal.pitch + (e.clientY - p[1]) * 0.005));
+      syncView();
+    }
+    pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) goal.dist = clampDist(dist0 * pinch0 / d); }
+  });
+  const up = e => { pts.delete(e.pointerId); pinch0 = 0; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); anim = null; goal.dist = clampDist(goal.dist * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+  const keys = new Set();
+  addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey || e.altKey) return; keys.add(e.key.toLowerCase()); if (e.key === ' ') { st.playing = !st.playing; e.preventDefault(); } });
+  addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+  api.keys = keys;
+}
+const clampDist = d => Math.max(0.3, Math.min(ctx().fit * 4, d));
+function cyclePreset(d) {
+  const i = M.PRESETS.findIndex(p => p.key === P.preset);
+  setPreset(M.PRESETS[(i + d + M.PRESETS.length) % M.PRESETS.length].key);
+}
+// Fly into the disk: the saver's dive shot, from the current view.
+function fly() {
+  const shot = { kind: 'dive', yaw0: goal.yaw, spin: 0.25, incl: Math.max(30, Math.min(70, 90 - goal.pitch / C.DEG)) };
+  anim = { shot, p: 0, dur: 7, ctx: ctx() };
+}
 
-// Build the initial population before the first frame.
-generateStars(density,arms);
-
-let frames=0,lastT=performance.now();const t0=performance.now();
-
-// Per-frame loop: regenerate stars if pending, then draw the core glow with
-// blending off, then the stars additively over it.
-function frame(){
-  const now=performance.now(),time=(now-t0)/1000+TIME_OFFSET;
-  frames++;if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now}
-  if(needsRegen){generateStars(density,arms);needsRegen=false}
-
-  const w=canvas.width,h=canvas.height,fit=fitZoom();
-
-  // Pass 1: the core and disk glow, opaque, filling the whole frame.
-  gl.disable(gl.BLEND);
-  gl.useProgram(coreProg);
-  gl.uniform2f(coreU.u_res,w,h);gl.uniform4f(coreU.u_mouse,dragX,dragY,0,0);
-  gl.uniform1f(coreU.u_zoom,zoom*fit);gl.uniform1f(coreU.u_tilt,tilt);
-  gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);
-  gl.enableVertexAttribArray(coreAttrPos);
-  gl.vertexAttribPointer(coreAttrPos,2,gl.FLOAT,false,0,0);
-  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-  gl.disableVertexAttribArray(coreAttrPos);
-
-  // Pass 2: stars, additive blend so overlapping sprites sum to bright cores.
-  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-  gl.useProgram(starProg);
-  gl.uniform1f(starU.u_time,time);gl.uniform1f(starU.u_timescale,timescale);
-  gl.uniform2f(starU.u_res,w,h);gl.uniform4f(starU.u_mouse,dragX,dragY,0,0);
-  gl.uniform1f(starU.u_zoom,zoom*fit);gl.uniform1f(starU.u_tilt,tilt);
-  gl.uniform1f(starU.u_spiral,spiral);
-  gl.bindVertexArray(starVAO);
-  gl.drawArrays(gl.POINTS,0,starCount);
-  gl.bindVertexArray(null);
-  gl.disable(gl.BLEND);
-
+// ── loop ───────────────────────────────────────────────────────────────────
+let last = performance.now(), fpsN = 0, fpsT = last;
+function frame(now) {
   requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (++fpsN && now - fpsT > 1000) { st.fps = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now; if (!api.saving) showHudStat(); }
+  if (!E || !built) return;
+  if (st.playing) st.time += st.speed * dt * (api.saving ? api.timeScale || 1 : 1);
+  let c;
+  if (api.saving && api.saverCam) c = api.saverCam(dt);
+  else {
+    if (anim) {
+      anim.p = Math.min(1, anim.p + dt / anim.dur);
+      const s = shotCamera(anim.shot, anim.p, anim.ctx);
+      Object.assign(goal, s, { target: s.target.slice() });
+      if (anim.p >= 1) anim = null;
+      syncView();
+    }
+    const k = api.keys;
+    if (k && k.size) {
+      const b = C.basis(cam), sp = goal.dist * 0.7 * dt;
+      const mv = (v, s) => { for (let i = 0; i < 3; i++) goal.target[i] += v[i] * s; };
+      if (k.has('w')) mv(b.fwd, sp); if (k.has('s')) mv(b.fwd, -sp);
+      if (k.has('d')) mv(b.right, sp); if (k.has('a')) mv(b.right, -sp);
+      if (k.has('e')) mv(b.up, sp); if (k.has('q')) mv(b.up, -sp);
+    }
+    const w = anim ? 9 : 6;
+    [cam.yaw, vel.yaw] = C.springAngle(cam.yaw, vel.yaw, goal.yaw, w, dt);
+    [cam.pitch, vel.pitch] = C.spring(cam.pitch, vel.pitch, goal.pitch, w, dt);
+    [cam.dist, vel.dist] = C.spring(cam.dist, vel.dist, goal.dist, w, dt);
+    [cam.fov, vel.fov] = C.spring(cam.fov, vel.fov, goal.fov, w, dt);
+    for (let i = 0; i < 3; i++) [cam.target[i], vel.t[i]] = C.spring(cam.target[i], vel.t[i], goal.target[i], w, dt);
+    c = cam;
+  }
+  // frame the galaxy in the clear part of the window
+  let off = [0, 0];
+  if (api.saving && api.saverOff) off = api.saverOff();
+  else { const o = occlusion(); off = [(o.l - o.r) / innerWidth, (o.b - o.t) / innerHeight]; }
+  E.render({
+    cam: C.frameUniform(c, bud.w / bud.h), off, time: st.time, wall: now / 1000, frame: st.frame++,
+    exposure: Math.pow(2, st.ev) * (api.saving ? api.fade ?? 1 : 1), sbRef: M.refSB(P), skyGain: 1, autoKey: 0.11, autoRate: Math.min(1, dt * 2.5), bloom: 0.06,
+    snapExposure: api.snap ? (api.snap = false, true) : false,
+  });
 }
-frame();
-})();
+function showHudStat() { if (built && bud) $('hudStat').textContent = `${built.count.toLocaleString('en')} stars · ${bud.w}×${bud.h} · ${st.fps} fps`; }
+
+// ── boot ───────────────────────────────────────────────────────────────────
+async function boot() {
+  resize();
+  bindUI();
+  showHud();
+  try { E = await createEngine({ canvas, mobile: PHONE_Q.matches }); }
+  catch (e) {
+    console.error(e);
+    $('msg').hidden = false;
+    $('msg').textContent = 'This page needs WebGPU. Use a current Safari, Chrome or Edge.';
+    return;
+  }
+  E.onLost = info => { if (info && info.reason !== 'destroyed') { $('msg').hidden = false; $('msg').textContent = 'The GPU device was lost. Reload the page.'; } };
+  E.resize(bud);
+  addEventListener('resize', resize);
+  await rebuild({ refit: true });
+  cam.dist = goal.dist * 1.6;                 // a short glide in at the start
+  requestAnimationFrame(frame);
+  typesetAll(document);
+  addEventListener('pagehide', () => { try { worker && worker.terminate(); } catch (e) {} });
+}
+
+// What saver.js may use.
+Object.assign(api, {
+  get E() { return E; }, get built() { return built; }, get P() { return P; }, st, cam, goal, ctx,
+  setPreset, setType, rebuild, setParams(p) { P = p; return rebuild(); },
+  canvas, resize, fitGoal, showHud,
+});
+window.__galaxy = api;
+boot();

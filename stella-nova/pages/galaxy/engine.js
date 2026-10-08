@@ -15,6 +15,7 @@
 //  API (grep -n "^  [a-zA-Z]*(" engine.js)
 //    const E = await createEngine({ canvas | device+format, mobile })
 //    E.setGalaxy(built)       built = model.buildGalaxy(...)
+//    E.setGals(gals, n)       new galaxy blocks only (the stars stay)
 //    E.resize(budget)         budget = budget.galaxyBudget(...)
 //    E.render(frame, view?)   frame: see "function render"; view: a
 //                             GPUTextureView to draw into (Deno); else the
@@ -165,6 +166,9 @@ export async function createEngine({ canvas = null, device = null, format = null
     firstExpo = true;
   }
 
+  // Replace the galaxy blocks only (a slider that does not move stars).
+  function setGals(g, n) { gals = new Float32Array(GAL_FLOATS * 2); gals.set(g.subarray(0, GAL_FLOATS * n)); nGal = n; }
+
   // frame = { cam: {eye, right, up, fwd, tanHalf, aspect}, off: [x, y],
   //   time (Myr), wall (s), frame, exposure, bloom, starGain, twinkle,
   //   sbRef, skyGain, autoKey, autoRate, peakClamp, vignette, snapExposure }
@@ -216,7 +220,7 @@ export async function createEngine({ canvas = null, device = null, format = null
     get count() { return starCount; },
     get targets() { return T; },
     expoTex,
-    resize, setGalaxy, render,
+    resize, setGalaxy, setGals, render,
     destroy() { try { device.destroy(); } catch (e) {} },
   };
   device.lost.then(info => { if (E.onLost) E.onLost(info); });

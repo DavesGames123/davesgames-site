@@ -5,56 +5,113 @@
 <script src="../../lib/wishlist.js"></script>
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Galaxy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Galaxy — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    GALAXY  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. The single full-screen <canvas id="c"> is where main.js
-   renders the WebGL2 galaxy; everything else here is the overlay HUD and the
-   four control sliders that main.js binds to by id.
+   One full-window WebGPU canvas (#c). main.js (module) draws a galaxy from
+   model.js with engine.js: ray-marched light and dust, star sprites,
+   bloom and a tone map. Seven types, seven presets, an orbit camera and a
+   "fly into the disk" move. saver.js is the screensaver hook.
 
-   LAYOUT  (# marks an element id)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ #c  full-screen WebGL canvas (galaxy)                            │
-     │   .hud   title                        .stats  #fps #res #starcount│
-     │                                                                   │
-     │                    .hint  drag / scroll help                     │
-     │   .slider-wrap  #timescale #density #spiral #tilt  (+ readouts)  │
-     └─────────────────────────────────────────────────────────────────┘
+   LAYOUT  (# marks an element id main.js binds to)
+     #c         the canvas
+     #hud       title, type line (#hudType), status (#hudStat)
+     #panel     right drawer on desktop, bottom sheet on phones
+                presets #presets, type #type, seed #seed #reroll,
+                sliders [data-p], view #incl #azim, #speed #ev #quality,
+                toggles #sky #bg, #fly #reset
+     #eqPanel   the four equations, TeX through lib/sci-math.js
+     #dock      phone dock: #dockPanel #dockPrev #dockNext #dockFly #dockPlay
+     #msg       a message when WebGPU is missing
 
-   main.js is a classic script at the end of body; it fetches the shaders,
-   builds the two programs, and drives the frame loop.
+   GREP MAP
+     grep -n 'data-p='   every model slider
+     grep -n 'data-tex'  every equation
   ═══════════════════════════════════════════════════════════════════════════
 -->
+<meta name="description" content="Galaxies from physical profiles: Sersic bulges, exponential disks, density-wave arms, dust that reddens light, HII regions, bars, ellipticals and tidal tails, ray marched on the GPU.">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
-<!-- The one render surface; main.js sizes it to the viewport. -->
-<canvas id="c"></canvas>
-<div class="hud"><h1>Galaxy</h1></div>
-<div class="stats"><div id="fps"></div><div id="res"></div><div id="starcount"></div></div>
-<div class="hint" id="hint">click + drag to orbit · scroll to zoom</div>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<canvas id="c" aria-label="A galaxy, rendered from a physical model"></canvas>
 
-<div class="slider-wrap">
-  <span class="slider-label">Timescale</span>
-  <input type="range" id="timescale" min="0" max="100" value="50">
-  <span class="slider-val" id="tsVal">0.50×</span>
-  <span class="sep"></span>
-  <span class="slider-label">Stars</span>
-  <input type="range" id="density" min="1000" max="20000" value="10000" step="500">
-  <span class="slider-val" id="densityVal">10000</span>
-  <span class="sep"></span>
-  <span class="slider-label">Wind</span>
-  <input type="range" id="spiral" min="0" max="200" value="70">
-  <span class="slider-val" id="spiralVal">0.70</span>
-  <span class="sep"></span>
-  <span class="slider-label">Tilt</span>
-  <input type="range" id="tilt" min="10" max="60" value="20">
-  <span class="slider-val" id="tiltVal">2.0</span>
+<div id="hud">
+  <h1>Galaxy</h1>
+  <div id="hudType"></div>
+  <div id="hudStat"></div>
 </div>
+<div id="hint">Drag to orbit · scroll or pinch to zoom · W A S D to move</div>
+<button id="gear" aria-label="Open the controls">☰</button>
 
-<script src="main.js"></script>
+<aside id="panel" aria-label="Galaxy controls">
+  <div id="sheetGrip"><span></span></div>
+  <button id="panelClose" aria-label="Close the controls">✕</button>
+
+  <div class="sec-label">Presets</div>
+  <div class="presets" id="presets"></div>
+
+  <div class="sec-label">Type and seed</div>
+  <div class="row2">
+    <select id="type" aria-label="Galaxy type"></select>
+    <input id="seed" type="number" min="1" max="99999" value="1" aria-label="Seed">
+    <button id="reroll" title="New seed">⚄</button>
+  </div>
+
+  <div class="sec-label">Structure</div>
+  <div class="row"><label><span class="m2">m</span> <span class="w">arms</span></label><input type="range" data-p="m" min="1" max="8" step="1" data-rebuild><span class="val"></span></div>
+  <div class="row"><label><span class="m1">ψ</span> <span class="w">pitch angle</span></label><input type="range" data-p="pitch" min="5" max="40" step="0.5"><span class="val"></span></div>
+  <div class="row"><label><span class="w">arm contrast</span></label><input type="range" data-p="armAmp" min="0" max="1" step="0.01"><span class="val"></span></div>
+  <div class="row"><label><span class="w">flocculence</span></label><input type="range" data-p="flocc" min="0" max="1" step="0.01"><span class="val"></span></div>
+  <div class="row"><label><span class="w">bar light</span></label><input type="range" data-p="bar" min="0" max="0.3" step="0.005" data-rebuild><span class="val"></span></div>
+  <div class="row"><label><span class="m5">B/T</span> <span class="w">bulge share</span></label><input type="range" data-p="BT" min="0" max="1" step="0.01" data-rebuild><span class="val"></span></div>
+  <div class="row"><label><span class="m4">n</span> <span class="w">Sérsic index</span></label><input type="range" data-p="n" min="0.5" max="8" step="0.1" data-rebuild><span class="val"></span></div>
+  <div class="row"><label><span class="m3">R<sub>d</sub></span> <span class="w">disk scale</span></label><input type="range" data-p="Rd" min="1" max="6" step="0.1" data-rebuild><span class="val"></span></div>
+  <div class="row"><label><span class="w">dust τ</span></label><input type="range" data-p="tau" min="0" max="4" step="0.05"><span class="val"></span></div>
+  <div class="row"><label><span class="w">star formation</span></label><input type="range" data-p="hii" min="0" max="3" step="0.05"><span class="val"></span></div>
+  <div class="row"><label><span class="m6">v<sub>f</sub></span> <span class="w">flat speed</span></label><input type="range" data-p="vflat" min="50" max="350" step="5"><span class="val"></span></div>
+
+  <div class="sec-label">View</div>
+  <div class="row"><label><span class="w">inclination</span></label><input type="range" id="incl" min="0" max="90" step="0.5"><span class="val"></span></div>
+  <div class="row"><label><span class="w">azimuth</span></label><input type="range" id="azim" min="-180" max="180" step="1"><span class="val"></span></div>
+  <div class="row"><label><span class="w">time, Myr per s</span></label><input type="range" id="speed" min="0" max="40" step="0.5" value="6"><span class="val"></span></div>
+  <div class="row"><label><span class="w">exposure, EV</span></label><input type="range" id="ev" min="-3" max="3" step="0.1" value="0"><span class="val"></span></div>
+  <div class="modes"><button id="fly">Fly into the disk</button><button id="reset">Reset view</button></div>
+  <div class="modes">
+    <label class="tog"><input type="checkbox" id="sky" checked> foreground stars</label>
+    <label class="tog"><input type="checkbox" id="bg" checked> background galaxies</label>
+  </div>
+  <div class="row2"><span class="w">Quality</span><select id="quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>The light is a sum of profiles: a triaxial Sérsic bulge, thin and thick exponential disks, a young disk in the arms, a bar and a faint halo. The arms are a density wave: a log-spiral pattern turns at one speed, the stars at another, so the arms never wind up. Young blue stars and pink HII regions are born in an arm and drift ahead of it.</p>
+    <p>Dust absorbs blue light more than red, so lanes look brown and stars behind them redden. The diffuse light and dust are ray marched; the brightest stars, clusters and tails are sprites. Interacting pairs come from a restricted three-body run on a parabolic orbit.</p>
+    <p>Sizes are true to type; dust is a little thicker than real so the lanes read at page size.</p>
+  </div>
+</aside>
+
+<section id="eqPanel" aria-label="Equations">
+  <div class="eq-head"><span class="lbl">The model</span><button id="eqCollapse" aria-label="Fold the equations">–</button></div>
+  <div class="eq-block"><div class="eq-sublabel">Log-spiral arm, pitch ψ</div><div class="sci-eq eq-row" data-tex="r = a\,e^{b\theta},\qquad b = \tan\psi"></div></div>
+  <div class="eq-block"><div class="eq-sublabel">Sérsic bulge</div><div class="sci-eq eq-row" data-tex="I(R) = I_e \exp\!\left[-b_n\left(\left(\tfrac{R}{r_e}\right)^{1/n} - 1\right)\right]"></div></div>
+  <div class="eq-block"><div class="eq-sublabel">Exponential disk</div><div class="sci-eq eq-row" data-tex="\rho(R,z) = \rho_0\, e^{-R/R_d}\, e^{-|z|/h_z}"></div></div>
+  <div class="eq-block"><div class="eq-sublabel">Rotation curve and pattern</div><div class="sci-eq eq-row" data-tex="v(R) = \frac{v_f\,R}{\sqrt{R^2 + R_t^2}},\qquad \Omega_p = \text{const}"></div></div>
+</section>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg"><button id="dockPrev" aria-label="Previous preset">‹</button><button id="dockName">Preset</button><button id="dockNext" aria-label="Next preset">›</button></div>
+  <button id="dockFly" aria-label="Fly into the disk">⤓</button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+</nav>
+<div id="msg" hidden></div>
+
+<script type="module" src="main.js"></script>
 </body>
 </html>
