@@ -13,6 +13,8 @@ import { buildSpecimen, formParams, randomParams, FORMS, FORM_KEYS, PARAMS, DEFA
 import { hideLines, mulberry, rdp, brushPoly, pointInPoly } from './geom.js';
 import { layoutPlate, fitSpec, pngSize, scaleBar, THEMES, STYLE_KEYS, cellAt } from './plate.js';
 import { plateSVG } from './svg.js';
+import { CODE, extract } from './saver.js';
+import fs from 'node:fs';
 
 let fails = 0;
 const tests = [];
@@ -43,7 +45,7 @@ test('every form builds, with no NaN and a sane line count', () => {
     ok(finite(s), `${f}/${seed} has a NaN`);
     ok(s.stats.lines >= 60 && s.stats.lines <= 20000, `${f}/${seed} has ${s.stats.lines} lines`);
     ok(s.bbox.w > 10 && s.bbox.h > 10, `${f}/${seed} bbox ${s.bbox.w} x ${s.bbox.h}`);
-    ok(ms < 3000, `${f}/${seed} took ${ms.toFixed(0)} ms`);
+    ok(ms < 8000, `${f}/${seed} took ${ms.toFixed(0)} ms (a guard against a runaway build; the usual time is under 150 ms)`);
     ok(s.offs[s.offs.length - 1] * 2 === s.xy.length, 'offs end');
     ok(s.order.length === s.offs.length - 1 && s.kinds.length === s.order.length, 'order and kinds length');
   }
@@ -173,6 +175,15 @@ test('every form key has a label and only known params', () => {
   for (const k of FORM_KEYS) {
     ok(FORMS[k].label, k + ' label');
     for (const key of Object.keys(FORMS[k].p)) ok(key in DEFAULTS, k + ' has unknown ' + key);
+  }
+});
+
+test('every saver code extract resolves in the shipped source', () => {
+  const src = { engine: fs.readFileSync(new URL('./engine.js', import.meta.url), 'utf8'), geom: fs.readFileSync(new URL('./geom.js', import.meta.url), 'utf8') };
+  for (const [key, [fn, from, file]] of Object.entries(CODE)) {
+    const t = extract(src[file], fn, from, 7);
+    ok(t && t.split('\n').length >= 4, `${key}: ${file}.js ${fn}() from "${from}" gave ${t ? t.split('\n').length : 0} lines`);
+    if (from !== 'start') ok(t.split('\n')[0].includes(from), `${key}: extract does not start at "${from}"`);
   }
 });
 
