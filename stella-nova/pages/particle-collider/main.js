@@ -464,13 +464,9 @@ let saverTick = null;
 // Only collisions: a seeded shuffle of events (processes, beams and
 // energies, the hypothetical ones named so). The main shots use the 3D
 // view: the camera orbits the vertex while the products fly out with
-// labels. Layouts of a shot (grep -n 'const LAYOUTS'):
-//   't' ..... the T: the 3D view on top, the r-phi and r-z diagrams below
-//             it, drawn in as the event plays (needs a tall clear band)
-//   'wing' .. the T for a short band: the 3D view in the middle, a diagram
-//             on each side
-//   'd3' .... the 3D view alone, in the whole band
-//   'split' . the two diagrams only (also the fallback without WebGL)
+// labels. The 3D view fills the clear band of the plate. The saver shows
+// no r-phi or r-z diagram and the plate has no code extract: the user
+// wants the collision alone. (The page itself keeps both diagrams.)
 // The 3D camera moves (MOVES3): orbit, push in, from the side along the
 // beams, down the beam axis, pull out. A cut (a short fade) every 5-12 s.
 // The 3D WebGL canvas stays in the document but hidden; each frame it is
@@ -480,7 +476,6 @@ const SAVER_EVENTS = [
   ['pp', 13.6e6, 'mb'], ['pp', 1e8, 'jj'], ['pp', 1e8, 'tt'], ['pp', 1e8, 'hgg'], ['pp', 1e9, 'jj'], ['pp', 1e9, 'zmm'],
   ['ee', 250000, 'hgg'], ['ee', 91190, 'zmm'], ['ee', 3e6, 'jj'], ['mumu', 1e7, 'tt'], ['mumu', 1e8, 'jj'], ['PbPb', 5.36e6, 'mb'], ['ppbar', 1.96e6, 'tt'],
 ];
-const LAYOUTS = ['t', 't', 'd3', 't', 'd3', 'split'];
 const MOVES3 = ['orbit', 'push', 'beam', 'axis', 'pull'];
 window.snSaver = {
   enter(o = {}) {
@@ -499,13 +494,6 @@ window.snSaver = {
     cv.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;display:block;background:#04060b;transition:opacity 0.35s ease;z-index:1';
     document.body.appendChild(cv);
     const g = cv.getContext('2d');
-    for (const v of VIEWS) { v.hardware = false; v.outline = true; v.labels = 'hard'; v.setFocus(null, null); }
-    // source extracts for the plate
-    const SRC = {}, grabs = [];
-    const grab = (file, start, name) => grabs.push(fetch(file).then(r => r.text()).then(t => { const i = t.indexOf(start); if (i < 0) return; let k = t.indexOf('{', i), dp = 0, j = k; for (; j < t.length; j++) { if (t[j] === '{') dp++; else if (t[j] === '}' && --dp === 0) break; } SRC[name] = { lang: 'js', name: `${file} · ${name}`, text: t.slice(i, j + 1) }; }).catch(() => {}));
-    grab('physics.js', 'export function bbHeavy', 'bbHeavy'); grab('physics.js', 'export function highland', 'highland'); grab('physics.js', 'export function sampleCompton', 'sampleCompton');
-    grab('transport.js', 'const helix = (tr, s, h) =>', 'helix'); grab('reco.js', 'export function fitTrack', 'fitTrack');
-    const code = n => SRC[n] || Object.values(SRC)[0];
     let bandFn = null, band = null;
     import('../../lib/saver-clear.js').then(m => { bandFn = m.plateBand; }).catch(() => {});
     // the 3D view: made now, hardware off, no auto orbit (the shot moves the camera)
@@ -516,8 +504,7 @@ window.snSaver = {
     let queue = [['pp', 13.6e6, ['zmm', 'hgg', 'h4l', 'zee'][Math.floor(rnd() * 4)]], ...shuffle(SAVER_EVENTS.slice())], next = null, nextSpec = null;
     const prepare = () => { if (!queue.length) queue = shuffle(SAVER_EVENTS.slice()); nextSpec = queue.shift(); const [beam, sqrtS, kind] = nextSpec; next = computeEvent(kind, (rnd() * 4e9) >>> 0, { beam, sqrtS, pileup: kind === 'mb' && beam === 'pp' ? 30 + Math.floor(rnd() * 20) : beam === 'pp' && rnd() < 0.3 ? 4 : 0 }); };
     prepare();
-    const MOVES = ['push', 'pull', 'pan', 'hold', 'replay'];
-    let shot = null, shotT = 0, shotDur = 8000, busy = false, layout = 't', move = 'push', move3 = 'orbit', cam = null, ev = null, n = 0, cutA = 1;
+    let shot = null, shotT = 0, shotDur = 8000, busy = false, move3 = 'orbit', cam = null, ev = null, n = 0, cutA = 1;
     const P = (sym, name, value) => ({ sym, name, value: String(value) });
     const start = async () => {
       if (busy) return; busy = true;
@@ -530,9 +517,6 @@ window.snSaver = {
         let tEnd = 4; for (let i = 0; i < E.R.nSeg; i++) { const t1 = E.R.seg[i * 9 + 7]; if (t1 < 40 && t1 > tEnd) tEnd = t1; }
         E.tEnd = Math.min(30, Math.max(14, tEnd + 1));
         shotDur = 1000 * Math.max(5.5, Math.min(12, (6 + 5 * calm) * (0.85 + 0.3 * rnd())));
-        layout = td ? LAYOUTS[Math.floor(rnd() * LAYOUTS.length)] : 'split';
-        if (shot && layout === shot.layout && layout !== 't') layout = 't';
-        move = MOVES[Math.floor(rnd() * MOVES.length)]; if (move === shot?.move) move = MOVES[(MOVES.indexOf(move) + 1) % MOVES.length];
         move3 = MOVES3[Math.floor(rnd() * MOVES3.length)]; if (move3 === shot?.move3) move3 = MOVES3[(MOVES3.indexOf(move3) + 1) % MOVES3.length];
         const sg = rnd() < 0.5 ? -1 : 1;
         cam = {
@@ -542,7 +526,7 @@ window.snSaver = {
           axis: { az0: 180 * (rnd() < 0.5) + 6 * sg, dAz: sg * 28, el0: 6, dEl: 12, r0: 12000, r1: 9500 },
           pull: { az0: rnd() * 360, dAz: sg * 35, el0: 26, dEl: -6, r0: 5200, r1: 15000 },
         }[move3];
-        shot = { n: ++n, spec, move, move3, layout }; shotT = 0;
+        shot = { n: ++n, spec, move3 }; shotT = 0;
         const info = E.info, tr = info.truth || {}, O = E.O, B = BEAMS[info.beam], tag = (B.E.find(e => Math.abs(e[0] * 1000 - info.sqrtS) < 1) || [0, '', ''])[2];
         const params = [P('\\sqrt{s}', tag === 'hyp' ? 'hypothetical' : tag === 'design' ? 'design study' : info.beamLabel, `${(info.sqrtS / 1e6).toPrecision(3)} TeV`)];
         const MK = { zmm: ['m_{\\mu\\mu}', 'mumu'], zee: ['m_{ee}', 'ee'], hgg: ['m_{\\gamma\\gamma}', 'gg'], h4l: ['m_{4\\ell}', 'l4'], tt: ['m_{jj}', 'jj'], jj: ['m_{jj}', 'jj'] }[E.kind];
@@ -551,18 +535,10 @@ window.snSaver = {
         const lead = [...O.muons, ...O.electrons, ...O.photons, ...O.jets].sort((a, b) => b.pT - a.pT)[0];
         if (lead) params.push(P('p_T', 'leading object', `${GeV(lead.pT)} GeV`));
         if (E.kind === 'mb') params.push(P('N', 'charged tracks', String(O.tracks.length)));
-        label({ title: info.title, sub: `${info.process.startsWith(info.beamLabel) || info.process.startsWith('Pb') ? info.process : `${info.beamLabel} → ${info.process.replace(/^p ?p̄? → |^pp → /, '')}`}${tag === 'hyp' ? ' · hypothetical energy' : ''}`, params, code: code(['bbHeavy', 'helix', 'highland', 'sampleCompton', 'fitTrack'][n % 5]), anchor: () => anchor });
+        label({ title: info.title, sub: `${info.process.startsWith(info.beamLabel) || info.process.startsWith('Pb') ? info.process : `${info.beamLabel} → ${info.process.replace(/^p ?p̄? → |^pp → /, '')}`}${tag === 'hyp' ? ' · hypothetical energy' : ''}`, params, anchor: () => anchor });
       } finally { busy = false; requestAnimationFrame(() => { cutA = 1; }); }
     };
-    let anchor = null, alpha = 0, eff = 't';
-    // the diagram rects of a layout inside [top, bot]: [mode, x, y, w, h]
-    const rects2 = (lay, W, top, bot) => {
-      const h = Math.max(80, bot - top), vert = W < (bot - top) * 1.4;
-      if (lay === 'split' && vert) { const s = Math.min(W - 20, (h - 10) / 2); return [['rphi', (W - s) / 2, top + h / 2 - s - 5, s, s], ['rz', (W - s) / 2, top + h / 2 + 5, s, s]]; }
-      if (lay === 'split') { const s = Math.min(h, (W - 52) / 2.7), x = (W - 2.7 * s - 12) / 2; return [['rphi', x, top + (h - s) / 2, s, s], ['rz', x + s + 12, top + (h - s) / 2, 1.7 * s, s]]; }
-      if (lay === 't' && W < 700) { const s = Math.min(h, (W - 30) / 2); return [['rphi', W / 2 - s - 5, top + (h - s) / 2, s, s], ['rz', W / 2 + 5, top + (h - s) / 2, s, s]]; }
-      const s = Math.min(h, (W - 52) / 2.7), x = (W - 2.7 * s - 12) / 2; return [['rphi', x, top + (h - s) / 2, s, s], ['rz', x + s + 12, top + (h - s) / 2, 1.7 * s, s]];
-    };
+    let anchor = null, alpha = 0;
     let bandT = 0, fN = 0, fT = 0, fps = 0;
     saverTick = dt => {
       fN++; fT += dt; if (fT >= 1) { fps = fN / fT; fN = 0; fT = 0; }
@@ -575,60 +551,32 @@ window.snSaver = {
       shotT += dt * 1000;
       const u = Math.min(1, shotT / shotDur), e = u * u * (3 - 2 * u);
       // the event plays from the beams coming in to the end, in about 80 % of the shot
-      const T = move === 'replay' && u > 0.55 ? -3 + (ev.tEnd + 3) * Math.min(1, (u - 0.55) / 0.42) : -3.5 + (ev.tEnd + 3.5) * Math.min(1, u / 0.8);
+      const T = -3.5 + (ev.tEnd + 3.5) * Math.min(1, u / 0.8);
       S.t = T;
       const vtx = ev.info.vertex || [0, 0, 0];
-      for (const v of VIEWS) {
-        const z0 = v.mode === 'rz' ? 1.15 : 1.2;
-        if (move === 'push') { v.zoom = z0 * (1 + 1.9 * e); v.cx = (v.mode === 'rz' ? vtx[2] : vtx[0]) * e; v.cy = 0; }
-        else if (move === 'pull') { v.zoom = z0 * (2.6 - 1.6 * e); v.cx = (v.mode === 'rz' ? vtx[2] : 0) * (1 - e); v.cy = 0; }
-        else if (move === 'pan') { v.zoom = z0 * 1.7; v.cx = v.mode === 'rz' ? -1800 + 3600 * e : -900 + 1800 * e; v.cy = v.mode === 'rz' ? 600 - 1200 * e : 300 - 600 * e; }
-        else if (move === 'replay') { const k = u < 0.55 ? e : 1 - (u - 0.55) / 0.45 * 0.6; v.zoom = z0 * (1 + 1.4 * k); v.cx = 0; v.cy = 0; }
-        else { v.zoom = z0 * (1.05 + 0.15 * e); v.cx = 0; v.cy = 0; }
-      }
       const top = band ? band.t : H * 0.16, bot = band ? H - band.b : H * 0.84, h = Math.max(120, bot - top);
-      // a T needs room: in a short band its diagrams go to the sides ('wing')
-      eff = layout === 't' && h < 420 && W > h * 2.2 ? 'wing' : layout;
       g.globalAlpha = alpha;
-      let A = null;   // the 3D part: [x, y, w, h]
-      const diag = [];
-      if (eff !== 'split' && td) {
-        const split = eff === 't' ? top + h * 0.62 : bot;
-        let side = 0;
-        if (eff === 'wing') { const s = Math.min(h, W * 0.24); side = s + 24; diag.push(['rphi', 12, top + (h - s) / 2, s, s], ['rz', W - 12 - s, top + (h - s) / 2, s, s]); }
-        else if (eff === 't') diag.push(...rects2('t', W, split + 8, bot));
-        A = [side, top, W - 2 * side, split - top];
-        band3D = { t: top, b: H - split, l: side, r: side };
+      // The 3D view in the whole clear band. With no WebGL the frame stays
+      // the dark field under the plate: the saver draws no 2D diagram.
+      if (td) {
+        band3D = { t: top, b: H - bot, l: 0, r: 0 };
         const c = cam, k = move3 === 'pull' ? e : u;
         const THREE = td.stage.THREE;
         td.stage.place({ az: c.az0 + c.dAz * u, el: c.el0 + c.dEl * e, r: c.r0 * Math.pow(c.r1 / c.r0, k) * (W < H ? 1.25 : 1), target: new THREE.Vector3(vtx[0], vtx[1], vtx[2]) });
-        td.frame(dt, T, { labels: 'hard', bounds: { x: A[0] + 6, y: A[1] + 4, w: A[2] - 12, h: A[3] - 8 }, reserved: [] });
+        td.frame(dt, T, { labels: 'hard', bounds: { x: 6, y: top + 4, w: W - 12, h: h - 8 }, reserved: [] });
         g.drawImage(td.canvas, 0, 0, W, H); g.drawImage(td.overlay, 0, 0, W, H);
-        // keep the 3D light inside its part: fade the rest to the field
+        // keep the 3D light inside the band: fade the rest to the field
         g.fillStyle = '#04060b';
-        if (eff === 't') { const gr = g.createLinearGradient(0, split - 26, 0, split + 4); gr.addColorStop(0, 'rgba(4,6,11,0)'); gr.addColorStop(1, 'rgba(4,6,11,1)'); g.fillStyle = gr; g.fillRect(0, split - 26, W, 30); g.fillStyle = '#04060b'; g.fillRect(0, split + 4, W, H - split - 4); }
         g.fillRect(0, 0, W, Math.max(0, top - 2)); g.fillRect(0, bot + 2, W, H - bot - 2);
-      } else diag.push(...rects2('split', W, top, bot));
-      // the diagrams draw in: a short fade after the cut
-      const din = Math.min(1, shotT / 900);
-      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-      for (const [m, x, y, w, hh] of diag) {
-        const v = m === 'rphi' ? vR : vZ; v.reserved = [];
-        g.globalAlpha = alpha * din;
-        v.renderInto(g, x, y, w, hh, T);
-        g.strokeStyle = 'rgba(127,214,255,0.12)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, hh - 1);
-        g.font = '600 10px "Space Grotesk", system-ui, sans-serif'; g.fillStyle = 'rgba(207,232,255,0.75)'; g.fillText(m === 'rphi' ? 'TRANSVERSE · r-φ' : 'LONGITUDINAL · r-z', x + 10, y + 16);
-        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + hh);
       }
-      if (A) { x0 = Math.min(x0, A[0]); y0 = Math.min(y0, A[1]); x1 = Math.max(x1, A[0] + A[2]); y1 = Math.max(y1, A[1] + A[3]); }
       g.globalAlpha = 1;
-      anchor = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, lead: false };
+      anchor = { x: W / 2, y: (top + bot) / 2, w: W, h, lead: false };
       if (shotT >= shotDur && !busy) start();
     };
-    window.snSaver.debug = () => ({ seed: o.seed, n, shot: shot && shot.spec.join(' '), layout, eff, move, move3, shotT: Math.round(shotT), shotDur: Math.round(shotDur), t: +S.t.toFixed(2), has3D: !!td,
+    window.snSaver.debug = () => ({ seed: o.seed, n, shot: shot && shot.spec.join(' '), move3, shotT: Math.round(shotT), shotDur: Math.round(shotDur), t: +S.t.toFixed(2), has3D: !!td,
       cam: td && (p => ({ az: Math.round(p.az), el: Math.round(p.el), r: Math.round(p.r) }))(td.stage.pose()), labels3D: td ? td.ov.placed.map(L => L.item.txt) : [],
-      views: VIEWS.map(v => ({ mode: v.mode, zoom: +v.zoom.toFixed(3), cx: Math.round(v.cx), cy: Math.round(v.cy) })), rect: anchor && { x: Math.round(anchor.x), y: Math.round(anchor.y), w: Math.round(anchor.w), h: Math.round(anchor.h) }, band, H: innerHeight, W: innerWidth, hardware: VIEWS.some(v => v.hardware) || !!(td && td.hwOn), fps: +fps.toFixed(1) });
-    Promise.race([Promise.all(grabs), new Promise(r => setTimeout(r, 1500))]).then(() => start());
+      rect: anchor && { x: Math.round(anchor.x), y: Math.round(anchor.y), w: Math.round(anchor.w), h: Math.round(anchor.h) }, band, H: innerHeight, W: innerWidth, hardware: VIEWS.some(v => v.hardware) || !!(td && td.hwOn), fps: +fps.toFixed(1) });
+    start();
     return { canvas: cv, warmupMs: 3000 };
   },
 };
