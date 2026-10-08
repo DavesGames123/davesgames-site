@@ -22,7 +22,7 @@
 //    grep -n 'fitFrame'                 raw bounds -> screen transform
 // ============================================================================
 import { makeMap, BY_KEY, D, vec } from './proj.js';
-import { frameOf, clipPolygon, clipLine, outline, graticule, ringsFromFlat, seamlessLines } from './geo.js';
+import { frameOf, clipPolygon, clipLine, outline, edgeLines, graticule, ringsFromFlat, seamlessLines } from './geo.js';
 
 export const THEME = {
   bg: '#06080d',
@@ -62,7 +62,11 @@ export function fitFrame(m, box, zoom = 1, pan = [0, 0], pad = 0.04) {
   }
   const w = box.w * (1 - 2 * pad), h = box.h * (1 - 2 * pad);
   const k = Math.min(w / (x1 - x0), h / (y1 - y0)) * zoom;
-  return { k, x: box.x + box.w / 2 - k * (x0 + x1) / 2 + pan[0], y: box.y + box.h / 2 + k * (y0 + y1) / 2 + pan[1], bounds: [x0, x1, y0, y1] };
+  // box.align 'top': a map with spare height sits near the top, so the
+  // card and the globe at the bottom cover less of it.
+  let cy = box.y + box.h / 2;
+  if (box.align === 'top' && zoom <= 1) { const mh = k * (y1 - y0), spare = box.h * (1 - 2 * pad) - mh; if (spare > 0) cy -= spare * 0.45; }
+  return { k, x: box.x + box.w / 2 - k * (x0 + x1) / 2 + pan[0], y: cy + k * (y0 + y1) / 2 + pan[1], bounds: [x0, x1, y0, y1] };
 }
 
 export class MapView {
@@ -82,12 +86,20 @@ export class MapView {
     this.W = w; this.H = h; this.dpr = dpr;
     const cw = Math.round(w * dpr), ch = Math.round(h * dpr);
     if (this.c.width !== cw || this.c.height !== ch) { this.c.width = cw; this.c.height = ch; }
-    this.cache.clear();
+    this.cache.clear(); this.stKey = null;
   }
   // box: the clear part of the canvas (CSS px) the map should fit in.
-  setBox(b) { this.box = b; this.cache.clear(); }
+  setBox(b) {
+    const o = this.box;
+    if (o && o.x === b.x && o.y === b.y && o.w === b.w && o.h === b.h && o.align === b.align) return;
+    this.box = b; this.cache.clear(); this.stKey = null;
+  }
   // state: { key, lon, lat, roll, aspect, lat0, lat1, lat2 }
   setState(st) {
+    // The same state, box and zoom keep the cached geometry.
+    const key = JSON.stringify([st, this.zoom, this.pan, this.W, this.H]);
+    if (key === this.stKey && this.frames && this.frames.length === 1) return this.map;
+    this.stKey = key;
     this.state = st; this.map = makeMap(st.key, st);
     this.screen = fitFrame(this.map, this.box, this.zoom, this.pan);
     this.frames = [frameOf(this.map, this.screen)];
@@ -102,7 +114,7 @@ export class MapView {
     const sa = fitFrame(a, this.box, this.zoom, this.pan), sb = fitFrame(b, this.box, this.zoom, this.pan);
     this.map = t < 0.5 ? a : b;
     this.frames = [frameOf(a, sa, 1 - t, rectsA), frameOf(b, sb, t, rectsB)];
-    this.cache.clear();
+    this.cache.clear(); this.stKey = null;
   }
   setFrames(frames, map) { this.frames = frames; this.map = map; this.cache.clear(); }
 
@@ -113,6 +125,7 @@ export class MapView {
     const tol = full ? 0.3 : 0.45;
     const out = {
       edge: outline(F, { tol }),
+      rim: edgeLines(F, { tol }),
       land: clipPolygon(full ? d.land : d.land110, F, { tol }),
       coast: (full ? d.coast : d.coast110).flatMap(l => clipLine(l, F, { tol })),
       grat: this.opts.graticule ? this.grat.flatMap(l => clipLine(l, F, { tol: 0.5 })) : [],
@@ -125,7 +138,8 @@ export class MapView {
   draw(lod = 'full', o = {}) {
     const g = this.g, T = THEME, s = this.dpr;
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = o.bg || T.bg; g.fillRect(0, 0, this.c.width, this.c.height);
+    if (o.bg === 'transparent') g.clearRect(0, 0, this.c.width, this.c.height);
+    else { g.fillStyle = o.bg || T.bg; g.fillRect(0, 0, this.c.width, this.c.height); }
     if (!this.frames) return;
     g.setTransform(s, 0, 0, s, 0, 0);
     const G = this.geom(lod), heat = o.heat && this.heat;
@@ -138,7 +152,7 @@ export class MapView {
     g.fillStyle = grd; g.fill(edge);
     if (heat) {
       g.save(); g.clip(edge); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-      g.drawImage(this.heat.canvas, 0, 0, this.W, this.H); g.restore();
+      const h = this.heat, c = h.cell; g.drawImage(h.canvas, -c / 2, -c / 2, h.gw * c, h.gh * c); g.restore();   // pixel i sits at x = i * cell
     }
     // graticule
     if (G.grat.length) {
@@ -155,7 +169,8 @@ export class MapView {
     const cp = new Path2D(); addPieces(cp, G.coast, false);
     g.strokeStyle = heat ? T.coastHeat : T.coast; g.lineWidth = heat ? 0.8 : 0.6; g.lineJoin = 'round'; g.stroke(cp);
     // edge
-    g.strokeStyle = o.edge || T.edge; g.lineWidth = 1.2; g.stroke(edge);
+    const rim = new Path2D(); addPieces(rim, G.rim, false);
+    g.strokeStyle = o.edge || T.edge; g.lineWidth = 1.2; g.stroke(rim);
     g.globalAlpha = 1;
     this.edgePath = edge;
   }

@@ -395,9 +395,36 @@ export function outline(frames, opt = {}) {
       for (const q of pieces) clipRingInFrame(densifyPlanar(q, k, frames), k, frames, next);
       pieces = next;
     }
-    for (const q of pieces) out.push({ xy: resample(q, frames, true, opt) });
+    for (const q of pieces) out.push(opt.raw ? q : { xy: resample(q, frames, true, opt) });
   }
   return out;
+}
+// The visible edge of the map, for a stroke: the outline without the
+// edges that lie inside the map. In an azimuthal clip frame the cut
+// (lon = +-pi) is a radius and the pole edge is the centre point.
+export function edgeLines(frames, opt = {}) {
+  const runs = [];
+  const hidden = (a, b) => {
+    const k = a.b; if (k < 0) return false;
+    const F = frames[k]; if (!F.m.def || F.m.def.family !== 'azimuthal') return false;
+    const onCut = abs(abs(a.L[k]) - PI) < 1e-9 && abs(abs(b.L[k]) - PI) < 1e-9;
+    const onPole = abs(abs(a.P[k]) - HALF) < 1e-9 && abs(abs(b.P[k]) - HALF) < 1e-9;
+    return onCut || onPole;
+  };
+  for (const pc of outline(frames, Object.assign({}, opt, { raw: true }))) {
+    const n = pc.length;
+    let start = 0;
+    for (let i = 0; i < n; i++) if (hidden(pc[i], pc[(i + 1) % n])) { start = i + 1; break; }
+    let cur = [];
+    for (let q = 0; q <= n; q++) {
+      const i = (start + q) % n, a = pc[i], b = pc[(i + 1) % n];
+      cur.push(a);
+      if (q === n) break;
+      if (hidden(a, b)) { if (cur.length > 1) runs.push(cur); cur = []; }
+    }
+    if (cur.length > 1) runs.push(cur);
+  }
+  return runs.map(r => ({ xy: resample(r, frames, false, opt) }));
 }
 // Graticule lines as world unit vectors, densified every 1 deg (parallels
 // are small circles, so they are not great-circle edges).
