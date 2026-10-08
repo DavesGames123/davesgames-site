@@ -13,6 +13,9 @@
 //    orbit      the camera turns slowly when idle
 //  The peel has six orders (A.peelMode, glsl.js peelKey) and the explode
 //  four axis sets (A.exOrder). The slice can keep a slab (A.slab).
+//  A.tour (the saver only): a staggered explode and an isolated region,
+//  from the per-unit table that saver.js uploads (part.setSel); the frame
+//  loop copies it into the uSel uniforms (glsl.js unitMove).
 //
 //  VIEWS  seven ways to draw the same beads (budget.js REPS): beads,
 //  space-filling, tube, blobs, cage, glow, toon (reps.js). A.W holds a
@@ -49,6 +52,7 @@ import { createView } from './view.js';
 import { maxInstances, strideFor, tubeCap, REPS } from './budget.js';
 import { SCHEMES, PALETTES } from './colors.js';
 import { installSaver } from './saver.js';
+import { fitDistance as fitBall } from './regions.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const COARSE = window.matchMedia('(pointer:coarse)').matches;
@@ -78,6 +82,9 @@ const A = {
   // explode: axis order (0 stored 5-fold, 5, 3, 2, -1 radial), slab: a
   // slice keeps only a slab of this half thickness (nm), 0 = half space
   peelMode: 0, peelReach: 0.5, exOrder: 0, slab: 0, spiral: 5,
+  // saver tour: null, or { exT, exStag, exAmp (x R), iso, ghost, lift
+  // (nm), liftDir, away (nm) }
+  tour: null,
 };
 
 const canvas = $('view');
@@ -359,9 +366,7 @@ function stepFly(dt) {
 // the camera distance that fits a ball of radius r in the clear part
 function fitDistance(r) {
   const { w, h } = size();
-  const wV = Math.max(80, w - occ.l - occ.r), hV = Math.max(80, h - occ.t - occ.b);
-  const fov = V.camera.fov * Math.PI / 180, half = Math.atan(Math.tan(fov / 2) * Math.min(hV, wV) / h);
-  return r / Math.sin(half) * 1.04;
+  return fitBall(r, { w, h, occ, fov: V.camera.fov });
 }
 
 // ── framing: the overlays that cover the view ─────────────────────────────
@@ -411,7 +416,7 @@ function frame(now) {
   for (let i = leaving.length - 1; i >= 0; i--) {
     const L = leaving[i]; L.t += dt;
     const s = Math.min(1, L.t / 0.55);
-    for (const p of L.B.parts) { p.uniforms.uFade.value = 1 - s; p.uniforms.uExplode.value += dt * L.B.r * 1.6; }
+    for (const p of L.B.parts) { p.uniforms.uFade.value = 1 - s; p.uniforms.uExplode.value += dt * L.B.r * 1.6; p.uniforms.uSelOn.value = 0; }
     if (L.B.membrane) L.B.membrane.mesh.scale.setScalar(Math.max(0.001, 1 - s));
     if (L.B.stalks) L.B.stalks.mesh.visible = false;
     if (L.B.axesObj) L.B.axesObj.group.visible = false;
@@ -440,6 +445,13 @@ function frame(now) {
       u.uSliceD.value = R * 1.05 * (1 - A.slice); u.uSlab.value = A.slab;
       u.uSway.value = cur.entry.look === 'virion' && G.sway && !REDUCED ? 0.09 : 0;
       u.uHiK.value = A.hiK; u.uRadialR.value = R;
+      const T = A.tour;
+      u.uSelOn.value = T ? 1 : 0;
+      if (T) {
+        u.uExMode.value = 3; p._ex = NaN;   // NaN: the axis set is set again when the tour ends
+        u.uExplode.value = T.exAmp * R; u.uExT.value = T.exT; u.uExStag.value = T.exStag;
+        u.uIso.value = T.iso; u.uGhost.value = T.ghost; u.uLift.value = T.lift; u.uAway.value = T.away; u.uLiftDir.value.copy(T.liftDir);
+      }
     }
     if (cur.membrane) {
       const e = easeInOut(Math.min(1, A.asm * 1.6));
@@ -447,7 +459,7 @@ function frame(now) {
       cur.membrane.mat.uniforms.uTime.value = A.time;
       cur.membrane.mesh.visible = A.slice < 0.02 && A.peel < 0.02;
     }
-    if (cur.stalks) cur.stalks.mesh.visible = A.asm > 0.3;
+    if (cur.stalks) cur.stalks.mesh.visible = A.asm > 0.3 && !(A.tour && (A.tour.exT > 0.01 || A.tour.iso > 0.01));
     controls.autoRotate = G.orbit && !REDUCED && !fly && performance.now() - userAt > 5000;
   }
   stepRep(dt);

@@ -8,13 +8,15 @@
 //    ops[3k + r]   row r of the 3x4 operator of copy k
 //    units[2u]     unit centroid + assembly delay, u = k * nChains + chain
 //    units[2u + 1] flight direction + sway phase of copy k
+//    sel[2u]       saver explode direction + stagger key (regions.js)
+//    sel[2u + 1]   away direction + selected flag (1: in the region)
 //  instanceWorld() is the same index arithmetic in JS (no animation
 //  offsets), so tests.mjs can check that the GPU expansion gives each
 //  copy of each bead exactly once.
 //
 //  grep -n targets: "export const ROW", "export function packBeads",
 //    "export function packOps", "export function packUnits",
-//    "export function instanceWorld"
+//    "export function packSel", "export function instanceWorld"
 // ============================================================================
 export const ROW = 2048;
 const rowsFor = n => Math.max(1, Math.ceil(n / ROW));
@@ -38,6 +40,16 @@ export function packUnits(cent, delays, dirs, nc, phase) {
     a[8 * u] = cent[3 * u]; a[8 * u + 1] = cent[3 * u + 1]; a[8 * u + 2] = cent[3 * u + 2]; a[8 * u + 3] = delays[u];
     a[8 * u + 4] = dirs[3 * u]; a[8 * u + 5] = dirs[3 * u + 1]; a[8 * u + 6] = dirs[3 * u + 2];
     a[8 * u + 7] = phase ? phase[Math.floor(u / nc)] : 0;
+  }
+  return a;
+}
+// t: regions.js selTable { dirs, keys, sel, away }; out: an array to
+// fill again (the same size), so a new shot does not make a new texture
+export function packSel(t, out) {
+  const U = t.keys.length, a = out || new Float32Array(ROW * rowsFor(2 * U) * 4);
+  for (let u = 0; u < U; u++) {
+    a[8 * u] = t.dirs[3 * u]; a[8 * u + 1] = t.dirs[3 * u + 1]; a[8 * u + 2] = t.dirs[3 * u + 2]; a[8 * u + 3] = t.keys[u];
+    a[8 * u + 4] = t.away[3 * u]; a[8 * u + 5] = t.away[3 * u + 1]; a[8 * u + 6] = t.away[3 * u + 2]; a[8 * u + 7] = t.sel[u];
   }
   return a;
 }

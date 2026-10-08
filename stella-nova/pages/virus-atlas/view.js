@@ -13,6 +13,10 @@
 //    uChainCol RGBA8 per chain: colour, alpha 0 hides the chain
 //    uAux     RGBA8 per bead (trace.js): burial, place along the chain,
 //             break count, ribbon weight
+//    uSel     RGBA32F, 2 texels per unit (pack.js packSel): the saver
+//             explode direction and stagger key, the away direction and
+//             the selected flag. part.setSel(table) fills it once per
+//             shot; uSelOn 0 (the page) leaves the shader as before.
 //  Each bead is a camera-facing quad with a sphere drawn in the fragment
 //  shader (glsl.js BEAD_VS, BEAD_FS). The vertex shader moves whole units
 //  for the assembly (uAsm), explode, peel and breathing, and bends spikes
@@ -32,13 +36,13 @@
 //  calls it on pagehide.
 //
 //  grep -n targets: "export function createView", "function setPalette",
-//    "function setLight", "function makePart", "function setColors",
+//    "function setLight", "function makePart", "function setColors", "part.setSel",
 //    "function makeMembrane", "function makeAxes", "function makeStalks"
 // ============================================================================
 import * as THREE from 'three';
 import { unitCentroids, assemblyDelays, explodeDirs, axesOf, ASM_SPREAD } from './symmetry.js';
 import { canvasBudget } from './budget.js';
-import { ROW, packBeads, packOps, packUnits } from './pack.js';
+import { ROW, packBeads, packOps, packUnits, packSel } from './pack.js';
 import { packAux, opsKey } from './trace.js';
 import { SCHEMES, MODE, LIGHTS, hex01, chainColors, paletteUniforms } from './colors.js';
 import { BEAD_VS, BEAD_FS } from './glsl.js';
@@ -114,6 +118,7 @@ export function createView(canvas, opts = {}) {
     const delays = o.delays || assemblyDelays(kind === 'none' ? 'single' : kind, cent, nc, { axes, fibril: !!o.fibril });
     const dirs = explodeDirs(kind, cent, { axes, fibril: !!o.fibril });
     const units = tex32(packUnits(cent, delays, dirs, nc, o.phase));
+    const selT = tex32(new Float32Array(ROW * Math.max(1, Math.ceil(2 * m * nc / ROW)) * 4));
     const ccData = new Uint8Array(W * Math.ceil(nc / W) * 4);
     const chainCol = new THREE.DataTexture(ccData, W, Math.ceil(nc / W), THREE.RGBAFormat, THREE.UnsignedByteType);
     chainCol.minFilter = chainCol.magFilter = THREE.NearestFilter; chainCol.generateMipmaps = false;
@@ -126,6 +131,8 @@ export function createView(canvas, opts = {}) {
       uSliceD: { value: 0 }, uSliceOn: { value: 0 }, uSlab: { value: 0 }, uSliceN: { value: new THREE.Vector3(0, 0, 1) }, uBreath: { value: 0 }, uTime: { value: 0 },
       uSway: { value: 0 }, uSwayH: { value: o.sway ? o.sway.h : 1 }, uSwayBase: { value: o.sway ? o.sway.base : 0 },
       uDim: { value: 0.35 }, uRadialR: { value: o.radius || 10 }, uFade: { value: 1 }, uOffset: { value: new THREE.Vector3() }, uGather: { value: 0 },
+      uSel: { value: selT }, uSelOn: { value: 0 }, uExT: { value: 0 }, uExStag: { value: 0 }, uIso: { value: 0 }, uGhost: { value: 0.3 },
+      uLift: { value: 0 }, uAway: { value: 0 }, uLiftDir: { value: new THREE.Vector3(0, 1, 0) },
       ...LIGHT, ...PALU,
     };
     const uniforms = { ...base, uRadMul: { value: 1 }, uRepScale: { value: 1 }, uSprite: { value: 1 }, uAO: { value: 0 }, uToon: { value: 0 } };
@@ -137,10 +144,12 @@ export function createView(canvas, opts = {}) {
     if (o.offset) base.uOffset.value.set(...o.offset);
     const part = { d, ops, mesh, uniforms, base, stride, nb, m, nc, cent, dirs, delays, axes, kind, instances: nb * m, auxData, aux,
       tubeStride: Math.max(1, o.tubeStride || stride), radius: o.radius || 10, coarse, palKey: () => palKey,
-      gpuBytes: (beads.image.data.byteLength + opsT.image.data.byteLength + units.image.data.byteLength + ccData.byteLength + auxData.byteLength),
+      gpuBytes: (beads.image.data.byteLength + opsT.image.data.byteLength + units.image.data.byteLength + selT.image.data.byteLength + ccData.byteLength + auxData.byteLength),
       extra: [],
-      dispose() { parts.delete(part); scene.remove(mesh); geo.dispose(); mat.dispose(); beads.dispose(); opsT.dispose(); units.dispose(); chainCol.dispose(); aux.dispose(); part.extra.forEach(f => f()); } };
+      dispose() { parts.delete(part); scene.remove(mesh); geo.dispose(); mat.dispose(); beads.dispose(); opsT.dispose(); units.dispose(); selT.dispose(); chainCol.dispose(); aux.dispose(); part.extra.forEach(f => f()); } };
     part.setColors = (mode, hide = {}) => setColors(part, mode, hide);
+    // the saver's per-unit table (regions.js selTable): one upload a shot
+    part.setSel = t => { packSel(t, selT.image.data); selT.needsUpdate = true; };
     addReps(THREE, part, { scene, quad, coarse, budget: () => budget });
     part.setColors('protein');
     scene.add(mesh);

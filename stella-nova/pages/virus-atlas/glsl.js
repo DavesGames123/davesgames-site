@@ -13,6 +13,12 @@
 //      assembly (uAsm, by delay), explode (uExMode: 0 stored 5-fold
 //      directions, 1 the nearest axis in uAx, 2 radial), peel (uPeelMode,
 //      see peelKey), breathing.
+//    the saver tour (uSelOn 1, uSel from pack.js packSel): uExMode 3 takes
+//      the explode direction per unit from uSel; every unit leaves at its
+//      own time, easeInOut((uExT - key uExStag) / (1 - uExStag)), the
+//      curve of regions.js explodeAmount. A selected unit (the inspected
+//      region) lifts by uLift along uLiftDir; the rest shrinks to uGhost,
+//      darkens by uIso (gIso) and moves uAway along its away direction.
 //    peelKey  0 plane (camera side), 1 latitude from the pole, 2 copy
 //      order, 3 radius shell (outer first), 4 spiral, 5 random tiles.
 //      A unit lifts off when its key passes uPeelD (width uPeelW).
@@ -37,17 +43,19 @@
 
 const COMMON = /* glsl */`
 precision highp float; precision highp int; precision highp sampler2D;
-uniform sampler2D uBeads, uAux, uOps, uUnits, uChainCol;
-uniform int uNB, uStride, uNChains, uColMode, uHiK, uNCopies, uNBead, uPeelMode, uExMode, uNAx;
+uniform sampler2D uBeads, uAux, uOps, uUnits, uChainCol, uSel;
+uniform int uNB, uStride, uNChains, uColMode, uHiK, uNCopies, uNBead, uPeelMode, uExMode, uNAx, uSelOn;
 uniform float uRad, uAsm, uSpread, uFly, uJitter, uExplode, uPeelD, uPeelW, uPeelOn, uSpiral,
-  uSliceD, uSliceOn, uSlab, uBreath, uTime, uSway, uSwayH, uSwayBase, uDim, uRadialR, uFade, uGather;
-uniform vec3 uPeelN, uSliceN, uOffset, uCopy;
+  uSliceD, uSliceOn, uSlab, uBreath, uTime, uSway, uSwayH, uSwayBase, uDim, uRadialR, uFade, uGather,
+  uExT, uExStag, uIso, uGhost, uLift, uAway;
+uniform vec3 uPeelN, uSliceN, uOffset, uCopy, uLiftDir;
 uniform vec3 uAx[15];
 uniform vec3 uRamp[5];
 uniform vec3 uDiv[3];
 uniform vec3 uSS[3];
 uniform vec3 uCls[8];
 const float PI = 3.14159265;
+float gIso = 0.0;   // set by unitMove: how far this unit is a ghost (0..1)
 const float HYD[8] = float[8](1.0, 0.32, 0.0, 0.04, 0.6, 0.15, 0.25, 0.5);
 
 vec4 fetchT(sampler2D t, int i) { return texelFetch(t, ivec2(i & 2047, i >> 11), 0); }
@@ -96,6 +104,17 @@ Move unitMove(int k, int ch) {
   float a = clamp((uAsm - U0.w * uSpread) / (1.0 - uSpread), 0.0, 1.0);
   m.e = a < 0.5 ? 4.0 * a * a * a : 1.0 - pow(-2.0 * a + 2.0, 3.0) / 2.0;
   vec3 ed = m.dir;
+  float exF = 1.0, sel = 1.0;
+  vec3 awd = vec3(0.0);
+  gIso = 0.0;
+  if (uSelOn > 0) {
+    vec4 S0 = fetchT(uSel, 2 * u), S1 = fetchT(uSel, 2 * u + 1);
+    float st = clamp(uExStag, 0.0, 0.95);
+    float x = clamp((uExT - S0.w * st) / (1.0 - st), 0.0, 1.0);
+    exF = x < 0.5 ? 4.0 * x * x * x : 1.0 - pow(-2.0 * x + 2.0, 3.0) / 2.0;
+    if (uExMode == 3) ed = S0.xyz;
+    awd = S1.xyz; sel = S1.w;
+  }
   if (uExMode == 1 && uNAx > 0) {
     vec3 ch3 = m.c / max(length(m.c), 1e-4);
     float best = -2.0; vec3 bd = ed;
@@ -106,13 +125,19 @@ Move unitMove(int k, int ch) {
     }
     ed = normalize(bd * 0.85 + ch3 * 0.15);
   } else if (uExMode == 2) ed = m.c / max(length(m.c), 1e-4);
-  m.off = m.dir * (1.0 - m.e) * uFly + ed * uExplode;
+  m.off = m.dir * (1.0 - m.e) * uFly + ed * uExplode * exF;
   m.s = 0.0;
   if (uPeelOn > 0.5) {
     m.s = smoothstep(uPeelD, uPeelD + uPeelW, peelKey(m.c, k, u));
     vec3 fl = m.dir * 0.7;
     if (uPeelMode == 1 || uPeelMode == 4) fl += cross(uPeelN, m.c / max(length(m.c), 1e-4)) * 0.6;
     m.off += fl * m.s * uRadialR;
+  }
+  if (uSelOn > 0) {
+    // the region lifts out; the rest turns to a small dark ghost or moves away
+    m.off += sel * uLiftDir * uLift + (1.0 - sel) * awd * uAway;
+    gIso = (1.0 - sel) * uIso;
+    m.s = 1.0 - (1.0 - m.s) * mix(1.0, uGhost, gIso);
   }
   m.off += m.c * uBreath;
   return m;
@@ -130,6 +155,7 @@ vec3 schemeColor(int k, int ch, int ss, int cls, float frac, float bur, float ra
   // sugars and nucleotides keep their own colours except in the class scheme
   if (cls == 6 && uColMode != 3) col = uCls[6];
   if (cls == 5 && uColMode != 3) col = uCls[5];
+  col = mix(col, col * 0.3 + vec3(0.03, 0.04, 0.06), gIso);
   if (uHiK >= 0 && k != uHiK) col *= uDim;
   else if (uHiK >= 0) col = mix(col, vec3(1.0), 0.18);
   return col;
