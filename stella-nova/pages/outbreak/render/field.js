@@ -109,15 +109,17 @@ export function sigmaKm(pop) {
 //   nodes: [{ lat, lon, pop }]
 //   -> { texel: Int32Array(T), node: Int32Array(T*K) (-1 = none), w: Float32Array(T*K), T }
 export function buildWeights(nodes, mask, w = FIELD_W, h = FIELD_H, k = K) {
-  const N = nodes.length, nx = new Float64Array(N), ny = new Float64Array(N), nz = new Float64Array(N), sg = new Float64Array(N);
+  const N = nodes.length, nx = new Float64Array(N), ny = new Float64Array(N), nz = new Float64Array(N), sg = new Float64Array(N), nl = new Float64Array(N);
   let sgMax = 0;
   for (let i = 0; i < N; i++) {
     const a = nodes[i].lat * DEG, b = nodes[i].lon * DEG, c = Math.cos(a);
     nx[i] = c * Math.cos(b); ny[i] = Math.sin(a); nz[i] = -c * Math.sin(b);
+    nl[i] = a;
     sg[i] = sigmaKm(nodes[i].pop) / EARTH_KM;
     if (sg[i] > sgMax) sgMax = sg[i];
   }
   const cosCut = Math.cos(CUT * sgMax);
+  const latCut = CUT * sgMax;   // a node further in latitude than this is out of range
   const tex = [], nd = [], wt = [];
   const bi = new Int32Array(k), bw = new Float64Array(k);
   for (let j = 0; j < h; j++) {
@@ -127,6 +129,7 @@ export function buildWeights(nodes, mask, w = FIELD_W, h = FIELD_H, k = K) {
       const b = (-180 + (i + 0.5) * 360 / w) * DEG, x = ca * Math.cos(b), z = -ca * Math.sin(b);
       bi.fill(-1); bw.fill(0);
       for (let n = 0; n < N; n++) {
+        if (Math.abs(a - nl[n]) > latCut) continue;
         const d = x * nx[n] + y * ny[n] + z * nz[n];
         if (d < cosCut) continue;
         const ang = Math.acos(Math.min(1, d)), r = ang / sg[n];
