@@ -74,6 +74,7 @@ import {
 	ALPHA_MODES
 } from './gltf/constants.js';
 import { GLTFCubicSplineInterpolant, GLTFCubicSplineQuaternionInterpolant } from './gltf/interpolants.js';
+import { addUnknownExtensionsToUserData, assignExtrasToUserData } from './gltf/userdata.js';
 
 /**
  * A loader for the glTF 2.0 format.
@@ -2033,47 +2034,6 @@ function createDefaultMaterial( cache ) {
 	}
 
 	return cache[ 'DefaultMaterial' ];
-
-}
-
-function addUnknownExtensionsToUserData( knownExtensions, object, objectDef ) {
-
-	// Add unknown glTF extensions to an object's userData.
-
-	for ( const name in objectDef.extensions ) {
-
-		if ( knownExtensions[ name ] === undefined ) {
-
-			object.userData.gltfExtensions = object.userData.gltfExtensions || {};
-			object.userData.gltfExtensions[ name ] = objectDef.extensions[ name ];
-
-		}
-
-	}
-
-}
-
-/**
- *
- * @private
- * @param {Object3D|Material|BufferGeometry|Object|AnimationClip} object
- * @param {GLTF.definition} gltfDef
- */
-function assignExtrasToUserData( object, gltfDef ) {
-
-	if ( gltfDef.extras !== undefined ) {
-
-		if ( typeof gltfDef.extras === 'object' ) {
-
-			Object.assign( object.userData, gltfDef.extras );
-
-		} else {
-
-			console.warn( 'THREE.GLTFLoader: Ignoring primitive type .extras, ' + gltfDef.extras );
-
-		}
-
-	}
 
 }
 
