@@ -15,6 +15,7 @@ import { layoutPlate, fitSpec, pngSize, scaleBar, THEMES, STYLE_KEYS, cellAt } f
 import { plateSVG } from './svg.js';
 import { CODE, extract } from './saver.js';
 import fs from 'node:fs';
+import { fitBox, boxPen, TREE_PEN, drawTree, treeSVG, hitTree, GROW_OVER } from './treedraw.js';
 import { buildTree, layoutTree, tipBoxes, drift, drawParams, lineage, paramChanges, cladeName, TIP_CAP, T_MAX, ASPECT, ANC } from './tree.js';
 
 let fails = 0;
@@ -305,6 +306,45 @@ test('tree: lineage runs root to node; param changes list real changes', () => {
     ok(L[0] === 0 && L[L.length - 1] === tip, 'root to tip');
     for (let i = 1; i < L.length; i++) ok(t.nodes[L[i]].parent === L[i - 1], 'parent chain');
     for (const c of paramChanges(t.nodes[0].params, t.nodes[tip].params)) ok(t.nodes[0].params[c.key] !== t.nodes[tip].params[c.key] && c.d > 0, 'listed a field that did not change');
+  }
+});
+
+test('tree mushrooms fit their boxes: bbox fit, inside, centred, fill; thin pen', () => {
+  ok(TREE_PEN <= 0.002, `the tree pen is the main view's share of the box width (${TREE_PEN})`);
+  for (const f of ['fly', 'bolete', 'bonnet', 'parasol', 'puffball', 'random']) {
+    const sp = buildSpecimen(drawParams(formParams(f, 5)), 9), b = sp.bbox;
+    for (const box of [{ x: 10, y: 20, w: 50, h: 40 }, { x: 0, y: 0, w: 35, h: 28 }, { x: -5, y: 3, w: 12, h: 30 }]) {
+      const c = fitBox(sp, box);
+      const x0 = c.ox + b.x * c.k, y0 = c.oy + b.y * c.k, x1 = c.ox + (b.x + b.w) * c.k, y1 = c.oy + (b.y + b.h) * c.k;
+      ok(x0 >= box.x - 1e-9 && y0 >= box.y - 1e-9 && x1 <= box.x + box.w + 1e-9 && y1 <= box.y + box.h + 1e-9, `${f}: inside the box`);
+      ok(Math.abs((x0 + x1) / 2 - (box.x + box.w / 2)) < 1e-9 && Math.abs((y0 + y1) / 2 - (box.y + box.h / 2)) < 1e-9, `${f}: centred`);
+      ok(Math.max((x1 - x0) / box.w, (y1 - y0) / box.h) > 0.93, `${f}: fills 94% of the box on one axis`);
+    }
+    ok(boxPen({ w: 60 }, 0.3) < 0.1, 'a 60 mm box gets a pen under 0.1 mm');
+  }
+});
+// A canvas 2D stub: records calls and rejects a NaN argument.
+function stubCtx(w, h) {
+  const bad = [];
+  const fn = name => (...a) => { if (a.some(v => typeof v === 'number' && !Number.isFinite(v))) bad.push(name); };
+  const ctx = new Proxy({ canvas: { width: w, height: h }, globalAlpha: 1, measureText: t => ({ width: String(t).length * 5 }) },
+    { get: (o, k) => (k in o ? o[k] : fn(k)), set: (o, k, v) => { if (typeof v === 'number' && !Number.isFinite(v)) bad.push(k); o[k] = v; return true; } });
+  globalThis.Path2D = globalThis.Path2D || class { moveTo() {} lineTo() {} closePath() {} };
+  return { ctx, bad };
+}
+test('tree draws on a stub canvas with no NaN (3 layouts, mid growth and grown); SVG holds every name', () => {
+  const t = treeOf(6, { maxTips: 9 }), specs = new Map(t.nodes.map(n => [n.id, buildSpecimen(drawParams(n.params), n.seed)]));
+  for (const kind of ['clado', 'radial', 'fan']) for (const lay of [layoutTree(t, kind, { tip: 50 }), layoutTree(t, kind, { w: 300, h: 200 })]) {
+    for (const tau of [30, 60, T_MAX * GROW_OVER]) for (const style of ['pen', 'wash', 'brush']) {
+      const { ctx, bad } = stubCtx(4000, 4000);
+      drawTree(ctx, { tree: t, lay, view: { s: 3, ox: 0, oy: 0 }, theme: THEMES.cream, style, pen: 0.3, dpr: 2, tau, specFor: id => specs.get(id), anc: true, names: true, sel: t.tips[0], line: new Set(lineage(t, t.tips[0])), back: true, paper: '#fff' });
+      ok(!bad.length, `${kind} tau ${tau} ${style}: NaN in ${bad.slice(0, 3)}`);
+    }
+    const svg = treeSVG(t, lay, { theme: THEMES.cream, pen: 0.3, anc: true, names: true }, id => specs.get(id));
+    ok(!/NaN|undefined/.test(svg), kind + ': NaN in the SVG');
+    for (const n of t.nodes) if (!lay.box[n.id].anc || lay.natural) ok(svg.includes(n.name), kind + ': name missing ' + n.name);
+    const tb = lay.box[t.tips[1]];
+    ok(hitTree(t, lay, tb.x + tb.w / 2, tb.y + tb.h / 2, 1) === t.tips[1], kind + ': a tap on a tip box finds it');
   }
 });
 

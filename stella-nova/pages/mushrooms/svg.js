@@ -11,6 +11,7 @@
 //  GREP MAP
 //    grep -n 'export function plateSVG'   the SVG text
 //    grep -n 'export function xmlEscape'  text and attribute escape
+//    grep -n 'export function specSVG'    one specimen at a fit
 // ============================================================================
 import { specPoints, brushPolys, washFill, PEN_K, SERIF } from './render.js';
 import { withCredit, fitSpec, scaleBar, specExtras } from './plate.js';
@@ -52,39 +53,8 @@ export function plateSVG(L0, specs, o) {
     const f = specs[c.i];
     if (!f) continue;
     const fit = fitSpec(f, c), k = fit.k;
-    const X = v => n3(fit.ox + v * k), Y = v => n3(fit.oy + v * k);
     out.push(`<g data-cell="${c.i + 1}" data-name="${xmlEscape(f.name)}">`);
-    for (const w of f.washes) {
-      const fill = washFill(t, ink, style, w.color);
-      if (!fill) continue;
-      let d = 'M';
-      for (let i = 0; i < w.xy.length; i += 2) d += (i ? 'L' : '') + X(w.xy[i]) + ' ' + Y(w.xy[i + 1]);
-      out.push(`<path d="${d}Z" fill="${fill}"/>`);
-    }
-    const xy = specPoints(f, o.jitter || 0).xy;
-    if (style === 'brush') {
-      const polys = brushPolys(f, o.jitter || 0, o.pen / k);
-      let d = '';
-      for (const q of polys) {
-        if (!q) continue;
-        d += 'M' + X(q[0]) + ' ' + Y(q[1]);
-        for (let i = 2; i < q.length; i += 2) d += 'L' + X(q[i]) + ' ' + Y(q[i + 1]);
-        d += 'Z';
-      }
-      out.push(`<path d="${d}" fill="${ink}" fill-rule="nonzero"/>`);
-    } else {
-      for (let kind = 0; kind < 4; kind++) {
-        let d = '';
-        for (let i = 0; i + 1 < f.offs.length; i++) {
-          if (f.kinds[i] !== kind) continue;
-          const a = f.offs[i], b = f.offs[i + 1];
-          if (b - a < 2) continue;
-          d += 'M' + X(xy[a * 2]) + ' ' + Y(xy[a * 2 + 1]);
-          for (let j = a + 1; j < b; j++) d += 'L' + X(xy[j * 2]) + ' ' + Y(xy[j * 2 + 1]);
-        }
-        if (d) out.push(`<path d="${d}" fill="none" stroke="${ink}" stroke-width="${n3(o.pen * PEN_K[kind])}" stroke-linecap="round" stroke-linejoin="round"/>`);
-      }
-    }
+    out.push(specSVG(f, fit, { theme: t, ink, style, pen: o.pen, jitter: o.jitter }));
     out.push('</g>');
     if (o.scale) {
       const ex = specExtras(f, c, fit), sb = scaleBar(k, Math.min(c.aw * 0.14, f.bbox.w * k * 0.3)), bx = ex.barX, by = ex.barY, tick = ex.fs * 0.45;
@@ -95,4 +65,47 @@ export function plateSVG(L0, specs, o) {
   }
   out.push('</svg>');
   return out.join('\n') + '\n';
+}
+
+// ── specSVG ─────────────────────────────────────────────────────────────────
+// One specimen at fit { k, ox, oy } (plate mm per unit and origin): its
+// washes, then its lines (one path per line kind) or brush outlines.
+// o: { theme, ink, style, pen (mm), jitter, opacity }. plateSVG and the
+// tree export (treedraw.js treeSVG) use it.
+export function specSVG(f, fit, o) {
+  const t = o.theme, ink = o.ink || t.ink, style = o.style || 'pen', k = fit.k, out = [];
+  const X = v => n3(fit.ox + v * k), Y = v => n3(fit.oy + v * k);
+  const op = o.opacity != null && o.opacity < 1 ? ` opacity="${n3(o.opacity)}"` : '';
+  for (const w of f.washes) {
+    const fill = washFill(t, ink, style, w.color);
+    if (!fill) continue;
+    let d = 'M';
+    for (let i = 0; i < w.xy.length; i += 2) d += (i ? 'L' : '') + X(w.xy[i]) + ' ' + Y(w.xy[i + 1]);
+    out.push(`<path d="${d}Z" fill="${fill}"${op}/>`);
+  }
+  const xy = specPoints(f, o.jitter || 0).xy;
+  if (style === 'brush') {
+    const polys = brushPolys(f, o.jitter || 0, o.pen / k);
+    let d = '';
+    for (const q of polys) {
+      if (!q) continue;
+      d += 'M' + X(q[0]) + ' ' + Y(q[1]);
+      for (let i = 2; i < q.length; i += 2) d += 'L' + X(q[i]) + ' ' + Y(q[i + 1]);
+      d += 'Z';
+    }
+    out.push(`<path d="${d}" fill="${ink}" fill-rule="nonzero"${op}/>`);
+  } else {
+    for (let kind = 0; kind < 4; kind++) {
+      let d = '';
+      for (let i = 0; i + 1 < f.offs.length; i++) {
+        if (f.kinds[i] !== kind) continue;
+        const a = f.offs[i], b = f.offs[i + 1];
+        if (b - a < 2) continue;
+        d += 'M' + X(xy[a * 2]) + ' ' + Y(xy[a * 2 + 1]);
+        for (let j = a + 1; j < b; j++) d += 'L' + X(xy[j * 2]) + ' ' + Y(xy[j * 2 + 1]);
+      }
+      if (d) out.push(`<path d="${d}" fill="none" stroke="${ink}" stroke-width="${n3(o.pen * PEN_K[kind])}" stroke-linecap="round" stroke-linejoin="round"${op}/>`);
+    }
+  }
+  return out.join('\n');
 }
