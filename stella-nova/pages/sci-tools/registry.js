@@ -19,6 +19,7 @@ export const CATS = [
   { id: 'units', name: 'Units and constants' },
   { id: 'measure', name: 'Measurement and errors' },
   { id: 'stats', name: 'Statistics' },
+  { id: 'chem', name: 'Chemistry' },
 ];
 
 export const TOOLS = [
@@ -37,6 +38,14 @@ export const TOOLS = [
   ['fit', 'stats', 'Curve fitting', 'Linear, polynomial, exponential, power, Gaussian and custom least-squares fits with parameter errors.', 'regression least squares levenberg marquardt nonlinear fit curve r squared residuals'],
   ['dist', 'stats', 'Distributions', 'pdf, cdf and quantiles of the normal, t, χ², F, binomial and Poisson laws.', 'probability distribution pdf cdf quantile critical value normal binomial poisson'],
   ['power', 'stats', 'Sample size and power', 'Sample size or power for t-tests and two proportions.', 'power analysis sample size cohen effect'],
+  ['molar-mass', 'chem', 'Molar mass', 'Molar mass and percent composition of any formula, hydrates too; mass ↔ moles.', 'formula weight molecular mass composition hydrate moles grams'],
+  ['balance', 'chem', 'Equation balancer', 'Balance chemical equations, ionic and redox too, by exact linear algebra.', 'balance chemical equation reaction coefficients redox'],
+  ['stoich', 'chem', 'Stoichiometry', 'Limiting reagent, theoretical yield and excess from reactant amounts.', 'limiting reagent reactant yield stoichiometry excess'],
+  ['dilution', 'chem', 'Dilution', 'C₁V₁ = C₂V₂ in any units; solve for the missing one.', 'dilution c1v1 c2v2 stock concentration'],
+  ['solution', 'chem', 'Concentration', 'Molarity, molality, mass fraction, ppm and mole fraction of a solution.', 'molarity molality ppm mass fraction mole fraction concentration solution'],
+  ['ph', 'chem', 'pH and buffers', 'pH of strong and weak acids and bases, polyprotic systems and buffers.', 'ph pka acid base buffer henderson hasselbalch titration'],
+  ['gas', 'chem', 'Gas laws', 'Ideal gas and van der Waals: solve for P, V, n or T.', 'ideal gas pv nrt van der waals pressure volume temperature'],
+  ['decay', 'chem', 'Half-life and decay', 'Remaining amount, elapsed time or half-life of first-order decay.', 'half life radioactive decay exponential carbon dating activity'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
