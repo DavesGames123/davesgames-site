@@ -242,15 +242,19 @@ function normals(h, W, H, reliefKm, radiusKm, bump) {
   for (let y = 0; y < H; y++) {
     const th = (y + 0.5) * dTh, cl = Math.sin(th);
     const dE = 2 * dPh * Math.max(cl, 1e-4) * radiusKm, dN = 2 * dTh * radiusKm;
+    // east-west differences over sx texels, so the step covers about one
+    // texel of ground near the poles too (no singular rows there)
+    const sx = Math.max(1, Math.min(W / 4, Math.round(1 / Math.max(cl, 1e-4))));
+    const dEs = dE * sx;
     const inner = y > 0 && y < H - 1, row = y * W;
     for (let x = 0; x < W; x++) {
       // off the pole rows: direct indices (the same values as hAt)
       let gx, gy;
-      if (inner && x > 0 && x < W - 1) {
-        gx = (h[row + x + 1] - h[row + x - 1]) * reliefKm / dE;
+      if (inner && x >= sx && x < W - sx) {
+        gx = (h[row + x + sx] - h[row + x - sx]) * reliefKm / dEs;
         gy = (h[row - W + x] - h[row + W + x]) * reliefKm / dN;
       } else {
-        gx = (hAt(h, W, H, x + 1, y) - hAt(h, W, H, x - 1, y)) * reliefKm / dE;
+        gx = (hAt(h, W, H, x + sx, y) - hAt(h, W, H, x - sx, y)) * reliefKm / dEs;
         gy = (hAt(h, W, H, x, y - 1) - hAt(h, W, H, x, y + 1)) * reliefKm / dN;
       }
       let nx = -gx * bump, ny = -gy * bump, nz = 1;

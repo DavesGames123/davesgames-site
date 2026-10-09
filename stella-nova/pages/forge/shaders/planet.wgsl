@@ -24,7 +24,8 @@
 //       corona, all in the world frame), exposure, ACES, sRGB, dither
 //  Texture coordinates come from the body-frame direction in the
 //  THREE.SphereGeometry layout. Gradients for the mip level are taken in
-//  uniform control flow and wrapped at the date line (no seam line).
+//  uniform control flow, wrapped at the date line (no seam line) and
+//  scaled by sin(colatitude) in u (fn poleGrad: no smeared pole cap).
 //
 //  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface",
 //  "fn cloudsAt", "fn cloudShadow", "fn terrainShadow", "fn atmosphere", "fn ringAt", "@fragment"
@@ -84,10 +85,43 @@ fn dirUV(p: vec3f) -> vec2f {
 // Seam-safe gradient: a jump of about 1 in u across the date line is a wrap.
 fn wrapGrad(g: vec2f) -> vec2f { return vec2f(g.x - round(g.x), g.y); }
 
-struct Grad { dx: vec2f, dy: vec2f }
+// The gradient for the mip level at body direction p. The u step is the
+// wrapped one, times sin(colatitude): near a pole a texel row is a small
+// ring, the map is oversampled in u, and the raw u step (up to 0.5 across
+// the pole) chose a very blurred mip and smeared the cap into radial
+// streaks. The floor keeps one row of texels at the pole itself.
+fn poleGrad(g: vec2f, p: vec3f, rows: f32) -> vec2f {
+  let s = max(length(p.xz), 3.14159265 / rows);
+  return vec2f((g.x - round(g.x)) * s, g.y);
+}
 
+// ring: x the half width in u of the pole ring average, y its weight
+// (fn capRing; 0 below about 70 deg latitude)
+struct Grad { dx: vec2f, dy: vec2f, ring: vec2f }
+
+// Near a pole a map texel is a thin wedge: the u rows hold far more
+// samples than the v columns, so a plain sample draws radial streaks.
+// There sampleG averages 5 taps along u over the ground width of one v
+// texel (at the current mip), which makes the cap isotropic.
 fn sampleG(t: texture_2d<f32>, uv: vec2f, g: Grad) -> vec4f {
-  return textureSampleGrad(t, sMap, uv, g.dx, g.dy);
+  let c = textureSampleGrad(t, sMap, uv, g.dx, g.dy);
+  if (g.ring.y <= 0.0) { return c; }
+  let d = g.ring.x;
+  var a = c;
+  a += textureSampleGrad(t, sMap, uv + vec2f(-d, 0.0), g.dx, g.dy);
+  a += textureSampleGrad(t, sMap, uv + vec2f(d, 0.0), g.dx, g.dy);
+  a += textureSampleGrad(t, sMap, uv + vec2f(-0.5 * d, 0.0), g.dx, g.dy);
+  a += textureSampleGrad(t, sMap, uv + vec2f(0.5 * d, 0.0), g.dx, g.dy);
+  return mix(c, a * 0.2, g.ring.y);
+}
+
+// The pole ring for body direction p, map rows H and the v gradient:
+// half width 0.4 x (one v texel at the mip) / (2 sin(colatitude)) in u,
+// weight 1 above 78 deg latitude, 0 below 70 deg.
+fn capRing(p: vec3f, rows: f32, g: Grad) -> vec2f {
+  let sT = max(length(p.xz), 3.14159265 / rows);
+  let fv = max(1.0, max(abs(g.dx.y), abs(g.dy.y)) * rows);
+  return vec2f(min(0.4 * fv / (2.0 * rows * sT), 0.25), smoothstep(0.35, 0.2, sT));
 }
 
 // Cubic B-spline sample of level 0 in 4 bilinear taps (Sigg and Hadwiger
@@ -261,7 +295,8 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32, f0: vec3f) -> vec3f {
 
 fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   var uv = uvIn;
-  let mg = select(magnify(tNormal, g), 0.0, V.flow.w > 0.5);
+  // no cubic sample on the pole caps (the ring average serves there)
+  let mg = select(magnify(tNormal, g), 0.0, V.flow.w > 0.5) * (1.0 - g.ring.y);
   var alb: vec3f;
   var nT: vec3f;
   var mat: vec4f;
@@ -401,14 +436,20 @@ fn fs(in: VOut) -> @location(0) vec4f {
   let pS = select(normalize(ro + rd * tca), normalize(ro + rd * hp.x), hp.x > 0.0);
   let uvS = dirUV(pS);
   var gS: Grad;
-  gS.dx = wrapGrad(dpdx(uvS));
-  gS.dy = wrapGrad(dpdy(uvS));
+  let rowsS = f32(textureDimensions(tAlbedo, 0).y);
+  gS.dx = poleGrad(dpdx(uvS), pS, rowsS);
+  gS.dy = poleGrad(dpdy(uvS), pS, rowsS);
+  gS.ring = vec2f(0.0);
+  gS.ring = capRing(pS, rowsS, gS);
   let hc = raySphere(ro, rd, V.shell.y);
   let pC = select(normalize(ro + rd * tca), normalize(ro + rd * hc.x), hc.x > 0.0);
   let uvC = dirUV(pC);
   var gC: Grad;
-  gC.dx = wrapGrad(dpdx(uvC));
-  gC.dy = wrapGrad(dpdy(uvC));
+  let rowsC = f32(textureDimensions(tDyn, 0).y);
+  gC.dx = poleGrad(dpdx(uvC), pC, rowsC);
+  gC.dy = poleGrad(dpdy(uvC), pC, rowsC);
+  gC.ring = vec2f(0.0);
+  gC.ring = capRing(pC, rowsC, gC);
 
   let L = V.sun.xyz;
   let cs = dot(rd, L);

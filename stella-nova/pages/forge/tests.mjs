@@ -89,7 +89,9 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   for (let y = 4; y < H - 4; y++) for (let x = 0; x < W; x++) {
     const j = (y * W + x) * 4, nx = M.normal[j] / 127.5 - 1, ny = M.normal[j + 1] / 127.5 - 1, nz = M.normal[j + 2] / 127.5 - 1;
     worst = Math.max(worst, Math.abs(Math.hypot(nx, ny, nz) - 1));
-    const dx = M.height[y * W + (x + 1) % W] - M.height[y * W + (x + W - 1) % W];
+    // the east difference over the row stride, as maps.js normals() takes it
+    const sx = Math.max(1, Math.round(1 / Math.sin((y + 0.5) / H * Math.PI)));
+    const dx = M.height[y * W + (x + sx) % W] - M.height[y * W + (x + W - sx) % W];
     if (Math.abs(dx) > 0.01 && Math.abs(nx) > 0.02) { tested++; if (Math.sign(nx) === -Math.sign(dx)) agree++; }
   }
   ok('normals: unit length (8-bit)', worst < 0.02, `max | |n| - 1 | ${worst.toFixed(4)}`);
@@ -539,6 +541,91 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   const share = W => pts.filter(q => Math.abs(R.microProbe(ctx, q, W)) > 1e-4).length / pts.length;
   const s2 = share(2048), s4 = share(4096);
   ok('craters: a 4k map adds small craters below rMin that 2k does not', s2 < 0.05 && s4 > 0.15 && s4 > 4 * s2, `share of points in a small crater: 2k ${(100 * s2).toFixed(0)} %, 4k ${(100 * s4).toFixed(0)} %`);
+}
+
+// seamless poles and date line, in every map
+{
+  const W = 256, H = 128;
+  // object-space normal of texel i (mapImage normalObj decodes the frame)
+  const objN = (M, P) => { const im = MP.mapImage(M, P, 'normalObj'); return i => [im.data[i * 3] / 127.5 - 1, im.data[i * 3 + 1] / 127.5 - 1, im.data[i * 3 + 2] / 127.5 - 1]; };
+  const ang = (a, b) => Math.acos(Math.max(-1, Math.min(1, (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (Math.hypot(...a) * Math.hypot(...b)))));
+  const chans = (M, P) => {
+    const n = objN(M, P);
+    return {
+      height: i => [M.height[i]], albedo: i => [M.albedo[i * 4], M.albedo[i * 4 + 1], M.albedo[i * 4 + 2]].map(v => v / 255),
+      mat: i => [M.mat[i * 4], M.mat[i * 4 + 2]].map(v => v / 255), emissive: i => [M.emissive[i * 4], M.emissive[i * 4 + 1]].map(v => v / 255),
+      cloud: i => [M.cloud[i * 4] / 255], ao: i => [M.ao[i] / 255], normal: n,
+    };
+  };
+  const d = (a, b) => a.reduce((s, v, k) => Math.max(s, Math.abs(v - b[k])), 0);
+  const bad = { pole: [], seam: [] };
+  for (const id of ['earth', 'rust', 'moon', 'ice', 'lava', 'desert', 'titan', 'jupiter', 'neptune']) {
+    // raw: the sampled rows before finish (erosion, rivers, normals, AO).
+    // The sampler reads the 3D field, so its rows meet at the pole by
+    // construction; finish must not add a mismatch there.
+    const P = PR.fromPreset(id, 7), ctx = MP.prepare(P), raw = MP.assemble(W, [MP.sampleRows(ctx, W, 0, H)]);
+    const R0 = { height: raw.height.slice(), albedo: raw.albedo.slice(), mat: raw.mat.slice(), emissive: raw.emissive.slice(), cloud: raw.cloud.slice() };
+    const M = MP.finish(raw, P, ctx), C = chans(M, P), CR = chans({ ...M, ...R0 }, P);
+    const across = f => { let a = 0, n = 0; for (const y of [0, H - 1]) for (let x = 0; x < W / 2; x++) { a += d(f(y * W + x), f(y * W + x + W / 2)); n++; } return a / n; };
+    for (const [k, f] of Object.entries(C)) {
+      // across the pole: texel x and texel x + W/2 of the first (last) row
+      // are one texel apart; the reference is the step from that row to
+      // the next one at the same x (the same distance, the same terrain)
+      let pole = 0, pref = 0, np = 0;
+      for (const [y, y2] of [[0, 1], [H - 1, H - 2]]) for (let x = 0; x < W / 2; x++) {
+        pole += d(f(y * W + x), f(y * W + x + W / 2)); pref += (d(f(y * W + x), f(y2 * W + x)) + d(f(y * W + x + W / 2), f(y2 * W + x + W / 2))) / 2; np++;
+      }
+      pole /= np; pref = pref / np + 2e-3;
+      // the date line: the first and the last column, against neighbouring
+      // columns of the same rows
+      let seam = 0, sref = 0;
+      for (let y = 0; y < H; y++) { seam += d(f(y * W), f(y * W + W - 1)); sref += (d(f(y * W), f(y * W + 1)) + d(f(y * W + W - 2), f(y * W + W - 1))) / 2; }
+      seam /= H; sref = sref / H + 2e-3;
+      // channels with a raw value: no worse than the raw rows (plus 1 %);
+      // normals and AO (made in finish): within 2.5 x the next-row step
+      const lim = k in R0 ? across(CR[k]) * 1.25 + 0.01 : 2.5 * pref;
+      if (pole > lim) bad.pole.push(`${id}.${k} ${pole.toFixed(3)} > ${lim.toFixed(3)}`);
+      if (seam > 2.5 * sref) bad.seam.push(`${id}.${k} ${(seam / sref).toFixed(1)}x`);
+    }
+  }
+  ok('poles: in every map the first and last rows match across the pole', !bad.pole.length, bad.pole.join(', ') || 'finish adds no mismatch; normals and AO within 2.5 x the next-row step');
+  ok('seams: in every map the first and last columns match', !bad.seam.length, bad.seam.join(', ') || 'all within 2.5 x the next-column step');
+  // normals near the poles: the object-space angle between neighbours in
+  // the 4 rows round each pole is no larger than at mid latitudes
+  const P = PR.fromPreset('ice', 7), M = MP.generate(P, W), n = objN(M, P);
+  const step = rows => { const a = []; for (const y of rows) for (let x = 0; x < W; x++) { const i = y * W + x; a.push(ang(n(i), n(y * W + (x + 1) % W))); if (y + 1 < H) a.push(ang(n(i), n(i + W))); } a.sort((p, q) => p - q); return a[Math.floor(a.length * 0.99)]; };
+  const mid = step([H / 2 - 8, H / 2, H / 2 + 8]), cap = step([0, 1, 2, 3, H - 4, H - 3, H - 2, H - 1]);
+  ok('poles: normals near the poles are continuous (99th pct step)', cap <= 1.5 * mid + 0.02, `pole ${(cap * 180 / Math.PI).toFixed(1)} deg vs mid ${(mid * 180 / Math.PI).toFixed(1)} deg`);
+}
+// a crater near a pole stays round on the sphere: one crater alone, at
+// 84 deg and at the equator, measured in its tangent plane on the map
+{
+  const R = await import('./rocky.js');
+  const base = PR.merge(PR.fromPreset('moon', 7), { terrain: { amp: 0 }, mountains: { amp: 0 }, plates: { count: 0 }, craters: { maria: 0 } });
+  const shape = lat => {
+    const P = JSON.parse(JSON.stringify(base)), ctx = R.prepareRocky(P), la = lat * Math.PI / 180;
+    const c = [Math.cos(la), Math.sin(la), 0], rnd = N.mulberry(3);
+    const cr = R.makeCrater(c, 0.08, 0.2, rnd, P.craters, 0);
+    cr.hc.fill(0); cr.hs.fill(0); cr.poly = 0; cr.ell = 1; cr.obl = 0; cr.asym = 0; cr.ord = 0; cr.fresh = false;
+    ctx.craters = { list: [cr], grids: [], big: [cr] };
+    const W = 512, H = 256, M = MP.assemble(W, [MP.sampleRows(ctx, W, 0, H)]);
+    // texels in the bowl (below the floor + 30 % of the depth), as tangent coordinates
+    let lo = Infinity; for (const v of M.height) lo = Math.min(lo, v);
+    let hi = 0; for (const v of M.height) hi = Math.max(hi, v);
+    const thr = lo + 0.3 * (hi - lo), p = [0, 0, 0];
+    let sxx = 0, syy = 0, sxy = 0, sw = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (M.height[y * W + x] > thr) continue;
+      N.texelDir(x, y, W, H, p);
+      const u = p[0] * cr.e[0] + p[1] * cr.e[1] + p[2] * cr.e[2], v = p[0] * cr.n[0] + p[1] * cr.n[1] + p[2] * cr.n[2];
+      const w = Math.sin((y + 0.5) / H * Math.PI);   // texel area
+      sxx += w * u * u; syy += w * v * v; sxy += w * u * v; sw += w;
+    }
+    const a = sxx / sw, b = syy / sw, c2 = sxy / sw, tr = a + b, det = a * b - c2 * c2, l1 = tr / 2 + Math.sqrt(tr * tr / 4 - det), l2 = tr / 2 - Math.sqrt(tr * tr / 4 - det);
+    return Math.sqrt(l1 / l2);
+  };
+  const ePole = shape(84), eEq = shape(0);
+  ok('poles: a crater at 84 deg stays round on the sphere (axis ratio)', ePole < 1.08 && Math.abs(ePole - eEq) < 0.05, `84 deg ${ePole.toFixed(3)}, equator ${eEq.toFixed(3)}`);
 }
 
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');

@@ -175,7 +175,7 @@ function frame3(c) {
   const el = Math.hypot(e[0], e[1], e[2]); e = [e[0] / el, e[1] / el, e[2] / el];
   return [e, [c[1] * e[2] - c[2] * e[1], c[2] * e[0] - c[0] * e[2], c[0] * e[1] - c[1] * e[0]]];
 }
-function makeCrater(c, r, age, rnd, C, i) {
+export function makeCrater(c, r, age, rnd, C, i) {
   const fresh = age < 0.06 && C.ejecta > 0;
   const [e, n] = frame3(c);
   // rim harmonics k = 2..6: amplitude falls as k^-1.3, larger on big

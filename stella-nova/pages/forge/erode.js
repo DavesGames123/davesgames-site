@@ -9,7 +9,8 @@
 //  1. DRAINAGE (Barnes et al. 2014, priority-flood + epsilon). Seeds: the
 //     sea, or on a dry world the lowest 0.3 % of cells (basins). A heap
 //     floods the map upward; each cell drains to the cell that reached it
-//     (8 neighbours, the column wraps at the date line, the row above row
+//     (8 neighbours, the column wraps at the date line, east-west steps
+//     grow toward the poles (strides), the row above row
 //     0 is row 0 shifted W/2 across the pole). The order is the flood order.
 //  2. AREA  A = upstream area in km^2 (cell areas shrink as cos(lat)).
 //  3. VALLEYS: each channel is cut to a depth that grows with log(A)
@@ -58,13 +59,29 @@ class Heap {
   }
 }
 
+// East-west stride per row: round(1 / sin(colatitude)), so a step to an
+// east or west neighbour covers about one texel of ground at any latitude.
+// Near the poles a plain 1-texel step is a tiny distance, which made the
+// drainage, the slopes and the talus run along the rows and drew radial
+// streaks round the poles. Rows within about 48 deg of the equator keep 1.
+let _sw = 0, _st = null;
+function strides(W, H) {
+  if (_sw !== W || !_st) {
+    _st = new Int32Array(H);
+    for (let y = 0; y < H; y++) _st[y] = Math.max(1, Math.min(W / 4, Math.round(1 / Math.sin((y + 0.5) / H * Math.PI))));
+    _sw = W;
+  }
+  return _st;
+}
+
 // The 8 neighbours of texel i with the wrap and pole rules; writes into nb.
+// East and west steps use the row stride (strides).
 function neighbours(i, W, H, nb) {
-  const x = i % W, y = (i - x) / W;
+  const x = i % W, y = (i - x) / W, sx = strides(W, H)[y];
   let c = 0;
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     if (!dx && !dy) continue;
-    let yy = y + dy, xx = x + dx;
+    let yy = y + dy, xx = x + dx * sx;
     if (yy < 0) { yy = 0; xx += W / 2; } else if (yy >= H) { yy = H - 1; xx += W / 2; }
     xx = ((xx % W) + W) % W;
     nb[c++] = yy * W + xx;
@@ -73,11 +90,12 @@ function neighbours(i, W, H, nb) {
 
 // The same 8 neighbours, with a fast path off the pole rows (no wrap
 // arithmetic past the date line). Same order and the same indices as
-// neighbours(), so the results stay bit-exact.
+// neighbours().
 function neighboursFast(i, W, H, nb) {
   const x = i % W, y = (i - x) / W;
   if (y === 0 || y === H - 1) { neighbours(i, W, H, nb); return; }
-  const b = i - x, xm = x ? x - 1 : W - 1, xp = x + 1 < W ? x + 1 : 0;
+  const sx = _sw === W ? _st[y] : strides(W, H)[y];
+  const b = i - x, xm = x >= sx ? x - sx : x - sx + W, xp = x + sx < W ? x + sx : x + sx - W;
   nb[0] = b - W + xm; nb[1] = b - W + x; nb[2] = b - W + xp;
   nb[3] = b + xm; nb[4] = b + xp;
   nb[5] = b + W + xm; nb[6] = b + W + x; nb[7] = b + W + xp;
@@ -165,12 +183,16 @@ function carve(hk, W, H, rec, order, area, A, depthKm, seaKm) {
   return cut;
 }
 
-// 5 x 5 box blur, x wraps, y clamps (twice: a soft tent).
+// 5 x 5 box blur, x wraps (in row strides), y clamps (twice: a soft tent).
 function blurWrap(src, W, H, r) {
   let a = src;
   for (let pass = 0; pass < 2; pass++) {
     const t = new Float64Array(W * H), o = new Float64Array(W * H);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let s = 0; for (let k = -r; k <= r; k++) s += a[y * W + (x + k + W) % W]; t[y * W + x] = s / (2 * r + 1); }
+    for (let y = 0; y < H; y++) {
+      // east-west steps of the row stride, so the blur covers the same ground
+      const sx = strides(W, H)[y];
+      for (let x = 0; x < W; x++) { let s = 0; for (let k = -r; k <= r; k++) s += a[y * W + (((x + k * sx) % W) + W) % W]; t[y * W + x] = s / (2 * r + 1); }
+    }
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let s = 0; for (let k = -r; k <= r; k++) s += t[Math.min(H - 1, Math.max(0, y + k)) * W + x]; o[y * W + x] = s / (2 * r + 1); }
     a = o;
   }
@@ -247,5 +269,18 @@ export function erode(h, W, H, o) {
       slope[i] = s;
     }
   }
-  return { height: out, delta, flow, slope, cut, net: vol1 - vol0, rec, flowE: flow, ew: W };
+  // near the poles a channel steps sx texels east-west, so its texels
+  // sit sx apart in the row; a running max over the stride closes the
+  // gaps (rivers stay lines, not dashes). flowE keeps the raw tree.
+  const st = strides(W, H), flowV = new Float32Array(flow);
+  for (let y = 0; y < H; y++) {
+    const half = st[y] >> 1;
+    if (!half) continue;
+    for (let x = 0; x < W; x++) {
+      let m = 0;
+      for (let k = -half; k <= half; k++) m = Math.max(m, flow[y * W + (((x + k) % W) + W) % W]);
+      flowV[y * W + x] = m;
+    }
+  }
+  return { height: out, delta, flow: flowV, slope, cut, net: vol1 - vol0, rec, flowE: flow, ew: W };
 }
