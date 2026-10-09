@@ -396,8 +396,30 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
   #sn-saver-menu .bar { overflow-x: auto; }
   #sn-saver-menu .tab { white-space: nowrap; }
 }
+#sn-saver-touch { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: 6px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--dim, #7f91ad); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#sn-saver-touch:active { background: rgba(150,200,255,.12); color: var(--ink, #eef3fb); }
+#sn-saver-touch svg { width: 22px; height: 22px; }
+body.sn-saver-on #sn-saver-touch { display: none; }
 `;
 document.head.appendChild(css);
+
+// ── touch entry ────────────────────────────────────────────────────────────
+// A phone or tablet has no keyboard for Cmd+Option+S, so the screensaver
+// could not start there. On a touch screen (any coarse pointer) a 44 px
+// button at the end of the shell's top bar opens the same menu. A single
+// tap during a run still stops it, as before.
+(function addTouchEntry() {
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const bar = document.getElementById('topbar');
+  if (!bar || document.getElementById('sn-saver-touch')) return;
+  const b = document.createElement('button');
+  b.id = 'sn-saver-touch'; b.type = 'button';
+  b.setAttribute('aria-label', 'Screensaver');
+  b.title = 'Screensaver';
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" fill="currentColor"/><path d="M8 20h8"/></svg>';
+  b.addEventListener('click', e => { e.stopPropagation(); if (!run) openMenu(); });
+  bar.appendChild(b);
+})();
 
 // ── menu ───────────────────────────────────────────────────────────────────
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
