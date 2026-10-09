@@ -22,8 +22,13 @@
 import { RxView } from './rxview.js';
 import { TreeView } from './treeview.js';
 import { makeScene } from './rxanim.js';
-import { emptySynth, addStep, fromNamed, layout, growOrder } from './synth.js';
-import { NAMED, CLASSES, CLASS, FAMILIES } from './templates.js';
+import { emptySynth, addStep, fromNamed, layout, growOrder, fromRoute } from './synth.js';
+import { NAMED, CLASSES, CLASS, FAMILIES, BASICS, SPECIES } from './templates.js';
+import { speciesSearch } from './builder.js';
+import { blockedWhy } from './react.js';
+import { nodeOfGraph } from './steps.js';
+import { fromOCL } from './rxgraph.js';
+import { search as libSearch } from '../molecules/browse.js';
 import { useData, speciesByKey, ceOf } from './species.js';
 import { setOCL } from './react.js';
 import { fromRecord, keyOf, hill } from './rxgraph.js';
@@ -137,6 +142,7 @@ function showStep(s) {
 
 // ── panel lists ─────────────────────────────────────────────────────────────
 function buildLists() {
+  $('basicList').innerHTML = BASICS.filter(([k]) => k !== 'oform').map(([k]) => `<span>${esc(SPECIES[k][1])}</span><span>${esc(SPECIES[k][2])}</span>`).join('');
   $('namedList').innerHTML = NAMED.map(n => `<button type="button" data-n="${n.id}">${esc(n.name)}<small>${n.steps.length} step${n.steps.length > 1 ? 's' : ''}</small></button>`).join('');
   $('classList').innerHTML = FAMILIES.map(([f, name]) => `<div class="fam">${esc(name)}</div>` + CLASSES.filter(c => c.family === f).map(c => `<button type="button" class="cls" data-c="${c.id}">${esc(c.name)}</button>`).join('')).join('');
 }
@@ -218,6 +224,8 @@ function wire() {
   $('b3d').addEventListener('click', () => { S.d3 = !S.d3; $('b3d').classList.toggle('on', S.d3); relayout(); });
   $('bEq').addEventListener('click', () => { S.eq = !S.eq; $('bEq').classList.toggle('on', S.eq); relayout(); });
   $('bGrow').addEventListener('click', () => grow());
+  $('rGo').addEventListener('click', () => findRoute());
+  $('rq').addEventListener('keydown', e => { if (e.key === 'Enter') findRoute(); });
   $('dockGrow').addEventListener('click', () => grow());
   $('bFit').addEventListener('click', () => { S.tree.user = false; S.tree.fit(true); });
   const replay = () => { if (S.view) { S.view.userCam = false; S.view.play(0); } };
@@ -245,6 +253,66 @@ function fromHash() {
   if (h.startsWith('c=') && CLASS[h.slice(2)]) { loadClass(h.slice(2), { noHash: true }); return true; }
   if (h.startsWith('b=') && S.ui) { loadBuild(h.slice(2)); return true; }
   return false;
+}
+
+// ── find a route ────────────────────────────────────────────────────────────
+// The search runs in a Web Worker (retro-worker.js, retro.js). The target
+// is a species name, a Molecule Explorer library name, or SMILES.
+let worker = null, wid = 0;
+async function resolveTarget(text) {
+  const t = text.trim(); if (!t) return null;
+  const sp = speciesSearch(t, 1)[0];
+  if (sp && SPECIES[sp][1].toLowerCase() === t.toLowerCase()) return { sp, name: SPECIES[sp][1] };
+  if (!/[=#()[\]@\\/]/.test(t) || /\s/.test(t)) {
+    try { await loadLibrary(); } catch (e) { /* offline */ }
+    const r = libSearch(t, 1)[0];
+    if (r && r.s) return { smiles: r.s, name: r.n };
+    if (sp) return { sp, name: SPECIES[sp][1] };
+  }
+  try { const m = S.OCL.Molecule.fromSmiles(t); if (m.getAllAtoms()) return { smiles: t, name: t }; } catch (e) { /* not SMILES */ }
+  return null;
+}
+async function findRoute() {
+  const st = $('rStatus'), list = $('rList');
+  st.classList.remove('err'); list.innerHTML = '';
+  const tg = await resolveTarget($('rq').value);
+  if (!tg) { st.textContent = 'Not a name in the library and not a SMILES string the engine can read.'; st.classList.add('err'); return; }
+  const G = tg.sp ? null : fromOCL(S.OCL, S.OCL.Molecule.fromSmiles(tg.smiles));
+  const why = G ? blockedWhy(G) : null;
+  if (why) { st.textContent = `This page does not plan routes to ${why}. Try an everyday compound such as aspirin, ethyl acetate or paracetamol.`; st.classList.add('err'); return; }
+  const maxSteps = +$('rSteps').value;
+  st.innerHTML = `<span class="spin" style="display:inline-block;vertical-align:-3px"></span> Searching backward from ${esc(tg.name)}, at most ${maxSteps} steps`;
+  if (!worker) worker = new Worker(new URL('retro-worker.js', import.meta.url), { type: 'module' });
+  const id = ++wid;
+  const res = await new Promise(resolve => {
+    worker.onmessage = e => { if (e.data.id === id) resolve(e.data); };
+    worker.onerror = e => resolve({ id, error: e.message || 'the worker failed' });
+    worker.postMessage({ id, sp: tg.sp, smiles: tg.smiles, maxSteps });
+  });
+  if (id !== wid) return;
+  if (res.error) { st.textContent = 'The search failed: ' + res.error; st.classList.add('err'); return; }
+  const r = res.result, secs = (r.stats.ms / 1000).toFixed(1);
+  if (!r.routes.length) {
+    st.classList.add('err');
+    st.textContent = r.reason === 'basic' ? `${tg.name} is already one of the starting compounds.`
+      : /^blocked/.test(r.reason) ? `This page does not plan routes to ${r.reason.slice(9)}.`
+      : r.reason === 'limit' ? `The search stopped at its limit (${r.stats.expanded} backward steps, ${secs} s) with no route. This teaching model knows only ${CLASSES.length} reaction classes.`
+      : `No route within ${maxSteps} steps from the starting compounds with these ${CLASSES.length} reaction classes. A real synthesis may well exist; this model does not know it.`;
+    return;
+  }
+  st.textContent = `${r.routes.length} route${r.routes.length > 1 ? 's' : ''} in ${secs} s (${r.stats.expanded} backward steps). The best is in the tree.`;
+  const label = sp => (SPECIES[sp] ? SPECIES[sp][1] : sp);
+  list.innerHTML = r.routes.map((ro, i) => `<button type="button" data-i="${i}">Route ${i + 1}: ${ro.steps.length} step${ro.steps.length > 1 ? 's' : ''}<small>${esc(ro.steps.map(s => CLASS[s.cls].name).join(' → '))}<br>from ${esc([...new Set(ro.leaves)].map(label).join(', '))}</small></button>`).join('');
+  const show = i => {
+    try {
+      const syn = fromRoute(S.OCL, r.routes[i], smi => nodeOfGraph(S.OCL, fromOCL(S.OCL, S.OCL.Molecule.fromSmiles(smi))));
+      syn.name = `Route to ${tg.name}`;
+      showSynth(syn, { noHash: true });
+      list.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.i === i));
+    } catch (e) { console.error(e); toast('This route could not be rebuilt: ' + e.message, true); }
+  };
+  list.onclick = e => { const b = e.target.closest('button'); if (b) { show(+b.dataset.i); if (PHONE_Q.matches) setOpen(false); } };
+  show(0);
 }
 
 // ── build your own ─────────────────────────────────────────────────────────

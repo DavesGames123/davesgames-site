@@ -168,3 +168,20 @@ export function overlaps(lay) {
   }
   return bad;
 }
+
+// A route of retro.js: its steps run forward from the starting compounds.
+// Leaves named by SMILES get a node from OpenChemLib.
+export function fromRoute(OCL, route, nodeOfSmiles) {
+  const S = emptySynth(), at = [];
+  route.steps.forEach(st => {
+    const ins = st.ins.map(x => {
+      if (x.made != null) return at[x.made];
+      if (x.sp) return x.sp;
+      return addLeaf(S, nodeOfSmiles(x.smiles));
+    });
+    const id = addStep(S, OCL, CLASS[st.cls], ins, st.pick);
+    if (id < 0) throw new Error('a route step did not run: ' + st.cls);
+    at.push(id);
+  });
+  return S;
+}

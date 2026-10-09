@@ -129,6 +129,18 @@ html.in-frame .topbar{display:none}
 #info .i-by{font-size:0.72rem;color:var(--dim);margin-top:6px}
 #info .i-by b{color:var(--text);font-weight:500}
 
+/* ROUTE */
+.routebox{display:flex;gap:5px}
+#rq{flex:1;min-width:0;height:36px;border:1px solid var(--line-b);border-radius:9px;background:var(--ink);color:var(--text);padding:0 10px;font-size:0.82rem}
+#rSteps{height:36px;border:1px solid var(--line-b);border-radius:9px;background:var(--ink2);color:var(--text);padding:0 4px;font-family:inherit}
+#rGo{height:36px;padding:0 12px;border:1px solid var(--tone);border-radius:9px;background:rgba(143,182,255,0.12);color:#e6eeff}
+#rStatus.err{color:var(--bad)}
+#rList{margin-top:6px}
+.basics{margin-top:8px;font-size:0.72rem;color:var(--dim)}
+.basics summary{cursor:pointer;color:var(--tone)}
+#basicList{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin-top:6px}
+#basicList span:nth-child(2n){font-family:var(--serif);color:var(--text)}
+
 /* BUILD */
 #build{position:fixed;top:var(--top);right:0;bottom:0;width:var(--build-w);z-index:20;overflow-y:auto;padding:10px 14px 28px;background:linear-gradient(180deg,rgba(14,17,27,0.98),rgba(8,10,16,0.98));border-left:1px solid var(--line);scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
 .b-head{display:flex;align-items:center;gap:5px;margin-bottom:8px}
@@ -174,6 +186,7 @@ html.in-frame .topbar{display:none}
   .bo button{min-height:44px}
   .res{min-height:44px}
   #bq{height:44px}
+  #rq,#rSteps,#rGo{height:44px}
   input{font-size:16px}
 }
 

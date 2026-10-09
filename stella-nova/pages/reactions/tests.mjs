@@ -230,4 +230,32 @@ globalThis.RX.finish = finish;
   const np = c.options([ph]).find(o => o.cls === 'nitrate');
   ok(!!np && np.items.length === 2 && np.items.every(i => !i.why), 'builder: phenol nitration gives ortho and para (not meta)', np ? np.items.map(i => i.main).join(', ') : '');
 }
+
+// ── retrosynthesis ─────────────────────────────────────────────────────────
+{
+  const { findRoutes, setRetroOCL } = await import('./retro.js');
+  const { fromRoute } = await import('./synth.js');
+  const { nodeOfGraph } = await import('./steps.js');
+  setRetroOCL(OCL);
+  const g = s => fromOCL(OCL, OCL.Molecule.fromSmiles(s));
+  for (const [sp, maxS] of [['aspirin', 2], ['ethylacetate', 1], ['paracetamol', 3], ['tamyl', 2], ['acetophenone', 2]]) {
+    const t0 = performance.now(), r = findRoutes(graphOf(sp), { maxSteps: 6 }), ms = performance.now() - t0;
+    const best = r.routes[0];
+    ok(!!best && best.steps.length <= maxS && ms < 15000, `retro ${sp}: a route within 6 steps, in time`, best ? `${best.steps.map(s => s.cls).join(' > ')} from ${[...new Set(best.leaves)].join(', ')}; ${best.steps.length} step(s), ${(ms / 1000).toFixed(1)} s, ${r.stats.expanded} expansions` : r.reason);
+    if (!best) continue;
+    const basicsK = new Set(BASICS.map(b => b[0]));
+    ok(best.leaves.every(l => basicsK.has(l)), `retro ${sp}: every starting compound is on the basics list`);
+    let S = null; try { S = fromRoute(OCL, best, smi => nodeOfGraph(OCL, g(smi))); } catch (e) { S = null; }
+    ok(!!S && S.nodes[S.root].mol.key === keyOfSpecies(sp), `retro ${sp}: the route runs forward to the target`);
+  }
+  const caf = findRoutes(g('CN1C=NC2=C1C(=O)N(C(=O)N2C)C'), { maxSteps: 6 });
+  ok(!caf.routes.length && (caf.reason === 'none' || caf.reason === 'limit'), 'retro caffeine: no route, said honestly', `${caf.reason}, ${caf.stats.ms} ms`);
+  const tnt = findRoutes(g('Cc1c(cc(cc1[N+](=O)[O-])[N+](=O)[O-])[N+](=O)[O-]'));
+  ok(/^blocked/.test(tnt.reason || '') && !tnt.routes.length, 'retro TNT: declined', tnt.reason);
+  const meth = findRoutes(g('CNC(C)Cc1ccccc1'));
+  ok(/^blocked/.test(meth.reason || ''), 'retro methamphetamine: declined', meth.reason);
+  ok(findRoutes(graphOf('ethanol')).reason === 'basic', 'retro ethanol: already a basic compound');
+  const lim = findRoutes(graphOf('tamyl'), { maxSteps: 1 });
+  ok(!lim.routes.length, 'retro: the step limit holds (2-methylbutan-2-ol needs 2 steps)', lim.reason);
+}
 if (!process.env.RX_MORE4) finish();

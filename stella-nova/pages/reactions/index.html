@@ -29,6 +29,7 @@
      treeview.js   the tree on the page: cards, branches, pan, zoom, growth
      builder.js    the build-your-own model (apply, undo, share)
      buildui.js    the build-your-own surface
+     retro.js      the backward search    retro-worker.js  its Web Worker
      main.js       state, panel, step pane, keys, hash
      tests.mjs     node tests.mjs        build/build.mjs  data/species.json
    Reused by import: molecules/chem.js, draw2d.js, drawlift.js, engine.js
@@ -103,6 +104,16 @@
   <button id="panelClose" type="button" aria-label="Close the panel">✕</button>
   <div class="sec-label first">Famous syntheses</div>
   <div id="namedList" class="list"></div>
+  <div class="sec-label">Find a route to a target</div>
+  <div class="routebox">
+    <input id="rq" type="search" placeholder="Target: name or SMILES" aria-label="Target molecule" autocomplete="off" spellcheck="false">
+    <select id="rSteps" aria-label="Most steps"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option></select>
+    <button type="button" id="rGo">Find</button>
+  </div>
+  <div id="rStatus" class="note">The search works backward from the target with the reaction library, down to common starting compounds.</div>
+  <div id="rList" class="list"></div>
+  <details class="basics"><summary>Starting compounds</summary><div id="basicList"></div></details>
+  <p class="note fine">A teaching model with a small set of reaction templates, not a real retrosynthesis engine and not a lab procedure. It says so when it finds no route. It does not plan routes to explosives, chemical-weapon agents or controlled drugs.</p>
   <div class="sec-label">The step</div>
   <div id="info"><p class="note">Point at a molecule in the tree.</p></div>
   <div class="sec-label">Reaction library</div>
