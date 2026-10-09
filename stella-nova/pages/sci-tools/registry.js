@@ -20,6 +20,7 @@ export const CATS = [
   { id: 'measure', name: 'Measurement and errors' },
   { id: 'stats', name: 'Statistics' },
   { id: 'chem', name: 'Chemistry' },
+  { id: 'phys', name: 'Physics and engineering' },
 ];
 
 export const TOOLS = [
@@ -46,6 +47,17 @@ export const TOOLS = [
   ['ph', 'chem', 'pH and buffers', 'pH of strong and weak acids and bases, polyprotic systems and buffers.', 'ph pka acid base buffer henderson hasselbalch titration'],
   ['gas', 'chem', 'Gas laws', 'Ideal gas and van der Waals: solve for P, V, n or T.', 'ideal gas pv nrt van der waals pressure volume temperature'],
   ['decay', 'chem', 'Half-life and decay', 'Remaining amount, elapsed time or half-life of first-order decay.', 'half life radioactive decay exponential carbon dating activity'],
+  ['projectile', 'phys', 'Projectile motion', 'Range, height, flight time and trajectory from speed, angle and height.', 'projectile ballistic trajectory range kinematics'],
+  ['shm', 'phys', 'Oscillators', 'Spring and pendulum: frequency, period, energy; exact large-angle period.', 'simple harmonic motion shm pendulum spring period frequency'],
+  ['photon', 'phys', 'Photon energy', 'Wavelength, frequency, energy and wavenumber from any one of them.', 'photon energy wavelength frequency wavenumber ev nm electromagnetic spectrum'],
+  ['blackbody', 'phys', 'Black body', 'Planck spectrum, Wien peak, σT⁴ and the power in a band.', 'blackbody black body planck wien stefan boltzmann radiation thermal spectrum'],
+  ['relativity', 'phys', 'Lorentz factor', 'γ, β, time dilation, length contraction and relativistic energy.', 'relativity lorentz gamma beta time dilation length contraction relativistic energy momentum'],
+  ['doppler', 'phys', 'Doppler shift', 'Relativistic Doppler for light, redshift ↔ speed, and sound.', 'doppler redshift blueshift z sound frequency shift'],
+  ['resistor', 'phys', 'Resistor colour code', 'Bands to value and value to bands, with the nearest E12, E24 and E96 values.', 'resistor color colour code bands e12 e24 e96'],
+  ['combine', 'phys', 'Series and parallel', 'Combine resistors, capacitors or inductors in series and in parallel.', 'series parallel resistors capacitors inductors equivalent'],
+  ['rlc', 'phys', 'RC, RL and RLC circuits', 'Time constants, resonance, Q, damping and bandwidth.', 'rc rl rlc time constant resonance q factor damping cutoff filter'],
+  ['optics', 'phys', 'Lenses and mirrors', 'Thin lens and mirror equation, magnification, lensmaker\'s equation.', 'thin lens mirror focal length magnification optics lensmaker'],
+  ['db', 'phys', 'Decibels', 'Power and amplitude ratios, dBm, dBW, dBV and dBu.', 'decibel db dbm dbv dbu ratio gain attenuation'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
