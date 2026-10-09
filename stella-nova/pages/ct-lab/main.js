@@ -14,7 +14,7 @@
 //    stored sinogram; a change of the window or colour map only redraws.
 //
 //  PAGE API  window.__ctlab, see LAB-API.md. This file does not write
-//  window.snSaver; saver.js (the saver agent) adds that hook on top of the API.
+//  window.snSaver; saver.js (imported below) adds that hook on top of the API.
 //
 //  GREP MAP
 //    grep -n 'API'          window.__ctlab
@@ -36,6 +36,7 @@ import { MATERIAL_CHOICES, DRAW_WIDTH, starterShapes, shapeFromDrag, hitShape, i
 import { FILTERS, rasterize2D, phantom2D, psnr, ssim } from './engine/index.js';
 import * as CM from './colormaps/maps.js';
 import { createPicker } from './colormaps/picker.js';
+import './saver.js';   // window.snSaver: the screensaver reel, on top of window.__ctlab
 
 const $ = (id) => document.getElementById(id);
 const DPR = () => Math.min(window.devicePixelRatio || 1, 2.5);
