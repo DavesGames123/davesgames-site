@@ -199,16 +199,19 @@ export function drawPaper(ctx, L, theme, view, grain, paperOut, dpr = 1) {
 
 // ── drawSpec ────────────────────────────────────────────────────────────────
 // fit: { k, ox, oy } in plate mm; view: { s, ox, oy } device px per mm.
-// o: { theme, ink, style, pen (mm), jitter, prog (null or units), marker, dpr }
+// o: { theme, ink, style, pen (mm), jitter, prog (null or units), marker, dpr,
+//      washMin (mm, the least wash edge, 0.3 by default) }
+// The alpha of ctx on entry scales every part, so a cross-fade fades the
+// washes and the lines together. Before, the washes reset alpha to 1.
 export function drawSpec(ctx, f, fit, view, o) {
-  const k = fit.k * view.s;
+  const k = fit.k * view.s, A = ctx.globalAlpha;
   const ink = o.ink || o.theme.ink;
   ctx.setTransform(k, 0, 0, k, view.ox + fit.ox * view.s, view.oy + fit.oy * view.s);
   const prog = o.prog == null || o.prog >= f.total ? null : Math.max(0, o.prog);
   // Washes, back to front; they bloom in over the last 40% of the draw-on.
   const wa = prog == null ? 1 : Math.min(1, Math.max(0, (prog / f.total - 0.55) / 0.4));
   if (o.style !== 'pen' && wa > 0) {
-    ctx.globalAlpha = wa;
+    ctx.globalAlpha = A * wa;
     for (const w of f.washes) {
       const fill = washFill(o.theme, ink, o.style, w.color);
       if (!fill) continue;
@@ -216,11 +219,11 @@ export function drawSpec(ctx, f, fit, view, o) {
       ctx.fillStyle = fill; ctx.fill(p);
       if (o.style === 'wash') {
         // The pooled pigment at the edge of a watercolour wash.
-        ctx.strokeStyle = mixHex(fill, '#000000', 0.12); ctx.lineWidth = Math.max(o.pen * 1.6, 0.3) * view.s / k;
-        ctx.globalAlpha = wa * 0.35; ctx.stroke(p); ctx.globalAlpha = wa;
+        ctx.strokeStyle = mixHex(fill, '#000000', 0.12); ctx.lineWidth = Math.max(o.pen * 1.6, o.washMin ?? 0.3) * view.s / k;
+        ctx.globalAlpha = A * wa * 0.35; ctx.stroke(p); ctx.globalAlpha = A * wa;
       }
     }
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = A;
   }
   ctx.strokeStyle = ink; ctx.fillStyle = ink;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -255,8 +258,8 @@ export function drawSpec(ctx, f, fit, view, o) {
     } else ctx.stroke();
     if (tip && o.marker) {
       const r = Math.max(o.pen * view.s * 1.6, 2.2 * (o.dpr || 1)) / k;
-      ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(tip[0], tip[1], r * 2.2, 0, 6.283); ctx.fill();
-      ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(tip[0], tip[1], r, 0, 6.283); ctx.fill();
+      ctx.globalAlpha = A * 0.25; ctx.beginPath(); ctx.arc(tip[0], tip[1], r * 2.2, 0, 6.283); ctx.fill();
+      ctx.globalAlpha = A; ctx.beginPath(); ctx.arc(tip[0], tip[1], r, 0, 6.283); ctx.fill();
     }
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
