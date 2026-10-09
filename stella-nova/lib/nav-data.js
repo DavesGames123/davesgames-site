@@ -332,6 +332,7 @@ w.SN_NAV = [
     { h: "Ray Marching", p: [
       ["supernova", "Fractal Orb", "SHADER", "fractal-orb"],
       ["sdf-lab", "SDF Modeller", "TOOL"],
+      ["biome-parts", "Biome Parts", "AI"],
       ["sphere-tracing", "Sphere Tracing Lab", "LAB"],
       ["mandelbulber", "Mandelbulber", "WGSL"],
       ["sdf-clouds", "SDF Clouds", "GPU"]
