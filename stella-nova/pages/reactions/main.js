@@ -6,7 +6,9 @@
 //  The tree (treeview.js) shows the synthesis; pointing at a molecule (a
 //  tap on touch) shows the step that made it: the 2D scheme, the equation
 //  in TeX, and the 3D change in the ONE shared RxView (rxview.js).
-//  Hash: #s=<named id>, #c=<class id>.
+//  Hash: #s=<named id>, #c=<class id>, #b=<builder ops> (buildui.js).
+//  The right-hand surface (buildui.js) builds a tree of the user's own;
+//  each change shows that tree here.
 //
 //  grep -n targets
 //    boot ............ "async function boot"
@@ -22,9 +24,14 @@ import { TreeView } from './treeview.js';
 import { makeScene } from './rxanim.js';
 import { emptySynth, addStep, fromNamed, layout, growOrder } from './synth.js';
 import { NAMED, CLASSES, CLASS, FAMILIES } from './templates.js';
-import { useData } from './species.js';
+import { useData, speciesByKey, ceOf } from './species.js';
 import { setOCL } from './react.js';
-import { loadEngine } from '../molecules/engine.js';
+import { fromRecord, keyOf, hill } from './rxgraph.js';
+import { nodeOfSpecies } from './steps.js';
+import { Builder } from './builder.js';
+import { BuilderUI } from './buildui.js';
+import { loadEngine, fromSmiles } from '../molecules/engine.js';
+import { LIB, loadLibrary } from '../molecules/browse.js';
 import { decode } from '../molecules/chem.js';
 import { render2D } from '../molecules/draw2d.js';
 import { typeset } from '../../lib/sci-math.js';
@@ -53,6 +60,11 @@ function still(m) {
 // ── a synthesis ─────────────────────────────────────────────────────────────
 function showSynth(syn, opts = {}) {
   S.synth = syn; S.node = -1;
+  if (syn.root < 0) {
+    S.tree.inner.innerHTML = ''; S.tree.lay = null;
+    $('treeTitle').innerHTML = '<b>Your synthesis</b> · empty';
+    return;
+  }
   $('treeTitle').innerHTML = `<b>${esc(syn.name || 'Synthesis')}</b>`;
   relayout();
   document.querySelectorAll('#namedList button').forEach(b => b.classList.toggle('on', b.dataset.n === syn.named));
@@ -162,22 +174,32 @@ function setLayout(k) {
   relayout(); S.tree.fit(true);
 }
 function setOpen(open) {
+  if (open && PHONE_Q.matches) setBuild(false, true);
   $('panel').classList.toggle('open', open);
   $('dockPanel').classList.toggle('on', open);
   $('dockPanel').setAttribute('aria-expanded', String(open));
   occlusion();
+}
+function setBuild(open, quiet) {
+  if (!PHONE_Q.matches) open = true;
+  if (open && PHONE_Q.matches && !quiet) setOpen(false);
+  $('build').classList.toggle('open', open);
+  $('dockBuild').classList.toggle('on', open && PHONE_Q.matches);
+  $('dockBuild').setAttribute('aria-expanded', String(open));
+  if (!quiet) occlusion();
 }
 // The stage ends where the sheet begins (portrait) or the drawer begins
 // (landscape), so the tree and the 3D view stay in sight.
 export function occlusion() {
   const root = document.documentElement.style;
   if (!PHONE_Q.matches) { root.setProperty('--occ-b', '0px'); root.setProperty('--occ-r', '0px'); return; }
-  const open = $('panel').classList.contains('open');
+  const sheet = $('panel').classList.contains('open') ? $('panel') : $('build').classList.contains('open') ? $('build') : null;
+  const open = !!sheet;
   const dock = $('dock').getBoundingClientRect().height;
   const land = window.matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)').matches;
-  if (land) { root.setProperty('--occ-b', dock + 'px'); root.setProperty('--occ-r', open ? $('panel').getBoundingClientRect().width + 'px' : '0px'); return; }
+  if (land) { root.setProperty('--occ-b', dock + 'px'); root.setProperty('--occ-r', open ? sheet.getBoundingClientRect().width + 'px' : '0px'); return; }
   root.setProperty('--occ-r', '0px');
-  root.setProperty('--occ-b', (dock + (open ? $('panel').offsetHeight : 0)) + 'px');
+  root.setProperty('--occ-b', (dock + (open ? sheet.offsetHeight : 0)) + 'px');
 }
 
 // ── frame loop ─────────────────────────────────────────────────────────────
@@ -202,12 +224,14 @@ function wire() {
   $('bReplay').addEventListener('click', replay); $('dockReplay').addEventListener('click', replay);
   $('bLoop').addEventListener('click', () => { S.loop = !S.loop; $('bLoop').classList.toggle('on', S.loop); if (S.view) { S.view.loop = S.loop; if (S.loop && !S.view.playing) S.view.play(0); } });
   $('dockPanel').addEventListener('click', () => setOpen(!$('panel').classList.contains('open')));
+  $('dockBuild').addEventListener('click', () => setBuild(!$('build').classList.contains('open')));
+  $('buildClose').addEventListener('click', () => setBuild(false));
   $('panelClose').addEventListener('click', () => setOpen(false));
   // the sheet grip: a drag down closes the sheet
   let gy = null;
   $('sheetGrip').addEventListener('pointerdown', e => { gy = e.clientY; $('sheetGrip').setPointerCapture(e.pointerId); });
   $('sheetGrip').addEventListener('pointerup', e => { if (gy != null && e.clientY - gy > 40) setOpen(false); gy = null; });
-  PHONE_Q.addEventListener('change', () => { setOpen(!PHONE_Q.matches); });
+  PHONE_Q.addEventListener('change', () => { setOpen(!PHONE_Q.matches); setBuild(!PHONE_Q.matches, true); occlusion(); });
   addEventListener('resize', occlusion);
   addEventListener('hashchange', fromHash);
   addEventListener('keydown', e => {
@@ -219,22 +243,67 @@ function fromHash() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (h.startsWith('s=') && NAMED.some(n => n.id === h.slice(2))) { loadNamed(h.slice(2), { noHash: true }); return true; }
   if (h.startsWith('c=') && CLASS[h.slice(2)]) { loadClass(h.slice(2), { noHash: true }); return true; }
+  if (h.startsWith('b=') && S.ui) { loadBuild(h.slice(2)); return true; }
   return false;
+}
+
+// ── build your own ─────────────────────────────────────────────────────────
+function nodeOfRecord(rec, name) {
+  const G = fromRecord(rec), key = keyOf(S.OCL, G), sp = speciesByKey(key);
+  return { rec, G, key, name: name || rec.n, ce: sp ? ceOf(sp) : hill(G).replace(/[+-]\d*$/, ''), sp };
+}
+async function nodeOfSmiles(smi) {
+  const rec = await fromSmiles(smi);
+  const n = nodeOfRecord(rec);
+  if (n.sp) return nodeOfSpecies(n.sp);
+  return n;
+}
+// a share link: fetch what its molecules need, then replay the ops
+async function loadBuild(code) {
+  loading('Rebuilding the shared tree');
+  try {
+    const ops = JSON.parse(decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/')))));
+    const pre = new Map();
+    if (ops.some(o => o[0] === 'a' && String(o[1]).startsWith('lib:'))) await loadLibrary();
+    for (const o of ops) {
+      if (o[0] !== 'a') continue;
+      const k = String(o[1]);
+      if (k.startsWith('lib:')) { const r = LIB.byId.get(k.slice(4)); if (r) pre.set(k, nodeOfRecord(r)); }
+      else if (k.startsWith('smi:')) pre.set(k, await nodeOfSmiles(k.slice(4)));
+    }
+    const b = Builder.decode(S.OCL, code, k => pre.get(k) || (k.startsWith('lib:') || k.startsWith('smi:') ? null : nodeOfSpecies(k)));
+    S.ui.load(b);
+    if (PHONE_Q.matches) setBuild(true);
+  } catch (e) { console.error(e); toast('The shared link could not be read.', true); }
+  loading(null);
 }
 
 async function boot() {
   wire(); buildLists();
   if (PHONE_Q.matches) setOpen(false); else setOpen(true);
+  setBuild(!PHONE_Q.matches, true);
   S.tree = new TreeView($('tree'), { hover: id => showNode(id), pick: id => { S.node = -1; showNode(id); } });
   try { S.view = new RxView(document.querySelector('#stepPane canvas'), { labels: document.querySelector('#stepPane .labels3'), lite: PHONE_Q.matches }); }
   catch (e) { S.view = null; $('nogl').hidden = false; }
   requestAnimationFrame(frame);
   loading('Loading the reaction library');
+  let OCL = null;
   try {
-    const [data, OCL] = await Promise.all([fetch(new URL('data/species.json', import.meta.url)).then(r => { if (!r.ok) throw new Error('species ' + r.status); return r.json(); }), loadEngine()]);
+    let data;
+    [data, OCL] = await Promise.all([fetch(new URL('data/species.json', import.meta.url)).then(r => { if (!r.ok) throw new Error('species ' + r.status); return r.json(); }), loadEngine()]);
     useData(data); setOCL(OCL); S.OCL = OCL;
   } catch (e) { loading(null); toast('The reaction library did not load: ' + e.message, true); return; }
   loading(null);
+  S.ui = new BuilderUI($('build'), {
+    OCL, toast, busy: loading, nodeOfSmiles,
+    nodeOfLib: rec => nodeOfRecord(rec),
+    focus: id => { if (S.synth === S.ui.b.S) showNode(id); },
+    onChange: (syn, id, quiet) => {
+      showSynth(syn, { grow: false, noHash: true });
+      if (id >= 0) { S.node = -1; showNode(id); }
+      if (!quiet) history.replaceState(null, '', syn.nodes.length ? '#b=' + S.ui.b.encode() : location.pathname);
+    },
+  });
   if (!fromHash()) loadNamed('aspirin', { noHash: true });
   window.__rx = { S, showSynth, loadNamed, loadClass };
 }

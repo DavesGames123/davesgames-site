@@ -196,4 +196,38 @@ globalThis.RX.finish = finish;
   }
   globalThis.RX.synths = all;
 }
-if (!process.env.RX_MORE3) finish();
+
+
+// ── builder ────────────────────────────────────────────────────────────────
+{
+  const { Builder } = await import('./builder.js');
+  const { nodeOfSpecies } = await import('./steps.js');
+  const b = new Builder(OCL);
+  const a = b.add(nodeOfSpecies('aceticacid')), e = b.add(nodeOfSpecies('ethanol'));
+  const opts = b.options([a, e]);
+  const fis = opts.find(o => o.cls === 'fischer');
+  ok(!!fis && fis.items[0].main === 'Ethyl acetate', 'builder: acetic acid + ethanol offers Fischer esterification', opts.map(o => o.cls).join(', '));
+  const n0 = b.S.nodes.length, s0 = b.S.steps.length;
+  const p = b.apply(fis, 0);
+  ok(p >= 0 && b.S.root === p && b.S.nodes[a].used === p && b.S.nodes[e].used === p && b.S.steps.length === s0 + 1, 'builder: apply adds a step; its inputs are used');
+  const o2 = b.options([p]).find(o => o.cls === 'saponify');
+  ok(!!o2, 'builder: the product offers saponification');
+  b.apply(o2, 0);
+  const link = b.encode();
+  const b2 = Builder.decode(OCL, link, k => (k.startsWith('smi:') ? null : nodeOfSpecies(k)));
+  ok(b2.S.nodes.length === b.S.nodes.length && b2.S.nodes[b2.S.root].mol.key === b.S.nodes[b.S.root].mol.key, 'builder: share link rebuilds the same tree', `${link.length} chars`);
+  b.undo();
+  ok(b.S.steps.length === s0 + 1 && b.S.root === p && b.S.nodes[p].used < 0, 'builder: undo removes the last step and frees its input');
+  b.undo();
+  ok(b.S.nodes.length === n0 && b.S.steps.length === s0 && b.S.nodes[a].used < 0 && b.S.nodes[e].used < 0, 'builder: undo again gives the surface back');
+  b.undo(); b.undo();
+  ok(b.S.nodes.length === 0 && !b.undo(), 'builder: undo to empty, then nothing to undo');
+  // a declined product is held back: toluene nitrated twice would be a polynitro compound
+  const c = new Builder(OCL); const t = c.add(nodeOfSpecies('nitrobenzene'));
+  const nit = c.options([t]).find(o => o.cls === 'nitrate');
+  ok(!!nit && nit.items.every(i => i.why) && c.apply(nit, 0) === -1, 'builder: a second nitration is declined (polynitro)', nit ? nit.items.map(i => i.why).join('; ') : 'no option');
+  const ph = c.add(nodeOfSpecies('phenol'));
+  const np = c.options([ph]).find(o => o.cls === 'nitrate');
+  ok(!!np && np.items.length === 2 && np.items.every(i => !i.why), 'builder: phenol nitration gives ortho and para (not meta)', np ? np.items.map(i => i.main).join(', ') : '');
+}
+if (!process.env.RX_MORE4) finish();

@@ -27,6 +27,8 @@
      synth.js      a synthesis as a tree; fishdraw layouts
      rxanim.js     the 3D change timeline        rxview.js  the 3D view
      treeview.js   the tree on the page: cards, branches, pan, zoom, growth
+     builder.js    the build-your-own model (apply, undo, share)
+     buildui.js    the build-your-own surface
      main.js       state, panel, step pane, keys, hash
      tests.mjs     node tests.mjs        build/build.mjs  data/species.json
    Reused by import: molecules/chem.js, draw2d.js, drawlift.js, engine.js
@@ -34,13 +36,14 @@
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌─────────────┬───────────────────────────────────────────────────┐
-     │ #panel      │ #treePane  the synthesis tree (pan, zoom, grow)    │
-     │  syntheses  ├───────────────────────────────────────────────────┤
-     │  library    │ #stepPane  the step: 2D scheme + TeX │ 3D change    │
-     │  step info  │                                                     │
-     └─────────────┴───────────────────────────────────────────────────┘
-   PHONE (max-width 768px): #dock at the base; #panel is a bottom sheet;
-   the tree above the step view.
+     ┌──────────┬──────────────────────────────────────┬──────────────┐
+     │ #panel   │ #treePane  the tree (pan, zoom, grow) │ #build       │
+     │ syntheses├──────────────────────────────────────┤ build your   │
+     │ library  │ #stepPane  2D scheme + TeX │ 3D change│ own: search, │
+     │ step info│                                      │ select, run  │
+     └──────────┴──────────────────────────────────────┴──────────────┘
+   PHONE (max-width 768px): #dock at the base; #panel and #build are
+   bottom sheets (one at a time); the tree above the step view.
 
    GREP MAP  (main.js)
      grep -n 'function showSynth'   load a synthesis into the tree
@@ -112,7 +115,26 @@
   </div>
 </aside>
 
+<aside id="build" aria-label="Build your own reaction sequence">
+  <div class="b-head"><b>Build your own</b>
+    <button type="button" class="tb" id="bUndo">Undo</button><button type="button" class="tb" id="bClear">Clear</button><button type="button" class="tb" id="bShare">Share</button>
+    <button type="button" class="tb" id="buildClose" aria-label="Close the builder">✕</button></div>
+  <div class="searchbox">
+    <input id="bq" type="search" placeholder="Add a molecule: name or SMILES" aria-label="Add a molecule" autocomplete="off" spellcheck="false">
+    <div id="bres" role="listbox" hidden></div>
+  </div>
+  <div id="bQuick" class="chips"></div>
+  <div class="sec-label">Your molecules <small>tap to select</small></div>
+  <div id="bSurface" class="surface"></div>
+  <div class="sec-label">Reactions you can run</div>
+  <div id="bOpts"></div>
+  <div class="sec-label">Your sequence</div>
+  <div id="bSeq"></div>
+  <p class="note fine">Only the reaction classes of this library run here. A product is a textbook outcome, not a prediction of yields or side reactions.</p>
+</aside>
+
 <nav id="dock" aria-label="Quick controls">
+  <button id="dockBuild" type="button" aria-label="Build your own" aria-expanded="false"><b>✚</b><span>Build</span></button>
   <button id="dockPanel" type="button" aria-label="Syntheses and library" aria-expanded="false"><b>☰</b><span>Library</span></button>
   <button id="dockLayout" type="button" aria-label="Next tree layout"><small>Tree</small><span id="dockLayoutV">Tree</span></button>
   <button id="dockGrow" type="button" aria-label="Grow the tree"><b>▶</b><span>Grow</span></button>
