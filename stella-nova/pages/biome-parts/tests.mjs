@@ -16,7 +16,11 @@
 //                        mirror symmetry, CPU field = analytic volume
 //    mesh .............. marching cubes export is closed; STL text
 //    wgsl .............. naga validates the shader; Tint traps absent
+//    workspace ......... every first-layout id still in the page and bound
+//                        in the JS; panel openers; moveItem; the squircle
+//                        mask = squirclePath(); a replayed log = the build
 //    main.js link ...... node import: no SyntaxError
+//    tests-dom.mjs ..... (separate) a jsdom boot at desktop and phone sizes
 //    saver soak ........ 500 live builds through director.js: no NaN, flat
 //                        heap, success rate vs the repo, shot rules
 // ============================================================================
@@ -179,6 +183,53 @@ if (SHADER && existsSync(naga)) {
 const mixed = WGSL_PART.split('\n').filter(l => /&&/.test(l) && /\|\|/.test(l));
 ok(!mixed.length, 'no mixed && and || (Tint)');
 ok(!/[*][^;\n]*\^|\^[^;\n]*[*]/.test(WGSL_PART), 'no mixed * and ^ (Tint)');
+
+section('workspace');
+{
+  const js = ['main.js', 'ui.js', 'panels.js', 'saver.js'].map(f => read('js/' + f).toString()).join('\n');
+  // the ids of the first layout (118c504b); each must stay, and each control must be bound
+  const ORIG = 'app top status tabs goalPanel gallery levels items addKind addBtn startSel goalNote stage view ov hud hudStep hudAct hudItem banner transport buildBtn stepBtn playBtn speed noiseChk nogpu brainPanel scores checks tree log stlBtn jsonBtn forgeBtn expNote explain msStep tokens evalTable evalNote forgeLink'.split(' ');
+  const STATIC = new Set(['transport', 'msStep', 'forgeLink', 'stage', 'hud']);
+  for (const id of ORIG) {
+    ok(html.includes(`id="${id}"`), 'first-layout id #' + id);
+    if (!STATIC.has(id)) ok(js.includes(`$('${id}')`) || js.includes(`'${id}'`), 'bound in the JS: #' + id);
+  }
+  for (const id of ['libPanel', 'rail', 'bar', 'expBtn', 'expMenu', 'timeline', 'console', 'scrub', 'ticks', 'scrubLab', 'tuneBtn', 'howBtn', 'toast', 'foldTree', 'leftCol', 'rightCol'])
+    ok(html.includes(`id="${id}"`), 'workspace id #' + id);
+  for (const m of html.matchAll(/data-(?:open|close)="([^"]+)"/g)) ok(html.includes(`id="${m[1]}"`), 'opener target #' + m[1]);
+  const { PANELS } = await import('./js/panels.js');
+  for (const id of PANELS) ok(html.includes(`id="${id}"`) && /\shidden|class="fp/.test(html.slice(html.indexOf(`id="${id}"`) - 200, html.indexOf(`id="${id}"`) + 200)), 'panel #' + id);
+  ok(html.includes('lib/forge-ui.css') && html.indexOf('lib/forge-ui.css') < html.indexOf('href="style.css"'), 'forge-ui.css before style.css');
+  ok(!/Playfair|Cormorant|JetBrains/i.test(css + html), 'no Playfair, Cormorant or JetBrains');
+  ok(/prefers-reduced-motion/.test(read('../../lib/forge-ui.css').toString()), 'reduced motion in forge-ui.css');
+  ok(/@media \(pointer:coarse\)/.test(css) && /min-height:44px/.test(css), '44 px targets on coarse pointers');
+  const { moveItem } = await import('./js/ui.js');
+  const a = ['b', 'x', 'y', 'z'];
+  ok(moveItem(a, 1, 3) && a.join('') === 'byzx', 'moveItem 1 -> 3');
+  ok(moveItem(a, 3, 1) && a.join('') === 'bxyz', 'moveItem 3 -> 1');
+  ok(!moveItem(a, 1, 0) && !moveItem(a, 0, 2) && !moveItem(a, 2, 9) && a.join('') === 'bxyz', 'moveItem keeps the base first and refuses bad indices');
+  const { squirclePath } = await import('../../lib/forge-ui.js');
+  ok(read('../../lib/forge-ui.css').toString().includes(`d='${squirclePath()}'`), 'squircle mask = squirclePath()');
+  const p2 = squirclePath(100, 40, 2).match(/[\d.]+ [\d.]+/g).slice(0, 11).map(s => s.split(' ').map(Number));
+  ok(p2.every(([x, y]) => Math.abs(Math.hypot(x - 60, y - 60) - 40) < 0.08), 'n = 2 is a circle');
+  // the scrubber's replay: the same goal, start and commands give the same part
+  const RR = new Runner(M);
+  const goal = JSON.parse(JSON.stringify(GALLERY.flange.goal)); goal.scale = 60;
+  const start = { doc_open: true, workbench: 'PartDesignWorkbench', body: false };
+  let v = RR.start({ goal, start }), rnd = 7;
+  for (let i = 0; i < 24 && !v.finished; i++) {
+    const d = RR.think().decision; rnd = (rnd * 16807) % 2147483647;
+    v = rnd % 5 === 0 && d ? RR.act({ action: d.rows[Math.min(d.rows.length - 1, 1 + rnd % 3)].a, kind: 'noise' }) : RR.act({});
+  }
+  const noId = ops => JSON.stringify(ops.map(o => ({ ...o, id: 0 }))); // op ids come from a global counter
+  const log = RR.log(), at = noId(v.ops), tr = JSON.stringify(v.tree);
+  for (const k of [log.length, 9]) {
+    let w = RR.start({ goal: JSON.parse(JSON.stringify(goal)), start });
+    for (const e of log.slice(0, k)) w = RR.act({ action: e.action, kind: e.kind });
+    if (k === log.length) ok(noId(w.ops) === at && JSON.stringify(w.tree) === tr && w.logLen === log.length, `replay of ${k} logged steps gives the same part`);
+    else ok(w.logLen === k && JSON.stringify(RR.log().map(e => e.action)) === JSON.stringify(log.slice(0, k).map(e => e.action)), 'replay to step 9 logs the same commands');
+  }
+}
 
 section('main.js link');
 {

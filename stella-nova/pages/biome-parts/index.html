@@ -19,15 +19,21 @@
    renders with the SDF lab's ray marcher.
 
    LAYOUT  (# marks an element id the modules bind to)
-     #app        the tool: #goalPanel | #stage | #brainPanel
-     #goalPanel  gallery, goal items (#items), add item, start state
-     #stage      #view (WebGPU), #ov (2D overlay), #hud, #transport
-     #brainPanel #scores (softmax bars, tap to override), #checks (done
-                 head), #tree (feature tree), #log, exports
-     phone ..... (max-width 768px) the stage on top, #tabs switch the
-                 panels in the sheet below; #transport is the dock
-     #explain    the explainer: System 1 vs 2, tokens, scorer, done head,
-                 eval numbers, Mesa-S1, credits
+     a modelling-tool workspace after SDF Forge and Forge in Warp: the 3D
+     view fills #app, squircle panels (.sq, lib/forge-ui.css) float over it
+     #stage      #view (WebGPU), #ov (2D overlay), #hud, #banner, #nogpu
+     #top        title plate and #status       #bar   #expBtn grows #expMenu
+     #rail       left tool rail: library, goal, inspector, log, how it works
+     #leftCol    #libPanel (gallery, random levels), #goalPanel (goal cards)
+     #rightCol   #brainPanel: #scores, #checks, #tree in folds
+     #timeline   #console (#log) over #transport: Build, Step, Play, the
+                 scrubber (#scrub, #ticks), speed, gremlin
+     phone ..... (max-width 760px, or a short touch screen) #tabs is the
+                 dock; one panel at a time is a bottom sheet over it
+     #explain    below the workspace: System 1 vs 2, tokens, scorer, done
+                 head, eval numbers, Mesa-S1, credits
+     keys ...... Space play, arrows step and replay, B build, [ ] scrub,
+                 L G I C E H panels, Escape closes
 
    MODULES  (js/, each with its own grep map)
      vocab.js featurize.js model.js ....... the Taiga-S1 port
@@ -35,50 +41,15 @@
      worker.js brain.js ................... the model off the main thread
      part.js gpu.js view.js scene.js ...... SDF field, renderer, camera
      gallery.js evalnums.js ............... data
-     ui.js main.js ........................ panels and orchestration
+     ui.js panels.js main.js .............. panels, workspace, orchestration
      director.js saver.js ................. the live screensaver (snSaver)
 -->
-<link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../../lib/forge-ui.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<section id="app">
-  <header id="top">
-    <div class="ttl">
-      <h1>Biome Parts</h1>
-      <p class="sub">Taiga-S1, a 1.2M-parameter model by Shiv Shanmugam, builds CAD parts one command at a time, live in this page.</p>
-    </div>
-    <div id="status" class="status">loading the model…</div>
-  </header>
-
-  <nav id="tabs" class="tabs" aria-label="Panels">
-    <button type="button" data-tab="goal" class="on">Goal</button>
-    <button type="button" data-tab="brain">Taiga</button>
-    <button type="button" data-tab="tree">Tree</button>
-  </nav>
-
-  <aside id="goalPanel" class="panel" data-pane="goal">
-    <h2>Gallery</h2>
-    <div id="gallery" class="chips"></div>
-    <div class="row rnd"><span>Random goal</span><div id="levels" class="chips small"></div></div>
-    <h2>Goal <span class="hint">an ordered list, like a planner would hand down</span></h2>
-    <ol id="items" class="items"></ol>
-    <div class="row add">
-      <select id="addKind" aria-label="Add a goal item"></select>
-      <button type="button" id="addBtn">Add</button>
-    </div>
-    <div class="row">
-      <label for="startSel">Start</label>
-      <select id="startSel">
-        <option value="pd">new document, PartDesign</option>
-        <option value="nodoc">no document open</option>
-        <option value="part">Part workbench</option>
-        <option value="body">a body is ready</option>
-      </select>
-    </div>
-    <p class="note" id="goalNote"></p>
-  </aside>
-
+<section id="app" class="ws">
   <main id="stage">
     <canvas id="view" aria-label="The part, ray marched"></canvas>
     <canvas id="ov" aria-hidden="true"></canvas>
@@ -87,38 +58,124 @@
       <div id="hudAct" class="hact"></div>
       <div id="hudItem" class="hitem"></div>
     </div>
-    <div id="banner" class="banner" hidden></div>
-    <div id="transport" class="transport">
-      <button type="button" id="buildBtn" class="pri">Build</button>
-      <button type="button" id="stepBtn">Step</button>
-      <button type="button" id="playBtn">Play</button>
-      <label class="spd"><span>Speed</span><input id="speed" type="range" min="0" max="1" step="0.01" value="0.55" aria-label="Speed"></label>
-      <label class="tog"><input id="noiseChk" type="checkbox"><span>Gremlin 20%</span></label>
-    </div>
-    <div id="nogpu" class="nogpu" hidden>WebGPU is not available here, so the part cannot render. The model still runs: the scores, the checks and the tree update.</div>
+    <div id="banner" class="banner sq" hidden></div>
+    <div id="nogpu" class="nogpu sq" hidden>WebGPU is not available here, so the part cannot render. The model still runs: the scores, the checks and the tree update.</div>
   </main>
 
-  <aside id="brainPanel" class="panel" data-pane="brain">
-    <h2>Taiga-S1 scores <span class="hint">calibrated softmax, tap a row to override</span></h2>
-    <ol id="scores" class="scores"></ol>
-    <h2>Done? checks <span class="hint">one per goal item</span></h2>
-    <ol id="checks" class="checks"></ol>
-    <div data-pane="tree" class="sub-pane">
-      <h2>Feature tree</h2>
-      <ol id="tree" class="tree"></ol>
-      <h2>Log</h2>
+  <header id="top" class="plate sq">
+    <div class="ttl">
+      <h1>Biome Parts</h1>
+      <p class="sub">Taiga-S1, a 1.2M-parameter model by Shiv Shanmugam, builds CAD parts one command at a time, live in this page.</p>
+    </div>
+    <div id="status" class="status">loading the model…</div>
+  </header>
+
+  <nav id="rail" class="rail sq" aria-label="Tools">
+    <button type="button" class="ico" data-open="libPanel" title="Library (L)" aria-label="Library" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></button>
+    <button type="button" class="ico" data-open="goalPanel" title="Goal (G)" aria-label="Goal" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg></button>
+    <button type="button" class="ico" data-open="brainPanel" title="Inspector (I)" aria-label="Inspector" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h3V11H4zM10.5 18h3V6h-3zM17 18h3v-4h-3z"/></svg></button>
+    <button type="button" class="ico" data-open="console" title="Log (C)" aria-label="Log" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 4 4-4 4M12 17h7"/></svg></button>
+    <span class="sep"></span>
+    <button type="button" class="ico" id="howBtn" title="How it works (H)" aria-label="How it works"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.8" r=".6"/></svg></button>
+  </nav>
+
+  <div id="bar" class="bar">
+    <div class="menuwrap">
+      <button type="button" id="expBtn" class="pill sq" aria-haspopup="true" aria-expanded="false" title="Export (E)">Export <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
+      <div id="expMenu" class="menu sq" role="menu" hidden>
+        <div class="pb">
+          <button type="button" id="stlBtn" role="menuitem"><b>STL</b><span>mesh of the part</span></button>
+          <button type="button" id="jsonBtn" role="menuitem"><b>Goal + log JSON</b><span>the goal and every step</span></button>
+          <button type="button" id="forgeBtn" role="menuitem"><b>Open in SDF Forge</b><span>edit it as a distance field</span></button>
+          <p class="note" id="expNote"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="leftCol" class="col left">
+    <aside id="libPanel" class="fp sq" data-pane="goal" aria-label="Library">
+      <div class="ph"><h2>Library</h2><button type="button" class="x" data-close="libPanel" aria-label="Close the library"></button></div>
+      <div class="pb">
+        <h3>Gallery</h3>
+        <div id="gallery" class="chips"></div>
+        <h3>Random goal <span class="hint">L1–L3 like training, L4–L6 longer</span></h3>
+        <div id="levels" class="chips small"></div>
+      </div>
+    </aside>
+    <aside id="goalPanel" class="fp sq panel" data-pane="goal" aria-label="Goal">
+      <div class="ph"><h2>Goal <span class="hint">an ordered list, like a planner would hand down</span></h2><button type="button" class="x" data-close="goalPanel" aria-label="Close the goal"></button></div>
+      <div class="pb">
+        <ol id="items" class="items"></ol>
+        <div class="row add">
+          <select id="addKind" aria-label="Add a goal item"></select>
+          <button type="button" id="addBtn" class="btn">Add</button>
+        </div>
+        <div class="row">
+          <label for="startSel">Start</label>
+          <select id="startSel">
+            <option value="pd">new document, PartDesign</option>
+            <option value="nodoc">no document open</option>
+            <option value="part">Part workbench</option>
+            <option value="body">a body is ready</option>
+          </select>
+        </div>
+        <p class="note" id="goalNote"></p>
+      </div>
+    </aside>
+  </div>
+
+  <div id="rightCol" class="col right">
+    <aside id="brainPanel" class="fp sq panel" data-pane="brain" aria-label="Inspector">
+      <div class="ph"><h2>Inspector</h2><button type="button" class="x" data-close="brainPanel" aria-label="Close the inspector"></button></div>
+      <div class="pb">
+        <details class="fold" id="foldScores" open><summary>Taiga-S1 scores <span class="hint">calibrated softmax, tap a row to override</span></summary>
+          <ol id="scores" class="scores"></ol></details>
+        <details class="fold" id="foldChecks" open><summary>Done? checks <span class="hint">one per goal item</span></summary>
+          <ol id="checks" class="checks"></ol></details>
+        <details class="fold sub-pane" id="foldTree" data-pane="tree" open><summary>Feature tree</summary>
+          <ol id="tree" class="tree" role="tree" aria-label="Feature tree"></ol></details>
+      </div>
+    </aside>
+  </div>
+
+  <div id="timeline" class="timeline sq">
+    <div id="console" class="console" hidden>
+      <div class="ch"><h2>Log</h2><button type="button" class="x" data-close="console" aria-label="Close the log"></button></div>
       <ol id="log" class="log"></ol>
     </div>
-    <div class="row exp">
-      <button type="button" id="stlBtn">STL</button>
-      <button type="button" id="jsonBtn">Goal + log JSON</button>
-      <button type="button" id="forgeBtn">Open in SDF Forge</button>
+    <div id="transport" class="transport">
+      <div class="tgrp">
+        <button type="button" id="buildBtn" class="btn pri" title="Build (B)">Build</button>
+        <button type="button" id="stepBtn" class="btn" title="Step (right arrow)">Step</button>
+        <button type="button" id="playBtn" class="btn" title="Play (space)">Play</button>
+      </div>
+      <div class="scrub">
+        <span id="scrubLab" class="slab">step 0</span>
+        <div class="track"><div id="ticks" class="ticks" aria-hidden="true"></div><input id="scrub" type="range" min="0" max="0" step="1" value="0" aria-label="Step: drag to replay the build to an earlier step"></div>
+      </div>
+      <button type="button" id="tuneBtn" class="ico tunebtn" aria-label="More controls" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/></svg></button>
+      <div class="tune">
+        <label class="spd"><span>Speed</span><input id="speed" type="range" min="0" max="1" step="0.01" value="0.55" aria-label="Speed"></label>
+        <label class="tog"><input id="noiseChk" type="checkbox"><span>Gremlin 20%</span></label>
+        <button type="button" class="ico" data-open="console" title="Log (C)" aria-label="Log" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 4 4-4 4M12 17h7"/></svg></button>
+      </div>
     </div>
-    <p class="note" id="expNote"></p>
-  </aside>
+  </div>
+
+  <nav id="tabs" class="tabs dock" aria-label="Panels">
+    <button type="button" data-tab="lib">Library</button>
+    <button type="button" data-tab="goal" class="on">Goal</button>
+    <button type="button" data-tab="brain">Taiga</button>
+    <button type="button" data-tab="tree">Tree</button>
+    <button type="button" data-tab="log">Log</button>
+    <button type="button" data-tab="how">How</button>
+  </nav>
+  <div id="toast" class="toast sq" role="status" aria-live="polite"></div>
 </section>
 
 <article id="explain" class="explain">
+  <p class="kicker">How it works</p>
   <h2>Fast hands, slow head</h2>
   <p>A computer-use agent has two jobs: decide <em>what</em> to make, and press the buttons that make it. Biome-S1 splits them, like the "System 2" and "System 1" of the dual-process story. A planner (a person here, or a large model) writes the goal: an ordered list of features with numbers. Taiga-S1 is the System 1: at every step it looks at the live CAD session and picks the next command from the ones the program offers right now. It is 1,228,163 parameters, trained from scratch, and one decision is one forward pass. In this page that pass runs in plain JavaScript in a worker, about <span id="msStep">10–20</span> ms on a laptop.</p>
   <p>Taiga-S1 picks the command; it never types a number. Sizes, depths and counts come from the goal item the command works on (Biome-S1's parameter stage), so a wrong command still makes real, wrong geometry that the model must notice and undo.</p>
