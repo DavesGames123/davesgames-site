@@ -4,7 +4,8 @@
 // the orbit camera and the pointer input. API: README.md.
 //
 // grep handles:
-//   createView3D, MODES, setPhantom3D, setVolume, scanStep, reconstructStep, setMode,
+//   createView3D, MODES, setPhantom3D, setVolume, setPreset, setScanned, scanStep,
+//   reconstructStep, setMode,
 //   setCamera, setSlices, setWindow, setIso, setShow, setGantryAngle, setColormap,
 //   render, resize, destroy, writeFrame, uploadVolume, updateDetector, bindInput
 
@@ -195,8 +196,8 @@ export function createView3D(canvas, device, opts = {}) {
 
   // ---------- state changes ----------
 
-  function setGeometryFor(vol, nAngles) {
-    st.geom = CT.fitGeometry('cone', vol, { nAngles });
+  function setGeometryFor(vol, nAngles, geom) {
+    st.geom = geom ?? CT.fitGeometry('cone', vol, { nAngles });
     st.L = gantryLayout(st.geom, vol.width, vol.nz / vol.nx);
     st.proj = CT.emptyCone(st.geom);
     st.q = null; st.scanned = 0; st.reconstructed = 0; st.lastView = -1; st.angle = 0;
@@ -219,8 +220,33 @@ export function createView3D(canvas, device, opts = {}) {
     uploadVolume(volTex, o.smooth === false ? vol : smooth3(vol)); // display copy only; the scan uses vol
     if (o.window) st.window = o.window.slice();
     else { const s = volumeStats(vol.data); st.window = [Math.min(0, s.min), s.max * 1.02 || 1]; }
-    setGeometryFor(vol, o.nAngles ?? st.nAngles);
+    setGeometryFor(vol, o.nAngles ?? st.nAngles, o.geom);
     makeVolBG();
+  }
+
+  // A transfer-function preset (scene.js TF_PRESETS shape) for a volume that is not an
+  // engine phantom. o.window sets the display window too.
+  function setPreset(preset) {
+    st.preset = { ...TF_PRESETS.head, ...preset };
+    st.iso = [st.preset.skin, st.preset.iso];
+    if (preset.window) st.window = preset.window.slice();
+    uploadLut();
+  }
+
+  // External scan: the caller wrote views 0..k-1 into view.projections.data (same geometry).
+  // This turns the gantry to view k-1 and shows that projection on the detector.
+  function setScanned(k) {
+    const g = st.geom; if (!g) return;
+    k = Math.max(0, Math.min(g.nAngles, k | 0));
+    if (st.scanned === 0 && k > 0) {
+      let mx = 0; const d = st.proj.data, n = g.nu * g.nv;
+      for (let i = 0; i < n; i++) if (d[i] > mx) mx = d[i];
+      st.detScale = mx > 0 ? 1 / mx : 1;
+    }
+    if (k < st.reconstructed) { st.reconstructed = 0; st.reconSum = null; }
+    st.scanned = k; st.lastView = k - 1;
+    if (k > 0) gantryToView(k - 1);
+    updateDetector(k - 1); st.dirtyLines = true;
   }
 
   function setPhantom3D(name, o = {}) {
@@ -428,7 +454,7 @@ export function createView3D(canvas, device, opts = {}) {
   // ---------- public object ----------
 
   const api = {
-    setPhantom3D, setVolume, scanStep, reconstructStep, render,
+    setPhantom3D, setVolume, setPreset, setScanned, scanStep, reconstructStep, render,
     setMode(m) { if (!MODES.includes(m)) throw new Error('setMode: ' + m); st.mode = m; },
     setCamera(c) { for (const k of ['yaw', 'pitch', 'dist', 'fov', 'autoRotate']) if (c[k] !== undefined) st.cam[k] = c[k]; if (c.target) st.cam.target = c.target.slice(); if (c.offset) st.cam.offset = c.offset.slice(); },
     getCamera() { return { ...st.cam, target: st.cam.target.slice(), offset: st.cam.offset.slice() }; },
@@ -471,7 +497,8 @@ export function createView3D(canvas, device, opts = {}) {
     },
   };
   uploadLut();
-  setPhantom3D(opts.phantom ?? 'head', { n: st.n, nAngles: st.nAngles });
+  if (opts.volume) { if (opts.preset) setPreset(opts.preset); setVolume(opts.volume, { nAngles: st.nAngles, window: opts.preset?.window, geom: opts.geom }); }
+  else setPhantom3D(opts.phantom ?? 'head', { n: st.n, nAngles: st.nAngles });
   if (opts.camera) api.setCamera(opts.camera);
   return api;
 }

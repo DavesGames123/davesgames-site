@@ -49,6 +49,7 @@ const view = createView3D(canvas, device, {
   steps: 256,            // ray-march samples across the volume diagonal (use 128 on phones)
   colormap: 'bone',      // colour map id; colormapOpts: { reverse, gamma }
   tfFromMap: false,      // true: the dvr colour comes from the colour map
+  volume: null,          // an engine Volume to show instead of a phantom (with preset, geom)
 });
 ```
 
@@ -62,7 +63,9 @@ For an offscreen render (Deno tests), pass `canvas = null` and
 | Method | What it does |
 |---|---|
 | `setPhantom3D(name, { n, supersample = 2, nAngles })` | Builds the engine phantom, makes a fitted cone geometry, and clears the scan and the reconstruction. Returns `{ volume, geom }`. |
-| `setVolume(volume, { window, as })` | Shows any engine `Volume`. `as: 'phantom'` (default) or `'recon'`. `window: [lo, hi]` in volume units. |
+| `setVolume(volume, { window, as, geom })` | Shows any engine `Volume`. `as: 'phantom'` (default) or `'recon'`. `window: [lo, hi]` in volume units. `geom`: a cone geometry to use instead of the fitted one (for example a finer detector). |
+| `setPreset(preset)` | A transfer-function preset (the `TF_PRESETS` shape: `window`, `air`, `soft`, `bone`, `skin`, `iso`) for a volume that is not an engine phantom. Missing keys come from the head preset. |
+| `setScanned(k)` | For an external scan: the caller wrote views `0..k-1` into `view.projections.data` (same geometry). The gantry turns to view `k-1` and the detector shows it. A smaller `k` than the reconstructed count clears the reconstruction. |
 | `scanStep({ views = 1, budgetMs })` | Projects the next views on the CPU (Joseph cone projector), turns the gantry to the last view and shows that projection on the detector. Returns `{ done, total, angle }`. |
 | `reconstructStep({ views = 8, filter = 'shepp-logan' })` | Async. FDK on the next scanned views: cosine weight and ramp filter (engine `fdkFilter`), then back-projection on the GPU (engine `createGpuCT().backProjectCone`) and accumulation. Returns `{ done, total, rmse }`. `rmse` is against the phantom, in volume units. |
 | `setMode(mode)` | One of `MODES`. |
