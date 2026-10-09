@@ -1,0 +1,63 @@
+/* ============================================================================
+   PASCAL EDITOR  ·  pages/pascal-editor/style.css — the frame around the editor
+   ----------------------------------------------------------------------------
+   A slim top bar, a credits panel, a phone note and the iframe with the
+   hosted editor, which fills the rest of the page. The colours and fonts
+   are the same as lib/craft-host.css. The editor has its own styles in its
+   own document. This file does not touch them.
+
+   grep -n targets
+     tokens ............... ":root"
+     top bar .............. ".pe-bar"
+     credits panel ........ ".pe-credits"
+     phones ............... "@media (max-width: 640px)"
+   ========================================================================== */
+[hidden] { display: none !important; }
+:root {
+  --bg: #0a0d14; --bg2: #10141e; --line: rgba(150, 200, 255, .1); --line2: rgba(150, 200, 255, .18);
+  --text: #c3cfe0; --dim: #7f8ea6; --ink: #eef3fb; --gold: #ffc864;
+  --f-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 400 14px/1.5 var(--f-sans); -webkit-font-smoothing: antialiased; }
+body { display: flex; flex-direction: column; }
+a { color: var(--gold); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.pe-bar { flex: none; display: flex; align-items: center; gap: 14px; min-height: 40px; padding: 4px 14px;
+  padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right));
+  border-bottom: 1px solid var(--line); background: var(--bg2); }
+.pe-name { font-weight: 500; color: var(--ink); white-space: nowrap; }
+.pe-ver { font: 500 .7rem/1 var(--f-mono); color: var(--gold); letter-spacing: .06em; white-space: nowrap; }
+.pe-by { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pe-links { margin-left: auto; display: flex; align-items: center; gap: 12px; white-space: nowrap; font-size: .86rem; }
+.pe-btn { min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line2); background: transparent;
+  color: var(--text); font: inherit; font-size: .86rem; cursor: pointer; }
+.pe-btn:hover, .pe-btn[aria-expanded="true"] { border-color: var(--gold); color: var(--ink); }
+
+.pe-credits { flex: none; max-height: 60vh; overflow: auto; padding: 14px 18px 16px; border-bottom: 1px solid var(--line2);
+  background: var(--bg2); font-size: .9rem; }
+.pe-credits p { margin: 0 0 8px; max-width: 80ch; }
+.pe-credits dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 0; }
+.pe-credits dt { color: var(--dim); font: 500 .72rem/1.9 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+.pe-credits dd { margin: 0; overflow-wrap: anywhere; }
+.pe-credits code { font: .8rem var(--f-mono); color: var(--text); overflow-wrap: anywhere; }
+
+.pe-stage { position: relative; flex: 1; min-height: 0; }
+.pe-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #f2f2f2; }
+.pe-msg { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line2); background: rgba(10, 13, 20, .92); color: var(--text); font-size: .86rem; text-align: center; }
+
+.pe-note { flex: none; display: none; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 14px; font-size: .82rem; color: var(--dim);
+  border-bottom: 1px solid var(--line); background: var(--bg); }
+.pe-note button { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .pe-by, .pe-links a.pe-wide { display: none; }
+  .pe-note { display: flex; }
+}
+@media (pointer: coarse) {
+  .pe-btn { min-height: 44px; }
+  .pe-links a { padding: 12px 0; }
+}

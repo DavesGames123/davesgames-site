@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pascal Editor // Stella Nova · davesgames.io</title>
+<meta name="description" content="Pascal Editor, the open-source 3D building editor by Pascal Group Inc. (MIT), shown full-window from its official hosted site, with credits, licence and the pinned open-source release.">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PASCAL EDITOR  ·  hosted upstream tool, shown in a frame
+  ───────────────────────────────────────────────────────────────────────────
+   Pascal Editor (github.com/pascalorg/editor, MIT, Pascal Group Inc.) is a
+   Next.js app with server routes (scenes API, SQLite store, server actions)
+   and no base-path option. GitHub Pages serves static files only, so the
+   site cannot host the unchanged build. This page shows the official hosted
+   editor at editor.pascal.app in an iframe, with a credits bar. The site
+   does not change, copy or proxy any upstream file.
+
+   FILES
+     index.html   this frame: bar, credits, phone note, iframe
+     style.css    styles of the frame
+     main.js      credits toggle, phone note, GPU release, the pin (PIN)
+     tests.mjs    node checks: head order, links, pin, [hidden] rule
+
+   grep -n targets
+     hosted URL ........... "const APP"
+     release pin .......... "const PIN"
+     credits panel ........ "id=\"pe-credits\""
+     phone note ........... "id=\"pe-note\""
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link href="../../vendor/fonts/space-grotesk+ibm-plex-mono+instrument-serif.e9f187bf.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="main.js"></script>
+</head>
+<body>
+<header class="pe-bar">
+  <span class="pe-name">Pascal Editor</span><span class="pe-ver" id="pe-ver">hosted</span>
+  <span class="pe-by">3D building editor by Pascal Group Inc. · MIT</span>
+  <nav class="pe-links">
+    <a class="pe-wide" href="https://github.com/pascalorg/editor" target="_blank" rel="noopener">Source</a>
+    <a class="pe-app" href="https://editor.pascal.app/" target="_blank" rel="noopener">Open in new tab</a>
+    <button class="pe-btn" type="button" aria-expanded="false" aria-controls="pe-credits">Credits</button>
+  </nav>
+</header>
+<section class="pe-credits" id="pe-credits" hidden>
+  <p><strong>Pascal Editor</strong> is a free, open-source, local-first 3D building editor (walls, rooms, levels, roofs, furniture) built with React Three Fiber and WebGPU. Copyright &copy; 2026 Pascal Group Inc. It is licensed under the <a href="https://github.com/pascalorg/editor/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.</p>
+  <p>The frame below shows the official hosted editor at <a href="https://editor.pascal.app/" target="_blank" rel="noopener">editor.pascal.app</a>, which Pascal runs. davesgames.io did not write or change Pascal Editor, does not copy its files, and is not affiliated with or endorsed by Pascal Group Inc. Projects you make in the frame go to Pascal's service under its <a href="https://editor.pascal.app/terms" target="_blank" rel="noopener">terms</a> and <a href="https://editor.pascal.app/privacy" target="_blank" rel="noopener">privacy policy</a>.</p>
+  <p>Why a frame: the open-source build is a Next.js server with a scenes API and a SQLite store. This site is static files only, so it cannot run that build unchanged. To run the pinned open-source release on your own computer (Node.js 22.13 or newer), use <code id="pe-cmd">npx @pascal-app/cli editor</code>. It keeps your projects on your disk.</p>
+  <dl>
+    <dt>Source</dt><dd><a href="https://github.com/pascalorg/editor" target="_blank" rel="noopener">pascalorg/editor</a></dd>
+    <dt>Licence</dt><dd><a href="https://github.com/pascalorg/editor/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a></dd>
+    <dt>Frame</dt><dd>editor.pascal.app, the live hosted version (Pascal updates it, the site cannot pin it)</dd>
+    <dt>Local pin</dt><dd id="pe-pin">see main.js</dd>
+  </dl>
+</section>
+<div class="pe-note" id="pe-note">Pascal Editor is made for a large screen with a mouse and keyboard.<a href="https://editor.pascal.app/" target="_blank" rel="noopener">Open it in its own tab</a><button class="pe-btn" type="button">OK</button></div>
+<main class="pe-stage">
+  <iframe id="pe-frame" title="Pascal Editor: 3D building editor (editor.pascal.app)"
+    allow="fullscreen; clipboard-read; clipboard-write; xr-spatial-tracking"
+    referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  <div class="pe-msg" id="pe-msg" hidden>If the editor does not load or does not keep your work in this frame, your browser may block storage for sites inside a frame. <a href="https://editor.pascal.app/" target="_blank" rel="noopener">Open Pascal Editor in its own tab</a>.</div>
+</main>
+</body>
+</html>
