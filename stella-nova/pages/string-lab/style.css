@@ -111,7 +111,13 @@ table.readout td:last-child{text-align:right;font-family:var(--mono);color:var(-
 #cmapHost .cmp{max-height:340px}
 
 /* EXPLAIN */
-#explain{max-width:780px;margin:0 auto;padding:56px 22px 80px;font-family:var(--serif);font-size:1.08rem;line-height:1.62;color:#d9dde8}
+#explain,#math{max-width:780px;margin:0 auto;padding:56px 22px 80px;font-family:var(--serif);font-size:1.08rem;line-height:1.62;color:#d9dde8}
+#math{padding-top:8px;border-top:1px solid var(--line)}
+#math .ex-head{padding-top:48px}
+#math .sci-eq{overflow-x:auto;overflow-y:hidden}
+.seeit{font-family:var(--sans);font-size:0.82rem;color:#0a0c14;background:#ffd666;border:0;border-radius:999px;padding:8px 16px;min-height:44px;cursor:pointer}
+.seeit:hover{filter:brightness(1.08)}
+.seeit:focus-visible{outline:2px solid #62c4ff;outline-offset:2px}
 .ex-head h1{font-family:var(--serif);font-weight:500;font-size:2.1rem;line-height:1.15;color:#f4f5fa}
 .lede{color:var(--dim);margin-top:10px}
 .ex{margin-top:48px}
@@ -173,6 +179,7 @@ table.readout td:last-child{text-align:right;font-family:var(--mono);color:var(-
   #sheetGrip{display:flex;position:sticky;top:0;z-index:3;justify-content:center;align-items:center;height:40px;margin:0 -16px 0;background:linear-gradient(180deg,rgba(14,17,27,1) 65%,rgba(14,17,27,0));touch-action:none;cursor:grab}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
   #explain{padding:40px 16px calc(var(--dock-h) + 40px);font-size:1.02rem}
+  #math{padding:8px 16px calc(var(--dock-h) + 40px);font-size:1.02rem}
   .ex-head h1{font-size:1.7rem}
   .ex figure canvas{height:200px}
 }
@@ -191,7 +198,7 @@ table.readout td:last-child{text-align:right;font-family:var(--mono);color:var(-
 }
 
 /* SAVER (lib/screensaver.js): the stage alone fills the frame. */
-html.sn-saver .topbar,html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #toast,html.sn-saver #transport,html.sn-saver #explain,html.sn-saver .ph{display:none!important}
+html.sn-saver .topbar,html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #toast,html.sn-saver #transport,html.sn-saver #explain,html.sn-saver #math,html.sn-saver .ph{display:none!important}
 html.sn-saver,html.sn-saver body{overflow:hidden}
 html.sn-saver #lab{position:fixed;inset:0;height:auto;display:block}
 html.sn-saver #stage{height:100%;padding:0;gap:0}

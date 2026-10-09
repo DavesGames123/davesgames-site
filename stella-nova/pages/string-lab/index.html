@@ -35,6 +35,8 @@
      #panel    instrument, string, excite, time, physics, colour, music,
                chords, sound. Phone: a bottom sheet over #dock.
      #explain  the explainer sections with [data-fig] canvases
+     #math     "The mathematics of a string": twelve steps, [data-mfig] canvases
+               and [data-see] buttons (mathsec.js)
    PHONE  (max-width 768px, or a short landscape touch screen)
      #dock     controls, pluck, pause, slow motion, next note
      the stage stacks 2D over 3D; the sheet shrinks the stage
@@ -270,6 +272,154 @@
   <footer class="ex-foot">
     <p>References: S. Bilbao, <i>Numerical Sound Synthesis</i> (Wiley, 2009), ch. 7. N. H. Fletcher and T. D. Rossing, <i>The Physics of Musical Instruments</i>, 2nd ed. (Springer, 1998), ch. 2, 9 and 10. H. von Helmholtz, <i>On the Sensations of Tone</i> (1863).</p>
     <p>Credits: the guitar, the classical guitar, the violin and the bow are our own generic models, made in code for this page. They are not copies of a brand or a model. The songs are our own arrangements of public-domain works (Romanza, Greensleeves, Bach's Bourrée in E minor, the Minuet in G, Ode to Joy and Amazing Grace) and three chord exercises of our own. We release the MIDI files under CC0. The list is in <a href="playback/CREDITS.md">playback/CREDITS.md</a>.</p>
+  </footer>
+</article>
+
+<article id="math">
+  <header class="ex-head">
+    <h1>The mathematics of a string</h1>
+    <p class="lede">Twelve steps from Newton's law to the colours in the lab. Each figure runs the page's own engine, and each "See it in the lab" button sets the views above to show the same thing.</p>
+  </header>
+
+  <section class="ex" id="m-element">
+    <h2>1. The wave equation from one piece of string</h2>
+    <p>Take a short piece of string between <i>x</i> and <i>x</i> + d<i>x</i>, with tension <span class="m2">T</span> and mass per length <span class="m3">μ</span>. The tension pulls along the string at each end. If the slopes are small, the angle of the string is θ ≈ ∂u/∂x, and the vertical pulls are <span class="m2">T</span> sin θ ≈ <span class="m2">T</span> ∂u/∂x. The net vertical force is the difference of the two ends:</p>
+    <div class="sci-eq" data-tex="F = T\left(\frac{\partial u}{\partial x}\Big|_{x+dx} - \frac{\partial u}{\partial x}\Big|_{x}\right) \approx T\,\frac{\partial^2 u}{\partial x^2}\,dx"></div>
+    <p>Newton's second law for the piece, mass <span class="m3">μ</span> d<i>x</i>, gives:</p>
+    <div class="sci-eq" data-tex="\mu\,dx\,\frac{\partial^2 u}{\partial t^2} = T\,\frac{\partial^2 u}{\partial x^2}\,dx \quad\Longrightarrow\quad \boxed{\frac{\partial^2 u}{\partial t^2} = c^2\,\frac{\partial^2 u}{\partial x^2},\qquad c = \sqrt{T/\mu}}"></div>
+    <p>A straight piece feels no net force, whatever its slope. Only a bend, the curvature ∂²u/∂x², accelerates the string.</p>
+    <figure><canvas data-mfig="element"></canvas>
+      <div class="figctl"><label>curvature <input type="range" data-ctl="K" min="-1" max="1" step="0.01" value="0.6"></label></div>
+      <figcaption>The two tension forces (orange) and their sum (yellow). Move the slider through zero: a straight piece has no net force.</figcaption></figure>
+    <button class="seeit" data-see="element">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-images">
+    <h2>2. d'Alembert's solution and the fixed ends</h2>
+    <p>Any function of <i>x</i> − <i>ct</i> or <i>x</i> + <i>ct</i> solves the wave equation, so the general solution is two shapes moving apart at speed <i>c</i>:</p>
+    <div class="sci-eq" data-tex="u(x,t) = \tfrac12\left[u_0(x-ct) + u_0(x+ct)\right] + \frac{1}{2c}\int_{x-ct}^{x+ct} v_0(s)\,ds"></div>
+    <p>The ends are fixed, u(0, t) = u(L, t) = 0. To keep them at zero, continue the start shape u₀ as an odd function about both ends, so it repeats every 2<i>L</i>. Each wave that reaches an end meets its upside-down image, and the two cancel at the end:</p>
+    <div class="sci-eq" data-tex="\boxed{u_0(-x) = -u_0(x),\qquad u_0(x + 2L) = u_0(x)}\qquad\Rightarrow\qquad \text{period } \frac{2L}{c} = \frac{1}{f_1}"></div>
+    <figure><canvas data-mfig="images"></canvas><figcaption>The real string is the bright window. The faint copies are its odd images. A wave leaves the window as its image comes in upside down: that is the reflection.</figcaption></figure>
+    <button class="seeit" data-see="images">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-modes">
+    <h2>3. Separation of variables and the modes</h2>
+    <p>Try a solution that is a shape times a time function, u = X(x) T(t). The wave equation splits into two ordinary equations with one constant, −k²:</p>
+    <div class="sci-eq" data-tex="\frac{T''(t)}{c^2\,T(t)} = \frac{X''(x)}{X(x)} = -k^2 \qquad\Rightarrow\qquad X'' + k^2 X = 0,\quad T'' + c^2k^2\,T = 0"></div>
+    <p>X(0) = X(L) = 0 allows only sin(<i>kx</i>) with <i>kL</i> = <i>n</i>π. So the string has a ladder of modes, each a standing sine that swings at its own frequency:</p>
+    <div class="sci-eq" data-tex="\boxed{u_n(x,t) = \sin\!\left(\frac{n\pi x}{L}\right)\left(a_n\cos\omega_n t + b'_n\sin\omega_n t\right),\qquad \omega_n = \frac{n\pi c}{L},\quad f_n = \frac{n}{2L}\sqrt{\frac{T}{\mu}}}"></div>
+    <p>Because the equation is linear, any motion of the string is a sum of these modes.</p>
+    <figure><canvas data-mfig="modes"></canvas>
+      <div class="figctl"><label>mode n <input type="range" data-ctl="n" min="1" max="8" step="1" value="3"></label></div>
+      <figcaption>X(x) is the dashed envelope, T(t) the phasor on the right. Their product is the moving string. Green dots are the nodes.</figcaption></figure>
+    <button class="seeit" data-see="modes">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-fourier">
+    <h2>4. Fourier coefficients of a pluck</h2>
+    <p>A pluck at <i>x</i>₀ = <i>pL</i> pulls the string into a triangle of height <i>h</i> and lets go with zero velocity. Project the triangle onto each mode with the orthogonality of the sines:</p>
+    <div class="sci-eq" data-tex="b_n = \frac{2}{L}\int_0^L u_0(x)\,\sin\frac{n\pi x}{L}\,dx = \boxed{\frac{2h\,\sin(n\pi p)}{n^2\pi^2\,p\,(1-p)}}"></div>
+    <p>Two facts follow. The amplitudes fall as 1/n², so a pluck is mellow compared with a strike (1/n). And if <i>p</i> = 1/<i>k</i>, then sin(<i>n</i>π<i>p</i>) = 0 for <i>n</i> = <i>k</i>, 2<i>k</i>, …: a mode with a node at the pluck point cannot be excited. Plucking at a fifth of the string removes the 5th, 10th and 15th harmonics.</p>
+    <figure><canvas data-mfig="fourier"></canvas>
+      <div class="figctl"><label>pluck point p <input type="range" data-ctl="p" min="0.04" max="0.5" step="0.001" value="0.2"></label></div>
+      <figcaption>Bars: the formula. Dots: the same numbers measured from the lab's StringSim, by projecting its plucked shape onto the modes. Red: harmonics that the pluck point removes.</figcaption></figure>
+    <button class="seeit" data-see="fourier">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-energy">
+    <h2>5. Energy in each mode</h2>
+    <p>The energy of the string is kinetic plus the stretch of the tension:</p>
+    <div class="sci-eq" data-tex="E = \int_0^L \left[\frac{\mu}{2}\left(\frac{\partial u}{\partial t}\right)^2 + \frac{T}{2}\left(\frac{\partial u}{\partial x}\right)^2\right]dx"></div>
+    <p>Put in the mode sum. The cross terms integrate to zero, because the sines are orthogonal, so the energy is a sum over modes, and each mode keeps its own energy:</p>
+    <div class="sci-eq" data-tex="\boxed{E = \sum_n E_n,\qquad E_n = \frac{\mu L}{4}\,\omega_n^2\,b_n^2},\qquad \frac{dE_n}{dt} = 0\ \text{(no damping)}"></div>
+    <p>For the pluck, the sum equals the work done to pull the string aside, <span class="m2">T</span>h²/(2L p(1 − p)). With damping each mode loses energy as e^(−2σₙt), and the high modes go first.</p>
+    <figure><canvas data-mfig="energy"></canvas><figcaption>Bars: energy of modes 1 to 12 now (yellow) and at the start (grey). Right: the total over 4 s.</figcaption></figure>
+    <button class="seeit" data-see="energy">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-dispersion">
+    <h2>6. Stiffness, dispersion and inharmonicity</h2>
+    <p>A real string also resists bending, like a thin beam with Young's modulus <i>E</i> and second moment <i>I</i> = π<i>d</i>⁴/64. That adds a fourth-derivative term:</p>
+    <div class="sci-eq" data-tex="\frac{\partial^2 u}{\partial t^2} = c^2\frac{\partial^2 u}{\partial x^2} - \kappa^2\frac{\partial^4 u}{\partial x^4},\qquad \kappa^2 = \frac{EI}{\mu}"></div>
+    <p>Put in u = sin(<i>kx</i>) cos(ω<i>t</i>). Waves of different length now travel at different speeds, which is dispersion, and the modes are no longer whole multiples:</p>
+    <div class="sci-eq" data-tex="\omega^2 = c^2k^2 + \kappa^2k^4 \quad\Rightarrow\quad \boxed{f_n = n f_1\sqrt{1 + Bn^2},\qquad B = \frac{\pi^3 E d^4}{64\,T L^2}}"></div>
+    <p>Thick, stiff, short strings have the largest <i>B</i>. That is why a wound string uses a thin core: the winding adds mass but almost no stiffness.</p>
+    <figure><canvas data-mfig="dispersion"></canvas>
+      <div class="figctl"><label>steel string <input type="range" data-ctl="str" min="0" max="5" step="1" value="0"></label></div>
+      <figcaption>Left: frequency against wave number for a flexible string (dashed) and for this stiff string. Right: how many cents each partial is sharp of n f₁.</figcaption></figure>
+    <button class="seeit" data-see="dispersion">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-decay">
+    <h2>7. Damping and decay times</h2>
+    <p>The lab adds two loss terms (Bilbao's model): σ₀ removes energy at the same rate for every mode (air), and σ₁ removes more from short waves (losses inside the string):</p>
+    <div class="sci-eq" data-tex="\frac{\partial^2 u}{\partial t^2} = c^2u_{xx} - \kappa^2u_{xxxx} - 2\sigma_0\,u_t + 2\sigma_1\,u_{txx}"></div>
+    <p>For mode <i>n</i>, u_txx = −(nπ/L)² u_t, so each mode decays as e^(−σₙt) with its own rate. The time to fall by 60 dB, a factor of 1000 in amplitude, follows:</p>
+    <div class="sci-eq" data-tex="\boxed{\sigma_n = \sigma_0 + \sigma_1\left(\frac{n\pi}{L}\right)^2,\qquad T_{60,n} = \frac{3\ln 10}{\sigma_n} \approx \frac{6.91}{\sigma_n}}"></div>
+    <figure><canvas data-mfig="decay"></canvas>
+      <div class="figctl"><label>σ₀ <input type="range" data-ctl="s0" min="0.1" max="4" step="0.01" value="1.05"></label><label>σ₁ <input type="range" data-ctl="s1" min="0" max="0.004" step="0.00001" value="0.00043"></label></div>
+      <figcaption>Left: T60 of modes 1 to 20. Right: modes 1, 4 and 8 dying away (oscillation drawn slow). The defaults are the steel A2 string of the lab.</figcaption></figure>
+    <button class="seeit" data-see="decay">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-accel">
+    <h2>8. The acceleration field: what the colours show</h2>
+    <p>The right side of the equation of motion is the total force per unit mass on each point of the string. That is the acceleration the lab colours:</p>
+    <div class="sci-eq" data-tex="\boxed{a(x,t) = \underbrace{c^2\,u_{xx}}_{\text{tension}} \;\underbrace{-\,\kappa^2\,u_{xxxx}}_{\text{stiffness}} \;\underbrace{-\,2\sigma_0 u_t + 2\sigma_1 u_{txx}}_{\text{damping}}}"></div>
+    <p>The tension term is by far the largest, so <i>a</i> ≈ <i>c</i>²u_xx: the colour is the curvature times <i>c</i>². A plucked string is straight lines and corners. The straight parts are dark, because nothing pulls them, and the corners glow, because all the force is there. Watch the corners run to the ends and back: that is d'Alembert's two waves. The field menu in the lab shows each term on its own.</p>
+    <figure><canvas data-mfig="accel"></canvas><figcaption>A StringSim of the classical E string, in slow motion. Top: the shape. Middle: the curvature. Bottom: |a| in magma, as the lab draws it.</figcaption></figure>
+    <button class="seeit" data-see="accel">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-impedance">
+    <h2>9. Impedance and the bridge</h2>
+    <p>A string resists being moved sideways with its wave impedance, the force needed per unit of transverse velocity:</p>
+    <div class="sci-eq" data-tex="Z = \frac{F}{v} = \sqrt{T\mu} = \mu c"></div>
+    <p>When a wave on string 1 meets a second medium with impedance Z₂, part reflects and part goes on. Matching the force and the velocity at the joint gives:</p>
+    <div class="sci-eq" data-tex="\boxed{r_F = \frac{Z_2 - Z_1}{Z_2 + Z_1},\qquad r_u = -r_F,\qquad \tau_u = \frac{2Z_1}{Z_1 + Z_2},\qquad \frac{P_{\text{out}}}{P_{\text{in}}} = 1 - r_F^2 = \frac{4Z_1Z_2}{(Z_1+Z_2)^2}}"></div>
+    <p>A guitar bridge has an impedance of order 10²–10³ kg/s; a string about 1 kg/s. So the displacement wave reflects almost fully and upside down (r_u ≈ −1), and only a few parts in a thousand go into the top plate per bounce. That small leak is all the sound you hear from the body, and it is why the note can sustain for seconds. The amplitude decay from the bridge alone is σ = f₁ (−ln|r|).</p>
+    <figure><canvas data-mfig="impedance"></canvas>
+      <div class="figctl"><label>log₁₀ Z₂/Z₁ <input type="range" data-ctl="lz" min="-2" max="3" step="0.01" value="1"></label></div>
+      <figcaption>A pulse on string 1 (blue) meets string 2 (orange). At Z₂ = Z₁ it passes through with no reflection; at large Z₂ the joint acts like a fixed end.</figcaption></figure>
+    <button class="seeit" data-see="impedance">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-helmholtz">
+    <h2>10. Helmholtz motion of a bowed string</h2>
+    <p>A bow does not pluck once; it sticks and slips every period. Helmholtz saw in 1863 that the result is a single corner running round the string along two parabolas. In modes, every harmonic is present with amplitude 1/n² and the same phase:</p>
+    <div class="sci-eq" data-tex="\boxed{u(x,t) \propto \sum_{n=1}^{\infty} \frac{1}{n^2}\,\sin\frac{n\pi x}{L}\,\sin(n\omega_1 t)},\qquad \max_t |u| \propto x\,(L - x)"></div>
+    <p>The sum is two straight lines meeting at a corner at x = c t (and back). Under the bow the string velocity has only two values: it moves with the bow (stick), then flies back (slip) when the corner passes. The spectrum, 1/n² in displacement and 1/n in velocity, is the bright sawtooth sound of a violin.</p>
+    <figure><canvas data-mfig="helmholtz"></canvas>
+      <div class="figctl"><label>modes in the sum <input type="range" data-ctl="nm" min="1" max="80" step="1" value="40"></label></div>
+      <figcaption>With few modes the corner is round; with many it is sharp. The dashed parabolas are the envelope.</figcaption></figure>
+    <button class="seeit" data-see="helmholtz">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-beats">
+    <h2>11. Beats and coupled strings</h2>
+    <p>Two tones close in frequency add to a tone at the mean frequency whose loudness swells and fades:</p>
+    <div class="sci-eq" data-tex="\cos 2\pi f t + \cos 2\pi(f+\Delta f)t = \boxed{2\cos(\pi\Delta f\,t)}\,\cos\!\left(2\pi\left(f + \tfrac{\Delta f}{2}\right)t\right)"></div>
+    <p>So you hear Δ<i>f</i> beats per second; tuning two strings means slowing the beats to zero. Strings on the same bridge are also coupled: the bridge moves a little and drives the other strings. Two equal strings with coupling <i>k</i> have two normal modes, and energy swaps between the strings at their difference frequency. That is sympathetic resonance: an untouched string sings when its partner is played.</p>
+    <div class="sci-eq" data-tex="\omega_\pm^2 = \frac{\omega_1^2 + \omega_2^2}{2} + k \pm\sqrt{\left(\frac{\omega_1^2-\omega_2^2}{2}\right)^2 + k^2},\qquad t_{\text{swap}} = \frac{\pi}{\omega_+ - \omega_-}"></div>
+    <figure><canvas data-mfig="beats"></canvas>
+      <div class="figctl"><label>Δf <input type="range" data-ctl="df" min="0" max="6" step="0.1" value="2"></label><label>coupling <input type="range" data-ctl="kc" min="0.005" max="0.2" step="0.001" value="0.04"></label></div>
+      <figcaption>Top: beats of two tones. Bottom: the energy of two coupled strings; only string 1 was plucked.</figcaption></figure>
+    <button class="seeit" data-see="beats">See it in the lab</button>
+  </section>
+
+  <section class="ex" id="m-tet">
+    <h2>12. Equal temperament against just ratios</h2>
+    <p>The harmonic series gives the pure intervals: 2:1, 3:2, 5:4 and so on. Frets divide the octave into twelve equal steps instead, so every key works the same. The size of an interval in cents is:</p>
+    <div class="sci-eq" data-tex="\text{cents}(r) = 1200\,\log_2 r,\qquad \boxed{r_{\text{ET}}(k) = 2^{k/12}}\quad\text{vs}\quad r_{\text{just}} = \frac{p}{q}"></div>
+    <p>The equal fifth is 2 cents flat of 3:2, almost pure. The equal major third is 14 cents sharp of 5:4, so a fretted major chord always beats a little. When the upper note of an interval p:q has its <i>q</i>th harmonic near the <i>p</i>th harmonic of the lower note, they beat at |q f_upper − p f_lower|.</p>
+    <figure><canvas data-mfig="tet"></canvas><figcaption>Top: the equal steps (blue, up) and the just ratios (orange, down). Bottom: how fast each equal-tempered interval beats on A3.</figcaption></figure>
+    <button class="seeit" data-see="tet">See it in the lab</button>
+  </section>
+
+  <footer class="ex-foot">
+    <p>Derivations follow N. H. Fletcher and T. D. Rossing, <i>The Physics of Musical Instruments</i>, 2nd ed. (Springer, 1998), ch. 2 and 5; S. Bilbao, <i>Numerical Sound Synthesis</i> (Wiley, 2009), ch. 6 and 7; and H. von Helmholtz, <i>On the Sensations of Tone</i> (1863). Bridge impedance values are orders of magnitude from Fletcher and Rossing, ch. 9.</p>
   </footer>
 </article>
 

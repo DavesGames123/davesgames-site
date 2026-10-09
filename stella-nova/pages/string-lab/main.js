@@ -59,6 +59,7 @@
 //    phone sheet ......... "function setSheet"
 //    loop ................ "function frame"
 //    page API ............ "window.__strings"
+//    maths section ....... "initMath" (mathsec.js, the #math article)
 // ════════════════════════════════════════════════════════════════════════════
 
 import { StringSim, hMin, viewStepper, modalFrequencies, modalDecay, pluckCoefficients } from './engine/strings.js';
@@ -72,6 +73,7 @@ import { createView2D, FIELDS } from './view2d.js';
 import { createPicker } from '../ct-lab/colormaps/picker.js';
 import * as CM from '../ct-lab/colormaps/maps.js';
 import { initExplainer } from './explain.js';
+import { initMath } from './mathsec.js';
 import { installSaver } from './saver.js';
 
 const $ = (id) => document.getElementById(id);
@@ -762,6 +764,7 @@ function boot() {
   });
   try { playback = mountPlayback($('musicHost'), window.__strings); } catch (e) { $('musicHost').textContent = 'The music panel could not start.'; console.warn('string-lab playback:', e); }
   try { initExplainer(document.getElementById('explain')); } catch (e) { console.warn('string-lab explainer:', e); }
+  try { initMath(document.getElementById('math')); } catch (e) { console.warn('string-lab math:', e); }
   window.addEventListener('pagehide', () => {
     running = false;
     cancelAnimationFrame(raf);
