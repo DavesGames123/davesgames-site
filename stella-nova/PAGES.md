@@ -189,10 +189,10 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `outbreak` | Outbreak | Life Sciences > Epidemiology | SIM | Diseases spread between cities on a 3D globe (a toy model). |  | shown | hook, tier 3, default | yes |
 | `fluidlab` | Stable Fluids | Fluids > Flow | GPU | Jos Stam stable fluids on the GPU. |  | shown | hook, tier 2, default | yes |
 | `wind-tunnel` | Wind Tunnel | Fluids > Flow | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
-| `euler-fluid` | Euler Fluid | Fluids > Flow | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `flip-fluid` | FLIP Water | Fluids > Flow | SIM | FLIP water: particles carry it, a grid solves the pressure. | Ten Minute Physics #18 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `pbf-boundary` | PBF Boundaries | Fluids > Flow | SIM | Position based particles with moving walls and friction. | Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `fire-simulation` | Fire Simulation | Fluids > Flow | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
+| `euler-fluid` | Euler Fluid | Fluids > Flow | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `flip-fluid` | FLIP Water | Fluids > Flow | SIM | FLIP water: particles carry it, a grid solves the pressure. | Ten Minute Physics #18 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `pbf-boundary` | PBF Boundaries | Fluids > Flow | SIM | Position based particles with moving walls and friction. | Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `fire-simulation` | Fire Simulation | Fluids > Flow | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `tidal-currents` | Tidal Currents | Fluids > Earth & Ocean | DATA | Real tidal current data, animated. |  | shown | hook, tier 2, default | yes |
 | `city-atlas` | City Atlas | Fluids > Earth & Ocean | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
 | `map-generator` | City Generator | Fluids > Earth & Ocean | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
@@ -219,7 +219,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `photon-caustics-3d` | Photon Caustics 3D | Light & Fields > Optics | GPU | Sunlight through waves draws caustics on a pool floor. |  | shown | hook, tier 3, default | yes |
 | `attractorlab` | Strange Attractors | Patterns & Chaos > Chaos | 3D | Lorenz, Rossler, Thomas and friends. |  | shown | hook, tier 2, default | yes |
 | `flowlab` | Vector Fields | Patterns & Chaos > Chaos | SIM | Flow lines through vector fields. |  | shown | hook, tier 2, default | yes |
-| `julia-fractals` | Julia Fractals | Patterns & Chaos > Chaos | SIM | Julia and Mandelbrot sets, zoom and explore. | Ten Minute Physics #19 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
+| `julia-fractals` | Julia Fractals | Patterns & Chaos > Chaos | SIM | Julia and Mandelbrot sets, zoom and explore. | Ten Minute Physics #19 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `reaction-diffusion` | Reaction–Diffusion | Patterns & Chaos > Emergence | GPU | Gray-Scott patterns that grow and split. |  | shown | hook, tier 3, default | yes |
 | `lenia` | Lenia | Patterns & Chaos > Emergence | GPU | Continuous cellular life. |  | shown | hook, tier 3, default | yes |
 | `game-of-life` | Game of Life | Patterns & Chaos > Emergence | SIM | Conway’s Life on the GPU, with a pattern library. |  | shown | hook, tier 2, default | yes |
@@ -262,16 +262,16 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `curta` | Curta Calculator | Machines > Calculating & Cipher | 3D | The Curta calculator in 3D, part by part. |  | shown | hook, tier 3, default | no |
 | `enigma-rotors` | Enigma Rotors | Machines > Calculating & Cipher | 3D | The Enigma rotor stack, from key to lamp. |  | shown | hook, tier 3, default | yes |
 | `pin-tumbler-lock` | Pin Tumbler Lock | Machines > Calculating & Cipher | 3D | Key in: each pin stack splits on the shear line. |  | shown | hook, tier 3, default | yes |
-| `cannonball-2d` | Cannonball 2D | Machines > Motion & Collisions | SIM | A ball under gravity in a box: physics in a few lines. | Ten Minute Physics #1 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
+| `cannonball-2d` | Cannonball 2D | Machines > Motion & Collisions | SIM | A ball under gravity in a box: physics in a few lines. | Ten Minute Physics #1 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `cannonball-3d` | Cannonball 3D | Machines > Motion & Collisions | 3D | The cannonball in 3D: balls bouncing in a box. | Ten Minute Physics #2 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
 | `cannonball-vr` | Cannonball VR | Machines > Motion & Collisions | VR | The 3D cannonball box in a VR headset. Needs WebXR. | Ten Minute Physics #2 by Matthias Müller (MIT) | shown | hook, tier 3 | no |
-| `billiard` | Billiard | Machines > Motion & Collisions | SIM | Many balls collide; set the restitution from elastic to dead. | Ten Minute Physics #3 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `pinball` | Pinball | Machines > Motion & Collisions | SIM | A playable pinball table: flippers, bumpers and borders. | Ten Minute Physics #4 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
+| `billiard` | Billiard | Machines > Motion & Collisions | SIM | Many balls collide; set the restitution from elastic to dead. | Ten Minute Physics #3 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `pinball` | Pinball | Machines > Motion & Collisions | SIM | A playable pinball table: flippers, bumpers and borders. | Ten Minute Physics #4 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `spatial-hashing` | Spatial Hashing | Machines > Motion & Collisions | 3D | Thousands of balls collide, found fast by a spatial hash. | Ten Minute Physics #11 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `pendulum-short` | Pendulum in 100 Lines | Machines > Pendulums & Constraints | SIM | A chaotic pendulum, complete in about a hundred lines. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `triple-pendulum` | Triple Pendulum | Machines > Pendulums & Constraints | SIM | A chaotic multi-link pendulum with position based dynamics. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `bead-on-wire` | Bead on a Wire | Machines > Pendulums & Constraints | SIM | A bead held on a circular wire, against the exact solution. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
-| `many-beads` | Many Beads | Machines > Pendulums & Constraints | SIM | Many beads collide on one circular wire. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
+| `pendulum-short` | Pendulum in 100 Lines | Machines > Pendulums & Constraints | SIM | A chaotic pendulum, complete in about a hundred lines. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `triple-pendulum` | Triple Pendulum | Machines > Pendulums & Constraints | SIM | A chaotic multi-link pendulum with position based dynamics. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `bead-on-wire` | Bead on a Wire | Machines > Pendulums & Constraints | SIM | A bead held on a circular wire, against the exact solution. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `many-beads` | Many Beads | Machines > Pendulums & Constraints | SIM | Many beads collide on one circular wire. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `joints` | Joint Simulation | Machines > Pendulums & Constraints | 3D | Hinges, ball joints and a steering linkage with XPBD. | Ten Minute Physics #25 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
 | `rigid-bodies` | Rigid Bodies | Machines > Pendulums & Constraints | 3D | Stacks, chains and collisions of rigid bodies in 3D. | Ten Minute Physics #22 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
 | `soft-bodies` | Soft Bodies | Machines > Soft Bodies & Cloth | 3D | Squash and throw tetrahedral soft bunnies (XPBD). | Ten Minute Physics #10 by Matthias Müller (MIT) | shown | hook, tier 3, default | no |
@@ -293,7 +293,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | Key | Title | Constellation > group | Badge | Blurb | Credit | Home | Saver | Thumb |
 |---|---|---|---|---|---|---|---|---|
 | `noise` (pages/noise-table) | Noise Table | Shader Tables > Patterns | WGSL | Perlin, simplex, Worley and more, live. |  | shown | hook, tier 2 | yes |
-| `volume-noise` | Volume Noise | Shader Tables > Patterns | WGSL | Tileable 3D Perlin-Worley noise for clouds, in WGSL. | TileableVolumeNoise by Sébastien Hillaire (MIT) | search only | hook, tier 3, default | no |
+| `volume-noise` | Volume Noise | Shader Tables > Patterns | WGSL | Tileable 3D Perlin-Worley noise for clouds, in WGSL. | TileableVolumeNoise by Sébastien Hillaire (MIT) | search only | hook, tier 3, default | yes |
 | `fields` (pages/field-table) | Field Table | Shader Tables > Patterns | COMPUTE | Compute-shader fields and flows. |  | shown | hook, tier 2, default | yes |
 | `sims` (pages/simulation-table) | Simulation Table | Shader Tables > Patterns | COMPUTE | GPU simulations side by side. |  | shown | hook, tier 3, default | yes |
 | `dot-field` (pages/dot-field-table) | Dot Field Table | Shader Tables > Patterns | WGSL | Halftone and dot-matrix fields. |  | shown | hook, tier 2 | yes |
@@ -302,13 +302,13 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `color` (pages/color-table) | Color Table | Shader Tables > Image | WGSL | Tone curves and palettes in WGSL. |  | shown | no | yes |
 | `postfx` (pages/postfx-table) | Post-Process | Shader Tables > Image | WGSL | Bloom, grain and grading passes. |  | shown | no | yes |
 | `sampling` (pages/sampling-table) | Sampling Table | Shader Tables > Image | WGSL | Sampling patterns, side by side. |  | shown | hook, tier 2 | yes |
-| `halftone` | Halftone | Shader Tables > Image | WGSL | Photos as halftone dots and rosettes, in WGSL. | glsl-halftone (MIT) | search only | hook, tier 3, default | no |
+| `halftone` | Halftone | Shader Tables > Image | WGSL | Photos as halftone dots and rosettes, in WGSL. | glsl-halftone (MIT) | search only | hook, tier 3, default | yes |
 | `thread-art` | Thread Art | Shader Tables > Image | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 3, default | yes |
 | `lighting` (pages/lighting-table) | Lighting Table | Shader Tables > Surfaces | WGSL | BRDFs and light models compared. |  | shown | hook, tier 2 | yes |
 | `sdf-solids` (pages/sdf-solids-table) | SDF Solids Table | Shader Tables > Surfaces | WGSL | 78 signed-distance solids, glass to gold. |  | shown | hook, tier 4, default | yes |
 | `liquid-metal` (pages/liquid-metal-table) | Liquid Metal Table | Shader Tables > Surfaces | WGSL | Chrome blobs that melt and merge. |  | shown | hook, tier 2, default | yes |
-| `refraction-table` | Refraction Table | Shader Tables > Surfaces | WGSL | Glass panels that bend, split and frost the light. | optics after quick-liquid (MIT) | search only | no | no |
-| `fractal-flames` | Fractal Flames | Shader Tables > Fractals | WGSL | flam3 fractal flames on the GPU: mutate and morph. | flam3 by Scott Draves (GPL-3.0) | search only | hook, tier 3, default | no |
+| `refraction-table` | Refraction Table | Shader Tables > Surfaces | WGSL | Glass panels that bend, split and frost the light. | optics after quick-liquid (MIT) | search only | no | yes |
+| `fractal-flames` | Fractal Flames | Shader Tables > Fractals | WGSL | flam3 fractal flames on the GPU: mutate and morph. | flam3 by Scott Draves (GPL-3.0) | search only | hook, tier 3, default | yes |
 | `bench` (pages/composition-bench) | Composition Bench | Shader Tables > Composition | NODES | Wire nodes from every table together. |  | shown | generic, tier 4 | yes |
 | `explosion` | Explosion | Game Effects > Weapons & Engines |  | The game’s explosion effects. |  | shown | hook, tier 2, default | yes |
 | `flare` | Engine Propulsion Effects | Game Effects > Weapons & Engines |  | Engine plumes and thruster flares. |  | shown | hook, tier 2, default | yes |
@@ -323,14 +323,14 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `sdf-lab` | SDF Modeller | Rendering > Ray Marching | TOOL | Model with distance fields, Forge style. |  | shown | generic, tier 4 | yes |
 | `biome-parts` | Biome Parts | Rendering > Ray Marching | AI | A 1.2M-parameter model builds CAD parts live, command by command. |  | shown | hook, tier 4, default | yes |
 | `sphere-tracing` | Sphere Tracing Lab | Rendering > Ray Marching | LAB | Watch one ray march through a distance field. |  | shown | hook, tier 3, default | yes |
-| `mandelbulber` | Mandelbulber | Rendering > Ray Marching | WGSL | The Mandelbulber2 fractal engine in WGSL. | Mandelbulber2 by Krzysztof Marczak and team (GPL-3.0) | search only | no | no |
-| `sdf-clouds` | SDF Clouds | Rendering > Ray Marching | GPU | Raymarched clouds from signed-distance shapes. | SDF Clouds by Alex Foulon | search only | no | no |
+| `mandelbulber` | Mandelbulber | Rendering > Ray Marching | WGSL | The Mandelbulber2 fractal engine in WGSL. | Mandelbulber2 by Krzysztof Marczak and team (GPL-3.0) | search only | no | yes |
+| `sdf-clouds` | SDF Clouds | Rendering > Ray Marching | GPU | Raymarched clouds from signed-distance shapes. | SDF Clouds by Alex Foulon | search only | no | yes |
 | `cornell` | Rendering Engine | Rendering > Light Transport | PATH | A path tracer in the browser. |  | shown | hook, tier 3, default | yes |
 | `glass-cube` | Refraction | Rendering > Light Transport | GPU | Light bending through glass. |  | shown | hook, tier 3, default | yes |
 | `platonic` (pages/platonic-mirrors) | Platonic Mirrors | Rendering > Light Transport | SHADER | Platonic solids in mirrored shells. |  | shown | hook, tier 1, default | yes |
 | `branched-flow` (pages/cube_branched_flow) | Branched Flow | Rendering > Light Transport | GPU | Light that splits into branching paths. |  | shown | hook, tier 3, default | yes |
 | `orbs` (pages/presence-orbs) | Presence Orbs | Rendering > Volumes | WGSL | Soft volumetric presence orbs. |  | shown | hook, tier 3, default | yes |
-| `thinking-orbs` | Thinking Orbs | Rendering > Volumes | WGSL | Dot orbs that spin, wave and morph. | thinking-orbs by RareFormLabs (MIT) | search only | no | no |
+| `thinking-orbs` | Thinking Orbs | Rendering > Volumes | WGSL | Dot orbs that spin, wave and morph. | thinking-orbs by RareFormLabs (MIT) | search only | no | yes |
 | `voxel` (pages/voxel-flythrough) | Voxel Flythrough | Rendering > Volumes | GPU | Fly through an endless voxel world. |  | shown | hook, tier 2, default | yes |
 | `markov-junior` | MarkovJunior | Rendering > Generative | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | yes |
 | `shan-shui` | Shan Shui | Rendering > Generative | SVG | An endless ink landscape scroll, drawn from a seed. | shan-shui-inf by Lingdong Huang (MIT) | search only | no | yes |
