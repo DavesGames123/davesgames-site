@@ -1,0 +1,115 @@
+/* ===========================================================================
+   MUJOCO LAB  ·  style.css
+   ---------------------------------------------------------------------------
+   The 3D view fills the window under the sim kit GUI
+   (widgets/sim-kit/sim-kit.css). Colours are the --sk-* theme tokens.
+   The page parts: #stage (view), .ml-hud (readout), .ml-gallery (model
+   cards), .ml-sec (panel sections added by main.js), .ml-ed (MJCF
+   editor), .ml-credit (licence line).
+
+   grep -n targets
+     view ................. "#stage"
+     readout .............. ".ml-hud"
+     gallery .............. ".ml-gallery"
+     panel sections ....... ".ml-stats"
+     editor ............... ".ml-ed"
+     phone ................ "PHONE"
+   =========================================================================== */
+html, body { margin: 0; height: 100%; background: var(--sk-bg); overflow: hidden; color: var(--sk-text); font-family: var(--sk-sans); }
+[hidden] { display: none !important; }
+
+/* #stage: the 3D view mount point */
+#stage { position: fixed; inset: 0; touch-action: none; }
+#stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.ml-note { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; color: var(--sk-text2); font-size: .9rem; }
+
+/* .ml-hud: readout under the title */
+.ml-hud { position: fixed; z-index: 29; top: 62px; left: 18px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: min(46vw, 520px); font: .74rem/1.4 var(--sk-mono); color: var(--sk-text2); font-variant-numeric: tabular-nums; pointer-events: none; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+.ml-hud .ml-warn { color: #ffb347; }
+.ml-hud .ml-paused { color: var(--sk-accent); }
+.ml-boot { position: fixed; z-index: 46; left: 50%; top: 18px; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 8px 14px; border-radius: 10px; background: var(--sk-glass); border: 1px solid var(--sk-line); font-size: .82rem; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.ml-boot.ml-bad { color: #ff9a8a; border-color: rgba(255,120,100,.45); white-space: pre-wrap; }
+.ml-drop { position: fixed; inset: 12px; z-index: 60; display: grid; place-items: center; border: 2px dashed var(--sk-accent); border-radius: 18px; background: rgba(0,0,0,.45); font-size: 1rem; pointer-events: none; }
+.ml-credit { position: fixed; z-index: 28; left: 18px; bottom: 14px; font-size: .72rem; color: var(--sk-text2); max-width: calc(50vw - 200px); }
+.ml-credit a { color: var(--sk-text2); }
+
+/* .ml-gallery: model cards */
+.ml-gallery { position: fixed; inset: 0; z-index: 55; background: rgba(4,6,10,.62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); overflow-y: auto; overscroll-behavior: contain; }
+.ml-gwrap { max-width: 1080px; margin: 0 auto; padding: 28px 22px 60px; }
+.ml-ghead { position: relative; padding-right: 50px; }
+.ml-ghead h2 { margin: 0; font: 400 1.6rem/1.2 var(--sk-serif); color: var(--sk-ink); }
+.ml-ghead p { margin: 6px 0 0; font-size: .82rem; color: var(--sk-text2); }
+.ml-gclose { position: absolute; right: 0; top: 0; font-size: 1rem; }
+.ml-glist h3 { margin: 26px 0 10px; font: 400 1.05rem var(--sk-serif); color: var(--sk-text); }
+.ml-grow { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 12px; }
+.ml-card { display: flex; flex-direction: column; gap: 4px; padding: 0 0 10px; border-radius: 12px; border: 1px solid var(--sk-line); background: var(--sk-glass); color: var(--sk-text); text-align: left; cursor: pointer; overflow: hidden; font: inherit; transition: border-color .15s, transform .15s; }
+.ml-card:hover, .ml-card:focus-visible { border-color: var(--sk-accent); transform: translateY(-1px); outline: none; }
+.ml-thumb { display: grid; place-items: center; aspect-ratio: 16 / 10; background: linear-gradient(140deg, #1b2a3c, #0d1420); overflow: hidden; }
+.ml-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-thumb.ml-g0 { background: linear-gradient(140deg, #2a3d55, #111a26); }
+.ml-thumb.ml-g1 { background: linear-gradient(140deg, #4a3423, #1a120c); }
+.ml-thumb.ml-g2 { background: linear-gradient(140deg, #23463c, #0d1a16); }
+.ml-thumb.ml-g3 { background: linear-gradient(140deg, #3f2c4f, #160f1d); }
+.ml-thumb.ml-g4 { background: linear-gradient(140deg, #4a4423, #19170c); }
+.ml-thumb.ml-g-1 { background: linear-gradient(140deg, #23394a, #3a2440); }
+.ml-plate { font: 400 1.9rem var(--sk-serif); color: rgba(255,255,255,.72); }
+.ml-cname { padding: 4px 10px 0; font-size: .86rem; font-weight: 600; line-height: 1.25; }
+.ml-cmeta { display: flex; gap: 6px; align-items: center; padding: 0 10px; }
+.ml-lic { font: .68rem var(--sk-mono); color: var(--sk-text2); padding: 1px 6px; border: 1px solid var(--sk-line); border-radius: 5px; white-space: nowrap; }
+.ml-heavy { font-size: .68rem; color: #ffb347; }
+
+/* panel sections (.ml-sec) */
+.ml-mname { margin: 0 0 4px; font: 400 1.02rem/1.25 var(--sk-serif); color: var(--sk-ink); }
+.ml-blurb { margin-bottom: 6px; }
+.ml-src { margin: 0 0 6px; font-size: .74rem; line-height: 1.5; color: var(--sk-text2); }
+.ml-src a { color: var(--sk-accent); }
+.ml-note2 { display: block; margin-top: 2px; }
+.ml-stats { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 6px 0 8px; font-size: .78rem; }
+.ml-stats dt { color: var(--sk-text2); }
+.ml-stats dd { margin: 0; text-align: right; font: .76rem var(--sk-mono); font-variant-numeric: tabular-nums; }
+.ml-scroll { max-height: 260px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--sk-line); border-radius: 8px; }
+.ml-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+.ml-table th { position: sticky; top: 0; background: var(--sk-bg2); text-align: left; font-weight: 600; padding: 5px 6px; color: var(--sk-text2); }
+.ml-table td { padding: 3px 6px; border-top: 1px solid var(--sk-line); vertical-align: top; overflow-wrap: anywhere; }
+.ml-num { font-family: var(--sk-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.ml-acts.ml-driven input[type=range] { opacity: .55; pointer-events: none; }
+.ml-plots { display: grid; gap: 8px; }
+.ml-plh { display: flex; justify-content: space-between; gap: 8px; font-size: .76rem; }
+.ml-plh span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-plot { width: 100%; height: 56px; display: block; border-radius: 6px; background: var(--sk-glass2); }
+
+/* .ml-ed: MJCF editor (a transparent textarea over the highlight) */
+.ml-ed { position: relative; height: 320px; border: 1px solid var(--sk-line); border-radius: 8px; background: rgba(0,0,0,.28); overflow: hidden; }
+.ml-hl, .ml-ta { position: absolute; inset: 0; margin: 0; padding: 8px 10px; border: 0; font: 12px/1.5 var(--sk-mono); tab-size: 2; white-space: pre; overflow: auto; box-sizing: border-box; }
+.ml-hl { color: var(--sk-text); pointer-events: none; overflow: hidden; }
+.ml-ta { background: transparent; color: transparent; caret-color: var(--sk-accent); resize: none; outline: none; }
+.ml-ta::selection { background: color-mix(in srgb, var(--sk-accent) 35%, transparent); color: transparent; }
+.ml-ta:focus-visible { box-shadow: inset 0 0 0 2px var(--sk-accent); }
+.ml-hl .xt { color: #7cc4ff; }
+.ml-hl .xa { color: #c9a0ff; }
+.ml-hl .xv { color: #b5e08a; }
+.ml-hl .xc { color: #7d8799; font-style: italic; }
+.ml-err { margin: 6px 0; padding: 6px 8px; border-radius: 7px; background: rgba(255,90,70,.12); color: #ff9a8a; font: .74rem/1.45 var(--sk-mono); white-space: pre-wrap; }
+.sk-root.ml-wide { --sk-panel-w: min(640px, calc(100vw - 24px)); }
+.sk-root.ml-wide .ml-ed { height: 52vh; }
+
+/* PHONE */
+@media (max-width: 768px), ((pointer: coarse) and (max-height: 520px)) {
+  .ml-hud { top: calc(40px + env(safe-area-inset-top)); left: 14px; max-width: 70vw; gap: 2px 10px; font-size: .68rem; }
+  .ml-hud span:nth-child(4) { display: none; }
+  .ml-credit { display: none; }
+  .ml-gwrap { padding: calc(18px + env(safe-area-inset-top)) 14px 90px; }
+  .ml-grow { grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); gap: 10px; }
+  .ml-ed { height: 240px; }
+  .ml-hl, .ml-ta { font-size: 16px; }   /* no zoom on focus in iOS Safari */
+}
+@media (pointer: coarse) {
+  .ml-card { min-height: 44px; }
+  .ml-gclose { width: 44px; height: 44px; }
+  .ml-table td, .ml-table th { padding: 6px; }
+}
+
+/* .ml-explain: the explainer dialog (explain/explain.css styles its content) */
+.ml-explain { background: var(--sk-bg); }
+.ml-explain .ml-gwrap { max-width: 860px; }
+.ml-explain .ml-ghead { position: sticky; top: 0; z-index: 2; padding: 10px 50px 10px 0; background: var(--sk-bg); }

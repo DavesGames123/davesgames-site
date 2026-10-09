@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>MuJoCo Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MUJOCO LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A playground for the MuJoCo physics engine (Google DeepMind,
+   https://github.com/google-deepmind/mujoco, Apache-2.0). The vendored
+   WASM build vendor/mujoco@3.15.0 runs in the page. The panels follow the
+   "simulate" app of MuJoCo: simulation, physics options, visualisation,
+   control, joints, sensors, contacts, and an MJCF editor.
+
+   FILES
+     core/        engine wrapper, model library, scene generator, explainer
+                  data (CONTRACT.md is the API)
+     render/      the 3D view (its README.md is the API); main.js mounts it
+                  into #stage when render/README.md is there
+     lab.js       page controller without DOM (load, options, drivers,
+                  stats, picking, share link)
+     scenes.js    page scene generator (domino runs + the core kinds)
+     explain/     "How MuJoCo works" section (explain/index.js header)
+     io.js        MJCF highlight and "load your own MJCF or zip"
+     main.js      DOM: sim kit panel, gallery, sections, pointer, loop
+     tests.mjs    node tests (no browser)
+
+   window.__mujoco  (for the screensaver and for tests; main.js header)
+     load(src)        src = 'model-key' | { model, seed } | { kind, seed }
+                      | { xml, files?, name? }  -> Promise<stats>
+     setOptions(o)    physics options (core CONTRACT.md keys)
+     play() pause() step(n) reset()
+     setCamera(c)     { azimuth, elevation, distance, lookat: [x, y, z] }
+     getCamera()      the same shape, or null before the view mounts
+     setVisual(f)     { contacts, forces, joints, com, ... } toggles
+     stats()          time, real-time factor, counts, energy, options
+     models           [{ key, name, group, heavy }]   kinds: scene kinds
+     sim / lab        the raw core sim and the page controller
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #stage ...... the 3D view mount point, full window
+     #hud ........ time, real-time factor, contacts, step time
+     #gallery .... model cards (a dialog over the view)
+     #explain-dlg  "How MuJoCo works" (explain/index.js, mounted on first open)
+     #drop ....... the drop target shown while a file is dragged in
+     #boot ....... loading and error line
+     .sk-root .... the sim kit panel (right drawer; bottom sheet on a
+                   phone) and the transport (the dock on a phone)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A MuJoCo physics playground in the browser: 24 models, a seeded scene generator, every physics option, actuator drivers, live joints, sensors and contacts, and an MJCF editor. MuJoCo by Google DeepMind, Apache-2.0.">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage" aria-label="3D view of the simulation. Drag empty space to orbit, drag a body to pull it with a spring, Ctrl-drag a body to turn it, pinch or scroll to zoom."></div>
+<div id="stage-note" class="ml-note" hidden><p>The 3D view mounts here.</p></div>
+<div id="hud" class="ml-hud" aria-live="off"></div>
+<div id="boot" class="ml-boot" role="status" aria-live="polite">Loading MuJoCo…</div>
+<div id="drop" class="ml-drop" hidden><p>Drop an MJCF file, a set of MJCF and mesh files, or a .zip</p></div>
+<section id="gallery" class="ml-gallery" role="dialog" aria-modal="true" aria-labelledby="gallery-h" hidden>
+  <div class="ml-gwrap">
+    <header class="ml-ghead">
+      <h2 id="gallery-h">Models</h2>
+      <p>Every model shows its source and licence. MuJoCo and its example models: Google DeepMind, Apache-2.0.</p>
+      <button type="button" class="sk-ib ml-gclose" id="gallery-close" aria-label="Close the model list">✕</button>
+    </header>
+    <div id="gallery-list" class="ml-glist"></div>
+  </div>
+</section>
+<section id="explain-dlg" class="ml-gallery ml-explain" role="dialog" aria-modal="true" aria-labelledby="explain-h" hidden>
+  <div class="ml-gwrap">
+    <header class="ml-ghead">
+      <h2 id="explain-h">How MuJoCo works</h2>
+      <p>One physics step, the equations it solves, and live figures that run the same engine.</p>
+      <button type="button" class="sk-ib ml-gclose" id="explain-close" aria-label="Close the explainer">✕</button>
+    </header>
+    <div id="explain"></div>
+  </div>
+</section>
+<footer id="credit" class="ml-credit">
+  <a href="https://github.com/google-deepmind/mujoco" target="_blank" rel="noopener">MuJoCo</a> by Google DeepMind, Apache-2.0
+  <span id="credit-model"></span>
+</footer>
+<script type="module" src="main.js"></script>
+</body>
+</html>
