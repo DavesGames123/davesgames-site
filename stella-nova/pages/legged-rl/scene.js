@@ -140,7 +140,7 @@ export function createView(o) {
       const rgba = mat >= 0 ? [m.mat_rgba[4 * mat], m.mat_rgba[4 * mat + 1], m.mat_rgba[4 * mat + 2]] : [m.geom_rgba[4 * g], m.geom_rgba[4 * g + 1], m.geom_rgba[4 * g + 2]];
       const col = new THREE.Color().setRGB(rgba[0], rgba[1], rgba[2], THREE.SRGBColorSpace);
       // the humanoid MJCF uses plain grey: a light satin metal, dark joints
-      if (tint) { const lum = col.r + col.g + col.b; col.copy(lum < 0.6 ? new THREE.Color(0x24262e) : tint); }
+      if (tint) { const lum = col.r + col.g + col.b; col.copy(lum < 0.6 ? new THREE.Color(0x3a3d48) : tint); }
       const sm = new THREE.MeshStandardMaterial({ color: col, roughness: 0.42, metalness: 0.35, envMapIntensity: 0.8 });
       mats.push(sm);
       const mesh = new THREE.Mesh(geo, sm);
