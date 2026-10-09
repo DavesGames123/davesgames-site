@@ -4,16 +4,25 @@
 //  Installs window.snSaver (protocol: lib/screensaver.js). It reuses the
 //  hero scene: a fan-beam gantry turns once around a phantom while the
 //  sinogram fills and the filtered back-projection builds. Each run
-//  shuffles the phantoms and the colour maps from the seed, so no two
-//  runs match. One shot is one rotation (about 9 s) plus a short hold.
-//  The CT Lab has its own, larger saver (another page).
+//  shuffles the phantoms from the seed, so no two runs match. One shot is
+//  one rotation (about 9 s) plus a short hold. The CT Lab has its own,
+//  larger saver (another page).
+//
+//  COLOUR. Each shot takes the next map from a seeded bag (theme.js
+//  mapBag: perceptual, medical and artistic maps, never the same map two
+//  shots in a row). The saver sets the page theme with { persist: false },
+//  so all three panels use that map. About two shots in five cross-fade
+//  the LUT from the last map over FADE_S seconds. The plate names the map.
+//  exit() restores the reader's own theme.
 //
 //  grep -n targets
 //    plate text ......... "const PLATES"
+//    map per shot ....... "function shotMap"
 //    frame loop ......... "function frame"
 // ============================================================================
 import { HeroScene, HERO_LIST } from './scenes-a.js';
-import { PAL } from './draw.js';
+import { PAL, CM } from './draw.js';
+import * as TH from './theme.js';
 import { plateBand } from '../../lib/saver-clear.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -27,9 +36,17 @@ const PLATES = {
 };
 const TEX = ['p(\\theta,s)=\\int_{L(\\theta,s)} \\mu\\,dl', '\\mu = \\int_0^{\\pi} (p_\\theta * h)(x\\cos\\theta + y\\sin\\theta)\\,d\\theta'];
 const RULES = [['\\mu', 'm2'], ['p', 'm1'], ['\\theta', 'm5'], ['h', 'm3']];
-const MAPS = [['bone', 'magma'], ['grey', 'inferno'], ['ice', 'magma'], ['bone', 'viridis'], ['xray-blue', 'magma'], ['grey', 'twilight']];
+export const FADE_S = 1.1;
 
 function rng(seed) { let s = seed >>> 0 || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+// The map plan of one shot: the next map from the bag, and a cross-fade
+// from the last map on about two shots in five (never on the first).
+export function shotMap(bag, R, first) {
+  const prev = bag.last;
+  const id = bag.next('seq');
+  return { id, from: !first && prev && R() < 0.4 ? prev : null };
+}
 
 let run = null;
 window.snSaver = {
@@ -39,7 +56,8 @@ window.snSaver = {
     const R = rng((o.seed >>> 0) || 7);
     const list = HERO_LIST.slice();
     for (let k = list.length - 1; k > 0; k--) { const j = Math.floor(R() * (k + 1)); [list[k], list[j]] = [list[j], list[k]]; }
-    const maps = MAPS[Math.floor(R() * MAPS.length)];
+    const bag = TH.mapBag(((o.seed >>> 0) || 7) ^ 0x9e3779b9);
+    const mine = TH.state();
     const css = document.createElement('style');
     css.textContent = 'html,body{overflow:hidden!important}body>*:not(#snSaverCv){visibility:hidden!important}' +
       '#snSaverCv{position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;display:block;cursor:none;touch-action:none}';
@@ -47,8 +65,16 @@ window.snSaver = {
     const cv = document.createElement('canvas'); cv.id = 'snSaverCv';
     document.body.appendChild(cv);
     window.__ctxSaver = true;
-    const scene = new HeroScene({ list, turn: 8 + 3 * calm, hold: 2.5, cmap: maps[0], sinoMap: maps[1] });
-    run = { css, cv, raf: 0, last: 0, scene, shown: null, subj: null };
+    const scene = new HeroScene({ list, turn: 8 + 3 * calm, hold: 2.5, cmap: '@image', sinoMap: '@image' });
+    run = { css, cv, raf: 0, last: 0, scene, shown: null, subj: null, mine, bag, map: null, fade: null };
+    const nextMap = (first) => {
+      const m = shotMap(bag, R, first);
+      TH.setTheme({ id: m.id, reverse: false, gamma: 1 }, { persist: false });
+      run.map = m.id;
+      run.fade = m.from ? { from: { id: m.from }, t: 0 } : null;
+      if (run.fade) TH.setFade(run.fade.from, 0);
+    };
+    nextMap(true);
     const g = cv.getContext('2d');
     const frame = (now) => {
       if (!run) return;
@@ -56,6 +82,11 @@ window.snSaver = {
       const dpr = Math.min(2, window.devicePixelRatio || 1), w = innerWidth, h = innerHeight;
       if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
       try { scene.step(dt); } catch (e) { /* skip a bad step */ }
+      if (run.fade) {
+        run.fade.t += dt;
+        const k = run.fade.t / FADE_S;
+        if (k >= 1) { TH.setFade(null, 1); run.fade = null; } else TH.setFade(run.fade.from, k * k * (3 - 2 * k));
+      }
       const band = typeof o.label === 'function' ? plateBand(h) : null;
       const top = band ? band.t : 24, bot = band ? band.b : 24, bh = Math.max(140, h - top - bot);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -75,18 +106,21 @@ window.snSaver = {
       const t = scene.t, end = scene.turn + scene.hold, f = clamp(Math.min(t, end - t) / 0.7, 0, 1);
       if (f < 1) { g.fillStyle = `rgba(5,7,12,${1 - f})`; g.fillRect(0, 0, w, h); }
       run.subj = { x: F.gantry.x + F.gantry.w / 2, y: F.gantry.y + F.gantry.h / 2, r: F.gantry.w * 0.42 };
+      if (run.shown !== null && run.shown !== scene.name) nextMap(false);
       if (run.shown !== scene.name && typeof o.label === 'function') {
         run.shown = scene.name;
         const P = PLATES[scene.name] || { title: 'Computed tomography', sub: '' };
         try {
           o.label({
             title: P.title, sub: P.sub, tex: TEX, rules: RULES,
-            params: [{ sym: '\\theta', name: 'views', value: '360 over one turn', cls: 'm5' }],
+            params: [{ sym: '\\theta', name: 'views', value: '360 over one turn', cls: 'm5' },
+              { name: 'colour map', value: `${CM.get(run.map).name}${run.fade ? ` (from ${CM.get(run.fade.from.id).name})` : ''}` }],
             lines: ['Fan beam, filtered back-projection', 'Algorithms after ASTRA Toolbox (van Aarle et al. 2015, 2016)'],
             anchor: () => (run && run.subj ? { ...run.subj } : null),
           });
         } catch (e) { /* the plate is optional */ }
       }
+      if (run.shown !== scene.name && typeof o.label !== 'function') run.shown = scene.name;
       run.raf = requestAnimationFrame(frame);
     };
     run.raf = requestAnimationFrame(frame);
@@ -96,7 +130,9 @@ window.snSaver = {
     if (!run) return;
     cancelAnimationFrame(run.raf);
     run.cv.remove(); run.css.remove();
+    const mine = run.mine;
     run = null; window.__ctxSaver = false;
+    TH.setTheme(mine, { persist: false });
   },
 };
-window.snSaver.debug = () => (run ? { name: run.scene.name, t: run.scene.t, views: run.scene.done } : null);
+window.snSaver.debug = () => (run ? { name: run.scene.name, t: run.scene.t, views: run.scene.done, map: run.map, fading: !!run.fade } : null);

@@ -11,6 +11,9 @@
 //     that index.html offers.
 //  3. saver.js: enter() returns a canvas in the document, frames run, the
 //     plate gets a title, exit() cleans up.
+//  2b. theme.js: the page colour map reaches the raster of every figure,
+//     signed figures get a diverging map, storage failures are harmless,
+//     the cross-fade LUT ends on each map, the saver bag never repeats.
 //  4. index.html: head order, [hidden] guard, figures and links match
 //     main.js and presets.js, ASTRA credit and both DOIs, no KaTeX.
 //  With --png DIR, it also writes one PNG per scene and width to look at.
@@ -36,6 +39,9 @@ const M = await import('./model.js');
 const A = await import('./scenes-a.js');
 const B = await import('./scenes-b.js');
 const P = await import('./presets.js');
+const TH = await import('./theme.js');
+const D = await import('./draw.js');
+const CMx = D.CM;
 const E = M.E;
 
 // ---------------------------------------------------------------- 1. model
@@ -176,6 +182,112 @@ for (const [name, C] of Object.entries(SCENES)) {
   ok(!err && nan === 0, `scene ${name}: steps, renders, takes pointer and controls`, err ? String(err.stack || err).split('\n').slice(0, 2).join(' | ') : `3 s of steps ${ms.toFixed(0)} ms, controls ${controlsFor(name).length}`);
 }
 
+// ---------------------------------------------------------------- 2b. theme
+{
+  const rasters = (sc) => Object.entries(sc).filter(([, v]) => v instanceof D.Raster && v.args);
+  const renderAt = (sc, w = 1100) => { const h = sc.height(w), cv = new Canvas(w, h), g = cv.getContext('2d'); sc.render(g, w, h); return cv; };
+  const ROLE_OF = (r) => r.args[3];
+  const scenes = Object.fromEntries(Object.entries(SCENES).map(([n, C]) => { const sc = new C({}); sc.step(0.5); sc.step(0.5); return [n, sc]; }));
+  for (const [choice, expect] of [
+    [{ id: null }, (role) => TH.CLASSIC[role.slice(1)]],
+    [{ id: 'viridis' }, (role) => (role === '@signed' ? 'berlin' : 'viridis')],
+    [{ id: 'gold-leaf', reverse: true }, (role) => (role === '@signed' ? 'vanimo' : 'gold-leaf')],
+  ]) {
+    TH.setTheme(choice, { persist: false });
+    const bad = [], seen = new Set();
+    let count = 0;
+    for (const [n, sc] of Object.entries(scenes)) {
+      renderAt(sc);
+      const rs = rasters(sc);
+      if (n !== 'filter' && n !== 'gantry' && !rs.length) bad.push(`${n}: no role raster`);
+      for (const [k, r] of rs) {
+        count++; seen.add(ROLE_OF(r));
+        if (r.mapId !== expect(ROLE_OF(r))) bad.push(`${n}.${k} ${ROLE_OF(r)} -> ${r.mapId}`);
+        if (r.ver !== TH.version()) bad.push(`${n}.${k} stale`);
+      }
+    }
+    ok(!bad.length, `theme ${choice.id || 'classic'}: every figure raster uses the chosen map`, bad.length ? bad.slice(0, 4).join('; ') : `${count} rasters, roles ${[...seen].join(' ')}`);
+  }
+  // the artefact figure shows a signed error on a diverging map
+  {
+    TH.setTheme({ id: 'magma' }, { persist: false });
+    const sc = scenes.artefact; renderAt(sc, 390);
+    const dmap = sc.rD && CMx.get(sc.rD.mapId);
+    ok(dmap && dmap.kind === 'diverging' && sc.rD.args[1] === -sc.rD.args[2], 'artefact: the error panel is signed and diverging', dmap ? `${dmap.id}, ±${sc.rD.args[2].toPrecision(3)}` : 'no error raster');
+    ok(TH.partnerOf('coolwarm') === 'coolwarm' && TH.partnerOf(null) === 'berlin' && TH.PICKER_GROUPS.every((g) => CMx.get(TH.PARTNER[g]).kind === 'diverging'), 'theme: every group has a diverging partner');
+  }
+  // a set-once raster colours again after a theme change, with no new set()
+  {
+    TH.setTheme({ id: 'bone' }, { persist: false });
+    const sc = scenes.fourier; renderAt(sc);
+    const px0 = Array.from(sc.rasI.id.data.slice(0, 4 * 4096));
+    TH.setTheme({ id: 'synthwave' }, { persist: false });
+    renderAt(sc);
+    const px1 = Array.from(sc.rasI.id.data.slice(0, 4 * 4096));
+    ok(sc.rasI.mapId === 'synthwave' && px0.join() !== px1.join(), 'fourier: the object raster (set once) follows the theme');
+  }
+  // storage
+  {
+    const boom = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
+    let err = null, st = null;
+    try { st = TH.load(boom); } catch (e) { err = e; }
+    ok(!err && st.id === null, 'theme: a storage that throws gives classic, no throw');
+    ok(TH.save(boom) === false && TH.save(null) === false, 'theme: save() reports a storage failure as false');
+    const mem = new Map(), good = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)) };
+    TH.setTheme({ id: 'ice', reverse: true, gamma: 1.4 }, { storage: good });
+    TH.setTheme({ id: null }, { persist: false });
+    st = TH.load(good);
+    ok(st.id === 'ice' && st.reverse === true && st.gamma === 1.4, 'theme: the choice round-trips through storage', JSON.stringify(st));
+    mem.set(TH.KEY, '{bad json'); ok(TH.load(good).id === null, 'theme: bad stored JSON gives classic');
+    mem.set(TH.KEY, JSON.stringify({ id: 'coolwarm' })); ok(TH.load(good).id === null, 'theme: a stored diverging id is refused');
+    mem.set(TH.KEY, JSON.stringify({ id: 'no-such-map' })); ok(TH.load(good).id === null, 'theme: an unknown stored id is refused');
+    let threw = null;
+    try { const g0 = Object.getOwnPropertyDescriptor(globalThis, 'localStorage'); Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('SecurityError'); } }); TH.load(); TH.setTheme({ id: 'mako' }); if (g0) Object.defineProperty(globalThis, 'localStorage', g0); else delete globalThis.localStorage; } catch (e) { threw = e; }
+    ok(!threw && TH.state().id === 'mako', 'theme: a localStorage getter that throws is harmless', threw ? String(threw) : '');
+  }
+  // cross-fade
+  {
+    TH.setTheme({ id: 'viridis' }, { persist: false });
+    TH.setFade({ id: 'bone' }, 0);
+    const a = TH.lutFor('@image');
+    TH.setFade({ id: 'bone' }, 0.5);
+    const mid = TH.lutFor('@image');
+    TH.setFade(null, 1);
+    const b = TH.lutFor('@image');
+    const eq = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
+    const vb = CMx.variant('bone'), vv = CMx.variant('viridis');
+    ok(eq(a, vb) && eq(b, vv), 'cross-fade: k = 0 is the old map, the end is the new map');
+    ok(mid.every((v, i) => Math.abs(v - (vb[i] + vv[i]) / 2) <= 0.51), 'cross-fade: k = 0.5 is the mean of the two LUTs');
+    ok(eq(TH.mixLut(vb, vv, 0), vb) && eq(TH.mixLut(vb, vv, 1), vv) && eq(TH.mixLut(vb, vv, 7), vv), 'mixLut: ends and clamp');
+  }
+  // the saver bag
+  {
+    let repeats = 0, kinds = 0, total = 0;
+    const firstCover = [];
+    for (const seed of [1, 7, 42, 1234, 99991, 0xdeadbeef]) {
+      const bag = TH.mapBag(seed), out = [];
+      for (let i = 0; i < 500; i++) {
+        const kind = i % 7 === 3 ? 'signed' : 'seq';
+        const id = bag.next(kind); out.push(id); total++;
+        if (kind === 'signed' && CMx.get(id).kind !== 'diverging') kinds++;
+        if (kind === 'seq' && !TH.SAVER_POOL.includes(id)) kinds++;
+      }
+      for (let i = 1; i < out.length; i++) if (out[i] === out[i - 1]) repeats++;
+      const b2 = TH.mapBag(seed), first = new Set();
+      for (let i = 0; i < TH.SAVER_POOL.length; i++) first.add(b2.next());
+      firstCover.push(first.size);
+    }
+    ok(repeats === 0, 'saver bag: never the same map twice in a row', `${total} picks over 6 seeds`);
+    ok(kinds === 0, 'saver bag: signed picks are diverging, others from the pool');
+    ok(firstCover.every((n) => n === TH.SAVER_POOL.length), 'saver bag: one pass shows every map of the pool once', firstCover.join(' '));
+    const seqA = Array.from({ length: 8 }, ((b) => () => b.next())(TH.mapBag(5))), seqB = Array.from({ length: 8 }, ((b) => () => b.next())(TH.mapBag(6)));
+    ok(seqA.join() !== seqB.join(), 'saver bag: two seeds give two orders');
+    const groups = TH.SAVER_POOL.map((id) => CMx.get(id).group), mostly = groups.filter((g) => ['perceptual', 'medical', 'artistic'].includes(g)).length / groups.length;
+    ok(mostly >= 0.85, 'saver bag: mostly perceptual, medical and artistic maps', `${(mostly * 100).toFixed(0)}%`);
+  }
+  TH.setTheme({ id: null }, { persist: false });
+}
+
 // ---------------------------------------------------------------- 3. saver
 {
   let frameFn = null, label = null, appended = [], removed = 0;
@@ -192,6 +304,7 @@ for (const [name, C] of Object.entries(SCENES)) {
   let err = null, got = null;
   try {
     await import('./saver.js');
+    TH.setTheme({ id: 'ocean', reverse: true }, { persist: false });
     got = window.snSaver.enter({ calm: 0.6, seed: 42, label: (x) => { label = x; } });
     for (let k = 1; k <= 40; k++) { const f = frameFn; frameFn = null; f(k * 33); }
   } catch (e) { err = e; }
@@ -199,7 +312,23 @@ for (const [name, C] of Object.entries(SCENES)) {
   ok(label && label.title && label.tex && typeof label.anchor === 'function' && label.anchor(), 'saver: plate has a title, TeX and an anchor', label ? label.title : '');
   const dbg = window.snSaver.debug();
   ok(dbg && dbg.views > 0, 'saver: the scan advances', dbg ? `${dbg.name}, ${dbg.views} views` : '');
+  const cm = label && label.params && label.params.find((p) => p.name === 'colour map');
+  ok(cm && dbg && cm.value.startsWith(D.CM.get(dbg.map).name) && TH.SAVER_POOL.includes(dbg.map) && TH.state().id === dbg.map, 'saver: the plate names the shot map', cm ? cm.value : '');
+  // run on through more shots: the map changes at each new object, never twice the same
+  const maps = [dbg && dbg.map];
+  let fades = 0;
+  for (let k = 41; k <= 41 + 30 * 60; k++) {
+    const f = frameFn; frameFn = null; f(k * 33);
+    const d = window.snSaver.debug();
+    if (d.map !== maps[maps.length - 1]) maps.push(d.map);
+    if (d.fading) fades++;
+  }
+  ok(maps.length >= 3 && maps.every((m, i) => !i || m !== maps[i - 1]), 'saver: a new map per shot, none back to back', maps.join(' > '));
+  const sm = await import('./saver.js');
+  { const bag = TH.mapBag(3); let n = 0; const seq = [0.1, 0.9]; for (let i = 0; i < 40; i++) { const m = sm.shotMap(bag, () => seq[i % 2], i === 0); if (m.from) { n++; if (m.from === m.id) n = -999; } } ok(n === 19 && sm.FADE_S > 0.5 && sm.FADE_S < 2, 'saver: shotMap cross-fades on some shots, from the last map', `${n} of 40, ${sm.FADE_S} s`); }
   window.snSaver.exit();
+  const back = TH.state();
+  ok(back.id === 'ocean' && back.reverse === true, 'saver: exit() restores the reader theme');
   ok(removed >= 2 && window.snSaver.debug() === null, 'saver: exit() removes the canvas and the style');
   globalThis.document = stubDocument();
 }
