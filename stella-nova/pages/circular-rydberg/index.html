@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Circular Rydberg atoms: giant orbits that refuse to decay — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CIRCULAR RYDBERG  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A research explainer on Pultinevicius, Götzelmann, Thielemann, Hölzl &
+   Meinert, "Long-lived giant circular Rydberg atoms at room temperature",
+   Nature Communications 17, 9834 (2026), doi:10.1038/s41467-026-77764-x
+   (CC BY 4.0), reported by Phys.org on 16 September 2026.
+
+   FACTS AND FIGURES
+     Numbers come from data.js, each with a source id. Every figure is our
+     own drawing: the orbitals are sampled from the hydrogen wave function
+     (physics.js, after pages/hydrogen-table/physics.js), the lifetime
+     points are the published dataset (Zenodo, CC BY 4.0), and the model
+     curves are our zero-field hydrogen model. Tags mark what is data,
+     what is our model, and what is illustrative.
+
+   NO GPU
+     The page makes no WebGL or WebGPU context. The orbital clouds are
+     point splats in a float buffer, written to a 2D canvas (cloud.js).
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module). It imports physics.js,
+   data.js, cloud.js, draw.js, saver.js and ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips   sticky section bar
+     hero     #heroStats
+     #s1 orbital    #orbCv #nIn #nOut #lIn #lOut #mIn #mOut #circBtn
+                    #cmpBtn #colSeg #packBtn #bohrBtn #spinBtn #orbRead
+     #s2 scaling    #scaleN #scaleOut #scaleBody
+     #s3 decay      #specCv #specN #specNOut #specT #specTOut #capBtn
+     #s4 prep       #prepCv #prepCloud #prepPlay #prepK
+     #s5 stable     #lifeCv #gapIn #gapOut #reflIn #reflOut #lifeRead
+                    #cascCv #cascSeg #cascN #cascPlay
+     #s6 size       #sizeCv #sizeN #sizeOut
+     #s7 uses
+     #s8 history    #tlList
+     sources        #srcList
+
+   GREP MAP  (main.js)
+     grep -n 'function initOrbital'   01 the 3D orbital viewer
+     grep -n 'function initScaling'   02 scaling table
+     grep -n 'function initDecay'     03 blackbody spectrum
+     grep -n 'function initPrep'      04 preparation ladder + morph
+     grep -n 'function initStable'    05 lifetimes and cascade
+     grep -n 'function initSize'      06 size scale
+     grep -n 'function loop'          the one rAF loop
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How strontium atoms with their outer electron on a giant circular orbit, up to 1.1 µm across, lived for more than 10 ms at room temperature between two transparent mirrors. Interactive orbitals, blackbody spectra, lifetimes and the preparation ladder, with sources.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Circular Rydberg atoms</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>The orbital</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>Scaling</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Why it lasts</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Making one</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Staying stable</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>How big</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>What for</a></li>
+    <li><a href="#s8" data-target="s8"><b>08</b>History</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Atomic physics · Nature Communications · September 2026</p>
+  <h1>Circular Rydberg atoms: giant orbits that refuse to decay</h1>
+  <p class="lede">Push the outer electron of an atom far enough out, and give it all the angular momentum it can hold, and quantum mechanics gives back something close to Bohr's old picture: an electron on a circle. At the University of Stuttgart, Einius Pultinevicius, Florian Meinert and colleagues made such circular orbits in single strontium atoms up to principal quantum number n = 103, a ring 1.1 µm across, about ten thousand times wider than the atom it came from. Between two transparent mirrors at room temperature these atoms kept their state for more than 10 milliseconds, the longest Rydberg lifetimes measured in a laboratory so far.</p>
+  <div class="stats" id="heroStats"></div>
+  <p class="note">Numbers on this page come from the paper, its published dataset, or the sources listed at the end. The orbitals and curves are our own drawings from the hydrogen wave function and textbook rate equations. Tags say which parts are <b>data</b>, which are <b>our model</b>, and which are <b>illustrative</b>.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The orbital: a ring instead of a cloud</h2><p>An electron in an atom is a probability cloud. Its shape is set by three numbers: n (the shell), l (the angular momentum) and m (how that angular momentum points). For most states the cloud is spread out, with nodes and lobes. When l and m take their largest values, l = |m| = n − 1, almost all of that structure goes away. What is left is a thin torus around the nucleus: a circular Rydberg state, written |nC⟩.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>The electron density, sampled from the hydrogen wave function</h3><span class="tag model">our model · hydrogen, exact |ψ|²</span></div>
+      <canvas class="fig orb" id="orbCv" aria-label="3D point cloud of the electron density of the chosen state. Drag to turn, scroll or pinch to zoom."></canvas>
+      <div class="ctrls">
+        <label class="ctrl grow">n <input type="range" id="nIn" min="1" max="110" step="1" value="30"><output id="nOut">30</output></label>
+        <label class="ctrl grow">l <input type="range" id="lIn" min="0" max="29" step="1" value="29"><output id="lOut">29</output></label>
+        <label class="ctrl grow">m <input type="range" id="mIn" min="-29" max="29" step="1" value="29"><output id="mOut">29</output></label>
+      </div>
+      <div class="ctrls">
+        <button class="tgl on" id="circBtn">Circular (l = m = n − 1)</button>
+        <button class="tgl" id="cmpBtn">Compare with l = 0</button>
+        <div class="seg" id="colSeg" role="group" aria-label="Colour"><button data-v="density" class="on">Density</button><button data-v="phase">Phase</button></div>
+        <button class="tgl" id="packBtn">Wave packet</button>
+        <button class="tgl" id="bohrBtn">Bohr orbit</button>
+        <button class="tgl on" id="spinBtn">Turn</button>
+      </div>
+      <p class="cap" id="orbCap">Drag to turn the view. The ring lies in the x–y plane; the quantization axis is vertical.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>This state</h3><span class="tag model">hydrogen, zero field</span></div>
+      <dl class="read" id="orbRead"></dl>
+      <div class="eqs">
+        <div class="sci-eq" data-tex="|\psi_{n,\,n-1,\,n-1}|^2 \;\propto\; r^{2n-2}\, e^{-2r/(n a_0)}\, \sin^{2n-2}\theta"></div>
+        <p class="body dim">The radial factor peaks near the Bohr radius n²a₀ and its relative width shrinks as 1/√(2n+1). The angular factor squeezes the cloud onto the equator with a width of about 1/√(2n). Both make the ring sharper as n grows.</p>
+        <div class="sci-eq" data-tex="\langle r\rangle = n\left(n+\tfrac12\right)a_0, \qquad \frac{\Delta r}{\langle r\rangle} = \frac{1}{\sqrt{2n+1}}"></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>Everything scales with n</h2><p>Rydberg atoms are extreme because their properties grow or shrink as powers of n. At n ≈ 100 the powers make them giants: a millionth of a metre across, sensitive to the smallest field, and, for circular states, nearly unable to radiate.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Scaling laws, with values at the chosen n</h3><span class="tag model">our model · hydrogen</span></div>
+      <div class="ctrls"><label class="ctrl grow">n <input type="range" id="scaleN" min="10" max="110" step="1" value="101"><output id="scaleOut">101</output></label></div>
+      <div class="tablewrap"><table class="scale"><thead><tr><th>quantity</th><th>scales as</th><th>value at n</th><th>why it matters</th></tr></thead><tbody id="scaleBody"></tbody></table></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>Why a circular state lasts: one way down, and a warm sky</h2><p>An excited atom loses energy by emitting a photon, and each photon can change l by exactly one. A circular state has l = n − 1, and the only state below it with l = n − 2 is the next circular state, |n−1 C⟩. So instead of dropping straight to the ground state with a high-energy optical photon, the electron can only step down one rung at a time with a weak microwave photon. Its natural lifetime grows as n⁵: about 1 second at n = 101.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Room-temperature light against the lines of |nC⟩</h3><span class="tag model">Planck spectrum · our model</span></div>
+      <canvas class="fig chart tall" id="specCv" aria-label="Photons per mode of blackbody radiation against frequency, with the transition lines of the chosen circular state"></canvas>
+      <div class="ctrls">
+        <label class="ctrl grow">n <input type="range" id="specN" min="60" max="105" step="1" value="90"><output id="specNOut">90</output></label>
+        <label class="ctrl grow">T <input type="range" id="specT" min="4" max="300" step="1" value="300"><output id="specTOut">300 K</output></label>
+        <button class="tgl on" id="capBtn">Plates on</button>
+      </div>
+      <p class="cap">At room temperature every microwave mode near 10 GHz holds hundreds of thermal photons. They drive the atom up and down the ladder hundreds of times faster than it decays on its own. The plates of the experiment, 10.5 mm apart, remove the modes that carry circularly polarized (σ) light below c/2d.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The rate, term by term</h3><span class="tag real">Pultinevicius et al. 2026, eq. 3</span></div>
+      <div class="sci-eq" data-tex="\Gamma = \sum_{s}\Big(\bar n(\omega_s, T) + \delta_{s,\,|n-1\,C\rangle}\Big)\,\xi\, A_{nC,\,s}"></div>
+      <p class="body">Each final state s adds its Einstein coefficient A, multiplied by the number of thermal photons n̄ at that frequency. The one spontaneous channel, down to |n−1 C⟩, adds the extra 1. The Purcell factor ξ says how much the surroundings change the density of photon modes: 1 in free space, near 0 for σ light between the plates below the cut-off.</p>
+      <div class="sci-eq" data-tex="\bar n = \frac{1}{e^{h\nu/k_B T}-1}\approx \frac{k_B T}{h\nu} \qquad \nu_{n\to n-1}\approx \frac{2R_\infty c}{n^3}"></div>
+      <p class="body dim">At n = 101 and 300 K, n̄ is about 1000, so blackbody light, not spontaneous decay, sets the lifetime: our hydrogen model gives about 0.5 ms in free space, against 0.55 ms in the paper's calculation, and about 1 s at 0 K.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>Making one: from a cloud to a ring, then up the ladder</h2><p>A laser cannot make a circular state directly: light carries too little angular momentum. The team first holds one strontium-88 atom in an optical tweezer, excites one electron with lasers to a Rydberg state of low l, and then turns it into |79C⟩ with a circularly polarized radio-frequency field, a method described in their 2024 work. From there they climb: two microwave photons at a time, n → n + 2, each step a Landau-Zener sweep of the electric field across the two-photon resonance.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>The sequence</h3><span class="tag toy">schematic, energies not to scale</span></div>
+      <canvas class="fig chart tall" id="prepCv" aria-label="Energy ladder of the preparation sequence"></canvas>
+      <div class="ctrls">
+        <button class="tgl" id="prepPlay">Play</button>
+        <label class="ctrl grow">step <input type="range" id="prepK" min="0" max="1" step="0.001" value="1"></label>
+      </div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The electron, as it is reshaped</h3><span class="tag model">our model · sampled |ψ|²</span></div>
+      <canvas class="fig" id="prepCloud" aria-label="The electron cloud morphing from a low-l state into a circular ring, then growing"></canvas>
+      <ul class="facts">
+        <li>Up to <b>12 microwave pulses</b> link |79C⟩ to |103C⟩; each two-photon step transfers about <b>94 %</b> of the population.</li>
+        <li>The whole climb to n = 101 takes about <b>400 µs</b>, already longer than the free-space lifetime of the lowest state used.</li>
+        <li>Fields: about 6 V/cm along z and 1.5 G hold the ring flat between the plates.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Staying stable: two mirrors that see through</h2><p>Earlier experiments with long-lived circular atoms cooled the whole apparatus to a few kelvin, so that there were few thermal photons left. This team kept the room temperature and changed the photons instead. The atom sits midway between two glass plates coated with indium tin oxide: transparent for the lasers, but about 96 % reflective for microwaves. Between such plates, a mode of σ light whose wavelength is longer than twice the gap cannot exist, so the atom cannot absorb or emit it. This is the inhibited emission that Kleppner described in 1981, now used to protect a quantum state.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Lifetime against n</h3><span class="tag real">points: published data</span><span class="tag model">lines: our model</span></div>
+      <canvas class="fig chart tall" id="lifeCv" aria-label="Measured circular state lifetimes against n, with the free-space model and the parallel-plate model"></canvas>
+      <div class="legend"><span><i style="background:#ff7a8a"></i>measured, 1σ (dataset)</span><span><i style="background:#6ee7a8"></i>free space, 300 K</span><span><i class="dash" style="border-color:#8fd3ff"></i>ideal plates, finite reflectivity</span></div>
+      <div class="ctrls">
+        <label class="ctrl grow">gap d <input type="range" id="gapIn" min="6" max="16" step="0.1" value="10.5"><output id="gapOut">10.5 mm</output></label>
+        <label class="ctrl grow">reflectivity <input type="range" id="reflIn" min="0.85" max="0.995" step="0.005" value="0.96"><output id="reflOut">96 %</output></label>
+      </div>
+      <p class="cap" id="lifeRead"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Where the population goes</h3><span class="tag model">our rate model</span></div>
+      <canvas class="fig chart tall" id="cascCv" aria-label="Populations of neighbouring circular states against hold time"></canvas>
+      <div class="ctrls">
+        <div class="seg" id="cascSeg" role="group" aria-label="Environment"><button data-v="cap" class="on">Between the plates</button><button data-v="free">Free space</button></div>
+        <label class="ctrl grow">start n <input type="range" id="cascN" min="79" max="103" step="2" value="97"><output id="cascNOut">97</output></label>
+        <button class="tgl" id="cascPlay">Play</button>
+      </div>
+      <p class="body dim">Blackbody photons move the atom one rung up or down; from there it can come back. That is why the paper fits a rate model to all the n manifolds, not one exponential to the first state. Our model has the circular ladder and one bin for everything else (elliptical states).</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>What the measurements show</h3><span class="tag real">Pultinevicius et al. 2026</span></div>
+      <ul class="facts cols">
+        <li>Lifetimes rise sharply near <b>n ≈ 80</b>, where the wavelength of the n → n ± 1 photons passes twice the plate gap: about <b>5 ms</b> around n = 85.</li>
+        <li>A dip near <b>n ≈ 90</b> comes from a π-polarized mode of the cylinder formed by the plates and the ring electrodes. Ideal plates do not have it, so our dashed line misses it too.</li>
+        <li>Above <b>n ≈ 95</b> a second step appears, when the weaker n → n + 2 photons are also cut off: <b>11.5(8) ms</b> at n = 101, about <b>21 times</b> the free-space value of 545 µs.</li>
+        <li>That is the lifetime a free atom would have in a <b>14 K</b> environment, and three times longer than the best cryogenic result so far.</li>
+        <li>The strontium ion core is polarizable, so an ordinary Gaussian tweezer still holds the Rydberg atom: <b>133(6) ms</b> 1/e trap lifetime from |97C⟩. With the tweezer off, the signal is gone in about 1 ms.</li>
+        <li>Each lifetime point comes from <b>4000 repetitions</b> per hold time, read out by state-selective field ionization.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>How big is n = 103?</h2><p>The mean radius of a circular state is n(n + ½) Bohr radii. At n = 103 that is about 0.56 µm, an orbit 1.1 µm across: as wide as a bacterium, from a single electron bound to a single ion.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <canvas class="fig chart" id="sizeCv" aria-label="Orbit diameter on a logarithmic size scale"></canvas>
+      <div class="ctrls"><label class="ctrl grow">n <input type="range" id="sizeN" min="1" max="110" step="1" value="103"><output id="sizeOut">103</output></label></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>What it is for</h2><p>Arrays of neutral atoms excited to Rydberg states are one of the main platforms for quantum simulation and quantum computing. The usual Rydberg states (S and D orbitals) last about 100 µs, which limits how long a simulation can run and how good a gate can be.</p></div></div>
+  <div class="grid">
+    <article class="card span-4"><div class="card-top"><h3>Longer quantum simulations</h3></div><p class="body">With lifetimes above 10 ms, the fundamental T₁ limit moves about two orders of magnitude beyond today's Rydberg simulators. The authors say the next step is coherence: technical magnetic and electric field noise now limits T₂ to about 100 µs.</p></article>
+    <article class="card span-4"><div class="card-top"><h3>Stronger interactions</h3></div><p class="body">Interactions grow fast with n. Compared with circular atoms at n ≈ 50, n ≈ 100 gives a van der Waals blockade about a thousand times stronger and a dipole exchange coupling more than ten times larger.</p><div class="sci-eq" data-tex="C_6 \propto n^{11}, \qquad C_3 \propto n^{4}"></div></article>
+    <article class="card span-4"><div class="card-top"><h3>Sensing and new encodings</h3></div><p class="body">A ladder of coherently linked circular states can act as a qudit or a synthetic dimension. The inner electron of strontium also allows optical addressing, cooling and clock spectroscopy of the ion core inside the Rydberg orbit.</p></article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8">
+  <div class="sec-head"><span class="num">08</span><div><h2>A century of circular orbits</h2></div></div>
+  <ol class="tl" id="tlList"></ol>
+</section>
+
+<section class="sec" id="refs">
+  <div class="sec-head"><span class="num">—</span><div><h2>Sources</h2><p>Facts are told in our own words. The paper and its dataset are open access under CC BY 4.0; no figure is copied. The lifetime points are the fitted values in the dataset; the paper quotes 11.5(8) ms for n = 101, the fit file gives 11.7(8) ms. The orbital renderer reuses the hydrogen functions of this site's <a href="../hydrogen-table/index.html">Hydrogen Wave Function</a> page.</p></div></div>
+  <ol class="refs" id="srcList"></ol>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
