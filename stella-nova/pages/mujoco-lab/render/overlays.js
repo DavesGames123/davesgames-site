@@ -123,7 +123,7 @@ export function drawOverlays(P, X) {
             const f = X.cf.GetView();
             // world force on geom2 from geom1: f0 n + f1 t1 + f2 t2
             const wx = f[0] * fr[0] + f[1] * fr[3] + f[2] * fr[6], wy = f[0] * fr[1] + f[1] * fr[4] + f[2] * fr[7], wz = f[0] * fr[2] + f[1] * fr[5] + f[2] * fr[8];
-            const fm = Math.hypot(wx, wy, wz), L = fm * sc.forceScale;
+            const fm = Math.hypot(wx, wy, wz), L = Math.min(fm * sc.forceScale, sc.forceMax);   // capped for legibility
             if (L > 1e-6) P.addArrow(px, py, pz, wx / fm, wy / fm, wz / fm, L, sc.forceWidth, COLORS.force);
           }
           if (F.constraints && c.dist < -1e-4) {
@@ -244,10 +244,10 @@ export function drawOverlays(P, X) {
   if (F.perturb && pt.body > 0) {
     const a = pt.anchor, t = pt.target, col = pt.mode === 'rotate' ? COLORS.perturbRot : COLORS.perturb;
     if (pt.mode === 'translate') {
-      P.addSeg(a[0], a[1], a[2], t[0], t[1], t[2], sc.meansize * 0.025, col);
-      P.addSphere(t[0], t[1], t[2], sc.meansize * 0.09, col);
+      P.addSeg(a[0], a[1], a[2], t[0], t[1], t[2], sc.mark * 0.03, col);
+      P.addSphere(t[0], t[1], t[2], sc.mark * 0.12, col);
     }
-    P.addSphere(a[0], a[1], a[2], sc.meansize * 0.06, col);
+    P.addSphere(a[0], a[1], a[2], sc.mark * 0.08, col);
   }
   P.end();
 }

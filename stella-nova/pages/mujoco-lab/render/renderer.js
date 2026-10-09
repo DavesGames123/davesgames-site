@@ -159,9 +159,9 @@ export function createMjRenderer(canvas, sim, opts = {}) {
     extent = st.extent || 1;
     const ms = st.meansize || 0.1 * extent, vs = m.vis.scale, vm = m.vis.map;
     Object.assign(sc, {
-      meansize: ms, extent,
+      meansize: ms, extent, mark: Math.max(ms, 0.04 * extent),
       contactWidth: Math.max(vs.contactwidth * ms, 0.004 * extent), contactHeight: Math.max(vs.contactheight * ms, 0.002 * extent),
-      forceWidth: vs.forcewidth * ms, forceScale: vm.force / Math.max(1e-9, st.meanmass || 1),
+      forceWidth: vs.forcewidth * ms, forceScale: vm.force / Math.max(1e-9, st.meanmass || 1), forceMax: 1.5 * extent,
       jointLength: vs.jointlength * ms, jointWidth: vs.jointwidth * ms, frameLength: vs.framelength * ms, frameWidth: vs.framewidth * ms,
       com: vs.com * ms * 0.5, actLength: (vs.actuatorlength || 0.7) * ms, actWidth: (vs.actuatorwidth || 0.2) * ms * 0.5,
     });

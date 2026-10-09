@@ -123,7 +123,7 @@ section('overlays: counts for each flag');
   // the force arrow length follows the simulate scale
   R.setFlags({ contactForces: true }); R.update();
   const f = S.contacts()[0], M = P.seg.M, L = Math.hypot(M[4], M[5], M[6]) + Math.hypot(P.cone.M[4], P.cone.M[5], P.cone.M[6]);
-  const want = Math.hypot(...f.force) * S.m.vis.map.force / S.m.stat.meanmass;
+  const want = Math.min(Math.hypot(...f.force) * S.m.vis.map.force / S.m.stat.meanmass, 1.5 * S.m.stat.extent);
   ok(near(L, want, 1e-4 * Math.max(1, want)), `arrow length ${L.toFixed(4)} = |f| map.force / meanmass ${want.toFixed(4)}`);
   // constraint violations: push a joint out of range
   R.setFlags({ contactForces: false, constraints: true });
@@ -239,7 +239,7 @@ section('allocation: update() with overlays off');
   gc(); const h1 = process.memoryUsage().heapUsed;
   const per = (h1 - h0) / 5000;
   ok(per < 64, `heap growth ${per.toFixed(1)} bytes per update (after gc)`);
-  console.log(`  ragdolls: ${R.stats().dynamic} dynamic meshes; heap ${(h0 / 1e6).toFixed(1)} -> ${(h1 / 1e6).toFixed(1)} MB over 5000 updates`);
+  console.log(`  ragdolls: ${R.stats().dynamic} dynamic meshes; heap ${(h0 / 1e6).toFixed(2)} -> ${(h1 / 1e6).toFixed(2)} MB over 5000 updates, ${per.toFixed(1)} bytes per update`);
   R.dispose(); S.dispose();
 }
 

@@ -69,7 +69,7 @@ The returned `R`:
 | Flag | Default | Draws |
 |---|---|---|
 | `contactPoints` | false | a disc at each contact, normal along `frame[0..2]` |
-| `contactForces` | false | an arrow per contact, `mj_contactForce` in world axes, length `|f| * vis.map.force / stat.meanmass` |
+| `contactForces` | false | an arrow per contact, `mj_contactForce` in world axes, length `|f| * vis.map.force / stat.meanmass`, at most 1.5 `stat.extent` |
 | `jointAxes` | false | hinge and slide axes at `xanchor` along `xaxis`, a ball for ball joints |
 | `com` | false | body centres of mass (`xipos`), larger for the subtree COM of each root body |
 | `inertia` | false | the equivalent inertia box of each body (`xipos`, `ximat`) |
