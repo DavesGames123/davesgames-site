@@ -38,6 +38,7 @@
 // The entry point is named `step`. It hides the WGSL builtin step(), so a body
 // must not call step(). Use select(0.0, 1.0, x >= edge) instead.
 
+import { varyInit } from './vary.js';
 export const MAX_PARAMS = 64;
 const CHEMS = ['a', 'b', 'c', 'd'];
 const COMP = ['x', 'y', 'z', 'w'];
@@ -227,6 +228,7 @@ export function buildStepShader(preset, opts = {}) {
 //          | {halfplane:"left"|"right"|"top"|"bottom"}. No region = every cell.
 // A circle or ring radius is a fraction of the grid width.
 // The noise uses a seeded PRNG (mulberry32), so a seed gives the same state.
+// vary.js moves, turns, scales and copies the geometry by the same seed.
 // ---------------------------------------------------------------------------
 
 function mulberry32(seed) {
@@ -266,7 +268,8 @@ export function buildInitState(preset, w, h, seed = 1) {
   const data = new Float32Array(w * h * 4);
   const rand = mulberry32(seed);
   const aspect = h / w;
-  for (const op of preset.init || []) {
+  // the start geometry varies with the seed (vary.js); FIXED presets keep theirs
+  for (const op of varyInit(preset, seed)) {
     const k = CHEMS.indexOf(op.chem || 'a');
     if (k < 0) throw new Error('unknown chem: ' + op.chem);
     const inside = regionTest(op.region, w, h);

@@ -36,6 +36,7 @@
      grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
 import { renderEquations, renderTeX, GENERAL, GENERAL_RULES, presetRules, paramTeX } from './equations.js';
+import { varyParams } from './vary.js';
 import { typeset } from '../../lib/sci-math.js';
 
 const $ = id => document.getElementById(id);
@@ -300,6 +301,7 @@ function pushView() {
 
 // --------------------------------------------------------------- parameters
 function buildParams(p) {
+  S.paramInputs = {};
   const box = $('params'); box.textContent = '';
   const pm = p.paramMap;
   for (const q of p.params || []) {
@@ -322,6 +324,7 @@ function buildParams(p) {
     const rst = document.createElement('button'); rst.className = 'rst same'; rst.textContent = '↺';
     rst.title = 'Reset to ' + fmt(q.value, step); rst.setAttribute('aria-label', `Reset ${q.label || q.name}`);
     const inp = document.createElement('input'); inp.type = 'range';
+    S.paramInputs[q.name] = inp;
     inp.min = lo; inp.max = hi; inp.step = step; inp.value = q.value;
     inp.setAttribute('aria-label', q.label || q.name);
     row.append(nm, val, rst, inp);
@@ -529,9 +532,20 @@ function setPlaying(on) {
   $('dockPlay').textContent = on ? '❚❚' : '▶';
   $('dockPlay').setAttribute('aria-label', on ? 'Pause' : 'Play');
 }
+// A new seed also varies the shape parameters that vary.js lists (the
+// crystal's orientation, anisotropy and latent heat), through the sliders,
+// so the panel shows the values in use.
+function varyPresetParams(rnd) {
+  for (const [name, v] of Object.entries(varyParams(S.preset, rnd))) {
+    const inp = S.paramInputs && S.paramInputs[name];
+    if (inp) { inp.value = v; inp.dispatchEvent(new Event('input')); }
+    else if (S.engine) { try { S.engine.setParam(name, v); } catch (e) { console.warn(e); } }
+  }
+}
 function doReset(newSeed) {
   if (!S.engine || S.failed) return;
   try {
+    if (newSeed) varyPresetParams(Math.random);
     if (newSeed) S.engine.reset((Math.random() * 0x7fffffff) >>> 0);
     else S.engine.reset();
   } catch (e) { console.warn('[rd] reset', e); }
@@ -912,6 +926,7 @@ window.snSaver = {
       loading = true;
       await selectPreset(list[k]);
       const p = S.preset, one = ONE.includes(p.id), own = (p.render || {}).colormap;
+      varyPresetParams(rnd);
       S.engine.reset((rnd() * 4294967296) >>> 0);
       const maps = S.cmaps.map(c => c.id).filter(id => id !== own);
       if (maps.length && rnd() < 0.45) S.view.colormap = maps[Math.floor(rnd() * maps.length)];
