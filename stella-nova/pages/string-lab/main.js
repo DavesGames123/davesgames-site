@@ -378,10 +378,16 @@ async function mount3D() {
   }
 }
 
+/** Release the 3D renderer and its GL context (pagehide, errors). */
 function dispose3D() {
   if (!view3) return;
+  const r = view3.renderer;
   try { view3.dispose(); } catch (_) { /* gone */ }
+  try { r?.forceContextLoss?.(); } catch (_) { /* gone */ }
   view3 = null;
+  // a lost context cannot be used again: a later mount gets a new canvas
+  const old = $('c3');
+  if (old) { const c = old.cloneNode(false); old.replaceWith(c); }
 }
 
 // ── controls ─────────────────────────────────────────────────────────────
