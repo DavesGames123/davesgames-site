@@ -125,6 +125,10 @@ w.SN_NAV = [
       ["human-skull", "Human Skull", "3D"],
       ["human-skeleton", "Human Skeleton", "3D"]
     ] },
+    { h: "Neuroscience", p: [
+      ["neuron-lab", "Neuron Lab", "SIM"],
+      ["neuron-network", "Neural Network", "SIM"]
+    ] },
     { h: "Deep Time", p: [
       ["ancient-earth", "Ancient Earth", "3D"]
     ] },
