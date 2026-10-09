@@ -171,7 +171,8 @@ w.SN_NAV = [
       ["maxwell", "Maxwell's Equations", "NEW", "maxwells-equations"],
       ["twenty-to-four", "Twenty to Four", "NEW"],
       ["smith-chart", "Smith Chart", "NEW"],
-      ["antenna-fields", "Antenna Fields", "NEW"]
+      ["antenna-fields", "Antenna Fields", "NEW"],
+      ["sstv", "Slow-Scan Television", "NEW"]
     ] },
     { h: "Optics", p: [
       ["diffraction", "Aperture Diffraction", "NEW", "diffraction-lab"],
