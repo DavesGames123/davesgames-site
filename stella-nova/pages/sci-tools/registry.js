@@ -17,6 +17,7 @@
 
 export const CATS = [
   { id: 'units', name: 'Units and constants' },
+  { id: 'measure', name: 'Measurement and errors' },
 ];
 
 export const TOOLS = [
@@ -24,6 +25,9 @@ export const TOOLS = [
   ['constants', 'units', 'Physical constants', 'CODATA 2022 values with uncertainties, searchable.', 'codata nist planck boltzmann avogadro speed light'],
   ['sig-figs', 'units', 'Significant figures', 'Count and round significant figures; scientific and engineering notation.', 'sig figs sigfig rounding notation scientific engineering uncertainty'],
   ['scales', 'units', 'Temperature, pressure and energy scales', 'One value in every unit of the scale, side by side.', 'temperature pressure energy wavenumber kelvin celsius ev hartree cross table'],
+  ['uncertainty', 'measure', 'Uncertainty propagation', 'Propagate standard uncertainties through any formula: first order and Monte Carlo.', 'error propagation gum monte carlo sensitivity budget'],
+  ['wmean', 'measure', 'Weighted mean', 'Inverse-variance mean of values with uncertainties, χ² and Birge ratio.', 'weighted average inverse variance birge chi'],
+  ['pct-error', 'measure', 'Percent error', 'Percent error and difference between values in any units.', 'percent error difference relative deviation z score'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
