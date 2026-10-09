@@ -1,0 +1,424 @@
+{
+ "objects": [
+  {
+   "id": "walnut",
+   "name": "Walnut (real cone-beam CT)",
+   "widthCm": 5.12,
+   "blurb": "A real walnut, scanned for a machine-learning data set: shell, kernel and the air between.",
+   "credit": {
+    "author": "H. Der Sarkissian, F. Lucka, M. van Eijnatten, G. Colacicco, S. B. Coban, K. J. Batenburg, Sci Data 6, 215 (2019), doi:10.1038/s41597-019-0235-y",
+    "licence": "CC-BY-4.0",
+    "source": "https://doi.org/10.5281/zenodo.2686726",
+    "changes": "Every 4th AGD reconstruction slice of Walnut1, 4 x 4 pixel means, scaled so the shell is mu at 70 keV, padded to 128^3."
+   },
+   "kind": "volume",
+   "file": "walnut.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "muMax": 0.3184,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     106,
+     "kernel",
+     [
+      0.68,
+      0,
+      0
+     ]
+    ],
+    [
+     227,
+     "shell",
+     [
+      1.15,
+      0.12,
+      0
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "rabbit",
+   "name": "Rabbit (C-arm CT)",
+   "widthCm": 25.6,
+   "blurb": "A real cone-beam scan of a post-mortem rabbit: skeleton, lungs, organs, and the table it lay on.",
+   "credit": {
+    "author": "RabbitCT: C. Rohkohl, B. Keck, H. G. Hofmann, J. Hornegger, Med Phys 36(9):3940-3944 (2009), doi:10.1118/1.3180956",
+    "licence": "CC-BY-4.0",
+    "source": "https://doi.org/10.5281/zenodo.21267885",
+    "changes": "reference_256.vol averaged to 128^3, values below 0.12 of water and the outside of the field-of-view cylinder set to 0, values scaled to mu at 70 keV."
+   },
+   "kind": "volume",
+   "file": "rabbit.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "muMax": 0.62783,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     82,
+     "soft",
+     [
+      1.04,
+      0,
+      0
+     ]
+    ],
+    [
+     204,
+     "bone",
+     [
+      0,
+      1,
+      0
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "skull",
+   "name": "Human skull",
+   "kind": "mesh",
+   "file": "skull.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "widthCm": 23.52,
+   "muMax": 0.51239,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     250,
+     "bone",
+     [
+      0,
+      1,
+      0
+     ]
+    ]
+   ],
+   "blurb": "A surface scan of a skull, rebuilt as a 6 mm bone wall around air.",
+   "credit": {
+    "author": "Skull by Vladimir Petkovic, Khronos glTF Sample Assets (ScatteringSkull)",
+    "licence": "CC0-1.0",
+    "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ScatteringSkull",
+    "changes": "Geometry only, turned into a voxel volume with assigned materials by tools/ct-lab-3d/build-meshes.mjs."
+   }
+  },
+  {
+   "id": "amber",
+   "name": "Mosquito in amber",
+   "kind": "mesh",
+   "file": "amber.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "widthCm": 3.584,
+   "muMax": 0.25712,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     206,
+     "amber",
+     [
+      1.07,
+      0,
+      0
+     ]
+    ],
+    [
+     250,
+     "chitin",
+     [
+      1.3,
+      0,
+      0
+     ]
+    ]
+   ],
+   "blurb": "A resin block with an insect inside: air fills its body, chitin its skin.",
+   "credit": {
+    "author": "Loïc Norgeot (model) and Geoffrey Marchal (mosquito scan), via Sketchfab and the Khronos glTF Sample Assets",
+    "licence": "CC-BY-4.0",
+    "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/MosquitoInAmber",
+    "changes": "Geometry only, turned into a voxel volume with assigned materials by tools/ct-lab-3d/build-meshes.mjs."
+   },
+   "thumb": "slice"
+  },
+  {
+   "id": "watch",
+   "name": "Chronograph watch",
+   "kind": "mesh",
+   "file": "watch.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "widthCm": 6.944,
+   "muMax": 6.63197,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     9,
+     "plastic",
+     [
+      1.18,
+      0,
+      0
+     ]
+    ],
+    [
+     10,
+     "rubber",
+     [
+      1.3,
+      0,
+      0
+     ]
+    ],
+    [
+     12,
+     "carbon",
+     [
+      1.55,
+      0,
+      0
+     ]
+    ],
+    [
+     24,
+     "glass",
+     [
+      0,
+      1.25,
+      0
+     ]
+    ],
+    [
+     25,
+     "aluminium",
+     [
+      0,
+      1.28,
+      0
+     ]
+    ],
+    [
+     250,
+     "steel",
+     [
+      0,
+      0,
+      1
+     ]
+    ]
+   ],
+   "blurb": "A steel case, a glass face, plastic and carbon bands. Steel makes metal streaks.",
+   "credit": {
+    "author": "Chronograph Watch by Eric Chadwick (Darmstadt Graphics Group), from \"Chronograph Watch Mudmaster\" by graphiccompressor, Khronos glTF Sample Assets",
+    "licence": "CC-BY-4.0",
+    "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ChronographWatch",
+    "changes": "Geometry only, turned into a voxel volume with assigned materials by tools/ct-lab-3d/build-meshes.mjs."
+   }
+  },
+  {
+   "id": "pot",
+   "name": "Copper pot of coals",
+   "kind": "mesh",
+   "file": "pot.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "widthCm": 17.92,
+   "muMax": 7.42781,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     9,
+     "coal",
+     [
+      1.35,
+      0,
+      0
+     ]
+    ],
+    [
+     250,
+     "copper",
+     [
+      0,
+      0,
+      1.12
+     ]
+    ]
+   ],
+   "blurb": "Dense copper around light coals: the classic metal-artefact case.",
+   "credit": {
+    "author": "Pot of Coals by Eric Chadwick (Darmstadt Graphics Group), Khronos glTF Sample Assets",
+    "licence": "CC-BY-4.0",
+    "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/PotOfCoals",
+    "changes": "Geometry only, turned into a voxel volume with assigned materials by tools/ct-lab-3d/build-meshes.mjs."
+   }
+  },
+  {
+   "id": "teacup",
+   "name": "Teacup and saucer",
+   "kind": "mesh",
+   "file": "teacup.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "widthCm": 16.8,
+   "muMax": 0.64049,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     250,
+     "porcelain",
+     [
+      0,
+      1.25,
+      0
+     ]
+    ]
+   ],
+   "blurb": "Thin porcelain walls: a test of how well the scan keeps a thin edge.",
+   "credit": {
+    "author": "Diffuse Transmission Teacup by Poly Haven and Eric Chadwick, Khronos glTF Sample Assets",
+    "licence": "CC0-1.0",
+    "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DiffuseTransmissionTeacup",
+    "changes": "Geometry only, turned into a voxel volume with assigned materials by tools/ct-lab-3d/build-meshes.mjs."
+   }
+  },
+  {
+   "id": "toycar",
+   "name": "Toy car on a cloth",
+   "kind": "mesh",
+   "file": "toycar.bin",
+   "dims": [
+    128,
+    128,
+    128
+   ],
+   "widthCm": 10.08,
+   "muMax": 0.64049,
+   "anchors": [
+    [
+     0,
+     "air",
+     [
+      0,
+      0,
+      0
+     ]
+    ],
+    [
+     91,
+     "plastic",
+     [
+      1.18,
+      0,
+      0
+     ]
+    ],
+    [
+     100,
+     "rubber",
+     [
+      1.3,
+      0,
+      0
+     ]
+    ],
+    [
+     250,
+     "glass",
+     [
+      0,
+      1.25,
+      0
+     ]
+    ]
+   ],
+   "blurb": "A plastic car with glass windows on a fold of fabric.",
+   "credit": {
+    "author": "Toy Car by Guido Odendahl and Eric Chadwick, Khronos glTF Sample Assets",
+    "licence": "CC0-1.0",
+    "source": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/ToyCar",
+    "changes": "Geometry only, turned into a voxel volume with assigned materials by tools/ct-lab-3d/build-meshes.mjs."
+   }
+  }
+ ]
+}
