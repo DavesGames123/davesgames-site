@@ -138,7 +138,8 @@ w.SN_NAV = [
     ] },
     { h: "Medical Imaging", p: [
       ["ct-explained", "How CT Works", "NEW"],
-      ["ct-lab", "CT Lab", "LAB"]
+      ["ct-lab", "CT Lab", "LAB"],
+      ["ct-lab-3d", "CT Lab 3D", "NEW"]
     ] },
     { h: "Neuroscience", p: [
       ["neuron-lab", "Neuron Lab", "SIM"],

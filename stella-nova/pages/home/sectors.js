@@ -290,6 +290,7 @@ const BLURBS = {
   'virus-atlas': 'Real virus capsids from the PDB: assemble, peel, explode.',
   'ct-explained': 'How CT works, from X-ray shadows to slices.',
   'ct-lab': 'Scan phantoms, fill the sinogram, break the image.',
+  'ct-lab-3d': 'CT scan a real walnut, a rabbit, a skull or a mosquito in amber, then slice it.',
   'neuron-lab': 'A 3D neuron: watch a spike run along its branches.',
   'neuron-network': 'A cortical column of spiking cells in a gamma rhythm.',
   'ancient-earth': 'The Earth from 540 million years ago to today.',

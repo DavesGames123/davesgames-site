@@ -126,7 +126,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-208 registered pages in 5 regions and 19 constellations.
+209 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -185,6 +185,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `human-skeleton` | Human Skeleton | Life Sciences > Anatomy | 3D | Explode a skeleton and inspect all 200 bones. |  | shown | hook, tier 3, default | yes |
 | `ct-explained` | How CT Works | Life Sciences > Medical Imaging | NEW | How CT works, from X-ray shadows to slices. |  | shown | hook, tier 3, default | yes |
 | `ct-lab` | CT Lab | Life Sciences > Medical Imaging | LAB | Scan phantoms, fill the sinogram, break the image. |  | shown | hook, tier 4, default | yes |
+| `ct-lab-3d` | CT Lab 3D | Life Sciences > Medical Imaging | NEW | CT scan a real walnut, a rabbit, a skull or a mosquito in amber, then slice it. |  | shown | hook, tier 4, default | yes |
 | `neuron-lab` | Neuron Lab | Life Sciences > Neuroscience | SIM | A 3D neuron: watch a spike run along its branches. |  | shown | hook, tier 3, default | yes |
 | `neuron-network` | Neural Network | Life Sciences > Neuroscience | SIM | A cortical column of spiking cells in a gamma rhythm. |  | shown | hook, tier 3, default | yes |
 | `ancient-earth` | Ancient Earth | Life Sciences > Deep Time | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
