@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Soft Bodies — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SOFT BODIES  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Tetrahedral soft bodies simulated with XPBD edge and volume constraints. Squash them, throw them and add more bunnies.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #10.
+   Upstream file: tenMinutePhysics/10-softBodies.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Video tutorial: https://youtu.be/uCaHXkS2cUg
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Tetrahedral soft bodies simulated with XPBD edge and volume constraints. Squash them, throw them and add more bunnies. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+        <h1>Soft Body Simulation</h1> 
+		<button id = "buttonRun" onclick="run()" class="button">Run</button>
+		<button onclick="restart()" class="button">Restart</button>
+		<button onclick="squash()" class="button">Squash</button>
+		<button onclick="newBody()" class="button">Bodies++</button>&nbsp;&nbsp;
+		<br><br>
+		<span id = "numTets">0</span> tets&nbsp;&nbsp;
+		Compliance:
+		<input type = "range" min = "0" max = "10" value = "0" id = "complianceSlider" class = "slider"> 
+
+		<br><br>		
+        <div id="container"></div>
+
+	
+<script src="../../vendor/three@0.139.2/build/three.min.js"></script>
+<script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>

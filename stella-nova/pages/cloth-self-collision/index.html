@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Cloth Self-Collision — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CLOTH SELF-COLLISION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Five tricks for stable cloth self-collisions, with the spatial hash for particle neighbours.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #15.
+   Upstream file: tenMinutePhysics/15-selfCollision.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Video tutorial: https://youtu.be/XY3dLpgOk4Q
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Five tricks for stable cloth self-collisions, with the spatial hash for particle neighbours. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+        <h1>Cloth Self Collision Handling</h1> 
+		<button id = "buttonRun" onclick="run()" class="button">Run</button>
+		<button onclick="restart()" class="button">Restart</button>
+		<input type = "checkbox" onclick = "onShowEdges()"> Show edges</p>
+		<input type = "checkbox" onclick = "onCollision()" checked> Handle collisions</p>
+	
+		<span id = "numTris">0</span> tris&nbsp;&nbsp;
+		<span id = "numVerts">0</span> verts&nbsp;&nbsp;
+		<span id = "ms">0.000</span> ms per frame
+		<br>
+		Bending compliance:
+		<input type = "range" min = "0" max = "10" value = "1" id = "bendingComplianceSlider" class = "slider"> 
+
+		<br><br>		
+        <div id="container"></div>
+
+	
+<script src="../../vendor/three@0.139.2/build/three.min.js"></script>
+<script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>
