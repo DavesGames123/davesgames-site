@@ -11,40 +11,44 @@
   ═══════════════════════════════════════════════════════════════════════════
    CANNONBALL VR  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   The 3D cannonball simulation with a WebXR button, so the box of bouncing balls can be watched in a VR headset.
+   The cannonball box for a VR headset: the cannonball-3d app with
+   renderer.xr on and the three.js VRButton (Enter VR). On a desktop the
+   page is the same sim with the sim kit GUI.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #02.
-   Upstream file: tenMinutePhysics/02-cannonballVR.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/j84zJ06wnVA
+   CREDIT. The upstream demo is Ten Minute Physics #02 by Matthias Müller:
+   tenMinutePhysics/02-cannonballVR.html in
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of ../cannonball-3d/sim.js). Video: https://youtu.be/j84zJ06wnVA. The
+   credit bar (kit.js) names the author on the page and the saver plate.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): many balls, ball-ball
+   impulses, friction, drag, wind, tilt, bumpers, crates, the cannon,
+   the throw pointer, the look, the GUI and the saver.
+
+   FILES
+     main.js      credit record + start({ vr: true })
+     vrbutton.js  the three.js VRButton (MIT), as the upstream page copied it
+     (style)      ../cannonball-3d/style.css (it holds .vr-slot)
+     tests.mjs    node tests (no browser)
+   The app is ../cannonball-3d/ (sim.js, scene.js, app.js, saver.js).
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, 3D stage),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  ../cannonball-3d/scene.js
+     grep -n 'const SHOTS'                 ../cannonball-3d/saver.js
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="The 3D cannonball simulation with a WebXR button, so the box of bouncing balls can be watched in a VR headset. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="The 3D cannonball box with a WebXR button: watch balls drop, burst and fly from a cannon in a VR headset. After Matthias Müller's Ten Minute Physics #02.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
+<link rel="stylesheet" href="../cannonball-3d/style.css">
 </head>
 <body>
-        <h1>Cannonball VR</h1> 
-
-		<br><br>		
-        <div id="container"></div>
-
-	
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>
