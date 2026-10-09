@@ -67,12 +67,12 @@ export const S = {
   mode: 'mono', pal: 'cmyk', dark: false, alpha: 0.08, width: 1, contrast: 1, seed: 1,
   speed: 0.62, playing: true, finishing: false, showErr: false, showPegNums: false,
   zoom: 1, cx: 0.5, cy: 0.5,
-  saver: false, band: null, saverTick: null, fade: 1, lpsOverride: 0,
+  saver: false, band: null, saverDraw: null, fade: 1, lpsOverride: 0,
   userName: '',
 };
 
 let run = null, colors = [], colHex = [], mask = null;
-let device = null, gpuR = null, engine = 'cpu', engineNote = '';
+let device = null, gpuR = null, engine = 'cpu', engineNote = '', wgslText = '';
 let shown = 0, drawn = 0, pending = false, gpuChunk = 16, rTok = 0;
 let errFrac = 1, errAt = 0, errBusy = false, errDirty = true;
 const artC = document.createElement('canvas'), artG = artC.getContext('2d');
@@ -422,12 +422,13 @@ let lastT = performance.now(), hudAt = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
-  if (S.saverTick) S.saverTick(dt);
   // canvas size
   // Full device pixel ratio, no cap: the lines are vectors and must be crisp.
   dpr = devicePixelRatio || 1;
   const W = Math.round(innerWidth * dpr), H = Math.round(innerHeight * dpr);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; cacheKey = ''; }
+  // The screensaver draws the whole canvas itself (saver.js); the page's step pump waits.
+  if (S.saverDraw) { S.saverDraw(ctx, dt, W, H, dpr); cacheKey = ''; return; }
   if (!run) return;
   pump();
   // reveal
@@ -679,6 +680,7 @@ export const ready = (async () => {
         device = await adapter.requestDevice();
         const wgsl = await (await fetch(new URL('thread.wgsl', import.meta.url))).text();
         gpuR = await createThreadGPU(device, wgsl);
+        wgslText = wgsl;
         engine = 'gpu';
         device.lost.then(info => { if (engine === 'gpu' && info.reason !== 'destroyed') toCPU(new Error('device lost: ' + info.message)); });
       }
@@ -694,7 +696,8 @@ export const ready = (async () => {
 ready.catch(e => console.error('thread-art:', e));
 
 installSaver({
-  S, SOURCES, canvas, ready, restart, setSource, syncUI, clampView, finish,
-  get run() { return run; }, get shown() { return shown; }, set shown(v) { shown = v; },
+  S, SOURCES, canvas, ready, syncUI, sourceRGBA, createThreadGPU,
+  sourceImage: key => loadBitmap(key),
+  gpu: () => (engine === 'gpu' && device && wgslText ? { device, wgsl: wgslText } : null),
   invalidate: () => { cacheKey = ''; },
 });

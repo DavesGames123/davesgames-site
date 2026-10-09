@@ -9,7 +9,12 @@
 //    piece  { res, pegs: { x, y }, cfg: { alpha, dark }, colHex: [..],
 //             lines: [{ k, a, b }] or L: Int32Array of k, a, b triples }
 //    x, y, s  the piece square on g, device px (s at the current zoom)
-//    opts   { zoom = 1, scale = 1, batch = 1, colour: override colour }
+//    opts   { zoom = 1, scale = 1, batch = 1, colour: override colour,
+//             only: draw the lines of this thread only, op: composite,
+//             index: Int32Array of line numbers (from..to index into it),
+//             cull: { x, y, w, h } skips lines with both ends on one
+//             outer side of that rect (a zoomed view draws fewer lines),
+//             alphaK: opacity factor }
 //  The width and the opacity come from engine.js hairline(), so the mean
 //  darkening equals the model's. The composite is the model's: multiply
 //  on a white board, screen on a black board.
@@ -39,12 +44,20 @@ export function strokeLines(g, piece, x, y, s, from, to, opts = {}) {
   const px = piece.pegs.x, py = piece.pegs.y, batch = Math.max(1, opts.batch | 0 || 1);
   g.save();
   g.globalCompositeOperation = opts.op || (piece.cfg.dark ? 'screen' : 'multiply');
-  g.globalAlpha = hl.q * (opts.alphaK ?? 1);
+  g.globalAlpha = Math.min(1, hl.q * (opts.alphaK ?? 1));
   g.lineWidth = hl.w;
   g.lineCap = 'round';
   let open = 0, curK = -1;
+  const only = opts.only ?? -1, cull = opts.cull || null;
+  const cx0 = cull ? cull.x - 2 : 0, cy0 = cull ? cull.y - 2 : 0, cx1 = cull ? cull.x + cull.w + 2 : 0, cy1 = cull ? cull.y + cull.h + 2 : 0;
+  const idx = opts.index || null;
   for (let i = from; i < to; i++) {
-    lineAt(piece, i, T);
+    lineAt(piece, idx ? idx[i] : i, T);
+    if (only >= 0 && T[0] !== only) continue;
+    if (cull) {
+      const ax = x + (px[T[1]] + 0.5) * k, ay = y + (py[T[1]] + 0.5) * k, bx = x + (px[T[2]] + 0.5) * k, by = y + (py[T[2]] + 0.5) * k;
+      if ((ax < cx0 && bx < cx0) || (ax > cx1 && bx > cx1) || (ay < cy0 && by < cy0) || (ay > cy1 && by > cy1)) continue;
+    }
     if (open && (T[0] !== curK || open >= batch)) { g.stroke(); open = 0; }
     if (!open) { curK = T[0]; g.strokeStyle = opts.colour || piece.colHex[curK]; g.beginPath(); }
     g.moveTo(x + (px[T[1]] + 0.5) * k, y + (py[T[1]] + 0.5) * k);

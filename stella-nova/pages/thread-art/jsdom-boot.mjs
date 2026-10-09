@@ -16,8 +16,11 @@
 //    hires   the page runs 40 frames, then 40 with the error view on; every
 //            canvas in the document has a backing store of at least its CSS
 //            size x DPR; no res x res canvas is drawn larger than res
+//    saver   snSaver.enter(), then each shot kind forced by snSaver.cut();
+//            frames through each shot; errors, NaN calls, the #view size
 //
 //  grep -n: "function ctxStub"  "export async function boot"  "async function hiresCheck"
+//           "async function saverCheck"
 // ============================================================================
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -121,11 +124,43 @@ async function hiresCheck(dpr, w, h) {
   return out;
 }
 
+async function saverCheck(dpr, w, h) {
+  const b = await boot({ dpr, w, h });
+  if (b.skip) return b;
+  for (let i = 0; i < 20 && !b.ta.ready; i++) { b.frames(1); await new Promise(r => setTimeout(r, 5)); }
+  const labels = [];
+  const sv = b.win.snSaver || globalThis.window.snSaver;
+  const res = await sv.enter({ seed: 12345, calm: 0.6, label: i => labels.push(i) });
+  const out = { dpr, w, h, canvasIsView: res && res.canvas && res.canvas.id === 'view', kinds: {}, labels: 0 };
+  const KINDS = ['needle', 'split', 'chase', 'layers', 'maker', 'push', 'rack', 'wipe', 'gallery'];
+  // let the pieces arrive (idle maker: no Worker in node)
+  for (let i = 0; i < 400 && !(sv.debug() && sv.debug().kind); i++) { b.frames(1); await new Promise(r => setTimeout(r, 2)); }
+  for (const k of KINDS) {
+    let ok = false;
+    for (let i = 0; i < 300 && !(ok = sv.cut(k)); i++) { b.frames(1); await new Promise(r => setTimeout(r, 2)); }
+    const bad0 = b.log.bad.length, err0 = b.log.errors.length;
+    for (let i = 0; i < 40; i++) b.frames(1, 120);   // about 5 s of the shot
+    const d = sv.debug();
+    out.kinds[k] = { cut: ok, kind: d && d.kind, nBad: b.log.bad.length - bad0, errors: b.log.errors.slice(err0, err0 + 2) };
+  }
+  out.labels = labels.filter(Boolean).length;
+  out.lastLabel = labels.filter(Boolean).slice(-1)[0] || null;
+  const v = b.doc.getElementById('view');
+  out.view = [v.width, v.height];
+  out.debug = sv.debug();
+  sv.exit();
+  b.frames(3);
+  out.afterExit = { saverDraw: !!b.ta.S.saverDraw, cls: b.doc.documentElement.className };
+  out.bad = b.log.bad.slice(0, 5);
+  return out;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [check, dpr = '2', w = '1280', h = '800'] = process.argv.slice(2);
   let out;
   try {
     if (check === 'hires') out = await hiresCheck(+dpr, +w, +h);
+    else if (check === 'saver') out = await saverCheck(+dpr, +w, +h);
     else out = { error: 'unknown check ' + check };
   } catch (e) { out = { error: String(e && e.stack || e).slice(0, 600) }; }
   process.stdout.write(JSON.stringify(out) + '\n');

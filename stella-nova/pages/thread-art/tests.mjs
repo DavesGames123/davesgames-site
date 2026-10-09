@@ -216,6 +216,142 @@ for (const dpr of [2, 3]) {
   ok(o.nBad === 0, `DPR ${dpr}: no NaN or infinite draw arguments`, `${o.calls} calls`);
 }
 
+console.log('saver: plan, pieces, shots, memory');
+{
+  const core = await import('./saver-core.js');
+  const { createDirector } = await import('./saver-draw.js');
+  const { ctxStub } = await import('./jsdom-boot.mjs');
+  // plan
+  let durOk = true, repeat = 0, allKinds = true;
+  const seen = new Set();
+  for (let seed = 1; seed <= 40; seed++) {
+    const plan = core.makePlan(seed * 7919, 60, (seed % 5) / 4);
+    const here = new Set(plan.slice(0, 18).map(q => q.kind));
+    if (here.size !== core.KINDS.length) allKinds = false;
+    for (let i = 0; i < plan.length; i++) {
+      seen.add(plan[i].kind);
+      if (!(plan[i].dur >= 6 && plan[i].dur <= 12)) durOk = false;
+      if (i && plan[i].kind === plan[i - 1].kind) repeat++;
+    }
+  }
+  ok(durOk, 'plan: every shot lasts 6-12 s (40 seeds x 60 shots)');
+  ok(repeat === 0, 'plan: no shot kind twice in a row', `${repeat} repeats`);
+  ok(allKinds && seen.size === core.KINDS.length, 'plan: all 9 kinds in the first 18 shots of each of 40 seeds', [...seen].join(' '));
+  const a1 = core.makePlan(5, 20).map(q => q.kind).join(), a2 = core.makePlan(6, 20).map(q => q.kind).join();
+  ok(a1 !== a2 && a1 === core.makePlan(5, 20).map(q => q.kind).join(), 'plan: a seed gives its own order, the same each time');
+
+  // thread length of a known sequence: 4 pegs on a circle, res 101
+  {
+    const pegs = E.makePegs('circle', 4, 101);
+    const p = { res: 101, n: 3, pegs, L: Int32Array.from([0, 0, 2, 0, 2, 1, 0, 1, 3]) };
+    const want = (100 + Math.hypot(50, 50) + 100) * 0.6 / 100, got = core.threadLength(p, 3, 0.6);
+    ok(pegs.x[0] === 50 && pegs.y[0] === 0 && pegs.x[1] === 100 && Math.abs(got - want) < 1e-9, 'thread length: 0-2-1-3 on a 60 cm frame', `${got.toFixed(4)} m (want ${want.toFixed(4)} m)`);
+    ok(core.threadLength(p, 1, 0.6) === 0.6 && core.threadLength(p, 0, 0.6) === 0, 'thread length counts only the first n lines');
+  }
+
+  // small pieces for the shot checks
+  const SRC = [
+    { key: 'eye', kind: 'shape', name: 'Eye', poi: [[0.5, 0.5]], credit: 'shape' },
+    { key: 'star', kind: 'shape', name: 'Star', colour: true, poi: [[0.5, 0.2]], credit: 'shape' },
+    { key: 'moon', kind: 'photo', name: 'Moon photo', poi: [[0.4, 0.5]], credit: 'test' },
+    { key: 'rings', kind: 'photo', name: 'Rings photo', colour: true, poi: [[0.5, 0.5]], credit: 'test' },
+  ];
+  const small = spec => ({ ...spec, res: 48, P: Math.min(spec.P, 48), maxLines: Math.min(spec.maxLines, 260) });
+  const makeSmall = async spec => { const sp = small(spec); return core.makePiece(sp, E.shapeImage(sp.src, sp.res)); };
+
+  // the precompute hands over a finished piece
+  {
+    const cache = new core.PieceCache(3);
+    const prod = core.createProducer({ make: makeSmall, cache, ahead: 2 });
+    const spec = core.pieceSpec(core.rng(3), 'layers', { sources: SRC });
+    ok(prod.want(spec) && prod.pending === 1, 'producer: a spec is queued');
+    for (let i = 0; i < 50 && !prod.readyCount; i++) await new Promise(r => setTimeout(r, 5));
+    const p = prod.take();
+    const ref = core.makePiece(small(spec), E.shapeImage(spec.src, 48));
+    ok(p && p.n > 0 && p.L.length === 3 * p.n && p.K === 4 && cache.size === 1 && p.n === ref.n && p.L.every((v, i) => v === ref.L[i]),
+      'producer: hands over a finished piece (same lines as a direct run), into the cache', p ? `${p.n} lines, K ${p.K}` : 'none');
+    // the worker: one message in, a finished piece out, buffers transferred
+    const posted = [];
+    globalThis.self = { postMessage: (m, tr) => posted.push([m, tr]) };
+    await import('./saver-worker.js');
+    const rgba = E.shapeImage('eye', 48), wspec = small(core.pieceSpec(core.rng(4), 'needle', { sources: SRC }));
+    globalThis.self.onmessage({ data: { id: 7, spec: wspec, rgba } });
+    const [m, tr] = posted[0] || [{}, []];
+    ok(m.id === 7 && m.piece && m.piece.n > 0 && tr.length === 6 && tr.includes(m.piece.L.buffer), 'worker: posts a finished piece with its buffers transferred', m.piece ? `${m.piece.n} lines` : String(m.error));
+    delete globalThis.self;
+  }
+
+  // every shot kind in a stub 2D context: no NaN or infinite draw arguments
+  const log = { calls: 0, bad: [], draws: [], texts: 0 };
+  let made = 0;
+  const mk = (w, h) => { made++; const c = { width: w, height: h }; c.getContext = () => c.__g || (c.__g = ctxStub(c, log)); return c; };
+  const source = key => ({ width: 1200, height: 1200 });
+  const view = { W: 1600, H: 1000, dpr: 2, band: { x: 60, y: 220, w: 1480, h: 520 } };
+  const main = mk(view.W, view.H), g = main.getContext('2d');
+  {
+    const cache = new core.PieceCache(6);
+    const prod = core.createProducer({ make: makeSmall, cache, ahead: 2 });
+    const labels = [];
+    const dir = createDirector({ seed: 99, calm: 0.5, mk, source, sources: SRC, producer: prod, cache, label: i => labels.push(i) });
+    const res = {};
+    for (const k of core.KINDS) {
+      let cut = false;
+      for (let i = 0; i < 200 && !(cut = dir.cut(k)); i++) { dir.frame(g, 0.05, view); await new Promise(r => setTimeout(r, 2)); }
+      const b0 = log.bad.length, sh = dir.shot;
+      let frames = 0, errs = 0;
+      try { while (dir.shot === sh && sh.t < sh.dur - 0.06) { dir.frame(g, 1 / 20, view); frames++; } } catch (e) { errs++; console.log('   ', k, e.stack.split('\n').slice(0, 3).join(' | ')); }
+      res[k] = { cut, kind: sh && sh.kind, frames, bad: log.bad.length - b0, errs };
+    }
+    const fails = Object.entries(res).filter(([k, v]) => !v.cut || v.kind !== k || v.bad || v.errs || v.frames < 50);
+    ok(!fails.length, 'every shot kind runs to its end in a stub 2D context with no NaN draw call',
+      fails.length ? JSON.stringify(fails).slice(0, 300) : Object.entries(res).map(([k, v]) => `${k} ${v.frames}`).join(', ') + ` frames, ${log.calls} calls`);
+    const lb = labels.filter(Boolean), last = lb.filter(l => !/^Gallery/.test(l.title)).pop() || {};
+    const pk = Object.fromEntries((last.params || []).map(q => [q.name, q.value]));
+    ok(lb.length > 20 && lb.every(l => l.title && Array.isArray(l.tex) && l.tex.length && !l.code) && 'pegs' in pk && /m$/.test(pk.thread || '') && 'lines' in pk && 'frame' in pk,
+      'plate: shot and image, frame, pegs, lines, thread length (m), TeX, no code', `${lb.length} labels; ${last.title}: ${(last.params || []).map(q => q.name + ' ' + q.value).join(', ')}`);
+  }
+
+  // memory flat over 200 cuts: the cache cap holds, the canvas pool stops growing
+  {
+    const cache = new core.PieceCache(6);
+    const prod = core.createProducer({ make: makeSmall, cache, ahead: 2 });
+    const dir = createDirector({ seed: 4242, calm: 0.2, mk, source, sources: SRC, producer: prod, cache, label: null });
+    let maxCache = 0, maxBytes = 0, at40 = -1, cuts = 0, guard = 0;
+    while (cuts < 200 && guard++ < 20000) {
+      dir.frame(g, 0.7, view);
+      const d = dir.debug();
+      if (d.count !== undefined) cuts = d.count;
+      maxCache = Math.max(maxCache, cache.size); maxBytes = Math.max(maxBytes, cache.bytes());
+      if (cuts >= 40 && at40 < 0) at40 = dir.canvases;
+      if (guard % 4 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+    ok(cuts >= 200 && maxCache <= 6, 'memory: 200 cuts, the piece cache stays at 6 or fewer', `${cuts} cuts, max ${maxCache} pieces, max ${(maxBytes / 1024).toFixed(0)} kB`);
+    ok(at40 > 0 && dir.canvases === at40 && dir.canvases <= 20, 'memory: no new canvases after cut 40 (a fixed pool)', `${dir.canvases} canvases at cut 200, ${at40} at cut 40`);
+  }
+}
+
+console.log('saver in the page (jsdom): every shot kind through snSaver');
+{
+  const r = spawnSync(process.execPath, [join(HERE, 'jsdom-boot.mjs'), 'saver', '2', '1280', '800'], { encoding: 'utf8', timeout: 300000, env: process.env });
+  let o; try { o = JSON.parse((r.stdout || '').trim().split('\n').pop()); } catch (e) { o = { error: (r.stderr || r.stdout || '').slice(0, 300) }; }
+  if (o.skip) { skip++; console.log('  skip ' + o.skip); }
+  else if (o.error) ok(false, 'saver boot', o.error);
+  else {
+    const bad = Object.entries(o.kinds).filter(([k, v]) => !v.cut || v.kind !== k || v.nBad || v.errors.length);
+    ok(o.canvasIsView && !bad.length, 'enter() gives #view; all 9 kinds cut and draw, no errors, no NaN', bad.length ? JSON.stringify(bad).slice(0, 300) : Object.keys(o.kinds).join(' '));
+    ok(o.view[0] === 2560 && o.view[1] === 1600, 'the saver canvas is at DPR 2', o.view.join('x'));
+    ok(o.labels > 10 && o.lastLabel && !o.lastLabel.code, 'the plate is sent, with no code', `${o.labels} labels`);
+    ok(!o.afterExit.saverDraw && !/ta-saver/.test(o.afterExit.cls), 'exit() gives the page back');
+  }
+}
+
+console.log('module link check (node import)');
+for (const f of ['main.js', 'saver.js', 'saver-draw.js', 'saver-core.js', 'draw.js']) {
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', `import(${JSON.stringify(join(HERE, f))}).then(() => console.log('LOADED')).catch(e => console.log(e.constructor.name + ': ' + e.message))`], { encoding: 'utf8' });
+  const outp = (r.stdout || '').trim();
+  ok(!/SyntaxError/.test(outp + r.stderr), `${f}: no SyntaxError at link`, outp.slice(0, 90));
+}
+
 console.log('GPU (Deno WebGPU) = CPU');
 {
   const r = spawnSync('deno', ['run', '-A', join(HERE, 'gpu-check.mjs')], { encoding: 'utf8', timeout: 120000 });
