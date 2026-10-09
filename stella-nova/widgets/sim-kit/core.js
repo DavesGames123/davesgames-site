@@ -104,7 +104,13 @@ export function defaults(schema) {
   return out;
 }
 
-const decimals = step => { const s = String(step); const i = s.indexOf('.'); return i < 0 ? 0 : Math.min(6, s.length - i - 1); };
+// Decimals of a step, also in exponent form (String(1e-12) is "1e-12"),
+// up to 12 so a fine step (a fractal centre) keeps its precision.
+const decimals = step => {
+  const s = String(step), e = s.indexOf('e-');
+  if (e >= 0) { const m = s.slice(0, e), i = m.indexOf('.'); return Math.min(12, +s.slice(e + 2) + (i < 0 ? 0 : m.length - i - 1)); }
+  const i = s.indexOf('.'); return i < 0 ? 0 : Math.min(12, s.length - i - 1);
+};
 export function snap(c, v) {
   if (c.type !== 'range') return v;
   v = Math.max(c.min, Math.min(c.max, +v));
