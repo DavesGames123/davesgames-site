@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Biome Parts — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   BIOME PARTS  ·  page shell  (nav key: biome-parts)
+  ───────────────────────────────────────────────────────────────────────────
+   Taiga-S1 (Biome-S1, github.com/shhivv/biome-s1, MIT, Shiv Shanmugam), a
+   1.2M-parameter "System 1" model, builds CAD parts one command at a time,
+   live in the browser. The released weights run in plain JavaScript in a
+   worker; a FreeCAD-like session (fcsim.js) answers each command; the part
+   renders with the SDF lab's ray marcher.
+
+   LAYOUT  (# marks an element id the modules bind to)
+     #app        the tool: #goalPanel | #stage | #brainPanel
+     #goalPanel  gallery, goal items (#items), add item, start state
+     #stage      #view (WebGPU), #ov (2D overlay), #hud, #transport
+     #brainPanel #scores (softmax bars, tap to override), #checks (done
+                 head), #tree (feature tree), #log, exports
+     phone ..... (max-width 768px) the stage on top, #tabs switch the
+                 panels in the sheet below; #transport is the dock
+     #explain    the explainer: System 1 vs 2, tokens, scorer, done head,
+                 eval numbers, Mesa-S1, credits
+
+   MODULES  (js/, each with its own grep map)
+     vocab.js featurize.js model.js ....... the Taiga-S1 port
+     goals.js fcsim.js agent.js core.js ... goals, session, episodes
+     worker.js brain.js ................... the model off the main thread
+     part.js gpu.js view.js scene.js ...... SDF field, renderer, camera
+     gallery.js evalnums.js ............... data
+     ui.js main.js ........................ panels and orchestration
+     director.js saver.js ................. the live screensaver (snSaver)
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<section id="app">
+  <header id="top">
+    <div class="ttl">
+      <h1>Biome Parts</h1>
+      <p class="sub">Taiga-S1, a 1.2M-parameter model by Shiv Shanmugam, builds CAD parts one command at a time, live in this page.</p>
+    </div>
+    <div id="status" class="status">loading the model…</div>
+  </header>
+
+  <nav id="tabs" class="tabs" aria-label="Panels">
+    <button type="button" data-tab="goal" class="on">Goal</button>
+    <button type="button" data-tab="brain">Taiga</button>
+    <button type="button" data-tab="tree">Tree</button>
+  </nav>
+
+  <aside id="goalPanel" class="panel" data-pane="goal">
+    <h2>Gallery</h2>
+    <div id="gallery" class="chips"></div>
+    <div class="row rnd"><span>Random goal</span><div id="levels" class="chips small"></div></div>
+    <h2>Goal <span class="hint">an ordered list, like a planner would hand down</span></h2>
+    <ol id="items" class="items"></ol>
+    <div class="row add">
+      <select id="addKind" aria-label="Add a goal item"></select>
+      <button type="button" id="addBtn">Add</button>
+    </div>
+    <div class="row">
+      <label for="startSel">Start</label>
+      <select id="startSel">
+        <option value="pd">new document, PartDesign</option>
+        <option value="nodoc">no document open</option>
+        <option value="part">Part workbench</option>
+        <option value="body">a body is ready</option>
+      </select>
+    </div>
+    <p class="note" id="goalNote"></p>
+  </aside>
+
+  <main id="stage">
+    <canvas id="view" aria-label="The part, ray marched"></canvas>
+    <canvas id="ov" aria-hidden="true"></canvas>
+    <div id="hud">
+      <div id="hudStep" class="hstep"></div>
+      <div id="hudAct" class="hact"></div>
+      <div id="hudItem" class="hitem"></div>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+    <div id="transport" class="transport">
+      <button type="button" id="buildBtn" class="pri">Build</button>
+      <button type="button" id="stepBtn">Step</button>
+      <button type="button" id="playBtn">Play</button>
+      <label class="spd"><span>Speed</span><input id="speed" type="range" min="0" max="1" step="0.01" value="0.55" aria-label="Speed"></label>
+      <label class="tog"><input id="noiseChk" type="checkbox"><span>Gremlin 20%</span></label>
+    </div>
+    <div id="nogpu" class="nogpu" hidden>WebGPU is not available here, so the part cannot render. The model still runs: the scores, the checks and the tree update.</div>
+  </main>
+
+  <aside id="brainPanel" class="panel" data-pane="brain">
+    <h2>Taiga-S1 scores <span class="hint">calibrated softmax, tap a row to override</span></h2>
+    <ol id="scores" class="scores"></ol>
+    <h2>Done? checks <span class="hint">one per goal item</span></h2>
+    <ol id="checks" class="checks"></ol>
+    <div data-pane="tree" class="sub-pane">
+      <h2>Feature tree</h2>
+      <ol id="tree" class="tree"></ol>
+      <h2>Log</h2>
+      <ol id="log" class="log"></ol>
+    </div>
+    <div class="row exp">
+      <button type="button" id="stlBtn">STL</button>
+      <button type="button" id="jsonBtn">Goal + log JSON</button>
+      <button type="button" id="forgeBtn">Open in SDF Forge</button>
+    </div>
+    <p class="note" id="expNote"></p>
+  </aside>
+</section>
+
+<article id="explain" class="explain">
+  <h2>Fast hands, slow head</h2>
+  <p>A computer-use agent has two jobs: decide <em>what</em> to make, and press the buttons that make it. Biome-S1 splits them, like the "System 2" and "System 1" of the dual-process story. A planner (a person here, or a large model) writes the goal: an ordered list of features with numbers. Taiga-S1 is the System 1: at every step it looks at the live CAD session and picks the next command from the ones the program offers right now. It is 1,228,163 parameters, trained from scratch, and one decision is one forward pass. In this page that pass runs in plain JavaScript in a worker, about <span id="msStep">10–20</span> ms on a laptop.</p>
+  <p>Taiga-S1 picks the command; it never types a number. Sizes, depths and counts come from the goal item the command works on (Biome-S1's parameter stage), so a wrong command still makes real, wrong geometry that the model must notice and undo.</p>
+
+  <h2>The state is a sentence of typed tokens</h2>
+  <p>The FreeCAD session becomes a sequence: a CLS token, a global token (workbench, edit mode, selection count, volume and face counts relative to the target), one token per object in the feature tree in build order (sketch geometry and constraints, feature parameters), the selection, the last 8 commands newest first, the target size, then one token per goal item and an END token. Each token sums learned embeddings and one projection of its numbers:</p>
+  <div class="sci-eq" data-tex="x_i = E_a[\class{m1}{a_i}] + E_b[\class{m2}{b_i}] + E_{seg}[s_i] + E_{pos}[p_i] + W_{s_i}\class{m3}{\mathbf n_i} + E_{cat}[c_i] + E_{ord}[\class{m4}{o_i}]"></div>
+  <p>The ordinal <span class="m4">o</span> couples goal item <i>k</i> with the <i>k</i>-th solid feature in the tree and the sketch that feeds it, so "item 3" and "the third feature" share an index. The live sequence for the current step:</p>
+  <div id="tokens" class="tokens" aria-label="Token sequence"></div>
+
+  <h2>Scoring the options</h2>
+  <p>A 3-layer transformer encodes the state. Each candidate command is encoded on its own (its id, category, scope, the word pieces of its name, and a direction for a face or plane), joined with the active goal item, and a 2-layer decoder lets the candidates look at the state and at each other. Each gets one logit <i>z</i>; the bars are</p>
+  <div class="sci-eq" data-tex="\class{m5}{p}(a \mid s, g) = \frac{e^{\class{m1}{z_a}/\class{m6}{T}}}{\sum_{b \in \mathcal A(s)} e^{\class{m1}{z_b}/\class{m6}{T}}},\qquad \class{m6}{T} = 2.554"></div>
+  <p>The temperature was fitted after training (config.json), so a bar near 1 means the model is right about that often. The argmax does not depend on <span class="m6">T</span>. The set <i>𝒜(s)</i> changes every step: no sketch tools until a sketch is open, no Pocket before there is a solid.</p>
+
+  <h2>"Am I built yet?"</h2>
+  <p>Each goal item asks one question of the state, with its own logit, and the model works on the first item that answers no. The command scores then see only the state and that one item:</p>
+  <div class="sci-eq" data-tex="k^\ast = \min\{\, k : \class{m2}{d_k}(s) < 0 \,\},\qquad \text{built}_k = \sigma(\class{m2}{d_k})"></div>
+  <p>A decision never depends on how long the goal is. That is why a model trained on goals of at most 5 items builds 11-item goals. The checks panel shows σ(d) for every item at every step.</p>
+
+  <h2>How good is it?</h2>
+  <p>The repo's own evaluation (FreeCAD 1.1, 100 fresh goals per suite; "right part" = the model said Done and the solid matches the target, IoU ≥ 0.99), next to the same goal streams run in this page against the JavaScript session:</p>
+  <div class="tablewrap"><table id="evalTable" class="evaltab"></table></div>
+  <p class="note" id="evalNote"></p>
+
+  <h2>Mesa-S1, the other hand</h2>
+  <p>Biome-S1 has a second model of the same size and design. Where Taiga-S1 says "Pad" and code fills in the dialog, Mesa-S1 works FreeCAD's interface itself: it presses the Pad button, types the length into the dialog field, picks "Through all" in a dropdown, clicks OK, and cancels or undoes when a click went wrong. Its inputs include the open dialog and the value in every field, read from the Qt widget tree. It is not in this page: its state needs FreeCAD's real dialogs and widgets, which a browser does not have, and a mock would decide its clicks on inputs it was never trained on. The repo reports 97–100% right parts per suite for Mesa-S1, and 92–100% with 20% random clicks.</p>
+
+  <h2>What runs here, and what does not</h2>
+  <p>The weights are the released Taiga-S1 (release/hf, v0.3.0), unchanged. The JavaScript forward pass matches PyTorch to 1.5·10⁻⁵ in the logits on 60 recorded states, and the token encoder matches the Python one exactly. FreeCAD itself does not run: fcsim.js keeps the same document, sketches, selection, undo stack and expert as Biome-S1's session, but the solid is a CSG tape drawn as a signed distance field, and face and edge counts come from rules, not from OpenCASCADE. The page shows the model's choices on those states; FreeCAD would build a few edge cases differently.</p>
+
+  <h2>Credits</h2>
+  <p>Biome-S1, Taiga-S1 and Mesa-S1 are by <a href="https://github.com/shhivv" target="_blank" rel="noopener">Shiv Shanmugam</a>: code <a href="https://github.com/shhivv/biome-s1" target="_blank" rel="noopener">github.com/shhivv/biome-s1</a>, weights <a href="https://huggingface.co/shhivv/taiga-s1" target="_blank" rel="noopener">huggingface.co/shhivv/taiga-s1</a>, MIT licence. The six gallery parts are the repo's showcase goals. The eval numbers are from the repo's results files. The ray marcher is this site's <a href="../sdf-lab/index.html" id="forgeLink">SDF Forge</a>. Ideas cited by the model card: randomized positions (Ruoss et al. 2023), position coupling (Cho et al. 2024).</p>
+</article>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
