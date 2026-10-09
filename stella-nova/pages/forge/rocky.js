@@ -147,8 +147,59 @@ export function prepareRocky(P) {
 // [0, 1] (1 = oldest). The list is sorted oldest first, so a lookup can
 // lay craters in impact order: a new bowl erases the older relief inside
 // it (overprint, which is how crater fields saturate).
-const LEVELS = [48, 12, 3];
+//
+// No two craters share a shape. Each crater draws, from its own seed:
+//   rim     a radius warp of angle harmonics 2..6 (low-frequency noise
+//           round the rim), and for about a third a polygon outline
+//           (mostly hexagons, as on the Moon, where joints guide the
+//           excavation)
+//   shape   depth x 0.8..1.25, rim height x 0.65..1.35, a tilt of the rim
+//           (asymmetry), a terrace phase that wanders with the angle
+//           (slumped walls), a central peak cluster of 2..5 summits, and
+//           how fast it softens with age (0.7..1.3)
+//   oblique 8 % hit at a low angle: an ellipse (axis ratio to 1.7), the
+//           ejecta in two lobes across the track (butterfly) or with an
+//           uprange gap
+// Craters over SEC_R spawn chains of secondaries (small, the same age).
+// craterList() gives the primaries only, so the size-frequency test fits
+// the primary power law. Small craters below rMin come from a cellular
+// field (microCraters) whose octaves fade in with the map width, so a
+// 4k map gets small craters, not a sharper copy of the 2k map.
+const LEVELS = [96, 24, 6, 2];
 const MARIA_AGE = 0.4;   // craters younger than this land on the flooded maria
+const SEC_R = 0.07;      // parent radius (rad) for secondary chains
+const TAU2 = Math.PI * 2;
+function frame3(c) {
+  const up = Math.abs(c[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let e = [up[1] * c[2] - up[2] * c[1], up[2] * c[0] - up[0] * c[2], up[0] * c[1] - up[1] * c[0]];
+  const el = Math.hypot(e[0], e[1], e[2]); e = [e[0] / el, e[1] / el, e[2] / el];
+  return [e, [c[1] * e[2] - c[2] * e[1], c[2] * e[0] - c[0] * e[2], c[0] * e[1] - c[1] * e[0]]];
+}
+function makeCrater(c, r, age, rnd, C, i) {
+  const fresh = age < 0.06 && C.ejecta > 0;
+  const [e, n] = frame3(c);
+  // rim harmonics k = 2..6: amplitude falls as k^-1.3, larger on big
+  // and old craters (slumps, later degradation)
+  const A = (0.025 + 0.05 * rnd()) * (1 + 0.6 * age);
+  const hc = new Float64Array(5), hs = new Float64Array(5);
+  let sumA = 0;
+  for (let k = 0; k < 5; k++) { const a = A * Math.pow(k + 2, -1.3) * (0.4 + rnd()), ph = rnd() * TAU2; hc[k] = a * Math.cos(ph); hs[k] = a * Math.sin(ph); sumA += a; }
+  const poly = rnd() < 0.35 ? 0.3 + 0.4 * rnd() : 0, sides = rnd() < 0.7 ? 6 : 5 + Math.floor(rnd() * 3);
+  const elong = rnd() < 0.08 ? 1.15 + 0.55 * rnd() : 1, axis = rnd() * TAU2;
+  const ell = Math.sqrt(elong);
+  // ejecta: oblique impacts lose the uprange side; the lowest angles
+  // throw two lobes across the track (butterfly)
+  const peaks = [];
+  const np = 2 + Math.floor(rnd() * 4);
+  for (let k = 0; k < np; k++) { const a = rnd() * TAU2, d = 0.13 * Math.sqrt(rnd()); peaks.push(d * Math.cos(a), d * Math.sin(a), 0.4 + 0.6 * rnd(), 0.05 + 0.05 * rnd()); }
+  const reach = (fresh ? 7 : 2.6) * r * (1 + sumA + 0.08 * poly) * ell;
+  return {
+    c, r, age, fresh, reach, e, n, id: i, terr: 3 + Math.floor(rnd() * 3),
+    hc, hs, poly, sides, pa: rnd() * TAU2, ell, ca: Math.cos(axis), sa: Math.sin(axis), but: elong > 1.4 ? 1 : 0, obl: elong > 1 ? 1 : 0,
+    dm: 0.8 + 0.45 * rnd(), rm: 0.65 + 0.7 * rnd(), asym: 0.3 * rnd(), aa: rnd() * TAU2,
+    tph: rnd() * TAU2, tamp: 0.2 + 0.3 * rnd(), soft: 0.7 + 0.6 * rnd(), peaks: new Float64Array(peaks), seed: (rnd() * 1e9) | 0,
+  };
+}
 function buildCraters(P, seed) {
   const C = P.craters, n = Math.round(C.density * 9000);
   const rnd = mulberry(seed);
@@ -160,21 +211,41 @@ function buildCraters(P, seed) {
     const r = rmin * Math.pow(1 - u * k, -1 / a);
     // more old craters than young ones (the impact rate fell with time)
     const age = 1 - Math.pow(rnd(), 1.6);
-    const fresh = age < 0.06 && C.ejecta > 0;
-    // influence: rays reach 7 r on fresh craters, ejecta 2.6 r on others
-    const reach = (fresh ? 7 : 2.6) * r;
-    const up = Math.abs(c[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
-    let e = [up[1] * c[2] - up[2] * c[1], up[2] * c[0] - up[0] * c[2], up[0] * c[1] - up[1] * c[0]];
-    const el = Math.hypot(...e); e = e.map(v => v / el);
-    const nn = [c[1] * e[2] - c[2] * e[1], c[2] * e[0] - c[0] * e[2], c[0] * e[1] - c[1] * e[0]];
-    list.push({ c, r, age, fresh, reach, e, n: nn, id: i, terr: 3 + Math.floor(rnd() * 3) });
+    list.push(makeCrater(c, r, age, rnd, C, i));
+  }
+  // secondary chains: 1-4 radial chains of 4-9 small craters from 1.7 to
+  // 4.5 radii out, a little younger than the parent (they land after it)
+  const srnd = mulberry(seed ^ 0x2545f491);
+  const nPrim = list.length;
+  for (let i = 0; i < nPrim; i++) {
+    const pc = list[i];
+    if (pc.r < SEC_R) continue;
+    const chains = 1 + Math.floor(srnd() * 4);
+    for (let ch = 0; ch < chains; ch++) {
+      const psi = srnd() * TAU2, d0 = (1.7 + 0.6 * srnd()) * pc.r, len = (1.2 + 1.6 * srnd()) * pc.r, m = 4 + Math.floor(srnd() * 6);
+      const rs0 = pc.r * (0.03 + 0.04 * srnd());
+      for (let j = 0; j < m; j++) {
+        const t = j / Math.max(1, m - 1), d = d0 + len * t, w = (srnd() - 0.5) * 0.25 * pc.r;
+        const dx = Math.cos(psi), dy = Math.sin(psi);
+        const tx = pc.e[0] * dx + pc.n[0] * dy, ty = pc.e[1] * dx + pc.n[1] * dy, tz = pc.e[2] * dx + pc.n[2] * dy;
+        const sx = -pc.e[0] * dy + pc.n[0] * dx, sy = -pc.e[1] * dy + pc.n[1] * dx, sz = -pc.e[2] * dy + pc.n[2] * dx;
+        const cd = Math.cos(d), sd = Math.sin(d);
+        let q = [pc.c[0] * cd + tx * sd + sx * w, pc.c[1] * cd + ty * sd + sy * w, pc.c[2] * cd + tz * sd + sz * w];
+        const ql = Math.hypot(q[0], q[1], q[2]); q = [q[0] / ql, q[1] / ql, q[2] / ql];
+        const cr = makeCrater(q, rs0 * (1 - 0.45 * t) * (0.7 + 0.6 * srnd()), Math.max(0, pc.age - 0.002 * srnd()), srnd, C, list.length);
+        cr.fresh = false; cr.reach = 2.6 * cr.r * (1 + 0.2) * cr.ell; cr.sec = 1;
+        list.push(cr);
+      }
+    }
   }
   list.sort((x, y) => y.age - x.age);
   list.forEach((cr, i) => { cr.ord = i; });
+  // grids: a crater goes in the finest level whose cell is at least twice
+  // its reach, so a lookup needs only the 2 x 2 x 2 cells nearest the point
   const grids = LEVELS.map(G => ({ G, cs: 2 / G, cells: new Map() }));
   const big = [];
   for (const cr of list) {
-    const g = grids.find(gg => gg.cs >= cr.reach);
+    const g = grids.find(gg => gg.cs >= 2 * cr.reach);
     if (!g) { big.push(cr); continue; }
     const ix = Math.floor((cr.c[0] + 1) / g.cs), iy = Math.floor((cr.c[1] + 1) / g.cs), iz = Math.floor((cr.c[2] + 1) / g.cs);
     const key = (ix * g.G + iy) * g.G + iz;
@@ -184,11 +255,13 @@ function buildCraters(P, seed) {
   return { list, grids, big };
 }
 
-// The radii of a crater field, for tests.mjs (size distribution).
-export function craterList(P) {
+// The radii of the primary crater field, for tests.mjs (size distribution).
+export function craterList(P) { return craterSet(P).filter(c => !c.sec).map(c => c.r); }
+// The whole crater list (primaries and secondaries), for tests.mjs.
+export function craterSet(P) {
   const seed = P.seed >>> 0;
   const S = k => (Math.imul(seed ^ 0x5bd1e995, 2654435761) + Math.imul(k, 40503)) | 0;
-  return buildCraters(P, S(21)).list.map(c => c.r);
+  return buildCraters(P, S(21)).list;
 }
 
 // Crater shape in km against x = distance / radius (Pike 1977, Melosh 1989).
@@ -198,70 +271,199 @@ export function craterList(P) {
 // terraced wall, a central peak, and past 10 Dt a peak ring instead.
 // age (0 fresh .. 1 old) lowers the rim, fills the floor and smooths the
 // terraces. Outside the rim the ejecta blanket thins as x^-3.
-export function craterProfile(x, Dkm, Dt, age, terr = 4) {
+// o (optional, craterField): dm, rm depth and rim factors, tph terrace
+// phase shift (0..1 of a step), peak (0..1, the peak cluster height that
+// craterField lays; undefined = the single central peak). With no o the
+// shape is the reference profile (tests.mjs).
+const _prof = { d: 0, xf: 0, complex: false };
+export function craterProfile(x, Dkm, Dt, age, terr = 4, o) {
+  const dm = o ? o.dm : 1, rm = o ? o.rm : 1;
   const deg = 1 - 0.55 * age;
   if (Dkm < Dt) {
-    const d = 0.2 * Dkm * deg, hr = 0.04 * Dkm * (1 - 0.6 * age);
+    const d = 0.2 * Dkm * deg * dm, hr = 0.04 * Dkm * (1 - 0.6 * age) * rm;
+    _prof.d = d; _prof.complex = false; _prof.xf = 0;
     if (x < 1) return -d + (d + hr) * x * x;
     return x < 3 ? hr * Math.pow(x, -3) * smooth(3, 2, x) : 0;
   }
-  const d = 0.2 * Dt * Math.pow(Dkm / Dt, 0.3) * deg, hr = 0.12 * d / deg * (1 - 0.6 * age);
+  const d = 0.2 * Dt * Math.pow(Dkm / Dt, 0.3) * deg * dm, hr = 0.12 * d / deg * (1 - 0.6 * age) * rm / dm;
   const xf = Math.min(0.7, 0.4 + 0.08 * Math.log(Dkm / Dt + 1));
+  _prof.d = d; _prof.complex = true; _prof.xf = xf;
   if (x < 1) {
     let h;
     if (x < xf) h = -d;
     else {
-      const sx = (x - xf) / (1 - xf), n = terr, f = sx * n, st = (Math.floor(f) + smooth(0.55, 1, f - Math.floor(f))) / n;
+      // o.tph shifts the terrace steps inside the wall (0 at the floor and the rim)
+      const sx = (x - xf) / (1 - xf), n = terr, f = sx * n + (o ? o.tph * Math.sin(Math.PI * sx) : 0), st = (Math.floor(f) + smooth(0.55, 1, f - Math.floor(f))) / n;
       const wall = mix(st, sx, 0.35 + 0.65 * age);
       h = -d + (d + hr) * Math.pow(wall, 1.6);
     }
-    if (Dkm < 10 * Dt) h += 0.45 * d * (1 - 0.7 * age) * Math.exp(-((x / (0.13 + 0.05 * age)) ** 2));
-    else h += 0.3 * d * (1 - 0.7 * age) * Math.exp(-(((x - 0.5 * xf) / 0.07) ** 2));
+    if (!o || o.peak === undefined) {
+      if (Dkm < 10 * Dt) h += 0.45 * d * (1 - 0.7 * age) * Math.exp(-((x / (0.13 + 0.05 * age)) ** 2));
+    }
+    if (Dkm >= 10 * Dt) h += 0.3 * d * (1 - 0.7 * age) * Math.exp(-(((x - 0.5 * xf) / 0.07) ** 2));
     // old floors fill in (lava, slumps)
     return mix(h, Math.max(h, -0.45 * d), age);
   }
   return x < 3 ? hr * Math.pow(x, -3) * smooth(3, 2, x) : 0;
 }
 
+// One crater at point p (km of relief, before the depth scale upk and the
+// rim factor). _ca gets x (distance / rim radius), ej (ejecta weight) and
+// the angle (cs, sn) for craterField. tests.mjs calls it (craterProbe).
+const _ca = { x: 0, ej: 1, cs: 1, sn: 0, D: 0 };
+function craterAt(ctx, cr, p, ta, R, Dt) {
+  const dx = p[0] - cr.c[0], dy = p[1] - cr.c[1], dz = p[2] - cr.c[2];
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  // local tangent coordinates (u east-ish, v north-ish) and the angle
+  const u = dx * cr.e[0] + dy * cr.e[1] + dz * cr.e[2], v = dx * cr.n[0] + dy * cr.n[1] + dz * cr.n[2];
+  const ul = Math.hypot(u, v) || 1e-12, cs = u / ul, sn = v / ul;
+  // the rim radius at this angle: harmonics, then the polygon
+  let f = 1, ck = cs, sk = sn;
+  for (let k = 0; k < 5; k++) {
+    const c2 = ck * cs - sk * sn, s2 = sk * cs + ck * sn; ck = c2; sk = s2;   // angle (k + 2) theta
+    f += cr.hc[k] * ck - cr.hs[k] * sk;
+  }
+  if (cr.poly > 0) {
+    const seg = TAU2 / cr.sides, th = Math.atan2(sn, cs) - cr.pa;
+    const t = th - seg * Math.round(th / seg), pf = Math.cos(Math.PI / cr.sides) / Math.cos(t);
+    f *= 1 + cr.poly * (pf / (0.5 + 0.5 * Math.cos(Math.PI / cr.sides)) - 1);
+  }
+  // oblique craters: an ellipse along the track
+  let dd = dist;
+  if (cr.ell !== 1) { const a = u * cr.ca + v * cr.sa, b = -u * cr.sa + v * cr.ca; dd = Math.hypot(a / cr.ell, b * cr.ell); }
+  const x = dd / (cr.r * f), D = 2 * cr.r * R;
+  // ejecta directions: an uprange gap, or two lobes across the track
+  const along = cs * cr.ca + sn * cr.sa;
+  const ej = cr.obl ? (cr.but ? smooth(0.15, 0.6, Math.sqrt(Math.max(0, 1 - along * along))) : smooth(-0.95, -0.35, along)) : 1;
+  // per-crater shape; the terrace phase and the rim height wander with the angle
+  const tilt = 1 + cr.asym * (cs * Math.cos(cr.aa) + sn * Math.sin(cr.aa));
+  _po.dm = cr.dm; _po.rm = cr.rm * tilt; _po.tph = cr.tamp * (0.5 + 0.5 * Math.sin(3 * Math.atan2(sn, cs) + cr.tph));
+  const age = Math.min(1, cr.age * cr.soft);
+  let prof = craterProfile(x, D, Dt, age, cr.terr, _po);
+  if (x >= 1) prof *= ej;
+  // central peak cluster (complex craters below the peak-ring size)
+  if (_prof.complex && D < 10 * Dt && x < 0.4) {
+    const pu = u / cr.r, pv = v / cr.r, pk = cr.peaks;
+    let s = 0;
+    for (let k = 0; k < pk.length; k += 4) { const ex = pu - pk[k], ey = pv - pk[k + 1], w = pk[k + 3] * (1 + 0.6 * age); s += pk[k + 2] * Math.exp(-(ex * ex + ey * ey) / (w * w)); }
+    prof += 0.45 * _prof.d * (1 - 0.7 * age) * Math.min(1.2, s);
+  }
+  // floor hummocks and rim texture where the crater spans many texels
+  if (ta > 0 && cr.r > 6 * ta) {
+    if (_prof.complex && x < _prof.xf + 0.05) {
+      CR_O.freq = 7 / cr.r;
+      prof += 0.07 * _prof.d * (1 - 0.5 * age) * fbm(p, CR_O, cr.seed);
+    } else if (x > 0.8 && x < 1.5) {
+      const nz = simplex3(p[0] * 14 / cr.r, p[1] * 14 / cr.r, p[2] * 14 / cr.r, cr.seed + 7);
+      // a third of the rim height (0.04 D on bowls, 0.12 d on complex craters)
+      const rimH = _prof.complex ? 0.12 * _prof.d : 0.2 * _prof.d;
+      prof += 0.3 * rimH * cr.rm * (1 - 0.6 * age) * nz * smooth(1.5, 1.0, x) * smooth(0.8, 0.95, x);
+    }
+  }
+  _ca.x = x; _ca.ej = ej; _ca.cs = cs; _ca.sn = sn; _ca.D = D;
+  return prof;
+}
+// The rim radius factor of crater cr at angle th (round the centre, in its
+// e/n frame), for tests.mjs.
+export function rimFactor(cr, th) {
+  const cs = Math.cos(th), sn = Math.sin(th);
+  let f = 1, ck = cs, sk = sn;
+  for (let k = 0; k < 5; k++) { const c2 = ck * cs - sk * sn, s2 = sk * cs + ck * sn; ck = c2; sk = s2; f += cr.hc[k] * ck - cr.hs[k] * sk; }
+  if (cr.poly > 0) {
+    const seg = TAU2 / cr.sides, t0 = th - cr.pa, t = t0 - seg * Math.round(t0 / seg), pf = Math.cos(Math.PI / cr.sides) / Math.cos(t);
+    f *= 1 + cr.poly * (pf / (0.5 + 0.5 * Math.cos(Math.PI / cr.sides)) - 1);
+  }
+  return f;
+}
+// The relief (km) of crater cr alone at point p, for tests.mjs.
+export function craterProbe(ctx, cr, p) {
+  const R = ctx.P.radiusKm;
+  return craterAt(ctx, cr, p, texelAngle(), R, 15 * 1737 / R);
+}
+
 const _cands = [];
+const _po = { dm: 1, rm: 1, tph: 0, peak: 1 };
+const CR_O = { freq: 1, octaves: 2, lacunarity: 2.3, gain: 0.5 };
 function craterField(ctx, p, st) {
   st.cOld = 0; st.cYoung = 0; st.rays = 0; st.floor = 0; st.cInside = 0; st.blanket = 0;
   const F = ctx.craters;
   if (!F.list.length) return;
   _cands.length = 0;
+  const p0 = p[0] + 1, p1 = p[1] + 1, p2 = p[2] + 1;
   for (const g of F.grids) {
     if (!g.cells.size) continue;
-    const ix = Math.floor((p[0] + 1) / g.cs), iy = Math.floor((p[1] + 1) / g.cs), iz = Math.floor((p[2] + 1) / g.cs);
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
-      const arr = g.cells.get(((ix + a) * g.G + iy + b) * g.G + iz + c);
-      if (arr) for (const cr of arr) {
+    const fx = p0 / g.cs, fy = p1 / g.cs, fz = p2 / g.cs;
+    const ix = Math.floor(fx), iy = Math.floor(fy), iz = Math.floor(fz);
+    // the two cells per axis nearest the point (cell >= 2 x reach)
+    const ax = fx - ix < 0.5 ? -1 : 1, by = fy - iy < 0.5 ? -1 : 1, cz = fz - iz < 0.5 ? -1 : 1;
+    for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) {
+      const arr = g.cells.get(((ix + a * ax) * g.G + iy + b * by) * g.G + iz + c * cz);
+      if (arr) for (let q = 0; q < arr.length; q++) {
+        const cr = arr[q];
         const dx = p[0] - cr.c[0], dy = p[1] - cr.c[1], dz = p[2] - cr.c[2];
         if (dx * dx + dy * dy + dz * dz < cr.reach * cr.reach) _cands.push(cr);
       }
     }
   }
   for (const cr of F.big) { const dx = p[0] - cr.c[0], dy = p[1] - cr.c[1], dz = p[2] - cr.c[2]; if (dx * dx + dy * dy + dz * dz < cr.reach * cr.reach) _cands.push(cr); }
-  if (_cands.length > 1) _cands.sort((x, y) => x.ord - y.ord);
+  // impact order (insertion sort: the list is short)
+  for (let i = 1; i < _cands.length; i++) { const v = _cands[i]; let j = i - 1; while (j >= 0 && _cands[j].ord > v.ord) { _cands[j + 1] = _cands[j]; j--; } _cands[j + 1] = v; }
   const C = ctx.P.craters, R = ctx.P.radiusKm, Dt = 15 * 1737 / R, upk = ctx.craterUPK * C.depth;
-  for (const cr of _cands) {
-    const dx = p[0] - cr.c[0], dy = p[1] - cr.c[1], dz = p[2] - cr.c[2];
-    const x = Math.sqrt(dx * dx + dy * dy + dz * dz) / cr.r, D = 2 * cr.r * R;
-    const prof = craterProfile(x, D, Dt, cr.age, cr.terr) * upk * (x < 1 ? 1 : C.rim);
+  const ta = texelAngle();
+  for (let q = 0; q < _cands.length; q++) {
+    const cr = _cands[q];
+    let prof = craterAt(ctx, cr, p, ta, R, Dt);
+    const x = _ca.x, ej = _ca.ej, cs = _ca.cs, sn = _ca.sn, D = _ca.D;
+    prof *= upk * (x < 1 ? 1 : C.rim);
     // overprint: inside the new bowl the older crater relief is erased
     const erase = smooth(1.05, 0.75, x) * 0.92;
     if (cr.age >= MARIA_AGE) st.cOld = st.cOld * (1 - erase) + prof;
     else { st.cOld *= 1 - erase; st.cYoung = st.cYoung * (1 - erase) + prof; }
     if (x < 1) st.floor = Math.max(st.floor, smooth(1, 0.75, x) * (cr.age > 0.6 && D > 6 * Dt ? 1 : 0));
     if (x < 1.05) st.cInside = Math.max(st.cInside, smooth(1.05, 0.8, x) * Math.max(0, 1 - cr.age * 4));
-    if (x > 1 && x < 2.5 && cr.age < 0.25) st.blanket = Math.max(st.blanket, smooth(2.5, 1.1, x) * (1 - cr.age / 0.25));
+    if (x > 1 && x < 2.5 && cr.age < 0.25) st.blanket = Math.max(st.blanket, smooth(2.5, 1.1, x) * (1 - cr.age / 0.25) * ej);
     if (cr.fresh && x > 0.9) {
-      // rays: angle round the centre, noise in angle, fading with distance
-      const a = Math.atan2(dx * cr.n[0] + dy * cr.n[1] + dz * cr.n[2], dx * cr.e[0] + dy * cr.e[1] + dz * cr.e[2]);
-      const rn = simplex3(Math.cos(a) * 4.5, Math.sin(a) * 4.5, cr.id * 1.37 + x * 0.15, ctx.sRay);
-      const ray = smooth(0.15, 0.7, rn) * Math.exp(-(x - 1) / 2.2) * smooth(7, 4, x);
+      // rays: angle round the centre, noise in angle, fading with distance,
+      // broken into streaks by a second noise along the ray
+      const rn = simplex3(cs * 4.5, sn * 4.5, cr.id * 1.37 + x * 0.15, ctx.sRay);
+      const brk = smooth(-0.2, 0.45, simplex3(cs * 11, sn * 11, cr.id * 2.1 + x * 0.9, ctx.sRay + 1));
+      const ray = smooth(0.15, 0.7, rn) * brk * Math.exp(-(x - 1) / 2.2) * smooth(7, 4, x) * ej;
       st.rays = Math.max(st.rays, C.ejecta * (1 - cr.age / 0.06) * ray);
     }
   }
+  if (ta > 0) microCraters(ctx, p, st, ta, upk, R, Dt);
+}
+
+// Small craters below rMin: a cellular field on the sphere (worley3).
+// Octave k has cells of size cs = 3 rMin / 2^k; each cell holds one
+// crater of radius 0.12..0.38 cs (a third of the cells are empty). An
+// octave fades in when its craters span 1.2-2.5 texels (texelAngle), so a
+// wider map shows the next octave. Fresh bowls with low rims, no rays.
+const _wo = [0, 0, 0];
+function microCraters(ctx, p, st, ta, upk, R, Dt) {
+  const C = ctx.P.craters;
+  let cs = 3 * Math.min(C.rMin, C.rMax * 0.95);
+  let add = 0;
+  for (let k = 0; k < 4; k++, cs *= 0.5) {
+    const rTyp = 0.25 * cs, vis = smooth(1.2, 2.5, rTyp / ta);
+    if (vis <= 0) break;
+    const f = 1 / cs;
+    worley3(p[0] * f, p[1] * f, p[2] * f, ctx.sRay + 101 + k * 17, _wo);
+    const hsh = _wo[2] >>> 0;
+    if ((hsh & 7) < 3) continue;
+    const r = (0.12 + 0.26 * ((hsh >>> 3) & 255) / 255) * cs, x = _wo[0] * cs / r;
+    if (x >= 2) continue;
+    const age = ((hsh >>> 11) & 255) / 255;
+    _po.dm = 0.8 + 0.4 * ((hsh >>> 19) & 15) / 15; _po.rm = 0.8; _po.tph = 0;
+    add += vis * craterProfile(x, 2 * r * R, Dt, 0.3 + 0.7 * age, 3, _po) * upk;
+  }
+  st.cYoung += add;
+}
+// The small-crater relief at p for a map of width W, for tests.mjs.
+export function microProbe(ctx, p, W) {
+  const R = ctx.P.radiusKm, st = { cYoung: 0 };
+  microCraters(ctx, p, st, Math.PI / (8 * (W / 16)), ctx.craterUPK * ctx.P.craters.depth, R, 15 * 1737 / R);
+  return st.cYoung;
 }
 
 // Volcanic calderas (paterae): dark floors, some with a plume ring.

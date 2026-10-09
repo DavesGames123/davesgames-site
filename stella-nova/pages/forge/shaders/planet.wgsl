@@ -90,6 +90,39 @@ fn sampleG(t: texture_2d<f32>, uv: vec2f, g: Grad) -> vec4f {
   return textureSampleGrad(t, sMap, uv, g.dx, g.dy);
 }
 
+// Cubic B-spline sample of level 0 in 4 bilinear taps (Sigg and Hadwiger
+// 2005). Used where the view magnifies the map past one texel per pixel:
+// bilinear normals then show square facets on crater walls.
+fn sampleCubic(t: texture_2d<f32>, uv: vec2f) -> vec4f {
+  let sz = vec2f(textureDimensions(t, 0));
+  let st = uv * sz - 0.5;
+  let i = floor(st);
+  let f = st - i;
+  let f2 = f * f;
+  let f3 = f2 * f;
+  let w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+  let w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+  let w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+  let w3 = f3 / 6.0;
+  let g0 = w0 + w1;
+  let g1 = w2 + w3;
+  let h0 = (i - 0.5 + w1 / g0) / sz;
+  let h1 = (i + 1.5 + w3 / g1) / sz;
+  let a = textureSampleLevel(t, sMap, vec2f(h0.x, h0.y), 0.0);
+  let b = textureSampleLevel(t, sMap, vec2f(h1.x, h0.y), 0.0);
+  let c = textureSampleLevel(t, sMap, vec2f(h0.x, h1.y), 0.0);
+  let d = textureSampleLevel(t, sMap, vec2f(h1.x, h1.y), 0.0);
+  return g0.y * (g0.x * a + g1.x * b) + g1.y * (g0.x * c + g1.x * d);
+}
+
+// How far the view magnifies texture t at this pixel: 1 when a texel
+// covers 1.5 px or more (use the cubic sample), 0 at 1 px or less.
+fn magnify(t: texture_2d<f32>, g: Grad) -> f32 {
+  let sz = vec2f(textureDimensions(t, 0));
+  let fp = max(length(g.dx * sz), length(g.dy * sz));
+  return smoothstep(1.0, 0.67, fp);
+}
+
 fn transmittance(r: f32, mu: f32) -> vec3f {
   return textureSampleLevel(tTrans, sLut, transUV(A, r, mu), 0.0).rgb;
 }
@@ -168,7 +201,9 @@ fn cloudShadow(p: vec3f) -> f32 {
 // radii, so a low sun lays long shadows behind ridges, rims and shields.
 // The band of -0.012..-0.002 (about 1..3 height steps) hides the 8-bit
 // steps. Steps: 10 on a phone, 14 on a tablet, 18 on a desktop.
-fn terrainShadow(p: vec3f, uv: vec2f) -> f32 {
+// mg (magnify): above 0 the start height and the first 4 steps use the
+// cubic sample, so a magnified shadow edge is not a texel staircase.
+fn terrainShadow(p: vec3f, uv: vec2f, mg: f32) -> f32 {
   if (V.terr.y < 0.5) { return 1.0; }
   let up = normalize(p);
   let L = V.sun.xyz;
@@ -176,16 +211,22 @@ fn terrainShadow(p: vec3f, uv: vec2f) -> f32 {
   if (mu <= -0.02 || mu > 0.45) { return 1.0; }
   let t = normalize(L - up * mu + vec3f(1e-6, 0.0, 0.0));
   let tanE = max(mu, 0.0) / sqrt(max(1.0 - mu * mu, 1e-6));
-  let h0 = textureSampleLevel(tNormal, sMap, uv, 0.0).a;
+  var h0 = textureSampleLevel(tNormal, sMap, uv, 0.0).a;
+  if (mg > 0.0) { h0 = mix(h0, sampleCubic(tNormal, uv).a, mg); }
   let n = 10 + 4 * i32(V.bw2.w);
   var s = V.terr.z;
   var lit = 1.0;
   for (var i = 0; i < 18; i++) {
     if (i >= n) { break; }
     let q = normalize(up + t * s);
-    let h = textureSampleLevel(tNormal, sMap, dirUV(q), 0.0).a;
+    let uq = dirUV(q);
+    var h = textureSampleLevel(tNormal, sMap, uq, 0.0).a;
+    if (mg > 0.0 && i < 4) { h = mix(h, sampleCubic(tNormal, uq).a, mg); }
     let ray = h0 + (s * tanE + 0.5 * s * s) / V.terr.x;
-    lit = min(lit, smoothstep(-0.012, -0.002, ray - h));
+    // penumbra: the sun disc (radius bw0.w) widens the shadow edge with
+    // the distance s to the occluder, so edges far from a ridge are soft
+    let pen = max(0.01, s * V.bw0.w / V.terr.x);
+    lit = min(lit, smoothstep(-0.002 - pen, -0.002, ray - h));
     s *= 1.32;
   }
   return mix(1.0, lit, smoothstep(0.45, 0.3, mu));
@@ -220,6 +261,7 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32, f0: vec3f) -> vec3f {
 
 fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   var uv = uvIn;
+  let mg = select(magnify(tNormal, g), 0.0, V.flow.w > 0.5);
   var alb: vec3f;
   var nT: vec3f;
   var mat: vec4f;
@@ -233,7 +275,10 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
     mat = sampleG(tMat, uv, g);
   } else {
     alb = sampleG(tAlbedo, uv, g).rgb;
-    nT = sampleG(tNormal, uv, g).xyz * 2.0 - 1.0;
+    var nS = sampleG(tNormal, uv, g);
+    // magnified: a cubic sample of the normals (no square facets)
+    if (mg > 0.0) { nS = mix(nS, sampleCubic(tNormal, uv), mg); }
+    nT = nS.xyz * 2.0 - 1.0;
     mat = sampleG(tMat, uv, g);
   }
   let emis = sampleG(tEmis, uv, g);
@@ -249,7 +294,7 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   let rough = clamp(mat.g, 0.03, 1.0);
   let metal = mat.b;
   let f0 = mix(vec3f(0.08 * mat.a), alb, metal);
-  let light = sunLight(p) * cloudShadow(p) * ringShadow(p) * terrainShadow(p, uv) * A.radii.w;
+  let light = sunLight(p) * cloudShadow(p) * ringShadow(p) * terrainShadow(p, uv, mg) * A.radii.w;
   let nl = max(dot(n, L), 0.0) * smoothstep(-0.05, 0.05, dot(up, L));
   let fd = (1.0 - f0) * (1.0 - metal) * alb / PI;
   var col = (fd + ggx(n, v, L, rough, f0)) * light * nl;

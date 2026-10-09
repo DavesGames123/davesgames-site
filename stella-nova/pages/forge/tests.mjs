@@ -72,8 +72,13 @@ for (const pr of PR.PRESETS) {
 // two neighbouring columns (not like a cut)
 for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   const { M } = made[id];
+  // inner: the mean over all neighbouring column pairs (one pair alone
+  // can sit on a crater rim and make the test flaky)
   let seam = 0, inner = 0;
-  for (let y = 0; y < H; y++) { seam += Math.abs(M.height[y * W] - M.height[y * W + W - 1]); inner += Math.abs(M.height[y * W + 40] - M.height[y * W + 41]); }
+  for (let y = 0; y < H; y++) {
+    seam += Math.abs(M.height[y * W] - M.height[y * W + W - 1]);
+    for (let x = 0; x < W - 1; x++) inner += Math.abs(M.height[y * W + x] - M.height[y * W + x + 1]) / (W - 1);
+  }
   ok(`${id}: no seam at the date line`, seam <= inner * 1.6 + 1e-3, `seam ${(seam / H).toFixed(4)} vs inner ${(inner / H).toFixed(4)}`);
 }
 // normals: unit length, and they lean down the height gradient
@@ -504,6 +509,36 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('resolution: a GPU at the vsync edge settles (at most 3 drops in 2 min)', drops <= 3, `${drops} drops, scale ${e.scale}`);
   const d = BG.createResScale(); d.update(5000); d.update(5000);
   ok('resolution: long gaps (hidden tab) do not count', d.scale === 1);
+}
+
+// craters in HD: no stamped copies. Two craters of the same size have
+// different profiles, rim roundness varies, some rims are polygons, some
+// impacts are oblique, big craters have secondary chains.
+{
+  const R = await import('./rocky.js'), P = PR.fromPreset('moon', 7), ctx = R.prepareRocky(P);
+  const L = ctx.craters.list, prim = L.filter(c => !c.sec && c.r > 0.02).sort((a, b) => a.r - b.r);
+  let pair = null;
+  for (let i = 1; i < prim.length && !pair; i++) if (prim[i].r / prim[i - 1].r < 1.02 && Math.abs(prim[i].age - prim[i - 1].age) < 0.3) pair = [prim[i - 1], prim[i]];
+  // profile along 8 directions at x = 0.1..1.4 of the radius, in units of the depth
+  const prof = cr => { const out = []; for (let a = 0; a < 8; a++) for (let k = 1; k <= 14; k++) {
+    const th = a * Math.PI / 4, d = 0.1 * k * cr.r, dir = cr.e.map((e, j) => e * Math.cos(th) + cr.n[j] * Math.sin(th));
+    const q = cr.c.map((c, j) => c * Math.cos(d) + dir[j] * Math.sin(d)); out.push(R.craterProbe(ctx, cr, q)); } return out; };
+  let rel = 0;
+  if (pair) { const a = prof(pair[0]), b = prof(pair[1]), dep = Math.max(...a.map(Math.abs)); rel = Math.max(...a.map((v, i) => Math.abs(v - b[i]))) / dep; }
+  ok('craters: two craters of the same size do not share a profile', !!pair && rel > 0.1, pair ? `r ${pair[0].r.toFixed(4)} / ${pair[1].r.toFixed(4)}, max diff ${(100 * rel).toFixed(0)} % of the depth` : 'no pair');
+  // roundness: (max - min) / mean of the rim radius over the angle
+  const round = L.filter(c => !c.sec).slice(0, 2000).map(cr => { let lo = 9, hi = 0, m = 0; for (let k = 0; k < 72; k++) { const f = R.rimFactor(cr, k * Math.PI / 36); lo = Math.min(lo, f); hi = Math.max(hi, f); m += f / 72; } return (hi - lo) / m; }).sort((a, b) => a - b);
+  const q10 = round[Math.floor(round.length * 0.1)], q90 = round[Math.floor(round.length * 0.9)];
+  ok('craters: rim roundness varies (10th to 90th percentile spread)', q10 < 0.08 && q90 > 2 * q10 && round.every(v => v < 0.6), `${q10.toFixed(3)} .. ${q90.toFixed(3)}`);
+  const polys = L.filter(c => !c.sec && c.poly > 0).length / L.filter(c => !c.sec).length, obl = L.filter(c => !c.sec && c.obl).length / L.filter(c => !c.sec).length;
+  ok('craters: about a third have polygonal rims, a few are oblique', polys > 0.25 && polys < 0.45 && obl > 0.04 && obl < 0.13, `${(100 * polys).toFixed(0)} % polygons, ${(100 * obl).toFixed(1)} % oblique`);
+  const sec = L.filter(c => c.sec), parents = L.filter(c => !c.sec && c.r >= 0.07).length;
+  ok('craters: big craters throw chains of secondaries', parents > 0 && sec.length >= 4 * parents, `${sec.length} secondaries round ${parents} parents`);
+  // micro craters: a 4k map has relief below rMin that a 2k map does not
+  const rr = N.mulberry(5), pts = []; for (let i = 0; i < 3000; i++) pts.push(N.onSphere(rr));
+  const share = W => pts.filter(q => Math.abs(R.microProbe(ctx, q, W)) > 1e-4).length / pts.length;
+  const s2 = share(2048), s4 = share(4096);
+  ok('craters: a 4k map adds small craters below rMin that 2k does not', s2 < 0.05 && s4 > 0.15 && s4 > 4 * s2, `share of points in a small crater: 2k ${(100 * s2).toFixed(0)} %, 4k ${(100 * s4).toFixed(0)} %`);
 }
 
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
