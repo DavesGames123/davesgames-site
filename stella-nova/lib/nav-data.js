@@ -75,7 +75,8 @@ w.SN_NAV = [
     ] },
     { h: "Studio Tools", p: [
       ["solar", "Solar Transit Study", "TOOL"],
-      ["matlab", "PBR Material Studio", "TOOL", "material-studio"]
+      ["matlab", "PBR Material Studio", "TOOL", "material-studio"],
+      ["pascal-editor", "Pascal Editor", "TOOL"]
     ] },
     { h: "Live Data", p: [
       ["flight-board", "Flight Board", "LIVE"]
@@ -426,11 +427,12 @@ w.SN_NAV = [
 // ask for a session. tools/nav-sync.js checks that each key is registered.
 w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'attractorlab', 'resonance-3d', 'cannonball-vr'];
 
-// Craft Suite pages (lib/craft-host.js). Each one holds an upstream app in a
-// child iframe. The shell gives their iframe allow="fullscreen;
-// clipboard-read; clipboard-write", so the child can ask for these too.
+// Craft Suite pages (lib/craft-host.js) and pascal-editor. Each one holds an
+// upstream app in a child iframe. The shell gives their iframe
+// allow="fullscreen; clipboard-read; clipboard-write", so the child can ask
+// for these too.
 // tools/nav-sync.js checks that each key is registered.
-w.SN_CRAFT = ['photocraft', 'lightcraft', 'vectorcraft', 'designcraft', 'filmcraft', 'effectcraft', 'printcraft'];
+w.SN_CRAFT = ['photocraft', 'lightcraft', 'vectorcraft', 'designcraft', 'filmcraft', 'effectcraft', 'printcraft', 'pascal-editor'];
 
 // Hidden pages: [key, label, dir]. The shell opens them at #<key>, and
 // nothing links to them: they are not in SN_NAV, so snPages(), the sidebar,

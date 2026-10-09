@@ -79,6 +79,7 @@ const NO_THUMB = {
   filmcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
   effectcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
   printcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  'pascal-editor': 'a frame of the hosted upstream editor; no capture of its UI',
 };
 // A JPEG for one of these keys still shows on the home; the entry only
 // stops the warning.

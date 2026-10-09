@@ -243,6 +243,7 @@ const BLURBS = {
   'tidal-currents': 'Real tidal current data, animated.',
   solar: 'Sun paths for any place and date.',
   matlab: 'Author PBR materials with a live sphere.',
+  'pascal-editor': 'Pascal, the open-source 3D building editor.',
   fortom: 'A tribute page.',
   'starward-belt': 'A player-made map of the belt.',
   fire: 'Procedural fire, many variants.',
