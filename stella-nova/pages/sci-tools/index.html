@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Science toolkit: unit conversion, CODATA constants, uncertainty propagation, statistics, curve fits, chemistry, physics and numerics in one page. Runs on your device and works offline.">
+<title>Science Toolkit — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SCIENCE TOOLKIT  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   One page of small tools for lab and desk work. registry.js lists the
+   tools. tools/<category>.js holds the tools of one category; main.js loads
+   it when a tool of that category opens. core/*.js holds the maths (no
+   DOM), which tests.mjs checks against reference values.
+
+   Every tool runs on the device. Nothing is sent to a server. The site
+   service worker keeps the files, so the page works offline after one
+   visit. The state of a tool is in the URL hash: #unit-convert?q=...&to=...
+
+   KEYS   / or Ctrl-K (Cmd-K) opens the palette. Esc closes the palette or
+          goes back to the grid. Arrow keys move in the palette.
+
+   HEAD LOAD ORDER
+     1. gpu-guard  2. wishlist  3. stats-beacon   (../../lib/)
+     4. style.css  5. ../../lib/sci.css
+   main.js (module) at the end of body.
+
+   REGIONS
+     .topbar      brand, title, palette button (hidden in the shell frame)
+     #intro       title and one line on what the page is
+     #tabs        category tabs (data-cat)
+     #grid        the tool cards
+     #tool        one open tool: inputs, result, method and references
+     #palette     the command palette (a sheet on a phone)
+     footer       related pages and the credit
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Science toolkit</div>
+</div>
+
+<main class="wrap">
+  <header id="intro">
+    <h1>Science toolkit</h1>
+    <p class="lead">Small, exact tools for lab and desk work. Each one shows its method and its sources. Everything runs on this device, nothing is uploaded, and the page works offline.</p>
+    <button id="openPalette" class="search" type="button" aria-label="Search tools">
+      <span>Search tools</span><kbd>/</kbd>
+    </button>
+  </header>
+
+  <nav id="tabs" role="tablist" aria-label="Categories"></nav>
+
+  <section id="grid" aria-label="Tools"></section>
+
+  <section id="tool" hidden aria-live="polite">
+    <div class="toolhead">
+      <button id="back" class="ghost" type="button" aria-label="Back to all tools">← All tools</button>
+      <div class="titles">
+        <h2 id="toolName"></h2>
+        <p id="toolBlurb" class="dim"></p>
+      </div>
+      <button id="copyLink" class="ghost" type="button" title="Copy a link to this tool with these inputs">Copy link</button>
+    </div>
+    <div class="toolbody">
+      <div class="col-main">
+        <form id="form" autocomplete="off" spellcheck="false" onsubmit="return false"></form>
+        <div id="examples" class="examples"></div>
+        <div id="err" class="err" role="alert" hidden></div>
+        <div id="out" class="out"></div>
+      </div>
+      <aside class="col-method">
+        <h3>Method</h3>
+        <div id="eqs"></div>
+        <p id="how"></p>
+        <h3>References</h3>
+        <ol id="refs"></ol>
+      </aside>
+    </div>
+  </section>
+
+  <footer>
+    <p id="related"></p>
+    <p class="dim">Inspired by <a href="https://github.com/1612elphi/delphitools" target="_blank" rel="noopener">delphitools</a> by 1612elphi: many small tools in one fast page, local only. The code and text here are our own. Element data comes from this site's <a href="/stella-nova/#periodic-table" target="_top">Periodic Table</a>.</p>
+  </footer>
+</main>
+
+<div id="palette" hidden>
+  <div class="scrim" data-close></div>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Find a tool">
+    <input id="pq" type="search" placeholder="Find a tool: units, t-test, molar mass…" aria-label="Find a tool" autocomplete="off" spellcheck="false">
+    <ul id="plist" role="listbox"></ul>
+    <p class="hint dim"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close</p>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
