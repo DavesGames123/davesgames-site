@@ -1,906 +1,162 @@
-/*
-Copyright 2021 Matthias M�ller - Ten Minute Physics
+// ============================================================================
+//  PBF BOUNDARIES  ·  pages/pbf-boundary/main.js — the page controller
+// ----------------------------------------------------------------------------
+//  CREDIT. The upstream demo is the Ten Minute Physics contribution
+//  contribs/PBFBoundary.html by Sergii Biloshytskyi (Ukraine), copyright
+//  2021 Matthias Müller - Ten Minute Physics, MIT License. Its particle
+//  model (round container, turning disks, static and kinetic friction,
+//  restitution through a velocity pass) lives on in solver.js, which keeps
+//  the MIT notice. The credit bar (widgets/ten-minute-physics/kit.js) names
+//  both authors on the page and on the saver plate.
+//
+//  OUR ADDITIONS (davesgames.io, not upstream): the density-constrained
+//  water mode, the containers, obstacles, emitters, paddle, floating and
+//  sinking bodies, the renderer (render.js), this controller, the sim kit
+//  GUI (widgets/sim-kit) and the screensaver (saver.js).
+//
+//  Flow: the sim kit (ui.mount) owns the GUI state. The schema and the
+//  scene rules are in scene.js (no DOM, so tests.mjs uses the same code).
+//  A change to a key in scene.REBUILD builds a new scene
+//  (solver.buildScene); every other key is a live set (scene.applyParams).
+//  The loop steps the solver at 60 Hz in real time (kit.speed scales it)
+//  and draws with render.draw.
+//
+//  grep -n targets
+//    schema, guard ........ scene.js "export function makeSchema"
+//    scene build .......... "function rebuild"
+//    look ................. "function look"
+//    clear view rect ...... "function viewRect"
+//    pointer .............. "function bindPointer"
+//    frame loop ........... "function frame"
+//    saver hooks .......... "window.__pbf"
+// ============================================================================
+import * as SV from './solver.js';
+import { draw, fitView } from './render.js';
+import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
+import { installSaver } from './saver.js';
+import * as SC from './scene.js';
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+TMP.page({ n: null, title: 'PBF Boundaries', file: 'contribs/PBFBoundary.html', video: null, year: 2021, licence: 'MIT', by: 'Sergii Biloshytskyi', from: 'Ukraine', holder: 'Matthias Müller' });
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+const PHONE = isPhone();
+const CAP = PHONE ? 1600 : 3200;
+const SCHEMA = SC.makeSchema(PHONE);
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-// PBF Boundaries · upstream script 1, verbatim from Ten Minute Physics
-// contribs/PBFBoundary.html by Sergii Biloshytskyi. MIT License (notice kept above).
-// Source: https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/contribs/PBFBoundary.html
-"use strict";
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d');
+const R = {};             // render cache
+let S = SV.createSim({ cap: CAP });
+let kit, cmMod = null, lut = null, lutId = null, veil = 0, saverView = null;
 
-var canvas = null;
-var c = null;
-
-var simMinWidth = 2.0;
-var cScale = 1;
-var simWidth = 1;
-var simHeight = 1;
-
-var doc = null;
-
-var printError = function(error, explicit) {
-    console.log(`[${explicit ? 'EXPLICIT' : 'INEXPLICIT'}] ${error.name}: ${error.message}`);
+function rebuild() {
+  const st = kit.state, r = SC.sceneRng(kit.seed);
+  applyParams();
+  SV.buildScene(S, SC.sceneConfig(st, r), r);
+  veil = 1;
+}
+function applyParams() { SC.applyParams(S, kit.state); }
+function look() {
+  const st = kit.state, t = K.themeById(st.theme);
+  if (st.colorBy !== 'water' && cmMod && lutId !== st.cmap) { lut = cmMod.variant(st.cmap); lutId = st.cmap; }
+  return {
+    bg: t.bg, bg2: t.bg2, grid: st.grid ? t.grid : null, wall: t.wall, wallFill: t.dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+    obstacle: t.wall, outline: t.dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.35)', mark: t.accent, cabin: t.dark ? '#f2f4f7' : '#ffffff',
+    water: st.water, colorBy: st.colorBy, lut: st.colorBy === 'water' ? null : lut, render: st.render, foam: st.foam, size: 1,
+    palette: K.paletteColors(st.palette), veil, alpha: 0.94,
+  };
 }
 
-function setupGlobals(canvas_, win, doc_) {
-    canvas = canvas_;
-    c = canvas.getContext("2d");
-    canvas.width = win.innerWidth - 20;
-    canvas.height = win.innerHeight - 100;
+// ---- view ----------------------------------------------------------------------
+let dpr = 1, cw = 1, ch = 1;
+function resize() {
+  dpr = Math.min(2, devicePixelRatio || 1);
+  cw = Math.max(1, Math.round(innerWidth * dpr)); ch = Math.max(1, Math.round(innerHeight * dpr));
+  canvas.width = cw; canvas.height = ch;
+}
+// The clear rect (device px): beside the panel, above the dock and credit.
+function viewRect() {
+  if (saverView) return { x: saverView.x * dpr, y: saverView.y * dpr, w: saverView.w * dpr, h: saverView.h * dpr };
+  const panel = document.getElementById('sk-panel'), tr = document.querySelector('.sk-transport');
+  let x1 = innerWidth, y1 = innerHeight;
+  if (kit && kit.panelOpen && panel && !PHONE) x1 = Math.max(innerWidth * 0.45, panel.getBoundingClientRect().left);
+  if (tr) y1 = Math.min(y1, tr.getBoundingClientRect().top - 6);
+  if (kit && kit.panelOpen && PHONE && panel) y1 = Math.min(y1, panel.getBoundingClientRect().top);
+  const y0 = 56;
+  return { x: 12 * dpr, y: y0 * dpr, w: Math.max(80, x1 - 24) * dpr, h: Math.max(80, y1 - y0 - 6) * dpr };
+}
+let view = null;
+const makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
 
-    simMinWidth = 2.0;
-    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
-    simWidth = canvas.width / cScale;
-    simHeight = canvas.height / cScale;
-
-    doc = doc_;
+// ---- pointer ----------------------------------------------------------------------
+function bindPointer() {
+  const toWorld = e => { const r = canvas.getBoundingClientRect(); const px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr; return [(px - view.ox) / view.s, (view.oy - py) / view.s]; };
+  let last = null;
+  canvas.addEventListener('pointerdown', e => {
+    if (!view || kit.saver) return;
+    canvas.setPointerCapture(e.pointerId);
+    const [x, y] = toWorld(e), p = S.pointer;
+    p.on = true; p.x = x; p.y = y; p.vx = p.vy = 0; last = [x, y, performance.now()];
+    const k = SV.pickBody(S, x, y, 0.03);
+    if (k >= 0) SV.grab(S, k, x, y); else p.body = -1;
+  });
+  canvas.addEventListener('pointermove', e => {
+    const p = S.pointer; if (!p.on) return;
+    const [x, y] = toWorld(e), now = performance.now();
+    const dt = Math.max(0.008, (now - last[2]) / 1000);
+    p.vx = (x - last[0]) / dt; p.vy = (y - last[1]) / dt; p.x = x; p.y = y; last = [x, y, now];
+  });
+  const up = () => { const p = S.pointer; p.on = false; p.vx = p.vy = 0; SV.release(S); };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
 }
 
-function cX(posX) {
-    return posX * cScale;
+// ---- loop -------------------------------------------------------------------------
+let lastT = 0, acc = 0;
+const H = 1 / 60;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0; lastT = ts;
+  if (kit.playing) {
+    acc += dt * kit.speed;
+    let n = 0; while (acc >= H && n < 3) { S.step(H); acc -= H; n++; }
+    if (n === 3) acc = 0;
+  } else if (kit.takeStep()) S.step(H);
+  veil = Math.max(0, veil - dt / 0.45);
+  view = fitView(S, viewRect(), saverView && saverView.cam);
+  draw(ctx, S, view, look(), R, makeCanvas, cw, ch);
 }
 
-function cY(posY) {
-    return canvas.height - posY * cScale;
-}
-
-// vector math -------------------------------------------------------
-
-function length(x0, y0, x1, y1) {
-    return Math.sqrt((x0 - x1)*(x0-x1) + (y0-y1)*(y0-y1));
-}
-
-class Vector2 {
-    constructor(x = 0.0, y = 0.0) {
-        this.x = x; 
-        this.y = y;
-    }
-
-    set(v) {
-        this.x = v.x; this.y = v.y;
-    }
-
-    clone() {
-        return new Vector2(this.x, this.y);
-    }
-
-    add(v, s = 1.0) {
-        this.x += v.x * s;
-        this.y += v.y * s;
-        return this;
-    }
-
-    addVectors(a, b) {
-        this.x = a.x + b.x;
-        this.y = a.y + b.y;
-        return this;
-    }
-
-    subtract(v, s = 1.0) {
-        this.x -= v.x * s;
-        this.y -= v.y * s;
-        return this;
-    }
-
-    subtractVectors(a, b) {
-        this.x = a.x - b.x;
-        this.y = a.y - b.y;
-        return this;			
-    }
-
-    length() {
-        return Math.sqrt(this.x * this.x + this.y * this.y);
-    }
-
-    scale(s) {
-        this.x *= s;
-        this.y *= s;
-        return this;
-    }
-
-    dot(v) {
-        return this.x * v.x + this.y * v.y;
-    }
-
-    perp() {
-        return new Vector2(-this.y, this.x);
-    }
-
-    rotate(m) {
-        var x = m.e00 * this.x + m.e01 * this.y;
-	    var y = m.e10 * this.x + m.e11 * this.y;
-        this.x = x;
-        this.y = y;
-    }
-}
-
-class Mat2 {
-    constructor(e00_, e01_, e10_, e11_) {
-        this.e00 = e00_;
-        this.e01 = e01_;
-        this.e10 = e10_;
-        this.e11 = e11_;
-    }
-
-    static rotation(angle) {
- 	    var cosA = Math.cos(angle);
-        var sinA = Math.sin(angle);
-
-	    return new Mat2(cosA, -sinA, sinA,  cosA);
-    }
-
-}
-
-class ConstraintsArray {
-    static IS = 2;
-    static DS = 7;
-
-    constructor(size) { 
-        this.Idx = new Int32Array(ConstraintsArray.IS*size); 
-        this.Data = new Float32Array(ConstraintsArray.DS*size); 
-        this.maxSize = size;
-        this.size = 0;
-    }
-
-    clear() {
-        this.size = 0;
-    }
-
-    pushBack(A, B, dvx, dvy, nx, ny, d_lambda_n, mu_k, e) {
-        if (this.size >= this.maxSize) {
-            this.maxSize *= 2;
-            var oldIdx = this.Idx;
-            var oldData = this.Data;
-
-            this.Idx = new Int32Array(ConstraintsArray.IS*this.maxSize); 
-            this.Data = new Float32Array(ConstraintsArray.DS*this.maxSize); 
-
-            for (var i = 0; i < oldIdx.length; ++i)
-            {
-                this.Idx[i] = oldIdx[i];
-            }
-            for (i = 0; i < oldData.length; ++i)
-            {
-                this.Data[i] = oldData[i];
-            }
-        }
-        var is = ConstraintsArray.IS;
-        var ds = ConstraintsArray.DS;
-        this.Idx[is*this.size + 0] = A; 
-        this.Idx[is*this.size + 1] = B; 
-
-        this.Data[ds*this.size + 0] = dvx; 
-        this.Data[ds*this.size + 1] = dvy; 
-        this.Data[ds*this.size + 2] = nx; 
-        this.Data[ds*this.size + 3] = ny; 
-        this.Data[ds*this.size + 4] = d_lambda_n; 
-        this.Data[ds*this.size + 5] = mu_k; 
-        this.Data[ds*this.size + 6] = e; 
-        this.size++;
-    }
-
-    idxA(i) {
-        return this.Idx[ConstraintsArray.IS*i+ 0]; 
-    }
-    idxB(i) {
-        return this.Idx[ConstraintsArray.IS*i + 1]; 
-    }
-    dvx(i) {
-        return this.Data[ConstraintsArray.DS*i + 0]; 
-    }
-    dvy(i) {
-        return this.Data[ConstraintsArray.DS*i + 1]; 
-    }
-    nx(i) {
-        return this.Data[ConstraintsArray.DS*i + 2]; 
-    }
-    ny(i) {
-        return this.Data[ConstraintsArray.DS*i + 3]; 
-    }
-    d_lambda_n(i) {
-        return this.Data[ConstraintsArray.DS*i + 4]; 
-    }
-    mu_k(i) {
-        return this.Data[ConstraintsArray.DS*i + 5]; 
-    }
-    e(i) {
-        return this.Data[ConstraintsArray.DS*i + 6]; 
-    }
-}
-
-
-class Vector {
-    constructor(size) { 
-        this.vals = new Int32Array(size); 
-        this.maxSize = size;
-        this.size = 0;
-    }
-    clear() {
-        this.size = 0;
-    }
-    pushBack(val) {
-        if (this.size >= this.maxSize) {
-            this.maxSize *= 2;
-            var old = this.vals;
-            this.vals = new Int32Array(this.maxSize);
-            for (var i = 0; i < old.length; i++)
-                this.vals[i] = old[i];
-        }
-        this.vals[this.size++] = val;
-    }
-}
-
-// boundary class -------------------------------------------------------
-class CircleBoundary {
-    constructor(pos_, radius_, inverted_) { 
-        this.pos = new Vector2(pos_.x, pos_.y);
-        this.radius = radius_;
-        this.inverted = inverted_;
-    }
-}
-
-// scene -------------------------------------------------------
-
-var physicsScene = 
-    {
-        gravity : new Vector2(0.0, -9.81),
-        dt : 1.0 / 60.0,
-        numSteps : 10,
-        paused : false,
-        numRows:  25,       
-        numColumns:  25,
-        numParticles: 0,
-        boundaryCenter: new Vector2(0.0, 0.0),
-        boundaryRadius: 0.0,
-        boundaries: null,
-        rotation_angle: 0.0
-    };
-
-var particleRadius = 0.01;
-var maxVel = 0.4 * particleRadius;
-var mu_s = 0.2; // static friction
-var mu_k = 0.2; // dynamic friction
-var e = 0.2; // restitution
-
-// if enabled, then using velocity pass as described in 
-// Detailed Rigid Body Sumulatio with Extended PBD
-var use_velocity_pass = false;
-
-var maxParticles = 10000;
-
-var particles = {
-    pos : new Float32Array(2 * maxParticles),
-    prev : new Float32Array(2 * maxParticles),
-    vel : new Float32Array(2 * maxParticles)
-}
-
-var constraints = new ConstraintsArray(1);
-
-// -------------------------------------------------------
-
-function setupScene() 
-{
-    var particleDiameter = 2*particleRadius;
-
-    if(physicsScene.numColumns*physicsScene.numRows > maxParticles)
-    {
-        alert("Too many particles, please increase maxPariticles value")
-        return;
-    }
-
-    physicsScene.radius = simMinWidth * 0.05;
-    physicsScene.paused = true;
-    physicsScene.boundaryCenter.x = simWidth / 2.0;
-    physicsScene.boundaryCenter.y = simHeight / 2.0;
-    physicsScene.boundaryRadius = simMinWidth * 0.4;
-
-    var offsetX = physicsScene.boundaryCenter.x - physicsScene.numColumns*particleDiameter*0.5;
-    var offsetY = physicsScene.boundaryCenter.y + physicsScene.numRows*particleDiameter*0.5;
-
-    //offsetX += particleRadius * 50;
-    //offsetY -= particleRadius * 50;
-
-    // init particle positions
-    var idx = 0;
-    for (var y = 0; y < physicsScene.numRows; y++) {
-        for (var x = 0; x < physicsScene.numColumns; x++) {
-            // x
-            particles.pos[idx] = offsetX + x * 1.2*particleDiameter;
-            particles.pos[idx] += 0.01 * particleDiameter * (y % 2);
-            // y
-            particles.pos[idx+ 1] = offsetY - y * particleDiameter;
-
-            // v.x v.y
-            particles.vel[idx] = 0.0;
-            particles.vel[idx + 1] = 0.0;
-            idx += 2;				
-        }
-    }
-    physicsScene.numParticles = physicsScene.numColumns * physicsScene.numRows;
-
-
-    // add some more boundaries
-    physicsScene.boundaries = new Array();
-    physicsScene.boundaries.push(new CircleBoundary(physicsScene.boundaryCenter,
-        physicsScene.boundaryRadius, true));
-
-    var num_boundaries = 5;
-    var delta_angle = 360 / num_boundaries;
-    var smallBoundaryRadius = 0.25*physicsScene.boundaryRadius;
-    var bpos = new Vector2(0,0);
-    for(var i=0;i<num_boundaries;++i)
-    {
-        var rot_m = Mat2.rotation(delta_angle*i*Math.PI/180.0)
-        bpos.x = physicsScene.boundaryRadius;
-        bpos.y = 0;
-        bpos.rotate(rot_m);
-        bpos.x += physicsScene.boundaryCenter.x;
-        bpos.y += physicsScene.boundaryCenter.y;
-        physicsScene.boundaries.push(new CircleBoundary(bpos, smallBoundaryRadius, false));
-    }
-
-    initNeighborsHash();
-    constraints.clear();
-
-    doc.getElementById("mu_s_slider").setAttribute("value", 100*mu_s);		
-    doc.getElementById("mu_k_slider").setAttribute("value", 100*mu_k);		
-    doc.getElementById("e_slider").setAttribute("value", 100*e);		
-    doc.getElementById("mu_k").innerHTML = mu_k;
-    doc.getElementById("mu_s").innerHTML = mu_s;
-    doc.getElementById("e").innerHTML = e;
-    doc.getElementById("use_velocity_pass").checked = use_velocity_pass;
-    doc.getElementById("cols").innerHTML = physicsScene.numColumns;
-    doc.getElementById("rows").innerHTML = physicsScene.numRows;
-}
-
-// draw -------------------------------------------------------
-
-function drawCircle(posX, posY, radius, filled)
-{
-    c.beginPath();			
-    c.arc(
-        cX(posX), cY(posY), cScale * radius, 0.0, 2.0 * Math.PI); 
-    c.closePath();
-    if (filled)
-        c.fill();
-    else 
-        c.stroke();
-}
-
-function drawCircleV(pos, radius, filled)
-{
-    drawCircle(pos.x, pos.y, radius, filled);
-}
-
-function draw() 
-{
-    c.clearRect(0, 0, canvas.width, canvas.height);
-
-    c.fillStyle = "#FF8800";
-    c.lineWidth = 2.0;
-
-    for(var i=0;i<physicsScene.numParticles; ++i)
-    {
-        var x = particles.pos[2*i + 0];
-        var y = particles.pos[2*i + 1];
-        drawCircle(x, y, particleRadius, true);
-    }
-
-    c.fillStyle = "#FF0000";
-
-    drawCircleV(physicsScene.boundaryCenter, physicsScene.boundaryRadius, false);
-
-    c.fillStyle = "#5555FF";
-
-    for(var i=1;i<physicsScene.boundaries.length;++i)
-    {
-        var x = physicsScene.boundaries[i].pos.x;
-        var y = physicsScene.boundaries[i].pos.y;
-        var r = physicsScene.boundaries[i].radius;
-        drawCircle(x, y, r, true);
-    }
-}
-
-// ------------------------------------------------
-
-function calcStaticFriction(dp, n, dist, frict)
-{
-    var dp_n = new Vector2(0,0);
-    var dp_t = new Vector2(0,0);
-
-    // perp projection
-    var proj = dp.dot(n);
-    dp_n.add(n, proj);
-
-    dp_t.subtractVectors(dp, dp_n);
-    var dp_t_len = dp_t.length();
-    // part of velocity update pass
-
-    if (dp_t_len < mu_s * dist) {
-        frict.x = dp_t.x;
-        frict.y = dp_t.y;
-    }
-}
-
-// calculated static & dynamic friction if not using velocity update pass
-// the way Unified Particle Physics describes it in 6.1
-function calcFriction(dp, n, dist, frict)
-{
-    if(use_velocity_pass) {
-        calcStaticFriction(dp, n, dist, frict);
-        return;
-    }
-
-    var dp_n = new Vector2(0,0);
-    var dp_t = new Vector2(0,0);
-
-    // perp projection
-    var proj = dp.dot(n);
-    dp_n.add(n, proj);
-
-    dp_t.subtractVectors(dp, dp_n);
-    var dp_t_len = dp_t.length();
-    // part of velocity update pass
-
-    if (dp_t_len < mu_s * dist) {
-        frict.x = dp_t.x;
-        frict.y = dp_t.y;
-    }
-    else {
-        // 0/0 = NaN, so avoid it
-        var k = mu_k == 0 ? 0 : Math.min(mu_k * dist / dp_t_len, 1);
-        frict.x = k * dp_t.x;
-        frict.y = k * dp_t.y;
-    }
-}
-
-// ------------------------------------------------
-
-function solveBoundaryConstraint(is_stab)
-{
-    //var br = physicsScene.boundaryRadius - particleRadius;
-    //var bc = physicsScene.boundaryCenter;
-
-    var n = new Vector2(0,0);
-    var pi = new Vector2(0,0);
-    var dp = new Vector2(0,0);
-    var dp_n = new Vector2(0,0);
-    var dp_t = new Vector2(0,0);
-    var path = new Vector2(0,0);
-    var frict = new Vector2(0,0);
-    for(var i=0;i<physicsScene.numParticles; ++i)
-    {
-        pi.x = particles.pos[2*i + 0];
-        pi.y = particles.pos[2*i + 1];
-
-        for(var j=0;j<physicsScene.boundaries.length;++j) {
-
-            var inv = physicsScene.boundaries[j].inverted;
-            var br = physicsScene.boundaries[j].radius - (inv ? particleRadius : -particleRadius);
-            var bc = physicsScene.boundaries[j].pos;
-
-            n.subtractVectors(pi, bc);
-            var d = n.length();
-            n.scale(1 / d);
-            var C = d - br;
-            if(inv) {
-                n.scale(-1);
-                C = -C;
-            }
-
-            if (C < 0) {
-                dp.x = 0;
-                dp.y = 0;
-                dp.add(n, -C);
-                var dist = Math.abs(C);
-
-                particles.pos[2 * i + 0] += dp.x;
-                particles.pos[2 * i + 1] += dp.y;
-
-                // corrected pos minus old pos
-                path.x = (particles.pos[2 * i + 0] - particles.prev[2 * i + 0]);
-                path.y = (particles.pos[2 * i + 1] - particles.prev[2 * i + 1]);
-
-
-                calcFriction(path, n, dist, frict)
-
-                if (use_velocity_pass) {
-                    var dvx = particles.vel[2 * i] - 0;
-                    var dvy = particles.vel[2 * i + 1] - 0;
-                    var d_lambda_n = dist;//path.dot(n);
-                    constraints.pushBack(i, -1, dvx, dvy, n.x, n.y, d_lambda_n, mu_k, e);
-                }
-
-                particles.pos[2 * i + 0] -= frict.x;
-                particles.pos[2 * i + 1] -= frict.y;
-
-                if(is_stab) {
-                    particles.prev[2 * i + 0] += dp.x - frict.x;
-                    particles.prev[2 * i + 1] += dp.y - frict.y;
-                }
-            }
-        }
-    }
-}
-
-function solveCollisionConstraints(is_stab)
-{
-    var frict = new Vector2(0,0);
-    var path = new Vector2(0,0);
-    var n = new Vector2(0,0);
-    for(var i=0;i<physicsScene.numParticles; ++i)
-    {
-        var px = particles.pos[2 * i];
-        var py = particles.pos[2 * i + 1];
-
-        var first = firstNeighbor[i];
-        var num = firstNeighbor[i + 1] - first;
-
-        for (var j = 0; j < num; j++) {
-
-
-            var id = neighbors.vals[first + j];				
-            if(id == i)
-                continue;
-
-            n.x = px - particles.pos[2 * id];				
-            n.y = py - particles.pos[2 * id + 1];
-            var d = n.length();
-
-            if (d > 0) {
-                n.scale(1/d);
-            }
-
-            var C = 2*particleRadius - d;
-            if(C > 0) {
-                // particles have same mass, so  w1/(w1+w2) = w2/(w1+w2) = 0.5
-
-                var dx = 0.5*C*n.x;
-                var dy = 0.5*C*n.y;
-
-                particles.pos[2 * i] += dx;
-                particles.pos[2 * i + 1 ]+= dy;
-
-                particles.pos[2 * id] -= dx;				
-                particles.pos[2 * id + 1] -= dy;
-
-                // corrected pos minus old pos
-                path.x = (particles.pos[2 * i + 0] - particles.prev[2 * i + 0]) -
-                (particles.pos[2 * id + 0] - particles.prev[2 * id + 0]);
-                path.y = (particles.pos[2 * i + 1] - particles.prev[2 * i + 1]) - 
-                (particles.pos[2 * id + 1] - particles.prev[2 * id + 1]);
-
-                var dist = C;
-                frict.x = frict.y = 0;
-                calcFriction(path, n, dist, frict)
-                particles.pos[2 * i + 0] -= 0.5*frict.x;
-                particles.pos[2 * i + 1] -= 0.5*frict.y;
-                particles.pos[2 * id + 0] += 0.5*frict.x;
-                particles.pos[2 * id + 1] += 0.5*frict.y;
-
-                if(is_stab) {
-                    particles.prev[2 * i + 0] += dx-0.5*frict.x;
-                    particles.prev[2 * i + 1] += dy-0.5 * frict.y;
-                    particles.prev[2 * id + 0] += -dx + 0.5 * frict.x;
-                    particles.prev[2 * id + 1] += -dy + 0.5 * frict.y;
-                }
-
-                if (use_velocity_pass) {
-                    // fill constraint for velocity pass
-                    var dvx = particles.vel[2 * i] - particles.vel[2 * id];
-                    var dvy = particles.vel[2 * i + 1] - particles.vel[2 * id + 1];
-                    var d_lambda_n = 0.5 * path.dot(n);
-                    constraints.pushBack(i, id, dvx, dvy, n.x, n.y, d_lambda_n, mu_k, e);
-                }
-            }
-        }
-    }
-
-}
-
-// -----------------------------------------------------------------------------------
-
-var hashSize = 370111;
-
-var hash = {
-    size : hashSize,
-
-    first : new Int32Array(hashSize),
-    marks : new Int32Array(hashSize),
-    currentMark : 0,
-
-    next : new Int32Array(maxParticles),
-
-    orig : { left : -100.0, bottom : -1.0 }		
-}
-
-var gridSpacing = 2*5*particleRadius;
-var invGridSpacing = 1/gridSpacing;
-var firstNeighbor = new Int32Array(maxParticles + 1);
-var neighbors = new Vector(10);// * maxParticles);
-
-function initNeighborsHash() {
-    for (var i = 0; i < hashSize; i++) {
-        hash.first[i] = -1;
-        hash.marks[i] = 0;
-    }			
-}
-
-function findNeighbors() 
-{
-    // hash particles
-    hash.currentMark++;
-
-    for (var i = 0; i < physicsScene.numParticles; i++) {
-        var px = particles.pos[2 * i];
-        var py = particles.pos[2 * i + 1];
-
-        var gx = Math.floor((px - hash.orig.left) * invGridSpacing);
-        var gy = Math.floor((py - hash.orig.bottom) * invGridSpacing);
-
-        var h = (Math.abs((gx * 92837111) ^ (gy * 689287499))) % hash.size;
-
-        if (hash.marks[h] != hash.currentMark) {				
-            hash.marks[h] = hash.currentMark;
-            hash.first[h] = -1;
-        }
-
-        hash.next[i] = hash.first[h];
-        hash.first[h] = i;
-    }
-
-    // collect neighbors
-    neighbors.clear();
-
-    var h2 = gridSpacing * gridSpacing;
-
-    for (var i = 0; i < physicsScene.numParticles; i++) {
-        firstNeighbor[i] = neighbors.size;
-
-        var px = particles.pos[2 * i];
-        var py = particles.pos[2 * i + 1];
-
-        var gx = Math.floor((px - hash.orig.left) * invGridSpacing);
-        var gy = Math.floor((py - hash.orig.bottom) * invGridSpacing);
-
-        var x, y;
-
-        for (x = gx - 1; x <= gx + 1; x++) {
-            for (y = gy - 1; y <= gy + 1; y++) {
-
-                var h = (Math.abs((x * 92837111) ^ (y * 689287499))) % hash.size;
-
-                if (hash.marks[h] != hash.currentMark) 
-                    continue;
-
-                var id = hash.first[h];
-                while (id >= 0) 
-                {
-                    var dx = particles.pos[2 * id] - px;
-                    var dy = particles.pos[2 * id + 1] - py;
-
-                    if (dx * dx + dy * dy < h2) 
-                        neighbors.pushBack(id);
-
-                    id = hash.next[id];						
-                }
-            }
-        }
-    }
-    firstNeighbor[physicsScene.numParticles] = neighbors.size;
-}
-
-// ------------------------------------------------
-var very_small_float = 1e-6;
-function velocityUpdate(h)
-{
-    //var mu_k; 
-    //var e; 
-    var v = new Vector2(0,0);
-    var vprev = new Vector2(0,0);
-    var n = new Vector2(0,0);
-    var dv = new Vector2(0,0);
-    var vt = new Vector2(0,0);
-    for (var i = 0; i < constraints.size; i++) {
-        var idA = constraints.idxA(i);
-        var idB = constraints.idxB(i);
-
-        // relative velocity
-        v.x = particles.vel[2*idA + 0];
-        v.y = particles.vel[2*idA + 1];
-        v.x -= idB==-1 ? 0 : particles.vel[2*idB + 0];
-        v.y -= idB==-1 ? 0 : particles.vel[2*idB + 1];
-
-        // previous relative velocity
-        vprev.x = constraints.dvx(i);
-        vprev.y = constraints.dvy(i);
-
-        n.x = constraints.nx(i);
-        n.y = constraints.ny(i);
-        var d_lambda_n = constraints.d_lambda_n(i);
-
-        var vn = n.dot(v);
-        vt.x = v.x - vn * n.x;
-        vt.y = v.y - vn * n.y;
-
-		// friction force (dynamic friction)
-		var vt_len = vt.length();
-		var fn = Math.abs(d_lambda_n / (h * h));
-		// Eq. 30
-        if(vt_len > very_small_float) {
-            dv.x = -(vt.x / vt_len) * Math.min(h * mu_k * fn, vt_len)
-            dv.y = -(vt.y / vt_len) * Math.min(h * mu_k * fn, vt_len)
-        } else {
-           dv.x = dv.y = 0; 
-        }
-
-		// restitution, Eq. 34
-		var v_prev_n = vprev.dot(n);
-        // !NB: original paper has: min() but probably it is an error
-		var restitution_x = n.x * (-vn + Math.max(-e * v_prev_n, 0.0));
-		var restitution_y = n.y * (-vn + Math.max(-e * v_prev_n, 0.0));
-
-		// now, apply delta velocity
-		// NOTE: probably should first apply dv and then calculate restitution_dv and
-		// apply it again?
-		var w1 = 1;
-		var w2 = idB==-1 ? 0.0 : 1;
-
-		particles.vel[2*idA + 0] += (dv.x + restitution_x) * w1 / (w1 + w2) ;
-		particles.vel[2*idA + 1] += (dv.y + restitution_y) * w1 / (w1 + w2) ;
-		if (idB != -1) {
-			restitution_x = n.x * (-vn + Math.max(-e * v_prev_n, 0.0));
-			restitution_y = n.y * (-vn + Math.max(-e * v_prev_n, 0.0));
-		    particles.vel[2*idB + 0] -= (dv.x + restitution_x) * w2 / (w1 + w2) ;
-		    particles.vel[2*idB + 1] -= (dv.y + restitution_y) * w2 / (w1 + w2) ;
-		}
-    }
-
-}
-
-
-// ------------------------------------------------
-
-function simulate() 
-{
-    if (physicsScene.paused)
-        return;
-
-    var h = physicsScene.dt / physicsScene.numSteps;
-    var force, analyticForce;
-    var g = physicsScene.gravity;
-    var force = 0;
-    var vi = new Vector2(0,0);
-    var pi = new Vector2(0,0);
-    var pprevi = new Vector2(0,0);
-
-    var delta_angle = 120*physicsScene.dt;
-    var smallBoundaryRadius = 0.25*physicsScene.boundaryRadius;
-    var bpos = new Vector2(0,0);
-    var rot_m = Mat2.rotation(delta_angle*Math.PI/180.0)
-    for(var i=1;i<physicsScene.boundaries.length;++i)
-    {   bpos = physicsScene.boundaries[i].pos;
-        bpos.x -= physicsScene.boundaryCenter.x;
-        bpos.y -= physicsScene.boundaryCenter.y;
-        bpos.rotate(rot_m);
-        bpos.x += physicsScene.boundaryCenter.x;
-        bpos.y += physicsScene.boundaryCenter.y;
-        physicsScene.boundaries.pos = bpos;
-    }
-
-    constraints.clear();
-    findNeighbors();
-
-    for (var step = 0; step < physicsScene.numSteps; step++)
-    {
-        constraints.clear();
-        // predict
-        for (var i = 0; i < physicsScene.numParticles; i++)
-        {
-            // use temp var to not overwrite correct velocities
-            // we need them when filling constraint structure
-            var vx = particles.vel[2 * i + 0] + g.x * h;
-            var vy = particles.vel[2 * i + 1] + g.y * h;
-            particles.prev[2 * i] = particles.pos[2 * i];
-            particles.prev[2 * i + 1] = particles.pos[2 * i + 1];
-            particles.pos[2 * i] += vx * h;
-            particles.pos[2 * i + 1] += vy * h;
-        }
-
-        var is_stab = false;
-        if(step<5)
-           is_stab = true;
-
-        solveCollisionConstraints(is_stab);
-        solveBoundaryConstraint(is_stab);
-
-        //force = Math.abs(lambda / sdt / sdt);
-
-        // update velocities
-        for (i = 0; i < physicsScene.numParticles; i++)
-        {
-            pi.x = particles.pos[2*i + 0];
-            pi.y = particles.pos[2*i + 1];
-
-            pprevi.x = particles.prev[2*i + 0];
-            pprevi.y = particles.prev[2*i + 1];
-
-            vi.subtractVectors(pi, pprevi);
-            vi.scale(1.0 / h);
-            if(Number.isNaN(vi.x) || Number.isNaN(vi.y)) {
-                //alert("Nan");
-                vi.x = 0;
-            }
-
-            particles.vel[2 * i + 0] = vi.x;
-            particles.vel[2 * i + 1] = vi.y;
-        }
-
-        velocityUpdate(h);
-    }
-}
-
-// --------------------------------------------------------
-
-function run() {
-    physicsScene.paused = false;
-}
-
-function step() {
-    physicsScene.paused = false;
-    simulate();
-    physicsScene.paused = true;
-}
-
-function update() {
-    try {
-        simulate();
-        draw();
-        requestAnimationFrame(update);
-    } catch(err) {
-        if (err instanceof TypeError) {
-            printError(err, true);
-        } else {
-            printError(err, false);
-        }
-    }
-}
-
-//setupScene();
-//update();
-
-	
-
-		document.getElementById("mu_s_slider").oninput = function() {
-			mu_s = this.value / 100;	
-			document.getElementById("mu_s").innerHTML = mu_s;
-		}
-		document.getElementById("mu_k_slider").oninput = function() {
-			mu_k = this.value / 100;	
-			document.getElementById("mu_k").innerHTML = mu_k;
-		}
-		document.getElementById("e_slider").oninput = function() {
-			e = this.value / 100;	
-			document.getElementById("e").innerHTML = e;
-		}
-		document.getElementById("use_velocity_pass").onclick = function() {
-			use_velocity_pass = this.checked;
-		}
-		document.getElementById("cols").onchange = function() {
-			physicsScene.numColumns = this.value;
-			setupScene();
-		}
-		document.getElementById("rows").onchange = function() {
-			physicsScene.numRows = this.value;
-			setupScene();
-		}
-		var cc = document.getElementById("myCanvas")
-		setupGlobals(cc, window, document);
-
-		setupScene();
-		update();
-	
+// ---- boot -------------------------------------------------------------------------
+kit = mount({
+  schema: SCHEMA, title: 'PBF Boundaries', sub: 'Position based particles with moving boundaries', panelTitle: 'Scene',
+  guard: SC.guard, randomStart: false, themeKey: 'theme',
+  footer: 'Upstream demo by Sergii Biloshytskyi (Ten Minute Physics contribution, MIT). Water mode, bodies, look and GUI: davesgames.io.',
+  actions: {
+    drop(kind) {
+      const r = K.rng(K.newSeed()), C = S.container.inner;
+      const x = C.x0 + (C.x1 - C.x0) * (0.2 + 0.6 * r()), y = C.y1 - 0.12;
+      if (!SV.addBody(S, kind, x, y, r, kit.state.bodySize)) kit.say('No room to drop a ' + kind);
+    },
+    clear() { while (S.bodies.length) SV.removeBody(S, S.bodies[S.bodies.length - 1]); },
+  },
+});
+// A new scene (dice, seed) always rebuilds, because the seed places the
+// bodies and obstacles; the saver rebuilds in its apply().
+kit.on('change', (out, st, why) => {
+  if (why === 'scene' || why === 'group' || why === 'saver') return;
+  if (Object.keys(out).some(k => SC.REBUILD.has(k))) rebuild(); else applyParams();
+});
+kit.on('scene', (seed, st, out, group) => { if (!group || Object.keys(out || {}).some(k => SC.REBUILD.has(k))) rebuild(); else applyParams(); });
+kit.on('reset', rebuild);
+import('../ct-lab/colormaps/maps.js').then(m => { cmMod = m; }).catch(() => {});
+addEventListener('resize', resize); resize();
+// First visit: a fresh random scene; a shared link: its scene.
+if (!kit.fromHash) kit.newScene(); else rebuild();
+bindPointer();
+requestAnimationFrame(frame);
+addEventListener('pagehide', () => { kit.playing = false; });
+
+window.__pbf = {
+  get S() { return S; }, get kit() { return kit; }, canvas, rebuild, applyParams,
+  setView(v) { saverView = v; if (v) this.viewBand = { x: v.x, y: v.y, w: v.w, h: v.h }; },
+};
+installSaver(window.__pbf);

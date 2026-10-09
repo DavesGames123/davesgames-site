@@ -1,79 +1,73 @@
-// PBF Boundaries · site layer: the credit record and the screensaver shots.
-// main.js is the upstream demo; this file only calls its globals
-// (physicsScene, setupScene, canvas, c, cScale, simMinWidth, simWidth,
-// simHeight, mu_s, mu_k, e, use_velocity_pass).
-TMP.page({ n: null, title: 'PBF Boundaries', file: 'contribs/PBFBoundary.html', video: null, year: 2021, licence: 'MIT', by: 'Sergii Biloshytskyi', from: 'Ukraine', holder: 'Matthias Müller' });
+// ============================================================================
+//  PBF BOUNDARIES  ·  pages/pbf-boundary/saver.js — the screensaver shots
+// ----------------------------------------------------------------------------
+//  installSaver(P) defines window.snSaver through the sim kit director
+//  (widgets/sim-kit/saver.js). Each cut draws a fresh random scene from the
+//  page randomizer, then the shot sets what it needs (a container, a fill,
+//  bodies, a colour mode) and a camera: { zoom, cx, cy } in world metres,
+//  with a slow spring drift. The plate shows the shot title, the scene and
+//  one TeX line; the credit lines come from the TMP kit. No code.
+//
+//  grep -n targets
+//    shot list ............ "const SHOTS"
+//    camera drift ......... "function tick"
+// ============================================================================
+import { director } from '../../widgets/sim-kit/saver.js';
 
-(function () {
-  const S = physicsScene;
-  // Shot state: container motion. shake = horizontal shake of the whole
-  // container; tilt = a turning gravity vector (a rotating drum).
-  let shake = null, tilt = null, off = 0;
-  // The draw() of main.js strokes the container with the default stroke
-  // colour (black). On the dark saver background it gets a light grey.
-  // A canvas resize resets the context, so set it after each resize.
-  function ink() { c.strokeStyle = '#c8ccd4'; }
-  function start(o) {
-    mu_s = o.mus; mu_k = o.muk; e = o.e != null ? o.e : 0.2;
-    use_velocity_pass = !!o.vel;
-    S.numColumns = o.cols || 25; S.numRows = o.rows || 25;
-    S.gravity.x = 0; S.gravity.y = -9.81;
-    shake = null; tilt = null; off = 0;
-    setupScene();
-    S.paused = false;
-    ink();
-  }
-  // Move the container and its disks together by dx (sim units).
-  function shift(dx) {
-    S.boundaryCenter.x += dx;
-    for (const b of S.boundaries) b.pos.x += dx;
-  }
-  function warm(n) { for (let k = 0; k < n; k++) simulate(); }
-  const EQ = ['C = |x − c| − r ≥ 0', '|Δx_t| < μ_s d ⇒ stick', 'Δx_t ← min(μ_k d / |Δx_t|, 1)·Δx_t'];
-  const CODE_FRICT = { lang: 'js', name: 'calcFriction', text: [
-    'if (dp_t_len < mu_s * dist) {',
-    '    frict.x = dp_t.x;',
-    '    frict.y = dp_t.y;',
-    '}',
-    'else {',
-    '    var k = mu_k == 0 ? 0 : Math.min(mu_k * dist / dp_t_len, 1);'].join('\n') };
-  const CODE_REST = { lang: 'js', name: 'velocityUpdate', text: [
-    'var v_prev_n = vprev.dot(n);',
-    'var restitution_x = n.x * (-vn + Math.max(-e * v_prev_n, 0.0));',
-    'var restitution_y = n.y * (-vn + Math.max(-e * v_prev_n, 0.0));'].join('\n') };
-  TMP.saver({
-    canvas: () => canvas,
-    bg: '#0b0d12',
-    fit(w, h) {
-      if (canvas.width === w && canvas.height === h) return false;
-      // setupGlobals of main.js, for a w x h canvas.
-      canvas.width = w; canvas.height = h; simMinWidth = 2.0;
-      cScale = Math.min(w, h) / simMinWidth; simWidth = w / cScale; simHeight = h / cScale;
-      ink();
-      return true;
+const TEX_DENSITY = String.raw`C_i = \frac{\rho_i}{\rho_0} - 1 = 0,\quad \lambda_i = -\frac{C_i}{\sum_k \lvert\nabla_{p_k} C_i\rvert^2 + \varepsilon}`;
+const TEX_DELTA = String.raw`\Delta\mathbf{p}_i = \frac{1}{\rho_0}\sum_j\left(\lambda_i + \lambda_j + s_{\mathrm{corr}}\right)\nabla W(\mathbf{p}_i - \mathbf{p}_j, h)`;
+const TEX_PSI = String.raw`\Psi_{b}(\rho_0) = \frac{\rho_0}{\sum_k W_{bk}},\quad \rho_i = \sum_j W_{ij} + \sum_b \Psi_b W_{ib}`;
+const TEX_BUOY = String.raw`F_b = \rho_{\mathrm{w}}\, g\, A_{\mathrm{sub}}\quad\Rightarrow\quad \frac{A_{\mathrm{sub}}}{A} = \frac{\rho_{\mathrm{body}}}{\rho_{\mathrm{w}}}`;
+const TEX_FRICTION = String.raw`\lvert\Delta\mathbf{x}_\perp\rvert < \mu_s d \;\Rightarrow\; \text{stick},\quad \Delta\mathbf{x}_\perp \leftarrow \min\!\left(\frac{\mu_k d}{\lvert\Delta\mathbf{x}_\perp\rvert}, 1\right)\Delta\mathbf{x}_\perp`;
+const TEX_VORT = String.raw`\omega_i = \nabla\times\mathbf{v},\quad \mathbf{f}_i^{\mathrm{vort}} = \varepsilon\,(\mathbf{N}\times\omega_i),\ \mathbf{N} = \frac{\nabla\lvert\omega\rvert}{\lvert\nabla\lvert\omega\rvert\rvert}`;
+
+const SHOTS = [
+  { key: 'dam', title: 'Dam break', sub: 'A wall of water and floating bodies', tex: TEX_DENSITY,
+    scene: r => ({ fill: 'dam', container: r.pick(['tank', 'tank', 'steps', 'beach']), material: 'water', nBodies: r.int(2, 6), bodySet: r.pick(['floaters', 'boats', 'mixed']), tilt: 0, spin: 0, shakeA: 0 }),
+    camera: () => ({ zoom: 1 }) },
+  { key: 'harbour', title: 'Harbour', sub: 'Boats and ducks on a paddle swell', tex: TEX_BUOY,
+    scene: r => ({ fill: 'pool', container: 'tank', paddle: true, material: 'water', nBodies: r.int(4, 8), bodySet: r.pick(['boats', 'ducks', 'floaters']), colorBy: 'water', tilt: 0, spin: 0 }),
+    camera: r => ({ zoom: 1.6, cx: 0.7 + 0.6 * r(), cy: 0.42, drift: 0.05 }) },
+  { key: 'sink', title: 'Floats and sinks', sub: 'Light bodies ride the surface; stone goes down', tex: TEX_BUOY,
+    scene: r => ({ fill: 'drop', container: r.pick(['tank', 'bowl']), material: 'water', nBodies: r.int(4, 8), bodySet: 'mixed', tilt: 0, spin: 0 }),
+    camera: () => ({ zoom: 1.15 }) },
+  { key: 'drum', title: 'Rotating drum', sub: 'Gravity turns; the water rolls over', tex: TEX_VORT,
+    scene: r => ({ container: 'drum', fill: 'pool', material: 'water', spin: (r() < 0.5 ? -1 : 1) * (14 + 16 * r()), colorBy: r.pick(['speed', 'depth', 'water']), cmap: r.pick(['viridis', 'plasma', 'turbo', 'ice', 'aurora', 'glacier']), nBodies: r.int(0, 3) }),
+    camera: () => ({ zoom: 1.05 }) },
+  { key: 'mixer', title: 'The upstream mixer', sub: 'Grains in a round container, five turning disks', tex: TEX_FRICTION,
+    scene: r => ({ container: 'mixer', fill: 'pool', material: 'granular', emitters: 0, nBodies: 0, render: 'particles', colorBy: r.pick(['speed', 'depth']), mixer: (r() < 0.5 ? -1 : 1) * (90 + 90 * r()), tilt: 0, spin: 0, mu_s: 0.2 + 0.6 * r(), mu_k: 0.2 + 0.5 * r() }),
+    camera: () => ({ zoom: 1.05 }) },
+  { key: 'pour', title: 'Pouring in', sub: 'Emitters fill an empty vessel', tex: TEX_DELTA,
+    scene: r => ({ fill: 'empty', container: r.pick(['funnel', 'bowl', 'twin', 'steps']), material: 'water', emitters: r.int(1, 3), nBodies: r.int(0, 3), tilt: 0, spin: 0 }),
+    camera: () => ({ zoom: 1 }) },
+  { key: 'splash', title: 'Splash', sub: 'A column drops into the pool', tex: TEX_DELTA,
+    scene: r => ({ fill: 'drop', container: 'tank', material: 'water', foam: true, render: 'smooth', colorBy: r.pick(['water', 'speed']), nBodies: r.int(0, 2), tilt: 0, spin: 0, shakeA: 0 }),
+    camera: r => ({ zoom: 2.0, cx: 1.0, cy: 0.38, drift: 0.03 }) },
+  { key: 'slosh', title: 'Slosh', sub: 'A shaking tank and a tilted gravity', tex: TEX_PSI,
+    scene: r => ({ fill: 'pool', container: r.pick(['tank', 'beach', 'twin']), material: 'water', shakeA: 0.02 + 0.03 * r(), shakeF: 0.8 + 0.8 * r(), tilt: (r() - 0.5) * 20, spin: 0, nBodies: r.int(2, 6), bodySet: 'floaters' }),
+    camera: () => ({ zoom: 1 }) },
+];
+
+export function installSaver(P) {
+  let drift = 0;
+  const D = director({
+    kit: P.kit,
+    canvas: () => P.canvas,
+    shots: SHOTS.map(s => Object.assign({ params: st => [
+      { sym: 'N', name: 'particles', value: String(P.S.n) },
+      { sym: 'B', name: 'bodies', value: String(P.S.bodies.length) },
+      { sym: 'g', name: 'gravity', value: st.g.toFixed(1) + ' m/s²' },
+    ] }, s)),
+    apply(state, shot, cam) { P.rebuild(); drift = 0; P.setView(shot ? { x: 0, y: 0, w: innerWidth, h: innerHeight, cam } : null); },
+    frame(band, cam) { P.setView(band ? Object.assign({}, band, { cam }) : null); },
+    tick(dt, ctx) {
+      const cam = ctx.cam; if (!cam || !cam.drift) return;
+      drift += dt;
+      const v = Object.assign({}, cam, { cx: cam.cx + cam.drift * Math.sin(drift * 0.35), cy: cam.cy + cam.drift * 0.4 * Math.sin(drift * 0.5) });
+      ctx.cam = cam; if (P.view) P.view.cam = v;
+      P.setView(Object.assign({}, P.viewBand || { x: 0, y: 0, w: innerWidth, h: innerHeight }, { cam: v }));
     },
-    // Bare text nodes of the upstream GUI ('mu_s:', 'Columns:') are not
-    // elements, so the kit CSS does not hide them: make the body text
-    // transparent.
-    enter() { document.body.style.color = 'transparent'; },
-    shots: [
-      { key: 'mixer', label: { title: 'Rotating Boundaries', lines: ['625 particles in a round container; five disks turn at 120°/s.'], eq: EQ, code: CODE_FRICT },
-        run(c) { start({ mus: 0.2, muk: 0.2 }); warm(20); } },
-      { key: 'slip', label: { title: 'No Friction', lines: ['μ_s = μ_k = 0: the particles slide like a liquid.'], eq: ['μ_s = 0, μ_k = 0', 'Δx_t = 0'], code: CODE_FRICT },
-        run(c) { start({ mus: 0, muk: 0, cols: 30, rows: 30 }); warm(20); } },
-      { key: 'sticky', label: { title: 'High Friction', lines: ['μ_s = μ_k = 0.9: the pile sticks to the disks and avalanches.'], eq: ['μ_s = 0.9, μ_k = 0.9', '|Δx_t| < μ_s d ⇒ stick'], code: CODE_FRICT },
-        run(c) { start({ mus: 0.9, muk: 0.9 }); warm(20); } },
-      { key: 'bounce', label: { title: 'Restitution', lines: ['Velocity pass on, e = 0.9: contacts give energy back.'], eq: ['v_n ← −e · v_n,prev', 'Δv_t = −min(h μ_k f_n, |v_t|)'], code: CODE_REST },
-        run(c) { start({ mus: 0.1, muk: 0.1, e: 0.9, vel: true, cols: 18, rows: 18 }); warm(10); } },
-      { key: 'drum', label: { title: 'Rotating Drum', lines: ['Gravity turns slowly; the particles roll over like a tumbler.'], eq: ['g(t) = 9.81 (sin ωt, −cos ωt)'], code: CODE_FRICT },
-        run(c) { start({ mus: 0.4 + 0.4 * c.rng(), muk: 0.4 }); tilt = { w: (c.rng() < 0.5 ? -1 : 1) * (0.5 + 0.3 * c.rng()) }; warm(20); } },
-      { key: 'shake', label: { title: 'Shaken Container', lines: ['The container and its disks shake side to side.'], eq: ['x_c(t) = A sin 2πft'], code: CODE_FRICT },
-        run(c) { start({ mus: 0.1 + 0.3 * c.rng(), muk: 0.1 }); shake = { a: 0.06 + 0.04 * c.rng(), f: 1.2 + 0.6 * c.rng() }; warm(10); } },
-    ],
-    tick(dt, c) {
-      const k = 1.15 - 0.6 * c.calm;
-      if (tilt) { const a = tilt.w * k * c.t; S.gravity.x = 9.81 * Math.sin(a); S.gravity.y = -9.81 * Math.cos(a); }
-      if (shake) { const x = shake.a * Math.sin(2 * Math.PI * shake.f * k * c.t); shift(x - off); off = x; }
-    },
+    exit() { P.setView(null); },
   });
-})();
+  return D;
+}

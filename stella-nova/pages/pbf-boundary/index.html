@@ -11,64 +11,43 @@
   ═══════════════════════════════════════════════════════════════════════════
    PBF BOUNDARIES  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Position based particles (no fluid density constraint) with moving boundaries and two particle-friction models from the PBD papers.
+   Position based particles in moving containers, with floating and
+   sinking bodies. The page starts a random scene on load and keeps it
+   running.
 
-   CREDIT. The simulation is by Sergii Biloshytskyi (Ukraine), a contribution to Ten Minute Physics by Matthias Müller.
-   Upstream file: tenMinutePhysics/contribs/PBFBoundary.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Contributions page: https://matthias-research.github.io/pages/tenMinutePhysics/contribs/
+   CREDIT. The upstream demo is by Sergii Biloshytskyi (Ukraine), a
+   contribution to Ten Minute Physics by Matthias Müller:
+   tenMinutePhysics/contribs/PBFBoundary.html in
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of solver.js). The credit bar (kit.js) names both
+   authors on the page and on the saver plate.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): the water mode, the
+   containers, obstacles, emitters, bodies, renderer, GUI and saver.
+
+   FILES
+     solver.js   PBF solver, boundary particles, bodies, upstream grains
+     render.js   Canvas 2D renderer
+     main.js     page controller: sim kit GUI, loop, pointer
+     saver.js    screensaver shots (sim kit director)
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver director),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'const SCHEMA'  main.js    every control and its random rule
+     grep -n 'const SHOTS'   saver.js   the screensaver shots
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Position based particles (no fluid density constraint) with moving boundaries and two particle-friction models from the PBD papers. By Sergii Biloshytskyi, Ten Minute Physics.">
+<meta name="description" content="Position based particles in moving containers, with boats, ducks and stones that float and sink. After Sergii Biloshytskyi's Ten Minute Physics contribution.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-	<button class="button" onclick="setupScene()">Restart</button>
-	<button class="button" onclick="run()">Run</button>
-	<button class="button" onclick="step()">Step</button>
-	<br>
-    <span style = "margin: 0px 0px 0px 20px;">Columns:</span>
-		<td> <input id="cols" type="number" placeholder="25" min="1" max="2" /></td>
-    <span style = "margin: 0px 0px 0px 20px;">Rows:</span>
-		<td> <input id="rows" type="number" placeholder="25" min="1" max="2" /></td>
-	<br>
-    <span style = "margin: 0px 0px 0px 20px;">mu_s</span>
-		<td>
-			<input type = "range" min = "0" max = "100" value = "0" id = "mu_s_slider" class = "slider">
-		</td>
-    <span style = "margin: 0px 0px 0px 20px;">mu_k</span>
-		<td>
-			<input type = "range" min = "0" max = "100" value = "0" id = "mu_k_slider" class = "slider">
-		</td>
-    <span style = "margin: 0px 0px 0px 20px;">restitution</span>
-		<td>
-			<input type = "range" min = "0" max = "100" value = "0" id = "e_slider" class = "slider">
-		</td>
-
-		<br>
-		<td>
-			<input type="checkbox" id="use_velocity_pass" value="velocity_pass" checked>
-			<label for="velocity_pass">Use velocity pass(enables restitution)</label>
-		</td>
-	<br>
-	mu_s: <span id = "mu_s">0</span> &emsp; mu_k: <span id = "mu_k">0</span> &emsp; restitution: <span id = "e">0</span> 
-
-	<canvas id="myCanvas"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="Particle fluid simulation. Drag a body to throw it; drag in the water to stir it."></canvas>
+<script type="module" src="main.js"></script>
 </body>
 </html>

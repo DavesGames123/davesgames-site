@@ -19,7 +19,7 @@ or a phone layout. Most start paused.
 |---|---|---|---|---|
 | euler-fluid | dev GUI: 4 grey scene buttons, 5 raw checkboxes | no | shots (4) | starts paused; needs a panel, colour maps for pressure and smoke |
 | flip-fluid | dev GUI: 4 raw checkboxes, 1 slider | no | shots (5) | another agent converts it now; match its look |
-| pbf-boundary | dev GUI: Restart/Run/Step, number boxes, 3 bare sliders | no | shots (6) | starts paused; converted first with the sim kit |
+| pbf-boundary | **converted (sim kit)**: panel, dock, transport | yes | shots (8) | done: autoplay, 6 groups of random rules, floating bodies, colour maps |
 | fire-simulation | dev GUI: 3 checkboxes, 1 slider | no | shots (5) | starts paused; needs fuel, wind and palette randomizer |
 | julia-fractals | dev GUI: 2 toggle buttons, 1 slider | no | shots (2) | weak saver; needs c-path randomizer and colour maps |
 | cannonball-2d | no controls | no | shots (4) | bare canvas; needs launch randomizer and transport |
