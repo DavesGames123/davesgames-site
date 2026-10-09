@@ -16,6 +16,7 @@
 //                           "maple:", "flame:", "violinTop:"
 //    other ................ "rosette:", "tortoise:", "pearl:"
 //    public getter ........ "export function texture"
+//    phone size ........... "export function setTextureScale"
 // ════════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 
@@ -49,7 +50,12 @@ function mixRGB(c0, c1, t, out) {
   return out;
 }
 
+let SCALE = 1;
+/** Texture size factor (0.5 on phones: a quarter of the pixels to compute). Call before texture(). */
+export function setTextureScale(k) { SCALE = k >= 1 ? 1 : 0.5; }
+
 function makeTex(w, h, fn, { repeat = true } = {}) {
+  if (SCALE < 1 && w >= 256) { w *= SCALE; h *= SCALE; }
   const data = new Uint8Array(w * h * 4);
   const c = [0, 0, 0];
   for (let y = 0; y < h; y++) {

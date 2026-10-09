@@ -309,6 +309,20 @@ for (const key of ['steel', 'classical', 'violin']) {
   ok(view.model === null || true, 'house: dispose runs');
 }
 
+// ------------------------------------------------------------ phone build
+{
+  const t1 = Date.now();
+  const low = createStringView3D(null, { renderer: 'none', controls: false, instrument: 'violin', quality: 'low' });
+  const ms = Date.now() - t1;
+  ok(low.model.materials.violinTop.map.image.width === 512, 'phone: low quality halves the top texture (512)');
+  ok(low.live.M === 80 && low.live.R === 6, 'phone: low quality tube has 80 x 6 vertices per ring row');
+  ok(ms < 1500, `phone: low quality build in ${ms} ms on this machine`);
+  low.dispose();
+  const high = createStringView3D(null, { renderer: 'none', controls: false, instrument: 'violin' });
+  ok(high.model.materials.violinTop.map.image.width === 1024, 'phone: high quality top texture is 1024');
+  high.dispose();
+}
+
 for (const [g, [p, f]] of Object.entries(groups)) console.log(`${g.padEnd(10)} ${p} passed${f ? `, ${f} failed` : ''}`);
 console.log(`\n${pass} passed, ${fail} failed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(fail ? 1 : 0);

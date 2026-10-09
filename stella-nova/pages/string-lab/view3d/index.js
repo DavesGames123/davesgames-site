@@ -29,7 +29,7 @@ import * as CM from '../../ct-lab/colormaps/maps.js';
 import { INSTRUMENTS } from '../engine/instruments.js';
 import { buildModel } from './models.js';
 import { LiveStrings, FIELDS, linearLut } from './strings3d.js';
-import { disposeTextures } from './textures.js';
+import { disposeTextures, setTextureScale } from './textures.js';
 
 export { FIELDS };
 export const CAMERA_PRESETS = [
@@ -83,6 +83,7 @@ export function createStringView3D(canvas, opts = {}) {
   };
   const renderer = makeRenderer(canvas, o);
   const high = o.quality !== 'low';
+  setTextureScale(high ? 1 : 0.5);
   if (renderer) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
