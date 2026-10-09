@@ -92,6 +92,16 @@ scheme. The test "acceleration field" checks this.
     dampingFromT60(f1, T60a, f2, T60b, c) { sigma0, sigma1 }
     inharmonicity({ E, d, T, L })    B
 
+    sim.schemeFrequency(n)          exact frequency of mode n in the scheme
+                                    (numerical dispersion included)
+    smoothField(field, passes, out) 1-2-1 smoothing for the force colour view
+
+The explicit scheme is flat on high partials when B is large (at B = 2e-3
+and 44.1 kHz, partial 12 is 16 cents flat). For real strings (B below
+1.2e-4) partials 1..8 are within about 1 cent. A sharp pluck corner leaves
+a grid-scale ripple in `a`; use `pluck({ width: 0.02 })` and
+`smoothField(sim.a, 3)` for the colour view.
+
 ### View clock (slow motion is not physics)
 
     viewStepper({ timeScale, k }) -> { advance(dtWallSeconds) -> steps }
@@ -134,7 +144,10 @@ shape for these instruments.
       playChord({ instrument, frets, direction, spreadMs, velocity, when })
       stopAll()
       bindPagehide(win)   stops all sound on pagehide
-      createStubContext() node stub for tests (records nodes and connects)
+      createStubContext() node stub for tests (records nodes and connects;
+                          each node has `kind`: gain, biquad, source, ...)
+      onVoice             optional callback({ instrument, string, fret, midi, when })
+      damp(instrument)    fade the strings of one instrument
 
 `method` is 'modal' (default), 'sim' or 'ks'. 'ks' is the low-power path.
 
@@ -144,7 +157,9 @@ shape for these instruments.
                          format 0 and 1, running status, tempo meta, sysex
     writeMidi(song)   -> Uint8Array   song = { format, division, tracks }
     notesFromMidi(parsed) -> [{ t, dur, midi, vel, ch, track }]  seconds
-    songFromNotes(notes, { bpm, division }) -> song (for files we write)
+    songFromNotes(notes, { bpm, division, name, program }) -> song (for
+                      files we write; note-offs are note-on velocity 0)
+    songInfo(parsed)  -> { names, bpm, format, tracks }
     class Scheduler(notes)
       play(now), pause(now), seek(t), setTempoScale(s), position(now)
       due(now) -> notes whose start passed since the last call
@@ -187,5 +202,16 @@ note and the lowest notes that fit.
 
 ## Performance
 
-See the end of this file. The numbers come from `node engine/tests.mjs`
-on the development Mac.
+From `node engine/tests.mjs` (group "perf") on the development Mac
+(Apple silicon, node 24), 2026-10-09. Budget: half of a 16.7 ms frame.
+
+    string (N)             us/step   strings/frame, real time   at 1/100
+    steel E2 (N=185)       0.45      25                          2500
+    steel E4 (N=65)        0.17      68                          6800
+    classical E2 (N=251)   0.62      18                          1840
+    violin E5 (N=32)       0.09      131                         13150
+
+Real time at 44.1 kHz is 735 steps per string per frame. A full guitar
+(six strings) at real time costs about 2 ms per frame. In slow motion the
+cost is negligible. renderModal of a 2.6 s low E note takes about 9 ms.
+A phone is perhaps 3 to 5 times slower (not measured).

@@ -28,6 +28,7 @@
 //    fretting ............. "setLength("
 //    modal solution ....... "export function modalFrequencies"
 //    view clock ........... "export function viewStepper"
+//    display smoothing .... "export function smoothField"
 // ════════════════════════════════════════════════════════════════════════════
 
 const LN1000 = Math.log(1000);
@@ -544,4 +545,22 @@ export function viewStepper({ timeScale = 1, k = 1 / 44100, maxSteps = 4000 } = 
     reset() { carry = 0; },
   };
   return st;
+}
+
+/**
+ * Binomial (1 2 1) smoothing of a field for display, `passes` times. The
+ * grid-scale ripple behind a sharp pluck corner (numerical and stiffness
+ * dispersion) is real in the scheme but noisy in a colour view; two to four
+ * passes keep the kinks and drop the ripple. Ends stay 0. Returns out.
+ */
+export function smoothField(field, passes = 2, out = new Float64Array(field.length)) {
+  const n = field.length;
+  let a = Float64Array.from(field), b = new Float64Array(n);
+  for (let p = 0; p < passes; p++) {
+    b[0] = a[0]; b[n - 1] = a[n - 1];
+    for (let i = 1; i < n - 1; i++) b[i] = 0.25 * a[i - 1] + 0.5 * a[i] + 0.25 * a[i + 1];
+    [a, b] = [b, a];
+  }
+  out.set(a);
+  return out;
 }
