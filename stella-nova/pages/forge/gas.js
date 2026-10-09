@@ -30,9 +30,12 @@
 //  grep -n targets: "export function prepareGas", "function bandValue",
 //  "function windAt", "function sampleGas", "export function ringProfile",
 //  "export function bandEdges"
+//  P.gx (gasx.js prepareGasX) and P.ringx (gasx.js ringProfileX) take over
+//  the texel and the ring strip; recipes without them are unchanged.
 // ============================================================================
 import { fbm, simplex3, curl, mulberry, clamp, mix, smooth } from './noise.js';
 import { rotateAbout, blackbody } from './rocky.js';
+import { prepareGasX, ringProfileX } from './gasx.js';
 
 const D = Math.PI / 180, HALF = Math.PI / 2;
 const _p = [0, 0, 0], _c = [0, 0, 0], _s = [0, 0, 0];
@@ -100,6 +103,8 @@ function windAt(ctx, lat) {
 export function windProfile(ctx, lat) { return windAt(ctx, lat); }
 
 export function prepareGas(P) {
+  // a recipe with P.gx (randomizer, new families) uses the varied generator
+  if (P.gx) return prepareGasX(P);
   const seed = P.seed >>> 0;
   const S = k => (Math.imul(seed ^ 0x27d4eb2f, 2654435761) + Math.imul(k, 40503)) | 0;
   const { edges, vals } = bandEdges(P);
@@ -284,6 +289,7 @@ function sampleGas(ctx, p, out) {
 // opacity. Gaps (a Cassini-like division at 0.62 of the width, an
 // Encke-like gap at 0.93) and many ringlets from layered 1D noise.
 export function ringProfile(P, n = 1024) {
+  if (P.ringx) return ringProfileX(P, n);
   const R = P.rings, rnd = mulberry(((P.seed >>> 0) * 1597334677 + 5) >>> 0);
   const out = new Uint8ClampedArray(n * 4);
   const s = (P.seed * 7919) | 0;
