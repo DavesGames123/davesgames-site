@@ -27,7 +27,10 @@
 //    inspector ............ "function renderInspector"
 //    phone sectors ........ "function buildSectors"
 //    dock ................. "function initDock"
+//    search index ......... "const FIND_ITEMS"
+//    search ranking ....... "function findResults"
 //    inline search ........ "function initFind"
+//    hero search text ..... "const FIND_TEXT"
 //    social links ......... "YOUTUBE_URL"
 //    directory filter ..... "function initDirectory"
 //    directory columns .... "function balanceDirectory"
@@ -43,7 +46,7 @@
 // ============================================================================
 (function (O) {
 'use strict';
-const { SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, THUMBS, FEATURED, allPages } = O;
+const { SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, THUMBS, FEATURED, allPages, searchPages } = O;
 
 document.documentElement.classList.add('js');
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
@@ -64,9 +67,13 @@ const SECTOR = Object.fromEntries(SECTORS.map(s => [s.id, s]));
 const UNIQUE = [...new Map(PAGES.map(p => [p.key, p])).values()];
 $$('.page-count').forEach(el => { el.textContent = UNIQUE.length; });
 $$('.con-count').forEach(el => { el.textContent = SECTORS.length; });
-// The hero search text is a fixed "99+", not the live page count. It is
-// set again when the window crosses the phone width.
-const setFindText = () => $$('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? 'Search 99+ pages' : 'Search 99+ pages: black hole, chord, fire, orbit'; });
+// The hero search text gives the number of searchable pages, rounded down
+// to ten ("200+" for 207), so it stays true as pages land. index.html has
+// the same text for no-JS readers. It is set again when the window crosses
+// the phone width.
+const FIND_COUNT = searchPages().length;
+const FIND_TEXT = 'Search ' + Math.floor(FIND_COUNT / 10) * 10 + '+ pages';
+const setFindText = () => $('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? FIND_TEXT : FIND_TEXT + ': black hole, chord, fire, orbit'; });
 setFindText();
 PHONE.addEventListener('change', setFindText);
 
@@ -670,17 +677,27 @@ function initDock() {
 
 // ── inline search ──────────────────────────────────────────────────────────
 // Each [data-find] block is a field with a results list under it. Typing
-// ranks pages by label, group, sector and blurb. Arrow keys move, Enter
-// opens, Esc or a click outside closes. "/" focuses the nearest field.
+// ranks pages by label, group, sector, blurb and credit. Arrow keys move,
+// Enter opens, Esc or a click outside closes. "/" focuses the nearest field.
 // No overlay and no scrim: the rest of the page stays sharp and usable.
+//
+// FIND_ITEMS holds every page of searchPages() (sectors.js): all registered
+// pages except DIRECTORY_ONLY, so also the EXCLUDED ports, which the rest
+// of the home does not show. The game sector stars come first. A port
+// carries the word "port" and its credit line (CREDITS) in its search
+// text, and the result row shows the credit. fold() drops accents, so
+// "muller" finds "Müller".
+const fold = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const FIND_ITEMS = (() => {
   const items = [];
-  SECTORS.forEach(sec => sectorGroups(sec).forEach(g => g.pages.forEach(p => {
+  const add = (p, sec) => {
     if (p.key && items.some(x => x.key === p.key)) return;
     const it = withImg(p);
-    it.hay = [p.label, p.group, p.cluster, p.badge, sec.name, BLURBS[p.key], p.sub, p.key].filter(Boolean).join(' ').toLowerCase();
+    it.hay = fold([p.label, p.group, p.cluster, p.badge, sec.name, BLURBS[p.key], p.sub, p.key, p.credit, p.port ? 'port' : ''].filter(Boolean).join(' '));
     items.push(it);
-  })));
+  };
+  SECTORS.forEach(sec => sectorGroups(sec).forEach(g => g.pages.forEach(p => add(p, sec))));
+  searchPages().forEach(p => add(p, p.sector));
   return items;
 })();
 const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -690,13 +707,15 @@ function hl(text, terms) {
   return out;
 }
 function findResults(q) {
-  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = fold(q).split(/\s+/).filter(Boolean);
   if (!terms.length) return { terms, res: FEATURED.slice(0, 6).map(k => FIND_ITEMS.find(x => x.key === k)).filter(Boolean), total: 0 };
   const res = FIND_ITEMS.filter(it => terms.every(t => it.hay.includes(t)))
-    .map(it => { const l = it.label.toLowerCase(); return { it, sc: l.startsWith(terms[0]) ? 0 : l.includes(terms[0]) ? 1 : 2 }; })
+    .map(it => { const l = fold(it.label); return { it, sc: l.startsWith(terms[0]) ? 0 : l.includes(terms[0]) ? 1 : 2 }; })
     .sort((a, b) => a.sc - b.sc).map(x => x.it);
   return { terms, res: res.slice(0, 8), total: res.length };
 }
+// For tests (pages/home/tests.mjs): the search index and its ranking.
+O.find = { FIND_ITEMS, findResults, FIND_TEXT };
 function initFind(root) {
   const input = $('input', root), list = $('.find-list', root);
   let sel = -1;
@@ -716,7 +735,7 @@ function initFind(root) {
     if (!res.length) html += `<p class="find-empty">No page matches "${esc(q)}". Try orbit, fluid, shader or chord.</p>`;
     html += res.map((it, i) => `<a class="find-item" role="option" data-sector="${it.sector.id}" data-n="${i}" ${linkAttrs(it)}>
       <span class="fi-img">${media(it, it.img)}</span>
-      <span class="fi-t"><b>${hl(it.label, terms)}</b><small>${esc(it.sector.short)} · ${hl(BLURBS[it.key] || it.sub || it.group || '', terms)}</small></span>
+      <span class="fi-t"><b>${hl(it.label, terms)}</b><small>${esc(it.sector.short)} · ${it.credit ? hl(it.credit, terms) + ' · ' : ''}${hl(BLURBS[it.key] || it.sub || it.group || '', terms)}</small></span>
       ${it.badge ? `<span class="badge">${esc(it.badge)}</span>` : ''}<span class="fi-go" aria-hidden="true">→</span></a>`).join('');
     if (q && total > res.length) html += `<a class="find-more" href="#directory" data-find-all>See all ${total} matches in the directory <span aria-hidden="true">→</span></a>`;
     list.innerHTML = html;

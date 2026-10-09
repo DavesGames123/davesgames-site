@@ -24,15 +24,19 @@
 //    flat page list ....... "function allPages"
 //    excluded pages ....... "const EXCLUDED"
 //    directory-only ....... "const DIRECTORY_ONLY"
+//    port credits ......... "const CREDITS"
+//    search page list ..... "function searchPages"
 // ============================================================================
 (function (O) {
 'use strict';
 const NAV = window.SN_NAV;
 const THUMB_KEYS = O.THUMB_KEYS || [];
 
-// Pages the home never points at. They stay in the shell sidebar, so they
-// are still reachable there. Reason: each one is a port of code we did not
-// write. tools/nav-sync.js also keeps them out of the home directory.
+// Ports of code we did not write, kept off the home showcase: no featured
+// spot, card, thumbnail rail, star or directory entry (tools/nav-sync.js
+// leaves them out of the directory block). They stay in the shell sidebar.
+// Search lists them (since 2026-10-09, at the user's request), tagged
+// "port" with the upstream credit from CREDITS: see searchPages().
 const EXCLUDED = new Set([
   'mandelbulber',      // port of Mandelbulber2
   'shan-shui',         // port of shan-shui-inf
@@ -52,6 +56,39 @@ const EXCLUDED = new Set([
 // Pages listed only in the plain directory: no featured spot, quick link,
 // thumbnail rail, star or search result. Their origin is being confirmed.
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
+
+// Upstream credit of each port, one short line. Search shows it on the
+// result row and searches its words, and every key here also gets the
+// search tag "port". Two kinds of port are here: the EXCLUDED ones above,
+// and the Ten Minute Physics ports, which the home shows like our own
+// pages, because each one carries the credit bar of
+// widgets/ten-minute-physics/kit.js.
+const TMP = n => 'Ten Minute Physics #' + n + ' by Matthias Müller (MIT)';
+const CREDITS = {
+  'mandelbulber': 'Mandelbulber2 by Krzysztof Marczak and team (GPL-3.0)',
+  'shan-shui': 'shan-shui-inf by Lingdong Huang (MIT)',
+  'markov-junior': 'MarkovJunior by Maxim Gumin',
+  'holocloth': 'Holocloth by Dmitry Kurash (MIT)',
+  'sdf-clouds': 'SDF Clouds by Alex Foulon',
+  'refraction-table': 'optics after quick-liquid (MIT)',
+  'thinking-orbs': 'thinking-orbs by RareFormLabs (MIT)',
+  'fractal-flames': 'flam3 by Scott Draves (GPL-3.0)',
+  'line-art': 'ln by Michael Fogleman (MIT)',
+  'volume-noise': 'TileableVolumeNoise by Sébastien Hillaire (MIT)',
+  'fishdraw': 'fishdraw by Lingdong Huang (MIT)',
+  'halftone': 'glsl-halftone (MIT)',
+  'context-free': 'Context Free by Mark Lentczner and John Horigan (GPL-2+)',
+  'cannonball-2d': TMP(1), 'cannonball-3d': TMP(2), 'cannonball-vr': TMP(2),
+  'billiard': TMP(3), 'pinball': TMP(4), 'bead-on-wire': TMP(5),
+  'many-beads': TMP(5), 'pendulum-short': TMP(6), 'triple-pendulum': TMP(6),
+  'soft-body-interaction': TMP(8), 'soft-bodies': TMP(10),
+  'spatial-hashing': TMP(11), 'soft-body-skinning': TMP(12), 'cloth': TMP(14),
+  'cloth-self-collision': TMP(15), 'euler-fluid': TMP(17),
+  'flip-fluid': TMP(18), 'julia-fractals': TMP(19), 'fire-simulation': TMP(21),
+  'rigid-bodies': TMP(22), 'joints': TMP(25),
+  'pbf-boundary': 'Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT)',
+};
+const PORTS = new Set(Object.keys(CREDITS));
 
 // Keys that have a thumbnail in thumbs/<key>.jpg. Others get generated art.
 const THUMBS = new Set(THUMB_KEYS);
@@ -266,15 +303,22 @@ const FEATURED = ['orbital', 'hydrogen-table', 'blackhole', 'galaxy', 'sdf-solid
   'attractorlab', 'reaction-diffusion'];
 
 // Flatten SN_NAV into page records with their sector, group and badge.
-function allPages() {
+// The showcase (cards, rails, chart) uses allPages(): no EXCLUDED and no
+// DIRECTORY_ONLY page. allPages({ ports: true }) adds the EXCLUDED pages,
+// for search. A record of a port has port: true and its credit line.
+function allPages(opts) {
+  const ports = !!(opts && opts.ports);
   const bySector = Object.fromEntries(SECTORS.map(s => [s.id, s]));
   const out = [];
   window.snPages().forEach(p => {
-    if (EXCLUDED.has(p.key) || DIRECTORY_ONLY.has(p.key)) return;
-    out.push({ key: p.key, label: p.label, badge: p.badge, group: p.group.h || p.con.label, cluster: p.con.label, sector: bySector[p.con.id] });
+    if (DIRECTORY_ONLY.has(p.key) || (EXCLUDED.has(p.key) && !ports)) return;
+    out.push({ key: p.key, label: p.label, badge: p.badge, group: p.group.h || p.con.label, cluster: p.con.label, sector: bySector[p.con.id],
+      port: PORTS.has(p.key), credit: CREDITS[p.key] || null, excluded: EXCLUDED.has(p.key) });
   });
   return out;
 }
+// Every page that search lists: all registered pages except DIRECTORY_ONLY.
+function searchPages() { return allPages({ ports: true }); }
 
 // Anchors [x, y, radius] for the groups the chart shows. A sector with one
 // group sits on its centre. More groups sit on a ring around the centre.
@@ -320,5 +364,5 @@ const LAYOUT = {};
   });
 }
 
-Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, THUMBS, SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, FEATURED, allPages });
+Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, CREDITS, PORTS, searchPages, THUMBS, SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, FEATURED, allPages });
 })(window.Observatory = window.Observatory || {});
