@@ -22,6 +22,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		}
 		
 
+/* ---- davesgames.io site rules (not upstream) ------------------------------
+   The upstream canvas fills the window under the sim kit GUI
+   (widgets/sim-kit/sim-kit.css). The theme colours are --sk-* tokens. */
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--sk-bg, #06080d); }
+#container { position: fixed; inset: 0; }
+#container canvas { position: fixed; inset: 0; width: 100vw !important; height: 100vh !important; display: block; touch-action: none; cursor: grab; }
+#container canvas:active { cursor: grabbing; }
+
 /* Site rule: an element with the hidden attribute stays hidden, also when
    a rule above gives it a display value. */
 [hidden] { display: none !important; }
