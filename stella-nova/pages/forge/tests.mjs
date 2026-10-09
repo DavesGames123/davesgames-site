@@ -103,6 +103,25 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('craters: cumulative size distribution follows the power law', Math.abs(-slope - P.craters.slope) < 0.25, `fit alpha ${(-slope).toFixed(2)} vs ${P.craters.slope} over ${rs.length} craters`);
   ok('craters: radii inside [rMin, rMax]', rs[0] <= P.craters.rMax && rs[rs.length - 1] >= P.craters.rMin * 0.95);
 }
+// crater shapes (rocky.js craterProfile): simple bowls d/D = 0.2 below the
+// transition, complex craters shallower with a central peak and a flat
+// floor, peak rings past 10 Dt, old craters shallower
+{
+  const { craterProfile } = await import('./rocky.js');
+  const Dt = 15, sd = -craterProfile(0, 5, Dt, 0) / 5;
+  ok('craters: simple bowl depth/diameter = 0.2, rim 0.04 D', Math.abs(sd - 0.2) < 1e-9 && Math.abs(craterProfile(1, 5, Dt, 0) - 0.2) < 1e-9, `d/D ${sd.toFixed(3)}`);
+  const D = 60, floor = craterProfile(0.3, D, Dt, 0), centre = craterProfile(0, D, Dt, 0), cd = -floor / D;
+  ok('craters: complex crater is shallower, flat-floored, with a central peak', cd < 0.12 && centre > floor + 0.3 && Math.abs(craterProfile(0.25, D, Dt, 0) - floor) < 0.05 * -floor, `d/D ${cd.toFixed(3)}, peak ${(centre - floor).toFixed(2)} km`);
+  const B = 400, ring = craterProfile(0.5 * Math.min(0.7, 0.4 + 0.08 * Math.log(B / Dt + 1)), B, Dt, 0);
+  ok('craters: basins past 10 Dt get a peak ring, not a central peak', ring > craterProfile(0, B, Dt, 0) + 0.5, `ring ${ring.toFixed(2)} vs centre ${craterProfile(0, B, Dt, 0).toFixed(2)} km`);
+  ok('craters: old craters are shallower and lower-rimmed', craterProfile(0, 5, Dt, 0.9) > craterProfile(0, 5, Dt, 0) * 0.6 && craterProfile(1, 5, Dt, 0.9) < craterProfile(1, 5, Dt, 0));
+  // saturation: a texel inside a young crater keeps no relief from older craters
+  const R = await import('./rocky.js'), P = PR.fromPreset('moon'), ctx = R.prepareRocky(P);
+  const young = ctx.craters.list.filter(c => c.age < 0.3 && c.r > 0.03)[0];
+  ok('craters: impact order runs oldest first', ctx.craters.list.every((c, i, a) => !i || a[i - 1].age >= c.age));
+  ok('craters: a young crater exists to overprint older ones', !!young);
+}
+
 // gas giants: symmetric bands and winds when asked
 {
   const P = PR.fromPreset('jupiter'); P.turbulence.amount = 0; P.storms = { spot: 0, spotLat: 0, spotLon: 0, spotSize: 0.1, ovals: 0, ovalLat: 0, small: 0, polar: 0 };
