@@ -66,6 +66,7 @@ for (const N of NAMED) {
     else outs = apply(cls, ks.map(graphOf));
     const keys = outs.map(o => o.products.map(p => key(p.G)));
     const hit = want ? keys.some(k => k.includes(want)) : outs.length > 0;
+    if (!want) info = 'no product key';
     if (!hit) { good = false; info = `step ${i + 1} ${cid}`; }
   });
   ok(good, `named ${N.id}: every step gives its product`, info);
@@ -172,4 +173,27 @@ globalThis.RX.finish = finish;
     if (globalThis.RX.MJ) ok(!globalThis.RX.MJ(st.tex), `anim ${cid}: step TeX typesets`);
   }
 }
-if (!process.env.RX_MORE2) finish();
+
+
+// ── tree (synth.js) ────────────────────────────────────────────────────────
+{
+  const { fromNamed, layout, overlaps, growOrder, treeOf } = await import('./synth.js');
+  const all = [];
+  for (const N of NAMED) {
+    let S = null;
+    try { S = fromNamed(OCL, N); } catch (e) { ok(false, `tree ${N.id}: builds`, e.message); continue; }
+    all.push(S);
+    const T = treeOf(S), leaves = T.tips.length;
+    ok(S.nodes[S.root].mol.key === keyOfSpecies(N.target), `tree ${N.id}: the root is the target`, `${S.steps.length} step(s), ${leaves} leaves`);
+    for (const kind of ['clado', 'radial', 'fan']) {
+      const L = layout(S, kind, 150), bad = overlaps(L);
+      const fin = T.keep.every(id => { const b = L.fish[id], p = L.pos[id]; return b && p && [b.x, b.y, b.w, b.h, p.x, p.y].every(Number.isFinite); });
+      ok(!bad.length && fin, `tree ${N.id}: ${kind} layout, no overlapping nodes`, bad.length ? JSON.stringify(bad) : `${T.keep.length} nodes in ${L.w.toFixed(0)} x ${L.h.toFixed(0)}`);
+      if (kind === 'clado') ok(S.steps.every(s => s.ins.every(c => !L.pos[c] || L.pos[c].x < L.pos[s.out].x)), `tree ${N.id}: clado leaves left of their product`);
+    }
+    const g = growOrder(S), at = new Map(g.map((id, i) => [id, i]));
+    ok(S.steps.every(s => s.ins.every(i => at.get(i) < at.get(s.out))), `tree ${N.id}: growth order puts inputs before products`);
+  }
+  globalThis.RX.synths = all;
+}
+if (!process.env.RX_MORE3) finish();

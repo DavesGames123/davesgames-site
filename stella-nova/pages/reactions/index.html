@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Reaction Explorer — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   REACTION EXPLORER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   How the 3D structures of molecules change in chemical reactions. A
+   synthesis is a tree like the fishdraw tree of life: the starting
+   compounds are the leaves, branches merge where chemicals combine, and
+   the target is the root. Point at (or tap) a molecule to see the step
+   that made it in 3D: the reactants come in, push together, bonds break
+   and form, and the product and by-products move apart.
+     templates.js  the reaction library, species, basics, blocklist (data)
+     smarts.js     SMARTS subset parser and matcher
+     rxgraph.js    graphs with every H; OpenChemLib in and out
+     react.js      apply a class forward or backward
+     species.js    species records (data/species.json) and names
+     steps.js      a step: product records, terms, mhchem TeX
+     synth.js      a synthesis as a tree; fishdraw layouts
+     rxanim.js     the 3D change timeline        rxview.js  the 3D view
+     treeview.js   the tree on the page: cards, branches, pan, zoom, growth
+     main.js       state, panel, step pane, keys, hash
+     tests.mjs     node tests.mjs        build/build.mjs  data/species.json
+   Reused by import: molecules/chem.js, draw2d.js, drawlift.js, engine.js
+   (OpenChemLib), fishdraw/tree.js (layoutTree).
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌─────────────┬───────────────────────────────────────────────────┐
+     │ #panel      │ #treePane  the synthesis tree (pan, zoom, grow)    │
+     │  syntheses  ├───────────────────────────────────────────────────┤
+     │  library    │ #stepPane  the step: 2D scheme + TeX │ 3D change    │
+     │  step info  │                                                     │
+     └─────────────┴───────────────────────────────────────────────────┘
+   PHONE (max-width 768px): #dock at the base; #panel is a bottom sheet;
+   the tree above the step view.
+
+   GREP MAP  (main.js)
+     grep -n 'function showSynth'   load a synthesis into the tree
+     grep -n 'function showStep'    the step pane and the 3D change
+     grep -n 'function occlusion'   the phone sheet and the stage
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Reaction Explorer: watch the 3D structures of molecules change in chemical reactions, follow famous syntheses as a tree, build your own reaction sequence, and find a route to a target from common compounds.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Reaction Explorer</div>
+</div>
+
+<main id="stage">
+  <section class="pane" id="treePane">
+    <header class="ph"><span class="pt" id="treeTitle">Synthesis tree</span>
+      <div class="tools">
+        <div class="seg" id="laySeg">
+          <button type="button" data-l="clado" class="on" title="Tree with elbow branches">Tree</button>
+          <button type="button" data-l="radial" title="Radial tree">Radial</button>
+          <button type="button" data-l="fan" title="Fan">Fan</button>
+        </div>
+        <button type="button" class="tb tog" id="b3d" title="3D models in the tree">3D</button>
+        <button type="button" class="tb tog on" id="bEq" title="Equations on the branches">TeX</button>
+        <button type="button" class="tb" id="bGrow" title="Grow the tree step by step">Grow</button>
+        <button type="button" class="tb" id="bFit" aria-label="Fit the tree">⤢</button>
+      </div>
+    </header>
+    <div class="treewrap" id="tree"><div class="tv-hint" id="treeHint">Point at a molecule to see the step that made it.</div></div>
+  </section>
+  <section class="pane" id="stepPane">
+    <header class="ph"><span class="pt" id="stepTitle">Reaction step</span>
+      <div class="tools">
+        <button type="button" class="tb" id="bReplay" title="Play the step again">Replay</button>
+        <button type="button" class="tb tog" id="bLoop" title="Play it again and again">Loop</button>
+      </div>
+    </header>
+    <div class="stepbody">
+      <div class="scheme" id="scheme"></div>
+      <div class="view3"><canvas aria-label="3D reaction"></canvas><div class="labels3" aria-hidden="true"></div>
+        <div class="src3">Illustration of the change, not a simulated trajectory</div></div>
+    </div>
+  </section>
+  <div id="loading" hidden><span class="spin"></span><span id="loadingText">Loading</span></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the 3D view cannot render. The trees and equations still work.</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<aside id="panel" class="open" aria-label="Syntheses and reaction library">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close the panel">✕</button>
+  <div class="sec-label first">Famous syntheses</div>
+  <div id="namedList" class="list"></div>
+  <div class="sec-label">The step</div>
+  <div id="info"><p class="note">Point at a molecule in the tree.</p></div>
+  <div class="sec-label">Reaction library</div>
+  <div id="classList"></div>
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>Each reaction class is a template with a map number on every atom, hydrogens included. Applying it moves only bonds and charges, so every atom of the reactants ends in exactly one product. The 3D change keeps each atom's identity: the bonds that break turn red and snap, the bonds that form grow green, and the reaction centre glows amber.</p>
+    <p>The motion is a schematic of what changes, made by easing atoms from the reactant shapes to the product shape. It is not a simulation of the reaction path, and the conditions are textbook conditions, not a lab procedure.</p>
+    <p class="note fine">Structures and 3D conformers: PubChem (NCBI, public domain) through the Molecule Explorer library; other conformers, layouts and ID codes: OpenChemLib (BSD-3). Tree layout from the fishdraw page. Equations: MathJax with mhchem (Apache-2.0). Descriptions are written for this page.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Syntheses and library" aria-expanded="false"><b>☰</b><span>Library</span></button>
+  <button id="dockLayout" type="button" aria-label="Next tree layout"><small>Tree</small><span id="dockLayoutV">Tree</span></button>
+  <button id="dockGrow" type="button" aria-label="Grow the tree"><b>▶</b><span>Grow</span></button>
+  <button id="dockReplay" type="button" aria-label="Replay the step"><b>⟲</b><span>Replay</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

@@ -12,7 +12,8 @@
 //  runStep(OCL, cls, nodes, pick) -> STEP or null:
 //    { cls, inputs: [node], products: [node + origin], off, names, tex,
 //      coef: [{ node, n }] (lhs terms), outs: [{ node, n }] (rhs terms) }
-//    pick: the key of the wanted main product, else the first outcome.
+//    pick: the key of the wanted product (main or by-product; its index is
+//    step.made), else the main product of the first outcome.
 //  outcomesFor(OCL, cls, nodes) -> every forward outcome (react.js apply),
 //    for the builder preview.
 //
@@ -59,7 +60,8 @@ export function runStep(OCL, cls, nodes, pick = null) {
   cls = typeof cls === 'string' ? CLASS[cls] : cls;
   const outs = outcomesFor(OCL, cls, nodes);
   if (!outs.length) return null;
-  const o = (pick && outs.find(x => keyOfG(x.products[0].G) === pick)) || outs[0];
+  let o = outs[0], made = 0;
+  if (pick) for (const x of outs) { const j = x.products.findIndex(p => keyOfG(p.G) === pick); if (j >= 0) { o = x; made = j; break; } }
   // the input nodes, one per input graph (copies for an overall equation)
   let inputs;
   if (cls.kind === 'overall') {
@@ -72,7 +74,7 @@ export function runStep(OCL, cls, nodes, pick = null) {
     const nd = nodeOfGraph(OCL, p.G);
     return Object.assign(nd, { origin: Int32Array.from(nd.perm, j => p.origin[j]) });
   });
-  const step = { cls: cls.id, inputs, products, off: o.off, names: products.map(p => p.name) };
+  const step = { cls: cls.id, inputs, products, off: o.off, names: products.map(p => p.name), made };
   texOf(step, cls);
   return step;
 }
