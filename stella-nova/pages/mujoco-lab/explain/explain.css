@@ -1,0 +1,59 @@
+/* ==========================================================================
+   MUJOCO LAB  ·  explain/explain.css — the "How MuJoCo works" section
+   --------------------------------------------------------------------------
+   Colors come from the sim-kit theme tokens (--sk-*) and the math colors
+   of lib/sci.css (--m1 to --m6), with fallbacks for a page without them.
+   The figure background is --mx-fig-bg; explain/index.js reads it.
+   GREP MAP: .mx-explain  .mx-toc  .mx-sec  .mx-eq  .mx-fig  .mx-ctl  .mx-refs
+   ========================================================================== */
+.mx-explain {
+  --mx-fig-bg: var(--sk-bg2, #0d1117);
+  max-width: 920px; margin: 0 auto; padding: 48px 16px 96px;
+  color: var(--sk-text, #e6edf3); font: 16px/1.6 var(--sk-sans, ui-sans-serif, system-ui, sans-serif);
+  box-sizing: border-box;
+}
+.mx-explain *, .mx-explain *::before, .mx-explain *::after { box-sizing: border-box; }
+.mx-explain [hidden] { display: none !important; }
+.mx-head h2 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.01em; }
+.mx-lede { color: var(--sk-text2, #8b949e); margin: 0 0 18px; }
+.mx-toc { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 28px; }
+.mx-toc a {
+  font-size: 13px; padding: 4px 10px; border-radius: 999px; text-decoration: none;
+  color: var(--sk-text, #e6edf3); border: 1px solid var(--sk-line, #30363d); background: var(--sk-glass2, transparent);
+}
+.mx-toc a:hover { border-color: var(--sk-accent, #62c4ff); }
+.mx-sec { margin: 0 0 44px; scroll-margin-top: 64px; }
+.mx-sec h3 { font-size: 22px; margin: 0 0 10px; padding-top: 18px; border-top: 1px solid var(--sk-line, #30363d); }
+.mx-sub { margin-top: -20px; }
+.mx-sec h4 { font-size: 17px; margin: 0 0 6px; color: var(--sk-text, #e6edf3); }
+.mx-sec p, .mx-sec li { color: var(--sk-text, #e6edf3); max-width: 72ch; }
+.mx-sec ul { padding-left: 1.2em; }
+.mx-sec code { font: 0.9em var(--sk-mono, ui-monospace, monospace); padding: 0 3px; border-radius: 4px; background: var(--sk-glass2, rgba(127,127,127,0.15)); }
+.mx-sec a { color: var(--sk-accent, #62c4ff); }
+.mx-cite { font-size: 0.8em; vertical-align: super; text-decoration: none; margin-left: 2px; }
+.mx-m { display: inline-block; vertical-align: middle; }
+.mx-m.raw, .mx-eq.raw { font: 0.9em var(--sk-mono, ui-monospace, monospace); color: var(--sk-text2, #8b949e); }
+.mx-eq { margin: 10px 0; overflow-x: auto; overflow-y: hidden; max-width: 100%; min-height: 1.6em; }
+.mx-eq svg { max-width: none; }
+.mx-fig { margin: 18px 0 0; }
+.mx-fig canvas {
+  display: block; width: 100%; border-radius: 10px; background: var(--mx-fig-bg);
+  border: 1px solid var(--sk-line, #30363d); touch-action: pan-y;
+}
+.mx-ctl { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--sk-text2, #8b949e); }
+.mx-ctl label { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.mx-ctl input[type=range] { width: min(180px, 42vw); accent-color: var(--sk-accent, #62c4ff); }
+.mx-ctl output { font: 12px var(--sk-mono, ui-monospace, monospace); min-width: 3.5em; color: var(--sk-text, #e6edf3); }
+.mx-ctl button {
+  min-height: 36px; padding: 0 14px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px;
+  color: var(--sk-text, #e6edf3); background: var(--sk-glass2, transparent); border: 1px solid var(--sk-line, #30363d);
+}
+.mx-ctl button:hover { border-color: var(--sk-accent, #62c4ff); }
+.mx-fig figcaption { font-size: 13px; line-height: 1.5; color: var(--sk-text2, #8b949e); margin-top: 6px; max-width: 72ch; }
+.mx-refs ol { padding-left: 1.4em; font-size: 14px; }
+.mx-refs li { margin-bottom: 6px; overflow-wrap: anywhere; }
+.mx-credit { font-size: 13px; color: var(--sk-text2, #8b949e); }
+@media (max-width: 520px) {
+  .mx-explain { padding: 32px 16px 72px; font-size: 15px; }
+  .mx-sec h3 { font-size: 19px; }
+}
