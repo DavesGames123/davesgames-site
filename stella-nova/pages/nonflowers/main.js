@@ -47,7 +47,7 @@ import { createGrowth } from './grow.js';
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const LAND_Q = matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)');
-const STAGES = { engine: 0, 'background paper': 0.02, 'painting paper': 0.06, woody: 0.12, herbal: 0.12, border: 0.94 };
+const STAGE_FLOOR = { engine: 0, 'background paper': 0.02, 'painting paper': 0.06, woody: 0.12, herbal: 0.12, border: 0.94 };
 const PAD = 40;   // the paper margin around the painting, in painting px
 const WATCH_BUDGET = 8;   // ms of stroke drawing per frame
 
@@ -137,7 +137,7 @@ function progress(on) {
   if (!on) { cancelAnimationFrame(progress.raf); return; }
   const tick = () => {
     if (!st.want || st.plant && st.plant.seed === st.want) return;
-    const ms = performance.now() - st.t0, floor = STAGES[st.stage] || 0;
+    const ms = performance.now() - st.t0, floor = STAGE_FLOOR[st.stage] || 0;
     const frac = Math.max(floor, Math.min(0.97, ms / st.avgMs));
     $('progBar').style.width = (frac * 100).toFixed(1) + '%';
     const what = st.stage === 'woody' || st.stage === 'herbal' ? `a ${st.stage} plant` : st.stage || 'waiting for a worker';
