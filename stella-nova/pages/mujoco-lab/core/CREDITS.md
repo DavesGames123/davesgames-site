@@ -54,21 +54,29 @@ LICENSE file, copied here unchanged. We checked these licences:
 | `menagerie/franka_emika_panda/LICENSE`, `README.md`, `scene.xml` | none |
 | `menagerie/franka_emika_panda/panda.xml` | each `<mesh file="X.obj"/>` is now `<mesh name="X" file="X.dec.stl"/>`; a comment at the top says so |
 | `menagerie/franka_emika_panda/assets/*.stl` (no `.dec`) | none: these are the collision meshes |
-| `menagerie/franka_emika_panda/assets/*.dec.stl` | the visual OBJ meshes, decimated: 134 590 faces to 24 633 |
+| `menagerie/franka_emika_panda/assets/*.dec.stl` | the visual OBJ meshes, welded and decimated: 134 555 faces to 24 606 |
 | `menagerie/shadow_hand/LICENSE`, `README.md`, `scene_right.xml` | none |
 | `menagerie/shadow_hand/right_hand.xml` | the same mesh change as `panda.xml` |
-| `menagerie/shadow_hand/assets/*.dec.stl` | the OBJ meshes, decimated: 37 640 faces to 14 270; `forearm_collision` is not decimated (452 faces) |
+| `menagerie/shadow_hand/assets/*.dec.stl` | the OBJ meshes, welded and decimated: 37 639 faces to 14 267; `forearm_collision` is not decimated (452 faces) |
 
 Not copied: `*.png` images, `mjx_*` files, `hand.xml`, `panda_nohand.xml`,
 the left hand and `keyframes.xml`.
 
-The decimation script is `decimate.py` below (python 3.13, numpy 2,
-trimesh, fast-simplification, in a venv). The face budget is shared in
-proportion to the face count of each mesh, with a floor of 40 faces. A
-mesh with `collision` in its name is not decimated.
+The decimation script is `decimate.py` below (python 3.13, numpy 2.5,
+trimesh 5.1, fast-simplification, in a venv). It welds the OBJ vertices
+by position before it simplifies. The OBJ files split vertices along
+their UV and normal seams, and the first version (2026-10-09) did not
+weld them, so the simplifier opened holes along every seam: the Panda
+kept 27 % of its surface area and the Shadow Hand 71 %. With the weld,
+the surface area after decimation is 99.4 % (Panda) and 99.9 % (Shadow
+Hand) of the source. The face budget is shared in proportion to the
+face count of each mesh, with a floor of 40 faces. A mesh with
+`collision` in its name is not decimated.
 
-    python -I decimate.py <menagerie>/franka_emika_panda/assets out/panda 24000 40
-    python -I decimate.py <menagerie>/shadow_hand/assets out/shadow 14000 40
+    git clone --filter=blob:none --no-checkout --sparse https://github.com/google-deepmind/mujoco_menagerie.git men
+    git -C men sparse-checkout set franka_emika_panda shadow_hand && git -C men checkout 0059d433
+    python -I decimate.py men/franka_emika_panda/assets out/panda 24000 40
+    python -I decimate.py men/shadow_hand/assets out/shadow 14000 40
     sed 's/file="\([^"]*\)\.obj"/file="\1.dec.stl"/' panda.xml       # then name="X" added to each mesh
     sed 's/file="\([^"]*\)\.obj"/file="\1.dec.stl"/' right_hand.xml
 
@@ -79,15 +87,28 @@ import sys, os, numpy as np, trimesh, fast_simplification
 src, out, budget = sys.argv[1], sys.argv[2], int(sys.argv[3])
 floor = int(sys.argv[4]) if len(sys.argv) > 4 else 60
 os.makedirs(out, exist_ok=True)
-ms = {f: trimesh.load(os.path.join(src, f), force='mesh', process=True)
-      for f in sorted(os.listdir(src)) if f.endswith('.obj')}
+def load(p):
+    m = trimesh.load(p, force='mesh', process=False)
+    # weld by position only: OBJ seams (uv, normals) split vertices, and the
+    # simplifier opens holes along every split edge
+    m = trimesh.Trimesh(np.asarray(m.vertices, np.float64), np.asarray(m.faces, np.int64), process=False)
+    m.merge_vertices(merge_tex=True, merge_norm=True)
+    m.update_faces(m.nondegenerate_faces())
+    return m
+ms = {f: load(os.path.join(src, f)) for f in sorted(os.listdir(src)) if f.endswith('.obj')}
 keep = min(1.0, budget / max(1, sum(len(m.faces) for m in ms.values())))
+tot0 = tot1 = 0
 for f, m in ms.items():
     v, t = np.asarray(m.vertices, np.float64), np.asarray(m.faces, np.int64)
     want = len(t) if 'collision' in f else max(floor, int(len(t) * keep))
+    a0 = m.area
     if want < len(t):
         v, t = fast_simplification.simplify(v, t, target_reduction=1 - want / len(t))
-    trimesh.Trimesh(v, t, process=True).export(os.path.join(out, f[:-4] + '.dec.stl'))
+    d = trimesh.Trimesh(v, t, process=True)
+    d.export(os.path.join(out, f[:-4] + '.dec.stl'))
+    tot0 += a0; tot1 += d.area
+    print(f'{f:28s} faces {len(m.faces):6d} -> {len(d.faces):5d}  area ratio {d.area / a0:.3f}')
+print(f'total area ratio {tot1 / tot0:.3f}')
 ```
 
 The decimated meshes are visual geoms only (`contype 0`, `conaffinity 0`,
