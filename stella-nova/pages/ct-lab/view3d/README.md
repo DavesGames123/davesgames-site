@@ -53,16 +53,16 @@ const view = createView3D(canvas, device, {
 `canvas` is an `HTMLCanvasElement` (the module configures a `webgpu` context on it).
 `device` is a `GPUDevice`. The module does not create or destroy the device.
 For an offscreen render (Deno tests), pass `canvas = null` and
-`opts = { width, height, format }`, then call `view.render({ target: textureView })`.
+`opts = { width, height, format }`, then call `view.render({ target: textureView, width, height })`.
 
 ### Methods
 
 | Method | What it does |
 |---|---|
-| `setPhantom3D(name, { n, supersample })` | Builds the engine phantom, makes a fitted cone geometry, and clears the scan and the reconstruction. Returns `{ volume, geom }`. |
+| `setPhantom3D(name, { n, supersample = 2, nAngles })` | Builds the engine phantom, makes a fitted cone geometry, and clears the scan and the reconstruction. Returns `{ volume, geom }`. |
 | `setVolume(volume, { window, as })` | Shows any engine `Volume`. `as: 'phantom'` (default) or `'recon'`. `window: [lo, hi]` in volume units. |
 | `scanStep({ views = 1, budgetMs })` | Projects the next views on the CPU (Joseph cone projector), turns the gantry to the last view and shows that projection on the detector. Returns `{ done, total, angle }`. |
-| `reconstructStep({ views = 8 })` | Async. FDK on the next scanned views: cosine weight and ramp filter (engine `fdkFilter`), then back-projection on the GPU (engine `createGpuCT().backProjectCone`) and accumulation. Returns `{ done, total, rmse }`. `rmse` is against the phantom, in volume units. |
+| `reconstructStep({ views = 8, filter = 'shepp-logan' })` | Async. FDK on the next scanned views: cosine weight and ramp filter (engine `fdkFilter`), then back-projection on the GPU (engine `createGpuCT().backProjectCone`) and accumulation. Returns `{ done, total, rmse }`. `rmse` is against the phantom, in volume units. |
 | `setMode(mode)` | One of `MODES`. |
 | `setCamera({ yaw, pitch, dist, fov, target, offset, autoRotate })` | Orbit camera. Angles in radians. `dist` in volume widths. `offset: [x, y]` shifts the image in NDC, for example to centre the subject in the saver's clear band. `autoRotate` in rad/s. |
 | `getCamera()` | Returns a copy of the camera state. |
@@ -71,10 +71,13 @@ For an offscreen render (Deno tests), pass `canvas = null` and
 | `setIso(skin, bone)` | Iso levels as fractions 0..1 of the window. |
 | `setShow({ gantry, rays, table, volume, detector })` | Turn parts on or off. `volume: 'auto' \| 'phantom' \| 'recon'`. `'auto'` shows the reconstruction once it has views. |
 | `setGantryAngle(rad)` | Turns the gantry without a scan (for explainer shots). |
+| `setCutaway(on)` | Cuts away the volume octant that faces the camera in `dvr` and `iso` (default on). |
+| `setSteps(n)` | Ray-march samples across the volume diagonal. |
 | `setColormap(id)` | Colour map id from `../colormaps/maps.js` for the `mip` and `slices` modes. |
 | `render({ dt, target })` | Draws one frame. `dt` in seconds moves `autoRotate`. |
 | `resize()` | Reads the canvas client size again. The module also calls it when the size changes. |
-| `state` | Read-only: `{ phantom, n, mode, scanned, reconstructed, total, angle }`. |
+| `state` | Read-only: `{ phantom, n, mode, scanned, reconstructed, total, angle, rmse, window }`. |
+| `geometry`, `volume`, `recon`, `projections` | Read-only getters: the engine cone geometry, the phantom Volume, the reconstruction (`data` is the partial sum; multiply by `scale`), and the cone projections. |
 | `destroy()` | Releases textures, buffers and listeners. Call it on `pagehide`. |
 
 ### Typical loop
@@ -108,6 +111,15 @@ WebGL2 path.
   This is correct behaviour, not a bug.
 - The engine's 3D Shepp-Logan drops the 10 degree tilt on two ellipsoids (see `../engine/phantoms.js`).
 - Volume textures are `r16float`. Values keep about three significant digits.
+- The phantom texture is smoothed with a [1 2 1] kernel for display. The scan uses the exact phantom.
+
+## Checks
+
+`node view3d/tests.mjs [pngDir]` runs the maths and mesh tests, the WGSL checks (naga and a
+mixed `&&`/`||` scan) and, when deno exists, `render-deno.mjs`. That script renders every mode
+with Deno WebGPU, writes PNGs to `pngDir`, and checks that the chunked GPU FDK matches the
+engine's CPU `fdk()`. Measured 2026-10-08 at 96^3, 180 views: scan 0.79 s (CPU),
+reconstruction 0.73 s (GPU, 12 views per step), max relative error 1.9e-6, rmse 0.023 /cm.
 
 ## Credit
 
