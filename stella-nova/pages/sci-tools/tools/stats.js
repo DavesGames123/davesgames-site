@@ -54,7 +54,7 @@ export const TOOLS = {
         ['Skewness g₁ (G₁ adjusted)', `${fmt(s.skew, 6)} (${fmt(s.skewAdj, 6)})`],
         ['Excess kurtosis g₂', fmt(s.kurt, 6)], ['Coefficient of variation', `${fmt(100 * s.cv, 5)} %`],
       ];
-      const h = histogram(s.sorted, { vlines: [{ x: s.mean, color: '#ff9a62' }, { x: s.median, color: '#ffd666' }], title: 'Histogram (Freedman–Diaconis bins); orange: mean, yellow: median' });
+      const h = histogram(s.sorted, { vlines: [{ x: s.mean, color: '#ff9a62' }, { x: s.median, color: '#ffd666' }], title: 'Histogram (NumPy auto bins); orange: mean, yellow: median' });
       return { rows, svg: [h.svg, boxplot(s)], copy: rows.map(r => `${r[0]}\t${r[1]}`).join('\n') };
     },
     tex: [

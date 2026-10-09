@@ -132,7 +132,7 @@ export const TOOLS = {
       const hs = r.mc.samples;
       const step = Math.max(1, Math.floor(hs.length / 20000));
       const sub = []; for (let i = 0; i < hs.length; i += step) sub.push(hs[i]);
-      const svg = histogram(sub, { xlabel: r.name, bins: 60, vlines: [{ x: r.y - r.sLin }, { x: r.y + r.sLin }, { x: r.mc.lo, color: '#e889dc' }, { x: r.mc.hi, color: '#e889dc' }], title: 'Monte Carlo draws (yellow: ± first-order u, pink: 95 % interval)' }).svg;
+      const svg = histogram(sub, { xlabel: r.name, bins: 60, clip: [0.002, 0.998], vlines: [{ x: r.y - r.sLin }, { x: r.y + r.sLin }, { x: r.mc.lo, color: '#e889dc' }, { x: r.mc.hi, color: '#e889dc' }], title: 'Monte Carlo draws, central 99.6 % (yellow: ± first-order u, pink: 95 % interval)' }).svg;
       return { rows, html, svg, copy: rows[0][1] };
     },
     tex: [

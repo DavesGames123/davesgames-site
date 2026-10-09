@@ -134,6 +134,9 @@ const tickText = (v) => {
   return String(Number(v.toPrecision(6)));
 };
 
+// Each plot gets its own clip-path id: two plots in one page must not share one.
+let plotSeq = 0;
+
 // series: [{ x:[], y:[], type:'line'|'scatter'|'bar'|'area', color, name, w }]
 // Options: xlabel, ylabel, w, h, title, logy, xr:[lo,hi], yr:[lo,hi],
 // vlines:[{x, color, dash}], hlines:[{y, color, dash}].
@@ -149,6 +152,8 @@ export function plot(series, o = {}) {
   let [y0, y1] = o.yr || [Math.min(...ys), Math.max(...ys)];
   if (series.some(s => s.type === 'bar' || s.type === 'area') && !o.logy) { y0 = Math.min(0, y0); y1 = Math.max(0, y1); }
   if (!o.yr) { const pad = (y1 - y0) * 0.06 || Math.abs(y0) * 0.1 || 1; y0 -= series.some(s => s.type === 'bar') && y0 === 0 ? 0 : pad; y1 += pad; }
+  const bw = Math.max(0, ...series.filter(s => s.type === 'bar' && s.w).map(s => s.w));
+  if (!o.xr && bw) { x0 -= bw / 2; x1 += bw / 2; }
   if (x1 === x0) { x0 -= 1; x1 += 1; }
   if (y1 === y0) { y0 -= 1; y1 += 1; }
   const px = (x) => L + (x - x0) / (x1 - x0) * (W - L - R);
@@ -170,7 +175,8 @@ export function plot(series, o = {}) {
   g.push(`<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="none" stroke="#2f4046"/>`);
   for (const v of o.vlines || []) g.push(`<line x1="${px(v.x).toFixed(1)}" x2="${px(v.x).toFixed(1)}" y1="${T}" y2="${H - B}" stroke="${v.color || '#ffd666'}" stroke-dasharray="${v.dash || '4 3'}"/>`);
   for (const v of o.hlines || []) g.push(`<line x1="${L}" x2="${W - R}" y1="${py(v.y).toFixed(1)}" y2="${py(v.y).toFixed(1)}" stroke="${v.color || '#ffd666'}" stroke-dasharray="${v.dash || '4 3'}"/>`);
-  g.push(`<clipPath id="pc"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath><g clip-path="url(#pc)">`);
+  const cid = `pc${++plotSeq}`;
+  g.push(`<clipPath id="${cid}"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath><g clip-path="url(#${cid})">`);
   series.forEach((s, k) => {
     const c = s.color || PLOT_COLORS[k % PLOT_COLORS.length];
     const pts = [];
@@ -196,13 +202,18 @@ export function plot(series, o = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Inter, system-ui, sans-serif">${g.join('')}</svg>`;
 }
 
-// Freedman–Diaconis bins (Sturges when the IQR is 0). Returns the bins and
-// a bar plot.
+// Bins by NumPy's "auto" rule: the larger count of Freedman–Diaconis and
+// Sturges. o.clip = [p0, p1] draws only the values between those quantiles
+// (for long-tailed Monte Carlo draws); the title should say so.
 export function histogram(data, o = {}) {
-  const v = [...data].sort((a, b) => a - b), n = v.length;
-  const q = (p) => { const h = (n - 1) * p, i = Math.floor(h); return v[i] + (h - i) * ((v[i + 1] ?? v[i]) - v[i]); };
-  const lo = v[0], hi = v[n - 1], iqr = q(0.75) - q(0.25);
-  let k = o.bins || (iqr > 0 ? Math.ceil((hi - lo) / (2 * iqr * n ** (-1 / 3))) : Math.ceil(Math.log2(n) + 1));
+  let v = [...data].sort((a, b) => a - b);
+  const q0 = (arr, p) => { const h = (arr.length - 1) * p, i = Math.floor(h); return arr[i] + (h - i) * ((arr[i + 1] ?? arr[i]) - arr[i]); };
+  if (o.clip) { const a = q0(v, o.clip[0]), b = q0(v, o.clip[1]); v = v.filter(x => x >= a && x <= b); }
+  const n = v.length;
+  const lo = v[0], hi = v[n - 1], iqr = q0(v, 0.75) - q0(v, 0.25);
+  const sturges = Math.ceil(Math.log2(n) + 1);
+  const fd = iqr > 0 ? Math.ceil((hi - lo) / (2 * iqr * n ** (-1 / 3))) : 0;
+  let k = o.bins || Math.max(fd, sturges);
   k = Math.max(1, Math.min(200, k || 1));
   const w = (hi - lo) / k || 1, counts = new Array(k).fill(0);
   for (const x of v) counts[Math.min(k - 1, Math.floor((x - lo) / w))]++;
