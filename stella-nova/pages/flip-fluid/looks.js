@@ -22,6 +22,7 @@
 //    export const SCHEMES / BACKGROUNDS / VIEWS / OBJECT_TINTS
 //    export function resolveLook
 //    export function randomLook
+//    export function contrast    water vs background, for random looks
 // ============================================================================
 import * as CM from '../ct-lab/colormaps/maps.js';
 
@@ -67,6 +68,13 @@ export const OBJECT_TINTS = {
   ghost:  { name: 'Ghost', tint: ['#cfe6ff', 0.7] },
 };
 
+const lum = (c) => { const v = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+// Light difference between the water (mean of shallow and deep) and the
+// tank background (mean of top and bottom), 0..1.
+export function contrast(scheme, bg) {
+  return Math.abs((lum(scheme.shallow) + lum(scheme.deep)) / 2 - (lum(bg.top) + lum(bg.bottom)) / 2);
+}
+
 export function resolveLook(c = {}) {
   const view = VIEWS[c.view] ? c.view : 'surface';
   const mapId = c.map && CM.has(c.map) ? c.map : (VIEWS[view].map || 'turbo');
@@ -83,7 +91,11 @@ export function resolveLook(c = {}) {
 export function randomLook(rnd = Math.random) {
   const pick = (a) => a[Math.floor(rnd() * a.length) % a.length];
   const view = rnd() < 0.62 ? 'surface' : rnd() < 0.3 ? 'particles' : pick(['speed', 'vorticity', 'pressure', 'density']);
-  const out = { water: pick(Object.keys(SCHEMES)), view, bg: pick(['night', 'night', 'abyss', 'slate', 'dusk', 'dawn', 'paper', 'grid']), obj: rnd() < 0.7 ? 'own' : pick(Object.keys(OBJECT_TINTS)), foam: rnd() < 0.85 ? '1' : '0' };
+  const out = { water: pick(Object.keys(SCHEMES)), view, bg: 'night', obj: rnd() < 0.7 ? 'own' : pick(Object.keys(OBJECT_TINTS)), foam: rnd() < 0.85 ? '1' : '0' };
+  // a background the water stands out from (milk water on paper, sunset
+  // water at dawn are nearly invisible)
+  const bgs = ['night', 'night', 'abyss', 'slate', 'dusk', 'dawn', 'paper', 'grid'];
+  for (let k = 0; k < 12; k++) { out.bg = pick(bgs); if (contrast(SCHEMES[out.water], BACKGROUNDS[out.bg]) > 0.1) break; out.bg = 'night'; }
   if (VIEWS[view].field) {
     const group = VIEWS[view].signed ? 'diverging' : pick(['perceptual', 'perceptual', 'artistic', 'medical']);
     out.map = pick(CM.list(group).map(m => m.id));

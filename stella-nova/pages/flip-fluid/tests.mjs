@@ -19,6 +19,8 @@
 //                 displaced area; the sweep also checks every body
 //                 stays finite and inside the tank
 //    looks        every view x scheme x background draws finite numbers
+//    saver        each shot runs finite; TeX plates, no code; no water
+//                 scheme twice in a row; the close-up zoom
 //    tools        palette drop, grab spring, throw, eraser, clear
 //    import       main.js links in node (a SyntaxError is a bug; a
 //                 ReferenceError on a browser global is expected)
@@ -244,6 +246,37 @@ async function main() {
     let rr = 5; const rnd = () => { rr = (rr * 16807) % 2147483647; return rr / 2147483647; };
     const a = JSON.stringify(LK.randomLook(rnd)); rr = 5; const b = JSON.stringify(LK.randomLook(rnd));
     check('looks: every view x scheme x background draws finite; random looks are seeded', bad === 0 && water > 0.05 && a === b, `${n} looks, ${calls} draw calls, water cover ${(water * 100).toFixed(0)} % of the texel image`);
+  }
+
+  // saver: every shot builds and runs; plates have TeX and no code; the
+  // water scheme never repeats back to back; the zoom stays finite
+  {
+    const { makeShots } = await import('./saver.js');
+    const app = { state: SC.defaultState(), sim: null, spec: null, zoom: null };
+    app.loadState = (st) => { app.state = st; app.spec = SC.build(st, { budget: 2400, minRes: 30 }); app.sim = SC.createSim(app.spec, B.makeBodies); };
+    app.objects = {
+      clearObjects() { for (const b of app.sim.solids.slice()) if (!b.kinematic) app.sim.removeSolid(b); },
+      dropAt(kind, x, y, extra = {}) { return B.spawn(app.sim, app.spec, Object.assign({ kind, x, y, a: 0, size: 1, density: B.KINDS[kind].density, colour: 0, look: 1 }, extra)); },
+    };
+    const S = makeShots(app);
+    let r = 11; const rng = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
+    const bad = [], waters = [];
+    let repeats = 0, plates = 0, maxK = 1;
+    for (let k = 0; k < 21; k++) {
+      const shot = S.SHOTS[k % S.SHOTS.length];
+      shot.run({ rng, calm: 0.7, w: 800, h: 500 });
+      const w = app.state.colours.view && app.state.colours.view !== 'surface' && app.state.colours.view !== 'particles' ? 'field:' + app.state.colours.map : app.state.colours.water;
+      if (waters.length && waters[waters.length - 1] === app.state.colours.water) repeats++;
+      waters.push(app.state.colours.water);
+      for (let f = 0; f < 90; f++) { app.sim.step(); S.tick(1 / 60); }
+      const s = app.sim.stats();
+      if (s.nan || s.out) bad.push(`${shot.key}: ${s.nan} NaN, ${s.out} out`);
+      if (app.zoom) { if (!(Number.isFinite(app.zoom.x) && Number.isFinite(app.zoom.y) && Number.isFinite(app.zoom.k))) bad.push(shot.key + ': zoom not finite'); maxK = Math.max(maxK, app.zoom.k); }
+      if (shot.label.tex && shot.label.tex.length && !shot.label.code && shot.label.title && shot.label.sub) plates++;
+    }
+    check('saver: 7 shots x 3 run finite, TeX plates without code, no water scheme twice in a row, close-ups zoom in',
+      bad.length === 0 && repeats === 0 && plates === 21 && S.SHOTS.length >= 7 && maxK > 1.5,
+      `${bad.join('; ') || 'ok'} · ${new Set(waters).size} schemes · zoom up to ${maxK.toFixed(2)}x`);
   }
 
   // sweep

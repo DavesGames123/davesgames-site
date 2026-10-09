@@ -114,11 +114,11 @@ export function createRenderer(ctx, opts = {}) {
       for (let y = ny - 1; y >= 0; y--) if (F[y * nx + x] > thr) { top = y; break; }
       surf[x] = top;
     }
-    // Smooth the surface line across 9 columns (a column with a spray
+    // Smooth the surface line across 25 columns (a column with a spray
     // texel above it would give a vertical stripe in the depth shade).
     for (let x = 0; x < nx; x++) {
       let s = 0, n = 0;
-      for (let k = -4; k <= 4; k++) { const q = x + k; if (q >= 0 && q < nx && surf[q] >= 0) { s += surf[q]; n++; } }
+      for (let k = -12; k <= 12; k++) { const q = x + k; if (q >= 0 && q < nx && surf[q] >= 0) { s += surf[q]; n++; } }
       surfS[x] = n ? s / n : -1;
     }
     const sh = hex(S.shallow), dp = hex(S.deep), ln = hex(S.line), fm = hex(S.foam);

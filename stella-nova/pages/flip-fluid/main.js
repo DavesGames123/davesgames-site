@@ -40,6 +40,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 //    function buildSliders     overrides
 //    function frame            the loop
 //    window.ffApp              the app object (saver, debugging)
+//  Saver: saver.js (TMP.saver shots); app.zoom = { x, y, k } is a
+//  close-up the frame applies when it draws.
 //  Other modules: tools.js (objects palette, grab, drop, erase),
 //  lookui.js (colours and views; state.colours)
 // ============================================================================
@@ -50,6 +52,7 @@ import { disc } from './shapes.js';
 import { makeBodies, KINDS } from './bodies.js';
 import { installTools } from './tools.js';
 import { installLook } from './lookui.js';
+import { installSaver } from './saver.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -340,7 +343,14 @@ function frame(ts) {
       app.slowRebuilds++; app.budgetScale *= 0.7; loadState(app.state, true); return;
     }
   }
-  renderer.draw(app.sim, app.view, app.drawOpts || {});
+  let view = app.view;
+  if (app.zoom && app.zoom.k > 1.001) {
+    // saver close-ups: scale about the tank centre, then centre the target
+    const z = app.zoom, v = app.view, s = v.s * z.k;
+    const cx = v.x + v.W * v.s / 2, cy = v.y + v.H * v.s / 2;
+    view = { s, W: v.W, H: v.H, x: cx - z.x * s, y: cy - (v.H - z.y) * s };
+  }
+  renderer.draw(app.sim, view, app.drawOpts || {});
   fpsN++;
   if (ts - fpsT > 1000) { fps = fpsN * 1000 / (ts - fpsT); fpsN = 0; fpsT = ts; }
   if (ts - lastStats > 500) {
@@ -366,6 +376,7 @@ app.openPanel = openPanel;
 app.writeHash = writeHash;
 installTools(app, $);
 installLook(app, $);
+installSaver(app);
 resize();
 addEventListener('resize', resize);
 if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
