@@ -225,6 +225,7 @@ const BLURBS = {
   'reaction-diffusion': 'Gray-Scott patterns that grow and split.',
   lenia: 'Continuous cellular life.',
   chordlab: 'Sing or play: it names the chord live.',
+  'string-lab': 'Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios.',
   harmonywheel: 'The circle of fifths you can spin.',
   'resonance-table': 'Resonance figures for every mode.',
   noise: 'Perlin, simplex, Worley and more, live.',

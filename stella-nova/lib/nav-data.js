@@ -223,6 +223,7 @@ w.SN_NAV = [
   { id: "sound", label: "Sound & Vibration", short: "Sound", icon: "♪", color: "#ff8ac2", color2: "#ffb478", groups: [
     { h: "Music", p: [
       ["chordlab", "ChordLab", "MIC"],
+      ["string-lab", "String Lab", "3D"],
       ["chordchart", "Chord Chart", "NEW", "chord-chart"],
       ["harmonywheel", "Harmony Wheel", "NEW", "harmony-wheel"]
     ] },

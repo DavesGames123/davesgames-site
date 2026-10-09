@@ -126,7 +126,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-209 registered pages in 5 regions and 19 constellations.
+210 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -231,6 +231,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `hopf-fibration` | Hopf Fibration | Patterns & Chaos > Geometry & Topology | GPU | The 3-sphere as linked circles, in 3D. |  | shown | hook, tier 4, default | yes |
 | `dice` | Dice Lab | Patterns & Chaos > Probability | 3D | Physics dice from d4 to d20, tested for fairness. |  | shown | hook, tier 3, default | yes |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
+| `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | no |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |
 | `harmonywheel` (pages/harmony-wheel) | Harmony Wheel | Sound & Vibration > Music | NEW | The circle of fifths you can spin. |  | shown | hook, tier 3 | yes |
 | `resonance-figure` | Resonance Figure | Sound & Vibration > Resonance | NEW | Lissajous figures from two tones. |  | shown | hook, tier 1, default | yes |
