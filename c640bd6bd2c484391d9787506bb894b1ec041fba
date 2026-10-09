@@ -1,0 +1,1 @@
+Correction: 'node tools/nav-sync.js --check' exited 1 at this commit, not 0. The one error was 'pages/string-lab is not in lib/nav-data.js': another session's new, unregistered page folder, not this thumbnail. thumbs-list --check: up to date (195 keys).
