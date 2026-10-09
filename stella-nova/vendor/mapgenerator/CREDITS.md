@@ -1,6 +1,6 @@
 # mapgenerator (vendored)
 
-The City Generator page (`stella-nova/pages/city-generator/`) uses the
+The City Generator page (`stella-nova/pages/map-generator/`) uses the
 generation code of **MapGenerator** by **ProbableTrain** and contributors.
 
 - Source: https://github.com/probabletrain/mapgenerator
@@ -22,7 +22,7 @@ generation code of **MapGenerator** by **ProbableTrain** and contributors.
 
 The upstream UI (`src/main.ts`, `src/ts/ui/*`, dat.gui, the SVG/canvas
 styles, the 3D model export) is **not** used. The page has its own UI, and
-`pages/city-generator/gen.js` does the work of the upstream UI glue
+`pages/map-generator/gen.js` does the work of the upstream UI glue
 (parameters and call order of `main_gui.ts`, `road_gui.ts`, `water_gui.ts`,
 `buildings.ts`, `tensor_field_gui.ts`).
 
@@ -65,7 +65,7 @@ sha256 of `mapgen.js`: `35d09ae3dcfe9ca58578fe4cce0db2e2cd18f63d7373ef14b762ddc1
 ## LGPL: how to replace this library
 
 `mapgen.js` is a separate module. The page loads it by one import in
-`pages/city-generator/gen.js` (`import * as MG from '../../vendor/mapgenerator/mapgen.js'`)
+`pages/map-generator/gen.js` (`import * as MG from '../../vendor/mapgenerator/mapgen.js'`)
 and uses only the exports named in `entry.mjs`. To use a changed or newer
 MapGenerator, rebuild `mapgen.js` with the steps above from your own copy of
 the upstream source and put it in this folder. No other file needs to change
