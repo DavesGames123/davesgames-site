@@ -341,12 +341,10 @@ async function push3D() {
   try {
     if (workerOk && worker) mesh = (await ask({ type: 'mesh' })).mesh;
   } catch { /* fall back */ }
-  if (!mesh) {
-    const { buildMesh } = await import('./mesh3d.js');
-    mesh = buildMesh(city, tl);
-  }
+  const m3 = await import('./mesh3d.js');
+  if (!mesh) mesh = m3.buildMesh(city, tl);
   if (token !== genToken) return;
-  v3.setCity(city, tl, mesh);
+  v3.setCity(city, tl, mesh, m3.fieldLines(city, fieldAt));
   meshFor = token;
   dirty = true;
 }

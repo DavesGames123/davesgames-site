@@ -261,6 +261,99 @@ section('2D map and exports');
   check('JSON export parses and keeps the city', j.seed === A.seed && j.lots.length === A.lots.length && j.buildings.length === A.lots.length && j.roads.minor.length === A.roads.minor.length && j.credit === CREDIT);
 }
 
+// ─── 3D mesh ────────────────────────────────────────────────────────────────
+section('3D mesh');
+{
+  const { buildMesh, toSTL, earcut, fieldLines, buildingAt, STRIDE, Z } = await import('./mesh3d.js');
+  const tl = timeline(A);
+  const m = buildMesh(A, tl);
+  const nv = m.vertices.byteLength / STRIDE;
+  const f32 = new Float32Array(m.vertices);
+  let bad = 0;
+  for (let i = 0; i < nv; i++) for (const k of [0, 1, 2, 5, 6, 7, 8, 9, 10, 11]) if (!Number.isFinite(f32[i * 13 + k])) bad++;
+  check('mesh: every vertex number is finite', bad === 0 && nv > 0, `${nv} vertices, ${(m.vertices.byteLength / 1e6).toFixed(1)} MB`);
+  let maxI = 0;
+  for (const i of m.indices) if (i > maxI) maxI = i;
+  check('mesh: indices are in range, whole triangles', maxI < nv && m.indices.length % 3 === 0, `${m.indices.length / 3} triangles`);
+  const r = m.ranges;
+  check('mesh: ranges cover the index buffer in order (opaque, roads)', r.opaque[0] === 0 && r.opaque[1] === r.roads[0] && r.roads[0] + r.roads[1] === m.indices.length && r.buildings[0] + r.buildings[1] === r.opaque[1] && r.roads[1] > 0);
+  // flat layers: one z per layer, and no two layers share a z
+  const zOf = new Map();
+  for (let i = 0; i < nv; i++) {
+    const kind = Math.round(f32[i * 13 + 8]);
+    if (kind === 2 || kind === 3) continue;   // z there is a 0/1 flag the shader scales
+    const z = f32[i * 13 + 2];
+    if (!zOf.has(kind)) zOf.set(kind, new Set());
+    zOf.get(kind).add(+z.toFixed(4));
+  }
+  const allZ = [...zOf.values()].map((s2) => [...s2]);
+  check('mesh: each flat layer has one z', allZ.every((a) => a.length === 1), [...zOf.entries()].map(([k, s2]) => `${k}:${[...s2]}`).join(' '));
+  const zs = allZ.flat();
+  check('mesh: no two flat layers are coplanar', new Set(zs).size === zs.length && Math.min(...zs.filter((z) => z > 0)) > 0);
+  check('mesh: roofs always above the block tops, block tops above the roads', Z.block + Z.pad > Z.block && Z.block > Z.field && Z.field > Z.road && Z.road > Z.park && Z.park > Z.sea && Z.sea > Z.river && Z.river > Z.ground);
+  // building footprints: no vertex of one footprint inside another (no shared wall planes)
+  {
+    const foot = [];
+    for (let i = 0; i < nv; i++) {
+      const kind = Math.round(f32[i * 13 + 8]);
+      if (kind !== 3 || f32[i * 13 + 2] !== 1) continue;
+      const nz = new Int8Array(m.vertices, i * STRIDE + 12, 3)[2];
+      if (nz < 100) continue;   // roof vertices only
+      foot.push([f32[i * 13], f32[i * 13 + 1], f32[i * 13 + 9]]);
+    }
+    check('mesh: buildings have roof vertices', foot.length >= A.lots.length * 3, `${foot.length} roof vertices`);
+  }
+  // building footprints: no vertex of one footprint inside another (no shared wall planes)
+  {
+    let overlaps = 0;
+    const cx = A.view.w / 2, cy = A.view.h / 2;
+    const polys = A.lots.map((l) => {
+      const p = l.map((q) => [q[0] - cx, cy - q[1]]);
+      const c = p.reduce((a, q) => [a[0] + q[0] / p.length, a[1] + q[1] / p.length], [0, 0]);
+      let rr = 0; for (const q of p) rr = Math.max(rr, Math.hypot(q[0] - c[0], q[1] - c[1]));
+      const k = rr > 3 * 0.35 ? 1 - 0.35 / rr : 0.85;
+      return p.map((q) => [c[0] + (q[0] - c[0]) * k, c[1] + (q[1] - c[1]) * k]);
+    });
+    const cell = 30, grid = new Map();
+    polys.forEach((p, i) => {
+      for (const q of p) { const k = Math.floor(q[0] / cell) + ',' + Math.floor(q[1] / cell); if (!grid.has(k)) grid.set(k, new Set()); grid.get(k).add(i); }
+    });
+    polys.forEach((p, i) => {
+      for (const q of p) {
+        for (const j of grid.get(Math.floor(q[0] / cell) + ',' + Math.floor(q[1] / cell)) || []) {
+          if (j !== i && inside(q, polys[j]) && distToRing(q, polys[j]) > 1e-3) { overlaps++; return; }
+        }
+      }
+    });
+    check('mesh: building footprints (lots inset 0.35 m) do not overlap', overlaps === 0, `${overlaps} of ${polys.length}`);
+  }
+  // triangulation keeps the area
+  {
+    let worst = 0;
+    for (const b of A.blocks.slice(0, 400)) {
+      const t = earcut(b);
+      let s2 = 0;
+      for (let i = 0; i < t.length; i += 3) { const [a1, b1, c1] = [b[t[i]], b[t[i + 1]], b[t[i + 2]]]; s2 += Math.abs((b1[0] - a1[0]) * (c1[1] - a1[1]) - (b1[1] - a1[1]) * (c1[0] - a1[0])) / 2; }
+      worst = Math.max(worst, Math.abs(s2 - Math.abs(area(b))) / Math.abs(area(b)));
+    }
+    check('earcut: the triangles of a block add up to its area', worst < 1e-6, `worst ${worst.toExponential(1)}`);
+  }
+  // playback in 3D: at the end every building stands at full height, at 0 none shows
+  {
+    const endOk = A.buildings.every((b, i) => { const s2 = buildingAt(tl, i, tl.dur + 1, b.h); return s2.shown && Math.abs(s2.top - (Z.block + b.h)) < 1e-6; });
+    const startOk = A.buildings.every((b, i) => !buildingAt(tl, i, 0, b.h).shown);
+    check('3D playback: every building at full height at the end, none at t = 0', endOk && startOk);
+  }
+  const fl = fieldLines(A, fieldSampler(A));
+  check('field lines: finite, whole segments', fl.length > 0 && fl.length % 6 === 0 && fl.every(Number.isFinite), `${fl.length / 6} segments`);
+  const stl = toSTL(A);
+  const dv = new DataView(stl);
+  const nt = dv.getUint32(80, true);
+  let stlBad = 0;
+  for (let i = 0; i < Math.min(nt, 20000); i++) for (let k = 0; k < 12; k++) if (!Number.isFinite(dv.getFloat32(84 + i * 50 + k * 4, true))) stlBad++;
+  check('STL export parses: header, count, size, finite numbers', stl.byteLength === 84 + nt * 50 && nt > 0 && stlBad === 0, `${nt} triangles, ${(stl.byteLength / 1e6).toFixed(1)} MB`);
+}
+
 // ─── page module with DOM stubs ────────────────────────────────────────────
 section('page module (DOM stubs, no browser)');
 {
