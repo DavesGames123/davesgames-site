@@ -628,5 +628,18 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('poles: a crater at 84 deg stays round on the sphere (axis ratio)', ePole < 1.08 && Math.abs(ePole - eEq) < 0.05, `84 deg ${ePole.toFixed(3)}, equator ${eEq.toFixed(3)}`);
 }
 
+// generation time at 512 (the quick preview), one thread, every preset.
+// The page splits the rows over up to 8 workers, so a preview takes
+// about 1/4 of this. The budget has a wide margin: other processes on a
+// shared machine slow the run.
+{
+  const BUDGET = 6000, times = [];
+  for (const pr of PR.PRESETS) {
+    const t0 = performance.now(); MP.generate(PR.fromPreset(pr.id, 7), 512); times.push([pr.id, performance.now() - t0]);
+  }
+  const worst = times.reduce((a, b) => (b[1] > a[1] ? b : a));
+  ok(`speed: every preset generates 512 in under ${BUDGET} ms on one thread`, worst[1] < BUDGET, times.map(([k, v]) => `${k} ${v.toFixed(0)}`).join(', '));
+}
+
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);
