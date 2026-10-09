@@ -2,14 +2,17 @@
 // Pure data and small helpers. No DOM. node tests import this file.
 //
 // grep handles:
-//   DEFAULTS, PRESETS, GROUPS, WINDOWS, presetById, paramsFor, workFor, RESCAN_KEYS, RECON_KEYS
+//   DEFAULTS, PRESETS, PRESET_MAPS, GROUPS, WINDOWS, presetById, paramsFor, workFor, RESCAN_KEYS, RECON_KEYS
 
 export const DEFAULTS = Object.freeze({
   phantom: 'shepp-logan-modified', n: 256,
   beam: 'parallel', views: 360, arc: 180, detectors: 0,
   dose: 0, poly: false, kVp: 120, motion: 0, deadPixels: 0, gain: 0, mar: false,
   algo: 'fbp', filter: 'ram-lak', cutoff: 1, iters: 30, relax: 0, tv: 0,
-  window: 'auto', cmap: 'grey', cmapReverse: false, cmapGamma: 1, diffMap: 'coolwarm',
+  window: 'auto', cmap: 'grey', cmapReverse: false, cmapGamma: 1,
+  sinoMap: 'magma', sinoReverse: false, sinoGamma: 0.85,
+  diffMap: 'coolwarm', diffReverse: false, diffGamma: 1,
+  map3d: 'bone', map3dReverse: false, map3dGamma: 1,
   compare: '', seed: 7,
 });
 
@@ -77,7 +80,7 @@ export const PRESETS = [
     { phantom: 'chest', dose: 3e6, window: 'soft' }),
   P('beam-hardening', 'physics', 'Beam hardening (cupping)',
     'A real tube gives many energies. Soft photons stop first, so the middle of a water disc looks too dark.',
-    { phantom: 'contrast-detail', poly: true, kVp: 80, window: 'soft', cmap: 'bone' }),
+    { phantom: 'contrast-detail', poly: true, kVp: 80, window: 'soft' }),
   P('metal-streaks', 'artefacts', 'Metal implant streaks',
     'A steel hip stops almost every photon. The bad rays become bright and dark streaks.',
     { phantom: 'metal-implant', poly: true, kVp: 120, dose: 2e5, window: 'soft' }),
@@ -86,7 +89,7 @@ export const PRESETS = [
     { phantom: 'metal-implant', poly: true, kVp: 120, dose: 2e5, mar: true, window: 'soft' }),
   P('rings', 'artefacts', 'Rings from a bad detector pixel',
     'One dead element and small gain errors make vertical lines in the sinogram and rings in the image.',
-    { phantom: 'walnut', deadPixels: 1, gain: 0.004, dose: 1e6, cmap: 'gold-leaf' }),
+    { phantom: 'walnut', deadPixels: 1, gain: 0.004, dose: 1e6 }),
   P('motion', 'artefacts', 'Motion during the scan',
     'The head moves 4 mm side to side during the turn. The sinogram curves wobble and edges double.',
     { phantom: 'head', motion: 0.4, beam: 'fan-flat', arc: 360, window: 'brain' }),
@@ -110,10 +113,10 @@ export const PRESETS = [
     { phantom: 'shepp-logan-modified', views: 36, dose: 1e5, algo: 'sart', iters: 40, tv: 0.02 }),
   P('walnut', 'objects', 'Walnut',
     'A lab micro-CT favourite: thin wrinkled shell, kernel lobes and air gaps, 5 cm across.',
-    { phantom: 'walnut', views: 540, dose: 2e6, cmap: 'gold-leaf' }),
+    { phantom: 'walnut', views: 540, dose: 2e6 }),
   P('suitcase', 'objects', 'Suitcase security scan',
     'An airport scanner view: clothes, a bottle, a laptop with battery cells, keys and coins.',
-    { phantom: 'suitcase', beam: 'fan-flat', arc: 360, poly: true, kVp: 140, dose: 5e5, cmap: 'hot-iron', window: 'bone' }),
+    { phantom: 'suitcase', beam: 'fan-flat', arc: 360, poly: true, kVp: 140, dose: 5e5, window: 'bone' }),
   P('chest-lung', 'clinical', 'Chest, lung window',
     'Window -600 HU, width 1500: the lung vessels and a small nodule show; soft tissue is flat white.',
     { phantom: 'chest', beam: 'fan-arc', arc: 360, dose: 1e6, window: 'lung' }),
@@ -138,7 +141,24 @@ export function presetById(id) {
   return PRESETS.find((p) => p.id === id) ?? PRESETS[0];
 }
 
-// Full parameter set for a preset: the defaults, then the preset fields.
+// Colour maps per preset (lab/colour.js names the fields). Clinical windows stay grey;
+// dose presets get PET-like maps; artefact presets get a sinogram map that shows the defect.
+export const PRESET_MAPS = {
+  'sparse-90': { sinoMap: 'mako' }, 'sparse-36': { sinoMap: 'mako' }, 'sparse-18': { sinoMap: 'mako', diffMap: 'berlin' },
+  'limited-120': { sinoMap: 'rocket' }, 'limited-90': { sinoMap: 'rocket', diffMap: 'purple-orange' },
+  'low-dose': { cmap: 'hot-iron', sinoMap: 'inferno' }, 'high-dose': { cmap: 'pet-rainbow', sinoMap: 'inferno' },
+  'beam-hardening': { cmap: 'copper', sinoMap: 'cubehelix' },
+  'metal-streaks': { cmap: 'bone', sinoMap: 'inferno', diffMap: 'berlin' }, 'metal-mar': { cmap: 'bone', sinoMap: 'inferno', diffMap: 'berlin' },
+  rings: { cmap: 'ice', sinoMap: 'viridis' }, motion: { sinoMap: 'twilight' },
+  'fan-flat': { sinoMap: 'plasma' }, 'fan-arc': { sinoMap: 'plasma' },
+  filters: { diffMap: 'red-blue' }, algorithms: { diffMap: 'purple-orange' }, 'art-kaczmarz': { cmap: 'cividis' }, 'tv-sparse': { cmap: 'viridis' },
+  walnut: { cmap: 'gold-leaf', sinoMap: 'rocket' }, suitcase: { cmap: 'hot-iron', sinoMap: 'turbo' },
+  'chest-lung': { cmap: 'grey', sinoMap: 'mako' }, 'head-brain': { cmap: 'grey' }, 'head-bone': { cmap: 'bone' },
+  bars: { cmap: 'cividis' }, 'contrast-detail': { cmap: 'bone' },
+};
+
+// Full parameter set for a preset: the defaults, the preset's maps, then the preset fields.
 export function paramsFor(id) {
-  return { ...DEFAULTS, ...presetById(id).params };
+  const pr = presetById(id);
+  return { ...DEFAULTS, ...(PRESET_MAPS[pr.id] || {}), ...pr.params };
 }

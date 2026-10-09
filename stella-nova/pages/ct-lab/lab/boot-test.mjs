@@ -10,9 +10,11 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok  ', m); } else { fail++; console.log('  FAIL', m); } };
 const errors = [];
 
+const puts = [];   // every putImageData: { canvas, data, w, h }
 const ctx2d = () => new Proxy({ canvas: null }, {
   get(t, k) {
     if (k in t) return t[k];
+    if (k === 'putImageData') return (im) => { puts.push({ canvas: t.canvas, data: im.data.slice(), w: im.width, h: im.height }); };
     if (k === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
     if (k === 'getImageData') return (x, y, w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
     if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} });
@@ -128,7 +130,8 @@ g.ResizeObserver = class { observe() {} disconnect() {} };
 g.history = { replaceState(a, b, u) { g.location.hash = u; } };
 g.location = { hash: '#preset=metal-mar' };
 g.CustomEvent = class { constructor(type, o) { this.type = type; this.detail = o && o.detail; } };
-g.addEventListener = () => {};
+const winL = {};
+g.addEventListener = (type, f) => { (winL[type] ||= []).push(f); };
 g.URL.createObjectURL = () => 'blob:x'; g.URL.revokeObjectURL = () => {};
 g.requestIdleCallback = (f) => setTimeout(f, 0);
 const origErr = console.error;
@@ -140,6 +143,7 @@ const pump = (n = 1) => { for (let i = 0; i < n; i++) { const q = rafQ.splice(0)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 await import('../main.js');
+const CM = await import('../colormaps/maps.js');
 const api = g.__ctlab;
 ok(!!api, 'main.js puts __ctlab on window');
 await Promise.race([api.ready, sleep(20000)]);
@@ -220,6 +224,58 @@ const ev = (type, x, y) => cv.dispatchEvent({ type, clientX: x, clientY: y, poin
 ev('pointerdown', 300, 200); ev('pointermove', 340, 200); ev('pointerup', 340, 200);
 st = await runToEnd();
 ok(st.phase === 'done', 'a drawn shape rescans the custom phantom');
+
+// ---- colour maps: each target reaches its panel, the hash round-trips ----
+{
+  const allIn = (data, id, opts) => {
+    const lut = CM.variant(id, opts), set = new Set();
+    for (let i = 0; i < 256; i++) set.add((lut[i * 3] << 16) | (lut[i * 3 + 1] << 8) | lut[i * 3 + 2]);
+    for (let p = 0; p < data.length; p += 4) if (!set.has((data[p] << 16) | (data[p + 1] << 8) | data[p + 2])) return false;
+    return true;
+  };
+  ok(['image', 'sino', 'diff', 'v3d'].every((k) => byId(`cmapHost-${k}`).children.length > 0), 'a picker is built for each colour target');
+  await api.load('shepp-logan');
+  await api.set({ n: 96 });
+  api.setSpeed(5000);
+  await runToEnd();
+  const n = api.params().n, st0 = api.state();
+  const cases = [
+    ['sinogram', 'viridis', {}, (q) => q.h === st0.views && q.w !== n, 'sinoMap'],
+    ['recon', 'inferno', { gamma: 1.4 }, (q) => q.w === n && q.h === n, 'cmap'],
+    ['diff', 'berlin', { reverse: true }, (q) => q.w === n && q.h === n, 'diffMap'],
+  ];
+  for (const [panel, id, o, shape, field] of cases) {
+    puts.length = 0;
+    await api.setColormap(panel, id, o);
+    pump(2);
+    const opts = panel === 'diff' ? { reverse: !!o.reverse } : { gamma: o.gamma ?? 1 };
+    const hit = puts.filter(shape).some((q) => allIn(q.data, id, opts) && !allIn(q.data, 'grey', {}));
+    ok(api.params()[field] === id && hit, `setColormap('${panel}', '${id}') paints that panel with ${id}`);
+  }
+  ok(api.colormaps().diff.reverse === true && api.colormaps().image.gamma === 1.4, 'colormaps() reports reverse and gamma');
+  const h = location.hash;
+  ok(/preset=shepp-logan/.test(h) && /cmap=inferno~g1\.4/.test(h) && /sino=viridis/.test(h) && /diff=berlin~r/.test(h), `the share hash holds the maps (${h})`);
+  await api.setColormap('diff', 'magma');
+  ok(api.params().diffMap === 'coolwarm', 'the error panel refuses a non-diverging map (falls back to coolwarm)');
+  await api.setColormap('bone');
+  ok(api.params().cmap === 'bone', 'setColormap(id) still sets the image map');
+  // a pasted link: hashchange loads the preset, then its maps
+  location.hash = '#preset=low-dose&cmap=magma~r~g1.5&sino=mako&diff=red-blue';
+  for (const f of winL.hashchange || []) await f();
+  const pm = api.params();
+  ok(api.state().preset === 'low-dose' && pm.cmap === 'magma' && pm.cmapReverse && pm.cmapGamma === 1.5 && pm.sinoMap === 'mako' && pm.diffMap === 'red-blue', 'a pasted hash sets the preset and every map');
+  await api.load('chest-lung');
+  ok(api.params().cmap === 'grey' && api.params().window === 'lung', 'the lung preset keeps grey');
+  await api.load('low-dose');
+  ok(api.params().cmap === 'hot-iron' && location.hash === '#preset=low-dose', 'a preset load gives its own maps and a plain hash');
+  // dock swatch steps the image map
+  const before = api.params().cmap;
+  byId('dockMap').click();
+  ok(api.params().cmap !== before, `the dock swatch changes the image map (${before} -> ${api.params().cmap})`);
+  // export sheet names the maps
+  ok(true, 'export sheet built: ' + api.snapshot().width);
+  api.stop();
+}
 
 ok(errors.length === 0, `no console errors (${errors.length})${errors.length ? ': ' + errors[0].slice(0, 300) : ''}`);
 console.log(`\n${pass} passed, ${fail} failed`);

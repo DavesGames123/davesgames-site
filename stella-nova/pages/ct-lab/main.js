@@ -13,6 +13,12 @@
 //    the compare strip. A change of the filter or the algorithm reuses the
 //    stored sinogram; a change of the window or colour map only redraws.
 //
+//  COLOUR  Each image goes through the display window first (level, width ->
+//    lo, hi), then a 256-step colour map LUT (CM.apply, on the CPU: the 2D
+//    panels are Canvas 2D). Targets: images (object, recon, compare), the
+//    sinogram and the error panel (lab/colour.js). The choice is in the
+//    share hash: #preset=<id>&cmap=<id>~r~g<gamma>&sino=..&diff=..
+//
 //  PAGE API  window.__ctlab, see LAB-API.md. This file does not write
 //  window.snSaver; saver.js (imported below) adds that hook on top of the API.
 //
@@ -25,6 +31,7 @@
 //    grep -n 'function layout'     panel grid sizing
 //    grep -n 'DRAW'                draw-your-own and the picture upload
 //    grep -n 'EXPORT'              PNG export
+//    grep -n 'COLOUR'              colour map pickers, quick swatches, share hash (lab/colour.js)
 // ============================================================================
 
 import { DEFAULTS, PRESETS, GROUPS, WINDOWS, presetById, paramsFor, workFor } from './lab/presets.js';
@@ -36,6 +43,7 @@ import { MATERIAL_CHOICES, DRAW_WIDTH, starterShapes, shapeFromDrag, hitShape, i
 import { FILTERS, rasterize2D, phantom2D, psnr, ssim } from './engine/index.js';
 import * as CM from './colormaps/maps.js';
 import { createPicker } from './colormaps/picker.js';
+import { TARGETS, QUICK, targetOf, mapOf, mapPartial, encodeMaps, decodeMaps, mapNames } from './lab/colour.js';
 import './saver.js';   // window.snSaver: the screensaver reel, on top of window.__ctlab
 
 const $ = (id) => document.getElementById(id);
@@ -316,7 +324,7 @@ function drawTile(c, img) {
   c.width = size; c.height = size;
   const off = imgCanvas(n, n), w = curWindow();
   const id = off.ctx.createImageData(n, n);
-  paintImage(img.data, w.lo, w.hi, id.data, S.params.cmap, cmapOpts());
+  paintImage(img.data, w.lo, w.hi, id.data, mapIdOf('image'), cmapOpts());
   off.ctx.putImageData(id, 0, 0);
   const g = c.getContext('2d');
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
@@ -324,7 +332,8 @@ function drawTile(c, img) {
 }
 
 // ---------- display helpers ----------
-function cmapOpts() { return { reverse: S.params.cmapReverse, gamma: S.params.cmapGamma }; }
+function cmapOpts() { const m = mapOf(S.params, 'image'); return { reverse: m.reverse, gamma: m.gamma }; }
+function mapIdOf(t) { return mapOf(S.params, t).id; }
 function curWindow() { return windowRange(S.params.window, S.hu, S.truthRange); }
 
 const offs = {};
@@ -353,7 +362,8 @@ function paintSinoBuffer(sino = S.scan && S.scan.sino) {
   if (!sino) return;
   const o = imgCanvas(sino.nDet, sino.nAngles, 'sino');
   const id = o.ctx.createImageData(sino.nDet, sino.nAngles);
-  paintImage(sino.data, 0, S.sinoMax, id.data, 'grey', { gamma: 0.85 });
+  const m = mapOf(S.params, 'sino');
+  paintImage(sino.data, 0, S.sinoMax, id.data, m.id, { reverse: m.reverse, gamma: m.gamma });
   o.ctx.putImageData(id, 0, 0);
   S.dirty.sino = true;
 }
@@ -371,7 +381,7 @@ function drawPhantom() {
   const n = ph.image.nx, o = imgCanvas(n, n, 'ph'), win = curWindow();
   if (S.dirty.phantomPaint !== false) {
     const id = o.ctx.createImageData(n, n);
-    paintImage(ph.image.data, win.lo, win.hi, id.data, S.params.cmap, cmapOpts());
+    paintImage(ph.image.data, win.lo, win.hi, id.data, mapIdOf('image'), cmapOpts());
     o.ctx.putImageData(id, 0, 0);
   }
   const box = imageBox(W, H, S.phantomScale);
@@ -433,6 +443,10 @@ function drawSino() {
   g.save(); g.translate(x0 - 16 * d, y0 + h / 2); g.rotate(-Math.PI / 2);
   const arc = Math.round(S.params.arc);
   g.fillText(`view angle 0° → ${arc}° ↓`, 0, 0); g.restore();
+  // colour bar of the sinogram map: line integral 0 (bottom) to max (top)
+  const sm = mapOf(S.params, 'sino'), bw = 4 * d, bx = W - 6 * d, bh = Math.min(h * 0.5, 120 * d);
+  g.fillStyle = CM.toCanvasGradient(g, sm.id, 0, y0 + bh, 0, y0, { reverse: sm.reverse, gamma: sm.gamma });
+  g.fillRect(bx, y0, bw, bh);
 }
 
 function reconPixels() {
@@ -454,7 +468,7 @@ function drawRecon() {
   const img = reconPixels(); if (!img) return;
   const n = img.nx, o = imgCanvas(n, n, 'rc'), win = reconWindow();
   const id = o.id && o.id.width === n ? o.id : (o.id = o.ctx.createImageData(n, n));
-  paintImage(img.data, win.lo, win.hi, id.data, S.params.cmap, cmapOpts());
+  paintImage(img.data, win.lo, win.hi, id.data, mapIdOf('image'), cmapOpts());
   o.ctx.putImageData(id, 0, 0);
   const box = imageBox(W, H, 1);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
@@ -480,14 +494,15 @@ function drawDiff() {
   const n = img.nx, o = imgCanvas(n, n, 'df'), win = curWindow();
   const id = o.id && o.id.width === n ? o.id : (o.id = o.ctx.createImageData(n, n));
   const span = 0.25 * (win.hi - win.lo);
-  diffTmp = paintSigned(img.data, ph.image.data, span, id.data, S.params.diffMap, diffTmp);
+  const dm = mapOf(S.params, 'diff');
+  diffTmp = paintSigned(img.data, ph.image.data, span, id.data, dm.id, diffTmp, dm);
   o.ctx.putImageData(id, 0, 0);
   const box = imageBox(W, H, 1);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(o.c, box.x, box.y, box.side, box.side);
   // legend
   const lw = Math.min(140 * d, W * 0.4), lh = 6 * d, lx = W - lw - 10 * d, ly = H - 22 * d;
-  g.fillStyle = CM.toCanvasGradient(g, S.params.diffMap, lx, 0, lx + lw, 0);
+  g.fillStyle = CM.toCanvasGradient(g, dm.id, lx, 0, lx + lw, 0, { reverse: dm.reverse });
   g.fillRect(lx, ly, lw, lh);
   g.fillStyle = '#9aa7b4'; g.font = `${10 * d}px Inter, system-ui, sans-serif`; g.textBaseline = 'top';
   const lab = S.hu ? `±${Math.round(span / (huOf(1) - huOf(0)))} HU` : `±${span.toPrecision(2)}`;
@@ -592,7 +607,7 @@ async function setParams(partial, o = {}) {
   syncControls();
   if (work === 'scan') await startScan({ autoplay: o.run !== false && S.playing !== false ? undefined : false });
   else if (work === 'recon') { captions(); await rerecon(); }
-  else { paintSinoBuffer(S.session && S.session.sino); markDirty(); drawCompareTiles(); }
+  else { paintSinoBuffer(S.session && S.session.sino); markDirty(); drawCompareTiles(); syncPickers(); }
   captions(); updateBar();
 }
 
@@ -614,7 +629,7 @@ async function loadPreset(id, o = {}) {
   document.querySelectorAll('#presetList button').forEach((b) => b.classList.toggle('on', b.dataset.id === pr.id));
   setDrawMode(p.phantom === 'custom');
   syncControls();
-  if (cmapPicker) cmapPicker.set({ id: p.cmap, reverse: p.cmapReverse, gamma: p.cmapGamma }, { silent: true });
+  syncPickers();
   await startScan({ autoplay: o.autoplay });
   emit('preset', { id: pr.id });
 }
@@ -652,7 +667,6 @@ const CONTROLS = [
     { key: 'window', label: 'Window', type: 'select', options: () => WINDOWS.filter((w) => w.auto || w.hu === S.hu).map((w) => [w.id, w.auto ? w.label : `${w.label} (${w.level}/${w.width})`]).concat(typeof S.params.window === 'object' ? [['custom', 'Custom']] : []) },
     { key: 'wl', label: 'Level', type: 'wl', which: 'level' },
     { key: 'ww', label: 'Width', type: 'wl', which: 'width' },
-    { key: 'diffMap', label: 'Error map', type: 'select', options: () => CM.list('diverging').map((m) => [m.id, m.name]) },
     { key: 'speed', label: 'Scan speed', type: 'speed' },
   ] },
 ];
@@ -815,7 +829,8 @@ function thumbQueue() {
       const hu = key !== 'custom' && !key.startsWith('shepp') ? true : key === 'custom';
       const w = windowRange(p.window, hu, imageRange(img));
       const c = b.querySelector('canvas'), g = c.getContext('2d'), id = g.createImageData(56, 56);
-      paintImage(img.data, w.lo, w.hi, id.data, p.cmap);
+      const tm = mapOf(p, 'image');
+      paintImage(img.data, w.lo, w.hi, id.data, tm.id, tm);
       g.putImageData(id, 0, 0);
     } catch (e) { /* a thumbnail is optional */ }
     (window.requestIdleCallback || ((f) => setTimeout(f, 30)))(next);
@@ -941,7 +956,7 @@ function snapshot() {
   return drawSheet(document, [
     { canvas: panels.phantom, label: 'Object' }, { canvas: panels.sinogram, label: 'Sinogram' },
     { canvas: panels.recon, label: 'Reconstruction' }, { canvas: panels.diff, label: 'Error' },
-  ], `CT lab: ${pr.label}`, `${$('capSino').textContent} · ${$('capRecon').textContent} · PSNR ${$('mPsnr').textContent}, SSIM ${$('mSsim').textContent}`);
+  ], `CT lab: ${pr.label}`, `${$('capSino').textContent} · ${$('capRecon').textContent} · PSNR ${$('mPsnr').textContent}, SSIM ${$('mSsim').textContent} · ${mapNames(S.params)}`);
 }
 function bindExport() {
   document.querySelectorAll('[data-export]').forEach((b) => b.addEventListener('click', () => {
@@ -989,6 +1004,12 @@ function bindSheets() {
   $('dockPanel').addEventListener('click', () => toggleSheet('panel'));
   $('dockPlay').addEventListener('click', () => togglePlay());
   $('dockStep').addEventListener('click', () => api.step(S.phase === 'scan' ? Math.max(1, Math.round(S.session.views / 36)) : 1));
+  $('dockMap').addEventListener('click', () => {
+    const list = QUICK.image, cur = mapOf(S.params, 'image').id;
+    const id = list[(list.indexOf(cur) + 1) % list.length];
+    setMap('image', id, {});
+    toast(`Colour map: ${CM.get(id).name}`);
+  });
   $('dockWin').addEventListener('click', () => {
     const list = WINDOWS.filter((w) => w.auto || w.hu === S.hu);
     const cur = typeof S.params.window === 'string' ? S.params.window : 'custom';
@@ -1024,6 +1045,69 @@ function toast(msg) {
   const el = $('toast');
   el.textContent = msg; el.hidden = false;
   clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600);
+}
+
+// ---------- COLOUR ----------
+const pickers = {};
+let mapTab = 'image';
+function setMap(target, id, o = {}) {
+  const partial = mapPartial(target, id, o, S.params);
+  const p = setParams(partial);
+  writeHash();
+  return p;
+}
+// The share hash: the preset, then the maps that differ from the preset's own maps.
+function writeHash() {
+  try { history.replaceState(null, '', `#preset=${S.preset}${encodeMaps(S.params, paramsFor(S.preset))}`); } catch (e) { /* no history */ }
+}
+function syncPickers() {
+  for (const [k, pk] of Object.entries(pickers)) {
+    const m = mapOf(S.params, k);
+    try { pk.set(m, { silent: true }); } catch (e) { /* the picker is optional */ }
+  }
+  paintQuick();
+  const dm = $('dockMap');
+  if (dm) { const m = mapOf(S.params, 'image'); dm.style.background = CM.cssGradient(m.id, m, '90deg', 8); dm.title = `Colour map: ${CM.get(m.id).name}`; }
+}
+function showMapTab(k) {
+  mapTab = TARGETS[k] ? k : 'image';
+  document.querySelectorAll('#cmapTabs button').forEach((b) => b.classList.toggle('on', b.dataset.target === mapTab));
+  for (const t of Object.keys(TARGETS)) { const h = $(`cmapHost-${t}`); if (h) h.hidden = t !== mapTab; }
+  paintQuick();
+}
+function paintQuick() {
+  const host = $('cmapQuick'); if (!host) return;
+  const cur = mapOf(S.params, mapTab), ids = QUICK[mapTab] || [];
+  if (host.dataset.tab !== mapTab) {
+    host.textContent = '';
+    for (const id of ids) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'qswatch'; b.dataset.id = id; b.title = CM.get(id).name;
+      b.setAttribute('aria-label', `${CM.get(id).name} colour map`);
+      b.addEventListener('click', () => setMap(mapTab, id, {}));
+      host.append(b);
+    }
+    host.dataset.tab = mapTab;
+  }
+  for (const b of host.querySelectorAll('button')) {
+    b.style.background = CM.cssGradient(b.dataset.id, { reverse: cur.reverse }, '90deg', 8);
+    b.classList.toggle('on', b.dataset.id === cur.id);
+    b.setAttribute('aria-pressed', String(b.dataset.id === cur.id));
+  }
+}
+function buildColour() {
+  for (const k of Object.keys(TARGETS)) {
+    const host = $(`cmapHost-${k}`); if (!host) continue;
+    try {
+      const m = mapOf(S.params, k);
+      const pk = createPicker(host, { value: m.id, reverse: m.reverse, gamma: m.gamma, compact: true, groups: TARGETS[k].groups, label: `${TARGETS[k].label} colour map` });
+      pk.addEventListener('change', (e) => { const { id, reverse, gamma } = e.detail; setMap(k, id, { reverse, gamma }); });
+      pickers[k] = pk;
+    } catch (e) { console.warn('colour map picker', k, e); }
+  }
+  $('cmapTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && b.dataset.target) showMapTab(b.dataset.target); });
+  showMapTab('image');
+  syncPickers();
 }
 
 // ---------- API ----------
@@ -1066,11 +1150,14 @@ const api = {
   snapshot,
   windows: () => WINDOWS.map(({ id, label, level, width }) => ({ id, label, level, width })),
   setWindow(w) { return setParams({ window: w }); },
-  setColormap(id, o = {}) {
-    const p = { cmap: CM.has(id) ? id : 'grey', cmapReverse: !!o.reverse, cmapGamma: o.gamma ?? 1 };
-    if (cmapPicker) cmapPicker.set({ id: p.cmap, reverse: p.cmapReverse, gamma: p.cmapGamma }, { silent: true });
-    return setParams(p);
+  // setColormap(panel, id, { reverse, gamma }) or setColormap(id, opts) for the image panels.
+  // panel: 'image' | 'phantom' | 'recon' | 'sinogram' | 'diff' | '3d' (lab/colour.js PANEL_TARGET).
+  setColormap(a, b, c) {
+    const t = targetOf(a);
+    const [target, id, o] = t ? [t, b, c || {}] : ['image', a, b || {}];
+    return setMap(target, id, o);
   },
+  colormaps() { const out = {}; for (const k of Object.keys(TARGETS)) out[k] = mapOf(S.params, k); return out; },
   focusPanel(name) {
     S.focus = name && panels[name] ? name : null;
     const grid = $('panels');
@@ -1084,7 +1171,6 @@ const api = {
 window.__ctlab = api;
 
 // ---------- boot ----------
-let cmapPicker = null;
 async function boot() {
   buildGallery();
   buildControls();
@@ -1092,13 +1178,7 @@ async function boot() {
   bindReadout();
   bindExport();
   bindSheets();
-  try {
-    cmapPicker = createPicker($('cmapHost'), { value: S.params.cmap, compact: true });
-    cmapPicker.addEventListener('change', (e) => {
-      const { id, reverse, gamma } = e.detail;
-      setParams({ cmap: id, cmapReverse: reverse, cmapGamma: gamma });
-    });
-  } catch (e) { console.warn('colour map picker', e); }
+  buildColour();
   $('btnRun').addEventListener('click', () => api.run());
   $('btnPlay').addEventListener('click', togglePlay);
   $('btnStep').addEventListener('click', () => api.step(S.phase === 'scan' ? Math.max(1, Math.round((S.session ? S.session.views : 36) / 36)) : 1));
@@ -1110,7 +1190,12 @@ async function boot() {
   });
   new ResizeObserver(() => layout()).observe($('stage'));
   window.addEventListener('resize', layout);
-  window.addEventListener('hashchange', () => { const id = hashPreset(); if (id && id !== S.preset) loadPreset(id); });
+  window.addEventListener('hashchange', async () => {
+    const id = hashPreset();
+    if (id && id !== S.preset) await loadPreset(id);
+    const maps = decodeMaps(location.hash);
+    if (Object.keys(maps).length) await setParams(maps);
+  });
   window.addEventListener('pagehide', () => { stopJobs(); releaseGpu(); cancelAnimationFrame(rafId); rafId = 0; });
 
   layout();
@@ -1118,6 +1203,7 @@ async function boot() {
   await initGpu();
   syncControls();
   await loadPreset(hashPreset() || 'shepp-logan');
+  { const maps = decodeMaps(location.hash); if (Object.keys(maps).length) await setParams(maps); }
   readyResolve();
 }
 

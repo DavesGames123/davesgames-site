@@ -33,7 +33,8 @@
     +-----------+---------------------------------------------+----------+
   PHONE (max-width 760px, or a short touch landscape): #dock at the base.
     #dockGallery opens #gallery and #dockPanel opens #panel as bottom sheets
-    (a right drawer in landscape). #dockPlay, #dockStep, #dockWin are one tap.
+    (a right drawer in landscape). #dockPlay, #dockStep, #dockWin, #dockMap
+    (next colour map) are one tap. #cmapBox: map tabs, quick swatches, pickers.
 
   grep handles: id="panels"  id="gallery"  id="panel"  id="dock"  data-panel=
 -->
@@ -100,6 +101,18 @@
 
 <aside id="panel" class="sheet" aria-label="Controls">
   <div class="sheet-grip"><span></span></div>
+  <section class="ctl" id="cmapBox">
+    <h3>Colour maps</h3>
+    <div class="row seg" id="cmapTabs" role="tablist" aria-label="What the map colours">
+      <button data-target="image" class="on">Images</button><button data-target="sino">Sinogram</button><button data-target="diff">Error</button><button data-target="v3d" hidden>3D</button>
+    </div>
+    <div id="cmapQuick" class="cmap-quick" aria-label="Quick colour maps"></div>
+    <div id="cmapHost-image" class="cmap-host"></div>
+    <div id="cmapHost-sino" class="cmap-host" hidden></div>
+    <div id="cmapHost-diff" class="cmap-host" hidden></div>
+    <div id="cmapHost-v3d" class="cmap-host" hidden></div>
+    <p class="dim small">The window (level and width) applies first. The map then colours the windowed values. The choice goes in the page link.</p>
+  </section>
   <div id="controls"></div>
   <section class="ctl" id="drawBox" hidden>
     <h3>Draw your own</h3>
@@ -114,10 +127,6 @@
       <button id="drawStarter" class="btn">Starter</button>
     </div>
     <label class="row file"><span>Picture</span><input id="upload" type="file" accept="image/*"></label>
-  </section>
-  <section class="ctl">
-    <h3>Colour map</h3>
-    <div id="cmapHost"></div>
   </section>
   <section class="ctl">
     <h3>Export</h3>
@@ -147,6 +156,7 @@
   <button id="dockPlay" class="icon" title="Play or pause">❚❚</button>
   <button id="dockStep" class="icon" title="Step">›|</button>
   <button id="dockWin" title="Next window">Window</button>
+  <button id="dockMap" class="swatch" title="Next colour map" aria-label="Next colour map"></button>
 </nav>
 
 <div id="toast" hidden></div>

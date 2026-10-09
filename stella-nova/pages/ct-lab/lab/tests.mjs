@@ -8,6 +8,8 @@ import { windowRange, huOf, muOf, MU_WATER, drawGantry, drawResidual, paintImage
 import { starterShapes, shapeFromDrag, hitShape, imageToPhantom, DRAW_WIDTH } from './draw.js';
 import { PHANTOMS_2D, rmse } from '../engine/index.js';
 import * as CM from '../colormaps/maps.js';
+import { TARGETS, PANEL_TARGET, QUICK, targetOf, mapOf, mapPartial, encodeMaps, decodeMaps, mapNames } from './colour.js';
+import { PRESET_MAPS } from './presets.js';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ok  ', msg); } else { fail++; console.log('  FAIL', msg); } };
@@ -165,5 +167,40 @@ console.log('drawing');
   ok(Math.abs(up.image.data[0] - (up.basis.water.data[0] * MU_WATER + up.basis.bone.data[0] * 0.5023)) < 0.01, 'white picture pixel becomes bone, with a matching basis');
 }
 
+
+// ---- colour targets (lab/colour.js) ----
+{
+  ok(Object.keys(PRESET_MAPS).every((id) => PRESETS.some((p) => p.id === id)), 'every PRESET_MAPS key is a preset');
+  ok(PRESETS.every((p) => { const q = paramsFor(p.id); return CM.has(q.cmap) && CM.has(q.sinoMap) && CM.get(q.diffMap).kind === 'diverging'; }), 'every preset has known maps and a diverging error map');
+  ok(Object.values(QUICK).flat().every((id) => CM.has(id)) && QUICK.diff.every((id) => CM.get(id).kind === 'diverging'), 'quick swatches are real maps; the error row is diverging');
+  ok(targetOf('sinogram') === 'sino' && targetOf('phantom') === 'image' && targetOf('3d') === 'v3d' && targetOf('viridis') === null, 'targetOf maps panel names, not map ids');
+  ok(CM.ids().every((id) => !(id in PANEL_TARGET)), 'no map id is also a panel name');
+  // hash round trip over many random choices
+  let good = 0, R = 12345;
+  const rnd = () => { R = (R * 1103515245 + 12345) >>> 0; return R / 4294967296; };
+  for (let k = 0; k < 400; k++) {
+    let p = paramsFor(PRESETS[Math.floor(rnd() * PRESETS.length)].id);
+    for (const t of Object.keys(TARGETS)) {
+      const pool = CM.list().filter((m) => TARGETS[t].groups.includes(m.group));
+      p = { ...p, ...mapPartial(t, pool[Math.floor(rnd() * pool.length)].id, { reverse: rnd() < 0.3, gamma: rnd() < 0.5 ? 1 : 0.4 + rnd() * 2 }) };
+    }
+    const back = { ...DEFAULTS, ...decodeMaps('#preset=x' + encodeMaps(p)) };
+    if (Object.keys(TARGETS).every((t) => JSON.stringify(mapOf(back, t)) === JSON.stringify(mapOf(p, t)))) good++;
+  }
+  ok(good === 400, `share hash round-trips 400 random map sets (${good})`);
+  ok(encodeMaps(paramsFor('walnut'), paramsFor('walnut')) === '', 'the hash leaves out maps equal to the preset maps');
+  const d = decodeMaps('#preset=a&cmap=nope&diff=viridis&sino=mako~r~g9');
+  ok(d.cmap === 'grey' && d.diffMap === 'coolwarm' && d.sinoMap === 'mako' && d.sinoReverse && d.sinoGamma === 3, 'bad hash maps fall back, gamma is clamped');
+  const keep = mapPartial('image', 'magma', {}, { cmap: 'grey', cmapReverse: true, cmapGamma: 2 });
+  ok(keep.cmapReverse === true && keep.cmapGamma === 2, 'mapPartial keeps reverse and gamma when absent');
+  ok(/Images .* · Sinogram .* · Error /.test(mapNames(DEFAULTS)), 'mapNames names the three 2D maps');
+  // signed paint: gamma keeps zero at the centre and the sign of the error
+  const a = new Float32Array([0.1, -0.1, 0, 0.05]), b = new Float32Array(4), out = new Uint8ClampedArray(16);
+  paintSigned(a, b, 0.1, out, 'coolwarm', null, { gamma: 2 });
+  const mid = CM.sample('coolwarm', 0.5), hi = CM.sample('coolwarm', 1), lo = CM.sample('coolwarm', 0);
+  ok(out[8] === mid[0] && out[0] === hi[0] && out[4] === lo[0], 'signed paint with gamma keeps 0 at the centre and the ends');
+  paintSigned(a, b, 0.1, out, 'coolwarm', null, { reverse: true });
+  ok(out[0] === lo[0] && out[4] === hi[0], 'signed paint reverse swaps the ends');
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

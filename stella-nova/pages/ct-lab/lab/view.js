@@ -43,10 +43,13 @@ export function paintImage(data, lo, hi, out, cmap = 'grey', opts = {}) {
 }
 
 // Signed image (a - b) -> RGBA with a diverging map, symmetric window +-span.
-export function paintSigned(a, b, span, out, cmap = 'coolwarm', tmp) {
+// opts: { reverse, gamma } of the map. Gamma acts on |t - 0.5| so zero stays at the centre.
+export function paintSigned(a, b, span, out, cmap = 'coolwarm', tmp, opts = {}) {
   const n = a.length, d = tmp && tmp.length === n ? tmp : new Float32Array(n);
-  for (let i = 0; i < n; i++) d[i] = a[i] - b[i];
-  CM.apply(cmap, d, -span, span, out);
+  const g = opts.gamma > 0 && opts.gamma !== 1 ? opts.gamma : 1;
+  if (g === 1) for (let i = 0; i < n; i++) d[i] = a[i] - b[i];
+  else for (let i = 0; i < n; i++) { const x = (a[i] - b[i]) / span; d[i] = Math.sign(x) * Math.pow(Math.min(1, Math.abs(x)), g) * span; }
+  CM.apply(cmap, d, -span, span, out, { reverse: !!opts.reverse });
   return d;
 }
 

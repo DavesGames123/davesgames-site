@@ -150,6 +150,14 @@ body.drawing .panel[data-panel="phantom"] canvas{cursor:crosshair}
   #stage{margin-top:0}
 }
 
+/* COLOUR MAPS: tabs, quick swatches, pickers */
+#cmapTabs{margin-bottom:8px}
+#cmapTabs button{font-size:12px}
+.cmap-quick{display:grid;grid-template-columns:repeat(auto-fill,minmax(34px,1fr));gap:5px;margin:0 0 8px}
+.qswatch{height:22px;border-radius:5px;border:1px solid var(--line-b);cursor:pointer;padding:0}
+.qswatch.on{outline:2px solid #fff;outline-offset:1px}
+.qswatch:focus-visible{outline:2px solid var(--warm);outline-offset:1px}
+
 /* PHONE */
 @media (max-width:760px), (pointer:coarse) and (max-height:520px){
   :root{--top-h:46px;--side-l:0px;--side-r:0px;--dock-h:calc(62px + env(safe-area-inset-bottom))}
@@ -182,7 +190,8 @@ body.drawing .panel[data-panel="phantom"] canvas{cursor:crosshair}
   .plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
   .plist button{flex-direction:row;width:auto}
   .plist .thumb{width:40px;height:40px}
-  #cmapHost{height:260px}
+  .cmap-host{height:260px}
+  #dock button.swatch{flex:0 0 46px;border:2px solid rgba(255,255,255,0.35)}
   #blurbBox h2{font-size:17px}
   #blurbBox p{font-size:13px}
 }
@@ -200,6 +209,8 @@ body.drawing .panel[data-panel="phantom"] canvas{cursor:crosshair}
   .row input[type=range]{height:30px}
   .plist button{min-height:44px}
   .row.check input{width:24px;height:24px}
+  .cmap-quick{grid-template-columns:repeat(auto-fill,minmax(44px,1fr))}
+  .qswatch{height:44px}
 }
 
 /* BARE: the saver or the API hides the chrome; the panels fill the page */

@@ -51,7 +51,7 @@ the change needs:
 |---|---|
 | `phantom`, `n`, `beam`, `views`, `arc`, `detectors`, `dose`, `poly`, `kVp`, `motion`, `deadPixels`, `gain`, `mar` | rescan (from view 0 when `run`) |
 | `algo`, `filter`, `cutoff`, `iters`, `relax`, `tv` | reconstruct again from the stored sinogram |
-| `window`, `cmap`, `cmapReverse`, `cmapGamma`, `diffMap` | redraw only |
+| `window`, every colour map field (see Colour maps) | redraw only |
 
 Parameter fields:
 
@@ -72,8 +72,10 @@ Parameter fields:
 | `filter`, `cutoff` | FBP filter name and cutoff (fraction of Nyquist) |
 | `iters`, `relax`, `tv` | iterations, relaxation, TV weight (0 = off) |
 | `window` | `{ level, width }` in HU (raw units for Shepp-Logan), or a window name |
-| `cmap`, `cmapReverse`, `cmapGamma` | colour map of the image panels |
-| `diffMap` | diverging colour map of the difference panel |
+| `cmap`, `cmapReverse`, `cmapGamma` | colour map of the image panels (object, reconstruction, compare tiles) |
+| `sinoMap`, `sinoReverse`, `sinoGamma` | colour map of the sinogram (default magma, gamma 0.85) |
+| `diffMap`, `diffReverse`, `diffGamma` | diverging colour map of the error panel (default coolwarm) |
+| `map3d`, `map3dReverse`, `map3dGamma` | colour map of the 3D tab (default bone) |
 | `compare` | `''`, `'filters'`, `'algorithms'` (the compare strip) |
 
 ## Running the scan
@@ -109,7 +111,9 @@ __ctlab.panels()        // { phantom, sinogram, recon, diff }: the page canvases
 __ctlab.snapshot()      // a new canvas with the four panels and labels (for export, not in the document)
 __ctlab.windows()       // [{ id, label, level, width }]
 __ctlab.setWindow(idOrObj)
-__ctlab.setColormap(id, { reverse, gamma })
+__ctlab.setColormap(panel, id, { reverse, gamma })   // see Colour maps
+__ctlab.setColormap(id, { reverse, gamma })          // the image panels (old form)
+__ctlab.colormaps()     // { image, sino, diff, v3d }: each { id, reverse, gamma }
 __ctlab.focusPanel(name | null)   // one panel fills the panel grid; null restores the grid
 __ctlab.setChrome(visible)        // false hides the controls, gallery and bars (html.ct-bare)
 ```
@@ -117,6 +121,46 @@ __ctlab.setChrome(visible)        // false hides the controls, gallery and bars 
 The panel canvases are drawn at the device pixel ratio. The phantom panel
 shows the gantry: the source, the rays and the detector with the current
 projection profile.
+
+## Colour maps
+
+The lab has four colour targets (`lab/colour.js`, `grep -n TARGETS`):
+
+| Target | `panel` names | Map groups in its picker | Default |
+|---|---|---|---|
+| `image` | `'image'`, `'phantom'`, `'recon'`, `'compare'` | grey, medical, perceptual, artistic | grey |
+| `sino` | `'sinogram'`, `'sino'` | grey, medical, perceptual, artistic, cyclic | magma, gamma 0.85 |
+| `diff` | `'diff'`, `'error'` | diverging only | coolwarm |
+| `v3d` | `'3d'`, `'v3d'`, `'volume'` | grey, medical, perceptual, artistic | bone |
+
+The object and the reconstruction share one map, so they stay comparable.
+`setColormap(panel, id, opts)` sets one target. A missing `reverse` or `gamma`
+keeps the current value. An unknown id falls back to the target default. The
+`diff` target takes only diverging maps. Gamma is clamped to 1/3..3. On the
+error panel, gamma acts on |error| so zero stays at the centre of the map.
+
+The display window applies first: level and width give `lo` and `hi`, and
+`t = (v - lo) / (hi - lo)` goes through the 256-step LUT (`CM.apply`). The 2D
+panels are Canvas 2D, so the 2D lab colours on the CPU. The 3D tab samples a
+LUT texture on the GPU (`view3d/README.md`, Colour).
+
+Each preset has its own maps (`lab/presets.js PRESET_MAPS`). For example, the
+lung and brain windows stay grey, the dose presets use PET-like maps, and the
+metal presets use a berlin error map. A preset load resets the maps.
+
+PNG exports draw the panels with the chosen maps. The "All panels" sheet names
+the maps in its subtitle.
+
+### Share hash
+
+The hash holds the preset, then each map that differs from the preset's maps:
+
+```
+#preset=walnut&cmap=magma~r~g1.25&sino=viridis&diff=berlin&v3d=ice
+```
+
+`~r` is reverse, `~g<n>` is gamma. The page reads the hash on load and on
+`hashchange`, and writes it (with `history.replaceState`) after each map change.
 
 ## Events
 
