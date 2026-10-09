@@ -272,10 +272,11 @@ function sampleGas(ctx, p, out) {
   } else { out.er = 0; out.eg = 0; out.eb = 0; }
   // high cirrus: bright zonal streaks, more in zones
   if (P.clouds.cover > 0) {
-    _s[1] = _p[1] * T.streak; CIRRUS_O.stretch = T.streak;
+    const cs = Math.max(T.streak, 8);   // zonal streaks, never round blobs
+    _s[1] = _p[1] * cs; CIRRUS_O.stretch = cs;
     const n = fbm(_s, CIRRUS_O, ctx.sCirrus);
     const thr = 0.3 - P.clouds.cover * 0.9;   // cover 0.1 -> about 15 % streaks (planet.wgsl gasHaze)
-    out.cloud = clamp(smooth(thr, thr + 0.25, n) * (0.6 + 0.4 * smooth(-0.2, 0.6, band)) + mOval * 0.0);
+    out.cloud = clamp(smooth(thr, thr + 0.25, n) * (0.2 + 0.8 * smooth(-0.2, 0.6, band)) + mOval * 0.0);   // mostly over the zones
   } else out.cloud = 0;
   // flow map: zonal and meridional wind, band value
   const u = windFast(ctx, lat0) / ctx.uMax;

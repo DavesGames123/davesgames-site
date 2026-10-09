@@ -342,8 +342,11 @@ function sampleGasX(ctx, p, out) {
   }
   // high cirrus
   if (P.clouds.cover > 0) {
-    const nn = fbm(_s, ctx.cirrusO, ctx.sCirrus), thr = 0.3 - P.clouds.cover * 0.9;   // cover 0.1 -> about 15 % streaks (planet.wgsl gasHaze)
-    out.cloud = clamp(smooth(thr, thr + 0.25, nn) * (0.6 + 0.4 * smooth(0.3, 0.8, _B[0])));
+    // the cirrus streaks are zonal: stretched at least 8 times (a giant
+    // with little zonal stretch got round blobs, like Earth clouds)
+    const cs = Math.max(T.streak, 8); _q[0] = _p[0]; _q[1] = _p[1] * cs; _q[2] = _p[2]; ctx.cirrusO.stretch = cs;
+    const nn = fbm(_q, ctx.cirrusO, ctx.sCirrus), thr = 0.3 - P.clouds.cover * 0.9;   // cover 0.1 -> about 15 % streaks (planet.wgsl gasHaze)
+    out.cloud = clamp(smooth(thr, thr + 0.25, nn) * (0.2 + 0.8 * smooth(0.3, 0.8, _B[0])));   // mostly over the high, bright zones
   } else out.cloud = 0;
   // flow map
   const u = windFast(ctx, lat0) / ctx.uMax;

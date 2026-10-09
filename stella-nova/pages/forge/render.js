@@ -222,7 +222,7 @@ export function packView(cam, P, shellR, terr = [1, 0, 0, 0], out = new Float32A
     bw[0][2], bw[1][2], bw[2][2], cam.quality ?? 2,
     sw[0], sw[1], sw[2], cam.starGain ?? 1,
     // cloud layers: the slow solid drift as a u offset, cirrus opacity, deck opacity max
-    -(DECK_RATE * hrs) / (2 * Math.PI) % 1, -(CIRRUS_RATE * hrs) / (2 * Math.PI) % 1, P && P.kind === 'gas' ? 0.35 : 0.55, CLOUD_MAX,
+    -(DECK_RATE * hrs) / (2 * Math.PI) % 1, -(CIRRUS_RATE * hrs) / (2 * Math.PI) % 1, P && P.kind === 'gas' ? 0.22 : 0.55, CLOUD_MAX,
     // cast shadows of the relief: relief (radii), on, first step (rad), 0
     terr[0], terr[1], terr[2], terr[3],
   ];
