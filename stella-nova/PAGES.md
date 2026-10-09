@@ -231,7 +231,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `hopf-fibration` | Hopf Fibration | Patterns & Chaos > Geometry & Topology | GPU | The 3-sphere as linked circles, in 3D. |  | shown | hook, tier 4, default | yes |
 | `dice` | Dice Lab | Patterns & Chaos > Probability | 3D | Physics dice from d4 to d20, tested for fairness. |  | shown | hook, tier 3, default | yes |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
-| `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | no |
+| `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |
 | `harmonywheel` (pages/harmony-wheel) | Harmony Wheel | Sound & Vibration > Music | NEW | The circle of fifths you can spin. |  | shown | hook, tier 3 | yes |
 | `resonance-figure` | Resonance Figure | Sound & Vibration > Resonance | NEW | Lissajous figures from two tones. |  | shown | hook, tier 1, default | yes |
