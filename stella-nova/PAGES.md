@@ -197,7 +197,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `city-atlas` | City Atlas | Fluids > Earth & Ocean | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
 | `map-generator` | City Generator | Fluids > Earth & Ocean | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
 | `storm-globe` | Storm Globe | Fluids > Earth & Ocean | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
-| `map-projections` | Map Projections | Fluids > Earth & Ocean | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | no |
+| `map-projections` | Map Projections | Fluids > Earth & Ocean | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
 | `ns-equations` | Navier–Stokes 1D | Fluids > Navier–Stokes | MATH | The Navier-Stokes terms one at a time in 1D. |  | shown | generic, tier 5 | yes |
 | `ns-burgers` | Burgers Equation | Fluids > Navier–Stokes | SIM | Shocks form in the Burgers equation. |  | shown | hook, tier 3, default | yes |
 | `ns-flow2d` | Navier–Stokes 2D | Fluids > Navier–Stokes | SIM | Navier-Stokes on a 2D grid. |  | shown | hook, tier 3, default | yes |
@@ -259,7 +259,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `pumps` | Positive-Displacement Pumps | Machines > Pumps | 3D | Gear, vane and Roots pumps move fluid pockets. |  | shown | hook, tier 3, default | yes |
 | `swashplate-pump` | Swashplate Piston Pump | Machines > Pumps | 3D | An axial piston pump on a tilted swashplate. |  | shown | hook, tier 3, default | yes |
 | `calculators` | Pascaline & Curta | Machines > Calculating & Cipher | 3D | The Pascaline and the Curta carry digit by digit. |  | shown | hook, tier 3, default | yes |
-| `curta` | Curta Calculator | Machines > Calculating & Cipher | 3D | The Curta calculator in 3D, part by part. |  | shown | hook, tier 3, default | no |
+| `curta` | Curta Calculator | Machines > Calculating & Cipher | 3D | The Curta calculator in 3D, part by part. |  | shown | hook, tier 3, default | yes |
 | `enigma-rotors` | Enigma Rotors | Machines > Calculating & Cipher | 3D | The Enigma rotor stack, from key to lamp. |  | shown | hook, tier 3, default | yes |
 | `pin-tumbler-lock` | Pin Tumbler Lock | Machines > Calculating & Cipher | 3D | Key in: each pin stack splits on the shear line. |  | shown | hook, tier 3, default | yes |
 | `cannonball-2d` | Cannonball 2D | Machines > Motion & Collisions | SIM | A ball under gravity in a box: physics in a few lines. | Ten Minute Physics #1 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
