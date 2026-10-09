@@ -23,7 +23,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { UPSTREAM, makeEngine, paint, plainPAR, hsvToRgb, recorderCanvas, seedToken, cleanSeed, randomSeed, flowerFocus, inkFocus } from './engine.js';
 import { layoutGrid, fitScale, parseSeedFrom, pngWithText, crc32 } from './view.js';
-import { recordPaint, drawStroke, chapters, createStepper, timeline, totalMs, SPEEDS, STAGES, KINDS } from './record.js';
+import { recordPaint, drawStroke, chapters, createStepper, timeline, totalMs, SPEEDS, STAGES, KINDS, planSteps, SHOT_MIN, SHOT_MAX, MAX_RATE } from './record.js';
+import { mulberry } from './view.js';
 
 const DIR = path.dirname(new URL(import.meta.url).pathname);
 const SRC = fs.readFileSync(path.join(DIR, 'upstream/main.js'), 'utf8');
@@ -312,6 +313,29 @@ test('STEPS: the replay ends in the expected time at each speed', () => {
     ok(S.at().done && !S.playing, `done at ${v}x`);
     ok(Math.abs(t - T1 / v) <= dt + 1e-6, `${v}x ended at ${t.toFixed(0)} ms, want ${(T1 / v).toFixed(0)} ms`);
   }
+});
+
+test('STEPS: saver growth shots last 5 to 12 s, cut at stage starts, and cover the whole growth', () => {
+  let shots = 0, multi = 0;
+  for (const seed of STEP_SEEDS) {
+    const ch = chapters(recorded(seed).rec), tl = timeline(ch, 1), T = totalMs(tl), starts = new Set(tl.map(c => c.t0));
+    for (const calm of [0, 0.35, 0.7, 1]) for (let k = 1; k <= 20; k++) {
+      const parts = planSteps(ch, calm, mulberry(k * 7919 + calm * 100));
+      eq(parts[0].t0, 0, 'first part starts at 0');
+      eq(parts[parts.length - 1].t1, T, 'last part ends at the end');
+      if (parts.length > 1) multi++;
+      parts.forEach((p, i) => {
+        shots++;
+        ok(p.dur >= SHOT_MIN && p.dur <= SHOT_MAX, `${seed} calm ${calm} part ${i} lasts ${p.dur} ms`);
+        if (i) { eq(p.t0, parts[i - 1].t1, 'parts join'); ok(starts.has(p.t0), 'cut at a stage start'); }
+        ok(p.t1 > p.t0, 'part has length');
+        const rate = (p.t1 - p.t0) / (p.dur - p.hold - 300);
+        ok(rate <= MAX_RATE * 1.5, `${seed} part ${i} plays at ${rate.toFixed(2)}x speed 1`);
+      });
+    }
+  }
+  ok(multi > 0, 'some growths span a cut');
+  console.log(`     ${shots} saver shots checked, ${multi} plans over more than one shot`);
 });
 
 for (const [name, fn] of tests) {

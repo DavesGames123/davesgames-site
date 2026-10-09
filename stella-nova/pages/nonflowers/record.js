@@ -243,3 +243,32 @@ export function createStepper(chs, speed = 1) {
   };
   return S;
 }
+
+// ── planSteps (saver) ───────────────────────────────────────────────────────
+// Cut the growth of one plant into saver shots of 5 to 12 s. Each shot
+// plays the timeline at speed 1 from t0 to t1 in dur - hold ms (hold:
+// the finished painting at the end of the last shot). A long growth goes
+// over more shots, cut at stage starts, so no shot plays faster than
+// about MAX_RATE times speed 1. rnd: a seeded random source.
+export const SHOT_MIN = 5000, SHOT_MAX = 12000, HOLD_MS = 1200, MAX_RATE = 3;
+export function planSteps(chs, calm, rnd) {
+  const tl = timeline(chs, 1), T = totalMs(tl);
+  const pick = () => 1000 * Math.max(5, Math.min(12, 5 + 7 * calm + (rnd() * 2 - 1) * 1.2));
+  const d = pick(), n = Math.max(1, Math.ceil(T / ((d - HOLD_MS) * MAX_RATE)));
+  // Cut points: the stage start nearest to k T / n, each later than the last.
+  const starts = tl.map(c => c.t0).filter(t => t > 0 && t < T);
+  const cuts = [0];
+  for (let k = 1; k < n; k++) {
+    const want = k * T / n, last = cuts[cuts.length - 1];
+    let best = null;
+    for (const t of starts) if (t > last && (best === null || Math.abs(t - want) < Math.abs(best - want))) best = t;
+    if (best !== null) cuts.push(best);
+  }
+  cuts.push(T);
+  const parts = [];
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const last = i + 2 === cuts.length;
+    parts.push({ t0: cuts[i], t1: cuts[i + 1], dur: i ? pick() : d, hold: last ? HOLD_MS : 0, part: i + 1, of: cuts.length - 1 });
+  }
+  return parts;
+}

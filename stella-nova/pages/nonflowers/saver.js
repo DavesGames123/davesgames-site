@@ -11,15 +11,24 @@
 //  5 to 12 s (calm 1 gives the long end).
 //
 //  SHOTS
-//    grow     one plant on its mat. A soft brush wipe grows it from the
+//    steps    one plant grows stage by stage from its recorded strokes
+//             (record.js, grow.js): paper, stems or branches, leaves,
+//             flowers, shading, mount. record.js planSteps() cuts a long
+//             growth into two or more shots of 5 to 12 s at stage starts;
+//             the next shot goes on with the same plant and a new frame
+//             (whole mat, then a closer frame that follows the pen). The
+//             plate names the stage and the seed and shows the TeX of the
+//             stage; it updates at most once per PLATE_MS.
+//    grow     (not in the deck; cut('grow') only) one plant on its mat. A soft brush wipe grows it from the
 //             root upward, then the camera pushes in on the flower head.
 //    detail   one plant in a wide window: the whole plant, a cut to a
 //             close look at the flower head, a cut to the stems and leaves
 //             (engine.js plantFoci), each with a slow push.
 //    herb     the herbarium: four or six sheets fill in one by one, each
 //             with the brush wipe, then the camera goes into one sheet.
-//    pair     two plants side by side (a woody and a herbal one when the
-//             buffer has both) grow at the same time.
+//    pair     (not in the deck; cut('pair') only) two plants side by side
+//             grow at the same time.
+//  The plates carry no code extract.
 //
 //  NO WAITS. The pool paints plants ahead into S.plants (up to AHEAD jobs
 //  in flight, a buffer of BUF). The director takes the next deck entry
@@ -41,30 +50,31 @@
 //  "function grown", "function plate", "window.snSaver"
 // ============================================================================
 import { SIZE, randomSeed } from './engine.js';
-import { mulberry, shuffle, codeExtract } from './view.js';
+import { mulberry, shuffle } from './view.js';
+import { chapters, createStepper, planSteps, STAGES } from './record.js';
+import { createGrowth } from './grow.js';
 
-const FADE_MS = 650, XFADE_MS = 260, PAD = 40, KMAX = 2, BUF = 10, AHEAD = 2;
-const DECK = ['grow', 'detail', 'herb', 'pair', 'grow', 'detail', 'grow'];
-const NEED = { grow: 1, detail: 1, herb: 4, pair: 2 };
+const FADE_MS = 650, XFADE_MS = 260, PAD = 40, KMAX = 2, BUF = 6, AHEAD = 2, PLATE_MS = 1200, SYNC_MS = 10;
+const DECK = ['steps', 'steps', 'detail', 'steps', 'steps', 'herb'];
+const NEED = { steps: 1, grow: 1, detail: 1, herb: 4, pair: 2 };
 const ease = t => { t = Math.max(0, Math.min(1, t)); return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
 const clamp01 = t => Math.max(0, Math.min(1, t));
 
 export function installSaver(api) {
-  let S = null, src = null;
-  const srcP = fetch(new URL('./upstream/main.js', import.meta.url)).then(r => r.text()).then(t => { src = t; }).catch(() => {});
+  let S = null;
 
   // ── the plant buffer ─────────────────────────────────────────────────────
   function feed() {
     // BUF counts the plants not shown yet, so new plants keep coming for
-    // the whole run. Shown plants go when the list passes BUF + 6.
+    // the whole run. Shown plants go when the list passes BUF + 2.
     while (S && S.inflight < AHEAD && S.plants.filter(q => !q.shown).length + S.inflight < BUF) {
       const seed = S.seeds[S.si++ % S.seeds.length];
       S.inflight++;
-      api.pool.paint(seed, { prio: 2, tag: 'saver' }).then(p => {
+      api.pool.record(seed, { prio: 2, tag: 'saver' }).then(p => {
         if (!S) return;
         S.inflight--;
         S.plants.push({ p, shown: 0 });
-        while (S.plants.length > BUF + 6) {
+        while (S.plants.length > BUF + 2) {
           const old = S.plants.findIndex(q => q.shown > 0);
           if (old < 0) break;
           S.plants.splice(old, 1);
@@ -87,13 +97,26 @@ export function installSaver(api) {
   }
 
   // ── the director ─────────────────────────────────────────────────────────
+  // A growth canvas set that no shot uses any more is released.
   function direct(force) {
+    const oldG = S.shot && S.shot.G;
+    direct0(force);
+    if (oldG && (!S.shot || S.shot.G !== oldG) && !(S.cont && S.cont.G === oldG)) oldG.release();
+  }
+  function direct0(force) {
+    // The next part of a growth goes first.
+    if (!force && S.cont) {
+      const c = S.cont; S.cont = null;
+      startSteps(c.plant, c.parts, c.i, c.G, c.S);
+      return;
+    }
+    if (S.cont && S.cont.G) { S.cont.G.release(); S.cont = null; }
     let type = force && NEED[force] ? force : null;
     if (!type) {
       for (let tries = 0; tries < DECK.length * 2 && !type; tries++) {
         if (S.di >= S.deck.length) { S.deck = shuffle(DECK, S.rng); S.di = 0; }
         const t = S.deck[S.di++];
-        if (S.plants.length >= NEED[t] && t !== S.lastType) type = t;
+        if (S.plants.length >= NEED[t] && (t !== S.lastType || t === 'steps')) type = t;
       }
     }
     if (!type || S.plants.length < NEED[type]) {
@@ -104,11 +127,103 @@ export function installSaver(api) {
     const dur = 1000 * (type === 'herb' ? Math.min(12, calmS + 2) : calmS);
     const n = type === 'herb' ? (S.plants.length >= 6 && (isShort() || S.rng() < 0.6) ? 6 : 4) : NEED[type];
     const plants = take(n, type === 'pair' ? 'mixed' : null);
+    if (type === 'steps') {
+      const p = plants[0];
+      if (p.rec) {
+        const chs = chapters(p.rec);
+        startSteps(p, planSteps(chs, S.calm, S.rng), 0, null, createStepper(chs, 1), chs);
+        return;
+      }
+      type = 'detail';
+    }
     const shot = { type, plants, dur, t0: performance.now(), wob: S.rng() * 6.28, beat: '' };
     if (type === 'herb') shot.pick = Math.floor(S.rng() * plants.length);
     S.lastType = type; S.shot = shot; S.phase = 'run'; S.count++;
     plate(shot);
     feed();
+  }
+
+  // ── steps ────────────────────────────────────────────────────────────────
+  // Part i of the growth of plant p. G and St carry over from the part
+  // before, so the strokes drawn stay drawn.
+  function startSteps(p, parts, i, G, St, chs) {
+    chs = chs || St.chapters;
+    G = G || createGrowth(p, chs);
+    const part = parts[i];
+    const shot = { type: 'steps', plants: [p], dur: part.dur, t0: performance.now(), wob: S.rng() * 6.28, beat: 'part ' + part.part + '/' + part.of,
+      part, G, St, close: i > 0 || S.rng() < 0.3, cam: null, ci: -1, plateAt: 0, plateCi: -2 };
+    S.lastType = 'steps'; S.shot = shot; S.phase = 'run'; S.count++;
+    S.cont = i + 1 < parts.length ? { plant: p, parts, i: i + 1, G, S: St } : null;
+    St.seek(part.t0);
+    platePart(shot, St.at());
+    feed();
+  }
+  function platePart(s, at) {
+    const p = s.plants[0], c = at.chapter, info = STAGES[c.key] || STAGES.other, n = s.St.chapters.length;
+    s.plateCi = at.done ? -1 : at.ci; s.plateAt = performance.now();
+    S.label({
+      title: 'Nonflowers',
+      sub: 'by Lingdong Huang (MIT) · github.com/LingDong-/nonflowers',
+      params: [
+        { name: 'seed', value: p.seed },
+        { name: 'plant', value: p.type },
+        { name: 'stage', value: at.done ? 'done' : `${at.ci + 1} of ${n}` },
+        { name: 'strokes', value: String(p.rec.n) },
+      ],
+      lines: [at.done ? `Seed ${p.seed}: the finished ${p.type} painting.` : `${at.ci + 1} · ${c.label}. ${info.note}`],
+      tex: !at.done && info.tex ? [info.tex] : [],
+      anchor: () => null,
+    });
+  }
+  function drawSteps(g, s, el, B, dpr) {
+    const p = s.plants[0], part = s.part, St = s.St;
+    const u = Math.min(1, el / Math.max(1, s.dur - part.hold - 300));
+    const want = part.t0 + (part.t1 - part.t0) * u;
+    let at = St.seek(want);
+    const got = s.G.sync(at.strokes, SYNC_MS);
+    if (got < at.strokes) at = St.seek(St.timeOfStrokes(got));
+    if (u >= 1 && part.hold) at = St.seek(St.total);
+    const pen = s.G.compose(at);
+    // The plate: a new stage after PLATE_MS, or done.
+    const ci = at.done ? -1 : at.ci;
+    if (ci !== s.plateCi && (performance.now() - s.plateAt > PLATE_MS || at.done)) platePart(s, at);
+    s.beat = (at.done ? 'done' : at.chapter.key) + ' · part ' + part.part + '/' + part.of;
+    const short = B.w > 2.6 * B.h;
+    const F = short ? wideIn(B, 3.4) : s.close ? wideIn(B, 1.6) : matIn(B);
+    shadow(g, F, dpr);
+    let k, tx = SIZE / 2, ty = SIZE / 2;
+    if (short) k = Math.min(KMAX, F.w / (SIZE * 0.92));
+    else if (s.close) k = Math.min(KMAX, F.h / (SIZE * 0.62));
+    else k = F.k0 * (1 + 0.05 * u);
+    if (short || s.close) {
+      // Follow the pen with a soft lag; at the end, the middle of the plant.
+      const aim = pen && !pen.paper ? pen : { x: SIZE / 2, y: short ? Math.min(SIZE, p.base[1]) - 160 : SIZE / 2 };
+      if (!s.cam) s.cam = { x: aim.x, y: aim.y };
+      s.cam.x += (aim.x - s.cam.x) * 0.035; s.cam.y += (aim.y - s.cam.y) * 0.035;
+      tx = s.cam.x; ty = s.cam.y;
+    }
+    const [cx, cy] = clampCam(F, k, tx, ty);
+    s.k = k; s.F = F;
+    viewImg(g, p, F, k, cx, cy, s.G.canvas, at.done ? null : pen, dpr);
+  }
+  // A view of an image of the painting (the growth canvas) on the paper.
+  function viewImg(g, p, F, k, cx, cy, img, pen, dpr) {
+    k = Math.min(k, KMAX);
+    const ox = F.x + F.w / 2 - cx * k, oy = F.y + F.h / 2 - cy * k;
+    g.save();
+    g.beginPath(); g.rect(F.x, F.y, F.w, F.h); g.clip();
+    const pat = g.createPattern(p.bg, 'repeat');
+    if (pat && pat.setTransform) pat.setTransform(new DOMMatrix().translate(ox, oy).scale(k));
+    g.fillStyle = pat || '#e9e2cf'; g.fillRect(F.x, F.y, F.w, F.h);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(img, ox, oy, SIZE * k, SIZE * k);
+    if (pen) {
+      const x = ox + pen.x * k, y = oy + pen.y * k, r = 8 * dpr;
+      g.strokeStyle = 'rgba(176,42,30,0.9)'; g.lineWidth = 2 * dpr;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = 'rgba(176,42,30,0.9)'; g.beginPath(); g.arc(x, y, r * 0.3, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
   }
 
   // ── plate ────────────────────────────────────────────────────────────────
@@ -125,10 +240,7 @@ export function installSaver(api) {
       herb: [`A herbarium of ${shot.plants.length} sheets. Each plant is woody or herbal with even odds.`, `Sheet ${shot.pick + 1}: seed ${p.seed}, ${p.type}.`],
       pair: [`Seed ${shot.plants[0].seed} (${shot.plants[0].type}) and seed ${shot.plants[1] ? shot.plants[1].seed + ' (' + shot.plants[1].type + ')' : ''}.`, 'Two plants from two seeds; each seed gives the same painting every time.'],
     }[shot.type];
-    // Two note lines and a 6-line code extract keep the base plate short,
-    // so the clear band stays as tall as it can at 1280 x 800.
     if (shot.type !== 'herb') lines.push(`Same plant: lingdong-.github.io/nonflowers/?seed=${p.token}`);
-    const fn = { grow: p.type, detail: 'leaf', herb: 'generate', pair: 'genParams' }[shot.type];
     S.label({
       title: 'Nonflowers',
       sub: 'by Lingdong Huang (MIT) · github.com/LingDong-/nonflowers',
@@ -139,7 +251,6 @@ export function installSaver(api) {
         { name: 'flower chance', value: chance == null ? '-' : chance.toFixed(3) },
       ],
       lines,
-      code: src ? { lang: 'js', name: `upstream/main.js · ${fn}()`, text: codeExtract(src, fn, 6) } : undefined,
       anchor: () => null,
     });
   }
@@ -370,7 +481,7 @@ export function installSaver(api) {
     g.fillStyle = '#0c0d10'; g.fillRect(0, 0, cw, ch);
     if (!s) return;
     const el = Math.min(now - s.t0, s.dur), B = band(dpr);
-    ({ grow: drawGrow, detail: drawDetail, herb: drawHerb, pair: drawPair })[s.type](g, s, el, B, dpr);
+    ({ steps: drawSteps, grow: drawGrow, detail: drawDetail, herb: drawHerb, pair: drawPair })[s.type](g, s, el, B, dpr);
     // Fade in at the start, fade out at the end, then the next shot.
     const tail = s.dur - (now - s.t0), head = now - s.t0;
     const a = head < 400 ? 1 - head / 400 : tail < FADE_MS ? 1 - Math.max(0, tail) / FADE_MS : 0;
@@ -392,16 +503,15 @@ export function installSaver(api) {
       const canvas = document.createElement('canvas'); canvas.id = 'nfSaver';
       document.body.append(canvas);
       S = { calm, rng, seeds, si: 0, deck: shuffle(DECK, rng), di: 0, plants: [], inflight: 0, canvas, mask: document.createElement('canvas'), style: st,
-        label: typeof o.label === 'function' ? o.label : () => {}, band: null, bandFn: null, bandAt: 0, shot: null, phase: 'wait', waits: 0, count: 0, lastType: '' };
+        label: typeof o.label === 'function' ? o.label : () => {}, cont: null, band: null, bandFn: null, bandAt: 0, shot: null, phase: 'wait', waits: 0, count: 0, lastType: '' };
       // The plants the page already painted go first into the buffer.
       // A recent seed that is still painting goes to the front of the list,
       // so the first saver job joins that job instead of starting cold.
       for (const seed of api.recent ? api.recent() : []) {
-        const p = api.pool.cached(seed);
+        const p = api.pool.recorded(seed);
         if (p) { if (S.plants.length < 4) S.plants.push({ p, shown: 0 }); } else S.seeds.unshift(seed);
       }
       import('../../lib/saver-clear.js').then(m => { if (S) S.bandFn = m.plateBand; }).catch(() => { /* no shell: the centre band */ });
-      srcP.then(() => { if (S && S.shot) plate(S.shot); });
       feed();
       if (S.plants.length) direct();
       S.raf = requestAnimationFrame(frame);
@@ -410,6 +520,8 @@ export function installSaver(api) {
     exit() {
       if (!S) return;
       cancelAnimationFrame(S.raf);
+      if (S.shot && S.shot.G) S.shot.G.release();
+      if (S.cont && S.cont.G) S.cont.G.release();
       try { S.label(null); } catch (e) { /* the shell is gone */ }
       api.pool.cancel('saver');
       S.canvas.remove(); S.style.remove();
