@@ -44,6 +44,15 @@ const CHECK = process.argv.includes('--check');
 // Folders in pages/ that are not in the nav, and why.
 const UNLISTED = {
   'material-lab': 'the old Material Lab; the matlab key routes to material-studio',
+  // Untracked folders on one machine. The six upstream files have no
+  // licence, so the pages are not published. Delete the folders, or
+  // register them when the author grants a licence.
+  'energy-dashboard': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
+  'height-field-water': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
+  'morton-bvh': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
+  'pendulum-3d': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
+  'pendulum-trail': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
+  'sweep-and-prune': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
 };
 
 // Load nav-data.js and sectors.js in one sandbox, as the home page does.

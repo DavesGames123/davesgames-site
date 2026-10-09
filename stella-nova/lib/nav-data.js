@@ -143,7 +143,11 @@ w.SN_NAV = [
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
     { h: "Flow", p: [
       ["fluidlab", "Stable Fluids", "GPU"],
-      ["wind-tunnel", "Wind Tunnel", "CFD"]
+      ["wind-tunnel", "Wind Tunnel", "CFD"],
+      ["euler-fluid", "Euler Fluid", "SIM"],
+      ["flip-fluid", "FLIP Water", "SIM"],
+      ["pbf-boundary", "PBF Boundaries", "SIM"],
+      ["fire-simulation", "Fire Simulation", "SIM"]
     ] },
     { h: "Earth & Ocean", p: [
       ["tidal-currents", "Tidal Currents", "DATA"],
@@ -185,7 +189,8 @@ w.SN_NAV = [
   { id: "patterns", label: "Patterns & Chaos", short: "Patterns", icon: "∞", color: "#9db4ff", color2: "#c490ff", groups: [
     { h: "Chaos", p: [
       ["attractorlab", "Strange Attractors", "3D"],
-      ["flowlab", "Vector Fields", "SIM"]
+      ["flowlab", "Vector Fields", "SIM"],
+      ["julia-fractals", "Julia Fractals", "SIM"]
     ] },
     { h: "Emergence", p: [
       ["reaction-diffusion", "Reaction–Diffusion", "GPU"],
@@ -256,6 +261,29 @@ w.SN_NAV = [
       ["curta", "Curta Calculator", "3D"],
       ["enigma-rotors", "Enigma Rotors", "3D"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"]
+    ] },
+    { h: "Motion & Collisions", p: [
+      ["cannonball-2d", "Cannonball 2D", "SIM"],
+      ["cannonball-3d", "Cannonball 3D", "3D"],
+      ["cannonball-vr", "Cannonball VR", "VR"],
+      ["billiard", "Billiard", "SIM"],
+      ["pinball", "Pinball", "SIM"],
+      ["spatial-hashing", "Spatial Hashing", "3D"]
+    ] },
+    { h: "Pendulums & Constraints", p: [
+      ["pendulum-short", "Pendulum in 100 Lines", "SIM"],
+      ["triple-pendulum", "Triple Pendulum", "SIM"],
+      ["bead-on-wire", "Bead on a Wire", "SIM"],
+      ["many-beads", "Many Beads", "SIM"],
+      ["joints", "Joint Simulation", "3D"],
+      ["rigid-bodies", "Rigid Bodies", "3D"]
+    ] },
+    { h: "Soft Bodies & Cloth", p: [
+      ["soft-bodies", "Soft Bodies", "3D"],
+      ["soft-body-interaction", "Grab Interaction", "3D"],
+      ["soft-body-skinning", "Soft Body Skinning", "3D"],
+      ["cloth", "Cloth", "3D"],
+      ["cloth-self-collision", "Cloth Self-Collision", "3D"]
     ] },
     { h: "Folding", p: [
       ["origami", "Origami Simulator", "SIM"]
@@ -393,7 +421,7 @@ w.SN_NAV = [
 // Pages that may start a WebXR session (VR or AR). The shell gives their
 // iframe allow="xr-spatial-tracking". Without it, a page in the shell cannot
 // ask for a session. tools/nav-sync.js checks that each key is registered.
-w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'attractorlab', 'resonance-3d'];
+w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'attractorlab', 'resonance-3d', 'cannonball-vr'];
 
 // Craft Suite pages (lib/craft-host.js). Each one holds an upstream app in a
 // child iframe. The shell gives their iframe allow="fullscreen;
