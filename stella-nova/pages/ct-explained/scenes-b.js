@@ -138,9 +138,9 @@ export class FBPScene {
     const R = layout(w, h, 2, { top: 26 });
     const sc = this.views / this.done;
     const [, ph] = minmax(this.plain.data);
-    this.rasP.set(this.plain.data, 0, ph || 1, 'bone');
+    this.rasP.set(this.plain.data, 0, ph || 1, '@image');
     const show = this.fil.data.map((v) => v * sc);
-    this.rasF.set(show, 0, this.hi, 'bone');
+    this.rasF.set(show, 0, this.hi, '@image');
     this.rasP.draw(g, R[0].x, R[0].y, R[0].w, R[0].h);
     panel(g, R[0], `plain back-projection, ${this.done} views`);
     this.rasF.draw(g, R[1].x, R[1].y, R[1].w, R[1].h);
@@ -275,7 +275,7 @@ export class GantryScene {
       // detector row 0 is the lowest z: flip so up is up
       const { nu, nv, data } = this.cv, flip = new Float32Array(nu * nv);
       for (let v = 0; v < nv; v++) flip.set(data.subarray(v * nu, (v + 1) * nu), (nv - 1 - v) * nu);
-      this.rasC.set(flip, 0, minmax(data)[1] || 1, 'magma');
+      this.rasC.set(flip, 0, minmax(data)[1] || 1, '@data');
       this.rasC.draw(g, I.x, I.y, I.w, I.h);
     } else if (this.prof) {
       if (this.mode === 'parallel') {
@@ -311,7 +311,7 @@ export class IterScene {
     this.D = M.iterSetup('shepp-logan-modified', { n: 96, nAngles: 30, dose: 1e5 });
     this.solvers = METHODS.map((m) => ({ ...m, s: M.E.createSolver(m.id, this.D.sino, this.D.geom, this.D.dims, {}), err: [], it: 0 }));
     this.fbpErr = M.E.rmse(this.D.ph.image, this.D.fbpImg);
-    this.ras = new Raster(96, 96); this.rasF = new Raster(96, 96).set(this.D.fbpImg.data, 0, 1, 'bone');
+    this.ras = new Raster(96, 96); this.rasF = new Raster(96, 96).set(this.D.fbpImg.data, 0, 1, '@image');
     this.turn = 0; this.acc = 0;
     this.x0 = [-0.6, 2.4]; this.path = M.kaczmarz(this.lines, this.x0, 12); this.tk = 0;
   }
@@ -357,7 +357,7 @@ export class IterScene {
     label(g, 'x₂', T.x + 8, T.y + 18, { size: 13, color: PAL.dim, font: SERIF });
     // selected solver image
     const S = this.solvers.find((s) => s.id === this.sel);
-    this.ras.set(S.s.image.data, 0, 1, 'bone');
+    this.ras.set(S.s.image.data, 0, 1, '@image');
     this.ras.draw(g, R[1].x, R[1].y, R[1].w, R[1].h);
     panel(g, R[1], `${S.label}, iteration ${S.it}`);
     const fs = R[1].w * 0.3;
@@ -381,25 +381,39 @@ export class IterScene {
 }
 
 // ---------------------------------------------------------------------------
-// 10 · ARTEFACTS: one case at a time, truth next to the reconstruction.
+// 10 · ARTEFACTS: one case at a time: truth, reconstruction and the signed
+// error (reconstruction minus truth) on the @signed diverging map.
 // ---------------------------------------------------------------------------
 export class ArtefactScene {
   constructor(o = {}) { this.id = o.id || 'noise'; this.p = o.p ?? 0.35; this.dirty = 0.01; this.res = null; }
   set(k, v) { if (k === 'case') { this.id = v; this.p = 0.35; } if (k === 'p') this.p = +v; this.dirty = 0.06; }
-  height(w) { return w > 700 ? Math.round(w * 0.42) : Math.round(w * 1.7); }
+  height(w) { return w > 700 ? Math.round(w * 0.36) : Math.round(w * 2.5); }
   step(dt) {
     if (this.dirty > 0) { this.dirty -= dt; if (this.dirty <= 0) { this.res = M.artefact(this.id, this.p); this.dirty = 0; } }
   }
   render(g, w, h) {
     if (!this.res) { this.res = M.artefact(this.id, this.p); }
     const r = this.res, hard = this.id === 'hardening';
-    const R = layout(w, h, hard ? 3 : 2, { top: 26 });
+    const R = layout(w, h, 3, { top: 26 });
     const n = r.recon.nx;
-    if (!this.rA || this.rA.w !== n) { this.rA = new Raster(n, n); this.rB = new Raster(n, n); }
+    if (!this.rA || this.rA.w !== n) { this.rA = new Raster(n, n); this.rB = new Raster(n, n); this.rD = new Raster(n, n); }
     let lo = r.lo, hi = r.hi;
     if (this.id === 'rings') { lo = M.MU_WATER * 0.75; hi = M.MU_WATER * 1.25; }
-    this.rA.set(r.ref.data, lo, hi, 'bone');
-    this.rB.set(r.recon.data, lo, hi, 'bone');
+    this.rA.set(r.ref.data, lo, hi, '@image');
+    this.rB.set(r.recon.data, lo, hi, '@image');
+    // signed error, recon - object, on a diverging map (zero in the middle)
+    if (!hard) {
+      if (this.errSrc !== r) {
+        this.errSrc = r;
+        this.err = r.recon.data.map((v, i) => v - r.ref.data[i]);
+        this.errSpan = 0.25 * (hi - lo) || 1;
+      }
+      this.rD.set(this.err, -this.errSpan, this.errSpan, '@signed');
+      this.rD.draw(g, R[2].x, R[2].y, R[2].w, R[2].h);
+      panel(g, R[2], 'error: image minus object');
+      label(g, 'too high', R[2].x + R[2].w - 8, R[2].y + 16, { size: 11, color: PAL.ink2, align: 'right', shadow: true });
+      label(g, 'too low', R[2].x + 8, R[2].y + 16, { size: 11, color: PAL.ink2, shadow: true });
+    }
     this.rA.draw(g, R[0].x, R[0].y, R[0].w, R[0].h);
     panel(g, R[0], 'the object');
     this.rB.draw(g, R[1].x, R[1].y, R[1].w, R[1].h);
@@ -460,7 +474,7 @@ export class HUScene {
     }
     this.F = r;
     const lo = this.L - this.W / 2, hi = this.L + this.W / 2;
-    this.ras.set(this.S.hu, lo, hi, 'grey');
+    this.ras.set(this.S.hu, lo, hi, '@hu');
     this.ras.draw(g, r.x, r.y, r.w, r.h);
     panel(g, r, `window: level ${this.L} HU, width ${this.W} HU`);
     if (this.hover) {

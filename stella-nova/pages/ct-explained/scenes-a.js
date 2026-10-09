@@ -22,7 +22,7 @@
 //    grep -n 'class FourierScene'  each view fills one line of k-space
 // ============================================================================
 import * as M from './model.js';
-import { PAL, CM, Raster, plot, label, glow, panel, layout, worldMap, clamp, minmax, MONO, SERIF } from './draw.js';
+import { PAL, CM, TH, Raster, plot, label, glow, panel, layout, worldMap, clamp, minmax, MONO, SERIF } from './draw.js';
 
 const TAU = Math.PI * 2;
 const deg = (r) => Math.round((r * 180) / Math.PI);
@@ -49,8 +49,8 @@ export class HeroScene {
     this.turn = o.turn || 9;     // seconds per rotation
     this.hold = o.hold || 3;
     this.idx = (o.start || 0) % this.list.length;
-    this.cmap = o.cmap || 'bone';
-    this.sinoMap = o.sinoMap || 'magma';
+    this.cmap = o.cmap || '@image';
+    this.sinoMap = o.sinoMap || '@data';
     this.load(this.idx);
   }
   load(i) {
@@ -74,7 +74,9 @@ export class HeroScene {
     for (let iy = 0; iy < n; iy++) for (let ix = 0; ix < n; ix++) if (Math.hypot(ix - c, iy - c) > n / 2) this.outside.push(iy * n + ix);
     this.show.set(ph.image.data);
     for (const i of this.outside) this.show[i] = NaN;
-    this.rasP = new Raster(n, n).set(this.show, 0, this.hi, this.cmap);
+    // the phantom keeps its own array: a theme change colours it again
+    this.showP = Float32Array.from(this.show);
+    this.rasP = new Raster(n, n).set(this.showP, 0, this.hi, this.cmap);
     this.rasS = new Raster(360, this.S.geom.nDet);
     this.rasR = new Raster(n, n);
     this.tbuf = null;
@@ -223,8 +225,15 @@ export class HeroScene {
 // 64-step colour lookup for the detector cells.
 const mapCache = new Map();
 function sampleMap(id, t) {
-  let lut = mapCache.get(id);
-  if (!lut) { lut = []; for (let i = 0; i < 64; i++) lut.push(CM.sample(id, i / 63)); mapCache.set(id, lut); }
+  const key = TH.isRole(id) ? `${id}|${TH.version()}` : id;
+  let lut = mapCache.get(key);
+  if (!lut) {
+    if (mapCache.size > 24) mapCache.clear();
+    const L = TH.isRole(id) ? TH.lutFor(id) : null;
+    lut = [];
+    for (let i = 0; i < 64; i++) { const j = Math.round((i / 63) * 255) * 3; lut.push(L ? [L[j], L[j + 1], L[j + 2]] : CM.sample(id, i / 63)); }
+    mapCache.set(key, lut);
+  }
   return lut[Math.max(0, Math.min(63, Math.round((Number.isFinite(t) ? t : 0) * 63)))];
 }
 
@@ -237,7 +246,7 @@ export class BeerScene {
   constructor(o = {}) {
     this.n = 128;
     this.ph = M.phantom(o.phantom || 'head', this.n);
-    this.ras = new Raster(this.n, this.n).set(this.ph.image.data, 0, M.MU_WATER * 2, 'bone');
+    this.ras = new Raster(this.n, this.n).set(this.ph.image.data, 0, M.MU_WATER * 2, '@image');
     this.row = 0.42; this.auto = true; this.idle = 0; this.t = 0;
     this.parts = []; this.sent = 0; this.got = 0; this.rng = 1;
     this.setRow(this.row);
@@ -351,7 +360,7 @@ export class ProjScene {
       this.ph = M.phantom(v, this.n);
       const [, hi] = minmax(this.ph.image.data);
       this.hi = v.startsWith('shepp') ? 1 : Math.min(hi, M.MU_WATER * 2);
-      this.ras = new Raster(this.n, this.n).set(this.ph.image.data, 0, this.hi, 'bone');
+      this.ras = new Raster(this.n, this.n).set(this.ph.image.data, 0, this.hi, '@image');
       const v0 = M.oneView(this.ph.image, 0.0), v1 = M.oneView(this.ph.image, Math.PI / 2);
       this.pmax = Math.max(...v0.data, ...v1.data) * 1.08;
     }
@@ -448,7 +457,7 @@ export class SinoScene {
     this.img = img;
     this.S = M.scanSet(img, { nAngles: this.views });
     this.shi = minmax(this.S.sino.data)[1];
-    this.rasP = new Raster(n, n).set(img.data, 0, this.base === 'point' ? 1 : 1.05, 'bone');
+    this.rasP = new Raster(n, n).set(img.data, 0, this.base === 'point' ? 1 : 1.05, '@image');
     this.rasS = new Raster(this.views, this.S.geom.nDet);
     this.tbuf = new Float32Array(this.views * this.S.geom.nDet);
   }
@@ -501,7 +510,7 @@ export class SinoScene {
     // sinogram
     const S = F.sino;
     g.fillStyle = '#080a10'; g.fillRect(S.x, S.y, S.w, S.h);
-    this.rasS.set(this.S.sino.data, 0, this.shi, 'magma', { transpose: true, rows: k, tbuf: this.tbuf });
+    this.rasS.set(this.S.sino.data, 0, this.shi, '@data', { transpose: true, rows: k, tbuf: this.tbuf });
     this.rasS.draw(g, S.x, S.y, S.w, S.h);
     panel(g, S, 'sinogram p(θ, s): angle θ across, detector position s up');
     // the sine of the point, through the revealed part
@@ -568,8 +577,8 @@ export class BPScene {
     const R = layout(w, h, 3, { top: 24 });
     const n = this.n;
     const [, oh] = minmax(this.one.data), [, ah] = minmax(this.acc.data);
-    this.rasO.set(this.one.data, 0, oh || 1, 'bone');
-    this.rasA.set(this.acc.data, 0, ah || 1, 'bone', { gamma: this.obj === 'point' ? 0.55 : 1 });
+    this.rasO.set(this.one.data, 0, oh || 1, '@image');
+    this.rasA.set(this.acc.data, 0, ah || 1, '@image', { gamma: this.obj === 'point' ? 0.55 : 1 });
     this.rasO.draw(g, R[0].x, R[0].y, R[0].w, R[0].h);
     panel(g, R[0], 'one view, smeared back');
     this.rasA.draw(g, R[1].x, R[1].y, R[1].w, R[1].h);
@@ -612,8 +621,8 @@ export class FourierScene {
     this.S = M.scanSet(this.img, { nAngles: this.views, key: 'fourier' });
     this.F2 = M.fft2Mag(this.img);
     this.hi = minmax(this.F2.data)[1];
-    this.rasI = new Raster(this.n, this.n).set(this.img.data, 0, 1, 'bone');
-    this.rasF = new Raster(this.F2.n, this.F2.n).set(this.F2.data, 0, this.hi, 'magma');
+    this.rasI = new Raster(this.n, this.n).set(this.img.data, 0, 1, '@image');
+    this.rasF = new Raster(this.F2.n, this.F2.n).set(this.F2.data, 0, this.hi, '@data');
     this.rasK = new Raster(this.F2.n, this.F2.n);
     this.order = M.viewOrder(this.views);
     this.reset();
@@ -639,7 +648,7 @@ export class FourierScene {
   render(g, w, h) {
     const R = layout(w, h, 3, { top: 24 });
     for (let i = 0; i < this.grid.length; i++) this.show[i] = this.cnt[i] ? this.grid[i] : NaN;
-    this.rasK.set(this.show, 0, this.hi, 'magma');
+    this.rasK.set(this.show, 0, this.hi, '@data');
     const b = this.S.geom.angles[this.cur ?? 0];
     // object with the current projection direction
     this.rasI.draw(g, R[0].x, R[0].y, R[0].w, R[0].h);

@@ -9,7 +9,8 @@
 //  GREP MAP
 //    grep -n 'export const PAL'        page colours (match style.css)
 //    grep -n 'export function makeCanvas'  offscreen canvas factory
-//    grep -n 'export class Raster'     float array -> coloured canvas
+//    grep -n 'export class Raster'     float array -> coloured canvas (map id or theme role)
+//    grep -n 'export function applyLut'  float array -> RGBA through a LUT
 //    grep -n 'export function plot'    line and area plots
 //    grep -n 'export function label'   text in the sans or serif face
 //    grep -n 'export function glow'    soft radial dot
@@ -17,8 +18,9 @@
 //    grep -n 'export function layout'  split a canvas into panels
 // ============================================================================
 import * as CM from '../ct-lab/colormaps/maps.js';
+import * as TH from './theme.js';
 
-export { CM };
+export { CM, TH };
 export const PAL = {
   bg: '#05070c', card: '#0b0e16', line: 'rgba(255,255,255,0.09)', line2: 'rgba(255,255,255,0.18)',
   ink: '#e8eaf0', ink2: '#b9c0cf', dim: '#7c849a', faint: '#2a3142',
@@ -45,7 +47,10 @@ export function makeCanvas(w, h) {
 
 // A float image shown through a colour map. set() recolours; draw()
 // scales it into a rectangle. transpose: column-major source (sinograms
-// shown with the angle along x).
+// shown with the angle along x). cmap is a map id, or a theme role
+// ('@image', '@data', '@hu', '@signed', see theme.js). For a role, set()
+// keeps its arguments, and draw() colours the image again when the page
+// theme changed since then. Keep the source array unchanged after set().
 export class Raster {
   constructor(w, h) {
     this.w = w; this.h = h;
@@ -65,15 +70,47 @@ export class Raster {
       src = Float32Array.from(data);
       src.fill(NaN, o.rows * this.w);
     }
-    CM.apply(cmap, src, lo, hi, this.id.data, { nan: o.nan || [0, 0, 0, 0], gamma: o.gamma ?? 1, reverse: !!o.reverse });
+    const nan = o.nan || [0, 0, 0, 0];
+    if (TH.isRole(cmap)) {
+      this.args = [data, lo, hi, cmap, o];
+      this.ver = TH.version();
+      this.mapId = TH.idFor(cmap);
+      applyLut(TH.lutFor(cmap), src, lo, hi, this.id.data, nan, o.gamma ?? 1);
+    } else {
+      this.args = null;
+      this.mapId = CM.get(cmap).id;
+      CM.apply(cmap, src, lo, hi, this.id.data, { nan, gamma: o.gamma ?? 1, reverse: !!o.reverse });
+    }
     this.g.putImageData(this.id, 0, 0);
     return this;
   }
+  // Colour again when the theme changed after the last set() of a role.
+  fresh() {
+    if (this.args && this.ver !== TH.version()) this.set(...this.args);
+    return this;
+  }
   draw(g, x, y, w, h, smoothIt = true) {
+    this.fresh();
     g.imageSmoothingEnabled = smoothIt;
     if (smoothIt && 'imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
     g.drawImage(this.cv, x, y, w, h);
   }
+}
+
+// Float array -> RGBA through a 768-byte LUT. Same steps as CM.apply.
+// gamma bends t before the lookup (a per-figure contrast, not the theme).
+export function applyLut(lut, src, lo, hi, out, nan = [0, 0, 0, 0], gamma = 1) {
+  const span = hi - lo, k = span !== 0 ? 1 / span : 0;
+  for (let p = 0, q = 0; p < src.length; p++, q += 4) {
+    const v = src[p];
+    if (v !== v) { out[q] = nan[0]; out[q + 1] = nan[1]; out[q + 2] = nan[2]; out[q + 3] = nan[3]; continue; }
+    let t = (v - lo) * k;
+    t = t > 0 ? (t < 1 ? t : 1) : 0;
+    if (gamma !== 1) t = Math.pow(t, gamma);
+    const i = ((t * 255 + 0.5) | 0) * 3;
+    out[q] = lut[i]; out[q + 1] = lut[i + 1]; out[q + 2] = lut[i + 2]; out[q + 3] = 255;
+  }
+  return out;
 }
 
 export function minmax(a) {
