@@ -1,0 +1,1 @@
+Correction: this commit also changed the cannonball-vr line of lib/screensaver-catalog.js (its new note: the cannonball-3d app in VR mode), not only the cannonball-3d line.
