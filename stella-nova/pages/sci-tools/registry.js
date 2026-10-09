@@ -18,6 +18,7 @@
 export const CATS = [
   { id: 'units', name: 'Units and constants' },
   { id: 'measure', name: 'Measurement and errors' },
+  { id: 'stats', name: 'Statistics' },
 ];
 
 export const TOOLS = [
@@ -28,6 +29,14 @@ export const TOOLS = [
   ['uncertainty', 'measure', 'Uncertainty propagation', 'Propagate standard uncertainties through any formula: first order and Monte Carlo.', 'error propagation gum monte carlo sensitivity budget'],
   ['wmean', 'measure', 'Weighted mean', 'Inverse-variance mean of values with uncertainties, χ² and Birge ratio.', 'weighted average inverse variance birge chi'],
   ['pct-error', 'measure', 'Percent error', 'Percent error and difference between values in any units.', 'percent error difference relative deviation z score'],
+  ['describe', 'stats', 'Descriptive statistics', 'Mean, median, SD, SEM, CI and quartiles of pasted data, with a histogram and box plot.', 'mean median standard deviation sem quartile iqr histogram box plot summary skewness'],
+  ['ttest', 'stats', 't-tests', 'One-sample, paired, Welch and Student t-tests with CI and effect size.', 'student welch paired hypothesis test p value compare means'],
+  ['chisq', 'stats', 'Chi-square tests', 'Goodness of fit and contingency tables, with expected counts and Cramér\'s V.', 'chi squared contingency independence goodness fit categorical cramer'],
+  ['anova', 'stats', 'One-way ANOVA', 'F-test of several group means, with the ANOVA table and η².', 'analysis variance f test groups'],
+  ['corr', 'stats', 'Correlation', 'Pearson r with Fisher CI and Spearman ρ, with a scatter plot.', 'pearson spearman rank correlation coefficient'],
+  ['fit', 'stats', 'Curve fitting', 'Linear, polynomial, exponential, power, Gaussian and custom least-squares fits with parameter errors.', 'regression least squares levenberg marquardt nonlinear fit curve r squared residuals'],
+  ['dist', 'stats', 'Distributions', 'pdf, cdf and quantiles of the normal, t, χ², F, binomial and Poisson laws.', 'probability distribution pdf cdf quantile critical value normal binomial poisson'],
+  ['power', 'stats', 'Sample size and power', 'Sample size or power for t-tests and two proportions.', 'power analysis sample size cohen effect'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
