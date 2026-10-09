@@ -390,6 +390,15 @@ section('page module (DOM stubs, no browser)');
   const g = globalThis.__mapGen;
   check('main.js loads and generates with stubs (no Worker: main-thread path)', !err && g && g.city && g.city.seed === 5, err ? err.message : `seed ${g.city.seed}, ${g.city.lots.length} lots`);
   check('the page starts the playback at t = 0', g && g.state.T === 0 && g.state.playing === true);
+  // the saver hook: no WebGPU in node, so it falls back to the 2D map
+  let ret = null, err2 = null;
+  const labels = [];
+  try { ret = await globalThis.snSaver.enter({ calm: 0.5, seed: 42, label: (x) => labels.push(x) }); } catch (e) { err2 = e; }
+  check('snSaver.enter returns a canvas and a warm-up (2D without WebGPU)', !err2 && ret && ret.canvas && ret.warmupMs > 0 && g.state.view === '2d', err2 ? err2.message : `seed ${g.city.seed}`);
+  check('snSaver.enter makes a new seeded city and plays it', g.state.playing === true && g.state.T === 0 && g.city.seed !== 5);
+  let err3 = null;
+  try { globalThis.snSaver.exit(); } catch (e) { err3 = e; }
+  check('snSaver.exit runs', !err3);
 }
 
 // ─── end ────────────────────────────────────────────────────────────────────

@@ -140,7 +140,7 @@ async function regenerate(patch = {}, { play = !reduced } = {}) {
   fillParams();
   syncPanel();
   dirty = true;
-  if (view === '3d') load3D().then(() => push3D());
+  if (view === '3d') await load3D().then(() => push3D()).catch(() => { /* 2D stays */ });
 }
 
 // ─── head, foot ─────────────────────────────────────────────────────────────
@@ -355,8 +355,10 @@ async function setView(v) {
     try { await load3D(); await push3D(); }
     catch {
       loadingEl.hidden = true;
-      fallbackEl.hidden = false;
-      setTimeout(() => { fallbackEl.hidden = true; }, 4200);
+      if (!saver) {
+        fallbackEl.hidden = false;
+        setTimeout(() => { fallbackEl.hidden = true; }, 4200);
+      }
       return;
     }
     loadingEl.hidden = true;
@@ -387,7 +389,7 @@ function frame(t) {
   if (f) { syncPhase(f); syncScrub(); }
   if (view === '2d' && dirty && v2) { draw2D(f); dirty = false; }
   else if (view === '3d' && v3 && meshFor === genToken) {
-    v3.frame({ T: T >= tl.dur ? 1e9 : T, dt, light, field: Math.max(f ? f.field : 0, showField ? 0.75 : 0), saver });
+    v3.frame({ T: T >= tl.dur ? 1e9 : T, dt, light, field: Math.max(f ? f.field : 0, showField ? 0.75 : 0), saver, offsetY: saver ? saverOffsetY : 0 });
     dirty = false;
   }
 }
@@ -617,8 +619,198 @@ function bindInput() {
 }
 
 // ─── screensaver ────────────────────────────────────────────────────────────
-// (the saver commit fills these in)
-let saverTick = null, saverRate = 1;
+// The shell screensaver (lib/screensaver.js) calls window.snSaver.enter().
+// Each city: a plan view from above while the field and the roads draw,
+// a tilt down while the blocks, lots and buildings come, then fly-through
+// shots of the finished city (along a street, round the tallest tower,
+// the skyline from the water, a high pass), cut every 6 to 11 s. Then a
+// new seed. Shots come from a seeded shuffle, so each run differs. With
+// no WebGPU the saver plays the 2D map with slow push-ins.
+// The plate has the city, the phase and the counts; no code.
+let saverTick = null, saverRate = 1, saverLabel = null, saverOffsetY = 0;
+const tour = { rnd: null, calm: 0, shot: null, shotT: 0, shotLen: 8, n: 0, band: null, bandAt: -1e9, bandFn: null, busy: false, light: 'golden', bag: [] };
+function mulberry32(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const SAVER_LIGHTS = [['golden', 0.4], ['day', 0.25], ['dusk', 0.2], ['night', 0.15]];
+function pickLight(r) { let x = r(); for (const [k, w] of SAVER_LIGHTS) if ((x -= w) <= 0) return k; return 'golden'; }
+
+// a point and the direction along a road, at share u of its length (world x, y)
+function alongRoad(l, u) {
+  const cx = city.view.w / 2, cy = city.view.h / 2;
+  let L = 0;
+  for (let i = 1; i < l.length; i++) L += Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]);
+  let left = L * clamp(u, 0, 1);
+  for (let i = 1; i < l.length; i++) {
+    const s = Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]);
+    if (s >= left || i === l.length - 1) {
+      const k = s ? Math.min(1, left / s) : 0;
+      const x = l[i - 1][0] + (l[i][0] - l[i - 1][0]) * k, y = l[i - 1][1] + (l[i][1] - l[i - 1][1]) * k;
+      return { p: [x - cx, cy - y], dir: [(l[i][0] - l[i - 1][0]) / (s || 1), -(l[i][1] - l[i - 1][1]) / (s || 1)], L };
+    }
+    left -= s;
+  }
+  return { p: [0, 0], dir: [1, 0], L };
+}
+function inView(x, y) { return Math.abs(x) < city.view.w * 0.45 && Math.abs(y) < city.view.h * 0.45; }
+
+function nextShot() {
+  const r = tour.rnd, h = v3.home();
+  const end = T >= tl.dur;
+  tour.shotT = 0;
+  tour.shotLen = (6 + r() * 5) * (1 + tour.calm * 0.4);
+  if (!end) {
+    const minorEnd = (tl.phases.find((p) => p.k === 'minor') || { t1: tl.dur * 0.6 }).t1;
+    if (T < minorEnd) {
+      // plan view: from above, turning slowly while the roads draw
+      tour.shot = { k: 'plan', yaw0: r() * Math.PI * 2, spin: (r() < 0.5 ? -1 : 1) * 0.05, dist: h.dist * (0.75 + r() * 0.2) };
+      Object.assign(v3.cam, { target: [0, 0, 0], yaw: tour.shot.yaw0, pitch: 1.5, dist: tour.shot.dist });
+    } else {
+      // tilt down while the blocks, lots and buildings come
+      tour.shot = { k: 'tilt' };
+      v3.goal({ target: [(r() - 0.5) * city.view.w * 0.2, (r() - 0.5) * city.view.h * 0.2, 0], yaw: v3.cam.yaw + 0.6, pitch: 0.42 + r() * 0.15, dist: h.dist * (0.55 + r() * 0.2) }, 0.35);
+    }
+    return;
+  }
+  if (tour.n >= 4 + Math.floor(r() * 3)) { tour.shot = { k: 'next' }; return; }
+  tour.n++;
+  if (!tour.bag.length) tour.bag = ['street', 'tower', 'skyline', 'high', 'street'].sort(() => r() - 0.5);
+  const k = tour.bag.pop();
+  if (k === 'street') {
+    const roads = city.roads.main.concat(city.roads.major).filter((l) => l.length > 1);
+    const l = roads[Math.floor(r() * roads.length)] || [];
+    const u0 = 0.15 + r() * 0.3;
+    const a = alongRoad(l, u0);
+    tour.shot = { k, l, u: u0, speed: 26 / Math.max(a.L, 1), pitch: 0.1 + r() * 0.1, dist: 140 + r() * 120, side: (r() - 0.5) * 0.5 };
+    if (!inView(a.p[0], a.p[1])) tour.shot.u = 0.5;
+    Object.assign(v3.cam, { target: [a.p[0], a.p[1], 10], yaw: Math.atan2(-a.dir[0], -a.dir[1]) + tour.shot.side, pitch: tour.shot.pitch, dist: tour.shot.dist });
+  } else if (k === 'tower') {
+    let best = 0;
+    city.buildings.forEach((b, i) => { if (b.h > city.buildings[best].h && r() < 0.9) best = i; });
+    const c = city.lots[best].reduce((a, q) => [a[0] + q[0] / city.lots[best].length, a[1] + q[1] / city.lots[best].length], [0, 0]);
+    const p = [c[0] - city.view.w / 2, city.view.h / 2 - c[1]];
+    const hh = city.buildings[best].h;
+    tour.shot = { k, spin: (r() < 0.5 ? -1 : 1) * 0.12 };
+    Object.assign(v3.cam, { target: [p[0], p[1], hh * 0.55], yaw: r() * Math.PI * 2, pitch: 0.25 + r() * 0.2, dist: Math.max(160, hh * 3.2) });
+  } else if (k === 'skyline') {
+    tour.shot = { k, spin: (r() < 0.5 ? -1 : 1) * 0.03 };
+    let yaw = r() * Math.PI * 2;
+    if (city.coastline.length) {
+      const m = city.coastline[city.coastline.length >> 1];
+      const sx = m[0] - city.view.w / 2, sy = city.view.h / 2 - m[1];
+      // look from the water toward the centre: the camera sits past the coast
+      const sea = city.sea.length ? city.sea.reduce((a, q) => [a[0] + q[0] / city.sea.length, a[1] + q[1] / city.sea.length], [0, 0]) : m;
+      const wx = sea[0] - city.view.w / 2, wy = city.view.h / 2 - sea[1];
+      yaw = Math.atan2(wx - sx, wy - sy);
+    }
+    Object.assign(v3.cam, { target: [0, 0, 20], yaw, pitch: 0.12 + r() * 0.08, dist: h.dist * (0.7 + r() * 0.2) });
+  } else {
+    tour.shot = { k: 'high', spin: (r() < 0.5 ? -1 : 1) * 0.04 };
+    Object.assign(v3.cam, { target: [(r() - 0.5) * city.view.w * 0.3, (r() - 0.5) * city.view.h * 0.3, 0], yaw: r() * Math.PI * 2, pitch: 0.7 + r() * 0.3, dist: h.dist * (0.45 + r() * 0.2) });
+  }
+  if (r() < 0.35) tour.light = pickLight(r);
+  light = tour.light;
+}
+
+async function saverCity() {
+  tour.busy = true;
+  tour.n = 0;
+  tour.light = pickLight(tour.rnd);
+  light = tour.light;
+  await regenerate({ seed: 1 + Math.floor(tour.rnd() * 999999) }, { play: true });
+  tour.shot = null;
+  tour.busy = false;
+}
+
+function saverPlate() {
+  if (!saverLabel || !city) return;
+  const f = tl ? frameAt(city, tl, T) : null;
+  const ph = f ? f.phase : 'done';
+  const s = city.stats;
+  const roads = city.roads.main.length + city.roads.major.length + city.roads.minor.length;
+  try {
+    saverLabel({
+      title: 'City Generator',
+      sub: `Seed ${city.seed} · ${ph === 'done' ? 'the finished city' : PHASE_TITLE[ph] || ph}`,
+      params: [
+        { sym: 'N_{\\mathrm{roads}}', name: 'roads', value: fmt(roads) },
+        { sym: 'N_{\\mathrm{lots}}', name: 'buildings', value: fmt(s.lots) },
+        { sym: 'h_{\\max}', name: 'tallest', value: `${fmt(s.tallest)} m` },
+      ],
+      tex: [String.raw`\frac{d\mathbf{x}}{ds}=\mathbf{e}_{\mathrm{major}}(\mathbf{x}),\qquad T=R\begin{pmatrix}\cos 2\theta&\sin 2\theta\\ \sin 2\theta&-\cos 2\theta\end{pmatrix}`],
+      eq: ['dx/ds = e_major(x),  T = R [cos 2θ, sin 2θ; sin 2θ, −cos 2θ]'],
+      lines: ['Streets are streamlines of a tensor field. Generator: MapGenerator by ProbableTrain (LGPL-3.0).'],
+    });
+  } catch { /* the plate is optional */ }
+}
+const PHASE_TITLE = { field: 'the tensor field', coast: 'the coastline', river: 'the river', main: 'main roads', major: 'major roads', parks: 'parks', minor: 'minor roads', blocks: 'blocks', lots: 'lots', buildings: 'buildings rise' };
+
+let plateAt = -1e9, platePhase = '';
+saverTick = (dt, t) => {
+  if (!city || !tl || tour.busy) return;
+  if (tour.bandFn && t - tour.bandAt > 700) { tour.bandAt = t; tour.band = tour.bandFn(window.innerHeight); }
+  const h = window.innerHeight;
+  const target = tour.band ? (tour.band.b - tour.band.t) / h : 0;
+  saverOffsetY += (target - saverOffsetY) * (1 - Math.exp(-dt * 0.8));
+  const ph = frameAt(city, tl, T).phase;
+  if (saverLabel && (t - plateAt > 1500 || ph !== platePhase)) { plateAt = t; platePhase = ph; saverPlate(); }
+  if (view !== '3d' || !v3) {
+    // 2D: slow push-in, a new city after the finished map has shown a while
+    tour.shotT += dt;
+    if (v2) { const k = Math.exp(dt * 0.012); const cx = window.innerWidth / 2, cy = window.innerHeight / 2; v2 = { s: v2.s * k, ox: cx - (cx - v2.ox) * k, oy: cy - (cy - v2.oy) * k }; dirty = true; }
+    if (T >= tl.dur && tour.shotT > 14) { tour.shotT = 0; saverCity(); }
+    return;
+  }
+  if (!tour.shot) nextShot();
+  const sh = tour.shot;
+  tour.shotT += dt;
+  if (sh.k === 'next') { saverCity(); return; }
+  if (sh.k === 'plan') v3.cam.yaw += sh.spin * dt;
+  else if (sh.k === 'street') {
+    sh.u += sh.speed * dt;
+    const a = alongRoad(sh.l, Math.min(sh.u, 0.95));
+    const k = 1 - Math.exp(-dt * 2);
+    v3.cam.target[0] += (a.p[0] - v3.cam.target[0]) * k;
+    v3.cam.target[1] += (a.p[1] - v3.cam.target[1]) * k;
+    let want = Math.atan2(-a.dir[0], -a.dir[1]) + sh.side, d = want - v3.cam.yaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    v3.cam.yaw += d * (1 - Math.exp(-dt * 0.8));
+  } else if (sh.spin) v3.cam.yaw += sh.spin * dt;
+  const done = T >= tl.dur;
+  // cut when the shot is long enough; the plan view holds until the roads are drawn
+  const minorEnd = (tl.phases.find((p) => p.k === 'minor') || { t1: 0 }).t1;
+  if (sh.k === 'plan' && T < minorEnd) { if (tour.shotT > tour.shotLen) nextShot(); return; }
+  if (sh.k === 'plan' || (sh.k === 'tilt' && done) || (sh.k !== 'tilt' && tour.shotT > tour.shotLen)) nextShot();
+};
+
+window.snSaver = {
+  async enter(o = {}) {
+    await started;
+    saver = true;
+    tour.calm = clamp(+o.calm || 0, 0, 1);
+    tour.rnd = mulberry32((o.seed >>> 0) || 1);
+    tour.bag = [];
+    saverRate = 1.15 / (1 + tour.calm * 0.6);
+    saverLabel = o.labels === false || typeof o.label !== 'function' ? null : o.label;
+    import('../../lib/saver-clear.js').then((m) => { tour.bandFn = m.plateBand; }).catch(() => { /* no band */ });
+    document.body.classList.add('saver', 'idle');
+    setCaption(false); setSheet(panelEl, false); setSheet(saveEl, false);
+    speedI = 0;
+    let canvas = c2;
+    try { await setView('3d'); if (view === '3d') { canvas = c3; v3.auto = false; } } catch { /* 2D */ }
+    await saverCity();
+    if (view === '2d') fit2D();
+    return { canvas, warmupMs: 1500 };
+  },
+  exit() {
+    saver = false;
+    saverLabel = null;
+    saverOffsetY = 0;
+    if (v3) v3.auto = true;
+    document.body.classList.remove('saver');
+    fit2D();
+  },
+};
 
 // ─── start ──────────────────────────────────────────────────────────────────
 async function start() {
