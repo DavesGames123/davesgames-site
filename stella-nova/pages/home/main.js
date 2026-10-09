@@ -21,6 +21,7 @@
 //    thumbnails / art ..... "function media"
 //    page card ............ "function cardHTML"
 //    hero sky ............. "function startSky"
+//    sky canvas DPR cap ... "function skyDpr"
 //    commit heatmap ....... "function buildCommits"
 //    featured rail ........ "function buildFeatured"
 //    star chart ........... "function buildChart"
@@ -42,8 +43,10 @@
 //    image slot sizes ..... "const SIZES"
 //    image loader ......... "const LZ"
 //
-//  GPU budget: one Canvas 2D sky in the hero. It stops when the hero leaves
-//  the view or the tab hides, and it frees its backing store on pagehide.
+//  GPU budget: one Canvas 2D sky in the hero, at most DPR 1.5 and 4 M
+//  device pixels (function skyDpr). Its loop stops when the hero leaves the
+//  view or the tab hides. Its backing store goes when the hero is 300 px
+//  past the view, when the tab hides and on pagehide.
 //  Everything else is DOM, CSS and SVG.
 //
 //  Image budget: no image has a src at load. The image loader (const LZ)
@@ -235,8 +238,9 @@ function initImages() {
 // Motion: planets move on Kepler periods (one Earth year = 240 s, so inner
 // planets run faster), the Moon circles Earth, and the satellites cross the
 // sky at a rate set by their mean motion. The loop moves DOM transforms only
-// at about 30 fps. It stops when the hero is off screen or the tab hides,
-// and on pagehide it frees the canvas backing store.
+// at about 30 fps. It stops when the hero is off screen or the tab hides.
+// The canvas backing store goes 300 px past the view, on a hidden tab and
+// on pagehide (function paint).
 function startSky() {
   const cv = $('#sky'), hero = $('.hero'), bg = $('.hero-bg');
   const SKY = O.SKY;
@@ -246,7 +250,7 @@ function startSky() {
   const YEAR = 240;               // seconds for one Earth orbit
   const RA0 = 23;                 // RA (h) at the left edge
   const rand = mulberry(7);
-  let W = 0, H = 0, dpr = 1, raf = 0, running = false, visible = true, last = 0;
+  let W = 0, H = 0, dpr = 1, raf = 0, running = false, visible = true, near = true, last = 0;
   const t0 = performance.now() - 37000;
 
   // Orbit rings (SVG) and the object layer (DOM).
@@ -380,8 +384,12 @@ function startSky() {
   new MutationObserver(refreshTips).observe(layer, { subtree: true, attributes: true, attributeFilter: ['class'] });
 
   // Canvas: nebula, field stars, real stars and deep-sky objects. Static.
+  // The backing store exists only while the hero is near the view and the
+  // tab shows (near, see below). Else paint frees it, and it paints again
+  // when the hero comes back. The paint is seeded, so it looks the same.
   function paint() {
-    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    if (!near || document.hidden) { if (cv.width) cv.width = cv.height = 0; return; }
+    dpr = skyDpr(W, H, window.devicePixelRatio || 1);
     cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#07090f'; ctx.fillRect(0, 0, W, H);
@@ -482,13 +490,25 @@ function startSky() {
   let rt = 0;
   addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(build, 150); });
   new IntersectionObserver(es => { visible = es[0].isIntersecting; setRun(); }, { threshold: 0 }).observe(hero);
-  document.addEventListener('visibilitychange', setRun);
+  // Free the canvas backing store when the hero is 300 px past the view,
+  // paint it again before it comes back.
+  new IntersectionObserver(es => { const n = es[0].isIntersecting; if (n !== near) { near = n; paint(); } }, { rootMargin: '300px 0px' }).observe(hero);
+  document.addEventListener('visibilitychange', () => { paint(); setRun(); });
   RM.addEventListener?.('change', setRun);
   addEventListener('pagehide', () => { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; cv.width = cv.height = 0; });
   addEventListener('pageshow', e => { if (e.persisted) { build(); setRun(); } });
   setRun();
 }
 
+// The device pixel ratio of the hero sky canvas. The sky is decorative: at
+// most 1.5, and at most SKY_PX device pixels in all (16 MB at 4 bytes),
+// but never under 1 on a high-DPI screen.
+const SKY_PX = 4e6;
+function skyDpr(W, H, dpr) {
+  const fit = Math.sqrt(SKY_PX / Math.max(1, W * H));
+  return Math.min(dpr, Math.max(1, Math.min(1.5, fit)));
+}
+O.skyDpr = skyDpr;
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
 // ── featured rail ──────────────────────────────────────────────────────────

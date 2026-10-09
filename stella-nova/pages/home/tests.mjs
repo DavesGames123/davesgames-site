@@ -19,6 +19,7 @@
 //    - image budget: no <img> in index.html or in generated markup has a
 //      src; every one has width and height; every file it names exists;
 //      every key in thumbs/list.js has thumbs/sm/<key>.jpg at 320x200
+//    - the hero sky canvas DPR cap (O.skyDpr): at most 1.5 and 4 M px
 //    - a jsdom boot of index.html: 0 errors, 0 images with a src at load,
 //      and the image loader (O.lazy) fills and empties groups and rails.
 //      jsdom is not in the repo. Set JSDOM_DIR to a folder whose
@@ -176,6 +177,10 @@ check('index.html hero placeholder matches FIND_TEXT', html.includes(`placeholde
   const { jpegSize } = await import(new URL('../../../tools/thumbs-small.mjs', import.meta.url));
   const noSm = keys.filter(k => { const f = path.join(HOME, 'thumbs', 'sm', k + '.jpg'); if (!fs.existsSync(f)) return true; const z = jpegSize(f); return !z || z.w !== 320 || z.h !== 200; });
   check(`every listed key has thumbs/sm/<key>.jpg at 320x200 (${keys.length})`, !noSm.length, noSm.join(', '));
+  const sd = O.skyDpr;
+  check('sky canvas DPR: 1440x1400 at DPR 2 stays <= 1.5 and <= 4 M px', sd(1440, 1400, 2) <= 1.5 && 1440 * 1400 * sd(1440, 1400, 2) ** 2 <= 4e6 + 1);
+  check('sky canvas DPR: 390x1800 at DPR 3 is 1.5', sd(390, 1800, 3) === 1.5);
+  check('sky canvas DPR: never above the screen DPR, never under 1 on high DPI', sd(1440, 900, 1) === 1 && sd(3840, 2400, 2) === 1);
 }
 
 // ── jsdom boot ────────────────────────────────────────────────────────────
