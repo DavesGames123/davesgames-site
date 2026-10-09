@@ -328,6 +328,7 @@ const BLURBS = {
   curta: 'The Curta calculator in 3D, part by part.',
   'enigma-rotors': 'The Enigma rotor stack, from key to lamp.',
   origami: 'Draw a crease pattern and watch it fold.',
+  'mujoco-lab': 'The MuJoCo physics engine live: robots, ragdolls, dominoes and cloth.',
   'lose-the-modifier': 'Turn “very tired” into one strong word.',
   'legged-rl': 'Walking robot policies in MuJoCo, in your browser.',
   'mrna-vaccine': 'The decades of science behind the 2020 mRNA vaccines.',

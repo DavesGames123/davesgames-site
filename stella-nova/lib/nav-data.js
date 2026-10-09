@@ -301,6 +301,9 @@ w.SN_NAV = [
     ] },
     { h: "Folding", p: [
       ["origami", "Origami Simulator", "SIM"]
+    ] },
+    { h: "Physics Engines", p: [
+      ["mujoco-lab", "MuJoCo Lab", "NEW"]
     ] }
   ] },
   { id: "language", label: "Language", short: "Language", icon: "❝", color: "#f2d16b", color2: "#7ee0c3", groups: [

@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-211 registered pages in 5 regions and 19 constellations.
+212 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -287,6 +287,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `cloth` | Cloth | Machines > Soft Bodies & Cloth | 3D | Fast, stable XPBD cloth with bending. | Ten Minute Physics #14 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `cloth-self-collision` | Cloth Self-Collision | Machines > Soft Bodies & Cloth | 3D | Cloth that folds onto itself and does not pass through. | Ten Minute Physics #15 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `origami` | Origami Simulator | Machines > Folding | SIM | Draw a crease pattern and watch it fold. |  | directory only | hook, tier 3, default | no |
+| `mujoco-lab` | MuJoCo Lab | Machines > Physics Engines | NEW | The MuJoCo physics engine live: robots, ragdolls, dominoes and cloth. |  | shown | hook, tier 4, default | no |
 | `lose-the-modifier` | Lose the Modifier | Language > Writing | WORDS | Turn “very tired” into one strong word. |  | shown | hook, tier 4, default | yes |
 | `gravitational-imaging` | Gravitational Imaging | Research > Astrophysics | NEW | A million Suns of dark mass, found by the dent it makes in a lensed arc. |  | shown | no | no |
 | `circular-rydberg` | Circular Rydberg Atoms | Research > Atomic Physics | NEW | Giant circular electron orbits that lived 11 ms at room temperature. |  | shown | hook, tier 3, default | yes |
