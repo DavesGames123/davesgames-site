@@ -73,7 +73,7 @@ $$('.con-count').forEach(el => { el.textContent = SECTORS.length; });
 // the phone width.
 const FIND_COUNT = searchPages().length;
 const FIND_TEXT = 'Search ' + Math.floor(FIND_COUNT / 10) * 10 + '+ pages';
-const setFindText = () => $('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? FIND_TEXT : FIND_TEXT + ': black hole, chord, fire, orbit'; });
+const setFindText = () => $$('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? FIND_TEXT : FIND_TEXT + ': black hole, chord, fire, orbit'; });
 setFindText();
 PHONE.addEventListener('change', setFindText);
 

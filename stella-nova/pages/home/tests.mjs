@@ -89,6 +89,14 @@ for (const f of FILES) {
 }
 const O = ctx.Observatory;
 check('main.js ran to its end (O.find is set)', !!(O && O.find));
+// The deep stub gives every value a forEach, so it cannot catch $(sel) (one
+// element) used where $$(sel) (a list) is meant. 799367a did that and the
+// home page stopped at load in the browser. Check the source instead.
+{
+  const src = fs.readFileSync(path.join(HOME, 'main.js'), 'utf8');
+  const bad = [...src.matchAll(/(?<![$\w])\$\(([^()]|\([^()]*\))*\)\.forEach/g)].map(m => m[0].slice(0, 60));
+  check('main.js never calls forEach on $(sel) (one element; use $$)', !bad.length, bad.join(' | '));
+}
 if (!O || !O.find) { console.log(`\n${passes} passed, ${fails} failed`); process.exit(1); }
 
 const { FIND_ITEMS, findResults, FIND_TEXT } = O.find;
