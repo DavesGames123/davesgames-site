@@ -16,6 +16,14 @@
 //      and of "muller" (accent folded)
 //    - no DIRECTORY_ONLY page is in FIND_ITEMS
 //    - the hero search text is true: its number <= the searchable count
+//    - image budget: no <img> in index.html or in generated markup has a
+//      src; every one has width and height; every file it names exists;
+//      every key in thumbs/list.js has thumbs/sm/<key>.jpg at 320x200
+//    - a jsdom boot of index.html: 0 errors, 0 images with a src at load,
+//      and the image loader (O.lazy) fills and empties groups and rails.
+//      jsdom is not in the repo. Set JSDOM_DIR to a folder whose
+//      node_modules holds jsdom (npm i jsdom@24 there), else this part is
+//      skipped with a note.
 //
 //  Exit 1 on any failure.
 //
@@ -23,6 +31,8 @@
 //    DOM stub ............. "function stub"
 //    sandbox load ......... "const FILES"
 //    checks ............... "check("
+//    image checks ......... "image budget"
+//    jsdom boot ........... "async function jsdomBoot"
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -146,6 +156,90 @@ check(`hero search text "${FIND_TEXT}" is true (${inIndex.size} searchable)`, n 
 
 const html = fs.readFileSync(path.join(HOME, 'index.html'), 'utf8');
 check('index.html hero placeholder matches FIND_TEXT', html.includes(`placeholder="${FIND_TEXT}: black hole, chord, fire, orbit"`));
+
+// ── image budget ──────────────────────────────────────────────────────────
+{
+  const imgs = [...html.matchAll(/<img\s[^>]*>/g)].map(m => m[0]);
+  const withSrc = imgs.filter(t => /\ssrc=/.test(t));
+  check(`no <img> in index.html has a src at load (${imgs.length} images)`, imgs.length > 0 && !withSrc.length, withSrc.slice(0, 3).join(' | '));
+  const noWH = imgs.filter(t => !/\swidth="\d+"/.test(t) || !/\sheight="\d+"/.test(t));
+  check('every <img> in index.html has width and height', !noWH.length, noWH.slice(0, 3).join(' | '));
+  const { imgTag, SIZES } = O.img;
+  const keys = [...O.THUMB_KEYS];
+  const gen = [...keys.map(k => imgTag(`thumbs/${k}.jpg`, SIZES.card)), ...[1, 2, 3, 4, 5, 6].map(i => imgTag(`media/game-${i}.jpg`, SIZES.sector))];
+  check(`no generated thumbnail <img> has a src (${gen.length})`, gen.every(t => !/\ssrc=/.test(t) && /\sdata-src=/.test(t)));
+  check('every generated thumbnail <img> has width and height', gen.every(t => /\swidth="\d+"/.test(t) && /\sheight="\d+"/.test(t)));
+  const named = [...html.matchAll(/data-src(?:set)?="([^"]+)"/g), ...gen.join(' ').matchAll(/data-src(?:set)?="([^"]+)"/g)]
+    .flatMap(m => m[1].split(',').map(x => x.trim().split(/\s+/)[0]));
+  const lost = [...new Set(named)].filter(f => !fs.existsSync(path.join(HOME, f)));
+  check(`every image file named by data-src or data-srcset exists (${new Set(named).size})`, !lost.length, lost.slice(0, 5).join(', '));
+  const { jpegSize } = await import(new URL('../../../tools/thumbs-small.mjs', import.meta.url));
+  const noSm = keys.filter(k => { const f = path.join(HOME, 'thumbs', 'sm', k + '.jpg'); if (!fs.existsSync(f)) return true; const z = jpegSize(f); return !z || z.w !== 320 || z.h !== 200; });
+  check(`every listed key has thumbs/sm/<key>.jpg at 320x200 (${keys.length})`, !noSm.length, noSm.join(', '));
+}
+
+// ── jsdom boot ────────────────────────────────────────────────────────────
+async function jsdomBoot() {
+  let JSDOM, VirtualConsole;
+  try {
+    const dir = process.env.JSDOM_DIR;
+    const { createRequire } = await import('node:module');
+    const req = createRequire(dir ? path.join(path.resolve(dir), 'x.js') : import.meta.url);
+    ({ JSDOM, VirtualConsole } = req('jsdom'));
+  } catch (e) { console.log('skip  jsdom boot (jsdom not found; set JSDOM_DIR)'); return; }
+  const errors = [];
+  const vc = new VirtualConsole();
+  vc.on('jsdomError', e => { if (!/Could not parse CSS/.test(e.message)) errors.push(e.message); });
+  vc.on('error', (...a) => errors.push('console.error ' + a.join(' ')));
+  const ios = [];
+  const dom = await JSDOM.fromFile(path.join(HOME, 'index.html'), {
+    runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true, virtualConsole: vc,
+    beforeParse(w) {
+      w.devicePixelRatio = 2;
+      w.matchMedia = q => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {} });
+      w.IntersectionObserver = class { constructor(cb, o) { this.cb = cb; this.o = o || {}; this.t = []; ios.push(this); } observe(t) { this.t.push(t); } unobserve() {} disconnect() {} takeRecords() { return []; } };
+      w.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+      // Canvas: every 2D call is a no-op. jsdom has no canvas.
+      const g = new Proxy(function () {}, { get: (t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient') ? () => ({ addColorStop() {} }) : typeof k === 'string' && k !== 'canvas' ? () => {} : undefined, set: () => true });
+      w.HTMLCanvasElement.prototype.getContext = function () { return g; };
+      w.scrollTo = () => {}; w.Element.prototype.scrollIntoView = function () {};
+    },
+  });
+  const w = dom.window, d = w.document;
+  await new Promise(r => (d.readyState === 'complete' ? r() : w.addEventListener('load', r)));
+  await new Promise(r => setTimeout(r, 200));
+  const imgs = [...d.querySelectorAll('img')];
+  check(`jsdom boot: no error (${errors.length})`, !errors.length, errors.slice(0, 3).join(' | '));
+  check('jsdom boot: main.js ran (O.lazy is set)', !!(w.Observatory && w.Observatory.lazy));
+  check(`jsdom boot: 0 of ${imgs.length} images have a src at load`, imgs.length > 100 && imgs.every(i => !i.getAttribute('src')), imgs.filter(i => i.getAttribute('src')).length + ' with src');
+  check('jsdom boot: every image has width and height', imgs.every(i => i.getAttribute('width') && i.getAttribute('height')));
+  // Drive the loader by hand: near/far are the observers with 400/1200 px margins.
+  const near = ios.find(o => o.o.rootMargin === '400px 0px'), far = ios.find(o => o.o.rootMargin === '1200px 0px');
+  const portals = d.querySelector('.portals');
+  check('jsdom boot: the loader watches the portals, rails, inspector, tip and search lists', !!near && near.t.includes(portals) && near.t.includes(d.getElementById('featuredRail')) && near.t.includes(d.getElementById('inspector')) && near.t.includes(d.getElementById('chartTip')) && d.querySelectorAll('.find-list').length > 0 && [...d.querySelectorAll('.find-list')].every(l => near.t.includes(l)));
+  if (near && far) {
+    near.cb([{ target: portals, isIntersecting: true }]);
+    const pi = [...portals.querySelectorAll('img')];
+    check('loader: a near group gets src and srcset', pi.length === 4 && pi.every(i => i.getAttribute('src') && i.getAttribute('srcset')));
+    check('loader: a portal game image takes media/sm (640 px) as src', /^media\/sm\/game-\d\.jpg$/.test(pi[0].getAttribute('src')));
+    far.cb([{ target: portals, isIntersecting: false }]);
+    check('loader: a far group drops src and srcset', pi.every(i => !i.getAttribute('src') && !i.getAttribute('srcset')));
+    // Rail window: cards 336 px apart in a 1440 px rail.
+    const rail = d.getElementById('featuredRail');
+    const cards = [...rail.querySelectorAll('.card')];
+    let shift = 0;
+    rail.getBoundingClientRect = () => ({ left: 0, right: 1440, width: 1440, top: 0, bottom: 400 });
+    cards.forEach((c, i) => { c.getBoundingClientRect = () => ({ left: i * 336 - shift, right: i * 336 + 320 - shift, width: 320, top: 0, bottom: 300 }); });
+    near.cb([{ target: rail, isIntersecting: true }]);
+    const loaded = () => cards.map(c => !!c.querySelector('img[src]'));
+    const want = cards.map((c, i) => !!c.querySelector('img') && i * 336 < 2880);
+    check(`loader: a rail loads cards up to 2 widths on (${loaded().filter(Boolean).length} of ${cards.length})`, loaded().join() === want.join());
+    shift = 6000; w.Observatory.lazy.fill(rail);
+    check('loader: a rail drops cards more than 2.5 widths back', cards.every((c, i) => i * 336 + 320 - shift >= -3600 || !c.querySelector('img[src]')));
+  }
+  w.close();
+}
+await jsdomBoot();
 
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

@@ -39,10 +39,16 @@
 //    screensaver key ...... "function initSaverKey"
 //    reveal on scroll ..... "function initReveal"
 //    portal spotlight ..... "function initSpot"
+//    image slot sizes ..... "const SIZES"
+//    image loader ......... "const LZ"
 //
 //  GPU budget: one Canvas 2D sky in the hero. It stops when the hero leaves
 //  the view or the tab hides, and it frees its backing store on pagehide.
 //  Everything else is DOM, CSS and SVG.
+//
+//  Image budget: no image has a src at load. The image loader (const LZ)
+//  sets src only for groups near the view and removes it again far from
+//  the view. Small slots take the 320x200 thumbs/sm copies by srcset.
 // ============================================================================
 (function (O) {
 'use strict';
@@ -108,9 +114,25 @@ function initials(label) {
   return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase();
 }
 function hash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
-function media(p, img) {
+// The slot widths for srcset. The browser takes thumbs/sm/<key>.jpg
+// (320x200) when the slot is small enough, else thumbs/<key>.jpg (640x400).
+const SIZES = {
+  card: '(max-width: 1041px) 250px, (max-width: 1333px) 24vw, 320px',
+  sector: '196px', mini: '(max-width: 1279px) 200px, 160px', tip: '210px', find: '64px',
+};
+// One image tag. It has no src: the image loader (const LZ) sets src and
+// srcset only near the view. width/height give the box its ratio.
+function imgTag(src, sizes) {
+  const t = src.match(/^thumbs\/(.+)\.jpg$/), g = src.match(/^media\/(game-\d+)\.jpg$/);
+  if (t) return `<img data-src="${src}" data-srcset="thumbs/sm/${t[1]}.jpg 320w, ${src} 640w" sizes="${sizes}" width="640" height="400" alt="" decoding="async">`;
+  if (g) return `<img data-src="media/sm/${g[1]}.jpg" data-srcset="media/sm/${g[1]}.jpg 640w, ${src} 1200w" sizes="${sizes}" width="640" height="361" alt="" decoding="async">`;
+  return `<img data-src="${src}" width="640" height="400" alt="" decoding="async">`;
+}
+// For tests (pages/home/tests.mjs): the image markup.
+O.img = { imgTag, SIZES };
+function media(p, img, sizes = SIZES.card) {
   const src = img || (THUMBS.has(p.key) ? `thumbs/${p.key}.jpg` : null);
-  if (src) return `<img src="${src}" alt="" loading="lazy" decoding="async">`;
+  if (src) return imgTag(src, sizes);
   const h = hash(p.key || p.label);
   return `<span class="art" style="--ax:${20 + h % 60}%;--ay:${15 + (h >> 8) % 50}%"><b>${esc(initials(p.label))}</b><i>${esc(p.badge || p.group || '')}</i></span>`;
 }
@@ -125,7 +147,7 @@ function cardHTML(p, i = 0, inSector = false) {
   const s = p.sector;
   const line = BLURBS[p.key] || p.sub || p.group;
   return `<a class="card" data-sector="${s.id}" ${linkAttrs(p)} style="--i:${i}">
-    <span class="card-img">${media(p, p.img)}${p.badge ? `<span class="card-badge">${esc(p.badge)}</span>` : ''}</span>
+    <span class="card-img">${media(p, p.img, inSector ? SIZES.sector : SIZES.card)}${p.badge ? `<span class="card-badge">${esc(p.badge)}</span>` : ''}</span>
     <span class="card-body"><span class="card-sec">${inSector ? esc(p.group) : esc(s.short) + (p.group && p.group !== s.name ? ' · ' + esc(p.group) : '')}</span>
     <span class="card-title">${esc(p.label)}</span><span class="card-line">${esc(line)}</span></span></a>`;
 }
@@ -133,7 +155,7 @@ function cardHTML(p, i = 0, inSector = false) {
 // Fill the static portal images from the thumbnail set.
 $$('img[data-thumb]').forEach(img => {
   const k = img.dataset.thumb;
-  if (THUMBS.has(k)) img.src = `thumbs/${k}.jpg`;
+  if (THUMBS.has(k)) img.outerHTML = imgTag(`thumbs/${k}.jpg`, img.sizes || SIZES.card);
   else { const p = UNIQUE.find(x => x.key === k); img.insertAdjacentHTML('afterend', media(p)); img.remove(); }
 });
 $$('.title .t-row > span').forEach((el, i) => el.style.setProperty('--i', i));
@@ -148,6 +170,56 @@ $$('.title .t-row > span').forEach((el, i) => el.style.setProperty('--i', i));
   setTimeout(done, 2600);
 })();
 $$('.portal').forEach((el, i) => el.style.setProperty('--i', i));
+
+// ── image loader ───────────────────────────────────────────────────────────
+// No <img> on the home page has a src in the HTML or in generated markup.
+// Each image sits in a group: a rail, the portals, the media grid, the
+// inspector, the chart tip or a search list. Two IntersectionObservers
+// watch each group:
+//   near  (400 px margin)   the group gets src and srcset (fill)
+//   far   (1200 px margin)  the group drops src and srcset (empty), so the
+//                           browser can free the decoded bitmaps
+// A hidden group (closed search list, hidden tip) counts as far. In a rail,
+// fill loads only the cards from half a rail width back to two widths on,
+// and drops cards more than 2.5 widths back or 4 widths on. A rail scroll
+// runs fill again. Code that writes new images into a group calls
+// LZ.refresh(group). With no IntersectionObserver, every image loads.
+const LZ = (() => {
+  const SEL = 'img[data-src]';
+  const on = img => { if (img.dataset.ld) return; img.dataset.ld = '1'; if (img.dataset.srcset) img.srcset = img.dataset.srcset; img.src = img.dataset.src; };
+  const off = img => { if (!img.dataset.ld) return; delete img.dataset.ld; img.removeAttribute('srcset'); img.removeAttribute('src'); };
+  const empty = g => $$(SEL, g).forEach(off);
+  if (typeof IntersectionObserver !== 'function') {
+    const all = g => g && $$(SEL, g).forEach(on);
+    return { group: all, refresh: all, fill: all, empty, on, off };
+  }
+  function fill(g) {
+    const imgs = $$(SEL, g);
+    if (!g.classList.contains('rail')) { imgs.forEach(on); return; }
+    const r = g.getBoundingClientRect(), w = r.width || innerWidth;
+    imgs.forEach(img => {
+      const b = (img.closest('.card, .yt') || img).getBoundingClientRect();
+      const l = b.left - r.left, rt = b.right - r.left;
+      if (rt > -w * 0.5 && l < w * 2) on(img);
+      else if (rt < -w * 2.5 || l > w * 4) off(img);
+    });
+  }
+  const near = new IntersectionObserver(es => es.forEach(e => { e.target._lzNear = e.isIntersecting; if (e.isIntersecting) fill(e.target); }), { rootMargin: '400px 0px' });
+  const far = new IntersectionObserver(es => es.forEach(e => { if (!e.isIntersecting) empty(e.target); }), { rootMargin: '1200px 0px' });
+  function group(g) {
+    if (!g || g._lz) return;
+    g._lz = true; near.observe(g); far.observe(g);
+    if (g.classList.contains('rail')) {
+      let q = 0;
+      g.addEventListener('scroll', () => { if (!q && g._lzNear) q = requestAnimationFrame(() => { q = 0; fill(g); }); }, { passive: true });
+    }
+  }
+  return { group, refresh: g => { if (g && g._lzNear) fill(g); }, fill, empty, on, off };
+})();
+O.lazy = LZ;
+function initImages() {
+  $$('.rail, .portals, .media-grid, #inspector, #chartTip, .find-list').forEach(LZ.group);
+}
 
 // ── hero sky ───────────────────────────────────────────────────────────────
 // The hero background is a quiet sky of real objects (sky-data.js):
@@ -581,8 +653,9 @@ function buildChart() {
     const s = allStars[Number(a.dataset.i)];
     const p = withImg(s.p);
     tip.dataset.sector = s.sec.id;
-    tip.innerHTML = `<div class="tip-img">${media(p, p.img)}</div><div class="tip-body"><b>${esc(p.label)}</b><span>${esc(s.sec.short)} · ${esc(p.badge || p.group || '')}</span></div>`;
+    tip.innerHTML = `<div class="tip-img">${media(p, p.img, SIZES.tip)}</div><div class="tip-body"><b>${esc(p.label)}</b><span>${esc(s.sec.short)} · ${esc(p.badge || p.group || '')}</span></div>`;
     tip.hidden = false;
+    LZ.refresh(tip);
     const W = map.clientWidth, H = map.clientHeight;
     const px = s.x / 1000 * W, py = s.y / 620 * H;
     const tw = 210, th = tip.offsetHeight || 190;
@@ -634,10 +707,11 @@ function renderInspector(sec) {
   ins.innerHTML = `<div class="ins-in">
     <div class="ins-head"><span class="ins-g">${sec.glyph}</span><div><h3>${esc(sec.name)}</h3><small>${n} page${n === 1 ? '' : 's'}${groups.length > 1 ? ' · ' + groups.length + ' asterisms' : ''}</small></div></div>
     <p class="ins-blurb">${esc(sec.blurb)}</p>
-    <div class="ins-grid">${minis.map((p, i) => `<a class="mini" ${linkAttrs(p)} style="--i:${i}"><span class="card-img">${media(p, p.img)}</span><span class="mini-t">${esc(p.label)}</span></a>`).join('')}</div>
+    <div class="ins-grid">${minis.map((p, i) => `<a class="mini" ${linkAttrs(p)} style="--i:${i}"><span class="card-img">${media(p, p.img, SIZES.mini)}</span><span class="mini-t">${esc(p.label)}</span></a>`).join('')}</div>
     <div class="ins-list">${pages.map(p => `<a class="pill${p.ext ? ' ext' : ''}" ${linkAttrs(p)}>${esc(p.label)}</a>`).join('')}</div>
     <a class="ins-cta" ${linkAttrs(lead)}><span>Open ${esc(lead.label)}</span><span aria-hidden="true">→</span></a>
   </div>`;
+  LZ.refresh(ins);
 }
 
 // ── phone sector cards ─────────────────────────────────────────────────────
@@ -734,12 +808,13 @@ function initFind(root) {
     let html = q ? '' : '<p class="find-h">Popular</p>';
     if (!res.length) html += `<p class="find-empty">No page matches "${esc(q)}". Try orbit, fluid, shader or chord.</p>`;
     html += res.map((it, i) => `<a class="find-item" role="option" data-sector="${it.sector.id}" data-n="${i}" ${linkAttrs(it)}>
-      <span class="fi-img">${media(it, it.img)}</span>
+      <span class="fi-img">${media(it, it.img, SIZES.find)}</span>
       <span class="fi-t"><b>${hl(it.label, terms)}</b><small>${esc(it.sector.short)} · ${it.credit ? hl(it.credit, terms) + ' · ' : ''}${hl(BLURBS[it.key] || it.sub || it.group || '', terms)}</small></span>
       ${it.badge ? `<span class="badge">${esc(it.badge)}</span>` : ''}<span class="fi-go" aria-hidden="true">→</span></a>`).join('');
     if (q && total > res.length) html += `<a class="find-more" href="#directory" data-find-all>See all ${total} matches in the directory <span aria-hidden="true">→</span></a>`;
     list.innerHTML = html;
     open();
+    LZ.refresh(list);
   }
   function open() { list.hidden = false; input.setAttribute('aria-expanded', 'true'); }
   function close() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); sel = -1; }
@@ -1105,5 +1180,6 @@ initBugForm();
 initSaverKey();
 initReveal();
 initSpot();
+initImages();
 startSky();
 })(window.Observatory = window.Observatory || {});

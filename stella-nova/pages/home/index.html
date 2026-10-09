@@ -39,6 +39,12 @@
      #reviews    Steam review cards (inside #features)
      .foot       social buttons, Help translate, the r/RimWorld post link
 
+   IMAGES
+     No <img> has a src in this file. Each has data-src (and data-srcset
+     with a small copy from thumbs/sm or media/sm) plus width and height.
+     main.js (const LZ) sets src only near the view and removes it far
+     from the view, so few decoded bitmaps stay in memory.
+
    SEARCH
      [data-find] blocks are inline: a field and a results list under it.
      No overlay, no scrim, no blur. "/" focuses a field. Esc closes.
@@ -138,22 +144,22 @@
 
     <nav class="portals" aria-label="Main destinations">
       <a class="portal" data-sector="game" href="#features">
-        <span class="portal-img"><img src="media/game-3.jpg" alt="" decoding="async"></span>
+        <span class="portal-img"><img data-src="media/sm/game-3.jpg" data-srcset="media/sm/game-3.jpg 640w, media/game-3.jpg 1200w" sizes="(max-width: 759px) 46vw, 25vw" width="640" height="361" alt="" decoding="async"></span>
         <span class="portal-txt"><span class="portal-kicker">&#8962; The game</span><span class="portal-title">Play Stella Nova</span><span class="portal-line">Colony sim &middot; free demo</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
       <a class="portal" data-sector="wiki" href="/stella-nova/#shipdesigner" target="_top" data-key="shipdesigner">
-        <span class="portal-img"><img src="thumbs/shipdesigner.jpg" alt="" decoding="async"></span>
+        <span class="portal-img"><img data-src="thumbs/shipdesigner.jpg" data-srcset="thumbs/sm/shipdesigner.jpg 320w, thumbs/shipdesigner.jpg 640w" sizes="(max-width: 759px) 46vw, 25vw" width="640" height="400" alt="" decoding="async"></span>
         <span class="portal-txt"><span class="portal-kicker">&#9733; Wiki</span><span class="portal-title">Game Wiki</span><span class="portal-line">Ships &middot; planner &middot; crafting</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
       <a class="portal" data-sector="quantum" href="/stella-nova/#orbital" target="_top" data-key="orbital">
-        <span class="portal-img"><img src="thumbs/orbital.jpg" alt="" decoding="async"></span>
+        <span class="portal-img"><img data-src="thumbs/orbital.jpg" data-srcset="thumbs/sm/orbital.jpg 320w, thumbs/orbital.jpg 640w" sizes="(max-width: 759px) 46vw, 25vw" width="640" height="400" alt="" decoding="async"></span>
         <span class="portal-txt"><span class="portal-kicker">&psi; Science</span><span class="portal-title">Science Lab</span><span class="portal-line">Space &middot; quantum &middot; fluids &middot; fields</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
       <a class="portal" data-sector="shaders" href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">
-        <span class="portal-img"><img src="thumbs/sdf-solids.jpg" alt="" decoding="async"></span>
+        <span class="portal-img"><img data-src="thumbs/sdf-solids.jpg" data-srcset="thumbs/sm/sdf-solids.jpg 320w, thumbs/sdf-solids.jpg 640w" sizes="(max-width: 759px) 46vw, 25vw" width="640" height="400" alt="" decoding="async"></span>
         <span class="portal-txt"><span class="portal-kicker">&#10022; Graphics</span><span class="portal-title">Shaders &amp; Rendering</span><span class="portal-line">WGSL tables &middot; effects &middot; ray marching</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
@@ -259,14 +265,14 @@
     <div class="media-head"><p class="kicker">// Gameplay feed</p><h3>See it in action</h3></div>
     <div class="media-grid">
       <button class="video" type="button" id="videoFacade" data-yt="Pn9WTbewFFQ" aria-label="Play the Stella Nova gameplay video">
-        <img src="media/game-2.jpg" alt="Stella Nova gameplay: thousands of orbiting bodies" loading="lazy" decoding="async">
+        <img data-src="media/sm/game-2.jpg" data-srcset="media/sm/game-2.jpg 640w, media/game-2.jpg 1200w" sizes="(max-width: 759px) 100vw, 50vw" width="640" height="361" alt="Stella Nova gameplay: thousands of orbiting bodies" decoding="async">
         <span class="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span>
         <span class="video-cap">Gameplay trailer &middot; YouTube</span>
       </button>
-      <figure class="shot"><img src="media/game-1.jpg" alt="Station construction" loading="lazy" decoding="async"><figcaption>Station construction</figcaption></figure>
-      <figure class="shot"><img src="media/game-5.jpg" alt="Citizen AI at work in the station" loading="lazy" decoding="async"><figcaption>Citizen AI</figcaption></figure>
-      <figure class="shot"><img src="media/game-4.jpg" alt="Interplanetary travel past the sun" loading="lazy" decoding="async"><figcaption>Interplanetary travel</figcaption></figure>
-      <figure class="shot"><img src="media/game-6.jpg" alt="Colony management screen" loading="lazy" decoding="async"><figcaption>Colony management</figcaption></figure>
+      <figure class="shot"><img data-src="media/sm/game-1.jpg" data-srcset="media/sm/game-1.jpg 640w, media/game-1.jpg 1200w" sizes="(max-width: 759px) 50vw, 25vw" width="640" height="361" alt="Station construction" decoding="async"><figcaption>Station construction</figcaption></figure>
+      <figure class="shot"><img data-src="media/sm/game-5.jpg" data-srcset="media/sm/game-5.jpg 640w, media/game-5.jpg 1200w" sizes="(max-width: 759px) 50vw, 25vw" width="640" height="361" alt="Citizen AI at work in the station" decoding="async"><figcaption>Citizen AI</figcaption></figure>
+      <figure class="shot"><img data-src="media/sm/game-4.jpg" data-srcset="media/sm/game-4.jpg 640w, media/game-4.jpg 1200w" sizes="(max-width: 759px) 50vw, 25vw" width="640" height="361" alt="Interplanetary travel past the sun" decoding="async"><figcaption>Interplanetary travel</figcaption></figure>
+      <figure class="shot"><img data-src="media/sm/game-6.jpg" data-srcset="media/sm/game-6.jpg 640w, media/game-6.jpg 1200w" sizes="(max-width: 759px) 50vw, 25vw" width="640" height="361" alt="Colony management screen" decoding="async"><figcaption>Colony management</figcaption></figure>
     </div>
 
     <!-- Channel videos: long-form uploads from youtube.com/@davesgamesio,
@@ -284,31 +290,31 @@
     </div>
     <div class="rail yt-rail" id="ytRail">
       <button class="yt" type="button" data-yt="Q3e1KhgtPmU" data-title="i made a very cool space game." aria-label="Play i made a very cool space game.">
-        <span class="yt-img"><img src="media/yt/Q3e1KhgtPmU.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/Q3e1KhgtPmU.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">Stella Nova</span><span class="yt-title">i made a very cool space game.</span><span class="yt-date">13 Jun 2026</span>
       </button>
       <button class="yt" type="button" data-yt="y-rNBpgqmXo" data-title="Matt vs. Tic Tac Toe" aria-label="Play Matt vs. Tic Tac Toe">
-        <span class="yt-img"><img src="media/yt/y-rNBpgqmXo.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/y-rNBpgqmXo.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">Stella Nova, the movie</span><span class="yt-title">Matt vs. Tic Tac Toe</span><span class="yt-date">31 Jul 2026</span>
       </button>
       <button class="yt" type="button" data-yt="xuQJkFIJSIA" data-title="Leon&#x27;s Croissant Colony" aria-label="Play Leon&#x27;s Croissant Colony">
-        <span class="yt-img"><img src="media/yt/xuQJkFIJSIA.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/xuQJkFIJSIA.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">Stella Nova, the movie</span><span class="yt-title">Leon&#x27;s Croissant Colony</span><span class="yt-date">24 Jul 2026</span>
       </button>
       <button class="yt" type="button" data-yt="y51rBDg7wao" data-title="Lissy Braves the Storm" aria-label="Play Lissy Braves the Storm">
-        <span class="yt-img"><img src="media/yt/y51rBDg7wao.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/y51rBDg7wao.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">Stella Nova, the movie</span><span class="yt-title">Lissy Braves the Storm</span><span class="yt-date">17 Jul 2026</span>
       </button>
       <button class="yt" type="button" data-yt="0biYmQT6fyA" data-title="Spawning Thousands of Resources in Orbit with @FoxxySteve on Twitch!" aria-label="Play Spawning Thousands of Resources in Orbit with @FoxxySteve on Twitch!">
-        <span class="yt-img"><img src="media/yt/0biYmQT6fyA.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/0biYmQT6fyA.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">Developer updates</span><span class="yt-title">Spawning Thousands of Resources in Orbit with @FoxxySteve on Twitch!</span><span class="yt-date">10 Jul 2026</span>
       </button>
       <button class="yt" type="button" data-yt="NBtotMVcTkw" data-title="Let&#x27;s play Stella Nova with Indie Twitch Streamers!!" aria-label="Play Let&#x27;s play Stella Nova with Indie Twitch Streamers!!">
-        <span class="yt-img"><img src="media/yt/NBtotMVcTkw.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/NBtotMVcTkw.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">FragginGamin x davesgames.io</span><span class="yt-title">Let&#x27;s play Stella Nova with Indie Twitch Streamers!!</span><span class="yt-date">3 Jul 2026</span>
       </button>
       <button class="yt" type="button" data-yt="4zP0Tovlp6M" data-title="thank you :) from dave" aria-label="Play thank you :) from dave">
-        <span class="yt-img"><img src="media/yt/4zP0Tovlp6M.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-img"><img data-src="media/yt/4zP0Tovlp6M.jpg" width="640" height="360" alt="" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
         <span class="yt-kick">The Twitch Stream Megacut</span><span class="yt-title">thank you :) from dave</span><span class="yt-date">29 Jun 2026</span>
       </button>
     </div>
