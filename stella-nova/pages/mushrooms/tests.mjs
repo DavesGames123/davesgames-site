@@ -13,7 +13,7 @@ import { buildSpecimen, formParams, randomParams, FORMS, FORM_KEYS, PARAMS, DEFA
 import { hideLines, mulberry, rdp, brushPoly, pointInPoly } from './geom.js';
 import { layoutPlate, fitSpec, pngSize, scaleBar, THEMES, STYLE_KEYS, cellAt } from './plate.js';
 import { plateSVG } from './svg.js';
-import { CODE, extract } from './saver.js';
+import { CODE, extract, TREE, treeDur, radiatePath, pathAt, camFollow } from './saver.js';
 import fs from 'node:fs';
 import { fitBox, boxPen, TREE_PEN, drawTree, treeSVG, hitTree, GROW_OVER } from './treedraw.js';
 import { buildTree, layoutTree, tipBoxes, drift, drawParams, lineage, paramChanges, cladeName, TIP_CAP, T_MAX, ASPECT, ANC } from './tree.js';
@@ -345,6 +345,38 @@ test('tree draws on a stub canvas with no NaN (3 layouts, mid growth and grown);
     for (const n of t.nodes) if (!lay.box[n.id].anc || lay.natural) ok(svg.includes(n.name), kind + ': name missing ' + n.name);
     const tb = lay.box[t.tips[1]];
     ok(hitTree(t, lay, tb.x + tb.w / 2, tb.y + tb.h / 2, 1) === t.tips[1], kind + ': a tap on a tip box finds it');
+  }
+});
+
+test('saver tree shots last 5-12 s at every calm', () => {
+  ok(['grow', 'radiate', 'lineage', 'evolve'].every(t => TREE.has(t)) && TREE.size === 4, 'four tree shots');
+  for (const type of TREE) for (let c = 0; c <= 1; c += 0.1) for (let r = 0; r <= 1; r += 0.1) {
+    const d = treeDur(type, c, r);
+    ok(d >= 5 && d <= 12, `${type} calm ${c.toFixed(1)} r ${r.toFixed(1)}: ${d.toFixed(2)} s`);
+  }
+});
+test('saver radiate camera: calm speed, no zigzag in the cladogram', () => {
+  for (const kind of ['clado', 'radial', 'fan']) for (let seed = 1; seed <= 30; seed++) {
+    const tree = treeOf(seed, { maxTips: 10 + seed % 5, spec: 1.5, ext: 0.8 }), N = tree.nodes;
+    const count = id => (N[id].children.length ? N[id].children.reduce((a, c) => a + count(c), 0) : 1);
+    const rad = N.filter(q => q.radiation), focus = (rad.length ? rad : N.filter(q => q.kind === 'split' && q.id > 1)).sort((a, b) => count(b.id) - count(a.id))[0] || N[1];
+    const sub = new Set(); (function w(id) { sub.add(id); N[id].children.forEach(w); })(focus.id);
+    const s = 50, lay = layoutTree(tree, kind, { tip: s }), dur = 12, dt = 1 / 60, ease = t => t * t * (3 - 2 * t);
+    let c = null, prev = null, vmax = 0, rev = 0;
+    const sign = [0, 0];
+    for (let t = 0; t <= dur; t += dt) {
+      const f = pathAt(radiatePath(lay, sub, focus.id, 5.76 * s), ease(t / dur), s * dur / 1.5);
+      if (!c) c = { x: f[0], y: f[1], vx: 0, vy: 0 };
+      camFollow(c, f, dt);
+      if (prev) {
+        const v = [(c.x - prev[0]) / dt / s, (c.y - prev[1]) / dt / s];
+        vmax = Math.max(vmax, Math.hypot(v[0], v[1]));
+        for (const k of [0, 1]) if (Math.abs(v[k]) > 0.1) { const g = Math.sign(v[k]); if (sign[k] && g !== sign[k]) rev++; sign[k] = g; }
+      }
+      prev = [c.x, c.y];
+    }
+    ok(vmax <= 1.3, `${kind} seed ${seed}: top speed ${vmax.toFixed(2)} tip widths/s`);
+    ok(rev <= (kind === 'clado' ? 0 : 4), `${kind} seed ${seed}: ${rev} reversals`);
   }
 });
 

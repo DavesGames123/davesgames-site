@@ -21,6 +21,17 @@
 //    plate   a plate of 4 to 9 specimens that fills cell by cell
 //    styles  one specimen drawn in pen, then inked with the brush, then
 //            given a colour wash
+//  Four tree of life shots use tree.js (7 to 14 living tips), drawn in the
+//  natural layout with treedraw.js, cladogram, radial or fan per shot:
+//    grow     the tree grows from a random root; the camera follows the
+//             newest node on a spring
+//    radiate  the camera pans along the clade of a radiation (the split
+//             with 4x speciation, else the largest clade), in tree order
+//    lineage  the ancestors of one living tip appear one by one, root to
+//             tip, and the camera walks down the lineage
+//    evolve   "evolve from here": the lineage of a tip, then a new tree
+//             grows from that tip
+//  Tree shots last 5-12 s too (treeDur), and carry no code extract.
 //  The next shot is built in a module worker (worker.js) while the
 //  current one plays. Every frame draws vectors through the camera; no
 //  raster of thin lines is ever scaled up.
@@ -47,13 +58,23 @@
 //    grep -n 'function labelFor'             the plate text
 //    grep -n 'function extract'              a code extract by function name
 //    grep -n 'function boxOf'                the subject box in the band
+//    grep -n 'function prepareTree'          the trees and jobs of a tree shot
+//    grep -n 'function renderTree'           one frame of a tree shot
+//    grep -n 'export function camFollow'     the spring camera (tested)
+//    grep -n 'export function treeDur'       tree shot lengths (tested)
 // ============================================================================
 import { formParams, randomParams, sanitize, FORMS, FORM_KEYS, UNIT_MM, PART_NAMES } from './engine.js';
 import { mulberry } from './geom.js';
 import { THEMES, THEME_KEYS, MM_PER_PX, layoutPlate, isDark, fitSpec, STYLES } from './plate.js';
 import { drawPaper, drawSpec, drawPlate } from './render.js';
+import { buildTree, layoutTree, lineage, cladeName, drawParams, maAgo, T_MAX } from './tree.js';
+import { drawTree, GROW_OVER } from './treedraw.js';
 
-const TYPES = ['draw', 'push', 'age', 'tilt', 'plate', 'styles'];
+const TYPES = ['draw', 'push', 'age', 'tilt', 'plate', 'styles', 'grow', 'radiate', 'lineage', 'evolve'];
+export const TREE = new Set(['grow', 'radiate', 'lineage', 'evolve']);
+// TeX for the plate of the tree shots: the birth-death rates and the drift.
+const TEX_BD = 'P(\\text{split}) = \\lambda\\,dt,\\quad P(\\text{extinct}) = \\mu\\,dt';
+const TEX_DRIFT = 'x_{\\text{child}} = x_{\\text{parent}} + \\sigma_g\\sqrt{\\Delta t / T}\\;Z';
 const FIRST = ['draw', 'push', 'styles'];
 export const CREDIT = 'After fishdraw and shan-shui-inf by Lingdong Huang';
 const GILLED = ['fly', 'parasol', 'bolete', 'chanterelle', 'inkcap', 'bonnet'];
@@ -100,6 +121,50 @@ export function extract(src, name, from = 'start', n = 12) {
 }
 
 const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
+
+// The length of a tree shot in s, 5 to 12 for calm 0..1 and r 0..1.
+export function treeDur(type, calm, r) {
+  const d = { grow: 7 + 3 * calm + 2 * r, radiate: 6 + 3 * calm + 3 * r, lineage: 7 + 3 * calm + 2 * r, evolve: 9 + 2 * calm + r }[type];
+  return Math.min(12, Math.max(5, d));
+}
+// The radiate pan in layout mm: the tips of the clade in tree order, so
+// two points in a row are neighbours. In the cladogram, a vertical pan at
+// the clade centre, the living column kept in view (viewW mm wide).
+export function radiatePath(lay, sub, focusId, viewW) {
+  const centre = id => { const b = lay.box[id]; return [b.x + b.w / 2, b.y + b.h / 2]; };
+  const tips = lay.order.filter(id => sub.has(id)).map(centre);
+  if (lay.kind !== 'clado' || !tips.length) return [centre(focusId), ...tips];
+  let x0 = Infinity, x1 = -Infinity;
+  for (const id of sub) { const b = lay.box[id]; x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x + b.w); }
+  const x = Math.max((x0 + x1) / 2, x1 - viewW * 0.46);
+  return [[x, tips[0][1]], [x, tips[tips.length - 1][1]]];
+}
+// The point at u (0..1) of the arc length of a polyline; a path longer
+// than maxLen is walked over its middle maxLen only.
+export function pathAt(path, u, maxLen = Infinity) {
+  if (path.length < 2) return path[0].slice();
+  const seg = [];
+  let L = 0;
+  for (let i = 1; i < path.length; i++) { const d = Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]); seg.push(d); L += d; }
+  const m = Math.min(L, maxLen);
+  let s = (L - m) / 2 + Math.min(1, Math.max(0, u)) * m;
+  for (let i = 0; i < seg.length; i++) {
+    if (s <= seg[i] || i === seg.length - 1) { const f = seg[i] > 0 ? Math.min(1, s / seg[i]) : 1; return [path[i][0] + (path[i + 1][0] - path[i][0]) * f, path[i][1] + (path[i + 1][1] - path[i][1]) * f]; }
+    s -= seg[i];
+  }
+  return path[path.length - 1].slice();
+}
+// A critically damped spring toward the focus (rate w per second): the
+// velocity is continuous, so a jump of the focus starts smooth.
+export function camFollow(cam, focus, dt, w = 2.2) {
+  const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    cam.vx += (w * w * (focus[0] - cam.x) - 2 * w * cam.vx) * h;
+    cam.vy += (w * w * (focus[1] - cam.y) - 2 * w * cam.vy) * h;
+    cam.x += cam.vx * h; cam.y += cam.vy * h;
+  }
+  return cam;
+}
 
 export function installSaver(ctxIn) {
   const { getSpec, getGrain, onEnter, onExit } = ctxIn;
@@ -151,6 +216,7 @@ export function installSaver(ctxIn) {
     const calm = V.calm, R = V.rnd;
     const shot = { type, theme: V.themeBag(), style: V.styleBag(), dur: 5 + 4 * calm + R() * 3, specs: [], t0: 0, ready: false, failed: false };
     styleOf(shot);
+    if (TREE.has(type)) { prepareTree(shot); return shot; }
     const jobs = [];
     const job = (p, s) => jobs.push(V.builder.build(sanitize(p), s));
     if (type === 'draw') {
@@ -217,6 +283,43 @@ export function installSaver(ctxIn) {
     });
     return shot;
   }
+  // ── prepareTree ───────────────────────────────────────────────────────────
+  // A tree view: a tree, its specimens (worker jobs in time order) and its
+  // layout cache. The shot starts when the specimens it opens on are built.
+  function treeView(rootParams, rootSeed, tips, spec) {
+    const R = V.rnd;
+    const tree = buildTree({ rootParams, rootSeed, seed: u32(), maxTips: tips, spec, ext: 0.4 + R() * 0.8, mut: 0.7 + R() * 0.8, radiations: true });
+    const tv = { tree, specs: new Map(), lay: null, layTip: 0 };
+    tv.jobs = tree.nodes.slice().sort((a, b) => a.t - b.t).map(q => ({ q, job: V.builder.build(sanitize(drawParams(q.params)), q.seed).then(f => { if (f) tv.specs.set(q.id, f); return f; }) }));
+    return tv;
+  }
+  function prepareTree(shot) {
+    const R = V.rnd, form = V.formBag(), seed = u32(), type = shot.type;
+    const tips = type === 'grow' || type === 'evolve' ? 7 + Math.floor(R() * 4) : 10 + Math.floor(R() * 5);
+    const kinds = innerWidth >= innerHeight ? ['clado', 'radial', 'fan'] : ['clado', 'radial'];
+    shot.kind = kinds[Math.floor(R() * kinds.length)];
+    shot.form = form; shot.seed = seed;
+    shot.dur = treeDur(type, V.calm, R());
+    const A = treeView(formParams(form, seed), seed, tips, type === 'radiate' ? 1.5 : 1);
+    shot.tv = [A];
+    const N = A.tree.nodes;
+    if (type === 'radiate') {
+      const count = id => (N[id].children.length ? N[id].children.reduce((a, c) => a + count(c), 0) : 1);
+      const rad = N.filter(q => q.radiation);
+      shot.focus = (rad.length ? rad : N.filter(q => q.kind === 'split' && q.id > 1)).sort((a, b) => count(b.id) - count(a.id))[0] || N[1];
+      shot.sub = new Set();
+      (function walk(id) { shot.sub.add(id); N[id].children.forEach(walk); })(shot.focus.id);
+    }
+    if (type === 'lineage' || type === 'evolve') {
+      const living = N.filter(q => q.kind === 'tip').sort((a, b) => lineage(A.tree, b.id).length - lineage(A.tree, a.id).length);
+      shot.tip = living[Math.floor(R() * Math.min(3, living.length))];
+      shot.line = lineage(A.tree, shot.tip.id);
+    }
+    if (type === 'evolve') shot.tv.push(treeView(shot.tip.params, shot.tip.seed, 6 + Math.floor(R() * 4), 1));
+    const need = [];
+    for (const { q, job } of A.jobs) if (type === 'grow' ? q.t < 30 : type === 'radiate' ? shot.sub.has(q.id) : shot.line.includes(q.id)) need.push(job);
+    Promise.race([Promise.all(need), new Promise(res => setTimeout(res, 9000))]).then(() => { shot.specs = [A.specs.get(0) || null]; shot.ready = true; });
+  }
   // The push target: the bbox of the lines of the focus part.
   function aimPush(shot) {
     const f = shot.specs[0], F = FOCI[shot.focus], pi = PART_NAMES.indexOf(F.part);
@@ -254,6 +357,7 @@ export function installSaver(ctxIn) {
   const formName = f => (FORMS[f] ? FORMS[f].label + ' form' : 'A random species');
   // Short text: the plate must leave a tall clear band for the subject.
   function labelFor(shot) {
+    if (TREE.has(shot.type)) return treeLabel(shot);
     const f = shot.specs[0], P = f.params;
     const params = [
       { sym: 'e', name: 'camera height', value: P.elev.toFixed(2), cls: 'm1' },
@@ -278,6 +382,23 @@ export function installSaver(ctxIn) {
     if (shot.type === 'tilt') return Object.assign(base, { params: params.slice(1),
       lines: ['The camera sinks below the cap; the underside opens.', meta, CREDIT], code: code('tilt') });
     return Object.assign(base, { lines: ['Pen, then ink brush, then colour wash.', `Seed ${shot.seed}`, CREDIT], code: code('styles') });
+  }
+
+  // The plate of a tree shot: the family name, the story of the shot, the
+  // rates as TeX where they explain the motion, no code extract.
+  function treeLabel(shot) {
+    const tv = shot.tv[shot.tv.length - 1], root = shot.tv[0].tree.nodes[0], N = tv.tree.nodes;
+    const living = N.filter(q => q.kind === 'tip').length, gone = N.filter(q => q.kind === 'extinct').length;
+    const layout = { clado: 'Cladogram', radial: 'Radial tree', fan: 'Fan' }[shot.kind] + ' · ' + styleNote(shot);
+    const fam = 'The ' + cladeName((shot.type === 'evolve' ? N[0] : root).genus);
+    if (shot.type === 'grow') return { title: fam, sub: `A tree of life grown from ${root.name}`, tex: TEX_BD, rules: [['\\lambda', 'm1'], ['\\mu', 'm2']],
+      lines: [`${living} living and ${gone} extinct species. Each lineage splits at rate λ and dies out at rate μ.`, layout, CREDIT] };
+    if (shot.type === 'radiate') return { title: fam, sub: `A radiation of ${shot.focus.genus}, ${maAgo(shot.focus.t)} million years ago`, tex: TEX_BD, rules: [['\\lambda', 'm1']],
+      lines: ['For a while one lineage splits four times as fast: λ → 4λ.', layout, CREDIT] };
+    if (shot.type === 'lineage') return { title: shot.tip.name, sub: `Its lineage from ${root.name}, ${shot.line.length - 1} steps`, tex: TEX_DRIFT, rules: [['\\sigma_g', 'm3'], ['\\Delta t', 'm4']],
+      lines: ['Each ancestor is drawn from its own parameters; colour drifts fast, the gills slowly.', layout, CREDIT] };
+    return { title: fam, sub: `Evolve from here: ${shot.tip.name} founds a new tree`, tex: TEX_DRIFT, rules: [['\\sigma_g', 'm3']],
+      lines: [`The lineage of ${shot.tip.name}, then ${living} living species grown from it.`, layout, CREDIT] };
   }
 
   // ── boxOf ─────────────────────────────────────────────────────────────────
@@ -332,6 +453,7 @@ export function installSaver(ctxIn) {
     x.restore();
   }
   function renderShot(x, shot, t, box, cell, view, o, f, pen, mmDev, dpr, W, H, theme) {
+    if (TREE.has(shot.type)) { renderTree(x, shot, t, box, mmDev, theme, pen, dpr); return; }
     if (shot.type === 'draw') {
       const T = shot.dur * 0.68;
       drawSpec(x, f, fitSpec(f, cell, 0.95), view, Object.assign(o, { prog: t < T ? f.total * t / T : null }));
@@ -377,6 +499,54 @@ export function installSaver(ctxIn) {
       if (a2 > 0) { x.globalAlpha = a2; drawSpec(x, f, fit, view, Object.assign({}, base, { style: 'wash' })); }
       x.globalAlpha = 1;
     }
+  }
+
+  // ── renderTree ────────────────────────────────────────────────────────────
+  // The tree in its natural layout, in mm. A tip box is half the band
+  // height (at least 120 CSS px, at most 300, and 45% of the band width),
+  // so the mushrooms stay large and the camera moves over the tree:
+  //   grow     the newest node
+  //   radiate  across the clade of the radiation, in tree order
+  //   lineage  down the lineage, root to tip
+  //   evolve   the lineage (40% of the shot), then the newest node of the
+  //            second tree, which grows from that tip
+  function renderTree(x, shot, t, box, mmDev, theme, pen, dpr) {
+    const p = t / shot.dur, second = shot.type === 'evolve' && p >= 0.4;
+    const tv = shot.tv[second ? 1 : 0], N = tv.tree.nodes;
+    let tipPx = Math.max(120 * dpr, Math.min(box.h * 0.5, 300 * dpr));
+    tipPx = Math.min(tipPx, box.w * 0.45);
+    const tipMM = +(tipPx * mmDev).toFixed(1);
+    if (!tv.lay || tv.layTip !== tipMM) {
+      if (shot.cam && shot.camTv === tv && tv.layTip) { const r = tipMM / tv.layTip; shot.cam.x *= r; shot.cam.y *= r; shot.cam.vx *= r; shot.cam.vy *= r; }
+      tv.lay = layoutTree(tv.tree, shot.kind, { tip: tipMM }); tv.layTip = tipMM;
+    }
+    if (shot.camTv !== tv) { shot.camTv = tv; shot.cam = null; }
+    const lay = tv.lay, s = 1 / mmDev, cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const centre = id => { const b = lay.box[id]; return [b.x + b.w / 2, b.y + b.h / 2]; };
+    let tau = null, line = null, ancOnly = null, anc = true, focus, sel = -1;
+    const newest = tt => { let best = N[0]; for (const q of N) if (q.t <= tt && q.t >= best.t) best = q; return centre(best.id); };
+    if (shot.type === 'grow' || second) {
+      const q = second ? (p - 0.4) / 0.5 : t / (shot.dur * 0.85);
+      tau = T_MAX * GROW_OVER * Math.min(1, q);
+      focus = newest(tau);
+    } else if (shot.type === 'radiate') {
+      focus = pathAt(radiatePath(lay, shot.sub, shot.focus.id, box.w * mmDev), ease(p), lay.tip.w * shot.dur / 1.5);
+      line = shot.sub;
+    } else {
+      const span = shot.type === 'evolve' ? shot.dur * 0.36 : shot.dur * 0.8;
+      const k = Math.min(shot.line.length - 1, Math.floor(Math.min(1, t / span) * shot.line.length));
+      ancOnly = new Set(shot.line.slice(0, k + 1));
+      line = new Set(shot.line); anc = false; sel = shot.line[shot.line.length - 1];
+      focus = centre(shot.line[k]);
+    }
+    const now = performance.now(), dt = shot.camAt ? Math.min(0.1, (now - shot.camAt) / 1000) : 0;
+    shot.camAt = now;
+    if (!shot.cam) shot.cam = { x: focus[0], y: focus[1], vx: 0, vy: 0 };
+    camFollow(shot.cam, focus, dt);
+    const view = { s, ox: cx - shot.cam.x * s, oy: cy - shot.cam.y * s };
+    shot.tipCss = +(lay.tip.w * s / dpr).toFixed(1);
+    drawTree(x, { tree: tv.tree, lay, view, theme, ink: shot.ink, style: shot.style, jitter: shot.jitter, pen, dpr, tau,
+      specFor: id => tv.specs.get(id) || null, anc, ancOnly, names: true, sel, line: line || new Set(), xMode: 'time', back: true, paper: theme.paper });
   }
 
   function nextType() {
@@ -433,7 +603,7 @@ export function installSaver(ctxIn) {
     debug() {
       if (!V) return null;
       const s = V.shot, n = V.next;
-      return s ? { type: s.type, form: s.form, focus: s.focus, name: s.specs[0] && s.specs[0].name, seed: s.seed, theme: s.theme, style: s.curStyle || s.style,
+      return s ? { kind: s.kind, tipCss: s.tipCss, type: s.type, form: s.form, focus: s.focus, name: s.specs[0] && s.specs[0].name, seed: s.seed, theme: s.theme, style: s.curStyle || s.style,
         ink: s.inkName, jitter: s.jitter, dur: +s.dur.toFixed(1), t: s.t0 ? +((performance.now() - s.t0) / 1000).toFixed(1) : null,
         zoom: s.zoom, step: s.step, cells: s.type === 'plate' ? s.specs.length : undefined, count: V.count, band: V.band,
         next: n && { type: n.type, ready: n.ready, failed: n.failed } } : null;
