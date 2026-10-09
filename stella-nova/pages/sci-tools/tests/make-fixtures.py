@@ -104,6 +104,24 @@ out["power"] = {
   "nct": [[2.0, 10, 1.5, float(st.nct.cdf(2.0, 10, 1.5))], [-1.0, 4, 0.5, float(st.nct.cdf(-1.0, 4, 0.5))], [3.0, 60, 2.8, float(st.nct.cdf(3.0, 60, 2.8))]],
 }
 
+# Maths: matrices, spline, Savitzky-Golay, FFT.
+from scipy.interpolate import CubicSpline
+from scipy.signal import savgol_filter
+M1 = [[4, -2, 1, 3], [3, 6, -4, 2], [2, 1, 8, -5], [1, -3, 2, 7]]
+M2 = [[1, 2, 3], [0, 1, 4], [5, 6, 0]]
+NS = [[0.5, -1.2, 0.3, 2.0], [1.1, 0.4, -0.7, 0.2], [-0.3, 0.9, 1.5, -1.0], [2.2, -0.1, 0.6, 0.8]]
+S4 = [[4, 1, -2, 2], [1, 2, 0, 1], [-2, 0, 3, -2], [2, 1, -2, -1]]
+ev = np.linalg.eigvals(np.array(NS))
+out["matrix"] = {"M1": M1, "detM1": float(np.linalg.det(M1)), "invM1": np.linalg.inv(M1).tolist(), "M2": M2, "invM2": np.linalg.inv(M2).tolist(),
+  "solveM1": np.linalg.solve(M1, [1, 2, 3, 4]).tolist(), "NS": NS, "eigNS": sorted([[float(z.real), float(z.imag)] for z in ev]),
+  "S4": S4, "eigS4": np.linalg.eigvalsh(S4).tolist(), "rankDef": int(np.linalg.matrix_rank([[1, 2, 3], [2, 4, 6], [1, 0, 1]]))}
+xs = [0, 0.7, 1.5, 2.1, 3.4, 4.0, 5.2]; ys = [1.0, 0.3, -0.8, 0.4, 2.2, 1.1, -0.5]; q = [0.2, 1.0, 2.75, 4.6, 5.0]
+out["spline"] = {"x": xs, "y": ys, "q": q, "v": CubicSpline(xs, ys, bc_type="natural")(q).tolist()}
+yy = [float(v) for v in np.round(np.sin(np.linspace(0, 6, 25)) + rng.normal(0, 0.1, 25), 6)]
+out["savgol"] = {"y": yy, "w7p2": savgol_filter(yy, 7, 2).tolist(), "w9p3": savgol_filter(yy, 9, 3).tolist()}
+z = [float(v) for v in np.round(rng.normal(0, 1, 37), 6)]
+F = np.fft.fft(z); out["fft"] = {"x": z, "re": F.real.tolist(), "im": F.imag.tolist()}
+
 path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures.json")
 old = json.load(open(path)) if os.path.exists(path) else {}
 old.update(out)

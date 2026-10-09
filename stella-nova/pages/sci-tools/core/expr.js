@@ -62,6 +62,8 @@ export const FN = {
   min: [-1, Math.min], max: [-1, Math.max], hypot: [-1, Math.hypot], pow: [2, Math.pow],
   sind: [1, (x) => Math.sin(x * Math.PI / 180)], cosd: [1, (x) => Math.cos(x * Math.PI / 180)], tand: [1, (x) => Math.tan(x * Math.PI / 180)],
   erf: [1, erf], erfc: [1, (x) => 1 - erf(x)], gamma: [1, gammaFn],
+  // Real versions of the complex helpers, so the names parse as calls.
+  re: [1, (x) => x], im: [1, () => 0], conj: [1, (x) => x], arg: [1, (x) => (x < 0 ? Math.PI : 0)],
 };
 
 // Constants that numeric mode knows.

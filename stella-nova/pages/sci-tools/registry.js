@@ -21,6 +21,7 @@ export const CATS = [
   { id: 'stats', name: 'Statistics' },
   { id: 'chem', name: 'Chemistry' },
   { id: 'phys', name: 'Physics and engineering' },
+  { id: 'maths', name: 'Maths and numerics' },
 ];
 
 export const TOOLS = [
@@ -58,6 +59,14 @@ export const TOOLS = [
   ['rlc', 'phys', 'RC, RL and RLC circuits', 'Time constants, resonance, Q, damping and bandwidth.', 'rc rl rlc time constant resonance q factor damping cutoff filter'],
   ['optics', 'phys', 'Lenses and mirrors', 'Thin lens and mirror equation, magnification, lensmaker\'s equation.', 'thin lens mirror focal length magnification optics lensmaker'],
   ['db', 'phys', 'Decibels', 'Power and amplitude ratios, dBm, dBW, dBV and dBu.', 'decibel db dbm dbv dbu ratio gain attenuation'],
+  ['calc', 'maths', 'Calculator with units', 'Evaluate expressions with units and constants; dimension errors are caught.', 'calculator expression evaluate units dimensional analysis constants'],
+  ['roots', 'maths', 'Root finder', 'Roots of f(x) = 0 by Brent\'s method: one in a bracket, or all in a range.', 'root solver equation zero brent bisection nonlinear solve'],
+  ['integrate', 'maths', 'Integrals and derivatives', 'Adaptive Gauss–Kronrod integrals (infinite limits too) and numeric derivatives.', 'integral integration quadrature derivative differentiation numeric calculus'],
+  ['matrix', 'maths', 'Matrix calculator', 'Determinant, inverse, eigenvalues, linear systems, products and rank.', 'matrix determinant inverse eigenvalue eigenvector linear system solve rank linear algebra'],
+  ['base', 'maths', 'Bases and bits', 'Binary, octal, hex and base 36; two\'s complement, bit operations, IEEE 754 floats.', 'base conversion binary hex octal bits twos complement bitwise ieee 754 float'],
+  ['complex', 'maths', 'Complex numbers', 'Complex expressions in rectangular, polar and exponential form.', 'complex numbers imaginary polar phasor modulus argument'],
+  ['fft', 'maths', 'FFT spectrum', 'Amplitude spectrum of pasted samples with windowing and peak finding.', 'fft fourier transform spectrum frequency dft signal'],
+  ['interp', 'maths', 'Interpolation and smoothing', 'Cubic spline and linear interpolation; moving average and Savitzky–Golay.', 'interpolation spline smoothing savitzky golay moving average filter'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
