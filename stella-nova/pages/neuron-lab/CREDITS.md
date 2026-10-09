@@ -58,3 +58,9 @@ Only the equations are used; no ModelDB file is shipped.
 
 The random ranges (engine/random.js) are our own choices inside the usual
 bounds of HH-type models.
+
+## Networks of full cells
+
+engine/multicell.js connects full cells with NetCon and Exp2Syn as a
+NEURON script would. The AMPA-like and GABA_A-like time constants are
+textbook values, not taken from any one model file.

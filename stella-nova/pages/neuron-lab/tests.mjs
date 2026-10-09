@@ -12,6 +12,9 @@
 //    saver shot plans: durations and no repeats
 //    randomisation: ranges, seeds, locks, every random cell a valid tree
 //    that fires, Ih sag, spine area, the hash round trip
+//    multi-cell networks of full cells: NetCon delay, threshold weight,
+//    inhibition, a reverberating ring, the compartment budget, presets,
+//    the connectivity matrix through the hash
 //  Exit code 1 on any failure.
 // ============================================================================
 import { Cell, hinesSolve, denseSolve, somaOnly, dLambdaNseg, lambdaF, exp2Factor } from './engine/cell.js';
@@ -23,6 +26,7 @@ import { rng } from './engine/rng.js';
 import { Cell as Cell2, ihRates, SPINE_AREA } from './engine/cell.js';
 import { CATS, RANGES, TYPES, sample, catSeed, defaults, morphFactors, cellOpts, stdStimulus, stimPlan } from './engine/random.js';
 import { encodeHash, decodeHash } from './engine/hashstate.js';
+import { MultiNet, BUDGET, THRESH_W, SYN_DELAY, layoutPositions, wirePreset, matrixOf, axonCurve, chooseDlambda } from './engine/multicell.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('FAIL', msg); } };
@@ -273,6 +277,80 @@ for (const [name, bag] of [['lab', LAB_SHOTS], ['net', NET_SHOTS]]) {
   ok(JSON.stringify(back) === JSON.stringify(st), 'seeds, locks, mode and ranges round-trip through the hash: ' + encodeHash(st));
   ok(decodeHash('#purkinje').type === 'purkinje', 'an old cell-id hash still works');
   ok(JSON.stringify(decodeHash('')) === '{}', 'an empty hash is empty');
+}
+
+// ── 13. networks of full cells ────────────────────────────────────────
+{
+  const bio = defaults('bio'), morph = defaults('morph');
+  const mk = (types, layout = 'line', o = {}) => new MultiNet({ specs: types.map((type, i) => ({ type, seed: 3 + i, morph, bio })), place: layoutPositions(types.length, layout, 4), seed: 9, ...o });
+  // chain A -> B: delivery time, strong fires, weak does not
+  const chain = wx => { const n = mk(['pyramidal', 'pyramidal']); const c = n.connect(0, 1, { ty: 'e', wx }); let on = NaN; n.kick(0); n.run(60, q => { if (isNaN(on) && c.syn.B - c.syn.A > 0) on = q.t; }); return { n, c, a: n.spikeTimes(0), b: n.spikeTimes(1), on }; };
+  const S = chain(1.2), W = chain(0.5);
+  ok(S.a.length === 1, 'A fires once from the kick');
+  ok(Math.abs(S.on - S.n.cells[1].dt - (S.a[0] + S.c.delay)) <= S.n.cells[1].dt + 1e-9, `A's spike reaches B's synapse after the NetCon delay: ${(S.on - 0.025).toFixed(3)} vs ${(S.a[0] + S.c.delay).toFixed(3)} ms`);
+  near(S.c.delay, SYN_DELAY + S.c.len / 300, 1e-9, 'delay = 0.5 ms + axon length / 0.3 m/s');
+  ok(S.b.length >= 1 && S.b[0] > S.a[0] + S.c.delay, `B fires at 1.2x threshold weight: B at ${S.b[0] && S.b[0].toFixed(2)} ms`);
+  ok(W.b.length === 0, 'B stays silent at 0.5x threshold weight');
+  say(`chain: A spikes at ${S.a[0].toFixed(2)} ms, axon ${S.c.len.toFixed(0)} um, delay ${S.c.delay.toFixed(2)} ms, B spikes at ${S.b[0].toFixed(2)} ms (1.2x, ${(1.2 * THRESH_W.pyramidal * 1000).toFixed(1)} nS); 0.5x: B silent`);
+  // inhibition: C inhibits B just before A's excitation lands
+  const inh = withI => {
+    const n = mk(['pyramidal', 'pyramidal', 'pyramidal']);
+    n.connect(0, 1, { ty: 'e', wx: 1.2, delay: 4 });
+    if (withI) n.connect(2, 1, { ty: 'i', wx: 3, delay: 2 });
+    n.kick(0); n.kick(2); n.run(60);
+    return n.spikeTimes(1);
+  };
+  const b0 = inh(false), b1 = inh(true);
+  say(`inhibition: B fires at ${b0[0] && b0[0].toFixed(2)} ms from A alone; with C's GABA-like input 2 ms after C fires: ${b1.length ? b1[0].toFixed(2) + ' ms' : 'no spike'}`);
+  ok(b0.length === 1 && (b1.length === 0 || b1[0] > b0[0] + 1), `an inhibitory synapse delays or blocks B: ${b0[0].toFixed(2)} ms without, ${b1.length ? b1[0].toFixed(2) + ' ms' : 'blocked'} with`);
+  // a ring reverberates with enough weight, dies out without
+  const ring = (wx, vel = 0.3) => { const n = mk(['pyramidal', 'pyramidal', 'pyramidal', 'pyramidal', 'pyramidal'], 'ring', { velocity: vel }); for (const c of wirePreset(5, 'ring').conns) n.connect(c.pre, c.post, { ty: 'e', wx }); n.kick(0); n.run(300); return n; };
+  const r1 = ring(3), r0 = ring(0.4);
+  const laps = Math.min(...[0, 1, 2, 3, 4].map(i => r1.spikeTimes(i).length));
+  ok(laps >= 3, 'a 5-cell ring at 3x threshold weight keeps going: every cell fires ' + laps + '+ times in 300 ms');
+  ok(r0.spikes.length / 2 === 1, 'at 0.4x the wave stops after the kicked cell: ' + r0.spikes.length / 2 + ' spike');
+  const s0 = r1.spikeTimes(0);
+  say(`ring of 5 at 3x: ${r1.spikes.length / 2} spikes in 300 ms, cell 0 at ${s0.slice(0, 4).map(t => t.toFixed(1)).join(', ')} ms (lap ${(s0[1] - s0[0]).toFixed(1)} ms)`);
+  // budget: 12 random cells (desktop), 6 on a phone; finite and fast enough
+  for (const [name, B, n] of [['desktop', BUDGET.desktop, 12], ['phone', BUDGET.phone, 6]]) {
+    let worst = 0, over = 0, bad = 0, msPer = 0;
+    for (let seed = 1; seed <= 3; seed++) {
+      const m = sample('morph', catSeed(seed, 'morph'), { branches: { lo: 1.4, hi: 1.6 }, depth: { lo: 1, hi: 1 } }), b = sample('bio', catSeed(seed, 'bio'));
+      const specs = Array.from({ length: n }, (_, i) => ({ type: TYPES[i % 4], seed: seed * 50 + i, morph: morphFactors(m, i, seed), bio: b }));
+      const net = new MultiNet({ specs, place: layoutPositions(n, 'cluster', seed), budget: B, seed });
+      for (const c of wirePreset(n, 'random', { p: 0.3, seed }).conns) net.connect(c.pre, c.post, { ty: c.ty, wx: 1.5 });
+      for (let i = 0; i < n; i += 3) net.kick(i);
+      const t0 = process.hrtime.bigint(); net.run(40); msPer = Math.max(msPer, Number(process.hrtime.bigint() - t0) / 1e6 / 40);
+      worst = Math.max(worst, net.total); if (net.total > B.comps) over++;
+      for (const c of net.cells) if (!c.v.every(Number.isFinite)) bad++;
+    }
+    ok(over === 0 && worst <= B.comps, `${name}: ${n} big random cells stay under ${B.comps} compartments (worst ${worst})`);
+    ok(bad === 0, name + ': no NaN in a random multi-cell run');
+    ok(msPer < 25, `${name}: ${msPer.toFixed(2)} ms of CPU per simulated ms (node), so 8 sim ms per s costs ${(msPer * 8 / 10).toFixed(1)}% of a core`);
+    say(`${name}: ${n} cells, worst ${worst} compartments, ${msPer.toFixed(2)} CPU ms per sim ms`);
+  }
+  ok(chooseDlambda([{ S: makeCell('pyramidal', 1), Ra: 35.4, cm: 1 }], 1e9).dl === 0.03, 'one cell keeps the finest d_lambda');
+  // presets
+  const P8 = k => wirePreset(8, k, { p: 0.3, seed: 2, fracE: 0.75 });
+  ok(P8('chain').conns.length === 7 && P8('ring').conns.length === 8 && P8('all').conns.length === 56, 'chain 7, ring 8, all-to-all 56 links for 8 cells');
+  const ei = P8('ei');
+  ok(ei.conns.every(c => c.ty === ei.sign[c.pre]) && ei.sign.filter(x => x === 'i').length === 2, "E/I preset obeys Dale's law (2 of 8 inhibitory)");
+  ok([...Array(8).keys()].every(j => ei.conns.some(c => c.post === j && c.ty === 'e')), 'E/I: every cell has an E input');
+  const ff = P8('ff'); ok(ff.conns.every(c => c.post > c.pre), 'feed-forward links only go forward');
+  const lp = P8('loop'); ok(lp.sign[7] === 'i' && lp.conns.filter(c => c.pre === 7).length === 7, 'loop: one I cell inhibits the ring');
+  ok(axonCurve([0, 0, 0], [300, 0, 0]).len > 300, 'a drawn axon is longer than the straight line');
+  // the connectivity matrix through the hash
+  const n8 = mk(['pyramidal', 'granule', 'purkinje', 'motor', 'pyramidal', 'pyramidal', 'granule', 'pyramidal'], 'layer');
+  for (const c of ei.conns) n8.connect(c.pre, c.post, { ty: c.ty, wx: 1 + (c.pre % 3) * 0.37 });
+  n8.connect(1, 3, { ty: 'e', wx: 1.1, delay: 3.3 });
+  const st = { mode: 'net', net: { n: 8, layout: 'layer', vel: 0.3, types: n8.specs.map(s => s.type), conns: n8.conns.map(c => ({ pre: c.pre, post: c.post, ty: c.ty, w: c.w, sec: c.sec, x: c.x, d: c.fixed ?? undefined })) } };
+  const back = decodeHash(encodeHash(st)).net;
+  const re = mk(back.types, back.layout);
+  for (const c of back.conns) re.connect(c.pre, c.post, { ty: c.ty, w: c.w, sec: c.sec, x: c.x, delay: c.d });
+  ok(JSON.stringify(matrixOf(8, re.conns)) === JSON.stringify(matrixOf(8, n8.conns)), 'the connectivity matrix round-trips through the hash');
+  ok(re.conns.every((c, i) => Math.abs(c.w - n8.conns[i].w) < 1e-5 && c.node === n8.conns[i].node && Math.abs(c.delay - n8.conns[i].delay) < 0.051), 'weights, synapse nodes and delays round-trip too');
+  ok(JSON.stringify(decodeHash(encodeHash({ net: back })).net) === JSON.stringify(back), 'a second trip changes nothing');
+  say(`hash for 8 cells, ${n8.conns.length} links: ${encodeHash(st).length} characters`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
