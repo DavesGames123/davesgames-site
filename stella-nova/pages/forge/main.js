@@ -23,6 +23,14 @@
 //  clear area beside the panel or above the sheet: the view shifts its
 //  principal point (render.js cam.offX / offY), it does not resize.
 //
+//  Randomize (Planet tab): randomize.js draw(mode, seed) rolls a planet;
+//  locked groups keep their values (applyLocks); a group dice rerolls one
+//  group (rollGroup); Mutate moves every number by the amount. A rolled
+//  planet counts as edited, so "New seed" keeps its look. The page hash
+//  holds a share link (shareHash); boot reads it (readHash). P.view sets
+//  the sun and the exposure; view.lockSun (eyeball) keeps the sun on the
+//  planet's pole and stops the moving sun.
+//
 //  window.__forge exposes the state for saver.js (window.snSaver) and for
 //  debugging; adopt(P, M, W) shows a planet the saver generated ahead.
 //
@@ -34,14 +42,15 @@
 //  grep -n targets: "async function boot", "function regenerate",
 //  "function buildShape", "function buildMaps", "function frame",
 //  "function clearArea", "function bindPointer", "function downloadZip",
-//  "function showClock",
+//  "function showClock", "function buildRandom", "function applyPlanet", "function applyView",
 //  "window.__forge"
 // ============================================================================
 import * as PR from './presets.js';
 import { MAP_INFO, mapIds, mapImage, shrinkMaps } from './maps.js';
 import { encodePNG } from './png.js';
 import { createPool } from './pool.js';
-import { createRenderer } from './render.js';
+import { createRenderer, worldFrame } from './render.js';
+import * as RZ from './randomize.js';
 import * as BG from './budget.js';
 import * as CK from './clock.js';
 import './saver.js';
@@ -57,6 +66,7 @@ const S = {
   moveSun: true, spin: true, clouds: true, atmo: true, spinAngle: 0, t: 0,
   rate: CK.RATE_DEFAULT, clock: CK.createClock(),
   busy: false, tab: 'planet', saver: false, override: null,
+  rmode: 'type', locks: {}, lockSun: false,
 };
 let pool, device = null, ctx = null, R = null, canvas, format;
 let genTimer = 0, fullTimer = 0, lastFrame = 0;
@@ -86,6 +96,9 @@ async function boot() {
   }
   addEventListener('resize', resize); resize();
   PHONE_Q.addEventListener('change', () => { ENV.mobile = phone(); resize(); });
+  const linked = location.hash.length > 3 ? await RZ.readHash(location.hash) : null;
+  if (linked) { S.P = linked; S.edited = true; S.drawPlanetTab(); buildShape(); buildSky(); applyView(linked); }
+  else if (location.hash) status('that planet link could not be read');
   await regenerate(true);
   requestAnimationFrame(frame);
 }
@@ -133,6 +146,7 @@ function buildPlanetTab() {
     const pr = PR.presetById(S.P.preset);
     $('blurb').textContent = pr ? pr.blurb : '';
     $('seed').value = S.P.seed;
+    buildLocks();
   };
   S.drawPlanetTab = draw;
   kindBtns.forEach(b => b.onclick = () => { if (b.dataset.kind !== S.P.kind) choosePreset(PR.PRESETS.find(p => p.kind === b.dataset.kind).id); });
@@ -153,13 +167,69 @@ function buildPlanetTab() {
   $('res').value = S.width;
   $('res').onchange = () => { S.width = +$('res').value; regenerate(true); };
   $('gen').onclick = () => regenerate(true);
+  buildRandom();
   $('resNote').textContent = `Budget: ${Math.round(BG.cpuBudget(ENV) / 1e6)} MB for maps; the view uploads at most ${BG.gpuWidth(4096, ENV)} wide.`;
   draw();
 }
 function choosePreset(id, seed) {
   S.P = PR.fromPreset(id, seed); S.edited = false;
-  S.drawPlanetTab(); buildShape(); buildSky();
+  S.drawPlanetTab(); buildShape(); buildSky(); applyView(S.P);
   regenerate(false).then(() => regenerate(true));
+}
+
+// ── randomize ───────────────────────────────────────────────────────────
+const rseed = () => Math.floor(Math.random() * 1e9);
+function buildRandom() {
+  try { const m = localStorage.getItem('forge.rmode'); if (RZ.MODES.some(x => x.id === m)) S.rmode = m; } catch (e) { /* no storage */ }
+  const host = $('rMode');
+  for (const m of RZ.MODES) {
+    const b = document.createElement('button'); b.textContent = m.label; b.dataset.mode = m.id;
+    b.onclick = () => { S.rmode = m.id; try { localStorage.setItem('forge.rmode', m.id); } catch (e) { /* no storage */ } mark(); };
+    host.appendChild(b);
+  }
+  const mark = () => [...host.children].forEach(b => b.classList.toggle('on', b.dataset.mode === S.rmode));
+  mark();
+  $('roll').onclick = () => applyPlanet(RZ.applyLocks(RZ.draw(S.rmode, rseed(), S.P.preset), S.P, S.locks));
+  const amt = $('mutAmt'), showAmt = () => { $('oMut').textContent = (+amt.value).toFixed(2); };
+  amt.oninput = showAmt; showAmt();
+  $('mutate').onclick = () => applyPlanet(RZ.mutate(S.P, +amt.value, rseed()));
+  $('share').onclick = async () => {
+    const h = await RZ.shareHash(S.P);
+    history.replaceState(null, '', '#' + h);
+    try { await navigator.clipboard.writeText(location.href); status(`link copied (${h.length} characters)`); }
+    catch (e) { status('link is in the address bar'); }
+  };
+}
+// one row per lock group: lock box, the group's name for this kind, a dice
+function buildLocks() {
+  const host = $('locks'); host.innerHTML = '';
+  for (const g of RZ.GROUPS) {
+    const row = document.createElement('label');
+    row.innerHTML = `<input type="checkbox"><span>${S.P.kind === 'gas' && g.gasLabel ? g.gasLabel : g.label}</span><button title="Reroll this group">dice</button>`;
+    const box = row.querySelector('input'); box.checked = !!S.locks[g.id];
+    box.onchange = () => { S.locks[g.id] = box.checked; };
+    row.querySelector('button').onclick = e => { e.preventDefault(); applyPlanet(RZ.rollGroup(S.P, g.id, rseed())); };
+    host.appendChild(row);
+  }
+}
+// show a new recipe: controls, view, maps, and the share hash
+async function applyPlanet(P) {
+  S.P = P; S.edited = true;
+  S.drawPlanetTab(); buildShape(); buildSky(); applyView(P);
+  regenerate(false).then(() => regenerate(true));
+  try { history.replaceState(null, '', '#' + await RZ.shareHash(P)); } catch (e) { /* no hash */ }
+}
+// P.view: the sun and the exposure; lockSun keeps the sun on the pole
+function applyView(P) {
+  const v = P.view, was = S.lockSun;
+  S.lockSun = !!(v && v.lockSun);
+  if (S.lockSun) { S.moveSun = false; $('tSun').checked = false; }
+  else if (was) { S.moveSun = true; $('tSun').checked = true; }
+  if (!v) return;
+  const set = (id, out, key, x) => { if (!Number.isFinite(x)) return; S[key] = x; $(id).value = x; $(out).textContent = $(id).value; };
+  set('exp', 'oExp', 'exposure', v.exposure);
+  set('sunAz', 'oSun', 'sunAz', ((v.sunAz % 360) + 360) % 360);
+  set('sunEl', 'oSunEl', 'sunEl', v.sunEl);
 }
 
 // ── shape and sky sliders (from presets.js SCHEMA) ─────────────────────
@@ -289,7 +359,7 @@ $('loadJson').onchange = async e => {
   try {
     const { width, planet } = PR.fromJSON(await f.text());
     S.P = planet; S.edited = true; if (BG.WIDTHS.includes(width)) { S.width = width; $('res').value = width; }
-    S.drawPlanetTab(); buildShape(); buildSky(); regenerate(true);
+    S.drawPlanetTab(); buildShape(); buildSky(); applyView(planet); regenerate(true);
   } catch (err) { status('could not load: ' + err.message); }
   e.target.value = '';
 };
@@ -349,6 +419,7 @@ function camState() {
   return { pos, target: [0, 0, 0], up: [0, 1, 0], fov: 35 * Math.PI / 180 };
 }
 function sunDir() {
+  if (S.lockSun && S.P) return worldFrame([0, 1, 0], S.P.tilt || 0, S.spinAngle);
   const a = S.sunAz * Math.PI / 180, e = S.sunEl * Math.PI / 180;
   return [Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a)];
 }
@@ -394,5 +465,5 @@ function adopt(P, M, W) {
   if (R) R.setPlanet(P, M, ENV);
 }
 
-window.__forge = { S, regenerate, choosePreset, adopt, get pool() { return pool; }, get VB() { return VB; }, get R() { return R; }, sunDir, camState, ENV, get canvas() { return canvas; }, clearArea, buildMaps };
+window.__forge = { S, regenerate, choosePreset, adopt, applyPlanet, RZ, get pool() { return pool; }, get VB() { return VB; }, get R() { return R; }, sunDir, camState, ENV, get canvas() { return canvas; }, clearArea, buildMaps };
 boot();

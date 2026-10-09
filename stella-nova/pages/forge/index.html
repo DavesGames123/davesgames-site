@@ -28,12 +28,14 @@
      render.js + shaders/planet.wgsl the view
      clock.js    time rate, simulated clock
      clouds.js + shaders/clouds.wgsl  the evolving cloud deck and cirrus
+     archetypes.js  new families, giant palettes   randomize.js  draws, locks, links
      main.js     the GUI, camera, downloads   saver.js window.snSaver
 
    LAYOUT  (# marks an element id main.js binds to)
      #view (canvas) fills the window. #panel: a left column on a desktop,
      a bottom sheet above #dock on a phone (portrait) or a right drawer
-     (landscape). Tabs: planet, shape, sky, maps. #mapView shows one map
+     (landscape). Tabs: planet (presets, seed, randomize: #rMode #roll
+     #share #locks #mutAmt #mutate), shape, sky, maps. #mapView shows one map
      large. #nogpu replaces the view without WebGPU (maps still work).
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -60,6 +62,12 @@
     <div class="row"><label for="seed">Seed</label><input id="seed" type="number" min="0" step="1"><button id="dice" title="New seed">New seed</button></div>
     <div class="row"><label for="res">Maps</label><select id="res"></select><button id="gen" class="primary">Generate</button></div>
     <p id="resNote" class="note"></p>
+    <h4>Randomize</h4>
+    <div class="seg small" id="rMode"></div>
+    <div class="row"><button id="roll" class="primary">Roll a planet</button><button id="share" title="Copy a link to this planet">Copy link</button></div>
+    <div id="locks" class="locks"></div>
+    <div class="ctl"><label>mutate amount <output id="oMut"></output></label><input id="mutAmt" type="range" min="0" max="1" step="0.01" value="0.3"></div>
+    <button id="mutate" class="wide">Mutate</button>
   </section>
   <section data-pane="shape"><div id="shapeCtl"></div><button id="resetShape" class="wide">Reset to preset</button></section>
   <section data-pane="sky">

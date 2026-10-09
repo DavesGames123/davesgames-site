@@ -127,3 +127,10 @@ label.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 }
 html.sn-saver #panel, html.sn-saver #dock, html.sn-saver #top, html.sn-saver #prog, html.sn-saver #mapView, html.sn-saver #sn-wishlist-chip { display: none !important; }
 html.sn-saver #view { cursor: none; }
+
+/* randomize: mode buttons, lock rows (lock box, group name, dice) */
+.seg.small button { padding: 6px 2px; font-size: 11.5px; }
+.locks { display: grid; gap: 4px; margin: 6px 0 4px; }
+.locks label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
+.locks label span { flex: 1; }
+.locks label button { padding: 2px 8px; font-size: 11px; }
