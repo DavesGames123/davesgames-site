@@ -12,8 +12,10 @@
 //    3. plates: nearest two of N seeded Voronoi sites on the sphere. Each
 //       plate is continental or oceanic and has a drift vector. Where two
 //       plates converge, the boundary lifts (uplift); where they part, it
-//       sinks (rift). A small dichotomy term lowers one hemisphere (Mars).
+//       sinks (rift). A small dichotomy term lowers one hemisphere.
 //    4. mountains = ridged(q) * mask    mask = uplift + high continent
+//       terraces (terrain.terraces): the height is quantized to benches
+//       with flat treads and steep risers (mesas of flat-lying layers)
 //    5. detail = fbmEroded(p)           derivative-damped fBm: less detail on
 //                                       steep slopes, so slopes read eroded
 //    6. dunes, cracks (lineae), calderas, craters
@@ -38,12 +40,16 @@
 //  times the height above the sea. Moisture M = Hadley pattern cos(6 lat)
 //  + noise + coast. Biomes are a soft Whittaker lookup in (T, M). Ice
 //  where T < iceC (land and sea). Barren worlds use the palette ramp.
+//  A lava sea is plates of dark basalt crust: Worley cells (noise.js
+//  worley3) at two scales; F2 - F1 near 0 marks the glowing cracks. The
+//  crust keeps a dull red glow so the sea reads apart from the land at night.
+//  Volcanic plume rings take palette.ring.
 //
 //  grep -n targets: "export function prepareRocky", "function heightCore",
 //  "function craterField", "function buildCraters", "export function craterProfile", "function shade",
 //  "const BIOMES", "export function craterList"
 // ============================================================================
-import { fbm, fbmEroded, ridged, warp, simplex3, mulberry, onSphere, fibonacci, clamp, mix, smooth } from './noise.js';
+import { fbm, fbmEroded, ridged, warp, simplex3, worley3, mulberry, onSphere, fibonacci, clamp, mix, smooth } from './noise.js';
 import { cloudSetup, cyclones, cloudField } from './clouds.js';
 
 // Linear sRGB-ish biome colours (sRGB triples) and their (T °C, M) centres.
@@ -249,7 +255,7 @@ function craterField(ctx, p, st) {
   }
 }
 
-// Io-like calderas (paterae): dark floors, some with a red plume ring.
+// Volcanic calderas (paterae): dark floors, some with a plume ring.
 function buildVolcanoes(P, seed) {
   const rnd = mulberry(seed), out = [];
   for (let i = 0; i < (P.volcanoes.count | 0); i++) {
@@ -311,6 +317,11 @@ function heightCore(ctx, p, st) {
   const r = P.mountains.amp > 0 ? ridged(_m, ctx.mtnO, ctx.sMtn, P.mountains.sharpness) : 0;
   h += P.mountains.amp * mmask * r;
   st.mtn = mmask * r; st.c = c; st.uplift = uplift; st.rift = rift;
+  // terraces (mesas and benches of flat-lying layers): flat treads, steep risers
+  if (P.terrain.terraces > 0) {
+    const n = 7 + 5 * P.terrain.terraces, q = h * n + 0.3 * simplex3(p[0] * 5, p[1] * 5, p[2] * 5, ctx.sVar + 5), f = Math.floor(q);
+    h = mix(h, (f + smooth(0.55, 0.85, q - f)) / n, P.terrain.terraces);
+  }
   const e = P.erosion.detail > 0 ? fbmEroded(p, ctx.eroO, ctx.sEro, P.erosion.strength) : 0;
   h += P.erosion.detail * e * (0.35 + mmask);
   // dunes: crests across a seeded wind, bent by low noise, only in dry basins
@@ -364,7 +375,7 @@ function biome(T, M, out) {
 const lerp3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
 const mixIn = (o, b, t) => { o[0] += (b[0] - o[0]) * t; o[1] += (b[1] - o[1]) * t; o[2] += (b[2] - o[2]) * t; };
 
-const _cf = {}, _st = {}, _col = [0, 0, 0], _bio = [0, 0, 0], _bar = [0, 0, 0], _cp = [0, 0, 0];
+const _w1 = [0, 0, 0], _w2 = [0, 0, 0], _cf = {}, _st = {}, _col = [0, 0, 0], _bio = [0, 0, 0], _bar = [0, 0, 0], _cp = [0, 0, 0];
 const VAR_O = { freq: 7, octaves: 4, lacunarity: 2.2, gain: 0.5 };
 const MOIST_O = { freq: 2.2, octaves: 4, lacunarity: 2.1, gain: 0.5 };
 const CITY_O = { freq: 16, octaves: 3, lacunarity: 2.3, gain: 0.5 };
@@ -395,14 +406,24 @@ function sampleRocky(ctx, p, out) {
     const depth = -hk;
     const liq = P.ocean.liquid | 0;
     if (liq === 1) {
-      // lava sea: a black crust broken by glowing seams
-      const n1 = Math.abs(simplex3(p[0] * 14, p[1] * 14, p[2] * 14, ctx.sLava)), n2 = Math.abs(simplex3(p[0] * 41, p[1] * 41, p[2] * 41, ctx.sLava + 1));
-      const crust = clamp(smooth(0.0, 0.09, n1) * (0.55 + 0.45 * smooth(0.0, 0.12, n2)) + smooth(1.5, 0.2, depth) * 0.0);
-      lerp3(_col, [0.3, 0.08, 0.03], pal.dark, crust);
-      const bb = blackbody(1250 + 400 * (1 - crust));
-      const g = (1 - crust) * 3.2;
-      out.er = bb[0] * g; out.eg = bb[1] * g; out.eb = bb[2] * g;
-      out.rough = mix(0.35, 0.92, crust); out.spec = 0.5;
+      // lava sea: plates of dark basalt crust (Worley cells at two scales)
+      // broken by glowing cracks; the crust is thin and hot near the
+      // shore rifts and where the seed's hot spots sit
+      worley3(p[0] * 7, p[1] * 7, p[2] * 7, ctx.sLava, _w1);
+      worley3(p[0] * 17, p[1] * 17, p[2] * 17, ctx.sLava + 1, _w2);
+      const wob = 0.04 * simplex3(p[0] * 40, p[1] * 40, p[2] * 40, ctx.sLava + 2);
+      const crack1 = smooth(0.09, 0.0, _w1[1] - _w1[0] + wob), crack2 = smooth(0.1, 0.0, _w2[1] - _w2[0] + wob * 0.6) * 0.8;
+      const hot = smooth(0.2, 0.7, 0.5 + 0.5 * fbm(p, VAR_O, ctx.sLava + 3)) * 0.6 + smooth(0.6, 0.0, depth) * 0.4;
+      const open = clamp(Math.max(crack1, crack2 * (0.35 + 0.65 * hot)) + hot * 0.12);
+      const plateTone = 0.75 + 0.5 * ((_w1[2] >>> 8) & 255) / 255;
+      _col[0] = pal.dark[0] * plateTone; _col[1] = pal.dark[1] * plateTone; _col[2] = pal.dark[2] * plateTone;
+      mixIn(_col, [0.32, 0.09, 0.03], open);
+      const bb = blackbody(1050 + 350 * open);
+      // the crust itself is warm: a dull red floor (0.05 at 900 K) keeps
+      // the sea apart from the black land at night
+      const g = open * open * 1.6 + 0.05 * (0.6 + 0.4 * hot);
+      out.er = bb[0] * g; out.eg = bb[1] * g * (0.3 + 0.7 * open); out.eb = bb[2] * g * open;
+      out.rough = mix(0.9, 0.4, open); out.spec = 0.45;
     } else if (liq === 2) {
       lerp3(_col, pal.shallow, pal.deep, 1 - Math.exp(-depth / 0.15));
       out.rough = 0.05; out.spec = 0.2;
@@ -445,13 +466,13 @@ function sampleRocky(ctx, p, out) {
     if (st.cInside > 0) mixIn(_col, pal.bright, st.cInside * 0.35);
     if (st.blanket > 0) mixIn(_col, pal.bright, st.blanket * 0.2);
     if (st.rays > 0) mixIn(_col, pal.bright, clamp(st.rays) * 0.6);
-    // Io: sulphur variety, calderas, plume rings, hot vents
+    // volcanic moons: surface deposits, calderas, plume rings, hot vents
     if (ctx.volcs.length) {
       const s1 = fbm(p, SULF_O, ctx.sVar + 7);
       mixIn(_col, pal.accent, smooth(0.1, 0.45, s1) * 0.7);
       mixIn(_col, pal.bright, smooth(-0.15, -0.45, s1) * 0.6);
       mixIn(_col, pal.rock, smooth(0.55, 0.85, Math.abs(lat) / (Math.PI / 2)) * 0.5);
-      mixIn(_col, [0.62, 0.22, 0.08], st.vRing * 0.65);
+      mixIn(_col, pal.ring || [0.62, 0.22, 0.08], st.vRing * 0.65);
       mixIn(_col, pal.dark, st.vDark * 0.9);
       if (st.vHot > 0 && P.volcanoes.glow > 0) {
         const bb = blackbody(1500), g = st.vHot * P.volcanoes.glow * 4;

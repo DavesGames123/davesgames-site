@@ -20,6 +20,7 @@
 //    ridged(p, o, seed, sharp) Musgrave ridged multifractal, crest power sharp
 //    warp(p, amount, freq, seed, out)  two-level domain warp (inner factor 0.8)
 //    curl(p, freq, seed, out) divergence-free tangent flow: grad(psi) x p
+//    worley3(x,y,z,seed,out)  cellular noise: F1, F2, cell id (plates, cracks)
 //    mulberry(seed)           seeded RNG in [0, 1)
 //    onSphere(rnd, out)       uniform random unit vector
 //    fibonacci(n)             n near-uniform unit vectors (deterministic)
@@ -215,6 +216,22 @@ export function curl(p, freq, seed, out, octaves = 2) {
   out[0] = gy * p[2] - gz * p[1];
   out[1] = gz * p[0] - gx * p[2];
   out[2] = gx * p[1] - gy * p[0];
+  return out;
+}
+
+// Worley (cellular) noise: out = [F1, F2, cell id] for the nearest two
+// seeded feature points of the unit lattice round (x, y, z). F2 - F1 is 0 on
+// the cell borders, so it draws cracks between plates.
+export function worley3(x, y, z, seed, out = [0, 0, 0]) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  let f1 = 9, f2 = 9, id = 0;
+  for (let k = -1; k <= 1; k++) for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const h = hash(ix + i, iy + j, iz + k, seed);
+    const px = ix + i + (h & 1023) / 1023, py = iy + j + ((h >>> 10) & 1023) / 1023, pz = iz + k + ((h >>> 20) & 1023) / 1023;
+    const dx = px - x, dy = py - y, dz = pz - z, d = dx * dx + dy * dy + dz * dz;
+    if (d < f1) { f2 = f1; f1 = d; id = h; } else if (d < f2) f2 = d;
+  }
+  out[0] = Math.sqrt(f1); out[1] = Math.sqrt(f2); out[2] = id;
   return out;
 }
 
