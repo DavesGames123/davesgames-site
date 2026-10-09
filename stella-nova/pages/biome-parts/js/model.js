@@ -145,46 +145,52 @@ function layerNorm(X, n, d, P, out = new Float32Array(n * d)) {
   }
   return out;
 }
-// Y = X W^T + b, W is (out x inp) row-major as torch stores it.
+// Y = X W^T + b, W is (out x inp) row-major as torch stores it. The inner
+// product is unrolled by 4 (inp is 128 or 384 here).
 function linear(X, n, L, act = null) {
   const { w, b, out: m, inp } = L, Y = new Float32Array(n * m);
   for (let i = 0; i < n; i++) {
     const xo = i * inp;
     for (let j = 0; j < m; j++) {
-      const wo = j * inp; let s = b[j];
-      for (let k = 0; k < inp; k++) s += X[xo + k] * w[wo + k];
+      const wo = j * inp;
+      let s0 = 0, s1 = 0, s2 = 0, s3 = 0, k = 0;
+      for (; k + 3 < inp; k += 4) {
+        s0 += X[xo + k] * w[wo + k]; s1 += X[xo + k + 1] * w[wo + k + 1];
+        s2 += X[xo + k + 2] * w[wo + k + 2]; s3 += X[xo + k + 3] * w[wo + k + 3];
+      }
+      for (; k < inp; k++) s0 += X[xo + k] * w[wo + k];
+      const s = b[j] + s0 + s1 + s2 + s3;
       Y[i * m + j] = act ? act(s) : s;
     }
   }
   return Y;
 }
 function proj(X, n, d, W, B, part) {
-  const Y = new Float32Array(n * d), wo0 = part * d * d, bo = part * d;
-  for (let i = 0; i < n; i++) for (let j = 0; j < d; j++) {
-    let s = B[bo + j]; const wo = wo0 + j * d;
-    for (let k = 0; k < d; k++) s += X[i * d + k] * W[wo + k];
-    Y[i * d + j] = s;
-  }
-  return Y;
+  return linear(X, n, { w: W.subarray(part * d * d, (part + 1) * d * d), b: B.subarray(part * d, (part + 1) * d), out: d, inp: d });
 }
-// Multi-head attention. allow(q, k) says whether query q may see key k.
-function mha(Xq, nq, Xk, nk, d, heads, P, allow) {
+// Multi-head attention. mask[q * nk + k] = 1 when query q may see key k
+// (null: all keys).
+function mha(Xq, nq, Xk, nk, d, heads, P, mask) {
   const Q = proj(Xq, nq, d, P.inW, P.inB, 0), K = proj(Xk, nk, d, P.inW, P.inB, 1), V = proj(Xk, nk, d, P.inW, P.inB, 2);
   const hd = d / heads, sc = 1 / Math.sqrt(hd), O = new Float32Array(nq * d), w = new Float64Array(nk);
   for (let h = 0; h < heads; h++) {
     const ho = h * hd;
     for (let i = 0; i < nq; i++) {
       let mx = -Infinity;
+      const qo = i * d + ho;
       for (let j = 0; j < nk; j++) {
-        if (allow && !allow(i, j)) { w[j] = -Infinity; continue; }
-        let s = 0; for (let k = 0; k < hd; k++) s += Q[i * d + ho + k] * K[j * d + ho + k];
-        w[j] = s * sc; if (w[j] > mx) mx = w[j];
+        if (mask && !mask[i * nk + j]) { w[j] = -Infinity; continue; }
+        const ko = j * d + ho;
+        let s = 0; for (let k = 0; k < hd; k++) s += Q[qo + k] * K[ko + k];
+        s *= sc; w[j] = s; if (s > mx) mx = s;
       }
       let z = 0;
-      for (let j = 0; j < nk; j++) { w[j] = w[j] === -Infinity ? 0 : Math.exp(w[j] - mx); z += w[j]; }
-      for (let k = 0; k < hd; k++) {
-        let s = 0; for (let j = 0; j < nk; j++) s += w[j] * V[j * d + ho + k];
-        O[i * d + ho + k] = s / z;
+      for (let j = 0; j < nk; j++) { const e = w[j] === -Infinity ? 0 : Math.exp(w[j] - mx); w[j] = e; z += e; }
+      const inv = 1 / z;
+      for (let j = 0; j < nk; j++) {
+        const e = w[j] * inv; if (!e) continue;
+        const vo = j * d + ho;
+        for (let k = 0; k < hd; k++) O[qo + k] += e * V[vo + k];
       }
     }
   }
@@ -210,10 +216,12 @@ export function forward(M, T, acts) {
     }
   }
   const isGoal = i => T.seg[i] === SEG_GOAL;
-  const allowEnc = (q, k) => !isGoal(k) || q === k;
+  const encMask = new Uint8Array(n * n);
+  for (let q = 0; q < n; q++) for (let k = 0; k < n; k++) encMask[q * n + k] = !isGoal(k) || q === k ? 1 : 0;
   let h = layerNorm(x, n, d, se.inNorm);
   for (const L of M.enc) {
-    addInto(h, mha(layerNorm(h, n, d, L.n1), n, layerNorm(h, n, d, L.n1), n, d, heads, L.sa, allowEnc));
+    const a1 = layerNorm(h, n, d, L.n1);
+    addInto(h, mha(a1, n, a1, n, d, heads, L.sa, encMask));
     addInto(h, ffn(layerNorm(h, n, d, L.n2), n, L.l1, L.l2));
   }
   const C = layerNorm(h, n, d, se.outNorm);
@@ -248,12 +256,13 @@ export function forward(M, T, acts) {
   addInto(O, mlp);
   for (let j = 0; j < N; j++) for (let k = 0; k < d; k++) O[j * d + k] += intent[k];
 
-  const allowMem = (q, k) => !isGoal(k) || k === chosen;
+  const memMask = new Uint8Array(N * n);
+  for (let q = 0; q < N; q++) for (let k = 0; k < n; k++) memMask[q * n + k] = !isGoal(k) || k === chosen ? 1 : 0;
   let y = O;
   for (const L of M.dec) {
     const a1 = layerNorm(y, N, d, L.n1);
     addInto(y, mha(a1, N, a1, N, d, heads, L.sa, null));
-    addInto(y, mha(layerNorm(y, N, d, L.n2), N, C, n, d, heads, L.ca, allowMem));
+    addInto(y, mha(layerNorm(y, N, d, L.n2), N, C, n, d, heads, L.ca, memMask));
     addInto(y, ffn(layerNorm(y, N, d, L.n3), N, L.l1, L.l2));
   }
   const logits = linear(linear(layerNorm(y, N, d, M.score.n), N, M.score.l1, gelu), N, M.score.l2);
