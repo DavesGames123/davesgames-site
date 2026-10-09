@@ -223,6 +223,82 @@ section('playback');
   check('cut() takes the first half of a line by length', h.length === 2 && Math.abs(h[1][0] - 10) < 1e-9 && Math.abs(h[1][1]) < 1e-9);
 }
 
+// ─── 2D map and exports ────────────────────────────────────────────────────
+section('2D map and exports');
+{
+  const { drawMap, fullFrame, fitView, toSVG, toJSON, CREDIT } = await import('./draw2d.js');
+  // a recording 2D context: counts calls and checks every number is finite
+  const rec = { calls: 0, bad: 0, fills: 0, strokes: 0 };
+  const ctx = new Proxy({}, {
+    get(t, k) {
+      if (k in t) return t[k];
+      return (...a) => { rec.calls++; if (k === 'fill') rec.fills++; if (k === 'stroke') rec.strokes++; for (const v of a) if (typeof v === 'number' && !Number.isFinite(v)) rec.bad++; };
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const v = fitView(A, 800, 500, 10);
+  check('fitView puts the map inside the box', v.s > 0 && v.ox >= 0 && v.oy >= 0 && v.ox + A.view.w * v.s <= 800 + 1e-6 && v.oy + A.view.h * v.s <= 500 + 1e-6);
+  const tl = timeline(A);
+  for (const [name, fr] of [['finished map', fullFrame(A)], ['mid playback', frameAt(A, tl, tl.dur * 0.5)], ['first frame', frameAt(A, tl, 0)]]) {
+    rec.calls = 0; rec.bad = 0;
+    let err = null;
+    try { drawMap(ctx, A, fr, { w: 800, h: 500, dpr: 2, ...v, fieldAt: fieldSampler(A), layers: {} }); } catch (e) { err = e; }
+    check(`drawMap draws the ${name} with finite numbers`, !err && rec.calls > 0 && rec.bad === 0, err ? err.message : `${rec.calls} calls`);
+  }
+  const svg = toSVG(A, { title: 'test' });
+  // well-formed: every opened tag closes, in order
+  const stack = [];
+  let wellFormed = true;
+  for (const m of svg.matchAll(/<(\/?)([a-zA-Z]+)[^>]*?(\/?)>/g)) {
+    if (m[3] === '/') continue;
+    if (m[1] === '/') { if (stack.pop() !== m[2]) { wellFormed = false; break; } } else stack.push(m[2]);
+  }
+  check('SVG export is well formed', wellFormed && stack.length === 0, `${(svg.length / 1024).toFixed(0)} KB`);
+  const nPoly = (svg.match(/<polygon /g) || []).length;
+  check('SVG export has every lot, block and park', nPoly === A.lots.length + A.blocks.length + A.parks.length + (A.sea.length > 2) + (A.river.length > 2), `${nPoly} polygons`);
+  check('SVG export carries the credit', svg.includes(CREDIT) && svg.includes('ProbableTrain'));
+  const j = JSON.parse(toJSON(A));
+  check('JSON export parses and keeps the city', j.seed === A.seed && j.lots.length === A.lots.length && j.buildings.length === A.lots.length && j.roads.minor.length === A.roads.minor.length && j.credit === CREDIT);
+}
+
+// ─── page module with DOM stubs ────────────────────────────────────────────
+section('page module (DOM stubs, no browser)');
+{
+  const rec = { draws: 0 };
+  const ctx2d = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => { if (k === 'fill') rec.draws++; }), set: (t, k, v) => { t[k] = v; return true; } });
+  const el = () => {
+    const kids = [];
+    const node = {
+      hidden: false, width: 0, height: 0, style: { setProperty() {} }, dataset: {}, children: kids,
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      textContent: '', innerHTML: '', value: '1',
+      setAttribute() {}, getAttribute: () => null, addEventListener() {}, appendChild() {}, prepend() {}, remove() {}, click() {},
+      querySelector: () => el(), querySelectorAll: () => [], contains: () => false, closest: () => null,
+      getBoundingClientRect: () => ({ left: 0, top: 0, right: 800, bottom: 60, width: 800, height: 60 }),
+      setPointerCapture() {}, getContext: () => ctx2d, toBlob() {},
+    };
+    return node;
+  };
+  const els = new Map();
+  globalThis.window = globalThis;
+  globalThis.innerWidth = 1280; globalThis.innerHeight = 800; globalThis.devicePixelRatio = 1;
+  globalThis.document = {
+    getElementById: (id) => { if (!els.has(id)) els.set(id, el()); return els.get(id); },
+    createElement: () => el(), documentElement: el(), body: el(), addEventListener() {},
+  };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
+  globalThis.requestAnimationFrame = () => 0;
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.location = { hash: '#seed=5&size=town' };
+  globalThis.history = { replaceState() {} };
+  globalThis.addEventListener = () => {};
+  let err = null;
+  try { await import('./main.js'); await globalThis.__mapGen.started; } catch (e) { err = e; }
+  const g = globalThis.__mapGen;
+  check('main.js loads and generates with stubs (no Worker: main-thread path)', !err && g && g.city && g.city.seed === 5, err ? err.message : `seed ${g.city.seed}, ${g.city.lots.length} lots`);
+  check('the page starts the playback at t = 0', g && g.state.T === 0 && g.state.playing === true);
+}
+
 // ─── end ────────────────────────────────────────────────────────────────────
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

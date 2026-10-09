@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>City Generator — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CITY GENERATOR  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A procedural city from a seed: a tensor field, then streamline roads
+   (main, major, minor), the coast and a river, parks, blocks, lots and
+   buildings. The generation code is MapGenerator by ProbableTrain
+   (LGPL-3.0), vendored unchanged in ../../vendor/mapgenerator/. The page
+   makes the whole city first, then plays back how it was made: in the 2D
+   map, or in the 3D view in the look of City Atlas.
+
+   FILES
+     main.js      head, foot, controls, settings, exports, 2D input, playback clock, saver
+     gen.js       generate(opts): our glue around the vendored generator, event log
+     playback.js  timeline(city), frameAt(city, tl, t)
+     draw2d.js    the 2D map (canvas) and the SVG export
+     worker.js    generate (and the 3D mesh) off the main thread
+     tests.mjs    node tests.mjs
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────── #stage ─────────────────────────────────┐
+     │ #map2d    the 2D map canvas          #map3d   the 3D view canvas    │
+     │ #veil     dark bands behind the head and the foot                   │
+     │ #head     No. · section  /  title  /  rule  /  seed · size          │
+     │ #foot     #params / #notes / #scrub (the playback) / #chips /       │
+     │           #controls = ‹ [ seed ] ›  play  speed  end  new  ⚙  ⤓  i  │
+     │ #loading  #fallback                                                 │
+     ├─────────────────────────────────────────────────────────────────────┤
+     │ #panel    settings: a drawer on the left, a sheet on phones         │
+     │ #save     exports: a drawer on the right, a sheet on phones         │
+     │ #caption  about sheet, credits                                      │
+     └─────────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'function regenerate'   worker call, fallback, new city
+     grep -n 'function frame'        playback clock and draw
+     grep -n 'function buildPanel'   settings groups
+     grep -n 'function bind2D'       2D pan and zoom
+     grep -n 'function setView'      2D / 3D switch
+     grep -n 'window.snSaver'        screensaver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Grow a procedural city from a seed: tensor-field streamline roads, coast, river, parks, lots and buildings, then watch it being built in 2D and 3D. After MapGenerator by ProbableTrain.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<script src="../../lib/nav-data.js"></script>
+<script src="../../lib/screensaver-catalog.js"></script>
+</head>
+<body>
+<main id="stage">
+  <canvas id="map2d" aria-label="2D map of the generated city"></canvas>
+  <canvas id="map3d" aria-label="3D view of the generated city" hidden></canvas>
+  <div id="veil"></div>
+  <header id="head">
+    <div id="cat"></div>
+    <h1 id="ttl">City Generator</h1>
+    <i class="rule"></i>
+    <div id="sub"></div>
+  </header>
+  <footer id="foot">
+    <div id="params"></div>
+    <div id="notes"><span id="phase"></span><span class="src">Streets, water and lots: MapGenerator by ProbableTrain · LGPL-3.0</span></div>
+    <div id="scrub" role="slider" aria-label="Playback of the generation" aria-valuemin="0" tabindex="0"><i class="fill"></i><i class="knob"></i></div>
+    <div id="chips" role="group" aria-label="View">
+      <button class="chip" id="chip2d" type="button" aria-pressed="true" title="2D map (V)"><i class="dot"></i>Map</button>
+      <button class="chip" id="chip3d" type="button" aria-pressed="false" title="3D city (V)"><i class="dot"></i>3D</button>
+      <button class="chip" id="chipField" type="button" aria-pressed="false" title="Show the tensor field (F)"><i class="dot"></i>Field</button>
+    </div>
+    <nav id="controls" aria-label="City">
+      <button id="prev" type="button" aria-label="Previous seed" title="Previous seed (Left)">‹</button>
+      <button id="where" type="button" aria-haspopup="dialog" aria-expanded="false" title="Settings (S)">
+        <span class="br">[</span><span id="seedName"></span><span id="seedSize"></span><span class="br">]</span>
+      </button>
+      <button id="next" type="button" aria-label="Next seed" title="Next seed (Right)">›</button>
+      <span class="sep"></span>
+      <button id="play" type="button" aria-label="Play" title="Play / pause the build (Space)"></button>
+      <button id="speed" type="button" aria-label="Playback speed" title="Playback speed (X)">1×</button>
+      <button id="end" type="button" aria-label="Skip to the finished city" title="Skip to the end (E)"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2.2v9.6a.4.4 0 0 0 .62.33L9 7.33V11.6a.4.4 0 0 0 .4.4h1.2a.4.4 0 0 0 .4-.4V2.4a.4.4 0 0 0-.4-.4H9.4a.4.4 0 0 0-.4.4v4.27L2.62 1.87A.4.4 0 0 0 2 2.2z"/></svg></button>
+      <button id="dice" type="button" aria-label="New city" title="New random city (R)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2.4" fill="none"/><circle cx="5.4" cy="5.4" r="1.1"/><circle cx="10.6" cy="10.6" r="1.1"/><circle cx="8" cy="8" r="1.1"/></svg></button>
+      <span class="sep"></span>
+      <button id="settingsBtn" type="button" aria-label="Settings" aria-expanded="false" title="Settings (S)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h7M12 4h2M2 8h2M7 8h7M2 12h9M14 12h0" fill="none"/><circle cx="10.5" cy="4" r="1.6" fill="none"/><circle cx="5.5" cy="8" r="1.6" fill="none"/><circle cx="12.5" cy="12" r="1.6" fill="none"/></svg></button>
+      <button id="saveBtn" type="button" aria-label="Export" aria-expanded="false" title="Export PNG, SVG, JSON (D)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.8 8 10.3l3.5-3.5M2.5 13.5h11" fill="none"/></svg></button>
+      <button id="info" type="button" aria-label="About this page" aria-pressed="false" title="About (I)">i</button>
+    </nav>
+  </footer>
+  <div id="loading" hidden><span></span>Generating</div>
+  <div id="fallback" hidden></div>
+</main>
+
+<div id="scrim" hidden></div>
+
+<aside id="panel" class="sheet left" hidden aria-label="Settings">
+  <div id="panelGrip" class="grip" aria-hidden="true"></div>
+  <header>
+    <h2>Generator</h2>
+    <button id="panelClose" class="close" type="button" aria-label="Close settings">×</button>
+  </header>
+  <div id="panelBody"></div>
+</aside>
+
+<aside id="save" class="sheet" hidden aria-label="Export">
+  <div id="saveGrip" class="grip" aria-hidden="true"></div>
+  <header>
+    <h2>Export</h2>
+    <button id="saveClose" class="close" type="button" aria-label="Close export">×</button>
+  </header>
+  <div id="saveBody"></div>
+</aside>
+
+<aside id="caption" class="sheet" hidden aria-live="polite">
+  <div id="capGrip" class="grip" aria-hidden="true"></div>
+  <button id="capClose" class="close" type="button" aria-label="Close about">×</button>
+  <h2 id="capTitle"></h2>
+  <div id="capBody"></div>
+</aside>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
