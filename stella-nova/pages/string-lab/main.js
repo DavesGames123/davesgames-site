@@ -176,7 +176,7 @@ function excite(i, kind, args = {}, { sound = true } = {}) {
   const sim = world.sims[i];
   if (!sim) return;
   if (world.frets[i] < 0) setFret(i, 0);
-  ensureAudio();
+  if (sound) ensureAudio();   // a silent API call must not start the AudioContext
   const pos = args.pos ?? world.pluckPos;
   if (kind === 'pluck') {
     const amp = args.amp == null ? DEFAULT_AMP : Math.max(-0.01, Math.min(0.01, args.amp));
