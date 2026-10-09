@@ -40,7 +40,13 @@
 //                                 toggle(), stop(), setSource('song'|'chords'),
 //                                 loadTrack(id) (set by playback/ui.js)
 //    state()                      a plain snapshot of the world
+//    stopSound()                  stop every voice now
 //    world, view2d, view3d(), audio
+//
+//  SAVER  saver.js sets window.snSaver. It sets world.silent (ensureAudio
+//  then starts no sound) and world.hook(phase, dtWall), which frame()
+//  calls with 'before' (shot director, 3D spring camera) and 'after' (the
+//  composite canvas, drawn in the same task as the WebGL render).
 //
 //  SECTION MAP   (grep -n "<anchor>" main.js)
 //    world ............... "const world ="
@@ -65,6 +71,7 @@ import { createView2D, FIELDS } from './view2d.js';
 import { createPicker } from '../ct-lab/colormaps/picker.js';
 import * as CM from '../ct-lab/colormaps/maps.js';
 import { initExplainer } from './explain.js';
+import { installSaver } from './saver.js';
 
 const $ = (id) => document.getElementById(id);
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -205,6 +212,7 @@ const custom = new Map();     // string key -> own voice (modified physics)
 let unbindHide = null;
 
 function ensureAudio() {
+  if (world.silent) return false;   // the screensaver keeps the sound off
   if (audio.started) return true;
   const ok = audio.start();
   if (ok && !unbindHide) unbindHide = audio.bindPagehide(window);
@@ -690,6 +698,7 @@ function frame(now) {
   raf = requestAnimationFrame(frame);
   const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
   last = now;
+  if (world.hook) world.hook('before', dt);
   let dtSim = 0;
   if (!world.paused && document.visibilityState !== 'hidden') {
     const n = stepper.advance(dt);
@@ -715,6 +724,7 @@ function frame(now) {
   if (view3) {
     try { view3.frame(dt, dtSim); } catch (e) { console.warn('string-lab 3D frame:', e); dispose3D(); $('msg3').hidden = false; $('msg3').textContent = 'The 3D view stopped. The 2D view still works.'; }
   }
+  if (world.hook) world.hook('after', dt);
 }
 
 function start() {
@@ -794,6 +804,7 @@ window.__strings = {
   setHarmonic(n) { world.harmonic = n; $('harm').value = String(n); },
   camera,
   pause: setPaused,
+  stopSound: stopAllSound,
   playFrets: playFromPanel,
   getTimeScale: () => world.timeScale,
   getInstrument: () => world.instKey,
@@ -817,3 +828,4 @@ window.__strings = {
 };
 
 boot();
+try { installSaver(window.__strings); } catch (e) { console.warn('string-lab saver:', e); }
