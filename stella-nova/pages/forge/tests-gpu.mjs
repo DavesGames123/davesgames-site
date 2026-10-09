@@ -7,7 +7,12 @@
 //    1. 100 frames create no GPU buffer, bind group or texture.
 //    2. The cloud map that render() builds in row slices while the hour
 //       moves equals one full dispatch at the final hour.
-//    3. Limb: a pixel whose centre just misses an airless sphere but is
+//    3. Terminator: on an Earth-like world (no clouds) the ground light
+//       falls from 50 % to 5 % of its value at 20 deg sun over at least
+//       TERM_MIN_DEG of arc, twilight is still seen 2 deg past the
+//       geometric terminator, and no step between adjacent pixels in the
+//       band passes TERM_STEP. An airless moon keeps a short edge.
+//    4. Limb: a pixel whose centre just misses an airless sphere but is
 //       more than 30 % covered shows the surface (analytic cover on both
 //       sides of the edge, no 1-px staircase), and on an Earth-like world
 //       the radial limb profile has no local minimum (no dark ring).
@@ -95,11 +100,50 @@ async function shoot(preset, seed, c, S = 400, clouds = false) {
   };
   return { S, lum, geo };
 }
+const TERM_MIN_DEG = 4, TERM_STEP = 24, CLOUD_STEP = 40;
 const sideCam = (d, ph) => {
   const c = nrm([Math.sin(0.6), 0.2, Math.cos(0.6)]), s = nrm(crs([0, 1, 0], c));
   const a = ph * Math.PI / 180;
   return { pos: c.map(v => v * d), target: [0, 0, 0], up: [0, 1, 0], fov: 0.5, exposure: 0.65, sunDir: c.map((v, i) => v * Math.cos(a) + s[i] * Math.sin(a)) };
 };
+function termProfile(img) {
+  // mean luminance by sun elevation bins of 0.5 deg (all sphere pixels)
+  const bins = new Map();
+  for (let y = 0; y < img.S; y++) for (let x = 0; x < img.S; x++) {
+    const g = img.geo(x, y); if (!(g.dist < 0.97)) continue;
+    const k = Math.round(g.el * 2) / 2, b = bins.get(k) || [0, 0]; b[0] += img.lum[y * img.S + x]; b[1]++; bins.set(k, b);
+  }
+  const at = e => { const b = bins.get(Math.round(e * 2) / 2); return b ? b[0] / b[1] : NaN; };
+  const ref = at(20);
+  let e50 = NaN, e5 = NaN;
+  for (let e = 20; e >= -15; e -= 0.5) { const v = at(e); if (Number.isNaN(e50) && v < 0.5 * ref) e50 = e; if (Number.isNaN(e5) && v < 0.05 * ref) { e5 = e; break; } }
+  // the largest step between adjacent pixels along rows inside the band
+  let step = 0;
+  for (let y = 0; y < img.S; y++) for (let x = 1; x < img.S; x++) {
+    const a = img.geo(x - 1, y), b = img.geo(x, y);
+    if (!(a.dist < 0.97 && b.dist < 0.97) || Math.abs(a.el) > 8) continue;
+    step = Math.max(step, Math.abs(img.lum[y * img.S + x] - img.lum[y * img.S + x - 1]));
+  }
+  return { ref, e50, e5, width: e50 - e5, past2: at(-2), dark: at(-14), step };
+}
+{
+  const E = termProfile(await shoot('earth', 4127, sideCam(3.2, 90)));
+  ok('terminator: Earth-like light falls 50 % -> 5 % over >= ' + TERM_MIN_DEG + ' deg', E.width >= TERM_MIN_DEG, `50 % at ${E.e50} deg, 5 % at ${E.e5} deg, width ${E.width} deg`);
+  ok('terminator: Earth-like twilight is seen 2 deg past the terminator', E.past2 > E.dark + 2, `lum ${E.past2.toFixed(1)} at -2 deg, ${E.dark.toFixed(1)} at -14 deg`);
+  ok('terminator: no adjacent-pixel step over ' + TERM_STEP + ' in the band', E.step <= TERM_STEP, `max step ${E.step.toFixed(1)}`);
+  // with clouds: the deck keeps the sun past the ground terminator and
+  // loses it by a fade (it was cut at a line, white to black)
+  const C = await shoot('earth', 4127, sideCam(3.2, 90), 400, true);
+  let cstep = 0;
+  for (let y = 0; y < C.S; y++) for (let x = 1; x < C.S; x++) {
+    const a = C.geo(x - 1, y), b = C.geo(x, y);
+    if (!(a.dist < 0.97 && b.dist < 0.97) || a.el > -0.5 || a.el < -8) continue;
+    cstep = Math.max(cstep, Math.abs(C.lum[y * C.S + x] - C.lum[y * C.S + x - 1]));
+  }
+  ok('terminator: with clouds, no step over ' + CLOUD_STEP + ' from -0.5 to -8 deg', cstep <= CLOUD_STEP, `max step ${cstep.toFixed(1)}`);
+  const Mo = termProfile(await shoot('moon', 1969, sideCam(3.2, 90)));
+  ok('terminator: an airless moon keeps a short edge (< 4 deg past 0)', !(Mo.e5 < -4), `5 % at ${Mo.e5} deg`);
+}
 {
   // limb of an airless moon: the sun behind the camera (full disc)
   const img = await shoot('moon', 1969, sideCam(3.2, 0)), inside = [];

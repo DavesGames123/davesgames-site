@@ -27,7 +27,13 @@
 //  uniform control flow, wrapped at the date line (no seam line) and
 //  scaled by sin(colatitude) in u (fn poleGrad: no smeared pole cap).
 //
-//  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface",
+//  TERMINATOR  the sun is a disc (V.bw0.w): sunVis is the share of it over
+//  the horizon of a point, which dips with height, so the cloud deck keeps
+//  the sun past the ground terminator and loses it by a red fade (sun rays
+//  that graze the low air). Past the terminator the ground keeps a
+//  twilight sky (fn twilightT); the shadow in the air has a penumbra.
+//
+//  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface", "fn sunVis", "fn twilightT",
 //  "fn cloudsAt", "fn cloudShadow", "fn terrainShadow", "fn atmosphere", "fn ringAt", "@fragment"
 // ============================================================================
 
@@ -180,13 +186,51 @@ fn flowUV(uv: vec2f, vel: vec2f, t: f32, period: f32) -> Flow {
 
 // Sun light reaching body-frame point p (radius ~1): transmittance and the
 // planet's own soft shadow.
+// The sun is a disc of radius V.bw0.w (rad), not a point: sunVis is the
+// share of the disc above the planet's horizon seen from p. The horizon
+// dips below the local level by acos(1 / |p|), so a cloud deck or the
+// air above the ground keeps the sun after the ground has lost it.
+fn horizonMu(p: vec3f) -> f32 {
+  let r = max(length(p), 1.0);
+  return -sqrt(max(1.0 - 1.0 / (r * r), 0.0));
+}
+fn sunVis(p: vec3f) -> f32 {
+  let mu = clamp(dot(normalize(p), V.sun.xyz), -1.0, 1.0);
+  let a = max(V.bw0.w, 0.0047);
+  return smoothstep(-a, a, asin(mu) - asin(horizonMu(p)));
+}
+
+// Sun light reaching body-frame point p (radius ~1): transmittance and the
+// planet's own penumbral shadow. Below the horizon the sun ray is taken
+// at its grazing angle (the LUT has no ground hit).
 fn sunLight(p: vec3f) -> vec3f {
   let L = V.sun.xyz;
   let up = normalize(p);
   let mu = dot(up, L);
-  if (A.ground.w < 0.5) { return vec3f(smoothstep(-0.01, 0.01, mu)); }
+  let vis = sunVis(p);
+  if (A.ground.w < 0.5) { return vec3f(vis); }
   let r = max(length(p) * A.radii.x, A.radii.x + 0.01);
-  return transmittance(r, mu) * smoothstep(-0.02, 0.01, mu);
+  // a sun ray that passes the ground at a tangent height ht (km) crosses
+  // the dense, dusty low air: it fades out before ht reaches 0, so a high
+  // cloud loses the sun by a long red fade, not at a line
+  let ht = r * sqrt(max(1.0 - mu * mu, 0.0)) - A.radii.x;
+  let low = select(1.0, smoothstep(0.0, 1.5 * A.rayleigh.w, ht), mu < 0.0);
+  return transmittance(r, max(mu, horizonMu(p) + 0.002)) * vis * low;
+}
+
+// Twilight: past the terminator the ground still sees the air above it
+// lit by the sun. The earth's shadow stands hs = R (1 / cos(d) - 1) high
+// for a sun d below the horizon; the sunlit air above hs scatters with
+// the column density exp(-hs / H), and its light came along the grazing
+// path at hs (transmittance at mu = 0, so it is red at first, then blue
+// through the ozone at depth). At d = 0 this equals the day value of
+// transmittance(R, 0), so the day and the twilight join.
+fn twilightT(mu: f32) -> vec3f {
+  let R = A.radii.x;
+  let d = max(-asin(clamp(mu, -1.0, 1.0)), 0.0);
+  let hs = min(R * (1.0 / cos(min(d, 1.2)) - 1.0), A.radii.y - R);
+  let col = exp(-hs / max(A.rayleigh.w, 0.1)) * 0.85 + exp(-hs / max(A.mieS.w, 0.1)) * 0.15;
+  return transmittance(R + hs + 0.01, 0.0) * col;
 }
 
 fn ringAt(r: f32) -> vec4f {
@@ -273,7 +317,10 @@ fn skyIrradiance(p: vec3f) -> vec3f {
   let up = normalize(p);
   let mu = dot(up, V.sun.xyz);
   let tauS = A.rayleigh.xyz * A.rayleigh.w + A.mieS.xyz * A.mieS.w;
-  let Ts = transmittance(A.radii.x + 0.01, mu) * smoothstep(-0.1, 0.1, mu);
+  // day: the sun through the air at mu; past the terminator: twilight
+  // (the twilight gets a legibility gain of 6 past the terminator: at
+  // the true level it is under one sRGB step at the page exposure)
+  let Ts = select(twilightT(mu) * mix(1.0, 6.0, smoothstep(0.0, -0.03, mu)), transmittance(A.radii.x + 0.01, mu), mu > 0.0);
   let ms = multiScat(A.radii.x + 0.01, mu);
   return A.radii.w * tauS * (Ts * 2.5 / (4.0 * PI) + ms * 2.0) + vec3f(V.cloudCol.w);
 }
@@ -381,7 +428,10 @@ fn atmosphere(ro: vec3f, rd: vec3f, tMax: f32) -> Scat {
     if (gs.x > 0.0) {
       let b = dot(x, L);
       let dmin = sqrt(max(r * r - b * b, 0.0));
-      sh = smoothstep(R - 4.0, R + 4.0, dmin);
+      // penumbra: the sun disc widens the shadow edge with the distance
+      // to the limb that casts it
+      let pw = 4.0 + max(-b, 0.0) * max(V.bw0.w, 0.0047);
+      sh = smoothstep(R - pw, R + pw, dmin);
     }
     let Ts = transmittance(r, muS) * sh;
     let ms = multiScat(r, muS);
@@ -513,7 +563,11 @@ fn fs(in: VOut) -> @location(0) vec4f {
       let Lt = L - up * dot(L, up);
       let toSun = cloudsAt(normalize(up + Lt * 0.03)).x;
       let selfSh = mix(1.0, 0.5, smoothstep(0.25, 1.0, toSun) * smoothstep(0.0, 0.6, c.x));
-      let lightC = sunLight(pC * V.shell.y) * ringShadow(pC * V.shell.y) * A.radii.w;
+      // the shell sits high for parallax; the sun is taken at a real
+      // deck height (at most 12 km), so the clouds catch the sun past the
+      // ground terminator over a band of a few degrees, not 6
+      let hC = select(V.shell.y, 1.0 + min(V.shell.y - 1.0, 12.0 / max(A.radii.x, 1.0)), A.ground.w > 0.5);
+      let lightC = sunLight(pC * hC) * ringShadow(pC * V.shell.y) * A.radii.w;
       let wrap = clamp(dot(up, L) * 0.7 + 0.3, 0.0, 1.0);
       let skyC = skyIrradiance(pC) / PI;
       let cl = V.cloudCol.rgb * (lightC * wrap / PI * 0.95 * selfSh * (0.8 + 0.2 * c.x) + skyC * 0.6);
