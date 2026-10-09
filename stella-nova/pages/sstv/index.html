@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Slow-Scan Television: pictures sent as sound — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SLOW-SCAN TELEVISION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A scrolling explainer of SSTV that ends in a CRT receiver. Every figure
+   runs our own codec (codec.js) on the CPU: the encoder makes real audio,
+   the receiver demodulates it, finds the VIS header and the syncs, fits
+   the line period and paints the lines. 2D canvas only: the page makes no
+   WebGL or WebGPU context. gpu-guard still loads first, as on every page.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module), which imports saver.js.
+
+   FIGURES  (each <figure data-scene="name">, scenes in figures.js)
+     #s0  hero    HeroScene    a CRT receiving, fast and muted
+     #s2  tone    ToneScene    tone slider, grey swatch, scope, waterfall
+     #s3  vis     VisScene     the VIS header decoded bit by bit
+     #s4  line    LineScene    one scan line: timing and a real trace
+     #s5  demod   DemodScene   quadrature and zero-crossing FM demod
+     #s6  slant   SlantScene   clock error, syncs, the line fit
+     #s7  noise   NoiseScene   noise, fading, mistuning, drift
+     #s8  the receiver (main.js "class Finale"): CRT, waterfall, scope
+
+   GREP MAP
+     grep -n 'data-scene='   every figure
+     grep -n 'data-set='     every figure control
+     grep -n 'data-tex='     every equation (MathJax SVG via lib/sci-math.js)
+     grep -n 'id="rx'        the receiver controls
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How slow-scan television sends a picture as sound: tones from 1500 to 2300 Hz, the VIS header, scan lines of Martin, Scottie, Robot and PD modes, FM demodulation, sync and slant correction, noise, and a CRT receiver that decodes the audio live.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Slow-scan television</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>History</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>Sound as frequency</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>VIS header</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Scan lines</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>FM demodulation</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>Sync and slant</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>Noise and fading</a></li>
+    <li><a href="#s8" data-target="s8"><b>08</b>Receiver</a></li>
+    <li><a href="#s9" data-target="s9"><b>09</b>Credits</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Radio · signals · 1957 to the ISS</p>
+  <h1>Slow-scan television: a picture sent as sound</h1>
+  <p class="lede">A slow-scan picture travels as a whistle. Each pixel is a tone between 1500 Hz for black and 2300 Hz for white, and a short 1200 Hz pulse starts every line. Any voice radio can carry it, from a handheld to the International Space Station. The monitor below decodes real audio as it arrives and paints the lines one by one.</p>
+  <figure class="fig hero-fig" data-scene="hero">
+    <canvas aria-label="A CRT monitor paints a picture line by line while a waterfall of the audio scrolls beside it"></canvas>
+  </figure>
+  <p class="note">Every figure here runs our own JavaScript encoder and decoder in your browser. The encoder follows the published mode timings and <a href="https://github.com/dnet/pysstv" target="_blank" rel="noopener">pysstv</a> by Andras Veres-Szentkiralyi, the Python SSTV generator this page was built around. The decoder is ours. Jump to the <a href="#s8">receiver</a> to send your own picture.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>Pictures down a voice channel</h2><p>Broadcast television needs a channel several megahertz wide. A voice channel is about 3 kHz. Slow-scan television fits a picture into that 3 kHz by taking its time: seconds or minutes for one frame instead of a thirtieth of a second.</p></div></div>
+  <ol class="timeline">
+    <li><b>1957</b><span>Copthorne Macdonald, a student at the University of Kentucky, builds a system that sends a still picture in about 8 seconds over an amateur voice channel. A long-persistence P7 tube holds the picture on screen. He describes it in <i>QST</i> in 1958.</span></li>
+    <li><b>1960s</b><span>Radio amateurs build 8-second, 120-line black-and-white systems. Line rate and frame time are chosen from the 60 Hz mains, so a picture is 120 lines at 15 lines per second. That format lives on as Robot 8 BW.</span></li>
+    <li><b>1969</b><span>The Apollo 11 camera on the Moon uses its own slow-scan format, 320 lines at 10 frames per second. That is much faster than amateur SSTV but still too slow for broadcast, so NASA converts it on the ground for television.</span></li>
+    <li><b>1970s</b><span>Robot Research sells slow-scan monitors and cameras. Scan converters with digital memory replace the fading P7 tube, so longer frames and colour become practical.</span></li>
+    <li><b>1980s to 1990s</b><span>Colour modes arrive: Robot 36 and 72 (luminance and colour differences), Martin (Martin Emmerson, G3OQD) and Scottie (Eddie Murphy, GM3SBC) in Britain, Wraase in Germany, and later the PD modes of Paul Turner, G4IJE, and Don Rotier, K0HEO.</span></li>
+    <li><b>2000</b><span>JL Barber, N7CXI, collects the timings in "Proposal for SSTV mode specifications" for the Dayton SSTV forum. PC sound cards now do the whole job in software.</span></li>
+    <li><b>Since about 2008</b><span>Cosmonauts and ARISS volunteers send series of SSTV pictures from the International Space Station on 145.800 MHz FM, mostly in PD120 and PD180. A handheld radio and a phone app are enough to receive them.</span></li>
+  </ol>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>Sound as frequency</h2><p>SSTV is frequency modulation of an audio tone. The receiver does not care how loud the tone is, only its pitch. The pitch maps linearly to brightness, so a radio fade does not darken the picture.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>One tone, three views</h3></div>
+      <figure class="fig" data-scene="tone"><canvas aria-label="A grey swatch, an oscilloscope and a waterfall of a tone"></canvas></figure>
+      <div class="ctrls">
+        <label class="ctrl grow"><span class="m1">f</span><input type="range" data-set="tone" min="1100" max="2300" step="5" value="1900"><output data-out="tone">1900 Hz</output></label>
+        <button class="tgl" type="button" data-set="sweep" aria-pressed="false">Play a scan line</button>
+        <button class="tgl" type="button" id="toneAudio" aria-pressed="false">Hear it</button>
+      </div>
+      <p class="cap">Move the slider and watch the swatch, the oscilloscope and the waterfall. Below 1500 Hz the receiver paints nothing: 1200 Hz is the sync pulse. "Play a scan line" plays one row of the test card, slowed down 20 times. "Hear it" plays the tone quietly.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The brightness map</h3></div>
+      <div class="sci-eq" data-tex="f = 1500 + \frac{800\,Y}{255}\ \text{Hz}"></div>
+      <p class="body">Brightness <span class="mi m5">Y</span> runs from 0 (black, 1500 Hz) to 255 (white, 2300 Hz). The receiver inverts the map:</p>
+      <div class="sci-eq" data-tex="Y = 255\,\frac{f - 1500}{800}"></div>
+      <p class="body">Four other tones have fixed jobs: 1200 Hz for sync, 1900 Hz for the leader, 1100 and 1300 Hz for the 1 and 0 bits of the header.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>The VIS header: which mode is coming</h2><p>Before the picture, the sender plays a vertical interval signalling (VIS) code: a 1900 Hz leader, a 10 ms break, the leader again, then 10 bits of 30 ms. The seven data bits name the mode. A parity bit catches a bit flipped by noise.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Decoded bit by bit</h3>
+        <div class="seg" data-set="mode"><button data-v="m1" class="on">Martin M1</button><button data-v="s1">Scottie S1</button><button data-v="r36">Robot 36</button><button data-v="pd120">PD-120</button></div>
+      </div>
+      <figure class="fig" data-scene="vis"><canvas aria-label="Frequency of the VIS header over time, with each bit decoded"></canvas></figure>
+      <p class="cap">The trace is the demodulated frequency of the synthesized header, slowed down about 5 times. The decoder takes the mean frequency over the middle of each 30 ms bit: below 1200 Hz is a 1, above is a 0.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Seven bits and a parity bit</h3></div>
+      <div class="sci-eq" data-tex="\text{code} = \sum_{i=0}^{6} b_i\,2^i"></div>
+      <div class="sci-eq" data-tex="b_7 = b_0 \oplus b_1 \oplus \cdots \oplus b_6"></div>
+      <p class="body">Bits go least significant first. Parity is even: the eight bits always hold an even number of ones. Martin M1 is 44, Scottie S1 is 60, Robot 36 is 8 and PD-120 is 95.</p>
+      <p class="body dim">The leader also tunes the receiver. If the radio is off frequency, the 1900 Hz leader shows the error, and the decoder subtracts it from every later tone (automatic frequency control).</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>A scan line, segment by segment</h2><p>Every mode sends the picture one line at a time. A line is a fixed sequence: a sync pulse, short porches of black, then the colour channels one after the other. RGB modes send green, blue and red. Robot and PD modes send luminance Y and the colour differences R-Y and B-Y, and save time by sending colour at lower resolution.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Timing of one line</h3>
+        <div class="seg" data-set="mode"><button data-v="m1" class="on">Martin M1</button><button data-v="s1">Scottie S1</button><button data-v="r36">Robot 36</button><button data-v="r72">Robot 72</button><button data-v="pd120">PD-120</button><button data-v="sc2180">Wraase SC2-180</button><button data-v="p3">Pasokon P3</button></div>
+      </div>
+      <figure class="fig" data-scene="line"><canvas aria-label="Segments of one scan line with their lengths in milliseconds, and the frequency of a real line"></canvas></figure>
+      <p class="cap">Scottie puts its sync in the middle of the line, before red. Robot 36 sends R-Y on even lines and B-Y on odd lines, and the 4.5 ms separator (1500 or 2300 Hz) says which. PD modes send two picture rows per sync: Y of row one, R-Y and B-Y shared by both rows, then Y of row two.</p>
+    </article>
+    <article class="card span-8">
+      <div class="card-top"><h3>Every mode on this page</h3></div>
+      <div class="tablewrap"><table class="modes" id="modeTable">
+        <thead><tr><th>Mode</th><th>VIS</th><th>Picture</th><th>Line (ms)</th><th>Colour order</th><th>Transmission</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="cap">Transmission time includes the 910 ms VIS header. Timings follow Barber (2000) and agree with pysstv to 0.001 ms per line. Robot 8 and 24 BW, Wraase SC2-120 and Pasokon follow pysstv. Robot 72 follows Barber.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Martin M1, added up</h3></div>
+      <div class="sci-eq" data-tex="T_\text{line} = t_s + 4\,t_p + 3\,t_c"></div>
+      <div class="sci-eq" data-tex="= 4.862 + 4(0.572) + 3(146.432) = 446.446\ \text{ms}"></div>
+      <p class="body">256 lines of 446.446 ms take 114.3 s. One pixel lasts 146.432 / 320 = 0.4576 ms, so the highest picture detail is a tone change about every half millisecond.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>FM demodulation: from audio back to frequency</h2><p>The receiver must measure the pitch of the audio at every instant. Two methods are common. Counting zero crossings is simple but jumpy. Quadrature demodulation shifts the signal down to 0 Hz, keeps it as a complex number, and reads the frequency from how fast its angle turns.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Quadrature against zero crossings</h3></div>
+      <figure class="fig" data-scene="demod"><canvas class="touch-y" aria-label="Audio samples, the rotating I/Q phasor and the frequency from two demodulators"></canvas></figure>
+      <div class="ctrls">
+        <label class="ctrl grow">SNR<input type="range" data-set="snr" min="0" max="40" step="1" value="30"><output data-out="snr">30 dB</output></label>
+      </div>
+      <p class="cap">A sync pulse, a porch and eight grey steps, sampled at 11025 Hz. Lower the SNR: the zero-crossing estimate gets ragged first. The quadrature phasor turns faster for a higher tone and backwards for a tone below 1900 Hz.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The maths</h3></div>
+      <p class="body">Mix down by <span class="mi m3">f</span><sub>0</sub> = 1900 Hz and low-pass with a filter <span class="mi">h</span>:</p>
+      <div class="sci-eq" data-tex="z[n] = \sum_k h[k]\, x[n-k]\, e^{-i 2\pi f_0 (n-k)/f_s}"></div>
+      <p class="body">The angle of <span class="mi m1">z</span> turns by Δφ per sample, so</p>
+      <div class="sci-eq" data-tex="f[n] = f_0 + \frac{f_s}{2\pi}\,\arg\!\big(z[n]\,\overline{z[n-1]}\big)"></div>
+      <p class="body">A zero-crossing counter sees <span class="mi">N</span> sign changes in <span class="mi">M</span> samples:</p>
+      <div class="sci-eq" data-tex="\hat f = \frac{N\,f_s}{2M}"></div>
+      <p class="body dim">Our filter is a 33-tap Hamming-windowed sinc with a 1500 Hz cut-off at 11025 Hz. The pixel value is the mean of <span class="mi">f</span>[<span class="mi">n</span>] over the pixel's time slot.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>Sync and slant</h2><p>If the sender's sound card runs 0.2 % fast, every line arrives 0.2 % early. A receiver that only counts time drifts by a pixel or more per line, and the picture leans. A good receiver finds every 1200 Hz sync pulse, fits a straight line through their times, and uses the fitted line period instead.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Same audio, two receivers</h3></div>
+      <figure class="fig" data-scene="slant"><canvas aria-label="A picture decoded with nominal timing leans; the same audio locked to the sync fit is straight"></canvas></figure>
+      <div class="ctrls">
+        <label class="ctrl grow">Sender clock error<input type="range" data-set="clock" min="-1" max="1" step="0.05" value="0.2"><output data-out="clock">+0.20 %</output></label>
+      </div>
+      <p class="cap">Robot 36 at 22 dB SNR. The dots are the sync times the decoder found, measured from where nominal timing expects them. The yellow line is the least-squares fit. Its slope is the clock error, and the receiver reads it back to 0.001 %.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Fitting the line period</h3></div>
+      <div class="sci-eq" data-tex="t_k = a + k\,P"></div>
+      <div class="sci-eq" data-tex="P = \frac{\sum_k (k-\bar k)(t_k-\bar t)}{\sum_k (k-\bar k)^2}"></div>
+      <p class="body">For each line <span class="mi">k</span> the decoder searches near the predicted time for the falling edge of a 1200 Hz pulse. Syncs more than about 1.5 ms off the fit are left out, so a burst of noise does not bend the line. Then line <span class="mi">k</span> starts at <span class="mi">a</span> + <span class="mi">kP</span>, and its pixels stretch by <span class="mi m2">P</span>/<span class="mi m4">L</span>.</p>
+      <div class="sci-eq" data-tex="\varepsilon = \frac{P}{L} - 1"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>Noise, fading and a radio off tune</h2><p>On a real band the picture fights noise, fades and a receiver that is a little off frequency. Noise makes the frequency estimate jump, and a jump is a wrong pixel: coloured speckle. A fade lowers the signal under the noise for a few seconds and smears a band of lines. A tuning error shifts every tone, so the picture goes light or dark unless the receiver corrects it.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Break the channel</h3>
+        <div class="seg" data-set="mode"><button data-v="r36" class="on">Robot 36</button><button data-v="m2">Martin M2</button><button data-v="s2">Scottie S2</button><button data-v="pd90">PD-90</button></div>
+      </div>
+      <figure class="fig" data-scene="noise"><canvas aria-label="A picture decoded from a noisy, fading, mistuned channel, with the spectrogram of the transmission"></canvas></figure>
+      <div class="ctrls">
+        <label class="ctrl grow">SNR<input type="range" data-set="snr" min="-5" max="40" step="1" value="18"><output data-out="snr">18 dB</output></label>
+        <label class="ctrl grow">Fading<input type="range" data-set="fade" min="0" max="1" step="0.05" value="0"><output data-out="fade">0 %</output></label>
+        <label class="ctrl grow">Mistuning<input type="range" data-set="shift" min="-150" max="150" step="5" value="0"><output data-out="shift">0 Hz</output></label>
+        <label class="ctrl grow">Drift<input type="range" data-set="drift" min="0" max="120" step="5" value="0"><output data-out="drift">0 Hz</output></label>
+        <button class="tgl on" type="button" data-set="afc" aria-pressed="true">AFC</button>
+        <button class="tgl on" type="button" data-set="slant" aria-pressed="true">Slant fix</button>
+      </div>
+      <p class="cap">SNR is measured over the whole audio band, 0 to 5.5 kHz. Mistuning shifts every tone by the same amount, as an SSB radio off frequency does. Drift adds a slow shift from the start to the end of the picture, as Doppler does. AFC measures the leader and corrects a fixed error, not a drift. Below about 0 dB the VIS is lost; the decoder then forces the mode, as you can on a real receiver.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8">
+  <div class="sec-head"><span class="num">08</span><div><h2>The receiver</h2><p>Choose a picture and a mode, then press play. The page encodes the picture into the audio you hear, adds the channel noise you set, and the decoder turns that audio back into lines on the tube. Nothing is copied from the picture to the screen except through the sound.</p></div></div>
+  <article class="card span-12 rx-card">
+    <div class="rx">
+      <figure class="fig rx-fig"><canvas id="rxCv" aria-label="A CRT monitor showing the received picture"></canvas></figure>
+      <div class="rx-side">
+        <canvas id="rxSide" aria-label="Waterfall and oscilloscope of the received audio"></canvas>
+        <dl class="rx-read" id="rxRead">
+          <div><dt>Mode</dt><dd id="rdMode">–</dd></div>
+          <div><dt>Line</dt><dd id="rdLine">–</dd></div>
+          <div><dt>Time</dt><dd id="rdTime">–</dd></div>
+          <div><dt>Line fit</dt><dd id="rdFit">–</dd></div>
+        </dl>
+      </div>
+    </div>
+    <div class="rx-dock" id="rxDock">
+      <button class="play" type="button" id="rxPlay" aria-label="Play">Play</button>
+      <div class="seg" id="rxSpeed" aria-label="Speed"><button data-v="1" class="on">1×</button><button data-v="2">2×</button><button data-v="4">4×</button><button data-v="8">8×</button><button data-v="16">16×</button><button data-v="32">32×</button></div>
+      <button class="tgl" type="button" id="rxMute" aria-pressed="false">Sound on</button>
+      <label class="ctrl vol">Volume<input type="range" id="rxVol" min="0" max="1" step="0.01" value="0.15"></label>
+    </div>
+    <div class="rx-ctrls">
+      <div class="rx-row"><span class="rx-k">Picture</span>
+        <div class="seg" id="rxCard"><button data-v="planet" class="on">Planet</button><button data-v="card">Test card</button><button data-v="sunset">Sunset</button><button data-v="bars">Bars</button><button data-v="zone">Zone plate</button><button data-v="event">Event card</button></div>
+        <label class="tgl filebtn">Upload<input type="file" id="rxFile" accept="image/*"></label>
+        <button class="tgl" type="button" id="rxCam">Camera</button>
+      </div>
+      <div class="rx-row"><span class="rx-k">Mode</span><select id="rxMode" aria-label="SSTV mode"></select>
+        <span class="rx-k">Tube</span>
+        <div class="seg" id="rxPh"><button data-v="colour" class="on">Colour</button><button data-v="p7">P7</button><button data-v="p31">P31</button><button data-v="p4">P4</button><button data-v="amber">Amber</button></div>
+      </div>
+      <div class="rx-row">
+        <label class="ctrl grow">SNR<input type="range" id="rxSnr" min="-5" max="41" step="1" value="41"><output id="rxSnrO">clean</output></label>
+        <label class="ctrl grow">Clock<input type="range" id="rxClock" min="-1" max="1" step="0.05" value="0"><output id="rxClockO">0 %</output></label>
+        <button class="tgl on" type="button" id="rxSlant" aria-pressed="true">Slant fix</button>
+      </div>
+      <div class="rx-row">
+        <button class="tgl" type="button" id="rxWav">Download WAV</button>
+        <button class="tgl" type="button" id="rxPng">Download PNG</button>
+        <label class="tgl filebtn">Decode an audio file<input type="file" id="rxAudio" accept="audio/*,.wav"></label>
+        <button class="tgl" type="button" id="rxMic" aria-pressed="false">Listen (microphone)</button>
+      </div>
+      <p class="cap" id="rxMsg">Sound plays only after you press Play, at low volume. Above 4× the audio is muted. A microphone or a file needs a VIS header: the mode comes from it. An ISS recording or a phone app that sends SSTV will work.</p>
+    </div>
+    <video id="rxVideo" playsinline muted hidden></video>
+  </article>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 09 -->
+<section class="sec" id="s9">
+  <div class="sec-head"><span class="num">09</span><div><h2>Credits and sources</h2></div></div>
+  <div class="grid">
+    <article class="card span-8 credit">
+      <div class="card-top"><h3>pysstv</h3><a class="lab" href="https://github.com/dnet/pysstv" target="_blank" rel="noopener">github.com/dnet/pysstv →</a></div>
+      <p class="body">This page was built around <b>pysstv</b> by Andras Veres-Szentkiralyi (MIT licence), a readable pure-Python SSTV generator for Martin, Scottie, Robot, PD, Wraase and Pasokon modes. We wrote our encoder in JavaScript from its structure and the published timings, checked our line lengths against its classes for every mode, and our tests decode WAV files that pysstv made. The receiver, the channel model and the figures are our own.</p>
+      <ul class="refs">
+        <li>JL Barber, N7CXI. "Proposal for SSTV mode specifications". Dayton SSTV forum, 2000. The line timings of Martin, Scottie, Robot and PD modes.</li>
+        <li>Mode authors: Martin Emmerson, G3OQD (Martin); Eddie Murphy, GM3SBC (Scottie); Robot Research Inc. (Robot); Paul Turner, G4IJE, and Don Rotier, K0HEO (PD); Volker Wraase, DL2RZ (Wraase SC-2); John Langner, WB2OSZ (Pasokon).</li>
+        <li>Copthorne Macdonald. The 1958 <i>QST</i> article that started amateur slow-scan television.</li>
+        <li>For a full open-source receiver, read <a href="https://github.com/windytan/slowrx" target="_blank" rel="noopener">slowrx</a> by Oona Räisänen. We did not use its code.</li>
+      </ul>
+      <p class="body dim">All pictures on this page are drawn by our own code from formulas. The event card is our own design and is not an ARISS card.</p>
+    </article>
+  </div>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
