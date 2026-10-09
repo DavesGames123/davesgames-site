@@ -54,6 +54,13 @@
 .mx-refs ol { padding-left: 1.4em; font-size: 14px; }
 .mx-refs li { margin-bottom: 6px; overflow-wrap: anywhere; }
 .mx-credit { font-size: 13px; color: var(--sk-text2, #8b949e); }
+/* touch: 44 px targets for the figure controls and the contents links */
+@media (pointer: coarse) {
+  .mx-ctl label, .mx-ctl button { min-height: 44px; }
+  .mx-ctl input[type=range] { height: 44px; }
+  .mx-toc a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; }
+  .mx-cite { display: inline-block; min-width: 24px; text-align: center; }
+}
 @media (max-width: 520px) {
   .mx-explain { padding: 32px 16px 72px; font-size: 15px; }
   .mx-sec h3 { font-size: 19px; }
