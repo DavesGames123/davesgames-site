@@ -1,3 +1,17 @@
+/* ═══════════ LOOK — fonts and colours shared by every canvas ═══════════
+   Diagrams use one style for every instrument: hairline grid, the chord root as a
+   coloured dot with a halo, the other chord tones as light dots, and
+   numbers or note names inside the dots. Fonts follow style.css. */
+const F_SANS='Inter,system-ui,-apple-system,"Segoe UI",sans-serif';
+const F_SERIF='"STIX Two Text",Georgia,"Times New Roman",serif';
+const F_MONO='ui-monospace,"SF Mono",Menlo,Consolas,monospace';
+const UI={bg:'#0b0d12',ink:'#eceff4',ink2:'#b8bfcc',dim:'#8a92a0',faint:'#596171',
+  line:'rgba(255,255,255,0.12)',grid:'rgba(255,255,255,0.22)',ok:'#5fd38a',bad:'#ff6b6b'};
+// Interval names, by semitones above the root.
+const DEG_NAMES=['R','♭2','2','♭3','3','4','♭5','5','♯5','6','♭7','7'];
+// Note name with an ASCII sharp, for small labels inside dots.
+const shortName=pc=>NOTE_NAMES[pc].replace('♯','#');
+
 /* ═══════════ CHROMA RING ═══════════ */
 // The wheel behind the chord name: 12 wedges, one per pitch class, each growing
 // outward with its chroma energy. Tones of the current chord are lit and ringed.
@@ -43,14 +57,14 @@ function drawRing(){
     }
     // note label
     const am=(a0+a1)/2, LR=R1-14;
-    ringX.font=(inChord?'700 ':'400 ')+'11px "JetBrains Mono",monospace';
-    ringX.fillStyle=inChord?pcColor(pc,70):'rgba(128,144,176,0.55)';
+    ringX.font=(inChord?'600 ':'400 ')+'11px '+F_SANS;
+    ringX.fillStyle=inChord?pcColor(pc,74):'rgba(138,146,160,0.6)';
     ringX.textAlign='center';ringX.textBaseline='middle';
     ringX.fillText(NOTE_NAMES[pc],cx+Math.cos(am)*LR,cy+Math.sin(am)*LR);
   }
   // faint inner circle
   ringX.beginPath();ringX.arc(cx,cy,R1,0,7);
-  ringX.strokeStyle='rgba(150,200,255,0.1)';ringX.lineWidth=1;ringX.stroke();
+  ringX.strokeStyle='rgba(255,255,255,0.08)';ringX.lineWidth=1;ringX.stroke();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -191,70 +205,30 @@ function ukeVoicings(root,q){
 
 /* ── bass: chord-tone map, first 5 frets ──
    Bassists outline chords, so show every chord tone position;
-   root ringed — walk root → 5th → octave from any of them. */
+   root coloured — walk root → 5th → octave from any of them. */
 function drawBass(){
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
-  // Chord-tone pitch classes to mark on the fretboard.
-  const tones=new Set();
-  (QUALS[diagChord.q]||QUALS['']).iv.forEach(iv=>tones.add((diagChord.root+iv)%12));
-  // Layout: padding gutters and NF frets. sx/fy map string index and fret to px.
-  const pad={t:64,b:30,l:42,r:24}, NF=5;
+  const tones=chordTones();
+  const pad={t:76,b:40,l:50,r:30}, NF=5;
   const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
   const sx=i=>pad.l+gw*i/3, fy=f=>pad.t+gh*f/NF;
-  // title
-  diagX.textAlign='center';diagX.textBaseline='alphabetic';
-  diagX.font='italic 400 28px "Cormorant Garamond",serif';
-  diagX.fillStyle=pcColor(diagChord.root,68);
-  diagX.shadowColor=pcColorA(diagChord.root,0.5);diagX.shadowBlur=16;
-  diagX.fillText(chordTitle(),w/2,34);diagX.shadowBlur=0;
-  // frets
-  for(let f=0;f<=NF;f++){
-    diagX.strokeStyle=f===0?'rgba(232,236,244,0.9)':'rgba(150,200,255,0.18)';
-    diagX.lineWidth=f===0?4:1.1;
-    diagX.beginPath();diagX.moveTo(pad.l,fy(f));diagX.lineTo(pad.l+gw,fy(f));diagX.stroke();
-  }
-  // fret numbers
-  diagX.font='500 10px "JetBrains Mono",monospace';
-  diagX.fillStyle='rgba(128,144,176,0.7)';diagX.textAlign='right';diagX.textBaseline='middle';
-  for(let f=1;f<=NF;f++)diagX.fillText(f,pad.l-10,fy(f-0.5));
-  diagX.textBaseline='alphabetic';
-  // strings — bass gauge: thick to thin
-  for(let st=0;st<4;st++){
-    diagX.strokeStyle='rgba(150,200,255,0.32)';diagX.lineWidth=3.4-st*0.7;
-    diagX.beginPath();diagX.moveTo(sx(st),fy(0));diagX.lineTo(sx(st),fy(NF));diagX.stroke();
-    diagX.font='700 11px "JetBrains Mono",monospace';
-    diagX.fillStyle='rgba(128,144,176,0.85)';diagX.textAlign='center';
-    diagX.fillText(BASS_NAMES[st],sx(st),fy(NF)+20);
-  }
-  // chord-tone markers
-  // For every string/fret in range, dot the chord tones; the root gets a ring.
-  // Open notes (fret 0) draw as an open circle above the nut.
+  diagTitle(w,'Chord tones in the first five frets');
+  fretInlays(sx(1),sx(2),fy,0,NF);
+  fretGrid(pad.l,pad.l+gw,fy,NF,true);
+  for(let st=0;st<4;st++)stringLine(sx(st),fy(0),fy(NF),2.6-st*0.45);
+  fretNumbers(pad.l,fy,0,NF);
   const dR=Math.min(12,gw/9);
-  for(let st=0;st<4;st++)for(let f=0;f<=NF;f++){
-    const pc=(BASS_MIDI[st]+f)%12;
-    if(!tones.has(pc))continue;
-    const isRoot=pc===diagChord.root,X=sx(st);
-    if(f===0){
-      diagX.strokeStyle=pcColor(pc,66);diagX.lineWidth=2.2;
-      diagX.beginPath();diagX.arc(X,fy(0)-14,6.5,0,7);diagX.stroke();
-      if(isRoot){diagX.strokeStyle=pcColorA(pc,0.45);diagX.beginPath();diagX.arc(X,fy(0)-14,10,0,7);diagX.stroke();}
-    }else{
-      const y=fy(f-0.5);
-      diagX.fillStyle=pcColor(pc,60);
-      diagX.shadowColor=pcColorA(pc,0.7);diagX.shadowBlur=isRoot?14:9;
-      diagX.beginPath();diagX.arc(X,y,isRoot?dR+1:dR-1.5,0,7);diagX.fill();diagX.shadowBlur=0;
-      if(isRoot){diagX.strokeStyle='rgba(255,255,255,0.85)';diagX.lineWidth=1.5;diagX.beginPath();diagX.arc(X,y,dR+4,0,7);diagX.stroke();}
-      diagX.fillStyle='#0e1118';
-      diagX.font='700 10px "JetBrains Mono",monospace';diagX.textAlign='center';diagX.textBaseline='middle';
-      diagX.fillText(NOTE_NAMES[pc].replace('♯','#'),X,y+0.5);
-      diagX.textBaseline='alphabetic';
+  for(let st=0;st<4;st++){
+    for(let f=0;f<=NF;f++){
+      const pc=(BASS_MIDI[st]+f)%12;
+      if(!tones.has(pc))continue;
+      if(f===0)openRing(sx(st),fy(0)-15,pc);
+      else noteDot(sx(st),fy(f-0.5),dR,pc,shortName(pc));
     }
+    stringLabel(sx(st),h-pad.b+24,BASS_NAMES[st]);
   }
-  diagX.font='500 9px "JetBrains Mono",monospace';
-  diagX.fillStyle='rgba(128,144,176,0.7)';diagX.textAlign='center';
-  diagX.fillText('chord tones · ◎ = root',w/2,h-6);
 }
 
 // Route to the drawing routine for the active instrument.
@@ -262,109 +236,196 @@ function redrawDiagram(){
   if(instrument==='guitar')drawChordBox(GTR_MIDI);
   else if(instrument==='ukulele')drawChordBox(UKE_MIDI);
   else if(instrument==='bass')drawBass();
+  else if(instrument==='piano')drawPiano();
   else drawViolin();
 }
 
 const diagC=$('diagCanvas'),diagX=diagC.getContext('2d');
-// Size the diagram canvas backing store to its CSS box at device pixel ratio.
-// Returns false when the element is collapsed (for example a hidden mobile tab).
+// Size the diagram canvas backing store to its CSS box at device pixel ratio
+// (up to 3, so the thin lines stay sharp on phones). Returns false when the
+// element is collapsed (for example a hidden mobile tab).
 function fitDiag(){
-  const dpr=Math.min(devicePixelRatio||1,2);
+  const dpr=Math.min(devicePixelRatio||1,3);
   const w=diagC.clientWidth,h=diagC.clientHeight;
   if(w<10||h<10)return false;
-  if(diagC.width!==Math.round(w*dpr)||diagC.height!==Math.round(h*dpr)){diagC.width=w*dpr;diagC.height=h*dpr;}
+  if(diagC.width!==Math.round(w*dpr)||diagC.height!==Math.round(h*dpr)){diagC.width=Math.round(w*dpr);diagC.height=Math.round(h*dpr);}
   diagX.setTransform(dpr,0,0,dpr,0,0);
   return true;
 }
 // The chord name shown above each diagram.
 function chordTitle(){return NOTE_NAMES[diagChord.root]+diagChord.q;}
+// The pitch classes of the diagram chord.
+function chordTones(){
+  const s=new Set();
+  (QUALS[diagChord.q]||QUALS['']).iv.forEach(iv=>s.add((diagChord.root+iv)%12));
+  return s;
+}
+// Chord name (serif, root hue) and a one-line caption under it.
+function diagTitle(w,sub){
+  diagX.textAlign='center';diagX.textBaseline='alphabetic';
+  diagX.font='500 27px '+F_SERIF;
+  diagX.fillStyle=pcColor(diagChord.root,74);
+  diagX.fillText(chordTitle(),w/2,30);
+  if(sub){diagX.font='400 11px '+F_SANS;diagX.fillStyle=UI.dim;diagX.fillText(sub,w/2,48);}
+}
+// Snap a 1 px line to the pixel grid.
+const px=v=>Math.round(v)+0.5;
+// Fret lines; a nut (thick bar) on top when the window starts at fret 0.
+function fretGrid(x0,x1,fy,n,nut){
+  diagX.lineCap='butt';
+  for(let f=nut?1:0;f<=n;f++){
+    diagX.strokeStyle=UI.grid;diagX.lineWidth=1;
+    diagX.beginPath();diagX.moveTo(x0,px(fy(f)));diagX.lineTo(x1,px(fy(f)));diagX.stroke();
+  }
+  if(nut){
+    diagX.fillStyle='#dfe3ea';
+    diagX.beginPath();
+    if(diagX.roundRect)diagX.roundRect(x0-2,fy(0)-4,x1-x0+4,6,2);else diagX.rect(x0-2,fy(0)-4,x1-x0+4,6);
+    diagX.fill();
+  }
+}
+function stringLine(x,y0,y1,lw){
+  diagX.strokeStyle='rgba(236,239,244,0.42)';diagX.lineWidth=lw;
+  diagX.beginPath();diagX.moveTo(x,y0);diagX.lineTo(x,y1);diagX.stroke();
+}
+// Inlay dots (frets 3 5 7 9, double at 12) between the middle strings.
+function fretInlays(xa,xb,fy,base,n){
+  diagX.fillStyle='rgba(255,255,255,0.06)';
+  for(let i=1;i<=n;i++){
+    const fr=base+i, y=fy(i-0.5);
+    if(fr===12){
+      [xa,xb].forEach(x=>{diagX.beginPath();diagX.arc(x,y,4,0,7);diagX.fill();});
+    }else if(fr===3||fr===5||fr===7||fr===9||fr===15){
+      diagX.beginPath();diagX.arc((xa+xb)/2,y,4.5,0,7);diagX.fill();
+    }
+  }
+}
+// Fret numbers down the left side of a nut-anchored grid.
+function fretNumbers(x,fy,base,n){
+  diagX.font='500 10px '+F_MONO;diagX.fillStyle=UI.faint;
+  diagX.textAlign='right';diagX.textBaseline='middle';
+  for(let f=1;f<=n;f++)diagX.fillText(String(base+f),x-20,fy(f-0.5));
+  diagX.textBaseline='alphabetic';
+}
+// One chord-tone dot: the root in its hue with a halo, the others light.
+function noteDot(x,y,r,pc,label){
+  const isRoot=pc===diagChord.root;
+  if(isRoot){
+    diagX.fillStyle=pcColorA(pc,0.22,60);
+    diagX.beginPath();diagX.arc(x,y,r+4,0,7);diagX.fill();
+  }
+  diagX.fillStyle=isRoot?pcColor(pc,62):'#e6e9ef';
+  diagX.beginPath();diagX.arc(x,y,r,0,7);diagX.fill();
+  if(label){
+    diagX.fillStyle=isRoot?'#07080c':'#14171f';
+    diagX.font='600 '+Math.max(9,Math.round(r*0.92))+'px '+F_SANS;
+    diagX.textAlign='center';diagX.textBaseline='middle';
+    diagX.fillText(label,x,y+0.5);
+    diagX.textBaseline='alphabetic';
+  }
+}
+// An open string above the nut: a ring, filled faintly when it is the root.
+function openRing(x,y,pc){
+  const isRoot=pc===diagChord.root;
+  diagX.lineWidth=1.8;
+  diagX.strokeStyle=isRoot?pcColor(pc,66):'rgba(236,239,244,0.8)';
+  if(isRoot){diagX.fillStyle=pcColorA(pc,0.22,60);diagX.beginPath();diagX.arc(x,y,6,0,7);diagX.fill();}
+  diagX.beginPath();diagX.arc(x,y,6,0,7);diagX.stroke();
+}
+// A muted string above the nut: a small cross.
+function muteMark(x,y){
+  diagX.strokeStyle='rgba(255,107,107,0.85)';diagX.lineWidth=1.7;diagX.lineCap='round';
+  diagX.beginPath();diagX.moveTo(x-4.5,y-4.5);diagX.lineTo(x+4.5,y+4.5);diagX.moveTo(x+4.5,y-4.5);diagX.lineTo(x-4.5,y+4.5);diagX.stroke();
+  diagX.lineCap='butt';
+}
+function stringLabel(x,y,t,col){
+  diagX.font='600 11px '+F_SANS;diagX.fillStyle=col||UI.dim;
+  diagX.textAlign='center';diagX.textBaseline='alphabetic';
+  diagX.fillText(t,x,y);
+}
+
+/* ── finger numbers ──
+   A fixed rule that gives the usual fingering for the voicing library:
+   the barre fret is finger 1; the other fretted notes take the next
+   fingers, lowest fret first and low string first on one fret. Capped
+   at 4. Gives C 3-2-1, D 1-3-2, E 2-3-1, Am 2-3-1, F (E-shape) 1-3-4-2-1-1. */
+function fingerFor(frets,barre){
+  const fing=frets.map(()=>0);
+  let next=1;
+  if(barre){frets.forEach((f,s)=>{if(f===barre)fing[s]=1;});next=2;}
+  const order=frets.map((f,s)=>({f,s})).filter(o=>o.f>0&&!fing[o.s]).sort((a,b)=>a.f-b.f||a.s-b.s);
+  for(const o of order)fing[o.s]=Math.min(4,next++);
+  return fing;
+}
 
 // Standard vertical chord box for guitar or ukulele: strings as columns, frets
-// as rows, one selected voicing drawn as fretted dots, open circles, and mutes.
+// as rows, one voicing as numbered finger dots, open rings and mutes, and the
+// note each string sounds under the box.
 function drawChordBox(MIDI){
   const NS=MIDI.length;
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
-  // Resolve the chosen voicing to a fret array.
   const vs=voicingsFor(diagChord.root,diagChord.q);
   const v=vs[Math.min(voicingIdx,vs.length-1)];
   const frets=v.frets;
-  // Choose the window: below the 5th fret show from the nut, otherwise scroll to
-  // the lowest fretted note so a high barre shape stays framed.
+  // Window: below the 5th fret show from the nut, otherwise start at the
+  // lowest fretted note so a high barre shape stays framed.
   const played=frets.filter(f=>f>=0);
   const fMax=played.length?Math.max(...played):3;
   const fMinPos=played.filter(f=>f>0);
   const fMin=fMinPos.length?Math.min(...fMinPos):0;
   const base=fMax<=4?0:Math.max(1,fMin);
   const nFrets=Math.max(5,fMax-base+(base>0?1:0));
-  const pad={t:64,b:16,l:32,r:20};
+  const pad={t:80,b:34,l:40,r:28};
   const gw=w-pad.l-pad.r, gh=h-pad.t-pad.b;
   const sx=i=>pad.l+gw*i/(NS-1);
   const fy=f=>pad.t+gh*f/nFrets;
-  // title
-  diagX.textAlign='center';diagX.textBaseline='alphabetic';
-  diagX.font='italic 400 28px "Cormorant Garamond",serif';
-  diagX.fillStyle=pcColor(diagChord.root,68);
-  diagX.shadowColor=pcColorA(diagChord.root,0.5);diagX.shadowBlur=16;
-  diagX.fillText(chordTitle(),w/2,34);diagX.shadowBlur=0;
-  // strings
-  for(let s=0;s<NS;s++){
-    diagX.strokeStyle='rgba(150,200,255,0.3)';diagX.lineWidth=0.8+s*0.25;
-    diagX.beginPath();diagX.moveTo(sx(s),pad.t);diagX.lineTo(sx(s),pad.t+gh);diagX.stroke();
-  }
-  // frets
-  for(let f=0;f<=nFrets;f++){
-    diagX.strokeStyle=f===0&&base===0?'rgba(232,236,244,0.9)':'rgba(150,200,255,0.18)';
-    diagX.lineWidth=f===0&&base===0?4:1.1;
-    diagX.beginPath();diagX.moveTo(pad.l,fy(f));diagX.lineTo(pad.l+gw,fy(f));diagX.stroke();
-  }
-  // base fret label
+  // Window row r (0-based) holds absolute fret base+r+(base>0?0:1).
+  const rowOf=f=>base>0?f-base:f-1;
+  diagTitle(w,(v.name&&v.name!=='—'?v.name+' · ':'')+(QUALS[diagChord.q]?QUALS[diagChord.q].full:''));
+  fretInlays(sx(Math.floor((NS-1)/2)),sx(Math.ceil((NS-1)/2)),fy,base>0?base-1:0,nFrets);
+  fretGrid(pad.l,pad.l+gw,fy,nFrets,base===0);
+  for(let s=0;s<NS;s++)stringLine(sx(s),fy(0),fy(nFrets),NS===6?1.9-s*0.22:1.4);
+  // Position label for a window up the neck.
   if(base>0){
-    diagX.font='600 11px "JetBrains Mono",monospace';
-    diagX.fillStyle='#8090b0';diagX.textAlign='right';
-    diagX.fillText(base+'fr',pad.l-8,fy(0.5)+4);
+    diagX.font='600 12px '+F_SANS;diagX.fillStyle=UI.ink2;
+    diagX.textAlign='right';diagX.textBaseline='middle';
+    diagX.fillText(base+'fr',pad.l-10,fy(0.5));
+    diagX.textBaseline='alphabetic';
   }
-  // barre band — only across the strings actually fretted at the barre
-  // Draw the barre as a rounded band spanning just the strings held at that fret.
-  if(v.barre&&base>0){
+  const fing=fingerFor(frets,v.barre||0);
+  const dR=Math.min(11.5,gw/(NS*1.9));
+  // Barre: one capsule from the lowest barred string to the highest.
+  let barreRow=-1;
+  if(v.barre){
     const barred=frets.map((f,s)=>f===v.barre?s:-1).filter(s=>s>=0);
     if(barred.length>1){
-      const y=fy(v.barre-base+0.5), x0=sx(Math.min(...barred)), x1=sx(Math.max(...barred));
-      diagX.fillStyle=pcColorA(diagChord.root,0.22,50);
+      barreRow=rowOf(v.barre);
+      const y=fy(barreRow+0.5), x0=sx(Math.min(...barred)), x1=sx(Math.max(...barred));
+      const isRoot=barred.some(s=>(MIDI[s]+v.barre)%12===diagChord.root);
+      diagX.fillStyle='#e6e9ef';
       diagX.beginPath();
-      if(diagX.roundRect)diagX.roundRect(x0-11,y-10,x1-x0+22,20,10);
-      else diagX.rect(x0-11,y-10,x1-x0+22,20);
+      if(diagX.roundRect)diagX.roundRect(x0-dR,y-dR,x1-x0+2*dR,2*dR,dR);else diagX.rect(x0-dR,y-dR,x1-x0+2*dR,2*dR);
       diagX.fill();
+      if(isRoot){diagX.strokeStyle=pcColorA(diagChord.root,0.6,62);diagX.lineWidth=2;diagX.stroke();}
     }
   }
-  // dots / open / mute
-  // Per string: muted (✕ above nut), open (ring above nut), or a fretted dot
-  // labeled with its note name.
-  const dR=Math.min(12.5,gw/12);
   for(let s=0;s<NS;s++){
-    const f=frets[s];
-    const x=sx(s);
-    if(f<0){
-      diagX.font='700 13px "JetBrains Mono",monospace';
-      diagX.fillStyle='rgba(224,80,80,0.85)';diagX.textAlign='center';
-      diagX.fillText('✕',x,pad.t-10);
-      continue;
-    }
+    const f=frets[s], x=sx(s);
+    if(f<0){muteMark(x,pad.t-16);continue;}
     const pc=(MIDI[s]+f)%12;
-    if(f===0){
-      diagX.strokeStyle=pcColor(pc,66);diagX.lineWidth=2.2;
-      diagX.beginPath();diagX.arc(x,pad.t-14,6.5,0,7);diagX.stroke();
-    }else{
-      const y=fy(f-base-0.5+(base>0?1:0));
-      diagX.fillStyle=pcColor(pc,60);
-      diagX.shadowColor=pcColorA(pc,0.7);diagX.shadowBlur=11;
-      diagX.beginPath();diagX.arc(x,y,dR,0,7);diagX.fill();diagX.shadowBlur=0;
-      diagX.fillStyle='#0e1118';
-      diagX.font='700 10px "JetBrains Mono",monospace';diagX.textAlign='center';diagX.textBaseline='middle';
-      diagX.fillText(NOTE_NAMES[pc].replace('♯','#'),x,y+0.5);
-      diagX.textBaseline='alphabetic';
+    if(f===0)openRing(x,pad.t-16,pc);
+    else{
+      const y=fy(rowOf(f)+0.5);
+      if(rowOf(f)===barreRow&&f===v.barre){
+        // On the barre: a dot only for the root string, so the root still
+        // reads; the capsule carries finger 1 on its last string.
+        if(pc===diagChord.root)noteDot(x,y,dR,pc,'1');
+        else if(s===frets.lastIndexOf(v.barre)){diagX.fillStyle='#14171f';diagX.font='600 '+Math.max(9,Math.round(dR*0.92))+'px '+F_SANS;diagX.textAlign='center';diagX.textBaseline='middle';diagX.fillText('1',x,y+0.5);diagX.textBaseline='alphabetic';}
+      }else noteDot(x,y,dR,pc,String(fing[s]||''));
     }
+    stringLabel(x,h-12,NOTE_NAMES[pc],pc===diagChord.root?pcColor(pc,70):UI.dim);
   }
 }
 
@@ -376,78 +437,91 @@ function drawViolin(){
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
-  // Chord-tone pitch classes to place on the four strings.
-  const tones=new Set();
-  const q=QUALS[diagChord.q]||QUALS[''];
-  q.iv.forEach(iv=>tones.add((diagChord.root+iv)%12));
-  const pad={t:64,b:34,l:44,r:44};
+  const tones=chordTones();
+  const pad={t:80,b:40,l:44,r:44};
   const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
   const sx=i=>pad.l+gw*i/3;
   const NPOS=7; // semitones in reach of 1st position
   const py=st=>pad.t+gh*st/NPOS;
-  // title
-  diagX.textAlign='center';
-  diagX.font='italic 400 28px "Cormorant Garamond",serif';
-  diagX.fillStyle=pcColor(diagChord.root,68);
-  diagX.shadowColor=pcColorA(diagChord.root,0.5);diagX.shadowBlur=16;
-  diagX.fillText(chordTitle(),w/2,34);diagX.shadowBlur=0;
-  // fingerboard backdrop
-  diagX.fillStyle='rgba(150,200,255,0.03)';
+  diagTitle(w,'First position · chord tones');
+  // fingerboard
+  diagX.fillStyle='rgba(255,255,255,0.035)';
   diagX.beginPath();
-  if(diagX.roundRect)diagX.roundRect(pad.l-20,pad.t-6,gw+40,gh+14,10);else diagX.rect(pad.l-20,pad.t-6,gw+40,gh+14);
+  if(diagX.roundRect)diagX.roundRect(pad.l-18,pad.t,gw+36,gh+8,[0,0,10,10]);else diagX.rect(pad.l-18,pad.t,gw+36,gh+8);
   diagX.fill();
-  // nut
-  diagX.strokeStyle='rgba(232,236,244,0.85)';diagX.lineWidth=4;
-  diagX.beginPath();diagX.moveTo(pad.l-20,pad.t);diagX.lineTo(pad.l+gw+20,pad.t);diagX.stroke();
-  // faint semitone guides
+  // semitone guides, then the nut
   for(let st=1;st<=NPOS;st++){
-    diagX.strokeStyle='rgba(150,200,255,0.08)';diagX.lineWidth=1;
-    diagX.beginPath();diagX.moveTo(pad.l-20,py(st));diagX.lineTo(pad.l+gw+20,py(st));diagX.stroke();
+    diagX.strokeStyle='rgba(255,255,255,0.06)';diagX.lineWidth=1;
+    diagX.beginPath();diagX.moveTo(pad.l-18,px(py(st)));diagX.lineTo(pad.l+gw+18,px(py(st)));diagX.stroke();
   }
-  // finger zone labels
-  const FING=[['1',1.5],['2',3.5],['3',5],['4',6.5]];
-  diagX.font='italic 300 14px "Cormorant Garamond",serif';
-  diagX.fillStyle='rgba(128,144,176,0.5)';diagX.textAlign='left';
-  FING.forEach(([f,st])=>diagX.fillText(f,pad.l+gw+28,py(st)+5));
-  // strings
+  diagX.fillStyle='#dfe3ea';diagX.fillRect(pad.l-18,pad.t-4,gw+36,5);
+  // finger zones on the right
+  diagX.font='500 11px '+F_SANS;diagX.fillStyle=UI.faint;diagX.textAlign='left';diagX.textBaseline='middle';
+  [['1',1.5],['2',3.5],['3',5],['4',6.5]].forEach(([f,st])=>diagX.fillText(f,pad.l+gw+26,py(st)));
+  diagX.textBaseline='alphabetic';
   for(let s=0;s<4;s++){
-    diagX.strokeStyle='rgba(150,200,255,0.3)';diagX.lineWidth=2.6-s*0.5;
-    diagX.beginPath();diagX.moveTo(sx(s),pad.t);diagX.lineTo(sx(s),pad.t+gh);diagX.stroke();
-    diagX.font='700 12px "JetBrains Mono",monospace';
-    diagX.fillStyle='rgba(128,144,176,0.85)';diagX.textAlign='center';
-    diagX.fillText(VLN_NAMES[s],sx(s),pad.t+gh+24);
+    stringLine(sx(s),pad.t,pad.t+gh,2.2-s*0.4);
+    stringLabel(sx(s),h-pad.b+26,VLN_NAMES[s]);
   }
-  // chord-tone markers (open + stopped)
-  // Scan each string across the first-position semitone range; dot every chord
-  // tone, ring the root, and draw open strings above the nut.
-  const dR=Math.min(13,gw/9);
-  for(let s=0;s<4;s++){
-    for(let st=0;st<=NPOS;st++){
-      const pc=(VLN_MIDI[s]+st)%12;
-      if(!tones.has(pc))continue;
-      const isRoot=pc===diagChord.root;
-      const x=sx(s);
-      if(st===0){
-        diagX.strokeStyle=pcColor(pc,66);diagX.lineWidth=2.4;
-        diagX.beginPath();diagX.arc(x,pad.t-16,7.5,0,7);diagX.stroke();
-        if(isRoot){diagX.strokeStyle=pcColorA(pc,0.4);diagX.beginPath();diagX.arc(x,pad.t-16,11,0,7);diagX.stroke();}
-      }else{
-        const y=py(st);
-        diagX.fillStyle=pcColor(pc,60);
-        diagX.shadowColor=pcColorA(pc,0.7);diagX.shadowBlur=isRoot?16:9;
-        diagX.beginPath();diagX.arc(x,y,isRoot?dR+1.5:dR-1,0,7);diagX.fill();diagX.shadowBlur=0;
-        if(isRoot){diagX.strokeStyle='rgba(255,255,255,0.85)';diagX.lineWidth=1.6;diagX.beginPath();diagX.arc(x,y,dR+4,0,7);diagX.stroke();}
-        diagX.fillStyle='#0e1118';
-        diagX.font='700 10px "JetBrains Mono",monospace';diagX.textAlign='center';diagX.textBaseline='middle';
-        diagX.fillText(NOTE_NAMES[pc].replace('♯','#'),x,y+0.5);
-        diagX.textBaseline='alphabetic';
-      }
+  const dR=Math.min(12,gw/9);
+  for(let s=0;s<4;s++)for(let st=0;st<=NPOS;st++){
+    const pc=(VLN_MIDI[s]+st)%12;
+    if(!tones.has(pc))continue;
+    if(st===0)openRing(sx(s),pad.t-16,pc);
+    else noteDot(sx(s),py(st),dR,pc,shortName(pc));
+  }
+}
+
+/* piano: the chord in root position from middle C's octave */
+// Two octaves, C4 to B5. The chord sits in root position on the root at or
+// above C4. Under the keys: each tone with its interval name.
+function drawPiano(){
+  if(!fitDiag())return;
+  const w=diagC.clientWidth,h=diagC.clientHeight;
+  diagX.clearRect(0,0,w,h);
+  const q=QUALS[diagChord.q]||QUALS[''];
+  const notes=q.iv.map(iv=>60+diagChord.root+iv);
+  const on=new Set(notes);
+  diagTitle(w,'Root position · '+q.full);
+  const NW=14, kx=14, kw=w-28, ww=kw/NW;
+  const ky=74, kh=Math.min(h*0.48,ww*6.4), bh=kh*0.6, bw=ww*0.6;
+  const WHITE=[0,2,4,5,7,9,11], BLACK={1:0,3:1,6:3,8:4,10:5};
+  // white keys
+  for(let i=0;i<NW;i++){
+    const m=60+Math.floor(i/7)*12+WHITE[i%7], x=kx+i*ww, pc=m%12;
+    const hit=on.has(m), isRoot=hit&&pc===diagChord.root;
+    diagX.fillStyle=isRoot?pcColor(pc,66):hit?'#8fc4ff':'#d5d9e0';
+    diagX.beginPath();
+    if(diagX.roundRect)diagX.roundRect(x+0.75,ky,ww-1.5,kh,[0,0,4,4]);else diagX.rect(x+0.75,ky,ww-1.5,kh);
+    diagX.fill();
+    if(hit){
+      diagX.fillStyle=isRoot?'#07080c':'#14171f';
+      diagX.beginPath();diagX.arc(x+ww/2,ky+kh-12,Math.min(5,ww*0.22),0,7);diagX.fill();
     }
+    if(m===60){diagX.font='500 10px '+F_SANS;diagX.fillStyle=UI.faint;diagX.textAlign='center';diagX.fillText('C4',x+ww/2,ky+kh+14);}
   }
-  // legend
-  diagX.font='500 9px "JetBrains Mono",monospace';
-  diagX.fillStyle='rgba(128,144,176,0.7)';diagX.textAlign='center';
-  diagX.fillText('1st position · ◎ ring = root',w/2,h-6);
+  // black keys
+  for(let o=0;o<2;o++)for(const k in BLACK){
+    const m=60+o*12+(+k), x=kx+(o*7+BLACK[k]+1)*ww-bw/2, pc=m%12;
+    const hit=on.has(m), isRoot=hit&&pc===diagChord.root;
+    diagX.fillStyle=isRoot?pcColor(pc,58):hit?'#6aa8ec':'#0b0d12';
+    diagX.beginPath();
+    if(diagX.roundRect)diagX.roundRect(x,ky-1,bw,bh,[0,0,3,3]);else diagX.rect(x,ky-1,bw,bh);
+    diagX.fill();
+    if(!hit){diagX.strokeStyle='rgba(255,255,255,0.10)';diagX.lineWidth=1;diagX.stroke();}
+    else{diagX.fillStyle=isRoot?'#07080c':'#14171f';diagX.beginPath();diagX.arc(x+bw/2,ky+bh-9,Math.min(4,bw*0.25),0,7);diagX.fill();}
+  }
+  // tone table: name over interval
+  const ty=ky+kh+52, cw=Math.min(64,kw/notes.length);
+  const x0=w/2-cw*notes.length/2+cw/2;
+  notes.forEach((m,i)=>{
+    const pc=m%12, x=x0+i*cw, isRoot=pc===diagChord.root;
+    diagX.textAlign='center';
+    diagX.font='500 20px '+F_SERIF;diagX.fillStyle=isRoot?pcColor(pc,72):UI.ink;
+    diagX.fillText(NOTE_NAMES[pc],x,ty);
+    diagX.font='500 11px '+F_SANS;diagX.fillStyle=UI.dim;
+    diagX.fillText(DEG_NAMES[q.iv[i]%12],x,ty+18);
+  });
 }
 
 /* ═══════════ INPUT METER — live scope + frequency bands ═══════════
@@ -466,21 +540,21 @@ function drawMeter(){
   const dpr=Math.min(devicePixelRatio||1,2);
   if(meterC.width!==Math.round(cw*dpr)){meterC.width=Math.round(cw*dpr);meterC.height=Math.round(ch*dpr);}
   meterX.setTransform(dpr,0,0,dpr,0,0);
-  meterX.fillStyle='#090c13';meterX.fillRect(0,0,cw,ch);
+  meterX.clearRect(0,0,cw,ch);
 
   // ── oscilloscope (top) ──
   const scopeH=Math.min(86,ch*0.22);
   const mid=scopeH*0.5+6;
-  meterX.strokeStyle='rgba(150,200,255,0.1)';meterX.lineWidth=1;
+  meterX.strokeStyle='rgba(200,214,235,0.1)';meterX.lineWidth=1;
   meterX.beginPath();meterX.moveTo(4,mid);meterX.lineTo(cw-4,mid);meterX.stroke();
   if(micOn){
     // Read the raw waveform and trace it; glow grows with input level.
     if(!scopeBuf)scopeBuf=new Float32Array(2048);
     analyser.getFloatTimeDomainData(scopeBuf);
     const amp=Math.min(1,level*4+0.15);
-    meterX.strokeStyle=`rgba(150,200,255,${0.35+amp*0.6})`;
+    meterX.strokeStyle=`rgba(200,214,235,${0.35+amp*0.6})`;
     meterX.lineWidth=1.3;
-    meterX.shadowColor='rgba(150,200,255,0.6)';meterX.shadowBlur=amp*8;
+    meterX.shadowColor='rgba(200,214,235,0.6)';meterX.shadowBlur=amp*8;
     meterX.beginPath();
     const N=scopeBuf.length;
     for(let x=0;x<cw-8;x++){
@@ -491,10 +565,10 @@ function drawMeter(){
     meterX.stroke();meterX.shadowBlur=0;
   }
   // divider
-  meterX.strokeStyle='rgba(150,200,255,0.16)';
+  meterX.strokeStyle='rgba(200,214,235,0.16)';
   meterX.beginPath();meterX.moveTo(0,scopeH+12);meterX.lineTo(cw,scopeH+12);meterX.stroke();
-  meterX.font='500 7.5px "JetBrains Mono",monospace';
-  meterX.fillStyle='rgba(128,144,176,0.6)';
+  meterX.font='500 9px '+F_SANS;
+  meterX.fillStyle='rgba(138,146,160,0.6)';
   meterX.textAlign='left';meterX.textBaseline='bottom';
   meterX.fillText('mic',4,scopeH+10);
 
@@ -518,7 +592,7 @@ function drawMeter(){
     meterPeaks[b]=Math.max(t,meterPeaks[b]-0.014);
     const y=bBot-(b+1)*bandH;
     // track
-    meterX.fillStyle='rgba(150,200,255,0.05)';
+    meterX.fillStyle='rgba(200,214,235,0.05)';
     meterX.fillRect(barX,y+1.5,barW,bandH-3);
     // bar
     if(t>0.02){
@@ -534,7 +608,7 @@ function drawMeter(){
     }
   }
   // freq labels along the band stack
-  meterX.fillStyle='rgba(128,144,176,0.6)';
+  meterX.fillStyle='rgba(138,146,160,0.6)';
   meterX.textAlign='left';
   [[100,'100'],[440,'440'],[1000,'1k'],[4000,'4k']].forEach(([f,l])=>{
     const b=Math.log(f/MF0)/MLOGR*MBANDS;
@@ -592,85 +666,117 @@ $('copyStaff').addEventListener('click',copyLog);
 // natural below them; PC_SHARP flags which pitch classes draw a sharp glyph.
 const PC_STEP=[0,0,1,1,2,3,3,4,4,5,5,6];
 const PC_SHARP=[0,1,0,1,0,0,1,0,1,0,1,0];
-// Render the running staff: five lines, treble clef, bar lines every four
-// slots, and one notehead per logged chord root, colored by pitch class.
+// Staff geometry in CSS px. SP is one staff space; the other sizes follow
+// engraving practice: notehead about 1.3 spaces wide, stem 3.5 spaces long.
+const ST={H:156,SP:10,TOP:50,SLOT:60,LEAD:112};
+// Staff position of a semitone above C4: 0 = bottom line (E4), 1 = space above.
+function staffPos(semi){return PC_STEP[semi%12]+7*Math.floor(semi/12)-2;}
+// A sharp drawn as lines (no music font needed), centred on (x, y).
+function sharpGlyph(g,x,y,sp,col){
+  g.strokeStyle=col;g.lineCap='butt';
+  g.lineWidth=1;
+  g.beginPath();
+  g.moveTo(x-1.8,y-sp*1.25);g.lineTo(x-1.8,y+sp*1.35);
+  g.moveTo(x+1.8,y-sp*1.35);g.lineTo(x+1.8,y+sp*1.25);
+  g.stroke();
+  g.lineWidth=sp*0.24;
+  g.beginPath();
+  g.moveTo(x-4,y-sp*0.3+1.4);g.lineTo(x+4,y-sp*0.3-1.4);
+  g.moveTo(x-4,y+sp*0.4+1.4);g.lineTo(x+4,y+sp*0.4-1.4);
+  g.stroke();
+}
+// Render the running staff: five lines, treble clef, 4/4, a bar line every
+// four chords, and each logged chord as a root-position stack of quarter
+// notes with its symbol above. The root head carries the root's hue.
 function drawStaff(){
   staffDirty=false;
   const dpr=Math.min(devicePixelRatio||1,2);
-  const H=132;
-  // SLOT is the horizontal step per chord; LEAD reserves room for clef and meter.
-  const SLOT=64, LEAD=86;
-  // Width grows with the log so the strip scrolls; minimum 16 slots keeps it full.
-  const n=Math.max(16,chordLog.length+2);
-  const W=Math.max($('staffScroll').clientWidth,LEAD+n*SLOT+30);
+  const {H,SP,TOP,SLOT,LEAD}=ST;
+  const n=Math.ceil(Math.max(16,chordLog.length+2)/4)*4;
+  const endX=LEAD+n*SLOT-SLOT/2;
+  const W=Math.max($('staffScroll').clientWidth,endX+16);
   staffC.style.width=W+'px';
-  staffC.width=W*dpr;staffC.height=H*dpr;
-  staffX.setTransform(dpr,0,0,dpr,0,0);
-  staffX.clearRect(0,0,W,H);
-  const top=34,gap=11;          // 5 staff lines
-  const lineY=i=>top+i*gap;
+  staffC.width=Math.round(W*dpr);staffC.height=Math.round(H*dpr);
+  const g=staffX;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,W,H);
+  const lineY=i=>TOP+i*SP;               // i = 0 top line (F5) .. 4 bottom (E4)
+  const yOf=pos=>lineY(4)-pos*SP/2;
+  const INK='rgba(236,239,244,0.86)', LINE='rgba(236,239,244,0.34)';
   // staff lines
-  staffX.strokeStyle='rgba(150,200,255,0.3)';staffX.lineWidth=1;
-  for(let i=0;i<5;i++){staffX.beginPath();staffX.moveTo(14,lineY(i));staffX.lineTo(W-14,lineY(i));staffX.stroke();}
-  // treble clef
-  staffX.font='300 62px "Cormorant Garamond",serif';
-  staffX.fillStyle='rgba(150,200,255,0.75)';
-  staffX.textAlign='left';staffX.textBaseline='middle';
-  staffX.fillText('𝄞',22,lineY(2)+2);
-  // 4/4
-  staffX.font='700 17px "JetBrains Mono",monospace';
-  staffX.fillStyle='rgba(128,144,176,0.8)';
-  staffX.fillText('4',62,lineY(1)-1);staffX.fillText('4',62,lineY(3)-1);
-  staffX.textBaseline='alphabetic';
-  // bar lines every 4 slots
-  for(let b=0;b<=Math.ceil(n/4);b++){
-    const x=LEAD+b*4*SLOT-SLOT*0.5+6;
-    if(x<LEAD)continue;
-    staffX.strokeStyle='rgba(150,200,255,0.22)';staffX.lineWidth=b%4===0?2:1;
-    staffX.beginPath();staffX.moveTo(x,lineY(0));staffX.lineTo(x,lineY(4));staffX.stroke();
+  g.strokeStyle=LINE;g.lineWidth=1;
+  for(let i=0;i<5;i++){g.beginPath();g.moveTo(12,px(lineY(i)));g.lineTo(endX,px(lineY(i)));g.stroke();}
+  // treble clef: a system music font (Apple Symbols on macOS and iOS)
+  g.font='300 '+Math.round(SP*7.4)+'px "Apple Symbols","Noto Music","Segoe UI Symbol","Bravura Text",serif';
+  g.fillStyle=INK;g.textAlign='left';g.textBaseline='middle';
+  g.fillText('𝄞',16,lineY(2)+3);
+  // 4/4: two numerals, each two spaces tall
+  g.font='600 '+Math.round(SP*2.5)+'px '+F_SERIF;
+  g.textAlign='center';
+  g.fillText('4',74,lineY(1));g.fillText('4',74,lineY(3));
+  g.textBaseline='alphabetic';
+  // bar lines at the slot edges; a final double bar at the end
+  for(let b=1;b<=n/4;b++){
+    const x=LEAD+b*4*SLOT-SLOT/2;
+    g.fillStyle=INK;
+    if(b===n/4){g.fillRect(x-4,lineY(0),3.5,4*SP);g.fillRect(x-8,lineY(0),1,4*SP);}
+    else g.fillRect(Math.round(x),lineY(0),1,4*SP);
   }
-  // notes — roots placed E4..D5 window for readability
-  // One notehead per logged chord: compute its staff row from the diatonic step,
-  // add a ledger line and sharp where needed, then draw head, stem, and symbol.
-  staffX.textAlign='center';
+  const RX=SP*0.66, RY=SP*0.47, STEM=SP*3.5;
   chordLog.forEach((e,i)=>{
-    const x=LEAD+i*SLOT+6;
-    // staff position: diatonic steps below/above; E4 = bottom line (step index: E4)
-    // Represent root in octave 4: C4 is one ledger below.
-    const step=PC_STEP[e.root];             // 0=C..6=B, octave 4
-    const pos=step-2;                        // E(2)→0 = bottom line; each step = half gap up
-    const y=lineY(4)-pos*gap/2;
-    const col=pcColor(e.root,62);
-    // ledger line — only C4 sits on one
-    if(pos<=-2){staffX.strokeStyle='rgba(150,200,255,0.35)';staffX.lineWidth=1;
-      staffX.beginPath();staffX.moveTo(x-11,lineY(4)+gap);staffX.lineTo(x+11,lineY(4)+gap);staffX.stroke();}
-    // sharp
-    if(PC_SHARP[e.root]){staffX.font='500 15px "JetBrains Mono",monospace';staffX.fillStyle=col;staffX.fillText('♯',x-15,y+5);}
-    // notehead
-    staffX.save();
-    staffX.translate(x,y);staffX.rotate(-0.32);
-    staffX.fillStyle=col;
-    staffX.shadowColor=pcColorA(e.root,0.65);staffX.shadowBlur=8;
-    staffX.beginPath();staffX.ellipse(0,0,7,5.2,0,0,7);staffX.fill();
-    staffX.restore();staffX.shadowBlur=0;
-    // stem
-    staffX.strokeStyle=col;staffX.lineWidth=1.4;
-    staffX.beginPath();
-    if(pos<4){staffX.moveTo(x+6.4,y-1);staffX.lineTo(x+6.4,y-30);}
-    else{staffX.moveTo(x-6.4,y+1);staffX.lineTo(x-6.4,y+30);}
-    staffX.stroke();
-    // chord symbol above
-    staffX.font='700 11px "JetBrains Mono",monospace';
-    staffX.fillStyle=col;
-    staffX.fillText(NOTE_NAMES[e.root]+e.q,x,20);
+    const x=LEAD+i*SLOT;
+    const q=QUALS[e.q]||QUALS[''];
+    const semis=q.iv.map(iv=>e.root+iv);
+    const heads=semis.map(s=>({s,pos:staffPos(s),sharp:PC_SHARP[s%12],root:s===e.root,dx:0})).sort((a,b)=>a.pos-b.pos);
+    const lo=heads[0].pos, hi=heads[heads.length-1].pos;
+    const up=(lo+hi)/2<4;
+    // seconds: the second head goes to the other side of the stem
+    if(up){for(let k=1;k<heads.length;k++)if(heads[k].pos-heads[k-1].pos===1&&!heads[k-1].dx)heads[k].dx=RX*2-1;}
+    else{for(let k=heads.length-2;k>=0;k--)if(heads[k+1].pos-heads[k].pos===1&&!heads[k+1].dx)heads[k].dx=-(RX*2-1);}
+    const newest=i===chordLog.length-1;
+    if(newest){
+      g.fillStyle='rgba(143,196,255,0.07)';
+      g.beginPath();
+      if(g.roundRect)g.roundRect(x-SLOT/2+3,6,SLOT-6,H-12,8);else g.rect(x-SLOT/2+3,6,SLOT-6,H-12);
+      g.fill();
+    }
+    // ledger lines below (C4 and down) and above (A5 and up)
+    g.fillStyle=LINE;
+    const minDx=Math.min(0,...heads.map(h=>h.dx)), maxDx=Math.max(0,...heads.map(h=>h.dx));
+    for(let p=-2;p>=lo;p-=2)g.fillRect(x-RX*1.6+minDx,Math.round(yOf(p)),RX*3.2+maxDx-minDx,1);
+    for(let p=10;p<=hi;p+=2)g.fillRect(x-RX*1.6+minDx,Math.round(yOf(p)),RX*3.2+maxDx-minDx,1);
+    // accidentals, top down, in columns so close ones do not touch
+    const placed=[];
+    heads.filter(h=>h.sharp).reverse().forEach(h=>{
+      let col=0;while(placed.some(p=>p.col===col&&Math.abs(p.pos-h.pos)<6))col++;
+      placed.push({col,pos:h.pos});
+      sharpGlyph(g,x+minDx-RX-6-col*9,yOf(h.pos),SP,INK);
+    });
+    // noteheads
+    for(const h of heads){
+      g.save();g.translate(x+h.dx,yOf(h.pos));g.rotate(-0.36);
+      g.fillStyle=h.root?pcColor(e.root,66):INK;
+      g.beginPath();g.ellipse(0,0,RX,RY,0,0,7);g.fill();
+      g.restore();
+    }
+    // one stem for the stack
+    const sx=up?x+RX-0.6:x-RX+0.6;
+    g.strokeStyle=INK;g.lineWidth=1.2;
+    g.beginPath();
+    if(up){g.moveTo(sx,yOf(lo)-1);g.lineTo(sx,yOf(hi)-STEM);}
+    else{g.moveTo(sx,yOf(hi)+1);g.lineTo(sx,yOf(lo)+STEM);}
+    g.stroke();
+    // chord symbol
+    g.font='600 13px '+F_SANS;g.textAlign='center';
+    g.fillStyle=pcColor(e.root,newest?76:70);
+    g.fillText(NOTE_NAMES[e.root]+e.q,x,18);
   });
   if(!chordLog.length){
-    staffX.font='italic 300 15px "Cormorant Garamond",serif';
-    staffX.fillStyle='rgba(128,144,176,0.55)';
-    staffX.textAlign='left';
-    staffX.fillText('chords you play will land here, in order…',LEAD+10,lineY(2)+5);
+    g.font='italic 400 15px '+F_SERIF;
+    g.fillStyle='rgba(138,146,160,0.85)';
+    g.textAlign='left';
+    g.fillText('Chords you play land here, in order, four to a bar.',LEAD-SLOT/2+8,20);
   }
-  // autoscroll to latest
   // Keep the newest chord in view as the log grows.
   const sc=$('staffScroll');sc.scrollLeft=sc.scrollWidth;
 }
@@ -685,7 +791,7 @@ const specC=$('specCanvas'),specX=specC.getContext('2d');
 // Spectrogram frequency window (70..1300 Hz, log-scaled) and its total log span.
 const SFMIN=70,SFMAX=1300,SLOGR=Math.log(SFMAX/SFMIN);
 const DB_LO=-90,DB_HI=-25;               // display dynamic range
-const AXIS_L=36,AXIS_R=22,AXIS_T=6,AXIS_B=16;  // CSS-px gutters
+const AXIS_L=36,AXIS_R=30,AXIS_T=6,AXIS_B=18;  // CSS-px gutters
 // Standard guitar tuning: name, octave, frequency, and pitch class per string.
 // Drives the reference lines, the tuning ladder, and the string buttons.
 const GTR_STRINGS=[
@@ -722,11 +828,10 @@ for(let i=0;i<256;i++){
   for(let c=0;c<3;c++)ILUT[i*3+c]=255*(INFERNO[k][c]+fr*(INFERNO[k+1][c]-INFERNO[k][c]));
 }
 
-// Frequency grid lines; entries with lbl are labeled, the rest are faint guides.
-const FREQ_TICKS=[
-  {f:80,lbl:'80'},{f:100},{f:150,lbl:'150'},{f:200},{f:300,lbl:'300'},
-  {f:500,lbl:'500'},{f:700},{f:1000,lbl:'1k'},{f:1300}
-];
+// Note grid: one faint line per natural note in the window, labelled at
+// every C and A. MIDI numbers; the Hz values follow the A4 reference.
+const NOTE_GRID=[];
+for(let m=37;m<=88;m++){const pc=m%12;if(!PC_SHARP[pc])NOTE_GRID.push({m,lbl:pc===0||pc===9?NOTE_NAMES[pc]+(Math.floor(m/12)-1):''});}
 
 // Offscreen waterfall buffer, its per-column image scratch, and the timestamp of
 // each column so the time ruler can label real elapsed seconds.
@@ -753,7 +858,7 @@ function drawSpec(){
     specC.width=Math.round(cssW*dpr);specC.height=Math.round(cssH*dpr);
     const nb=document.createElement('canvas');nb.width=pw;nb.height=ph;
     const nx=nb.getContext('2d');nx.imageSmoothingEnabled=false;
-    nx.fillStyle='#07090f';nx.fillRect(0,0,pw,ph);
+    nx.fillStyle='#000004';nx.fillRect(0,0,pw,ph);
     if(specBuf)nx.drawImage(specBuf,0,0,pw,ph);
     specBuf=nb;specBufX=nx;specPW=pw;specPH=ph;specDpr=dpr;
     colImg=specBufX.createImageData(1,ph);
@@ -794,27 +899,30 @@ function drawSpec(){
   /* ── composite the instrument frame ── */
   specX.setTransform(1,0,0,1,0,0);
   specX.imageSmoothingEnabled=false;
-  specX.fillStyle='#090c13';specX.fillRect(0,0,specC.width,specC.height);
+  specX.clearRect(0,0,specC.width,specC.height);
   specX.drawImage(specBuf,Math.round(AXIS_L*dpr),Math.round(AXIS_T*dpr));
   specX.setTransform(dpr,0,0,dpr,0,0);
   const px0=AXIS_L,py0=AXIS_T,pwc=pw/dpr,phc=ph/dpr;
   // Map any frequency to its y in the plot (log axis, low at the bottom).
   const yOf=f=>py0+phc*(1-Math.log(f/SFMIN)/SLOGR);
 
-  // frequency grid + tick marks + labels
-  specX.font='500 8.5px "JetBrains Mono",monospace';
+  // note grid + tick marks + labels (C and A)
+  specX.font='500 10px '+F_SANS;
   specX.textBaseline='middle';
-  for(const tk of FREQ_TICKS){
-    const y=yOf(tk.f);
-    specX.strokeStyle=tk.lbl?'rgba(150,200,255,0.13)':'rgba(150,200,255,0.06)';
+  for(const tk of NOTE_GRID){
+    const f=A4*Math.pow(2,(tk.m-69)/12);
+    if(f<SFMIN||f>SFMAX)continue;
+    const y=Math.round(yOf(f))+0.5;
+    specX.strokeStyle=tk.lbl?'rgba(255,255,255,0.13)':'rgba(255,255,255,0.045)';
     specX.lineWidth=1;
     specX.beginPath();specX.moveTo(px0,y);specX.lineTo(px0+pwc,y);specX.stroke();
-    specX.strokeStyle='rgba(150,200,255,0.45)';
-    specX.beginPath();specX.moveTo(px0-3,y);specX.lineTo(px0,y);specX.stroke();
-    if(tk.lbl){specX.fillStyle='rgba(128,144,176,0.9)';specX.textAlign='right';specX.fillText(tk.lbl,px0-5,y);}
+    if(tk.lbl){
+      specX.strokeStyle='rgba(255,255,255,0.4)';
+      specX.beginPath();specX.moveTo(px0-3,y);specX.lineTo(px0,y);specX.stroke();
+      specX.fillStyle=tk.lbl[0]==='C'?'rgba(236,239,244,0.85)':'rgba(138,146,160,0.9)';
+      specX.textAlign='right';specX.fillText(tk.lbl,px0-5,y);
+    }
   }
-  specX.fillStyle='rgba(128,144,176,0.55)';specX.textAlign='right';
-  specX.fillText('Hz',px0-5,py0+5);
 
   // time ruler along the bottom (real elapsed time per column)
   const now=performance.now();
@@ -825,9 +933,10 @@ function drawSpec(){
     const idx=colAt(now-s*1000);
     if(idx<=0||idx>=colTimes.length-1)continue;
     const x=px0+idx/dpr;
-    specX.strokeStyle='rgba(150,200,255,0.28)';specX.lineWidth=1;
+    if(x>px0+pwc-38)continue;   // keep clear of the "now" label
+    specX.strokeStyle='rgba(200,214,235,0.28)';specX.lineWidth=1;
     specX.beginPath();specX.moveTo(x,py0+phc);specX.lineTo(x,py0+phc+3);specX.stroke();
-    specX.fillStyle='rgba(128,144,176,0.75)';
+    specX.fillStyle='rgba(138,146,160,0.75)';
     specX.fillText('-'+s+'s',x,py0+phc+5);
   }
   specX.fillStyle='rgba(200,208,224,0.7)';specX.textAlign='right';
@@ -845,7 +954,7 @@ function drawSpec(){
     specX.strokeStyle=isTgt?'rgba(232,236,244,0.05)':'rgba(232,236,244,0.22)';
     specX.lineWidth=1;
     specX.beginPath();specX.moveTo(px0,y);specX.lineTo(px0+pwc,y);specX.stroke();
-    specX.font='600 8.5px "JetBrains Mono",monospace';
+    specX.font='600 10px '+F_SANS;
     specX.fillStyle=isTgt?pcColor(s.pc,70):'rgba(210,220,236,0.75)';
     specX.textAlign='right';
     specX.fillText(s.n+s.o,px0+pwc-3,y-1);
@@ -865,7 +974,7 @@ function drawSpec(){
       specX.setLineDash(hn===1?[]:[5,4]);
       specX.beginPath();specX.moveTo(px0,y);specX.lineTo(px0+pwc,y);specX.stroke();
       if(lastLblY-y>11){   // rungs compress upward on the log axis — skip crowded labels
-        specX.font='600 8px "JetBrains Mono",monospace';
+        specX.font='600 9px '+F_SANS;
         specX.fillStyle=pcColorA(tgt.pc,0.85,68);
         specX.textAlign='left';
         specX.fillText(hn===1?tgt.n+tgt.o+' ×1':'×'+hn,px0+3,y-1);
@@ -878,7 +987,7 @@ function drawSpec(){
     // on the target's rungs the string is in tune. Green means within 5 cents.
     if(lastPitch>0&&Math.abs(Math.log2(lastPitch/tgt.f))<0.45){
       const inTune=Math.abs(lastCents)<=5;
-      const mCol=inTune?'#64c864':pcColor(lastPitchPc,64);
+      const mCol=inTune?UI.ok:pcColor(lastPitchPc,64);
       for(let hn=1;hn*lastPitch<=SFMAX;hn++){
         const y=yOf(hn*lastPitch);
         specX.fillStyle=mCol;
@@ -887,9 +996,9 @@ function drawSpec(){
         specX.closePath();specX.fill();
       }
       // status chip: sharp/flat direction against the ladder
-      specX.font='700 9px "JetBrains Mono",monospace';
+      specX.font='600 11px '+F_SANS;
       specX.textAlign='left';specX.textBaseline='top';
-      specX.fillStyle=inTune?'#64c864':mCol;
+      specX.fillStyle=inTune?UI.ok:mCol;
       specX.fillText(inTune?'● in tune':(lastCents>0?'▲ sharp '+Math.abs(lastCents)+'¢':'▼ flat '+Math.abs(lastCents)+'¢'),px0+4,py0+4);
     }
   }
@@ -902,10 +1011,10 @@ function drawSpec(){
     specX.fillStyle=`rgb(${ILUT[li*3]},${ILUT[li*3+1]},${ILUT[li*3+2]})`;
     specX.fillRect(cbX,py0+y,cbW,1.2);
   }
-  specX.strokeStyle='rgba(150,200,255,0.3)';specX.lineWidth=1;
+  specX.strokeStyle='rgba(200,214,235,0.3)';specX.lineWidth=1;
   specX.strokeRect(cbX+0.5,py0+0.5,cbW-1,phc-1);
-  specX.font='500 7px "JetBrains Mono",monospace';
-  specX.fillStyle='rgba(128,144,176,0.8)';specX.textAlign='left';
+  specX.font='500 9px '+F_SANS;
+  specX.fillStyle='rgba(138,146,160,0.8)';specX.textAlign='left';
   specX.textBaseline='top';specX.fillText('-25',cbX+cbW+2,py0);
   specX.textBaseline='bottom';specX.fillText('-90',cbX+cbW+2,py0+phc);
   specX.save();
@@ -929,7 +1038,7 @@ function drawSpec(){
   }
 
   // plot frame
-  specX.strokeStyle='rgba(150,200,255,0.3)';specX.lineWidth=1;
+  specX.strokeStyle='rgba(255,255,255,0.12)';specX.lineWidth=1;
   specX.strokeRect(px0+0.5,py0+0.5,pwc-1,phc-1);
 }
 
@@ -972,13 +1081,14 @@ function updateTuner(){
   analyser.getFloatTimeDomainData(tdBuf);
   // Use a 2048-sample window: enough cycles for low strings, still cheap.
   const p=autoCorrelate(tdBuf.subarray(0,2048),AC.sampleRate);
-  const nEl=$('tunerNote'),fEl=$('tunerFreq'),nd=$('centsNeedle');
-  // Outside the instrument's plausible range: blank the tuner.
+  const nEl=$('tunerNote'),fEl=$('tunerFreq');
+  // Outside the instrument's plausible range: blank the tuner and let the
+  // needle spring back to centre.
   if(p<50||p>1400){
-    lastPitch=0;lastCents=999;
-    nEl.textContent='—';nEl.style.color='var(--text-faint)';nEl.style.textShadow='none';
-    fEl.textContent='— Hz';
-    nd.style.left='50%';nd.style.background='var(--text-faint)';nd.style.boxShadow='none';
+    lastPitch=0;lastCents=999;gLive=false;
+    nEl.textContent='—';nEl.style.color='';nEl.style.textShadow='none';
+    nEl.classList.remove('ok');
+    fEl.textContent='Play one string';
     return;
   }
   // Convert Hz to MIDI, find the nearest note, and the cents error from it.
@@ -995,12 +1105,11 @@ function updateTuner(){
   }else lastCents=cents;
   const inTune=Math.abs(cents)<=5;
   nEl.textContent=NOTE_NAMES[pc]+oct;
-  nEl.style.color=inTune?'#64c864':pcColor(pc,66);
-  nEl.style.textShadow=inTune?'0 0 26px rgba(100,200,100,0.6)':`0 0 22px ${pcColorA(pc,0.45)}`;
-  fEl.textContent=p.toFixed(1)+' Hz · '+(cents>0?'+':'')+cents+'¢';
-  nd.style.left=(50+Math.max(-50,Math.min(50,cents)))+'%';
-  nd.style.background=inTune?'#64c864':pcColor(pc,60);
-  nd.style.boxShadow=inTune?'0 0 10px #64c864':`0 0 8px ${pcColorA(pc,0.7)}`;
+  nEl.style.color=inTune?UI.ok:pcColor(pc,70);
+  nEl.style.textShadow=inTune?'0 0 28px rgba(95,211,138,0.55)':'none';
+  nEl.classList.toggle('ok',inTune);
+  fEl.textContent=p.toFixed(1)+' Hz · '+(cents>0?'+':cents<0?'−':'±')+Math.abs(cents)+' ¢';
+  gLive=true;gTarget=cents;gPc=pc;
 }
 
 /* reference-tone buttons: tap a string to hear it */
@@ -1084,6 +1193,11 @@ function strum(){
     const base=28+((diagChord.root-4)%12+12)%12;   // lowest position on the E string
     midis=[base,base+7,base+12];                    // root · fifth · octave walk
     stag=0.22;dur=2.9;
+  }else if(instrument==='piano'){
+    // Piano: the root-position chord the diagram shows, rolled quickly.
+    const q=QUALS[diagChord.q]||QUALS[''];
+    midis=[48+diagChord.root].concat(q.iv.map(iv=>60+diagChord.root+iv));
+    stag=0.03;dur=2.8;
   }else{
     // Violin (and fallback): block chord tones around middle C plus a low root.
     const q=QUALS[diagChord.q]||QUALS[''];
@@ -1109,3 +1223,67 @@ function strum(){
 }
 $('strumBtn').addEventListener('click',strum);
 
+
+
+/* ═══════════ TUNER GAUGE — arc needle on a spring ═══════════
+   A 140 degree arc from -50 to +50 cents. updateTuner() sets the target
+   (gTarget, gLive); drawGauge(dt) moves the needle toward it as a damped
+   spring each frame, so it swings and settles like a real meter. Inside
+   ±5 cents the in-tune band and the needle glow green. */
+const gaugeC=$('gaugeCanvas'),gaugeX=gaugeC?gaugeC.getContext('2d'):null;
+let gNeedle=0,gVel=0,gTarget=0,gLive=false,gPc=0,gGlow=0;
+const G_SPAN=70*Math.PI/180;              // half of the arc, in radians
+function drawGauge(dt){
+  if(!gaugeX)return;
+  // Spring: stiffness K, damping a little under critical, in small sub-steps.
+  const K=160,C=2*Math.sqrt(K)*0.6,tgt=gLive?Math.max(-50,Math.min(50,gTarget)):0;
+  const n=Math.max(1,Math.ceil(dt/0.008)),hs=dt/n;
+  for(let i=0;i<n;i++){gVel+=(K*(tgt-gNeedle)-C*gVel)*hs;gNeedle+=gVel*hs;}
+  if(!isFinite(gNeedle)){gNeedle=0;gVel=0;}
+  const inTune=gLive&&Math.abs(gTarget)<=5;
+  gGlow+=((inTune?1:0)-gGlow)*Math.min(1,dt*7);
+  const w=gaugeC.clientWidth,h=gaugeC.clientHeight;
+  if(w<40||h<30)return;
+  const dpr=Math.min(devicePixelRatio||1,3);
+  if(gaugeC.width!==Math.round(w*dpr)||gaugeC.height!==Math.round(h*dpr)){gaugeC.width=Math.round(w*dpr);gaugeC.height=Math.round(h*dpr);}
+  const g=gaugeX;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  // Pivot under the arc; radius fits both the width and the height.
+  const R=Math.min(w*0.46/Math.sin(G_SPAN),h*0.86);
+  const cx=w/2,cy=h*0.06+R;
+  const ang=c=>-Math.PI/2+c/50*G_SPAN;
+  // track
+  g.lineCap='round';
+  g.strokeStyle='rgba(255,255,255,0.07)';g.lineWidth=10;
+  g.beginPath();g.arc(cx,cy,R,ang(-50),ang(50));g.stroke();
+  // in-tune band
+  g.strokeStyle=`rgba(95,211,138,${0.28+gGlow*0.6})`;g.lineWidth=10;
+  if(gGlow>0.05){g.shadowColor='rgba(95,211,138,0.8)';g.shadowBlur=18*gGlow;}
+  g.beginPath();g.arc(cx,cy,R,ang(-5),ang(5));g.stroke();
+  g.shadowBlur=0;g.lineCap='butt';
+  // ticks every 5 cents, long every 10, labels at 0 and the ends
+  for(let c=-50;c<=50;c+=5){
+    const a=ang(c),major=c%10===0;
+    const r0=R-(major?17:13),r1=R-8;
+    g.strokeStyle=c===0?'rgba(236,239,244,0.75)':major?'rgba(236,239,244,0.38)':'rgba(236,239,244,0.18)';
+    g.lineWidth=c===0?1.6:1;
+    g.beginPath();g.moveTo(cx+Math.cos(a)*r0,cy+Math.sin(a)*r0);g.lineTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1);g.stroke();
+  }
+  g.font='500 11px '+F_SANS;g.fillStyle=UI.dim;g.textBaseline='middle';
+  [[-50,'♭ −50'],[50,'+50 ♯']].forEach(([c,t])=>{
+    const a=ang(c),r=R-30;
+    g.textAlign=c<0?'left':'right';
+    g.fillText(t,cx+Math.cos(a)*r+(c<0?-4:4),cy+Math.sin(a)*r);
+  });
+  // needle: from inside the arc up to the track, coloured by state
+  const a=ang(gNeedle);
+  const col=!gLive?'rgba(138,146,160,0.55)':inTune?UI.ok:pcColor(gPc,64);
+  g.strokeStyle=col;g.lineWidth=3;g.lineCap='round';
+  if(gLive){g.shadowColor=inTune?'rgba(95,211,138,0.9)':pcColorA(gPc,0.7);g.shadowBlur=inTune?16:8;}
+  g.beginPath();g.moveTo(cx+Math.cos(a)*(R*0.55),cy+Math.sin(a)*(R*0.55));g.lineTo(cx+Math.cos(a)*(R+6),cy+Math.sin(a)*(R+6));g.stroke();
+  g.shadowBlur=0;g.lineCap='butt';
+  g.fillStyle=col;
+  g.beginPath();g.arc(cx+Math.cos(a)*(R+6),cy+Math.sin(a)*(R+6),3.2,0,7);g.fill();
+  g.textBaseline='alphabetic';
+}
