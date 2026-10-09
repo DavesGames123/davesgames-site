@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>String Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STRING LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Guitar and violin strings simulated with the stiff damped wave equation
+   (engine/), shown twice side by side as in the molecule explorer: a 2D
+   view (view2d.js) and a 3D instrument (view3d/). Both views read the same
+   StringSim objects, so they show the same string at the same time. Slow
+   motion and display exaggeration change the view only. A scrolling
+   explainer with live figures (explain.js) is under the lab.
+     engine/     physics, sound, MIDI, chords, harmonics   (no DOM)
+     view2d.js   the 2D pane: string, force colour, modes, spectrum
+     view3d/     the 3D pane: generic instruments in three.js
+     playback/   MIDI tracks (and the track player when present)
+     explain.js  the explainer figures under the lab
+     main.js     world state, controls, sound, music, window.__strings
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. fonts, style.css, lib/sci.css, the colour map picker css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #lab      panel | stage. stage: .pane 2D | .pane 3D, then #transport
+     #panel    instrument, string, excite, time, physics, colour, music,
+               chords, sound. Phone: a bottom sheet over #dock.
+     #explain  the explainer sections with [data-fig] canvases
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock     controls, pluck, pause, slow motion, next note
+     the stage stacks 2D over 3D; the sheet shrinks the stage
+
+   GREP MAP  (main.js)
+     grep -n 'function excite'      pluck, strike, bow, touch from any view
+     grep -n 'function buildSims'   rebuild the strings after a change
+     grep -n 'function frame'       the animation loop
+     grep -n 'function playFrets'   chords and MIDI groups to sims + sound
+     grep -n 'window.__strings'     the page API for the saver and tests
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="String Lab: guitar and violin strings simulated in 2D and 3D side by side, coloured by the force on the wave, in slow motion, with harmonics, frets, chords, MIDI playback and an explainer of wave mechanics.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
+<link rel="stylesheet" href="playback/playback.css" data-pb-css="1">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">String Lab</div>
+  <a class="toexp" href="#explain">How strings work ↓</a>
+</div>
+
+<section id="lab">
+  <aside id="panel" aria-label="String controls">
+    <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+    <button id="panelClose" type="button" aria-label="Close the panel">✕</button>
+
+    <h2 class="sec">Instrument</h2>
+    <div class="seg wide" id="instSeg">
+      <button type="button" data-inst="steel" class="on">Steel guitar</button>
+      <button type="button" data-inst="classical">Classical</button>
+      <button type="button" data-inst="violin">Violin</button>
+    </div>
+    <p class="note" id="instNote"></p>
+
+    <h2 class="sec">String and fret</h2>
+    <div class="chips" id="stringChips"></div>
+    <label class="row"><span>Fret <b id="fretV">0</b></span><input id="fret" type="range" min="0" max="20" step="1" value="0"></label>
+    <p class="note" id="noteRead"></p>
+
+    <h2 class="sec">Excite</h2>
+    <div class="seg wide" id="toolSeg2">
+      <button type="button" data-tool="pluck" class="on">Pluck</button>
+      <button type="button" data-tool="strike">Strike</button>
+      <button type="button" data-tool="bow">Bow</button>
+      <button type="button" data-tool="touch">Harmonic</button>
+    </div>
+    <p class="note">Drag the string in the 2D view and let go to pluck it. Strike taps it. Bow holds the bow on it. Harmonic touches a node lightly, then plucks.</p>
+    <label class="row"><span>Pluck position <b id="posV">0.20</b></span><input id="pos" type="range" min="0.03" max="0.5" step="0.005" value="0.2"></label>
+    <label class="row"><span>Show nodes of harmonic</span>
+      <select id="harm"><option value="0">off</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+    <div class="grid3">
+      <button type="button" id="bPluck">Pluck</button>
+      <button type="button" id="bAll">Strum all</button>
+      <button type="button" id="bMute">Mute</button>
+    </div>
+
+    <h2 class="sec">Time</h2>
+    <div class="chips" id="tsChips"></div>
+    <label class="row"><span>Slow motion <b id="tsV">1/100</b></span><input id="ts" type="range" min="-4" max="0" step="0.05" value="-2"></label>
+    <label class="row"><span>Exaggeration <b id="exV">×40</b></span><input id="ex" type="range" min="0" max="2.7" step="0.01" value="1.6"></label>
+    <p class="note">Slow motion and exaggeration change the view only. Sound always plays in real time.</p>
+
+    <h2 class="sec">Physics</h2>
+    <label class="row"><span>Tension <b id="tenV">100%</b></span><input id="ten" type="range" min="0.5" max="1.5" step="0.01" value="1"></label>
+    <label class="row"><span>Gauge <b id="gauV">100%</b></span><input id="gau" type="range" min="0.6" max="1.6" step="0.01" value="1"></label>
+    <label class="row"><span>Damping <b id="dmpV">×1</b></span><input id="dmp" type="range" min="0" max="2" step="0.01" value="1"></label>
+    <label class="row"><span>Stiffness <b id="stfV">×1</b></span><input id="stf" type="range" min="0" max="1.6" step="0.01" value="0"></label>
+    <button type="button" class="wbtn" id="bPhysReset">Reset physics</button>
+    <table class="readout" id="readout"></table>
+
+    <h2 class="sec">Colour</h2>
+    <div class="chips" id="fieldChips"></div>
+    <label class="chk"><input type="checkbox" id="arrows" checked> Force arrows</label>
+    <div id="cmapHost"></div>
+
+    <h2 class="sec">Music</h2>
+    <div id="musicHost"><p class="note">Loading the music panel…</p></div>
+
+    <h2 class="sec">Quick chords</h2>
+    <div id="chordGrid" class="chordgrid"></div>
+    <p class="note" id="chordNote">Tap a chord to strum it once.</p>
+
+    <h2 class="sec">Sound</h2>
+    <div class="grid2">
+      <button type="button" id="sMute" class="tog">Sound on</button>
+      <select id="method" aria-label="Synthesis method"><option value="modal">Modal synthesis</option><option value="sim">Full simulation</option><option value="ks">Light (Karplus-Strong)</option></select>
+    </div>
+    <label class="row"><span>Volume <b id="volV">12%</b></span><input id="vol" type="range" min="0" max="0.6" step="0.01" value="0.12"></label>
+    <p class="note fine">The instruments are a generic steel-string acoustic guitar, a generic classical guitar and a violin. String data are rounded published values (sources in engine/instruments.js).</p>
+  </aside>
+
+  <main id="stage">
+    <section class="pane p2">
+      <header class="ph"><span class="pt">2D string</span>
+        <div class="tools">
+          <div class="seg" id="toolSeg">
+            <button type="button" data-tool="pluck" class="on">Pluck</button>
+            <button type="button" data-tool="strike">Strike</button>
+            <button type="button" data-tool="bow">Bow</button>
+            <button type="button" data-tool="touch">Harmonic</button>
+          </div>
+          <button type="button" class="tb tog" id="bShowAll" title="Show every string">All strings</button>
+        </div>
+      </header>
+      <div class="view2"><canvas id="c2" aria-label="2D string view"></canvas></div>
+    </section>
+    <section class="pane p3">
+      <header class="ph"><span class="pt">3D instrument</span>
+        <div class="tools" id="camTools">
+          <button type="button" class="tb" data-cam="instrument">Whole</button>
+          <button type="button" class="tb" data-cam="soundhole">Strings</button>
+          <button type="button" class="tb" data-cam="string">Close</button>
+          <button type="button" class="tb" data-cam="fretboard">Neck</button>
+          <button type="button" class="tb" data-cam="bow" hidden>Bow</button>
+        </div>
+      </header>
+      <div class="view3" id="view3"><canvas id="c3" aria-label="3D instrument view"></canvas><div class="msg3" id="msg3">Loading the 3D instrument…</div></div>
+    </section>
+    <div id="transport">
+      <button type="button" id="tPause" class="tb">Pause</button>
+      <div class="seg" id="tsSeg"></div>
+      <span class="tlabel">exaggeration</span><input id="ex2" type="range" min="0" max="2.7" step="0.01" value="1.6" aria-label="Exaggeration">
+      <button type="button" id="tPluck" class="tb">Pluck</button>
+      <button type="button" id="tStep" class="tb">Next note ▶</button>
+      <span id="tRead" class="tread"></span>
+    </div>
+  </main>
+</section>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-expanded="false"><b>☰</b><span>Controls</span></button>
+  <button id="dockPluck" type="button"><b>〰</b><span>Pluck</span></button>
+  <button id="dockPause" type="button"><b>❚❚</b><span id="dockPauseV">Pause</span></button>
+  <button id="dockSlow" type="button"><small>slow</small><span id="dockSlowV">1/100</span></button>
+  <button id="dockStep" type="button"><b>▶</b><span>Next note</span></button>
+</nav>
+
+<article id="explain">
+  <header class="ex-head">
+    <h1>How a string makes a note</h1>
+    <p class="lede">Every figure here runs live. The lab above uses the same equations on a grid of a few hundred points, 44,100 times a simulated second.</p>
+  </header>
+
+  <section class="ex" id="ex-wave">
+    <h2>The wave equation</h2>
+    <p>A small piece of string feels the tension pull on both of its ends. When the string is straight the two pulls cancel. When it is curved they do not, and the net force points toward the inside of the curve. Divide that force by the mass of the piece and you get its acceleration:</p>
+    <div class="sci-eq" data-tex="\class{m5}{\frac{\partial^2 u}{\partial t^2}} = \class{m1}{c^2}\,\frac{\partial^2 u}{\partial x^2}, \qquad \class{m1}{c} = \sqrt{\class{m2}{T}/\class{m3}{\mu}}"></div>
+    <p>Here <i>u</i> is the sideways displacement, <span class="m2">T</span> the tension and <span class="m3">μ</span> the mass per metre. So the <span class="m5">acceleration</span> is the curvature times <span class="m1">c²</span>. This is what the magma colour in the lab shows: bright where the string bends hard, dark where it is straight. A plucked string is a set of straight lines joined at sharp corners, so all the force sits in those corners.</p>
+    <p>d'Alembert saw in 1747 that any solution is two shapes moving in opposite directions at speed <span class="m1">c</span>:</p>
+    <div class="sci-eq" data-tex="u(x,t) = \class{m1}{f(x - ct)} + \class{m2}{g(x + ct)}"></div>
+    <p>A pluck starts as two equal half-height copies of the triangle, one running each way. At a fixed end each copy comes back upside down. The figure shows the two copies (blue and orange) and their sum (white). The corners are where the force is.</p>
+    <figure><canvas data-fig="dalembert"></canvas><figcaption>Two travelling waves add to the plucked shape. Each reflects upside down at a fixed end.</figcaption></figure>
+  </section>
+
+  <section class="ex" id="ex-standing">
+    <h2>Standing waves</h2>
+    <p>The waves bounce between the ends, so only shapes that fit a whole number of half wavelengths survive. These are the modes. Mode <i>n</i> has <i>n</i> loops, <i>n</i> − 1 still points inside (nodes) and moves as a whole at one frequency:</p>
+    <div class="sci-eq" data-tex="u_n(x,t) = \sin\!\left(\frac{n\pi x}{L}\right)\cos(2\pi \class{m5}{f_n} t), \qquad \class{m5}{f_n} = n\,\class{m4}{f_1}"></div>
+    <figure><canvas data-fig="standing"></canvas><figcaption>The first five modes. Dots are nodes. Mode n vibrates n times as fast as mode 1.</figcaption></figure>
+    <p>Any motion of the string is a sum of these modes. The bars under the lab string show how much of each mode is on the string now.</p>
+  </section>
+
+  <section class="ex" id="ex-mersenne">
+    <h2>What sets the pitch</h2>
+    <p>The fundamental takes one round trip, 2<span class="m6">L</span>, at speed <span class="m1">c</span>:</p>
+    <div class="sci-eq" data-tex="\class{m4}{f_1} = \frac{1}{2\class{m6}{L}}\sqrt{\frac{\class{m2}{T}}{\class{m3}{\mu}}}"></div>
+    <p>This is Mersenne's law (1636). Halve the <span class="m6">length</span> and the pitch goes up an octave: that is the 12th fret. Four times the <span class="m2">tension</span> also gives an octave. A heavier string (larger <span class="m3">μ</span>) is lower, which is why the bass strings are wound with wire: more mass without more stiffness.</p>
+    <figure><canvas data-fig="mersenne"></canvas>
+      <div class="figctl">
+        <label><span class="m6">L</span> <input type="range" data-ctl="L" min="0.2" max="0.7" step="0.005" value="0.648"></label>
+        <label><span class="m2">T</span> <input type="range" data-ctl="T" min="20" max="200" step="1" value="73"></label>
+        <label><span class="m3">μ</span> ×<input type="range" data-ctl="mu" min="0.25" max="4" step="0.01" value="1"></label>
+      </div>
+      <figcaption>Change length, tension and mass. The string slows down 200 times so you can see it.</figcaption></figure>
+  </section>
+
+  <section class="ex" id="ex-series">
+    <h2>The harmonic series and its ratios</h2>
+    <p>The modes of an ideal string are exact whole-number multiples of <span class="m4">f₁</span>. Two notes sound smooth together when their harmonics line up, which happens when their frequencies are in a ratio of small whole numbers:</p>
+    <div class="sci-eq" data-tex="\frac{f_2}{f_1} = \frac{2}{1}\ \text{octave},\quad \frac{f_3}{f_2} = \frac{3}{2}\ \text{fifth},\quad \frac{f_4}{f_3} = \frac{4}{3}\ \text{fourth},\quad \frac{f_5}{f_4} = \frac{5}{4}\ \text{major third}"></div>
+    <figure><canvas data-fig="series"></canvas><figcaption>Harmonics 1 to 12 of a low E on a log frequency axis, with the ratio between neighbours. The intervals get smaller as you go up.</figcaption></figure>
+    <p>Play a chord in the lab and watch the bars: each string adds its own series, and in a major chord many of those lines fall on top of each other.</p>
+  </section>
+
+  <section class="ex" id="ex-pluck">
+    <h2>Why the pluck position changes the tone</h2>
+    <p>A pluck at fraction <span class="m2">p</span> of the length gives mode <i>n</i> the amplitude</p>
+    <div class="sci-eq" data-tex="b_n = \frac{2h}{n^2\pi^2\,\class{m2}{p}(1-\class{m2}{p})}\,\sin(n\pi \class{m2}{p})"></div>
+    <p>A mode with a node at the pluck point gets nothing. Pluck at the middle (<span class="m2">p</span> = 1/2) and every even harmonic is gone: the tone is round and hollow. Pluck near the bridge and many high modes stay: the tone is bright and thin. Guitarists play near the sound hole, about <span class="m2">p</span> = 1/5, so the 5th, 10th and 15th harmonics are missing.</p>
+    <figure><canvas data-fig="pluck"></canvas><figcaption>The pluck point moves along the string. Red bars are harmonics with a node at the pluck point.</figcaption></figure>
+  </section>
+
+  <section class="ex" id="ex-stiff">
+    <h2>Inharmonicity: real strings are stiff</h2>
+    <p>A steel string also resists bending. That adds a fourth-derivative term, and high modes go a little sharp:</p>
+    <div class="sci-eq" data-tex="\frac{\partial^2 u}{\partial t^2} = c^2 \frac{\partial^2 u}{\partial x^2} - \class{m4}{\kappa^2}\frac{\partial^4 u}{\partial x^4}, \qquad f_n = n f_1\sqrt{1 + \class{m4}{B}\,n^2}, \qquad \class{m4}{B} = \frac{\pi^3 E d^4}{64\,T L^2}"></div>
+    <p>For guitar strings <span class="m4">B</span> is about 10⁻⁵ to 10⁻⁴, so the 8th harmonic is a few cents sharp. A piano's short bass strings are much worse, which is why tuners stretch the octaves. Turn up Stiffness in the lab and watch the spectrum lines move right of the grid.</p>
+    <figure><canvas data-fig="stiff"></canvas><figcaption>How sharp each harmonic is, in cents, for a plain steel B string, a wound low E, and a string with 30 times the B value of the plain B string.</figcaption></figure>
+  </section>
+
+  <section class="ex" id="ex-frets">
+    <h2>Frets and twelve equal steps</h2>
+    <p>Each fret shortens the string by the same factor, 2<sup>−1/12</sup>, so each step is the same ratio, 100 cents:</p>
+    <div class="sci-eq" data-tex="L_n = L\,2^{-n/12}, \qquad \frac{f_{n}}{f_0} = 2^{n/12}"></div>
+    <p>This makes every key sound the same, but only the octave is a pure ratio. The equal fifth (2<sup>7/12</sup> = 1.4983) is 2 cents flat of 3/2. The equal major third (1.2599) is 14 cents sharp of 5/4, and you can hear it as a slow beat.</p>
+    <figure><canvas data-fig="frets"></canvas><figcaption>Fret positions on a 648 mm scale. The spacing shrinks by 5.6 % at each fret.</figcaption></figure>
+    <table class="ivtable" id="ivTable"></table>
+  </section>
+
+  <section class="ex" id="ex-body">
+    <h2>How the body makes it loud</h2>
+    <p>A string is too thin to push much air. It pushes the bridge instead, with the force</p>
+    <div class="sci-eq" data-tex="F_{\text{bridge}}(t) = T\,\frac{\partial u}{\partial x}\Big|_{x=0}"></div>
+    <p>The bridge drives the top plate, and the top and the air inside the box have resonances of their own. Near a resonance the body radiates much more. The guitar's air mode near 100 Hz gives the bass its boom. A violin's main body modes sit near 280, 470 and 550 Hz, and its bridge adds a broad lift near 2.5 kHz.</p>
+    <figure><canvas data-fig="body"></canvas><figcaption>Gain of the body filters used for the lab's sound, for the three instruments.</figcaption></figure>
+  </section>
+
+  <section class="ex" id="ex-bow">
+    <h2>Bowing: stick and slip</h2>
+    <p>A bow does not pluck. Rosin makes the hair grip the string, which moves with the bow (stick) until the string's pull is larger than friction. Then it snaps back (slip), and grips again. Helmholtz found in the 1860s that the string takes a simple shape: two straight lines joined at one sharp corner. The corner runs around a lens-shaped path once per period, and each time it passes the bow, the string slips.</p>
+    <div class="sci-eq" data-tex="v_{\text{string at bow}} = \begin{cases} v_{\text{bow}} & \text{stick, for a fraction } 1-\beta \\ -v_{\text{bow}}\,\frac{1-\beta}{\beta} & \text{slip, for a fraction } \beta \end{cases}"></div>
+    <p>Here β is the bow position as a fraction of the length. Choose the violin and the Bow tool in the lab and hold the bow on a string to watch the corner travel.</p>
+    <figure><canvas data-fig="helmholtz"></canvas><figcaption>Helmholtz motion. Top: the string with its travelling corner. Bottom: the string velocity under the bow.</figcaption></figure>
+  </section>
+
+  <footer class="ex-foot">
+    <p>References: S. Bilbao, <i>Numerical Sound Synthesis</i> (Wiley, 2009), ch. 7. N. H. Fletcher and T. D. Rossing, <i>The Physics of Musical Instruments</i>, 2nd ed. (Springer, 1998), ch. 2, 9 and 10. H. von Helmholtz, <i>On the Sensations of Tone</i> (1863).</p>
+  </footer>
+</article>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
