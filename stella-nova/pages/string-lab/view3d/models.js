@@ -903,16 +903,25 @@ function buildViolin(inst, M) {
   root.add(btn, cylinderBetween(V3(xTail - 0.004, 0, (zEdgeB + zRibB) / 2), V3(xTail + 0.002, 0, (zEdgeB + zRibB) / 2), 0.0033, M.ebony));
 
   // chinrest on the bass (+y) side of the tailpiece
-  const prof = [[0, 0.006], [0.45, 0.0052], [0.75, 0.0068], [0.92, 0.0102], [1, 0.0118], [1.04, 0.0105], [1.02, 0.0045], [0.9, 0.0005], [0, 0]];
+  const prof = [[0, 0.0062], [0.5, 0.006], [0.8, 0.0068], [0.94, 0.0084], [1, 0.0092], [1.035, 0.0085], [1.02, 0.004], [0.9, 0.0004], [0, 0]];
   const lathe = new THREE.LatheGeometry(prof.map(([r, h]) => new THREE.Vector2(r, h)), 48);
   lathe.rotateX(Math.PI / 2);
-  lathe.scale(0.033, 0.029, 1);
-  const crX = xTail + 0.03, crY = 0.035;
-  lathe.translate(crX, crY, topA.height(crX, crY) + 0.0085);
+  lathe.scale(0.029, 0.025, 1);
+  const crX = xTail + 0.024, crY = 0.04;
+  lathe.translate(crX, crY, topA.height(crX, crY) + 0.0075);
   scaleUV(lathe, 4);
   root.add(mesh(lathe, M.ebony));
-  for (const dy of [-0.014, 0.022]) root.add(cylinderBetween(V3(xTail - 0.0015, crY + dy, zRibB + 0.006), V3(xTail - 0.0015, crY + dy, topA.height(xTail + 0.01, crY + dy) + 0.0085), 0.0022, M.chrome));
-  root.add(mesh(taperedBox(xTail + 0.001, xTail + 0.03, 0.03, 0.03, () => topA.height(xTail + 0.012, crY) + 0.006, 0.004, 8).translate(0, crY, 0), M.ebony));
+  // two short barrels clamp over the tail rib under the cup; a foot block under the cup
+  const ribX = (y) => ribOut.filter((p) => p.x < xTail + 0.06 && Math.abs(p.y - y) < 0.004).reduce((m, p) => Math.min(m, p.x), xTail + 0.06);
+  for (const by of [crY - 0.016, crY + 0.012]) {
+    const bx = ribX(by) - 0.0024;
+    root.add(cylinderBetween(V3(bx, by, zRibB + 0.008), V3(bx, by, zEdgeB - 0.002), 0.0021, M.chrome));
+  }
+  const foot = new THREE.CylinderGeometry(0.009, 0.011, 0.0075, 24);
+  foot.rotateX(Math.PI / 2);
+  foot.scale(1.4, 1, 1);
+  foot.translate(crX, crY, topA.height(crX, crY) + 0.0038);
+  root.add(mesh(foot, M.ebony));
 
   // pegs: D and G on +y (heads on +y), A and E on -y
   const pegU = [0.044, 0.016, 0.03, 0.058];
