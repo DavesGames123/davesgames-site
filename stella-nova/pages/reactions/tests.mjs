@@ -178,6 +178,7 @@ globalThis.RX.finish = finish;
 // ── tree (synth.js) ────────────────────────────────────────────────────────
 {
   const { fromNamed, layout, overlaps, growOrder, treeOf } = await import('./synth.js');
+  const { nodeOfSpecies } = await import('./steps.js');
   const all = [];
   for (const N of NAMED) {
     let S = null;
@@ -195,6 +196,10 @@ globalThis.RX.finish = finish;
     ok(S.steps.every(s => s.ins.every(i => at.get(i) < at.get(s.out))), `tree ${N.id}: growth order puts inputs before products`);
   }
   globalThis.RX.synths = all;
+  const { emptySynth, addLeaf } = await import('./synth.js');
+  const one = emptySynth(); addLeaf(one, nodeOfSpecies('ethanol'));
+  ok(['clado', 'radial', 'fan'].every(k => { const L = layout(one, k, 150); const b = L.fish[0]; return b && [b.x, b.y, b.w, b.h, L.w, L.h].every(Number.isFinite); }), 'tree: a one-molecule tree lays out in all three layouts');
+  for (const S of all.filter(x => x.named === 'fermentation' || x.named === 'haber')) ok(S.nodes.every(n => n.used >= 0 || n.id === S.root), `tree ${S.named}: no orphan nodes`, `${S.nodes.length} nodes`);
 }
 
 

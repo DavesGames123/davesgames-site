@@ -50,6 +50,7 @@ export function addStep(S, OCL, cls, ins, pick = null) {
   // species per step (coef counts the copies); formal reagents: no node
   const used = [], seen = new Map();
   mols.forEach((m, i) => {
+    if (cls.kind === 'overall' && !cls.fuel) return;   // its species come below
     if (cls.kind !== 'overall' && st.formal[i]) return;
     const k = m.key;
     if (seen.has(k) && ids[i] == null) { S.nodes[seen.get(k)].coef++; return; }
