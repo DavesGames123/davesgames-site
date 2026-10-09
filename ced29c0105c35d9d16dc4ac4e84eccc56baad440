@@ -1,0 +1,1 @@
+Correction to the body: node stella-nova/pages/home/tests.mjs without jsdom gives 23 passed, 0 failed (not 25). The jsdom part adds 10 checks for 33.
