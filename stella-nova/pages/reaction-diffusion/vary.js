@@ -30,6 +30,7 @@
 //    export function isSeedPreset  background + small seed shapes
 //    export function varyInit .... the varied init list
 //    export function varyParams .. the varied parameter values
+//    export function randomPresetIndex  the preset the page opens on
 // ============================================================================
 
 export const FIXED = new Set([
@@ -155,4 +156,13 @@ export function varyParams(preset, rnd) {
   const known = new Set((preset.params || []).map(q => q.name));
   for (const [name, [lo, hi]] of Object.entries(P)) if (known.has(name)) out[name] = +(lo + (hi - lo) * rnd()).toFixed(5);
   return out;
+}
+
+// A random preset index in [0, n), never equal to last (the preset of the
+// previous visit) when n > 1.
+export function randomPresetIndex(n, last = -1, rnd = Math.random) {
+  if (n <= 1) return 0;
+  if (!(last >= 0 && last < n)) return Math.floor(rnd() * n);
+  const i = Math.floor(rnd() * (n - 1));
+  return i >= last ? i + 1 : i;
 }

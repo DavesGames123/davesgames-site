@@ -36,7 +36,7 @@
      grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
 import { renderEquations, renderTeX, GENERAL, GENERAL_RULES, presetRules, paramTeX } from './equations.js';
-import { varyParams } from './vary.js';
+import { varyParams, randomPresetIndex } from './vary.js';
 import { typeset } from '../../lib/sci-math.js';
 
 const $ = id => document.getElementById(id);
@@ -190,8 +190,8 @@ async function boot() {
 
   const fromHash = decodeURIComponent(location.hash.slice(1));
   let i = S.presets.findIndex(p => p.id === fromHash);
-  if (i < 0) i = S.presets.findIndex(p => p.id === lsGet(LS_KEY));
-  if (i < 0) i = 0;
+  // No preset in the hash: open a random preset, not the last one seen.
+  if (i < 0) i = randomPresetIndex(S.presets.length, S.presets.findIndex(p => p.id === lsGet(LS_KEY)));
   await selectPreset(i);
   addEventListener('hashchange', () => {
     const j = S.presets.findIndex(p => p.id === decodeURIComponent(location.hash.slice(1)));

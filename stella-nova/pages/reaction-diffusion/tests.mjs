@@ -9,10 +9,11 @@
 //    copies       a seed preset gets 1 to 5 copies, all counts occur
 //    crystal      the crystal grows from 1 to 5 discs, inside the grid
 //    params       varyParams stays inside each slider's range
+//    open         the page opens on a random preset, never the last one
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { buildInitState } from './shadergen.js';
-import { varyInit, isSeedPreset, FIXED, PARAMS, varyParams } from './vary.js';
+import { varyInit, isSeedPreset, FIXED, PARAMS, varyParams, randomPresetIndex } from './vary.js';
 
 const here = new URL('.', import.meta.url).pathname;
 const raw = JSON.parse(readFileSync(here + 'presets.json', 'utf8'));
@@ -90,6 +91,19 @@ const seeds = PRESETS.filter(isSeedPreset);
     }
   }
   ok(bad.length === 0, 'params: varied values stay inside the slider ranges', bad.slice(0, 4).join(' '));
+}
+{
+  const n = PRESETS.length, hits = new Uint32Array(n);
+  let r = 7; const rnd = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
+  let bad = 0, last = 5;
+  for (let k = 0; k < 20000; k++) {
+    const i = randomPresetIndex(n, last, rnd);
+    if (!(i >= 0 && i < n) || i === last) bad++;
+    hits[i]++; last = i;
+  }
+  const seen = hits.filter(h => h > 0).length;
+  ok(bad === 0 && seen === n && randomPresetIndex(1, 0) === 0 && randomPresetIndex(n, -1, () => 0.9999) === n - 1,
+    `open: random preset in range, never the last one, all ${n} reachable`, `${seen} seen, ${bad} bad`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
