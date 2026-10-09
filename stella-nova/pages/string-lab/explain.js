@@ -129,7 +129,7 @@ export const FIGURES = {
         if (n < 12 && X((n + 1) * f1) - x > 26) {
           const r = ratioOf(n + 1, n);
           label(ctx, `${n + 1}:${n}`, (x + X((n + 1) * f1)) / 2, top + 50 + (n % 2) * 16, n === hi || n + 1 === hi ? C.m5 : C.dim, 'center');
-          if (r.name && n <= 5) label(ctx, r.name, (x + X((n + 1) * f1)) / 2, top + 84 + (n % 2) * 14, C.dim, 'center');
+          if (r.name && n <= 4) label(ctx, r.name, (x + X((n + 1) * f1)) / 2, top + 84 + ((n - 1) % 3) * 15, C.dim, 'center');
         }
       }
       label(ctx, `harmonic ${hi}: ${(hi * f1).toFixed(1)} Hz, ${noteName(Math.round(freqToMidi(hi * f1)))}`, x1, 16, C.m5, 'right');
@@ -167,20 +167,25 @@ export const FIGURES = {
       const sets = [
         { B: st[4].B, name: `plain steel B3 (B = ${st[4].B.toExponential(1)})`, col: C.m1 },
         { B: st[0].B, name: `wound E2 (B = ${st[0].B.toExponential(1)})`, col: C.m3 },
-        { B: st[4].B * 30, name: `30 × the plain B3 value`, col: C.m4 },
+        { B: st[4].B * 30, name: '30 × the plain B3 value', col: C.m4 },
       ];
       const N = 16, x0 = 44, x1 = w - 16, top = 16, base = h - 28;
-      const maxC = 1200 * Math.log2(Math.sqrt(1 + sets[2].B * N * N));
+      const cents = (B, n) => 1200 * Math.log2(Math.sqrt(1 + B * n * n));
+      // the axis fits the real strings; the exaggerated string leaves the top
+      const maxC = Math.ceil(Math.max(cents(sets[0].B, N), cents(sets[1].B, N)) * 1.25 / 5) * 5;
       const X = (n) => x0 + ((n - 1) / (N - 1)) * (x1 - x0), Y = (c) => base - (c / maxC) * (base - top);
       axisLine(ctx, x0, x1, base);
-      for (let c = 0; c <= maxC; c += maxC > 60 ? 20 : 5) { label(ctx, `${c}¢`, x0 - 6, Y(c) + 4, C.dim, 'right'); ctx.strokeStyle = C.line; ctx.beginPath(); ctx.moveTo(x0, Y(c)); ctx.lineTo(x1, Y(c)); ctx.stroke(); }
+      for (let c = 0; c <= maxC; c += 5) { label(ctx, `${c}¢`, x0 - 6, Y(c) + 4, C.dim, 'right'); ctx.strokeStyle = C.line; ctx.beginPath(); ctx.moveTo(x0, Y(c)); ctx.lineTo(x1, Y(c)); ctx.stroke(); }
       for (let n = 1; n <= N; n++) label(ctx, String(n), X(n), base + 14, C.dim, 'center');
-      sets.forEach((s, k) => {
-        ctx.strokeStyle = s.col; ctx.lineWidth = 2.2; ctx.beginPath();
-        for (let n = 1; n <= N; n++) { const c = 1200 * Math.log2(Math.sqrt(1 + s.B * n * n)); n === 1 ? ctx.moveTo(X(n), Y(c)) : ctx.lineTo(X(n), Y(c)); }
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, top - 4, x1 - x0, base - top + 6); ctx.clip();
+      sets.forEach((st2) => {
+        ctx.strokeStyle = st2.col; ctx.lineWidth = 2.2; ctx.beginPath();
+        for (let n = 1; n <= N; n++) { const c = cents(st2.B, n); n === 1 ? ctx.moveTo(X(n), Y(c)) : ctx.lineTo(X(n), Y(c)); }
         ctx.stroke();
-        label(ctx, s.name, x0 + 8, top + 14 + k * 15, s.col);
       });
+      ctx.restore();
+      sets.forEach((st2, k) => label(ctx, st2.name, x1 - 4, top + 14 + k * 15, st2.col, 'right'));
+      label(ctx, `(reaches ${cents(sets[2].B, N).toFixed(0)}¢ at n = ${N}, off the top)`, x1 - 4, top + 59, C.m4, 'right');
       label(ctx, 'harmonic n', x1, h - 4, C.dim, 'right');
     },
   },
