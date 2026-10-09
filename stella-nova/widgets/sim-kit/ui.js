@@ -100,6 +100,7 @@ export function mount(opts) {
   const kit = {
     schema: S, state: K.defaults(S), seed: opts.seed != null ? opts.seed >>> 0 : K.newSeed(),
     locks: new Set(opts.locks || []), playing: opts.autoplay !== false, baseSpeed: 1, slow: false,
+    guard: opts.guard || null,
     get speed() { return this.baseSpeed * (this.slow ? 0.2 : 1); },
     phone, root: null, panelOpen: false,
     on(n, f) { (ev[n] = ev[n] || []).push(f); return kit; },

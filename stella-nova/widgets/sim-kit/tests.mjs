@@ -163,6 +163,19 @@ const { mount } = await import('./ui.js');
   window.snSaver.exit();
   ok(kit.state.n === 35 && kit.seed === 7, 'saver: exit restores the state and the seed');
 }
+{
+  // The page guard of mount() also guards the saver scenes.
+  installDom({});
+  const { mount: m4 } = await import('./ui.js?guard');
+  const { director } = await import('./saver.js?guard');
+  const kit = m4({ schema: SCHEMA, seed: 9, guard: s => Object.assign({}, s, { n: Math.min(s.n, 30) }) });
+  const cv = document.createElement('canvas'); cv.width = 100; cv.height = 60;
+  director({ kit, canvas: () => cv, shots: [{ key: 'one', title: 'One' }, { key: 'two', title: 'Two' }], apply() {}, frame() {} });
+  await window.snSaver.enter({ seed: 5, label() {} });
+  let over = 0; for (let i = 0; i < 30; i++) { window.snSaver.cut(); if (kit.state.n > 30) over++; }
+  window.snSaver.exit();
+  ok(over === 0, 'saver: scenes pass through the guard given to mount()', `${over} of 30 over the clamp`);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

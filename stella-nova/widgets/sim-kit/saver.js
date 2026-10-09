@@ -100,7 +100,7 @@ export function director(spec) {
     const shot = spec.shots.find(s => s.key === key);
     const seed = r.int(1, 999999);
     const sr = K.rng(seed);
-    let st = K.randomize(kit.schema, seed, kit.state, { locks: shot.locks || [], guard: spec.guard }).state;
+    let st = K.randomize(kit.schema, seed, kit.state, { locks: shot.locks || [], guard: spec.guard || kit.guard }).state;
     if (shot.scene) { const extra = shot.scene(sr, st); if (extra) st = Object.assign({}, st, extra); }
     if (kit.schema.byKey.has('theme') && !(shot.scene && shot.keepTheme)) {
       let t = r.pick(themes); if (themes.length > 1) while (t === lastTheme) t = r.pick(themes);
