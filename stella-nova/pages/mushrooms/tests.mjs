@@ -15,6 +15,7 @@ import { layoutPlate, fitSpec, pngSize, scaleBar, THEMES, STYLE_KEYS, cellAt } f
 import { plateSVG } from './svg.js';
 import { CODE, extract } from './saver.js';
 import fs from 'node:fs';
+import { buildTree, layoutTree, tipBoxes, drift, drawParams, lineage, paramChanges, cladeName, TIP_CAP, T_MAX, ASPECT, ANC } from './tree.js';
 
 let fails = 0;
 const tests = [];
@@ -204,6 +205,106 @@ test('every saver code extract resolves in the shipped source', () => {
     const t = extract(src[file], fn, from, 7);
     ok(t && t.split('\n').length >= 4, `${key}: ${file}.js ${fn}() from "${from}" gave ${t ? t.split('\n').length : 0} lines`);
     if (from !== 'start') ok(t.split('\n')[0].includes(from), `${key}: extract does not start at "${from}"`);
+  }
+});
+
+// ── tree of life ────────────────────────────────────────────────────────────
+const treeOf = (seed, extra = {}) => buildTree(Object.assign({ rootParams: formParams('fly', 1), rootSeed: 77, seed, maxTips: 24 }, extra));
+const treeKey = t => JSON.stringify(t.nodes.map(n => [n.parent, n.kind, +n.t.toFixed(9), n.name, n.seed, PARAMS.map(d => n.params[d.key])]));
+const overlap = (a, b) => a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y < b.y + b.h - 1e-9 && b.y < a.y + a.h - 1e-9;
+test('tree: the same seed gives the same tree, names and mushrooms', () => {
+  for (const seed of [1, 7, 99]) {
+    const a = treeOf(seed), b = treeOf(seed);
+    ok(treeKey(a) === treeKey(b), 'tree ' + seed);
+    const tip = a.nodes[a.tips[a.tips.length - 1]];
+    ok(same(buildSpecimen(drawParams(tip.params), tip.seed), buildSpecimen(drawParams(tip.params), tip.seed)), 'tip mushroom ' + seed);
+  }
+  ok(treeKey(treeOf(1)) !== treeKey(treeOf(2)), 'seeds 1 and 2 give the same tree');
+});
+test('tree: shape rules (root, splits, living tips at T, cap, names from seeds)', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const t = treeOf(seed, { maxTips: 4 + (seed % 5) * 12 });
+    ok(t.nodes[0].kind === 'root' && t.nodes[0].children.length === 1, 'root with one child');
+    ok(t.nodes[0].name === randomName(77), 'the root is the specimen name');
+    for (const n of t.nodes) {
+      if (n.parent >= 0) ok(n.t >= t.nodes[n.parent].t, 'child before parent');
+      if (n.kind === 'tip') ok(n.t === T_MAX, 'tip time');
+      if (n.kind === 'split') ok(n.children.length === 2, 'split with two children');
+      ok(n.name === randomName(n.seed), 'name comes from the seed');
+      if (n.founder !== n.id) ok(n.genus === t.nodes[n.parent].genus, 'a non-founder keeps the genus');
+    }
+    const alive = t.nodes.filter(n => n.kind === 'tip').length;
+    ok(alive <= Math.min(TIP_CAP, t.opts.maxTips), `seed ${seed}: ${alive} tips over the cap`);
+    ok(alive >= Math.min(3, t.opts.maxTips), `seed ${seed}: only ${alive} living tips`);
+    ok(new Set(t.nodes.map(n => n.name)).size === t.nodes.length, 'names are unique');
+  }
+  ok(cladeName('Amanita') === 'Amanitaceae' && cladeName('Boletus') === 'Boletaceae' && cladeName('Agaromyces') === 'Agaromycetaceae', 'family names');
+});
+test('tree: params stay in range under drift; habitat and camera do not drift', () => {
+  const check = (p, why) => {
+    for (const d of PARAMS) {
+      const v = p[d.key];
+      ok(Number.isFinite(v), why + ' ' + d.key + ' not finite');
+      ok(v >= d.min - 1e-9 && v <= d.max + 1e-9, `${why} ${d.key}=${v}`);
+      if (d.kind !== 'float') ok(Number.isInteger(v), `${why} ${d.key}=${v} not an integer`);
+    }
+    if (p.profile >= 8) ok(p.under === 4, why + ': a morel or puffball with a gilled underside');
+  };
+  for (let seed = 1; seed <= 12; seed++) for (const n of treeOf(seed, { mut: 3 }).nodes) check(n.params, 'tree node');
+  const rnd = mulberry(5);
+  let p = formParams('bolete', 1);
+  for (let i = 0; i < 400; i++) {
+    const q = drift(p, 60, 3, rnd); check(q, 'drift');
+    for (const k of ['ground', 'moss', 'grass', 'litter', 'elev']) ok(q[k] === p[k], k + ' drifted');
+    p = q;
+  }
+  ok(paramChanges(formParams('bolete', 1), p).length > 10, 'drift changes many fields');
+});
+test('tree: every tip and ancestor draws, no NaN', () => {
+  const t = treeOf(11, { maxTips: 14, mut: 2 });
+  for (const n of t.nodes) {
+    const f = buildSpecimen(drawParams(n.params), n.seed);
+    ok(finite(f), n.name + ' has NaN');
+    ok(f.offs.length - 1 > 20, n.name + ' drew too few lines');
+  }
+});
+test('tree layout: no two tip boxes overlap (3 layouts, 4 sizes, up to 64 tips)', () => {
+  const sizes = [[300, 200], [120, 260], [400, 120], [90, 90]];
+  for (const seed of [2, 3, 6]) for (const maxTips of [3, 24, 64]) {
+    const t = treeOf(seed, { maxTips, spec: maxTips > 30 ? 2.5 : 1 });
+    for (const kind of ['clado', 'radial', 'fan']) for (const [w, h] of sizes) for (const xMode of ['time', 'change']) {
+      const B = tipBoxes(t, layoutTree(t, kind, { w, h, ox: 10, oy: 5, xMode }));
+      for (const b of B) ok([b.x, b.y, b.w, b.h].every(Number.isFinite) && b.w > 0, 'bad box');
+      for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++)
+        ok(!overlap(B[i], B[j]), `${kind} ${w}x${h} ${maxTips} tips: boxes ${i} and ${j} overlap`);
+    }
+  }
+});
+test('tree natural layout: tips keep their size, stay inside, never overlap (3 layouts)', () => {
+  for (const seed of [2, 3, 6, 11]) for (const maxTips of [3, 10, 24, 64]) {
+    const t = treeOf(seed, { maxTips, spec: maxTips > 30 ? 2.5 : 1 });
+    for (const kind of ['clado', 'radial', 'fan']) {
+      const L = layoutTree(t, kind, { tip: 40, ox: 7, oy: 3 });
+      ok(L.natural && L.w > 0 && L.h > 0, 'natural size');
+      const B = tipBoxes(t, L);
+      for (const b of B) {
+        const living = t.nodes[b.id].kind === 'tip';
+        ok(Math.abs(b.w - (living ? 40 : 34)) < 1e-9 && Math.abs(b.h - b.w * ASPECT) < 1e-9, `${kind}: tip box ${b.w} x ${b.h}`);
+        ok(b.x >= 7 - 1e-6 && b.y >= 3 - 1e-6 && b.x + b.w <= 7 + L.w + 1e-6 && b.y + b.h <= 3 + L.h + 1e-6, `${kind} ${maxTips}: tip box outside the layout`);
+      }
+      for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++)
+        ok(!overlap(B[i], B[j]), `${kind} ${maxTips} tips: natural boxes ${i} and ${j} overlap`);
+      for (const q of t.nodes) if (q.children.length) ok(Math.abs(L.box[q.id].w - 40 * ANC) < 1e-9, 'ancestor box is ANC of a tip');
+    }
+  }
+});
+test('tree: lineage runs root to node; param changes list real changes', () => {
+  const t = treeOf(4);
+  for (const tip of t.tips) {
+    const L = lineage(t, tip);
+    ok(L[0] === 0 && L[L.length - 1] === tip, 'root to tip');
+    for (let i = 1; i < L.length; i++) ok(t.nodes[L[i]].parent === L[i - 1], 'parent chain');
+    for (const c of paramChanges(t.nodes[0].params, t.nodes[tip].params)) ok(t.nodes[0].params[c.key] !== t.nodes[tip].params[c.key] && c.d > 0, 'listed a field that did not change');
   }
 });
 
