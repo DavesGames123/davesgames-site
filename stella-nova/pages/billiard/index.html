@@ -11,37 +11,38 @@
   ═══════════════════════════════════════════════════════════════════════════
    BILLIARD  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Many balls colliding with each other and the walls, with a restitution slider: elastic and inelastic collisions in 2D.
+   Balls that collide with restitution: the upstream box, a pool break with pockets, a gas against the Maxwell-Boltzmann speeds, two gases mixing and Brownian motion. The page starts a random scene on load and keeps it running.
 
    CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #03.
    Upstream file: tenMinutePhysics/03-billiard.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of sim.js, which holds the upstream step).
    Video tutorial: https://youtu.be/ThhdlMbGT5g
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): layouts, a pool table with pockets, a round table, bumpers, rolling friction, gravity, a spatial grid, the cue shot, a speed histogram, the renderer, the sim kit GUI and the saver.
+
+   FILES
+     sim.js      simulation, schema, guard (no DOM)
+     main.js     page controller: sim kit GUI, drawing, pointer
+     saver.js    screensaver shots (sim kit director)
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, page2d frame),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  sim.js     controls and random rules
+     grep -n 'const SHOTS'                 saver.js   the screensaver shots
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Many balls colliding with each other and the walls, with a restitution slider: elastic and inelastic collisions in 2D. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="Colliding balls with restitution: a pool break, a gas with its Maxwell-Boltzmann speeds, mixing and Brownian motion. After Matthias Müller's Ten Minute Physics #03.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-	<button class="button" onclick="setupScene()">Restart</button>
-	Restitution <input type = "range" min = "0" max = "10" value = "10" id = "restitutionSlider" class = "slider">
-	<br>
-	<canvas id="myCanvas" style="border:2px solid"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="Billiard simulation. Drag back from a ball and let go to shoot it."></canvas>
+<script type="module" src="main.js"></script>
 </body>
 </html>
