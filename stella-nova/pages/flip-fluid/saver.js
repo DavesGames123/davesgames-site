@@ -3,10 +3,10 @@
 // ----------------------------------------------------------------------------
 //  Our addition to the Ten Minute Physics port (not upstream code).
 //
-//  installSaver(app) hands seven shots to the Ten Minute Physics kit
-//  (widgets/ten-minute-physics/kit.js TMP.saver): the kit hides the GUI,
-//  frames the canvas in the plate's clear band and cuts a seeded shuffle
-//  of the shots every 5-12 s, never the same shot twice in a row. Each
+//  installSaver(app) hands seven shots to the sim kit director
+//  (widgets/sim-kit/saver.js): it hides the GUI, frames the canvas in the
+//  plate's clear band and cuts a seeded bag of the shots every 6-12 s,
+//  never the same shot twice in a row. Each
 //  shot builds a new scene through the page's own randomizer and objects,
 //  with a new seeded look (looks.js randomLook; never the same water
 //  scheme twice in a row). Some shots follow a body with a spring zoom
@@ -31,6 +31,7 @@
 import { randomLook, SCHEMES, VIEWS } from './looks.js';
 import { build, defaultState } from './scenes.js';
 import { KINDS } from './bodies.js';
+import { director } from '../../widgets/sim-kit/saver.js';
 
 const TEX = {
   buoy: 'F_b = \\rho_w\\, g\\, V_{\\mathrm{sub}}',
@@ -140,26 +141,33 @@ export function makeShots(app) {
   return { SHOTS, tick, TEX };
 }
 
+// The sim kit director (widgets/sim-kit/saver.js) drives the cuts: a
+// seeded bag, no shot twice in a row, 6-12 s cuts, the plate band. Each
+// cut runs the shot's own run() through the app API; the kit's scene draw
+// is not used (why = 'saver' changes are ignored by main.js), and exit
+// rebuilds the visitor's scene from the restored kit state.
 export function installSaver(app) {
-  if (typeof window === 'undefined' || !window.TMP || !window.TMP.saver) return null;
+  if (typeof window === 'undefined' || !app.kit) return null;
   const S = makeShots(app);
-  let saved = null;
-  window.TMP.saver({
+  let rngState = 1;
+  const rng = () => { rngState = (rngState * 16807) % 2147483647; return rngState / 2147483647; };
+  app.saverTick = dt => { if (app.saver) S.tick(dt); };
+  director({
+    kit: app.kit,
     canvas: () => app.canvas,
-    bg: '#05070c',
-    enter() {
-      saved = JSON.parse(JSON.stringify(app.state));
-      app.saver = true; app.paused = false;
-      if (app.openPanel) app.openPanel(false);
-      setTimeout(() => app.resize && app.resize(), 60);
+    themes: ['night', 'abyss', 'slate', 'violet'],
+    shots: S.SHOTS.map(s => ({ key: s.key, title: s.label.title, sub: s.label.sub, tex: s.label.tex[0], lines: s.label.lines,
+      params: () => [{ sym: 'N', name: 'particles', value: app.sim ? String(app.sim.numParticles) : '' }] })),
+    enter() { app.saver = true; },
+    apply(state, shot) {
+      if (!shot) return;
+      rngState = 1 + Math.floor(Math.random() * 2147483646);
+      const s = S.SHOTS.find(x => x.key === shot.key);
+      if (s) s.run({ rng, calm: 0.7 });
+      app.fitTank && app.fitTank();
     },
-    exit() {
-      app.saver = false; app.zoom = null;
-      if (saved) app.loadState(saved);
-      setTimeout(() => app.resize && app.resize(), 60);
-    },
-    shots: S.SHOTS,
-    tick: (dt) => S.tick(dt),
+    frame(band) { app.band = band || null; app.fitTank && app.fitTank(); },
+    exit() { app.saver = false; app.zoom = null; app.band = null; app.pendingRebuild = true; },
   });
   return S;
 }

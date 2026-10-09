@@ -14,57 +14,63 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 // ============================================================================
 //  FLIP WATER  ·  main.js  —  page controller
 // ----------------------------------------------------------------------------
+// ============================================================================
+//  FLIP WATER  ·  main.js  —  page controller on the sim kit
+// ----------------------------------------------------------------------------
 //  The FLIP solver (flip.js) is a port of Ten Minute Physics #18 by
 //  Matthias Müller (18-flip.html, MIT; notice above). The upstream page
 //  code (WebGL draw, mouse obstacle, start button) is replaced. This file
-//  and the other modules are our additions (davesgames.io): the scene
-//  starts on load and keeps running, the seeded randomizer, the UI and the
-//  pointer tools.
+//  and the other modules are our additions (davesgames.io).
 //
-//  Frame: requestAnimationFrame -> sim.step() (unless paused) -> draw.
-//  State: scenes.js state { seed, sub, locks, colours, over }; every change
-//  writes the URL hash (history.replaceState), and a typed hash loads.
+//  GUI: the sim kit (widgets/sim-kit) owns the panel, the transport, the
+//  seed, the share link and the screensaver director. scene.js turns the
+//  kit state into the scenes.js state { seed, sub, locks, colours, over },
+//  so the randomizer, presets and objects of scenes.js stay as they were:
+//    - each scenes.js category is a kit group with a "Variant" control;
+//      the group dice draws a new variant (scenes.js sub seed), the group
+//      lock keeps it, "New scene" draws them all;
+//    - the old Adjust sliders are kit controls with an "auto" end;
+//    - the Look keys (view, water, map, reverse, background, tint, foam)
+//      are kit controls; the background also sets the panel theme;
+//    - the objects palette (tools.js) is the Objects group: arm a kind,
+//      drop 3, eraser, clear.
 //
-//  Performance: the particle budget comes from the device (phones are
-//  lighter). If the mean step time stays above 22 ms, the page rebuilds
-//  the same scene with 0.7 x the budget (at most twice per scene).
+//  Frame: requestAnimationFrame -> sim.step() (while kit.playing) -> draw.
+//  Performance: the particle budget comes from the device. If the mean
+//  step time stays above 22 ms, the page rebuilds the same scene with
+//  0.7 x the budget (at most twice per scene).
 //
 //  grep -n targets
 //    function deviceBudget     particle budget per device
-//    function loadState        build + create the sim
-//    function resize           canvas size x devicePixelRatio, tank fit
-//    function toSim            pointer -> sim coordinates
-//    function onDown / onMove / onUp   stir tool (tools.js goes first:
-//                              grab, drop, erase)
-//    function buildCats        category rows (dice + lock)
-//    function buildSliders     overrides
+//    function loadState        build + create the sim from a scenes state
+//    function fromKit          kit state -> scenes state
+//    function resize / fitTank canvas size and tank fit beside the panel
+//    function onDown / onMove / onUp   pointer: tools.js first, else stir
 //    function frame            the loop
 //    window.ffApp              the app object (saver, debugging)
-//  Saver: saver.js (TMP.saver shots); app.zoom = { x, y, k } is a
-//  close-up the frame applies when it draws.
-//  Other modules: tools.js (objects palette, grab, drop, erase),
-//  lookui.js (colours and views; state.colours)
 // ============================================================================
-import { build, createSim, CATS, CAT_NAMES, encodeHash, decodeHash, rollAll, rollCat, newSeed, OVERRIDES } from './scenes.js';
+import { build, createSim } from './scenes.js';
 import { createRenderer, fitView } from './render.js';
 import { Solid } from './flip.js';
 import { disc } from './shapes.js';
 import { makeBodies, KINDS } from './bodies.js';
 import { installTools } from './tools.js';
-import { installLook } from './lookui.js';
+import { randomLook } from './looks.js';
 import { installSaver } from './saver.js';
+import { mount, isPhone } from '../../widgets/sim-kit/ui.js';
+import * as SC from './scene.js';
 
-const $ = (id) => document.getElementById(id);
-const canvas = $('view');
+const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d', { alpha: false });
 const renderer = createRenderer(ctx);
+const PHONE = isPhone();
 
 if (window.TMP) TMP.page({ n: '18', title: 'FLIP Water', file: '18-flip.html', video: 'XmzBREkK8kY', year: 2022, licence: 'MIT' });
 
 const app = {
   state: null, spec: null, sim: null, view: null, dpr: 1, portrait: false,
-  paused: false, budgetScale: 1, slowRebuilds: 0, stepMs: 0, frames: 0,
-  stir: null, pointer: null, saver: false,
+  budgetScale: 1, slowRebuilds: 0, stepMs: 0, frames: 0,
+  stir: null, pointer: null, saver: false, kit: null,
 };
 window.ffApp = app;
 
@@ -84,35 +90,33 @@ function loadState(state, keepBudget) {
   app.stir = null;
   app.frames = 0; app.stepMs = 0;
   fitTank();
-  writeHash();
-  refreshUI();
-  if (app.syncLook) app.syncLook();
+  syncLook();
 }
-
-function writeHash() {
-  const h = encodeHash(app.state);
-  if (location.hash !== h) { try { history.replaceState(null, '', h); } catch (e) { /* file:// */ } }
-  app.lastHash = h;
+function fromKit() { return SC.toScenesState(app.kit.state, app.kit.seed); }
+function syncLook() {
+  app.drawOpts = Object.assign(app.drawOpts || {}, { colours: app.state.colours });
+  document.documentElement.style.setProperty('--page-bg', SC.pageBg(app.state.colours));
 }
 
 // ---- size -------------------------------------------------------------------
-function measureBars() {
-  const cb = document.getElementById('tmp-credit');
-  document.documentElement.style.setProperty('--credit-h', (cb ? cb.offsetHeight : 0) + 'px');
-  document.documentElement.style.setProperty('--dock-h', $('dock').offsetHeight + 'px');
-}
-
 function fitTank() {
   if (!app.sim) return;
   const d = app.dpr, cw = canvas.width, ch = canvas.height;
-  const dock = app.saver ? 0 : $('dock').offsetHeight + 14;
-  const top = app.saver ? 0 : 40;
-  app.view = fitView(app.spec.W, app.spec.H, cw, ch, { l: 10 * d, r: 10 * d, t: top * d, b: dock * d });
+  let pad;
+  if (app.saver && app.band) pad = { l: app.band.x * d, r: cw - (app.band.x + app.band.w) * d, t: app.band.y * d, b: ch - (app.band.y + app.band.h) * d };
+  else if (app.saver) pad = { l: 0, r: 0, t: 0, b: 0 };
+  else {
+    const panel = document.getElementById('sk-panel'), tr = document.querySelector('.sk-transport');
+    let x1 = innerWidth, y1 = innerHeight;
+    if (app.kit && app.kit.panelOpen && panel && !PHONE) x1 = Math.max(innerWidth * 0.45, panel.getBoundingClientRect().left);
+    if (tr) y1 = Math.min(y1, tr.getBoundingClientRect().top - 6);
+    if (app.kit && app.kit.panelOpen && PHONE && panel) y1 = Math.min(y1, panel.getBoundingClientRect().top);
+    pad = { l: 10 * d, r: (innerWidth - x1 + 10) * d, t: 56 * d, b: (innerHeight - y1 + 6) * d };
+  }
+  app.view = fitView(app.spec.W, app.spec.H, cw, ch, pad);
 }
-
 function resize() {
-  measureBars();
-  const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+  const w = innerWidth, h = innerHeight;
   app.dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.max(1, Math.round(w * app.dpr));
   canvas.height = Math.max(1, Math.round(h * app.dpr));
@@ -122,7 +126,7 @@ function resize() {
   fitTank();
 }
 
-// ---- pointer: stir ---------------------------------------------------------------
+// ---- pointer: tools first, else stir ---------------------------------------------
 function toSim(e) {
   const r = canvas.getBoundingClientRect(), v = app.view;
   const px = (e.clientX - r.left) * app.dpr, py = (e.clientY - r.top) * app.dpr;
@@ -150,12 +154,12 @@ function onDown(e) {
   app.pointer = { id: e.pointerId, p };
   if (app.tools && app.tools.down && app.tools.down(p, e)) return;
   app.stir = makeStir(p);
-  e.preventDefault();
+  e.preventDefault && e.preventDefault();
 }
 function onMove(e) {
   if (!app.pointer || e.pointerId !== app.pointer.id) return;
   app.pointer.p = clampIn(toSim(e));
-  if (app.tools && app.tools.move && app.tools.move(app.pointer.p, e)) return;
+  if (app.tools && app.tools.move) app.tools.move(app.pointer.p, e);
 }
 function onUp(e) {
   if (!app.pointer || e.pointerId !== app.pointer.id) return;
@@ -167,9 +171,7 @@ canvas.addEventListener('pointerdown', onDown);
 canvas.addEventListener('pointermove', onMove);
 canvas.addEventListener('pointerup', onUp);
 canvas.addEventListener('pointercancel', onUp);
-
-// Before each frame: the stir disc moves toward the pointer in one frame,
-// at most 0.3 m per frame (a fast flick must not inject huge velocities).
+// The stir disc moves toward the pointer in one frame, at most 0.3 m.
 function aimStir() {
   const s = app.stir;
   if (!s || !app.pointer) return;
@@ -180,169 +182,33 @@ function aimStir() {
   s.to = { x: s.x + dx, y: s.y + dy }; s.t0 = app.sim.time;
 }
 
-// ---- UI ----------------------------------------------------------------------------
-function fmt(x, d = 2) { return (+x).toFixed(d); }
-function summary(cat) {
-  const s = app.spec, sim = app.sim;
-  switch (cat) {
-    case 'tank': return `${fmt(s.W, 1)} × ${fmt(s.H, 1)} m · ${sim.fNumX} × ${sim.fNumY} cells`;
-    case 'water': return s.waterKind + (s.gate ? ' · sluice gate' : '');
-    case 'obstacles': return s.statics.length ? [...new Set(s.statics.map(x => x.kind))].join(', ') : 'none';
-    case 'gravity': return `${fmt(s.g)} m/s² · tilt ${fmt(s.tilt * 180 / Math.PI, 0)}°`;
-    case 'particles': return `${sim.initialParticles} particles · r = ${fmt(s.r / s.h)} h`;
-    case 'solver': return `FLIP ${fmt(s.flip)} · ${s.pressureIters} it · ω ${fmt(s.overRelax)} · drift ${s.compensate ? fmt(s.stiffness) : 'off'}`;
-    case 'damping': return `damping ${fmt(s.damping)} /s · viscosity ${fmt(s.viscosity)}`;
-    case 'flow': return `${s.emitters.length} emitter · ${s.drains.length} drain${s.paddle ? ' · paddle' : ''}${s.wind ? ' · wind ' + fmt(s.wind, 1) : ''}`;
-    case 'time': return `dt 1/${Math.round(1 / s.dt)} · ${s.substeps} substep · CFL ${fmt(s.cfl, 1)}`;
-    case 'objects': return app.objectSummary ? app.objectSummary() : '';
-  }
-  return '';
-}
-
-function buildCats() {
-  const host = $('cats');
-  host.textContent = '';
-  for (const cat of app.cats || CATS) {
-    const row = document.createElement('div');
-    row.className = 'catrow';
-    row.innerHTML = `<b></b><button class="dice" title="Roll this category">⚄</button><button class="lock" title="Lock this category">Lock</button><span class="sum"></span>`;
-    row.querySelector('b').textContent = CAT_NAMES[cat] || cat;
-    row.querySelector('.dice').onclick = () => loadState(rollCat(app.state, cat));
-    row.querySelector('.lock').onclick = () => {
-      const L = new Set(app.state.locks);
-      if (L.has(cat)) L.delete(cat); else L.add(cat);
-      app.state.locks = [...L]; writeHash(); refreshUI();
-    };
-    row.dataset.cat = cat;
-    host.appendChild(row);
-  }
-}
-
-const SPEC_KEY = { flip: 'flip', g: 'g', tilt: 'tilt', damping: 'damping', viscosity: 'viscosity', wind: 'wind', stiffness: 'stiffness', pressureIters: 'pressureIters' };
-function applyOver(k, v) {
-  const sim = app.sim;
-  if (k === 'flip') sim.flipRatio = v;
-  else if (k === 'damping') sim.damping = v;
-  else if (k === 'viscosity') sim.viscosity = v;
-  else if (k === 'wind') sim.wind = v;
-  else if (k === 'stiffness') sim.stiffness = v;
-  else if (k === 'pressureIters') sim.numPressureIters = Math.round(v);
-  if (k === 'g' || k === 'tilt') {
-    app.spec[k] = v;
-    sim.gx = app.spec.g * Math.sin(app.spec.tilt); sim.gy = -app.spec.g * Math.cos(app.spec.tilt);
-  } else app.spec[SPEC_KEY[k]] = v;
-}
-function buildSliders() {
-  const host = $('sliders');
-  host.textContent = '';
-  for (const [k, [lo, hi, st, label]] of Object.entries(OVERRIDES)) {
-    const d = document.createElement('div');
-    d.className = 'slider'; d.dataset.k = k;
-    d.innerHTML = `<label></label><output></output><input type="range">`;
-    d.querySelector('label').textContent = label;
-    const inp = d.querySelector('input');
-    inp.min = lo; inp.max = hi; inp.step = st;
-    inp.setAttribute('aria-label', label);
-    inp.oninput = () => {
-      const v = +inp.value;
-      app.state.over[k] = v; applyOver(k, v);
-      d.querySelector('output').textContent = fmt(v, st < 0.1 ? 2 : st < 1 ? 1 : 0);
-      d.classList.add('set'); scheduleHash(); refreshSums();
-    };
-    host.appendChild(d);
-  }
-}
-let hashTimer = 0;
-function scheduleHash() { clearTimeout(hashTimer); hashTimer = setTimeout(writeHash, 250); }
-
-function refreshSums() {
-  for (const row of $('cats').children) row.querySelector('.sum').textContent = summary(row.dataset.cat);
-}
-function refreshUI() {
-  if (!app.spec) return;
-  $('seedChip').textContent = app.state.seed;
-  if (document.activeElement !== $('seedIn')) $('seedIn').value = app.state.seed;
-  const L = new Set(app.state.locks);
-  for (const row of $('cats').children) {
-    const on = L.has(row.dataset.cat), b = row.querySelector('.lock');
-    b.classList.toggle('on', on); b.textContent = on ? 'Locked' : 'Lock';
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  }
-  refreshSums();
-  for (const d of $('sliders').children) {
-    const k = d.dataset.k, [, , st] = OVERRIDES[k];
-    const v = app.state.over[k] != null ? app.state.over[k] : app.spec[SPEC_KEY[k]];
-    d.querySelector('input').value = v;
-    d.querySelector('output').textContent = fmt(v, st < 0.1 ? 2 : st < 1 ? 1 : 0);
-    d.classList.toggle('set', app.state.over[k] != null);
-  }
-  $('bPlay').textContent = app.paused ? '▶' : '❚❚';
-  $('bPlay').setAttribute('aria-label', app.paused ? 'Play' : 'Pause');
-  if (app.onRefresh) app.onRefresh();
-}
-
-function newScene() { loadState(rollAll(app.state)); }
-function togglePlay() { app.paused = !app.paused; refreshUI(); }
-function stepOnce() { app.paused = true; aimStir(); app.sim.step(); refreshUI(); }
-function reset() { loadState(app.state, true); }
-
-$('bPlay').onclick = togglePlay;
-$('bStep').onclick = stepOnce;
-$('bReset').onclick = reset;
-$('bNew').onclick = newScene;
-$('seedChip').onclick = () => openPanel(true);
-$('bPanel').onclick = () => openPanel(!$('panel').classList.contains('open'));
-$('sheetGrip').onclick = () => $('panel').classList.toggle('full');
-$('seedGo').onclick = () => { const v = $('seedIn').value.trim(); if (v) loadState({ seed: v.slice(0, 40), sub: {}, locks: app.state.locks, colours: app.state.colours, over: {} }); };
-$('seedIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('seedGo').onclick(); e.stopPropagation(); });
-$('seedRoll').onclick = newScene;
-$('seedCopy').onclick = () => {
-  writeHash();
-  const b = $('seedCopy');
-  const done = () => { b.textContent = 'Copied'; setTimeout(() => (b.textContent = 'Link'), 1200); };
-  if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(done, () => {}); else done();
-};
-$('clearOver').onclick = () => { app.state.over = {}; loadState(app.state, true); };
-function openPanel(on) {
-  $('panel').classList.toggle('open', on);
-  $('bPanel').classList.toggle('on', on);
-  $('bPanel').setAttribute('aria-expanded', on ? 'true' : 'false');
-}
-
-addEventListener('keydown', (e) => {
-  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const k = e.key.toLowerCase();
-  if (k === 'p' || k === ' ') { togglePlay(); e.preventDefault(); }
-  else if (k === 'm') stepOnce();
-  else if (k === 'r') reset();
-  else if (k === 'n') newScene();
-  else if (k === 'escape') openPanel(false);
-  else if (app.onKey) app.onKey(k, e);
-});
-addEventListener('hashchange', () => {
-  if (location.hash === app.lastHash) return;
-  loadState(decodeHash(location.hash));
-});
-
 // ---- loop ----------------------------------------------------------------------------
-let lastStats = 0, fps = 0, fpsN = 0, fpsT = 0;
+function stepOnce() {
+  aimStir();
+  if (app.beforeStep) app.beforeStep();
+  const t0 = performance.now();
+  app.sim.step();
+  const ms = performance.now() - t0;
+  app.stepMs = app.frames ? app.stepMs * 0.95 + ms * 0.05 : ms;
+  app.frames++;
+}
+let lastT = 0, acc = 0;
 function frame(ts) {
   requestAnimationFrame(frame);
+  if (app.pendingRebuild) { app.pendingRebuild = false; loadState(fromKit()); }
   const sim = app.sim;
   if (!sim) return;
-  if (!app.paused) {
-    aimStir();
-    if (app.beforeStep) app.beforeStep();
-    const t0 = performance.now();
-    sim.step();
-    const ms = performance.now() - t0;
-    app.stepMs = app.frames ? app.stepMs * 0.95 + ms * 0.05 : ms;
-    app.frames++;
+  const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0; lastT = ts;
+  if (app.kit.playing) {
+    // kit.speed: slow motion runs fewer steps per second (one step a frame at 1x)
+    acc += app.kit.speed; let n = 0;
+    while (acc >= 1 && n < 2) { stepOnce(); acc -= 1; n++; }
     if (app.frames === 150 && app.stepMs > 22 && app.slowRebuilds < 2 && !app.saver) {
       app.slowRebuilds++; app.budgetScale *= 0.7; loadState(app.state, true); return;
     }
-  }
+  } else if (app.kit.takeStep()) stepOnce();
+  if (app.saverTick) app.saverTick(dt);
+  fitTank();
   let view = app.view;
   if (app.zoom && app.zoom.k > 1.001) {
     // saver close-ups: scale about the tank centre, then centre the target
@@ -351,34 +217,76 @@ function frame(ts) {
     view = { s, W: v.W, H: v.H, x: cx - z.x * s, y: cy - (v.H - z.y) * s };
   }
   renderer.draw(app.sim, view, app.drawOpts || {});
-  fpsN++;
-  if (ts - fpsT > 1000) { fps = fpsN * 1000 / (ts - fpsT); fpsN = 0; fpsT = ts; }
-  if (ts - lastStats > 500) {
-    lastStats = ts;
-    $('stats').textContent = `${sim.numParticles} particles · ${fmt(app.stepMs, 1)} ms · ${Math.round(fps)} fps`;
-  }
 }
 
 // ---- start ------------------------------------------------------------------------------
-app.cats = CATS.slice();
-if (!app.cats.includes('objects')) app.cats.push('objects');
+const hold = {};
+const stubEl = () => ({ children: [], classList: { toggle() {}, add() {}, remove() {} }, style: {}, dataset: {}, setAttribute() {}, appendChild(c) { this.children.push(c); return c; }, querySelectorAll() { return []; }, set textContent(v) { this._t = v; }, get textContent() { return this._t || ''; }, set onclick(f) { this._f = f; } });
+const $ = id => (hold[id] = hold[id] || stubEl());   // tools.js writes its old palette into detached stubs
+app.kit = mount({
+  schema: SC.makeSchema(PHONE), title: 'FLIP Water', sub: 'Particles carry the water; a grid solves the pressure', panelTitle: 'Scene',
+  guard: SC.guard, randomStart: false, themeKey: 'theme',
+  footer: 'FLIP solver by Matthias Müller (Ten Minute Physics 18, MIT). Scenes, bodies, looks and GUI: davesgames.io.',
+  actions: {
+    arm(kind) {
+      const T = app.objects.state; T.armed = T.armed === kind ? null : kind; T.erase = false; app.kit.set('erase', false);
+      app.kit.say(T.armed ? `Tap the water to drop a ${KINDS[kind].name.toLowerCase()}. Pick it again to stop.` : 'Dropping off.');
+      if (T.armed && PHONE) app.kit.setPanel(false);
+    },
+    objs(id) { if (id === 'drop3') app.objects.dropRandom(3); else if (id === 'clearObj') app.objects.clearObjects(); },
+    look() { lookDice(); },
+  },
+});
+app.kit.on('change', (out, st, why) => {
+  if (why === 'saver') return;
+  if ('bg' in out && why === 'input') app.kit.set('theme', SC.themeForBg(st.bg));
+  if ('erase' in out) { const T = app.objects.state; T.erase = !!st.erase; if (T.erase) T.armed = null; }
+  const next = fromKit();
+  if (why === 'scene' || why === 'group' || why === 'hash' || why === 'load' || Object.keys(out).some(k => SC.REBUILD.has(k))) { loadState(next); return; }
+  // live: the look and the adjust controls
+  app.state.colours = next.colours; app.state.over = next.over; syncLook();
+  for (const k of Object.keys(out)) if (SC.OVER_KEYS.has(k)) applyOver(SC.overKey(k), next.over[SC.overKey(k)]);
+});
+app.kit.on('scene', () => loadState(fromKit()));
+app.kit.on('reset', () => loadState(fromKit(), true));
+function lookDice() { const L = randomLook(); for (const [k, v] of Object.entries(SC.lookToKit(L))) app.kit.set(k, v); }
+const SPEC_KEY = { flip: 'flip', g: 'g', tilt: 'tilt', damping: 'damping', viscosity: 'viscosity', wind: 'wind', stiffness: 'stiffness', pressureIters: 'pressureIters' };
+function applyOver(k, v) {
+  const sim = app.sim;
+  if (v == null) { loadState(fromKit(), true); return; }   // back to auto: the scene's own value
+  if (k === 'flip') sim.flipRatio = v;
+  else if (k === 'damping') sim.damping = v;
+  else if (k === 'viscosity') sim.viscosity = v;
+  else if (k === 'wind') sim.wind = v;
+  else if (k === 'stiffness') sim.stiffness = v;
+  else if (k === 'pressureIters') sim.numPressureIters = Math.round(v);
+  if (k === 'g' || k === 'tilt') { app.spec[k] = v; sim.gx = app.spec.g * Math.sin(app.spec.tilt); sim.gy = -app.spec.g * Math.cos(app.spec.tilt); }
+  else app.spec[SPEC_KEY[k]] = v;
+}
+addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = String(e.key || '').toLowerCase();
+  // upstream keys P (pause) and M (one step); L random look; the rest in tools.js
+  if (k === 'p') app.kit.playing = !app.kit.playing;
+  else if (k === 'm') { app.kit.playing = false; stepOnce(); }
+  else if (k === 'l') lookDice();
+  else if (app.onKey) app.onKey(k, e);
+});
+
+app.loadState = loadState; app.resize = resize; app.fitTank = fitTank; app.syncLook = syncLook;
+app.renderer = renderer; app.ctx = ctx; app.canvas = canvas;
 app.objectSummary = () => {
   const n = {};
   for (const o of app.spec.objects) n[o.kind] = (n[o.kind] || 0) + 1;
   const parts = Object.entries(n).map(([k, c]) => `${c} ${(KINDS[k] ? KINDS[k].name : k).toLowerCase()}${c > 1 ? 's' : ''}`);
   return parts.length ? parts.join(', ') : 'none';
 };
-app.loadState = loadState; app.resize = resize; app.fitTank = fitTank; app.refreshUI = refreshUI;
-app.renderer = renderer; app.ctx = ctx; app.canvas = canvas; app.newSeed = newSeed;
-buildCats();
-buildSliders();
-app.openPanel = openPanel;
-app.writeHash = writeHash;
+app.openPanel = on => app.kit.setPanel(on);
 installTools(app, $);
-installLook(app, $);
 installSaver(app);
 resize();
 addEventListener('resize', resize);
-if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
-loadState(decodeHash(location.hash));
+loadState(fromKit());
 requestAnimationFrame(frame);
+addEventListener('pagehide', () => { app.kit.playing = false; });

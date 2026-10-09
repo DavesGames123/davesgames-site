@@ -33,10 +33,10 @@
      art.js      how each object looks (also the palette icons)
      tools.js    objects palette, grab and throw, drop, eraser
      looks.js    water schemes, backgrounds, views, random looks
-     lookui.js   the Look section (uses ../ct-lab/colormaps)
-     saver.js    the screensaver shots (through kit.js TMP.saver)
+     scene.js    the sim kit schema over scenes.js and looks.js
+     saver.js    the screensaver shots (sim kit director)
      render.js   Canvas 2D renderer
-     main.js     page controller: loop, UI, pointer, hash
+     main.js     page controller: sim kit GUI, loop, pointer
      tests.mjs   node tests (no browser)
 
    GREP MAP
@@ -51,73 +51,11 @@
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="view" aria-label="FLIP water simulation"></canvas>
-
-<header id="hud">
-  <h1>FLIP Water</h1>
-  <button id="seedChip" class="chip" title="Scene seed: open the scene sheet">harbour</button>
-  <span id="stats" class="dim"></span>
-</header>
-
-<nav id="dock" aria-label="Quick controls">
-  <button id="bPlay" aria-label="Pause" title="Pause (P)">❚❚</button>
-  <button id="bStep" aria-label="Step one frame" title="Step (M)">⏭</button>
-  <button id="bReset" aria-label="Reset the scene" title="Reset (R)">↺</button>
-  <button id="bLook" aria-label="Random look" title="Random look: colours and view (L)">◐</button>
-  <button id="bNew" class="wide" aria-label="New random scene" title="New random scene (N)">⚄ New scene</button>
-  <button id="bPanel" aria-label="Scene settings" aria-expanded="false" title="Scene settings">☰</button>
-</nav>
-
-<aside id="panel" aria-label="Scene settings">
-  <div id="sheetGrip" role="button" aria-label="Resize the sheet"><span></span></div>
-  <section>
-    <h2>Seed</h2>
-    <div class="row">
-      <input id="seedIn" type="text" spellcheck="false" autocomplete="off" aria-label="Seed">
-      <button id="seedGo" title="Load this seed">Load</button>
-      <button id="seedRoll" title="Roll a new seed">⚄</button>
-      <button id="seedCopy" title="Copy the link to this scene">Link</button>
-    </div>
-    <p class="dim small">The seed and every option are in the address, so a link brings back the same scene.</p>
-  </section>
-  <section>
-    <h2>Look</h2>
-    <div class="row wrap"><button id="lookRandom" title="Random look (L)">◐ Random look</button><button id="lookReset" title="Back to the default look">Default look</button></div>
-    <h3>View</h3>
-    <div id="lookView" class="chips" role="group" aria-label="View"></div>
-    <div id="lookWaterBox"><h3>Water</h3><div id="lookWater" class="chips" role="group" aria-label="Water colours"></div></div>
-    <div id="lookMapBox" hidden><h3>Colour map</h3><div id="lookMap"></div></div>
-    <h3>Background</h3>
-    <div id="lookBg" class="chips" role="group" aria-label="Background"></div>
-    <h3>Objects</h3>
-    <div id="lookObj" class="chips" role="group" aria-label="Object colours"></div>
-    <button id="lookFoam" class="small-btn" aria-pressed="true">Foam and spray: on</button>
-  </section>
-  <section>
-    <h2>Objects</h2>
-    <p id="toolHint" class="dim small"></p>
-    <div id="palette" role="group" aria-label="Objects to drop"></div>
-    <div class="row wrap">
-      <button id="bDrop3" title="Drop three random objects (O drops one)">Drop 3 random</button>
-      <button id="bErase" aria-pressed="false" title="Eraser: tap an object to delete it (X)">Eraser</button>
-      <button id="bClearObj" title="Delete every object (Delete)">Clear objects</button>
-    </div>
-  </section>
-  <section>
-    <h2>Randomize by category</h2>
-    <p class="dim small">⚄ rolls one category. A lock keeps the category when you press New scene.</p>
-    <div id="cats"></div>
-  </section>
-  <section>
-    <h2>Adjust</h2>
-    <div id="sliders"></div>
-    <button id="clearOver" class="small-btn">Clear adjustments</button>
-  </section>
-</aside>
-
+<canvas id="view" aria-label="FLIP water simulation. Drag an object to move or throw it; drag in the water to stir."></canvas>
 <script type="module" src="main.js"></script>
 </body>
 </html>

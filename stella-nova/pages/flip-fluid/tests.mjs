@@ -22,6 +22,7 @@
 //    saver        each shot runs finite; TeX plates, no code; no water
 //                 scheme twice in a row; the close-up zoom
 //    tools        palette drop, grab spring, throw, eraser, clear
+//    kit page     tests-page.mjs: the sim kit schema, hash, boot and saver
 //    import       main.js links in node (a SyntaxError is a bug; a
 //                 ReferenceError on a browser global is expected)
 //
@@ -299,6 +300,15 @@ async function main() {
     try { await import('./main.js'); }
     catch (e) { msg = `${e.name}: ${e.message}`; }
     check('main.js links in node (no SyntaxError)', !/SyntaxError/.test(msg), msg.slice(0, 90));
+  }
+
+  // the sim kit page (own process: it needs the kit DOM stub)
+  {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(process.execPath, [fileURLToPath(new URL('./tests-page.mjs', import.meta.url))], { encoding: 'utf8' });
+    const last = String(r.stdout || '').trim().split('\n').pop();
+    if (r.status !== 0) console.log(String(r.stdout || '') + String(r.stderr || ''));
+    check('sim kit page: schema, hash, kit-to-scenes map, boot, New scene, saver (tests-page.mjs)', r.status === 0, last);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
