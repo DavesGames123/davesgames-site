@@ -104,10 +104,76 @@ for (const key of ORDER) {
   S.dispose();
 }
 
+section('saver: shot plan rules (seeds 1-200, desktop and phone)');
+{
+  const { makePlan, KINDS, PARADE } = await import('./saver-plan.js');
+  let rep = 0, badDur = 0, go2sees = 0, phoneSquad = 0, order = 0, kindsSeen = new Set(), longest = 0;
+  for (let seed = 1; seed <= 200; seed++) for (const phone of [false, true]) {
+    const P = makePlan(seed, 60, { phone });
+    let run = 1;
+    P.forEach((s, i) => {
+      kindsSeen.add(s.kind);
+      if (s.dur < 6 || s.dur > 12) badDur++;
+      if (i && P[i - 1].kind === s.kind) rep++;
+      if (s.lead === 'go2' && !KINDS[s.kind].go2) go2sees++;
+      if (phone && s.kind === 'squad') phoneSquad++;
+      if (i) { const a = PARADE.indexOf(P[i - 1].lead), b = PARADE.indexOf(s.lead); if (b === a) run++; else { if (b !== (a + 1) % 4) order++; longest = Math.max(longest, run); run = 1; } }
+    });
+  }
+  console.log(`  2 x 200 plans of 60 shots: back-to-back repeats ${rep}, durations outside 6-12 s ${badDur}, Go2 in a policy-only kind ${go2sees}, squad on phone ${phoneSquad}, parade order breaks ${order}, kinds used ${kindsSeen.size}/${Object.keys(KINDS).length}, longest run on one robot ${longest}`);
+  ok(rep === 0 && badDur === 0 && go2sees === 0 && phoneSquad === 0 && order === 0 && kindsSeen.size === Object.keys(KINDS).length && longest <= 3, 'plan rules');
+}
+
+section('saver: every shot run headless (cameras finite, never inside a robot, no falls)');
+{
+  const { makePlan, cmdAt, camAt, pushVec, DIM, SQUAD, PARADE, yawOf } = await import('./saver-plan.js');
+  const sims = {};
+  const sim = async k => (sims[k] = sims[k] || await loadRobot(mj, k, get));
+  let shots = 0, frames = 0, nonFinite = 0, inside = 0, falls = 0, minGap = Infinity;
+  const t0 = performance.now();
+  for (const [seed, phone, count] of [[7, false, 18], [2026, false, 18], [5, true, 14]]) {
+    for (const shot of makePlan(seed, count, { phone })) {
+      const keys = shot.robot === 'all' ? PARADE : [shot.robot];
+      const R = [];
+      for (const k of keys) { const S = await sim(k); S.cmdKeep = null; S.reset(); R.push({ S, off: shot.robot === 'all' ? [0, SQUAD[k]] : [0, 0], acc: 0 }); }
+      const L = R.find(r => r.S.key === shot.lead) || R[0];
+      let t = 0, pushed = false, fell = false;
+      const dt = 1 / 30;
+      while (t < shot.dur) {
+        t += dt;
+        for (const r of R) {
+          r.acc += dt * shot.slow;
+          while (r.acc >= r.S.cfg.simulation_dt) { r.acc -= r.S.cfg.simulation_dt; const c = cmdAt(shot.cmd, t); r.S.cmd.set(c); if (r.S.step() && r.S.fallen) fell = true; }
+        }
+        if (shot.kind === 'push' && !pushed && t >= shot.pushAt) { const v = pushVec(shot, yawOf(L.S.base().q)); L.S.push(v[0], v[1]); pushed = true; }
+        const b = L.S.base();
+        let bx = b.x, by = b.y;
+        if (shot.robot === 'all') { bx = 0; by = 0; for (const r of R) { const q = r.S.base(); bx += q.x + r.off[0]; by += q.y + r.off[1]; } bx /= R.length; by /= R.length; }
+        const f = L.S.footPos[0];
+        const c = camAt(shot, t, { x: bx, y: by, z: b.z, yaw: yawOf(b.q) }, DIM[shot.robot === 'all' ? 'h1' : shot.robot], [f[0], f[1], f[2]]);
+        if (![...c.pos, ...c.target, c.fov].every(Number.isFinite)) nonFinite++;
+        for (const r of R) {
+          const q = r.S.base(), D = DIM[r.S.key], hx = c.pos[0] - q.x - r.off[0], hy = c.pos[1] - q.y - r.off[1];
+          if (Math.hypot(hx, hy) < D.r && c.pos[2] < D.h + 0.05) inside++;
+          const X = r.S.d.xpos;
+          for (let i = 1; i < r.S.m.nbody; i++) minGap = Math.min(minGap, Math.hypot(c.pos[0] - X[3 * i] - r.off[0], c.pos[1] - X[3 * i + 1] - r.off[1], c.pos[2] - X[3 * i + 2]));
+        }
+        frames++;
+      }
+      if (fell) { falls++; console.log(`  fell: seed ${seed} shot ${shot.i} ${shot.kind} ${shot.lead} ${shot.cmd}`); }
+      shots++;
+    }
+  }
+  console.log(`  ${shots} shots, ${frames} camera frames at 30 Hz: non-finite ${nonFinite}, camera inside a robot ${inside}, nearest body ${minGap.toFixed(2)} m, falls ${falls}  (${((performance.now() - t0) / 1000).toFixed(1)} s)`);
+  ok(nonFinite === 0 && inside === 0 && minGap > 0.25 && falls === 0, 'saver shots');
+  for (const k in sims) sims[k].dispose();
+}
+
 section('page boot: main.js in node with DOM stand-ins and a stand-in renderer');
 {
   const { boot } = await import('./stub-boot.mjs');
   const r = await boot({ frames: 300 });
+  globalThis.__lrlBoot = r;
   const G = r.G;
   console.log(`  robot ${G.key}  sim t ${G.S.t.toFixed(2)} s after 300 frames  meshes ${G.rv.meshes.length}  renders ${G.view.renderer.renders}  errors ${r.errors.length}`);
   ok(r.errors.length === 0, 'boot errors: ' + r.errors.slice(0, 3).join(' | '));
@@ -117,6 +183,29 @@ section('page boot: main.js in node with DOM stand-ins and a stand-in renderer')
   r.win.__lrl.S.push(0, 0.8); await r.step(30);
   ok(r.errors.length === 0, 'no errors after swaps and a push');
   console.log(`  swaps g1 -> go2 -> h1_2: robots in view ${G.view.robots.length}, errors ${r.errors.length}`);
+}
+
+section('saver in the booted page: enter(), cuts, plate labels, memory between shots');
+{
+  const r = globalThis.__lrlBoot, G = r.G, labels = [], robotsPerCut = [];
+  let maxRobots = 0;
+  const ret = r.win.snSaver.enter({ seed: 11, calm: 0.5, label: l => labels.push(l) });
+  ok(ret && ret.canvas && ret.warmupMs > 0, 'enter returns { canvas, warmupMs }');
+  ok(G.S === null, 'the play robot is freed when the saver starts');
+  for (let i = 0; i < 160; i++) {
+    await new Promise(res => setTimeout(res, 25));
+    await r.step(15);
+    maxRobots = Math.max(maxRobots, G.view.robots.length);
+    if (labels.length && robotsPerCut.at(-1) !== labels.length) robotsPerCut.push(labels.length);
+  }
+  const titles = [...new Set(labels.map(l => l.title))];
+  const subs = [...new Set(labels.map(l => l.sub.split(' · ')[0]))];
+  const texOk = labels.every(l => Array.isArray(l.tex) && l.tex.length && l.params.length && !('code' in l));
+  console.log(`  ${labels.length} plate updates, robots ${titles.join(', ')}, shot kinds ${subs.join(', ')}, most robots in view at once ${maxRobots}, errors ${r.errors.length}`);
+  ok(subs.length >= 3 && titles.length >= 1 && texOk, 'plate: several shots, TeX and params, no code');
+  ok(maxRobots <= 4 && r.errors.length === 0, 'saver ran with no errors and at most 4 robots');
+  G.saver.dispose();
+  ok(G.view.robots.length === 0, 'dispose frees every saver robot');
 }
 
 console.log(`\n${passes} passed, ${fails} failed`);

@@ -31,6 +31,7 @@
 //    function drawJoint ............. joint q, q*, tau over 5 s
 //    function fillRewards ........... the reward table
 //    function frame ................. the loop
+//    window.snSaver ................. screensaver hook (saver.js)
 // ============================================================================
 import * as THREE from 'three';
 import { createView } from './scene.js';
@@ -516,6 +517,21 @@ function release() {
   G.mj = null;
 }
 window.addEventListener('pagehide', release);
+
+// ── screensaver ─────────────────────────────────────────────────────────────
+// Hook for the shell (lib/screensaver.js). enter() frees the play robot
+// and hands the loop to saver.js (shots from saver-plan.js). No exit():
+// the shell reloads the page.
+window.snSaver = {
+  enter(o = {}) {
+    G.saver = { tick() {} };
+    G.keys.clear(); G.pad = null;
+    freeSim({ S: G.S, rv: G.rv }); G.S = null; G.rv = null;
+    setOpen(false); setAna(false);
+    import('./saver.js').then(m => { if (G.saver && running) G.saver = m.startSaver(G, o); }).catch(e => console.error(e));
+    return { canvas: $('view'), warmupMs: 2500 };
+  },
+};
 
 // ── boot ────────────────────────────────────────────────────────────────────
 buildPicker();
