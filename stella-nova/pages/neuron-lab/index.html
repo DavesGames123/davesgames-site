@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Neuron Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   NEURON LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. One neuron in 3D, simulated as a branched cable after
+   NEURON (neuronsimulator/nrn): Hines solve, hh.mod channels, IClamp,
+   Exp2Syn, NetStim. engine/ has the simulator (no DOM; tests.mjs runs it).
+   shared/ has the renderer and the tube mesh, which the Neural Network page
+   imports too. main.js binds this markup; saver.js is the screensaver.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. fonts, style.css, lib/sci.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel left (cell, place, channels), #anaPanel right
+                 (traces, phase plane, gates, explainer), #view between.
+     phone ..... #dock at the base: tabs and Fire. A tab opens #panel with
+                 that .grp only, as a bottom sheet (portrait) or a drawer
+                 (landscape). The analysis groups move into #panel.
+
+   GREP MAP  (main.js)
+     grep -n 'function loadCell'    build the cell, mesh and markers
+     grep -n 'function place'       click to add a clamp, synapse or probe
+     grep -n 'function fire'        start the stimuli
+     grep -n 'function drawTraces'  the plots
+     grep -n 'function frame'       the loop
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A neuron in 3D, simulated like NEURON: place a current clamp or a synapse on a dendrite and watch the spike run along the branches, with live voltage traces, the Hodgkin-Huxley phase plane and the gates m, h and n.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Neuron Lab</div>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="marks" aria-hidden="true"></div>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">tap a branch to place the tool · drag to orbit · Fire starts the stimuli</div>
+  <div class="credit">method after <a href="https://github.com/neuronsimulator/nrn" target="_blank" rel="noopener">NEURON</a> · procedural cell</div>
+</main>
+<div id="nogl" hidden>WebGL 2 is not available in this browser, so the cell cannot render.</div>
+
+<aside id="panel" aria-label="Controls">
+  <div id="sheetGrip" aria-hidden="true"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="cell">
+    <div class="sec-label first">Cell</div>
+    <div class="cards" id="cells"></div>
+    <p class="lede" id="cellNote"></p>
+    <div class="grid2" style="margin-top:8px">
+      <button type="button" id="reshape">New shape</button>
+      <button type="button" id="resetSim">Reset to rest</button>
+    </div>
+    <p class="note" id="cellStats"></p>
+    <div class="sec-label">Voltage</div>
+    <div class="vbar"></div>
+    <div class="vbar-l"><span>−80</span><span>−65 rest</span><span>−45</span><span>0</span><span>+40 mV</span></div>
+    <div class="sec-label">Speed</div>
+    <div class="row"><label for="speed">Sim ms per s</label><input type="range" id="speed" min="1" max="40" step="1" value="8"><span class="val" id="speedV"></span></div>
+    <div class="grid2"><button class="tog" id="pause" type="button">Pause</button><button class="tog on" id="autoOrbit" type="button">Slow orbit</button></div>
+  </section>
+
+  <section class="grp" data-grp="place">
+    <div class="sec-label first">Place on the cell</div>
+    <div class="grid2" id="tools">
+      <button type="button" data-tool="iclamp" class="on">Current clamp</button>
+      <button type="button" data-tool="syn">Synapse</button>
+      <button type="button" data-tool="probe">Voltage probe</button>
+      <button type="button" data-tool="erase">Erase</button>
+    </div>
+    <p class="note">Tap or click a branch. A clamp injects current (IClamp). A synapse is an Exp2Syn driven by a NetStim through a NetCon. A probe adds a trace. Up to four probes.</p>
+    <div class="sec-label">Current clamp</div>
+    <div class="row"><label for="amp">Amplitude</label><input type="range" id="amp" min="0.05" max="5" step="0.05" value="1"><span class="val" id="ampV"></span></div>
+    <div class="row"><label for="dur">Duration</label><input type="range" id="dur" min="0.5" max="40" step="0.5" value="2"><span class="val" id="durV"></span></div>
+    <div class="sec-label">Synapse</div>
+    <div class="row"><label for="wsyn">Weight</label><input type="range" id="wsyn" min="0.001" max="0.1" step="0.001" value="0.02"><span class="val" id="wsynV"></span></div>
+    <div class="row"><label for="nsyn">Spikes in burst</label><input type="range" id="nsyn" min="1" max="10" step="1" value="3"><span class="val" id="nsynV"></span></div>
+    <div class="grid2" style="margin-top:6px">
+      <button class="tog" id="auto" type="button">Fire every 120 ms</button>
+      <button class="tog" id="hold" type="button">Clamps hold (DC)</button>
+    </div>
+    <button class="big" id="fire" type="button">⚡ Fire</button>
+    <button type="button" id="clearAll" class="tog" style="width:100%;margin-top:6px">Remove all</button>
+  </section>
+
+  <section class="grp" data-grp="chan">
+    <div class="sec-label first">Channels (hh.mod)</div>
+    <div class="row"><label for="gna"><span class="m2">ḡ</span>Na soma, axon</label><input type="range" id="gna" min="0" max="0.3" step="0.005" value="0.12"><span class="val" id="gnaV"></span></div>
+    <div class="row"><label for="gk"><span class="m4">ḡ</span>K soma, axon</label><input type="range" id="gk" min="0" max="0.1" step="0.001" value="0.036"><span class="val" id="gkV"></span></div>
+    <div class="row"><label for="dfrac">In dendrites</label><input type="range" id="dfrac" min="0" max="1" step="0.05" value="0.3"><span class="val" id="dfracV"></span></div>
+    <div class="row"><label for="gl">g leak</label><input type="range" id="gl" min="0.0001" max="0.002" step="0.0001" value="0.0003"><span class="val" id="glV"></span></div>
+    <div class="grid2" style="margin-top:6px">
+      <button class="tog warn" id="ttx" type="button">TTX (no Na)</button>
+      <button class="tog warn" id="tea" type="button">TEA (no K)</button>
+    </div>
+    <div class="sec-label">Cable and temperature</div>
+    <div class="row"><label for="celsius">Temperature</label><input type="range" id="celsius" min="6.3" max="30" step="0.1" value="6.3"><span class="val" id="celsiusV"></span></div>
+    <div class="row"><label for="ra"><span class="m5">R</span>a axial</label><input type="range" id="ra" min="20" max="400" step="1" value="35.4"><span class="val" id="raV"></span></div>
+    <div class="row"><label for="diam">Diameter ×</label><input type="range" id="diam" min="0.4" max="3" step="0.05" value="1"><span class="val" id="diamV"></span></div>
+    <p class="note">q10 = 3: each 10 °C makes the gates three times faster. Thicker branches or lower Ra carry a spike farther and faster. TTX blocks sodium channels; TEA blocks potassium channels.</p>
+  </section>
+
+  <section class="grp ana" data-grp="trace">
+    <div class="sec-label first">Voltage at the probes</div>
+    <canvas id="traces" class="plot"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="sec-label">Phase plane at the soma</div>
+    <canvas id="phase" class="plot sq"></canvas>
+    <div class="sec-label">Gates at the soma</div>
+    <canvas id="gates" class="plot"></canvas>
+    <div class="legend"><span><i style="background:var(--m2)"></i>m (Na on)</span><span><i style="background:var(--m3)"></i>h (Na off)</span><span><i style="background:var(--m4)"></i>n (K)</span></div>
+  </section>
+
+  <section class="grp ana" data-grp="learn">
+    <div class="sec-label first">How it works</div>
+    <div class="about">
+      <p><b>A neuron as a cable.</b> NEURON cuts every branch into short compartments. Each compartment has a membrane (a capacitor and ion channels) and passes current to its neighbours through the axial resistance of the cytoplasm. In the limit this is the cable equation:</p>
+    </div>
+    <div class="eqs"><div class="eq" data-tex="c_m \frac{\partial V}{\partial t} = \frac{d}{4 R_a} \frac{\partial^2 V}{\partial x^2} - i_{ion} + i_{inj}"></div></div>
+    <div class="about"><p><b>Hodgkin and Huxley.</b> The channels in hh.mod give the ion current from three gates. m opens sodium fast, h closes it slowly, n opens potassium:</p></div>
+    <div class="eqs">
+      <div class="eq" data-tex="i_{ion} = \bar g_{Na} m^3 h (V - E_{Na}) + \bar g_K n^4 (V - E_K) + g_L (V - E_L)"></div>
+      <div class="eq" data-tex="\frac{dm}{dt} = \alpha_m(V)(1 - m) - \beta_m(V)\, m, \quad \text{and so for } h, n"></div>
+    </div>
+    <div class="about"><p><b>The Hines method.</b> Each step is implicit (backward Euler, Δt = 0.025 ms). For a tree, the matrix has one entry per compartment and one pair per branch link, so one sweep from the leaves to the soma and one back solve it in O(n):</p></div>
+    <div class="eqs"><div class="eq" data-tex="\left(\frac{C_i}{\Delta t} + G_i + \sum_j g_{ij}\right)\Delta V_i - \sum_j g_{ij}\,\Delta V_j = I_i"></div></div>
+    <div class="about">
+      <p><b>What to try.</b> Put a clamp on the soma and a probe far out on a dendrite: the spike runs back into the tree and gets smaller (back-propagation with attenuation). Drop the dendrite channels to 0 and it only spreads passively. Put a synapse far out: its bump is small and slow by the time it reaches the soma. Warm the cell and watch the spike get narrow.</p>
+      <p><b>This page and NEURON.</b> This is our own small engine in JavaScript after NEURON's method: the same rate equations as hh.mod, NEURON's dt, temperature and v_init defaults, the d_lambda rule for the number of segments, IClamp, Exp2Syn, NetStim and NetCon with delay and weight. The cells are procedural shapes, not reconstructions. For research, use NEURON itself.</p>
+    </div>
+    <div class="links">
+      <a href="https://github.com/neuronsimulator/nrn" target="_blank" rel="noopener">NEURON on GitHub (BSD-3-Clause)</a>
+      <a href="https://www.neuronsimulator.org" target="_blank" rel="noopener">neuronsimulator.org: docs and tutorials</a>
+      <a href="https://github.com/neuronsimulator/nrn/blob/8202fe7e9db706d39780d0abb3531c929a325cb7/src/nrnoc/hh.mod" target="_blank" rel="noopener">hh.mod, the channel file the rates come from</a>
+      <a href="https://doi.org/10.1113/jphysiol.1952.sp004764" target="_blank" rel="noopener">Hodgkin and Huxley 1952</a>
+    </div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Plots and explainer"></aside>
+
+<nav id="dock" aria-label="Controls">
+  <button type="button" data-grp="cell"><i>◎</i><span>Cell</span></button>
+  <button type="button" data-grp="place"><i>✚</i><span>Place</span></button>
+  <button type="button" data-grp="chan"><i>⚗</i><span>Channels</span></button>
+  <button type="button" data-grp="trace"><i>∿</i><span>Traces</span></button>
+  <button type="button" data-grp="learn"><i>∑</i><span>Learn</span></button>
+  <button type="button" id="dockFire"><i>⚡</i><span>Fire</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
