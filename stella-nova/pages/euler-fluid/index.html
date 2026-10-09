@@ -18,37 +18,36 @@
    https://github.com/matthias-research/pages (MIT License (notice kept above)).
    Video tutorial: https://youtu.be/iKAVRgIrUOU
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): the scenes beyond the
+   four upstream ones (lid-driven cavity, jets), several shaped and moving
+   obstacles, the field views and colour maps, the renderer, the sim kit
+   GUI, the randomizer and the screensaver.
+
+   FILES
+     solver.js   upstream Fluid (MIT notice kept) + scenes and obstacles
+     scene.js    sim kit schema, guard, scene config
+     render.js   Canvas 2D renderer
+     main.js     page controller: sim kit GUI, loop, pointer
+     saver.js    screensaver shots (sim kit director)
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver director),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scene.js   every control
+     grep -n 'const SHOTS'                 saver.js   the screensaver shots
+     grep -n 'export class Fluid'          solver.js  the upstream solver
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A grid-based Eulerian fluid in about 200 lines: wind tunnel, tank and paint, with pressure, smoke and streamlines. By Matthias Müller, Ten Minute Physics.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-	<button class="button" onclick="setupScene(1)">Wind Tunnel</button>
-	<button class="button" onclick="setupScene(3)">Hires Tunnel</button>
-	<button class="button" onclick="setupScene(0)">Tank</button>
-	<button class="button" onclick="setupScene(2)">Paint</button>
-	<input type = "checkbox" id = "streamButton" onclick = "scene.showStreamlines = !scene.showStreamlines">Streamlines
-	<input type = "checkbox" id = "velocityButton" onclick = "scene.showVelocities = !scene.showVelocities">Velocities
-	<input type = "checkbox" name = "field" id = "pressureButton" onclick = "scene.showPressure = !scene.showPressure;"> Pressure
-	<input type = "checkbox" name = "field" id = "smokeButton" onclick = "scene.showSmoke = !scene.showSmoke;" checked>Smoke
-	<input type = "checkbox" id = "overrelaxButton" onclick = "scene.overRelaxation = scene.overRelaxation == 1.0 ? 1.9 : 1.0" checked>Overrelax
-	<br>
-	<canvas id="myCanvas" style="border:2px solid"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="Grid fluid simulation. Drag an obstacle to move it; drag in the fluid to stir."></canvas>
+<script type="module" src="main.js"></script>
 </body>
 </html>
