@@ -32,7 +32,11 @@
 //    grep -n 'function bindView'    pan, zoom and pinch
 //    grep -n 'function bindExport'  the export buttons (export.js)
 //    grep -n 'function setOpen'     the panel, the phone sheet, the dock
+//    grep -n 'function followCamera' the tree camera (follow, then overview)
+//    grep -n 'function drawMinimap'  the tree minimap
 //    grep -n 'BOOT'                 the boot order
+//  TREE. The tree of life mode is in treemode.js (TM). main.js gives it the
+//  plate, the view and the taps; TM draws the tree in the plate content.
 //  The screensaver hook (window.snSaver) is in saver.js, loaded by a dynamic
 //  import at boot; it sets S.saver,
 //  and frame() then leaves the canvas to it.
@@ -42,7 +46,8 @@ import { buildSpecimen, formParams, randomParams, FORMS, FORM_KEYS, PARAMS, GROU
 import { mulberry } from './geom.js';
 import { THEMES, THEME_KEYS, STYLES, STYLE_KEYS, PAGES, MM_PER_PX, GRID_PRESETS, pageSize, layoutPlate, cellAt, pngSize } from './plate.js';
 import { drawPlate, makeGrain } from './render.js';
-import { exportSVG, exportPNG, exportJSON, copyLink, slug } from './export.js';
+import { exportSVG, exportPNG, exportJSON, copyLink, slug, download } from './export.js';
+import { createTreeMode } from './treemode.js';
 import { typesetAll } from '../../lib/sci-math.js';
 
 const $ = id => document.getElementById(id);
@@ -63,6 +68,7 @@ const S = {
   plates: {
     single: { page: 'screen', orient: 'landscape', border: false, title: false, labels: true, scale: true },
     grid: { page: 'screen', orient: 'landscape', border: true, title: true, labels: true, scale: false },
+    tree: { page: 'screen', orient: 'landscape', border: false, title: true, labels: false, scale: false },
   },
   anim: { auto: !REDUCED, tip: true, speed: 0.5, p: null, last: 0 },
   view: { z: 1, px: 0, py: 0 },
@@ -72,6 +78,7 @@ const S = {
 };
 let grain = null;
 let lastPlate = null;
+let TM = null;           // the tree mode (treemode.js)
 
 // ── getSpec ─────────────────────────────────────────────────────────────────
 // A small cache of built specimens, keyed by the full params and seed.
@@ -109,7 +116,25 @@ function layout() {
 function plateCfg() { return S.plates[S.mode]; }
 function plateNow() {
   const cfg = plateCfg(), grid = S.mode === 'grid', G = S.grid;
-  const size = pageSize(cfg.page, cfg.orient, { w: S.clear.w * MM_PER_PX, h: S.clear.h * MM_PER_PX });
+  const vw = { w: S.clear.w * MM_PER_PX, h: S.clear.h * MM_PER_PX };
+  const size = pageSize(cfg.page, cfg.orient, vw);
+  if (S.mode === 'tree') {
+    const pt = TM.plateText();
+    const mk = (w, h) => layoutPlate({ w, h, rows: 1, cols: 1, screen: cfg.page === 'screen', border: cfg.border, title: cfg.title, labels: false,
+      titleText: S.title || pt.title, subText: pt.sub, footRight: 'davesgames.io', names: [], plateNo: 1 });
+    if (!natural()) return mk(size.w, size.h);
+    // The 'screen' page grows to the natural size of the tree and to the
+    // aspect of the view, so the mushrooms keep their size and the view pans.
+    const nat = TM.natSize(), asp = vw.w / vw.h;
+    let W = nat.w * 1.08, H = nat.h * 1.08, L = null;
+    for (let i = 0; i < 4; i++) {
+      if (W / H < asp) W = H * asp; else H = W / asp;
+      L = mk(W, H);
+      if (L.content.w >= nat.w - 1e-6 && L.content.h >= nat.h - 1e-6) break;
+      W += Math.max(0, nat.w - L.content.w) + 1; H += Math.max(0, nat.h - L.content.h) + 1;
+    }
+    return L;
+  }
   const names = grid ? S.gspec.map(c => c.name) : [S.spec ? S.spec.name : ''];
   const srcText = { random: 'random species', form: 'the ' + formLabel(S.form).toLowerCase() + ' form', family: 'the family of ' + (S.spec ? S.spec.name.split(' ')[0] : '') };
   const sub = grid ? `${G.rows * G.cols} specimens of ${srcText[G.src]}, plate seed ${G.seed}` : `${formLabel(S.form)} form, seed ${S.seed}`;
@@ -134,6 +159,16 @@ function draw() {
   const L = plateNow(), view = fitView(L), cfg = plateCfg(), grid = S.mode === 'grid';
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (S.mode === 'tree') {
+    drawPlate(ctx, { L: Object.assign({}, L, { cells: [] }), theme: THEMES[S.theme], ink: S.ink, style: S.style, pen: S.pen, jitter: S.jitter, view,
+      specs: [], progress: [], grain: S.grain ? grain : null, marker: false, hiCell: -1, paperOut: cfg.page !== 'screen', dpr: S.dpr });
+    TM.draw(ctx, L, view);
+    lastPlate = { L, view };
+    placeCaption(L, view);
+    drawMinimap(L, view);
+    return;
+  }
+  $('minimap').classList.remove('on');
   drawPlate(ctx, {
     L, theme: THEMES[S.theme], ink: S.ink, style: S.style, pen: S.pen, jitter: S.jitter, view,
     specs: grid ? S.gfish : [S.spec], progress: grid ? S.gprog : [S.anim.p], grain: S.grain ? grain : null,
@@ -145,7 +180,10 @@ function draw() {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function placeCaption(L, view) {
   const cap = $('caption'), f = S.spec;
-  if (S.mode === 'grid') {
+  if (S.mode === 'tree') {
+    const t = S.tr.tree;
+    cap.innerHTML = t ? `Tree of <i>${esc(t.nodes[0].name)}</i> · <span class="n">${S.tr.specs.size}/${t.nodes.length}</span> drawn · tap a mushroom or a branch` : '';
+  } else if (S.mode === 'grid') {
     const n = S.gspec.length, done = S.gfish.filter(Boolean).length, hi = S.hiCell >= 0 && S.gspec[S.hiCell];
     cap.innerHTML = hi ? `${S.hiCell + 1}. <i>${esc(hi.name)}</i> · ${esc(formLabel(hi.form))} · click to open`
       : `Plate of ${n} · <span class="n">${done}/${n}</span> drawn`;
@@ -159,6 +197,74 @@ function placeCaption(L, view) {
   cap.style.top = bottom + 'px';
 }
 
+// ── tree sizing and camera ──────────────────────────────────────────────────
+// The least on-screen width of a tip mushroom in the tree mode, CSS px.
+const minPx = () => (PHONE_Q.matches ? 120 : 180);
+// A tip box in mm on the 'screen' page: 1.3 x the least width at zoom 1.
+const tipMM = () => minPx() * 1.3 * MM_PER_PX;
+const natural = () => S.mode === 'tree' && plateCfg().page === 'screen';
+// The view moves toward TM.cameraTarget on a critically damped spring, so
+// a jump of the target (a new node) starts smooth. True when it moved.
+const cam = { vx: 0, vy: 0, vz: 0 };
+function followCamera(dt, L) {
+  const fit = fitView(L).fit, c = TM.cameraTarget(L, fit);
+  if (!c) { cam.vx = cam.vy = cam.vz = 0; return false; }
+  const v = S.view, w = 2.4, n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+  const before = v.px + v.py + v.z;
+  for (let i = 0; i < n; i++) {
+    const tx = -(c.x - L.w / 2) * fit * v.z, ty = -(c.y - L.h / 2) * fit * v.z;
+    cam.vx += (w * w * (tx - v.px) - 2 * w * cam.vx) * h; cam.vy += (w * w * (ty - v.py) - 2 * w * cam.vy) * h; cam.vz += (w * w * (c.z - v.z) - 2 * w * cam.vz) * h;
+    v.px += cam.vx * h; v.py += cam.vy * h; v.z = Math.max(0.5, v.z + cam.vz * h);
+  }
+  return Math.abs(v.px + v.py + v.z - before) > 0.01;
+}
+// The minimap: in the tree mode when the plate is larger than the clear
+// area at the current zoom. A tap or a drag on it moves the view.
+function drawMinimap(L, view) {
+  const mm = $('minimap');
+  const big = S.mode === 'tree' && !S.saver && S.tr.tree && (L.w * view.s / S.dpr > S.clear.w * 1.02 || L.h * view.s / S.dpr > S.clear.h * 1.02);
+  mm.classList.toggle('on', !!big);
+  if (!big) return;
+  const maxW = PHONE_Q.matches ? 120 : 180, maxH = PHONE_Q.matches ? 90 : 130;
+  const k = Math.min(maxW / L.w, maxH / L.h), W = Math.round(L.w * k), H = Math.round(L.h * k);
+  mm.style.width = W + 'px'; mm.style.height = H + 'px';
+  mm.width = W * S.dpr; mm.height = H * S.dpr;
+  const x = mm.getContext('2d'), th = THEMES[S.theme], q = k * S.dpr;
+  x.fillStyle = th.paper; x.fillRect(0, 0, mm.width, mm.height);
+  const lay = TM.layoutFor(L), tree = S.tr.tree;
+  x.strokeStyle = S.ink || th.ink; x.globalAlpha = 0.6; x.lineWidth = 1;
+  x.beginPath();
+  for (const n of tree.nodes) {
+    const b = lay.branch[n.id]; if (!b) continue;
+    x.moveTo(b.elbow[0][0] * q, b.elbow[0][1] * q);
+    for (const p of b.elbow) x.lineTo(p[0] * q, p[1] * q);
+    x.moveTo(b.run[0][0] * q, b.run[0][1] * q); x.lineTo(b.run[1][0] * q, b.run[1][1] * q);
+  }
+  x.stroke();
+  x.globalAlpha = 0.8; x.fillStyle = S.ink || th.ink;
+  for (const id of tree.tips) { const b = lay.box[id]; if (b) x.fillRect(b.x * q, b.y * q, Math.max(2, b.w * q), Math.max(1.5, b.h * q)); }
+  const v0x = (S.clear.x * S.dpr - view.ox) / view.s, v0y = (S.clear.y * S.dpr - view.oy) / view.s;
+  x.globalAlpha = 1; x.strokeStyle = '#e3c48a'; x.lineWidth = 2 * S.dpr;
+  x.strokeRect(v0x * q, v0y * q, S.clear.w * S.dpr / view.s * q, S.clear.h * S.dpr / view.s * q);
+  mm.dataset.k = k;
+}
+function bindMinimap() {
+  const mm = $('minimap');
+  let down = false;
+  const go = e => {
+    if (!lastPlate) return;
+    const r = mm.getBoundingClientRect(), k = +mm.dataset.k || 1;
+    const mx = (e.clientX - r.left) / k, my = (e.clientY - r.top) / k, L = lastPlate.L, fit = fitView(L).fit;
+    S.tr.follow = false;
+    S.view.px = -(mx - L.w / 2) * fit * S.view.z; S.view.py = -(my - L.h / 2) * fit * S.view.z;
+    S.dirty = true;
+  };
+  mm.addEventListener('pointerdown', e => { down = true; try { mm.setPointerCapture(e.pointerId); } catch (x) { /* synthetic */ } go(e); });
+  mm.addEventListener('pointermove', e => { if (down) go(e); });
+  mm.addEventListener('pointerup', () => { down = false; });
+  mm.addEventListener('pointercancel', () => { down = false; });
+}
+
 // ── frame ───────────────────────────────────────────────────────────────────
 // The pen speed slider sets the time of one draw-on: 14 s at 0, 1.1 s at 1.
 function drawTime() { return 14 * Math.pow(0.08, S.anim.speed); }
@@ -167,7 +273,13 @@ function frame(now) {
   if (S.saver) return;
   const a = S.anim, dt = Math.min(0.1, (now - (a.last || now)) / 1000);
   a.last = now;
-  if (a.p != null && S.spec) {
+  if (S.mode === 'tree') {
+    if (TM.pump(14)) S.dirty = true;
+    if (TM.tick(dt)) S.dirty = true;
+    if (lastPlate && followCamera(dt, lastPlate.L)) S.dirty = true;
+    busy();
+  }
+  if (a.p != null && S.spec && S.mode !== 'tree') {
     a.p += S.spec.total / drawTime() * dt;
     if (a.p >= S.spec.total) { a.p = null; syncPlay(); }
     S.dirty = true;
@@ -194,17 +306,18 @@ function frame(now) {
   if (S.dirty) { S.dirty = false; draw(); }
 }
 function startDrawOn() {
+  if (S.mode === 'tree') { TM.togglePlay(); return; }
   if (S.mode === 'grid') { S.gprog = S.gfish.map(f => (f ? 0 : null)); S.dirty = true; syncPlay(); return; }
   if (!S.spec) return;
   S.anim.p = 0; S.dirty = true; syncPlay();
 }
-function drawing() { return S.mode === 'grid' ? S.gprog.some(p => p != null) : S.anim.p != null; }
-function stopDrawOn() { S.anim.p = null; S.gprog = S.gprog.map(() => null); S.dirty = true; syncPlay(); }
+function drawing() { return S.mode === 'tree' ? S.tr.playing : S.mode === 'grid' ? S.gprog.some(p => p != null) : S.anim.p != null; }
+function stopDrawOn() { if (S.mode === 'tree') { if (S.tr.playing) TM.togglePlay(); return; } S.anim.p = null; S.gprog = S.gprog.map(() => null); S.dirty = true; syncPlay(); }
 function syncPlay() {
   $('playBtn').textContent = drawing() ? 'Finish' : 'Draw on';
   $('dockDraw').classList.toggle('on', drawing());
 }
-function busy() { $('busy').hidden = !(S.mode === 'grid' && S.gqueue.length); }
+function busy() { $('busy').hidden = !((S.mode === 'grid' && S.gqueue.length) || (S.mode === 'tree' && TM && TM.busy())); }
 
 // ── showSpec ────────────────────────────────────────────────────────────────
 // params null: the form params of (form, seed).
@@ -215,8 +328,9 @@ function showSpec(form, seed, params, { push = true, animate = S.anim.auto } = {
   S.params = sanitize(Object.assign({}, S.base, params || {}));
   if (push) pushHist();
   try { S.spec = getSpec(S.params, S.seed); } catch (err) { console.error(err); note('This specimen broke the engine: ' + err.message); }
-  if (animate && S.mode === 'single') startDrawOn(); else { S.anim.p = null; syncPlay(); }
+  if (animate && S.mode === 'single') startDrawOn(); else if (S.mode !== 'tree') { S.anim.p = null; syncPlay(); }
   if (S.mode === 'grid' && S.grid.src !== 'random') buildGrid();
+  if (S.mode === 'tree') TM.onSpecimen();
   syncUI();
   writeHash();
 }
@@ -235,6 +349,7 @@ function goHist(d) {
   showSpec(e.form, e.seed, e.params, { push: false });
 }
 function newSeed() {
+  if (S.mode === 'tree') { TM.newTree(); return; }
   if (S.mode === 'grid' && S.grid.src !== 'family') { newPlate(); return; }
   const seed = rand32();
   const keep = diffParams(S.params, S.base);
@@ -287,9 +402,17 @@ function setMode(m) {
   if (S.mode === m) return;
   S.mode = m; S.hiCell = -1;
   resetView();
-  if (m === 'grid') buildGrid(); else { stopDrawOn(); }
+  S.anim.p = null;
+  if (m === 'grid') buildGrid();
+  else if (m === 'tree') { S.tr.follow = true; TM.onSpecimen(); }
+  $('treeCard').hidden = m !== 'tree' || S.tr.sel < 0;
   syncUI(); layout(); writeHash();
 }
+const MODES = ['single', 'grid', 'tree'];
+const MODE_ICON = { single: '◧', grid: '▦', tree: '⟟' }, MODE_NAME = { single: 'Single specimen', grid: 'Plate grid', tree: 'Tree of life' };
+// The tree card: open a node as the specimen, or grow a new tree from it.
+function openSpecimen(form, seed, params) { S.mode = 'single'; resetView(); $('treeCard').hidden = true; showSpec(form, seed, params); syncUI(); layout(); }
+function setSpecimen(form, seed, params) { showSpec(form, seed, params, { animate: false }); }
 function openCell(i) {
   const c = S.gspec[i];
   if (!c) return;
@@ -400,9 +523,12 @@ function syncUI() {
   const cfg = plateCfg(), G = S.grid, grid = S.mode === 'grid';
   for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === S.mode);
   $('gridSec').hidden = !grid;
-  $('dockMode').textContent = grid ? '◧' : '▦';
-  $('dockMode').setAttribute('aria-label', grid ? 'Single specimen' : 'Plate grid');
-  $('dockMode').classList.toggle('on', grid);
+  $('treeSec').hidden = S.mode !== 'tree';
+  // The dock button shows the next mode of the cycle.
+  const nm = MODES[(MODES.indexOf(S.mode) + 1) % MODES.length];
+  $('dockMode').textContent = MODE_ICON[nm];
+  $('dockMode').setAttribute('aria-label', MODE_NAME[nm]);
+  $('dockMode').classList.toggle('on', S.mode !== 'single');
   for (const b of $('forms').children) b.classList.toggle('on', b.dataset.f === S.form);
   for (const b of $('styleSeg').children) b.classList.toggle('on', b.dataset.s === S.style);
   for (const id of ['colorTog', 'dockColor']) $(id).setAttribute('aria-pressed', String(colourOn()));
@@ -411,7 +537,7 @@ function syncUI() {
   for (const b of $('srcSeg').children) b.classList.toggle('on', b.dataset.f === G.src);
   $('spreadRow').style.display = G.src === 'family' ? '' : 'none';
   $('spread').value = G.spread; $('spreadV').textContent = Math.round(G.spread * 100) + '%';
-  $('newBtn').textContent = grid && G.src !== 'family' ? 'New plate' : 'New seed';
+  $('newBtn').textContent = S.mode === 'tree' ? 'New tree' : grid && G.src !== 'family' ? 'New plate' : 'New seed';
   if (document.activeElement !== $('seedInp')) $('seedInp').value = String(S.seed);
   $('dockName').textContent = S.spec ? S.spec.name : '…';
   $('seedLine').innerHTML = S.spec ? `<i>${esc(S.spec.name)}</i>, ${esc(formLabel(S.form).toLowerCase())} form. The name comes from the seed.` : '';
@@ -436,6 +562,7 @@ function syncUI() {
   $('grainBtn').classList.toggle('on', S.grain);
   if (document.activeElement !== $('titleInp')) $('titleInp').value = S.title;
   syncParamRows();
+  if (TM) TM.syncUI();
   syncPlay();
   syncExport();
   S.dirty = true;
@@ -451,6 +578,7 @@ function shareState() {
     pg: cfg.page, or: cfg.orient === 'portrait' ? 'p' : 'l',
     fl: [cfg.border ? 'b' : '', cfg.title ? 't' : '', cfg.labels ? 'l' : '', cfg.scale ? 's' : '', S.grain ? 'g' : ''].join('') || '-',
     ti: S.title,
+    ...(S.mode === 'tree' ? TM.shareState() : {}),
     ...(S.mode === 'grid' ? { gs: S.grid.seed, r: S.grid.rows, c: S.grid.cols, src: S.grid.src, sp: S.grid.src === 'family' ? S.grid.spread : '', no: S.grid.no } : {}),
   };
 }
@@ -463,7 +591,8 @@ function writeHash() {
 }
 function readHash() {
   const q = decodeShare(location.hash);
-  if (q.m === 'single' || q.m === 'grid') S.mode = q.m;
+  if (MODES.includes(q.m)) S.mode = q.m;
+  TM.readShare(q);
   if (q.st && STYLES[q.st]) S.style = q.st;
   if (q.t && THEMES[q.t]) S.theme = q.t;
   if (q.ink && /^[0-9a-f]{6}$/i.test(q.ink)) S.ink = '#' + q.ink;
@@ -549,7 +678,7 @@ function bindUI() {
     $('openAllBtn').textContent = open ? 'Close all' : 'Open all';
   });
   for (const b of $('modeSeg').children) b.addEventListener('click', () => setMode(b.dataset.mode));
-  $('dockMode').addEventListener('click', () => setMode(S.mode === 'grid' ? 'single' : 'grid'));
+  $('dockMode').addEventListener('click', () => setMode(MODES[(MODES.indexOf(S.mode) + 1) % MODES.length]));
   for (const p of GRID_PRESETS) {
     const b = document.createElement('button');
     b.dataset.id = p.id; b.textContent = p.label || p.rows + ' × ' + p.cols;
@@ -578,7 +707,9 @@ function bindKeys() {
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
     const k = e.key.toLowerCase();
-    if (k === 'n' || k === ' ') { e.preventDefault(); newSeed(); }
+    if (S.mode === 'tree' && k === ' ') { e.preventDefault(); TM.togglePlay(); }
+    else if (k === 'n' || k === ' ') { e.preventDefault(); newSeed(); }
+    else if (k === 't') setMode(S.mode === 'tree' ? 'single' : 'tree');
     else if (k === 'r') randomise();
     else if (k === 'm') mutateSpec();
     else if (k === 'd') $('playBtn').click();
@@ -594,6 +725,7 @@ function bindKeys() {
 let onTap = null, onHover = null;
 function resetView() { S.view.z = 1; S.view.px = 0; S.view.py = 0; S.dirty = true; }
 function zoomAt(f, cx, cy) {
+  S.tr.follow = false;
   const v = S.view, z = clamp(v.z * f, 0.5, 40), k = z / v.z;
   const ox = S.clear.x + S.clear.w / 2, oy = S.clear.y + S.clear.h / 2;
   v.px = (cx - ox) - (cx - ox - v.px) * k;
@@ -614,6 +746,7 @@ function bindView() {
     if (!pts.has(e.pointerId)) { if (onHover) onHover(...local(e)); return; }
     const p = local(e), q = pts.get(e.pointerId);
     if (pts.size === 1) {
+      if (Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) > 0) S.tr.follow = false;
       S.view.px += p[0] - q[0]; S.view.py += p[1] - q[1];
       moved += Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]);
       S.dirty = true;
@@ -639,11 +772,13 @@ function bindView() {
   canvas.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = local(e); zoomAt(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0018)), x, y); }, { passive: false });
   canvas.addEventListener('dblclick', resetView);
   onTap = (x, y) => {
+    if (S.mode === 'tree' && lastPlate) { const [mx, my] = plateAt(x, y); TM.tap(mx, my, lastPlate.L, lastPlate.view); return; }
     if (S.mode !== 'grid' || !lastPlate) return;
     const [mx, my] = plateAt(x, y), i = cellAt(lastPlate.L, mx, my);
     if (i >= 0) openCell(i);
   };
   onHover = (x, y) => {
+    if (S.mode === 'tree' && lastPlate) { const [mx, my] = plateAt(x, y); TM.hover(mx, my, lastPlate.L); return; }
     if (S.mode !== 'grid' || !lastPlate) return;
     const [mx, my] = plateAt(x, y), i = cellAt(lastPlate.L, mx, my);
     if (i !== S.hiCell) { S.hiCell = i; canvas.classList.toggle('cell', i >= 0); S.dirty = true; }
@@ -654,21 +789,29 @@ function bindView() {
 // ── bindExport ──────────────────────────────────────────────────────────────
 function exportOpts() {
   return { theme: THEMES[S.theme], ink: S.ink, style: S.style, pen: S.pen, jitter: S.jitter, grain: S.grain ? grain : null,
-    scale: plateCfg().scale, title: S.mode === 'grid' ? (S.title || 'Fungi fictae') : (S.spec ? S.spec.name : 'Mushroom') };
+    scale: plateCfg().scale, title: S.mode === 'grid' ? (S.title || 'Fungi fictae') : S.mode === 'tree' ? TM.plateText().title : (S.spec ? S.spec.name : 'Mushroom') };
 }
-function exportName() { return S.mode === 'grid' ? 'mushrooms-plate-' + S.grid.seed : 'mushroom-' + slug(S.spec ? S.spec.name : 'specimen') + '-' + S.seed; }
-function exportSpecs() { return S.mode === 'grid' ? S.gfish : [S.spec]; }
+function exportName() { return S.mode === 'tree' ? 'mushrooms-tree-' + slug(S.spec ? S.spec.name : 'tree') + '-' + S.tr.seed : S.mode === 'grid' ? 'mushrooms-plate-' + S.grid.seed : 'mushroom-' + slug(S.spec ? S.spec.name : 'specimen') + '-' + S.seed; }
+function exportSpecs() { return S.mode === 'tree' ? [] : S.mode === 'grid' ? S.gfish : [S.spec]; }
+// A tree plate: the plate frame with no cells, then the tree on top.
+function exportPlate() { const L = plateNow(); return S.mode === 'tree' ? Object.assign({}, L, { cells: [] }) : L; }
+function treeExtra(o) {
+  if (S.mode !== 'tree' || !S.tr.tree) return null;
+  const L = plateNow();
+  return { svg: TM.svgOf(L, o), draw: (x, view) => TM.draw(x, L, view, { tau: null, sel: S.tr.sel, dpr: view.s / (96 / 25.4) }) };
+}
 function syncExport() {
   const L = plateNow(), z = pngSize(L, +$('dpiSel').value);
   $('pngHint').textContent = `PNG ${z.w} × ${z.h} px` + (z.clamped ? `, lowered to ${z.dpi} dpi (the browser canvas limit)` : '') + `. Plate ${L.w.toFixed(0)} × ${L.h.toFixed(0)} mm.`;
 }
 function bindExport() {
-  $('xSvg').addEventListener('click', () => exportSVG(plateNow(), exportSpecs(), exportOpts(), exportName()));
+  $('xSvg').addEventListener('click', () => { const o = exportOpts(); exportSVG(exportPlate(), exportSpecs(), o, exportName(), treeExtra(o)); });
   $('xPng').addEventListener('click', async () => {
     $('xPng').disabled = true;
-    try { await exportPNG(plateNow(), exportSpecs(), exportOpts(), +$('dpiSel').value, exportName()); } finally { $('xPng').disabled = false; }
+    try { const o = exportOpts(); await exportPNG(exportPlate(), exportSpecs(), o, +$('dpiSel').value, exportName(), treeExtra(o)); } finally { $('xPng').disabled = false; }
   });
-  $('xJson').addEventListener('click', () => exportJSON(plateNow(), exportSpecs(), exportOpts(), exportName()));
+  $('xJson').addEventListener('click', () => (S.mode === 'tree' && S.tr.tree ? download(new Blob([TM.json()], { type: 'application/json' }), exportName() + '.json')
+    : exportJSON(plateNow(), exportSpecs(), exportOpts(), exportName())));
   $('dpiSel').addEventListener('change', syncExport);
   $('xLink').addEventListener('click', async () => {
     const url = location.href.split('#')[0] + '#' + encodeShare(shareState());
@@ -712,7 +855,9 @@ function bindPanel() {
 // ── BOOT ────────────────────────────────────────────────────────────────────
 async function boot() {
   grain = makeGrain(11);
-  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindExport();
+  TM = createTreeMode({ S, $, dirty: () => { S.dirty = true; }, writeHash, resetView, syncPlay, minPx, tipMM, natural,
+    clearW: () => S.clear.w, openSpecimen, setSpecimen });
+  buildParams(); bindUI(); bindKeys(); bindView(); bindPanel(); bindExport(); TM.bind(); bindMinimap();
   if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
   addEventListener('resize', layout);
   layout();
@@ -728,7 +873,7 @@ async function boot() {
   import('./saver.js').then(m => m.installSaver({ S, getSpec, getGrain: () => grain,
     onEnter: () => { S.saver = true; panel.classList.remove('open'); },
     onExit: () => { S.saver = null; setOpen(!PHONE_Q.matches); S.dirty = true; } })).catch(err => console.error('saver', err));
-  window.__mush = { S, showSpec, newSeed, randomise, mutateSpec, setMode, buildGrid, openCell, draw, plateNow, layout, ready: true,
+  window.__mush = { S, TM, showSpec, newSeed, randomise, mutateSpec, setMode, buildGrid, openCell, draw, plateNow, layout, ready: true,
     toClient: (x, y) => { if (!lastPlate) return null; const r = canvas.getBoundingClientRect(), v = lastPlate.view; return [r.left + (v.ox + x * v.s) / S.dpr, r.top + (v.oy + y * v.s) / S.dpr]; } };
 }
 boot().catch(err => { $('caption').textContent = 'Mushroom Draw failed to start: ' + err.message; console.error(err); });

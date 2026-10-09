@@ -25,14 +25,19 @@ export function download(blob, name) {
 export function slug(s) {
   return String(s || 'mushroom').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'mushroom';
 }
-export function exportSVG(L, specs, o, name) {
-  download(new Blob([plateSVG(L, specs, o)], { type: 'image/svg+xml' }), name + '.svg');
+// extra (the tree mode): { svg: elements put in before </svg>,
+// draw(ctx, view): drawn over the plate in the PNG }.
+export function exportSVG(L, specs, o, name, extra = null) {
+  let svg = plateSVG(L, specs, o);
+  if (extra && extra.svg) svg = svg.replace(/<\/svg>\n$/, extra.svg + '\n</svg>\n');
+  download(new Blob([svg], { type: 'image/svg+xml' }), name + '.svg');
 }
-export function exportPNG(L0, specs, o, dpi, name) {
+export function exportPNG(L0, specs, o, dpi, name, extra = null) {
   const L = withCredit(L0), z = pngSize(L, dpi);
   const c = document.createElement('canvas'); c.width = z.w; c.height = z.h;
   drawPlate(c.getContext('2d'), { L, theme: o.theme, ink: o.ink, style: o.style, pen: o.pen, jitter: o.jitter, view: { s: z.w / L.w, ox: 0, oy: 0 },
     specs, progress: null, grain: o.grain, marker: false, hiCell: -1, paperOut: false, dpr: z.dpi / 96, scale: o.scale });
+  if (extra && extra.draw) extra.draw(c.getContext('2d'), { s: z.w / L.w, ox: 0, oy: 0 });
   return new Promise(res => c.toBlob(b => { if (b) download(b, `${name}-${z.dpi}dpi.png`); res(z); }, 'image/png'));
 }
 export function exportJSON(L, specs, o, name) {

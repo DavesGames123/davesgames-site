@@ -8,6 +8,7 @@
    the rest. main.js fits the plate in the clear part of the desk.
 
      grep -n 'DESK'       the canvas, the caption, the busy note
+     grep -n 'TREE CARD'  the tree mode card and minimap
      grep -n 'PANEL'      the control column
      grep -n 'CONTROLS'   sliders, segments, buttons, themes, parameters
      grep -n 'TOUCH'      target and text sizes for any touch screen
@@ -60,6 +61,20 @@ html.in-frame #gear{top:14px}
 #colorTog:hover{border-color:var(--acc);color:var(--acc)}
 #colorTog i,#dockColor i{display:inline-block;width:12px;height:12px;border-radius:50%;border:1.5px solid currentColor;background:transparent}
 #colorTog[aria-pressed="true"] i,#dockColor[aria-pressed="true"] i{border-color:#e06a55;background:#e06a55}
+[hidden]{display:none!important}
+#minimap{position:absolute;left:12px;bottom:40px;display:none;z-index:4;border:1px solid var(--line-b);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.45);cursor:crosshair;touch-action:none}
+#minimap.on{display:block}
+/* TREE CARD. The mushroom under the cursor (or tapped) in the tree mode. */
+#treeCard{position:absolute;right:14px;top:56px;width:380px;max-height:calc(100% - 72px);overflow-y:auto;z-index:5;
+  background:rgba(14,16,20,0.94);border:1px solid var(--line-b);border-radius:12px;padding:12px 12px 10px;font-size:0.76rem;color:var(--dim);
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+#cardClose{position:absolute;top:8px;right:8px;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--bg2);color:var(--dim)}
+#cardSpec{display:block;width:100%;aspect-ratio:5/4;border-radius:6px;margin-top:22px}
+#cardName{font:italic 1.1rem var(--sci-serif);color:#f1eee6;margin:8px 0 2px}
+#cardMeta{margin-bottom:6px}
+#cardDiff .ch{color:var(--ink);margin:8px 0 3px}
+#cardDiff ul,#cardDiff ol{margin:0 0 0 18px;line-height:1.5}
+#cardDiff i{font-family:var(--sci-serif);font-size:0.86rem;color:#d8d2c4}
 #busy{position:absolute;right:14px;top:12px;font-size:0.75rem;color:var(--dim);background:rgba(14,16,20,0.82);border:1px solid var(--line);border-radius:999px;padding:4px 10px;pointer-events:none}
 
 .seg.three{grid-template-columns:repeat(3,1fr)}
@@ -150,7 +165,7 @@ button:disabled{opacity:0.4;cursor:default}
 /* TOUCH. Any touch screen or narrow window: targets are 44px or more. */
 @media (pointer:coarse), (max-width:768px){
   :root{--panel-w:340px}
-  #panelClose{width:44px;height:44px}
+  #panelClose,#cardClose{width:44px;height:44px}
   .seg button,.btns button,.namerow button,.small{min-height:44px;font-size:0.8rem;border-radius:10px}
   .namerow input{min-height:44px;font-size:1.08rem}
   .row2 select{min-height:44px}
@@ -186,6 +201,10 @@ button:disabled{opacity:0.4;cursor:default}
   #gear,body.panel-closed #gear{display:none}
   #desk{bottom:var(--dock-h)}
   #caption{font-size:0.86rem}
+  #treeCard{left:8px;right:8px;top:8px;width:auto;max-height:60%;padding:10px}
+  #cardSpec{width:min(100%,260px);margin:4px auto 4px}
+  #cardName{padding-right:48px}
+  #minimap{left:8px;bottom:36px}
 
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:7px;align-items:center;
     padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));

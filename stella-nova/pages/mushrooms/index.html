@@ -28,6 +28,10 @@
      render.js   the plate on a canvas, as vectors, and the pen draw-on
      svg.js      the plate as SVG in mm (no DOM)
      export.js   the file downloads and the clipboard
+     tree.js     the tree of life: birth-death model, param drift, names,
+                 layouts (no DOM)
+     treedraw.js the tree on a canvas and as SVG, hit test
+     treemode.js the tree mode: state, playback, camera, card, controls
      saver.js    window.snSaver: the screensaver tour
      main.js     the controls, history, modes, view, and the boot
      tests.mjs   node tests (engine, clipper, layout, SVG)
@@ -74,6 +78,18 @@
   <div id="caption"></div>
   <div id="busy" hidden>Drawing…</div>
   <button id="colorTog" aria-pressed="true" title="Colour on or off (C)"><i></i><span>Colour</span></button>
+  <canvas id="minimap" aria-label="Minimap of the tree. Tap to move the view."></canvas>
+  <div id="treeCard" hidden>
+    <button id="cardClose" aria-label="Close">✕</button>
+    <canvas id="cardSpec"></canvas>
+    <div id="cardName"></div>
+    <div id="cardMeta"></div>
+    <div class="btns">
+      <button id="cardOpen" title="Open this mushroom in single mode">Open as specimen</button>
+      <button id="cardEvolve" title="Grow a new tree from this mushroom">Evolve from here</button>
+    </div>
+    <div id="cardDiff"></div>
+  </div>
 </main>
 
 <aside id="panel" class="open" aria-label="Controls">
@@ -81,9 +97,10 @@
   <button id="panelClose" aria-label="Close controls">✕</button>
 
   <p class="credit-box">Original code in the spirit of <a href="https://github.com/LingDong-/fishdraw" target="_blank" rel="noopener">fishdraw</a> and <a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">shan-shui-inf</a> by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a>.</p>
-  <div class="seg first" id="modeSeg">
-    <button data-mode="single" class="on">Single specimen</button>
+  <div class="seg three first" id="modeSeg">
+    <button data-mode="single" class="on">Single</button>
     <button data-mode="grid">Plate grid</button>
+    <button data-mode="tree" title="Tree of life (T)">Tree of life</button>
   </div>
 
   <div class="sec-label">Specimen</div>
@@ -134,6 +151,43 @@
       <input type="range" id="spread" min="0.02" max="1" step="0.01" value="0.3" aria-label="Mutation spread"></div>
     <div class="btns"><button id="gridNew" title="A new plate (N)">New plate</button></div>
     <p class="hint">Click or tap a specimen to open it on its own. Locked fields hold in every cell.</p>
+  </div>
+
+  <div id="treeSec" hidden>
+    <div class="sec-label">Tree of life</div>
+    <p class="hint">The specimen is the ancestor. Its parameters drift down each branch; lineages split and die out. Each column or ring is one split. Tap a mushroom or a branch to follow its lineage; drag to pan a large tree.</p>
+    <div class="seg three" id="treeLayout">
+      <button data-l="clado" class="on">Cladogram</button>
+      <button data-l="radial">Radial</button>
+      <button data-l="fan">Fan</button>
+    </div>
+    <div class="seg" id="treeX">
+      <button data-x="time" class="on" title="Branch length is time (paper pages)">Time</button>
+      <button data-x="change" title="Branch length is the amount of change (paper pages)">Change</button>
+    </div>
+    <div class="btns">
+      <button id="treePlay">Play</button>
+      <button id="treeRestart">Restart</button>
+      <button id="treeNew" title="Same ancestor, new history (N)">New tree</button>
+    </div>
+    <div class="prm"><div class="nm">Time</div><span class="val" id="treeTimeV"></span>
+      <input type="range" id="treeTime" min="0" max="1000" step="1" value="0" aria-label="Scrub the time"></div>
+    <div class="prm"><div class="nm">Growth time</div><span class="val" id="treeSpeedV"></span>
+      <input type="range" id="treeSpeed" min="0" max="1" step="0.01" value="0.5" aria-label="Growth speed"></div>
+    <div class="prm"><div class="nm">Mutation rate</div><span class="val" id="treeMutV"></span>
+      <input type="range" id="treeMut" min="0.1" max="3" step="0.05" value="1" aria-label="Mutation rate"></div>
+    <div class="prm"><div class="nm">Speciation rate</div><span class="val" id="treeSpecV"></span>
+      <input type="range" id="treeSpec" min="0.3" max="2.5" step="0.05" value="1" aria-label="Speciation rate"></div>
+    <div class="prm"><div class="nm">Extinction rate</div><span class="val" id="treeExtV"></span>
+      <input type="range" id="treeExt" min="0" max="3" step="0.05" value="0.6" aria-label="Extinction rate"></div>
+    <div class="prm"><div class="nm">Living tips, at most</div><span class="val" id="treeTipsV"></span>
+      <input type="range" id="treeTips" min="3" max="64" step="1" value="10" aria-label="Most living tips"></div>
+    <div class="btns">
+      <button id="treeRad" class="on" title="Bursts of fast splitting">Radiations</button>
+      <button id="treeAnc" class="on" title="Mushrooms at the split points">Ancestors</button>
+      <button id="treeNames" class="on" title="Names under the mushrooms">Names</button>
+    </div>
+    <p class="hint" id="treeInfo"></p>
   </div>
 
   <div class="sec-label">Plate</div>
@@ -199,6 +253,9 @@
     <p>The cap is a surface of revolution on a bent stem. Its outline (the meridian) is a superellipse from the apex to the rim, with an umbo, a central dip, an upturned or inrolled margin, and an underside back to the stem. The age slider moves a cap from button to convex to plane to upturned. A camera at height <span class="m1">e</span> projects a cap point at height <span class="m2">h</span>, radius <span class="m3">r</span> and angle <span class="m4">φ</span> to</p>
     <div class="eq" data-tex="Y = y_m - h\cos e + r\sin\varphi\,\sin e"></div>
     <p>so from below (<span class="m1">e</span> &lt; 0) the rim is a full ellipse and the gills, pores, teeth or ridges show.</p>
+    <p>The tree of life grows made-up fungi from the specimen. Each lineage splits at rate <span class="m1">λ</span> and dies out at rate <span class="m2">μ</span>; along a branch of length <span class="m3">Δt</span> each parameter takes a random step</p>
+    <div class="eq" data-tex="x_{\text{child}} = x_{\text{parent}} + \sigma_g \sqrt{\Delta t / T}\; Z,\qquad Z \sim \mathcal{N}(0, 1)"></div>
+    <p>with a size <span class="m4">σ</span> per group: colour and surface marks change fast, the gills and pores slowly. Names follow the seed, and a clade keeps its genus until it has drifted far from the founder; family names end in -aceae.</p>
     <p>Hidden lines are removed in the engine. Each line point of the cap is tested by a ray march toward the camera, and every line is cut where a part drawn after it covers it. The SVG holds only visible strokes, ready for a pen plotter.</p>
     <p>The page is our own code, made in the spirit of two programs by <a href="https://lingdong.works" target="_blank" rel="noopener">Lingdong Huang</a>: <a href="https://github.com/LingDong-/fishdraw" target="_blank" rel="noopener">fishdraw</a> (fish as noise-wobbled pen lines with hatching and clipped parts) and <a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">shan-shui-inf</a> (Chinese landscape painting with brush strokes of varying width and light washes). Both have pages on this site. No code of theirs is used here.</p>
     <p class="ours">The forms are shapes of real mushroom groups, for drawing only. This is not a field guide: never eat a wild mushroom on the strength of a picture.</p>
