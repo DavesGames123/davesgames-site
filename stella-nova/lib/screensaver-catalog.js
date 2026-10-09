@@ -93,6 +93,7 @@ window.SN_SAVER_CATALOG = {
     'lenia': { tier: 3, default: true, hook: true, note: 'ES module pages/lenia/main.js;' },
     'game-of-life': { tier: 2, default: true, hook: true, note: 'window.__life = {S, loadPattern, setRule, setRunning, randomFill, fitWorld, setLearn, setPanel, ...} (pages/game-of-life/main.js:724), so the hook can live in t' },
     'chordlab': { tier: 5, note: 'Exclude. All content is driven by live mic input (dsp.js:147-159 getUserMedia into one AnalyserNode;' },
+    'string-lab': { tier: 3, default: true, hook: true, note: 'String Lab (our own stiff-string solver and unbranded guitar and violin models): a seeded bag of six shots every 6-12 s, sound off: a slow-motion pluck in magma, a chord strummed across the guitar in 3D, a violin bow stroke (Helmholtz motion), harmonic n after a light touch, a track stepped note by note with TAB, the harmonic series building; 2D pane and spring 3D camera in plateBand; plate has the note, frequency, ratio and one TeX line, no code.' },
     'chordchart': { tier: 5, note: 'Exclude. Reference grid of chord cards rendered as inline SVG (diagrams.js), no canvas and no animation;' },
     'harmonywheel': { tier: 3, hook: true, note: 'Not a default (user, 2026-10-02): the chord pages are not screensaver material. Classic ’use strict’ script;' },
     'resonance-figure': { tier: 1, default: true, hook: true, note: 'Generic fallback is enough: #fig is already position:fixed inset:0 (style.css:38) and resize() reads its client size on window resize;' },
