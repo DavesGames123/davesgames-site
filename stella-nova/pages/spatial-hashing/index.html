@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Spatial Hashing — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SPATIAL HASHING  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Thousands of colliding balls found fast with a dense spatial hash grid: neighbour search in linear time.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #11.
+   Upstream file: tenMinutePhysics/11-hashing.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Video tutorial: https://youtu.be/D2M8jTtKi44
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Thousands of colliding balls found fast with a dense spatial hash grid: neighbour search in linear time. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+        <h1>Spatial Hashing</h1> 
+		<button id = "buttonRun" onclick="run()" class="button">Run</button>
+		<button onclick="restart()" class="button">Restart</button>
+		<input type = "checkbox" onclick = "onShowColl()"> Show collisions</p>
+		<span id = "particleCount">0</span> particles, 
+		<span id = "ms">0.000</span> ms per frame
+
+		<br><br>		
+        <div id="container"></div>
+
+	
+<script src="../../vendor/three@0.139.2/build/three.min.js"></script>
+<script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>
