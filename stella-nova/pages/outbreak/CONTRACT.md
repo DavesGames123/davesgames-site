@@ -527,8 +527,8 @@ a compact two-column panel at 10 Hz (desktop 15 Hz). `globe.setHud({ on,
 rect, focus })`, `frame.hud` = stats.js hud values plus `series`
 (history.inc) and `curve`. The Auto button does not draw it.
 
-Calm motion: one subject per shot; the style holds for a run; an
-`export` shot only when the disease reaches a new region. main.js
+Calm motion: one subject per shot; the style holds for a run; one
+`front` shot per new region, not one per city. main.js
 flies the camera with `FLY` (18 deg/s, heading and tilt 20 deg/s,
 camera.js `maxTurnDegPerSec`), and eases spin, drift and the idle turn
 (1.2 deg/s after 8 s) to their rates. saver.js flies moves under 50 deg
