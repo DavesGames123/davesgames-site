@@ -2,7 +2,10 @@
 <!-- Restitution in MuJoCo: a negative solref sets the contact stiffness and
      damping directly (solref="-stiffness -damping"). With damping 0 the
      contact is elastic and the ball comes back to its drop height; more
-     damping takes more energy out of each bounce. -->
+     damping takes more energy out of each bounce. As a damped spring with
+     zeta = damping / (2 sqrt(stiffness)), the restitution is about
+     exp(-pi zeta / sqrt(1 - zeta^2)): 1, 0.89 and 0.30 here. A contact
+     cannot pull, so the dead ball lets go early and comes back at about 0.39. -->
 <mujoco model="bouncing balls">
   <option timestep="0.0005" integrator="RK4"/>
   <visual><global azimuth="90" elevation="-10"/></visual>
@@ -11,7 +14,7 @@
     <light pos="0 -1 3" dir="0 .3 -1"/>
     <geom name="floor" type="plane" size="2 2 .1" rgba=".22 .25 .3 1" solref="-20000 -0" solimp=".99 .99 .001"/>
     <body name="elastic" pos="-.3 0 1"><freejoint/><geom solref="-20000 -0" solimp=".99 .99 .001" rgba=".95 .75 .2 1"/></body>
-    <body name="lively" pos="0 0 1"><freejoint/><geom solref="-20000 -4" solimp=".99 .99 .001" rgba=".95 .45 .2 1"/></body>
-    <body name="dead" pos=".3 0 1"><freejoint/><geom solref="-20000 -20" solimp=".99 .99 .001" rgba=".7 .25 .2 1"/></body>
+    <body name="lively" pos="0 0 1"><freejoint/><geom solref="-20000 -10" solimp=".99 .99 .001" rgba=".95 .45 .2 1"/></body>
+    <body name="dead" pos=".3 0 1"><freejoint/><geom solref="-20000 -100" solimp=".99 .99 .001" rgba=".7 .25 .2 1"/></body>
   </worldbody>
 </mujoco>

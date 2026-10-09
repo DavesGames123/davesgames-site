@@ -48,7 +48,7 @@ export const MODELS = [
   // ── contact and stacking
   { key: 'balls-in-box', group: 'Contact and stacking', name: 'Balls in a box', blurb: 'Sixty-four spheres fall into an open box: many contacts at once.',
     source: LAB(), camera: cam(135, -35, 1.8, [0, 0, 0.15]), load: { dir: 'models/lab/', main: 'balls_box.xml' } },
-  { key: 'bounce', group: 'Contact and stacking', name: 'Bouncing balls', blurb: 'Three balls with the same contact stiffness and different contact damping: one is elastic, one is lively, one is dead.',
+  { key: 'bounce', group: 'Contact and stacking', name: 'Bouncing balls', blurb: 'Three balls with the same contact stiffness and different contact damping (solref): restitution about 1, 0.9 and 0.4.',
     source: LAB(), camera: cam(90, -5, 2.4, [0, 0, 0.5]), load: { dir: 'models/lab/', main: 'bounce.xml' } },
   { key: 'dominoes', group: 'Contact and stacking', name: 'Dominoes', blurb: 'A chain of dominoes with turns. Bodies that stop moving go to sleep and cost nothing.',
     source: MJ('sleep/dominos.xml'), camera: cam(120, -35, 3.5, [0.7, 0, 0]), load: { dir: 'models/mujoco/sleep/', main: 'dominos.xml' } },
