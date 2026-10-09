@@ -76,7 +76,8 @@ w.SN_NAV = [
     { h: "Studio Tools", p: [
       ["solar", "Solar Transit Study", "TOOL"],
       ["matlab", "PBR Material Studio", "TOOL", "material-studio"],
-      ["pascal-editor", "Pascal Editor", "TOOL"]
+      ["pascal-editor", "Pascal Editor", "TOOL"],
+      ["sci-tools", "Science Toolkit", "TOOL"]
     ] },
     { h: "Live Data", p: [
       ["flight-board", "Flight Board", "LIVE"]

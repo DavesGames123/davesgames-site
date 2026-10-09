@@ -382,6 +382,7 @@ const BLURBS = {
   'pbf-boundary': 'Position based particles with moving walls and friction.',
   'fire-simulation': 'Fire from a grid fluid: heat and smoke rise and swirl.',
   'julia-fractals': 'Julia and Mandelbrot sets, zoom and explore.',
+  'sci-tools': 'Units, constants, statistics, fits and chemistry in one offline page.',
 };
 
 // The "brightest stars" rail: the best single pages across the site.
