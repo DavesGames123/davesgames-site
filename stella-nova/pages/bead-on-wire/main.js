@@ -1,272 +1,124 @@
-/*
-Copyright 2021 Matthias Müller - Ten Minute Physics
+// ============================================================================
+//  BEAD ON A WIRE  ·  pages/bead-on-wire/main.js — the page controller
+// ----------------------------------------------------------------------------
+//  CREDIT. Ten Minute Physics #05 "bead" by Matthias Müller, MIT License
+//  (the notice is kept at the top of sim.js, which holds the upstream PBD
+//  bead and the analytic bead). The credit bar names the author on the
+//  page and on the saver plate.
+//
+//  OUR ADDITIONS (davesgames.io, not upstream): wire shapes, several
+//  beads, force arrows, this renderer, the sim kit GUI and the saver.
+//
+//  grep -n targets: "function rebuild", "function draw",
+//  "function bindPointer", "window.__bead"
+// ============================================================================
+import * as SM from './sim.js';
+import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
+import { page2d, background, lutColor } from '../../widgets/sim-kit/page2d.js';
+import { installSaver } from './saver.js';
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+TMP.page({ n: '05', title: 'Bead on a Wire', file: '05-bead.html', video: 'qISgdDhdCro', year: 2021, licence: 'MIT' });
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+const PHONE = isPhone();
+const canvas = document.getElementById('view');
+const S = SM.createSim();
+let kit, P, veil = 1, wire = null;
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-// Bead on a Wire · upstream script 1, verbatim from Ten Minute Physics
-// 05-bead.html by Matthias Müller. MIT License (notice kept above).
-// Source: https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/05-bead.html
-	// drawing -------------------------------------------------------
+function rebuild() { SM.buildScene(S, kit.state, SM.sceneRng(kit.seed)); wire = SM.wirePoints(S); veil = 1; }
+const twinsShown = () => kit.state.analytic && S.C.type === 'circle' && Math.abs(kit.state.tilt) < 1e-9;
 
-	var canvas = document.getElementById("myCanvas");
-	var c = canvas.getContext("2d");
+function beadColor(b, twin, lut, pal) {
+  const st = kit.state;
+  if (st.colorBy === 'speed' && lut && !twin) return lutColor(lut, 0.15 + 0.85 * Math.min(1, Math.hypot(b.vx, b.vy) / 8));
+  if (st.colorBy === 'force' && lut) return lutColor(lut, 0.15 + 0.85 * Math.min(1, b.force / (6 * st.g)));
+  return twin ? pal[(2 + b.c) % pal.length] : pal[b.c % pal.length];
+}
 
-	canvas.width = window.innerWidth - 20;
-	canvas.height = window.innerHeight - 100;
+function arrow(ctx, x, y, dx, dy, col, w) {
+  const L = Math.hypot(dx, dy); if (L < 2) return;
+  const ux = dx / L, uy = dy / L, hd = Math.min(12 * w, L * 0.4);
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 2 * w;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx - ux * hd, y + dy - uy * hd); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + dx, y + dy); ctx.lineTo(x + dx - ux * hd - uy * hd * 0.5, y + dy - uy * hd + ux * hd * 0.5); ctx.lineTo(x + dx - ux * hd + uy * hd * 0.5, y + dy - uy * hd - ux * hd * 0.5); ctx.fill();
+}
 
-	var simMinWidth = 2.0;
-	var cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
-	var simWidth = canvas.width / cScale;
-	var simHeight = canvas.height / cScale;
+function draw(ctx, v) {
+  const st = kit.state, t = K.themeById(st.theme), s = v.s, d = P.dpr;
+  background(ctx, t, P.w, P.h, st.grid ? v : null, 0.2);
+  const pal = K.paletteColors(st.palette), lut = st.colorBy === 'palette' ? null : P.lut(st.cmap);
+  // the wire: a soft glow, then the wire itself
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const [wd, a] of [[10, 0.08], [4, 0.2], [1.6, 0.9]]) {
+    ctx.strokeStyle = t.wall; ctx.globalAlpha = a; ctx.lineWidth = wd * d; ctx.beginPath();
+    wire.forEach((p, k) => k ? ctx.lineTo(v.X(p[0]), v.Y(p[1])) : ctx.moveTo(v.X(p[0]), v.Y(p[1]))); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  if (!S.C.closed) for (const p of [wire[0], wire[wire.length - 1]]) { ctx.fillStyle = t.wall; ctx.fillRect(v.X(p[0]) - 3 * d, v.Y(p[1]) - 8 * d, 6 * d, 16 * d); }
+  const twins = twinsShown() ? S.twins : [];
+  // trails
+  for (const [b, tw] of S.beads.map(b => [b, false]).concat(twins.map(a => [a, true]))) {
+    const N = Math.min(b.tN, S.TL); if (N < 2) continue;
+    ctx.strokeStyle = beadColor(b, tw, null, pal); ctx.lineWidth = Math.max(1, s * 0.012);
+    const seg = 16;
+    for (let a = 0; a < N - 1; a += seg) { ctx.globalAlpha = 0.7 * ((a + seg / 2) / N) ** 1.3; ctx.beginPath(); for (let k = a; k <= Math.min(N - 1, a + seg); k++) { const j = (b.tN - N + k) % S.TL; k === a ? ctx.moveTo(v.X(b.tx[j]), v.Y(b.ty[j])) : ctx.lineTo(v.X(b.tx[j]), v.Y(b.ty[j])); } ctx.stroke(); }
+  }
+  ctx.globalAlpha = 1;
+  // beads, twins, force arrows
+  const fScale = s * 0.35 / (3 * st.g);
+  for (const [b, tw] of twins.map(a => [a, true]).concat(S.beads.map(b => [b, false]))) {
+    const X = v.X(b.x), Y = v.Y(b.y), R = Math.max(3, s * 0.06 * (tw ? 0.85 : 1)), col = beadColor(b, tw, lut, pal);
+    if (st.arrows) {
+      // along the wire's push: the last PBD correction, or toward the centre for the analytic twin
+      let ux, uy;
+      if (tw) { const dx = S.C.cx - b.x, dy = S.C.cy - b.y, L = Math.hypot(dx, dy) || 1; ux = dx / L * Math.sign(b.force || 1); uy = dy / L * Math.sign(b.force || 1); }
+      else { ux = b.nx || 0; uy = b.ny || 0; }
+      const f = Math.min(Math.abs(b.force) * fScale, s * 0.6);
+      if (!tw || S.beads.length === 1) arrow(ctx, X, Y, ux * f, -uy * f, col, d * (tw ? 0.7 : 1));
+    }
+    if (st.glow) { const g = ctx.createRadialGradient(X, Y, 0, X, Y, R * 3); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.3; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, R * 3, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+    const g = ctx.createRadialGradient(X - R * 0.35, Y - R * 0.4, R * 0.1, X, Y, R);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.3, col); g.addColorStop(1, col);
+    ctx.globalAlpha = tw ? 0.8 : 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    if (tw) { ctx.strokeStyle = col; ctx.lineWidth = 1.5 * d; ctx.beginPath(); ctx.arc(X, Y, R * 1.35, 0, 7); ctx.stroke(); }
+  }
+  // the upstream readout: constraint force of the PBD bead and the analytic one
+  if (!kit.saver && S.beads.length) {
+    ctx.font = `${12 * d}px Inter, system-ui, sans-serif`; ctx.textBaseline = 'middle'; ctx.fillStyle = t.ink; ctx.globalAlpha = 0.85;
+    const x0 = v.rect.x + 8 * d, y0 = v.rect.y + 14 * d;
+    ctx.fillText(`PBD force ${S.beads[0].force.toFixed(2)} N`, x0, y0);
+    if (twins.length) ctx.fillText(`Analytic force ${twins[0].force.toFixed(2)} N`, x0, y0 + 18 * d);
+    ctx.globalAlpha = 1;
+  }
+  if (veil > 0) { ctx.fillStyle = t.bg; ctx.globalAlpha = veil; ctx.fillRect(0, 0, P.w, P.h); ctx.globalAlpha = 1; }
+}
 
-	function cX(pos) {
-		return pos.x * cScale;
-	}
+function bindPointer() {
+  canvas.addEventListener('pointerdown', e => {
+    if (!P.view || kit.saver) return;
+    const [x, y] = P.toWorld(e), g = SM.pick(S, x, y);
+    if (!g) return;
+    canvas.setPointerCapture(e.pointerId); S.grab = g;
+  });
+  canvas.addEventListener('pointermove', e => { if (!S.grab) return; const [x, y] = P.toWorld(e); S.grab.x = x; S.grab.y = y; });
+  const up = () => { S.grab = null; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+}
 
-	function cY(pos) {
-		return canvas.height - pos.y * cScale;
-	}
+kit = mount({
+  schema: SM.makeSchema(PHONE), title: 'Bead on a Wire', sub: 'Position based dynamics against the analytic solution', panelTitle: 'Scene', guard: SM.guard,
+  footer: 'Upstream demo: Ten Minute Physics #05 by Matthias Müller (MIT). Wire shapes, several beads, look and GUI: davesgames.io.',
+  actions: {},
+});
+kit.on('change', (out, st, why) => {
+  if (why === 'scene' || why === 'group' || why === 'saver') return;
+  if (Object.keys(out).some(k => SM.REBUILD.has(k))) rebuild(); else SM.applyParams(S, kit.state);
+});
+kit.on('scene', (seed, st, out, group) => { if (!group || Object.keys(out || {}).some(k => SM.REBUILD.has(k))) rebuild(); else SM.applyParams(S, kit.state); });
+kit.on('reset', rebuild);
+P = page2d({ canvas, kit, world: () => ({ w: SM.W, h: SM.H }), step: h => SM.step(S, h), draw: (ctx, v, dt) => { veil = Math.max(0, veil - dt / 0.45); draw(ctx, v); } });
+if (!kit.fromHash) kit.newScene(); else rebuild();
+bindPointer();
+addEventListener('pagehide', () => { kit.playing = false; });
 
-	// vector math -------------------------------------------------------
-
-	class Vector2 {
-		constructor(x = 0.0, y = 0.0) {
-			this.x = x; 
-			this.y = y;
-		}
-
-		set(v) {
-			this.x = v.x; this.y = v.y;
-		}
-
-		clone() {
-			return new Vector2(this.x, this.y);
-		}
-
-		add(v, s = 1.0) {
-			this.x += v.x * s;
-			this.y += v.y * s;
-			return this;
-		}
-
-		addVectors(a, b) {
-			this.x = a.x + b.x;
-			this.y = a.y + b.y;
-			return this;
-		}
-
-		subtract(v, s = 1.0) {
-			this.x -= v.x * s;
-			this.y -= v.y * s;
-			return this;
-		}
-
-		subtractVectors(a, b) {
-			this.x = a.x - b.x;
-			this.y = a.y - b.y;
-			return this;			
-		}
-
-		length() {
-			return Math.sqrt(this.x * this.x + this.y * this.y);
-		}
-
-		scale(s) {
-			this.x *= s;
-			this.y *= s;
-			return this;
-		}
-
-		dot(v) {
-			return this.x * v.x + this.y * v.y;
-		}
-
-		perp() {
-			return new Vector2(-this.y, this.x);
-		}
-	}
-
-	// scene -------------------------------------------------------
-
-    var physicsScene = 
-	{
-		gravity : new Vector2(0.0, -10.0),
-		dt : 1.0 / 60.0,
-		numSteps : 1000,
-		paused : false,        
-		wireCenter : new Vector2(),
-		wireRadius : 0.0,
-		bead : null,
-        analyticBead : null
-	};
-
-   // -------------------------------------------------------
- 
-	class Bead {
-		constructor(radius, mass, pos) {
-			this.radius = radius;
-			this.mass = mass;
-			this.pos = pos.clone();
-			this.prevPos = pos.clone();
-			this.vel = new Vector2();
-		}
-		startStep(dt, gravity) {
-			this.vel.add(gravity, dt);
-			this.prevPos.set(this.pos);
-			this.pos.add(this.vel, dt);
-		}
-		keepOnWire(center, radius) {
-			var dir = new Vector2();
-			dir.subtractVectors(this.pos, center);
-			var len = dir.length();
-			if (len == 0.0)
-				return;
-			dir.scale(1.0 / len);
-			var lambda = physicsScene.wireRadius - len;
-			this.pos.add(dir, lambda);
-			return lambda;
-		}
-		endStep(dt) {
-			this.vel.subtractVectors(this.pos, this.prevPos);
-			this.vel.scale(1.0 / dt);
-		}
-	}
-
-// -------------------------------------------------------
-
-class AnalyticBead {
-		constructor(radius, beadRadius, mass, angle) {
-			this.radius = radius;
-			this.beadRadius = beadRadius;
-			this.mass = mass;
-			this.angle = angle;
-			this.omega = 0.0;
-		}
-		simulate(dt, gravity) {
-			var acc = -gravity / this.radius * Math.sin(this.angle);
-			this.omega += acc * dt;
-			this.angle += this.omega * dt;
-
-			var centrifugalForce = this.omega * this.omega * this.radius;
-			var force = centrifugalForce + Math.cos(this.angle) * Math.abs(gravity);
-			return force;
-		}
-		getPos() {
-			return new Vector2(
-				Math.sin(this.angle) * this.radius,
-				-Math.cos(this.angle) * this.radius); 
-		}
-	}    
-
-	// -----------------------------------------------------
-
-	function setupScene() 
-	{
-		physicsScene.paused = true;
-
-		physicsScene.wireCenter.x = simWidth / 2.0;
-		physicsScene.wireCenter.y = simHeight / 2.0;
-		physicsScene.wireRadius = simMinWidth * 0.4;
-
-		var pos = new Vector2(
-			physicsScene.wireCenter.x + physicsScene.wireRadius, 
-			physicsScene.wireCenter.y);
-
-        physicsScene.bead = new Bead(0.1, 1.0, pos);
-
-		physicsScene.analyticBead = new AnalyticBead(
-			physicsScene.wireRadius, 0.1, 1.0, 0.5 * Math.PI);
-
-        document.getElementById("force").innerHTML = 0.0.toFixed(3);		
-        document.getElementById("aforce").innerHTML = 0.0.toFixed(3);		
-
-	}
-
-	// draw -------------------------------------------------------
-
-	function drawCircle(pos, radius, filled)
-	{
-		c.beginPath();			
-		c.arc(
-			cX(pos), cY(pos), cScale * radius, 0.0, 2.0 * Math.PI); 
-		c.closePath();
-		if (filled)
-			c.fill();
-		else 
-			c.stroke();
-	}
-
-	function draw() 
-	{
-		c.clearRect(0, 0, canvas.width, canvas.height);
-
-		c.fillStyle = "#FF0000";
-		c.lineWidth = 2.0;
-		drawCircle(physicsScene.wireCenter, physicsScene.wireRadius, false);
-
-		c.fillStyle = "#FF0000";
-
-		var bead = physicsScene.bead;
-		drawCircle(bead.pos, bead.radius, true);
-
-        c.fillStyle = "#00FF00";
-
-        var analyticBead = physicsScene.analyticBead;
-        var pos = analyticBead.getPos();
-        pos.add(physicsScene.wireCenter);
-        drawCircle(pos, analyticBead.beadRadius, true)        
-	}
-
-	// ------------------------------------------------
-
-	function simulate() 
-	{
-		if (physicsScene.paused)
-			return;
-
-		var sdt = physicsScene.dt / physicsScene.numSteps;
-        var force, analyticForce;
-
-		for (var step = 0; step < physicsScene.numSteps; step++) {
-
-            physicsScene.bead.startStep(sdt, physicsScene.gravity);
-
-			var lambda = physicsScene.bead.keepOnWire(
-					physicsScene.wireCenter, physicsScene.wireRadius);
-            
-            force = Math.abs(lambda / sdt / sdt);                    
-
-			physicsScene.bead.endStep(sdt);
-
-            analyticForce = physicsScene.analyticBead.simulate(sdt, -physicsScene.gravity.y);
-		}
-
-		document.getElementById("force").innerHTML = force.toFixed(3);		
-		document.getElementById("aforce").innerHTML = analyticForce.toFixed(3);	        
-	}
-
-	// --------------------------------------------------------
-
-	function run() {
-		physicsScene.paused = false;
-	}
-
-	function step() {
-		physicsScene.paused = false;
-		simulate();
-		physicsScene.paused = true;
-	}
-
-	function update() {
-		simulate();
-		draw();
-		requestAnimationFrame(update);
-	}
-	
-	setupScene();
-	update();
-	
+window.__bead = { S, get kit() { return kit; }, canvas, rebuild, P };
+installSaver(window.__bead);
