@@ -1,0 +1,56 @@
+/* ============================================================================
+   STELLA NOVA  ·  lib/forge-ui.css — the Forge palette and the squircle plate
+   ----------------------------------------------------------------------------
+   Shared by the modelling pages: sdf-lab (SDF Forge) and biome-parts.
+   The palette is the one sdf-lab used in its own :root. It follows the Theme
+   of Forge, the modeller in Warp (warp_core/src/panels/forge/src/ui/mod.rs):
+   panels darker than the viewport, wells darker than the panel, one blue
+   accent for every active state.
+
+   THE SQUIRCLE. Forge cuts every corner as a quarter of the superellipse
+   |x|^4 + |y|^4 = r^4 (shaders/gui.wgsl, SQUIRCLE_N = 4). A plain arc has a
+   step in curvature where it meets the straight edge; the superellipse does
+   not. Here the plate is the ::before layer of a .sq element, so the shape
+   does not clip the content, and filter: drop-shadow follows its alpha.
+     1. corner-shape: squircle where the browser has it (the same curve);
+     2. else -webkit-mask-box-image: a 9-slice of SQ_MASK (Safari, Chrome);
+     3. else a plain border-radius.
+   SQ_MASK is squirclePath() in forge-ui.js (100 box, r = 40, n = 4);
+   biome-parts/tests.mjs checks that the two agree.
+
+   MOTION. --ease-out is an exponential approach, the curve Forge's
+   OPEN_SPEED spring draws. Reduced motion sets every duration to 0.
+
+   GREP MAP
+     :root ........... palette, fonts, radii, motion
+     .sq ............. the squircle plate (layers 1, 2, 3)
+     reduced motion .. durations to 0
+   ========================================================================== */
+:root{
+  --bg:#19191c; --panel:#111113; --head:#151517; --line:#26262c; --line2:#303037;
+  --well:#08080a; --btn:#1d1d21; --btn-h:#25252b; --txt:#e2e3e9; --dim:#9496a1; --faint:#5c5e68;
+  --acc:#6b9fe2; --acc-h:#7caaea; --acc-ink:#0c1626; --accTxt:#e8f0ff;
+  --x:#e2474e; --y:#63c24c; --z:#4f86e8;
+  --edit:#ff7a1a; --close:#b42828; --close-h:#dc3232;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --sq-r:14px; --sq-fill:rgba(12,12,15,0.94);
+  --ease-out:cubic-bezier(0.16,1,0.3,1); --ease-in:cubic-bezier(0.5,0,0.75,0);
+  --t-open:360ms; --t-close:220ms; --t-hover:120ms;
+}
+
+/* .sq: the plate. Set --sq-r and --sq-fill on the element. */
+.sq{position:relative;isolation:isolate}
+.sq::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:var(--sq-fill);border-radius:var(--sq-r)}
+@supports (-webkit-mask-box-image:none) and (not (corner-shape:squircle)){
+  .sq::before{border-radius:0;
+    -webkit-mask-box-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 60L99.8 75.8L99 82.2L97.8 87L96 90.7L93.6 93.6L90.7 96L87 97.8L82.2 99L75.8 99.8L60 100L40 100L24.2 99.8L17.8 99L13 97.8L9.3 96L6.4 93.6L4 90.7L2.2 87L1 82.2L0.2 75.8L0 60L0 40L0.2 24.2L1 17.8L2.2 13L4 9.3L6.4 6.4L9.3 4L13 2.2L17.8 1L24.2 0.2L40 0L60 0L75.8 0.2L82.2 1L87 2.2L90.7 4L93.6 6.4L96 9.3L97.8 13L99 17.8L99.8 24.2L100 40Z'/%3E%3C/svg%3E") 40 / var(--sq-r) stretch}
+}
+@supports (corner-shape:squircle){
+  .sq::before{corner-shape:squircle}
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion:reduce){
+  :root{--t-open:0ms;--t-close:0ms;--t-hover:0ms}
+}
