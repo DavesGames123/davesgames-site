@@ -17,6 +17,12 @@
 //  worker can keep it). If it does not load, the TeX text stays in the box
 //  with the class "raw".
 //
+//  typeset() runs one MathJax call at a time (a promise queue). MathJax
+//  loads an extension such as mhchem (\ce) on its first use (autoload).
+//  When two calls parse \ce at the same time during that load, MathJax
+//  3.2.2 gives each of them an undefined-macro error, and all the boxes
+//  stayed raw. The queue lets the first call finish the load.
+//
 //  EXPORTS   (jump with grep -n "<anchor>" sci-math.js)
 //      loadMath ....... "export function loadMath"   load MathJax once
 //      colorize ....... "export function colorize"   TeX + rules -> TeX
@@ -110,6 +116,15 @@ export function colorize(tex, rules) {
   return out;
 }
 
+// One MathJax call at a time: a call starts when the one before it ends,
+// pass or fail. See the header for the autoload race this stops.
+let queue = Promise.resolve();
+function serial(fn) {
+  const run = queue.then(fn);
+  queue = run.catch(() => {});
+  return run;
+}
+
 // Typeset tex into el. Options: display (default true), rules (for
 // colorize). Returns true when MathJax made the SVG.
 export async function typeset(el, tex, { display = true, rules = null } = {}) {
@@ -119,8 +134,8 @@ export async function typeset(el, tex, { display = true, rules = null } = {}) {
   if (el.dataset.tex !== tex) return false;   // a newer call replaced it
   if (!MJ) { el.textContent = tex; el.classList.add('raw'); return false; }
   try {
-    const node = await MJ.tex2svgPromise(colorize(tex, rules), { display });
-    if (el.dataset.tex !== tex) return false;
+    const node = await serial(() => el.dataset.tex === tex ? MJ.tex2svgPromise(colorize(tex, rules), { display }) : null);
+    if (!node || el.dataset.tex !== tex) return false;
     // A parse error gives merror. An undefined macro (noundefined) does not:
     // MathJax draws its name as red text, so check for red fill too.
     if (node.querySelector('[data-mjx-error], merror, [data-mml-node="merror"], [fill="red"]')) throw new Error('TeX error');
