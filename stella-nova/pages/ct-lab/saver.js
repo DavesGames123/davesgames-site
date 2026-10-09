@@ -46,12 +46,18 @@ async function make3D(opts) {
   cv.hidden = false;
   let view;
   try { view = createView3D(cv, device, { ...opts, interactive: false, dpr: Math.min(2, devicePixelRatio || 1) }); } catch (e) { device.destroy(); throw e; }
+  const r = run; r.live3d = (r.live3d || 0) + 1;
+  let done = false;
   return {
     view,
     release() {
+      if (done) return;
+      done = true;
       try { view.destroy(); } catch (e) { /* gone */ }
       try { device.destroy(); } catch (e) { /* gone */ }
-      if (run && run.cv3) run.cv3.hidden = true;
+      r.live3d--;
+      // a late release of a cut shot must not hide the canvas of the next 3D shot
+      if (r.cv3 && r.live3d <= 0) r.cv3.hidden = true;
     },
   };
 }
@@ -177,5 +183,14 @@ window.snSaver = {
     }
   },
 };
+// pagehide: the shell may drop this frame during a 3D shot. Release that
+// shot's GPUDevice here. Do not reload a lab preset in a page that goes away.
+window.addEventListener('pagehide', () => {
+  if (!run) return;
+  const r = run;
+  cancelAnimationFrame(r.raf);
+  endShot();
+  run = null;
+});
 window.snSaver.debug = () => (run ? { kind: run.shot && run.shot.kind, t: run.shot && run.shot.t, dur: run.shot && run.shot.dur, ready: !!(run.shot && run.shot.ready), history: run.history.slice() } : null);
 window.snSaver.cut = (kind) => { if (!run) return; endShot(); startShot(kind); };

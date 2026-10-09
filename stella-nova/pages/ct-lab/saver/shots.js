@@ -802,7 +802,10 @@ function shot3D(spec, env, kind) {
   s.cam3 = { yaw: 0.6 + R() * 1.2, pitch: 0.28, dist: 10.5, yawV: (R() < 0.5 ? -1 : 1) * 0.22 };
   s.springs = null;
   s.init = async function () {
-    this.h3 = await env.make3D({ phantom: name, n, nAngles: nA, mode: kind === 'cone-scan' ? 'dvr' : look, steps: env.phone ? 128 : 256 });
+    const h3 = await env.make3D({ phantom: name, n, nAngles: nA, mode: kind === 'cone-scan' ? 'dvr' : look, steps: env.phone ? 128 : 256 });
+    // a cut can end this shot while make3D waits for the adapter: release the late device at once
+    if (this.gone) { h3.release(); return; }
+    this.h3 = h3;
     const v = this.h3.view;
     v.setColormap(cmap);
     if (kind === 'cone-volume') v.setShow({ gantry: false, rays: false, table: false, detector: false, volume: 'phantom' });
@@ -875,7 +878,7 @@ function shot3D(spec, env, kind) {
       lines: [`${P} phantom · ${n}³ voxels · Feldkamp, Davis and Kress`, CREDIT],
     };
   };
-  s.dispose = function () { try { this.h3 && this.h3.release(); } catch (e) { /* gone */ } this.h3 = null; };
+  s.dispose = function () { this.gone = true; try { this.h3 && this.h3.release(); } catch (e) { /* gone */ } this.h3 = null; };
   return s;
 }
 function stepSpringObj(sp, dt) {

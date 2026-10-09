@@ -161,6 +161,22 @@ for (const phone of [false, true]) {
   }
 }
 
+// ---------- a cut during make3D releases the late device ----------
+{
+  let resolve3D; let late = null;
+  const env = {
+    phone: false, now: () => performance.now(), lab: labStub(),
+    makeCanvas: (w, h) => new Canvas(w, h),
+    make3D: () => new Promise((res) => { resolve3D = () => { late = view3dStub(); late.view._init(144); res({ view: late.view, release() { late.released = true; } }); }; }),
+  };
+  const spec = makePlan(11, { lab: true, gpu: true, only: ['cone-scan'] }).next();
+  const shot = makeShot(spec, env);
+  const p = shot.init();
+  shot.dispose();
+  resolve3D(); await p;
+  ok(late && late.released && !shot.h3, 'a 3D shot cut before make3D resolves releases the late device');
+}
+
 // ---------- the hook on a stub DOM ----------
 {
   const els = [];
@@ -176,6 +192,8 @@ for (const phone of [false, true]) {
     document: { createElement: mkEl, head: { appendChild: (e) => els.push(e) }, body: { appendChild: (e) => els.push(e) } },
     requestAnimationFrame: (f) => { rafQ.push(f); return rafQ.length; }, cancelAnimationFrame: () => { rafQ = []; },
   });
+  const winL = {};
+  globalThis.addEventListener = (t, f) => { (winL[t] ||= []).push(f); };
   const lab = labStub(); globalThis.__ctlab = lab;
   await import('../saver.js');
   const labels = [];
@@ -199,6 +217,11 @@ for (const phone of [false, true]) {
   window.snSaver.exit();
   ok(window.snSaver.debug() === null && !els.some((e) => e.tagName === 'CANVAS'), 'exit removes the canvases');
   ok(lab.calls.includes('chrome:true') && lab.calls.filter((c) => c.startsWith('load:')).length >= 1, 'exit gives the lab its chrome back and reloads a preset');
+  window.snSaver.enter({ seed: 9 });
+  for (let i = 0; i < 4; i++) { const q = rafQ; rafQ = []; tNow += 33; for (const f of q) f(tNow); await new Promise((r) => setImmediate(r)); }
+  const loads0 = lab.calls.filter((c) => c.startsWith('load:')).length;
+  (winL.pagehide || []).forEach((f) => f());
+  ok(window.snSaver.debug() === null && rafQ.length === 0 && lab.calls.filter((c) => c.startsWith('load:')).length === loads0, 'pagehide ends the reel and does not reload a lab preset');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
