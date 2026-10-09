@@ -66,9 +66,10 @@ const slots = new Map();      // id -> GPU slot (renderer.upload)
 let lastInput = -1e9;
 
 const ov = {
-  terrain: { on: false, exag: 2, contour: true, amt: 0 },
+  // terrain and wind are on at load (the user asked for both by default)
+  terrain: { on: true, exag: 2, contour: true, amt: 0 },
   ocean: { on: false, amt: 0 },
-  wind: { on: false, amt: 0, live: false, dirFrom: 270, speed: 5, slice: 12, seaBreeze: false, heat: true, liveInfo: null },
+  wind: { on: true, amt: 0, live: false, dirFrom: 270, speed: 5, slice: 12, seaBreeze: false, heat: true, liveInfo: null },
   view: { light: 'golden', colour: 0, orbit: true },
 };
 const cam = { target: [0, 0, 0], yaw: 3.6, pitch: 0.5, dist: 4500 };
