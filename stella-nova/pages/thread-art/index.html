@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Thread Art // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   THREAD ART  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the image, starts the greedy thread
+   step (WebGPU compute in thread.wgsl, or the CPU in engine.js), binds the
+   controls by id and draws the threads on #view (a 2D canvas).
+   After the idea of image-stylization-threading by Jeremie Piellard
+   (GPL-3.0); our own code: see CREDITS.md.
+
+   HEAD LOAD ORDER  (order matters)
+     1. lib/gpu-guard.js  first, so the shell can release the GPU device
+     2. lib/wishlist.js, lib/stats-beacon.js
+     3. style.css, lib/sci.css
+     4. main.js           type=module, at the end of body
+
+   LAYOUT  (# marks an element id)
+     #view       the 2D canvas, full frame: the thread piece, and the error
+                 image beside it when Error is on
+     topbar      hidden in the site shell iframe (.in-frame)
+     #panel      desktop: a left panel; phone portrait: a bottom sheet above
+                 #dock; phone landscape: a right drawer
+     #dock       phone only: controls, play, restart, finish, error
+     #drop       the drop target that shows while a file is dragged in
+     #hud        one line of live values at the top of the clear area
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<canvas id="view" aria-label="Thread art view"></canvas>
+
+<div class="topbar">
+  <span class="brand">Stella Nova</span><span class="pagetitle">Thread Art · string art by a greedy GPU search</span>
+</div>
+
+<button id="gear" type="button" aria-label="Show controls">☰</button>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Hide controls">✕</button>
+  <header class="ph">
+    <h1>Thread Art</h1>
+    <p class="sub">One thread, wound peg to peg around a frame, draws the image. At each peg the GPU scores every line to every other peg and lays the one that lowers the error most.</p>
+  </header>
+
+  <section class="sec">
+    <div class="sec-label">Image</div>
+    <div class="src-grid" id="sources"></div>
+    <div class="chips">
+      <label class="chip file" for="file">Your image…<input type="file" id="file" accept="image/*"></label>
+      <button type="button" class="chip" id="cam">Camera snapshot</button>
+    </div>
+    <p class="hint" id="credit"></p>
+    <p class="hint" id="srcNote">You can also drop or paste an image here. It stays in your browser. The camera takes one frame and stops.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Frame <span class="now" id="frameNow"></span></div>
+    <div class="modes three" id="shapes">
+      <button type="button" data-shape="circle">Circle</button>
+      <button type="button" data-shape="square">Square</button>
+      <button type="button" data-shape="hexagon">Hexagon</button>
+    </div>
+    <div class="row"><label for="pegs">pegs</label><input type="range" id="pegs" min="60" max="400" step="4" value="240"><span class="val" id="pegsv"></span></div>
+    <div class="row"><label for="maxLines">line limit</label><input type="range" id="maxLines" min="200" max="15000" step="100" value="4000"><span class="val" id="maxLinesv"></span></div>
+    <div class="sub-label">Detail (model grid)</div>
+    <div class="modes three" id="resSeg">
+      <button type="button" data-res="256">256</button>
+      <button type="button" data-res="384">384</button>
+      <button type="button" data-res="512">512</button>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Thread <span class="now" id="modeNow"></span></div>
+    <div class="modes two" id="modes">
+      <button type="button" data-mode="mono">Mono</button>
+      <button type="button" data-mode="colour">Colour</button>
+    </div>
+    <div id="palRow">
+      <div class="sub-label">Thread colours</div>
+      <div class="modes three" id="palettes">
+        <button type="button" data-pal="cmyk">CMY + K</button>
+        <button type="button" data-pal="image">From image</button>
+        <button type="button" data-pal="rgbw">RGB + W</button>
+      </div>
+    </div>
+    <div class="swatches" id="swatches"></div>
+    <div class="sub-label">Board</div>
+    <div class="modes two" id="pages">
+      <button type="button" data-page="light">White board</button>
+      <button type="button" data-page="dark">Black board</button>
+    </div>
+    <div class="row"><label for="alpha">opacity</label><input type="range" id="alpha" min="0.03" max="0.5" step="0.01" value="0.1"><span class="val" id="alphav"></span></div>
+    <div class="row"><label for="width">width</label><input type="range" id="width" min="0.4" max="3" step="0.1" value="1"><span class="val" id="widthv"></span></div>
+    <div class="row"><label for="contrast">contrast</label><input type="range" id="contrast" min="0.5" max="2" step="0.05" value="1"><span class="val" id="contrastv"></span></div>
+    <div class="row"><label for="seed">seed</label><input type="number" id="seed" min="0" max="999999" step="1" value="1"><button type="button" class="chip" id="reseed" aria-label="New seed">New</button></div>
+    <p class="hint">Opacity sets how much one line darkens (or, on a black board, lights) the pixels under it. Width changes the drawing only: 1 is one model pixel. The seed picks the start peg of each thread.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Lay the thread <span class="now" id="engineNow"></span></div>
+    <div class="row"><label for="speed">speed</label><input type="range" id="speed" min="0" max="1" step="0.001" value="0.62"><span class="val" id="speedv"></span></div>
+    <div class="chips">
+      <button type="button" class="chip" id="play" aria-pressed="false">Pause</button>
+      <button type="button" class="chip" id="restart">Restart</button>
+      <button type="button" class="chip" id="finish">Finish now</button>
+    </div>
+    <div class="chips">
+      <button type="button" class="chip" id="errBtn" aria-pressed="false">Error image</button>
+      <button type="button" class="chip" id="pegBtn" aria-pressed="false">Peg numbers</button>
+      <button type="button" class="chip" id="fit">Fit</button>
+    </div>
+    <p class="hint">The error image shows what each pixel still lacks: the part of the image no thread has drawn yet. Red marks pixels with more thread than the image has. Wheel or pinch to zoom, drag to move.</p>
+  </section>
+
+  <section class="sec">
+    <div class="sec-label">Export</div>
+    <div class="chips">
+      <button type="button" class="chip" id="expPng">PNG</button>
+      <button type="button" class="chip" id="expSvg">SVG</button>
+      <button type="button" class="chip" id="expJson">Pegs JSON</button>
+      <button type="button" class="chip" id="expTxt">Pegs text</button>
+    </div>
+    <p class="hint" id="expNote">PNG: 2048 px. SVG: one line element per thread line. JSON and text: the peg sequence of each thread, to wind a real piece. Peg 0 is at the top; numbers go clockwise.</p>
+  </section>
+
+  <section class="sec about">
+    <div class="sec-label">About</div>
+    <p>After the idea of <a href="https://github.com/piellardj/image-stylization-threading" target="_blank" rel="noopener">image-stylization-threading</a> by Jérémie Piellard (<a href="https://piellardj.github.io/image-stylization-threading/" target="_blank" rel="noopener">live demo</a>), a string-art method that Petros Vrellis made known. This page is our own code: an optical-density model, an exact squared-error greedy step and WGSL compute kernels. Images: public-domain paintings, a NASA photo and shapes of this page. See <a href="CREDITS.md" target="_blank">CREDITS.md</a>.</p>
+  </section>
+</aside>
+
+<div id="hud" aria-live="off"><span id="hudL"></span><span id="hudR"></span></div>
+<div id="drop" hidden><span>Drop an image to thread it</span></div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button type="button" id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg" id="dockTools">
+    <button type="button" data-tool="play">Pause</button>
+    <button type="button" data-tool="restart">Restart</button>
+    <button type="button" data-tool="finish">Finish</button>
+    <button type="button" data-tool="err">Error</button>
+  </div>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
