@@ -43,3 +43,18 @@ All four cells (pyramidal, Purkinje, motor neuron, granule) are procedural:
 engine/morph.js grows them from a seed after the plan of each cell type.
 They are not reconstructions. No NeuroMorpho.org or ModelDB file is used,
 so no per-cell licence applies. The pages label them "procedural".
+
+## Ih (HCN) channel
+
+engine/cell.js has an optional Ih current. Its rate equations and ehcn
+= -45 mV are those of Ih.mod from Hay E, Hill S, Schurmann F, Markram H,
+Segev I (2011). Models of neocortical layer 5b pyramidal cells capturing a
+wide range of dendritic and perisomatic active properties. PLoS Comput Biol
+7, e1002107. https://doi.org/10.1371/journal.pcbi.1002107 (ModelDB 139653),
+after Kole MHP, Hallermann S, Stuart GJ (2006), J Neurosci 26, 1677-1687.
+Only the equations are used; no ModelDB file is shipped.
+
+## Randomize
+
+The random ranges (engine/random.js) are our own choices inside the usual
+bounds of HH-type models.

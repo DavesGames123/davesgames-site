@@ -19,6 +19,8 @@
 //    "function drawTraces"  probe traces, phase plane, gates
 //    "function layout"      desktop columns or phone sheet; clear area
 //    "function frame"       the loop
+//    "function applyRandom" the Randomize panel: seeds -> cell, channels, stimuli
+//    "function writeHash"   the lab state in the URL hash (engine/hashstate.js)
 //    "installSaver"         the screensaver (saver.js)
 // ============================================================================
 import * as THREE from 'three';
@@ -29,6 +31,9 @@ import { createStage } from './shared/stage.js';
 import { buildNeuronMesh } from './shared/neuron-mesh.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { installSaver } from './saver.js';
+import { sample as randSample, defaults as randDefaults, typeFor, morphFactors, densFrom, stimPlan, CATS } from './engine/random.js';
+import { encodeHash, decodeHash } from './engine/hashstate.js';
+import { createRandPanel } from './randpanel.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -39,9 +44,19 @@ const DLAMBDA = 0.03; // finer than the usual 0.1, so the colour runs smoothly
 const P = {
   type: 'pyramidal', seed: 1, gna: 0.12, gk: 0.036, dfrac: 0.3, gl: 0.0003, ttx: false, tea: false,
   celsius: 6.3, Ra: 35.4, diam: 1, speed: 8, paused: false, tool: 'iclamp', amp: 1, dur: 2,
-  wsyn: 0.02, nsyn: 3, auto: true, hold: false, orbit: true,
+  wsyn: 0.02, nsyn: 3, auto: true, hold: false, orbit: true, el: HH.el, cm: 1, gih: 0,
 };
-try { const h = location.hash.slice(1); if (CELLS.some(c => c.id === h)) P.type = h; } catch (e) { /* file: */ }
+// the Randomize state: a master seed, one seed per category (0 = defaults), locks, range edits
+const RS = { seed: 0, seeds: { morph: 0, bio: 0, stim: 0, wire: 0 }, lock: [], ranges: {} };
+let HASH0 = {};
+try { HASH0 = decodeHash(location.hash); } catch (e) { /* file: */ }
+if (HASH0.type) P.type = HASH0.type;
+if (HASH0.cs) P.seed = HASH0.cs;
+if (HASH0.seed) RS.seed = HASH0.seed;
+if (HASH0.seeds) Object.assign(RS.seeds, HASH0.seeds);
+if (HASH0.lock) RS.lock = HASH0.lock;
+if (HASH0.ranges) RS.ranges = HASH0.ranges;
+const randValues = cat => RS.seeds[cat] ? randSample(cat, RS.seeds[cat], RS.ranges[cat]) : randDefaults(cat);
 
 const stage = createStage({ canvas: $('view'), coarse: COARSE, onNoGL: () => { $('nogl').hidden = false; } });
 const L = {
@@ -51,19 +66,16 @@ const L = {
 if (stage) stage.scene.add(L.group);
 
 // ── cell ────────────────────────────────────────────────────────────────
-function densFor(s) {
-  const k = s.kind;
-  let f = k === 'soma' || k === 'axon' ? 1 : k === 'ais' ? 2 : P.dfrac;
-  return { gnabar: P.ttx ? 0 : P.gna * f, gkbar: P.tea ? 0 : P.gk * Math.min(1, f), gl: P.gl, el: HH.el };
-}
+const bioP = () => ({ gna: P.gna, gk: P.gk, dfrac: P.dfrac, gl: P.gl, el: P.el, Ra: P.Ra, cm: P.cm, celsius: P.celsius, gih: P.gih });
+function densFor(s) { return densFrom(bioP(), { ttx: P.ttx, tea: P.tea })(s); }
 function nodeAt(cell, si, x) { const s = cell.sections[si]; return s.first + Math.min(s.nseg - 1, Math.floor(x * s.nseg)); }
 
 function loadCell(o = {}) {
   const keep = o.keep !== false && L.cell;
   const old = keep ? { markers: L.markers.map(m => ({ kind: m.kind, sec: m.sec, x: m.x })), probes: L.probes.map(p => ({ sec: p.sec, x: p.x })) } : null;
-  const S = o.sections || makeCell(P.type, P.seed);
+  const S = o.sections || makeCell(P.type, P.seed, RS.seeds.morph ? morphFactors(randValues('morph')) : null);
   clearMarkers(true); // with the old cell, before it goes
-  const cell = new Cell(S, { Ra: P.Ra, celsius: P.celsius, diamScale: P.diam, dlambda: DLAMBDA, dens: densFor });
+  const cell = new Cell(S, { Ra: P.Ra, cm: P.cm, celsius: P.celsius, diamScale: P.diam, dlambda: DLAMBDA, dens: densFor });
   cell.useTable(true);
   L.cell = cell; L.B = bounds(S);
   if (stage) {
@@ -105,7 +117,8 @@ function farNode(test, q = 1) {
 
 function applyDensities() {
   const c = L.cell; if (!c) return;
-  for (let i = 0; i < c.n; i++) { const D = densFor(c.sections[c.sec[i]]); c.gnabar[i] = D.gnabar; c.gkbar[i] = D.gkbar; c.gl[i] = D.gl; }
+  for (let i = 0; i < c.n; i++) { const D = densFor(c.sections[c.sec[i]]); c.gnabar[i] = D.gnabar; c.gkbar[i] = D.gkbar; c.gl[i] = D.gl; c.el[i] = D.el; c.gih[i] = D.gih; }
+  c.ihCheck();
 }
 
 // ── markers ─────────────────────────────────────────────────────────────
@@ -173,14 +186,20 @@ function relabel() {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 // ── stimuli ─────────────────────────────────────────────────────────────
+// A marker from the Randomize panel carries its own plan (m.rand); the others use the sliders.
 function fire(list = L.markers) {
   const c = L.cell, t0 = c.t + 0.2;
+  let end = 0;
   for (const m of list) {
-    if (m.kind === 'iclamp') { m.pp.del = t0; m.pp.dur = P.hold ? 1e9 : P.dur; m.pp.amp = P.amp; }
-    else if (m.kind === 'syn') { m.nc.weight = P.wsyn; m.ns.number = P.nsyn; m.ns.interval = 6; m.ns.burst(c, t0); }
+    const r = m.rand;
+    if (m.kind === 'iclamp') { m.pp.del = t0 + (r ? r.del : 0); m.pp.dur = P.hold ? 1e9 : r ? r.dur : P.dur; m.pp.amp = r ? r.amp : P.amp; end = Math.max(end, (r ? r.del + r.dur : P.dur)); }
+    else if (m.kind === 'syn') {
+      m.nc.weight = r ? r.weight : P.wsyn; m.ns.number = r ? r.number : P.nsyn; m.ns.interval = r ? r.interval : 6; m.ns.noise = r ? r.noise : 0;
+      m.ns.burst(c, t0 + (r ? r.start : 0)); end = Math.max(end, (r ? r.start : 0) + m.ns.number * m.ns.interval);
+    }
     m.flash = 1;
   }
-  L.lastAuto = c.t;
+  L.lastAuto = c.t; L.autoMs = Math.max(AUTO_MS, end + 20);
 }
 function holdOff() { for (const m of L.markers) if (m.kind === 'iclamp' && m.pp.dur > 1e8) { m.pp.dur = 0; m.pp.amp = 0; } }
 
@@ -278,14 +297,22 @@ function buildCards() {
   $('cells').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     if (P.type === b.dataset.id) return;
     P.type = b.dataset.id; holdOff(); loadCell({ keep: false });
-    try { history.replaceState(null, '', '#' + P.type); } catch (e) { /* file: */ }
+    writeHash();
   }));
 }
 const fmt = {
   speed: v => v + ' ms', amp: v => (+v).toFixed(2) + ' nA', dur: v => v + ' ms', wsyn: v => (+v).toFixed(3) + ' µS', nsyn: v => v,
   gna: v => (+v).toFixed(3), gk: v => (+v).toFixed(3), dfrac: v => Math.round(v * 100) + '%', gl: v => (+v).toFixed(4),
   celsius: v => (+v).toFixed(1) + ' °C', ra: v => Math.round(v) + ' Ωcm', diam: v => (+v).toFixed(2) + '×',
+  cm: v => (+v).toFixed(2), el: v => (+v).toFixed(1) + ' mV', gih: v => (+v * 1e4).toFixed(1) + 'e-4',
 };
+// put P back into the sliders (after a dice)
+function syncSliders() {
+  const set = (id, v) => { const e = $(id); if (e) e.value = v; };
+  set('gna', P.gna); set('gk', P.gk); set('dfrac', P.dfrac); set('gl', P.gl); set('celsius', P.celsius); set('ra', P.Ra);
+  set('cm', P.cm); set('el', P.el); set('gih', P.gih); set('diam', P.diam);
+  showVals();
+}
 function showVals() { for (const k in fmt) { const e = $(k), o = $(k + 'V'); if (e && o) o.textContent = fmt[k](e.value); } }
 function bindRange(id, fn) { $(id).addEventListener('input', () => { fn(+$(id).value); showVals(); }); }
 let rebuildT = 0;
@@ -302,6 +329,9 @@ function bindUI() {
   bindRange('dfrac', v => { P.dfrac = v; applyDensities(); });
   bindRange('gl', v => { P.gl = v; applyDensities(); });
   bindRange('celsius', v => { P.celsius = v; L.cell.celsius = v; });
+  bindRange('el', v => { P.el = v; applyDensities(); });
+  bindRange('gih', v => { P.gih = v; applyDensities(); });
+  bindRange('cm', v => { P.cm = v; rebuildSoon(); });
   bindRange('ra', v => { P.Ra = v; rebuildSoon(); });
   bindRange('diam', v => { P.diam = v; rebuildSoon(); });
   const tog = (id, key, after) => $(id).addEventListener('click', () => { P[key] = !P[key]; $(id).classList.toggle('on', P[key]); if (after) after(); });
@@ -314,7 +344,7 @@ function bindUI() {
   $('fire').addEventListener('click', () => fire());
   $('dockFire').addEventListener('click', () => fire());
   $('clearAll').addEventListener('click', () => clearMarkers(false));
-  $('reshape').addEventListener('click', () => { P.seed = (P.seed % 9973) + 1; loadCell({ keep: false }); });
+  $('reshape').addEventListener('click', () => { P.seed = (P.seed % 9973) + 1; loadCell({ keep: false }); writeHash(); });
   $('resetSim').addEventListener('click', () => { holdOff(); L.cell.init(); for (const m of L.markers) if (m.ns) m.ns.number = 0; resetHistory(); });
   // dock and sheet
   document.querySelectorAll('#dock button[data-grp]').forEach(b => b.addEventListener('click', () => openGroup(b.dataset.grp === openG ? null : b.dataset.grp)));
@@ -394,7 +424,7 @@ function frame(now) {
   if (L.saver) { if (L.saverTick) L.saverTick(dt, now); }
   else {
     if (!P.paused) {
-      if (P.auto && !P.hold && L.markers.length && L.cell.t - L.lastAuto > AUTO_MS) fire();
+      if (P.auto && !P.hold && L.markers.length && L.cell.t - L.lastAuto > (L.autoMs || AUTO_MS)) fire();
       stepSim(P.speed * dt);
     }
     stage.controls.autoRotate = P.orbit && !stage.springOn; stage.controls.autoRotateSpeed = 0.35;
@@ -423,12 +453,54 @@ function readout() {
   $('read').innerHTML = `${esc(C.short)} · t <span class="hi">${c.t.toFixed(1)}</span> ms<br>soma <span class="hi">${c.v[0].toFixed(1)}</span> mV · ${P.celsius.toFixed(1)} °C<br><span class="lo">${isNaN(L.lastSpike) ? 'no spike yet' : 'last soma spike ' + (c.t - L.lastSpike).toFixed(1) + ' ms ago'}</span>`;
 }
 
+// ── randomize ───────────────────────────────────────────────────────────
+// cats: the categories whose seeds just changed. Rebuilds what they touch.
+function applyRandom(cats) {
+  const has = c => cats.includes(c);
+  if (has('bio')) {
+    const b = randValues('bio');
+    Object.assign(P, { gna: b.gna, gk: b.gk, dfrac: b.dfrac, gl: b.gl, el: b.el, Ra: b.Ra, cm: b.cm, celsius: b.celsius, gih: b.gih });
+    syncSliders();
+  }
+  if (has('morph') && RS.seeds.morph) { P.type = typeFor(randValues('morph'), 0, RS.seeds.morph); P.seed = RS.seeds.morph % 9973 + 1; }
+  if (has('morph') || has('bio')) { holdOff(); loadCell({ keep: !has('morph'), fit: has('morph') }); }
+  if (has('stim') || has('morph')) applyStim();
+  if (window.__nlNet && window.__nlNet.onRandom) window.__nlNet.onRandom(cats);
+  writeHash();
+}
+// random clamps and synapse trains (stim seed), or the default clamp
+function applyStim() {
+  if (!L.cell) return;
+  if (!RS.seeds.stim) { if (!L.markers.length) { place('iclamp', 0, true); fire(); } return; }
+  clearMarkers(false);
+  const plan = stimPlan(randValues('stim'), L.cell, P.type, RS.seeds.stim);
+  for (const it of plan) {
+    const m = place(it.kind, it.node, true); if (!m) continue;
+    m.rand = it;
+  }
+  if (!plan.length) place('iclamp', 0, true);
+  fire();
+}
+let hashT = 0;
+function writeHash() {
+  clearTimeout(hashT);
+  hashT = setTimeout(() => {
+    const st = { seed: RS.seed, type: P.type, cs: P.seed, lock: RS.lock, ranges: RS.ranges };
+    if (CATS.some(c => RS.seeds[c.id])) st.seeds = RS.seeds;
+    if (window.__nlNet && window.__nlNet.hashState) Object.assign(st, window.__nlNet.hashState());
+    try { history.replaceState(null, '', '#' + encodeHash(st)); } catch (e) { /* file: */ }
+  }, 150);
+}
+const randPanel = createRandPanel({ host: $('randBody'), RS, onApply: applyRandom, onRanges: writeHash, values: randValues, netOK: () => !!(window.__nlNet && window.__nlNet.on) });
+
 // ── boot ────────────────────────────────────────────────────────────────
 bindUI();
 if (stage) {
   bindPick();
   layout();
+  if (RS.seeds.bio) { const b = randValues('bio'); Object.assign(P, { gna: b.gna, gk: b.gk, dfrac: b.dfrac, gl: b.gl, el: b.el, Ra: b.Ra, cm: b.cm, celsius: b.celsius, gih: b.gih }); syncSliders(); }
   loadCell({ keep: false });
+  if (RS.seeds.stim) applyStim();
   fitCamera(false);
   addEventListener('resize', () => { layout(); });
   PHONE_Q.addEventListener('change', () => { openGroup(null); layout(); });
@@ -436,4 +508,4 @@ if (stage) {
   installSaver({ L, P, stage, THREE, loadCell, place, fire, holdOff, clearMarkers, farNode, resetHistory, drawPhase, drawGates, stepSim, applyDensities, layout, CELLS });
 }
 typesetAll(document, [['V', 'm1'], ['m^3', 'm2'], ['n^4', 'm4'], ['R_a', 'm5']]);
-window.__neuronLab = { L, P };
+window.__neuronLab = { L, P, RS, applyRandom, writeHash, randPanel, randValues };

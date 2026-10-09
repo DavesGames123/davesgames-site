@@ -10,6 +10,8 @@
 //    morphologies, the d_lambda rule
 //    network: determinism by seed, no NaN, PING gamma
 //    saver shot plans: durations and no repeats
+//    randomisation: ranges, seeds, locks, every random cell a valid tree
+//    that fires, Ih sag, spine area, the hash round trip
 //  Exit code 1 on any failure.
 // ============================================================================
 import { Cell, hinesSolve, denseSolve, somaOnly, dLambdaNseg, lambdaF, exp2Factor } from './engine/cell.js';
@@ -18,6 +20,9 @@ import { makeCell, CELLS } from './engine/morph.js';
 import { makeNetwork, popRate, peakFreq, MODELS } from './engine/network.js';
 import { LAB_SHOTS, NET_SHOTS, shotPlan } from './engine/shots.js';
 import { rng } from './engine/rng.js';
+import { Cell as Cell2, ihRates, SPINE_AREA } from './engine/cell.js';
+import { CATS, RANGES, TYPES, sample, catSeed, defaults, morphFactors, cellOpts, stdStimulus, stimPlan } from './engine/random.js';
+import { encodeHash, decodeHash } from './engine/hashstate.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('FAIL', msg); } };
@@ -186,6 +191,88 @@ for (const [name, bag] of [['lab', LAB_SHOTS], ['net', NET_SHOTS]]) {
   ok(p1 !== p2, name + ': plans vary by seed');
   ok(shotPlan(bag, 3, bag.length).every((s, i, A) => A.findIndex(q => q.id === s.id) === i), name + ': each pass holds every shot once');
   ok(bag.every(s => s.title && s.tex && s.tex.length && !('code' in s)), name + ': plates have TeX, no code');
+}
+
+// ── 10. randomisation ─────────────────────────────────────────────────
+{
+  let out = 0, nkeys = 0;
+  for (const C of CATS) for (let seed = 1; seed <= 300; seed++) {
+    const v = sample(C.id, catSeed(seed, C.id));
+    for (const [k, r] of Object.entries(RANGES[C.id])) {
+      nkeys++;
+      if (r.choices) { const ok2 = r.multi ? v[k].every(x => r.choices.includes(x)) : r.choices.includes(v[k]); if (!ok2) out++; }
+      else if (!(v[k] >= r.lo - 1e-12 && v[k] <= r.hi + 1e-12) || (r.int && v[k] !== Math.round(v[k]))) out++;
+    }
+  }
+  ok(out === 0, 'every sampled value inside its range: ' + out + ' out of ' + nkeys);
+  // the default ranges are physiological
+  const B = RANGES.bio;
+  ok(B.gna.lo >= 0.05 && B.gna.hi <= 0.3 && B.gk.lo >= 0.01 && B.gk.hi <= 0.1 && B.gl.lo >= 5e-5 && B.gl.hi <= 1e-3, 'channel densities in hh-model bounds');
+  ok(B.el.lo >= -70 && B.el.hi <= -45 && B.Ra.lo >= 30 && B.Ra.hi <= 300 && B.cm.lo >= 0.5 && B.cm.hi <= 2 && B.celsius.lo >= 6 && B.celsius.hi <= 37 && B.gih.hi <= 0.001, 'cable, temperature, leak and Ih in physiological bounds');
+  const a = JSON.stringify(CATS.map(C => sample(C.id, catSeed(42, C.id)))), b = JSON.stringify(CATS.map(C => sample(C.id, catSeed(42, C.id))));
+  ok(a === b, 'same master seed, same values');
+  ok(a !== JSON.stringify(CATS.map(C => sample(C.id, catSeed(43, C.id)))), 'other seed, other values');
+  ok(new Set(CATS.map(C => catSeed(42, C.id))).size === 4, 'each category has its own stream');
+  // a key that is off keeps its default; the others do not move
+  const s1 = sample('bio', 77), s2 = sample('bio', 77, { gna: { on: false } });
+  ok(s2.gna === RANGES.bio.gna.d && s2.gk === s1.gk && s2.Ra === s1.Ra, 'a toggle sets the default and leaves the other keys');
+  const s3 = sample('bio', 77, { Ra: { lo: 100, hi: 101 } });
+  ok(s3.Ra >= 100 && s3.Ra <= 101, 'a user range is obeyed: Ra ' + s3.Ra.toFixed(2));
+  ok(JSON.stringify(defaults('bio')) === JSON.stringify(sample('bio', 5, Object.fromEntries(Object.keys(RANGES.bio).map(k => [k, { on: false }])))), 'all keys off gives the defaults');
+  // every random cell: valid tree, finite, fires under the standard stimulus
+  let bad = 0, nofire = 0, tot = 0, maxN = 0, tr = 0;
+  const t0 = Date.now();
+  for (let seed = 1; seed <= 50; seed++) for (const type of TYPES) {
+    const m = sample('morph', catSeed(seed, 'morph')), bio = sample('bio', catSeed(seed, 'bio'));
+    const S = makeCell(type, seed, morphFactors(m));
+    if (!(S[0].kind === 'soma' && S[0].parent === -1 && S.every((s, i) => i === 0 || (s.parent >= 0 && s.parent < i)) && S.every(s => s.L > 0 && s.d0 > 0 && s.x >= 0 && s.x <= 1 && s.pts.every(p => p.every(Number.isFinite))))) bad++;
+    const c = new Cell2(S, { ...cellOpts(bio), dlambda: 0.1 }); c.useTable(true);
+    const st = stdStimulus(type, m); c.iclamp(0, { del: 1, dur: st.dur, amp: st.amp });
+    let pk = -1e9; c.run(20, k => { pk = Math.max(pk, k.v[0]); });
+    if (!c.v.every(Number.isFinite)) bad++;
+    if (!(pk > 0)) nofire++;
+    tot++; maxN = Math.max(maxN, c.n);
+    if (stimPlan(sample('stim', catSeed(seed, 'stim')), c, type, seed).every(it => it.node >= 0 && it.node < c.n)) tr++;
+  }
+  ok(bad === 0, 'random cells are valid trees with finite state: bad ' + bad);
+  ok(nofire === 0, `random cells fire under the standard soma pulse: ${tot - nofire}/${tot}`);
+  ok(tr === tot, 'random stimulus plans use real nodes');
+  say(`${tot} random cells (50 seeds x 4 types, morph + bio random): ${tot - nofire} fire, largest ${maxN} compartments at d_lambda 0.1, ${Date.now() - t0} ms`);
+  // shape factors do something
+  const big = makeCell('pyramidal', 3, morphFactors({ ...sample('morph', 1), branches: 1.6, depth: 1, length: 1.5 })), small = makeCell('pyramidal', 3, morphFactors({ ...sample('morph', 1), branches: 0.6, depth: -1, length: 0.6 }));
+  ok(big.length > small.length * 1.5, `branch factors change the tree: ${small.length} -> ${big.length} sections`);
+  const ax2 = makeCell('pyramidal', 3, { axon: 2, collaterals: 4 }), ax1 = makeCell('pyramidal', 3, { axon: 1, collaterals: 0 });
+  ok(ax2.find(s => s.name === 'axon').L === 840 && ax2.filter(s => s.name.startsWith('coll')).length === 4 && ax1.filter(s => s.name.startsWith('coll')).length === 0, 'axon length and collateral count');
+}
+// ── 11. spines and Ih ─────────────────────────────────────────────────
+{
+  const S = [{ name: 'soma', kind: 'soma', parent: -1, L: 20, d0: 20, pts: [[0, 0, 0], [0, 20, 0]] }, { name: 'd', kind: 'dend', parent: 0, L: 200, d0: 2, pts: [[0, 20, 0], [0, 220, 0]] }];
+  const c0 = new Cell2(S, { nseg: 5 }), c1 = new Cell2(S.map(s => s.kind === 'dend' ? { ...s, spines: 1.5 } : s), { nseg: 5 });
+  near(c1.area[7] / c0.area[7], 1 + 1.5 * SPINE_AREA / (Math.PI * 2), 1e-9, 'spine factor F = 1 + density A / (pi d)');
+  ok(c1.ga[7] === c0.ga[7] && c1.area[2] === c0.area[2], 'spines leave the axial conductance');
+  const [inf65, tau65] = ihRates(-65), [inf90] = ihRates(-90);
+  ok(inf90 > inf65 && tau65 > 20 && tau65 < 80, `Ih opens on hyperpolarisation: minf(-65) ${inf65.toFixed(4)}, minf(-90) ${inf90.toFixed(3)}, tau(-65) ${tau65.toFixed(1)} ms`);
+  const sag = gih => {
+    const c = somaOnly({ dens: () => ({ gnabar: HH.gnabar, gkbar: HH.gkbar, gl: HH.gl, el: HH.el, gih }) });
+    c.run(400); const rest = c.v[0];
+    c.iclamp(0, { del: c.t, dur: 600, amp: -0.04 });
+    let vmin = 1e9; c.run(c.t + 600, k => { vmin = Math.min(vmin, k.v[0]); });
+    return { rest, vmin, end: c.v[0], sag: c.v[0] - vmin, on: c.ihOn };
+  };
+  const s0 = sag(0), s1 = sag(0.002);
+  ok(!s0.on && s1.on, 'Ih is skipped when gih is 0 everywhere');
+  ok(s1.sag > 2 && s0.sag < 0.5, `Ih gives a sag under a hyperpolarising step: ${s1.sag.toFixed(2)} mV with Ih, ${s0.sag.toFixed(2)} mV without`);
+  ok(s1.rest > s0.rest, `Ih depolarises rest: ${s0.rest.toFixed(2)} -> ${s1.rest.toFixed(2)} mV`);
+  say(`Ih (Hay 2011): rest ${s0.rest.toFixed(2)} -> ${s1.rest.toFixed(2)} mV, sag ${s1.sag.toFixed(2)} mV at -0.04 nA (none without: ${s0.sag.toFixed(2)})`);
+}
+// ── 12. the hash ──────────────────────────────────────────────────────
+{
+  const st = { seed: 4242, seeds: { morph: 11, bio: 0, stim: 7, wire: 900001 }, lock: ['bio', 'wire'], mode: 'net', type: 'motor',
+    ranges: { bio: { Ra: { lo: 80, hi: 120 }, gih: { on: false } }, morph: { types: { choices: ['pyramidal', 'granule'] } } } };
+  const back = decodeHash(encodeHash(st));
+  ok(JSON.stringify(back) === JSON.stringify(st), 'seeds, locks, mode and ranges round-trip through the hash: ' + encodeHash(st));
+  ok(decodeHash('#purkinje').type === 'purkinje', 'an old cell-id hash still works');
+  ok(JSON.stringify(decodeHash('')) === '{}', 'an empty hash is empty');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

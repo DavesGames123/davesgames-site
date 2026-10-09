@@ -36,6 +36,7 @@
      grep -n 'function fire'        start the stimuli
      grep -n 'function drawTraces'  the plots
      grep -n 'function frame'       the loop
+     grep -n 'function applyRandom' the Randomize panel (randpanel.js builds #randBody)
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A neuron in 3D, simulated like NEURON: place a current clamp or a synapse on a dendrite and watch the spike run along the branches, with live voltage traces, the Hodgkin-Huxley phase plane and the gates m, h and n.">
@@ -104,12 +105,19 @@
     <button type="button" id="clearAll" class="tog" style="width:100%;margin-top:6px">Remove all</button>
   </section>
 
+  <section class="grp" data-grp="rand">
+    <div class="sec-label first">Randomize</div>
+    <div id="randBody"></div>
+  </section>
+
   <section class="grp" data-grp="chan">
     <div class="sec-label first">Channels (hh.mod)</div>
     <div class="row"><label for="gna"><span class="m2">ḡ</span>Na soma, axon</label><input type="range" id="gna" min="0" max="0.3" step="0.005" value="0.12"><span class="val" id="gnaV"></span></div>
     <div class="row"><label for="gk"><span class="m4">ḡ</span>K soma, axon</label><input type="range" id="gk" min="0" max="0.1" step="0.001" value="0.036"><span class="val" id="gkV"></span></div>
     <div class="row"><label for="dfrac">In dendrites</label><input type="range" id="dfrac" min="0" max="1" step="0.05" value="0.3"><span class="val" id="dfracV"></span></div>
     <div class="row"><label for="gl">g leak</label><input type="range" id="gl" min="0.0001" max="0.002" step="0.0001" value="0.0003"><span class="val" id="glV"></span></div>
+    <div class="row"><label for="el">E leak</label><input type="range" id="el" min="-70" max="-45" step="0.1" value="-54.3"><span class="val" id="elV"></span></div>
+    <div class="row"><label for="gih">Ih (HCN)</label><input type="range" id="gih" min="0" max="0.001" step="0.00001" value="0"><span class="val" id="gihV"></span></div>
     <div class="grid2" style="margin-top:6px">
       <button class="tog warn" id="ttx" type="button">TTX (no Na)</button>
       <button class="tog warn" id="tea" type="button">TEA (no K)</button>
@@ -117,8 +125,9 @@
     <div class="sec-label">Cable and temperature</div>
     <div class="row"><label for="celsius">Temperature</label><input type="range" id="celsius" min="6.3" max="30" step="0.1" value="6.3"><span class="val" id="celsiusV"></span></div>
     <div class="row"><label for="ra"><span class="m5">R</span>a axial</label><input type="range" id="ra" min="20" max="400" step="1" value="35.4"><span class="val" id="raV"></span></div>
+    <div class="row"><label for="cm">c<sub>m</sub> µF/cm²</label><input type="range" id="cm" min="0.5" max="2" step="0.01" value="1"><span class="val" id="cmV"></span></div>
     <div class="row"><label for="diam">Diameter ×</label><input type="range" id="diam" min="0.4" max="3" step="0.05" value="1"><span class="val" id="diamV"></span></div>
-    <p class="note">q10 = 3: each 10 °C makes the gates three times faster. Thicker branches or lower Ra carry a spike farther and faster. TTX blocks sodium channels; TEA blocks potassium channels.</p>
+    <p class="note">q10 = 3: each 10 °C makes the gates three times faster. Thicker branches or lower Ra carry a spike farther and faster. TTX blocks sodium channels; TEA blocks potassium channels. Ih is the HCN current of Hay et al. 2011 (Ih.mod): it opens below rest and gives a sag.</p>
   </section>
 
   <section class="grp ana" data-grp="trace">
@@ -164,6 +173,7 @@
   <button type="button" data-grp="cell"><i>◎</i><span>Cell</span></button>
   <button type="button" data-grp="place"><i>✚</i><span>Place</span></button>
   <button type="button" data-grp="chan"><i>⚗</i><span>Channels</span></button>
+  <button type="button" data-grp="rand"><i>⚄</i><span>Random</span></button>
   <button type="button" data-grp="trace"><i>∿</i><span>Traces</span></button>
   <button type="button" data-grp="learn"><i>∑</i><span>Learn</span></button>
   <button type="button" id="dockFire"><i>⚡</i><span>Fire</span></button>

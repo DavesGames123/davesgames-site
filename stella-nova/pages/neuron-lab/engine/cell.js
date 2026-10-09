@@ -28,7 +28,17 @@
 //  parent length from that segment centre to x. NEURON puts a zero-area
 //  node at x = 1 instead. The two agree when one child joins at a point.
 //
+//  Spines: a section with s.spines (per um) gets a larger membrane area
+//  (C and channel conductances) and the same axial resistance, the usual
+//  NEURON spine factor F = 1 + density * area_spine / (pi d).
+//
+//  Ih (optional, gihbar from dens, 0 by default): the HCN current of Hay et
+//  al. 2011 (ModelDB 139653, Ih.mod, after Kole et al. 2006): one gate m,
+//  i = gihbar m (v - ehcn), ehcn = -45 mV. Only the equations are copied.
+//  With every gihbar = 0 the step skips it and the cell is pure hh.
+//
 //  grep -n targets
+//    "export function ihRates"      the Ih gate rates
 //    "export function dLambdaNseg"  the d_lambda nseg rule (NEURON book)
 //    "export function hinesSolve"   the O(n) tree solve
 //    "export function denseSolve"   Gaussian elimination, for the tests
@@ -39,6 +49,13 @@
 import { HH, NRN, rates } from './hh.js';
 
 const PI = Math.PI;
+export const SPINE_AREA = 1.2; // um2 per spine (head and neck)
+export const EHCN = -45;
+// Ih.mod (Hay 2011): mAlpha = 0.001*6.43*(v+154.9)/(exp((v+154.9)/11.9)-1), mBeta = 0.001*193*exp(v/33.1), per ms.
+export function ihRates(v) {
+  const x = v + 154.9, a = 0.001 * 6.43 * (Math.abs(x) < 1e-6 ? 11.9 : x / (Math.exp(x / 11.9) - 1)), b = 0.001 * 193 * Math.exp(v / 33.1);
+  return [a / (a + b), 1 / (a + b)];
+}
 
 // lambda at frequency f (NEURON book, d_lambda rule). d um, Ra ohm cm, cm uF/cm2.
 export function lambdaF(f, d, Ra, cm) { return 1e5 * Math.sqrt(d / (4 * PI * f * Ra * cm)); }
@@ -136,7 +153,7 @@ export class Cell {
     this.n = n;
     const F = k => new Float64Array(n);
     this.parent = new Int32Array(n); this.ga = F(); this.area = F(); this.C = F(); this.diam = F();
-    this.gnabar = F(); this.gkbar = F(); this.gl = F(); this.el = F();
+    this.gnabar = F(); this.gkbar = F(); this.gl = F(); this.el = F(); this.gih = F(); this.qih = F();
     this.v = F(); this.m = F(); this.h = F(); this.nn = F(); this.vprev = F();
     this.sec = new Int32Array(n); this.xc = F(); this.pos = new Float32Array(n * 3); this.dist = F();
     this.gsyn = F(); this.isyn = F(); this.iext = F(); this.ina = F(); this.ik = F();
@@ -148,9 +165,9 @@ export class Cell {
         const i = s.first + j, xc = (j + 0.5) / ns;
         const d = (s.d0 + ((s.d1 ?? s.d0) - s.d0) * xc) * this.diamScale;
         this.sec[i] = si; this.xc[i] = xc; this.diam[i] = d;
-        this.area[i] = PI * d * len; this.C[i] = this.cm * this.area[i] * 1e-5;
+        this.area[i] = PI * d * len * (s.spines ? 1 + s.spines * SPINE_AREA / (PI * d) : 1); this.C[i] = this.cm * this.area[i] * 1e-5;
         const D = this.dens(s, xc);
-        this.gnabar[i] = D.gnabar; this.gkbar[i] = D.gkbar; this.gl[i] = D.gl; this.el[i] = D.el;
+        this.gnabar[i] = D.gnabar; this.gkbar[i] = D.gkbar; this.gl[i] = D.gl; this.el[i] = D.el; this.gih[i] = D.gih || 0;
         const p = this.pointAt(s, xc); this.pos[i * 3] = p[0]; this.pos[i * 3 + 1] = p[1]; this.pos[i * 3 + 2] = p[2];
         if (j > 0) {
           const dp = this.diam[i - 1];
@@ -168,6 +185,7 @@ export class Cell {
       }
     }
     if (this.parent[0] !== -1) throw new Error('first section must be the root');
+    this.ihCheck();
     this.syns = []; this.clamps = []; this.netcons = []; this.stims = [];
     this.queue = new EventQueue();
     this.tbl = null;
@@ -192,12 +210,15 @@ export class Cell {
     const r = new Float64Array(6);
     rates(vinit, this.celsius, r);
     this.v.fill(vinit); this.vprev.fill(vinit);
-    this.m.fill(r[0]); this.h.fill(r[2]); this.nn.fill(r[4]);
+    this.m.fill(r[0]); this.h.fill(r[2]); this.nn.fill(r[4]); this.qih.fill(ihRates(vinit)[0]);
     for (const s of this.syns) { s.g = 0; s.A = 0; s.B = 0; }
     this.queue.clear();
     this.t = 0;
     for (const ns of this.stims) ns.reset(this);
   }
+
+  // Call after gih changes: the step skips Ih when every gih is 0.
+  ihCheck() { this.ihOn = this.gih.some(g => g > 0); }
 
   // Use a fine rate table (0.05 mV, linear) instead of exp() in the loop. Pages use it.
   useTable(on) { this.tbl = on ? { celsius: NaN, dt: NaN } : null; }
@@ -254,8 +275,10 @@ export class Cell {
       const ina = gna * (v[i] - ena), ik = gk * (v[i] - ek), il = gl * (v[i] - this.el[i]);
       this.ina[i] = ina; this.ik[i] = ik;
       const ar = this.area[i] * 1e-2;
-      d[i] = this.C[i] * cfac + (gna + gk + gl) * ar + gs[i];
-      r[i] = ie[i] - (ina + ik + il) * ar - is[i];
+      let gh = 0, ih = 0;
+      if (this.ihOn) { gh = this.gih[i] * this.qih[i]; ih = gh * (v[i] - EHCN); }
+      d[i] = this.C[i] * cfac + (gna + gk + gl + gh) * ar + gs[i];
+      r[i] = ie[i] - (ina + ik + il + ih) * ar - is[i];
     }
     for (let i = 1; i < n; i++) {
       const p = P[i], g = ga[i], dv = v[p] - v[i];
@@ -283,6 +306,10 @@ export class Cell {
         h[i] += (1 - Math.exp(-dt / R[3])) * (R[2] - h[i]);
         nk[i] += (1 - Math.exp(-dt / R[5])) * (R[4] - nk[i]);
       }
+    }
+    if (this.ihOn) {
+      const q = this.qih, gi = this.gih;
+      for (let i = 0; i < n; i++) if (gi[i] > 0) { const [inf, tau] = ihRates(v[i]); q[i] += (1 - Math.exp(-dt / tau)) * (inf - q[i]); }
     }
     for (const s of this.syns) {
       if (s.type === 'ExpSyn') s.g *= Math.exp(-dt / s.tau);
