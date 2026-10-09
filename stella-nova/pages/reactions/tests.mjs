@@ -303,4 +303,53 @@ globalThis.RX.finish = finish;
   const alone = { location: mk(''), history: { replaceState() {} } }; alone.parent = alone;
   ok(shareUrl('s=soap', alone) === 'https://davesgames.io/stella-nova/#s=soap', 'route: alone, the share link is the page URL');
 }
+// ── TeX on the browser path (lib/sci-math.js + vendor MathJax) ─────────────
+// The page typesets every chip of the tree and the step pane at the same
+// time, through lib/sci-math.js and the vendored es5/tex-svg.js, and \ce
+// loads mhchem by autoload on first use. The mathjax-full check above
+// preloads mhchem, so it passed while the page showed raw TeX.
+{
+  const { typeset } = await import('../../lib/sci-math.js');
+  // 1. the queue: never two MathJax calls at once (no DOM needed)
+  let active = 0, most = 0;
+  const fakeNode = { querySelector: () => null, querySelectorAll: () => [] };
+  globalThis.window = { MathJax: { tex2svgPromise: async () => { active++; most = Math.max(most, active); await new Promise(r => setTimeout(r, 2)); active--; return fakeNode; } } };
+  const box = () => ({ dataset: {}, classList: { add() {}, remove() {} }, replaceChildren() {}, setAttribute() {}, set textContent(v) {} });
+  const res = await Promise.all(Array.from({ length: 12 }, (_, i) => typeset(box(), '\\ce{A' + i + '}')));
+  ok(most === 1 && res.every(Boolean), 'sci-math: one MathJax call at a time', `${res.length} calls, most at once ${most}`);
+  delete globalThis.window;
+  // 2. the real load path in jsdom (NODE_PATH must hold jsdom)
+  let JSDOM = null;
+  try { JSDOM = createRequire((process.env.NODE_PATH || '/nonexistent') + '/')('jsdom').JSDOM; } catch (e) { JSDOM = null; }
+  if (!JSDOM) console.log('SKIP  TeX browser path: jsdom not on NODE_PATH');
+  else {
+    const { pathToFileURL } = await import('node:url');
+    const { emptySynth, addStep } = await import('./synth.js');
+    const eqs = [];
+    for (const cls of CLASSES) {
+      eqs.push([cls.id + ' class', `\\ce{${cls.tex}}`, true]);
+      const ins = cls.kind === 'overall' ? (cls.fuel ? cls.ex.slice(0, 1) : cls.lhsQ.map(x => x[0])) : cls.ex.slice(0, cls.lhs.length);
+      const syn = emptySynth();
+      if (addStep(syn, OCL, cls, ins) < 0) { ok(false, `TeX browser path: ${cls.id} example runs`); continue; }
+      for (const d of [false, true]) eqs.push([cls.id + ' example', syn.steps[0].st.tex, d]);
+    }
+    for (const S of globalThis.RX.synths) for (const s of S.steps) for (const d of [false, true]) eqs.push([S.named + ' ' + s.st.cls, s.st.tex, d]);
+    const lib = here + '../../lib/sci-math.js';
+    const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: pathToFileURL(here + 'index.html').href, runScripts: 'dangerously', resources: 'usable' });
+    const w = dom.window;
+    // run lib/sci-math.js itself in the window (its config objects must
+    // come from the page realm, as in the browser)
+    const src = readFileSync(lib, 'utf8').replace(/import\.meta\.url/g, JSON.stringify(pathToFileURL(lib).href)).replace(/^export /gm, '');
+    w.eval(`(function () { ${src}\n window.__sm = { typeset, loadMath }; })();`);
+    const els = eqs.map(() => w.document.body.appendChild(w.document.createElement('div')));
+    const t0 = performance.now();
+    const all = Promise.all(eqs.map(([, tex, display], i) => w.__sm.typeset(els[i], tex, { display })));
+    const out = await Promise.race([all, new Promise(r => setTimeout(() => r(null), 120000))]);
+    const bad = out ? eqs.filter((e, i) => !out[i] || els[i].classList.contains('raw') || !els[i].querySelector('svg')) : eqs;
+    ok(!!out && !bad.length, 'TeX browser path: every equation of the page typesets (vendor MathJax, autoload mhchem, all at once)',
+      bad.length ? `${bad.length} raw: ` + bad.slice(0, 3).map(b => b[0] + ' ' + b[1]).join(' | ') : `${eqs.length} typesets, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    w.close();
+  }
+}
+
 if (!process.env.RX_MORE4) finish();
