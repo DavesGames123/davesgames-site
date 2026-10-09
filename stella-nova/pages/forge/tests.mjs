@@ -483,5 +483,28 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('render: packView fills the given array (no new typed array per frame)', a === out && a.every((v, i) => v === b[i]));
 }
 
+// dynamic resolution: the scale falls under load, holds a floor, and
+// comes back when the frames are fast again
+{
+  // a toy GPU: frame time = base ms x (scale^2) (cost ~ pixels), 60 Hz floor
+  const run = (base, frames, rs) => { let t = 0; for (let i = 0; i < frames; i++) { const ms = Math.max(1000 / 60, base * rs.scale * rs.scale); rs.update(ms); t += ms; } return rs.scale; };
+  const a = BG.createResScale();
+  ok('resolution: a 60 fps machine keeps scale 1', run(12, 600, a) === 1);
+  const b = BG.createResScale(), s1 = run(30, 600, b);
+  ok('resolution: a 30 ms frame converges to a scale that holds 60 fps', s1 < 1 && s1 >= BG.RES_FLOOR && 30 * s1 * s1 <= 22, `scale ${s1}, ${(30 * s1 * s1).toFixed(1)} ms`);
+  const s1b = run(30, 1200, b);
+  ok('resolution: then it stays put (no oscillation)', s1b === s1 || Math.abs(s1b - s1) <= 0.12, `${s1} -> ${s1b}`);
+  const c = BG.createResScale(), s2 = run(200, 600, c);
+  ok('resolution: a very slow GPU stops at the floor', s2 === BG.RES_FLOOR, `scale ${s2}`);
+  ok('resolution: fast frames bring the scale back to 1', run(8, 3000, c) === 1);
+  // a GPU at the vsync edge: 15 ms at scale 1 misses vsync (33 ms), fits below
+  // (each drop is a visible bounce: a short run of 30 fps frames)
+  const e = BG.createResScale(); let drops = 0, prev = 1;
+  for (let i = 0; i < 60 * 120; i++) { const g = 15.5 * e.scale * e.scale, ms = g > 15 ? 33.3 : 16.7; const s = e.update(ms); if (s < prev) drops++; prev = s; }
+  ok('resolution: a GPU at the vsync edge settles (at most 3 drops in 2 min)', drops <= 3, `${drops} drops, scale ${e.scale}`);
+  const d = BG.createResScale(); d.update(5000); d.update(5000);
+  ok('resolution: long gaps (hidden tab) do not count', d.scale === 1);
+}
+
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);

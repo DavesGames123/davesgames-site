@@ -304,10 +304,14 @@ function showMap(id) {
 $('mvClose').onclick = () => { $('mapView').hidden = true; };
 
 // ── camera, view ────────────────────────────────────────────────────────
-let VB = { pr: 1, w: 1, h: 1 };
+let VB = { pr: 1, w: 1, h: 1, scale: 1 };
+// dynamic resolution (budget.js createResScale): a safety net under the
+// view budget; the canvas shrinks only while frames stay slow
+const RS = BG.createResScale();
 function resize() {
   const w = innerWidth, h = innerHeight;
-  VB = BG.viewBudget(w, h, devicePixelRatio || 1, ENV);
+  VB = BG.viewBudget(w, h, devicePixelRatio || 1, ENV, RS.scale);
+  VB.scale = RS.scale;
   canvas.width = VB.w; canvas.height = VB.h;
 }
 // The clear area of the window (CSS px): beside the panel or above the sheet.
@@ -351,6 +355,8 @@ function sunDir() {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  if (document.hidden) { lastFrame = 0; return; }
+  if (lastFrame && R && S.M && RS.update(now - lastFrame) !== VB.scale) resize();
   const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000); lastFrame = now;
   S.t += dt;
   // the simulated clock (clock.js): spin, the sun's year, the cloud hours
