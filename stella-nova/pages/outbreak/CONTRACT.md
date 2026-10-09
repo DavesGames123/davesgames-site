@@ -93,7 +93,11 @@ One line per file: what it owns. "DONE" files exist now.
 | `camera.js` | Camera state, poses, eased flights (no DOM). | E |
 | `budget.js` | GPU memory budget (pixel ratio cap, phone budget, `phoneView`). | F |
 | `render/globe.js` | three.js renderer core, style switch, layers, picking, pagehide release. | F |
-| `render/field.js` | Land mask and the prevalence field texture. | F |
+| `render/field.js` | Land mask, the prevalence field texture, and the infection front (B, A). | F |
+| `render/infect.js` | The infection texture of the land: one GLSL chunk for every surface style, the palette `PAL`, shared uniforms, a JS mirror for tests. | F |
+| `render/ignite.js` | The ignition bus: a city lights up when an infected plane lands. | H |
+| `render/hud.js` | The on-canvas HUD of the screensaver. | M |
+| `stats.js` | Live numbers from the sim for the director and the HUD; `tickCounter`. | M |
 | `render/style-night.js` | Style 1: dark globe, city lights, glowing coasts (default). | G1 |
 | `render/style-marble.js` | Style 2: Blue Marble with sun lighting. | G2 |
 | `render/style-dots.js` | Style 3: dot-matrix globe coloured by local prevalence. | G3 |
@@ -345,17 +349,31 @@ the scene, and the shared context it hands to each style and layer:
 
 ```js
 ctx = { THREE, scene, renderer, camera, D, net, geo, field, mode, root /* THREE.Group the style adds to */,
-        proj /* flat projection */, phone /* bool, budget.js phoneView at boot */ }
+        proj /* flat projection */, phone /* bool, budget.js phoneView at boot */,
+        infect /* { uniforms }: shared uniforms of render/infect.js */,
+        ignite /* render/ignite.js bus */ }
 // every style module (G1-G5):
 export default { id, label, mode: 'globe' | 'flat',
                  create(ctx) -> { group, update(frame), dispose() } }
 // render/field.js (F):
 export function createField(D, THREE, worldJson) -> {
   texture,        // DataTexture 1024x512, R = prevalence glow 0..1 (land only), G = deaths share;
-                  // weight exp(-(d/sigma)^4), cutoff 2 sigma: sharp patches, not a blur
+                  // weight exp(-(d/sigma)^4), cutoff 2 sigma: sharp patches, not a blur;
+                  // B = the infection front now, A = the front at the update before
+                  // (0.5 on the front, > 0.5 inside, 0 on healthy land)
   landMask,       // DataTexture 2048x1024, 1 on land
-  update(prev),   // per node I/N -> texels, about 4 times a second
+  update(prev, dead, first, dt), // per node I/N, D/N, sim.firstDay; dt wall s -> texels, 4 times a second
+  reach,          // Float32Array(N): each node's front radius in its own sigma (crawls 0.45 sigma/s, never shrinks)
+  reset(),        // a new run
   dispose() }
+// render/infect.js (F):
+export const INFECT_GLSL;        // vec3 infectApply(vec3 col, vec2 uv, float landRaw, vec4 fieldTexel)
+export const PAL;                // { blood, arterial, core, scar } display RGB
+export function infectUniforms(THREE, ctx); // ctx.infect.uniforms or a fresh set:
+                                 // uIgn[8] (point, age), uBeat, uFieldMix, uAny
+export function infectDefines(phone);       // { INF_PHONE: 1 } on a phone
+// render/ignite.js (H):
+export function createIgnition({ phone }) -> { now, fire(node, power), expire(), since(cursor), slots(point, out), clear() }
 // render/arcs.js and render/nodes.js (H):
 export function createArcs(ctx) -> { setMode(mode), update(frame), dispose(), heat, pool, limits }
 export function createNodes(ctx) -> { setMode(mode), update(frame), dispose(), pool, glow, px }
@@ -370,9 +388,45 @@ antialias on. On `pagehide`, `dispose()` everything and call
 
 Look (redesign of 2026-10-08, after the user said the page was "too soft
 and extremely vibecoded", then "i like the densely connected network it
-doesn't glow appropriately behind planes as they fly"): restrained,
-crisp and calm. No time pulse, breathing, scanline or flicker in any
-style.
+doesn't glow appropriately behind planes as they fly"; then, the same
+day: "the screensaver animations for the disease/outbreak system need to
+be way more badass, as well as the pure animations. the screensaver
+animations should track things like infected and cases, and infected
+LAND should look much more texutred and much different to represent
+infection. also more intense red."): dramatic and high-contrast, but
+crisp and deliberate. No scanline or flicker in any style. The only
+motion over time on the land: the front crawl, the ignitions and a
+subtle heartbeat tied to new cases.
+
+- Infection red: one palette, `PAL` in render/infect.js. Blood
+  (0.42, 0, 0.03) for infected ground, arterial (1, 0.02, 0.07) =
+  `#ff0512` (`--hot` in style.css) for colonies, stipple, cities,
+  infected flights and the chart; hot core (1, 0.46, 0.32) for the front
+  line, active outbreaks, first arrivals and flashes; scar
+  (0.11, 0, 0.012) for land where people died. tests/palette.test.mjs.
+- Infected land (`INFECT_GLSL`, in the night, marble, flat, Equal Earth
+  and holo land shaders): a hard front (field B blended from A, plus fbm
+  and Voronoi noise; `smoothstep(-fwidth, fwidth)`, about 2 device px at
+  every zoom) with a bright line and a red band inside; blood-red
+  ground; Voronoi colonies (about 245 km) that light up as the
+  prevalence passes each cell's threshold; arterial stipple in screen
+  cells of about 5 px, dot radius by prevalence; veins on the cell edges,
+  dark when calm and ember-hot when active; crimson-black scar by the
+  deaths share. Healthy land (front below 0.08) gets no infection
+  colour. Phone (`INF_PHONE`): 2 fbm octaves, one stipple octave, no
+  fine veins. The dots style turns a dot red only inside the front.
+  tests/infect.test.mjs (healthy land, monotone in prevalence, front
+  width in px at five zooms, the red range, the field front).
+- Ignitions (render/ignite.js): a first arrival lights the city when
+  the plane lands (an infected arrival in a city with cases at 0.4
+  power). The land shows a white-hot flash, a thin ground ring and a red
+  bloom (up to 8 shader slots, 4 on a phone); render/nodes.js draws a
+  0.28 s flash disc and a 1.8 px shockwave ring out to 64 CSS px (44 on
+  a phone). The seeds of a new sim ignite. tests/ignite.test.mjs.
+- Heartbeat: `uBeat`, a lub-dub at 44-94 bpm, depth and rate by the new
+  cases of the last day; none without new cases. It lifts only the front
+  line and band.
+- HUD counters tick up (stats.js `tickCounter`) and never jump.
 
 - Network: always on. One low arch per air edge (lift 0.07), hairlines
   at alpha 0.07-0.18 by flow. A per-edge heat (tau 10 s) turns a used
@@ -391,8 +445,8 @@ style.
   screen direction of travel, thin dark outline, 10 CSS px (9 on a
   phone).
 - Cities: crisp circles in CSS px (`markerPx`): 1.8-3 px grey when idle,
-  3.5-12 px flat red by log prevalence, muted teal after the epidemic.
-  A first infection starts one 1.3 px ring that grows to 30 px in 1.6 s.
+  3.5-12 px arterial red by log prevalence with a hot-core rim, muted
+  teal after the epidemic. Ignitions add the flash and shockwave ring.
 - Labels: main.js labels only the largest current outbreaks
   (`topOutbreaks`, 4 on desktop, 2 on a phone).
 
@@ -422,19 +476,56 @@ user's Safari).
 
 ```js
 // director.js, no DOM
-export const SHOT_KINDS = ['origin', 'export', 'erupt', 'network', 'region', 'flat', 'policy', 'aftermath'];
-export function createDirector({ seed, calm = 0.7, styles }) -> Director
+export const SHOT_KINDS = ['origin', 'front', 'surge', 'export', 'tipping', 'curve', 'erupt', 'network',
+  'region', 'flat', 'policy', 'aftermath'];
+export function createDirector({ seed, calm = 0.7, styles, D, texFor, rules }) -> Director
 Director = {
   newRun() -> { diseaseId, seedNode, policies, startDayOfYear },  // seeded choice, never the same disease twice in a row
   tick(now, view) -> { shot, changed, restart },
   plate(view, disease) -> label info ({ title, sub, params, lines, tex }; no code)
+  restartClock(now),   // a faded cut came on screen: the shot runs its full length from now
+  force(kind), state()
 }
 view = { day, burnedOut, totals, reff, hottest /* node index */, newestFirst /* Event | null */,
-         topRegion, active, D }
+         topRegion, active, D,
+         // from stats.js (main.js), optional:
+         sim, growth: { node, rate, doubling } | null, exporter: { node, count, days } | null,
+         tipped: { region, day, reached, cities } | null, curve: { inc, peakInc, peakDay, reff, peaked, below1 },
+         hud: { day, infected, cases, today, deaths, cities, countries, reff }, regionStats }
 shot = { kind, dur /* seconds, SHOT_S = 8..12 */, style, cam /* camera.js state */,
-         follow: { kind: 'event' | 'node', id } | null, simSpeed /* days per second */, title,
-         spin, drift /* deg/s, |x| <= CALM_DEG_S = 1.5 */ }
+         camEnd: { alt, tilt } | null /* main.js eases to it over the shot: push in, pull back */,
+         follow: { kind: 'event' | 'node' | 'front', id } | null, simSpeed /* days per second */, title,
+         spin, drift /* deg/s, |x| <= CALM_DEG_S = 1.5 */, hud: 'curve' | null, subject }
+// stats.js
+export function createStats(D) -> { update(sim, events), reset(), growth(sim), exporter(sim),
+  regions(sim), tipped(sim), curve(sim), hud(sim) }
+export function tickCounter(shown, target, dt);
 ```
+
+Shots from the real sim state: `origin` (the cold open, tight on the
+seed city at day 0, slow pull out), `front` (a region newly reached
+since the cut before; the camera flies on to each new city, at most
+once per 3 s), `surge` (push in on the fastest-growing city: doubling
+time over 3 days), `export` (over the hub with the most infected
+flights out in 10 days), `tipping` (a region with half its cities
+reached or 1e-3 infected: pull back to the globe), `curve` (after the
+peak of daily cases, or R_eff below 1: wide, the curve large on the
+HUD). Once a shot has run 8 s, a waiting event (policy, tipping, new
+region, curve) cuts at once, so the cuts land on events; else a shot
+runs to its end (12 s at most). The plate sub line names the subject
+with live numbers ("Delhi · cases doubling every 7.0 days"); the lines
+give day, infected now, cases today, cases, deaths, cities and
+countries. tests/shots.test.mjs checks each pick against the view it
+saw, on a real model run.
+
+`render/hud.js` (saver only): a 2D canvas at device px, drawn 1:1
+(nearest filter) at the bottom-left of the clear band, after the fade
+quad. Day, R_eff, infected now and cases today in red, total cases,
+deaths, cities and countries, and a log sparkline of daily new cases
+(tall in a `curve` shot). Tabular digits; the counters tick up. Phone:
+a compact two-column panel at 10 Hz (desktop 15 Hz). `globe.setHud({ on,
+rect, focus })`, `frame.hud` = stats.js hud values plus `series`
+(history.inc) and `curve`. The Auto button does not draw it.
 
 Calm motion: one subject per shot; the style holds for a run; an
 `export` shot only when the disease reaches a new region. main.js
@@ -457,6 +548,10 @@ same director without the shell plate. No code on the plate.
 | d8487a5 | `tools/build-nodes.py`, `data/nodes.json` (395 nodes, 7.66 bn), `data.js`, `CREDITS.txt` | data: nodes load; valid coordinates, pop, region, income; world population 7-8.5 billion; every region has nodes; hubs exist |
 | (this commit) | `rng.js`, `tests.mjs` runner, `tests/data.test.mjs`, `tests/rng.test.mjs`, this contract | rng: same seed, same stream; poisson mean; binom mean |
 | fbd9ff9..1640fec | Redesign: crisp network, planes and trails; pixel markers; sharp field; calm styles and camera; editorial layout and phone dock | arcs, nodes, render, style-*, director, motion, layout |
+| c69158a | Infection texture of the land (render/infect.js), the front in field B/A | infect |
+| f7932c9 | One arterial red for cities, flights, rims, HUD and chart | palette |
+| aecd4ef | Ignitions on landing, shockwave rings, heartbeat, ticking counters | ignite |
+| e7508f9 | Data-driven saver shots (stats.js, director.js), the canvas HUD (render/hud.js) | shots |
 
 ## Left: work packages
 
