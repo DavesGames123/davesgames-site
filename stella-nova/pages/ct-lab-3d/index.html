@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>CT Lab 3D — Stella Nova · davesgames.io</title>
+<meta name="description" content="CT scan real objects in 3D: a walnut, a rabbit, a skull, a watch, a mosquito in amber. Watch the cone-beam scan and the reconstruction, then explore the slices.">
+<!--
+  CT LAB 3D  ·  page shell
+  ---------------------------------------------------------------------------
+  Static markup only. main.js runs the page. Real objects only: open-licence
+  CT volumes and glTF models turned into volumes (data/, made by
+  tools/ct-lab-3d/; credits in CREDITS.md and on the page).
+  The CT maths is the CT lab's engine (../ct-lab/engine, CONTRACT.md); the 3D
+  gantry and volume renderer is ../ct-lab/view3d (README.md); colour maps are
+  ../ct-lab/colormaps. This page's own modules are in lib/.
+
+  LOAD ORDER
+    gpu-guard.js, wishlist.js, stats-beacon.js   shared shell scripts, first
+    style.css, ../ct-lab/colormaps/picker.css, ../../lib/sci.css
+    main.js                                       module, end of body
+
+  LAYOUT  (# marks an element id main.js binds to)
+    +---------------------------------------------------------------------+
+    | .topbar  title · #backend · #btnScan #btnPlay · links               |
+    +-----------+----------------------------------------------+----------+
+    | #gallery  | #view: #cv3d (WebGPU) + #phase overlay +     | #panel   |
+    |  objects  |   #look3d (mode, preset, cutaway, source)    | scan     |
+    |           | #explore: #slAxial #slCoronal #slSagittal    | settings,|
+    |           |   #slOblique, #exbar (source, slab, window,  | colour,  |
+    |           |   HU readout, measure)                       | export,  |
+    |           |                                              | credit   |
+    +-----------+----------------------------------------------+----------+
+  PHONE (max-width 760px, or a short touch landscape): #dock at the base;
+    #dockObjects opens #gallery, #dockPanel opens #panel as bottom sheets.
+
+  grep handles: id="gallery"  id="view"  id="explore"  id="panel"  id="dock"  data-view=
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="crumb">Stella Nova</span>
+    <h1>CT Lab 3D</h1>
+    <span id="backend" class="badge" title="Where the reconstruction runs">CPU</span>
+  </div>
+  <div class="actions">
+    <button id="btnScan" class="btn" title="Scan again with the settings (R)">Scan again</button>
+    <button id="btnPlay" class="btn" title="Pause or play the scan (space)">Pause</button>
+    <a class="link hide-phone" href="../ct-lab/index.html">2D CT lab</a>
+    <a class="link hide-phone" href="../ct-explained/index.html">How CT works</a>
+  </div>
+</header>
+
+<aside id="gallery" aria-label="Objects">
+  <div class="sheet-grip" data-close="gallery"></div>
+  <h2>Objects</h2>
+  <p class="fine">Real scans and real 3D models with open licences. Pick one to scan it.</p>
+  <div id="objList" class="olist"></div>
+</aside>
+
+<main id="stage">
+  <section id="view" aria-label="3D view">
+    <canvas id="cv3d" aria-label="3D view of the scanner and the object"></canvas>
+    <canvas id="fb3d" hidden aria-label="Slices of the object (no WebGPU)"></canvas>
+    <div id="v3Note" class="note" hidden></div>
+    <div id="phase">
+      <div id="phaseText">Loading</div>
+      <div class="prog"><i id="prog"></i></div>
+    </div>
+    <div id="look3d">
+      <div class="seg" id="segMode" aria-label="3D view mode">
+        <button data-mode="dvr" class="on">Volume</button><button data-mode="mip">MIP</button><button data-mode="iso">Surfaces</button><button data-mode="slices">Planes</button>
+      </div>
+      <div class="seg" id="segPreset" aria-label="Transfer function"></div>
+      <div class="seg" id="segShow" aria-label="What the 3D view shows">
+        <button data-show="auto" class="on" title="The reconstruction once it exists">Scan</button><button data-show="phantom" title="The object itself">Truth</button>
+      </div>
+      <button id="btnCut" class="chip on" title="Cut away the corner that faces you">Cutaway</button>
+    </div>
+  </section>
+
+  <section id="explore" aria-label="Slices">
+    <div id="exbar">
+      <div class="seg" id="segSource" aria-label="What the slices show">
+        <button data-src="recon" class="on">Reconstruction</button><button data-src="truth">Truth</button><button data-src="diff">Difference</button>
+      </div>
+      <div class="seg" id="segWin" aria-label="Window"></div>
+      <label class="slab">Slab <input id="slab" type="range" min="0" max="12" step="1" value="0"><output id="slabOut">1</output></label>
+      <button id="btnMeasure" class="chip" title="Click two points on a slice to measure (M)">Measure</button>
+      <span id="readout" class="readout">-</span>
+    </div>
+    <div id="slgrid">
+      <figure class="slp" data-view="axial"><canvas id="slAxial"></canvas><figcaption><b>Axial</b> <span></span></figcaption><input type="range" class="depth" aria-label="Axial slice"></figure>
+      <figure class="slp" data-view="coronal"><canvas id="slCoronal"></canvas><figcaption><b>Coronal</b> <span></span></figcaption><input type="range" class="depth" aria-label="Coronal slice"></figure>
+      <figure class="slp" data-view="sagittal"><canvas id="slSagittal"></canvas><figcaption><b>Sagittal</b> <span></span></figcaption><input type="range" class="depth" aria-label="Sagittal slice"></figure>
+      <figure class="slp" data-view="oblique"><canvas id="slOblique"></canvas><figcaption><b>Oblique</b> <span></span></figcaption>
+        <div class="obl"><label>Turn <input id="oblYaw" type="range" min="-180" max="180" value="30"></label><label>Tilt <input id="oblPitch" type="range" min="-90" max="90" value="20"></label></div></figure>
+    </div>
+    <p id="metrics" class="fine"></p>
+  </section>
+</main>
+
+<aside id="panel" aria-label="Settings">
+  <div class="sheet-grip" data-close="panel"></div>
+  <section>
+    <h2 id="objName">Object</h2>
+    <p id="objBlurb" class="blurb"></p>
+    <p id="objCredit" class="fine credit"></p>
+  </section>
+  <section>
+    <h3>Scan</h3>
+    <div class="row"><label for="sViews">Views</label><input id="sViews" type="range" min="30" max="360" step="10" value="180"><output id="oViews">180</output></div>
+    <div class="row"><label>Detector</label><div class="seg" id="segDet"><button data-det="0.6">Coarse</button><button data-det="1" class="on">Normal</button><button data-det="1.5">Fine</button></div></div>
+    <div class="row"><label for="sDose">Dose</label><input id="sDose" type="range" min="0" max="5" step="1" value="5"><output id="oDose">no noise</output></div>
+    <div class="row"><label for="sKvp">Tube</label><input id="sKvp" type="range" min="60" max="150" step="10" value="120"><output id="oKvp">120 kVp</output></div>
+    <div class="row"><label for="tPoly">Beam hardening</label><input id="tPoly" type="checkbox"><span class="fine">polychromatic: cupping, metal streaks</span></div>
+    <div class="row"><label>Voxels</label><div class="seg" id="segN"><button data-n="64">64³</button><button data-n="96">96³</button><button data-n="128" class="on">128³</button></div></div>
+    <div class="row"><label>Method</label><div class="seg" id="segAlg"><button data-alg="fdk" class="on">FDK</button><button data-alg="sirt">SIRT</button></div></div>
+    <div class="row"><label for="selFilter">Filter</label><select id="selFilter"><option value="ram-lak">Ram-Lak</option><option value="shepp-logan" selected>Shepp-Logan</option><option value="cosine">Cosine</option><option value="hamming">Hamming</option><option value="hann">Hann</option></select></div>
+    <p class="fine" id="scanNote"></p>
+  </section>
+  <section>
+    <h3>Colour</h3>
+    <div id="cmapMain"></div>
+    <details><summary>Difference map</summary><div id="cmapDiff"></div></details>
+  </section>
+  <section>
+    <h3>Export</h3>
+    <div class="btns"><button class="btn" id="exSlices">Slices (PNG)</button><button class="btn" id="exVolume">Volume (raw + JSON)</button></div>
+  </section>
+  <section class="fine about">
+    <h3>About</h3>
+    <p>The scan and the reconstruction run in your browser: a Joseph cone-beam projector, Beer-Lambert physics with Poisson noise and a polychromatic spectrum, then FDK (Feldkamp, Davis and Kress 1984) on the GPU or SIRT on the CPU. We wrote this code. The real tool for this work is the <a href="https://github.com/astra-toolbox/astra-toolbox">ASTRA Toolbox</a> (W. van Aarle et al., <a href="https://doi.org/10.1016/j.ultramic.2015.05.002">Ultramicroscopy 2015</a>; <a href="https://doi.org/10.1364/OE.24.025129">Optics Express 2016</a>).</p>
+    <p>Model objects: we turned surface models into voxels and gave each part a material (bone, steel, glass, resin and so on), so their insides are our choice, not a scan. The walnut and the rabbit are real CT scans. Full credits: <a href="CREDITS.md">CREDITS.md</a>.</p>
+  </section>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button id="dockObjects">Objects</button>
+  <button id="dockScan">Scan again</button>
+  <button id="dockSlices">Slices</button>
+  <button id="dockPanel">Settings</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
