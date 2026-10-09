@@ -5,7 +5,8 @@
 //  cirrus, on a seeded simplex noise that copies noise.js simplex3 (the
 //  same integer hash in u32, so the GPU field is the CPU field up to f32
 //  rounding). render.js runs csClouds on a W x W/2 equirect map (the
-//  texelDir layout of noise.js) when the simulated hour changes.
+//  texelDir layout of noise.js) when the simulated hour changes, one
+//  row slice per frame (U.rows.x is the first row of the slice).
 //  Output rgba8unorm: r deck cover, g cirrus cover, b 0, a 1.
 //
 //  grep -n targets: "struct CloudU", "fn n_hash", "fn simplex",
@@ -16,7 +17,7 @@ struct CloudU {
   a: vec4f,                // hours, cover, freq, swirl
   b: vec4f,                // cirrus, deck on, cyclone count, thr0 (clouds.js calibrate)
   s: vec4i,                // deck seed, cirrus seed
-  pad: vec4f,
+  rows: vec4f,             // x first row of this dispatch (render.js row slices)
   cyc: array<vec4f, 24>,   // per cyclone: (cx, cy, cz, r), (twist, front, sign, intensity)
 }
 
@@ -166,14 +167,15 @@ fn cirrusAt(p: vec3f, lat: f32) -> f32 {
 @compute @workgroup_size(8, 8)
 fn csClouds(@builtin(global_invocation_id) id: vec3u) {
   let sz = textureDimensions(outMap);
-  if (id.x >= sz.x || id.y >= sz.y) { return; }
+  let y = id.y + u32(U.rows.x);
+  if (id.x >= sz.x || y >= sz.y) { return; }
   let u = (f32(id.x) + 0.5) / f32(sz.x);
-  let th = (f32(id.y) + 0.5) / f32(sz.y) * 3.14159265;
+  let th = (f32(y) + 0.5) / f32(sz.y) * 3.14159265;
   let p = vec3f(-cos(6.2831853 * u) * sin(th), cos(th), sin(6.2831853 * u) * sin(th));
   let lat = asin(clamp(p.y, -1.0, 1.0));
   var deck = 0.0;
   if (U.b.y > 0.5 && U.a.y > 0.0) { deck = deckAt(p, lat); }
   var cir = 0.0;
   if (U.b.x > 0.0) { cir = cirrusAt(p, lat); }
-  textureStore(outMap, id.xy, vec4f(deck, cir, 0.0, 1.0));
+  textureStore(outMap, vec2u(id.x, y), vec4f(deck, cir, 0.0, 1.0));
 }

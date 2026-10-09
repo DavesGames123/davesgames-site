@@ -243,7 +243,7 @@ export function packClouds(su, hours, buf = new ArrayBuffer(CLOUD_U_BYTES)) {
   f[0] = hours; f[1] = su.cover; f[2] = su.freq; f[3] = su.swirl;
   f[4] = su.cirrus; f[5] = su.deck; f[6] = su.nCyc; f[7] = su.thr0;
   i[8] = su.seed; i[9] = su.cirrusSeed; i[10] = 0; i[11] = 0;
-  f[12] = 0; f[13] = 0; f[14] = 0; f[15] = 0;
+  f[12] = 0; f[13] = 0; f[14] = 0; f[15] = 0;   // rows: render.js sets f[12], the first row of a slice
   f.set(cyclones(su, hours), 16);
   return buf;
 }

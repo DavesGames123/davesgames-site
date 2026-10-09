@@ -469,5 +469,19 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('saver: exit restores the rate and the toggles', S.rate === 360 && S.clouds === false && S.moveSun === true);
 }
 
+// render speed: cloud row slices and the reused view uniform
+{
+  const RD = await import('./render.js');
+  const ks = [0.00167, 0.0167, 0.1, 1.6, 0].map(RD.cloudSlices);
+  // 6 min/s, 1 h/s, 6 h/s, 4 days/s at 60 fps, and a held hour
+  ok('render: cloud slices 8 at 6 min/s, 1 at 6 h/s and faster, 8 when held', ks[0] === 8 && ks[2] === 1 && ks[3] === 1 && ks[4] === 8 && ks[1] >= 1 && ks[1] <= 8, ks.join(' '));
+  let gap = 0;
+  for (let dh = 1e-4; dh < 2; dh *= 1.3) { const k = RD.cloudSlices(dh); if (k > 1) gap = Math.max(gap, (k - 1) * dh); }
+  ok('render: rows of one cloud map differ by at most SLICE_DH hours', gap <= RD.SLICE_DH + 1e-12, `max ${gap.toFixed(4)} h`);
+  const out = new Float32Array(RD.VIEW_FLOATS), cam = { pos: [0, 0, 3], fov: 1, w: 4, h: 3, sunDir: [1, 0, 0] };
+  const a = RD.packView(cam, null, 1.006, undefined, out), b = RD.packView(cam, null, 1.006);
+  ok('render: packView fills the given array (no new typed array per frame)', a === out && a.every((v, i) => v === b[i]));
+}
+
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);

@@ -58,7 +58,9 @@ export async function createRenderer({ device, format, loadText }) {
   const cPipe = await device.createComputePipelineAsync({ layout: 'auto', compute: { module: cMod, entryPoint: 'csClouds' } });
   const cBuf = device.createBuffer({ size: CLOUD_U_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const cPack = new ArrayBuffer(CLOUD_U_BYTES);
-  let dyn = null, cBind = null, cSetup = null, cHours = NaN, cFrame = 0;
+  let dyn = null, cBind = null, cSetup = null, cHours = NaN, cSlice = 0, cLeft = 0;
+  const cF = new Float32Array(cPack);
+  const vPack = new Float32Array(VIEW_FLOATS);
   const vbuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const sMap = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'clamp-to-edge', maxAnisotropy: 8 });
   let tex = {}, bind = null, P = null, shellR = 1.006, glow = [0, 0, 0], terr = [1, 0, 0, 0];
@@ -80,10 +82,10 @@ export async function createRenderer({ device, format, loadText }) {
     const cw = cloudWidth(env);
     if (!dyn || dyn.width !== cw) {
       if (dyn) dyn.destroy();
-      dyn = device.createTexture({ size: [cw, cw / 2], format: 'rgba8unorm', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+      dyn = device.createTexture({ size: [cw, cw / 2], format: 'rgba8unorm', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC });
       cBind = device.createBindGroup({ layout: cPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: cBuf } }, { binding: 1, resource: dyn.createView() }] });
     }
-    cSetup = cloudSetup(P); cHours = NaN;
+    cSetup = cloudSetup(P); cHours = NaN; cLeft = 0;
     tex = {
       albedo: makeTex(gw, gh, true, shrink(M.albedo, M.W, M.H, f), true),
       normal: makeTex(gw, gh, false, shrink(M.normal, M.W, M.H, f), true),
@@ -107,6 +109,7 @@ export async function createRenderer({ device, format, loadText }) {
   const R = {
     atmo,
     get planet() { return P; },
+    get cloudMap() { return dyn; },   // tests-gpu.mjs reads it back
     setPlanet(planet, M, env = {}) {
       P = planet;
       shellR = 1 + Math.max(0.002, (P.kind === 'gas' ? 0.004 : P.clouds.height || 0.006));
@@ -121,19 +124,26 @@ export async function createRenderer({ device, format, loadText }) {
     setAtmo(planet, ground = 0.3) { P = planet; atmo.update(P.atmo, Math.min(0.9, ground), glow); },
     render(cam, target) {
       if (!bind) return;
-      device.queue.writeBuffer(vbuf, 0, packView(cam, P, shellR, terr));
+      device.queue.writeBuffer(vbuf, 0, packView(cam, P, shellR, terr, vPack));
       const enc = device.createCommandEncoder();
-      // the cloud map follows the simulated hour; phones refresh it every
-      // third frame and tablets every second (the solid drift stays smooth)
-      const h = cam.hours || 0, every = cam.quality === 0 ? 3 : cam.quality === 1 ? 2 : 1;
-      cFrame++;
-      if (cSetup && (cSetup.cover > 0 || cSetup.cirrus > 0) && h !== cHours && (Number.isNaN(cHours) || cFrame % every === 0)) {
-        device.queue.writeBuffer(cBuf, 0, packClouds(cSetup, h, cPack));
-        const cp = enc.beginComputePass();
-        cp.setPipeline(cPipe); cp.setBindGroup(0, cBind);
-        cp.dispatchWorkgroups(Math.ceil(dyn.width / 8), Math.ceil(dyn.height / 8));
-        cp.end();
-        cHours = h;
+      // the cloud map follows the simulated hour in row slices (cloudSlices):
+      // one slice per frame, so a frame pays 1/k of the map. When the hour
+      // stops, the last k slices bring every row to that hour.
+      const h = cam.hours || 0;
+      if (cSetup && (cSetup.cover > 0 || cSetup.cirrus > 0)) {
+        const first = Number.isNaN(cHours);
+        const k = first ? 1 : cloudSlices(Math.abs(h - cHours));
+        if (first || h !== cHours) { cLeft = k; cHours = h; }
+        if (cLeft > 0) {
+          const H = dyn.height, rows = Math.ceil(H / k / 8) * 8, s = cSlice % Math.ceil(H / rows);
+          packClouds(cSetup, h, cPack); cF[12] = s * rows;
+          device.queue.writeBuffer(cBuf, 0, cPack);
+          const cp = enc.beginComputePass();
+          cp.setPipeline(cPipe); cp.setBindGroup(0, cBind);
+          cp.dispatchWorkgroups(Math.ceil(dyn.width / 8), Math.min(rows, H - s * rows) / 8);
+          cp.end();
+          cSlice = s + 1; cLeft--;
+        }
       }
       const pass = enc.beginRenderPass({ colorAttachments: [{ view: target, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
       pass.setPipeline(pipeline); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
@@ -165,7 +175,20 @@ export function worldFrame(v, tiltDeg, spin) {
   return [x, y * ct - z * st, y * st + z * ct];
 }
 
-export function packView(cam, P, shellR, terr = [1, 0, 0, 0]) {
+// How many row slices the cloud map is split into, from the change of
+// the simulated hour in one frame (dh). Rows of one map then differ by
+// at most (k - 1) dh <= SLICE_DH hours: corr > 0.999 (clouds.js), so the
+// slice edges do not show. At 6 min/s and 60 fps, k = 8; at 1 day/s, 1.
+export const SLICE_DH = 0.05, MAX_SLICES = 8;
+export function cloudSlices(dh) {
+  if (!(dh > 0)) return MAX_SLICES;
+  return Math.max(1, Math.min(MAX_SLICES, Math.floor(SLICE_DH / dh) + 1));
+}
+
+// out: an optional Float32Array(VIEW_FLOATS) to fill (render() reuses one,
+// so a frame allocates no typed array).
+export const VIEW_FLOATS = 64;
+export function packView(cam, P, shellR, terr = [1, 0, 0, 0], out = new Float32Array(VIEW_FLOATS)) {
   const tilt = P ? P.tilt : 0;
   const fwdW = norm(sub(cam.target || [0, 0, 0], cam.pos));
   const rightW = norm(cross(fwdW, cam.up || [0, 1, 0]));
@@ -179,7 +202,7 @@ export function packView(cam, P, shellR, terr = [1, 0, 0, 0]) {
   const bw = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(e => worldFrame(e, tilt, cam.spin || 0));
   const sw = norm(cam.sunDir), hrs = cam.hours || 0;
   const cloudsOn = cam.cloudsOn !== false && P && P.clouds && P.clouds.cover > 0 ? 1 : 0;
-  return new Float32Array([
+  const v = [
     pos[0], pos[1], pos[2], cam.t || 0,
     r[0], r[1], r[2], Math.tan(cam.fov / 2),
     u[0], u[1], u[2], cam.w / cam.h,
@@ -199,5 +222,7 @@ export function packView(cam, P, shellR, terr = [1, 0, 0, 0]) {
     -(DECK_RATE * hrs) / (2 * Math.PI) % 1, -(CIRRUS_RATE * hrs) / (2 * Math.PI) % 1, P && P.kind === 'gas' ? 0.35 : 0.55, CLOUD_MAX,
     // cast shadows of the relief: relief (radii), on, first step (rad), 0
     terr[0], terr[1], terr[2], terr[3],
-  ]);
+  ];
+  out.set(v);
+  return out;
 }

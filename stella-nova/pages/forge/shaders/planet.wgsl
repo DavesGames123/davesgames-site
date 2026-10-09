@@ -280,7 +280,9 @@ fn atmosphere(ro: vec3f, rd: vec3f, tMax: f32) -> Scat {
   let t0 = max(hit.x, 0.0);
   let t1 = min(hit.y, tMax * R);
   if (t1 <= t0) { return s; }
-  let n = i32(V.shell.z);
+  // a ray that ends on the ground crosses a short, smooth stretch of
+  // air: half the steps (at least 10) change a pixel by at most 3 / 255
+  let n = select(i32(V.shell.z), max(10, i32(V.shell.z) / 2), tMax < 1e8);
   let dt = (t1 - t0) / f32(n);
   let L = V.sun.xyz;
   let c = dot(rd, L);
@@ -369,9 +371,18 @@ fn fs(in: VOut) -> @location(0) vec4f {
   // the planet spins; the sun disc has a true angular size
   let rdW = vec3f(dot(V.bw0.xyz, rd), dot(V.bw1.xyz, rd), dot(V.bw2.xyz, rd));
   let pxAngle = 2.0 * th / V.res.y;
-  var col = skyColor(rdW, pxAngle, V.bw2.w) * V.sunW.w;
-  let sun = sky_sun(rdW, V.sunW.xyz, V.bw0.w, V.camPos.w, V.bw1.w, 0.35);
-  col += sun.col;
+  let planetHit = hp.x > 0.0;
+  // planet cover of this pixel (the soft silhouette edge below). Where the
+  // planet covers the pixel fully, the background is not seen, so the
+  // stars, the Milky Way and the sun are not computed (same pixels).
+  let dEdge = (1.0 - length(ro + rd * tca)) / max(tca * pxAngle, 1e-5);
+  let cover = select(0.0, clamp(dEdge + 0.5, 0.0, 1.0), planetHit);
+  var col = vec3f(0.0);
+  if (cover < 1.0) {
+    col = skyColor(rdW, pxAngle, V.bw2.w) * V.sunW.w;
+    let sun = sky_sun(rdW, V.sunW.xyz, V.bw0.w, V.camPos.w, V.bw1.w, 0.35);
+    col += sun.col;
+  }
 
   // ring plane hit
   var ringT = -1.0;
@@ -395,7 +406,6 @@ fn fs(in: VOut) -> @location(0) vec4f {
     }
   }
   let topT = raySphere(ro, rd, V.shell.x);
-  let planetHit = hp.x > 0.0;
   // ring behind the planet's atmosphere (or no planet in the way)
   if (ringT > 0.0 && !planetHit && (topT.y < 0.0 || ringT > topT.y)) { col = mix(col, ring.rgb, ring.a); }
 
@@ -421,9 +431,7 @@ fn fs(in: VOut) -> @location(0) vec4f {
       surf = mix(surf, ci, c.y * V.cloud2.z);
     }
     // a soft edge for airless bodies (anti-aliased silhouette)
-    let pxAng = 2.0 * th / V.res.y;
-    let dEdge = (1.0 - length(ro + rd * tca)) / max(tca * pxAng, 1e-5);
-    col = mix(col, surf, clamp(dEdge + 0.5, 0.0, 1.0));
+    col = mix(col, surf, cover);
   }
   let sc = atmosphere(ro, rd, tEnd);
   col = col * sc.T + sc.L;
