@@ -25,6 +25,7 @@
      worker.js + pool.js   generation across module workers
      atmo.js + shaders/atmo-*.wgsl   atmosphere LUTs
      render.js + shaders/planet.wgsl the view
+     clock.js    time rate, simulated clock
      main.js     the GUI, camera, downloads   saver.js window.snSaver
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -42,7 +43,7 @@
 <canvas id="view"></canvas>
 <div id="nogpu" hidden><b>WebGPU is not available here.</b><span>The generator and the map downloads still work. The 3D view needs a browser with WebGPU (Chrome, Edge, Safari 26).</span></div>
 
-<header id="top"><span class="brand">Stella Nova</span><span class="sep">/</span><span class="name">Planet Forge</span><span id="status"></span></header>
+<header id="top"><span class="brand">Stella Nova</span><span class="sep">/</span><span class="name">Planet Forge</span><span id="status"></span><span id="clock" title="time rate · planet days"></span></header>
 <div id="prog"><i id="progFill"></i></div>
 
 <aside id="panel">
@@ -65,6 +66,8 @@
     <div class="ctl"><label>exposure <output id="oExp"></output></label><input id="exp" type="range" min="0.1" max="3" step="0.01" value="0.65"></div>
     <div class="ctl"><label>sun azimuth <output id="oSun"></output></label><input id="sunAz" type="range" min="0" max="360" step="0.5" value="50"></div>
     <div class="ctl"><label>sun elevation <output id="oSunEl"></output></label><input id="sunEl" type="range" min="-60" max="60" step="0.5" value="12"></div>
+    <div class="ctl"><label>time rate <output id="oRate"></output></label><input id="rate" type="range" min="0" max="1" step="0.001"></div>
+    <div id="ratePresets" class="presets rates"></div>
     <div class="toggles">
       <label><input id="tSun" type="checkbox" checked> moving sun</label>
       <label><input id="tSpin" type="checkbox" checked> spin</label>
@@ -80,7 +83,7 @@
 </aside>
 
 <nav id="dock">
-  <button data-tab="planet">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button><button id="dockDice" title="New seed">⟳</button>
+  <button data-tab="planet">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button><button id="dockRate" title="Time rate">6 min</button><button id="dockDice" title="New seed">⟳</button>
 </nav>
 
 <div id="mapView" hidden><header><b id="mvTitle"></b><span id="mvNote"></span><button id="mvSave">Download PNG</button><button id="mvClose">Close</button></header><canvas id="mvCanvas"></canvas></div>

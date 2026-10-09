@@ -31,6 +31,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); 
 #nogpu b { color: var(--ink); font-size: 15px; }
 
 #top { position: fixed; top: 0; left: var(--panel-w); right: 0; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; pointer-events: none; font-size: 12px; letter-spacing: 0.04em; }
+#clock { flex: none; color: var(--acc); font-variant-numeric: tabular-nums; }
+.presets.rates { margin: 2px 0 6px; } .presets.rates button { padding: 6px 2px; font-size: 11px; }
 #top .brand { color: var(--dim); } #top .sep { color: #444; } #top .name { font-weight: 600; }
 #status { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-variant-numeric: tabular-nums; }
 #prog { position: fixed; top: 0; left: var(--panel-w); right: 0; height: 2px; }
@@ -91,6 +93,7 @@ label.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   #dock button { flex: 1; height: 44px; border-radius: 10px; }
   #dock button.on { border-color: var(--acc); color: var(--acc); }
   #dock #dockDice { flex: 0 0 52px; font-size: 18px; }
+  #dock #dockRate { flex: 0 0 64px; font-size: 11px; font-variant-numeric: tabular-nums; }
   #tabs { display: none; }
   #panel { top: auto; left: 0; right: 0; bottom: var(--dock-h); width: auto; height: 46vh; height: 46dvh; border-right: 0; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; transform: translateY(calc(100% + var(--dock-h))); transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
   #panel.open { transform: none; }

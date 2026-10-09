@@ -13,7 +13,10 @@
 //  tilted by P.tilt about x. The view rays are moved into that body frame
 //  (bodyFrame), so the shader works in one frame. cam = { pos, target,
 //  up, fov (rad), w, h, offX, offY, t, exposure, sunDir (world), spin
-//  angle, steps, cloudsOn, flowSpeed }.
+//  angle, steps, cloudsOn, flowSpeed, quality (0 phone, 1 tablet,
+//  2 desktop), sunRadiusDeg, sunGain, starGain }.
+//  Shaders: atmo-common.wgsl + sky.wgsl (stars, Milky Way, sun) +
+//  planet.wgsl, joined in that order into one module.
 //
 //  Textures (RGBA8): albedo (sRGB), normal (+height), material (AO,
 //  roughness, metallic, specular), emissive (sRGB, a = city light),
@@ -28,11 +31,15 @@ import { mipChain, shrink } from './maps.js';
 import { ringProfile } from './gas.js';
 import { gpuWidth } from './budget.js';
 
+// The sun's angular radius on the sky. The real Sun from 1 AU is 0.27 deg;
+// 1.6 deg makes the granulation and the limb darkening read at page size.
+export const SUN_RADIUS_DEG = 1.6;
+
 const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 
 export async function createRenderer({ device, format, loadText }) {
   const atmo = await createAtmo(device, loadText);
-  const code = atmo.common + '\n' + await loadText('planet.wgsl');
+  const code = atmo.common + '\n' + await loadText('sky.wgsl') + '\n' + await loadText('planet.wgsl');
   const module = device.createShaderModule({ label: 'forge planet', code });
   const pipeline = await device.createRenderPipelineAsync({
     layout: 'auto',
@@ -40,7 +47,7 @@ export async function createRenderer({ device, format, loadText }) {
     fragment: { module, entryPoint: 'fs', targets: [{ format }] },
     primitive: { topology: 'triangle-list' },
   });
-  const vbuf = device.createBuffer({ size: 160, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const vbuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const sMap = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'clamp-to-edge', maxAnisotropy: 8 });
   let tex = {}, bind = null, P = null, shellR = 1.012;
 
@@ -131,6 +138,9 @@ export function packView(cam, P, shellR) {
   const top = P && P.atmo.on ? 1 + P.atmo.heightKm / P.atmo.radiusKm : 1;
   const rings = P && P.rings && P.rings.on ? [P.rings.inner, P.rings.outer, 1, P.rings.opacity] : [0, 0, 0, 0];
   const cc = P && P.clouds ? P.clouds.color.map(lin) : [1, 1, 1];
+  // columns of the body -> world rotation: the world images of the body axes
+  const bw = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(e => worldFrame(e, tilt, cam.spin || 0));
+  const sw = norm(cam.sunDir);
   const cloudsOn = cam.cloudsOn !== false && P && P.clouds && P.clouds.cover > 0 ? 1 : 0;
   return new Float32Array([
     pos[0], pos[1], pos[2], cam.t || 0,
@@ -143,5 +153,10 @@ export function packView(cam, P, shellR) {
     ...rings,
     0.0004 * (cam.flowSpeed ?? 1), 0.00025 * (cam.flowSpeed ?? 1), cloudsOn, P && P.kind === 'gas' ? 1 : 0,
     cc[0], cc[1], cc[2], 0.0015,
+    // body -> world rows (stars stay fixed in the world frame), the sun
+    bw[0][0], bw[1][0], bw[2][0], (cam.sunRadiusDeg ?? SUN_RADIUS_DEG) * Math.PI / 180,
+    bw[0][1], bw[1][1], bw[2][1], cam.sunGain ?? 1.6,
+    bw[0][2], bw[1][2], bw[2][2], cam.quality ?? 2,
+    sw[0], sw[1], sw[2], cam.starGain ?? 1,
   ]);
 }

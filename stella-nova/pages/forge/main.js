@@ -10,8 +10,12 @@
 //  chosen width is capped by budget.js pickWidth (phones: 2k at most).
 //
 //  Camera: an orbit (yaw, pitch, distance) about the planet, drag to turn,
-//  wheel or pinch to zoom. The planet spins about its tilted axis; the sun
-//  moves slowly unless "moving sun" is off. The planet is framed in the
+//  wheel or pinch to zoom. Time: clock.js runs a simulated clock at S.rate
+//  (simulated seconds per real second, 1 .. 4 days/s, log slider and
+//  presets in the Sky tab, a cycle button in the phone dock, the rate and
+//  the day count in #clock). The planet spins once per simulated day; the
+//  sun goes round in a 30-day year unless "moving sun" is off; the clouds
+//  evolve in simulated hours. The planet is framed in the
 //  clear area beside the panel or above the sheet: the view shifts its
 //  principal point (render.js cam.offX / offY), it does not resize.
 //
@@ -26,6 +30,7 @@
 //  grep -n targets: "async function boot", "function regenerate",
 //  "function buildShape", "function buildMaps", "function frame",
 //  "function clearArea", "function bindPointer", "function downloadZip",
+//  "function showClock",
 //  "window.__forge"
 // ============================================================================
 import * as PR from './presets.js';
@@ -34,6 +39,7 @@ import { encodePNG } from './png.js';
 import { createPool } from './pool.js';
 import { createRenderer } from './render.js';
 import * as BG from './budget.js';
+import * as CK from './clock.js';
 import './saver.js';
 
 const $ = id => document.getElementById(id);
@@ -45,6 +51,7 @@ const S = {
   P: PR.fromPreset('earth'), width: BG.defaultWidth(ENV), M: null, Mw: 0,
   cam: { yaw: 0.6, pitch: 0.22, dist: 3.4 }, sunAz: 50, sunEl: 12, exposure: 0.65,
   moveSun: true, spin: true, clouds: true, atmo: true, spinAngle: 0, t: 0,
+  rate: CK.RATE_DEFAULT, clock: CK.createClock(),
   busy: false, tab: 'planet', saver: false, override: null,
 };
 let pool, device = null, ctx = null, R = null, canvas, format;
@@ -176,6 +183,19 @@ function buildSky() {
 function bindView() {
   const bind = (id, out, key, f = v => v) => { const el = $(id); const set = () => { S[key] = f(+el.value); $(out).textContent = el.value; }; el.oninput = set; set(); };
   bind('exp', 'oExp', 'exposure'); bind('sunAz', 'oSun', 'sunAz'); bind('sunEl', 'oSunEl', 'sunEl');
+  // time rate: a log slider and presets (clock.js)
+  const rate = $('rate');
+  const setRate = r => { S.rate = r; rate.value = CK.rateToSlider(r); showClock(); };
+  rate.oninput = () => { S.rate = CK.sliderToRate(+rate.value); showClock(); };
+  for (const p of CK.RATE_PRESETS) {
+    const b = document.createElement('button'); b.textContent = p.label; b.onclick = () => setRate(p.rate);
+    $('ratePresets').appendChild(b);
+  }
+  $('dockRate').onclick = () => {
+    const i = CK.RATE_PRESETS.findIndex(p => p.rate > S.rate * 1.01);
+    setRate(CK.RATE_PRESETS[i < 0 ? 0 : i].rate);
+  };
+  S.setRate = setRate; setRate(S.rate);
   $('tSun').onchange = e => S.moveSun = e.target.checked;
   $('tSpin').onchange = e => S.spin = e.target.checked;
   $('tClouds').onchange = e => S.clouds = e.target.checked;
@@ -323,8 +343,12 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000); lastFrame = now;
   S.t += dt;
-  if (S.spin && S.P) S.spinAngle += dt * 0.02 * S.P.spin;
-  if (S.moveSun && !S.override) { S.sunAz = (S.sunAz + dt * 1.2) % 360; }
+  // the simulated clock (clock.js): spin, the sun's year, the cloud hours
+  const ck = S.clock;
+  ck.spinAngle = S.spinAngle; ck.sunAz = S.sunAz;
+  ck.tick(dt, { rate: S.rate, spinOn: S.spin && !!S.P, spin: S.P ? S.P.spin : 1, sunOn: S.moveSun && !S.override });
+  S.spinAngle = ck.spinAngle; S.sunAz = ck.sunAz;
+  if (now - (S.hudAt || 0) > 250) { S.hudAt = now; showClock(); }
   if (!R || !S.M) return;
   const c = camState(), ca = clearArea();
   // the principal point moves to the centre of the clear area
@@ -336,7 +360,16 @@ function frame(now) {
     pos: c.pos, target: c.target, up: c.up, fov: Math.min(fov, 1.6), w: VB.w, h: VB.h, offX, offY,
     t: S.t, exposure: S.exposure, sunDir: c.sunDir || sunDir(), spin: S.spinAngle,
     steps: BG.viewSteps(ENV), cloudsOn: S.clouds, flowSpeed: 1,
+    hours: ck.hours(), quality: ENV.mobile ? 0 : ENV.coarse ? 1 : 2,
   }, ctx.getCurrentTexture().createView());
+}
+
+// The clock line in the header: the rate and the planet's local day.
+function showClock() {
+  const day = S.clock.simS / CK.DAY_S * (S.P ? S.P.spin : 1);
+  const txt = `${CK.rateLabel(S.rate)} · day ${day.toFixed(day < 10 ? 2 : 1)}`;
+  $('clock').textContent = txt; $('oRate').textContent = CK.rateLabel(S.rate);
+  $('dockRate').textContent = CK.rateLabel(S.rate).replace('/s', '');
 }
 
 // Show a planet that was generated elsewhere (the saver preloads the next).

@@ -16,13 +16,14 @@
 //       surface (aerial perspective) or through the limb, with the
 //       multiple-scattering LUT and the planet shadow (terminator glow)
 //    5. rings in front of or behind the planet, shadowed by the planet
-//    6. stars and sun, exposure, ACES tone map, sRGB, dither
+//    6. the background (sky.wgsl: stars, Milky Way, the sun disc and
+//       corona, all in the world frame), exposure, ACES, sRGB, dither
 //  Texture coordinates come from the body-frame direction in the
 //  THREE.SphereGeometry layout. Gradients for the mip level are taken in
 //  uniform control flow and wrapped at the date line (no seam line).
 //
 //  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface",
-//  "fn cloudAt", "fn atmosphere", "fn ringAt", "fn stars", "@fragment"
+//  "fn cloudAt", "fn atmosphere", "fn ringAt", "@fragment"
 // ============================================================================
 
 struct View {
@@ -36,6 +37,10 @@ struct View {
   rings: vec4f,     // inner, outer, on, opacity
   flow: vec4f,      // x cloud drift (u per s), y gas giant flow speed, z clouds on, w gas (1) / rocky (0)
   cloudCol: vec4f,  // rgb cloud colour (linear), w ambient floor
+  bw0: vec4f,       // xyz row 0 of the body -> world rotation, w sun angular radius (rad)
+  bw1: vec4f,       // xyz row 1, w sun disc gain
+  bw2: vec4f,       // xyz row 2, w quality (0 phone, 1 tablet, 2 desktop)
+  sunW: vec4f,      // xyz sun direction (world frame), w star gain
 }
 
 @group(0) @binding(0) var<uniform> V: View;
@@ -283,18 +288,6 @@ fn hash3(p: vec3f) -> f32 {
   return fract((q.x + q.y) * q.z);
 }
 
-fn stars(rd: vec3f) -> vec3f {
-  let p = rd * 220.0;
-  let c = floor(p);
-  let h = hash3(c);
-  if (h < 0.982) { return vec3f(0.0); }
-  let o = vec3f(hash3(c + 7.1), hash3(c + 3.7), hash3(c + 1.3));
-  let d = length(p - (c + 0.2 + 0.6 * o));
-  let b = pow((h - 0.982) / 0.018, 6.0) * 0.6 + 0.02;
-  let tint = mix(vec3f(1.0, 0.82, 0.68), vec3f(0.75, 0.85, 1.0), o.x);
-  return tint * b * smoothstep(0.16, 0.0, d);
-}
-
 fn aces(x: vec3f) -> vec3f {
   return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0));
 }
@@ -328,10 +321,14 @@ fn fs(in: VOut) -> @location(0) vec4f {
   gC.dy = wrapGrad(dpdy(uvC));
 
   let L = V.sun.xyz;
-  var col = stars(rd);
-  // the sun disc and a small glare
   let cs = dot(rd, L);
-  col += vec3f(1.0, 0.96, 0.9) * (smoothstep(V.sun.w, V.sun.w + 0.00002, cs) * 400.0 + pow(max(cs, 0.0), 900.0) * 3.0);
+  // the background in the world frame (sky.wgsl): stars stay fixed while
+  // the planet spins; the sun disc has a true angular size
+  let rdW = vec3f(dot(V.bw0.xyz, rd), dot(V.bw1.xyz, rd), dot(V.bw2.xyz, rd));
+  let pxAngle = 2.0 * th / V.res.y;
+  var col = skyColor(rdW, pxAngle, V.bw2.w) * V.sunW.w;
+  let sun = sky_sun(rdW, V.sunW.xyz, V.bw0.w, V.camPos.w, V.bw1.w, 0.35);
+  col += sun.col;
 
   // ring plane hit
   var ringT = -1.0;

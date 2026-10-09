@@ -177,6 +177,39 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('atmo: an off atmosphere packs on = 0', packAtmo(PR.ATMO.none)[23] === 0);
 }
 
+// starfield: the shader turns a body-frame ray back to the world frame with
+// the rows packView sends (View.bw0..bw2), so a star keeps its world
+// direction while the planet spins and tilts
+{
+  const { packView, bodyFrame } = await import('./render.js');
+  const P = PR.fromPreset('earth'), rnd = N.mulberry(5);
+  let worst = 0;
+  for (let k = 0; k < 200; k++) {
+    const spin = rnd() * 40, d = N.onSphere(rnd);
+    const U = packView({ pos: [0, 0, 3], target: [0, 0, 0], up: [0, 1, 0], fov: 0.6, w: 100, h: 100, sunDir: [1, 0, 0], spin }, P, 1.01);
+    const rb = bodyFrame(d, P.tilt, spin);
+    for (let i = 0; i < 3; i++) { const o = 40 + 4 * i; worst = Math.max(worst, Math.abs(U[o] * rb[0] + U[o + 1] * rb[1] + U[o + 2] * rb[2] - d[i])); }
+  }
+  ok('starfield: world directions survive any spin (body -> world rows)', worst < 1e-5, `max err ${worst.toExponential(1)}`);
+  const U = packView({ pos: [0, 0, 3], target: [0, 0, 0], up: [0, 1, 0], fov: 0.6, w: 100, h: 100, sunDir: [2, 0, 0] }, P, 1.01);
+  ok('sun: angular radius packs in radians, world sun direction is unit', Math.abs(U[43] - 1.6 * Math.PI / 180) < 1e-6 && Math.abs(Math.hypot(U[52], U[53], U[54]) - 1) < 1e-6);
+}
+
+// time rate (clock.js): log slider, labels, and the clock it drives
+{
+  const CK = await import('./clock.js');
+  ok('clock: slider ends are 1 x (real time) and 4 days/s', Math.abs(CK.sliderToRate(0) - 1) < 1e-9 && Math.abs(CK.sliderToRate(1) - 4 * 86400) < 1e-6);
+  let rt = 0; for (let x = 0; x <= 1; x += 0.01) rt = Math.max(rt, Math.abs(CK.rateToSlider(CK.sliderToRate(x)) - x));
+  ok('clock: slider and rate invert each other', rt < 1e-9, `max err ${rt.toExponential(1)}`);
+  ok('clock: labels', CK.rateLabel(1) === '1 s/s' && CK.rateLabel(360) === '6 min/s' && CK.rateLabel(3600) === '1 h/s' && CK.rateLabel(86400) === '1 day/s' && CK.rateLabel(4 * 86400) === '4 days/s',
+    [1, 360, 3600, 86400, 345600].map(CK.rateLabel).join(', '));
+  const c = CK.createClock({ sunAz: 0 });
+  for (let i = 0; i < 100; i++) c.tick(0.01, { rate: 86400, spin: 1, sunOn: true });
+  ok('clock: 1 day/s turns the planet once and the sun 12 deg in 1 s', Math.abs(c.simS - 86400) < 1e-6 && Math.min(c.spinAngle, 2 * Math.PI - c.spinAngle) < 1e-6 && Math.abs(c.sunAz - 12) < 1e-9, `simS ${c.simS.toFixed(1)}, sunAz ${c.sunAz.toFixed(3)}`);
+  const g = CK.createClock(); g.tick(10, { rate: 3600, spin: 2.4, spinOn: false });
+  ok('clock: spin off holds the angle, time still runs', g.spinAngle === 0 && g.hours() === 10);
+}
+
 // ── pool failures (pool.js) ─────────────────────────────────────────────────
 // Stub workers run worker.js's work on the main thread. One kind crashes
 // (an error event), one never answers. The job must still finish (other
