@@ -154,7 +154,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `solar` | Solar Transit Study | Community & Tools > Studio Tools | TOOL | Sun paths for any place and date. |  | shown | generic, tier 5 | yes |
 | `matlab` (pages/material-studio) | PBR Material Studio | Community & Tools > Studio Tools | TOOL | Author PBR materials with a live sphere. |  | shown | hook, tier 3, default | yes |
 | `pascal-editor` | Pascal Editor | Community & Tools > Studio Tools | TOOL | Pascal, the open-source 3D building editor. |  | shown | no | no |
-| `sci-tools` | Science Toolkit | Community & Tools > Studio Tools | TOOL | Units, constants, statistics, fits and chemistry in one offline page. |  | shown | no | no |
+| `sci-tools` | Science Toolkit | Community & Tools > Studio Tools | TOOL | Units, constants, statistics, fits and chemistry in one offline page. |  | shown | no | yes |
 | `flight-board` | Flight Board | Community & Tools > Live Data | LIVE | A split-flap board for any airport, from live ADS-B. |  | shown | no | no |
 
 ### Science
