@@ -461,8 +461,13 @@ fn fs(in: VOut) -> @location(0) vec4f {
   // planet cover of this pixel (the soft silhouette edge below). Where the
   // planet covers the pixel fully, the background is not seen, so the
   // stars, the Milky Way and the sun are not computed (same pixels).
+  // The cover is a box filter of one pixel across the edge, on both
+  // sides: a pixel whose centre just misses the sphere is still part
+  // covered. (It was 0 there, so the ramp was half a pixel wide and the
+  // silhouette showed a 1-px staircase.)
   let dEdge = (1.0 - length(ro + rd * tca)) / max(tca * pxAngle, 1e-5);
-  let cover = select(0.0, clamp(dEdge + 0.5, 0.0, 1.0), planetHit);
+  let cover = select(0.0, clamp(dEdge + 0.5, 0.0, 1.0), tca > 0.0 && dot(ro, ro) > 1.0);
+  let edgeHit = cover > 0.0;
   var col = vec3f(0.0);
   if (cover < 1.0) {
     col = skyColor(rdW, pxAngle, V.bw2.w) * V.sunW.w;
@@ -496,8 +501,8 @@ fn fs(in: VOut) -> @location(0) vec4f {
   if (ringT > 0.0 && !planetHit && (topT.y < 0.0 || ringT > topT.y)) { col = mix(col, ring.rgb, ring.a); }
 
   var tEnd = 1e9;
-  if (planetHit) {
-    tEnd = hp.x;
+  if (edgeHit) {
+    tEnd = select(1e9, hp.x, planetHit);
     var surf = shadeSurface(pS, rd, uvS, gS);
     // the cloud deck in front of the surface: one map sample (no flow
     // phases, so no double image), lit by the sun, darkened where the
