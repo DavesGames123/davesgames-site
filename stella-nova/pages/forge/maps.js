@@ -242,9 +242,17 @@ function normals(h, W, H, reliefKm, radiusKm, bump) {
   for (let y = 0; y < H; y++) {
     const th = (y + 0.5) * dTh, cl = Math.sin(th);
     const dE = 2 * dPh * Math.max(cl, 1e-4) * radiusKm, dN = 2 * dTh * radiusKm;
+    const inner = y > 0 && y < H - 1, row = y * W;
     for (let x = 0; x < W; x++) {
-      const gx = (hAt(h, W, H, x + 1, y) - hAt(h, W, H, x - 1, y)) * reliefKm / dE;
-      const gy = (hAt(h, W, H, x, y - 1) - hAt(h, W, H, x, y + 1)) * reliefKm / dN;
+      // off the pole rows: direct indices (the same values as hAt)
+      let gx, gy;
+      if (inner && x > 0 && x < W - 1) {
+        gx = (h[row + x + 1] - h[row + x - 1]) * reliefKm / dE;
+        gy = (h[row - W + x] - h[row + W + x]) * reliefKm / dN;
+      } else {
+        gx = (hAt(h, W, H, x + 1, y) - hAt(h, W, H, x - 1, y)) * reliefKm / dE;
+        gy = (hAt(h, W, H, x, y - 1) - hAt(h, W, H, x, y + 1)) * reliefKm / dN;
+      }
       let nx = -gx * bump, ny = -gy * bump, nz = 1;
       const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
       const j = (y * W + x) * 4;
@@ -372,9 +380,17 @@ export function mipChain(data, W, H, maxLevels = 16) {
   let w = W, h = H, src = data;
   while ((w > 1 || h > 1) && out.length < maxLevels) {
     const nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1), d = new Uint8Array(nw * nh * 4);
-    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) for (let c = 0; c < 4; c++) {
-      const y0 = Math.min(h - 1, y * 2), y1 = Math.min(h - 1, y * 2 + 1), x0 = (x * 2) % w, x1 = (x * 2 + 1) % w;
-      d[(y * nw + x) * 4 + c] = (src[(y0 * w + x0) * 4 + c] + src[(y0 * w + x1) * 4 + c] + src[(y1 * w + x0) * 4 + c] + src[(y1 * w + x1) * 4 + c] + 2) >> 2;
+    for (let y = 0; y < nh; y++) {
+      const r0 = Math.min(h - 1, y * 2) * w * 4, r1 = Math.min(h - 1, y * 2 + 1) * w * 4;
+      let o = y * nw * 4;
+      for (let x = 0; x < nw; x++) {
+        const a0 = r0 + ((x * 2) % w) * 4, a1 = r0 + ((x * 2 + 1) % w) * 4, b0 = r1 + ((x * 2) % w) * 4, b1 = r1 + ((x * 2 + 1) % w) * 4;
+        d[o] = (src[a0] + src[a1] + src[b0] + src[b1] + 2) >> 2;
+        d[o + 1] = (src[a0 + 1] + src[a1 + 1] + src[b0 + 1] + src[b1 + 1] + 2) >> 2;
+        d[o + 2] = (src[a0 + 2] + src[a1 + 2] + src[b0 + 2] + src[b1 + 2] + 2) >> 2;
+        d[o + 3] = (src[a0 + 3] + src[a1 + 3] + src[b0 + 3] + src[b1 + 3] + 2) >> 2;
+        o += 4;
+      }
     }
     out.push({ w: nw, h: nh, data: d }); w = nw; h = nh; src = d;
   }
@@ -385,10 +401,15 @@ export function mipChain(data, W, H, maxLevels = 16) {
 export function shrink(data, W, H, f) {
   if (f <= 1) return data;
   const nw = W / f, nh = H / f, d = new Uint8Array(nw * nh * 4), k = f * f;
-  for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) for (let c = 0; c < 4; c++) {
-    let s = 0;
-    for (let j = 0; j < f; j++) for (let i = 0; i < f; i++) s += data[((y * f + j) * W + x * f + i) * 4 + c];
-    d[(y * nw + x) * 4 + c] = Math.round(s / k);
+  const acc = new Uint32Array(4);
+  for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+    acc[0] = acc[1] = acc[2] = acc[3] = 0;
+    for (let j = 0; j < f; j++) {
+      let a = ((y * f + j) * W + x * f) * 4;
+      for (let i = 0; i < f; i++, a += 4) { acc[0] += data[a]; acc[1] += data[a + 1]; acc[2] += data[a + 2]; acc[3] += data[a + 3]; }
+    }
+    const o = (y * nw + x) * 4;
+    d[o] = Math.round(acc[0] / k); d[o + 1] = Math.round(acc[1] / k); d[o + 2] = Math.round(acc[2] / k); d[o + 3] = Math.round(acc[3] / k);
   }
   return d;
 }

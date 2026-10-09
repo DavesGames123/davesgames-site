@@ -71,6 +71,26 @@ function neighbours(i, W, H, nb) {
   }
 }
 
+// The same 8 neighbours, with a fast path off the pole rows (no wrap
+// arithmetic past the date line). Same order and the same indices as
+// neighbours(), so the results stay bit-exact.
+function neighboursFast(i, W, H, nb) {
+  const x = i % W, y = (i - x) / W;
+  if (y === 0 || y === H - 1) { neighbours(i, W, H, nb); return; }
+  const b = i - x, xm = x ? x - 1 : W - 1, xp = x + 1 < W ? x + 1 : 0;
+  nb[0] = b - W + xm; nb[1] = b - W + x; nb[2] = b - W + xp;
+  nb[3] = b + xm; nb[4] = b + xp;
+  nb[5] = b + W + xm; nb[6] = b + W + x; nb[7] = b + W + xp;
+}
+
+// The 8 neighbour distances of a texel in row y (off the pole rows they
+// depend only on the row). Values come from dist(), so they are bit-exact.
+function rowDists(y, W, H, R, out, nb) {
+  const i = y * W + 1;
+  neighbours(i, W, H, nb);
+  for (let q = 0; q < 8; q++) out[q] = dist(i, nb[q], W, H, R);
+}
+
 // Distance (km) between texels i and j (small steps on the sphere).
 function dist(i, j, W, H, R) {
   const xi = i % W, yi = (i - xi) / W, xj = j % W, yj = (j - xj) / W;
@@ -94,7 +114,7 @@ function flood(h, W, H, sea) {
   let k = 0;
   while (heap.n) {
     const c = heap.pop(); order[k++] = c;
-    neighbours(c, W, H, nb);
+    neighboursFast(c, W, H, nb);
     for (let q = 0; q < 8; q++) {
       const j = nb[q]; if (done[j]) continue;
       done[j] = 1; rec[j] = c;
@@ -157,16 +177,23 @@ function blurWrap(src, W, H, r) {
   return a;
 }
 
+// The distances come from a per-row table (rowDists) off the pole rows,
+// and from dist() on them; the sweep order is unchanged (bit-exact).
 function talus(hk, W, H, R, area, tanMax, sweeps) {
-  const nb = new Int32Array(8), n = W * H;
-  for (let s = 0; s < sweeps; s++) for (let i = 0; i < n; i++) {
-    neighbours(i, W, H, nb);
-    let lo = -1, best = 0;
-    for (let q = 0; q < 8; q++) { const j = nb[q], g = (hk[i] - hk[j]) / dist(i, j, W, H, R) - tanMax; if (g > best) { best = g; lo = j; } }
-    if (lo < 0) continue;
-    // move volume v so the slope comes back half way to tanMax
-    const d = dist(i, lo, W, H, R), dz = 0.25 * best * d, v = dz * Math.min(area[i], area[lo]);
-    hk[i] -= v / area[i]; hk[lo] += v / area[lo];
+  const nb = new Int32Array(8), n = W * H, D = new Float64Array(8), tmp = new Int32Array(8);
+  for (let s = 0; s < sweeps; s++) for (let y = 0; y < H; y++) {
+    const pole = y === 0 || y === H - 1;
+    if (!pole) rowDists(y, W, H, R, D, tmp);
+    for (let i = y * W, e = i + W; i < e; i++) {
+      neighboursFast(i, W, H, nb);
+      if (pole) for (let q = 0; q < 8; q++) D[q] = dist(i, nb[q], W, H, R);
+      let lo = -1, best = 0, d = 0;
+      for (let q = 0; q < 8; q++) { const j = nb[q], g = (hk[i] - hk[j]) / D[q] - tanMax; if (g > best) { best = g; lo = j; d = D[q]; } }
+      if (lo < 0) continue;
+      // move volume v so the slope comes back half way to tanMax
+      const dz = 0.25 * best * d, v = dz * Math.min(area[i], area[lo]);
+      hk[i] -= v / area[i]; hk[lo] += v / area[lo];
+    }
   }
 }
 
@@ -189,28 +216,36 @@ export function erode(h, W, H, o) {
     return { height: out, flow, slope, cut: r.cut, net: r.net, rec: r.rec, flowE: r.flowE, ew: r.ew };
   }
   const n = W * H, R = o.radiusKm, km = Math.max(o.reliefKm, 1e-3);
-  const lo = h.reduce((a, v) => Math.min(a, v), 1), hi = h.reduce((a, v) => Math.max(a, v), 0);
+  let lo = 1, hi = 0;
+  for (let i = 0; i < h.length; i++) { const v = h[i]; lo = Math.min(lo, v); hi = Math.max(hi, v); }
   const hk = new Float64Array(n);
   for (let i = 0; i < n; i++) hk[i] = h[i] * km;
   const area = new Float64Array(n), cellA = 2 * Math.PI * R / W * (Math.PI * R / H);
   for (let y = 0; y < H; y++) { const a = cellA * Math.max(Math.sin((y + 0.5) / H * Math.PI), 0.02); for (let x = 0; x < W; x++) area[y * W + x] = a; }
-  const vol0 = hk.reduce((s, v, i) => s + v * area[i], 0);
+  const vol = () => { let s = 0; for (let i = 0; i < n; i++) s += hk[i] * area[i]; return s; };
+  const vol0 = vol();
   const { rec, order } = flood(h, W, H, o.sea);
   const A = Float64Array.from(area);
   for (let t = order.length - 1; t >= 0; t--) { const i = order[t]; if (rec[i] >= 0) A[rec[i]] += A[i]; }
   // valley depth: 0.8 km for the trunk rivers at flow 1
   const cut = (o.flow ?? 1) > 0 ? carve(hk, W, H, rec, order, area, A, 0.8 * o.flow * Math.min(1, km / 8), o.sea == null ? null : o.sea * km) : 0;
   if ((o.talus ?? 0) > 0) talus(hk, W, H, R, area, 0.7 - 0.45 * o.talus, 2);
-  const vol1 = hk.reduce((s, v, i) => s + v * area[i], 0);
+  const vol1 = vol();
   const out = new Float32Array(n), delta = new Float32Array(n), flow = new Float32Array(n), slope = new Float32Array(n);
-  const amax = Math.log(A.reduce((a, v) => Math.max(a, v), 1) / cellA + 1);
-  const nb = new Int32Array(8);
-  for (let i = 0; i < n; i++) {
-    out[i] = Math.min(hi, Math.max(lo, hk[i] / km)); delta[i] = out[i] - h[i];
-    flow[i] = Math.log(A[i] / area[i] + 1) / amax;
-    neighbours(i, W, H, nb);
-    let s = 0; for (const q of N4) s = Math.max(s, Math.abs(hk[i] - hk[nb[q]]) / dist(i, nb[q], W, H, R));
-    slope[i] = s;
+  let Amax = 1; for (let i = 0; i < n; i++) Amax = Math.max(Amax, A[i]);
+  const amax = Math.log(Amax / cellA + 1);
+  const nb = new Int32Array(8), D = new Float64Array(8), tmp = new Int32Array(8);
+  for (let y = 0; y < H; y++) {
+    const pole = y === 0 || y === H - 1;
+    if (!pole) rowDists(y, W, H, R, D, tmp);
+    for (let i = y * W, e = i + W; i < e; i++) {
+      out[i] = Math.min(hi, Math.max(lo, hk[i] / km)); delta[i] = out[i] - h[i];
+      flow[i] = Math.log(A[i] / area[i] + 1) / amax;
+      neighboursFast(i, W, H, nb);
+      if (pole) for (let q = 0; q < 8; q++) D[q] = dist(i, nb[q], W, H, R);
+      let s = 0; for (let k = 0; k < 4; k++) { const q = N4[k]; s = Math.max(s, Math.abs(hk[i] - hk[nb[q]]) / D[q]); }
+      slope[i] = s;
+    }
   }
   return { height: out, delta, flow, slope, cut, net: vol1 - vol0, rec, flowE: flow, ew: W };
 }
