@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>CT lab — Stella Nova · davesgames.io</title>
+<meta name="description" content="A computed tomography lab: scan phantoms, watch the sinogram fill and the image appear, and break the reconstruction with few views, noise, metal, motion and bad pixels.">
+<!--
+  CT LAB  ·  page shell
+  ---------------------------------------------------------------------------
+  Static markup only. main.js runs the lab. The CT maths is in engine/ (the
+  core agent's DOM-free modules, see engine/CONTRACT.md). The lab glue is in
+  lab/ (presets, scan session, jobs, drawing). The page API for the saver and
+  the explainer is window.__ctlab, documented in LAB-API.md.
+
+  LOAD ORDER
+    gpu-guard.js, wishlist.js, stats-beacon.js   shared shell scripts, first
+    style.css, colormaps/picker.css, lib/sci.css stylesheets
+    main.js                                       module, at the end of body
+
+  LAYOUT  (# marks an element id main.js binds to)
+    +--------------------------------------------------------------------+
+    | .topbar  title · #backend · #btnRun #btnPlay #btnStep · links       |
+    +-----------+---------------------------------------------+----------+
+    | #gallery  | #panels: phantom | sinogram | recon | diff   | #panel   |
+    |  presets  | #bar: phase, #prog, #resid, metrics, #hu     | controls |
+    |  grouped  | #compare: the compare strip (filters, algos) |          |
+    |           | #blurb: what the preset shows                |          |
+    +-----------+---------------------------------------------+----------+
+  PHONE (max-width 760px, or a short touch landscape): #dock at the base.
+    #dockGallery opens #gallery and #dockPanel opens #panel as bottom sheets
+    (a right drawer in landscape). #dockPlay, #dockStep, #dockWin are one tap.
+
+  grep handles: id="panels"  id="gallery"  id="panel"  id="dock"  data-panel=
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="colormaps/picker.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="crumb">Stella Nova</span>
+    <h1>CT lab</h1>
+    <span id="backend" class="badge" title="Where the projections run">CPU</span>
+  </div>
+  <div class="actions">
+    <button id="btnRun" class="btn" title="Scan again from the first view (R)">Rescan</button>
+    <button id="btnPlay" class="btn" title="Play or pause (space)">Pause</button>
+    <button id="btnStep" class="btn" title="One view or one iteration (.)">Step</button>
+    <a class="link" href="../ct-explained/index.html">How CT works</a>
+    <a class="link" href="https://github.com/astra-toolbox/astra-toolbox" target="_blank" rel="noopener">After the ASTRA Toolbox</a>
+  </div>
+</header>
+
+<aside id="gallery" class="sheet" aria-label="Presets">
+  <div class="sheet-grip"><span></span></div>
+  <h2>Experiments</h2>
+  <div id="presetList"></div>
+</aside>
+
+<main id="stage">
+  <div id="panels">
+    <figure class="panel" data-panel="phantom">
+      <canvas id="cvPhantom" aria-label="Phantom and gantry"></canvas>
+      <figcaption><b>Object</b> <span id="capPhantom"></span></figcaption>
+    </figure>
+    <figure class="panel" data-panel="sinogram">
+      <canvas id="cvSino" aria-label="Sinogram"></canvas>
+      <figcaption><b>Sinogram</b> <span id="capSino"></span></figcaption>
+    </figure>
+    <figure class="panel" data-panel="recon">
+      <canvas id="cvRecon" aria-label="Reconstruction"></canvas>
+      <figcaption><b>Reconstruction</b> <span id="capRecon"></span></figcaption>
+    </figure>
+    <figure class="panel" data-panel="diff">
+      <canvas id="cvDiff" aria-label="Difference"></canvas>
+      <figcaption><b>Error</b> <span id="capDiff">reconstruction minus object</span></figcaption>
+    </figure>
+  </div>
+  <section id="bar">
+    <div class="cell phase"><span id="phase">Ready</span><div id="prog"><i></i></div></div>
+    <div class="cell"><canvas id="resid" width="160" height="40" aria-label="Residual"></canvas><span id="iterTxt" class="dim"></span></div>
+    <div class="cell metrics"><span>PSNR <b id="mPsnr">-</b></span><span>SSIM <b id="mSsim">-</b></span></div>
+    <div class="cell hu" id="hu">Point at an image to read values</div>
+  </section>
+  <section id="compare" hidden>
+    <h3 id="compareTitle">Compare</h3>
+    <div id="compareTiles"></div>
+  </section>
+  <section id="blurbBox">
+    <h2 id="presetTitle">Shepp-Logan</h2>
+    <p id="blurb"></p>
+  </section>
+</main>
+
+<aside id="panel" class="sheet" aria-label="Controls">
+  <div class="sheet-grip"><span></span></div>
+  <div id="controls"></div>
+  <section class="ctl" id="drawBox" hidden>
+    <h3>Draw your own</h3>
+    <p class="dim small">Drag on the object panel. A disc grows from its centre; an ellipse fills the box you drag. Each shape triggers a new scan.</p>
+    <div class="row seg" id="drawTool">
+      <button data-tool="disc" class="on">Disc</button><button data-tool="ellipse">Ellipse</button><button data-tool="erase">Erase</button>
+    </div>
+    <label class="row"><span>Material</span><select id="drawMat"></select></label>
+    <div class="row btns">
+      <button id="drawUndo" class="btn">Undo</button>
+      <button id="drawClear" class="btn">Clear</button>
+      <button id="drawStarter" class="btn">Starter</button>
+    </div>
+    <label class="row file"><span>Picture</span><input id="upload" type="file" accept="image/*"></label>
+  </section>
+  <section class="ctl">
+    <h3>Colour map</h3>
+    <div id="cmapHost"></div>
+  </section>
+  <section class="ctl">
+    <h3>Export</h3>
+    <div class="row btns wrap">
+      <button class="btn" data-export="sheet">All panels</button>
+      <button class="btn" data-export="phantom">Object</button>
+      <button class="btn" data-export="sinogram">Sinogram</button>
+      <button class="btn" data-export="recon">Reconstruction</button>
+      <button class="btn" data-export="diff">Error</button>
+    </div>
+  </section>
+  <section class="ctl about">
+    <h3>About this lab</h3>
+    <p>All the code on this page is our own: the Joseph projector, filtered back-projection, ART, SART, SIRT and CGLS, fan beam and the X-ray physics are textbook methods. The real tool for this work is the
+      <a href="https://github.com/astra-toolbox/astra-toolbox" target="_blank" rel="noopener">ASTRA Toolbox</a> (GPL-3.0), which inspired the lab. We did not copy or port its code.</p>
+    <p class="cite">W. van Aarle et al., The ASTRA Toolbox: a platform for advanced algorithm development in electron tomography, Ultramicroscopy 157 (2015) 35-47,
+      <a href="https://doi.org/10.1016/j.ultramic.2015.05.002" target="_blank" rel="noopener">doi:10.1016/j.ultramic.2015.05.002</a>.</p>
+    <p class="cite">W. van Aarle et al., Fast and flexible X-ray tomography using the ASTRA toolbox, Optics Express 24(22) (2016) 25129-25147,
+      <a href="https://doi.org/10.1364/OE.24.025129" target="_blank" rel="noopener">doi:10.1364/OE.24.025129</a>.</p>
+    <p class="dim small">Shepp-Logan is the published 1974 ellipse table. The other objects are procedural. Attenuation values are approximate, at 70 keV. HU = 1000 (μ − μ<sub>water</sub>) / μ<sub>water</sub>.</p>
+  </section>
+</aside>
+
+<nav id="dock" aria-label="Lab controls">
+  <button id="dockGallery" title="Experiments">Experiments</button>
+  <button id="dockPanel" title="Controls">Controls</button>
+  <button id="dockPlay" class="icon" title="Play or pause">❚❚</button>
+  <button id="dockStep" class="icon" title="Step">›|</button>
+  <button id="dockWin" title="Next window">Window</button>
+</nav>
+
+<div id="toast" hidden></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
