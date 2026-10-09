@@ -12,6 +12,10 @@
 //    3D          cone-beam scan and FDK, volume tour (view3d/README.md);
 //                only with WebGPU. Each 3D shot makes its own GPUDevice and
 //                destroys it when the shot ends.
+//  Colour: each image shot takes a map from a seeded bag (saver/plan.js
+//  makeMapBag), never the map of the shot before. Error panels get a
+//  diverging map. About 40 % of the 2D and 3D shots cross-fade to a second
+//  map (CM.blend LUTs). The plate names the map.
 //  The subject sits in the plate clear band (lib/saver-clear.js plateBand).
 //  2D cameras are critically damped springs. Phones get smaller images,
 //  fewer views and a 64^3 volume.

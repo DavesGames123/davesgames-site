@@ -8,7 +8,8 @@
 //  with no NaN, and the window.snSaver hook on a stub DOM (enter, cuts, exit).
 //  --png DIR writes frames of every shot kind to look at.
 // ============================================================================
-import { makePlan, KINDS, spring, stepSpring, cam2d, aimCam, stepCam, camOK, fitPanels, MIN_SHOT, MAX_SHOT } from './plan.js';
+import * as CM from '../colormaps/maps.js';
+import { makePlan, makeMapBag, MAP_POOLS, rng, KINDS, spring, stepSpring, cam2d, aimCam, stepCam, camOK, fitPanels, MIN_SHOT, MAX_SHOT } from './plan.js';
 import { makeShot, spin } from './shots.js';
 import { Canvas, writePNG } from '../../ct-explained/test-canvas.mjs';
 import { mkdirSync } from 'node:fs';
@@ -44,6 +45,40 @@ const ALL = KINDS.map((k) => k.kind);
   ok(new Set(sa.split(',')).size === 11, 'one bag holds every kind once', sa);
   const d = makePlan(3, { lab: true, gpu: true }); d.next(); d.drop('3d');
   ok(Array.from({ length: 40 }, () => d.next()).every((s) => s.fam !== '3d'), 'drop(3d) removes the 3D shots');
+}
+
+// ---------- colour maps: bags, no repeat, diverging for error panels ----------
+{
+  let picks = 0, rep = 0, same = 0, divRep = 0, kindBad = 0, fades = 0, fadeable = 0, greyish = 0;
+  for (let seed = 1; seed <= 12; seed++) for (const caps of [{ lab: true, gpu: true }, { lab: false, gpu: false }]) {
+    const p = makePlan(seed * 7919, caps);
+    let lastShown = null, lastDiv = null;
+    for (let i = 0; i < 500; i++) {
+      const s = p.next();
+      const K = KINDS.find((k) => k.kind === s.kind);
+      if (!K.map) { if (s.cmap) kindBad++; continue; }
+      picks++;
+      if (s.cmap === lastShown) rep++;
+      if (s.cmap2 && s.cmap2 === s.cmap) same++;
+      if (CM.get(s.cmap).kind === 'diverging' || (s.cmap2 && CM.get(s.cmap2).kind === 'diverging')) kindBad++;
+      if (K.diff) { if (!s.dmap || CM.get(s.dmap).kind !== 'diverging') kindBad++; if (s.dmap === lastDiv) divRep++; lastDiv = s.dmap; }
+      if (K.fade) { fadeable++; if (s.cmap2) fades++; }
+      if (s.cmap === 'grey' || s.cmap === 'grey-inv') greyish++;
+      lastShown = s.cmap2 || s.cmap;
+    }
+  }
+  ok(rep === 0 && same === 0, 'the saver never shows the same map twice in a row', `${picks} map shots over 24 reels of 500`);
+  ok(divRep === 0 && kindBad === 0, 'error panels get a diverging map, never twice in a row; image maps are never diverging');
+  ok(fades / fadeable > 0.3 && fades / fadeable < 0.5, 'about 40 % of the fade-able shots cross-fade', `${fades} of ${fadeable}`);
+  ok(greyish / picks < 0.06, 'grey is rare: mostly medical, perceptual and artistic maps', `${greyish} of ${picks}`);
+  ok(MAP_POOLS.seq.every((id) => CM.has(id) && ['grey', 'medical', 'perceptual', 'artistic'].includes(CM.get(id).group)) && MAP_POOLS.div.length >= 6, 'the pools hold real maps of the right groups');
+  // a bag over a two-map pool still never repeats
+  const b = makeMapBag(rng(3), { seq: ['magma', 'viridis'] });
+  let prev = null, r2 = 0;
+  for (let i = 0; i < 200; i++) { const id = b.draw('seq', prev); if (id === prev) r2++; prev = id; }
+  ok(r2 === 0, 'a two-map pool alternates with no repeat');
+  const a1 = makePlan(9, { lab: true, gpu: true }), a2 = makePlan(9, { lab: true, gpu: true });
+  ok(Array.from({ length: 30 }, () => a1.next().cmap).join() === Array.from({ length: 30 }, () => a2.next().cmap).join(), 'the maps are seeded: same seed, same maps');
 }
 
 // ---------- springs and layout ----------
@@ -133,6 +168,7 @@ for (const phone of [false, true]) {
       if (frames % 30 === 0 || t + dt >= shot.dur) {
         const p = shot.plate();
         if (!p.title || !p.tex || p.tex.length !== 1 || /NaN|undefined/.test(JSON.stringify(p)) || p.code) plateBad++;
+        if (spec.cmap && !(p.params || []).some((q) => q.name === 'colour map' && q.value)) plateBad++;
         if (shot.cam) {
           g.setTransform(0.5, 0, 0, 0.5, 0, 0); g.fillStyle = '#04060b'; g.fillRect(0, 0, w, h);
           const c = shot.cam, cx = st.x + st.w / 2, cy = st.y + st.h / 2;
@@ -159,6 +195,40 @@ for (const phone of [false, true]) {
     if (spec.fam === 'lab') ok(lab.calls.includes('stop') && lab.calls.some((c) => c.startsWith('load:')) && lab.state().view === lab.state().views, `${kind}${phone ? ' (phone)' : ''}: drives __ctlab (load, steps to the last view, stop)`, lab.calls.filter((c) => c !== 'win').join(' '));
     ok(nan === 0 && camBad === 0 && plateBad === 0 && sub, `${kind}${phone ? ' (phone)' : ''}: ${frames} frames, no NaN, finite camera, plate ok`, `dur ${spec.dur.toFixed(1)} s, init ${tInit.toFixed(0)} ms, worst step ${worst.toFixed(0)} ms`);
   }
+}
+
+// ---------- cross-fade: the layers move from one LUT to the next ----------
+{
+  const lutSet = (id) => { const l = CM.variant(id), out = new Set(); for (let i = 0; i < 256; i++) out.add((l[i * 3] << 16) | (l[i * 3 + 1] << 8) | l[i * 3 + 2]); return out; };
+  const allIn = (d, set) => { for (let p = 0; p < d.length; p += 4) if (d[p + 3] && !set.has((d[p] << 16) | (d[p + 1] << 8) | d[p + 2])) return false; return true; };
+  const env = { phone: true, now: () => performance.now(), lab: null, makeCanvas: (w, h) => new Canvas(w, h), make3D: null };
+  for (const kind of ['smear', 'iterate', 'sparse', 'dose']) {
+    const spec = { kind, fam: 'x', dur: 8, seed: 5, index: 0, cmap: 'magma', cmap2: 'ice', fadeAt: 0.5, dmap: kind === 'iterate' ? 'vanimo' : undefined };
+    const shot = makeShot(spec, env);
+    await shot.init();
+    const A = lutSet('magma'), B = lutSet('ice');
+    let before = null, mid = null, after = null;
+    for (let t = 0; t < 8; t += 1 / 30) {
+      let g = 0; while (!shot.tick(1 / 30) && g++ < 10000);
+      const L = shot.layers.find((x) => x.main);
+      if (!L) continue;
+      const k = shot.fadeK();
+      if (k === 0 && shot.t > 1) before = allIn(L.id.data, A);
+      if (k > 0.3 && k < 0.7 && mid === null) mid = { name: shot.plate().params.find((q) => q.name === 'colour map').value, a: allIn(L.id.data, A), b: allIn(L.id.data, B) };
+      if (k === 1) after = allIn(L.id.data, B);
+    }
+    ok(before && mid && !mid.a && !mid.b && mid.name === `${CM.get("magma").name} → ${CM.get("ice").name}` && after, `${kind}: cross-fade magma -> ice (pure, blended, pure; plate "${mid && mid.name}")`);
+    if (kind === 'iterate') ok(shot.eL && allIn(shot.eL.id.data, lutSet('vanimo')) && shot.plate().params.some((q) => q.name === 'error map' && q.value === 'Vanimo'), 'iterate: the error panel uses the diverging dmap and the plate names it');
+    shot.dispose();
+  }
+  // 3D: the view gets the blended LUT, then the second map, with tf on
+  const calls = [];
+  const env3 = { ...env, phone: false, make3D: async (o) => { const h = view3dStub(); h.view._init(o.nAngles); h.view.setColormap = (id, oo) => calls.push([id, oo]); return { view: h.view, release() {} }; } };
+  const shot = makeShot({ kind: 'cone-volume', fam: '3d', dur: 8, seed: 3, index: 0, cmap: 'bone', cmap2: 'aurora', fadeAt: 0.4 }, env3);
+  await shot.init();
+  for (let t = 0; t < 8; t += 1 / 30) shot.tick(1 / 30);
+  ok(calls[0][0] === 'bone' && calls.some((c) => c[1].lut && c[1].tf) && calls.at(-1)[0] === 'aurora' && calls.every((c) => c[1].tf === true), `3D cross-fade: bone -> blended LUTs -> aurora, tf on (${calls.length} LUT writes)`);
+  shot.dispose();
 }
 
 // ---------- a cut during make3D releases the late device ----------

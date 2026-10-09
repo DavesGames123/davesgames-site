@@ -27,6 +27,13 @@
 //    grep -n 'const TEX'               the equations on the plate
 //    grep -n 'class Layer'             raster layer: colour map -> canvas
 //    grep -n 'function frameBox'       panel frame and caption
+//    grep -n 'MAIN'                    the shot colour map, its cross-fade, the plate name
+//
+//  COLOUR  plan.js gives spec.cmap (and spec.cmap2, spec.fadeAt for a cross-
+//  fade, spec.dmap for an error panel). A layer painted with MAIN uses the
+//  shot map. During a cross-fade, base.tick() repaints those layers with
+//  CM.blend(cmap, cmap2, k), and 3D shots send the blended LUT to view3d.
+//  makeShot() adds the map name to every plate.
 // ============================================================================
 import {
   phantom2D, PHANTOMS_2D, fitGeometry, sparseAngles, forwardProject, backProject, fbpBackProject,
@@ -71,13 +78,24 @@ export function spin(u, a = 0.3) {
 }
 
 // ---------- raster layer ----------
+// paint(..., MAIN) uses the shot map (resolve() -> [id, opts]) and keeps a copy of the
+// data, so a cross-fade can repaint the layer.
+const MAIN = '@main';
+const FADE_T = 1.6;   // seconds of a cross-fade
 class Layer {
-  constructor(mk, nx, ny) {
-    this.nx = nx; this.ny = ny;
+  constructor(mk, nx, ny, resolve) {
+    this.nx = nx; this.ny = ny; this.resolve = resolve; this.main = null;
     this.cv = mk(nx, ny); this.g = this.cv.getContext('2d');
     this.id = this.g.createImageData(nx, ny);
   }
-  paint(data, lo, hi, cmap, opts) { CM.apply(cmap, data, lo, hi, this.id.data, opts); this.g.putImageData(this.id, 0, 0); return this; }
+  paint(data, lo, hi, cmap, opts) {
+    if (cmap === MAIN) {
+      this.main = { data: this.main && this.main.data.length === data.length ? (this.main.data.set(data), this.main.data) : Float32Array.from(data), lo, hi };
+      [cmap, opts] = this.resolve();
+    }
+    CM.apply(cmap, data, lo, hi, this.id.data, opts); this.g.putImageData(this.id, 0, 0); return this;
+  }
+  repaint() { const m = this.main; if (m && this.id) { const [c, o] = this.resolve(); CM.apply(c, m.data, m.lo, m.hi, this.id.data, o); this.g.putImageData(this.id, 0, 0); } }
   draw(g, r, alpha = 1) {
     if (alpha <= 0) return;
     g.save(); g.globalAlpha *= alpha;
@@ -144,13 +162,39 @@ function base(spec, env, kind) {
   return {
     kind, spec, env, R, dur: spec.dur, t: 0, ready: false, cam: cam2d(0, 0), subject: null,
     prep: null,                      // a generator of setup work, run in slices before the shot starts
+    layers: [], fadeQ: -1, onMap: null,
     async init() { this.ready = true; },
     step(dt) { this.t += dt; },
     // tick(dt) -> false while the setup work still runs (the saver keeps the frame dark)
     tick(dt) {
       if (this.prep) { if (!runFor(this.prep, env.phone ? 7 : 10, env.now)) return false; this.prep = null; }
-      this.step(dt); return true;
+      this.step(dt);
+      const q = this.fadeK();
+      if (q !== this.fadeQ) {            // cross-fade: repaint the MAIN layers at 32 steps
+        const first = this.fadeQ < 0; this.fadeQ = q;
+        if (!first || q > 0) { for (const L of this.layers) L.repaint(); if (this.onMap) this.onMap(); }
+      }
+      return true;
     },
+    // MAIN map: [id, opts]. Before the fade: cmap. During: a blended LUT. After: cmap2.
+    fadeK() {
+      if (!spec.cmap2) return 0;
+      const k = smooth((this.t - (spec.fadeAt ?? 0.5) * this.dur) / FADE_T);
+      return Math.round(k * 32) / 32;
+    },
+    mainMap() {
+      const a = spec.cmap || 'bone', b = spec.cmap2, k = this.fadeK();
+      if (!b || k <= 0) return [a, {}];
+      if (k >= 1) return [b, {}];
+      return [a, { lut: CM.blend(a, b, k) }];
+    },
+    mapName() {
+      const a = CM.get(spec.cmap || 'bone').name;
+      if (!spec.cmap2) return a;
+      const k = this.fadeK(), b = CM.get(spec.cmap2).name;
+      return k <= 0 ? a : k >= 1 ? b : `${a} → ${b}`;
+    },
+    layer(nx, ny) { const L = new Layer(env.makeCanvas, nx, ny, () => this.mainMap()); this.layers.push(L); return L; },
     focus(stage) { return { r: stage, z: 1 }; },
     dispose() {},
   };
@@ -244,7 +288,7 @@ function shotSine(spec, env) {
 function shotSmear(spec, env) {
   const s = base(spec, env, 'smear');
   const R = s.R, name = pick(R, ['shepp-logan-modified', 'head', 'chest', 'walnut']);
-  const n = env.phone ? 128 : 192, V = env.phone ? 120 : 180, cmap = pick(R, ['grey', 'bone', 'xray-blue', 'ice']);
+  const n = env.phone ? 128 : 192, V = env.phone ? 120 : 180, cmap = MAIN;
   const filt = pick(R, ['ram-lak', 'shepp-logan', 'hamming']);
   const scanEnd = s.dur * 0.52, snapT = 1.1;
   s.init = async function () {
@@ -254,7 +298,7 @@ function shotSmear(spec, env) {
     this.fbp = { ...ph.image, data: new Float32Array(n * n) };
     this.acc = { ...ph.image, data: new Float32Array(n * n) };
     this.done = 0;
-    this.bpL = new Layer(env.makeCanvas, n, n); this.fbL = new Layer(env.makeCanvas, n, n);
+    this.bpL = s.layer(n, n); this.fbL = s.layer(n, n);
     this.resp = filterResponse(filt, 256, 1, 1, 'ramp');
     const self = this, [lo, hi] = WIN[name] || [0, 1];
     this.prep = (function* () {
@@ -348,7 +392,7 @@ function shotFourier(spec, env) {
   const s = base(spec, env, 'fourier');
   const R = s.R, name = pick(R, ['shepp-logan-modified', 'head', 'suitcase', 'walnut']);
   const n = env.phone ? 96 : 128, V = env.phone ? 120 : 180, K = env.phone ? 300 : 440;
-  const cmap = pick(R, ['magma', 'inferno', 'nebula', 'aurora', 'synthwave']);
+  const cmap = spec.cmap || pick(R, ['magma', 'inferno', 'nebula', 'aurora', 'synthwave']);
   const fillEnd = s.dur * 0.72;
   s.init = async function () {
     const ph = phantom2D(name, n, { supersample: env.phone ? 1 : 2 });
@@ -372,8 +416,8 @@ function shotFourier(spec, env) {
     }
     this.mx = mx;
     const [lo, hi] = WIN[name] || [0, 1];
-    this.obL = new Layer(env.makeCanvas, n, n).paint(ph.image.data, lo, hi, 'grey');
-    this.kL = new Layer(env.makeCanvas, K, K);
+    this.obL = s.layer(n, n).paint(ph.image.data, lo, hi, 'grey');
+    this.kL = s.layer(K, K);
     this.kd = this.kL.id.data; this.kd.fill(0);
     this.lut = CM.rgba(cmap);
     this.done = 0;
@@ -444,7 +488,7 @@ function shotIterate(spec, env) {
   const s = base(spec, env, 'iterate');
   const R = s.R, name = pick(R, ['shepp-logan-modified', 'chest', 'head', 'walnut']);
   const algo = pick(R, ['sirt', 'cgls', 'sirt']), n = env.phone ? 96 : 128, V = pick(R, [45, 60, 90]);
-  const IT = { sirt: 160, cgls: 36, sart: 24 }[algo], cmap = pick(R, ['grey', 'bone', 'ice', 'cividis']);
+  const IT = { sirt: 160, cgls: 36, sart: 24 }[algo], cmap = MAIN, dmap = spec.dmap || 'berlin';
   const runEnd = s.dur * 0.8;
   s.init = async function () {
     const ph = phantom2D(name, n, { supersample: env.phone ? 1 : 2 });
@@ -467,14 +511,14 @@ function shotIterate(spec, env) {
     this.solver = createSolver(algo, this.sino, this.geom, ph.image, { x0, relax: algo === 'sart' ? 0.6 : undefined, seed: spec.seed });
     this.res = []; this.iter = 0;
     [this.lo, this.hi] = WIN[name] || [0, tm];
-    this.rL = new Layer(env.makeCanvas, n, n).paint(x0.data, this.lo, this.hi, cmap);
-    this.eL = new Layer(env.makeCanvas, n, n); this.err = new Float32Array(n * n); this.paintErr(x0.data);
+    this.rL = s.layer(n, n).paint(x0.data, this.lo, this.hi, cmap);
+    this.eL = s.layer(n, n); this.err = new Float32Array(n * n); this.paintErr(x0.data);
     this.psnr = psnr(this.truth, x0);
   };
   s.paintErr = function (d) {
     const t = this.truth.data, sp = (this.hi - this.lo) * 0.5;
     for (let i = 0; i < d.length; i++) this.err[i] = d[i] - t[i];
-    this.eL.paint(this.err, -sp, sp, 'berlin');
+    this.eL.paint(this.err, -sp, sp, dmap);
   };
   s.step = function (dt) {
     this.t += dt;
@@ -549,14 +593,14 @@ function shotSparse(spec, env) {
   const s = base(spec, env, 'sparse');
   const R = s.R, name = pick(R, ['chest', 'head', 'shepp-logan-modified', 'walnut', 'bars']);
   const n = env.phone ? 128 : 160, FULL = 720, COUNTS = [18, 30, 45, 90, 180, 360, 720];
-  const cmap = pick(R, ['grey', 'bone', 'xray-blue', 'gold-leaf']);
+  const cmap = MAIN;
   s.init = async function () {
     const ph = phantom2D(name, n, { supersample: env.phone ? 1 : 2 });
     this.truth = ph.image; this.geom = fitGeometry('parallel', ph.image, { nAngles: FULL });
     this.sino = { nAngles: FULL, nDet: this.geom.nDet, data: new Float32Array(FULL * this.geom.nDet) };
     this.fwd = 0; this.stage = 0; this.shown = -1; this.prev = -1; this.fadeT = 0;
     [this.lo, this.hi] = WIN[name] || [0, 1];
-    this.L = COUNTS.map(() => new Layer(env.makeCanvas, n, n)); this.ps = COUNTS.map(() => NaN);
+    this.L = COUNTS.map(() => s.layer(n, n)); this.ps = COUNTS.map(() => NaN);
     this.out = { ...ph.image, data: new Float32Array(n * n) };
     this.prep = fwdJob(ph.image, this.geom, this.sino, 24);
     this.fwd = FULL;
@@ -623,7 +667,7 @@ function shotDose(spec, env) {
   const s = base(spec, env, 'dose');
   const R = s.R, name = pick(R, ['chest', 'head', 'contrast-detail']);
   const n = env.phone ? 128 : 192, V = env.phone ? 240 : 360, DOSES = [3e2, 1e3, 3e3, 1e4, 3e4, 1e5, 1e6];
-  const cmap = pick(R, ['grey', 'bone', 'ice']);
+  const cmap = MAIN;
   const win = name === 'head' ? hu(40, 200) : name === 'chest' ? hu(40, 500) : hu(40, 160);
   s.init = async function () {
     const ph = phantom2D(name, n, { supersample: env.phone ? 1 : 2 });
@@ -632,7 +676,7 @@ function shotDose(spec, env) {
     this.ref = { ...ph.image, data: new Float32Array(n * n) };
     const self = this;
     this.prep = (function* () { yield* fwdJob(ph.image, self.geom, self.clean); yield* fbpJob(self.clean, self.geom, ph.image, self.ref); })();
-    this.L = DOSES.map(() => new Layer(env.makeCanvas, n, n)); this.sig = DOSES.map(() => NaN);
+    this.L = DOSES.map(() => s.layer(n, n)); this.sig = DOSES.map(() => NaN);
     this.out = { ...ph.image, data: new Float32Array(n * n) };
     this.stage = 0; this.shown = -1; this.prev = -1; this.fadeT = 0; this.ready = true;
   };
@@ -723,7 +767,7 @@ const ART_TITLES = {
 };
 function shotLab(spec, env, kind) {
   const s = base(spec, env, kind), D = LAB_SHOTS[kind], lab = env.lab, R = s.R;
-  const preset = pick(R, D.presets), cmap = D.cmaps ? pick(R, D.cmaps) : null;
+  const preset = pick(R, D.presets), cmap = spec.cmap || (D.cmaps ? pick(R, D.cmaps) : null);
   s.init = async function () {
     await lab.ready;
     lab.setChrome(false); lab.focusPanel(null);
@@ -797,7 +841,7 @@ function shot3D(spec, env, kind) {
   s.cam = null;
   const name = pick(R, ['head', 'chest', 'shepp-logan']), n = env.phone ? 64 : 96, nA = env.phone ? 90 : 144;
   const look = kind === 'cone-scan' ? pick(R, ['mip', 'dvr', 'iso']) : pick(R, ['slices', 'iso', 'dvr']);
-  const cmap = pick(R, ['bone', 'xray-blue', 'magma', 'ice', 'gold-leaf']);
+  const cmap = spec.cmap || pick(R, ['bone', 'xray-blue', 'magma', 'ice', 'gold-leaf']);
   const scanEnd = 0.36, reconEnd = 0.62;
   s.cam3 = { yaw: 0.6 + R() * 1.2, pitch: 0.28, dist: 10.5, yawV: (R() < 0.5 ? -1 : 1) * 0.22 };
   s.springs = null;
@@ -807,7 +851,8 @@ function shot3D(spec, env, kind) {
     if (this.gone) { h3.release(); return; }
     this.h3 = h3;
     const v = this.h3.view;
-    v.setColormap(cmap);
+    v.setColormap(cmap, { tf: true });
+    this.onMap = () => { const [id, o] = this.mainMap(); this.h3?.view?.setColormap(id, { ...o, tf: true }); };
     if (kind === 'cone-volume') v.setShow({ gantry: false, rays: false, table: false, detector: false, volume: 'phantom' });
     else v.setShow({ gantry: true, rays: true, table: true, detector: true, volume: 'phantom' });
     this.phase = kind === 'cone-scan' ? 'scan' : 'look'; this.lookT = 0;
@@ -888,6 +933,20 @@ function stepSpringObj(sp, dt) {
 
 // ---------- factory ----------
 export function makeShot(spec, env) {
+  const shot = makeShotRaw(spec, env);
+  const plate0 = shot.plate;
+  if (spec.cmap && plate0) {
+    // the plate names the colour map (and the error map of a diff shot)
+    shot.plate = function () {
+      const p = plate0.call(this);
+      const extra = [{ name: 'colour map', value: this.mapName() }];
+      if (spec.dmap) extra.push({ name: 'error map', value: CM.get(spec.dmap).name });
+      return { ...p, params: [...(p.params || []), ...extra] };
+    };
+  }
+  return shot;
+}
+function makeShotRaw(spec, env) {
   switch (spec.kind) {
     case 'sine': return shotSine(spec, env);
     case 'smear': return shotSmear(spec, env);

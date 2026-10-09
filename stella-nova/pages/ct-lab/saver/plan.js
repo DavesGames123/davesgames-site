@@ -9,27 +9,65 @@
 //  A spring is critically damped: it reaches its target with a continuous
 //  velocity and no overshoot. The saver cameras use springs, not snaps.
 //
+//  COLOUR  Each shot that shows an image gets its colour map from a seeded
+//  bag (makeMapBag): medical, perceptual and artistic maps, plus grey.
+//  Shots with an error panel also get a diverging map from its own bag. A
+//  map never follows itself: the first map of a shot differs from the last
+//  map of the shot before. Some shots (fade: true, about 40 %) cross-fade
+//  to a second map part way through (spec.cmap2 at spec.fadeAt of the shot).
+//
 //  GREP MAP
 //    grep -n 'export const KINDS'     shot kinds, families, lengths, needs
+//    grep -n 'export function makeMapBag'  colour map bags
+//    grep -n 'MAP_POOLS'              the map pools
 //    grep -n 'export function makePlan'
 //    grep -n 'export function spring'  stepSpring, cam2d, stepCam
 //    grep -n 'export function fitPanels' panel rectangles in the clear band
 // ============================================================================
 
+import * as CM from '../colormaps/maps.js';
+
 // needs: 'lab' = window.__ctlab, 'gpu' = WebGPU for view3d.
+// map: the shot shows an image in a colour map. fade: the map can cross-fade in the shot.
+// diff: the shot also shows a signed error image (a diverging map).
 export const KINDS = [
-  { kind: 'gantry', fam: 'lab', dur: [8, 12], needs: 'lab' },
-  { kind: 'artefacts', fam: 'lab', dur: [9, 12], needs: 'lab' },
-  { kind: 'reveal', fam: 'lab', dur: [8, 12], needs: 'lab' },
+  { kind: 'gantry', fam: 'lab', dur: [8, 12], needs: 'lab', map: true },
+  { kind: 'artefacts', fam: 'lab', dur: [9, 12], needs: 'lab', map: true },
+  { kind: 'reveal', fam: 'lab', dur: [8, 12], needs: 'lab', map: true },
   { kind: 'sine', fam: 'radon', dur: [7, 11] },
-  { kind: 'smear', fam: 'bp', dur: [9, 12] },
-  { kind: 'fourier', fam: 'fourier', dur: [8, 12] },
-  { kind: 'iterate', fam: 'iter', dur: [8, 12] },
-  { kind: 'sparse', fam: 'sweep', dur: [8, 12] },
-  { kind: 'dose', fam: 'sweep', dur: [7, 11] },
-  { kind: 'cone-scan', fam: '3d', dur: [10, 12], needs: 'gpu' },
-  { kind: 'cone-volume', fam: '3d', dur: [7, 11], needs: 'gpu' },
+  { kind: 'smear', fam: 'bp', dur: [9, 12], map: true, fade: true },
+  { kind: 'fourier', fam: 'fourier', dur: [8, 12], map: true },
+  { kind: 'iterate', fam: 'iter', dur: [8, 12], map: true, fade: true, diff: true },
+  { kind: 'sparse', fam: 'sweep', dur: [8, 12], map: true, fade: true },
+  { kind: 'dose', fam: 'sweep', dur: [7, 11], map: true, fade: true },
+  { kind: 'cone-scan', fam: '3d', dur: [10, 12], needs: 'gpu', map: true, fade: true },
+  { kind: 'cone-volume', fam: '3d', dur: [7, 11], needs: 'gpu', map: true, fade: true },
 ];
+
+// Map pools: mostly medical, perceptual and artistic maps; grey and bone stay in.
+export const MAP_POOLS = {
+  seq: ['grey', ...CM.list('medical'), ...CM.list('perceptual'), ...CM.list('artistic')].map((m) => (typeof m === 'string' ? m : m.id)),
+  div: CM.list('diverging').map((m) => m.id),
+};
+export const FADE_P = 0.4;
+
+// A seeded bag per pool. draw(pool, avoid) never gives `avoid` and never the last map of
+// that pool again. A new shuffle starts when a bag is empty.
+export function makeMapBag(R, pools = MAP_POOLS) {
+  const bags = {}, last = {};
+  function draw(pool = 'seq', avoid = null) {
+    const all = pools[pool];
+    const okId = (id) => id !== avoid && id !== last[pool];
+    if (!bags[pool] || !bags[pool].length) bags[pool] = shuffle(R, all);
+    let i = bags[pool].findIndex(okId);
+    if (i < 0) { bags[pool] = shuffle(R, all); i = bags[pool].findIndex(okId); }
+    if (i < 0) i = 0;                    // a pool of one map only
+    const id = bags[pool].splice(i, 1)[0];
+    last[pool] = id;
+    return id;
+  }
+  return { draw };
+}
 export const MIN_SHOT = 6, MAX_SHOT = 12;
 
 // A small seeded generator (mulberry32). Returns numbers in [0, 1).
@@ -56,6 +94,8 @@ export function makePlan(seed, caps = {}) {
   const calm = Math.max(0, Math.min(1, caps.calm ?? 0.6));
   let kinds = KINDS.filter((k) => (!k.needs || caps[k.needs]) && (!caps.only || caps.only.includes(k.kind)));
   let bag = [], last = null, index = 0;
+  const MR = rng((seed ^ 0x5bd1e995) >>> 0), maps = makeMapBag(MR);   // its own stream: the kind order does not change
+  let lastMap = null, lastDiff = null;
   function next(force) {
     let spec = force ? kinds.find((k) => k.kind === force) || KINDS.find((k) => k.kind === force) : null;
     if (!spec) {
@@ -69,7 +109,14 @@ export function makePlan(seed, caps = {}) {
     const [lo, hi] = spec.dur;
     const dur = Math.max(MIN_SHOT, Math.min(MAX_SHOT, lo + (hi - lo) * (0.45 * R() + 0.55 * calm)));
     last = spec;
-    return { kind: spec.kind, fam: spec.fam, dur, seed: (R() * 4294967296) >>> 0, index: index++ };
+    const out = { kind: spec.kind, fam: spec.fam, dur, seed: (R() * 4294967296) >>> 0, index: index++ };
+    if (spec.map) {
+      out.cmap = maps.draw('seq', lastMap);
+      if (spec.fade && MR() < FADE_P) { out.cmap2 = maps.draw('seq', out.cmap); out.fadeAt = 0.35 + 0.25 * MR(); }
+      lastMap = out.cmap2 || out.cmap;
+      if (spec.diff) { out.dmap = maps.draw('div', lastDiff); lastDiff = out.dmap; }
+    }
+    return out;
   }
   // drop(fam): remove a family (for example '3d' when WebGPU fails at run time)
   function drop(fam) { kinds = kinds.filter((k) => k.fam !== fam); bag = bag.filter((k) => k.fam !== fam); }
