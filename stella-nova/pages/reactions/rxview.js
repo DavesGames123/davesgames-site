@@ -17,7 +17,11 @@
 //  view.setScene(scene)  view.play(t0)  view.pause()  view.seek(t)
 //  view.frame(dt)        advances and draws (call from rAF)
 //  view.setRect(r)       frame the subject in a sub-rectangle (saver band)
-//  view.still(rec)       a one-molecule still (the 3D thumbnails)
+//  view.still(rec)       a one-molecule still (the step pane)
+//  view.thumb(rec, w, h) a still of one molecule that fills a w x h card
+//                        (orthographic, longest axis across: treefit.js
+//                        principal3 and frameBox). It gives a data URL
+//                        and puts the scene that played back in place.
 //  view.snapshot(w, h)   the current frame as a data URL
 //  view.lite = true      fewer sphere segments (phones)
 //
@@ -27,6 +31,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { el, decode } from '../molecules/chem.js';
+import { principal3, frameBox } from './treefit.js';
 
 const RED = new THREE.Color('#ff5a4a'), GREEN = new THREE.Color('#5be39a'), GREY = new THREE.Color('#9aa3b5'), INK = new THREE.Color('#f4f1e8');
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Color();
@@ -60,6 +65,7 @@ export class RxView {
     this.S = null; this.t = 0; this.playing = false; this.loop = false; this.rect = null;
     this.camDist = 20; this.camTarget = new THREE.Vector3(); this.userCam = false; this.labelEls = [];
     this.onEnd = null;
+    this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
   }
 
   // ── scene ────────────────────────────────────────────────────────────────
@@ -80,8 +86,9 @@ export class RxView {
     this.draw(true);
   }
   // a still of one record: a scene with one input and no change
-  still(rec) {
+  still(rec, { orient = false } = {}) {
     const M = decode(rec), U = M.N;
+    if (orient) M.xyz = principal3(M.xyz, U);
     const bonds = M.bonds.map(b => ({ a: b.a, b: b.b, oR: b.o, oP: b.o, kind: 'keep' }));
     const pos = new Float32Array(3 * U); let c = [0, 0, 0];
     for (let i = 0; i < U; i++) for (let d = 0; d < 3; d++) c[d] += M.xyz[3 * i + d] / U;
@@ -206,14 +213,34 @@ export class RxView {
     if (r) this.camera.setViewOffset(w, h, w / 2 - (r.x + r.w / 2), h / 2 - (r.y + r.h / 2), w, h); else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
   }
-  snapshot(w = 240, h = 150) {
+  // a still of one molecule framed to fill a w x h card (CSS px); the
+  // image has dpr x the pixels. The scene that was playing comes back.
+  thumb(rec, w, h, dpr = 2) {
+    const prev = this.S ? { S: this.S, t: this.t, playing: this.playing, rot: this.group.rotation.y, userCam: this.userCam } : null;
+    this.still(rec, { orient: true });
+    // the still scene is centred: the group sits at the origin, unturned
+    this.group.rotation.set(0, 0, 0); this.group.position.set(0, 0, 0);
+    const f = this.S.at(0), fr = frameBox(f.pos, this.rad, w / h);
+    let R = 1; for (let u = 0; u < this.S.U; u++) R = Math.max(R, Math.abs(f.pos[3 * u + 2]) + this.rad[u]);
+    const o = this.ortho;
+    o.left = -fr.hw; o.right = fr.hw; o.top = fr.hh; o.bottom = -fr.hh; o.near = 0.1; o.far = 4 * R + 10;
+    o.position.set(fr.cx, fr.cy, 2 * R + 5); o.lookAt(fr.cx, fr.cy, 0); o.updateProjectionMatrix(); o.updateMatrixWorld();
+    // the lights ride on the perspective camera: point it the same way
+    const cp = this.camera.position.clone(), cq = this.camera.quaternion.clone();
+    this.camera.position.set(0, 0, this.camDist); this.camera.lookAt(0, 0, 0); this.camera.updateMatrixWorld();
+    const url = this.snapshot(Math.max(2, Math.round(w * dpr)), Math.max(2, Math.round(h * dpr)), o);
+    this.camera.position.copy(cp); this.camera.quaternion.copy(cq); this.camera.updateMatrixWorld();
+    if (prev) { this.setScene(prev.S); this.t = prev.t; this.playing = prev.playing; this.group.rotation.y = prev.rot; this.userCam = prev.userCam; this.draw(true); }
+    return url;
+  }
+  snapshot(w = 240, h = 150, cam = this.camera) {
     const rt = new THREE.WebGLRenderTarget(w, h, { samples: 4, colorSpace: THREE.SRGBColorSpace });
     const asp = this.camera.aspect;
-    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
-    this.renderer.setRenderTarget(rt); this.renderer.setClearColor(0x000000, 0); this.renderer.clear(); this.renderer.render(this.scene3, this.camera);
+    if (cam === this.camera) { this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
+    this.renderer.setRenderTarget(rt); this.renderer.setClearColor(0x000000, 0); this.renderer.clear(); this.renderer.render(this.scene3, cam);
     const px = new Uint8Array(w * h * 4); this.renderer.readRenderTargetPixels(rt, 0, 0, w, h, px);
     this.renderer.setRenderTarget(null); rt.dispose();
-    this.camera.aspect = asp; this.camera.updateProjectionMatrix();
+    if (cam === this.camera) { this.camera.aspect = asp; this.camera.updateProjectionMatrix(); }
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d'), img = g.createImageData(w, h);
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);

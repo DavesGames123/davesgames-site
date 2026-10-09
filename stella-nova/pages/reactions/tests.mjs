@@ -345,11 +345,84 @@ globalThis.RX.finish = finish;
     const t0 = performance.now();
     const all = Promise.all(eqs.map(([, tex, display], i) => w.__sm.typeset(els[i], tex, { display })));
     const out = await Promise.race([all, new Promise(r => setTimeout(() => r(null), 120000))]);
+    // the chip size of each inline equation, for the chip placement test
+    globalThis.RX.chipVB = new Map();
+    eqs.forEach(([, tex, display], i) => { const v = !display && els[i].querySelector('svg'); if (v) globalThis.RX.chipVB.set(tex, v.getAttribute('viewBox').split(/[\s,]+/).map(Number)); });
     const bad = out ? eqs.filter((e, i) => !out[i] || els[i].classList.contains('raw') || !els[i].querySelector('svg')) : eqs;
     ok(!!out && !bad.length, 'TeX browser path: every equation of the page typesets (vendor MathJax, autoload mhchem, all at once)',
       bad.length ? `${bad.length} raw: ` + bad.slice(0, 3).map(b => b[0] + ' ' + b[1]).join(' | ') : `${eqs.length} typesets, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
     w.close();
   }
+}
+
+// ── tree fit (treefit.js): 3D default, stills, 2D art, names, chips ─────────
+{
+  const T = await import('./treefit.js');
+  const { layout, emptySynth, addStep } = await import('./synth.js');
+  const { decode, el } = await import('../molecules/chem.js');
+  const main = readFileSync(here + 'main.js', 'utf8'), html = readFileSync(here + 'index.html', 'utf8');
+  ok(/export const S = \{[^}]*\bd3: true\b/.test(main) && /class="tb tog on" id="b3d"/.test(html), 'tree: 3D stills on by default (S.d3 and the 3D button)');
+  // every tree the page can show: the named syntheses and each class example
+  const trees = globalThis.RX.synths.map(S => [S.named, S]);
+  for (const cls of CLASSES) {
+    const ins = cls.kind === 'overall' ? (cls.fuel ? cls.ex.slice(0, 1) : cls.lhsQ.map(x => x[0])) : cls.ex.slice(0, cls.lhs.length);
+    const syn = emptySynth(); if (addStep(syn, OCL, cls, ins) >= 0) trees.push(['class ' + cls.id, syn]);
+  }
+  const VB = globalThis.RX.chipVB;
+  const size = tex => (VB && VB.has(tex) ? T.chipBox(VB.get(tex)[2], VB.get(tex)[3]) : T.chipGuess(tex));
+  const stillCache = new Map(), artCache = new Map();
+  let nCards = 0, nSmall = 0, stillLo = 9, stillHi = 0, badStill = [], badName = [], artLo = 9, strokeLo = 9, badArt = [], nChip = 0, badChip = [], spreadHi = 1;
+  for (const [name, S] of trees) for (const kind of ['clado', 'radial', 'fan']) {
+    const L0 = layout(S, kind, 150);
+    // names and art boxes
+    for (const id of L0.ids) {
+      const b = L0.fish[id], m = S.nodes[id].mol, g = T.cardGeom(b, m.name);
+      nCards++;
+      const wide = g.lab.lines.map(l => T.textWidth(l, g.lab.fs)).filter(x => x > g.lab.tw + 0.01);
+      if (wide.length || g.lab.lines.length > 2 || g.art.h < 0.45 * b.h || g.art.y + g.art.h > b.h - 2 - g.labH + 0.01) badName.push(`${name}/${kind} ${m.name}: ${g.lab.lines.join(' | ')} @${g.lab.fs}px, art ${g.art.h.toFixed(0)} of ${b.h.toFixed(0)}`);
+      // the 3D still: atom spheres (radius 0.27 vdw, as rxview.js) in the
+      // orthographic frame of the art box
+      const ks = m.key + '|' + g.art.w.toFixed(1) + 'x' + g.art.h.toFixed(1);
+      if (!stillCache.has(ks)) {
+        const M = decode(m.rec), pos = T.principal3(M.xyz, M.N), rad = Array.from(M.z, z => 0.27 * el(z).vdw);
+        const fr = T.frameBox(pos, rad, g.art.w / g.art.h);
+        stillCache.set(ks, [Math.max(fr.fillX, fr.fillY), fr.atMin]);
+      }
+      const [f, small] = stillCache.get(ks);
+      if (!small) { stillLo = Math.min(stillLo, f); stillHi = Math.max(stillHi, f); } else nSmall++;
+      if (small ? f > 0.95 : (f < 0.85 || f > 0.95)) badStill.push(`${name} ${m.name} ${f.toFixed(2)}`);
+      // the 2D drawing: strokes and fill
+      const ka = m.key + '|' + g.art.w.toFixed(1) + 'x' + g.art.h.toFixed(1);
+      if (!artCache.has(ka)) {
+        const r = T.fitArt2D(m.rec, g.art.w, g.art.h), heavy = (m.rec.a || '').split(' ').filter(x => x && x !== 'H').length;
+        const pad = 0.45 * 30, used = Math.max((r.box.w - 2 * pad) * r.s / g.art.w, (r.box.h - 2 * pad) * r.s / g.art.h);
+        artCache.set(ka, { used, px: r.strokePx, heavy });
+      }
+      const a = artCache.get(ka);
+      strokeLo = Math.min(strokeLo, a.px);
+      if (a.heavy >= 12) artLo = Math.min(artLo, a.used);
+      if (a.px < 1.2 || (a.heavy >= 12 && a.used < 0.7)) badArt.push(`${name} ${m.name} fill ${a.used.toFixed(2)} stroke ${a.px.toFixed(2)}px`);
+    }
+    // chips: placed, then checked against every card and every other chip
+    const steps = S.steps.map(s => ({ out: s.out, ins: s.ins })), sz = S.steps.map(s => size(s.st.tex));
+    const P = T.placeChips(L0, steps, k => sz[k]);
+    spreadHi = Math.max(spreadHi, P.lay.spread || 1);
+    const cards = P.lay.ids.map(id => P.lay.fish[id]);
+    const at = P.at.filter(Boolean);
+    nChip += at.length;
+    if (at.length !== S.steps.filter(s => L0.fish[s.out]).length) badChip.push(`${name}/${kind}: ${at.length} of ${S.steps.length} chips placed`);
+    at.forEach((r, i) => {
+      for (const c of cards) if (T.overlapArea(r, c) > 0) badChip.push(`${name}/${kind}: chip ${i} on a card`);
+      for (let j = i + 1; j < at.length; j++) if (T.overlapArea(r, at[j]) > 0) badChip.push(`${name}/${kind}: chips ${i} and ${j} overlap`);
+      if (r.x < 0 || r.y < 0 || r.x + r.w > P.lay.w || r.y + r.h > P.lay.h) badChip.push(`${name}/${kind}: chip ${i} out of the layout box`);
+    });
+    // cards must still not overlap after a spread
+    for (let i = 0; i < cards.length; i++) for (let j = i + 1; j < cards.length; j++) if (T.overlapArea(cards[i], cards[j]) > 0) badChip.push(`${name}/${kind}: cards overlap after the spread`);
+  }
+  ok(!badName.length, 'tree fit: every card name fits its card (width model of STIX Two Text, at most 2 lines)', badName.length ? badName.slice(0, 3).join('; ') : `${nCards} cards in ${trees.length} trees x 3 layouts`);
+  ok(!badStill.length, 'tree fit: every 3D still fills 85-95% of its art box on its longer side (small molecules: the minimum frame)', badStill.length ? badStill.slice(0, 3).join('; ') : `fill ${stillLo.toFixed(2)}-${stillHi.toFixed(2)}, ${nSmall} small-molecule cards at the minimum frame`);
+  ok(!badArt.length, 'tree fit: 2D drawings fill their art box (>= 70% for 12+ heavy atoms; small ones keep the minimum box), strokes >= 1.2 px', badArt.length ? badArt.slice(0, 3).join('; ') : `fill >= ${artLo.toFixed(2)}, stroke >= ${strokeLo.toFixed(2)} px`);
+  ok(!badChip.length, `tree fit: no chip on a card or on another chip, all layouts (${VB && VB.size ? 'MathJax sizes' : 'guessed sizes'})`, badChip.length ? badChip.slice(0, 3).join('; ') : `${nChip} chips, spread at most x${spreadHi.toFixed(2)}`);
 }
 
 if (!process.env.RX_MORE4) finish();

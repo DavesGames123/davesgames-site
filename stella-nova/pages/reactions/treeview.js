@@ -2,27 +2,37 @@
 //  REACTIONS  ·  treeview.js — the synthesis tree on the page (DOM)
 // ----------------------------------------------------------------------------
 //  Draws a layout of synth.js (the fishdraw tree-of-life layouts) as HTML:
-//  one paper card per molecule (the 2D skeletal formula from
-//  molecules/draw2d.js, or a 3D still from the shared view), the branches
-//  as SVG paths, and the equation of each step in TeX under the card of
-//  its product. Pan with a drag, zoom with the wheel or a pinch. Like the
-//  fishdraw tree, the view follows the growth while the tree builds, until
-//  the user moves it.
+//  one card per molecule (the 2D skeletal formula from molecules/draw2d.js
+//  on paper, or a 3D still from the shared view on dark), the branches
+//  as SVG paths, and the equation of each step in TeX in a chip on a
+//  branch into its product. Pan with a drag, zoom with the wheel or a
+//  pinch. Like the fishdraw tree, the view follows the growth while the
+//  tree builds, until the user moves it.
+//
+//  FIT (treefit.js)  each card name gets a font size and line breaks that
+//  fit the card; the drawing or the still fills the art box above it.
+//  The chips are placed with a size guess, then placed again with the
+//  size of the typeset SVG. placeChips spreads the layout until no chip
+//  touches a card or another chip.
 //
 //  new TreeView(wrap, { hover(id), pick(id), leave() })
-//  tv.set(S, lay, { d3, eq, art(node) -> svg text, still(node) -> url })
+//  tv.set(S, lay, { d3, eq, art(node, w, h) -> svg text,
+//                   still(node, w, h) -> url })
 //  tv.grow(u)      0..1, the growth playback (1 = all shown)
 //  tv.light(id)    light a molecule, the branches into it and its equation
 //  tv.fit(anim)    the whole tree in view; fitRect(r), focusIn(id, r) for
 //                  the saver's clear band
+//  tv.placed       a promise: the chips are typeset and placed
 //
-//  GREP MAP: grep -n 'set(S, lay'  'grow(u)'  'bindPointer'
+//  GREP MAP: grep -n 'set(S, lay'  'place(lay, at)'  'grow(u)'  'bindPointer'
 // ============================================================================
 import { typeset } from '../../lib/sci-math.js';
 import { growOrder } from './synth.js';
+import { cardGeom, chipBox, chipGuess, placeChips, CHIP } from './treefit.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const pathOf = br => [...br.run.slice().reverse(), ...br.elbow.slice().reverse()];
 
 export class TreeView {
   constructor(wrap, cb = {}) {
@@ -34,42 +44,88 @@ export class TreeView {
     new ResizeObserver(() => { if (!this.user && this.lay) this.fit(false); }).observe(wrap);
   }
   set(S, lay, opt = {}) {
-    this.S = S; this.lay = lay; this.opt = opt; this.user = false;
+    this.S = S; this.opt = opt; this.user = false;
+    const tok = this.tok = (this.tok || 0) + 1;
     const ids = lay.ids, order = growOrder(S);
     this.appear = new Map(order.map((id, i) => [id, (i + 1) / order.length]));
     this.dn = 1 / order.length;
-    let h = `<svg class="tv-lines" width="${lay.w}" height="${lay.h}" viewBox="0 0 ${lay.w} ${lay.h}">`;
-    for (const id of ids) {
-      const br = lay.branch[id]; if (!br) continue;
-      // from the reactant to the product: run first, then the elbow
-      const pts = [...br.run.slice().reverse(), ...br.elbow.slice().reverse()];
-      h += `<path data-c="${id}" d="M${pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L')}"/>`;
-    }
+    const eq = opt.eq !== false;
+    const steps = S.steps.map(s => ({ out: s.out, ins: s.ins }));
+    const sizes = S.steps.map(s => chipGuess(s.st.tex));
+    const first = eq ? placeChips(lay, steps, k => sizes[k]) : { lay, at: [] };
+    const L = first.lay;
+    let h = `<svg class="tv-lines" width="${L.w}" height="${L.h}" viewBox="0 0 ${L.w} ${L.h}">`;
+    for (const id of ids) if (L.branch[id]) h += `<path data-c="${id}"/>`;
     h += '</svg>';
     for (const id of ids) {
-      const n = S.nodes[id], b = lay.fish[id], m = n.mol;
+      const n = S.nodes[id], b = L.fish[id], m = n.mol, g = cardGeom(b, m.name), a = g.art;
       const cls = ['tv-node', n.step < 0 ? 'leaf' : '', id === S.root ? 'root' : '', opt.d3 ? 'd3' : ''].join(' ');
-      const fs = Math.max(10, Math.min(15, b.w * 0.095));
-      h += `<div class="${cls}" data-id="${id}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px" title="${esc(m.name)}">`
-        + `<div class="art">${opt.d3 && opt.still ? `<img alt="" src="${opt.still(m) || ''}">` : (opt.art ? opt.art(m) : '')}</div>`
-        + `<div class="nm" style="font-size:${fs}px">${esc(m.name)}</div>${n.coef > 1 ? `<span class="cf">${n.coef}×</span>` : ''}</div>`;
+      const pic = opt.d3 && opt.still ? `<img alt="" src="${opt.still(m, a.w, a.h) || ''}">` : (opt.art ? opt.art(m, a.w, a.h) : '');
+      h += `<div class="${cls}" data-id="${id}" style="width:${b.w}px;height:${b.h}px" title="${esc(m.name)}">`
+        + `<div class="art" style="left:${a.x}px;top:${a.y}px;width:${a.w}px;height:${a.h}px">${pic}</div>`
+        + `<div class="nm" style="font-size:${g.lab.fs}px;height:${g.labH}px">${g.lab.lines.map(l => `<span>${esc(l)}</span>`).join('')}</div>${n.coef > 1 ? `<span class="cf">${n.coef}×</span>` : ''}</div>`;
     }
-    if (opt.eq !== false) S.steps.forEach((s, k) => {
-      const b = lay.fish[s.out]; if (!b) return;
-      h += `<div class="tv-eq" data-out="${s.out}" style="left:${b.x + b.w / 2}px;top:${b.y + b.h + 5}px"></div>`;
-    });
+    if (eq) S.steps.forEach(s => { if (L.fish[s.out]) h += `<div class="tv-eq wait" data-out="${s.out}"></div>`; });
     this.inner.innerHTML = h;
-    this.inner.style.width = lay.w + 'px'; this.inner.style.height = lay.h + 'px';
-    this.paths = [...this.inner.querySelectorAll('path')].map(p => { const L = p.getTotalLength ? p.getTotalLength() : 100; p.style.strokeDasharray = L; return [p, +p.dataset.c, L]; });
+    this.svg = this.inner.querySelector('svg');
     this.cards = new Map([...this.inner.querySelectorAll('.tv-node')].map(e => [+e.dataset.id, e]));
     this.eqs = new Map([...this.inner.querySelectorAll('.tv-eq')].map(e => [+e.dataset.out, e]));
-    S.steps.forEach(s => { const e = this.eqs.get(s.out); if (e) typeset(e, s.st.tex, { display: false }); });
+    this.place(L, first.at);
     for (const [id, e] of this.cards) {
       e.addEventListener('pointerenter', ev => { if (ev.pointerType === 'mouse' && !this.dragging) this.cb.hover && this.cb.hover(id); });
       e.addEventListener('click', () => { if (!this.moved) this.cb.pick && this.cb.pick(id); });
     }
     this.grow(1);
     this.fit(false);
+    this.shrinkNames();
+    // typeset every chip, then place them again with their real sizes
+    this.placed = !eq ? Promise.resolve() : Promise.all(S.steps.map((s, k) => {
+      const e = this.eqs.get(s.out); if (!e) return null;
+      return typeset(e, s.st.tex, { display: false }).then(okd => {
+        const svg = okd && e.querySelector('svg'), vb = svg && svg.getAttribute('viewBox');
+        if (vb) {
+          const [, , vw, vh] = vb.split(/[\s,]+/).map(Number), c = chipBox(vw, vh);
+          svg.style.width = c.svgW.toFixed(1) + 'px'; svg.style.height = c.svgH.toFixed(1) + 'px';
+          sizes[k] = c;
+        } else sizes[k] = { w: e.offsetWidth || sizes[k].w, h: e.offsetHeight || sizes[k].h };
+      });
+    })).then(() => {
+      if (this.tok !== tok) return;
+      const P = placeChips(lay, steps, k => sizes[k]);
+      this.place(P.lay, P.at);
+      for (const e of this.eqs.values()) e.classList.remove('wait');
+      if (!this.user) this.fit(false);
+    });
+  }
+  // put the cards, branches and chips of a placed layout on the page
+  place(lay, at) {
+    this.lay = lay;
+    this.svg.setAttribute('width', lay.w); this.svg.setAttribute('height', lay.h); this.svg.setAttribute('viewBox', `0 0 ${lay.w} ${lay.h}`);
+    for (const p of this.svg.querySelectorAll('path')) {
+      const br = lay.branch[+p.dataset.c];
+      p.setAttribute('d', 'M' + pathOf(br).map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join('L'));
+    }
+    for (const [id, e] of this.cards) { const b = lay.fish[id]; e.style.left = b.x + 'px'; e.style.top = b.y + 'px'; }
+    this.S.steps.forEach((s, k) => {
+      const e = this.eqs.get(s.out), a = at[k]; if (!e || !a) return;
+      e.style.left = a.x.toFixed(1) + 'px'; e.style.top = a.y.toFixed(1) + 'px';
+      e.style.minWidth = a.w.toFixed(1) + 'px'; e.style.height = a.h.toFixed(1) + 'px';
+    });
+    this.inner.style.width = lay.w + 'px'; this.inner.style.height = lay.h + 'px';
+    this.paths = [...this.svg.querySelectorAll('path')].map(p => { const L = p.getTotalLength ? p.getTotalLength() : 100; p.style.strokeDasharray = L; return [p, +p.dataset.c, L]; });
+    this.grow(this.u);
+  }
+  // a safety net for the width model: a name line wider than its card
+  // (a font with other widths) shrinks until it fits
+  shrinkNames() {
+    const run = () => {
+      for (const e of this.cards.values()) {
+        const nm = e.querySelector('.nm'); if (!nm) continue;
+        for (let k = 0; k < 6 && nm.scrollWidth > nm.clientWidth + 0.5; k++) nm.style.fontSize = (parseFloat(nm.style.fontSize) * 0.92).toFixed(2) + 'px';
+      }
+    };
+    requestAnimationFrame(run);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
   }
   grow(u) {
     this.u = u;

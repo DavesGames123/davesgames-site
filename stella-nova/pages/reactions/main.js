@@ -6,6 +6,9 @@
 //  The tree (treeview.js) shows the synthesis; pointing at a molecule (a
 //  tap on touch) shows the step that made it: the 2D scheme, the equation
 //  in TeX, and the 3D change in the ONE shared RxView (rxview.js).
+//  The tree shows 3D stills by default (S.d3; the 3D button gives the 2D
+//  drawings). Stills come from RxView.thumb, framed per card, and the
+//  thumb puts the playing step back, so the 3D step keeps playing.
 //  Hash: #s=<named id>, #c=<class id>, #b=<builder ops> (buildui.js).
 //  The right-hand surface (buildui.js) builds a tree of the user's own;
 //  each change shows that tree here.
@@ -41,6 +44,7 @@ import { LIB, loadLibrary } from '../molecules/browse.js';
 import { decode } from '../molecules/chem.js';
 import { render2D } from '../molecules/draw2d.js';
 import { typeset } from '../../lib/sci-math.js';
+import { fitArt2D } from './treefit.js';
 import { installSaver } from './saver.js';
 import { setRoute } from './route.js';
 
@@ -50,19 +54,25 @@ const REDUCED_Q = window.matchMedia('(prefers-reduced-motion: reduce)');
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const LAYOUTS = [['clado', 'Tree'], ['radial', 'Radial'], ['fan', 'Fan']];
 
-export const S = { synth: null, layout: 'clado', d3: false, eq: true, node: -1, OCL: null, view: null, tree: null, loop: false };
+export const S = { synth: null, layout: 'clado', d3: true, eq: true, node: -1, OCL: null, view: null, tree: null, loop: false };
 const scenes = new WeakMap(), arts = new Map(), stills = new Map();
 
 // ── drawings ────────────────────────────────────────────────────────────────
-function art(m) {
-  const k = m.key + '|' + (m.rec.p2 || '');
-  if (!arts.has(k)) { try { arts.set(k, render2D(decode(m.rec), { lw: 1.7, pad: 0.45, minW: 4.6, minH: 2.8 }).svg); } catch (e) { arts.set(k, ''); } }
+// w, h: the art box of the card (treefit.js cardGeom); no size: the
+// step scheme and the saver plate
+function art(m, w, h) {
+  const k = m.key + '|' + (m.rec.p2 || '') + '|' + (w ? Math.round(w) + 'x' + Math.round(h) : '');
+  if (!arts.has(k)) {
+    try { arts.set(k, w ? fitArt2D(m.rec, w, h).svg : render2D(decode(m.rec), { lw: 1.7, pad: 0.45, minW: 4.6, minH: 2.8 }).svg); }
+    catch (e) { arts.set(k, ''); }
+  }
   return arts.get(k);
 }
-function still(m) {
+function still(m, w = 150, h = 70) {
   if (!S.view) return '';
-  if (!stills.has(m.key)) { S.view.still(m.rec); stills.set(m.key, S.view.snapshot(300, 180)); }
-  return stills.get(m.key);
+  const k = m.key + '|' + Math.round(w) + 'x' + Math.round(h);
+  if (!stills.has(k)) { try { stills.set(k, S.view.thumb(m.rec, w, h)); } catch (e) { console.error(e); return ''; } }
+  return stills.get(k);
 }
 
 // ── a synthesis ─────────────────────────────────────────────────────────────
@@ -83,10 +93,8 @@ function showSynth(syn, opts = {}) {
 }
 function relayout() {
   const syn = S.synth; if (!syn) return;
-  const keep = S.view ? S.view.S : null, t = S.view ? S.view.t : 0, playing = S.view && S.view.playing;
   const lay = layout(syn, S.layout, PHONE_Q.matches ? 130 : 150);
   S.tree.set(syn, lay, { d3: S.d3, eq: S.eq, art, still });
-  if (S.view && keep && S.d3) { S.view.setScene(keep); S.view.t = t; S.view.playing = playing; }
   if (S.node >= 0) S.tree.light(S.node);
 }
 // the growth playback: the camera follows the newest molecule unless the
