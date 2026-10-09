@@ -66,6 +66,7 @@ import { INSTRUMENTS, stringParams, stoppedLength, noteName, freqToMidi, midiToF
 import { AudioEngine, renderModal, renderSim, strumOffsets } from './engine/audio.js';
 import { CHORD_SHAPES, findShape, STANDARD } from './engine/chords.js';
 import { mapFretting } from './engine/midi.js';
+import { HARMONIC_TOUCH } from './engine/harmonics.js';
 import { mountPlayback } from './playback/ui.js';
 import { createView2D, FIELDS } from './view2d.js';
 import { createPicker } from '../ct-lab/colormaps/picker.js';
@@ -199,7 +200,7 @@ function excite(i, kind, args = {}, { sound = true } = {}) {
     const pp = Math.abs(Math.sin(n * Math.PI * world.pluckPos)) < 0.2 ? 0.13 : world.pluckPos;
     sim.stopBow();
     sim.pluck({ pos: pp, amp: DEFAULT_AMP, width: 0.02 });
-    sim.touch({ pos, strength: 4000, seconds: 0.08 });
+    sim.touch({ pos, ...HARMONIC_TOUCH });
     if (n > 1) { world.harmonic = n; $('harm').value = String(Math.min(8, n)); }
     if (sound) soundHarmonic(i, pp, pos);
   }

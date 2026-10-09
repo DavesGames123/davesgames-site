@@ -476,6 +476,23 @@ group('chords: every shape gives the named pitches', () => {
 });
 
 // ── harmonics ──────────────────────────────────────────────────────────────
+group('harmonics: the page light touch leaves harmonic n alone (all strings, n 2..6)', () => {
+  const amps = (s) => { const N = s.N, out = []; for (let m = 1; m <= 12; m++) { let b = 0, c = 0; for (let i = 1; i < N; i++) { const w = Math.sin(m * Math.PI * i / N); b += s.u[i] * w; c += s.v[i] * w; } out.push(Math.hypot(b, c / (2 * Math.PI * m * s.f1Stiff))); } return out; };
+  const { strength, seconds } = H.HARMONIC_TOUCH;
+  let worst = Infinity, where = '';
+  for (const inst of Object.values(INSTRUMENTS)) for (let si = 0; si < inst.strings.length; si++) for (const n of [2, 3, 4, 5, 6]) {
+    const s = new StringSim(stringParams(inst, si, 0));
+    const pp = Math.abs(Math.sin(n * Math.PI * inst.pluckPos)) < 0.2 ? 0.13 : inst.pluckPos;   // as main.js excite('touch')
+    s.pluck({ pos: pp, amp: 0.002, width: 0.02 });
+    s.touch({ pos: 1 / n, strength, seconds });
+    s.step(Math.ceil((seconds + 0.02) / s.k));
+    const a = amps(s), other = Math.max(...a.filter((_, m) => (m + 1) % n)), r = a[n - 1] / other;
+    if (r < worst) { worst = r; where = `${inst.label} ${inst.strings[si].name} n=${n}`; }
+    ok(r > 10 && Number.isFinite(s.energy()), `${inst.label} ${inst.strings[si].name} touch 1/${n}: ${r.toFixed(1)}x`);
+  }
+  console.log(`  worst: ${worst.toFixed(1)}x at ${where}`);
+});
+
 group('harmonics: ratios, intervals, nodes, beats', () => {
   ok(H.ratioOf(3, 2).name === 'perfect fifth' && H.ratioOf(5, 4).name === 'major third', 'just names');
   ok(H.ratioOf(6, 4).num === 3 && H.ratioOf(6, 4).den === 2, 'reduce');

@@ -15,7 +15,18 @@
 //    suppressed modes ..... "export function suppressedHarmonics"
 //    beats ................ "export function beatFrequency"
 //    harmonic touch frets . "export function harmonicFrets"
+//    light touch force .... "export const HARMONIC_TOUCH"
 // ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The light touch that the page's Harmonic tool puts at a node (L/n),
+ * for StringSim.touch. A finger rests 0.2 s of simulated time. With a
+ * strength of 20000, harmonic n is more than 10 times every other mode
+ * after the touch on all strings of the three instruments, for n = 2..6
+ * (engine tests). The old touch (4000 for 0.08 s) left the fundamental
+ * ringing for n >= 4 on the guitars.
+ */
+export const HARMONIC_TOUCH = Object.freeze({ strength: 20000, seconds: 0.2 });
 
 export function centsBetween(f1, f2) {
   return 1200 * Math.log2(f2 / f1);
