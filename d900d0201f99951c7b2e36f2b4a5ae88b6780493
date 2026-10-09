@@ -1,0 +1,1 @@
+This commit also carries one line it did not write: the 'soft-bodies' note in stella-nova/lib/screensaver-catalog.js. Another session (the sim kit batch that converts soft-bodies) had that edit uncommitted in the working tree, and the pathspec commit of the catalog file took the whole file. The line names the sim kit director for soft-bodies; it parses (node --check passed).
