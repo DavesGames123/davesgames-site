@@ -220,5 +220,11 @@ group('marker parse');
   ok(m.length === 1 && m[0].name === 'F#m7' && m[0].rootPc === 6, 'chord:F#m7 marker gives root F#; other markers are skipped');
 }
 
+group('ui module links');
+{
+  const ui = await import('./ui.js');
+  ok(typeof ui.mountPlayback === 'function', 'ui.js links and exports mountPlayback');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

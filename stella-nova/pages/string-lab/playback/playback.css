@@ -1,0 +1,50 @@
+/* ============================================================================
+   STRING LAB · playback panel (playback/ui.js)
+   ----------------------------------------------------------------------------
+   The music panel in the controls column. It uses the page colour tokens
+   (--ink2, --text, --tone, --hi and so on) with fallbacks.
+     grep -n 'SEG'      the two-button toggles
+     grep -n 'CANVAS'   TAB strip, fretboard, ratio graph
+     grep -n 'EXPLAIN'  the note and chord text
+     grep -n 'TOUCH'    44px targets for a coarse pointer
+   ========================================================================== */
+.pb [hidden],[hidden].pb-chords,[hidden].pb-song{display:none!important}
+.pb{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text,#dde1ec)}
+.pb select,.pb button{font:inherit;color:inherit;background:var(--ink3,#161a28);border:1px solid var(--line-b,rgba(143,182,255,.24));border-radius:6px;padding:5px 8px;min-height:30px}
+.pb button{cursor:pointer;touch-action:manipulation}
+.pb button:hover{border-color:var(--tone,#8fb6ff)}
+.pb button.on,.pb .pb-primary{border-color:var(--hi,#ffd27a);color:var(--hi,#ffd27a)}
+.pb-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pb-row>span{flex:0 0 auto;color:var(--dim,#8b92a8)}
+.pb-row select{flex:1 1 auto;min-width:0;max-width:70%}
+.pb-row input[type=range]{flex:1 1 auto;min-width:0;max-width:62%}
+/* SEG */
+.pb-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pb-transport{display:grid;grid-template-columns:44px 1fr 1fr 1fr;gap:4px}
+.pb-file{display:block;text-align:center;border:1px dashed var(--line-b,rgba(143,182,255,.24));border-radius:6px;padding:6px;color:var(--dim,#8b92a8);cursor:pointer}
+.pb-file input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pb-file:focus-within{outline:1px solid var(--hi,#ffd27a)}
+.pb-about,.pb-status,.pb-cap,.pb-dim{color:var(--dim,#8b92a8);line-height:1.45;margin:0}
+.pb-status{min-height:1.4em}
+/* CANVAS */
+.pb canvas{display:block;width:100%;border-radius:6px;border:1px solid var(--line,rgba(143,182,255,.10));background:var(--ink2,#0e111b)}
+/* EXPLAIN */
+.pb-explain{background:var(--ink2,#0e111b);border:1px solid var(--line,rgba(143,182,255,.10));border-radius:6px;padding:8px 10px;line-height:1.5;min-height:64px}
+.pb-explain p{margin:0 0 5px}
+.pb-explain p:last-child{margin-bottom:0}
+.pb-explain b{color:var(--hi,#ffd27a);font-weight:600}
+.pb-big{font-size:15px}
+.pb-big span{color:var(--dim,#8b92a8);font-size:12px;margin-left:6px;font-family:var(--mono,ui-monospace,Menlo,monospace)}
+.pb-strings{list-style:none;margin:0 0 5px;padding:0;font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:11px}
+.pb-strings .pb-mute{color:var(--faint,#363b52)}
+.pb-slow summary{cursor:pointer;color:var(--dim,#8b92a8)}
+.pb-slow summary b{color:var(--text,#dde1ec);font-weight:500}
+.pb-slow select{margin:6px 0;width:100%}
+.pb-slow p{color:var(--dim,#8b92a8);line-height:1.45;margin:0}
+/* TOUCH */
+@media (pointer:coarse){
+  .pb select,.pb button,.pb-file{min-height:44px}
+  .pb-transport{grid-template-columns:52px 1fr 1fr 1fr}
+  .pb{font-size:13px}
+  .pb-about,.pb-status,.pb-cap,.pb-dim,.pb-slow p{font-size:11px}
+}
