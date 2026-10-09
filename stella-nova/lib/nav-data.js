@@ -125,6 +125,10 @@ w.SN_NAV = [
       ["human-skull", "Human Skull", "3D"],
       ["human-skeleton", "Human Skeleton", "3D"]
     ] },
+    { h: "Medical Imaging", p: [
+      ["ct-explained", "How CT Works", "NEW"],
+      ["ct-lab", "CT Lab", "LAB"]
+    ] },
     { h: "Neuroscience", p: [
       ["neuron-lab", "Neuron Lab", "SIM"],
       ["neuron-network", "Neural Network", "SIM"]
