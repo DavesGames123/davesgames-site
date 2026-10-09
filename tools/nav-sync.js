@@ -22,6 +22,7 @@
 //    - each registered page has a BLURBS line in pages/home/sectors.js
 //    - each page the home shows has thumbs/<key>.jpg, and list.js names
 //      every thumbnail file (rebuild list.js after you add a JPEG)
+//    - each key in list.js has its small copy thumbs/sm/<key>.jpg
 //
 //  Usage (from the repo root):
 //    node tools/nav-sync.js           write the blocks, then check
@@ -220,6 +221,9 @@ function checkHome() {
   if (notListed.length) warns.push(`${notListed.length} thumbnail(s) not in thumbs/list.js (rebuild it): ${notListed.join(', ')}`);
   const gone = [...THUMB_KEYS].filter(k => !files.includes(k));
   if (gone.length) warns.push(`thumbs/list.js names missing file(s): ${gone.join(', ')}`);
+  // Each listed key also needs its 320x200 copy (tools/thumbs-small.mjs).
+  const noSmall = [...THUMB_KEYS].filter(k => !fs.existsSync(path.join(HOME, 'thumbs', 'sm', k + '.jpg')));
+  if (noSmall.length) warns.push(`${noSmall.length} listed key(s) with no thumbs/sm/<key>.jpg (run node tools/thumbs-small.mjs): ${noSmall.join(', ')}`);
   return warns;
 }
 

@@ -12,7 +12,7 @@ registry, so do not edit the text between the `PAGES` markers.
 | Page registry (the only one) | `stella-nova/lib/nav-data.js` (`SN_NAV`, `SN_XR`, `SN_CRAFT`, `SN_HIDDEN`) |
 | Home text, blurbs, credits, ports | `stella-nova/pages/home/sectors.js` (`SECTOR_TEXT`, `BLURBS`, `CREDITS`, `EXCLUDED`, `DIRECTORY_ONLY`, `FEATURED`) |
 | Home search | `stella-nova/pages/home/main.js` (`FIND_ITEMS`, `findResults`, `initFind`) |
-| Home thumbnails | `stella-nova/pages/home/thumbs/<key>.jpg` and `thumbs/list.js` |
+| Home thumbnails | `stella-nova/pages/home/thumbs/<key>.jpg`, `thumbs/sm/<key>.jpg` and `thumbs/list.js` |
 | Screensaver tiers | `stella-nova/lib/screensaver-catalog.js` |
 | Sync and checks | `tools/nav-sync.js` (writes the home blocks and this table) |
 | Home tests | `node stella-nova/pages/home/tests.mjs` |
@@ -62,8 +62,10 @@ registry, so do not edit the text between the `PAGES` markers.
 
 8. Add a home thumbnail: `pages/home/thumbs/<key>.jpg`, 640 x 400, JPEG
    quality 82 to 85, cropped to the subject. After you add the JPEG, build
-   `thumbs/list.js` with `node tools/thumbs-list.mjs`, then run
-   `node tools/nav-sync.js`.
+   `thumbs/list.js` with `node tools/thumbs-list.mjs`. Then make the
+   320 x 200 copy `thumbs/sm/<key>.jpg` with `node tools/thumbs-small.mjs`
+   (it needs `magick`). Small slots and phones show that copy. Then run
+   `node tools/nav-sync.js`. `node tools/thumbs-list.mjs --check` must exit 0.
    Headless Chrome, Playwright, CDP and browser screenshots are not
    permitted on this machine (since 2026-10-07, because they filled the
    disk). Make the image with a render that has no browser, for example a

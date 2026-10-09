@@ -9,11 +9,14 @@
 //  Usage (from the repo root):
 //    node tools/thumbs-list.mjs           write list.js
 //    node tools/thumbs-list.mjs --check   change nothing, exit 1 if stale
-//  After a write, run node tools/nav-sync.js (PAGES.md has a Thumb column).
+//                                         or if a key has no thumbs/sm copy
+//  After a write, run node tools/thumbs-small.mjs (the 320x200 copies) and
+//  node tools/nav-sync.js (PAGES.md has a Thumb column).
 // ============================================================================
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { checkSmall } from './thumbs-small.mjs';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'stella-nova', 'pages', 'home', 'thumbs');
 const FILE = path.join(DIR, 'list.js');
@@ -29,7 +32,10 @@ const old = readFileSync(FILE, 'utf8');
 if (process.argv.includes('--check')) {
   const same = old === text;
   console.log(same ? `up to date   list.js (${keys.length} keys)` : 'out of date  list.js (run node tools/thumbs-list.mjs)');
-  process.exit(same ? 0 : 1);
+  const bad = checkSmall();
+  console.log(bad.length ? bad.join('\n') + `\n${bad.length} small-copy problem(s) (run node tools/thumbs-small.mjs)` : 'complete     thumbs/sm and media/sm');
+  process.exit(same && !bad.length ? 0 : 1);
 }
 writeFileSync(FILE, text);
 console.log(`wrote list.js (${keys.length} keys)`);
+if (checkSmall().length) console.log('next: node tools/thumbs-small.mjs (some keys have no 320x200 copy)');
