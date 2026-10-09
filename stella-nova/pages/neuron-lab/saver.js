@@ -11,6 +11,13 @@
 //    phase    tonic firing; a V-n phase plane on a board next to the cell
 //    gates    tonic firing; m, h, n on the board
 //    axon     the camera rides the spike down the axon
+//    netchain   six full cells in a line; the camera follows the spike
+//               from cell to cell down the chain (netmode.js, DEMOS.chain)
+//    netring    one kick, a ring that keeps itself going; a slow orbit
+//    netinhibit a ring with one inhibitory cell that silences it
+//    netrandom  random cells and random wiring, the raster on a board
+//  Network shots run the Network mode (netmode.js); a one-cell shot turns
+//  it off. exit() puts back the mode the user had.
 //  The camera is on springs the whole time (stage.hold), so it moves with
 //  a continuous velocity. The subject sits in the clear band between the
 //  plate texts (lib/saver-clear.js plateBand). Plates carry TeX, no code.
@@ -65,7 +72,10 @@ export function installSaver(A) {
   const isDend = k => k !== 'axon' && k !== 'ais' && k !== 'soma';
   const fovK = () => 1 / Math.tan(stage.camera.fov * Math.PI / 360);
 
+  const NET = A.NET;
+  function netOff() { if (NET && NET.on) NET.disable({ hash: false }); }
   function loadType(type, seed) {
+    netOff();
     P.type = type; P.seed = seed; P.dfrac = 0.35; P.hold = false;
     A.loadCell({ keep: false, defaults: false, fit: false });
     A.clearMarkers(true);
@@ -146,7 +156,38 @@ export function installSaver(A) {
       s.subject = () => s.focus;
       return s;
     },
+    netchain(R) { return netShot(R, 'chain'); },
+    netring(R) { return netShot(R, 'ring'); },
+    netinhibit(R) { return netShot(R, 'inhibit'); },
+    netrandom(R) { return netShot(R, 'random'); },
   };
+  // A network shot. The camera follows the cell that fired last (chain) or
+  // orbits the whole circuit.
+  function netShot(R, kind) {
+    const seed = 1 + Math.floor(R() * 9000);
+    if (kind === 'random') {
+      const pick = a => a[Math.floor(R() * a.length)];
+      NET.N.w = { count: 5 + Math.floor(R() * 4), layout: pick(['ring', 'layer', 'cluster', 'line']), preset: pick(['chain', 'ring', 'ff', 'ei', 'random', 'loop']), p: 0.3 + 0.2 * R(), wE: 2.2 + 1.2 * R(), wI: 2 + R(), fracE: 0.75, velocity: 0.25 + 0.3 * R() };
+      const n = NET.N.w.count, types = Array.from({ length: n }, () => pick(['pyramidal', 'pyramidal', 'purkinje', 'motor', 'granule']));
+      NET.enable(NET.make({ seed, types }), { hash: false, jump: true, fit: false });
+      NET.N.auto = true; NET.N.kickEvery = 60 + 60 * R();
+    } else NET.runDemo(kind, { hash: false, jump: true, fit: false, seed });
+    const net = NET.N.net, B = NET.worldBounds();
+    const s = { net: true, ms: kind === 'ring' ? 4 : 3.2, follow: kind === 'chain', board: kind === 'random', kind: 'raster', last: 0 };
+    s.az = R() * 6.28; s.el = 0.35 + 0.25 * R(); s.spin = (R() < 0.5 ? -1 : 1) * (0.05 + 0.05 * R());
+    s.focus = net.world(0, 0);
+    s.cam = () => s.follow
+      ? { az: s.az, el: s.el, r: B.R * 0.85 * fovK() / run.fit, target: s.focus }
+      : { az: s.az, el: s.el, r: B.R * 1.15 * fovK() / run.fit, target: B.c };
+    s.tick = dt => {
+      s.az += dt * s.spin;
+      if (s.follow && net.spikes.length) { const i = net.spikes[net.spikes.length - 1]; const w = net.world(i, 0); s.focus = s.focus.map((x, k) => x + (w[k] - x) * Math.min(1, dt * 1.5)); }
+    };
+    s.subject = () => (s.follow ? s.focus : B.c);
+    // warm up so spikes are already in flight when the cut lands
+    NET.step(8, 40);
+    return s;
+  }
   function tonicShot(R, kind) {
     const type = ['pyramidal', 'purkinje', 'motor', 'granule'][Math.floor(R() * 4)];
     loadType(type, 1 + Math.floor(R() * 40));
@@ -182,7 +223,11 @@ export function installSaver(A) {
   function plate(sh) {
     if (!run.label) return;
     const S = LAB_SHOTS.find(q => q.id === sh.id), C = A.CELLS.find(c => c.id === run.shot.type);
-    const lines = [`${C.name} (procedural shape)`, `hh.mod channels at ${P.celsius.toFixed(1)} °C, Δt = 0.025 ms · ${L.cell.n} compartments`, 'Method after NEURON (neuronsimulator.org)'];
+    let lines;
+    if (run.shot.net) {
+      const net = NET.N.net, nI = net.conns.filter(c => c.ty === 'i').length;
+      lines = [`${net.n} full cable cells · ${net.conns.length} NetCons (${net.conns.length - nI} excitatory, ${nI} inhibitory)`, `${net.total} compartments · conduction ${net.velocity.toFixed(2)} m/s · hh.mod channels`, 'Method after NEURON (neuronsimulator.org)'];
+    } else lines = [`${C.name} (procedural shape)`, `hh.mod channels at ${P.celsius.toFixed(1)} °C, Δt = 0.025 ms · ${L.cell.n} compartments`, 'Method after NEURON (neuronsimulator.org)'];
     try { run.label({ title: S.title, sub: S.sub, tex: S.tex, rules: S.rules, lines, anchor: () => anchor() }); } catch (e) { /* the plate is optional */ }
   }
   const _v = new THREE.Vector3();
@@ -198,7 +243,8 @@ export function installSaver(A) {
     if (run.tau >= run.sec) { run.i++; startShot(); return; }
     const k = run.tau / run.sec, s = run.shot;
     s.tick(dt, k);
-    A.stepSim(s.ms * (1 - 0.35 * run.calm) * dt);
+    if (s.net) NET.step(s.ms * (1 - 0.35 * run.calm) * dt, 8);
+    else A.stepSim(s.ms * (1 - 0.35 * run.calm) * dt);
     // keep the band current (the plate can reflow)
     if ((run.bandT -= dt) <= 0) {
       run.bandT = 0.5; const fb = band(); if (s.board) fb.x1 = stage.W * 0.52;
@@ -213,7 +259,8 @@ export function installSaver(A) {
       if ((run.drawT -= dt) <= 0) {
         run.drawT = 1 / 30;
         const opts = { bg: 'rgba(6,10,19,0.86)', lw: 3 };
-        if (s.kind === 'phase') A.drawPhase(b.cv, opts); else A.drawGates(b.cv, opts);
+        if (s.net) NET.drawRaster(b.cv, null, { ...opts, force: true, lw: 4 });
+        else if (s.kind === 'phase') A.drawPhase(b.cv, opts); else A.drawGates(b.cv, opts);
         b.tex.needsUpdate = true;
       }
     }
@@ -226,7 +273,8 @@ export function installSaver(A) {
       css.textContent = '#panel,#anaPanel,#dock,.topbar,#read,#hint,#marks,.credit,#nogl{display:none!important}#stage{top:0!important}#view{cursor:none}';
       document.head.appendChild(css);
       const saved = { ...P };
-      run = { css, saved, calm: Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm)), label: typeof o.label === 'function' ? o.label : null, plan: shotPlan(LAB_SHOTS, (o.seed >>> 0) || 1, 80, o.calm ?? 0.7), i: 0, bandT: 0, drawT: 0, fit: 1, board: null };
+      const netSaved = NET && NET.on ? NET.hashState().net : null;
+      run = { css, saved, netSaved, calm: Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm)), label: typeof o.label === 'function' ? o.label : null, plan: shotPlan(LAB_SHOTS, (o.seed >>> 0) || 1, 80, o.calm ?? 0.7), i: 0, bandT: 0, drawT: 0, fit: 1, board: null };
       L.saver = true; L.saverTick = tick;
       stage.hold = true; stage.controls.enabled = false; stage.controls.autoRotate = false;
       stage.resize();
@@ -238,9 +286,12 @@ export function installSaver(A) {
       run.css.remove();
       if (run.board) { stage.camera.remove(run.board.mesh); run.board.tex.dispose(); run.board.mesh.geometry.dispose(); run.board.mesh.material.dispose(); run.board.cv.remove(); }
       Object.assign(P, run.saved);
+      const ns = run.netSaved;
       run = null; L.saver = false; L.saverTick = null;
       stage.hold = false; stage.controls.enabled = true; stage.springOn = false;
+      netOff();
       A.loadCell({ keep: false });
+      if (ns && NET) { try { NET.enable(NET.make({ types: ns.types, conns: ns.conns, place: ns.pos, velocity: ns.vel }), { hash: false }); } catch (e) { /* stay in one-cell mode */ } }
       A.layout();
     },
     cut() { if (run) { run.i++; startShot(); } },

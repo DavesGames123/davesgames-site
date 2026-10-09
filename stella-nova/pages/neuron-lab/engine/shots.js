@@ -8,7 +8,7 @@
 //  The plates hold TeX and plain lines only, no code.
 //
 //  grep -n targets
-//    "export const LAB_SHOTS"   Neuron Lab shots and plates
+//    "export const LAB_SHOTS"   Neuron Lab shots and plates (net: a network shot)
 //    "export const NET_SHOTS"   Neural Network shots and plates
 //    "export function shotPlan" the planner
 // ============================================================================
@@ -26,6 +26,10 @@ export const LAB_SHOTS = [
   { id: 'phase', title: 'The Hodgkin-Huxley limit cycle', sub: 'membrane voltage against potassium activation n', tex: [GATE], rules: RULES },
   { id: 'gates', title: 'Three gates, one spike', sub: 'sodium opens fast (m), closes slowly (h); potassium follows (n)', tex: [HHI], rules: RULES },
   { id: 'axon', title: 'Down the axon', sub: 'conduction speed grows as the square root of diameter', tex: ['\\theta \\propto \\sqrt{d}'], rules: [['d', 'm5']] },
+  { id: 'netchain', net: 'chain', title: 'A spike handed down a chain', sub: 'each cell fires the next through an axon, a delay and a synapse', tex: ['t_{k+1} = t_k + \\delta_{syn} + \\frac{\\ell_k}{\\theta} + t_{rise}'], rules: [['\\ell_k', 'm2'], ['\\theta', 'm1']] },
+  { id: 'netring', net: 'ring', title: 'A loop that keeps itself going', sub: 'one kick, then the spike runs round the ring on its own', tex: ['T_{lap} = \\sum_k \\left(\\delta_{syn} + \\frac{\\ell_k}{\\theta} + t_{rise}\\right)'], rules: [['\\theta', 'm1']] },
+  { id: 'netinhibit', net: 'inhibit', title: 'Inhibition stops the wave', sub: 'the ring drives one inhibitory cell, and it silences the ring', tex: ['I_{syn} = g(t)\\,(V - E_{GABA})'], rules: [['V', 'm1']] },
+  { id: 'netrandom', net: 'random', board: true, title: 'A random circuit of full cells', sub: 'random cells, random wiring; the raster shows who fires when', tex: ['g \\leftarrow g + w \\quad \\text{at} \\quad t_{spike} + d'], rules: [['w', 'm2']] },
 ];
 
 export const NET_SHOTS = [

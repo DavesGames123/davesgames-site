@@ -324,7 +324,7 @@ for (const [name, bag] of [['lab', LAB_SHOTS], ['net', NET_SHOTS]]) {
       const net = new MultiNet({ specs, place: layoutPositions(n, 'cluster', seed), budget: B, seed });
       for (const c of wirePreset(n, 'random', { p: 0.3, seed }).conns) net.connect(c.pre, c.post, { ty: c.ty, wx: 1.5 });
       for (let i = 0; i < n; i += 3) net.kick(i);
-      const t0 = process.hrtime.bigint(); net.run(40); msPer = Math.max(msPer, Number(process.hrtime.bigint() - t0) / 1e6 / 40);
+      const c0 = process.cpuUsage(); net.run(40); const cu = process.cpuUsage(c0); msPer = Math.max(msPer, (cu.user + cu.system) / 1e3 / 40);
       worst = Math.max(worst, net.total); if (net.total > B.comps) over++;
       for (const c of net.cells) if (!c.v.every(Number.isFinite)) bad++;
     }
@@ -420,6 +420,8 @@ for (const [name, bag] of [['lab', LAB_SHOTS], ['net', NET_SHOTS]]) {
   ok(Math.abs(us[0]) < 1e-9 && Math.abs(us[1] - 0.5) < 1e-9 && Math.abs(us[2] - 1) < 1e-9, 'a spike in flight is at u 0, 0.5, 1 at the start, middle and end of the axon');
   const pe = pointOn(c0.pts, 1), q = c0.pts[c0.pts.length - 1];
   ok(Math.hypot(pe[0] - q[0], pe[1] - q[1], pe[2] - q[2]) < 1e-6, 'u = 1 is the synapse');
+  const netShots = LAB_SHOTS.filter(q => q.net);
+  ok(netShots.length === 4 && netShots.every(q => q.net === 'random' || DEMOS[q.net]), 'saver: four network shots, each a demo or the random circuit: ' + netShots.map(q => q.id).join(' '));
   say(`network mode: chain ${first.map(t => t.toFixed(1)).join(', ')} ms; ring cell 0 x${rg.spikeTimes(0).length}; inhibit E spikes ${eSp(withI)} vs ${eSp(noI)}`);
 }
 
