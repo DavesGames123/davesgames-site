@@ -111,7 +111,8 @@ ${chainXML('rope', { n: 30, len: 0.045, radius: 0.012, pos: [0, 0, 1.8], dir: [1
 // ── files ───────────────────────────────────────────────────────────────────
 const CORE = new URL('./', import.meta.url);
 const UNITREE = new URL('../../../vendor/unitree_rl_gym/', import.meta.url);
-const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node) && typeof window === 'undefined';
+// node, also under jsdom (window is defined there, but fetch cannot read file: URLs)
+const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
 
 // get(url: URL, kind: 'text' | 'buf') -> Promise<string | Uint8Array>
 export async function defaultGet(url, kind) {
