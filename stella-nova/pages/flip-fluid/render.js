@@ -16,7 +16,9 @@
 //    export function createRenderer
 //    function drawParticles      speed buckets, one fillStyle per bucket
 //    function drawStatics / drawSolids
+//    bodies ................ art.js drawBody (each kind has its own look)
 // ============================================================================
+import { drawBody } from './art.js';
 
 export function fitView(W, H, cw, ch, pad) {
   const p = Object.assign({ l: 8, r: 8, t: 8, b: 8 }, pad || {});
@@ -90,7 +92,8 @@ export function createRenderer(ctx) {
     ctx.fillRect(view.x, view.y, view.W * view.s, view.H * view.s);
     drawParticles(sim, view);
     for (const st of sim.statics) drawPlaced(view, st, '#5b6478', '#8a93a8');
-    for (const so of sim.solids) if (so.active && so.kind !== 'stir') drawPlaced(view, so, so.kind === 'gate' ? '#9a7b4f' : '#6f7d96', '#c9d2e3');
+    for (const so of sim.solids) if (so.active && so.kinematic && so.kind !== 'stir') drawPlaced(view, so, so.kind === 'gate' ? '#9a7b4f' : '#6f7d96', '#c9d2e3');
+    for (const so of sim.solids) if (so.active && !so.kinematic) drawBody(ctx, so, view, opt.body || {});
     for (const so of sim.solids) if (so.active && so.kind === 'stir') drawPlaced(view, so, 'rgba(255,90,80,0.85)', '#fff');
     // tank walls
     ctx.strokeStyle = '#8a93a8'; ctx.lineWidth = Math.max(1, view.s * 0.012);

@@ -86,6 +86,12 @@ body.tmp-has-credit { padding-bottom: 0; }
 #panel button:hover { background: rgba(255, 255, 255, 0.12); }
 #panel button.on { border-color: var(--warm); color: var(--warm); }
 .small-btn { margin-top: 6px; }
+.row.wrap { flex-wrap: wrap; margin-top: 6px; }
+#palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+#panel #palette button.kind { height: auto; padding: 4px 2px 3px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#palette button.kind canvas { width: 34px; height: 34px; }
+#palette button.kind span { font-size: 10.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#palette button.kind.on span { color: var(--warm); }
 
 .catrow { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
 .catrow b { font-weight: 600; }

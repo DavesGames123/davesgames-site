@@ -24,6 +24,8 @@
 //     itself. Added mass 0.5 rho_w A_wet keeps light bodies stable.
 //     Particle impacts faster than 0.8 m/s add their momentum to the
 //     body (a dam wave pushes a boat).
+//  Ballast (boat, buoy, duck): gravity acts at a point below the
+//  centroid, so the righting moment brings the keel down.
 //  3. Body <-> body, walls and obstacles. Each body has a cluster of
 //     circles inside its shape. Contacts get sequential impulses with
 //     restitution and Coulomb friction, then a position correction.
@@ -52,13 +54,13 @@ const N2 = new Float64Array(2), V2 = new Float64Array(2);
 // Object catalogue. Sizes are in units of S (scene scale, metres), the
 // density is relative to water (1 = neutral).
 export const KINDS = {
-  duck:    { name: 'Rubber duck', density: 0.3,  shape: (S) => poly([[-0.07, -0.035], [0.06, -0.035], [0.085, 0], [0.06, 0.03], [-0.05, 0.035], [-0.085, 0.01]].map(([x, y]) => [x * S, y * S]), 0.012 * S) },
-  boat:    { name: 'Boat',        density: 0.35, shape: (S) => poly([[-0.24 * S, 0.05 * S], [0.24 * S, 0.05 * S], [0.17 * S, -0.06 * S], [-0.17 * S, -0.06 * S]], 0.006 * S) },
+  duck:    { name: 'Rubber duck', density: 0.3,  ballast: 0.4, shape: (S) => poly([[-0.095, 0.045], [-0.075, -0.025], [0.045, -0.035], [0.08, -0.005], [0.06, 0.022], [0.042, 0.03], [0.062, 0.05], [0.058, 0.078], [0.035, 0.093], [0.012, 0.085], [0.006, 0.058], [0.012, 0.033], [-0.045, 0.028]].map(([x, y]) => [x * S, y * S]), 0.008 * S) },
+  boat:    { name: 'Boat',        density: 0.35, ballast: 1.6, shape: (S) => poly([[-0.24 * S, 0.05 * S], [0.24 * S, 0.05 * S], [0.17 * S, -0.06 * S], [-0.17 * S, -0.06 * S]], 0.006 * S) },
   box:     { name: 'Crate',       density: 0.6,  shape: (S) => box(0.17 * S, 0.17 * S, 0.008 * S) },
   ball:    { name: 'Beach ball',  density: 0.12, shape: (S) => disc(0.085 * S) },
   log:     { name: 'Log',         density: 0.65, shape: (S) => capsule(0.38 * S, 0.055 * S) },
   plank:   { name: 'Plank',       density: 0.55, shape: (S) => box(0.46 * S, 0.045 * S, 0.006 * S) },
-  buoy:    { name: 'Buoy',        density: 0.25, shape: (S) => disc(0.06 * S) },
+  buoy:    { name: 'Buoy',        density: 0.25, ballast: 0.6, shape: (S) => disc(0.06 * S) },
   ice:     { name: 'Ice cube',    density: 0.92, shape: (S) => box(0.12 * S, 0.12 * S, 0.014 * S) },
   bottle:  { name: 'Bottle',      density: 1.0,  shape: (S) => capsule(0.16 * S, 0.035 * S) },
   rock:    { name: 'Rock',        density: 2.6,  shape: (S, r) => rockShape(S, r) },
@@ -111,6 +113,7 @@ export class Body extends Solid {
     this.r2 = Math.max(I / (pts.length / 2) + pitch * pitch / 6, 0.02 * B * B);
     this.inertia = this.mass * this.r2;
     this.circles = clusterOf(shape);
+    this.cgy = 0;   // centre of gravity below the centroid (ballast), local y
     this.wetSamples = new Float32Array(pts.length / 2);
   }
 }
@@ -197,6 +200,11 @@ export function couple(sim, dt) {
     if (b.kinematic || !b.active) continue;
     const c = Math.cos(b.a), s = Math.sin(b.a), S = b.samples, m = S.length / 2;
     let Fx = b.mass * gx, Fy = b.mass * gy, T = 0, wetA = 0, wetI = 0;
+    if (b.cgy) {
+      // gravity acts at the ballast point (0, cgy) in local coordinates
+      const gxr = -s * b.cgy, gyr = c * b.cgy;
+      T += gxr * b.mass * gy - gyr * b.mass * gx;
+    }
     for (let i = 0; i < m; i++) {
       const lx = S[2 * i], ly = S[2 * i + 1];
       const rx = c * lx - s * ly, ry = s * lx + c * ly;
@@ -272,7 +280,9 @@ function resolve(A, B, px, py, nx, ny, depth, posPass) {
   const sum = ima + imb;
   if (sum <= 0) return;
   if (posPass) {
-    const corr = Math.max(0, depth - 0.002) * 0.6 / sum;
+    // capped, so a deep overlap (a body spawned in a wall) is pushed out
+    // over several frames, not thrown across the tank in one
+    const corr = Math.min(Math.max(0, depth - 0.002), 0.02) * 0.6 / sum;
     if (!A.kinematic) { A.x += nx * corr * ima; A.y += ny * corr * ima; }
     if (B && !B.kinematic) { B.x -= nx * corr * imb; B.y -= ny * corr * imb; }
     return;
@@ -359,7 +369,8 @@ function contacts(sim, dt, posPass) {
 }
 
 // ---- creation --------------------------------------------------------------------------------
-export function sceneScale(spec) { return Math.min(spec.W, spec.H) / 2.4; }
+// Objects are sized to be seen: a crate is about a tenth of the short side.
+export function sceneScale(spec) { return Math.min(spec.W, spec.H) / 1.7; }
 
 export function spawn(sim, spec, o) {
   const K = KINDS[o.kind] || KINDS.box;
@@ -368,14 +379,45 @@ export function spawn(sim, spec, o) {
   const shape = K.shape(S, rng);
   const b = new Body(o.kind, shape, o.x, o.y, o.a || 0, o.density ?? K.density, sim.h);
   b.colour = o.colour || 0; b.look = o.look || 1;
+  // Ballast: a keel weight puts the centre of gravity below the centroid,
+  // so a boat or a buoy rights itself (KINDS[kind].ballast: fraction of
+  // the distance from the centroid to the lowest sample; above 1 the
+  // weight hangs below the hull, as a keel bulb does).
+  if (K.ballast) { let lo = 0; for (let i = 1; i < b.samples.length; i += 2) lo = Math.min(lo, b.samples[i]); b.cgy = K.ballast * lo; }
   b.vx = o.vx || 0; b.vy = o.vy || 0; b.w = o.w || 0;
   return sim.addSolid(b);
+}
+
+// True when the body's collision circles overlap a wall, an obstacle or
+// another solid.
+function blocked(sim, b) {
+  const h = sim.h, x0 = h, x1 = (sim.fNumX - 1) * h, y0 = h, y1 = (sim.fNumY - 1) * h, C = b.circles;
+  for (let k = 0; k < C.length; k += 3) {
+    worldCircle(b, k, QA);
+    const x = QA[0], y = QA[1], r = C[k + 2];
+    if (x - r < x0 || x + r > x1 || y - r < y0 || y + r > y1) return true;
+    for (const st of sim.statics) if (sdfWorld(st, x, y) < r) return true;
+    for (const s of sim.solids) if (s !== b && s.active && sdfWorld(s, x, y) < r) return true;
+  }
+  return false;
 }
 
 export function makeBodies(sim, spec) {
   sim.onCoupling = couple;
   sim.onSolidHit = hit;
-  for (const o of spec.objects || []) spawn(sim, spec, o);
+  for (const o of spec.objects || []) {
+    const b = spawn(sim, spec, o);
+    // A scene object must not start inside a wall, an obstacle, the gate
+    // or another body: search nearby places, else leave it out.
+    const R = b.shape.bound, sx = b.x, sy = b.y;
+    let ok = !blocked(sim, b);
+    for (let k = 1; !ok && k <= 24; k++) {
+      const ang = k * 2.39996, d = 0.25 * R * Math.sqrt(k);
+      b.x = sx + d * Math.cos(ang); b.y = sy + Math.abs(d * Math.sin(ang));
+      ok = !blocked(sim, b);
+    }
+    if (!ok) sim.removeSolid(b);
+  }
 }
 
 // ---- randomizer category -------------------------------------------------------------------------
@@ -388,7 +430,7 @@ function surfaceAt(c, x) {
 }
 
 export function genObjects(r, c) {
-  const W = c.W, H = c.H, S = Math.min(W, H) / 2.4, out = [];
+  const W = c.W, H = c.H, S = Math.min(W, H) / 1.7, out = [];
   const mix = r.pick(['mixed', 'mixed', 'mixed', 'ducks', 'harbour', 'raft', 'rocks', 'ice', 'none']);
   const pools = {
     mixed: KIND_IDS,

@@ -14,9 +14,11 @@
 //    preset       the default 'harbour' scene builds and runs
 //    bodies       still pool: a crate of density 0.5 floats half
 //                 submerged, the wet fraction follows the density, a
-//                 rock sinks, floating bodies raise the level by their
+//                 rock sinks, a capsized boat rights itself, floating
+//                 bodies raise the level by their
 //                 displaced area; the sweep also checks every body
 //                 stays finite and inside the tank
+//    tools        palette drop, grab spring, throw, eraser, clear
 //    import       main.js links in node (a SyntaxError is a bug; a
 //                 ReferenceError on a browser global is expected)
 //
@@ -173,12 +175,46 @@ async function main() {
     const rk = pool(one('rock', 2.6));
     const rb = rk.bodies[0];
     check('a rock (density 2.6) sinks to the floor', rb.y < 0.12 * rk.H && Math.abs(rb.vy) < 0.2, `y ${rb.y.toFixed(3)} m of H ${rk.H.toFixed(2)} m`);
+    const capsized = pool((W, H) => [{ kind: 'boat', x: W / 2, y: 0.4 * H + 0.12, a: 3.0, size: 1, density: 0.35, colour: 0, look: 1 }], 700);
+    const ca = Math.atan2(Math.sin(capsized.bodies[0].a), Math.cos(capsized.bodies[0].a));
+    check('a capsized boat rights itself (keel ballast)', Math.abs(ca) < 0.2, `start 3.0 rad, end ${ca.toFixed(3)} rad`);
     // displacement: a large neutral-density raft of planks raises the level
-    const none = pool(() => []), big = pool((W, H) => [0, 1, 2].map(k => ({ kind: 'box', x: (0.3 + 0.2 * k) * W, y: 0.4 * H + 0.2, a: 0, size: 1.6, density: 0.8, colour: 0, look: 1 })));
+    const none = pool(() => []), big = pool((W, H) => [0, 1, 2].map(k => ({ kind: 'box', x: (0.3 + 0.2 * k) * W, y: 0.4 * H + 0.2, a: 0, size: 1.13, density: 0.8, colour: 0, look: 1 })));
     const rise = level(big.sim) - level(none.sim);
     const displaced = big.bodies.reduce((s, b, k) => s + b.area * big.wet[k], 0);
     const expect = displaced / (big.W - 2 * big.sim.h);
     check('floating bodies raise the water level by their displaced area', Math.abs(rise - expect) < Math.max(0.35 * expect, 1.2 * big.sim.particleRadius), `rise ${(rise * 100).toFixed(2)} cm, expected ${(expect * 100).toFixed(2)} cm`);
+  }
+
+  // tools: palette, grab and throw, eraser (DOM stubs, no browser)
+  {
+    const el = () => { const e = { children: [], classList: { toggle() {}, add() {}, remove() {} }, style: {}, dataset: {}, setAttribute() {}, appendChild(c) { this.children.push(c); return c; }, querySelectorAll() { return this.children; }, getContext: () => null, textContent: '' }; return e; };
+    const els = {};
+    globalThis.document = globalThis.document || { createElement: () => el() };
+    globalThis.matchMedia = globalThis.matchMedia || (() => ({ matches: false }));
+    globalThis.window = globalThis.window || { devicePixelRatio: 1 };
+    const $ = (id) => (els[id] = els[id] || el());
+    const { installTools } = await import('./tools.js');
+    const st = SC.defaultState(); st.seed = 'tools-1';
+    const spec = SC.build(st, ENV); spec.objects = [];
+    const app = { spec, sim: SC.createSim(spec, B.makeBodies), canvas: el() };
+    const T = installTools(app, $);
+    let r = 3; T.rnd = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
+    const n0 = app.sim.solids.filter(s => !s.kinematic).length;
+    app.objects.dropRandom(3);
+    const dyn = () => app.sim.solids.filter(s => !s.kinematic);
+    const b = dyn()[n0];
+    const grabbed = app.tools.down({ x: b.x, y: b.y });
+    app.tools.move({ x: b.x + 0.4, y: b.y + 0.3 });
+    for (let f = 0; f < 20; f++) app.sim.step();
+    const moved = Math.hypot(b.x - (b.grab ? b.grab.x : 0), b.y - (b.grab ? b.grab.y : 0));
+    app.tools.up();
+    const speed = Math.hypot(b.vx, b.vy);
+    T.erase = true; app.tools.down({ x: b.x, y: b.y }); T.erase = false;
+    const left = dyn().length;
+    app.objects.clearObjects();
+    check('tools: drop 3, grab and drag (spring follows), release keeps speed, eraser and clear', dyn().length === 0 && left === n0 + 2 && grabbed && moved < 0.25 && speed > 0.05,
+      `dropped ${n0 + 3 - n0}, grab gap ${moved.toFixed(3)} m, release speed ${speed.toFixed(2)} m/s`);
   }
 
   // sweep

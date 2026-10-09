@@ -30,6 +30,8 @@
      shapes.js   shape geometry and signed distance
      scenes.js   seeded randomizer, presets, URL hash
      bodies.js   floating and sinking bodies, two-way coupled to the water
+     art.js      how each object looks (also the palette icons)
+     tools.js    objects palette, grab and throw, drop, eraser
      render.js   Canvas 2D renderer
      main.js     page controller: loop, UI, pointer, hash
      tests.mjs   node tests (no browser)
@@ -37,6 +39,7 @@
    GREP MAP
      grep -n 'id="dock"'   index.html   the quick controls
      grep -n 'id="panel"'  index.html   the scene sheet
+     grep -n 'id="palette"' index.html  the objects palette
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="FLIP water that runs on its own: seeded random tanks, obstacles, pours, paddles and gates. Solver by Matthias Müller, Ten Minute Physics.">
@@ -72,6 +75,16 @@
       <button id="seedCopy" title="Copy the link to this scene">Link</button>
     </div>
     <p class="dim small">The seed and every option are in the address, so a link brings back the same scene.</p>
+  </section>
+  <section>
+    <h2>Objects</h2>
+    <p id="toolHint" class="dim small"></p>
+    <div id="palette" role="group" aria-label="Objects to drop"></div>
+    <div class="row wrap">
+      <button id="bDrop3" title="Drop three random objects (O drops one)">Drop 3 random</button>
+      <button id="bErase" aria-pressed="false" title="Eraser: tap an object to delete it (X)">Eraser</button>
+      <button id="bClearObj" title="Delete every object (Delete)">Clear objects</button>
+    </div>
   </section>
   <section>
     <h2>Randomize by category</h2>

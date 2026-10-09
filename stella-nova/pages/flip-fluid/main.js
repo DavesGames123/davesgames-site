@@ -34,7 +34,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 //    function loadState        build + create the sim
 //    function resize           canvas size x devicePixelRatio, tank fit
 //    function toSim            pointer -> sim coordinates
-//    function onDown / onMove / onUp   stir tool
+//    function onDown / onMove / onUp   stir tool (tools.js goes first:
+//                              grab, drop, erase)
 //    function buildCats        category rows (dice + lock)
 //    function buildSliders     overrides
 //    function frame            the loop
@@ -45,6 +46,7 @@ import { createRenderer, fitView } from './render.js';
 import { Solid } from './flip.js';
 import { disc } from './shapes.js';
 import { makeBodies, KINDS } from './bodies.js';
+import { installTools } from './tools.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -356,6 +358,8 @@ app.loadState = loadState; app.resize = resize; app.fitTank = fitTank; app.refre
 app.renderer = renderer; app.ctx = ctx; app.canvas = canvas; app.newSeed = newSeed;
 buildCats();
 buildSliders();
+app.openPanel = openPanel;
+installTools(app, $);
 resize();
 addEventListener('resize', resize);
 if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
