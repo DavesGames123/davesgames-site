@@ -179,6 +179,7 @@ window.SN_SAVER_CATALOG = {
     'frost': { tier: 3, default: true, hook: true, note: 'Uses the SHARED TABLE HOOK (see beam page plan).' },
     'supernova': { tier: 2, default: true, hook: true, note: 'Single canvas = renderer.domElement inserted before #ui (stella-nova/pages/fractal-orb/main.js:143), no id.' },
     'sdf-lab': { tier: 4, note: 'Editor. Renders only dirty panes (frame() stella-nova/pages/sdf-lab/js/main.js:336), so idle is a frozen image;' },
+    'biome-parts': { tier: 4, default: true, hook: true, note: 'Live: Taiga-S1 builds a fresh seeded goal per part in the worker (js/director.js); spring cameras, exploded and gallery finishes; plate shows live tally, no code.' },
     'sphere-tracing': { tier: 3, default: true, hook: true, note: 'On-demand renderer: frame() (stella-nova/pages/sphere-tracing/main.js:461) only draws when gpuDirty/ovDirty, so idle is static.' },
     'cornell': { tier: 3, default: true, hook: true, note: 'Classic script; globals SCENE (stella-nova/pages/cornell/main.js:70), CAM {az,el,R,fov,tx,ty,tz} (main.js:81) and APP (main.js:432) returning {init,setMode,setB' },
     'glass-cube': { tier: 3, default: true, hook: true, note: 'Specimen tour: 12 glasses (index, dispersion, tint, interior shape, camera move), one every 5.5 to 7 s, morphing in place.' },
