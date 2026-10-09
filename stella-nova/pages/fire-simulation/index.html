@@ -18,33 +18,34 @@
    https://github.com/matthias-research/pages (MIT License (notice kept above)).
    Video tutorial: https://youtu.be/RsgmS3ZxDtc
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): burner kinds (disc, log,
+   torch) and motions, wind, flame colour ramps and colour maps, glow,
+   the renderer, the sim kit GUI, the randomizer and the screensaver.
+
+   FILES
+     solver.js   upstream Fluid (MIT notice kept) + burners and wind
+     scene.js    sim kit schema, guard, flame ramps, scene config
+     render.js   Canvas 2D renderer
+     main.js     page controller: sim kit GUI, loop, pointer
+     saver.js    screensaver shots (sim kit director)
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/, ../../widgets/ten-minute-physics/kit.js.
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scene.js   every control
+     grep -n 'const SHOTS'                 saver.js   the screensaver shots
+     grep -n 'updateFire('                 solver.js  the upstream fire step
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Fire from the Eulerian fluid solver: a burning obstacle releases heat and smoke that rise and swirl. By Matthias Müller, Ten Minute Physics.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-	<input type = "checkbox" id = "burningFloor" onclick = "scene.burningFloor = !scene.burningFloor"> Floor
-	<input type = "checkbox" id = "burningObstacle" onclick = "scene.burningObstacle = !scene.burningObstacle" checked> Ring
-	<input type = "checkbox" id = "swirlButton" onclick = "scene.showSwirls = !scene.showSwirls"> Swirls
-	<input type = "range" min = "0" max = "100" value = "50" id = "probabilitySlider" class = "slider"> Probability
-
-	<br>
-	<canvas id="myCanvas" style="border:2px solid"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="Fire simulation. Drag a burner to move it and fan the flame."></canvas>
+<script type="module" src="main.js"></script>
 </body>
 </html>

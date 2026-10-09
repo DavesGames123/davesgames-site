@@ -1,756 +1,130 @@
-/*
-Copyright 2022 Matthias Müller - Ten Minute Physics, 
-www.youtube.com/c/TenMinutePhysics
-www.matthiasMueller.info/tenMinutePhysics
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-// Fire Simulation · upstream script 1, verbatim from Ten Minute Physics
-// 21-fire.html by Matthias Müller. MIT License (notice kept above).
-// Source: https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/21-fire.html
-var scene = 
-	{
-		gravity : 0.00,
-		dt : 1.0 / 60.0,
-		numIters : 10,
-		frameNr : 0,
-		obstacleX : 0.0,
-		obstacleY : 0.0,
-		obstacleRadius: 0.2,
-		burningObstacle: true,
-		burningFloor: false,
-		paused: false,
-		showObstacle: false,
-		showSwirls: false,
-		swirlProbability: 50.0,
-		swirlMaxRadius: 0.05,
-		fluid: null
-	};
-
-
-	var canvas = document.getElementById("myCanvas");
-	var c = canvas.getContext("2d");	
-	canvas.width = window.innerWidth;
-	canvas.height = window.innerHeight - 100;
-
-	canvas.focus();
-
-	var cScale = 1.0;
-
-	var U_FIELD = 0;
-	var V_FIELD = 1;
-	var T_FIELD = 2;
-
-	var cnt = 0;
-
-	function cX(x) {
-		return x * cScale;
-	}
-
-	function cY(y) {
-		return canvas.height - y * cScale;
-	}
-
-	function kernel(r, rmax, leftBorder, rightBorder) {
-		if (r >= rmax || r <= 0.0)
-			return 0.0;
-		else if (r < leftBorder)
-			return r / leftBorder;
-		else if (r <= rmax - rightBorder)
-			return 1.0;
-		else 
-			return (rmax - r) / rightBorder;
-	}
-
-
-	// ----------------- start of simulator ------------------------------
-
-	class Fluid {
-		constructor(numX, numY, h) {
-			this.numX = numX + 2; 
-			this.numY = numY + 2;
-			this.numCells = this.numX * this.numY;
-			this.h = h;
-			this.u = new Float32Array(this.numCells);
-			this.v = new Float32Array(this.numCells);
-			this.newU = new Float32Array(this.numCells);
-			this.newV = new Float32Array(this.numCells);
-			this.s = new Float32Array(this.numCells);
-			this.t = new Float32Array(this.numCells);
-			this.newT = new Float32Array(this.numCells);
-			var num = numX * numY;
-			this.t.fill(0.0);
-			this.s.fill(1.0);
-			
-			this.numSwirls = 0;
-
-			let maxSwirls = 100;
-			this.swirlGlobalTime = 0.0;
-			this.swirlX = new Float32Array(maxSwirls);
-			this.swirlY = new Float32Array(maxSwirls);
-			this.swirlOmega = new Float32Array(maxSwirls);
-			this.swirlRadius = new Float32Array(maxSwirls);
-			this.swirlTime = new Float32Array(maxSwirls);
-			this.swirlTime.fill(0.0);
-		}
-
-		integrate(dt, gravity) {
-			var n = this.numY;
-			for (var i = 1; i < this.numX; i++) {
-				for (var j = 1; j < this.numY-1; j++) {
-					if (this.s[i*n + j] != 0.0 && this.s[i*n + j-1] != 0.0)
-						this.v[i*n + j] += gravity * dt;
-				}	 
-			}
-		}
-
-		solveIncompressibility(numIters, dt) {
-
-			var n = this.numY;
-			let overRelaxation = 1.9;
-
-			for (var iter = 0; iter < numIters; iter++) {
-
-				for (var i = 1; i < this.numX-1; i++) {
-					for (var j = 1; j < this.numY-1; j++) {
-
-						if (this.s[i*n + j] == 0.0)
-							continue;
-
-						var s = this.s[i*n + j];
-						var sx0 = this.s[(i-1)*n + j];
-						var sx1 = this.s[(i+1)*n + j];
-						var sy0 = this.s[i*n + j-1];
-						var sy1 = this.s[i*n + j+1];
-						var s = sx0 + sx1 + sy0 + sy1;
-						if (s == 0.0)
-							continue;
-
-						var div = this.u[(i+1)*n + j] - this.u[i*n + j] + 
-							this.v[i*n + j+1] - this.v[i*n + j];
-
-						var p = -div / s;
-						p *= overRelaxation;
-						this.u[i*n + j] -= sx0 * p;
-						this.u[(i+1)*n + j] += sx1 * p;
-						this.v[i*n + j] -= sy0 * p;
-						this.v[i*n + j+1] += sy1 * p;
-					}
-				}
-			}
-		}
-
-		extrapolate() {
-			var n = this.numY;
-			for (var i = 0; i < this.numX; i++) {
-				this.u[i*n + 0] = this.u[i*n + 1];
-				this.u[i*n + this.numY-1] = this.u[i*n + this.numY-2]; 
-			}
-			for (var j = 0; j < this.numY; j++) {
-				this.v[0*n + j] = this.v[1*n + j];
-				this.v[(this.numX-1)*n + j] = this.v[(this.numX-2)*n + j] 
-			}
-		}
-
-		sampleField(x, y, field) {
-			var n = this.numY;
-			var h = this.h;
-			var h1 = 1.0 / h;
-			var h2 = 0.5 * h;
-
-			x = Math.max(Math.min(x, this.numX * h), h);
-			y = Math.max(Math.min(y, this.numY * h), h);
-
-			var dx = 0.0;
-			var dy = 0.0;
-
-			var f;
-
-			switch (field) {
-				case U_FIELD: f = this.u; dy = h2; break;
-				case V_FIELD: f = this.v; dx = h2; break;
-				case T_FIELD: f = this.t; dx = h2; dy = h2; break
-
-			}
-
-			var x0 = Math.min(Math.floor((x-dx)*h1), this.numX-1);
-			var tx = ((x-dx) - x0*h) * h1;
-			var x1 = Math.min(x0 + 1, this.numX-1);
-			
-			var y0 = Math.min(Math.floor((y-dy)*h1), this.numY-1);
-			var ty = ((y-dy) - y0*h) * h1;
-			var y1 = Math.min(y0 + 1, this.numY-1);
-
-			var sx = 1.0 - tx;
-			var sy = 1.0 - ty;
-
-			var val = sx*sy * f[x0*n + y0] +
-				tx*sy * f[x1*n + y0] +
-				tx*ty * f[x1*n + y1] +
-				sx*ty * f[x0*n + y1];
-			
-			return val;
-		}
-
-		avgU(i, j) {
-			var n = this.numY;
-			var u = (this.u[i*n + j-1] + this.u[i*n + j] +
-				this.u[(i+1)*n + j-1] + this.u[(i+1)*n + j]) * 0.25;
-			return u;
-				
-		}
-
-		avgV(i, j) {
-			var n = this.numY;
-			var v = (this.v[(i-1)*n + j] + this.v[i*n + j] +
-				this.v[(i-1)*n + j+1] + this.v[i*n + j+1]) * 0.25;
-			return v;
-		}
-
-		advectVel(dt) {
-
-			this.newU.set(this.u);
-			this.newV.set(this.v);
-
-			var n = this.numY;
-			var h = this.h;
-			var h2 = 0.5 * h;
-
-			for (var i = 1; i < this.numX; i++) {
-				for (var j = 1; j < this.numY; j++) {
-
-					cnt++;
-
-					// u component
-					if (this.s[i*n + j] != 0.0 && this.s[(i-1)*n + j] != 0.0 && j < this.numY - 1) {
-						var x = i*h;
-						var y = j*h + h2;
-						var u = this.u[i*n + j];
-						var v = this.avgV(i, j);
-						x = x - dt*u;
-						y = y - dt*v;
-						u = this.sampleField(x,y, U_FIELD);
-						this.newU[i*n + j] = u;
-					}
-					// v component
-					if (this.s[i*n + j] != 0.0 && this.s[i*n + j-1] != 0.0 && i < this.numX - 1) {
-						var x = i*h + h2;
-						var y = j*h;
-						var u = this.avgU(i, j);
-						var v = this.v[i*n + j];
-						x = x - dt*u;
-						y = y - dt*v;
-						v = this.sampleField(x,y, V_FIELD);
-						this.newV[i*n + j] = v;
-					}
-				}	 
-			}
-
-			this.u.set(this.newU);
-			this.v.set(this.newV);
-		}
-
-		advectTemperature(dt) {
-
-			this.newT.set(this.t);
-
-			var n = this.numY;
-			var h = this.h;
-			var h2 = 0.5 * h;
-
-			for (var i = 1; i < this.numX-1; i++) {
-				for (var j = 1; j < this.numY-1; j++) {
-
-					if (this.s[i*n + j] != 0.0) {
-						var u = (this.u[i*n + j] + this.u[(i+1)*n + j]) * 0.5;
-						var v = (this.v[i*n + j] + this.v[i*n + j+1]) * 0.5;
-						var x = i*h + h2 - dt*u;
-						var y = j*h + h2 - dt*v;
-
-						this.newT[i*n + j] = this.sampleField(x,y, T_FIELD);
- 					}
-				}	 
-			}
-			this.t.set(this.newT);
-		}
-
-		updateFire(dt) {
-
-			let h = this.h;
-
-			let swirlTimeSpan = 1.0;
-			let swirlOmega = 20.0;
-			let swirlDamping = 10.0 * dt;
-			let swirlProbability = scene.swirlProbability * h * h;
-
-			var fireCooling = 1.2 * dt;
-			var smokeCooling = 0.3 * dt;
-			var lift = 3.0;
-			var acceleration = 6.0 * dt;
-			let kernelRadius = scene.swirlMaxRadius;
-
-			// update swirls
-
-			var n = this.numY;
-			let maxX = (this.numX - 1) * this.h;
-			let maxY = (this.numY - 1) * this.h;
-
-			// kill swirls
-
-			let num = 0
-			for (let nr = 0; nr < this.numSwirls; nr++) {
-				this.swirlTime[nr] -= dt;
-				if (this.swirlTime[nr] > 0.0) {
-					this.swirlTime[num] = this.swirlTime[nr];
-					this.swirlX[num] = this.swirlX[nr];
-					this.swirlY[num] = this.swirlY[nr];
-					this.swirlOmega[num] = this.swirlOmega[nr];
-					num++;
-				}
-			}
-			this.numSwirls = num;
-
-			// advect and modify velocity field
-
-			for (let nr = 0; nr < this.numSwirls; nr++) {
-
-				let ageScale = this.swirlTime[nr] / swirlTimeSpan;
-				let x = this.swirlX[nr];
-				let y = this.swirlY[nr];
-				let swirlU = (1.0 - swirlDamping) * this.sampleField(x, y, U_FIELD);
-				let swirlV = (1.0 - swirlDamping) * this.sampleField(x, y, V_FIELD);
-				x += swirlU * dt;
-				y += swirlV * dt;
-				x = Math.min(Math.max(x, h), maxX);
-				y = Math.min(Math.max(y, h), maxY);
-
-				this.swirlX[nr] = x;
-				this.swirlY[nr] = y;
-				let omega = this.swirlOmega[nr];
-
-				// update surrounding velocity field
-
-				let x0 = Math.max(Math.floor((x - kernelRadius) / h), 0);
-				let y0 = Math.max(Math.floor((y - kernelRadius) / h), 0);
-				let x1 = Math.min(Math.floor((x + kernelRadius) / h) + 1, this.numX - 1);
-				let y1 = Math.min(Math.floor((y + kernelRadius) / h) + 1, this.numY - 1);
-
-				for (let i = x0; i <= x1; i++) {
-					for (let j = y0; j <= y1; j++) {
-						for (let dim = 0; dim < 2; dim++) {
-
-							let vx = dim == 0 ? i * h : (i + 0.5) * h;
-							let vy = dim == 0 ? (j + 0.5) * h : j * h;
-
-							let rx = vx - x;
-							let ry = vy - y;
-							let r = Math.sqrt(rx * rx + ry * ry);
-
-							if (r < kernelRadius) {
-								let s = 1.0;
-								if (r > 0.8 * kernelRadius) {
-									s = 5.0 - 5.0 / kernelRadius * r;
-									// s = (kernelRadius - r) / kernelRadius * ageScale;
-								}
-							
-								if (dim == 0) {
-									let target = ry * omega + swirlU;
-									let u = this.u[n*i + j];
-									this.u[n*i + j] = (target - u) * s;
-								}
-								else {
-									let target = -rx * omega + swirlV;
-									let v = this.v[n*i + j];
-									this.v[n*i + j] += (target - v) * s;
-								}
-							}
-						}
-					}
-				}
-			}
-
-			// update temperatures 
-
-			let minR = 0.85 * scene.obstacleRadius;
-			let maxR = scene.obstacleRadius + h;
-
-			for (var i = 0; i < this.numX; i++) {
-				for (var j = 0; j < this.numY; j++) {
-					let t = this.t[i*n + j];
-
-					let cooling = t < 0.3 ? smokeCooling : fireCooling;
-					this.t[i*n + j] = Math.max(t - cooling, 0.0);
-					let u = this.u[i*n + j];
-					let v = this.v[i*n + j];
-					let targetV = t * lift;
-					this.v[i*n + j] += (targetV - v) * acceleration;
-
-					let numNewSwirls = 0;
-
-					// obstacle burning
-					if (scene.burningObstacle) {
-						let dx = (i + 0.5) * this.h - scene.obstacleX;
-						let dy = (j + 0.5) * this.h - scene.obstacleY - 3.0 * this.h;
-						let d = dx * dx + dy * dy;
-						if (minR * minR <= d && d < maxR * maxR) {
-							this.t[i*n + j] = 1.0;
-							if (Math.random() < 0.5 * swirlProbability)
-								numNewSwirls++;
-						}
-					}
-
-					// floor burning
-					if (j < 4 && scene.burningFloor) {
-						this.t[i*n + j] = 1.0;
-						this.u[i*n + j] = 0.0;
-						this.v[i*n + j] = 0.0;
-						if (Math.random() < swirlProbability)
-							numNewSwirls++;
-					}
-
-					for (let k = 0; k < numNewSwirls; k++) {
-						if (this.numSwirls >= this.maxSwirls)
-							break;
-						let nr = this.numSwirls;
-						this.swirlX[nr] = i * h;
-						this.swirlY[nr] = j * h;
-						this.swirlOmega[nr] = (-1.0 + 2.0 * Math.random()) * swirlOmega;
-						this.swirlTime[nr] = swirlTimeSpan;
-						this.numSwirls++;
-					}
-				}
-			}
-
-			// foo: maybe for obstacle
-			
-			// smooth temperatures
-
-			for (let i = 1; i < this.numX - 1; i++) {
-				for (let j = 1; j < this.numY - 1; j++) {
-					let t = this.t[i * n + j];
-					if (t == 1.0) {
-						let avg = (
-							this.t[(i - 1) * n + (j - 1)] + 
-							this.t[(i + 1) * n + (j - 1)] + 
-							this.t[(i + 1) * n + (j + 1)] + 
-							this.t[(i - 1) * n + (j + 1)]) * 0.25;
-						this.t[i * n + j] = avg;
-					}
-				}
-			}
-		}
-
-		// ----------------- end of simulator ------------------------------
-
-		simulate(dt, gravity, numIters) {
-
-			this.integrate(dt, gravity);
-
-			this.solveIncompressibility(numIters, dt);
-			this.extrapolate();
-			this.advectVel(dt);
-			this.advectTemperature(dt);
-			this.updateFire(dt);
-		}
-	}
-
-	function setupScene() 
-	{
-		var canvas = document.getElementById("myCanvas");
-		canvas.width = window.innerWidth;
-		canvas.height = window.innerHeight - 20;
-
-		let simHeight = 1.0;	
-		cScale = canvas.height / simHeight;
-		let simWidth = canvas.width / cScale;
-
-		var numCells = 100000;
-		var h = Math.sqrt(simWidth * simHeight / numCells);
-
-		var numX = Math.floor(simWidth / h);
-		var numY = Math.floor(simHeight / h);
-
-		if (numX < numY) {
-			scene.swirlProbability = 80.0;
-			scene.swirlMaxRadius = 0.04;
-		}
-
-		scene.obstacleX = 0.5 * numX * h;
-		scene.obstacleY = 0.3 * numY * h;
-		scene.showObstacle = scene.burningObstacle;
-
-		scene.fluid = new Fluid(numX, numY, h);
-	}
-
-
-	// draw -------------------------------------------------------
-
-	function setColor(r,g,b) {
-		c.fillStyle = `rgb(
-			${Math.floor(255*r)},
-			${Math.floor(255*g)},
-			${Math.floor(255*b)})`
-		c.strokeStyle = `rgb(
-			${Math.floor(255*r)},
-			${Math.floor(255*g)},
-			${Math.floor(255*b)})`
-	}
-
-	function getFireColor(val) {
-		val = Math.min(Math.max(val, 0.0), 1.0);
-		var r, g, b;
-
-		if (val < 0.3) {
-			let s = val / 0.3;
-			r = 0.2 * s; g = 0.2 * s; b = 0.2 * s; 
-		}
-		else if (val < 0.5) {
-			let s = (val-0.3) / 0.2;
-			r = 0.2 + 0.8 * s; g = 0.1; b = 0.1;
-		}
-		else  {
-			let s = (val - 0.5) / 0.48;
-			r = 1.0; g = s; b = 0.0;
-		}
-		return[255*r,255*g,255*b, 255]
-	}
-
-	function draw() 
-	{
-		c.clearRect(0, 0, canvas.width, canvas.height);
-
-		c.fillStyle = "#FF0000";
-		f = scene.fluid;
-		n = f.numY;
-
-		var cellScale = 1.1;
-
-		var h = f.h;
-
-		id = c.getImageData(0,0, canvas.width, canvas.height)
-
-		var color = [255, 255, 255, 255]
-
-		for (var i = 0; i < f.numX; i++) {
-			for (var j = 0; j < f.numY; j++) {
-
-				var t = f.t[i*n + j];
-				color = getFireColor(t, 0.0, 1.0);
-
-				var x = Math.floor(cX(i * h));
-				var y = Math.floor(cY((j+1) * h));
-				var cx = Math.floor(cScale * cellScale * h) + 1;
-				var cy = Math.floor(cScale * cellScale * h) + 1;
-
-				r = color[0];
-				g = color[1];
-				b = color[2];
-
-				for (var yi = y; yi < y + cy; yi++) {
-					var p = 4 * (yi * canvas.width + x)
-
-					for (var xi = 0; xi < cx; xi++) {
-						id.data[p++] = r;
-						id.data[p++] = g;
-						id.data[p++] = b;
-						id.data[p++] = 255;
-					}
-				}
-			}
-		}
-
-		c.putImageData(id, 0, 0);
-
-		if (scene.showObstacle) {
-
-			r = scene.obstacleRadius + f.h;
-			if (scene.showPressure)
-				c.fillStyle = "#000000";
-			else
-				c.fillStyle = "#DDDDDD";
-			// c.beginPath();	
-			// c.arc(
-			// 	cX(scene.obstacleX), cY(scene.obstacleY), cScale * r, 0.0, 2.0 * Math.PI); 
-			// c.closePath();
-			// c.fill();
-
-			c.lineWidth = 20.0;
-			c.strokeStyle = "#404040";
-			c.beginPath();	
-			c.arc(
-				cX(scene.obstacleX), cY(scene.obstacleY), cScale * r, 0.0, 2.0 * Math.PI); 
-			c.closePath();
-			c.stroke();
-			c.lineWidth = 1.0;
-		}
-
-		if (scene.showSwirls) {
-
-			for (let i = 0; i < f.numSwirls; i++) {
-				let x = f.swirlX[i];
-				let y = f.swirlY[i];
-				let r = scene.swirlMaxRadius;
-
-				c.lineWidth = 1.0;
-				c.strokeStyle = "#303030";
-				c.beginPath();	
-				c.arc(
-					cX(x), cY(y), cScale * r, 0.0, 2.0 * Math.PI); 
-				c.closePath();
-				c.stroke();
-				c.lineWidth = 1.0;
-			}
-		}
-	}
-
-	function setObstacle(x, y, reset) {
-
-		var vx = 0.0;
-		var vy = 0.0;
-
-		if (!reset) {
-			vx = (x - scene.obstacleX) / scene.dt;
-			vy = (y - scene.obstacleY) / scene.dt;
-		}
-
-		scene.obstacleX = x;
-		scene.obstacleY = y;
-		scene.showObstacle = true;
-
-		var r = scene.obstacleRadius;
-		var f = scene.fluid;
-		var n = f.numY;
-		var cd = Math.sqrt(2) * f.h;
-
-		for (var i = 1; i < f.numX-2; i++) {
-			for (var j = 1; j < f.numY-2; j++) {
-
-				f.s[i*n + j] = 1.0;
-
-				dx = (i + 0.5) * f.h - x;
-				dy = (j + 0.5) * f.h - y;
-
-				let d2 = dx * dx + dy * dy;
-				if (d2 < r * r) {
-					// f.s[i*n + j] = 0.0;
-					f.u[i*n + j] += 0.2 * vx;
-					f.u[(i+1)*n + j] += 0.2 * vx;
-					f.v[i*n + j] += 0.2 * vy;
-					f.v[i*n + j+1] += 0.2 * vy;
-				}
-			}
-		}
-	}
-
-	// interaction -------------------------------------------------------
-
-	var mouseDown = false;
-
-	function startDrag(x, y) {
-		let bounds = canvas.getBoundingClientRect();
-
-		let mx = x - bounds.left - canvas.clientLeft;
-		let my = y - bounds.top - canvas.clientTop;
-		mouseDown = true;
-
-		x = mx / cScale;
-		y = (canvas.height - my) / cScale;
-
-		setObstacle(x,y, true);
-	}
-
-	function drag(x, y) {
-		if (mouseDown) {
-			let bounds = canvas.getBoundingClientRect();
-			let mx = x - bounds.left - canvas.clientLeft;
-			let my = y - bounds.top - canvas.clientTop;
-			x = mx / cScale;
-			y = (canvas.height - my) / cScale;
-			setObstacle(x,y, false);
-		}
-	}
-
-	function endDrag() {
-		mouseDown = false;
-	}
-
-	canvas.addEventListener('mousedown', event => {
-		startDrag(event.x, event.y);
-	});
-
-	canvas.addEventListener('mouseup', event => {
-		endDrag();
-	});
-
-	canvas.addEventListener('mousemove', event => {
-		drag(event.x, event.y);
-	});
-
-	canvas.addEventListener('touchstart', event => {
-		startDrag(event.touches[0].clientX, event.touches[0].clientY)
-	});
-
-	canvas.addEventListener('touchend', event => {
-		endDrag()
-	});
-
-	canvas.addEventListener('touchmove', event => {
-		event.preventDefault();
-		event.stopImmediatePropagation();
-		drag(event.touches[0].clientX, event.touches[0].clientY)
-	}, { passive: false});
-
-
-	document.addEventListener('keydown', event => {
-		switch(event.key) {
-			case 'p': scene.paused = !scene.paused; break;
-			case 'm': scene.paused = false; simulate(); scene.paused = true; break;
-		}
-	});
-
-	function toggleStart()
-	{
-		var button = document.getElementById('startButton');
-		if (scene.paused)
-			button.innerHTML = "Stop";
-		else
-			button.innerHTML = "Start";
-		scene.paused = !scene.paused;
-	}
-
-	document.getElementById("probabilitySlider").oninput = function() {
-		scene.swirlProbability = this.value;
-	}
-
-	var resizeTimer = 0;
-	
-	onResize = function() {
-    	clearTimeout(resizeTimer);
-		resizeTimer = setTimeout(setupScene, 300);
-	};
-
-	// main -------------------------------------------------------
-
-	function simulate() 
-	{
-		if (!scene.paused)
-			scene.fluid.simulate(scene.dt, scene.gravity, scene.numIters)
-			scene.frameNr++;
-	}
-
-	function update() {
-		simulate();
-		draw();
-		requestAnimationFrame(update);
-	}
-
-	setupScene();
-	
-	update();
-	
+// ============================================================================
+//  FIRE SIMULATION  ·  pages/fire-simulation/main.js — the page controller
+// ----------------------------------------------------------------------------
+//  CREDIT. The fire solver is Matthias Müller's Ten Minute Physics #21
+//  (21-fire.html, MIT; the notice is kept at the top of solver.js). The
+//  credit bar (widgets/ten-minute-physics/kit.js) names him on the page and
+//  on the saver plate.
+//
+//  OUR ADDITIONS (davesgames.io, not upstream): burner kinds and motions,
+//  wind, flame colour ramps and colour maps, glow, this controller, the sim
+//  kit GUI (widgets/sim-kit), the renderer and the screensaver.
+//
+//  Every upstream control lives on in the kit panel: Floor and Ring are the
+//  Fire choice and the Floor burns toggle, Swirls is "Show swirls",
+//  Probability is "Swirl probability", and P / M are Space and ".".
+//  A tap in open air moves the first burner there, as the upstream drag did.
+//
+//  grep -n targets: "function rebuild", "function look", "function bindPointer",
+//  "function frame", "window.__fire"
+// ============================================================================
+import * as SV from './solver.js';
+import { draw, fitView, pickBurner, rampLut } from './render.js';
+import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
+import { installSaver } from './saver.js';
+import * as SC from './scene.js';
+
+TMP.page({ n: '21', title: 'Fire Simulation', file: '21-fire.html', video: 'RsgmS3ZxDtc', year: 2022, licence: 'MIT' });
+
+const PHONE = isPhone();
+const SCHEMA = SC.makeSchema(PHONE);
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d');
+const R = {};
+const S = SV.createSim();
+let kit, cmMod = null, veil = 0, saverView = null;
+const RAMPS = new Map();
+const ramp = id => { if (!RAMPS.has(id)) { const f = SC.FIRE.find(x => x.id === id) || SC.FIRE[0]; RAMPS.set(id, rampLut(f.colors, SC.FIRE_STOPS)); } return RAMPS.get(id); };
+
+function rebuild() {
+  const st = kit.state, r = SC.sceneRng(kit.seed);
+  applyParams();
+  SV.buildScene(S, SC.sceneConfig(st, r), SC.sceneRng(kit.seed + 1));
+  veil = 1;
+}
+function applyParams() { SC.applyParams(S, kit.state); }
+function look() {
+  const st = kit.state, t = K.themeById(st.theme);
+  let lut = ramp(st.fire);
+  if (st.colorBy !== 'flame' && cmMod) { try { lut = cmMod.variant(st.cmap); } catch (e) { /* keep the ramp */ } }
+  return { bg: t.bg, bg2: t.bg2, ink: t.ink, wall: t.wall, accent: t.accent, burner: t.dark ? '#3c4250' : '#4a4f5a', log: '#5b3a24',
+    lut, colorBy: st.colorBy, glow: st.glow, showBurners: st.showBurners, showSwirls: st.showSwirls, veil };
+}
+
+let dpr = 1, cw = 1, ch = 1, view = null;
+function resize() {
+  dpr = Math.min(2, devicePixelRatio || 1);
+  cw = Math.max(1, Math.round(innerWidth * dpr)); ch = Math.max(1, Math.round(innerHeight * dpr));
+  canvas.width = cw; canvas.height = ch;
+}
+function viewRect() {
+  if (saverView) return { x: saverView.x * dpr, y: saverView.y * dpr, w: saverView.w * dpr, h: saverView.h * dpr };
+  const panel = document.getElementById('sk-panel'), tr = document.querySelector('.sk-transport');
+  let x1 = innerWidth, y1 = innerHeight;
+  if (kit && kit.panelOpen && panel && !PHONE) x1 = Math.max(innerWidth * 0.45, panel.getBoundingClientRect().left);
+  if (tr) y1 = Math.min(y1, tr.getBoundingClientRect().top - 6);
+  if (kit && kit.panelOpen && PHONE && panel) y1 = Math.min(y1, panel.getBoundingClientRect().top);
+  const y0 = 56;
+  return { x: 12 * dpr, y: y0 * dpr, w: Math.max(80, x1 - 24) * dpr, h: Math.max(80, y1 - y0 - 6) * dpr };
+}
+const makeCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+
+function bindPointer() {
+  const toWorld = e => { const r = canvas.getBoundingClientRect(); const px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr; return [(px - view.ox) / view.s, (view.oy - py) / view.s]; };
+  let held = null;
+  const place = (b, x, y) => { b.x = Math.min(S.W - 0.02, Math.max(0.02, x)); b.y = Math.min(S.H - 0.02, Math.max(0.02, y)); };
+  canvas.addEventListener('pointerdown', e => {
+    if (!view || kit.saver || !S.f) return;
+    canvas.setPointerCapture(e.pointerId);
+    const [x, y] = toWorld(e);
+    held = pickBurner(S, x, y) || S.cfg.burners[0] || SV.addBurner(S, { kind: 'ring', x, y, r: kit.state.size });
+    held.held = true; place(held, x, y);
+  });
+  canvas.addEventListener('pointermove', e => { if (!held) return; const [x, y] = toWorld(e); place(held, x, y); });
+  const up = () => { if (!held) return; held.held = false; held.x0 = held.x; held.y0 = held.y; held = null; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+}
+
+let lastT = 0, acc = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0; lastT = ts;
+  const H = S.cfg.dt;
+  if (kit.playing) {
+    acc += dt * kit.speed;
+    let n = 0; while (acc >= H && n < 2) { SV.step(S, H); acc -= H; n++; }
+    if (n === 2) acc = 0;
+  } else if (kit.takeStep()) SV.step(S, H);
+  veil = Math.max(0, veil - dt / 0.45);
+  view = fitView(S, viewRect(), saverView && saverView.cam);
+  draw(ctx, S, view, look(), R, makeCanvas, cw, ch);
+}
+
+kit = mount({
+  schema: SCHEMA, title: 'Fire Simulation', sub: 'Buoyant flame, smoke and swirls on a grid', panelTitle: 'Fire',
+  guard: SC.guard, randomStart: false, themeKey: 'theme',
+  footer: 'Solver by Matthias Müller (Ten Minute Physics 21, MIT). Burners, wind, colours and GUI: davesgames.io.',
+  actions: {
+    add(kind) { const r = K.rng(K.newSeed()); SV.addBurner(S, { kind, x: S.W * (0.15 + 0.7 * r()), y: S.H * (0.12 + 0.3 * r()), r: kit.state.size }); },
+    clear() { S.cfg.burners = []; S.cfg.floor = false; kit.set('floor', false); },
+  },
+});
+kit.on('change', (out, st, why) => {
+  if (why === 'scene' || why === 'group' || why === 'saver') return;
+  if ('preset' in out && why === 'input') kit.set('floor', st.preset === 'floor' || st.preset === 'both');
+  if (Object.keys(out).some(k => SC.REBUILD.has(k))) rebuild(); else applyParams();
+});
+kit.on('scene', (seed, st, out, group) => { if (!group || Object.keys(out || {}).some(k => SC.REBUILD.has(k))) rebuild(); else applyParams(); });
+kit.on('reset', rebuild);
+import('../ct-lab/colormaps/maps.js').then(m => { cmMod = m; }).catch(() => {});
+addEventListener('resize', resize); resize();
+if (!kit.fromHash) kit.newScene(); else rebuild();
+bindPointer();
+requestAnimationFrame(frame);
+addEventListener('pagehide', () => { kit.playing = false; });
+
+window.__fire = {
+  S, get kit() { return kit; }, canvas, rebuild, applyParams,
+  setView(v) { saverView = v; },
+};
+installSaver(window.__fire);
