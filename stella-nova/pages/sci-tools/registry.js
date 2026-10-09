@@ -22,6 +22,7 @@ export const CATS = [
   { id: 'chem', name: 'Chemistry' },
   { id: 'phys', name: 'Physics and engineering' },
   { id: 'maths', name: 'Maths and numerics' },
+  { id: 'data', name: 'Data and references' },
 ];
 
 export const TOOLS = [
@@ -67,6 +68,11 @@ export const TOOLS = [
   ['complex', 'maths', 'Complex numbers', 'Complex expressions in rectangular, polar and exponential form.', 'complex numbers imaginary polar phasor modulus argument'],
   ['fft', 'maths', 'FFT spectrum', 'Amplitude spectrum of pasted samples with windowing and peak finding.', 'fft fourier transform spectrum frequency dft signal'],
   ['interp', 'maths', 'Interpolation and smoothing', 'Cubic spline and linear interpolation; moving average and Savitzky–Golay.', 'interpolation spline smoothing savitzky golay moving average filter'],
+  ['csv', 'data', 'CSV cleaner and plotter', 'Clean pasted CSV or TSV, see the columns, plot them, export SVG or PNG.', 'csv tsv table clean parse plot chart scatter line histogram export spreadsheet'],
+  ['latex', 'data', 'LaTeX equation preview', 'Typeset TeX math with MathJax and copy it as SVG.', 'latex tex equation math mathjax preview render svg formula'],
+  ['bibtex', 'data', 'BibTeX formatter', 'BibTeX to APA, IEEE, Vancouver or Chicago references, offline.', 'bibtex citation reference bibliography apa ieee vancouver chicago doi format'],
+  ['jd', 'data', 'Julian dates', 'Calendar date ↔ JD, MJD and Unix time, with sidereal time.', 'julian date jd mjd astronomy epoch sidereal time calendar unix'],
+  ['geo', 'data', 'Coordinates and distances', 'Decimal ↔ DMS, geodesic distance (WGS 84) and great-circle bearing.', 'latitude longitude coordinates dms decimal degrees distance haversine vincenty bearing gps'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));

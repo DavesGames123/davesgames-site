@@ -154,6 +154,11 @@ else {
   tw.eval(`(function () { ${src}\n window.__sm = { typeset }; })();`);
   const texes = [];
   for (const t of TOOLS) for (const x of defs[t.id].tex) texes.push([t.id, x, true]);
+  // The LaTeX tool's own default and examples go through the same path.
+  if (defs.latex) for (const v of [{}, ...(defs.latex.examples || []).map(e => e.v)]) {
+    const base = Object.fromEntries(defs.latex.inputs.map(i => [i.k, i.def ?? '']));
+    texes.push(['latex output', defs.latex.run({ ...base, ...v }).texOut, true]);
+  }
   const constHtml = defs.constants ? defs.constants.run({ f: '' }).html : '';
   const dec = (t) => t.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   const syms = [...constHtml.matchAll(/data-tex="([^"]*)"/g)].map(m => ['constants symbol', dec(m[1]), false]);
