@@ -41,7 +41,12 @@
 //    console  log() keeps the PAR object (it has flowerChance); the rest of
 //             the upstream log lines are dropped.
 //    footer   returns the upstream functions and accessors for CTX, SEED
-//             and the paper colours.
+//             and the paper colours. With a tap (record.js), the footer
+//             first sets the local bindings polygon, leaf, stem and
+//             branch to tap(name, fn). Upstream calls these functions by
+//             name, so its own calls go through the tap. A tap only looks
+//             at the arguments: it uses no random numbers and changes no
+//             value, so the shapes stay the same.
 //
 //  THE SEED. Upstream parseArgs() does not decode the URL value, so the
 //  upstream SEED is the raw token after "?seed=". seedToken(seed) gives
@@ -77,7 +82,7 @@
 //    grep -n 'export function makeEngine'   the new Function() shim
 //    grep -n 'function stubElement'         the inert DOM stub
 //    grep -n 'function cpuCanvas'           willReadFrequently: one raster path
-//    grep -n 'export function paint'        upstream load() order
+//    grep -n 'export function paint'        upstream load() order (opts.tap, opts.snap)
 //    grep -n 'export function inkFocus'     where the petals / leaves are (saver)
 //    grep -n 'export function plainPAR'     PAR -> plain data
 //    grep -n 'export function hsvToRgb'     the upstream hsv(), as numbers
@@ -160,7 +165,9 @@ function cpuCanvas(c) {
 // src: the text of upstream/main.js. seed: our seed string. env.canvas():
 // a new canvas-like object with width, height and getContext('2d').
 // Returns the upstream functions plus the accessors and a log of PAR.
-export function makeEngine(src, seed, env) {
+// tap(name, fn) (optional): see THE SHIM, footer.
+export const TAPPED = ['polygon', 'leaf', 'stem', 'branch'];
+export function makeEngine(src, seed, env, tap = null) {
   const token = seedToken(seed);
   if (!token) throw new Error('empty seed');
   const stub = stubElement();
@@ -182,14 +189,15 @@ export function makeEngine(src, seed, env) {
     warn() {}, error() {}, info() {},
   };
   const header = 'var ' + LOCALS.join(', ') + ';\n';
-  const footer = '\n;return {' + EXPORTS.join(',') +
+  const footer = '\n;if(__nfTap){' + TAPPED.map(n => n + '=__nfTap(' + JSON.stringify(n) + ',' + n + ');').join('') + '}' +
+    '\nreturn {' + EXPORTS.join(',') +
     ',random:function(){return Math.random()}' +
     ',getCTX:function(){return CTX},setCTX:function(c){CTX=c}' +
     ',getSEED:function(){return SEED}' +
     ',paperCols:function(){return [PAPER_COL0,PAPER_COL1]}};';
   // eslint-disable-next-line no-new-func
-  const run = new Function('window', 'document', 'Object', 'Math', 'console', header + src + footer);
-  const E = run(win, doc, ObjectShim, MathShim, con);
+  const run = new Function('window', 'document', 'Object', 'Math', 'console', '__nfTap', header + src + footer);
+  const E = run(win, doc, ObjectShim, MathShim, con, tap);
   E.pars = pars;
   E.token = token;
   return E;
@@ -202,11 +210,15 @@ export function makeEngine(src, seed, env) {
 // blank the bare sheet before the plant (with the same border), blits the
 // two plant layers (see flowerFocus), base the root in painting px.
 // onStage(name) is called before each step (for a progress line).
-export function paint(src, seed, env, onStage = () => {}) {
+// opts.tap goes to makeEngine (record.js). opts.snap adds snaps: { sheet,
+// plant }: copies of the painting before the plant (white and paper) and
+// after the plant blits, both before the border. Copies use no random
+// numbers, so the painting stays the same.
+export function paint(src, seed, env, onStage = () => {}, opts = {}) {
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const t0 = now();
   onStage('engine');
-  const E = makeEngine(src, seed, env);
+  const E = makeEngine(src, seed, env, opts.tap || null);
   const [PAPER_COL0, PAPER_COL1] = E.paperCols();
   onStage('background paper');
   const bg = E.paper({ col: PAPER_COL0, tex: 10, spr: 0 });     // makeBG()
@@ -229,17 +241,20 @@ export function paint(src, seed, env, onStage = () => {}) {
   // brush wipe. Copying and Layer.border use no random numbers.
   const blank = E.Layer.empty();
   blank.drawImage(ctx.canvas, 0, 0);
+  let snaps = null;
+  if (opts.snap) { snaps = { sheet: E.Layer.empty(), plant: E.Layer.empty() }; snaps.sheet.drawImage(ctx.canvas, 0, 0); }
   const type = E.random() <= 0.5 ? 'woody' : 'herbal';
   onStage(type);
   if (type === 'woody') E.woody({ ctx, xof: 300, yof: 550 });
   else E.herbal({ ctx, xof: 300, yof: 600 });
+  if (snaps) snaps.plant.drawImage(ctx.canvas, 0, 0);
   onStage('border');
   E.Layer.border(ctx, E.squircle(0.98, 3));
   E.Layer.border(blank, E.squircle(0.98, 3));
   const t2 = now();
   const PAR = E.pars[E.pars.length - 1] || null;
   E.Layer.blit = blit0;
-  return { E, ctx, bg, blank: blank.canvas, type, PAR, blits, base: type === 'woody' ? [300, 550] : [300, 600], ms: { bg: t1 - t0, plant: t2 - t1, total: t2 - t0 } };
+  return { E, ctx, bg, blank: blank.canvas, type, PAR, blits, base: type === 'woody' ? [300, 550] : [300, 600], snaps: snaps && { sheet: snaps.sheet.canvas, plant: snaps.plant.canvas }, ms: { bg: t1 - t0, plant: t2 - t1, total: t2 - t0 } };
 }
 
 // ── inkFocus / flowerFocus ──────────────────────────────────────────────────

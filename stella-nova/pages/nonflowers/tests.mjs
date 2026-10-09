@@ -10,14 +10,20 @@
 //  browser. The pixel parity with the upstream page is a headless Chrome
 //  check (see the commit body), not a node test.
 //
+//  STEPS. The record.js tests compare the recorded strokes with the canvas
+//  calls of a plain paint() (no tap) on an exact recorder: each call with
+//  its full-precision numbers and strings, per canvas.
+//
 //  GREP MAP
 //    grep -n "test('"   one line per test
+//    grep -n 'STEPS'    the step recorder and stepper tests
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { UPSTREAM, makeEngine, paint, plainPAR, hsvToRgb, recorderCanvas, seedToken, cleanSeed, randomSeed, flowerFocus, inkFocus } from './engine.js';
 import { layoutGrid, fitScale, parseSeedFrom, pngWithText, crc32 } from './view.js';
+import { recordPaint, drawStroke, chapters, createStepper, timeline, totalMs, SPEEDS, STAGES, KINDS } from './record.js';
 
 const DIR = path.dirname(new URL(import.meta.url).pathname);
 const SRC = fs.readFileSync(path.join(DIR, 'upstream/main.js'), 'utf8');
@@ -189,6 +195,123 @@ test('PNG tEXt chunks: CRC32 and a valid chunk after IHDR', () => {
   eq(new TextDecoder().decode(out.slice(41, 41 + len)), 'Author\0Lingdong Huang', 'first chunk text: Author first');
   const crc = (out[41 + len] << 24 | out[42 + len] << 16 | out[43 + len] << 8 | out[44 + len]) >>> 0;
   eq(crc, crc32(out.slice(37, 41 + len)), 'chunk crc');
+});
+
+// ── STEPS: record.js ────────────────────────────────────────────────────────
+// An exact recorder: a list of call strings per canvas, numbers at full
+// precision. Getters return the canvas; any other property is a call.
+function exactCanvas(all) {
+  const c = { width: 300, height: 150, calls: [] };
+  all.push(c);
+  const ctx = new Proxy({ canvas: c }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'getImageData') return (x, y, w, h) => { c.calls.push('gid'); return { data: new Uint8ClampedArray(0), width: w, height: h }; };
+      return function () { c.calls.push(String(k) + '(' + Array.prototype.map.call(arguments, a => (typeof a === 'number' ? String(a) : typeof a === 'string' ? a : '#')).join(',') + ')'); };
+    },
+    set(t, k, v) { t[k] = v; c.calls.push('set ' + String(k) + '=' + (typeof v === 'string' || typeof v === 'number' ? v : '#')); return true; },
+  });
+  c.getContext = () => ctx;
+  return c;
+}
+// The draw calls of one layer before the first pixel read (the filters).
+const drawPrefix = c => { const i = c.calls.indexOf('gid'); return i < 0 ? c.calls : c.calls.slice(0, i); };
+const STEP_SEEDS = ['1', '2', '3', '77', 'hello', 'Gongbi 7', 'x9'];
+const recCache = new Map();
+function recorded(seed) {
+  if (!recCache.has(seed)) recCache.set(seed, recordPaint(SRC, seed, { canvas: () => recorderCanvas({ h: 0, n: 0 }) }));
+  return recCache.get(seed);
+}
+test('STEPS: the recorded strokes replay to the same layer draw calls as a plain paint (7 seeds)', () => {
+  const types = new Set();
+  for (const seed of STEP_SEEDS) {
+    const all = [], r = paint(SRC, seed, { canvas: () => exactCanvas(all) });
+    const lay = [r.blits[0].ctx.canvas, r.blits[1].ctx.canvas];
+    const { rec } = recorded(seed);
+    types.add(rec.type);
+    eq(rec.type, r.type, seed + ' type');
+    ok(rec.n > 1000, seed + ' strokes ' + rec.n);
+    for (const L of [0, 1]) {
+      const out = [], c = exactCanvas(out), g = c.getContext('2d');
+      // In playback order: the order between the layers changes, the order in one layer does not.
+      for (let j = 0; j < rec.n; j++) { const i = rec.order[j]; if (rec.layer[i] === L) drawStroke(g, rec, i); }
+      const want = drawPrefix(lay[L]), got = c.calls;
+      eq(got.length, want.length, `${seed} layer ${L} call count`);
+      for (let k = 0; k < want.length; k++) if (got[k] !== want[k]) throw new Error(`${seed} layer ${L} call ${k}: ${got[k]} !== ${want[k]}`);
+    }
+  }
+  ok(types.has('woody') && types.has('herbal'), 'both plant types: ' + [...types]);
+});
+test('STEPS: the tap does not change the painting (draw-call hash with and without it)', () => {
+  for (const seed of ['1', '2', 'x9']) {
+    const log = { h: 2166136261, n: 0 };
+    recordPaint(SRC, seed, { canvas: () => recorderCanvas(log) });
+    const plain = run(seed);
+    // recordPaint also copies two snapshots (sheet, plant): drawImage calls on
+    // their own canvases. Compare the painting canvas only.
+    const a = [], b = [];
+    paint(SRC, seed, { canvas: () => exactCanvas(a) });
+    recordPaint(SRC, seed, { canvas: () => exactCanvas(b) });
+    const main = list => list.find(c => c.width === 600 && c.calls.some(s => s.startsWith('set globalCompositeOperation')));
+    eq(main(b).calls.join('|'), main(a).calls.join('|'), seed + ' painting calls');
+    ok(plain.calls > 0, 'plain run');
+  }
+});
+test('STEPS: every stroke has a kind, and the stages come in the documented order', () => {
+  const woodyRe = /^paper (trunk )?(branch )?(foliage )?(flower )?shade mount$/;
+  const herbalRe = /^paper (stem (leaf )?(sheath )?(shoot )?(flower )?)+(basal )?shade mount$/;
+  for (const seed of STEP_SEEDS) {
+    const { rec } = recorded(seed), ch = chapters(rec);
+    eq(rec.kind.filter(k => KINDS[k] === 'other').length, 0, seed + ' strokes of no kind');
+    const seq = ch.map(c => c.key).join(' ');
+    ok((rec.type === 'woody' ? woodyRe : herbalRe).test(seq), `${seed} ${rec.type}: ${seq}`);
+    // The chapters cover the playback order once, without a gap.
+    let at = 0;
+    for (const c of ch) { eq(c.from, at, seed + ' chapter start ' + c.key); at = c.to; ok(STAGES[c.key], 'stage text ' + c.key); }
+    eq(at, rec.n, seed + ' chapters end at n');
+  }
+});
+test('STEPS: the stepper keeps a consistent state on stage steps, seeks and speed changes', () => {
+  for (const seed of ['1', '2']) {
+    const ch = chapters(recorded(seed).rec), S = createStepper(ch);
+    let a = S.at();
+    eq(a.ci, 0, 'start in paper'); eq(a.strokes, 0, 'no strokes at 0');
+    const seen = [0];
+    for (let i = 1; i < ch.length; i++) { a = S.next(); seen.push(a.ci); eq(a.strokes, ch[a.ci].from, `${seed} next ${i} strokes`); }
+    eq(seen.join(','), ch.map((_, i) => i).join(','), seed + ' next visits every stage');
+    a = S.next(); ok(a.done, 'next at the last stage ends'); eq(a.strokes, recorded(seed).rec.n, 'all strokes at the end');
+    for (let i = ch.length - 1; i >= 0; i--) { a = S.prev(); eq(a.ci, i, `${seed} prev to ${i}`); eq(a.u, 0, 'prev lands on a stage start'); }
+    a = S.prev(); eq(a.ci, 0, 'prev at 0 stays');
+    // Forward then back returns to the same place.
+    S.goto(3); const t3 = S.t; S.next(); S.prev(); eq(S.t, t3, 'next then prev');
+    // Strokes never go down as the clock goes up.
+    let last = -1;
+    for (let t = 0; t <= S.total; t += S.total / 500) { const s = S.seek(t).strokes; ok(s >= last, 'monotone strokes at ' + t); last = s; }
+    // timeOfStrokes is the inverse of at().strokes within one step.
+    for (const n of [0, 5, 500, ch[ch.length - 3].to - 1]) { const st = S.seek(S.timeOfStrokes(n)).strokes; ok(Math.abs(st - n) <= 1, `timeOfStrokes ${n} -> ${st}`); }
+    // A speed change keeps the stage and the share of it.
+    S.goto(4); S.seek(S.t + S.chapters[4].dur * 0.5);
+    const before = S.at();
+    S.setSpeed(4);
+    const after = S.at();
+    eq(after.ci, before.ci, 'speed keeps the stage'); ok(Math.abs(after.u - before.u) < 1e-9, 'speed keeps the share');
+    S.setSpeed(1);
+  }
+});
+test('STEPS: the replay ends in the expected time at each speed', () => {
+  const ch = chapters(recorded('77').rec);
+  const T1 = totalMs(timeline(ch, 1));
+  ok(T1 > 8000 && T1 < 60000, 'speed 1 total ' + T1);
+  for (const v of SPEEDS) {
+    const S = createStepper(ch, v);
+    ok(Math.abs(S.total - T1 / v) < 1e-6, `total at ${v}x`);
+    S.play();
+    let t = 0;
+    const dt = 1000 / 60;
+    while (S.playing && t < T1 * 8) { S.advance(dt); t += dt; }
+    ok(S.at().done && !S.playing, `done at ${v}x`);
+    ok(Math.abs(t - T1 / v) <= dt + 1e-6, `${v}x ended at ${t.toFixed(0)} ms, want ${(T1 / v).toFixed(0)} ms`);
+  }
 });
 
 for (const [name, fn] of tests) {
