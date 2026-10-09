@@ -641,5 +641,12 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok(`speed: every preset generates 512 in under ${BUDGET} ms on one thread`, worst[1] < BUDGET, times.map(([k, v]) => `${k} ${v.toFixed(0)}`).join(', '));
 }
 
+// The studio and randomizer checks live in tests-studio.mjs; run them too.
+{
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync(process.execPath, [new URL('./tests-studio.mjs', import.meta.url).pathname], { encoding: 'utf8' });
+  ok('tests-studio.mjs passes', r.status === 0, (r.stdout + r.stderr).trim().split('\n').slice(-2).join(' | '));
+}
+
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);
