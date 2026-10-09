@@ -4,6 +4,8 @@
 //  Run: node tests.mjs   (from any directory)
 //  The GPU check runs gpu-check.mjs in Deno when deno is on PATH; without
 //  deno it is reported as skipped, not as passed.
+//  The page boot (jsdom-boot.mjs) needs JSDOM_DIR, a folder whose
+//  node_modules holds jsdom; without it the boot checks are skipped.
 // ============================================================================
 import * as E from './engine.js';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -200,6 +202,18 @@ console.log('hairline: the drawn line keeps the model darkening');
   const svg = E.toSVG(run, { size: 1600 }), hs = E.hairline(0.08, 1600 / 64);
   const sw = +(svg.match(/stroke-width="([\d.]+)"/) || [])[1], so = +(svg.match(/stroke-opacity="([\d.]+)"/) || [])[1];
   ok(Math.abs(sw - hs.w) < 1e-3 && Math.abs(so - hs.q) < 1e-3, 'SVG export uses the same hairline', `stroke-width ${sw}, stroke-opacity ${so}`);
+}
+
+console.log('page boot in jsdom: backing stores at DPR 2 and 3');
+for (const dpr of [2, 3]) {
+  const r = spawnSync(process.execPath, [join(HERE, 'jsdom-boot.mjs'), 'hires', String(dpr), '1280', '800'], { encoding: 'utf8', timeout: 120000, env: process.env });
+  let o; try { o = JSON.parse((r.stdout || '').trim().split('\n').pop()); } catch (e) { o = { error: (r.stderr || r.stdout || '').slice(0, 300) }; }
+  if (o.skip) { skip++; console.log('  skip ' + o.skip); break; }
+  if (o.error) { ok(false, `DPR ${dpr}: boot`, o.error); continue; }
+  ok(o.ready && o.lines > 0 && !o.errors.length, `DPR ${dpr}: the page boots and lays lines`, `${o.lines} lines${o.errors.length ? ' ' + o.errors[0] : ''}`);
+  ok(o.canvases.length > 0 && !o.low.length, `DPR ${dpr}: no canvas has a backing store below CSS size x DPR`, o.canvases.map(c => `#${c.id} ${c.w}x${c.h} (need ${c.need.join('x')})`).join(', '));
+  ok(o.upscaledGrid === 0 && o.errCanvas && o.errCanvas[0] > 2 * 384, `DPR ${dpr}: the error view is at device px, no model grid drawn scaled up`, `error canvas ${o.errCanvas && o.errCanvas.join('x')}, upscaled grid draws ${o.upscaledGrid}`);
+  ok(o.nBad === 0, `DPR ${dpr}: no NaN or infinite draw arguments`, `${o.calls} calls`);
 }
 
 console.log('GPU (Deno WebGPU) = CPU');

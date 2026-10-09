@@ -13,8 +13,10 @@
 //  about 0.35-0.5 device px wide and near opaque, with width x opacity
 //  equal to the model's darkening, so the picture shows what the step
 //  scored. A change of view (resize, zoom, pan, width) draws all lines
-//  again as vectors; a cached raster is never scaled up. The error image
-//  (engine.js residualRGBA) is a res x res canvas drawn beside the piece.
+//  again as vectors; a cached raster is never scaled up. The canvas is at
+//  the full devicePixelRatio. The error view (draw.js errorView) is drawn
+//  at the view's own device px from the full-resolution source and the
+//  hairline render; the model grid (res x res) is never shown scaled up.
 //
 //  MODULE MAP
 //    engine.js ... the CPU model, the step, the exports (no DOM)
@@ -26,20 +28,19 @@
 //  grep -n: "export const SOURCES"  "export const S ="  "async function sourceRGBA"
 //           "export async function restart"  "function pump"  "function speedLps"
 //           "function clearArea"  "function layout"  "function drawAll"
-//           "function present"  "function frame"  "function hud"  "function bindUI"
+//           "function present"  "function viewSource"  "function drawErrorView"  "function frame"  "function hud"  "function bindUI"
 //           "function bindPointer"  "function bindDrop"  "async function snapshot"
 //           "async function exportPng"  "function exportText"  "const ready"
 // ============================================================================
 import {
   createRun, stepRun, targetFrom, frameMask, imagePalette, shapeImage, PALETTES, hex,
-  toJSON, toText, toSVG, residualRGBA, sumSq, MAX_RES, hairline,
+  toJSON, toText, toSVG, sumSq, MAX_RES, hairline,
 } from './engine.js';
 import { createThreadGPU } from './gpu.js';
-import { strokeLines as strokeVec } from './draw.js';
+import { strokeLines as strokeVec, errorView } from './draw.js';
 import { installSaver } from './saver.js';
 
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
-const TOUCH = matchMedia('(hover:none)').matches;
 const $ = id => document.getElementById(id);
 const canvas = $('view');
 const ctx = canvas.getContext('2d');
@@ -76,6 +77,9 @@ let shown = 0, drawn = 0, pending = false, gpuChunk = 16, rTok = 0;
 let errFrac = 1, errAt = 0, errBusy = false, errDirty = true;
 const artC = document.createElement('canvas'), artG = artC.getContext('2d');
 const errC = document.createElement('canvas'), errG = errC.getContext('2d');
+const tmpC = document.createElement('canvas'), tmpG = tmpC.getContext('2d');
+const smallC = document.createElement('canvas'), smallG = smallC.getContext('2d');
+let errViewAt = 0, errViewKey = '', shapeC = null, shapeKey = '';
 let cacheKey = '', dpr = 1;
 const bitmaps = {};
 let userBmp = null;
@@ -168,7 +172,6 @@ export async function restart() {
   if (gpuR) { try { gpuR.load(run); } catch (e) { toCPU(e); } }
   shown = 0; drawn = 0; cacheKey = ''; S.finishing = false;
   errFrac = 1; errDirty = true; errAt = 0;
-  errC.width = errC.height = S.res;
   syncSwatches();
 }
 
@@ -224,7 +227,6 @@ async function refreshError(now) {
     if (run !== myRun || !resid) return;
   }
   errFrac = run.E0 > 0 ? sumSq(resid) / run.E0 : 0;
-  if (S.showErr) errG.putImageData(new ImageData(residualRGBA(resid, run.res, run.C, run.cfg.dark, mask), run.res, run.res), 0, 0);
 }
 
 export function finish() { S.finishing = true; S.playing = true; syncUI(); }
@@ -369,8 +371,8 @@ function present(L, now) {
     ctx.save();
     ctx.beginPath(); ctx.rect(e.clip.x * d, e.clip.y * d, e.clip.w * d, e.clip.h * d); ctx.clip();
     framePath(ctx, e.x * d, e.y * d, e.s * d); ctx.clip();
-    ctx.imageSmoothingEnabled = e.s * d / run.res < 3;
-    ctx.drawImage(errC, e.x * d, e.y * d, e.s * d, e.s * d);
+    drawErrorView(L, now);
+    ctx.drawImage(errC, Math.round(e.clip.x * d), Math.round(e.clip.y * d));
     ctx.restore();
     ctx.save();
     ctx.font = `${Math.round(11 * d)}px Inter, system-ui, sans-serif`; ctx.fillStyle = '#8090b0'; ctx.textAlign = 'center';
@@ -381,14 +383,49 @@ function present(L, now) {
   void now;
 }
 
+/** The source image for the error view: the full bitmap, or a shape drawn at the view size. */
+function viewSource(px) {
+  if (S.source === 'user') return userBmp;
+  if (SRC[S.source] && SRC[S.source].kind === 'shape') {
+    const n = Math.min(2048, Math.max(64, Math.ceil(px / 64) * 64)), key = S.source + n;
+    if (key !== shapeKey) {
+      shapeC = shapeC || document.createElement('canvas'); shapeC.width = shapeC.height = n;
+      shapeC.getContext('2d').putImageData(new ImageData(shapeImage(S.source, n), n, n), 0, 0);
+      shapeKey = key;
+    }
+    return shapeC;
+  }
+  return bitmaps[S.source] || null;
+}
+
+/**
+ * The error view (draw.js errorView) into errC at the view's own device
+ * px: the full-resolution source over the hairline render, not the model
+ * grid scaled up. Rebuilt when the lines or the view change (max 10 / s).
+ */
+function drawErrorView(L, now) {
+  const e = L.err, a = L.art, d = dpr;
+  const w = Math.max(1, Math.round(e.clip.w * d)), h = Math.max(1, Math.round(e.clip.h * d));
+  const key = [w, h, e.x, e.y, e.s, cacheKey].join('|');
+  if (key === errViewKey && (drawn === errViewAt || now - errViewT < 100)) return;
+  errViewKey = key; errViewAt = drawn; errViewT = now;
+  for (const c of [errC, tmpC]) if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const src = viewSource(e.s * d);
+  const sw = src ? src.width : 1, sh = src ? src.height : 1, ss = Math.min(sw, sh);
+  const ox = Math.round(e.clip.x * d), oy = Math.round(e.clip.y * d);
+  errorView(errG, tmpG, smallG, w, h, src, [(sw - ss) / 2, (sh - ss) / 2, ss], [e.x * d - ox, e.y * d - oy, e.s * d],
+    artC, [a.x * d - (e.x * d - ox), a.y * d - (e.y * d - oy)], { dark: run.cfg.dark, mono: run.C === 1, res: run.res });
+}
+let errViewT = 0;
+
 let lastT = performance.now(), hudAt = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const dt = Math.max(0, Math.min(0.1, (now - lastT) / 1000)); lastT = now;
   if (S.saverTick) S.saverTick(dt);
   // canvas size
-  const cap = TOUCH ? 2 : 2.5;
-  dpr = Math.min(cap, devicePixelRatio || 1);
+  // Full device pixel ratio, no cap: the lines are vectors and must be crisp.
+  dpr = devicePixelRatio || 1;
   const W = Math.round(innerWidth * dpr), H = Math.round(innerHeight * dpr);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; cacheKey = ''; }
   if (!run) return;
@@ -603,14 +640,15 @@ function shownRun() { return { ...run, lines: run.lines.slice(0, Math.floor(show
 
 async function exportPng() {
   if (!run) return;
-  const size = 2048, pad = 48, c = document.createElement('canvas');
+  // 4096 px in all (the iOS canvas limit is 4096 x 4096).
+  const pad = 96, size = 4096 - 2 * pad, c = document.createElement('canvas');
   c.width = c.height = size + 2 * pad;
   const g = c.getContext('2d');
   g.fillStyle = run.cfg.dark ? '#000000' : '#ffffff'; g.fillRect(0, 0, c.width, c.height);
   strokeLines(g, pad, pad, size, 0, Math.floor(shown), 1);
   const k = size / run.res;
   g.fillStyle = run.cfg.dark ? '#888888' : '#555555';
-  for (let p = 0; p < run.P; p++) { g.beginPath(); g.arc(pad + (run.pegs.x[p] + 0.5) * k, pad + (run.pegs.y[p] + 0.5) * k, 3, 0, Math.PI * 2); g.fill(); }
+  for (let p = 0; p < run.P; p++) { g.beginPath(); g.arc(pad + (run.pegs.x[p] + 0.5) * k, pad + (run.pegs.y[p] + 0.5) * k, 6, 0, Math.PI * 2); g.fill(); }
   c.toBlob(b => { if (b) { download(b, baseName() + '.png'); $('expNote').textContent = `Saved ${baseName()}.png (${c.width} px).`; } }, 'image/png');
 }
 
@@ -619,7 +657,7 @@ function exportText(kind) {
   const r = shownRun(), src = SRC[S.source];
   const extra = { image: src ? src.name : S.userName || 'your image', credit: src ? src.credit : '', made: 'https://davesgames.io (Stella Nova thread-art page)' };
   let blob, ext;
-  if (kind === 'svg') { blob = new Blob([toSVG(r, { size: 1600, width: S.width, title: 'Thread art: ' + extra.image })], { type: 'image/svg+xml' }); ext = 'svg'; }
+  if (kind === 'svg') { blob = new Blob([toSVG(r, { size: 4096, width: S.width, title: 'Thread art: ' + extra.image })], { type: 'image/svg+xml' }); ext = 'svg'; }
   else if (kind === 'json') { blob = new Blob([JSON.stringify(toJSON(r, extra), null, 1)], { type: 'application/json' }); ext = 'json'; }
   else { blob = new Blob([toText(r)], { type: 'text/plain' }); ext = 'txt'; }
   download(blob, baseName() + '.' + ext);
@@ -627,7 +665,7 @@ function exportText(kind) {
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
-window.__ta = { ready: false, S, get run() { return run; }, get engine() { return engine; }, restart, finish };
+window.__ta = { ready: false, S, get run() { return run; }, get engine() { return engine; }, get errCanvas() { return errC; }, restart, finish };
 bindUI();
 bindPointer();
 bindDrop();
