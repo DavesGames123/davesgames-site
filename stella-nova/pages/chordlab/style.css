@@ -215,4 +215,56 @@ html.mob #mobTabs{display:flex;flex-shrink:0;border-top:1px solid var(--line);ba
 #mobTabs .tl{font-size:.68rem;font-weight:500}
 #mobTabs button.on{color:var(--ink)}
 
+/* PHONE POLISH: safe-area insets, compact chrome, and the landscape
+   phone on a music stand (the ring and the chord name use the full
+   height; the likely chords, notes and history move to a side column). */
+html.mob .topbar{height:40px;padding:0 calc(var(--s4) + env(safe-area-inset-right)) 0 calc(var(--s4) + env(safe-area-inset-left))}
+html.mob .topsub{display:none}
+html.mob #app{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+html.mob .col{padding:var(--s2) var(--s3) var(--s3);gap:var(--s2)}
+html.mob #mobTabs{padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+html.mob #domHint{display:none}
+html.mob #domBar{min-height:0;gap:var(--s2)}
+html.mob #nowBody{min-height:0;gap:var(--s2)}
+html.mob #meterCanvas{flex-basis:44px;width:44px}
+html.mob #ringWrap{width:min(100%,46vh,420px)}
+html.mob #chordRoot{font-size:clamp(3rem,9vh,5.4rem)}
+html.mob #heroMeta{justify-content:center}
+html.mob #confTrack{width:80px}
+html.mob #history{padding-top:var(--s2)}
+html.mob #specCanvas{min-height:140px}
+html.mob .gateCard{padding:22px 18px 12px}
+html.mob .gateCard h1{font-size:1.3rem}
+html.mob #micGate.resume{padding:var(--s2)}
+/* any touch screen, phones and tablets: 44 px targets */
+@media (pointer:coarse){
+  .btn,.btn.sm,.vbtn,.seg button,.linkbtn{min-height:44px}
+  .btn.sq{width:44px;height:44px}
+  #status-bar{display:none}
+}
+@media (orientation:landscape) and (max-height:560px){
+  html.mob .topbar{display:none}
+  html.mob body.mtab-now #now{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,40%);grid-template-rows:auto auto 1fr auto;
+    grid-template-areas:"ph ph" "body dom" "body meta" "body hist";column-gap:var(--s4)}
+  html.mob #now>.ph{grid-area:ph}
+  html.mob #nowBody{grid-area:body}
+  html.mob #domBar{grid-area:dom;flex-direction:column;align-items:flex-start}
+  html.mob #heroMeta{grid-area:meta;flex-direction:column;align-items:flex-start;justify-content:center}
+  html.mob #history{grid-area:hist}
+  html.mob #ringWrap{width:min(100%,calc(100dvh - 120px),420px)}
+  html.mob #chordRoot{font-size:clamp(2.6rem,16vh,5rem)}
+  html.mob body.mtab-tuner #tuner{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-rows:auto auto auto auto 1fr;column-gap:var(--s4);align-content:start}
+  html.mob #tuner>.ph{grid-column:1/-1}
+  html.mob #gaugeWrap,html.mob #stringRow,html.mob #tuneTargetLbl,html.mob #refRow{grid-column:1}
+  html.mob #gaugeWrap{max-width:300px}
+  html.mob #tuner .subhead{grid-column:2;grid-row:2;margin:0}
+  html.mob #specCanvas{grid-column:2;grid-row:3/-1;min-height:0;height:100%}
+  html.mob body.mtab-diag #diag{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto auto auto auto 1fr;column-gap:var(--s4);align-content:start}
+  html.mob #diag>.ph{grid-column:1/-1}
+  html.mob #diagWrap{grid-column:1;grid-row:2/-1;width:auto;max-width:none}
+  html.mob #diagCanvas{height:calc(100dvh - 130px);width:auto;max-width:42vw}
+  html.mob #instSeg,html.mob #voicings,html.mob #strumBtn,html.mob #tallyHead,html.mob #tally{grid-column:2}
+  html.mob #strumBtn{justify-self:start}
+}
+
 @media (prefers-reduced-motion:reduce){.pill.live::before,.pill.asking::before{animation:none}#micBtn,#confBar{transition:none}}
