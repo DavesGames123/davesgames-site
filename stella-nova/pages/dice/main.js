@@ -52,7 +52,7 @@ const COARSE = matchMedia('(pointer:coarse)').matches;
 
 const S = {
   counts: { d6: 3 }, text: '3d6', spec: parse('3d6'), finish: 'resin', style: 'numbers',
-  strength: 0.35, tray: 'medium', speed: 1, cam: 'orbit', camCheck: false,
+  strength: 0.35, tray: 'medium', speed: 0.5, cam: 'orbit', camCheck: false,
   tab: 'faces', src: 'session', faceType: 'd6', target: 10,
   faces: {}, totals: {}, check: { agree: 0, total: 0 },
   batch: { faces: {}, totals: {}, text: '', running: false },
