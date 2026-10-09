@@ -280,8 +280,8 @@ async function build(o, W, H, t0) {
     for (const c of centres) core = Math.max(core, c.w * Math.exp(-((cx - c.x) ** 2 + (cy - c.y) ** 2) / (R * R)));
     core = Math.min(1, core);
     const u = Math.random();
-    let h = 8 + 14 * u + 70 * core * core * (0.4 + 0.6 * Math.random());
-    if (Math.random() < 0.025 + 0.12 * core) h *= 1.8;
+    let h = 5 + 9 * u + 62 * Math.pow(core, 2.4) * (0.35 + 0.65 * Math.random());
+    if (Math.random() < 0.015 + 0.08 * core) h *= 1.7;
     return { h: Math.round(h * o.height * 10) / 10 };
   });
   buildings.forEach((_, i) => events.push({ k: 'building', i }));
