@@ -16,9 +16,14 @@
 // ============================================================================
 
 export const CATS = [
+  { id: 'units', name: 'Units and constants' },
 ];
 
 export const TOOLS = [
+  ['unit-convert', 'units', 'Unit converter', 'Convert any quantity, compound units too; errors for wrong dimensions.', 'units si dimension convert compound imperial'],
+  ['constants', 'units', 'Physical constants', 'CODATA 2022 values with uncertainties, searchable.', 'codata nist planck boltzmann avogadro speed light'],
+  ['sig-figs', 'units', 'Significant figures', 'Count and round significant figures; scientific and engineering notation.', 'sig figs sigfig rounding notation scientific engineering uncertainty'],
+  ['scales', 'units', 'Temperature, pressure and energy scales', 'One value in every unit of the scale, side by side.', 'temperature pressure energy wavenumber kelvin celsius ev hartree cross table'],
 ].map(([id, cat, name, blurb, keys]) => ({ id, cat, name, blurb, keys }));
 
 export const BY_ID = Object.fromEntries(TOOLS.map(t => [t.id, t]));
