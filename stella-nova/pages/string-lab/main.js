@@ -55,7 +55,7 @@
 //    page API ............ "window.__strings"
 // ════════════════════════════════════════════════════════════════════════════
 
-import { StringSim, viewStepper, modalFrequencies, modalDecay, pluckCoefficients } from './engine/strings.js';
+import { StringSim, hMin, viewStepper, modalFrequencies, modalDecay, pluckCoefficients } from './engine/strings.js';
 import { INSTRUMENTS, stringParams, stoppedLength, noteName, freqToMidi, midiToFreq, TIME_SCALES } from './engine/instruments.js';
 import { AudioEngine, renderModal, renderSim, strumOffsets } from './engine/audio.js';
 import { CHORD_SHAPES, findShape, STANDARD } from './engine/chords.js';
@@ -97,6 +97,8 @@ const world = {
   bowMove: (i, pos) => { const s = world.sims[i]; if (s && s.bowing) s.bow({ ...s.bowing, pos }); },
 };
 
+const MIN_N = 16;
+
 function nominal() {
   const m = world.mods;
   return m.tension === 1 && m.gauge === 1 && m.damping === 1 && m.stiffness === 1;
@@ -111,6 +113,10 @@ function modParams(i, fret) {
   p.kappa *= m.gauge * m.stiffness;       // kappa^2 = E I / mu ~ d^2
   p.sigma0 *= m.damping;
   p.sigma1 *= m.damping;
+  // a very stiff, short string needs a coarse grid; below MIN_N points the
+  // scheme has too few modes to be useful, so the stiffness is capped there
+  const k = 1 / 44100, c = Math.sqrt(p.T / p.mu);
+  while (p.kappa > 1e-9 && p.L / hMin(c, p.kappa, p.sigma1, k) < MIN_N) p.kappa *= 0.85;
   return p;
 }
 
