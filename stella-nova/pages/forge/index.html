@@ -29,13 +29,15 @@
      clock.js    time rate, simulated clock
      clouds.js + shaders/clouds.wgsl  the evolving cloud deck and cirrus
      archetypes.js  new families, giant palettes   randomize.js  draws, locks, links
+     studio-core.js + studio.js   the Studio tab (batch renders to PNG)
      main.js     the GUI, camera, downloads   saver.js window.snSaver
 
    LAYOUT  (# marks an element id main.js binds to)
      #view (canvas) fills the window. #panel: a left column on a desktop,
      a bottom sheet above #dock on a phone (portrait) or a right drawer
      (landscape). Tabs: planet (presets, seed, randomize: #rMode #roll
-     #share #locks #mutAmt #mutate), shape, sky, maps. #mapView shows one map
+     #share #locks #mutAmt #mutate), shape, sky, maps, studio (studio.js
+     binds the #st* ids). #mapView shows one map
      large. #nogpu replaces the view without WebGPU (maps still work).
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -53,7 +55,7 @@
 <aside id="panel">
   <div id="sheetGrip"><span></span></div>
   <nav id="tabs">
-    <button data-tab="planet" class="on">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button>
+    <button data-tab="planet" class="on">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button><button data-tab="studio">Studio</button>
   </nav>
   <section data-pane="planet" class="on">
     <div class="seg" id="kind"><button data-kind="rocky" class="on">Rocky</button><button data-kind="gas">Gas giant</button></div>
@@ -90,10 +92,25 @@
     <div id="mapGrid" class="mapgrid"></div>
     <div class="row wrap"><button id="dlZip" class="primary">Download all (ZIP)</button><button id="dlJson">Recipe JSON</button><label class="file">Load JSON<input id="loadJson" type="file" accept=".json,application/json"></label></div>
   </section>
+  <section data-pane="studio">
+    <div class="seg small" id="stSource"><button data-src="random">Random</button><button data-src="variations">Variations</button><button data-src="list">From files</button></div>
+    <div class="row" id="stModeRow"><label for="stMode">Mode</label><select id="stMode"></select></div>
+    <div class="row" id="stCountRow"><label for="stCount">Count</label><input id="stCount" type="number" min="1" max="200" value="8"><label for="stSeed">Seed</label><input id="stSeed" type="number" min="0" step="1"></div>
+    <div class="ctl" id="stAmtRow"><label>variation amount <output id="oStAmt"></output></label><input id="stAmt" type="range" min="0.05" max="1" step="0.01" value="0.35"></div>
+    <div class="row" id="stFilesRow"><label class="file">Load recipes<input id="stFiles" type="file" accept=".json,application/json" multiple></label></div>
+    <h4>Render</h4>
+    <div class="row"><label for="stRes">Size</label><select id="stRes"></select><select id="stAspect" aria-label="Aspect"></select></div>
+    <div class="row"><label for="stFraming">Shot</label><select id="stFraming"></select><select id="stBg" aria-label="Background"></select></div>
+    <div class="toggles"><label><input id="stMatch" type="checkbox" checked> same shot for all</label></div>
+    <div class="row"><button id="stStart" class="primary">Render</button><button id="stCancel">Cancel</button></div>
+    <p class="note" id="stNote"></p>
+    <div id="stGallery" class="stgallery"></div>
+    <div class="row wrap"><button id="stZip">Download all (ZIP)</button><button id="stClear">Clear</button></div>
+  </section>
 </aside>
 
 <nav id="dock">
-  <button data-tab="planet">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button><button id="dockRate" title="Time rate">6 min</button><button id="dockDice" title="New seed">⟳</button>
+  <button data-tab="planet">Planet</button><button data-tab="shape">Shape</button><button data-tab="sky">Sky</button><button data-tab="maps">Maps</button><button data-tab="studio">Studio</button><button id="dockRate" title="Time rate">6 min</button><button id="dockDice" title="New seed">⟳</button>
 </nav>
 
 <div id="mapView" hidden><header><b id="mvTitle"></b><span id="mvNote"></span><button id="mvSave">Download PNG</button><button id="mvClose">Close</button></header><canvas id="mvCanvas"></canvas></div>

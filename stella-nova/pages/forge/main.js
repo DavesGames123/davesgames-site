@@ -31,6 +31,8 @@
 //  the sun and the exposure; view.lockSun (eyeball) keeps the sun on the
 //  planet's pole and stops the moving sun.
 //
+//  Studio tab: studio.js (createStudio in boot, after the device).
+//
 //  window.__forge exposes the state for saver.js (window.snSaver) and for
 //  debugging; adopt(P, M, W) shows a planet the saver generated ahead.
 //
@@ -51,6 +53,7 @@ import { encodePNG } from './png.js';
 import { createPool } from './pool.js';
 import { createRenderer, worldFrame } from './render.js';
 import * as RZ from './randomize.js';
+import { createStudio } from './studio.js';
 import * as BG from './budget.js';
 import * as CK from './clock.js';
 import './saver.js';
@@ -94,6 +97,7 @@ async function boot() {
     console.warn('forge: no WebGPU view:', e.message);
     device = null; R = null; $('nogpu').hidden = false;
   }
+  S.studio = createStudio({ $, device, loadText, ENV, getPlanet: () => S.P, open: P => { applyPlanet(PR.clone(P)); }, status, progress, save });
   addEventListener('resize', resize); resize();
   PHONE_Q.addEventListener('change', () => { ENV.mobile = phone(); resize(); });
   const linked = location.hash.length > 3 ? await RZ.readHash(location.hash) : null;
@@ -105,6 +109,7 @@ async function boot() {
 
 addEventListener('pagehide', () => {
   try { pool && pool.terminate(); } catch (e) {}
+  try { S.studio && S.studio.destroy(); } catch (e) {}
   try { R && R.destroy(); } catch (e) {}
   try { device && device.destroy(); } catch (e) {}
 });
