@@ -61,7 +61,7 @@ export async function createRenderer({ device, format, loadText }) {
   let dyn = null, cBind = null, cSetup = null, cHours = NaN, cFrame = 0;
   const vbuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const sMap = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'clamp-to-edge', maxAnisotropy: 8 });
-  let tex = {}, bind = null, P = null, shellR = 1.006, glow = [0, 0, 0];
+  let tex = {}, bind = null, P = null, shellR = 1.006, glow = [0, 0, 0], terr = [1, 0, 0, 0];
 
   function makeTex(w, h, srgb, data, mips) {
     const levels = mips ? mipChain(data, w, h) : [{ w, h, data }];
@@ -111,6 +111,9 @@ export async function createRenderer({ device, format, loadText }) {
       P = planet;
       shellR = 1 + Math.max(0.002, (P.kind === 'gas' ? 0.004 : P.clouds.height || 0.006));
       const info = upload(M, env);
+      // cast shadows (planet.wgsl terrainShadow): relief in radii, scaled
+      // like the normal map (bump / 2, at least 1), first step 1.5 texels
+      terr = P.kind !== 'gas' && M.reliefKm > 0 ? [M.reliefKm / P.radiusKm * Math.max(1, (P.bump ?? 3) / 2), 1, 1.5 * Math.PI / (info.gpuW / 2), 0] : [1, 0, 0, 0];
       glow = M.stats && M.stats.meanEmis ? M.stats.meanEmis.map(v => v * (P.atmo.glow ?? 0)) : [0, 0, 0];
       R.setAtmo(P, M.stats ? M.stats.meanAlbedo : 0.3);
       return info;
@@ -118,7 +121,7 @@ export async function createRenderer({ device, format, loadText }) {
     setAtmo(planet, ground = 0.3) { P = planet; atmo.update(P.atmo, Math.min(0.9, ground), glow); },
     render(cam, target) {
       if (!bind) return;
-      device.queue.writeBuffer(vbuf, 0, packView(cam, P, shellR));
+      device.queue.writeBuffer(vbuf, 0, packView(cam, P, shellR, terr));
       const enc = device.createCommandEncoder();
       // the cloud map follows the simulated hour; phones refresh it every
       // third frame and tablets every second (the solid drift stays smooth)
@@ -162,7 +165,7 @@ export function worldFrame(v, tiltDeg, spin) {
   return [x, y * ct - z * st, y * st + z * ct];
 }
 
-export function packView(cam, P, shellR) {
+export function packView(cam, P, shellR, terr = [1, 0, 0, 0]) {
   const tilt = P ? P.tilt : 0;
   const fwdW = norm(sub(cam.target || [0, 0, 0], cam.pos));
   const rightW = norm(cross(fwdW, cam.up || [0, 1, 0]));
@@ -194,5 +197,7 @@ export function packView(cam, P, shellR) {
     sw[0], sw[1], sw[2], cam.starGain ?? 1,
     // cloud layers: the slow solid drift as a u offset, cirrus opacity, deck opacity max
     -(DECK_RATE * hrs) / (2 * Math.PI) % 1, -(CIRRUS_RATE * hrs) / (2 * Math.PI) % 1, P && P.kind === 'gas' ? 0.35 : 0.55, CLOUD_MAX,
+    // cast shadows of the relief: relief (radii), on, first step (rad), 0
+    terr[0], terr[1], terr[2], terr[3],
   ]);
 }

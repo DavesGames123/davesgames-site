@@ -255,6 +255,26 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('lava: every family member keeps a sooty sky', L.every(a => a.mie.every((m, i) => m / (m + a.mieAbs[i]) < 0.35) && a.glow > 0.5));
 }
 
+// rust worlds have real relief: basins, shields and canyons (geology.js)
+// span many km, and each member draws basins
+{
+  const R = await import('./rocky.js');
+  let basins = 0, withShield = 0, withCanyon = 0; const ranges = [];
+  for (let s = 1; s <= 8; s++) {
+    const P = PR.fromPreset('rust', s), ctx = R.prepareRocky(P), G = ctx.geo;
+    basins += G.basins.length; if (G.shields.length) withShield++; if (G.canyon) withCanyon++;
+    let lo = 9, hi = -9;
+    for (const S of G.shields) { const h = ctx.heightAt(S.c); hi = Math.max(hi, h); }
+    if (G.canyon) for (const sg of G.canyon.segs.slice(0, 40)) lo = Math.min(lo, ctx.heightAt(sg.m));
+    for (const B of G.basins) lo = Math.min(lo, ctx.heightAt(B.c));
+    ranges.push(((hi > -9 ? hi : 0.5) - lo) * P.relief);
+  }
+  ok('rust: every member has 1-4 impact basins; shields and rifts appear in the family', basins >= 8 && basins <= 32 && withShield >= 3 && withCanyon >= 2, `${basins} basins in 8 seeds, ${withShield} with shields, ${withCanyon} with a rift`);
+  ok('rust: landform relief spans km (shield top to basin or canyon floor >= 6 km in most members)', ranges.filter(r => r >= 6).length >= 6, ranges.map(r => r.toFixed(1)).join(' ') + ' km');
+  const E = R.prepareRocky(PR.fromPreset('earth'));
+  ok('rust: geology stays off on other presets', !E.geo.on && !R.prepareRocky(PR.fromPreset('moon')).geo.on);
+}
+
 // lava rivers and lineae stay continuous: the river channel field
 // (maps.js channels) forms long connected channels, also when the map is
 // wider than the erosion grid, and the glowing lineae do not break into dots

@@ -9,7 +9,8 @@
 //    2. surface: PBR from the maps (GGX specular + Lambert, F0 = 0.08 s),
 //       normal mapping in the east/north/up frame, AO, emissive (city
 //       lights only at night), sun through the transmittance LUT, cloud
-//       shadows (the sun ray meets the cloud shell), ring shadows
+//       shadows (the sun ray meets the cloud shell), ring shadows, cast
+//       shadows of the relief at a low sun (rocky worlds, fn terrainShadow)
 //    3. clouds: the shell over the surface. One deck and one cirrus layer
 //       from the evolving cloud map (clouds.wgsl, tDyn), sampled once each
 //       (the old two-phase flow map drew every cloud twice). Lit by the
@@ -26,7 +27,7 @@
 //  uniform control flow and wrapped at the date line (no seam line).
 //
 //  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface",
-//  "fn cloudsAt", "fn cloudShadow", "fn atmosphere", "fn ringAt", "@fragment"
+//  "fn cloudsAt", "fn cloudShadow", "fn terrainShadow", "fn atmosphere", "fn ringAt", "@fragment"
 // ============================================================================
 
 struct View {
@@ -45,6 +46,7 @@ struct View {
   bw2: vec4f,       // xyz row 2, w quality (0 phone, 1 tablet, 2 desktop)
   sunW: vec4f,      // xyz sun direction (world frame), w star gain
   cloud2: vec4f,    // x deck u offset, y cirrus u offset (the slow solid drift), z cirrus opacity, w deck opacity max
+  terr: vec4f,      // x relief (radii) x 0..1 height, y cast shadows on, z first march step (rad), w 0
 }
 
 @group(0) @binding(0) var<uniform> V: View;
@@ -160,6 +162,35 @@ fn cloudShadow(p: vec3f) -> f32 {
   return (1.0 - 0.85 * cloudOpacity(c.x) / max(V.cloud2.w, 1e-3)) * (1.0 - 0.3 * c.y * V.cloud2.z);
 }
 
+// Cast shadows of the relief on rocky worlds. From p the march goes toward
+// the sun over the height map (the normal map alpha, 8 bits); the sun ray
+// rises s tan(e) and the ground falls away s^2 / 2 (curvature), both in
+// radii, so a low sun lays long shadows behind ridges, rims and shields.
+// The band of -0.012..-0.002 (about 1..3 height steps) hides the 8-bit
+// steps. Steps: 10 on a phone, 14 on a tablet, 18 on a desktop.
+fn terrainShadow(p: vec3f, uv: vec2f) -> f32 {
+  if (V.terr.y < 0.5) { return 1.0; }
+  let up = normalize(p);
+  let L = V.sun.xyz;
+  let mu = dot(up, L);
+  if (mu <= -0.02 || mu > 0.45) { return 1.0; }
+  let t = normalize(L - up * mu + vec3f(1e-6, 0.0, 0.0));
+  let tanE = max(mu, 0.0) / sqrt(max(1.0 - mu * mu, 1e-6));
+  let h0 = textureSampleLevel(tNormal, sMap, uv, 0.0).a;
+  let n = 10 + 4 * i32(V.bw2.w);
+  var s = V.terr.z;
+  var lit = 1.0;
+  for (var i = 0; i < 18; i++) {
+    if (i >= n) { break; }
+    let q = normalize(up + t * s);
+    let h = textureSampleLevel(tNormal, sMap, dirUV(q), 0.0).a;
+    let ray = h0 + (s * tanE + 0.5 * s * s) / V.terr.x;
+    lit = min(lit, smoothstep(-0.012, -0.002, ray - h));
+    s *= 1.32;
+  }
+  return mix(1.0, lit, smoothstep(0.45, 0.3, mu));
+}
+
 // Sky irradiance on the ground (a cheap fit: scattered sun over one scale
 // height plus the multiple-scattering term), for the ambient light.
 fn skyIrradiance(p: vec3f) -> vec3f {
@@ -218,7 +249,7 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   let rough = clamp(mat.g, 0.03, 1.0);
   let metal = mat.b;
   let f0 = mix(vec3f(0.08 * mat.a), alb, metal);
-  let light = sunLight(p) * cloudShadow(p) * ringShadow(p) * A.radii.w;
+  let light = sunLight(p) * cloudShadow(p) * ringShadow(p) * terrainShadow(p, uv) * A.radii.w;
   let nl = max(dot(n, L), 0.0) * smoothstep(-0.05, 0.05, dot(up, L));
   let fd = (1.0 - f0) * (1.0 - metal) * alb / PI;
   var col = (fd + ggx(n, v, L, rough, f0)) * light * nl;

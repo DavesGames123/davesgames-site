@@ -53,6 +53,7 @@
 // ============================================================================
 import { fbm, fbmEroded, ridged, warp, simplex3, worley3, mulberry, onSphere, fibonacci, clamp, mix, smooth, texelAngle } from './noise.js';
 import { cloudSetup, cyclones, cloudField } from './clouds.js';
+import { buildGeology, geologyHeight, geologyColour, geologyProbes } from './geology.js';
 
 // Linear sRGB-ish biome colours (sRGB triples) and their (T °C, M) centres.
 const BIOMES = [
@@ -117,6 +118,8 @@ export function prepareRocky(P) {
   ctx.craterUPK = 2 / Math.max(P.relief, 0.5);
   ctx.craters = buildCraters(P, S(21));
   ctx.volcs = buildVolcanoes(P, S(22));
+  // large landforms of dry worlds (geology.js; off unless P.features asks)
+  ctx.geo = buildGeology(P, S(23), ctx.craters, ctx.craterUPK);
   // height range and sea level over Fibonacci points
   const N = 6000, pts = fibonacci(N), hs = new Float64Array(N), st = {};
   const p = [0, 0, 0];
@@ -124,7 +127,11 @@ export function prepareRocky(P) {
   for (let i = 0; i < N; i++) { p[0] = pts[i * 3]; p[1] = pts[i * 3 + 1]; p[2] = pts[i * 3 + 2]; heightCore(ctx, p, st); hs[i] = st.h; }
   hs.sort();
   const q = f => hs[Math.min(N - 1, Math.max(0, Math.round(f * (N - 1))))];
-  const lo = q(0), hi = q(1), pad = (hi - lo) * 0.08 + 1e-6;
+  let lo = q(0), hi = q(1);
+  // small, tall landforms (shield summits, canyon floors) can fall between
+  // the Fibonacci points: sample them directly so they are not clipped
+  for (const pt of geologyProbes(ctx.geo)) { heightCore(ctx, pt, st); lo = Math.min(lo, st.h); hi = Math.max(hi, st.h); }
+  const pad = (hi - lo) * 0.08 + 1e-6;
   ctx.hMin = lo - pad; ctx.hMax = hi + pad;
   ctx.seaH = P.ocean.level > 0 ? q(P.ocean.level) : ctx.hMin - 1;
   // the datum of the lapse rate: the sea, or the median height when dry
@@ -351,12 +358,19 @@ function heightCore(ctx, p, st) {
   h += P.mountains.amp * mmask * r;
   st.mtn = mmask * r; st.mmask = mmask; st.c = c; st.uplift = uplift; st.rift = rift;
   // terraces (mesas and benches of flat-lying layers): flat treads, steep risers
+  st.riser = 0;
   if (P.terrain.terraces > 0) {
     const n = 7 + 5 * P.terrain.terraces, q = h * n + 0.3 * simplex3(p[0] * 5, p[1] * 5, p[2] * 5, ctx.sVar + 5), f = Math.floor(q);
-    h = mix(h, (f + smooth(0.55, 0.85, q - f)) / n, P.terrain.terraces);
+    const sr = smooth(0.55, 0.85, q - f);
+    h = mix(h, (f + sr) / n, P.terrain.terraces);
+    st.riser = 4 * sr * (1 - sr) * P.terrain.terraces;
   }
+  // basins, shields, the canyon, caps (geology.js); their floors are smooth
+  let calm = 1;
+  if (ctx.geo.on) { h += geologyHeight(ctx.geo, p, st); calm = 1 - 0.7 * st.basinFloor - 0.5 * st.cFloor; }
+  else { st.basinFloor = 0; st.shield = 0; st.summit = 0; st.flows = 0; st.cFloor = 0; st.cWall = 0; st.streak = 0; st.capIce = 0; st.capTrough = 0; }
   const e = P.erosion.detail > 0 ? fbmEroded(p, ctx.eroO, ctx.sEro, P.erosion.strength) : 0;
-  h += P.erosion.detail * e * (0.35 + mmask);
+  h += P.erosion.detail * e * (0.35 + mmask) * calm;
   // dunes: crests across a seeded wind, bent by low noise, only in dry basins
   st.dune = 0;
   if (P.dunes.amount > 0) {
@@ -508,6 +522,8 @@ function sampleRocky(ctx, p, out) {
       _col[0] = _bar[0]; _col[1] = _bar[1]; _col[2] = _bar[2];
       if (P.dunes.amount > 0) { mixIn(_col, pal.bright, st.dune * 0.35); rough = mix(rough, 0.95, smooth(0, 0.3, st.dune)); }
     }
+    // landforms: provinces, basin plains, shields, canyon floors, strata, streaks
+    if (ctx.geo.on) geologyColour(ctx.geo, p, st, pal, _col, hn);
     // maria, craters, rays
     if (st.maria > 0) mixIn(_col, pal.dark, st.maria * 0.85);
     // fresh craters are bright (unweathered rock), their blankets less so;
@@ -532,6 +548,8 @@ function sampleRocky(ctx, p, out) {
     // snow: only the potential from temperature (latitude, altitude by the
     // lapse rate). maps.js finish lays it where the slope holds it.
     if (T < P.climate.iceC + 6) out.snow = smooth(P.climate.iceC + 2, P.climate.iceC - 5, T + 4 * vary);
+    // structured polar caps replace the temperature caps (geology.js)
+    if (ctx.geo.caps) out.snow = st.capIce;
     // city lights at night: temperate, wet, lowland, clustered near coasts
     if (P.climate.cities > 0 && P.climate.life > 0) {
       const hab = smooth(-2, 8, T) * smooth(32, 24, T) * smooth(0.12, 0.35, M) * smooth(2.5, 0.2, hk) * smooth(0.4, 0.1, st.mtn);

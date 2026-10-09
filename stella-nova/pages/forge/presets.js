@@ -44,7 +44,7 @@ export const ATMO = {
   earth: { on: 1, radiusKm: 6360, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [3.996, 3.996, 3.996], mieAbs: [4.4, 4.4, 4.4], mieH: 1.2, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.3, clarity: 0.45 },
   // rust world: a thin CO2 sky lit mostly by iron-oxide dust that absorbs
   // blue (butterscotch noon); the family varies the dust load and tint
-  rust: { on: 1, radiusKm: 3390, heightKm: 80, rayleigh: [0.19, 0.42, 1.0], rayleighH: 11, mie: [16, 13, 10], mieAbs: [2, 4.5, 9], mieH: 9, mieG: 0.72, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25 },
+  rust: { on: 1, radiusKm: 3390, heightKm: 80, rayleigh: [0.19, 0.42, 1.0], rayleighH: 11, mie: [16, 13, 10], mieAbs: [2, 4.5, 9], mieH: 9, mieG: 0.72, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25 , clarity: 0.6 },
   // dusty orange desert sky
   dust: { on: 1, radiusKm: 6000, heightKm: 100, rayleigh: [4.2, 9.8, 23.9], rayleighH: 8, mie: [14, 11.5, 8.5], mieAbs: [3, 5, 9], mieH: 2.6, mieG: 0.78, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.4 },
   // thin, pale blue sky of a frozen world
@@ -82,6 +82,7 @@ export const ROCKY_DEFAULT = {
   ocean: { level: 0.6, liquid: 0 },   // liquid: 0 water, 1 lava, 2 methane
   climate: { equatorC: 28, poleC: -28, lapse: 6.5, moisture: 0.55, life: 1, iceC: -12, cities: 0 },
   rivers: { amount: 0 },
+  features: { basins: 0, shields: 0, canyon: 0, streaks: 0, provinces: 0, caps: 0, layers: 0 },
   dunes: { amount: 0, freq: 40 },
   cracks: { amount: 0, freq: 2.5, glow: 0 },
   volcanoes: { count: 0, glow: 0 },
@@ -145,7 +146,12 @@ export const PRESETS = [
         climate: { equatorC: F.u(-40, 0), poleC: F.u(-130, -80), iceC: -110 + 40 * cold },
         relief: F.u(10, 26), radiusKm: F.u(2400, 5400), tilt: F.u(0, 40),
         palette: { low: b, high: sh(1.15, 0.04), rock: sh(0.7), dark: sh(0.45), bright: sh(1.28, 0.1), accent: sh(0.8), ice: F.tint([0.94, 0.92, 0.9], 0.04) },
-        atmo: { density: F.u(0.4, 1.2), mie: ATMO.rust.mie.map(v => v * dust), mieAbs: base[1] < 0.3 ? [2, 6.5, 12] : [2, 4.5, 9] } };
+        atmo: { density: F.u(0.4, 1.2), mie: ATMO.rust.mie.map(v => v * dust), mieAbs: base[1] < 0.3 ? [2, 6.5, 12] : [2, 4.5, 9] },
+        // large landforms (geology.js), drawn after the old dice so older
+        // members keep their other keys
+        features: { basins: F.i(1, 4), shields: F.u(0, 1) < 0.7 ? F.i(1, 5) : 0, canyon: F.u(0, 1) < 0.6 ? F.u(0.5, 1) : 0,
+          streaks: F.u(0.4, 1), provinces: F.u(0.5, 0.9), caps: F.u(0.5, 1), layers: F.u(0.3, 0.8) },
+        bump: F.u(4, 5.5) };
     } },
   { id: 'moon', name: 'Moon-like', kind: 'rocky', seed: 1969, blurb: 'an airless body: power-law crater fields with rims, ejecta and rays, dark maria; each seed sets the age, the maria and the tint',
     p: { terrain: { amp: 0.25, octaves: 6, warp: 0.2 }, plates: { count: 0 }, mountains: { amp: 0.05 }, erosion: { strength: 0.3, detail: 0.08 },
@@ -341,6 +347,13 @@ export const SCHEMA = {
     ['Surface', 'cracks.amount', 'cracks and lineae', 0, 1.5, 0.01],
     ['Surface', 'cracks.freq', 'crack frequency', 0.5, 8, 0.05],
     ['Surface', 'cracks.glow', 'crack glow', 0, 2, 0.01],
+    ['Geology', 'features.basins', 'impact basins', 0, 6, 1],
+    ['Geology', 'features.shields', 'volcanic shields', 0, 8, 1],
+    ['Geology', 'features.canyon', 'rift canyon', 0, 1, 0.01],
+    ['Geology', 'features.streaks', 'wind streaks', 0, 1, 0.01],
+    ['Geology', 'features.provinces', 'dust provinces', 0, 1, 0.01],
+    ['Geology', 'features.caps', 'layered polar caps', 0, 1, 0.01],
+    ['Geology', 'features.layers', 'strata on risers', 0, 1, 0.01],
     ['Surface', 'volcanoes.count', 'volcanic calderas', 0, 200, 1],
     ['Surface', 'volcanoes.glow', 'vent glow', 0, 2, 0.01],
     ['Climate', 'climate.equatorC', 'equator °C', -200, 500, 1],
