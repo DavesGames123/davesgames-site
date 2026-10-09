@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Legged Robot Gym — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   LEGGED ROBOT GYM  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A playground for unitreerobotics/unitree_rl_gym. MuJoCo WASM runs the
+   upstream robot MJCF, and the upstream pretrained policies (converted
+   by tools/legged-rl/convert.py) drive the joints with the same loop as
+   deploy/deploy_mujoco/deploy_mujoco.py. robot.js and policy.js have no
+   DOM (tests.mjs runs them in node). scene.js draws, main.js binds.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. fonts, style.css, lib/sci.css
+     3. importmap for three r160, then main.js as a module. main.js loads
+        MuJoCo WASM and one robot at a time, when it is needed.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (robot, drive, show, learn), #anaPanel
+                 at the right (observation, action, joint plot, rewards).
+                 #read is the readout, #pad the joystick.
+     phone ..... #dock at the base: five tabs and play. A tab opens #panel
+                 with only its .grp, as a bottom sheet (portrait) or a
+                 drawer (landscape). The data group moves into #panel.
+
+   GREP MAP  (main.js)
+     grep -n 'async function setRobot'  load a robot and build its view
+     grep -n 'function stepSim'         the fixed-step loop, slow motion
+     grep -n 'function drawObs'         observation and action bars
+     grep -n 'function drawJoint'       joint target / position / torque plot
+     grep -n 'function pushDrag'        drag to push
+     grep -n 'window.snSaver'           the screensaver director
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Play with the unitree_rl_gym walking policies in the browser: MuJoCo WASM runs the Unitree G1, H1 and H1-2 humanoids with their pretrained PPO policies, as in the repository's sim2sim step. Drive them with a joystick, push them, and watch the observation, the actions, the joint torques and the reward terms.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Legged Robot Gym</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">drive: W A S D or the pad · Q E strafe · drag the robot to push it · drag the floor to orbit</div>
+  <div id="loading" class="loading"><b>Loading MuJoCo</b><span id="loadMsg">physics engine, 2.5 MB</span><i><em id="loadBar"></em></i></div>
+  <div id="fallen" class="fallen" hidden><b>The robot fell.</b><span>It resets in 2 s, or press R.</span></div>
+  <div id="pad" class="pad" aria-label="Velocity joystick" role="application"><div class="ring"></div><div class="knob" id="knob"></div><span class="pl t">fwd</span><span class="pl l" id="padL">turn</span></div>
+  <button id="anaOpen" type="button" hidden>∑ Data</button>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the robots cannot render.</div>
+<div id="nowasm" hidden>WebAssembly could not start here, so MuJoCo cannot run.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="robot">
+    <div class="sec-label first">Robot</div>
+    <div id="variants"></div>
+    <div id="engInfo">
+      <h1 id="engTitle">G1</h1>
+      <div class="kind" id="engKind"></div>
+      <p class="lede" id="engLede"></p>
+    </div>
+    <div class="sec-label">Upstream config</div>
+    <table class="readout" id="cfgTable"></table>
+    <p class="note">From <code>deploy/deploy_mujoco/configs/</code> in the repository. The loop on this page uses these numbers unchanged.</p>
+  </section>
+
+  <section class="grp" data-grp="drive">
+    <div class="sec-label first">Command</div>
+    <div class="row"><label for="cvx"><span class="m1">v<sub>x</sub></span></label><input type="range" id="cvx" min="-1" max="1" step="0.05" value="0.5"><span class="val" id="cvxV"></span></div>
+    <div class="row"><label for="cvy"><span class="m2">v<sub>y</sub></span></label><input type="range" id="cvy" min="-1" max="1" step="0.05" value="0"><span class="val" id="cvyV"></span></div>
+    <div class="row"><label for="cwz"><span class="m3">ω<sub>z</sub></span></label><input type="range" id="cwz" min="-1" max="1" step="0.05" value="0"><span class="val" id="cwzV"></span></div>
+    <div class="grid3" id="presets">
+      <button data-cmd="0,0,0" type="button">Stand</button>
+      <button data-cmd="0.5,0,0" type="button">Walk</button>
+      <button data-cmd="1,0,0" type="button">Fast</button>
+      <button data-cmd="0,0,0.9" type="button">Turn</button>
+      <button data-cmd="0,0.4,0" type="button">Strafe</button>
+      <button data-cmd="-0.4,0,0" type="button">Back</button>
+    </div>
+    <button class="tog wide" id="tStrafe" type="button">Pad sideways = strafe</button>
+    <p class="note">The training range is ±1 m/s and ±1 rad/s. Keys: W S speed, A D turn, Q E strafe, space stop, R reset, P pause, . step.</p>
+    <div class="sec-label">Push</div>
+    <div class="grid2" id="pushes">
+      <button data-push="0,1" type="button">← from the right</button>
+      <button data-push="0,-1" type="button">from the left →</button>
+      <button data-push="1,0" type="button">↑ from behind</button>
+      <button data-push="-1,0" type="button">↓ from the front</button>
+    </div>
+    <div class="row"><label for="pushK">Size</label><input type="range" id="pushK" min="0.2" max="1.5" step="0.05" value="0.7"><span class="val" id="pushKV"></span></div>
+    <p class="note">A push adds a base velocity, as training does (max_push_vel_xy: 1.5 m/s for the humanoids). Or drag from the robot.</p>
+    <div class="sec-label">Time</div>
+    <div class="grid3" id="speeds">
+      <button data-speed="1" type="button">1×</button>
+      <button data-speed="0.5" type="button">½×</button>
+      <button data-speed="0.2" type="button">⅕×</button>
+    </div>
+    <div class="toggles">
+      <button class="tog" id="bPause" type="button">❚❚ Pause</button>
+      <button class="tog" id="bStep" type="button">Step 20 ms</button>
+      <button class="tog" id="bReset" type="button">↺ Reset</button>
+    </div>
+    <div class="sec-label">Domain randomization</div>
+    <div class="row"><label for="fric">Friction</label><input type="range" id="fric" min="0.1" max="1.25" step="0.05" value="1"><span class="val" id="fricV"></span></div>
+    <div class="row"><label for="mass">Payload</label><input type="range" id="mass" min="-1" max="3" step="0.25" value="0"><span class="val" id="massV"></span></div>
+    <button class="tog wide" id="bRand" type="button">Draw like training</button>
+    <p class="note" id="drNote"></p>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label first">Camera</div>
+    <div class="grid2" id="views">
+      <button data-view="chase" type="button">Chase</button>
+      <button data-view="side" type="button">Side</button>
+      <button data-view="front" type="button">Front</button>
+      <button data-view="top" type="button">Above</button>
+    </div>
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tFollow" type="button">Follow</button>
+      <button class="tog on" id="tFeet" type="button">Footprints</button>
+      <button class="tog" id="tXray" type="button">X-ray torques</button>
+      <button class="tog on" id="tShadow" type="button">Shadows</button>
+    </div>
+    <p class="note">X-ray: each joint glows with |τ| over its torque limit.</p>
+  </section>
+
+  <section class="grp" data-grp="learn">
+    <div class="sec-label first">How the policy was made</div>
+    <div class="about" id="learn">
+      <p><a href="https://github.com/unitreerobotics/unitree_rl_gym" target="_blank" rel="noopener">unitree_rl_gym</a> trains a walking policy in <b>Isaac Gym</b> with thousands of robots at once (<code>num_envs = 4096</code>), then checks it in <b>MuJoCo</b>, then runs it on the real robot. Isaac Gym needs an NVIDIA GPU, so this page runs only the second step: the policy you see was trained by Unitree, and MuJoCo WASM runs it here.</p>
+      <p><b>The loop.</b> MuJoCo steps every 2 ms. Every 10 steps (50 Hz) the policy reads the observation and sets new joint targets. A PD law turns the targets into torques:</p>
+      <div class="sci-eq" data-tex="\tau = K_p\,(q^{*} - q) - K_d\,\dot q,\qquad q^{*} = q_0 + 0.25\,a"></div>
+      <p><b>The observation</b> is 47 numbers (41 for H1): body rate, gravity in the body frame, the command, joint angles and speeds, the last action, and a clock (sin and cos of the gait phase, period 0.8 s).</p>
+      <p><b>The network</b> is small: an LSTM with 64 units, then 32 ELU units, then one output per leg joint. The LSTM state carries memory between steps, so the policy can sense slip and pushes over time.</p>
+      <p><b>PPO</b> (<a href="https://github.com/leggedrobotics/rsl_rl" target="_blank" rel="noopener">rsl_rl</a>) collects 24 steps from every robot, then makes 5 passes of updates that keep the new policy close to the old one:</p>
+      <div class="sci-eq" data-tex="L(\theta) = \mathbb{E}\Big[\min\big(\rho_t A_t,\ \operatorname{clip}(\rho_t, 1-\epsilon, 1+\epsilon)\,A_t\big)\Big],\quad \rho_t = \frac{\pi_\theta(a_t\mid o_t)}{\pi_{\text{old}}(a_t\mid o_t)}"></div>
+      <p>with ε = 0.2, γ = 0.99, λ = 0.95 (GAE) and an adaptive learning rate that holds the KL step near 0.01.</p>
+      <p><b>The reward</b> is a sum of weighted terms, each times dt = 0.02 s. The Data panel shows every term of the chosen robot live. The two main ones track the command:</p>
+      <div class="sci-eq" data-tex="r_{\text{lin}} = \exp\!\Big(-\frac{\lVert \mathbf v^{*}_{xy} - \mathbf v_{xy}\rVert^2}{\sigma}\Big),\qquad r_{\text{yaw}} = \exp\!\Big(-\frac{(\omega^{*}_z - \omega_z)^2}{\sigma}\Big),\quad \sigma = 0.25"></div>
+      <p>Negative totals are clipped to zero (<code>only_positive_rewards</code>), so early falls do not teach the robot to end the episode.</p>
+      <p><b>Domain randomization.</b> Each training robot gets a random floor friction (0.1 to 1.25 for the humanoids), a random payload on the pelvis (−1 to +3 kg) and a velocity push every 5 s (up to 1.5 m/s). A policy that works on all of them has a good chance to work on the real robot.</p>
+      <p><b>Curriculum.</b> legged_gym can make terrain harder as the robots improve (<code>terrain.curriculum</code>), but the shipped configs use a flat plane, so the curriculum is off and these policies only know flat ground.</p>
+      <p><b>Sim2sim, then sim2real.</b> A policy that only works in Isaac Gym has learned the simulator, not walking. Running it in a second engine (MuJoCo, this page) is a cheap test. <code>deploy/deploy_real</code> then runs the same network on the robot over DDS. This page does not do that step.</p>
+      <p class="fine">Go2: the repository trains a Go2 policy but ships no pretrained Go2 weights, so the Go2 here walks with a scripted trot (sine joint targets on the same PD loop), not a policy. Robots, policies and configs: BSD-3-Clause, Unitree Robotics. MuJoCo: Apache-2.0. Sources and conversion: <a href="../../vendor/unitree_rl_gym/CREDITS.md" target="_blank" rel="noopener">CREDITS.md</a>.</p>
+    </div>
+  </section>
+
+  <section class="grp ana" data-grp="data" id="anaSec">
+    <div class="sec-label first">Observation in <span class="dimt" id="obsN"></span></div>
+    <canvas id="obsPlot" class="plot obs"></canvas>
+    <div class="sec-label">Action out <span class="dimt">joint target offsets</span></div>
+    <canvas id="actPlot" class="plot act"></canvas>
+    <div class="sec-label">Joint</div>
+    <select id="jointSel" class="sel"></select>
+    <canvas id="jointPlot" class="plot jnt"></canvas>
+    <div class="legend"><span class="lq"><i></i>q</span><span class="lt"><i></i>q* target</span><span class="lu"><i></i>τ torque</span></div>
+    <div class="sec-label">Reward terms <span class="dimt">per control step</span></div>
+    <table class="readout" id="rewTable"></table>
+    <p class="note">Scale and formula from <code>legged_gym/envs/&lt;robot&gt;</code>. Reward = raw × scale × 0.02 s. Here the terms are only a readout: the policy does not learn on this page.</p>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Data">
+  <button id="anaClose" type="button" aria-label="Close the data panel">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="robot" type="button"><i>◎</i><span>Robot</span></button>
+  <button class="tab" data-grp="drive" type="button"><i>✥</i><span>Drive</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="data" type="button"><i>∑</i><span>Data</span></button>
+  <button class="tab" data-grp="learn" type="button"><i>¶</i><span>Learn</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

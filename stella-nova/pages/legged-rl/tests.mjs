@@ -104,5 +104,20 @@ for (const key of ORDER) {
   S.dispose();
 }
 
+section('page boot: main.js in node with DOM stand-ins and a stand-in renderer');
+{
+  const { boot } = await import('./stub-boot.mjs');
+  const r = await boot({ frames: 300 });
+  const G = r.G;
+  console.log(`  robot ${G.key}  sim t ${G.S.t.toFixed(2)} s after 300 frames  meshes ${G.rv.meshes.length}  renders ${G.view.renderer.renders}  errors ${r.errors.length}`);
+  ok(r.errors.length === 0, 'boot errors: ' + r.errors.slice(0, 3).join(' | '));
+  ok(G.key === 'g1' && Math.abs(G.S.t - 5) < 0.1, `5 s of sim in 300 frames: ${G.S.t}`);
+  ok(/G1/.test(r.get('read').innerHTML) && r.get('rewTable').innerHTML.includes('tracking lin vel'), 'readout and reward table filled');
+  for (const k of ['go2', 'h1_2']) { await G.setRobot(k); await r.step(60); ok(G.key === k && G.view.robots.length === 1 && G.S.t > 0.9, `swap to ${k}: one robot in the view`); }
+  r.win.__lrl.S.push(0, 0.8); await r.step(30);
+  ok(r.errors.length === 0, 'no errors after swaps and a push');
+  console.log(`  swaps g1 -> go2 -> h1_2: robots in view ${G.view.robots.length}, errors ${r.errors.length}`);
+}
+
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);
