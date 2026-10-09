@@ -34,6 +34,7 @@
 //           "export function imagePalette"  "export function toJSON"
 //           "export function fromJSON"  "export function toText"
 //           "export function toSVG"  "export function renderRGBA"
+//           "export function hairline"
 // ============================================================================
 
 export const Q = 100;            // integer units per unit of optical density
@@ -355,6 +356,30 @@ export function imagePalette(rgba, res, n, opts = {}) {
   return out;
 }
 
+// ── the drawn line ─────────────────────────────────────────────────────────
+/**
+ * How to draw one thread line so that the picture shows what the model
+ * scored. The model darkens a model pixel by a (the opacity) per line. A
+ * drawn line of width w device px and opacity q covers w / k of a model
+ * pixel that is k device px wide, so the mean darkening is q * w / k.
+ * The two agree when q * w = a * k ("cover").
+ *
+ * The line is a hairline: w = HAIR_MIN device px, or wider only when q
+ * would go above HAIR_QMAX. So a line is thin and dark, and the image
+ * forms from line density. kFit is k at zoom 1. A zoom makes the line a
+ * little wider (zoom^0.3, max HAIR_MAX), so a close-up shows hairlines
+ * with paper between them, not wide bands.
+ * opts: { zoom = 1, scale = 1 (the page width slider) }. Returns { w, q }.
+ */
+export const HAIR_MIN = 0.35, HAIR_QMAX = 0.95, HAIR_MAX = 1.6;
+export function hairline(alpha, kFit, opts = {}) {
+  const scale = opts.scale ?? 1, zoom = Math.max(1, opts.zoom ?? 1);
+  const cover = Math.max(1e-6, alpha * kFit);
+  const w = Math.max(HAIR_MIN * scale, cover / HAIR_QMAX);
+  const q = Math.min(1, cover / w);
+  return { w: Math.min(Math.max(w, HAIR_MAX), w * Math.pow(zoom, 0.3)), q };
+}
+
 // ── exports ────────────────────────────────────────────────────────────────
 export const hex = c => '#' + c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
 export const unhex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
@@ -425,7 +450,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 export function toSVG(run, opts = {}) {
   const cfg = run.cfg, size = opts.size || 1000, s = size / (run.res - 1 || 1);
   const pad = Math.round(size * 0.03), W = size + 2 * pad;
-  const width = ((opts.width || 1) * size) / run.res;
+  const hl = hairline(cfg.alpha, size / run.res, { scale: opts.width || 1 }), width = hl.w;
   const page = cfg.dark ? '#000000' : '#ffffff', blend = cfg.dark ? 'screen' : 'multiply';
   const X = i => (pad + run.pegs.x[i] * s).toFixed(2), Y = i => (pad + run.pegs.y[i] * s).toFixed(2);
   const parts = [`<?xml version="1.0" encoding="UTF-8"?>`,
@@ -433,7 +458,7 @@ export function toSVG(run, opts = {}) {
     `<title>${esc(opts.title || 'Thread art')}</title>`,
     `<desc>${esc(`${cfg.shape} frame, ${run.P} pegs, ${run.lines.length} lines, seed ${cfg.seed >>> 0}. davesgames.io thread-art.`)}</desc>`,
     `<rect width="${W}" height="${W}" fill="${cfg.dark ? '#000000' : '#ffffff'}"/>`];
-  const groups = cfg.colors.map((c, k) => [`<g stroke="${hex(c)}" stroke-opacity="${cfg.alpha}" stroke-width="${width.toFixed(3)}" stroke-linecap="round" style="mix-blend-mode:${blend}" data-thread="${k + 1}">`]);
+  const groups = cfg.colors.map((c, k) => [`<g stroke="${hex(c)}" stroke-opacity="${hl.q.toFixed(3)}" stroke-width="${width.toFixed(3)}" stroke-linecap="round" style="mix-blend-mode:${blend}" data-thread="${k + 1}">`]);
   // Lines go in their build order; a group per thread keeps the file small.
   // Order matters for the look only when the blend is not commutative; multiply and screen are.
   for (const l of run.lines) groups[l.k].push(`<line x1="${X(l.a)}" y1="${Y(l.a)}" x2="${X(l.b)}" y2="${Y(l.b)}"/>`);

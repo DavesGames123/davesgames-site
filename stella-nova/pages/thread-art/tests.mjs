@@ -182,6 +182,26 @@ console.log('render and palette');
   ok(err.length === 64 * 64 * 4, 'error image size');
 }
 
+console.log('hairline: the drawn line keeps the model darkening');
+{
+  let agree = true, thin = true, worst = 0;
+  for (const alpha of [0.05, 0.08, 0.1, 0.14]) for (const k of [1.5, 2.1, 3, 4.2, 6.3, 8]) {
+    const h = E.hairline(alpha, k);
+    if (h.q < 1 - 1e-9) { const e = Math.abs(h.q * h.w - alpha * k) / (alpha * k); worst = Math.max(worst, e); if (e > 1e-9) agree = false; }
+    if (alpha <= 0.1 && k <= 4.5 && !(h.w >= 0.35 - 1e-9 && h.w <= 0.5)) thin = false;
+    if (!(h.q > 0 && h.q <= 1)) agree = false;
+  }
+  ok(agree, 'width x opacity = opacity x model px (fit view)', `worst rel. error ${worst.toExponential(1)}`);
+  ok(thin, 'opacity <= 0.1: the line is 0.35-0.5 device px at 1.5-4.5 device px per model px');
+  const h1 = E.hairline(0.08, 4.2), h6 = E.hairline(0.08, 4.2, { zoom: 6 }), h40 = E.hairline(0.08, 4.2, { zoom: 40 });
+  ok(h6.w > h1.w && h6.w < 3 * h1.w && h40.w <= E.HAIR_MAX && h6.q === h1.q, 'a zoom keeps the line a hairline', `w ${h1.w.toFixed(3)} / ${h6.w.toFixed(3)} / ${h40.w.toFixed(3)} px, q ${h1.q.toFixed(2)}`);
+  ok(h1.q >= 0.9, 'the line is near opaque at 4.2 device px per model px', `q ${h1.q.toFixed(2)}`);
+  const run = makeRun({ res: 64, P: 50, maxLines: 80, alpha: 0.08 }); while (E.stepRun(run));
+  const svg = E.toSVG(run, { size: 1600 }), hs = E.hairline(0.08, 1600 / 64);
+  const sw = +(svg.match(/stroke-width="([\d.]+)"/) || [])[1], so = +(svg.match(/stroke-opacity="([\d.]+)"/) || [])[1];
+  ok(Math.abs(sw - hs.w) < 1e-3 && Math.abs(so - hs.q) < 1e-3, 'SVG export uses the same hairline', `stroke-width ${sw}, stroke-opacity ${so}`);
+}
+
 console.log('GPU (Deno WebGPU) = CPU');
 {
   const r = spawnSync('deno', ['run', '-A', join(HERE, 'gpu-check.mjs')], { encoding: 'utf8', timeout: 120000 });

@@ -9,8 +9,9 @@
 //
 //  DRAWING. #view is a 2D canvas. The lines go into a cache canvas with
 //  the model's composite: "multiply" on a white board and "screen" on a
-//  black board, at globalAlpha = thread opacity. That is the same
-//  arithmetic as the model (engine.js), so the picture shows what the step
+//  black board. Each line is a hairline (draw.js, engine.js hairline):
+//  about 0.35-0.5 device px wide and near opaque, with width x opacity
+//  equal to the model's darkening, so the picture shows what the step
 //  scored. A change of view (resize, zoom, pan, width) draws all lines
 //  again as vectors; a cached raster is never scaled up. The error image
 //  (engine.js residualRGBA) is a res x res canvas drawn beside the piece.
@@ -31,9 +32,10 @@
 // ============================================================================
 import {
   createRun, stepRun, targetFrom, frameMask, imagePalette, shapeImage, PALETTES, hex,
-  toJSON, toText, toSVG, residualRGBA, sumSq, MAX_RES,
+  toJSON, toText, toSVG, residualRGBA, sumSq, MAX_RES, hairline,
 } from './engine.js';
 import { createThreadGPU } from './gpu.js';
+import { strokeLines as strokeVec } from './draw.js';
 import { installSaver } from './saver.js';
 
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -60,8 +62,8 @@ export const SOURCES = [
 const SRC = Object.fromEntries(SOURCES.map(s => [s.key, s]));
 
 export const S = {
-  source: 'mona-lisa', shape: 'circle', P: 240, maxLines: 4000, res: 384,
-  mode: 'mono', pal: 'cmyk', dark: false, alpha: 0.1, width: 1, contrast: 1, seed: 1,
+  source: 'mona-lisa', shape: 'circle', P: 240, maxLines: 5000, res: 384,
+  mode: 'mono', pal: 'cmyk', dark: false, alpha: 0.08, width: 1, contrast: 1, seed: 1,
   speed: 0.62, playing: true, finishing: false, showErr: false, showPegNums: false,
   zoom: 1, cx: 0.5, cy: 0.5,
   saver: false, band: null, saverTick: null, fade: 1, lpsOverride: 0,
@@ -162,6 +164,7 @@ export async function restart() {
   const T = targetFrom(rgba, S.res, { color: S.mode === 'colour', dark: S.dark, contrast: S.contrast, mask });
   run = createRun({ res: S.res, shape: S.shape, P: S.P, colors, alpha: S.alpha, color: S.mode === 'colour', dark: S.dark,
     seed: S.seed >>> 0, maxLines: S.maxLines }, T);
+  run.colHex = colHex;
   if (gpuR) { try { gpuR.load(run); } catch (e) { toCPU(e); } }
   shown = 0; drawn = 0; cacheKey = ''; S.finishing = false;
   errFrac = 1; errDirty = true; errAt = 0;
@@ -293,23 +296,12 @@ function framePath(g, x, y, s) {
   }
 }
 
-/** Stroke lines [from, to) into g; the piece square is at (x, y) with side s (device px). */
-function strokeLines(g, x, y, s, from, to) {
-  const k = s / run.res, px = run.pegs.x, py = run.pegs.y;
-  g.save();
-  g.globalCompositeOperation = run.cfg.dark ? 'screen' : 'multiply';
-  g.globalAlpha = run.cfg.alpha;
-  g.lineWidth = Math.max(0.25, S.width * k);
-  g.lineCap = 'round';
-  for (let i = from; i < to; i++) {
-    const l = run.lines[i];
-    g.strokeStyle = colHex[l.k];
-    g.beginPath();
-    g.moveTo(x + (px[l.a] + 0.5) * k, y + (py[l.a] + 0.5) * k);
-    g.lineTo(x + (px[l.b] + 0.5) * k, y + (py[l.b] + 0.5) * k);
-    g.stroke();
-  }
-  g.restore();
+/**
+ * Stroke lines [from, to) into g as hairlines (draw.js); the piece square
+ * is at (x, y) with side s (device px). zoom: s over the side at zoom 1.
+ */
+function strokeLines(g, x, y, s, from, to, zoom = S.zoom) {
+  strokeVec(g, run, x, y, s, from, to, { zoom, scale: S.width });
 }
 
 function paintBoard(g, x, y, s) {
@@ -350,7 +342,7 @@ function present(L, now) {
     const hx = x0 + (x1 - x0) * f, hy = y0 + (y1 - y0) * f;
     ctx.globalAlpha = Math.min(1, 0.35 + run.cfg.alpha * 2);
     ctx.strokeStyle = colHex[l.k] === '#000000' ? '#ffb020' : colHex[l.k] === '#ffffff' ? '#ffd860' : colHex[l.k];
-    ctx.lineWidth = Math.max(1, S.width * k * 1.4);
+    ctx.lineWidth = Math.max(0.8 * d, hairline(run.cfg.alpha, k / S.zoom, { zoom: S.zoom, scale: S.width }).w * 2);
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(hx, hy); ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#ffc832';
@@ -502,7 +494,7 @@ function bindUI() {
   document.querySelectorAll('#resSeg button').forEach(b => b.addEventListener('click', () => { S.res = Math.min(MAX_RES, +b.dataset.res); syncUI(); restartSoon(0); }));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => {
     S.mode = b.dataset.mode;
-    if (S.mode === 'colour' && S.alpha < 0.12) S.alpha = 0.12;
+    if (S.mode === 'colour' && S.alpha < 0.1) S.alpha = 0.1;
     syncUI(); restartSoon(0);
   }));
   document.querySelectorAll('#palettes button').forEach(b => b.addEventListener('click', () => { S.pal = b.dataset.pal; syncUI(); restartSoon(0); }));
@@ -615,7 +607,7 @@ async function exportPng() {
   c.width = c.height = size + 2 * pad;
   const g = c.getContext('2d');
   g.fillStyle = run.cfg.dark ? '#000000' : '#ffffff'; g.fillRect(0, 0, c.width, c.height);
-  strokeLines(g, pad, pad, size, 0, Math.floor(shown));
+  strokeLines(g, pad, pad, size, 0, Math.floor(shown), 1);
   const k = size / run.res;
   g.fillStyle = run.cfg.dark ? '#888888' : '#555555';
   for (let p = 0; p < run.P; p++) { g.beginPath(); g.arc(pad + (run.pegs.x[p] + 0.5) * k, pad + (run.pegs.y[p] + 0.5) * k, 3, 0, Math.PI * 2); g.fill(); }

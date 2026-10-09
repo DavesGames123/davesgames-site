@@ -34,5 +34,5 @@ on Wikimedia Commons.
 ## Code
 
 All files in this folder are this site's own code:
-`engine.js`, `thread.wgsl`, `gpu.js`, `main.js`, `saver.js`, `tests.mjs`,
+`engine.js`, `draw.js`, `thread.wgsl`, `gpu.js`, `main.js`, `saver.js`, `tests.mjs`,
 `gpu-check.mjs`, `index.html`, `style.css`.
