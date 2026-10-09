@@ -3,6 +3,10 @@
 // ----------------------------------------------------------------------------
 //  paint(seed, { prio, tag, onStage }) returns a Promise of a plant:
 //    { seed, token, type, par, focus, leaf, base, painting, bg, blank, hash, ms, where }
+//  record(seed, { prio, tag, onStage }) returns the same plant plus
+//    { rec, sheet, inked } (record.js recordPaint; inked: the sheet with
+//    the plant, before the border). Records have their own
+//    small cache (REC_MAX); the plain fields also go to the plant cache.
 //  painting and bg are ImageBitmaps (worker) or canvases (main thread).
 //  where is 'worker' or 'main'.
 //
@@ -26,11 +30,13 @@
 //    grep -n 'function useFallback'         the main-thread path
 // ============================================================================
 import { paint as paintNow, plainPAR, rgbaHash, cleanSeed, plantFoci } from './engine.js';
+import { recordPaint } from './record.js';
 
 const CACHE_MAX = 24;   // about 2.5 MB of bitmaps per plant
+const REC_MAX = 6;      // a record: 1 to 6 MB of strokes and two more bitmaps
 
 export function createPool(n = 2) {
-  const cache = new Map(), inflight = new Map(), queue = [], workers = [];
+  const cache = new Map(), recs = new Map(), inflight = new Map(), queue = [], workers = [];
   let seq = 0, fallback = null, alive = true;
 
   function remember(seed, plant) {
@@ -40,11 +46,16 @@ export function createPool(n = 2) {
     while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
   }
   function finish(job, msg) {
-    inflight.delete(job.seed);
+    inflight.delete(job.key);
     if (msg.error) { job.reject(new Error(msg.error)); return; }
     const plant = { seed: job.seed, token: msg.token, type: msg.type, par: msg.par, focus: msg.focus, leaf: msg.leaf, base: msg.base, painting: msg.painting, bg: msg.bg, blank: msg.blank, hash: msg.hash, ms: msg.ms, where: msg.where || 'worker' };
     remember(job.seed, plant);
-    job.resolve(plant);
+    if (job.record) {
+      const full = Object.assign({}, plant, { rec: msg.rec, sheet: msg.sheet, inked: msg.plant });
+      recs.delete(job.seed); recs.set(job.seed, full);
+      while (recs.size > REC_MAX) recs.delete(recs.keys().next().value);
+      job.resolve(full);
+    } else job.resolve(plant);
   }
   function stage(job, name, at) { for (const f of job.listeners) { try { f(name, at); } catch (e) { /* a page callback */ } } }
   function spawn() {
@@ -83,10 +94,11 @@ export function createPool(n = 2) {
       const env = { canvas: () => document.createElement('canvas') };
       fallback.then(src => new Promise(r => setTimeout(r, 30)).then(() => {
         try {
-          const r = paintNow(src, job.seed, env, s => stage(job, s, 0));
+          const R = job.record ? recordPaint(src, job.seed, env, s => stage(job, s, 0)) : null;
+          const r = R ? R.r : paintNow(src, job.seed, env, s => stage(job, s, 0));
           const hash = rgbaHash(r.ctx.getImageData(0, 0, r.ctx.canvas.width, r.ctx.canvas.height).data);
           const f = plantFoci(r.blits);
-          finish(job, { token: r.E.token, type: r.type, par: plainPAR(r.PAR), focus: f.flower, leaf: f.leaf, base: r.base, painting: r.ctx.canvas, bg: r.bg, blank: r.blank, hash, ms: r.ms, where: 'main' });
+          finish(job, { token: r.E.token, type: r.type, par: plainPAR(r.PAR), focus: f.flower, leaf: f.leaf, base: r.base, painting: r.ctx.canvas, bg: r.bg, blank: r.blank, hash, ms: r.ms, where: 'main', rec: R && R.rec, sheet: R && r.snaps.sheet, plant: R && r.snaps.plant });
         } catch (err) { finish(job, { error: String(err && err.message || err) }); }
       })).finally(() => { fallback.busy = false; pump(); });
       return;
@@ -94,8 +106,27 @@ export function createPool(n = 2) {
     for (const w of workers) {
       if (w.busy || w.dead || !queue.length) continue;
       const job = queue.shift(); w.busy = job;
-      w.postMessage({ id: job.seq, seed: job.seed });
+      w.postMessage({ id: job.seq, seed: job.seed, record: !!job.record });
     }
+  }
+
+  // One job per seed and kind (plain or record). A record job also
+  // serves a plain request for the same seed when it ends.
+  function request(seed0, { prio = 5, tag = '*', onStage = null } = {}, record) {
+    const seed = cleanSeed(seed0), key = (record ? 'R:' : 'P:') + seed;
+    const hit = record ? recs.get(seed) : cache.get(seed);
+    if (hit) { if (record) { recs.delete(seed); recs.set(seed, hit); } else remember(seed, hit); return Promise.resolve(hit); }
+    if (inflight.has(key)) {
+      const j = inflight.get(key);
+      if (prio < j.prio) { j.prio = prio; pump(); }
+      j.tags.add(tag);
+      if (onStage) j.listeners.add(onStage);
+      return j.promise;
+    }
+    const job = { seed, key, record, prio, seq: ++seq, tags: new Set([tag]), listeners: new Set(onStage ? [onStage] : []) };
+    job.promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
+    inflight.set(key, job); queue.push(job); pump();
+    return job.promise;
   }
 
   for (let i = 0; i < n; i++) spawn();
@@ -105,28 +136,15 @@ export function createPool(n = 2) {
     get pending() { return queue.length + workers.filter(w => w.busy).length; },
     get mode() { return fallback && workers.every(w => w.dead) ? 'main' : 'worker'; },
     cached(seed) { return cache.get(cleanSeed(seed)) || null; },
-    paint(seed0, { prio = 5, tag = '*', onStage = null } = {}) {
-      const seed = cleanSeed(seed0);
-      const hit = cache.get(seed);
-      if (hit) { remember(seed, hit); return Promise.resolve(hit); }
-      if (inflight.has(seed)) {
-        const j = inflight.get(seed);
-        if (prio < j.prio) { j.prio = prio; pump(); }
-        j.tags.add(tag);
-        if (onStage) j.listeners.add(onStage);
-        return j.promise;
-      }
-      const job = { seed, prio, seq: ++seq, tags: new Set([tag]), listeners: new Set(onStage ? [onStage] : []) };
-      job.promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
-      inflight.set(seed, job); queue.push(job); pump();
-      return job.promise;
-    },
+    paint(seed0, opts = {}) { return request(seed0, opts, false); },
+    record(seed0, opts = {}) { return request(seed0, opts, true); },
+    recorded(seed) { return recs.get(cleanSeed(seed)) || null; },
     cancel(tag) {
       for (let i = queue.length - 1; i >= 0; i--) {
         const j = queue[i];
         if (!j.tags.has(tag)) continue;
         j.tags.delete(tag);
-        if (!j.tags.size) { queue.splice(i, 1); inflight.delete(j.seed); j.reject(Object.assign(new Error('cancelled'), { cancelled: true })); }
+        if (!j.tags.size) { queue.splice(i, 1); inflight.delete(j.key); j.reject(Object.assign(new Error('cancelled'), { cancelled: true })); }
       }
     },
     destroy() { alive = false; workers.forEach(w => w.terminate()); },

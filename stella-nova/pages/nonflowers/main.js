@@ -15,6 +15,12 @@
 //  allows it (view.js fitScale), so each painting pixel is a whole number
 //  of device pixels, or the reverse.
 //
+//  WATCH IT GROW. st.growMode on: each plant shown is recorded (pool.js
+//  record()) and replays stage by stage (record.js stepper, grow.js
+//  canvases) on the mat, with the watch bar under it. Off: the instant
+//  render. A frame draws strokes for at most WATCH_BUDGET ms; when the
+//  pen lags, the clock waits for it, so the bar shows what is drawn.
+//
 //  GREP MAP
 //    grep -n 'function layout'         fit the mat in the clear area
 //    grep -n 'function show'           paint a seed and show it
@@ -25,6 +31,9 @@
 //    grep -n 'function openHerb'       the herbarium grid
 //    grep -n 'function exportPNG'      paper + painting, with tEXt credit
 //    grep -n 'function shareLink'      ?seed= link
+//    grep -n 'function startWatch'     Watch it grow: record, then replay
+//    grep -n 'function watchFrame'     one frame of the replay
+//    grep -n 'function watchUI'        the watch bar and the stage list
 //    saver ........................... saver.js (installSaver)
 // ============================================================================
 import { createPool } from './pool.js';
@@ -32,15 +41,18 @@ import { UPSTREAM, SIZE, TILE, cleanSeed, seedToken, randomSeed, hsvToRgb } from
 import { fitScale, layoutGrid, parseSeedFrom, pngWithText, FIELDS, GROUPS } from './view.js';
 import { typeset } from '../../lib/sci-math.js';
 import { installSaver } from './saver.js';
+import { chapters, createStepper, STAGES, SPEEDS } from './record.js';
+import { createGrowth } from './grow.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const LAND_Q = matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)');
 const STAGES = { engine: 0, 'background paper': 0.02, 'painting paper': 0.06, woody: 0.12, herbal: 0.12, border: 0.94 };
 const PAD = 40;   // the paper margin around the painting, in painting px
+const WATCH_BUDGET = 8;   // ms of stroke drawing per frame
 
 const pool = createPool(2);
-const st = { hist: [], at: -1, plant: null, want: null, next: null, avgMs: 2600, saverOn: false, t0: 0, stage: '', fadeAt: 0, view: null, herbSeeds: [] };
+const st = { hist: [], at: -1, plant: null, want: null, next: null, avgMs: 2600, saverOn: false, growMode: false, watch: null, speed: 1, t0: 0, stage: '', fadeAt: 0, view: null, herbSeeds: [] };
 const thumbs = new Map();   // seed -> { canvas, type } for the herbarium
 
 function toast(msg) {
@@ -63,7 +75,8 @@ function layout() {
   }
   // Landscape phone: the dock is a tab over the base of the desk.
   if (LAND_Q.matches) B = Math.min(B, $('dock').getBoundingClientRect().top);
-  const phone = PHONE_Q.matches, cap = phone ? 26 : 36, top = phone ? 10 : 64, m = phone ? 12 : 30;
+  const phone = PHONE_Q.matches, top = phone ? 10 : 64, m = phone ? 12 : 30;
+  const cap = st.growMode ? (phone ? 104 : 112) : phone ? 26 : 36;
   const aw = R - L - 2 * m, ah = B - T - top - m - cap, dpr = devicePixelRatio || 1;
   const box = Math.max(60, Math.min(aw, ah));
   // The painting scale, then the mat around it.
@@ -76,6 +89,7 @@ function layout() {
   if (c.width !== matDev) { c.width = matDev; c.height = matDev; }
   st.view = { x, y, w, k, padDev, pDev, matDev };
   const cp = $('caption'); cp.style.left = (x + w / 2) + 'px'; cp.style.top = (y + w + (phone ? 6 : 10)) + 'px';
+  const wb = $('watch'); wb.style.left = (x + w / 2) + 'px'; wb.style.top = (y + w + (phone ? 4 : 8)) + 'px'; wb.style.width = Math.min(Math.max(w, 320), R - L - 12) + 'px';
   const pr = $('prog'); pr.style.left = (x + w / 2) + 'px'; pr.style.top = (y + w / 2 - 26) + 'px';
   drawMat();
 }
@@ -83,7 +97,7 @@ function layout() {
 // ── the mat ────────────────────────────────────────────────────────────────
 // The background paper as a pattern at the painting scale, then the
 // painting. alpha < 1 while a new plant fades in.
-function drawMat(alpha = 1) {
+function drawMat(alpha = 1, img = null, pen = null) {
   const c = $('mat'), g = c.getContext('2d'), v = st.view, p = st.plant;
   if (!v) return;
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -94,8 +108,15 @@ function drawMat(alpha = 1) {
   g.fillStyle = pat || '#e9e2cf'; g.fillRect(0, 0, c.width, c.height);
   g.imageSmoothingEnabled = v.k !== 1; g.imageSmoothingQuality = 'high';
   g.globalAlpha = alpha;
-  g.drawImage(p.painting, v.padDev, v.padDev, v.pDev, v.pDev);
+  g.drawImage(img || p.painting, v.padDev, v.padDev, v.pDev, v.pDev);
   g.globalAlpha = 1;
+  if (pen) {
+    // The pen tip: a ring at the last point drawn.
+    const k = v.pDev / SIZE, x = v.padDev + pen.x * k, y = v.padDev + pen.y * k, r = Math.max(5, 7 * (devicePixelRatio || 1));
+    g.strokeStyle = 'rgba(176,42,30,0.9)'; g.lineWidth = Math.max(1.5, 2 * k);
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = 'rgba(176,42,30,0.9)'; g.beginPath(); g.arc(x, y, r * 0.3, 0, Math.PI * 2); g.fill();
+  }
 }
 function fadeIn() {
   const t0 = performance.now();
@@ -134,6 +155,7 @@ function show(seed0, push = true) {
   if (push) { st.hist = st.hist.slice(0, st.at + 1); if (st.hist[st.hist.length - 1] !== seed) st.hist.push(seed); st.at = st.hist.length - 1; }
   st.want = seed; st.stage = ''; st.t0 = performance.now();
   pool.cancel('main');
+  stopWatch();
   $('seed').value = seed; $('dockTitle').textContent = seed;
   syncNav();
   const hit = pool.cached(seed);
@@ -144,7 +166,7 @@ function show(seed0, push = true) {
     progress(false);
     st.plant = p;
     remember(p);
-    if (hit) drawMat(); else fadeIn();
+    if (st.growMode) startWatch(p); else if (hit) drawMat(); else fadeIn();
     caption(p); renderSummary(p); syncNav(); setURL(seed);
     prefetch();
   }).catch(err => {
@@ -177,6 +199,118 @@ function setURL(seed) {
   try { history.replaceState(null, '', location.pathname + '?seed=' + seedToken(seed)); } catch (e) { /* a sandboxed frame */ }
 }
 function shareLink(seed) { return location.origin + location.pathname + '?seed=' + seedToken(seed); }
+
+// ── watch it grow ──────────────────────────────────────────────────────────
+// Record the plant on show (a second worker job; the plain plant is
+// already on the mat), then replay it.
+function startWatch(p) {
+  stopWatch();
+  const seed = p.seed, W = { seed, loading: true, raf: 0, last: 0 };
+  st.watch = W;
+  watchUI();
+  const have = pool.recorded(seed);
+  if (!have) { $('wStage').textContent = 'Recording the strokes of seed ' + seed + '…'; $('wTex').textContent = ''; }
+  pool.record(seed, { prio: 0, tag: 'main' }).then(P => {
+    if (st.watch !== W) return;
+    const chs = chapters(P.rec);
+    Object.assign(W, { P, chs, loading: false, S: createStepper(chs, st.speed), G: createGrowth(P, chs), ci: -1 });
+    W.S.play();
+    renderStages();
+    W.last = performance.now();
+    W.raf = requestAnimationFrame(watchFrame);
+  }).catch(err => {
+    if (err && err.cancelled) return;
+    if (st.watch === W) { toast('Could not record this seed: ' + (err && err.message)); setGrowMode(false); }
+  });
+}
+function stopWatch() {
+  const W = st.watch;
+  if (!W) return;
+  cancelAnimationFrame(W.raf);
+  if (W.G) W.G.release();
+  st.watch = null;
+  watchUI();
+}
+function watchFrame(now) {
+  const W = st.watch;
+  if (!W || !W.S || st.saverOn) return;
+  W.raf = requestAnimationFrame(watchFrame);
+  const S = W.S, dt = Math.min(100, now - W.last);
+  W.last = now;
+  let at = S.advance(dt);
+  const got = W.G.sync(at.strokes, WATCH_BUDGET);
+  // The pen lags: hold the clock where the pen is.
+  if (got < at.strokes && S.playing) at = S.seek(S.timeOfStrokes(got));
+  const pen = W.G.compose(at);
+  drawMat(1, W.G.canvas, at.done ? null : pen);
+  if (at.ci !== W.ci || at.done !== W.done) { W.ci = at.ci; W.done = at.done; stageCaption(at); }
+  if (!W.drag) $('wScrub').value = String(Math.round(1000 * S.t / S.total));
+  $('wPlay').classList.toggle('on', S.playing);
+  $('wPlay').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+}
+function stageCaption(at) {
+  const W = st.watch, n = W.chs.length, c = at.chapter, info = STAGES[c.key] || STAGES.other;
+  $('wStage').innerHTML = at.done ? `Done · seed <span class="n">${esc(W.seed)}</span> · ${W.P.type}`
+    : `<b>${at.ci + 1}</b><small>/${n}</small> · ${esc(c.label)}`;
+  $('wStage').title = at.done ? '' : info.note;
+  const tex = at.done ? '' : info.tex;
+  if (tex !== $('wTex').dataset.tex) {
+    $('wTex').dataset.tex = tex;
+    $('wTex').replaceChildren();
+    if (tex) typeset($('wTex'), tex, { display: false }).catch(() => { $('wTex').textContent = ''; });
+  }
+  [...$('stageList').children].forEach((li, i) => li.classList.toggle('on', !at.done && i === at.ci));
+}
+function renderStages() {
+  const W = st.watch, ol = $('stageList');
+  ol.replaceChildren();
+  if (!W || !W.chs) return;
+  W.chs.forEach((c, i) => {
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.textContent = c.label;
+    b.title = (STAGES[c.key] || STAGES.other).note + (c.to > c.from ? ` (${c.to - c.from} strokes)` : '');
+    b.addEventListener('click', () => { if (st.watch && st.watch.S) { st.watch.S.goto(i); st.watch.S.play(); } });
+    li.append(b); ol.append(li);
+  });
+}
+function setGrowMode(on) {
+  st.growMode = on;
+  document.body.classList.toggle('growing', on);
+  for (const id of ['growBtn', 'growBtn2', 'dockGrow']) { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', String(on)); }
+  if (!on) { stopWatch(); layout(); return; }
+  layout();
+  if (st.plant && st.plant.seed === st.want) startWatch(st.plant);
+}
+function watchUI() {
+  const on = st.growMode;
+  $('watch').hidden = !on; $('caption').hidden = on;
+  $('growBtn2').textContent = on ? 'Show it at once' : 'Watch it grow';
+  $('growBtn').textContent = on ? 'Instant' : 'Watch it grow';
+  $('wSpeed').textContent = fmtSpeed(st.speed);
+  if (!st.watch) { $('stageList').replaceChildren(); }
+}
+const fmtSpeed = v => (v === 0.25 ? '¼' : v === 0.5 ? '½' : String(v)) + '×';
+function watchCmd(cmd) {
+  const W = st.watch;
+  if (!W || !W.S) return;
+  const S = W.S;
+  if (cmd === 'play') S.toggle();
+  else if (cmd === 'prev') S.prev();
+  else if (cmd === 'next') S.next();
+  else if (cmd === 'speed') { const i = SPEEDS.indexOf(st.speed); st.speed = SPEEDS[(i + 1) % SPEEDS.length]; S.setSpeed(st.speed); watchUI(); }
+}
+function bindWatch() {
+  for (const id of ['growBtn', 'growBtn2', 'dockGrow']) $(id).addEventListener('click', () => setGrowMode(!st.growMode));
+  $('wPlay').addEventListener('click', () => watchCmd('play'));
+  $('wPrev').addEventListener('click', () => watchCmd('prev'));
+  $('wNext').addEventListener('click', () => watchCmd('next'));
+  $('wSpeed').addEventListener('click', () => watchCmd('speed'));
+  const sc = $('wScrub');
+  const seek = () => { const W = st.watch; if (W && W.S) W.S.seek(Number(sc.value) / 1000 * W.S.total); };
+  sc.addEventListener('pointerdown', () => { if (st.watch) st.watch.drag = true; });
+  sc.addEventListener('input', seek);
+  for (const ev of ['change', 'pointerup', 'pointercancel']) sc.addEventListener(ev, () => { if (st.watch) st.watch.drag = false; });
+}
 
 // ── summary ────────────────────────────────────────────────────────────────
 function fmt(v) { return Number.isInteger(v) ? String(v) : Math.abs(v) < 10 ? v.toFixed(3) : v.toFixed(1); }
@@ -348,6 +482,11 @@ function bindUI() {
     if (/INPUT|SELECT|TEXTAREA/.test(tag)) { if (e.key === 'Escape') e.target.blur(); return; }
     const k = e.key.toLowerCase();
     if (e.key === 'Escape' && !$('herb').hidden) closeHerb();
+    else if (k === 'g') setGrowMode(!st.growMode);
+    else if (st.watch && e.key === ' ') { e.preventDefault(); watchCmd('play'); }
+    else if (st.watch && (e.key === ',' || e.key === '[')) watchCmd('prev');
+    else if (st.watch && (e.key === '.' || e.key === ']')) watchCmd('next');
+    else if (st.watch && e.key === 's') watchCmd('speed');
     else if (k === 'n' || k === 'r') newFlower();
     else if (e.key === 'ArrowLeft') back();
     else if (e.key === 'ArrowRight') forward();
@@ -364,7 +503,7 @@ function equations() {
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
-bindUI(); bindPanel();
+bindUI(); bindPanel(); bindWatch(); watchUI();
 if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
 layout();
 show(parseSeedFrom(location.search, location.hash) || randomSeed());
@@ -373,10 +512,14 @@ equations();
 installSaver({
   pool,
   recent: () => st.hist.slice(-4).reverse(),
-  enter() { st.saverOn = true; closeHerb(); progress(false); },
-  exit() { st.saverOn = false; layout(); },
+  enter() { st.saverOn = true; closeHerb(); progress(false); if (st.watch) cancelAnimationFrame(st.watch.raf); },
+  exit() {
+    st.saverOn = false; layout();
+    const W = st.watch;
+    if (W && W.S) { W.last = performance.now(); W.raf = requestAnimationFrame(watchFrame); }
+  },
 });
 window.__nf = {
-  st, pool, show, newFlower, back, forward, openHerb, closeHerb, exportPNG, layout, setOpen, thumbs,
+  st, pool, show, newFlower, setGrowMode, watchCmd, back, forward, openHerb, closeHerb, exportPNG, layout, setOpen, thumbs,
   get ready() { return !!st.plant && st.plant.seed === st.want; },
 };

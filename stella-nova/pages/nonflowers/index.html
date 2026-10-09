@@ -28,6 +28,8 @@
      pool.js                 two workers, queue, cache, main-thread fallback
      view.js                 DOM-free helpers: crisp scale, grid, PNG text
      main.js                 the mat, the controls, summary, herbarium, export
+     record.js               the step recorder: strokes, stages, play clock
+     grow.js                 the stroke replay on canvases (page and saver)
      saver.js                the screensaver tour (window.snSaver)
      tests.mjs               node tests (sha256 pin, determinism, PAR)
 
@@ -38,6 +40,9 @@
                  #caption is one line under it. #prog shows the stages
                  while a plant paints. #tools holds Herbarium and
                  New flower. #herb covers #desk with the grid.
+                 Watch it grow: #watch under the mat (stage caption,
+                 TeX, stage back, play, next stage, scrub, speed);
+                 #stageList in the panel jumps to a stage.
      phone ..... (max-width 768px, or a short landscape touch screen)
                  #dock at the base: back, new flower (the seed), forward,
                  herbarium, settings. #panel is a bottom sheet (portrait)
@@ -53,6 +58,7 @@
      grep -n 'function openHerb'     the herbarium grid
      grep -n 'function exportPNG'    paper + painting, with tEXt credit
      grep -n 'function shareLink'    ?seed= link
+     grep -n 'function startWatch'     Watch it grow
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Nonflowers by Lingdong Huang: procedurally generated Gongbi paintings of flowers that do not exist. Seeds, history, share links, PNG export, a parameter summary and a herbarium.">
@@ -75,7 +81,18 @@
   <canvas id="mat" aria-label="The painting on its paper"></canvas>
   <div id="prog" aria-live="polite"><div class="pl" id="progLine">Painting…</div><div class="bar"><i id="progBar"></i></div></div>
   <div id="caption"></div>
+  <div id="watch" hidden>
+    <div class="w-cap"><span id="wStage" aria-live="polite"></span><span id="wTex" class="w-tex"></span></div>
+    <div class="w-row">
+      <button id="wPrev" title="Stage back ( , )" aria-label="Stage back"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 6l-9 6 9 6z"/></svg></button>
+      <button id="wPlay" title="Play or pause (space)" aria-label="Pause"><svg viewBox="0 0 24 24"><path class="i-play" d="M8 5l11 7-11 7z"/><path class="i-pause" d="M8 5v14M16 5v14"/></svg></button>
+      <button id="wNext" title="Next stage ( . )" aria-label="Next stage"><svg viewBox="0 0 24 24"><path d="M18 5v14M6 6l9 6-9 6z"/></svg></button>
+      <input id="wScrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Time in the growth">
+      <button id="wSpeed" class="spd" title="Speed (S)" aria-label="Speed">1×</button>
+    </div>
+  </div>
   <div id="tools">
+    <button id="growBtn" title="Replay the strokes stage by stage (G)" aria-pressed="false">Watch it grow</button>
     <button id="herbBtn" title="A grid of plants (H)">Herbarium</button>
     <button id="newBtn" class="acc" title="A new plant (N)">New flower</button>
   </div>
@@ -113,6 +130,11 @@
   </div>
   <p class="hint" id="plantInfo"></p>
 
+  <div class="sec-label">Watch it grow</div>
+  <div class="btns"><button id="growBtn2" aria-pressed="false">Watch it grow</button></div>
+  <p class="hint">The engine draws each plant as polygons. This replay draws the same polygons in stages: paper, stems or branches, leaves, flowers, then the two pixel filters and the border. The last frame is the one-shot painting. Tap a stage to go to it.</p>
+  <ol id="stageList"></ol>
+
   <div class="sec-label">Share and save</div>
   <div class="btns">
     <button id="linkBtn">Copy link</button>
@@ -141,6 +163,7 @@
   <button id="dockBack" aria-label="Back">‹</button>
   <button id="dockName" class="name" aria-label="New flower"><span id="dockTitle">…</span><i>new</i></button>
   <button id="dockFwd" aria-label="Forward">›</button>
+  <button id="dockGrow" aria-label="Watch it grow" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 21V10M12 14c-4 0-6-3-6-7 4 0 6 3 6 7zM12 11c0-4 2-6 6-6 0 4-2 6-6 6z"/></svg></button>
   <button id="dockHerb" aria-label="Herbarium"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
   <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
 </nav>

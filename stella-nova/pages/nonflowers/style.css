@@ -8,6 +8,7 @@
    Labels are sentence case with no letter-spacing.
 
      grep -n 'MAT'        the mat, the progress line, the caption, tools
+     grep -n 'WATCH'      the watch bar and the stage list
      grep -n 'HERBARIUM'  the grid over the desk
      grep -n 'PANEL'      the control column
      grep -n 'SUMMARY'    the PAR rows, swatches and curves
@@ -61,6 +62,29 @@ html.in-frame #gear{top:14px}
 #tools button.acc:hover,.btns button.acc:hover{background:#f0d6a4;color:#15130e}
 #toast{position:fixed;left:50%;bottom:calc(var(--dock-h) + 18px);transform:translate(-50%,20px);padding:8px 14px;border-radius:9px;background:#1d2027;border:1px solid var(--line-b);color:var(--ink);font-size:0.8rem;opacity:0;pointer-events:none;transition:opacity 0.25s,transform 0.25s;z-index:60;max-width:90vw}
 #toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* WATCH. The bar under the mat while Watch it grow is on. */
+#watch{position:absolute;left:0;top:0;transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:12px;background:rgba(14,16,20,0.86);border:1px solid var(--line-b)}
+.w-cap{display:flex;align-items:center;gap:12px;min-height:26px;min-width:0}
+#wStage{font-family:var(--sci-serif);font-size:1rem;color:#f1eee6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+#wStage b{font-family:var(--sci-sans);font-weight:600;color:var(--acc)}
+#wStage small{color:var(--dim);font-size:0.75rem}
+#wStage .n{font-variant-numeric:tabular-nums}
+.w-tex{margin-left:auto;color:#e8e6df;font-size:0.9rem;overflow:hidden;white-space:nowrap;min-width:0;flex:0 1 auto}
+.w-row{display:flex;align-items:center;gap:6px}
+.w-row button{flex:0 0 auto;width:36px;height:34px;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);display:flex;align-items:center;justify-content:center}
+.w-row button:hover{border-color:var(--acc);color:var(--acc)}
+.w-row svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+#wPlay .i-pause{display:none}
+#wPlay.on .i-pause{display:inline}
+#wPlay.on .i-play{display:none}
+.w-row .spd{width:auto;padding:0 10px;font-size:0.8rem;font-variant-numeric:tabular-nums}
+#wScrub{flex:1 1 auto;min-width:60px;accent-color:var(--acc);height:28px}
+#tools button.on,.btns button.on{border-color:var(--acc);color:var(--acc)}
+#stageList{list-style:none;margin:8px 0 0;display:flex;flex-direction:column;gap:2px}
+#stageList button{width:100%;text-align:left;padding:5px 8px;border:1px solid transparent;border-radius:6px;background:none;color:var(--dim);font-size:0.78rem}
+#stageList button:hover{color:var(--ink);border-color:var(--line)}
+#stageList li.on button{color:var(--acc);border-color:var(--line-b);background:rgba(227,196,138,0.06)}
 
 /* HERBARIUM */
 #herb{position:absolute;inset:0;z-index:20;display:grid;grid-template-rows:auto auto 1fr;background:#0b0c0f;padding:18px 22px 0}
@@ -133,6 +157,10 @@ html.in-frame #panel{padding-top:20px}
   .seedrow button,.seedrow input{min-height:44px;font-size:16px}
   #herbMore{min-height:44px}
   #herbClose{width:44px;height:44px}
+  .w-row button{width:44px;height:44px;border-radius:10px}
+  .w-row .spd{min-width:52px}
+  #wScrub{height:44px}
+  #stageList button{min-height:40px;font-size:0.84rem}
   .hint{font-size:0.78rem}
   .about p{font-size:0.84rem;line-height:1.65}
   .sum-r{font-size:0.82rem;padding:5px 0}
@@ -151,6 +179,9 @@ html.in-frame #panel{padding-top:20px}
   #caption{font-size:0.86rem}
   #tools{display:none}
   #herb{padding:12px 12px 0}
+  #watch{padding:6px 8px;gap:4px}
+  #wStage{font-size:0.9rem}
+  .w-tex{font-size:0.78rem}
   .hb-title{font-size:1.15rem}
   #herbGrid{gap:12px}
 
@@ -177,6 +208,9 @@ html.in-frame #panel{padding-top:20px}
   #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -18px 2px;background:linear-gradient(180deg,#0e1014 70%,rgba(14,16,20,0));touch-action:none;cursor:grab}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
 }
+
+/* Narrow phones: six dock buttons. */
+@media (max-width:400px){ #dock{gap:6px} #dock > button{flex-basis:44px} }
 
 /* LANDSCAPE phone. The panel is a drawer at the right edge, the dock a
    tab at the lower left, and the topbar is hidden. */
