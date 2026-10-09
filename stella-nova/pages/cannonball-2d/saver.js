@@ -1,73 +1,52 @@
-// Cannonball 2D · site layer: the credit record and the screensaver shots.
-// main.js is the upstream demo; this file only uses its globals (canvas, c,
-// simMinWidth, cScale, simWidth, simHeight, gravity, timeStep, ball).
-TMP.page({ n: '01', title: 'Cannonball 2D', file: '01-cannonball2d.html', video: 'oPuSvdBGrpE', year: 2021, licence: 'MIT' });
+// ============================================================================
+//  CANNONBALL 2D  ·  pages/cannonball-2d/saver.js — the screensaver shots
+// ----------------------------------------------------------------------------
+//  installSaver(C) defines window.snSaver through the sim kit director
+//  (widgets/sim-kit/saver.js). Each cut draws a fresh random scene with the
+//  page guard, then the shot sets what it needs and a camera. The plate
+//  shows the title, the scene values and one TeX line; no code.
+//
+//  grep -n targets: "const SHOTS", "export function installSaver"
+// ============================================================================
+import { director } from '../../widgets/sim-kit/saver.js';
 
-(function () {
-  // Saver look: a dark page and a dark box, so the light plate text reads.
-  // The upstream draw() starts with c.clearRect; in saver mode that call
-  // also fills the box and draws the trail of the ball under the ball.
-  const BOX = '#141a26', TRAIL = 'rgba(255, 120, 90, ', FLOOR = '#3a4660';
-  let trail = [], hooked = false;
-  function hook() {
-    if (hooked) return; hooked = true;
-    const clear = c.clearRect.bind(c);
-    c.clearRect = function (x, y, w, h) {
-      clear(x, y, w, h);
-      c.save();
-      c.fillStyle = BOX; c.fillRect(0, 0, canvas.width, canvas.height);
-      c.fillStyle = FLOOR; c.fillRect(0, canvas.height - 2, canvas.width, 2);
-      trail.push({ x: cX(ball.pos), y: cY(ball.pos) });
-      if (trail.length > 260) trail.shift();
-      for (let i = 0; i < trail.length; i += 2) {
-        const a = i / trail.length;
-        c.fillStyle = TRAIL + (0.15 + 0.65 * a).toFixed(3) + ')';
-        c.beginPath(); c.arc(trail[i].x, trail[i].y, 1.5 + 2 * a, 0, 2 * Math.PI); c.fill();
-      }
-      // a soft halo under the upstream ball, so the small disc reads
-      const p = trail[trail.length - 1], g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, 7 * ball.radius * cScale);
-      g.addColorStop(0, 'rgba(255, 90, 60, 0.45)'); g.addColorStop(1, 'rgba(255, 90, 60, 0)');
-      c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, 7 * ball.radius * cScale, 0, 2 * Math.PI); c.fill();
-      c.restore();
-    };
-  }
-  // Start the ball at the lower left corner. vy is capped so the top of the
-  // arc stays in the box (upstream has no ceiling).
-  function launch(r, gx, gy, angMin, angMax) {
-    gravity.x = gx; gravity.y = gy;
-    const ang = (angMin + (angMax - angMin) * r()) * Math.PI / 180;
-    const vMax = Math.sqrt(2 * -gy * 0.85 * simHeight) / Math.sin(ang);
-    const v = vMax * (0.8 + 0.2 * r());
-    ball.pos.x = 0.2 + (gx < 0 ? simWidth - 0.4 : 0); ball.pos.y = 0.2;
-    ball.vel.x = v * Math.cos(ang) * (gx < 0 ? -1 : 1); ball.vel.y = v * Math.sin(ang);
-    trail = [];
-  }
-  const speed = k => { timeStep = (1.0 / 60.0) * (1.2 - 0.5 * k.calm); };
-  const CODE = { lang: 'js', name: 'simulate', text:
-    'ball.vel.x += gravity.x * timeStep;\nball.vel.y += gravity.y * timeStep;\nball.pos.x += ball.vel.x * timeStep;\nball.pos.y += ball.vel.y * timeStep;\n\nif (ball.pos.y < 0.0) {\n\tball.pos.y = 0.0;\n\tball.vel.y = -ball.vel.y;' };
-  const EQ = ['v ← v + g Δt', 'x ← x + v Δt'];
+const TEX_EULER = String.raw`\mathbf{v} \leftarrow \mathbf{v} + \mathbf{g}\,\Delta t,\qquad \mathbf{x} \leftarrow \mathbf{x} + \mathbf{v}\,\Delta t`;
+const TEX_APEX = String.raw`h_{\max} = \frac{v_0^2 \sin^2\theta}{2g},\qquad R = \frac{v_0^2 \sin 2\theta}{g}`;
+const TEX_BOUNCE = String.raw`v_n' = -e\,v_n,\qquad h_{k+1} = e^2\, h_k`;
+const TEX_GALTON = String.raw`P(k) = \binom{n}{k}\,2^{-n}\ \longrightarrow\ \mathcal{N}\!\left(\tfrac{n}{2},\ \tfrac{n}{4}\right)`;
+const TEX_DRAG = String.raw`\dot{\mathbf{v}} = \mathbf{g} - k\,\mathbf{v},\qquad v_\infty = \frac{g}{k}`;
+const TEX_IMPULSE = String.raw`J = \frac{-(1+e)\,v_{\mathrm{rel}}\cdot\mathbf{n}}{1/m_1 + 1/m_2}`;
 
-  TMP.saver({
-    canvas: () => canvas,
-    bg: '#0b0e14',
-    enter() { hook(); },
-    fit(w, h) {
-      if (canvas.width === w && canvas.height === h) return false;
-      // A box 8 units on its short side: the 0.2 ball is easier to see
-      // than in the upstream 20-unit box.
-      canvas.width = w; canvas.height = h; simMinWidth = 8.0;
-      cScale = Math.min(w, h) / simMinWidth; simWidth = w / cScale; simHeight = h / cScale;
-      return true;
-    },
-    shots: [
-      { key: 'launch', label: { title: 'Cannonball', lines: ['Gravity and one explicit Euler step per frame.', 'The ball bounces off the floor and the walls.'], eq: EQ, code: CODE },
-        run(k) { speed(k); launch(k.rng, 0, -10, 40, 70); } },
-      { key: 'moon', label: { title: 'Cannonball on the Moon', lines: ['The same code with g = 1.62 m/s².', 'The arcs are wider and much slower.'], eq: ['g = 1.62 m/s²', 'h = v_y² / 2g'], code: CODE },
-        run(k) { speed(k); launch(k.rng, 0, -1.62, 55, 80); } },
-      { key: 'wind', label: { title: 'A Side Wind', lines: ['Gravity gets an x part too.', 'Each arc leans into the wind.'], eq: ['g = (gₓ, −10)', 'v ← v + g Δt'], code: CODE },
-        run(k) { speed(k); launch(k.rng, (k.rng() < 0.5 ? -1 : 1) * (1.5 + 2 * k.rng()), -10, 60, 80); } },
-      { key: 'heavy', label: { title: 'Strong Gravity', lines: ['g = 25 m/s², close to the value at the top of Jupiter’s clouds.', 'Short, fast hops.'], eq: ['g = 25 m/s²', 'T = 2 v_y / g'], code: CODE },
-        run(k) { speed(k); launch(k.rng, 0, -25, 30, 60); } },
-    ],
+const SHOTS = [
+  { key: 'arc', title: 'Cannonball', sub: 'Gravity and one explicit Euler step per frame', tex: TEX_EULER,
+    scene: r => ({ pegs: 'none', side: 'left', g: 10, wind: 0, drag: 0, e: 0.9 + 0.08 * r(), rate: 0.8 + r(), count: 12, collide: false, trail: 200 }) },
+  { key: 'moon', title: 'On the Moon', sub: 'g = 1.62 m/s²: wide, slow arcs', tex: TEX_APEX,
+    scene: r => ({ pegs: 'none', g: 1.62, wind: 0, drag: 0, e: 0.85 + 0.1 * r(), rate: 0.6 + 0.6 * r(), count: 10, angle: 50 + 25 * r(), speed: 5 + 2 * r(), trail: 220 }) },
+  { key: 'galton', title: 'Galton board', sub: 'Balls fall through rows of pegs', tex: TEX_GALTON,
+    scene: r => ({ pegs: 'galton', nPegs: 30 + Math.floor(25 * r()), pegR: 0.14, rate: 4 + 3 * r(), count: 110, collide: true, r: 0.14, rVar: 0.1, e: 0.45 + 0.15 * r(), drag: 0.1, trail: 30, wind: 0 }),
+    camera: () => ({ zoom: 1 }) },
+  { key: 'bumpers', title: 'Bumpers', sub: 'Pegs that kick back harder than they are hit', tex: TEX_BOUNCE,
+    scene: r => ({ pegs: r.pick(['wall', 'ring', 'scatter']), kick: 1.15 + 0.15 * r(), e: 0.8, rate: 1.5 + r(), count: 30, collide: true, colorBy: 'speed', trail: 120 }) },
+  { key: 'wind', title: 'A side wind', sub: 'Gravity gets an x part; every arc leans', tex: TEX_DRAG,
+    scene: r => ({ pegs: 'none', wind: (r() < 0.5 ? -1 : 1) * (1.5 + 2 * r()), drag: 0.05 + 0.15 * r(), rate: 1.5, count: 24, trail: 200, colorBy: 'height' }) },
+  { key: 'crowd', title: 'A crowded box', sub: 'Many balls, colliding with each other', tex: TEX_IMPULSE,
+    scene: r => ({ pegs: r.pick(['none', 'scatter']), side: 'both', rate: 4 + 3 * r(), count: 90, collide: true, rVar: 0.4 + 0.3 * r(), e: 0.7 + 0.2 * r(), colorBy: r.pick(['speed', 'energy']), trail: 30 }) },
+  { key: 'close', title: 'Close up', sub: 'The cannon and the first bounces', tex: TEX_EULER,
+    scene: r => ({ pegs: 'none', side: 'left', rate: 1.2 + r(), count: 16, trail: 160, glow: true }),
+    camera: r => ({ zoom: 1.9, cx: 4 + 2 * r(), cy: 2.6 }) },
+];
+
+export function installSaver(C) {
+  return director({
+    kit: C.kit,
+    canvas: () => C.canvas,
+    shots: SHOTS.map(s => Object.assign({ params: st => [
+      { sym: 'g', name: 'gravity', value: st.g.toFixed(2) + ' m/s²' },
+      { sym: 'e', name: 'bounce', value: st.e.toFixed(2) },
+      { sym: 'N', name: 'balls', value: String(C.S.n) },
+    ] }, s)),
+    apply(state, shot, cam) { C.rebuild(); C.P.setSaver(shot ? { x: 0, y: 0, w: innerWidth, h: innerHeight } : null, cam); },
+    frame(band, cam) { C.P.setSaver(band, cam); },
+    exit() { C.P.setSaver(null); },
   });
-})();
+}

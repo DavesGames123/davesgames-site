@@ -11,34 +11,41 @@
   ═══════════════════════════════════════════════════════════════════════════
    CANNONBALL 2D  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   A cannonball under gravity, bouncing off the walls of a 2D box: the simplest physics simulation, explicit Euler in a few lines.
+   Balls fired from a cannon under gravity, bouncing off the walls, pegs
+   and each other. The page starts a random scene on load and keeps it
+   running.
 
    CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #01.
    Upstream file: tenMinutePhysics/01-cannonball2d.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of sim.js, which holds the upstream Euler step).
    Video tutorial: https://youtu.be/oPuSvdBGrpE
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): cannons, pegs, many balls,
+   collisions, the renderer, the sim kit GUI and the saver.
+
+   FILES
+     sim.js      simulation, schema, guard (no DOM)
+     main.js     page controller: sim kit GUI, drawing, pointer
+     saver.js    screensaver shots (sim kit director)
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, page2d frame),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  sim.js     controls and random rules
+     grep -n 'const SHOTS'                 saver.js   the screensaver shots
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A cannonball under gravity, bouncing off the walls of a 2D box: the simplest physics simulation, explicit Euler in a few lines. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="Balls fired from a cannon under gravity, bouncing off walls, pegs and each other: explicit Euler, after Matthias Müller's Ten Minute Physics #01.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="myCanvas" style="border:2px solid"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="Cannonball simulation. Drag from empty space to fling a ball; drag a ball to throw it."></canvas>
+<script type="module" src="main.js"></script>
 </body>
 </html>
