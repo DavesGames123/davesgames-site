@@ -11,41 +11,79 @@
   ═══════════════════════════════════════════════════════════════════════════
    FLIP WATER  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   FLIP water: particles carry the fluid and a grid solves the pressure. Push the water with the obstacle.
+   FLIP water: particles carry the fluid and a grid solves the pressure.
+   The page starts a scene on load and keeps it running.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #18.
+   CREDIT. The FLIP solver is by Matthias Müller, Ten Minute Physics #18.
    Upstream file: tenMinutePhysics/18-flip.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/XmzBREkK8kY
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of flip.js and main.js). Video: https://youtu.be/XmzBREkK8kY
+   The credit bar (kit.js) names him on the page and on the saver plate.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): the seeded scene
+   randomizer, obstacles, emitters, drains, paddles, the sluice gate, the
+   Canvas 2D renderer and this page UI. Each file header says which part
+   is upstream and which part is ours.
+
+   FILES
+     flip.js     solver (upstream FlipFluid + our solids, sources, wind)
+     shapes.js   shape geometry and signed distance
+     scenes.js   seeded randomizer, presets, URL hash
+     render.js   Canvas 2D renderer
+     main.js     page controller: loop, UI, pointer, hash
+     tests.mjs   node tests (no browser)
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'id="dock"'   index.html   the quick controls
+     grep -n 'id="panel"'  index.html   the scene sheet
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="FLIP water: particles carry the fluid and a grid solves the pressure. Push the water with the obstacle. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="FLIP water that runs on its own: seeded random tanks, obstacles, pours, paddles and gates. Solver by Matthias Müller, Ten Minute Physics.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-	<input type = "checkbox" checked  onclick = "scene.showParticles = !scene.showParticles">Particles &nbsp; 
-	<input type = "checkbox" onclick = "scene.showGrid = !scene.showGrid">Grid &nbsp;
-	<input type = "checkbox" checked onclick = "scene.compensateDrift = !scene.compensateDrift">Compensate Drift &nbsp;
-	<input type = "checkbox" checked onclick = "scene.separateParticles = !scene.separateParticles">Separate Particles &nbsp;
-	PIC
-	<input type = "range" min = "0" max = "10" value = "9" class = "slider" onchange="scene.flipRatio = 0.1 * this.value"> FLIP 
-<br>
-	<canvas id="myCanvas" style="border:2px solid"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="FLIP water simulation"></canvas>
+
+<header id="hud">
+  <h1>FLIP Water</h1>
+  <button id="seedChip" class="chip" title="Scene seed: open the scene sheet">harbour</button>
+  <span id="stats" class="dim"></span>
+</header>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="bPlay" aria-label="Pause" title="Pause (P)">❚❚</button>
+  <button id="bStep" aria-label="Step one frame" title="Step (M)">⏭</button>
+  <button id="bReset" aria-label="Reset the scene" title="Reset (R)">↺</button>
+  <button id="bNew" class="wide" aria-label="New random scene" title="New random scene (N)">⚄ New scene</button>
+  <button id="bPanel" aria-label="Scene settings" aria-expanded="false" title="Scene settings">☰</button>
+</nav>
+
+<aside id="panel" aria-label="Scene settings">
+  <div id="sheetGrip" role="button" aria-label="Resize the sheet"><span></span></div>
+  <section>
+    <h2>Seed</h2>
+    <div class="row">
+      <input id="seedIn" type="text" spellcheck="false" autocomplete="off" aria-label="Seed">
+      <button id="seedGo" title="Load this seed">Load</button>
+      <button id="seedRoll" title="Roll a new seed">⚄</button>
+      <button id="seedCopy" title="Copy the link to this scene">Link</button>
+    </div>
+    <p class="dim small">The seed and every option are in the address, so a link brings back the same scene.</p>
+  </section>
+  <section>
+    <h2>Randomize by category</h2>
+    <p class="dim small">⚄ rolls one category. A lock keeps the category when you press New scene.</p>
+    <div id="cats"></div>
+  </section>
+  <section>
+    <h2>Adjust</h2>
+    <div id="sliders"></div>
+    <button id="clearOver" class="small-btn">Clear adjustments</button>
+  </section>
+</aside>
+
+<script type="module" src="main.js"></script>
 </body>
 </html>
