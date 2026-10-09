@@ -5,7 +5,8 @@
 <script src="../../lib/wishlist.js"></script>
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#07080c">
 <title>ChordLab // Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
@@ -13,33 +14,38 @@
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js opens the mic, reads one AnalyserNode, and paints
    every canvas below from the detected chord, pitch, and spectrum. This file
-   only lays out the four zones and the elements main.js binds to by id.
+   only lays out the panels and the elements the scripts bind to by id.
 
    HEAD LOAD ORDER
      1. in-frame guard   adds .in-frame when embedded in the site shell
      2. mobile switch    adds .mob by device, not just viewport width
-     3. fonts + style     Google Fonts stylesheet, then style.css
-     4. main.js           classic script at end of body, runs after markup
+     3. fonts + style    Inter + STIX Two Text (vendor), then style.css
+     4. scripts          dsp.js, render.js, main.js: classic scripts at the
+                         end of body, one shared global scope
 
    LAYOUT  (▦ marks a canvas · # marks an element id)
-     ┌─────────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · ChordLab                                        │
-     ├───────────────┬───────────────────────────┬─────────────────────────┤
-     │ #now  Listen  │ #diag  How To Play It      │ #tuner  Tuner           │
-     │  #domBar      │  instrument segments        │  #tunerNote #tunerFreq  │
-     │  ▦meterCanvas │  ▦diagCanvas  fretboard     │  #centsBar needle       │
-     │  ▦ringCanvas  │  #voicings  #strumBtn       │  ▦specCanvas waterfall  │
-     │  chord readout│  #tally  most detected      │  #stringRow buttons     │
-     │  #micGate     │                             │                         │
-     ├───────────────┴───────────────────────────┴─────────────────────────┤
-     │ #staffZone  ▦staffCanvas  running 4-bar notation                      │
-     ├───────────────────────────────────────────────────────────────────────
-     │ #status-bar   mic · level · tuning · chord · logged · fps             │
-     └───────────────────────────────────────────────────────────────────────
-     #mobTabs: narrow-screen switch between the four zones (Listen/Chords/Tuner/Staff)
+     ┌──────────────────────────────────────────────────────────────────────┐
+     │ .topbar  Stella Nova · ChordLab   (hidden in the site shell)          │
+     ├──────────────────────┬────────────────────────┬──────────────────────┤
+     │ #now  Listen         │ #diag  How to play it   │ #tuner  Tuner         │
+     │  #micPill #micToggle │  #instSeg 5 instruments │  ▦gaugeCanvas arc     │
+     │  #micGo              │  ▦diagCanvas            │  #tunerNote #tunerFreq│
+     │  #domBar likely      │  #voicings  #strumBtn   │  #stringRow #refRow   │
+     │  ▦meterCanvas        │  #tally  most played    │  ▦specCanvas spectrum │
+     │  ▦ringCanvas + hero  │                         │                       │
+     │  #heroMeta notes+conf│                         │                       │
+     │  #history  recent    │                         │                       │
+     ├──────────────────────┴────────────────────────┴──────────────────────┤
+     │ #staffZone  Chord log   #copyStaff #clearStaff   ▦staffCanvas          │
+     ├──────────────────────────────────────────────────────────────────────┤
+     │ #status-bar  mic · level · tuning · chord · logged · fps · keys       │
+     └──────────────────────────────────────────────────────────────────────┘
+     #micGate: start card over the workspace; a small resume card when paused
+     #mobTabs: phone tab bar that shows one panel at a time
+     #keysCard: keyboard shortcuts, toggled by ?
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="../../vendor/fonts/cormorant-garamond+jetbrains-mono.726a7451.css" rel="stylesheet">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -47,7 +53,7 @@
      CSS can hide this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <!-- Device-aware mobile switch: toggles the .mob class that enables the tabbed
-     single-column layout. Checks physical device size, not just viewport width. -->
+     single-panel layout. Checks physical device size, not just viewport width. -->
 <script>
 /* Device-aware mobile switch. iOS Safari expands iframes to content size,
    so media queries on viewport width lie inside the index shell — check the
@@ -67,93 +73,121 @@
 </script>
 
 <!-- Page header bar (hidden by CSS when running inside the site shell). -->
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">ChordLab · ♪</span></div>
-  <div class="topbar-r">SYS // <strong>LIVE CHORD DETECTION</strong></div>
-</div>
+<header class="topbar">
+  <span class="brand"><span class="mark"></span>Stella Nova</span>
+  <span class="pagetitle">ChordLab</span>
+  <span class="topsub">Live chord detection</span>
+</header>
 
-<!-- Three-column workspace: Now Playing, How To Play It, Tuner. -->
-<div id="main">
-  <!-- LEFT: what's playing right now -->
-  <div class="col" id="now">
-    <div class="zone-lbl"><span class="dot"></span>Now Playing</div>
-    <!-- Pause listening: shown only while the mic is live (Space also works). -->
-    <button class="sbtn" id="micToggle" title="Pause listening (Space)" hidden>❚❚ Pause</button>
+<div id="app">
+<main id="main">
+  <!-- LISTEN: what is playing now -->
+  <section class="panel col" id="now" aria-label="Listen">
+    <div class="ph">
+      <h2>Listen</h2>
+      <span id="micPill" class="pill">Mic off</span>
+      <span class="ph-r">
+        <button class="btn sm" id="micGo" hidden>Start listening</button>
+        <!-- Pause listening: shown only while the mic is live (Space also works). -->
+        <button class="btn sm" id="micToggle" title="Pause listening (Space)" hidden>Pause</button>
+      </span>
+    </div>
     <div id="domBar">
-      <span id="domTag">Likely Chords</span>
-      <div id="domList"><span class="domEmpty">listening for a passage…</span></div>
+      <span id="domTag">Likely chords</span>
+      <div id="domList"><span class="domEmpty">Listening for a passage…</span></div>
       <span id="domHint">this passage</span>
     </div>
-    <!-- Left strip: input meter (scope + bands). Center: chroma ring with the
-         current chord name, quality, and match confidence overlaid. -->
+    <!-- Left strip: input meter (scope + bands). Centre: chroma ring with the
+         current chord name and quality over it. -->
     <div id="nowBody">
-      <canvas id="meterCanvas"></canvas>
+      <canvas id="meterCanvas" aria-hidden="true"></canvas>
       <div id="ringArea">
         <div id="ringWrap">
-          <canvas id="ringCanvas"></canvas>
-          <div id="chordDisp">
+          <canvas id="ringCanvas" aria-hidden="true"></canvas>
+          <div id="chordDisp" aria-live="polite">
             <div id="chordRoot">···</div>
             <div id="chordQual">listening</div>
-            <div id="chordConf">— %</div>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Mic gate: the start button (required user gesture) and any error text.
-         main.js hides this once the stream is live. -->
-    <div id="micGate">
-      <button id="micBtn">🎤&nbsp; Start Listening</button>
-      <div id="micHint">Play a chord on any instrument.<br>ChordLab hears it, names it, and shows you how to play it.</div>
-      <div id="micErr"></div>
+    <!-- Hero detail: the chord's notes with intervals, and the match strength. -->
+    <div id="heroMeta">
+      <div id="chordNotes"><span class="nEmpty">Notes show here</span></div>
+      <div id="confWrap"><div id="confTrack"><i id="confBar"></i></div><span id="chordConf">— %</span></div>
     </div>
-  </div>
+    <!-- Recent chords as a timeline of chips, newest on the right. -->
+    <div id="history">
+      <span class="hTag">Recent</span>
+      <div id="histList"><span class="hEmpty">Chords you play line up here.</span></div>
+    </div>
+  </section>
 
-  <!-- MIDDLE: how to play it + what's been detected -->
-  <div class="col" id="diag">
-    <div class="zone-lbl"><span class="dot" style="background:#ffc832;box-shadow:0 0 8px #ffc832"></span>How To Play It</div>
-    <div class="seg" id="instSeg">
+  <!-- HOW TO PLAY IT: diagram for the shown chord + what has been detected -->
+  <section class="panel col" id="diag" aria-label="How to play it">
+    <div class="ph"><h2>How to play it</h2></div>
+    <div class="seg" id="instSeg" role="tablist">
       <button data-i="guitar" class="on">Guitar</button>
       <button data-i="bass">Bass</button>
       <button data-i="ukulele">Uke</button>
       <button data-i="violin">Violin</button>
+      <button data-i="piano">Piano</button>
     </div>
-    <!-- Fretboard/staff diagram for the selected instrument, the voicing picker,
-         and a button that plays the shown chord through the strum synth. -->
-    <div id="diagWrap"><canvas id="diagCanvas"></canvas></div>
+    <!-- Diagram for the selected instrument, the voicing picker, and a button
+         that plays the shown chord through the strum synth. -->
+    <div id="diagWrap"><canvas id="diagCanvas" role="img" aria-label="Chord diagram"></canvas></div>
     <div id="voicings"></div>
-    <button id="strumBtn">♪ Hear this chord</button>
+    <button class="btn" id="strumBtn"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h3l4-3v10l-4-3H3z"/><path d="M12 5.5c1 1.4 1 3.6 0 5"/></svg>Hear this chord</button>
     <!-- Per-span histogram of the most-detected chords. -->
-    <div id="tallyHead">Most Detected · this span</div>
-    <div id="tally"><div id="tallyEmpty">play something — chords tally up here…</div></div>
-  </div>
+    <div id="tallyHead">Most played</div>
+    <div id="tally"><div id="tallyEmpty">Play something. Chords count up here.</div></div>
+  </section>
 
-  <!-- RIGHT: tuner + live spectrogram -->
-  <div class="col" id="tuner">
-    <div class="zone-lbl"><span class="dot" style="background:#c890ff;box-shadow:0 0 8px #c890ff"></span>Tuner · Spectrogram</div>
-    <!-- Autocorrelation tuner readout: detected note, frequency, and a cents
-         needle against the active target string. -->
-    <div id="tunerTop">
-      <div id="tunerNote">—</div>
-      <div id="tunerFreq">— Hz</div>
+  <!-- TUNER: arc needle, string targets, reference pitch, spectrum -->
+  <section class="panel col" id="tuner" aria-label="Tuner">
+    <div class="ph"><h2>Tuner</h2><span class="ph-sub">Standard guitar tuning</span></div>
+    <div id="gaugeWrap">
+      <canvas id="gaugeCanvas" aria-hidden="true"></canvas>
+      <div id="tunerTop">
+        <div id="tunerNote">—</div>
+        <div id="tunerFreq">Play one string</div>
+      </div>
     </div>
-    <div id="centsBar"><div id="centsNeedle"></div></div>
-    <div id="centsLbl"><span>♭ −50</span><span>in tune</span><span>+50 ♯</span></div>
-    <div id="tuneTargetLbl">target auto · tap a string to lock</div>
-    <!-- Reference pitch: A4 for the tuner, the string tones and the strum. -->
-    <div id="refRow"><button class="sbtn" id="a4Dn" aria-label="Lower the reference pitch">−</button><span id="a4Val">A4 440 Hz</span><button class="sbtn" id="a4Up" aria-label="Raise the reference pitch">+</button></div>
-    <!-- Waterfall spectrogram with string reference lines and tuning ladder. -->
-    <canvas id="specCanvas"></canvas>
     <!-- Buttons to sound each open string and lock the tuning target. -->
     <div id="stringRow"></div>
+    <div id="tuneTargetLbl">target auto · tap a string to lock</div>
+    <!-- Reference pitch: A4 for the tuner, the string tones and the strum. -->
+    <div id="refRow"><button class="btn sq" id="a4Dn" aria-label="Lower the reference pitch">−</button><span id="a4Val">A4 440 Hz</span><button class="btn sq" id="a4Up" aria-label="Raise the reference pitch">+</button></div>
+    <!-- Waterfall spectrogram with a note grid, string lines and tuning ladder. -->
+    <div class="subhead">Spectrum</div>
+    <canvas id="specCanvas" aria-hidden="true"></canvas>
+  </section>
+</main>
+
+<!-- CHORD LOG: the running staff -->
+<section class="panel" id="staffZone" aria-label="Chord log">
+  <div class="ph">
+    <h2>Chord log</h2><span class="ph-sub">four chords to a bar</span>
+    <span class="ph-r" id="staffBtns"><button class="btn sm" id="copyStaff" title="Copy the chord log as text (C)">Copy</button><button class="btn sm" id="clearStaff" title="Clear the log">Clear</button></span>
+  </div>
+  <div id="staffScroll"><canvas id="staffCanvas"></canvas></div>
+</section>
+
+<!-- Mic gate: the start card (a user gesture is required to open the mic),
+     the permission wait, and any error text. main.js hides it once the
+     stream is live; when paused it comes back as a small resume card. -->
+<div id="micGate">
+  <div class="gateCard" role="dialog" aria-labelledby="gateTitle">
+    <div class="gateIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div>
+    <h1 id="gateTitle">Hear a chord, see how to play it</h1>
+    <div id="micHint">Play a chord on any instrument. ChordLab names it, shows the shape, and keeps a log.</div>
+    <button id="micBtn">Start listening</button>
+    <div id="micWait">Waiting for microphone permission…</div>
+    <div id="micErr" role="alert"></div>
+    <div class="gateNote">Sound stays on this device. Nothing is recorded or sent.</div>
+    <button id="gateSkip" class="linkbtn">Look around first</button>
   </div>
 </div>
-
-<!-- BOTTOM: the running staff -->
-<div id="staffZone">
-  <div class="zone-lbl"><span class="dot" style="background:#64c864;box-shadow:0 0 8px #64c864"></span>Chord Log · 4-bar staff</div>
-  <div id="staffBtns"><button class="sbtn" id="copyStaff" title="Copy the chord log as text (C)">⧉ Copy</button><button class="sbtn" id="clearStaff" title="Clear the log">✕ Clear</button></div>
-  <div id="staffScroll"><canvas id="staffCanvas"></canvas></div>
 </div>
 
 <!-- Live status line: mic state, level, tuning, chord, log count, and fps. -->
@@ -163,30 +197,30 @@
   <span id="st-tune">tuning —</span><span class="sep"></span>
   <span id="st-chord">chord —</span><span class="sep"></span>
   <span id="st-log">0 logged</span><span class="sep"></span>
-  <span id="st-fps">-- fps</span><span class="sep"></span>
-  <button id="st-keys" title="Keyboard shortcuts (?)">? keys</button>
+  <span id="st-fps">-- fps</span>
+  <button id="st-keys" title="Keyboard shortcuts (?)">Keys ?</button>
 </div>
 
 <!-- Keyboard shortcut card, toggled by ? (hidden on touch layouts). -->
 <div id="keysCard" hidden>
-  <div class="kc-h">Keys</div>
+  <div class="kc-h">Keyboard</div>
   <dl>
     <dt>Space</dt><dd>start / pause listening</dd>
     <dt>H</dt><dd>hear the chord on the diagram</dd>
     <dt>← →</dt><dd>previous / next voicing</dd>
-    <dt>1 – 4</dt><dd>guitar · bass · uke · violin</dd>
+    <dt>1 – 5</dt><dd>guitar · bass · uke · violin · piano</dd>
     <dt>C</dt><dd>copy the chord log</dd>
     <dt>[ ]</dt><dd>reference pitch A4 −1 / +1 Hz</dd>
     <dt>?</dt><dd>show / hide this card</dd>
   </dl>
 </div>
 
-<!-- Bottom tab bar shown only on narrow screens; switches the visible zone. -->
-<nav id="mobTabs">
-  <button data-t="now"   class="on"><span class="ti">◉</span><span class="tl">Listen</span></button>
-  <button data-t="diag"><span class="ti">⌗</span><span class="tl">Chords</span></button>
-  <button data-t="tuner"><span class="ti">∿</span><span class="tl">Tuner</span></button>
-  <button data-t="staff"><span class="ti">♩</span><span class="tl">Staff</span></button>
+<!-- Bottom tab bar shown only on narrow screens; switches the visible panel. -->
+<nav id="mobTabs" aria-label="Panels">
+  <button data-t="now" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span class="tl">Listen</span></button>
+  <button data-t="diag"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18M10 3v18M14 3v18M18 3v18M6 7h12M6 11h12M6 15h12"/><circle cx="10" cy="9" r="1.6"/><circle cx="14" cy="13" r="1.6"/></svg><span class="tl">Play it</span></button>
+  <button data-t="tuner"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l3.5-5"/></svg><span class="tl">Tuner</span></button>
+  <button data-t="staff"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 11h18M3 15h18"/><ellipse cx="9" cy="15" rx="2.2" ry="1.6"/><path d="M11.2 15V6"/></svg><span class="tl">Log</span></button>
 </nav>
 
 <script src="dsp.js"></script>

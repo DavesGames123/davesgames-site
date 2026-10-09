@@ -38,9 +38,10 @@
 //    meter  oscilloscope + log band bars .......... drawMeter()
 //    diag   fretboard / staff per instrument ...... redrawDiagram()
 //    staff  running 4-bar notation of the log ..... drawStaff()
-//    spec   rainbow waterfall + tuning ladder ..... drawSpec()
+//    spec   inferno waterfall + note grid + ladder  drawSpec()
+//    gauge  tuner arc needle on a spring .......... drawGauge()
 //
-//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  SECTION MAP   (jump with grep -n "<anchor>" *.js)
 //  ──────────────────────────────────────────────────────────────────────────
 //    pitch classes ........ "NOTE_NAMES"       chroma wheel names + colors
 //    chord templates ...... "const QUALS"      interval sets per quality
@@ -60,6 +61,11 @@
 //    bass map ............. "function drawBass"        chord-tone fretboard
 //    chord box ............ "function drawChordBox"    guitar/uke diagram
 //    violin map ........... "function drawViolin"      first-position tones
+//    piano map ............ "function drawPiano"       root-position keys
+//    finger numbers ....... "function fingerFor"       chord-box fingering
+//    tuner gauge .......... "function drawGauge"       arc needle + spring
+//    hero + history ....... "function renderHero"      notes chips, recent chips
+//    mic states ........... "function syncMicUi"       gate, pill, resume
 //    input meter .......... "function drawMeter"       scope + bands
 //    staff ................ "function drawStaff"       running notation
 //    tuner ................ "autoCorrelate"    ACF2+ pitch detector
@@ -193,8 +199,8 @@ function stopMic(msg){
   if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
   keepAwake(false);
   if(curChord)holdChord(true);
-  $('micBtn').innerHTML='🎤&nbsp; Resume Listening';
-  $('micHint').innerHTML='Paused. The last chord stays on screen.<br>Press the button or Space to listen again.';
+  $('micBtn').textContent='Resume listening';
+  $('micHint').textContent='Paused. The last chord stays on screen. Press the button or Space to listen again.';
   $('micGate').classList.remove('hidden');
   $('micToggle').hidden=true;
   $('st-mic').textContent='mic paused';
