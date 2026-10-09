@@ -11,36 +11,38 @@
   ═══════════════════════════════════════════════════════════════════════════
    MANY BEADS  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Many beads on one circular wire, colliding with each other: constrained dynamics with position based dynamics.
+   Beads on circular wires by position based dynamics, colliding with each other: a Newton's cradle, crowded wires and turning gravity. The page starts a random scene on load and keeps it running.
 
    CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #05.
    Upstream file: tenMinutePhysics/05-manyBeads.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of sim.js, which holds the upstream step).
    Video tutorial: https://youtu.be/qISgdDhdCro
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): concentric wires, counts, sizes and mass rules, start patterns, restitution, friction, gravity tilt and turn, shake, add and kick, dragging, the renderer, the sim kit GUI and the saver.
+
+   FILES
+     sim.js      simulation, schema, guard (no DOM)
+     main.js     page controller: sim kit GUI, drawing, pointer
+     saver.js    screensaver shots (sim kit director)
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, page2d frame),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  sim.js     controls and random rules
+     grep -n 'const SHOTS'                 saver.js   the screensaver shots
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Many beads on one circular wire, colliding with each other: constrained dynamics with position based dynamics. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="Beads on circular wires that collide: Newton's cradle, crowded wires and turning gravity. After Matthias Müller's Ten Minute Physics #05.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-	<button class="button" onclick="setupScene()">Restart</button>
-	<br>
-	<canvas id="myCanvas"></canvas>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<canvas id="view" aria-label="Beads on a wire. Drag a bead; tap a wire to add one."></canvas>
+<script type="module" src="main.js"></script>
 </body>
 </html>
