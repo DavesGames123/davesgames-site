@@ -24,7 +24,16 @@
 //  far cut) and add spin and drift. The spin and drift rates ease to
 //  each new shot's values (MOVE_RATE), so a cut never starts a turn at
 //  full speed.
+//  A shot with camEnd eases the altitude and tilt from cam to camEnd over
+//  the shot (a push in or a pull back; it waits for the cut's flight). A
+//  shot that follows the 'front' flies on to each new city that the
+//  infection reaches (at most once per FRONT_GAP s, only if it is more
+//  than FRONT_MIN_DEG away), at the calm flight caps.
 //  Any user edit of the disease, policies, style or run stops Auto.
+//
+//  Stats: stats.js createStats reads the sim each frame (growth, exports,
+//  tipping regions, the curve). view() hands them to the director, and
+//  frame() hands the HUD values to the globe when the saver HUD is on.
 //
 //  Framing: occlusion() is the area that the panel, HUD, base bar and dock
 //  leave clear (ui.clearRect). The globe centres in it by setViewOffset.
@@ -58,6 +67,10 @@ import { createGlobe } from './render/globe.js';
 import { createUI } from './ui.js';
 import { createChart } from './charts.js';
 import { installSaver } from './saver.js';
+import { createStats } from './stats.js';
+import { hudRect } from './render/hud.js';
+import { phoneView } from './budget.js';
+import { ease } from './camera.js';
 
 export const DEFAULT_DISEASE = 'covid-ancestral';
 export const MAX_DT = 0.1;         // s, the largest frame step
@@ -71,6 +84,7 @@ const SEED_POOL = 60;              // the random seed city is one of the largest
 export const LABELS_DESKTOP = 4, LABELS_PHONE = 2;   // city labels on the globe
 export const LABEL_MIN_PREV = 1e-4;                  // I/N below this gets no label
 export const LABEL_EVERY = 0.75;                     // s between label set changes
+export const FRONT_GAP = 3, FRONT_MIN_DEG = 8;       // the front follow of a shot
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
@@ -126,6 +140,8 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
   let fl = null, flT = 0, move = { spin: 0, drift: 0 }, vel = { spin: 0, drift: 0, idle: 0 };
   let ui = null, chart = null, ctl = null, saverRect = null;
   let lastT = null, now = 0, idleAt = 0, chartAt = -1e9;
+  const stats = createStats(D);
+  let push = null, shotFollow = null, frontAt = -1e9, frontNode = -1, hudFocus = null;
 
   const mode = () => (globe.mode === 'flat' ? 'flat' : 'globe');
   const autoMode = () => (ctl ? ctl.mode : null);
@@ -135,6 +151,7 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     sim = createSim({ D, net, disease: st.disease, policies: st.policies, seed: st.seed,
       seedNode: runSeedNode, startDayOfYear: st.startDayOfYear });
     cursor = 0; events = []; newestFirst = null; prev.fill(0);
+    stats.reset(); frontNode = -1;
     if (chart && chart.invalidate) chart.invalidate();
   }
 
@@ -155,7 +172,26 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     move = { spin: +(s && s.spin) || 0, drift: +(s && s.drift) || 0 };
     if (fly) { fl = flight(cam, to, { ...FLY, mode: mode() }); flT = 0; }
     else { fl = null; cam = to; vel = { spin: 0, drift: 0, idle: 0 }; }
+    const end = s && s.camEnd;
+    push = end && Number.isFinite(end.alt)
+      ? { a0: to.alt, a1: end.alt, t0: to.tilt || 0, t1: Number.isFinite(end.tilt) ? end.tilt : (to.tilt || 0), t: 0, dur: Math.max(3, (s.dur || 10) - (fl ? fl.dur : 0)) }
+      : null;
+    shotFollow = s && s.follow ? { ...s.follow } : null;
+    frontAt = now; frontNode = shotFollow && shotFollow.kind === 'front' ? shotFollow.id : -1;
+    hudFocus = (s && s.hud) || null;
     globe.setCamera(cam);
+  }
+
+  // the 'front' follow: fly on to the newest city reached
+  function followFront() {
+    if (!shotFollow || shotFollow.kind !== 'front' || fl || !newestFirst || !autoMode()) return;
+    const i = newestFirst.to, n = D.nodes[i];
+    if (!n || i === frontNode || now - frontAt < FRONT_GAP) return;
+    frontNode = i;
+    const R = Math.PI / 180, d = Math.acos(Math.max(-1, Math.min(1, Math.sin(cam.lat * R) * Math.sin(n.lat * R) + Math.cos(cam.lat * R) * Math.cos(n.lat * R) * Math.cos((cam.lon - n.lon) * R)))) / R;
+    if (d < FRONT_MIN_DEG || d > 70) return;
+    frontAt = now;
+    fl = flight(cam, { ...cam, lat: n.lat, lon: n.lon }, { ...FLY, mode: mode() }); flT = 0;
   }
 
   function updateCamera(dt) {
@@ -168,6 +204,12 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
       flT += dt; cam = fl.at(Math.min(flT, fl.dur));
       if (flT >= fl.dur) fl = null;
     } else {
+      if (push && auto) {
+        push.t = Math.min(push.dur, push.t + dt);
+        const k = ease(push.t / push.dur);
+        cam.alt = push.a0 + (push.a1 - push.a0) * k;
+        cam.tilt = push.t0 + (push.t1 - push.t0) * k;
+      }
       cam.heading = ((cam.heading || 0) + vel.spin * dt) % 360;
       if (mode() === 'globe') cam.lon = wrapLon(cam.lon + (vel.drift + vel.idle) * dt);
     }
@@ -189,6 +231,8 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     return {
       day: sim.day, burnedOut: sim.burnedOut, totals: sim.totals(), reff: sim.reffGlobal(),
       hottest: hottestNode(sim), newestFirst, topRegion: topRegion(sim), active: sim.active, D,
+      sim, growth: stats.growth(sim), exporter: stats.exporter(sim), tipped: stats.tipped(sim),
+      curve: stats.curve(sim), hud: stats.hud(sim), regionStats: stats.regions(sim),
     };
   }
 
@@ -201,15 +245,27 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     const ev = sim.eventsSince(cursor);
     cursor = ev.cursor; events = ev.list;
     for (const e of events) if (e.first && !e.blocked) newestFirst = e;
+    stats.update(sim, events);
     for (let i = 0; i < N; i++) prev[i] = sim.I[i] / pop[i];
+    followFront();
     updateCamera(dt);
-    globe.update({ t, dt, sim, prev, events, mode: mode() });
+    const hud = globe.hudOn ? { ...stats.hud(sim), series: sim.history.inc, curve: stats.curve(sim) } : null;
+    if (globe.setHud && globe.hudOn && hudFocus !== hudShown) { hudShown = hudFocus; globe.setHud({ on: true, rect: hudBox(), focus: hudFocus }); }
+    globe.update({ t, dt, sim, prev, events, mode: mode(), hud });
     if (ui) ui.update(sim, t * 1000);
     if (chart && t - chartAt >= CHART_EVERY) {
       chartAt = t;
       if (chart.setLog) chart.setLog(ui ? ui.chartLog : st.chartLog);
       chart.draw(sim.history, sim.active, st.disease);
     }
+  }
+
+  // the saver HUD box: the bottom-left of the clear band
+  let hudBand = null, hudShown = null;
+  const winOf = () => (typeof window !== 'undefined' ? window : null);
+  function hudBox() {
+    const w = winOf(), W = w ? w.innerWidth : 1280, H = w ? w.innerHeight : 800;
+    return hudRect(hudBand, W, H, phoneView(w), hudFocus);
   }
 
   // ── the ui.js api ──────────────────────────────────────────────────────
@@ -260,7 +316,13 @@ export function createApp({ D, net, globe, canvas = null, disease = DEFAULT_DISE
     setSpeed: v => { st.speed = Math.max(0, +v || 0); },
     play: b => { st.playing = !!b; },
     setShot,
-    setViewRect(r) { saverRect = r || null; layout(); },
+    setViewRect(r) { saverRect = r || null; layout(); if (globe.hudOn) { hudBand = saverRect; globe.setHud({ on: true, rect: hudBox(), focus: hudFocus }); } },
+    // the on-canvas HUD (saver only): on, and the clear band it sits in
+    setHud(o = {}) {
+      if (!globe.setHud) return false;
+      hudBand = o.band || saverRect || null; hudShown = hudFocus;
+      return globe.setHud({ on: !!o.on, rect: o.on ? hudBox() : null, focus: hudFocus });
+    },
     saveState: () => ({ ...st, style: globe.style || st.style, cam: { ...cam } }),
     restoreState(s) {
       if (!s) return;

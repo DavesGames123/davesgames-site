@@ -34,12 +34,19 @@
 //                    runner calls globe.setViewOffset(l, r, t, b).
 //    saveState(), restoreState(s)   optional: the screensaver keeps the
 //                    viewer's settings and puts them back on exit
+//    setHud({ on, band })  optional: the on-canvas HUD (render/hud.js) in
+//                    the clear band. The screensaver turns it on (the shell
+//                    hides the DOM HUD and records only the canvas); the
+//                    Auto button does not (the page HUD is there).
 //
 //  In the shell, the subject sits in the clear band of the label plate
 //  (plateBand from lib/saver-clear.js). The band holds for a shot and
 //  only grows, so the view does not move while the plate text changes.
 //  The camera altitude is scaled by the band height, so the globe fills
-//  the band and not the full frame. The plate has no code.
+//  the band and not the full frame. A shot's camEnd (push in, pull back)
+//  gets the same scale. The plate has no code; its sub line names what
+//  the shot shows with live numbers (director.js plate), refreshed every
+//  PLATE_EVERY s, and the HUD on the canvas ticks the counters.
 //
 //  grep -n targets: "export function createAuto", "export function installSaver",
 //    "const FADE_S", "const NEAR_DEG", "function apply", "function bandRect",
@@ -97,13 +104,17 @@ export function createAuto(app, { seed, calm = 0.7, label = null, band = false }
     if (s.style !== style) { style = s.style; if (app.globe && app.globe.setStyle) app.globe.setStyle(style); }
     const r = bandRect(now);
     const cam = { ...s.cam };
+    const camEnd = s.camEnd ? { ...s.camEnd } : null;
     if (r && typeof window !== 'undefined') {
       const fill = Math.max(0.3, (r.b - r.t) / window.innerHeight);
-      cam.alt = s.style === 'flat' ? cam.alt / fill : (1 + cam.alt) / fill - 1;
+      const sc = a => (s.style === 'flat' ? a / fill : (1 + a) / fill - 1);
+      cam.alt = sc(cam.alt);
+      if (camEnd && Number.isFinite(camEnd.alt)) camEnd.alt = sc(camEnd.alt);
     }
     app.setSpeed(s.simSpeed);
     app.play(s.simSpeed > 0);
-    app.setShot({ ...s, cam }, { fly });
+    app.setShot({ ...s, cam, camEnd }, { fly });
+    if (band && app.setHud) app.setHud({ on: true, band: r });
     sendPlate(now, true);
   }
 
@@ -127,6 +138,7 @@ export function createAuto(app, { seed, calm = 0.7, label = null, band = false }
             const r = dir.tick(now, app.view());
             if (r.shot) apply(r.shot, false, now);
           } else apply(fade.shot, false, now);
+          dir.restartClock(now);
           fade = { phase: 2, t0: now };
         }
       } else {
@@ -155,7 +167,7 @@ export function createAuto(app, { seed, calm = 0.7, label = null, band = false }
       if (r.shot) apply(r.shot, false, now);
       fade = { phase: 2, t0: now };
     },
-    stop() { running = false; fade = null; setFade(1); if (label) label(null); },
+    stop() { running = false; fade = null; setFade(1); if (label) label(null); if (band && app.setHud) app.setHud({ on: false }); },
     frame,
     cut(kind) { return dir.force(kind); },
     get running() { return running; },

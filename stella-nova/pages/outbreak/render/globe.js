@@ -35,6 +35,11 @@
 //  the front from frame.sim.firstDay. A new sim resets the front. Between
 //  two field updates uFieldMix runs 0 -> 1, so the front crawls smoothly.
 //
+//  HUD: setHud({ on, rect, focus }) turns on the on-canvas saver HUD
+//  (render/hud.js, made on first use) in rect (CSS px). update() draws it
+//  from frame.hud (stats.js hud() values, series, curve). It draws after
+//  the fade quad, so the numbers stay on through a cut.
+//
 //  GPU rules: no EffectComposer and no render targets. budget.js caps the
 //  pixel ratio at 2 and the drawing buffer at 2560 x 1440 device px (1.6
 //  million device px on a phone, ctx.phone). The canvas draws at that
@@ -53,6 +58,7 @@ import { canvasBudget, phoneView } from '../budget.js';
 import { createField } from './field.js';
 import { infectUniforms, heartbeat, beatShape } from './infect.js';
 import { createIgnition } from './ignite.js';
+import { createHud } from './hud.js';
 import night from './style-night.js';
 import holo from './style-holo.js';
 
@@ -220,6 +226,7 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
   if (win && win.addEventListener) win.addEventListener('pagehide', onHide);
 
   const dead = new Float32Array(N);
+  let hud = null;
   const globe = {
     styles, ready, field, ctx: base,
     get style() { return curId; },
@@ -264,6 +271,7 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
       const f = { ...frame, mode: curMode };
       if (cur && cur.update) cur.update(f);
       for (const l of layers) l.update(f);
+      if (hud && hud.on) hud.update(t, frame.hud || null);
       fadeQuad.visible = fade < 0.999;
       fadeU.uA.value = 1 - fade;
       renderer.render(scene, camera);
@@ -294,6 +302,13 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
     },
     resize,
     setFade(a) { fade = Math.max(0, Math.min(1, +a || 0)); },
+    setHud(o = {}) {
+      if (o.on && !hud && !disposed) { try { hud = createHud(base); } catch (e) { console.warn('outbreak globe: hud', e); hud = null; } }
+      if (!hud) return false;
+      hud.setRect(o.rect || null); hud.setFocus(o.focus || null); hud.setOn(!!o.on);
+      return true;
+    },
+    get hudOn() { return !!(hud && hud.on); },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -301,6 +316,7 @@ export function createGlobe(canvas, { D, net, THREE, worldUrl = WORLD_URL } = {}
       if (cur) { try { cur.dispose(); } catch (e) { console.warn(e); } cur = null; }
       for (const l of layers) { try { l.dispose(); } catch (e) { console.warn(e); } }
       layers.length = 0;
+      if (hud) { hud.dispose(); hud = null; }
       field.dispose();
       fadeGeo.dispose(); fadeMat.dispose();
       renderer.dispose();
