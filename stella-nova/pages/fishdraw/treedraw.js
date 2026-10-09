@@ -30,6 +30,7 @@
 //  GREP MAP
 //    grep -n 'export function drawTree'     the canvas draw
 //    grep -n 'function drawFishBox'         one fish in a box, alpha, pen
+//    grep -n 'export function fitFish'      a fish fitted to its box by its bbox
 //    grep -n 'export function treeSVG'      the SVG elements
 //    grep -n 'export function hitTree'      the node under a plate point
 //    grep -n 'export const GROW_OVER'       the overrun for the draw-on
@@ -59,13 +60,28 @@ function backing(ctx, box, P, alpha) {
   ctx.fill();
   ctx.restore();
 }
+// The transform that fits fish f into box (mm): by the fish's own bbox, at
+// FIT of the box, centred, aspect kept. Before, the whole 500 x 300 frame
+// of fishdraw went into the box, but a fish fills only part of that frame,
+// so every tree fish was small and off centre in its box.
+export const FIT = 0.96;
+// The pen of a tree fish as a share of its box width. It was 0.0042, about
+// 4 x the main view (a 0.3 mm pen on a fish 150-250 mm wide), so on a small
+// tree fish the scales, fins and shading ran together into a blob.
+export const TREE_PEN = 0.0016;
+export function fitFish(f, box) {
+  const b = f && f.bbox && f.bbox.w > 0 && f.bbox.h > 0 ? f.bbox : { x: 0, y: 0, w: 500, h: 300 };
+  const k = Math.min(box.w / b.w, box.h / b.h) * FIT;
+  return { k, fx: box.x + box.w / 2 - (b.x + b.w / 2) * k, fy: box.y + box.h / 2 - (b.y + b.h / 2) * k };
+}
 function drawFishBox(ctx, f, box, P, alpha, prog) {
-  const s = P.view.s, k = box.w / 500 * s;
-  const ox = P.view.ox + box.x * s, oy = P.view.oy + box.y * s;
-  if (ox > ctx.canvas.width || oy > ctx.canvas.height || ox + box.w * s < 0 || oy + box.h * s < 0) return;
+  const s = P.view.s, fit = fitFish(f, box), k = fit.k * s;
+  const ox = P.view.ox + fit.fx * s, oy = P.view.oy + fit.fy * s;
+  const bx = P.view.ox + box.x * s, by = P.view.oy + box.y * s;
+  if (bx > ctx.canvas.width || by > ctx.canvas.height || bx + box.w * s < 0 || by + box.h * s < 0) return;
   if (box.w * s < 3) return;
   if (P.back && P.paper) backing(ctx, box, P, alpha);
-  const penF = clamp(box.w * 0.0042, 0.03, P.pen);
+  const penF = clamp(box.w * TREE_PEN, 0.02, P.pen);
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.setTransform(k, 0, 0, k, ox, oy);
@@ -281,8 +297,8 @@ export function treeSVG(tree, lay, o, fishFor) {
     if (!box || (box.anc && !o.anc)) continue;
     if (f && lay.natural) out.push(`<rect x="${n3(box.x - box.w * 0.04)}" y="${n3(box.y - box.h * 0.08)}" width="${n3(box.w * 1.08)}" height="${n3(box.h * 1.16)}" rx="${n3(box.h * 0.18)}" fill="${t.paper}" fill-opacity="0.86"/>`);
     if (f) {
-      const pen = clamp(box.w * 0.0042, 0.03, o.pen);
-      const dd = cellLines(f, { fx: box.x, fy: box.y, k: box.w / 500 }, o.jitter || 0).map(pl => 'M' + pl.map(([x, y]) => n2(x) + ' ' + n2(y)).join('L')).join('');
+      const pen = clamp(box.w * TREE_PEN, 0.02, o.pen);
+      const dd = cellLines(f, fitFish(f, box), o.jitter || 0).map(pl => 'M' + pl.map(([x, y]) => n2(x) + ' ' + n2(y)).join('L')).join('');
       out.push(`<path data-name="${xmlEscape(q.name)}" d="${dd}" fill="none" stroke="${ink}" stroke-width="${n3(pen)}" stroke-linecap="round" stroke-linejoin="round"${q.kind === 'extinct' ? ' stroke-opacity="0.5"' : box.anc ? ' stroke-opacity="0.8"' : ''}/>`);
     }
     if ((!box.anc || lay.natural) && o.names !== false) {

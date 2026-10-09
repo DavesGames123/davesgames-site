@@ -13,6 +13,7 @@ import path from 'node:path';
 import { plateSVG, platePolylines } from './svg.js';
 import { buildTree, layoutTree, tipBoxes, drift, lineage, paramChanges, TIP_CAP, T_MAX } from './tree.js';
 import { THEMES } from './plate.js';
+import { fitFish, TREE_PEN } from './treedraw.js';
 import { layoutPlate, pageSize, PAGES, GRID_PRESETS, cellAt, MM_PER_PX } from './plate.js';
 import { PART_ORDER, partsOf } from './engine.js';
 import { makeEngine, drawFish, baseParams, PARAMS, GROUPS, sanitize, mutate, mulberry, diffParams,
@@ -468,6 +469,22 @@ test('saver gridOptions: plate fish stay 110 px wide on phone bands', async () =
   }
   ok(gridOptions(760, 117).every(([r]) => r === 1), 'landscape phone strip: one row only');
   ok(gridOptions(1152, 258).some(([r, c]) => r * c >= 8), 'desktop keeps the large grids');
+});
+
+test('tree fish fill their box: bbox fit, centred, inside, aspect kept', () => {
+  ok(TREE_PEN <= 0.002, `the tree pen is the main view's share of the fish width (${TREE_PEN}, was 0.0042)`);
+  const E = makeEngine(SRC);
+  for (const name of ['Colus splennita', 'Biggus fishus', 'Xipola nare']) {
+    const f = flatten(drawFish(E, name, null, false).polylines);   // the pool fish shape, with bbox
+    for (const box of [{ x: 10, y: 20, w: 50, h: 30 }, { x: 0, y: 0, w: 35, h: 21 }]) {
+      const c = fitFish(f, box), b = f.bbox;
+      const x0 = c.fx + b.x * c.k, y0 = c.fy + b.y * c.k, x1 = x0 + b.w * c.k, y1 = y0 + b.h * c.k;
+      ok(x0 >= box.x - 1e-9 && y0 >= box.y - 1e-9 && x1 <= box.x + box.w + 1e-9 && y1 <= box.y + box.h + 1e-9, `${name}: inside the box`);
+      ok(Math.max((x1 - x0) / box.w, (y1 - y0) / box.h) > 0.95, `${name}: fills 96 % of the box on one axis (was the 500 x 300 frame)`);
+      ok(Math.abs((x0 + x1) / 2 - (box.x + box.w / 2)) < 1e-9 && Math.abs((y0 + y1) / 2 - (box.y + box.h / 2)) < 1e-9, `${name}: centred`);
+      ok(c.k >= box.w / 500 - 1e-12, `${name}: at least as large as the old frame fit`);
+    }
+  }
 });
 
 // node tests.mjs <text> runs only the tests whose name holds <text>.

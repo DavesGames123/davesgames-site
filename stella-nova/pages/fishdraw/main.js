@@ -225,7 +225,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 
 // ── tree sizing and camera ──────────────────────────────────────────────────
 // The smallest on-screen length of a tip fish in the tree mode, CSS px.
-const minPx = () => (PHONE_Q.matches ? 90 : 120);
+// The user found the tree fish too small at 120 (90 on a phone).
+const minPx = () => (PHONE_Q.matches ? 120 : 180);
 // A tip fish in mm on the 'screen' page: 1.3 x the minimum at zoom 1.
 const tipMM = () => minPx() * 1.3 * MM_PER_PX;
 const natural = () => S.mode === 'tree' && plateCfg().page === 'screen';
