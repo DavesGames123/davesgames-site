@@ -1,128 +1,88 @@
-// Rigid Bodies · site layer: the credit record and the screensaver shots.
-// main.js is the upstream demo; this file only calls its globals (gSimulator,
-// gCamera, gCameraControl, gRenderer, onRestart, onStart, gPaused) and the
-// scene and time step selects.
-TMP.page({ n: '22', title: 'Rigid Bodies', file: '22-rigidBodies.html', video: 'euypZDssYxE', year: 2024, licence: 'MIT' });
+// ============================================================================
+//  RIGID BODIES  ·  pages/rigid-bodies/saver.js — the screensaver shots
+// ----------------------------------------------------------------------------
+//  installSaver(P) defines window.snSaver through the sim kit director
+//  (widgets/sim-kit/saver.js). Each cut draws a fresh random scene from the
+//  page randomizer; the shot picks the scene and its start, a camera path
+//  for the stage spring camera (stage3d.js: an orbit, a front view, a
+//  chase of the lowest body, a slow push-in) and, for some shots, an
+//  autopilot hand that pulls a body with the upstream drag constraint and
+//  lets go. The plate shows the title, the scene values and one TeX line;
+//  the TMP kit adds the credit lines. No code.
+//
+//  grep -n targets: "export const SHOTS", "function camAt"
+// ============================================================================
+import { director } from '../../widgets/sim-kit/saver.js';
+import { rng } from '../../widgets/sim-kit/core.js';
 
-(function () {
-  let move = null, hand = null;
+const TEX_XPBD = String.raw`\lambda = \frac{-C}{w_1 + w_2 + \tilde\alpha},\quad \tilde\alpha = \frac{\alpha}{\Delta t^2},\quad \Delta\mathbf{x}_i = \lambda\, w_i\, \mathbf{n}`;
+const TEX_W = String.raw`w = \frac{1}{m} + (\mathbf{r}\times\mathbf{n})^{T} I^{-1} (\mathbf{r}\times\mathbf{n})`;
+const TEX_PEND = String.raw`T_k = 2\pi\sqrt{\frac{L_k}{g}} = \frac{T}{N_0 + k}`;
+const TEX_MOBILE = String.raw`V_{\text{sphere},\,k} = 2\,V_{\text{tree},\,k-1} + V_{\text{bar}}`;
+const TEX_CHAIN = String.raw`m_{k+1} = 2\,m_k,\qquad F_k = g \sum_{j \ge k} m_j`;
+const TEX_ROT = String.raw`\mathbf{q} \leftarrow \mathbf{q} + \tfrac{1}{2}\,\Delta t\,[\boldsymbol{\omega}, 0]\,\mathbf{q}`;
 
-  // Build an upstream scene: 0 = crib mobile, 1 = chain. dt = time step.
-  function setup(nr, dt) {
-    hand = null;
-    document.getElementById('sceneNumber').value = String(nr);
-    document.getElementById('timeStep').value = dt;
-    onRestart();
-    // A stiffer drag spring than the mouse one (0.001), so the autopilot
-    // hand moves the heavy bodies within a shot.
-    gSimulator.dragCompliance = 0.0001;
-    if (gPaused) onStart();
-  }
-  const dynamic = () => gSimulator.rigidBodies.filter(b => b.invMass > 0);
+export const SHOTS = [
+  { key: 'mobile', title: 'Crib mobile', sub: 'Every sphere balances the tree that hangs from the other end of its bar', tex: TEX_MOBILE,
+    scene: r => ({ scene: 'mobile', spin: (r() < 0.5 ? -1 : 1) * (0.3 + 0.6 * r()), windX: 0, windZ: 0, gust: 0 }),
+    camera: r => ({ kind: 'orbit', a0: r() * 6.28, dir: r() < 0.5 ? -1 : 1, R: 3.2, y: 1.9, ty: 1.75, tx: -0.7 }) },
+  { key: 'chain', title: 'Mass chain', sub: 'The mass doubles per link; the labels read force and stretch', tex: TEX_CHAIN,
+    scene: r => ({ scene: 'chain', growth: 2, links: 4, labels: true, density: 1000, compliance: 0.001, damping: 5, g: 10, windX: 0, windZ: 0, gust: 0 }),
+    camera: () => ({ kind: 'front', z: 3.1, y: 1.55, ty: 1.4 }), hand: 'yank' },
+  { key: 'pendulums', title: 'Pendulum wave', sub: 'Each thread fits one more swing in the cycle', tex: TEX_PEND,
+    scene: r => ({ scene: 'pendulums', count: 10 + Math.floor(5 * r()), angle: 20 + 20 * r(), g: 10, windX: 0, windZ: 0, gust: 0 }),
+    camera: r => ({ kind: 'front', z: 1.9, y: 2.25, ty: 2.0, x: (r() - 0.5) * 0.8 }) },
+  { key: 'chandelier', title: 'Chandelier', sub: 'A turning hub with chains and drops', tex: TEX_ROT,
+    scene: r => ({ scene: 'chandelier', count: 6 + Math.floor(7 * r()), spin: 0.8 + 1.2 * r(), windX: 0, windZ: 0 }),
+    camera: r => ({ kind: 'orbit', a0: r() * 6.28, dir: r() < 0.5 ? -1 : 1, R: 2.2, y: 1.5, ty: 2.0 }) },
+  { key: 'bridge', title: 'Rope bridge', sub: 'Planks on two ropes; a hand pulls one up and lets go', tex: TEX_XPBD,
+    scene: r => ({ scene: 'bridge', count: 7 + Math.floor(6 * r()), windX: 0, windZ: 0, gust: 0 }),
+    camera: r => ({ kind: 'orbit', a0: 0.5 + 0.8 * r(), dir: r() < 0.5 ? -1 : 1, R: 2.4, y: 2.4, ty: 1.7 }), hand: 'lift' },
+  { key: 'net', title: 'Net in the wind', sub: 'A grid of beads on threads billows in gusts', tex: TEX_XPBD,
+    scene: r => ({ scene: 'net', count: 7 + Math.floor(5 * r()), windZ: 1 + 1.5 * r(), windX: (r() - 0.5) * 1.5, gust: 0.4 + 0.5 * r() }),
+    camera: r => ({ kind: 'orbit', a0: 0.6 + 0.6 * r(), dir: r() < 0.5 ? -1 : 1, R: 2.4, y: 1.8, ty: 1.85 }) },
+  { key: 'wrecking', title: 'Wrecking ball', sub: 'A heavy sphere on a chain of links', tex: TEX_W,
+    scene: r => ({ scene: 'wrecking', count: 6 + Math.floor(6 * r()), angle: 40 + 35 * r(), windX: 0, windZ: 0, gust: 0 }),
+    camera: r => ({ kind: 'chase', az: r() * 6.28 }) },
+];
 
-  // ---- autopilot hand ----------------------------------------------------------
-  // Grab a body at its centre with the upstream drag constraint, move the
-  // grab point along a path, let go, rest, then grab again.
-  // pick(c) returns a body; path(c, b) returns { dur, rest, at(u, p0) }.
-  function handOn(c, pick, path, wait) { hand = { c, pick, path, phase: 'rest', t: 0, dur: wait || 0.4 }; }
-  function handTick(dt) {
-    if (!hand) return;
-    hand.t += dt;
-    if (hand.phase === 'rest' && hand.t > hand.dur) {
-      const b = hand.pick(hand.c); if (!b) return;
-      hand.p0 = b.pos.clone(); hand.g = hand.path(hand.c, b);
-      gSimulator.startDrag(b, hand.p0.clone()); hand.phase = 'pull'; hand.t = 0;
-    } else if (hand.phase === 'pull') {
-      const u = Math.min(1, hand.t / hand.g.dur);
-      gSimulator.drag(hand.g.at(u, hand.p0));
-      if (u >= 1) { gSimulator.endDrag(); hand.phase = 'rest'; hand.t = 0; hand.dur = hand.g.rest; }
+export function installSaver(P) {
+  const THREE = P.THREE, stage = P.stage;
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  let cam = null, t = 0;
+  function camAt() {
+    switch (cam.kind) {
+      case 'orbit': { const a = cam.a0 + cam.dir * 0.16 * t, tx = cam.tx || 0; stage.cam.set(V(tx + Math.sin(a) * cam.R, cam.y, Math.cos(a) * cam.R), V(tx, cam.ty, 0)); break; }
+      case 'front': stage.cam.set(V((cam.x || 0) + 0.3 * Math.sin(0.2 * t), cam.y, cam.z - 0.04 * t), V(0, cam.ty, 0)); break;
+      case 'chase': default: {
+        const sim = P.sim; if (!sim) break;
+        const b = sim.rigidBodies.reduce((m, x) => (!m || x.pos.y < m.pos.y ? x : m), null); if (!b) break;
+        const a = cam.az + 0.12 * t;
+        stage.cam.set(V(b.pos.x * 0.5 + Math.sin(a) * 2.4, 1.4, b.pos.z * 0.5 + Math.cos(a) * 2.4), V(b.pos.x * 0.6, Math.max(0.8, b.pos.y), b.pos.z * 0.6));
+      }
     }
   }
-  const ease = u => u * u * (3 - 2 * u);
-  // Pull out to an offset, hold, let go. len: offset size.
-  function yank(c, len, up, slow) {
-    const a = c.rng() * 6.28, d = new THREE.Vector3(Math.cos(a) * len, up * len, Math.sin(a) * len);
-    return { dur: (1.2 + 0.6 * c.rng()) * slow, rest: (1.8 + 1.5 * c.rng()) * slow, at: (u, p0) => p0.clone().addScaledVector(d, ease(Math.min(1, u * 1.6))) };
-  }
-  // Move the grab point on a horizontal circle: the body twists the chain
-  // or the mobile above it.
-  function swirl(c, rad, turns, slow) {
-    const sg = c.rng() < 0.5 ? -1 : 1, a0 = c.rng() * 6.28;
-    return { dur: (2.5 + 1.5 * c.rng()) * slow, rest: (2.5 + 1.5 * c.rng()) * slow, at(u, p0) {
-      const a = a0 + sg * turns * 6.28 * u, r = rad * Math.min(1, 4 * u);
-      return new THREE.Vector3(p0.x + r * (Math.cos(a) - Math.cos(a0)), p0.y, p0.z + r * (Math.sin(a) - Math.sin(a0)));
-    } };
-  }
-
-  // ---- camera: one move per shot (orbit, push in, pull out, truck) -----------
-  // Distance at which a w x h subject (world units) just fills the view at
-  // the current aspect (the band can be wide or a 9:16 column).
-  function fitR(w, h) { const t = Math.tan(gCamera.fov * Math.PI / 360); return Math.max(h / 2 / t, w / 2 / (t * gCamera.aspect)); }
-  function pose(t, r, az, el) { return { t, r, az, el }; }
-  function plan(c, p) {
-    const q = { t: p.t.slice(), r: p.r, az: p.az, el: p.el }, k = c.rng(), sg = c.rng() < 0.5 ? -1 : 1;
-    if (k < 0.35) q.az += sg * (0.9 + 0.8 * c.rng());
-    else if (k < 0.6) { q.r *= 0.72 + 0.1 * c.rng(); q.el += 0.15 * (c.rng() - 0.5); }
-    else if (k < 0.75) { p.r *= 0.75; }
-    else { const s = sg * p.r * 0.25; q.t[0] += Math.cos(p.az) * s; q.t[2] -= Math.sin(p.az) * s; q.az += 0.35 * sg; }
-    move = { a: p, b: q, T: 10 * (0.8 + 0.4 * c.calm) };
-  }
-  function camTick(t) {
-    if (!move) return;
-    let u = Math.min(1, t / move.T); u = ease(u);
-    const a = move.a, b = move.b, m = (x, y) => x + (y - x) * u;
-    const tx = m(a.t[0], b.t[0]), ty = m(a.t[1], b.t[1]), tz = m(a.t[2], b.t[2]), r = m(a.r, b.r), az = m(a.az, b.az), el = m(a.el, b.el), ce = Math.cos(el);
-    gCamera.position.set(tx + r * ce * Math.sin(az), ty + r * Math.sin(el), tz + r * ce * Math.cos(az));
-    gCameraControl.target.set(tx, ty, tz);
-    gCamera.lookAt(tx, ty, tz);
-  }
-
-  // The mobile hangs between x = -2.05 and 0.41, y = 0.9 and 2.8, and
-  // turns about its top rope at x = 0; the chain hangs between y = 1.0 and
-  // 2.5 at x = 0.
-  const MOBILE = [-0.5, 1.85, 0], CHAIN = [0.05, 1.75, 0];
-  const EQ = ['Δλ = −C / (w₀ + w₁ + α / Δt²)', 'wᵢ = 1/mᵢ + (rᵢ × n)ᵀ Iᵢ⁻¹ (rᵢ × n)'];
-  const CODE_XPBD = { lang: 'js', name: 'applyCorrection', text: 'let w = this.getInverseMass(normal, pos);\nif (otherBody != undefined)\n  w += otherBody.getInverseMass(normal, otherPos);\n// XPBD\nlet alpha = compliance / this.dt / this.dt;\nlet lambda = -C / (w + alpha);\nnormal.multiplyScalar(-lambda);' };
-  const CODE_STEP = { lang: 'js', name: 'simulate', text: 'let sdt = this.dt / this.numSubSteps;\nfor (let subStep = 0; subStep < this.numSubSteps; subStep++)\n{\n  for (let i = 0; i < this.rigidBodies.length; i++)\n    this.rigidBodies[i].integrate(sdt, this.gravity);\n  for (let i = 0; i < this.distanceConstraints.length; i++)\n    this.distanceConstraints[i].solve();' };
-  const CODE_ROT = { lang: 'js', name: 'integrate', text: 'this.dRot.set(this.omega.x, this.omega.y, this.omega.z, 0.0);\nthis.dRot.multiply(this.rot);\nthis.rot.x += 0.5 * dt * this.dRot.x;\nthis.rot.y += 0.5 * dt * this.dRot.y;\nthis.rot.z += 0.5 * dt * this.dRot.z;\nthis.rot.w += 0.5 * dt * this.dRot.w;\nthis.rot.normalize();' };
-  const slowOf = c => 0.8 + 0.5 * c.calm;
-  const shots = [
-    { key: 'mobile', label: { title: 'Crib Mobile', lines: ['Five bars and six spheres on rope constraints; a hand pulls one body, then lets go.', 'Rope: a one-sided distance constraint, slack when shorter.'], eq: EQ, code: CODE_XPBD },
-      run(c) {
-        setup(0, '0.02');
-        handOn(c, () => { const d = dynamic(); return d[Math.floor(c.rng() * d.length)]; }, () => yank(c, 0.25 + 0.25 * c.rng(), 0.3 * c.rng(), slowOf(c)));
-        plan(c, pose(MOBILE.slice(), fitR(2.6, 2.4) * (1.5 + 0.2 * c.rng()), 0.6 * (c.rng() - 0.5), 0.15 + 0.2 * c.rng()));
-      } },
-    { key: 'twist', label: { title: 'Twisting the Mobile', lines: ['The hand swings the lowest sphere round; each bar turns on its rope.', 'Rotation is a quaternion, integrated with the angular velocity.'], eq: ['q ← q + ½ Δt [ω, 0] q', 'q ← q / |q|'], code: CODE_ROT },
-      run(c) {
-        setup(0, '0.02');
-        handOn(c, () => { const d = dynamic(); return d[d.length - 1 - Math.floor(2 * c.rng())]; }, () => swirl(c, 0.25 + 0.15 * c.rng(), 1 + c.rng(), slowOf(c)), 0.2);
-        plan(c, pose([-0.3, 1.8, 0], fitR(3.2, 2.4) * (1.5 + 0.2 * c.rng()), c.rng() * 6.28, 0.25 + 0.2 * c.rng()));
-      } },
-    { key: 'chain', label: { title: 'Chain of Boxes', lines: ['Each box doubles the mass of the box above; the links show force and stretch.', 'Links: soft distance constraints, compliance 0.001.'], eq: EQ, code: CODE_XPBD },
-      run(c) {
-        setup(1, '0.02');
-        handOn(c, () => { const d = dynamic(); return d[d.length - 1 - (c.rng() < 0.3 ? 1 : 0)]; }, () => yank(c, 0.3 + 0.2 * c.rng(), 0.6 * c.rng(), slowOf(c)));
-        plan(c, pose(CHAIN.slice(), fitR(0.9, 1.8) * (1.35 + 0.2 * c.rng()), 0.8 * (c.rng() - 0.5), 0.1 + 0.2 * c.rng()));
-      } },
-    { key: 'coarse', label: { title: 'Large Time Steps', lines: ['Δt = 0.05 s, cut into 10 substeps: the bodies stay stable.', 'Small substeps keep the constraints stiff with one iteration each.'], eq: ['Δt_sub = Δt / n', 'α̃ = α / Δt_sub²'], code: CODE_STEP },
-      run(c) {
-        const mob = c.rng() < 0.4;
-        setup(mob ? 0 : 1, '0.05');
-        handOn(c, () => { const d = dynamic(); return d[d.length - 1]; }, () => mob ? yank(c, 0.4, 0.2, slowOf(c)) : swirl(c, 0.3, 1.5, slowOf(c)));
-        plan(c, pose((mob ? MOBILE : CHAIN).slice(), mob ? fitR(2.6, 2.4) * 1.6 : fitR(0.9, 1.8) * 1.45, c.rng() * 6.28, 0.15 + 0.2 * c.rng()));
-      } },
-  ];
-
-  TMP.saver({
-    canvas: () => gRenderer.domElement,
-    bg: '#000',
-    enter() { gCameraControl.enabled = false; },
-    fit(w, h) {
-      gRenderer.setSize(w, h); gCamera.aspect = w / h; gCamera.updateProjectionMatrix();
-      return false;
+  return director({
+    kit: P.kit,
+    canvas: () => stage.canvas,
+    shots: SHOTS.map(s => Object.assign({ params: st => [
+      { sym: 'n', name: 'bodies', value: String(P.sim ? P.sim.rigidBodies.length : 0) },
+      { sym: 'g', name: 'gravity', value: st.g.toFixed(1) + ' m/s²' },
+      { sym: '\\alpha', name: 'compliance', value: st.compliance.toExponential(1) },
+    ] }, s)),
+    apply(state, shot, c) {
+      P.rebuild(); t = 0; cam = shot ? c : null;
+      if (shot && shot.hand) {
+        const r = rng((P.kit.seed ^ 0x51ab) >>> 0);
+        P.setHand(shot.hand === 'lift'
+          ? { pick: bs => bs[Math.floor(bs.length / 2)], dir: () => V(0, 0.45, 0.25), dur: 1.4, rest: 2.2 }
+          : { pick: bs => bs[bs.length - 1], dir: () => V((r() < 0.5 ? -1 : 1) * (0.2 + 0.15 * r()), 0.1 * r(), 0.15 * (r() - 0.5)), dur: 1.1, rest: 2.6, soft: 0.02 });
+      } else P.setHand(null);
+      if (cam) { camAt(); stage.cam.snap(); }
     },
-    shots,
-    tick(dt, c) { camTick(c.t); handTick(dt); },
+    frame(band) { P.setBand(band ? { x: band.x, y: band.y, w: band.w, h: band.h } : null); },
+    tick(dt) { if (cam) { t += dt; camAt(); } },
+    enter() { stage.setAuto(true); },
+    exit() { cam = null; P.setHand(null); stage.setAuto(false); P.setBand(null); },
   });
-})();
+}

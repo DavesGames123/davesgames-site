@@ -11,61 +11,49 @@
   ═══════════════════════════════════════════════════════════════════════════
    RIGID BODIES  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   A basic rigid body simulator with position based dynamics: stacks, chains and collisions in 3D.
+   XPBD rigid bodies on distance constraints: a crib mobile, a mass
+   chain, a pendulum wave, a chandelier, a rope bridge, a net and a
+   wrecking ball. The page starts a random scene on load and keeps it
+   running. Drag a body to pull it; let go fast to throw it.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #22.
-   Upstream file: tenMinutePhysics/22-rigidBodies.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/euypZDssYxE
+   CREDIT. The upstream demo is Ten Minute Physics #22 by Matthias Müller:
+   tenMinutePhysics/22-rigidBodies.html in
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of sim.js). The credit bar (kit.js) names the author on
+   the page and the saver plate.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): the scene parameters, the
+   five new scenes, wind and gusts, the look, the GUI and the saver.
+
+   FILES
+     sim.js      the upstream classes (bodies, constraints, simulator,
+                 labels), with site changes marked "site:"
+     scenes.js   scene builders, schema, random rules, guard
+     app.js      page controller: kit, stage, recolour, drag, loop
+     saver.js    screensaver shots (sim kit director)
+     main.js     credit record + start()
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, 3D stage),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scenes.js  controls and random rules
+     grep -n 'export const SHOTS'          saver.js   the screensaver shots
+     grep -n 'export class RigidBody'      sim.js     the upstream body
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A basic rigid body simulator with position based dynamics: stacks, chains and collisions in 3D. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="XPBD rigid bodies on threads: crib mobiles, mass chains with force labels, pendulum waves, chandeliers, rope bridges and nets. After Matthias Müller's Ten Minute Physics #22.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-        <h1>Rigid Body Simulation</h1> 
-		<button id = "startButton" onclick="onStart()" class="button">Start</button>
-		<button id = "startRestart" onclick="onRestart()" class="button">Restart</button>
-
-        Scene:
-
-        <select id="sceneNumber" class="styled-select" onchange="onRestart()">
-            <option value="0">Crib mobile</option>
-            <option value="1">Chain</option>
-        </select>
-
-        Time step size:
-
-        <select id="timeStep" class="styled-select" onchange="onRestart()">
-            <option value="0.01">0.01</option>
-            <option value="0.02" selected>0.02</option>
-            <option value="0.05">0.05</option>
-        </select>
-        s
-	
-		<br><br>		
-        <div id="container"></div>
-
-	
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/geometries/TextGeometry.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/loaders/FontLoader.js"></script>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>
