@@ -11,43 +11,44 @@
   ═══════════════════════════════════════════════════════════════════════════
    CANNONBALL 3D  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   The cannonball simulation in 3D with three.js: a ball bouncing in a box under gravity.
+   Balls under gravity in a box, in three.js. The page starts a random
+   scene on load and keeps it running. Drag a ball to throw it.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #02.
-   Upstream file: tenMinutePhysics/02-cannonball3d.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/j84zJ06wnVA
+   CREDIT. The upstream demo is Ten Minute Physics #02 by Matthias Müller:
+   tenMinutePhysics/02-cannonball3d.html in
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of sim.js). Video: https://youtu.be/j84zJ06wnVA. The
+   credit bar (kit.js) names the author on the page and the saver plate.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): many balls, ball-ball
+   impulses, friction, drag, wind, tilt, bumpers, crates, the cannon,
+   the throw pointer, the look, the GUI and the saver.
+
+   FILES
+     sim.js      ball physics (the upstream step plus our additions)
+     scene.js    schema, random rules, guard (no DOM)
+     app.js      page controller (cannonball-vr runs it too)
+     saver.js    screensaver shots (sim kit director)
+     main.js     credit record + start()
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, 3D stage),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scene.js   controls and random rules
+     grep -n 'const SHOTS'                 saver.js   the screensaver shots
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="The cannonball simulation in 3D with three.js: a ball bouncing in a box under gravity. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="Cannonballs in a box in 3D: drop, burst, fire and throw balls with gravity, bounces, wind and tilt. After Matthias Müller's Ten Minute Physics #02.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-        <h1>Cannonball 3d</h1> 
-		<button id = "buttonRun" onclick="run()" class="button">Run</button>
-		<button onclick="restart()" class="button">Restart</button>
-
-		<br><br>		
-        <div id="container"></div>
-
-	
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>

@@ -1,97 +1,90 @@
-// Cannonball 3D · site layer: the credit record and the screensaver shots.
-// main.js is the upstream demo; this file only uses its globals (THREE,
-// threeScene, renderer, camera, cameraControl, physicsScene, Ball).
+// ============================================================================
+//  CANNONBALL 3D  ·  pages/cannonball-3d/saver.js — the screensaver shots
+// ----------------------------------------------------------------------------
+//  installSaver(P) defines window.snSaver through the sim kit director
+//  (widgets/sim-kit/saver.js). Each cut draws a fresh random scene from the
+//  page randomizer, the shot sets what it needs (a start, a gravity, the
+//  cannon), and a camera: a path for the spring camera of the stage
+//  (stage3d.js cam), as a push-in, an orbit, a top view, a chase of one
+//  ball, or a view down the cannon. The plate shows the title, the scene
+//  values and one TeX line; the TMP kit adds the credit lines. No code.
+//  cannonball-vr uses the same shots (it calls app.start too).
 //
-// Camera. The saver turns OrbitControls off (enabled = false, and update()
-// does nothing, because main.js update() calls it each frame and it would
-// aim the camera back at its own target). tick() then moves the camera on a
-// path per shot: a push-in, a truck, an orbit to a new side, or a chase.
-TMP.page({ n: '02', title: 'Cannonball 3D', file: '02-cannonball3d.html', video: 'j84zJ06wnVA', year: 2021, licence: 'MIT' });
+//  grep -n targets: "const SHOTS", "function camAt"
+// ============================================================================
+import { director } from '../../widgets/sim-kit/saver.js';
 
-(function () {
+const TEX_STEP = String.raw`\mathbf{v} \leftarrow \mathbf{v} + \mathbf{g}\,\Delta t,\qquad \mathbf{x} \leftarrow \mathbf{x} + \mathbf{v}\,\Delta t`;
+const TEX_WALL = String.raw`x < -w_x \;\Rightarrow\; x = -w_x,\;\; v_x \leftarrow -e\,v_x`;
+const TEX_IMPULSE = String.raw`J = \frac{-(1+e)\,(\mathbf{v}_b-\mathbf{v}_a)\cdot\mathbf{n}}{1/m_a + 1/m_b}`;
+const TEX_ARC = String.raw`h_{\max} = \frac{v_y^2}{2g},\qquad R = \frac{v^2 \sin 2\theta}{g}`;
+const TEX_DRAG = String.raw`\mathbf{v} \leftarrow \mathbf{w} + (\mathbf{v}-\mathbf{w})\,(1 - c_d\,\Delta t)`;
+
+// shot camera kinds: push (a -> b), orbit, top, chase (one ball), muzzle
+export const SHOTS = [
+  { key: 'push', title: 'A box of cannonballs', sub: 'Gravity, bounces and ball-ball impulses', tex: TEX_STEP,
+    scene: r => ({ start: r.pick(['drop', 'fountain', 'burst']), cannon: false }),
+    camera: r => ({ kind: 'push', side: r() < 0.5 ? -1 : 1, h: 1.6 + 1.6 * r() }) },
+  { key: 'chase', title: 'Chase camera', sub: 'The camera rides along with one ball', tex: TEX_WALL,
+    scene: r => ({ start: r.pick(['fountain', 'billiard', 'burst']), cannon: false, trails: true, count: Math.max(6, Math.round(20 * r())) }),
+    camera: r => ({ kind: 'chase', az: r() * 6.28 }) },
+  { key: 'orbit', title: 'Low orbit', sub: 'Round the box at floor height', tex: TEX_IMPULSE,
+    scene: r => ({ start: r.pick(['drop', 'rain', 'billiard']), collide: true }),
+    camera: r => ({ kind: 'orbit', a0: r() * 6.28, dir: r() < 0.5 ? -1 : 1, R: 1.5, y: 0.35 + 0.5 * r() }) },
+  { key: 'top', title: 'From above', sub: 'In plan the motion is a billiard in x and z', tex: TEX_WALL,
+    scene: r => ({ start: 'billiard', g: 10, trails: true, bumpers: Math.round(2 + 3 * r()), crates: Math.round(3 * r()) }),
+    camera: () => ({ kind: 'top' }) },
+  { key: 'cannon', title: 'Cannon', sub: 'Shots across the box, one every second or so', tex: TEX_ARC,
+    scene: r => ({ start: 'cannon', cannon: true, cannonRate: 1 + 2 * r(), cannonSpeed: 6 + 4 * r(), crates: Math.round(4 * r()), bumpers: Math.round(3 * r()), tiltX: 0, tiltZ: 0, windX: 0, windZ: 0 }),
+    camera: r => ({ kind: 'muzzle', side: r() < 0.5 ? -1 : 1 }) },
+  { key: 'moon', title: 'Moon gravity', sub: 'g = 1.62 m/s²: slow, high arcs', tex: TEX_ARC,
+    scene: r => ({ start: r.pick(['fountain', 'burst']), g: 1.62, drag: 0, windX: 0, windZ: 0, tiltX: 0, tiltZ: 0, speed: 3 + 3 * r() }),
+    camera: r => ({ kind: 'push', side: r() < 0.5 ? -1 : 1, h: 0.8 + r() }) },
+  { key: 'storm', title: 'Wind and a tilted floor', sub: 'Drag pulls every ball toward the wind', tex: TEX_DRAG,
+    scene: r => ({ start: 'rain', drag: 0.3 + 0.4 * r(), windX: (r() - 0.5) * 8, windZ: (r() - 0.5) * 8, tiltX: (r() - 0.5) * 24, tiltZ: (r() - 0.5) * 24 }),
+    camera: r => ({ kind: 'orbit', a0: r() * 6.28, dir: r() < 0.5 ? -1 : 1, R: 1.8, y: 2.2 }) },
+  { key: 'upstream', title: 'The upstream scene', sub: 'One ball, restitution 1, the box of Ten Minute Physics #02', tex: TEX_STEP,
+    scene: () => ({ start: 'upstream', trails: true }),
+    camera: r => ({ kind: 'chase', az: r() * 6.28 }) },
+];
+
+export function installSaver(P) {
+  const THREE = P.THREE, stage = P.stage;
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
-  let path = null, edges = null;
-  const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
-  // Keep ball 0 (the upstream ball), take the other meshes out, add n balls.
-  function balls(r, n, vy) {
-    const O = physicsScene.objects;
-    for (let i = 1; i < O.length; i++) threeScene.remove(O[i].visMesh);
-    O.length = 1;
-    for (let i = 0; i < n; i++) {
-      const rad = i === 0 ? 0.2 : 0.08 + 0.12 * r();
-      const pos = V((2 * r() - 1) * 1.3, rad + r() * 1.2, (2 * r() - 1) * 2.3);
-      const vel = V((2 * r() - 1) * 3, vy[0] + r() * (vy[1] - vy[0]), (2 * r() - 1) * 3);
-      if (i === 0) { O[0].pos.copy(pos); O[0].vel.copy(vel); continue; }
-      const b = new Ball(pos, rad, vel, threeScene);
-      b.visMesh.material.color.setHSL(r(), 0.75, 0.55); b.visMesh.castShadow = true;
-      O.push(b);
-    }
-    O[0].visMesh.castShadow = true;
-  }
-  function set(k, g) {
-    physicsScene.paused = false;
-    physicsScene.gravity.set(0, g, 0);
-    physicsScene.dt = (1.0 / 60.0) * (1.2 - 0.5 * k.calm);
-  }
-  // A camera path: from pose a to pose b over T seconds (longer when calm).
-  function move(k, a, b, T) { path = { a, b, T: T * (0.8 + 0.6 * k.calm) }; }
-  const side = r => (r() < 0.5 ? -1 : 1);
-  const CODE = { lang: 'js', name: 'Ball.simulate', text:
-    'this.vel.addScaledVector(physicsScene.gravity, physicsScene.dt);\nthis.pos.addScaledVector(this.vel, physicsScene.dt);\n\nif (this.pos.y < this.radius) {\n\tthis.pos.y = this.radius; this.vel.y = -this.vel.y;\n}' };
-  const EQ = ['v ← v + g Δt', 'x ← x + v Δt'];
-
-  TMP.saver({
-    canvas: () => renderer.domElement,
-    bg: '#000',
-    enter() {
-      cameraControl.enabled = false; cameraControl.update = function () {};
-      camera.fov = 40; camera.updateProjectionMatrix();
-      // the walls of the box (worldSize), so the bounces off them read
-      const W = physicsScene.worldSize, g = new THREE.BoxGeometry(2 * W.x, 1.6, 2 * W.z);
-      edges = new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0x8fa4c0, transparent: true, opacity: 0.45 }));
-      edges.position.set(0, 0.8, 0); threeScene.add(edges);
-    },
-    fit(w, h) {
-      renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
-      return false;
-    },
-    shots: [
-      { key: 'push', label: { title: 'Cannonball in 3D', lines: ['One ball, gravity, and a box of walls.', 'The same Euler step as in 2D, with THREE.Vector3.'], eq: EQ, code: CODE },
-        run(k) { set(k, -10); balls(k.rng, 1, [4, 6]); const s = side(k.rng);
-          move(k, { p: V(3.5 * s, 2.6, 7.5), t: V(0, 0.5, 0) }, { p: V(1.2 * s, 1.0, 3.6), t: V(0, 0.5, 0) }, 10); } },
-      { key: 'chase', label: { title: 'Chase Camera', lines: ['The camera follows the ball through its bounces.'], eq: ['v_y′ = −v_y  (floor)', 'v_x′ = −v_x  (wall)'], code: CODE },
-        run(k) { set(k, -10); balls(k.rng, 1, [5, 6.5]); path = { chase: true, az: k.rng() * 6.28, T: 1 }; } },
-      { key: 'many', label: { title: 'A Box of Balls', lines: ['Twelve balls; they do not collide with each other.', 'Each one is the same three lines of physics.'], eq: EQ, code: CODE },
-        run(k) { set(k, -10); balls(k.rng, 12, [2, 6]); const s = side(k.rng);
-          move(k, { p: V(-3.2 * s, 1.5, 4.6), t: V(-0.8 * s, 0.4, 0) }, { p: V(3.2 * s, 1.5, 4.6), t: V(0.8 * s, 0.4, 0) }, 11); } },
-      { key: 'top', label: { title: 'From Above', lines: ['Seen from the top, the path is a billiard in the x-z plane.'], eq: ['x ∈ [−1.5, 1.5]', 'z ∈ [−2.5, 2.5]'], code: CODE },
-        run(k) { set(k, -10); balls(k.rng, 6, [3, 5]); path = { top: true, T: 10 * (0.8 + 0.6 * k.calm) }; } },
-      { key: 'orbit', label: { title: 'Low Orbit', lines: ['The camera goes round the box at floor height.'], eq: EQ, code: CODE },
-        run(k) { set(k, -10); balls(k.rng, 5, [3, 6]); const a0 = k.rng() * 6.28, s = side(k.rng);
-          path = { orbit: true, a0, da: s * 1.6, R: 6, y: 0.35, T: 10 * (0.8 + 0.6 * k.calm) }; } },
-      { key: 'moon', label: { title: 'Moon Gravity', lines: ['g = 1.62 m/s²: slow, high arcs.'], eq: ['g = 1.62 m/s²', 'h = v_y² / 2g'], code: CODE },
-        run(k) { set(k, -1.62); balls(k.rng, 8, [1, 2.2]); const s = side(k.rng);
-          move(k, { p: V(5 * s, 0.6, 5), t: V(0, 0.6, 0) }, { p: V(2.5 * s, 2.2, 6), t: V(0, 0.4, 0) }, 11); } },
-    ],
-    tick(dt, k) {
-      if (!path) return;
-      const u = ease(k.t / path.T);
-      // up is +x only in the top view: the long side of the box (z) then
-      // runs across the wide band
-      camera.up.set(path.top ? 1 : 0, path.top ? 0 : 1, 0);
-      if (path.top) {
-        camera.position.set(0, 6.2 - 1.4 * u, 0); camera.lookAt(0, 0, 0);
-      } else if (path.chase) {
-        const b = physicsScene.objects[0].pos, a = path.az + 0.15 * k.t;
-        const want = V(b.x + Math.sin(a) * 3, 0.7 + 0.5 * b.y, b.z + Math.cos(a) * 3);
-        camera.position.lerp(want, Math.min(1, dt * 2)); camera.lookAt(b.x, 0.3 + 0.7 * b.y, b.z);
-      } else if (path.orbit) {
-        const a = path.a0 + path.da * u;
-        camera.position.set(Math.sin(a) * path.R, path.y, Math.cos(a) * path.R); camera.lookAt(0, 0.5, 0);
-      } else {
-        camera.position.lerpVectors(path.a.p, path.b.p, u);
-        const t = V().lerpVectors(path.a.t, path.b.t, u); camera.lookAt(t);
+  let shot = null, t = 0;
+  const ease = u => (u < 0 ? 0 : u > 1 ? 1 : u * u * (3 - 2 * u));
+  // The camera goal at time t of a shot (spring camera follows it).
+  function camAt(cam, dt) {
+    const S = P.S, hx = S.P.hx, hz = S.P.hz, ext = Math.max(hx, hz);
+    const u = ease(t / 10);
+    switch (cam.kind) {
+      case 'push': stage.cam.set(V(cam.side * (ext * 1.2 - ext * 0.5 * u), cam.h - 0.5 * u, ext * 1.9 - ext * 0.8 * u), V(0, 0.55, 0)); break;
+      case 'orbit': { const a = cam.a0 + cam.dir * 0.22 * t; stage.cam.set(V(Math.sin(a) * ext * 1.25 * cam.R, cam.y, Math.cos(a) * ext * 1.25 * cam.R), V(0, 0.45, 0)); break; }
+      case 'top': stage.cam.set(V(0, ext * 2.5 - 0.4 * u, ext * 0.55), V(0, 0, 0)); break;
+      case 'muzzle': { const c = S.P; stage.cam.set(V(cam.side * 1.1, 1.0, -c.hz - 1.4), V(0, 0.9, c.hz * 0.4)); break; }
+      case 'chase': default: {
+        const b = S.balls.reduce((m, x) => (!m || x.r > m.r ? x : m), null);
+        if (!b) break;
+        const a = cam.az + 0.15 * t;
+        stage.cam.set(V(b.x + Math.sin(a) * 3.2, 1.0 + 0.5 * b.y, b.z + Math.cos(a) * 3.2), V(b.x * 0.6, 0.3 + 0.6 * b.y, b.z * 0.6));
       }
+    }
+  }
+  return director({
+    kit: P.kit,
+    canvas: () => stage.canvas,
+    shots: SHOTS.map(s => Object.assign({ params: st => [
+      { sym: 'N', name: 'balls', value: String(P.S.balls.length) },
+      { sym: 'g', name: 'gravity', value: st.g.toFixed(2) + ' m/s²' },
+      { sym: 'e', name: 'restitution', value: st.e.toFixed(2) },
+    ] }, s)),
+    apply(state, sh, cam) {
+      P.rebuild(); t = 0; shot = sh ? cam : null;
+      if (shot) { camAt(shot, 0); stage.cam.snap(); }
     },
+    frame(band) { P.setBand(band ? { x: band.x, y: band.y, w: band.w, h: band.h } : null); },
+    tick(dt) { if (shot) { t += dt; camAt(shot, dt); } },
+    enter() { stage.setAuto(true); },
+    exit() { shot = null; stage.setAuto(false); P.setBand(null); },
   });
-})();
+}
