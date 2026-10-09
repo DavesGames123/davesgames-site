@@ -44,8 +44,10 @@ export function lookGroup(extra = [], o = {}) {
   return { id: 'look', label: 'Look', controls: [
     ...extra,
     K.themeControl(o.theme || 'night'),
-    K.paletteControl(o.palette || 'toybox'),
-    { key: 'mat', type: 'choice', label: 'Material', value: o.mat || 'satin', seg: false, options: STYLES, random: { weights: { satin: 3, gloss: 3, matte: 1, facet: 2, toon: 1, jelly: 2, glow: 1 } } },
+    // cloth: no white or pale sets, a broad sheet under the lights reads as white
+    K.paletteControl(o.palette || 'toybox', o.cloth ? { random: { weights: { toybox: 3, harbour: 3, driftwood: 2, neon: 2, pastel: 0, mono: 0, sunset: 3, rocks: 1 }, rnd: 0.2 } } : {}),
+    // cloth: a broad flat sheet under the spot turns white with gloss or jelly
+    { key: 'mat', type: 'choice', label: 'Material', value: o.mat || 'satin', seg: false, options: STYLES, random: { weights: o.cloth ? { satin: 4, matte: 3, facet: 1, toon: 1, glow: 1 } : { satin: 3, gloss: 3, matte: 1, facet: 2, toon: 1, jelly: 2, glow: 1 } } },
     { key: 'shadows', type: 'toggle', label: 'Shadows', value: true, random: false },
     { key: 'grid', type: 'toggle', label: 'Floor grid', value: true, random: { p: 0.6 } },
     { key: 'fog', type: 'toggle', label: 'Fog', value: true, random: { p: 0.7 } },
@@ -91,9 +93,9 @@ export function themeScene(G, st) {
   if (P.amb) { P.amb.color.set(t.dark ? K.mixHex('#505050', t.accent, 0.12) : '#8c8c8c'); }
   // a sky fill light (ours): the upstream spot leaves the floor edges black
   if (!P.hemi) { P.hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5); sc.add(P.hemi); }
-  P.hemi.color.set(K.mixHex('#ffffff', t.accent, 0.25)); P.hemi.groundColor.set(t.dark ? t.bg2 : t.bg); P.hemi.intensity = t.dark ? 0.55 : 0.75;
+  P.hemi.color.set(K.mixHex('#ffffff', t.accent, 0.25)); P.hemi.groundColor.set(t.dark ? t.bg2 : t.bg); P.hemi.intensity = t.dark ? 0.38 : 0.55;
   if (P.spot) {
-    if (!P.spotSet) { P.spotSet = true; P.spot.angle = Math.PI / 3.2; P.spot.penumbra = 0.55; P.spot.position.set(2.5, 6, 4); P.spot.shadow.camera.near = 2; P.spot.shadow.camera.far = 20; P.spot.shadow.mapSize.width = P.spot.shadow.mapSize.height = 2048; P.spot.intensity = 1.1; }
+    if (!P.spotSet) { P.spotSet = true; P.spot.angle = Math.PI / 3.2; P.spot.penumbra = 0.55; P.spot.position.set(2.5, 6, 4); P.spot.shadow.camera.near = 2; P.spot.shadow.camera.far = 20; P.spot.shadow.mapSize.width = P.spot.shadow.mapSize.height = 2048; P.spot.intensity = 0.85; }
     P.spot.color.set(K.mixHex('#ffffff', t.accent, 0.10)); P.spot.castShadow = st.shadows !== false;
   }
   if (P.dir) { P.dir.color.set(t.dark ? K.mixHex('#55505a', t.accent, 0.25) : '#9a9aa4'); P.dir.castShadow = st.shadows !== false; }
@@ -105,7 +107,7 @@ export function makeMaterial(THREE, style, color, o = {}) {
   const c = new THREE.Color(color), side = o.side != null ? o.side : THREE.FrontSide;
   let m;
   switch (style) {
-    case 'gloss': m = new THREE.MeshPhongMaterial({ color: c, shininess: 140, specular: 0x777777, side }); break;
+    case 'gloss': m = new THREE.MeshPhongMaterial({ color: c, shininess: 140, specular: 0x555555, side }); break;
     case 'matte': m = new THREE.MeshLambertMaterial({ color: c, side }); break;
     case 'facet': m = new THREE.MeshPhongMaterial({ color: c, shininess: 40, flatShading: true, side }); break;
     case 'toon': m = new THREE.MeshToonMaterial({ color: c, side }); break;
@@ -303,7 +305,8 @@ export function centroid(list) {
 }
 export function finiteBody(b) { const p = b.pos; for (let i = 0; i < p.length; i++) if (!Number.isFinite(p[i])) return false; return true; }
 // Run f with Math.random replaced by the seeded r (upstream jitter).
-export function seeded(r, f) { const m = Math.random; Math.random = r; try { return f(); } finally { Math.random = m; } }
+// M: the Math object the upstream code sees (a node vm has its own).
+export function seeded(r, f, M = Math) { const m = M.random; M.random = r; try { return f(); } finally { M.random = m; } }
 
 // ---- camera rig (saver) ---------------------------------------------------------------------------
 // cam = { mode, az, el, r, r1, w, target: [x,y,z], track: 0..1, lift }
