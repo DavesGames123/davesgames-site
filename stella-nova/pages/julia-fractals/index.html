@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Julia Fractals — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   JULIA FRACTALS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Julia and Mandelbrot sets from the tutorial on calculus and differential equations from scratch.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #19.
+   Upstream file: tenMinutePhysics/19-julia.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Video tutorial: https://youtu.be/asiFbvRKgRk
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Julia and Mandelbrot sets from the tutorial on calculus and differential equations from scratch. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Site change: upstream puts this markup between </head> and <body>, so
+     the converter dropped it and main.js stopped at getElementById
+     ("myCanvas") = null. It is copied here verbatim. -->
+	<button class="button" id="toggleModeButton" onclick="toggleMode()">Julia</button>
+	<button class="button" id="toggleViewButton" onclick="toggleView()">Mono</button>
+ 	Iterations <input type = "range" min = "1" max = "500" value = "50" id = "numItersSlider" class = "slider">
+     <span id = "numIters">50</span>
+	 &nbsp;&nbsp; [shift] - drag to change c
+
+    <canvas id="myCanvas" style="border:2px solid"></canvas>
+
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>

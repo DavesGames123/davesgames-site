@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Fire Simulation — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FIRE SIMULATION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Fire from the Eulerian fluid solver: a burning obstacle releases heat and smoke that rise and swirl.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #21.
+   Upstream file: tenMinutePhysics/21-fire.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Video tutorial: https://youtu.be/RsgmS3ZxDtc
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Fire from the Eulerian fluid solver: a burning obstacle releases heat and smoke that rise and swirl. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<input type = "checkbox" id = "burningFloor" onclick = "scene.burningFloor = !scene.burningFloor"> Floor
+	<input type = "checkbox" id = "burningObstacle" onclick = "scene.burningObstacle = !scene.burningObstacle" checked> Ring
+	<input type = "checkbox" id = "swirlButton" onclick = "scene.showSwirls = !scene.showSwirls"> Swirls
+	<input type = "range" min = "0" max = "100" value = "50" id = "probabilitySlider" class = "slider"> Probability
+
+	<br>
+	<canvas id="myCanvas" style="border:2px solid"></canvas>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>

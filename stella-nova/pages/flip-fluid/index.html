@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FLIP Water — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FLIP WATER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   FLIP water: particles carry the fluid and a grid solves the pressure. Push the water with the obstacle.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #18.
+   Upstream file: tenMinutePhysics/18-flip.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Video tutorial: https://youtu.be/XmzBREkK8kY
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="FLIP water: particles carry the fluid and a grid solves the pressure. Push the water with the obstacle. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<input type = "checkbox" checked  onclick = "scene.showParticles = !scene.showParticles">Particles &nbsp; 
+	<input type = "checkbox" onclick = "scene.showGrid = !scene.showGrid">Grid &nbsp;
+	<input type = "checkbox" checked onclick = "scene.compensateDrift = !scene.compensateDrift">Compensate Drift &nbsp;
+	<input type = "checkbox" checked onclick = "scene.separateParticles = !scene.separateParticles">Separate Particles &nbsp;
+	PIC
+	<input type = "range" min = "0" max = "10" value = "9" class = "slider" onchange="scene.flipRatio = 0.1 * this.value"> FLIP 
+<br>
+	<canvas id="myCanvas" style="border:2px solid"></canvas>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>

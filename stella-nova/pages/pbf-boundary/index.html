@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PBF Boundaries — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PBF BOUNDARIES  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Position based particles (no fluid density constraint) with moving boundaries and two particle-friction models from the PBD papers.
+
+   CREDIT. The simulation is by Sergii Biloshytskyi (Ukraine), a contribution to Ten Minute Physics by Matthias Müller.
+   Upstream file: tenMinutePhysics/contribs/PBFBoundary.html in
+   https://github.com/matthias-research/pages (MIT License (notice kept above)).
+   Contributions page: https://matthias-research.github.io/pages/tenMinutePhysics/contribs/
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Position based particles (no fluid density constraint) with moving boundaries and two particle-friction models from the PBD papers. By Sergii Biloshytskyi, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<button class="button" onclick="setupScene()">Restart</button>
+	<button class="button" onclick="run()">Run</button>
+	<button class="button" onclick="step()">Step</button>
+	<br>
+    <span style = "margin: 0px 0px 0px 20px;">Columns:</span>
+		<td> <input id="cols" type="number" placeholder="25" min="1" max="2" /></td>
+    <span style = "margin: 0px 0px 0px 20px;">Rows:</span>
+		<td> <input id="rows" type="number" placeholder="25" min="1" max="2" /></td>
+	<br>
+    <span style = "margin: 0px 0px 0px 20px;">mu_s</span>
+		<td>
+			<input type = "range" min = "0" max = "100" value = "0" id = "mu_s_slider" class = "slider">
+		</td>
+    <span style = "margin: 0px 0px 0px 20px;">mu_k</span>
+		<td>
+			<input type = "range" min = "0" max = "100" value = "0" id = "mu_k_slider" class = "slider">
+		</td>
+    <span style = "margin: 0px 0px 0px 20px;">restitution</span>
+		<td>
+			<input type = "range" min = "0" max = "100" value = "0" id = "e_slider" class = "slider">
+		</td>
+
+		<br>
+		<td>
+			<input type="checkbox" id="use_velocity_pass" value="velocity_pass" checked>
+			<label for="velocity_pass">Use velocity pass(enables restitution)</label>
+		</td>
+	<br>
+	mu_s: <span id = "mu_s">0</span> &emsp; mu_k: <span id = "mu_k">0</span> &emsp; restitution: <span id = "e">0</span> 
+
+	<canvas id="myCanvas"></canvas>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>
