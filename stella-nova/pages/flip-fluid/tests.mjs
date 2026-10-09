@@ -18,6 +18,7 @@
 //                 bodies raise the level by their
 //                 displaced area; the sweep also checks every body
 //                 stays finite and inside the tank
+//    looks        every view x scheme x background draws finite numbers
 //    tools        palette drop, grab spring, throw, eraser, clear
 //    import       main.js links in node (a SyntaxError is a bug; a
 //                 ReferenceError on a browser global is expected)
@@ -215,6 +216,34 @@ async function main() {
     app.objects.clearObjects();
     check('tools: drop 3, grab and drag (spring follows), release keeps speed, eraser and clear', dyn().length === 0 && left === n0 + 2 && grabbed && moved < 0.25 && speed > 0.05,
       `dropped ${n0 + 3 - n0}, grab gap ${moved.toFixed(3)} m, release speed ${speed.toFixed(2)} m/s`);
+  }
+
+  // looks: every view, scheme and background draws with finite numbers
+  {
+    const R = await import('./render.js'), LK = await import('./looks.js');
+    let bad = 0, calls = 0, water = 0;
+    const mkCtx = (w, h) => {
+      const c = { canvas: { width: w, height: h } };
+      const num = (...a) => { calls++; for (const v of a) if (typeof v === 'number' && !Number.isFinite(v)) bad++; };
+      for (const k of ['fillRect', 'moveTo', 'lineTo', 'arc', 'ellipse', 'bezierCurveTo', 'strokeRect', 'drawImage', 'setTransform', 'transform', 'translate']) c[k] = num;
+      for (const k of ['beginPath', 'closePath', 'fill', 'stroke', 'save', 'restore', 'clip']) c[k] = () => {};
+      c.createLinearGradient = (...a) => { num(...a); return { addColorStop() {} }; };
+      c.createImageData = (iw, ih) => ({ width: iw, height: ih, data: new Uint8ClampedArray(iw * ih * 4) });
+      c.putImageData = (img) => { let a = 0; for (let i = 3; i < img.data.length; i += 4) if (img.data[i] > 0) a++; water = Math.max(water, a / (img.data.length / 4)); };
+      return c;
+    };
+    const st = SC.defaultState(); st.seed = 'look-1';
+    const spec = SC.build(st, ENV);
+    const sim = SC.createSim(spec, B.makeBodies);
+    for (let f = 0; f < 60; f++) sim.step();
+    const ctx = mkCtx(800, 500);
+    const r = R.createRenderer(ctx, { makeCanvas: (w, h) => ({ width: w, height: h, getContext: () => mkCtx(w, h) }) });
+    const view = R.fitView(spec.W, spec.H, 800, 500);
+    let n = 0;
+    for (const v of Object.keys(LK.VIEWS)) for (const w of Object.keys(LK.SCHEMES)) for (const bg of Object.keys(LK.BACKGROUNDS)) { r.draw(sim, view, { colours: { view: v, water: w, bg } }); n++; }
+    let rr = 5; const rnd = () => { rr = (rr * 16807) % 2147483647; return rr / 2147483647; };
+    const a = JSON.stringify(LK.randomLook(rnd)); rr = 5; const b = JSON.stringify(LK.randomLook(rnd));
+    check('looks: every view x scheme x background draws finite; random looks are seeded', bad === 0 && water > 0.05 && a === b, `${n} looks, ${calls} draw calls, water cover ${(water * 100).toFixed(0)} % of the texel image`);
   }
 
   // sweep

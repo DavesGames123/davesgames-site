@@ -40,6 +40,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 //    function buildSliders     overrides
 //    function frame            the loop
 //    window.ffApp              the app object (saver, debugging)
+//  Other modules: tools.js (objects palette, grab, drop, erase),
+//  lookui.js (colours and views; state.colours)
 // ============================================================================
 import { build, createSim, CATS, CAT_NAMES, encodeHash, decodeHash, rollAll, rollCat, newSeed, OVERRIDES } from './scenes.js';
 import { createRenderer, fitView } from './render.js';
@@ -47,6 +49,7 @@ import { Solid } from './flip.js';
 import { disc } from './shapes.js';
 import { makeBodies, KINDS } from './bodies.js';
 import { installTools } from './tools.js';
+import { installLook } from './lookui.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -80,6 +83,7 @@ function loadState(state, keepBudget) {
   fitTank();
   writeHash();
   refreshUI();
+  if (app.syncLook) app.syncLook();
 }
 
 function writeHash() {
@@ -359,7 +363,9 @@ app.renderer = renderer; app.ctx = ctx; app.canvas = canvas; app.newSeed = newSe
 buildCats();
 buildSliders();
 app.openPanel = openPanel;
+app.writeHash = writeHash;
 installTools(app, $);
+installLook(app, $);
 resize();
 addEventListener('resize', resize);
 if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);

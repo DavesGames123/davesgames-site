@@ -32,6 +32,8 @@
      bodies.js   floating and sinking bodies, two-way coupled to the water
      art.js      how each object looks (also the palette icons)
      tools.js    objects palette, grab and throw, drop, eraser
+     looks.js    water schemes, backgrounds, views, random looks
+     lookui.js   the Look section (uses ../ct-lab/colormaps)
      render.js   Canvas 2D renderer
      main.js     page controller: loop, UI, pointer, hash
      tests.mjs   node tests (no browser)
@@ -40,11 +42,14 @@
      grep -n 'id="dock"'   index.html   the quick controls
      grep -n 'id="panel"'  index.html   the scene sheet
      grep -n 'id="palette"' index.html  the objects palette
+     grep -n 'id="lookView"' index.html  the Look section
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="FLIP water that runs on its own: seeded random tanks, obstacles, pours, paddles and gates. Solver by Matthias Müller, Ten Minute Physics.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -60,6 +65,7 @@
   <button id="bPlay" aria-label="Pause" title="Pause (P)">❚❚</button>
   <button id="bStep" aria-label="Step one frame" title="Step (M)">⏭</button>
   <button id="bReset" aria-label="Reset the scene" title="Reset (R)">↺</button>
+  <button id="bLook" aria-label="Random look" title="Random look: colours and view (L)">◐</button>
   <button id="bNew" class="wide" aria-label="New random scene" title="New random scene (N)">⚄ New scene</button>
   <button id="bPanel" aria-label="Scene settings" aria-expanded="false" title="Scene settings">☰</button>
 </nav>
@@ -75,6 +81,19 @@
       <button id="seedCopy" title="Copy the link to this scene">Link</button>
     </div>
     <p class="dim small">The seed and every option are in the address, so a link brings back the same scene.</p>
+  </section>
+  <section>
+    <h2>Look</h2>
+    <div class="row wrap"><button id="lookRandom" title="Random look (L)">◐ Random look</button><button id="lookReset" title="Back to the default look">Default look</button></div>
+    <h3>View</h3>
+    <div id="lookView" class="chips" role="group" aria-label="View"></div>
+    <div id="lookWaterBox"><h3>Water</h3><div id="lookWater" class="chips" role="group" aria-label="Water colours"></div></div>
+    <div id="lookMapBox" hidden><h3>Colour map</h3><div id="lookMap"></div></div>
+    <h3>Background</h3>
+    <div id="lookBg" class="chips" role="group" aria-label="Background"></div>
+    <h3>Objects</h3>
+    <div id="lookObj" class="chips" role="group" aria-label="Object colours"></div>
+    <button id="lookFoam" class="small-btn" aria-pressed="true">Foam and spray: on</button>
   </section>
   <section>
     <h2>Objects</h2>
