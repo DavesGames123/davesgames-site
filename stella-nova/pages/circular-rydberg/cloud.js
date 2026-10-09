@@ -17,7 +17,12 @@
 //            exposure, mix: { pts2, k } (morph), count,
 //            colour: 'density' (default, one ramp) | 'phase' (m*phi - w*t),
 //            cycles: colour turns round the ring (default m; the page uses
-//            min(|m|, 8), since dozens of turns blur to grey) }
+//            min(|m|, 8), since dozens of turns blur to grey),
+//            lut: optional 768-byte RGB table (256 steps) for the density
+//            colour, in place of the built-in ramp (pages/exotic-atoms
+//            passes a ct-lab colour map here),
+//            weights: optional Float32Array, one brightness factor per
+//            point (importance weights of a superposition) }
 //  The exposure is automatic: a high percentile of the buffer maps to a
 //  fixed brightness, so a spread cloud and a thin ring both read.
 //
@@ -90,7 +95,7 @@ export function createCloud(w = 1, h = 1) {
     const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
     const sc = view.scale, ox = view.cx, oy = view.cy, m = view.cycles != null ? view.cycles : (view.m || 0), ph0 = view.phase || 0;
     const pk = view.packet, mix = view.mix, k = mix ? mix.k : 0, p2 = mix ? mix.pts2 : null;
-    const gain = 1, phaseMode = view.colour === 'phase';
+    const gain = 1, phaseMode = view.colour === 'phase', wts = view.weights || null;
     for (let i = 0; i < n; i++) {
       let x = pts[i * 4], y = pts[i * 4 + 1], z = pts[i * 4 + 2], phi = pts[i * 4 + 3];
       if (p2 && k > 0) {
@@ -102,7 +107,8 @@ export function createCloud(w = 1, h = 1) {
       const Z = sp * Y + cp * z;
       const px = ox + X * sc, py = oy - Z * sc;
       if (px < 1 || py < 1 || px >= W - 1 || py >= H - 1) continue;
-      let wgt = gain;
+      let wgt = wts ? gain * wts[i] : gain;
+      if (!(wgt > 0)) continue;
       if (pk) {
         let d = phi - pk.phi; d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
         wgt *= 0.4 + 1.6 * Math.exp(-d * d / (2 * pk.width * pk.width));
@@ -141,7 +147,7 @@ export function createCloud(w = 1, h = 1) {
     samp.sort((x, y) => x - y);
     const ref = samp.length ? samp[Math.min(samp.length - 1, Math.floor(samp.length * 0.993))] : 1;
     const ex = 1.6 / Math.max(1e-6, ref) * (view.exposure || 1);
-    const d = img.data, bg = view.bg || [3, 4, 10];
+    const d = img.data, bg = view.bg || [3, 4, 10], LUT = view.lut || RAMP_T;
     for (let i = 0, j = 0; i < W * H; i++, j += 3) {
       if (phaseMode) {
         const r = acc[j] * ex, gg = acc[j + 1] * ex, b = acc[j + 2] * ex;
@@ -152,9 +158,9 @@ export function createCloud(w = 1, h = 1) {
       } else {
         const v = 1 - Math.exp(-acc[j] * ex * 0.9), a = v * v * (3 - 2 * v) * 0.35 + v * 0.65;
         const ci = Math.min(255, (a * 255) | 0) * 3, s2 = Math.min(1, v * 1.4);
-        d[i * 4] = bg[0] + (RAMP_T[ci] - bg[0]) * s2;
-        d[i * 4 + 1] = bg[1] + (RAMP_T[ci + 1] - bg[1]) * s2;
-        d[i * 4 + 2] = bg[2] + (RAMP_T[ci + 2] - bg[2]) * s2;
+        d[i * 4] = bg[0] + (LUT[ci] - bg[0]) * s2;
+        d[i * 4 + 1] = bg[1] + (LUT[ci + 1] - bg[1]) * s2;
+        d[i * 4 + 2] = bg[2] + (LUT[ci + 2] - bg[2]) * s2;
       }
       d[i * 4 + 3] = 255;
     }
