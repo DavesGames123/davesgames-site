@@ -1,551 +1,127 @@
-/*
-Copyright 2021 Matthias Müller - Ten Minute Physics
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-// Pinball · upstream script 1, verbatim from Ten Minute Physics
-// 04-pinball.html by Matthias Müller. MIT License (notice kept above).
-// Source: https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/04-pinball.html
-	// drawing setup -------------------------------------------------------
-
-	var canvas = document.getElementById("myCanvas");
-	var c = canvas.getContext("2d");
-
-	canvas.width = window.innerWidth - 20;
-	canvas.height = window.innerHeight - 100;
-
-	var flipperHeight = 1.7;
-
-	var cScale = canvas.height / flipperHeight;
-	var simWidth = canvas.width / cScale;
-	var simHeight = canvas.height / cScale;
-
-	function cX(pos) {
-		return pos.x * cScale;
-	}
-
-	function cY(pos) {
-		return canvas.height - pos.y * cScale;
-	}
-
-	// vector math -------------------------------------------------------
-
-	class Vector2 {
-		constructor(x = 0.0, y = 0.0) {
-			this.x = x; 
-			this.y = y;
-		}
-
-		set(v) {
-			this.x = v.x; this.y = v.y;
-		}
-
-		clone() {
-			return new Vector2(this.x, this.y);
-		}
-
-		add(v, s = 1.0) {
-			this.x += v.x * s;
-			this.y += v.y * s;
-			return this;
-		}
-
-		addVectors(a, b) {
-			this.x = a.x + b.x;
-			this.y = a.y + b.y;
-			return this;
-		}
-
-		subtract(v, s = 1.0) {
-			this.x -= v.x * s;
-			this.y -= v.y * s;
-			return this;
-		}
-
-		subtractVectors(a, b) {
-			this.x = a.x - b.x;
-			this.y = a.y - b.y;
-			return this;			
-		}
-
-		length() {
-			return Math.sqrt(this.x * this.x + this.y * this.y);
-		}
-
-		scale(s) {
-			this.x *= s;
-			this.y *= s;
-			return this;
-		}
-
-		dot(v) {
-			return this.x * v.x + this.y * v.y;
-		}
-
-		perp() {
-			return new Vector2(-this.y, this.x);
-		}
-	}
-
-	// ----------------------------------------------------------------------
-	function closestPointOnSegment(p, a, b) 
-	{
-		var ab = new Vector2();
-		ab.subtractVectors(b, a);
-		var t = ab.dot(ab);
-		if (t == 0.0)
-			return a.clone();
-		t = Math.max(0.0, Math.min(1.0, (p.dot(ab) - a.dot(ab)) / t));
-		var closest = a.clone();
-		return closest.add(ab, t);
-	}
-
-	// physics scene -------------------------------------------------------
-
-	class Ball {
-		constructor(radius, mass, pos, vel, restitution) {
-			this.radius = radius;
-			this.mass = mass;
-			this.restitution = restitution;
-			this.pos = pos.clone();
-			this.vel = vel.clone();
-		}
-		simulate(dt, gravity) {
-			this.vel.add(gravity, dt);
-			this.pos.add(this.vel, dt);
-		}
-	}
-
-	class Obstacle {
-		constructor(radius, pos, pushVel) {
-			this.radius = radius;
-			this.pos = pos.clone();
-			this.pushVel = pushVel;
-		}
-	}
-
-	class Flipper {
-		constructor(radius, pos, length, restAngle, maxRotation, 
-			angularVelocity, restitution) 
-		{
-			// fixed
-			this.radius = radius;
-			this.pos = pos.clone();
-			this.length = length;
-			this.restAngle = restAngle;
-			this.maxRotation = Math.abs(maxRotation);
-			this.sign = Math.sign(maxRotation);
-			this.angularVelocity = angularVelocity;
-			// changing
-			this.rotation = 0.0;
-			this.currentAngularVelocity = 0.0;
-			this.touchIdentifier = -1;
-		}
-		simulate(dt) 
-		{
-			var prevRotation = this.rotation;
-			var pressed = this.touchIdentifier >= 0;
-			if (pressed) 
-				this.rotation = Math.min(this.rotation + dt * this.angularVelocity, 
-					this.maxRotation);
-			else 
-				this.rotation = Math.max(this.rotation - dt * this.angularVelocity, 
-					0.0);
-			this.currentAngularVelocity = this.sign * (this.rotation - prevRotation) / dt;
-		}
-		select(pos) {
-			var d = new Vector2();
-			d.subtractVectors(this.pos, pos);
-			return d.length() < this.length;
-		}
-		getTip() 
-		{
-			var angle = this.restAngle + this.sign * this.rotation;
-			var dir = new Vector2(Math.cos(angle), Math.sin(angle));
-			var tip = this.pos.clone();
-			return tip.add(dir, this.length);
-		}
-	}
-
-	var physicsScene = 
-	{
-		gravity : new Vector2(0.0, -3.0),
-		dt : 1.0 / 60.0,
-		score: 0,
-		paused: true,
-		border: [],
-		balls: [],
-		obstacles: [],
-		flippers: []
-	};
-
-	function setupScene() 
-	{
-		var offset = 0.02;
-		physicsScene.score = 0;
-	
-		// border
-
-		physicsScene.border.push(new Vector2(0.74, 0.25));
-		physicsScene.border.push(new Vector2(1.0 - offset, 0.4));
-		physicsScene.border.push(new Vector2(1.0 - offset, flipperHeight - offset));
-		physicsScene.border.push(new Vector2(offset, flipperHeight - offset));
-		physicsScene.border.push(new Vector2(offset, 0.4));
-		physicsScene.border.push(new Vector2(0.26, 0.25));
-		physicsScene.border.push(new Vector2(0.26, 0.0));
-		physicsScene.border.push(new Vector2(0.74, 0.0));
-
-		// ball
-
-		{
-			physicsScene.balls = [];
-
-			var radius = 0.03;
-			var mass = Math.PI * radius * radius;
-			var pos = new Vector2(0.92,  0.5);
-			var vel = new Vector2(-0.2, 3.5);
-			physicsScene.balls.push(new Ball(radius, mass, pos, vel, 0.2));
-
-			pos = new Vector2(0.08,  0.5);
-			vel = new Vector2(0.2, 3.5);
-			physicsScene.balls.push(new Ball(radius, mass, pos, vel, 0.2));
-		}
-
-		// obstacles 
-
-		{
-			physicsScene.obstacles = [];
-			var numObstacles = 4;
-
-			physicsScene.obstacles.push(new Obstacle(0.1, new Vector2(0.25, 0.6), 2.0));
-			physicsScene.obstacles.push(new Obstacle(0.1, new Vector2(0.75, 0.5), 2.0));
-			physicsScene.obstacles.push(new Obstacle(0.12, new Vector2(0.7, 1.0), 2.0));
-			physicsScene.obstacles.push(new Obstacle(0.1, new Vector2(0.2, 1.2), 2.0));
-		}
-
-		// flippers
-
-		{
-			var radius = 0.03;
-			var length = 0.2;
-			var maxRotation = 1.0;
-			var restAngle = 0.5;
-			var angularVelocity = 10.0;
-			var restitution = 0.0;
-
-			var pos1 = new Vector2(0.26, 0.22);
-			var pos2 = new Vector2(0.74, 0.22);
-
-			physicsScene.flippers.push(
-				new Flipper(radius, pos1, length, 
-					-restAngle, maxRotation, angularVelocity, restitution));
-			physicsScene.flippers.push(
-				new Flipper(radius, pos2, length, 
-					Math.PI + restAngle, -maxRotation, angularVelocity, restitution));
-		}
-	}
-
-	// draw -------------------------------------------------------
-
-	function drawDisc(x, y, radius)
-	{
-		c.beginPath();			
-		c.arc(
-			x, y, radius, 0.0, 2.0 * Math.PI); 
-		c.closePath();
-		c.fill();
-	}
-
-	function draw() 
-	{
-		c.clearRect(0, 0, canvas.width, canvas.height);
-
-		// border
-
-		if (physicsScene.border.length >= 2) {
-
-			c.strokeStyle = "#000000";
-			c.lineWidth = 5;
-
-			c.beginPath();
-			var v = physicsScene.border[0];
-			c.moveTo(cX(v), cY(v));
-			for (var i = 1; i < physicsScene.border.length + 1; i++) {
-				v = physicsScene.border[i % physicsScene.border.length];
-				c.lineTo(cX(v), cY(v));
-			}
-			c.stroke();	
-			c.lineWidth = 1;
-		}
-
-		// balls
-
-		c.fillStyle = "#202020";
-
-		for (var i = 0; i < physicsScene.balls.length; i++) {
-			var ball = physicsScene.balls[i];
-			drawDisc(cX(ball.pos), cY(ball.pos), ball.radius * cScale);
-		}
-
-		// obstacles
-
-		c.fillStyle = "#FF8000";
-
-		for (var i = 0; i < physicsScene.obstacles.length; i++) {
-			var obstacle = physicsScene.obstacles[i];
-			drawDisc(cX(obstacle.pos), cY(obstacle.pos), obstacle.radius * cScale);
-		}
-
-		// flippers
-
-		c.fillStyle = "#FF0000";
-
-		for (var i = 0; i < physicsScene.flippers.length; i++) {
-			var flipper = physicsScene.flippers[i];
-			c.translate(cX(flipper.pos), cY(flipper.pos));
-			c.rotate(-flipper.restAngle - flipper.sign * flipper.rotation);
-
-			c.fillRect(0.0, -flipper.radius * cScale, 
-				flipper.length * cScale, 2.0 * flipper.radius * cScale);
-			drawDisc(0, 0, flipper.radius * cScale);
-			drawDisc(flipper.length * cScale, 0, flipper.radius * cScale);
-			c.resetTransform();				
-		} 
-	}
-
-	// --- collision handling -------------------------------------------------------
-
-	function handleBallBallCollision(ball1, ball2) 
-	{
-		var restitution = Math.min(ball1.restitution, ball2.restitution);
-		var dir = new Vector2();
-		dir.subtractVectors(ball2.pos, ball1.pos);
-		var d = dir.length();
-		if (d == 0.0 || d > ball1.radius + ball2.radius)
-			return;
-
-		dir.scale(1.0 / d);
-
-		var corr = (ball1.radius + ball2.radius - d) / 2.0;
-		ball1.pos.add(dir, -corr);
-		ball2.pos.add(dir, corr);
-
-		var v1 = ball1.vel.dot(dir);
-		var v2 = ball2.vel.dot(dir);
-
-		var m1 = ball1.mass;
-		var m2 = ball2.mass;
-
-		var newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * restitution) / (m1 + m2);
-		var newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * restitution) / (m1 + m2);
-
-		ball1.vel.add(dir, newV1 - v1);
-		ball2.vel.add(dir, newV2 - v2);
-	}
-
-	// -----------------------------------------------------------------
-	function handleBallObstacleCollision(ball, obstacle) 
-	{
-		var dir = new Vector2();
-		dir.subtractVectors(ball.pos, obstacle.pos);
-		var d = dir.length();
-		if (d == 0.0 || d > ball.radius + obstacle.radius)
-			return;
-
-		dir.scale(1.0 / d);
-
-		var corr = ball.radius + obstacle.radius - d;
-		ball.pos.add(dir, corr);
-
-		var v = ball.vel.dot(dir);
-		ball.vel.add(dir, obstacle.pushVel - v);
-
-		physicsScene.score++;
-	}
-
-	// ----------------------------------------------------------------
-	function handleBallFlipperCollision(ball, flipper) 
-	{
-		var closest = closestPointOnSegment(ball.pos, flipper.pos, flipper.getTip());
-		var dir = new Vector2();
-		dir.subtractVectors(ball.pos, closest);
-		var d = dir.length();
-		if (d == 0.0 || d > ball.radius + flipper.radius)
-			return;
-
-		dir.scale(1.0 / d);
-
-		var corr = (ball.radius + flipper.radius - d);
-		ball.pos.add(dir, corr);
-
-		// update velocitiy
-
-		var radius = closest.clone();
-		radius.add(dir, flipper.radius);
-		radius.subtract(flipper.pos);
-		var surfaceVel = radius.perp();
-		surfaceVel.scale(flipper.currentAngularVelocity);
-
-		var v = ball.vel.dot(dir);
-		var vnew = surfaceVel.dot(dir);
-
-		ball.vel.add(dir, vnew - v);
-	}
-
-	// ---------------------------------------------------------------------
-	function handleBallBorderCollision(ball, border) 
-	{
-		if (border.length < 3)
-			return;
-
-		// find closest segment;
-
-		var d = new Vector2();
-		var closest = new Vector2();
-		var ab = new Vector2();
-		var normal;
-
-		var minDist = 0.0;
-
-		for (var i = 0; i < border.length; i++) {
-			var a = border[i];
-			var b = border[(i + 1) % border.length];
-			var c = closestPointOnSegment(ball.pos, a, b);
-			d.subtractVectors(ball.pos, c);
-			var dist = d.length();
-			if (i == 0 || dist < minDist) {
-				minDist = dist;
-				closest.set(c);
-				ab.subtractVectors(b, a);
-				normal = ab.perp();
-			}
-		}
-
-		// push out
-		d.subtractVectors(ball.pos, closest);
-		var dist = d.length();
-		if (dist == 0.0) {
-			d.set(normal);
-			dist = normal.length();
-		}
-		d.scale(1.0 / dist);
-
-		if (d.dot(normal) >= 0.0) {
-			if (dist > ball.radius) 
-				return;
-			ball.pos.add(d, ball.radius - dist);
-		}
-		else
-			ball.pos.add(d, -(dist + ball.radius));
-
-		// update velocity
-		var v = ball.vel.dot(d);
-		var vnew = Math.abs(v) * ball.restitution;
-
-		ball.vel.add(d, vnew - v);
-	}
-
-	// simulation -------------------------------------------------------
-
-	function simulate() 
-	{
-		for (var i = 0; i < physicsScene.flippers.length; i++)
-			physicsScene.flippers[i].simulate(physicsScene.dt);
-
-		for (var i = 0; i < physicsScene.balls.length; i++) {
-			var ball = physicsScene.balls[i];
-			ball.simulate(physicsScene.dt, physicsScene.gravity);
-
-			for (var j = i + 1; j < physicsScene.balls.length; j++) {
-				var ball2 = physicsScene.balls[j];
-				handleBallBallCollision(ball, ball2, physicsScene.restitution);
-			}
-
-			for (var j = 0; j < physicsScene.obstacles.length; j++)
-				handleBallObstacleCollision(ball, physicsScene.obstacles[j]);
-
-			for (var j = 0; j < physicsScene.flippers.length; j++)
-				handleBallFlipperCollision(ball, physicsScene.flippers[j]);
-	
-			handleBallBorderCollision(ball, physicsScene.border);
-	
-		}
-	}
-
-	// ---------------------------------------------------------------
-
-	function update() {
-		simulate();
-		draw();
-		document.getElementById("score").innerHTML = physicsScene.score.toString();		
-		requestAnimationFrame(update);
-	}
-	
-	setupScene();
-	update();
-
-	// ------------------------ user interaction ---------------------------
-
-	canvas.addEventListener("touchstart", onTouchStart, false);
-	canvas.addEventListener("touchend", onTouchEnd, false);
-
-	canvas.addEventListener("mousedown", onMouseDown, false);
-	canvas.addEventListener("mouseup", onMouseUp, false);
-	
-	function onTouchStart(event)
-	{
-		for (var i = 0; i < event.touches.length; i++) {
-			var touch = event.touches[i];
-
-			var rect = canvas.getBoundingClientRect();	
-			var touchPos = new Vector2(
-				(touch.clientX - rect.left) / cScale, 
-				simHeight - (touch.clientY - rect.top) / cScale);
-
-			for (var j = 0; j < physicsScene.flippers.length; j++) {
-				var flipper = physicsScene.flippers[j];
-				if (flipper.select(touchPos)) 
-					flipper.touchIdentifier = touch.identifier;
-			}
-		}
-	}
-
-	function onTouchEnd(event)
-	{
-		for (var i = 0; i < physicsScene.flippers.length; i++) {
-			var flipper = physicsScene.flippers[i];
-			if (flipper.touchIdentifier < 0)
-				continue;
-			var found = false;
-			for (var j = 0; j < event.touches.length; j++) {
-				if (event.touches[j].touchIdentifier == flipper.touchIdentifier)
-					found = true;
-			}
-			if (!found)
-				flipper.touchIdentifier = -1;
-		}
-	}
-
-	function onMouseDown(event)
-	{
-		var rect = canvas.getBoundingClientRect();	
-		var mousePos = new Vector2(
-			(event.clientX - rect.left) / cScale, 
-			simHeight - (event.clientY - rect.top) / cScale);
-
-		for (var j = 0; j < physicsScene.flippers.length; j++) {
-			var flipper = physicsScene.flippers[j];
-			if (flipper.select(mousePos)) 
-				flipper.touchIdentifier = 0;
-		}
-	}
-
-	function onMouseUp(event)
-	{
-		for (var i = 0; i < physicsScene.flippers.length; i++) 
-			physicsScene.flippers[i].touchIdentifier = -1;
-	}	
+// ============================================================================
+//  PINBALL  ·  pages/pinball/main.js — the page controller
+// ----------------------------------------------------------------------------
+//  CREDIT. Ten Minute Physics #04 "pinball" by Matthias Müller, MIT
+//  License (the notice is kept at the top of sim.js, which holds the
+//  upstream collisions and flippers). The credit bar names the author on
+//  the page and on the saver plate.
+//
+//  OUR ADDITIONS (davesgames.io, not upstream): bumper layouts, the
+//  autopilot, the drain, combos, this renderer, the sim kit GUI and the
+//  saver.
+//
+//  Input: Z / M or the left / right arrow keys flip; a tap on the left or
+//  right half of the table flips that side; a key or a tap takes the
+//  flippers from the autopilot for 4 s. Drag a ball to move it.
+//
+//  grep -n targets: "function rebuild", "function draw", "function bindInput",
+//  "window.__pin"
+// ============================================================================
+import * as SM from './sim.js';
+import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
+import { page2d, background, lutColor } from '../../widgets/sim-kit/page2d.js';
+import { installSaver } from './saver.js';
+
+TMP.page({ n: '04', title: 'Pinball', file: '04-pinball.html', video: 'NhVUCsXp-Uo', year: 2021, licence: 'MIT' });
+
+const PHONE = isPhone();
+const canvas = document.getElementById('view');
+const S = SM.createSim();
+let kit, P, veil = 1;
+
+function rebuild() { SM.buildScene(S, kit.state, SM.sceneRng(kit.seed)); veil = 1; }
+
+function glowLine(ctx, pts, col, w, neon, closed) {
+  const d = P.dpr, pass = neon ? [[w + 16 * d, 0.07], [w + 7 * d, 0.2], [w, 1]] : [[w, 1]];
+  for (const [lw, a] of pass) { ctx.strokeStyle = col; ctx.globalAlpha = a; ctx.lineWidth = lw; ctx.beginPath(); pts.forEach((p, k) => k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); if (closed) ctx.closePath(); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+}
+
+function draw(ctx, v) {
+  const st = kit.state, t = K.themeById(st.theme), s = v.s, d = P.dpr, neon = st.style === 'neon', classic = st.style === 'classic';
+  background(ctx, t, P.w, P.h, null);
+  const pal = K.paletteColors(st.palette), lut = st.colorBy === 'speed' ? P.lut(st.cmap) : null;
+  const B = S.border.map(p => [v.X(p[0]), v.Y(p[1])]);
+  // the playfield
+  ctx.save(); ctx.beginPath(); B.forEach((p, k) => k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+  const g = ctx.createLinearGradient(0, v.Y(SM.H), 0, v.Y(0));
+  if (classic) { g.addColorStop(0, '#1b2a6b'); g.addColorStop(1, '#3a0f4a'); } else { g.addColorStop(0, t.bg2); g.addColorStop(1, t.bg); }
+  ctx.fillStyle = g; ctx.fill(); ctx.clip();
+  // lane arrows and a grid of faint dots
+  ctx.fillStyle = t.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+  for (let y = 0.3; y < SM.H; y += 0.08) for (let x = 0.06; x < 0.97; x += 0.08) { ctx.beginPath(); ctx.arc(v.X(x), v.Y(y), 1.2 * d, 0, 7); ctx.fill(); }
+  ctx.restore();
+  const wallCol = neon ? pal[1 % pal.length] : t.wall;
+  if (S.drain) glowLine(ctx, B.slice(0, 7).concat([]), wallCol, 3 * d, neon, false), glowLine(ctx, [B[7], B[0]], wallCol, 3 * d, neon, false);
+  else glowLine(ctx, B, wallCol, 3 * d, neon, true);
+  // bumpers and posts
+  for (const o of S.obstacles) {
+    const X = v.X(o.x), Y = v.Y(o.y), R = o.r * s, col = o.post ? t.wall : pal[(S.obstacles.indexOf(o) + 2) % pal.length];
+    if (o.post) { ctx.fillStyle = col; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill(); ctx.globalAlpha = 1; if (o.hit) { ctx.fillStyle = t.accent; ctx.globalAlpha = 0.6 * o.hit; ctx.beginPath(); ctx.arc(X, Y, R * 2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; } continue; }
+    if (neon || o.hit) { const gg = ctx.createRadialGradient(X, Y, R * 0.6, X, Y, R * (1.8 + o.hit)); gg.addColorStop(0, col); gg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.25 + 0.5 * o.hit; ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(X, Y, R * (1.8 + o.hit), 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = classic ? '#f2f2f2' : t.bg; ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, R * 0.22); ctx.beginPath(); ctx.arc(X, Y, R * 0.86, 0, 7); ctx.stroke();
+    ctx.fillStyle = col; ctx.globalAlpha = 0.35 + 0.65 * o.hit; ctx.beginPath(); ctx.arc(X, Y, R * 0.45, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  // flippers
+  S.flippers.forEach((f, k) => {
+    const [tx, ty] = SM.flipperTip(f), col = pal[(k ? 0 : 3) % pal.length];
+    const pts = [[v.X(f.x), v.Y(f.y)], [v.X(tx), v.Y(ty)]];
+    if (neon) glowLine(ctx, pts, col, 2 * f.r * s, true, false);
+    ctx.strokeStyle = classic ? '#f2f2f2' : col; ctx.lineCap = 'round'; ctx.lineWidth = 2 * f.r * s; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[1][0], pts[1][1]); ctx.stroke();
+    ctx.fillStyle = t.bg; ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], f.r * s * 0.45, 0, 7); ctx.fill();
+  });
+  // trails and balls
+  for (const b of S.balls) {
+    const col = lut ? lutColor(lut, 0.15 + 0.85 * Math.min(1, Math.hypot(b.vx, b.vy) / 5)) : pal[b.c % pal.length];
+    const N = Math.min(b.tN, S.TL);
+    for (let k = 1; k < N; k++) { const j0 = (b.tN - N + k - 1) % S.TL, j1 = (b.tN - N + k) % S.TL; if (Math.abs(b.ty[j1] - b.ty[j0]) > 0.3) continue; ctx.strokeStyle = col; ctx.globalAlpha = 0.5 * k / N; ctx.lineWidth = Math.max(1, b.r * s * 1.6 * k / N); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(v.X(b.tx[j0]), v.Y(b.ty[j0])); ctx.lineTo(v.X(b.tx[j1]), v.Y(b.ty[j1])); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    const X = v.X(b.x), Y = v.Y(b.y), R = Math.max(2, b.r * s);
+    const gb = ctx.createRadialGradient(X - R * 0.35, Y - R * 0.4, R * 0.1, X, Y, R);
+    gb.addColorStop(0, '#ffffff'); gb.addColorStop(0.35, classic ? '#c9ced6' : col); gb.addColorStop(1, classic ? '#6b7280' : col);
+    ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(X, Y, R, 0, 7); ctx.fill();
+  }
+  // score
+  ctx.font = `600 ${18 * d}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = t.ink; ctx.globalAlpha = 0.9;
+  ctx.fillText(String(S.score).padStart(6, '0'), v.X(0.5), v.Y(SM.H - 0.07));
+  if (S.combo > 1) { ctx.font = `${12 * d}px Inter, system-ui, sans-serif`; ctx.fillStyle = t.accent; ctx.fillText('combo ×' + S.combo, v.X(0.5), v.Y(SM.H - 0.12)); }
+  ctx.globalAlpha = 1; ctx.textAlign = 'start';
+  if (veil > 0) { ctx.fillStyle = t.bg; ctx.globalAlpha = veil; ctx.fillRect(0, 0, P.w, P.h); ctx.globalAlpha = 1; }
+}
+
+function bindInput() {
+  const press = (k, on) => { S.keys[k] = on; if (on) S.manualT = 4; };
+  addEventListener('keydown', e => { if (kit.saver || e.target.closest && e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase(); if (k === 'z' || k === 'arrowleft') press(0, true); if (k === 'm' || k === 'arrowright') press(1, true); });
+  addEventListener('keyup', e => { const k = e.key.toLowerCase(); if (k === 'z' || k === 'arrowleft') S.keys[0] = false; if (k === 'm' || k === 'arrowright') S.keys[1] = false; });
+  const touches = new Map();
+  canvas.addEventListener('pointerdown', e => {
+    if (!P.view || kit.saver) return;
+    canvas.setPointerCapture(e.pointerId);
+    const [x, y] = P.toWorld(e), g = SM.pick(S, x, y);
+    if (g) { S.grab = g; touches.set(e.pointerId, 'grab'); return; }
+    const side = x < 0.5 ? 0 : 1; press(side, true); touches.set(e.pointerId, side);
+  });
+  canvas.addEventListener('pointermove', e => { if (touches.get(e.pointerId) === 'grab' && S.grab) { const [x, y] = P.toWorld(e); S.grab.x = Math.max(0.03, Math.min(0.97, x)); S.grab.y = Math.max(0.3, Math.min(SM.H - 0.03, y)); } });
+  const up = e => { const k = touches.get(e.pointerId); if (k === 'grab') S.grab = null; else if (k != null) S.keys[k] = false; touches.delete(e.pointerId); };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+}
+
+kit = mount({
+  schema: SM.makeSchema(PHONE), title: 'Pinball', sub: 'Bumpers, flippers and the closest-segment border', panelTitle: 'Table', guard: SM.guard,
+  footer: 'Upstream demo: Ten Minute Physics #04 by Matthias Müller (MIT). Layouts, autopilot, drain, look and GUI: davesgames.io.',
+  actions: { act(id) { const r = K.rng(K.newSeed()); if (id === 'launch') SM.launch(S, kit.state, r); else SM.nudge(S, r); } },
+});
+kit.on('change', (out, st, why) => {
+  if (why === 'scene' || why === 'group' || why === 'saver') return;
+  if (Object.keys(out).some(k => SM.REBUILD.has(k))) rebuild(); else SM.applyParams(S, kit.state);
+});
+kit.on('scene', (seed, st, out, group) => { if (!group || Object.keys(out || {}).some(k => SM.REBUILD.has(k))) rebuild(); else SM.applyParams(S, kit.state); });
+kit.on('reset', rebuild);
+P = page2d({ canvas, kit, world: () => ({ w: SM.W, h: SM.H }), step: h => SM.step(S, h), draw: (ctx, v, dt) => { veil = Math.max(0, veil - dt / 0.45); draw(ctx, v); } });
+if (!kit.fromHash) kit.newScene(); else rebuild();
+bindInput();
+addEventListener('pagehide', () => { kit.playing = false; });
+
+window.__pin = { S, get kit() { return kit; }, canvas, rebuild, P };
+installSaver(window.__pin);
