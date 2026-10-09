@@ -4,8 +4,10 @@
 //  Pass 1, sampleRows: every texel of a 2:1 equirect map gets its unit
 //  vector (noise.js texelDir) and the generator's sample. Rows are
 //  independent, so the page splits them across workers (pool.js).
-//  Pass 2, finish: the tangent-space normal map and the ambient occlusion,
-//  which both need the whole height field.
+//  Pass 2, finish: river and talus erosion (erode.js) on rocky worlds,
+//  then rivers, snow by slope and cliff rock in the colour maps, then the
+//  tangent-space normal map and the ambient occlusion. All of these need
+//  the whole height field.
 //
 //  MAPS (id: format, meaning)
 //    albedo      RGB8 sRGB    base colour
@@ -42,7 +44,8 @@
 // ============================================================================
 import { prepareRocky } from './rocky.js';
 import { prepareGas, ringProfile } from './gas.js';
-import { texelDir, texelFrame, clamp, setBand } from './noise.js';
+import { texelDir, texelFrame, clamp, smooth, setBand } from './noise.js';
+import { erode } from './erode.js';
 
 export const MAP_INFO = [
   { id: 'albedo', label: 'Base colour', note: 'sRGB' },
@@ -73,8 +76,8 @@ export function sampleRows(ctx, W, y0, y1) {
     emissive: new Uint8Array(n * 4), cloud: new Uint8Array(n * 4),
   };
   const p = [0, 0, 0], s = {};
-  // octaves above about W / 10 cycles per radian alias at this width
-  setBand(W / 24);
+  // octaves above about W / 8 cycles per radian alias at this width
+  setBand(W / 16);
   const cc = ctx.P.clouds && ctx.P.clouds.color || [1, 1, 1];
   const cr = Math.round(clamp(cc[0]) * 255), cg = Math.round(clamp(cc[1]) * 255), cb = Math.round(clamp(cc[2]) * 255);
   let i = 0;
@@ -83,7 +86,9 @@ export function sampleRows(ctx, W, y0, y1) {
     ctx.sample(p, s);
     o.height[i] = s.h;
     const j = i * 4;
-    o.albedo[j] = Math.round(s.r * 255); o.albedo[j + 1] = Math.round(s.g * 255); o.albedo[j + 2] = Math.round(s.b * 255); o.albedo[j + 3] = 255;
+    o.albedo[j] = Math.round(s.r * 255); o.albedo[j + 1] = Math.round(s.g * 255); o.albedo[j + 2] = Math.round(s.b * 255);
+    // alpha: the snow potential for finish (rocky), 255 = none to apply (gas)
+    o.albedo[j + 3] = s.snow === undefined ? 255 : Math.round(clamp(s.snow) * 254);
     // mat: roughness, metallic, specular, flow band (AO comes in pass 2)
     o.mat[j] = Math.round(clamp(s.rough) * 255); o.mat[j + 1] = Math.round(clamp(s.metal) * 255);
     o.mat[j + 2] = Math.round(clamp(s.spec) * 255); o.mat[j + 3] = Math.round(clamp(s.fb) * 255);
@@ -116,10 +121,59 @@ export function assemble(W, parts) {
 export function finish(M, P, ctx) {
   const km = ctx ? ctx.kmPerUnit * (ctx.hMax - ctx.hMin) : P.relief;
   M.reliefKm = km;
+  if (P.kind !== 'gas' && ctx) {
+    const sea = P.ocean.level > 0 ? (ctx.seaH - ctx.hMin) / (ctx.hMax - ctx.hMin) : null;
+    const er = erode(M.height, M.W, M.H, { reliefKm: km, radiusKm: P.radiusKm, sea, flow: P.atmo.on ? P.erosion.flow : 0, talus: P.erosion.talus });
+    M.height = er.height; M.erosion = { cut: er.cut, net: er.net };
+    surface(M, P, er, sea);
+  }
   M.normal = normals(M.height, M.W, M.H, km, P.radiusKm, P.bump);
   M.ao = ambient(M.height, M.W, M.H, km, P.radiusKm);
   M.stats = stats(M);
   return M;
+}
+
+// After erosion: rivers along the drainage, snow where the slope holds it,
+// bare rock on cliffs, then alpha back to 255. Slopes are measured against
+// the 90th percentile of land slope, so the look does not change with the
+// map width.
+function surface(M, P, er, sea) {
+  const n = M.W * M.H, pal = P.palette, liq = P.ocean.liquid | 0;
+  const land = i => sea == null || M.height[i] > sea + 1e-4;
+  const sl = []; for (let i = 0; i < n; i += 13) if (land(i)) sl.push(er.slope[i]);
+  sl.sort((a, b) => a - b);
+  const s90 = Math.max(sl[Math.floor(sl.length * 0.9)] || 1e-6, 1e-6);
+  const ice = pal.ice.map(v => v * 255), rock = pal.rock.map(v => v * 255), deep = pal.deep.map(v => v * 255);
+  const riv = P.rivers.amount, bb = [1, 0.42, 0.08];
+  for (let i = 0; i < n; i++) {
+    const j = i * 4, a = M.albedo[j + 3];
+    if (a === 255) continue;
+    M.albedo[j + 3] = 255;
+    if (!land(i)) continue;
+    const s = er.slope[i] / s90;
+    // cliffs: bare rock where the slope is twice the usual steep slope
+    const cliff = smooth(1.4, 2.6, s) * 0.6;
+    if (cliff > 0) for (let c = 0; c < 3; c++) M.albedo[j + c] += (rock[c] - M.albedo[j + c]) * cliff;
+    // rivers: the trunk channels of the drainage
+    const r = riv > 0 ? smooth(0.62, 0.8, er.flow[i]) * riv * (1 - a / 254) : 0;   // frozen rivers stay under snow
+    if (r > 0) {
+      if (liq === 1) {
+        // lava channels glow (sRGB bytes of a 1300 K body)
+        const g = r * 0.9;
+        M.emissive[j] = Math.max(M.emissive[j], 255 * g); M.emissive[j + 1] = Math.max(M.emissive[j + 1], 150 * g * g); M.emissive[j + 2] = Math.max(M.emissive[j + 2], 40 * g * g * g);
+        for (let c = 0; c < 3; c++) M.albedo[j + c] += (bb[c] * 120 - M.albedo[j + c]) * r * 0.6;
+      } else {
+        for (let c = 0; c < 3; c++) M.albedo[j + c] += (deep[c] - M.albedo[j + c]) * r * 0.85;
+        if (M.mat) { M.mat[j] += (25 - M.mat[j]) * r; M.mat[j + 2] += (64 - M.mat[j + 2]) * r; }
+      }
+    }
+    // snow: the temperature potential, held by gentle slopes, shed by steep ones
+    const snow = (a / 254) * smooth(2.2, 0.9, s);
+    if (snow > 0) {
+      for (let c = 0; c < 3; c++) M.albedo[j + c] += (ice[c] - M.albedo[j + c]) * snow * 0.95;
+      if (M.mat) { M.mat[j] += (140 - M.mat[j]) * snow; M.mat[j + 2] += (71 - M.mat[j + 2]) * snow; }
+    }
+  }
 }
 
 // Neighbour fetch with the date-line wrap and the across-the-pole rule.

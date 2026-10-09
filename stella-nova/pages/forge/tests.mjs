@@ -219,6 +219,29 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('clock: spin off holds the angle, time still runs', g.spinAngle === 0 && g.hours() === 10);
 }
 
+// erosion (erode.js): the cut material stays on the map, heights stay in
+// range, channels sit lower than before, and the time at 1k
+{
+  const { erode } = await import('./erode.js');
+  const P = PR.fromPreset('earth'), ctx = MP.prepare(P), W1 = 1024;
+  const M = MP.assemble(W1, [MP.sampleRows(ctx, W1, 0, W1 / 2)]);
+  const sea = (ctx.seaH - ctx.hMin) / (ctx.hMax - ctx.hMin), km = ctx.kmPerUnit * (ctx.hMax - ctx.hMin);
+  const t0 = Date.now(), r = erode(M.height, W1, W1 / 2, { reliefKm: km, radiusKm: P.radiusKm, sea, flow: 1, talus: 0.4 }), ms = Date.now() - t0;
+  let lo = 1, hi = 0, rlo = 1, rhi = 0, dch = 0, nch = 0;
+  for (let i = 0; i < M.height.length; i++) {
+    lo = Math.min(lo, M.height[i]); hi = Math.max(hi, M.height[i]); rlo = Math.min(rlo, r.height[i]); rhi = Math.max(rhi, r.height[i]);
+    if (r.flow[i] > 0.7 && M.height[i] > sea) { dch += (r.height[i] - M.height[i]) * km; nch++; }
+  }
+  ok('erosion: the cut volume is laid back on the map (mass budget)', r.cut > 0 && Math.abs(r.net) < 1e-6 * r.cut, `cut ${r.cut.toExponential(2)} km3, net ${r.net.toExponential(1)} km3`);
+  ok('erosion: heights stay inside the input range', rlo >= lo - 1e-6 && rhi <= hi + 1e-6);
+  ok('erosion: river channels are cut down', nch > 50 && dch / nch < -0.1, `${nch} channel texels, mean ${(dch / nch * 1000).toFixed(0)} m`);
+  ok('erosion: 1k map erodes in under 2 s (one thread)', ms < 2000, `${ms} ms`);
+  const er = MP.generate(P, 128);
+  let seam = 0, inner = 0;
+  for (let y = 0; y < 64; y++) { seam += Math.abs(er.height[y * 128] - er.height[y * 128 + 127]); inner += Math.abs(er.height[y * 128 + 40] - er.height[y * 128 + 41]); }
+  ok('erosion: no seam at the date line after the pass', seam <= inner * 1.6 + 1e-3, `seam ${(seam / 64).toFixed(4)} vs inner ${(inner / 64).toFixed(4)}`);
+}
+
 // clouds (clouds.js, the CPU twin of clouds.wgsl): the field stays in
 // [0, 1], changes over hours but not from one frame to the next, the
 // cyclones stay bounded, and the exported map is the field at hour 0
@@ -261,7 +284,7 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   const good = () => { const w = { postMessage(m) { setTimeout(() => {
     try { const ctx = MP.prepare(m.planet);
       if (m.cmd === 'rows') w.onmessage({ data: { id: m.id, part: MP.sampleRows(ctx, m.W, m.y0, m.y1) } });
-      else { const M = MP.finish(m.M, m.planet, ctx); w.onmessage({ data: { id: m.id, normal: M.normal, ao: M.ao, stats: M.stats, reliefKm: M.reliefKm } }); }
+      else { const M = MP.finish(m.M, m.planet, ctx); w.onmessage({ data: { id: m.id, normal: M.normal, ao: M.ao, stats: M.stats, reliefKm: M.reliefKm, height: M.height, albedo: M.albedo, mat: M.mat, emissive: M.emissive } }); }
     } catch (e) { w.onmessage({ data: { id: m.id, error: String(e) } }); } }, 0); }, terminate() {} }; return w; };
   const crash = () => { const w = { postMessage() { setTimeout(() => w.onerror({ message: 'boom' }), 5); }, terminate() {} }; return w; };
   const silent = () => ({ postMessage() {}, terminate() {} });

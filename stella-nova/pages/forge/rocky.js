@@ -7,7 +7,8 @@
 //
 //  HEIGHT (heightCore), in order
 //    1. q = warp(p)                     two-level domain warp of the input
-//    2. c = fbm(q)                      continents
+//    2. c = fbm(q) + fbm(p)             continents: 3 low octaves warped,
+//                                       the fine ones on the plain point
 //    3. plates: nearest two of N seeded Voronoi sites on the sphere. Each
 //       plate is continental or oceanic and has a drift vector. Where two
 //       plates converge, the boundary lifts (uplift); where they part, it
@@ -16,6 +17,8 @@
 //    5. detail = fbmEroded(p)           derivative-damped fBm: less detail on
 //                                       steep slopes, so slopes read eroded
 //    6. dunes, cracks (lineae), calderas, craters
+//    Valleys and rivers come later: erode.js cuts drainage networks into
+//    the joined height map, and maps.js finish lays rivers and snow.
 //  The sea level is the quantile of the height at ocean.level over 6000
 //  Fibonacci points, so it does not depend on the map size.
 //
@@ -52,7 +55,7 @@ const BIOMES = [
 ];
 
 const D = d => d * Math.PI / 180;
-const _q = [0, 0, 0], _t = [0, 0, 0], _v = [0, 0, 0];
+const _q = [0, 0, 0], _t = [0, 0, 0], _v = [0, 0, 0], _m = [0, 0, 0];
 
 // Planck colour of a black body at T kelvin, normalised to max channel 1
 // (fit of the CIE result; good from 1000 K to 3000 K, which is all we use).
@@ -72,6 +75,9 @@ export function prepareRocky(P) {
     sWarp: S(1), sCont: S(2), sMtn: S(3), sEro: S(4), sTemp: S(5), sMoist: S(6), sCloud: S(7),
     sDune: S(8), sCrack: S(9), sRiver: S(10), sCity: S(11), sVar: S(12), sRay: S(13), sLava: S(14), sWind: S(15),
     terrainO: { freq: P.terrain.freq, octaves: P.terrain.octaves, lacunarity: P.terrain.lacunarity, gain: P.terrain.gain },
+    terrainLo: { freq: P.terrain.freq, octaves: Math.min(3, P.terrain.octaves), lacunarity: P.terrain.lacunarity, gain: P.terrain.gain },
+    terrainHi: { freq: P.terrain.freq * P.terrain.lacunarity ** 3, octaves: Math.max(0, P.terrain.octaves - 3), lacunarity: P.terrain.lacunarity, gain: P.terrain.gain },
+    hiGain: P.terrain.gain ** 3 * 1.6,
     mtnO: { freq: P.mountains.freq, octaves: P.mountains.octaves, lacunarity: P.mountains.lacunarity, gain: P.mountains.gain },
     eroO: { freq: P.erosion.freq, octaves: P.erosion.octaves, lacunarity: 2.0, gain: 0.5 },
   };
@@ -232,7 +238,9 @@ function volcanoField(ctx, p, st) {
 function heightCore(ctx, p, st) {
   const P = ctx.P;
   warp(p, P.terrain.warp, P.terrain.warpFreq, ctx.sWarp, _q);
-  const c = fbm(_q, ctx.terrainO, ctx.sCont) * P.terrain.amp;
+  // continents: the low octaves on the warped point, the fine octaves on
+  // the plain point (warped fine octaves comb into hair-like streaks)
+  const c = (fbm(_q, ctx.terrainLo, ctx.sCont) + (ctx.terrainHi.octaves > 0 ? fbm(p, ctx.terrainHi, ctx.sCont + 77) * ctx.hiGain : 0)) * P.terrain.amp;
   let h = c, uplift = 0, rift = 0, pe = 0;
   const pl = ctx.plates;
   if (pl.length > 1) {
@@ -262,7 +270,10 @@ function heightCore(ctx, p, st) {
     h -= P.terrain.dichotomy * 0.45 * smooth(-0.35, 0.45, t + 0.12 * simplex3(p[0] * 2, p[1] * 2, p[2] * 2, ctx.sVar));
   }
   const mmask = clamp(uplift * 1.3 + smooth(0.05, 0.55, c + pe * P.plates.weight) * 0.55);
-  const r = P.mountains.amp > 0 ? ridged(_q, ctx.mtnO, ctx.sMtn, P.mountains.sharpness) : 0;
+  // ranges follow the warped plates only partly: a fully warped ridged field
+  // reads as marble swirls, not as mountain ranges
+  _m[0] = p[0] + 0.35 * (_q[0] - p[0]); _m[1] = p[1] + 0.35 * (_q[1] - p[1]); _m[2] = p[2] + 0.35 * (_q[2] - p[2]);
+  const r = P.mountains.amp > 0 ? ridged(_m, ctx.mtnO, ctx.sMtn, P.mountains.sharpness) : 0;
   h += P.mountains.amp * mmask * r;
   st.mtn = mmask * r; st.c = c; st.uplift = uplift; st.rift = rift;
   const e = P.erosion.detail > 0 ? fbmEroded(p, ctx.eroO, ctx.sEro, P.erosion.strength) : 0;
@@ -297,14 +308,6 @@ function heightCore(ctx, p, st) {
     const low = smooth(-0.05, -0.35, c + 0.15 * simplex3(p[0] * 4, p[1] * 4, p[2] * 4, ctx.sVar + 3));
     st.maria = clamp(Math.max(st.floor, low) * P.craters.maria);
     h = mix(h, Math.min(h, -0.25 * P.terrain.amp), st.maria * 0.7);
-  }
-  // rivers: ridged lines in a warped field, carved where wet and low
-  st.river = 0;
-  if (P.rivers.amount > 0 && h > ctx.seaH) {
-    const n = Math.abs(simplex3(_q[0] * 9, _q[1] * 9, _q[2] * 9, ctx.sRiver)) + 0.5 * Math.abs(simplex3(_q[0] * 19, _q[1] * 19, _q[2] * 19, ctx.sRiver + 1));
-    const land = smooth(0, 0.02, h - ctx.seaH) * smooth(0.5, 0.1, st.mtn);
-    st.river = smooth(0.05, 0.0, n) * land * P.rivers.amount;
-    h -= 0.012 * st.river;
   }
   st.h = h;
 }
@@ -347,7 +350,7 @@ function sampleRocky(ctx, p, out) {
   M -= 0.25 * st.mtn;                                  // rain shadow on ranges
   M = clamp(M * P.climate.moisture * 2 - (1 - P.climate.moisture) * 0.15 + 0.5 * (P.climate.moisture - 0.5));
   const vary = fbm(p, VAR_O, ctx.sVar);
-  out.er = 0; out.eg = 0; out.eb = 0; out.night = 0; out.metal = 0;
+  out.er = 0; out.eg = 0; out.eb = 0; out.night = 0; out.metal = 0; out.snow = 0;
 
   const polarOnly = (P.ocean.liquid | 0) === 2 ? smooth(0.75, 1.0, Math.abs(lat) + 0.15 * vary) : 1;
   if (hk < 0 && P.ocean.level > 0 && polarOnly > 0.5) {
@@ -392,7 +395,7 @@ function sampleRocky(ctx, p, out) {
       const grow = P.climate.life * smooth(-14, -4, T) * smooth(45, 35, T) * smooth(0.6, 0.25, st.mtn);
       lerp3(_col, _bar, _bio, grow);
       // beaches
-      mixIn(_col, pal.beach, smooth(0.04, 0.0, hk) * smooth(0.0, 0.3, M) * 0.8);
+      mixIn(_col, pal.beach, smooth(0.12, 0.0, hk) * (0.3 + 0.3 * smooth(0.0, 0.3, M)));
       rough = mix(0.88, 0.78, grow);
     } else {
       _col[0] = _bar[0]; _col[1] = _bar[1]; _col[2] = _bar[2];
@@ -416,14 +419,9 @@ function sampleRocky(ctx, p, out) {
       }
       rough = mix(rough, 0.7, st.vDark);
     }
-    // rivers
-    if (st.river > 0) { mixIn(_col, pal.deep, st.river * 0.8); rough = mix(rough, 0.1, st.river); spec = mix(spec, 0.25, st.river); }
-    // snow and ice
-    if (T < P.climate.iceC + 6) {
-      const snow = smooth(P.climate.iceC + 2, P.climate.iceC - 5, T + 4 * vary);
-      mixIn(_col, pal.ice, snow * 0.95);
-      rough = mix(rough, 0.55, snow); spec = mix(spec, 0.28, snow);
-    }
+    // snow: only the potential from temperature (latitude, altitude by the
+    // lapse rate). maps.js finish lays it where the slope holds it.
+    if (T < P.climate.iceC + 6) out.snow = smooth(P.climate.iceC + 2, P.climate.iceC - 5, T + 4 * vary);
     // city lights at night: temperate, wet, lowland, clustered near coasts
     if (P.climate.cities > 0 && P.climate.life > 0) {
       const hab = smooth(-2, 8, T) * smooth(32, 24, T) * smooth(0.12, 0.35, M) * smooth(2.5, 0.2, hk) * smooth(0.4, 0.1, st.mtn);

@@ -63,10 +63,10 @@ for (const a of Object.values(ATMO)) { a.clarity ??= 1; a.glow ??= 0; }
 
 export const ROCKY_DEFAULT = {
   kind: 'rocky', name: 'Rocky world', seed: 1,
-  terrain: { amp: 1, freq: 0.9, octaves: 7, lacunarity: 2.05, gain: 0.47, warp: 0.3, warpFreq: 0.9, dichotomy: 0 },
+  terrain: { amp: 1, freq: 0.9, octaves: 7, lacunarity: 2.05, gain: 0.47, warp: 0.14, warpFreq: 0.9, dichotomy: 0 },
   plates: { count: 14, weight: 0.32, uplift: 0.7, width: 0.12, oceanic: 0.55 },
   mountains: { amp: 0.55, freq: 2.4, octaves: 6, lacunarity: 2.1, gain: 0.5, sharpness: 2.2 },
-  erosion: { strength: 1.5, detail: 0.16, freq: 6, octaves: 6 },
+  erosion: { strength: 1.5, detail: 0.16, freq: 6, octaves: 6, flow: 1, talus: 0.4 },
   craters: { density: 0, rMin: 0.006, rMax: 0.2, slope: 2.0, depth: 1, rim: 1, ejecta: 0.6, maria: 0 },
   ocean: { level: 0.6, liquid: 0 },   // liquid: 0 water, 1 lava, 2 methane
   climate: { equatorC: 28, poleC: -28, lapse: 6.5, moisture: 0.55, life: 1, iceC: -12, cities: 0 },
@@ -75,7 +75,7 @@ export const ROCKY_DEFAULT = {
   cracks: { amount: 0, freq: 2.5, glow: 0 },
   volcanoes: { count: 0, glow: 0 },
   clouds: { cover: 0.5, freq: 1.5, swirl: 0.6, cyclones: 6, height: 0.006, cirrus: 0.3, color: [1, 1, 1] },
-  relief: 12, radiusKm: 6371, bump: 1, tilt: 23, spin: 1,
+  relief: 12, radiusKm: 6371, bump: 3, tilt: 23, spin: 1,
   palette: {
     deep: [0.03, 0.07, 0.17], shallow: [0.06, 0.2, 0.32], beach: [0.62, 0.56, 0.42],
     low: [0.42, 0.36, 0.28], high: [0.56, 0.52, 0.46], rock: [0.34, 0.31, 0.28],
@@ -206,6 +206,8 @@ export const SCHEMA = {
     ['Erosion', 'erosion.detail', 'detail', 0, 0.5, 0.005],
     ['Erosion', 'erosion.freq', 'detail frequency', 2, 20, 0.1],
     ['Erosion', 'erosion.octaves', 'detail octaves', 1, 10, 0.25],
+    ['Erosion', 'erosion.flow', 'river erosion (air only)', 0, 3, 0.01],
+    ['Erosion', 'erosion.talus', 'talus slopes', 0, 1, 0.01],
     ['Craters', 'craters.density', 'density', 0, 1.5, 0.01],
     ['Craters', 'craters.rMin', 'smallest radius (rad)', 0.002, 0.05, 0.001],
     ['Craters', 'craters.rMax', 'largest radius (rad)', 0.02, 0.4, 0.005],
