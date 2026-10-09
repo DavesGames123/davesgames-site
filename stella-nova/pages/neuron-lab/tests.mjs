@@ -15,6 +15,9 @@
 //    multi-cell networks of full cells: NetCon delay, threshold weight,
 //    inhibition, a reverberating ring, the compartment budget, presets,
 //    the connectivity matrix through the hash
+//    network mode (netplan.js): build from Randomize values and from the
+//    hash, the demos (chain hand-off, ring, inhibition), the matrix click,
+//    the multi-select edit, spikes in flight on the axons
 //  Exit code 1 on any failure.
 // ============================================================================
 import { Cell, hinesSolve, denseSolve, somaOnly, dLambdaNseg, lambdaF, exp2Factor } from './engine/cell.js';
@@ -26,6 +29,7 @@ import { rng } from './engine/rng.js';
 import { Cell as Cell2, ihRates, SPINE_AREA } from './engine/cell.js';
 import { CATS, RANGES, TYPES, sample, catSeed, defaults, morphFactors, cellOpts, stdStimulus, stimPlan } from './engine/random.js';
 import { encodeHash, decodeHash } from './engine/hashstate.js';
+import { buildNet, applyPreset, cycleLink, editLinks, netState, flightsOf, pointOn, DEMOS, kicker, wxOf } from './engine/netplan.js';
 import { MultiNet, BUDGET, THRESH_W, SYN_DELAY, layoutPositions, wirePreset, matrixOf, axonCurve, chooseDlambda } from './engine/multicell.js';
 
 let pass = 0, fail = 0;
@@ -351,6 +355,72 @@ for (const [name, bag] of [['lab', LAB_SHOTS], ['net', NET_SHOTS]]) {
   ok(re.conns.every((c, i) => Math.abs(c.w - n8.conns[i].w) < 1e-5 && c.node === n8.conns[i].node && Math.abs(c.delay - n8.conns[i].delay) < 0.051), 'weights, synapse nodes and delays round-trip too');
   ok(JSON.stringify(decodeHash(encodeHash({ net: back })).net) === JSON.stringify(back), 'a second trip changes nothing');
   say(`hash for 8 cells, ${n8.conns.length} links: ${encodeHash(st).length} characters`);
+}
+
+// ── 14. network mode (netplan.js) ─────────────────────────────────────
+{
+  const bio = defaults('bio'), morph = null;
+  const run = (net, ms, f) => { while (net.t < ms) { net.step(); if (f) f(net); } };
+  // determinism by seed: same seeds, same spikes
+  const mkR = () => buildNet({ wire: sample('wire', 41), morph: sample('morph', 7), bio: sample('bio', 5), seeds: { morph: 7, wire: 41 } });
+  const a = mkR(), b = mkR(); a.kick(0); b.kick(0); run(a, 60); run(b, 60);
+  ok(a.n === b.n && a.conns.length === b.conns.length && JSON.stringify(a.spikes) === JSON.stringify(b.spikes), `same seeds give the same network and spikes (${a.n} cells, ${a.conns.length} links, ${a.spikes.length / 2} spikes)`);
+  ok(a.total <= BUDGET.desktop.comps, `random network fits the desktop budget: ${a.total} compartments`);
+  const ph = buildNet({ wire: { ...sample('wire', 41), count: 12 }, morph: sample('morph', 7), bio, seeds: { morph: 7, wire: 41 }, phone: true });
+  ok(ph.n <= BUDGET.phone.cells && ph.total <= BUDGET.phone.comps, `phone: ${ph.n} cells, ${ph.total} compartments`);
+  // demos: the chain hands the spike to the last cell, in order
+  const ch = buildNet({ wire: DEMOS.chain.wire, morph, bio, seeds: { wire: 3 } }), kc = kicker(DEMOS.chain.kick);
+  run(ch, 60, kc);
+  const first = [...Array(ch.n).keys()].map(i => ch.spikeTimes(i)[0]);
+  ok(first.every(Number.isFinite) && first.every((t, i) => !i || t > first[i - 1]), 'chain demo: every cell fires, in order: ' + first.map(t => t.toFixed(1)).join(' '));
+  // the delay between neighbours is at least the NetCon delay
+  ok(ch.conns.every(c => first[c.post] - first[c.pre] >= c.delay - 0.05), 'chain demo: each hand-off takes at least its NetCon delay');
+  // ring: one kick, the loop keeps going
+  const rg = buildNet({ wire: DEMOS.ring.wire, morph, bio, seeds: { wire: 3 } }), kr = kicker(DEMOS.ring.kick);
+  run(rg, 200, kr);
+  ok(rg.spikeTimes(0).length >= 3, `ring demo: one kick, cell 0 fires ${rg.spikeTimes(0).length} times in 200 ms`);
+  // inhibition: the same loop without the I cell's outputs fires more
+  const mkL = cut => { const n = buildNet({ wire: DEMOS.inhibit.wire, morph, bio, seeds: { wire: 3 } }); if (cut) editLinks(n, n.conns.filter(c => c.ty === 'i'), { remove: true }); const k = kicker(DEMOS.inhibit.kick); run(n, 200, k); return n; };
+  const withI = mkL(false), noI = mkL(true);
+  const eSp = n => { let s = 0; for (let i = 0; i < n.n - 1; i++) s += n.spikeTimes(i).length; return s; };
+  ok(withI.spikeTimes(withI.n - 1).length > 0 && eSp(withI) < eSp(noI), `inhibit demo: the I cell fires (${withI.spikeTimes(withI.n - 1).length}) and the E ring fires less with it (${eSp(withI)} vs ${eSp(noI)})`);
+  // every demo builds and runs finite
+  for (const [k, D] of Object.entries(DEMOS)) {
+    const n = buildNet({ wire: D.wire, morph, bio, seeds: { wire: 5 } }), f = kicker(D.kick); let bad = 0;
+    run(n, 40, f); for (const c of n.cells) for (let i = 0; i < c.n; i++) if (!Number.isFinite(c.v[i])) bad++;
+    ok(bad === 0 && n.spikes.length > 0, `demo ${k}: ${n.n} cells, ${n.conns.length} links, ${n.spikes.length / 2} spikes, finite`);
+  }
+  // the matrix click cycles none -> E -> I -> none
+  const m = buildNet({ wire: { ...DEMOS.chain.wire, count: 3, preset: 'chain' }, morph, bio, seeds: { wire: 2 } });
+  const s1 = cycleLink(m, 2, 0), c1 = m.conns.find(c => c.pre === 2 && c.post === 0), w1 = wxOf(m, c1);
+  const s2 = cycleLink(m, 2, 0), c2 = m.conns.find(c => c.pre === 2 && c.post === 0), w2 = wxOf(m, c2);
+  const s3 = cycleLink(m, 2, 0);
+  ok(s1 === 1 && s2 === -1 && s3 === 0 && c2.ty === 'i' && Math.abs(w1 - w2) < 1e-9 && !m.conns.some(c => c.pre === 2 && c.post === 0), 'matrix click: none -> E -> I (same multiple) -> none');
+  ok(cycleLink(m, 1, 1) === 0 && !m.conns.some(c => c.pre === c.post), 'matrix click on the diagonal does nothing');
+  // multi-select edit: one edit on many links
+  const e8 = buildNet({ wire: { ...DEMOS.ei.wire }, morph, bio, seeds: { wire: 4 } });
+  const sel = e8.conns.filter(c => c.pre < 3);
+  editLinks(e8, sel, { ty: 'i', wx: 1.5, delay: 4 });
+  ok(sel.length > 1 && sel.every(c => c.ty === 'i' && Math.abs(wxOf(e8, c) - 1.5) < 1e-9 && Math.abs(c.delay - 4) < 1e-9 && Math.abs(c.nc.delay - 4) < 1e-9), `multi-select edit sets type, weight and delay on ${sel.length} links`);
+  editLinks(e8, sel, { delay: 'auto' });
+  ok(sel.every(c => c.fixed == null && c.delay > 0.5 && Math.abs(c.delay - (0.5 + c.len / (e8.velocity * 1000))) < 1e-9), 'delay "auto" goes back to length over velocity');
+  const before = e8.conns.length; editLinks(e8, sel, { remove: true });
+  ok(e8.conns.length === before - sel.length, 'multi-select delete removes exactly the selection');
+  // the network state through the hash, rebuilt, gives the same matrix and delays
+  e8.move(2, [123, 0, -456]); e8.moved[2] = true;
+  const st = { mode: 'net', net: netState(e8) }, back = decodeHash(encodeHash(st)).net;
+  const re = buildNet({ wire: { ...DEMOS.ei.wire, layout: back.layout, count: back.n }, morph, bio, seeds: { wire: 4 }, types: back.types, conns: back.conns, place: back.pos, velocity: back.vel });
+  ok(JSON.stringify(matrixOf(re.n, re.conns)) === JSON.stringify(matrixOf(e8.n, e8.conns)), 'network mode state round-trips through the hash (matrix)');
+  ok(re.place[2].p[0] === 123 && re.place[2].p[2] === -456 && re.moved[2] && !re.moved[1], 'a moved cell keeps its place through the hash, the others stay on the layout');
+  ok(re.conns.every((c, i) => Math.abs(c.delay - e8.conns[i].delay) < 0.051), 'delays round-trip');
+  // spikes in flight: u runs 0 -> 1 over the axon part of the delay
+  const c0 = ch.conns[0], fl = [];
+  c0.flights.length = 0; c0.flights.push(10);
+  const us = [10, 10 + (c0.delay - SYN_DELAY) / 2, 10 + c0.delay - SYN_DELAY].map(t => flightsOf(c0, t, fl)[0].u);
+  ok(Math.abs(us[0]) < 1e-9 && Math.abs(us[1] - 0.5) < 1e-9 && Math.abs(us[2] - 1) < 1e-9, 'a spike in flight is at u 0, 0.5, 1 at the start, middle and end of the axon');
+  const pe = pointOn(c0.pts, 1), q = c0.pts[c0.pts.length - 1];
+  ok(Math.hypot(pe[0] - q[0], pe[1] - q[1], pe[2] - q[2]) < 1e-6, 'u = 1 is the synapse');
+  say(`network mode: chain ${first.map(t => t.toFixed(1)).join(', ')} ms; ring cell 0 x${rg.spikeTimes(0).length}; inhibit E spikes ${eSp(withI)} vs ${eSp(noI)}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
