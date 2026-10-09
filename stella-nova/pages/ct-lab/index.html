@@ -36,7 +36,10 @@
     (a right drawer in landscape). #dockPlay, #dockStep, #dockWin, #dockMap
     (next colour map) are one tap. #cmapBox: map tabs, quick swatches, pickers.
 
-  grep handles: id="panels"  id="gallery"  id="panel"  id="dock"  data-panel=
+  3D TAB: #tab2d / #tab3d in the top bar swap #panels and #bar for #view3d
+    (lab/tab3d.js: #cv3d WebGPU canvas, #v3Note when WebGPU is absent).
+
+  grep handles: id="panels"  id="gallery"  id="panel"  id="dock"  data-panel=  id="view3d"
 -->
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="colormaps/picker.css">
@@ -48,6 +51,9 @@
     <span class="crumb">Stella Nova</span>
     <h1>CT lab</h1>
     <span id="backend" class="badge" title="Where the projections run">CPU</span>
+    <div class="seg tabs" id="tabs" role="tablist" aria-label="2D or 3D">
+      <button id="tab2d" data-tab="2d" class="on" role="tab" aria-selected="true">2D</button><button id="tab3d" data-tab="3d" role="tab" aria-selected="false">3D</button>
+    </div>
   </div>
   <div class="actions">
     <button id="btnRun" class="btn" title="Scan again from the first view (R)">Rescan</button>
@@ -65,6 +71,18 @@
 </aside>
 
 <main id="stage">
+  <section id="view3d" hidden aria-label="3D cone-beam scan">
+    <div class="v3-bar">
+      <label class="row"><span>Object</span><select id="v3Phantom"></select></label>
+      <div class="seg" id="v3Look"></div>
+      <button id="v3Rescan" class="btn">Rescan</button>
+    </div>
+    <canvas id="cv3d" aria-label="3D cone-beam scan and volume"></canvas>
+    <p id="v3Note" class="v3-note" hidden></p>
+    <canvas id="cv3dFallback" hidden aria-label="Phantom slices (no WebGPU)"></canvas>
+    <p id="v3Status" class="dim small">Cone-beam scan</p>
+    <p class="dim small v3-about">A cone of X-rays and a flat detector turn once around a 3D phantom. The FDK method (Feldkamp, Davis and Kress, 1984) filters each 2D projection and back-projects it on the GPU. The colour map (Controls, Colour maps, 3D) colours the MIP, the slices and the volume rendering.</p>
+  </section>
   <div id="panels">
     <figure class="panel" data-panel="phantom">
       <canvas id="cvPhantom" aria-label="Phantom and gantry"></canvas>
@@ -104,7 +122,7 @@
   <section class="ctl" id="cmapBox">
     <h3>Colour maps</h3>
     <div class="row seg" id="cmapTabs" role="tablist" aria-label="What the map colours">
-      <button data-target="image" class="on">Images</button><button data-target="sino">Sinogram</button><button data-target="diff">Error</button><button data-target="v3d" hidden>3D</button>
+      <button data-target="image" class="on">Images</button><button data-target="sino">Sinogram</button><button data-target="diff">Error</button><button data-target="v3d">3D</button>
     </div>
     <div id="cmapQuick" class="cmap-quick" aria-label="Quick colour maps"></div>
     <div id="cmapHost-image" class="cmap-host"></div>

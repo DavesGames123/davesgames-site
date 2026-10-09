@@ -162,6 +162,24 @@ The hash holds the preset, then each map that differs from the preset's maps:
 `~r` is reverse, `~g<n>` is gamma. The page reads the hash on load and on
 `hashchange`, and writes it (with `history.replaceState`) after each map change.
 
+## 3D tab
+
+```js
+__ctlab.setTab('3d' | '2d')   // returns __ctlab.tab()
+__ctlab.tab()                 // { tab, active, phase, phantom, mode, map, live, made, error, view }
+```
+
+The 3D tab (`lab/tab3d.js`) scans a 3D phantom (head, chest or Shepp-Logan 3D)
+with a cone beam, reconstructs it with FDK on the GPU, then shows it as MIP,
+volume rendering, surfaces or slices (`view3d/`). The `v3d` colour map colours
+the MIP, the slices and the volume rendering (`tf: true`). Phones get 64^3
+voxels, 90 views and 128 ray steps. Desktops get 96^3, 180 views and 256 steps.
+
+The tab is WebGPU only. Without WebGPU it shows a note and a Canvas 2D preview of
+the phantom slices. The tab makes its own GPUDevice when it opens and destroys
+it when it closes, on `pagehide`, and on `setChrome(false)` (the saver). `live`
+counts the devices that the tab holds now. `#...&tab=3d` in the hash opens it.
+
 ## Events
 
 ```js
@@ -178,5 +196,6 @@ const off = __ctlab.on(name, fn)  // returns a function that removes the listene
 
 ## Teardown
 
-The page destroys its WebGPU device and its worker on `pagehide`.
+The page destroys its WebGPU devices (the 2D lab device and the 3D tab device)
+and its worker on `pagehide`.
 `lib/gpu-guard.js` also releases the device when the shell swaps pages.

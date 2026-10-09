@@ -32,6 +32,7 @@
 //    grep -n 'DRAW'                draw-your-own and the picture upload
 //    grep -n 'EXPORT'              PNG export
 //    grep -n 'COLOUR'              colour map pickers, quick swatches, share hash (lab/colour.js)
+//    grep -n 'TAB3D'               the 3D tab (lab/tab3d.js): open, close, GPU release
 // ============================================================================
 
 import { DEFAULTS, PRESETS, GROUPS, WINDOWS, presetById, paramsFor, workFor } from './lab/presets.js';
@@ -44,6 +45,7 @@ import { FILTERS, rasterize2D, phantom2D, psnr, ssim } from './engine/index.js';
 import * as CM from './colormaps/maps.js';
 import { createPicker } from './colormaps/picker.js';
 import { TARGETS, QUICK, targetOf, mapOf, mapPartial, encodeMaps, decodeMaps, mapNames } from './lab/colour.js';
+import { createTab3D, PHANTOMS as PHANTOMS_3D_TAB, LOOKS } from './lab/tab3d.js';
 import './saver.js';   // window.snSaver: the screensaver reel, on top of window.__ctlab
 
 const $ = (id) => document.getElementById(id);
@@ -56,6 +58,7 @@ const FILTER_NAMES = { 'ram-lak': 'Ram-Lak', 'shepp-logan': 'Shepp-Logan', cosin
 const S = {
   params: { ...DEFAULTS },
   preset: 'shepp-logan',
+  tab: '2d',                  // '2d' | '3d' (TAB3D)
   phantom: null, hu: false, truthRange: { lo: 0, hi: 1 },
   geom: null, scan: null, session: null, sinoMax: 1,
   phase: 'idle', playing: true, stopped: false,
@@ -571,7 +574,7 @@ function fmtDose(v) {
 let last = 0, rafId = 0;
 function frame(t) {
   rafId = requestAnimationFrame(frame);
-  if (S.stopped) return;
+  if (S.stopped || S.tab === '3d') return;
   const dt = Math.min(0.1, last ? (t - last) / 1000 : 0.016);
   last = t;
   const ses = S.session;
@@ -607,7 +610,7 @@ async function setParams(partial, o = {}) {
   syncControls();
   if (work === 'scan') await startScan({ autoplay: o.run !== false && S.playing !== false ? undefined : false });
   else if (work === 'recon') { captions(); await rerecon(); }
-  else { paintSinoBuffer(S.session && S.session.sino); markDirty(); drawCompareTiles(); syncPickers(); }
+  else { paintSinoBuffer(S.session && S.session.sino); markDirty(); drawCompareTiles(); syncPickers(); if (tab3d) tab3d.setMap(mapOf(S.params, 'v3d')); }
   captions(); updateBar();
 }
 
@@ -800,6 +803,7 @@ function buildGallery() {
       const sp = document.createElement('span'); sp.textContent = pr.label;
       b.append(th, sp);
       b.addEventListener('click', () => {
+        setTab('2d');
         history.replaceState(null, '', `#preset=${pr.id}`);
         loadPreset(pr.id);
         if (phoneish()) closeSheets();
@@ -1058,7 +1062,42 @@ function setMap(target, id, o = {}) {
 }
 // The share hash: the preset, then the maps that differ from the preset's own maps.
 function writeHash() {
-  try { history.replaceState(null, '', `#preset=${S.preset}${encodeMaps(S.params, paramsFor(S.preset))}`); } catch (e) { /* no history */ }
+  try { history.replaceState(null, '', `#preset=${S.preset}${encodeMaps(S.params, paramsFor(S.preset))}${S.tab === '3d' ? '&tab=3d' : ''}`); } catch (e) { /* no history */ }
+}
+
+// ---------- TAB3D ----------
+let tab3d = null;
+function buildTab3D() {
+  const sel = $('v3Phantom');
+  for (const [v, l] of PHANTOMS_3D_TAB) { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.append(o); }
+  sel.value = 'head';
+  const look = $('v3Look');
+  for (const [v, l] of LOOKS) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.mode = v; b.textContent = l;
+    b.classList.toggle('on', v === 'dvr'); look.append(b);
+  }
+  tab3d = createTab3D({ canvas: $('cv3d'), note: $('v3Note'), status: $('v3Status'), fallback: $('cv3dFallback') }, { phone: phoneish });
+  tab3d.setMap(mapOf(S.params, 'v3d'));
+  sel.addEventListener('change', () => tab3d.setPhantom(sel.value));
+  look.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    tab3d.setMode(b.dataset.mode);
+    look.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  });
+  $('v3Rescan').addEventListener('click', () => tab3d.rescan());
+  $('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && b.dataset.tab) setTab(b.dataset.tab); });
+}
+// '2d' | '3d'. The 3D tab owns its GPUDevice; closing the tab destroys it.
+function setTab(t) {
+  const next = t === '3d' ? '3d' : '2d';
+  if (S.tab === next) return;
+  S.tab = next;
+  document.body.classList.toggle('tab3d', next === '3d');
+  $('view3d').hidden = next !== '3d';
+  for (const b of document.querySelectorAll('#tabs button')) { const on = b.dataset.tab === next; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  if (next === '3d') { showMapTab('v3d'); tab3d && tab3d.enter(); }
+  else { tab3d && tab3d.leave(); showMapTab('image'); markDirty(); requestAnimationFrame(layout); }
+  writeHash();
 }
 function syncPickers() {
   for (const [k, pk] of Object.entries(pickers)) {
@@ -1158,6 +1197,8 @@ const api = {
     return setMap(target, id, o);
   },
   colormaps() { const out = {}; for (const k of Object.keys(TARGETS)) out[k] = mapOf(S.params, k); return out; },
+  setTab(t) { setTab(t); return api.tab(); },
+  tab: () => ({ tab: S.tab || '2d', ...(tab3d ? tab3d.state() : {}) }),
   focusPanel(name) {
     S.focus = name && panels[name] ? name : null;
     const grid = $('panels');
@@ -1165,7 +1206,7 @@ const api = {
     grid.querySelectorAll('.panel').forEach((f) => f.classList.toggle('focused', f.dataset.panel === S.focus));
     layout();
   },
-  setChrome(visible) { document.documentElement.classList.toggle('ct-bare', !visible); requestAnimationFrame(layout); },
+  setChrome(visible) { if (!visible) setTab('2d'); document.documentElement.classList.toggle('ct-bare', !visible); requestAnimationFrame(layout); },
   on,
 };
 window.__ctlab = api;
@@ -1179,6 +1220,7 @@ async function boot() {
   bindExport();
   bindSheets();
   buildColour();
+  buildTab3D();
   $('btnRun').addEventListener('click', () => api.run());
   $('btnPlay').addEventListener('click', togglePlay);
   $('btnStep').addEventListener('click', () => api.step(S.phase === 'scan' ? Math.max(1, Math.round((S.session ? S.session.views : 36) / 36)) : 1));
@@ -1195,8 +1237,9 @@ async function boot() {
     if (id && id !== S.preset) await loadPreset(id);
     const maps = decodeMaps(location.hash);
     if (Object.keys(maps).length) await setParams(maps);
+    setTab(/[#&]tab=3d/.test(location.hash) ? '3d' : '2d');
   });
-  window.addEventListener('pagehide', () => { stopJobs(); releaseGpu(); cancelAnimationFrame(rafId); rafId = 0; });
+  window.addEventListener('pagehide', () => { stopJobs(); releaseGpu(); if (tab3d) tab3d.leave(); cancelAnimationFrame(rafId); rafId = 0; });
 
   layout();
   rafId = requestAnimationFrame(frame);
@@ -1204,6 +1247,7 @@ async function boot() {
   syncControls();
   await loadPreset(hashPreset() || 'shepp-logan');
   { const maps = decodeMaps(location.hash); if (Object.keys(maps).length) await setParams(maps); }
+  if (/[#&]tab=3d/.test(location.hash)) setTab('3d');
   readyResolve();
 }
 

@@ -10,6 +10,7 @@ import { PHANTOMS_2D, rmse } from '../engine/index.js';
 import * as CM from '../colormaps/maps.js';
 import { TARGETS, PANEL_TARGET, QUICK, targetOf, mapOf, mapPartial, encodeMaps, decodeMaps, mapNames } from './colour.js';
 import { PRESET_MAPS } from './presets.js';
+import { createTab3D } from './tab3d.js';
 
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ok  ', msg); } else { fail++; console.log('  FAIL', msg); } };
@@ -201,6 +202,80 @@ console.log('drawing');
   ok(out[8] === mid[0] && out[0] === hi[0] && out[4] === lo[0], 'signed paint with gamma keeps 0 at the centre and the ends');
   paintSigned(a, b, 0.1, out, 'coolwarm', null, { reverse: true });
   ok(out[0] === lo[0] && out[4] === hi[0], 'signed paint reverse swaps the ends');
+}
+
+// ---- 3D tab life cycle (lab/tab3d.js) with a fake GPU and a fake view ----
+{
+  const mkEl = () => ({ hidden: false, textContent: '' });
+  const fakes = () => {
+    const log = { devices: [], views: [] };
+    let q = [], id = 0;
+    const deps = {
+      gpu: { async requestAdapter() { return { async requestDevice() { const d = { destroyed: false, destroy() { this.destroyed = true; }, lost: new Promise(() => {}) }; log.devices.push(d); return d; } }; } },
+      load: async () => ({
+        createView3D(cv, dev, o) {
+          const v = { o, dev, destroyed: false, maps: [], mode: o.mode, st: { scanned: 0, reconstructed: 0, total: o.nAngles, n: o.n, rmse: 0.02 },
+            get state() { return { ...this.st }; },
+            setPhantom3D() { this.st.scanned = 0; this.st.reconstructed = 0; }, setShow() {}, setMode(m) { this.mode = m; }, setCamera() {},
+            scanStep() { this.st.scanned = Math.min(this.st.total, this.st.scanned + 3); return { done: this.st.scanned, total: this.st.total }; },
+            async reconstructStep({ views }) { this.st.reconstructed = Math.min(this.st.total, this.st.reconstructed + views); return { done: this.st.reconstructed, total: this.st.total }; },
+            render() { this.frames = (this.frames || 0) + 1; }, setColormap(id, oo) { this.maps.push([id, oo]); }, destroy() { this.destroyed = true; } };
+          log.views.push(v); return v;
+        },
+      }),
+      raf: (f) => { q.push([++id, f]); return id; }, caf: (k) => { q = q.filter((x) => x[0] !== k); },
+      phone: () => false, now: () => 0,
+    };
+    const pump = async (n) => { for (let i = 0; i < n; i++) { const qq = q; q = []; for (const [, f] of qq) f(i * 16); await Promise.resolve(); await Promise.resolve(); } };
+    return { log, deps, pump, queued: () => q.length };
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  let F = fakes();
+  let el = { canvas: mkEl(), note: mkEl(), status: mkEl(), fallback: null };
+  let T = createTab3D(el, F.deps);
+  T.setMap({ id: 'magma', reverse: true, gamma: 1.3 });
+  await T.enter(); await tick();
+  let v = F.log.views[0];
+  ok(F.log.devices.length === 1 && v && v.o.tfFromMap === true && v.o.colormap === 'magma' && v.o.colormapOpts.reverse === true, '3D tab: one device, view gets the 3D map with tf on');
+  await F.pump(200);
+  ok(T.state().phase === 'look' && v.st.reconstructed === v.st.total && v.frames > 50, `3D tab: scan -> FDK -> look (${T.state().phase})`);
+  T.setMap({ id: 'ice', reverse: false, gamma: 1 });
+  ok(v.maps.at(-1)[0] === 'ice' && v.maps.at(-1)[1].tf === true, '3D tab: a map change reaches the view with tf on');
+  T.setMode('mip');
+  ok(v.mode === 'mip', '3D tab: the look buttons set the mode');
+  T.leave();
+  ok(v.destroyed && F.log.devices[0].destroyed && T.state().live === 0 && F.queued() === 0, '3D tab: leave() destroys the view and the device and stops the frame loop');
+  await T.enter(); await tick();
+  ok(F.log.devices.length === 2 && !F.log.devices[1].destroyed && T.state().live === 1, '3D tab: open again makes a new device');
+  T.leave();
+  ok(F.log.devices[1].destroyed && T.state().live === 0, '3D tab: second leave frees the second device');
+
+  // a leave while the device request waits: the late device is destroyed at once
+  F = fakes();
+  T = createTab3D({ canvas: mkEl(), note: mkEl(), status: mkEl() }, F.deps);
+  const p = T.enter(); T.leave(); await p; await tick();
+  ok(F.log.devices.length === 1 && F.log.devices[0].destroyed && F.log.views.length === 0 && T.state().live === 0, '3D tab: a late device after leave() is destroyed, no view is made');
+
+  // no WebGPU: a note, no throw
+  el = { canvas: mkEl(), note: { hidden: true, textContent: '' }, status: mkEl(), fallback: null };
+  T = createTab3D(el, { ...fakes().deps, gpu: undefined });
+  await T.enter();
+  ok(!el.note.hidden && /WebGPU/.test(el.note.textContent) && el.canvas.hidden && T.state().live === 0, '3D tab without WebGPU shows a clear note');
+  T.leave();
+}
+
+// ---- the 3D tab on a real WebGPU device (Deno), when deno exists ----
+{
+  const { execFileSync, spawnSync } = await import('node:child_process');
+  let deno = null;
+  try { deno = execFileSync('which', ['deno'], { encoding: 'utf8' }).trim(); } catch { /* no deno */ }
+  if (!deno) console.log('skip: deno not found (lab/tab3d-deno.mjs not run)');
+  else {
+    const r = spawnSync(deno, ['run', '-A', new URL('./tab3d-deno.mjs', import.meta.url).pathname], { encoding: 'utf8' });
+    process.stdout.write(r.stdout);
+    ok(r.status === 0, `tab3d-deno.mjs: real device scan, FDK, leave() destroys it (exit ${r.status})${r.status ? ' ' + r.stderr.slice(-400) : ''}`);
+  }
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

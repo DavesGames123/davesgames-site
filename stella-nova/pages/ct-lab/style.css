@@ -150,6 +150,19 @@ body.drawing .panel[data-panel="phantom"] canvas{cursor:crosshair}
   #stage{margin-top:0}
 }
 
+/* 3D TAB */
+.tabs{margin-left:6px;align-self:center}
+.tabs button{padding:3px 12px;font-size:12px}
+#view3d{display:flex;flex-direction:column;gap:8px}
+.v3-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.v3-bar .row{margin:0;gap:8px}
+.v3-bar .seg button{padding:6px 10px;font-size:12px}
+#cv3d{width:100%;height:min(72vh,calc(100vh - var(--top-h) - 150px));min-height:260px;border-radius:12px;background:#04060b;display:block;touch-action:none}
+#cv3dFallback{max-width:100%;border-radius:10px}
+.v3-note{padding:12px 14px;border:1px solid var(--line-b);border-radius:10px;background:var(--bg2);color:var(--warm)}
+.v3-about{max-width:70ch}
+body.tab3d #panels,body.tab3d #bar,body.tab3d #compare,body.tab3d #blurbBox{display:none!important}
+
 /* COLOUR MAPS: tabs, quick swatches, pickers */
 #cmapTabs{margin-bottom:8px}
 #cmapTabs button{font-size:12px}
@@ -191,6 +204,8 @@ body.drawing .panel[data-panel="phantom"] canvas{cursor:crosshair}
   .plist button{flex-direction:row;width:auto}
   .plist .thumb{width:40px;height:40px}
   .cmap-host{height:260px}
+  #cv3d{height:calc(100dvh - var(--top-h) - var(--dock-h) - 120px);min-height:240px}
+  .tabs button{padding:3px 9px}
   #dock button.swatch{flex:0 0 46px;border:2px solid rgba(255,255,255,0.35)}
   #blurbBox h2{font-size:17px}
   #blurbBox p{font-size:13px}
@@ -215,7 +230,7 @@ body.drawing .panel[data-panel="phantom"] canvas{cursor:crosshair}
 
 /* BARE: the saver or the API hides the chrome; the panels fill the page */
 html.ct-bare .topbar,html.ct-bare #gallery,html.ct-bare #panel,html.ct-bare #dock,html.ct-bare #bar,
-html.ct-bare #compare,html.ct-bare #blurbBox,html.ct-bare #toast,
+html.ct-bare #compare,html.ct-bare #blurbBox,html.ct-bare #toast,html.ct-bare #view3d,
 html.sn-saver .topbar,html.sn-saver #gallery,html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #bar,
 html.sn-saver #compare,html.sn-saver #blurbBox,html.sn-saver #toast{display:none!important}
 html.ct-bare #stage,html.sn-saver #stage{margin:0;padding:12px;min-height:100vh;display:flex;align-items:center;justify-content:center}

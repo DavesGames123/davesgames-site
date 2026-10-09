@@ -277,6 +277,24 @@ ok(st.phase === 'done', 'a drawn shape rescans the custom phantom');
   api.stop();
 }
 
+// ---- 3D tab in the page (node has no WebGPU: the note path) ----
+{
+  api.setTab('3d');
+  await sleep(30);
+  ok(!byId('view3d').hidden && body.classList.contains('tab3d') && /tab=3d/.test(location.hash), 'the 3D tab shows #view3d and goes in the hash');
+  ok(!byId('v3Note').hidden && /WebGPU/.test(byId('v3Note').textContent), 'without WebGPU the 3D tab shows its note');
+  ok(byId('cmapHost-v3d').hidden === false, 'the 3D tab opens the 3D colour picker');
+  await api.setColormap('3d', 'aurora');
+  ok(api.colormaps().v3d.id === 'aurora' && api.tab().map.id === 'aurora' && /v3d=aurora/.test(location.hash), 'setColormap(\'3d\') reaches the 3D tab and the hash');
+  api.setChrome(false);
+  ok(api.tab().tab === '2d' && byId('view3d').hidden, 'setChrome(false) closes the 3D tab (the saver frees its GPU)');
+  api.setChrome(true);
+  api.setTab('3d');
+  for (const f of winL.pagehide || []) f();
+  ok(api.tab().active === false && api.tab().live === 0, 'pagehide closes the 3D tab');
+  api.setTab('2d');
+}
+
 ok(errors.length === 0, `no console errors (${errors.length})${errors.length ? ': ' + errors[0].slice(0, 300) : ''}`);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
