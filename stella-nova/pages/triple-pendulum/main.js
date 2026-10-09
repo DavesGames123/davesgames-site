@@ -1,326 +1,109 @@
-/*
-Copyright 2021 Matthias Müller - Ten Minute Physics
+// ============================================================================
+//  TRIPLE PENDULUM  ·  pages/triple-pendulum/main.js — the page controller
+// ----------------------------------------------------------------------------
+//  CREDIT. Ten Minute Physics #06 "pendulum" by Matthias Müller, MIT
+//  License (the notice is kept at the top of sim.js, which holds the
+//  upstream PBD and analytic steps). The credit bar names the author on
+//  the page and on the saver plate.
+//
+//  OUR ADDITIONS (davesgames.io, not upstream): random chains, the second
+//  copy, dragging, this renderer, the sim kit GUI and the saver.
+//
+//  The pendulum coordinates have the pivot at (0, 0); the view adds
+//  (W/2, H/2).
+//
+//  grep -n targets: "function rebuild", "function draw",
+//  "function bindPointer", "window.__tri"
+// ============================================================================
+import * as SM from './sim.js';
+import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
+import { page2d, background, lutColor } from '../../widgets/sim-kit/page2d.js';
+import { installSaver } from './saver.js';
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+TMP.page({ n: '06', title: 'Triple Pendulum', file: '06-pendulum.html', video: 'XPZEeS70zzU', year: 2021, licence: 'MIT' });
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+const PHONE = isPhone();
+const canvas = document.getElementById('view');
+const S = SM.createSim();
+const OX = SM.W / 2, OY = SM.H / 2;
+let kit, P, veil = 1;
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-// Triple Pendulum · upstream script 1, verbatim from Ten Minute Physics
-// 06-pendulum.html by Matthias Müller. MIT License (notice kept above).
-// Source: https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/06-pendulum.html
-   	var canvas = document.getElementById("myCanvas");
-	var c = canvas.getContext("2d");
-	canvas.width = window.innerWidth - 20;
-	canvas.height = window.innerHeight - 20;
+function rebuild() { SM.buildScene(S, kit.state, SM.sceneRng(kit.seed)); veil = 1; }
+const shown = p => p.kind !== 'analytic' || (kit.state.analytic && SM.subsOf(kit.state) >= 100);
 
-	var simMinWidth = 1.0;
-	var cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+function colorOf(p, i, lut, pal) {
+  if (kit.state.colorBy === 'speed' && lut) return lutColor(lut, 0.15 + 0.85 * Math.min(1, Math.hypot(p.vx[i], p.vy[i]) / 5));
+  return pal[{ pbd: 0, analytic: 2, twin: 3 }[p.kind] % pal.length];
+}
 
-	function cX(pos) { return canvas.width / 2 + pos.x * cScale; }
-	function cY(pos) { return 0.4 * canvas.height - pos.y * cScale; }
-
-    class Pendulum {
-        constructor(usePBD, color, masses, lengths, angles) {
-            this.usePBD = usePBD;
-            this.color = color;
-            this.masses = [0.0];
-            this.lengths = [0.0];
-            this.pos = [{x:0.0, y:0.0}];
-            this.prevPos = [{x:0.0, y:0.0}];
-            this.vel = [{x:0.0, y:0.0}];
-            this.theta = [0.0];
-            this.omega = [0.0];
-
-            this.trail = new Int32Array(1000);
-            this.trailFirst = 0;
-            this.trailLast = 0;
-
-            var x = 0.0, y = 0.0;
-            for (var i = 0; i < masses.length; i++) {
-                this.masses.push(masses[i]);
-                this.lengths.push(lengths[i]);
-                this.theta.push(angles[i]);
-                this.omega.push(0.0);
-                x += lengths[i] * Math.sin(angles[i]);
-                y += lengths[i] * -Math.cos(angles[i]); 
-                this.pos.push({ x:x, y:y});
-                this.prevPos.push({ x:x, y:y});
-                this.vel.push({x:0, y:0});
-            }
-        }
-        simulate(dt, gravity) {
-            if (this.usePBD)
-                this.simulatePBD(dt, gravity);
-            else
-                this.simulateAnalytic(dt, gravity);
-        }
-        simulatePBD(dt, gravity) 
-        {
-            var p = this;
-            for (var i = 1; i < p.masses.length; i++) {
-                p.vel[i].y += dt * scene.gravity;
-                p.prevPos[i].x = p.pos[i].x;
-                p.prevPos[i].y = p.pos[i].y;
-                p.pos[i].x += p.vel[i].x * dt;
-                p.pos[i].y += p.vel[i].y * dt;
-            }
-            for (var i = 1; i < p.masses.length; i++) {
-                var dx = p.pos[i].x - p.pos[i-1].x;
-                var dy = p.pos[i].y - p.pos[i-1].y;
-                var d = Math.sqrt(dx * dx + dy * dy);
-                var w0 = p.masses[i - 1] > 0.0 ? 1.0 / p.masses[i - 1] : 0.0;
-                var w1 = p.masses[i] > 0.0 ? 1.0 / p.masses[i] : 0.0;
-                var corr = (p.lengths[i] - d) / d / (w0 + w1);
-                p.pos[i - 1].x -= w0 * corr * dx; 
-                p.pos[i - 1].y -= w0 * corr * dy; 
-                p.pos[i].x += w1 * corr * dx; 
-                p.pos[i].y += w1 * corr * dy; 
-            }
-            for (var i = 1; i < p.masses.length; i++) {
-                p.vel[i].x = (p.pos[i].x - p.prevPos[i].x) / dt;
-                p.vel[i].y = (p.pos[i].y - p.prevPos[i].y) / dt;
-            }
-        }
-        simulateAnalytic(dt, gravity) 
-        {
-			var g = -gravity;
-			var m1 = this.masses[1];
-			var m2 = this.masses[2];
-			var m3 = this.masses[3];
-			var l1 = this.lengths[1];
-			var l2 = this.lengths[2];
-			var l3 = this.lengths[3];
-			var t1 = this.theta[1];
-			var t2 = this.theta[2];
-			var t3 = this.theta[3];
-			var w1 = this.omega[1];
-			var w2 = this.omega[2];
-			var w3 = this.omega[3];
-
-			var b1 = 
-				g*l1*m1*Math.sin(t1) + g*l1*m2*Math.sin(t1)+g*l1*m3*Math.sin(t1) + m2*l1*l2*Math.sin(t1-t2)*w1*w2 + 
-				m3*l1*l3*Math.sin(t1-t3)*w1*w3       +   m3*l1*l2*Math.sin(t1-t2)*w1*w2  +  
-				m2*l1*l2*Math.sin(t2-t1)*(w1-w2)*w2  +   
-				m3*l1*l2*Math.sin(t2-t1)*(w1-w2)*w2  +  
-				m3*l1*l3*Math.sin(t3-t1)*(w1-w3)*w3;
-
-			var a11 = l1*l1*(m1+m2+m3);
-			var a12 = m2*l1*l2*Math.cos(t1-t2) + m3*l1*l2*Math.cos(t1-t2);
-			var a13 = m3*l1*l3*Math.cos(t1-t3);
-
-			var b2 = 
-				g*l2*m2*Math.sin(t2) + g*l2*m3*Math.sin(t2) + w1*w2*l1*l2*Math.sin(t2-t1)*(m2 + m3) +
-				m3*l2*l3*Math.sin(t2-t3)*w2*w3               +    
-				(m2 + m3)*l1*l2*Math.sin(t2-t1)*(w1-w2)*w1   +  
-				m3*l2*l3*Math.sin(t3-t2)*(w2-w3)*w3; 
-
-			var a21 = (m2 + m3)*l1*l2*Math.cos(t2-t1);
-			var a22 = l2*l2*(m2+m3);
-			var a23 = m3*l2*l3*Math.cos(t2-t3);
-
-			var b3 = 
-				m3*g*l3*Math.sin(t3) - m3*l2*l3*Math.sin(t2-t3)*w2*w3 - m3*l1*l3*Math.sin(t1-t3)*w1*w3 + 
-				m3*l1*l3*Math.sin(t3-t1)*(w1-w3)*w1    + 
-				m3*l2*l3*Math.sin(t3-t2)*(w2-w3)*w2;
-
-			var a31 = m3*l1*l3*Math.cos(t1-t3);
-			var a32 = m3*l2*l3*Math.cos(t2-t3);
-			var a33 = m3*l3*l3;
-
-			b1 = -b1;
-			b2 = -b2;
-			b3 = -b3;
-
-			var det = a11 * (a22 * a33 - a23 * a32) + a21 * (a32 * a13 - a33 * a12) + a31 * (a12 * a23 - a13 * a22);
-			if (det == 0.0)
-				return;
-
-			var a1 = b1 * (a22 * a33 - a23 * a32) + b2 * (a32 * a13 - a33 * a12) + b3 * (a12 * a23 - a13 * a22);
-			var a2 = b1 * (a23 * a31 - a21 * a33) + b2 * (a33 * a11 - a31 * a13) + b3 * (a13 * a21 - a11 * a23);
-			var a3 = b1 * (a21 * a32 - a22 * a31) + b2 * (a31 * a12 - a32 * a11) + b3 * (a11 * a22 - a12 * a21);
-
-			a1 /= det;
-			a2 /= det;
-			a3 /= det;
-
-			this.omega[1] += a1 * dt;
-			this.omega[2] += a2 * dt;
-			this.omega[3] += a3 * dt;
-			this.theta[1] += this.omega[1] * dt;
-			this.theta[2] += this.omega[2] * dt;	
-			this.theta[3] += this.omega[3] * dt;	
-
-            var x = 0.0, y = 0.0;
-            for (var i = 1; i < this.masses.length; i++) {
-                x += this.lengths[i] * Math.sin(this.theta[i]);
-                y += this.lengths[i] * -Math.cos(this.theta[i]); 
-                this.pos[i].x = x;
-                this.pos[i].y = y;
-            }
-        }
-        updateTrail() {
-            this.trail[this.trailLast] = cX(this.pos[this.pos.length-1]);
-            this.trail[this.trailLast + 1] = cY(this.pos[this.pos.length-1]);
-            this.trailLast = (this.trailLast + 2) % this.trail.length;
-            if (this.trailLast == this.trailFirst)
-                this.trailFirst = (this.trailFirst + 2) % this.trail.length;
-        }
-        draw() {
-            c.strokeStyle = this.color;
-            c.lineWidth = 2.0;
-            if (this.trailLast != this.trailFirst) {
-                var i = this.trailFirst;
-                c.beginPath();
-                c.moveTo(this.trail[i], this.trail[i + 1]);
-                i = (i + 2) % this.trail.length;
-                while (i != this.trailLast) {
-                    c.lineTo(this.trail[i], this.trail[i + 1]);
-                    i = (i + 2) % this.trail.length;
-                }
-                c.stroke();
-            }
-
-            var p = this;
-            c.strokeStyle = "#303030";
-            c.lineWidth = 10;
-            c.beginPath();
-            c.moveTo(cX(p.pos[0]), cY(p.pos[0]));
-            for (var i = 1; i < p.masses.length; i++) 
-                c.lineTo(cX(p.pos[i]), cY(p.pos[i]));
-            c.stroke();
-            c.lineWidth = 1;            
-
-            c.fillStyle = this.color;
-            for (var i = 1; i < p.masses.length; i++) {
-                var r = 0.03 * Math.sqrt(p.masses[i]);
-                c.beginPath();			
-                c.arc(
-                    cX(p.pos[i]), cY(p.pos[i]), cScale * r, 0.0, 2.0 * Math.PI); 
-                c.closePath();
-                c.fill();
-            }
-        }
+function draw(ctx, v) {
+  const st = kit.state, t = K.themeById(st.theme), s = v.s;
+  background(ctx, t, P.w, P.h, st.grid ? v : null, 0.08);
+  const pal = K.paletteColors(st.palette), lut = st.colorBy === 'palette' ? null : P.lut(st.cmap);
+  const X = x => v.X(x + OX), Y = y => v.Y(y + OY);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const p of S.list) {
+    if (!shown(p)) continue;
+    const N = Math.min(p.tN, S.TL), e = p.x.length - 1, col = colorOf(p, e, null, pal);
+    if (N < 2) continue;
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, s * 0.0035);
+    const seg = 32;
+    for (let a = 0; a < N - 1; a += seg) {
+      ctx.globalAlpha = 0.9 * ((a + seg / 2) / N) ** 1.4; ctx.beginPath();
+      for (let k = a; k <= Math.min(N - 1, a + seg); k++) { const j = (p.tN - N + k) % S.TL; k === a ? ctx.moveTo(X(p.tx[j]), Y(p.ty[j])) : ctx.lineTo(X(p.tx[j]), Y(p.ty[j])); }
+      ctx.stroke();
     }
-
-    var scene = {
-        gravity : -10.0,
-        dt : 0.01,
-        numSubSteps : 10000,
-        paused : true,
-        pendulumPBD : null,
-        pendulumAnalytic : null
-    };
-
-    var sceneNr = 0;
-
-    function setupScene() {
-        var angles = [0.5 * Math.PI, Math.PI, Math.PI, Math.PI, Math.PI];
-        var lengths = [];
-        var masses = [];
-
-        switch(sceneNr % 6) {
-            case 0 : {
-                lengths = [0.15, 0.15, 0.15];
-                masses = [1.0, 1.0, 1.0];
-                break;
-            }
-            case 1 : {
-                lengths = [0.06, 0.15, 0.2];
-                masses = [1.0, 0.5, 0.1];
-                break;
-            }
-            case 2 : {
-                lengths = [0.15, 0.15, 0.15];
-                masses = [1.0, 0.01, 1.0];
-                break;
-            }
-            case 3 : {
-                lengths = [0.15, 0.15, 0.15];
-                masses = [0.01, 1.0, 0.01];
-                break;
-            }
-            case 4 : {
-                lengths = [0.2, 0.133, 0.04];
-                masses = [0.3, 0.3, 0.3];
-                break;
-            }
-            case 5 : {
-                lengths = [0.1, 0.12, 0.1, 0.15, 0.05];
-                masses = [0.2, 0.6, 0.4, 0.3, 0.2];
-                break;
-            }
-        }
-
-        scene.pendulumAnalytic = null;
-
-        scene.pendulumPBD = new Pendulum(true, "#FF3030", masses, lengths, angles);
-        if (masses.length <= 3)
-            scene.pendulumAnalytic = new Pendulum(false, "#00FF00", masses, lengths, angles);
-        scene.paused = true;
-
-        sceneNr++;
+  }
+  ctx.globalAlpha = 1;
+  for (const p of S.list) {
+    if (!shown(p)) continue;
+    const ghost = p.kind === 'analytic' ? 0.85 : 1;
+    if (st.rods) { ctx.strokeStyle = t.wall; ctx.globalAlpha = 0.5 * ghost; ctx.lineWidth = Math.max(2, s * 0.009); ctx.beginPath(); ctx.moveTo(X(0), Y(0)); for (let i = 1; i < p.x.length; i++) ctx.lineTo(X(p.x[i]), Y(p.y[i])); ctx.stroke(); ctx.globalAlpha = 1; }
+    for (let i = 1; i < p.x.length; i++) {
+      const cx = X(p.x[i]), cy = Y(p.y[i]), R = Math.max(2, s * 0.03 * Math.sqrt(p.m[i]) + 1.5), col = colorOf(p, i, lut, pal);
+      if (st.glow) { const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 3); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = 0.3; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 3, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+      const g = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.1, cx, cy, R);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.3, col); g.addColorStop(1, col);
+      ctx.globalAlpha = ghost; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     }
+  }
+  ctx.fillStyle = t.wall; ctx.beginPath(); ctx.arc(X(0), Y(0), Math.max(3, s * 0.01), 0, 7); ctx.fill();
+  // legend: which colour is which solver
+  if (!kit.saver) {
+    const items = S.list.filter(shown).map(p => [colorOf(p, 1, null, pal), { pbd: 'PBD', analytic: 'Analytic', twin: 'PBD copy' }[p.kind]]);
+    const d = P.dpr; ctx.font = `${12 * d}px Inter, system-ui, sans-serif`; ctx.textBaseline = 'middle';
+    items.forEach(([c, label], k) => { const x0 = v.rect.x + 8 * d, y0 = v.rect.y + (14 + 18 * k) * d; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x0 + 5 * d, y0, 5 * d, 0, 7); ctx.fill(); ctx.fillStyle = t.ink; ctx.globalAlpha = 0.8; ctx.fillText(label, x0 + 16 * d, y0); ctx.globalAlpha = 1; });
+  }
+  if (veil > 0) { ctx.fillStyle = t.bg; ctx.globalAlpha = veil; ctx.fillRect(0, 0, P.w, P.h); ctx.globalAlpha = 1; }
+}
 
-    function draw() {
-        c.fillStyle = "#000000";
-        c.fillRect(0, 0, canvas.width, canvas.height);
-        if (scene.pendulumPBD)
-            scene.pendulumPBD.draw();
-        if (scene.numSubSteps >= 100) {
-            if (scene.pendulumAnalytic)
-                scene.pendulumAnalytic.draw();
-        }
-    }
+function bindPointer() {
+  canvas.addEventListener('pointerdown', e => {
+    if (!P.view || kit.saver) return;
+    const [x, y] = P.toWorld(e), g = SM.pick(S, x - OX, y - OY);
+    if (!g) return;
+    canvas.setPointerCapture(e.pointerId); S.grab = g;
+  });
+  canvas.addEventListener('pointermove', e => { if (!S.grab) return; const [x, y] = P.toWorld(e); S.grab.x = x - OX; S.grab.y = y - OY; });
+  const up = () => { S.grab = null; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+}
 
-    function simulate() {
-        if (scene.paused)
-            return;
-        var sdt = scene.dt / scene.numSubSteps;
-        var trailGap = scene.numSubSteps / 10;
+kit = mount({
+  schema: SM.makeSchema(PHONE), title: 'Triple Pendulum', sub: 'Position based dynamics against the analytic solution', panelTitle: 'Scene', guard: SM.guard,
+  footer: 'Upstream demo: Ten Minute Physics #06 by Matthias Müller (MIT). Random chains, the copy, look and GUI: davesgames.io.',
+  actions: {},
+});
+kit.on('change', (out, st, why) => {
+  if (why === 'scene' || why === 'group' || why === 'saver') return;
+  if (Object.keys(out).some(k => SM.REBUILD.has(k))) rebuild(); else SM.applyParams(S, kit.state);
+});
+kit.on('scene', (seed, st, out, group) => { if (!group || Object.keys(out || {}).some(k => SM.REBUILD.has(k))) rebuild(); else SM.applyParams(S, kit.state); });
+kit.on('reset', rebuild);
+P = page2d({ canvas, kit, world: () => ({ w: SM.W, h: SM.H }), step: h => SM.step(S, h), draw: (ctx, v, dt) => { veil = Math.max(0, veil - dt / 0.45); draw(ctx, v); } });
+if (!kit.fromHash) kit.newScene(); else rebuild();
+bindPointer();
+addEventListener('pagehide', () => { kit.playing = false; });
 
-        for (var step = 0; step < scene.numSubSteps; step++) {
-            if (scene.pendulumPBD) {
-                scene.pendulumPBD.simulate(sdt, scene.gravity);
-                if (step % trailGap == 0)
-                    scene.pendulumPBD.updateTrail();
-            }
-            if (scene.pendulumAnalytic) {
-                scene.pendulumAnalytic.simulate(sdt, scene.gravity);
-                if (step % trailGap == 0)
-                    scene.pendulumAnalytic.updateTrail();
-            }
-        }
-    }
-    
-	document.getElementById("stepsSlider").oninput = function() {
-		var steps = [1, 5, 10, 100, 1000, 10000];
-		scene.numSubSteps = steps[Number(this.value)];
-		document.getElementById("steps").innerHTML = scene.numSubSteps.toString();
-	}
-
-    document.addEventListener("keydown", event => {
-        if (event.isComposing || event.keyCode === 229) 
-            return;
-        if (event.key == 's')
-            step();
-        });    
-
-	function run() {
-		scene.paused = false;
-	}
-
-	function step() {
-		scene.paused = false;
-		simulate();
-		scene.paused = true;
-	}
-
-	function update() {
-		simulate();
-		draw();
-		requestAnimationFrame(update);
-	}
-    setupScene();
-	update();	
+window.__tri = { S, get kit() { return kit; }, canvas, rebuild, P };
+installSaver(window.__tri);
