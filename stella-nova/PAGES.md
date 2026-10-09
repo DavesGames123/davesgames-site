@@ -62,7 +62,8 @@ registry, so do not edit the text between the `PAGES` markers.
 
 8. Add a home thumbnail: `pages/home/thumbs/<key>.jpg`, 640 x 400, JPEG
    quality 82 to 85, cropped to the subject. After you add the JPEG, build
-   `thumbs/list.js` again from the folder and run `node tools/nav-sync.js`.
+   `thumbs/list.js` with `node tools/thumbs-list.mjs`, then run
+   `node tools/nav-sync.js`.
    Headless Chrome, Playwright, CDP and browser screenshots are not
    permitted on this machine (since 2026-10-07, because they filled the
    disk). Make the image with a render that has no browser, for example a
@@ -331,14 +332,14 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `orbs` (pages/presence-orbs) | Presence Orbs | Rendering > Volumes | WGSL | Soft volumetric presence orbs. |  | shown | hook, tier 3, default | yes |
 | `thinking-orbs` | Thinking Orbs | Rendering > Volumes | WGSL | Dot orbs that spin, wave and morph. | thinking-orbs by RareFormLabs (MIT) | search only | no | no |
 | `voxel` (pages/voxel-flythrough) | Voxel Flythrough | Rendering > Volumes | GPU | Fly through an endless voxel world. |  | shown | hook, tier 2, default | yes |
-| `markov-junior` | MarkovJunior | Rendering > Generative | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | no |
-| `shan-shui` | Shan Shui | Rendering > Generative | SVG | An endless ink landscape scroll, drawn from a seed. | shan-shui-inf by Lingdong Huang (MIT) | search only | no | no |
-| `fishdraw` | Fishdraw | Rendering > Generative | SVG | Pen-line fish, one specimen or a full plate. | fishdraw by Lingdong Huang (MIT) | search only | hook, tier 3, default | no |
+| `markov-junior` | MarkovJunior | Rendering > Generative | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | yes |
+| `shan-shui` | Shan Shui | Rendering > Generative | SVG | An endless ink landscape scroll, drawn from a seed. | shan-shui-inf by Lingdong Huang (MIT) | search only | no | yes |
+| `fishdraw` | Fishdraw | Rendering > Generative | SVG | Pen-line fish, one specimen or a full plate. | fishdraw by Lingdong Huang (MIT) | search only | hook, tier 3, default | yes |
 | `mushrooms` | Mushroom Draw | Rendering > Generative | SVG | Procedural mushrooms as pen-plotter lines. |  | shown | hook, tier 3, default | yes |
 | `nonflowers` | Nonflowers | Rendering > Generative | CANVAS | Gongbi paintings of flowers that do not exist. |  | shown | hook, tier 3, default | yes |
-| `context-free` | Context Free | Rendering > Generative | WASM | The Context Free engine: grow designs from grammar. | Context Free by Mark Lentczner and John Horigan (GPL-2+) | search only | hook, tier 3, default | no |
-| `holocloth` | Holocloth | Rendering > Generative | CLOTH | A holographic foil cloth in zero gravity. | Holocloth by Dmitry Kurash (MIT) | search only | no | no |
-| `line-art` | Line Art | Rendering > Generative | RUST | The ln 3D line-art engine, as a pen plotter. | ln by Michael Fogleman (MIT) | search only | hook, tier 3, default | no |
+| `context-free` | Context Free | Rendering > Generative | WASM | The Context Free engine: grow designs from grammar. | Context Free by Mark Lentczner and John Horigan (GPL-2+) | search only | hook, tier 3, default | yes |
+| `holocloth` | Holocloth | Rendering > Generative | CLOTH | A holographic foil cloth in zero gravity. | Holocloth by Dmitry Kurash (MIT) | search only | no | yes |
+| `line-art` | Line Art | Rendering > Generative | RUST | The ln 3D line-art engine, as a pen plotter. | ln by Michael Fogleman (MIT) | search only | hook, tier 3, default | yes |
 
 ### Finance
 
