@@ -17,7 +17,7 @@ import { rng } from './rng.js';
 const CABLE = 'c_m \\frac{\\partial V}{\\partial t} = \\frac{d}{4 R_a} \\frac{\\partial^2 V}{\\partial x^2} - i_{ion}';
 const HHI = 'i_{ion} = \\bar g_{Na} m^3 h (V - E_{Na}) + \\bar g_K n^4 (V - E_K) + g_L (V - E_L)';
 const GATE = '\\frac{dn}{dt} = \\alpha_n(V)(1 - n) - \\beta_n(V)\\, n';
-const RULES = [['V', 'm1'], ['m', 'm2'], ['h', 'm3'], ['n', 'm4'], ['R_a', 'm5']];
+const RULES = [['V', 'm1'], ['m^3', 'm2'], ['n^4', 'm4'], ['R_a', 'm5']];
 
 export const LAB_SHOTS = [
   { id: 'bap', title: 'A spike runs back into the dendrites', sub: 'back-propagation from the soma, fading with distance', tex: [CABLE], rules: RULES },

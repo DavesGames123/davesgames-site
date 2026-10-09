@@ -19,6 +19,7 @@
 //    "function drawTraces"  probe traces, phase plane, gates
 //    "function layout"      desktop columns or phone sheet; clear area
 //    "function frame"       the loop
+//    "installSaver"         the screensaver (saver.js)
 // ============================================================================
 import * as THREE from 'three';
 import { Cell } from './engine/cell.js';
@@ -27,6 +28,7 @@ import { makeCell, CELLS, bounds } from './engine/morph.js';
 import { createStage } from './shared/stage.js';
 import { buildNeuronMesh } from './shared/neuron-mesh.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -431,6 +433,7 @@ if (stage) {
   addEventListener('resize', () => { layout(); });
   PHONE_Q.addEventListener('change', () => { openGroup(null); layout(); });
   requestAnimationFrame(frame);
+  installSaver({ L, P, stage, THREE, loadCell, place, fire, holdOff, clearMarkers, farNode, resetHistory, drawPhase, drawGates, stepSim, applyDensities, layout, CELLS });
 }
 typesetAll(document, [['V', 'm1'], ['m^3', 'm2'], ['n^4', 'm4'], ['R_a', 'm5']]);
 window.__neuronLab = { L, P };

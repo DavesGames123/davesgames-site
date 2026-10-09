@@ -17,11 +17,13 @@
 //    "function drawRaster"  raster and rates
 //    "function layout"      desktop columns or phone sheet; clear area
 //    "function frame"       the loop
+//    "installSaver"         the screensaver (saver.js)
 // ============================================================================
 import * as THREE from 'three';
 import { makeNetwork, MODELS, popRate, peakFreq } from '../neuron-lab/engine/network.js';
 import { createStage } from '../neuron-lab/shared/stage.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -361,6 +363,7 @@ if (stage) {
   addEventListener('resize', layout);
   PHONE_Q.addEventListener('change', () => { openGroup(null); layout(); });
   requestAnimationFrame(frame);
+  installSaver({ W, P, stage, THREE, build, stepSim, pulseAt, kick, randomCellPos, drawRaster, rhythm, bandName, MODELS });
 }
 typesetAll(document, [['\\theta', 'm1'], ['\\ell', 'm2'], ['\\tau', 'm3'], ['w', 'm2']]);
 window.__neuronNet = { W, P };
