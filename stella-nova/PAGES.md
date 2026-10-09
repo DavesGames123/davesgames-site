@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-212 registered pages in 5 regions and 19 constellations.
+213 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -172,6 +172,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `chandrasekhar-limit` | Chandrasekhar Limit | Space & Gravity > Deep Space | NEW | Why no white dwarf weighs more than 1.4 Suns. |  | shown | hook, tier 4, default | yes |
 | `orbital` (pages/atomic-orbital-vr) | Atomic Orbital | Quantum > Atoms | VR | Hydrogen orbitals in 3D, VR ready. |  | shown | hook, tier 2, default | yes |
 | `hydrogen-table` | Hydrogen Wave Function | Quantum > Atoms | NEW | Every hydrogen wave function, side by side. |  | shown | hook, tier 3, default | yes |
+| `exotic-atoms` | Exotic Atoms | Quantum > Atoms | NEW | Rydberg giants to n = 300, positronium, trilobite molecules and the field of the electron cloud. |  | shown | hook, tier 4, default | no |
 | `qave` (pages/quantum-algorithm-visualizer) | Quantum Algorithm Visualizer | Quantum > Quantum Computing | 3D | Quantum algorithms step by step in 3D. |  | directory only | hook, tier 2, default | no |
 | `qft-flow` | Quantum Encoding | Quantum > Quantum Computing | MATH | Four qubit phase knobs and the spectrum a QFT reads out. |  | shown | no | yes |
 | `qft-store` | Quantum Decoding | Quantum > Quantum Computing | DATA | Write bytes into qubit rotation angles and read them back. |  | shown | generic, tier 5 | yes |
@@ -312,7 +313,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `postfx` (pages/postfx-table) | Post-Process | Shader Tables > Image | WGSL | Bloom, grain and grading passes. |  | shown | no | yes |
 | `sampling` (pages/sampling-table) | Sampling Table | Shader Tables > Image | WGSL | Sampling patterns, side by side. |  | shown | hook, tier 2 | yes |
 | `halftone` | Halftone | Shader Tables > Image | WGSL | Photos as halftone dots and rosettes, in WGSL. | glsl-halftone (MIT) | search only | hook, tier 3, default | yes |
-| `thread-art` | Thread Art | Shader Tables > Image | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 3, default | yes |
+| `thread-art` | Thread Art | Shader Tables > Image | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 4, default | yes |
 | `lighting` (pages/lighting-table) | Lighting Table | Shader Tables > Surfaces | WGSL | BRDFs and light models compared. |  | shown | hook, tier 2 | yes |
 | `sdf-solids` (pages/sdf-solids-table) | SDF Solids Table | Shader Tables > Surfaces | WGSL | 78 signed-distance solids, glass to gold. |  | shown | hook, tier 4, default | yes |
 | `liquid-metal` (pages/liquid-metal-table) | Liquid Metal Table | Shader Tables > Surfaces | WGSL | Chrome blobs that melt and merge. |  | shown | hook, tier 2, default | yes |

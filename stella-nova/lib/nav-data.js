@@ -103,7 +103,8 @@ w.SN_NAV = [
   { id: "quantum", label: "Quantum", short: "Quantum", icon: "ψ", color: "#9088e0", color2: "#64b4ff", groups: [
     { h: "Atoms", p: [
       ["orbital", "Atomic Orbital", "VR", "atomic-orbital-vr"],
-      ["hydrogen-table", "Hydrogen Wave Function", "NEW"]
+      ["hydrogen-table", "Hydrogen Wave Function", "NEW"],
+      ["exotic-atoms", "Exotic Atoms", "NEW"]
     ] },
     { h: "Quantum Computing", p: [
       ["qave", "Quantum Algorithm Visualizer", "3D", "quantum-algorithm-visualizer"],

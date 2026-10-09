@@ -201,6 +201,7 @@ const BLURBS = {
   orbital: 'Hydrogen orbitals in 3D, VR ready.',
   'molecular-bond': 'Watch two atoms share an electron.',
   'hydrogen-table': 'Every hydrogen wave function, side by side.',
+  'exotic-atoms': 'Rydberg giants to n = 300, positronium, trilobite molecules and the field of the electron cloud.',
   'protein-viewer': 'Real protein structures in 3D, 37 presets.',
   'protein-folding': 'Watch a chain fold into its native shape.',
   alphafold: 'How AlphaFold turns a sequence into a structure.',
