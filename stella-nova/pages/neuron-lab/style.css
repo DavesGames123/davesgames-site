@@ -175,3 +175,23 @@ input[type=range]{width:100%;accent-color:var(--tone);height:20px}
   .phint{bottom:10px}
   .credit{bottom:8px}
 }
+
+/* ── Network mode (netmode.js) ───────────────────────────────────────── */
+body:not(.net) .netonly{display:none!important}
+body.net .cellonly,body.net #marks .mk:not(.netlab){display:none!important}
+.segs{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
+.segs button{flex:1 1 auto;border:1px solid var(--line-b);border-radius:9px;background:var(--ink2);color:var(--dim);padding:7px 9px;font-size:0.72rem;transition:border-color .2s,color .2s,background .2s}
+.segs button:hover{border-color:var(--tone)}
+.segs button.on{border-color:var(--tone);color:#eaf8ff;background:rgba(95,212,255,0.10)}
+#netMode button{font-weight:600;font-size:0.78rem;padding:9px}
+#netNewTy button[data-k="e"].on,#netSelTy button[data-k="e"].on{border-color:#ffb347;color:#ffe2b8;background:rgba(255,179,71,0.12)}
+#netNewTy button[data-k="i"].on,#netSelTy button[data-k="i"].on{border-color:#7aa8ff;color:#dce8ff;background:rgba(122,168,255,0.14)}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}
+.selbox{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:rgba(255,255,255,0.02)}
+.selbox.empty .segs,.selbox.empty .row,.selbox.empty .grid3 button:not(#netSelAll),.selbox.empty #netSelDel{opacity:0.4;pointer-events:none}
+.note.msg{color:#cfe8f5;min-height:1.2em}
+.plot.tall{height:220px}
+#netMatrix{cursor:pointer}
+#marks .mk.netlab{transform:translate(-50%,-190%)}
+@media (pointer:coarse){ .segs button{min-height:44px;font-size:12px} }
+

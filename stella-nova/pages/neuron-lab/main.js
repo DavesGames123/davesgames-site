@@ -22,6 +22,9 @@
 //    "function applyRandom" the Randomize panel: seeds -> cell, channels, stimuli
 //    "function writeHash"   the lab state in the URL hash (engine/hashstate.js)
 //    "installSaver"         the screensaver (saver.js)
+//    "installNet"           the Network mode: several cells wired together
+//                           (netmode.js); while it is on, the frame loop
+//                           steps and draws the network, not the one cell
 // ============================================================================
 import * as THREE from 'three';
 import { Cell } from './engine/cell.js';
@@ -34,6 +37,7 @@ import { installSaver } from './saver.js';
 import { sample as randSample, defaults as randDefaults, typeFor, morphFactors, densFrom, stimPlan, CATS } from './engine/random.js';
 import { encodeHash, decodeHash } from './engine/hashstate.js';
 import { createRandPanel } from './randpanel.js';
+import { installNet } from './netmode.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -398,9 +402,9 @@ function pickNode(cx, cy) {
 }
 function bindPick() {
   let down = null;
-  $('view').addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  $('view').addEventListener('pointerdown', e => { down = NET && NET.on ? null : { x: e.clientX, y: e.clientY, t: performance.now() }; });
   $('view').addEventListener('pointerup', e => {
-    if (!down) return; const d = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    if (!down || (NET && NET.on)) { down = null; return; } const d = Math.hypot(e.clientX - down.x, e.clientY - down.y);
     if (d < 8 && performance.now() - down.t < 600) { const n = pickNode(e.clientX, e.clientY); if (n >= 0) { place(P.tool, n); $('hint').classList.add('gone'); } }
     down = null;
   });
@@ -421,20 +425,27 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
   if (!L.cell) return;
+  const net = NET && NET.on;
   if (L.saver) { if (L.saverTick) L.saverTick(dt, now); }
   else {
     if (!P.paused) {
-      if (P.auto && !P.hold && L.markers.length && L.cell.t - L.lastAuto > (L.autoMs || AUTO_MS)) fire();
-      stepSim(P.speed * dt);
+      if (net) NET.step(P.speed * dt);
+      else {
+        if (P.auto && !P.hold && L.markers.length && L.cell.t - L.lastAuto > (L.autoMs || AUTO_MS)) fire();
+        stepSim(P.speed * dt);
+      }
     }
     stage.controls.autoRotate = P.orbit && !stage.springOn; stage.controls.autoRotateSpeed = 0.35;
   }
   if (!stage) return;
-  L.mesh.update(L.cell.v);
-  for (const m of L.markers) { if (m.flash > 0) m.flash = Math.max(0, m.flash - dt * 1.5); const s = m.obj.userData.base * (1 + 1.4 * m.flash); m.obj.userData.halo.scale.setScalar(s * 2.2); }
+  if (NET && NET.on) NET.frame(dt, now, 0);
+  else {
+    L.mesh.update(L.cell.v);
+    for (const m of L.markers) { if (m.flash > 0) m.flash = Math.max(0, m.flash - dt * 1.5); const s = m.obj.userData.base * (1 + 1.4 * m.flash); m.obj.userData.halo.scale.setScalar(s * 2.2); }
+  }
   stage.update(dt);
   stage.render();
-  if (!L.saver) {
+  if (!L.saver && !(NET && NET.on)) {
     updateLabels();
     if (now - plotT > 50) { plotT = now; drawTraces(); readout(); }
   }
@@ -491,6 +502,7 @@ function writeHash() {
     try { history.replaceState(null, '', '#' + encodeHash(st)); } catch (e) { /* file: */ }
   }, 150);
 }
+const NET = stage ? installNet({ stage, THREE, P, RS, L, $, randValues, writeHash, PHONE_Q, COARSE }) : null;
 const randPanel = createRandPanel({ host: $('randBody'), RS, onApply: applyRandom, onRanges: writeHash, values: randValues, netOK: () => !!(window.__nlNet && window.__nlNet.on) });
 
 // ── boot ────────────────────────────────────────────────────────────────
@@ -502,10 +514,11 @@ if (stage) {
   loadCell({ keep: false });
   if (RS.seeds.stim) applyStim();
   fitCamera(false);
+  NET.boot(location.hash);
   addEventListener('resize', () => { layout(); });
   PHONE_Q.addEventListener('change', () => { openGroup(null); layout(); });
   requestAnimationFrame(frame);
-  installSaver({ L, P, stage, THREE, loadCell, place, fire, holdOff, clearMarkers, farNode, resetHistory, drawPhase, drawGates, stepSim, applyDensities, layout, CELLS });
+  installSaver({ L, P, stage, THREE, NET, loadCell, place, fire, holdOff, clearMarkers, farNode, resetHistory, drawPhase, drawGates, stepSim, applyDensities, layout, CELLS });
 }
 typesetAll(document, [['V', 'm1'], ['m^3', 'm2'], ['n^4', 'm4'], ['R_a', 'm5']]);
-window.__neuronLab = { L, P, RS, applyRandom, writeHash, randPanel, randValues };
+window.__neuronLab = { L, P, RS, applyRandom, writeHash, randPanel, randValues, NET };

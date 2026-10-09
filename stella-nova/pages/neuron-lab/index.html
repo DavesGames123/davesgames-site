@@ -67,13 +67,14 @@
 
   <section class="grp" data-grp="cell">
     <div class="sec-label first">Cell</div>
-    <div class="cards" id="cells"></div>
-    <p class="lede" id="cellNote"></p>
-    <div class="grid2" style="margin-top:8px">
+    <div class="segs" id="netMode" role="group" aria-label="Mode"></div>
+    <div class="cards cellonly" id="cells"></div>
+    <p class="lede cellonly" id="cellNote"></p>
+    <div class="grid2 cellonly" style="margin-top:8px">
       <button type="button" id="reshape">New shape</button>
       <button type="button" id="resetSim">Reset to rest</button>
     </div>
-    <p class="note" id="cellStats"></p>
+    <p class="note cellonly" id="cellStats"></p>
     <div class="sec-label">Voltage</div>
     <div class="vbar"></div>
     <div class="vbar-l"><span>−80</span><span>−65 rest</span><span>−45</span><span>0</span><span>+40 mV</span></div>
@@ -82,7 +83,42 @@
     <div class="grid2"><button class="tog" id="pause" type="button">Pause</button><button class="tog on" id="autoOrbit" type="button">Slow orbit</button></div>
   </section>
 
-  <section class="grp" data-grp="place">
+  <section class="grp netonly" data-grp="net">
+    <div class="sec-label first">Network</div>
+    <p class="note" id="netStats"></p>
+    <div class="sec-label">Demos</div>
+    <div class="segs wrap" id="netDemos"></div>
+    <div class="sec-label">Tool</div>
+    <div class="segs" id="netTools"></div>
+    <p class="note" id="netHint"></p>
+    <div class="segs" id="netNewTy" aria-label="New links are"></div>
+    <p class="note msg" id="netMsg" aria-live="polite"></p>
+    <div class="sec-label">Cells and placement</div>
+    <div class="row"><label for="netCount">Cells</label><input type="range" id="netCount" min="2" max="12" step="1" value="6"><span class="val" id="netCountV"></span></div>
+    <div class="segs" id="netLayout"></div>
+    <div class="sec-label">Auto-wire</div>
+    <div class="segs wrap" id="netPreset"></div>
+    <div class="row"><label for="netP">p (random)</label><input type="range" id="netP" min="0.05" max="0.8" step="0.05" value="0.3"><span class="val" id="netPV"></span></div>
+    <div class="row"><label for="netWE">E weight</label><input type="range" id="netWE" min="0.5" max="5" step="0.1" value="2.5"><span class="val" id="netWEV"></span></div>
+    <div class="row"><label for="netWI">I weight</label><input type="range" id="netWI" min="0.5" max="5" step="0.1" value="2"><span class="val" id="netWIV"></span></div>
+    <div class="row"><label for="netVel">Conduction</label><input type="range" id="netVel" min="0.1" max="2" step="0.05" value="0.3"><span class="val" id="netVelV"></span></div>
+    <p class="note">Weights are in multiples of the weight that just fires the target cell from one synapse. The axon delay is its drawn length over the conduction speed, plus 0.5 ms at the synapse.</p>
+    <div class="sec-label">Selected links</div>
+    <div id="netSel" class="selbox">
+      <p class="note" id="netSelN"></p>
+      <div class="segs" id="netSelTy"></div>
+      <div class="row"><label for="netSelW">Weight</label><input type="range" id="netSelW" min="0.2" max="6" step="0.1" value="2"><span class="val" id="netSelWV"></span></div>
+      <div class="row"><label for="netSelD">Delay</label><input type="range" id="netSelD" min="0.5" max="20" step="0.1" value="2"><span class="val" id="netSelDV"></span></div>
+      <div class="grid3"><button type="button" id="netSelAuto" class="tog">Delay from length</button><button type="button" id="netSelAll">Select all</button><button type="button" id="netSelNone">Clear</button></div>
+      <button type="button" id="netSelDel" class="tog warn" style="width:100%;margin-top:6px">Delete selected</button>
+    </div>
+    <div class="sec-label">Drive</div>
+    <div class="grid2"><button class="tog on" id="netAuto" type="button">Kick cell 1 every</button><button type="button" id="netKick">Kick cell 1 now</button></div>
+    <div class="row"><label for="netKickEvery">Every</label><input type="range" id="netKickEvery" min="20" max="400" step="10" value="80"><span class="val" id="netKickEveryV"></span></div>
+    <div class="grid3"><button type="button" id="netKickAll">Kick all</button><button type="button" id="netReset">Reset</button><button type="button" id="netFit">Fit view</button></div>
+  </section>
+
+  <section class="grp cellonly" data-grp="place">
     <div class="sec-label first">Place on the cell</div>
     <div class="grid2" id="tools">
       <button type="button" data-tool="iclamp" class="on">Current clamp</button>
@@ -130,7 +166,18 @@
     <p class="note">q10 = 3: each 10 °C makes the gates three times faster. Thicker branches or lower Ra carry a spike farther and faster. TTX blocks sodium channels; TEA blocks potassium channels. Ih is the HCN current of Hay et al. 2011 (Ih.mod): it opens below rest and gives a sag.</p>
   </section>
 
-  <section class="grp ana" data-grp="trace">
+  <section class="grp ana netonly" data-grp="netview">
+    <div class="sec-label first">Connectivity</div>
+    <canvas id="netMatrix" class="plot sq"></canvas>
+    <p class="note">Row: from. Column: to. Click a square: none, excitatory, inhibitory, none.</p>
+    <div class="legend"><span><i style="background:#ffb347"></i>excitatory (AMPA-like)</span><span><i style="background:#7aa8ff"></i>inhibitory (GABA<sub>A</sub>-like)</span></div>
+    <div class="sec-label">Raster</div>
+    <canvas id="netRaster" class="plot"></canvas>
+    <div class="sec-label">Soma voltage, every cell</div>
+    <canvas id="netTraces" class="plot tall"></canvas>
+  </section>
+
+  <section class="grp ana cellonly" data-grp="trace">
     <div class="sec-label first">Voltage at the probes</div>
     <canvas id="traces" class="plot"></canvas>
     <div class="legend" id="legend"></div>
@@ -171,10 +218,12 @@
 
 <nav id="dock" aria-label="Controls">
   <button type="button" data-grp="cell"><i>◎</i><span>Cell</span></button>
-  <button type="button" data-grp="place"><i>✚</i><span>Place</span></button>
+  <button type="button" data-grp="place" class="cellonly"><i>✚</i><span>Place</span></button>
+  <button type="button" data-grp="net" class="netonly"><i>⇄</i><span>Wire</span></button>
   <button type="button" data-grp="chan"><i>⚗</i><span>Channels</span></button>
   <button type="button" data-grp="rand"><i>⚄</i><span>Random</span></button>
-  <button type="button" data-grp="trace"><i>∿</i><span>Traces</span></button>
+  <button type="button" data-grp="trace" class="cellonly"><i>∿</i><span>Traces</span></button>
+  <button type="button" data-grp="netview" class="netonly"><i>∿</i><span>Raster</span></button>
   <button type="button" data-grp="learn"><i>∑</i><span>Learn</span></button>
   <button type="button" id="dockFire"><i>⚡</i><span>Fire</span></button>
 </nav>
