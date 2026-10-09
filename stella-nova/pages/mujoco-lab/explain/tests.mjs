@@ -176,6 +176,11 @@ if (JSDOM) {
   const figErr = ex ? ex.figs.filter(f => f.error || !f.F).map(f => f.id + ': ' + (f.error ? f.error.message : 'not built')) : ['no explainer'];
   ok(!errors.length && !figErr.length, 'jsdom boot: mountExplainer runs with 0 errors and builds every figure', errors.concat(figErr).slice(0, 3).join(' | ') || `${nFig} figures, ${nEq} display + ${nIn} inline equations`);
   ok(ctxs.length === nFig && ctxs.every(c => c.calls > 0 && c.bad === 0), 'jsdom boot: every canvas drew, no NaN or Infinity in any draw call', ctxs.map(c => c.calls).join(' '));
+  ok(d.querySelectorAll('.mx-explain h2').length === 1, 'jsdom boot: outside a dialog the section has its own h2');
+  {
+    const dlg = d.createElement('section'); dlg.setAttribute('role', 'dialog'); const r = d.createElement('div'); dlg.appendChild(r); d.body.appendChild(dlg);
+    const e2 = mountExplainer(r, { mj }); ok(!r.querySelector('h2') && r.querySelector('.mx-in-dialog'), 'jsdom boot: inside a [role=dialog] the h2 is left out'); e2.dispose();
+  }
   ok(d.querySelectorAll('.mx-toc a').length === SECTIONS.filter(s => !s.sub).length && d.querySelectorAll('.mx-refs li').length === REFS.length, 'jsdom boot: contents links and reference list');
   ok(d.querySelectorAll('.mx-ctl input[type=range]').length === 4 && d.querySelectorAll('.mx-ctl button').length === 2, 'jsdom boot: sliders and buttons', `${d.querySelectorAll('.mx-ctl input').length} sliders`);
   const h0 = heapBytes(); ex && ex.dispose();

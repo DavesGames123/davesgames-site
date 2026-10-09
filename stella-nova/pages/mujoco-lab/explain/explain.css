@@ -12,6 +12,7 @@
   color: var(--sk-text, #e6edf3); font: 16px/1.6 var(--sk-sans, ui-sans-serif, system-ui, sans-serif);
   box-sizing: border-box;
 }
+.mx-explain.mx-in-dialog { padding-top: 4px; }
 .mx-explain *, .mx-explain *::before, .mx-explain *::after { box-sizing: border-box; }
 .mx-explain [hidden] { display: none !important; }
 .mx-head h2 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.01em; }

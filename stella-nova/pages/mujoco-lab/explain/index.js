@@ -5,6 +5,7 @@
 //
 //      import { mountExplainer } from './explain/index.js';
 //      const ex = mountExplainer(document.querySelector('#explain'), { mj });
+//      (opts.heading = false, or a root inside [role=dialog], drops the h2)
 //      ...  ex.dispose()   // on page release
 //
 //  It writes ten sections of text, equations (MathJax through
@@ -125,8 +126,10 @@ export function mountExplainer(root, opts = {}) {
     const l = doc.createElement('link'); l.rel = 'stylesheet'; l.dataset.mxExplain = '';
     l.href = new URL('./explain.css', import.meta.url).href; doc.head.appendChild(l);
   }
-  const wrap = doc.createElement('section'); wrap.className = 'mx-explain'; wrap.id = 'how-mujoco-works';
-  wrap.innerHTML = `<header class="mx-head"><h2>How MuJoCo works</h2>
+  // In a dialog that has its own title (main.js #explain-dlg), skip the h2.
+  const inDialog = opts.heading === false || !!(root.closest && root.closest('[role=dialog]'));
+  const wrap = doc.createElement('section'); wrap.className = 'mx-explain' + (inDialog ? ' mx-in-dialog' : ''); wrap.id = 'how-mujoco-works';
+  wrap.innerHTML = `<header class="mx-head">${inDialog ? '' : '<h2>How MuJoCo works</h2>'}
     <p class="mx-lede">Every figure below runs the real MuJoCo engine, the same WebAssembly build as the playground above, on a tiny model of its own.</p>
     <nav class="mx-toc">${SECTIONS.filter(s => !s.sub).map(s => `<a href="#mx-${s.id}">${s.title}</a>`).join('')}</nav></header>`;
   const figs = [];
