@@ -26,6 +26,9 @@
 //  flow (log upstream area, 0..1) and slope (km/km) per texel. maps.js
 //  uses them for rivers, snow on gentle slopes and bare rock on cliffs.
 //  Maps wider than 2048 erode at 2048 and add the upsampled change.
+//  The drainage tree also goes out at the erosion width (rec: the texel
+//  each texel drains to, flowE: its flow, ew: the width), so maps.js can
+//  draw channels as joined segments at any map width.
 //
 //  grep -n targets: "export function erode", "function flood",
 //  "function carve", "function blurWrap", "function talus", "class Heap"
@@ -168,7 +171,8 @@ function talus(hk, W, H, R, area, tanMax, sweeps) {
 }
 
 // h: Float32Array 0..1 (W x H), opts = { reliefKm, radiusKm, sea (0..1 or null),
-// flow (valley depth scale), talus (0..1) }. Returns { height, flow, slope, cut, net }.
+// flow (valley depth scale), talus (0..1) }. Returns { height, flow, slope, cut, net,
+// rec, flowE, ew } (the last three at the erosion width).
 export function erode(h, W, H, o) {
   if (W > MAXW) {
     const f = W / MAXW, w = MAXW, hh = w / 2, small = new Float32Array(w * hh);
@@ -182,7 +186,7 @@ export function erode(h, W, H, o) {
       const i = y * W + x;
       out[i] = h[i] + g(r.delta); flow[i] = g(r.flow); slope[i] = g(r.slope);
     }
-    return { height: out, flow, slope, cut: r.cut, net: r.net };
+    return { height: out, flow, slope, cut: r.cut, net: r.net, rec: r.rec, flowE: r.flowE, ew: r.ew };
   }
   const n = W * H, R = o.radiusKm, km = Math.max(o.reliefKm, 1e-3);
   const lo = h.reduce((a, v) => Math.min(a, v), 1), hi = h.reduce((a, v) => Math.max(a, v), 0);
@@ -208,5 +212,5 @@ export function erode(h, W, H, o) {
     let s = 0; for (const q of N4) s = Math.max(s, Math.abs(hk[i] - hk[nb[q]]) / dist(i, nb[q], W, H, R));
     slope[i] = s;
   }
-  return { height: out, delta, flow, slope, cut, net: vol1 - vol0 };
+  return { height: out, delta, flow, slope, cut, net: vol1 - vol0, rec, flowE: flow, ew: W };
 }

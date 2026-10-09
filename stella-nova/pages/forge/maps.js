@@ -5,7 +5,8 @@
 //  vector (noise.js texelDir) and the generator's sample. Rows are
 //  independent, so the page splits them across workers (pool.js).
 //  Pass 2, finish: river and talus erosion (erode.js) on rocky worlds,
-//  then rivers, snow by slope and cliff rock in the colour maps, then the
+//  then rivers, snow by slope and cliff rock in the colour maps (lava
+//  rivers come from channels: capsules round the drainage segments), then the
 //  tangent-space normal map and the ambient occlusion. All of these need
 //  the whole height field.
 //
@@ -38,7 +39,7 @@
 //  slope (blur - h) / distance. ao = 1 - 0.55 * mean(occlusion).
 //
 //  grep -n targets: "export const MAP_INFO", "export function prepare",
-//  "export function sampleRows", "export function finish", "function normals",
+//  "export function sampleRows", "export function finish", "export function channels", "function normals",
 //  "function ambient", "export function generate", "export function mapImage",
 //  "export function hashMaps", "export function shrinkMaps"
 // ============================================================================
@@ -145,6 +146,9 @@ function surface(M, P, er, sea) {
   const s90 = Math.max(sl[Math.floor(sl.length * 0.9)] || 1e-6, 1e-6);
   const ice = pal.ice.map(v => v * 255), rock = pal.rock.map(v => v * 255), deep = pal.deep.map(v => v * 255);
   const riv = P.rivers.amount, bb = [1, 0.42, 0.08];
+  // lava rivers: a channel field from the drainage segments (continuous at
+  // any zoom); water rivers keep the per-texel flow threshold
+  const chan = liq === 1 && riv > 0 && er.rec ? channels(er, M.W, M.H) : null;
   for (let i = 0; i < n; i++) {
     const j = i * 4, a = M.albedo[j + 3];
     if (a === 255) continue;
@@ -155,11 +159,12 @@ function surface(M, P, er, sea) {
     const cliff = smooth(1.4, 2.6, s) * 0.6;
     if (cliff > 0) for (let c = 0; c < 3; c++) M.albedo[j + c] += (rock[c] - M.albedo[j + c]) * cliff;
     // rivers: the trunk channels of the drainage
-    const r = riv > 0 ? smooth(0.62, 0.8, er.flow[i]) * riv * (1 - a / 254) : 0;   // frozen rivers stay under snow
+    const r = riv > 0 ? (chan ? chan[i] : smooth(0.62, 0.8, er.flow[i])) * riv * (1 - a / 254) : 0;   // frozen rivers stay under snow
     if (r > 0) {
       if (liq === 1) {
-        // lava channels glow (sRGB bytes of a 1300 K body)
-        const g = r * 0.9;
+        // lava channels glow (sRGB bytes of a 1300 K body); the channel
+        // field is 1 on the axis and falls to 0 at the bank
+        const g = Math.min(1, r * 1.5) * 0.9;
         M.emissive[j] = Math.max(M.emissive[j], 255 * g); M.emissive[j + 1] = Math.max(M.emissive[j + 1], 150 * g * g); M.emissive[j + 2] = Math.max(M.emissive[j + 2], 40 * g * g * g);
         for (let c = 0; c < 3; c++) M.albedo[j + c] += (bb[c] * 120 - M.albedo[j + c]) * r * 0.6;
       } else {
@@ -174,6 +179,54 @@ function surface(M, P, er, sea) {
       if (M.mat) { M.mat[j] += (140 - M.mat[j]) * snow; M.mat[j + 2] += (71 - M.mat[j + 2]) * snow; }
     }
   }
+}
+
+// Lava channels as a distance field. Each drainage texel with flow over
+// CH_T0 (at the erosion width ew) is a segment from its centre to the
+// centre of the texel it drains to, in map texels. The channel is a
+// capsule round that segment: half width CH_W0..CH_W1 erosion texels
+// (wider downstream), at least CH_MIN map texels, and the east-west
+// distance is shrunk by cos(lat), so the width on the ground does not
+// change with latitude. Value: strength (smooth in flow, so a tributary
+// fades in) x smooth bank falloff. Joined segments leave no gaps, so
+// the channel does not break into dots at diagonal steps or when the
+// map is wider than the erosion grid.
+const CH_T0 = 0.6, CH_T1 = 0.8, CH_W0 = 0.35, CH_W1 = 0.9, CH_MIN = 0.8;
+export function channels(er, W, H) {
+  const out = new Float32Array(W * H), ew = er.ew, eh = ew / 2, f = W / ew;
+  const rec = er.rec, fl = er.flowE;
+  for (let i = 0; i < ew * eh; i++) {
+    const v = fl[i];
+    if (v <= CH_T0 || rec[i] < 0) continue;
+    const s = smooth(CH_T0, CH_T1, v), t = Math.min(1, (v - CH_T0) / (1 - CH_T0));
+    const xi = i % ew, yi = (i - xi) / ew, j = rec[i], xj = j % ew, yj = (j - xj) / ew;
+    let ax = (xi + 0.5) * f, ay = (yi + 0.5) * f, dx = (xj - xi), dy = (yj - yi) * f;
+    if (dx > eh) dx -= ew; else if (dx < -eh) dx += ew;
+    dx *= f;
+    if (Math.abs(yj - yi) > 1) { dx = 0; dy = 0; }   // across the pole: a dot
+    const cl = Math.max(Math.sin((ay / H) * Math.PI), 0.05);
+    // a channel narrower than CH_MIN texels is drawn CH_MIN wide and dimmer
+    // by the width ratio (the same coverage at any map width)
+    const hw0 = (CH_W0 + (CH_W1 - CH_W0) * t) * f, hw = Math.max(CH_MIN, hw0), cov = s * hw0 / hw, reach = hw + 1;
+    const y0 = Math.max(0, Math.floor(Math.min(ay, ay + dy) - reach)), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, ay + dy) + reach));
+    const rx = reach / cl;
+    const x0 = Math.floor(Math.min(ax, ax + dx) - rx), x1 = Math.ceil(Math.max(ax, ax + dx) + rx);
+    // segment in ground-scaled texels (x times cos(lat))
+    const sx = dx * cl, sy = dy, L2 = sx * sx + sy * sy;
+    for (let y = y0; y <= y1; y++) {
+      const py = y + 0.5 - ay;
+      for (let x = x0; x <= x1; x++) {
+        const px = (x + 0.5 - ax) * cl;
+        const u = L2 > 0 ? Math.min(1, Math.max(0, (px * sx + py * sy) / L2)) : 0;
+        const d = Math.hypot(px - u * sx, py - u * sy);
+        if (d >= hw + 0.75) continue;
+        const val = cov * smooth(hw + 0.75, hw - 0.5, d);
+        const k = y * W + (((x % W) + W) % W);
+        if (val > out[k]) out[k] = val;
+      }
+    }
+  }
+  return out;
 }
 
 // Neighbour fetch with the date-line wrap and the across-the-pole rule.

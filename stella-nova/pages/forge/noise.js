@@ -43,6 +43,8 @@ export const TAU = Math.PI * 2;
 // texels (no aliasing speckle). maps.js sets it from the map width.
 let BAND = Infinity;
 export function setBand(f) { BAND = f > 0 ? f : Infinity; }
+// The angle of one map texel (rad) at the band set by maps.js (0 when unset).
+export function texelAngle() { return BAND === Infinity ? 0 : Math.PI / (8 * BAND); }
 const fade = f => f <= BAND ? 1 : f >= 2 * BAND ? 0 : 2 - f / BAND;
 const F3 = 1 / 3, G3 = 1 / 6;
 // The 12 edge gradients of the cube, plus 4 repeats so that h & 15 picks one.

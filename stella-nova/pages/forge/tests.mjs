@@ -255,6 +255,46 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('lava: every family member keeps a sooty sky', L.every(a => a.mie.every((m, i) => m / (m + a.mieAbs[i]) < 0.35) && a.glow > 0.5));
 }
 
+// lava rivers and lineae stay continuous: the river channel field
+// (maps.js channels) forms long connected channels, also when the map is
+// wider than the erosion grid, and the glowing lineae do not break into dots
+{
+  const { erode } = await import('./erode.js');
+  const comps = (on, W, H) => {
+    const lab = new Int32Array(W * H).fill(-1), sizes = [], st = [];
+    for (let i = 0; i < W * H; i++) if (on(i) && lab[i] < 0) {
+      let c = 0; st.push(i); lab[i] = sizes.length;
+      while (st.length) {
+        const k = st.pop(); c++; const x = k % W, y = (k - x) / W;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const yy = y + dy; if (yy < 0 || yy >= H) continue;
+          const j = yy * W + ((x + dx + W) % W); if (on(j) && lab[j] < 0) { lab[j] = sizes.length; st.push(j); }
+        }
+      }
+      sizes.push(c);
+    }
+    return sizes;
+  };
+  const P = PR.fromPreset('lava'), W = 512, H = 256, ctx = MP.prepare(P);
+  const M0 = MP.assemble(W, [MP.sampleRows(ctx, W, 0, H)]);
+  const sea = (ctx.seaH - ctx.hMin) / (ctx.hMax - ctx.hMin), km = ctx.kmPerUnit * (ctx.hMax - ctx.hMin);
+  const er = erode(M0.height, W, H, { reliefKm: km, radiusKm: P.radiusKm, sea, flow: P.erosion.flow, talus: P.erosion.talus });
+  const stat = (on, w, h, minLen) => { const s = comps(on, w, h), tot = s.reduce((a, b) => a + b, 0); return { n: s.length, long: s.filter(v => v >= minLen).reduce((a, b) => a + b, 0) / Math.max(tot, 1), tot }; };
+  const ch = MP.channels(er, W, H);
+  const a = stat(i => ch[i] > 0.05, W, H, 40), old = stat(i => er.flow[i] > 0.62, W, H, 40);
+  ok('lava rivers: the channel field forms long connected channels (>= 90 % of river texels in channels of >= 40 texels)', a.long > 0.9 && a.tot > 200,
+    `${a.n} channels, ${(100 * a.long).toFixed(0)} % in long ones (per-texel threshold: ${old.n} pieces, ${(100 * old.long).toFixed(0)} %)`);
+  const ch2 = MP.channels(er, 2 * W, 2 * H), b = stat(i => ch2[i] > 0.05, 2 * W, 2 * H, 80);
+  ok('lava rivers: a map twice the erosion width keeps the channels joined', b.long > 0.9 && b.n <= a.n * 1.2, `${b.n} channels, ${(100 * b.long).toFixed(0)} % in long ones`);
+  // glowing lineae: an ice world with glowing cracks has no other light, so
+  // the emissive map is the line field. Joined lines make a few large
+  // pieces; lines thinner than a texel fall apart into many specks.
+  const Pi = PR.normalize(PR.merge(PR.fromPreset('ice'), { cracks: { glow: 0.6 } })), Mi = MP.generate(Pi, 512);
+  const li = comps(i => Mi.emissive[i * 4] > 20, 512, 256), lt = li.reduce((x, y) => x + y, 0);
+  ok('lineae: glowing lines stay joined (< 100 pieces, the largest > 80 % of the lit texels; 1910 pieces before)', li.length < 100 && Math.max(...li) / lt > 0.8,
+    `${li.length} pieces, largest ${(100 * Math.max(...li) / lt).toFixed(0)} %, lit ${(100 * lt / (512 * 256)).toFixed(1)} %`);
+}
+
 // starfield: the shader turns a body-frame ray back to the world frame with
 // the rows packView sends (View.bw0..bw2), so a star keeps its world
 // direction while the planet spins and tilts

@@ -18,7 +18,9 @@
 //       with flat treads and steep risers (mesas of flat-lying layers)
 //    5. detail = fbmEroded(p)           derivative-damped fBm: less detail on
 //                                       steep slopes, so slopes read eroded
-//    6. dunes, cracks (lineae), calderas, craters
+//    6. dunes, cracks (lineae), calderas, craters. Lineae are zero sets of
+//       noise on their own warp (crackWarp); lineDist gives the distance
+//       to a line, so a line keeps its width and never breaks into dots
 //    Valleys and rivers come later: erode.js cuts drainage networks into
 //    the joined height map, and maps.js finish lays rivers and snow.
 //  The sea level is the quantile of the height at ocean.level over 6000
@@ -47,9 +49,9 @@
 //
 //  grep -n targets: "export function prepareRocky", "function heightCore",
 //  "function craterField", "function buildCraters", "export function craterProfile", "function shade",
-//  "const BIOMES", "export function craterList"
+//  "const BIOMES", "export function craterList", "function crackWarp", "function lineDist"
 // ============================================================================
-import { fbm, fbmEroded, ridged, warp, simplex3, worley3, mulberry, onSphere, fibonacci, clamp, mix, smooth } from './noise.js';
+import { fbm, fbmEroded, ridged, warp, simplex3, worley3, mulberry, onSphere, fibonacci, clamp, mix, smooth, texelAngle } from './noise.js';
 import { cloudSetup, cyclones, cloudField } from './clouds.js';
 
 // Linear sRGB-ish biome colours (sRGB triples) and their (T °C, M) centres.
@@ -276,6 +278,37 @@ function volcanoField(ctx, p, st) {
 }
 
 // ── height ──────────────────────────────────────────────────────────────
+// Lineae: half width LINE_W / freq rad (0.05 of a noise unit at the median
+// gradient 2.15 of simplex3 near 0), at least LINE_MIN map texels.
+const LINE_W = 0.05 / 2.15, LINE_MIN = 0.8, CW_K = [1.2, 2.6];
+const _g = [0, 0, 0];
+// _cw: [qx, qy, qz, J (3 x 3, row-major)] of the crack warp
+// q = p + A sum_o 0.5^o (s_o1, s_o2, s_o3)(p k_o), two octaves.
+const _cw = new Float64Array(12);
+function crackWarp(p, A, seed) {
+  _cw[0] = p[0]; _cw[1] = p[1]; _cw[2] = p[2];
+  for (let r = 0; r < 9; r++) _cw[3 + r] = r % 4 === 0 ? 1 : 0;
+  for (let o = 0; o < 2; o++) {
+    const k = CW_K[o], a = A * (o ? 0.5 : 1);
+    for (let c = 0; c < 3; c++) {
+      const v = simplex3(p[0] * k, p[1] * k, p[2] * k, seed + c * 31 + o * 7, _g);
+      _cw[c] += a * v;
+      _cw[3 + c * 3] += a * k * _g[0]; _cw[4 + c * 3] += a * k * _g[1]; _cw[5 + c * 3] += a * k * _g[2];
+    }
+  }
+}
+// Distance (rad) from p to the zero set of simplex(q f) on the warp w:
+// grad_p = f J^T g, taken along the sphere (the radial part does not
+// move the line).
+function lineDist(w, f, seed, p) {
+  const n = simplex3(w[0] * f, w[1] * f, w[2] * f, seed, _g);
+  const gx = f * (w[3] * _g[0] + w[6] * _g[1] + w[9] * _g[2]);
+  const gy = f * (w[4] * _g[0] + w[7] * _g[1] + w[10] * _g[2]);
+  const gz = f * (w[5] * _g[0] + w[8] * _g[1] + w[11] * _g[2]);
+  const r = gx * p[0] + gy * p[1] + gz * p[2];
+  const gt = Math.hypot(gx - r * p[0], gy - r * p[1], gz - r * p[2]);
+  return Math.abs(n) / Math.max(gt, 0.05 * f);
+}
 function heightCore(ctx, p, st) {
   const P = ctx.P;
   warp(p, P.terrain.warp, P.terrain.warpFreq, ctx.sWarp, _q);
@@ -316,7 +349,7 @@ function heightCore(ctx, p, st) {
   _m[0] = p[0] + 0.35 * (_q[0] - p[0]); _m[1] = p[1] + 0.35 * (_q[1] - p[1]); _m[2] = p[2] + 0.35 * (_q[2] - p[2]);
   const r = P.mountains.amp > 0 ? ridged(_m, ctx.mtnO, ctx.sMtn, P.mountains.sharpness) : 0;
   h += P.mountains.amp * mmask * r;
-  st.mtn = mmask * r; st.c = c; st.uplift = uplift; st.rift = rift;
+  st.mtn = mmask * r; st.mmask = mmask; st.c = c; st.uplift = uplift; st.rift = rift;
   // terraces (mesas and benches of flat-lying layers): flat treads, steep risers
   if (P.terrain.terraces > 0) {
     const n = 7 + 5 * P.terrain.terraces, q = h * n + 0.3 * simplex3(p[0] * 5, p[1] * 5, p[2] * 5, ctx.sVar + 5), f = Math.floor(q);
@@ -335,16 +368,28 @@ function heightCore(ctx, p, st) {
     st.dune = dune * basin * P.dunes.amount;
     h += 0.035 * st.dune;
   }
-  // cracks / lineae: thin ridged lines, raised as double ridges
+  // cracks / lineae: the zero sets of two noise fields, raised as double
+  // ridges. The lines run on their own smooth warp (crackWarp), whose
+  // Jacobian is known, so the distance to a zero set is |n| / |grad n|
+  // with the full gradient along the sphere. A line keeps one width along
+  // its length, at least LINE_MIN map texels: it never breaks into dots
+  // where the noise is steep, the warp folds, or the map is coarse.
   st.crack = 0;
   if (P.cracks.amount > 0) {
-    const f = P.cracks.freq;
-    _t[0] = _q[0] * f; _t[1] = _q[1] * f; _t[2] = _q[2] * f;
-    const n1 = Math.abs(simplex3(_t[0], _t[1], _t[2], ctx.sCrack));
-    const n2 = Math.abs(simplex3(_t[0] * 2.3, _t[1] * 2.3, _t[2] * 2.3, ctx.sCrack + 5));
-    const l = Math.max(smooth(0.06, 0.0, n1), 0.7 * smooth(0.04, 0.0, n2));
+    const f = P.cracks.freq, tx = texelAngle();
+    crackWarp(p, 0.05 + 0.3 * P.terrain.warp, ctx.sCrack + 9);
+    const d1 = lineDist(_cw, f, ctx.sCrack, p), d2 = lineDist(_cw, f * 2.3, ctx.sCrack + 5, p);
+    // the width swells and thins along a line (a low noise, 0.45..1.25)
+    const sw = 0.85 + 0.4 * simplex3(p[0] * 4, p[1] * 4, p[2] * 4, ctx.sCrack + 3);
+    // a line thinner than LINE_MIN texels is drawn LINE_MIN wide and dimmer
+    // by the same ratio (its coverage), so a small map is not brighter
+    const t1 = sw * LINE_W / f, t2 = sw * 0.67 * LINE_W / (2.3 * f);
+    const w1 = Math.max(t1, LINE_MIN * tx), w2 = Math.max(t2, LINE_MIN * tx);
+    const e = 0.5 * tx;
+    const l = Math.max(smooth(w1 + e, 0, d1) * t1 / w1, 0.7 * smooth(w2 + e, 0, d2) * t2 / w2);
     st.crack = l * P.cracks.amount;
-    h += 0.02 * st.crack - 0.035 * smooth(0.015, 0.0, n1) * P.cracks.amount;
+    const wc = Math.max(0.25 * LINE_W / f, 0.5 * tx);
+    h += 0.02 * st.crack - 0.035 * smooth(wc + e, 0.0, d1) * P.cracks.amount;
   }
   volcanoField(ctx, p, st); h += st.vH;
   // craters in impact order: the old ones, then the maria flood, then the
@@ -412,7 +457,11 @@ function sampleRocky(ctx, p, out) {
       worley3(p[0] * 7, p[1] * 7, p[2] * 7, ctx.sLava, _w1);
       worley3(p[0] * 17, p[1] * 17, p[2] * 17, ctx.sLava + 1, _w2);
       const wob = 0.04 * simplex3(p[0] * 40, p[1] * 40, p[2] * 40, ctx.sLava + 2);
-      const crack1 = smooth(0.09, 0.0, _w1[1] - _w1[0] + wob), crack2 = smooth(0.1, 0.0, _w2[1] - _w2[0] + wob * 0.6) * 0.8;
+      // F2 - F1 is about twice the distance to the plate edge (in cells),
+      // so a crack is at least 1.3 map texels wide at any map width
+      // (dimmer by the width ratio when widened: the same coverage)
+      const tx = texelAngle(), k1 = Math.max(0.09, 2.6 * 7 * tx), k2 = Math.max(0.1, 2.6 * 17 * tx);
+      const crack1 = smooth(k1, 0.0, _w1[1] - _w1[0] + wob) * 0.09 / k1, crack2 = smooth(k2, 0.0, _w2[1] - _w2[0] + wob * 0.6) * 0.8 * 0.1 / k2;
       const hot = smooth(0.2, 0.7, 0.5 + 0.5 * fbm(p, VAR_O, ctx.sLava + 3)) * 0.6 + smooth(0.6, 0.0, depth) * 0.4;
       const open = clamp(Math.max(crack1, crack2 * (0.35 + 0.65 * hot)) + hot * 0.12);
       const plateTone = 0.75 + 0.5 * ((_w1[2] >>> 8) & 255) / 255;
@@ -500,7 +549,9 @@ function sampleRocky(ctx, p, out) {
   if (st.crack > 0) {
     mixIn(_col, pal.accent, clamp(st.crack) * 0.7);
     if (P.cracks.glow > 0) {
-      const bb = blackbody(1400), g = clamp(st.crack) * P.cracks.glow * 2.4 * smooth(0.6, 0.0, st.mtn);
+      // the glow fades under the ranges by the smooth range mask, not by the
+      // ridged relief (that cut the lines into dashes)
+      const bb = blackbody(1400), g = clamp(st.crack) * P.cracks.glow * 2.4 * smooth(0.75, 0.15, st.mmask);
       out.er += bb[0] * g; out.eg += bb[1] * g; out.eb += bb[2] * g;
     }
   }
