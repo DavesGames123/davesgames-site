@@ -134,5 +134,42 @@ function unionZ(o) { const z = []; for (const g of o.inputs) for (let i = 0; i <
 }
 export { ok };
 const finish = () => { console.log(`\n${pass} passed, ${fail} failed  (${((performance.now() - T0) / 1000).toFixed(1)} s)`); process.exit(fail ? 1 : 0); };
-if (!process.env.RX_MORE) finish();
+
 globalThis.RX.finish = finish;
+
+// ── 3D change (rxanim.js) ──────────────────────────────────────────────────
+{
+  const { runStep, nodeOfSpecies } = await import('./steps.js');
+  const { makeScene } = await import('./rxanim.js');
+  const { decode } = await import('../molecules/chem.js');
+  const cases = [['sn2', ['etbr', 'naoh']], ['fischer', ['aceticacid', 'ethanol']], ['nitro-reduce', ['nitrobenzene', 'h2', 'h2', 'h2']],
+    ['diels-alder', ['butadiene', 'maleican']], ['grignard', ['acetone', 'etmgbr', 'water']], ['combustion', ['methane']], ['suzuki', ['bromobenzene', 'phboh2', 'naoh']],
+    ['ox-primary', ['ethanol', 'oform']], ['kolbe', ['phenol', 'co2']]];
+  for (const [cid, ks] of cases) {
+    const st = runStep(OCL, cid, ks.map(nodeOfSpecies));
+    if (!st) { ok(false, `anim ${cid}: step runs`); continue; }
+    const S = makeScene(st);
+    let finite = true;
+    for (let t = 0; t <= S.T + 0.01; t += 0.05) { const f = S.at(t); for (const v of f.pos) if (!Number.isFinite(v)) finite = false; for (const a of f.alpha) if (!(a >= 0 && a <= 1)) finite = false; }
+    ok(finite, `anim ${cid}: every mapped atom finite, bond alpha in 0..1`, `${S.U} atoms, ${S.bonds.length} bonds, ${S.T.toFixed(1)} s`);
+    // at the end of the rearrange the main product sits at its own conformer
+    const f = S.at(S.phases.tR), P = decode(st.products[0].rec), og = st.products[0].origin;
+    let err = 0;
+    for (let i = 0; i < og.length; i++) for (let j = i + 1; j < og.length; j++) {
+      const a = og[i], b = og[j];
+      const d1 = Math.hypot(f.pos[3 * a] - f.pos[3 * b], f.pos[3 * a + 1] - f.pos[3 * b + 1], f.pos[3 * a + 2] - f.pos[3 * b + 2]);
+      const d0 = Math.hypot(P.xyz[3 * i] - P.xyz[3 * j], P.xyz[3 * i + 1] - P.xyz[3 * j + 1], P.xyz[3 * i + 2] - P.xyz[3 * j + 2]);
+      err = Math.max(err, Math.abs(d1 - d0));
+    }
+    ok(err < 1e-3, `anim ${cid}: ends at the product geometry`, `max distance error ${err.toExponential(1)} A`);
+    // every by-product keeps its own geometry while it drifts away
+    let berr = 0;
+    st.products.slice(1).forEach(p => { const Q = decode(p.rec), g = S.at(S.T).pos; for (let i = 0; i < p.origin.length; i++) for (let j = i + 1; j < p.origin.length; j++) { const a = p.origin[i], b = p.origin[j]; berr = Math.max(berr, Math.abs(Math.hypot(g[3 * a] - g[3 * b], g[3 * a + 1] - g[3 * b + 1], g[3 * a + 2] - g[3 * b + 2]) - Math.hypot(Q.xyz[3 * i] - Q.xyz[3 * j], Q.xyz[3 * i + 1] - Q.xyz[3 * j + 1], Q.xyz[3 * i + 2] - Q.xyz[3 * j + 2]))); } });
+    ok(berr < 1e-3, `anim ${cid}: by-products rigid at the end`, `${st.products.length - 1} by-product(s)`);
+    const kinds = S.bonds.reduce((m, b) => (m[b.kind] = (m[b.kind] || 0) + 1, m), {});
+    ok((kinds.break || 0) + (kinds.form || 0) + (kinds.change || 0) > 0 && S.centre.some(Boolean), `anim ${cid}: reaction centre found`, JSON.stringify(kinds));
+    ok(/^\\ce\{.+->|<=>/.test(st.tex), `anim ${cid}: step TeX`, st.tex);
+    if (globalThis.RX.MJ) ok(!globalThis.RX.MJ(st.tex), `anim ${cid}: step TeX typesets`);
+  }
+}
+if (!process.env.RX_MORE2) finish();
