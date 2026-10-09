@@ -205,6 +205,56 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('atmo: an off atmosphere packs on = 0', packAtmo(PR.ATMO.none)[23] === 0);
 }
 
+// preset families (presets.js fromPreset + vary): each seed is a new
+// member, the same seed gives the same member, old ids still load
+{
+  const keys = P => [P.radiusKm, P.tilt, P.ocean && P.ocean.level, P.terrain && P.terrain.amp, P.craters && P.craters.density, P.volcanoes && P.volcanoes.count,
+    ...(P.palette.low || P.palette.stops.flatMap(s => s[1])), P.bands && P.bands.count].filter(v => v != null);
+  let varied = 0, same = 0, spread = [];
+  for (const pr of PR.PRESETS) {
+    const ms = [1, 2, 3, 4, 5, 6].map(s => keys(PR.fromPreset(pr.id, s)));
+    const diff = ms.slice(1).filter(m => m.some((v, i) => Math.abs(v - ms[0][i]) > 1e-6)).length;
+    if (diff === 5) varied++;
+    if (JSON.stringify(PR.fromPreset(pr.id, 9)) === JSON.stringify(PR.fromPreset(pr.id, 9))) same++;
+  }
+  ok('families: every preset gives a different member for each of 6 seeds', varied === PR.PRESETS.length, `${varied}/${PR.PRESETS.length}`);
+  ok('families: the same seed gives the same member', same === PR.PRESETS.length);
+  // the rust family spans hues and sizes widely over 40 seeds
+  const R = [...Array(40)].map((_, s) => PR.fromPreset('rust', s + 1));
+  const hue = R.map(P => P.palette.low[0] / (P.palette.low[1] + P.palette.low[2])), rad = R.map(P => P.radiusKm);
+  const span = a => Math.max(...a) / Math.min(...a);
+  ok('families: rust worlds vary widely (red/(g+b) span, radius span)', span(hue) > 1.4 && span(rad) > 1.8 && R.some(P => P.terrain.dichotomy === 0) && R.some(P => P.terrain.dichotomy > 0) && R.some(P => P.terrain.terraces > 0),
+    `hue span ${span(hue).toFixed(2)}, radius ${Math.min(...rad).toFixed(0)}..${Math.max(...rad).toFixed(0)} km`);
+  const V = [...Array(40)].map((_, s) => PR.fromPreset('volcanic', s + 1)), vl = new Set(V.map(P => P.palette.ring.map(v => v.toFixed(1)).join()));
+  ok('families: volcanic moons draw several deposit sets (plume ring colours)', vl.size >= 4, `${vl.size} ring colours in 40 seeds`);
+  ok('families: no preset is named after a real body (Mars-like, Io-like gone)', !PR.PRESETS.some(p => /Mars|Io-like/.test(p.name)));
+  const oldM = PR.fromPreset('mars', 7), oldI = PR.fromPreset('io', 7);
+  ok('families: old ids mars and io map to rust and volcanic', oldM.preset === 'rust' && oldI.preset === 'volcanic' && JSON.stringify(oldM) === JSON.stringify(PR.fromPreset('rust', 7)));
+  const saved = JSON.parse(PR.toJSON(PR.fromPreset('rust', 3), 512)); saved.planet.preset = 'mars'; saved.planet.name = 'Mars-like';
+  const back = PR.fromJSON(JSON.stringify(saved)).planet;
+  ok('families: an old saved Mars-like JSON loads as a rust world, recipe kept', back.preset === 'rust' && back.name === 'Rust world' && back.radiusKm === saved.planet.radiusKm);
+}
+
+// lava world: the crust is dark, the cracks and rivers glow, and the sky
+// is dark and sooty (it absorbs more than it scatters)
+{
+  const P = PR.fromPreset('lava'), M = MP.generate(P, 256), n = 256 * 128;
+  let dark = 0, lit = 0, eSum = 0, land = 0;
+  for (let i = 0; i < n; i++) {
+    const a = (M.albedo[i * 4] + M.albedo[i * 4 + 1] + M.albedo[i * 4 + 2]) / 3, e = M.emissive[i * 4];
+    if (a < 60) dark++;
+    if (e > 120) lit++;
+    eSum += e;
+  }
+  ok('lava: most of the surface is dark crust (albedo byte < 60)', dark / n > 0.7, `${(100 * dark / n).toFixed(0)} % dark`);
+  ok('lava: bright cracks and rivers (emissive byte > 120) cover 3-40 % (reads at night, not a lit disc)', lit / n > 0.03 && lit / n < 0.4, `${(100 * lit / n).toFixed(1)} % glowing, mean emissive byte ${(eSum / n).toFixed(1)}`);
+  const A = P.atmo, ssa = A.mie.map((m, i) => m / (m + A.mieAbs[i])), rayRatio = A.rayleigh[2] / A.mie[2];
+  ok('lava: ash sky is dark (ssa < 0.35), brown (red ash scatters most), little blue Rayleigh, lit from below', ssa.every(v => v < 0.35) && A.mie[0] > A.mie[2] && rayRatio < 0.5 && A.glow >= 0.8,
+    'ssa ' + ssa.map(v => v.toFixed(2)).join(' ') + `, Rayleigh/Mie blue ${rayRatio.toFixed(2)}, glow ${A.glow.toFixed(2)}`);
+  const L = [...Array(12)].map((_, s) => PR.fromPreset('lava', s + 1).atmo);
+  ok('lava: every family member keeps a sooty sky', L.every(a => a.mie.every((m, i) => m / (m + a.mieAbs[i]) < 0.35) && a.glow > 0.5));
+}
+
 // starfield: the shader turns a body-frame ray back to the world frame with
 // the rows packView sends (View.bw0..bw2), so a star keeps its world
 // direction while the planet spins and tilts
@@ -307,7 +357,7 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
     } catch (e) { w.onmessage({ data: { id: m.id, error: String(e) } }); } }, 0); }, terminate() {} }; return w; };
   const crash = () => { const w = { postMessage() { setTimeout(() => w.onerror({ message: 'boom' }), 5); }, terminate() {} }; return w; };
   const silent = () => ({ postMessage() {}, terminate() {} });
-  const P = PRM.fromPreset('mars'), W = 128, ref = MP.hashMaps(MP.generate(JSON.parse(JSON.stringify(P)), W));
+  const P = PRM.fromPreset('rust'), W = 128, ref = MP.hashMaps(MP.generate(JSON.parse(JSON.stringify(P)), W));
   const warn = console.warn; console.warn = () => {};
   const t0 = Date.now();
   const mixed = await createPool(3, { stallMs: 300, makeWorker: i => (i === 0 ? crash() : i === 1 ? silent() : good()) }).generate(P, W);

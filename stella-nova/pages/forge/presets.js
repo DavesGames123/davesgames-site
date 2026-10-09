@@ -11,6 +11,13 @@
 //  missing keys and clamps each number to its SCHEMA range, so an old or
 //  hand-edited JSON still loads.
 //
+//  Families: a preset is a family, not one planet. fromPreset(id, seed)
+//  lays pr.p over the default, then pr.vary(F) with F a dice seeded by the
+//  seed: sea cover, temperatures, palette hue, crater and volcano counts,
+//  radius and so on. So each seed gives a different member of the family,
+//  and the same seed always gives the same member. ALIASES maps old preset
+//  ids (saved JSON files, links) to the family that replaced them.
+//
 //  atmo.clarity (view only, default 1) keeps that share of the haze over
 //  the ground at the nadir; the Earth-like skies use 0.45 so the ground
 //  reads from orbit while the optical depths stay real (tests.mjs).
@@ -21,6 +28,7 @@
 //  rayleigh = [5.802, 13.558, 33.1].
 //
 //  grep -n targets: "export const ROCKY_DEFAULT", "export const GAS_DEFAULT",
+//  "export const ALIASES", "function dice", "export function fromPreset",
 //  "export const ATMO", "export const PRESETS", "export const SCHEMA",
 //  "export function normalize", "export function toJSON", "export function fromJSON"
 // ============================================================================
@@ -34,8 +42,9 @@ export const VERSION = 1;
 export const ATMO = {
   none: { on: 0, radiusKm: 1737, heightKm: 10, rayleigh: [0, 0, 0], rayleighH: 8, mie: [0, 0, 0], mieAbs: [0, 0, 0], mieH: 1.2, mieG: 0.8, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.12 },
   earth: { on: 1, radiusKm: 6360, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [3.996, 3.996, 3.996], mieAbs: [4.4, 4.4, 4.4], mieH: 1.2, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.3, clarity: 0.45 },
-  // Mars: a thin CO2 sky lit mostly by dust that absorbs blue (butterscotch noon)
-  mars: { on: 1, radiusKm: 3390, heightKm: 80, rayleigh: [0.19, 0.42, 1.0], rayleighH: 11, mie: [16, 13, 10], mieAbs: [2, 4.5, 9], mieH: 9, mieG: 0.72, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25 },
+  // rust world: a thin CO2 sky lit mostly by iron-oxide dust that absorbs
+  // blue (butterscotch noon); the family varies the dust load and tint
+  rust: { on: 1, radiusKm: 3390, heightKm: 80, rayleigh: [0.19, 0.42, 1.0], rayleighH: 11, mie: [16, 13, 10], mieAbs: [2, 4.5, 9], mieH: 9, mieG: 0.72, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25 },
   // dusty orange desert sky
   dust: { on: 1, radiusKm: 6000, heightKm: 100, rayleigh: [4.2, 9.8, 23.9], rayleighH: 8, mie: [14, 11.5, 8.5], mieAbs: [3, 5, 9], mieH: 2.6, mieG: 0.78, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.4 },
   // thin, pale blue sky of a frozen world
@@ -49,8 +58,10 @@ export const ATMO = {
   // lava world: a dark, sooty, ash-laden haze. Its soot absorbs more than
   // it scatters (single-scattering albedo about 0.3) and absorbs blue most,
   // so the sky is grey-brown and dim; at night the lava lights it from below
-  // (glow x the mean surface emission, render.js).
-  lava: { on: 1, radiusKm: 6200, heightKm: 120, rayleigh: [1.2, 2.8, 6.8], rayleighH: 10, mie: [9, 8, 7], mieAbs: [20, 24, 30], mieH: 10, mieG: 0.7, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.12, glow: 0.6 },
+  // (glow x the mean surface emission, render.js). The ash scatters red
+  // more than blue (mie) and the gas adds almost no blue Rayleigh light,
+  // so the day limb is brown, not lavender.
+  lava: { on: 1, radiusKm: 6200, heightKm: 120, rayleigh: [0.25, 0.5, 1.0], rayleighH: 10, mie: [7, 5.2, 3.6], mieAbs: [17, 19, 22], mieH: 9, mieG: 0.62, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1.2, sun: 10, ground: 0.08, glow: 1.1 },
   // gas giants: H2/He Rayleigh plus a coloured haze; absorb is methane (red)
   jupiter: { on: 1, radiusKm: 7000, heightKm: 260, rayleigh: [1.6, 3.7, 9], rayleighH: 30, mie: [4.5, 4, 3], mieAbs: [0.6, 1.2, 2.6], mieH: 22, mieG: 0.7, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.5 },
   saturn: { on: 1, radiusKm: 7000, heightKm: 300, rayleigh: [1.3, 3, 7.4], rayleighH: 34, mie: [5, 4.6, 3.6], mieAbs: [0.4, 0.9, 2.2], mieH: 30, mieG: 0.7, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.5 },
@@ -63,7 +74,7 @@ for (const a of Object.values(ATMO)) { a.clarity ??= 1; a.glow ??= 0; }
 
 export const ROCKY_DEFAULT = {
   kind: 'rocky', name: 'Rocky world', seed: 1,
-  terrain: { amp: 1, freq: 0.9, octaves: 7, lacunarity: 2.05, gain: 0.47, warp: 0.14, warpFreq: 0.9, dichotomy: 0 },
+  terrain: { amp: 1, freq: 0.9, octaves: 7, lacunarity: 2.05, gain: 0.47, warp: 0.14, warpFreq: 0.9, dichotomy: 0, terraces: 0 },
   plates: { count: 14, weight: 0.32, uplift: 0.7, width: 0.12, oceanic: 0.55 },
   mountains: { amp: 0.55, freq: 2.4, octaves: 6, lacunarity: 2.1, gain: 0.5, sharpness: 2.2 },
   erosion: { strength: 1.5, detail: 0.16, freq: 6, octaves: 6, flow: 1, talus: 0.4 },
@@ -80,7 +91,7 @@ export const ROCKY_DEFAULT = {
     deep: [0.03, 0.07, 0.17], shallow: [0.06, 0.2, 0.32], beach: [0.62, 0.56, 0.42],
     low: [0.42, 0.36, 0.28], high: [0.56, 0.52, 0.46], rock: [0.34, 0.31, 0.28],
     dark: [0.16, 0.15, 0.14], bright: [0.82, 0.8, 0.76], ice: [0.92, 0.95, 0.98],
-    accent: [0.6, 0.3, 0.15],
+    accent: [0.6, 0.3, 0.15], ring: [0.62, 0.22, 0.08],
   },
   atmo: ATMO.earth,
   rings: { on: 0, inner: 1.3, outer: 2.1, opacity: 0.7, color: [0.75, 0.7, 0.62] },
@@ -103,83 +114,188 @@ export const GAS_DEFAULT = {
   rings: { on: 0, inner: 1.24, outer: 2.27, opacity: 0.9, color: [0.82, 0.76, 0.64] },
 };
 
-// Presets: { id, name, kind, blurb, seed, p } with p laid over the default.
+// Presets: { id, name, kind, blurb, seed, p, vary }. p is laid over the
+// default, then vary(F) over that (F: the seeded dice of function dice).
+// The preset seed is only the first member shown; every seed is a member.
 export const PRESETS = [
-  { id: 'earth', name: 'Earth-like', kind: 'rocky', seed: 4127, blurb: 'continents on 14 plates, biomes from temperature and rain, ice caps, city lights',
-    p: { climate: { cities: 0.7 }, rivers: { amount: 0.5 }, clouds: { cover: 0.42 } } },
-  { id: 'mars', name: 'Mars-like', kind: 'rocky', seed: 2203, blurb: 'a crustal dichotomy, layered craters, dust and two CO2 caps',
-    p: { terrain: { amp: 0.7, warp: 0.25, dichotomy: 0.8 }, plates: { count: 5, weight: 0.2, uplift: 0.9 },
-      mountains: { amp: 0.4, sharpness: 2.6 }, erosion: { detail: 0.12 },
-      craters: { density: 0.45, rMin: 0.006, rMax: 0.16, slope: 1.9, depth: 0.9, ejecta: 0.2, maria: 0.35 },
+  { id: 'earth', name: 'Earth-like', kind: 'rocky', seed: 4127, blurb: 'continents on plates, biomes from temperature and rain, ice caps, city lights; each seed moves the sea, the climate and the plates',
+    p: { climate: { cities: 0.7 }, rivers: { amount: 0.5 }, clouds: { cover: 0.42 } },
+    vary: F => ({ ocean: { level: F.u(0.48, 0.74) }, plates: { count: F.i(8, 20), uplift: F.u(0.5, 0.95) },
+      terrain: { freq: F.u(0.7, 1.2), warp: F.u(0.08, 0.22) }, mountains: { amp: F.u(0.4, 0.7) },
+      climate: { equatorC: F.u(20, 34), poleC: F.u(-40, -12), moisture: F.u(0.35, 0.8), life: F.u(0.6, 1), cities: F.u(0, 0.8) },
+      clouds: { cover: F.u(0.26, 0.42), cyclones: F.i(2, 6) }, tilt: F.u(5, 35), radiusKm: F.u(5200, 7600),
+      palette: { deep: F.tint([0.03, 0.07, 0.17], 0.25), shallow: F.tint([0.06, 0.2, 0.32], 0.25) } }) },
+  { id: 'rust', name: 'Rust world', kind: 'rocky', seed: 2203, blurb: 'a cold, dry iron-oxide world under a thin dusty sky: each seed draws its own tint, basins, mesas, craters and caps',
+    p: { terrain: { amp: 0.7, warp: 0.25 }, plates: { count: 5, weight: 0.2, uplift: 0.9 },
+      mountains: { amp: 0.4, sharpness: 2.6 }, erosion: { detail: 0.12, flow: 0.4 },
+      craters: { density: 0.3, rMin: 0.006, rMax: 0.16, slope: 1.9, depth: 0.9, ejecta: 0.2, maria: 0.2 },
       ocean: { level: 0 }, climate: { equatorC: -20, poleC: -110, lapse: 2.5, moisture: 0, life: 0, iceC: -95 },
-      clouds: { cover: 0.04, color: [0.95, 0.9, 0.85] }, relief: 20, radiusKm: 3390, tilt: 25,
-      palette: { low: [0.62, 0.36, 0.2], high: [0.74, 0.5, 0.32], rock: [0.45, 0.28, 0.18], dark: [0.3, 0.18, 0.12], bright: [0.8, 0.6, 0.45], ice: [0.94, 0.92, 0.9], accent: [0.55, 0.25, 0.12] },
-      atmo: ATMO.mars } },
-  { id: 'moon', name: 'Moon-like', kind: 'rocky', seed: 1969, blurb: 'an airless body: power-law crater fields with rims, ejecta and rays, dark maria',
+      clouds: { cover: 0, cyclones: 0, color: [0.95, 0.9, 0.85] }, relief: 20, radiusKm: 3390, tilt: 25,
+      atmo: ATMO.rust },
+    vary: F => {
+      // iron oxides from ochre to oxblood to brown-grey (the hue of the dust)
+      const base = F.pick([[0.66, 0.4, 0.22], [0.58, 0.26, 0.15], [0.7, 0.52, 0.32], [0.5, 0.36, 0.28], [0.62, 0.32, 0.24], [0.74, 0.46, 0.3]]);
+      const b = F.tint(base, 0.1), sh = (k, d = 0) => b.map((v, i) => Math.min(1, v * k + d * (i === 2 ? 0.6 : 1)));
+      const dust = F.u(0.5, 1.2), cold = F.u(0, 1);
+      return { terrain: { amp: F.u(0.5, 0.95), freq: F.u(0.7, 1.6), warp: F.u(0.12, 0.35), dichotomy: F.u(0, 1) < 0.55 ? F.u(0.3, 1.0) : 0, terraces: F.u(0, 1) < 0.5 ? F.u(0.25, 0.7) : 0 },
+        plates: { count: F.i(0, 9) }, mountains: { amp: F.u(0.15, 0.6), sharpness: F.u(2, 3.2) },
+        craters: { density: F.u(0.02, 0.6), slope: F.u(1.8, 2.2), maria: F.u(0, 0.4) },
+        dunes: { amount: F.u(0, 1) < 0.5 ? F.u(0.3, 0.9) : 0, freq: F.u(34, 56) },
+        cracks: { amount: F.u(0, 1) < 0.25 ? F.u(0.2, 0.6) : 0, freq: F.u(1.5, 4) },
+        climate: { equatorC: F.u(-40, 0), poleC: F.u(-130, -80), iceC: -110 + 40 * cold },
+        relief: F.u(10, 26), radiusKm: F.u(2400, 5400), tilt: F.u(0, 40),
+        palette: { low: b, high: sh(1.15, 0.04), rock: sh(0.7), dark: sh(0.45), bright: sh(1.28, 0.1), accent: sh(0.8), ice: F.tint([0.94, 0.92, 0.9], 0.04) },
+        atmo: { density: F.u(0.4, 1.2), mie: ATMO.rust.mie.map(v => v * dust), mieAbs: base[1] < 0.3 ? [2, 6.5, 12] : [2, 4.5, 9] } };
+    } },
+  { id: 'moon', name: 'Moon-like', kind: 'rocky', seed: 1969, blurb: 'an airless body: power-law crater fields with rims, ejecta and rays, dark maria; each seed sets the age, the maria and the tint',
     p: { terrain: { amp: 0.25, octaves: 6, warp: 0.2 }, plates: { count: 0 }, mountains: { amp: 0.05 }, erosion: { strength: 0.3, detail: 0.08 },
       craters: { density: 1, rMin: 0.005, rMax: 0.24, slope: 2.0, depth: 1.1, rim: 1.1, ejecta: 0.9, maria: 0.7 },
       ocean: { level: 0 }, climate: { equatorC: 100, poleC: -150, lapse: 0, moisture: 0, life: 0, iceC: -300 },
       clouds: { cover: 0 }, relief: 18, radiusKm: 1737, tilt: 1.5, spin: 0.6,
       palette: { low: [0.4, 0.39, 0.37], high: [0.6, 0.59, 0.56], rock: [0.48, 0.47, 0.45], dark: [0.2, 0.2, 0.2], bright: [0.86, 0.85, 0.83], accent: [0.5, 0.48, 0.45] },
-      atmo: ATMO.none } },
-  { id: 'io', name: 'Io-like', kind: 'rocky', seed: 1610, blurb: 'sulphur plains, dark calderas with red plume rings and glowing vents',
-    p: { terrain: { amp: 0.35, freq: 1.6, warp: 0.6 }, plates: { count: 0 }, mountains: { amp: 0.25, sharpness: 3 }, erosion: { detail: 0.08 },
-      volcanoes: { count: 70, glow: 1 }, ocean: { level: 0 }, climate: { equatorC: -140, poleC: -160, lapse: 0, moisture: 0, life: 0, iceC: -300 },
-      clouds: { cover: 0 }, relief: 10, radiusKm: 1822, tilt: 0.1, spin: 0.8,
-      palette: { low: [0.86, 0.76, 0.38], high: [0.92, 0.88, 0.7], rock: [0.62, 0.5, 0.3], dark: [0.12, 0.09, 0.07], bright: [0.94, 0.92, 0.84], accent: [0.72, 0.34, 0.12] },
-      atmo: ATMO.none } },
-  { id: 'ocean', name: 'Ocean world', kind: 'rocky', seed: 808, blurb: '96 % sea, volcanic island arcs on the plate edges, a cloudy wet sky',
+      atmo: ATMO.none },
+    vary: F => {
+      const t = F.f(0.035), k = F.u(0.7, 1.15), m = (c) => c.map((v, i) => Math.min(1, v * k * t[i]));
+      return { craters: { density: F.u(0.55, 1.25), slope: F.u(1.8, 2.3), rMax: F.u(0.14, 0.3), maria: F.u(0, 0.9), ejecta: F.u(0.6, 1.1) },
+        terrain: { amp: F.u(0.15, 0.4) }, mountains: { amp: F.u(0, 0.15) }, radiusKm: F.u(700, 2700), tilt: F.u(0, 8),
+        palette: { low: m([0.4, 0.39, 0.37]), high: m([0.6, 0.59, 0.56]), rock: m([0.48, 0.47, 0.45]), dark: m([0.2, 0.2, 0.2]), bright: m([0.86, 0.85, 0.83]), accent: m([0.5, 0.48, 0.45]) } };
+    } },
+  { id: 'volcanic', name: 'Volcanic moon', kind: 'rocky', seed: 1610, blurb: 'a tidally heated airless moon: fresh lava plains, dark calderas, plume rings and glowing vents; each seed draws its own deposits',
+    p: { terrain: { amp: 0.35, freq: 1.6, warp: 0.5 }, plates: { count: 0 }, mountains: { amp: 0.25, sharpness: 3 }, erosion: { detail: 0.08 },
+      volcanoes: { count: 60, glow: 1 }, ocean: { level: 0 }, climate: { equatorC: -140, poleC: -160, lapse: 0, moisture: 0, life: 0, iceC: -300 },
+      clouds: { cover: 0 }, relief: 10, radiusKm: 1822, tilt: 0.1, spin: 0.8, atmo: ATMO.none },
+    vary: F => {
+      // surface deposits: sulphur frost, basalt with white frost, ash and
+      // oxides, greenish olivine plains, salt crust (low, high, rock, accent, ring)
+      const D = F.pick([
+        [[0.78, 0.7, 0.42], [0.9, 0.86, 0.68], [0.58, 0.48, 0.32], [0.7, 0.36, 0.14], [0.6, 0.24, 0.1]],
+        [[0.32, 0.31, 0.3], [0.78, 0.8, 0.82], [0.22, 0.21, 0.2], [0.5, 0.46, 0.42], [0.86, 0.86, 0.84]],
+        [[0.5, 0.4, 0.32], [0.68, 0.6, 0.5], [0.36, 0.28, 0.22], [0.55, 0.3, 0.18], [0.2, 0.16, 0.14]],
+        [[0.48, 0.47, 0.32], [0.68, 0.66, 0.5], [0.34, 0.33, 0.24], [0.4, 0.42, 0.24], [0.62, 0.5, 0.3]],
+        [[0.8, 0.78, 0.74], [0.92, 0.9, 0.86], [0.52, 0.48, 0.44], [0.66, 0.5, 0.36], [0.4, 0.3, 0.26]],
+      ]).map(c => F.tint(c, 0.08));
+      return { volcanoes: { count: F.i(15, 130), glow: F.u(0.4, 1.5) }, terrain: { amp: F.u(0.2, 0.55), freq: F.u(1, 2.2), warp: F.u(0.2, 0.7) },
+        mountains: { amp: F.u(0.1, 0.4) }, craters: { density: F.u(0, 1) < 0.4 ? F.u(0.02, 0.15) : 0 },
+        cracks: { amount: F.u(0, 1) < 0.3 ? F.u(0.2, 0.6) : 0, freq: F.u(1.5, 4), glow: F.u(0, 0.6) },
+        radiusKm: F.u(900, 2700), tilt: F.u(0, 3),
+        palette: { low: D[0], high: D[1], rock: D[2], accent: D[3], ring: D[4], dark: F.tint([0.1, 0.08, 0.07], 0.2), bright: D[1].map(v => Math.min(1, v * 1.06)) } };
+    } },
+  { id: 'ocean', name: 'Ocean world', kind: 'rocky', seed: 808, blurb: 'a global sea with volcanic island arcs on the plate edges, a thin blue sky and living weather',
     p: { ocean: { level: 0.955 }, plates: { count: 16, uplift: 1.2, width: 0.08 }, mountains: { amp: 0.7 },
-      climate: { equatorC: 30, poleC: -14, moisture: 0.9 }, clouds: { cover: 0.5, cyclones: 9 }, relief: 14, radiusKm: 6800,
+      climate: { equatorC: 30, poleC: -14, moisture: 0.9 }, clouds: { cover: 0.42, cyclones: 9 }, relief: 14, radiusKm: 6800,
       palette: { deep: [0.02, 0.06, 0.18], shallow: [0.05, 0.28, 0.38] },
-      atmo: ATMO.ocean } },
-  { id: 'desert', name: 'Desert world', kind: 'rocky', seed: 1965, blurb: 'no sea, dune seas in the basins, bare ranges, small caps, a dusty sky',
+      atmo: ATMO.ocean },
+    vary: F => ({ ocean: { level: F.u(0.92, 0.985) }, plates: { count: F.i(10, 24) },
+      climate: { equatorC: F.u(22, 36), poleC: F.u(-25, 5) }, clouds: { cover: F.u(0.28, 0.42), cyclones: F.i(3, 8) },
+      radiusKm: F.u(5500, 9000), tilt: F.u(0, 30),
+      palette: { deep: F.tint([0.02, 0.06, 0.18], 0.3), shallow: F.tint([0.05, 0.28, 0.38], 0.3) } }) },
+  { id: 'desert', name: 'Desert world', kind: 'rocky', seed: 1965, blurb: 'a hot world with no sea: dune seas in the basins, bare ranges and mesas, a dusty sky',
     p: { terrain: { warp: 0.5 }, plates: { count: 9, weight: 0.25 }, mountains: { amp: 0.6, sharpness: 2.8 }, erosion: { strength: 2.2, detail: 0.2 },
       craters: { density: 0.05, ejecta: 0.1 }, ocean: { level: 0 }, dunes: { amount: 1, freq: 42 },
       climate: { equatorC: 45, poleC: -45, lapse: 7, moisture: 0.04, life: 0, iceC: -30 },
       clouds: { cover: 0.06, color: [0.98, 0.92, 0.84] }, relief: 14, radiusKm: 6000,
       palette: { low: [0.78, 0.6, 0.38], high: [0.66, 0.5, 0.34], rock: [0.48, 0.36, 0.26], dark: [0.38, 0.27, 0.18], bright: [0.9, 0.78, 0.58], accent: [0.62, 0.36, 0.2] },
-      atmo: ATMO.dust } },
+      atmo: ATMO.dust },
+    vary: F => {
+      const t = F.f(0.12), m = c => c.map((v, i) => Math.min(1, v * t[i]));
+      return { terrain: { warp: F.u(0.25, 0.6), terraces: F.u(0, 1) < 0.5 ? F.u(0.2, 0.6) : 0 }, plates: { count: F.i(4, 14) },
+        dunes: { amount: F.u(0.4, 1.2), freq: F.u(30, 60) }, climate: { equatorC: F.u(30, 60), poleC: F.u(-60, 0) },
+        radiusKm: F.u(4500, 7500), tilt: F.u(0, 35),
+        palette: { low: m([0.78, 0.6, 0.38]), high: m([0.66, 0.5, 0.34]), rock: m([0.48, 0.36, 0.26]), dark: m([0.38, 0.27, 0.18]), bright: m([0.9, 0.78, 0.58]), accent: m([0.62, 0.36, 0.2]) } };
+    } },
   { id: 'ice', name: 'Ice world', kind: 'rocky', seed: 3141, blurb: 'a frozen sea cut by cracked ridges, ice sheets on the land, a thin pale sky',
     p: { ocean: { level: 0.55 }, plates: { count: 10 }, cracks: { amount: 0.9, freq: 2.2 },
       climate: { equatorC: -25, poleC: -70, lapse: 6, moisture: 0.4, life: 0, iceC: -4 },
       craters: { density: 0.08, ejecta: 0.3 }, clouds: { cover: 0.25 }, relief: 8, radiusKm: 5200, tilt: 12,
       palette: { deep: [0.05, 0.12, 0.2], shallow: [0.12, 0.26, 0.34], low: [0.62, 0.62, 0.62], high: [0.78, 0.78, 0.8], rock: [0.38, 0.38, 0.4], ice: [0.86, 0.92, 0.97], accent: [0.56, 0.38, 0.28] },
-      atmo: ATMO.thin } },
-  { id: 'lava', name: 'Lava world', kind: 'rocky', seed: 666, blurb: 'molten lowlands, glowing rifts between plates, a thick hot haze',
-    p: { ocean: { level: 0.42, liquid: 1 }, plates: { count: 16, uplift: 1.0, width: 0.1 }, mountains: { amp: 0.65, sharpness: 2.8 },
-      cracks: { amount: 0.8, freq: 3, glow: 1 }, craters: { density: 0.05, ejecta: 0 },
+      atmo: ATMO.thin },
+    vary: F => ({ ocean: { level: F.u(0.3, 0.75) }, plates: { count: F.i(4, 16) }, cracks: { amount: F.u(0.4, 1.2), freq: F.u(1.5, 3.5) },
+      climate: { equatorC: F.u(-40, -12), poleC: F.u(-90, -50) }, craters: { density: F.u(0, 0.25) }, clouds: { cover: F.u(0.1, 0.35) },
+      radiusKm: F.u(2500, 6500), tilt: F.u(0, 30),
+      palette: { ice: F.tint([0.86, 0.92, 0.97], 0.05), accent: F.tint([0.56, 0.38, 0.28], 0.25), deep: F.tint([0.05, 0.12, 0.2], 0.25) } }) },
+  { id: 'lava', name: 'Lava world', kind: 'rocky', seed: 666, blurb: 'plates of dark basalt crust over a magma sea, glowing cracks and lava rivers, a dark ash-laden sky lit from below',
+    p: { ocean: { level: 0.34, liquid: 1 }, plates: { count: 16, uplift: 1.0, width: 0.1 }, mountains: { amp: 0.65, sharpness: 2.8 },
+      erosion: { flow: 1.2 }, rivers: { amount: 0.5 },
+      cracks: { amount: 0.2, freq: 2.5, glow: 0.6 }, craters: { density: 0.05, ejecta: 0 },
       climate: { equatorC: 420, poleC: 380, lapse: 4, moisture: 0, life: 0, iceC: -300 },
-      clouds: { cover: 0.18, color: [0.55, 0.5, 0.46] }, relief: 12, radiusKm: 6200, tilt: 8,
-      palette: { low: [0.09, 0.08, 0.08], high: [0.2, 0.18, 0.17], rock: [0.13, 0.12, 0.11], dark: [0.05, 0.05, 0.05], bright: [0.4, 0.37, 0.34], accent: [0.3, 0.12, 0.06] },
-      atmo: ATMO.lava } },
+      clouds: { cover: 0.32, color: [0.2, 0.17, 0.15], cirrus: 0.15 }, relief: 12, radiusKm: 6200, tilt: 8,
+      palette: { low: [0.06, 0.055, 0.05], high: [0.15, 0.13, 0.12], rock: [0.09, 0.085, 0.08], dark: [0.05, 0.045, 0.04], bright: [0.3, 0.27, 0.24], accent: [0.28, 0.08, 0.03] },
+      atmo: ATMO.lava },
+    vary: F => ({ ocean: { level: F.u(0.2, 0.5) }, plates: { count: F.i(8, 24) }, mountains: { amp: F.u(0.4, 0.8) },
+      cracks: { amount: F.u(0.08, 0.35), freq: F.u(1.5, 3.5), glow: F.u(0.4, 0.9) }, rivers: { amount: F.u(0.3, 0.7) },
+      clouds: { cover: F.u(0.2, 0.42) }, radiusKm: F.u(4000, 8000), tilt: F.u(0, 25),
+      atmo: { density: F.u(0.8, 1.6), glow: F.u(0.8, 1.4) } }) },
   { id: 'titan', name: 'Haze moon', kind: 'rocky', seed: 1655, blurb: 'Titan-like: methane lakes at the poles under a thick orange tholin haze',
     p: { ocean: { level: 0.1, liquid: 2 }, plates: { count: 0 }, terrain: { amp: 0.8, warp: 0.6 }, mountains: { amp: 0.25 }, dunes: { amount: 0.8, freq: 46 },
       climate: { equatorC: -179, poleC: -183, lapse: 1, moisture: 0.3, life: 0, iceC: -300 },
       craters: { density: 0.02 }, clouds: { cover: 0.08, color: [0.96, 0.86, 0.7] }, relief: 3, radiusKm: 2575, tilt: 27,
       palette: { deep: [0.03, 0.03, 0.03], shallow: [0.06, 0.05, 0.04], low: [0.34, 0.26, 0.17], high: [0.5, 0.42, 0.3], rock: [0.42, 0.35, 0.26], dark: [0.2, 0.15, 0.1], bright: [0.62, 0.55, 0.42] },
-      atmo: ATMO.titan } },
-  { id: 'jupiter', name: 'Jupiter-like', kind: 'gas', seed: 1979, blurb: 'cream zones and brown belts, a great red anticyclone, white ovals, polar cyclones',
-    p: {} },
+      atmo: ATMO.titan },
+    vary: F => ({ ocean: { level: F.u(0.04, 0.25) }, dunes: { amount: F.u(0.3, 1.1) }, terrain: { amp: F.u(0.5, 1) },
+      radiusKm: F.u(1500, 3200), tilt: F.u(0, 35), atmo: { density: F.u(0.6, 1.4) } }) },
+  { id: 'jupiter', name: 'Jupiter-like', kind: 'gas', seed: 1979, blurb: 'cream zones and brown belts, a great anticyclone, white ovals, polar cyclones; each seed redraws the bands and storms',
+    p: {}, vary: F => gasVary(F, GAS_DEFAULT) },
   { id: 'saturn', name: 'Saturn-like', kind: 'gas', seed: 1610, blurb: 'soft butterscotch bands under haze, a polar hexagon and ringed shadow',
     p: { bands: { count: 18, contrast: 0.35, jitter: 0.25, equatorJet: 1, jetWidth: 0.3 }, turbulence: { amount: 0.3, advect: 0.35, streak: 9 },
       storms: { spot: 0, ovals: 2, ovalLat: 42, small: 10, polar: 2 }, haze: { amount: 0.6, polar: 0.6 }, clouds: { cover: 0.06 },
       tilt: 26.7, radiusKm: 58232, spin: 2.2,
       palette: { stops: [[0, [0.55, 0.44, 0.3]], [0.35, [0.74, 0.63, 0.45]], [0.65, [0.86, 0.78, 0.6]], [1, [0.94, 0.9, 0.78]]], spot: [0.9, 0.86, 0.76], polar: [0.42, 0.52, 0.6], oval: [0.96, 0.94, 0.88], barge: [0.5, 0.4, 0.3] },
-      atmo: ATMO.saturn, rings: { on: 1, inner: 1.24, outer: 2.27, opacity: 0.92, color: [0.84, 0.78, 0.66] } } },
+      atmo: ATMO.saturn, rings: { on: 1, inner: 1.24, outer: 2.27, opacity: 0.92, color: [0.84, 0.78, 0.66] } },
+    vary: F => ({ ...gasVary(F, PRESET_P('saturn')), rings: { inner: F.u(1.15, 1.4), outer: F.u(1.9, 2.6), opacity: F.u(0.6, 0.95) } }) },
   { id: 'neptune', name: 'Neptune-like', kind: 'gas', seed: 1846, blurb: 'an ice giant: a retrograde equator jet, a dark spot and bright methane cirrus',
     p: { bands: { count: 8, contrast: 0.3, jitter: 0.5, equatorJet: -1, jetWidth: 0.55 }, turbulence: { amount: 0.45, freq: 2.6, advect: 0.6, streak: 10 },
       storms: { spot: 1, spotLat: -20, spotLon: 0.6, spotSize: 0.1, ovals: 1, ovalLat: -55, small: 6, polar: 0 }, haze: { amount: 0.5, polar: 0.3 },
       clouds: { cover: 0.32 }, tilt: 28.3, radiusKm: 24622, spin: 2.0, bump: 4,
       palette: { stops: [[0, [0.12, 0.22, 0.5]], [0.4, [0.22, 0.38, 0.72]], [0.7, [0.3, 0.48, 0.8]], [1, [0.44, 0.6, 0.86]]], spot: [0.08, 0.13, 0.32], polar: [0.26, 0.4, 0.7], oval: [0.92, 0.95, 1], barge: [0.14, 0.24, 0.5] },
-      atmo: ATMO.neptune } },
+      atmo: ATMO.neptune },
+    vary: F => gasVary(F, PRESET_P('neptune')) },
   { id: 'hotjupiter', name: 'Hot Jupiter', kind: 'gas', seed: 51, blurb: 'a tidally heated giant: dark absorbing clouds, thermal glow from the deep belts',
     p: { bands: { count: 10, contrast: 0.55, jitter: 0.45, equatorJet: 1.4, jetWidth: 0.4 }, turbulence: { amount: 0.8, advect: 0.8, streak: 5 },
       storms: { spot: 0, ovals: 0, small: 25, polar: 0 }, haze: { amount: 0.3, polar: 0.2 }, glow: 1, clouds: { cover: 0.1, color: [0.8, 0.6, 0.45] },
       tilt: 0, radiusKm: 95000, spin: 3,
       palette: { stops: [[0, [0.1, 0.05, 0.04]], [0.4, [0.25, 0.12, 0.08]], [0.75, [0.42, 0.26, 0.18]], [1, [0.58, 0.42, 0.3]]], spot: [0.5, 0.2, 0.1], polar: [0.15, 0.08, 0.06], oval: [0.7, 0.55, 0.45], barge: [0.08, 0.04, 0.03] },
-      atmo: ATMO.hot } },
+      atmo: ATMO.hot },
+    vary: F => ({ ...gasVary(F, PRESET_P('hotjupiter')), glow: F.u(0.6, 1.6) }) },
 ];
+
+// Old preset ids and names (saved JSON files, links, saver logs).
+export const ALIASES = { mars: 'rust', io: 'volcanic' };
+const OLD_NAMES = { 'Mars-like': 'rust', 'Io-like': 'volcanic' };
+
+// The p of a preset merged over the gas default (for gasVary).
+function PRESET_P(id) { return merge(GAS_DEFAULT, PRESETS.find(p => p.id === id).p); }
+
+// A giant's family: band count and contrast, jets, storm places and sizes,
+// and a small hue shift of the palette.
+function gasVary(F, G) {
+  const t = F.f(0.1), m = c => c.map((v, i) => Math.min(1, v * t[i]));
+  return {
+    bands: { count: Math.max(4, Math.round(G.bands.count * F.u(0.7, 1.35))), contrast: G.bands.contrast * F.u(0.75, 1.3), jitter: F.u(0.2, 0.6), equatorJet: G.bands.equatorJet * F.u(0.7, 1.3), jetWidth: G.bands.jetWidth * F.u(0.8, 1.25) },
+    turbulence: { amount: G.turbulence.amount * F.u(0.7, 1.3), freq: G.turbulence.freq * F.u(0.8, 1.25) },
+    storms: { spotLat: F.u(-35, 35), spotLon: F.u(0, 1), spotSize: G.storms.spotSize * F.u(0.7, 1.4), ovals: Math.round(G.storms.ovals * F.u(0.5, 1.6)), ovalLat: F.u(-50, 50), small: Math.round(G.storms.small * F.u(0.5, 1.6)) },
+    tilt: F.u(0, 35), spin: G.spin * F.u(0.8, 1.2),
+    palette: { stops: G.palette.stops.map(([s, c]) => [s, m(c)]), spot: m(G.palette.spot), oval: G.palette.oval, polar: m(G.palette.polar), barge: m(G.palette.barge) },
+  };
+}
+
+// The seeded dice of a family: u(a, b) uniform, i(a, b) integer in [a, b],
+// pick(list), tint(rgb, s) each channel times 1 +- s (clamped to [0, 1]),
+// f(s) three channel factors 1 +- s (a hue shift for a whole palette).
+// The preset id is part of the seed, so two families with one seed differ.
+function dice(seed, id) {
+  let h = seed >>> 0;
+  for (let k = 0; k < id.length; k++) h = Math.imul(h ^ id.charCodeAt(k), 0x9E3779B1) >>> 0;
+  let s = h;
+  const r = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const F = {
+    u: (a, b) => a + (b - a) * r(),
+    i: (a, b) => a + Math.floor(r() * (b - a + 1)),
+    pick: l => l[Math.floor(r() * l.length)],
+    tint: (c, s) => c.map(v => Math.min(1, Math.max(0, v * (1 + s * (2 * r() - 1))))),
+    f: s => [0, 1, 2].map(() => 1 + s * (2 * r() - 1)),
+  };
+  return F;
+}
 
 // The UI builds its sliders from SCHEMA: [group, path, label, min, max, step].
 export const SCHEMA = {
@@ -192,6 +308,7 @@ export const SCHEMA = {
     ['Continents', 'terrain.warp', 'warp strength', 0, 1.5, 0.01],
     ['Continents', 'terrain.warpFreq', 'warp frequency', 0.3, 4, 0.01],
     ['Continents', 'terrain.dichotomy', 'hemisphere dichotomy', 0, 1.5, 0.01],
+    ['Continents', 'terrain.terraces', 'mesa terraces', 0, 1, 0.01],
     ['Plates', 'plates.count', 'plates', 0, 32, 1],
     ['Plates', 'plates.weight', 'plate relief', 0, 1, 0.01],
     ['Plates', 'plates.uplift', 'collision uplift', 0, 2, 0.01],
@@ -317,11 +434,14 @@ export function setPath(o, path, v) {
   a[ks[ks.length - 1]] = v;
 }
 
-export function presetById(id) { return PRESETS.find(p => p.id === id) || PRESETS[0]; }
+export function presetById(id) { id = ALIASES[id] || id; return PRESETS.find(p => p.id === id) || PRESETS[0]; }
+// One member of a family: the preset, then its seeded variation.
 export function fromPreset(id, seed) {
   const pr = presetById(id);
-  const P = merge(pr.kind === 'gas' ? GAS_DEFAULT : ROCKY_DEFAULT, pr.p);
-  P.name = pr.name; P.preset = pr.id; P.seed = seed != null ? seed >>> 0 : pr.seed;
+  let P = merge(pr.kind === 'gas' ? GAS_DEFAULT : ROCKY_DEFAULT, pr.p);
+  P.seed = seed != null ? seed >>> 0 : pr.seed;
+  if (pr.vary) P = merge(P, pr.vary(dice(P.seed, pr.id)));
+  P.name = pr.name; P.preset = pr.id;
   return normalize(P);
 }
 
@@ -331,6 +451,9 @@ export function normalize(P) {
   const out = merge(kind === 'gas' ? GAS_DEFAULT : ROCKY_DEFAULT, P || {});
   out.kind = kind;
   out.seed = (Number(out.seed) >>> 0) || 0;
+  // old preset ids and names map to the families that replaced them
+  if (ALIASES[out.preset]) out.preset = ALIASES[out.preset];
+  if (OLD_NAMES[out.name]) out.name = presetById(OLD_NAMES[out.name]).name;
   for (const [, path, , lo, hi, step] of [...SCHEMA[kind], ...SCHEMA.atmo]) {
     let v = Number(getPath(out, path));
     if (!Number.isFinite(v)) v = Number(getPath(kind === 'gas' ? GAS_DEFAULT : ROCKY_DEFAULT, path));

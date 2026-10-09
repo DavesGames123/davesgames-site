@@ -4,6 +4,10 @@
 //  boot: presets + UI -> worker pool -> WebGPU (else the no-GPU note; the
 //  maps still generate and download) -> first planet -> frame loop.
 //
+//  Families: the dice and the seed box draw a new member of the preset's
+//  family (presets.js fromPreset) until a slider is moved (S.edited);
+//  then they change only the noise seed and keep the edits.
+//
 //  Generation: any recipe change regenerates. A slider drag first makes a
 //  quick preview (512 wide, or less than the chosen width), then the
 //  chosen width after 700 ms of quiet. pool.js cancels stale jobs. The
@@ -132,8 +136,14 @@ function buildPlanetTab() {
   };
   S.drawPlanetTab = draw;
   kindBtns.forEach(b => b.onclick = () => { if (b.dataset.kind !== S.P.kind) choosePreset(PR.PRESETS.find(p => p.kind === b.dataset.kind).id); });
-  $('seed').onchange = () => { S.P.seed = (+$('seed').value >>> 0); changed(); };
-  const dice = () => { S.P.seed = Math.floor(Math.random() * 1e6); $('seed').value = S.P.seed; changed(); };
+  // a new seed draws a new member of the preset's family (presets.js
+  // fromPreset); after a slider edit it changes only the noise seed
+  const reseed = seed => {
+    if (!S.edited && S.P.preset) { choosePreset(S.P.preset, seed); return; }
+    S.P.seed = seed; $('seed').value = seed; changed();
+  };
+  $('seed').onchange = () => reseed(+$('seed').value >>> 0);
+  const dice = () => reseed(Math.floor(Math.random() * 1e6));
   $('dice').onclick = dice; $('dockDice').onclick = dice;
   for (const w of BG.WIDTHS) {
     const o = document.createElement('option'); o.value = w; o.textContent = `${w >= 1024 ? w / 1024 + 'k' : w} (${w} × ${w / 2})`;
@@ -147,7 +157,7 @@ function buildPlanetTab() {
   draw();
 }
 function choosePreset(id, seed) {
-  S.P = PR.fromPreset(id, seed);
+  S.P = PR.fromPreset(id, seed); S.edited = false;
   S.drawPlanetTab(); buildShape(); buildSky();
   regenerate(false).then(() => regenerate(true));
 }
@@ -163,7 +173,7 @@ function sliders(host, rows, onInput) {
     d.innerHTML = `<label>${label} <output></output></label><input type="range" min="${lo}" max="${hi}" step="${step}">`;
     const inp = d.querySelector('input'), out = d.querySelector('output');
     inp.value = v; out.textContent = fmt(v, step);
-    inp.oninput = () => { const x = +inp.value; PR.setPath(S.P, path, x); out.textContent = fmt(x, step); onInput(path); };
+    inp.oninput = () => { const x = +inp.value; PR.setPath(S.P, path, x); S.edited = true; out.textContent = fmt(x, step); onInput(path); };
     box.appendChild(d);
   }
 }
@@ -278,7 +288,7 @@ $('loadJson').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const { width, planet } = PR.fromJSON(await f.text());
-    S.P = planet; if (BG.WIDTHS.includes(width)) { S.width = width; $('res').value = width; }
+    S.P = planet; S.edited = true; if (BG.WIDTHS.includes(width)) { S.width = width; $('res').value = width; }
     S.drawPlanetTab(); buildShape(); buildSky(); regenerate(true);
   } catch (err) { status('could not load: ' + err.message); }
   e.target.value = '';
