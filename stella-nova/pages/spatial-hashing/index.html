@@ -11,46 +11,46 @@
   ═══════════════════════════════════════════════════════════════════════════
    SPATIAL HASHING  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Thousands of colliding balls found fast with a dense spatial hash grid: neighbour search in linear time.
+   Thousands of colliding balls in a box; a spatial hash finds each
+   ball's neighbours. The page starts a random scene on load and keeps it
+   running. Drag the glass sphere to stir the balls.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #11.
-   Upstream file: tenMinutePhysics/11-hashing.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/D2M8jTtKi44
+   CREDIT. The upstream demo is Ten Minute Physics #11 by Matthias Müller:
+   tenMinutePhysics/11-hashing.html in
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of sim.js). Video: https://youtu.be/D2M8jTtKi44. The
+   credit bar (kit.js) names the author on the page and the saver plate.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): restitution, gravity and
+   tilt, the box size, the starts, the stirrer, the probe query view, the
+   pair counter, the look, the GUI and the saver.
+
+   FILES
+     sim.js      the upstream Hash class, helpers and ball loop + ours
+     scene.js    schema, random rules, guard (no DOM)
+     app.js      page controller: kit, stage, instanced balls, HUD
+     saver.js    screensaver shots (sim kit director)
+     main.js     credit record + start()
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, 3D stage),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scene.js   controls and random rules
+     grep -n 'export const SHOTS'          saver.js   the screensaver shots
+     grep -n 'export class Hash'           sim.js     the upstream hash
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Thousands of colliding balls found fast with a dense spatial hash grid: neighbour search in linear time. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="Thousands of colliding balls, found by a spatial hash: gases, bursts, colliding clouds, rain and a glass stirrer. After Matthias Müller's Ten Minute Physics #11.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-        <h1>Spatial Hashing</h1> 
-		<button id = "buttonRun" onclick="run()" class="button">Run</button>
-		<button onclick="restart()" class="button">Restart</button>
-		<input type = "checkbox" onclick = "onShowColl()"> Show collisions</p>
-		<span id = "particleCount">0</span> particles, 
-		<span id = "ms">0.000</span> ms per frame
-
-		<br><br>		
-        <div id="container"></div>
-
-	
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>
