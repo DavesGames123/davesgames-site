@@ -1,0 +1,27 @@
+<!-- MuJoCo Lab model, written for this site (stella-nova/pages/mujoco-lab). -->
+<mujoco model="balls in a box">
+  <option timestep="0.002" cone="elliptic" impratio="2"/>
+  <visual><global azimuth="135" elevation="-30"/></visual>
+  <default>
+    <default class="wall"><geom type="box" rgba=".5 .6 .7 .35" group="1"/></default>
+    <default class="ball"><geom type="sphere" size=".04" density="800" friction=".6 .005 .0001" solref=".004 .4"/></default>
+  </default>
+  <worldbody>
+    <light pos="0 0 3"/>
+    <geom name="floor" type="plane" size="2 2 .1" rgba=".22 .25 .3 1"/>
+    <geom class="wall" pos="0 .32 .2" size=".32 .01 .2"/>
+    <geom class="wall" pos="0 -.32 .2" size=".32 .01 .2"/>
+    <geom class="wall" pos=".32 0 .2" size=".01 .32 .2"/>
+    <geom class="wall" pos="-.32 0 .2" size=".01 .32 .2"/>
+    <replicate count="4" offset="0 0 .1">
+      <replicate count="4" offset=".12 0 0">
+        <replicate count="4" offset="0 .12 0">
+          <body pos="-.18 -.18 .3">
+            <freejoint/>
+            <geom class="ball" rgba=".95 .5 .2 1"/>
+          </body>
+        </replicate>
+      </replicate>
+    </replicate>
+  </worldbody>
+</mujoco>

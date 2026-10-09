@@ -1,0 +1,15 @@
+<!-- MuJoCo Lab model, written for this site (stella-nova/pages/mujoco-lab). -->
+<!-- A square cloth (a 2D flex) that falls over a ball. -->
+<mujoco model="cloth">
+  <option timestep="0.002" solver="CG" tolerance="1e-6" density="1.2"/>
+  <visual><global azimuth="120" elevation="-25"/></visual>
+  <worldbody>
+    <light pos="0 0 3"/>
+    <geom name="floor" type="plane" size="2 2 .1" rgba=".22 .25 .3 1"/>
+    <geom name="ball" type="sphere" pos="0 0 .3" size=".2" rgba=".3 .55 .85 1"/>
+    <flexcomp name="cloth" type="grid" dim="2" count="9 9 1" spacing=".08 .08 .08" pos="0 0 .8" radius=".006" mass=".3" rgba=".9 .5 .25 1">
+      <edge equality="true" damping="0.002"/>
+      <contact condim="3" solref="0.01 1" selfcollide="none"/>
+    </flexcomp>
+  </worldbody>
+</mujoco>

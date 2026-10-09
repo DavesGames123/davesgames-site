@@ -1,0 +1,54 @@
+<!-- MuJoCo Lab model, written for this site (stella-nova/pages/mujoco-lab). -->
+<!-- A four-legged walker of the "ant" kind: a ball body, a hip yaw and a
+     knee pitch on each leg, and eight motors. -->
+<mujoco model="quadruped">
+  <option timestep="0.005" integrator="implicitfast"/>
+  <visual><global azimuth="120" elevation="-25"/></visual>
+  <default>
+    <joint limited="true" damping="1" armature=".01"/>
+    <geom type="capsule" size=".04" friction="1 .5 .5" density="5" rgba=".85 .6 .3 1"/>
+    <motor ctrlrange="-1 1" gear="15"/>
+  </default>
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".18 .2 .24" rgb2=".24 .27 .31" width="64" height="64"/>
+    <material name="grid" texture="grid" texrepeat="10 10" texuniform="true"/>
+  </asset>
+  <worldbody>
+    <light pos="0 0 4" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="10 10 .1" material="grid" condim="3"/>
+    <body name="torso" pos="0 0 .75">
+      <freejoint/>
+      <geom name="torso" type="sphere" size=".25" rgba=".3 .55 .85 1"/>
+      <body name="leg 1" euler="0 0 45">
+        <joint name="hip 1" type="hinge" axis="0 0 1" range="-30 30"/>
+        <geom fromto="0 0 0 .4 0 0"/>
+        <body pos=".4 0 0"><joint name="knee 1" type="hinge" axis="0 1 0" range="-5 60"/><geom fromto="0 0 0 .5 0 -.4"/></body>
+      </body>
+      <body name="leg 2" euler="0 0 135">
+        <joint name="hip 2" type="hinge" axis="0 0 1" range="-30 30"/>
+        <geom fromto="0 0 0 .4 0 0"/>
+        <body pos=".4 0 0"><joint name="knee 2" type="hinge" axis="0 1 0" range="-5 60"/><geom fromto="0 0 0 .5 0 -.4"/></body>
+      </body>
+      <body name="leg 3" euler="0 0 225">
+        <joint name="hip 3" type="hinge" axis="0 0 1" range="-30 30"/>
+        <geom fromto="0 0 0 .4 0 0"/>
+        <body pos=".4 0 0"><joint name="knee 3" type="hinge" axis="0 1 0" range="-5 60"/><geom fromto="0 0 0 .5 0 -.4"/></body>
+      </body>
+      <body name="leg 4" euler="0 0 315">
+        <joint name="hip 4" type="hinge" axis="0 0 1" range="-30 30"/>
+        <geom fromto="0 0 0 .4 0 0"/>
+        <body pos=".4 0 0"><joint name="knee 4" type="hinge" axis="0 1 0" range="-5 60"/><geom fromto="0 0 0 .5 0 -.4"/></body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="hip 1" joint="hip 1"/><motor name="knee 1" joint="knee 1"/>
+    <motor name="hip 2" joint="hip 2"/><motor name="knee 2" joint="knee 2"/>
+    <motor name="hip 3" joint="hip 3"/><motor name="knee 3" joint="knee 3"/>
+    <motor name="hip 4" joint="hip 4"/><motor name="knee 4" joint="knee 4"/>
+  </actuator>
+  <sensor>
+    <framepos name="torso position" objtype="body" objname="torso"/>
+    <framelinvel name="torso velocity" objtype="body" objname="torso"/>
+  </sensor>
+</mujoco>
