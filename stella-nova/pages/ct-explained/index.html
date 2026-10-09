@@ -21,7 +21,8 @@
      1. gpu-guard     ../../lib/gpu-guard.js
      2. wishlist      ../../lib/wishlist.js
      3. stats-beacon  ../../lib/stats-beacon.js
-     4. style.css, then ../../lib/sci.css (fonts, math colours)
+     4. style.css, then ../../lib/sci.css (fonts, math colours), then
+        ../ct-lab/colormaps/picker.css (the colour map control)
    Script at the end of body: main.js (module).
 
    FIGURES  (each <figure data-scene="name">, scene classes in scenes-*.js)
@@ -44,11 +45,13 @@
      grep -n 'data-scene='   every figure
      grep -n 'data-link='    every CT Lab link (ids in presets.js)
      grep -n 'data-tex='     every equation (MathJax SVG via lib/sci-math.js)
+     grep -n 'cmapBtn'       the page colour map control (theme.js, main.js)
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="How computed tomography works, with live figures: X-ray attenuation, projections, the sinogram and the Radon transform, back-projection, the Fourier slice theorem, filtered back-projection, fan and cone beams, iterative reconstruction, artefacts and Hounsfield units.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -73,7 +76,16 @@
     <li><a href="#s11" data-target="s11"><b>11</b>History</a></li>
     <li><a href="#s12" data-target="s12"><b>12</b>Credits</a></li>
   </ol>
+  <button id="cmapBtn" class="cmap-btn" type="button" aria-expanded="false" aria-controls="cmapPop" title="Colour map of every figure"><span class="cmap-sw" id="cmapSw"></span><span class="cmap-name" id="cmapName">Classic</span></button>
 </nav>
+<div id="cmapPop" class="cmap-pop" role="dialog" aria-label="Colour map of every figure" hidden>
+  <div class="cmap-head">
+    <div><b>Colour map</b><span id="cmapNote">Recolours every figure. Signed images use a diverging partner.</span></div>
+    <button id="cmapClassic" type="button" class="cmap-tool">Classic</button>
+    <button id="cmapClose" type="button" class="cmap-tool" aria-label="Close">×</button>
+  </div>
+  <div id="cmapHost"></div>
+</div>
 
 <main id="doc">
 
@@ -232,7 +244,7 @@
   <div class="grid">
     <article class="card span-12">
       <div class="card-top"><h3>Break one assumption at a time</h3><a class="lab" data-link="low-dose">Open in CT Lab →</a></div>
-      <figure class="fig" data-scene="artefact"><canvas aria-label="The true object and its reconstruction with the selected artefact"></canvas></figure>
+      <figure class="fig" data-scene="artefact"><canvas aria-label="The true object, its reconstruction with the selected artefact, and the signed error"></canvas></figure>
       <div class="ctrls">
         <div class="seg wrap" data-set="case" role="group" aria-label="Artefact"><button data-v="noise" class="on">Noise</button><button data-v="views">Few views</button><button data-v="limited">Limited angle</button><button data-v="hardening">Beam hardening</button><button data-v="metal">Metal</button><button data-v="rings">Rings</button><button data-v="motion">Motion</button></div>
         <label class="ctrl grow"><span>amount</span> <input type="range" data-set="p" min="0" max="100" step="1" value="35"><output data-out="p"></output></label>

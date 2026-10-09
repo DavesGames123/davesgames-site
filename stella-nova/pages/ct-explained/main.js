@@ -28,12 +28,20 @@
 //    grep -n 'function loop'       the one animation loop
 //    grep -n 'function initChips'  the sticky section bar
 //    grep -n 'function initLinks'  CT Lab preset links
+//    grep -n 'function initColour' the page colour map control (theme.js)
+//
+//  COLOUR. Scenes colour images by role (theme.js). initColour() reads
+//  the stored choice, opens the picker in a popover, and redraws every
+//  figure when the choice changes. Raster.draw() colours again by itself.
 // ============================================================================
 import { HeroScene, BeerScene, ProjScene, SinoScene, BPScene, FourierScene } from './scenes-a.js';
 import { FilterScene, FBPScene, GantryScene, IterScene, ArtefactScene, HUScene } from './scenes-b.js';
 import { artefactParam, ARTEFACTS } from './model.js';
 import { labHref } from './presets.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import * as TH from './theme.js';
+import { CM } from './draw.js';
+import { createPicker } from '../ct-lab/colormaps/picker.js';
 import './saver.js';
 
 const MAKERS = {
@@ -225,8 +233,46 @@ function initLinks() {
   });
 }
 
+// The colour map control. The picker is made on the first open.
+function initColour() {
+  const btn = document.getElementById('cmapBtn'), pop = document.getElementById('cmapPop');
+  if (!btn || !pop) { TH.load(); return; }
+  const sw = document.getElementById('cmapSw'), name = document.getElementById('cmapName');
+  const classic = document.getElementById('cmapClassic');
+  let picker = null;
+  const paint = () => {
+    const s = TH.state(), id = TH.idFor('@image');
+    try { sw.style.background = CM.cssGradient(id, { reverse: s.reverse, gamma: s.gamma }); } catch (e) { /* swatch only */ }
+    const label = s.id ? CM.get(s.id).name + (s.reverse ? ' (rev.)' : '') : 'Classic';
+    name.textContent = label;
+    btn.title = `Colour map of every figure: ${label}`;
+    classic.classList.toggle('on', !s.id);
+  };
+  const open = (on) => {
+    pop.hidden = !on;
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on && !picker) {
+      const s = TH.state();
+      try {
+        picker = createPicker(document.getElementById('cmapHost'), { value: s.id || 'bone', reverse: s.reverse, gamma: s.gamma, groups: TH.PICKER_GROUPS, compact: true, label: 'Colour map of every figure' });
+        picker.addEventListener('change', (e) => { const { id, reverse, gamma } = e.detail; TH.setTheme({ id, reverse, gamma }); });
+      } catch (e) { console.warn('ct-explained colour picker', e); }
+    }
+  };
+  btn.addEventListener('click', () => open(pop.hidden));
+  document.getElementById('cmapClose').addEventListener('click', () => { open(false); btn.focus(); });
+  classic.addEventListener('click', () => { TH.setTheme({ id: null, reverse: false, gamma: 1 }); if (picker) picker.set({ id: 'bone', reverse: false, gamma: 1 }, { silent: true }); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { open(false); btn.focus(); } });
+  document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) open(false); });
+  // the saver changes the theme for itself; the figures redraw when it exits
+  TH.onChange(() => { if (window.__ctxSaver) return; paint(); for (const F of figs) if (F.scene) draw(F); });
+  TH.load();
+  paint();
+}
+
 initLinks();
 initChips();
+initColour();
 initFigures();
 typesetAll(document, [['\\mu', 'm2'], ['p', 'm1'], ['\\theta', 'm5'], ['I_0', 'm4'], ['I', 'm4'], ['s', 'm3'], ['W', 'm6']]);
 window.addEventListener('pagehide', () => { if (raf) cancelAnimationFrame(raf); raf = 0; });
