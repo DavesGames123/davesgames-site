@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Neural Network — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   NEURAL NETWORK  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Hundreds to thousands of reduced Hodgkin-Huxley cells
+   wired with NetCons in 3D, after NEURON's network model. The engine is
+   ../neuron-lab/engine/network.js (no DOM; ../neuron-lab/tests.mjs runs
+   it). The renderer and the camera springs are ../neuron-lab/shared/.
+   The look and the phone layout are ../neuron-lab/style.css.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. fonts, ../neuron-lab/style.css, lib/sci.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel left (model, stimulus, synapses), #anaPanel right
+                 (raster, rate, explainer), #view between.
+     phone ..... #dock at the base: tabs and Pulse; a tab opens #panel as
+                 a sheet (portrait) or a drawer (landscape).
+
+   GREP MAP  (main.js)
+     grep -n 'function build'       network, points, links, pulses
+     grep -n 'function emit'        spikes become pulses along NetCons
+     grep -n 'function drawRaster'  raster and population rate
+     grep -n 'function frame'       the loop
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Hundreds to thousands of Hodgkin-Huxley cells wired with NetCons in a 3D cortical column: spikes flash and travel along axons with delay, a raster plot builds, and pyramidal cells and interneurons fall into a gamma rhythm.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="../neuron-lab/style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<style>
+  .plot.raster{height:230px}
+  .rhythm{font-family:var(--serif);font-size:1.05rem;color:#eef3fa;margin-top:6px}
+  .rhythm b{color:var(--hot);font-family:var(--mono);font-size:0.9rem}
+  .key{display:flex;gap:12px;font-size:0.68rem;color:var(--dim);margin-top:5px}
+  .key i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  @media (max-width:768px), (max-height:500px) and (pointer:coarse){ .plot.raster{height:170px} }
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Neural Network</div>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">tap the network to send a pulse there · drag to orbit</div>
+  <div class="credit">NetCons after <a href="https://github.com/neuronsimulator/nrn" target="_blank" rel="noopener">NEURON</a> · CPU engine</div>
+</main>
+<div id="nogl" hidden>WebGL 2 is not available in this browser, so the network cannot render.</div>
+
+<aside id="panel" aria-label="Controls">
+  <div id="sheetGrip" aria-hidden="true"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="model">
+    <div class="sec-label first">Network</div>
+    <div class="cards" id="models"></div>
+    <p class="lede" id="modelNote"></p>
+    <div class="row"><label for="ncell">Cells</label><input type="range" id="ncell" min="200" max="3000" step="100" value="1200"><span class="val" id="ncellV"></span></div>
+    <div class="grid2" style="margin-top:6px">
+      <button type="button" id="rewire">Rewire (new seed)</button>
+      <button class="tog" id="pause" type="button">Pause</button>
+    </div>
+    <p class="note" id="netStats"></p>
+    <div class="key"><span><i style="background:#5fa8ff"></i>pyramidal (E)</span><span><i style="background:#ff5c9a"></i>interneuron (I)</span><span><i style="background:#fff3d8"></i>spike</span></div>
+    <div class="sec-label">Speed</div>
+    <div class="row"><label for="speed">Sim ms per s</label><input type="range" id="speed" min="2" max="80" step="1" value="15"><span class="val" id="speedV"></span></div>
+    <div class="grid2"><button class="tog on" id="tPulses" type="button">Spikes in flight</button><button class="tog on" id="tLinks" type="button">Some NetCons</button></div>
+    <button class="tog on" id="autoOrbit" type="button" style="width:100%;margin-top:6px">Slow orbit</button>
+  </section>
+
+  <section class="grp" data-grp="stim">
+    <div class="sec-label first">Stimulus</div>
+    <p class="note">Tap the network: a 2 ms current pulse goes into the pyramidal cells within 120 µm of that point.</p>
+    <div class="grid2" style="margin-top:8px">
+      <button type="button" id="pulseAll">Pulse all E</button>
+      <button type="button" id="sweep">Sweep a bar</button>
+      <button type="button" id="kick">Kick one spot</button>
+      <button type="button" id="silence">Silence I</button>
+    </div>
+    <div class="row"><label for="drive">Background</label><input type="range" id="drive" min="0" max="2" step="0.05" value="1"><span class="val" id="driveV"></span></div>
+    <p class="note">Background: the rate of the Poisson NetStim that drives each cell, as a share of the model's own.</p>
+    <button class="big" id="fire" type="button">⚡ Pulse a random spot</button>
+  </section>
+
+  <section class="grp" data-grp="syn">
+    <div class="sec-label first">Synapses</div>
+    <div class="row"><label for="wei">E → I ×</label><input type="range" id="wei" min="0" max="3" step="0.05" value="1"><span class="val" id="weiV"></span></div>
+    <div class="row"><label for="wie">I → E ×</label><input type="range" id="wie" min="0" max="3" step="0.05" value="1"><span class="val" id="wieV"></span></div>
+    <div class="row"><label for="wee">E → E ×</label><input type="range" id="wee" min="0" max="3" step="0.05" value="1"><span class="val" id="weeV"></span></div>
+    <div class="row"><label for="taui"><span class="m3">τ</span> GABA</label><input type="range" id="taui" min="2" max="25" step="0.5" value="6"><span class="val" id="tauiV"></span></div>
+    <div class="row"><label for="celsius">Temperature</label><input type="range" id="celsius" min="6.3" max="30" step="0.1" value="16"><span class="val" id="celsiusV"></span></div>
+    <p class="note">Weights are NetCon weights in µS onto one ExpSyn per cell and type. A longer GABA decay slows the gamma rhythm; no I → E stops it.</p>
+  </section>
+
+  <section class="grp ana" data-grp="raster">
+    <div class="sec-label first">Raster</div>
+    <canvas id="raster" class="plot raster"></canvas>
+    <div class="rhythm" id="rhythm">rhythm: <b>–</b></div>
+    <div class="sec-label">Population rate</div>
+    <canvas id="rate" class="plot"></canvas>
+    <div class="legend"><span><i style="background:#5fa8ff"></i>E, Hz per cell</span><span><i style="background:#ff5c9a"></i>I, Hz per cell</span></div>
+  </section>
+
+  <section class="grp ana" data-grp="learn">
+    <div class="sec-label first">How it works</div>
+    <div class="about"><p><b>Cells.</b> Each cell is a reduced model: a Hodgkin-Huxley soma (the rates of NEURON's hh.mod) and a passive dendrite. Each cell has one ExpSyn for excitation and one for inhibition; every incoming NetCon adds its weight to that synapse's conductance:</p></div>
+    <div class="eqs"><div class="eq" data-tex="\frac{dg}{dt} = -\frac{g}{\tau}, \qquad g \leftarrow g + w \;\text{ at each event}, \qquad i = g\,(V - E)"></div></div>
+    <div class="about"><p><b>NetCons.</b> When the soma voltage crosses 10 mV from below, each NetCon from that cell queues an event. It arrives after a synaptic delay plus the axon length over the conduction speed. On screen, each streak is one event in flight:</p></div>
+    <div class="eqs"><div class="eq" data-tex="t_{arrive} = t_{spike} + \delta_{syn} + \frac{\ell}{\theta}"></div></div>
+    <div class="about">
+      <p><b>Gamma by PING.</b> Pyramidal cells (E) excite fast interneurons (I). The interneurons fire together and inhibit the pyramids, which stay quiet until the GABA conductance decays. Then they fire again. The period is about the two delays plus a few GABA time constants, so the network sings at gamma frequency (30 to 80 Hz).</p>
+      <p><b>The other two.</b> On the ring, each pyramidal cell excites the cells just ahead of it, so a kick runs round as a wave. In the balanced net, strong excitation and stronger inhibition cancel on average, and the cells fire at random times.</p>
+      <p><b>This page and NEURON.</b> NEURON builds networks the same way: cells, point process synapses and NetCon objects with threshold, delay and weight, and a queue of events. This page is our own engine in JavaScript after that model, on the CPU. For research, use NEURON (with ParallelContext for big networks).</p>
+    </div>
+    <div class="links">
+      <a href="https://github.com/neuronsimulator/nrn" target="_blank" rel="noopener">NEURON on GitHub (BSD-3-Clause)</a>
+      <a href="https://www.neuronsimulator.org" target="_blank" rel="noopener">neuronsimulator.org: docs and tutorials</a>
+      <a href="https://doi.org/10.1162/089976603321192059" target="_blank" rel="noopener">Börgers and Kopell 2003: PING</a>
+      <a href="../neuron-lab/index.html">Neuron Lab: one cell in detail</a>
+    </div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Raster and explainer"></aside>
+
+<nav id="dock" aria-label="Controls">
+  <button type="button" data-grp="model"><i>◎</i><span>Network</span></button>
+  <button type="button" data-grp="stim"><i>✚</i><span>Stimulus</span></button>
+  <button type="button" data-grp="syn"><i>⚗</i><span>Synapses</span></button>
+  <button type="button" data-grp="raster"><i>⋮</i><span>Raster</span></button>
+  <button type="button" data-grp="learn"><i>∑</i><span>Learn</span></button>
+  <button type="button" id="dockFire"><i>⚡</i><span>Pulse</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

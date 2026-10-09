@@ -24,6 +24,7 @@
 //    "export function makeNetwork" build cells, positions, wiring
 //    "step()"                     one fixed step for all cells
 //    "stimulate("                 a burst into cells near a point
+//    "net.setDrive" "net.scaleWeights"  live changes from the page
 // ============================================================================
 import { rng, gauss } from './rng.js';
 import { HH, NRN } from './hh.js';
@@ -130,6 +131,16 @@ export function makeNetwork(o = {}) {
   net.run = (tstop, each) => { while (net.t < tstop - 1e-9) { step(net); if (each) each(net); } };
   net.stimulate = (o2) => stimulate(net, o2);
   net.setCelsius = c => { net.celsius = c; net.tbl = rateTable(c, dt); };
+  // background drive as a share of the model rate; new Poisson times from now
+  net.setDrive = s => { net.bgScale = s; for (let i = 0; i < N; i++) net.nextBg[i] = bgInterval(net, i); };
+  // scale the NetCon weights by pathway (ee, ei, ie, ii) from the built values
+  net.w0 = w.slice();
+  net.scaleWeights = (k = {}) => {
+    for (let pre = 0; pre < N; pre++) for (let c = ptr[pre]; c < ptr[pre + 1]; c++) {
+      const a = pre < NE ? 'e' : 'i', b = tgt[c] < NE ? 'e' : 'i';
+      w[c] = net.w0[c] * (k[a + b] ?? 1);
+    }
+  };
   return net;
 }
 
