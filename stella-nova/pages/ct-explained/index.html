@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>How CT works: from X-ray shadows to slices — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CT EXPLAINED  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A scrolling explainer of computed tomography. Every figure runs the
+   shared CT engine (../ct-lab/engine/) on the CPU in 2D canvases. The
+   page makes no WebGL or WebGPU context. gpu-guard still loads first,
+   because every page loads it.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module).
+
+   FIGURES  (each <figure data-scene="name">, scene classes in scenes-*.js)
+     #s0  hero      HeroScene      fan-beam scan, sinogram, FBP
+     #s1  beer      BeerScene      photons through one row of a head
+     #s2  proj      ProjScene      one projection = line integrals
+     #s3  sino      SinoScene      the sinogram, a point traces a sine
+     #s4  bp        BPScene        plain back-projection, 1/r blur
+     #s5  fourier   FourierScene   Fourier slice theorem
+     #s6  filter    FilterScene    ramp filter and windows
+          fbp       FBPScene       plain vs filtered as views add up
+     #s7  gantry    GantryScene    parallel, fan and cone beam in 3D
+     #s8  iter      IterScene      ART toy and four solvers
+     #s9  artefact  ArtefactScene  seven artefacts
+     #s10 hu        HUScene        Hounsfield units and windows
+     #s11 history   (text)
+     #s12 credit    ASTRA Toolbox and the papers
+
+   GREP MAP
+     grep -n 'data-scene='   every figure
+     grep -n 'data-link='    every CT Lab link (ids in presets.js)
+     grep -n 'data-tex='     every equation (MathJax SVG via lib/sci-math.js)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How computed tomography works, with live figures: X-ray attenuation, projections, the sinogram and the Radon transform, back-projection, the Fourier slice theorem, filtered back-projection, fan and cone beams, iterative reconstruction, artefacts and Hounsfield units.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">How CT works</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>Shadows</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>One projection</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Sinogram</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Back-projection</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Fourier slice</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>Filtering</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>Fan and cone</a></li>
+    <li><a href="#s8" data-target="s8"><b>08</b>Iterative</a></li>
+    <li><a href="#s9" data-target="s9"><b>09</b>Artefacts</a></li>
+    <li><a href="#s10" data-target="s10"><b>10</b>Hounsfield units</a></li>
+    <li><a href="#s11" data-target="s11"><b>11</b>History</a></li>
+    <li><a href="#s12" data-target="s12"><b>12</b>Credits</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Medical imaging · inverse problems · 1917 to today</p>
+  <h1>How CT works: a picture of the inside, made from shadows</h1>
+  <p class="lede">An X-ray photograph squashes a whole body into one shadow. A CT scanner takes hundreds of shadows from every direction around you, then solves for the one slice that could have cast all of them. Watch it happen below: the source turns, each turn fills a sinogram, and the image sharpens view by view.</p>
+  <figure class="fig hero-fig" data-scene="hero">
+    <canvas aria-label="A fan-beam gantry turns around a phantom; the sinogram and the reconstruction build as it turns"></canvas>
+  </figure>
+  <p class="note">Every figure on this page runs a real reconstruction in your browser: our own JavaScript code for the textbook algorithms, the same ones the <a href="https://github.com/astra-toolbox/astra-toolbox" target="_blank" rel="noopener">ASTRA Toolbox</a> runs on GPUs for research scanners. The phantoms are drawn shapes with realistic attenuation, not patient scans. Each figure has a link to the matching experiment in the <a data-link="shepp-logan">CT Lab</a>.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>Shadows: how X-rays fade</h2><p>An X-ray photon either crosses the body or is taken out of the beam, mostly by scattering off electrons and by the photoelectric effect. Every millimetre of tissue removes the same fraction of the photons that reach it. That is why the beam fades exponentially, and bone, with more electrons per millimetre, removes a larger fraction than soft tissue.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Photons through one row of a head</h3><a class="lab" data-link="head-brain">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="beer"><canvas class="touch-y" aria-label="Photons cross one row of a head phantom; plots of attenuation and surviving intensity"></canvas></figure>
+      <p class="cap">Each dot is a photon. Orange flashes are photons taken out of the beam. Tap or drag on the head to move the beam. The counter on the right compares the counted fraction with the exponential law.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The Beer-Lambert law</h3></div>
+      <div class="sci-eq" data-tex="I = I_0 \, \exp\!\left(-\int_L \mu(x)\,dx\right)"></div>
+      <p class="body">The attenuation coefficient <span class="mi m2">μ</span> says what fraction of photons a material removes per centimetre. At 70 keV, water has <span class="mi m2">μ</span> ≈ 0.19 /cm and dense bone two to three times that.</p>
+      <div class="sci-eq" data-tex="p = -\ln\frac{I}{I_0} = \int_L \mu \, dl"></div>
+      <p class="body">Take the logarithm and the exponential is gone. The detector reading becomes <span class="mi m1">p</span>, the sum of <span class="mi m2">μ</span> along the ray. A CT scanner measures thousands of such line sums. The rest of the page is about turning them back into <span class="mi m2">μ</span> at every point.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>One projection: a row of line integrals</h2><p>Line up many parallel rays and one detector element behind each. The row of readings is a projection: the object squashed flat in one direction. A single projection cannot tell a dense spot at the front from the same spot at the back. Turn the beam and the answer changes.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Parallel rays at angle θ</h3><a class="lab" data-link="shepp-logan">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="proj"><canvas class="touch-y" aria-label="Parallel rays through a phantom and the projection profile on the detector"></canvas></figure>
+      <div class="ctrls"><div class="seg" data-set="phantom" role="group" aria-label="Object"><button data-v="shepp-logan-modified" class="on">Shepp-Logan</button><button data-v="chest">Chest</button><button data-v="suitcase">Suitcase</button></div></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The Radon transform</h3></div>
+      <div class="sci-eq" data-tex="p(\theta, s) = \iint \mu(x,y)\;\delta(x\cos\theta + y\sin\theta - s)\,dx\,dy"></div>
+      <p class="body">The delta function keeps only the points on the line at distance <span class="mi m3">s</span> from the centre, with its normal at angle <span class="mi m5">θ</span>. Johann Radon showed in 1917 that if you know <span class="mi m1">p</span> for every <span class="mi m5">θ</span> and every <span class="mi m3">s</span>, you know <span class="mi m2">μ</span> everywhere. He also gave the inversion formula, more than fifty years before anyone had a reason to use it.</p>
+      <p class="body dim">Over 180° of parallel rays, every line has been measured once. Going on to 360° measures each line again from the other side.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>The sinogram: every projection, stacked</h2><p>Put each projection in a column, one column per angle, and you get a sinogram. It is the raw data of every CT scan. The name comes from what a single point does in it: as the beam turns, the point's shadow slides back and forth across the detector along a sine curve.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Turn the gantry and watch the columns fill</h3><a class="lab" data-link="shepp-logan">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="sino"><canvas aria-label="A phantom with a bright point and its sinogram, which fills column by column"></canvas></figure>
+      <div class="ctrls"><div class="seg" data-set="phantom" role="group" aria-label="Object"><button data-v="shepp-logan-modified" class="on">Shepp-Logan + point</button><button data-v="point">Point only</button><button data-v="head">Head + point</button></div><span class="hint">Tap the object to move the point.</span></div>
+      <div class="eqs"><div class="eq-row"><div class="sci-eq" data-tex="s(\theta) = x_0\cos\theta + y_0\sin\theta"></div><p>A point at (<i>x</i><sub>0</sub>, <i>y</i><sub>0</sub>) lands on the detector at <span class="mi m3">s</span>(<span class="mi m5">θ</span>). Its amplitude is the point's distance from the centre and its phase is the point's direction. Every object is a sum of points, so every sinogram is a sum of sine curves, which is why a sinogram looks like woven ribbons. The dashed amber curve is this formula, drawn over the data.</p></div></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>Back-projection, and why it blurs</h2><p>The obvious way back: take each projection and smear it back across the image along the rays it came from, then add up all the smears. Bright spots get smeared through from every angle and pile up where they belong. But the smear also lands everywhere else.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Smear and add</h3><a class="lab" data-link="filters">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="bp"><canvas aria-label="One back-projected view, the sum of views, and a profile against 1/r"></canvas></figure>
+      <div class="ctrls"><div class="seg" data-set="object" role="group" aria-label="Object"><button data-v="point" class="on">A point</button><button data-v="shepp">Shepp-Logan</button></div></div>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The 1/r star</h3></div>
+      <div class="sci-eq" data-tex="b(x,y) = \int_0^{\pi} p\big(\theta,\; x\cos\theta + y\sin\theta\big)\, d\theta"></div>
+      <p class="body">With a few views, a point back-projects into a star of lines. With many views the star fills in, but it does not go away: the sum falls off only as 1/<i>r</i> with distance from the point. The back-projected image is the true image blurred by 1/<i>r</i>.</p>
+      <div class="sci-eq" data-tex="b = \mu * \frac{1}{r}"></div>
+      <p class="body">Every edge gets a halo and every organ a glow. To remove that blur we need to know what 1/<i>r</i> does to each spatial frequency. That is a job for the Fourier transform.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>The Fourier slice theorem</h2><p>Here is the key fact of tomography. Take the one-dimensional Fourier transform of one projection. It equals the two-dimensional Fourier transform of the image along one line through the centre, at the same angle as the beam. Each view gives one spoke of the image's spectrum.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Each view fills one line of k-space</h3><a class="lab" data-link="shepp-logan">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="fourier"><canvas aria-label="The object, k-space filled spoke by spoke from projections, and the true 2D Fourier transform"></canvas></figure>
+      <div class="eqs"><div class="eq-row"><div class="sci-eq" data-tex="P_{\theta}(\omega) = \int p(\theta, s)\, e^{-2\pi i \omega s}\, ds = F(\omega\cos\theta,\; \omega\sin\theta)"></div><p>The middle panel is built only from the sinogram: the 1D spectrum of each projection, placed on its spoke. It matches the right panel, the 2D Fourier transform of the object, computed directly. Fill in every spoke, invert the 2D transform, and you have the image. Look at the spokes, though: near the centre they crowd together, at the edge they spread apart. Plain back-projection counts the crowded low frequencies too often, and that excess weight is exactly the 1/<i>r</i> blur.</p></div></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>Filtered back-projection</h2><p>The fix is to weight each spoke by its spacing, which grows in proportion to the frequency |<i>k</i>|. In practice you filter each projection with a ramp before you smear it back. The ramp boosts fine detail, adds negative side lobes around every edge, and these cancel the halos when the views are added up. This is filtered back-projection (FBP), and nearly every clinical scanner has used it for fifty years.</p></div></div>
+  <div class="grid">
+    <article class="card span-12" data-share="filter">
+      <div class="card-top"><h3>The ramp filter and its windows</h3><a class="lab" data-link="filters">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="filter"><canvas aria-label="Filter responses against frequency, and one projection before and after filtering"></canvas></figure>
+      <div class="ctrls">
+        <div class="seg" data-set="filter" role="group" aria-label="Window"><button data-v="ram-lak" class="on">Ram-Lak</button><button data-v="shepp-logan">Shepp-Logan</button><button data-v="cosine">Cosine</button><button data-v="hamming">Hamming</button><button data-v="hann">Hann</button></div>
+        <label class="ctrl grow">cutoff <input type="range" data-set="cutoff" min="0.2" max="1" step="0.01" value="1"><output data-out="cutoff">1.00</output></label>
+      </div>
+      <div class="eqs"><div class="eq-row"><div class="sci-eq" data-tex="\mu(x,y) = \int_0^{\pi} \big(p_{\theta} * h\big)(x\cos\theta + y\sin\theta)\, d\theta, \qquad \hat h(k) = |k|\, W(k)"></div><p>The bare ramp (Ram-Lak, after Ramachandran and Lakshminarayanan, 1971) is the sharpest, and it also boosts noise most, because noise lives at high frequencies. A window <span class="mi m6">W</span>(<i>k</i>) rolls the ramp off: Shepp-Logan a little, Cosine, Hamming and Hann more. The cutoff stops the filter below the detector's Nyquist frequency. Sharper or quieter: you choose, per scan, and the change also drives the figure below.</p></div></div>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Same views, with and without the filter</h3><a class="lab" data-link="head-brain">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="fbp"><canvas aria-label="Plain and filtered back-projection side by side as views are added"></canvas></figure>
+      <div class="ctrls"><div class="seg" data-set="phantom" role="group" aria-label="Object"><button data-v="shepp-logan-modified" class="on">Shepp-Logan</button><button data-v="head">Head</button><button data-v="chest">Chest</button></div></div>
+      <p class="cap">Views arrive spread over 180°, so at first you see the streaks of a few views. The filtered image (right) uses the window chosen above. The PSNR compares it with the true object; higher is closer.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>Parallel, fan and cone beams</h2><p>The first scanner, EMI's in 1971, used one pencil beam and one detector. It stepped across the head, turned one degree, and stepped across again, 180 times: several minutes for each pair of slices. Third-generation scanners spread the beam into a fan and caught it on an arc of hundreds of detectors, so one turn of well under a second gives a slice. Cone-beam scanners open the beam in the other direction too and catch it on a flat panel, which gives a whole volume per turn.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Three beam shapes</h3><a class="lab" data-link="fan-arc">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="gantry"><canvas class="touch-y" aria-label="A 3D gantry with parallel, fan or cone beam, and the detector reading"></canvas></figure>
+      <div class="ctrls"><div class="seg" data-set="mode" role="group" aria-label="Beam"><button data-v="parallel">Parallel</button><button data-v="fan" class="on">Fan</button><button data-v="cone">Cone</button></div></div>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>What changes in the maths</h3></div>
+      <p class="body"><b>Fan beam.</b> Each fan ray is also a parallel ray at some angle, so you can re-sort (rebin) fan data into parallel projections and use FBP. Or you filter the fan data directly, with a weight for the ray's distance from the source. Both need 180° plus the fan angle of data; this page's engine uses a full turn.</p>
+      <p class="body"><b>Cone beam.</b> Rays that leave the central plane cross several slices. Feldkamp, Davis and Kress (1984) gave the standard approximation, FDK: weight each detector row by its cone angle, ramp-filter along rows, and back-project along the real 3D rays. It is exact in the mid-plane and drifts further out, which shows as streaks at the top and bottom of the volume.</p>
+      <p class="body dim">The panel at the bottom right shows what the detector reads at this angle: a profile for the fan and the pencil beam, a full 2D projection for the cone.</p>
+      <p class="body"><a data-link="fan-flat">Fan beam in the CT Lab →</a> The lab works in 2D, so it has fan presets but no cone preset.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8">
+  <div class="sec-head"><span class="num">08</span><div><h2>Iterative reconstruction: CT as a system of equations</h2><p>Forget calculus for a moment. Split the slice into pixels, unknowns <i>x</i><sub><i>j</i></sub>. Each ray adds up the pixels it crosses, weighted by its path length in each one: one linear equation per ray. A scan is a huge system <i>A</i><b>x</b> = <b>b</b>, with a row for every ray and a column for every pixel. Solve it, and you have the image. Hounsfield's first scanner solved it this way.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Four solvers on 30 noisy views</h3><a class="lab" data-link="algorithms">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="iter"><canvas aria-label="ART on two equations, the selected solver's image and error curves of four solvers"></canvas></figure>
+      <div class="ctrls"><div class="seg" data-set="method" role="group" aria-label="Solver"><button data-v="art">ART</button><button data-v="sart">SART</button><button data-v="sirt" class="on">SIRT</button><button data-v="cgls">CGLS</button></div><button class="tgl" data-act="reset">Restart</button></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathbf{x}^{k+1} = \mathbf{x}^{k} + \lambda\,\frac{b_i - \mathbf{a}_i\cdot\mathbf{x}^{k}}{\lVert\mathbf{a}_i\rVert^2}\,\mathbf{a}_i"></div><p><b>ART</b> (Kaczmarz 1937; Gordon, Bender and Herman 1970) takes one ray at a time and moves the image just enough to satisfy that ray. On the left, each line is one ray's equation: the estimate zigzags between them towards the crossing. When two rays are nearly parallel, the zigzag is slow. <a data-link="art-kaczmarz">ART in the CT Lab →</a></p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\mathbf{x}^{k+1} = \mathbf{x}^{k} + \lambda\, C A^{\mathsf T} R\,(\mathbf{b} - A\mathbf{x}^{k})"></div><p><b>SIRT</b> uses all rays at once and averages the corrections, with <i>R</i> and <i>C</i> the inverse row and column sums. It is smooth and slow. <b>SART</b> (Andersen and Kak 1984) does the same one view at a time. <b>CGLS</b> runs conjugate gradients on the least-squares problem and gets close in a few steps.</p></div>
+      </div>
+      <p class="cap">The curves show the error against the true object, not the fit to the data. With noisy data, the solvers first approach the truth and then start to fit the noise; stopping early is itself a kind of regularisation. With few views or low dose, iterative methods beat FBP (dashed), which is why modern scanners use them to cut dose.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 09 -->
+<section class="sec" id="s9">
+  <div class="sec-head"><span class="num">09</span><div><h2>Artefacts: when the model is wrong</h2><p>Reconstruction assumes a perfect world: enough photons, enough angles, one energy, perfect detectors, an object that holds still. Each broken assumption leaves its own fingerprint in the image. Radiologists learn to read them, and scanner makers spend fortunes to correct them.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>Break one assumption at a time</h3><a class="lab" data-link="low-dose">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="artefact"><canvas aria-label="The true object and its reconstruction with the selected artefact"></canvas></figure>
+      <div class="ctrls">
+        <div class="seg wrap" data-set="case" role="group" aria-label="Artefact"><button data-v="noise" class="on">Noise</button><button data-v="views">Few views</button><button data-v="limited">Limited angle</button><button data-v="hardening">Beam hardening</button><button data-v="metal">Metal</button><button data-v="rings">Rings</button><button data-v="motion">Motion</button></div>
+        <label class="ctrl grow"><span>amount</span> <input type="range" data-set="p" min="0" max="100" step="1" value="35"><output data-out="p"></output></label>
+      </div>
+      <div class="cases">
+        <p data-case="noise"><b>Noise and dose.</b> Photon counts follow Poisson statistics, so the noise in each reading goes as 1/√<i>I</i>. Halve the dose and the noise grows by √2. The ramp filter then amplifies it into fine streaky grain. Every CT protocol trades this grain against radiation dose.</p>
+        <p data-case="views" hidden><b>Too few views.</b> With too few angles, the gaps between spokes in k-space leave out fine detail at the edges of the spectrum. Each view's back-projection then shows as a streak. This is where iterative methods with prior knowledge help most.</p>
+        <p data-case="limited" hidden><b>Limited angle.</b> If the views cover less than 180°, a whole wedge of k-space is never measured. Edges that run along the missing directions vanish, and the image smears along them. This happens in dental and breast scanners that cannot go round.</p>
+        <p data-case="hardening" hidden><b>Beam hardening.</b> A real tube makes a spectrum of energies. Soft, low-energy photons are absorbed first, so the beam that gets through is harder and attenuates less. Long paths through the middle look too thin, and the centre of a uniform object reads too low: cupping. Dark bands appear between dense bones. Lower kVp makes it worse.</p>
+        <p data-case="metal" hidden><b>Metal.</b> Steel stops almost every photon on rays that cross it, so those readings are mostly noise and badly hardened. FBP spreads the bad readings out as bright and dark streaks. Metal artefact reduction replaces those rays before reconstruction.</p>
+        <p data-case="rings" hidden><b>Rings.</b> A detector element with a slightly wrong gain reads off by the same amount in every view. In a turning scan, that one element always looks at the same distance from the centre, so its error back-projects into a circle. Scanners calibrate detectors every day to keep rings away.</p>
+        <p data-case="motion" hidden><b>Motion.</b> The reconstruction assumes the object is the same in every view. If it moves (a breath, a heartbeat, a bag on a belt), the views disagree and edges double or streak. Fast gantries and cardiac gating exist for this reason.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 10 -->
+<section class="sec" id="s10">
+  <div class="sec-head"><span class="num">10</span><div><h2>Hounsfield units and windows</h2><p>A scanner reconstructs <span class="mi m2">μ</span>, which depends on the beam energy. To make images comparable, CT reports the Hounsfield unit (HU) instead, fixed by two points: air is −1000 and water is 0. Each HU is one tenth of a percent of the attenuation of water.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>One slice, four ways to look at it</h3><a class="lab" data-link="chest-lung">Open in CT Lab →</a></div>
+      <figure class="fig" data-scene="hu"><canvas aria-label="A reconstructed slice in Hounsfield units through a display window, and the HU scale"></canvas></figure>
+      <div class="ctrls">
+        <div class="seg" data-set="phantom" role="group" aria-label="Slice"><button data-v="chest" class="on">Chest</button><button data-v="head">Head</button></div>
+        <div class="seg" data-set="window" role="group" aria-label="Window"><button data-v="lung" class="on">Lung</button><button data-v="soft">Soft tissue</button><button data-v="bone">Bone</button><button data-v="brain">Brain</button></div>
+      </div>
+      <div class="ctrls">
+        <label class="ctrl grow">level <input type="range" data-set="L" min="-1000" max="1000" step="10" value="-600"><output data-out="L">-600 HU</output></label>
+        <label class="ctrl grow">width <input type="range" data-set="W" min="20" max="3000" step="10" value="1500"><output data-out="W">1500 HU</output></label>
+      </div>
+      <p class="cap">Hover or tap the slice to read the value. A screen shows about 256 greys and the eye separates far fewer, but the HU scale spans thousands. A window picks a band of the scale, a level at its centre and a width, and spreads only that band over black to white.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The definition</h3></div>
+      <div class="sci-eq" data-tex="\mathrm{HU} = 1000 \times \frac{\mu - \mu_{\mathrm{water}}}{\mu_{\mathrm{water}} - \mu_{\mathrm{air}}}"></div>
+      <p class="body">Fat is around −100, soft tissue and blood a few tens above zero, and dense bone near +1000 and more. Brain grey and white matter differ by only a few HU, so the brain window is just 80 HU wide. The lung window is wide and low, to show airways and vessels inside dark lung. The bone window is wider still.</p>
+      <p class="body dim">The HU values on this page come from our phantom's mixes at 70 keV, so they are close to clinical values, not equal to them.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 11 -->
+<section class="sec" id="s11">
+  <div class="sec-head"><span class="num">11</span><div><h2>A short history</h2><p>The mathematics came first, by decades. The machine came from a record company's research lab.</p></div></div>
+  <ol class="timeline">
+    <li><b>1895</b><span>Wilhelm Röntgen discovers X-rays in Würzburg. The first medical radiographs follow within weeks.</span></li>
+    <li><b>1917</b><span>Johann Radon, in Vienna, proves that a function in the plane is fixed by its integrals along all lines, and gives the inversion formula.</span></li>
+    <li><b>1937</b><span>Stefan Kaczmarz publishes the row-by-row method for linear systems that later becomes ART.</span></li>
+    <li><b>1956</b><span>Ronald Bracewell reconstructs maps of the Sun's radio emission from strip scans, using the Fourier slice idea.</span></li>
+    <li><b>1963–64</b><span>Allan Cormack, a physicist in Cape Town and at Tufts, works out how to reconstruct attenuation from line measurements and tests it on a simple phantom. Few people read the papers at the time.</span></li>
+    <li><b>1970</b><span>Gordon, Bender and Herman describe ART for electron microscopy and X-ray photography.</span></li>
+    <li><b>1971</b><span>Ramachandran and Lakshminarayanan publish the convolution form of filtered back-projection. On 1 October, the EMI scanner built by Godfrey Hounsfield scans its first patient at Atkinson Morley's Hospital in London and shows a brain tumour.</span></li>
+    <li><b>1974</b><span>Lawrence Shepp and Benjamin Logan publish the head phantom of ten ellipses that this page uses, and a filter.</span></li>
+    <li><b>1979</b><span>Cormack and Hounsfield share the Nobel Prize in Physiology or Medicine.</span></li>
+    <li><b>1984</b><span>Feldkamp, Davis and Kress publish cone-beam FDK. Andersen and Kak publish SART.</span></li>
+    <li><b>1989</b><span>Willi Kalender and colleagues introduce spiral (helical) CT: the table moves while the gantry turns.</span></li>
+    <li><b>2015–16</b><span>The ASTRA Toolbox papers describe an open GPU toolbox for 2D and 3D tomography that many research groups now use.</span></li>
+  </ol>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 12 -->
+<section class="sec" id="s12">
+  <div class="sec-head"><span class="num">12</span><div><h2>Credits and the real tool</h2><p>This page and the CT Lab were inspired by the <b>ASTRA Toolbox</b>, the open-source, GPU-accelerated toolbox for tomography from imec-Vision Lab (University of Antwerp) and CWI (Amsterdam). If you want to reconstruct real data, use it.</p></div></div>
+  <div class="grid">
+    <article class="card span-6 credit">
+      <div class="card-top"><h3>ASTRA Toolbox</h3></div>
+      <p class="body"><a href="https://github.com/astra-toolbox/astra-toolbox" target="_blank" rel="noopener">github.com/astra-toolbox/astra-toolbox</a> · <a href="https://astra-toolbox.com" target="_blank" rel="noopener">astra-toolbox.com</a></p>
+      <ul class="refs">
+        <li>W. van Aarle, W. J. Palenstijn, J. De Beenhouwer, T. Altantzis, S. Bals, K. J. Batenburg and J. Sijbers, “The ASTRA Toolbox: A platform for advanced algorithm development in electron tomography”, <i>Ultramicroscopy</i> 157 (2015) 35–47. <a href="https://doi.org/10.1016/j.ultramic.2015.05.002" target="_blank" rel="noopener">doi:10.1016/j.ultramic.2015.05.002</a></li>
+        <li>W. van Aarle, W. J. Palenstijn, J. Cant, E. Janssens, F. Bleichrodt, A. Dabravolski, J. De Beenhouwer, K. J. Batenburg and J. Sijbers, “Fast and flexible X-ray tomography using the ASTRA toolbox”, <i>Optics Express</i> 24(22) (2016) 25129–25147. <a href="https://doi.org/10.1364/OE.24.025129" target="_blank" rel="noopener">doi:10.1364/OE.24.025129</a></li>
+      </ul>
+      <p class="body dim">The ASTRA Toolbox is GPL-3.0 software. No ASTRA code is used or ported here: this page runs our own JavaScript implementation of the published algorithms.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>The algorithms on this page</h3></div>
+      <ul class="refs">
+        <li>J. Radon (1917), the line-integral transform and its inverse.</li>
+        <li>A. C. Kak and M. Slaney, <i>Principles of Computerized Tomographic Imaging</i>, IEEE Press (1988): FBP, fan-beam FBP and the discrete ramp filter.</li>
+        <li>L. A. Shepp and B. F. Logan, “The Fourier reconstruction of a head section”, <i>IEEE Trans. Nucl. Sci.</i> 21 (1974): the phantom.</li>
+        <li>P. M. Joseph (1982): the ray projector with linear interpolation.</li>
+        <li>L. A. Feldkamp, L. C. Davis and J. W. Kress, <i>JOSA A</i> 1 (1984): cone-beam FDK.</li>
+        <li>R. Gordon, R. Bender and G. T. Herman (1970): ART. A. H. Andersen and A. C. Kak (1984): SART. M. R. Hestenes and E. Stiefel (1952): conjugate gradients.</li>
+      </ul>
+      <p class="body dim">The procedural phantoms (head, chest, suitcase, walnut, hip) are our own drawings. Attenuation values are approximate figures for water, bone and iron at 70 keV, mixed coarsely. No patient data is on this page.</p>
+      <p class="body"><a data-link="shepp-logan">Try everything in the CT Lab →</a></p>
+    </article>
+  </div>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>

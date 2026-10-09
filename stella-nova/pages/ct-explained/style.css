@@ -1,0 +1,150 @@
+/* ============================================================================
+   CT EXPLAINED  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark page, one column of sections, each a grid of cards. A sticky chip
+   bar jumps between sections. Fonts and math colours come from
+   ../../lib/sci.css. The layout follows pages/mrna-vaccine.
+
+   COLOURS. --ray (X-ray blue) marks the chips, toggles and links. The
+   canvases use the same values from draw.js PAL. Math colours: μ m2,
+   p m1, s m3, I m4, θ m5, W m6.
+
+   FIGURES. A figure is a full-width canvas. main.js sets its CSS height
+   from scene.height(width), so the figure picks its own layout for a
+   phone or a desktop width. touch-action stays pan-y, so a finger can
+   still scroll the page over a figure.
+
+   PHONE (max-width 860px): cards go to one column, the chip bar scrolls
+   sideways, small text goes up to 12px. A pointer:coarse block sets 44px
+   targets on any touch screen. Hover colours apply only where (hover:hover).
+     grep -n 'CHIPS'      the sticky section bar
+     grep -n 'CARDS'      grid, cards, figures
+     grep -n 'CONTROLS'   segmented buttons, toggles, sliders
+     grep -n 'TIMELINE'   the history list
+     grep -n 'TOUCH'      target sizes for any touch screen
+     grep -n 'PHONE'      the phone block
+   ========================================================================== */
+[hidden]{display:none!important}
+:root{
+  --bg:#05070c; --card:#0b0e16; --card2:#111624;
+  --ink:#e8eaf0; --ink2:#c0c6d4; --dim:#858ca2; --faint:#394155;
+  --line:rgba(255,255,255,0.075); --line2:rgba(255,255,255,0.15);
+  --acc:#62c4ff; --acc-bg:rgba(98,196,255,0.14); --acc-line:rgba(98,196,255,0.55);
+  --amber:#ffb35c;
+  --serif:var(--sci-serif,'STIX Two Text',Georgia,serif);
+  --sans:var(--sci-sans,Inter,system-ui,-apple-system,sans-serif);
+  --mono:var(--sci-mono,ui-monospace,'SF Mono',Menlo,monospace);
+  --top:52px;
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* overflow-x stays on html only: on the body it breaks position:sticky. */
+html{background:var(--bg);overflow-x:hidden;scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+html.in-frame{--top:0px;scroll-padding-top:60px}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+a{color:var(--acc);text-decoration:none}
+@media (hover:hover){a:hover{text-decoration:underline}}
+sub,sup{font-size:0.72em;line-height:0}
+.mi{font-family:var(--serif);font-style:italic;font-size:1.06em}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;
+  padding:0 calc(20px + var(--sr)) 0 calc(20px + var(--sl));background:rgba(5,7,12,0.94);border-bottom:1px solid var(--line);pointer-events:none}
+.brand{font:500 0.85rem/1 var(--sans);color:var(--dim);white-space:nowrap}
+.pagetitle{font:400 1.1rem/1 var(--serif);color:var(--ink);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.in-frame .topbar{display:none}
+
+/* ---------------------------------------------------------------- CHIPS */
+#chips{position:sticky;top:var(--top);z-index:20;background:rgba(5,7,12,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:8px calc(20px + var(--sr)) 8px calc(20px + var(--sl))}
+#chips ol{list-style:none;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;max-width:1320px;margin:0 auto}
+#chips ol::-webkit-scrollbar{display:none}
+#chips a{display:flex;gap:7px;align-items:baseline;white-space:nowrap;padding:6px 11px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);font-size:0.8rem}
+#chips a b{font:500 0.7rem var(--mono);color:var(--dim)}
+@media (hover:hover){#chips a:hover{text-decoration:none;border-color:var(--acc)}}
+#chips a.on{background:var(--acc-bg);border-color:var(--acc-line);color:#fff}
+#chips a.on b{color:var(--acc)}
+
+/* ---------------------------------------------------------------- page */
+#doc{max-width:1320px;margin:0 auto;padding:calc(var(--top) + 6px) calc(22px + var(--sr)) 60px calc(22px + var(--sl))}
+.hero{padding:26px 0 22px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.kicker{font-size:0.82rem;font-weight:500;color:var(--acc)}
+.hero h1{font:400 clamp(1.7rem,4.2vw,2.8rem)/1.15 var(--serif);margin:6px 0 12px;max-width:30ch}
+.lede{font:400 1.12rem/1.6 var(--serif);color:var(--ink2);max-width:78ch}
+.hero-fig{margin:22px 0 6px;background:radial-gradient(ellipse at 30% 40%,rgba(98,196,255,0.06),transparent 60%),#04050a;border:1px solid var(--line);border-radius:16px}
+.note{margin-top:14px;font-size:0.82rem;color:var(--dim);max-width:100ch;border-left:3px solid var(--line2);padding-left:11px}
+
+.sec{padding:34px 0 8px}
+.sec-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.num{font:500 0.8rem var(--mono);color:var(--acc);border:1px solid var(--acc-line);border-radius:8px;padding:4px 7px;margin-top:6px}
+.sec-head h2{font:400 1.65rem/1.2 var(--serif)}
+.sec-head p{color:var(--ink2);margin-top:4px;max-width:86ch}
+
+/* ---------------------------------------------------------------- CARDS */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;min-width:0}
+.span-12{grid-column:span 12} .span-8{grid-column:span 8} .span-7{grid-column:span 7}
+.span-6{grid-column:span 6} .span-5{grid-column:span 5} .span-4{grid-column:span 4}
+.card-top{display:flex;align-items:baseline;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
+.card h3{font:500 0.98rem/1.3 var(--sans)}
+a.lab{font-size:0.78rem;color:var(--acc);border:1px solid var(--acc-line);border-radius:999px;padding:3px 10px;white-space:nowrap}
+@media (hover:hover){a.lab:hover{text-decoration:none;background:var(--acc-bg)}}
+.fig{display:block;margin:0}
+.fig canvas{display:block;width:100%;height:320px;border-radius:10px;background:#04050a;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.hero-fig canvas{background:transparent}
+.figerr{font-size:0.82rem;color:var(--amber);margin-top:8px}
+.cap{font-size:0.84rem;color:var(--ink2);margin-top:10px;max-width:96ch}
+.hint{font-size:0.78rem;color:var(--dim)}
+.body{color:var(--ink2);margin-bottom:10px}
+.body.dim{color:var(--dim);font-size:0.84rem}
+.card .sci-eq{margin:6px 0 12px;font-size:1.05rem}
+.eqs{margin-top:12px;display:grid;gap:10px}
+.eq-row{display:grid;grid-template-columns:minmax(0,22em) minmax(0,1fr);gap:18px;align-items:center;border-top:1px solid var(--line);padding-top:10px}
+.eq-row p{font-size:0.86rem;color:var(--ink2)}
+.cases p{font-size:0.88rem;color:var(--ink2);margin-top:12px;max-width:96ch}
+.cases b{color:var(--ink);font-weight:500}
+.refs{list-style:none;display:grid;gap:9px;color:var(--ink2);font-size:0.84rem;margin:6px 0 12px}
+.refs li{padding-left:14px;position:relative}
+.refs li::before{content:'';position:absolute;left:0;top:0.62em;width:6px;height:6px;border-radius:50%;background:var(--acc)}
+.credit{border-color:var(--acc-line);background:linear-gradient(160deg,rgba(98,196,255,0.07),var(--card) 55%)}
+
+/* ---------------------------------------------------------------- CONTROLS */
+.ctrls{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:10px}
+.ctrl{display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--ink2)}
+.ctrl.grow{flex:1 1 260px}
+.ctrl input[type=range]{flex:1;min-width:0;accent-color:var(--acc)}
+.ctrl output{font:0.8rem var(--mono);color:var(--ink);min-width:6.5em}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+.seg button{background:transparent;border:0;border-right:1px solid var(--line2);color:var(--ink2);padding:6px 11px;font-size:0.8rem}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc-bg);color:#fff}
+.tgl{background:transparent;border:1px solid var(--line2);color:var(--ink2);border-radius:999px;padding:6px 12px;font-size:0.8rem}
+@media (hover:hover){.tgl:hover,.seg button:hover{color:#fff}}
+
+/* ---------------------------------------------------------------- TIMELINE */
+.timeline{list-style:none;display:grid;gap:8px;max-width:980px}
+.timeline li{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:4px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.timeline b{font:400 1.1rem/1.3 var(--serif);color:var(--acc)}
+.timeline span{color:var(--ink2)}
+
+/* ---------------------------------------------------------------- TOUCH */
+@media (pointer:coarse){
+  .seg button,.tgl{min-height:44px;padding:8px 12px}
+  a.lab{padding:9px 12px}
+  #chips a{padding:10px 12px}
+  .ctrl input[type=range]{height:44px}
+  .hint,.body.dim,.cap{font-size:0.86rem}
+}
+
+/* ---------------------------------------------------------------- PHONE */
+@media (max-width:860px){
+  #doc{padding-left:calc(14px + var(--sl));padding-right:calc(14px + var(--sr))}
+  .span-12,.span-8,.span-7,.span-6,.span-5,.span-4{grid-column:span 12}
+  .card{padding:12px 10px 10px}
+  .eq-row{grid-template-columns:minmax(0,1fr);gap:6px}
+  .sec-head{gap:10px}
+  .sec-head h2{font-size:1.4rem}
+  .timeline li{grid-template-columns:minmax(0,1fr)}
+  .seg{max-width:100%}
+  .seg button{flex:1 1 auto}
+}
