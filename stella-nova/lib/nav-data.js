@@ -100,7 +100,8 @@ w.SN_NAV = [
       ["orbital", "Atomic Orbital", "VR", "atomic-orbital-vr"],
       ["molecular-bond", "Molecular Bond", "SIM"],
       ["hydrogen-table", "Hydrogen Wave Function", "NEW"],
-      ["molecules", "Molecule Explorer", "2D/3D"]
+      ["molecules", "Molecule Explorer", "2D/3D"],
+      ["reactions", "Reaction Explorer", "NEW"]
     ] },
     { h: "Quantum Computing", p: [
       ["qave", "Quantum Algorithm Visualizer", "3D", "quantum-algorithm-visualizer"],
