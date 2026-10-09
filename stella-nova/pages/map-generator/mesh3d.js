@@ -30,7 +30,7 @@
 // so two buildings never share a wall plane.
 //
 // grep: export const STRIDE  export const Z  export function buildMesh  export function toSTL
-//       export function earcut  export function fieldLines  function extendSea  function ribbon  function prism
+//       export function extent  export function trimRoads  export function earcut  export function fieldLines  function seaApron  function ribbon  function prism
 
 import { heightColour } from './draw2d.js';
 import { prog } from './playback.js';
@@ -153,12 +153,12 @@ function prism(W, pts, col, kind, t0, dur, e = [0, 0, 0]) {
 }
 
 // a road ribbon of width w along line l (world x, y), s = share of length
-function ribbon(W, l, w, col, t0, dur) {
+function ribbon(W, l, w, col, t0, dur, s0 = 0, total = 0) {
   const n = l.length;
   if (n < 2) return;
   const cum = [0];
   for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]));
-  const L = cum[n - 1] || 1;
+  const L = total || cum[n - 1] || 1;
   W.reserve(2 * n, 6 * (n - 1));
   const base = W.nv;
   const h = w / 2;
@@ -175,7 +175,7 @@ function ribbon(W, l, w, col, t0, dur) {
       k = 1 / Math.max(0.5, c);
     }
     nx *= h * k; ny *= h * k;
-    const s = cum[i] / L;
+    const s = (s0 + cum[i]) / L;
     W.v(l[i][0] + nx, l[i][1] + ny, Z.road, 0, 0, 1, col, 1, t0, dur, s, 1);
     W.v(l[i][0] - nx, l[i][1] - ny, Z.road, 0, 0, 1, col, 1, t0, dur, s, 1);
   }
@@ -185,18 +185,32 @@ function ribbon(W, l, w, col, t0, dur) {
   }
 }
 
-// The sea polygon reaches the edge of the generated area. Its points on the
-// edge move far out, so the sea runs to the horizon as the land does.
-function extendSea(sea, d, ext) {
-  const eps = 0.6;
-  return sea.map(([x, y]) => {
-    let X = x, Y = y;
-    if (x <= d.x + eps) X = x - ext;
-    if (x >= d.x + d.w - eps) X = x + ext;
-    if (y <= d.y + eps) Y = y - ext;
-    if (y >= d.y + d.h - eps) Y = y + ext;
-    return [X, Y];
-  });
+// The sea polygon reaches the edge of the generated area. Each of its
+// edges that lies on that edge gets a strip out to the horizon, and each
+// corner of the area that the sea holds gets a square, so the sea runs on
+// as the land does. The strips sit side by side and never overlap, and the
+// polygon itself is not moved (moving its edge points swept a wedge of sea
+// over the land next to a coastline end).
+function seaApron(sea, d, ext) {
+  const eps = 0.6, x0 = d.x, x1 = d.x + d.w, y0 = d.y, y1 = d.y + d.h;
+  const on = (p, sd) => (sd === 'L' ? Math.abs(p[0] - x0) < eps : sd === 'R' ? Math.abs(p[0] - x1) < eps : sd === 'T' ? Math.abs(p[1] - y0) < eps : Math.abs(p[1] - y1) < eps);
+  const out = [];
+  for (let i = 0; i < sea.length; i++) {
+    const p = sea[i], q = sea[(i + 1) % sea.length];
+    for (const sd of ['L', 'R', 'T', 'B']) {
+      if (!on(p, sd) || !on(q, sd)) continue;
+      if (sd === 'L') out.push([[x0 - ext, p[1]], [x0, p[1]], [x0, q[1]], [x0 - ext, q[1]]]);
+      if (sd === 'R') out.push([[x1, p[1]], [x1 + ext, p[1]], [x1 + ext, q[1]], [x1, q[1]]]);
+      if (sd === 'T') out.push([[p[0], y0 - ext], [q[0], y0 - ext], [q[0], y0], [p[0], y0]]);
+      if (sd === 'B') out.push([[p[0], y1], [q[0], y1], [q[0], y1 + ext], [p[0], y1 + ext]]);
+    }
+  }
+  const has = (cx, cy) => sea.some((p) => Math.abs(p[0] - cx) < eps && Math.abs(p[1] - cy) < eps);
+  if (has(x0, y0)) out.push([[x0 - ext, y0 - ext], [x0, y0 - ext], [x0, y0], [x0 - ext, y0]]);
+  if (has(x1, y0)) out.push([[x1, y0 - ext], [x1 + ext, y0 - ext], [x1 + ext, y0], [x1, y0]]);
+  if (has(x1, y1)) out.push([[x1, y1], [x1 + ext, y1], [x1 + ext, y1 + ext], [x1, y1 + ext]]);
+  if (has(x0, y1)) out.push([[x0 - ext, y1], [x0, y1], [x0, y1 + ext], [x0 - ext, y1 + ext]]);
+  return out.filter((r) => Math.abs(signedArea(r)) > 1e-6);
 }
 
 const cen = (p) => { let x = 0, y = 0; for (const q of p) { x += q[0]; y += q[1]; } return [x / p.length, y / p.length]; };
@@ -226,14 +240,17 @@ export function buildMesh(city, tl) {
     const mid = city.coastline.length ? T(city.coastline[city.coastline.length >> 1]) : [0, 0];
     seaCentre = mid; seaR = Math.hypot(d.w, d.h);
     const dMap = { x: d.x, y: d.y, w: d.w, h: d.h };
-    flat(W, ccwOf(extendSea(city.sea, dMap, ext).map(T)), Z.sea, COL.sea, 4, tl.coast[0], tl.coast[1], [mid[0], mid[1], seaR]);
+    flat(W, ccwOf(city.sea.map(T)), Z.sea, COL.sea, 4, tl.coast[0], tl.coast[1], [mid[0], mid[1], seaR]);
+    for (const r of seaApron(city.sea, dMap, ext)) flat(W, ccwOf(r.map(T)), Z.sea, COL.sea, 4, tl.coast[0], tl.coast[1], [mid[0], mid[1], seaR * 4]);
   }
   city.parks.forEach((p, i) => flat(W, ccwOf(p.map(T)), Z.park, COL.park, 5, tl.parks[2 * i], tl.parks[2 * i + 1]));
-  city.blocks.forEach((b, i) => prism(W, ccwOf(b.map(T)), COL.block, 2, tl.blocks[2 * i], tl.blocks[2 * i + 1]));
+  const kept = extent(city);
+  city.blocks.forEach((b, i) => { if (kept.block[i]) prism(W, ccwOf(b.map(T)), COL.block, 2, tl.blocks[2 * i], tl.blocks[2 * i + 1]); });
   // ── buildings (the shadow casters) ──
   const bFirst = W.ni;
   let tallest = 0;
   city.lots.forEach((l, i) => {
+    if (!kept.lot[i]) return;
     const h = city.buildings[i].h;
     tallest = Math.max(tallest, h);
     const col = heightColour(h);
@@ -241,9 +258,11 @@ export function buildMesh(city, tl) {
   });
   const bEnd = W.ni;
   // ── roads, minor first, so the main roads draw on top ──
+  // (each road trimmed to the built area: see trimRoads)
+  const trimmed = trimRoads(city);
   for (const cls of ['minor', 'river', 'major', 'coast', 'main']) {
     const a = tl.roads[cls] || [];
-    city.roads[cls].forEach((l, i) => ribbon(W, l.map(T), ROAD_W[cls], ROAD_COL[cls], a[2 * i] || 0, a[2 * i + 1] || 1e-3));
+    trimmed[cls].forEach((r, i) => { if (r) ribbon(W, r.line.map(T), ROAD_W[cls], ROAD_COL[cls], a[2 * i] || 0, a[2 * i + 1] || 1e-3, r.a, r.L); });
   }
   const rEnd = W.ni;
   const out = W.done();
@@ -254,6 +273,88 @@ export function buildMesh(city, tl) {
     seaCentre, seaR, half: [cx, cy], domain: dW, ext, tallest,
     transfer: [out.vertices, out.indices.buffer],
   };
+}
+
+// EXTENT. The generator works on the view grown 1.2 times (as upstream),
+// and the margin past the view holds thin, cut-off blocks. The 3D city and
+// the STL keep the blocks and lots whose centroid lies in the view, the
+// area of the 2D map. The water runs on past it.
+// extent(city) -> { block: [bool], lot: [bool] }
+export function extent(city) {
+  const inV = (p) => { const c = cen(p); return c[0] >= 0 && c[1] >= 0 && c[0] <= city.view.w && c[1] <= city.view.h; };
+  const block = city.blocks.map(inV);
+  const lot = city.lots.map((l, i) => block[city.lotBlock[i]] !== false && inV(l));
+  return { block, lot };
+}
+
+// ROAD TRIM. The generator runs on the view grown 1.2 times, and its roads
+// run on to the edge of that area, past the last blocks. In 3D those ends
+// stand out over bare ground or water like piers. trimRoads cuts each end
+// of each road back to its last point near the city: within ANCHOR m of the
+// edge of a block that extent() keeps, or inside a park. The middle of a road is kept, so bridges
+// over the river stay. A road with no such point is dropped.
+// trimRoads(city) -> { cls: [{ line, a, L } | null] }  (map coordinates;
+// a = length cut from the start, L = the whole length, for the playback)
+export const ANCHOR = 8;
+export function trimRoads(city) {
+  const kept = extent(city);
+  const cell = 32, grid = new Map();
+  const add = (x, y) => { const k = Math.floor(x / cell) + ',' + Math.floor(y / cell); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(x, y); };
+  for (const b of city.blocks.filter((_, i) => kept.block[i])) {
+    for (let i = 0; i < b.length; i++) {
+      const p = b[i], q = b[(i + 1) % b.length];
+      const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 4));
+      for (let k = 0; k < n; k++) add(p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n);
+    }
+  }
+  const r2 = ANCHOR * ANCHOR;
+  const near = (x, y) => {
+    const cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const a = grid.get((cx + dx) + ',' + (cy + dy));
+      if (a) for (let i = 0; i < a.length; i += 2) if ((a[i] - x) ** 2 + (a[i + 1] - y) ** 2 <= r2) return true;
+    }
+    return city.parks.some((pk) => insidePoly([x, y], pk));
+  };
+  const out = {};
+  for (const cls of ['coast', 'river', 'main', 'major', 'minor']) {
+    out[cls] = city.roads[cls].map((l) => {
+      if (l.length < 2) return null;
+      // resample every 2 m, with the length along the road
+      const pts = [];
+      let acc = 0;
+      for (let i = 1; i < l.length; i++) {
+        const [ax, ay] = l[i - 1], [bx, by] = l[i];
+        const s = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(s / 2));
+        for (let k = 0; k < n; k++) pts.push([ax + (bx - ax) * k / n, ay + (by - ay) * k / n, acc + s * k / n]);
+        acc += s;
+      }
+      pts.push([l[l.length - 1][0], l[l.length - 1][1], acc]);
+      let i0 = 0, i1 = pts.length - 1;
+      while (i0 <= i1 && !near(pts[i0][0], pts[i0][1])) i0++;
+      while (i1 >= i0 && !near(pts[i1][0], pts[i1][1])) i1--;
+      if (i1 - i0 < 1) return null;
+      const a = pts[i0][2], b = pts[i1][2];
+      // the original vertices between the two cut points, plus the cut points
+      const line = [[pts[i0][0], pts[i0][1]]];
+      let d = 0;
+      for (let i = 1; i < l.length; i++) {
+        d += Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]);
+        if (d > a + 1e-6 && d < b - 1e-6) line.push(l[i]);
+      }
+      line.push([pts[i1][0], pts[i1][1]]);
+      return { line, a, L: acc };
+    });
+  }
+  return out;
+}
+function insidePoly(p, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
 }
 
 // Tensor field crosses for the 3D view: a line list (x, y, z per end) of a
@@ -300,8 +401,9 @@ export function toSTL(city) {
   };
   const v = city.view;
   solid([T([0, 0]), T([v.w, 0]), T([v.w, v.h]), T([0, v.h])], -2, 0);
-  for (const b of city.blocks) solid(b.map(T), 0, Z.block);
-  city.lots.forEach((l, i) => solid(inset(l.map(T), INSET), Z.block, Z.block + city.buildings[i].h));
+  const kept = extent(city);
+  city.blocks.forEach((b, i) => { if (kept.block[i]) solid(b.map(T), 0, Z.block); });
+  city.lots.forEach((l, i) => kept.lot[i] && solid(inset(l.map(T), INSET), Z.block, Z.block + city.buildings[i].h));
   const buf = new ArrayBuffer(84 + tris.length * 50);
   const dv = new DataView(buf);
   const head = 'City Generator, davesgames.io. Streets and lots: MapGenerator by ProbableTrain, LGPL-3.0';

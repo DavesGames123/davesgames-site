@@ -686,7 +686,11 @@ function nextShot() {
     Object.assign(v3.cam, { target: [a.p[0], a.p[1], 10], yaw: Math.atan2(-a.dir[0], -a.dir[1]) + tour.shot.side, pitch: tour.shot.pitch, dist: tour.shot.dist });
   } else if (k === 'tower') {
     let best = 0;
-    city.buildings.forEach((b, i) => { if (b.h > city.buildings[best].h && r() < 0.9) best = i; });
+    // the tallest tower inside the view (the 3D city drops the margin, mesh3d.js extent)
+    const inV = (l) => { let x = 0, y = 0; for (const q of l) { x += q[0] / l.length; y += q[1] / l.length; } return x >= 0 && y >= 0 && x <= city.view.w && y <= city.view.h; };
+    best = city.lots.findIndex(inV);
+    if (best < 0) best = 0;
+    city.buildings.forEach((b, i) => { if (b.h > city.buildings[best].h && r() < 0.9 && inV(city.lots[i])) best = i; });
     const c = city.lots[best].reduce((a, q) => [a[0] + q[0] / city.lots[best].length, a[1] + q[1] / city.lots[best].length], [0, 0]);
     const p = [c[0] - city.view.w / 2, city.view.h / 2 - c[1]];
     const hh = city.buildings[best].h;

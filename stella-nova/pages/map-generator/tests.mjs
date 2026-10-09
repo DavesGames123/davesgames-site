@@ -346,6 +346,41 @@ section('3D mesh');
   }
   const fl = fieldLines(A, fieldSampler(A));
   check('field lines: finite, whole segments', fl.length > 0 && fl.length % 6 === 0 && fl.every(Number.isFinite), `${fl.length / 6} segments`);
+  // road trim: no 3D road end past the built area or over the sea
+  {
+    const { trimRoads, ANCHOR, extent } = await import('./mesh3d.js');
+    const tr = trimRoads(A);
+    const ex = extent(A);
+    const keptBlocks = A.blocks.filter((_, i) => ex.block[i]);
+    check('3D extent keeps the blocks of the 2D view and drops the margin', keptBlocks.length > 0 && keptBlocks.length < A.blocks.length && ex.lot.filter(Boolean).length > 0, `${keptBlocks.length} of ${A.blocks.length} blocks, ${ex.lot.filter(Boolean).length} of ${A.lots.length} lots`);
+    const edgePts = [];
+    for (const b of keptBlocks) for (let i = 0; i < b.length; i++) {
+      const p = b[i], q = b[(i + 1) % b.length], n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 2));
+      for (let k = 0; k < n; k++) edgePts.push([p[0] + (q[0] - p[0]) * k / n, p[1] + (q[1] - p[1]) * k / n]);
+    }
+    const nearBlock = (x, y) => edgePts.some((e) => (e[0] - x) ** 2 + (e[1] - y) ** 2 <= (ANCHOR + 1) ** 2);
+    const inPark = (x, y) => A.parks.some((pk) => inside([x, y], pk));
+    let ends = 0, loose = 0, wet = 0, kept = 0, dropped = 0, cut = 0;
+    for (const cls of Object.keys(tr)) tr[cls].forEach((r, i) => {
+      if (!r) { dropped++; return; }
+      kept++;
+      const l0 = A.roads[cls][i];
+      if (r.line.length !== l0.length || r.a > 0) cut++;
+      for (const e of [r.line[0], r.line[r.line.length - 1]]) {
+        ends++;
+        if (!nearBlock(e[0], e[1]) && !inPark(e[0], e[1])) loose++;
+        // an end that joins the coast road sits up to dstep into the sea, under
+        // that road (10 m wide); deeper than half its width would show as a pier
+        if (A.sea.length > 2 && deepIn(e, A.sea, 5)) wet++;
+      }
+    });
+    check(`3D roads: every road end within ${ANCHOR} m of a block edge or in a park`, loose === 0, `${ends} ends, ${loose} loose; ${cut} roads cut, ${dropped} dropped, ${kept} kept`);
+    check('3D roads: no road ends over the sea past the coast road (bridges keep their middles)', wet === 0, `${wet}`);
+    // the stub test for the untrimmed roads, to show the trim does work
+    let rawLoose = 0;
+    for (const cls of Object.keys(tr)) for (const l of A.roads[cls]) for (const e of [l[0], l[l.length - 1]]) if (!nearBlock(e[0], e[1]) && !inPark(e[0], e[1])) rawLoose++;
+    check('the untrimmed roads do have loose ends (the case the trim fixes)', rawLoose > 0, `${rawLoose}`);
+  }
   const stl = toSTL(A);
   const dv = new DataView(stl);
   const nt = dv.getUint32(80, true);
