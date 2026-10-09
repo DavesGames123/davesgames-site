@@ -66,7 +66,7 @@ const ENV = { mobile: MOBILE, coarse: matchMedia('(pointer:coarse)').matches, de
 const S = {
   P: PR.fromPreset('earth'), width: BG.defaultWidth(ENV), M: null, Mw: 0,
   cam: { yaw: 0.6, pitch: 0.22, dist: 3.4 }, sunAz: 50, sunEl: 12, exposure: 0.65,
-  moveSun: true, spin: true, clouds: true, atmo: true, spinAngle: 0, t: 0,
+  moveSun: true, spin: true, clouds: true, atmo: true, aurora: true, stormAt: -1e9, spinAngle: 0, t: 0,
   rate: CK.RATE_DEFAULT, clock: CK.createClock(),
   busy: false, tab: 'planet', saver: false, override: null,
   rmode: 'type', locks: {}, lockSun: false,
@@ -284,6 +284,10 @@ function bindView() {
   $('tSun').onchange = e => S.moveSun = e.target.checked;
   $('tSpin').onchange = e => S.spin = e.target.checked;
   $('tClouds').onchange = e => S.clouds = e.target.checked;
+  $('tAurora').onchange = e => S.aurora = e.target.checked;
+  // a geomagnetic storm: starts at the current simulated hour, fades with
+  // an e-folding time of 8 simulated hours (stormLevel)
+  $('storm').onclick = () => { S.stormAt = S.clock.hours(); S.aurora = true; $('tAurora').checked = true; };
   $('tAtmo').onchange = e => { S.atmo = e.target.checked; if (R) R.setAtmo(S.atmo ? S.P : PR.merge(S.P, { atmo: { on: 0 } }), S.M ? S.M.stats.meanAlbedo : 0.3); };
 }
 
@@ -451,9 +455,20 @@ function frame(now) {
   R.render({
     pos: c.pos, target: c.target, up: c.up, fov: Math.min(fov, 1.6), w: VB.w, h: VB.h, offX, offY,
     t: S.t, exposure: S.exposure, sunDir: c.sunDir || sunDir(), spin: S.spinAngle,
-    steps: BG.viewSteps(ENV), cloudsOn: S.clouds, flowSpeed: 1,
+    steps: BG.viewSteps(ENV), cloudsOn: S.clouds, flowSpeed: 1, auroraOn: S.aurora, storm: stormLevel(ck.hours()),
     hours: ck.hours(), quality: ENV.mobile ? 0 : ENV.coarse ? 1 : 2,
   }, ctx.getCurrentTexture().createView());
+}
+
+// The storm level (0..1) at simulated hour h: a fast rise, then an
+// e-folding fade of 8 h.
+function stormLevel(h) {
+  const d = h - S.stormAt;
+  if (d < 0 || d > 48) { if ($('oStorm').textContent) $('oStorm').textContent = ''; return 0; }
+  const v = Math.min(1, d / 0.3) * Math.exp(-d / 8);
+  const txt = v > 0.02 ? 'storm ' + Math.round(v * 100) + ' %' : '';
+  if ($('oStorm').textContent !== txt) $('oStorm').textContent = txt;
+  return v;
 }
 
 // The clock line in the header: the rate and the planet's local day.

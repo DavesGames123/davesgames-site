@@ -15,6 +15,8 @@
 //    push     a push-in from 2.3 to 1.45 radii on the great spot (giants)
 //             or the highest massif (rocky); spin stops for the shot
 //    rings    a low pass across the ring plane (ringed giants only)
+//    aurora   planets with aurorae: the night side over the north pole
+//             from 2.5 radii, the sun behind the planet, a storm on
 //    lapse    a wide shot at 4.2 radii, the planet left of centre, a 6 h/s
 //             time-lapse (the planet turns, the clouds evolve). Half are
 //             lit from the camera side; half are backlit: a crescent, the
@@ -36,6 +38,7 @@
 import * as PR from './presets.js';
 import { plateBand } from '../../lib/saver-clear.js';
 import { worldFrame } from './render.js';
+import { auroraInfo } from './aurora.js';
 
 const D2R = Math.PI / 180;
 const SAVER_RATE = 1200, LAPSE_RATE = 21600;
@@ -63,7 +66,7 @@ window.snSaver = {
     const order = [];
     for (let i = 0; i < Math.max(rocky.length, gas.length); i++) { order.push(rocky[i % rocky.length]); order.push(gas[i % gas.length]); }
     const W = F.ENV.mobile ? 1024 : 2048;
-    const saved = { moveSun: S.moveSun, spin: S.spin, exposure: S.exposure, rate: S.rate, clouds: S.clouds };
+    const saved = { moveSun: S.moveSun, spin: S.spin, exposure: S.exposure, rate: S.rate, clouds: S.clouds, aurora: S.aurora, stormAt: S.stormAt };
     document.documentElement.classList.add('sn-saver');
     S.saver = true; S.moveSun = false; S.spin = true; S.exposure = 0.7; S.rate = SAVER_RATE; S.clouds = true;
     run = { i: 0, order, W, shot: null, shotsLeft: 0, next: null, P: null, M: null, raf: 0, saved, label, calm, rnd };
@@ -83,7 +86,7 @@ window.snSaver = {
       run.P = j.P; run.M = j.M;
       F.adopt(j.P, j.M, W);
       run.shotsLeft = 2 + (rnd() < 0.4 ? 1 : 0);
-      run.kinds = shuffle(['orbit', 'sunrise', 'push', 'lapse', ...(j.P.rings && j.P.rings.on ? ['rings'] : [])]);
+      run.kinds = shuffle(['orbit', 'sunrise', 'push', 'lapse', ...(j.P.rings && j.P.rings.on ? ['rings'] : []), ...(auroraInfo(j.P).active ? ['aurora'] : [])]);
       run.next = makeNext();
       return true;
     }
@@ -94,6 +97,8 @@ window.snSaver = {
       const sh = { kind, t0: performance.now(), dur, a0, dir, el: (rnd() - 0.4) * 0.5 };
       S.rate = kind === 'lapse' ? LAPSE_RATE : SAVER_RATE;
       if (kind === 'lapse') sh.lit = rnd() < 0.5;
+      // aurora: a storm at full strength for the shot, the toggle on
+      if (kind === 'aurora') { S.aurora = true; S.stormAt = S.clock ? S.clock.hours() - 0.5 : -1e9; }
       if (kind === 'push') {
         // the subject in the body frame
         let b;
@@ -128,6 +133,17 @@ window.snSaver = {
         const target = right.map(v => v * 0.55);
         return { pos, target, up: [0, 1, 0], fov: 40 * D2R, sunDir: sun };
       }
+      if (sh.kind === 'aurora') {
+        // the night side from 2.5 radii over the north polar region (the
+        // world frame pole of the planet), the sun behind the planet; the
+        // camera drifts round the pole
+        const pole = norm(worldFrame([0, 1, 0], run.P.tilt, 0));
+        const yaw = sh.a0 + sh.dir * 0.25 * e, side = norm(cross(pole, [Math.sin(yaw), 0, Math.cos(yaw)]));
+        const away = norm(cross(side, pole));
+        const pos = [0, 1, 2].map(i => (pole[i] * 0.75 + away[i] * 0.66) * 2.5);
+        const sun = norm(away.map((v, i) => -v + pole[i] * 0.1));
+        return { pos, target: pole.map(v => v * 0.55), up: pole, fov: 44 * D2R, sunDir: sun };
+      }
       if (sh.kind === 'sunrise') {
         const s = norm([Math.sin(sh.a0), 0.15, Math.cos(sh.a0)]);
         const up0 = norm(cross(cross(s, [0, 1, 0]), s));
@@ -157,7 +173,7 @@ window.snSaver = {
       if (!label || !run.P) return;
       const P = run.P, rocky = P.kind === 'rocky', A = P.atmo;
       const kind = run.shot ? run.shot.kind : 'orbit';
-      const shotName = { orbit: 'orbit', sunrise: 'sunrise over the limb', push: rocky || !P.storms.spot ? 'push-in on the highest point' : 'push-in on the great spot', rings: 'across the ring plane', lapse: 'time-lapse under the stars' }[kind];
+      const shotName = { orbit: 'orbit', sunrise: 'sunrise over the limb', push: rocky || !P.storms.spot ? 'push-in on the highest point' : 'push-in on the great spot', rings: 'across the ring plane', lapse: 'time-lapse under the stars', aurora: 'aurora over the night side' }[kind];
       const pr = PR.presetById(P.preset);
       const params = rocky ? [
         { sym: 'o', name: 'octaves', value: P.terrain.octaves.toFixed(1) },

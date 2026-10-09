@@ -277,6 +277,31 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
     `${none.length} airless of 16; heat ${Math.min(...L.map(Q => Q.lava.heat)).toFixed(2)}-${Math.max(...L.map(Q => Q.lava.heat)).toFixed(2)}`);
 }
 
+// aurorae (aurora.js): only with a field and an air; the oval follows
+// the dipole tilt; the colour follows the composition; off packs zeros
+{
+  const AU = await import('./aurora.js');
+  const act = id => AU.auroraInfo(PR.fromPreset(id, 5)).active;
+  const lavaAirless = [...Array(16)].map((_, s) => PR.fromPreset('lava', s + 1)).find(Q => !Q.atmo.on);
+  ok('aurora: on for worlds with a field and an atmosphere only', act('earth') && act('ocean') && act('jupiter') && act('neptune') && act('rust') && !act('moon') && !act('titan') && !act('volcanic') && !AU.auroraInfo(lavaAirless).active,
+    `rust field ${AU.auroraInfo(PR.fromPreset('rust', 5)).field} (crustal), airless lava ${AU.auroraInfo(lavaAirless).active}`);
+  const P = PR.fromPreset('earth', 5); P.aurora.tilt = 30; P.aurora.lon = 0.25;
+  const u = AU.auroraPack(P, {}), tilt = Math.acos(u[1]) * 180 / Math.PI;
+  const P0 = PR.fromPreset('earth', 5); P0.aurora.tilt = 0;
+  ok('aurora: the oval axis follows the dipole tilt (30 deg set, 0 deg set)', Math.abs(tilt - 30) < 1e-3 && Math.abs(AU.auroraPack(P0, {})[1] - 1) < 1e-6, `axis tilt ${tilt.toFixed(3)} deg, axis ${[u[0], u[1], u[2]].map(v => v.toFixed(3)).join(' ')}`);
+  const ice = AU.auroraInfo(PR.fromPreset('neptune', 5)), jup = AU.auroraInfo(PR.fromPreset('jupiter', 5)), ea = AU.auroraInfo(PR.fromPreset('earth', 5));
+  ok('aurora: ice giants have tilted (>= 45 deg), offset fields; Earth-like 4-14 deg', ice.tilt * 180 / Math.PI >= 45 && ice.offset > 0.2 && jup.offset === 0 && ea.tilt * 180 / Math.PI >= 4 && ea.tilt * 180 / Math.PI <= 14);
+  const quiet = AU.auroraPack(PR.fromPreset('earth', 5), {}), storm = AU.auroraPack(PR.fromPreset('earth', 5), { storm: 1 });
+  ok('aurora: a storm moves the oval toward the equator, widens and brightens it', storm[4] > quiet[4] + 0.05 && storm[5] > quiet[5] && storm[3] > quiet[3], `colat ${(quiet[4] * 57.3).toFixed(1)} -> ${(storm[4] * 57.3).toFixed(1)} deg`);
+  const mid = id => [...AU.auroraPack(PR.fromPreset(id, 5), {}).slice(16, 19)], lowC = id => [...AU.auroraPack(PR.fromPreset(id, 5), {}).slice(12, 15)], topC = id => [...AU.auroraPack(PR.fromPreset(id, 5), {}).slice(20, 23)];
+  const e = mid('earth'), j = mid('jupiter'), r = lowC('rust');
+  ok('aurora: colours by composition: O green curtain, O red top, N2+ blue edge (N2/O2); magenta (H2); violet edge (CO2)',
+    e[1] > e[0] && e[1] > e[2] && topC('earth')[0] > topC('earth')[1] && lowC('earth')[2] > lowC('earth')[0] && j[0] > j[1] && j[2] > j[1] && r[2] > r[1],
+    `earth ${e.join(',')}, jupiter ${j.join(',')}`);
+  const off = AU.auroraPack(PR.fromPreset('earth', 5), { auroraOn: false }), moonU = AU.auroraPack(PR.fromPreset('moon', 5), {});
+  ok('aurora: the toggle off and a field-less world pack all zeros (the shader skips the march)', off.every(v => v === 0) && moonU.every(v => v === 0));
+}
+
 // rust worlds have real relief: basins, shields and canyons (geology.js)
 // span many km, and each member draws basins
 {

@@ -25,6 +25,7 @@
 //  lava = { heat, age, sulfur } (0..1) shapes a lava sea (rocky.js
 //  lavaSea) and the lava channels (maps.js): tidal heating, crust age,
 //  sulfur frost. Other worlds do not read it.
+//  aurora (aurora.js) sets the aurorae of the view; -1 means auto.
 //
 //  Colours are sRGB triples in 0..1. The atmosphere coefficients are in
 //  1/km times 1e-3 (the units of Hillaire 2020), so Earth reads
@@ -35,6 +36,8 @@
 //  "export const ATMO", "export const PRESETS", "export const SCHEMA",
 //  "export function normalize", "export function toJSON", "export function fromJSON"
 // ============================================================================
+
+import { AURORA_DEFAULT } from './aurora.js';
 
 export const FORMAT = 'stella-nova-planet';
 export const VERSION = 1;
@@ -90,6 +93,7 @@ export const ROCKY_DEFAULT = {
   cracks: { amount: 0, freq: 2.5, glow: 0 },
   volcanoes: { count: 0, glow: 0 },
   lava: { heat: 0.6, age: 0.5, sulfur: 0.2 },
+  aurora: { ...AURORA_DEFAULT },
   clouds: { cover: 0.5, freq: 1.5, swirl: 0.6, cyclones: 6, height: 0.006, cirrus: 0.3, color: [1, 1, 1] },
   relief: 12, radiusKm: 6371, bump: 3, tilt: 23, spin: 1,
   palette: {
@@ -110,6 +114,7 @@ export const GAS_DEFAULT = {
   haze: { amount: 0.25, polar: 0.5 },
   glow: 0,
   clouds: { cover: 0.12, color: [1, 1, 1] },
+  aurora: { ...AURORA_DEFAULT },
   relief: 40, radiusKm: 69911, bump: 6, tilt: 3, spin: 2.4,
   palette: {
     stops: [[0, [0.42, 0.26, 0.16]], [0.3, [0.66, 0.48, 0.34]], [0.55, [0.86, 0.76, 0.62]], [0.8, [0.95, 0.91, 0.84]], [1, [0.98, 0.96, 0.92]]],
@@ -438,6 +443,11 @@ export const SCHEMA = {
     ['Atmosphere', 'atmo.sun', 'sun illuminance', 1, 40, 0.1],
     ['Atmosphere', 'atmo.clarity', 'ground clarity (view)', 0.1, 1, 0.01],
     ['Atmosphere', 'atmo.glow', 'haze glow from the surface', 0, 2, 0.01],
+    ['Aurora', 'aurora.on', 'aurorae', 0, 1, 1],
+    ['Aurora', 'aurora.strength', 'strength', 0, 3, 0.01],
+    ['Aurora', 'aurora.activity', 'activity', 0, 1, 0.01],
+    ['Aurora', 'aurora.field', 'field: auto · none · dipole · crustal', -1, 2, 1],
+    ['Aurora', 'aurora.tilt', 'dipole tilt ° (-1 auto)', -1, 90, 0.5],
   ],
 };
 

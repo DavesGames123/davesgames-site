@@ -33,7 +33,11 @@
 //  that graze the low air). Past the terminator the ground keeps a
 //  twilight sky (fn twilightT); the shadow in the air has a penumbra.
 //
-//  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface", "fn sunVis", "fn twilightT",
+//  AURORAE  fn auroraMarch: an emission term marched through the shell
+//  100-300 km up, bounded to the oval (aurora.js sets the uniforms; a
+//  strength of 0 skips it).
+//
+//  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface", "fn sunVis", "fn twilightT", "fn auroraMarch",
 //  "fn cloudsAt", "fn cloudShadow", "fn terrainShadow", "fn atmosphere", "fn ringAt", "@fragment"
 // ============================================================================
 
@@ -54,6 +58,12 @@ struct View {
   sunW: vec4f,      // xyz sun direction (world frame), w star gain
   cloud2: vec4f,    // x deck u offset, y cirrus u offset (the slow solid drift), z cirrus opacity, w deck opacity max
   terr: vec4f,      // x relief (radii) x 0..1 height, y cast shadows on, z first march step (rad), w 0
+  aur0: vec4f,      // aurora.js: xyz dipole axis (body frame), w strength (0 = off)
+  aur1: vec4f,      // x oval colatitude (rad), y width (rad), z r0, w r1 (radii)
+  aur2: vec4f,      // x activity, y time (sim minutes), z kind (0 oval, 1 giant, 2 crustal), w centre offset (radii)
+  aurLo: vec4f,     // rgb lower edge (N2+ blue / violet)
+  aurMid: vec4f,    // rgb curtain (O green / H magenta)
+  aurTop: vec4f,    // rgb top (O red / violet)
 }
 
 @group(0) @binding(0) var<uniform> V: View;
@@ -457,6 +467,110 @@ fn atmosphere(ro: vec3f, rd: vec3f, tMax: f32) -> Scat {
   return s;
 }
 
+// Aurorae (aurora.js gives the uniforms). An emission marched along the
+// view ray through the shell r0..r1 (about 100-300 km), bounded to the
+// oval: a sample farther than 4 widths from the oval costs one dot
+// product. The curtains are thin sheets along the magnetic longitude:
+// the oval centre folds with the longitude and drifts in time, rays are
+// fine stripes across the sheet, patches pulse. Colour by height: the
+// low-edge colour, the curtain colour peaking low in the shell, the top
+// colour above. Thicker and brighter on the night side and round
+// midnight; faint by day. Giants add a moon footprint and diffuse polar
+// light; crustal fields give patches with no oval.
+fn auroraMarch(ro: vec3f, rd: vec3f, tEnd: f32) -> vec3f {
+  let r0 = V.aur1.z;
+  let r1 = V.aur1.w;
+  let hit = raySphere(ro, rd, r1);
+  if (hit.y <= 0.0) { return vec3f(0.0); }
+  let ta = max(hit.x, 0.0);
+  let tb = min(hit.y, tEnd);
+  if (tb <= ta) { return vec3f(0.0); }
+  let ax = V.aur0.xyz;
+  var perp = cross(ax, vec3f(0.0, 0.0, 1.0));
+  if (dot(perp, perp) < 1e-6) { perp = vec3f(1.0, 0.0, 0.0); }
+  let ctr = normalize(perp) * V.aur2.w;
+  let e1 = normalize(cross(ax, normalize(perp)));
+  let e2 = cross(ax, e1);
+  let L = V.sun.xyz;
+  let tm = V.aur2.y;
+  let act = V.aur2.x;
+  let kind = V.aur2.z;
+  // bound: the largest |cos colatitude| at 5 points of the chord. A
+  // chord that stays 4 widths (plus the folds and 0.08 rad of chord
+  // curvature) equatorward of the oval has no oval light: skip it.
+  // On giants the bound also takes in the moon footprint (1.45 x the
+  // oval colatitude).
+  let reach = max(V.aur1.x + 4.0 * V.aur1.y * 1.8, select(0.0, V.aur1.x * 1.45 + V.aur1.y, V.aur2.z > 0.5));
+  var mMax = 0.0;
+  var mLow = 1.0;
+  for (var k = 0; k < 5; k++) {
+    let xk = ro + rd * mix(ta, tb, f32(k) * 0.25);
+    let mk = dot(normalize(xk - ctr), ax);
+    mMax = max(mMax, abs(mk));
+    mLow = min(mLow, mk);
+  }
+  if (V.aur2.z < 1.5 && acos(min(mMax, 1.0)) > reach + 0.11) { return vec3f(0.0); }
+  // crustal patches lie on the southern magnetic hemisphere (m < 0.1)
+  if (V.aur2.z > 1.5 && mLow > 0.2) { return vec3f(0.0); }
+  // steps: 10 on a phone to 16 on a desktop; the soft crustal patches 6
+  let n = select(10 + 3 * i32(V.bw2.w), 6, kind > 1.5);
+  let dt = (tb - ta) / f32(n);
+  // a sub-step jitter per pixel hides the march steps
+  let jit = hash3(vec3f(rd * 917.0));
+  var acc = vec3f(0.0);
+  for (var i = 0; i < 16; i++) {
+    if (i >= n) { break; }
+    let x = ro + rd * (ta + (f32(i) + jit) * dt);
+    let r = length(x);
+    let h = (r - r0) / (r1 - r0);
+    if (h < -0.08 || h > 1.0) { continue; }
+    let q = normalize(x - ctr);
+    let m = dot(q, ax);
+    let colat = acos(clamp(abs(m), 0.0, 1.0));
+    if (kind < 0.5 && abs(colat - V.aur1.x) > 4.0 * V.aur1.y * 1.8 + 0.05) { continue; }
+    if (kind > 0.5 && kind < 1.5 && colat > reach + 0.05) { continue; }
+    let phi = atan2(dot(q, e2), dot(q, e1));
+    // night side and the midnight sector (the sun direction at the point)
+    let sunUp = dot(normalize(x), L);
+    let night = smoothstep(0.25, -0.35, sunUp);
+    let w = V.aur1.y * (1.0 + 0.8 * night);
+    // the oval centre folds with the longitude and drifts (curtain folds)
+    let fold = 0.018 * sin(phi * 5.0 + tm * 0.11 + 2.0 * sin(phi * 2.0 - tm * 0.05)) + 0.009 * sin(phi * 13.0 - tm * 0.23);
+    let c0 = V.aur1.x + fold + 0.02 * night;
+    let d = (colat - c0) / w;
+    var mask = 0.0;
+    if (kind > 1.5) {
+      // crustal fields: patches on one hemisphere, no oval
+      let pn = sin(dot(q, vec3f(7.1, 3.3, 5.7)) + tm * 0.02) * sin(dot(q, vec3f(-4.3, 8.9, 2.1)) - tm * 0.015);
+      mask = smoothstep(0.35, 0.8, pn) * smoothstep(0.1, -0.4, m) * 0.8;
+    } else {
+      if (abs(d) > 4.0 && !(kind > 0.5 && colat < c0)) { continue; }
+      mask = exp(-d * d);
+      if (kind > 0.5) {
+        // giants: diffuse polar light inside the oval, and a moon
+        // footprint spot with a trail, equatorward of the oval
+        mask += 0.18 * smoothstep(c0, c0 * 0.4, colat) * (0.6 + 0.4 * sin(phi * 3.0 + tm * 0.07));
+        let fl = tm * 0.004;
+        let dphi = atan2(sin(phi - fl), cos(phi - fl));
+        let fc = (colat - c0 * 1.45) / (0.25 * w);
+        mask += 1.6 * exp(-fc * fc) * (exp(-dphi * dphi / 0.002) + 0.4 * exp(-max(dphi, 0.0) * 8.0) * step(0.0, dphi));
+      }
+    }
+    // rays: fine stripes across the sheet that shimmer; pulsating patches
+    let rays = 0.55 + 0.45 * pow(0.5 + 0.5 * sin(phi * 90.0 + 6.0 * sin(phi * 9.0 + tm * 0.3) + tm * 0.9), 3.0);
+    let pulse = 0.75 + 0.25 * sin(tm * 0.6 + phi * 4.0 + 3.0 * sin(phi * 1.7));
+    // the sheet: a sharp lower edge that wanders, a slow fade upward
+    let edge = 0.03 * sin(phi * 31.0 + tm * 0.4);
+    let lo = exp(-pow((h - 0.02 - edge) / 0.045, 2.0));
+    let mid = exp(-pow((h - 0.16 - edge) / 0.14, 2.0)) * smoothstep(-0.05, 0.03, h - edge);
+    let top = smoothstep(0.3, 0.6, h) * smoothstep(1.0, 0.75, h);
+    let e = V.aurLo.rgb * (0.45 * lo) + V.aurMid.rgb * mid + V.aurTop.rgb * (0.4 * top * (0.6 + 0.6 * act));
+    let lit = mix(0.12, 1.0, night);
+    acc += e * (mask * rays * pulse * lit * dt / (r1 - r0));
+  }
+  return acc * V.aur0.w * 0.12;
+}
+
 fn hash3(p: vec3f) -> f32 {
   var q = fract(p * vec3f(0.1031, 0.1030, 0.0973));
   q += dot(q, q.yxz + 33.33);
@@ -580,6 +694,8 @@ fn fs(in: VOut) -> @location(0) vec4f {
   }
   let sc = atmosphere(ro, rd, tEnd);
   col = col * sc.T + sc.L;
+  // aurorae: a uniform branch, skipped when the toggle is off
+  if (V.aur0.w > 0.0) { col += auroraMarch(ro, rd, tEnd); }
   // ring in front of the planet
   if (ringT > 0.0 && (!planetHit || ringT < hp.x) && !(!planetHit && (topT.y < 0.0 || ringT > topT.y))) { col = mix(col, ring.rgb, ring.a); }
 

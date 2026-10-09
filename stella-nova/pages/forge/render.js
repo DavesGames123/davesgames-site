@@ -14,7 +14,8 @@
 //  (bodyFrame), so the shader works in one frame. cam = { pos, target,
 //  up, fov (rad), w, h, offX, offY, t, exposure, sunDir (world), spin
 //  angle, steps, cloudsOn, flowSpeed, quality (0 phone, 1 tablet,
-//  2 desktop), sunRadiusDeg, sunGain, starGain }.
+//  2 desktop), sunRadiusDeg, sunGain, starGain, auroraOn (default on),
+//  storm (0..1, aurora.js) }.
 //  Shaders: atmo-common.wgsl + sky.wgsl (stars, Milky Way, sun) +
 //  planet.wgsl, joined in that order into one module.
 //
@@ -29,6 +30,7 @@
 //  "function bodyFrame", "function packView", "render(cam"
 // ============================================================================
 import { createAtmo } from './atmo.js';
+import { auroraPack, AURORA_FLOATS } from './aurora.js';
 import { mipChain, shrink } from './maps.js';
 import { ringProfile } from './gas.js';
 import { gpuWidth, cloudWidth } from './budget.js';
@@ -187,7 +189,7 @@ export function cloudSlices(dh) {
 
 // out: an optional Float32Array(VIEW_FLOATS) to fill (render() reuses one,
 // so a frame allocates no typed array).
-export const VIEW_FLOATS = 64;
+export const VIEW_FLOATS = 64 + AURORA_FLOATS;
 export function packView(cam, P, shellR, terr = [1, 0, 0, 0], out = new Float32Array(VIEW_FLOATS)) {
   const tilt = P ? P.tilt : 0;
   const fwdW = norm(sub(cam.target || [0, 0, 0], cam.pos));
@@ -224,5 +226,7 @@ export function packView(cam, P, shellR, terr = [1, 0, 0, 0], out = new Float32A
     terr[0], terr[1], terr[2], terr[3],
   ];
   out.set(v);
+  // aurorae (aurora.js): 6 vec4 after the 16 above, all 0 when off
+  auroraPack(P, cam, out, 64);
   return out;
 }

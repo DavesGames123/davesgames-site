@@ -16,6 +16,8 @@
 //       more than 30 % covered shows the surface (analytic cover on both
 //       sides of the edge, no 1-px staircase), and on an Earth-like world
 //       the radial limb profile has no local minimum (no dark ring).
+//    5. Aurorae: the toggle off renders byte-identical frames to strength
+//       0, and with the aurora on the night side changes.
 // ============================================================================
 import { createRenderer } from './render.js';
 import * as PR from './presets.js';
@@ -167,6 +169,22 @@ function termProfile(img) {
   const prof = [], dips = [];
   for (let k = -6; k <= 4; k++) { prof.push(Math.round(med(k))); if (k >= -3 && k <= 3 && med(k) + 8 < med(k - 1) && med(k) + 8 < med(k + 1)) dips.push(k); }
   ok('limb: no dark ring at the Earth-like limb', dips.length === 0, `median by px from the edge (-6..4): ${prof.join(' ')}`);
+}
+// 5. aurorae: the toggle off renders byte-identical frames to a world
+// whose aurora strength is 0; on, the night side changes
+{
+  const Q = PR.fromPreset('earth', 4127), MQ = generate(Q, 256);
+  const R = await createRenderer({ device, format: 'rgba8unorm', loadText });
+  const t = device.createTexture({ size: [256, 256], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const cam = { pos: [-1.2, 2.2, -0.9], target: [0, 0.6, 0], up: [0, 1, 0], fov: 0.8, w: 256, h: 256, t: 1, exposure: 0.65, sunDir: [0.8, 0.1, 0.6], spin: 0, steps: 24, quality: 2, hours: 3, cloudsOn: true, starGain: 0, sunGain: 0 };
+  const shot = async (P, c) => { R.setPlanet(P, MQ, {}); R.render(c, t.createView()); return readMap(t); };
+  const a = await shot(Q, { ...cam, auroraOn: false });
+  const Q0 = PR.clone(Q); Q0.aurora.strength = 0;
+  const b = await shot(Q0, { ...cam, auroraOn: true });
+  const c = await shot(Q, { ...cam, auroraOn: true, storm: 1 });
+  let same = true, diff = 0; for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) same = false; if (a[i] !== c[i]) diff++; }
+  ok('aurora: toggle off gives byte-identical frames (vs strength 0); on changes the night side', same && diff > 500, `${diff} bytes differ with the aurora on`);
+  R.destroy(); t.destroy();
 }
 ok('render: no GPU validation errors', !gpuErr, gpuErr.trim());
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');

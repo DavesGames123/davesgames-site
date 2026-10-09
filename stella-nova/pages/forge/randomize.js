@@ -45,7 +45,7 @@ export const GROUPS = [
   { id: 'ocean', label: 'oceans and climate', gasLabel: 'heat and aurorae',
     rocky: ['ocean', 'climate', 'rivers', 'lava'], gas: ['glow', 'gx.glowT', 'gx.aurora', 'gx.auroraLat'] },
   { id: 'sky', label: 'atmosphere and clouds', gasLabel: 'atmosphere and haze',
-    rocky: ['atmo', 'clouds'], gas: ['atmo', 'haze', 'clouds', 'gx.hood'] },
+    rocky: ['atmo', 'clouds', 'aurora'], gas: ['atmo', 'haze', 'clouds', 'gx.hood', 'aurora'] },
   { id: 'palette', label: 'palette', rocky: ['palette'], gas: ['palette', 'gx.col', 'gx.accent', 'gx.patchy', 'gx.albedo'] },
   { id: 'rings', label: 'rings', rocky: ['rings', 'ringx'], gas: ['rings', 'ringx'] },
   { id: 'light', label: 'lighting', rocky: ['view'], gas: ['view'] },
@@ -90,6 +90,9 @@ export function draw(mode = 'any', seed = 1, preset = 'earth') {
   }
   P.seed = s2; P.name = pr.name; P.preset = id;
   P.view = randomView(makeDice(s2, 'view:' + mode), P);
+  // aurorae: their own dice stream, so the rest of the draw is unchanged
+  const AF = makeDice(s2, 'aurora');
+  P.aurora = { ...(P.aurora || {}), strength: +AF.u(0.6, 1.6).toFixed(2), activity: +AF.u(0.1, 0.8).toFixed(2) };
   P = clean(P);
   P.rand = mode === 'type' ? { mode, seed, type: id } : { mode, seed };
   return P;
@@ -124,7 +127,7 @@ export function applyLocks(next, prev, locks) {
 const SKIP = new Set(['kind', 'name', 'preset', 'rand', 'seed', 'view.lockSun']);
 // switches, and counts whose change moves every feature (a new plate or
 // jet count redraws the whole layout), flip as a whole
-const DISCRETE = ['ocean.liquid', 'rings.on', 'atmo.on', 'bands.symmetric', 'storms.spot', 'storms.polar', 'gx.polar', 'gx.spots', 'gx.ovalChains', 'gx.polySides',
+const DISCRETE = ['ocean.liquid', 'rings.on', 'atmo.on', 'aurora.on', 'aurora.field', 'aurora.tilt', 'bands.symmetric', 'storms.spot', 'storms.polar', 'gx.polar', 'gx.spots', 'gx.ovalChains', 'gx.polySides',
   'gx.jets', 'gx.cyclones', 'gx.khWaves', 'plates.count', 'turbulence.steps', 'volcanoes.count', 'features.basins', 'features.shields', 'storms.small', 'storms.ovals', 'bands.count'];
 export function mutate(P, amount, seed) {
   const a = Math.min(1, Math.max(0, +amount || 0));
