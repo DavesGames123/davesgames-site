@@ -25,6 +25,7 @@ const { fieldOnGrid, linearLut, srgbToLinear } = await import('./strings3d.js');
 const { StringSim, smoothField } = await import('../engine/strings.js');
 const { INSTRUMENTS, stringParams } = await import('../engine/instruments.js');
 const CM = await import('../../ct-lab/colormaps/maps.js');
+const { floorLut } = await import('../stringlut.js');
 
 let pass = 0, fail = 0;
 const groups = {};
@@ -151,7 +152,10 @@ for (const key of ['steel', 'classical', 'violin']) {
   for (let q = 0; q < col.length; q += 3) { const s = col[q] + col[q + 1] + col[q + 2]; if (s > best) { best = s; bi = q; } }
   const top = [...Array(256).keys()].filter((q) => near(col[bi], lut[q * 3], 1e-6) && near(col[bi + 2], lut[q * 3 + 2], 1e-6));
   ok(top.length && top[0] >= 240, 'colour: brightest ring is in the top of the LUT', top);
-  ok(view.live.items[0].geo.attributes.color.array.every((v, q) => near(v, lut[q % 3], 1e-6)), 'colour: string at rest gets the first LUT entry');
+  // the view floors the LUT (stringlut.js): a resting string is a dim steel
+  // core, not black; the top of the map is unchanged
+  const flut = linearLut(floorLut(CM.variant('magma')));
+  ok(view.live.items[0].geo.attributes.color.array.every((v, q) => near(v, flut[q % 3], 1e-6)), 'colour: string at rest gets the first entry of the floored LUT (not black)');
   // decay of the auto range
   sims[2].reset ? sims[2].reset() : sims[2].damp(0);
   view.frame(1.5, 0);

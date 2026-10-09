@@ -39,6 +39,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import * as CM from '../ct-lab/colormaps/maps.js';
+import { floorLut } from './stringlut.js';
 import { smoothField } from './engine/strings.js';
 import { noteName, freqToMidi } from './engine/instruments.js';
 
@@ -90,7 +91,7 @@ export function createView2D(canvas, world) {
   const hctx = histCanvas.getContext('2d');
   let himg = null;
   const amps = new Float64Array(N_MODES);
-  let lutKey = '', lut = null, diverging = false;
+  let lutKey = '', lut = null, slut = null, diverging = false;
   let drag = null;                     // { lane, pos, kind, y0, id }
   let hover = null;
 
@@ -139,6 +140,7 @@ export function createView2D(canvas, world) {
     if (key !== lutKey) {
       lutKey = key;
       lut = CM.variant(c.id, { reverse: c.reverse, gamma: c.gamma });
+      slut = floorLut(lut);   // the string itself: never darker than L* 34
       diverging = CM.get(c.id).kind === 'diverging';
     }
     return lut;
@@ -146,6 +148,12 @@ export function createView2D(canvas, world) {
   const col = (t) => {
     const k = Math.max(0, Math.min(255, Math.round(t * 255))) * 3;
     return `rgb(${lut[k]},${lut[k + 1]},${lut[k + 2]})`;
+  };
+  // the string and its arrows: the floored LUT, so a string at rest (zero
+  // field, black in magma) still shows over the dark fretboard
+  const scol = (t) => {
+    const k = Math.max(0, Math.min(255, Math.round(t * 255))) * 3;
+    return `rgb(${slut[k]},${slut[k + 1]},${slut[k + 2]})`;
   };
   // value -> colour parameter: magnitude for sequential maps, signed for diverging
   const tOf = (f, s) => (diverging ? 0.5 + 0.5 * Math.max(-1, Math.min(1, f / s)) : Math.min(1, Math.abs(f) / s));
@@ -243,7 +251,7 @@ export function createView2D(canvas, world) {
     ctx.stroke();
     ctx.lineWidth = lw;
     for (let j = 0; j < N; j++) {
-      ctx.strokeStyle = col(tOf(0.5 * (F[j] + F[j + 1]), s));
+      ctx.strokeStyle = scol(tOf(0.5 * (F[j] + F[j + 1]), s));
       ctx.beginPath(); ctx.moveTo(xOf(j), yOf(sim.u[j])); ctx.lineTo(xOf(j + 1), yOf(sim.u[j + 1])); ctx.stroke();
     }
 
@@ -254,7 +262,7 @@ export function createView2D(canvas, world) {
         const j = Math.round((q / na) * N), f = F[j] / s;
         if (Math.abs(f) < 0.04) continue;
         const x = xOf(j), y = yOf(sim.u[j]), dy = -f * len;
-        ctx.strokeStyle = col(tOf(F[j], s)); ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = single ? 1.6 : 1.2;
+        ctx.strokeStyle = scol(tOf(F[j], s)); ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = single ? 1.6 : 1.2;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + dy); ctx.stroke();
         const hd = Math.sign(dy) * Math.min(6, Math.abs(dy) * 0.5);
         ctx.beginPath(); ctx.moveTo(x, y + dy); ctx.lineTo(x - 3.5, y + dy - hd); ctx.lineTo(x + 3.5, y + dy - hd); ctx.closePath(); ctx.fill();

@@ -29,6 +29,7 @@ import * as CM from '../../ct-lab/colormaps/maps.js';
 import { INSTRUMENTS } from '../engine/instruments.js';
 import { buildModel } from './models.js';
 import { LiveStrings, FIELDS, linearLut } from './strings3d.js';
+import { floorLut } from '../stringlut.js';
 import { disposeTextures, setTextureScale } from './textures.js';
 
 export { FIELDS };
@@ -125,7 +126,8 @@ export function createStringView3D(canvas, opts = {}) {
   let model = null, live = null;
 
   function refreshLut() {
-    st.lut = linearLut(CM.variant(st.colormap, { reverse: st.reverse, gamma: st.gamma }));
+    // floored LUT: a resting string (zero field) stays a dim steel core, not black
+    st.lut = linearLut(floorLut(CM.variant(st.colormap, { reverse: st.reverse, gamma: st.gamma })));
     const kind = CM.get(st.colormap).kind;
     const f = FIELDS.find((x) => x.id === st.field);
     st.signed = !!(f && f.signed && kind !== 'sequential');
