@@ -9,6 +9,10 @@
 //  The tree shows 3D stills by default (S.d3; the 3D button gives the 2D
 //  drawings). Stills come from RxView.thumb, framed per card, and the
 //  thumb puts the playing step back, so the 3D step keeps playing.
+//  The growth playback does not restart the 3D step for each new node,
+//  and a hover waits HOVER_MS: a pointer that only crosses the tree does
+//  not restart it. A restart shows the start of the intro, where little
+//  is drawn yet, so a stream of restarts left the 3D pane near empty.
 //  Hash: #s=<named id>, #c=<class id>, #b=<builder ops> (buildui.js).
 //  The right-hand surface (buildui.js) builds a tree of the user's own;
 //  each change shows that tree here.
@@ -54,6 +58,7 @@ const REDUCED_Q = window.matchMedia('(prefers-reduced-motion: reduce)');
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const LAYOUTS = [['clado', 'Tree'], ['radial', 'Radial'], ['fan', 'Fan']];
 
+const HOVER_MS = 140;
 export const S = { synth: null, layout: 'clado', d3: true, eq: true, node: -1, OCL: null, view: null, tree: null, loop: false };
 const scenes = new WeakMap(), arts = new Map(), stills = new Map();
 
@@ -69,7 +74,7 @@ function art(m, w, h) {
   return arts.get(k);
 }
 function still(m, w = 150, h = 70) {
-  if (!S.view) return '';
+  if (!S.view || S.view.lost) return '';
   const k = m.key + '|' + Math.round(w) + 'x' + Math.round(h);
   if (!stills.has(k)) { try { stills.set(k, S.view.thumb(m.rec, w, h)); } catch (e) { console.error(e); return ''; } }
   return stills.get(k);
@@ -108,7 +113,8 @@ function grow(perNode = 0.9) {
     const u = Math.min(1, (now - t0) / T);
     S.tree.grow(u);
     const g = S.tree.growing();
-    if (g !== last && g >= 0) { last = g; if (!S.tree.user) S.tree.focus(g, Math.max(0.55, Math.min(1, S.tree.view.s)), 500); if (syn.nodes[g].step >= 0) showNode(g); }
+    // the camera follows the growth; the step pane keeps playing the target
+    if (g !== last && g >= 0) { last = g; if (!S.tree.user) S.tree.focus(g, Math.max(0.55, Math.min(1, S.tree.view.s)), 500); }
     if (u < 1) requestAnimationFrame(step); else if (!S.tree.user) setTimeout(() => S.synth === syn && !S.tree.user && S.tree.fit(true), 600);
   };
   requestAnimationFrame(step);
@@ -361,7 +367,11 @@ async function boot() {
   wire(); buildLists();
   if (PHONE_Q.matches) setOpen(false); else setOpen(true);
   setBuild(!PHONE_Q.matches, true);
-  S.tree = new TreeView($('tree'), { hover: id => showNode(id), pick: id => { S.node = -1; showNode(id); } });
+  let hoverT = 0;
+  S.tree = new TreeView($('tree'), {
+    hover: id => { clearTimeout(hoverT); hoverT = setTimeout(() => showNode(id), HOVER_MS); },
+    pick: id => { clearTimeout(hoverT); S.node = -1; showNode(id); },
+  });
   try { S.view = new RxView(document.querySelector('#stepPane canvas'), { labels: document.querySelector('#stepPane .labels3'), lite: PHONE_Q.matches }); }
   catch (e) { S.view = null; $('nogl').hidden = false; }
   requestAnimationFrame(frame);

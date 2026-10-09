@@ -25,6 +25,12 @@
 //  view.snapshot(w, h)   the current frame as a data URL
 //  view.lite = true      fewer sphere segments (phones)
 //
+//  SIZE AND CONTEXT  frame() sizes the drawing buffer from the canvas box
+//  every frame (the parent box when the canvas reports 0). A lost WebGL
+//  context (GPU reset, Safari memory) is restored by the browser; three
+//  then draws again, and the view redraws its scene at once. The page
+//  can ask view.lost.
+//
 //  GREP MAP
 //    grep -n 'setScene('   grep -n 'draw('   grep -n 'snapshot('
 // ============================================================================
@@ -66,6 +72,9 @@ export class RxView {
     this.camDist = 20; this.camTarget = new THREE.Vector3(); this.userCam = false; this.labelEls = [];
     this.onEnd = null;
     this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+    this.lost = false;
+    canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.lost = true; }, false);
+    canvas.addEventListener('webglcontextrestored', () => { this.lost = false; this._rk = null; if (this.S) this.setScene(this.S); }, false);
   }
 
   // ── scene ────────────────────────────────────────────────────────────────
@@ -202,7 +211,9 @@ export class RxView {
     });
   }
   resize() {
-    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    let w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    // a canvas that reports no box: take the box of its parent
+    if ((!w || !h) && this.canvas.parentElement) { w = this.canvas.parentElement.clientWidth; h = this.canvas.parentElement.clientHeight; }
     if (!w || !h) return;
     const key = w + 'x' + h + JSON.stringify(this.rect);
     if (key === this._rk) return;
