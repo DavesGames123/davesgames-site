@@ -70,6 +70,22 @@ const ok = (c, n, i = '') => { if (!c) fails++; console.log(`${c ? 'ok  ' : 'FAI
   }
 }
 
+// transfer function colour from a colour map (dvr): rgb from the map, alpha kept
+{
+  const p = S.TF_PRESETS.head, cm = new Uint8Array(1024);
+  for (let i = 0; i < 256; i++) { cm[i * 4] = i; cm[i * 4 + 1] = 255 - i; cm[i * 4 + 2] = 77; cm[i * 4 + 3] = 255; }
+  const tissue = S.buildLut(p, cm), mapped = S.buildLut(p, cm, { tfFromMap: true });
+  let alphaSame = true, rgbFromMap = true;
+  for (let i = 0; i < 256; i++) {
+    if (tissue[i * 4 + 3] !== mapped[i * 4 + 3]) alphaSame = false;
+    const j = Math.round(S.tfMapT(p, i / 255) * 255);
+    if (mapped[i * 4] !== j || mapped[i * 4 + 1] !== 255 - j || mapped[i * 4 + 2] !== 77) rgbFromMap = false;
+  }
+  ok(alphaSame && rgbFromMap, 'tfFromMap: dvr colour comes from the map, opacity unchanged');
+  ok(S.tfMapT(p, 0) >= 0.12 && S.tfMapT(p, 1) === 1, 'tfMapT keeps soft tissue off the dark end of the map');
+  ok(mapped.subarray(1024).every((v, i) => v === tissue[1024 + i]), 'tfFromMap leaves the mip and slices row alone');
+}
+
 // meshes and lines
 {
   const geom = { nu: 137, nv: 167, du: 0.576, dv: 0.578, sod: 33.9, sdd: 67.9, nAngles: 180 };

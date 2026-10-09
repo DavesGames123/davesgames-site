@@ -191,7 +191,14 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 
 // 256 x 2 RGBA8 texture data. Row 0: transfer function (rgb, opacity per reference step).
 // Row 1: colour map for mip and slices (alpha 255).
-export function buildLut(preset, cmapRgba) {
+// o.tfFromMap: row 0 takes its colour from the colour map, not the tissue tints. The
+// opacity stays the same. Values from the soft-tissue edge up map to t = 0.12..1, so
+// translucent tissue does not go black on maps that start dark.
+export function tfMapT(preset, s) {
+  const a = preset.air ? preset.air[0] : preset.soft[0];
+  return 0.12 + 0.88 * Math.min(1, Math.max(0, (s - a) / Math.max(1e-6, 1 - a)));
+}
+export function buildLut(preset, cmapRgba, o = {}) {
   const p = preset, out = new Uint8Array(256 * 2 * 4);
   for (let i = 0; i < 256; i++) {
     const s = i / 255;
@@ -205,6 +212,10 @@ export function buildLut(preset, cmapRgba) {
     let b = 0.85 * air + soft * (0.36 + 0.2 * s) + bone * (0.78 + 0.2 * g);
     const wsum = air + soft + bone || 1;
     r /= wsum; gg /= wsum; b /= wsum;
+    if (o.tfFromMap) {
+      const j = Math.round(tfMapT(p, s) * 255) * 4;
+      r = cmapRgba[j] / 255; gg = cmapRgba[j + 1] / 255; b = cmapRgba[j + 2] / 255;
+    }
     const a = 0.01 * air + 0.028 * soft + bone * (0.35 + 0.5 * g);
     const k = i * 4;
     out[k] = Math.round(255 * Math.min(1, r)); out[k + 1] = Math.round(255 * Math.min(1, gg));

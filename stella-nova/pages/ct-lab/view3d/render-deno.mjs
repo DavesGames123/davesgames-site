@@ -92,6 +92,19 @@ view.setShow({ gantry: false, table: false, rays: false, detector: false });
 view.setCamera({ dist: 2.6, yaw: 0.6, pitch: 0.25 });
 for (const m of ['dvr', 'slices', 'mip']) { view.setMode(m); await shot(view, `head-recon-close-${m}`); }
 
+// colour maps: the recon in two maps, mip and dvr with the transfer function colour from the map
+for (const [id, o] of [['magma', {}], ['ice', { reverse: false, gamma: 0.8 }]]) {
+  view.setColormap(id, { ...o, tf: true });
+  const c = view.colormap;
+  ok(c.id === id && c.tf === true, `setColormap(${id}) sets the map and tf`);
+  for (const m of ['mip', 'dvr']) { view.setMode(m); stats[`map-${id}-${m}`] = await shot(view, `head-recon-map-${id}-${m}`); }
+}
+{
+  const a = stats['map-magma-dvr'], b = stats['map-ice-dvr'];
+  ok(a && b && Math.abs(a.mean - b.mean) > 0.5, 'dvr colour changes with the map', `mean ${a?.mean.toFixed(1)} vs ${b?.mean.toFixed(1)}`);
+}
+view.setColormap('bone', { tf: false });
+
 for (const ph of ['chest', 'shepp-logan']) {
   view.setPhantom3D(ph, { n: 96 });
   for (let k = 0; k < 60; k++) view.scanStep();

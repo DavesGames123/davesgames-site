@@ -47,6 +47,8 @@ const view = createView3D(canvas, device, {
   interactive: true,     // pointer orbit, wheel and pinch zoom, slice drag in 'slices' mode
   dpr: devicePixelRatio, // canvas pixel ratio (capped at 2 by default)
   steps: 256,            // ray-march samples across the volume diagonal (use 128 on phones)
+  colormap: 'bone',      // colour map id; colormapOpts: { reverse, gamma }
+  tfFromMap: false,      // true: the dvr colour comes from the colour map
 });
 ```
 
@@ -73,7 +75,8 @@ For an offscreen render (Deno tests), pass `canvas = null` and
 | `setGantryAngle(rad)` | Turns the gantry without a scan (for explainer shots). |
 | `setCutaway(on)` | Cuts away the volume octant that faces the camera in `dvr` and `iso` (default on). |
 | `setSteps(n)` | Ray-march samples across the volume diagonal. |
-| `setColormap(id)` | Colour map id from `../colormaps/maps.js` for the `mip` and `slices` modes. |
+| `setColormap(id, { reverse, gamma, lut, tf })` | Colour map id from `../colormaps/maps.js`. The map colours the `mip` and `slices` modes. With `tf: true`, the map also gives the colour of the `dvr` transfer function (the opacity does not change). `lut` is a 768-byte LUT, for example `CM.blend(a, b, t)` for a cross-fade. |
+| `colormap` | Read-only: `{ id, reverse, gamma, tf }`. |
 | `render({ dt, target })` | Draws one frame. `dt` in seconds moves `autoRotate`. |
 | `resize()` | Reads the canvas client size again. The module also calls it when the size changes. |
 | `state` | Read-only: `{ phantom, n, mode, scanned, reconstructed, total, angle, rmse, window }`. |
@@ -97,6 +100,17 @@ addEventListener('pagehide', () => view.destroy());
 
 `scanStep` runs on the main thread. At n = 96 one view takes about 7 ms on the CPU.
 Keep `views` small, or pass `budgetMs`.
+
+## Colour
+
+The LUT texture has two rows (`scene.js buildLut`). Row 0 is the `dvr` transfer
+function: colour and opacity per value. Row 1 is the colour map for `mip` and
+`slices`. When `tf` is on, row 0 takes its colour from the map at
+`tfMapT(preset, s)`. That function maps the soft-tissue edge to t = 0.12 and the
+top of the window to t = 1, so translucent tissue does not go black on a map that
+starts dark. The `iso` mode keeps its fixed skin and bone tints. The detector panel
+keeps the `xray-blue` map. The texture is `rgba8unorm` and the canvas format is the
+preferred non-sRGB format, so the map colours are not encoded two times.
 
 ## Without WebGPU
 

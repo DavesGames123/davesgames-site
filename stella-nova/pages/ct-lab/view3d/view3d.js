@@ -37,7 +37,7 @@ export function createView3D(canvas, device, opts = {}) {
     phantom: null, n: opts.n ?? 96, nAngles: opts.nAngles ?? 180, mode: opts.mode ?? 'dvr',
     volume: null, recon: null, reconSum: null, geom: null, L: null, preset: TF_PRESETS.head,
     proj: null, q: null, scanned: 0, reconstructed: 0, angle: 0, time: 0,
-    window: [0, 1], iso: [0.2, 0.6], slices: { x: 0.5, y: 0.5, z: 0.5 }, cmap: opts.colormap ?? 'bone',
+    window: [0, 1], iso: [0.2, 0.6], slices: { x: 0.5, y: 0.5, z: 0.5 }, cmap: opts.colormap ?? 'bone', cmapOpts: opts.colormapOpts ?? {}, tfFromMap: !!opts.tfFromMap,
     show: { gantry: true, rays: true, table: true, detector: true, volume: 'auto' },
     cam: { yaw: 0.75, pitch: 0.32, dist: 10.5, fov: 0.62, target: [0, 0, 0], offset: [0, 0], autoRotate: opts.autoRotate ?? 0 },
     detScale: 1, lastView: -1, dirtyLines: true, steps: opts.steps ?? 256, ghost: 0.3,
@@ -118,7 +118,7 @@ export function createView3D(canvas, device, opts = {}) {
   }
 
   function uploadLut() {
-    device.queue.writeTexture({ texture: lutTex }, buildLut(st.preset, CM.rgba(st.cmap)), { bytesPerRow: 1024, rowsPerImage: 2 }, [256, 2]);
+    device.queue.writeTexture({ texture: lutTex }, buildLut(st.preset, CM.rgba(st.cmap, st.cmapOpts), { tfFromMap: st.tfFromMap }), { bytesPerRow: 1024, rowsPerImage: 2 }, [256, 2]);
   }
 
   function make3D(vol) {
@@ -443,7 +443,14 @@ export function createView3D(canvas, device, opts = {}) {
     },
     setGantryAngle(r) { st.angle = r; },
     setCutaway(on) { st.cutaway = !!on; },
-    setColormap(id) { st.cmap = id; uploadLut(); },
+    // o: { reverse, gamma, lut (a 768-byte LUT, for example CM.blend), tf (true: dvr colour from the map) }
+    setColormap(id, o = {}) {
+      st.cmap = CM.has(id) ? id : 'bone';
+      st.cmapOpts = { reverse: !!o.reverse, gamma: o.gamma > 0 ? +o.gamma : 1, lut: o.lut };
+      if (o.tf !== undefined) st.tfFromMap = !!o.tf;
+      uploadLut();
+    },
+    get colormap() { return { id: st.cmap, reverse: !!st.cmapOpts.reverse, gamma: st.cmapOpts.gamma ?? 1, tf: st.tfFromMap }; },
     setSteps(n) { st.steps = n; },
     resize() { ensureTargets(); },
     get state() {
