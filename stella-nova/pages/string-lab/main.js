@@ -151,7 +151,10 @@ function setFret(i, fret) {
 }
 
 function selectString(i) {
+  const was = world.sel;
   world.sel = Math.max(0, Math.min(world.sims.length - 1, i));
+  // the single-string lane is laid out for one string: lay it out again
+  if (world.sel !== was && !world.showAll) view2d?.relayout();
   view3?.highlight(world.sel);
   if (view3 && camPreset === 'string') view3.setCamera('string', { animate: true, string: world.sel });
   syncStringUI();
