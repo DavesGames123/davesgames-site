@@ -74,7 +74,7 @@ export function createPool(n, opts = {}) {
     }));
     if (my !== job) throw new Error('stale');
     const M = assemble(W, parts);
-    const f = await call(workers[0], { cmd: 'finish', planet, M: { W, H, height: M.height, albedo: M.albedo, cloud: M.cloud } });
+    const f = await call(workers[0], { cmd: 'finish', planet, M: { W, H, height: M.height, albedo: M.albedo, cloud: M.cloud, emissive: M.emissive } });
     if (my !== job) throw new Error('stale');
     M.normal = f.normal; M.ao = f.ao; M.stats = f.stats; M.reliefKm = f.reliefKm;
     onProgress(1);

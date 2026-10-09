@@ -172,6 +172,15 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   const z = transmittanceRef(PR.ATMO.earth, 6360, 1), h = transmittanceRef(PR.ATMO.earth, 6360, 0.02);
   ok('atmo: Earth zenith transmittance is about 0.9 red, 0.75 blue', z[0] > 0.9 && z[0] < 0.97 && z[2] > 0.7 && z[2] < 0.8, z.map(v => v.toFixed(3)).join(' '));
   ok('atmo: the horizon is redder than the zenith (sunset)', h[0] / h[2] > z[0] / z[2] * 3, h.map(v => v.toExponential(1)).join(' '));
+  // Rayleigh optical depth tau = beta H against Bucholtz (1995) at the
+  // 680, 550, 440 nm channels: 0.042, 0.097, 0.236
+  const ER = PR.ATMO.earth, tauR = ER.rayleigh.map(b => b * 1e-3 * ER.rayleighH), real = [0.042, 0.097, 0.236];
+  ok('atmo: Earth Rayleigh optical depth within 15 % of Bucholtz 1995', tauR.every((t, i) => Math.abs(t / real[i] - 1) < 0.15), tauR.map(v => v.toFixed(3)).join(' ') + ' vs ' + real.join(' '));
+  const Ue = packAtmo(PR.fromPreset('earth').atmo), Uo = packAtmo(PR.fromPreset('ocean').atmo), Um = packAtmo(PR.fromPreset('moon').atmo);
+  ok('atmo: Earth-like skies keep 45 % of the ground haze (view), others all', Math.abs(Ue[27] - 0.45) < 1e-6 && Math.abs(Uo[27] - 0.45) < 1e-6 && Um[27] === 1, [Ue[27], Uo[27], Um[27]].map(v => v.toFixed(2)).join(' '));
+  const LA = PR.fromPreset('lava').atmo, ssa = LA.mie.map((m, i) => m / (m + LA.mieAbs[i]));
+  const zl = transmittanceRef(LA, LA.radiusKm, 1);
+  ok('atmo: lava haze is sooty (single-scattering albedo < 0.4, blue absorbed most, glow on)', ssa.every(v => v < 0.4) && zl[2] < zl[0] && zl[2] < z[2] && LA.glow > 0, 'ssa ' + ssa.map(v => v.toFixed(2)).join(' ') + ', T ' + zl.map(v => v.toFixed(2)).join(' '));
   const n = transmittanceRef(PR.ATMO.neptune, 7000, 1);
   ok('atmo: methane absorbs red on Neptune (blue passes)', n[2] > n[0], n.map(v => v.toFixed(3)).join(' '));
   ok('atmo: an off atmosphere packs on = 0', packAtmo(PR.ATMO.none)[23] === 0);
@@ -208,6 +217,37 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('clock: 1 day/s turns the planet once and the sun 12 deg in 1 s', Math.abs(c.simS - 86400) < 1e-6 && Math.min(c.spinAngle, 2 * Math.PI - c.spinAngle) < 1e-6 && Math.abs(c.sunAz - 12) < 1e-9, `simS ${c.simS.toFixed(1)}, sunAz ${c.sunAz.toFixed(3)}`);
   const g = CK.createClock(); g.tick(10, { rate: 3600, spin: 2.4, spinOn: false });
   ok('clock: spin off holds the angle, time still runs', g.spinAngle === 0 && g.hours() === 10);
+}
+
+// clouds (clouds.js, the CPU twin of clouds.wgsl): the field stays in
+// [0, 1], changes over hours but not from one frame to the next, the
+// cyclones stay bounded, and the exported map is the field at hour 0
+{
+  const C = await import('./clouds.js');
+  const P = PR.fromPreset('earth'), su = C.cloudSetup(P), pts = N.fibonacci(3000), o = {};
+  const field = h => { const cyc = C.cyclones(su, h), d = [], c = []; for (let i = 0; i < 3000; i++) { C.cloudField(su, [pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2]], h, cyc, o); d.push(o.deck); c.push(o.cirrus); } return { d, c }; };
+  const corr = (a, b) => { const n = a.length, ma = a.reduce((x, v) => x + v) / n, mb = b.reduce((x, v) => x + v) / n; let ab = 0, aa = 0, bb = 0; for (let i = 0; i < n; i++) { ab += (a[i] - ma) * (b[i] - mb); aa += (a[i] - ma) ** 2; bb += (b[i] - mb) ** 2; } return ab / Math.sqrt(aa * bb); };
+  const f0 = field(0), f1 = field(0.1), f24 = field(24), f240 = field(240);
+  const all = [f0, f1, f24, f240].flatMap(f => [...f.d, ...f.c]);
+  ok('clouds: deck and cirrus stay in [0, 1] over 10 days', all.every(v => v >= 0 && v <= 1));
+  const c1 = corr(f0.d, f1.d), c24 = corr(f0.d, f24.d), cc = corr(f0.c, f24.c);
+  ok('clouds: the field evolves (6 min: same; 1 day: changed, not replaced)', c1 > 0.99 && c24 < 0.85 && c24 > 0.2 && cc < 0.9, `corr 6 min ${c1.toFixed(3)}, 1 day ${c24.toFixed(2)}, cirrus 1 day ${cc.toFixed(2)}`);
+  const cover = f => f.d.filter(v => v > 0.3).length / f.d.length;
+  ok('clouds: cover stays steady while the field moves', Math.abs(cover(f0) - cover(f240)) < 0.1 && cover(f0) > 0.25 && cover(f0) < 0.75, `${cover(f0).toFixed(2)} at 0 h, ${cover(f240).toFixed(2)} at 240 h`);
+  let tw = 0, unit = 0, jump = 0;
+  for (let h = 0; h < 400; h += 0.5) {
+    const a = C.cyclones(su, h), b = C.cyclones(su, h + 0.05);
+    for (let k = 0; k < su.nCyc; k++) {
+      const j = k * 8; tw = Math.max(tw, Math.abs(a[j + 4])); unit = Math.max(unit, Math.abs(Math.hypot(a[j], a[j + 1], a[j + 2]) - 1));
+      if (a[j + 7] > 0.05 && b[j + 7] > 0.05) jump = Math.max(jump, Math.hypot(a[j] - b[j], a[j + 1] - b[j + 1], a[j + 2] - b[j + 2]));
+    }
+  }
+  ok('clouds: cyclones drift smoothly, stay on the sphere, twist stays bounded', tw <= su.swirl * 6 + 0.03 * 168 && unit < 1e-6 && jump < 0.01, `max twist ${tw.toFixed(2)} rad, max 3-min move ${jump.toExponential(1)}`);
+  const M = MP.generate(P, 64);
+  let worst = 0; const cyc = C.cyclones(su, 0), p = [0, 0, 0];
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { N.texelDir(x, y, 64, 32, p); C.cloudField(su, p, 0, cyc, o); worst = Math.max(worst, Math.abs(M.cloud[(y * 64 + x) * 4] - Math.round(o.deck * 255))); }
+  ok('clouds: the exported cloud map is the field at hour 0', worst <= 1, `max byte diff ${worst}`);
+  ok('clouds: airless and cloudless worlds get no cirrus', C.cloudSetup(PR.fromPreset('moon')).cirrus === 0);
 }
 
 // ── pool failures (pool.js) ─────────────────────────────────────────────────

@@ -8,10 +8,14 @@
 //    multi   32 x 32 rgba16float  Psi_ms(mu_s, h)
 //  They are rebuilt when the planet changes (a few ms), not per frame.
 //
-//  packAtmo(a, densityScale) -> Float32Array(24), the WGSL struct Atmo
+//  packAtmo(a, ground, glow) -> Float32Array(28), the WGSL struct Atmo
 //  (atmo-common.wgsl). The JSON keeps the coefficients in 1/km x 1e-3;
 //  the GPU gets 1/km. density scales all coefficients. ground is the
-//  mean albedo of the generated surface.
+//  mean albedo of the generated surface. glow (linear rgb) is the haze
+//  light from a hot surface (render.js: mean emission x atmo.glow).
+//  a.clarity (0..1, view only) keeps that share of the haze on rays that
+//  end on the ground at the nadir; the limb stays physical. Earth's real
+//  optical depths over a dark sea read as a milky veil at page size.
 //
 //  transmittanceRef(a, r, mu) is a JS reference integral of T, for tests
 //  and for the Deno check of the GPU LUT.
@@ -22,7 +26,7 @@
 
 export const LUT = { transW: 256, transH: 64, multi: 32 };
 
-export function packAtmo(a, groundAlbedo = 0.3) {
+export function packAtmo(a, groundAlbedo = 0.3, glow = [0, 0, 0]) {
   const k = 1e-3 * (a.density ?? 1);
   const bot = a.radiusKm, top = a.radiusKm + a.heightKm;
   return new Float32Array([
@@ -32,6 +36,7 @@ export function packAtmo(a, groundAlbedo = 0.3) {
     a.absorb[0] * k, a.absorb[1] * k, a.absorb[2] * k, a.absorbC,
     bot, top, a.absorbW, a.sun,
     groundAlbedo, groundAlbedo, groundAlbedo, a.on ? 1 : 0,
+    glow[0], glow[1], glow[2], a.clarity ?? 1,
   ]);
 }
 
@@ -55,7 +60,7 @@ export async function createAtmo(device, loadText) {
   const common = await loadText('atmo-common.wgsl');
   const code = common + '\n' + await loadText('atmo-lut.wgsl');
   const module = device.createShaderModule({ label: 'forge atmo lut', code });
-  const ubuf = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const ubuf = device.createBuffer({ size: 112, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const usage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC;
   const trans = device.createTexture({ size: [LUT.transW, LUT.transH], format: 'rgba16float', usage });
   const multi = device.createTexture({ size: [LUT.multi, LUT.multi], format: 'rgba16float', usage });
@@ -72,8 +77,8 @@ export async function createAtmo(device, loadText) {
     trans, multi, sampler, ubuf, common,
     get packed() { return packed; },
     // Rebuild both LUTs for atmosphere a (a JSON atmo block).
-    update(a, groundAlbedo) {
-      packed = packAtmo(a, groundAlbedo);
+    update(a, groundAlbedo, glow) {
+      packed = packAtmo(a, groundAlbedo, glow);
       device.queue.writeBuffer(ubuf, 0, packed);
       const enc = device.createCommandEncoder();
       const pass = enc.beginComputePass();

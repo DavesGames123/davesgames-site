@@ -11,6 +11,11 @@
 //  missing keys and clamps each number to its SCHEMA range, so an old or
 //  hand-edited JSON still loads.
 //
+//  atmo.clarity (view only, default 1) keeps that share of the haze over
+//  the ground at the nadir; the Earth-like skies use 0.45 so the ground
+//  reads from orbit while the optical depths stay real (tests.mjs).
+//  atmo.glow scales the haze light from a hot surface (lava worlds).
+//
 //  Colours are sRGB triples in 0..1. The atmosphere coefficients are in
 //  1/km times 1e-3 (the units of Hillaire 2020), so Earth reads
 //  rayleigh = [5.802, 13.558, 33.1].
@@ -28,7 +33,7 @@ export const VERSION = 1;
 // radius: at the true radius their haze would be thinner than one pixel.
 export const ATMO = {
   none: { on: 0, radiusKm: 1737, heightKm: 10, rayleigh: [0, 0, 0], rayleighH: 8, mie: [0, 0, 0], mieAbs: [0, 0, 0], mieH: 1.2, mieG: 0.8, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.12 },
-  earth: { on: 1, radiusKm: 6360, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [3.996, 3.996, 3.996], mieAbs: [4.4, 4.4, 4.4], mieH: 1.2, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.3 },
+  earth: { on: 1, radiusKm: 6360, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [3.996, 3.996, 3.996], mieAbs: [4.4, 4.4, 4.4], mieH: 1.2, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.3, clarity: 0.45 },
   // Mars: a thin CO2 sky lit mostly by dust that absorbs blue (butterscotch noon)
   mars: { on: 1, radiusKm: 3390, heightKm: 80, rayleigh: [0.19, 0.42, 1.0], rayleighH: 11, mie: [16, 13, 10], mieAbs: [2, 4.5, 9], mieH: 9, mieG: 0.72, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25 },
   // dusty orange desert sky
@@ -40,15 +45,21 @@ export const ATMO = {
   // Titan-like: thick orange tholin haze, almost no surface contrast
   titan: { on: 1, radiusKm: 2575, heightKm: 200, rayleigh: [1.2, 2.8, 6.8], rayleighH: 21, mie: [26, 18, 9], mieAbs: [1.5, 5, 14], mieH: 30, mieG: 0.65, absorb: [0, 0, 0], absorbC: 60, absorbW: 20, density: 1, sun: 10, ground: 0.2 },
   // ocean world: Earth air, a little more water haze
-  ocean: { on: 1, radiusKm: 6800, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [6, 6, 6], mieAbs: [2, 2, 2], mieH: 1.4, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1.1, sun: 10, ground: 0.25 },
-  // lava world: hot thick haze lit from below
-  lava: { on: 1, radiusKm: 6200, heightKm: 120, rayleigh: [6.5, 15, 36], rayleighH: 10, mie: [22, 18, 12], mieAbs: [3, 6, 14], mieH: 4, mieG: 0.72, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.12 },
+  ocean: { on: 1, radiusKm: 6800, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [6, 6, 6], mieAbs: [2, 2, 2], mieH: 1.4, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25, clarity: 0.45 },
+  // lava world: a dark, sooty, ash-laden haze. Its soot absorbs more than
+  // it scatters (single-scattering albedo about 0.3) and absorbs blue most,
+  // so the sky is grey-brown and dim; at night the lava lights it from below
+  // (glow x the mean surface emission, render.js).
+  lava: { on: 1, radiusKm: 6200, heightKm: 120, rayleigh: [1.2, 2.8, 6.8], rayleighH: 10, mie: [9, 8, 7], mieAbs: [20, 24, 30], mieH: 10, mieG: 0.7, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.12, glow: 0.6 },
   // gas giants: H2/He Rayleigh plus a coloured haze; absorb is methane (red)
   jupiter: { on: 1, radiusKm: 7000, heightKm: 260, rayleigh: [1.6, 3.7, 9], rayleighH: 30, mie: [4.5, 4, 3], mieAbs: [0.6, 1.2, 2.6], mieH: 22, mieG: 0.7, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.5 },
   saturn: { on: 1, radiusKm: 7000, heightKm: 300, rayleigh: [1.3, 3, 7.4], rayleighH: 34, mie: [5, 4.6, 3.6], mieAbs: [0.4, 0.9, 2.2], mieH: 30, mieG: 0.7, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.5 },
   neptune: { on: 1, radiusKm: 7000, heightKm: 300, rayleigh: [2.4, 5.6, 13.6], rayleighH: 34, mie: [1.6, 1.6, 1.6], mieAbs: [0.2, 0.2, 0.2], mieH: 20, mieG: 0.7, absorb: [5.5, 1.2, 0.15], absorbC: 40, absorbW: 120, density: 1, sun: 10, ground: 0.4 },
   hot: { on: 1, radiusKm: 7000, heightKm: 320, rayleigh: [1.0, 2.4, 5.8], rayleighH: 40, mie: [6, 4, 2.4], mieAbs: [2, 4, 8], mieH: 30, mieG: 0.6, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.2 },
 };
+
+// every sky has both view keys: clear ground (1) and no surface glow (0) unless set
+for (const a of Object.values(ATMO)) { a.clarity ??= 1; a.glow ??= 0; }
 
 export const ROCKY_DEFAULT = {
   kind: 'rocky', name: 'Rocky world', seed: 1,
@@ -63,7 +74,7 @@ export const ROCKY_DEFAULT = {
   dunes: { amount: 0, freq: 40 },
   cracks: { amount: 0, freq: 2.5, glow: 0 },
   volcanoes: { count: 0, glow: 0 },
-  clouds: { cover: 0.5, freq: 1.5, swirl: 0.6, cyclones: 6, height: 0.012, color: [1, 1, 1] },
+  clouds: { cover: 0.5, freq: 1.5, swirl: 0.6, cyclones: 6, height: 0.006, cirrus: 0.3, color: [1, 1, 1] },
   relief: 12, radiusKm: 6371, bump: 1, tilt: 23, spin: 1,
   palette: {
     deep: [0.03, 0.07, 0.17], shallow: [0.06, 0.2, 0.32], beach: [0.62, 0.56, 0.42],
@@ -95,7 +106,7 @@ export const GAS_DEFAULT = {
 // Presets: { id, name, kind, blurb, seed, p } with p laid over the default.
 export const PRESETS = [
   { id: 'earth', name: 'Earth-like', kind: 'rocky', seed: 4127, blurb: 'continents on 14 plates, biomes from temperature and rain, ice caps, city lights',
-    p: { climate: { cities: 0.7 }, rivers: { amount: 0.5 }, clouds: { cover: 0.55 } } },
+    p: { climate: { cities: 0.7 }, rivers: { amount: 0.5 }, clouds: { cover: 0.42 } } },
   { id: 'mars', name: 'Mars-like', kind: 'rocky', seed: 2203, blurb: 'a crustal dichotomy, layered craters, dust and two CO2 caps',
     p: { terrain: { amp: 0.7, warp: 0.25, dichotomy: 0.8 }, plates: { count: 5, weight: 0.2, uplift: 0.9 },
       mountains: { amp: 0.4, sharpness: 2.6 }, erosion: { detail: 0.12 },
@@ -119,7 +130,7 @@ export const PRESETS = [
       atmo: ATMO.none } },
   { id: 'ocean', name: 'Ocean world', kind: 'rocky', seed: 808, blurb: '96 % sea, volcanic island arcs on the plate edges, a cloudy wet sky',
     p: { ocean: { level: 0.955 }, plates: { count: 16, uplift: 1.2, width: 0.08 }, mountains: { amp: 0.7 },
-      climate: { equatorC: 30, poleC: -14, moisture: 0.9 }, clouds: { cover: 0.66, cyclones: 9 }, relief: 14, radiusKm: 6800,
+      climate: { equatorC: 30, poleC: -14, moisture: 0.9 }, clouds: { cover: 0.5, cyclones: 9 }, relief: 14, radiusKm: 6800,
       palette: { deep: [0.02, 0.06, 0.18], shallow: [0.05, 0.28, 0.38] },
       atmo: ATMO.ocean } },
   { id: 'desert', name: 'Desert world', kind: 'rocky', seed: 1965, blurb: 'no sea, dune seas in the basins, bare ranges, small caps, a dusty sky',
@@ -223,7 +234,9 @@ export const SCHEMA = {
     ['Clouds', 'clouds.cover', 'cover', 0, 1, 0.01],
     ['Clouds', 'clouds.freq', 'frequency', 0.5, 6, 0.01],
     ['Clouds', 'clouds.swirl', 'swirl', 0, 2, 0.01],
-    ['Clouds', 'clouds.cyclones', 'cyclones', 0, 24, 1],
+    ['Clouds', 'clouds.cyclones', 'cyclones', 0, 12, 1],
+    ['Clouds', 'clouds.cirrus', 'high cirrus', 0, 1, 0.01],
+    ['Clouds', 'clouds.height', 'deck height (radii)', 0.002, 0.02, 0.0005],
     ['Body', 'relief', 'relief km', 0.5, 40, 0.1],
     ['Body', 'radiusKm', 'radius km', 200, 20000, 1],
     ['Body', 'bump', 'normal strength', 0, 8, 0.05],
@@ -278,6 +291,8 @@ export const SCHEMA = {
     ['Atmosphere', 'atmo.mieH', 'Mie scale height km', 0.2, 60, 0.1],
     ['Atmosphere', 'atmo.mieG', 'Mie anisotropy g', 0, 0.95, 0.01],
     ['Atmosphere', 'atmo.sun', 'sun illuminance', 1, 40, 0.1],
+    ['Atmosphere', 'atmo.clarity', 'ground clarity (view)', 0.1, 1, 0.01],
+    ['Atmosphere', 'atmo.glow', 'haze glow from the surface', 0, 2, 0.01],
   ],
 };
 

@@ -10,8 +10,11 @@
 //       normal mapping in the east/north/up frame, AO, emissive (city
 //       lights only at night), sun through the transmittance LUT, cloud
 //       shadows (the sun ray meets the cloud shell), ring shadows
-//    3. clouds: the shell over the surface, lit by the same sun, with a
-//       flow-map drift (two phases, cross-faded)
+//    3. clouds: the shell over the surface. One deck and one cirrus layer
+//       from the evolving cloud map (clouds.wgsl, tDyn), sampled once each
+//       (the old two-phase flow map drew every cloud twice). Lit by the
+//       sun, self-shadowed toward the sun, shadows on the ground where the
+//       sun ray meets the shell
 //    4. atmosphere: single scattering ray-march from the camera to the
 //       surface (aerial perspective) or through the limb, with the
 //       multiple-scattering LUT and the planet shadow (terminator glow)
@@ -23,7 +26,7 @@
 //  uniform control flow and wrapped at the date line (no seam line).
 //
 //  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface",
-//  "fn cloudAt", "fn atmosphere", "fn ringAt", "@fragment"
+//  "fn cloudsAt", "fn cloudShadow", "fn atmosphere", "fn ringAt", "@fragment"
 // ============================================================================
 
 struct View {
@@ -41,6 +44,7 @@ struct View {
   bw1: vec4f,       // xyz row 1, w sun disc gain
   bw2: vec4f,       // xyz row 2, w quality (0 phone, 1 tablet, 2 desktop)
   sunW: vec4f,      // xyz sun direction (world frame), w star gain
+  cloud2: vec4f,    // x deck u offset, y cirrus u offset (the slow solid drift), z cirrus opacity, w deck opacity max
 }
 
 @group(0) @binding(0) var<uniform> V: View;
@@ -55,6 +59,7 @@ struct View {
 @group(0) @binding(9) var tMulti: texture_2d<f32>;
 @group(0) @binding(10) var sMap: sampler;
 @group(0) @binding(11) var sLut: sampler;
+@group(0) @binding(12) var tDyn: texture_2d<f32>;   // clouds.wgsl: r deck, g cirrus
 
 struct VOut { @builtin(position) pos: vec4f }
 
@@ -131,32 +136,28 @@ fn ringShadow(p: vec3f) -> f32 {
   return 1.0 - ringAt(length(q.xz)).a * 0.9;
 }
 
-// The cloud map (0..1 coverage, also an exported PBR map) to the rendered
-// opacity: thin cloud lets most of the ground through, and the thickest
-// cloud stays at most CLOUD_MAX opaque, as real cloud decks do from orbit.
-const CLOUD_MAX: f32 = 0.75;
-fn cloudOpacity(a: f32) -> f32 { return CLOUD_MAX * pow(clamp(a, 0.0, 1.0), 1.6); }
+// The deck cover (clouds.wgsl, 0..1) to the rendered opacity: thin cloud
+// lets most of the ground through, the thickest stays V.cloud2.w opaque.
+fn cloudOpacity(a: f32) -> f32 { return V.cloud2.w * pow(clamp(a, 0.0, 1.0), 1.5); }
 
-fn cloudAlpha(uv: vec2f, g: Grad, lat: f32) -> f32 {
-  let drift = V.flow.x * (0.55 + 0.45 * cos(2.0 * lat));
-  let f = flowUV(uv, vec2f(drift, 0.0), V.camPos.w, 40.0);
-  let a = sampleG(tCloud, f.a, g).r;
-  let b = sampleG(tCloud, f.b, g).r;
-  return cloudOpacity(mix(a, b, f.w)) * V.flow.z;
+// The evolving cloud map at body-frame direction q: x deck, y cirrus.
+// The u offsets carry the slow solid drift of each layer.
+fn cloudsAt(q: vec3f) -> vec2f {
+  let uv = dirUV(q);
+  let d = textureSampleLevel(tDyn, sMap, uv + vec2f(V.cloud2.x, 0.0), 0.0).r;
+  let c = textureSampleLevel(tDyn, sMap, uv + vec2f(V.cloud2.y, 0.0), 0.0).g;
+  return vec2f(d, c);
 }
 
-// Cloud shadow at surface point p: the sun ray meets the cloud shell.
+// Cloud shadow at surface point p: the sun ray meets the cloud shell, one
+// sample at that point (so the shadow is offset by the sun and the height).
 fn cloudShadow(p: vec3f) -> f32 {
   if (V.flow.z < 0.5) { return 1.0; }
   let L = V.sun.xyz;
   let t = raySphere(p, L, V.shell.y).y;
   if (t <= 0.0) { return 1.0; }
-  let q = normalize(p + L * t);
-  let uv = dirUV(q);
-  let drift = V.flow.x * (0.55 + 0.45 * cos(2.0 * asin(q.y)));
-  let f = flowUV(uv, vec2f(drift, 0.0), V.camPos.w, 40.0);
-  let a = mix(textureSampleLevel(tCloud, sMap, f.a, 2.0).r, textureSampleLevel(tCloud, sMap, f.b, 2.0).r, f.w);
-  return 1.0 - 0.8 * cloudOpacity(a) / CLOUD_MAX;
+  let c = cloudsAt(normalize(p + L * t));
+  return (1.0 - 0.85 * cloudOpacity(c.x) / max(V.cloud2.w, 1e-3)) * (1.0 - 0.3 * c.y * V.cloud2.z);
 }
 
 // Sky irradiance on the ground (a cheap fit: scattered sun over one scale
@@ -271,11 +272,22 @@ fn atmosphere(ro: vec3f, rd: vec3f, tMax: f32) -> Scat {
     }
     let Ts = transmittance(r, muS) * sh;
     let ms = multiScat(r, muS);
-    let S = A.radii.w * (m.sR * (pR * Ts + ms) + m.sM * (pM * Ts + ms));
+    // + the glow of a hot surface scattered by the haze (lava worlds)
+    let S = A.radii.w * (m.sR * (pR * Ts + ms) + m.sM * (pM * Ts + ms)) + m.sM * A.extra.rgb;
     let ext = max(m.ext, vec3f(1e-7));
     let st = exp(-ext * dt);
     acc += T * (S - S * st) / ext;
     T *= st;
+  }
+  // Ground clarity (a legibility choice, A.extra.w): a ray that ends on
+  // the ground keeps only part of its haze, most at the nadir, none at a
+  // grazing angle, so the limb stays physical and continuous at the edge.
+  if (tMax < 1e8 && A.extra.w < 0.999) {
+    let pg = ro + rd * tMax;
+    let mu = clamp(-dot(rd, normalize(pg)), 0.0, 1.0);
+    let k = mix(A.extra.w, 1.0, pow(1.0 - mu, 3.0));
+    acc *= k;
+    T = pow(T, vec3f(k));
   }
   s.L = acc;
   s.T = T;
@@ -360,14 +372,22 @@ fn fs(in: VOut) -> @location(0) vec4f {
   if (planetHit) {
     tEnd = hp.x;
     var surf = shadeSurface(pS, rd, uvS, gS);
-    // the cloud shell in front of the surface
+    // the cloud deck in front of the surface: one map sample (no flow
+    // phases, so no double image), lit by the sun, darkened where the
+    // cloud toward the sun is thick (self-shadow), then the thin cirrus
     if (V.flow.z > 0.5 && hc.x > 0.0) {
-      let a = cloudAlpha(uvC, gC, asin(pC.y));
       let up = pC;
+      let c = vec2f(sampleG(tDyn, uvC + vec2f(V.cloud2.x, 0.0), gC).r, sampleG(tDyn, uvC + vec2f(V.cloud2.y, 0.0), gC).g);
+      let Lt = L - up * dot(L, up);
+      let toSun = cloudsAt(normalize(up + Lt * 0.03)).x;
+      let selfSh = mix(1.0, 0.5, smoothstep(0.25, 1.0, toSun) * smoothstep(0.0, 0.6, c.x));
       let lightC = sunLight(pC * V.shell.y) * ringShadow(pC * V.shell.y) * A.radii.w;
       let wrap = clamp(dot(up, L) * 0.7 + 0.3, 0.0, 1.0);
-      let cl = V.cloudCol.rgb * (lightC * wrap / PI * 0.9 + skyIrradiance(pC) / PI * 0.6);
-      surf = mix(surf, cl, a);
+      let skyC = skyIrradiance(pC) / PI;
+      let cl = V.cloudCol.rgb * (lightC * wrap / PI * 0.95 * selfSh * (0.8 + 0.2 * c.x) + skyC * 0.6);
+      surf = mix(surf, cl, cloudOpacity(c.x));
+      let ci = V.cloudCol.rgb * (lightC * wrap / PI + skyC * 0.5);
+      surf = mix(surf, ci, c.y * V.cloud2.z);
     }
     // a soft edge for airless bodies (anti-aliased silhouette)
     let pxAng = 2.0 * th / V.res.y;

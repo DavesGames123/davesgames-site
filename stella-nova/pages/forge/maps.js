@@ -181,11 +181,16 @@ function ambient(h, W, H, reliefKm, radiusKm) {
   return out;
 }
 
+const dec = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
 function stats(M) {
-  let al = 0, cl = 0; const n = M.W * M.H;
-  for (let i = 0; i < n; i += 7) { al += (M.albedo[i * 4] + M.albedo[i * 4 + 1] + M.albedo[i * 4 + 2]) / 765; cl += M.cloud[i * 4] / 255; }
+  let al = 0, cl = 0; const n = M.W * M.H, em = [0, 0, 0];
+  for (let i = 0; i < n; i += 7) {
+    al += (M.albedo[i * 4] + M.albedo[i * 4 + 1] + M.albedo[i * 4 + 2]) / 765; cl += M.cloud[i * 4] / 255;
+    if (M.emissive && !M.emissive[i * 4 + 3]) for (let c = 0; c < 3; c++) em[c] += dec(M.emissive[i * 4 + c]);
+  }
   const k = Math.ceil(n / 7);
-  return { meanAlbedo: al / k, cloudCover: cl / k };
+  // meanEmis: the mean linear emission without city lights (the haze glow, render.js)
+  return { meanAlbedo: al / k, cloudCover: cl / k, meanEmis: em.map(v => v / k) };
 }
 
 // Whole planet, synchronously (node tests, the Deno thumbnail).

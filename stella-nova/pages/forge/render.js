@@ -20,7 +20,9 @@
 //
 //  Textures (RGBA8): albedo (sRGB), normal (+height), material (AO,
 //  roughness, metallic, specular), emissive (sRGB, a = city light),
-//  cloud (alpha, flow u, flow v). The canvas gets the shader output with
+//  cloud (alpha, flow u, flow v; the view uses only the gas flow), and the
+//  evolving cloud map dyn (clouds.wgsl: deck, cirrus), refreshed in a
+//  compute pass when cam.hours (the simulated clock) moves. The canvas gets the shader output with
 //  no intermediate target: no MSAA, no HDR buffer (memory: swap chain).
 //
 //  grep -n targets: "export async function createRenderer", "function upload",
@@ -29,11 +31,15 @@
 import { createAtmo } from './atmo.js';
 import { mipChain, shrink } from './maps.js';
 import { ringProfile } from './gas.js';
-import { gpuWidth } from './budget.js';
+import { gpuWidth, cloudWidth } from './budget.js';
+import { cloudSetup, packClouds, CLOUD_U_BYTES, DECK_RATE, CIRRUS_RATE } from './clouds.js';
 
 // The sun's angular radius on the sky. The real Sun from 1 AU is 0.27 deg;
 // 1.6 deg makes the granulation and the limb darkening read at page size.
 export const SUN_RADIUS_DEG = 1.6;
+// The densest cloud deck lets 20 % of the ground through (0d73dfc made the
+// clouds more transparent at the user's request).
+export const CLOUD_MAX = 0.8;
 
 const lin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 
@@ -47,9 +53,15 @@ export async function createRenderer({ device, format, loadText }) {
     fragment: { module, entryPoint: 'fs', targets: [{ format }] },
     primitive: { topology: 'triangle-list' },
   });
+  // the evolving cloud map (clouds.wgsl), rebuilt when the simulated hour moves
+  const cMod = device.createShaderModule({ label: 'forge clouds', code: await loadText('clouds.wgsl') });
+  const cPipe = await device.createComputePipelineAsync({ layout: 'auto', compute: { module: cMod, entryPoint: 'csClouds' } });
+  const cBuf = device.createBuffer({ size: CLOUD_U_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const cPack = new ArrayBuffer(CLOUD_U_BYTES);
+  let dyn = null, cBind = null, cSetup = null, cHours = NaN, cFrame = 0;
   const vbuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const sMap = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'clamp-to-edge', maxAnisotropy: 8 });
-  let tex = {}, bind = null, P = null, shellR = 1.012;
+  let tex = {}, bind = null, P = null, shellR = 1.006, glow = [0, 0, 0];
 
   function makeTex(w, h, srgb, data, mips) {
     const levels = mips ? mipChain(data, w, h) : [{ w, h, data }];
@@ -64,6 +76,14 @@ export async function createRenderer({ device, format, loadText }) {
     const mat = new Uint8Array(n * 4);
     for (let i = 0; i < n; i++) { mat[i * 4] = M.ao[i]; mat[i * 4 + 1] = M.mat[i * 4]; mat[i * 4 + 2] = M.mat[i * 4 + 1]; mat[i * 4 + 3] = M.mat[i * 4 + 2]; }
     for (const k in tex) tex[k].destroy();
+    // cloud map: 2k on a desktop, 1k on a phone or tablet (budget.js)
+    const cw = cloudWidth(env);
+    if (!dyn || dyn.width !== cw) {
+      if (dyn) dyn.destroy();
+      dyn = device.createTexture({ size: [cw, cw / 2], format: 'rgba8unorm', usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING });
+      cBind = device.createBindGroup({ layout: cPipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: cBuf } }, { binding: 1, resource: dyn.createView() }] });
+    }
+    cSetup = cloudSetup(P); cHours = NaN;
     tex = {
       albedo: makeTex(gw, gh, true, shrink(M.albedo, M.W, M.H, f), true),
       normal: makeTex(gw, gh, false, shrink(M.normal, M.W, M.H, f), true),
@@ -79,8 +99,9 @@ export async function createRenderer({ device, format, loadText }) {
       { binding: 6, resource: tex.cloud.createView() }, { binding: 7, resource: tex.ring.createView() },
       { binding: 8, resource: atmo.trans.createView() }, { binding: 9, resource: atmo.multi.createView() },
       { binding: 10, resource: sMap }, { binding: 11, resource: atmo.sampler },
+      { binding: 12, resource: dyn.createView() },
     ] });
-    return { gpuW: gw, bytes: Object.values(tex).reduce((a, t) => a + t.width * t.height * 4 * (t.mipLevelCount > 1 ? 4 / 3 : 1), 0) };
+    return { gpuW: gw, bytes: Object.values(tex).reduce((a, t) => a + t.width * t.height * 4 * (t.mipLevelCount > 1 ? 4 / 3 : 1), 0) + dyn.width * dyn.height * 4 };
   }
 
   const R = {
@@ -88,21 +109,34 @@ export async function createRenderer({ device, format, loadText }) {
     get planet() { return P; },
     setPlanet(planet, M, env = {}) {
       P = planet;
-      shellR = 1 + Math.max(0.004, (P.kind === 'gas' ? 0.004 : P.clouds.height || 0.012));
+      shellR = 1 + Math.max(0.002, (P.kind === 'gas' ? 0.004 : P.clouds.height || 0.006));
       const info = upload(M, env);
+      glow = M.stats && M.stats.meanEmis ? M.stats.meanEmis.map(v => v * (P.atmo.glow ?? 0)) : [0, 0, 0];
       R.setAtmo(P, M.stats ? M.stats.meanAlbedo : 0.3);
       return info;
     },
-    setAtmo(planet, ground = 0.3) { P = planet; atmo.update(P.atmo, Math.min(0.9, ground)); },
+    setAtmo(planet, ground = 0.3) { P = planet; atmo.update(P.atmo, Math.min(0.9, ground), glow); },
     render(cam, target) {
       if (!bind) return;
       device.queue.writeBuffer(vbuf, 0, packView(cam, P, shellR));
       const enc = device.createCommandEncoder();
+      // the cloud map follows the simulated hour; phones refresh it every
+      // third frame and tablets every second (the solid drift stays smooth)
+      const h = cam.hours || 0, every = cam.quality === 0 ? 3 : cam.quality === 1 ? 2 : 1;
+      cFrame++;
+      if (cSetup && (cSetup.cover > 0 || cSetup.cirrus > 0) && h !== cHours && (Number.isNaN(cHours) || cFrame % every === 0)) {
+        device.queue.writeBuffer(cBuf, 0, packClouds(cSetup, h, cPack));
+        const cp = enc.beginComputePass();
+        cp.setPipeline(cPipe); cp.setBindGroup(0, cBind);
+        cp.dispatchWorkgroups(Math.ceil(dyn.width / 8), Math.ceil(dyn.height / 8));
+        cp.end();
+        cHours = h;
+      }
       const pass = enc.beginRenderPass({ colorAttachments: [{ view: target, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }] });
       pass.setPipeline(pipeline); pass.setBindGroup(0, bind); pass.draw(3); pass.end();
       device.queue.submit([enc.finish()]);
     },
-    destroy() { for (const k in tex) tex[k].destroy(); tex = {}; atmo.destroy(); vbuf.destroy(); bind = null; },
+    destroy() { for (const k in tex) tex[k].destroy(); tex = {}; if (dyn) dyn.destroy(); dyn = null; cBuf.destroy(); atmo.destroy(); vbuf.destroy(); bind = null; },
   };
   return R;
 }
@@ -140,7 +174,7 @@ export function packView(cam, P, shellR) {
   const cc = P && P.clouds ? P.clouds.color.map(lin) : [1, 1, 1];
   // columns of the body -> world rotation: the world images of the body axes
   const bw = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(e => worldFrame(e, tilt, cam.spin || 0));
-  const sw = norm(cam.sunDir);
+  const sw = norm(cam.sunDir), hrs = cam.hours || 0;
   const cloudsOn = cam.cloudsOn !== false && P && P.clouds && P.clouds.cover > 0 ? 1 : 0;
   return new Float32Array([
     pos[0], pos[1], pos[2], cam.t || 0,
@@ -158,5 +192,7 @@ export function packView(cam, P, shellR) {
     bw[0][1], bw[1][1], bw[2][1], cam.sunGain ?? 1.6,
     bw[0][2], bw[1][2], bw[2][2], cam.quality ?? 2,
     sw[0], sw[1], sw[2], cam.starGain ?? 1,
+    // cloud layers: the slow solid drift as a u offset, cirrus opacity, deck opacity max
+    -(DECK_RATE * hrs) / (2 * Math.PI) % 1, -(CIRRUS_RATE * hrs) / (2 * Math.PI) % 1, P && P.kind === 'gas' ? 0.35 : 0.55, CLOUD_MAX,
   ]);
 }

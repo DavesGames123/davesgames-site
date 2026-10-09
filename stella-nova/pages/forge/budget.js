@@ -25,7 +25,7 @@
 //
 //  env = { mobile, coarse, deviceMemory (GB, may be undefined: Safari), cores }
 //  EXPORTS  WIDTHS, BYTES_PER_TEXEL, MAX_PX, TABLET_PX, PHONE_PX, mapBytes,
-//           cpuBudget, pickWidth, gpuWidth, gpuBytes, viewBudget, viewSteps,
+//           cpuBudget, pickWidth, gpuWidth, cloudWidth, gpuBytes, viewBudget, viewSteps,
 //           defaultWidth
 // ============================================================================
 
@@ -56,6 +56,9 @@ export function gpuWidth(W, env = {}) {
   const cap = !env.mobile && !env.coarse && env.deviceMemory >= 8 ? 4096 : 2048;
   return Math.min(W, cap);
 }
+// The evolving cloud map (render.js dyn): 2k x 1k (8 MB) on a desktop,
+// 1k x 512 (2 MB) on a phone or tablet.
+export function cloudWidth(env = {}) { return env.mobile || env.coarse ? 1024 : 2048; }
 export function gpuBytes(W) { return 5 * W * (W / 2) * 4 * 4 / 3; }
 
 export function viewBudget(cssW, cssH, dpr = 1, env = {}) {

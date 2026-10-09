@@ -11,6 +11,8 @@
 //  the Bruneton/Hillaire (r, mu) <-> uv mapping. Multiple-scattering LUT
 //  (32 x 32): Psi_ms(mu_s, h), Hillaire's isotropic second-order term
 //  L2 / (1 - f_ms).
+//  extra: the glow of a hot surface that lights the haze from below
+//  (lava worlds), and the ground clarity of the view (planet.wgsl).
 //
 //  grep -n targets: "struct Atmo", "fn medium", "fn transUV", "fn uvTrans",
 //  "fn raySphere", "fn phaseR", "fn phaseM", "fn transmittance", "fn multiScat"
@@ -23,6 +25,7 @@ struct Atmo {
   absorb: vec4f,    // xyz beta_A, w centre (km)
   radii: vec4f,     // x bottom (km), y top (km), z absorber half-width (km), w sun illuminance
   ground: vec4f,    // xyz ground albedo, w on (1) or off (0)
+  extra: vec4f,     // rgb haze glow from a hot surface (radiance per unit scattering), w ground clarity (view only)
 }
 
 struct Medium { sR: vec3f, sM: vec3f, ext: vec3f }

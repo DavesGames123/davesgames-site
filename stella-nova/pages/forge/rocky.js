@@ -32,9 +32,10 @@
 //
 //  grep -n targets: "export function prepareRocky", "function heightCore",
 //  "function craterField", "function buildCraters", "function shade",
-//  "function cloudAlpha", "const BIOMES", "export function craterList"
+//  "const BIOMES", "export function craterList"
 // ============================================================================
-import { fbm, fbmEroded, ridged, warp, simplex3, mulberry, onSphere, fibonacci, clamp, mix, smooth, curl } from './noise.js';
+import { fbm, fbmEroded, ridged, warp, simplex3, mulberry, onSphere, fibonacci, clamp, mix, smooth } from './noise.js';
+import { cloudSetup, cyclones, cloudField } from './clouds.js';
 
 // Linear sRGB-ish biome colours (sRGB triples) and their (T °C, M) centres.
 const BIOMES = [
@@ -90,12 +91,8 @@ export function prepareRocky(P) {
   const da = rnd() * Math.PI * 2, dt = 0.25 + 0.3 * rnd();
   ctx.dichAxis = [Math.sin(dt) * Math.cos(da), Math.cos(dt), Math.sin(dt) * Math.sin(da)];
   ctx.windDir = onSphere(rnd);
-  // cyclones for the cloud layer: mid-latitude centres, hemisphere spin
-  ctx.cyclones = [];
-  for (let i = 0; i < (P.clouds.cyclones | 0); i++) {
-    const lat = D(20 + 45 * rnd()) * (rnd() < 0.5 ? -1 : 1), lon = rnd() * Math.PI * 2;
-    ctx.cyclones.push({ c: [Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)], r: 0.08 + 0.1 * rnd(), s: Math.sign(lat) });
-  }
+  // the cloud field at hour 0 (clouds.js; the view evolves it on the GPU)
+  ctx.cloudSu = cloudSetup(P); ctx.cloudCyc = cyclones(ctx.cloudSu, 0);
   ctx.craters = buildCraters(P, S(21));
   ctx.volcs = buildVolcanoes(P, S(22));
   // height range and sea level over Fibonacci points
@@ -327,12 +324,11 @@ function biome(T, M, out) {
 const lerp3 = (o, a, b, t) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
 const mixIn = (o, b, t) => { o[0] += (b[0] - o[0]) * t; o[1] += (b[1] - o[1]) * t; o[2] += (b[2] - o[2]) * t; };
 
-const _st = {}, _col = [0, 0, 0], _bio = [0, 0, 0], _bar = [0, 0, 0], _cp = [0, 0, 0];
+const _cf = {}, _st = {}, _col = [0, 0, 0], _bio = [0, 0, 0], _bar = [0, 0, 0], _cp = [0, 0, 0];
 const VAR_O = { freq: 7, octaves: 4, lacunarity: 2.2, gain: 0.5 };
 const MOIST_O = { freq: 2.2, octaves: 4, lacunarity: 2.1, gain: 0.5 };
 const CITY_O = { freq: 16, octaves: 3, lacunarity: 2.3, gain: 0.5 };
 const SULF_O = { freq: 2.5, octaves: 4, lacunarity: 2.2, gain: 0.55 };
-const CLOUD_O = { freq: 2.2, octaves: 6, lacunarity: 2.1, gain: 0.45 };
 
 // out: { h (0..1), r, g, b (0..1 sRGB), rough, metal, spec, er, eg, eb, night, cloud, fu, fv, fb }
 function sampleRocky(ctx, p, out) {
@@ -450,37 +446,9 @@ function sampleRocky(ctx, p, out) {
     }
   }
   out.r = clamp(_col[0]); out.g = clamp(_col[1]); out.b = clamp(_col[2]);
-  out.cloud = P.clouds.cover > 0 ? cloudAlpha(ctx, p) : 0;
+  out.cloud = P.clouds.cover > 0 ? cloudField(ctx.cloudSu, p, 0, ctx.cloudCyc, _cf).deck : 0;
   out.fu = 0.5; out.fv = 0.5; out.fb = 0;
   return out;
-}
-
-// Cloud cover: a warped fBm, swirled round seeded cyclones, thresholded by
-// a latitude pattern (wet equator, clear subtropics, stormy mid-latitudes).
-function cloudAlpha(ctx, p) {
-  const P = ctx.P;
-  _cp[0] = p[0]; _cp[1] = p[1]; _cp[2] = p[2];
-  for (const cy of ctx.cyclones) {
-    const dx = _cp[0] - cy.c[0], dy = _cp[1] - cy.c[1], dz = _cp[2] - cy.c[2];
-    const d2 = (dx * dx + dy * dy + dz * dz) / (cy.r * cy.r);
-    if (d2 > 9) continue;
-    // rotate about the cyclone axis by an angle that falls with distance
-    const ang = P.clouds.swirl * 5 * cy.s * Math.exp(-d2) * (1 - Math.exp(-d2 * 3));
-    rotateAbout(_cp, cy.c, ang);
-  }
-  curl(_cp, 3, ctx.sCloud + 9, _v);
-  _cp[0] += _v[0] * 0.02 * P.clouds.swirl; _cp[1] += _v[1] * 0.02 * P.clouds.swirl; _cp[2] += _v[2] * 0.02 * P.clouds.swirl;
-  warp(_cp, 0.18, 1.4, ctx.sCloud, _t);
-  CLOUD_O.freq = P.clouds.freq;
-  // stretch along the east-west direction a little (y gets more frequency)
-  _t[1] *= 1.6; CLOUD_O.stretch = 1.6;
-  const n = fbm(_t, CLOUD_O, ctx.sCloud + 1);
-  const lat = Math.asin(clamp(p[1], -1, 1));
-  const band = 0.12 * Math.cos(6 * lat) + 0.08 * Math.cos(2 * lat);
-  const cov = P.clouds.cover;
-  const thr = 0.35 - cov * 0.9 - band;
-  const a = smooth(thr - 0.05, thr + 0.4, n);
-  return clamp(a * a * (0.7 + 0.3 * smooth(thr + 0.1, thr + 0.6, n)));
 }
 
 // Rodrigues rotation of v about unit axis k by angle a (in place).
