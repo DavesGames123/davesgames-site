@@ -1,7 +1,7 @@
 # ct-lab colour maps
 
 A standalone colour map catalogue and picker for the CT pages. The module
-has no imports outside this folder, and no page imports it yet. Sources
+has no imports outside this folder. The CT lab, its 3D view, its saver and How CT Works import it. Sources
 and licences are in `CREDITS.md`.
 
 ## Files
@@ -44,6 +44,8 @@ const opts = { reverse: false, gamma: 1, contrast: 1 };
 CM.sample('magma', 0.3, opts)     // [r, g, b] bytes
 CM.variant('magma', opts)         // 768-byte LUT after the options (cached)
 CM.rgba('magma', opts)            // 1024-byte RGBA row for textures or ImageData
+CM.blend('bone', 'magma', 0.3, optsA, optsB)  // 768-byte LUT between two maps
+CM.apply(id, src, lo, hi, out, { lut })        // opts.lut overrides the map (cross-fades)
 
 // Float data -> RGBA bytes. lo -> t = 0, hi -> t = 1. NaN -> opts.nan.
 const img = new ImageData(w, h);

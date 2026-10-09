@@ -252,6 +252,19 @@ function png(w, h, rgbaBytes) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
+// blend(): end points equal the two maps, the middle lies between, opts.lut reaches apply()
+{
+  const a = M.variant('magma'), b = M.variant('viridis', { reverse: true });
+  const b0 = M.blend('magma', 'viridis', 0, {}, { reverse: true }), b1 = M.blend('magma', 'viridis', 1, {}, { reverse: true });
+  const mid = M.blend('magma', 'viridis', 0.5, {}, { reverse: true });
+  check('blend t=0 equals map a', b0.every((v, i) => v === a[i]));
+  check('blend t=1 equals map b (with its options)', b1.every((v, i) => v === b[i]));
+  check('blend t=0.5 lies between', mid.every((v, i) => v >= Math.min(a[i], b[i]) && v <= Math.max(a[i], b[i])));
+  const px = M.apply('grey', new Float32Array([0, 1]), 0, 1, null, { lut: b1 });
+  check('apply() takes opts.lut', px[0] === b[0] && px[4] === b[765] && px[6] === b[767]);
+  check('blend clamps t and NaN', M.blend('grey', 'bone', 7)[300] === M.variant('bone')[300] && M.blend('grey', 'bone', NaN)[300] === M.variant('grey')[300]);
+}
+
 const sheetAt = process.argv.indexOf('--sheet');
 if (sheetAt > 0) {
   const dir = process.argv[sheetAt + 1];

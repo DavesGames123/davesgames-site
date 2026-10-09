@@ -9,7 +9,7 @@
 //   SOURCED          33-stop tables from matplotlib, seaborn, Crameri
 //   const DEFS       the catalogue: id, name, group, kind, use, stops
 //   function buildLut
-//   export function get / list / sample / apply / variant
+//   export function get / list / sample / apply / variant / blend
 //   export function cssGradient / toCanvasGradient
 //   export function lutTexture / lutAtlasTexture
 //   export const WGSL    sampling functions for page shaders
@@ -282,6 +282,7 @@ export function remapT(t, opts = {}) {
 
 /** The 256x3 LUT of a map after reverse, gamma and contrast. Cached. */
 export function variant(id, opts = {}) {
+  if (opts && opts.lut && opts.lut.length === 768) return opts.lut;   // a ready LUT, for example from blend()
   const m = get(id);
   const g = +(opts.gamma ?? 1), c = +(opts.contrast ?? 1), r = !!opts.reverse;
   if (g === 1 && c === 1 && !r) return m.lut;
@@ -296,6 +297,18 @@ export function variant(id, opts = {}) {
   }
   if (VARIANTS.size > 96) VARIANTS.clear();
   VARIANTS.set(key, out);
+  return out;
+}
+
+/**
+ * A 768-byte LUT between two maps: t = 0 gives map a, t = 1 gives map b.
+ * Each map gets its own options first. Pass the result as opts.lut to
+ * apply(), sample(), rgba() or cssGradient() for a cross-fade.
+ */
+export function blend(a, b, t, optsA, optsB) {
+  const A = variant(a, optsA), B = variant(b, optsB), out = new Uint8Array(768);
+  const k = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
+  for (let i = 0; i < 768; i++) out[i] = Math.round(A[i] + (B[i] - A[i]) * k);
   return out;
 }
 
