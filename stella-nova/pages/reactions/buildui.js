@@ -23,6 +23,7 @@ import { render2D } from '../molecules/draw2d.js';
 import { decode } from '../molecules/chem.js';
 import { LIB, loadLibrary, search } from '../molecules/browse.js';
 import { typeset } from '../../lib/sci-math.js';
+import { setRoute, shareUrl } from './route.js';
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const q = (root, s) => root.querySelector(s);
@@ -126,8 +127,8 @@ export class BuilderUI {
     el.querySelectorAll('.bs-tex').forEach((d, i) => typeset(d, S.steps[i].st.tex));
   }
   async share() {
-    const url = location.origin + location.pathname + '#b=' + this.b.encode();
-    history.replaceState(null, '', '#b=' + this.b.encode());
+    const route = 'b=' + this.b.encode(), url = shareUrl(route);
+    setRoute(route);
     try { await navigator.clipboard.writeText(url); this.cb.toast('Link copied. It rebuilds this tree.'); }
     catch (e) { this.cb.toast('The link is in the address bar.'); }
   }

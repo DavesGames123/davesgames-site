@@ -287,4 +287,20 @@ globalThis.RX.finish = finish;
   const hid = [...html.matchAll(/id="([^"]+)"[^>]*\bhidden\b/g)].map(m => m[1]);
   ok(hid.every(id => !new RegExp('#' + id + '\\{[^}]*display:(?!none)').test(css) || /\[hidden\]\{display:none!important\}/.test(css)), 'css: hidden elements stay hidden', hid.join(', '));
 }
+{
+  // route.js: in the shell, the share link is the shell URL #<tab>/<route>
+  // and snNav gets the route; alone, the page URL.
+  const { setRoute, shareUrl } = await import('./route.js');
+  const mk = (hash) => ({ hash, origin: 'https://davesgames.io', pathname: '/stella-nova/', get href() { return this.origin + this.pathname + this.hash; } });
+  const calls = [];
+  const shell = { location: mk('#reactions/s=aspirin'), snNav: (r, m) => calls.push([r, m]) };
+  const frame = { location: mk(''), parent: shell, history: { replaceState: (a, b, h) => { frame.location.hash = h; } } };
+  frame.location.pathname = '/stella-nova/pages/reactions/index.html';
+  setRoute('b=abc_-', frame);
+  const url = shareUrl('b=abc_-', frame);
+  ok(frame.location.hash === '#b=abc_-' && calls.length === 1 && calls[0][0] === 'b=abc_-' && calls[0][1] === 'replace', 'route: setRoute writes the frame hash and calls snNav(route, replace)');
+  ok(url === 'https://davesgames.io/stella-nova/#reactions/b=abc_-', 'route: the share link in the shell is #reactions/<route>', url);
+  const alone = { location: mk(''), history: { replaceState() {} } }; alone.parent = alone;
+  ok(shareUrl('s=soap', alone) === 'https://davesgames.io/stella-nova/#s=soap', 'route: alone, the share link is the page URL');
+}
 if (!process.env.RX_MORE4) finish();

@@ -42,6 +42,7 @@ import { decode } from '../molecules/chem.js';
 import { render2D } from '../molecules/draw2d.js';
 import { typeset } from '../../lib/sci-math.js';
 import { installSaver } from './saver.js';
+import { setRoute } from './route.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -76,7 +77,7 @@ function showSynth(syn, opts = {}) {
   relayout();
   document.querySelectorAll('#namedList button').forEach(b => b.classList.toggle('on', b.dataset.n === syn.named));
   document.querySelectorAll('.cls').forEach(b => b.classList.toggle('on', b.dataset.c === syn.cls));
-  if (!opts.noHash) history.replaceState(null, '', syn.named ? '#s=' + syn.named : syn.cls ? '#c=' + syn.cls : location.pathname);
+  if (!opts.noHash) setRoute(syn.named ? 's=' + syn.named : syn.cls ? 'c=' + syn.cls : '');
   showNode(syn.root);
   if (opts.grow !== false && !REDUCED_Q.matches) grow();
 }
@@ -371,7 +372,7 @@ async function boot() {
     onChange: (syn, id, quiet) => {
       showSynth(syn, { grow: false, noHash: true });
       if (id >= 0) { S.node = -1; showNode(id); }
-      if (!quiet) history.replaceState(null, '', syn.nodes.length ? '#b=' + S.ui.b.encode() : location.pathname);
+      if (!quiet) setRoute(syn.nodes.length ? 'b=' + S.ui.b.encode() : '');
     },
   });
   if (!fromHash()) loadNamed('aspirin', { noHash: true });
