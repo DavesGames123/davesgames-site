@@ -132,7 +132,8 @@ export async function createRenderer({ device, format, loadText }) {
       // one slice per frame, so a frame pays 1/k of the map. When the hour
       // stops, the last k slices bring every row to that hour.
       const h = cam.hours || 0;
-      if (cSetup && (cSetup.cover > 0 || cSetup.cirrus > 0)) {
+      // giants draw no separate cloud field (planet.wgsl gasHaze): no dispatch
+      if (cSetup && (cSetup.cover > 0 || cSetup.cirrus > 0) && P.kind !== 'gas') {
         const first = Number.isNaN(cHours);
         const k = first ? 1 : cloudSlices(Math.abs(h - cHours));
         if (first || h !== cHours) { cLeft = k; cHours = h; }

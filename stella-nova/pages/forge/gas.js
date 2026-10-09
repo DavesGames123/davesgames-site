@@ -180,7 +180,9 @@ function ramp(stops, t, out) {
 const mixIn = (o, b, t) => { o[0] += (b[0] - o[0]) * t; o[1] += (b[1] - o[1]) * t; o[2] += (b[2] - o[2]) * t; };
 const STREAK_O = { freq: 3, octaves: 4, lacunarity: 2.2, gain: 0.55 };
 const DET_O = { freq: 18, octaves: 3, lacunarity: 2.2, gain: 0.5 };
-const CIRRUS_O = { freq: 5, octaves: 4, lacunarity: 2.1, gain: 0.5 };
+// freq 2: x the zonal stretch (about 7) it is 14 across the bands, under
+// the band limit of a 256 map (at freq 5 every octave faded out: no cirrus)
+const CIRRUS_O = { freq: 2, octaves: 4, lacunarity: 2.1, gain: 0.5 };
 
 function windFast(ctx, lat) {
   const t = clamp(lat / Math.PI + 0.5) * 2048, i = Math.min(2047, t | 0), f = t - i;
@@ -272,7 +274,7 @@ function sampleGas(ctx, p, out) {
   if (P.clouds.cover > 0) {
     _s[1] = _p[1] * T.streak; CIRRUS_O.stretch = T.streak;
     const n = fbm(_s, CIRRUS_O, ctx.sCirrus);
-    const thr = 0.55 - P.clouds.cover * 0.8;
+    const thr = 0.3 - P.clouds.cover * 0.9;   // cover 0.1 -> about 15 % streaks (planet.wgsl gasHaze)
     out.cloud = clamp(smooth(thr, thr + 0.25, n) * (0.6 + 0.4 * smooth(-0.2, 0.6, band)) + mOval * 0.0);
   } else out.cloud = 0;
   // flow map: zonal and meridional wind, band value

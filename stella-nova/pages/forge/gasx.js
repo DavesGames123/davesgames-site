@@ -142,7 +142,7 @@ export function prepareGasX(P) {
     turbO: { freq: P.turbulence.freq, octaves: P.turbulence.octaves, lacunarity: P.turbulence.lacunarity, gain: P.turbulence.gain },
     streakO: { freq: P.turbulence.freq, octaves: 4, lacunarity: 2.2, gain: 0.55, stretch: P.turbulence.streak },
     detO: { freq: 18, octaves: 3, lacunarity: 2.2, gain: 0.5, stretch: P.turbulence.streak },
-    cirrusO: { freq: 5, octaves: 4, lacunarity: 2.1, gain: 0.5, stretch: P.turbulence.streak },
+    cirrusO: { freq: 2, octaves: 4, lacunarity: 2.1, gain: 0.5, stretch: P.turbulence.streak },   // freq 5 faded out (band limit)
     patchO: { freq: 1.3, octaves: 3, lacunarity: 2, gain: 0.5 },
   };
   // wind table
@@ -342,7 +342,7 @@ function sampleGasX(ctx, p, out) {
   }
   // high cirrus
   if (P.clouds.cover > 0) {
-    const nn = fbm(_s, ctx.cirrusO, ctx.sCirrus), thr = 0.55 - P.clouds.cover * 0.8;
+    const nn = fbm(_s, ctx.cirrusO, ctx.sCirrus), thr = 0.3 - P.clouds.cover * 0.9;   // cover 0.1 -> about 15 % streaks (planet.wgsl gasHaze)
     out.cloud = clamp(smooth(thr, thr + 0.25, nn) * (0.6 + 0.4 * smooth(0.3, 0.8, _B[0])));
   } else out.cloud = 0;
   // flow map

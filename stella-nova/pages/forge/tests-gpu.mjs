@@ -18,6 +18,8 @@
 //       the radial limb profile has no local minimum (no dark ring).
 //    5. Aurorae: the toggle off renders byte-identical frames to strength
 //       0, and with the aurora on the night side changes.
+//    6. Giants: the high haze correlates with the map's own band cirrus
+//       at a shift of (0, 0) (no second, shifted cloud field).
 // ============================================================================
 import { createRenderer } from './render.js';
 import * as PR from './presets.js';
@@ -185,6 +187,55 @@ function termProfile(img) {
   let same = true, diff = 0; for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) same = false; if (a[i] !== c[i]) diff++; }
   ok('aurora: toggle off gives byte-identical frames (vs strength 0); on changes the night side', same && diff > 500, `${diff} bytes differ with the aurora on`);
   R.destroy(); t.destroy();
+}
+// 6. giants: the high haze is the band cirrus of the maps, not a second
+// cloud field that slides over the bands. Face-on render with the clouds
+// on and off: the difference D (the haze layer) is cross-correlated with
+// the map's cirrus alpha E at each pixel's surface point (the expected
+// haze), over shifts of -6..6 px in x and y. The peak must sit at
+// (0, 0) +-1 px with r > 0.3 for every giant with visible haze.
+{
+  const res = [];
+  for (const [id, seed] of [['jupiter', 1979], ['saturn', 1610], ['neptune', 1846], ['hotjupiter', 51]]) {
+    const Q = PR.fromPreset(id, seed); Q.rings.on = 0; Q.tilt = 0;
+    const MQ = generate(Q, 512), S = 200;
+    const R = await createRenderer({ device, format: 'rgba8unorm', loadText });
+    R.setPlanet(Q, MQ, {});
+    const t = device.createTexture({ size: [S, S], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const cam = { pos: [0, 0, 3.4], target: [0, 0, 0], up: [0, 1, 0], fov: 0.7, w: S, h: S, t: 1, exposure: 0.65, sunDir: [0.3, 0.05, 1], spin: 0, steps: 24, quality: 2, hours: 2, starGain: 0, sunGain: 0, auroraOn: false };
+    R.render({ ...cam, cloudsOn: true }, t.createView()); const on = await readMap(t);
+    R.render({ ...cam, cloudsOn: false }, t.createView()); const off = await readMap(t);
+    R.destroy(); t.destroy();
+    const bpr = Math.ceil(S * 4 / 256) * 256, L = (d, i) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    const D = new Float64Array(S * S), E = new Float64Array(S * S), inn = new Uint8Array(S * S), th = Math.tan(0.35);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const nx = (x + 0.5) / S * 2 - 1, ny = 1 - (y + 0.5) / S * 2;
+      const rd = [nx * th, ny * th, -1], l = Math.hypot(...rd); rd[0] /= l; rd[1] /= l; rd[2] /= l;
+      const b = 3.4 * rd[2], c = 3.4 * 3.4 - 1, disc = b * b - c;
+      if (disc <= 0) continue;
+      const tt = -b - Math.sqrt(disc), p = [rd[0] * tt, rd[1] * tt, 3.4 + rd[2] * tt];
+      if (p[2] < 0.55) continue;   // keep to the face (no limb, no grazing)
+      const u = ((Math.atan2(p[2], -p[0]) / (2 * Math.PI)) % 1 + 1) % 1, v = Math.acos(Math.max(-1, Math.min(1, p[1]))) / Math.PI;
+      const k = y * S + x, mx = Math.min(MQ.W - 1, Math.floor(u * MQ.W)), my = Math.min(MQ.H - 1, Math.floor(v * MQ.H));
+      inn[k] = 1; E[k] = MQ.cloud[(my * MQ.W + mx) * 4]; D[k] = L(on, y * bpr + x * 4) - L(off, y * bpr + x * 4);
+    }
+    const corr = (dx, dy) => {
+      let n = 0, sa = 0, sb = 0, sab = 0, saa = 0, sbb = 0;
+      for (let y = 8; y < S - 8; y++) for (let x = 8; x < S - 8; x++) {
+        const k = y * S + x, j = (y + dy) * S + x + dx;
+        if (!inn[k] || !inn[j]) continue;
+        const a2 = D[k], b2 = E[j]; n++; sa += a2; sb += b2; sab += a2 * b2; saa += a2 * a2; sbb += b2 * b2;
+      }
+      const va = saa - sa * sa / n, vb = sbb - sb * sb / n;
+      return va > 0 && vb > 0 ? (sab - sa * sb / n) / Math.sqrt(va * vb) : 0;
+    };
+    let best = -2, bx = 0, by = 0;
+    for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) { const c = corr(dx, dy); if (c > best) { best = c; bx = dx; by = dy; } }
+    let hz = 0, nIn = 0; for (let k = 0; k < S * S; k++) if (inn[k]) { hz += Math.abs(D[k]); nIn++; }
+    res.push({ id, bx, by, best, hz: hz / nIn });
+  }
+  ok('giants: the haze is the band cirrus at its own place (2D peak at (0, 0) +- 1 px, r > 0.3)', res.every(r => r.hz < 0.05 || (Math.abs(r.bx) <= 1 && Math.abs(r.by) <= 1 && r.best > 0.3)),
+    res.map(r => `${r.id} peak (${r.bx}, ${r.by}) r ${r.best.toFixed(2)}, haze ${r.hz.toFixed(2)}`).join('; '));
 }
 ok('render: no GPU validation errors', !gpuErr, gpuErr.trim());
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');

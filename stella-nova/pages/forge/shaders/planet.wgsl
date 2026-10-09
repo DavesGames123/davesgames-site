@@ -33,11 +33,15 @@
 //  that graze the low air). Past the terminator the ground keeps a
 //  twilight sky (fn twilightT); the shadow in the air has a penumbra.
 //
+//  GIANTS  no separate cloud field: the high haze is the band cirrus of the
+//  maps (fn gasHaze), advected with the deck's flow, at the shell height;
+//  zones and storms shade the lower belts near the terminator.
+//
 //  AURORAE  fn auroraMarch: an emission term marched through the shell
 //  100-300 km up, bounded to the oval (aurora.js sets the uniforms; a
 //  strength of 0 skips it).
 //
-//  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface", "fn sunVis", "fn twilightT", "fn auroraMarch",
+//  grep -n targets: "struct View", "fn dirUV", "fn shadeSurface", "fn sunVis", "fn twilightT", "fn auroraMarch", "fn gasHaze",
 //  "fn cloudsAt", "fn cloudShadow", "fn terrainShadow", "fn atmosphere", "fn ringAt", "@fragment"
 // ============================================================================
 
@@ -272,6 +276,28 @@ fn cloudsAt(q: vec3f) -> vec2f {
   return vec2f(d, c);
 }
 
+// Giants: the high haze (the band cirrus in tCloud.r, gas.js / gasx.js),
+// advected by the same flow map and phases as the deck (shadeSurface),
+// so it stays on its band and never slides over the belts as a copy.
+// The haze is soft: it is sampled 4 times wider than the deck (a
+// coarser mip), so thin streaks read as a veil, not as bright threads.
+fn gasHaze(uv: vec2f, g: Grad) -> f32 {
+  let fl = sampleG(tCloud, uv, g);
+  let vel = vec2f((fl.g - 0.5) * 2.0, (fl.b - 0.5) * 2.0) * V.flow.y;
+  let f = flowUV(uv, vel, V.camPos.w, 30.0);
+  var gw = g;
+  gw.dx = g.dx * 4.0;
+  gw.dy = g.dy * 4.0;
+  return mix(sampleG(tCloud, f.a, gw).r, sampleG(tCloud, f.b, gw).r, f.w);
+}
+fn gasHazeL(q: vec3f) -> f32 {
+  let uv = dirUV(q);
+  let fl = textureSampleLevel(tCloud, sMap, uv, 1.0);
+  let vel = vec2f((fl.g - 0.5) * 2.0, (fl.b - 0.5) * 2.0) * V.flow.y;
+  let f = flowUV(uv, vel, V.camPos.w, 30.0);
+  return mix(textureSampleLevel(tCloud, sMap, f.a, 1.0).r, textureSampleLevel(tCloud, sMap, f.b, 1.0).r, f.w);
+}
+
 // Cloud shadow at surface point p: the sun ray meets the cloud shell, one
 // sample at that point (so the shadow is offset by the sun and the height).
 fn cloudShadow(p: vec3f) -> f32 {
@@ -279,7 +305,9 @@ fn cloudShadow(p: vec3f) -> f32 {
   let L = V.sun.xyz;
   let t = raySphere(p, L, V.shell.y).y;
   if (t <= 0.0) { return 1.0; }
-  let c = cloudsAt(normalize(p + L * t));
+  let q = normalize(p + L * t);
+  if (V.flow.w > 0.5) { return 1.0 - 0.3 * gasHazeL(q) * V.cloud2.z; }
+  let c = cloudsAt(q);
   return (1.0 - 0.85 * cloudOpacity(c.x) / max(V.cloud2.w, 1e-3)) * (1.0 - 0.3 * c.y * V.cloud2.z);
 }
 
@@ -357,13 +385,20 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   var alb: vec3f;
   var nT: vec3f;
   var mat: vec4f;
+  var gfa = uv;
+  var gfb = uv;
+  var gfw = 0.0;
+  var gh = 0.0;
   if (V.flow.w > 0.5) {
     // gas giant: the cloud deck flows along the zonal wind of the flow map
     let fl = sampleG(tCloud, uv, g);
     let vel = vec2f((fl.g - 0.5) * 2.0, (fl.b - 0.5) * 2.0) * V.flow.y;
     let f = flowUV(uv, vel, V.camPos.w, 30.0);
     alb = mix(sampleG(tAlbedo, f.a, g).rgb, sampleG(tAlbedo, f.b, g).rgb, f.w);
-    nT = mix(sampleG(tNormal, f.a, g).xyz, sampleG(tNormal, f.b, g).xyz, f.w) * 2.0 - 1.0;
+    let na = sampleG(tNormal, f.a, g);
+    let nb = sampleG(tNormal, f.b, g);
+    nT = mix(na.xyz, nb.xyz, f.w) * 2.0 - 1.0;
+    gfa = f.a; gfb = f.b; gfw = f.w; gh = mix(na.a, nb.a, f.w);
     mat = sampleG(tMat, uv, g);
   } else {
     alb = sampleG(tAlbedo, uv, g).rgb;
@@ -386,7 +421,20 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   let rough = clamp(mat.g, 0.03, 1.0);
   let metal = mat.b;
   let f0 = mix(vec3f(0.08 * mat.a), alb, metal);
-  let light = sunLight(p) * cloudShadow(p) * ringShadow(p) * terrainShadow(p, uv, mg) * A.radii.w;
+  var light = sunLight(p) * cloudShadow(p) * ringShadow(p) * terrainShadow(p, uv, mg) * A.radii.w;
+  // giants: zones and storms stand higher than the belts (the height in
+  // the normal map alpha). Near the terminator a deck lower than the
+  // cloud tops 0.5 deg toward the sun lies in their soft shadow.
+  if (V.flow.w > 0.5) {
+    let mu = dot(up, L);
+    if (mu < 0.4) {
+      let st = 0.009;
+      let du = vec2f(dot(L, east) * st / (TAU * max(length(up.xz), 0.05)), -dot(L, north) * st / PI);
+      let hs = mix(textureSampleLevel(tNormal, sMap, gfa + du, 1.0).a, textureSampleLevel(tNormal, sMap, gfb + du, 1.0).a, gfw);
+      let occ = smoothstep(0.0, 0.06, hs - gh) * (1.0 - smoothstep(0.05, 0.4, mu));
+      light *= 1.0 - 0.45 * occ;
+    }
+  }
   let nl = max(dot(n, L), 0.0) * smoothstep(-0.05, 0.05, dot(up, L));
   let fd = (1.0 - f0) * (1.0 - metal) * alb / PI;
   var col = (fd + ggx(n, v, L, rough, f0)) * light * nl;
@@ -673,9 +721,18 @@ fn fs(in: VOut) -> @location(0) vec4f {
     // cloud toward the sun is thick (self-shadow), then the thin cirrus
     if (V.flow.z > 0.5 && hc.x > 0.0) {
       let up = pC;
-      let c = vec2f(sampleG(tDyn, uvC + vec2f(V.cloud2.x, 0.0), gC).r, sampleG(tDyn, uvC + vec2f(V.cloud2.y, 0.0), gC).g);
-      let Lt = L - up * dot(L, up);
-      let toSun = cloudsAt(normalize(up + Lt * 0.03)).x;
+      var c = vec2f(0.0);
+      var toSun = 0.0;
+      if (V.flow.w > 0.5) {
+        // giants: no separate cloud field. The high haze is the band
+        // cirrus of the maps, advected by the deck's own flow, at the
+        // shell height (parallax from the real altitude)
+        c = vec2f(0.0, gasHaze(uvC, gC));
+      } else {
+        c = vec2f(sampleG(tDyn, uvC + vec2f(V.cloud2.x, 0.0), gC).r, sampleG(tDyn, uvC + vec2f(V.cloud2.y, 0.0), gC).g);
+        let Lt = L - up * dot(L, up);
+        toSun = cloudsAt(normalize(up + Lt * 0.03)).x;
+      }
       let selfSh = mix(1.0, 0.5, smoothstep(0.25, 1.0, toSun) * smoothstep(0.0, 0.6, c.x));
       // the shell sits high for parallax; the sun is taken at a real
       // deck height (at most 12 km), so the clouds catch the sun past the
