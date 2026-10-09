@@ -24,6 +24,10 @@
 //    canvas          the 3D canvas; models, kinds: the lists
 //    lab, sim, view  the controller, the core sim, the renderer
 //
+//  window.snSaver  (lib/screensaver.js) enter() hides the GUI, waits for
+//  the 3D view and gives the loop to saver.js (shots from saver-plan.js).
+//  No exit(): the shell reloads the page.
+//
 //  GREP MAP
 //    const SCHEMA .............. kit groups: physics, visual, generator
 //    async function loadSource . every model load goes through here
@@ -37,6 +41,7 @@
 //    function frame ............ the loop
 //    function shareURL ......... the share link (lab.encodeShare)
 //    function release .......... pagehide: free WASM objects and GL
+//    window.snSaver ............ screensaver hook (saver.js)
 // ============================================================================
 import { mount, core as K } from '../../widgets/sim-kit/ui.js';
 import { createLab, encodeShare, decodeShare, MODELS, SCENE_KINDS, INTEGRATORS, SOLVERS, CONES } from './lab.js';
@@ -97,7 +102,7 @@ const OPT_KEYS = ['timestep', 'substeps', 'integrator', 'solver', 'iterations', 
 
 // ---- state ------------------------------------------------------------------------
 const lab = createLab();
-let view = null, THREE = null, canvas = null, booted = false, lastT = 0, raf = 0, released = false;
+let view = null, THREE = null, canvas = null, booted = false, lastT = 0, raf = 0, released = false, saver = null;
 const panels = {};          // section id -> { sec, update() }
 const shareIn = decodeShare(location.hash);
 
@@ -533,6 +538,7 @@ function frame(t) {
   if (!lab.sim || released) return;
   const dt = lastT ? (t - lastT) / 1000 : 1 / 60;
   lastT = t;
+  if (saver) { saver.tick(dt); if (view) view.render(); return; }
   const single = !kit.playing && kit.takeStep();
   const n = lab.frame(dt, { playing: kit.playing, speed: kit.speed, single });
   if (n && panels.sensors) panels.sensors.sample();
@@ -572,6 +578,7 @@ function addModelsButton() {
 function release() {
   released = true;
   cancelAnimationFrame(raf);
+  try { if (saver && saver.dispose) saver.dispose(); } catch (e) { /* gone */ }
   try { if (view) view.dispose(); } catch (e) { /* gone */ }
   try { if (explainer) explainer.dispose(); } catch (e) { /* gone */ }
   try { const gl = canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl')); const x = gl && gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); } catch (e) { /* gone */ }
@@ -599,6 +606,27 @@ const api = {
   openExplain, openGallery, kit, release,
 };
 window.__mujoco = api;
+
+// ---- screensaver -----------------------------------------------------------------------------
+window.snSaver = {
+  async enter(o = {}) {
+    window.snSaverActive = true;
+    saver = { tick() {} };
+    const st = document.createElement('style');
+    st.textContent = '.sk-root,.sk-panel,.sk-transport,#hud,#boot,#drop,#gallery,#explain-dlg,#credit,#stage-note{display:none!important}#stage{pointer-events:none}#stage canvas{cursor:none;transition:opacity .6s ease}';
+    document.head.appendChild(st);
+    openGallery(false); openExplain(false);
+    kit.setPlaying(true);
+    for (let i = 0; i < 100 && !view && !released; i++) await new Promise(r => setTimeout(r, 200));
+    if (view && view.endPerturb && view.perturbing) view.endPerturb();
+    const env = { lab, get view() { return view; }, canvas, load: src => loadSource(src), setVisual: f => api.setVisual(f) };
+    import('./saver.js').then(m => { if (!released) saver = m.startSaver(env, o); }).catch(e => console.error(e));
+    return { canvas, warmupMs: 3000 };
+  },
+  // probes: the director state, and a forced cut to a shot kind
+  debug: () => (saver && saver.debug ? saver.debug() : null),
+  cut: kind => (saver && saver.cut ? saver.cut(kind) : null),
+};
 
 // ---- boot ----------------------------------------------------------------------------------
 async function boot() {
