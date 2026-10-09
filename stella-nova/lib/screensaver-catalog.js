@@ -49,6 +49,7 @@ window.SN_SAVER_CATALOG = {
     'wormhole': { tier: 2, default: true, hook: true, note: 'Generic fallback already gives a slow orbit (autoSpin, SPIN_SPEED 0.0008, main.js:84-85) and RenderScale sizes from the window, so tier 1 would show.' },
     'orbital': { tier: 2, default: true, hook: true, note: 'Idle motion already exists: default S (core.js:21-33) has n=3,l=1,m=1, animateFlow=true, B-field tracers on, so particles flow along J (main.js loop, animateFlow at m!=0).' },
     'molecular-bond': { tier: 3, default: true, hook: true, note: 'Idle frame loop (main.js:466) only renders;' },
+    'exotic-atoms': { tier: 4, default: true, hook: true, note: 'Exotic Atoms; saver.js plays a seeded bag of 13 shots, 6-12 s cuts: seven one-photon climbs from the ground state toward n = 50-300 and ionization (H circular and s-p, Rb, positronium, muonic H, Cu2O exciton, B field on), plus n = 1 to 200 swell, trilobite forming, B-field bloom, Kepler packet, Ps/H/muonic H at scale, white-dwarf squeeze; plates with n, l, m, the photon and one TeX line, no code.' },
     'hydrogen-table': { tier: 3, default: true, hook: true, note: 'Page is a scrolling DOM table of many tile canvases (main.js layout/addShell);' },
     'qave': { tier: 2, default: true, hook: true, note: 'Already plays and orbits idle: VS.playing=true, speed 2, autoRotate true speed 0.55 (core.js:29-31,50).' },
     'qft-flow': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02). Its hook stays in the page.' },
