@@ -140,6 +140,79 @@ check('cssGradient is a linear-gradient', /^linear-gradient\(90deg, #[0-9a-f]{6}
   check('WGSL has no && or || or ^', !/&&|\|\||\^/.test(M.WGSL));
 }
 
+// ---------------------------------------------------------------- picker (DOM stub)
+{
+  const P = await import('./picker.js');
+  class El extends EventTarget {
+    constructor(doc, tag) {
+      super(); this.ownerDocument = doc; this.tagName = tag.toUpperCase(); this.attrs = {}; this.children = [];
+      this.style = {}; this.hidden = false; this.textContent = ''; this.value = ''; this.className = ''; this.parentNode = null;
+      const cls = new Set();
+      this.classList = { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), contains: (c) => cls.has(c) };
+    }
+    setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'value') this.value = String(v); }
+    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+    append(...cs) { for (const c of cs) { c.parentNode = this; this.children.push(c); } }
+    remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((c) => c !== this); }
+    focus() { this.ownerDocument.activeElement = this; }
+  }
+  const doc = {
+    activeElement: null,
+    createElement: (t) => new El(doc, t),
+    defaultView: { getComputedStyle: () => ({ gridTemplateColumns: '100px 100px 100px' }) },
+  };
+  const host = new El(doc, 'div');
+  const pk = P.createPicker(host, { value: 'viridis' });
+  const events = [];
+  pk.addEventListener('change', (e) => events.push(e.detail));
+  let hostEvents = 0;
+  host.addEventListener('cmapchange', () => hostEvents++);
+  check('picker builds into host', host.children.length === 1 && pk.swatches.size === M.list().length);
+  check('picker starts on viridis', pk.value.id === 'viridis' && pk.swatches.get('viridis').getAttribute('aria-checked') === 'true');
+  check('one swatch is in the tab order', [...pk.swatches.values()].filter((b) => b.getAttribute('tabindex') === '0').length === 1);
+  pk.swatches.get('magma').dispatchEvent(new Event('click'));
+  check('click selects and emits', pk.value.id === 'magma' && events.at(-1)?.id === 'magma' && hostEvents === 1);
+  check('click moves focus', doc.activeElement === pk.swatches.get('magma'));
+  const key = (k, target) => { const e = new Event('keydown'); e.key = k; Object.defineProperty(e, 'target', { value: target }); pk.list.dispatchEvent(e); };
+  key('ArrowRight', pk.swatches.get('magma'));
+  check('ArrowRight selects the next map', pk.value.id === 'inferno', pk.value.id);
+  key('ArrowDown', pk.swatches.get('inferno'));
+  const perc = M.list('perceptual').map((m) => m.id);
+  check('ArrowDown moves one row of 3', pk.value.id === perc[perc.indexOf('inferno') + 3], pk.value.id);
+  key('Home', doc.activeElement);
+  check('Home goes to the first map', pk.value.id === M.list()[0].id);
+  key('End', doc.activeElement);
+  check('End goes to the last map', pk.value.id === M.list().at(-1).id);
+  key('ArrowUp', pk.swatches.get('grey'));
+  check('ArrowUp at the top stays at the top', pk.value.id === 'grey');
+  pk.revBtn.dispatchEvent(new Event('click'));
+  check('reverse toggles', pk.value.reverse === true && pk.revBtn.getAttribute('aria-pressed') === 'true');
+  check('reverse repaints swatches', pk.swatches.get('grey')._bar.style.background.startsWith('linear-gradient(90deg, #ffffff'));
+  pk.gamma.value = '1'; pk.gamma.dispatchEvent(new Event('input'));
+  check('gamma slider at max gives 3', pk.value.gamma === 3 && pk.gammaOut.textContent === '3.00');
+  pk.search.value = 'phase'; pk.search.dispatchEvent(new Event('input'));
+  const vis = [...pk.swatches.entries()].filter(([, b]) => !b.hidden).map(([id]) => id);
+  check('search filters to phase maps', vis.length >= 1 && vis.every((id) => P.matchMap(M.get(id), 'phase')), vis.join());
+  check('search hides empty sections', pk.sections.get('grey').el.hidden === true);
+  check('a visible swatch is in the tab order', vis.some((id) => pk.swatches.get(id).getAttribute('tabindex') === '0'));
+  pk.search.value = 'zzzz'; pk.search.dispatchEvent(new Event('input'));
+  check('no match shows the empty note', pk.empty.hidden === false);
+  pk.search.value = ''; pk.search.dispatchEvent(new Event('input'));
+  pk.chips[4][1].dispatchEvent(new Event('click'));
+  check('group chip filters', [...pk.swatches.entries()].filter(([, b]) => !b.hidden).every(([id]) => M.get(id).group === pk.chips[4][0]));
+  const before = pk.value.id;
+  pk.randBtn.dispatchEvent(new Event('click'));
+  check('random picks another map in the filter', pk.value.id !== before && M.get(pk.value.id).group === pk.chips[4][0]);
+  const n = events.length;
+  pk.set({ id: 'turbo' }, { silent: true });
+  check('silent set does not emit', events.length === n && pk.value.id === 'turbo');
+  check('gamma scale round trip', Math.abs(P.gammaFromSlider(P.sliderFromGamma(2)) - 2) < 0.01 && P.gammaFromSlider(0) === 1);
+  const only = P.createPicker(new El(doc, 'div'), { groups: ['diverging'], value: 'grey' });
+  check('groups option limits the picker', only.swatches.size === M.list('diverging').length && only.value.id === 'coolwarm' && only.root.children[3].hidden === true);
+  pk.destroy();
+  check('destroy removes the root', host.children.length === 0);
+}
+
 // ---------------------------------------------------------------- contact sheet
 function sheppLogan(n) {
   // Modified Shepp-Logan (Toft): [A, a, b, x0, y0, phi deg].
