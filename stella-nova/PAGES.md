@@ -172,7 +172,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `chandrasekhar-limit` | Chandrasekhar Limit | Space & Gravity > Deep Space | NEW | Why no white dwarf weighs more than 1.4 Suns. |  | shown | hook, tier 4, default | yes |
 | `orbital` (pages/atomic-orbital-vr) | Atomic Orbital | Quantum > Atoms | VR | Hydrogen orbitals in 3D, VR ready. |  | shown | hook, tier 2, default | yes |
 | `hydrogen-table` | Hydrogen Wave Function | Quantum > Atoms | NEW | Every hydrogen wave function, side by side. |  | shown | hook, tier 3, default | yes |
-| `exotic-atoms` | Exotic Atoms | Quantum > Atoms | NEW | Rydberg giants to n = 300, positronium, trilobite molecules and the field of the electron cloud. |  | shown | hook, tier 4, default | no |
+| `exotic-atoms` | Exotic Atoms | Quantum > Atoms | NEW | Rydberg giants to n = 300, positronium, trilobite molecules and the field of the electron cloud. |  | shown | hook, tier 4, default | yes |
 | `qave` (pages/quantum-algorithm-visualizer) | Quantum Algorithm Visualizer | Quantum > Quantum Computing | 3D | Quantum algorithms step by step in 3D. |  | directory only | hook, tier 2, default | no |
 | `qft-flow` | Quantum Encoding | Quantum > Quantum Computing | MATH | Four qubit phase knobs and the spectrum a QFT reads out. |  | shown | no | yes |
 | `qft-store` | Quantum Decoding | Quantum > Quantum Computing | DATA | Write bytes into qubit rotation angles and read them back. |  | shown | generic, tier 5 | yes |
