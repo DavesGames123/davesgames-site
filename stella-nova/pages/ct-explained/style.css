@@ -130,8 +130,8 @@ a.lab{font-size:0.78rem;color:var(--acc);border:1px solid var(--acc-line);border
 /* ---------------------------------------------------------------- TOUCH */
 @media (pointer:coarse){
   .seg button,.tgl{min-height:44px;padding:8px 12px}
-  a.lab{padding:9px 12px}
-  #chips a{padding:10px 12px}
+  a.lab{display:inline-flex;align-items:center;min-height:44px;padding:0 14px}
+  #chips a{min-height:44px;align-items:center;padding:0 14px}
   .ctrl input[type=range]{height:44px}
   .hint,.body.dim,.cap{font-size:0.86rem}
 }
