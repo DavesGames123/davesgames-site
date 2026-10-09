@@ -18,6 +18,7 @@
 //    growth .......... "function grow("
 //    phone sheet ..... "function setOpen" "function occlusion"
 //    frame loop ...... "function frame"
+//    screensaver ..... saver.js installSaver (window.snSaver)
 // ============================================================================
 import { RxView } from './rxview.js';
 import { TreeView } from './treeview.js';
@@ -40,6 +41,7 @@ import { LIB, loadLibrary } from '../molecules/browse.js';
 import { decode } from '../molecules/chem.js';
 import { render2D } from '../molecules/draw2d.js';
 import { typeset } from '../../lib/sci-math.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -374,5 +376,6 @@ async function boot() {
   });
   if (!fromHash()) loadNamed('aspirin', { noHash: true });
   window.__rx = { S, showSynth, loadNamed, loadClass };
+  installSaver({ S, showSynth, art });
 }
 boot();

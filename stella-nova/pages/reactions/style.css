@@ -244,3 +244,7 @@ html.sn-saver #stepPane{position:absolute;inset:0;border:0;border-radius:0;backg
 html.sn-saver .stepbody{display:block;padding:0;height:100%}
 html.sn-saver .view3{position:absolute;inset:0;border-radius:0;background:transparent}
 html.sn-saver .treewrap{background:#05060a}
+html.sn-saver #stage{transition:none}
+html.sn-saver #stage.sv-tree #stepPane,html.sn-saver #stage.sv-step #treePane{visibility:hidden}
+html.sn-saver #stage.sv-step #stepPane{background:#05060a}
+html.sn-saver .tv-node{transition:opacity 0.5s,transform 0.5s}

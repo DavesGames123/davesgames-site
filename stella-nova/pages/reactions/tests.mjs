@@ -258,4 +258,28 @@ globalThis.RX.finish = finish;
   const lim = findRoutes(graphOf('tamyl'), { maxSteps: 1 });
   ok(!lim.routes.length, 'retro: the step limit holds (2-methylbutan-2-ol needs 2 steps)', lim.reason);
 }
+
+// ── saver and phone limits ─────────────────────────────────────────────────
+{
+  const { makeScene } = await import('./rxanim.js');
+  const src = readFileSync(here + 'saver.js', 'utf8');
+  const ids = JSON.parse(src.match(/const SYNTHS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  let lo = 1e9, hi = 0, n = 0;
+  for (const S of globalThis.RX.synths) {
+    if (!ids.includes(S.named)) continue;
+    for (const s of S.steps) for (const calm of [0, 1]) { const T = makeScene(s.st, { turn: 1.5 + 1.5 * calm }).T; lo = Math.min(lo, T); hi = Math.max(hi, T); n++; }
+    for (const calm of [0, 1]) { const d = Math.min(12, Math.max(5, 4.5 + 1.1 * S.steps.length + 2.5 * calm)); lo = Math.min(lo, d); hi = Math.max(hi, d); }
+  }
+  ok(lo >= 5 && hi <= 12, 'saver: every shot lasts 5-12 s', `${n} step shots, ${lo.toFixed(1)}-${hi.toFixed(1)} s`);
+  ok(ids.every(id => NAMED.some(x => x.id === id)) && ids.length >= 6, 'saver: the tour names only built syntheses', ids.join(', '));
+  ok(!/code\s*:/.test(src), 'saver: the plate carries no code extract');
+  const css = readFileSync(here + 'style.css', 'utf8'), html = readFileSync(here + 'index.html', 'utf8');
+  ok(/\[hidden\]\{display:none!important\}/.test(css), 'css: [hidden]{display:none!important}');
+  const coarse = css.slice(css.indexOf('@media (pointer:coarse)'), css.indexOf('/* PHONE'));
+  ok(/input\{font-size:16px\}/.test(coarse) && /min-height:44px/.test(coarse) && /height:44px/.test(coarse), 'css: touch targets 44 px and 16 px inputs on a coarse pointer');
+  const heads = [...html.matchAll(/<script src="\.\.\/\.\.\/lib\/([a-z-]+)\.js"><\/script>/g)].map(m => m[1]);
+  ok(heads.join(',') === 'gpu-guard,wishlist,stats-beacon' && html.indexOf('gpu-guard') < html.indexOf('<meta'), 'html: head scripts gpu-guard, wishlist, stats-beacon first', heads.join(', '));
+  const hid = [...html.matchAll(/id="([^"]+)"[^>]*\bhidden\b/g)].map(m => m[1]);
+  ok(hid.every(id => !new RegExp('#' + id + '\\{[^}]*display:(?!none)').test(css) || /\[hidden\]\{display:none!important\}/.test(css)), 'css: hidden elements stay hidden', hid.join(', '));
+}
 if (!process.env.RX_MORE4) finish();

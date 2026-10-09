@@ -13,7 +13,8 @@
 //  tv.set(S, lay, { d3, eq, art(node) -> svg text, still(node) -> url })
 //  tv.grow(u)      0..1, the growth playback (1 = all shown)
 //  tv.light(id)    light a molecule, the branches into it and its equation
-//  tv.fit(anim)    the whole tree in view
+//  tv.fit(anim)    the whole tree in view; fitRect(r), focusIn(id, r) for
+//                  the saver's clear band
 //
 //  GREP MAP: grep -n 'set(S, lay'  'grow(u)'  'bindPointer'
 // ============================================================================
@@ -103,6 +104,18 @@ export class TreeView {
     const s = clamp(Math.min(W / (this.lay.w + 40), H / (this.lay.h + 60)), 0.2, 1.6);
     const to = { s, x: (W - this.lay.w * s) / 2, y: (H - this.lay.h * s) / 2 };
     this.tween(to, anim ? 450 : 0);
+  }
+  // the whole tree inside a rectangle of the wrap (the saver's clear band)
+  fitRect(r) {
+    if (!this.lay) return;
+    const s = clamp(Math.min(r.w / (this.lay.w + 30), r.h / (this.lay.h + 50)), 0.15, 1.6);
+    this.tween({ s, x: r.x + (r.w - this.lay.w * s) / 2, y: r.y + (r.h - this.lay.h * s) / 2 }, 0);
+  }
+  // a push-in on a node, centred in a rectangle of the wrap
+  focusIn(id, r, k = 1.5, ms = 1400) {
+    const b = this.lay && this.lay.fish[id]; if (!b) return;
+    const s = clamp(Math.min(this.view.s * k, r.h * 0.6 / b.h), 0.15, 3);
+    this.tween({ s, x: r.x + r.w / 2 - (b.x + b.w / 2) * s, y: r.y + r.h / 2 - (b.y + b.h / 2) * s }, ms);
   }
   // keep a node in view (growth playback, saver)
   focus(id, zoom = null, ms = 600) {
