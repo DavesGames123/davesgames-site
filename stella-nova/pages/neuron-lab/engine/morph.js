@@ -72,18 +72,18 @@ export function makeCell(type = 'pyramidal', seed = 1) {
     for (let k = 0; k < 3; k++) {
       const t = sec(S, R, { name: 'apic' + k, kind: 'apical', parent: par, x, L: 170, d0: d, d1: d * 0.78, p0: p, dir: [0, 1, 0], wiggle: 0.05, pull: [0, 1, 0] });
       const tp = S[t.i].pts;
-      for (let q = 0; q < 2; q++) {
-        const ang = R() * Math.PI * 2, j = Math.min(tp.length - 1, 2 + q * 4);
-        tree(S, R, { kind: 'dend', len: dp => 90 / (1 + dp * 0.4), depth: 1, minDepth: 1, stop: 0.3, spread: 0.7, taper: 0.7, dmin: 0.5, wiggle: 0.16 },
-          0, tp[j], V.norm([Math.cos(ang), 0.55, Math.sin(ang)]), 1.4, t.i, 'obl' + k + q, j / (tp.length - 1));
+      for (let q = 0; q < 3; q++) {
+        const ang = R() * Math.PI * 2, j = Math.min(tp.length - 1, 1 + q * 3);
+        tree(S, R, { kind: 'dend', len: dp => 120 / (1 + dp * 0.4), depth: 2, minDepth: 1, stop: 0.25, spread: 0.7, taper: 0.7, dmin: 0.5, wiggle: 0.16 },
+          0, tp[j], V.norm([Math.cos(ang), 0.45 + 0.2 * k, Math.sin(ang)]), 1.5, t.i, 'obl' + k + q, j / (tp.length - 1));
       }
       p = t.end; par = t.i; x = 1; d *= 0.78;
     }
-    tree(S, R, { kind: 'tuft', len: dp => 110 / (1 + dp * 0.35), depth: 3, minDepth: 2, stop: 0.3, spread: 0.85, taper: 0.75, dmin: 0.4, wiggle: 0.14, pull: [0, 0.6, 0] }, 0, p, [0, 1, 0], 2.2, par, 'tuft');
+    tree(S, R, { kind: 'tuft', len: dp => 130 / (1 + dp * 0.3), depth: 4, minDepth: 3, stop: 0.25, spread: 0.85, taper: 0.75, dmin: 0.4, wiggle: 0.14, pull: [0, 0.6, 0] }, 0, p, [0, 1, 0], 2.2, par, 'tuft');
     // basal dendrites
-    for (let b = 0; b < 6; b++) {
-      const ang = b / 6 * Math.PI * 2 + R() * 0.5, dir = V.norm([Math.cos(ang), -0.35 - R() * 0.4, Math.sin(ang)]);
-      tree(S, R, { kind: 'dend', len: dp => 70 / (1 + dp * 0.25), depth: 2, minDepth: 1, stop: 0.25, spread: 0.6, taper: 0.7, dmin: 0.5, wiggle: 0.18, pull: [0, -0.3, 0] }, 0, V.mul(dir, 10), dir, 1.6, 0, 'basal' + b, 0.5);
+    for (let b = 0; b < 7; b++) {
+      const ang = b / 7 * Math.PI * 2 + R() * 0.5, dir = V.norm([Math.cos(ang), -0.3 - R() * 0.4, Math.sin(ang)]);
+      tree(S, R, { kind: 'dend', len: dp => 85 / (1 + dp * 0.25), depth: 3, minDepth: 2, stop: 0.25, spread: 0.6, taper: 0.7, dmin: 0.5, wiggle: 0.18, pull: [0, -0.3, 0] }, 0, V.mul(dir, 10), dir, 1.6, 0, 'basal' + b, 0.5);
     }
     axon(S, R, [0, -10, 0], [0, -1, 0], 1.6, 1.0, 420, 0.5);
   } else if (type === 'purkinje') {
