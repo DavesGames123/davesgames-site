@@ -44,6 +44,7 @@
 [data-sector="community"]  { --c: #64dcc8; --c2: #64c8f0; }
 [data-sector="space"]      { --c: #60b0f0; --c2: #ffc864; }
 [data-sector="quantum"]    { --c: #9088e0; --c2: #64b4ff; }
+[data-sector="chemistry"]  { --c: #7ee0b0; --c2: #ffc46b; }
 [data-sector="life"]       { --c: #6cd6a8; --c2: #e8d2a8; }
 [data-sector="fluids"]     { --c: #50c0ff; --c2: #64dcc8; }
 [data-sector="fields"]     { --c: #60e0ee; --c2: #ffb478; }

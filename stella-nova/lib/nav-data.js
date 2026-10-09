@@ -100,12 +100,9 @@ w.SN_NAV = [
     ] }
   ] },
   { id: "quantum", label: "Quantum", short: "Quantum", icon: "ψ", color: "#9088e0", color2: "#64b4ff", groups: [
-    { h: "Atoms & Molecules", p: [
+    { h: "Atoms", p: [
       ["orbital", "Atomic Orbital", "VR", "atomic-orbital-vr"],
-      ["molecular-bond", "Molecular Bond", "SIM"],
-      ["hydrogen-table", "Hydrogen Wave Function", "NEW"],
-      ["molecules", "Molecule Explorer", "2D/3D"],
-      ["reactions", "Reaction Explorer", "NEW"]
+      ["hydrogen-table", "Hydrogen Wave Function", "NEW"]
     ] },
     { h: "Quantum Computing", p: [
       ["qave", "Quantum Algorithm Visualizer", "3D", "quantum-algorithm-visualizer"],
@@ -115,6 +112,16 @@ w.SN_NAV = [
     ] },
     { h: "Particle Physics", p: [
       ["particle-collider", "Particle Collider", "SIM"]
+    ] }
+  ] },
+  { id: "chemistry", label: "Chemistry", short: "Chemistry", icon: "⚗", color: "#7ee0b0", color2: "#ffc46b", groups: [
+    { h: "The Elements", p: [
+      ["periodic-table", "Periodic Table", "NEW"]
+    ] },
+    { h: "Molecules & Reactions", p: [
+      ["molecular-bond", "Molecular Bond", "SIM"],
+      ["molecules", "Molecule Explorer", "2D/3D"],
+      ["reactions", "Reaction Explorer", "NEW"]
     ] }
   ] },
   { id: "life", label: "Life Sciences", short: "Life", icon: "✿", color: "#6cd6a8", color2: "#e8d2a8", groups: [

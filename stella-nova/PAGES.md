@@ -126,7 +126,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-206 registered pages in 5 regions and 18 constellations.
+207 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -167,16 +167,17 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `blackhole` | Black Hole | Space & Gravity > Deep Space | GPU | Gravitational lensing around a Schwarzschild hole. |  | shown | hook, tier 1, default | yes |
 | `wormhole` (pages/ellis-wormhole) | Wormhole | Space & Gravity > Deep Space | GPU | Fly through an Ellis wormhole. |  | shown | hook, tier 2, default | yes |
 | `chandrasekhar-limit` | Chandrasekhar Limit | Space & Gravity > Deep Space | NEW | Why no white dwarf weighs more than 1.4 Suns. |  | shown | hook, tier 4, default | yes |
-| `orbital` (pages/atomic-orbital-vr) | Atomic Orbital | Quantum > Atoms & Molecules | VR | Hydrogen orbitals in 3D, VR ready. |  | shown | hook, tier 2, default | yes |
-| `molecular-bond` | Molecular Bond | Quantum > Atoms & Molecules | SIM | Watch two atoms share an electron. |  | shown | hook, tier 3, default | yes |
-| `hydrogen-table` | Hydrogen Wave Function | Quantum > Atoms & Molecules | NEW | Every hydrogen wave function, side by side. |  | shown | hook, tier 3, default | yes |
-| `molecules` | Molecule Explorer | Quantum > Atoms & Molecules | 2D/3D | Over a thousand molecules, skeletal formula beside 3D. |  | shown | hook, tier 3, default | yes |
-| `reactions` | Reaction Explorer | Quantum > Atoms & Molecules | NEW | Watch molecules change in 3D through famous syntheses. |  | shown | hook, tier 3, default | yes |
+| `orbital` (pages/atomic-orbital-vr) | Atomic Orbital | Quantum > Atoms | VR | Hydrogen orbitals in 3D, VR ready. |  | shown | hook, tier 2, default | yes |
+| `hydrogen-table` | Hydrogen Wave Function | Quantum > Atoms | NEW | Every hydrogen wave function, side by side. |  | shown | hook, tier 3, default | yes |
 | `qave` (pages/quantum-algorithm-visualizer) | Quantum Algorithm Visualizer | Quantum > Quantum Computing | 3D | Quantum algorithms step by step in 3D. |  | directory only | hook, tier 2, default | no |
 | `qft-flow` | Quantum Encoding | Quantum > Quantum Computing | MATH | Four qubit phase knobs and the spectrum a QFT reads out. |  | shown | no | yes |
 | `qft-store` | Quantum Decoding | Quantum > Quantum Computing | DATA | Write bytes into qubit rotation angles and read them back. |  | shown | generic, tier 5 | yes |
 | `frqi` (pages/frqi-quantum-image-lab) | Quantum Image Encoding | Quantum > Quantum Computing | IMG | Store an image in qubits with FRQI, layer by layer. |  | shown | hook, tier 3, default | yes |
 | `particle-collider` | Particle Collider | Quantum > Particle Physics | SIM | Collide two particles and trace the products. |  | shown | hook, tier 4, default | yes |
+| `periodic-table` | Periodic Table | Chemistry > The Elements | NEW | Eleven shapes of the table, and the live atom of every element. |  | shown | hook, tier 4, default | no |
+| `molecular-bond` | Molecular Bond | Chemistry > Molecules & Reactions | SIM | Watch two atoms share an electron. |  | shown | hook, tier 3, default | yes |
+| `molecules` | Molecule Explorer | Chemistry > Molecules & Reactions | 2D/3D | Over a thousand molecules, skeletal formula beside 3D. |  | shown | hook, tier 3, default | yes |
+| `reactions` | Reaction Explorer | Chemistry > Molecules & Reactions | NEW | Watch molecules change in 3D through famous syntheses. |  | shown | hook, tier 3, default | yes |
 | `protein-viewer` | Protein Structure | Life Sciences > Proteins | 3D | Real protein structures in 3D, 37 presets. |  | shown | hook, tier 3, default | yes |
 | `protein-folding` | Protein Folding | Life Sciences > Proteins | SIM | Watch a chain fold into its native shape. |  | shown | hook, tier 2, default | yes |
 | `virus-atlas` | Virus Atlas | Life Sciences > Viruses & Prions | 3D | Real virus capsids from the PDB: assemble, peel, explode. |  | shown | hook, tier 4, default | yes |
