@@ -208,6 +208,21 @@ ct.destroy()                              // releases buffers and pipelines (cal
 - WGSL: every mixed `&&`/`||` and every mixed bitwise/arithmetic expression has parentheses
   (Chrome Tint rejects them, naga does not).
 
+## Lower-level exports
+
+`index.js` also exports these helpers. The pages and tests use some of them.
+They have no stability promise beyond their files.
+
+```
+geometry.js  rayFor, rayFor3D, detCoord, angleWeights, coverage
+phantoms.js  rasterize2D, rasterize3D, buildHead, buildChest, buildSuitcase,
+             buildBars, buildContrastDetail, buildWalnut, buildMetal
+project.js   emptyImage, emptySino, emptyVolume, emptyCone, josephRay2D,
+             josephRay3D, josephScatter2D, josephRowNorm2
+recon.js     fft, filterWindow, makeART, makeSART, makeSIRT, makeCGLS
+physics.js   BASIS, COMPOSITIONS, muOfComposition, mulberry32
+```
+
 ## Performance
 
 Measured 2026-10-08 on this Mac (Apple Silicon). CPU: Node 24, single thread. GPU: Deno WebGPU
