@@ -25,6 +25,7 @@ metrics.js    rmse, psnr, ssim
 gpu.js        WebGPU runner (forward 2D, back-projection 2D, cone back-projection 3D)
 wgsl.js       WGSL source strings for gpu.js (tests write them to files for naga)
 tests.mjs     node tests (run: node stella-nova/pages/ct-lab/engine/tests.mjs)
+gpu-tests.mjs Deno WebGPU checks and GPU timings (tests.mjs runs it when deno exists)
 ```
 
 grep handles: `grep -n "^export" engine/*.js` lists every public name.
@@ -144,6 +145,9 @@ filterSinogram(sino, geom, { filter='ram-lak', cutoff=1 }) -> Sinogram (filtered
 fbp(sino, geom, dims, { filter, cutoff }) -> Image2D        // parallel, fan flat, fan arc
 rebinFanToParallel(sino, fanGeom, { nAngles, nDet, du }) -> { sino, geom }
 fdk(proj, geom, dims, { filter, cutoff }) -> Volume
+fdkFilter(proj, geom, { filter, cutoff }) -> filtered projections (feed gpu.backProjectCone)
+coneBackProjectFDK(q, geom, dims, { weights, a0, a1, out }) -> Volume (CPU, chunkable by view)
+filterResponse(name, P, tau, cutoff, kind) -> Float64Array  // for plotting a filter
 createSolver(method, sino, geom, dims, opts) -> solver      // 'art'|'sart'|'sirt'|'cgls'
 runIterative(method, sino, geom, dims, { iterations, onIter, ...opts }) -> Image2D
 tvDenoise(image, { weight, steps })                          // a few TV gradient steps, in place
@@ -152,7 +156,9 @@ tvDenoise(image, { weight, steps })                          // a few TV gradien
 `dims` is `{ nx, ny, width }` (2D) or `{ nx, ny, nz, width }` (3D).
 
 Solver object: `solver.step()` does one full iteration and returns
-`{ iter, residual, image }`. `residual = ||b - A x||_2`. `solver.image` is the current
+`{ iter, residual, image }`. `residual = ||b - A x||_2`. CGLS reports it after the step.
+SIRT reports it for the estimate at the start of the step (one step late, no extra projection).
+ART and SART sum it over the sweep while x changes. All four decrease monotonically in the tests. `solver.image` is the current
 estimate (Image2D, shared buffer, do not keep a reference across steps if you need a copy).
 Options: `relax` (lambda), `nonneg` (default true, not for CGLS), `x0`,
 `tv: { weight, steps }` (TV steps after each iteration), `seed` (ART/SART view order).
@@ -204,5 +210,34 @@ ct.destroy()                              // releases buffers and pipelines (cal
 
 ## Performance
 
-Measured on this Mac (Apple Silicon, Node 24, Deno WebGPU). See the bottom of this file.
-Values fill in after the tests run.
+Measured 2026-10-08 on this Mac (Apple Silicon). CPU: Node 24, single thread. GPU: Deno WebGPU
+(Metal), times include upload and read back. Parallel beam, 363 detectors for 256, 725 for 512.
+
+| Task | 256^2, 360 views | 512^2, 360 views |
+|---|---|---|
+| CPU forward projection | 65 ms | 235 ms |
+| CPU adjoint back-projection | 50 ms | 185 ms |
+| CPU FBP (filter + back-projection) | 98 ms | 373 ms |
+| CPU SIRT iteration | 110 ms | 435 ms |
+| CPU CGLS iteration | 125 ms | 483 ms |
+| CPU fan FBP, 720 views | 282 ms | 1084 ms |
+| GPU forward projection | 16 ms | 21 ms |
+| GPU FBP back-projection | 16 ms | 23 ms |
+
+Cone beam: CPU 128^3 from 180 views (183 x 223 detector): forward 2.7 s, FDK 2.1 s.
+GPU FDK back-projection 256^3 from 360 views of 384 x 384: 191 ms.
+
+Advice for pages: on the CPU, run SIRT/CGLS on 256^2 or less, in a Worker or with one
+`step()` per frame. Run 3D work on the GPU. Use `a0/a1` or the generators to stay under a
+frame budget on the main thread.
+
+## Measured quality (tests.mjs)
+
+- Joseph vs exact line integrals (Shepp-Logan, 256): rmse/peak 0.0023.
+- FBP, modified Shepp-Logan, 256, 360 views, exact data: PSNR 33.87 dB (Ram-Lak),
+  33.28 (Shepp-Logan), 30.78 (cosine), 29.29 (Hamming), 28.83 (Hann). SSIM 0.90.
+  The test threshold is 33.0 dB.
+- Fan FBP vs parallel FBP: rmse 0.025 (flat and arc). Rebinned fan: 0.013.
+- FDK central slice (64^3, 180 views) vs parallel FBP of the same slice: rmse 0.053.
+- Noise: sd(I0 = 1e4) / sd(I0 = 1e6) = 9.98 (expected 10).
+- GPU vs CPU: max relative error below 1.1e-5 for every kernel.
