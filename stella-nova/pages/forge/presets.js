@@ -22,6 +22,9 @@
 //  the ground at the nadir; the Earth-like skies use 0.45 so the ground
 //  reads from orbit while the optical depths stay real (tests.mjs).
 //  atmo.glow scales the haze light from a hot surface (lava worlds).
+//  lava = { heat, age, sulfur } (0..1) shapes a lava sea (rocky.js
+//  lavaSea) and the lava channels (maps.js): tidal heating, crust age,
+//  sulfur frost. Other worlds do not read it.
 //
 //  Colours are sRGB triples in 0..1. The atmosphere coefficients are in
 //  1/km times 1e-3 (the units of Hillaire 2020), so Earth reads
@@ -55,13 +58,13 @@ export const ATMO = {
   titan: { on: 1, radiusKm: 2575, heightKm: 200, rayleigh: [1.2, 2.8, 6.8], rayleighH: 21, mie: [26, 18, 9], mieAbs: [1.5, 5, 14], mieH: 30, mieG: 0.65, absorb: [0, 0, 0], absorbC: 60, absorbW: 20, density: 1, sun: 10, ground: 0.2 },
   // ocean world: Earth air, a little more water haze
   ocean: { on: 1, radiusKm: 6800, heightKm: 100, rayleigh: [5.802, 13.558, 33.1], rayleighH: 8, mie: [6, 6, 6], mieAbs: [2, 2, 2], mieH: 1.4, mieG: 0.8, absorb: [0.65, 1.881, 0.085], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.25, clarity: 0.45 },
-  // lava world: a dark, sooty, ash-laden haze. Its soot absorbs more than
-  // it scatters (single-scattering albedo about 0.3) and absorbs blue most,
-  // so the sky is grey-brown and dim; at night the lava lights it from below
-  // (glow x the mean surface emission, render.js). The ash scatters red
-  // more than blue (mie) and the gas adds almost no blue Rayleigh light,
-  // so the day limb is brown, not lavender.
-  lava: { on: 1, radiusKm: 6200, heightKm: 120, rayleigh: [0.25, 0.5, 1.0], rayleighH: 10, mie: [7, 5.2, 3.6], mieAbs: [17, 19, 22], mieH: 9, mieG: 0.62, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1.2, sun: 10, ground: 0.08, glow: 1.1 },
+  // lava world: a thin, dark sulfurous sky. SO2 and sulfate haze over
+  // soot: the sulfate scatters (single-scattering albedo 0.45-0.7) and the
+  // soot and SO2 absorb blue most, so the day sky is a smoky tan with
+  // little blue Rayleigh light, not mud; the ground stays legible (clarity). At
+  // night the lava lights the haze from below (glow x the mean surface
+  // emission, render.js).
+  lava: { on: 1, radiusKm: 6200, heightKm: 120, rayleigh: [0.35, 0.7, 1.4], rayleighH: 10, mie: [6, 5.2, 4.0], mieAbs: [2.8, 4.2, 6.8], mieH: 8, mieG: 0.66, absorb: [0, 0, 0], absorbC: 25, absorbW: 15, density: 1, sun: 10, ground: 0.1, glow: 1.2, clarity: 0.7 },
   // gas giants: H2/He Rayleigh plus a coloured haze; absorb is methane (red)
   jupiter: { on: 1, radiusKm: 7000, heightKm: 260, rayleigh: [1.6, 3.7, 9], rayleighH: 30, mie: [4.5, 4, 3], mieAbs: [0.6, 1.2, 2.6], mieH: 22, mieG: 0.7, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.5 },
   saturn: { on: 1, radiusKm: 7000, heightKm: 300, rayleigh: [1.3, 3, 7.4], rayleighH: 34, mie: [5, 4.6, 3.6], mieAbs: [0.4, 0.9, 2.2], mieH: 30, mieG: 0.7, absorb: [0, 0, 0], absorbC: 60, absorbW: 40, density: 1, sun: 10, ground: 0.5 },
@@ -86,6 +89,7 @@ export const ROCKY_DEFAULT = {
   dunes: { amount: 0, freq: 40 },
   cracks: { amount: 0, freq: 2.5, glow: 0 },
   volcanoes: { count: 0, glow: 0 },
+  lava: { heat: 0.6, age: 0.5, sulfur: 0.2 },
   clouds: { cover: 0.5, freq: 1.5, swirl: 0.6, cyclones: 6, height: 0.006, cirrus: 0.3, color: [1, 1, 1] },
   relief: 12, radiusKm: 6371, bump: 3, tilt: 23, spin: 1,
   palette: {
@@ -219,18 +223,24 @@ export const PRESETS = [
       climate: { equatorC: F.u(-40, -12), poleC: F.u(-90, -50) }, craters: { density: F.u(0, 0.25) }, clouds: { cover: F.u(0.3, 0.53) },
       radiusKm: F.u(2500, 6500), tilt: F.u(0, 30),
       palette: { ice: F.tint([0.86, 0.92, 0.97], 0.05), accent: F.tint([0.56, 0.38, 0.28], 0.25), deep: F.tint([0.05, 0.12, 0.2], 0.25) } }) },
-  { id: 'lava', name: 'Lava world', kind: 'rocky', seed: 666, blurb: 'plates of dark basalt crust over a magma sea, glowing cracks and lava rivers, a dark ash-laden sky lit from below',
+  { id: 'lava', name: 'Lava world', kind: 'rocky', seed: 666, blurb: 'a tidally heated world: a magma sea of crusted rafts with glowing seams, lava rivers from the vents, sulfur frost on old crust, a thin sulfurous sky lit from below',
     p: { ocean: { level: 0.34, liquid: 1 }, plates: { count: 16, uplift: 1.0, width: 0.1 }, mountains: { amp: 0.65, sharpness: 2.8 },
       erosion: { flow: 1.2 }, rivers: { amount: 0.5 },
-      cracks: { amount: 0.2, freq: 2.5, glow: 0.6 }, craters: { density: 0.05, ejecta: 0 },
+      cracks: { amount: 0, freq: 2.5, glow: 0 }, craters: { density: 0.05, ejecta: 0 }, volcanoes: { count: 14, glow: 1 },
+      lava: { heat: 0.6, age: 0.5, sulfur: 0.25 },
       climate: { equatorC: 420, poleC: 380, lapse: 4, moisture: 0, life: 0, iceC: -300 },
-      clouds: { cover: 0.53, color: [0.2, 0.17, 0.15], cirrus: 0.15 }, relief: 12, radiusKm: 6200, tilt: 8,
-      palette: { low: [0.06, 0.055, 0.05], high: [0.15, 0.13, 0.12], rock: [0.09, 0.085, 0.08], dark: [0.05, 0.045, 0.04], bright: [0.3, 0.27, 0.24], accent: [0.28, 0.08, 0.03] },
+      clouds: { cover: 0.28, color: [0.5, 0.47, 0.4], cirrus: 0.12 }, relief: 12, radiusKm: 6200, tilt: 8,
+      palette: { low: [0.07, 0.06, 0.055], high: [0.2, 0.17, 0.14], rock: [0.11, 0.1, 0.09], dark: [0.04, 0.035, 0.03], bright: [0.5, 0.45, 0.3], accent: [0.62, 0.5, 0.14], ring: [0.55, 0.45, 0.2] },
       atmo: ATMO.lava },
-    vary: F => ({ ocean: { level: F.u(0.2, 0.5) }, plates: { count: F.i(8, 24) }, mountains: { amp: F.u(0.4, 0.8) },
-      cracks: { amount: F.u(0.08, 0.35), freq: F.u(1.5, 3.5), glow: F.u(0.4, 0.9) }, rivers: { amount: F.u(0.3, 0.7) },
-      clouds: { cover: F.u(0.35, 0.57) }, radiusKm: F.u(4000, 8000), tilt: F.u(0, 25),
-      atmo: { density: F.u(0.8, 1.6), glow: F.u(0.8, 1.4) } }) },
+    vary: F => {
+      const airless = F.u(0, 1) < 0.25;
+      return { ocean: { level: F.u(0.15, 0.6) }, plates: { count: F.i(8, 24) }, mountains: { amp: F.u(0.4, 0.8) },
+        rivers: { amount: F.u(0.3, 0.7) },
+        volcanoes: { count: F.i(4, 30), glow: F.u(0.6, 1.4) },
+        lava: { heat: F.u(0.25, 1), age: F.u(0.1, 0.95), sulfur: F.u(0, 0.8) },
+        clouds: { cover: airless ? 0 : F.u(0.1, 0.4) }, radiusKm: F.u(4000, 8000), tilt: F.u(0, 25),
+        atmo: airless ? ATMO.none : { density: F.u(0.6, 1.5), glow: F.u(0.8, 1.4) } };
+    } },
   { id: 'titan', name: 'Haze moon', kind: 'rocky', seed: 1655, blurb: 'Titan-like: methane lakes at the poles under a thick orange tholin haze',
     p: { ocean: { level: 0.1, liquid: 2 }, plates: { count: 0 }, terrain: { amp: 0.8, warp: 0.6 }, mountains: { amp: 0.25 }, dunes: { amount: 0.8, freq: 46 },
       climate: { equatorC: -179, poleC: -183, lapse: 1, moisture: 0.3, life: 0, iceC: -300 },
@@ -356,6 +366,9 @@ export const SCHEMA = {
     ['Geology', 'features.layers', 'strata on risers', 0, 1, 0.01],
     ['Surface', 'volcanoes.count', 'volcanic calderas', 0, 200, 1],
     ['Surface', 'volcanoes.glow', 'vent glow', 0, 2, 0.01],
+    ['Lava', 'lava.heat', 'tidal heating', 0, 1, 0.01],
+    ['Lava', 'lava.age', 'crust age', 0, 1, 0.01],
+    ['Lava', 'lava.sulfur', 'sulfur', 0, 1, 0.01],
     ['Climate', 'climate.equatorC', 'equator °C', -200, 500, 1],
     ['Climate', 'climate.poleC', 'pole °C', -250, 450, 1],
     ['Climate', 'climate.lapse', 'lapse °C/km', 0, 12, 0.1],

@@ -206,7 +206,7 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('atmo: Earth-like skies keep 45 % of the ground haze (view), others all', Math.abs(Ue[27] - 0.45) < 1e-6 && Math.abs(Uo[27] - 0.45) < 1e-6 && Um[27] === 1, [Ue[27], Uo[27], Um[27]].map(v => v.toFixed(2)).join(' '));
   const LA = PR.fromPreset('lava').atmo, ssa = LA.mie.map((m, i) => m / (m + LA.mieAbs[i]));
   const zl = transmittanceRef(LA, LA.radiusKm, 1);
-  ok('atmo: lava haze is sooty (single-scattering albedo < 0.4, blue absorbed most, glow on)', ssa.every(v => v < 0.4) && zl[2] < zl[0] && zl[2] < z[2] && LA.glow > 0, 'ssa ' + ssa.map(v => v.toFixed(2)).join(' ') + ', T ' + zl.map(v => v.toFixed(2)).join(' '));
+  ok('atmo: lava haze is sulfurous and dark (single-scattering albedo 0.3-0.75, blue absorbed most, glow on)', ssa.every(v => v > 0.3 && v < 0.75) && ssa[2] < ssa[0] && zl[2] < zl[0] && LA.glow > 0, 'ssa ' + ssa.map(v => v.toFixed(2)).join(' ') + ', T ' + zl.map(v => v.toFixed(2)).join(' '));
   const n = transmittanceRef(PR.ATMO.neptune, 7000, 1);
   ok('atmo: methane absorbs red on Neptune (blue passes)', n[2] > n[0], n.map(v => v.toFixed(3)).join(' '));
   ok('atmo: an off atmosphere packs on = 0', packAtmo(PR.ATMO.none)[23] === 0);
@@ -242,24 +242,39 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('families: an old saved Mars-like JSON loads as a rust world, recipe kept', back.preset === 'rust' && back.name === 'Rust world' && back.radiusKm === saved.planet.radiusKm);
 }
 
-// lava world: the crust is dark, the cracks and rivers glow, and the sky
-// is dark and sooty (it absorbs more than it scatters)
+// lava world: the crust is dark, the seams and rivers glow by
+// temperature, the light comes from the network, and the sky is a thin,
+// dark sulfurous haze (it absorbs blue most), or none on airless members
 {
-  const P = PR.fromPreset('lava'), M = MP.generate(P, 256), n = 256 * 128;
-  let dark = 0, lit = 0, eSum = 0, land = 0;
+  const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  // 512: at 256 the cool seams are thinner than a texel and drawn dimmer
+  const P = PR.fromPreset('lava'), M = MP.generate(P, 512), n = 512 * 256;
+  let dark = 0, vis = 0, bright = 0, hot = 0, cool = 0;
+  const en = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const a = (M.albedo[i * 4] + M.albedo[i * 4 + 1] + M.albedo[i * 4 + 2]) / 3, e = M.emissive[i * 4];
+    const a = (M.albedo[i * 4] + M.albedo[i * 4 + 1] + M.albedo[i * 4 + 2]) / 3, r = M.emissive[i * 4], g = M.emissive[i * 4 + 1];
     if (a < 60) dark++;
-    if (e > 120) lit++;
-    eSum += e;
+    en[i] = lin(r) + lin(g) + lin(M.emissive[i * 4 + 2]);
+    if (r > 120) bright++;
+    if (r > 40) { vis++; const k = lin(g) / Math.max(lin(r), 1e-6); if (k > 0.43) hot++; else if (k < 0.12) cool++; }
   }
   ok('lava: most of the surface is dark crust (albedo byte < 60)', dark / n > 0.7, `${(100 * dark / n).toFixed(0)} % dark`);
-  ok('lava: bright cracks and rivers (emissive byte > 120) cover 3-40 % (reads at night, not a lit disc)', lit / n > 0.03 && lit / n < 0.4, `${(100 * lit / n).toFixed(1)} % glowing, mean emissive byte ${(eSum / n).toFixed(1)}`);
+  ok('lava: visible glow (emissive byte > 40) covers 4-40 %, bright lava (> 120) 0.5-15 %', vis / n > 0.04 && vis / n < 0.4 && bright / n > 0.005 && bright / n < 0.15, `${(100 * vis / n).toFixed(1)} % glowing, ${(100 * bright / n).toFixed(1)} % bright`);
+  // temperature from the emission colour (lavaColour): g / r over 0.43 is
+  // >= 1250 K (orange to yellow-white), under 0.12 is <= 1050 K (red)
+  ok('lava: temperatures: fresh hot lava (>= 1250 K) is 1-35 % of the glow, red cooling seams more', hot / vis > 0.01 && hot / vis < 0.35 && cool > hot, `${(100 * hot / vis).toFixed(1)} % hot, ${(100 * cool / vis).toFixed(1)} % red`);
+  const sorted = Float64Array.from(en).sort().reverse(), tot = sorted.reduce((x, y) => x + y, 0);
+  let top = 0; for (let i = 0; i < n * 0.1; i++) top += sorted[i];
+  ok('lava: the night light comes from the network (top 10 % of texels give >= 75 % of the emission)', top / tot >= 0.75, `${(100 * top / tot).toFixed(0)} %`);
   const A = P.atmo, ssa = A.mie.map((m, i) => m / (m + A.mieAbs[i])), rayRatio = A.rayleigh[2] / A.mie[2];
-  ok('lava: ash sky is dark (ssa < 0.35), brown (red ash scatters most), little blue Rayleigh, lit from below', ssa.every(v => v < 0.35) && A.mie[0] > A.mie[2] && rayRatio < 0.5 && A.glow >= 0.8,
+  ok('lava: the sky is a dark sulfurous haze (ssa 0.3-0.75, blue absorbed most), little blue Rayleigh, lit from below', ssa.every(v => v > 0.3 && v < 0.75) && ssa[2] < ssa[0] && rayRatio < 0.5 && A.glow >= 0.8,
     'ssa ' + ssa.map(v => v.toFixed(2)).join(' ') + `, Rayleigh/Mie blue ${rayRatio.toFixed(2)}, glow ${A.glow.toFixed(2)}`);
-  const L = [...Array(12)].map((_, s) => PR.fromPreset('lava', s + 1).atmo);
-  ok('lava: every family member keeps a sooty sky', L.every(a => a.mie.every((m, i) => m / (m + a.mieAbs[i]) < 0.35) && a.glow > 0.5));
+  const L = [...Array(16)].map((_, s) => PR.fromPreset('lava', s + 1));
+  const air = L.filter(Q => Q.atmo.on), none = L.filter(Q => !Q.atmo.on);
+  ok('lava: the family varies heat, crust age, sulfur and sky; hazy members stay dark, airless ones have no cloud',
+    air.every(Q => Q.atmo.mie.every((m, i) => m / (m + Q.atmo.mieAbs[i]) < 0.75) && Q.atmo.glow > 0.5) && none.length >= 1 && none.every(Q => Q.clouds.cover === 0)
+    && Math.max(...L.map(Q => Q.lava.heat)) - Math.min(...L.map(Q => Q.lava.heat)) > 0.4 && Math.max(...L.map(Q => Q.lava.sulfur)) > 0.4,
+    `${none.length} airless of 16; heat ${Math.min(...L.map(Q => Q.lava.heat)).toFixed(2)}-${Math.max(...L.map(Q => Q.lava.heat)).toFixed(2)}`);
 }
 
 // rust worlds have real relief: basins, shields and canyons (geology.js)

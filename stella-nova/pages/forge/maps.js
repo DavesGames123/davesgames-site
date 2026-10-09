@@ -7,7 +7,8 @@
 //  Pass 2, finish: river and talus erosion (erode.js) on rocky worlds,
 //  then rivers, snow by slope and cliff rock in the colour maps (lava
 //  rivers come from channels: capsules round the drainage segments), then the
-//  tangent-space normal map and the ambient occlusion. All of these need
+//  tangent-space normal map and the ambient occlusion (lava seas also get
+//  a soft halo round the hot lava, function halo). All of these need
 //  the whole height field.
 //
 //  MAPS (id: format, meaning)
@@ -40,12 +41,13 @@
 //
 //  grep -n targets: "export const MAP_INFO", "export function prepare",
 //  "export function sampleRows", "export function finish", "export function channels", "function normals",
-//  "function ambient", "export function generate", "export function mapImage",
+//  "function ambient", "function halo", "export function generate", "export function mapImage",
 //  "export function hashMaps", "export function shrinkMaps"
 // ============================================================================
-import { prepareRocky } from './rocky.js';
+import { prepareRocky, lavaColour } from './rocky.js';
 import { prepareGas, ringProfile } from './gas.js';
-import { texelDir, texelFrame, clamp, smooth, setBand } from './noise.js';
+import { texelDir, texelFrame, clamp, smooth, setBand, simplex3 } from './noise.js';
+const _p = [0, 0, 0], _lc = [0, 0, 0];
 import { erode } from './erode.js';
 
 export const MAP_INFO = [
@@ -127,6 +129,7 @@ export function finish(M, P, ctx) {
     const er = erode(M.height, M.W, M.H, { reliefKm: km, radiusKm: P.radiusKm, sea, flow: P.atmo.on ? P.erosion.flow : 0, talus: P.erosion.talus });
     M.height = er.height; M.erosion = { cut: er.cut, net: er.net };
     surface(M, P, er, sea);
+    if ((P.ocean.liquid | 0) === 1 && P.ocean.level > 0) halo(M);
   }
   M.normal = normals(M.height, M.W, M.H, km, P.radiusKm, P.bump);
   M.ao = ambient(M.height, M.W, M.H, km, P.radiusKm);
@@ -162,11 +165,24 @@ function surface(M, P, er, sea) {
     const r = riv > 0 ? (chan ? chan[i] : smooth(0.62, 0.8, er.flow[i])) * riv * (1 - a / 254) : 0;   // frozen rivers stay under snow
     if (r > 0) {
       if (liq === 1) {
-        // lava channels glow (sRGB bytes of a 1300 K body); the channel
-        // field is 1 on the axis and falls to 0 at the bank
-        const g = Math.min(1, r * 1.5) * 0.9;
-        M.emissive[j] = Math.max(M.emissive[j], 255 * g); M.emissive[j + 1] = Math.max(M.emissive[j + 1], 150 * g * g); M.emissive[j + 2] = Math.max(M.emissive[j + 2], 40 * g * g * g);
-        for (let c = 0; c < 3; c++) M.albedo[j + c] += (bb[c] * 120 - M.albedo[j + c]) * r * 0.6;
+        // lava channels: hot at the vents (the heads), cooling downstream
+        // (1230 K to 980 K by the flow, scaled by the heating; the thin,
+        // jagged heads stay dark); a
+        // stretch roofed over (a lava tube, about a fifth of the length)
+        // glows only through its skylights. The channel field is 1 on the
+        // axis and falls to 0 at the bank.
+        texelDir(i % M.W, (i / M.W) | 0, M.W, M.H, _p);
+        const fl = er.flow[i], heatK = P.lava ? P.lava.heat : 0.6;
+        const T = 1150 + 80 * heatK - 170 * smooth(0.7, 1.0, fl) + 50 * simplex3(_p[0] * 30, _p[1] * 30, _p[2] * 30, 911);
+        const tube = smooth(0.42, 0.55, simplex3(_p[0] * 22, _p[1] * 22, _p[2] * 22, 913));
+        const sky = smooth(0.55, 0.8, simplex3(_p[0] * 45, _p[1] * 45, _p[2] * 45, 917));
+        // only the flow fields fed now glow; the rest are cooled, dark channels
+        const fed = smooth(-0.15, 0.25, simplex3(_p[0] * 1.6, _p[1] * 1.6, _p[2] * 1.6, 919) + 0.6 * (heatK - 0.5));
+        const g = Math.min(1, r * 1.5) * Math.pow(T / 1500, 4) * 0.8 * (1 - tube * (1 - 0.6 * sky)) * fed * smooth(0.62, 0.75, fl);
+        lavaColour(T, _lc);
+        M.emissive[j] = Math.max(M.emissive[j], enc(_lc[0] * g)); M.emissive[j + 1] = Math.max(M.emissive[j + 1], enc(_lc[1] * g)); M.emissive[j + 2] = Math.max(M.emissive[j + 2], enc(_lc[2] * g));
+        // the channel floor: dark red skin; a tube roof is black crust
+        for (let c = 0; c < 3; c++) M.albedo[j + c] += (bb[c] * 90 * (1 - tube) + 8 * tube - M.albedo[j + c]) * r * 0.6;
       } else {
         for (let c = 0; c < 3; c++) M.albedo[j + c] += (deep[c] - M.albedo[j + c]) * r * 0.85;
         if (M.mat) { M.mat[j] += (25 - M.mat[j]) * r; M.mat[j + 2] += (64 - M.mat[j + 2]) * r; }
@@ -178,6 +194,33 @@ function surface(M, P, er, sea) {
       for (let c = 0; c < 3; c++) M.albedo[j + c] += (ice[c] - M.albedo[j + c]) * snow * 0.95;
       if (M.mat) { M.mat[j] += (140 - M.mat[j]) * snow; M.mat[j + 2] += (71 - M.mat[j + 2]) * snow; }
     }
+  }
+}
+
+// Lava worlds: a soft halo round the hot lava (a box blur of the
+// emission, radius W / 512 texels, twice, so about a tent), added at 22 %
+// in linear light. The view has no bloom pass; this is the glow of the
+// lava on the ground and the fumes next to it.
+function halo(M) {
+  const W = M.W, H = M.H, n = W * H, r = Math.max(2, Math.round(W / 512)), dec = new Float32Array(256);
+  for (let k = 0; k < 256; k++) { const v = k / 255; dec[k] = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+  const a = new Float32Array(n), b = new Float32Array(n);
+  for (let c = 0; c < 3; c++) {
+    for (let i = 0; i < n; i++) a[i] = dec[M.emissive[i * 4 + c]];
+    for (let pass = 0; pass < 2; pass++) {
+      // rows (wrap at the date line), then columns (clamped at the poles)
+      for (let y = 0; y < H; y++) {
+        const o = y * W; let sum = 0;
+        for (let k = -r; k <= r; k++) sum += a[o + ((k % W) + W) % W];
+        for (let x = 0; x < W; x++) { b[o + x] = sum / (2 * r + 1); sum += a[o + (x + r + 1) % W] - a[o + ((x - r) % W + W) % W]; }
+      }
+      for (let x = 0; x < W; x++) {
+        let sum = 0;
+        for (let k = -r; k <= r; k++) sum += b[Math.min(H - 1, Math.max(0, k)) * W + x];
+        for (let y = 0; y < H; y++) { a[y * W + x] = sum / (2 * r + 1); sum += b[Math.min(H - 1, y + r + 1) * W + x] - b[Math.max(0, y - r) * W + x]; }
+      }
+    }
+    for (let i = 0; i < n; i++) { const j = i * 4 + c; M.emissive[j] = enc(dec[M.emissive[j]] + 0.22 * a[i]); }
   }
 }
 

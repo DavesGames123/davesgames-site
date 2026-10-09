@@ -47,7 +47,7 @@
 //  crust keeps a dull red glow so the sea reads apart from the land at night.
 //  Volcanic plume rings take palette.ring.
 //
-//  grep -n targets: "export function prepareRocky", "function heightCore",
+//  grep -n targets: "export function prepareRocky", "function heightCore", "function lavaSea", "export function lavaColour",
 //  "function craterField", "function buildCraters", "export function craterProfile", "function shade",
 //  "const BIOMES", "export function craterList", "function crackWarp", "function lineDist"
 // ============================================================================
@@ -641,6 +641,86 @@ const VAR_O = { freq: 7, octaves: 4, lacunarity: 2.2, gain: 0.5 };
 const MOIST_O = { freq: 2.2, octaves: 4, lacunarity: 2.1, gain: 0.5 };
 const CITY_O = { freq: 16, octaves: 3, lacunarity: 2.3, gain: 0.5 };
 const SULF_O = { freq: 2.5, octaves: 4, lacunarity: 2.2, gain: 0.55 };
+const SULFUR = [0.6, 0.5, 0.2];   // sulfur on lava worlds (the palette hue shift can turn accent green)
+
+// ── the lava sea ───────────────────────────────────────────────────────
+// A lava lake seen from orbit: rafts of crust broken by seams, after the
+// crusted lakes of shield volcanoes. Three fields set it:
+//   heat   upwelling cells (a warped low fBm x P.lava.heat): the crust is
+//          thin, black and broken there; the open lava runs 1400-1500 K
+//          (yellow-white) in the fresh breaks
+//   seams  the borders of warped Worley plates at two scales (rafts of
+//          about 0.17 rad, and 0.07 rad plates where it is warm). A seam is
+//          hot near the upwelling and cools with the distance from it
+//          (1250 K orange to 950 K deep red); in cold crust the small
+//          seams close (crusted over), so the net is not a uniform mesh
+//   crust  fresh black glassy basalt near the heat; old crust (P.lava.age)
+//          weathers to grey-brown and rust; sulfur (P.lava.sulfur) lays
+//          yellow and white frost on the old, cold rafts
+// Emission has the lava colour at T (lavaColour) and radiance (T / 1500)^3
+// (a seam at 950 K glows at a quarter of a fresh break; the cube, not the
+// fourth power, keeps the cool net legible at the page exposure). The
+// light at night comes from the network, not from a flat floor.
+// The colour of glowing lava at T kelvin as photographs show it (a black
+// body seen through a camera curve): 900 K deep red, 1050 K red, 1200 K
+// orange, 1350 K yellow-orange, 1500 K yellow-white. Radiance is apart.
+const LAVA_RAMP = [[900, 0.35, 0.02, 0.0], [1050, 0.8, 0.12, 0.01], [1200, 1, 0.35, 0.05], [1350, 1, 0.6, 0.18], [1500, 1, 0.86, 0.52]];
+const _lc = [0, 0, 0];
+export function lavaColour(T, o = [0, 0, 0]) {
+  const R = LAVA_RAMP;
+  if (T <= R[0][0]) { o[0] = R[0][1]; o[1] = R[0][2]; o[2] = R[0][3]; return o; }
+  for (let i = 1; i < R.length; i++) if (T <= R[i][0] || i === R.length - 1) {
+    const a = R[i - 1], b = R[i], t = clamp((T - a[0]) / (b[0] - a[0]));
+    o[0] = mix(a[1], b[1], t); o[1] = mix(a[2], b[2], t); o[2] = mix(a[3], b[3], t); return o;
+  }
+  return o;
+}
+const LV_O = { freq: 1.6, octaves: 4, lacunarity: 2.1, gain: 0.55 }, _lw = [0, 0, 0];
+function lavaSea(ctx, p, out) {
+  const P = ctx.P, L = P.lava, pal = P.palette, s = ctx.sLava, tx = texelAngle();
+  // a smooth, low warp (one octave at frequency 3), so the plates are
+  // bent rafts, not a regular honeycomb; a stronger or finer warp moves
+  // F2 - F1 by a large step per texel and breaks the seams into dots
+  _lw[0] = p[0] + 0.05 * simplex3(p[0] * 3, p[1] * 3, p[2] * 3, s + 9);
+  _lw[1] = p[1] + 0.05 * simplex3(p[0] * 3, p[1] * 3, p[2] * 3, s + 10);
+  _lw[2] = p[2] + 0.05 * simplex3(p[0] * 3, p[1] * 3, p[2] * 3, s + 11);
+  const heatN = 0.5 + 0.5 * fbm(_lw, LV_O, s + 3);
+  const heat = smooth(0.62 - 0.18 * L.heat, 0.98 - 0.12 * L.heat, heatN);
+  worley3(_lw[0] * 6, _lw[1] * 6, _lw[2] * 6, s, _w1);
+  worley3(_lw[0] * 15, _lw[1] * 15, _lw[2] * 15, s + 1, _w2);
+  const wob = 0.012 * simplex3(p[0] * 40, p[1] * 40, p[2] * 40, s + 2);
+  // seam half widths in cell units, at least ~1 map texel (dimmer when widened)
+  const k1 = Math.max(0.09 + 0.08 * heat, 2.2 * 6 * tx), k2 = Math.max(0.06 + 0.06 * heat, 2.2 * 15 * tx);
+  const c1 = smooth(k1, 0, _w1[1] - _w1[0] + wob) * Math.min(1, (0.09 + 0.08 * heat) / k1);
+  // small seams close in the cold crust
+  const c2 = smooth(k2, 0, _w2[1] - _w2[0] + wob * 0.7) * Math.min(1, (0.06 + 0.06 * heat) / k2) * smooth(0.05, 0.45, heat + 0.25 * ((_w1[2] >>> 3) & 7) / 7);
+  const seam = Math.max(c1, c2 * 0.8);
+  // open lava: fresh breaks where the heat is highest
+  const open = smooth(0.82, 1.05, heat + 0.14 * simplex3(p[0] * 9, p[1] * 9, p[2] * 9, s + 5)) * smooth(0.0, 0.6, seam + 0.3 * heat);
+  // temperature (K): seams cool away from the heat, a per-plate scatter
+  const plateR = ((_w1[2] >>> 8) & 255) / 255, plateR2 = ((_w2[2] >>> 8) & 255) / 255;
+  const Tseam = 970 + 260 * heat * heat + 120 * plateR2 * heat * heat + 60 * (plateR - 0.5);
+  const T = Math.max(open * (1380 + 120 * heat), seam * Tseam);
+  const lit = Math.max(open, seam);
+  // crust: black glass near the heat, weathered grey-brown or rust far off
+  const age = clamp(L.age + 0.35 * (plateR - 0.5) - 0.6 * heat);
+  const fresh = [0.03, 0.028, 0.027], old = [0.17, 0.145, 0.12], rust = [0.22, 0.12, 0.07];
+  lerp3(_col, fresh, old, smooth(0.1, 0.8, age));
+  mixIn(_col, rust, smooth(0.5, 1.0, age) * 0.6 * (0.5 + 0.5 * plateR2));
+  mixIn(_col, pal.dark, 0.25);
+  // sulfur frost on old, cold rafts: yellow, white at the rims
+  if (L.sulfur > 0) {
+    const sn = fbm(p, SULF_O, s + 7), sf = L.sulfur * smooth(0.3, 0.9, age) * smooth(0.05, 0.4, sn) * (1 - lit);
+    mixIn(_col, SULFUR, sf * 0.6);
+    mixIn(_col, [0.74, 0.71, 0.62], L.sulfur * smooth(0.5, 0.75, sn) * smooth(0.5, 1, age) * 0.4 * (1 - lit));
+  }
+  // the lit lava: dark red skin in the day, the glow at night
+  mixIn(_col, [0.3, 0.07, 0.02], lit * 0.85);
+  const g = lit * Math.pow(Math.max(T, 1) / 1500, 3) * 0.75;
+  lavaColour(T, _lc);
+  out.er = _lc[0] * g; out.eg = _lc[1] * g; out.eb = _lc[2] * g;
+  out.rough = mix(mix(0.55, 0.9, age), 0.35, lit); out.spec = mix(0.5, 0.4, age);
+}
 
 // out: { h (0..1), r, g, b (0..1 sRGB), rough, metal, spec, er, eg, eb, night, cloud, fu, fv, fb }
 function sampleRocky(ctx, p, out) {
@@ -667,28 +747,7 @@ function sampleRocky(ctx, p, out) {
     const depth = -hk;
     const liq = P.ocean.liquid | 0;
     if (liq === 1) {
-      // lava sea: plates of dark basalt crust (Worley cells at two scales)
-      // broken by glowing cracks; the crust is thin and hot near the
-      // shore rifts and where the seed's hot spots sit
-      worley3(p[0] * 7, p[1] * 7, p[2] * 7, ctx.sLava, _w1);
-      worley3(p[0] * 17, p[1] * 17, p[2] * 17, ctx.sLava + 1, _w2);
-      const wob = 0.04 * simplex3(p[0] * 40, p[1] * 40, p[2] * 40, ctx.sLava + 2);
-      // F2 - F1 is about twice the distance to the plate edge (in cells),
-      // so a crack is at least 1.3 map texels wide at any map width
-      // (dimmer by the width ratio when widened: the same coverage)
-      const tx = texelAngle(), k1 = Math.max(0.09, 2.6 * 7 * tx), k2 = Math.max(0.1, 2.6 * 17 * tx);
-      const crack1 = smooth(k1, 0.0, _w1[1] - _w1[0] + wob) * 0.09 / k1, crack2 = smooth(k2, 0.0, _w2[1] - _w2[0] + wob * 0.6) * 0.8 * 0.1 / k2;
-      const hot = smooth(0.2, 0.7, 0.5 + 0.5 * fbm(p, VAR_O, ctx.sLava + 3)) * 0.6 + smooth(0.6, 0.0, depth) * 0.4;
-      const open = clamp(Math.max(crack1, crack2 * (0.35 + 0.65 * hot)) + hot * 0.12);
-      const plateTone = 0.75 + 0.5 * ((_w1[2] >>> 8) & 255) / 255;
-      _col[0] = pal.dark[0] * plateTone; _col[1] = pal.dark[1] * plateTone; _col[2] = pal.dark[2] * plateTone;
-      mixIn(_col, [0.32, 0.09, 0.03], open);
-      const bb = blackbody(1050 + 350 * open);
-      // the crust itself is warm: a dull red floor (0.05 at 900 K) keeps
-      // the sea apart from the black land at night
-      const g = open * open * 1.6 + 0.05 * (0.6 + 0.4 * hot);
-      out.er = bb[0] * g; out.eg = bb[1] * g * (0.3 + 0.7 * open); out.eb = bb[2] * g * open;
-      out.rough = mix(0.9, 0.4, open); out.spec = 0.45;
+      lavaSea(ctx, p, out);
     } else if (liq === 2) {
       lerp3(_col, pal.shallow, pal.deep, 1 - Math.exp(-depth / 0.15));
       out.rough = 0.05; out.spec = 0.2;
@@ -735,11 +794,12 @@ function sampleRocky(ctx, p, out) {
     if (st.rays > 0) mixIn(_col, pal.bright, clamp(st.rays) * 0.6);
     // volcanic moons: surface deposits, calderas, plume rings, hot vents
     if (ctx.volcs.length) {
-      const s1 = fbm(p, SULF_O, ctx.sVar + 7);
-      mixIn(_col, pal.accent, smooth(0.1, 0.45, s1) * 0.7);
-      mixIn(_col, pal.bright, smooth(-0.15, -0.45, s1) * 0.6);
-      mixIn(_col, pal.rock, smooth(0.55, 0.85, Math.abs(lat) / (Math.PI / 2)) * 0.5);
-      mixIn(_col, pal.ring || [0.62, 0.22, 0.08], st.vRing * 0.65);
+      // (on a lava world the deposits follow its sulfur and stay thin)
+      const s1 = fbm(p, SULF_O, ctx.sVar + 7), dep = P.ocean.liquid === 1 ? 0.45 * P.lava.sulfur : 1;
+      mixIn(_col, P.ocean.liquid === 1 ? SULFUR : pal.accent, smooth(0.1, 0.45, s1) * 0.7 * dep);
+      mixIn(_col, pal.bright, smooth(-0.15, -0.45, s1) * 0.6 * dep);
+      mixIn(_col, pal.rock, smooth(0.55, 0.85, Math.abs(lat) / (Math.PI / 2)) * 0.5 * dep);
+      mixIn(_col, pal.ring || [0.62, 0.22, 0.08], st.vRing * 0.65 * Math.min(1, dep + 0.2));
       mixIn(_col, pal.dark, st.vDark * 0.9);
       if (st.vHot > 0 && P.volcanoes.glow > 0) {
         const bb = blackbody(1500), g = st.vHot * P.volcanoes.glow * 4;

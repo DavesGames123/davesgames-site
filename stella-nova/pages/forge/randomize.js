@@ -43,7 +43,7 @@ export const GROUPS = [
     rocky: ['seed', 'terrain', 'plates', 'mountains', 'erosion', 'craters', 'features', 'dunes', 'cracks', 'volcanoes', 'relief', 'radiusKm', 'bump', 'tilt', 'spin'],
     gas: ['seed', 'bands', 'turbulence', 'storms', 'relief', 'radiusKm', 'bump', 'tilt', 'spin', ...GX_SHAPE] },
   { id: 'ocean', label: 'oceans and climate', gasLabel: 'heat and aurorae',
-    rocky: ['ocean', 'climate', 'rivers'], gas: ['glow', 'gx.glowT', 'gx.aurora', 'gx.auroraLat'] },
+    rocky: ['ocean', 'climate', 'rivers', 'lava'], gas: ['glow', 'gx.glowT', 'gx.aurora', 'gx.auroraLat'] },
   { id: 'sky', label: 'atmosphere and clouds', gasLabel: 'atmosphere and haze',
     rocky: ['atmo', 'clouds'], gas: ['atmo', 'haze', 'clouds', 'gx.hood'] },
   { id: 'palette', label: 'palette', rocky: ['palette'], gas: ['palette', 'gx.col', 'gx.accent', 'gx.patchy', 'gx.albedo'] },
