@@ -23,6 +23,7 @@ files and runs in node.
 | `strings3d.js` | live string tubes, field values, colour mapping, hand dots |
 | `textures.js` | procedural wood, flame, rosette and winding textures (`DataTexture`) |
 | `tests.mjs` | node tests: `node stella-nova/pages/string-lab/view3d/tests.mjs` |
+| `README.md` | this file |
 
 ## Coordinates
 
@@ -48,6 +49,8 @@ const view = createStringView3D(canvas, {
   pixelRatio: 2,            // capped at 2
   quality: 'high',          // 'low' for phones: fewer tube segments, no shadows
   background: 0x0b0d12,     // or null for a transparent canvas
+  orientation: 'auto',      // 'auto' (portrait canvas: neck up), 'landscape', 'portrait'
+  thick: 1.8,               // drawn string radius / real radius
   renderer: null,           // an existing WebGLRenderer, or 'none' (no GL; tests)
 });
 
@@ -62,7 +65,8 @@ view.setRange(null);                   // null = auto range, or a fixed max (fie
 view.setExaggeration(50);
 view.setPolarization(Math.PI / 4);
 view.setBow({ string: 2, pos: 0.09, speed: 0.4, on: true }); // violin only; null hides
-view.highlight(i);                     // brighten one string (null = none)
+view.highlight(i);                     // draw one string thicker (null = none)
+view.setThickness(2.5);                // drawn string radius / real radius
 view.setCamera('soundhole', { animate: true, string: 2 });
 view.autoOrbit(0.05);                  // rad per wall second, 0 = off (saver)
 view.frame(dtWall, dtSim);             // read sims, update tubes, move bow, render
@@ -72,6 +76,8 @@ view.stringAt(clientX, clientY);       // { string, pos } or null (pick to pluck
 view.dispose();
 
 view.renderer; view.scene; view.camera; view.model; view.controls;
+view.live;                             // LiveStrings (strings3d.js)
+view.state;                            // copy of the view state (field, auto range, bow, ...)
 ```
 
 Call `frame()` once per animation frame. `dtWall` is the wall time in
