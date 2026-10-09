@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Periodic Table — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PERIODIC TABLE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   One canvas (#table) draws every view of the table (render.js); the
+   elements fly between views. Hover a square: #card shows the element and
+   its live atom. Click: #inspect pins everything about it. 2D canvas only:
+   the page makes no WebGL or WebGPU context.
+
+   HEAD LOAD ORDER
+     1. gpu-guard  2. wishlist  3. stats-beacon   (../../lib/)
+     4. fonts, style.css, ../ct-lab/colormaps/picker.css
+   main.js (module) at the end of body; it imports saver.js.
+
+   REGIONS
+     .topbar       brand and title (hidden in the shell frame)
+     #views        the view tabs (data-view)
+     #stage        canvas#table, #card (hover), #legend, #hud
+     #panel        colour, property, colour map, temperature, years,
+                   scatter axes, filters, compare
+     #inspect      the pinned element (desktop: right; phone: sheet)
+     #dock         phone: Views · Colour · Filter · Find
+
+   GREP MAP
+     grep -n 'data-view='     the view tabs
+     grep -n 'data-color='    the colour modes
+     grep -n 'id="temp'       the temperature slider
+     grep -n 'id="year'       the discovery year slider
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A periodic table you can play with: eleven views that morph into each other (standard, long, spiral, shells, left-step, orbital blocks, a 3D tower, heat maps, the discovery timeline, abundance, scatter), a temperature slider that melts and boils the elements, and the live atomic structure of every element on hover.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Periodic Table</div>
+</div>
+
+<nav id="views" aria-label="Views">
+  <div class="vtabs" role="tablist"></div>
+  <label class="find"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Find: Fe, gold, 79" autocomplete="off" spellcheck="false" aria-label="Find an element"></label>
+</nav>
+
+<main id="stage">
+  <canvas id="table" aria-label="Periodic table"></canvas>
+  <div id="hud" class="hud" aria-live="polite"></div>
+  <div id="card" class="cardhost" hidden></div>
+  <div id="vhint" class="vhint"></div>
+  <div id="play" class="playbar" hidden>
+    <button type="button" id="playBtn" aria-label="Play">▶</button>
+    <input type="range" id="playRange" aria-label="Scrub">
+    <output id="playOut"></output>
+  </div>
+</main>
+
+<aside id="panel" aria-label="Controls">
+  <button id="sheetGrip" class="grip" type="button" aria-label="Close">
+    <span></span>
+  </button>
+  <section data-pane="colour">
+    <h2>Colour</h2>
+    <div class="seg" id="colorSeg">
+      <button type="button" data-color="cat">Category</button>
+      <button type="button" data-color="block">Block</button>
+      <button type="button" data-color="prop">Property</button>
+      <button type="button" data-color="phase">Phase</button>
+      <button type="button" data-color="cpk">CPK</button>
+    </div>
+    <label class="row"><span>Property</span><select id="prop"></select></label>
+    <div id="cmapHost" class="cmaphost"></div>
+    <div class="row slider">
+      <span>Temperature <output id="tempOut"></output></span>
+      <input type="range" id="temp" min="0" max="1000" value="300" aria-label="Temperature">
+      <div class="btns"><button type="button" id="tempPlay">Sweep 0 → 6000 K</button><button type="button" data-temp="298">25 °C</button></div>
+    </div>
+  </section>
+  <section data-pane="view">
+    <h2>View options</h2>
+    <div class="row slider" id="yearRow">
+      <span>Discovered by <output id="yearOut"></output></span>
+      <input type="range" id="year" min="1650" max="2030" value="2030" aria-label="Year">
+    </div>
+    <div class="row two" id="axesRow">
+      <label><span>X</span><select id="axX"></select></label>
+      <label><span>Y</span><select id="axY"></select></label>
+    </div>
+    <div class="seg" id="abSeg">
+      <button type="button" data-source="crust">Crust</button>
+      <button type="button" data-source="ocean">Ocean</button>
+      <button type="button" data-source="universe">Universe</button>
+      <button type="button" data-source="human">Human</button>
+    </div>
+  </section>
+  <section data-pane="filter">
+    <h2>Filter</h2>
+    <div class="chips" id="catChips"></div>
+    <div class="chips" id="blockChips"></div>
+    <button type="button" id="clearFilter" class="ghost">Show all</button>
+  </section>
+  <section data-pane="compare">
+    <h2>Compare</h2>
+    <p class="muted">Pin an element, then pick a second one here.</p>
+    <label class="row"><span>With</span><select id="cmpWith"></select></label>
+  </section>
+  <section class="about">
+    <p>Data: komed3/periodic-table (MIT) and the PubChem periodic table (public domain). Descriptions written for this page. Atoms: hydrogen-like orbitals with Slater's effective charge; sizes are for legibility, not to scale.</p>
+  </section>
+</aside>
+
+<section id="inspect" aria-label="Element" hidden>
+  <div class="ihead"><button type="button" id="cmpBtn" class="ghost">Compare</button><button type="button" id="inspClose" class="x" aria-label="Close">×</button></div>
+  <div id="inspBody"></div>
+</section>
+
+<nav id="dock" aria-label="Page">
+  <button type="button" data-sheet="view">Views</button>
+  <button type="button" data-sheet="colour">Colour</button>
+  <button type="button" data-sheet="filter">Filter</button>
+  <button type="button" data-sheet="find">Find</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
