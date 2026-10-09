@@ -15,10 +15,17 @@
 //    push     a push-in from 2.3 to 1.45 radii on the great spot (giants)
 //             or the highest massif (rocky); spin stops for the shot
 //    rings    a low pass across the ring plane (ringed giants only)
+//    lapse    a wide shot at 4.2 radii, the planet left of centre, a 6 h/s
+//             time-lapse (the planet turns, the clouds evolve). Half are
+//             lit from the camera side; half are backlit: a crescent, the
+//             granulated sun disc in frame and the starfield.
+//  Time: the tour runs the clock at SAVER_RATE (20 min/s), so cloud decks
+//  move in every shot; the lapse shot runs at LAPSE_RATE. exit() puts
+//  back the user's rate.
 //  The planet is framed in the plate's clear band (lib/saver-clear.js
 //  plateBand through main.js clearArea). The plate names the planet, its
-//  generator parameters and the scattering maths in TeX. No code on the
-//  plate.
+//  family member (preset and seed), its generator parameters, the clock
+//  rate and the scattering maths in TeX. No code on the plate.
 //
 //  snSaver.debug() returns the director state; snSaver.cut() forces the
 //  next shot (for probes).
@@ -31,6 +38,8 @@ import { plateBand } from '../../lib/saver-clear.js';
 import { worldFrame } from './render.js';
 
 const D2R = Math.PI / 180;
+const SAVER_RATE = 1200, LAPSE_RATE = 21600;
+const rateText = r => r >= 86400 ? (r / 86400) + ' day/s' : r >= 3600 ? (r / 3600) + ' h/s' : (r / 60) + ' min/s';
 const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const ease = t => t * t * (3 - 2 * t);
@@ -54,9 +63,9 @@ window.snSaver = {
     const order = [];
     for (let i = 0; i < Math.max(rocky.length, gas.length); i++) { order.push(rocky[i % rocky.length]); order.push(gas[i % gas.length]); }
     const W = F.ENV.mobile ? 1024 : 2048;
-    const saved = { moveSun: S.moveSun, spin: S.spin, exposure: S.exposure };
+    const saved = { moveSun: S.moveSun, spin: S.spin, exposure: S.exposure, rate: S.rate, clouds: S.clouds };
     document.documentElement.classList.add('sn-saver');
-    S.saver = true; S.moveSun = false; S.spin = true; S.exposure = 0.7;
+    S.saver = true; S.moveSun = false; S.spin = true; S.exposure = 0.7; S.rate = SAVER_RATE; S.clouds = true;
     run = { i: 0, order, W, shot: null, shotsLeft: 0, next: null, P: null, M: null, raf: 0, saved, label, calm, rnd };
 
     const makeNext = () => {
@@ -74,7 +83,7 @@ window.snSaver = {
       run.P = j.P; run.M = j.M;
       F.adopt(j.P, j.M, W);
       run.shotsLeft = 2 + (rnd() < 0.4 ? 1 : 0);
-      run.kinds = shuffle(['orbit', 'sunrise', 'push', ...(j.P.rings && j.P.rings.on ? ['rings'] : [])]);
+      run.kinds = shuffle(['orbit', 'sunrise', 'push', 'lapse', ...(j.P.rings && j.P.rings.on ? ['rings'] : [])]);
       run.next = makeNext();
       return true;
     }
@@ -83,6 +92,8 @@ window.snSaver = {
       const P = run.P, dur = (5 + 7 * rnd()) * (0.8 + 0.4 * calm);
       const a0 = rnd() * Math.PI * 2, dir = rnd() < 0.5 ? -1 : 1;
       const sh = { kind, t0: performance.now(), dur, a0, dir, el: (rnd() - 0.4) * 0.5 };
+      S.rate = kind === 'lapse' ? LAPSE_RATE : SAVER_RATE;
+      if (kind === 'lapse') sh.lit = rnd() < 0.5;
       if (kind === 'push') {
         // the subject in the body frame
         let b;
@@ -102,6 +113,20 @@ window.snSaver = {
         const pos = [d * Math.cos(el) * Math.sin(yaw), d * Math.sin(el), d * Math.cos(el) * Math.cos(yaw)];
         const sun = norm([Math.sin(yaw + 1.0), 0.25, Math.cos(yaw + 1.0)]);
         return { pos, target: [0, 0, 0], up: [0, 1, 0], fov: 32 * D2R, sunDir: sun };
+      }
+      if (sh.kind === 'lapse') {
+        // wide and still: the planet left of centre, backlit to a crescent,
+        // the sun disc in frame to the right of it, the starfield behind;
+        // the time-lapse does the motion
+        const yaw = sh.a0 + sh.dir * 0.08 * e, d = 4.2, el = sh.el * 0.6;
+        const pos = [d * Math.cos(el) * Math.sin(yaw), d * Math.sin(el), d * Math.cos(el) * Math.cos(yaw)];
+        const fwd = norm(pos.map(v => -v)), right = norm(cross(fwd, [0, 1, 0]));
+        // half the lapse shots: lit from the camera side (day clouds move),
+        // the other half: backlit (the sun disc in frame, night glow)
+        const sun = sh.lit ? norm([-fwd[0] * 0.35 + right[0], 0.25, -fwd[2] * 0.35 + right[2]])
+          : norm([fwd[0] + right[0] * 0.34, 0.06, fwd[2] + right[2] * 0.34]);
+        const target = right.map(v => v * 0.55);
+        return { pos, target, up: [0, 1, 0], fov: 40 * D2R, sunDir: sun };
       }
       if (sh.kind === 'sunrise') {
         const s = norm([Math.sin(sh.a0), 0.15, Math.cos(sh.a0)]);
@@ -131,7 +156,9 @@ window.snSaver = {
     function plate() {
       if (!label || !run.P) return;
       const P = run.P, rocky = P.kind === 'rocky', A = P.atmo;
-      const shotName = { orbit: 'orbit', sunrise: 'sunrise over the limb', push: rocky ? 'push-in on the highest massif' : 'push-in on the great spot', rings: 'across the ring plane' }[run.shot ? run.shot.kind : 'orbit'];
+      const kind = run.shot ? run.shot.kind : 'orbit';
+      const shotName = { orbit: 'orbit', sunrise: 'sunrise over the limb', push: rocky || !P.storms.spot ? 'push-in on the highest point' : 'push-in on the great spot', rings: 'across the ring plane', lapse: 'time-lapse under the stars' }[kind];
+      const pr = PR.presetById(P.preset);
       const params = rocky ? [
         { sym: 'o', name: 'octaves', value: P.terrain.octaves.toFixed(1) },
         { sym: '\\lambda', name: 'lacunarity', value: P.terrain.lacunarity.toFixed(2) },
@@ -148,7 +175,10 @@ window.snSaver = {
         { sym: 'n_s', name: 'storms', value: String(P.storms.spot + P.storms.ovals + P.storms.small) },
       ];
       if (A.on) params.push({ sym: 'H_R', name: 'Rayleigh scale height', value: A.rayleighH + ' km' });
-      const tex = A.on ? [
+      params.push({ sym: '\\dot t', name: 'time-lapse', value: rateText(S.rate) });
+      const lapseTex = ['N(<m) \\propto 10^{0.45\\,m}', 'I(\\mu) = I_0\\,(0.3 + 0.7\\,\\mu^{0.55})'];
+      const lapseEq = ['N(<m) ∝ 10^(0.45 m)', 'I(μ) = I₀ (0.3 + 0.7 μ^0.55)'];
+      const tex0 = A.on ? [
         'P_R(\\theta) = \\frac{3}{16\\pi}\\left(1 + \\cos^2\\theta\\right)',
         '\\tau(s) = \\int_0^s \\beta_R\\, e^{-h/H_R} + \\beta_M\\, e^{-h/H_M}\\, dx',
         'L = \\int_0^{t} T(x)\\, \\sigma_s(x) \\left[ P(\\theta)\\, T_\\odot(x)\\, E + \\Psi_{ms} \\right] dx',
@@ -156,13 +186,16 @@ window.snSaver = {
         rocky ? 'N(>r) \\propto r^{-\\alpha}' : 'u(\\varphi) = u_0 e^{-(\\varphi/w)^2} + \\sum_k a_k e^{-((\\varphi-\\varphi_k)/\\sigma)^2}',
         'f_{\\mathrm{spec}} = \\frac{D\\, G\\, F}{4\\, (n\\cdot l)(n\\cdot v)}',
       ];
-      const eq = A.on ? ['P_R(θ) = 3/(16π) (1 + cos²θ)', 'τ(s) = ∫ β_R e^(−h/H_R) + β_M e^(−h/H_M) dx', 'L = ∫ T σ_s [P(θ) T_sun E + Ψ_ms] dx']
+      const tex = kind === 'lapse' ? [...lapseTex, tex0[0]] : tex0;
+      const eq0 = A.on ? ['P_R(θ) = 3/(16π) (1 + cos²θ)', 'τ(s) = ∫ β_R e^(−h/H_R) + β_M e^(−h/H_M) dx', 'L = ∫ T σ_s [P(θ) T_sun E + Ψ_ms] dx']
         : [rocky ? 'N(>r) ∝ r^(−α)' : 'u(φ) = u₀ e^(−(φ/w)²) + Σ jets', 'f_spec = D G F / (4 (n·l)(n·v))'];
+      const eq = kind === 'lapse' ? [...lapseEq, eq0[0]] : eq0;
       label({
         title: `${P.name}, seed ${P.seed}`,
-        sub: (rocky ? 'Rocky world' : 'Gas giant') + ' · ' + shotName,
+        sub: (pr ? pr.name + ' family' : rocky ? 'Rocky world' : 'Gas giant') + ' · ' + shotName + ' · ' + rateText(S.rate),
         params, tex, eq,
-        lines: [rocky ? 'warped fBm continents, plate uplift, ridged mountains, eroded detail' + (P.craters.density > 0 ? ', power-law craters' : '') : 'zonal band profile, curl-advected turbulence, vortices'],
+        lines: [rocky ? 'warped fBm continents, plate uplift, ridged mountains, eroded detail' + (P.craters.density > 0 ? ', power-law craters' : '') : 'zonal band profile, curl-advected turbulence, vortices',
+          kind === 'lapse' ? 'stars: magnitudes by the count law, colours from black-body temperatures; sun: granulation and limb darkening' : 'clouds evolve on the GPU in simulated hours; the sky turns with the world frame, not the planet'],
         anchor: () => {
           if (!run || !run.shot || run.shot.kind !== 'orbit') return null;
           const ca = F.clearArea();

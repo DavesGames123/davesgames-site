@@ -366,5 +366,33 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('pool: a crashed and a silent worker still give the same planet', MP.hashMaps(mixed) === ref && MP.hashMaps(allDead) === ref, `${Date.now() - t0} ms`);
 }
 
+// ── saver tour (saver.js) in a DOM-free stub ────────────────────────────────
+// The tour runs the clock at 20 min/s, the lapse shot at 6 h/s, the plate
+// carries no code, and exit() puts the user's rate and toggles back.
+{
+  const perf = globalThis.performance; let now = 0;
+  Object.defineProperty(globalThis, 'performance', { value: { now: () => now }, configurable: true, writable: true });
+  const rafs = []; globalThis.requestAnimationFrame = f => { rafs.push(f); return rafs.length; }; globalThis.cancelAnimationFrame = () => {};
+  globalThis.innerHeight = 800; globalThis.innerWidth = 1280;
+  globalThis.document = { documentElement: { classList: { add() {}, remove() {} } } };
+  globalThis.window = globalThis;
+  const S = { rate: 360, moveSun: true, spin: true, exposure: 0.65, clouds: false, spinAngle: 0 };
+  const M = { W: 64, H: 32, height: new Float32Array(64 * 32).map((_, i) => (i * 7919 % 101) / 101) };
+  globalThis.__forge = { S, ENV: { mobile: false }, pool: { generate: async () => M }, adopt() {}, clearArea: () => ({ x0: 0, x1: 900, y0: 0, y1: 700 }), canvas: {} };
+  await import('./saver.js');
+  const plates = [], rates = {};
+  globalThis.snSaver.enter({ seed: 7, calm: 0.7, label: p => p && plates.push(p) });
+  for (let k = 0; k < 4000 && Object.keys(rates).length < 4; k++) {
+    await new Promise(r => setTimeout(r, 0)); now += 100;
+    const f = rafs.pop(); rafs.length = 0; if (f) f();
+    const d = globalThis.snSaver.debug(); if (d && d.shot) rates[d.shot] = S.rate;
+  }
+  globalThis.snSaver.exit();
+  Object.defineProperty(globalThis, 'performance', { value: perf, configurable: true, writable: true });
+  ok('saver: lapse shot at 6 h/s, other shots at 20 min/s', rates.lapse === 21600 && Object.entries(rates).every(([k, r]) => k === 'lapse' || r === 1200), JSON.stringify(rates));
+  ok('saver: plates name the family and the rate, carry no code', plates.length > 0 && plates.every(p => !('code' in p) && / family · .* · \d/.test(p.sub)), `${plates.length} plates`);
+  ok('saver: exit restores the rate and the toggles', S.rate === 360 && S.clouds === false && S.moveSun === true);
+}
+
 console.log(fails ? `${fails} check(s) failed` : 'all checks passed');
 process.exit(fails ? 1 : 0);
