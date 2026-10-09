@@ -60,7 +60,7 @@ export function makeSchema(PHONE) {
       { key: 'glow', type: 'toggle', label: 'Glow', value: true, random: { p: 0.7 } },
       { key: 'grid', type: 'toggle', label: 'Grid', value: false, random: { p: 0.3 } },
       K.themeControl('night'),
-      K.paletteControl('neon'),
+      K.paletteControl('neon', { random: { pick: ['toybox', 'neon', 'sunset', 'harbour', 'pastel'], rnd: 0.3 } }),
     ] },
     { id: 'solver', label: 'Solver', open: false, random: false, controls: [
       { key: 'sub', type: 'range', label: 'Substeps per frame', min: 5, max: 200, step: 5, value: PHONE ? 50 : 100, phone: 50 },
