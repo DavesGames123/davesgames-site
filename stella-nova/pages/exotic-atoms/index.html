@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Exotic atoms: Rydberg giants, positronium, trilobites and white-dwarf hydrogen · Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   EXOTIC ATOMS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   An explorer of extreme atomic states: hydrogen up to n = 300, alkali
+   Rydberg atoms with quantum defects, positronium, muonic hydrogen,
+   antihydrogen, Cu2O Rydberg excitons, trilobite and butterfly molecules,
+   and hydrogen in a white-dwarf magnetic field. The electron is a point
+   cloud of |psi|^2 in a colour map (magma by default), with the magnetic
+   field of its own probability current on top.
+
+   DESIGN  The layout follows pages/atomic-orbital-vr: a quick panel on
+   the left, a fine-tuning drawer on the right, an equations panel at the
+   top centre and the state ket at the top right. The quantum-number
+   sliders and toggles are the ones of pages/circular-rydberg (n, l, m,
+   Circular, Compare with l = 0, Density / Phase, Wave packet, Bohr orbit,
+   Turn). The cloud renderer is circular-rydberg/cloud.js.
+
+   NO GPU  The page makes no WebGL or WebGPU context. The cloud is point
+   splats in a float buffer on a 2D canvas, so pagehide has no GPU device
+   to release; main.js still stops its loop on pagehide.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, ../ct-lab/colormaps/picker.css, ../../lib/sci.css
+   Script at the end of body: main.js (module). It imports physics.js,
+   states.js, bfield.js, climb.js, draw.js, saver.js, the ct-lab colour
+   maps and picker, circular-rydberg/cloud.js and ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #cv          the full-window canvas (cloud, field, overlays)
+     #qp          quick panel: species, state family, n l m sliders,
+                  the circular-rydberg toggles, fields, readouts
+     #adv         drawer: colour maps, exposure, cut, quality, family
+                  options (packet, molecule, strong field)
+     #eq          equations of the current state family
+     #ket         the state ket and its name
+     #status      field solver progress
+     #dock        phone dock: State, Fields, View, Guide, Scale
+     #guide       the explainer (sections, sources)
+     #ruler       the size ruler, fm to mm
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../ct-lab/colormaps/picker.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<canvas id="cv" aria-label="Electron cloud of the selected state"></canvas>
+
+<div class="topbar"><span class="sys-name">Exotic atoms</span><span class="topbar-r">Rydberg giants and other extreme states</span></div>
+
+<aside id="qp" class="panel" aria-label="State controls">
+  <div class="qp-head">
+    <div class="qp-id"><span class="qp-big" id="qpBig">H</span><span class="qp-ket" id="qpKet">|30, 29, 29⟩</span></div>
+    <button class="icon-btn" id="qpCollapse" title="Collapse panel" aria-label="Collapse panel">◀</button>
+  </div>
+  <div class="qp-body">
+    <section class="sec" data-sec="state">
+      <div class="sec-lbl">Species</div>
+      <div class="chips" id="spChips" role="group" aria-label="Species"></div>
+      <p class="note" id="spNote"></p>
+    </section>
+    <section class="sec" data-sec="state">
+      <div class="sec-lbl">State</div>
+      <div class="seg wide" id="famSeg" role="group" aria-label="State family">
+        <button data-v="nlm" class="on">|n l m⟩</button><button data-v="para">Stark</button><button data-v="mol">Molecule</button><button data-v="strongB">White dwarf</button>
+      </div>
+      <div class="ctrls" id="qnCtrls">
+        <label class="ctrl"><span class="sym m1">n</span><input type="range" id="nIn" min="1" max="300" step="1" value="30"><output id="nOut">30</output></label>
+        <label class="ctrl" id="lRow"><span class="sym m2" id="lSym">l</span><input type="range" id="lIn" min="0" max="29" step="1" value="29"><output id="lOut">29</output></label>
+        <label class="ctrl" id="mRow"><span class="sym m3">m</span><input type="range" id="mIn" min="-29" max="29" step="1" value="29"><output id="mOut">29</output></label>
+        <label class="ctrl" id="bRow" hidden><span class="sym m5">B</span><input type="range" id="sbIn" min="0" max="9" step="0.05" value="5"><output id="sbOut">10⁵ T</output></label>
+        <label class="ctrl" id="rRow" hidden><span class="sym m5">R</span><input type="range" id="molR" min="0.15" max="2" step="0.005" value="1"><output id="molROut"></output></label>
+      </div>
+      <div class="tgls">
+        <button class="tgl on" id="circBtn">Circular (l = m = n − 1)</button>
+        <button class="tgl" id="cmpBtn">Compare with l = 0</button>
+        <div class="seg" id="colSeg" role="group" aria-label="Colour"><button data-v="density" class="on">Density</button><button data-v="phase">Phase</button></div>
+        <button class="tgl" id="packBtn">Wave packet</button>
+        <button class="tgl" id="bohrBtn">Bohr orbit</button>
+        <button class="tgl on" id="spinBtn">Turn</button>
+      </div>
+      <div class="seg" id="molSeg" role="group" aria-label="Molecule" hidden><button data-v="trilobite" class="on">Trilobite</button><button data-v="butterfly">Butterfly</button></div>
+    </section>
+    <section class="sec" data-sec="fields">
+      <div class="sec-lbl">Fields</div>
+      <div class="tgls">
+        <button class="tgl big" id="bBtn"><span class="sym m4">B</span> field of the current</button>
+        <button class="tgl" id="spinLayerBtn">Spin moment layer</button>
+        <button class="tgl on" id="linesBtn">Field lines</button>
+        <button class="tgl" id="arrowsBtn">Arrows on the slice</button>
+        <button class="tgl on" id="magBtn">|B| slice</button>
+      </div>
+      <div class="tgls">
+        <button class="tgl" id="extBBtn">External B (Zeeman)</button>
+        <button class="tgl" id="extEBtn">External E (Stark)</button>
+      </div>
+      <label class="ctrl" id="extBRow" hidden><span class="sym m4">B</span><input type="range" id="extBIn" min="-4" max="1" step="0.05" value="-1"><output id="extBOut">0.1 T</output></label>
+      <label class="ctrl" id="extERow" hidden><span class="sym m6">F</span><input type="range" id="extEIn" min="-4" max="2" step="0.05" value="-1"><output id="extEOut">0.1 V/cm</output></label>
+    </section>
+    <section class="sec" data-sec="read">
+      <div class="sec-lbl">Readouts</div>
+      <dl class="read" id="read"></dl>
+      <p class="note" id="readNote"></p>
+    </section>
+    <div class="qp-foot">
+      <button class="wide-btn" id="advBtn">Fine tuning</button>
+      <button class="wide-btn" id="guideBtn">How it works</button>
+      <button class="wide-btn" id="rulerBtn">Size ruler</button>
+    </div>
+  </div>
+</aside>
+
+<aside id="adv" class="panel" aria-label="Fine tuning">
+  <div class="adv-head"><span>Fine tuning</span><button class="icon-btn" id="advClose" aria-label="Close">✕</button></div>
+  <div class="adv-body">
+    <div class="sec-lbl">Cloud colour map</div>
+    <div id="pickerHost"></div>
+    <div class="sec-lbl">Field colour map</div>
+    <select id="fmapSel" aria-label="Field colour map"></select>
+    <div class="sec-lbl">Look</div>
+    <label class="ctrl"><span>Exposure</span><input type="range" id="expIn" min="-1.5" max="1.5" step="0.05" value="0"><output id="expOut">1.0×</output></label>
+    <label class="ctrl"><span>Density floor</span><input type="range" id="floorIn" min="0" max="0.6" step="0.01" value="0"><output id="floorOut">0</output></label>
+    <div class="sec-lbl">Cross-section</div>
+    <div class="seg" id="cutSeg" role="group" aria-label="Cut"><button data-v="0" class="on">Full</button><button data-v="1">Cut</button><button data-v="2">Slab</button></div>
+    <div class="seg" id="axisSeg" role="group" aria-label="Cut axis"><button data-v="0">x</button><button data-v="1" class="on">y</button><button data-v="2">z</button></div>
+    <label class="ctrl"><span>Position</span><input type="range" id="cutIn" min="-1" max="1" step="0.01" value="0"><output id="cutOut">0</output></label>
+    <div class="sec-lbl">Wave packet</div>
+    <label class="ctrl"><span>Width σₙ</span><input type="range" id="sigIn" min="0.6" max="5" step="0.1" value="1.6"><output id="sigOut">1.6</output></label>
+    <label class="ctrl"><span>Speed</span><input type="range" id="spdIn" min="0.05" max="3" step="0.05" value="0.6"><output id="spdOut">0.6 T_K/s</output></label>
+    <div class="sec-lbl">Quality</div>
+    <div class="seg" id="qSeg" role="group" aria-label="Quality"><button data-v="low">Light</button><button data-v="med" class="on">Normal</button><button data-v="high">Dense</button></div>
+    <label class="ctrl"><span>Field lines</span><input type="range" id="nLinesIn" min="3" max="16" step="1" value="8"><output id="nLinesOut">8</output></label>
+  </div>
+</aside>
+
+<section id="eq" class="eq" aria-label="Equations">
+  <button class="icon-btn" id="eqCollapse" aria-label="Collapse equations">▲</button>
+  <div class="eq-lbl" id="eqLbl">Hydrogen-like eigenstate</div>
+  <div class="eq-rows" id="eqRows"></div>
+</section>
+
+<div id="ket" class="ket"><div class="ket-main" id="ketMain"></div><div class="ket-sub" id="ketSub"></div></div>
+<div id="status" class="status" hidden></div>
+<div id="ruler" class="ruler" hidden><canvas id="rulerCv"></canvas></div>
+
+<nav id="dock" class="dock" aria-label="Panels">
+  <button data-tab="state">State</button><button data-tab="fields">Fields</button><button data-tab="view">View</button><button data-tab="guide">Guide</button><button data-tab="ruler">Scale</button>
+</nav>
+
+<article id="guide" class="guide" hidden aria-label="How it works">
+  <header><h2>How the exotic atoms work</h2><button class="icon-btn" id="guideClose" aria-label="Close">✕</button></header>
+  <div class="guide-body" id="doc">
+    <p class="lead">Every cloud on this page is a probability density |ψ|² of one state, drawn as tens of thousands of points sampled from it. Notes in each section say what is an exact solution and what is a model.</p>
+
+    <h3>Hydrogen to n = 300</h3>
+    <p>The bound states of one charge around another are</p>
+    <div class="sci-eq" data-tex="\psi_{n\ell m} = R_{n\ell}(r)\,Y_{\ell}^{m}(\theta,\varphi),\qquad E_n = -\frac{\mathrm{Ry}}{n^2},\qquad \langle r\rangle = \tfrac12\left(3n^2-\ell(\ell+1)\right)a"></div>
+    <p>At n = 300 the factorials in the normalization of R_nl are near 10⁶¹⁴ and overflow a double. The page keeps the normalization as a sum of logarithms and rescales the Laguerre recurrence while it runs. The angular part uses the normalized Legendre recurrence. The checks integrate |R|²r² to 1 at n = 50, 100, 200 and 300. The radial sampler uses a grid that scales with n²a. <b>Exact</b> for a point nucleus without relativity [codata, bethe].</p>
+    <p>At the top of the ladder, n = 300, the atom is about 10 µm across, the size of a red blood cell, and is bound by 0.15 meV. A neighbouring level is 245 MHz away: a radio photon.</p>
+
+    <h3>Circular, elliptical and low-l states</h3>
+    <p>For one n, the largest l = |m| = n − 1 gives a thin ring of radius n²a: the circular state [hulet83]. It can decay only one step down, so it lives longest. Low l goes through the nucleus. In an electric field the good quantum numbers are parabolic, n₁, n₂ and m:</p>
+    <div class="sci-eq" data-tex="E = -\frac{1}{2n^2} + \frac{3}{2}F\,n\,(n_1-n_2) - \frac{F^2 n^4}{16}\left(17n^2 - 3(n_1-n_2)^2 - 9m^2 + 19\right)"></div>
+    <p>The Stark state with the largest |n₁ − n₂| is the elliptical state: its cloud sits on one side of the nucleus with a dipole of (3/2)n(n₁ − n₂) e a. <b>Exact</b> to second order in F [bethe]. When the field passes the Inglis–Teller value</p>
+    <div class="sci-eq" data-tex="F_{\mathrm{IT}} = \frac{1}{3n^5}\,\frac{E_h}{e\,a}"></div>
+    <p>the n and n + 1 manifolds touch and the levels merge [inglis39]. At 10 mV/cm this happens at n ≈ 176.</p>
+
+    <h3>Wave packets</h3>
+    <p>A short pulse excites many n at once. The sum</p>
+    <div class="sci-eq" data-tex="\Psi(t) = \sum_n c_n\,\psi_n\,e^{-iE_n t/\hbar},\qquad T_K = 2\pi n_0^3\,\frac{\hbar}{E_h},\qquad T_{\mathrm{rev}} = \frac{2n_0}{3}\,T_K"></div>
+    <p>moves like the classical electron for a few orbits, spreads round the ring, and comes back together at the revival time [parker86, yeazell88]. The page draws points from the incoherent mixture and weights each point by |Ψ(t)|² over that mixture, so the cloud is the exact density at each time. The circular packet uses circular states; the radial packet uses l = 1 states and breathes in and out.</p>
+
+    <h3>Alkali Rydberg atoms: quantum defects</h3>
+    <div class="sci-eq" data-tex="E_{n\ell} = -\frac{\mathrm{Ry}_M}{(n-\delta_\ell)^2},\qquad \delta_\ell(n) = \delta_0 + \frac{\delta_2}{(n-\delta_0)^2}"></div>
+    <p>A low-l orbit dives into the closed core, sees more of the nuclear charge and is bound more deeply. The defects are fits to measured spectra: Rb [li03, han06], Cs [deig16], Na (as compiled in ARC) [arc] and Sr singlet series [vail12]. Above F, the alkalis use the core-polarization model δ_l = 3α_d / (4(l + 3/2)(l + 1)(l + ½)l(l − ½)). The ground and first P levels use measured term values [nist]. The cloud of an alkali state is drawn as hydrogen at the same n and l (a <b>model</b>: the real cloud differs inside the core); its readouts use n* = n − δ_l.</p>
+
+    <h3>Positronium, muonic hydrogen, antihydrogen</h3>
+    <p>For two bodies only the reduced mass μ changes the scale: a = a₀ m/μ and E ∝ μ.</p>
+    <ul>
+      <li><b>Positronium</b>, μ = m/2: twice the size, half the binding (6.8 eV). Equal masses with opposite charges give zero orbital magnetic moment, so the page shows no orbital field. S states also annihilate: ortho-positronium lives 142 ns in 1S, longer by n³ above [cassidy18].</li>
+      <li><b>Muonic hydrogen</b>, μ = 185.8 m: 186 times smaller (285 fm) and 2.53 keV deep, so 1S → 2P is an X-ray. Its Lamb shift measured the proton radius [pohl10]. The muon decays in 2.2 µs.</li>
+      <li><b>Antihydrogen</b>: by CPT the levels and the cloud are those of hydrogen; ALPHA measured 1S–2S to 2 parts in 10¹² [alpha18]. The positron has charge +e, so the current and the moment reverse.</li>
+    </ul>
+
+    <h3>Rydberg excitons in Cu₂O</h3>
+    <p>An electron and a hole in copper oxide form a hydrogen-like pair with Ry = 92 meV and a = 1.11 nm. Kazimierczuk and co-workers saw P states up to n = 25, more than 2 µm across [kaz14]. The page uses E = E_g − Ry/n² without the small exciton quantum defects and does not compute a field (the moment depends on the effective masses). A <b>model</b> with measured constants.</p>
+
+    <h3>Trilobite and butterfly molecules</h3>
+    <p>A ground-state atom inside the orbit scatters the Rydberg electron through a contact potential 2πa_s δ(r − R). Inside the degenerate manifold, the bound state is the projection of that delta function [gds00]:</p>
+    <div class="sci-eq" data-tex="\psi_{\mathrm{tri}}(\mathbf r) \propto \sum_{\ell\ge 3} R_{n\ell}(R)\,R_{n\ell}(r)\,\frac{2\ell+1}{4\pi}\,P_\ell(\cos\theta),\qquad U(R) = 2\pi a_s\sum_{\ell\ge3}\frac{2\ell+1}{4\pi}R_{n\ell}(R)^2"></div>
+    <p>With a_s ≈ −16 a₀ the curve U(R) has about n − 3 wells; the outermost lies near 1.7n². The electron piles up at the perturber, which gives a dipole of thousands of debye. The butterfly uses R′_nl(R), the p-wave state [hgs02]. Low-l molecules were seen first [bend09]; trilobites with kilo-debye dipoles in Cs [booth15]; butterflies in Rb [nied16]. First-order <b>model</b> in a hydrogen manifold.</p>
+
+    <h3>Hydrogen in a white-dwarf field</h3>
+    <p>In a field B the Hamiltonian gains a paramagnetic and a diamagnetic term (β = B / 2.35 × 10⁵ T):</p>
+    <div class="sci-eq" data-tex="H = -\tfrac12\nabla^2 - \frac{1}{r} + \frac{\beta}{2}(L_z + 2S_z) + \frac{\beta^2}{8}\rho^2"></div>
+    <p>The diamagnetic term squeezes the cloud across the field into a needle along it. The page minimizes the energy of ψ = exp(−ρ²/4s² − √(ρ²/a² + z²/b²)) on a grid. It reproduces the exact binding energies of Kravchenko et al. to 0.1 % at β = 1 and 2.5 % at β = 1000 [krav96, ruder94]. A <b>variational model</b> of the ground state only. A Rydberg state feels the same squeeze at B ≈ B₀/n³: at n = 50 that is 1.9 T, the quasi-Landau regime [garton69].</p>
+
+    <h3>The magnetic field of the cloud</h3>
+    <p>The probability current of a state and the field it makes are</p>
+    <div class="sci-eq" data-tex="\mathbf j = \frac{\hbar}{m}\,\mathrm{Im}\left(\psi^*\nabla\psi\right) = \frac{\hbar m_\ell}{m\rho}\,|\psi|^2\,\hat{\boldsymbol\varphi},\qquad \mathbf B(\mathbf r) = \frac{\mu_0}{4\pi}\int \frac{q\,\mathbf j(\mathbf r')\times(\mathbf r-\mathbf r')}{|\mathbf r-\mathbf r'|^3}\,d^3r'"></div>
+    <p>For a state with e^{imφ} the current is a nest of coaxial loops. The page puts |ψ|² on a grid of (ρ, z) cells and adds the exact field of each loop (complete elliptic integrals). The orbital moment comes out as μ = −m μ_B for hydrogen, zero for m = 0. The spin layer is the magnetization μ_s|ψ|² with its bound current ∇ × M. On the axis of a circular state the field at the nucleus is close to the loop value B ≈ μ₀μ_B(n − 1)/(2πn⁶a³): about 0.2 T for n = 2, falling as n⁻⁵. For the moving circular packet the page sums Biot–Savart over the weighted points in 3D.</p>
+    <p>The external field controls apply a uniform B (Zeeman shift (m + g_s m_s)μ_B B, Larmor precession of a tilted cloud at eB/2m, 14 GHz per tesla) and a uniform F (the Stark map above).</p>
+
+    <h3>Lifetimes and other readouts</h3>
+    <p>Hydrogen radiative lifetimes are exact sums over all dipole channels (2p: 1.60 ns, 3s: 158 ns). Other species scale as 1/μ; alkalis use hydrogen at n* (a model). Blackbody depopulation at 300 K uses Γ = 4α³kT/3n*² [cooke80, gallagher]. Circular hydrogen at 300 K uses the full model of the circular-Rydberg page [pult26].</p>
+
+    <h3>Sources</h3>
+    <ol id="srcList" class="src"></ol>
+  </div>
+</article>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
