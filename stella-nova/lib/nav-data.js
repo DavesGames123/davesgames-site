@@ -309,6 +309,9 @@ w.SN_NAV = [
     { h: "Astrophysics", p: [
       ["gravitational-imaging", "Gravitational Imaging", "NEW"]
     ] },
+    { h: "Atomic Physics", p: [
+      ["circular-rydberg", "Circular Rydberg Atoms", "NEW"]
+    ] },
     { h: "Machine Learning", p: [
       ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"],
       ["4d-codebench", "4DCodeBench", "NEW"],

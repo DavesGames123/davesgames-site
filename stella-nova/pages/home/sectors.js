@@ -329,6 +329,7 @@ const BLURBS = {
   'lose-the-modifier': 'Turn “very tired” into one strong word.',
   'legged-rl': 'Walking robot policies in MuJoCo, in your browser.',
   'mrna-vaccine': 'The decades of science behind the 2020 mRNA vaccines.',
+  'circular-rydberg': 'Giant circular electron orbits that lived 11 ms at room temperature.',
   'volume-noise': 'Tileable 3D Perlin-Worley noise for clouds, in WGSL.',
   halftone: 'Photos as halftone dots and rosettes, in WGSL.',
   'thread-art': 'A portrait drawn by one thread from peg to peg.',

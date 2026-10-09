@@ -126,7 +126,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-207 registered pages in 5 regions and 19 constellations.
+208 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -284,6 +284,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `origami` | Origami Simulator | Machines > Folding | SIM | Draw a crease pattern and watch it fold. |  | directory only | hook, tier 3, default | no |
 | `lose-the-modifier` | Lose the Modifier | Language > Writing | WORDS | Turn “very tired” into one strong word. |  | shown | hook, tier 4, default | yes |
 | `gravitational-imaging` | Gravitational Imaging | Research > Astrophysics | NEW | A million Suns of dark mass, found by the dent it makes in a lensed arc. |  | shown | no | no |
+| `circular-rydberg` | Circular Rydberg Atoms | Research > Atomic Physics | NEW | Giant circular electron orbits that lived 11 ms at room temperature. |  | shown | hook, tier 3, default | yes |
 | `alphafold` (pages/alphafold-explained) | How AlphaFold Works | Research > Machine Learning | ML | How AlphaFold turns a sequence into a structure. |  | shown | hook, tier 3, default | yes |
 | `4d-codebench` | 4DCodeBench | Research > Machine Learning | NEW | Can coding agents rebuild a moving scene from video? Play the benchmark in your browser. |  | shown | no | yes |
 | `enzyme-design` | De Novo Enzyme Design | Research > Machine Learning | NEW | Design an enzyme from scratch: hold the chemistry still and grow a protein around it. |  | shown | no | yes |
