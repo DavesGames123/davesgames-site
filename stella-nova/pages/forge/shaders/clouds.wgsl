@@ -14,7 +14,7 @@
 
 struct CloudU {
   a: vec4f,                // hours, cover, freq, swirl
-  b: vec4f,                // cirrus, deck on, cyclone count, 0
+  b: vec4f,                // cirrus, deck on, cyclone count, thr0 (clouds.js calibrate)
   s: vec4i,                // deck seed, cirrus seed
   pad: vec4f,
   cyc: array<vec4f, 24>,   // per cyclone: (cx, cy, cz, r), (twist, front, sign, intensity)
@@ -135,7 +135,7 @@ fn deckAt(p: vec3f, lat: f32) -> f32 {
   }
   n = n / (sqrt(nrm) * 1.1);
   let band = 0.12 * cos(6.0 * lat) + 0.08 * cos(2.0 * lat);
-  let thr = 0.35 - U.a.y * 0.9 - band - 0.45 * min(storm, 1.2) + 0.6 * eye;
+  let thr = U.b.w - band - 0.45 * min(storm, 1.2) + 0.6 * eye;
   let c0 = smoothstep(thr - 0.02, thr + 0.16, n);
   return clamp(c0 * (0.7 + 0.3 * smoothstep(thr + 0.1, thr + 0.5, n)), 0.0, 1.0);
 }

@@ -340,6 +340,21 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { N.texelDir(x, y, 64, 32, p); C.cloudField(su, p, 0, cyc, o); worst = Math.max(worst, Math.abs(M.cloud[(y * 64 + x) * 4] - Math.round(o.deck * 255))); }
   ok('clouds: the exported cloud map is the field at hour 0', worst <= 1, `max byte diff ${worst}`);
   ok('clouds: airless and cloudless worlds get no cirrus', C.cloudSetup(PR.fromPreset('moon')).cirrus === 0);
+  // calibration: cover c gives a visible fraction (deck > 0.1 or cirrus
+  // opacity > 0.1) of about c, at hour 0 and two days later
+  const vis = [];
+  let calOk = true;
+  for (const id of ['earth', 'desert', 'ocean', 'ice']) for (const c of [0.06, 0.3, 0.6]) {
+    const sv = C.cloudSetup(PR.merge(PR.fromPreset(id, 5), { clouds: { cover: c } }));
+    const v0 = C.visibleFraction(sv, 0, 3000), v48 = C.visibleFraction(sv, 48, 3000);
+    if (Math.abs(v0 - c) > 0.02 || Math.abs(v48 - c) > 0.1) calOk = false;
+    if (id === 'earth' || id === 'desert') vis.push(`${id} ${c}: ${v0.toFixed(3)}/${v48.toFixed(3)}`);
+  }
+  ok('clouds: cover 0.06/0.3/0.6 is the visible fraction (0 h within 0.02, 48 h within 0.1)', calOk, vis.join(', '));
+  const dv = C.visibleFraction(C.cloudSetup(PR.fromPreset('desert')));
+  ok('clouds: a desert world at cover 0.06 is about 6 % clouded, cirrus thinned', Math.abs(dv - 0.06) < 0.02 && C.cloudSetup(PR.fromPreset('desert')).cirrus < 0.1, `${(100 * dv).toFixed(1)} %`);
+  const ev = [1, 2, 3, 4, 5].map(s => C.visibleFraction(C.cloudSetup(PR.fromPreset('earth', s))));
+  ok('clouds: Earth-like members stay 40-65 % clouded (as before the calibration)', ev.every(v => v > 0.4 && v < 0.65), ev.map(v => v.toFixed(2)).join(' '));
 }
 
 // ── pool failures (pool.js) ─────────────────────────────────────────────────
