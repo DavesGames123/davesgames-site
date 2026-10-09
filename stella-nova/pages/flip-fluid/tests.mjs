@@ -12,6 +12,11 @@
 //    determinism  the same seed gives the same particles after 120 frames
 //    hash         encodeHash / decodeHash round-trip of random states
 //    preset       the default 'harbour' scene builds and runs
+//    bodies       still pool: a crate of density 0.5 floats half
+//                 submerged, the wet fraction follows the density, a
+//                 rock sinks, floating bodies raise the level by their
+//                 displaced area; the sweep also checks every body
+//                 stays finite and inside the tank
 //    import       main.js links in node (a SyntaxError is a bug; a
 //                 ReferenceError on a browser global is expected)
 //
@@ -21,6 +26,7 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import * as SC from './scenes.js';
+import * as B from './bodies.js';
 
 const FRAMES = 600;
 const ENV = { budget: 2400, minRes: 30, portrait: false };
@@ -34,8 +40,8 @@ function randomState(i) {
 export function runSeed(i, frames = FRAMES) {
   const st = randomState(i);
   const spec = SC.build(st, ENV);
-  const sim = SC.createSim(spec);
-  const res = { i, kind: spec.waterKind, bad: [] };
+  const sim = SC.createSim(spec, B.makeBodies);
+  const res = { i, kind: spec.waterKind, bad: [], bodies: spec.objects.length };
   let minRatio = 9, maxRatio = 0;
   for (let f = 0; f < frames; f++) {
     sim.step();
@@ -48,6 +54,8 @@ export function runSeed(i, frames = FRAMES) {
         const ratio = s.area / s.particleArea;
         minRatio = Math.min(minRatio, ratio); maxRatio = Math.max(maxRatio, ratio);
       }
+      for (const b of sim.solids) if (!b.kinematic && !(Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.a))) res.bad.push(`frame ${f}: body ${b.kind} not finite`);
+      for (const b of sim.solids) if (!b.kinematic && (b.x < 0 || b.x > spec.W || b.y < 0 || b.y > spec.H)) res.bad.push(`frame ${f}: body ${b.kind} left the tank`);
       if (res.bad.length) break;
     }
   }
@@ -117,11 +125,13 @@ async function main() {
   // determinism
   {
     const st = SC.defaultState(); st.seed = 'det42';
-    const run = () => { const sim = SC.createSim(SC.build(st, ENV)); for (let f = 0; f < 120; f++) sim.step(); return sim; };
+    const run = () => { const sim = SC.createSim(SC.build(st, ENV), B.makeBodies); for (let f = 0; f < 120; f++) sim.step(); return sim; };
     const a = run(), b = run();
     let same = a.numParticles === b.numParticles;
     for (let i = 0; same && i < 2 * a.numParticles; i++) if (a.particlePos[i] !== b.particlePos[i]) same = false;
-    check('same seed, same particles after 120 frames', same, `${a.numParticles} particles`);
+    const ba = a.solids.filter(s => !s.kinematic), bb = b.solids.filter(s => !s.kinematic);
+    for (let k = 0; same && k < ba.length; k++) if (ba[k].x !== bb[k].x || ba[k].y !== bb[k].y || ba[k].a !== bb[k].a) same = false;
+    check('same seed, same particles and bodies after 120 frames', same, `${a.numParticles} particles, ${ba.length} bodies`);
   }
 
   // default preset
@@ -131,6 +141,44 @@ async function main() {
     for (let f = 0; f < 200; f++) sim.step();
     const s = sim.stats();
     check('default harbour scene runs (gate lifts, water moves)', !s.nan && !s.out && spec.gate && s.maxSpeed > 0.5, `${s.n} particles, max speed ${s.maxSpeed.toFixed(2)} m/s`);
+  }
+
+  // bodies in still water: buoyancy, sinking, displacement
+  {
+    const pool = (objects, frames = 600) => {
+      const st = SC.defaultState(); st.seed = 'still-1';
+      const spec = SC.build(st, { budget: 6000, minRes: 30 });
+      const W = spec.W, H = spec.H;
+      spec.water = [{ kind: 'rect', x0: 0, y0: 0, x1: W, y1: 0.4 * H }];
+      spec.statics = []; spec.gate = null; spec.paddle = null; spec.emitters = []; spec.drains = []; spec.wind = 0;
+      spec.gx = 0; spec.gy = -9.81; spec.damping = 0.05;
+      spec.objects = objects(W, H);
+      const sim = SC.createSim(spec, B.makeBodies);
+      const bodies = sim.solids.filter(s => !s.kinematic);
+      const wet = bodies.map(() => 0);
+      for (let f = 0; f < frames; f++) { sim.step(); if (f >= frames - 150) bodies.forEach((b, k) => { wet[k] += b.wet / 150; }); }
+      return { sim, bodies, wet, W, H };
+    };
+    const level = (sim) => {
+      // mean top particle height in two side columns (away from the body)
+      const P = sim.particlePos, h = sim.h, xs = [0.08, 0.92].map(f => f * sim.fNumX * h), top = [0, 0];
+      for (let i = 0; i < sim.numParticles; i++) for (let k = 0; k < 2; k++) if (Math.abs(P[2 * i] - xs[k]) < 2 * h) top[k] = Math.max(top[k], P[2 * i + 1]);
+      return (top[0] + top[1]) / 2;
+    };
+    const one = (kind, density, size = 1) => (W, H) => [{ kind, x: W / 2, y: 0.4 * H + 0.15, a: 0, size, density, colour: 0, look: 1 }];
+    const f5 = pool(one('box', 0.5));
+    check('a crate of density 0.5 settles about half submerged', Math.abs(f5.wet[0] - 0.5) < 0.08, `wet fraction ${f5.wet[0].toFixed(3)}`);
+    const f25 = pool(one('box', 0.25)), f8 = pool(one('box', 0.8));
+    check('the wet fraction follows the density (0.25, 0.8)', Math.abs(f25.wet[0] - 0.25) < 0.08 && Math.abs(f8.wet[0] - 0.8) < 0.08, `${f25.wet[0].toFixed(3)}, ${f8.wet[0].toFixed(3)}`);
+    const rk = pool(one('rock', 2.6));
+    const rb = rk.bodies[0];
+    check('a rock (density 2.6) sinks to the floor', rb.y < 0.12 * rk.H && Math.abs(rb.vy) < 0.2, `y ${rb.y.toFixed(3)} m of H ${rk.H.toFixed(2)} m`);
+    // displacement: a large neutral-density raft of planks raises the level
+    const none = pool(() => []), big = pool((W, H) => [0, 1, 2].map(k => ({ kind: 'box', x: (0.3 + 0.2 * k) * W, y: 0.4 * H + 0.2, a: 0, size: 1.6, density: 0.8, colour: 0, look: 1 })));
+    const rise = level(big.sim) - level(none.sim);
+    const displaced = big.bodies.reduce((s, b, k) => s + b.area * big.wet[k], 0);
+    const expect = displaced / (big.W - 2 * big.sim.h);
+    check('floating bodies raise the water level by their displaced area', Math.abs(rise - expect) < Math.max(0.35 * expect, 1.2 * big.sim.particleRadius), `rise ${(rise * 100).toFixed(2)} cm, expected ${(expect * 100).toFixed(2)} cm`);
   }
 
   // sweep

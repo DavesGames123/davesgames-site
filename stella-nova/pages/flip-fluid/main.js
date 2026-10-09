@@ -44,6 +44,7 @@ import { build, createSim, CATS, CAT_NAMES, encodeHash, decodeHash, rollAll, rol
 import { createRenderer, fitView } from './render.js';
 import { Solid } from './flip.js';
 import { disc } from './shapes.js';
+import { makeBodies, KINDS } from './bodies.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -71,7 +72,7 @@ function loadState(state, keepBudget) {
   app.state = state;
   if (!keepBudget) { app.budgetScale = Math.min(app.budgetScale, 1); app.slowRebuilds = 0; }
   app.spec = build(state, { portrait: app.portrait, budget: deviceBudget() });
-  app.sim = createSim(app.spec);
+  app.sim = createSim(app.spec, makeBodies);
   app.stir = null;
   app.frames = 0; app.stepMs = 0;
   fitTank();
@@ -344,6 +345,13 @@ function frame(ts) {
 
 // ---- start ------------------------------------------------------------------------------
 app.cats = CATS.slice();
+if (!app.cats.includes('objects')) app.cats.push('objects');
+app.objectSummary = () => {
+  const n = {};
+  for (const o of app.spec.objects) n[o.kind] = (n[o.kind] || 0) + 1;
+  const parts = Object.entries(n).map(([k, c]) => `${c} ${(KINDS[k] ? KINDS[k].name : k).toLowerCase()}${c > 1 ? 's' : ''}`);
+  return parts.length ? parts.join(', ') : 'none';
+};
 app.loadState = loadState; app.resize = resize; app.fitTank = fitTank; app.refreshUI = refreshUI;
 app.renderer = renderer; app.ctx = ctx; app.canvas = canvas; app.newSeed = newSeed;
 buildCats();
