@@ -18,25 +18,36 @@
    https://github.com/matthias-research/pages (MIT License (notice kept above)).
    Video tutorial: https://youtu.be/Noo5sfGGWe0
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   The upstream demo is split into the page with no change to its code:
+   style.css holds its <style> block, main.js its inline script, one
+   shared global scope. CDN libraries load from vendor/. Its buttons and
+   inputs stay in the hidden block #tmp-ui, so the upstream script still
+   finds them; the sim kit GUI replaces them on screen.
+
+   OUR ADDITIONS (davesgames.io, not upstream):
+     sim.js       the site layer: credit, sim kit GUI, look, actions
+     scene.js     controls, stability guard, scene build (no DOM)
+     shots.js     the screensaver shots (no DOM)
+     tests.mjs    node tests (no browser)
+   Shared: ../soft-bodies/stage3d.js (look, obstacles, camera rig, frame
+           loop), ../soft-bodies/page3d.js (sim kit controller, saver
+           director), ../../widgets/sim-kit/ (GUI, randomizer, saver),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scene.js   every control
+     grep -n 'export function makeShots'   shots.js   the saver shots
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A detailed dragon mesh skinned to a coarse tetrahedral soft body: high-resolution visuals on a cheap simulation. By Matthias Müller, Ten Minute Physics.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="tmp-ui" hidden>
         <h1>Soft Body Simulation</h1> 
 		<button id = "buttonRun" onclick="run()" class="button">Run</button>
 		<button onclick="restart()" class="button">Restart</button>
@@ -50,12 +61,13 @@
 		<input type = "range" min = "0" max = "10" value = "0" id = "complianceSlider" class = "slider"> 
 
 		<br><br>		
-        <div id="container"></div>
+        </div>
+<div id="container"></div>
 
 	
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
 <script src="main.js"></script>
-<script src="saver.js"></script>
+<script type="module" src="sim.js"></script>
 </body>
 </html>
