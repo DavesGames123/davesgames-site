@@ -11,53 +11,51 @@
   ═══════════════════════════════════════════════════════════════════════════
    JOINT SIMULATION  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Joints made simple with extended position based dynamics: hinges, ball joints, a steering mechanism and pendulums.
+   XPBD joints: hinges, motors, servos, ball, prismatic and cylinder
+   joints, in the three upstream scenes and five made ones. The page
+   starts a random scene on load and keeps it running. Drag a body to
+   pull it; the joystick drives the steering scene.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #25.
-   Upstream file: tenMinutePhysics/25-joints.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/YVaQxeWGlJA
+   CREDIT. The upstream demo is Ten Minute Physics #25 by Matthias Müller:
+   tenMinutePhysics/25-joints.html in
+   https://github.com/matthias-research/pages (MIT License; the notice is
+   kept at the top of engine.js). Video: https://youtu.be/YVaQxeWGlJA. The
+   scene files basicJoints.json, steering.json and pendulum.json are the
+   upstream files, unchanged. The credit bar (kit.js) names the author.
 
-   The upstream demo is split into the page pad with no change to its
-   code: style.css holds its <style> blocks, main.js (and script-N.js)
-   its inline scripts in order, one shared global scope. CDN libraries
-   load from vendor/. The site adds only these files:
-     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
-     saver.js                                  TMP.page credit + snSaver shots
+   OUR ADDITIONS (davesgames.io, not upstream): the made scenes, the
+   autopilot drive, the look, the GUI and the saver.
+
+   FILES
+     engine.js   the upstream joint engine (site changes marked "site:")
+     scenes.js   made scenes in the importer format, schema, rules
+     app.js      page controller: kit, stage, load, colour, drive, loop
+     saver.js    screensaver shots (sim kit director)
+     main.js     credit record + start()
+     tests.mjs   node tests (no browser)
+   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, 3D stage),
+           ../../widgets/ten-minute-physics/kit.js (credit bar).
 
    GREP MAP
-     grep -n 'TMP.page'    saver.js   the credit record
-     grep -n 'shots:'      saver.js   the screensaver shot list
-     grep -n 'fit('        saver.js   how the sim is resized for the saver
+     grep -n 'export function makeSchema'  scenes.js  controls and random rules
+     grep -n 'export const SHOTS'          saver.js   the screensaver shots
+     grep -n 'export class Joint'          engine.js  the upstream joint
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Joints made simple with extended position based dynamics: hinges, ball joints, a steering mechanism and pendulums. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="XPBD joints in 3D: hinges, motors, servos, ball and prismatic joints, a steerable car, a robot arm, a windmill and cart-poles. After Matthias Müller's Ten Minute Physics #25.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-        <h1>Joint Simulation</h1> 
-		<button id = "startButton" onclick="onStart()" class="button">Start</button>
-		<button id = "startRestart" onclick="onRestart()" class="button">Restart</button>
-		<button id = "toggleView" onclick="onToggleView()" class="button">Toggle View</button>
-		<select id="sceneSelect" class="styled-select" onchange="onSceneChange()">
-			<option value="0">Basic Joints</option>
-			<option value="1">Steering</option>
-			<option value="2">Pendulums</option>
-		</select>
-
-		<br><br>		
-        <div id="container"></div>
-        <div id="touchControl">
-            <div id="outerCircle"></div>
-            <div id="innerCircle"></div>
-        </div>
-
-	
+<div id="touchControl" aria-label="Joystick: up and down drive, left and right steer">
+  <div id="outerCircle"></div>
+  <div id="innerCircle"></div>
+</div>
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
-<script src="main.js"></script>
-<script src="saver.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>
