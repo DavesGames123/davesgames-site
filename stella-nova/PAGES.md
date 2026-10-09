@@ -174,7 +174,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `qft-store` | Quantum Decoding | Quantum > Quantum Computing | DATA | Write bytes into qubit rotation angles and read them back. |  | shown | generic, tier 5 | yes |
 | `frqi` (pages/frqi-quantum-image-lab) | Quantum Image Encoding | Quantum > Quantum Computing | IMG | Store an image in qubits with FRQI, layer by layer. |  | shown | hook, tier 3, default | yes |
 | `particle-collider` | Particle Collider | Quantum > Particle Physics | SIM | Collide two particles and trace the products. |  | shown | hook, tier 4, default | yes |
-| `periodic-table` | Periodic Table | Chemistry > The Elements | NEW | Eleven shapes of the table, and the live atom of every element. |  | shown | hook, tier 4, default | no |
+| `periodic-table` | Periodic Table | Chemistry > The Elements | NEW | Eleven shapes of the table, and the live atom of every element. |  | shown | hook, tier 4, default | yes |
 | `molecular-bond` | Molecular Bond | Chemistry > Molecules & Reactions | SIM | Watch two atoms share an electron. |  | shown | hook, tier 3, default | yes |
 | `molecules` | Molecule Explorer | Chemistry > Molecules & Reactions | 2D/3D | Over a thousand molecules, skeletal formula beside 3D. |  | shown | hook, tier 3, default | yes |
 | `reactions` | Reaction Explorer | Chemistry > Molecules & Reactions | NEW | Watch molecules change in 3D through famous syntheses. |  | shown | hook, tier 3, default | yes |
