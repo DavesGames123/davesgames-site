@@ -10,11 +10,18 @@
 //    CHIPS           pages/home/index.html  one dock chip per sector
 //    DIRECTORY       pages/home/index.html  every page as a real anchor,
 //                                           one column per region
-//  It also checks the registry:
+//    PAGES           stella-nova/PAGES.md   the page index: one row per
+//                                           page, with place, badge,
+//                                           blurb, credit, saver, thumb
+//  It also checks the registry (errors, exit 1):
 //    - no key is registered twice
 //    - each registered page has pages/<dir>/index.html
 //    - each folder in pages/ is registered, or is in UNLISTED
-//    - each SN_XR key is a registered page
+//    - each SN_XR, SN_CRAFT and SN_HIDDEN key is valid
+//  and the home data (warnings only, exit code unchanged):
+//    - each registered page has a BLURBS line in pages/home/sectors.js
+//    - each page the home shows has thumbs/<key>.jpg, and list.js names
+//      every thumbnail file (rebuild list.js after you add a JPEG)
 //
 //  Usage (from the repo root):
 //    node tools/nav-sync.js           write the blocks, then check
@@ -23,14 +30,18 @@
 //
 //  The directory leaves out the EXCLUDED pages of pages/home/sectors.js
 //  (ports of code we did not write). The tool loads sectors.js to read
-//  that set, so the list stays in one place.
+//  that set, BLURBS and CREDITS, so each list stays in one place. It
+//  loads lib/screensaver-catalog.js for the saver column of PAGES.md.
 //
 //  grep -n targets
 //    unlisted folders ..... "const UNLISTED"
+//    pages with no thumb .. "const NO_THUMB"
 //    colour block ......... "function coloursBlock"
 //    chip block ........... "function chipsBlock"
 //    directory block ...... "function directoryBlock"
+//    page index block ..... "function pagesBlock"
 //    registry checks ...... "function checkRegistry"
+//    blurb/thumb warnings . "function checkHome"
 // ============================================================================
 'use strict';
 const fs = require('fs');
@@ -55,16 +66,35 @@ const UNLISTED = {
   'sweep-and-prune': 'Ten Minute Physics port held back: the upstream file has no licence text, so the author keeps all rights (checked 2026-10-09); not committed',
 };
 
+// Shown pages that keep the generated letter plate on purpose, and why.
+const NO_THUMB = {
+  home: 'the home card uses media/game-6.jpg',
+  translate: 'a text tool; a screenshot shows nothing of use',
+  'flight-board': 'a capture shows the feed error until the proxy is live',
+  'gravitational-imaging': 'the figures are mostly black at thumbnail size',
+  photocraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  lightcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  vectorcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  designcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  filmcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  effectcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+  printcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
+};
+// A JPEG for one of these keys still shows on the home; the entry only
+// stops the warning.
+
 // Load nav-data.js and sectors.js in one sandbox, as the home page does.
 const ctx = { console };
 ctx.window = ctx;
 vm.createContext(ctx);
-for (const f of [path.join(SN, 'lib', 'nav-data.js'), path.join(HOME, 'sectors.js')]) {
+for (const f of [path.join(HOME, 'thumbs', 'list.js'), path.join(SN, 'lib', 'nav-data.js'), path.join(HOME, 'sectors.js'), path.join(SN, 'lib', 'screensaver-catalog.js')]) {
   vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: f });
 }
 const NAV = ctx.SN_NAV;
 const PAGES = ctx.snPages();
-const { EXCLUDED, SECTORS } = ctx.Observatory;
+const { EXCLUDED, DIRECTORY_ONLY, SECTORS, BLURBS, CREDITS } = ctx.Observatory;
+const THUMB_KEYS = new Set(ctx.Observatory.THUMB_KEYS || []);
+const SAVER = (ctx.SN_SAVER_CATALOG || { pages: {} }).pages;
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -111,6 +141,38 @@ function directoryBlock() {
   return out.join('\n');
 }
 
+// The page index of stella-nova/PAGES.md: one table per region, one row
+// per page, in nav order. Then the hidden pages and the UNLISTED folders.
+// Thumb is "yes" when thumbs/list.js names the key (what the home shows).
+function pagesBlock() {
+  const md = s => String(s == null ? '' : s).replace(/\|/g, '\\|');
+  const home = key => DIRECTORY_ONLY.has(key) ? 'directory only' : EXCLUDED.has(key) ? 'search only' : 'shown';
+  const saver = key => {
+    const c = SAVER[key];
+    if (!c || c.tier === 'excluded') return 'no';
+    return (c.hook ? 'hook' : 'generic') + ', tier ' + c.tier + (c.default ? ', default' : '');
+  };
+  const out = [];
+  out.push(`${PAGES.length} registered pages in ${NAV.length} regions and ${SECTORS.length} constellations.`);
+  out.push(`Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).`);
+  out.push(`Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.`);
+  NAV.forEach(r => {
+    out.push('', `### ${md(r.label)}`, '');
+    out.push('| Key | Title | Constellation > group | Badge | Blurb | Credit | Home | Saver | Thumb |');
+    out.push('|---|---|---|---|---|---|---|---|---|');
+    r.constellations.forEach(c => c.groups.forEach(g => g.p.forEach(([key, label, badge, dir]) => {
+      const where = md(c.label) + (g.h ? ' > ' + md(g.h) : '');
+      const k = '`' + key + '`' + (dir && dir !== key ? ' (pages/' + dir + ')' : '');
+      out.push(`| ${k} | ${md(label)} | ${where} | ${md(badge || '')} | ${md(BLURBS[key] || '')} | ${md(CREDITS[key] || '')} | ${home(key)} | ${saver(key)} | ${THUMB_KEYS.has(key) ? 'yes' : 'no'} |`);
+    })));
+  });
+  out.push('', '### Hidden pages', '', 'Open at `/stella-nova/#<key>`. Not in the nav, home, search or saver (SN_HIDDEN in lib/nav-data.js).', '');
+  (ctx.SN_HIDDEN || []).forEach(([k, label, dir]) => out.push(`- \`${k}\` ${md(label)} (pages/${dir || k})`));
+  out.push('', '### Folders not in the nav', '', 'UNLISTED in tools/nav-sync.js. A folder here is not a page of the site.', '');
+  Object.entries(UNLISTED).forEach(([k, why]) => out.push(`- \`pages/${k}\`: ${md(why)}`));
+  return out.join('\n');
+}
+
 // Replace the text between the BEGIN and END marker lines. Returns
 // [newText, changed].
 function splice(text, begin, end, body, file) {
@@ -143,10 +205,28 @@ function checkRegistry() {
   return errs;
 }
 
+// Warnings, not errors: a missing blurb or thumbnail does not break a
+// page. The thumbnail agents and page authors fill them.
+function checkHome() {
+  const warns = [];
+  const noBlurb = PAGES.filter(p => !BLURBS[p.key]).map(p => p.key);
+  if (noBlurb.length) warns.push(`${noBlurb.length} page(s) with no BLURBS line in pages/home/sectors.js: ${noBlurb.join(', ')}`);
+  const shown = PAGES.filter(p => !EXCLUDED.has(p.key) && !DIRECTORY_ONLY.has(p.key));
+  const noFile = shown.filter(p => !NO_THUMB[p.key] && !fs.existsSync(path.join(HOME, 'thumbs', p.key + '.jpg'))).map(p => p.key);
+  if (noFile.length) warns.push(`${noFile.length} shown page(s) with no thumbs/<key>.jpg: ${noFile.join(', ')}`);
+  const files = fs.readdirSync(path.join(HOME, 'thumbs')).filter(n => n.endsWith('.jpg')).map(n => n.slice(0, -4));
+  const notListed = files.filter(k => !THUMB_KEYS.has(k));
+  if (notListed.length) warns.push(`${notListed.length} thumbnail(s) not in thumbs/list.js (rebuild it): ${notListed.join(', ')}`);
+  const gone = [...THUMB_KEYS].filter(k => !files.includes(k));
+  if (gone.length) warns.push(`thumbs/list.js names missing file(s): ${gone.join(', ')}`);
+  return warns;
+}
+
 const jobs = [
   [path.join(HOME, 'style.css'), '/* SECTOR-COLOURS:BEGIN', '/* SECTOR-COLOURS:END', coloursBlock()],
   [path.join(HOME, 'index.html'), '<!-- CHIPS:BEGIN', '<!-- CHIPS:END', chipsBlock()],
   [path.join(HOME, 'index.html'), '<!-- DIRECTORY:BEGIN', '<!-- DIRECTORY:END', directoryBlock()],
+  [path.join(SN, 'PAGES.md'), '<!-- PAGES:BEGIN', '<!-- PAGES:END', pagesBlock()],
 ];
 let stale = 0;
 const texts = {};
@@ -162,5 +242,6 @@ if (!CHECK) for (const f in texts) fs.writeFileSync(f, texts[f]);
 
 const errs = checkRegistry();
 errs.forEach(e => console.log('error: ' + e));
+checkHome().forEach(w => console.log('warning: ' + w));
 console.log(`registry: ${PAGES.length} pages, ${NAV.length} regions, ${SECTORS.length} constellations, ${errs.length} errors`);
 process.exit(errs.length || (CHECK && stale) ? 1 : 0);

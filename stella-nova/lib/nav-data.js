@@ -5,8 +5,9 @@
 //  it:
 //    index.html (shell)   builds the sidebar, PAGES (key -> path) and LABELS
 //    pages/home/          builds the star chart, sector cards, search, chips
-//    tools/nav-sync.js    writes the home directory and the sector colours,
-//                         and checks that every page directory is registered
+//    tools/nav-sync.js    writes the home directory, the sector colours and
+//                         the page table of stella-nova/PAGES.md, and
+//                         checks that every page directory is registered
 //
 //  Shape: region -> constellation -> group -> page.
 //    region         a heading in the sidebar, a band of sky on the home chart
@@ -21,9 +22,11 @@
 //
 //  To add a page: add one row to a group, then run
 //    node tools/nav-sync.js
+//  The full steps (head scripts, blurb, thumbnail, saver, tests, licence
+//  rules for ports) are in stella-nova/PAGES.md, "How to add a page".
 //
 //  grep -n targets
-//    region table ......... "window.SN_NAV ="
+//    region table ......... "w.SN_NAV ="
 //    one region ........... "{ id: \"science\""
 //    flat page list ....... "function snPages"
 //    XR pages ............. "w.SN_XR ="
