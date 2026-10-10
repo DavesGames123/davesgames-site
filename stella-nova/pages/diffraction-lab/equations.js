@@ -51,6 +51,7 @@ const TRANS = {
   'lens-ap': String.raw`t = \mathrm{circ}\!\left(\frac{r}{R}\right)\, e^{-i\pi r^2/(\lambda f)}`,
   fzp: String.raw`t = \mathrm{circ}\!\left(\frac{r}{R}\right)\, e^{-i\,2\pi\left(\sqrt{f^2 + r^2} - f\right)/\lambda}`,
   text: String.raw`t(x,y) = \text{glyph mask of the text}\ \in \{0, 1\}`,
+  shape: String.raw`t(x,y) = \begin{cases} 1 & (x/R,\ y/R) \in \text{shape} \\ 0 & \text{otherwise} \end{cases}`,
   image: String.raw`t(x,y) = \text{luminance of the image}\ \in [0, 1]`,
 };
 

@@ -63,6 +63,8 @@
 //      events .............. "EVENTS"                element/source/view wiring
 //      export .............. "EXPORT SYSTEM"         PNG still and WebM video
 //      presets ............. "const PR="             named element setups
+//      saver shapes ........ "const SHAPES="         hidden 'shape' masks
+//      saver deck .......... "function saverDeck"    shots, words, z sweep
 //      screensaver ......... "window.snSaver"        shell saver hook
 // ============================================================================
 
@@ -206,6 +208,45 @@ function onWorker(wk,m){
 /* ═══ RASTER HELPER (flips Y so text/images appear right-side up) ═══ */
 function rasterToField(imgData,side,N){const t=czeros(N);for(let iy=0;iy<side;iy++)for(let ix=0;ix<side;ix++){const si=iy*side+ix,ci=(side-1-iy)*side+ix;t.re[si]=imgData.data[ci*4]/255}return t}
 
+/* ═══ SHAPES ═══ */
+// Analytic masks for the hidden 'shape' element (the screensaver uses it).
+// f(u,v) is true inside the shape. u and v are x/R and y/R, v points up.
+// R is the shape radius in mm. nf is the Fresnel number a²/(λz) at the end of
+// the sweep, with a = R (default 0.5). talbot (a pitch in R units) and lam
+// select a linear sweep through tk Talbot lengths 2p²/λ in one wavelength.
+// Each nf and tk is the smallest end distance whose wrap-around error stays
+// at the level of the old presets (a 256² field against a 512² field).
+function polyIn(u,v,n,rot){const r=Math.hypot(u,v),s=TAU/n,a=((Math.atan2(v,u)-rot)%s+s)%s-s/2;return r*Math.cos(a)<=Math.cos(PI/n)}
+function angOf(u,v){return(Math.atan2(v,u)+TAU)%TAU}
+const BOLT=[[.15,1],[-.55,-.1],[-.05,-.1],[-.25,-1],[.55,.15],[.05,.15]];
+const PINS=(function(){let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647,o=[];while(o.length<36){const u=r()*2-1,v=r()*2-1;if(u*u+v*v<.9&&o.every(q=>Math.hypot(q[0]-u,q[1]-v)>.2))o.push([u,v])}return o})();
+const SHAPES=[
+  {name:'Triangle',nf:.85,R:.4,f:(u,v)=>polyIn(u,v,3,PI/2)},
+  {name:'Square',R:.35,f:(u,v)=>polyIn(u,v,4,PI/4)},
+  {name:'Pentagon',nf:.6,R:.38,f:(u,v)=>polyIn(u,v,5,PI/2)},
+  {name:'Octagon',R:.36,f:(u,v)=>polyIn(u,v,8,PI/8)},
+  {name:'Diamond',nf:.85,R:.42,f:(u,v)=>Math.abs(u)/.62+Math.abs(v)<=1},
+  {name:'Ellipse',nf:.7,R:.42,f:(u,v)=>u*u+v*v/.3<=1},
+  {name:'Crescent',nf:.85,R:.4,f:(u,v)=>u*u+v*v<=1&&(u-.45)**2+(v-.15)**2>.64},
+  {name:'Smile',nf:.7,R:.42,f:(u,v)=>{if(u*u+v*v>1)return false;if((Math.abs(u)-.35)**2+(v-.3)**2<.0225)return false;const m=Math.hypot(u,v+.05);return!(m>.42&&m<.6&&v<-.18)}},
+  {name:'Keyhole',nf:1,R:.42,f:(u,v)=>u*u+(v-.35)**2<=.42**2||(v<=.35&&v>=-.85&&Math.abs(u)<=.12+.15*(.35-v))},
+  {name:'Arrow',nf:1.2,R:.42,f:(u,v)=>(Math.abs(v)<.18&&u>=-1&&u<=.2)||(u>=.2&&u<=1&&Math.abs(v)<.75*(1-u))},
+  {name:'Lightning bolt',nf:1.5,R:.42,f:(u,v)=>inPoly(u,v,BOLT)},
+  {name:'Gear',nf:.85,R:.4,f:(u,v)=>{const r=Math.hypot(u,v);return r>=.25&&r<=(Math.cos(10*angOf(u,v))>0?.98:.78)}},
+  {name:'Flower',nf:.85,R:.42,f:(u,v)=>Math.hypot(u,v)<=.4+.6*Math.abs(Math.cos(2.5*angOf(u,v)))},
+  {name:'Spiral',nf:4,R:.42,f:(u,v)=>{const r=Math.hypot(u,v),q=r/.25-angOf(u,v)/TAU;return r<=1&&r>.04&&(q%1+1)%1<.5}},
+  {name:'Wheel',nf:2.5,R:.42,f:(u,v)=>{const r=Math.hypot(u,v);if(r>1)return false;if(r>=.82||r<=.18)return true;for(let k=0;k<3;k++){const a=k*PI/3;if(Math.abs(u*Math.sin(a)-v*Math.cos(a))<.06)return true}return false}},
+  {name:'Target',nf:2.5,R:.42,f:(u,v)=>{const r=Math.hypot(u,v);return r<=.2||(r>=.4&&r<=.6)||(r>=.8&&r<=1)}},
+  {name:'Sun',nf:2,R:.42,f:(u,v)=>{const r=Math.hypot(u,v);if(r<=.5)return true;if(r<.62||r>1)return false;const s=TAU/12,a=Math.abs(((angOf(u,v)+s/2)%s)-s/2);return a*r<.075*(1-r)/.38}},
+  {name:'House',nf:.7,R:.42,f:(u,v)=>{if(Math.abs(u)<.14&&v<-.35&&v>=-.85)return false;return(Math.abs(u)<=.62&&v<=.1&&v>=-.85)||(v>.1&&v<.9&&Math.abs(u)<.8*(.9-v)/.8)}},
+  {name:'Atom',nf:4,R:.42,f:(u,v)=>{if(u*u+v*v<.02)return true;for(let k=0;k<3;k++){const a=k*PI/3,x=u*Math.cos(a)+v*Math.sin(a),y=-u*Math.sin(a)+v*Math.cos(a),e=Math.hypot(x,y/.32);if(Math.abs(e-.92)<.07)return true}return false}},
+  {name:'Ring of holes',nf:2.5,R:.42,f:(u,v)=>{const r=Math.hypot(u,v),s=TAU/12,a=((angOf(u,v)+s/2)%s)-s/2;return Math.hypot(r*Math.cos(a)-.85,r*Math.sin(a))<.1}},
+  {name:'Scattered pinholes',nf:6,R:.45,f:(u,v)=>PINS.some(q=>(u-q[0])**2+(v-q[1])**2<.0036)},
+  {name:'Five slits',nf:3,R:.42,f:(u,v)=>Math.abs(v)<=.8&&Math.abs(u)<=.66&&Math.abs(((u+.15)%.3+.3)%.3-.15)<.03},
+  {name:'Square mesh',R:.5,talbot:.25,tk:1.5,lam:633,f:(u,v)=>Math.abs(u)<=1&&Math.abs(v)<=1&&(((u+.125)%.25+.25)%.25)<.14&&(((v+.125)%.25+.25)%.25)<.14},
+  {name:'Pinhole lattice',R:.3,talbot:.45,tk:1,lam:532,f:(u,v)=>{const i=Math.round(u/.45),j=Math.round(v/.45);return Math.abs(i)<=2&&Math.abs(j)<=2&&(u-.45*i)**2+(v-.45*j)**2<.0064}},
+];
+
 // The element catalog. Each entry is an aperture or optic: its t(xx,yy,l,N,p)
 // returns the complex transmittance mask over the sampled grid, params drive its
 // sliders, wlDep marks masks that depend on wavelength (lens, zone plate, phase
@@ -227,12 +268,13 @@ const EL={
   'lens-ap':{name:'Lens',wlDep:true,params:[{id:'f',label:'f',min:1,max:1000,value:50,step:1},{id:'radius',label:'R',min:.05,max:5,value:.4,step:.01}],t(xx,yy,l,N,p){const f=p.f*mm,a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];if(r2<a*a){const ph=-PI/(l*f)*r2;t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
   fzp:{name:'Zone plate',wlDep:true,params:[{id:'f',label:'f',min:5,max:500,value:50,step:1},{id:'radius',label:'R',min:.05,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const f=p.f*mm,a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];if(r2<a*a){const ph=-(TAU/l)*(Math.sqrt(f*f+r2)-f);t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
   text:{name:'Text',wlDep:false,params:[{id:'txt',label:'Text',type:'text',value:'davesgames.io'},{id:'sz',label:'Size',min:8,max:120,value:28,step:1}],t(xx,yy,l,N,p){const side=Math.round(Math.sqrt(N)),cv=document.createElement('canvas');cv.width=side;cv.height=side;const ctx=cv.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,side,side);ctx.fillStyle='#fff';ctx.font=`bold ${p.sz}px "JetBrains Mono",monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(p.txt||'A',side/2,side/2);return rasterToField(ctx.getImageData(0,0,side,side),side,N)}},
+  shape:{name:'Shape',hidden:true,wlDep:false,params:[{id:'kind',label:'Kind',min:0,max:SHAPES.length-1,value:0,step:1},{id:'size',label:'Size',min:.05,max:5,value:.4,step:.01}],t(xx,yy,l,N,p){const f=(SHAPES[p.kind|0]||SHAPES[0]).f,R=p.size*mm,t=czeros(N);for(let i=0;i<N;i++)t.re[i]=f(xx[i]/R,yy[i]/R)?1:0;return t}},
   image:{name:'Image',wlDep:false,params:[{id:'file',label:'Image',type:'file'},{id:'inv',label:'Invert',min:0,max:1,value:0,step:1}],t(xx,yy,l,N,p){if(!window._imgMask||window._imgMask.length!==N)return cones(N);const t=czeros(N),inv=p.inv>.5;for(let i=0;i<N;i++)t.re[i]=inv?1-window._imgMask[i]:window._imgMask[i];return t}},
 };
 
 // Fill the element dropdown from EL, defaulting the selection to the text mask.
 /* Populate element select */
-(function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.name;if(k==='hex')o.selected=true;sel.appendChild(o)})})();
+(function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{if(v.hidden)return;const o=document.createElement('option');o.value=k;o.textContent=v.name;if(k==='hex')o.selected=true;sel.appendChild(o)})})();
 
 // The single mutable state. source is 'mono' or 'white'; z is the propagation
 // distance in mm; extent is the physical grid width in mm; N is the grid side;
@@ -591,23 +633,66 @@ function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=
 
 // Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI
 // and pins #stage to the window, so the composite cell (and #cv-rgb, sized
-// from it in renderCh) fills the frame. One rAF driver eases z on a slow sine
-// around the preset distance and recomputes once per frame. It moves to the
-// next preset (from opts.seed) every max(12, seconds/3) s, with a canvas fade.
+// from it in renderCh) fills the frame. Each shot lasts SAVER_SHOT s. It
+// opens on the bare aperture at z = 0, then one rAF driver moves z forward to
+// the shot's zMax and holds there, with a canvas fade at each end.
+//   sweep   log: z = z0 (zMax/z0)^e, z0 = zMax/2000 (N_F falls evenly)
+//           lin: z = zMax e (lens, zone plate, Talbot shots)
+//           e is a smoothstep of the shot time between the two holds
+//   zMax    a²/(λ0 nf) with λ0 = 550 nm; a is the shot's size in mm and
+//           nf its end Fresnel number (SHAPES explains the values)
+// The deck (saverDeck) alternates shapes and words. Both lists are a seeded
+// shuffle of opts.seed, so each run has a different order. A shot without a
+// fixed wavelength gets white light (10 lines) or one laser line.
 // afterPaint fills the letterbox opaque after each frame, so a recording has
-// no transparency. White light uses 10 wavelengths to keep a frame cheap.
+// no transparency.
 /* ═══ SCREENSAVER ═══ */
+const SAVER_SHOT=8,SAVER_HOLD0=.9,SAVER_HOLD1=.7,SAVER_FADE=.45;
+const SAVER_WORDS=['LIGHT','WAVE','PHOTON','HUYGENS','FRESNEL','YOUNG','AIRY','FOURIER','OPTICS','PRISM','LASER','FOCUS','FRINGE','PHASE','BEAM','LENS','ORBIT','NOVA','ATOM','HELLO','DAVE','GAMES','STAR','MOON','SUN','RAINBOW','QUANTUM','SPECTRUM','ECHO','GLOW','PI','42','E=mc2','ABC','XYZ','OK','HI','wave','light','davesgames.io'];
+function saverZMax(a,nf){return a*a/(550e-6*(nf||.5))}
+function saverDeck(seed){
+  let s=(seed>>>0)||1;const rnd=()=>{s=(s+0x6D2B79F5)>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296};
+  const shuf=a=>{for(let i=a.length-1;i>0;i--){const j=rnd()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+  const LINES=[450,488,532,589,633];
+  const light=sh=>{if(sh.lam){sh.src='mono'}else if(rnd()<.35){sh.src='mono';sh.lam=LINES[rnd()*LINES.length|0]}return sh};
+  const el=(name,e,p,a,x)=>Object.assign({name,el:e,p,ext:3,z:0,div:10,a,zMax:saverZMax(a,x&&x.nf)},x||{});
+  const talbot=(p,lam,k)=>k*2*p*p/(lam*1e-6);
+  const shapes=[
+    el('Hexagon','hex',{radius:.38},.38),
+    el('Circle','circular',{radius:.35},.35),
+    el('Five-point star','star',{pts:5,radius:.42,inner:.38},.42,{nf:1.2}),
+    el('Six-point star','star',{pts:6,radius:.42,inner:.5},.42,{nf:1}),
+    el('Eight-point star','star',{pts:8,radius:.42,inner:.45},.42,{nf:1.2}),
+    el('Heart','heart',{size:.3},.3),
+    el('Ring','ring',{outer:.42,inner:.3},.42,{nf:1}),
+    el('Cross','cross',{arm:.42,width:.12},.42,{nf:1.2}),
+    el('Young\'s slits','double',{slit_w:.04,sep:.3,height:1},.15),
+    el('Slit','rect',{width:.08,height:1},.15),
+    el('Grating','grating-bin',{period:.12,width:1.4,height:1.4},.7,{lam:532,lin:true,zMax:talbot(.12,532,2)}),
+    el('Lens','lens-ap',{f:80,radius:.4},.4,{ext:.6,lin:true,zMax:120}),
+    el('Zone plate','fzp',{f:60,radius:.5},.5,{ext:.6,lin:true,zMax:80}),
+    ...SHAPES.map((sh,k)=>el(sh.name,'shape',{kind:k,size:sh.R},sh.R,sh.talbot?{lam:sh.lam,lin:true,zMax:talbot(sh.talbot*sh.R,sh.lam,sh.tk)}:{nf:sh.nf})),
+  ];
+  const words=SAVER_WORDS.map(w=>{const sz=Math.min(60,Math.floor(.6*256/(.62*w.length)));return el('“'+w+'”','text',{txt:w,sz},.36*sz*3/256,{word:true,nf:.6})});
+  shuf(shapes);shuf(words);
+  const deck=[];for(let i=0;i<Math.max(shapes.length,words.length);i++){if(i<shapes.length)deck.push(light(shapes[i]));if(i<words.length)deck.push(light(words[i]))}
+  return deck;
+}
+// z (mm) at time tp (s) into a shot.
+function saverZ(sh,tp){
+  if(tp<SAVER_HOLD0)return 0;
+  const u=Math.min(1,(tp-SAVER_HOLD0)/(SAVER_SHOT-SAVER_HOLD0-SAVER_HOLD1)),e=u*u*(3-2*u);
+  if(sh.lin)return sh.zMax*e;
+  const z0=sh.zMax/2000;return z0*Math.pow(sh.zMax/z0,e);
+}
 window.snSaver={enter(opts){
-  const calm=Math.max(0,Math.min(1,+opts.calm||0)),sp=1-0.6*calm;
   const st=document.createElement('style');
   st.textContent='html.saver .topbar,html.saver #panel,html.saver #eq-panel,html.saver #eq-toggle,html.saver #stage-bar,html.saver #dock,html.saver .cell-label,html.saver .ov{display:none!important}'+
     'html.saver #stage{position:fixed;inset:0;z-index:5;padding:0}html.saver #canvas-grid{padding:0}html.saver .canvas-cell{border-radius:0}html.saver #cv-rgb{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
-  const names=['Hex','Circle','Star','Heart','Ring','Cross','Young\'s','Lens','FZP','6-star'];
-  const list=names.map(n=>PR.find(p=>p.name===n)).filter(Boolean);
-  const hold=Math.max(12,(+opts.seconds||60)/3),FADE=0.9;
-  let pi=(opts.seed>>>0)%list.length,tp=0,tz=0,last=0;
-  const show=()=>{applyP(list[pi]);S.divs=10;S.scale='log';S.range=2;animDir=0;tz=0;saverPlate(list[pi]);};
+  const list=saverDeck(opts.seed);
+  let pi=0,tp=0,last=0;
+  const show=()=>{applyP(list[pi]);S.divs=10;S.scale='log';S.range=2;animDir=0;S.z=0;saverPlate(list[pi]);};
   saverLabel=opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
   clearInterval(saverTimer);
   if(saverLabel)saverTimer=setInterval(()=>saverPlate(list[pi]),1000);
@@ -617,25 +702,25 @@ window.snSaver={enter(opts){
     const cv=document.getElementById('cv-rgb'),c=cv.getContext('2d');
     c.save();c.setTransform(1,0,0,1,0,0);c.globalCompositeOperation='destination-over';c.fillStyle='#000';c.fillRect(0,0,cv.width,cv.height);
     c.globalCompositeOperation='source-over';
-    const f=Math.max(0,1-tp/FADE,1-(hold-tp)/FADE);
+    const f=Math.max(0,1-tp/SAVER_FADE,1-(SAVER_SHOT-tp)/SAVER_FADE);
     if(f>0){c.fillStyle=`rgba(0,0,0,${Math.min(1,f)})`;c.fillRect(0,0,cv.width,cv.height);}
     c.restore();
   };
   (function drive(now){
     requestAnimationFrame(drive);
     const dt=last?Math.min(0.25,(now-last)/1000):0;last=now;
-    tp+=dt;tz+=dt*sp;
-    if(tp>hold){tp=0;pi=(pi+1)%list.length;show();}
-    // z from 0.8 to 2 times the preset distance, one slow cycle per 40 s at calm 0.
-    S.z=list[pi].z*(1.4-0.6*Math.cos(tz*TAU/40));
+    tp+=dt;
+    if(tp>SAVER_SHOT){tp=0;pi=(pi+1)%list.length;show();}
+    S.z=saverZ(list[pi],tp);
     recompute();
   })(0);
   return{canvas:document.getElementById('cv-rgb'),warmupMs:2000};
 },
 exit(){saverLabel=null;clearInterval(saverTimer);saverTimer=0;}};
-// The plate (opts.label) names the preset and its element, the aperture
+// The plate (opts.label) names the shot and its element, the aperture
 // parameters from readParams() with the units that EL[...].t() applies (mm,
-// except the star point count and inner ratio), and the live z, field width,
+// except the star point count, the inner ratio and the font size in px),
+// the shot size a for N_F when the shot has one, and the live z, field width,
 // grid pitch and Fresnel number with the same formula and regime words as
 // recompute(). The equations are the angular spectrum step that asm.js runs,
 // the white-light sum in fieldRGB(), and the transmittance of the element.
@@ -644,20 +729,20 @@ const SAVER_T={lens:'t = e^(−iπr²/(λf)) for r < R',fzp:'t = e^(−ik(√(f�
 function saverPlate(pr){
   if(!saverLabel||!pr)return;
   const el=EL[S.element],p=readParams(),f2=v=>(+v).toFixed(v<.1?3:2);
-  const parts=el.params.filter(pd=>pd.type!=='file'&&pd.type!=='text').map(pd=>
-    pd.label+' = '+(+p[pd.id]).toFixed(pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0)+(pd.id==='pts'?'':S.element==='star'&&pd.id==='inner'?' R':' mm'));
-  const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0,lam0=S.source==='mono'?S.lambda:550;
+  const parts=el.params.filter(pd=>pd.type!=='file'&&pd.type!=='text'&&pd.id!=='kind').map(pd=>
+    pd.label+' = '+(+p[pd.id]).toFixed(pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0)+(pd.id==='pts'?'':pd.id==='sz'?' px':S.element==='star'&&pd.id==='inner'?' R':' mm'));
+  const aC=pr.a||p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0,lam0=S.source==='mono'?S.lambda:550;
   const Nf=aC>0&&S.z>0?(aC*mm)**2/(lam0*nm*S.z*mm):0;
   // Parameters: TeX symbol, short name, live value. The classes are RULES
   // of equations.js (lambda m1, t m2, k m3, z m4, E m5, F m6). The TeX is
   // the TeX of equations.js: the angular spectrum step, the Fresnel number
   // and the transmittance of the element (window.DiffEq.TRANS). The
   // pattern fills the window, so the plate has no anchor.
-  const params=[{sym:'z',name:'distance',value:S.z.toFixed(0)+' mm',cls:'m4'},
+  const params=[{sym:'z',name:'distance',value:S.z.toFixed(S.z<10?1:0)+' mm',cls:'m4'},
     {sym:'\\lambda',name:'light',value:S.source==='white'?'white, '+S.divs+' lines':S.lambda+' nm',cls:'m1'}];
   if(Nf>0)params.push({sym:'N_F',name:Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer',value:Nf<.01?Nf.toExponential(1):Nf.toFixed(2)});
   params.push({sym:'a',name:'aperture size',value:f2(aC)+' mm'});
-  const lines=[el.name+' aperture: '+parts.join(', ')+'.','Field '+S.extent+' mm on a '+S.N+'² grid.'];
+  const lines=[(pr.word?'Text aperture '+pr.name+': ':pr.el==='shape'?pr.name+' aperture: ':el.name+' aperture: ')+parts.join(', ')+'.','Field '+S.extent+' mm on a '+S.N+'² grid.'];
   const eq=['E(z) = F⁻¹{ F{t} · e^(i k_z z) }',
     'k_z = √(k² − kₓ² − k_y²),   k = 2π/λ',
     'I = |E|²,   XYZ = Σ_λ I · D65 · (x̄, ȳ, z̄)'];
@@ -668,7 +753,7 @@ function saverPlate(pr){
   if(D&&D.TRANS&&D.TRANS[pr.el])tex.splice(1,0,D.TRANS[pr.el]);
   saverLabel({
     title:'Diffraction · '+pr.name,
-    sub:'Angular spectrum propagation of a scalar field, log tone over 2 decades',
+    sub:'From the bare aperture at z = 0 to the far field, by angular spectrum propagation',
     params,lines,tex,rules:(D&&D.RULES)||[['\\lambda','m1'],['t','m2'],['k_x','m3'],['k_y','m3'],['k_z','m3'],['k','m3'],['E','m5'],['\\mathcal{F}','m6']],eq,
   });
 }
