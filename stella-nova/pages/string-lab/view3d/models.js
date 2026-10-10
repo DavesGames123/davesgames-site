@@ -33,24 +33,32 @@
 //    public entry ......... "export function buildModel"
 // ════════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
-import { texture } from './textures.js';
+import { texture, scan } from './textures.js';
 
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---------------------------------------------------------------- materials
+// Woods are PBR: a scanned colour, normal and roughness set (textures.js
+// scan) under a clearcoat for the finish. roughness 1 lets the roughness
+// map set the bare wood. tint is the varnish colour, applied to the scan
+// only (the procedural fallback textures already carry their colour).
 function materials() {
   const std = (o) => new THREE.MeshStandardMaterial(o);
   const phys = (o) => new THREE.MeshPhysicalMaterial(o);
+  const wood = (sc, proc, finish, tint) => {
+    const s = scan(sc);
+    return phys(s ? { ...s, roughness: 1, normalScale: new THREE.Vector2(0.7, 0.7), color: tint ?? 0xffffff, ...finish } : { map: texture(proc), roughness: 0.5, ...finish });
+  };
   return {
-    spruce: phys({ map: texture('spruce'), roughness: 0.5, clearcoat: 0.6, clearcoatRoughness: 0.18, envMapIntensity: 0.65 }),
-    violinTop: phys({ map: texture('violinTop'), roughness: 0.4, clearcoat: 0.7, clearcoatRoughness: 0.16, envMapIntensity: 0.75 }),
-    rosewood: phys({ map: texture('rosewood'), roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.25, envMapIntensity: 0.7 }),
-    mahogany: phys({ map: texture('mahogany'), roughness: 0.5, clearcoat: 0.5, clearcoatRoughness: 0.25 }),
-    ebony: std({ map: texture('ebony'), roughness: 0.35 }),
-    maple: std({ map: texture('maple'), roughness: 0.6 }),
-    flame: phys({ map: texture('flame'), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1 }),
+    spruce: wood('spruce', 'spruce', { clearcoat: 0.9, clearcoatRoughness: 0.06, envMapIntensity: 0.8 }),
+    violinTop: wood('spruce', 'violinTop', { clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9 }, 0xb05a24),
+    rosewood: wood('rosewood', 'rosewood', { clearcoat: 0.8, clearcoatRoughness: 0.08, envMapIntensity: 0.8 }, 0x7d5546),
+    mahogany: wood('mahogany', 'mahogany', { clearcoat: 0.6, clearcoatRoughness: 0.18 }, 0xc98f74),
+    ebony: wood('ebony', 'ebony', { clearcoat: 0.15, clearcoatRoughness: 0.35 }),
+    maple: wood('maple', 'maple', {}),
+    flame: wood('flame', 'flame', { clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9 }, 0xa4501e),
     rosette: std({ map: texture('rosette'), roughness: 0.4 }),
     tortoise: phys({ map: texture('tortoise'), roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }),
     pearl: phys({ map: texture('pearl'), roughness: 0.2, clearcoat: 1, sheen: 0.6, sheenColor: new THREE.Color(0xd8f0ff) }),
@@ -64,7 +72,7 @@ function materials() {
     gold: std({ color: 0xd9b26a, metalness: 1, roughness: 0.3 }),
     cream: std({ color: 0xf1e8d2, roughness: 0.3 }),
     hair: std({ color: 0xf3ecdb, roughness: 0.85, side: THREE.DoubleSide }),
-    stick: phys({ map: texture('mahogany'), color: 0xb06a48, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1 }),
+    stick: wood('mahogany', 'mahogany', { clearcoat: 1, clearcoatRoughness: 0.1 }, 0x9c5236),
     gut: std({ color: 0x2a2622, roughness: 0.7 }),
   };
 }
@@ -87,7 +95,7 @@ function loft(rings, { closed = true, capStart = false, capEnd = false, uScale =
       const p = rings[r][c % C];
       if (c > 0) around += p.distanceTo(rings[r][(c - 1) % C]);
       pos.push(p.x, p.y, p.z);
-      uv.push(along * uScale, around * vScale);
+      uv.push(along, around); // metres (uScale/vScale are kept in the signature only)
     }
   }
   const W = C + (closed ? 1 : 0);
@@ -142,7 +150,7 @@ function taperedBox(x0, x1, w0, w1, ztop, th, uvs = 8) {
     p.setXYZ(i, x, p.getY(i) * w, ztop(x) + (p.getZ(i) - 0.5) * th);
   }
   const uv = g.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * Math.abs(x1 - x0) * uvs, uv.getY(i) * Math.max(w0, w1) * uvs);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * Math.abs(x1 - x0), uv.getY(i) * Math.max(w0, w1)); // metres
   g.computeVertexNormals();
   return g;
 }
@@ -289,7 +297,6 @@ function buildGuitar(inst, M) {
   // top with the sound hole; rosette ring; dark hole
   const hole = circle(P.holeX, 0, P.holeR, 72, true);
   const top = new THREE.ShapeGeometry(flatShape(out, [hole]), 64);
-  scaleUV(top, 1.6, 2.2);
   root.add(mesh(top, M[P.top]));
   const ros = new THREE.RingGeometry(P.holeR + 0.002, P.holeR + 0.017, 96, 1);
   ros.translate(P.holeX, 0, 0.0002);
@@ -310,7 +317,6 @@ function buildGuitar(inst, M) {
   const bp = back.attributes.position;
   for (let i = 0; i < bp.count; i++) bp.setZ(i, -depth(bp.getX(i)));
   back.computeVertexNormals();
-  scaleUV(back, 1.6, 2.2);
   root.add(mesh(back, M[P.back]));
   const bindPts = (z) => out.map((p) => V3(p.x, p.y, typeof z === 'function' ? z(p.x) : z));
   for (const z of [-0.0012, (x) => -depth(x) + 0.0012]) {
@@ -402,7 +408,6 @@ function buildGuitar(inst, M) {
   const bg = new THREE.ExtrudeGeometry(new THREE.Shape(bShape.map(([x, y]) => new THREE.Vector2(x, y))),
     { depth: bridgeH - 0.0016, bevelEnabled: true, bevelThickness: 0.0008, bevelSize: 0.0012, bevelSegments: 3, curveSegments: 16 });
   bg.translate(0, 0, 0.0008);
-  scaleUV(bg, 8);
   root.add(mesh(bg, M[P.board]));
   if (P.bridge === 'tie') {
     root.add(mesh(taperedBox(-0.018, -0.006, 0.18, 0.18, () => bridgeH + 0.0024, 0.0024, 8), M[P.board]));
@@ -483,7 +488,6 @@ function guitarHead(root, M, P, inst, L, nutTop, ha, strings, yN) {
   for (let k = K; k >= 0; k--) { const u = (k / K) * (len - 0.012); pts.push(new THREE.Vector2(u, half(u))); }
   const th = 0.0135;
   const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: th, bevelEnabled: true, bevelThickness: 0.0008, bevelSize: 0.0008, bevelSegments: 2, curveSegments: 24 });
-  scaleUV(g, 6);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const w = W(p.getX(i), p.getY(i), p.getZ(i) - th);
@@ -598,13 +602,13 @@ function makeArch(out, centre, A, K = 26, sign = 1, uvs = 4) {
   }
   const height = (x, y) => sign * A * prof(Math.max(0, phiAt(x, y)));
   const pos = [], uv = [], idx = [];
-  pos.push(centre.x, centre.y, height(centre.x, centre.y)); uv.push(centre.x * uvs, centre.y * uvs);
+  pos.push(centre.x, centre.y, height(centre.x, centre.y)); uv.push(centre.x, centre.y);
   for (let k = 1; k <= K; k++) {
     const r = Math.pow(k / K, 0.8);
     for (let j = 0; j < n; j++) {
       const p = out[j];
       const x = centre.x + (p.x - centre.x) * r, y = centre.y + (p.y - centre.y) * r;
-      pos.push(x, y, k === K ? 0 : height(x, y)); uv.push(x * uvs, y * uvs);
+      pos.push(x, y, k === K ? 0 : height(x, y)); uv.push(x, y); // metres
     }
   }
   for (let j = 0; j < n; j++) idx.push(0, 1 + j, 1 + ((j + 1) % n));
@@ -732,7 +736,6 @@ function violinBridge(M, height, ys, zString) {
     p.setXYZ(i, (d - th / 2) * taper - 0.0004 * smooth(z0, zt, z), y, z);
   }
   g.computeVertexNormals();
-  scaleUV(g, 30);
   return mesh(g, M.maple);
 }
 
@@ -909,7 +912,6 @@ function buildViolin(inst, M) {
   lathe.scale(0.029, 0.025, 1);
   const crX = xTail + 0.024, crY = 0.04;
   lathe.translate(crX, crY, topA.height(crX, crY) + 0.0075);
-  scaleUV(lathe, 4);
   root.add(mesh(lathe, M.ebony));
   // two short barrels clamp over the tail rib under the cup; a foot block under the cup
   const ribX = (y) => ribOut.filter((p) => p.x < xTail + 0.06 && Math.abs(p.y - y) < 0.004).reduce((m, p) => Math.min(m, p.x), xTail + 0.06);

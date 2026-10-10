@@ -10,9 +10,10 @@ It has no physics of its own: it reads the sims and never steps them.
 The models are our own procedural geometry. They are generic and
 unbranded: a steel-string acoustic guitar (dreadnought style), a classical
 guitar and a violin with its bow. No brand name, logo or branded headstock
-shape is in the models or in the code. Wood grain, flame and rosette
-textures are `DataTexture`s made in code, so the module needs no image
-files and runs in node.
+shape is in the models or in the code. The woods are PBR materials from
+CC0 photo scans in `../tex` (colour, normal and roughness maps; credits in
+`../tex/CREDITS.md`). The model UVs are in metres. In node no image loads,
+and the woods fall back to `DataTexture`s made in code, so tests run.
 
 ## Files
 
@@ -21,7 +22,7 @@ files and runs in node.
 | `index.js` | `createStringView3D()`: renderer, scene, lights, camera presets, frame loop |
 | `models.js` | procedural guitar, classical guitar, violin and bow; string anchor points |
 | `strings3d.js` | live string tubes, field values, colour mapping, hand dots |
-| `textures.js` | procedural wood, flame, rosette and winding textures (`DataTexture`) |
+| `textures.js` | scanned CC0 wood sets from `../tex` (`scan`), and procedural textures (`DataTexture`) for the node fallback and the inlays |
 | `tests.mjs` | node tests: `node stella-nova/pages/string-lab/view3d/tests.mjs` |
 | `README.md` | this file |
 

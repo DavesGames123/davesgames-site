@@ -1,9 +1,10 @@
 // ════════════════════════════════════════════════════════════════════════════
 //  STRING LAB · view3d/textures.js — procedural wood and inlay textures
 // ────────────────────────────────────────────────────────────────────────────
-//  Every texture is a DataTexture that this file computes from value noise.
-//  No image file is loaded, so the 3D view runs in node (headless-gl) the
-//  same as in a browser. The grain runs along u. The instrument models map
+//  texture(name) is a DataTexture that this file computes from value noise.
+//  scan(name) loads a CC0 photo-scanned wood set (colour, normal and
+//  roughness) from ../tex in a browser. In node it returns null and the
+//  materials fall back to the DataTextures, so tests run without images. The grain runs along u. The instrument models map
 //  u to the long axis (x) of each part.
 //
 //  The sizes are powers of two, so WebGL 1 can make mipmaps. Each texture
@@ -16,6 +17,7 @@
 //                           "maple:", "flame:", "violinTop:"
 //    other ................ "rosette:", "tortoise:", "pearl:"
 //    public getter ........ "export function texture"
+//    scanned PBR sets ..... "export function scan"  (../tex, CC0)
 //    phone size ........... "export function setTextureScale"
 // ════════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
@@ -184,8 +186,50 @@ export function texture(name) {
   return cache.get(name);
 }
 export const TEXTURE_NAMES = Object.keys(RECIPES);
+
+// ------------------------------------------------------------- scanned sets
+// CC0 photo scans in ../tex (credits in ../tex/CREDITS.md): a colour, a
+// normal (OpenGL) and a roughness map per wood, 1024 px. The model UVs are
+// in metres, so repeat = 1 / tile (m) sets the real grain size. rot turns
+// the scan a quarter turn when its grain runs along v, because the models
+// run the grain along u. flame is the maple scan with flame bands baked in
+// (the same relief maps as maple). In node (no document) scan() returns
+// null and the materials use the procedural textures above.
+const SCANS = {
+  spruce: { tile: 0.15, rot: 0 },
+  rosewood: { tile: 0.8, rot: 1 },
+  mahogany: { tile: 0.5, rot: 1 },
+  ebony: { tile: 0.4, rot: 1 },
+  maple: { tile: 0.5, rot: 1 },
+  flame: { tile: 0.4, rot: 1, relief: 'maple' },
+};
+const scanCache = new Map();
+let loader = null;
+function scanMap(file, srgb, d) {
+  if (scanCache.has(file)) return scanCache.get(file);
+  loader = loader || new THREE.TextureLoader();
+  const t = loader.load(new URL(`../tex/${file}.jpg`, import.meta.url).href);
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1 / d.tile, 1 / d.tile);
+  t.center.set(0.5, 0.5);
+  t.rotation = d.rot ? Math.PI / 2 : 0;
+  t.anisotropy = 8;
+  scanCache.set(file, t);
+  return t;
+}
+/** { map, normalMap, roughnessMap } of a scanned wood, or null in node. */
+export function scan(name) {
+  const d = SCANS[name];
+  if (!d || typeof document === 'undefined') return null;
+  const r = d.relief || name;
+  return { map: scanMap(`${name}-color`, true, d), normalMap: scanMap(`${r}-normal`, false, d), roughnessMap: scanMap(`${r}-rough`, false, d) };
+}
+
 /** Free the GPU copies (the view calls this on dispose). */
 export function disposeTextures() {
   for (const t of cache.values()) t.dispose();
   cache.clear();
+  for (const t of scanCache.values()) t.dispose();
+  scanCache.clear();
 }
