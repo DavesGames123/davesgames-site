@@ -79,8 +79,8 @@ function lights(scene, shadows) {
 export function createStringView3D(canvas, opts = {}) {
   const o = {
     instrument: 'steel', field: 'accel', colormap: 'magma', reverse: false, gamma: 1,
-    exaggeration: 20, polarization: 0, controls: true, quality: 'high', background: 0x0b0d12,
-    orientation: 'auto', thick: 1.8, ...opts,
+    exaggeration: 6, polarization: 0, controls: true, quality: 'high', background: 0x0b0d12,
+    orientation: 'auto', thick: 1, ...opts,
   };
   const renderer = makeRenderer(canvas, o);
   const high = o.quality !== 'low';

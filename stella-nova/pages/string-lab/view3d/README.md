@@ -44,14 +44,14 @@ const view = createStringView3D(canvas, {
   field: 'accel',           // a FIELDS id, or 'none' (natural string colours)
   colormap: 'magma',        // any ct-lab colour map id
   reverse: false, gamma: 1,
-  exaggeration: 20,         // display only, multiplies u
+  exaggeration: 6,          // display only, multiplies u
   polarization: 0,          // rad; 0 = in the plane of the top, PI/2 = toward it
   controls: true,           // OrbitControls on the canvas (needs DOM events)
   pixelRatio: 2,            // capped at 2
   quality: 'high',          // 'low' for phones: fewer tube segments, no shadows
   background: 0x0b0d12,     // or null for a transparent canvas
   orientation: 'auto',      // 'auto' (portrait canvas: neck up), 'landscape', 'portrait'
-  thick: 1.8,               // drawn string radius / real radius
+  thick: 1,                 // drawn string radius / real radius
   renderer: null,           // an existing WebGLRenderer, or 'none' (no GL; tests)
 });
 
@@ -116,6 +116,6 @@ seconds), so the colours stay legible while a note decays.
 
 - The colour map LUT bytes are sRGB. The view converts them to linear for
   the vertex colours, so the screen shows the LUT colours.
-- Strings are drawn about two times thicker than real, for legibility.
+- Strings are drawn at their real radius (thick 1), with a 0.25 mm floor.
 - The sim of a fretted string covers the bridge to the fret only. The part
   from the fret to the nut is drawn straight.

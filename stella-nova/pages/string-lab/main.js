@@ -26,7 +26,7 @@
 //    playNote({ string, fret } | midi, { sound })   frets, plucks, sounds
 //    playChord(name | frets[], { dir, sound })      'Am', 'G7' or [3,2,0,0,0,3]
 //    setTimeScale(s)              simulated s per wall s, 1 .. 1e-4
-//    setExaggeration(x)           display factor on u, 1 .. 500
+//    setExaggeration(x)           display factor on u, 1 .. 500 (default 6)
 //    setField(id)                 'a' | 'aTension' | 'aStiff' | 'aDamp' | 'v' | 'u'
 //    setColormap(id, { reverse, gamma })   any ct-lab map id
 //    setTool(t)                   'pluck' | 'strike' | 'bow' | 'touch'
@@ -79,6 +79,8 @@ import { installSaver } from './saver.js';
 const $ = (id) => document.getElementById(id);
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const FIELD3 = { a: 'accel', v: 'velocity', u: 'displacement', aTension: 'tension', aStiff: 'accel', aDamp: 'accel' };
+// The 3D strings show the plain string material unless world.colour3 is on.
+const field3 = () => (world.colour3 ? FIELD3[world.field] : 'none');
 
 // ── world ─────────────────────────────────────────────────────────────────
 const world = {
@@ -88,7 +90,8 @@ const world = {
   frets: [],
   sel: 0,
   timeScale: 0.01,
-  exag: 40,
+  exag: 6,
+  colour3: false,      // colour the 3D strings by the field (off: plain metal)
   field: 'a',
   cmap: { id: 'magma', reverse: false, gamma: 1 },
   showAll: false,
@@ -364,7 +367,7 @@ async function mount3D() {
     const r = host.getBoundingClientRect();
     view3 = mod.createStringView3D($('c3'), {
       instrument: world.instKey,
-      field: FIELD3[world.field],
+      field: field3(),
       colormap: world.cmap.id, reverse: world.cmap.reverse, gamma: world.cmap.gamma,
       exaggeration: world.exag,
       controls: true,
@@ -435,7 +438,7 @@ function setField(f) {
   if (!FIELDS[f]) return;
   world.field = f;
   for (const b of document.querySelectorAll('#fieldChips button')) b.classList.toggle('on', b.dataset.f === f);
-  view3?.setField(FIELD3[f]);
+  view3?.setField(field3());
   view2d?.resetScales();
 }
 
@@ -590,6 +593,7 @@ function bindControls() {
     fc.appendChild(b);
   }
   $('arrows').addEventListener('change', () => { world.arrows = $('arrows').checked; });
+  $('colour3').addEventListener('change', () => { world.colour3 = $('colour3').checked; view3?.setField(field3()); });
   try {
     picker = createPicker($('cmapHost'), { value: world.cmap.id, compact: true, label: 'Colour map' });
     picker.addEventListener('change', (e) => setColormap(e.detail.id, { reverse: e.detail.reverse, gamma: e.detail.gamma }));

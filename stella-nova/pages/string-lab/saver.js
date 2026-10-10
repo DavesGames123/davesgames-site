@@ -298,11 +298,11 @@ function noteOf(f) { return noteName(Math.round(freqToMidi(f))); }
  * peak of `target` metres: the light touch leaves a small amplitude, and
  * a fixed factor would draw it flat. Clamped to the page range 1 .. 500.
  */
-export function exaggerationFor(sim, f, target = 0.06) {
+export function exaggerationFor(sim, f, target = 0.008) {
   const w = 2 * Math.PI * f;
   let m = 0;
   for (let i = 0; i < sim.u.length; i++) m = Math.max(m, Math.hypot(sim.u[i], w > 0 ? sim.v[i] / w : 0));
-  return m > 0 ? Math.max(1, Math.min(500, target / m)) : 40;
+  return m > 0 ? Math.max(1, Math.min(500, target / m)) : 6;
 }
 
 export function settleTouch(sim, n, { strength = 20000, seconds = 0.2 } = {}) {
@@ -330,7 +330,7 @@ export const SHOTS = {
       const sim = c.world.sims[i], f = sim.f1Stiff;
       const div = pick(c.rng, [3, 4, 5, 6]);
       c.S.setTimeScale(slowFor(f, 0.14));
-      c.S.setExaggeration(30);
+      c.S.setExaggeration(5);
       c.S.pluck(i, { pos: 1 / div, amp: 0.002, sound: false });
       c.cam('instrument', { push: 0.8 });
       c.state.later = { at: 0.4, id: 'soundhole', push: 1.1 };
@@ -344,7 +344,7 @@ export const SHOTS = {
       c.load(inst);
       const chord = pick(c.rng, OPEN_CHORDS);
       c.S.setTimeScale(0.01);
-      c.S.setExaggeration(20);
+      c.S.setExaggeration(4);
       const frets = c.S.playChord(chord, { sound: false }) || findShape(chord).frets;
       c.state.chord = chord; c.state.next = 4.6; c.state.dir = 'down';
       const midis = shapePitches(findShape(chord), STANDARD);
@@ -370,7 +370,7 @@ export const SHOTS = {
       c.S.selectString(i);
       const f = c.world.sims[i].f1Stiff;
       c.S.setTimeScale(slowFor(f, 1.4));
-      c.S.setExaggeration(60);
+      c.S.setExaggeration(8);
       c.S.setTool('bow');
       c.S.bow(i, { pos: 0.11, sound: false });
       c.state.bowString = i;
@@ -390,11 +390,12 @@ export const SHOTS = {
       c.S.selectString(i);
       const f = c.world.sims[i].f1Stiff;
       c.S.setTimeScale(slowFor(f * n, 0.7));
-      c.S.setExaggeration(inst === 'violin' ? 60 : 40);
+      c.S.setExaggeration(inst === 'violin' ? 8 : 6);
       if (c.world.inst.bowed) c.S.setTool('pluck');
       c.S.harmonic(i, n, { sound: false });
       settleTouch(c.world.sims[i], n);
-      c.S.setExaggeration(exaggerationFor(c.world.sims[i], f * n));
+      // full 2D: no 3D string to keep near true scale, so a larger peak
+      c.S.setExaggeration(exaggerationFor(c.world.sims[i], f * n, 0.02));
       c.S.setHarmonic(n);
       c.cam('string', { string: i, push: 1 });
       return { inst, string: c.world.inst.strings[i].name, note: noteOf(f), f, n, ts: c.world.timeScale };
@@ -416,7 +417,7 @@ export const SHOTS = {
       c.state.next = 0.4;
       c.state.track = c.stepsFor(id, inst) ? tr.title : 'Ode to Joy';
       c.S.setTimeScale(0.02);
-      c.S.setExaggeration(inst === 'violin' ? 50 : 35);
+      c.S.setExaggeration(inst === 'violin' ? 7 : 5);
       c.cam(inst === 'violin' ? 'fretboard' : 'instrument', { push: 1 });
       c.state.later = { at: 0.5, id: 'soundhole', push: 1 };
       return { inst, track: c.state.track, ts: 0.02 };
@@ -460,7 +461,7 @@ export const SHOTS = {
       c.state.i = i; c.state.n = 0; c.state.f = f;
       c.state.every = Math.max(1.4, (c.seconds - 0.6) / 6);
       c.state.next = 0;
-      c.S.setExaggeration(inst === 'violin' ? 60 : 40);
+      c.S.setExaggeration(inst === 'violin' ? 8 : 6);
       c.cam('string', { string: i, push: 1 });
       return { inst, string: c.world.inst.strings[i].name, note: noteOf(f), f, n: 1, ts: slowFor(f, 0.7), ratio: '1 : 1', ratioName: 'fundamental' };
     },

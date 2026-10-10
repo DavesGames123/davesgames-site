@@ -103,7 +103,7 @@
     <h2 class="sec">Time</h2>
     <div class="chips" id="tsChips"></div>
     <label class="row"><span>Slow motion <b id="tsV">1/100</b></span><input id="ts" type="range" min="-4" max="0" step="0.05" value="-2"></label>
-    <label class="row"><span>Exaggeration <b id="exV">×40</b></span><input id="ex" type="range" min="0" max="2.7" step="0.01" value="1.6"></label>
+    <label class="row"><span>Exaggeration <b id="exV">×6.0</b></span><input id="ex" type="range" min="0" max="2.7" step="0.01" value="0.78"></label>
     <p class="note">Slow motion and exaggeration change the view only. Sound always plays in real time.</p>
 
     <h2 class="sec">Physics</h2>
@@ -117,6 +117,7 @@
     <h2 class="sec">Colour</h2>
     <div class="chips" id="fieldChips"></div>
     <label class="chk"><input type="checkbox" id="arrows" checked> Force arrows</label>
+    <label class="chk"><input type="checkbox" id="colour3"> Colour the 3D strings</label>
     <div id="cmapHost"></div>
 
     <h2 class="sec">Music</h2>
@@ -165,7 +166,7 @@
     <div id="transport">
       <button type="button" id="tPause" class="tb">Pause</button>
       <div class="seg" id="tsSeg"></div>
-      <span class="tlabel">exaggeration</span><input id="ex2" type="range" min="0" max="2.7" step="0.01" value="1.6" aria-label="Exaggeration">
+      <span class="tlabel">exaggeration</span><input id="ex2" type="range" min="0" max="2.7" step="0.01" value="0.78" aria-label="Exaggeration">
       <button type="button" id="tPluck" class="tb">Pluck</button>
       <button type="button" id="tStep" class="tb">Next note ▶</button>
       <span id="tRead" class="tread"></span>

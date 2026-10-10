@@ -106,7 +106,7 @@ export class LiveStrings {
    * @param model   from buildModel()
    * @param opts    { segments, radial, thick }
    */
-  constructor(model, { segments = 160, radial = 10, thick = 1.8 } = {}) {
+  constructor(model, { segments = 160, radial = 10, thick = 1 } = {}) {
     this.model = model;
     this.group = new THREE.Group();
     this.group.name = 'strings';
@@ -182,10 +182,11 @@ export class LiveStrings {
     const { s, fret, finger } = it;
     if (fret > 0) {
       const color = FINGER_COLORS[finger] ?? FINGER_COLORS[1];
-      const m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.55, roughness: 0.35, transparent: true, opacity: 0.92 });
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.0052, 24, 16), m);
-      dot.scale.set(1.25, 1, 0.75);
-      dot.position.copy(it.stop).add(new THREE.Vector3(0.002, 0, 0.0035));
+      const m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.3, roughness: 0.35, transparent: true, opacity: 0.85 });
+      // a small flat dot just behind the fret, about a fingertip contact wide
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.0028, 20, 12), m);
+      dot.scale.set(1, 1, 0.5);
+      dot.position.copy(it.stop).add(new THREE.Vector3(0.002, 0, 0.0018));
       dot.name = 'finger';
       g.add(dot);
     } else {

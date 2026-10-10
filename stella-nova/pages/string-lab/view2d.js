@@ -174,6 +174,9 @@ export function createView2D(canvas, world) {
   }
 
   const fretX = (fret) => L.nutX + (L.bridgeX - L.nutX) * (1 - 2 ** (-fret / 12));
+  // The lane is a diagram at true length scale, so u gets GAIN2D on top of
+  // the shared exaggeration: at ×6 a 2 mm pluck draws about 18 px.
+  const GAIN2D = 2.5;
   const pxPerM = () => (L.bridgeX - L.nutX) / world.inst.scaleM;
 
   function drawLane(lane, F) {
@@ -181,7 +184,7 @@ export function createView2D(canvas, world) {
     const s = scales[i];
     const fx = fretX(world.frets[i]), bx = L.bridgeX, cy = lane.y;
     const ampPx = Math.min(lane.h * 0.46, 260);
-    const k = world.exag * pxPerM();
+    const k = world.exag * GAIN2D * pxPerM();
     const yOf = (u) => cy - Math.max(-ampPx, Math.min(ampPx, u * k));
     const xOf = (j) => bx - ((bx - fx) * j) / N;
     const single = !L.all;
@@ -484,7 +487,7 @@ export function createView2D(canvas, world) {
     if (!drag || e.pointerId !== drag.id) return;
     if (drag.kind === 'pluck') {
       const dy = drag.cy - drag.y;
-      const amp = dy / (world.exag * pxPerM());
+      const amp = dy / (world.exag * GAIN2D * pxPerM());
       world.excite(drag.lane, 'pluck', { pos: drag.pos, amp: Math.abs(dy) < 4 ? null : amp });
     } else if (drag.kind === 'bow') world.excite(drag.lane, 'bowStop', {});
     drag = null;
