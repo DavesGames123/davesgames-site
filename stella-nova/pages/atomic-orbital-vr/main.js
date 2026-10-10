@@ -31,8 +31,7 @@
 //
 //  OPENING LOOK  pickLook(rng, mode) draws one orbital from LOOKS and a camera
 //  angle. A normal visit draws from Math.random and always opens on |psi|^2
-//  (mode 0); the screensaver draws from opts.seed and also draws the color
-//  mode. A URL that names an orbital (#n=4&l=2&m=1, see
+//  (mode 0). A URL that names an orbital (#n=4&l=2&m=1, see
 //  readQNHash in ui.js) wins over the random draw.
 //
 //  VIEW AND TONE  Each state is drawn with its r99 (the radius that holds 99
@@ -44,16 +43,22 @@
 //  (cdf.js): density over its 99.5 percent value, asinh curve, median at 0.5.
 //
 //  SCREENSAVER  window.snSaver (end of file), for lib/screensaver.js. The
-//  hook sends saverPlate() to opts.label: n, l, m, the subshell, the explicit
-//  radial factor R_nl, E_n, the node counts and the Biot-Savart sum.
+//  hook plays saverDeck(seed): 61 states of n = 1..6, seeded, in rounds
+//  that mix n, SAVER_SLOT s each. The views alternate: the full 3D cloud,
+//  then a 2D cut (Cross view, half the cloud away, camera on the cut face).
+//  A veil plane in front of the camera fades each state out and the next
+//  one in. Each new state sends saverPlate() to opts.label: n, l, m, the
+//  subshell, the explicit radial factor R_nl, E_n, the node counts and the
+//  Biot-Savart sum.
 //
 //  grep -n targets: "const LOOKS" | "function pickLook" | "function mulberry"
 //                   "window.snSaver" | "hashchange" | "function saverPlate"
+//                   "function saverDeck" | "function saverShow" | "const veil"
 
 // ============================================================================
 import * as THREE from 'three';
 import { renderer, scene, camera, controls, orbitalGroup, S, RT,
-         nucleusGroup, bgDimMesh, pointScale } from './core.js';
+         nucleusGroup, bgDimMesh, pointScale, fitDistance } from './core.js';
 import { startRebuild, spawnChunk, updateColors, animateFlow, pMat } from './particles.js';
 import { computeBField } from './bfield.js';
 import { updateFlowTracers, updateBTracers } from './tracers.js';
@@ -145,6 +150,7 @@ renderer.setAnimationLoop((time, frame)=>{
     bgDimMesh.quaternion.copy(camera.quaternion);
     bgDimMesh.translateZ(-10);
   }
+  if(saverTick) saverTick(dt);
   controls.update();
   renderer.render(scene,camera);
 });
@@ -226,7 +232,7 @@ function saverPlate(){
   // fallback. The anchor is orbitalAnchor() below.
   return {
     title:'Hydrogen '+name+' orbital',
-    sub:'Color: '+mode,
+    sub:'Color: '+mode+(S.viewMode===1?' · 2D cut, '+'xyz'[S.cutAxis]+' = 0':''),
     params:[{sym:'n',name:'shell',value:String(n),cls:'m1'},
       {sym:'\\ell',name:'angular, '+(SUB_LETTERS[l]||'?'),value:String(l),cls:'m2'},
       {sym:'m',name:'magnetic',value:ms.replace('-','−'),cls:'m3'},
@@ -273,26 +279,79 @@ function orbitalAnchor(){
   return {x,y,r:Math.hypot(ex-x,ey-y),pts:[{x,y}]};
 }
 
-// Screensaver hook for the shell (lib/screensaver.js). It hides the GUI, draws
-// one look from opts.seed, and turns on a slow camera orbit. opts.calm
-// (1 = slowest) scales the orbit, flow and tracer speeds. The shell reloads
-// the page on stop, so enter() does not keep the old values.
+// Screensaver cycle. saverTick is null on a normal visit, so the loop
+// skips it. The veil is a plane in the clear color just in front of the
+// camera; its opacity hides the scene while the next state streams in.
+let saverTick=null;
+const veil=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial({color:0x0e1118,transparent:true,opacity:1,depthTest:false,depthWrite:false}));
+veil.renderOrder=1e4; veil.frustumCulled=false; veil.visible=false; scene.add(veil);
+// Seconds on screen for one state, and the fade time at each end.
+const SAVER_SLOT=5.5, SAVER_FADE=0.9, SAVER_GAP=0.25;
+// The play order, shuffled by rng. A plain shuffle of all 91 states puts
+// n = 5 and 6 in two thirds of the slots, so the deck goes in rounds: each
+// round shows one state of each n = 2..6 in a new order, never the same n
+// twice in a row. Each n walks its own shuffled list of (l, m). 1s comes
+// once. m = 0 states have no flow, but their shapes are wanted.
+function saverDeck(rng){
+  const sh=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;};
+  const by=[];for(let n=2;n<=6;n++){by[n]=[];for(let l=0;l<n;l++)for(let m=-l;m<=l;m++)by[n].push([n,l,m]);sh(by[n]);}
+  const d=[];
+  for(let r=0;r<12;r++){const ns=sh([2,3,4,5,6]);if(d.length&&ns[0]===d[d.length-1][0])ns.push(ns.shift());for(const n of ns)d.push(by[n][r%by[n].length]);}
+  d.splice(1+Math.floor(rng()*(d.length-1)),0,[1,0,0]);
+  return d;
+}
+// Put one state on screen. cut false: the full 3D cloud from a low angle.
+// cut true: the Cross view cut at x = 0 or z = 0, which keeps the points on
+// the negative side, so the camera looks at the cut face from the positive
+// side. The phase flow turns points about y, through that plane, so it
+// stops for a cut. Color modes keep their time evolution.
+function saverShow(q,cut,rng){
+  applyQN(q[0],q[1],q[2]); S.dirty=true;
+  setColorMode(LOOK_MODES[Math.floor(rng()*LOOK_MODES.length)]);
+  S.viewMode=cut?1:0; S.cutPos=0;
+  let az=rng()*Math.PI*2, el=0.08+rng()*0.32;
+  if(cut){S.cutAxis=rng()<0.5?0:2; az=(S.cutAxis===0?Math.PI/2:0)+(rng()-0.5)*0.9; el=0.1+rng()*0.35;}
+  setAnimate(!cut);
+  const R=fitDistance(camera.aspect);
+  camera.position.set(R*Math.cos(el)*Math.sin(az),R*Math.sin(el),R*Math.cos(el)*Math.cos(az));
+  controls.target.set(0,0,0); controls.update();
+}
+
+// Screensaver hook for the shell (lib/screensaver.js). It hides the GUI,
+// starts the seeded cycle (saverDeck, saverShow) and turns on a slow camera
+// orbit. opts.calm (1 = slowest) scales the orbit, flow and tracer speeds.
+// The shell reloads the page on stop, so enter() does not keep old values.
 window.snSaver={
   enter(o){
     const calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
     const st=document.createElement('style');
     st.textContent='body>*:not(#c){display:none!important}';
     document.head.appendChild(st);
-    pickLook(mulberry((o&&o.seed!=null?o.seed:Math.random()*1e9)|0));
-    setAnimate(true);
+    const rng=mulberry((o&&o.seed!=null?o.seed:Math.random()*1e9)|0);
+    const deck=saverDeck(rng), plate=o&&typeof o.label==='function'?o.label:null;
+    // The views alternate (3D cloud, 2D cut). A seeded draw picks the first.
+    let k=0, cut=rng()<0.5, t=0, a=0;
+    const anchor=()=>a<0.3?null:orbitalAnchor();
+    const next=()=>{
+      saverShow(deck[k++%deck.length],cut,rng); cut=!cut; t=0;
+      if(plate) plate(Object.assign(saverPlate(),{anchor}));
+    };
+    const ease=q=>{q=Math.max(0,Math.min(1,q));return q*q*(3-2*q);};
+    // a is the visibility of the state: 0 for SAVER_GAP s while the cloud
+    // streams in, a fade in, a hold, a fade out, then the next state.
+    saverTick=dt=>{
+      t+=dt; if(t>=SAVER_SLOT) next();
+      a=Math.min(ease((t-SAVER_GAP)/SAVER_FADE),ease((SAVER_SLOT-t)/SAVER_FADE));
+      veil.material.opacity=1-a; veil.visible=a<1;
+      veil.position.copy(camera.position); veil.quaternion.copy(camera.quaternion); veil.translateZ(-0.05);
+    };
+    next();
     S.flowSpeed=0.5*(1-0.6*calm);
     S.timeSpeed=1-0.6*calm;
     S.bTrSpeed=1-0.5*calm;
     controls.autoRotate=true;
     controls.autoRotateSpeed=0.15+0.6*(1-calm);
     renderer.setClearColor(0x0e1118,1);
-    // One orbital plays for the whole visit, so one plate is enough.
-    if(o&&typeof o.label==='function') o.label(saverPlate());
     return {canvas:document.getElementById('c'),warmupMs:2500};
   }
 };
