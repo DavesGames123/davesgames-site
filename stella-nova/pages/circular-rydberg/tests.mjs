@@ -108,6 +108,17 @@ function recorder() {
   cl.render(g, P.sampleCircular(30, 4000, 1), { yaw: 0.3, pitch: 1, scale: 0.05, cx: 100, cy: 60, m: 29, phase: 0.3, colour: 'phase', packet: { phi: 1, width: 0.3 } });
   let lit = 0; for (let i = 0; i < put.data.length; i += 4) if (put.data[i] + put.data[i + 1] + put.data[i + 2] > 60) lit++;
   ok(put && lit > 300 && put.data.every(Number.isFinite), 'figures: the cloud renderer lights pixels and writes finite values', `${lit} lit px`);
+  // frame time at the saver's 1.5 MP cap: the full-size three-channel
+  // glow took about 68 ms (density) here; the half-size glow takes about 12
+  {
+    const W = 1500, H = 1000, big = createCloud(W, H), pts = P.sampleState(30, 5, 3, 80000, 7), g2 = recorder();
+    g2.createImageData = (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }); g2.putImageData = () => {};
+    const v = { yaw: 0.3, pitch: 1, scale: Math.min(W, H) * 0.45 / 1800, cx: W / 2, cy: H / 2, m: 3 };
+    for (let i = 0; i < 3; i++) big.render(g2, pts, v);
+    const t0 = performance.now(); for (let i = 0; i < 8; i++) big.render(g2, pts, v);
+    const ms = (performance.now() - t0) / 8;
+    ok(ms < 30, 'figures: a 1.5 MP density cloud renders in under 30 ms', `${ms.toFixed(1)} ms`);
+  }
 }
 
 // ── saver ─────────────────────────────────────────────────────────────────
