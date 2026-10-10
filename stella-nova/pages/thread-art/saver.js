@@ -13,8 +13,9 @@
 //  each run, so each run plays a new order with new images and frames.
 //
 //  PIECES. The next pieces are computed ahead, so a cut does not wait:
-//    GPU  ... gpu.js + thread.wgsl on the page's device, res 384, 5000 lines
-//    worker . saver-worker.js, the CPU step, res 256, about 2400 lines
+//    GPU  ... gpu.js + thread.wgsl on the page's device, res 512, laid to
+//             the error floor (about 23000 lines, opacity 0.025)
+//    worker . saver-worker.js, the CPU step, res 384, 14000 lines
 //    idle ... the CPU step in 8 ms slices (no Worker), the same sizes
 //  Phones get 1500-1800 lines. The cache holds 6 pieces (LRU); canvases
 //  come from fixed pool slots. Memory stays flat over hours.

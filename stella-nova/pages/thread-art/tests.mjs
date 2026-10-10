@@ -256,6 +256,21 @@ console.log('saver: plan, pieces, shots, memory');
     { key: 'moon', kind: 'photo', name: 'Moon photo', poi: [[0.4, 0.5]], credit: 'test' },
     { key: 'rings', kind: 'photo', name: 'Rings photo', colour: true, poi: [[0.5, 0.5]], credit: 'test' },
   ];
+  // piece density: fine thread, many lines. A GPU piece is res 512 at
+  // opacity <= 0.035 with room for 20000+ lines. A CPU piece is at least
+  // res 256 at opacity <= 0.09 with at least 3000 lines. The old caps
+  // were 1800-6000 lines at opacity 0.08-0.12.
+  {
+    const r = core.rng(17), envs = [{ gpu: true, phone: false }, { gpu: false, phone: false }, { gpu: false, phone: true }];
+    let gpuOk = true, cpuOk = true, info = '';
+    for (const env of envs) for (const kind of core.KINDS) for (let i = 0; i < 6; i++) {
+      const sp = core.pieceSpec(r, kind, { sources: SRC, last: null, ...env }), big = env.gpu && !env.phone;
+      if (big && !(sp.res === 512 && sp.alpha <= 0.035 && sp.maxLines >= 20000)) { gpuOk = false; info = `${kind} res ${sp.res} a ${sp.alpha} ${sp.maxLines}`; }
+      if (!big && !(sp.res >= 256 && sp.alpha <= 0.09 && sp.maxLines >= 3000 * (kind === 'maker' ? 0.8 : 1))) { cpuOk = false; info = `${kind} res ${sp.res} a ${sp.alpha} ${sp.maxLines}`; }
+    }
+    ok(gpuOk, 'pieces: a GPU piece is res 512, opacity <= 0.035, 20000+ lines', info);
+    ok(cpuOk, 'pieces: a CPU piece is res >= 256, opacity <= 0.09, 3000+ lines', info);
+  }
   const small = spec => ({ ...spec, res: 48, P: Math.min(spec.P, 48), maxLines: Math.min(spec.maxLines, 260) });
   const makeSmall = async spec => { const sp = small(spec); return core.makePiece(sp, E.shapeImage(sp.src, sp.res)); };
 

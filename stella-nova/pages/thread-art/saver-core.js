@@ -86,7 +86,7 @@ export function pieceSpec(r, kind, env) {
   const fresh = list => { const o = list.filter(k => k !== env.last); return pick(r, o.length ? o : list); };
   const big = env.gpu && !env.phone;
   let src, colour = false, dark = r() < 0.25, shape = r() < 0.55 ? 'circle' : pick(r, ['square', 'hexagon']);
-  let P = pick(r, env.phone ? [160, 200] : [200, 240, 288]);
+  let P = pick(r, env.phone ? [200, 240] : big ? [288, 320, 360] : [240, 288]);
   if (kind === 'layers') { src = fresh(colourSrc.length ? colourSrc : photos); colour = true; dark = shapes.includes(src) ? r() < 0.5 : false; }
   else if (kind === 'wipe' || kind === 'rack' || kind === 'push' || kind === 'split') { src = fresh(photos); colour = env.sources.find(s => s.key === src)?.colour && r() < 0.6; }
   else if (kind === 'maker') { src = fresh(r() < 0.7 ? photos : shapes); P = pick(r, env.phone ? [120, 150] : [150, 180]); shape = 'circle'; }
@@ -94,12 +94,14 @@ export function pieceSpec(r, kind, env) {
   if (kind === 'chase') dark = r() < 0.4;
   const isShape = shapes.includes(src);
   const pal = colour ? (isShape ? pick(r, ['cmyk', 'rgbw']) : 'image') : 'mono';
-  const res = big ? 384 : 256;
-  const alpha = colour ? (big ? 0.1 : 0.12) : 0.08;
-  // Lines scale with the model area: 5000 at res 384 is ~2400 at 256. A
-  // colour run lays black first and the colours later, so it gets more
-  // lines (it stops on its own when no line lowers the error).
-  let maxLines = big ? (colour ? 6000 : 5000) : env.phone ? (colour ? 2500 : 1800) : (colour ? 4000 : 2400);
+  // Fine thread: a low opacity per line and many lines, so the image forms
+  // from line density. The GPU lays a res 512 piece to the error floor
+  // (about 23000 lines, 1-2 s). The CPU worker gets a smaller model and
+  // a cap, so a piece is ready in 1-7 s (desktop CPU) before its cut. A
+  // colour step scores every thread, so colour gets the smaller numbers.
+  const res = big ? 512 : env.phone ? (colour ? 256 : 320) : (colour ? 288 : 384);
+  const alpha = big ? (colour ? 0.035 : 0.025) : env.phone ? (colour ? 0.09 : 0.05) : (colour ? 0.07 : 0.04);
+  let maxLines = big ? 32000 : env.phone ? (colour ? 3000 : 6000) : (colour ? 6000 : 14000);
   if (kind === 'maker') maxLines = Math.round(maxLines * 0.8);
   return { src, shape, P, res, colour, pal, dark, alpha, maxLines, seed: Math.floor(r() * 1e6), kind };
 }

@@ -10,7 +10,7 @@
 //  DRAWING. #view is a 2D canvas. The lines go into a cache canvas with
 //  the model's composite: "multiply" on a white board and "screen" on a
 //  black board. Each line is a hairline (draw.js, engine.js hairline):
-//  about 0.35-0.5 device px wide and near opaque, with width x opacity
+//  about 0.35-0.5 device px wide, with width x opacity
 //  equal to the model's darkening, so the picture shows what the step
 //  scored. A change of view (resize, zoom, pan, width) draws all lines
 //  again as vectors; a cached raster is never scaled up. The canvas is at
@@ -63,8 +63,8 @@ export const SOURCES = [
 const SRC = Object.fromEntries(SOURCES.map(s => [s.key, s]));
 
 export const S = {
-  source: 'mona-lisa', shape: 'circle', P: 240, maxLines: 5000, res: 384,
-  mode: 'mono', pal: 'cmyk', dark: false, alpha: 0.08, width: 1, contrast: 1, seed: 1,
+  source: 'mona-lisa', shape: 'circle', P: 320, maxLines: 30000, res: 512,
+  mode: 'mono', pal: 'cmyk', dark: false, alpha: 0.025, width: 1, contrast: 1, seed: 1,
   speed: 0.62, playing: true, finishing: false, showErr: false, showPegNums: false,
   zoom: 1, cx: 0.5, cy: 0.5,
   saver: false, band: null, saverDraw: null, fade: 1, lpsOverride: 0,
@@ -181,11 +181,15 @@ function toCPU(e) {
   restart();
 }
 
-/** Lines per second of the display (Infinity: as fast as the step goes). */
+/**
+ * Lines per second of the display (Infinity: as fast as the step goes).
+ * The rate scales with the line limit over 5000, so a dense piece takes
+ * about as long to lay as a sparse one at the same slider position.
+ */
 function speedLps() {
   if (S.lpsOverride) return S.lpsOverride;
   if (S.finishing || S.speed >= 0.999) return Infinity;
-  return 2 * Math.pow(10, S.speed * 3.5);
+  return 2 * Math.pow(10, S.speed * 3.5) * Math.max(1, S.maxLines / 5000);
 }
 
 function pump() {
@@ -467,7 +471,7 @@ function hud() {
 
 // ── controls ───────────────────────────────────────────────────────────────
 const fmt = {
-  pegs: v => String(v), maxLines: v => (+v).toLocaleString(), alpha: v => (+v).toFixed(2), width: v => (+v).toFixed(1),
+  pegs: v => String(v), maxLines: v => (+v).toLocaleString(), alpha: v => (+v).toFixed(3), width: v => (+v).toFixed(1),
   contrast: v => (+v).toFixed(2),
   speed: () => { const l = speedLps(); return l === Infinity ? 'max' : Math.round(l) + '/s'; },
 };
@@ -532,7 +536,7 @@ function bindUI() {
   document.querySelectorAll('#resSeg button').forEach(b => b.addEventListener('click', () => { S.res = Math.min(MAX_RES, +b.dataset.res); syncUI(); restartSoon(0); }));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => {
     S.mode = b.dataset.mode;
-    if (S.mode === 'colour' && S.alpha < 0.1) S.alpha = 0.1;
+    if (S.mode === 'colour' && S.alpha < 0.035) S.alpha = 0.035;
     syncUI(); restartSoon(0);
   }));
   document.querySelectorAll('#palettes button').forEach(b => b.addEventListener('click', () => { S.pal = b.dataset.pal; syncUI(); restartSoon(0); }));
