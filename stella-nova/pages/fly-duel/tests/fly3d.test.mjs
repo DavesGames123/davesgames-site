@@ -14,6 +14,8 @@
 //             every record, the triangle budget (desktop < 400k, phone
 //             < 150k), no warning, the stand-in fly runs every clip, the
 //             real fly.js is used when it is there.
+//    faces    the card textures are drawCard / cardBack of ui/cardface.js
+//             on a 5:7 canvas, drawn again when the picture loads.
 //  Exit code 1 on any failure.
 //
 //  GREP MAP   (grep -n "^// ---" tests/fly3d.test.mjs)
@@ -366,6 +368,58 @@ if (C) {
   ok(Math.abs(TABLE.lifeU) - 0.36 > TABLE.rowHalf + TABLE.cardW / 2, 'life drum clear of the land row');
   ok(TABLE.graveU - TABLE.cardW / 2 > TABLE.rowHalf + TABLE.cardW / 2 - 0.01, 'graveyard clear of the creature row');
   ok(TABLE.seatV - 0.78 < TABLE.r && TABLE.seatV > TABLE.r + 0.3, 'stools tuck under the table edge');
+}
+
+// --- card faces: ui/cardface.js on the table cards ---------------------------
+// A stub OffscreenCanvas records the 2D calls. The face of a card must be
+// drawCard() (the name, the type line and the stat plate of the painted
+// card), drawn again when its picture loads. The back is cardBack().
+{
+  const { textureCache } = await import('../ui/fly3d/scene.js');
+  const cf = await import('../ui/cardface.js');
+  const made = [];
+  class StubCanvas {
+    constructor(w, h) { this.width = w; this.height = h; this.text = []; this.paints = 0; made.push(this); }
+    getContext() {
+      const cv = this, grad = { addColorStop() {} };
+      return new Proxy({}, {
+        get(t, k) {
+          if (k in t) return t[k];
+          if (k === 'measureText') return s => ({ width: String(s).length * 6 });
+          if (k === 'createLinearGradient') return () => grad;
+          if (k === 'clearRect') return () => { cv.paints++; };
+          if (k === 'fillText') return s => { cv.text.push(String(s)); };
+          return () => {};
+        },
+        set(t, k, v) { t[k] = v; return true; },
+      });
+    }
+  }
+  const hadOC = 'OffscreenCanvas' in globalThis, oldOC = globalThis.OffscreenCanvas;
+  globalThis.OffscreenCanvas = StubCanvas;
+  try {
+    for (const coarse of [false, true]) {
+      made.length = 0;
+      const tc = textureCache({ coarse });
+      const tex = tc.face('dew-moth');
+      const cv = tex?.image;
+      ok(cv instanceof StubCanvas, `scene card face is a canvas texture (coarse ${coarse})`);
+      if (!cv) continue;
+      ok(Math.abs(cv.width / cv.height - 5 / 7) < 0.01 && cv.width >= 256, `scene card face is 5:7, ${cv.width}x${cv.height}`);
+      const card = CARD['dew-moth'];
+      ok(cv.text.includes(card.name) && cv.text.includes(cf.typeLine(card)) && cv.text.includes(`${card.power}/${card.toughness}`), 'scene card face is drawCard (name, type line, stat plate)');
+      const p0 = cv.paints;
+      await cf.loadCardArt('dew-moth', { small: coarse });
+      for (let i = 0; i < 4; i++) await null;
+      ok(cv.paints > p0, `scene card face is drawn again when the picture loads (${p0} -> ${cv.paints})`);
+      const back = tc.back();
+      ok(back?.image instanceof StubCanvas && back.image.text.includes('Fly Duel'), 'scene card back is cardBack()');
+      ok(tc.face('dew-moth') === tex, 'one texture per card id');
+      tc.dispose();
+    }
+  } finally {
+    if (hadOC) globalThis.OffscreenCanvas = oldOC; else delete globalThis.OffscreenCanvas;
+  }
 }
 
 console.warn = realWarn;

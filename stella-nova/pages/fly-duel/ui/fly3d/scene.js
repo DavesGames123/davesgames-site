@@ -12,6 +12,11 @@
 //  the table), a cool rim light and a hemisphere fill. ACES tone mapping,
 //  sRGB. No bloom, no blur, no fog.
 //
+//  Cards: every face is drawCard() of ui/cardface.js on a 5:7 canvas, the
+//  painted plate card of section 01. The face is drawn again when its
+//  picture (loadCardArt) and the STIX font load. The back of every card,
+//  the deck and the hand of the other fly show cardBack().
+//
 //  World units: the table top is at y = TABLE.y, radius TABLE.r. Seat 0
 //  (Fly A) sits at +z and looks to -z. Seat 1 (Fly B) sits at -z. Layout
 //  numbers are in seat space (u = to the right of the seat as seen from
@@ -43,8 +48,9 @@
 //  GREP MAP
 //      grep -n 'export const TABLE'           table and layout numbers
 //      grep -n 'function seatPos'             seat space -> world
-//      grep -n 'function drawFace'            card face (our own frame)
-//      grep -n 'function drawBack'            card back
+//      grep -n 'const FACE_PX'                card face canvas size
+//      grep -n 'function fontsReady'          wait for STIX Two Text
+//      grep -n 'function textureCache'        faces and back (ui/cardface.js)
 //      grep -n 'function cardGeometry'        chamfered card mesh
 //      grep -n 'class CardObj'                one card on the table
 //      grep -n 'function buildRoom'           floor, rug, walls, lamp
@@ -60,7 +66,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CARD } from '../../game/cards.js';
-import { cardArt, PALETTE, colourKey } from '../art.js';
+import { PALETTE, colourKey } from '../art.js';
+import { drawCard, cardBack, loadCardArt, getCardArt } from '../cardface.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
 
@@ -98,7 +105,6 @@ function makeCanvas(w, h) {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
   return null;
 }
-const HAS_PATH2D = typeof Path2D !== 'undefined';
 
 function canvasTexture(cv, { srgb = true, aniso = 8 } = {}) {
   if (!cv) return null;
@@ -108,10 +114,11 @@ function canvasTexture(cv, { srgb = true, aniso = 8 } = {}) {
   return t;
 }
 
-// The card shape: top corners cut at 45 degrees (chamfer = 10 % of the
-// width), bottom corners round (DESIGN.md 3.1). Counter-clockwise points.
+// The card shape: the elytron plate of ui/cardface.js. The top corners
+// are cut at 45 degrees (chamfer = 7 % of the width), the bottom corners
+// are round (radius = 5 % of the width). Counter-clockwise points.
 function cardOutline(W, H, arcSeg = 4) {
-  const c = 0.1 * W, r = 0.036 * W, x0 = -W / 2, x1 = W / 2, y0 = -H / 2, y1 = H / 2;
+  const c = 0.07 * W, r = 0.05 * W, x0 = -W / 2, x1 = W / 2, y0 = -H / 2, y1 = H / 2;
   const pts = [];
   const arc = (cx, cy, a0, a1) => { for (let i = 0; i <= arcSeg; i++) { const a = a0 + (a1 - a0) * i / arcSeg; pts.push(new THREE.Vector2(cx + r * Math.cos(a), cy + r * Math.sin(a))); } };
   arc(x1 - r, y0 + r, -Math.PI / 2, 0);
@@ -119,199 +126,78 @@ function cardOutline(W, H, arcSeg = 4) {
   arc(x0 + r, y0 + r, Math.PI, Math.PI * 1.5);
   return pts;
 }
-function cardPath(g, W, H) {
-  const c = 0.1 * W, r = 0.036 * W;
-  g.beginPath();
-  g.moveTo(c, 0); g.lineTo(W - c, 0); g.lineTo(W, c); g.lineTo(W, H - r);
-  g.arcTo(W, H, W - r, H, r); g.lineTo(r, H); g.arcTo(0, H, 0, H - r, r); g.lineTo(0, c); g.closePath();
-}
 
 // ------------------------------------------------------------ card face
-// Logical card 168 x 235 (DESIGN.md 3.1), drawn at FACE_S times.
-const FACE_W = 168, FACE_H = 235, FACE_S = 2;
-const GLYPH = {
-  amberHex: 'M10 1.5 17.4 5.75v8.5L10 18.5 2.6 14.25v-8.5z',
-  amberDrop: 'M10 5.2c2.2 3 3.3 4.9 3.3 6.4a3.3 3.3 0 0 1-6.6 0c0-1.5 1.1-3.4 3.3-6.4z',
-  mossTile: 'M10 1.2 18.8 10 10 18.8 1.2 10z',
-  mossLeaf: 'M6.2 13.8C6.2 9.4 9.2 6.6 13.6 6.4c.2 4.4-2.7 7.3-7 7.4z',
-  mossVein: 'M6.7 13.3 12.6 7.4',
-};
-// One mana glyph (the shapes of ui/art.js manaGlyph) at x, y, size px.
-function drawGlyph(g, kind, x, y, size, n = 0) {
-  g.save(); g.translate(x, y); g.scale(size / 20, size / 20);
-  if (kind === 'amber' && HAS_PATH2D) {
-    g.fillStyle = '#2b1604'; g.strokeStyle = TOKENS.amber; g.lineWidth = 1.6;
-    const h = new Path2D(GLYPH.amberHex); g.fill(h); g.stroke(h);
-    g.fillStyle = TOKENS.amber; g.fill(new Path2D(GLYPH.amberDrop));
-    g.fillStyle = '#fff3d0'; g.fillRect(8.2, 10.8, 1.3, 1.3);
-  } else if (kind === 'moss' && HAS_PATH2D) {
-    g.fillStyle = '#14260a'; g.strokeStyle = TOKENS.moss; g.lineWidth = 1.4; g.lineJoin = 'round';
-    const d = new Path2D(GLYPH.mossTile); g.fill(d); g.stroke(d);
-    g.fillStyle = TOKENS.moss; g.fill(new Path2D(GLYPH.mossLeaf));
-    g.strokeStyle = '#14260a'; g.lineWidth = 1; g.lineCap = 'round'; g.stroke(new Path2D(GLYPH.mossVein));
-  } else {
-    g.fillStyle = TOKENS.panel2; g.strokeStyle = TOKENS.none; g.lineWidth = 1.4;
-    g.beginPath(); g.roundRect ? g.roundRect(2, 2, 16, 16, 3.5) : g.rect(2, 2, 16, 16); g.fill(); g.stroke();
-    g.fillStyle = TOKENS.ink; g.font = `600 11px ${MONO}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-    g.fillText(String(n | 0), 10, 14);
-  }
-  g.restore();
-}
-
-// Keyword icons, 16 px box, 1.5 px stroke (DESIGN.md 3.3).
-function drawKeyword(g, kw, x, y, s, col) {
-  g.save(); g.translate(x, y); g.scale(s / 16, s / 16);
-  g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1.5; g.lineCap = 'square'; g.lineJoin = 'miter';
-  g.beginPath();
-  if (kw === 'swift') { g.moveTo(3, 3); g.lineTo(8, 8); g.lineTo(3, 13); g.moveTo(8, 3); g.lineTo(13, 8); g.lineTo(8, 13); g.stroke(); }
-  else if (kw === 'wings') { g.moveTo(2, 13); g.quadraticCurveTo(4, 2, 14, 3); g.quadraticCurveTo(12, 11, 2, 13); g.moveTo(3, 12); g.lineTo(11, 5); g.moveTo(6, 11); g.lineTo(12, 8); g.stroke(); }
-  else if (kw === 'sting') { g.moveTo(8, 1); g.lineTo(11, 11); g.lineTo(5, 11); g.closePath(); g.stroke(); g.beginPath(); g.arc(8, 13.5, 1.8, 0, Math.PI * 2); g.fill(); }
-  else if (kw === 'thick') { for (const yy of [4, 8, 12]) { g.moveTo(2, yy); g.lineTo(14, yy); } g.stroke(); }
-  else if (kw === 'sap') { g.moveTo(8, 1.5); g.bezierCurveTo(12, 7, 13, 9, 13, 10.5); g.arc(8, 10.5, 5, 0, Math.PI); g.bezierCurveTo(3, 9, 4, 7, 8, 1.5); g.stroke(); g.beginPath(); g.moveTo(8, 7.5); g.lineTo(8, 13); g.moveTo(5.3, 10.3); g.lineTo(10.7, 10.3); g.stroke(); }
-  g.restore();
-}
-
-function wrapText(g, text, x, y, maxW, lh, maxLines) {
-  const words = String(text || '').split(/\s+/).filter(Boolean);
-  let line = '', n = 0;
-  for (let i = 0; i < words.length; i++) {
-    const test = line ? line + ' ' + words[i] : words[i];
-    if (g.measureText(test).width > maxW && line) {
-      if (n === maxLines - 1) { g.fillText(line + '…', x, y + n * lh); return n + 1; }
-      g.fillText(line, x, y + n * lh); n++; line = words[i];
-    } else line = test;
-  }
-  if (line) { g.fillText(line, x, y + n * lh); n++; }
-  return n;
-}
-
-// The face of one card. Our own frame (DESIGN.md 3.1, 3.6): cost rail on
-// the left, name band with the colour bar, art window, type line with
-// keyword icons, rules text, stat plate bottom left. Lands show a large
-// mana glyph, so mana reads from far away.
-function drawFace(g, card, art) {
-  const W = FACE_W, H = FACE_H, P = PALETTE[colourKey(card.colour)];
-  g.save();
-  g.clearRect(0, 0, W, H);
-  cardPath(g, W, H); g.save(); g.clip();
-  g.fillStyle = TOKENS.panel2; g.fillRect(0, 0, W, H);
-  g.fillStyle = P.ink; g.fillRect(0, 0, W, 4);                       // colour bar
-  // name
-  g.fillStyle = TOKENS.ink; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
-  let fs = 13; g.font = `600 ${fs}px ${SANS}`;
-  while (g.measureText(card.name).width > W - 34 && fs > 9) { fs -= 0.5; g.font = `600 ${fs}px ${SANS}`; }
-  g.fillText(card.name, 22, 21);
-  // cost rail
-  const cost = card.cost || {};
-  let gy = 30;
-  if (cost.generic > 0) { drawGlyph(g, 'generic', 3, gy, 18, cost.generic); gy += 20; }
-  for (let i = 0; i < (cost.amber | 0); i++) { drawGlyph(g, 'amber', 3, gy, 18); gy += 20; }
-  for (let i = 0; i < (cost.moss | 0); i++) { drawGlyph(g, 'moss', 3, gy, 18); gy += 20; }
-  // art window
-  const ax = 26, ay = 28, aw = W - 32, ah = Math.round(aw * 0.7);
-  g.fillStyle = P.sky0; g.fillRect(ax, ay, aw, ah);
-  if (art) g.drawImage(art, ax, ay, aw, ah);
-  g.strokeStyle = TOKENS.hair2; g.lineWidth = 1; g.strokeRect(ax + 0.5, ay + 0.5, aw - 1, ah - 1);
-  // type line
-  const ty = ay + ah + 16;
-  g.fillStyle = TOKENS.dim; g.font = `500 10.5px ${SANS}`;
-  g.fillText(card.type === 'creature' ? (card.token ? 'Creature token' : 'Creature') : card.type === 'land' ? 'Land' : 'Spell', 8, ty);
-  let kx = W - 8;
-  for (const kw of (card.keywords || []).slice().reverse()) { kx -= 15; drawKeyword(g, kw, kx, ty - 11, 13, TOKENS.ink2); }
-  g.fillStyle = TOKENS.hair; g.fillRect(6, ty + 5, W - 12, 1);
-  // text box
-  if (card.type === 'land') {
-    const kind = card.produces === 'amber' ? 'amber' : 'moss';
-    drawGlyph(g, kind, W / 2 - 22, ty + 12, 44);
-    g.fillStyle = P.ink; g.font = `600 12px ${MONO}`; g.textAlign = 'center';
-    g.fillText(`+1 ${kind}`, W / 2, H - 10);
-    g.textAlign = 'left';
-  } else {
-    g.fillStyle = TOKENS.ink2; g.font = `400 11px ${SANS}`;
-    const n = card.text ? wrapText(g, card.text, 8, ty + 20, W - 16, 13.5, 3) : 0;
-    if (card.flavour && n < 2) { g.fillStyle = TOKENS.dim; g.font = `italic 400 10px ${SANS}`; wrapText(g, card.flavour, 8, ty + 20 + n * 13.5 + 2, W - 16, 12.5, 2 - n || 1); }
-  }
-  // stat plate (creatures), bottom left
-  if (card.type === 'creature') {
-    const sx = 6, sy = H - 30, sw = 64, sh = 24;
-    g.fillStyle = TOKENS.panel; g.fillRect(sx, sy, sw, sh);
-    g.strokeStyle = P.ink; g.lineWidth = 1; g.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
-    g.fillRect(sx + sw / 2, sy + 3, 1, sh - 6);
-    g.fillStyle = TOKENS.ink; g.font = `700 17px ${MONO}`; g.textAlign = 'center';
-    g.fillText(String(card.power ?? 0), sx + sw / 4 + 3, sy + 18);
-    g.fillText(String(card.toughness ?? 0), sx + (3 * sw) / 4 + 3, sy + 18);
-    // mandible (power) and shell arc (toughness) marks
-    g.strokeStyle = TOKENS.dim; g.lineWidth = 1.2; g.beginPath();
-    g.moveTo(sx + 5, sy + 7); g.quadraticCurveTo(sx + 9, sy + 12, sx + 6, sy + 17);
-    g.moveTo(sx + sw / 2 + 5, sy + 16); g.arc(sx + sw / 2 + 8, sy + 16, 3.5, Math.PI, 0); g.stroke();
-    g.textAlign = 'left';
-  }
-  g.restore();
-  // 1 px border in the card colour
-  cardPath(g, W, H); g.strokeStyle = P.ink; g.lineWidth = 2; g.stroke();
-  g.restore();
-}
-
-// Card back (DESIGN.md 3.6): honeycomb grid, one wing outline.
-function drawBack(g) {
-  const W = FACE_W, H = FACE_H;
-  cardPath(g, W, H); g.save(); g.clip();
-  g.fillStyle = TOKENS.panel2; g.fillRect(0, 0, W, H);
-  g.strokeStyle = TOKENS.faint; g.lineWidth = 1;
-  const cw = W / 6, rh = H / 9, rr = Math.min(cw, rh) * 0.5;
-  for (let j = 0; j <= 9; j++) for (let i = 0; i <= 6; i++) {
-    const cx = i * cw + (j % 2 ? cw / 2 : 0), cy = j * rh + rh / 2;
-    g.beginPath();
-    for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; g[k ? 'lineTo' : 'moveTo'](cx + rr * Math.cos(a), cy + rr * Math.sin(a)); }
-    g.closePath(); g.stroke();
-  }
-  g.strokeStyle = TOKENS.dim; g.lineWidth = 2; g.beginPath();
-  g.moveTo(30, 170); g.bezierCurveTo(40, 80, 110, 50, 146, 62); g.bezierCurveTo(140, 120, 90, 160, 30, 170);
-  g.moveTo(34, 165); g.lineTo(120, 80); g.moveTo(60, 158); g.lineTo(132, 104); g.moveTo(50, 120); g.lineTo(96, 70);
-  g.stroke();
-  g.restore();
-  cardPath(g, W, H); g.strokeStyle = TOKENS.hair2; g.lineWidth = 2; g.stroke();
+// The card faces and the card back come from ui/cardface.js (drawCard,
+// cardBack): the same painted plate cards as the DOM cards of section 01.
+// One canvas per card id, 5:7. FACE_PX[0] is the desktop size, so a
+// close-up shot stays sharp. FACE_PX[1] is the phone size (less texture
+// memory). The texture has mipmaps, so the wide shot does not shimmer.
+const FACE_PX = [[360, 504], [256, 358]];
+// The card text is STIX Two Text (lib/sci.css). A canvas does not wait
+// for a web font: it draws the fallback serif. fontsReady() resolves when
+// the three faces of the card text are loaded (or at once without a DOM).
+let fontsPromise = null;
+function fontsReady() {
+  if (fontsPromise) return fontsPromise;
+  const fs = typeof document !== 'undefined' ? document.fonts : null;
+  if (!fs?.load) return (fontsPromise = Promise.resolve(false));
+  const fam = "'STIX Two Text'";
+  fontsPromise = Promise.all([`500 20px ${fam}`, `600 20px ${fam}`, `italic 400 20px ${fam}`].map(f => fs.load(f).catch(() => null)))
+    .then(() => true, () => false);
+  return fontsPromise;
 }
 
 // --------------------------------------------------------- texture cache
-function textureCache() {
+// face(id) -> CanvasTexture or null (node: no canvas, the caller uses a
+// flat colour). The face is drawn at once with the placeholder picture,
+// then again when the font loads and when loadCardArt() resolves.
+export function textureCache({ coarse = false } = {}) {
   const faces = new Map();
   let back = null;
   const all = [];
+  const [FW, FH] = FACE_PX[coarse ? 1 : 0];
+  const small = FW < 300;
   function face(id) {
     if (faces.has(id)) return faces.get(id);
     const card = CARD[id] || { id, name: id, type: 'spell', colour: 'none', cost: {} };
-    const cv = makeCanvas(FACE_W * FACE_S, FACE_H * FACE_S);
+    const cv = makeCanvas(FW, FH);
+    const g = cv?.getContext?.('2d');
     let tex = null;
-    if (cv && cv.getContext) {
-      const g = cv.getContext('2d');
-      const entry = { cv, g, card, art: null };
-      const paint = () => { g.setTransform(FACE_S, 0, 0, FACE_S, 0, 0); drawFace(g, card, entry.art); if (tex) tex.needsUpdate = true; };
+    if (g) {
+      const paint = () => {
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.clearRect(0, 0, FW, FH);
+        drawCard(g, card, { w: FW, h: FH, art: getCardArt(id, { small }) });
+        if (tex) tex.needsUpdate = true;
+      };
       paint();
       tex = canvasTexture(cv);
       tex.userData.repaint = paint;
-      // the art: our own SVG from ui/art.js, drawn when the image loads
-      if (typeof Image !== 'undefined') {
-        const svg = cardArt(card).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="280" ');
-        const img = new Image();
-        img.onload = () => { entry.art = img; paint(); };
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-      }
+      fontsReady().then(paint);
+      loadCardArt(id, { small }).then(img => { if (img && faces.get(id) === tex) paint(); }).catch(() => {});
       all.push(tex);
     }
     faces.set(id, tex);
     return tex;
   }
+  // One back for the deck, the hidden side of every card and the hand of
+  // the other fly (the back material is on the back cap of each card).
   function backTex() {
     if (back !== null) return back;
-    const cv = makeCanvas(FACE_W * FACE_S, FACE_H * FACE_S);
-    if (cv && cv.getContext) { const g = cv.getContext('2d'); g.setTransform(FACE_S, 0, 0, FACE_S, 0, 0); drawBack(g); back = canvasTexture(cv); all.push(back); }
-    else back = undefined;
+    const cv = makeCanvas(FW, FH);
+    const g = cv?.getContext?.('2d');
+    if (g) {
+      const paint = () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, FW, FH); cardBack(g, { w: FW, h: FH }); if (back) back.needsUpdate = true; };
+      paint();
+      back = canvasTexture(cv);
+      back.userData.repaint = paint;
+      fontsReady().then(paint);
+      all.push(back);
+    } else back = undefined;
     return back;
   }
-  // Fonts load late: paint every face again when they are ready.
-  if (typeof document !== 'undefined' && document.fonts?.ready) document.fonts.ready.then(() => { for (const t of all) t.userData.repaint?.(); });
-  return { face, back: backTex, dispose() { for (const t of all) t.dispose(); faces.clear(); } };
+  return { face, back: backTex, size: [FW, FH], dispose() { for (const t of all) t.dispose(); faces.clear(); } };
 }
 
 // Text on a sprite (damage numbers, banners). Crisp: a dark outline, no
@@ -857,7 +743,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   const W = {
     scene, reduced, coarse, headless,
-    tex: textureCache(), sprites: spriteFactory(),
+    tex: textureCache({ coarse }), sprites: spriteFactory(),
     cardGeo: cardGeometry(), ringGeo: ringGeometry(),
     cards: new THREE.Group(),
     fx: new THREE.Group(),
