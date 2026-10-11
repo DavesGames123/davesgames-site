@@ -120,6 +120,17 @@ console.warn = (...a) => { warns.push(a.map(String).join(' ')); };
 
 // --- scene: headless build and whole matches ----------------------------------
 const C = existsSync(new URL('../data/connectome.json', import.meta.url)) ? JSON.parse(readFileSync(new URL('../data/connectome.json', import.meta.url), 'utf8')) : null;
+// Every card object stays above the table top band (no card starts at
+// the world origin or falls through the table) and has finite numbers.
+let badPos = 0;
+function posCheck(sc) {
+  const Z = sc.world.Z;
+  const all = [...Z.hand[0], ...Z.hand[1], ...Z.grave[0], ...Z.grave[1], ...Z.perms.values(), ...Z.held.filter(Boolean)];
+  for (const o of all) {
+    const p = o.mesh.position;
+    if (!Number.isFinite(p.x + p.y + p.z) || p.y < TABLE.y - 0.05) { badPos++; if (badPos < 4) console.error('card below the table', o.id, p.toArray()); }
+  }
+}
 async function runGame(sc, M, check) {
   sc.setState(M.state);
   sc.setSpeed(8);
@@ -127,7 +138,7 @@ async function runGame(sc, M, check) {
   while ((r = M.next())) {
     let done = false;
     sc.play(r).then(() => { done = true; });
-    for (let k = 0; k < 5000 && !done; k++) { sc.render(0.1); await null; }
+    for (let k = 0; k < 5000 && !done; k++) { sc.render(0.1); await null; if (k % 3 === 0) posCheck(sc); }
     if (!done) stuck++;
     n++;
     const st = sc.stats();
@@ -162,6 +173,7 @@ async function runGame(sc, M, check) {
   ok(zoneBad === 0, `card objects follow the mirror (hand, graveyard, battlefield) (${zoneBad} bad)`);
   ok(pipBad === 0, `one mana pip per untapped land (${pipBad} bad)`);
   ok(maxTris < 400000, `desktop triangles ${maxTris} < 400k`);
+  ok(badPos === 0, `cards stay on or above the table top (${badPos} bad samples)`);
   const st = sc.stats();
   ok(st.meshes > 100, `meshes ${st.meshes}`);
   sc.dispose();
@@ -180,6 +192,32 @@ async function runGame(sc, M, check) {
   await sc.ready;
   const res = await runGame(sc, botMatch(33), () => {});
   ok(res.stuck === 0 && res.n > 10, 'reduced motion: a whole match plays');
+  sc.dispose();
+}
+
+// --- scene: real frame rate around a token and a death -----------------------
+{
+  // Find a game with a token step, then play it at speed 2 and 30 frames a
+  // second up to two records past the token, with the position check on
+  // every frame.
+  let seed = 0, upTo = -1;
+  for (let g = 1; g < 60 && upTo < 0; g++) {
+    const M = botMatch(g); let r;
+    while ((r = M.next())) if (choreograph(r).steps.some(x => x.op === 'token')) { seed = g; upTo = r.i + 2; break; }
+  }
+  ok(upTo > 0, `a game with a token (seed ${seed})`);
+  const sc = createDuelScene(null, { headless: true });
+  await sc.ready;
+  const M = botMatch(seed);
+  sc.setState(M.state); sc.setSpeed(2);
+  const before = badPos;
+  let r;
+  while ((r = M.next()) && r.i <= upTo) {
+    let done = false;
+    sc.play(r).then(() => { done = true; });
+    for (let k = 0; k < 20000 && !done; k++) { sc.render(1 / 30); await null; posCheck(sc); }
+  }
+  ok(badPos === before, `30 fps play: cards stay on or above the table top (${badPos - before} bad samples)`);
   sc.dispose();
 }
 

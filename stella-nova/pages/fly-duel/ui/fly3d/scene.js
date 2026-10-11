@@ -1337,9 +1337,9 @@ export function createDuelScene(canvas, opts = {}) {
     hurt(s) { const o = Z.perms.get(s.uid); if (o) floatNumber(`-${s.amount}`, TOKENS.dmg, o.toP.clone().add(new THREE.Vector3(0, 0.25, 0))); },
     pump(s) { const o = Z.perms.get(s.uid); if (o) { o.pulse = 1; floatNumber(`+${s.amount}/+${s.amount}`, TOKENS.heal, o.toP.clone().add(new THREE.Vector3(0, 0.3, 0)), { height: 0.28 }); } },
     token(s) {
+      // the token appears in its own slot (the mirror gets it after this)
       const o = new CardObj(W, s.card); o.uid = s.uid; Z.perms.set(s.uid, o);
-      const x = mirror.players[s.p].battlefield.find(y => y.uid === s.uid);
-      if (x) { permPose(s.p, x); o.place(P, Qt); }
+      o.place(mirrorSlot(s.p, s.uid, s.card), seatQuat(s.p, -Math.PI / 2, 0, 0));
       o.scale = W.reduced ? 1 : 0.05; o.scaleTo = 1;
     },
     draw(s) {
