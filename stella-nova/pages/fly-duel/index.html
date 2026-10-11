@@ -47,7 +47,8 @@
               #heroSpeed #heroNew #heroLog #heroStats #wiringHero
      #s1 game       #kwList #deckLists #galSeg #gallery
      #s2 centre     #mbCv #mbLegend #cxMeta #factList #ourList
-     anywhere       [data-fact] value of a FACTS id, [data-cite] [n] links
+     anywhere       [data-fact] value of a FACTS id, [data-cite] [n] links,
+                    [data-mix] TRAIN_MIX share or TRAIN_EXPLORE of train/worker.js
      #s3 smell      #featPick #featIn #featOut #glomCv #featBars #smellGrab #smellRead
      #s4 sparse     #sparseCv #spIn #spOut #spNext #spRead
      #s5 dopamine   #toyCv #toySel #toyRew #toyPun #toyReset #toyRead
@@ -254,7 +255,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 06 -->
 <section class="sec" id="s6">
-  <div class="sec-head"><span class="num">06</span><div><h2>Train them yourself</h2><p>Start from naive flies, with all KC-to-MBON weights equal, and let them play each other in a background thread on your device. Every few games the trainer measures each fly against two fixed opponents: a random player and a simple greedy player. The curves are live numbers from your browser.</p></div></div>
+  <div class="sec-head"><span class="num">06</span><div><h2>Train them yourself</h2><p>Start from naive flies, with all KC-to-MBON weights at their start value, and train them in a background thread on your device. Each training game is drawn from a mix: <span data-mix="self">half</span> fly against fly, <span data-mix="greedy">some</span> against a simple greedy player and <span data-mix="random">some</span> against a random player. The curves are live numbers from your browser: the share of recent training games each fly won, with exploration on. "Evaluate" measures them properly, with exploration and learning off.</p></div></div>
   <div class="grid">
     <article class="card span-8">
       <div class="card-top"><h3>Win rate while training</h3><span class="tag">train/worker.js, runs on your device</span></div>
@@ -266,14 +267,15 @@
         <button class="tgl" id="trainNaive">Reset to naive</button>
         <button class="tgl" id="trainLoad">Load pretrained</button>
         <span class="seg" id="trainSpeed" role="group" aria-label="Games per batch"><button data-v="10">10 / batch</button><button data-v="50" class="on">50</button><button data-v="200">200</button></span>
-        <button class="tgl" id="trainEval">Evaluate (200 games)</button>
+        <button class="tgl" id="trainEval">Evaluate (100 games each)</button>
       </div>
       <p class="cap" id="trainRead">Idle.</p>
     </article>
     <article class="card span-4">
       <div class="card-top"><h3>What happens per game</h3></div>
       <ul class="facts">
-        <li>Each fly scores every legal move by the value of the board it would lead to, and picks by a softmax, with some exploration while training.</li>
+        <li>Each fly scores every legal move by the value of the board it would lead to, and picks by a softmax at temperature <span data-mix="explore">a small value</span> while training (the best move when watching).</li>
+        <li>For an attack, the board after the attack still waits for the opponent's block. The fly scores it by the worst block the opponent could make. This look-ahead is a model step, not fly biology.</li>
         <li>After each of its moves, the fly computes δ and its DANs update the KC-to-MBON weights of the KCs that were recently active.</li>
         <li>At the end, the win (+1), loss (−1) or draw (0) is the only reward. Nothing tells the fly which cards are good.</li>
         <li>The wiring (PN to KC claws, which DAN reaches which compartment) never changes. Only the KC-to-MBON weights learn.</li>
@@ -285,7 +287,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 07 -->
 <section class="sec" id="s7">
-  <div class="sec-head"><span class="num">07</span><div><h2>Watch a match, move by move</h2><p>Step through a game. For each decision you see every move the fly could make and the value its mushroom body gave the board after that move. The brain of the fly that is acting lights up with the Kenyon cells of the chosen board.</p></div></div>
+  <div class="sec-head"><span class="num">07</span><div><h2>Watch a match, move by move</h2><p>Step through a game. For each decision you see every move the fly could make and the score of the board after that move: the value from its mushroom body, or for an attack, the value after the worst block the opponent could make. The brain of the fly that is acting lights up with the Kenyon cells of the chosen board.</p></div></div>
   <div class="grid">
     <article class="card span-12">
       <div class="ctrls top">
@@ -329,7 +331,7 @@
       <ul class="facts small">
         <li>Win rates near 50% against each other are expected: the two flies trained together.</li>
         <li>With 200 games, one standard error of a rate near 50% is about 3.5 percentage points.</li>
-        <li>The decks differ, so a fly's rate also measures its deck, not only its brain.</li>
+        <li>Evaluation games rotate the seat, the deck and who goes first in blocks of 8, so no fly gets an easy deck.</li>
       </ul>
     </article>
   </div>
@@ -349,7 +351,7 @@
     </article>
     <article class="card span-4">
       <div class="card-top"><h3>Not how a fly sees a game</h3></div>
-      <p class="body">The 48 board features, the way they become glomerulus rates, the TD error sent to the DANs, the move search one step ahead and the game itself are our design choices. They are labelled "model" wherever they appear. The connectome fixes who talks to whom, not what the signals mean here.</p>
+      <p class="body">The 48 board features, the way they become glomerulus rates, the TD error sent to the DANs, the one-step look-ahead with the imagined block and the game itself are our design choices. They are labelled "model" wherever they appear. The connectome fixes who talks to whom, not what the signals mean here.</p>
     </article>
     <article class="card span-6">
       <div class="card-top"><h3>Why it still says something</h3></div>
@@ -358,7 +360,7 @@
     <article class="card span-6">
       <div class="card-top"><h3>Limits we know about</h3></div>
       <ul class="facts">
-        <li>The flies look only one move ahead. They do not plan.</li>
+        <li>The flies look one move ahead, plus the opponent's block after an attack. They do not plan further.</li>
         <li>Both flies share the same PN-to-KC claws; they differ in the feature-to-glomerulus map and in what they learned.</li>
         <li>The duel is far simpler than any commercial card game: no stack, no instants, one block per attacker.</li>
         <li>Win rates are against weak fixed bots and each other. We make no claim of skill against people.</li>

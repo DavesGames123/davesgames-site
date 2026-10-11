@@ -60,9 +60,9 @@ export function toSeries(rows) {
   return { xKey, series };
 }
 
+const SEG = { A: 'Fly A', B: 'Fly B', vsRandom: 'vs random bot', vsGreedy: 'vs greedy bot', AvsB: 'A vs B', winRateA: 'Fly A wins of A vs B', eval: 'eval' };
 export function seriesLabel(key) {
-  return key.replace(/\.?winRate/i, ' win rate').replace(/vsRandom/i, 'vs random bot').replace(/vsGreedy/i, 'vs greedy bot')
-    .replace(/AvsB|aVsB|A_vs_B/i, 'A vs B').replace(/\./g, ' · ').replace(/^A\b/, 'Fly A').replace(/^B\b/, 'Fly B').trim();
+  return key.split('.').map(k => SEG[k] ?? k.replace(/winRate/i, 'win rate')).join(' · ');
 }
 
 // Draw series on [0, 1]. opts: { xMax, chance: 0.5, title, hide: Set }.

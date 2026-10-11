@@ -214,19 +214,27 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     addEventListener() {}, head: fakeEl('head'), body: fakeEl('body'), documentElement: fakeEl('html'), hidden: false,
   };
   const frames = [];
-  // A fake worker that follows the contract protocol: progress messages,
-  // then weights at the end of each train batch, and eval results.
+  // A worker stand-in. With train/worker.js in the tree, init, train and
+  // pause go to its real createTrainer (the same code the worker runs).
+  // Without it, a fake follows the contract. eval is always the fake: the
+  // real one takes about 25 s for 100 games per match-up.
   const sent = [];
+  const realTrainer = has('train/worker.js') ? (await import('../train/worker.js')).createTrainer : null;
   class FakeWorker {
-    constructor(url, opts) { this.url = String(url); this.opts = opts; this.games = 0; }
+    constructor(url, opts) {
+      this.url = String(url); this.opts = opts; this.games = 0;
+      if (realTrainer) this.t = realTrainer(m => setTimeout(() => this.onmessage && this.onmessage({ data: m }), 0));
+    }
     postMessage(m) {
       sent.push(m.cmd);
       const out = r => setTimeout(() => this.onmessage && this.onmessage({ data: r }), 0);
+      if (m.cmd === 'eval') { out({ type: 'eval', game: this.games, n: m.n, vsRandom: { A: 0.7, B: 0.6 }, vsGreedy: { A: 0.2, B: 0.1 }, AvsB: 0.5 }); return; }
+      if (this.t) { setTimeout(() => this.t.handle(m), 0); return; }
       if (m.cmd === 'train') {
         for (let i = 0; i < 2; i++) { this.games += m.games / 2; out({ type: 'progress', game: this.games, winRateA: 0.5, vsRandom: { A: 0.6, B: 0.55 }, vsGreedy: { A: 0.3, B: 0.25 } }); }
-        out({ type: 'weights', A: { format: 'x' }, B: { format: 'x' } });
+        out({ type: 'weights', game: this.games, A: { format: 'x' }, B: { format: 'x' } });
       }
-      if (m.cmd === 'eval') out({ type: 'eval', vsRandom: { A: 0.7, B: 0.6 } });
+      if (m.cmd === 'pause') out({ type: 'paused', game: this.games });
     }
     terminate() {}
   }
@@ -281,15 +289,21 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     ok(/\[\d+\]/.test(E('factList').innerHTML) && E('ourList').innerHTML.includes('<li>'), 'dom: two fact lists with citations');
   }
   E('trainStart').fire('click');
-  await new Promise(r => setTimeout(r, 30));
+  // wait for the second train batch (real trainer: about 1.5 s per batch)
+  for (let i = 0; i < 400 && sent.filter(c => c === 'train').length < 2; i++) await new Promise(r => setTimeout(r, 25));
   E('trainPause').fire('click');
-  await new Promise(r => setTimeout(r, 30));
+  await new Promise(r => setTimeout(r, 60));
   ok(sent[0] === 'init' && sent.filter(c => c === 'train').length >= 2, `dom: worker gets init, then a new train batch after each weights message (${sent.join(',')})`);
   ok(/vs random bot/.test(E('trainLegend').innerHTML), 'dom: live legend has the vs-random series');
   ok(/Paused at game \d+/.test(E('trainRead').textContent), `dom: pause reads the game count (${E('trainRead').textContent})`);
+  E('wNew').fire('click');
+  if (realTrainer) ok(/weights from your training run/.test(E('wInfo').textContent), `dom: section 07 uses the trained weights (${E('wInfo').textContent.slice(0, 90)})`);
+  E('wNext').fire('click');
+  ok(/Decision 1/.test(E('wInfo').textContent), 'dom: a trained fly plays a decision in section 07');
   E('trainEval').fire('click');
   await new Promise(r => setTimeout(r, 10));
-  ok(/Evaluation at game/.test(E('trainRead').textContent), 'dom: eval result line');
+  ok(/Evaluation at game \d+, 100 games each/.test(E('trainRead').textContent), `dom: eval result line (${E('trainRead').textContent.slice(0, 80)})`);
+  ok(/eval · vs random bot/.test(E('trainLegend').innerHTML), 'dom: eval rates get their own series');
   E('toyRew').fire('click');
   ok(/PAM burst/.test(E('toyRead').innerHTML), 'dom: section 05 reward gives a PAM burst line');
   ok(!/NaN|undefined/.test([...els.values()].map(e => e.innerHTML + e.textContent).join('')), 'dom: no NaN or undefined in any markup');

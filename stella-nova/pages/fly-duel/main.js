@@ -109,8 +109,10 @@ async function loadAll() {
     tryJSON('pretrained', './data/pretrained.json'),
     tryJSON('curve', './data/training-curve.json'),
   ]);
-  // brain/fly.js imports the rules, so it loads after them
+  // brain/fly.js imports the rules, so it loads after them. The worker
+  // module gives TRAIN_MIX and FLY_OPTS; its worker glue is inert here.
   await tryImport('fly', './brain/fly.js');
+  await tryImport('trainer', './train/worker.js');
   if (M.cards?.KEYWORDS) setKeywordText(M.cards.KEYWORDS);
   return { M, D, status };
 }
@@ -137,7 +139,7 @@ function makeFly(side, saved = weightsFor(side)) {
     try { return Fly.fromJSON(D.connectome, saved); }
     catch (e) { console.warn(`fly-duel: weights for ${side} did not load`, e); }
   }
-  try { return new Fly(D.connectome, { name: `Fly ${side}`, hemisphere: side, seed: side === 'A' ? 1 : 2 }); }
+  try { return new Fly(D.connectome, { ...(M.trainer?.FLY_OPTS || {}), name: `Fly ${side}`, hemisphere: side, seed: side === 'A' ? 1 : 2 }); }
   catch (e) { console.warn('fly-duel: new Fly failed', e); return null; }
 }
 
@@ -352,6 +354,12 @@ function factsHTML(measured) {
 // [data-fact] and [data-cite] spans in the prose. A missing id keeps the
 // words that the markup has.
 function initFacts() {
+  const mix = M.trainer?.TRAIN_MIX, ex = M.trainer?.TRAIN_EXPLORE;
+  document.querySelectorAll('[data-mix]').forEach(el => {
+    const k = el.dataset.mix;
+    if (k === 'explore' && Number.isFinite(ex)) el.textContent = String(ex);
+    else if (mix && Number.isFinite(mix[k])) el.textContent = `${Math.round(mix[k] * 100)}%`;
+  });
   const F = M.facts?.FACTS;
   if (!F) return;
   document.querySelectorAll('[data-fact]').forEach(el => { const f = F[el.dataset.fact]; const v = fmtFact(f); if (v) el.textContent = v; });
@@ -460,7 +468,8 @@ function initSparse() {
   // first pair once the hero has a few moves (or now, from a scripted game)
   const prev = hero.onDecision; let done = false;
   hero.onDecision = rec => { prev?.(rec); if (!done && (hero.match.history.length >= 8)) { done = true; pair = pickPair(); compute(); } };
-  if (!hero.match) { pair = pickPair(); compute(); }
+  if (!hero.match) pair = pickPair();
+  compute();
 }
 
 // ---------------------------------------------------------------- 05
@@ -479,6 +488,8 @@ function initDopamine() {
 }
 
 // ---------------------------------------------------------------- 06
+// games per match-up for the Evaluate button (node: about 48 ms a game)
+const EVAL_N = 100;
 const train = { worker: null, running: false, pending: false, batch: 50, series: new Map(), hide: new Set(), weights: null, games: 0, wasRunning: false };
 
 function initTrain() {
@@ -518,8 +529,10 @@ function initTrain() {
         train.pending = false;
         if (train.running) { train.pending = true; post({ cmd: 'train', games: train.batch }); }
       } else if (m.type === 'eval') {
-        add({ ...m, game: train.games });
-        read.textContent = `Evaluation at game ${train.games}: ${Object.entries(flattenRow(m)).filter(([k, y]) => y >= 0 && y <= 1 && k !== 'type').map(([k, y]) => `${seriesLabel(k)} ${pct(y)}`).join(', ') || 'done'}.`;
+        // eval rates go in their own series, apart from the training rates
+        add({ game: m.game ?? train.games, eval: { vsRandom: m.vsRandom, vsGreedy: m.vsGreedy, AvsB: m.AvsB } });
+        const ev = flattenRow({ vsRandom: m.vsRandom, vsGreedy: m.vsGreedy, AvsB: m.AvsB });
+        read.textContent = `Evaluation at game ${m.game ?? train.games}, ${m.n ?? '?'} games each, no exploration, no learning: ${Object.entries(ev).map(([k, y]) => `${seriesLabel(k)} ${pct(y)}`).join(', ') || 'done'}.`;
       } else if (m.type === 'paused' || m.type === 'idle') {
         train.running = false; train.pending = false;
       } else if (m.type === 'error') {
@@ -539,9 +552,9 @@ function initTrain() {
   btns[2].addEventListener('click', () => { if (boot(null)) read.textContent = 'Naive flies: every KC→MBON weight at its start value. Press Start.'; });
   btns[3].addEventListener('click', () => {
     if (!D.pretrained) { read.textContent = 'data/pretrained.json is not there yet.'; return; }
-    if (boot({ A: weightsFor('A'), B: weightsFor('B') })) read.textContent = 'Pretrained flies loaded into the worker. Press Start to train more, or Evaluate.';
+    if (boot({ A: weightsFor('A'), B: weightsFor('B'), games: D.pretrained.meta?.games ?? D.pretrained.games })) read.textContent = 'Pretrained flies loaded into the worker. Press Start to train more, or Evaluate.';
   });
-  btns[4].addEventListener('click', () => { if (!train.worker && !boot(null)) return; read.textContent = 'Evaluating 200 games…'; post({ cmd: 'eval', n: 200 }); });
+  btns[4].addEventListener('click', () => { if (!train.worker && !boot(null)) return; train.running = false; train.pending = false; read.textContent = `Evaluating: ${EVAL_N} games for each of five match-ups, with exploration and learning off. This can take a minute.`; post({ cmd: 'eval', n: EVAL_N }); });
   seg($('trainSpeed'), x => train.batch = +x);
   // no training while the tab is hidden
   document.addEventListener('visibilitychange', () => {
@@ -580,12 +593,13 @@ function initWatch() {
     renderBoard($('wBoard'), rec ? rec.before : st, { byId, names: m.names, hands: 'open', hot: hotOf(rec?.action), last: rec ? `${m.names[rec.who]}: ${rec.text}` : 'start' });
     if (rec) {
       const order = rec.legal.map((a, i) => i);
-      const vals = rec.values;
+      const vals = rec.scores || rec.values;
       if (vals) order.sort((x, y) => vals[y] - vals[x]);
       const lo = vals ? Math.min(...vals) : 0, hi = vals ? Math.max(...vals) : 1;
       const desc = a => { try { return M.rules.describe(a, rec.before); } catch { return a.type; } };
-      $('wCands').innerHTML = `<li class="head">${esc(m.names[rec.who])} had ${rec.legal.length} options${vals ? ', ranked by the value of the board each leads to' : ' (a bot: no values)'}</li>`
-        + order.map(i => `<li class="${i === rec.idx ? 'chosen' : ''}"><span>${esc(desc(rec.legal[i]))}</span><b>${vals ? vals[i].toFixed(3) : ''}</b>${vals ? `<i style="--v:${hi > lo ? (100 * (vals[i] - lo) / (hi - lo)).toFixed(0) : 100}%;--c:${rec.who ? '#86dc7c' : '#ffb347'}"></i>` : ''}</li>`).join('');
+      const imag = i => rec.values && rec.scores && Math.abs(rec.scores[i] - rec.values[i]) > 1e-9;
+      $('wCands').innerHTML = `<li class="head">${esc(m.names[rec.who])} had ${rec.legal.length} options${vals ? ', ranked by score (* = after the worst block the opponent could make)' : ' (a bot: no values)'}</li>`
+        + order.map(i => `<li class="${i === rec.idx ? 'chosen' : ''}"><span>${esc(desc(rec.legal[i]))}</span><b title="${rec.values ? `MB value ${rec.values[i].toFixed(3)}` : ''}">${vals ? `${imag(i) ? '*' : ''}${vals[i].toFixed(3)}` : ''}</b>${vals ? `<i style="--v:${hi > lo ? (100 * (vals[i] - lo) / (hi - lo)).toFixed(0) : 100}%;--c:${rec.who ? '#86dc7c' : '#ffb347'}"></i>` : ''}</li>`).join('');
       const bv = W.bvs[rec.who];
       if (rec.trace) bv.setTrace(rec.trace, rec.value);
       if (rec.delta != null) bv.burst(rec.delta);

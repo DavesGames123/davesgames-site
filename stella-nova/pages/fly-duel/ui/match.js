@@ -6,7 +6,9 @@
 //  is passed in, so this file has no static import of another package.
 //
 //  An agent is { name, kind: 'fly' | 'bot', choose(state, legal, rng) ->
-//  { action, values?, trace? } }. agentFromFly() wraps brain/fly.js;
+//  { action, values?, scores?, trace? } }. values are MB values of each
+//  afterstate; scores are what the policy ranked (brain/agent.js: equal
+//  to values, or the imagined-block value for an attack). agentFromFly() wraps brain/fly.js;
 //  agentFromBot() wraps a game/bots.js bot.
 //
 //  The DAN burst on the page comes from the TD error of the fly, per fly:
@@ -79,6 +81,8 @@ export class Match {
     let idx = legal.indexOf(action);
     if (idx < 0 && this.rules.actionKey) { const k = this.rules.actionKey(action); idx = legal.findIndex(a => this.rules.actionKey(a) === k); }
     const values = res.values ? Array.from(res.values) : null;
+    // scores: what the policy ranked (values, or imagined-block values)
+    const scores = res.scores ? Array.from(res.scores) : values;
     const value = values && idx >= 0 ? values[idx] : (res.value ?? null);
     let delta = null;
     if (ag.kind === 'fly' && value != null && this.prevV[who] != null) delta = ag.gamma * value - this.prevV[who];
@@ -86,7 +90,7 @@ export class Match {
     let text = '';
     try { text = this.rules.describe(action, s); } catch { text = action.type; }
     const after = this.rules.step(s, action);
-    const rec = { i: this.history.length, who, before: s, after, legal, action, idx, values, value, delta, trace: res.trace || null, text, ms };
+    const rec = { i: this.history.length, who, before: s, after, legal, action, idx, values, scores, value, delta, trace: res.trace || null, text, ms };
     this.history.push(rec);
     this.state = after;
     const end = this.rules.isOver(after);
