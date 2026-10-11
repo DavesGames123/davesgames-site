@@ -11,6 +11,7 @@
 //      grep -n 'MANA GLYPHS'    no disc-shaped mana glyph
 //      grep -n 'PAGE PROSE'     claims the sources or the model do not hold
 //      grep -n 'EVAL VERDICT'   08 says plainly what the measured numbers mean
+//      grep -n 'FACT TEXT'      fact texts that misread their source
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync } from 'node:fs';
@@ -19,6 +20,7 @@ import { dirname, join } from 'node:path';
 import { CARDS, TOKENS } from '../game/cards.js';
 import { manaGlyph } from '../ui/art.js';
 import { evalVerdict } from '../ui/charts.js';
+import { FACTS } from '../data/facts.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => readFileSync(join(ROOT, p), 'utf8');
@@ -86,6 +88,16 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg
   ok(/id="evalVerdict"/.test(read('index.html')), 'verdict: index.html has #evalVerdict');
   ok(/evalVerdict\(fin\)/.test(read('main.js')), 'verdict: main.js fills #evalVerdict from meta.final');
   console.log('  verdict:', t);
+}
+
+// ---------------------------------------------------------------- FACT TEXT
+// Shiu et al. 2024 give "more than 125,000 neurons and 50 million synaptic
+// connections" as the size of the connectome, not of their model. The
+// fact text must give the numbers to the connectome.
+{
+  const t = FACTS.wholeBrainModel.text;
+  ok(/uses the FlyWire connectome \(more than 125,000 neurons and 50 million synaptic connections\)/.test(t), 'fact text: Shiu 2024 numbers belong to the connectome');
+  ok(!/^The about/.test(FACTS.mbonCells.text), 'fact text: mbonCells reads as a sentence');
 }
 
 console.log(`review.test: ${pass} pass, ${fail} fail`);

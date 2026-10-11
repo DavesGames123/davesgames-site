@@ -77,7 +77,7 @@ export const FACTS = {
   kcSubtypes: F(14, 'subtypes', 'Li et al. split the KCs into 14 subtypes by shape.', 'li2020'),
   compartments: F(15, 'compartments', 'MBON dendrites and DAN axons divide the MB lobes into 15 compartments.', 'aso2014a'),
   mbonTypes: F(21, 'cell types', 'There are 21 types of MB output neuron (MBON).', 'aso2014a', { also: ['aso2014b'] }),
-  mbonCells: F(34, 'neurons', 'The about 2,000 KCs converge onto 34 MBONs.', 'aso2014b', { also: ['hige2015b'] }),
+  mbonCells: F(34, 'neurons', 'About 2,000 KCs converge onto only 34 MBONs.', 'aso2014b', { also: ['hige2015b'] }),
   danTypes: F(20, 'cell types', 'There are 20 types of dopaminergic neuron (DAN) in the MB.', 'aso2014a', { also: ['aso2016'] }),
   danTargets: F([1, 2], 'compartments', 'Each DAN type sends its axons to one, or at most two, compartments.', 'aso2014a'),
   aplCount: F(1, 'neuron per hemisphere', 'One GABAergic APL neuron per hemisphere covers the whole mushroom body.', 'liu2009'),
@@ -108,7 +108,7 @@ export const FACTS = {
   dopaminePredictionError: F(null, null, 'In primates, dopamine neuron firing tracks errors in the prediction of reward.', 'schultz1997'),
   tdLearning: F(null, null, 'Temporal-difference learning updates a value estimate from the difference between successive predictions.', 'sutton1988'),
   selfPlay: F(null, null, 'TD-Gammon learned backgammon by temporal-difference learning in self-play.', 'tesauro1995'),
-  wholeBrainModel: F(125000, 'neurons', 'A leaky integrate-and-fire model of the whole fly brain, built from the connectome (more than 125,000 neurons and 50 million connections), predicts feeding and grooming circuits. It is not trained.', 'shiu2024'),
+  wholeBrainModel: F(125000, 'neurons', 'A leaky integrate-and-fire model of the whole fly brain uses the FlyWire connectome (more than 125,000 neurons and 50 million synaptic connections). It predicts feeding and grooming circuits. It is not trained.', 'shiu2024'),
 
   // ----- counts measured from our shipped file (hemibrain v1.2)
   ourKc: F(1927, 'Kenyon cells', 'KCs in data/connectome.json (hemibrain v1.2, right hemisphere).', 'hemibrainData', { measured: 'kc.n', also: ['scheffer2020'] }),
