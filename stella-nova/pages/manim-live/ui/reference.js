@@ -99,7 +99,7 @@ export function mountReference(root, { getEngine, onLoadCode }) {
         <h3><code>${escapeHtml(full)}</code></h3>
         ${info.signature ? `<pre class="rf-sig"><code>${highlightPython(`${(info.name || name).split('.').pop()}${info.signature}`)}</code></pre>` : ''}
         ${info.file ? `<p class="rf-file muted" title="${escapeHtml(info.file)}">${escapeHtml(shortFile(info.file))}${info.line ? ':' + info.line : ''}</p>` : ''}
-        ${info.bases && info.bases.length ? `<p class="rf-bases">Inherits from ${info.bases.map(b => `<code class="ref-link" data-ref="${escapeHtml(b)}">${escapeHtml(b.split('.').pop())}</code>`).join(', ')}</p>` : ''}
+        ${info.bases && info.bases.filter(b => !/^builtins\./.test(b)).length ? `<p class="rf-bases">Inherits from ${info.bases.filter(b => !/^builtins\./.test(b)).map(b => `<code class="ref-link" data-ref="${escapeHtml(b)}">${escapeHtml(b.split('.').pop())}</code>`).join(', ')}</p>` : ''}
         <div class="rf-acts"><button class="btn small rf-src">View source</button></div>
       </header>
       <div class="rf-source" hidden></div>

@@ -88,12 +88,17 @@ export function mountHood(root, { getEngine }) {
         } catch {}
       }
       const v = x => x ? `<code>${escapeHtml(x)}</code>` : '<span class="muted">not reported</span>';
+      const wheel = Array.isArray(f.wheels) ? f.wheels.find(w => w.name === 'manim') : null;
+      if (wheel) { f.wheelSha256 = f.wheelSha256 || wheel.sha256; f.wheelFile = wheel.file; }
       let html = row('manim', v(f.manimVersion || f.version))
         + row('manim.__file__', v(f.manimFile || f.file))
+        + (f.wheelFile ? row('Wheel', v(f.wheelFile)) : '')
         + row('Wheel sha256', v(f.wheelSha256 || f.sha256 || f.wheel_sha256), 'hash')
         + row('Pyodide', v(f.pyodideVersion || f.pyodide))
         + row('Python', v(f.pythonVersion || f.python));
-      const stubs = f.replaced || f.stubs;
+      if (f.tex) html += row('TeX', escapeHtml(f.tex));
+      if (f.bootSeconds) html += row('Boot time', `${(+f.bootSeconds).toFixed(1)} s`);
+      const stubs = f.replaced || f.stubs || f.shims;
       if (stubs) {
         const list = Array.isArray(stubs) ? stubs : Object.entries(stubs).map(([mod, file]) => ({ mod, file }));
         html += row('Replaced modules', list.map(s => `<code title="${escapeHtml(s.file || '')}">${escapeHtml(s.mod || s.name || s)}</code>`).join(' '));
