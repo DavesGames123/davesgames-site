@@ -7,9 +7,15 @@
 //  2026-10-11. We read the claim in the abstract or in the open full text
 //  (Europe PMC). If we could not check a claim, we left it out.
 //
-//  Facts with `measured: true` are counts that tools/build-connectome.mjs
-//  made from the hemibrain v1.2 export. tests/data.test.mjs checks them
+//  Facts with `measured` are counts that tools/build-connectome.mjs made
+//  from the hemibrain v1.2 export (Fly A). tests/data.test.mjs checks them
 //  against data/connectome.json, so they cannot drift from the shipped file.
+//  Facts with `flywire` are the same counts from the FlyWire 783 export
+//  (Fly B, tools/build-connectome-flywire.mjs). tests/flywire.test.mjs
+//  checks them against data/connectome-flywire.json.
+//
+//  COMPARE lists the fact pairs (Fly A, Fly B) of the comparison table in
+//  section 02. main.js builds the table from it, so each cell is a fact.
 //
 //  EXPORTS   (jump with grep -n "<anchor>" data/facts.js)
 //      SOURCES ......... "export const SOURCES"     references, by id
@@ -17,6 +23,7 @@
 //      DISCLAIMER ...... "export const DISCLAIMER"  trademark line
 //      HONESTY ......... "export const HONESTY"     plain-words model notes
 //      DATA_CREDIT ..... "export const DATA_CREDIT" connectome licence line
+//      COMPARE ......... "export const COMPARE"     Fly A / Fly B table rows
 //      fact ............ "export function fact"     id -> fact, throws if unknown
 //      cite ............ "export function cite"     fact id -> source list
 // ============================================================================
@@ -94,6 +101,8 @@ export const FACTS = {
   // ----- sparse coding
   kcSparseness: F([0.05, 0.10], 'fraction active', 'Only about 5-10% of KCs respond to a given odour.', 'lin2014', { also: ['honegger2011', 'turner2008'] }),
   aplFeedback: F(null, null, 'KCs excite APL and APL inhibits KCs. This feedback loop keeps the KC code sparse and decorrelated. When the loop is cut, flies cannot learn to tell similar odours apart.', 'lin2014'),
+  kcFewSpikes: F(null, null, 'A KC that responds to an odour fires only a few spikes.', 'lin2014'),
+  kcSelective: F(null, null, 'KC responses are sparse because PN input decays fast, few PNs converge on each KC, and KC firing thresholds are high.', 'turner2008'),
   sparseRobust: F(null, null, 'The KC code stays sparse across many odours, from single chemicals to natural smells.', 'honegger2011'),
 
   // ----- dopamine and plasticity
@@ -128,6 +137,7 @@ export const FACTS = {
   ourKcWithPn: F(1750, 'Kenyon cells', 'KCs in our file that get uPN input.', 'hemibrainData', { measured: 'kcWithPnInput' }),
   ourPnKcEdges: F(9734, 'connections', 'PN-to-KC connections in our file.', 'hemibrainData', { measured: 'edges.pn_kc' }),
   ourKcMbonEdges: F(24370, 'connections', 'KC-to-MBON connections in our file.', 'hemibrainData', { measured: 'edges.kc_mbon' }),
+  ourKcMbonSynapses: F(309004, 'synapses', 'KC-to-MBON synapses in our file (sum over the connections of 3 or more synapses).', 'hemibrainData', { measured: 'kcMbonSynapses' }),
 
   // ----- counts measured from data/connectome-flywire.json (Fly B, FlyWire 783)
   // `flywire` names the path in that file. tests/flywire.test.mjs checks
@@ -150,14 +160,31 @@ export const FACTS = {
 export const DISCLAIMER = 'Not affiliated with or endorsed by Wizards of the Coast.';
 
 export const HONESTY = {
-  notAFly: 'We do not train a real fly. We train a computer model whose wiring comes from the published connectome of one fly brain.',
-  wiringReal: 'Wiring from the connectome: hemibrain v1.2 synapse counts between the selected neurons.',
+  notAFly: 'We do not train a real fly. We train two computer models. The wiring of each comes from the published connectome of a different fly brain.',
+  wiringReal: 'Wiring from the connectomes: hemibrain v1.2 synapse counts for Fly A, FlyWire 783 synapse counts for Fly B, between the selected neurons.',
+  twoAnimals: 'Fly A and Fly B are wired from two different animals: the hemibrain fly (Fly A) and the FlyWire fly (Fly B).',
+  synapseMethods: 'The two data sets detect synapses by different methods. So a difference in a synapse count between the two flies is not a biological difference only.',
   wiringSynthetic: 'Wiring sampled from published statistics: the real connectome was not available to this build.',
   valenceModel: 'The approach or avoid sign of each MBON is a model rule from its compartment (PAM or PPL1 dopamine), not a measurement of that cell.',
   onlyMb: 'The model is the mushroom body of one hemisphere only, not the whole brain.',
 };
 
-export const DATA_CREDIT = 'Connectome data: hemibrain v1.2, Janelia FlyEM (Scheffer et al. 2020), CC BY 4.0. We selected the mushroom body neurons and thresholded the synapse counts.';
+export const DATA_CREDIT = 'Connectome data: Fly A, hemibrain v1.2, Janelia FlyEM (Scheffer et al. 2020), CC BY 4.0. Fly B, FlyWire 783 (Dorkenwald et al. 2024) with the annotations v3.2.0 (Schlegel et al. 2024), CC BY 4.0. We selected the mushroom body neurons and thresholded the synapse counts.';
+
+// Rows of the Fly A / Fly B table in section 02: [label, Fly A fact ids,
+// Fly B fact ids]. Two or more ids in one cell show as "a / b / c".
+export const COMPARE = [
+  ['Kenyon cells (KCs)', ['ourKc'], ['fwKc']],
+  ['KC classes γ / α′β′ / αβ', ['ourKcg', 'ourKcapbp', 'ourKcab'], ['fwKcg', 'fwKcapbp', 'fwKcab']],
+  ['KCs with uPN input', ['ourKcWithPn'], ['fwKcWithPn']],
+  ['uniglomerular PNs', ['ourPn'], ['fwPn']],
+  ['uPN partners per KC (mean)', ['ourClaws'], ['fwClaws']],
+  ['PN-to-KC connections', ['ourPnKcEdges'], ['fwPnKcEdges']],
+  ['MBONs', ['ourMbon'], ['fwMbon']],
+  ['DANs', ['ourDan'], ['fwDan']],
+  ['KC-to-MBON connections', ['ourKcMbonEdges'], ['fwKcMbonEdges']],
+  ['KC-to-MBON synapses', ['ourKcMbonSynapses'], ['fwKcMbonSynapses']],
+];
 
 // ---------------------------------------------------------------- helpers
 export function fact(id) {

@@ -11,7 +11,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { FACTS, SOURCES, DISCLAIMER, HONESTY, DATA_CREDIT, fact, cite } from '../data/facts.js';
+import { FACTS, SOURCES, DISCLAIMER, HONESTY, DATA_CREDIT, COMPARE, fact, cite } from '../data/facts.js';
 import { parseCompartments, kcClass, danCluster, COMPARTMENTS } from '../tools/build-connectome.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -134,6 +134,19 @@ ok(threw, 'fact() throws on an unknown id');
 ok(DISCLAIMER === 'Not affiliated with or endorsed by Wizards of the Coast.', 'disclaimer text exact');
 ok(HONESTY.notAFly.includes('not train a real fly'), 'honesty line says we do not train a real fly');
 ok(/CC BY 4\.0/.test(DATA_CREDIT), 'data credit names the licence');
+ok(/hemibrain v1\.2/.test(DATA_CREDIT) && /FlyWire 783/.test(DATA_CREDIT), 'data credit names both connectomes');
+ok(/two different animals/.test(HONESTY.twoAnimals) && /different methods/.test(HONESTY.synapseMethods), 'honesty lines for two animals and two synapse methods');
+
+// ---------------------------------------------------------------- Fly A / Fly B table
+// Each row: a Fly A cell of hemibrain facts (measured) and a Fly B cell of
+// FlyWire facts (flywire), with the same number of ids.
+ok(Array.isArray(COMPARE) && COMPARE.length >= 7, `COMPARE has ${COMPARE.length} rows`);
+for (const [label, a, b] of COMPARE) {
+  ok(a.length === b.length && a.length >= 1, `COMPARE ${label}: same number of ids per fly`);
+  ok(a.every(id => FACTS[id]?.measured), `COMPARE ${label}: Fly A ids are measured hemibrain facts`);
+  ok(b.every(id => FACTS[id]?.flywire), `COMPARE ${label}: Fly B ids are FlyWire facts`);
+}
+for (const want of ['Kenyon cells', 'classes', 'PNs', 'per KC', 'MBONs', 'DANs', 'KC-to-MBON connections']) ok(COMPARE.some(r => r[0].includes(want)), `COMPARE has a row for ${want}`);
 
 // ---------------------------------------------------------------- optional network DOI check
 if (process.env.FLY_DUEL_NET === '1') {
