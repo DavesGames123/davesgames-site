@@ -43,6 +43,14 @@ for (const id of ids) {
   ok(cf.ART_CREDIT[id] === `${e.artist}, ${e.year}`, `${id}: ART_CREDIT in cardface.js matches art.json`);
 }
 ok(Object.keys(ART).sort().join() === [...cf.ART_IDS].sort().join(), 'ART_IDS lists the art.json ids');
+// Plain public domain or CC0 only: no Commons page of a picture carries a
+// CC BY tag (2026-10-11: moss-snail and hollow-husk changed for this).
+for (const id of ids) {
+  const e = ART[id];
+  if (!e) continue;
+  ok(!(e.templates || []).some(t => /^cc-by/i.test(t)) && !/CC BY/i.test(JSON.stringify(e)), `${id}: no CC BY tag on the picture`);
+}
+ok(!/\| CC BY|CC-BY/i.test(CREDITS), 'CREDITS-ART.md names no CC BY licence in the table');
 ok(Object.keys(ART).every(k => ids.includes(k)), 'art.json has no id that is not a card');
 
 // --------------------------------------------------------------- JPEG SIZE

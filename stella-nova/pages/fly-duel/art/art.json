@@ -46,24 +46,24 @@
   }
  },
  "ember-gnat": {
-  "artist": "John Curtis",
+  "artist": "Robert Hooke",
   "file": "cards/ember-gnat.jpg",
   "small": "cards/ember-gnat@sm.jpg",
-  "title": "British Entomology, vol. 8, plate 537",
-  "subject": "gnat (Diptera)",
-  "author": "John Curtis",
-  "year": "1836",
-  "commons": "File:Britishentomologyvolume8Plate537.jpg",
-  "url": "https://commons.wikimedia.org/wiki/File:Britishentomologyvolume8Plate537.jpg",
+  "title": "Micrographia, Schem. XXIX: the great belly'd gnat",
+  "subject": "gnat under the microscope",
+  "author": "Robert Hooke",
+  "year": "1665",
+  "commons": "File:Hooke-gnat.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Hooke-gnat.jpg",
   "licence": "Public domain",
   "templates": [
    "PD-old-100"
   ],
   "crop": {
-   "x": 0.2698,
-   "y": 0.0687,
-   "w": 0.7,
-   "h": 0.3025,
+   "x": 0.0,
+   "y": 0.0203,
+   "w": 1.0,
+   "h": 0.4493,
    "note": "fractions of the source image, 4:3 box"
   }
  },
@@ -422,30 +422,26 @@
   }
  },
  "moss-snail": {
-  "artist": "G. B. Sowerby",
+  "artist": "Giovanna Garzoni",
   "file": "cards/moss-snail.jpg",
   "small": "cards/moss-snail@sm.jpg",
-  "title": "The Edible Mollusca of Great Britain and Ireland, plate I (Helix)",
-  "subject": "snail on a leaf",
-  "author": "M. S. Lovell, plate by G. B. Sowerby",
-  "year": "1884",
-  "commons": "File:The edible Mollusca of Great Britain and Ireland (Plate I) (5987518093).jpg",
-  "url": "https://commons.wikimedia.org/wiki/File:The_edible_Mollusca_of_Great_Britain_and_Ireland_(Plate_I)_(5987518093).jpg",
+  "title": "A Lizard with a Snail and a Snail Shell (tempera on vellum)",
+  "subject": "garden snail",
+  "author": "Giovanna Garzoni",
+  "year": "before 1670",
+  "commons": "File:Giovanna Garzoni A Lizard with a Snail and a Snail Shell.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Giovanna_Garzoni_A_Lizard_with_a_Snail_and_a_Snail_Shell.jpg",
   "licence": "Public domain",
   "templates": [
-   "PD-old-70-1923",
-   "PD-old-70-expired",
-   "PD-old-X-expired",
-   "PD-scan"
+   "PD-old-70"
   ],
   "crop": {
-   "x": 0.05,
-   "y": 0.0178,
-   "w": 0.9,
-   "h": 0.4041,
+   "x": 0.0,
+   "y": 0.0379,
+   "w": 0.5,
+   "h": 0.4436,
    "note": "fractions of the source image, 4:3 box"
-  },
-  "note": "The Commons page also has the CC BY 2.0 tag of the Flickr scan; the work itself is public domain (PD-old-70, PD-scan)."
+  }
  },
  "thorn-vine": {
   "artist": "Flora Batava",
@@ -660,26 +656,24 @@
   }
  },
  "strangle-root": {
-  "artist": "Flora Batava",
+  "artist": "John Ellis",
   "file": "cards/strangle-root.jpg",
   "small": "cards/strangle-root@sm.jpg",
-  "title": "Flora Batava, vol. 11 (Cuscuta europaea)",
-  "subject": "dodder",
-  "author": "Jan Kops et al.",
-  "year": "1853",
-  "commons": "File:Cuscuta europaea — Flora Batava — Volume v11.jpg",
-  "url": "https://commons.wikimedia.org/wiki/File:Cuscuta_europaea_%E2%80%94_Flora_Batava_%E2%80%94_Volume_v11.jpg",
+  "title": "Dionaea muscipula, the Venus flytrap (plate sent to Linnaeus)",
+  "subject": "Venus flytrap with a caught fly",
+  "author": "John Ellis",
+  "year": "1769",
+  "commons": "File:Dionaea muscipula02.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Dionaea_muscipula02.jpg",
   "licence": "Public domain",
   "templates": [
-   "PD-old-100-1923",
-   "PD-old-100-expired",
-   "PD-old-X-expired"
+   "PD-old-100"
   ],
   "crop": {
-   "x": 0.0203,
-   "y": 0.3766,
-   "w": 0.5203,
-   "h": 0.2865,
+   "x": 0.15,
+   "y": 0.4292,
+   "w": 0.7,
+   "h": 0.3918,
    "note": "fractions of the source image, 4:3 box"
   }
  },
@@ -750,30 +744,29 @@
   }
  },
  "hollow-husk": {
-  "artist": "G. B. Sowerby",
+  "artist": "James Dwight Dana",
   "file": "cards/hollow-husk.jpg",
   "small": "cards/hollow-husk@sm.jpg",
-  "title": "A Popular History of the Aquarium, plate XI (Pagurus bernhardus)",
-  "subject": "hermit crab in a whelk shell",
-  "author": "George Brettingham Sowerby",
-  "year": "1857",
-  "commons": "File:Popular history of the aquarium of marine and fresh-water animals and plants (Plate XI) (7414355314).jpg",
-  "url": "https://commons.wikimedia.org/wiki/File:Popular_history_of_the_aquarium_of_marine_and_fresh-water_animals_and_plants_(Plate_XI)_(7414355314).jpg",
+  "title": "United States Exploring Expedition, Crustacea, atlas, plate 29 (Coenobita spinosus)",
+  "subject": "land hermit crab in its shell",
+  "author": "James Dwight Dana",
+  "year": "1852",
+  "commons": "File:Coenobita spinosus.png",
+  "url": "https://commons.wikimedia.org/wiki/File:Coenobita_spinosus.png",
   "licence": "Public domain",
   "templates": [
-   "PD-old-70-1923",
+   "PD-US-expired",
    "PD-old-70-expired",
-   "PD-old-X-expired",
-   "PD-scan"
+   "PD-old-X-expired"
   ],
   "crop": {
-   "x": 0.05,
-   "y": 0.2344,
-   "w": 0.8,
-   "h": 0.4307,
+   "x": 0.0203,
+   "y": 0.2271,
+   "w": 0.9,
+   "h": 0.6651,
    "note": "fractions of the source image, 4:3 box"
   },
-  "note": "The Commons page also has the CC BY 2.0 tag of the Flickr scan; the work itself is public domain (PD-old-70, PD-scan)."
+  "edit": "levels stretched (4 % to 90 %) for contrast"
  },
  "ember-larva": {
   "artist": "F. Nemos",

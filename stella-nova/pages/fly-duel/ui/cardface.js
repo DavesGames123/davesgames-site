@@ -31,7 +31,7 @@
 //      grep -n 'export function frameKind'  card -> amber|moss|none|land
 //      grep -n 'export function artURL'     picture URL for an id
 //      grep -n 'export function loadArtIndex'  art/art.json, once
-//      grep -n 'export function artCredit'  "Art: John Curtis, 1836"
+//      grep -n 'export function artCredit'  "Art: Dru Drury, 1770"
 //      grep -n 'export function loadCardArt'   picture loader and cache
 //      grep -n 'export function getCardArt'    cached picture or null
 //      grep -n 'export function rulesRuns'  rules text as styled runs
@@ -50,7 +50,7 @@ import { KEYWORDS } from '../game/cards.js';
 export const ART_CREDIT = Object.freeze({
   "amber-ridge": "Albert Bierstadt, 1866",
   "moss-hollow": "Ernst Haeckel, 1904",
-  "ember-gnat": "John Curtis, 1836",
+  "ember-gnat": "Robert Hooke, 1665",
   "cinder-ant": "John Lubbock, 1897",
   "dune-wasp": "Edward Saunders, 1892",
   "hive-soldier": "W. H. Lizars, 1840",
@@ -66,7 +66,7 @@ export const ART_CREDIT = Object.freeze({
   "war-chirp": "W. H. Lizars, 1840",
   "swarm-call": "John Lubbock, 1897",
   "root-sentinel": "Ivan Shishkin, 1865",
-  "moss-snail": "G. B. Sowerby, 1884",
+  "moss-snail": "Giovanna Garzoni, before 1670",
   "thorn-vine": "Flora Batava, 1893",
   "bark-toad": "A. J. Rösel von Rosenhof, 1758",
   "dew-moth": "Dru Drury, 1770",
@@ -76,11 +76,11 @@ export const ART_CREDIT = Object.freeze({
   "fern-beast": "Ernst Haeckel, 1904",
   "deep-roots": "Vincent van Gogh, 1890",
   "sap-bloom": "Johan Carl Krauss, 1802",
-  "strangle-root": "Flora Batava, 1853",
+  "strangle-root": "John Ellis, 1769",
   "swell": "Anna Maria Hussey, 1847",
   "spore-burst": "J. B. F. P. Bulliard, 1780-1791",
   "drift-seed": "Walther Otto Müller, 1887",
-  "hollow-husk": "G. B. Sowerby, 1857",
+  "hollow-husk": "James Dwight Dana, 1852",
   "ember-larva": "F. Nemos, 1895",
   "spore": "Ernst Haeckel, 1904",
 });
@@ -96,7 +96,7 @@ export const SUBTYPE = Object.freeze({
   'flare-spit': 'Venom', 'heat-pulse': 'Fever', 'kiln-burst': 'Eruption', 'war-chirp': 'Song', 'swarm-call': 'Signal',
   'root-sentinel': 'Oak', 'moss-snail': 'Snail', 'thorn-vine': 'Bramble', 'bark-toad': 'Toad', 'dew-moth': 'Moth',
   'briar-wall': 'Rose', 'spore-mother': 'Fungus', 'grove-stag': 'Beetle', 'fern-beast': 'Fern',
-  'deep-roots': 'Growth', 'sap-bloom': 'Nectar', 'strangle-root': 'Vine', 'swell': 'Growth', 'spore-burst': 'Spores',
+  'deep-roots': 'Growth', 'sap-bloom': 'Nectar', 'strangle-root': 'Snare', 'swell': 'Growth', 'spore-burst': 'Spores',
   'drift-seed': 'Seed', 'hollow-husk': 'Crab',
   'ember-larva': 'Larva', 'spore': 'Fungus',
 });
