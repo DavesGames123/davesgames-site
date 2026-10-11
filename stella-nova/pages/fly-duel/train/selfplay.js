@@ -62,8 +62,16 @@ export function asPlayer(p, seed = 1) {
 
 // Training defaults, shared by train/worker.js and tools/train.mjs.
 // FLY_OPTS: options for new flies. imagine scores an attack by the
-// worst opposing block (model step, see brain/agent.js).
-export const FLY_OPTS = Object.freeze({ imagine: true });
+// worst opposing block (model step, see brain/agent.js). kcCode
+// 'graded' gives each active KC a rate above the APL level, and
+// sparsity 0.1 lets 10 % of live KCs fire (the top of the published
+// 5-10 % band). See brain/mb.js. Held-out rate against the greedy bot,
+// tools/mb-lab.mjs, 8000 games, 3 seeds (2026, 7, 11), 1000 games each:
+//     binary, sparsity 0.05:  652/3000 = 0.217
+//     binary, sparsity 0.10:  829/3000 = 0.276
+//     graded, sparsity 0.10:  899/3000 = 0.300
+// Weights saved with other options keep their own options in the JSON.
+export const FLY_OPTS = Object.freeze({ imagine: true, kcCode: 'graded', sparsity: 0.1 });
 // TRAIN_MIX: share of training games vs the random bot, vs the greedy
 // bot, and fly A vs fly B.
 /** @type {{ random: number, greedy: number, self: number }} */

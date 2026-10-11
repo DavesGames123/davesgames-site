@@ -66,6 +66,16 @@ const t0 = performance.now();
   ok(bad, 'asPlayer: an unknown name throws');
 }
 
+// ---------------------------------------------------------------- 1b fly options
+// FLY_OPTS: graded KC code, sparsity inside the published 5-10 % band.
+{
+  const [A] = makePair(C, { ...FLY_OPTS, seed: 4 });
+  ok(FLY_OPTS.kcCode === 'graded' && A.mb.graded, 'FLY_OPTS: new flies use the graded KC code');
+  ok(FLY_OPTS.sparsity >= 0.05 && FLY_OPTS.sparsity <= 0.1 && A.mb.k === Math.round(FLY_OPTS.sparsity * A.mb.nLive), `FLY_OPTS: sparsity ${FLY_OPTS.sparsity} in the 5-10 % band, k = ${A.mb.k}`);
+  const j = JSON.parse(JSON.stringify(A)), A2 = Fly.fromJSON(C, j);
+  ok(A2.mb.graded && A2.mb.k === A.mb.k, 'FLY_OPTS: a saved fly keeps its code and sparsity');
+}
+
 // ---------------------------------------------------------------- 2 stats
 {
   ok(near(binomialP(60, 100), 0.0284, 0.0005), `binomialP(60, 100) = 0.0284 (${binomialP(60, 100).toFixed(4)})`);
