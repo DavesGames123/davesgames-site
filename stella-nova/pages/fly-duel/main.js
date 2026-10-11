@@ -151,13 +151,14 @@ function weightsFor(side, src = D.pretrained) {
 function makeFly(side, saved = weightsFor(side)) {
   const Fly = M.fly?.Fly;
   if (!Fly || !D.connectome) return null;
+  // each fly on its own wiring file (pretrained.json "wiring"); the
+  // section 06 worker trains on the same files
+  const C = conOf(side);
   if (saved) {
-    // shipped weights go with the wiring file pretrained.json names
-    const C = saved === weightsFor(side) ? (D.cons?.[side] || D.connectome) : D.connectome;
     try { return Fly.fromJSON(C, saved); }
     catch (e) { console.warn(`fly-duel: weights for ${side} did not load`, e); }
   }
-  try { return new Fly(D.connectome, { ...(M.trainer?.FLY_OPTS || {}), name: `Fly ${side}`, hemisphere: side, seed: side === 'A' ? 1 : 2 }); }
+  try { return new Fly(C, { ...(M.trainer?.FLY_OPTS || {}), name: `Fly ${side}`, hemisphere: side, seed: side === 'A' ? 1 : 2 }); }
   catch (e) { console.warn('fly-duel: new Fly failed', e); return null; }
 }
 
@@ -765,7 +766,7 @@ function initTrain() {
       }
     };
     train.worker.onerror = e => { read.textContent = `The training worker failed: ${e.message || 'train/worker.js did not load'}.`; train.running = false; };
-    post({ cmd: 'init', connectome: D.connectome, weights: weights || undefined });
+    post({ cmd: 'init', connectomes: { A: conOf('A'), B: conOf('B') }, weights: weights || undefined });
     return true;
   };
   btns[0].addEventListener('click', () => {
