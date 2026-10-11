@@ -21,7 +21,8 @@
 //
 //  GREP MAP   (grep -n "^// ---" tests/page.test.mjs)
 // ============================================================================
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -213,6 +214,19 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     querySelector: () => fakeEl('q'), querySelectorAll: () => [], createElement: () => fakeEl('c'),
     addEventListener() {}, head: fakeEl('head'), body: fakeEl('body'), documentElement: fakeEl('html'), hidden: false,
   };
+  // data/pretrained.json and data/training-curve.json: the real files
+  // when they are in the tree, else a tiny real run of tools/train.mjs
+  // into a temp folder (same format, a few seconds).
+  const fixture = {};
+  let tmp = null;
+  if (has('tools/train.mjs') && !(has('data/pretrained.json') && has('data/training-curve.json'))) {
+    tmp = mkdtempSync(join(tmpdir(), 'fly-duel-page-'));
+    const { run } = await import('../tools/train.mjs');
+    run({ games: 20, every: 10, eval: 4, final: 6, curriculum: 10, seed: 3, out: tmp, quiet: true });
+    for (const f of ['pretrained.json', 'training-curve.json']) fixture[`data/${f}`] = readFileSync(join(tmp, f), 'utf8');
+    rmSync(tmp, { recursive: true, force: true });
+    console.log('  dom: pretrained and curve from a 20-game tools/train.mjs run (fixture)');
+  }
   const frames = [];
   // A worker stand-in. With train/worker.js in the tree, init, train and
   // pause go to its real createTrainer (the same code the worker runs).
@@ -245,9 +259,9 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     IntersectionObserver: class { constructor(cb) { this.cb = cb; } observe(t) { this.cb([{ target: t, isIntersecting: true }]); } },
     requestAnimationFrame: f => frames.push(f), addEventListener() {},
     fetch: async p => {
-      const f = join(ROOT, String(p).replace(/^\.\//, ''));
-      if (!existsSync(f)) return { ok: false, status: 404 };
-      const txt = readFileSync(f, 'utf8');
+      const rel = String(p).replace(/^\.\//, ''), f = join(ROOT, rel);
+      if (!existsSync(f) && !fixture[rel]) return { ok: false, status: 404 };
+      const txt = existsSync(f) ? readFileSync(f, 'utf8') : fixture[rel];
       return { ok: true, status: 200, json: async () => JSON.parse(txt), text: async () => txt };
     },
   });
@@ -304,6 +318,13 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   await new Promise(r => setTimeout(r, 10));
   ok(/Evaluation at game \d+, 100 games each/.test(E('trainRead').textContent), `dom: eval result line (${E('trainRead').textContent.slice(0, 80)})`);
   ok(/eval · vs random bot/.test(E('trainLegend').innerHTML), 'dom: eval rates get their own series');
+  if (has('tools/train.mjs')) {
+    ok(/held-out games/.test(E('evalTable').innerHTML) && /Fly A vs random bot/.test(E('evalTable').innerHTML) && /95% CI/.test(E('evalTable').innerHTML), 'dom: section 08 shows the held-out table');
+    ok(/node tools\/train\.mjs/.test(E('curveMeta').innerHTML), 'dom: section 08 shows the command that made the numbers');
+    ok(/vs random bot/.test(E('curveLegend').innerHTML), 'dom: section 08 legend has the checkpoint series');
+    ok(/held-out games Fly A won/.test(E('heroStats').innerHTML), 'dom: hero stat from the held-out numbers');
+    ok(/pretrained weights/.test(E('heroStatus').textContent) || /wins|Draw/.test(E('heroStatus').textContent), `dom: hero plays the pretrained flies (${E('heroStatus').textContent.slice(0, 70)})`);
+  } else skipped('dom: tools/train.mjs not there');
   E('toyRew').fire('click');
   ok(/PAM burst/.test(E('toyRead').innerHTML), 'dom: section 05 reward gives a PAM burst line');
   ok(!/NaN|undefined/.test([...els.values()].map(e => e.innerHTML + e.textContent).join('')), 'dom: no NaN or undefined in any markup');

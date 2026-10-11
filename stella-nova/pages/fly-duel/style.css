@@ -235,7 +235,10 @@ input[type=number]{background:var(--card2);color:var(--ink);border:1px solid var
 .evaltab{width:100%;border-collapse:collapse;font-size:0.8rem}
 .evaltab th,.evaltab td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
 .evaltab th{color:var(--dim);font-weight:500}
-.evaltab td.n{font-family:var(--mono);color:var(--ink);text-align:right}
+.evaltab td.n,.evaltab th.n{font-family:var(--mono);text-align:right;white-space:nowrap}
+.evaltab td.n{color:var(--ink)}
+.evaltab tbody th{font-weight:400;color:var(--ink2)}
+#curveMeta code{font:0.76rem var(--mono);color:var(--ink);word-break:break-all}
 .refs{list-style:decimal;padding-left:2em;display:grid;gap:7px;font-size:0.82rem;color:var(--dim)}
 .refs li{scroll-margin-top:120px}
 .refs li:target{color:var(--ink)}

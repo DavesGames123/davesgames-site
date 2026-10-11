@@ -29,7 +29,8 @@
 //      grep -n 'function initDopamine'    05 toy three-factor rule
 //      grep -n 'function initTrain'       06 worker, live curves
 //      grep -n 'function initWatch'       07 step-through match
-//      grep -n 'function initResults'     08 measured curve and table
+//      grep -n 'function initResults'     08 measured curve, held-out table
+//      grep -n 'function finalOf'         meta.final of training-curve.json
 //      grep -n 'function initFacts'       [data-fact] and [data-cite] spans
 //      grep -n 'function initSources'     references and credits
 //      grep -n 'function initChips'       sticky section bar
@@ -109,10 +110,10 @@ async function loadAll() {
     tryJSON('pretrained', './data/pretrained.json'),
     tryJSON('curve', './data/training-curve.json'),
   ]);
-  // brain/fly.js imports the rules, so it loads after them. The worker
-  // module gives TRAIN_MIX and FLY_OPTS; its worker glue is inert here.
+  // brain/fly.js imports the rules, so it loads after them.
+  // train/selfplay.js gives TRAIN_MIX, TRAIN_EXPLORE and FLY_OPTS.
   await tryImport('fly', './brain/fly.js');
-  await tryImport('trainer', './train/worker.js');
+  await tryImport('trainer', './train/selfplay.js');
   if (M.cards?.KEYWORDS) setKeywordText(M.cards.KEYWORDS);
   return { M, D, status };
 }
@@ -258,6 +259,9 @@ function initHero() {
   if (REDUCED) step();
 }
 
+// Held-out numbers of the shipped flies (tools/train.mjs meta.final), or null.
+function finalOf() { return D.curve?.meta?.final || D.pretrained?.meta?.final || null; }
+
 function initHeroStats() {
   const C = D.connectome, items = [];
   if (C) {
@@ -266,11 +270,11 @@ function initHeroStats() {
     items.push([`${C.mbon?.n}`, 'output neurons (MBONs) read the KCs out']);
     items.push([`${C.dan?.n}`, 'dopamine neurons (DANs) gate the learning']);
   }
-  const rows = curveRows(D.curve);
-  if (rows.length) {
-    const last = flattenRow(rows[rows.length - 1]);
-    const k = Object.keys(last).find(x => /^A\b|^a\b|flyA/i.test(x) && /random/i.test(x) && last[x] <= 1) || Object.keys(last).find(x => /random/i.test(x) && last[x] <= 1);
-    if (k) items.push([pct(last[k]), `win rate of ${/B/.test(k.split('.')[0]) ? 'Fly B' : 'Fly A'} against a random player after pretraining (measured)`]);
+  const fin = finalOf();
+  if (fin?.vsRandom?.A?.rate != null) items.push([pct(fin.vsRandom.A.rate), `of ${fin.vsRandom.A.n} held-out games Fly A won against a random player (measured)`]);
+  else if (fin == null && D.curve) {
+    const rows = curveRows(D.curve), last = rows.length ? rows[rows.length - 1] : null;
+    if (last?.vsRandom?.A != null) items.push([pct(last.vsRandom.A), 'win rate of Fly A against a random player at the last checkpoint (measured)']);
   }
   $('heroStats').innerHTML = items.map(([v, t]) => `<div><b>${esc(v)}</b><span>${esc(t)}</span></div>`).join('');
 }
@@ -648,15 +652,24 @@ function initResults() {
   legend();
   if (!D.curve) { $('curveMeta').textContent = 'The pretraining run has not written its file yet. When it does, its numbers appear here.'; $('evalTable').innerHTML = '<tbody><tr><td class="none">No measured numbers yet.</td></tr></tbody>'; return; }
   const meta = D.curve.meta || {};
-  const flat = flattenRow(meta);
-  const strs = Object.entries(meta).filter(([, x]) => typeof x === 'string');
-  $('curveMeta').innerHTML = [...strs.map(([k, x]) => `<b>${esc(k)}</b> <code>${esc(x)}</code>`), ...Object.entries(flat).map(([k, x]) => `<b>${esc(k)}</b> ${esc(x)}`)].join(' · ') || 'No run details in the file.';
+  const show = ['command', 'seed', 'date', 'wallSeconds', 'node', 'curriculum', 'checkpointEval', 'selection', 'flyOptions', 'note'];
+  const txt = k => k === 'wallSeconds' ? `${Math.round(meta[k] / 60)} min (${meta[k]} s)` : String(meta[k]);
+  $('curveMeta').innerHTML = show.filter(k => meta[k] != null).map(k => `<b>${esc(k)}</b> ${k === 'command' ? `<code>${esc(meta[k])}</code>` : esc(txt(k))}`).join(' · ')
+    + (meta.trainingGamesByKind ? ` · <b>training games by kind</b> ${esc(Object.entries(meta.trainingGamesByKind).map(([k, n]) => `${k} ${n}`).join(', '))}` : '');
+  const fin = finalOf();
+  if (fin) {
+    // held-out rows: label, result { wins, losses, draws, n, rate, ci95, pVsCoin }
+    const R = [['Fly A vs random bot', fin.vsRandom?.A], ['Fly B vs random bot', fin.vsRandom?.B], ['Fly A vs greedy bot', fin.vsGreedy?.A], ['Fly B vs greedy bot', fin.vsGreedy?.B],
+      ['Fly A vs Fly B', fin.AvsB], ['greedy bot vs random bot (scale)', fin.greedyVsRandom]].filter(r => r[1] && r[1].rate != null);
+    const p = v => v == null ? '' : v < 1e-4 ? '< 0.0001' : String(v);
+    $('evalTable').innerHTML = `<thead><tr><th>held-out games, kept flies (checkpoint ${esc(fin.games)})</th><th class="n">win</th><th class="n">95% CI</th><th class="n">W-L-D</th><th class="n">p vs coin</th></tr></thead><tbody>`
+      + R.map(([lab, r]) => `<tr><th>${esc(lab)}</th><td class="n">${pct(r.rate)}</td><td class="n">${r.ci95 ? `${pct(r.ci95[0])}–${pct(r.ci95[1])}` : ''}</td><td class="n">${r.wins}-${r.losses}-${r.draws}</td><td class="n">${p(r.pVsCoin)}</td></tr>`).join('') + '</tbody>';
+    return;
+  }
   const last = rows.length ? flattenRow(rows[rows.length - 1]) : {};
   const rateKeys = Object.keys(last).filter(k => k !== xKey && last[k] >= 0 && last[k] <= 1);
-  const otherKeys = Object.keys(last).filter(k => k !== xKey && !rateKeys.includes(k));
   $('evalTable').innerHTML = `<thead><tr><th>${esc(xKey || 'checkpoint')}</th><td class="n">${esc(last[xKey] ?? rows.length)}</td></tr></thead><tbody>`
-    + rateKeys.map(k => `<tr><th>${esc(seriesLabel(k))}</th><td class="n">${pct(last[k])}</td></tr>`).join('')
-    + otherKeys.map(k => `<tr><th>${esc(k)}</th><td class="n">${esc(last[k])}</td></tr>`).join('') + '</tbody>';
+    + rateKeys.map(k => `<tr><th>${esc(seriesLabel(k))}</th><td class="n">${pct(last[k])}</td></tr>`).join('') + '</tbody>';
 }
 
 // ---------------------------------------------------------------- sources
