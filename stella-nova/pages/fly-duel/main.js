@@ -432,13 +432,17 @@ function initSparse() {
     return mbCache.get(sp);
   };
   // Two afterstates of one decision: two boards that differ by one move.
+  // With no hero history (a new hero game), the greedy bot plays a
+  // scripted game to a decision with 3 or more options. The last move
+  // of each turn always gave 1 or 2 options, so that script found none.
   const pickPair = () => {
     const hist = hero.match?.history || [];
     const cands = hist.filter(r => r.legal?.length >= 2);
     if (!cands.length && M.rules) {
       try {
-        let s = M.rules.newGame({ seed: 11 });
-        for (let i = 0; i < 40 && !M.rules.isOver(s); i++) { const l = M.rules.legalActions(s); if (l.length >= 3 && i > 8) return { s, l, me: s.toAct }; s = M.rules.step(s, l[l.length - 1]); }
+        const bot = M.bots?.greedyBot ? M.bots.greedyBot() : (st, l) => l[l.length - 1];
+        let s = M.rules.newGame({ seed: 11 + Math.floor(Math.random() * 1000), names: NAMES });
+        for (let i = 0; i < 80 && !M.rules.isOver(s); i++) { const l = M.rules.legalActions(s); if (l.length >= 3 && i > 8) return { s, l, me: s.toAct }; s = M.rules.step(s, bot(s, l)); }
       } catch { return null; }
       return null;
     }
@@ -468,7 +472,7 @@ function initSparse() {
   };
   inp.addEventListener('input', () => { out.textContent = `${Math.round(+inp.value * 100)}%`; });
   inp.addEventListener('change', compute);
-  $('spNext').addEventListener('click', () => { pair = pickPair(); compute(); });
+  $('spNext').addEventListener('click', () => { pair = pickPair() || pair; compute(); });
   // first pair once the hero has a few moves (or now, from a scripted game)
   const prev = hero.onDecision; let done = false;
   hero.onDecision = rec => { prev?.(rec); if (!done && (hero.match.history.length >= 8)) { done = true; pair = pickPair(); compute(); } };
@@ -608,7 +612,7 @@ function initWatch() {
       if (rec.trace) bv.setTrace(rec.trace, rec.value);
       if (rec.delta != null) bv.burst(rec.delta);
       const end = W.cur === m.history.length - 1 && m.result;
-      $('wInfo').textContent = `Decision ${W.cur + 1}, turn ${rec.before.turn}. ${m.names[rec.who]} chose: ${rec.text}.${rec.delta != null ? ` TD error δ = ${rec.delta.toFixed(3)}.` : ''}${end ? ` Game over: ${m.result.winner === -1 ? 'draw' : `${m.names[m.result.winner]} wins`}.` : ''} Using ${W.src}.`;
+      $('wInfo').textContent = `Decision ${W.cur + 1}, turn ${rec.before.turn}. ${m.names[rec.who]} chose: ${rec.text.replace(/\.$/, '')}.${rec.delta != null ? ` TD error δ = ${rec.delta.toFixed(3)}.` : ''}${end ? ` Game over: ${m.result.winner === -1 ? 'draw' : `${m.names[m.result.winner]} wins`}.` : ''} Using ${W.src}.`;
     } else {
       $('wCands').innerHTML = '<li class="head">Press Next to see the first decision.</li>';
       $('wInfo').textContent = `Seed ${m.seed}. Using ${W.src}.`;
