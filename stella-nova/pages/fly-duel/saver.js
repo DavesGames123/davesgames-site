@@ -42,6 +42,11 @@
 //  the table play the real match; the brain maps float beside them.
 //  Without the 3D table, createShow() draws the 2D shots.
 //
+//  THE CARDS. Every card the 2D show draws is drawCard() of ui/cardface.js:
+//  the painted plate card of the gallery and the 3D table. wantArt()
+//  starts the picture load once per card. No glow: a hot card gets a hard
+//  ring.
+//
 //  THE PLATE. plateFor() gives the shell poster: title per shot, a live
 //  line (life totals, turn), KC sparsity of each fly, the weights state
 //  and the honesty line (model, not a real fly). No code extract. The
@@ -58,6 +63,8 @@
 //      grep -n 'export function camShot'      shot kind -> 3D camera shot
 //      grep -n 'export function createShow3d' the duel on the 3D table
 //      grep -n 'function drawTable'           the table (and combat)
+//      grep -n 'function wantArt'             load the plate of a card once
+//      grep -n 'function drawMini'            one card on the table
 //      grep -n 'function drawCardFace'        one card, large
 //      grep -n 'function drawValues'          legal moves and values
 //      grep -n 'function drawBrain'           one brain view in a rect
@@ -67,7 +74,8 @@ import { plateBand } from '../../lib/saver-clear.js';
 import { mulberry32, shuffle } from './data/rng.js';
 import { BrainView } from './ui/brain.js';
 import { Match, agentFromFly, agentFromBot } from './ui/match.js';
-import { cardArt, manaGlyph, colourKey, PALETTE } from './ui/art.js';
+import { manaGlyph, colourKey, PALETTE } from './ui/art.js';
+import { drawCard, loadCardArt, getCardArt } from './ui/cardface.js';
 import { permInfo } from './ui/board.js';
 import { TOKENS } from './ui/tokens.js';
 
@@ -217,7 +225,7 @@ export function plateFor(shot, snap = {}) {
 }
 
 // ----------------------------------------------------------- drawing
-const INK = TOKENS.ink, INK2 = TOKENS.ink2, DIM = TOKENS.dim, BG = TOKENS.bg, CARD = TOKENS.panel2;
+const INK = TOKENS.ink, INK2 = TOKENS.ink2, DIM = TOKENS.dim, BG = TOKENS.bg;
 // seat colours (DESIGN.md 1.1): Fly A, Fly B
 const SIDE_COL = [TOKENS.flyA, TOKENS.flyB];
 const FONT = 'system-ui,-apple-system,Segoe UI,sans-serif';
@@ -270,17 +278,16 @@ function svgImage(S, key, svg) {
 }
 const ready = img => !!(img && (img.complete === undefined || img.complete) && (img.naturalWidth === undefined || img.naturalWidth > 0));
 
-function drawArt(S, g, card, x, y, w, h) {
-  const P = PALETTE[colourKey(card && card.colour)];
-  const img = card ? svgImage(S, 'art:' + card.id, cardArt(card, 'art')) : null;
-  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
-  g.fillStyle = P.sky0; g.fillRect(x, y, w, h);
-  if (ready(img)) {
-    // the art is 100 x 70 with "slice": cover the box
-    const k = Math.max(w / 100, h / 70), iw = 100 * k, ih = 70 * k;
-    g.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih);
-  }
-  g.restore();
+// The plate picture of a card (ui/cardface.js loadCardArt). The first
+// call starts the load; drawCard() uses the cached picture from the next
+// frame on. Without a DOM the loader gives null, and drawCard() draws a
+// flat placeholder.
+function wantArt(S, card, small) {
+  if (!card) return;
+  const key = `${card.id}${small ? '@sm' : ''}`;
+  if (S.art.has(key)) return;
+  S.art.add(key);
+  loadCardArt(card.id, { small }).catch(() => null);
 }
 
 function drawGlyph(S, g, kind, n, x, y, s) {
@@ -291,32 +298,22 @@ function drawGlyph(S, g, kind, n, x, y, s) {
   g.beginPath(); g.arc(x + s / 2, y + s / 2, s * 0.42, 0, Math.PI * 2); g.stroke();
 }
 
-// A permanent on the table: art, name, power/toughness, damage.
+// A permanent on the table: the painted card of ui/cardface.js at a small
+// size, with its state (tapped, sick, damage, pump). A hot card (attacker
+// or blocker of the shot) gets a hard ring in the card colour. No glow.
 function drawMini(S, g, card, info, x, y, w, h, hot) {
   const P = PALETTE[colourKey(card && card.colour)];
+  wantArt(S, card, true);
   g.save();
-  if (info.tapped) { g.translate(x + w / 2, y + h / 2); g.rotate(0.22); g.translate(-x - w / 2, -y - h / 2); g.globalAlpha = 0.7; }
-  if (hot) { g.shadowColor = P.glow; g.shadowBlur = Math.max(6, w * 0.18); }
-  rrect(g, x, y, w, h, w * 0.08); g.fillStyle = CARD; g.fill();
-  g.shadowBlur = 0;
-  g.lineWidth = hot ? Math.max(2, w * 0.035) : Math.max(1, w * 0.018);
-  g.strokeStyle = hot ? P.glow : P.ink; g.stroke();
-  const pad = w * 0.06, ah = h * 0.52;
-  drawArt(S, g, card, x + pad, y + pad, w - 2 * pad, ah);
-  g.fillStyle = INK; g.font = font(w * 0.105, 600); g.textAlign = 'left'; g.textBaseline = 'top';
-  g.fillText(fitText(g, card ? card.name : '?', w - 2 * pad), x + pad, y + pad * 1.6 + ah);
-  const kw = (card && card.keywords) || [];
-  if (kw.length) { g.fillStyle = DIM; g.font = font(w * 0.085); g.fillText(fitText(g, kw.join(' · '), w - 2 * pad), x + pad, y + pad * 1.6 + ah + w * 0.14); }
-  if (card && card.type === 'creature') {
-    const pw = (card.power || 0) + (info.pp | 0), tg = (card.toughness || 0) + (info.pt | 0);
-    const t = `${pw}/${tg - (info.damage | 0)}`;
-    g.font = font(w * 0.15, 700);
-    const tw = g.measureText(t).width + w * 0.1, th = w * 0.2;
-    rrect(g, x + w - tw - pad, y + h - th - pad, tw, th, th * 0.3); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fill();
-    g.fillStyle = info.damage ? TOKENS.dmg : INK; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(t, x + w - pad - tw / 2, y + h - pad - th / 2);
+  if (info.tapped) { g.translate(x + w / 2, y + h / 2); g.rotate(0.22); g.translate(-x - w / 2, -y - h / 2); }
+  drawCard(g, card || null, { x, y, w, h, art: card ? getCardArt(card.id, { small: true }) : null,
+    state: { tapped: !!info.tapped, sick: !!info.sick, damage: info.damage | 0, pp: info.pp | 0, pt: info.pt | 0 } });
+  if (hot) {
+    // the card keeps 5:7 inside (w, h): ring its real box
+    const u = Math.min(w / 100, h / 140), cw = 100 * u, ch = 140 * u;
+    g.lineWidth = Math.max(2, cw * 0.03); g.strokeStyle = P.glow;
+    g.strokeRect(x + (w - cw) / 2 - g.lineWidth, y + (h - ch) / 2 - g.lineWidth, cw + 2 * g.lineWidth, ch + 2 * g.lineWidth);
   }
-  if (info.sick) { g.fillStyle = DIM; g.font = font(w * 0.1); g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText('new', x + pad, y + h - pad); }
   g.restore();
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
 }
@@ -428,48 +425,12 @@ function drawTable(S, g, R, o = {}) {
   return { x: R.x + R.w / 2, y: R.y + R.h / 2, w: R.w, h: R.h };
 }
 
-// One card, large. Height = 1.4 * w.
+// One card, large: the painted card of ui/cardface.js (drawCard), the
+// same face as the gallery and the 3D table. Height = 1.4 * w.
 function drawCardFace(S, g, card, x, y, w) {
-  const h = w * 1.4, P = PALETTE[colourKey(card && card.colour)], pad = w * 0.05;
-  g.save();
-  g.shadowColor = P.glow; g.shadowBlur = w * 0.08;
-  rrect(g, x, y, w, h, w * 0.05); g.fillStyle = CARD; g.fill();
-  g.shadowBlur = 0; g.lineWidth = Math.max(1.5, w * 0.012); g.strokeStyle = P.ink; g.stroke();
-  // name and cost
-  const nh = w * 0.11;
-  g.fillStyle = INK; g.font = font(nh * 0.62, 650); g.textBaseline = 'middle'; g.textAlign = 'left';
-  const cost = (card && card.cost) || {}, gl = [];
-  if (cost.generic > 0) gl.push(['generic', cost.generic]);
-  for (let i = 0; i < (cost.amber | 0); i++) gl.push(['amber', 0]);
-  for (let i = 0; i < (cost.moss | 0); i++) gl.push(['moss', 0]);
-  const gs = nh * 0.72;
-  g.fillText(fitText(g, card ? card.name : '?', w - 2 * pad - gl.length * gs * 1.08), x + pad, y + pad + nh / 2);
-  gl.forEach(([k, n], i) => drawGlyph(S, g, k, n, x + w - pad - (gl.length - i) * gs * 1.08, y + pad + (nh - gs) / 2, gs));
-  // art
-  const ay = y + pad + nh, ah = (w - 2 * pad) * 0.7;
-  drawArt(S, g, card, x + pad, ay, w - 2 * pad, ah);
-  // type line
-  const ty = ay + ah + nh * 0.55;
-  const type = !card ? '' : card.type === 'creature' ? 'Creature' : card.type === 'land' ? 'Land' : 'Spell';
-  g.font = font(nh * 0.5, 600); g.fillStyle = P.ink;
-  g.fillText(fitText(g, type + ((card && card.keywords && card.keywords.length) ? ' · ' + card.keywords.join(' · ') : ''), w - 2 * pad), x + pad, ty);
-  // text and flavour
-  g.textBaseline = 'top';
-  g.font = font(nh * 0.48); g.fillStyle = INK2;
-  let yy = ty + nh * 0.5;
-  for (const l of wrap(g, card && card.text, w - 2 * pad, 3)) { g.fillText(l, x + pad, yy); yy += nh * 0.62; }
-  if (card && card.flavour) {
-    g.font = `italic ${font(nh * 0.42)}`; g.fillStyle = DIM; yy += nh * 0.15;
-    for (const l of wrap(g, card.flavour, w - 2 * pad - w * 0.2, 2)) { g.fillText(l, x + pad, yy); yy += nh * 0.55; }
-  }
-  if (card && card.type === 'creature') {
-    const t = `${card.power || 0}/${card.toughness || 0}`;
-    g.font = font(nh * 0.7, 700); g.textBaseline = 'middle'; g.textAlign = 'center';
-    const tw = g.measureText(t).width + nh * 0.6;
-    rrect(g, x + w - pad - tw, y + h - pad - nh, tw, nh, nh * 0.25); g.fillStyle = 'rgba(0,0,0,0.5)'; g.fill();
-    g.fillStyle = INK; g.fillText(t, x + w - pad - tw / 2, y + h - pad - nh / 2);
-  }
-  g.restore();
+  const h = w * 1.4;
+  wantArt(S, card, false);
+  drawCard(g, card || null, { x, y, w, h, art: card ? getCardArt(card.id) : null });
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
   return { x: x + w / 2, y: y + h / 2, w, h };
 }
@@ -547,7 +508,8 @@ function agentsOf(env, kinds) {
   return agents;
 }
 
-// env = { rules, byId, connectome, flies: [A, B] (null = bot), bots,
+// env = { rules, byId, connectome, connectomes?: [A, B], flies: [A, B]
+// (null = bot), bots,
 // trained, seed, calm, wiring: [A, B] names for the plate, makeCanvas(),
 // makeImage(src) | null, dpr }.
 export function createShow(env) {
@@ -555,8 +517,10 @@ export function createShow(env) {
   const seed = (env.seed >>> 0) || 1;
   const rng = mulberry32(seed ^ 0xf1ead);
   const S = {
-    rules: env.rules, byId: env.byId, names: NAMES.slice(), imgs: new Map(), makeImage: env.makeImage || null, dpr: env.dpr || 1,
-    bvs: [0, 1].map(i => new BrainView(env.connectome, { side: i ? 'B' : 'A', label: NAMES[i] })),
+    rules: env.rules, byId: env.byId, names: NAMES.slice(), imgs: new Map(), art: new Set(), makeImage: env.makeImage || null, dpr: env.dpr || 1,
+    // each fly's own wiring: env.connectomes [A, B] (Fly B = FlyWire),
+    // else env.connectome for both
+    bvs: [0, 1].map(i => new BrainView(env.connectomes?.[i] || env.connectome, { side: i ? 'B' : 'A', label: NAMES[i] })),
     brainCv: [0, 1].map(() => env.makeCanvas()),
     match: null, last: null, lastBy: [null, null], lastValues: null, kinds: ['fly', 'fly'],
   };
@@ -820,6 +784,7 @@ function enter(o = {}) {
     me.try3d = false; me.mode = '2d';
     me.show = createShow({
       rules: M.rules, byId, connectome: D.connectome, flies, bots: M.bots, trained, seed, calm, wiring,
+      connectomes: fd.conOf ? [fd.conOf('A'), fd.conOf('B')] : null,
       makeCanvas: () => document.createElement('canvas'),
       makeImage: src => { const im = new Image(); im.decoding = 'async'; im.src = src; return im; },
       dpr: Math.min(2, window.devicePixelRatio || 1),
