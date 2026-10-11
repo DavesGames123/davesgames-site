@@ -3,7 +3,8 @@
   FLY DUEL 3D · dev page (not linked from the site)
   Opens the table scene of ui/fly3d/scene.js full window and plays live
   matches (ui/match.js) between the two model flies from
-  data/pretrained.json. Without the weights or brain/fly.js, two greedy
+  data/pretrained.json, each on its own connectome file (pretrained.json
+  "wiring"). Without the weights or brain/fly.js, two greedy
   bots play as stand-ins and the label says so.
   Keys: 1 / 2 / 3 = slow / normal / fast, N = new game.
   GREP MAP
@@ -57,14 +58,18 @@ import { Match, agentFromFly, agentFromBot } from '../match.js';
 
 const $ = id => document.getElementById(id);
 const json = async u => { try { const r = await fetch(u); return r.ok ? await r.json() : null; } catch { return null; } };
-const [C, PT] = await Promise.all([json('../../data/connectome.json'), json('../../data/pretrained.json')]);
+// Each fly has its own connectome file (pretrained.json "wiring", format
+// 2: fly A hemibrain, fly B FlyWire). Format 1 puts both on the hemibrain.
+const PT = await json('../../data/pretrained.json');
+const fileOf = side => PT?.wiring?.[side]?.file || 'data/connectome.json';
+const [CA, CB] = await Promise.all([json('../../' + fileOf('A')), json('../../' + fileOf('B'))]);
 
 // Two agents: the pretrained flies, or two greedy bots as stand-ins.
 async function agents() {
   try {
-    if (!C || !PT?.A || !PT?.B) throw new Error('no connectome or weights');
+    if (!CA || !CB || !PT?.A || !PT?.B) throw new Error('no connectome or weights');
     const { Fly } = await import('../../brain/fly.js');
-    const A = Fly.fromJSON(C, PT.A), B = Fly.fromJSON(C, PT.B);
+    const A = Fly.fromJSON(CA, PT.A), B = Fly.fromJSON(CB, PT.B);
     $('note').textContent = 'Model flies with pretrained weights (a model of the mushroom body, not a real fly). Drag to orbit.';
     return [agentFromFly(A, 'Fly A'), agentFromFly(B, 'Fly B')];
   } catch (e) {
@@ -75,7 +80,7 @@ async function agents() {
 }
 
 const cv = $('cv');
-const scene = createDuelScene(cv, { connectomes: C ? [C, C] : null, names: ['Fly A', 'Fly B'] });
+const scene = createDuelScene(cv, { connectomes: CA ? [CA, CB || CA] : null, names: ['Fly A', 'Fly B'] });
 addEventListener('resize', () => scene.resize());
 const AG = await agents();
 

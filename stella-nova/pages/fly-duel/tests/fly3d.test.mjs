@@ -179,6 +179,17 @@ async function runGame(sc, M, check) {
   sc.dispose();
 }
 {
+  // fly B on its own FlyWire connectome: each fly gets its own brain map
+  const fw = new URL('../data/connectome-flywire.json', import.meta.url);
+  if (C && existsSync(fw) && existsSync(new URL('../ui/fly3d/brain3d.js', import.meta.url))) {
+    const CF = JSON.parse(readFileSync(fw, 'utf8'));
+    const sc = createDuelScene(null, { headless: true, connectomes: [C, CF] });
+    const info = await sc.ready;
+    ok(info.brain && sc.stats().brain.every(Boolean), 'two connectomes (hemibrain, FlyWire): two brain maps');
+    sc.dispose();
+  }
+}
+{
   const sc = createDuelScene(null, { headless: true, coarse: true, connectomes: C ? [C, C] : null });
   await sc.ready;
   const res = await runGame(sc, botMatch(21), () => {});
