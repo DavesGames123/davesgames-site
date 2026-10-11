@@ -77,6 +77,7 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg
   const fin = JSON.parse(read('data/training-curve.json')).meta.final;
   const t = evalVerdict(fin).join(' ');
   ok(t.includes(`Fly A won ${Math.round(100 * fin.vsGreedy.A.rate)}%`), 'verdict: greedy rate of Fly A from the file');
+  ok(t.includes(`They lost ${Math.round(100 * fin.vsGreedy.A.losses / fin.vsGreedy.A.n)}% and ${Math.round(100 * fin.vsGreedy.B.losses / fin.vsGreedy.B.n)}% of those games`), 'verdict: the loss share against greedy comes from the file');
   ok(/lose most games/.test(t) === (fin.vsGreedy.A.ci95[1] < 0.5 && fin.vsGreedy.B.ci95[1] < 0.5), 'verdict: says the flies lose to greedy exactly when both intervals are below 50%');
   const ab = fin.AvsB.ci95;
   ok(/Fly B is a little stronger/.test(t) === (ab[1] < 0.5), 'verdict: names Fly B stronger exactly when the A-vs-B interval is below 50%');

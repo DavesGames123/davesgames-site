@@ -112,7 +112,10 @@ export function evalVerdict(fin) {
     out.push(`Against the random player, Fly A won ${pc(rA.rate)} and Fly B won ${pc(rB.rate)} of the held-out games.`);
   if (gA?.rate != null && gB?.rate != null) {
     const both = side(gA) === -1 && side(gB) === -1;
+    const lost = r => r.n && r.losses != null ? r.losses / r.n : null;
+    const lA = lost(gA), lB = lost(gB);
     out.push(`Against the greedy bot, Fly A won ${pc(gA.rate)} and Fly B won ${pc(gB.rate)}.`
+      + (lA != null && lB != null ? ` They lost ${pc(lA)} and ${pc(lB)} of those games.` : '')
       + (both ? ' The flies lose most games to this short hand-written heuristic: they have not learned to beat it.' : ''));
   }
   if (ab?.rate != null) {
