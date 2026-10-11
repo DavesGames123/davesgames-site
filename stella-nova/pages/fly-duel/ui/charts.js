@@ -19,7 +19,7 @@
 // ============================================================================
 
 export const X_KEYS = ['games', 'game', 'episodes', 'step', 'checkpoint'];
-import { TOKENS } from './tokens.js';
+import { TOKENS, font } from './tokens.js';
 
 // Series colours from ui/tokens.js: Fly A, Fly B, then neutral inks.
 export const SERIES_COL = [TOKENS.flyA, TOKENS.flyB, TOKENS.ink2, TOKENS.dim, TOKENS.ink, TOKENS.faint];
@@ -77,7 +77,7 @@ export function drawChart(g, w, h, series, opts = {}) {
   let xMax = opts.xMax || 1;
   for (const s of series) for (const p of s.pts) xMax = Math.max(xMax, p[0]);
   const X = x => L + (x / xMax) * pw, Y = y => T + (1 - y) * ph;
-  g.strokeStyle = TOKENS.faint; g.lineWidth = 1; g.fillStyle = TOKENS.dim; g.font = '11px system-ui,sans-serif';
+  g.strokeStyle = TOKENS.faint; g.lineWidth = 1; g.fillStyle = TOKENS.dim; g.font = font(11);
   for (const y of [0, 0.25, 0.5, 0.75, 1]) {
     g.beginPath(); g.moveTo(L, Y(y)); g.lineTo(L + pw, Y(y)); g.stroke();
     g.textAlign = 'right'; g.fillText(`${Math.round(y * 100)}%`, L - 4, Y(y) + 4);

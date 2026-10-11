@@ -31,7 +31,7 @@
 //      grep -n 'draw(g'                      one frame
 // ============================================================================
 
-import { TOKENS, KC_TYPE, FLY, rgb } from './tokens.js';
+import { TOKENS, KC_TYPE, FLY, rgb, font } from './tokens.js';
 
 // Colours as [r, g, b], all from ui/tokens.js (DESIGN.md 1.1).
 export const COL = {
@@ -168,7 +168,7 @@ export class BrainView {
   draw(g, w, h, dt = 0.016) {
     g.clearRect(0, 0, w, h);
     if (!this.ok) {
-      g.fillStyle = TOKENS.dim; g.font = '13px system-ui,sans-serif'; g.textAlign = 'center';
+      g.fillStyle = TOKENS.dim; g.font = font(13); g.textAlign = 'center';
       g.fillText(this.label ? `${this.label}: waiting for data/connectome.json` : 'waiting for data/connectome.json', w / 2, h / 2);
       g.textAlign = 'left';
       return;
@@ -270,7 +270,7 @@ export class BrainView {
       }
     }
     // labels
-    g.font = '11px system-ui,sans-serif'; g.fillStyle = TOKENS.ink2; g.textAlign = 'left';
+    g.font = font(11); g.fillStyle = TOKENS.ink2; g.textAlign = 'left';
     const nOn = this.trace.kc ? this.trace.kc.length : 0;
     g.fillText(`${this.label}  KC ${nOn}/${nk} on (${((100 * nOn) / Math.max(1, nk)).toFixed(1)}%)`, 6, 14);
     if (this.value != null && Number.isFinite(this.value)) { g.textAlign = 'right'; g.fillText(`value ${this.value.toFixed(3)}`, w - 6, 14); }

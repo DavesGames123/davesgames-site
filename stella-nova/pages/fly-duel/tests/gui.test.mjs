@@ -82,5 +82,22 @@ const dE = (a, b) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[
   ok((a.match(/Gradient /g) || []).length === 1 && /linearGradient/.test(a), 'crisp: card art has one linear sky gradient');
 }
 
+// --------------------------------------------------------------- 3 fonts
+// No Playfair, Cormorant or JetBrains anywhere in the page code (the
+// spec files DESIGN.md and this test name them, so they are left out).
+// style.css takes its stacks only from the sci.css variables, and the
+// canvases take theirs from ui/tokens.js.
+{
+  const banned = /playfair|cormorant|jetbrains/i;
+  const code = ['style.css', 'index.html', 'main.js', 'saver.js', ...uiFiles];
+  for (const p of code) ok(!banned.test(read(p)), `fonts: ${p} names no banned font`);
+  const decl = [...css.matchAll(/font(?:-family)?:([^;}]*)/g)].map(m => m[1]);
+  const bad = decl.filter(d => !/var\(--(sans|serif|mono)\)|^inherit$/.test(d.trim()));
+  ok(bad.length === 0, `fonts: every style.css font uses var(--sans|serif|mono) (${bad.slice(0, 3)})`);
+  ok(/--serif:var\(--sci-serif\); --sans:var\(--sci-sans\); --mono:var\(--sci-mono\);/.test(css), 'fonts: the page stacks point at the sci.css stacks');
+  ok(/\.\.\/\.\.\/lib\/sci\.css/.test(html), 'fonts: index.html loads ../../lib/sci.css');
+  for (const p of uiFiles.filter(f => f !== 'ui/tokens.js')) ok(!/system-ui,sans-serif/.test(read(p)), `fonts: ${p} canvas text uses the tokens font stacks`);
+}
+
 console.log(`gui.test: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

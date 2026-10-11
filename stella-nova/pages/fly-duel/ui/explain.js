@@ -21,7 +21,7 @@
 //      grep -n 'export function drawSparse'  section 04 KC grid, two boards
 // ============================================================================
 
-import { TOKENS, PAIR, rgb } from './tokens.js';
+import { TOKENS, PAIR, rgb, font } from './tokens.js';
 
 export function jaccard(a, b) {
   if (!a || !b) return 0;
@@ -99,7 +99,7 @@ export function drawToy(g, w, h, toy, sel, flash = 0) {
   for (let m = 0; m < 2; m++) {
     g.fillStyle = `rgba(${cols[m]},${0.35 + 0.65 * Math.min(1, r[m])})`;
     g.beginPath(); g.arc(mx[m], y1, 12 + 6 * r[m], 0, 7); g.fill();
-    g.fillStyle = TOKENS.ink2; g.font = '12px system-ui,sans-serif'; g.textAlign = 'center';
+    g.fillStyle = TOKENS.ink2; g.font = font(12); g.textAlign = 'center';
     g.fillText(`${names[m]} ${r[m].toFixed(2)}`, mx[m], y1 + 34);
   }
   // DANs: PAM onto the avoid MBON, PPL1 onto the approach MBON
@@ -119,7 +119,7 @@ export function drawToy(g, w, h, toy, sel, flash = 0) {
 // Section 03: PN (glomerulus channel) rates as a grid of discs.
 export function drawGlomeruli(g, w, h, rates, labels = null) {
   g.clearRect(0, 0, w, h);
-  if (!rates || !rates.length) { g.fillStyle = TOKENS.dim; g.font = '12px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText('waiting for the brain model', w / 2, h / 2); g.textAlign = 'left'; return; }
+  if (!rates || !rates.length) { g.fillStyle = TOKENS.dim; g.font = font(12); g.textAlign = 'center'; g.fillText('waiting for the brain model', w / 2, h / 2); g.textAlign = 'left'; return; }
   const n = rates.length, cols = Math.ceil(Math.sqrt((n * w) / h)), rows = Math.ceil(n / cols);
   const cw = w / cols, chh = h / rows, rad = Math.max(2, Math.min(cw, chh) * 0.4);
   let mx = 1e-6; for (const v of rates) mx = Math.max(mx, v);
@@ -127,7 +127,7 @@ export function drawGlomeruli(g, w, h, rates, labels = null) {
     const x = (i % cols + 0.5) * cw, y = (Math.floor(i / cols) + 0.5) * chh, v = Math.max(0, rates[i]) / mx;
     g.fillStyle = `rgba(${rgb(TOKENS.pn)},${0.08 + 0.92 * v})`;
     g.beginPath(); g.arc(x, y, rad * (0.55 + 0.45 * v), 0, 7); g.fill();
-    if (labels && rad > 9) { g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '8px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText(String(labels[i]).slice(0, 5), x, y + rad + 8); }
+    if (labels && rad > 9) { g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = font(11); g.textAlign = 'center'; g.fillText(String(labels[i]).slice(0, 5), x, y + rad + 8); }
   }
   g.textAlign = 'left';
 }

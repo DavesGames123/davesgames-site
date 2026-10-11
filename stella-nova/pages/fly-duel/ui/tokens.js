@@ -17,6 +17,7 @@
 //  GREP MAP
 //      grep -n 'export const TOKENS'  the token list
 //      grep -n 'export function rgb'  '#rrggbb' -> [r, g, b]
+//      grep -n 'export const SANS'    canvas font stacks, font()
 //      grep -n 'export const FLY'     seat colours by seat index
 // ============================================================================
 
@@ -58,6 +59,12 @@ export function rgb(hex) {
   const h = String(hex).replace('#', '');
   return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
 }
+
+// Canvas font stacks: the --sci-sans and --sci-mono stacks of
+// ../../lib/sci.css (DESIGN.md 1.2). Sans for labels, mono for numbers.
+export const SANS = "Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+export const MONO = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
+export const font = (px, w = 400, mono = false) => `${w} ${px}px ${mono ? MONO : SANS}`;
 
 // Seat colours: index 0 is Fly A, index 1 is Fly B.
 export const FLY = [TOKENS.flyA, TOKENS.flyB];
