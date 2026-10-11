@@ -192,6 +192,7 @@ export function createEngine({ onStatus = () => {}, pyodide = null } = {}) {
     return api.ready;
   };
 
+  api.facts = () => api.ready; // same object as engine.info, for ui/hood.js
   api.introspect = (name) => request('introspect', { name });
   api.source = (name) => request('source', { name });
   api.complete = (code, line, col) => request('complete', { code, line, col });
