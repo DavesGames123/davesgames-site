@@ -2,7 +2,10 @@
 //  FLY DUEL  ·  brain view  (2D canvas, no DOM access of its own)
 // ----------------------------------------------------------------------------
 //  Draws one mushroom body as a turning point cloud. The positions come from
-//  data/connectome.json (package B), in micrometres. The view uses "cen"
+//  the connectome of that fly (package B), in micrometres: Fly A from
+//  data/connectome.json (hemibrain space), Fly B from
+//  data/connectome-flywire.json (FAFB space). The view centres and scales
+//  on the KC cloud of each file, so the two spaces need no common frame. The view uses "cen"
 //  (the cable centroid of each neuron, where its wiring is) when the file
 //  has it, else "pos" (the soma). It projects them with a small
 //  perspective onto a 2D canvas. Points far from the KC cloud are pulled

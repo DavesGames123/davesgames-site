@@ -5,11 +5,15 @@
 //  import(), so a missing or broken module gives a loading message in its
 //  card and the rest of the page still works:
 //    game/rules.js game/cards.js game/features.js game/bots.js   (package A)
-//    data/connectome.json data/facts.js                          (package B)
+//    data/connectome.json data/connectome-flywire.json data/facts.js (package B)
 //    brain/fly.js brain/mb.js                                    (package C)
 //    train/worker.js data/pretrained.json data/training-curve.json (package D)
 //    saver.js                                                    (package F)
 //    ui/fly3d/scene.js (the 3D hero, three.js by the import map)
+//  Fly A is wired from data/connectome.json (hemibrain v1.2) and Fly B
+//  from data/connectome-flywire.json (FlyWire 783): two animals.
+//  pretrained.json format 2 names the file of each fly, and conOf(side)
+//  gives it. Every view of Fly B (hero, 07, worker, 3D maps) uses conOf.
 //  The ui/ modules (this package) load by static import. The 3D table
 //  loads by import() too: in node or without WebGL, the 2D table and the
 //  2D brains of #arena play the hero match instead.
@@ -28,8 +32,12 @@
 //      grep -n 'function start3d'         the 3D table (ui/fly3d/scene.js)
 //      grep -n 'function initHero'        hero live match, 3D or 2D driver
 //      grep -n 'function setBrains'       hero brain maps: beside, close, off
+//      grep -n 'function conOf'           the connectome of Fly A or Fly B
+//      grep -n 'function initHeroStats'   hero numbers, one line per fly
 //      grep -n 'function initGame'        01 rules, decks, gallery
 //      grep -n 'function initCentre'      02 point cloud, counts, facts
+//      grep -n 'function initCompare'     02 Fly A / Fly B table (COMPARE)
+//      grep -n 'function initKcCode'      [data-kc] KC share, k, code
 //      grep -n 'function initSmell'       03 features -> glomeruli
 //      grep -n 'function initSparse'      04 KC sparse code, overlap
 //      grep -n 'function initDopamine'    05 toy three-factor rule
@@ -291,7 +299,7 @@ function initHero(mod3d = null) {
   $('arena').hidden = hero.mode === '3d';
   if (hero.mode === '2d') { $('heroCam').hidden = true; $('heroBrains').hidden = true; document.querySelectorAll('.ctl-l').forEach(e => e.hidden = true); }
   $('manaLegGlyphs').innerHTML = `${manaGlyph('amber', 0, 16)} Amber ${manaGlyph('moss', 0, 16)} Moss ${manaGlyph('generic', 1, 16)} generic.`;
-  hero.bvs = [new BrainView(D.connectome, { side: 'A', label: 'Fly A' }), new BrainView(D.connectome, { side: 'B', label: 'Fly B' })];
+  hero.bvs = [new BrainView(conOf('A'), { side: 'A', label: 'Fly A' }), new BrainView(conOf('B'), { side: 'B', label: 'Fly B' })];
   brainCanvas($('heroBrainA'), hero.bvs[0]);
   brainCanvas($('heroBrainB'), hero.bvs[1]);
   if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: `The rules engine did not load: ${status.rules}.` }); $('arena').hidden = false; $('heroStage').hidden = true; return; }
@@ -484,12 +492,15 @@ function setBrains(v) {
 function finalOf() { return D.curve?.meta?.final || D.pretrained?.meta?.final || null; }
 
 function initHeroStats() {
-  const C = D.connectome, items = [];
-  if (C) {
-    items.push([`${C.kc?.n ?? C.kc?.pos?.length}`, 'Kenyon cells in each model fly, one per traced KC of the connectome']);
-    items.push([`${C.pn?.n}`, 'projection neurons carry the board "smell" in']);
-    items.push([`${C.mbon?.n}`, 'output neurons (MBONs) read the KCs out']);
-    items.push([`${C.dan?.n}`, 'dopamine neurons (DANs) gate the learning']);
+  const items = [];
+  const n = (C, k) => C?.[k]?.n ?? C?.[k]?.pos?.length;
+  const two = k => `${n(conOf('A'), k)} / ${n(conOf('B'), k)}`;
+  if (conOf('A') && conOf('B')) {
+    const sameFile = conOf('A') === conOf('B');
+    items.push([two('kc'), sameFile ? 'Kenyon cells in Fly A / Fly B, one per traced KC (both on one file: the second wiring file did not load)' : 'Kenyon cells in Fly A (hemibrain) / Fly B (FlyWire), one per traced KC: two animals']);
+    items.push([two('pn'), 'projection neurons carry the board "smell" in']);
+    items.push([two('mbon'), 'output neurons (MBONs) read the KCs out']);
+    items.push([two('dan'), 'dopamine neurons (DANs) gate the learning']);
   }
   const fin = finalOf();
   if (fin?.vsRandom?.A?.rate != null) items.push([pct(fin.vsRandom.A.rate), `of ${fin.vsRandom.A.n} held-out games Fly A won against a random player (measured)`]);
@@ -504,7 +515,7 @@ function initHeroStats() {
 function initWiring() {
   const C = D.connectome;
   if (!C) return;
-  if (C.meta?.synthetic) {
+  if (C.meta?.synthetic || conOf('B')?.meta?.synthetic) {
     document.querySelectorAll('[data-wiring]').forEach(el => el.textContent = 'wired from patterns sampled from published statistics (not the traced connectome)');
     const t = $('wiringTag'); t.textContent = 'sampled from published statistics'; t.className = 'tag synth';
   }
@@ -544,7 +555,7 @@ function initCentre() {
   ].join('');
   const m = C.meta || {};
   const e = C.edges || {};
-  $('cxMeta').innerHTML = `${m.synthetic ? '<b>Wiring sampled from published statistics</b>, not traced. ' : ''}${esc(m.release || m.source || '')}${m.licence ? `, licence ${esc(m.licence)}` : ''}${m.retrieved ? `, retrieved ${esc(m.retrieved)}` : ''}. `
+  $('cxMeta').innerHTML = `<b>Fly A.</b> ${m.synthetic ? '<b>Wiring sampled from published statistics</b>, not traced. ' : ''}${esc(m.release || m.source || '')}${m.licence ? `, licence ${esc(m.licence)}` : ''}${m.retrieved ? `, retrieved ${esc(m.retrieved)}` : ''}. `
     + `${(e.pn_kc || []).length.toLocaleString('en-US')} PN→KC and ${(e.kc_mbon || []).length.toLocaleString('en-US')} KC→MBON connections. Positions are cable centroids in micrometres; neurons far from the Kenyon cells are drawn pulled in toward them, so the edges are not to scale. Drag to turn. ${esc(M.facts?.HONESTY?.valenceModel || 'MBON valence is a model rule from the dopamine cluster of each compartment.')} The lit KCs mirror Fly A in the hero match.`;
 }
 let centreView = null;
@@ -566,10 +577,12 @@ function citeLinks(ids) {
   return ids.filter(id => S[id]).map(id => `<a href="#ref-${esc(id)}">[${keys.indexOf(id) + 1}]</a>`).join('');
 }
 
+// measured true: counts from the two shipped files (hemibrain `measured`,
+// FlyWire `flywire`). false: numbers from the literature.
 function factsHTML(measured) {
   const F = M.facts?.FACTS;
   if (!F) return measured ? '' : `<li class="none">data/facts.js did not load (${esc(status.facts)}).</li>`;
-  return Object.entries(F).filter(([, f]) => !!f.measured === measured).map(([id, f]) => {
+  return Object.entries(F).filter(([, f]) => !!(f.measured || f.flywire) === measured).map(([id, f]) => {
     const v = fmtFact(f);
     const unit = /fraction/.test(f.unit || '') ? '' : f.unit;
     return `<li><b>${v ? esc(v) : '·'}${v && unit ? ` <small>${esc(unit)}</small>` : ''}</b><span>${esc(f.text || id)} ${citeLinks([f.src, ...(f.also || [])])}</span></li>`;
@@ -589,6 +602,43 @@ function initFacts() {
   if (!F) return;
   document.querySelectorAll('[data-fact]').forEach(el => { const f = F[el.dataset.fact]; const v = fmtFact(f); if (v) el.textContent = v; });
   document.querySelectorAll('[data-cite]').forEach(el => { el.innerHTML = citeLinks(el.dataset.cite.split(/\s+/)); });
+}
+
+// Section 02: the Fly A / Fly B table. Each cell is one or more FACTS
+// ids of data/facts.js COMPARE. The last column is Fly B / Fly A for the
+// rows with one id per cell.
+export function compareHTML(facts) {
+  const F = facts?.FACTS, rows = facts?.COMPARE;
+  if (!F || !rows) return '';
+  const cell = ids => ids.map(id => fmtFact(F[id])).join(' / ');
+  const ratio = (a, b) => a.length === 1 && F[a[0]]?.value ? (F[b[0]].value / F[a[0]].value).toFixed(2) : '';
+  return '<thead><tr><th>right mushroom body, same thresholds</th><th class="n">Fly A · hemibrain v1.2</th><th class="n">Fly B · FlyWire 783</th><th class="n">B / A</th></tr></thead><tbody>'
+    + rows.map(([label, a, b]) => `<tr><th>${esc(label)} ${citeLinks([...new Set([...a, ...b].map(id => F[id].src))])}</th><td class="n">${esc(cell(a))}</td><td class="n">${esc(cell(b))}</td><td class="n">${ratio(a, b)}</td></tr>`).join('')
+    + '</tbody>';
+}
+
+function initCompare() {
+  const t = compareHTML(M.facts);
+  $('flyCompare').innerHTML = t || `<tbody><tr><td class="none">data/facts.js did not load (${esc(status.facts)}).</td></tr></tbody>`;
+}
+
+// [data-kc] spans: the KC code that the loaded flies use (brain/mb.js
+// sparsity, k, live KCs, kcCode). With no model, the markup words stay.
+export function kcCodeText(mbA, mbB) {
+  if (!mbA) return null;
+  const one = (mb, who) => `${who}: ${mb.k} of ${mb.nLive} KCs with PN input`;
+  return {
+    share: `${+(100 * mbA.sparsity).toFixed(1)}%`,
+    count: [one(mbA, 'Fly A'), mbB ? one(mbB, 'Fly B') : null].filter(Boolean).join('; '),
+    code: mbA.graded ? 'Each winner gets a graded rate: how far its drive is above the best KC that did not win, which stands for the APL level.' : 'Each winner has the same rate (a binary code).',
+  };
+}
+
+function initKcCode() {
+  const F = heroFlies();
+  const t = kcCodeText(mbOf(F.A), mbOf(F.B));
+  if (!t) return;
+  document.querySelectorAll('[data-kc]').forEach(el => { const v = t[el.dataset.kc]; if (v) el.textContent = v; });
 }
 
 // ---------------------------------------------------------------- 03
@@ -691,6 +741,9 @@ function initSparse() {
     ].join('');
     v.dirty = true;
   };
+  // the slider starts at the share of the loaded model (FLY_OPTS)
+  const base0 = mbOf(heroFlies().A);
+  if (base0 && Number.isFinite(base0.sparsity)) { inp.value = String(base0.sparsity); out.textContent = `${Math.round(base0.sparsity * 100)}%`; }
   inp.addEventListener('input', () => { out.textContent = `${Math.round(+inp.value * 100)}%`; });
   inp.addEventListener('change', compute);
   $('spNext').addEventListener('click', () => { pair = pickPair() || pair; compute(); });
@@ -800,7 +853,9 @@ function initTrain() {
 function initWatch() {
   const W = { kind: 'ab', match: null, cur: -1, auto: false, acc: 0, bvs: [] };
   const byId = cardMap();
-  W.bvs = [new BrainView(D.connectome, { side: 'A', label: 'Fly A' }), new BrainView(D.connectome, { side: 'B', label: 'Fly B' })];
+  // Fly B on its own wiring. A bot in seat B has no trace, so the
+  // FlyWire cloud stays dark then.
+  W.bvs = [new BrainView(conOf('A'), { side: 'A', label: 'Fly A' }), new BrainView(conOf('B'), { side: 'B', label: 'Fly B' })];
   brainCanvas($('wBrainA'), W.bvs[0]); brainCanvas($('wBrainB'), W.bvs[1]);
   if (!M.rules) { renderBoard($('wBoard'), null, { empty: 'The rules engine is not loaded yet.' }); return; }
   const fliesFor = () => {
@@ -911,10 +966,17 @@ function initSources() {
     const link = s.doi ? `https://doi.org/${s.doi}` : s.url;
     return `<li id="ref-${esc(id)}">${esc(s.cite || s.t || id)}${link ? ` <a href="${esc(link)}" target="_blank" rel="noopener">${esc(s.doi ? `doi:${s.doi}` : link.replace(/^https?:\/\//, ''))}</a>` : ''}</li>`;
   }).join('') : `<li class="none">data/facts.js did not load (${esc(status.facts)}).</li>`;
-  const m = D.connectome?.meta;
+  const con = (who, C) => {
+    const m = C?.meta;
+    return m ? `<div><b>Connectome, ${who}.</b> ${esc(m.source || '')}. ${esc(m.release || '')}. Licence: ${esc(m.licence || 'see CREDITS.md')}. ${m.citation ? esc(m.citation) + '.' : ''} ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">data</a>` : ''}</div>` : '';
+  };
+  const B = conOf('B');
   $('credits').innerHTML = [
-    m ? `<div><b>Connectome.</b> ${esc(m.source || '')}. ${esc(m.release || '')}. Licence: ${esc(m.licence || 'see CREDITS.md')}. ${m.citation ? esc(m.citation) + '.' : ''} ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">data</a>` : ''}</div>` : '',
-    `<div><b>Credits.</b> Data licences, releases and dates: <a href="CREDITS.md">CREDITS.md</a>. Game, cards, art, glyphs, model and code: our own.</div>`,
+    con('Fly A', D.connectome),
+    B && B !== D.connectome ? con('Fly B', B) : '',
+    `<div><b>FlyWire data.</b> Connections: FlyWire Consortium, release 783, <a href="https://doi.org/10.5281/zenodo.10676866" target="_blank" rel="noopener">doi:10.5281/zenodo.10676866</a>. Cell annotations: flywire_annotations v3.2.0, <a href="https://doi.org/10.5281/zenodo.23037340" target="_blank" rel="noopener">doi:10.5281/zenodo.23037340</a>. Both CC BY 4.0. We kept the right mushroom body and thresholded the synapse counts.</div>`,
+    `<div><b>Card art.</b> Each card picture is a crop of a public-domain natural-history plate or painting from Wikimedia Commons. Work, author, year and licence of each: <a href="art/CREDITS-ART.md">art/CREDITS-ART.md</a>.</div>`,
+    `<div><b>Credits.</b> Data licences, releases, dates and our changes: <a href="CREDITS.md">CREDITS.md</a>. Game, card names and text, card frame, card back, mana glyphs, 3D flies, model and code: our own.</div>`,
   ].join('');
 }
 
@@ -982,7 +1044,7 @@ async function boot() {
   await ready;
   const mod3d = await scene3d;
   const startHero = () => initHero(mod3d);
-  const steps = [initFacts, initWiring, initHeroStats, startHero, initGame, initCentre, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
+  const steps = [initFacts, initWiring, initHeroStats, startHero, initKcCode, initGame, initCentre, initCompare, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
   for (const f of steps) { try { f(); } catch (e) { console.error(f.name, e); } }
   try { typesetAll(document.querySelector('#doc')); } catch (e) { console.warn(e); }
 }

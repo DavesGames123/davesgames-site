@@ -155,6 +155,12 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     for (let i = 0; i < bv.pts[k].length; i++) { total++; if (Math.abs(pr[i * 3]) * brain.FILL <= 0.5 && Math.abs(pr[i * 3 + 1]) * brain.FILL <= 0.5) inside++; }
   }
   ok(inside / total > 0.99, `brain: ${(100 * inside / total).toFixed(2)}% of points stay inside the view at six turns`);
+  if (has('data/connectome-flywire.json')) {
+    const CB = JSON.parse(readFileSync(join(ROOT, 'data/connectome-flywire.json'), 'utf8'));
+    const bvB = new brain.BrainView(CB, { side: 'B', label: 'Fly B' });
+    const gB = fakeCtx(); bvB.draw(gB, 360, 300, 0.016);
+    ok(bvB.ok && bvB.pts.kc.length === CB.kc.n && gB.calls.bad === 0, `brain: the FlyWire file (Fly B, ${CB.kc.n} KCs) draws with finite numbers`);
+  }
   const empty = new brain.BrainView(null, { label: 'x' }); empty.draw(fakeCtx(), 100, 100);
   ok(!empty.ok, 'brain: no connectome gives a waiting view');
   const out = brain.project([[0, 0, 0], [1, 0, 0]], [0, 0, 0], 1, 0, 0, 0, 0);
@@ -174,6 +180,15 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   const title = html.match(/<title>([^<]*)<\/title>/)[1];
   ok(!/magic|gathering/i.test(title), 'markup: the title has no trademark');
   ok(/We do not train a real fly/.test(html), 'markup: the plain-words line');
+  const sci = head.indexOf('../../lib/sci.css'), cardCss = head.indexOf('href="ui/card.css"');
+  ok(sci > 0 && cardCss > sci && cardCss < head.indexOf('importmap'), 'markup: ui/card.css loads after sci.css, before the import map');
+  ok(/wired from two different animals/.test(html), 'markup: says Fly A and Fly B are wired from two different animals');
+  ok(/detect synapses by different methods/.test(html), 'markup: the synapse-method caveat');
+  ok(/art\/CREDITS-ART\.md/.test(html) && /public-domain/.test(html), 'markup: the card art credit');
+  // Text that the old page had and the shipped state no longer holds.
+  const plain = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  for (const re of [/(?<!binary code at )\b5 ?%/, /88 active KCs/, /\b21 ?%/, /96\.3/, /both flies use the hemibrain/i, /same wiring/i, /share the same PN-to-KC claws/i, /procedural art/i, /picture and mana glyph here is our own/i])
+    ok(!re.test(plain), `markup: no stale text ${re}`);
   const js = readFileSync(join(ROOT, 'main.js'), 'utf8');
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
   const used = [...new Set([...js.matchAll(/\$\('([A-Za-z0-9_]+)'\)/g)].map(m => m[1]))];
@@ -196,7 +211,7 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   console.error = (...a) => { errors.push(a.map(x => x && x.stack || String(x)).join(' ')); };
   console.warn = () => {};
   const els = new Map();
-  const defaults = { wSeed: '7', spIn: '0.05', featIn: '0.5', featPick: '0' };
+  const defaults = { wSeed: '7', spIn: '0.1', featIn: '0.5', featPick: '0' };
   const fakeEl = (id = '') => {
     const L = {};
     const el = {
@@ -294,6 +309,22 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     ok(/KC overlap/.test(E('spRead').innerHTML), 'dom: section 04 overlap readout');
   } else skipped('dom: brain/fly.js not there');
   if (has('data/connectome.json')) ok(/PN \d+/.test(E('mbLegend').innerHTML), 'dom: section 02 legend counts');
+  if (has('data/facts.js')) {
+    const t = E('flyCompare').innerHTML;
+    ok(/hemibrain v1\.2/.test(t) && /FlyWire 783/.test(t) && /1,927/.test(t) && /2,597/.test(t), 'dom: section 02 Fly A / Fly B table has both flies');
+    ok((t.match(/<tr>/g) || []).length >= 8, 'dom: section 02 table has a row per COMPARE entry');
+  }
+  if (has('brain/fly.js')) {
+    const F = globalThis.flyDuel.heroFlies();
+    const mm = await import(pathToFileURL(join(ROOT, 'main.js')).href);
+    const kt = mm.kcCodeText(F.A.mb, F.B.mb);
+    ok(kt.share === `${+(100 * F.A.mb.sparsity).toFixed(1)}%` && kt.count.includes(`${F.A.mb.k} of ${F.A.mb.nLive}`) && kt.count.includes(`${F.B.mb.k} of ${F.B.mb.nLive}`), `dom: KC code text from the loaded model (${kt.share}; ${kt.count})`);
+    ok(F.A.mb.nLive !== F.B.mb.nLive, 'dom: Fly A and Fly B have different live KC counts (two wiring files)');
+    ok(E('spIn').value === String(F.A.mb.sparsity), `dom: section 04 slider starts at the model share (${E('spIn').value})`);
+    ok(globalThis.flyDuel.hero.bvs[1].pts.kc.length === globalThis.flyDuel.conOf('B').kc.n, 'dom: the 2D brain of Fly B uses the FlyWire file');
+    ok(/Fly A \(hemibrain\) \/ Fly B \(FlyWire\)/.test(E('heroStats').innerHTML), 'dom: hero numbers name both flies');
+  }
+  ok(/zenodo\.10676866/.test(E('credits').innerHTML) && /zenodo\.23037340/.test(E('credits').innerHTML) && /CREDITS-ART\.md/.test(E('credits').innerHTML), 'dom: credits name the FlyWire records and the card art');
   if (has('data/facts.js')) ok(E('srcList').innerHTML.includes('ref-'), 'dom: sources list');
   if (has('data/facts.js')) {
     const mm = await import(pathToFileURL(join(ROOT, 'main.js')).href);

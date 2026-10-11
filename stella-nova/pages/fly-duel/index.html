@@ -12,36 +12,45 @@
   ═══════════════════════════════════════════════════════════════════════════
    FLY DUEL  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup and the text. Two model fruit fly mushroom bodies, wired
-   from data/connectome.json, learn a small card duel of our own by
-   dopamine-gated plasticity, and play it against each other on the page.
-   CONTRACT.md is the binding spec.
+   Static markup and the text. Two model fruit fly mushroom bodies learn a
+   small card duel of our own by dopamine-gated plasticity, and play it
+   against each other on the page. Fly A and Fly B are wired from two
+   different animals: Fly A from the hemibrain v1.2 right MB
+   (data/connectome.json), Fly B from the FlyWire 783 right MB
+   (data/connectome-flywire.json). CONTRACT.md is the binding spec.
+   FLY3D.md is the spec of the 3D hero.
 
    HONESTY
      We do not train a real fly. The page says so in the hero and in 09.
      Every number about the fly comes from data/facts.js (with a source)
-     or is counted from data/connectome.json. Win rates come from
-     data/training-curve.json, measured by train/ code. Toy figures carry
-     the tag "illustrative"; model parts carry the tag "model".
+     or is counted from the two connectome files. The KC share and k come
+     from the loaded model (brain/mb.js), not from the markup. Win rates
+     come from data/training-curve.json meta.final, measured by train/
+     code. The one typed-in result is the development-run line in 08
+     (tools/mb-lab.mjs), and the line says so. Toy figures carry the tag
+     "illustrative"; model parts carry the tag "model".
 
    IP
-     The game, the cards, the art and the mana glyphs are our own. Magic:
-     The Gathering is named in plain text only, as the inspiration, with
-     the line "Not affiliated with or endorsed by Wizards of the Coast."
+     The game, the card names, the card text, the card frame, the card
+     back and the mana glyphs are our own. The card pictures are crops of
+     public-domain plates and paintings (art/CREDITS-ART.md). Magic: The
+     Gathering is named in plain text only, as the inspiration, with the
+     line "Not affiliated with or endorsed by Wizards of the Coast."
 
    GPU
      The hero is one WebGL scene (three.js r160 from ../../vendor, by the
      import map in the head): ui/fly3d/scene.js with the flies of
-     ui/fly3d/fly.js and the brain maps of ui/fly3d/brain3d.js. "brains up
-     close" adds two WebGL brain views. When the scene cannot start, the
-     2D table and 2D brains (#arena) take its place. Sections 01 to 09
-     use 2D canvases only. No WebGPU.
+     ui/fly3d/fly.js and the brain maps of ui/fly3d/brain3d.js. "close-up"
+     adds two WebGL brain views. When the scene cannot start, the 2D table
+     and 2D brains (#arena) take its place. Sections 01 to 09 use 2D
+     canvases and DOM cards only. No WebGPU.
 
    HEAD LOAD ORDER
      1. gpu-guard     ../../lib/gpu-guard.js
      2. wishlist      ../../lib/wishlist.js
      3. stats-beacon  ../../lib/stats-beacon.js
-     4. style.css, then ../../lib/sci.css (fonts, math colours)
+     4. style.css, then ../../lib/sci.css (fonts, math colours), then
+        ui/card.css (the card face of the DOM cards, ui/board.js)
      5. the import map for three r160 (before any module script)
    Script at the end of body: main.js (module). main.js loads the other
    packages with dynamic import(), so a missing file gives a loading
@@ -49,45 +58,60 @@
 
    LAYOUT  (# marks an element id main.js binds to)
      #chips   sticky section bar
-     hero     #hudBar #hudA #heroTurn #hudB #heroStage #heroCv #heroMaps #heroMapA #heroMapB
-              #heroMove #heroStatus #heroPlay #heroSpeed #heroNew #heroCam
-              #heroBrains #manaLegGlyphs #heroLog #heroStats
-              2D stand-in (shown only when the 3D scene cannot start):
-              #arena #heroPaneA #heroPaneB #heroBrainA #heroBrainB #heroBoard
-     #s1 game       #kwList #deckLists #galSeg #gallery
-     #s2 centre     #mbCv #mbLegend #cxMeta #factList #ourList
-     anywhere       [data-fact] value of a FACTS id, [data-cite] [n] links,
-                    [data-mix] TRAIN_MIX share or TRAIN_EXPLORE of train/worker.js
-     #s3 smell      #featPick #featIn #featOut #glomCv #featBars #smellGrab #smellRead
+     #s0 hero  3D: #hudBar #hudA #heroTurn #hudB #heroStage #heroCv
+                   #heroMaps #heroMapA #heroMapB #heroMove
+               bar: #heroStatus #heroPlay #heroSpeed #heroNew #heroCam
+                    #heroBrains
+               under: #heroLog #manaLeg #manaLegGlyphs #heroStats
+               2D stand-in (shown only when the 3D scene cannot start):
+                    #arena #heroPaneA #heroPaneB #heroBrainA #heroBrainB
+                    #heroBoard
+     #s1 game       #manaKey #kwList #deckLists #galSeg #gallery
+     #s2 centre     #mbCv #mbLegend #wiringTag #cxMeta #factList #ourList
+                    #flyCompare (Fly A / Fly B table from COMPARE)
+     #s3 smell      #featPick #featIn #featOut #glomCv #featBars #smellGrab
+                    #smellRead
      #s4 sparse     #sparseCv #spIn #spOut #spNext #spRead
      #s5 dopamine   #toyCv #toySel #toyRew #toyPun #toyReset #toyRead
-     #s6 train      #trainStart #trainPause #trainNaive #trainLoad #trainSpeed
-                    #trainEval #trainCv #trainLegend #trainRead
+     #s6 train      #trainStart #trainPause #trainNaive #trainLoad
+                    #trainSpeed #trainEval #trainCv #trainLegend #trainRead
      #s7 watch      #wOpp #wPrev #wNext #wAuto #wNew #wSeed #wBoard
                     #wBrainA #wBrainB #wCands #wInfo
      #s8 results    #evalVerdict #evalTable #curveCv #curveLegend #curveMeta
      #s9 limits     text only
-     refs           #srcList #credits
+     #refs          #srcList #credits
+     anywhere       [data-fact] value of a FACTS id
+                    [data-cite] [n] links to #srcList
+                    [data-mix] TRAIN_MIX share or TRAIN_EXPLORE
+                    [data-kc] KC code of the loaded flies: share, count, code
+                    [data-wiring] text that changes for sampled wiring
 
    GREP MAP  (main.js)
-     grep -n 'async function loadAll'   dynamic imports and data files
+     grep -n 'async function loadAll'   dynamic imports, both wiring files
      grep -n 'function makeFly'         Fly construction and weights
-     grep -n 'function initHero'        hero live match
+     grep -n 'function conOf'           the connectome of Fly A or Fly B
+     grep -n 'function start3d'         the 3D table
+     grep -n 'function initHero'        hero live match, 3D or 2D
+     grep -n 'function setBrains'       hero brain maps
+     grep -n 'function initHeroStats'   hero numbers, per fly
      grep -n 'function initGame'        section 01
-     grep -n 'function initCentre'      section 02
+     grep -n 'function initCentre'      section 02 point cloud
+     grep -n 'function initCompare'     section 02 Fly A / Fly B table
+     grep -n 'function initKcCode'      [data-kc] spans from brain/mb.js
      grep -n 'function initSmell'       section 03
      grep -n 'function initSparse'      section 04
      grep -n 'function initDopamine'    section 05
      grep -n 'function initTrain'       section 06
      grep -n 'function initWatch'       section 07
      grep -n 'function initResults'     section 08
-     grep -n 'function initSources'     references
+     grep -n 'function initSources'     references and credits
      grep -n 'function loop'            one rAF loop, visible canvases only
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Two model fruit fly brains, wired from the published mushroom body connectome, learn a small trading-card duel by dopamine-gated plasticity and play it against each other. Live match, brain view, training in your browser, measured win rates and sources.">
+<meta name="description" content="Two model fruit fly brains, wired from the mushroom body connectomes of two different flies (hemibrain and FlyWire), learn a small trading-card duel by dopamine-gated plasticity and play it against each other. Live match, brain view, training in your browser, measured win rates and sources.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="ui/card.css">
 <script type="importmap">
 { "imports": {
   "three": "../../vendor/three@0.160.0/build/three.module.js",
@@ -124,7 +148,7 @@
 <header class="hero" id="s0">
   <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
   <h1>Two fruit fly brains learn a card duel</h1>
-  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
+  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, each <span data-wiring>wired from the published connectome</span> of a different fly, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
 
   <div class="hudbar" id="hudBar">
     <div class="hud a" id="hudA" aria-live="off"></div>
@@ -170,12 +194,12 @@
     <span><i style="background:var(--avoid)"></i>avoid output / PPL1</span>
   </div>
   <div class="stats" id="heroStats"></div>
-  <p class="note"><b>We do not train a real fly.</b> We train a computer model whose wiring, <span data-wiring>taken from the published fruit fly connectome</span>, is that of one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons. Fly A wears the cyan collar, Fly B the magenta collar; the flies are drawn by us, larger than life, and only the brain maps come from data. In this live match both flies play with their trained weights and learning is switched off. The flashes show the dopamine signal the model computes after each move. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
+  <p class="note"><b>We do not train a real fly.</b> We train two computer models. Each model is one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons, <span data-wiring>taken from a published fruit fly connectome</span>. Fly A and Fly B are wired from two different animals: Fly A from the hemibrain connectome<span data-cite="scheffer2020"></span>, Fly B from the FlyWire connectome<span data-cite="dorkenwald2024"></span>. Fly A wears the cyan collar, Fly B the magenta collar; the flies are drawn by us, larger than life, and only the brain maps come from data. In this live match both flies play with their trained weights and learning is switched off. The flashes show the dopamine signal the model computes after each move. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
 </header>
 
 <!-- ───────────────────────────────────────────────────────────── 01 -->
 <section class="sec" id="s1">
-  <div class="sec-head"><span class="num">01</span><div><h2>The game: a small card duel of our own</h2><p>The flies play a cut-down duel in the style of the trading card games: two players, 20 life each, a 40-card deck, lands that make mana, creatures that attack and block, and spells. Every card, name, picture and mana glyph here is our own. The rules are short on purpose, so that each decision is a choice among a few options.</p></div></div>
+  <div class="sec-head"><span class="num">01</span><div><h2>The game: a small card duel of our own</h2><p>The flies play a cut-down duel in the style of the trading card games: two players, 20 life each, a 40-card deck, lands that make mana, creatures that attack and block, and spells. Every card, name, card text and mana glyph here is our own. The pictures are crops of public-domain natural-history plates and paintings (credits under Sources). The rules are short on purpose, so that each decision is a choice among a few options.</p></div></div>
   <div class="grid">
     <article class="card span-5">
       <div class="card-top"><h3>One turn</h3><span class="tag">rules engine: game/rules.js</span></div>
@@ -195,7 +219,7 @@
       <div class="decks" id="deckLists"><p class="none">Loading the card pool…</p></div>
     </article>
     <article class="card span-12">
-      <div class="card-top"><h3>Every card</h3><span class="tag">procedural art from each card id</span></div>
+      <div class="card-top"><h3>Every card</h3><span class="tag">public-domain plate art</span></div>
       <div class="seg" id="galSeg" role="group" aria-label="Filter"><button data-v="all" class="on">All</button><button data-v="amber">Amber</button><button data-v="moss">Moss</button><button data-v="none">Colourless</button><button data-v="creature">Creatures</button><button data-v="spell">Spells</button></div>
       <div class="gallery" id="gallery"></div>
     </article>
@@ -215,8 +239,14 @@
     <article class="card span-5">
       <div class="card-top"><h3>Published numbers</h3><span class="tag real">data/facts.js</span></div>
       <ul class="factlist" id="factList"><li class="none">Loading facts…</li></ul>
-      <h3 class="subh">Counted from the file this page ships</h3>
+      <h3 class="subh">Counted from the two files this page ships</h3>
       <ul class="factlist" id="ourList"></ul>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Two flies, two animals</h3><span class="tag real">data/facts.js, counted from the two files</span></div>
+      <p class="body">Fly A and Fly B are wired from two different animals. Fly A has the right mushroom body of the hemibrain v1.2 fly<span data-cite="scheffer2020 li2020"></span>. Fly B has the right mushroom body of the FlyWire 783 fly<span data-cite="dorkenwald2024 flywireData"></span>, with the cell types of the FlyWire annotations v3.2.0<span data-cite="schlegel2024 flywireAnnotations"></span>. We selected both circuits with the same thresholds. Each fly learns on its own wiring, so the weights of one fly do not fit the other.</p>
+      <div class="tablewrap"><table class="evaltab" id="flyCompare"><tbody><tr><td class="none">Loading the facts…</td></tr></tbody></table></div>
+      <p class="cap">The two data sets detect synapses by different methods<span data-cite="buhmann2021"></span>. The KC-to-MBON synapse total of the FlyWire file is about one third of the hemibrain total, so a part of each difference in this table comes from the method, not from biology only. For the same reason, some MBONs and DANs fall below the same threshold in FlyWire. The KC counts come from the cell annotations and do not depend on a threshold.</p>
     </article>
   </div>
 </section>
@@ -244,14 +274,14 @@
 
 <!-- ───────────────────────────────────────────────────────────── 04 -->
 <section class="sec" id="s4">
-  <div class="sec-head"><span class="num">04</span><div><h2>A sparse code: few Kenyon cells speak at once</h2><p>Each Kenyon cell sums a handful of PN inputs, and one large inhibitory neuron, APL, feeds back onto all of them, so only the most strongly driven few fire: in the fly, about <span data-fact="kcSparseness">a small share</span> of KCs respond to a given odour<span data-cite="lin2014 honegger2011"></span>. The model keeps the same share active. The result is a sparse code: two smells that overlap a lot on the PNs share far fewer active KCs. That keeps memories of similar boards apart. Below are two candidate moves from the same decision: almost the same board, and the KCs they light.</p></div></div>
+  <div class="sec-head"><span class="num">04</span><div><h2>A sparse code: few Kenyon cells speak at once</h2><p>Each Kenyon cell sums a handful of PN inputs, and one large inhibitory neuron, APL, feeds back onto all of them, so only the most strongly driven few fire: in the fly, about <span data-fact="kcSparseness">5–10%</span> of KCs respond to a given odour, and a KC that responds fires only a few spikes<span data-cite="lin2014 honegger2011"></span>. KC responses are this selective because few PNs converge on each KC and its firing threshold is high<span data-cite="turner2008"></span>. The model lets the top <span data-kc="share">10%</span> of KCs fire, the top of that band (<span data-kc="count">the same share in each fly</span>). <span data-kc="code">Each winner gets a graded rate: how far its drive is above the best KC that did not win, which stands for the APL level.</span> The result is a sparse code: two smells that overlap a lot on the PNs share far fewer active KCs. That keeps memories of similar boards apart. Below are two candidate moves from the same decision: almost the same board, and the KCs they light.</p></div></div>
   <div class="grid">
     <article class="card span-8">
-      <div class="card-top"><h3>Every Kenyon cell, two boards</h3><span class="tag toy">model: APL as k-winners</span></div>
+      <div class="card-top"><h3>Every Kenyon cell, two boards</h3><span class="tag toy">model: APL as k-winners, graded rates</span></div>
       <canvas class="fig wide" id="sparseCv" aria-label="Grid of all Kenyon cells: orange board one only, blue board two only, white both"></canvas>
       <div class="legend"><span><i style="background:var(--m2)"></i>board 1 only</span><span><i style="background:var(--m1)"></i>board 2 only</span><span><i style="background:var(--kc-on)"></i>both</span></div>
       <div class="ctrls">
-        <label class="ctrl grow">active share <input type="range" id="spIn" min="0.01" max="0.3" step="0.01" value="0.05"><output id="spOut">5%</output></label>
+        <label class="ctrl grow">active share <input type="range" id="spIn" min="0.01" max="0.3" step="0.01" value="0.1"><output id="spOut">10%</output></label>
         <button class="tgl" id="spNext">Another pair</button>
       </div>
     </article>
@@ -353,7 +383,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 08 -->
 <section class="sec" id="s8">
-  <div class="sec-head"><span class="num">08</span><div><h2>How good are they?</h2><p>The numbers here were measured by our own training code, offline, with a fixed seed, and stored with the command that made them. Nothing on this card is typed in by hand. A random player is a low bar; the greedy player is a short hand-written heuristic, not a strong opponent.</p></div></div>
+  <div class="sec-head"><span class="num">08</span><div><h2>How good are they?</h2><p>The numbers here were measured by our own training code, offline, with a fixed seed, and stored with the command that made them. Nothing in the curve or the table is typed in by hand. A random player is a low bar; the greedy player is a short hand-written heuristic, not a strong opponent.</p></div></div>
   <div class="grid">
     <article class="card span-7">
       <div class="card-top"><h3>Pretraining curve</h3><span class="tag">data/training-curve.json</span></div>
@@ -370,6 +400,7 @@
         <li>The shipped flies are the checkpoint with the best result against the greedy bot. Choosing on those games makes their checkpoint numbers a little too good, so the table uses new games with a different seed.</li>
         <li>The interval is the 95% Wilson interval. "p vs coin" is the one-sided binomial chance of that many wins or more if each game were a coin flip.</li>
         <li>Evaluation games rotate the seat, the deck and who goes first in blocks of 8, so no fly gets an easy deck.</li>
+        <li>Why the graded KC code at 10%: in a development run with tools/mb-lab.mjs (3 seeds, 3000 held-out games against the greedy bot), flies with the graded code at 10% won 30.0% of the games (899 of 3000), and flies with the binary code at 5% won 21.7% (652 of 3000). That run is not the shipped training run.</li>
       </ul>
     </article>
   </div>
@@ -381,7 +412,7 @@
   <div class="grid">
     <article class="card span-4">
       <div class="card-top"><h3>Not a real fly</h3></div>
-      <p class="body">No animal was trained. A real fly would never see a card game. We took the wiring diagram of one circuit and ran a rate model of it on a computer. Real neurons spike, adapt, release several transmitters and change in ways our model leaves out.</p>
+      <p class="body">No animal was trained. A real fly would never see a card game. We took the wiring diagram of one circuit from two flies and ran a rate model of it on a computer. Real neurons spike, adapt, release several transmitters and change in ways our model leaves out.</p>
     </article>
     <article class="card span-4">
       <div class="card-top"><h3>Not the whole brain</h3></div>
@@ -399,7 +430,7 @@
       <div class="card-top"><h3>Limits we know about</h3></div>
       <ul class="facts">
         <li>The flies look one move ahead, plus the opponent's block after an attack. They do not plan further.</li>
-        <li>Both flies share the same PN-to-KC claws; they differ in the feature-to-glomerulus map and in what they learned.</li>
+        <li>Fly A and Fly B are wired from two different animals, so their PN-to-KC claws and their cell counts differ. Each fly also has its own feature-to-glomerulus map and its own learned weights. The two data sets detect synapses by different methods, so we do not read a difference between the flies as biology only.</li>
         <li>The duel is far simpler than any commercial card game: no stack, no instants, one block per attacker.</li>
         <li>Win rates are against weak fixed bots and each other. We make no claim of skill against people.</li>
       </ul>
@@ -411,7 +442,7 @@
   <div class="sec-head"><span class="num">¶</span><div><h2>Sources and credits</h2><p>Primary papers and data releases. Numbers about the fly on this page are taken from these.</p></div></div>
   <ol class="refs" id="srcList"><li class="none">Loading sources…</li></ol>
   <div class="credits" id="credits"></div>
-  <p class="note">Magic: The Gathering is a trademark of Wizards of the Coast LLC. The game on this page is our own, with our own cards, names, art and symbols. Not affiliated with or endorsed by Wizards of the Coast.</p>
+  <p class="note">Magic: The Gathering is a trademark of Wizards of the Coast LLC. The game on this page is our own, with our own cards, names, card frame and symbols. The card pictures are public-domain plates and paintings (<a href="art/CREDITS-ART.md">art credits</a>). Not affiliated with or endorsed by Wizards of the Coast.</p>
 </section>
 
 </main>
