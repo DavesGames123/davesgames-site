@@ -140,6 +140,11 @@ const nAll = $('gallery').children.length;
 const segBtns = [...document.querySelectorAll('#galSeg button')];
 click(segBtns[1]);
 ok(segBtns.length > 1 && $('gallery').children.length > 0 && $('gallery').children.length < nAll, `01: the gallery filter (${nAll} -> ${$('gallery').children.length})`);
+// The section 03 prose must name the encoding that the shipped fly uses.
+const enc = globalThis.flyDuel.heroFlies().A?.mb?.opts?.encoding;
+const h03 = [...document.querySelectorAll('.sec-head h2')].find(h => /smell of a board/i.test(h.textContent));
+const p03 = h03?.parentNode?.querySelector('p')?.textContent || '';
+ok(enc === 'receptor' ? /receptor/.test(p03) && !/tuning curve/.test(p03) : /tuning curve/.test(p03), `03: the prose names the '${enc}' encoding (${p03.slice(60, 140)})`);
 ok(new RegExp(`${C.pn.n} PN channels`).test($('smellRead').textContent), `03: ${C.pn.n} PN channels (${$('smellRead').textContent.slice(0, 40)})`);
 // A new hero game empties the hero history. "Another pair" must still
 // find two boards (the old scripted fallback found none).
