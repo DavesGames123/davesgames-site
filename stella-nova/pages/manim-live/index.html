@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Manim Live: the real ManimCE in your browser — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MANIM LIVE  ·  page shell (the IDE)
+  ───────────────────────────────────────────────────────────────────────────
+   A code editor and a player for ManimCE 0.22.0. The real manim wheel from
+   PyPI runs without changes in Pyodide, in a Web Worker (engine.js owns
+   the worker and its protocol). Five native libraries are replaced by
+   small Python modules in py/. The "Under the hood" panel names them.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module). main.js loads engine.js
+   with dynamic import(), so the editor works while Python loads, and a
+   missing engine gives a message, not a blank page.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #bar        #run #stop #scene #quality #layoutSeg #share #panelSeg
+     #work       data-layout = code | split | output
+                 data-panel  = none | examples | learn | ref | hood
+     #side       #sideTitle #sideClose #pExamples #pLearn #pRef #pHood
+     #codePane   #editor #boot (load stages) #bootList
+     #split      the splitter between code and output
+     #outPane    #stage #frame #stageMsg #err #errText
+                 #transport: #play #stepB #stepF #loop #speed #time
+                 #track (timeline) #animLabel
+                 #exportPng #exportVid #consoleBtn #console
+     #dock       phone tabs: code, output, learn, examples, ref
+     #toast      one-line notices
+
+   KEYS
+     Mod-Enter / Shift-Enter / Mod-S   run          Esc   stop the run
+     Alt-1 / Alt-2 / Alt-3   code / split / output layout
+     Space, , and .          play or pause, step back, step forward
+                             (when the focus is not in the editor)
+
+   GREP MAP  (main.js)
+     grep -n 'async function bootEngine'   engine import and status
+     grep -n 'function runCode'            one run: events -> player, editor
+     grep -n 'function setLayout'          three layouts and the phone tabs
+     grep -n 'function openPanel'          side panels
+     grep -n 'function initSplitter'       drag the splitter
+     grep -n 'function initKeys'           page keys
+     grep -n 'function share'              URL hash share
+     grep -n 'function showError'          traceback view and editor mark
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Write and run real ManimCE code in your browser. The unmodified manim package runs in Python compiled to WebAssembly, with an editor, a frame-by-frame player, a timeline of animations, lessons, many examples, and a live API reference with the real manim source.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<style>[hidden]{display:none!important}</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<header id="bar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">π</span>
+    <div><h1>Manim live</h1><p class="sub">The real ManimCE, compiled from its source, running in your browser</p></div>
+  </div>
+  <div class="bar-run">
+    <button id="run" class="btn primary" title="Run (Ctrl or Cmd + Enter)"><span class="ico">▶</span> Run</button>
+    <button id="stop" class="btn" title="Stop the run (Esc)" hidden>■ Stop</button>
+    <label class="pick" title="Scene to render"><span>Scene</span><select id="scene" aria-label="Scene"></select></label>
+    <label class="pick" title="Render quality"><span>Quality</span>
+      <select id="quality" aria-label="Quality">
+        <option value="low">480p, 15 fps</option>
+        <option value="medium">720p, 30 fps</option>
+        <option value="high">1080p, 60 fps</option>
+      </select>
+    </label>
+  </div>
+  <div class="bar-view">
+    <div id="layoutSeg" class="seg" role="group" aria-label="Layout">
+      <button data-layout="code" title="Code only (Alt+1)">Code</button>
+      <button data-layout="split" title="Code and output (Alt+2)" class="on">Split</button>
+      <button data-layout="output" title="Output only (Alt+3)">Output</button>
+    </div>
+    <div id="panelSeg" class="seg" role="group" aria-label="Panels">
+      <button data-panel="examples" title="Examples">Examples</button>
+      <button data-panel="learn" title="Lessons">Learn</button>
+      <button data-panel="ref" title="API reference">Reference</button>
+      <button data-panel="hood" title="Under the hood">Under the hood</button>
+    </div>
+    <button id="share" class="btn" title="Copy a link with this code">Share</button>
+  </div>
+</header>
+
+<main id="work" data-layout="split" data-panel="none" data-mtab="code">
+  <aside id="side" aria-label="Panel">
+    <div class="side-head"><h2 id="sideTitle">Examples</h2><button id="sideClose" class="icon" aria-label="Close panel" title="Close">✕</button></div>
+    <section id="pExamples" class="panel" data-p="examples"></section>
+    <section id="pLearn" class="panel" data-p="learn" hidden></section>
+    <section id="pRef" class="panel" data-p="ref" hidden></section>
+    <section id="pHood" class="panel" data-p="hood" hidden></section>
+  </aside>
+
+  <section id="codePane" aria-label="Code">
+    <div id="editor"></div>
+    <div id="boot" role="status" aria-live="polite">
+      <div class="boot-head"><b>Starting Python</b><span id="bootPct" class="muted"></span></div>
+      <ol id="bootList">
+        <li data-stage="python">Python (Pyodide)</li>
+        <li data-stage="numpy">numpy, scipy and the other packages</li>
+        <li data-stage="manim">The manim wheel from PyPI</li>
+        <li data-stage="fonts">Fonts and the native stand-ins</li>
+      </ol>
+      <div class="boot-bar"><i id="bootBar"></i></div>
+      <p id="bootMsg" class="muted">You can write code while this loads.</p>
+    </div>
+  </section>
+
+  <div id="split" role="separator" aria-orientation="vertical" aria-label="Resize code and output" tabindex="0"></div>
+
+  <section id="outPane" aria-label="Output">
+    <div id="stage">
+      <canvas id="frame" width="854" height="480" aria-label="Rendered frame"></canvas>
+      <div id="stageMsg"><p>Press <b>Run</b> to render the scene.</p><p class="muted">Ctrl or Cmd + Enter runs from the editor.</p></div>
+      <div id="renderBadge" hidden></div>
+    </div>
+    <div id="err" hidden>
+      <div class="err-head"><b id="errTitle">Error</b><button id="errClose" class="icon" aria-label="Hide error">✕</button></div>
+      <pre id="errText"></pre>
+    </div>
+    <div id="transport">
+      <button id="play" class="icon" aria-label="Play" title="Play or pause (Space)" disabled>▶</button>
+      <button id="stepB" class="icon" aria-label="Step back" title="Step back one frame (,)" disabled>‹</button>
+      <button id="stepF" class="icon" aria-label="Step forward" title="Step forward one frame (.)" disabled>›</button>
+      <span id="time" class="mono">0:00.0 / 0:00.0</span>
+      <span id="animLabel" class="anim-label"></span>
+      <span class="grow"></span>
+      <label class="tog" title="Loop"><input type="checkbox" id="loop" checked> Loop</label>
+      <select id="speed" aria-label="Speed" title="Speed">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+      </select>
+    </div>
+    <div id="track" aria-label="Timeline"></div>
+    <div id="outTools">
+      <button id="exportPng" class="btn small" disabled>Save frame (PNG)</button>
+      <button id="exportVid" class="btn small" disabled>Save video</button>
+      <span class="grow"></span>
+      <button id="consoleBtn" class="btn small" aria-expanded="false">Console <span id="consoleN"></span></button>
+    </div>
+    <pre id="console" hidden></pre>
+  </section>
+</main>
+
+<nav id="dock" aria-label="Views">
+  <button data-mtab="code" class="on"><span>✎</span>Code</button>
+  <button data-mtab="output"><span>▶</span>Output</button>
+  <button data-mtab="learn"><span>⚑</span>Learn</button>
+  <button data-mtab="examples"><span>☰</span>Examples</button>
+  <button data-mtab="ref"><span>?</span>Docs</button>
+</nav>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
