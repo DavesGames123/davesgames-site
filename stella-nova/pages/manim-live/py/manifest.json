@@ -1,0 +1,19 @@
+{
+ "files": [
+  "av/__init__.py",
+  "cairo/__init__.py",
+  "manimlive/__init__.py",
+  "manimlive/introspect.py",
+  "manimlive/runtime.py",
+  "manimlive/tex.py",
+  "manimpango/__init__.py",
+  "manimpango/_fonts.py",
+  "manimpango/_layout.py",
+  "manimpango/_markup.py",
+  "manimpango/enums.py",
+  "manimpango/utils.py",
+  "mapbox_earcut/__init__.py",
+  "moderngl/__init__.py",
+  "pathops/__init__.py"
+ ]
+}
