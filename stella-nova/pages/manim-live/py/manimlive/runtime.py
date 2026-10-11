@@ -87,6 +87,13 @@ def _anim_name(anim) -> str:
 
         if isinstance(anim, Wait):
             return "Wait"
+        methods = getattr(anim, "methods", None)
+        if type(anim).__name__ == "_MethodAnimation" and methods:
+            names = []
+            for m in methods:
+                fn = getattr(m, "method", None)
+                names.append(getattr(fn, "__name__", "method"))
+            return f"{type(anim.mobject).__name__}.animate." + ".".join(names)
         s = str(anim)
     except Exception:
         s = type(anim).__name__
@@ -176,6 +183,12 @@ def boot() -> str:
     import manim
 
     t_import = time.time() - t0
+    try:
+        import tqdm
+
+        tqdm.tqdm.monitor_interval = 0  # no monitor thread in wasm
+    except Exception:
+        pass
     install_hooks()
     from manim import config
 
