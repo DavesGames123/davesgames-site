@@ -177,7 +177,7 @@ export function paceFor(action, calm = 0.7, over = false) {
 const pctOf = (on, live) => live > 0 ? `${(100 * on / live).toFixed(1)}%` : 'n/a';
 
 // The shell poster for a shot. snap = { life, turn, kc: [{ on, live }],
-// trained, kinds: ['fly'|'bot', ..], card, over, last }. Plain text; the
+// trained, kinds: ['fly'|'bot', ..], card, over, last, wiring: [A, B] }. Plain text; the
 // TeX is the TD error and the value readout of the model.
 export function plateFor(shot, snap = {}) {
   const life = snap.life || ['?', '?'], who = shot ? shot.who : 0, name = NAMES[who] || 'Fly A';
@@ -188,7 +188,11 @@ export function plateFor(shot, snap = {}) {
   if (kc.length) lines.push(`Active Kenyon cells (of the ${kc[0]?.live} with PN input): ${NAMES[0]} ${pctOf(kc[0]?.on, kc[0]?.live)} · ${NAMES[1]} ${pctOf(kc[1]?.on, kc[1]?.live)}`);
   if (kinds.some(k => k !== 'fly')) lines.push('The fly model did not load: the greedy bot stands in');
   else lines.push(snap.trained ? 'Pretrained weights, learning off during the show' : 'Untrained flies: no pretrained weights yet');
-  lines.push('A model on hemibrain mushroom body wiring, not a real fly');
+  // snap.wiring: the connectome name of each fly (pretrained.json "wiring")
+  const wr = snap.wiring || [];
+  lines.push(wr[0] && wr[1] && wr[0] !== wr[1]
+    ? `Models on traced wiring (${NAMES[0]} ${wr[0]}, ${NAMES[1]} ${wr[1]} mushroom body), not real flies`
+    : `A model on ${wr[0] || 'hemibrain'} mushroom body wiring, not a real fly`);
   const td = { tex: ["\\delta = r + \\gamma\\,V(s') - V(s)"], rules: [['\\delta', 'm1'], ['V', 'm2'], ['\\gamma', 'm3']], eq: ["δ = r + γ·V(s′) − V(s)"] };
   const val = { tex: ['V(s) = \\sum_j v_j\\, m_j(s)'], rules: [['V', 'm2'], ['v_j', 'm4'], ['m_j', 'm5']], eq: ['V(s) = Σ v_j · m_j(s)'] };
   const k = shot ? shot.kind : 'table', e = shot && shot.event;
@@ -544,7 +548,8 @@ function agentsOf(env, kinds) {
 }
 
 // env = { rules, byId, connectome, flies: [A, B] (null = bot), bots,
-// trained, seed, calm, makeCanvas(), makeImage(src) | null, dpr }.
+// trained, seed, calm, wiring: [A, B] names for the plate, makeCanvas(),
+// makeImage(src) | null, dpr }.
 export function createShow(env) {
   const calm = clamp(env.calm ?? 0.7, 0, 1);
   const seed = (env.seed >>> 0) || 1;
@@ -614,7 +619,7 @@ export function createShow(env) {
       const st = S.match.state, sh = dir.shot;
       const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; }).filter(Boolean);
       const card = sh && sh.event && sh.event.card ? cardOf(S.byId, sh.event.card) : null;
-      return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over() };
+      return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over(), wiring: env.wiring };
     },
     // Draw the shot into the band R (CSS px). Returns the subject box.
     draw(g, R, dt) {
@@ -764,7 +769,7 @@ export function createShow3d(env) {
       const st = S.match.state, sh = dir.shot;
       const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; }).filter(Boolean);
       const card = sh && sh.event && sh.event.card ? cardOf(S.byId, sh.event.card) : null;
-      return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over() };
+      return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over(), wiring: env.wiring };
     },
     plate() { return plateFor(dir.shot, this.snapshot()); },
     resize() { scene.resize(); },
@@ -802,17 +807,19 @@ function enter(o = {}) {
     const flies = [fd.makeFly ? fd.makeFly('A') : null, fd.makeFly ? fd.makeFly('B') : null];
     let trained = false;
     try { trained = !!(fd.heroFlies && fd.heroFlies().trained); } catch { trained = false; }
+    const WN = { hemibrain: 'hemibrain', flywire: 'FlyWire' };
+    const wiring = ['A', 'B'].map(k => { const id = D.pretrained?.wiring?.[k]?.id; return id ? (WN[id] || id) : null; });
     let scene = null;
     if (me.try3d) { try { scene = await fd.makeScene3d(cv); } catch (e) { scene = null; } }
     if (run !== me) { try { scene && scene.dispose(); } catch { /* gone */ } return; }
     if (scene) {
-      me.show = createShow3d({ rules: M.rules, byId, flies, bots: M.bots, trained, seed, calm, scene });
+      me.show = createShow3d({ rules: M.rules, byId, flies, bots: M.bots, trained, seed, calm, scene, wiring });
       me.mode = '3d';
       return;
     }
     me.try3d = false; me.mode = '2d';
     me.show = createShow({
-      rules: M.rules, byId, connectome: D.connectome, flies, bots: M.bots, trained, seed, calm,
+      rules: M.rules, byId, connectome: D.connectome, flies, bots: M.bots, trained, seed, calm, wiring,
       makeCanvas: () => document.createElement('canvas'),
       makeImage: src => { const im = new Image(); im.decoding = 'async'; im.src = src; return im; },
       dpr: Math.min(2, window.devicePixelRatio || 1),

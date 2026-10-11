@@ -248,6 +248,8 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   ok(d.n >= 2 && d.games >= 1, `saver: 30 s give shots (${d.n} shots, ${d.games} games, now ${d.now})`);
   ok(['wide', 'over', 'close', 'combat', 'win'].includes(d.camera), `saver: the scene camera takes the director shot (${d.camera})`);
   ok(labels.length >= 10 && labels.every(p => p.title && /turn \d+/.test(p.sub)), `saver: plates with live numbers (${labels.length})`);
+  const pw = JSON.parse(readFileSync(join(ROOT, 'data/pretrained.json'), 'utf8')).wiring;
+  if (pw?.B?.id === 'flywire') ok(labels.every(p => p.lines.some(l => /Fly B FlyWire/.test(l))) && !labels.some(p => p.lines.some(l => /A model on hemibrain/.test(l))), 'saver: the plate names the wiring of each fly');
   const a = labels[labels.length - 1].anchor();
   ok(a && Number.isFinite(a.x) && Number.isFinite(a.y) && a.lead === false, 'saver: the anchor gives a box');
   ok(hero.match.history.length === n0, 'saver: the hero match waits while the saver runs');
