@@ -71,7 +71,7 @@ export const TABLE = {
   handV: 3.75, handY: 0.12, handR: 0.38,
   stageU: 0.7, stageV: 2.0, stageY: 1.0,
   seatV: 4.2, seatTop: 1.16,
-  flyScale: 2.0, handScale: 0.82, fanR: 0.42,
+  flyScale: 2.0, handScale: 0.78, fanR: 0.3,
 };
 const T = TABLE;
 const YAW = [0, Math.PI];
@@ -1241,12 +1241,20 @@ export function createDuelScene(canvas, opts = {}) {
   }
   const handAnchor = p => seatPos(p, 0, T.handY + 0.15, T.handV + 0.05);
   const restAnchor = p => seatPos(p, 0, 0.02, T.r - 0.15);
-  const flyHead = p => seatPos(p, 0, 1.5, T.seatV - 0.2);
+  const flyHead = p => seatPos(p, 0, 1.15, T.seatV - 0.15);
 
   // ---------------------------------------------------------- director
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 80);
-  const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), wantPos: new THREE.Vector3(), wantLook: new THREE.Vector3(), shot: 'wide', p: 0, az: 0.35, userUntil: -1, hold: 0 };
-  function director(shot, p = 0) { cam.shot = shot; cam.p = p; }
+  const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), wantPos: new THREE.Vector3(), wantLook: new THREE.Vector3(), shot: 'wide', p: 0, az: 0.35, userUntil: -1, since: -99 };
+  // A shot holds at least HOLD seconds (scene time), so the camera does
+  // not swing on each small decision. force: a cast, a combat or the end
+  // of the game cuts at once.
+  const HOLD = 3.2;
+  function director(shot, p = 0, force = false) {
+    if (cam.shot === shot && cam.p === p) return;
+    if (!force && sceneT - cam.since < HOLD) return;
+    cam.shot = shot; cam.p = p; cam.since = sceneT;
+  }
   function shotPose(dt) {
     const aspect = camera.aspect || 1.6;
     const fit = Math.max(1, 1.45 / aspect);           // tall frames step back
@@ -1292,7 +1300,10 @@ export function createDuelScene(canvas, opts = {}) {
       toAct = s.p;
       clip(s.p, 'think', { until: s.dur + 0.3 });
       if (!s.bot && cur?.rec) brains[s.p]?.fire?.(cur.rec.trace, cur.rec.delta);
-      director(cur?.rec?.action?.type === 'block' || cur?.rec?.action?.type === 'attack' ? 'combat' : 'over', s.p);
+      const ty = cur?.rec?.action?.type;
+      if (ty === 'attack' && cur.rec.action.attackers.length) director('combat', s.p, true);
+      else if (ty === 'block') director('combat', s.p);
+      else if (ty === 'land' || ty === 'cast') director('over', s.p);
     },
     lift(s) {
       const H = Z.hand[s.p];
@@ -1304,7 +1315,7 @@ export function createDuelScene(canvas, opts = {}) {
       const touch = s.dur * 0.45;
       Z.held[s.p] = o; o.next = { dur: s.dur - touch, arc: 0.35, delay: touch };
       clip(s.p, 'reach', { target: o.mesh.position, contactAt: touch });
-      if (CARD[s.card].type !== 'land') director('close', s.p);
+      if (CARD[s.card].type !== 'land') director('close', s.p, true);
     },
     land(s) {
       const o = Z.held[s.p] || new CardObj(W, s.card);
@@ -1325,7 +1336,7 @@ export function createDuelScene(canvas, opts = {}) {
       Z.held[s.p] = null; o.uid = s.uid; Z.perms.set(s.uid, o); o.next = { dur: s.dur, arc: 0.35 };
       clip(s.p, 'place', { target: mirrorSlot(s.p, s.uid, s.card), contactAt: s.dur });
     },
-    reveal(s) { const o = Z.held[s.p]; if (o) o.pulse = 1; director('close', s.p); },
+    reveal(s) { const o = Z.held[s.p]; if (o) o.pulse = 1; },
     spark(s) {
       const o = Z.held[s.p];
       const a = o ? o.mesh.position.clone() : stagePose(s.p).clone();
@@ -1395,7 +1406,9 @@ export function createDuelScene(canvas, opts = {}) {
         trackLoose(o);
       } else { Z.grave[s.p].push(o); o.next = { dur: s.dur, arc: 0.55 }; }
     },
-    settle() { for (const [u, f] of Z.flags) { delete f.attacking; delete f.blocking; delete f.target; if (!Object.keys(f).length) Z.flags.delete(u); } },
+    settle() {
+      director('wide');
+      for (const [u, f] of Z.flags) { delete f.attacking; delete f.blocking; delete f.target; if (!Object.keys(f).length) Z.flags.delete(u); } },
     discard(s) {
       const H = Z.hand[s.p];
       const i = mirror.players[s.p].hand.indexOf(s.card);
@@ -1422,7 +1435,7 @@ export function createDuelScene(canvas, opts = {}) {
         clip(p, s.winner >= 0 && p === s.winner ? 'raiseArms' : 'slump');
         flies[p].end = s.winner < 0 ? 'slump' : p === s.winner ? 'raiseArms' : 'slump';
       }
-      director('win');
+      director('win', 0, true);
     },
     sync() {
       const want = mirrorOf(cur.rec.after);
@@ -1546,12 +1559,15 @@ export function createDuelScene(canvas, opts = {}) {
       const def = clipDef(f, f.spec.name);
       let t = (sceneT - f.t0) * f.rate;
       const over = (!def.loop && !def.hold && t >= def.duration) || sceneT >= f.until;
-      if (over) {
-        if (!cur?.rec && sceneT > f.nextGroom && !f.end) { clip(f.p, 'groom'); f.nextGroom = sceneT + 10 + ((f.p * 7 + Math.floor(sceneT)) % 7); }
+      // the fly that waits grooms now and then (idle is a loop clip, so
+      // the groom starts from idle, not from the end of a clip)
+      const groom = (!cur?.rec || cur.rec.who !== f.p) && sceneT > f.nextGroom && !f.end && !W.reduced;
+      if (over || (f.spec.name === 'idle' && groom)) {
+        if (groom) { clip(f.p, 'groom'); f.nextGroom = sceneT + 10 + ((f.p * 7 + Math.floor(sceneT)) % 7); }
         else clip(f.p, f.end || 'idle');
         t = 0;
       }
-      f.tNow = f.spec.name === 'idle' || f.spec.name === 'think' ? sceneT : t;
+      f.tNow = f.spec.name === 'idle' ? sceneT : t;
       f.built.rig.setLife?.(Math.max(0, Math.min(1, life / 20)));
       const mix = W.reduced ? 1 : Math.min(1, (sceneT - f.mixT0) / 0.22);
       const o = {
@@ -1627,7 +1643,9 @@ function buildLights(scene, W, coarse) {
   const hemi = new THREE.HemisphereLight(0xbfcbe8, 0x2a1c12, 0.55);
   scene.add(hemi);
   // key: the lamp over the table, the only shadow light
-  const key = new THREE.SpotLight(0xffe6c4, 160, 22, 0.78, 0.35, 1.6);
+  // cone wide enough to reach the flies on the stools; the felt is in the
+  // bright centre of the cone
+  const key = new THREE.SpotLight(0xffe6c4, 130, 24, 0.98, 0.5, 2);
   key.position.set(0, W.lampY - 0.25, 0);
   key.target.position.set(0, T.y, 0);
   key.castShadow = !coarse;

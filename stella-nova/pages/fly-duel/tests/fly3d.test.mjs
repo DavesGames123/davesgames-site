@@ -210,13 +210,17 @@ async function runGame(sc, M, check) {
   await sc.ready;
   const M = botMatch(seed);
   sc.setState(M.state); sc.setSpeed(2);
-  const before = badPos;
+  const before = badPos, clips = {};
   let r;
   while ((r = M.next()) && r.i <= upTo) {
     let done = false;
     sc.play(r).then(() => { done = true; });
-    for (let k = 0; k < 20000 && !done; k++) { sc.render(1 / 30); await null; posCheck(sc); }
+    for (let k = 0; k < 20000 && !done; k++) {
+      sc.render(1 / 30); await null; posCheck(sc);
+      for (const f of sc.world.flies) clips[f.spec.name] = (clips[f.spec.name] || 0) + 1;
+    }
   }
+  for (const c of ['idle', 'think', 'reach', 'place', 'tap', 'groom']) ok(clips[c] > 0, `fly clip ${c} plays (${clips[c] || 0} frames)`);
   ok(badPos === before, `30 fps play: cards stay on or above the table top (${badPos - before} bad samples)`);
   sc.dispose();
 }
