@@ -29,22 +29,31 @@
      The Gathering is named in plain text only, as the inspiration, with
      the line "Not affiliated with or endorsed by Wizards of the Coast."
 
-   NO GPU
-     The page makes no WebGL or WebGPU context. All views are 2D canvases.
+   GPU
+     The hero is one WebGL scene (three.js r160 from ../../vendor, by the
+     import map in the head): ui/fly3d/scene.js with the flies of
+     ui/fly3d/fly.js and the brain maps of ui/fly3d/brain3d.js. "brains up
+     close" adds two WebGL brain views. When the scene cannot start, the
+     2D table and 2D brains (#arena) take its place. Sections 01 to 09
+     use 2D canvases only. No WebGPU.
 
    HEAD LOAD ORDER
      1. gpu-guard     ../../lib/gpu-guard.js
      2. wishlist      ../../lib/wishlist.js
      3. stats-beacon  ../../lib/stats-beacon.js
      4. style.css, then ../../lib/sci.css (fonts, math colours)
+     5. the import map for three r160 (before any module script)
    Script at the end of body: main.js (module). main.js loads the other
    packages with dynamic import(), so a missing file gives a loading
    message, not a blank page.
 
    LAYOUT  (# marks an element id main.js binds to)
      #chips   sticky section bar
-     hero     #heroStatus #heroBoard #heroBrainA #heroBrainB #heroPlay
-              #heroSpeed #heroNew #heroLog #heroStats #wiringHero
+     hero     #heroStage #heroCv #hudA #hudB #heroMaps #heroMapA #heroMapB
+              #heroMove #heroStatus #heroPlay #heroSpeed #heroNew #heroCam
+              #heroBrains #manaLegGlyphs #heroLog #heroStats
+              2D stand-in (shown only when the 3D scene cannot start):
+              #arena #heroPaneA #heroPaneB #heroBrainA #heroBrainB #heroBoard
      #s1 game       #kwList #deckLists #galSeg #gallery
      #s2 centre     #mbCv #mbLegend #cxMeta #factList #ourList
      anywhere       [data-fact] value of a FACTS id, [data-cite] [n] links,
@@ -79,6 +88,12 @@
 <meta name="description" content="Two model fruit fly brains, wired from the published mushroom body connectome, learn a small trading-card duel by dopamine-gated plasticity and play it against each other. Live match, brain view, training in your browser, measured win rates and sources.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -111,19 +126,37 @@
   <h1>Two fruit fly brains learn a card duel</h1>
   <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
 
-  <div class="arena" id="arena">
+  <div class="stage" id="heroStage">
+    <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a table play the card duel; each fly's mushroom body map floats beside it. Drag to turn the view."></canvas>
+    <div class="hud a" id="hudA" aria-live="off"></div>
+    <div class="hud b" id="hudB" aria-live="off"></div>
+    <div class="maps" id="heroMaps" hidden>
+      <figure class="map a"><figcaption><b class="seatmark s0">A</b> Fly A · model mushroom body</figcaption><canvas id="heroMapA" aria-label="3D map of the mushroom body of Fly A; drag to turn"></canvas></figure>
+      <figure class="map b"><figcaption><b class="seatmark s1">B</b> Fly B · model mushroom body</figcaption><canvas id="heroMapB" aria-label="3D map of the mushroom body of Fly B; drag to turn"></canvas></figure>
+    </div>
+    <p class="stage-move" id="heroMove" aria-live="polite"></p>
+    <p class="stage-tag">A computer model <span data-wiring>wired from the connectome</span>, not a real fly</p>
+  </div>
+  <div class="stagebar">
+    <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
+    <span class="arena-ctrls">
+      <button class="tgl" id="heroPlay" aria-pressed="true">Pause</button>
+      <span class="seg mini" id="heroSpeed" role="group" aria-label="Speed"><button data-v="0.5">slow</button><button data-v="1" class="on">normal</button><button data-v="3">fast</button></span>
+      <button class="tgl" id="heroNew">New game</button>
+      <span class="ctl-l">camera</span><span class="seg mini" id="heroCam" role="group" aria-label="Camera"><button data-v="auto" class="on" title="The camera cuts to the fly that acts">director</button><button data-v="wide" title="Hold the wide shot of the table">wide</button><button data-v="free" title="Drag to turn, no cuts">free</button></span>
+      <span class="ctl-l">brains</span><span class="seg mini" id="heroBrains" role="group" aria-label="Brain maps"><button data-v="beside" class="on" title="Each brain map floats beside its fly">beside</button><button data-v="close" title="Two large brain maps you can turn">close-up</button><button data-v="off" title="Hide the brain maps">hide</button></span>
+    </span>
+  </div>
+  <div class="under">
+  <ol class="log" id="heroLog" aria-label="Last moves"></ol>
+  <div class="manaleg" id="manaLeg">
+    <b>Mana.</b> <span id="manaLegGlyphs"></span> Each land makes one mana of its colour. A bright land is untapped; a dim, turned land is tapped. To cast a card, the fly touches each land it pays with and a token goes from the land to the card. A token that pays a generic cost turns into a grey square on the way.
+  </div>
+  </div>
+  <div class="arena" id="arena" hidden>
     <div class="arena-brain a" id="heroPaneA" data-seat="0"><p class="brain-cap" id="heroCapA"><b class="seatmark s0">A</b> Fly A</p><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
     <div class="arena-mid">
-      <div class="arena-bar">
-        <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
-        <span class="arena-ctrls">
-          <button class="tgl" id="heroPlay" aria-pressed="true">Pause</button>
-          <span class="seg mini" id="heroSpeed" role="group" aria-label="Speed"><button data-v="0.5">slow</button><button data-v="1" class="on">normal</button><button data-v="3">fast</button></span>
-          <button class="tgl" id="heroNew">New game</button>
-        </span>
-      </div>
       <div class="board" id="heroBoard" aria-live="off"><div class="board-empty">Loading…</div></div>
-      <ol class="log" id="heroLog" aria-label="Last moves"></ol>
     </div>
     <div class="arena-brain b" id="heroPaneB" data-seat="1"><p class="brain-cap" id="heroCapB"><b class="seatmark s1">B</b> Fly B</p><canvas class="fig brain" id="heroBrainB" aria-label="Brain of Fly B: point cloud of its mushroom body neurons"></canvas></div>
   </div>
@@ -134,7 +167,7 @@
     <span><i style="background:var(--avoid)"></i>avoid output / PPL1</span>
   </div>
   <div class="stats" id="heroStats"></div>
-  <p class="note"><b>We do not train a real fly.</b> We train a computer model whose wiring, <span data-wiring>taken from the published fruit fly connectome</span>, is that of one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons. Fly A sits at the bottom of the table, Fly B at the top. In this live match both flies play with their trained weights and learning is switched off. The flashes show the dopamine signal the model computes after each move. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
+  <p class="note"><b>We do not train a real fly.</b> We train a computer model whose wiring, <span data-wiring>taken from the published fruit fly connectome</span>, is that of one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons. Fly A wears the cyan collar, Fly B the magenta collar; the flies are drawn by us, larger than life, and only the brain maps come from data. In this live match both flies play with their trained weights and learning is switched off. The flashes show the dopamine signal the model computes after each move. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
 </header>
 
 <!-- ───────────────────────────────────────────────────────────── 01 -->

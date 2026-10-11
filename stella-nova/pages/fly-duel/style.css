@@ -25,6 +25,7 @@
      grep -n 'HIDDEN'     the [hidden] guard
      grep -n 'CHIPS'      the sticky section bar
      grep -n 'ARENA'      hero layout, brains and table
+     grep -n 'STAGE'      the 3D hero: canvas, HUD cards, maps, bar
      grep -n 'TABLE'      the board: sides, lands, creatures
      grep -n 'FCARD'      one card, full and mini
      grep -n 'CARDS'      grid, cards, figures
@@ -299,6 +300,49 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
 .cands li i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--v,0%);background:var(--c,var(--pn))}
 .cands .head{background:none;border:0;color:var(--dim);padding:0 2px 4px}
 
+/* ---------------------------------------------------------------- STAGE
+   The 3D hero (ui/fly3d/scene.js) fills .stage. The HUD cards, the move
+   line, the honesty tag and the close-up brain maps sit on top of the
+   canvas. They are solid panels with a hard 1 px edge: no blur. A HUD
+   card reads life, mana (one glyph per land, dim when tapped), hand,
+   deck and creatures of one fly. #arena is the 2D stand-in. */
+.stage{position:relative;margin-top:18px;height:clamp(440px,74vh,800px);border:1px solid var(--hair2);border-radius:12px;overflow:hidden;background:#0a0d14}
+.stage-cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:pan-y}
+.stage-cv:active{cursor:grabbing}
+.hud{position:absolute;top:12px;width:min(280px,40%);background:rgba(5,7,12,0.86);border:1px solid var(--hair2);border-top:3px solid var(--flyA);border-radius:10px;padding:8px 11px 9px;color:var(--ink2);pointer-events:none}
+.hud:empty{display:none}
+.hud.a{left:12px} .hud.b{right:12px;border-top-color:var(--flyB)}
+.hud .top{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink)}
+.hud .top em{font-style:normal;color:var(--dim);font-size:11px;letter-spacing:0.02em}
+.hud.acting .top em{color:var(--ink)}
+.hud .life{margin-left:auto;font:600 28px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.hud.a .life{color:var(--flyA)} .hud.b .life{color:var(--flyB)}
+.hud .life.low{color:var(--dmg)}
+.hud .mana{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:7px 0 5px;min-height:18px}
+.hud .mana .m{display:inline-block;line-height:0}
+.hud .mana .m.off{opacity:0.3}
+.hud .mana .n{margin-left:6px;font:600 13px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.hud .mana .none{font-size:11px;color:var(--dim)}
+.hud .row{display:flex;flex-wrap:wrap;gap:4px 11px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.hud .row b{color:var(--ink2);font-weight:600}
+.stage-move{position:absolute;left:50%;transform:translateX(-50%);bottom:42px;max-width:min(720px,calc(100% - 24px));background:rgba(5,7,12,0.86);border:1px solid var(--hair2);border-radius:999px;padding:6px 14px;font:0.82rem/1.3 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.stage-move:empty{display:none}
+.stage-move b{font-weight:700} .stage-move b.s0{color:var(--flyA)} .stage-move b.s1{color:var(--flyB)}
+.stage-tag{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--ink2);background:rgba(5,7,12,0.86);border:1px solid var(--hair);border-radius:6px;padding:3px 8px;pointer-events:none}
+.maps{position:absolute;left:12px;right:12px;bottom:82px;display:grid;grid-template-columns:repeat(2,minmax(0,min(300px,40%)));justify-content:space-between;gap:12px;pointer-events:none}
+.map{pointer-events:auto;background:var(--fig);border:1px solid var(--hair2);border-top:3px solid var(--flyA);border-radius:10px;overflow:hidden;min-width:0}
+.map.b{border-top-color:var(--flyB)}
+.map figcaption{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:11px;color:var(--ink2);border-bottom:1px solid var(--hair);white-space:nowrap;overflow:hidden}
+.map canvas{display:block;width:100%;aspect-ratio:1/1;touch-action:pan-y;cursor:grab}
+.stagebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin-top:10px}
+.ctl-l{font-size:0.72rem;color:var(--dim);margin-left:6px}
+.under{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:12px;margin-top:10px}
+.under .log{height:auto;min-height:6.4em;margin:0}
+.manaleg{font-size:0.8rem;line-height:1.5;color:var(--dim);background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:8px 12px}
+.manaleg b{color:var(--ink);font-weight:600}
+.manaleg svg{vertical-align:-3px}
+.hero .arena{margin-top:12px}
+
 /* ---------------------------------------------------------------- TOUCH */
 @media (pointer:coarse){
   .seg button,.tgl,.arena-ctrls .tgl,.seg.mini button{min-height:44px;padding:10px 14px}
@@ -341,4 +385,25 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
   .fcard.mini{width:50px}
   .fcard.mini .fc-name{font-size:0.62rem}
   .side-head .meta{flex-basis:100%;order:5}
+}
+
+/* STAGE on a phone: smaller HUD cards in the two top corners, the brain
+   close-ups side by side over the lower half of the stage, the log and
+   the mana legend in one column. */
+@media (max-width:860px){
+  .stage{height:clamp(420px,70svh,640px);border-radius:10px}
+  .hud{top:8px;width:calc(50% - 12px);padding:6px 8px 7px}
+  .hud.a{left:8px} .hud.b{right:8px}
+  .hud .top{font-size:12px}
+  .hud .top em{display:none}
+  .hud .life{font-size:22px}
+  .hud .mana svg{width:13px;height:13px}
+  .hud .mana .n{font-size:12px}
+  .hud .row{font-size:12px;gap:2px 8px}
+  .hud .row .cr{display:none}
+  .stage-move{bottom:38px;font-size:0.72rem;padding:5px 10px}
+  .stage-tag{left:8px;bottom:8px}
+  .maps{left:8px;right:8px;bottom:74px;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .under{grid-template-columns:minmax(0,1fr)}
+  .ctl-l{display:none}
 }

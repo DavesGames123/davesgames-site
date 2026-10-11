@@ -9,7 +9,10 @@
 //    brain/fly.js brain/mb.js                                    (package C)
 //    train/worker.js data/pretrained.json data/training-curve.json (package D)
 //    saver.js                                                    (package F)
-//  The ui/ modules (this package) load by static import.
+//    ui/fly3d/scene.js (the 3D hero, three.js by the import map)
+//  The ui/ modules (this package) load by static import. The 3D table
+//  loads by import() too: in node or without WebGL, the 2D table and the
+//  2D brains of #arena play the hero match instead.
 //
 //  One rAF loop draws only the canvases that are on screen, and runs the
 //  autoplay tickers. The loop stops while window.__fdSaver is true (the
@@ -21,7 +24,10 @@
 //      grep -n 'function weightsFor'      pretrained.json -> one fly
 //      grep -n 'function makeFly'         Fly construction and weights
 //      grep -n 'function dragRotate'      pointer drag on a brain canvas
-//      grep -n 'function initHero'        hero live match
+//      grep -n 'export function hudHTML'  hero HUD card: life, mana, hand
+//      grep -n 'function start3d'         the 3D table (ui/fly3d/scene.js)
+//      grep -n 'function initHero'        hero live match, 3D or 2D driver
+//      grep -n 'function setBrains'       hero brain maps: beside, close, off
 //      grep -n 'function initGame'        01 rules, decks, gallery
 //      grep -n 'function initCentre'      02 point cloud, counts, facts
 //      grep -n 'function initSmell'       03 features -> glomeruli
@@ -114,6 +120,13 @@ async function loadAll() {
   ]);
   // brain/fly.js imports the rules, so it loads after them.
   // train/selfplay.js gives TRAIN_MIX, TRAIN_EXPLORE and FLY_OPTS.
+  // pretrained.json format 2: a wiring file per fly (fly B on FlyWire).
+  D.cons = { A: D.connectome, B: D.connectome };
+  for (const side of ['A', 'B']) {
+    const f = D.pretrained?.wiring?.[side]?.file;
+    if (!f || f === 'data/connectome.json') continue;
+    try { const r = await fetch(`./${f}`); if (r.ok) D.cons[side] = await r.json(); } catch { /* keep connectome.json */ }
+  }
   await tryImport('fly', './brain/fly.js');
   await tryImport('trainer', './train/selfplay.js');
   if (M.cards?.KEYWORDS) setKeywordText(M.cards.KEYWORDS);
@@ -139,7 +152,9 @@ function makeFly(side, saved = weightsFor(side)) {
   const Fly = M.fly?.Fly;
   if (!Fly || !D.connectome) return null;
   if (saved) {
-    try { return Fly.fromJSON(D.connectome, saved); }
+    // shipped weights go with the wiring file pretrained.json names
+    const C = saved === weightsFor(side) ? (D.cons?.[side] || D.connectome) : D.connectome;
+    try { return Fly.fromJSON(C, saved); }
     catch (e) { console.warn(`fly-duel: weights for ${side} did not load`, e); }
   }
   try { return new Fly(D.connectome, { ...(M.trainer?.FLY_OPTS || {}), name: `Fly ${side}`, hemisphere: side, seed: side === 'A' ? 1 : 2 }); }
@@ -198,10 +213,20 @@ function brainCanvas(cv, bv) {
 }
 
 // ---------------------------------------------------------------- hero
-// One decision per beat (ui/motion.js beatPlan). The ticker runs the
-// timed steps of the beat: focus, PN/KC/MBON reveal, decision strip,
-// table, DAN burst. At a game end the last board holds with a banner.
-const hero = { match: null, playing: !REDUCED, speed: 1, bvs: [], log: [], last: null, rec: null, plan: null, t: 0, hold: 0, focus: -1 };
+// Two drivers share one Match.
+//   3D (hero.mode '3d'): ui/fly3d/scene.js plays each record. The next
+//   decision starts when scene.play(record) resolves, so the flies set
+//   the pace. The HUD cards read life and mana from the state after the
+//   record. "brains up close" adds two createBrainView canvases.
+//   2D (hero.mode '2d', the stand-in when the scene cannot start): one
+//   decision per beat (ui/motion.js beatPlan). The ticker runs the timed
+//   steps of the beat: focus, PN/KC/MBON reveal, decision strip, table,
+//   DAN burst.
+// At a game end the last board holds with a banner, then a new game.
+const hero = {
+  match: null, playing: !REDUCED, speed: 1, bvs: [], log: [], last: null, rec: null, plan: null, t: 0, hold: 0, focus: -1,
+  mode: '2d', scene: null, busy: false, gen: 0, cam: 'auto', brains: 'beside', maps: [null, null], mapsLoading: null, poke: 0,
+};
 
 // The banner text of a game result (DESIGN.md 2.3).
 export function resultBanner(r, names = NAMES) {
@@ -211,29 +236,90 @@ export function resultBanner(r, names = NAMES) {
   return { text: `${names[r.winner]} wins${why ? ` · ${why}` : ''}`, seat: r.winner };
 }
 
-function initHero() {
+// One HUD card: life, then one mana glyph per land (dim when tapped) and
+// the untapped count, then hand, deck and creatures. Exported for the
+// node test.
+export function hudHTML(state, p, byId, { acting = false, over = null, names = NAMES } = {}) {
+  const pl = state?.players?.[p];
+  if (!pl) return '';
+  const card = id => (byId && (byId.get ? byId.get(id) : byId[id])) || {};
+  const lands = pl.battlefield.filter(x => card(x.id).type === 'land');
+  const order = { amber: 0, moss: 1 };
+  const kind = x => card(x.id).produces || 'generic';
+  lands.sort((a, b) => (order[kind(a)] ?? 2) - (order[kind(b)] ?? 2) || (a.tapped - b.tapped));
+  const up = lands.filter(x => !x.tapped).length;
+  const shown = lands.slice(0, 12);
+  const glyphs = shown.map(x => `<i class="m ${x.tapped ? 'off' : 'on'}" title="${esc(card(x.id).name || 'land')}${x.tapped ? ', tapped' : ''}">${manaGlyph(kind(x), 0, 16)}</i>`).join('');
+  const more = lands.length > shown.length ? `<span class="none">+${lands.length - shown.length}</span>` : '';
+  const creatures = pl.battlefield.filter(x => card(x.id).type === 'creature').length;
+  const tag = over ? (over.winner === p ? 'wins' : over.winner === -1 ? 'draw' : 'loses') : acting ? 'choosing' : 'waiting';
+  return `<div class="top"><b class="seatmark s${p}">${p ? 'B' : 'A'}</b>${esc(names[p])}<em>${tag}</em><span class="life${pl.life <= 5 ? ' low' : ''}" title="life">${pl.life}</span></div>`
+    + `<div class="mana" title="mana: untapped lands of ${lands.length}">${lands.length ? `${glyphs}${more}<span class="n">${up}/${lands.length}</span>` : '<span class="none">no lands yet</span>'}</div>`
+    + `<div class="row"><span>hand <b>${pl.hand.length}</b></span><span>deck <b>${pl.library.length}</b></span><span class="cr">creatures <b>${creatures}</b></span><span>grave <b>${pl.graveyard.length}</b></span></div>`;
+}
+
+// The connectome of one fly. pretrained.json format 2 names a wiring
+// file per fly (fly B on FlyWire); format 1 puts both on connectome.json.
+function conOf(side) { return D.cons?.[side] || D.connectome; }
+
+// Start the 3D scene on #heroCv. Returns the scene, or null (no module,
+// no WebGL): then the 2D stand-in plays.
+function start3d(mod) {
+  const cv = $('heroCv');
+  if (!mod?.createDuelScene || !cv) return null;
+  const headless = !!window.flyDuelOpts?.headless3d;   // node test seam
+  try {
+    const sc = mod.createDuelScene(headless ? null : cv, { connectomes: D.connectome ? [conOf('A'), conOf('B')] : null, names: NAMES, headless });
+    sc.ready?.then(info => { hero.info3d = info; }).catch(() => {});
+    return sc;
+  } catch (e) {
+    status.scene3d = String(e && e.message || e);
+    console.info('fly-duel: the 3D table did not start, the 2D table plays', e);
+    return null;
+  }
+}
+
+function initHero(mod3d = null) {
   const st = $('heroStatus');
+  const byId = cardMap();
+  hero.byId = byId;
+  hero.scene = M.rules ? start3d(mod3d) : null;
+  hero.mode = hero.scene ? '3d' : '2d';
+  $('heroStage').hidden = hero.mode !== '3d';
+  $('arena').hidden = hero.mode === '3d';
+  if (hero.mode === '2d') { $('heroCam').hidden = true; $('heroBrains').hidden = true; document.querySelectorAll('.ctl-l').forEach(e => e.hidden = true); }
+  $('manaLegGlyphs').innerHTML = `${manaGlyph('amber', 0, 16)} Amber ${manaGlyph('moss', 0, 16)} Moss ${manaGlyph('generic', 1, 16)} generic.`;
   hero.bvs = [new BrainView(D.connectome, { side: 'A', label: 'Fly A' }), new BrainView(D.connectome, { side: 'B', label: 'Fly B' })];
   brainCanvas($('heroBrainA'), hero.bvs[0]);
   brainCanvas($('heroBrainB'), hero.bvs[1]);
-  const byId = cardMap();
-  if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: `The rules engine did not load: ${status.rules}.` }); return; }
+  if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: `The rules engine did not load: ${status.rules}.` }); $('arena').hidden = false; $('heroStage').hidden = true; return; }
   const F = heroFlies();
   const agents = agentsFor('ab', F.A, F.B);
   if (!agents) { st.textContent = 'No players could load.'; return; }
   hero.match = new Match(M.rules, agents, { seed: 1 + Math.floor(Math.random() * 1e6), names: NAMES });
   const who = F.A && F.B ? (F.trained ? 'Both flies play with their pretrained weights.' : 'Untrained flies: no pretrained weights.') : 'Stand-in bots play until the fly model loads.';
-  const draw = (state, banner = null) => renderBoard($('heroBoard'), state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '', lastWho: hero.last?.who, banner });
+  const draw = (state, banner = null) => {
+    if (hero.mode === '2d') renderBoard($('heroBoard'), state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '', lastWho: hero.last?.who, banner });
+    hud(state);
+  };
+  const hud = (state = hero.match.state) => {
+    const over = hero.match.over();
+    $('hudA').innerHTML = hudHTML(state, 0, byId, { acting: hero.focus === 0, over });
+    $('hudB').innerHTML = hudHTML(state, 1, byId, { acting: hero.focus === 1, over });
+    $('hudA').classList.toggle('acting', hero.focus === 0);
+    $('hudB').classList.toggle('acting', hero.focus === 1);
+  };
   const say = () => {
     const r = hero.match.over();
     st.classList.toggle('win', !!r);
     if (r) st.textContent = r.winner === -1 ? `Draw (${r.reason || 'turn cap'}). A new game starts soon.` : `${NAMES[r.winner]} wins${r.reason ? ` (${r.reason})` : ''}. A new game starts soon.`;
-    else st.textContent = `${who} Seed ${hero.match.seed}.`;
+    else st.textContent = `${who} Seed ${hero.match.seed}, turn ${hero.match.state.turn}.`;
   };
   const logLine = rec => {
     hero.log.unshift(rec);
     if (hero.log.length > 4) hero.log.length = 4;
     $('heroLog').innerHTML = hero.log.map(r => `<li class="p${r.who}">${esc(r.text)}${r.value != null ? ` <span class="v">V=${r.value.toFixed(2)}</span>` : ''}</li>`).join('');
+    $('heroMove').innerHTML = `<b class="s${rec.who}">${NAMES[rec.who]}</b> ${esc(rec.text)}`;
   };
   // Focus on the thinker: the acting pane gets the fly colour and
   // "choosing", the other pane steps back with "waiting". A cut.
@@ -251,11 +337,24 @@ function initHero() {
   const newGame = () => {
     hero.match.reset(1 + Math.floor(Math.random() * 1e6));
     hero.log = []; hero.last = null; hero.rec = null; hero.plan = null; hero.hold = 0; hero.t = 0;
-    $('heroLog').innerHTML = '';
+    hero.gen++; hero.busy = false;
+    $('heroLog').innerHTML = ''; $('heroMove').innerHTML = '';
+    if (hero.scene) hero.scene.setState(hero.match.state);
     setFocus(hero.match.state.toAct); draw(hero.match.state); say();
     hero.onReset?.();
   };
-  // One step of the beat plan.
+  // The end of a record: log, board, HUD, status, the page hooks.
+  const landed = rec => {
+    hero.last = rec;
+    const r = hero.match.over();
+    if (r) {
+      if (hero.match.finalDelta) hero.match.finalDelta.forEach((d, p) => { if (d != null && hero.bvs[p]) hero.bvs[p].burst(d); });
+      setFocus(-1);
+    }
+    draw(rec.after, r ? resultBanner(r) : null); say();
+    hero.onDecision?.(rec);
+  };
+  // 2D: one step of the beat plan.
   const fire = (step) => {
     const rec = hero.rec, bv = hero.bvs[rec.who], P = hero.plan;
     if (step.key === 'focus') setFocus(rec.who);
@@ -264,41 +363,68 @@ function initHero() {
       if (bv && rec.trace) bv.setTrace(rec.trace, rec.value, { pn: 0, kc: at('kc'), mbon: at('mbon') });
     } else if (step.key === 'decide') hero.onDecide?.(rec);
     else if (step.key === 'burst') { if (bv) bv.burst(step.delta); }
-    else if (step.key === 'table') {
-      hero.last = rec; logLine(rec);
-      const r = hero.match.over();
-      if (r) {
-        if (hero.match.finalDelta) hero.match.finalDelta.forEach((d, p) => { if (d != null && hero.bvs[p]) hero.bvs[p].burst(d); });
-        setFocus(-1);
-      }
-      draw(rec.after, r ? resultBanner(r) : null); say();
-      hero.onDecision?.(rec);
-    }
+    else if (step.key === 'table') { logLine(rec); landed(rec); }
   };
   const flush = (all = false) => {
     if (!hero.plan) return;
     for (const s of hero.plan.steps) if (!s.done && (all || hero.t >= s.at)) { s.done = true; fire(s); }
   };
-  // Start the next beat: the fly decides now, the steps play over the beat.
+  const next = () => {
+    try { return hero.match.next(); } catch (e) { console.error('hero step', e); st.textContent = `The match stopped: ${e.message}`; hero.setPlay?.(false); return null; }
+  };
+  // 2D: start the next beat: the fly decides now, the steps play over the beat.
   const begin = () => {
-    let rec = null;
-    try { rec = hero.match.next(); } catch (e) { console.error('hero step', e); st.textContent = `The match stopped: ${e.message}`; hero.playing = false; return false; }
+    const rec = next();
     if (!rec) return false;
     hero.rec = rec; hero.plan = beatPlan(rec, hero.speed, REDUCED); hero.t = 0;
     flush();
     return true;
   };
-  // A whole beat at once (reduced motion start, keyboard step).
+  // 3D: the fly decides now; the scene plays the record, then the next
+  // one starts. The close-up maps fire with the decision.
+  const begin3d = () => {
+    const rec = next();
+    if (!rec) return false;
+    const gen = hero.gen;
+    hero.rec = rec; hero.busy = true;
+    setFocus(rec.who); hud(rec.before); logLine(rec);
+    if (rec.trace) hero.maps[rec.who]?.fire(rec.trace, rec.delta);
+    hero.onDecide?.(rec);
+    hero.scene.play(rec).then(() => {
+      if (gen !== hero.gen) return;
+      hero.busy = false; landed(rec);
+    }, e => { console.error('hero 3d', e); hero.busy = false; });
+    return true;
+  };
+  // A whole record at once (reduced motion start, the 2D stand-in).
   const stepNow = () => {
     if (hero.match.over()) { newGame(); return; }
+    if (hero.mode === '3d') { if (!hero.busy) begin3d(); return; }
     flush(true);
     if (begin()) flush(true);
     hero.plan = null;
   };
   hero.stepNow = stepNow; hero.newGame = newGame;
+  if (hero.scene) hero.scene.setState(hero.match.state);
   setFocus(hero.match.state.toAct); draw(hero.match.state); say();
+  const onStage = () => onScreen.has($('heroCv')) || onScreen.has($('heroBrainA')) || onScreen.has($('heroBoard'));
   tickers.push(dt => {
-    if (!hero.playing || !onScreen.has($('heroBrainA')) && !onScreen.has($('heroBoard'))) return;
+    if (hero.mode === '3d') {
+      if (!onScreen.has($('heroCv'))) return;
+      // paused: still draw for a moment after a drag or a control change
+      if (hero.playing || hero.poke > 0) hero.scene.render(hero.playing ? dt : 0);
+      hero.poke = Math.max(0, hero.poke - dt);
+      if (!hero.playing || hero.busy) return;
+      if (hero.match.over()) {
+        hero.t += dt * 1000;
+        if (hero.t >= motionFor(REDUCED).endHold + 1500) newGame();
+        return;
+      }
+      hero.t = 0;
+      begin3d();
+      return;
+    }
+    if (!hero.playing || !onStage()) return;
     hero.t += dt * 1000;
     if (hero.plan) {
       flush();
@@ -309,15 +435,45 @@ function initHero() {
     if (hero.hold > 0) { if (hero.t < hero.hold) return; newGame(); return; }
     begin();
   });
-  io.observe($('heroBoard'));
+  io.observe($('heroBoard')); io.observe($('heroCv'));
   const play = $('heroPlay');
-  const setPlay = on => { hero.playing = on; play.textContent = on ? 'Pause' : 'Play'; play.setAttribute('aria-pressed', String(on)); };
+  const setPlay = on => { hero.playing = on; play.textContent = on ? 'Pause' : 'Play'; play.setAttribute('aria-pressed', String(on)); hero.poke = 0.5; };
   hero.setPlay = setPlay;
   setPlay(hero.playing);
   play.addEventListener('click', () => setPlay(!hero.playing));
-  seg($('heroSpeed'), v => hero.speed = +v);
-  $('heroNew').addEventListener('click', newGame);
+  seg($('heroSpeed'), v => { hero.speed = +v; hero.scene?.setSpeed(+v); });
+  $('heroNew').addEventListener('click', () => { newGame(); hero.poke = 1; });
+  seg($('heroCam'), v => { hero.cam = v; hero.scene?.setCamera?.(v); hero.poke = 2; });
+  seg($('heroBrains'), v => setBrains(v));
+  const cv = $('heroCv');
+  for (const t of ['pointerdown', 'pointermove', 'wheel']) cv.addEventListener(t, () => { hero.poke = 1.5; }, { passive: true });
+  addEventListener('resize', () => { hero.scene?.resize(); hero.poke = 0.5; });
   if (REDUCED) stepNow();
+}
+
+// "brains": beside (the maps in the scene), close (two large WebGL brain
+// views over the stage), off. The close-up views load on first use.
+function setBrains(v) {
+  hero.brains = v;
+  hero.scene?.setBrains?.(v === 'beside');
+  $('heroMaps').hidden = v !== 'close';
+  hero.poke = 1;
+  if (v === 'close' && !hero.maps[0] && !hero.mapsLoading) {
+    hero.mapsLoading = import('./ui/fly3d/brain3d.js').then(async B => {
+      for (const [p, side, id] of [[0, 'A', 'heroMapA'], [1, 'B', 'heroMapB']]) {
+        const C = conOf(side);
+        if (!C) continue;
+        try {
+          const view = B.createBrainView($(id), C, { colour: FLY[p] });
+          hero.maps[p] = view;
+          const np = await B.loadNeuropil(C, new URL('./data/', import.meta.url)).catch(() => null);
+          if (np) view.setNeuropil(np);
+          const last = [...(hero.match?.history || [])].reverse().find(r => r.who === p && r.trace);
+          if (last) view.fire(last.trace, last.delta, { instant: true });
+        } catch (e) { console.info('fly-duel: brain close-up did not start', e); }
+      }
+    }).catch(e => console.info('fly-duel: brain3d.js did not load', e));
+  }
 }
 
 // Held-out numbers of the shipped flies (tools/train.mjs meta.final), or null.
@@ -805,12 +961,17 @@ async function boot() {
   initChips();
   requestAnimationFrame(loop);
   const ready = loadAll();
-  window.flyDuel = { ready, makeFly: (s, w) => makeFly(s, w), heroFlies, BrainView, Match, renderBoard, M, D };
+  // The 3D table loads beside the data. In node, or with no import map,
+  // the import fails and the 2D stand-in plays.
+  const scene3d = window.flyDuelOpts?.no3d ? Promise.resolve(null) : import('./ui/fly3d/scene.js').catch(e => { status.scene3d = String(e && e.message || e); return null; });
+  window.flyDuel = { ready, scene3d, makeFly: (s, w) => makeFly(s, w), heroFlies, conOf, BrainView, Match, renderBoard, M, D, hero };
   // The saver installs window.snSaver at once and waits on flyDuel.ready
   // itself, so the shell finds the hook before the data has loaded.
   import('./saver.js').catch(e => console.warn('fly-duel: saver.js', e));
   await ready;
-  const steps = [initFacts, initWiring, initHeroStats, initHero, initGame, initCentre, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
+  const mod3d = await scene3d;
+  const startHero = () => initHero(mod3d);
+  const steps = [initFacts, initWiring, initHeroStats, startHero, initGame, initCentre, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
   for (const f of steps) { try { f(); } catch (e) { console.error(f.name, e); } }
   try { typesetAll(document.querySelector('#doc')); } catch (e) { console.warn(e); }
 }
