@@ -49,7 +49,7 @@
 
    LAYOUT  (# marks an element id main.js binds to)
      #chips   sticky section bar
-     hero     #heroStage #heroCv #hudA #hudB #heroMaps #heroMapA #heroMapB
+     hero     #hudBar #hudA #heroTurn #hudB #heroStage #heroCv #heroMaps #heroMapA #heroMapB
               #heroMove #heroStatus #heroPlay #heroSpeed #heroNew #heroCam
               #heroBrains #manaLegGlyphs #heroLog #heroStats
               2D stand-in (shown only when the 3D scene cannot start):
@@ -126,10 +126,13 @@
   <h1>Two fruit fly brains learn a card duel</h1>
   <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
 
+  <div class="hudbar" id="hudBar">
+    <div class="hud a" id="hudA" aria-live="off"></div>
+    <div class="turnbox" id="heroTurn" aria-live="off"></div>
+    <div class="hud b" id="hudB" aria-live="off"></div>
+  </div>
   <div class="stage" id="heroStage">
     <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a table play the card duel; each fly's mushroom body map floats beside it. Drag to turn the view."></canvas>
-    <div class="hud a" id="hudA" aria-live="off"></div>
-    <div class="hud b" id="hudB" aria-live="off"></div>
     <div class="maps" id="heroMaps" hidden>
       <figure class="map a"><figcaption><b class="seatmark s0">A</b> Fly A · model mushroom body</figcaption><canvas id="heroMapA" aria-label="3D map of the mushroom body of Fly A; drag to turn"></canvas></figure>
       <figure class="map b"><figcaption><b class="seatmark s1">B</b> Fly B · model mushroom body</figcaption><canvas id="heroMapB" aria-label="3D map of the mushroom body of Fly B; drag to turn"></canvas></figure>

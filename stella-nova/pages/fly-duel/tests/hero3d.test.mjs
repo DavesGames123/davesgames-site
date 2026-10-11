@@ -58,7 +58,7 @@ const raw = readFileSync(join(ROOT, 'index.html'), 'utf8');
   const stage = raw.slice(raw.indexOf('id="heroStage"'), raw.indexOf('class="stagebar"'));
   ok(/not a real fly/.test(stage), 'markup: the honesty line is on the stage');
   ok(/<div class="arena" id="arena" hidden>/.test(raw), 'markup: the 2D stand-in starts hidden');
-  for (const id of ['heroCv', 'hudA', 'hudB', 'heroCam', 'heroBrains', 'heroMaps', 'heroMove', 'manaLegGlyphs']) ok(raw.includes(`id="${id}"`), `markup: #${id}`);
+  for (const id of ['heroCv', 'hudBar', 'heroTurn', 'hudA', 'hudB', 'heroCam', 'heroBrains', 'heroMaps', 'heroMove', 'manaLegGlyphs']) ok(raw.includes(`id="${id}"`), `markup: #${id}`);
 }
 
 // --------------------------------------------------------------- globals
@@ -167,6 +167,7 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
       ok(el.querySelectorAll('.mana .m').length === Math.min(12, lands.length), `hud ${id}: one glyph per land`);
       ok(el.querySelectorAll('.mana .m.off').length === Math.min(12, lands.length) - Math.min(up, 12) || lands.length > 12, `hud ${id}: tapped lands are dim`);
     }
+    ok(!raw.slice(raw.indexOf('id="heroStage"'), raw.indexOf('class="stagebar"')).includes(`id="${id}"`), `hud ${id}: outside the stage, over no part of the scene`);
     ok(/hand <b>\d+<\/b>/.test(html) && /deck <b>\d+<\/b>/.test(html), `hud ${id}: hand and deck`);
   }
   // hudHTML on a fixed state: two amber lands (one tapped), one moss land

@@ -287,6 +287,7 @@ function initHero(mod3d = null) {
   hero.scene = M.rules ? start3d(mod3d) : null;
   hero.mode = hero.scene ? '3d' : '2d';
   $('heroStage').hidden = hero.mode !== '3d';
+  $('hudBar').hidden = hero.mode !== '3d';
   $('arena').hidden = hero.mode === '3d';
   if (hero.mode === '2d') { $('heroCam').hidden = true; $('heroBrains').hidden = true; document.querySelectorAll('.ctl-l').forEach(e => e.hidden = true); }
   $('manaLegGlyphs').innerHTML = `${manaGlyph('amber', 0, 16)} Amber ${manaGlyph('moss', 0, 16)} Moss ${manaGlyph('generic', 1, 16)} generic.`;
@@ -309,6 +310,8 @@ function initHero(mod3d = null) {
     $('hudB').innerHTML = hudHTML(state, 1, byId, { acting: hero.focus === 1, over });
     $('hudA').classList.toggle('acting', hero.focus === 0);
     $('hudB').classList.toggle('acting', hero.focus === 1);
+    const f = hero.focus;
+    $('heroTurn').innerHTML = `<b>turn ${state.turn ?? 1}</b>` + (over ? `<span>${over.winner === -1 ? 'draw' : `${esc(NAMES[over.winner])} wins`}</span>` : f >= 0 ? `<span class="s${f}">${esc(NAMES[f])} to act</span>` : '');
   };
   const say = () => {
     const r = hero.match.over();
