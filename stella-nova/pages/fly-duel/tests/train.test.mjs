@@ -3,7 +3,8 @@
 // ----------------------------------------------------------------------------
 //  Checks train/selfplay.js, train/worker.js, tools/train.mjs and the two
 //  files that the pretraining run wrote. All games use the real rules
-//  (game/) and the real wiring (data/connectome.json). Checks:
+//  (game/) and the real wiring: data/connectome.json (hemibrain, fly A)
+//  and data/connectome-flywire.json (FlyWire, fly B). Checks:
 //    1. playGame ends, is deterministic in the seed, does not share one
 //       fly between seats, and gameSetup rotates seat, deck and first.
 //    2. binomialP and wilson give known values.
@@ -11,14 +12,16 @@
 //    4. Learning helps: over 3 seeds, a fly that trained 200 games vs
 //       the random bot wins more often vs the random bot than its naive
 //       self (mean over the seeds, same eval games).
-//    5. data/pretrained.json loads and beats the random bot over 100 new
-//       games at p < 0.05 (one-sided binomial test against a coin flip).
+//    5. data/pretrained.json loads, each fly on the connectome file that
+//       its "wiring" names, and beats the random bot over 100 new games
+//       at p < 0.05 (one-sided binomial test against a coin flip).
 //    6. data/training-curve.json has the shape the page reads, and its
 //       rates agree with its own counts.
-//    7. The worker protocol through createTrainer and a fake post, and
-//       the worker glue in a fake worker scope.
+//    7. The worker protocol through createTrainer and a fake post, with
+//       one connectome and with two, and the worker glue in a fake
+//       worker scope.
 //    8. tools/train.mjs run() twice with a tiny budget writes the same
-//       weights.
+//       weights, and records the wiring of each fly.
 //  Exit code 1 on any failure.
 // ============================================================================
 import { existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -27,7 +30,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mulberry32, hashSeed } from '../data/rng.js';
 import { makePair, Fly } from '../brain/fly.js';
-import { playGame, evaluate, gameSetup, binomialP, wilson, trainGame, asPlayer, FLY_OPTS } from '../train/selfplay.js';
+import { playGame, evaluate, gameSetup, binomialP, wilson, trainGame, asPlayer, FLY_OPTS, WIRING } from '../train/selfplay.js';
 import { createTrainer } from '../train/worker.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,6 +38,9 @@ let fail = 0, pass = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg); } };
 const near = (a, b, tol) => Math.abs(a - b) <= tol;
 const C = JSON.parse(readFileSync(join(ROOT, 'data/connectome.json'), 'utf8'));
+// fly B's wiring (FlyWire). null when the file is not there.
+const CW = existsSync(join(ROOT, WIRING.B.file)) ? JSON.parse(readFileSync(join(ROOT, WIRING.B.file), 'utf8')) : null;
+const byFile = { [WIRING.A.file]: C, ...(CW ? { [WIRING.B.file]: CW } : {}) };
 const t0 = performance.now();
 
 // ---------------------------------------------------------------- 1 games
@@ -126,9 +132,25 @@ if (existsSync(PRE)) {
   const pre = JSON.parse(readFileSync(PRE, 'utf8'));
   const size = readFileSync(PRE).length;
   ok(size < 2 * 1024 * 1024, `pretrained.json is under 2 MB (${(size / 1024).toFixed(0)} KB)`);
+  // format 1 has no wiring: both flies on data/connectome.json
+  const wf = side => (pre.wiring && pre.wiring[side] && pre.wiring[side].file) || WIRING.A.file;
+  ok(pre.format === 'fly-duel-pretrained/1' || (pre.format === 'fly-duel-pretrained/2' && ['one', 'two'].includes(pre.wiring?.mode)), `pretrained.json: format ${pre.format}, wiring ${pre.wiring?.mode}`);
+  ok(byFile[wf('A')] && byFile[wf('B')], `pretrained.json: the wiring files are there (A ${wf('A')}, B ${wf('B')})`);
   let A = null, B = null;
-  try { A = Fly.fromJSON(C, pre.A); B = Fly.fromJSON(C, pre.B); } catch (e) { ok(false, `pretrained.json loads (${e.message})`); }
+  try { A = Fly.fromJSON(byFile[wf('A')], pre.A); B = Fly.fromJSON(byFile[wf('B')], pre.B); } catch (e) { ok(false, `pretrained.json loads (${e.message})`); }
   ok(A && B && A.mb.hemisphere === 'A' && B.mb.hemisphere === 'B', 'pretrained.json: fly A and fly B load on the real wiring');
+  if (pre.wiring) {
+    for (const side of ['A', 'B']) {
+      const Cs = byFile[wf(side)], r = pre.wiring[side];
+      ok(Cs && r.kc === Cs.kc.n && r.pn === Cs.pn.n && r.release === Cs.meta.release, `pretrained.json: wiring of fly ${side} matches ${wf(side)} (${r.kc} KCs)`);
+    }
+  }
+  if (pre.wiring?.mode === 'two') {
+    let refused = false;
+    try { Fly.fromJSON(C, pre.B); } catch { refused = true; }
+    ok(refused, 'pretrained.json: fly B (FlyWire) does not load on the hemibrain file');
+    ok(B && B.mb.nKC === CW.kc.n && A.mb.nKC === C.kc.n && A.mb.nKC !== B.mb.nKC, `pretrained.json: fly A has ${A && A.mb.nKC} KCs, fly B ${B && B.mb.nKC}`);
+  }
   if (A && B) {
     const seed = hashSeed('pretrained-test');
     for (const [name, F] of [['A', A], ['B', B]]) {
@@ -137,7 +159,7 @@ if (existsSync(PRE)) {
       console.log(`  pretrained fly ${name} vs random: ${e.wins}/100 wins, ${e.draws} draws, p = ${p.toExponential(2)}`);
       ok(p < 0.05, `pretrained fly ${name} beats the random bot at p < 0.05 (${e.wins}/100, p = ${p.toExponential(2)})`);
     }
-    const n = new Fly(C, { ...FLY_OPTS, name: 'naive', hemisphere: 'A', seed: 1 });
+    const n = new Fly(byFile[wf('A')], { ...FLY_OPTS, name: 'naive', hemisphere: 'A', seed: 1 });
     ok(n.mb.w.some((x, i) => x !== A.mb.w[i]), 'pretrained fly A has learned weights (not the naive ones)');
   }
 }
@@ -165,6 +187,7 @@ if (existsSync(CUR)) {
   if (f && existsSync(PRE)) {
     const pre = JSON.parse(readFileSync(PRE, 'utf8'));
     ok(pre.meta && pre.meta.games === f.games, `pretrained.json is the kept checkpoint of the curve (games ${pre.meta && pre.meta.games})`);
+    ok(JSON.stringify(pre.wiring || null) === JSON.stringify(m.wiring || null), 'pretrained.json and the curve meta name the same wiring');
   }
 }
 
@@ -213,6 +236,28 @@ if (existsSync(CUR)) {
   delete globalThis.self;
 }
 
+// ---------------------------------------------------------------- 7b worker, two wirings
+if (CW) {
+  const out = [], queue = [];
+  const T = createTrainer(m => out.push(m), fn => queue.push(fn));
+  const drain = () => { while (queue.length) queue.shift()(); };
+  T.handle({ cmd: 'init', connectomes: { A: C, B: CW } });
+  const r = out.at(-1);
+  ok(r.type === 'ready' && r.wiring.A.kc === C.kc.n && r.wiring.B.kc === CW.kc.n, `worker: init with two connectomes (A ${r.wiring && r.wiring.A.kc} KCs, B ${r.wiring && r.wiring.B.kc} KCs)`);
+  ok(T.state.A.mb.nKC === C.kc.n && T.state.B.mb.nKC === CW.kc.n, 'worker: fly A on the hemibrain, fly B on FlyWire');
+  T.handle({ cmd: 'train', games: 4 });
+  drain();
+  const w = out.filter(m => m.type === 'weights').at(-1);
+  ok(w && w.game === 4, 'worker: two wirings train and post weights');
+  T.handle({ cmd: 'init', connectomes: { A: C, B: CW }, weights: { A: w.A, B: w.B } });
+  ok(out.at(-1).type === 'ready' && out.at(-1).trained === true && T.state.B.toJSON().mb.w === w.B.mb.w, 'worker: two-wiring weights load back');
+  T.handle({ cmd: 'init', connectome: C, weights: { A: w.A, B: w.B } });
+  ok(out.at(-1).type === 'error' && /fly B/.test(out.at(-1).message), `worker: fly B weights on the wrong wiring post an error (${out.at(-1).message.slice(0, 60)})`);
+  const one = createTrainer(() => {}, fn => fn());
+  one.handle({ cmd: 'init', connectome: C });
+  ok(one.state.A.mb.nKC === C.kc.n && one.state.B.mb.nKC === C.kc.n, 'worker: the old one-connectome init gives both flies the same wiring');
+} else console.log('  worker two-wiring block skipped (no data/connectome-flywire.json)');
+
 // ---------------------------------------------------------------- 8 train.mjs
 {
   const { run } = await import(pathToFileURL(join(ROOT, 'tools/train.mjs')).href);
@@ -224,6 +269,12 @@ if (existsSync(CUR)) {
     ok(p1.A.mb.w === p2.A.mb.w && p1.B.mb.w === p2.B.mb.w, 'train.mjs: two tiny runs with one seed write the same weights');
     const c1 = JSON.parse(readFileSync(join(d1, 'training-curve.json'), 'utf8'));
     ok(c1.checkpoints.length === 3 && c1.meta.command.includes('--seed 5'), `train.mjs: 3 checkpoints and the command in meta (${c1.meta.command})`);
+    const mode = CW ? 'two' : 'one';
+    ok(p1.format === 'fly-duel-pretrained/2' && p1.wiring.mode === mode && c1.meta.wiring.mode === mode && c1.meta.command.includes(`--wiring ${mode}`), `train.mjs: wiring ${mode} in pretrained.json, the curve meta and the command`);
+    if (CW) ok(p1.wiring.A.file === WIRING.A.file && p1.wiring.B.file === WIRING.B.file && Fly.fromJSON(CW, p1.B).mb.nKC === CW.kc.n, 'train.mjs: fly B trains on the FlyWire file');
+    run({ ...o, games: 10, every: 10, wiring: 'one', out: d1 });
+    const q = JSON.parse(readFileSync(join(d1, 'pretrained.json'), 'utf8'));
+    ok(q.wiring.mode === 'one' && q.wiring.B.file === WIRING.A.file && Fly.fromJSON(C, q.B).mb.nKC === C.kc.n, 'train.mjs: --wiring one puts both flies on data/connectome.json');
   } finally { rmSync(d1, { recursive: true, force: true }); rmSync(d2, { recursive: true, force: true }); }
 }
 

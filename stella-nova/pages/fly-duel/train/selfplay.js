@@ -31,6 +31,7 @@
 //  EXPORTS   (jump with grep -n "<anchor>" train/selfplay.js)
 //      asPlayer ....... "export function asPlayer"   fly | bot | name -> player
 //      FLY_OPTS ....... "export const FLY_OPTS"      options of new flies
+//      WIRING ......... "export const WIRING"        connectome file of each fly
 //      TRAIN_MIX ...... "export const TRAIN_MIX"     opponent shares in training
 //      trainGame ...... "export function trainGame"  one training game number g
 //      playGame ....... "export function playGame"   one game
@@ -72,6 +73,17 @@ export function asPlayer(p, seed = 1) {
 //     graded, sparsity 0.10:  899/3000 = 0.300
 // Weights saved with other options keep their own options in the JSON.
 export const FLY_OPTS = Object.freeze({ imagine: true, kcCode: 'graded', sparsity: 0.1 });
+// WIRING: the connectome file of each fly. Fly A has the hemibrain MB
+// (Janelia, one animal) and fly B has the FlyWire MB (FAFB, a second
+// animal). The KC count and the claws are not the same, so the saved
+// weights of a fly load only on its own file (MushroomBody.fromJSON
+// compares the wiring fingerprint). tools/train.mjs writes the file of
+// each fly into data/pretrained.json ("wiring"). A run with --wiring one
+// gives both flies data/connectome.json, as before.
+export const WIRING = Object.freeze({
+  A: Object.freeze({ id: 'hemibrain', file: 'data/connectome.json' }),
+  B: Object.freeze({ id: 'flywire', file: 'data/connectome-flywire.json' }),
+});
 // TRAIN_MIX: share of training games vs the random bot, vs the greedy
 // bot, and fly A vs fly B.
 /** @type {{ random: number, greedy: number, self: number }} */
