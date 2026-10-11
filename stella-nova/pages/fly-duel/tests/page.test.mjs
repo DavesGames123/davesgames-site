@@ -155,6 +155,33 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   console.log(`  match + brain: ${n} decisions in ${Date.now() - t0} ms`);
 } else skipped('match + brain: game/, brain/fly.js or the connectome not there');
 
+// --------------------------------------------------------------- markup
+{
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const css = readFileSync(join(ROOT, 'style.css'), 'utf8');
+  ok(/\[hidden\]\{display:none!important\}/.test(css), 'markup: [hidden] guard in style.css');
+  const head = html.slice(0, html.indexOf('</head>'));
+  const order = ['gpu-guard.js', 'wishlist.js', 'stats-beacon.js', 'style.css'].map(x => head.indexOf(x));
+  ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])), 'markup: head order gpu-guard, wishlist, stats-beacon, css');
+  ok(/Not affiliated with or endorsed by Wizards of the Coast\./.test(html), 'markup: the disclaimer line');
+  const title = html.match(/<title>([^<]*)<\/title>/)[1];
+  ok(!/magic|gathering/i.test(title), 'markup: the title has no trademark');
+  ok(/We do not train a real fly/.test(html), 'markup: the plain-words line');
+  const js = readFileSync(join(ROOT, 'main.js'), 'utf8');
+  const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
+  const used = [...new Set([...js.matchAll(/\$\('([A-Za-z0-9_]+)'\)/g)].map(m => m[1]))];
+  const missing = used.filter(id => !ids.includes(id));
+  ok(missing.length === 0, `markup: every $('id') of main.js is in index.html (missing: ${missing})`);
+  ok(new Set(ids).size === ids.length, 'markup: ids are unique');
+  if (has('data/facts.js')) {
+    const { FACTS, SOURCES } = await import('../data/facts.js');
+    const facts = [...html.matchAll(/data-fact="([^"]+)"/g)].map(m => m[1]);
+    const cites = [...html.matchAll(/data-cite="([^"]+)"/g)].flatMap(m => m[1].split(/\s+/));
+    ok(facts.length > 0 && facts.every(f => FACTS[f]), `markup: every data-fact id is in FACTS (${facts.filter(f => !FACTS[f])})`);
+    ok(cites.length > 0 && cites.every(c => SOURCES[c]), `markup: every data-cite id is in SOURCES (${cites.filter(c => !SOURCES[c])})`);
+  } else skipped('markup: data/facts.js not there');
+}
+
 // --------------------------------------------------------------- fake DOM boot
 {
   const errors = [];
@@ -223,6 +250,13 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   } else skipped('dom: brain/fly.js not there');
   if (has('data/connectome.json')) ok(/PN \d+/.test(E('mbLegend').innerHTML), 'dom: section 02 legend counts');
   if (has('data/facts.js')) ok(E('srcList').innerHTML.includes('ref-'), 'dom: sources list');
+  if (has('data/facts.js')) {
+    const mm = await import(pathToFileURL(join(ROOT, 'main.js')).href);
+    ok(mm.fmtFact({ value: [0.05, 0.1], unit: 'fraction active' }) === '5–10%', 'dom: fmtFact gives 5–10% for a fraction range');
+    ok(mm.fmtFact({ value: 139255, unit: 'neurons' }) === '139,255', 'dom: fmtFact puts commas in big numbers');
+    ok(mm.fmtFact({ value: null }) === '', 'dom: fmtFact of a claim is empty');
+    ok(/\[\d+\]/.test(E('factList').innerHTML) && E('ourList').innerHTML.includes('<li>'), 'dom: two fact lists with citations');
+  }
   E('toyRew').fire('click');
   ok(/PAM burst/.test(E('toyRead').innerHTML), 'dom: section 05 reward gives a PAM burst line');
   ok(!/NaN|undefined/.test([...els.values()].map(e => e.innerHTML + e.textContent).join('')), 'dom: no NaN or undefined in any markup');

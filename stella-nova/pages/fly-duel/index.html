@@ -46,7 +46,8 @@
      hero     #heroStatus #heroBoard #heroBrainA #heroBrainB #heroPlay
               #heroSpeed #heroNew #heroLog #heroStats #wiringHero
      #s1 game       #kwList #deckLists #galSeg #gallery
-     #s2 centre     #mbCv #mbLegend #cxMeta #factList
+     #s2 centre     #mbCv #mbLegend #cxMeta #factList #ourList
+     anywhere       [data-fact] value of a FACTS id, [data-cite] [n] links
      #s3 smell      #featPick #featIn #featOut #glomCv #featBars #smellGrab #smellRead
      #s4 sparse     #sparseCv #spIn #spOut #spNext #spRead
      #s5 dopamine   #toyCv #toySel #toyRew #toyPun #toyReset #toyRead
@@ -166,7 +167,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 02 -->
 <section class="sec" id="s2">
-  <div class="sec-head"><span class="num">02</span><div><h2>The fly's learning centre</h2><p>The mushroom body is a paired structure in the insect brain where smells become memories. Odour information arrives on projection neurons (PNs). Each Kenyon cell (KC) samples a few PNs at random-looking claws. KCs talk to a small set of output neurons (MBONs) in separate compartments, and dopamine neurons (DANs) that carry reward or punishment signals reach exactly those compartments. That layout is the whole learning machine.</p></div></div>
+  <div class="sec-head"><span class="num">02</span><div><h2>The fly's learning centre</h2><p>The mushroom body is a paired structure in the insect brain where smells become memories. Odour information arrives on projection neurons (PNs). Each Kenyon cell (KC) samples a few PNs at random-looking claws. KCs talk to a small set of output neurons (MBONs) in separate compartments, and dopamine neurons (DANs) that carry reward or punishment signals reach exactly those compartments. That layout is the whole learning machine. In numbers: each mushroom body has about <span data-fact="kcPerHemisphere">two thousand</span> KCs<span data-cite="aso2014a"></span>, read out by <span data-fact="mbonCells">a few dozen</span> MBONs of <span data-fact="mbonTypes">about twenty</span> types in <span data-fact="compartments">about fifteen</span> compartments, each fed by its own DAN types<span data-cite="aso2014b"></span>.</p></div></div>
   <div class="grid">
     <article class="card span-7">
       <div class="card-top"><h3>One mushroom body, neuron by neuron</h3><span class="tag real" id="wiringTag">from data/connectome.json</span></div>
@@ -177,6 +178,8 @@
     <article class="card span-5">
       <div class="card-top"><h3>Published numbers</h3><span class="tag real">data/facts.js</span></div>
       <ul class="factlist" id="factList"><li class="none">Loading facts…</li></ul>
+      <h3 class="subh">Counted from the file this page ships</h3>
+      <ul class="factlist" id="ourList"></ul>
     </article>
   </div>
 </section>
@@ -204,7 +207,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 04 -->
 <section class="sec" id="s4">
-  <div class="sec-head"><span class="num">04</span><div><h2>A sparse code: few Kenyon cells speak at once</h2><p>Each Kenyon cell sums a handful of PN inputs, and one large inhibitory neuron, APL, feeds back onto all of them, so only the most strongly driven few fire. The result is a sparse code: two smells that overlap a lot on the PNs share far fewer active KCs. That keeps memories of similar boards apart. Below are two candidate moves from the same decision: almost the same board, and the KCs they light.</p></div></div>
+  <div class="sec-head"><span class="num">04</span><div><h2>A sparse code: few Kenyon cells speak at once</h2><p>Each Kenyon cell sums a handful of PN inputs, and one large inhibitory neuron, APL, feeds back onto all of them, so only the most strongly driven few fire: in the fly, about <span data-fact="kcSparseness">a small share</span> of KCs respond to a given odour<span data-cite="lin2014 honegger2011"></span>. The model keeps the same share active. The result is a sparse code: two smells that overlap a lot on the PNs share far fewer active KCs. That keeps memories of similar boards apart. Below are two candidate moves from the same decision: almost the same board, and the KCs they light.</p></div></div>
   <div class="grid">
     <article class="card span-8">
       <div class="card-top"><h3>Every Kenyon cell, two boards</h3><span class="tag toy">model: APL as k-winners</span></div>
@@ -225,7 +228,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 05 -->
 <section class="sec" id="s5">
-  <div class="sec-head"><span class="num">05</span><div><h2>Dopamine teaches</h2><p>Fly learning is a three-factor rule. A KC-to-MBON synapse changes only when the KC was active (factor one and two: pre and post) and a dopamine neuron in that compartment fires (factor three). The change is a depression. Reward-signalling PAM neurons depress synapses onto output neurons that drive avoidance; punishment-signalling PPL1 neurons depress synapses onto output neurons that drive approach. Our model sends each DAN the temporal-difference error δ, the surprise of the last move.</p></div></div>
+  <div class="sec-head"><span class="num">05</span><div><h2>Dopamine teaches</h2><p>Fly learning is a three-factor rule<span data-cite="hige2015a"></span>. A KC-to-MBON synapse changes only when the KC was active (factor one and two: pre and post) and a dopamine neuron in that compartment fires (factor three). The change is a depression. Reward-signalling PAM neurons<span data-cite="liu2012"></span> depress synapses onto output neurons that drive avoidance; punishment-signalling PPL1 neurons<span data-cite="claridgechang2009"></span> depress synapses onto output neurons that drive approach<span data-cite="owald2015 aso2014b"></span>. Our model sends each DAN the temporal-difference error δ<span data-cite="sutton1988"></span>, the surprise of the last move, the same signal that dopamine neurons carry in monkeys<span data-cite="schultz1997"></span>.</p></div></div>
   <div class="grid">
     <article class="card span-7">
       <div class="card-top"><h3>Teach a tiny mushroom body</h3><span class="tag toy">illustrative: 20 KCs, 2 MBONs, same sign rule as the model</span></div>
@@ -342,7 +345,7 @@
     </article>
     <article class="card span-4">
       <div class="card-top"><h3>Not the whole brain</h3></div>
-      <p class="body">We model one mushroom body. A whole-brain model of the fly built from the full connectome exists and predicts real feeding and grooming circuits (Shiu et al. 2024), but it is not trained to play anything. The mushroom body is the part of the fly that is known to learn from dopamine, which is why we chose it.</p>
+      <p class="body">We model one mushroom body. A whole-brain model of the fly built from the full connectome exists and predicts real feeding and grooming circuits<span data-cite="shiu2024"></span>, but it is not trained to play anything. The mushroom body is the part of the fly that is known to learn from dopamine, which is why we chose it.</p>
     </article>
     <article class="card span-4">
       <div class="card-top"><h3>Not how a fly sees a game</h3></div>
@@ -350,7 +353,7 @@
     </article>
     <article class="card span-6">
       <div class="card-top"><h3>Why it still says something</h3></div>
-      <p class="body">The learning rule here is not ours: dopamine-gated depression of KC-to-MBON synapses has been measured in the fly, and the sparse KC code and its compartments are in the wiring data. Showing that such a circuit, with its real fan-out and sparsity, can learn a value for boards of a game it has never seen is a small demonstration of how general that design is.</p>
+      <p class="body">The learning rule here is not ours: dopamine-gated depression of KC-to-MBON synapses has been measured in the fly<span data-cite="hige2015a"></span>, and the sparse KC code and its compartments are in the wiring data. Showing that such a circuit, with its real fan-out and sparsity, can learn a value for boards of a game it has never seen is a small demonstration of how general that design is. Self-play with TD learning is an old idea in games<span data-cite="tesauro1995"></span>; the new part is the wiring.</p>
     </article>
     <article class="card span-6">
       <div class="card-top"><h3>Limits we know about</h3></div>

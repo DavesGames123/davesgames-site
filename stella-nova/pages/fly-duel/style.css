@@ -217,7 +217,8 @@ html.in-frame .topbar{display:none}
 .gallery .fcard{width:auto}
 
 /* facts and features */
-.factlist{list-style:none;display:grid;gap:7px;font-size:0.82rem;color:var(--ink2)}
+.factlist{list-style:none;display:grid;gap:7px;font-size:0.82rem;color:var(--ink2);max-height:460px;overflow:auto;overscroll-behavior:contain}
+.subh{font:500 0.9rem var(--sans);margin:16px 0 6px}
 .factlist li{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
 .factlist b{font:500 0.92rem var(--serif);color:#fff}
 .factlist small{color:var(--dim)}

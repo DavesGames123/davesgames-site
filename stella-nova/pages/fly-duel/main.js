@@ -30,6 +30,7 @@
 //      grep -n 'function initTrain'       06 worker, live curves
 //      grep -n 'function initWatch'       07 step-through match
 //      grep -n 'function initResults'     08 measured curve and table
+//      grep -n 'function initFacts'       [data-fact] and [data-cite] spans
 //      grep -n 'function initSources'     references and credits
 //      grep -n 'function initChips'       sticky section bar
 //      grep -n 'function loop'            the one rAF loop
@@ -317,19 +318,44 @@ function initCentre() {
   const m = C.meta || {};
   const e = C.edges || {};
   $('cxMeta').innerHTML = `${m.synthetic ? '<b>Wiring sampled from published statistics</b>, not traced. ' : ''}${esc(m.release || m.source || '')}${m.licence ? `, licence ${esc(m.licence)}` : ''}${m.retrieved ? `, retrieved ${esc(m.retrieved)}` : ''}. `
-    + `${(e.pn_kc || []).length.toLocaleString('en-US')} PN→KC and ${(e.kc_mbon || []).length.toLocaleString('en-US')} KC→MBON connections. Positions are cable centroids in micrometres; drag to turn. MBON valence is a model rule from the dopamine cluster of each compartment. The lit KCs mirror Fly A in the hero match.`;
+    + `${(e.pn_kc || []).length.toLocaleString('en-US')} PN→KC and ${(e.kc_mbon || []).length.toLocaleString('en-US')} KC→MBON connections. Positions are cable centroids in micrometres; drag to turn. ${esc(M.facts?.HONESTY?.valenceModel || 'MBON valence is a model rule from the dopamine cluster of each compartment.')} The lit KCs mirror Fly A in the hero match.`;
 }
 let centreView = null;
 
-function factsHTML() {
-  const F = M.facts?.FACTS, S = M.facts?.SOURCES;
-  if (!F) return `<li class="none">data/facts.js did not load (${esc(status.facts)}).</li>`;
-  const ids = S ? Object.keys(S) : [];
-  return Object.entries(F).map(([id, f]) => {
-    const n = ids.indexOf(f.src);
-    const v = f.value == null ? '' : typeof f.value === 'number' ? f.value.toLocaleString('en-US') : String(f.value);
-    return `<li><b>${esc(v)}${f.unit ? ` <small>${esc(f.unit)}</small>` : ''}</b><span>${esc(f.text || id)} ${n >= 0 ? `<a href="#ref-${esc(f.src)}">[${n + 1}]</a>` : ''}</span></li>`;
+// A FACTS value as text: 0.05..0.10 fractions as "5-10%", big numbers
+// with commas, null as "".
+export function fmtFact(f) {
+  if (!f || f.value == null) return '';
+  const frac = /fraction/.test(f.unit || '');
+  const one = v => frac ? `${+(v * 100).toFixed(1)}%` : typeof v === 'number' ? v.toLocaleString('en-US') : String(v);
+  if (Array.isArray(f.value)) return frac ? `${f.value.map(v => +(v * 100).toFixed(1)).join('–')}%` : f.value.map(one).join('–');
+  return one(f.value);
+}
+
+function citeLinks(ids) {
+  const S = M.facts?.SOURCES;
+  if (!S) return '';
+  const keys = Object.keys(S);
+  return ids.filter(id => S[id]).map(id => `<a href="#ref-${esc(id)}">[${keys.indexOf(id) + 1}]</a>`).join('');
+}
+
+function factsHTML(measured) {
+  const F = M.facts?.FACTS;
+  if (!F) return measured ? '' : `<li class="none">data/facts.js did not load (${esc(status.facts)}).</li>`;
+  return Object.entries(F).filter(([, f]) => !!f.measured === measured).map(([id, f]) => {
+    const v = fmtFact(f);
+    const unit = /fraction/.test(f.unit || '') ? '' : f.unit;
+    return `<li><b>${v ? esc(v) : '·'}${v && unit ? ` <small>${esc(unit)}</small>` : ''}</b><span>${esc(f.text || id)} ${citeLinks([f.src, ...(f.also || [])])}</span></li>`;
   }).join('');
+}
+
+// [data-fact] and [data-cite] spans in the prose. A missing id keeps the
+// words that the markup has.
+function initFacts() {
+  const F = M.facts?.FACTS;
+  if (!F) return;
+  document.querySelectorAll('[data-fact]').forEach(el => { const f = F[el.dataset.fact]; const v = fmtFact(f); if (v) el.textContent = v; });
+  document.querySelectorAll('[data-cite]').forEach(el => { el.innerHTML = citeLinks(el.dataset.cite.split(/\s+/)); });
 }
 
 // ---------------------------------------------------------------- 03
@@ -618,7 +644,8 @@ function initResults() {
 
 // ---------------------------------------------------------------- sources
 function initSources() {
-  $('factList').innerHTML = factsHTML();
+  $('factList').innerHTML = factsHTML(false);
+  $('ourList').innerHTML = factsHTML(true);
   const S = M.facts?.SOURCES;
   $('srcList').innerHTML = S ? Object.entries(S).map(([id, s]) => {
     const link = s.doi ? `https://doi.org/${s.doi}` : s.url;
@@ -680,7 +707,7 @@ async function boot() {
   const ready = loadAll();
   window.flyDuel = { ready, makeFly: (s, w) => makeFly(s, w), heroFlies, BrainView, Match, renderBoard, M, D };
   await ready;
-  const steps = [initWiring, initHeroStats, initHero, initGame, initCentre, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
+  const steps = [initFacts, initWiring, initHeroStats, initHero, initGame, initCentre, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
   for (const f of steps) { try { f(); } catch (e) { console.error(f.name, e); } }
   try { typesetAll(document.querySelector('#doc')); } catch (e) { console.warn(e); }
   import('./saver.js').catch(() => { /* package F lands later */ });
