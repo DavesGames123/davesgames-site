@@ -361,6 +361,7 @@ const BLURBS = {
   'pattern-designer': 'Generative vector patterns for posters.',
   filmcraft: 'The FilmCraft video editor: timeline, colour, sound.',
   effectcraft: 'The EffectCraft motion graphics compositor.',
+  'manim-live': 'Write real ManimCE code and watch it render beside the editor.',
   printcraft: 'The PrintCraft PDF workbench.',
   // Ten Minute Physics ports (Matthias Müller and contributors, MIT).
   'cannonball-2d': 'A ball under gravity in a box: physics in a few lines.',

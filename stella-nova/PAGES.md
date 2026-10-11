@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-214 registered pages in 5 regions and 19 constellations.
+215 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -369,6 +369,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `pattern-designer` | Pattern Designer | Crafting Apps > Vector & Layout | SVG | Generative vector patterns for posters. |  | shown | hook, tier 3, default | yes |
 | `filmcraft` | FilmCraft | Crafting Apps > Video & Motion | RUST | The FilmCraft video editor: timeline, colour, sound. |  | shown | no | no |
 | `effectcraft` | EffectCraft | Crafting Apps > Video & Motion | RUST | The EffectCraft motion graphics compositor. |  | shown | no | no |
+| `manim-live` | Manim live | Crafting Apps > Video & Motion | NEW | Write real ManimCE code and watch it render beside the editor. |  | shown | no | no |
 | `printcraft` | PrintCraft | Crafting Apps > Documents | RUST | The PrintCraft PDF workbench. |  | shown | no | no |
 
 ### Hidden pages

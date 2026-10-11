@@ -433,7 +433,8 @@ w.SN_NAV = [
     ] },
     { h: "Video & Motion", p: [
       ["filmcraft", "FilmCraft", "RUST"],
-      ["effectcraft", "EffectCraft", "RUST"]
+      ["effectcraft", "EffectCraft", "RUST"],
+      ["manim-live", "Manim live", "NEW"]
     ] },
     { h: "Documents", p: [
       ["printcraft", "PrintCraft", "RUST"]
