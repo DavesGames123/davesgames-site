@@ -1,0 +1,173 @@
+/* ============================================================================
+   FLY DUEL  ·  card frame for DOM cards  (ui/board.js cardHTML)
+   ----------------------------------------------------------------------------
+   The same design as the canvas card of ui/cardface.js: an elytron plate
+   (top corners cut at 45 degrees, bottom corners round), a name bar with
+   the cost at the right, a painted picture (4:3), a type line, a parchment
+   rules box and a stat plate. The frame, ornaments, glyphs and card back
+   are our own.
+
+   Every rule is under .fcard.fx, so the rules win over the older .fcard
+   rules in style.css. The card width stays with style.css (.fcard,
+   .fcard.mini, .row.hand, .gallery). Sizes are in cqw (the card is a size container), so
+   the type scales with the card width.
+
+   Frame colours (same values as FRAME in ui/cardface.js):
+     .f-amber   warm gold and orange rim, warm parchment
+     .f-moss    deep green rim, pale green parchment
+     .f-none    grey stone rim, grey parchment
+     .f-land    earth-brown rim
+
+   GREP MAP
+     grep -n 'FRAME COLOURS'   custom properties per frame kind
+     grep -n 'PLATE'           the card plate, rim and texture
+     grep -n 'NAME BAR'        name and cost
+     grep -n 'PICTURE'         the art window
+     grep -n 'RULES BOX'       type line, rules and flavour
+     grep -n 'STAT PLATE'      power/toughness, damage, pump
+     grep -n 'STATES'          tapped, sick, hot
+     grep -n 'MINI'            the small card on the table
+     grep -n 'GALLERY'         wider cards in the section 01 gallery
+   ========================================================================== */
+
+/* FRAME COLOURS */
+.fcard.fx{
+  --rim0:#b3b6bd; --rim1:#565b65; --edge:#1b1d22; --line:#eef0f4;
+  --bar:#e4e3de; --bar-edge:#4a4e57; --ink-c:#1d1f24;
+  --paper:#efede7; --paper-ink:#25272c; --soft:#4d5058; --fleck:#7d828c;
+  --serif:'STIX Two Text','Times New Roman',Georgia,serif;
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.25 0 0 0 0 0.12 0 0 0 0.16 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.fcard.fx.f-amber{--rim0:#e6a647; --rim1:#8f4a12; --edge:#2a1404; --line:#ffe2a6; --bar:#f6dca4; --bar-edge:#7a3f0e; --ink-c:#2a1604; --paper:#f7e9cb; --paper-ink:#2b1d0e; --soft:#6a4a2a; --fleck:#9a5a1c}
+.fcard.fx.f-moss{--rim0:#5d8f3a; --rim1:#1d3a17; --edge:#0b1608; --line:#cfe8a2; --bar:#d9e6b8; --bar-edge:#2c4f22; --ink-c:#14200e; --paper:#eef0dc; --paper-ink:#1d2616; --soft:#46553a; --fleck:#4f7a34}
+.fcard.fx.f-land{--rim0:#a27b4e; --rim1:#4c3320; --edge:#1e1309; --line:#f0dcb8; --bar:#ead7b2; --bar-edge:#5a3e24; --ink-c:#24170b; --paper:#f1e5cc; --paper-ink:#2a1e10; --soft:#5e4a34; --fleck:#8a6a44}
+
+/* PLATE */
+.fcard.fx{
+  container-type:inline-size;
+  position:relative; display:flex; flex-direction:column; box-sizing:border-box;
+  aspect-ratio:5/7; height:auto; overflow:hidden;
+  padding:4.4cqw 4.4cqw 6.2cqw; gap:1.4cqw;
+  border:0; border-radius:0 0 5cqw 5cqw;
+  clip-path:polygon(7cqw 0, calc(100% - 7cqw) 0, 100% 7cqw, 100% 100%, 0 100%, 0 7cqw);
+  background:var(--grain), linear-gradient(180deg, var(--rim0), var(--rim1));
+  color:var(--paper-ink); font:400 4.4cqw/1.25 var(--serif);
+}
+/* the dark outline and the thin inner line, inside the clip */
+.fcard.fx::before{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  border:0.9cqw solid var(--edge); border-radius:inherit;
+  clip-path:inherit;
+}
+.fcard.fx::after{
+  content:''; position:absolute; inset:2.4cqw; pointer-events:none;
+  border:max(1px,0.35cqw) solid var(--line); opacity:0.7;
+  border-radius:0 0 3.4cqw 3.4cqw;
+  clip-path:polygon(5.4cqw 0, calc(100% - 5.4cqw) 0, 100% 5.4cqw, 100% 100%, 0 100%, 0 5.4cqw);
+}
+.fcard.fx > *{position:relative; z-index:1}
+
+/* NAME BAR */
+.fcard.fx .fx-name,
+.fcard.fx .fx-type{
+  display:flex; align-items:center; justify-content:space-between; gap:1cqw;
+  min-height:9cqw; padding:0 3cqw; box-sizing:border-box;
+  background:var(--grain), var(--bar); color:var(--ink-c);
+  clip-path:polygon(2.2cqw 0, calc(100% - 2.2cqw) 0, 100% 50%, calc(100% - 2.2cqw) 100%, 2.2cqw 100%, 0 50%);
+  box-shadow:inset 0 0 0 max(1px,0.45cqw) var(--bar-edge);
+}
+.fcard.fx .fx-title{font:500 5.8cqw/1.1 var(--serif); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.fcard.fx .fx-cost{display:inline-flex; gap:0.5cqw; flex:none}
+.fcard.fx .fx-cost svg{width:6.4cqw; height:6.4cqw; display:block}
+
+/* PICTURE */
+.fcard.fx .fx-art{
+  aspect-ratio:4/3; margin:0 2cqw; overflow:hidden; flex:none;
+  background:var(--rim1); border:0.7cqw solid var(--edge);
+  box-shadow:inset 0 0 0 max(1px,0.3cqw) var(--line);
+}
+.fcard.fx .fx-art .art{display:block; width:100%; height:100%; aspect-ratio:auto; object-fit:cover}
+.fcard.fx .fx-art svg.art{width:100%; height:100%}
+
+/* RULES BOX */
+.fcard.fx .fx-type{font:500 4.7cqw/1.1 var(--serif); min-height:8.2cqw; justify-content:flex-start}
+.fcard.fx .fx-text{
+  flex:1 1 auto; min-height:0; overflow:hidden; margin:0 2.6cqw;
+  display:flex; flex-direction:column; justify-content:center; gap:1.6cqw;
+  padding:2.2cqw 2.6cqw; box-sizing:border-box;
+  background:var(--grain), var(--paper); color:var(--paper-ink);
+  border:0.5cqw solid var(--edge);
+  font-size:clamp(9px, 4.4cqw, 15px); line-height:1.24;
+}
+.fcard.fx .fx-text p{margin:0}
+.fcard.fx .fx-rules b{font-weight:600}
+.fcard.fx .fx-rules i{font-style:italic; color:var(--soft)}
+.fcard.fx .fx-flav{
+  font-style:italic; color:var(--soft);
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden;
+}
+.fcard.fx .fx-rules + .fx-flav{border-top:max(1px,0.2cqw) solid color-mix(in srgb, var(--fleck) 45%, transparent); padding-top:1.4cqw}
+.fcard.fx .fx-text.only-flavour{text-align:center}
+.fcard.fx .fx-landglyph{display:flex; justify-content:center}
+.fcard.fx .fx-landglyph svg{width:15cqw; height:15cqw}
+.fcard.fx .fx-credit{
+  position:absolute; left:7cqw; bottom:1.4cqw; z-index:2;
+  font:400 2.6cqw/1 Inter,system-ui,sans-serif; color:var(--line); opacity:0.9;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60cqw;
+}
+
+/* STAT PLATE */
+.fcard.fx .fx-pt{
+  position:absolute; right:3.6cqw; bottom:2.2cqw; z-index:3;
+  display:flex; align-items:stretch; gap:0;
+  font:600 6cqw/1 var(--serif); font-variant-numeric:tabular-nums; color:var(--ink-c);
+}
+.fcard.fx .fx-pt > span:last-child{
+  display:block; padding:1.4cqw 4.4cqw 1.4cqw;
+  background:var(--grain), var(--bar);
+  clip-path:polygon(1.8cqw 0, calc(100% - 1.8cqw) 0, 100% 50%, calc(100% - 1.8cqw) 100%, 1.8cqw 100%, 0 50%);
+  box-shadow:inset 0 0 0 max(1px,0.6cqw) var(--edge);
+}
+.fcard.fx .fx-pt.pumped > span:last-child{box-shadow:inset 0 0 0 max(1px,0.6cqw) var(--edge), inset 0 0 0 max(2px,1.1cqw) #1d1f24}
+.fcard.fx .fx-dmg{
+  display:flex; align-items:center; padding:0 1.6cqw; margin-right:0.8cqw;
+  background:#ff4d4d; color:#05070c; font:700 4.8cqw/1 Inter,system-ui,sans-serif;
+}
+.fcard.fx .fx-count{
+  position:absolute; left:4cqw; top:12cqw; z-index:3;
+  padding:0.6cqw 1.6cqw; background:var(--edge); color:var(--line);
+  font:600 4.4cqw/1 ui-monospace,Menlo,monospace;
+}
+
+/* STATES (the tap shift comes from style.css; the hatch is ours) */
+.fcard.fx.tapped .fx-art .art{opacity:0.45}
+.fcard.fx.tapped .fx-art::after{
+  content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--edge) 70%, transparent) 7px 9px);
+}
+.fcard.fx.tapped .fx-art{position:relative}
+.fcard.fx.sick::after{border-style:dashed; opacity:0.95}
+.fcard.fx.hot{box-shadow:none; outline:2px solid #eef0f5; outline-offset:-2px}
+
+/* MINI */
+.fcard.fx.mini{
+  aspect-ratio:auto; padding:3.5px 3.5px 4px; gap:2px;
+  font-size:10px; transition:transform .25s;
+}
+.fcard.fx.mini::after{inset:2px}
+.fcard.fx.mini .fx-art{margin:0; border-width:1px}
+.fcard.fx.mini .fx-name{min-height:0; padding:1px 3px; clip-path:none; box-shadow:inset 0 0 0 1px var(--bar-edge)}
+.fcard.fx.mini .fx-title{font:500 9.5px/1.15 var(--serif)}
+.fcard.fx.mini .fx-kws{font:400 8.5px/1.1 var(--serif); color:var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 2px}
+.fcard.fx.mini .fx-kws .kw+.kw::before{content:' '}
+.fcard.fx.mini .fx-pt{right:2px; bottom:2px; font-size:10.5px}
+.fcard.fx.mini .fx-pt > span:last-child{padding:1.5px 4px; clip-path:none; box-shadow:inset 0 0 0 1px var(--edge)}
+.fcard.fx.mini .fx-dmg{font-size:9px; padding:0 2px; margin-right:1px}
+.fcard.fx.mini.t-creature{padding-bottom:17px}
+.fcard.fx.mini .fx-count{top:3px; left:3px; font-size:9px}
+
+/* GALLERY: wider cards, so the rules text stays legible */
+.gallery .fcard.fx{width:auto}
+@media (min-width:560px){
+  .gallery:has(.fcard.fx){grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+}

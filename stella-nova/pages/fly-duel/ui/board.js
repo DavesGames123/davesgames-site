@@ -1,8 +1,11 @@
 // ============================================================================
 //  FLY DUEL  ·  cards and the table  (DOM module)
 // ----------------------------------------------------------------------------
-//  Draws cards and the game table as HTML. The art and the mana glyphs come
-//  from ui/art.js. The game state comes from game/rules.js (package A):
+//  Draws cards and the game table as HTML. A card has the frame of
+//  ui/cardface.js (name bar, painted picture, type line, rules box, stat
+//  plate), styled by ui/card.css. The pictures are the public-domain plates
+//  in art/cards/. The mana glyphs come from ui/art.js. A card id with no
+//  picture falls back to the procedural art of ui/art.js. The game state comes from game/rules.js (package A):
 //    players[i] = { life, library, hand, battlefield, graveyard, landPlayed }
 //  A permanent is { uid, id, tapped, sick, dmg, pp, pt } (game/rules.js,
 //  pp/pt = pump this turn). permInfo() reads it, with fallbacks for other
@@ -14,6 +17,7 @@
 //
 //  GREP MAP
 //      grep -n 'export function permInfo'     read one permanent
+//      grep -n 'export function ensureCardCSS' link ui/card.css once
 //      grep -n 'export function cardHTML'     one card, full or mini
 //      grep -n 'export function renderBoard'  the table for one state
 //      grep -n 'export function deckCounts'   card id -> count in a deck
@@ -21,6 +25,7 @@
 //      grep -n 'export function renderGallery' section 01 card gallery
 // ============================================================================
 import { cardArt, costGlyphs, manaGlyph, colourKey } from './art.js';
+import { ART_CREDIT, artURL, typeLine, rulesRuns, frameKind, TOKEN_NOTE } from './cardface.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -59,30 +64,65 @@ function ptOf(card, info) {
   return [(card.power ?? 0) + (info?.pp | 0), (card.toughness ?? 0) + (info?.pt | 0)];
 }
 
+// Link ui/card.css once, so the card frame has its styles before the page
+// links the file itself. No work without a DOM.
+let cardCssDone = false;
+export function ensureCardCSS() {
+  if (cardCssDone || typeof document === 'undefined') return;
+  cardCssDone = true;
+  if (document.querySelector('link[data-card-css]')) return;
+  const href = new URL('./card.css', import.meta.url).href;
+  if ([...document.querySelectorAll('link[rel="stylesheet"]')].some(l => l.href === href)) return;
+  const l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = href; l.dataset.cardCss = '';
+  document.head.appendChild(l);
+}
+
+// The picture of a card: the plate when there is one, else the
+// procedural art.
+function pictureHTML(card, small) {
+  if (ART_CREDIT[card.id]) {
+    return `<img class="art" src="${esc(artURL(card.id, { small }))}" alt="${esc(card.name)}" loading="lazy" decoding="async" draggable="false">`;
+  }
+  return cardArt(card, 'art');
+}
+
+function rulesHTML(card) {
+  return rulesRuns(card).map(r => r.s === 'b' ? `<b>${esc(r.t)}</b>` : r.s === 'i' ? `<i>${esc(r.t)}</i>` : esc(r.t)).join('');
+}
+
 // One card. opts: { mini, tapped, damage, sick, info, count, hot, uid }.
 export function cardHTML(card, opts = {}) {
-  if (!card) return `<div class="fcard ${opts.mini ? 'mini' : ''} unknown"><div class="fc-name">?</div></div>`;
+  ensureCardCSS();
+  if (!card) return `<div class="fcard fx ${opts.mini ? 'mini' : ''} unknown"><div class="fx-name"><span class="fx-title">?</span></div></div>`;
   const ck = colourKey(card.colour);
   const pt = ptOf(card, opts.info);
+  const pumped = !!((opts.info?.pp | 0) || (opts.info?.pt | 0));
   const kw = (card.keywords || []).map(k => `<span class="kw" title="${esc(KEYWORD_TEXT[k]?.[1] || k)}">${esc(KEYWORD_TEXT[k]?.[0] || k)}</span>`).join('');
-  const cls = ['fcard', `c-${ck}`, `t-${card.type}`, opts.mini ? 'mini' : '', opts.tapped ? 'tapped' : '', opts.sick ? 'sick' : '', opts.hot ? 'hot' : ''].filter(Boolean).join(' ');
-  const dmg = opts.damage ? `<span class="fc-dmg">-${opts.damage}</span>` : '';
-  const cnt = opts.count ? `<span class="fc-count">${opts.count}×</span>` : '';
+  const cls = ['fcard', 'fx', `c-${ck}`, `f-${frameKind(card)}`, `t-${card.type}`, card.token ? 'token' : '', opts.mini ? 'mini' : '', opts.tapped ? 'tapped' : '', opts.sick ? 'sick' : '', opts.hot ? 'hot' : ''].filter(Boolean).join(' ');
+  const dmg = opts.damage ? `<span class="fx-dmg" title="${opts.damage} damage">−${opts.damage}</span>` : '';
+  const cnt = opts.count ? `<span class="fx-count">${opts.count}×</span>` : '';
   const uid = opts.uid != null ? ` data-uid="${esc(opts.uid)}"` : '';
   const title = `${card.name}${card.text ? ' — ' + card.text : ''}`;
+  const ptHTML = pt ? `<div class="fx-pt${pumped ? ' pumped' : ''}">${dmg}<span>${pt[0]}/${pt[1]}</span></div>` : '';
   if (opts.mini) {
-    return `<div class="${cls}"${uid} title="${esc(title)}">${cardArt(card, 'art')}`
-      + `<div class="fc-name">${esc(card.name)}</div>`
-      + (pt ? `<div class="fc-pt">${pt[0]}/${pt[1]}</div>` : '') + dmg + cnt
-      + (kw ? `<div class="fc-kws">${kw}</div>` : '') + `</div>`;
+    return `<div class="${cls}" data-id="${esc(card.id)}"${uid} title="${esc(title)}">`
+      + `<div class="fx-art">${pictureHTML(card, true)}</div>`
+      + `<div class="fx-name"><span class="fx-title">${esc(card.name)}</span></div>`
+      + (kw ? `<div class="fx-kws">${kw}</div>` : '')
+      + ptHTML + cnt + `</div>`;
   }
-  const type = card.type === 'creature' ? 'Creature' : card.type === 'land' ? 'Land' : 'Spell';
-  return `<div class="${cls}"${uid}>`
-    + `<div class="fc-top"><div class="fc-name">${esc(card.name)}</div><div class="fc-cost">${costGlyphs(card.cost)}</div></div>`
-    + cardArt(card, 'art')
-    + `<div class="fc-type">${type}${kw ? ' · ' + kw : ''}</div>`
-    + `<div class="fc-text">${esc(card.text || '')}${card.flavour ? `<i>${esc(card.flavour)}</i>` : ''}</div>`
-    + (pt ? `<div class="fc-pt">${pt[0]}/${pt[1]}</div>` : '') + dmg + cnt
+  const flav = card.flavour || (card.token ? TOKEN_NOTE : '');
+  const rules = rulesHTML(card);
+  const land = card.type === 'land'
+    ? `<div class="fx-landglyph">${manaGlyph(card.produces === 'moss' ? 'moss' : card.produces === 'amber' ? 'amber' : 'generic', 1, 40)}</div>` : '';
+  const credit = ART_CREDIT[card.id] ? `<div class="fx-credit">Art: ${esc(ART_CREDIT[card.id])}</div>` : '';
+  return `<div class="${cls}" data-id="${esc(card.id)}"${uid}>`
+    + `<div class="fx-name"><span class="fx-title">${esc(card.name)}</span><span class="fx-cost">${costGlyphs(card.cost, 16)}</span></div>`
+    + `<div class="fx-art">${pictureHTML(card, false)}</div>`
+    + `<div class="fx-type">${esc(typeLine(card))}</div>`
+    + `<div class="fx-text${rules ? '' : ' only-flavour'}">${land}${rules ? `<p class="fx-rules">${rules}</p>` : ''}${flav ? `<p class="fx-flav">${esc(flav)}</p>` : ''}</div>`
+    + ptHTML + credit + cnt
     + `</div>`;
 }
 
