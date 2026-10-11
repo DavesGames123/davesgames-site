@@ -723,10 +723,12 @@ async function boot() {
   requestAnimationFrame(loop);
   const ready = loadAll();
   window.flyDuel = { ready, makeFly: (s, w) => makeFly(s, w), heroFlies, BrainView, Match, renderBoard, M, D };
+  // The saver installs window.snSaver at once and waits on flyDuel.ready
+  // itself, so the shell finds the hook before the data has loaded.
+  import('./saver.js').catch(e => console.warn('fly-duel: saver.js', e));
   await ready;
   const steps = [initFacts, initWiring, initHeroStats, initHero, initGame, initCentre, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
   for (const f of steps) { try { f(); } catch (e) { console.error(f.name, e); } }
   try { typesetAll(document.querySelector('#doc')); } catch (e) { console.warn(e); }
-  import('./saver.js').catch(() => { /* package F lands later */ });
 }
 boot();
