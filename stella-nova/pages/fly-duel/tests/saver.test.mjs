@@ -157,9 +157,15 @@ const C = JSON.parse(readFileSync(join(ROOT, 'data/connectome.json'), 'utf8'));
 let pre = null;
 if (existsSync(join(ROOT, 'data/pretrained.json'))) { try { pre = JSON.parse(readFileSync(join(ROOT, 'data/pretrained.json'), 'utf8')); } catch { pre = null; } }
 const wFor = side => pre ? (pre[side] ?? pre.flies?.[side] ?? null) : null;
+// pretrained.json format 2 names the wiring file of each fly (Fly B is
+// FlyWire), so each saved fly loads on its own file, as main.js conOf does.
+const conFor = side => {
+  const f = pre?.wiring?.[side]?.file;
+  return f && f !== 'data/connectome.json' && existsSync(join(ROOT, f)) ? JSON.parse(readFileSync(join(ROOT, f), 'utf8')) : C;
+};
 function flyFor(side) {
   const w = wFor(side);
-  if (w) { try { return Fly.fromJSON(C, w); } catch (e) { console.log(`  note: pretrained ${side} did not load (${e.message}); naive fly`); } }
+  if (w) { try { return Fly.fromJSON(conFor(side), w); } catch (e) { console.log(`  note: pretrained ${side} did not load (${e.message}); naive fly`); } }
   return new Fly(C, { name: `Fly ${side}`, hemisphere: side, seed: side === 'A' ? 1 : 2 });
 }
 const byId = new Map(Object.entries(cards.CARD));
