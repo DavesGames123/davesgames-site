@@ -225,6 +225,43 @@ async function runGame(sc, M, check) {
   sc.dispose();
 }
 
+// --- canvas paths with a stub 2D context ----------------------------------------
+{
+  // Node has no canvas. A stub context takes every call, so the card
+  // faces, the card back, the felt, the wood, the life drums, the badges
+  // and the sprites run their drawing code once. A thrown error fails.
+  const calls = { fillText: 0, drawImage: 0 };
+  const ctx = new Proxy({}, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'measureText') return txt => ({ width: String(txt).length * 6 });
+      if (k === 'canvas') return undefined;
+      return (...args) => { if (k in calls) calls[k]++; };
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const made = [];
+  globalThis.document = { createElement: () => { const c = { width: 0, height: 0, getContext: () => ctx, style: {} }; made.push(c); return c; } };
+  globalThis.Path2D = class { constructor(d) { this.d = d; } };
+  let threw = null;
+  try {
+    const sc = createDuelScene(null, { headless: true });
+    await sc.ready;
+    const M = botMatch(7);
+    sc.setState(M.state); sc.setSpeed(8);
+    let r, n = 0;
+    while ((r = M.next()) && n++ < 60) {
+      let done = false;
+      sc.play(r).then(() => { done = true; });
+      for (let k = 0; k < 5000 && !done; k++) { sc.render(0.1); await null; }
+    }
+    sc.dispose();
+  } catch (e) { threw = e; }
+  delete globalThis.document; delete globalThis.Path2D;
+  ok(!threw, `canvas drawing code runs (${threw?.stack?.split('\n').slice(0, 2).join(' ') || 'ok'})`);
+  ok(made.length > 20 && calls.fillText > 50, `canvases made ${made.length}, text drawn ${calls.fillText} times`);
+}
+
 // --- stand-in fly ---------------------------------------------------------------
 {
   const { root, rig, dispose } = PLACEHOLDER_FLY.buildFly({ colour: '#39d0f0', seed: 1 });
