@@ -48,7 +48,9 @@ export function tracebackLines(tb) {
   let m;
   while ((m = re.exec(String(tb || '')))) {
     const file = m[1];
-    const user = !/site-packages|\/lib\/python|pyodide|_pyodide|<frozen|\/py\//.test(file);
+    // The worker writes the user code to /home/pyodide/scene.py. The shims
+    // live in /home/pyodide/py/, and the packages in site-packages.
+    const user = !/site-packages|\/lib\/python|_pyodide|<frozen|\/home\/pyodide\/py\//.test(file);
     out.push({ file, line: +m[2], user });
   }
   return out;

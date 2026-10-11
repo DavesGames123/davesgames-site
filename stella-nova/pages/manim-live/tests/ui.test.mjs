@@ -193,8 +193,8 @@ test('pysource: scenes, play lines, dotted names, traceback frames', () => {
   assert.equal(dottedAt('Axes.plot(f)', 1), 'Axes');
   assert.equal(dottedAt('x = Circle(radius=1)', 6), 'Circle');
   assert.equal(dottedAt('x = (1)', 4), '');
-  const tb = 'Traceback (most recent call last):\n  File "/lib/python3.13/site-packages/manim/scene/scene.py", line 237, in render\n  File "<scene>", line 4, in construct\nNameError: name \'Circl\' is not defined';
-  assert.deepEqual(tracebackLines(tb).map(f => [f.line, f.user]), [[237, false], [4, true]]);
+  const tb = 'Traceback (most recent call last):\n  File "/lib/python3.13/site-packages/manim/scene/scene.py", line 237, in render\n  File "/home/pyodide/scene.py", line 4, in construct\n  File "/home/pyodide/py/cairo/__init__.py", line 9, in f\nNameError: name \'Circl\' is not defined';
+  assert.deepEqual(tracebackLines(tb).map(f => [f.line, f.user]), [[237, false], [4, true], [9, false]]);
 });
 
 test('learn: checkStep forms', () => {
