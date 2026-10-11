@@ -32,8 +32,11 @@
 //  API
 //      createDuelScene(canvas, { connectomes, cards, names, reduced,
 //        coarse, headless }) -> { play(record) -> Promise, setState(state),
-//        resize(), render(dt), dispose(), setSpeed(s), ready, stats(),
-//        world }
+//        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
+//        shoot(shot, p), setBrains(on), ready, stats(), world }
+//      setCamera: 'auto' (the steps pick the shots), 'wide', 'free' (the
+//      user orbits, no cuts), 'script' (only shoot() cuts). Shots: wide,
+//      over, close, combat, win.
 //      canvas null or headless: true builds the scene graph without a
 //      renderer (node tests).
 //
@@ -1250,7 +1253,12 @@ export function createDuelScene(canvas, opts = {}) {
   // not swing on each small decision. force: a cast, a combat or the end
   // of the game cuts at once.
   const HOLD = 3.2;
+  // Camera mode (setCamera): 'auto' lets the steps call director();
+  // 'wide' holds the wide shot; 'free' leaves the camera to the user's
+  // orbit; 'script' takes shots only from shoot() (the saver director).
+  let camMode = 'auto';
   function director(shot, p = 0, force = false) {
+    if (camMode !== 'auto') return;
     if (cam.shot === shot && cam.p === p) return;
     if (!force && sceneT - cam.since < HOLD) return;
     cam.shot = shot; cam.p = p; cam.since = sceneT;
@@ -1279,6 +1287,14 @@ export function createDuelScene(canvas, opts = {}) {
       cam.wantPos.set(7.6 * fit, T.y + 3.6, 1.2 * side);
       cam.wantLook.set(0, T.y + 0.1, 0);
     }
+  }
+  // Cut to a shot now, in any mode but 'free' (the saver and the page).
+  function shoot(shot, p = 0) { cam.shot = shot; cam.p = p | 0; cam.since = sceneT; }
+  function setCamera(mode) {
+    camMode = ['auto', 'wide', 'free', 'script'].includes(mode) ? mode : 'auto';
+    if (camMode === 'wide') shoot('wide');
+    cam.userUntil = camMode === 'free' ? Infinity : now;
+    if (camMode !== 'free') { cam.pos.copy(camera.position); if (controls) cam.look.copy(controls.target); }
   }
   function updateCamera(dt) {
     shotPose(dt);
@@ -1496,7 +1512,7 @@ export function createDuelScene(canvas, opts = {}) {
     controls.minDistance = 3; controls.maxDistance = 22; controls.maxPolarAngle = Math.PI * 0.48;
     controls.enablePan = false;
     controls.addEventListener('start', () => { cam.userUntil = Infinity; });
-    controls.addEventListener('end', () => { cam.userUntil = now + 7; cam.pos.copy(camera.position); cam.look.copy(controls.target); });
+    controls.addEventListener('end', () => { cam.userUntil = camMode === 'free' ? Infinity : now + 7; cam.pos.copy(camera.position); cam.look.copy(controls.target); });
     canvas.style.touchAction = 'pan-y';
     if (typeof IntersectionObserver !== 'undefined') {
       io = new IntersectionObserver(es => { for (const e of es) visible = e.isIntersecting; });
@@ -1605,6 +1621,8 @@ export function createDuelScene(canvas, opts = {}) {
     snapTo(mirrorOf(state));
   }
   function setSpeed(s) { speed = Math.max(0.1, Math.min(8, +s || 1)); }
+  // The two floating brain maps (and their rings and labels) on or off.
+  function setBrains(on) { for (const g of brainHolders) g.visible = !!on; }
   function stats() {
     let meshes = 0, tris = 0;
     scene.traverse(o => {
@@ -1618,7 +1636,7 @@ export function createDuelScene(canvas, opts = {}) {
       cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length,
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
-      brain: brains.map(Boolean),
+      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible,
     };
   }
   function dispose() {
@@ -1633,8 +1651,8 @@ export function createDuelScene(canvas, opts = {}) {
   }
 
   return {
-    play, setState, resize, render, dispose, setSpeed, ready, stats, camera, scene,
-    world: { W, Z, flies, drums, piles, lights, get mirror() { return mirror; }, cam, director },
+    play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
+    world: { W, Z, flies, drums, piles, lights, get mirror() { return mirror; }, cam, director, brains },
   };
 }
 
