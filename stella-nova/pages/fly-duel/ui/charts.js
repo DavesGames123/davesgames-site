@@ -15,6 +15,7 @@
 //      grep -n 'export function toSeries'      rows -> series per key
 //      grep -n 'export function seriesLabel'   readable name of a key
 //      grep -n 'export function drawChart'     axes, chance line, series
+//      grep -n 'export function evalVerdict'   held-out result as plain sentences
 // ============================================================================
 
 export const X_KEYS = ['games', 'game', 'episodes', 'step', 'checkpoint'];
@@ -93,4 +94,29 @@ export function drawChart(g, w, h, series, opts = {}) {
   });
   if (!series.length) { g.fillStyle = '#8a91a5'; g.textAlign = 'center'; g.fillText(opts.empty || 'no data yet', L + pw / 2, T + ph / 2); }
   g.textAlign = 'left';
+}
+
+// The plain verdict of the held-out test (meta.final of
+// data/training-curve.json), as sentences. All numbers come from fin.
+// A result is "above" or "below" a coin flip only when its 95% interval
+// does not include 50%. Returns [] when fin has no rates.
+export function evalVerdict(fin) {
+  const out = [];
+  const pc = v => `${Math.round(100 * v)}%`;
+  const side = r => !r?.ci95 ? 0 : r.ci95[0] > 0.5 ? 1 : r.ci95[1] < 0.5 ? -1 : 0;
+  const rA = fin?.vsRandom?.A, rB = fin?.vsRandom?.B, gA = fin?.vsGreedy?.A, gB = fin?.vsGreedy?.B, ab = fin?.AvsB;
+  if (rA?.rate != null && rB?.rate != null)
+    out.push(`Against the random player, Fly A won ${pc(rA.rate)} and Fly B won ${pc(rB.rate)} of the held-out games.`);
+  if (gA?.rate != null && gB?.rate != null) {
+    const both = side(gA) === -1 && side(gB) === -1;
+    out.push(`Against the greedy bot, Fly A won ${pc(gA.rate)} and Fly B won ${pc(gB.rate)}.`
+      + (both ? ' The flies lose most games to this short hand-written heuristic: they have not learned to beat it.' : ''));
+  }
+  if (ab?.rate != null) {
+    const s = side(ab);
+    out.push(`Fly A against Fly B: Fly A won ${pc(ab.rate)}`
+      + (ab.ci95 ? ` (95% interval ${pc(ab.ci95[0])} to ${pc(ab.ci95[1])})` : '')
+      + (s === 1 ? ', so Fly A is a little stronger.' : s === -1 ? ', so Fly B is a little stronger.' : ', not different from an even match.'));
+  }
+  return out;
 }

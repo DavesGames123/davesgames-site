@@ -10,6 +10,7 @@
 //      grep -n 'CARD NAMES'     card names that clash with published cards
 //      grep -n 'MANA GLYPHS'    no disc-shaped mana glyph
 //      grep -n 'PAGE PROSE'     claims the sources or the model do not hold
+//      grep -n 'EVAL VERDICT'   08 says plainly what the measured numbers mean
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync } from 'node:fs';
@@ -17,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { CARDS, TOKENS } from '../game/cards.js';
 import { manaGlyph } from '../ui/art.js';
+import { evalVerdict } from '../ui/charts.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => readFileSync(join(ROOT, p), 'utf8');
@@ -62,6 +64,28 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg
   ok(/random-looking claws<span data-cite="caron2013">/.test(html), 'prose: 02 cites Caron 2013 for random claws');
   ok(/its own DAN types<span data-cite="aso2014b aso2014a">/.test(html), 'prose: 02 cites Aso 2014a for compartments and DAN types');
   ok(!/sparse KC code and its compartments are in the wiring/.test(text), 'prose: 09 does not say the sparse code is in the wiring');
+}
+
+// ---------------------------------------------------------------- EVAL VERDICT
+// The held-out table in 08 showed the numbers, but no sentence said that
+// the flies lose about four games in five to the greedy bot, or that the
+// A-vs-B interval does not include 50%. evalVerdict() writes those
+// sentences from meta.final, so they follow the data file.
+{
+  const fin = JSON.parse(read('data/training-curve.json')).meta.final;
+  const t = evalVerdict(fin).join(' ');
+  ok(t.includes(`Fly A won ${Math.round(100 * fin.vsGreedy.A.rate)}%`), 'verdict: greedy rate of Fly A from the file');
+  ok(/lose most games/.test(t) === (fin.vsGreedy.A.ci95[1] < 0.5 && fin.vsGreedy.B.ci95[1] < 0.5), 'verdict: says the flies lose to greedy exactly when both intervals are below 50%');
+  const ab = fin.AvsB.ci95;
+  ok(/Fly B is a little stronger/.test(t) === (ab[1] < 0.5), 'verdict: names Fly B stronger exactly when the A-vs-B interval is below 50%');
+  ok(/Fly A is a little stronger/.test(t) === (ab[0] > 0.5), 'verdict: names Fly A stronger exactly when the interval is above 50%');
+  const even = evalVerdict({ AvsB: { rate: 0.5, ci95: [0.47, 0.53] } }).join(' ');
+  ok(/not different from an even match/.test(even), 'verdict: an interval across 50% reads as even');
+  ok(evalVerdict(null).length === 0 && evalVerdict({}).length === 0, 'verdict: no rates, no sentences');
+  ok(!/NaN|undefined/.test(t), 'verdict: no NaN or undefined');
+  ok(/id="evalVerdict"/.test(read('index.html')), 'verdict: index.html has #evalVerdict');
+  ok(/evalVerdict\(fin\)/.test(read('main.js')), 'verdict: main.js fills #evalVerdict from meta.final');
+  console.log('  verdict:', t);
 }
 
 console.log(`review.test: ${pass} pass, ${fail} fail`);

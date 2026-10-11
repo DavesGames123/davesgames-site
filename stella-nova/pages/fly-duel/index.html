@@ -56,7 +56,7 @@
                     #trainEval #trainCv #trainLegend #trainRead
      #s7 watch      #wOpp #wPrev #wNext #wAuto #wNew #wSeed #wBoard
                     #wBrainA #wBrainB #wCands #wInfo
-     #s8 results    #evalTable #curveCv #curveLegend #curveMeta
+     #s8 results    #evalVerdict #evalTable #curveCv #curveLegend #curveMeta
      #s9 limits     text only
      refs           #srcList #credits
 
@@ -327,6 +327,7 @@
     </article>
     <article class="card span-5">
       <div class="card-top"><h3>Held-out test of the shipped flies</h3><span class="tag real">measured</span></div>
+      <p class="note" id="evalVerdict" hidden></p>
       <div class="tablewrap"><table class="evaltab" id="evalTable"><tbody><tr><td class="none">Loading…</td></tr></tbody></table></div>
       <ul class="facts small">
         <li>Win rates near 50% against each other are expected: the two flies trained together. A draw (turn cap) is not a win.</li>

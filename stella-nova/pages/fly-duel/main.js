@@ -39,7 +39,7 @@
 import { manaGlyph } from './ui/art.js';
 import { renderBoard, renderDecks, renderGallery, setKeywordText, KEYWORD_TEXT } from './ui/board.js';
 import { BrainView } from './ui/brain.js';
-import { curveRows, toSeries, seriesLabel, drawChart, SERIES_COL, flattenRow } from './ui/charts.js';
+import { curveRows, toSeries, seriesLabel, drawChart, SERIES_COL, flattenRow, evalVerdict } from './ui/charts.js';
 import { ToyMB, drawToy, drawGlomeruli, drawSparse, jaccard, cosine } from './ui/explain.js';
 import { Match, agentFromFly, agentFromBot } from './ui/match.js';
 import { typesetAll } from '../../lib/sci-math.js';
@@ -668,6 +668,8 @@ function initResults() {
     const p = v => v == null ? '' : v < 1e-4 ? '< 0.0001' : String(v);
     $('evalTable').innerHTML = `<thead><tr><th>held-out games, kept flies (checkpoint ${esc(fin.games)})</th><th class="n">win</th><th class="n">95% CI</th><th class="n">W-L-D</th><th class="n">p vs coin</th></tr></thead><tbody>`
       + R.map(([lab, r]) => `<tr><th>${esc(lab)}</th><td class="n">${pct(r.rate)}</td><td class="n">${r.ci95 ? `${pct(r.ci95[0])}–${pct(r.ci95[1])}` : ''}</td><td class="n">${r.wins}-${r.losses}-${r.draws}</td><td class="n">${p(r.pVsCoin)}</td></tr>`).join('') + '</tbody>';
+    const vd = $('evalVerdict');
+    if (vd) { const t = evalVerdict(fin); vd.textContent = t.join(' '); vd.hidden = !t.length; }
     return;
   }
   const last = rows.length ? flattenRow(rows[rows.length - 1]) : {};
