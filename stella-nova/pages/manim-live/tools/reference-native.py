@@ -11,6 +11,8 @@ import importlib.util
 import os
 import sys
 
+sys.dont_write_bytecode = True  # no __pycache__ in tests/reference
+
 import manimpango
 from PIL import Image
 
