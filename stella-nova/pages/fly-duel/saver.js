@@ -60,6 +60,7 @@ import { BrainView } from './ui/brain.js';
 import { Match, agentFromFly, agentFromBot } from './ui/match.js';
 import { cardArt, manaGlyph, colourKey, PALETTE } from './ui/art.js';
 import { permInfo } from './ui/board.js';
+import { TOKENS } from './ui/tokens.js';
 
 // ----------------------------------------------------------- director
 export const SHOT_MIN = 5, SHOT_MAX = 12;
@@ -203,8 +204,9 @@ export function plateFor(shot, snap = {}) {
 }
 
 // ----------------------------------------------------------- drawing
-const INK = '#e8eaf0', INK2 = '#c2c7d4', DIM = '#8a91a5', BG = '#05070c', CARD = '#121725';
-const SIDE_COL = ['#62c4ff', '#ff9a62'];
+const INK = TOKENS.ink, INK2 = TOKENS.ink2, DIM = TOKENS.dim, BG = TOKENS.bg, CARD = TOKENS.panel2;
+// seat colours (DESIGN.md 1.1): Fly A, Fly B
+const SIDE_COL = [TOKENS.flyA, TOKENS.flyB];
 const FONT = 'system-ui,-apple-system,Segoe UI,sans-serif';
 const font = (px, w = 500) => `${w} ${Math.max(6, Math.round(px))}px ${FONT}`;
 
@@ -298,7 +300,7 @@ function drawMini(S, g, card, info, x, y, w, h, hot) {
     g.font = font(w * 0.15, 700);
     const tw = g.measureText(t).width + w * 0.1, th = w * 0.2;
     rrect(g, x + w - tw - pad, y + h - th - pad, tw, th, th * 0.3); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fill();
-    g.fillStyle = info.damage ? '#ff6a6a' : INK; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = info.damage ? TOKENS.dmg : INK; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(t, x + w - pad - tw / 2, y + h - pad - th / 2);
   }
   if (info.sick) { g.fillStyle = DIM; g.font = font(w * 0.1); g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillText('new', x + pad, y + h - pad); }
@@ -324,7 +326,7 @@ function drawSide(S, g, st, p, x, y, w, h, o) {
   g.fillStyle = SIDE_COL[p]; g.beginPath(); g.arc(x + hh * 0.4, cy, hh * 0.12, 0, Math.PI * 2); g.fill();
   g.fillStyle = INK; g.font = font(hh * 0.4, 600); g.fillText(S.names[p], x + hh * 0.65, cy);
   let cx = x + hh * 0.65 + g.measureText(S.names[p]).width + hh * 0.35;
-  g.font = font(hh * 0.62, 700); g.fillStyle = P.life <= 5 ? '#ff6a6a' : INK;
+  g.font = font(hh * 0.62, 700); g.fillStyle = P.life <= 5 ? TOKENS.dmg : INK;
   const lt = String(P.life); g.fillText(lt, cx, cy); cx += g.measureText(lt).width + hh * 0.15;
   g.font = font(hh * 0.3); g.fillStyle = DIM; g.fillText('life', cx, cy + hh * 0.06); cx += g.measureText('life').width + hh * 0.4;
   const meta = `hand ${(P.hand || []).length} · library ${(P.library || []).length}`;
@@ -402,13 +404,13 @@ function drawTable(S, g, R, o = {}) {
       const p0 = side[atk.who].pos.get(u); if (!p0 || blocked.has(u)) continue;
       const tgt = side[1 - atk.who].life;
       const y0 = p0.y + (atk.who === 0 ? -p0.h / 2 : p0.h / 2);
-      arrow(g, p0.x, y0, tgt.x, tgt.y, 'rgba(255,106,106,0.75)', lw);
+      arrow(g, p0.x, y0, tgt.x, tgt.y, SIDE_COL[atk.who], lw);
     }
   }
   for (const [a, b] of o.blocks || []) {
     let pa = null, pb = null;
     for (const s of side) { pa = pa || s.pos.get(a); pb = pb || s.pos.get(b); }
-    if (pa && pb) arrow(g, pb.x, pb.y, pa.x, pa.y, 'rgba(134,220,124,0.8)', lw);
+    if (pa && pb) arrow(g, pb.x, pb.y, pa.x, pa.y, SIDE_COL[atk ? 1 - atk.who : 0], lw);
   }
   return { x: R.x + R.w / 2, y: R.y + R.h / 2, w: R.w, h: R.h };
 }
@@ -503,7 +505,7 @@ function drawValues(S, g, rec, R) {
     const bx = R.x + lab, bw = R.w - lab - 52, z = (0 - lo) / (hi - lo || 1);
     const x0 = bx + bw * z, x1 = bx + bw * ((r.v - lo) / (hi - lo || 1));
     g.fillStyle = 'rgba(255,255,255,0.05)'; g.fillRect(bx, y + rh * 0.2, bw, rh * 0.6);
-    g.fillStyle = chosen ? SIDE_COL[rec.who] : r.v >= 0 ? 'rgba(134,220,124,0.65)' : 'rgba(255,106,106,0.65)';
+    g.fillStyle = chosen ? SIDE_COL[rec.who] : r.v >= 0 ? TOKENS.app : TOKENS.avoid;
     g.fillRect(Math.min(x0, x1), y + rh * 0.2, Math.max(1, Math.abs(x1 - x0)), rh * 0.6);
     g.fillStyle = chosen ? INK : DIM; g.textAlign = 'right'; g.font = font(clamp(rh * 0.34, 9, 14));
     g.fillText(r.v.toFixed(3), R.x + R.w, y + rh / 2);

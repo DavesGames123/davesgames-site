@@ -43,6 +43,7 @@ import { curveRows, toSeries, seriesLabel, drawChart, SERIES_COL, flattenRow, ev
 import { ToyMB, drawToy, drawGlomeruli, drawSparse, jaccard, cosine } from './ui/explain.js';
 import { Match, agentFromFly, agentFromBot } from './ui/match.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import { TOKENS, KC_TYPE, FLY } from './ui/tokens.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -313,13 +314,13 @@ function initCentre() {
   const count = (arr) => { const m = new Map(); for (const t of arr || []) m.set(t, (m.get(t) || 0) + 1); return m; };
   const kcT = count(C.kc?.types), danC = count(C.dan?.cluster);
   const val = count((C.mbon?.valence || []).map(v => v > 0 ? 'approach' : v < 0 ? 'avoid' : 'neutral'));
-  const sw = c => `<i style="background:${c};width:9px;height:9px;border-radius:50%"></i>`;
+  const sw = c => `<i style="background:${c};width:9px;height:9px"></i>`;
   $('mbLegend').innerHTML = [
-    `<span>${sw('#62c4ff')}PN ${C.pn?.n}</span>`,
-    ...[...kcT].map(([t, n]) => `<span>${sw(/g/.test(t) && !/a/.test(t) ? '#ffd666' : /'/.test(t) ? '#e889dc' : '#ff9a62')}${esc(t)} ${n}</span>`),
-    `<span>${sw('#86dc7c')}MBON approach ${val.get('approach') || 0}</span>`,
-    `<span>${sw('#ff6a6a')}MBON avoid ${val.get('avoid') || 0}</span>`,
-    ...[...danC].map(([t, n]) => `<span>${sw(/PAM/.test(t) ? '#86dc7c' : /PPL1/.test(t) ? '#ff6a6a' : '#a8a4ff')}DAN ${esc(t)} ${n}</span>`),
+    `<span>${sw(TOKENS.pn)}PN ${C.pn?.n}</span>`,
+    ...[...kcT].map(([t, n]) => `<span>${sw(/g/.test(t) && !/a/.test(t) ? KC_TYPE.g : /'/.test(t) ? KC_TYPE.apbp : KC_TYPE.ab)}${esc(t)} ${n}</span>`),
+    `<span>${sw(TOKENS.app)}MBON approach ${val.get('approach') || 0}</span>`,
+    `<span>${sw(TOKENS.avoid)}MBON avoid ${val.get('avoid') || 0}</span>`,
+    ...[...danC].map(([t, n]) => `<span>${sw(/PAM/.test(t) ? TOKENS.app : /PPL1/.test(t) ? TOKENS.avoid : TOKENS.dim)}DAN ${esc(t)} ${n}</span>`),
   ].join('');
   const m = C.meta || {};
   const e = C.edges || {};
@@ -607,7 +608,7 @@ function initWatch() {
       const desc = a => { try { return M.rules.describe(a, rec.before); } catch { return a.type; } };
       const imag = i => rec.values && rec.scores && Math.abs(rec.scores[i] - rec.values[i]) > 1e-9;
       $('wCands').innerHTML = `<li class="head">${esc(m.names[rec.who])} had ${rec.legal.length} options${vals ? ', ranked by score (* = after the worst block the opponent could make)' : ' (a bot: no values)'}</li>`
-        + order.map(i => `<li class="${i === rec.idx ? 'chosen' : ''}"><span>${esc(desc(rec.legal[i]))}</span><b title="${rec.values ? `MB value ${rec.values[i].toFixed(3)}` : ''}">${vals ? `${imag(i) ? '*' : ''}${vals[i].toFixed(3)}` : ''}</b>${vals ? `<i style="--v:${hi > lo ? (100 * (vals[i] - lo) / (hi - lo)).toFixed(0) : 100}%;--c:${rec.who ? '#86dc7c' : '#ffb347'}"></i>` : ''}</li>`).join('');
+        + order.map(i => `<li class="${i === rec.idx ? 'chosen' : ''}"><span>${esc(desc(rec.legal[i]))}</span><b title="${rec.values ? `MB value ${rec.values[i].toFixed(3)}` : ''}">${vals ? `${imag(i) ? '*' : ''}${vals[i].toFixed(3)}` : ''}</b>${vals ? `<i style="--v:${hi > lo ? (100 * (vals[i] - lo) / (hi - lo)).toFixed(0) : 100}%;--c:${FLY[rec.who]}"></i>` : ''}</li>`).join('');
       const bv = W.bvs[rec.who];
       if (rec.trace) bv.setTrace(rec.trace, rec.value);
       if (rec.delta != null) bv.burst(rec.delta);

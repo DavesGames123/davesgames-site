@@ -19,7 +19,10 @@
 // ============================================================================
 
 export const X_KEYS = ['games', 'game', 'episodes', 'step', 'checkpoint'];
-export const SERIES_COL = ['#ff9a62', '#62c4ff', '#86dc7c', '#e889dc', '#ffd666', '#a8a4ff', '#ff6a6a', '#9de8b6'];
+import { TOKENS } from './tokens.js';
+
+// Series colours from ui/tokens.js: Fly A, Fly B, then neutral inks.
+export const SERIES_COL = [TOKENS.flyA, TOKENS.flyB, TOKENS.ink2, TOKENS.dim, TOKENS.ink, TOKENS.faint];
 
 export function flattenRow(o, pre = '', out = {}) {
   if (o == null) return out;
@@ -74,7 +77,7 @@ export function drawChart(g, w, h, series, opts = {}) {
   let xMax = opts.xMax || 1;
   for (const s of series) for (const p of s.pts) xMax = Math.max(xMax, p[0]);
   const X = x => L + (x / xMax) * pw, Y = y => T + (1 - y) * ph;
-  g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 1; g.fillStyle = '#8a91a5'; g.font = '11px system-ui,sans-serif';
+  g.strokeStyle = TOKENS.faint; g.lineWidth = 1; g.fillStyle = TOKENS.dim; g.font = '11px system-ui,sans-serif';
   for (const y of [0, 0.25, 0.5, 0.75, 1]) {
     g.beginPath(); g.moveTo(L, Y(y)); g.lineTo(L + pw, Y(y)); g.stroke();
     g.textAlign = 'right'; g.fillText(`${Math.round(y * 100)}%`, L - 4, Y(y) + 4);
@@ -82,7 +85,7 @@ export function drawChart(g, w, h, series, opts = {}) {
   g.textAlign = 'center';
   for (let i = 0; i <= 4; i++) { const x = (xMax * i) / 4; g.fillText(x >= 1000 ? `${(x / 1000).toFixed(x % 1000 ? 1 : 0)}k` : `${Math.round(x)}`, X(x), h - 6); }
   if (opts.chance != null) {
-    g.setLineDash([4, 4]); g.strokeStyle = 'rgba(255,255,255,0.3)';
+    g.setLineDash([4, 4]); g.strokeStyle = TOKENS.faint;
     g.beginPath(); g.moveTo(L, Y(opts.chance)); g.lineTo(L + pw, Y(opts.chance)); g.stroke(); g.setLineDash([]);
   }
   series.forEach((s, i) => {
@@ -92,7 +95,7 @@ export function drawChart(g, w, h, series, opts = {}) {
     g.stroke();
     if (s.pts.length < 40) { g.fillStyle = g.strokeStyle; for (const p of s.pts) { g.beginPath(); g.arc(X(p[0]), Y(p[1]), 2.4, 0, 7); g.fill(); } }
   });
-  if (!series.length) { g.fillStyle = '#8a91a5'; g.textAlign = 'center'; g.fillText(opts.empty || 'no data yet', L + pw / 2, T + ph / 2); }
+  if (!series.length) { g.fillStyle = TOKENS.dim; g.textAlign = 'center'; g.fillText(opts.empty || 'no data yet', L + pw / 2, T + ph / 2); }
   g.textAlign = 'left';
 }
 

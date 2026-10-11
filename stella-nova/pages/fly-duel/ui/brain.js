@@ -31,9 +31,13 @@
 //      grep -n 'draw(g'                      one frame
 // ============================================================================
 
+import { TOKENS, KC_TYPE, FLY, rgb } from './tokens.js';
+
+// Colours as [r, g, b], all from ui/tokens.js (DESIGN.md 1.1).
 export const COL = {
-  pn: [98, 196, 255], kcab: [255, 154, 98], kcapbp: [232, 137, 220], kcg: [255, 214, 102], kc: [200, 200, 210],
-  on: [255, 250, 225], app: [134, 220, 124], avoid: [255, 106, 106], neu: [169, 180, 200], pam: [134, 220, 124], ppl1: [255, 106, 106], dan: [168, 164, 255],
+  pn: rgb(TOKENS.pn), kcab: rgb(KC_TYPE.ab), kcapbp: rgb(KC_TYPE.apbp), kcg: rgb(KC_TYPE.g), kc: rgb(TOKENS['kc-off']),
+  on: rgb(TOKENS['kc-on']), app: rgb(TOKENS.app), avoid: rgb(TOKENS.avoid), neu: rgb(TOKENS.none), pam: rgb(TOKENS.app), ppl1: rgb(TOKENS.avoid), dan: rgb(TOKENS.faint),
+  flyA: rgb(FLY[0]), flyB: rgb(FLY[1]), ink: rgb(TOKENS.ink), dim: rgb(TOKENS.dim),
 };
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
@@ -164,7 +168,7 @@ export class BrainView {
   draw(g, w, h, dt = 0.016) {
     g.clearRect(0, 0, w, h);
     if (!this.ok) {
-      g.fillStyle = '#8a91a5'; g.font = '13px system-ui,sans-serif'; g.textAlign = 'center';
+      g.fillStyle = TOKENS.dim; g.font = '13px system-ui,sans-serif'; g.textAlign = 'center';
       g.fillText(this.label ? `${this.label}: waiting for data/connectome.json` : 'waiting for data/connectome.json', w / 2, h / 2);
       g.textAlign = 'left';
       return;
@@ -266,11 +270,11 @@ export class BrainView {
       }
     }
     // labels
-    g.font = '11px system-ui,sans-serif'; g.fillStyle = '#c2c7d4'; g.textAlign = 'left';
+    g.font = '11px system-ui,sans-serif'; g.fillStyle = TOKENS.ink2; g.textAlign = 'left';
     const nOn = this.trace.kc ? this.trace.kc.length : 0;
     g.fillText(`${this.label}  KC ${nOn}/${nk} on (${((100 * nOn) / Math.max(1, nk)).toFixed(1)}%)`, 6, 14);
     if (this.value != null && Number.isFinite(this.value)) { g.textAlign = 'right'; g.fillText(`value ${this.value.toFixed(3)}`, w - 6, 14); }
-    g.textAlign = 'left'; g.fillStyle = '#8a91a5';
+    g.textAlign = 'left'; g.fillStyle = TOKENS.dim;
     g.fillText('MBON  approach … avoid', 6, by + 11);
     if (this.dan > 0.05) {
       g.textAlign = 'right'; g.fillStyle = rgba(this.danSign > 0 ? COL.pam : COL.ppl1, Math.min(1, this.dan + 0.2));

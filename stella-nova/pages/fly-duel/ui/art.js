@@ -48,10 +48,13 @@ export function rngFrom(seed) {
   };
 }
 
+import { TOKENS } from './tokens.js';
+
+// ink is the card colour token; the other shades are art only.
 export const PALETTE = {
-  amber: { ink: '#ffb347', deep: '#7a3a08', sky0: '#3a1c06', sky1: '#a85a14', glow: '#ffd27a', body: ['#ffb347', '#e0782a', '#ffcf70', '#c9541c'] },
-  moss: { ink: '#86dc7c', deep: '#173f1c', sky0: '#08200f', sky1: '#2f6b33', glow: '#c8f59a', body: ['#86dc7c', '#4fae5b', '#b5e86e', '#2f8a63'] },
-  none: { ink: '#a9b4c8', deep: '#2a3140', sky0: '#0d111a', sky1: '#3a4560', glow: '#dfe6f5', body: ['#a9b4c8', '#7f8aa3', '#cfd7e6', '#6b7690'] },
+  amber: { ink: TOKENS.amber, deep: '#7a3a08', sky0: '#3a1c06', sky1: '#a85a14', glow: '#ffd27a', body: ['#ffb347', '#e0782a', '#ffcf70', '#c9541c'] },
+  moss: { ink: TOKENS.moss, deep: '#1f3d10', sky0: '#0b1f06', sky1: '#3d6a1c', glow: '#dcf3a8', body: ['#a8d65a', '#7fae3a', '#c9ea8a', '#5f8f2a'] },
+  none: { ink: TOKENS.none, deep: '#2a3140', sky0: '#0d111a', sky1: '#3a4560', glow: '#dfe6f5', body: ['#a9b4c8', '#7f8aa3', '#cfd7e6', '#6b7690'] },
 };
 export const colourKey = c => (c === 'amber' || c === 'Amber') ? 'amber' : (c === 'moss' || c === 'Moss') ? 'moss' : 'none';
 
@@ -61,17 +64,17 @@ const f1 = v => (Math.round(v * 10) / 10).toString();
 export function manaGlyph(kind, n = 0, size = 16) {
   const s = `width="${size}" height="${size}" viewBox="0 0 20 20" class="mana mana-${kind}" aria-hidden="true"`;
   if (kind === 'amber') {
-    return `<svg ${s}><path d="M10 1.5 17.4 5.75v8.5L10 18.5 2.6 14.25v-8.5z" fill="#2b1604" stroke="#ffb347" stroke-width="1.6"/>`
-      + `<path d="M10 5.2c2.2 3 3.3 4.9 3.3 6.4a3.3 3.3 0 0 1-6.6 0c0-1.5 1.1-3.4 3.3-6.4z" fill="#ffb347"/>`
+    return `<svg ${s}><path d="M10 1.5 17.4 5.75v8.5L10 18.5 2.6 14.25v-8.5z" fill="#2b1604" stroke="${TOKENS.amber}" stroke-width="1.6"/>`
+      + `<path d="M10 5.2c2.2 3 3.3 4.9 3.3 6.4a3.3 3.3 0 0 1-6.6 0c0-1.5 1.1-3.4 3.3-6.4z" fill="${TOKENS.amber}"/>`
       + `<circle cx="8.8" cy="11.4" r="0.9" fill="#fff3d0"/></svg>`;
   }
   if (kind === 'moss') {
-    return `<svg ${s}><path d="M10 1.2 18.8 10 10 18.8 1.2 10z" fill="#0d2612" stroke="#86dc7c" stroke-width="1.4" stroke-linejoin="round"/>`
-      + `<path d="M6.2 13.8C6.2 9.4 9.2 6.6 13.6 6.4c.2 4.4-2.7 7.3-7 7.4z" fill="#86dc7c"/>`
-      + `<path d="M6.7 13.3 12.6 7.4" stroke="#0d2612" stroke-width="1" stroke-linecap="round"/></svg>`;
+    return `<svg ${s}><path d="M10 1.2 18.8 10 10 18.8 1.2 10z" fill="#14260a" stroke="${TOKENS.moss}" stroke-width="1.4" stroke-linejoin="round"/>`
+      + `<path d="M6.2 13.8C6.2 9.4 9.2 6.6 13.6 6.4c.2 4.4-2.7 7.3-7 7.4z" fill="${TOKENS.moss}"/>`
+      + `<path d="M6.7 13.3 12.6 7.4" stroke="#14260a" stroke-width="1" stroke-linecap="round"/></svg>`;
   }
-  return `<svg ${s}><rect x="2" y="2" width="16" height="16" rx="3.5" fill="#1b2130" stroke="#a9b4c8" stroke-width="1.4"/>`
-    + `<text x="10" y="14" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" font-weight="600" fill="#e8eaf0">${n | 0}</text></svg>`;
+  return `<svg ${s}><rect x="2" y="2" width="16" height="16" rx="3.5" fill="${TOKENS.panel2}" stroke="${TOKENS.none}" stroke-width="1.4"/>`
+    + `<text x="10" y="14" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" font-weight="600" fill="${TOKENS.ink}">${n | 0}</text></svg>`;
 }
 
 // The glyph row for a cost { generic, amber, moss }.

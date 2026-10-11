@@ -21,6 +21,8 @@
 //      grep -n 'export function drawSparse'  section 04 KC grid, two boards
 // ============================================================================
 
+import { TOKENS, PAIR, rgb } from './tokens.js';
+
 export function jaccard(a, b) {
   if (!a || !b) return 0;
   const A = new Set(a); let both = 0;
@@ -77,7 +79,7 @@ export function drawToy(g, w, h, toy, sel, flash = 0) {
   const mx = [w * 0.3, w * 0.7];
   const active = new Set(toy.odours[sel]);
   const both = new Set(toy.odours[0].filter(k => toy.odours[1].includes(k)));
-  const cols = [[134, 220, 124], [255, 106, 106]];
+  const cols = [rgb(TOKENS.app), rgb(TOKENS.avoid)];
   // synapse lines
   for (let m = 0; m < 2; m++) for (let k = 0; k < n; k++) {
     const wt = toy.w[m][k], on = active.has(k);
@@ -88,7 +90,7 @@ export function drawToy(g, w, h, toy, sel, flash = 0) {
   // KCs
   for (let k = 0; k < n; k++) {
     const on = active.has(k);
-    g.fillStyle = on ? '#fffae1' : both.has(k) ? '#5a6280' : '#394155';
+    g.fillStyle = on ? TOKENS['kc-on'] : both.has(k) ? TOKENS.dim : TOKENS['kc-off'];
     g.beginPath(); g.arc(kx(k), y0, on ? 6 : 4.5, 0, 7); g.fill();
   }
   // MBONs and their rates
@@ -97,19 +99,19 @@ export function drawToy(g, w, h, toy, sel, flash = 0) {
   for (let m = 0; m < 2; m++) {
     g.fillStyle = `rgba(${cols[m]},${0.35 + 0.65 * Math.min(1, r[m])})`;
     g.beginPath(); g.arc(mx[m], y1, 12 + 6 * r[m], 0, 7); g.fill();
-    g.fillStyle = '#c2c7d4'; g.font = '12px system-ui,sans-serif'; g.textAlign = 'center';
+    g.fillStyle = TOKENS.ink2; g.font = '12px system-ui,sans-serif'; g.textAlign = 'center';
     g.fillText(`${names[m]} ${r[m].toFixed(2)}`, mx[m], y1 + 34);
   }
   // DANs: PAM onto the avoid MBON, PPL1 onto the approach MBON
-  const dans = [{ x: mx[1] + 46, lab: 'PAM', col: [134, 220, 124], s: 1 }, { x: mx[0] - 46, lab: 'PPL1', col: [255, 106, 106], s: -1 }];
+  const dans = [{ x: mx[1] + 46, lab: 'PAM', col: rgb(TOKENS.app), s: 1 }, { x: mx[0] - 46, lab: 'PPL1', col: rgb(TOKENS.avoid), s: -1 }];
   for (const d of dans) {
     const hot = toy.lastDan === d.s ? flash : 0;
     g.fillStyle = `rgba(${d.col},${0.35 + 0.65 * hot})`;
     g.beginPath(); g.moveTo(d.x, y1 - 8 - hot * 6); g.lineTo(d.x + 9 + hot * 5, y1 + 6); g.lineTo(d.x - 9 - hot * 5, y1 + 6); g.closePath(); g.fill();
-    g.fillStyle = '#c2c7d4'; g.fillText(d.lab, d.x, y1 + 20);
+    g.fillStyle = TOKENS.ink2; g.fillText(d.lab, d.x, y1 + 20);
     if (hot > 0) { g.strokeStyle = `rgba(${d.col},${hot * 0.7})`; g.lineWidth = 2; g.beginPath(); g.arc(d.s > 0 ? mx[1] : mx[0], y1, 20 + (1 - hot) * 22, 0, 7); g.stroke(); }
   }
-  g.fillStyle = '#8a91a5'; g.textAlign = 'left'; g.fillText('Kenyon cells (lit = this board)', pad, y0 - 12);
+  g.fillStyle = TOKENS.dim; g.textAlign = 'left'; g.fillText('Kenyon cells (lit = this board)', pad, y0 - 12);
   g.textAlign = 'right'; g.fillText(`V(board ${sel ? 'B' : 'A'}) = ${toy.value(sel).toFixed(2)}`, w - pad, y0 - 12);
   g.textAlign = 'left';
 }
@@ -117,13 +119,13 @@ export function drawToy(g, w, h, toy, sel, flash = 0) {
 // Section 03: PN (glomerulus channel) rates as a grid of discs.
 export function drawGlomeruli(g, w, h, rates, labels = null) {
   g.clearRect(0, 0, w, h);
-  if (!rates || !rates.length) { g.fillStyle = '#8a91a5'; g.font = '12px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText('waiting for the brain model', w / 2, h / 2); g.textAlign = 'left'; return; }
+  if (!rates || !rates.length) { g.fillStyle = TOKENS.dim; g.font = '12px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText('waiting for the brain model', w / 2, h / 2); g.textAlign = 'left'; return; }
   const n = rates.length, cols = Math.ceil(Math.sqrt((n * w) / h)), rows = Math.ceil(n / cols);
   const cw = w / cols, chh = h / rows, rad = Math.max(2, Math.min(cw, chh) * 0.4);
   let mx = 1e-6; for (const v of rates) mx = Math.max(mx, v);
   for (let i = 0; i < n; i++) {
     const x = (i % cols + 0.5) * cw, y = (Math.floor(i / cols) + 0.5) * chh, v = Math.max(0, rates[i]) / mx;
-    g.fillStyle = `rgba(98,196,255,${0.08 + 0.92 * v})`;
+    g.fillStyle = `rgba(${rgb(TOKENS.pn)},${0.08 + 0.92 * v})`;
     g.beginPath(); g.arc(x, y, rad * (0.55 + 0.45 * v), 0, 7); g.fill();
     if (labels && rad > 9) { g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '8px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText(String(labels[i]).slice(0, 5), x, y + rad + 8); }
   }
@@ -136,10 +138,10 @@ export function drawSparse(g, w, h, n, a, b) {
   if (!n) return;
   const cols = Math.ceil(Math.sqrt((n * w) / h)), rows = Math.ceil(n / cols);
   const cw = w / cols, ch = h / rows, s = Math.max(1, Math.min(cw, ch) - 0.6);
-  g.fillStyle = '#1b2130';
+  g.fillStyle = TOKENS['kc-off'];
   for (let i = 0; i < n; i++) g.fillRect((i % cols) * cw, Math.floor(i / cols) * ch, s, s);
   const A = new Set(a || []), Bs = new Set(b || []);
-  for (const i of A) { g.fillStyle = Bs.has(i) ? '#fffae1' : '#ff9a62'; g.fillRect((i % cols) * cw - 0.5, Math.floor(i / cols) * ch - 0.5, s + 1, s + 1); }
-  g.fillStyle = '#62c4ff';
+  for (const i of A) { g.fillStyle = Bs.has(i) ? TOKENS['kc-on'] : PAIR[0]; g.fillRect((i % cols) * cw - 0.5, Math.floor(i / cols) * ch - 0.5, s + 1, s + 1); }
+  g.fillStyle = PAIR[1];
   for (const i of Bs) if (!A.has(i)) g.fillRect((i % cols) * cw - 0.5, Math.floor(i / cols) * ch - 0.5, s + 1, s + 1);
 }
