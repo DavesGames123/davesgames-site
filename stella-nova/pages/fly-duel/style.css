@@ -18,11 +18,22 @@
    (max-width 860px): the table takes the full width, the two brains go
    side by side under it. The table stacks Fly B over Fly A.
 
+   LOOK. A faux fantasy card game, our own: bronze rules and corner curls
+   (wing veins) on dark tome panels, parchment for the notes and the "on"
+   state of a button, STIX Two Text for headings and numbers. The colours
+   of the card frame (ui/card.css, ui/cardface.js) set the accents. The
+   fly colours stay cyan (Fly A) and magenta (Fly B). No WotC frame, mana
+   symbol, set symbol or font. Crisp: no blur, no glow, hard rings only.
+     --bronze --bronze-dim --bronze-line   rules, ornaments, cartouches
+     --tome --tome2                        panel and control grounds
+     --parch --parch2 --parch-ink          parchment and its ink
+
    PHONE (max-width 860px): cards go to one column, the chip bar scrolls
    sideways, small labels go up to 12px. A pointer:coarse block sets 44px
    targets on any touch screen. Hover colours apply only where
    (hover:hover), so a tap does not leave them on.
      grep -n 'HIDDEN'     the [hidden] guard
+     grep -n 'ORNAMENTS'  the SVG ornaments (rule, corner curl)
      grep -n 'CHIPS'      the sticky section bar
      grep -n 'ARENA'      hero layout, brains and table
      grep -n 'STAGE'      the 3D hero: canvas, HUD cards, maps, bar
@@ -42,9 +53,18 @@
   --amber:#ffb347; --moss:#a8d65a; --none:#a9b4c8;
   --pn:#9d8cff; --kc-off:#2b3142; --kc-on:#fffbe6; --app:#3ee89a; --avoid:#ff4d4d;
   --dmg:#ff4d4d; --heal:#3ee89a; --acc:#eef0f5;
+  --bronze:#c9a45a; --bronze-dim:#6e5a32; --bronze-line:rgba(201,164,90,0.34);
+  --tome:#0e0c09; --tome2:#16120c; --parch:#f1e5cc; --parch2:#d9c9a6; --parch-ink:#2a1e10;
   --serif:var(--sci-serif); --sans:var(--sci-sans); --mono:var(--sci-mono);
   --top:52px;
   --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+}
+/* ORNAMENTS: our own SVG, in the bronze of the card back. The rule is a
+   line, a diamond and two small lozenges. The curl is one corner of a
+   panel: a bracket with a wing-vein arc inside it. */
+:root{
+  --orn-rule:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='10' viewBox='0 0 220 10'%3E%3Cpath d='M0 5H96M124 5H220' stroke='%23c9a45a' stroke-width='1'/%3E%3Cpath d='M110 0.6 114.4 5 110 9.4 105.6 5Z' fill='%23c9a45a'/%3E%3Cpath d='M99 5 101.5 2.5 104 5 101.5 7.5ZM116 5 118.5 2.5 121 5 118.5 7.5Z' fill='%236e5a32'/%3E%3C/svg%3E");
+  --orn-curl:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpath d='M1.5 17V7Q1.5 1.5 7 1.5H17' fill='none' stroke='%23c9a45a' stroke-width='1.2'/%3E%3Cpath d='M5.5 14Q5.5 5.5 14 5.5' fill='none' stroke='%236e5a32' stroke-width='1'/%3E%3Cpath d='M0 0h3.2v3.2H0z' fill='%23c9a45a'/%3E%3C/svg%3E");
 }
 /* HIDDEN: an author display rule must not beat the hidden attribute. */
 [hidden]{display:none!important}
@@ -62,40 +82,44 @@ sub,sup{font-size:0.72em;line-height:0}
 .none{color:var(--dim);font-size:0.82rem}
 
 .topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;
-  padding:0 calc(20px + var(--sr)) 0 calc(20px + var(--sl));background:var(--bg);border-bottom:1px solid var(--hair);pointer-events:none}
+  padding:0 calc(20px + var(--sr)) 0 calc(20px + var(--sl));background:var(--bg);border-bottom:1px solid var(--bronze-line);pointer-events:none}
 .brand{font:500 0.85rem/1 var(--sans);color:var(--dim);white-space:nowrap}
-.pagetitle{font:400 1.1rem/1 var(--serif);color:var(--ink);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pagetitle{font:500 1.1rem/1 var(--serif);color:var(--parch);letter-spacing:0.01em;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 html.in-frame .topbar{display:none}
 
 /* ---------------------------------------------------------------- CHIPS */
 #chips{position:sticky;top:var(--top);z-index:20;background:var(--bg);
-  border-bottom:1px solid var(--hair);padding:8px calc(20px + var(--sr)) 8px calc(20px + var(--sl))}
+  border-bottom:1px solid var(--bronze-line);padding:8px calc(20px + var(--sr)) 8px calc(20px + var(--sl))}
 #chips ol{list-style:none;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;max-width:1320px;margin:0 auto}
 #chips ol::-webkit-scrollbar{display:none}
-#chips a{display:flex;gap:7px;align-items:baseline;white-space:nowrap;padding:6px 11px;border-radius:999px;border:1px solid var(--hair2);color:var(--ink2);font-size:0.8rem}
-#chips a b{font:500 0.7rem var(--mono);color:var(--dim)}
+#chips a{display:flex;gap:7px;align-items:baseline;white-space:nowrap;padding:6px 11px;border-radius:3px;border:1px solid var(--bronze-line);background:var(--tome);color:var(--parch2);font-size:0.8rem}
+#chips a b{font:600 0.74rem var(--serif);color:var(--bronze)}
 /* state squares, both data-driven: 00 in the colour of the fly that acts
    in the hero, 06 while the trainer runs */
 #chips a[data-seat="0"]::after,#chips a[data-seat="1"]::after,#chips a.running::after{content:'';align-self:center;width:6px;height:6px}
 #chips a[data-seat="0"]::after{background:var(--flyA)} #chips a[data-seat="1"]::after{background:var(--flyB)} #chips a.running::after{background:var(--ink)}
 #chips a.on.running::after{background:var(--bg)}
 #chips a{text-decoration:none}
-@media (hover:hover){#chips a:hover{border-color:var(--ink)}}
-#chips a.on{background:var(--acc);border-color:var(--acc);color:var(--bg)}
-#chips a.on b{color:var(--bg);opacity:0.7}
+@media (hover:hover){#chips a:hover{border-color:var(--bronze);color:var(--parch)}}
+#chips a.on{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink)}
+#chips a.on b{color:var(--parch-ink);opacity:0.75}
 
 /* ---------------------------------------------------------------- page */
 #doc{max-width:1320px;margin:0 auto;padding:calc(var(--top) + 6px) calc(22px + var(--sr)) 60px calc(22px + var(--sl))}
 .hero{padding:22px 0 22px;border-bottom:1px solid var(--hair);margin-bottom:8px}
-.kicker{font-size:0.82rem;font-weight:500;color:var(--ink2)}
-.hero h1{font:400 clamp(1.7rem,4.2vw,2.7rem)/1.15 var(--serif);margin:6px 0 10px;max-width:30ch}
+.kicker{font-size:0.74rem;font-weight:600;color:var(--bronze);letter-spacing:0.09em;text-transform:uppercase}
+.hero h1{font:500 clamp(1.7rem,4.2vw,2.7rem)/1.15 var(--serif);color:var(--parch);margin:6px 0 10px;max-width:30ch}
+.hero h1::after{content:'';display:block;width:220px;max-width:70%;height:10px;margin-top:12px;background:var(--orn-rule) left center/220px 10px no-repeat}
 .lede{font:400 1.08rem/1.6 var(--serif);color:var(--ink2);max-width:82ch}
-.note{margin-top:14px;font-size:0.8rem;color:var(--dim);max-width:110ch;border-left:3px solid var(--hair2);padding-left:11px}
-.note b{color:var(--ink2);font-weight:500}
+/* the note reads as the rules box of a card: parchment, dark ink, a
+   bronze frame with a hard inner ring */
+.note{margin-top:14px;font:400 0.86rem/1.55 var(--serif);color:var(--parch-ink);max-width:110ch;background:var(--parch);border:1px solid var(--bronze-dim);box-shadow:inset 0 0 0 3px var(--parch),inset 0 0 0 4px var(--bronze);border-radius:3px;padding:12px 16px}
+.note b{color:var(--parch-ink);font-weight:600}
+.note a{color:var(--parch-ink);text-decoration-color:var(--bronze-dim)}
 .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:16px 0 4px}
 .stats:empty{display:none}
-.stats div{background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:12px 12px 10px;min-width:0}
-.stats b{display:block;font:400 1.45rem/1.1 var(--serif);color:var(--ink);font-variant-numeric:tabular-nums}
+.stats div{background:var(--tome);border:1px solid var(--bronze-line);border-top:2px solid var(--bronze-dim);border-radius:3px;padding:12px 12px 10px;min-width:0}
+.stats b{display:block;font:500 1.45rem/1.1 var(--serif);color:var(--parch);font-variant-numeric:tabular-nums}
 .stats span{display:block;font-size:0.74rem;color:var(--dim);margin-top:4px;line-height:1.35}
 
 /* ---------------------------------------------------------------- ARENA */
@@ -117,7 +141,7 @@ html.in-frame .topbar{display:none}
 .arena-ctrls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .status{font-size:0.8rem;color:var(--ink2);min-height:1.4em}
 .status.win{color:var(--ink)}
-.log{list-style:none;font:0.76rem/1.45 var(--mono);color:var(--dim);background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:6px 10px;height:6.4em;overflow:hidden}
+.log{list-style:none;font:0.76rem/1.45 var(--mono);color:var(--dim);background:var(--tome);border:1px solid var(--bronze-line);border-radius:3px;padding:6px 10px;height:6.4em;overflow:hidden}
 .log li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .log li.p0::before{content:'A ';color:var(--flyA);font-weight:700}
 .log li.p1::before{content:'B ';color:var(--flyB);font-weight:700}
@@ -152,50 +176,42 @@ html.in-frame .topbar{display:none}
 .midline .last{color:var(--ink2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mana{display:inline-block;vertical-align:-3px}
 
-/* ---------------------------------------------------------------- FCARD */
-.fcard{position:relative;display:flex;flex-direction:column;width:168px;background:var(--panel2);border:1px solid var(--hair2);border-radius:10px;overflow:hidden;font-size:0.72rem;color:var(--ink2)}
-.fcard.c-amber{border-color:var(--amber)} .fcard.c-moss{border-color:var(--moss)} .fcard.c-none{border-color:var(--none)}
-.fcard .art{display:block;width:100%;aspect-ratio:10/7;height:auto}
-.fc-top{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 6px;background:var(--panel)}
-.fc-name{font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fc-cost{display:inline-flex;gap:1px;flex:none}
-.fc-type{padding:4px 6px 0;color:var(--dim);font-size:0.68rem}
-.fc-text{padding:3px 6px 22px;line-height:1.35;min-height:4.4em}
-.fc-text i{display:block;color:var(--dim);margin-top:4px}
-.fc-pt{position:absolute;right:5px;bottom:5px;font:600 0.78rem var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--hair2);border-radius:5px;padding:0 5px}
-.fc-dmg{position:absolute;left:4px;top:4px;font:600 0.7rem var(--mono);color:var(--bg);background:var(--dmg);border-radius:4px;padding:0 4px}
-.fc-count{position:absolute;left:5px;bottom:5px;font:600 0.72rem var(--mono);color:var(--ink)}
-.kw{color:var(--ink2)}
-.kw+.kw::before{content:', ';color:var(--dim)}
-/* mini: on the table */
-.fcard.mini{width:64px;border-radius:7px;font-size:0.6rem;transition:transform .25s,box-shadow .25s}
-.fcard.mini .art{aspect-ratio:1/0.8}
-.fcard.mini .fc-name{padding:2px 3px 0;font-size:0.58rem;line-height:1.2}
-.fcard.mini .fc-pt{right:2px;bottom:2px;font-size:0.66rem;padding:0 3px}
-.fcard.mini .fc-kws{padding:0 3px 15px;font-size:0.52rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fcard.mini .fc-kws .kw+.kw::before{content:' '}
-.fcard.mini:not(:has(.fc-kws)){padding-bottom:15px}
+/* ---------------------------------------------------------------- FCARD
+   The frame of a card is ui/card.css (.fcard.fx). Here: only the card
+   width, the tap shift and the hot ring of the table. */
+.fcard{position:relative;display:flex;flex-direction:column;width:168px}
+.kw{color:inherit}
+.kw+.kw::before{content:', '}
+.fcard.mini{width:64px;transition:transform .25s}
 .fcard.tapped{transform:rotate(8deg) translateY(3px);opacity:0.62}
-.fcard.sick{border-style:dashed}
-.fcard.hot{box-shadow:0 0 0 2px var(--ink)}
 .row.hand .fcard.mini{width:52px}
 
 /* ---------------------------------------------------------------- CARDS */
 .sec{padding:34px 0 8px}
-.sec-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
-.num{font:500 0.8rem var(--mono);color:var(--ink);border:1px solid var(--hair2);border-radius:8px;padding:4px 7px;margin-top:6px}
-.sec-head h2{font:400 1.65rem/1.2 var(--serif)}
-.sec-head p{color:var(--ink2);margin-top:4px;max-width:86ch}
+.sec-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:18px}
+/* the section number: a bronze cartouche with the cut top corners of the
+   card plate */
+.num{flex:none;font:600 0.86rem/1 var(--serif);color:var(--parch-ink);background:var(--bronze);min-width:2.5em;text-align:center;padding:7px 8px 6px;margin-top:5px;
+  clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%,0 6px);border-radius:0 0 3px 3px;font-variant-numeric:lining-nums tabular-nums}
+.sec-head h2{font:500 1.65rem/1.2 var(--serif);color:var(--parch)}
+.sec-head h2::after{content:'';display:block;width:220px;max-width:100%;height:10px;margin-top:8px;background:var(--orn-rule) left center/220px 10px no-repeat}
+.sec-head p{color:var(--ink2);margin-top:8px;max-width:86ch}
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:start}
-.card{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:14px 14px 12px;min-width:0}
+/* a panel: dark tome ground, a bronze hairline and a hard inner ring,
+   two corner curls at the top */
+.card{position:relative;background:var(--tome);border:1px solid var(--bronze-line);border-radius:4px;padding:16px 16px 13px;min-width:0;
+  box-shadow:inset 0 0 0 3px var(--tome),inset 0 0 0 4px rgba(201,164,90,0.14)}
+.card::before,.card::after{content:'';position:absolute;top:5px;width:18px;height:18px;background:var(--orn-curl) 0 0/18px 18px no-repeat;pointer-events:none}
+.card::before{left:5px} .card::after{right:5px;transform:scaleX(-1)}
 .span-12{grid-column:span 12} .span-8{grid-column:span 8} .span-7{grid-column:span 7}
 .span-6{grid-column:span 6} .span-5{grid-column:span 5} .span-4{grid-column:span 4}
 .card-top{display:flex;align-items:baseline;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
-.card h3{font:500 0.98rem/1.3 var(--sans)}
-.tag{font-size:0.7rem;color:var(--dim);border:1px solid var(--hair2);border-radius:999px;padding:2px 8px}
-.tag.toy{color:var(--ink2);border-style:dashed}
-.tag.real{color:var(--ink2)}
-.tag.synth{color:var(--ink2);border-color:var(--ink2)}
+.card-top{padding:0 14px}
+.card h3{font:600 1.08rem/1.3 var(--serif);color:var(--parch);font-variant:small-caps;letter-spacing:0.02em}
+.tag{font-size:0.7rem;color:var(--parch2);background:var(--tome2);border:1px solid var(--bronze-line);border-radius:3px;padding:2px 8px}
+.tag.toy{border-style:dashed;border-color:var(--bronze-dim)}
+.tag.real{border-color:var(--bronze-dim)}
+.tag.synth{color:var(--parch);border-color:var(--bronze)}
 .fig{display:block;width:100%;aspect-ratio:1/1;max-height:560px;border-radius:8px;background:var(--fig);touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .fig.wide{aspect-ratio:16/9}
 .fig.chart{aspect-ratio:auto;height:240px;background:transparent}
@@ -206,10 +222,11 @@ html.in-frame .topbar{display:none}
 .facts{list-style:none;display:grid;gap:8px;color:var(--ink2)}
 .facts.small{font-size:0.8rem;margin-top:12px}
 .facts li{padding-left:14px;position:relative}
-.facts li::before{content:'';position:absolute;left:0;top:0.62em;width:6px;height:6px;background:var(--dim)}
+.facts li::before{content:'';position:absolute;left:0;top:0.6em;width:6px;height:6px;background:var(--bronze);transform:rotate(45deg)}
 .facts b{color:var(--ink);font-weight:500}
 .steps{padding-left:1.4em;display:grid;gap:6px;color:var(--ink2);margin-bottom:10px}
-.steps b{color:var(--ink);font-weight:500}
+.steps b{color:var(--parch);font-weight:600;font-family:var(--serif)}
+.steps li::marker{color:var(--bronze);font:600 0.9em var(--serif)}
 .manakey{font-size:0.8rem;color:var(--ink2);margin:6px 0 10px}
 .manakey span{display:inline-flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
 .eqs{margin-top:4px;display:grid;gap:10px}
@@ -222,45 +239,54 @@ html.in-frame .topbar{display:none}
 .legend button{background:none;border:0;color:inherit;font:inherit;display:inline-flex;align-items:center;gap:6px;padding:2px 0}
 .legend button.off{opacity:0.35}
 .trials{display:grid;gap:8px;margin-top:6px}
-.trials div{background:var(--panel2);border:1px solid var(--hair);border-radius:10px;padding:8px 10px;font-size:0.82rem;color:var(--ink2)}
+.trials div{background:var(--tome2);border:1px solid var(--bronze-line);border-radius:3px;padding:8px 10px;font-size:0.82rem;color:var(--ink2)}
 .trials b{color:var(--ink);font-weight:500;font-family:var(--mono)}
 
-/* decks and gallery */
+/* decks and gallery. A deck list is a deck box: a band in the deck
+   colour, then one row per card with a thumbnail of its plate. */
 .decks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.decklist h4{font:500 0.92rem var(--sans);margin-bottom:6px;color:var(--ink)}
-.decklist h4 small{font-weight:400;color:var(--dim);margin-left:6px}
+.decklist{background:var(--tome2);border:1px solid var(--bronze-line);border-top:3px solid var(--bronze-dim);border-radius:3px;padding:10px 10px 8px;min-width:0}
+.decklist.c-amber{border-top-color:var(--amber)} .decklist.c-moss{border-top-color:var(--moss)}
+.decklist h4{font:600 1rem var(--serif);margin-bottom:8px;color:var(--parch);font-variant:small-caps;letter-spacing:0.02em}
+.decklist h4 small{font:400 0.76rem var(--sans);color:var(--dim);margin-left:6px;font-variant:normal;letter-spacing:0}
 .decklist.c-amber h4{color:var(--amber)} .decklist.c-moss h4{color:var(--moss)}
-.decklist ul{list-style:none;display:grid;gap:2px}
-.decklist li{display:grid;grid-template-columns:2em minmax(0,1fr) auto;gap:6px;align-items:center;font-size:0.8rem;padding:2px 0;border-bottom:1px solid var(--hair)}
-.decklist li b{font:500 0.78rem var(--mono);color:var(--dim)}
-.dl-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.decklist ul{list-style:none;display:grid;gap:0}
+.decklist li{display:grid;grid-template-columns:1.6em 32px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:0.8rem;padding:3px 0;border-bottom:1px solid var(--hair)}
+.decklist li:last-child{border-bottom:0}
+.decklist li b{font:600 0.82rem var(--serif);color:var(--bronze);text-align:right;font-variant-numeric:tabular-nums}
+.dl-art{display:block;width:32px;height:24px;object-fit:cover;border:1px solid #000;box-shadow:0 0 0 1px var(--bronze-dim)}
+.dl-art.none{background:var(--tome)}
+.dl-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--parch2);font-family:var(--serif);font-size:0.9rem}
+.dl-name.t-land{color:var(--ink2)}
 .dl-cost{display:inline-flex;gap:1px}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:4px}
 .gallery .fcard{width:auto}
+@media (hover:hover){.gallery .fcard{transition:transform .18s}.gallery .fcard:hover{transform:translateY(-4px)}}
 
 /* facts and features */
 .factlist{list-style:none;display:grid;gap:7px;font-size:0.82rem;color:var(--ink2);max-height:460px;overflow:auto;overscroll-behavior:contain}
-.subh{font:500 0.9rem var(--sans);margin:16px 0 6px}
+.subh{font:600 0.98rem var(--serif);color:var(--parch);font-variant:small-caps;letter-spacing:0.02em;margin:16px 0 6px}
 .factlist li{display:grid;grid-template-columns:6.5em minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--hair)}
-.factlist b{font:500 0.92rem var(--serif);color:var(--ink)}
+.factlist b{font:500 0.92rem var(--serif);color:var(--parch)}
 .factlist small{color:var(--dim)}
 .featbars{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 12px;font-size:0.7rem;max-height:520px;overflow:auto}
 .featbars li{display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:6px;align-items:center;color:var(--ink2);cursor:pointer;padding:1px 2px;border-radius:4px}
-.featbars li.on{background:var(--panel2);color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.featbars li.on{background:var(--tome2);color:var(--parch);box-shadow:0 0 0 1px var(--bronze)}
 .featbars li span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .featbars li i{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--pn) var(--v,0%),var(--faint) var(--v,0%))}
-select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair2);border-radius:8px;padding:5px 8px;font:inherit;font-size:0.8rem;max-width:15em}
-input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid var(--hair2);border-radius:8px;padding:5px 8px;font:0.8rem var(--mono);width:6.5em}
+select{background:var(--tome2);color:var(--parch);border:1px solid var(--bronze-dim);border-radius:3px;padding:5px 8px;font:inherit;font-size:0.8rem;max-width:15em}
+input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid var(--bronze-dim);border-radius:3px;padding:5px 8px;font:0.8rem var(--mono);width:6.5em}
 
 /* results */
 .tablewrap{overflow-x:auto}
 .evaltab{width:100%;border-collapse:collapse;font-size:0.8rem}
 .evaltab th,.evaltab td{padding:6px 8px;border-bottom:1px solid var(--hair);text-align:left}
-.evaltab th{color:var(--dim);font-weight:500}
+.evaltab thead th{color:var(--bronze);font:600 0.84rem var(--serif);font-variant:small-caps;letter-spacing:0.03em;border-bottom:1px solid var(--bronze-dim)}
 .evaltab td.n,.evaltab th.n{font-family:var(--mono);text-align:right;white-space:nowrap}
 .evaltab td.n{color:var(--ink)}
 .evaltab tbody th{font-weight:400;color:var(--ink2)}
 #curveMeta code{font:0.76rem var(--mono);color:var(--ink);word-break:break-all}
+.refs li::marker{color:var(--bronze)}
 .refs{list-style:decimal;padding-left:2em;display:grid;gap:7px;font-size:0.82rem;color:var(--dim)}
 .refs li{scroll-margin-top:120px}
 .refs li:target{color:var(--ink)}
@@ -272,18 +298,22 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
 .ctrls.top{margin:0 0 12px}
 .ctrl{display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--ink2)}
 .ctrl.grow{flex:1 1 220px}
-.ctrl input[type=range]{flex:1;min-width:0;accent-color:var(--ink)}
+.ctrl input[type=range]{flex:1;min-width:0;accent-color:var(--bronze)}
 .ctrl output,.readout{font:0.8rem var(--mono);color:var(--ink);min-width:3.5em}
-.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--hair2);border-radius:10px;overflow:hidden;margin-bottom:8px}
+/* buttons: dark tome keys in a bronze edge; "on" is parchment with dark
+   ink, as the name bar of a card */
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--bronze-dim);border-radius:3px;overflow:hidden;margin-bottom:8px;background:var(--tome2)}
 .ctrls .seg,.arena-ctrls .seg{margin-bottom:0}
-.seg button{background:transparent;border:0;border-right:1px solid var(--hair2);color:var(--ink2);padding:6px 11px;font-size:0.8rem}
+.seg button{background:transparent;border:0;border-right:1px solid var(--bronze-dim);color:var(--parch2);padding:6px 11px;font-size:0.8rem}
 .seg.mini button{padding:4px 9px;font-size:0.74rem}
 .seg button:last-child{border-right:0}
-.seg button.on{background:var(--acc);color:var(--bg)}
-.tgl{background:transparent;border:1px solid var(--hair2);color:var(--ink2);border-radius:999px;padding:6px 12px;font-size:0.8rem}
+.seg button.on{background:var(--parch);color:var(--parch-ink);font-weight:600}
+.tgl{background:var(--tome2);border:1px solid var(--bronze-dim);color:var(--parch2);border-radius:3px;padding:6px 12px;font-size:0.8rem;box-shadow:inset 0 -2px 0 rgba(0,0,0,0.45)}
 .arena-ctrls .tgl{padding:4px 10px;font-size:0.74rem}
-.tgl.on,.tgl[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--bg)}
-@media (hover:hover){.tgl:hover,.seg button:hover{color:var(--ink)}.tgl.on:hover,.tgl[aria-pressed=true]:hover,.seg button.on:hover{color:var(--bg)}}
+.tgl.on,.tgl[aria-pressed=true]{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--parch2)}
+.tgl:active{transform:translateY(1px)}
+.tgl:focus-visible,.seg button:focus-visible,#chips a:focus-visible{outline:2px solid var(--bronze);outline-offset:2px}
+@media (hover:hover){.tgl:hover,.seg button:hover{color:var(--parch);border-color:var(--bronze)}.tgl.on:hover,.tgl[aria-pressed=true]:hover,.seg button.on:hover{color:var(--parch-ink)}}
 
 /* ---------------------------------------------------------------- WATCH */
 .watch{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:12px;align-items:start}
@@ -292,8 +322,8 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
 .watch-brains{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
 .watch-brains .fig.brain{height:320px;min-height:0}
 .cands{list-style:none;display:grid;gap:4px;max-height:430px;overflow:auto}
-.cands li{display:grid;grid-template-columns:minmax(0,1fr) 5.2em;gap:4px 8px;align-items:center;font-size:0.78rem;padding:5px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--hair)}
-.cands li.chosen{border-color:var(--ink);color:var(--ink)}
+.cands li{display:grid;grid-template-columns:minmax(0,1fr) 5.2em;gap:4px 8px;align-items:center;font-size:0.78rem;padding:5px 8px;border-radius:3px;background:var(--tome2);border:1px solid var(--hair)}
+.cands li.chosen{border-color:var(--bronze);color:var(--parch);box-shadow:inset 3px 0 0 var(--bronze)}
 .cands li span{overflow:hidden;text-overflow:ellipsis}
 .cands li b{font:500 0.76rem var(--mono);text-align:right}
 .cands li i{grid-column:1/-1;display:block;height:4px;border-radius:2px;background:var(--faint);position:relative;overflow:hidden}
@@ -310,20 +340,20 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
    2D stand-in. */
 .hudbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;margin-top:18px;align-items:stretch}
 .hudbar[hidden]{display:none}
-.turnbox{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:92px;padding:6px 12px;background:var(--panel);border:1px solid var(--hair2);border-radius:10px;text-align:center}
-.turnbox b{font:600 22px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.turnbox{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:92px;padding:6px 12px;background:var(--tome);border:1px solid var(--bronze-dim);border-radius:3px;text-align:center;box-shadow:inset 0 0 0 2px var(--tome),inset 0 0 0 3px var(--bronze-line)}
+.turnbox b{font:600 24px/1 var(--serif);color:var(--ink);font-variant-numeric:tabular-nums}
 .turnbox span{font-size:11px;color:var(--dim);margin-top:4px;white-space:nowrap}
 .turnbox span.s0{color:var(--flyA)} .turnbox span.s1{color:var(--flyB)}
-.stage{position:relative;margin-top:10px;height:clamp(440px,74vh,800px);border:1px solid var(--hair2);border-radius:12px;overflow:hidden;background:#0a0d14}
+.stage{position:relative;margin-top:10px;height:clamp(440px,74vh,800px);border:1px solid var(--bronze-dim);border-radius:4px;overflow:hidden;background:#0a0d14}
 .stage-cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:pan-y}
 .stage-cv:active{cursor:grabbing}
-.hud{min-width:0;background:var(--panel);border:1px solid var(--hair2);border-top:3px solid var(--flyA);border-radius:10px;padding:8px 12px 9px;color:var(--ink2)}
+.hud{min-width:0;background:var(--tome);border:1px solid var(--bronze-line);border-top:3px solid var(--flyA);border-radius:3px;padding:8px 12px 9px;color:var(--ink2)}
 .hud.b{border-top-color:var(--flyB)}
 .hud.acting.a{background:#08161b} .hud.acting.b{background:#180a17}
 .hud .top{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink)}
 .hud .top em{font-style:normal;color:var(--dim);font-size:11px;letter-spacing:0.02em}
 .hud.acting .top em{color:var(--ink)}
-.hud .life{margin-left:auto;font:600 28px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.hud .life{margin-left:auto;font:600 30px/1 var(--serif);font-variant-numeric:tabular-nums;color:var(--ink)}
 .hud.a .life{color:var(--flyA)} .hud.b .life{color:var(--flyB)}
 .hud .life.low{color:var(--dmg)}
 .hud .mana{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:7px 0 5px;min-height:18px}
@@ -347,8 +377,8 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
 .ctl-l{font-size:0.72rem;color:var(--dim);margin-left:6px}
 .under{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:12px;margin-top:10px}
 .under .log{height:auto;min-height:6.4em;margin:0}
-.manaleg{font-size:0.8rem;line-height:1.5;color:var(--dim);background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:8px 12px}
-.manaleg b{color:var(--ink);font-weight:600}
+.manaleg{font-size:0.8rem;line-height:1.5;color:var(--parch2);background:var(--tome);border:1px solid var(--bronze-line);border-radius:3px;padding:8px 12px}
+.manaleg b{color:var(--parch);font-weight:600;font-family:var(--serif)}
 .manaleg svg{vertical-align:-3px}
 .hero .arena{margin-top:12px}
 
@@ -358,8 +388,8 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
   .ctrl input[type=range]{min-height:44px}
   select,input[type=number]{min-height:44px}
   .legend button{min-height:44px}
-  .featbars li{min-height:32px}
-  #chips a{padding:10px 13px}
+  .featbars li{min-height:44px}
+  #chips a{padding:10px 13px;min-height:44px;align-items:center}
 }
 
 /* ---------------------------------------------------------------- PHONE */
@@ -367,7 +397,10 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
   #doc{padding-left:calc(14px + var(--sl));padding-right:calc(14px + var(--sr))}
   .span-12,.span-8,.span-7,.span-6,.span-5,.span-4{grid-column:span 12}
   .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sec-head{gap:10px}
   .sec-head h2{font-size:1.35rem}
+  .card{padding:14px 12px 12px}
+  .note{padding:10px 12px}
   .eq-row{grid-template-columns:minmax(0,1fr)}
   .fig.wide{aspect-ratio:4/3}
   .fig{max-height:none}
@@ -387,12 +420,10 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
   .seg button{flex:1 1 0}
   .arena-ctrls .seg{width:auto}
   .tag,#chips a b,.stats span,.legend,.meta,.midline,.log{font-size:0.75rem}
-  .fc-text{font-size:0.75rem}
 }
 @media (max-width:420px){
   .watch-brains{grid-template-columns:minmax(0,1fr)}
   .fcard.mini{width:50px}
-  .fcard.mini .fc-name{font-size:0.62rem}
   .side-head .meta{flex-basis:100%;order:5}
 }
 

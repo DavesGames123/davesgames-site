@@ -21,6 +21,7 @@
 //      grep -n 'export function cardHTML'     one card, full or mini
 //      grep -n 'export function renderBoard'  the table for one state
 //      grep -n 'export function deckCounts'   card id -> count in a deck
+//      grep -n 'function thumbHTML'            plate thumbnail of a deck row
 //      grep -n 'export function renderDecks'  section 01 deck lists
 //      grep -n 'export function renderGallery' section 01 card gallery
 // ============================================================================
@@ -187,7 +188,15 @@ export function deckCounts(deck) {
   return m;
 }
 
+// A small crop of the plate of a card for a deck list row (the 240 px
+// file, shown at 32 x 24 px). An id with no plate gets an empty box.
+function thumbHTML(card) {
+  if (!ART_CREDIT[card.id]) return '<span class="dl-art none"></span>';
+  return `<img class="dl-art" src="${esc(artURL(card.id, { small: true }))}" alt="" loading="lazy" decoding="async" draggable="false">`;
+}
+
 // Section 01: the two deck lists, sorted lands, creatures by cost, spells.
+// Each row: count, a thumbnail of the plate, name, cost.
 export function renderDecks(root, cards, decks) {
   if (!root) return;
   const byId = new Map(cards.map(c => [c.id, c]));
@@ -200,7 +209,7 @@ export function renderDecks(root, cards, decks) {
     const lands = counts.filter(o => o.c.type === 'land').reduce((s, o) => s + o.n, 0);
     const title = deck.name || (name[0].toUpperCase() + name.slice(1));
     return `<div class="decklist c-${colourKey(deck.colour || name)}"><h4>${esc(title)} <small>${total} cards, ${lands} lands</small></h4><ul>`
-      + counts.map(o => `<li><b>${o.n}</b><span class="dl-name c-${colourKey(o.c.colour)}">${esc(o.c.name)}</span><span class="dl-cost">${costGlyphs(o.c.cost, 13)}</span></li>`).join('')
+      + counts.map(o => `<li title="${esc(o.c.name)}${o.c.text ? ' — ' + esc(o.c.text) : ''}"><b>${o.n}</b>${thumbHTML(o.c)}<span class="dl-name c-${colourKey(o.c.colour)} t-${o.c.type}">${esc(o.c.name)}</span><span class="dl-cost">${costGlyphs(o.c.cost, 13)}</span></li>`).join('')
       + `</ul></div>`;
   }).join('');
 }
