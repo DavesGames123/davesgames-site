@@ -1,6 +1,10 @@
 # Fly Duel: credits and licences
 
-## Connectome data
+Fly A and Fly B are wired from two different animals. Fly A has the right
+mushroom body of the hemibrain v1.2 fly. Fly B has the right mushroom body
+of the FlyWire 783 fly.
+
+## Connectome data, Fly A: hemibrain
 
 - **Data set:** Janelia FlyEM hemibrain, release **v1.2** (neuPrint dataset
   `hemibrain:v1.2`, released 2020-12-23).
@@ -133,8 +137,16 @@ All numbers on the page come from `data/facts.js`, which lists each
 source with its DOI. We resolved every DOI through doi.org on 2026-10-11.
 Run `FLY_DUEL_NET=1 node tests/data.test.mjs` to resolve them again.
 
+## Card art
+
+Each card picture is a crop of a public-domain natural-history plate or
+painting from Wikimedia Commons. `art/CREDITS-ART.md` gives the work,
+the author, the year, the licence template and the Commons file of each
+picture, and `art/art.json` gives the crop box.
+
 ## Trademark
 
 The card game on this page is our own design, inspired by Magic: The
-Gathering. All card names, card text, symbols and art are original.
-Not affiliated with or endorsed by Wizards of the Coast.
+Gathering. The card names, the card text, the card frame, the card back
+and the mana glyphs are our own. The card pictures are public domain
+(see Card art). Not affiliated with or endorsed by Wizards of the Coast.
