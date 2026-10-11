@@ -14,6 +14,7 @@
 //    play gutter    a triangle on each line that made an animation;
 //                   a click on it calls onLineClick(line)
 //    active line    the line of the animation under the player head
+//  Ctrl-click or Cmd-click on a name calls onDoc(name) (reference panel).
 //
 //  EXPORTS
 //    createEditor(parent, opts) -> api   (grep -n "export function createEditor")
@@ -194,6 +195,20 @@ export function createEditor(parent, opts = {}) {
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, ...completionKeymap, indentWithTab]),
       python(), hover, activeField, errField, animField,
       EditorView.lineWrapping,
+      // Ctrl-click or Cmd-click on a name opens it in the reference panel.
+      EditorView.domEventHandlers({
+        mousedown(e, view) {
+          if (!(e.metaKey || e.ctrlKey) || e.button !== 0) return false;
+          const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+          if (pos == null) return false;
+          const line = view.state.doc.lineAt(pos);
+          const name = dottedAt(line.text, pos - line.from);
+          if (!name) return false;
+          e.preventDefault();
+          onDoc(name);
+          return true;
+        },
+      }),
       EditorView.contentAttributes.of({ 'aria-label': 'Manim code', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off' }),
       EditorView.updateListener.of(u => {
         if (u.docChanged) onChange(u.state.doc.toString());
