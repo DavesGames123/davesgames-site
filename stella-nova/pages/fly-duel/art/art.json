@@ -1,5 +1,6 @@
 {
  "amber-ridge": {
+  "artist": "Albert Bierstadt",
   "file": "cards/amber-ridge.jpg",
   "small": "cards/amber-ridge@sm.jpg",
   "title": "Sunset in the Rockies (oil painting)",
@@ -23,6 +24,7 @@
   }
  },
  "moss-hollow": {
+  "artist": "Ernst Haeckel",
   "file": "cards/moss-hollow.jpg",
   "small": "cards/moss-hollow@sm.jpg",
   "title": "Kunstformen der Natur, plate 72: Muscinae",
@@ -44,6 +46,7 @@
   }
  },
  "ember-gnat": {
+  "artist": "John Curtis",
   "file": "cards/ember-gnat.jpg",
   "small": "cards/ember-gnat@sm.jpg",
   "title": "British Entomology, vol. 8, plate 537",
@@ -65,6 +68,7 @@
   }
  },
  "cinder-ant": {
+  "artist": "John Lubbock",
   "file": "cards/cinder-ant.jpg",
   "small": "cards/cinder-ant@sm.jpg",
   "title": "Ants, Bees, and Wasps, plate 2 (Atta barbara)",
@@ -89,6 +93,7 @@
   }
  },
  "dune-wasp": {
+  "artist": "Edward Saunders",
   "file": "cards/dune-wasp.jpg",
   "small": "cards/dune-wasp@sm.jpg",
   "title": "The Hymenoptera Aculeata of the British Islands, plate 12",
@@ -112,6 +117,7 @@
   }
  },
  "hive-soldier": {
+  "artist": "W. H. Lizars",
   "file": "cards/hive-soldier.jpg",
   "small": "cards/hive-soldier@sm.jpg",
   "title": "The Naturalist's Library, Entomology: Bees, plate 24 (Apis ligustica)",
@@ -134,6 +140,7 @@
   }
  },
  "spark-hornet": {
+  "artist": "Edward Saunders",
   "file": "cards/spark-hornet.jpg",
   "small": "cards/spark-hornet@sm.jpg",
   "title": "The Hymenoptera Aculeata of the British Islands, plate 20, fig. 1 (Vespa)",
@@ -156,11 +163,12 @@
   }
  },
  "ember-mantis": {
+  "artist": "W. H. Lizars",
   "file": "cards/ember-mantis.jpg",
   "small": "cards/ember-mantis@sm.jpg",
   "title": "The Naturalist's Library, Entomology, plate 8 (Mantis religiosa)",
   "subject": "praying mantis",
-  "author": "James Duncan (ed. William Jardine)",
+  "author": "James Duncan (ed. William Jardine), plates engraved by W. H. Lizars",
   "year": "1840",
   "commons": "File:Jardine Naturalist's library Entomology Plate 8.jpg",
   "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_8.jpg",
@@ -178,6 +186,7 @@
   }
  },
  "brood-captain": {
+  "artist": "John Lubbock",
   "file": "cards/brood-captain.jpg",
   "small": "cards/brood-captain@sm.jpg",
   "title": "Ants, Bees, and Wasps, plate 3 (Oecodoma cephalotes, major)",
@@ -202,6 +211,7 @@
   }
  },
  "magma-beetle": {
+  "artist": "Dru Drury",
   "file": "cards/magma-beetle.jpg",
   "small": "cards/magma-beetle@sm.jpg",
   "title": "Illustrations of Exotic Entomology, vol. I, plate 31 (Goliathus)",
@@ -223,11 +233,12 @@
   }
  },
  "sun-locust": {
+  "artist": "W. H. Lizars",
   "file": "cards/sun-locust.jpg",
   "small": "cards/sun-locust@sm.jpg",
   "title": "The Naturalist's Library, Entomology, plate 16, fig. 2 (Locusta flava)",
   "subject": "locust",
-  "author": "James Duncan (ed. William Jardine)",
+  "author": "James Duncan (ed. William Jardine), plates engraved by W. H. Lizars",
   "year": "1840",
   "commons": "File:Locusta Cristata and Locusta Flava (Jardine Naturalist's library Entomology, Plate 16).jpg",
   "url": "https://commons.wikimedia.org/wiki/File:Locusta_Cristata_and_Locusta_Flava_(Jardine_Naturalist%27s_library_Entomology,_Plate_16).jpg",
@@ -245,11 +256,12 @@
   }
  },
  "sting-hopper": {
+  "artist": "W. H. Lizars",
   "file": "cards/sting-hopper.jpg",
   "small": "cards/sting-hopper@sm.jpg",
   "title": "The Naturalist's Library, Entomology, plate 22, fig. 2 (Fulgora)",
   "subject": "lanternfly (planthopper)",
-  "author": "James Duncan (ed. William Jardine)",
+  "author": "James Duncan (ed. William Jardine), plates engraved by W. H. Lizars",
   "year": "1840",
   "commons": "File:Jardine Naturalist's library Entomology Plate 22.jpg",
   "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_22.jpg",
@@ -267,11 +279,12 @@
   }
  },
  "flare-spit": {
+  "artist": "W. H. Lizars",
   "file": "cards/flare-spit.jpg",
   "small": "cards/flare-spit@sm.jpg",
   "title": "The Naturalist's Library, Entomology, plate 20, fig. 2",
   "subject": "leaf-footed bug",
-  "author": "James Duncan (ed. William Jardine)",
+  "author": "James Duncan (ed. William Jardine), plates engraved by W. H. Lizars",
   "year": "1840",
   "commons": "File:Jardine Naturalist's library Entomology Plate 20.jpg",
   "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_20.jpg",
@@ -289,6 +302,7 @@
   }
  },
  "heat-pulse": {
+  "artist": "W. H. Lizars",
   "file": "cards/heat-pulse.jpg",
   "small": "cards/heat-pulse@sm.jpg",
   "title": "The Naturalist's Library, Entomology: Bees, plate 9 (Death's-head hawkmoth)",
@@ -311,6 +325,7 @@
   }
  },
  "kiln-burst": {
+  "artist": "Joseph Wright of Derby",
   "file": "cards/kiln-burst.jpg",
   "small": "cards/kiln-burst@sm.jpg",
   "title": "Vesuvius in Eruption, with a View over the Islands in the Bay of Naples (oil painting)",
@@ -334,11 +349,12 @@
   }
  },
  "war-chirp": {
+  "artist": "W. H. Lizars",
   "file": "cards/war-chirp.jpg",
   "small": "cards/war-chirp@sm.jpg",
   "title": "The Naturalist's Library, Entomology, plate 21 (Cicada)",
   "subject": "cicada",
-  "author": "James Duncan (ed. William Jardine)",
+  "author": "James Duncan (ed. William Jardine), plates engraved by W. H. Lizars",
   "year": "1840",
   "commons": "File:Jardine Naturalist's library Entomology Plate 21.jpg",
   "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_21.jpg",
@@ -356,6 +372,7 @@
   }
  },
  "swarm-call": {
+  "artist": "John Lubbock",
   "file": "cards/swarm-call.jpg",
   "small": "cards/swarm-call@sm.jpg",
   "title": "Ants, Bees, and Wasps, plate 1",
@@ -380,6 +397,7 @@
   }
  },
  "root-sentinel": {
+  "artist": "Ivan Shishkin",
   "file": "cards/root-sentinel.jpg",
   "small": "cards/root-sentinel@sm.jpg",
   "title": "Oaks (oil painting)",
@@ -404,6 +422,7 @@
   }
  },
  "moss-snail": {
+  "artist": "G. B. Sowerby",
   "file": "cards/moss-snail.jpg",
   "small": "cards/moss-snail@sm.jpg",
   "title": "The Edible Mollusca of Great Britain and Ireland, plate I (Helix)",
@@ -429,6 +448,7 @@
   "note": "The Commons page also has the CC BY 2.0 tag of the Flickr scan; the work itself is public domain (PD-old-70, PD-scan)."
  },
  "thorn-vine": {
+  "artist": "Flora Batava",
   "file": "cards/thorn-vine.jpg",
   "small": "cards/thorn-vine@sm.jpg",
   "title": "Flora Batava, vol. 19 (Rubus discolor)",
@@ -452,6 +472,7 @@
   }
  },
  "bark-toad": {
+  "artist": "A. J. Rösel von Rosenhof",
   "file": "cards/bark-toad.jpg",
   "small": "cards/bark-toad@sm.jpg",
   "title": "Historia naturalis ranarum nostratium, Tab. I",
@@ -475,6 +496,7 @@
   }
  },
  "dew-moth": {
+  "artist": "Dru Drury",
   "file": "cards/dew-moth.jpg",
   "small": "cards/dew-moth@sm.jpg",
   "title": "Illustrations of Exotic Entomology, vol. I, plate 24 (luna moth)",
@@ -496,6 +518,7 @@
   }
  },
  "briar-wall": {
+  "artist": "Pierre-Joseph Redouté",
   "file": "cards/briar-wall.jpg",
   "small": "cards/briar-wall@sm.jpg",
   "title": "Traité des arbres et arbustes, nouvelle édition: Rosa canina (after P.-J. Redouté)",
@@ -520,6 +543,7 @@
   }
  },
  "spore-mother": {
+  "artist": "Anna Maria Hussey",
   "file": "cards/spore-mother.jpg",
   "small": "cards/spore-mother@sm.jpg",
   "title": "Illustrations of British Mycology, plate VIII",
@@ -541,6 +565,7 @@
   }
  },
  "grove-stag": {
+  "artist": "Brehms Tierleben",
   "file": "cards/grove-stag.jpg",
   "small": "cards/grove-stag@sm.jpg",
   "title": "Brehms Tierleben: Die Insekten, Tausendfüssler und Spinnen, plate 5 (Hirschkäfer)",
@@ -565,6 +590,7 @@
   }
  },
  "fern-beast": {
+  "artist": "Ernst Haeckel",
   "file": "cards/fern-beast.jpg",
   "small": "cards/fern-beast@sm.jpg",
   "title": "Kunstformen der Natur, plate 92: Filicinae",
@@ -586,6 +612,7 @@
   }
  },
  "deep-roots": {
+  "artist": "Vincent van Gogh",
   "file": "cards/deep-roots.jpg",
   "small": "cards/deep-roots@sm.jpg",
   "title": "Tree Roots (oil painting)",
@@ -610,6 +637,7 @@
   }
  },
  "sap-bloom": {
+  "artist": "Johan Carl Krauss",
   "file": "cards/sap-bloom.jpg",
   "small": "cards/sap-bloom@sm.jpg",
   "title": "Afbeeldingen der fraaiste, meest uitheemsche boomen en heesters, plate 27 (Lonicera)",
@@ -632,6 +660,7 @@
   }
  },
  "strangle-root": {
+  "artist": "Flora Batava",
   "file": "cards/strangle-root.jpg",
   "small": "cards/strangle-root@sm.jpg",
   "title": "Flora Batava, vol. 11 (Cuscuta europaea)",
@@ -655,6 +684,7 @@
   }
  },
  "swell": {
+  "artist": "Anna Maria Hussey",
   "file": "cards/swell.jpg",
   "small": "cards/swell@sm.jpg",
   "title": "Illustrations of British Mycology, plate XXVI",
@@ -676,6 +706,7 @@
   }
  },
  "spore-burst": {
+  "artist": "J. B. F. P. Bulliard",
   "file": "cards/spore-burst.jpg",
   "small": "cards/spore-burst@sm.jpg",
   "title": "Herbier de la France: Lycoperdon (puffballs)",
@@ -697,6 +728,7 @@
   }
  },
  "drift-seed": {
+  "artist": "Walther Otto Müller",
   "file": "cards/drift-seed.jpg",
   "small": "cards/drift-seed@sm.jpg",
   "title": "Köhler's Medizinal-Pflanzen, plate 135 (Taraxacum officinale)",
@@ -718,6 +750,7 @@
   }
  },
  "hollow-husk": {
+  "artist": "G. B. Sowerby",
   "file": "cards/hollow-husk.jpg",
   "small": "cards/hollow-husk@sm.jpg",
   "title": "A Popular History of the Aquarium, plate XI (Pagurus bernhardus)",
@@ -743,6 +776,7 @@
   "note": "The Commons page also has the CC BY 2.0 tag of the Flickr scan; the work itself is public domain (PD-old-70, PD-scan)."
  },
  "ember-larva": {
+  "artist": "F. Nemos",
   "file": "cards/ember-larva.jpg",
   "small": "cards/ember-larva@sm.jpg",
   "title": "Europas bekannteste Schmetterlinge, Tafel VIII (Deilephila euphorbiae, larva)",
@@ -764,6 +798,7 @@
   }
  },
  "spore": {
+  "artist": "Ernst Haeckel",
   "file": "cards/spore.jpg",
   "small": "cards/spore@sm.jpg",
   "title": "Kunstformen der Natur, plate 93: Mycetozoa (Didymium sporangium)",
