@@ -676,12 +676,21 @@ function buildLifeDrum(W, p) {
 }
 
 // --------------------------------------------------------- mana tokens
+// The tokens are thick (0.08) and large (a third of the card width), so
+// that the mana on each untapped land reads in the wide shot.
 function tokenGeos() {
   return {
-    amber: new THREE.CylinderGeometry(0.1, 0.1, 0.05, 6),      // honeycomb cell
-    moss: new THREE.CylinderGeometry(0.115, 0.115, 0.05, 4),   // diamond tile
-    generic: new THREE.BoxGeometry(0.16, 0.05, 0.16),          // grey square
+    amber: new THREE.CylinderGeometry(0.13, 0.13, 0.08, 6),    // honeycomb cell
+    moss: new THREE.CylinderGeometry(0.15, 0.15, 0.08, 4),     // diamond tile
+    generic: new THREE.BoxGeometry(0.2, 0.08, 0.2),            // grey square
   };
+}
+// A dark hull behind each token (back faces, 1.16 times the size) gives
+// a hard edge. Without it, an amber token on an amber land has almost
+// no contrast. It is an outline, not a glow: no blur, no blend.
+const TOKEN_HULL = 1.16;
+function tokenHullMat() {
+  return new THREE.MeshBasicMaterial({ color: new THREE.Color('#07080c'), side: THREE.BackSide });
 }
 function tokenMats() {
   const m = (c, e) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), emissive: new THREE.Color(c), emissiveIntensity: e, roughness: 0.35, metalness: 0.1 });
@@ -1142,20 +1151,22 @@ export function createDuelScene(canvas, opts = {}) {
     o.mesh.add(m); o.badge = m;
   }
 
-  const tokGeo = tokenGeos(), tokMat = tokenMats();
+  const tokGeo = tokenGeos(), tokMat = tokenMats(), hullMat = tokenHullMat();
   function pipPose(p, uid, out = new THREE.Vector3()) {
     const o = Z.perms.get(uid);
     const base = o ? o.toP : seatPos(p, 0, 0, T.landV);
     out.copy(base);
     // toward the top end of the land card (the centre side)
     out.add(seatPos(p, 0, 0, -0.2, _v1).sub(seatPos(p, 0, 0, 0, _v2)));
-    out.y = T.y + 0.06;
+    out.y = T.y + 0.065;
     return out;
   }
   function addPip(p, x) {
     const kind = CARD[x.id].produces === 'amber' ? 'amber' : 'moss';
     const m = new THREE.Mesh(tokGeo[kind], tokMat[kind]);
     m.castShadow = true;
+    const hull = new THREE.Mesh(tokGeo[kind], hullMat);
+    hull.scale.setScalar(TOKEN_HULL); hull.name = 'token-hull'; m.add(hull);
     m.userData = { kind, p, uid: x.uid, grow: W.reduced ? 1 : 0 };
     m.position.copy(pipPose(p, x.uid)); m.rotation.y = YAW[p] + (kind === 'amber' ? Math.PI / 6 : 0);
     m.scale.setScalar(m.userData.grow);
@@ -1226,9 +1237,13 @@ export function createDuelScene(canvas, opts = {}) {
       const e = easeIO(k);
       pip.position.lerpVectors(from, to, e); pip.position.y += 0.55 * 4 * e * (1 - e);
       pip.rotation.x = e * Math.PI * 1.0;
-      if (pays === 'generic' && k > swapAt && pip.userData.kind !== 'generic') { pip.geometry = tokGeo.generic; pip.material = tokMat.generic; pip.userData.kind = 'generic'; }
+      if (pays === 'generic' && k > swapAt && pip.userData.kind !== 'generic') {
+        pip.geometry = tokGeo.generic; pip.material = tokMat.generic; pip.userData.kind = 'generic';
+        if (pip.children[0]) pip.children[0].geometry = tokGeo.generic;
+      }
+      // the token gets smaller on the way: the cost rail slots are 0.1 apart
       const sc = k > 0.85 ? Math.max(0, 1 - (k - 0.85) / 0.15) : 1;
-      pip.scale.setScalar(0.95 * sc + 0.05);
+      pip.scale.setScalar((0.95 * sc + 0.05) * (1 - 0.5 * e));
       if (k >= 1) { W.fx.remove(pip); if (held) held.pulse = 1; return false; }
       return true;
     } });

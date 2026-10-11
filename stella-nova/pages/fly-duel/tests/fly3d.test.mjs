@@ -154,7 +154,7 @@ async function runGame(sc, M, check) {
   ok(info.fly === (hasFly ? 'fly.js' : 'placeholder'), `fly module in use: ${info.fly}`);
   if (C && existsSync(new URL('../ui/fly3d/brain3d.js', import.meta.url))) ok(info.brain === true, 'brain maps built from the connectome');
   ok(sc.scene.getObjectByName('table') && sc.scene.getObjectByName('room') && sc.scene.getObjectByName('cards'), 'table, room and card groups');
-  let zoneBad = 0, pipBad = 0;
+  let zoneBad = 0, pipBad = 0, pipSmall = 0, pipSeen = 0;
   const check = (st, m) => {
     const handOk = st.hand[0] === m.players[0].hand.length && st.hand[1] === m.players[1].hand.length;
     const graveOk = st.grave[0] === m.players[0].graveyard.length && st.grave[1] === m.players[1].graveyard.length;
@@ -162,6 +162,14 @@ async function runGame(sc, M, check) {
     if (!(handOk && graveOk && permOk)) zoneBad++;
     const untapped = m.players.reduce((n, p) => n + p.battlefield.filter(x => !x.tapped && CARD[x.id].type === 'land').length, 0);
     if (st.pips !== untapped) pipBad++;
+    // each resting mana token is a third of the card width or more and has
+    // its dark hull (the hard edge that keeps amber on amber readable)
+    for (const pip of sc.world.Z.pips.values()) {
+      if (pip.userData.flying || pip.userData.grow < 1) continue;
+      pipSeen++;
+      const box = new THREE.Box3().setFromObject(pip, true), w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+      if (w < TABLE.cardW / 3 || pip.children[0]?.name !== 'token-hull') pipSmall++;
+    }
   };
   let total = 0, maxTris = 0;
   for (const seed of [5, 12]) {
@@ -172,6 +180,7 @@ async function runGame(sc, M, check) {
   ok(total > 60, `scene played ${total} records`);
   ok(zoneBad === 0, `card objects follow the mirror (hand, graveyard, battlefield) (${zoneBad} bad)`);
   ok(pipBad === 0, `one mana pip per untapped land (${pipBad} bad)`);
+  ok(pipSeen > 20 && pipSmall === 0, `mana tokens are large and edged (${pipSmall} of ${pipSeen} too small or no hull)`);
   ok(maxTris < 400000, `desktop triangles ${maxTris} < 400k`);
   ok(badPos === 0, `cards stay on or above the table top (${badPos} bad samples)`);
   const st = sc.stats();
