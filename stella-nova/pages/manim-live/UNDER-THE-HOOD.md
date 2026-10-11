@@ -3,7 +3,7 @@
 ## What runs when you press Run
 
 1. Your browser starts **Pyodide 314.0.7**: CPython 3.14 compiled to WebAssembly, in a Web Worker so the page stays responsive.
-2. The worker downloads **manim 0.22.0** as the wheel `manim-0.22.0-py3-none-any.whl` from PyPI, checks its SHA-256 (`bce56dbe…937e935f`, the digest PyPI publishes) and unpacks it into Python's `site-packages`. No file of manim is edited.
+2. The worker downloads **manim 0.22.0** as the wheel `manim-0.22.0-py3-none-any.whl`. This site serves a copy of the PyPI file (in `py/wheels/`). The worker checks its SHA-256 (`bce56dbe…937e935f`, the digest PyPI publishes for that file) and stops if the digest is different. Then it unpacks the wheel into Python's `site-packages`. No file of manim is edited.
 3. numpy, scipy, Pillow, shapely and fontTools come from the Pyodide distribution. The pure-Python dependencies of manim (cloup, click, networkx, svgelements, isosurfaces, watchdog, srt, pydub, screeninfo) come from PyPI wheels with pinned digests.
 4. Your code runs with `from manim import *` exactly as on a desktop. Manim's own `Scene`, `Camera`, `Mobject`, animations, rate functions, updaters and `SceneFileWriter` produce every frame.
 5. Each frame goes to the page while the scene still renders, so playback starts before the scene ends.
@@ -23,6 +23,18 @@ Manim calls a few libraries written in C or C++. WebAssembly Python cannot load 
 | `av` | PyAV (FFmpeg) | Nothing to encode: manim renders with `format="none"`, and the page receives the frames from manim's `SceneFileWriter`. The page records video in the browser. |
 
 `moderngl` (OpenGL) is not replaced: a stand-in module gives only the few constants that manim reads when it imports. The page uses manim's Cairo renderer, as `manim render` does by default.
+
+## The three observers
+
+The page must know when a frame is ready and which line of your code started an animation. For this, three manim methods are wrapped at run time. Each wrapper calls the real method with the same arguments and returns its result unchanged. Python's `inspect` follows the wrapper, so **Reference** shows the real manim source.
+
+| Method | What the wrapper adds |
+|---|---|
+| `Scene.play` | Records the line of your code that called it and the first and last frame. The timeline and the editor use this. |
+| `Camera.display_multiple_non_background_colored_vmobjects` | After manim draws, sends the recorded `cairo` commands to the canvas, so manim reads the drawn pixels. |
+| `SceneFileWriter.write_frame` | Sends a copy of each frame to the page. |
+
+Each run also sets these values with manim's own `tempconfig`: `format="none"`, `renderer="cairo"`, `disable_caching=True`, `progress_bar="none"`, and the size and frame rate of the quality you pick.
 
 ## TeX without LaTeX
 
