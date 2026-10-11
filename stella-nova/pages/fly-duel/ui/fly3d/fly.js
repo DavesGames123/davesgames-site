@@ -813,7 +813,8 @@ function makePose() {
 const NUM_KEYS = Object.keys(makePose()).filter(k => k !== 'legs');
 
 // The base pose: hold the cards, sit, breathe. Life adds wing droop, a
-// lower head and (at 25 % life or less) a small tremor.
+// lower head and (at 25 % life or less) a small tremor. opts.shake ===
+// false in animate() stops the tremor (reduced motion).
 function resetPose(rig, P, time) {
   const life = rig.life, low = 1 - life, ph = rig.phase;
   for (const k of NUM_KEYS) P[k] = 0;
@@ -827,7 +828,7 @@ function resetPose(rig, P, time) {
   P.wingLStroke = P.wingRStroke = 0.45 * low;
   P.wingLPitch = P.wingRPitch = 0.45 * low;
   P.fanTilt = 0.47;
-  if (life <= 0.25 + 1e-9) {
+  if (life <= 0.25 + 1e-9 && rig._shake !== false) {
     const a = 0.012 + 0.03 * (0.25 - life) * 4;
     P.bodyRoll += a * Math.sin(time * 29 + ph) * 0.6;
     P.headRoll += a * Math.sin(time * 41 + 1.3);
@@ -1136,9 +1137,12 @@ function poseFor(rig, P, clip, t, time, opts = {}) {
  * @param {string|{name:string, target?, to?, leg?, space?: 'world'|'local'}} clip
  * @param {number} t
  * @param {{ time?: number, prev?: { clip, t: number }, mix?: number,
- *           target?, to?, dur?: number, droop?: number, life?: number }} [opts]
+ *           target?, to?, dur?: number, droop?: number, life?: number,
+ *           shake?: boolean }} [opts]
  *   target / to: used when clip is a bare name. dur: stretch a one-shot
  *   clip to this many seconds. droop (0..1) or life (0..20): set the life.
+ *   shake: false stops the low-life tremor (the scene sends false with
+ *   reduced motion). Omitted, the tremor follows the life.
  * @returns {{ name: string, contact: boolean, done: boolean }}
  */
 export function animate(rig, clip, t, opts = {}) {
@@ -1146,6 +1150,7 @@ export function animate(rig, clip, t, opts = {}) {
   // opts.droop (0 full life .. 1 no life) or opts.life (0..20) set the life.
   if (Number.isFinite(opts.droop)) rig.setLife(1 - opts.droop);
   else if (Number.isFinite(opts.life)) rig.setLife(opts.life / 20);
+  rig._shake = opts.shake !== false;
   const { spec, def, tt } = poseFor(rig, rig._P, clip, t, time, opts);
   if (opts.prev && Number.isFinite(opts.mix) && opts.mix < 1) {
     poseFor(rig, rig._Pb, opts.prev.clip, opts.prev.t, time, opts.prev);

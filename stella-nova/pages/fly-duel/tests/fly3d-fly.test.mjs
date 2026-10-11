@@ -197,6 +197,9 @@ ok(tipHi.distanceTo(tipLo) > 0.05, 'wings droop as life falls');
 const rolls = [];
 for (let i = 0; i < 20; i++) { animate(rig, 'idle', 0, { time: i * 0.05 }); rolls.push(rig.joints.body.rotation.z); }
 ok(Math.max(...rolls) - Math.min(...rolls) > 0.005, 'a fly at low life shakes a little');
+const calm = [];
+for (let i = 0; i < 20; i++) { animate(rig, 'idle', 0, { time: i * 0.05, shake: false }); calm.push(rig.joints.body.rotation.z); }
+ok(Math.max(...calm) - Math.min(...calm) < 1e-9, 'shake: false (reduced motion) stops the tremor at low life');
 rig.setLife(1);
 const still = [];
 for (let i = 0; i < 20; i++) { animate(rig, 'idle', 0, { time: i * 0.05 }); still.push(rig.joints.body.rotation.z); }
