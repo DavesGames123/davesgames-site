@@ -286,6 +286,7 @@ function runCode() {
   $('stageMsg').hidden = true;
   $('renderBadge').textContent = 'Starting…';
   setRunning(true);
+  if (isPhone() && work.dataset.mtab === 'code') setMTab('output');
   const run = { code, scenes: [], anims: [], frames: 0, error: null, t0: performance.now() };
   running = run;
   let handle;

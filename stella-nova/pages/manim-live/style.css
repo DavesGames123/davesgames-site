@@ -10,8 +10,8 @@
 
    PHONE (max-width 760px). One view at a time, picked by data-mtab on
    #work: code, output, learn, examples or ref. The dock at the base
-   switches the view. In the code view a small live preview of the output
-   sits above the dock, so a run shows on the same screen.
+   switches the view. A run moves the phone to the output view, and the
+   output dock button pulses while the render runs.
 
    GREP MAP
      grep -n 'TOKENS'     colours and sizes

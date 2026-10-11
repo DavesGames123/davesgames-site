@@ -100,7 +100,7 @@ export function mountExamples(root, { onOpen, onConcept }) {
           const r = await fetch(new URL(`../examples/${e.file.replace(/^examples\//, '')}`, import.meta.url));
           if (!r.ok) throw new Error(r.status);
           code = await r.text();
-        } catch (err) { code = null; }
+        } catch { code = null; }
       }
       if (!code) { note.hidden = false; note.textContent = `Could not load ${e.file}.`; return false; }
       onOpen(e, code);
