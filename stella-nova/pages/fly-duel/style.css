@@ -416,5 +416,5 @@ input[type=number]{background:var(--panel2);color:var(--ink);border:1px solid va
   .stage-tag{left:8px;bottom:8px}
   .maps{left:8px;right:8px;bottom:74px;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .under{grid-template-columns:minmax(0,1fr)}
-  .ctl-l{display:none}
+  .ctl-l{margin-left:0;flex-basis:100%;margin-top:4px}
 }
