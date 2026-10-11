@@ -56,6 +56,10 @@
 //      map.fire(trace);                     // trace from fly.choose()
 //      map.update(dt);                      // each frame, dt in seconds
 //      const view = createBrainView(canvas, connectome, { colour });  // own canvas
+//      Edge alpha options: restEdges (default 1) multiplies the rest alpha
+//      of all edges. holdOut (default HOLD_ALPHA) is the alpha factor of
+//      the lit KC->MBON edges after the sequence. The small map in the
+//      table scene uses restEdges 0.3 and holdOut 0.
 //
 //  GREP MAP   (grep -n "<anchor>" ui/fly3d/brain3d.js)
 //      export function createBrainMap ... the map: group, fire, update, lit
@@ -278,7 +282,7 @@ export function createBrainMap(connectome, opts = {}) {
   if (!C || !C.kc || !C.pn || !C.mbon) throw new Error('createBrainMap: connectome needs pn, kc and mbon');
   const o = {
     colour: TOKENS.flyA, size: 1, lite: false, neuropil: null, duration: 1.4,
-    reducedMotion: false, kcColour: 'type', frame: detectFrame(C), clampRadius: 1.2, ...opts,
+    reducedMotion: false, kcColour: 'type', frame: detectFrame(C), clampRadius: 1.2, holdOut: HOLD_ALPHA, restEdges: 1, ...opts,
   };
   const keys = { pn: 'pos', kc: 'pos', mbon: 'cen', dan: 'cen', apl: 'cen', ...(opts.keys || {}) };
   const place = placeAll(C, keys, o.frame, o.clampRadius);
@@ -356,8 +360,8 @@ export function createBrainMap(connectome, opts = {}) {
     line.frustumCulled = false;
     return { line, list, pos, col: ca, base: c.slice(), len, maxLen };
   }
-  const E1 = edgeLines(pnKc, P.pn, P.kc, K.pn.clone().lerp(K.faint, 0.35), o.lite ? 0.022 : 0.03, 'pn-kc');
-  const E2 = edgeLines(kcMb, P.kc, P.mbon, K.dim.clone().lerp(K.faint, 0.4), o.lite ? 0.014 : 0.02, 'kc-mbon');
+  const E1 = edgeLines(pnKc, P.pn, P.kc, K.pn.clone().lerp(K.faint, 0.35), (o.lite ? 0.022 : 0.03) * o.restEdges, 'pn-kc');
+  const E2 = edgeLines(kcMb, P.kc, P.mbon, K.dim.clone().lerp(K.faint, 0.4), (o.lite ? 0.014 : 0.02) * o.restEdges, 'kc-mbon');
   group.add(E1.line, E2.line);
   // edges of each KC (for lookup at fire time)
   const byKc = (list, at) => {
@@ -511,14 +515,14 @@ export function createBrainMap(connectome, opts = {}) {
     // edges + spikes
     let ns = 0;
     const sp = spPos.array, sc = spCol.array;
-    const run = (E, litE, win, cA, cB, alphaOf) => {
+    const run = (E, litE, win, cA, cB, alphaOf, hold = HOLD_ALPHA) => {
       const c = E.col.array;
       for (const e of litE) {
         const end = win[0] + (win[1] - win[0]) * (E.len[e] / E.maxLen);
         const u = done ? 1 : ramp(p, win[0], Math.max(win[0] + 1e-4, end));
         const a0 = alphaOf(e);
         if (u <= 0) continue;
-        const aH = done ? HOLD_ALPHA * a0 : a0;
+        const aH = done ? hold * a0 : a0;
         const cb = typeof cB === "function" ? cB(e) : cB;
         c[8 * e] = cA.r; c[8 * e + 1] = cA.g; c[8 * e + 2] = cA.b; c[8 * e + 3] = aH;
         c[8 * e + 4] = cb.r; c[8 * e + 5] = cb.g; c[8 * e + 6] = cb.b; c[8 * e + 7] = aH * (0.15 + 0.85 * u);
@@ -533,7 +537,7 @@ export function createBrainMap(connectome, opts = {}) {
       }
     };
     run(E1, S.litE1, PHASE.pnKc, K.pn, K.kcOn, e => 0.25 + 0.75 * S.pnRate[E1.list[e][0]]);
-    if (p >= PHASE.kcMbon[0] || done) run(E2, S.litE2, PHASE.kcMbon, K.kcOn, e => valCol(E2.list[e][1]), () => 0.8);
+    if (p >= PHASE.kcMbon[0] || done) run(E2, S.litE2, PHASE.kcMbon, K.kcOn, e => valCol(E2.list[e][1]), () => 0.8, o.holdOut);
     spGeo.setDrawRange(0, done ? 0 : ns);
     spPos.needsUpdate = spCol.needsUpdate = true;
     E1.col.needsUpdate = E2.col.needsUpdate = true;

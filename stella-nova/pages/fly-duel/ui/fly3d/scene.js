@@ -921,6 +921,11 @@ export function createDuelScene(canvas, opts = {}) {
 
   // ---------------------------------------------------------- brain maps
   const brains = [null, null];
+  // The small map in the scene holds the lit KC->MBON edges at a low alpha
+  // after the sequence. About 2000 lit edges meet at some 20 MBONs, so at
+  // the standard hold alpha they made one solid wedge over the KCs and the
+  // MBON gems. The live signal (spikes, full alpha) does not change.
+  const HOLD_OUT = 0, REST_EDGES = 0.3;
   const brainHolders = [0, 1].map(p => {
     const g = new THREE.Group();
     g.rotation.y = YAW[p];
@@ -951,7 +956,7 @@ export function createDuelScene(canvas, opts = {}) {
         let neuropil = null;
         if (mod.loadNeuropil && typeof fetch === 'function' && !headless) neuropil = await mod.loadNeuropil(c, new URL('../../data/', import.meta.url)).catch(() => null);
         if (disposed) return;
-        const bm = mod.createBrainMap(c, { colour: FLY[p], size: 0.62, lite: coarse, reducedMotion: reduced, neuropil });
+        const bm = mod.createBrainMap(c, { colour: FLY[p], size: 0.62, lite: coarse, reducedMotion: reduced, neuropil, holdOut: HOLD_OUT, restEdges: REST_EDGES });
         brainHolders[p].add(bm.group);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.01, 6, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(FLY[p]) }));
         ring.rotation.x = Math.PI / 2; ring.position.y = -0.82;

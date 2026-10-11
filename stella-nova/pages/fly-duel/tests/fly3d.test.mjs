@@ -299,6 +299,30 @@ async function runGame(sc, M, check) {
   dispose();
 }
 
+// --- the small brain map in the scene reads as gems, not a solid wedge --------
+if (C) {
+  // About 2000 KC->MBON edges light on each decision and some 20000 rest
+  // edges run from the calyx to the lobes. At the standalone alphas they
+  // fill the 0.62 map with one solid wedge over the MBON gems. The scene
+  // map rests its edges at 0.3 times and drops the lit KC->MBON edges
+  // after the sequence (MBON gem size carries the output).
+  const sc = createDuelScene(null, { headless: true, connectomes: [C, C] });
+  await sc.ready;
+  const bm = sc.world.brains[0];
+  const kc = []; for (let i = 0; i < 175; i++) kc.push((i * 11) % C.kc.n);
+  bm.fire({ pn: Array.from({ length: C.pn.n }, (_, i) => (i % 4 ? 0 : 0.8)), kc, mbon: Array.from({ length: C.mbon.n }, (_, j) => j / C.mbon.n) }, 0, { instant: true });
+  const maxA = line => { const a = line.geometry.attributes.color.array; let m = 0; for (let i = 3; i < a.length; i += 4) m = Math.max(m, a[i]); return m; };
+  const meanA = line => { const a = line.geometry.attributes.color.array; let m = 0; for (let i = 3; i < a.length; i += 4) m += a[i]; return m / (a.length / 4); };
+  ok(maxA(bm.meshes.kcMbon) <= 0.0061, `scene map: KC->MBON edges at rest after a fire (max alpha ${maxA(bm.meshes.kcMbon).toFixed(4)})`);
+  ok(meanA(bm.meshes.pnKc) < 0.03 && maxA(bm.meshes.pnKc) > 0.1, `scene map: PN->KC claws of the active KCs stay lit (max ${maxA(bm.meshes.pnKc).toFixed(2)})`);
+  const B = await import('../ui/fly3d/brain3d.js');
+  const full = B.createBrainMap(C, {});
+  full.fire({ pn: [], kc, mbon: [] }, 0, { instant: true });
+  ok(maxA(full.meshes.kcMbon) > 0.3, 'standalone map: lit KC->MBON edges hold as before');
+  full.dispose();
+  sc.dispose();
+}
+
 // --- camera framing: wide stage and phone stage --------------------------------
 {
   // The wide and combat shots keep the camera inside the room wall
