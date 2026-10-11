@@ -111,6 +111,9 @@ Object.assign(globalThis, {
 Object.defineProperty(document, 'hidden', { value: false, configurable: true });
 
 // --------------------------------------------------------------- boot
+// main.js seeds the hero match from Math.random: a fixed generator makes
+// each run of this test the same.
+{ let a = 0x5eed1234; Math.random = () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const t0 = Date.now();
 let bootErr = null;
 try { await import(pathToFileURL(join(ROOT, 'main.js')).href); } catch (e) { bootErr = e; }
@@ -178,6 +181,9 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   const h = hudHTML(fake, 0, byId, { acting: true });
   ok(/<span class="n">2\/3<\/span>/.test(h) && (h.match(/class="m off"/g) || []).length === 1, 'hudHTML: 2/3 untapped, one dim glyph');
   ok(h.indexOf('mana-amber') < h.indexOf('mana-moss') && /life low/.test(h) && /choosing/.test(h), 'hudHTML: amber first, low life marked, "choosing"');
+  // while a record plays, the box shows the turn before the record
+  const turn = hero.busy ? hero.rec.before.turn : st.turn;
+  ok(new RegExp(`turn ${turn}(?!\\d)`).test($('heroTurn').textContent), `turn box: turn ${turn} (${$('heroTurn').textContent}, busy ${hero.busy})`);
   ok(/mana-amber/.test($('manaLegGlyphs').innerHTML) && /mana-moss/.test($('manaLegGlyphs').innerHTML), 'mana legend: the glyphs');
 }
 
@@ -238,7 +244,7 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   const sv = globalThis.snSaver;
   ok(!!sv, 'saver: window.snSaver installed');
   const labels = [];
-  const n0 = hero.match.history.length;
+  const n0 = hero.match.history.length, seed0 = hero.match.seed;
   const res = sv.enter({ seed: 7, calm: 0.5, label: p => labels.push(p) });
   ok(res?.canvas?.id === 'fdSaverCv' && document.getElementById('fdSaverCv') === res.canvas, 'saver: enter gives a canvas in the document');
   await new Promise(r => setTimeout(r, 300));
@@ -253,11 +259,12 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   if (pw?.B?.id === 'flywire') ok(labels.every(p => p.lines.some(l => /Fly B FlyWire/.test(l))) && !labels.some(p => p.lines.some(l => /A model on hemibrain/.test(l))), 'saver: the plate names the wiring of each fly');
   const a = labels[labels.length - 1].anchor();
   ok(a && Number.isFinite(a.x) && Number.isFinite(a.y) && a.lead === false, 'saver: the anchor gives a box');
-  ok(hero.match.history.length === n0, 'saver: the hero match waits while the saver runs');
+  ok(hero.match.history.length === n0 && hero.match.seed === seed0, 'saver: the hero match waits while the saver runs');
   sv.exit();
   ok(globalThis.__fdSaver === false && !document.getElementById('fdSaverCv'), 'saver: exit removes the canvas and clears the flag');
   await pump(100);
-  ok(hero.match.history.length > n0, 'saver: the hero goes on after exit');
+  // a game in its end hold starts a new game (new seed), else it goes on
+  ok(hero.match.history.length > n0 || hero.match.seed !== seed0, `saver: the hero goes on after exit (${n0} -> ${hero.match.history.length})`);
 }
 
 // --------------------------------------------------------------- end
