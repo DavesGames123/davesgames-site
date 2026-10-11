@@ -1,0 +1,787 @@
+{
+ "amber-ridge": {
+  "file": "cards/amber-ridge.jpg",
+  "small": "cards/amber-ridge@sm.jpg",
+  "title": "Sunset in the Rockies (oil painting)",
+  "subject": "mountain ridge at sunset",
+  "author": "Albert Bierstadt",
+  "year": "1866",
+  "commons": "File:Bierstadt Albert Sunset in the Rockies.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Bierstadt_Albert_Sunset_in_the_Rockies.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-old-100-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0452,
+   "w": 0.9,
+   "h": 0.9548,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "moss-hollow": {
+  "file": "cards/moss-hollow.jpg",
+  "small": "cards/moss-hollow@sm.jpg",
+  "title": "Kunstformen der Natur, plate 72: Muscinae",
+  "subject": "mosses",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Muscinae.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Muscinae.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old"
+  ],
+  "crop": {
+   "x": 0.15,
+   "y": 0.3423,
+   "w": 0.7,
+   "h": 0.3754,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ember-gnat": {
+  "file": "cards/ember-gnat.jpg",
+  "small": "cards/ember-gnat@sm.jpg",
+  "title": "British Entomology, vol. 8, plate 537",
+  "subject": "gnat (Diptera)",
+  "author": "John Curtis",
+  "year": "1836",
+  "commons": "File:Britishentomologyvolume8Plate537.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Britishentomologyvolume8Plate537.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-100"
+  ],
+  "crop": {
+   "x": 0.2698,
+   "y": 0.0687,
+   "w": 0.7,
+   "h": 0.3025,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "cinder-ant": {
+  "file": "cards/cinder-ant.jpg",
+  "small": "cards/cinder-ant@sm.jpg",
+  "title": "Ants, Bees, and Wasps, plate 2 (Atta barbara)",
+  "subject": "harvester ant",
+  "author": "John Lubbock",
+  "year": "1897",
+  "commons": "File:Ants, bees, and wasps (Plate 2) BHL9657358.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Ants,_bees,_and_wasps_(Plate_2)_BHL9657358.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.1052,
+   "y": 0.0283,
+   "w": 0.7499,
+   "h": 0.3629,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "dune-wasp": {
+  "file": "cards/dune-wasp.jpg",
+  "small": "cards/dune-wasp@sm.jpg",
+  "title": "The Hymenoptera Aculeata of the British Islands, plate 12",
+  "subject": "sand wasp",
+  "author": "Edward Saunders",
+  "year": "1892",
+  "commons": "File:SaundersHymenopteraAculeataPlate12.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:SaundersHymenopteraAculeataPlate12.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.5298,
+   "y": 0.6063,
+   "w": 0.4198,
+   "h": 0.2073,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "hive-soldier": {
+  "file": "cards/hive-soldier.jpg",
+  "small": "cards/hive-soldier@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 24 (Apis ligustica)",
+  "subject": "honey bees",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 24.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_24.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.25,
+   "y": 0.1289,
+   "w": 0.7,
+   "h": 0.342,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spark-hornet": {
+  "file": "cards/spark-hornet.jpg",
+  "small": "cards/spark-hornet@sm.jpg",
+  "title": "The Hymenoptera Aculeata of the British Islands, plate 20, fig. 1 (Vespa)",
+  "subject": "hornet",
+  "author": "Edward Saunders",
+  "year": "1896",
+  "commons": "File:SaundersHymenopteraAculeataPlate20.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:SaundersHymenopteraAculeataPlate20.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-US-expired",
+   "PD-old-70"
+  ],
+  "crop": {
+   "x": 0.2852,
+   "y": 0.1085,
+   "w": 0.3703,
+   "h": 0.1825,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ember-mantis": {
+  "file": "cards/ember-mantis.jpg",
+  "small": "cards/ember-mantis@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 8 (Mantis religiosa)",
+  "subject": "praying mantis",
+  "author": "James Duncan (ed. William Jardine)",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 8.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_8.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.3969,
+   "w": 1.0,
+   "h": 0.486,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "brood-captain": {
+  "file": "cards/brood-captain.jpg",
+  "small": "cards/brood-captain@sm.jpg",
+  "title": "Ants, Bees, and Wasps, plate 3 (Oecodoma cephalotes, major)",
+  "subject": "leaf-cutter ant soldier",
+  "author": "John Lubbock",
+  "year": "1897",
+  "commons": "File:Ants, bees, and wasps (Plate 3) BHL9657360.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Ants,_bees,_and_wasps_(Plate_3)_BHL9657360.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0581,
+   "w": 1.0,
+   "h": 0.484,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "magma-beetle": {
+  "file": "cards/magma-beetle.jpg",
+  "small": "cards/magma-beetle@sm.jpg",
+  "title": "Illustrations of Exotic Entomology, vol. I, plate 31 (Goliathus)",
+  "subject": "goliath beetle",
+  "author": "Dru Drury",
+  "year": "1770",
+  "commons": "File:Illustrations of Exotic Entomology I 31.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_Exotic_Entomology_I_31.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Gutenberg"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0629,
+   "w": 1.0,
+   "h": 0.9143,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "sun-locust": {
+  "file": "cards/sun-locust.jpg",
+  "small": "cards/sun-locust@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 16, fig. 2 (Locusta flava)",
+  "subject": "locust",
+  "author": "James Duncan (ed. William Jardine)",
+  "year": "1840",
+  "commons": "File:Locusta Cristata and Locusta Flava (Jardine Naturalist's library Entomology, Plate 16).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Locusta_Cristata_and_Locusta_Flava_(Jardine_Naturalist%27s_library_Entomology,_Plate_16).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.0252,
+   "y": 0.0189,
+   "w": 0.8499,
+   "h": 0.4024,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "sting-hopper": {
+  "file": "cards/sting-hopper.jpg",
+  "small": "cards/sting-hopper@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 22, fig. 2 (Fulgora)",
+  "subject": "lanternfly (planthopper)",
+  "author": "James Duncan (ed. William Jardine)",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 22.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_22.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0704,
+   "w": 1.0,
+   "h": 0.4596,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "flare-spit": {
+  "file": "cards/flare-spit.jpg",
+  "small": "cards/flare-spit@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 20, fig. 2",
+  "subject": "leaf-footed bug",
+  "author": "James Duncan (ed. William Jardine)",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 20.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_20.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.1703,
+   "y": 0.0038,
+   "w": 0.6,
+   "h": 0.2725,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "heat-pulse": {
+  "file": "cards/heat-pulse.jpg",
+  "small": "cards/heat-pulse@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 9 (Death's-head hawkmoth)",
+  "subject": "death's-head hawkmoth",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 9.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_9.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.0352,
+   "y": 0.0012,
+   "w": 0.8898,
+   "h": 0.9965,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "kiln-burst": {
+  "file": "cards/kiln-burst.jpg",
+  "small": "cards/kiln-burst@sm.jpg",
+  "title": "Vesuvius in Eruption, with a View over the Islands in the Bay of Naples (oil painting)",
+  "subject": "volcano erupting",
+  "author": "Joseph Wright of Derby",
+  "year": "c. 1776",
+  "commons": "File:Joseph Wright of Derby - Vesuvius in Eruption, with a View over the Islands in the Bay of Naples - Google Art Project.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Joseph_Wright_of_Derby_-_Vesuvius_in_Eruption,_with_a_View_over_the_Islands_in_the_Bay_of_Naples_-_Google_Art_Project.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-old-X-expired",
+   "PD-old-auto-expired"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0242,
+   "w": 0.9,
+   "h": 0.9505,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "war-chirp": {
+  "file": "cards/war-chirp.jpg",
+  "small": "cards/war-chirp@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 21 (Cicada)",
+  "subject": "cicada",
+  "author": "James Duncan (ed. William Jardine)",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 21.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_21.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-US-expired"
+  ],
+  "crop": {
+   "x": 0.15,
+   "y": 0.4637,
+   "w": 0.85,
+   "h": 0.3921,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "swarm-call": {
+  "file": "cards/swarm-call.jpg",
+  "small": "cards/swarm-call@sm.jpg",
+  "title": "Ants, Bees, and Wasps, plate 1",
+  "subject": "European ants",
+  "author": "John Lubbock",
+  "year": "1897",
+  "commons": "File:Ants, bees, and wasps (Plate 1) BHL9656891.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Ants,_bees,_and_wasps_(Plate_1)_BHL9656891.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.3591,
+   "w": 1.0,
+   "h": 0.4822,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "root-sentinel": {
+  "file": "cards/root-sentinel.jpg",
+  "small": "cards/root-sentinel@sm.jpg",
+  "title": "Oaks (oil painting)",
+  "subject": "old oak tree",
+  "author": "Ivan Shishkin",
+  "year": "1865",
+  "commons": "File:Ivan Ivanovich Shishkin - Oaks, 1865.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Ivan_Ivanovich_Shishkin_-_Oaks,_1865.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-old-X-expired",
+   "PD-old-auto-1923",
+   "PD-old-auto-expired"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1793,
+   "w": 1.0,
+   "h": 0.6406,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "moss-snail": {
+  "file": "cards/moss-snail.jpg",
+  "small": "cards/moss-snail@sm.jpg",
+  "title": "The Edible Mollusca of Great Britain and Ireland, plate I (Helix)",
+  "subject": "snail on a leaf",
+  "author": "M. S. Lovell, plate by G. B. Sowerby",
+  "year": "1884",
+  "commons": "File:The edible Mollusca of Great Britain and Ireland (Plate I) (5987518093).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:The_edible_Mollusca_of_Great_Britain_and_Ireland_(Plate_I)_(5987518093).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.05,
+   "y": 0.0178,
+   "w": 0.9,
+   "h": 0.4041,
+   "note": "fractions of the source image, 4:3 box"
+  },
+  "note": "The Commons page also has the CC BY 2.0 tag of the Flickr scan; the work itself is public domain (PD-old-70, PD-scan)."
+ },
+ "thorn-vine": {
+  "file": "cards/thorn-vine.jpg",
+  "small": "cards/thorn-vine@sm.jpg",
+  "title": "Flora Batava, vol. 19 (Rubus discolor)",
+  "subject": "bramble",
+  "author": "Jan Kops et al.",
+  "year": "1893",
+  "commons": "File:Rubus discolor — Flora Batava — Volume v19.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Rubus_discolor_%E2%80%94_Flora_Batava_%E2%80%94_Volume_v19.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.2602,
+   "y": 0.3424,
+   "w": 0.7203,
+   "h": 0.4349,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bark-toad": {
+  "file": "cards/bark-toad.jpg",
+  "small": "cards/bark-toad@sm.jpg",
+  "title": "Historia naturalis ranarum nostratium, Tab. I",
+  "subject": "common toad",
+  "author": "August Johann Rösel von Rosenhof",
+  "year": "1758",
+  "commons": "File:RU OD Kluis - August Johann Rösel von Rosenhof - Historia naturalis ranarum nostratium 027 Tab 01 (cropped).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:RU_OD_Kluis_-_August_Johann_R%C3%B6sel_von_Rosenhof_-_Historia_naturalis_ranarum_nostratium_027_Tab_01_(cropped).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.1102,
+   "y": 0.0485,
+   "w": 0.7203,
+   "h": 0.3531,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "dew-moth": {
+  "file": "cards/dew-moth.jpg",
+  "small": "cards/dew-moth@sm.jpg",
+  "title": "Illustrations of Exotic Entomology, vol. I, plate 24 (luna moth)",
+  "subject": "luna moth",
+  "author": "Dru Drury",
+  "year": "1770",
+  "commons": "File:Illustrations of Exotic Entomology I 24.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_Exotic_Entomology_I_24.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Gutenberg"
+  ],
+  "crop": {
+   "x": 0.0352,
+   "y": 0.0022,
+   "w": 0.9297,
+   "h": 0.9955,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "briar-wall": {
+  "file": "cards/briar-wall.jpg",
+  "small": "cards/briar-wall@sm.jpg",
+  "title": "Traité des arbres et arbustes, nouvelle édition: Rosa canina (after P.-J. Redouté)",
+  "subject": "dog rose",
+  "author": "Pierre-Joseph Redouté",
+  "year": "1801",
+  "commons": "File:Fig. 1. Rosa canina - Rosier des chiens. fig. 2. Rosa sepium - Rosier des haies. (Dog rose - Wild rose) (NYPL b14485031-1110807).tiff",
+  "url": "https://commons.wikimedia.org/wiki/File:Fig._1._Rosa_canina_-_Rosier_des_chiens._fig._2._Rosa_sepium_-_Rosier_des_haies._(Dog_rose_-_Wild_rose)_(NYPL_b14485031-1110807).tiff",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-X-expired",
+   "PD-old-auto-1923",
+   "PD-old-auto-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.2398,
+   "y": 0.1471,
+   "w": 0.5203,
+   "h": 0.2353,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spore-mother": {
+  "file": "cards/spore-mother.jpg",
+  "small": "cards/spore-mother@sm.jpg",
+  "title": "Illustrations of British Mycology, plate VIII",
+  "subject": "shaggy scalycap mushrooms",
+  "author": "Anna Maria Hussey",
+  "year": "1847",
+  "commons": "File:Illustrations of British mycology (Plate VIII) (8619408566)-cropped.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_British_mycology_(Plate_VIII)_(8619408566)-cropped.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-100"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1107,
+   "w": 1.0,
+   "h": 0.7787,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "grove-stag": {
+  "file": "cards/grove-stag.jpg",
+  "small": "cards/grove-stag@sm.jpg",
+  "title": "Brehms Tierleben: Die Insekten, Tausendfüssler und Spinnen, plate 5 (Hirschkäfer)",
+  "subject": "stag beetle",
+  "author": "Alfred Brehm and Ernst Ludwig Taschenberg",
+  "year": "1884",
+  "commons": "File:Die Insekten, Tausendfüssler und Spinnen (Plate 5) (9524145828).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Die_Insekten,_Tausendf%C3%BCssler_und_Spinnen_(Plate_5)_(9524145828).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.1602,
+   "y": 0.5126,
+   "w": 0.7602,
+   "h": 0.3753,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "fern-beast": {
+  "file": "cards/fern-beast.jpg",
+  "small": "cards/fern-beast@sm.jpg",
+  "title": "Kunstformen der Natur, plate 92: Filicinae",
+  "subject": "tree ferns",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Filicinae 92.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Filicinae_92.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1831,
+   "w": 1.0,
+   "h": 0.5342,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "deep-roots": {
+  "file": "cards/deep-roots.jpg",
+  "small": "cards/deep-roots@sm.jpg",
+  "title": "Tree Roots (oil painting)",
+  "subject": "tree roots",
+  "author": "Vincent van Gogh",
+  "year": "1890",
+  "commons": "File:Vincent van Gogh - Tree-roots - Google Art Project.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Vincent_van_Gogh_-_Tree-roots_-_Google_Art_Project.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.1211,
+   "y": 0.0,
+   "w": 0.6586,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "sap-bloom": {
+  "file": "cards/sap-bloom.jpg",
+  "small": "cards/sap-bloom@sm.jpg",
+  "title": "Afbeeldingen der fraaiste, meest uitheemsche boomen en heesters, plate 27 (Lonicera)",
+  "subject": "honeysuckle",
+  "author": "Johan Carl Krauss",
+  "year": "1802",
+  "commons": "File:Afbeeldingen der fraaiste, meest uitheemsche boomen en heesters (Plate 27) (7899772380) - clean.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Afbeeldingen_der_fraaiste,_meest_uitheemsche_boomen_en_heesters_(Plate_27)_(7899772380)_-_clean.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.425,
+   "y": 0.0781,
+   "w": 0.55,
+   "h": 0.3438,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "strangle-root": {
+  "file": "cards/strangle-root.jpg",
+  "small": "cards/strangle-root@sm.jpg",
+  "title": "Flora Batava, vol. 11 (Cuscuta europaea)",
+  "subject": "dodder",
+  "author": "Jan Kops et al.",
+  "year": "1853",
+  "commons": "File:Cuscuta europaea — Flora Batava — Volume v11.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Cuscuta_europaea_%E2%80%94_Flora_Batava_%E2%80%94_Volume_v11.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired"
+  ],
+  "crop": {
+   "x": 0.0203,
+   "y": 0.3766,
+   "w": 0.5203,
+   "h": 0.2865,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "swell": {
+  "file": "cards/swell.jpg",
+  "small": "cards/swell@sm.jpg",
+  "title": "Illustrations of British Mycology, plate XXVI",
+  "subject": "giant puffball",
+  "author": "Anna Maria Hussey",
+  "year": "1847",
+  "commons": "File:Illustrations of British mycology (Plate XXVI) (8619414838)-cropped.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_British_mycology_(Plate_XXVI)_(8619414838)-cropped.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-100"
+  ],
+  "crop": {
+   "x": 0.025,
+   "y": 0.0649,
+   "w": 0.95,
+   "h": 0.8702,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spore-burst": {
+  "file": "cards/spore-burst.jpg",
+  "small": "cards/spore-burst@sm.jpg",
+  "title": "Herbier de la France: Lycoperdon (puffballs)",
+  "subject": "puffballs releasing spores",
+  "author": "Jean Baptiste François Pierre Bulliard",
+  "year": "1780-1791",
+  "commons": "File:Bulliard01.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Bulliard01.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-100"
+  ],
+  "crop": {
+   "x": 0.075,
+   "y": 0.1894,
+   "w": 0.85,
+   "h": 0.4814,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "drift-seed": {
+  "file": "cards/drift-seed.jpg",
+  "small": "cards/drift-seed@sm.jpg",
+  "title": "Köhler's Medizinal-Pflanzen, plate 135 (Taraxacum officinale)",
+  "subject": "dandelion seed head",
+  "author": "Walther Otto Müller",
+  "year": "1887",
+  "commons": "File:Taraxacum officinale - Köhler–s Medizinal-Pflanzen-135.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Taraxacum_officinale_-_K%C3%B6hler%E2%80%93s_Medizinal-Pflanzen-135.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old"
+  ],
+  "crop": {
+   "x": 0.275,
+   "y": 0.05,
+   "w": 0.55,
+   "h": 0.2998,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "hollow-husk": {
+  "file": "cards/hollow-husk.jpg",
+  "small": "cards/hollow-husk@sm.jpg",
+  "title": "A Popular History of the Aquarium, plate XI (Pagurus bernhardus)",
+  "subject": "hermit crab in a whelk shell",
+  "author": "George Brettingham Sowerby",
+  "year": "1857",
+  "commons": "File:Popular history of the aquarium of marine and fresh-water animals and plants (Plate XI) (7414355314).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Popular_history_of_the_aquarium_of_marine_and_fresh-water_animals_and_plants_(Plate_XI)_(7414355314).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.05,
+   "y": 0.2344,
+   "w": 0.8,
+   "h": 0.4307,
+   "note": "fractions of the source image, 4:3 box"
+  },
+  "note": "The Commons page also has the CC BY 2.0 tag of the Flickr scan; the work itself is public domain (PD-old-70, PD-scan)."
+ },
+ "ember-larva": {
+  "file": "cards/ember-larva.jpg",
+  "small": "cards/ember-larva@sm.jpg",
+  "title": "Europas bekannteste Schmetterlinge, Tafel VIII (Deilephila euphorbiae, larva)",
+  "subject": "spurge hawkmoth caterpillar",
+  "author": "F. Nemos",
+  "year": "1895",
+  "commons": "File:European-butterfly 068-VIII.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:European-butterfly_068-VIII.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old"
+  ],
+  "crop": {
+   "x": 0.0297,
+   "y": 0.181,
+   "w": 0.6,
+   "h": 0.3179,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spore": {
+  "file": "cards/spore.jpg",
+  "small": "cards/spore@sm.jpg",
+  "title": "Kunstformen der Natur, plate 93: Mycetozoa (Didymium sporangium)",
+  "subject": "slime mould sporangium",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Mycetozoa Didymium farinaceum.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Mycetozoa_Didymium_farinaceum.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-old"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.063,
+   "w": 1.0,
+   "h": 0.4738,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ }
+}
