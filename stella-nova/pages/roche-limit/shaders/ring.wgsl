@@ -25,7 +25,7 @@ struct Cam {
   eye: vec4f, sun: vec4f, vpSize: vec4f,
   right: vec4f, up: vec4f, fwd: vec4f,
   planet: vec4f, misc: vec4f, sat: vec4f, sat2: vec4f, field: vec4f, ringExt: vec4f,
-  extra: vec4f,   // z: real-ring overlay on (Saturn), w unused
+  extra: vec4f,   // z: real-ring overlay on (Saturn), w the planet radius (0: 1)
 };
 // today's rings of Saturn in planet radii: C, B, Cassini Division, A
 const RING_C0: f32 = 1.2388;
@@ -128,8 +128,13 @@ fn fs_disk(in: VOut) -> @location(0) vec4f {
     ghost = select(0.016, select(0.03, 0.022, r > RING_A0), r > RING_B0 && r < RING_CD0) * cam.extra.z;
   }
   if (tau < 2e-4 && ghost <= 0.0) { discard; }
-  if (r < 1.0) { discard; }
-  let L = cam.sun.xyz;
+  let R = select(1.0, cam.extra.w, cam.extra.w > 0.0);
+  if (r < R) { discard; }
+  // a white dwarf (style 9) lights the layer from the centre; a thin
+  // layer would get no light edge-on, so the light comes in at about
+  // 14 degrees, as on a flared disc
+  let star = i32(cam.planet.z + 0.5) == 9;
+  let L = select(cam.sun.xyz, normalize(vec3f(-p.xy, 0.25 * r)), star);
   let V = normalize(cam.eye.xyz - p);
   let mu = max(abs(V.z), 0.03);
   let mu0 = max(abs(L.z), 0.03);
@@ -146,7 +151,7 @@ fn fs_disk(in: VOut) -> @location(0) vec4f {
   // the planet's shadow
   let t = -dot(p, L);
   var sh = 1.0;
-  if (t > 0.0) { sh = smoothstep(0.985, 1.015, length(p + t * L)); }
+  if (t > 0.0 && !star) { sh = smoothstep(0.985, 1.015, length(p + t * L) / R); }
   // the layer stands in for grains smaller than a pixel; where the grains
   // themselves are large on screen it fades out (cam.misc.w: grain radius)
   let rpx = cam.misc.w * cam.misc.x / max(length(cam.eye.xyz - p), 1e-4);

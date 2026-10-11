@@ -16,8 +16,20 @@
 //                behind the thin limb glow through it.
 //  Styles (cam.planet.z): 0 ice giant, 1 Saturn, 2 Jupiter, 3 Mars, 4 Earth,
 //  5 a texture map (planetTex, equirectangular; Saturn in the default
-//  story). The planet is an oblate spheroid with flattening cam.extra.x:
+//  story), and for the random runs (roll.js, 2026-10-11): 6 Uranus, 7 a
+//  hot Jupiter (dark cloud decks, a dull red thermal glow on the night
+//  side), 8 a brown dwarf (self-luminous bands), 9 a white dwarf, 10 a
+//  neutron star. 9 and 10 are hot surfaces: emission only, no sunlight.
+//  The planet is an oblate spheroid with flattening cam.extra.x:
 //  each ray is intersected in a space stretched along z (fn hitPlanet).
+//  Its radius is cam.extra.w world units (0 means 1): a compact star in
+//  the world unit of roll.js is far smaller than 1 (fn planetR).
+//  STAR GLARE (fs_sky, styles 9 and 10). A white dwarf or a neutron star
+//  is often smaller than a pixel. The sky pass draws a core of at least
+//  1.2 px and a short glare around the star's direction: an incandescent
+//  source, so a restrained glare is real optics, not decoration. With
+//  style 9 the distant sun is off: the white dwarf lights the scene
+//  (particles.wgsl lights the grains from it).
 //
 //  grep -n targets: "fn rayDir", "fn fbm", "fn albedo", "fn fs_surface",
 //  "fn fs_atmo", "fn fs_sky"
@@ -69,6 +81,14 @@ fn hitPlanet(o: vec3f, d: vec3f, r: f32) -> vec2f {
   let l = length(ds);
   let h = hitSphere(vec3f(o.x, o.y, o.z / c), ds / l, r);
   return h / l;
+}
+// the drawn radius of the primary (world units) and the style number
+fn planetR() -> f32 { return select(1.0, cam.extra.w, cam.extra.w > 0.0); }
+fn styleId() -> i32 { return i32(cam.planet.z + 0.5); }
+// the colour of a hot surface (styles 9 and 10), linear, times its radiance
+fn starColor(st: i32) -> vec3f {
+  if (st == 10) { return vec3f(0.70, 0.80, 1.00) * 9.0; }
+  return vec3f(0.82, 0.88, 1.00) * 6.0;
 }
 fn planetNormal(p: vec3f) -> vec3f {
   let c = 1.0 - cam.extra.x;
@@ -157,8 +177,31 @@ fn albedo(nW: vec3f) -> vec3f {
     c = mix(c, vec3f(0.95), cloud * 0.85);
     return mix(c, vec3f(0.95), smoothstep(1.2, 1.35, abs(lat)));
   }
+  if (style == 6) {
+    // Uranus: a pale cyan haze with faint bands and a brighter pole
+    let c = bands(lat, w * 0.4, vec3f(0.52, 0.78, 0.82), vec3f(0.62, 0.86, 0.88), vec3f(0.46, 0.72, 0.78), 10.0);
+    return mix(c, vec3f(0.70, 0.90, 0.92), smoothstep(0.9, 1.4, lat) * 0.5) * (0.95 + 0.08 * fine);
+  }
+  if (style == 7) {
+    // a hot Jupiter: dark, low-albedo cloud decks
+    let c = bands(lat, w * 2.0, vec3f(0.10, 0.08, 0.09), vec3f(0.20, 0.15, 0.13), vec3f(0.06, 0.06, 0.08), 14.0);
+    return c * (0.85 + 0.3 * fine);
+  }
+  if (style == 8) {
+    // a brown dwarf: deep red-brown bands (it shines mostly in the infrared)
+    let c = bands(lat, w * 1.8, vec3f(0.30, 0.12, 0.12), vec3f(0.45, 0.20, 0.16), vec3f(0.20, 0.07, 0.10), 20.0);
+    return c * (0.85 + 0.3 * fine);
+  }
   let c = bands(lat, w * 0.9, vec3f(0.22, 0.46, 0.58), vec3f(0.48, 0.70, 0.76), vec3f(0.16, 0.30, 0.48), 16.0);
   return c * (0.88 + 0.22 * fine);
+}
+// The light that a surface gives off by itself (linear): the night-side
+// glow of a hot Jupiter (about 1,000-2,000 K) and the bands of a brown
+// dwarf. n: the normal, ndl: the sun term, alb: the albedo.
+fn selfGlow(st: i32, ndl: f32, alb: vec3f) -> vec3f {
+  if (st == 7) { return vec3f(0.12, 0.02, 0.006) * smoothstep(0.2, -0.3, ndl) * (0.6 + 2.0 * alb.r); }
+  if (st == 8) { return vec3f(0.30, 0.07, 0.03) * (0.35 + 1.6 * alb.r); }
+  return vec3f(0.0);
 }
 fn atmColor() -> vec3f {
   let style = i32(cam.planet.z + 0.5);
@@ -166,6 +209,9 @@ fn atmColor() -> vec3f {
   if (style == 2) { return vec3f(0.85, 0.75, 0.62); }
   if (style == 3) { return vec3f(0.90, 0.55, 0.40); }
   if (style == 4) { return vec3f(0.35, 0.60, 1.00); }
+  if (style == 6) { return vec3f(0.55, 0.88, 0.95); }
+  if (style == 7) { return vec3f(0.70, 0.40, 0.30); }
+  if (style == 8) { return vec3f(0.85, 0.30, 0.20); }
   return vec3f(0.45, 0.80, 1.00);
 }
 
@@ -176,11 +222,19 @@ fn fs_surface(in: VOut) -> FOut {
   var o: FOut;
   let d = rayDir(in.pos.xy);
   let e = cam.eye.xyz;
-  let h = hitPlanet(e, d, 1.0);
+  let h = hitPlanet(e, d, planetR());
   if (h.x > h.y || h.y < 0.0) { discard; }
   let t = max(h.x, 0.0);
   let p = e + t * d;
   let n = planetNormal(p);
+  let st = styleId();
+  if (st >= 9) {
+    // a hot surface: emission with limb darkening, no sunlight
+    let mu9 = max(dot(n, -d), 0.0);
+    o.color = vec4f(starColor(st) * (0.45 + 0.55 * mu9), 1.0);
+    o.depth = depthOf(p);
+    return o;
+  }
   let L = cam.sun.xyz;
   let ndl = dot(n, L);
   let lit = clamp(ndl * 0.92 + 0.08, 0.0, 1.0) * smoothstep(-0.10, 0.12, ndl);
@@ -208,6 +262,7 @@ fn fs_surface(in: VOut) -> FOut {
   // haze toward the limb (the atmosphere seen through its depth)
   let rim = pow(1.0 - mu, 4.0) * smoothstep(-0.25, 0.3, ndl);
   col = mix(col, atmColor() * cam.sun.w * 0.6, rim * 0.6);
+  col = col + selfGlow(st, ndl, alb / 0.55);
   o.color = vec4f(col, 1.0);
   o.depth = depthOf(p);
   return o;
@@ -218,23 +273,26 @@ fn fs_atmo(in: VOut) -> FOut {
   var o: FOut;
   let d = rayDir(in.pos.xy);
   let e = cam.eye.xyz;
-  let Ra = 1.0 + cam.planet.x;
+  if (styleId() >= 9) { discard; }
+  let R = planetR();
+  let Ra = R * (1.0 + cam.planet.x);
   let ha = hitPlanet(e, d, Ra);
   if (ha.x > ha.y || ha.y < 0.0) { discard; }
   let t0 = max(ha.x, 0.0);
   var t1 = ha.y;
-  let hp = hitPlanet(e, d, 1.0);
+  let hp = hitPlanet(e, d, R);
   if (hp.x <= hp.y && hp.x > 0.0) { t1 = hp.x; }
   // closest approach to the centre along the ray segment
   let tc = clamp(-dot(e, d), t0, t1);
   let pc = e + tc * d;
-  let b = length(vec3f(pc.x, pc.y, pc.z / (1.0 - cam.extra.x)));
+  let bw = length(vec3f(pc.x, pc.y, pc.z / (1.0 - cam.extra.x)));
+  let b = bw / R;
   let H = cam.planet.x * 0.33;
   let dens = exp(-(max(b, 1.0) - 1.0) / H);
-  let chord = (t1 - t0) / cam.planet.x;
+  let chord = (t1 - t0) / (cam.planet.x * R);
   let L = cam.sun.xyz;
-  let ill = smoothstep(-0.35, 0.35, dot(pc / b, L));
-  let sunset = smoothstep(0.35, -0.05, dot(pc / b, L)) * ill;
+  let ill = smoothstep(-0.35, 0.35, dot(pc / bw, L));
+  let sunset = smoothstep(0.35, -0.05, dot(pc / bw, L)) * ill;
   let fwd = pow(max(dot(d, L), 0.0), 8.0);
   let amount = (1.0 - exp(-0.6 * dens * chord)) * ill;
   let col = mix(atmColor(), vec3f(1.0, 0.45, 0.22), sunset) * amount * cam.sun.w * (0.9 + 2.5 * fwd);
@@ -273,8 +331,23 @@ fn fs_sky(in: VOut) -> @location(0) vec4f {
     let neb = 0.5 * vnoise(q) + 0.25 * vnoise(q * 2.03 + vec3f(1.7, 9.2, 3.1)) + 0.125 * vnoise(q * 4.1 + vec3f(3.3, 1.1, 7.7));
     col = col + band * (0.010 + 0.022 * neb) * mix(vec3f(0.55, 0.45, 0.70), vec3f(0.40, 0.55, 0.75), neb);
   }
-  // the sun
+  // the sun (off when a white dwarf lights the scene)
+  let st = styleId();
   let cs = dot(d, cam.sun.xyz);
-  col = col + vec3f(1.0, 0.92, 0.80) * (smoothstep(0.99996, 0.99999, cs) * 60.0 + pow(max(cs, 0.0), 900.0) * 1.5 + pow(max(cs, 0.0), 40.0) * 0.04);
+  let sunOn = select(1.0, 0.0, st == 9);
+  col = col + sunOn * vec3f(1.0, 0.92, 0.80) * (smoothstep(0.99996, 0.99999, cs) * 60.0 + pow(max(cs, 0.0), 900.0) * 1.5 + pow(max(cs, 0.0), 40.0) * 0.04);
+  // a compact star: a core of at least 1.2 px and a short glare
+  if (st >= 9) {
+    let toS = -cam.eye.xyz;
+    let dist = max(length(toS), 1e-6);
+    let u = toS / dist;
+    let sn = length(cross(d, u));
+    let ang = select(3.14159265 - asin(min(sn, 1.0)), asin(min(sn, 1.0)), dot(d, u) > 0.0);
+    let px = ang * cam.misc.x;
+    let rpx = max(1.2, cam.misc.x * planetR() / dist);
+    let core = smoothstep(rpx + 1.0, rpx - 0.5, px);
+    let glare = 0.5 * exp(-px / (2.0 + 0.4 * rpx)) + 0.05 * exp(-px / 24.0);
+    col = col + starColor(st) * (core + glare);
+  }
   return vec4f(col, 1.0);
 }

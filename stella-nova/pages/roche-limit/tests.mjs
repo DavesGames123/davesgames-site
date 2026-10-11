@@ -39,6 +39,9 @@
 //     lobes touch, a binary holds its mutual orbit (CPU), a train shares
 //     one orbit, two moons, the core mass, clumps.
 //     node tests.mjs --start runs test 13 only.
+//  14 renderer (Deno WebGPU, offscreen texture): every planet style draws
+//     with no error; a white dwarf under one pixel shows a core; grains
+//     near it are lit by it
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
 //     for desktop and phone profiles, against budget.js LIMIT; phones get
 //     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
@@ -648,6 +651,58 @@ async function gpuTest() {
   gpu.destroy(); device.destroy();
 }
 
+// 14 ─ the renderer in Deno: every planet style (0-10) draws with no
+// WebGPU error; a white dwarf smaller than a pixel still shows a bright
+// core; the grains next to it are lit by it (style 9). An offscreen
+// texture stands in for the canvas: no browser, no screenshot file.
+async function renderTest() {
+  if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  render test: no navigator.gpu here'); return; }
+  const { Renderer, loadRenderCode } = await import('./render.js');
+  const { SimGPU, loadSimCode } = await import('./engine.js');
+  const adapter = await navigator.gpu.requestAdapter();
+  const device = await adapter.requestDevice();
+  const errs = []; device.addEventListener?.('uncapturederror', e => errs.push(String(e.error?.message || e)));
+  const W = 320, H = 200, fmt = 'rgba8unorm';
+  const tex = device.createTexture({ size: [W, H], format: fmt, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const ren = new Renderer(device, { getCurrentTexture: () => tex }, fmt, await loadRenderCode(), { gridN: 256 });
+  ren.resize(W, H, 1);
+  const msgs = (await ren.compilationMessages()).filter(m => / error /.test(m));
+  // a small pile 3 world units out on +x
+  const N = 300, { cl, sim } = settledPile(N, P.MATERIALS.fluid, 3, 2);
+  const gpu = new SimGPU(device, N, await loadSimCode());
+  const z = new Float64Array(N * 3);
+  gpu.setParams(P.contactParams(N, P.MATERIALS.fluid), { GM: 0, Rp: 1 }, 0); gpu.setState(sim.x, z, z, cl.rad, cl.mass);
+  const e = ren.addSim(gpu); ren.setTags(e, new Float32Array(gpu.np).fill(1));
+  const k = 0.2 / P.expectedRadius(N);
+  const frame = (style, bodyR, eye) => ({ eye, target: [0, 0, 0], fov: 0.62, near: 0.01, time: 1, sun: [-0.024, 0.825, 0.565], sunI: 1.45, atm: 0.05, spin: 0, style, shine: 0.25,
+    flattening: 0, realRings: 0, sat: [3, 0, 0], satR: 0.2, GMs: 0, GMp: 0, omega: 0, phiL1: 0, fieldMode: 0, fieldExt: 4, fieldScale: 1, fieldAlpha: 0,
+    ringExt: 3.6, ringGain: 2, ringBlend: 0.9, ringOn: true, exposure: 0.88, bloom: 0.08, bloomThreshold: 1, vignette: 0.32, grainR: k, bodyR });
+  const sims = [{ e, ring: true, frame: [3, 0, 0, k], refV: [0, 0, 0, 0], motion: [0, 6, 0.08, 1], opts: [4, 0, 1, 1], tint: [0.78, 0.9, 1, 1], heatInv: 1, simT: 0, flashT: 0, strain: 1 }];
+  const read = async () => {
+    const bpr = Math.ceil(W * 4 / 256) * 256, buf = device.createBuffer({ size: bpr * H, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = device.createCommandEncoder(); enc.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: bpr }, [W, H]); device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ); const px = new Uint8Array(buf.getMappedRange().slice(0)); buf.unmap(); buf.destroy();
+    return (x, y) => { const o = y * bpr + 4 * x; return (px[o] + px[o + 1] + px[o + 2]) / 3; };
+  };
+  // where the pile lands on screen: the brightest pixel in a box round it
+  const region = (at, cx, cy, r) => { let m = 0, s = 0; for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) { const v = at(x, y); m = Math.max(m, v); s += v; } return { max: m, mean: s / (2 * r + 1) ** 2 }; };
+  const eye = [0.5, -9, 1.2];
+  let styles = [];
+  for (let st = 0; st <= 10; st++) { ren.render(frame(st, st >= 9 ? 0.0153 : 1, eye), sims); const at = await read(); styles.push(Math.round(at(W / 2, H / 2))); }
+  ok('render: every planet style (0-10) draws with no WebGPU error', errs.length === 0 && msgs.length === 0, `centre brightness by style ${styles.join(' ')}; ${errs.concat(msgs).join(' | ') || 'no errors'}`);
+  // a white dwarf 0.0153 world units across, 9 units away: under one pixel
+  const prj = p => ren.project(p, W, H);
+  ren.render(frame(9, 0.0153, eye), sims); let at = await read();
+  const c = prj([0, 0, 0]), pp = prj([3, 0, 0]);
+  const core = at(Math.round(c.x), Math.round(c.y)), lit9 = region(at, Math.round(pp.x), Math.round(pp.y), 3);
+  // the same pile under a planet with the sun behind it (style 0) and
+  // under a white dwarf: the white dwarf lights the side facing it
+  ok('render: a white dwarf under one pixel still shows a bright core', core > 200 && ren.focal * 0.0153 / 9 < 1, `disc ${(ren.focal * 0.0153 / 9).toFixed(2)} px wide, core brightness ${core.toFixed(0)} of 255`);
+  ok('render: grains near a white dwarf are lit by it', lit9.max > 60, `brightest grain pixel ${lit9.max.toFixed(0)}, mean ${lit9.mean.toFixed(1)} round the pile`);
+  ok('render: no WebGPU validation errors', errs.length === 0, errs.join(' | ') || 'none');
+  gpu.destroy(); device.destroy();
+}
+
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
 const START_ONLY = ARGS.includes('--start');
@@ -661,7 +716,7 @@ if (!GPU_ONLY) {
   }
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
-if (typeof Deno !== 'undefined') await gpuTest();
+if (typeof Deno !== 'undefined') { await gpuTest(); await renderTest(); }
 else if (PACE_ONLY || START_ONLY) {}
 else {
   // Node has no WebGPU: run the GPU test in Deno when it is installed.

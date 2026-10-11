@@ -39,6 +39,10 @@
 //  ring's own shadow (optical depth tau from ring.wgsl) and a faint fill.
 //  Colour: bound rock / shed ice, speed, or tidal stress (the ratio
 //  |tide| / |self-gravity| per grain, from the force kernel's diag).
+//  The planet's radius is cam.extra.w world units (0 means 1; roll.js
+//  draws a compact star smaller). With planet style 9 (a white dwarf) the
+//  light comes from the star at the origin, falling as 1/r^2 about 3
+//  world units out, and the planet casts no shadow (fn lightDir).
 //
 //  grep -n targets: "fn vs_main", "fn fs_main", "fn fs_blend", "fn shade",
 //  "fn sunShadow", "fn heat", "fn cs_smooth", "fn plasma", "fn glint",
@@ -50,6 +54,7 @@ struct Cam {
   eye: vec4f, sun: vec4f, vpSize: vec4f,
   right: vec4f, up: vec4f, fwd: vec4f,
   planet: vec4f, misc: vec4f, sat: vec4f, sat2: vec4f, field: vec4f, ringExt: vec4f,
+  extra: vec4f,   // x flattening, y map level, z real rings, w the planet radius (0: 1)
 };
 struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 // frame: frame point (world) and k = 1/R_p; refV: frame velocity (world per
@@ -141,14 +146,27 @@ fn cool(t: f32) -> vec3f {
   return mix(mix(vec3f(0.10, 0.20, 0.55), vec3f(0.25, 0.85, 0.95), smoothstep(0.0, 0.5, s)), vec3f(1.0, 0.95, 0.75), smoothstep(0.5, 1.0, s));
 }
 
+fn planetR() -> f32 { return select(1.0, cam.extra.w, cam.extra.w > 0.0); }
+fn starLit() -> bool { return i32(cam.planet.z + 0.5) == 9; }
+// the direction to the light from p, and its strength and colour
+fn lightDir(p: vec3f) -> vec3f {
+  if (starLit()) { return normalize(-p); }
+  return cam.sun.xyz;
+}
+fn lightGain(p: vec3f) -> vec3f {
+  if (starLit()) { let r = max(length(p), 0.3); return vec3f(0.84, 0.91, 1.0) * clamp(9.0 / (r * r), 0.25, 4.0); }
+  return vec3f(1.0);
+}
 // Sunlight that reaches p: 0 in the planet's shadow, a soft edge, and a red
-// tint where the ray grazes the atmosphere. The planet has radius 1.
+// tint where the ray grazes the atmosphere. The planet has radius planetR().
 fn sunShadow(p: vec3f) -> vec3f {
+  if (starLit()) { return vec3f(1.0); }
   let L = cam.sun.xyz;
+  let R = planetR();
   let t = -dot(p, L);
   if (t <= 0.0) { return vec3f(1.0); }
-  let b = length(p + t * L);
-  let pen = 0.012 + 0.004 * t;
+  let b = length(p + t * L) / R;
+  let pen = 0.012 + 0.004 * t / R;
   let lit = smoothstep(1.0 - pen, 1.0 + pen, b);
   let graze = smoothstep(1.0 + 0.09, 1.0, b) * lit;
   return lit * mix(vec3f(1.0), vec3f(1.0, 0.55, 0.32), graze);
@@ -299,8 +317,8 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   }
   // glints of shed ice in the sunlight (modes 0 and 4)
   if ((mode < 0.5 || mode > 3.5) && tg < 0.5 && tg > -0.5) {
-    let hv = normalize(cam.sun.xyz + normalize(cam.eye.xyz - wp));
-    let sh0 = sunShadow(wp);
+    let hv = normalize(lightDir(wp) + normalize(cam.eye.xyz - wp));
+    let sh0 = sunShadow(wp) * lightGain(wp);
     em = em + vec3f(1.0, 0.97, 0.9) * (6.0 * cam.sun.w * glint(ii, bd.spin.xyz, hv)) * sh0;
   }
   let hcol = heat(st);
@@ -340,9 +358,9 @@ fn shade(in: VOut) -> FOut {
   if (edge <= 0.0) { discard; }
   let nz = sqrt(max(0.0, 1.0 - rho2));
   let n = normalize(rel.x * cam.right.xyz + rel.y * cam.up.xyz - nz * cam.fwd.xyz);
-  let L = cam.sun.xyz;
   let p = in.world;
-  let sh = sunShadow(p);
+  let L = lightDir(p);
+  let sh = sunShadow(p) * lightGain(p);
   let tau = ringTau(p);
   let ringT = exp(-0.5 * tau / max(abs(L.z), 0.08));
   // regolith: Lommel-Seeliger blended with Lambert
@@ -354,7 +372,8 @@ fn shade(in: VOut) -> FOut {
   let dp = length(p);
   let toP = -p / dp;
   let phaseP = 0.5 + 0.5 * dot(-toP, L);
-  let shine = vec3f(0.55, 0.62, 0.75) * cam.planet.w * phaseP * max(dot(n, toP), 0.0) / (dp * dp);
+  let pr = planetR();
+  let shine = vec3f(0.55, 0.62, 0.75) * cam.planet.w * pr * pr * phaseP * max(dot(n, toP), 0.0) / (dp * dp);
   let fill = vec3f(0.018, 0.022, 0.03);
   let col = in.color * (cam.sun.w * diffuse * sh * ringT + shine + fill) + in.emis;
   o.color = vec4f(col, in.cover * edge);

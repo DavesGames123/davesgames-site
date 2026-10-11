@@ -271,7 +271,8 @@ export class Renderer {
     // the planet map level: the texels per screen pixel across the disc
     let lod = 0;
     if (this.planetTexW) { const rpx = focal / Math.max(1e-3, Math.hypot(...f.eye)); lod = Math.max(0, Math.min(this.planetMips - 1, Math.log2(this.planetTexW / (Math.PI * 2 * rpx)))); }
-    d[96] = f.flattening || 0; d[97] = lod; d[98] = f.realRings || 0; d[99] = 0;
+    // d[99]: the drawn radius of the primary in world units (roll.js bodyR; 0 = 1)
+    d[96] = f.flattening || 0; d[97] = lod; d[98] = f.realRings || 0; d[99] = f.bodyR && f.bodyR !== 1 ? f.bodyR : 0;
     // vp shift is in clip space; the shaders' px math assumes a centred
     // projection, so the shift must stay 0 for grains (main.js uses a
     // target offset for framing instead)
