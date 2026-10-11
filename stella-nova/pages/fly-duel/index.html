@@ -109,7 +109,7 @@
 <header class="hero" id="s0">
   <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
   <h1>Two fruit fly brains learn a card duel</h1>
-  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other by the same rule a fly uses: dopamine tells a synapse whether the last choice turned out better or worse than expected.</p>
+  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
 
   <div class="arena" id="arena">
     <div class="arena-brain a"><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
@@ -168,7 +168,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 02 -->
 <section class="sec" id="s2">
-  <div class="sec-head"><span class="num">02</span><div><h2>The fly's learning centre</h2><p>The mushroom body is a paired structure in the insect brain where smells become memories. Odour information arrives on projection neurons (PNs). Each Kenyon cell (KC) samples a few PNs at random-looking claws. KCs talk to a small set of output neurons (MBONs) in separate compartments, and dopamine neurons (DANs) that carry reward or punishment signals reach exactly those compartments. That layout is the whole learning machine. In numbers: each mushroom body has about <span data-fact="kcPerHemisphere">two thousand</span> KCs<span data-cite="aso2014a"></span>, read out by <span data-fact="mbonCells">a few dozen</span> MBONs of <span data-fact="mbonTypes">about twenty</span> types in <span data-fact="compartments">about fifteen</span> compartments, each fed by its own DAN types<span data-cite="aso2014b"></span>.</p></div></div>
+  <div class="sec-head"><span class="num">02</span><div><h2>The fly's learning centre</h2><p>The mushroom body is a paired structure in the insect brain where smells become memories. Odour information arrives on projection neurons (PNs). Each Kenyon cell (KC) samples a few PNs at random-looking claws<span data-cite="caron2013"></span>. KCs talk to a small set of output neurons (MBONs) in separate compartments, and dopamine neurons (DANs) that carry reward or punishment signals reach exactly those compartments. That layout is the whole learning machine. In numbers: each mushroom body has about <span data-fact="kcPerHemisphere">two thousand</span> KCs<span data-cite="aso2014a"></span>, read out by <span data-fact="mbonCells">a few dozen</span> MBONs of <span data-fact="mbonTypes">about twenty</span> types in <span data-fact="compartments">about fifteen</span> compartments, each fed by its own DAN types<span data-cite="aso2014b aso2014a"></span>.</p></div></div>
   <div class="grid">
     <article class="card span-7">
       <div class="card-top"><h3>One mushroom body, neuron by neuron</h3><span class="tag real" id="wiringTag">from data/connectome.json</span></div>
@@ -229,7 +229,7 @@
 
 <!-- ───────────────────────────────────────────────────────────── 05 -->
 <section class="sec" id="s5">
-  <div class="sec-head"><span class="num">05</span><div><h2>Dopamine teaches</h2><p>Fly learning is a three-factor rule<span data-cite="hige2015a"></span>. A KC-to-MBON synapse changes only when the KC was active (factor one and two: pre and post) and a dopamine neuron in that compartment fires (factor three). The change is a depression. Reward-signalling PAM neurons<span data-cite="liu2012"></span> depress synapses onto output neurons that drive avoidance; punishment-signalling PPL1 neurons<span data-cite="claridgechang2009"></span> depress synapses onto output neurons that drive approach<span data-cite="owald2015 aso2014b"></span>. Our model sends each DAN the temporal-difference error δ<span data-cite="sutton1988"></span>, the surprise of the last move, the same signal that dopamine neurons carry in monkeys<span data-cite="schultz1997"></span>.</p></div></div>
+  <div class="sec-head"><span class="num">05</span><div><h2>Dopamine teaches</h2><p>In the fly, a KC-to-MBON synapse changes when the KC was active and a dopamine neuron in that compartment fires, and the order of the two signals matters<span data-cite="hige2015a"></span>. The change is a depression. The model uses the same two signals: a decaying trace of the activity of each KC, and the dopamine signal of the compartment. It uses no MBON activity. Reward-signalling PAM neurons<span data-cite="liu2012"></span> depress synapses onto output neurons that drive avoidance; punishment-signalling PPL1 neurons<span data-cite="claridgechang2009"></span> depress synapses onto output neurons that drive approach<span data-cite="owald2015 aso2014b"></span>. Our model sends each DAN the temporal-difference error δ<span data-cite="sutton1988"></span>, the surprise of the last move, the same signal that dopamine neurons carry in monkeys<span data-cite="schultz1997"></span>.</p></div></div>
   <div class="grid">
     <article class="card span-7">
       <div class="card-top"><h3>Teach a tiny mushroom body</h3><span class="tag toy">illustrative: 20 KCs, 2 MBONs, same sign rule as the model</span></div>
@@ -356,7 +356,7 @@
     </article>
     <article class="card span-6">
       <div class="card-top"><h3>Why it still says something</h3></div>
-      <p class="body">The learning rule here is not ours: dopamine-gated depression of KC-to-MBON synapses has been measured in the fly<span data-cite="hige2015a"></span>, and the sparse KC code and its compartments are in the wiring data. Showing that such a circuit, with its real fan-out and sparsity, can learn a value for boards of a game it has never seen is a small demonstration of how general that design is. Self-play with TD learning is an old idea in games<span data-cite="tesauro1995"></span>; the new part is the wiring.</p>
+      <p class="body">The learning rule here is not ours: dopamine-gated depression of KC-to-MBON synapses has been measured in the fly<span data-cite="hige2015a"></span>, and the KC fan-out and the compartments are in the wiring data. Showing that such a circuit, with its real fan-out and a fly-like share of active KCs, can learn a value for boards of a game it has never seen is a small demonstration of how general that design is. Self-play with TD learning is an old idea in games<span data-cite="tesauro1995"></span>; the new part is the wiring.</p>
     </article>
     <article class="card span-6">
       <div class="card-top"><h3>Limits we know about</h3></div>

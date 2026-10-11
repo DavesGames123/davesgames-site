@@ -9,6 +9,7 @@
 //  GREP MAP
 //      grep -n 'CARD NAMES'     card names that clash with published cards
 //      grep -n 'MANA GLYPHS'    no disc-shaped mana glyph
+//      grep -n 'PAGE PROSE'     claims the sources or the model do not hold
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync } from 'node:fs';
@@ -44,6 +45,23 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg
     const first = (svg.match(/<svg[^>]*>\s*<(\w+)/) || [])[1];
     ok(first && first !== 'circle' && first !== 'ellipse', `mana glyphs: ${k} outline is ${first}, not a disc`);
   }
+}
+
+// ---------------------------------------------------------------- PAGE PROSE
+// Claims that the review found wrong in index.html, and the citations it
+// added. Checked against the abstracts and full texts (Europe PMC) on
+// 2026-10-11, and against brain/mb.js learn(), which uses the KC trace and
+// the compartment dopamine only (no MBON activity).
+{
+  const html = read('index.html');
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  ok(!/same rule a fly uses/i.test(text), 'prose: the hero does not say the model uses the same rule as a fly');
+  ok(!/pre and post/i.test(text), 'prose: 05 does not say the rule needs MBON (post) activity');
+  ok(/uses no MBON activity/.test(text), 'prose: 05 says the model uses no MBON activity');
+  ok(/order of the two signals matters/.test(text), 'prose: 05 gives the order rule of Hige et al. 2015');
+  ok(/random-looking claws<span data-cite="caron2013">/.test(html), 'prose: 02 cites Caron 2013 for random claws');
+  ok(/its own DAN types<span data-cite="aso2014b aso2014a">/.test(html), 'prose: 02 cites Aso 2014a for compartments and DAN types');
+  ok(!/sparse KC code and its compartments are in the wiring/.test(text), 'prose: 09 does not say the sparse code is in the wiring');
 }
 
 console.log(`review.test: ${pass} pass, ${fail} fail`);
