@@ -259,7 +259,7 @@ function hexEyeTextures(size, seed) {
   const colour = new Uint8Array(size * size * 4), normal = new Uint8Array(size * size * 4);
   const base = col(COLOURS.eye).convertLinearToSRGB(), groove = col(COLOURS.eyeGroove).convertLinearToSRGB();
   const shade = new Float32Array(HEX_W * HEX_H), rnd = mulberry32(seed ^ 0x9e3779b9);
-  for (let i = 0; i < shade.length; i++) shade[i] = 0.84 + 0.3 * rnd();
+  for (let i = 0; i < shade.length; i++) shade[i] = 0.88 + 0.18 * rnd();
   const tileH = HEX_H * HEX_RH;
   const mod = (a, m) => ((a % m) + m) % m;
   for (let py = 0; py < size; py++) for (let px = 0; px < size; px++) {
@@ -278,7 +278,7 @@ function hexEyeTextures(size, seed) {
     let nx = 0, ny = 0, nz = 1, cr, cg, cb;
     if (hd < 0.84) {
       const s = shade[mod(br, HEX_H) * HEX_W + mod(bc, HEX_W)];
-      const lift = 1 + 0.18 * (1 - hd); // a little brighter at the dome centre
+      const lift = 1 + 0.08 * (1 - hd); // a little brighter at the dome centre
       cr = base.r * s * lift; cg = base.g * s * lift; cb = base.b * s * lift;
       nx = bdx * 1.5; ny = bdy * 1.5;
     } else {
