@@ -3,9 +3,15 @@
 // ----------------------------------------------------------------------------
 //  The panel over studio-core.js. It makes jobs from the controls, runs
 //  them in a queue and shows a gallery. Each card has its thumbnail, its
-//  state, and PNG, JSON and Open buttons. Open sends the planet to the
-//  editor (main.js applyPlanet). Download all writes a ZIP with a PNG and
-//  a recipe JSON per render (studio-core.js zipFiles).
+//  state, and PNG, Maps, JSON and Open buttons. Open sends the planet to
+//  the editor (main.js applyPlanet). Maps writes a ZIP with every texture
+//  map of that planet (maps.js mapIds: albedo, height, normals, PBR,
+//  clouds, rings and the ring alpha, and so on) and its JSON. Download all
+//  writes a ZIP with a PNG and a recipe JSON per render, and the maps in a
+//  folder per render (studio-core.js zipFiles).
+//  MAPS  The Maps select sets render.maps for every job, also for recipe
+//    files: off, the map width of the render, or a fixed map width. Maps
+//    count against the gallery memory cap.
 //
 //  SOURCES  random      n draws of the chosen randomize.js mode
 //           variations  n mutations of the editor's planet
@@ -20,7 +26,7 @@
 //    Without WebGPU, Render is off and the note says why.
 //
 //  grep -n targets: "export function createStudio", "function startRun", "function makeJobs",
-//  "function drawGallery", "function downloadZip"
+//  "function drawGallery", "function downloadZip", "function downloadMaps"
 // ============================================================================
 import * as SC from './studio-core.js';
 import { MODES } from './randomize.js';
@@ -43,6 +49,7 @@ export function createStudio(o) {
   fill('stAspect', SC.ASPECTS.map(a => [a.id, a.label]), 'square');
   fill('stFraming', SC.FRAMINGS.map(f => [f.id, f.label]), 'disc');
   fill('stBg', SC.BACKGROUNDS.map(b => [b.id, b.label]), 'stars');
+  fill('stMaps', [['off', 'no texture maps'], ['auto', 'maps at render detail'], ...RES.filter(r => r >= 1024 && r <= maxRes).map(r => [r, `maps ${r} × ${r / 2}`])], 'auto');
   $('stSeed').value = Math.floor(Math.random() * 1e6);
   const amt = $('stAmt'), showAmt = () => { $('oStAmt').textContent = (+amt.value).toFixed(2); };
   amt.oninput = showAmt; showAmt();
@@ -62,7 +69,7 @@ export function createStudio(o) {
     $('stNote').textContent = `${files.length} recipe${files.length === 1 ? '' : 's'} loaded`;
   };
 
-  const renderSettings = () => ({ ...SC.RENDER_DEFAULT, res: +$('stRes').value, aspect: $('stAspect').value, framing: $('stFraming').value, background: $('stBg').value });
+  const renderSettings = () => ({ ...SC.RENDER_DEFAULT, res: +$('stRes').value, aspect: $('stAspect').value, framing: $('stFraming').value, background: $('stBg').value, maps: $('stMaps').value });
   const queue = SC.createQueue({
     maxBytes: ENV.mobile ? 3e8 : 1.5e9,
     run: (job, hooks) => SC.renderJob({ run, env: ENV, maxRes, generate: (P, W, prog) => pool.generate(P, W, prog) }, job, hooks),
@@ -72,7 +79,7 @@ export function createStudio(o) {
   function makeJobs() {
     const matchAll = $('stMatch').checked, render = renderSettings();
     const n = Math.max(1, Math.min(200, +$('stCount').value | 0));
-    if (src === 'list') { batch++; return files.map(j => ({ ...j, id: `f${batch}-${j.id}`, render: matchAll ? render : j.render })); }
+    if (src === 'list') { batch++; return files.map(j => ({ ...j, id: `f${batch}-${j.id}`, render: matchAll ? render : { ...j.render, maps: render.maps } })); }
     return SC.makeJobs({ source: src, mode: $('stMode').value, n, seed: +$('stSeed').value >>> 0, amount: +amt.value, current: o.getPlanet(), render, matchAll });
   }
 
@@ -107,10 +114,11 @@ export function createStudio(o) {
       let c = cards.get(j.id);
       if (!c) {
         const fig = document.createElement('figure');
-        fig.innerHTML = '<canvas width="1" height="1"></canvas><figcaption><span></span><b></b><button data-a="png">PNG</button><button data-a="json">JSON</button><button data-a="open">Open</button></figcaption>';
+        fig.innerHTML = '<canvas width="1" height="1"></canvas><figcaption><span></span><b></b><button data-a="png">PNG</button><button data-a="maps">Maps</button><button data-a="json">JSON</button><button data-a="open">Open</button></figcaption>';
         if (j.render.background === 'transparent') fig.classList.add('alpha');
         c = { fig, canvas: fig.querySelector('canvas'), name: fig.querySelector('span'), state: fig.querySelector('b'), drawn: false };
         fig.querySelector('[data-a=png]').onclick = () => j.result && o.save(new Blob([j.result.png], { type: 'image/png' }), SC.fileBase(j.result, i) + '.png');
+        fig.querySelector('[data-a=maps]').onclick = () => j.result && j.result.maps && downloadMaps(j.result, queue.jobs.indexOf(j));
         fig.querySelector('[data-a=json]').onclick = () => o.save(new Blob([JSON.stringify(j.result ? j.result.recipe : SC.recipeOf(j), null, 1)], { type: 'application/json' }), (j.result ? SC.fileBase(j.result, i) : 'recipe-' + j.planet.seed) + '.json');
         fig.querySelector('[data-a=open]').onclick = () => o.open(j.planet);
         cards.set(j.id, c); host.appendChild(fig);
@@ -119,6 +127,8 @@ export function createStudio(o) {
       c.state.textContent = j.status === 'running' ? Math.round(j.progress * 100) + '%' : j.status === 'failed' ? 'failed' : j.status === 'done' ? `${j.result.w}×${j.result.h}` : j.status;
       c.state.title = j.error || '';
       c.fig.querySelector('[data-a=png]').disabled = !j.result;
+      const mb = c.fig.querySelector('[data-a=maps]');
+      mb.disabled = !(j.result && j.result.maps); mb.title = j.result && !j.result.maps ? 'rendered with maps off' : 'texture maps (ZIP)';
       if (j.result && !c.drawn) {
         const t = j.result.thumb;
         c.canvas.width = t.w; c.canvas.height = t.h;
@@ -145,6 +155,15 @@ export function createStudio(o) {
     const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
     o.save(blob, `forge-studio-${new Date().toISOString().slice(0, 10)}.zip`);
     o.status(`ZIP saved (${(blob.size / 1e6).toFixed(0)} MB)`);
+  }
+
+  async function downloadMaps(r, i) {
+    if (!window.JSZip) { o.status('ZIP library missing'); return; }
+    const zip = new window.JSZip();
+    for (const [name, bytes] of SC.mapZipFiles(r, i)) zip.file(name, bytes);
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    o.save(blob, SC.fileBase(r, i) + '-maps.zip');
+    o.status(`${r.maps.length} maps saved (${(blob.size / 1e6).toFixed(0)} MB)`);
   }
 
   drawGallery();

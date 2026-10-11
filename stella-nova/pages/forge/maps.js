@@ -27,6 +27,7 @@
 //    clouds      RGBA8        white (cloud colour) with alpha = cover
 //    flow        RGB8         gas giants: zonal wind, meridional wind, band
 //    rings       RGBA8        1024 x 64 strip, inner -> outer (if rings on)
+//    ringAlpha   L8           the ring strip's alpha (opacity) alone
 //
 //  NORMALS  central differences on the sphere: east-west distance
 //  2 dphi cos(lat) R, north-south 2 dtheta R; the column wraps at the date
@@ -42,7 +43,7 @@
 //  grep -n targets: "export const MAP_INFO", "export function prepare",
 //  "export function sampleRows", "export function finish", "export function channels", "function normals",
 //  "function ambient", "function halo", "export function generate", "export function mapImage",
-//  "export function hashMaps", "export function shrinkMaps"
+//  "export function encodeMaps", "export function hashMaps", "export function shrinkMaps"
 // ============================================================================
 import { prepareRocky, lavaColour } from './rocky.js';
 import { prepareGas, ringProfile } from './gas.js';
@@ -65,6 +66,7 @@ export const MAP_INFO = [
   { id: 'clouds', label: 'Clouds', note: 'RGBA, alpha' },
   { id: 'flow', label: 'Band / flow', note: 'u · v · band' },
   { id: 'rings', label: 'Rings', note: 'RGBA strip' },
+  { id: 'ringAlpha', label: 'Ring alpha', note: 'linear opacity' },
 ];
 
 // The height quantiles use the full band, whatever the last map width was.
@@ -404,13 +406,27 @@ export function mapImage(M, P, id) {
       for (let y = 0; y < h; y++) d.set(strip, y * 1024 * 4);
       return { width: 1024, height: h, channels: 4, depth: 8, data: d };
     }
+    case 'ringAlpha': {
+      const strip = ringProfile(P, 1024), h = 64, d = new Uint8Array(1024 * h);
+      for (let x = 0; x < 1024; x++) d[x] = strip[x * 4 + 3];
+      for (let y = 1; y < h; y++) d.copyWithin(y * 1024, 0, 1024);
+      return { width: 1024, height: h, channels: 1, depth: 8, data: d };
+    }
   }
   return null;
 }
 
 // Which maps a planet has (flow for giants, rings when on).
 export function mapIds(P) {
-  return MAP_INFO.map(m => m.id).filter(id => (id !== 'flow' || P.kind === 'gas') && (id !== 'rings' || (P.rings && P.rings.on)));
+  return MAP_INFO.map(m => m.id).filter(id => (id !== 'flow' || P.kind === 'gas') && (!id.startsWith('ring') || (P.rings && P.rings.on)));
+}
+
+// Every map of a planet as PNG bytes: [[id, bytes]] in mapIds order.
+// encode(img) -> bytes (png.js encodePNG); onEach(i, n, id) before each.
+export async function encodeMaps(M, P, encode, onEach = () => {}) {
+  const ids = mapIds(P), out = [];
+  for (let i = 0; i < ids.length; i++) { onEach(i, ids.length, ids[i]); out.push([ids[i], await encode(mapImage(M, P, ids[i]))]); }
+  return out;
 }
 
 // FNV-1a over every map buffer, as 8 hex digits.

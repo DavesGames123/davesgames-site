@@ -17,6 +17,7 @@ import * as RZ from './randomize.js';
 import * as SC from './studio-core.js';
 import * as MP from './maps.js';
 import { GX_RANGE } from './gasx.js';
+import { encodePNG } from './png.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { console.log(`${cond ? 'ok  ' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); if (!cond) fails++; };
@@ -172,6 +173,24 @@ function spread(Ps) {
   const names = Object.keys(z2.files).sort();
   const j0 = JSON.parse(await z2.file(names.find(n => n.endsWith('.json'))).async('string'));
   ok('studio ZIP: a PNG and a recipe JSON per render', names.length === 4 && names.filter(n => n.endsWith('.png')).length === 2 && j0.format === SC.STUDIO_FORMAT && j0.planet.seed === jobs[0].planet.seed, names.join(' '));
+  // maps: a ringed giant exports every map, the ring alpha as its own L8 map
+  const Ps = PR.fromPreset('saturn', 3), Ms = MP.generate(Ps, 64), ids = MP.mapIds(Ps);
+  const ra = MP.mapImage(Ms, Ps, 'ringAlpha'), rs = MP.mapImage(Ms, Ps, 'rings');
+  let raOk = ra.channels === 1 && ra.width === rs.width && ra.height === rs.height;
+  for (let i = 0; i < ra.width * ra.height && raOk; i++) raOk = ra.data[i] === rs.data[i * 4 + 3];
+  ok('studio maps: a ringed planet has the ring strip and its alpha', ids.includes('rings') && ids.includes('ringAlpha') && raOk && ra.data.some(v => v > 0) && ra.data.some(v => v < 255), ids.join(' '));
+  ok('studio maps: no ring maps without rings', !MP.mapIds(PR.fromPreset('earth', 3)).some(id => id.startsWith('ring')));
+  const enc = await MP.encodeMaps(Ms, Ps, encodePNG);
+  ok('studio maps: encodeMaps gives one PNG per map id', enc.length === ids.length && enc.every(([id, b], i) => id === ids[i] && b[0] === 137 && b[1] === 80), enc.map(e => e[0]).join(' '));
+  const rm = { ...results[0], maps: enc };
+  const zm = new JSZip(); for (const [name, bytes] of SC.zipFiles([rm, results[1]])) zm.file(name, bytes);
+  const nm = Object.keys((await JSZip.loadAsync(await zm.generateAsync({ type: 'uint8array', compression: 'STORE' }))).files).filter(n => !n.endsWith('/'));
+  const b0 = SC.fileBase(rm, 0);
+  ok('studio ZIP: every map of a render goes in its maps folder', nm.length === 4 + ids.length && ids.every(id => nm.includes(`${b0}-maps/${b0}-${id}.png`)), nm.filter(n => n.includes('-maps/')).length + ' maps');
+  const one = SC.mapZipFiles(rm, 0);
+  ok('studio ZIP: the Maps button gives the maps and the recipe', one.length === ids.length + 1 && one.some(([n]) => n === `${b0}-ringAlpha.png`) && one.at(-1)[0] === b0 + '.json');
+  ok('studio queue: the memory cap counts the maps', SC.resultBytes(rm) === rm.png.length + enc.reduce((a, m) => a + m[1].length, 0) && SC.resultBytes(results[1]) === results[1].png.length);
+  ok('studio maps: the Maps setting survives varied shots', SC.makeJobs({ source: 'random', n: 3, seed: 9, render: { maps: 2048 }, matchAll: false }).every(j => j.render.maps === 2048));
   // auto exposure stays in range and does not blow out
   const bright = new Uint8Array(400).fill(250), dark = new Uint8Array(400).fill(20);
   const eb = SC.nextExposure(0.65, SC.exposureStats(bright)), ed = SC.nextExposure(0.65, SC.exposureStats(dark));

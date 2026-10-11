@@ -15,7 +15,9 @@
 //  RENDER keys: res (long side px), aspect (ASPECTS id), framing (FRAMINGS
 //    id), sun ('auto' or the phase angle in deg: 0 full, 90 half, 150
 //    crescent), sunEl (deg), background ('stars', 'black', 'transparent'),
-//    exposure ('auto' or a number), hours (cloud and spin state), yaw (rad).
+//    exposure ('auto' or a number), hours (cloud and spin state), yaw (rad),
+//    maps ('off', 'auto' = the map width of the render, or a map width in
+//    px): with maps on, the job also keeps every texture map as a PNG.
 //  cameraFor(P, r, w, h) -> the render.js cam (pos, target, up, fov,
 //    sunDir, spin, starGain, sunGain). The planet is radius 1 at the origin.
 //
@@ -34,17 +36,21 @@
 //
 //  QUEUE  createQueue({ run, onChange, maxBytes }): add(jobs), start(),
 //    cancel(), clear() (drops the finished jobs); one job at a time; a job's result keeps only its
-//    PNG bytes and a thumbnail. When the kept bytes pass maxBytes the queue
+//    PNG bytes, its map PNGs (maps on) and a thumbnail; resultBytes counts
+//    them. When the kept bytes pass maxBytes the queue
 //    pauses ('full') until the gallery is cleared.
 //  RECIPES  recipeOf(job, res) / jobFromRecipe(json): the planet, the
 //    render settings with the resolved exposure, and the size.
-//    zipFiles(results) -> [[name, bytes]] (a PNG and a JSON per result).
+//    zipFiles(results) -> [[name, bytes]] (a PNG and a JSON per result,
+//    and the maps in a folder <base>-maps/ per result).
+//    mapZipFiles(result, i) -> the maps and the JSON of one result.
 //
 //  grep -n targets: "export const ASPECTS", "export const FRAMINGS", "export function maxRes",
 //  "export function outputSize", "export function planTiles", "export function cameraFor",
 //  "export function makeJobs", "export async function createRun", "export async function renderJob",
 //  "export function createQueue", "export function recipeOf", "export function jobFromRecipe",
-//  "export function zipFiles", "function alphaFor"
+//  "export function zipFiles", "export function mapZipFiles", "export const resultBytes",
+//  "function alphaFor"
 // ============================================================================
 import { createRenderer, worldFrame } from './render.js';
 import { encodePNG } from './png.js';
@@ -52,6 +58,7 @@ import * as PR from './presets.js';
 import { draw, mutate, clean } from './randomize.js';
 import { makeDice } from './archetypes.js';
 import { pickWidth } from './budget.js';
+import { encodeMaps } from './maps.js';
 
 export const STUDIO_FORMAT = 'stella-nova-studio';
 export const ASPECTS = [
@@ -64,7 +71,7 @@ export const FRAMINGS = [
   { id: 'pole', label: 'pole', phase: 60 },
 ];
 export const BACKGROUNDS = [{ id: 'stars', label: 'stars' }, { id: 'black', label: 'black' }, { id: 'transparent', label: 'transparent PNG' }];
-export const RENDER_DEFAULT = { res: 2048, aspect: 'square', framing: 'disc', sun: 'auto', sunEl: 8, background: 'stars', exposure: 'auto', hours: 0, yaw: 0.6 };
+export const RENDER_DEFAULT = { res: 2048, aspect: 'square', framing: 'disc', sun: 'auto', sunEl: 8, background: 'stars', exposure: 'auto', hours: 0, yaw: 0.6, maps: 'off' };
 
 const D = Math.PI / 180;
 const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -230,10 +237,16 @@ export async function renderJob(ctx, job, hooks = {}) {
   if (run.lost) throw new Error('GPU device lost: reload the page');
   const P = job.planet, r = { ...RENDER_DEFAULT, ...job.render };
   const { w: W, h: H } = outputSize(Math.min(r.res, ctx.maxRes || 4096), r.aspect);
-  const mw = mapWidthFor(Math.max(W, H), env);
+  const keepMaps = r.maps && r.maps !== 'off';
+  const mw = +r.maps > 0 ? Math.min(+r.maps, ctx.maxRes || 4096) : mapWidthFor(Math.max(W, H), env);
   prog(0.02);
-  let M = await ctx.generate(P, mw, f => prog(0.02 + 0.4 * f));
+  let M = await ctx.generate(P, mw, f => prog(0.02 + (keepMaps ? 0.3 : 0.4) * f));
   if (stop()) throw new Error('cancelled');
+  let maps = null;
+  if (keepMaps) {
+    maps = await encodeMaps(M, P, img => encodePNG(img), (i, n) => prog(0.32 + 0.1 * i / n));
+    if (stop()) throw new Error('cancelled');
+  }
   const device = run.device;
   device.pushErrorScope('out-of-memory'); device.pushErrorScope('validation');
   run.R.setPlanet(P, M, env);
@@ -266,10 +279,11 @@ export async function renderJob(ctx, job, hooks = {}) {
   const png = ctx.encode ? await ctx.encode(rgba, W, H) : await encodePNG({ width: W, height: H, channels: 4, depth: 8, data: rgba });
   prog(1);
   const render = { ...r, exposure: +cam.exposure.toFixed(4), mapWidth: mw };
-  return { png, thumb, w: W, h: H, recipe: recipeOf({ planet: P, render }, { w: W, h: H }) };
+  return { png, maps, thumb, w: W, h: H, recipe: recipeOf({ planet: P, render }, { w: W, h: H }) };
 }
 
 // ── queue ───────────────────────────────────────────────────────────────
+export const resultBytes = r => r.png.length + (r.maps || []).reduce((a, m) => a + m[1].length, 0);
 export function createQueue({ run, onChange = () => {}, maxBytes = 1.5e9 }) {
   const jobs = [];
   let active = false, cancelFlag = false, kept = 0;
@@ -277,8 +291,8 @@ export function createQueue({ run, onChange = () => {}, maxBytes = 1.5e9 }) {
     jobs, get running() { return active; }, get bytes() { return kept; }, state: 'idle',
     add(list) { for (const j of list) jobs.push({ ...j, status: 'queued', progress: 0 }); onChange(Q); return Q; },
     cancel() { cancelFlag = true; for (const j of jobs) if (j.status === 'queued') j.status = 'cancelled'; onChange(Q); },
-    clear() { for (let i = jobs.length - 1; i >= 0; i--) if (/done|failed|cancelled/.test(jobs[i].status)) jobs.splice(i, 1); kept = 0; for (const j of jobs) if (j.result) kept += j.result.png.length; if (Q.state === 'full') Q.state = 'idle'; onChange(Q); },
-    remove(id) { const i = jobs.findIndex(j => j.id === id && j.status !== 'running'); if (i >= 0) { if (jobs[i].result) kept -= jobs[i].result.png.length; jobs.splice(i, 1); onChange(Q); } },
+    clear() { for (let i = jobs.length - 1; i >= 0; i--) if (/done|failed|cancelled/.test(jobs[i].status)) jobs.splice(i, 1); kept = 0; for (const j of jobs) if (j.result) kept += resultBytes(j.result); if (Q.state === 'full') Q.state = 'idle'; onChange(Q); },
+    remove(id) { const i = jobs.findIndex(j => j.id === id && j.status !== 'running'); if (i >= 0) { if (jobs[i].result) kept -= resultBytes(jobs[i].result); jobs.splice(i, 1); onChange(Q); } },
     async start() {
       if (active) return;
       active = true; cancelFlag = false; Q.state = 'running'; onChange(Q);
@@ -290,7 +304,7 @@ export function createQueue({ run, onChange = () => {}, maxBytes = 1.5e9 }) {
           j.status = 'running'; j.progress = 0; onChange(Q);
           try {
             j.result = await run(j, { onProgress: f => { j.progress = f; onChange(Q); }, cancelled: () => cancelFlag });
-            j.status = 'done'; kept += j.result.png.length;
+            j.status = 'done'; kept += resultBytes(j.result);
           } catch (e) {
             j.status = cancelFlag || e.message === 'cancelled' ? 'cancelled' : 'failed'; j.error = e.message;
             if (/device lost/.test(e.message)) { for (const k of jobs) if (k.status === 'queued') { k.status = 'failed'; k.error = e.message; } }
@@ -332,6 +346,11 @@ export function zipFiles(results) {
     const b = fileBase(r, i);
     out.push([b + '.png', r.png]);
     out.push([b + '.json', new TextEncoder().encode(JSON.stringify(r.recipe, null, 1))]);
+    for (const [id, bytes] of r.maps || []) out.push([`${b}-maps/${b}-${id}.png`, bytes]);
   });
   return out;
+}
+export function mapZipFiles(r, i) {
+  const b = fileBase(r, i);
+  return [...(r.maps || []).map(([id, bytes]) => [`${b}-${id}.png`, bytes]), [b + '.json', new TextEncoder().encode(JSON.stringify(r.recipe, null, 1))]];
 }
