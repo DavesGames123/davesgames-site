@@ -1,0 +1,234 @@
+// ============================================================================
+//  FLY DUEL  ·  node tests for the page  (node tests/page.test.mjs)
+// ----------------------------------------------------------------------------
+//  Package E. No browser: the user does not allow headless Chrome. Two
+//  parts.
+//
+//  1. Pure ui/ modules against the real packages: card art is the same
+//     for the same id and different between ids, the art and glyphs hold
+//     no trademark words, the board adapter reads the real permanent
+//     shape, a Match plays a full game between two real Fly objects, the
+//     brain view draws on a fake 2D context, the chart reader handles
+//     nested rows, and the toy three-factor rule has the right sign.
+//
+//  2. A fake DOM boot of main.js. A small stand-in for document, canvas,
+//     IntersectionObserver, rAF and fetch lets main.js run its whole boot
+//     in node. The test then runs frames, clicks the section 07 buttons
+//     and checks the markup. Any console.error fails the test.
+//
+//  Parts that need a module that is not there yet are skipped, with a
+//  line that says so. Exit code 1 on any failure.
+//
+//  GREP MAP   (grep -n "^// ---" tests/page.test.mjs)
+// ============================================================================
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const has = p => existsSync(join(ROOT, p));
+let fail = 0, pass = 0, skip = 0;
+const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg); } };
+const skipped = msg => { skip++; console.log('skip', msg); };
+
+const art = await import('../ui/art.js');
+const board = await import('../ui/board.js');
+const brain = await import('../ui/brain.js');
+const charts = await import('../ui/charts.js');
+const explain = await import('../ui/explain.js');
+const matchMod = await import('../ui/match.js');
+
+// A 2D context that accepts every call and counts them.
+function fakeCtx() {
+  const calls = { n: 0, bad: 0 };
+  const g = new Proxy({ calls }, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'measureText') return s => ({ width: String(s).length * 6 });
+      return (...a) => { calls.n++; if (a.some(x => typeof x === 'number' && !Number.isFinite(x))) calls.bad++; };
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  return g;
+}
+
+// --------------------------------------------------------------- art
+{
+  const c1 = { id: 'ember-gnat', colour: 'amber', type: 'creature', keywords: ['swift'] };
+  const c2 = { id: 'dew-moth', colour: 'moss', type: 'creature', keywords: ['wings'] };
+  const a1 = art.cardArt(c1), a1b = art.cardArt({ ...c1 }), a2 = art.cardArt(c2);
+  ok(a1 === a1b, 'art: same id gives the same picture');
+  ok(a1 !== a2, 'art: two ids give two pictures');
+  ok(/^<svg[^>]*viewBox="0 0 100 70"/.test(a1) && a1.endsWith('</svg>'), 'art: an svg element');
+  ok(!/NaN|undefined|Infinity/.test(a1 + a2), 'art: no NaN or undefined in the svg');
+  for (const t of ['land', 'spell']) for (const k of ['damage', 'draw', 'pump', 'heal', 'destroy', 'token', undefined]) {
+    const s = art.cardArt({ id: `x-${t}-${k || "plain"}`, colour: 'moss', type: t, effect: k ? { kind: k } : undefined });
+    ok(!/NaN|undefined/.test(s), `art: ${t} ${k} has no NaN`);
+  }
+  const glyphs = art.manaGlyph('amber') + art.manaGlyph('moss') + art.manaGlyph('generic', 3) + art.costGlyphs({ generic: 2, amber: 1, moss: 1 });
+  ok((glyphs.match(/<svg/g) || []).length === 3 + 3, 'art: cost {2,1,1} gives three glyphs');
+  const ip = /magic|gathering|wizards|planeswalker|mana symbol|\bwotc\b/i;
+  const src = ['ui/art.js', 'ui/board.js'].map(p => readFileSync(join(ROOT, p), 'utf8')).join('\n');
+  ok(!ip.test(src.replace(/^\/\/.*$/gm, '')), 'art/board: no trademark words outside comments');
+}
+
+// --------------------------------------------------------------- charts
+{
+  const rows = [{ games: 0, A: { vsRandom: 0.5, vsGreedy: 0.2, wins: 100 }, AvsB: 0.5 }, { games: 1000, A: { vsRandom: 0.8, vsGreedy: 0.4, wins: 160 }, AvsB: 0.55 }];
+  ok(charts.curveRows({ meta: {}, checkpoints: rows }).length === 2, 'charts: rows found under checkpoints');
+  const { xKey, series } = charts.toSeries(rows);
+  ok(xKey === 'games', 'charts: x key is games');
+  const keys = series.map(s => s.key).sort();
+  ok(JSON.stringify(keys) === JSON.stringify(['A.vsGreedy', 'A.vsRandom', 'AvsB']), `charts: rate series only (${keys})`);
+  ok(charts.seriesLabel('A.vsRandom') === 'Fly A · vs random bot', `charts: label (${charts.seriesLabel('A.vsRandom')})`);
+  const g = fakeCtx(); charts.drawChart(g, 300, 200, series, { chance: 0.5 });
+  ok(g.calls.n > 10 && g.calls.bad === 0, 'charts: draws with finite numbers');
+}
+
+// --------------------------------------------------------------- toy rule
+{
+  const t = new explain.ToyMB();
+  const v0 = t.value(0);
+  const d = t.trial(0, 1);
+  ok(d > 0 && t.value(0) > v0, 'toy: reward gives delta > 0 and raises the value');
+  ok(t.lastDan === 1, 'toy: delta > 0 is a PAM burst');
+  const v1 = t.value(1);
+  for (let i = 0; i < 6; i++) t.trial(1, -1);
+  ok(t.value(1) < v1, 'toy: punishment lowers the value');
+  ok(t.w.every(w => w.every(x => x >= 0 && x <= t.wmax)), 'toy: weights stay in [0, wmax]');
+  ok(Math.abs(explain.jaccard([1, 2, 3], [2, 3, 4]) - 0.5) < 1e-9, 'jaccard of {1,2,3} and {2,3,4} is 0.5');
+  ok(Math.abs(explain.cosine([1, 0], [1, 0]) - 1) < 1e-9, 'cosine of equal vectors is 1');
+  const g = fakeCtx(); explain.drawToy(g, 400, 220, t, 0, 0.5); explain.drawSparse(g, 300, 160, 2000, [1, 2, 3], [3, 4]);
+  explain.drawGlomeruli(g, 300, 200, new Float32Array(108).fill(0.3));
+  ok(g.calls.bad === 0, 'toy, sparse, glomeruli draw with finite numbers');
+}
+
+// --------------------------------------------------------------- board
+if (has('game/rules.js') && has('game/cards.js')) {
+  const rules = await import('../game/rules.js');
+  const cards = await import('../game/cards.js');
+  const byId = new Map(Object.entries(cards.CARD));
+  let s = rules.newGame({ seed: 5 });
+  s = rules.withPermanent(s, 0, 'ember-gnat', { tapped: true, dmg: 1 });
+  const perm = s.players[0].battlefield.at(-1);
+  const info = board.permInfo(perm);
+  ok(info.cardId === 'ember-gnat' && info.tapped && info.damage === 1, 'board: permInfo reads { id, tapped, dmg }');
+  const root = { innerHTML: '' };
+  board.renderBoard(root, s, { byId, names: ['Fly A', 'Fly B'], hands: 'open' });
+  ok(root.innerHTML.includes('side-0') && root.innerHTML.includes('Ember Gnat') && root.innerHTML.includes('tapped'), 'board: table shows a tapped creature');
+  const counts = board.deckCounts(cards.DECKS.amber);
+  ok([...counts.values()].reduce((a, b) => a + b, 0) === 40, 'board: the amber deck counts 40');
+  const dl = { innerHTML: '' }; board.renderDecks(dl, [...cards.CARDS, ...cards.TOKENS], cards.DECKS);
+  ok((dl.innerHTML.match(/class="decklist/g) || []).length === 2 && dl.innerHTML.includes('40 cards, 17 lands'), 'board: two deck lists with 40 cards, 17 lands');
+  const gal = { innerHTML: '' }; board.renderGallery(gal, cards.CARDS, 'all');
+  ok((gal.innerHTML.match(/class="fcard /g) || []).length === cards.CARDS.length, 'board: gallery shows every card');
+  ok(!/NaN|undefined/.test(gal.innerHTML + dl.innerHTML + root.innerHTML), 'board: no NaN or undefined in the markup');
+} else skipped('board: game/ not there');
+
+// --------------------------------------------------------------- match + brain view
+if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) {
+  const rules = await import('../game/rules.js');
+  const { Fly } = await import('../brain/fly.js');
+  const C = JSON.parse(readFileSync(join(ROOT, 'data/connectome.json'), 'utf8'));
+  const t0 = Date.now();
+  const A = new Fly(C, { name: 'Fly A', hemisphere: 'A', seed: 1 }), B = new Fly(C, { name: 'Fly B', hemisphere: 'B', seed: 2 });
+  const m = new matchMod.Match(rules, [matchMod.agentFromFly(A, 'Fly A'), matchMod.agentFromFly(B, 'Fly B')], { seed: 9 });
+  let n = 0;
+  while (m.next()) n++;
+  const end = m.over();
+  ok(!!end && [0, 1, -1].includes(end.winner), `match: a full game ends (${n} decisions, winner ${end && end.winner})`);
+  const recs = m.history.filter(r => r.values);
+  ok(recs.length === n && recs.every(r => r.values.length === r.legal.length && r.idx >= 0), 'match: every decision has one value per legal action');
+  ok(m.history.some(r => r.delta != null && Number.isFinite(r.delta)), 'match: TD errors are computed');
+  ok(m.finalDelta.some(d => d != null && Number.isFinite(d)), 'match: final TD errors are computed');
+  const tr = brain.normTrace(recs.at(-1).trace);
+  ok(tr.pn && tr.kc && tr.mbon && tr.pn.length === C.pn.n && tr.mbon.length === C.mbon.n, 'brain: trace adapter reads pn, kc, mbon');
+  const bv = new brain.BrainView(C, { side: 'A', label: 'Fly A' });
+  ok(bv.ok, 'brain: view accepts the connectome');
+  bv.setTrace(recs.at(-1).trace, recs.at(-1).value); bv.burst(0.3);
+  const g = fakeCtx(); bv.draw(g, 360, 300, 0.016);
+  ok(g.calls.n > C.kc.n && g.calls.bad === 0, `brain: one frame draws every KC with finite numbers (${g.calls.n} calls)`);
+  const empty = new brain.BrainView(null, { label: 'x' }); empty.draw(fakeCtx(), 100, 100);
+  ok(!empty.ok, 'brain: no connectome gives a waiting view');
+  const out = brain.project([[0, 0, 0], [1, 0, 0]], [0, 0, 0], 1, 0, 0, 0, 0);
+  ok(Math.abs(out[3] - 1) < 1e-9 && out[0] === 0, 'brain: project with no turn keeps x');
+  console.log(`  match + brain: ${n} decisions in ${Date.now() - t0} ms`);
+} else skipped('match + brain: game/, brain/fly.js or the connectome not there');
+
+// --------------------------------------------------------------- fake DOM boot
+{
+  const errors = [];
+  const origErr = console.error, origWarn = console.warn;
+  console.error = (...a) => { errors.push(a.map(x => x && x.stack || String(x)).join(' ')); };
+  console.warn = () => {};
+  const els = new Map();
+  const defaults = { wSeed: '7', spIn: '0.05', featIn: '0.5', featPick: '0' };
+  const fakeEl = (id = '') => {
+    const L = {};
+    const el = {
+      id, innerHTML: '', textContent: '', value: defaults[id] ?? '', dataset: {}, style: {}, disabled: false, className: '',
+      classList: { toggle() {}, add() {}, remove() {}, contains: () => false },
+      addEventListener(t, f) { (L[t] ||= []).push(f); }, fire(t, e = {}) { for (const f of L[t] || []) f({ target: { closest: () => null }, ...e }); },
+      setAttribute() {}, getAttribute: () => null, querySelectorAll: () => [], querySelector: () => fakeEl('q'), closest: () => null, contains: () => true,
+      getBoundingClientRect: () => ({ width: 360, height: 260, top: 1000 }), getContext: () => fakeCtx(),
+      setPointerCapture() {}, scrollTo() {}, appendChild() {}, remove() {}, offsetLeft: 0, width: 0, height: 0,
+    };
+    return el;
+  };
+  const doc = {
+    getElementById: id => { if (!els.has(id)) els.set(id, fakeEl(id)); return els.get(id); },
+    querySelector: () => fakeEl('q'), querySelectorAll: () => [], createElement: () => fakeEl('c'),
+    addEventListener() {}, head: fakeEl('head'), body: fakeEl('body'), documentElement: fakeEl('html'), hidden: false,
+  };
+  const frames = [];
+  Object.assign(globalThis, {
+    window: globalThis, document: doc, innerHeight: 800, devicePixelRatio: 2,
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
+    IntersectionObserver: class { constructor(cb) { this.cb = cb; } observe(t) { this.cb([{ target: t, isIntersecting: true }]); } },
+    requestAnimationFrame: f => frames.push(f), addEventListener() {},
+    fetch: async p => {
+      const f = join(ROOT, String(p).replace(/^\.\//, ''));
+      if (!existsSync(f)) return { ok: false, status: 404 };
+      const txt = readFileSync(f, 'utf8');
+      return { ok: true, status: 200, json: async () => JSON.parse(txt), text: async () => txt };
+    },
+  });
+  let bootErr = null;
+  try { await import(pathToFileURL(join(ROOT, 'main.js')).href); } catch (e) { bootErr = e; }
+  ok(!bootErr, `dom: main.js imports (${bootErr && bootErr.message})`);
+  const fd = globalThis.flyDuel;
+  ok(!!fd && !!fd.ready, 'dom: window.flyDuel is set');
+  if (fd) await fd.ready;
+  // let boot() finish its sync init after ready
+  await new Promise(r => setTimeout(r, 50));
+  let t = 0;
+  const pump = n => { for (let i = 0; i < n; i++) { const fs = frames.splice(0); t += 50; for (const f of fs) f(t); } };
+  pump(400);
+  const E = id => els.get(id) || fakeEl(id);
+  if (has('game/rules.js')) {
+    ok(E('heroBoard').innerHTML.includes('side-0') && E('heroBoard').innerHTML.includes('side-1'), 'dom: hero table has both sides');
+    ok(/<li class="p[01]">/.test(E('heroLog').innerHTML), 'dom: hero log has moves after 20 s of frames');
+    ok(E('deckLists').innerHTML.includes('decklist'), 'dom: section 01 deck lists');
+    ok(E('gallery').innerHTML.includes('fcard'), 'dom: section 01 gallery');
+    for (let i = 0; i < 25; i++) E('wNext').fire('click');
+    ok(E('wCands').innerHTML.includes('chosen'), 'dom: section 07 lists candidates with the chosen one');
+    ok(/Decision \d+/.test(E('wInfo').textContent), `dom: section 07 info line (${E('wInfo').textContent.slice(0, 80)})`);
+    E('wPrev').fire('click');
+    ok(/Decision \d+/.test(E('wInfo').textContent), 'dom: section 07 back works');
+  } else skipped('dom: game/ not there');
+  if (has('brain/fly.js') && has('game/features.js')) {
+    ok(/PN channels/.test(E('smellRead').textContent), `dom: section 03 reads PN channels (${E('smellRead').textContent.slice(0, 60)})`);
+    E('spNext').fire('click');
+    ok(/KC overlap/.test(E('spRead').innerHTML), 'dom: section 04 overlap readout');
+  } else skipped('dom: brain/fly.js not there');
+  if (has('data/connectome.json')) ok(/PN \d+/.test(E('mbLegend').innerHTML), 'dom: section 02 legend counts');
+  if (has('data/facts.js')) ok(E('srcList').innerHTML.includes('ref-'), 'dom: sources list');
+  E('toyRew').fire('click');
+  ok(/PAM burst/.test(E('toyRead').innerHTML), 'dom: section 05 reward gives a PAM burst line');
+  ok(!/NaN|undefined/.test([...els.values()].map(e => e.innerHTML + e.textContent).join('')), 'dom: no NaN or undefined in any markup');
+  console.error = origErr; console.warn = origWarn;
+  ok(errors.length === 0, `dom: no console.error (${errors.length}): ${errors.slice(0, 3).join(' | ')}`);
+}
+
+console.log(`page tests: ${pass} pass, ${fail} fail, ${skip} skipped`);
+process.exit(fail ? 1 : 0);

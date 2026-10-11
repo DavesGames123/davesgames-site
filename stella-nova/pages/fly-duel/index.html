@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Fly Brain Card Duel: two model fly brains learn a card game — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FLY DUEL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and the text. Two model fruit fly mushroom bodies, wired
+   from data/connectome.json, learn a small card duel of our own by
+   dopamine-gated plasticity, and play it against each other on the page.
+   CONTRACT.md is the binding spec.
+
+   HONESTY
+     We do not train a real fly. The page says so in the hero and in 09.
+     Every number about the fly comes from data/facts.js (with a source)
+     or is counted from data/connectome.json. Win rates come from
+     data/training-curve.json, measured by train/ code. Toy figures carry
+     the tag "illustrative"; model parts carry the tag "model".
+
+   IP
+     The game, the cards, the art and the mana glyphs are our own. Magic:
+     The Gathering is named in plain text only, as the inspiration, with
+     the line "Not affiliated with or endorsed by Wizards of the Coast."
+
+   NO GPU
+     The page makes no WebGL or WebGPU context. All views are 2D canvases.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module). main.js loads the other
+   packages with dynamic import(), so a missing file gives a loading
+   message, not a blank page.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips   sticky section bar
+     hero     #heroStatus #heroBoard #heroBrainA #heroBrainB #heroPlay
+              #heroSpeed #heroNew #heroLog #heroStats #wiringHero
+     #s1 game       #kwList #deckLists #galSeg #gallery
+     #s2 centre     #mbCv #mbLegend #cxMeta #factList
+     #s3 smell      #featPick #featIn #featOut #glomCv #featBars #smellGrab #smellRead
+     #s4 sparse     #sparseCv #spIn #spOut #spNext #spRead
+     #s5 dopamine   #toyCv #toySel #toyRew #toyPun #toyReset #toyRead
+     #s6 train      #trainStart #trainPause #trainNaive #trainLoad #trainSpeed
+                    #trainEval #trainCv #trainLegend #trainRead
+     #s7 watch      #wOpp #wPrev #wNext #wAuto #wNew #wSeed #wBoard
+                    #wBrainA #wBrainB #wCands #wInfo
+     #s8 results    #evalTable #curveCv #curveLegend #curveMeta
+     #s9 limits     text only
+     refs           #srcList #credits
+
+   GREP MAP  (main.js)
+     grep -n 'async function loadAll'   dynamic imports and data files
+     grep -n 'function makeFly'         Fly construction and weights
+     grep -n 'function initHero'        hero live match
+     grep -n 'function initGame'        section 01
+     grep -n 'function initCentre'      section 02
+     grep -n 'function initSmell'       section 03
+     grep -n 'function initSparse'      section 04
+     grep -n 'function initDopamine'    section 05
+     grep -n 'function initTrain'       section 06
+     grep -n 'function initWatch'       section 07
+     grep -n 'function initResults'     section 08
+     grep -n 'function initSources'     references
+     grep -n 'function loop'            one rAF loop, visible canvases only
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Two model fruit fly brains, wired from the published mushroom body connectome, learn a small trading-card duel by dopamine-gated plasticity and play it against each other. Live match, brain view, training in your browser, measured win rates and sources.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Fly Brain Card Duel</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s0" data-target="s0"><b>00</b>The duel</a></li>
+    <li><a href="#s1" data-target="s1"><b>01</b>The game</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>Learning centre</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Smell of a board</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>Sparse code</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Dopamine teaches</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>Train them</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>Watch a match</a></li>
+    <li><a href="#s8" data-target="s8"><b>08</b>How good</a></li>
+    <li><a href="#s9" data-target="s9"><b>09</b>What this is not</a></li>
+    <li><a href="#refs" data-target="refs"><b>¶</b>Sources</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
+  <h1>Two fruit fly brains learn a card duel</h1>
+  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other by the same rule a fly uses: dopamine tells a synapse whether the last choice turned out better or worse than expected.</p>
+
+  <div class="arena" id="arena">
+    <div class="arena-brain a"><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
+    <div class="arena-mid">
+      <div class="arena-bar">
+        <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
+        <span class="arena-ctrls">
+          <button class="tgl" id="heroPlay" aria-pressed="true">Pause</button>
+          <span class="seg mini" id="heroSpeed" role="group" aria-label="Speed"><button data-v="0.5">slow</button><button data-v="1" class="on">normal</button><button data-v="3">fast</button></span>
+          <button class="tgl" id="heroNew">New game</button>
+        </span>
+      </div>
+      <div class="board" id="heroBoard" aria-live="off"><div class="board-empty">Loading…</div></div>
+      <ol class="log" id="heroLog" aria-label="Last moves"></ol>
+    </div>
+    <div class="arena-brain b"><canvas class="fig brain" id="heroBrainB" aria-label="Brain of Fly B: point cloud of its mushroom body neurons"></canvas></div>
+  </div>
+  <div class="legend brainleg">
+    <span><i style="background:#62c4ff"></i>projection neurons (the board's smell)</span>
+    <span><i style="background:#fffae1"></i>active Kenyon cells</span>
+    <span><i style="background:#86dc7c"></i>approach output / PAM</span>
+    <span><i style="background:#ff6a6a"></i>avoid output / PPL1</span>
+  </div>
+  <div class="stats" id="heroStats"></div>
+  <p class="note"><b>We do not train a real fly.</b> We train a computer model whose wiring, <span data-wiring>taken from the published fruit fly connectome</span>, is that of one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons. Fly A sits at the bottom of the table, Fly B at the top. In this live match both flies play with their trained weights and learning is switched off. The flashes show the dopamine signal the model computes after each move. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The game: a small card duel of our own</h2><p>The flies play a cut-down duel in the style of the trading card games: two players, 20 life each, a 40-card deck, lands that make mana, creatures that attack and block, and spells. Every card, name, picture and mana glyph here is our own. The rules are short on purpose, so that each decision is a choice among a few options.</p></div></div>
+  <div class="grid">
+    <article class="card span-5">
+      <div class="card-top"><h3>One turn</h3><span class="tag">rules engine: game/rules.js</span></div>
+      <ol class="steps">
+        <li><b>Untap and draw.</b> Your lands and creatures stand up and you draw one card. The first player skips the draw on turn one.</li>
+        <li><b>Main.</b> Play at most one land, then cast any cards you can pay for. Lands tap for mana by themselves.</li>
+        <li><b>Attack.</b> Pick which ready creatures attack, as one choice.</li>
+        <li><b>Block.</b> The other player picks, as one choice, which creature blocks which attacker. Unblocked attackers hit the player.</li>
+        <li><b>End.</b> Damage wears off. Above seven cards in hand, discard the cheapest.</li>
+      </ol>
+      <p class="body dim">A player at 0 life, or who must draw from an empty deck, loses. After turn 60 the game is a draw. To keep each choice short, the engine lists at most 16 attack plans and 16 block plans, and always includes "do nothing".</p>
+      <div class="manakey"><span id="manaKey"></span></div>
+      <ul class="facts" id="kwList"></ul>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>The two decks</h3><span class="tag">Fly A plays Amber, Fly B plays Moss</span></div>
+      <div class="decks" id="deckLists"><p class="none">Loading the card pool…</p></div>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Every card</h3><span class="tag">procedural art from each card id</span></div>
+      <div class="seg" id="galSeg" role="group" aria-label="Filter"><button data-v="all" class="on">All</button><button data-v="amber">Amber</button><button data-v="moss">Moss</button><button data-v="none">Colourless</button><button data-v="creature">Creatures</button><button data-v="spell">Spells</button></div>
+      <div class="gallery" id="gallery"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>The fly's learning centre</h2><p>The mushroom body is a paired structure in the insect brain where smells become memories. Odour information arrives on projection neurons (PNs). Each Kenyon cell (KC) samples a few PNs at random-looking claws. KCs talk to a small set of output neurons (MBONs) in separate compartments, and dopamine neurons (DANs) that carry reward or punishment signals reach exactly those compartments. That layout is the whole learning machine.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>One mushroom body, neuron by neuron</h3><span class="tag real" id="wiringTag">from data/connectome.json</span></div>
+      <canvas class="fig" id="mbCv" aria-label="Point cloud of mushroom body neurons; drag to turn"></canvas>
+      <div class="legend" id="mbLegend"></div>
+      <p class="cap" id="cxMeta">Loading the connectome…</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Published numbers</h3><span class="tag real">data/facts.js</span></div>
+      <ul class="factlist" id="factList"><li class="none">Loading facts…</li></ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>The smell of a board</h2><p>A fly cannot read cards. So each board becomes an odour: 48 numbers that describe it (life totals, lands, creatures, power on each side and so on) each drive a fixed set of glomeruli, the input channels of the fly's antennal lobe, through tuning curves. Similar boards give similar smells. Pick a feature and move it to see the pattern change.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Glomerulus rates for one board</h3><span class="tag toy">model: our encoding, real PN count</span></div>
+      <canvas class="fig" id="glomCv" aria-label="Projection neuron channels as discs; brightness is rate"></canvas>
+      <div class="ctrls">
+        <label class="ctrl"><select id="featPick" aria-label="Feature"></select></label>
+        <label class="ctrl grow">value <input type="range" id="featIn" min="0" max="1" step="0.01" value="0.5"><output id="featOut">0.50</output></label>
+        <button class="tgl" id="smellGrab">Use the hero board</button>
+      </div>
+      <p class="cap" id="smellRead"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The 48 features, from Fly A's side</h3><span class="tag">game/features.js</span></div>
+      <ol class="featbars" id="featBars"></ol>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>A sparse code: few Kenyon cells speak at once</h2><p>Each Kenyon cell sums a handful of PN inputs, and one large inhibitory neuron, APL, feeds back onto all of them, so only the most strongly driven few fire. The result is a sparse code: two smells that overlap a lot on the PNs share far fewer active KCs. That keeps memories of similar boards apart. Below are two candidate moves from the same decision: almost the same board, and the KCs they light.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Every Kenyon cell, two boards</h3><span class="tag toy">model: APL as k-winners</span></div>
+      <canvas class="fig wide" id="sparseCv" aria-label="Grid of all Kenyon cells: orange board one only, blue board two only, white both"></canvas>
+      <div class="legend"><span><i style="background:#ff9a62"></i>board 1 only</span><span><i style="background:#62c4ff"></i>board 2 only</span><span><i style="background:#fffae1"></i>both</span></div>
+      <div class="ctrls">
+        <label class="ctrl grow">active share <input type="range" id="spIn" min="0.01" max="0.3" step="0.01" value="0.05"><output id="spOut">5%</output></label>
+        <button class="tgl" id="spNext">Another pair</button>
+      </div>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Overlap, measured</h3></div>
+      <div class="trials" id="spRead"><div>Waiting for the brain model…</div></div>
+      <p class="body dim">PN similarity is the cosine of the two PN rate vectors. KC overlap is the share of active KCs the two boards have in common (Jaccard index). Both come from the model on this page, computed now.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Dopamine teaches</h2><p>Fly learning is a three-factor rule. A KC-to-MBON synapse changes only when the KC was active (factor one and two: pre and post) and a dopamine neuron in that compartment fires (factor three). The change is a depression. Reward-signalling PAM neurons depress synapses onto output neurons that drive avoidance; punishment-signalling PPL1 neurons depress synapses onto output neurons that drive approach. Our model sends each DAN the temporal-difference error δ, the surprise of the last move.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Teach a tiny mushroom body</h3><span class="tag toy">illustrative: 20 KCs, 2 MBONs, same sign rule as the model</span></div>
+      <canvas class="fig wide" id="toyCv" aria-label="Kenyon cells wired to an approach and an avoid output neuron, with PAM and PPL1 dopamine neurons"></canvas>
+      <div class="ctrls">
+        <span class="seg" id="toySel" role="group" aria-label="Board"><button data-v="0" class="on">Board A</button><button data-v="1">Board B</button></span>
+        <button class="tgl" id="toyRew">Win (r = +1)</button>
+        <button class="tgl" id="toyPun">Lose (r = −1)</button>
+        <button class="tgl" id="toyReset">Reset</button>
+      </div>
+      <p class="cap" id="toyRead">The two boards share one KC, so teaching one leaks a little onto the other.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The rule in two lines</h3><span class="tag toy">model: brain/mb.js</span></div>
+      <div class="eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\delta = r + \gamma\, V(s') - V(s)"></div><p>The TD error: the reward plus the value of the new board, minus what the fly expected. Positive means "better than expected".</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\Delta w_{ij} = -\eta\, \mathrm{DAN}_{c(j)}\, e_i"></div><p><span class="mi">e<sub>i</sub></span> is a decaying trace of KC <span class="mi">i</span>'s recent activity; DAN<sub>c(j)</sub> is the dopamine burst in the compartment of MBON <span class="mi">j</span>. Weights stay in [0, <span class="mi">w</span><sub>max</sub>].</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="V = \textstyle\sum_j v_j\, \mathrm{MBON}_j"></div><p>The value of a board: approach outputs (<span class="mi">v</span> = +1) minus avoid outputs (<span class="mi">v</span> = −1). The fly plays the move whose resulting board smells best.</p></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>Train them yourself</h2><p>Start from naive flies, with all KC-to-MBON weights equal, and let them play each other in a background thread on your device. Every few games the trainer measures each fly against two fixed opponents: a random player and a simple greedy player. The curves are live numbers from your browser.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Win rate while training</h3><span class="tag">train/worker.js, runs on your device</span></div>
+      <canvas class="fig chart tall" id="trainCv" aria-label="Win rate against games played"></canvas>
+      <div class="legend" id="trainLegend"></div>
+      <div class="ctrls">
+        <button class="tgl" id="trainStart">Start</button>
+        <button class="tgl" id="trainPause">Pause</button>
+        <button class="tgl" id="trainNaive">Reset to naive</button>
+        <button class="tgl" id="trainLoad">Load pretrained</button>
+        <span class="seg" id="trainSpeed" role="group" aria-label="Games per batch"><button data-v="10">10 / batch</button><button data-v="50" class="on">50</button><button data-v="200">200</button></span>
+        <button class="tgl" id="trainEval">Evaluate (200 games)</button>
+      </div>
+      <p class="cap" id="trainRead">Idle.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>What happens per game</h3></div>
+      <ul class="facts">
+        <li>Each fly scores every legal move by the value of the board it would lead to, and picks by a softmax, with some exploration while training.</li>
+        <li>After each of its moves, the fly computes δ and its DANs update the KC-to-MBON weights of the KCs that were recently active.</li>
+        <li>At the end, the win (+1), loss (−1) or draw (0) is the only reward. Nothing tells the fly which cards are good.</li>
+        <li>The wiring (PN to KC claws, which DAN reaches which compartment) never changes. Only the KC-to-MBON weights learn.</li>
+      </ul>
+      <p class="body dim">The trained weights from this panel are used by section 07 when you press "New game" there.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>Watch a match, move by move</h2><p>Step through a game. For each decision you see every move the fly could make and the value its mushroom body gave the board after that move. The brain of the fly that is acting lights up with the Kenyon cells of the chosen board.</p></div></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="ctrls top">
+        <span class="seg" id="wOpp" role="group" aria-label="Match"><button data-v="ab" class="on">Fly A vs Fly B</button><button data-v="ag">Fly A vs greedy bot</button><button data-v="ar">Fly A vs random bot</button></span>
+        <button class="tgl" id="wPrev" aria-label="Previous move">◀ Back</button>
+        <button class="tgl" id="wNext" aria-label="Next move">Next ▶</button>
+        <button class="tgl" id="wAuto" aria-pressed="false">Auto</button>
+        <button class="tgl" id="wNew">New game</button>
+        <label class="ctrl">seed <input type="number" id="wSeed" value="7" min="1" max="999999" inputmode="numeric"></label>
+      </div>
+      <div class="watch">
+        <div class="watch-board">
+          <div class="board" id="wBoard"><div class="board-empty">Loading…</div></div>
+          <p class="cap" id="wInfo"></p>
+        </div>
+        <div class="watch-side">
+          <ol class="cands" id="wCands"></ol>
+        </div>
+      </div>
+      <div class="watch-brains">
+        <canvas class="fig brain" id="wBrainA" aria-label="Brain of Fly A"></canvas>
+        <canvas class="fig brain" id="wBrainB" aria-label="Brain of Fly B or the bot"></canvas>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8">
+  <div class="sec-head"><span class="num">08</span><div><h2>How good are they?</h2><p>The numbers here were measured by our own training code, offline, with a fixed seed, and stored with the command that made them. Nothing on this card is typed in by hand. A random player is a low bar; the greedy player is a short hand-written heuristic, not a strong opponent.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Pretraining curve</h3><span class="tag">data/training-curve.json</span></div>
+      <canvas class="fig chart tall" id="curveCv" aria-label="Win rate against games of pretraining"></canvas>
+      <div class="legend" id="curveLegend"></div>
+      <p class="cap" id="curveMeta">Loading…</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Last checkpoint</h3></div>
+      <div class="tablewrap"><table class="evaltab" id="evalTable"><tbody><tr><td class="none">Loading…</td></tr></tbody></table></div>
+      <ul class="facts small">
+        <li>Win rates near 50% against each other are expected: the two flies trained together.</li>
+        <li>With 200 games, one standard error of a rate near 50% is about 3.5 percentage points.</li>
+        <li>The decks differ, so a fly's rate also measures its deck, not only its brain.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 09 -->
+<section class="sec" id="s9">
+  <div class="sec-head"><span class="num">09</span><div><h2>What this is not</h2><p>It is easy to oversell a project like this. Here is the plain account.</p></div></div>
+  <div class="grid">
+    <article class="card span-4">
+      <div class="card-top"><h3>Not a real fly</h3></div>
+      <p class="body">No animal was trained. A real fly would never see a card game. We took the wiring diagram of one circuit and ran a rate model of it on a computer. Real neurons spike, adapt, release several transmitters and change in ways our model leaves out.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Not the whole brain</h3></div>
+      <p class="body">We model one mushroom body. A whole-brain model of the fly built from the full connectome exists and predicts real feeding and grooming circuits (Shiu et al. 2024), but it is not trained to play anything. The mushroom body is the part of the fly that is known to learn from dopamine, which is why we chose it.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Not how a fly sees a game</h3></div>
+      <p class="body">The 48 board features, the way they become glomerulus rates, the TD error sent to the DANs, the move search one step ahead and the game itself are our design choices. They are labelled "model" wherever they appear. The connectome fixes who talks to whom, not what the signals mean here.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>Why it still says something</h3></div>
+      <p class="body">The learning rule here is not ours: dopamine-gated depression of KC-to-MBON synapses has been measured in the fly, and the sparse KC code and its compartments are in the wiring data. Showing that such a circuit, with its real fan-out and sparsity, can learn a value for boards of a game it has never seen is a small demonstration of how general that design is.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>Limits we know about</h3></div>
+      <ul class="facts">
+        <li>The flies look only one move ahead. They do not plan.</li>
+        <li>Both flies share the same PN-to-KC claws; they differ in the feature-to-glomerulus map and in what they learned.</li>
+        <li>The duel is far simpler than any commercial card game: no stack, no instants, one block per attacker.</li>
+        <li>Win rates are against weak fixed bots and each other. We make no claim of skill against people.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="sec" id="refs">
+  <div class="sec-head"><span class="num">¶</span><div><h2>Sources and credits</h2><p>Primary papers and data releases. Numbers about the fly on this page are taken from these.</p></div></div>
+  <ol class="refs" id="srcList"><li class="none">Loading sources…</li></ol>
+  <div class="credits" id="credits"></div>
+  <p class="note">Magic: The Gathering is a trademark of Wizards of the Coast LLC. The game on this page is our own, with our own cards, names, art and symbols. Not affiliated with or endorsed by Wizards of the Coast.</p>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
