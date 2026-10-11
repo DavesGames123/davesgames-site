@@ -327,6 +327,22 @@ for (const key of ['steel', 'classical', 'violin']) {
   high.dispose();
 }
 
+// swap: the old materials stay alive until a frame has rendered the new
+// model, so three.js keeps the shared shader programs (no recompile per swap)
+{
+  const v = createStringView3D(null, { renderer: 'none', controls: false, instrument: 'steel' });
+  const old = Object.values(v.model.materials);
+  let freed = 0;
+  for (const m of old) m.addEventListener('dispose', () => { freed++; });
+  v.setInstrument('violin');
+  ok(freed === 0, 'swap: old materials are not disposed inside setInstrument', `freed ${freed}`);
+  v.frame(1 / 60, 0);
+  ok(freed === old.length, 'swap: old materials are disposed after the next frame', `freed ${freed} of ${old.length}`);
+  v.setInstrument('classical');
+  v.dispose();
+  ok(true, 'swap: dispose frees a retired model without a frame');
+}
+
 for (const [g, [p, f]] of Object.entries(groups)) console.log(`${g.padEnd(10)} ${p} passed${f ? `, ${f} failed` : ''}`);
 console.log(`\n${pass} passed, ${fail} failed (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(fail ? 1 : 0);

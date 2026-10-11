@@ -14,7 +14,7 @@
 //
 //  SECTION MAP   (grep -n "<anchor>" index.js)
 //    renderer and scene ... "function makeRenderer", "function lights"
-//    instrument swap ...... "setInstrument("
+//    instrument swap ...... "setInstrument(", "function freeRetired"
 //    colour state ......... "function refreshLut"
 //    bow motion ........... "function moveBow"
 //    camera presets ....... "function presetPose", "setCamera("
@@ -134,14 +134,27 @@ export function createStringView3D(canvas, opts = {}) {
   }
   refreshLut();
 
+  const retired = [];
+  function freeRetired() {
+    for (const r of retired.splice(0)) {
+      r.live.dispose();
+      r.model.root.traverse((x) => { if (x.geometry) x.geometry.dispose(); });
+      for (const m of Object.values(r.model.materials)) m.dispose();
+    }
+  }
+
   function setInstrument(key) {
     const inst = INSTRUMENTS[key];
     if (!inst) throw new Error('unknown instrument ' + key);
     if (model) {
-      live.dispose();
+      // Retire the old parts and free them after the next render. If the old
+      // materials were disposed now, three.js would delete their shader
+      // programs (use count 0) before the new model asks for the same ones.
+      // Then each swap recompiles every PBR wood shader. The screensaver
+      // swaps the instrument about every 6-12 s, and Safari blocked the page
+      // and the shell timers for seconds at each swap.
       holder.remove(model.root);
-      model.root.traverse((x) => { if (x.geometry) x.geometry.dispose(); });
-      for (const m of Object.values(model.materials)) m.dispose();
+      retired.push({ live, model });
     }
     model = buildModel(inst);
     holder.add(model.root);
@@ -282,6 +295,7 @@ export function createStringView3D(canvas, opts = {}) {
     }
     if (controls) controls.update();
     if (renderer) renderer.render(scene, camera);
+    if (retired.length) freeRetired();
   }
 
   // --------------------------------------------------------------- picking
@@ -331,6 +345,7 @@ export function createStringView3D(canvas, opts = {}) {
     get state() { return { ...st }; },
     dispose() {
       if (controls) controls.dispose();
+      freeRetired();
       if (model) {
         live.dispose();
         model.root.traverse((x) => { if (x.geometry) x.geometry.dispose(); });

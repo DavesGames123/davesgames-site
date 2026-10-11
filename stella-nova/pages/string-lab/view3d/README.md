@@ -55,7 +55,7 @@ const view = createStringView3D(canvas, {
   renderer: null,           // an existing WebGLRenderer, or 'none' (no GL; tests)
 });
 
-view.setInstrument('violin');          // rebuilds the model; detaches all sims
+view.setInstrument('violin');          // rebuilds the model; detaches all sims; the old one is freed after the next frame
 view.attach(i, sim);                   // StringSim for string i (null = string at rest)
 view.attachAll(sims);                  // array by string index
 view.setFret(i, fret, finger);         // -1 muted, 0 open, n = fret (violin: semitone stop)
