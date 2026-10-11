@@ -35,6 +35,7 @@ export function createPlayer({ canvas, track, onSegment = () => {}, onTick = () 
   let fps = 15, width = 854, height = 480;
   let cur = -1, playing = false, live = true, done = false, loop = true, speed = 1;
   let raf = 0, lastT = 0, acc = 0, lastSeg = null;
+  let generation = 0, lastSrc = null, lastBm = null;
 
   // ---- timeline DOM ----
   track.innerHTML = '';
@@ -160,7 +161,8 @@ export function createPlayer({ canvas, track, onSegment = () => {}, onTick = () 
   const api = {
     reset(meta = {}) {
       pause();
-      for (const b of frames) try { b && b.close && b.close(); } catch {}
+      for (const b of new Set(frames)) try { b && b.close && b.close(); } catch {}
+      generation++; lastSrc = null; lastBm = null;
       frames = []; bytes = 0; scale = 1; anims = []; segs = [];
       cur = -1; live = true; done = false; lastSeg = null;
       if (meta.fps) fps = meta.fps;
@@ -170,20 +172,30 @@ export function createPlayer({ canvas, track, onSegment = () => {}, onTick = () 
       onSegment(null);
       onTick(state());
     },
+    // engine.js sends one 'frame' event per index. A held frame (for
+    // example in self.wait) is one bitmap for many indices, so the cache
+    // keeps one copy per source bitmap and counts its bytes once.
     async addFrame({ index, bitmap }) {
       if (!bitmap) return;
-      if (frames.length === 0 && bitmap.width) { width = bitmap.width; height = bitmap.height; }
-      let bm = bitmap;
-      const full = bitmap.width * bitmap.height * 4;
-      while (scale > 0.25 && bytes + full * scale * scale > BUDGET) scale /= 2;
-      if (scale < 1 && typeof createImageBitmap === 'function') {
-        try {
-          bm = await createImageBitmap(bitmap, { resizeWidth: Math.max(1, Math.round(bitmap.width * scale)), resizeHeight: Math.max(1, Math.round(bitmap.height * scale)), resizeQuality: 'medium' });
-          bitmap.close && bitmap.close();
-        } catch { bm = bitmap; }
-      }
-      bytes += bm.width * bm.height * 4;
+      const gen = generation;
       const i = Number.isFinite(index) ? index : frames.length;
+      if (frames.length === 0 && bitmap.width) { width = bitmap.width; height = bitmap.height; }
+      if (bitmap !== lastSrc) {
+        lastSrc = bitmap;
+        const full = bitmap.width * bitmap.height * 4;
+        while (scale > 0.25 && bytes + full * scale * scale > BUDGET) scale /= 2;
+        if (scale < 1 && typeof createImageBitmap === 'function') {
+          const w = Math.max(1, Math.round(bitmap.width * scale)), h = Math.max(1, Math.round(bitmap.height * scale));
+          lastBm = createImageBitmap(bitmap, { resizeWidth: w, resizeHeight: h, resizeQuality: 'medium' })
+            .then(small => { try { bitmap.close && bitmap.close(); } catch {} return small; }, () => bitmap);
+          bytes += w * h * 4;
+        } else {
+          lastBm = bitmap;
+          bytes += full;
+        }
+      }
+      const bm = await lastBm;
+      if (gen !== generation) return;          // a reset came while it waited
       frames[i] = bm;
       if (live && !playing) show(i);
       else placeHead();
