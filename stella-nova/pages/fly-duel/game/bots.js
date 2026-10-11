@@ -1,0 +1,101 @@
+// ============================================================================
+//  FLY DUEL  ·  baseline opponents  (ES module, no DOM, pure)
+// ----------------------------------------------------------------------------
+//  Two fixed players that the flies train against and that measure them.
+//  Both have the shape (state, legal) -> action, where legal is
+//  legalActions(state). Neither one learns.
+//
+//  randomBot(rng)  picks a legal action uniformly with the given rng.
+//  greedyBot()     a short hand-written heuristic:
+//      main    play a land first, then cast the card that most raises
+//              boardScore one step ahead, then pass
+//      attack  for each attack option, let the defender block with the
+//              same greedy block rule, and keep the best boardScore
+//      block   keep the block option with the best boardScore after damage
+//  boardScore counts life, creatures (with a small bonus per keyword),
+//  cards in hand and lands, and takes off points when the opposing
+//  creatures could kill on the next attack (the crack-back risk).
+//
+//  EXPORTS   (jump with grep -n "<anchor>" game/bots.js)
+//      boardScore ..... "export function boardScore"  heuristic, side me
+//      randomBot ...... "export function randomBot"
+//      greedyBot ...... "export function greedyBot"
+// ============================================================================
+import { CARD } from './cards.js';
+import { step, legalActions, power } from './rules.js';
+
+const WIN = 1000;
+
+function creatureValue(x) {
+  const c = CARD[x.id];
+  let v = c.power + c.toughness;
+  for (const k of c.keywords) v += k === 'sap' ? 0.5 : k === 'thick' ? -0.5 : 1;
+  return v;
+}
+
+export function boardScore(state, me) {
+  if (state.result) return state.result.winner === me ? WIN : state.result.winner < 0 ? 0 : -WIN;
+  const P = state.players[me], O = state.players[1 - me];
+  let v = P.life - O.life;
+  let lands = 0, oLands = 0;
+  for (const x of P.battlefield) { if (CARD[x.id].type === 'land') lands++; else v += 1.5 * creatureValue(x); }
+  for (const x of O.battlefield) { if (CARD[x.id].type === 'land') oLands++; else v -= 1.5 * creatureValue(x); }
+  v += 0.5 * (P.hand.length - O.hand.length) + 0.4 * (Math.min(lands, 7) - Math.min(oLands, 7));
+  // crack-back: opposing attackers that my untapped creatures cannot all stop
+  if (state.active !== me || state.phase === 'block') {
+    const oPow = O.battlefield.filter(x => CARD[x.id].type === 'creature' && !CARD[x.id].keywords.includes('thick'))
+      .map(power).sort((a, b) => b - a);
+    const blockers = P.battlefield.filter(x => CARD[x.id].type === 'creature' && !x.tapped).length;
+    let through = 0;
+    for (let i = blockers; i < oPow.length; i++) through += oPow[i];
+    if (through >= P.life) v -= 200;
+    else v -= 0.3 * through;
+  }
+  return v;
+}
+
+export function randomBot(rng) {
+  return (state, legal) => legal[Math.floor(rng() * legal.length)];
+}
+
+function bestBy(legal, score) {
+  let best = legal[0], bs = -Infinity;
+  for (const a of legal) {
+    const v = score(a);
+    if (v > bs) { bs = v; best = a; }
+  }
+  return best;
+}
+
+function greedyBlock(state, legal) {
+  const me = state.toAct;
+  return bestBy(legal, a => boardScore(step(state, a), me));
+}
+
+export function greedyBot() {
+  return function greedy(state, legal) {
+    const me = state.toAct;
+    if (state.phase === 'main') {
+      const land = legal.find(a => a.type === 'land');
+      if (land) return land;
+      const base = boardScore(state, me);
+      let best = legal.find(a => a.type === 'pass') || legal[0], bs = 0.25;
+      for (const a of legal) {
+        if (a.type !== 'cast') continue;
+        const d = boardScore(step(state, a), me) - base;
+        if (d > bs) { bs = d; best = a; }
+      }
+      return best;
+    }
+    if (state.phase === 'attack') {
+      return bestBy(legal, a => {
+        let s = step(state, a);
+        if (!s.result && s.phase === 'block') s = step(s, greedyBlock(s, legalActions(s)));
+        return boardScore(s, me);
+      });
+    }
+    if (state.phase === 'block') return greedyBlock(state, legal);
+    return legal[0];
+  };
+}
+
