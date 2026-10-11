@@ -8,8 +8,10 @@
 //
 //  Mana glyphs are our own too:
 //    amber    a honeycomb cell with a drop of resin in it
-//    moss     a leaf with a centre vein
-//    generic  a grey disc with the number
+//    moss     a leaf with a centre vein, on a diamond tile
+//    generic  the number on a grey rounded square
+//  No glyph is a disc. A coloured disc with a symbol, or a grey disc with
+//  a number, is the look of the mana symbols of a published card game.
 //
 //  All functions give SVG text. They do not touch the DOM, so node tests
 //  can call them.
@@ -64,11 +66,11 @@ export function manaGlyph(kind, n = 0, size = 16) {
       + `<circle cx="8.8" cy="11.4" r="0.9" fill="#fff3d0"/></svg>`;
   }
   if (kind === 'moss') {
-    return `<svg ${s}><circle cx="10" cy="10" r="8.6" fill="#0d2612" stroke="#86dc7c" stroke-width="1.4"/>`
-      + `<path d="M5 14.5C5 8.5 9 4.8 15 4.6c.2 6-3.6 10-9.6 10.2z" fill="#86dc7c"/>`
-      + `<path d="M5.6 14.2 13.4 6.6" stroke="#0d2612" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+    return `<svg ${s}><path d="M10 1.2 18.8 10 10 18.8 1.2 10z" fill="#0d2612" stroke="#86dc7c" stroke-width="1.4" stroke-linejoin="round"/>`
+      + `<path d="M6.2 13.8C6.2 9.4 9.2 6.6 13.6 6.4c.2 4.4-2.7 7.3-7 7.4z" fill="#86dc7c"/>`
+      + `<path d="M6.7 13.3 12.6 7.4" stroke="#0d2612" stroke-width="1" stroke-linecap="round"/></svg>`;
   }
-  return `<svg ${s}><circle cx="10" cy="10" r="8.6" fill="#1b2130" stroke="#a9b4c8" stroke-width="1.4"/>`
+  return `<svg ${s}><rect x="2" y="2" width="16" height="16" rx="3.5" fill="#1b2130" stroke="#a9b4c8" stroke-width="1.4"/>`
     + `<text x="10" y="14" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" font-weight="600" fill="#e8eaf0">${n | 0}</text></svg>`;
 }
 
