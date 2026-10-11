@@ -31,6 +31,18 @@
 //  observe(.., true) uses the last pattern once and then clears it, so a
 //  second end call does nothing.
 //
+//  IMAGINED BLOCK (optional, opts.imagine, default false).  Model step,
+//  not fly biology. An attack afterstate is the block phase: the outcome
+//  depends on the opponent's block, and the 48 features do not show the
+//  declared attackers. So a pure afterstate fly cannot tell good attacks
+//  from bad ones. With imagine on, the policy scores such an afterstate
+//  by the worst MB value over the opponent's legal blocks. TD still
+//  learns on the afterstate values. Measured in node (seed 1, training
+//  vs greedyBot, eval 200 games with greedy play, checkpoints every
+//  1200 or 3000 games): win rate vs greedyBot 0.17-0.28 with imagine
+//  (6000 games), 0.02-0.04 without (15000 games). These are dev runs,
+//  not the page numbers (train/ measures those).
+//
 //  SHAPED REWARD (optional, opts.shaping, default 0 = off).  Potential
 //  based (Ng, Harada, Russell 1999), so it does not change which policy is
 //  best: r_t += gamma * Phi(x_{t+1}) - Phi(x_t), Phi = shaping * (my life
@@ -58,6 +70,7 @@ export const FLY_DEFAULTS = {
   lambda: 0.7,        // eligibility trace decay (times gamma)
   lr: 0.05,           // part of the TD error removed per update (normalised)
   shaping: 0,         // potential-based shaped reward size (0 = off)
+  imagine: false,     // score attacks by the worst opponent block (model)
   calibrationGames: 6,// random games for KC thresholds (needs newGame)
   maxCalibration: 1200,
 };
@@ -144,8 +157,9 @@ export class FlyAgent {
   }
 
   // Score each afterstate, pick one. ctx: { explore = 0, rng, learn =
-  // false, trace = true, epsilon = 0 }. Returns { action, index, values,
-  // probs, trace, learned }.
+  // false, trace = true, epsilon = 0 }. Returns { action, index, values
+  // (MB value per option), scores (what the policy used: values, or the
+  // imagined block values), probs, trace, learned }.
   choose(state, legal, ctx = {}) {
     const { explore = 0, rng = this.rng, learn = false, trace = true, epsilon = 0 } = ctx;
     if (!legal || !legal.length) throw new Error('FlyAgent.choose: no legal action');
@@ -170,14 +184,18 @@ export class FlyAgent {
         values[i] = mb.valueOfKc(kc);
       }
     }
+    // Imagined block (opts.imagine, off by default). Model, not biology:
+    // when an action hands the opponent a block choice, score it by the
+    // worst value over the opponent's blocks. TD still learns on values.
+    const scores = this.opts.imagine ? values.map((v, i) => this._imagine(afters[i], me, v, terminal[i])) : values;
     // policy
     let best = 0;
-    for (let i = 1; i < n; i++) if (values[i] > values[best]) best = i;
+    for (let i = 1; i < n; i++) if (scores[i] > scores[best]) best = i;
     const probs = new Array(n).fill(0);
     let index = best;
     if (explore > 0) {
       let z = 0;
-      for (let i = 0; i < n; i++) { probs[i] = Math.exp((values[i] - values[best]) / explore); z += probs[i]; }
+      for (let i = 0; i < n; i++) { probs[i] = Math.exp((scores[i] - scores[best]) / explore); z += probs[i]; }
       for (let i = 0; i < n; i++) probs[i] /= z;
       let u = rng(), acc = 0;
       index = n - 1;
@@ -210,9 +228,22 @@ export class FlyAgent {
     this.lastTurn = state.turn ?? -1;
     this.decisions++;
 
-    const out = { action: legal[index], index, values, probs, learned, trace: null };
+    const out = { action: legal[index], index, values, scores, probs, learned, trace: null };
     if (trace) out.trace = this.buildTrace(feats[index] || (chosenTerminal ? safeFeatures(features, afters[index], me) : null), { me, index, values, probs, terminal: chosenTerminal });
     return out;
+  }
+
+  _imagine(after, me, v, isTerminal) {
+    const { legalActions, step, isOver, features } = this.game;
+    if (isTerminal || !legalActions || after.toAct === me || after.phase !== 'block') return v;
+    const mb = this.mb;
+    let worst = Infinity;
+    for (const b of legalActions(after)) {
+      const s2 = step(after, b), over = isOver(s2);
+      const w = over ? (over.winner === me ? 1 : over.winner === -1 ? 0 : -1) : mb.valueOfKc(mb.kcActivity(mb.encode(features(s2, me))));
+      if (w < worst) worst = w;
+    }
+    return worst === Infinity ? v : worst;
   }
 
   // PN, KC, MBON and DAN arrays of one board, for the brain view.

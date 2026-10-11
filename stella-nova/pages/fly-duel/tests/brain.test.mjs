@@ -445,6 +445,25 @@ if (need.every(existsSync)) {
   const c1 = A.choose(s0, R.legalActions(s0)), c2 = A2.choose(s0, R.legalActions(s0));
   ok(c1.index === c2.index && c1.values.every((v, i) => v === c2.values[i]), 'real Fly JSON round trip');
   ok(GAME.features(s0, 0).length === 48, 'features() gives 48 numbers');
+  ok(c1.scores === c1.values, 'imagine off: the policy uses the MB values');
+  // imagine on: block-phase afterstates get the worst block value, others keep their value
+  const [I] = makePair(RC, { seed: 2, imagine: true });
+  let checked = 0, badImg = 0;
+  for (let g = 0; g < 3; g++) {
+    let s = R.newGame({ seed: 700 + g, log: false });
+    while (!R.isOver(s)) {
+      const legal = R.legalActions(s);
+      const r = I.choose(s, legal, { trace: false });
+      legal.forEach((a, i) => {
+        const after = R.step(s, a);
+        if (!Number.isFinite(r.scores[i])) badImg++;
+        if (after.phase !== 'block' || after.toAct === s.toAct || R.isOver(after)) { if (r.scores[i] !== r.values[i]) badImg++; }
+        else checked++;
+      });
+      s = R.step(s, r.action);
+    }
+  }
+  ok(badImg === 0 && checked > 0, `imagine on: ${checked} attack options scored by the imagined block, others unchanged`);
 } else console.log('brain: integration block skipped (game/ or data/connectome.json missing)');
 
 console.log(`brain: ${pass} pass, ${fail} fail`);
