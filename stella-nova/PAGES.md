@@ -297,7 +297,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `enzyme-design` | De Novo Enzyme Design | Research > Machine Learning | NEW | Design an enzyme from scratch: hold the chemistry still and grow a protein around it. |  | shown | no | yes |
 | `legged-rl` | Legged Robot Gym | Research > Machine Learning | NEW | Walking robot policies in MuJoCo, in your browser. |  | shown | hook, tier 4, default | yes |
 | `mrna-vaccine` | The mRNA Vaccine | Research > Medicine | NEW | The decades of science behind the 2020 mRNA vaccines. |  | shown | hook, tier 3, default | yes |
-| `fly-duel` | Fly Brain Card Duel | Research > Neuroscience | NEW | Two model fruit fly brains, wired from the connectome, learn a card duel. |  | shown | no | no |
+| `fly-duel` | Fly Brain Card Duel | Research > Neuroscience | NEW | Two model fruit fly brains, wired from the connectome, learn a card duel. |  | shown | hook, tier 4, default | yes |
 
 ### Graphics
 
