@@ -914,12 +914,21 @@ export function createDuelScene(canvas, opts = {}) {
   const brains = [null, null];
   const brainHolders = [0, 1].map(p => {
     const g = new THREE.Group();
-    // both maps on the world -x side, away from the default camera side
-    g.position.copy(seatPos(p, p === 0 ? -2.4 : 2.4, 2.1, T.seatV - 0.35));
     g.rotation.y = YAW[p];
     scene.add(g);
     return g;
   });
+  // A wide frame: both maps on the world -x side, away from the default
+  // camera side. A tall frame (a phone) looks along the line between the
+  // seats, so a map at the side is out of the frame. There, each map
+  // floats above the head of its fly.
+  function placeBrains(tall) {
+    for (let p = 0; p < 2; p++) {
+      if (tall) seatPos(p, 0, 2.55, T.seatV + 0.05, brainHolders[p].position);
+      else seatPos(p, p === 0 ? -2.4 : 2.4, 2.1, T.seatV - 0.35, brainHolders[p].position);
+    }
+  }
+  placeBrains(false);
   // One map per fly, from its own connectome (connectomes[1] may be the
   // FlyWire file of fly B). A thin ring in the seat colour and a label
   // stand under each map.
@@ -1253,6 +1262,7 @@ export function createDuelScene(canvas, opts = {}) {
   // not swing on each small decision. force: a cast, a combat or the end
   // of the game cuts at once.
   const HOLD = 3.2;
+  const TALL = 0.95;
   // Camera mode (setCamera): 'auto' lets the steps call director();
   // 'wide' holds the wide shot; 'free' leaves the camera to the user's
   // orbit; 'script' takes shots only from shoot() (the saver director).
@@ -1267,7 +1277,18 @@ export function createDuelScene(canvas, opts = {}) {
     const aspect = camera.aspect || 1.6;
     const fit = Math.max(1, 1.45 / aspect);           // tall frames step back
     const s = speed > 2.5 ? 'wide' : cam.shot;
-    if (s === 'wide' || s === 'win') {
+    // A tall frame (a phone, aspect < TALL) does not step back from the
+    // side view: at 0.65 the camera went past the wall and each fly was
+    // about 70 px high. The wide and combat shots look along the line
+    // between the seats instead, so one fly is near and one is far.
+    if (aspect < TALL && (s === 'wide' || s === 'win' || s === 'combat')) {
+      const r = 13.5 * Math.max(1, 0.68 / aspect);
+      let el = 0.55, az = 0.28, toward = 0.8;
+      if (s === 'combat') { el = 0.75; az = cam.p === 0 ? 0.3 : Math.PI + 0.3; toward = cam.p === 0 ? 0.6 : -0.6; }
+      else if (!W.reduced) { cam.az += dt * 0.05; az += 0.12 * Math.sin(cam.az); }
+      cam.wantLook.set(0, T.y + 0.3, toward);
+      cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + 0.3 + Math.sin(el) * r, toward + Math.cos(az) * Math.cos(el) * r);
+    } else if (s === 'wide' || s === 'win') {
       if (!W.reduced) cam.az += dt * 0.05;
       const r = 10 * fit, el = 0.48;
       const az = Math.PI / 2 + 0.55 * Math.sin(cam.az);
@@ -1522,6 +1543,7 @@ export function createDuelScene(canvas, opts = {}) {
   function resize() {
     const w = Math.max(1, canvas?.clientWidth || 960), h = Math.max(1, canvas?.clientHeight || 540);
     camera.aspect = w / h; camera.updateProjectionMatrix();
+    placeBrains(camera.aspect < TALL);
     renderer?.setSize(w, h, false);
   }
   resize();

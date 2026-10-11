@@ -290,6 +290,39 @@ async function runGame(sc, M, check) {
   dispose();
 }
 
+// --- camera framing: wide stage and phone stage --------------------------------
+{
+  // The wide and combat shots keep the camera inside the room wall
+  // (radius 16) and keep each fly (head and seat) and each brain map in
+  // the frame, at a 16:9 stage and at a 362 x 557 phone stage. Before the
+  // tall-frame shots, the phone camera stood at r = 22 (past the wall) and
+  // the combat shot cut both flies at the frame edges.
+  const inFrame = (cam, w) => { const v = w.clone().project(cam); return Math.abs(v.x) < 0.98 && Math.abs(v.y) < 0.98 && v.z < 1; };
+  for (const [w, h] of [[960, 540], [362, 557]]) {
+    const sc = createDuelScene({ clientWidth: w, clientHeight: h }, { headless: true, connectomes: C ? [C, C] : null });
+    await sc.ready;
+    sc.setState(botMatch(3).state);
+    sc.setCamera('script');
+    for (const shot of ['wide', 'combat']) {
+      for (const p of [0, 1]) {
+        sc.shoot(shot, p);
+        for (let k = 0; k < 240; k++) sc.render(1 / 30);
+        const cam = sc.camera, r = Math.hypot(cam.position.x, cam.position.z);
+        ok(r < 15.5, `${w}x${h} ${shot} p${p}: camera inside the wall (r ${r.toFixed(1)})`);
+        let out = [];
+        for (const f of sc.world.flies) {
+          const head = f.built.rig.joints?.head?.getWorldPosition(new THREE.Vector3()) ?? f.holder.position.clone().setY(3.2);
+          if (!inFrame(cam, head)) out.push(`head ${f.p}`);
+          if (!inFrame(cam, f.holder.position)) out.push(`seat ${f.p}`);
+        }
+        if (C && shot === 'wide') for (const b of sc.world.brains) if (b && !inFrame(cam, b.group.getWorldPosition(new THREE.Vector3()))) out.push('brain map');
+        ok(out.length === 0, `${w}x${h} ${shot} p${p}: flies and maps in the frame (${out.join(', ') || 'all in'})`);
+      }
+    }
+    sc.dispose();
+  }
+}
+
 // --- layout numbers ---------------------------------------------------------------
 {
   const inTable = (u, v) => Math.hypot(u, v) < TABLE.felt;
