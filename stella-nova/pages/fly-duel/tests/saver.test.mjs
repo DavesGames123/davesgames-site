@@ -146,6 +146,13 @@ function runDirector(seed, calm, evAt = () => [], T = 400, dt = 0.1) {
   ok(/PPL1/.test(plateFor({ kind: 'brain', who: 1, event: { kind: 'burst', delta: -0.2, who: 1 } }, snap).lines[0]), 'plate: a negative burst names PPL1');
   ok(/Untrained/.test(plateFor({ kind: 'table' }, { ...snap, trained: false }).lines.join()), 'plate: untrained flies are named as such');
   ok(/greedy bot/.test(plateFor({ kind: 'table' }, { ...snap, kinds: ['fly', 'bot'] }).lines.join()), 'plate: a stand-in bot is named');
+  {
+    // two wiring files: each fly's KC share names its own live KC count
+    const two = plateFor({ kind: 'table' }, { ...snap, kc: [{ on: 175, live: 1750 }, { on: 238, live: 2378 }] }).lines.join(' ');
+    ok(/Fly A 10\.0% of 1750/.test(two) && /Fly B 10\.0% of 2378/.test(two), 'plate: each fly has its own KC count');
+    const one = plateFor({ kind: 'table' }, { ...snap, kc: [null, { on: 238, live: 2378 }] }).lines.join(' ');
+    ok(/Fly A n\/a/.test(one) && /Fly B 10\.0% of 2378/.test(one), 'plate: a fly with no move yet shows n/a, seats keep their order');
+  }
 }
 
 // ---------------------------------------------------------------- show (real modules)

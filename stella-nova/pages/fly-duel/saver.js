@@ -184,7 +184,7 @@ export function paceFor(action, calm = 0.7, over = false) {
 
 const pctOf = (on, live) => live > 0 ? `${(100 * on / live).toFixed(1)}%` : 'n/a';
 
-// The shell poster for a shot. snap = { life, turn, kc: [{ on, live }],
+// The shell poster for a shot. snap = { life, turn, kc: [{ on, live } | null, same for B],
 // trained, kinds: ['fly'|'bot', ..], card, over, last, wiring: [A, B] }. Plain text; the
 // TeX is the TD error and the value readout of the model.
 export function plateFor(shot, snap = {}) {
@@ -193,7 +193,10 @@ export function plateFor(shot, snap = {}) {
   const sub = `${NAMES[0]} ${life[0]} life · ${NAMES[1]} ${life[1]} life · turn ${snap.turn ?? '?'}`;
   const kc = snap.kc || [];
   const lines = [];
-  if (kc.length) lines.push(`Active Kenyon cells (of the ${kc[0]?.live} with PN input): ${NAMES[0]} ${pctOf(kc[0]?.on, kc[0]?.live)} · ${NAMES[1]} ${pctOf(kc[1]?.on, kc[1]?.live)}`);
+  // kc[i] is fly i, or null before its first move. The two flies have
+  // different wiring files, so each share names its own KC count.
+  const kcPart = i => kc[i] ? `${NAMES[i]} ${pctOf(kc[i].on, kc[i].live)} of ${kc[i].live}` : `${NAMES[i]} n/a`;
+  if (kc.some(Boolean)) lines.push(`Active Kenyon cells (share of those with PN input): ${kcPart(0)} · ${kcPart(1)}`);
   if (kinds.some(k => k !== 'fly')) lines.push('The fly model did not load: the greedy bot stands in');
   else lines.push(snap.trained ? 'Pretrained weights, learning off during the show' : 'Untrained flies: no pretrained weights yet');
   // snap.wiring: the connectome name of each fly (pretrained.json "wiring")
@@ -581,7 +584,7 @@ export function createShow(env) {
     // A plate snapshot of now.
     snapshot() {
       const st = S.match.state, sh = dir.shot;
-      const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; }).filter(Boolean);
+      const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; });
       const card = sh && sh.event && sh.event.card ? cardOf(S.byId, sh.event.card) : null;
       return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over(), wiring: env.wiring };
     },
@@ -731,7 +734,7 @@ export function createShow3d(env) {
     },
     snapshot() {
       const st = S.match.state, sh = dir.shot;
-      const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; }).filter(Boolean);
+      const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; });
       const card = sh && sh.event && sh.event.card ? cardOf(S.byId, sh.event.card) : null;
       return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over(), wiring: env.wiring };
     },
