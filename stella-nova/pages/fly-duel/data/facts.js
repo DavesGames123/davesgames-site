@@ -54,6 +54,9 @@ export const SOURCES = {
   sutton1988: S('Sutton RS. Learning to predict by the methods of temporal differences. Machine Learning 3, 9-44 (1988).', '10.1007/BF00115009'),
   tesauro1995: S('Tesauro G. Temporal difference learning and TD-Gammon. Communications of the ACM 38(3), 58-68 (1995).', '10.1145/203330.203343'),
   hemibrainData: S('Janelia FlyEM. Hemibrain v1.2 compact connection matrix summary (exported-traced-adjacencies-v1.2) and skeletons, released 2020-12-23. Licence CC BY 4.0. Read 2026-10-11.', null, 'https://www.janelia.org/project-team/flyem/hemibrain'),
+  flywireData: S('FlyWire Consortium. FlyWire Whole-brain Connectome Connectivity Data, release 783 (proofread_connections_783.feather). Zenodo (2024). Licence CC BY 4.0. Read 2026-10-11.', '10.5281/zenodo.10676866'),
+  flywireAnnotations: S('Schlegel P, Jefferis G, Yin Y, Costa M. flyconnectome/flywire_annotations: Version 3.2.0 (Supplemental_file1_neuron_annotations.tsv, Supplemental_file5_hemibrain_meta.csv). Zenodo (2026). Licence CC BY 4.0. Read 2026-10-11.', '10.5281/zenodo.23037340'),
+  buhmann2021: S('Buhmann J, Sheridan A, Malin-Mayor C, et al. Automatic detection of synaptic partners in a whole-brain Drosophila electron microscopy data set. Nature Methods 18, 771-774 (2021).', '10.1038/s41592-021-01183-7'),
 };
 
 // ---------------------------------------------------------------- facts
@@ -125,6 +128,22 @@ export const FACTS = {
   ourKcWithPn: F(1750, 'Kenyon cells', 'KCs in our file that get uPN input.', 'hemibrainData', { measured: 'kcWithPnInput' }),
   ourPnKcEdges: F(9734, 'connections', 'PN-to-KC connections in our file.', 'hemibrainData', { measured: 'edges.pn_kc' }),
   ourKcMbonEdges: F(24370, 'connections', 'KC-to-MBON connections in our file.', 'hemibrainData', { measured: 'edges.kc_mbon' }),
+
+  // ----- counts measured from data/connectome-flywire.json (Fly B, FlyWire 783)
+  // `flywire` names the path in that file. tests/flywire.test.mjs checks
+  // each value against the file. data.test.mjs does not read these keys.
+  fwKc: F(2597, 'Kenyon cells', 'KCs in the right hemisphere of FlyWire (data/connectome-flywire.json): a second, different female fly.', 'flywireAnnotations', { flywire: 'kc.n', also: ['schlegel2024', 'dorkenwald2024'] }),
+  fwKcab: F(860, 'Kenyon cells', 'α/β KCs in the FlyWire file.', 'flywireAnnotations', { flywire: 'kcByClass.KCab' }),
+  fwKcapbp: F(467, 'Kenyon cells', 'α′/β′ KCs in the FlyWire file.', 'flywireAnnotations', { flywire: "kcByClass.KCa'b'" }),
+  fwKcg: F(1270, 'Kenyon cells', 'γ KCs in the FlyWire file.', 'flywireAnnotations', { flywire: 'kcByClass.KCg' }),
+  fwPn: F(121, 'neurons', 'Uniglomerular PNs in the FlyWire file: each makes at least 3 synapses onto a KC.', 'flywireData', { flywire: 'pn.n' }),
+  fwMbon: F(38, 'neurons', 'MBONs in the FlyWire file, by the same rule as the hemibrain file (at least 100 synapses from KCs).', 'flywireData', { flywire: 'mbon.n' }),
+  fwDan: F(161, 'neurons', 'DANs in the FlyWire file, by the same rule as the hemibrain file (at least 50 synapses onto KCs).', 'flywireData', { flywire: 'dan.n' }),
+  fwClaws: F(4.61, 'uPN partners per KC', 'Mean number of uPN partners per KC in the FlyWire file (connections of 3 or more synapses, KCs with uPN input only).', 'flywireData', { flywire: 'clawsPerKcMean' }),
+  fwKcWithPn: F(2378, 'Kenyon cells', 'KCs in the FlyWire file that get uPN input.', 'flywireData', { flywire: 'kcWithPnInput' }),
+  fwPnKcEdges: F(10955, 'connections', 'PN-to-KC connections in the FlyWire file.', 'flywireData', { flywire: 'edges.pn_kc' }),
+  fwKcMbonEdges: F(17033, 'connections', 'KC-to-MBON connections in the FlyWire file.', 'flywireData', { flywire: 'edges.kc_mbon' }),
+  fwKcMbonSynapses: F(103800, 'synapses', 'KC-to-MBON synapses in the FlyWire file. The hemibrain file has 309,004. The two data sets detect synapses by different methods, so this ratio is not a biological difference only.', 'flywireData', { flywire: 'kcMbonSynapses', also: ['buhmann2021'] }),
 };
 
 // ---------------------------------------------------------------- texts
