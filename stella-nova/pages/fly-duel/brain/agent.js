@@ -10,8 +10,10 @@
 //  afterstate step(state, a) through features(after, me), the "smell" of
 //  that board. The MB value of the smell is its approach-minus-avoid
 //  drive. A finished afterstate has its true value (+1 win, -1 loss, 0
-//  draw) and needs no smell. Softmax at temperature `explore` picks the
-//  action (explore 0 = greedy, first best on ties).
+//  draw) and needs no smell. With the graded KC code (brain/mb.js) the
+//  fly keeps the KC rates of each afterstate with its KC list, and the
+//  value, the trace and the update use them. Softmax at temperature
+//  `explore` picks the action (explore 0 = greedy, first best on ties).
 //
 //  LEARNING.  TD(lambda) on afterstate values, in the fly's own decision
 //  sequence x_0, x_1, ... (the opponent moves between two of them).
@@ -147,12 +149,12 @@ export class FlyAgent {
   // One TD update toward target from the last pattern (uses the trace).
   _learnTo(target) {
     const mb = this.mb, last = this.last;
-    const v = mb.valueOfKc(last.kc);
+    const v = mb.valueOfKc(last.kc, last.rate);
     const delta = target - v;
     const dan = mb.danFromDelta(delta);
-    const res = mb.learn(null, dan, this.opts.lr, last.kc);
+    const res = mb.learn(null, dan, this.opts.lr, last.kc, last.rate);
     this.updates++;
-    this.lastLearn = { delta, target, before: v, after: mb.valueOfKc(last.kc), dan, danNeurons: mb.danNeurons(dan), clamped: res.clamped };
+    this.lastLearn = { delta, target, before: v, after: mb.valueOfKc(last.kc, last.rate), dan, danNeurons: mb.danNeurons(dan), clamped: res.clamped };
     return this.lastLearn;
   }
 
@@ -168,7 +170,7 @@ export class FlyAgent {
     if (state.turn != null && state.turn < this.lastTurn) this.reset();
     this.me = me;
     const n = legal.length;
-    const values = new Array(n), kcs = new Array(n), afters = new Array(n), feats = new Array(n), terminal = new Uint8Array(n);
+    const values = new Array(n), kcs = new Array(n), rates = new Array(n), afters = new Array(n), feats = new Array(n), terminal = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       const after = step(state, legal[i]);
       afters[i] = after;
@@ -179,9 +181,9 @@ export class FlyAgent {
       } else {
         const f = features(after, me);
         feats[i] = f;
-        const kc = mb.kcActivity(mb.encode(f)).slice();
-        kcs[i] = kc;
-        values[i] = mb.valueOfKc(kc);
+        const code = mb.kcCode(mb.encode(f));
+        kcs[i] = code.kc; rates[i] = code.rate;
+        values[i] = mb.valueOfKc(code.kc, code.rate);
       }
     }
     // Imagined block (opts.imagine, off by default). Model, not biology:
@@ -214,7 +216,7 @@ export class FlyAgent {
       this.pendingR = 0;
       learned = this._learnTo(chosenTerminal ? values[index] + r : r + gamma * values[index]);
       // the value changed: rescore the chosen pattern for the trace view
-      if (!chosenTerminal) values[index] = mb.valueOfKc(kcs[index]);
+      if (!chosenTerminal) values[index] = mb.valueOfKc(kcs[index], rates[index]);
     }
     if (chosenTerminal) {
       // Way A: the step to the end is done. Way B: keep the last pattern
@@ -222,8 +224,8 @@ export class FlyAgent {
       if (learn) { this.last = null; this.pendingR = 0; this.mb.clearTrace(); }
     } else {
       // A live trace means mid-game (reset clears it), in both ways A and B.
-      mb.traceStep(kcs[index], mb.eligN > 0 ? gamma * this.opts.lambda : 0);
-      this.last = { kc: kcs[index], phi: phiNew };
+      mb.traceStep(kcs[index], mb.eligN > 0 ? gamma * this.opts.lambda : 0, rates[index]);
+      this.last = { kc: kcs[index], rate: rates[index], phi: phiNew };
     }
     this.lastTurn = state.turn ?? -1;
     this.decisions++;
@@ -240,7 +242,7 @@ export class FlyAgent {
     let worst = Infinity;
     for (const b of legalActions(after)) {
       const s2 = step(after, b), over = isOver(s2);
-      const w = over ? (over.winner === me ? 1 : over.winner === -1 ? 0 : -1) : mb.valueOfKc(mb.kcActivity(mb.encode(features(s2, me))));
+      const w = over ? (over.winner === me ? 1 : over.winner === -1 ? 0 : -1) : mb.value(features(s2, me));
       if (w < worst) worst = w;
     }
     return worst === Infinity ? v : worst;
@@ -257,7 +259,7 @@ export class FlyAgent {
       fly: this.name, hemisphere: mb.hemisphere,
       features: feat ? Float32Array.from(feat) : null,
       glomeruli: mb._glom.slice(),
-      pn: ev.pn, kc: ev.kc, mbon: ev.mbon, value: ev.value,
+      pn: ev.pn, kc: ev.kc, kcRate: ev.kcRate || null, mbon: ev.mbon, value: ev.value,
       valence: mb.valence, kActive: mb.k, kcLive: mb.nLive,
       delta: L ? L.delta : 0,
       danCompartment: L ? L.dan.slice() : new Float32Array(mb.compartments.length),
@@ -276,7 +278,7 @@ export class FlyAgent {
     }
     if (this.mode === 'A' || !this.last) { this.pendingR += reward; return null; }
     const mb = this.mb, me = this.me, g = this.opts.gamma;
-    const v = mb.valueOfKc(mb.kcActivity(mb.encode(this.game.features(state, me))));
+    const v = mb.value(this.game.features(state, me));
     const res = this._learnTo(this.pendingR + reward + g * this.phi(state, me) - this.last.phi + g * v);
     this.pendingR = 0;
     return res;

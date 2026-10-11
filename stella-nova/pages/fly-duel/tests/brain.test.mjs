@@ -274,6 +274,88 @@ for (const seed of [1, 2, 3]) {
   ok(near(x.valueOfKc(kA), 0.8, 0.25), `two-armed seed ${seed}: V(A) near 0.8 (${x.valueOfKc(kA).toFixed(2)})`);
 }
 
+// ---------------------------------------------------------------- graded KC code
+// kcCode 'graded': the same k winners as the binary code, each with a
+// rate (z - APL level) / rateScale > 0. The mean rate on the calibration
+// boards is 1. The value, the MBON rates, the trace and the update use
+// the rate. A format 1 JSON (no kcCode) loads as the binary code.
+{
+  const rng = mulberry32(31);
+  const cal = Array.from({ length: 128 }, () => randFeat(rng));
+  const bin = new MushroomBody(C, { seed: 21, calibration: cal });
+  const gr = new MushroomBody(C, { seed: 21, kcCode: 'graded', calibration: cal });
+  let same = true, pos = true, rs = 0, rn = 0;
+  for (const f of cal) {
+    const a = bin.kcActivity(bin.encode(f)).slice();
+    const c = gr.kcCode(gr.encode(f));
+    if (a.length !== c.kc.length || a.some((k, i) => k !== c.kc[i])) same = false;
+    if (!(c.rate && c.rate.length === c.kc.length && c.rate.every(r => r > 0 && Number.isFinite(r)))) pos = false;
+    for (const r of c.rate) { rs += r; rn++; }
+  }
+  ok(same, 'graded code: the same k winners as the binary code');
+  ok(pos, 'graded code: every active KC has a finite rate > 0');
+  ok(near(rs / rn, 1, 1e-3), `graded code: mean rate on the calibration boards is 1 (${(rs / rn).toFixed(4)})`);
+  ok(bin.kcCode(bin.encode(cal[0])).rate === null, 'binary code: kcCode gives rate null');
+  // the best KC has the highest rate
+  {
+    const c = gr.kcCode(gr.encode(cal[3]));
+    const z = Array.from(c.kc, k => (gr._drive[k] - gr.kcMu[k]) / gr.kcSd[k]);
+    const iz = z.indexOf(Math.max(...z)), ir = c.rate.indexOf(Math.max(...c.rate));
+    ok(iz === ir, 'graded code: the KC with the highest z-score has the highest rate');
+  }
+  // value, MBON rates and evaluate agree; the binary value is rate 1
+  {
+    const f = cal[5], c = gr.kcCode(gr.encode(f));
+    const ev = gr.evaluate(f);
+    ok(near(ev.value, gr.valueOfKc(c.kc, c.rate), 1e-9) && near(gr.value(f), ev.value, 1e-9), 'graded code: value(), evaluate() and valueOfKc(kc, rate) agree');
+    ok(near(bin.valueOfKc(c.kc), bin.valueOfKc(c.kc, new Float32Array(c.kc.length).fill(1)), 1e-9), 'rate null equals rate 1');
+    let s = 0; for (let j = 0; j < gr.nMBON; j++) s += gr.valence[j] * ev.mbon[j];
+    ok(near(gr.valueScale * s - gr.bias, ev.value, 1e-6), 'graded code: value = valueScale * sum valence * MBON rate - bias');
+  }
+  // one update removes lr of the error (normalised step with rates)
+  {
+    const x = new MushroomBody(C, { seed: 22, kcCode: 'graded', calibration: cal });
+    const c = x.kcCode(x.encode(cal[9]));
+    const v0 = x.valueOfKc(c.kc, c.rate), target = v0 + 0.4, lr = 0.25;
+    const res = x.learn(c.kc, x.danFromDelta(target - v0), lr, null, null, c.rate);
+    const v1 = x.valueOfKc(c.kc, c.rate);
+    ok(res.clamped === 0 && near(v1 - v0, lr * 0.4, 1e-4), `graded update: value moves lr of the error (${(v1 - v0).toFixed(4)} vs ${(lr * 0.4).toFixed(4)})`);
+    // the trace holds the rates, and a trace update gives the same step
+    const y = new MushroomBody(C, { seed: 22, kcCode: 'graded', calibration: cal });
+    y.traceStep(c.kc, 0, c.rate);
+    ok(c.kc.every((k, i) => y.elig[k] === Math.max(1e-3, c.rate[i])), 'graded trace: e_i = rate of KC i');
+    y.learn(null, y.danFromDelta(target - v0), lr, c.kc, c.rate);
+    ok(near(y.valueOfKc(c.kc, c.rate), v1, 1e-5), 'graded trace update = direct update on the same pattern');
+  }
+  // JSON: format 2 keeps the code and rateScale; format 1 loads as binary
+  {
+    const x = new MushroomBody(C, { seed: 23, kcCode: 'graded', calibration: cal });
+    const j = JSON.parse(JSON.stringify(x));
+    const y = MushroomBody.fromJSON(C, j);
+    ok(j.format === 'fly-duel-mb/2' && y.graded && y.rateScale === x.rateScale && y.value(cal[2]) === x.value(cal[2]), 'graded JSON round trip keeps code, rateScale and value');
+    const old = JSON.parse(JSON.stringify(bin));
+    old.format = 'fly-duel-mb/1'; delete old.opts.kcCode; delete old.rateScale;
+    const z = MushroomBody.fromJSON(C, old);
+    ok(!z.graded && z.value(cal[4]) === bin.value(cal[4]), 'format 1 JSON loads as the binary code with the same value');
+  }
+  // two-armed task with the graded code
+  {
+    const x = new MushroomBody(C, { seed: 24, kcCode: 'graded', calibration: cal });
+    const r2 = mulberry32(9);
+    const A2 = x.kcCode(x.encode(randFeat(mulberry32(1001)))), B2 = x.kcCode(x.encode(randFeat(mulberry32(2001))));
+    let lastA = 0;
+    for (let t = 0; t < 500; t++) {
+      const va = x.valueOfKc(A2.kc, A2.rate), vb = x.valueOfKc(B2.kc, B2.rate);
+      const pa = 1 / (1 + Math.exp(-(va - vb) / 0.1));
+      const pickA = r2() < pa, arm = pickA ? A2 : B2;
+      const r = r2() < (pickA ? 0.8 : 0.2) ? 1 : 0;
+      x.learn(arm.kc, x.danFromDelta(r - x.valueOfKc(arm.kc, arm.rate)), 0.1, null, null, arm.rate);
+      if (t >= 400 && pickA) lastA++;
+    }
+    ok(lastA > 80, `graded two-armed task: last 100 pick A ${lastA} times`);
+  }
+}
+
 // ---------------------------------------------------------------- speed
 {
   const rng = mulberry32(12);

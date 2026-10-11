@@ -37,27 +37,36 @@
 //     APL is a k-winners-take-all: the top k = round(sparsity * live KCs)
 //     z-scores fire. Ties go to the lower KC index. A KC with no PN claw
 //     never fires ("dead" in stats).
+//     KC RATE (opts.kcCode).  'binary': each winner has rate 1 (format 1
+//     model). 'graded': each winner has rate (z - L) / rateScale, where
+//     L is the best z-score that did not win (the APL level) and
+//     rateScale makes the mean rate 1 on the calibration boards. A real
+//     KC fires a small and variable number of spikes per odour (Turner
+//     2008), and APL feedback sets the level it must pass (Lin 2014), so
+//     a graded rate is the nearer model. The winners are the same in
+//     both codes. Only the rates change.
 //
-//  3. VALUE.  MBON rate j = (1/k) * sum over active KCs of w_ij.
+//  3. VALUE.  MBON rate j = (1/k) * sum over active KCs of r_i * w_ij
+//     (r_i = KC rate, 1 for the binary code).
 //     value = valueScale * sum_j valence_j * rate_j - bias. Valence +1
 //     is approach, -1 is avoid. bias is the mean naive value over the
 //     calibration set, so a naive fly starts near 0.
 //
 //  4. PLASTICITY.  Three-factor rule, depression gated by dopamine.
 //       dw_ij = -eta * DAN_c(j) * e_i ,  w clamped to [0, wmax]
-//     e_i is the decaying KC eligibility trace. DAN_c is the signed DAN
-//     rate of compartment c relative to its tonic rate (burst > 0,
-//     dip < 0). danFromDelta(delta) sets DAN_c = -valence_c * delta:
+//     e_i is the decaying KC eligibility trace (set to the KC rate when
+//     the KC fires). DAN_c is the signed DAN rate of compartment c
+//     relative to its tonic rate (burst > 0, dip < 0). danFromDelta(delta) sets DAN_c = -valence_c * delta:
 //       delta > 0: avoid compartments (PAM in the fly) burst. Their KC ->
 //                  MBON synapses depress, avoid drive falls, value rises.
 //       delta < 0: approach compartments (PPL1 in the fly) burst. Their
 //                  synapses depress, approach drive falls, value falls.
 //     A dip (DAN_c < 0) gives the opposite change (recovery). With this
 //     sign, dw_ij = eta * delta * valence_j * e_i, which is the TD(lambda)
-//     gradient step. eta = lr / ((valueScale/k) * N), N = plastic synapses
-//     of the current active KCs (a normalised step), so lr is the part of
-//     the error that one update removes on the current pattern before
-//     clamping. Only MBONs whose valence agrees with their compartment
+//     gradient step. eta = lr / ((valueScale/k) * N), N = sum of r_i^2 *
+//     plastic synapses of KC i over the current active KCs (a normalised
+//     step), so lr is the part of the error that one update removes on
+//     the current pattern before clamping. Only MBONs whose valence agrees with their compartment
 //     valence, and that have a gating DAN, are plastic.
 //
 //  EXPORTS   (jump with grep -n "<anchor>" brain/mb.js)
@@ -65,6 +74,7 @@
 //      MB_DEFAULTS ....... "export const MB_DEFAULTS"
 //      encode ............ "  encode("          features -> PN rates
 //      kcActivity ........ "  kcActivity("      PN rates -> active KC list
+//      kcCode ............ "  kcCode("          PN rates -> { kc, rate } copies
 //      mbonOut ........... "  mbonOut("         active KCs -> MBON rates
 //      value ............. "  value("           features -> number
 //      evaluate .......... "  evaluate("        features -> { pn, kc, mbon, value }
@@ -92,9 +102,14 @@ export const MB_DEFAULTS = {
   tuningWidth: 0.6,      // population: sigma as a fraction of centre spacing
   wmax: 4,               // weight clamp; mean initial plastic weight = 1
   calibrationSize: 128,  // random boards when no samples are given
+  kcCode: 'binary',      // 'binary' (rate 1) or 'graded' (rate above APL)
 };
 
-const FORMAT = 'fly-duel-mb/1';
+// Format 2 adds kcCode and rateScale. fromJSON reads a format 1 file
+// with kcCode 'binary', which is the format 1 model.
+const FORMAT = 'fly-duel-mb/2';
+const FORMATS = ['fly-duel-mb/1', FORMAT];
+const LEGACY = { kcCode: 'binary' };
 
 // ---------------------------------------------------------------- helpers
 function b64FromBytes(u8) {
@@ -277,6 +292,9 @@ export class MushroomBody {
     this._z = new Float64Array(nKC);
     this._sel = new Float64Array(nKC);
     this._kc = new Uint16Array(nKC);
+    this._rate = new Float32Array(nKC);
+    this.graded = o.kcCode === 'graded';
+    this.rateScale = 1;   // graded: mean (z - APL level) of a winner
     this._mbon = new Float32Array(nM);
     this._dan = new Float32Array(nC);
 
@@ -419,22 +437,41 @@ export class MushroomBody {
     let above = 0;
     for (let k = 0; k < n; k++) if (z[k] > thr) above++;
     let ties = K - above, out = 0;
-    const kc = this._kc;
+    const kc = this._kc, rate = this._rate;
     for (let k = 0; k < n && out < K; k++) {
       const v = z[k];
       if (v > thr) kc[out++] = k;
       else if (v === thr && ties > 0) { kc[out++] = k; ties--; }
     }
+    if (this.graded) {
+      // APL level = the best z-score that did not win (the K+1-th).
+      let lose = -Infinity, j = 0;
+      for (let k = 0; k < n; k++) {
+        if (j < out && kc[j] === k) { j++; continue; }
+        if (live[k] && z[k] > lose) lose = z[k];
+      }
+      if (lose === -Infinity) lose = thr - 1;
+      const inv = 1 / this.rateScale;
+      for (let a = 0; a < out; a++) { const r = (z[kc[a]] - lose) * inv; rate[a] = r > 0.01 ? r : 0.01; }
+    } else rate.fill(1, 0, out);
+    this.kcRate = rate.subarray(0, out);
     return kc.subarray(0, out);
   }
 
-  // Active KCs -> MBON rates (mean weight over the k winners).
-  mbonOut(activeKc, out = this._mbon) {
+  // PN rates -> { kc, rate } copies. rate is null for the binary code.
+  kcCode(pnRates) {
+    const kc = this.kcActivity(pnRates).slice();
+    return { kc, rate: this.graded ? this.kcRate.slice() : null };
+  }
+
+  // Active KCs -> MBON rates (mean weight over the k winners). rate:
+  // KC rates in the order of activeKc (graded code), or null (rate 1).
+  mbonOut(activeKc, out = this._mbon, rate = null) {
     out.fill(0);
     const ptr = this.kcOutPtr, mb = this.kcOutMbon, w = this.w;
     for (let a = 0; a < activeKc.length; a++) {
-      const k = activeKc[a];
-      for (let e = ptr[k]; e < ptr[k + 1]; e++) out[mb[e]] += w[e];
+      const k = activeKc[a], r = rate ? rate[a] : 1;
+      for (let e = ptr[k]; e < ptr[k + 1]; e++) out[mb[e]] += r * w[e];
     }
     const inv = 1 / this.k;
     for (let j = 0; j < out.length; j++) out[j] *= inv;
@@ -442,25 +479,33 @@ export class MushroomBody {
   }
 
   // Active KCs -> value, without the MBON buffer (fast path).
-  valueOfKc(activeKc) {
+  // rate: as in mbonOut.
+  valueOfKc(activeKc, rate = null) {
     const ptr = this.kcOutPtr, mb = this.kcOutMbon, w = this.w, v = this.valence;
     let s = 0;
     for (let a = 0; a < activeKc.length; a++) {
       const k = activeKc[a];
-      for (let e = ptr[k]; e < ptr[k + 1]; e++) s += v[mb[e]] * w[e];
+      let sk = 0;
+      for (let e = ptr[k]; e < ptr[k + 1]; e++) sk += v[mb[e]] * w[e];
+      s += rate ? rate[a] * sk : sk;
     }
     return this.valueScale * s / this.k - this.bias;
   }
 
   // features -> value (approach minus avoid drive).
-  value(features) { return this.valueOfKc(this.kcActivity(this.encode(features))); }
+  value(features) {
+    const kc = this.kcActivity(this.encode(features));
+    return this.valueOfKc(kc, this.graded ? this.kcRate : null);
+  }
 
   // features -> copies of every layer, for the brain view and the trainer.
+  // kcRate: rate of each active KC (all 1 for the binary code).
   evaluate(features) {
     const pn = this.encode(features).slice();
     const kc = this.kcActivity(pn).slice();
-    const mbon = this.mbonOut(kc).slice();
-    return { pn, kc, mbon, value: this.valueOfKc(kc) };
+    const kcRate = this.kcRate.slice(), rate = this.graded ? kcRate : null;
+    const mbon = this.mbonOut(kc, this._mbon, rate).slice();
+    return { pn, kc, kcRate, mbon, value: this.valueOfKc(kc, rate) };
   }
 
   // TD error -> signed DAN rate per compartment (relative to tonic rate).
@@ -477,8 +522,9 @@ export class MushroomBody {
   }
 
   // Eligibility: e <- decay * e, then e_i = 1 for each active KC (a
-  // replacing trace). Values under 1e-3 leave the list.
-  traceStep(activeKc, decay) {
+  // replacing trace), or e_i = its rate when rate is given (graded code).
+  // Values under 1e-3 leave the list.
+  traceStep(activeKc, decay, rate = null) {
     const e = this.elig, idx = this.eligIdx;
     let n = 0;
     for (let a = 0; a < this.eligN; a++) {
@@ -488,7 +534,7 @@ export class MushroomBody {
     if (activeKc) for (let a = 0; a < activeKc.length; a++) {
       const k = activeKc[a];
       if (e[k] === 0) idx[n++] = k;
-      e[k] = 1;
+      e[k] = rate ? Math.max(1e-3, rate[a]) : 1;
     }
     this.eligN = n;
   }
@@ -504,13 +550,16 @@ export class MushroomBody {
   //   lr:       part of the error to remove on normKc (default 0.1).
   //   normKc:   pattern for the normalised step (default activeKc, or the
   //             trace KCs with e = 1).
+  //   normRate: rates of normKc (graded code), or null (rate 1).
+  //   activeRate: rates of activeKc (graded code): e_i = rate.
   // Returns { eta, changed, clamped, dwAbs }.
-  learn(activeKc, dan, lr = 0.1, normKc = null) {
+  learn(activeKc, dan, lr = 0.1, normKc = null, normRate = null, activeRate = null) {
     const ptr = this.kcOutPtr, mb = this.kcOutMbon, w = this.w, plast = this.edgePlastic, comp = this.mbonComp;
     const wmax = this.wmax;
     const norm = normKc || activeKc;
+    const nRate = normKc ? normRate : activeRate;
     let N = 0;
-    if (norm) for (let a = 0; a < norm.length; a++) N += this.kcPlasticCount[norm[a]];
+    if (norm) for (let a = 0; a < norm.length; a++) { const r = nRate ? nRate[a] : 1; N += r * r * this.kcPlasticCount[norm[a]]; }
     else for (let a = 0; a < this.eligN; a++) { const k = this.eligIdx[a]; if (this.elig[k] === 1) N += this.kcPlasticCount[k]; }
     if (!N) return { eta: 0, changed: 0, clamped: 0, dwAbs: 0 };
     const eta = lr / ((this.valueScale / this.k) * N);
@@ -526,7 +575,7 @@ export class MushroomBody {
         w[e] = nw; changed++;
       }
     };
-    if (activeKc) for (let a = 0; a < activeKc.length; a++) one(activeKc[a], 1);
+    if (activeKc) for (let a = 0; a < activeKc.length; a++) one(activeKc[a], activeRate ? activeRate[a] : 1);
     else for (let a = 0; a < this.eligN; a++) { const k = this.eligIdx[a]; one(k, this.elig[k]); }
     this.updates++;
     return { eta, changed, clamped, dwAbs };
@@ -553,6 +602,14 @@ export class MushroomBody {
       this.kcSd[k] = Math.sqrt(v) + 1e-3;
       this._invSd[k] = 1 / this.kcSd[k];
     }
+    // Graded code: rateScale = mean (z - APL level) of a winner, so the
+    // mean rate of an active KC is 1, as in the binary code.
+    if (this.graded) {
+      this.rateScale = 1;
+      let rs = 0, rn = 0;
+      for (const f of samples) { this.kcActivity(this.encode(f)); for (const r of this.kcRate) { rs += r; rn++; } }
+      this.rateScale = rn && rs > 0 ? rs / rn : 1;
+    }
     this.bias = 0;
     let vs = 0;
     for (const f of samples) vs += this.value(f);
@@ -570,20 +627,21 @@ export class MushroomBody {
       format: FORMAT, fingerprint: this.fingerprint,
       opts: { ...this.opts, calibration: undefined },
       hemisphere: this.hemisphere, seed: this.seed,
-      bias: this.bias, updates: this.updates,
+      bias: this.bias, updates: this.updates, rateScale: this.rateScale,
       kcMu: f32ToB64(this.kcMu), kcSd: f32ToB64(this.kcSd), w: f32ToB64(this.w),
     };
   }
 
   static fromJSON(connectome, json) {
-    if (!json || json.format !== FORMAT) throw new Error(`MushroomBody.fromJSON: format ${json && json.format} is not ${FORMAT}`);
-    const mb = new MushroomBody(connectome, { ...json.opts, seed: json.seed, hemisphere: json.hemisphere, calibration: false });
+    if (!json || !FORMATS.includes(json.format)) throw new Error(`MushroomBody.fromJSON: format ${json && json.format} is not ${FORMAT}`);
+    const mb = new MushroomBody(connectome, { ...LEGACY, ...json.opts, seed: json.seed, hemisphere: json.hemisphere, calibration: false });
     if (mb.fingerprint !== json.fingerprint) throw new Error(`MushroomBody.fromJSON: wiring ${mb.fingerprint} is not ${json.fingerprint}`);
     const mu = f32FromB64(json.kcMu), sd = f32FromB64(json.kcSd), w = f32FromB64(json.w);
     if (mu.length !== mb.nKC || sd.length !== mb.nKC || w.length !== mb.w.length) throw new Error('MushroomBody.fromJSON: array size');
     mb.kcMu.set(mu); mb.kcSd.set(sd); mb.w.set(w);
     for (let k = 0; k < mb.nKC; k++) mb._invSd[k] = 1 / mb.kcSd[k];
     mb.bias = json.bias; mb.updates = json.updates | 0;
+    if (json.rateScale > 0) mb.rateScale = json.rateScale;
     return mb;
   }
 }
