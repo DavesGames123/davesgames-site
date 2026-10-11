@@ -93,7 +93,8 @@ function landChip(card, info) {
 }
 
 // The table for one state. opts: { byId: Map, names: [a, b], hands:
-// 'open' | 'count', hot: Set of uids to light, last: string, toAct }.
+// 'open' | 'count', hot: Set of uids to light, last: string, lastWho:
+// seat of the last action, banner: { text, seat } at a game end }.
 export function renderBoard(root, state, opts = {}) {
   if (!root) return;
   if (!state || !state.players) { root.innerHTML = `<div class="board-empty">${esc(opts.empty || 'Waiting for the rules engine.')}</div>`; return; }
@@ -121,9 +122,13 @@ export function renderBoard(root, state, opts = {}) {
       + `</div>`;
   };
   const phase = state.phase ? `${state.phase}` : '';
-  root.innerHTML = side(1)
-    + `<div class="midline"><span>turn ${state.turn ?? '?'}${phase ? ' · ' + esc(phase) : ''}</span><span class="last">${esc(opts.last || '')}</span></div>`
-    + side(0);
+  // The midline: turn and phase, and the last action in the actor's seat
+  // colour. A result banner replaces it at a game end (opts.banner).
+  const ban = opts.banner;
+  const mid = ban
+    ? `<div class="midline banner${ban.seat >= 0 ? ` s${ban.seat}` : ''}" role="note"><b>${esc(ban.text)}</b></div>`
+    : `<div class="midline"><span>turn ${state.turn ?? '?'}${phase ? ' · ' + esc(phase) : ''}</span><span class="last${opts.lastWho != null ? ` s${opts.lastWho}` : ''}">${esc(opts.last || '')}</span></div>`;
+  root.innerHTML = side(1) + mid + side(0);
 }
 
 // card id -> count for a deck given as { list: [[id, n]] }, as ids, as

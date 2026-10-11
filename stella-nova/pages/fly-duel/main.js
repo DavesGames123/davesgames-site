@@ -42,6 +42,7 @@ import { BrainView } from './ui/brain.js';
 import { curveRows, toSeries, seriesLabel, drawChart, SERIES_COL, flattenRow, evalVerdict } from './ui/charts.js';
 import { ToyMB, drawToy, drawGlomeruli, drawSparse, jaccard, cosine } from './ui/explain.js';
 import { Match, agentFromFly, agentFromBot } from './ui/match.js';
+import { beatPlan, motionFor } from './ui/motion.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { TOKENS, KC_TYPE, FLY } from './ui/tokens.js';
 
@@ -191,22 +192,24 @@ function dragRotate(cv, bv, v) {
 }
 
 function brainCanvas(cv, bv) {
-  const v = view(cv, dt => { const { g, w, h } = fit(cv); bv.draw(g, w, h, dt); }, () => bv.ok && !REDUCED || bv.pulse > 0 || bv.dan > 0);
+  const v = view(cv, dt => { const { g, w, h } = fit(cv); bv.draw(g, w, h, dt); }, () => bv.ok && !REDUCED || bv.busy || bv.pulse > 0 || bv.dan > 0);
   dragRotate(cv, bv, v);
   return v;
 }
 
-// A record from a Match -> the two brain views.
-function feedBrains(rec, bvs, match) {
-  if (!rec) return;
-  const bv = bvs[rec.who];
-  if (bv && rec.trace) bv.setTrace(rec.trace, rec.value);
-  if (bv && rec.delta != null) bv.burst(rec.delta);
-  if (match?.result && match.finalDelta) match.finalDelta.forEach((d, p) => { if (d != null && bvs[p]) bvs[p].burst(d); });
-}
-
 // ---------------------------------------------------------------- hero
-const hero = { match: null, playing: !REDUCED, speed: 1, acc: 0, wait: 0, bvs: [], log: [], last: null };
+// One decision per beat (ui/motion.js beatPlan). The ticker runs the
+// timed steps of the beat: focus, PN/KC/MBON reveal, decision strip,
+// table, DAN burst. At a game end the last board holds with a banner.
+const hero = { match: null, playing: !REDUCED, speed: 1, bvs: [], log: [], last: null, rec: null, plan: null, t: 0, hold: 0, focus: -1 };
+
+// The banner text of a game result (DESIGN.md 2.3).
+export function resultBanner(r, names = NAMES) {
+  if (!r) return null;
+  if (r.winner === -1) return { text: `Draw · ${r.reason || 'turn cap'}`, seat: -1 };
+  const why = r.reason === 'life' ? 'life 0' : r.reason === 'decked' ? `${names[1 - r.winner]} drew from an empty deck` : (r.reason || '');
+  return { text: `${names[r.winner]} wins${why ? ` · ${why}` : ''}`, seat: r.winner };
+}
 
 function initHero() {
   const st = $('heroStatus');
@@ -214,13 +217,13 @@ function initHero() {
   brainCanvas($('heroBrainA'), hero.bvs[0]);
   brainCanvas($('heroBrainB'), hero.bvs[1]);
   const byId = cardMap();
-  if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: 'The rules engine is not loaded yet.' }); return; }
+  if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: `The rules engine did not load: ${status.rules}.` }); return; }
   const F = heroFlies();
   const agents = agentsFor('ab', F.A, F.B);
   if (!agents) { st.textContent = 'No players could load.'; return; }
   hero.match = new Match(M.rules, agents, { seed: 1 + Math.floor(Math.random() * 1e6), names: NAMES });
-  const who = F.A && F.B ? (F.trained ? 'Both flies play with their pretrained weights.' : 'Untrained flies: data/pretrained.json is not there yet.') : 'Stand-in bots play until the fly model loads.';
-  const draw = () => renderBoard($('heroBoard'), hero.match.state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '' });
+  const who = F.A && F.B ? (F.trained ? 'Both flies play with their pretrained weights.' : 'Untrained flies: no pretrained weights.') : 'Stand-in bots play until the fly model loads.';
+  const draw = (state, banner = null) => renderBoard($('heroBoard'), state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '', lastWho: hero.last?.who, banner });
   const say = () => {
     const r = hero.match.over();
     st.classList.toggle('win', !!r);
@@ -232,32 +235,89 @@ function initHero() {
     if (hero.log.length > 4) hero.log.length = 4;
     $('heroLog').innerHTML = hero.log.map(r => `<li class="p${r.who}">${esc(r.text)}${r.value != null ? ` <span class="v">V=${r.value.toFixed(2)}</span>` : ''}</li>`).join('');
   };
-  draw(); say();
-  const step = () => {
-    if (hero.match.over()) { hero.match.reset(1 + Math.floor(Math.random() * 1e6)); hero.log = []; hero.last = null; $('heroLog').innerHTML = ''; draw(); say(); return; }
-    let rec = null;
-    try { rec = hero.match.next(); } catch (e) { console.error('hero step', e); st.textContent = `The match stopped: ${e.message}`; hero.playing = false; return; }
-    if (!rec) return;
-    hero.last = rec; logLine(rec); feedBrains(rec, hero.bvs, hero.match); draw(); say();
-    hero.onDecision?.(rec);
-    // pause longer on moves that change the board, shorter on a pass
-    hero.wait = rec.action?.type === 'pass' || (rec.action?.attackers && !rec.action.attackers.length) || (rec.action?.blocks && !rec.action.blocks.length) ? 0.45 : 1.1;
-    if (hero.match.over()) hero.wait = 4;
+  // Focus on the thinker: the acting pane gets the fly colour and
+  // "choosing", the other pane steps back with "waiting". A cut.
+  const setFocus = w => {
+    hero.focus = w;
+    [0, 1].forEach(p => {
+      const on = p === w;
+      const pane = $(p ? 'heroPaneB' : 'heroPaneA');
+      pane.classList.toggle('acting', on); pane.classList.toggle('waiting', w >= 0 && !on);
+      $(p ? 'heroCapB' : 'heroCapA').innerHTML = `<b class="seatmark s${p}">${p ? 'B' : 'A'}</b> ${NAMES[p]} · ${w < 0 ? 'game over' : on ? 'choosing' : 'waiting'}`;
+    });
+    const chip = document.querySelector('#chips a[data-target="s0"]');
+    if (chip) chip.dataset.seat = w < 0 ? '' : String(w);
   };
-  hero.stepNow = step;
+  const newGame = () => {
+    hero.match.reset(1 + Math.floor(Math.random() * 1e6));
+    hero.log = []; hero.last = null; hero.rec = null; hero.plan = null; hero.hold = 0; hero.t = 0;
+    $('heroLog').innerHTML = '';
+    setFocus(hero.match.state.toAct); draw(hero.match.state); say();
+    hero.onReset?.();
+  };
+  // One step of the beat plan.
+  const fire = (step) => {
+    const rec = hero.rec, bv = hero.bvs[rec.who], P = hero.plan;
+    if (step.key === 'focus') setFocus(rec.who);
+    else if (step.key === 'pn') {
+      const at = k => (P.steps.find(x => x.key === k)?.at ?? 0) - step.at;
+      if (bv && rec.trace) bv.setTrace(rec.trace, rec.value, { pn: 0, kc: at('kc'), mbon: at('mbon') });
+    } else if (step.key === 'decide') hero.onDecide?.(rec);
+    else if (step.key === 'burst') { if (bv) bv.burst(step.delta); }
+    else if (step.key === 'table') {
+      hero.last = rec; logLine(rec);
+      const r = hero.match.over();
+      if (r) {
+        if (hero.match.finalDelta) hero.match.finalDelta.forEach((d, p) => { if (d != null && hero.bvs[p]) hero.bvs[p].burst(d); });
+        setFocus(-1);
+      }
+      draw(rec.after, r ? resultBanner(r) : null); say();
+      hero.onDecision?.(rec);
+    }
+  };
+  const flush = (all = false) => {
+    if (!hero.plan) return;
+    for (const s of hero.plan.steps) if (!s.done && (all || hero.t >= s.at)) { s.done = true; fire(s); }
+  };
+  // Start the next beat: the fly decides now, the steps play over the beat.
+  const begin = () => {
+    let rec = null;
+    try { rec = hero.match.next(); } catch (e) { console.error('hero step', e); st.textContent = `The match stopped: ${e.message}`; hero.playing = false; return false; }
+    if (!rec) return false;
+    hero.rec = rec; hero.plan = beatPlan(rec, hero.speed, REDUCED); hero.t = 0;
+    flush();
+    return true;
+  };
+  // A whole beat at once (reduced motion start, keyboard step).
+  const stepNow = () => {
+    if (hero.match.over()) { newGame(); return; }
+    flush(true);
+    if (begin()) flush(true);
+    hero.plan = null;
+  };
+  hero.stepNow = stepNow; hero.newGame = newGame;
+  setFocus(hero.match.state.toAct); draw(hero.match.state); say();
   tickers.push(dt => {
     if (!hero.playing || !onScreen.has($('heroBrainA')) && !onScreen.has($('heroBoard'))) return;
-    hero.acc += dt * hero.speed;
-    if (hero.acc >= hero.wait) { hero.acc = 0; step(); }
+    hero.t += dt * 1000;
+    if (hero.plan) {
+      flush();
+      if (hero.t < hero.plan.beat) return;
+      hero.plan = null;
+      if (hero.match.over()) { hero.hold = motionFor(REDUCED).endHold; hero.t = 0; return; }
+    }
+    if (hero.hold > 0) { if (hero.t < hero.hold) return; newGame(); return; }
+    begin();
   });
   io.observe($('heroBoard'));
   const play = $('heroPlay');
   const setPlay = on => { hero.playing = on; play.textContent = on ? 'Pause' : 'Play'; play.setAttribute('aria-pressed', String(on)); };
+  hero.setPlay = setPlay;
   setPlay(hero.playing);
   play.addEventListener('click', () => setPlay(!hero.playing));
   seg($('heroSpeed'), v => hero.speed = +v);
-  $('heroNew').addEventListener('click', () => { hero.match.reset(1 + Math.floor(Math.random() * 1e6)); hero.log = []; hero.last = null; $('heroLog').innerHTML = ''; draw(); say(); });
-  if (REDUCED) step();
+  $('heroNew').addEventListener('click', newGame);
+  if (REDUCED) stepNow();
 }
 
 // Held-out numbers of the shipped flies (tools/train.mjs meta.final), or null.
@@ -565,6 +625,9 @@ function initTrain() {
   });
   btns[4].addEventListener('click', () => { if (!train.worker && !boot(null)) return; train.running = false; train.pending = false; read.textContent = `Evaluating: ${EVAL_N} games for each of five match-ups, with exploration and learning off. This can take a minute.`; post({ cmd: 'eval', n: EVAL_N }); });
   seg($('trainSpeed'), x => train.batch = +x);
+  // chip 06 carries a square while the trainer runs (DESIGN.md 2.2)
+  const chip = document.querySelector('#chips a[data-target="s6"]');
+  if (chip) tickers.push(() => { if (chip.classList.contains('running') !== train.running) chip.classList.toggle('running', train.running); });
   // no training while the tab is hidden
   document.addEventListener('visibilitychange', () => {
     if (!train.worker) return;

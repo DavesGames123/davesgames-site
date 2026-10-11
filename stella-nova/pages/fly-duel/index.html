@@ -112,7 +112,7 @@
   <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, <span data-wiring>wired from the published connectome</span>, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
 
   <div class="arena" id="arena">
-    <div class="arena-brain a"><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
+    <div class="arena-brain a" id="heroPaneA" data-seat="0"><p class="brain-cap" id="heroCapA"><b class="seatmark s0">A</b> Fly A</p><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
     <div class="arena-mid">
       <div class="arena-bar">
         <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
@@ -125,7 +125,7 @@
       <div class="board" id="heroBoard" aria-live="off"><div class="board-empty">Loading…</div></div>
       <ol class="log" id="heroLog" aria-label="Last moves"></ol>
     </div>
-    <div class="arena-brain b"><canvas class="fig brain" id="heroBrainB" aria-label="Brain of Fly B: point cloud of its mushroom body neurons"></canvas></div>
+    <div class="arena-brain b" id="heroPaneB" data-seat="1"><p class="brain-cap" id="heroCapB"><b class="seatmark s1">B</b> Fly B</p><canvas class="fig brain" id="heroBrainB" aria-label="Brain of Fly B: point cloud of its mushroom body neurons"></canvas></div>
   </div>
   <div class="legend brainleg">
     <span><i style="background:var(--pn)"></i>projection neurons (the board's smell)</span>

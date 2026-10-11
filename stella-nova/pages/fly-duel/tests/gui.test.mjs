@@ -99,5 +99,38 @@ const dE = (a, b) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[
   for (const p of uiFiles.filter(f => f !== 'ui/tokens.js')) ok(!/system-ui,sans-serif/.test(read(p)), `fonts: ${p} canvas text uses the tokens font stacks`);
 }
 
+// --------------------------------------------------------------- 4 hero beat
+// ui/motion.js: the steps of one beat are in order and inside the beat,
+// reduced motion gives no tween and a beat of at least 1800 ms, and the
+// focus goes to the actor of the record.
+{
+  const M = await import('../ui/motion.js');
+  const keys = ['beat', 'think', 'draw', 'cast', 'tap', 'arrow', 'dmgRise', 'lifeFlash', 'burst', 'zoom', 'sheet'];
+  ok(keys.every(k => Number.isFinite(M.MOTION[k])), 'motion: MOTION has every DESIGN.md 1.4 key');
+  ok(M.EASE === 'cubic-bezier(0.2,0,0,1)', 'motion: one easing');
+  ok(M.beatMs(0.5) === 1800 && M.beatMs(1) === 900 && M.beatMs(3) === 300, 'motion: beat 1800 / 900 / 300 by speed');
+  for (const [speed, reduced] of [[0.5, false], [1, false], [3, false], [1, true], [3, true]]) for (const rec of [{ who: 0, delta: 0.4 }, { who: 1, delta: -0.05 }, { who: 1, delta: 0.001 }, { who: 0 }]) {
+    const p = M.beatPlan(rec, speed, reduced);
+    const tag = `speed ${speed}${reduced ? ' reduced' : ''} who ${rec.who} δ ${rec.delta}`;
+    ok(p.who === rec.who, `motion: focus is rec.who (${tag})`);
+    ok(p.steps.every((s, i) => i === 0 || s.at >= p.steps[i - 1].at), `motion: steps in order (${tag})`);
+    ok(p.steps.every(s => s.at >= 0 && s.at + s.dur <= p.beat), `motion: steps inside the beat (${tag})`);
+    const order = p.steps.map(s => s.key).filter(k => k !== 'burst').join(' ');
+    ok(order === 'focus pn kc mbon decide table', `motion: step order ${order}`);
+    ok(p.steps.some(s => s.key === 'burst') === (rec.delta != null && Math.abs(rec.delta) > M.BURST_MIN), `motion: burst only above |δ| ${M.BURST_MIN} (${tag})`);
+    if (reduced) ok(p.steps.every(s => s.dur === 0) && p.beat >= 1800, `motion: reduced is all cuts, beat >= 1800 (${tag})`);
+    const tab = p.steps.find(s => s.key === 'table');
+    ok(Math.abs(tab.at / p.beat - 0.55) < 0.01, `motion: the table plays at 0.55 of the beat (${tag})`);
+  }
+  const r = M.motionFor(true);
+  ok(Object.entries(r).every(([k, v]) => ['beat', 'think', 'dmgHold', 'burst', 'endHold', 'reduced'].includes(k) || v === 0), 'motion: reduced sets every tween key to 0');
+  ok(r.endHold === 4000 && M.motionFor(false).endHold === 2500, 'motion: end hold 2.5 s, 4 s reduced');
+  // The page wires the beat: main.js uses beatPlan, the panes and captions exist.
+  const js = read('main.js');
+  ok(/beatPlan\(rec, hero\.speed, REDUCED\)/.test(js), 'motion: main.js runs the hero on beatPlan');
+  for (const id of ['heroPaneA', 'heroPaneB', 'heroCapA', 'heroCapB']) ok(html.includes(`id="${id}"`), `motion: index.html has #${id}`);
+  ok(/\.arena-brain\.waiting \.fig\.brain\{opacity:0\.5\}/.test(css), 'motion: the waiting brain is at 0.5 opacity');
+}
+
 console.log(`gui.test: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

@@ -136,11 +136,17 @@ export class BrainView {
   }
 
   // A new decision: trace from fly.choose, value of the chosen afterstate.
-  setTrace(trace, value = null) {
+  // stages (optional, ms from now): { pn, kc, mbon }. Until a stage time,
+  // that layer keeps the last trace, so the hero beat shows PN, then KC,
+  // then MBON change in turn (ui/motion.js beatPlan). No stages: all at once.
+  setTrace(trace, value = null, stages = null) {
+    this.prev = this.trace;
     this.trace = normTrace(trace);
     this.value = value;
+    this.stages = stages; this.age = 0;
     if (this.ok) {
       const n = this.pts.kc.length;
+      this.kcOnPrev = this.kcOn && this.kcOn.length === n ? this.kcOn.slice() : null;
       if (!this.kcOn || this.kcOn.length !== n) this.kcOn = new Uint8Array(n);
       this.kcOn.fill(0);
       for (const i of this.trace.kc || []) if (i >= 0 && i < n) this.kcOn[i] = 1;
@@ -149,6 +155,9 @@ export class BrainView {
     }
     this.pulse = 1;
   }
+
+  // True while a staged trace is still being revealed (the view must draw).
+  get busy() { return !!this.stages && (this.age || 0) < (this.stages.mbon || 0) + 40; }
 
   // A DAN burst for TD error delta. The size of the flash follows |delta|.
   burst(delta) {
@@ -174,6 +183,11 @@ export class BrainView {
       return;
     }
     if (!this.drag) this.yaw += this.spin * dt;
+    this.age = (this.age || 0) + dt * 1000;
+    const stg = this.stages, prev = this.prev || normTrace(null);
+    const at = k => !stg || this.age >= (stg[k] || 0);
+    const kcOn = at('kc') ? this.kcOn : this.kcOnPrev;
+    const T = { pn: at('pn') ? this.trace.pn : prev.pn, kc: at('kc') ? this.trace.kc : prev.kc, mbon: at('mbon') ? this.trace.mbon : prev.mbon };
     this.pulse = Math.max(0, this.pulse - dt * 1.2);
     this.dan = Math.max(0, this.dan - dt * 1.4);
     const barsH = Math.max(34, Math.min(76, h * 0.24));
@@ -192,7 +206,7 @@ export class BrainView {
     // silent KCs: one fill per lobe colour
     const groups = new Map();
     for (let i = 0; i < nk; i++) {
-      if (this.kcOn && this.kcOn[i]) continue;
+      if (kcOn && kcOn[i]) continue;
       const col = this.kcCol[i] || COL.kc;
       if (!groups.has(col)) groups.set(col, []);
       groups.get(col).push(i);
@@ -203,7 +217,7 @@ export class BrainView {
     }
     // PNs coloured by rate
     if (pn) {
-      const r = this.trace.pn;
+      const r = T.pn;
       for (let i = 0; i < PT.pn.length; i++) {
         const v = r ? Math.min(1, Math.max(0, r[i] || 0)) : 0;
         g.fillStyle = rgba(COL.pn, 0.18 + 0.8 * v);
@@ -213,20 +227,20 @@ export class BrainView {
     }
     // claw lines and active KCs, additive
     g.save(); g.globalCompositeOperation = 'lighter';
-    if (this.kcOn && pn && this.pulse > 0) {
+    if (kcOn && pn && this.pulse > 0) {
       const claws = this.claws(); let lines = 0;
       g.strokeStyle = rgba(COL.pn, 0.10 * this.pulse); g.lineWidth = 0.6; g.beginPath();
-      for (const i of this.trace.kc || []) {
+      for (const i of T.kc || []) {
         const ps = claws.get(i); if (!ps) continue;
         for (const p of ps) { g.moveTo(tx(pn, p), ty(pn, p)); g.lineTo(tx(kc, i), ty(kc, i)); if (++lines > 900) break; }
         if (lines > 900) break;
       }
       g.stroke();
     }
-    if (this.kcOn) {
+    if (kcOn) {
       const a = 0.55 + 0.45 * this.pulse, d = dot * (1.8 + this.pulse * 1.6);
       g.fillStyle = rgba(COL.on, a);
-      for (const i of this.trace.kc || []) if (i < nk) g.fillRect(tx(kc, i) - d / 2, ty(kc, i) - d / 2, d, d);
+      for (const i of T.kc || []) if (i < nk) g.fillRect(tx(kc, i) - d / 2, ty(kc, i) - d / 2, d, d);
     }
     // DANs and the burst
     if (dn) {
@@ -248,7 +262,7 @@ export class BrainView {
     g.restore();
     // MBONs
     if (mb) {
-      const val = C.mbon.valence || [], r = this.trace.mbon;
+      const val = C.mbon.valence || [], r = T.mbon;
       for (let i = 0; i < PT.mbon.length; i++) {
         const v = val[i] ?? 0, col = v > 0 ? COL.app : v < 0 ? COL.avoid : COL.neu;
         const rate = r ? Math.min(1, Math.abs(r[i] || 0) / this.mbonMax) : 0;
@@ -260,7 +274,7 @@ export class BrainView {
     const by = h - barsH, order = this.mbonOrder, nb = order.length;
     g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(0, by, w, barsH);
     if (nb) {
-      const bw = (w - 8) / nb, r = this.trace.mbon, val = C.mbon.valence || [];
+      const bw = (w - 8) / nb, r = T.mbon, val = C.mbon.valence || [];
       for (let j = 0; j < nb; j++) {
         const i = order[j], v = val[i] ?? 0, col = v > 0 ? COL.app : v < 0 ? COL.avoid : COL.neu;
         const rate = r ? Math.min(1, Math.abs(r[i] || 0) / this.mbonMax) : 0;
@@ -271,7 +285,7 @@ export class BrainView {
     }
     // labels
     g.font = font(11); g.fillStyle = TOKENS.ink2; g.textAlign = 'left';
-    const nOn = this.trace.kc ? this.trace.kc.length : 0;
+    const nOn = T.kc ? T.kc.length : 0;
     g.fillText(`${this.label}  KC ${nOn}/${nk} on (${((100 * nOn) / Math.max(1, nk)).toFixed(1)}%)`, 6, 14);
     if (this.value != null && Number.isFinite(this.value)) { g.textAlign = 'right'; g.fillText(`value ${this.value.toFixed(3)}`, w - 6, 14); }
     g.textAlign = 'left'; g.fillStyle = TOKENS.dim;
