@@ -209,7 +209,17 @@ function onStatus(s) {
     $('boot').hidden = false;
     return;
   }
+  // After a stop without SharedArrayBuffer, engine.js starts a new worker
+  // and boots Python again. Show the stage list again for that boot.
+  if (s.stage === 'restart') {
+    stageAt = -1;
+    $('boot').hidden = false;
+    $('bootMsg').textContent = text || 'Restarting Python';
+    lis.forEach(li => { li.className = ''; });
+    return;
+  }
   const i = s.ready ? 4 : stageOf(s, text);
+  if (i >= 4) setTimeout(() => { if (stageAt >= 4) $('boot').hidden = true; }, 900);
   stageAt = Math.max(stageAt, i);
   lis.forEach((li, j) => { li.className = j < stageAt ? 'ok' : j === stageAt ? 'on' : ''; });
   let frac = Number.isFinite(s.progress) ? s.progress : Number.isFinite(s.fraction) ? s.fraction
@@ -245,7 +255,6 @@ async function bootEngine() {
     onStatus({ ready: true, text: 'Ready.' });
     $('run').classList.remove('busy');
     $('run').title = 'Run (Ctrl or Cmd + Enter)';
-    setTimeout(() => { $('boot').hidden = true; }, 900);
     if (info && typeof info === 'object') engine.info = engine.info || info;
     hood.refresh();
     engine.introspect('manim').then(m => {
@@ -351,7 +360,10 @@ function cancelRun(silent = false) {
   try { engine.cancel(); } catch {}
   setRunning(false);
   player.finish({});
-  if (!silent) { logLine('Run stopped.', 'stderr'); toast('Run stopped.'); }
+  if (!silent) {
+    logLine('Run stopped.', 'stderr');
+    toast(engine.canInterrupt === false ? 'Run stopped. Python restarts, which takes a moment.' : 'Run stopped.');
+  }
 }
 $('run').onclick = () => runCode();
 $('stop').onclick = () => cancelRun();
