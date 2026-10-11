@@ -92,12 +92,10 @@ export function costGlyphs(cost, size = 15) {
 
 function backdrop(r, P, id) {
   const gid = `g${id}`;
-  let s = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.sky1}"/><stop offset="1" stop-color="${P.sky0}"/></linearGradient>`
-    + `<radialGradient id="${gid}r" cx="${f1(30 + r() * 40)}%" cy="${f1(20 + r() * 30)}%" r="60%"><stop offset="0" stop-color="${P.glow}" stop-opacity="0.35"/><stop offset="1" stop-color="${P.glow}" stop-opacity="0"/></radialGradient></defs>`
-    + `<rect width="100" height="70" fill="url(#${gid})"/><rect width="100" height="70" fill="url(#${gid}r)"/>`;
-  const n = 10 + Math.floor(r() * 14);
-  for (let i = 0; i < n; i++) s += `<circle cx="${f1(r() * 100)}" cy="${f1(r() * 70)}" r="${f1(0.3 + r() * 1.1)}" fill="${P.glow}" opacity="${f1(0.15 + r() * 0.4)}"/>`;
-  return s;
+  // One 2-stop linear sky: the only gradient (DESIGN.md 3.4). No glow,
+  // no grain.
+  return `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.sky1}"/><stop offset="1" stop-color="${P.sky0}"/></linearGradient></defs>`
+    + `<rect width="100" height="70" fill="url(#${gid})"/>`;
 }
 
 function insect(r, P, kw) {
@@ -107,8 +105,6 @@ function insect(r, P, kw) {
   const c0 = P.body[Math.floor(r() * 4)], c1 = P.body[Math.floor(r() * 4)];
   const thick = kw.includes('thick'), wings = kw.includes('wings'), sting = kw.includes('sting'), swift = kw.includes('swift');
   let s = `<g transform="rotate(${f1(ang)} ${f1(cx)} ${f1(cy)})">`;
-  // ground shadow
-  s += `<ellipse cx="${f1(cx)}" cy="${f1(cy + abW + 8)}" rx="${f1(abL + 6)}" ry="3" fill="#000" opacity="0.35"/>`;
   // legs: three pairs, two segments each
   for (let i = 0; i < 3; i++) {
     const bx = cx - thL * 0.5 + i * thL * 0.5;

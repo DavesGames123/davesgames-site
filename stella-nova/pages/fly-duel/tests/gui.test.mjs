@@ -64,5 +64,23 @@ const dE = (a, b) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[
   for (const p of src) ok(!old.test(read(p)), `tokens: ${p} has no old palette value (${(read(p).match(old) || [])[0]})`);
 }
 
+// --------------------------------------------------------------- 2 crisp
+// No blur, glow, text shadow or radial gradient. A box-shadow is a hard
+// ring only (no blur radius). One linear sky gradient per card art.
+{
+  const files = ['style.css', 'main.js', ...uiFiles];
+  for (const p of files) {
+    const s = read(p);
+    const m = s.match(/shadowBlur|blur\(|text-shadow|radial-gradient|radialGradient|createRadialGradient/);
+    ok(!m, `crisp: ${p} has no blur or glow (${m && m[0]})`);
+    const bs = s.match(/box-shadow:[^;}]*[0-9]px [0-9]+px [1-9]/);
+    ok(!bs, `crisp: ${p} box-shadow has no blur radius (${bs && bs[0]})`);
+  }
+  ok(!/filter:\s*(saturate|blur|drop-shadow)/.test(css), 'crisp: no CSS filter on cards');
+  const { cardArt } = await import('../ui/art.js');
+  const a = cardArt({ id: 'x', colour: 'amber', type: 'creature', keywords: ['wings'] });
+  ok((a.match(/Gradient /g) || []).length === 1 && /linearGradient/.test(a), 'crisp: card art has one linear sky gradient');
+}
+
 console.log(`gui.test: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);
