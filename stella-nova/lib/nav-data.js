@@ -327,6 +327,9 @@ w.SN_NAV = [
     ] },
     { h: "Medicine", p: [
       ["mrna-vaccine", "The mRNA Vaccine", "NEW"]
+    ] },
+    { h: "Neuroscience", p: [
+      ["fly-duel", "Fly Brain Card Duel", "NEW"]
     ] }
   ] }
 ] },
