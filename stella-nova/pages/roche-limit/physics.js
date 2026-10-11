@@ -126,6 +126,8 @@ export const MATERIALS = {
   fluid:    { name: 'Fluid',      e: 0.5, mu: 0.0, muR: 0.0,  coh: 0.0, note: 'frictionless grains, no cohesion: flows like a liquid' },
   rigid:    { name: 'Rigid-ish',  e: 0.5, mu: 0.6, muR: 0.05, coh: 0.0, note: 'rough grains (friction 0.6, rolling resistance): a granular solid' },
   cohesive: { name: 'Cohesive',   e: 0.5, mu: 0.6, muR: 0.05, coh: 0.4, note: 'rough grains with a weak cement between touching grains' },
+  // added 2026-10-11 for the random runs (roll.js): sand-like grains
+  loose:    { name: 'Loose',      e: 0.5, mu: 0.3, muR: 0.0,  coh: 0.0, note: 'grains with some friction (0.3) and no rolling resistance: loose sand' },
 };
 
 // ── random numbers ────────────────────────────────────────────────────────

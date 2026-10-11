@@ -32,6 +32,13 @@
 //  12 phone layout (style.css, read as text): 44 px touch targets on a
 //     coarse pointer, the dock and bottom sheets on a phone, the short
 //     landscape strip, no page scroll, the canvas takes every touch
+//  13 random runs and start layouts (roll.js, initial.js): 3000 seeds
+//     valid, every choice reached, seeds reproducible and unrelated,
+//     presets valid, the world unit keeps the tide; the part sizes, the
+//     orbit tilt and the ellipse start, spin modes and the cap, contact
+//     lobes touch, a binary holds its mutual orbit (CPU), a train shares
+//     one orbit, two moons, the core mass, clumps.
+//     node tests.mjs --start runs test 13 only.
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
 //     for desktop and phone profiles, against budget.js LIMIT; phones get
 //     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
@@ -46,6 +53,8 @@ import * as PC from './pacing.js';
 import { SCENARIOS, REAL, limitsOf } from './scenarios.js';
 import * as BG from './budget.js';
 import * as SP from './saver-plan.js';
+import * as RL from './roll.js';
+import * as IN from './initial.js';
 
 const GPU_ONLY = typeof Deno !== 'undefined' && Deno.args.includes('--gpu');
 let fails = 0;
@@ -254,6 +263,105 @@ function cpuTests() {
     ok('breakup run: energy ledger drift over 3 orbits', Math.abs(a.drift) < 2e-3 && Math.abs(b.drift) < 2e-3, `|d(E - W)| / |U_self| ${Math.abs(a.drift).toExponential(2)} (torn), ${Math.abs(b.drift).toExponential(2)} (whole)`);
     ok('breakup run: angular momentum drift over 3 orbits', Math.abs(a.Ld) < 1e-5 && Math.abs(b.Ld) < 1e-5, `|dL_z| / L_z ${Math.abs(a.Ld).toExponential(2)} (torn, ${a.acc} hits), ${Math.abs(b.Ld).toExponential(2)} (whole)`);
   }
+}
+
+// 13 ─ random runs and start layouts (roll.js, initial.js)
+function startTests() {
+  // the roll space: every seed valid, the same seed the same run, all
+  // choices reached
+  { let bad = [], seen = { planet: new Set(), body: new Set(), material: new Set(), spin: new Set(), orbit: new Set() }, combos = new Set();
+    for (let seed = 1; seed <= 3000; seed++) {
+      const s = RL.rollRun(seed), e = RL.checkSpec(s);
+      if (e) bad.push(`${seed}: ${e}`);
+      for (const k of Object.keys(seen)) seen[k].add(k === 'orbit' ? s.orbitKind : s.choice[k]);
+      combos.add(`${s.choice.planet}|${s.choice.body}|${s.orbitKind}`);
+    }
+    ok('rolls: 3000 seeds give valid runs', bad.length === 0, bad.slice(0, 3).join('; ') || 'all pass checkSpec');
+    const cov = Object.entries(seen).map(([k, v]) => `${k} ${v.size}`).join(', ');
+    ok('rolls: every planet, body, material, spin and orbit is reached', seen.planet.size === 10 && seen.body.size === 9 && seen.material.size === 4 && seen.spin.size === 4 && seen.orbit.size === 6, `${cov}; ${combos.size} planet-body-orbit combinations`);
+    const a = JSON.stringify(RL.rollRun(4242)), b = JSON.stringify(RL.rollRun(4242)), c = JSON.stringify(RL.rollRun(4243));
+    let same = 0; for (let i = 1; i <= 1000; i++) { const x = RL.rollRun(i).choice, y = RL.rollRun(i + 1).choice; if (x.planet === y.planet && x.body === y.body) same++; }
+    ok('rolls: neighbour seeds give unrelated runs', same < 40, `${same} of 1000 neighbour pairs share planet and body (chance: about 11)`);
+    ok('rolls: the same seed gives the same run', a === b && a !== c, `seed 4242: "${RL.rollRun(4242).title}"; 4243: "${RL.rollRun(4243).title}"`);
+    const bp = RL.PRESETS.map(p => [p.key, RL.checkSpec(RL.presetSpec(p.key))]).filter(x => x[1]);
+    ok('presets: a dozen or more, all valid, unique keys', RL.PRESETS.length >= 12 && bp.length === 0 && new Set(RL.PRESETS.map(p => p.key)).size === RL.PRESETS.length, `${RL.PRESETS.length} presets; ${bp.map(x => x.join(': ')).join('; ') || 'all valid'}`);
+    // the world unit: the tide is the same (q / d^3 in true and world units)
+    const w = RL.presetSpec('wd'), tideW = w.q / (w.peri ** 3), tideT = w.qTrue / ((w.peri / w.bodyR) ** 3);
+    ok('rolls: the world unit of a white dwarf keeps the tide', rel(tideW, tideT) < 1e-12 && w.bodyR < 0.02, `q ${w.q} world, ${w.qTrue.toExponential(3)} true, drawn radius ${w.bodyR.toExponential(2)} world units; Roche limit ${w.LfTrue.toFixed(0)} radii = ${(w.LfTrue * w.Rtrue / 1e6).toFixed(2)} million km`); }
+
+  // a settled pile for the layouts
+  const N = 600, mat = P.MATERIALS.fluid, { C, sim } = settledPile(N, mat, 5, 4);
+  const st0 = P.pileStats(sim.x, sim.mass), pos = Float64Array.from(sim.x);
+  for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) pos[3 * i + k] -= st0.com[k];
+  const pile = { pos, rad: Float64Array.from(sim.rad), mass: Float64Array.from(sim.mass), st: P.pileStats(pos, sim.mass) };
+  const pl = P.planetFor(pile.st, { q: 1.2, s: 0.1, J2: 0 });
+  const mk = (orbit, extra = {}) => { const o = IN.orbitStart3(pl, orbit); return Object.assign(o, { P: pl }, extra); };
+  const mom = b => { let M = 0, p = [0, 0, 0], c = [0, 0, 0]; for (let i = 0; i < N; i++) { M += b.mass[i]; for (let k = 0; k < 3; k++) { p[k] += b.mass[i] * b.vel[3 * i + k]; c[k] += b.mass[i] * b.pos[3 * i + k]; } } return { M, p: Math.hypot(...p) / M, c: Math.hypot(...c) / M }; };
+  const Lf = P.K_FLUID * Math.cbrt(1.2);
+  // part sizes
+  { const t = ['single', 'core', 'contact', 'binary', 'two', 'train'].map(type => [type, IN.partSizes({ type, k: 9, ratio: 0.3 }, 4096)]);
+    ok('layouts: part sizes add up to N, each at least 256', t.every(([, s]) => s.reduce((a, b) => a + b, 0) === 4096 && s.every(n => n >= IN.MIN_PART)), t.map(([k, s]) => `${k} ${s.join('+')}`).join('; ')); }
+  // orbits
+  { const o1 = IN.orbitStart3(pl, { kind: 'circular', d: 2.5, inc: 157 * Math.PI / 180 });
+    const o2 = IN.orbitStart3(pl, { kind: 'flyby', peri: 1.2, e: 0.6, r0: 9, inc: 0 });
+    const el2 = P.keplerElements(o2.X, o2.V, pl.GM), apo = 1.2 * pl.Rp * 1.6 / 0.4;
+    ok('orbits: tilt and backward orbit; an ellipse starts inside its apocentre', Math.abs(Math.acos(o1.n[2]) * 180 / Math.PI - 157) < 1e-9 && Math.hypot(...o2.X) <= 0.97 * apo + 1e-6 && rel(el2.e, 0.6) < 1e-9 && rel(el2.rp, 1.2 * pl.Rp) < 1e-9,
+      `inclination ${(Math.acos(o1.n[2]) * 180 / Math.PI).toFixed(3)} deg; ellipse r0 ${(Math.hypot(...o2.X) / apo).toFixed(3)} of the apocentre, e ${el2.e.toFixed(6)}, q ${(el2.rp / pl.Rp).toFixed(6)} R_p`); }
+  // single with spin modes: momentum zero, spin as asked, capped
+  { const orb = mk({ kind: 'circular', d: 1.05 * Lf });
+    const wb = Math.sqrt(4 * Math.PI / 3 * pile.st.rho);
+    const res = ['sync', 'prograde', 'retrograde', 'tumbling'].map(mode => { const b = IN.buildStart(pile, { layout: { type: 'single' }, spin: { mode, k: 2 } }, orb, P.rng(3)); return [mode, b, mom(b)]; });
+    const big = IN.spinVector({ mode: 'prograde', k: 50 }, orb.Omega, orb.n, pile.st.rho, P.rng(1));
+    const w = r => Math.hypot(r[1].spin[0], r[1].spin[1], r[1].spin[2]);
+    ok('layouts: one pile, every spin mode: no net momentum, spin rate as asked, capped at 0.7 of breakup', res.every(r => r[2].p < 1e-9 * pile.st.R * orb.Omega + 1e-12) && rel(w(res[0]), orb.Omega) < 1e-12 && rel(w(res[1]), 2 * orb.Omega) < 1e-12 && res[2][1].spin[2] < 0 && rel(Math.hypot(...big), 0.7 * wb) < 1e-12,
+      res.map(r => `${r[0]} |w| ${(w(r) / orb.Omega).toFixed(2)} Omega`).join(', ') + `; cap ${(Math.hypot(...big) / wb).toFixed(2)} w_breakup`); }
+  // contact binary: the lobes touch, none overlaps, it turns as one body
+  { const orb = mk({ kind: 'circular', d: 1.05 * Lf });
+    const b = IN.buildStart(pile, { layout: { type: 'contact', ratio: 0.7 }, spin: { mode: 'sync' } }, orb, P.rng(4));
+    const n0 = b.parts[0].n; let gap = Infinity;
+    for (let i = 0; i < n0; i++) for (let j = n0; j < N; j++) { const g = Math.hypot(b.pos[3 * i] - b.pos[3 * j], b.pos[3 * i + 1] - b.pos[3 * j + 1], b.pos[3 * i + 2] - b.pos[3 * j + 2]) - b.rad[i] - b.rad[j]; if (g < gap) gap = g; }
+    const m = mom(b);
+    ok('layouts: contact binary lobes touch without overlap, no net momentum', gap >= 0 && gap < 0.1 && m.p < 1e-9 && m.c < 1e-9, `closest gap between the lobes ${gap.toFixed(4)} grain radii; lobes ${b.parts.map(p => p.n).join(' + ')} grains`); }
+  // binary: separation in range, circular mutual orbit; it stays at its
+  // separation for a quarter orbit with no planet (CPU)
+  { const orb = mk({ kind: 'circular', d: 2.4 * Lf });
+    const b = IN.buildStart(pile, { layout: { type: 'binary', ratio: 0.5, sep: 2.5, tilt: 0.3 }, spin: { mode: 'sync' } }, orb, P.rng(5));
+    const [p0, p1] = b.parts, M = p0.M + p1.M, D = b.parts.D, rs = p0.R + p1.R;
+    const vrel = Math.hypot(...[0, 1, 2].map(k => p1.u[k] - p0.u[k]));
+    const g = new P.CpuSim(N, b.rad, b.mass, C, { GM: 0, Rp: 1 });
+    g.x.set(b.pos); g.v.set(b.vel); g.w.set(b.spin); g.init(null);
+    const T = 2 * Math.PI * Math.sqrt(D ** 3 / M), nb = Math.ceil(0.25 * T / (C.dt * P.K_STEP));
+    const sep = () => { const c = [0, 1].map(k => { let m = 0, x = [0, 0, 0]; const a = k ? p0.n : 0, e = k ? N : p0.n; for (let i = a; i < e; i++) { m += g.mass[i]; for (let q = 0; q < 3; q++) x[q] += g.mass[i] * g.x[3 * i + q]; } return x.map(q => q / m); }); return Math.hypot(c[0][0] - c[1][0], c[0][1] - c[1][1], c[0][2] - c[1][2]); };
+    let dmin = Infinity, dmax = 0;
+    for (let k = 0; k < nb; k++) { g.block(C.dt); const d = sep(); dmin = Math.min(dmin, d); dmax = Math.max(dmax, d); }
+    ok('layouts: binary on a circular mutual orbit; it holds its separation (CPU, no planet)', D >= 1.15 * rs && D <= 0.6 * b.parts.rH + 1e-9 && rel(vrel, Math.sqrt(M / D)) < 1e-12 && dmin > 0.95 * D && dmax < 1.05 * D,
+      `D = ${(D / rs).toFixed(2)} (R_1 + R_2) = ${(D / b.parts.rH).toFixed(2)} r_H; over ${(0.25).toFixed(2)} of a mutual orbit (${nb} blocks) the separation stays in ${(dmin / D).toFixed(3)}-${(dmax / D).toFixed(3)} D`); }
+  // train: every fragment on the orbit of the frame point (same energy and
+  // angular momentum about the planet), none touching
+  { const orb = mk({ kind: 'flyby', peri: 0.6 * Lf, e: 1, r0: 1.25 * Lf });
+    const b = IN.buildStart(pile, { layout: { type: 'train', k: 2, gap: 2.6 }, spin: { mode: 'tumbling', k: 1 } }, orb, P.rng(6));
+    const E = (X, V) => 0.5 * (V[0] ** 2 + V[1] ** 2 + V[2] ** 2) - pl.GM / Math.hypot(...X);
+    const Lz = (X, V) => X[0] * V[1] - X[1] * V[0];
+    const e0 = E(orb.X, orb.V), l0 = Lz(orb.X, orb.V);
+    const dev = b.parts.slice(1).map(p => { const X = [0, 1, 2].map(k => orb.X[k] + p.c[k]), V = [0, 1, 2].map(k => orb.V[k] + p.u[k]); return Math.max(Math.abs(E(X, V) - e0) / Math.abs(pl.GM / Math.hypot(...orb.X)), Math.abs(Lz(X, V) - l0) / Math.abs(l0)); });
+    const dist = Math.hypot(...b.parts[1].c);
+    ok('layouts: a train of fragments shares one orbit and does not touch', dev.every(d => d < 1e-8) && dist > b.parts[0].R + b.parts[1].R, `${b.parts.length} fragments; largest energy / angular momentum error ${Math.max(...dev).toExponential(2)}; first gap ${(dist / (b.parts[0].R + b.parts[1].R)).toFixed(2)} (R_0 + R_1)`); }
+  // two moons: the second on its own circular orbit
+  { const orb = mk({ kind: 'circular', d: 1.05 * Lf });
+    const b = IN.buildStart(pile, { layout: { type: 'two', ratio: 0.7, d2: 1.12, phi: -0.6 }, spin: { mode: 'sync' } }, orb, P.rng(7));
+    const X2 = [0, 1, 2].map(k => orb.X[k] + b.parts[1].c[k]), V2 = [0, 1, 2].map(k => orb.V[k] + b.parts[1].u[k]);
+    const r2 = Math.hypot(...X2), vr = (X2[0] * V2[0] + X2[1] * V2[1] + X2[2] * V2[2]) / r2;
+    ok('layouts: two moons, the second on a circular orbit 12% wider', rel(r2, 1.12 * Math.hypot(...orb.X)) < 1e-9 && Math.abs(vr) < 1e-9 * Math.hypot(...V2) && rel(Math.hypot(...V2), Math.sqrt(pl.GM / r2)) < 1e-9, `r_2 / r_1 = ${(r2 / Math.hypot(...orb.X)).toFixed(6)}, radial speed ${vr.toExponential(1)}`); }
+  // core: the mass share of the core
+  { const m = Float64Array.from(pile.mass), share = IN.coreMasses(pile.pos, m, 0.3, 3);
+    const want = 0.9 / 1.6;
+    ok('layouts: a core of 30% of the grains at 3x density holds about 56% of the mass', Math.abs(share - want) < 0.03, `core share ${(100 * share).toFixed(1)}% (uniform grains: ${(100 * want).toFixed(1)}%)`); }
+  // clumps: two piles apart are two clumps; a lone grain is debris
+  { const b = IN.buildStart(pile, { layout: { type: 'binary', ratio: 0.5, sep: 3 }, spin: { mode: 'sync' } }, mk({ kind: 'circular', d: 1.05 * Lf }), P.rng(8));
+    b.pos[0] += 500;
+    const r = IN.clumpMask(b.pos, b.mass, b.rad, 3, 0.05 * pile.st.M);
+    let n = 0; for (const v of r.mask) n += v;
+    ok('clumps: two separate piles are two clumps; a lone grain is not', r.clumps === 2 && n === N - 1 && r.mask[0] === 0, `${r.clumps} clumps, ${n} of ${N} grains in them`); }
 }
 
 // 8 ─ pacing: wall time to the first shed grains
@@ -542,15 +650,19 @@ async function gpuTest() {
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
+const START_ONLY = ARGS.includes('--start');
 const CAMERA = typeof Deno === 'undefined';   // the camera test imports app/ with DOM stubs: node only
 if (!GPU_ONLY) {
   const t0 = Date.now();
-  if (!PACE_ONLY) { cpuTests(); budgetTests(); if (CAMERA) await layoutTests(); }
-  await paceTests(ARGS.includes('--pace-old'));
+  if (START_ONLY) startTests();
+  else {
+    if (!PACE_ONLY) { cpuTests(); budgetTests(); startTests(); if (CAMERA) await layoutTests(); }
+    await paceTests(ARGS.includes('--pace-old'));
+  }
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 if (typeof Deno !== 'undefined') await gpuTest();
-else if (PACE_ONLY) {}
+else if (PACE_ONLY || START_ONLY) {}
 else {
   // Node has no WebGPU: run the GPU test in Deno when it is installed.
   const { spawnSync } = await import('node:child_process');
