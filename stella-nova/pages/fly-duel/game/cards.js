@@ -134,7 +134,7 @@ export const CARDS = [
   { id: 'swell', name: 'Swell', colour: 'moss', type: 'spell', cost: c(0, 0, 1),
     effect: { kind: 'pump', amount: 3, target: 'own' },
     text: 'One of your creatures gets +3/+3 this turn.', flavour: 'Rain in the night, and by morning it is twice the size.' },
-  { id: 'spore-burst', name: 'Spore Burst', colour: 'moss', type: 'spell', cost: c(2, 0, 1),
+  { id: 'spore-burst', name: 'Puffball Split', colour: 'moss', type: 'spell', cost: c(2, 0, 1),
     effect: { kind: 'token', amount: 3, token: 'spore', target: 'self' },
     text: 'Make three 1/1 Spore creatures.', flavour: 'The fruiting body splits with a sigh.' },
 
