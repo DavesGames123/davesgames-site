@@ -35,6 +35,13 @@
 //  rectangle. It has no DOM access: it gets canvases and images from
 //  factories, so the node test draws every shot kind on a fake context.
 //
+//  THE 3D SHOW. When main.js gives window.flyDuel.makeScene3d (the 3D
+//  table of ui/fly3d/scene.js can start), createShow3d() films the duel
+//  on that table: the same director, the same events, and SHOT_3D maps
+//  each shot kind to a camera shot of the scene (camShot). The flies at
+//  the table play the real match; the brain maps float beside them.
+//  Without the 3D table, createShow() draws the 2D shots.
+//
 //  THE PLATE. plateFor() gives the shell poster: title per shot, a live
 //  line (life totals, turn), KC sparsity of each fly, the weights state
 //  and the honesty line (model, not a real fly). No code extract. The
@@ -48,6 +55,8 @@
 //      grep -n 'export function paceFor'      seconds between decisions
 //      grep -n 'export function plateFor'     shell poster for a shot
 //      grep -n 'export function createShow'   match + brains + director
+//      grep -n 'export function camShot'      shot kind -> 3D camera shot
+//      grep -n 'export function createShow3d' the duel on the 3D table
 //      grep -n 'function drawTable'           the table (and combat)
 //      grep -n 'function drawCardFace'        one card, large
 //      grep -n 'function drawValues'          legal moves and values
@@ -521,6 +530,19 @@ function split(R, f = 0.5, gap = 12) {
 }
 
 // ----------------------------------------------------------- the show
+// The two players: the flies, or the greedy bot for a fly that did not
+// load (kinds[i] becomes 'bot', the plate says so).
+function agentsOf(env, kinds) {
+  const agents = [0, 1].map(i => {
+    const f = env.flies && env.flies[i];
+    if (f) return agentFromFly(f, NAMES[i]);
+    kinds[i] = 'bot';
+    return env.bots && env.bots.greedyBot ? agentFromBot(env.bots.greedyBot(), `${NAMES[i]} (greedy bot)`) : null;
+  });
+  if (!agents[0] || !agents[1]) throw new Error('fly-duel saver: no players');
+  return agents;
+}
+
 // env = { rules, byId, connectome, flies: [A, B] (null = bot), bots,
 // trained, seed, calm, makeCanvas(), makeImage(src) | null, dpr }.
 export function createShow(env) {
@@ -534,14 +556,7 @@ export function createShow(env) {
     match: null, last: null, lastBy: [null, null], lastValues: null, kinds: ['fly', 'fly'],
   };
   for (const bv of S.bvs) bv.spin = 0.16 - 0.08 * calm;
-  const agents = [0, 1].map(i => {
-    const f = env.flies && env.flies[i];
-    if (f) return agentFromFly(f, NAMES[i]);
-    S.kinds[i] = 'bot';
-    const b = env.bots && env.bots.greedyBot ? agentFromBot(env.bots.greedyBot(), `${NAMES[i]} (greedy bot)`) : null;
-    return b;
-  });
-  if (!agents[0] || !agents[1]) throw new Error('fly-duel saver: no players');
+  const agents = agentsOf(env, S.kinds);
   const dir = createDirector({ seed, calm });
   let wait = 0.8, acc = 0, games = 0, absMean = 0, nDelta = 0, overAt = -1, now = 0;
   const newMatch = () => { games++; S.match = new Match(env.rules, agents, { seed: (rng() * 2 ** 32) >>> 0 || 1, names: NAMES }); S.last = null; S.lastBy = [null, null]; S.lastValues = null; overAt = -1; wait = 1; };
@@ -662,6 +677,101 @@ export function createShow(env) {
   };
 }
 
+// ----------------------------------------------------------- the 3D show
+// The saver films the 3D table of ui/fly3d/scene.js. The director above
+// picks the shots from the same events. SHOT_3D gives the camera shot of
+// the scene for each shot kind. A card shot is a close-up only while the
+// card is still in the air (up to CLOSE_S after the cast), else the shot
+// looks over the shoulder of the caster.
+export const SHOT_3D = { table: 'wide', duo: 'wide', values: 'over', brain: 'over', card: 'close', combat: 'combat', win: 'win' };
+const CLOSE_S = 1.5;
+export function camShot(shot, now = 0) {
+  if (!shot) return ['wide', 0];
+  let s = SHOT_3D[shot.kind] || 'wide';
+  if (s === 'close' && !(shot.event && now - (shot.event.at ?? -1e9) <= CLOSE_S)) s = 'over';
+  return [s, shot.who === 1 ? 1 : 0];
+}
+
+// env = { rules, byId, flies, bots, trained, seed, calm, scene } with
+// scene from createDuelScene (main.js flyDuel.makeScene3d). The scene
+// plays each record; the next decision waits until the record has
+// played, plus a short pause. The win event goes to the director when
+// the last record has played, so the lethal attack is on screen first.
+export function createShow3d(env) {
+  const calm = clamp(env.calm ?? 0.7, 0, 1);
+  const seed = (env.seed >>> 0) || 1;
+  const rng = mulberry32(seed ^ 0xf1ead);
+  const scene = env.scene;
+  const S = { byId: env.byId, match: null, last: null, lastBy: [null, null], kinds: ['fly', 'fly'] };
+  const agents = agentsOf(env, S.kinds);
+  const dir = createDirector({ seed, calm });
+  let now = 0, games = 0, busy = false, gen = 0, wait = 1, acc = 0, overAt = -1, absMean = 0, nDelta = 0, later = [];
+  scene.setCamera?.('script');
+  scene.setSpeed?.(1.1 - 0.4 * calm);
+  scene.setBrains?.(true);
+  const newMatch = () => {
+    games++; gen++; busy = false; later = [];
+    S.match = new Match(env.rules, agents, { seed: (rng() * 2 ** 32) >>> 0 || 1, names: NAMES });
+    S.last = null; S.lastBy = [null, null]; overAt = -1; wait = 1; acc = 0;
+    scene.setState(S.match.state);
+  };
+  newMatch();
+
+  function decide() {
+    let rec = null;
+    try { rec = S.match.next(); } catch (e) { rec = null; newMatch(); return []; }
+    if (!rec) return [];
+    S.last = rec; S.lastBy[rec.who] = rec;
+    let burstAt = Infinity;
+    if (rec.delta != null && Number.isFinite(rec.delta)) {
+      const d = Math.abs(rec.delta);
+      if (nDelta >= 6) burstAt = Math.max(3 * absMean, 1e-4);
+      nDelta++; absMean += (d - absMean) / Math.min(nDelta, 40);
+    }
+    const ev = classify(rec, { byId: S.byId, burstAt }).map(e => ({ ...e, at: now }));
+    const over = S.match.over();
+    busy = true;
+    const g = gen;
+    scene.play(rec).then(() => {
+      if (g !== gen) return;
+      busy = false; acc = 0;
+      if (over) { overAt = now; later.push({ kind: 'win', pri: PRIORITY.win, who: over.winner === 1 ? 1 : 0, i: rec.i, at: now }); }
+    }, () => { if (g === gen) busy = false; });
+    wait = 0.25 + 0.5 * calm;
+    return ev;
+  }
+
+  return {
+    S, dir, scene,
+    get games() { return games; },
+    get now() { return now; },
+    update(dt) {
+      now += dt;
+      let ev = later; later = [];
+      if (S.match.over() && !busy) {
+        const sh = dir.shot, shown = sh && sh.kind === 'win' && now - sh.t0 >= 3 + 2 * calm;
+        if (shown || (overAt >= 0 && now - overAt > 16)) newMatch();
+      } else if (!busy) {
+        acc += dt;
+        if (acc >= wait) { acc = 0; ev = ev.concat(decide()); }
+      }
+      const r = dir.tick(now, ev);
+      if (r.changed) { const [shot, p] = camShot(r.shot, now); scene.shoot?.(shot, p); }
+      scene.render(dt);
+      return r;
+    },
+    snapshot() {
+      const st = S.match.state, sh = dir.shot;
+      const kc = [0, 1].map(i => { const t = S.lastBy[i] && S.lastBy[i].trace; return t ? { on: (t.kc || []).length, live: t.kcLive || 0 } : null; }).filter(Boolean);
+      const card = sh && sh.event && sh.event.card ? cardOf(S.byId, sh.event.card) : null;
+      return { life: st.players.map(p => p.life), turn: st.turn, kc: kc.length === 2 ? kc : [], trained: !!env.trained, kinds: S.kinds, card, over: S.match.over() };
+    },
+    plate() { return plateFor(dir.shot, this.snapshot()); },
+    resize() { scene.resize(); },
+    dispose() { gen++; try { scene.dispose(); } catch { /* gone */ } },
+  };
+}
+
 // ----------------------------------------------------------- the hook
 const PLATE_EVERY = 1, BAND_EVERY = 0.25;
 const win = () => /** @type {any} */ (window);   // page globals: __fdSaver, flyDuel, snSaver
@@ -681,7 +791,10 @@ function enter(o = {}) {
   win().__fdSaver = true;
   const me = run = { cv, css, raf: 0, show: null, err: null, last: 0, band: null, bandAt: -1e9, bandShot: -1, plateAt: -1e9, plateShot: -1, subj: null };
   const fd = win().flyDuel;
-  Promise.resolve(fd && fd.ready).then(() => {
+  // 3D when main.js gives makeScene3d. The canvas then must not get a 2D
+  // context before the scene takes it, so the loading frames stay blank.
+  me.try3d = !!(fd && fd.makeScene3d);
+  Promise.resolve(fd && fd.ready).then(async () => {
     if (run !== me) return;
     if (!fd || !fd.M || !fd.M.rules) throw new Error('the rules engine did not load');
     const M = fd.M, D = fd.D;
@@ -689,23 +802,44 @@ function enter(o = {}) {
     const flies = [fd.makeFly ? fd.makeFly('A') : null, fd.makeFly ? fd.makeFly('B') : null];
     let trained = false;
     try { trained = !!(fd.heroFlies && fd.heroFlies().trained); } catch { trained = false; }
+    let scene = null;
+    if (me.try3d) { try { scene = await fd.makeScene3d(cv); } catch (e) { scene = null; } }
+    if (run !== me) { try { scene && scene.dispose(); } catch { /* gone */ } return; }
+    if (scene) {
+      me.show = createShow3d({ rules: M.rules, byId, flies, bots: M.bots, trained, seed, calm, scene });
+      me.mode = '3d';
+      return;
+    }
+    me.try3d = false; me.mode = '2d';
     me.show = createShow({
       rules: M.rules, byId, connectome: D.connectome, flies, bots: M.bots, trained, seed, calm,
       makeCanvas: () => document.createElement('canvas'),
       makeImage: src => { const im = new Image(); im.decoding = 'async'; im.src = src; return im; },
       dpr: Math.min(2, window.devicePixelRatio || 1),
     });
-  }).catch(e => { if (run === me) me.err = String(e && e.message || e); });
+  }).catch(e => { if (run === me) { me.err = String(e && e.message || e); me.try3d = false; } });
 
-  const g = cv.getContext('2d');
+  let g = null;
   const frame = t => {
     if (run !== me) return;
     const dt = Math.min(0.05, me.last ? (t - me.last) / 1000 : 0.016); me.last = t;
     const dpr = Math.min(2, window.devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+    const show = me.show;
+    if (me.try3d) {
+      // 3D: the scene owns the canvas and its size
+      if (show) {
+        if (me.w !== w || me.h !== h) { me.w = w; me.h = h; show.resize(); }
+        try { show.update(dt); } catch (e) { console.error('fly-duel saver 3d', e); }
+        afterShow(show, w, h, R => ({ x: R.x + R.w / 2, y: R.y + R.h / 2, w: R.w * 0.6, h: R.h * 0.6 }));
+      }
+      me.raf = requestAnimationFrame(frame);
+      return;
+    }
+    if (!g) g = cv.getContext('2d');
+    if (!g) { me.raf = requestAnimationFrame(frame); return; }   // a GL context holds the canvas
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = BG; g.fillRect(0, 0, w, h);
-    const show = me.show;
     if (!show) {
       g.fillStyle = DIM; g.font = font(14); g.textAlign = 'center';
       g.fillText(me.err ? `The duel cannot start: ${me.err}` : 'Loading the flies…', w / 2, h / 2);
@@ -715,6 +849,12 @@ function enter(o = {}) {
     }
     show.S.dpr = dpr;
     try { show.update(dt); } catch (e) { console.error('fly-duel saver', e); }
+    afterShow(show, w, h, R => show.draw(g, R, dt));
+    me.raf = requestAnimationFrame(frame);
+  };
+  // The clear band of the plate, the subject box (draw(R) gives it) and
+  // the plate itself. One path for the 2D and the 3D show.
+  const afterShow = (show, w, h, draw) => {
     const sh = show.dir.shot, n = sh ? sh.n : 0, now = show.now;
     // the clear band: held for a shot, it only grows
     if (label && (now - me.bandAt >= BAND_EVERY || me.bandShot !== n)) {
@@ -732,14 +872,13 @@ function enter(o = {}) {
     const bw = B ? B.w : w, bt = B ? B.t : 0, bb = B ? B.b : 0;
     const side = Math.max(16, bw * 0.03);
     const R = { x: (w - bw) / 2 + side, y: bt + 8, w: bw - 2 * side, h: Math.max(h * 0.3, h - bt - bb - 16) };
-    try { me.subj = show.draw(g, R, dt); } catch (e) { console.error('fly-duel saver draw', e); }
+    try { me.subj = draw(R); } catch (e) { console.error('fly-duel saver draw', e); }
     if (label && sh && (me.plateShot !== n || now - me.plateAt >= PLATE_EVERY)) {
       me.plateAt = now; me.plateShot = n;
       try {
         label({ ...show.plate(), anchor: () => (run === me && me.subj ? { x: me.subj.x, y: me.subj.y, w: me.subj.w, h: me.subj.h, lead: false } : null) });
       } catch (e) { /* the plate is optional */ }
     }
-    me.raf = requestAnimationFrame(frame);
   };
   me.raf = requestAnimationFrame(frame);
   return { canvas: cv, warmupMs: 1200 };
@@ -748,6 +887,11 @@ function enter(o = {}) {
 function exit() {
   if (!run) return;
   cancelAnimationFrame(run.raf);
+  if (run.mode === '3d' && run.show) {
+    run.show.dispose();
+    // free the GL context now, not at garbage collection (Safari)
+    try { run.cv.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext(); } catch { /* no context */ }
+  }
   run.cv.remove(); run.css.remove();
   run = null; win().__fdSaver = false;
   // the page views redraw on a resize event
@@ -758,6 +902,6 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   win().snSaver = {
     enter, exit,
     // The director state, for a probe: shot kind, length, pending event.
-    debug: () => (run && run.show ? { games: run.show.games, now: +run.show.now.toFixed(2), ...run.show.dir.state(), band: run.band } : { loading: !!run, err: run && run.err }),
+    debug: () => (run && run.show ? { games: run.show.games, now: +run.show.now.toFixed(2), mode: run.mode, ...run.show.dir.state(), band: run.band, camera: run.mode === '3d' ? run.show.scene.stats().shot : null } : { loading: !!run, err: run && run.err }),
   };
 }

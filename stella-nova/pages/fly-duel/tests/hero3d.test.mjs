@@ -14,6 +14,9 @@
 //      untapped count of the state
 //    - pause, speed, new game, camera and brain controls reach the scene
 //    - the triangle count of the hero is under the desktop budget
+//    - the saver (saver.js createShow3d) films the duel on its own 3D
+//      table: director shots reach the scene camera, plates go out,
+//      and the hero waits while the saver runs
 //    - no console.error or console.warn
 //  Without linkedom the test prints "skipped" and exits 0.
 //
@@ -221,6 +224,37 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   ok(over && /wins|Draw/.test($('heroStatus').textContent), `game: the status line (${$('heroStatus').textContent.slice(0, 50)})`);
   await pump(200);
   ok(hero.match.history.length < 20 && !hero.match.over(), 'game: a new game starts after the hold');
+}
+
+// --------------------------------------------------------------- saver on the 3D table
+{
+  const SV = await import(pathToFileURL(join(ROOT, 'saver.js')).href);
+  const ev = (kind, at) => ({ kind, n: 1, who: 1, event: { kind, at, card: 'x' } });
+  ok(JSON.stringify(SV.camShot({ ...ev('card', 10), kind: 'card' }, 11)) === '["close",1]', 'saver: a fresh card shot is a close-up');
+  ok(SV.camShot({ ...ev('card', 10), kind: 'card' }, 13)[0] === 'over', 'saver: a late card shot looks over the shoulder');
+  ok(SV.camShot({ kind: 'combat', who: 0 })[0] === 'combat' && SV.camShot({ kind: 'duo', who: 0 })[0] === 'wide' && SV.camShot(null)[0] === 'wide', 'saver: combat and duo shots');
+  ok(Object.keys(SV.SHOT_3D).sort().join() === [...SV.IDLE, ...new Set(Object.values(SV.EVENT_SHOT))].filter((k, i, a) => a.indexOf(k) === i).sort().join(), 'saver: SHOT_3D covers every shot kind of the director');
+  const sv = globalThis.snSaver;
+  ok(!!sv, 'saver: window.snSaver installed');
+  const labels = [];
+  const n0 = hero.match.history.length;
+  const res = sv.enter({ seed: 7, calm: 0.5, label: p => labels.push(p) });
+  ok(res?.canvas?.id === 'fdSaverCv' && document.getElementById('fdSaverCv') === res.canvas, 'saver: enter gives a canvas in the document');
+  await new Promise(r => setTimeout(r, 300));
+  await pump(600);
+  const d = sv.debug();
+  console.log(`  saver 3d: ${d.n} shots, ${d.games} games, ${labels.length} plates in ${d.now} s, camera ${d.camera}`);
+  ok(d.mode === '3d', `saver: the show plays on the 3D table (${JSON.stringify({ mode: d.mode, err: d.err })})`);
+  ok(d.n >= 2 && d.games >= 1, `saver: 30 s give shots (${d.n} shots, ${d.games} games, now ${d.now})`);
+  ok(['wide', 'over', 'close', 'combat', 'win'].includes(d.camera), `saver: the scene camera takes the director shot (${d.camera})`);
+  ok(labels.length >= 10 && labels.every(p => p.title && /turn \d+/.test(p.sub)), `saver: plates with live numbers (${labels.length})`);
+  const a = labels[labels.length - 1].anchor();
+  ok(a && Number.isFinite(a.x) && Number.isFinite(a.y) && a.lead === false, 'saver: the anchor gives a box');
+  ok(hero.match.history.length === n0, 'saver: the hero match waits while the saver runs');
+  sv.exit();
+  ok(globalThis.__fdSaver === false && !document.getElementById('fdSaverCv'), 'saver: exit removes the canvas and clears the flag');
+  await pump(100);
+  ok(hero.match.history.length > n0, 'saver: the hero goes on after exit');
 }
 
 // --------------------------------------------------------------- end

@@ -965,7 +965,14 @@ async function boot() {
   // The 3D table loads beside the data. In node, or with no import map,
   // the import fails and the 2D stand-in plays.
   const scene3d = window.flyDuelOpts?.no3d ? Promise.resolve(null) : import('./ui/fly3d/scene.js').catch(e => { status.scene3d = String(e && e.message || e); return null; });
-  window.flyDuel = { ready, scene3d, makeFly: (s, w) => makeFly(s, w), heroFlies, conOf, BrainView, Match, renderBoard, M, D, hero };
+  // makeScene3d: a 3D table for the saver on its own canvas, or null.
+  const makeScene3d = async (canvas, o = {}) => {
+    const m = await scene3d;
+    if (!m?.createDuelScene) return null;
+    const off = !!window.flyDuelOpts?.headless3d;   // node test seam
+    return m.createDuelScene(off ? null : canvas, { connectomes: D.connectome ? [conOf('A'), conOf('B')] : null, names: NAMES, headless: off, ...o });
+  };
+  window.flyDuel = { ready, scene3d, makeScene3d, makeFly: (s, w) => makeFly(s, w), heroFlies, conOf, BrainView, Match, renderBoard, M, D, hero };
   // The saver installs window.snSaver at once and waits on flyDuel.ready
   // itself, so the shell finds the hook before the data has loaded.
   import('./saver.js').catch(e => console.warn('fly-duel: saver.js', e));
