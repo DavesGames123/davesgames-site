@@ -479,7 +479,7 @@ function initDopamine() {
 }
 
 // ---------------------------------------------------------------- 06
-const train = { worker: null, running: false, batch: 50, series: new Map(), hide: new Set(), weights: null, games: 0, wasRunning: false };
+const train = { worker: null, running: false, pending: false, batch: 50, series: new Map(), hide: new Set(), weights: null, games: 0, wasRunning: false };
 
 function initTrain() {
   const cv = $('trainCv'), read = $('trainRead');
@@ -503,24 +503,27 @@ function initTrain() {
   const post = m => { try { train.worker.postMessage(m); } catch (e) { read.textContent = `Worker message failed: ${e.message}`; } };
   const boot = (weights) => {
     if (train.worker) train.worker.terminate();
-    train.series.clear(); train.games = 0; train.running = false; legend(); chartV.dirty = true;
+    train.series.clear(); train.games = 0; train.running = false; train.pending = false; legend(); chartV.dirty = true;
     try { train.worker = new Worker(new URL('./train/worker.js', import.meta.url), { type: 'module' }); }
     catch (e) { read.textContent = `The training worker did not start: ${e.message}`; return false; }
+    // Contract protocol: progress, weights, eval. A batch ends with
+    // 'weights' (or 'done'); while running, the next batch is posted then.
     train.worker.onmessage = e => {
       const m = e.data || {};
       if (m.type === 'progress') {
         train.games = m.game ?? m.games ?? train.games; add(m);
-        read.textContent = `Game ${train.games}${m.winRateA != null ? `, Fly A won ${pct(m.winRateA)} of recent A vs B games` : ''}.`;
-      } else if (m.type === 'weights') {
-        train.weights = { A: m.A, B: m.B, games: train.games };
+        if (train.running) read.textContent = `Game ${train.games}${m.winRateA != null ? `. Fly A won ${pct(m.winRateA)} of recent A vs B games` : ''}.`;
+      } else if (m.type === 'weights' || m.type === 'done') {
+        if (m.A && m.B) train.weights = { A: m.A, B: m.B, games: train.games };
+        train.pending = false;
+        if (train.running) { train.pending = true; post({ cmd: 'train', games: train.batch }); }
       } else if (m.type === 'eval') {
         add({ ...m, game: train.games });
         read.textContent = `Evaluation at game ${train.games}: ${Object.entries(flattenRow(m)).filter(([k, y]) => y >= 0 && y <= 1 && k !== 'type').map(([k, y]) => `${seriesLabel(k)} ${pct(y)}`).join(', ') || 'done'}.`;
-      } else if (m.type === 'done' || m.type === 'paused' || m.type === 'idle') {
-        if (m.type === 'done' && train.running) post({ cmd: 'train', games: train.batch });
-        else if (m.type !== 'done') train.running = false;
+      } else if (m.type === 'paused' || m.type === 'idle') {
+        train.running = false; train.pending = false;
       } else if (m.type === 'error') {
-        read.textContent = `Worker error: ${m.message || m.error}`; train.running = false;
+        read.textContent = `Worker error: ${m.message || m.error}`; train.running = false; train.pending = false;
       }
     };
     train.worker.onerror = e => { read.textContent = `The training worker failed: ${e.message || 'train/worker.js did not load'}.`; train.running = false; };
@@ -530,9 +533,9 @@ function initTrain() {
   btns[0].addEventListener('click', () => {
     if (!train.worker && !boot(null)) return;
     train.running = true; read.textContent = 'Training…';
-    post({ cmd: 'train', games: train.batch });
+    if (!train.pending) { train.pending = true; post({ cmd: 'train', games: train.batch }); }
   });
-  btns[1].addEventListener('click', () => { if (!train.worker) return; train.running = false; post({ cmd: 'pause' }); read.textContent = `Paused at game ${train.games}.`; });
+  btns[1].addEventListener('click', () => { if (!train.worker) return; train.running = false; train.pending = false; post({ cmd: 'pause' }); read.textContent = `Paused at game ${train.games}.`; });
   btns[2].addEventListener('click', () => { if (boot(null)) read.textContent = 'Naive flies: every KC→MBON weight at its start value. Press Start.'; });
   btns[3].addEventListener('click', () => {
     if (!D.pretrained) { read.textContent = 'data/pretrained.json is not there yet.'; return; }
@@ -543,8 +546,8 @@ function initTrain() {
   // no training while the tab is hidden
   document.addEventListener('visibilitychange', () => {
     if (!train.worker) return;
-    if (document.hidden && train.running) { train.wasRunning = true; train.running = false; post({ cmd: 'pause' }); }
-    else if (!document.hidden && train.wasRunning) { train.wasRunning = false; train.running = true; post({ cmd: 'train', games: train.batch }); }
+    if (document.hidden && train.running) { train.wasRunning = true; train.running = false; train.pending = false; post({ cmd: 'pause' }); }
+    else if (!document.hidden && train.wasRunning) { train.wasRunning = false; train.running = true; train.pending = true; post({ cmd: 'train', games: train.batch }); }
   });
 }
 

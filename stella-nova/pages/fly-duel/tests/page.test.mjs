@@ -214,7 +214,24 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     addEventListener() {}, head: fakeEl('head'), body: fakeEl('body'), documentElement: fakeEl('html'), hidden: false,
   };
   const frames = [];
+  // A fake worker that follows the contract protocol: progress messages,
+  // then weights at the end of each train batch, and eval results.
+  const sent = [];
+  class FakeWorker {
+    constructor(url, opts) { this.url = String(url); this.opts = opts; this.games = 0; }
+    postMessage(m) {
+      sent.push(m.cmd);
+      const out = r => setTimeout(() => this.onmessage && this.onmessage({ data: r }), 0);
+      if (m.cmd === 'train') {
+        for (let i = 0; i < 2; i++) { this.games += m.games / 2; out({ type: 'progress', game: this.games, winRateA: 0.5, vsRandom: { A: 0.6, B: 0.55 }, vsGreedy: { A: 0.3, B: 0.25 } }); }
+        out({ type: 'weights', A: { format: 'x' }, B: { format: 'x' } });
+      }
+      if (m.cmd === 'eval') out({ type: 'eval', vsRandom: { A: 0.7, B: 0.6 } });
+    }
+    terminate() {}
+  }
   Object.assign(globalThis, {
+    Worker: FakeWorker,
     window: globalThis, document: doc, innerHeight: 800, devicePixelRatio: 2,
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     IntersectionObserver: class { constructor(cb) { this.cb = cb; } observe(t) { this.cb([{ target: t, isIntersecting: true }]); } },
@@ -263,6 +280,16 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
     ok(mm.fmtFact({ value: null }) === '', 'dom: fmtFact of a claim is empty');
     ok(/\[\d+\]/.test(E('factList').innerHTML) && E('ourList').innerHTML.includes('<li>'), 'dom: two fact lists with citations');
   }
+  E('trainStart').fire('click');
+  await new Promise(r => setTimeout(r, 30));
+  E('trainPause').fire('click');
+  await new Promise(r => setTimeout(r, 30));
+  ok(sent[0] === 'init' && sent.filter(c => c === 'train').length >= 2, `dom: worker gets init, then a new train batch after each weights message (${sent.join(',')})`);
+  ok(/vs random bot/.test(E('trainLegend').innerHTML), 'dom: live legend has the vs-random series');
+  ok(/Paused at game \d+/.test(E('trainRead').textContent), `dom: pause reads the game count (${E('trainRead').textContent})`);
+  E('trainEval').fire('click');
+  await new Promise(r => setTimeout(r, 10));
+  ok(/Evaluation at game/.test(E('trainRead').textContent), 'dom: eval result line');
   E('toyRew').fire('click');
   ok(/PAM burst/.test(E('toyRead').innerHTML), 'dom: section 05 reward gives a PAM burst line');
   ok(!/NaN|undefined/.test([...els.values()].map(e => e.innerHTML + e.textContent).join('')), 'dom: no NaN or undefined in any markup');
