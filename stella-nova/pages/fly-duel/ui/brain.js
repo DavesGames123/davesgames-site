@@ -5,7 +5,9 @@
 //  data/connectome.json (package B), in micrometres. The view uses "cen"
 //  (the cable centroid of each neuron, where its wiring is) when the file
 //  has it, else "pos" (the soma). It projects them with a small
-//  perspective onto a 2D canvas.
+//  perspective onto a 2D canvas. Points far from the KC cloud are pulled
+//  in toward it (radial compression past the KC radius), so the view is
+//  a schematic of positions, not to scale at the edges.
 //
 //  What lights up, per decision of the fly (trace from brain/fly.js):
 //    PN    projection neurons, coloured by their rate (the board "smell")
@@ -57,12 +59,14 @@ export function project(pos, centre, scale, yaw, pitch, cx, cy, out) {
     const x = (p[0] - centre[0]) * scale, y = (p[1] - centre[1]) * scale, z = (p[2] - centre[2]) * scale;
     const x1 = x * cyw + z * syw, z1 = -x * syw + z * cyw;
     const y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
-    const k = 1 / (1 + z2 * 0.35);
+    const k = 1 / (1 + z2 * PERSP);
     out[i * 3] = cx + x1 * k; out[i * 3 + 1] = cy + y1 * k; out[i * 3 + 2] = z2;
   }
   return out;
 }
 
+// perspective strength and the cloud radius as a share of the view size
+export const PERSP = 0.22, FILL = 0.5;
 const validPos = a => Array.isArray(a) && a.length > 0 && Array.isArray(a[0]) && a[0].length >= 3;
 
 export class BrainView {
@@ -83,14 +87,28 @@ export class BrainView {
     this.kcOn = null; this.pulse = 0; this.dan = 0; this.danSign = 0; this.value = null;
     this.mbonMax = 1e-6;
     if (!this.ok) return;
-    const all = [];
-    for (const k of ['pn', 'kc', 'mbon', 'dan']) if (this.pts[k]) all.push(...this.pts[k]);
+    // Centre on the KC cloud. KCs sit within about 50 um of their centre,
+    // PN and DAN centroids reach more than twice as far. So points past the
+    // KC radius R0 are pulled in: r' = R0 + (r - R0) * k, with the farthest
+    // point at 1.6 R0. The KC cloud then fills most of the view.
+    const kp = this.pts.kc;
     let cx = 0, cy = 0, cz = 0;
-    for (const p of all) { cx += p[0]; cy += p[1]; cz += p[2]; }
-    cx /= all.length; cy /= all.length; cz /= all.length;
-    let r = 1e-6;
-    for (const p of all) r = Math.max(r, Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz));
-    this.centre = [cx, cy, cz]; this.unit = 1 / r;
+    for (const p of kp) { cx += p[0]; cy += p[1]; cz += p[2]; }
+    cx /= kp.length; cy /= kp.length; cz /= kp.length;
+    const kd = kp.map(p => Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz)).sort((a, b) => a - b);
+    const R0 = Math.max(1e-6, kd[Math.floor(0.99 * (kd.length - 1))]);
+    let rmax = R0;
+    for (const k of ['pn', 'mbon', 'dan']) for (const p of this.pts[k] || []) rmax = Math.max(rmax, Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz));
+    const kk = rmax > R0 ? (0.6 * R0) / (rmax - R0) : 1;
+    for (const k of ['pn', 'kc', 'mbon', 'dan']) {
+      if (!this.pts[k]) continue;
+      this.pts[k] = this.pts[k].map(p => {
+        const dx = p[0] - cx, dy = p[1] - cy, dz = p[2] - cz, r = Math.hypot(dx, dy, dz);
+        const f = r > R0 ? (R0 + (r - R0) * kk) / r : 1;
+        return [cx + dx * f, cy + dy * f, cz + dz * f];
+      });
+    }
+    this.centre = [cx, cy, cz]; this.unit = 1 / (1.6 * R0);
     this.kcCol = (connectome.kc.types || []).map(t => {
       const s = String(t);
       if (/g/i.test(s) && !/a/i.test(s)) return COL.kcg;
@@ -156,7 +174,7 @@ export class BrainView {
     this.dan = Math.max(0, this.dan - dt * 1.4);
     const barsH = Math.max(34, Math.min(76, h * 0.24));
     const ch = h - barsH - 6;
-    const s = Math.min(w, ch) * 0.46;
+    const s = Math.min(w, ch) * FILL;
     const cx = w / 2, cy = ch / 2 + 4;
     const B = this.buf, C = this.c, PT = this.pts;
     const P = (k) => (B[k] = project(PT[k], this.centre, this.unit, this.yaw, this.pitch, 0, 0, B[k]));

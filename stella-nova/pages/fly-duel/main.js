@@ -318,7 +318,7 @@ function initCentre() {
   const m = C.meta || {};
   const e = C.edges || {};
   $('cxMeta').innerHTML = `${m.synthetic ? '<b>Wiring sampled from published statistics</b>, not traced. ' : ''}${esc(m.release || m.source || '')}${m.licence ? `, licence ${esc(m.licence)}` : ''}${m.retrieved ? `, retrieved ${esc(m.retrieved)}` : ''}. `
-    + `${(e.pn_kc || []).length.toLocaleString('en-US')} PN→KC and ${(e.kc_mbon || []).length.toLocaleString('en-US')} KC→MBON connections. Positions are cable centroids in micrometres; drag to turn. ${esc(M.facts?.HONESTY?.valenceModel || 'MBON valence is a model rule from the dopamine cluster of each compartment.')} The lit KCs mirror Fly A in the hero match.`;
+    + `${(e.pn_kc || []).length.toLocaleString('en-US')} PN→KC and ${(e.kc_mbon || []).length.toLocaleString('en-US')} KC→MBON connections. Positions are cable centroids in micrometres; neurons far from the Kenyon cells are drawn pulled in toward them, so the edges are not to scale. Drag to turn. ${esc(M.facts?.HONESTY?.valenceModel || 'MBON valence is a model rule from the dopamine cluster of each compartment.')} The lit KCs mirror Fly A in the hero match.`;
 }
 let centreView = null;
 

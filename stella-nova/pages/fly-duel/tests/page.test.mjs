@@ -148,6 +148,12 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   bv.setTrace(recs.at(-1).trace, recs.at(-1).value); bv.burst(0.3);
   const g = fakeCtx(); bv.draw(g, 360, 300, 0.016);
   ok(g.calls.n > C.kc.n && g.calls.bad === 0, `brain: one frame draws every KC with finite numbers (${g.calls.n} calls)`);
+  let inside = 0, total = 0;
+  for (const yaw of [0, 1, 2, 3, 4, 5]) for (const k of ['pn', 'kc', 'mbon', 'dan']) {
+    const pr = brain.project(bv.pts[k], bv.centre, bv.unit, yaw, bv.pitch, 0, 0);
+    for (let i = 0; i < bv.pts[k].length; i++) { total++; if (Math.abs(pr[i * 3]) * brain.FILL <= 0.5 && Math.abs(pr[i * 3 + 1]) * brain.FILL <= 0.5) inside++; }
+  }
+  ok(inside / total > 0.99, `brain: ${(100 * inside / total).toFixed(2)}% of points stay inside the view at six turns`);
   const empty = new brain.BrainView(null, { label: 'x' }); empty.draw(fakeCtx(), 100, 100);
   ok(!empty.ok, 'brain: no connectome gives a waiting view');
   const out = brain.project([[0, 0, 0], [1, 0, 0]], [0, 0, 0], 1, 0, 0, 0, 0);
