@@ -184,6 +184,7 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   ok(sci > 0 && cardCss > sci && cardCss < head.indexOf('importmap'), 'markup: ui/card.css loads after sci.css, before the import map');
   ok(/wired from two different animals/.test(html), 'markup: says Fly A and Fly B are wired from two different animals');
   ok(/detect synapses by different methods/.test(html), 'markup: the synapse-method caveat');
+  ok(/Two computer models, <span data-wiring>wired from the connectomes<\/span> of two flies: each is a model, not a real fly/.test(html), 'markup: the 3D stage tag names two models and two connectomes');
   ok(/art\/CREDITS-ART\.md/.test(html) && /public-domain/.test(html), 'markup: the card art credit');
   // Text that the old page had and the shipped state no longer holds.
   const plain = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
