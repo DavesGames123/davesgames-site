@@ -75,7 +75,11 @@ export function drawFrame(now, cssW, cssH, steps) {
     tint: TINTS[spec.tint] || (s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1]),
     heatInv: 1 / (S.run.heatRef || 0.006 * s.C.vesc * s.C.vesc),
     simT: s.gpu.t, flashT: S.run.phase === 'orbit' ? flashT : 0, strain: 1,
+    // the origin colour: each grain's side of the moon, stamped once on
+    // the first frame of the orbit (particles.wgsl cs_smooth)
+    stamp: S.run.phase === 'orbit' && !s.e.stamped, invRs: 1 / (s.Rs || s.C.Rs || 1), invT0: 1 / S.run.T0,
   }));
+  for (const s of S.run.sats) if (S.run.phase === 'orbit') s.e.stamped = true;
   S.run.lastFrame = { frame, sims };
   S.ren.render(frame, sims);
   placeLabels(cssW, cssH, fp);

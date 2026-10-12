@@ -71,7 +71,7 @@ export function simBytes(N, NB = 24, CAP = 16) {
   return b;
 }
 export function ringBytes(gridN) { return gridN * gridN * 4 + 2 * gridN * gridN * 8; }
-export function partBytes(N) { const np = Math.ceil(N / 256) * 256; return np * 4 + np * 8 + 96; }
+export function partBytes(N) { const np = Math.ceil(N / 256) * 256; return np * 4 + np * 16 + 112; }
 // The whole page for a profile: { cssW, cssH, dpr, touch, maxPx, N, sats, gridN }
 export function pageBytes(p) {
   const r = renderBudget(p.cssW, p.cssH, p.dpr, p);

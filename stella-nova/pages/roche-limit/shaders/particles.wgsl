@@ -37,8 +37,12 @@
 //  LIGHT. Sun with a soft planet shadow (penumbra, and a red tint where the
 //  sunlight grazes the atmosphere), planetshine from the lit planet, the
 //  ring's own shadow (optical depth tau from ring.wgsl) and a faint fill.
-//  Colour: bound rock / shed ice, speed, or tidal stress (the ratio
-//  |tide| / |self-gravity| per grain, from the force kernel's diag).
+//  Colour (inst.opts.x): 0 bound rock / shed ice, 1 speed, 2 tidal stress
+//  (the ratio |tide| / |self-gravity| per grain, from the force kernel's
+//  diag), 3 collision heat, 4 ice and heat, 5 AGE (orbits since the grain
+//  was shed: white, amber, teal, violet over three orbits), 6 ORIGIN (the
+//  side of the moon the grain started on: cyan faced the planet, amber
+//  faced away). cs_smooth stamps the origin and the shed time.
 //  The planet's radius is cam.extra.w world units (0 means 1; roll.js
 //  draws a compact star smaller). With planet style 9 (a white dwarf) the
 //  light comes from the star at the origin, falling as 1/r^2 about 3
@@ -46,6 +50,7 @@
 //
 //  grep -n targets: "fn vs_main", "fn fs_main", "fn fs_blend", "fn shade",
 //  "fn sunShadow", "fn heat", "fn cs_smooth", "fn plasma", "fn glint",
+//  "fn ageRamp", "fn originRamp",
 //  "fn flashQuad"
 // ============================================================================
 
@@ -67,7 +72,9 @@ struct Body { pos: vec4f, vel: vec4f, spin: vec4f };
 // log10(heat x) in [-3, 1]; y the sim time now; z how long an impact
 // flash lasts (sim time, 0 = none); w the strain share of the default
 // colour mode (0..1)
-struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f, heatP: vec4f };
+// ext: x 1 = stamp the origin of each grain this frame (cs_smooth), y 1 /
+// the moon radius (sim units), z 1 / one orbit (sim time, the age scale)
+struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f, heatP: vec4f, ext: vec4f };
 
 @group(0) @binding(0) var<uniform> cam: Cam;
 @group(0) @binding(1) var tauTex: texture_2d<f32>;
@@ -77,15 +84,21 @@ struct Inst { frame: vec4f, refV: vec4f, opts: vec4f, tint: vec4f, motion: vec4f
 @group(1) @binding(2) var<storage, read> tag: array<f32>;
 @group(1) @binding(3) var<uniform> inst: Inst;
 // the tidal stress of each grain, smoothed in time (cs_smooth writes it,
-// the vertex stage reads it), so the heatmap colours do not flicker
-@group(1) @binding(4) var<storage, read> stressS: array<vec2f>;
-@group(1) @binding(5) var<storage, read_write> stressW: array<vec2f>;
+// the vertex stage reads it), so the heatmap colours do not flicker;
+// z the origin, w the shed time (see cs_smooth)
+@group(1) @binding(4) var<storage, read> stressS: array<vec4f>;
+@group(1) @binding(5) var<storage, read_write> stressW: array<vec4f>;
 @group(1) @binding(6) var<storage, read_write> diagW: array<vec4f>;
 
 // x: the tidal stress, smoothed in time. y: the collision heat, energy per
 // unit mass that decays with time constant tau (exp(-dt/tau) in motion.w),
 // fed by what cs_forces summed since the last frame. Both read by the
 // vertex stage, so the colours never flicker.
+// z: the ORIGIN of the grain, stamped once at the start of the orbit
+// (inst.ext.x): its height toward the planet in moon radii, -1 (the far
+// side) to +1 (the side that faces the planet). w: the SHED TIME, the sim
+// time when the analysis first tagged the grain as shed (0: not shed). A
+// grain that is bound again, or a time after a jump back, clears it.
 @compute @workgroup_size(64)
 fn cs_smooth(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
@@ -94,8 +107,37 @@ fn cs_smooth(@builtin(global_invocation_id) gid: vec3u) {
   let ratio = dg.x / max(dg.y, 1e-12);
   let st = clamp((log(max(ratio, 1e-6)) / 2.302585 + 1.5) / 3.0, 0.0, 1.0);
   let o = stressW[i];
-  stressW[i] = vec2f(mix(o.x, st, inst.motion.z), o.y * inst.motion.w + dg.z);
+  var org = o.z;
+  if (inst.ext.x > 0.5) {
+    let toP = -inst.frame.xyz / max(length(inst.frame.xyz), 1e-6);
+    org = clamp(dot(body[i].pos.xyz, toP) * inst.ext.y, -1.0, 1.0);
+  }
+  let tg = tag[i];
+  var shed = o.w;
+  if (tg > 0.5 || shed > inst.heatP.y) { shed = 0.0; }
+  if (tg < 0.5 && tg > -0.5 && shed <= 0.0) { shed = max(inst.heatP.y, 1e-6); }
+  stressW[i] = vec4f(mix(o.x, st, inst.motion.z), o.y * inst.motion.w + dg.z, org, shed);
   diagW[i].z = 0.0;
+}
+// the AGE ramp, u in [0, 1] (0: just shed, 1: three orbits ago): warm
+// white, amber, teal, violet
+fn ageRamp(u: f32) -> vec3f {
+  let s = clamp(u, 0.0, 1.0) * 3.0;
+  let c0 = vec3f(1.00, 0.93, 0.78);
+  let c1 = vec3f(1.00, 0.60, 0.20);
+  let c2 = vec3f(0.18, 0.72, 0.76);
+  let c3 = vec3f(0.36, 0.30, 0.86);
+  if (s < 1.0) { return mix(c0, c1, s); }
+  if (s < 2.0) { return mix(c1, c2, s - 1.0); }
+  return mix(c2, c3, s - 2.0);
+}
+// the ORIGIN ramp, z in [-1, 1]: far side amber, middle pale, near side cyan
+fn originRamp(z: f32) -> vec3f {
+  let far = vec3f(1.00, 0.52, 0.18);
+  let mid = vec3f(0.86, 0.85, 0.80);
+  let near = vec3f(0.22, 0.76, 1.00);
+  if (z < 0.0) { return mix(mid, far, smoothstep(0.0, 0.8, -z)); }
+  return mix(mid, near, smoothstep(0.0, 0.8, z));
 }
 
 // matplotlib "plasma" as a polynomial fit (CC0, Matt Zucker's fit of the
@@ -303,6 +345,17 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
     let pc = plasma(hn);
     alb = pc * 0.55;
     em = pc * (0.08 + 1.1 * hn * hn);
+  } else if (mode > 5.5) {
+    // origin: where the grain sat in the moon at the start
+    alb = originRamp(sh.z) * (0.9 + 0.2 * hash11(fi + 3.3));
+    em = alb * 0.05;
+  } else if (mode > 4.5) {
+    // age: orbits since the grain was shed; the bound moon is grey rock
+    if (sh.w > 0.0) {
+      let a = max(inst.heatP.y - sh.w, 0.0) * inst.ext.z;
+      alb = ageRamp(log2(1.0 + 4.0 * a) / log2(13.0));
+      em = alb * 0.06;
+    } else { alb = vec3f(0.42, 0.42, 0.45) * (0.85 + 0.3 * hash11(fi + 3.3)); }
   } else if (mode > 3.5) {
     // ice and heat: icy grains; the ones that collide glow in plasma
     alb = vec3f(0.80, 0.86, 0.95) * (0.85 + 0.3 * hash11(fi + 3.3));
@@ -316,7 +369,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
     }
   }
   // glints of shed ice in the sunlight (modes 0 and 4)
-  if ((mode < 0.5 || mode > 3.5) && tg < 0.5 && tg > -0.5) {
+  if ((mode < 0.5 || (mode > 3.5 && mode < 4.5)) && tg < 0.5 && tg > -0.5) {
     let hv = normalize(lightDir(wp) + normalize(cam.eye.xyz - wp));
     let sh0 = sunShadow(wp) * lightGain(wp);
     em = em + vec3f(1.0, 0.97, 0.9) * (6.0 * cam.sun.w * glint(ii, bd.spin.xyz, hv)) * sh0;

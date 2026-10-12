@@ -2,7 +2,7 @@
 //  ROCHE LIMIT  ·  app/legend.js — colour legend
 // ----------------------------------------------------------------------------
 //  The legend bar and its labels for the grain colour or the force
-//  map in use. plasma() matches the fit in shaders/particles.wgsl.
+//  map in use (age and origin: the ramps of shaders/particles.wgsl). plasma() matches the fit in shaders/particles.wgsl.
 //
 //  grep -n targets
 //    colour map .... "function plasma"
@@ -19,7 +19,7 @@ function plasma(t) {
 export function drawLegend() {
   const lg = $('legend');
   const heat = UI.color === 3 || UI.color === 4;
-  lg.classList.toggle('off', UI.field === 0 && UI.color !== 2 && !heat);
+  lg.classList.toggle('off', UI.field === 0 && UI.color !== 2 && UI.color !== 5 && UI.color !== 6 && !heat);
   const c = $('lgBar'), g = c.getContext('2d'), w = c.width, h = c.height;
   const grad = g.createLinearGradient(0, 0, w, 0);
   if (UI.field === 1) {
@@ -30,6 +30,16 @@ export function drawLegend() {
     $('lgTitle').textContent = 'Force map: tide against the moon’s pull (bright line: equal)';
     [[0, '#05051a'], [0.25, '#4d1a8c'], [0.5, '#d94059'], [0.75, '#ff9e26'], [1, '#fff8bf']].forEach(([o, col]) => grad.addColorStop(o, col));
     $('lgLo').textContent = '0.01×'; $('lgMid').textContent = 'equal'; $('lgHi').textContent = '100×';
+  } else if (UI.color === 5) {
+    // the ramp of particles.wgsl fn ageRamp, on log2(1 + 4a) / log2(13)
+    $('lgTitle').textContent = 'Age: orbits since each grain was torn off (grey: still in the moon)';
+    [[0, '#ffedc7'], [1 / 3, '#ff9933'], [2 / 3, '#2eb8c2'], [1, '#5c4ddb']].forEach(([o, col]) => grad.addColorStop(o, col));
+    $('lgLo').textContent = 'just now'; $('lgMid').textContent = '0.6'; $('lgHi').textContent = '3 orbits';
+  } else if (UI.color === 6) {
+    // the ramp of particles.wgsl fn originRamp
+    $('lgTitle').textContent = 'Origin: where each grain started in the moon';
+    [[0, '#ff852e'], [0.1, '#ff852e'], [0.5, '#dbd9cc'], [0.9, '#38c2ff'], [1, '#38c2ff']].forEach(([o, col]) => grad.addColorStop(o, col));
+    $('lgLo').textContent = 'far side'; $('lgMid').textContent = 'middle'; $('lgHi').textContent = 'side facing the planet';
   } else if (heat) {
     $('lgTitle').textContent = UI.color === 4 ? 'Ice; grains that collide glow by the heat of their collisions' : 'Heat from collisions (energy per kilogram, log scale)';
     for (let i = 0; i <= 10; i++) { const p = plasma(i / 10); grad.addColorStop(i / 10, `rgb(${p[0]},${p[1]},${p[2]})`); }

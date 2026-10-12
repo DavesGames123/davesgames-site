@@ -126,6 +126,7 @@ export class Renderer {
       { binding: 2, visibility: S.VERTEX, buffer: ro }, { binding: 3, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 4, visibility: S.VERTEX, buffer: ro }] });
     this.bglSmooth = dev.createBindGroupLayout({ entries: [
+      { binding: 0, visibility: S.COMPUTE, buffer: ro }, { binding: 2, visibility: S.COMPUTE, buffer: ro },
       { binding: 3, visibility: S.COMPUTE, buffer: { type: 'uniform' } },
       { binding: 5, visibility: S.COMPUTE, buffer: { type: 'storage' } }, { binding: 6, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
     this.bglSplat = dev.createBindGroupLayout({ entries: [
@@ -217,14 +218,16 @@ export class Renderer {
     const e = { sim };
     e.tagBuf = dev.createBuffer({ size: sim.np * 4, usage: U.STORAGE | U.COPY_DST });
     dev.queue.writeBuffer(e.tagBuf, 0, new Float32Array(sim.np).fill(-1));
-    e.inst = dev.createBuffer({ size: 96, usage: U.UNIFORM | U.COPY_DST });
-    e.stress = dev.createBuffer({ size: sim.np * 8, usage: U.STORAGE });
+    e.inst = dev.createBuffer({ size: 112, usage: U.UNIFORM | U.COPY_DST });
+    // per grain: stress, heat, origin, shed time (particles.wgsl cs_smooth)
+    e.stress = dev.createBuffer({ size: sim.np * 16, usage: U.STORAGE | U.COPY_SRC });
     e.fresh = true;   // the first smoothing pass takes the value as it is
     e.bgPart = dev.createBindGroup({ layout: this.bglPart, entries: [
       { binding: 0, resource: { buffer: sim.bufBody } }, { binding: 1, resource: { buffer: sim.bufDiag } },
       { binding: 2, resource: { buffer: e.tagBuf } }, { binding: 3, resource: { buffer: e.inst } },
       { binding: 4, resource: { buffer: e.stress } }] });
     e.bgSmooth = dev.createBindGroup({ layout: this.bglSmooth, entries: [
+      { binding: 0, resource: { buffer: sim.bufBody } }, { binding: 2, resource: { buffer: e.tagBuf } },
       { binding: 3, resource: { buffer: e.inst } },
       { binding: 5, resource: { buffer: e.stress } }, { binding: 6, resource: { buffer: sim.bufDiag } }] });
     e.bgSplat = dev.createBindGroup({ layout: this.bglSplat, entries: [
@@ -292,7 +295,9 @@ export class Renderer {
   // vesc], tint, motion:[streaks 0/1, dim above px, stress smoothing,
   // heat decay], heatInv: 1 / the reference collision heat, simT: the sim
   // time now, flashT: how long an impact flash lasts (sim time), strain:
-  // the strain share of the default colour mode }].
+  // the strain share of the default colour mode, stamp: stamp the origin
+  // of each grain this frame, invRs: 1 / the moon radius (sim units),
+  // invT0: 1 / one orbit (sim time) }].
   // The stages of a frame, each encoded into enc. draws (optional) picks
   // the scene draws, for profiling: { sky, surface, part, disk, field,
   // lines, atmo }.
@@ -307,11 +312,12 @@ export class Renderer {
     const dev = this.dev;
     this.writeCam(f);
     for (const s of sims) {
-      const a = this._instData || (this._instData = new Float32Array(24));
+      const a = this._instData || (this._instData = new Float32Array(28));
       const m = s.motion || [0, 0, 0.1, 1];
       a.set(s.frame, 0); a.set(s.refV, 4); a.set(s.opts, 8); a.set(s.tint || [0.80, 0.88, 1.0, 1], 12);
       a[16] = m[0]; a[17] = m[1]; a[18] = s.e.fresh ? 1 : m[2]; a[19] = s.e.fresh ? 0 : (m[3] ?? 1);
       a[20] = s.heatInv || 1; a[21] = s.simT || 0; a[22] = s.flashT || 0; a[23] = s.strain ?? 1;
+      a[24] = s.stamp ? 1 : 0; a[25] = s.invRs || 1; a[26] = s.invT0 || 1; a[27] = 0;
       s.e.fresh = false;
       dev.queue.writeBuffer(s.e.inst, 0, a);
     }

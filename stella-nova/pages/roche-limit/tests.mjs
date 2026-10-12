@@ -41,7 +41,8 @@
 //     node tests.mjs --start runs test 13 only.
 //  14 renderer (Deno WebGPU, offscreen texture): every planet style draws
 //     with no error; a white dwarf under one pixel shows a core; grains
-//     near it are lit by it
+//     near it are lit by it; the origin colour stamps each grain's side of
+//     the moon and the age colour keeps the shed time
 //  15 every preset and 16 random seeds through the page's run code on the
 //     GPU (Deno; app/runs.js, worker.js, app/history.js with the DOM
 //     stubbed): each preset's claim (torn, hits, a capture with one body
@@ -712,6 +713,31 @@ async function renderTest() {
   // under a white dwarf: the white dwarf lights the side facing it
   ok('render: a white dwarf under one pixel still shows a bright core', core > 200 && ren.focal * 0.0153 / 9 < 1, `disc ${(ren.focal * 0.0153 / 9).toFixed(2)} px wide, core brightness ${core.toFixed(0)} of 255`);
   ok('render: grains near a white dwarf are lit by it', lit9.max > 60, `brightest grain pixel ${lit9.max.toFixed(0)}, mean ${lit9.mean.toFixed(1)} round the pile`);
+  // the age and origin colours (modes 5 and 6): cs_smooth stamps each
+  // grain's side of the moon on the stamp frame, and the shed time when
+  // the tag says shed; a bound tag clears it
+  const readStress = async () => {
+    const buf = device.createBuffer({ size: gpu.np * 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = device.createCommandEncoder(); enc.copyBufferToBuffer(e.stress, 0, buf, 0, gpu.np * 16); device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ); const a = new Float32Array(buf.getMappedRange().slice(0)); buf.unmap(); buf.destroy(); return a;
+  };
+  const Rs = P.expectedRadius(N), sim5 = Object.assign({}, sims[0], { opts: [6, 0, 1, 1], stamp: true, invRs: 1 / Rs, invT0: 1, simT: 0.25 });
+  ren.render(frame(1, 1, eye), [sim5]);
+  let st4 = await readStress(), cxz = 0, nz = 0, zmin = 1, zmax = -1;
+  for (let i = 0; i < N; i++) { const zz = st4[4 * i + 2]; cxz += zz * sim.x[3 * i]; nz += sim.x[3 * i] * sim.x[3 * i]; zmin = Math.min(zmin, zz); zmax = Math.max(zmax, zz); }
+  // the planet is at the origin, the pile at +x: the side facing it has x < 0
+  const slope = cxz / nz * Rs;
+  ok('render: the origin colour stamps each grain\'s side of the moon', Math.abs(slope + 1) < 0.02 && zmin < -0.8 && zmax > 0.8, `origin = ${slope.toFixed(3)} x / R_s (want -1), range ${zmin.toFixed(2)} to ${zmax.toFixed(2)}`);
+  ren.setTags(e, new Float32Array(gpu.np).fill(0));
+  ren.render(frame(1, 1, eye), [Object.assign({}, sim5, { opts: [5, 0, 1, 1], stamp: false, simT: 0.5 })]);
+  ren.render(frame(1, 1, eye), [Object.assign({}, sim5, { opts: [5, 0, 1, 1], stamp: false, simT: 0.7 })]);
+  st4 = await readStress();
+  let shedOk = 0, keepOrg = 0; for (let i = 0; i < N; i++) { if (st4[4 * i + 3] === 0.5) shedOk++; if (Math.abs(st4[4 * i + 2] + sim.x[3 * i] / Rs) < 0.05 || Math.abs(st4[4 * i + 2]) === 1) keepOrg++; }
+  ren.setTags(e, new Float32Array(gpu.np).fill(1));
+  ren.render(frame(1, 1, eye), [Object.assign({}, sim5, { opts: [5, 0, 1, 1], stamp: false, simT: 0.8 })]);
+  st4 = await readStress();
+  let cleared = 0; for (let i = 0; i < N; i++) if (st4[4 * i + 3] === 0) cleared++;
+  ok('render: the age colour keeps the shed time; a bound grain clears it', shedOk === N && cleared === N && keepOrg === N, `${shedOk} of ${N} stamped at t = 0.5 (not 0.7), ${cleared} cleared when bound again, ${keepOrg} kept their origin`);
   ok('render: no WebGPU validation errors', errs.length === 0, errs.join(' | ') || 'none');
   gpu.destroy(); device.destroy();
 }
