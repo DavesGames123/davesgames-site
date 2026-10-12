@@ -144,6 +144,15 @@ painting from Wikimedia Commons. `art/CREDITS-ART.md` gives the work,
 the author, the year, the licence template and the Commons file of each
 picture, and `art/art.json` gives the crop box.
 
+## Dice physics
+
+The 3D dice on the table (ui/fly3d/dice3d.js) reuse the Dice Lab page
+(pages/dice/dice.js and physics.js) read-only. Dice Lab runs Rapier
+(rapier3d-compat 0.21.0, Dimforge, Apache-2.0), served from
+vendor/rapier3d-compat@0.21.0. The game engine decides each roll with its
+own seeded random numbers. The physics throw only shows the roll: the
+face that lands up gets the engine's value.
+
 ## Trademark
 
 The card game on this page is our own design, inspired by Magic: The
