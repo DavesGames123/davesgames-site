@@ -280,6 +280,8 @@ const BLURBS = {
   // warns when a registered page has none).
   'flight-board': 'A split-flap board for any airport, from live ADS-B.',
   'roche-limit': 'An icy moon crosses the Roche limit and becomes a ring.',
+  'gravity-lab': 'Throw planets, stars and black holes into a GPU gravity sandbox.',
+  'planet-collision': 'Two planets collide as molten particles: the Moon hits Earth.',
   'chandrasekhar-limit': 'Why no white dwarf weighs more than 1.4 Suns.',
   molecules: 'Over a thousand molecules, skeletal formula beside 3D.',
   reactions: 'Watch molecules change in 3D through famous syntheses.',

@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-215 registered pages in 5 regions and 19 constellations.
+217 registered pages in 5 regions and 19 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -166,6 +166,8 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `gravity` | Gravity Sim | Space & Gravity > Planets & Orbits | SIM | A Barnes-Hut n-body sandbox. Fling planets. |  | shown | hook, tier 2, default | yes |
 | `forge` | Planet Forge | Space & Gravity > Planets & Orbits | GPU | Sculpt and paint a planet from noise. |  | shown | hook, tier 3, default | yes |
 | `roche-limit` | Roche Limit | Space & Gravity > Planets & Orbits | SIM | An icy moon crosses the Roche limit and becomes a ring. |  | shown | hook, tier 4, default | yes |
+| `gravity-lab` | Gravity Lab | Space & Gravity > Planets & Orbits | NEW | Throw planets, stars and black holes into a GPU gravity sandbox. |  | shown | hook, tier 4, default | no |
+| `planet-collision` | Planet Collision | Space & Gravity > Planets & Orbits | NEW | Two planets collide as molten particles: the Moon hits Earth. |  | shown | hook, tier 4, default | no |
 | `galaxy` | Galaxy | Space & Gravity > Deep Space | SIM | A spiral galaxy that holds its own arms. |  | shown | hook, tier 1, default | yes |
 | `blackhole` | Black Hole | Space & Gravity > Deep Space | GPU | Gravitational lensing around a Schwarzschild hole. |  | shown | hook, tier 1, default | yes |
 | `wormhole` (pages/ellis-wormhole) | Wormhole | Space & Gravity > Deep Space | GPU | Fly through an Ellis wormhole. |  | shown | hook, tier 2, default | yes |

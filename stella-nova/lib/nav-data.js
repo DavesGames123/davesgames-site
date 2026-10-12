@@ -91,7 +91,9 @@ w.SN_NAV = [
       ["leo", "LEO Catalog", "NEW", "leo-catalog"],
       ["gravity", "Gravity Sim", "SIM"],
       ["forge", "Planet Forge", "GPU"],
-      ["roche-limit", "Roche Limit", "SIM"]
+      ["roche-limit", "Roche Limit", "SIM"],
+      ["gravity-lab", "Gravity Lab", "NEW"],
+      ["planet-collision", "Planet Collision", "NEW"]
     ] },
     { h: "Deep Space", p: [
       ["galaxy", "Galaxy", "SIM"],
