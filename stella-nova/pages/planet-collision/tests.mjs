@@ -37,6 +37,8 @@
 //     grazing hit makes debris (fn classify) and glowing pixels; the colour
 //     modes and the cutaway change the image; no validation errors.
 //     --time also prints ms per frame
+//  9  analysis.js outcome on a made-up ball with orbiting, escaping and
+//     falling test particles; arc.js meets at R1 + R2 at tContact
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, a preset change, a random
@@ -50,6 +52,8 @@ import { profile, bodyParticles, impactGeometry, buildScenario, rng } from './bu
 import { CpuSPH, makeParams, boundMass } from './sph.js';
 import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
+import { outcome, percentile } from './analysis.js';
+import { previewArc } from './arc.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const GPU_ONLY = ARGS.includes('--gpu');
@@ -134,6 +138,39 @@ function geometryTests() {
     worst += ` [${vRel}, ${b}] v ${(v / g.vImp).toFixed(5)} b ${bb.toFixed(4)}`;
   }
   ok('4 impact geometry: contact speed and impact parameter, COM at rest', bad === 0, worst.trim());
+}
+
+// 9 ─ the outcome of a readback (analysis.js) and the preview arc (arc.js)
+function analysisTests() {
+  // a uniform ball (M 1, R 1, at rest) and four test particles
+  const nb = 3000, R = rng(5), n = nb + 4;
+  const rb = { pos: new Float32Array(4 * n), vel: new Float32Array(4 * n), grav: new Float32Array(8 * n), aux: new Float32Array(4 * n) };
+  for (let i = 0; i < nb; i++) {
+    let p; do { p = [2 * R() - 1, 2 * R() - 1, 2 * R() - 1]; } while (Math.hypot(...p) > 1);
+    const r = Math.hypot(...p);
+    rb.pos.set([...p, 0.05], 4 * i); rb.vel.set([0, 0, 0, 1 / nb], 4 * i);
+    rb.grav[8 * i + 3] = -(3 - r * r) / 2; rb.aux[4 * i] = 300 + 1000 * (i % 100) / 100;
+  }
+  const add = (k, p, v) => { const i = nb + k, r = Math.hypot(...p); rb.pos.set([...p, 0.1], 4 * i); rb.vel.set([...v, 1e-4], 4 * i); rb.grav[8 * i + 3] = -1 / r; rb.aux[4 * i] = 5000; };
+  add(0, [3, 0, 0], [0, Math.sqrt(1 / 3), 0]);            // circular orbit at 3 R: disk
+  add(1, [3, 0, 0], [0, 1.2 * Math.sqrt(2 / 3), 0]);      // over the escape speed: escaping
+  add(2, [2, 0, 0], [-0.3, 0, 0]);                        // falls straight in: largest body
+  add(3, [0, 3, 0], [0.1, 0, 0]);                         // periapsis inside R: largest body
+  const o = outcome(rb, n, [{ M: 1, R: 1 }]);
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  ok('9 outcome: largest body, disk and escaping mass from orbits', o.nD === 1 && o.nE === 1 && o.nP === nb + 2 && near(o.Md, 1e-4) && near(o.Me, 1e-4) && Math.abs(o.Rp - 1) < 1e-3,
+    `largest ${o.nP} particles (M ${o.Mp.toFixed(5)}, Rp ${o.Rp.toFixed(4)}), disk ${o.nD}, escaping ${o.nE}`);
+  const p99 = percentile(rb.aux.filter((_, k) => k % 4 === 0), n, 0.99);
+  ok('9 outcome: T99 is the 99th percentile', o.T99 === p99 && o.T99 >= 1280 && o.T99 < 1300, `T99 ${o.T99.toFixed(0)} K`);
+  // the preview arc meets at R1 + R2 at the contact time of build.js
+  let worst = 0, info = [];
+  for (const k of ['theia', 'moon-earth', 'mercury', 'two-earths']) {
+    const st = buildScenario(PRESETS.find(p => p.key === k), 4096, 1), a = previewArc(st), B = st.bodies;
+    const e = a.imp[a.imp.length - 1], t = a.tgt[a.tgt.length - 1], d = Math.hypot(e[0] - t[0], e[1] - t[1], e[2] - t[2]);
+    const err = Math.max(Math.abs(d / (B[0].R + B[1].R) - 1), Math.abs(a.tHit / st.impact.tContact - 1), Math.hypot(a.imp[0][0] - B[1].X[0], a.imp[0][1] - B[1].X[1]));
+    worst = Math.max(worst, err); info.push(`${k} ${a.imp.length}+${a.ghost.length} pts`);
+  }
+  ok('9 preview arc: starts at the impactor, meets at R1 + R2 at tContact', worst < 0.01, `worst rel err ${worst.toExponential(1)}; ${info.join(', ')}`);
 }
 
 function settledEarth(N, seed) {
@@ -442,7 +479,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {
