@@ -36,9 +36,9 @@
      We do not train a real fly. The title screen, one short line at the
      base of the control bar (.honest) and the "How it works" drawer say
      so. RESEARCH CONTENT lives only in the drawer (#how): no kicker,
-     chip bar, stage tag or section text over or around the game view. Every number about the fly comes from
-     data/facts.js (with a source) or is counted from the two connectome
-     files. Win rates come from data/training-curve.json meta.final.
+     chip bar, stage tag or section text over or around the game view.
+     Every number about the fly comes from data/facts.js (with a source)
+     or is counted from the two connectome files. Win rates come from data/training-curve.json meta.final.
      The decks the flies trained with come from the meta of
      data/training-curve.json or data/pretrained.json, never from markup.
 
@@ -126,6 +126,7 @@
      grep -n 'function initPanels'         the two brain panels
      grep -n 'function brainFire'          a decision -> its fly's panel
      grep -n 'function setBrains'          panels, in the hall, off
+     grep -n 'export function turnLine'    the one turn indicator
      grep -n 'function initHero'           watch match, 3D or 2D
      grep -n 'function initHow'            the drawer
      grep -n 'function loop'               one rAF loop

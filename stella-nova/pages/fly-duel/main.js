@@ -2,10 +2,12 @@
 //  FLY DUEL  ·  page logic  (module)
 // ----------------------------------------------------------------------------
 //  The page is a fullscreen game with two modes (index.html header):
-//    watch  Fly A against Fly B on the 3D table. The scorecards of
-//           ui/hud/scorecard.js sit top-left (Fly A) and top-right
-//           (Fly B), each with the live neural panel of its fly. The
-//           table holds still for a pause between turns.
+//    watch  Fly A against Fly B on the 3D table, between the two big
+//           live brain panels (initPanels: brain A | table | brain B,
+//           or A over the table over B on a portrait phone). The slim
+//           scorecard of each fly lies over its panel. One turn box
+//           (turnLine) is the one voice of the game state; the table
+//           holds still for a pause between turns.
 //    play   You against a model fly: ui/play/play.js mountPlay() in
 //           #playRoot. The 3D canvas of the watch table moves into the
 //           play table, and play.js drives the scene. On exit the canvas
@@ -553,7 +555,8 @@ function initHero(mod3d = null) {
     return true;
   };
   // 3D: the fly decides now; the scene plays the record, then the next
-  // one starts. The close-up maps and the scorecard fire with the decision.
+  // one starts. The brain panel and the scorecard of the fly get the
+  // decision at once (brainFire, decided).
   const begin3d = () => {
     const rec = next();
     if (!rec) return false;
