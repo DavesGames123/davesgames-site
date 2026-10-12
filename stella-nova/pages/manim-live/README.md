@@ -91,6 +91,10 @@ The tests are:
   `ast` parse of each step.
 - `tests/ui.test.mjs`: timeline, share links, catalog filter, Markdown,
   docstrings, source parse, step checks, highlight and the hood table.
+- `tests/mobile.test.mjs`: the phone view after a run, the key row
+  edits, the soft keyboard inset, the share-sheet choice, and the phone
+  rules in `style.css` and `index.html` (one view at a time, 16 px
+  fields, 44 px targets, 100dvh, safe-area insets).
 
 To render one file and write PNG frames, run:
 
@@ -123,6 +127,8 @@ program, the scene name, a task, a hint and a check.
   machine. The worker, the CDN import, OffscreenCanvas bitmaps, the
   layout, the phone dock and video export are checked only in Node
   (jsdom, worker_threads and @napi-rs/canvas).
+- No phone run was done. The key row focus, the iOS keyboard inset, the
+  full screen fallback and the share sheet are not checked on a device.
 - The site sends no COOP and COEP headers, so `crossOriginIsolated` is
   false. Stop then terminates the worker, and Python boots again, which
   takes some seconds.

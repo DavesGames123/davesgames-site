@@ -28,6 +28,7 @@
 //    reference.js  live API reference (rst.js, pyhighlight.js)
 //    hood.js       "Under the hood" panel
 //    share.js      code <-> URL hash
+//    mobile.js     phone views after a run, key row, soft keyboard inset
 //    pysource.js   fast regex reads of the code (scenes, play lines)
 //    markdown.js   small Markdown renderer
 //
@@ -43,6 +44,8 @@
 //    grep -n 'function showError'          traceback view and editor mark
 //    grep -n 'function setLayout'          code | split | output
 //    grep -n 'function setMTab'            phone views
+//    grep -n 'function initTouch'          key row, keyboard, typing class
+//    grep -n 'function toggleFull'         output full screen
 //    grep -n 'function openPanel'          side panels
 //    grep -n 'function initSplitter'       splitter drag
 //    grep -n 'function initKeys'           page keys
@@ -62,12 +65,13 @@ import { guessScenes, tracebackLines } from './ui/pysource.js';
 import { parseHeader } from './ui/catalog.js';
 import { escapeHtml } from './ui/markdown.js';
 import { SEEDS } from './ui/seed-examples.js';
+import { PHONE_QUERY, tabAfterRun, mountKeyRow, watchKeyboard } from './ui/mobile.js';
 
 const $ = (id) => document.getElementById(id);
 const work = $('work');
 const QUALITY = { low: { fps: 15, w: 854, h: 480 }, medium: { fps: 30, w: 1280, h: 720 }, high: { fps: 60, w: 1920, h: 1080 } };
 const PANEL_TITLE = { examples: 'Examples', learn: 'Learn', ref: 'Reference', hood: 'Under the hood' };
-const isPhone = () => matchMedia('(max-width: 760px)').matches;
+const isPhone = () => matchMedia(PHONE_QUERY).matches;
 
 // ---- storage ---------------------------------------------------------------
 const store = {
@@ -91,6 +95,7 @@ let engine = null;            // set when engine.js loads
 let engineReady = false;
 let running = null;           // {handle, code, scenes, anims, frames, error}
 let pendingRun = false;
+let pendingSource = 'user';   // the source of the run that waits for Python
 let preferredScene = '';      // from the loaded example or lesson
 let lastResult = null;
 
@@ -262,7 +267,7 @@ async function bootEngine() {
       editor.setNames(names);
       reference.setNames(names);
     }).catch(() => {});
-    if (pendingRun) { pendingRun = false; runCode(); }
+    if (pendingRun) { pendingRun = false; runCode(pendingSource); }
   } catch (e) {
     onStatus({ error: e });
   }
@@ -274,11 +279,18 @@ function setRunning(on) {
   $('stop').hidden = !on;
   $('renderBadge').hidden = !on;
   document.querySelector('#dock [data-mtab=output]').classList.toggle('busy', on);
+  const dr = $('dockRun');
+  dr.classList.toggle('stop', on);
+  dr.setAttribute('aria-label', on ? 'Stop the run' : 'Run');
+  dr.innerHTML = on ? '<span>■</span><b>Stop</b>' : '<span>▶</span><b>Run</b>';
 }
 
-function runCode() {
+// source: 'user' (Run, keys), 'example', 'ref' or 'lesson'. On a phone,
+// ui/mobile.js tabAfterRun picks the view: the output, except for a lesson.
+function runCode(source = 'user') {
   if (!engine || !engineReady) {
     pendingRun = true;
+    pendingSource = source;
     $('run').classList.add('busy');
     toast('Python is still loading. The scene runs when it is ready.');
     return;
@@ -295,7 +307,10 @@ function runCode() {
   $('stageMsg').hidden = true;
   $('renderBadge').textContent = 'Starting…';
   setRunning(true);
-  if (isPhone() && work.dataset.mtab === 'code') setMTab('output');
+  if (isPhone()) {
+    const t = tabAfterRun(work.dataset.mtab, source);
+    if (t !== work.dataset.mtab) setMTab(t);
+  }
   const run = { code, scenes: [], anims: [], frames: 0, error: null, t0: performance.now() };
   running = run;
   let handle;
@@ -422,8 +437,8 @@ $('exportVid').onclick = async () => {
       signal: ac.signal,
       onProgress: f => { btn.textContent = `Recording ${Math.round(f * 100)}% (click to stop)`; },
     });
-    download(blob, `${$('scene').value || 'scene'}.${ext}`);
-    toast(`Saved a ${ext.toUpperCase()} video, ${(blob.size / 1e6).toFixed(1)} MB.`);
+    const how = await download(blob, `${$('scene').value || 'scene'}.${ext}`);
+    if (how !== 'cancelled') toast(`Saved a ${ext.toUpperCase()} video, ${(blob.size / 1e6).toFixed(1)} MB.`);
   } catch (e) {
     toast(e.message || String(e));
   } finally {
@@ -463,7 +478,11 @@ document.querySelectorAll('#layoutSeg button').forEach(b => b.onclick = () => se
 
 function setMTab(t) {
   work.dataset.mtab = t;
-  document.querySelectorAll('#dock button').forEach(b => b.classList.toggle('on', b.dataset.mtab === t));
+  document.querySelectorAll('#dock button[data-mtab]').forEach(b => b.classList.toggle('on', b.dataset.mtab === t));
+  // A hidden editor must not keep the focus: the soft keyboard and the
+  // typing class (no dock) go with it.
+  if (t !== 'code' && editor.view.hasFocus) editor.view.contentDOM.blur();
+  if (t !== 'output') exitFull();
   if (PANEL_TITLE[t]) {
     work.dataset.panel = t;
     document.querySelectorAll('#side .panel').forEach(s => { s.hidden = s.dataset.p !== t; });
@@ -471,7 +490,58 @@ function setMTab(t) {
   }
   if (t === 'code') requestAnimationFrame(() => editor.view.requestMeasure());
 }
-document.querySelectorAll('#dock button').forEach(b => b.onclick = () => setMTab(b.dataset.mtab));
+document.querySelectorAll('#dock button[data-mtab]').forEach(b => b.onclick = () => setMTab(b.dataset.mtab));
+$('dockRun').onclick = () => { if (running) cancelRun(); else runCode(); };
+
+// ---- touch: key row, soft keyboard, typing class ------------------------------
+function initTouch() {
+  mountKeyRow($('keys'), (key) => {
+    if (key === 'run') { runCode(); return; }
+    if (key === 'doc') {
+      const name = editor.nameAtCursor();
+      if (name) openRef(name); else toast('Put the cursor on a name, then tap Ref.');
+      return;
+    }
+    editor.applyKey(key);
+  });
+  const root = document.documentElement;
+  watchKeyboard(window, root);
+  const touchUI = matchMedia(`${PHONE_QUERY}, (pointer: coarse)`);
+  const typing = () => root.classList.toggle('typing', touchUI.matches && editor.view.hasFocus);
+  editor.view.dom.addEventListener('focusin', typing);
+  editor.view.dom.addEventListener('focusout', () => setTimeout(typing, 0));
+}
+
+// ---- output full screen ----------------------------------------------------------
+// Element full screen where the browser has it (Android Chrome, iPad,
+// desktop). iPhone Safari has it only for <video>, so there #outPane
+// gets the class pseudo-full and covers the window.
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+function exitFull() {
+  const out = $('outPane');
+  if (out.classList.contains('pseudo-full')) out.classList.remove('pseudo-full');
+  else if (fsElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
+  syncFull();
+}
+function syncFull() {
+  const on = !!fsElement() || $('outPane').classList.contains('pseudo-full');
+  $('fullBtn').setAttribute('aria-pressed', String(on));
+  $('fullBtn').setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+}
+function toggleFull() {
+  const out = $('outPane');
+  if (fsElement() || out.classList.contains('pseudo-full')) { exitFull(); return; }
+  const req = out.requestFullscreen || out.webkitRequestFullscreen;
+  const fallback = () => { out.classList.add('pseudo-full'); syncFull(); };
+  if (!req) { fallback(); return; }
+  Promise.resolve(req.call(out))
+    .then(() => { syncFull(); return screen.orientation?.lock?.('landscape'); })
+    .catch(() => { if (!fsElement()) fallback(); });
+}
+$('fullBtn').onclick = toggleFull;
+document.addEventListener('fullscreenchange', syncFull);
+document.addEventListener('webkitfullscreenchange', syncFull);
+addEventListener('keydown', e => { if (e.key === 'Escape' && $('outPane').classList.contains('pseudo-full')) exitFull(); });
 
 function initSplitter() {
   const sp = $('split');
@@ -533,33 +603,33 @@ async function share() {
 $('share').onclick = share;
 
 // ---- programs from examples and lessons -------------------------------------
-function loadProgram(code, scene, title) {
+function loadProgram(code, scene, title, source = 'user') {
   const head = parseHeader(code);
   preferredScene = scene || head.scene || '';
   editor.setCode(code);
   setScenes(guessScenes(code), false);
   store.set('manim-live:code', code);
   if (title) toast(`Loaded “${title}”. Ctrl or Cmd + Z brings back your code.`);
-  if (engineReady) runCode();
-  else pendingRun = true;
+  if (engineReady) runCode(source);
+  else { pendingRun = true; pendingSource = source; }
 }
 
 // ---- panels: mount ---------------------------------------------------------
 const examples = mountExamples($('pExamples'), {
   onOpen: (entry, code) => {
-    loadProgram(code, entry.scene, entry.title);
+    loadProgram(code, entry.scene, entry.title, 'example');
     document.querySelectorAll('.ex-card').forEach(c => c.classList.toggle('cur', c.dataset.id === entry.id));
     if (isPhone()) setMTab('output');
   },
   onConcept: (name) => openRef(name),
 });
 const learn = mountLearn($('pLearn'), {
-  onLoadCode: (code, scene) => { loadProgram(code, scene); if (isPhone()) setMTab('code'); },
+  onLoadCode: (code, scene) => { loadProgram(code, scene, undefined, 'lesson'); if (isPhone()) setMTab('code'); },
   onConcept: (name) => openRef(name),
 });
 const reference = mountReference($('pRef'), {
   getEngine: () => engine,
-  onLoadCode: (code, scene) => { loadProgram(code, scene, scene || 'docstring example'); if (isPhone()) setMTab('output'); },
+  onLoadCode: (code, scene) => { loadProgram(code, scene, scene || 'docstring example', 'ref'); if (isPhone()) setMTab('output'); },
 });
 const hood = mountHood($('pHood'), { getEngine: () => engine });
 
@@ -569,6 +639,7 @@ async function start() {
   setLayout(prefs.layout);
   initSplitter();
   initKeys();
+  initTouch();
   openPanel(isPhone() ? 'examples' : (prefs.panel || 'none'), false);
   if (isPhone()) setMTab('code');
 

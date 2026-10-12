@@ -19,7 +19,12 @@
 //  EXPORTS
 //    createEditor(parent, opts) -> api   (grep -n "export function createEditor")
 //  api: view, getCode, setCode, markError, clearError, setActiveLine,
-//       setAnimLines, gotoLine, focus, setNames
+//       setAnimLines, gotoLine, focus, setNames, applyKey, nameAtCursor
+//
+//  TOUCH. A phone has no hover and no Ctrl-click. applyKey(id) runs one
+//  key of the phone key row (ui/mobile.js keyEdit, or undo and redo from
+//  historyKeymap). nameAtCursor() gives the dotted name at the caret, so
+//  the Docs key can open it in the reference.
 // ============================================================================
 import {
   EditorView, EditorState, StateField, StateEffect, Prec, keymap, lineNumbers,
@@ -32,6 +37,7 @@ import {
   highlightSelectionMatches, lintGutter, setDiagnostics,
 } from '../vendor-editor/codemirror@6.bundle.js';
 import { dottedAt } from './pysource.js';
+import { keyEdit } from './mobile.js';
 
 const TIMEOUT_MS = 900;
 
@@ -252,6 +258,23 @@ export function createEditor(parent, opts = {}) {
       view.focus();
     },
     focus: () => view.focus(),
+    applyKey(id) {
+      if (id === 'undo' || id === 'redo') {
+        const k = historyKeymap.find(b => b.key === (id === 'undo' ? 'Mod-z' : 'Mod-y'));
+        if (k) k.run(view);
+        return true;
+      }
+      const sel = view.state.selection.main;
+      const e = keyEdit(view.state.doc.toString(), sel.from, sel.to, id);
+      if (!e) return false;
+      view.dispatch({ changes: e.changes, selection: { anchor: e.anchor, head: e.head }, scrollIntoView: true, userEvent: 'input.type' });
+      return true;
+    },
+    nameAtCursor() {
+      const pos = view.state.selection.main.head;
+      const line = view.state.doc.lineAt(pos);
+      return dottedAt(line.text, pos - line.from) || dottedAt(line.text, Math.max(0, pos - line.from - 1));
+    },
     setNames(list) { names = (list || []).filter(x => x && x.name && !x.name.startsWith('_')); },
     setBackends({ complete: c, introspect: i }) { if (c) complete = c; if (i) introspect = i; },
   };

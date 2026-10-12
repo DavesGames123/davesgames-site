@@ -5,7 +5,7 @@
 <script src="../../lib/wishlist.js"></script>
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="dark">
 <title>Manim Live: the real ManimCE in your browser — Stella Nova · davesgames.io</title>
 <!--
@@ -31,13 +31,20 @@
      #work       data-layout = code | split | output
                  data-panel  = none | examples | learn | ref | hood
      #side       #sideTitle #sideClose #pExamples #pLearn #pRef #pHood
-     #codePane   #editor #boot (load stages) #bootList
+     #codePane   #editor #keys (phone key row) #boot (load stages) #bootList
      #split      the splitter between code and output
      #outPane    #stage #frame #stageMsg #err #errText
-                 #transport: #play #stepB #stepF #loop #speed #time
+                 #transport: #play #stepB #stepF #loop #speed #time #fullBtn
                  #track (timeline) #animLabel
                  #exportPng #exportVid #consoleBtn #console
-     #dock       phone tabs: code, output, learn, examples, ref, hood
+     #dock       phone tabs: code, output, learn, examples, ref, hood,
+                 and #dockRun (run or stop, in reach of the thumb)
+
+   PHONE  (max-width 760px, ui/mobile.js)
+     One view at a time, picked by data-mtab on #work. A run shows the
+     output view. #keys gives Tab, brackets, quotes, the colon, undo and
+     Run above the soft keyboard. #fullBtn shows #outPane full screen,
+     or fills the window where the browser has no element full screen.
      #toast      one-line notices
 
    KEYS
@@ -109,6 +116,7 @@
 
   <section id="codePane" aria-label="Code">
     <div id="editor"></div>
+    <div id="keys" class="keyrow" role="toolbar" aria-label="Code keys"></div>
     <div id="boot" role="status" aria-live="polite">
       <div class="boot-head"><b>Starting Python</b><span id="bootPct" class="muted"></span></div>
       <ol id="bootList">
@@ -145,6 +153,7 @@
       <select id="speed" aria-label="Speed" title="Speed">
         <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
       </select>
+      <button id="fullBtn" class="icon" aria-label="Full screen" title="Full screen" aria-pressed="false">⛶</button>
     </div>
     <div id="track" aria-label="Timeline"></div>
     <div id="outTools">
@@ -159,10 +168,11 @@
 
 <nav id="dock" aria-label="Views">
   <button data-mtab="code" class="on"><span>✎</span>Code</button>
-  <button data-mtab="output"><span>▶</span>Output</button>
+  <button data-mtab="output"><span>▣</span>Output</button>
+  <button id="dockRun" class="dock-run" aria-label="Run"><span>▶</span><b>Run</b></button>
   <button data-mtab="learn"><span>⚑</span>Learn</button>
   <button data-mtab="examples"><span>☰</span>Examples</button>
-  <button data-mtab="ref"><span>?</span>Reference</button>
+  <button data-mtab="ref" aria-label="Reference"><span>?</span>Ref</button>
   <button data-mtab="hood"><span>⚙</span>Hood</button>
 </nav>
 

@@ -13,7 +13,14 @@
 //    pickVideoType()                -> {mime, ext} or null
 //    exportPNG(bitmap, name)        -> Promise<void> (download)
 //    exportVideo(player, opts)      -> Promise<{blob, ext}>
-//    download(blob, name)
+//    download(blob, name)           -> Promise<'shared'|'cancelled'|'saved'>
+//    useShareSheet(env)             -> boolean (pure)
+//
+//  PHONES. On a touch device with the Web Share API for files, download()
+//  opens the share sheet, so iOS can save the PNG or the video to Photos.
+//  The share sheet needs a recent tap (user activation). A video export
+//  takes as long as the clip, so the activation is often gone, and then
+//  download() uses a normal <a download> link.
 // ============================================================================
 
 export function pickVideoType() {
@@ -26,7 +33,21 @@ export function pickVideoType() {
   return null;
 }
 
-export function download(blob, name) {
+export function useShareSheet({ coarse, canShare, activation, file }) {
+  if (!coarse || typeof canShare !== 'function' || !file) return false;
+  if (activation === false) return false;
+  try { return !!canShare({ files: [file] }); } catch { return false; }
+}
+
+export async function download(blob, name) {
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  const file = typeof File === 'function' ? new File([blob], name, { type: blob.type }) : null;
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  if (useShareSheet({ coarse, canShare: nav.canShare?.bind(nav), activation: nav.userActivation?.isActive, file })) {
+    try { await nav.share({ files: [file], title: name }); return 'shared'; } catch (e) {
+      if (e && e.name === 'AbortError') return 'cancelled';
+    }
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -34,6 +55,7 @@ export function download(blob, name) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  return 'saved';
 }
 
 export async function exportPNG(bitmap, name = 'frame.png') {
@@ -42,7 +64,7 @@ export async function exportPNG(bitmap, name = 'frame.png') {
   c.width = bitmap.width; c.height = bitmap.height;
   c.getContext('2d').drawImage(bitmap, 0, 0);
   const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-  download(blob, name);
+  return download(blob, name);
 }
 
 // opts: {onProgress(fraction), signal: AbortSignal, bitrate}
