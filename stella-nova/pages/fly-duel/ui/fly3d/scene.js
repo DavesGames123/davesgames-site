@@ -75,6 +75,8 @@
 //      orbitBy(dx, dy), zoomBy(k), seatView(): the player turns and zooms
 //      the seat camera (clamped, ui/fly3d/director.js ORBIT) and goes
 //      back to the seat. ui/play/orbit.js gives the pointer gestures.
+//      In first person the fly at your seat and its fan hide
+//      (seatHide): they covered your creatures, lands and hand.
 //      Hidden cards: in first person the hand and the library of the
 //      other fly show the question-mark back (textureCache mystery) on
 //      both caps. The mesh then has no card id, and pickCard gives id
@@ -121,6 +123,7 @@
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
 //      grep -n 'function pickFace'            any card under a point (zoom)
+//      grep -n 'function seatHide'            first person: your fly hides
 //      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'function deckBoxesOf'         the deck boxes print the game decks
 //      grep -n 'export function createDuelScene'
@@ -1953,6 +1956,7 @@ export function createDuelScene(canvas, opts = {}) {
     advance(sdt);
     animateFlies();
     layout(false);
+    seatHide();
     for (const o of Z.hand[0]) o.update(sdt);
     for (const o of Z.hand[1]) o.update(sdt);
     for (const o of Z.grave[0]) o.update(sdt);
@@ -2056,6 +2060,7 @@ export function createDuelScene(canvas, opts = {}) {
       if (controls) controls.enabled = true;
     }
     layout(false);       // the hidden hand changes with the seat at once
+    seatHide();          // and your own fly and its fan hide at once
     applyHats();         // the fedora goes to the fly you play against
     return fpSeat;
   }
@@ -2064,6 +2069,22 @@ export function createDuelScene(canvas, opts = {}) {
   // zoomBy(k) changes the distance, seatView() goes back to the seat. The
   // first call starts from the seat pose, so the camera does not jump.
   // Only in first person: in watch mode OrbitControls has the camera.
+  // First person: the fly at your seat and the fan that it holds hide
+  // (user: "the fly model is constantly blocking my board"). From the
+  // seat camera that fly covered your creature row, your lands and the
+  // fan. The DOM hand of play mode shows your cards. The other fly stays.
+  // A card that leaves the fan (lift, discard) shows again. A hidden mesh
+  // is not a pick target (pickPermanent, pickFace).
+  function seatHide() {
+    for (let p = 0; p < 2; p++) {
+      const off = p === fpSeat;
+      flies[p].holder.visible = !off;
+      for (const o of Z.hand[p]) o.mesh.visible = !off;
+      for (const o of Z.grave[p]) o.mesh.visible = true;
+      if (Z.held[p]) Z.held[p].mesh.visible = true;
+    }
+    for (const o of Z.perms.values()) o.mesh.visible = true;
+  }
   let fpOrbit = null;
   const _oa = new THREE.Vector3(), _ob = new THREE.Vector3();
   function orbitStart() {
@@ -2097,7 +2118,7 @@ export function createDuelScene(canvas, opts = {}) {
     const h = castAt(x, y, list);
     if (h) return { ...owner.get(h.object), point: h.point.clone() };
     const bodies = [];
-    for (let p = 0; p < 2; p++) { drums[p].grp.traverse(o => { if (o.isMesh) { o.userData.seat = p; bodies.push(o); } }); flies[p].built?.root.traverse(o => { if (o.isMesh && !o.isInstancedMesh) { o.userData.seat = p; bodies.push(o); } }); }
+    for (let p = 0; p < 2; p++) { drums[p].grp.traverse(o => { if (o.isMesh) { o.userData.seat = p; bodies.push(o); } }); if (flies[p].holder.visible) flies[p].built?.root.traverse(o => { if (o.isMesh && !o.isInstancedMesh) { o.userData.seat = p; bodies.push(o); } }); }
     const b = castAt(x, y, bodies);
     return b ? { uid: null, player: b.object.userData.seat, point: b.point.clone() } : null;
   }
