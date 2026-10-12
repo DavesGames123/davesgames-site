@@ -347,9 +347,13 @@ export function createInteraction({ rules, CARD, seat = 0, names = null }) {
     return { label: '', enabled: false };
   }
 
+  // The small button. In target mode the big button is Cancel already,
+  // so there is no small button: two Cancel buttons showed at once (the
+  // 1600x900 capture of 2026-10-12). secondary() still cancels there
+  // (Escape).
   function secondaryOf(m) {
     if (m === 'attack' || m === 'block') return { label: 'Undo', kind: 'undo', enabled: hist.length > 0 };
-    if ((m === 'main' && sel !== null) || m === 'target') return { label: 'Cancel', kind: 'cancel', enabled: true };
+    if (m === 'main' && sel !== null) return { label: 'Cancel', kind: 'cancel', enabled: true };
     return null;
   }
 
