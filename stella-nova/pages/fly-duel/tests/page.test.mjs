@@ -189,7 +189,18 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   ok(sci > 0 && cardCss > sci && cardCss < head.indexOf('importmap'), 'markup: ui/card.css loads after sci.css, before the import map');
   ok(/wired from two different animals/.test(html), 'markup: says Fly A and Fly B are wired from two different animals');
   ok(/detect synapses by different methods/.test(html), 'markup: the synapse-method caveat');
-  ok(/Two computer models, <span data-wiring>wired from the connectomes<\/span> of two flies: each is a model, not a real fly/.test(html), 'markup: the 3D stage tag names two models and two connectomes');
+  ok(/Two computer models <span data-wiring>wired from the connectomes<\/span> of two flies: not real flies\./.test(html), 'markup: the honesty line of the bar names two models and two connectomes');
+  // research content lives behind "How it works" only (CONTRACT.md):
+  // no kicker, chip bar, stage tag or section text outside the drawer
+  {
+    const game = html.slice(html.indexOf('<body>'), html.indexOf('<aside class="how"'));
+    ok(!/class="(kicker|stage-tag|sec|sec-head)\b/.test(game) && !/id="chips"/.test(game) && !/id="s\d"/.test(game), 'markup: no kicker, chips, stage tag or section outside the drawer');
+    const how = html.slice(html.indexOf('<aside class="how"'));
+    ok(/We do not train a real fly/.test(how) && /Not affiliated with or endorsed by Wizards of the Coast\./.test(how) && /id="srcList"/.test(how) && /id="credits"/.test(how), 'markup: the drawer has the honesty line, the not-affiliated line, the sources and the credits');
+    ok(/<ol class="short">/.test(how) && (how.match(/<ol class="short">([\s\S]*?)<\/ol>/)[1].match(/<li>/g) || []).length === 5, 'markup: the drawer opens on a short explainer of five steps');
+    ok(/id="btnHow"/.test(game) && (game.match(/How it works/g) || []).length === 1, 'markup: one "How it works" button on the game view');
+    ok(!/kicker/.test(readFileSync(join(ROOT, 'ui/chooser/chooser.js'), 'utf8')), 'markup: the title screen has no kicker either');
+  }
   ok(/art\/CREDITS-ART\.md/.test(html) && /public-domain/.test(html), 'markup: the card art credit');
   // the fullscreen game: two modes, the chooser, the drawer
   ok(!html.includes('id="turnBanner"') && (html.match(/data-turn-indicator/g) || []).length === 1, 'markup: one turn indicator, no turn banner');

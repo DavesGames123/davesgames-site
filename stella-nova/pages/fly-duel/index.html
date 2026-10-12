@@ -33,8 +33,10 @@
         ?mode=play&deck=<yours>&opp=A|B|bot&fly=<deck id or random>
 
    HONESTY
-     We do not train a real fly. The chooser, the stage tag and the "How
-     it works" drawer say so. Every number about the fly comes from
+     We do not train a real fly. The title screen, one short line at the
+     base of the control bar (.honest) and the "How it works" drawer say
+     so. RESEARCH CONTENT lives only in the drawer (#how): no kicker,
+     chip bar, stage tag or section text over or around the game view. Every number about the fly comes from
      data/facts.js (with a source) or is counted from the two connectome
      files. Win rates come from data/training-curve.json meta.final.
      The decks the flies trained with come from the meta of
@@ -85,15 +87,17 @@
                      banner per turn
      fallback HUD    #hudBar #hudA #hudB (shows only when
                      ui/hud/scorecard.js does not load)
-     #heroStage      #heroCv #heroMove #heroLog, stage tag (honesty line)
-     .stagebar       #heroStatus #heroPlay #heroNew #heroSpeed #heroCam
+     #heroStage      #heroCv #heroMove #heroLog
+     .stagebar       .barline (.honest: the short honesty line,
+                     #heroStatus), #heroPlay #heroNew #heroSpeed #heroCam
                      #heroBrains #btnDecks #btnPlay #btnHow
      #arena          2D stand-in of the table: #heroBoard
      #playRoot       play mode root (mountPlay)
      #chooser        the title screen of ui/chooser/chooser.js (mountChooser
                      fills it: mode cards, two seats, deck tiles, start)
      #how            "How it works" drawer: #howClose #chips #doc
-       #s0 duel      #heroStats, honesty note, brain legend
+       #s0 duel      the short explainer (five steps), #heroStats,
+                     brain legend, honesty note, not-affiliated line
        #s1 game      #manaKey #manaLeg #manaLegGlyphs #kwList #deckTag
                      #deckLists #galSeg #gallery
        #s2 centre    #mbCv #mbLegend #wiringTag #cxMeta #factList #ourList
@@ -155,7 +159,6 @@
     <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a convention table play the card duel. Drag to turn the view."></canvas>
     <ol class="log" id="heroLog" aria-label="Last moves"></ol>
     <p class="stage-move" id="heroMove" aria-live="polite"></p>
-    <p class="stage-tag">Two computer models, <span data-wiring>wired from the connectomes</span> of two flies: each is a model, not a real fly</p>
   </div>
 
   <div class="arena" id="arena" hidden>
@@ -182,7 +185,7 @@
   </div>
 
   <div class="stagebar">
-    <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
+    <p class="barline"><span class="honest">Two computer models <span data-wiring>wired from the connectomes</span> of two flies: not real flies.</span> <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span></p>
     <span class="arena-ctrls">
       <button class="tgl" id="heroPlay" aria-pressed="true">Pause</button>
       <button class="tgl" id="heroNew">New game</button>
@@ -223,9 +226,15 @@
     <main id="doc">
 
 <header class="hero sec" id="s0">
-  <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
   <h1>Two fruit fly brains learn a card duel</h1>
-  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, each <span data-wiring>wired from the published connectome</span> of a different fly, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
+  <ol class="short">
+    <li><b>One learning centre.</b> A fruit fly learns which smells mean sugar and which mean a shock with its mushroom body. Each fly here is a model of that one circuit, <span data-wiring>wired from the published connectome</span> of a different fly.</li>
+    <li><b>A board is a smell.</b> 48 numbers about the board (life, lands, creatures and so on) drive the projection neurons, as an odour drives them in the fly.</li>
+    <li><b>A sparse code.</b> Each Kenyon cell sums a few projection neurons. Feedback inhibition lets only the most driven few fire.</li>
+    <li><b>Dopamine teaches.</b> After each move, the dopamine neurons change the synapses of the Kenyon cells that were just active, by how much better or worse the move turned out than the fly expected.</li>
+    <li><b>The choice.</b> The fly plays the move whose board smells best to its output neurons. The two brain panels beside the table show this for each decision.</li>
+  </ol>
+  <p class="lede">The sections below give the detail, the numbers and the sources.</p>
   <div class="stats" id="heroStats"></div>
   <div class="legend brainleg">
     <span><i style="background:var(--pn)"></i>projection neurons (the board's smell)</span>

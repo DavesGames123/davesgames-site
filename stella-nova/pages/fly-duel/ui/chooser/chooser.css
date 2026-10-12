@@ -47,7 +47,6 @@
 
 /* TITLE */
 .fdc-top{grid-area:top;position:relative}
-.fdc-kicker{margin:0;font:600 0.72rem/1.3 var(--c-sans);letter-spacing:0.1em;text-transform:uppercase;color:var(--c-bronze)}
 .fdc-title{margin:8px 0 0;font-family:var(--c-serif);font-weight:500;color:var(--c-parch);line-height:1}
 .fdc-t1{display:block;font-size:0.95rem;letter-spacing:0.38em;text-transform:uppercase;color:var(--c-parch2)}
 .fdc-t2{display:block;font-size:clamp(2.4rem,3.6vw,3.3rem);letter-spacing:0.01em;margin-top:4px}
@@ -151,7 +150,7 @@
 .fdc-phone .fdc-mt{padding:12px 14px 14px 16px}
 .fdc-phone[data-step="mode"] .fdc-decks{display:none}
 .fdc-phone[data-step="decks"] .fdc-modes{display:none}
-.fdc-phone[data-step="decks"] .fdc-lede,.fdc-phone[data-step="decks"] .fdc-kicker,.fdc-phone[data-step="decks"] .fdc-title::after{display:none}
+.fdc-phone[data-step="decks"] .fdc-lede,.fdc-phone[data-step="decks"] .fdc-title::after{display:none}
 .fdc-phone[data-step="decks"] .fdc-t2{font-size:1.5rem}
 .fdc-phone[data-step="decks"] .fdc-t1{font-size:0.66rem}
 .fdc-phone .fdc-decks{padding:12px 0 6px;border:0;background:transparent;gap:12px}

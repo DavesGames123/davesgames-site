@@ -395,15 +395,12 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
 .hud .row .cr{display:none}
 i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 
-/* on the stage: the move chip, the honesty tag, the log */
+/* on the stage: the move chip, the log */
 .stage-move{position:absolute;left:0;right:0;margin:0 auto;width:fit-content;bottom:30px;max-width:calc(100% - 16px);
   background:var(--bg);border:1px solid var(--hair2);border-radius:999px;padding:5px 12px;font:0.74rem/1.3 var(--mono);color:var(--ink);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:3}
 .stage-move:empty{display:none}
 .stage-move b{font-weight:700} .stage-move b.s0{color:var(--flyA)} .stage-move b.s1{color:var(--flyB)}
-.stage-tag{position:absolute;left:8px;right:8px;bottom:6px;font-size:11px;line-height:1.3;color:var(--ink2);
-  pointer-events:none;z-index:3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stage-tag::before{content:'';display:inline-block;width:6px;height:6px;background:var(--bronze);transform:rotate(45deg);margin-right:6px;vertical-align:1px}
 .stage .log{display:none}
 /* the 2D stand-in of the table: the centre region, it scrolls */
 .app .arena{position:absolute;left:var(--cl);right:var(--cr);top:calc(var(--ct) + var(--hud-h,0px));bottom:var(--cb);margin:0;overflow:auto;overscroll-behavior:contain;
@@ -479,7 +476,12 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
    on a touch screen (TOUCH). */
 .stagebar{position:absolute;left:0;right:0;bottom:0;z-index:6;height:var(--bar-h);display:flex;flex-direction:column;justify-content:flex-start;gap:6px;
   padding:8px calc(8px + var(--sr)) env(safe-area-inset-bottom,0px) calc(8px + var(--sl));background:var(--bg);border-top:1px solid var(--bronze-line)}
-.stagebar .status{font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.3em;line-height:1.3}
+.stagebar .barline{display:flex;gap:10px;align-items:baseline;min-width:0;font-size:0.74rem;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden}
+/* the one short honesty line at the base of the HUD (CONTRACT.md) */
+.barline .honest{flex:none;color:var(--ink2)}
+.barline .honest::before{content:'';display:inline-block;width:6px;height:6px;background:var(--bronze);transform:rotate(45deg);margin-right:6px;vertical-align:1px}
+.stagebar .status{font-size:inherit;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+.barline .status{display:none}
 .arena-ctrls{display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .arena-ctrls::-webkit-scrollbar{display:none}
 .arena-ctrls>*{flex:none}
@@ -496,6 +498,9 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   padding:0 calc(14px + var(--sr)) 0 calc(14px + var(--sl));background:var(--bg);border-bottom:1px solid var(--bronze-line)}
 .how-top .pagetitle{flex:1}
 .how .hero{padding-top:18px}
+.short{display:grid;gap:8px;max-width:82ch;padding-left:1.4em;margin:4px 0 6px;font:400 1rem/1.55 var(--serif);color:var(--ink2)}
+.short b{color:var(--parch);font-weight:600}
+.short li::marker{color:var(--bronze);font:600 0.9em var(--serif)}
 .galbar{margin-bottom:8px}
 
 .manaleg{font-size:0.8rem;line-height:1.5;color:var(--parch2);background:var(--tome2);border:1px solid var(--bronze-line);border-radius:3px;padding:8px 12px;margin:0 0 10px}
@@ -557,10 +562,10 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .hud .life{font-size:30px}
   .hud .row .cr{display:inline}
   .stagebar{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding-top:0}
-  .stagebar .status{flex:1 1 200px;font-size:0.8rem}
+  .stagebar .barline{flex:1 1 200px;font-size:0.78rem}
+  .barline .status{display:block}
   .arena-ctrls{flex:0 1 auto}
   .stage-move{font-size:0.82rem;padding:6px 14px;bottom:34px}
-  .stage-tag{right:auto;bottom:10px;left:12px}
   .stage .log{display:block;position:absolute;left:12px;bottom:34px;width:min(340px,30vw);height:auto;z-index:3;background:var(--tome)}
   .stage .log:empty{display:none}
 }
@@ -573,6 +578,8 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .app{--bar-h:calc(56px + env(safe-area-inset-bottom,0px))}
   .stagebar{flex-direction:row;align-items:center;padding-top:0}
   .stagebar .status{display:none}
+  .stagebar .barline{flex:0 1 38%}
+  .barline .honest{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
   .whud .hd-brain{height:30px}
   .whud .hd-counts{display:none}
   .wtop{grid-template-columns:minmax(0,220px) auto minmax(0,220px);justify-content:space-between}

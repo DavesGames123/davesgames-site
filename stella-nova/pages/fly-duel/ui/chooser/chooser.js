@@ -362,7 +362,6 @@ function shellHTML(D) {
   return `<div class="fdc-veil" aria-hidden="true"></div>
 <div class="fdc-in">
   <header class="fdc-top">
-    <p class="fdc-kicker">A model, not a fly · a card duel of our own</p>
     <h1 class="fdc-title" id="fdcTitle"><span class="fdc-t1">Fly Brain</span> <span class="fdc-t2">Card Duel</span></h1>
     <p class="fdc-lede">Two model fruit fly brains, each wired from the connectome of a different fly, learned this game by dopamine. Watch them duel, or take a seat.</p>
     <button type="button" class="fdc-x" data-act="close" hidden>Close</button>
