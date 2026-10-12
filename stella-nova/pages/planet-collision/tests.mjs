@@ -32,7 +32,8 @@
 //  R  the renderer (Deno WebGPU, an offscreen texture, no browser and no
 //     image file): every shader compiles clean; before contact the target
 //     fills its disc and the sky round it is dark, with no glow; no
-//     particle of a settled body is debris; the remnant at +1 h and +3 h
+//     particle of a settled body is debris; a body drawn all as vapour
+//     is a dim haze (mean under 110 of 255); the remnant at +1 h and +3 h
 //     after contact (moon-earth, 16k) has under 2 % near-white pixels in
 //     its disc and over 2 % orange-red ones; the
 //     filter makes the depth smooth, keeps the area and makes the limb
@@ -484,6 +485,13 @@ async function renderTests() {
   const pre = scan(at);
   ok('R before contact: the target fills its disc, dark sky outside, no glow', cIn[0] + cIn[1] + cIn[2] > 90 && cOut[0] + cOut[1] + cOut[2] < 60 && pre.glow === 0,
     `centre rgb ${cIn.join(',')}, 1.35 R out ${cOut.join(',')}, ${pre.glow} glowing px, disc ${rpx.toFixed(0)} px`);
+  // vapour is a translucent haze, not a pale fog: draw every particle of
+  // the settled target as vapour (xvLo -2, xvHi -1; no drawn atmosphere);
+  // the disc stays dim and the sky shows through it (opacity at most 0.6)
+  { const g = Object.assign({}, f, { xvLo: -2, xvHi: -1, bodies: [0, 1, 2, 3].map(() => ({ atm: 0, shadow: 0 })) }); ren.render(g); const at2 = await rgb();
+    let n = 0, sum = 0, white = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (Math.hypot(x - ctr.x, y - ctr.y) >= 0.8 * rpx) continue; const c = at2(x, y); n++; sum += (c[0] + c[1] + c[2]) / 3; if (c[0] > 235 && c[1] > 235) white++; }
+    ok('R an all-vapour body is a dim haze, not a pale fog', n > 100 && sum / n < 110 && white === 0, `mean ${(sum / Math.max(n, 1)).toFixed(0)} of 255 over ${n} disc px, ${white} near-white`); }
   // the filter: depth roughness down; the outline (coverage 0.5) keeps
   // the area and loses the bump of each particle (a shorter boundary)
   // (a close view at 960 x 600, so a particle sphere is several px wide)

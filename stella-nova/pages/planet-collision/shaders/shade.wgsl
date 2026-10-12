@@ -16,9 +16,9 @@
 //                 hide behind the surface. Premultiplied: alpha 0 where
 //                 there is no fluid (the sky shows, the atmosphere adds).
 //    fs_vapour    the vapour thickness of fluid.wgsl fs_thick (half size,
-//                 filtered) -> opacity 1 - exp(-k chord), sharpened at the
-//                 edge; lit condensate plus a weak glow at the skin
-//                 temperature (fn skinT). Premultiplied.
+//                 filtered) -> opacity 0.6 (1 - exp(-k chord)), sharpened
+//                 at the edge; lit condensate plus a weak glow at the
+//                 skin temperature (fn skinT). Premultiplied.
 //
 //  grep -n targets: "fn vs_full", "fn fs_sky", "fn normalAt", "fn shadowAt",
 //  "fn atmosphere", "fn fs_surface", "fn fs_vapour"
@@ -219,7 +219,9 @@ fn fs_surface(in: VOut) -> SurfOut {
     let mc = modeColor(mode, T, b1, mixw, speed, fIron, fIce);
     col = mc * (0.30 + 0.70 * max(ndl, 0.0) * mix(1.0, shadow, 0.6));
   }
-  col = col + atmosphere(e, Dn, dot(P - e, Dn));
+  // the shell in front of the disc: thinner than at the limb, so the
+  // surface (crust, oceans) reads through it
+  col = col + 0.4 * atmosphere(e, Dn, dot(P - e, Dn));
   // premultiplied: the edge pixel lets the sky (and the atmosphere) through
   o.color = vec4f(col * edge + atmosphere(e, Dn, 1e9) * (1.0 - edge), edge);
   o.depth = select(0.0, depthOfZ(z), edge >= 0.5);
@@ -234,12 +236,14 @@ fn fs_vapour(in: VOut) -> @location(0) vec4f {
   let T = 10000.0 * t.y / t.x;
   let op = 1.0 - exp(-U0.vap.x * t.x);
   // a crisp edge: the opacity rises over a short range, then saturates
-  let a = clamp(smoothstep(0.03, 0.22, op) * min(op * 1.4, 0.94), 0.0, 1.0);
+  // the opacity follows the column (thick columns show as denser gas),
+  // up to 0.6, so the remnant shows through
+  let a = clamp(smoothstep(0.02, 0.12, op) * 0.6 * op, 0.0, 1.0);
   if (a <= 0.002) { discard; }
   let D = normalize(rayAt(in.pos.xy));
   let fwdS = pow(max(dot(D, U0.sun.xyz), 0.0), 6.0);
-  // silicate condensate: grey-white, lit from the sun (more toward it)
-  let lit = vec3f(0.78, 0.76, 0.74) * U0.sun.w * (0.35 + 0.5 * fwdS) + vec3f(U0.view.w);
+  // silicate condensate: grey, lit from the sun (more toward it)
+  let lit = vec3f(0.42, 0.40, 0.39) * U0.sun.w * (0.25 + 0.5 * fwdS) + vec3f(U0.view.w);
   let col = lit + glow(skinT(T, 0.6)) * U0.vap.w;
   return vec4f(col * a, a);
 }

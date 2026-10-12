@@ -133,7 +133,7 @@ export function defaultFrame() {
     frags: 3,                     // fragments drawn per debris particle (1-4)
     smooth: 2,                    // bilateral X+Y iterations
     debrisQ: 1.6,                 // h / h0 over this (or h at h_max): debris
-    vapK: 3.0, vapGlow: 0.15, xvLo: 0.3, xvHi: 0.5,
+    vapK: 1.5, vapGlow: 0.15, xvLo: 0.3, xvHi: 0.5,
     glowGain: 0.6, ambient: 0.012,
     bodies: [{ atm: 1, shadow: 1 }, { atm: 1, shadow: 1 }, { atm: 0, shadow: 0 }, { atm: 0, shadow: 0 }],
     flashes: [],                  // [{ p, r, I, T }]
@@ -329,7 +329,7 @@ export class Renderer {
     d[40] = f.mode || 0; d[41] = cut.on ? 1 : 0; d[42] = f.streakT || 0; d[43] = Math.max(1, Math.min(4, f.frags | 0 || 1));
     put(44, norm(cut.n || [0, -1, 0]), cut.d || 0);
     d[48] = lk.surf[0]; d[49] = lk.surf[1]; d[50] = lk.surf[2]; d[51] = f.debrisQ ?? 1.6;
-    d[52] = (f.vapK ?? 3) / lk.unit; d[53] = f.xvLo ?? 0.3; d[54] = f.xvHi ?? 0.5; d[55] = f.vapGlow ?? 0.15;
+    d[52] = (f.vapK ?? 1.5) / lk.unit; d[53] = f.xvLo ?? 0.3; d[54] = f.xvHi ?? 0.5; d[55] = f.vapGlow ?? 0.15;
     d[56] = f.near; d[57] = lk.speed; d[58] = f.glowGain ?? 0.6; d[59] = f.ambient ?? 0.012;
     for (let m = 0; m < 4; m++) { const M = MAT_LIST[m]; d.set([M.rho0 / UNIT.RHO, M.Tmelt, ETA_H, 0], 60 + 4 * m); }
     for (let b = 0; b < 4; b++) {

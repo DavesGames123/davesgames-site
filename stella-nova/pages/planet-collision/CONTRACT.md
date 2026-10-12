@@ -216,7 +216,7 @@ Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`;
 
 | Class | Test | Drawn as |
 |---|---|---|
-| vapour | `xv > xvHi` (0.5) | translucent layer, opacity 1 - exp(-vapK chord), crisp edge |
+| vapour | `xv > xvHi` (0.5) | translucent layer, opacity 0.6 (1 - exp(-vapK chord)), crisp edge |
 | debris | `rho < rho0 / debrisQ^3` (the summed density, `th.x`; 0.24 rho0) | flat-faced fragments, `frags` per particle, and streaks |
 | fluid | all others | the screen-space surface |
 
@@ -245,7 +245,9 @@ skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn crustSkin`):
 
 `coolH` (frame field) is the sim hours since the first contact; main.js
 sets it, and a negative value (the default) means before contact: no
-crust, the 4000 K cap. Bloom: only light over `bloomThreshold` (2.0),
+crust, the 4000 K cap. Vapour opacity is 0.6 (1 - exp(-vapK chord)),
+with the chord weighted by the column density (s0 / r)^3, so thin,
+expanded vapour is faint. Bloom: only light over `bloomThreshold` (2.0),
 strength 0.035: the hottest melt only.
 
 GPU cost (Apple M4 Pro, Deno, `deno run -A tests.mjs --gpu --time`, the

@@ -26,8 +26,9 @@
 //                             a2  w speed, w mixing, w cut, w
 //    vs_thick + fs_thick    pass 3 (half size): vapour particles, the
 //                           chord length of each sphere in front of the
-//                           fluid surface, additive (rg16float: chord,
-//                           chord T / 1e4)
+//                           fluid surface, weighted by the column
+//                           density (s0 / r)^3, additive (rg16float:
+//                           chord, chord T / 1e4)
 //
 //  grep -n targets: "fn vs_sphere", "fn hitSphere", "fn fs_depth",
 //  "fn fs_attr", "fn vs_thick", "fn fs_thick"
@@ -171,7 +172,11 @@ fn vs_thick(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
   let s = r * dist / sqrt(max(dist * dist - r * r, 1e-8));
   o.pos = U0.vp * vec4f(x + (c.x * side + c.y * upv) * s + n * r, 1.0);
   o.centre = vec4f(x, r);
-  o.temp = vec2f(pAux[ii].x, wv);
+  // the optical depth goes with the column mass: a particle spread over a
+  // sphere of radius r has the density (s0 / r)^3 of a packed one, so
+  // thin, expanded vapour is faint
+  let dens = clamp(pow(s0 / r, 3.0), 0.04, 1.0);
+  o.temp = vec2f(pAux[ii].x, wv * dens);
   return o;
 }
 @fragment
