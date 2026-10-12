@@ -17,6 +17,7 @@
 //              play mode: when the fly loses it throws, when you lose your
 //              seat does not throw and the fly celebrates; the fedora is
 //              on the fly you play against only; a new game clears it all
+//              (after the change of game, ui/fly3d/regame.js)
 //    (the director checks of the toss shot are in
 //    tests/fly3d-director.test.mjs)
 //  Exit code 1 on any failure.
@@ -197,11 +198,13 @@ if (game) {
     for (let k = 0; k < 300; k++) sc.render(1 / 30);
     ok(F[L].spec.name === 'headDown' && sc.stats().tossed === nHand, 'watch: the loser stays head down 10 s later');
     restCheck(sc, 'watch +10 s');
-    // a new game clears the toss and the pose
+    // a new game clears the toss and the pose: the change of game
+    // (ui/fly3d/regame.js, tests/fly3d-regame.test.mjs) gathers the
+    // thrown cards and lifts the head
     const G2 = allRecords(game.g + 100);
     sc.setState(G2.start);
-    sc.render(1 / 30);
-    ok(sc.stats().tossed === 0 && F[L].spec.name !== 'headDown' && F[L].end == null, `watch: a new game clears the thrown cards and lifts the head (${sc.stats().tossed}, ${F[L].spec.name})`);
+    for (let k = 0; k < 600 && sc.between(); k++) sc.render(1 / 30);
+    ok(!sc.between() && sc.stats().tossed === 0 && F[L].spec.name !== 'headDown' && F[L].end == null, `watch: a new game clears the thrown cards and lifts the head (${sc.stats().tossed}, ${F[L].spec.name})`);
     sc.dispose();
   }
   // --- reduced motion: the cards are at rest at once

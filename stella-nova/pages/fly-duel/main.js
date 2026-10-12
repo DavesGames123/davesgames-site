@@ -609,11 +609,16 @@ function initHero(mod3d = null) {
       hero.poke = Math.max(0, hero.poke - dt);
       if (!hero.playing || hero.busy) return;
       if (hero.pause > 0) { hero.pause -= dt * 1000; if (hero.pause <= 0) endPause(); return; }
+      // The end of a game: the scene plays the win beat, the clean-up and
+      // the deal between two games (ui/fly3d/regame.js), so the page waits
+      // only a short time before it gives the new game. Reduced motion
+      // has no such sequence: the last board holds for the end hold.
       if (hero.match.over()) {
         hero.t += dt * 1000;
-        if (hero.t >= motionFor(REDUCED).endHold + 1500) newGame();
+        if (hero.t >= (REDUCED || !hero.scene.between ? motionFor(REDUCED).endHold + 1500 : 300)) newGame();
         return;
       }
+      if (hero.scene.between?.()) return;   // the next decision waits for the deal
       hero.t = 0;
       begin3d();
       return;
@@ -637,7 +642,8 @@ function initHero(mod3d = null) {
   setPlay(hero.playing);
   play.addEventListener('click', () => setPlay(!hero.playing));
   seg($('heroSpeed'), v => { hero.speed = +v; hero.scene?.setSpeed(+v); });
-  $('heroNew').addEventListener('click', () => { newGame(); hero.poke = 1; });
+  // a click during the change of game ends it at once (a skip)
+  $('heroNew').addEventListener('click', () => { if (hero.scene?.between?.()) hero.scene.skipBetween(); newGame(); hero.poke = 1; });
   seg($('heroCam'), v => { hero.cam = v; hero.scene?.setCamera?.(v); hero.poke = 2; });
   seg($('heroBrains'), v => setBrains(v));
   const cv = $('heroCv');

@@ -138,6 +138,21 @@ about the simulation and layout in fullscreen"
   turn; Space or Enter) with the timer on it. The small button stands
   beside it. 44 px targets, safe areas, no overlap with a resting hand
   card (tests/play-dock.test.mjs).
+- Change of game (user, verbatim, 2026-10-12): "switching decks/end of
+  game needs better animations". Between two games the scene plays one
+  sequence (ui/fly3d/regame.js) and does not cut to the next board: the
+  win beat (the winner raises its arms again, the crowd cheers, the win
+  shot; the loser keeps its head down), the clean-up (each card flies
+  from the hand, the floor, the battlefield and the graveyard to the
+  library pile of its owner, the pile grows card by card, a riffle, the
+  deck goes into its box and the lid closes), the box swap only when the
+  deck of a seat changes (the old box slides off the end of the table,
+  the new one slides in, the mat crossfades to the new deck colours),
+  the deck out of the box, a cut and the opening hands card by card. At
+  speed 1 the sequence is 5.2 s (same decks) or 6.4 s (a deck change);
+  setSpeed scales it, "New game" skips it. Play mode has no cut or deal
+  (ui/play/opening.js draws the hand); the saver gets the hands in a
+  short deal of its own (tests/fly3d-regame.test.mjs).
 
 
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain

@@ -59,7 +59,7 @@
 //        shoot(shot, p), setBrains(on), setBigBrain(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
 //        pickFace(x, y),
-//        orbitBy(dx, dy), zoomBy(k), seatView(),
+//        orbitBy(dx, dy), zoomBy(k), seatView(), between(), skipBetween(),
 //        highlight(ids, kind) | highlight(spec) | highlight(null),
 //        setRig(fn | null) }
 //      Saver hook: setRig(fn) gives the camera to the saver reel
@@ -91,6 +91,14 @@
 //      not throw: it keeps the slump. The director frames the toss
 //      (shot 'toss'), then the win. The fedora is on the fly you play
 //      against only (applyHats).
+//      Between two games (ui/fly3d/regame.js): after the end, setState
+//      does not put the new game on the table at once. A sequence plays:
+//      the win beat, the clean-up (the cards fly to the piles, shuffle,
+//      the deck into its box), the box swap and mat crossfade when a
+//      deck changes, the deck out, the cut and the deal. Records wait
+//      for its end. between() is true while it runs, skipBetween() ends
+//      it at once. In play mode setFirstPerson starts the clean-up, and
+//      the new state ends it with no deal (ui/play/opening.js deals).
 //      setCamera: 'auto' (the steps pick the shots), 'wide', 'free' (the
 //      user orbits, no cuts), 'script' (only shoot() cuts). Shots
 //      (ui/fly3d/director.js SHOTS): wide, over, close, follow, dolly,
@@ -128,6 +136,7 @@
 //      grep -n 'function blockArrows'         blocker -> attacker arrows
 //      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'function deckBoxesOf'         the deck boxes print the game decks
+//      grep -n 'const regame'                 between two games (regame.js)
 //      grep -n 'export function createDuelScene'
 // ============================================================================
 import * as THREE from 'three';
@@ -142,6 +151,7 @@ import { buildHall, HALL, CROWD_SECTOR, MAT } from './hall.js';
 import { createDirector, recordInfo, SHOTS, orbitFrom, orbitPos, orbitDrag, orbitZoom } from './director.js';
 import { createLifeDice } from './d20.js';
 import { createDice } from './dice3d.js';
+import { createRegame } from './regame.js';
 
 // ------------------------------------------------------------ dimensions
 export const TABLE = {
@@ -1859,6 +1869,10 @@ export function createDuelScene(canvas, opts = {}) {
   // ---------------------------------------------------------- play
   function startNext() {
     if (cur || !queue.length) return;
+    // between two games (ui/fly3d/regame.js): the record waits; a record
+    // gives a target to a sequence that waits in the box
+    if (regame.busy) { if (regame.state().waiting) regame.take(queue[0].rec.before); return; }
+    if (mirror && winner != null && mirrorDiff(mirror, mirrorOf(queue[0].rec.before)).length && regame.take(queue[0].rec.before)) return;
     const { rec, resolve } = queue.shift();
     if (!mirror || mirrorDiff(mirror, mirrorOf(rec.before)).length) {
       // a new game or a skipped record: put the table in its before state
@@ -1871,6 +1885,17 @@ export function createDuelScene(canvas, opts = {}) {
     if (plan.steps.some(x => x.op === 'roll' || x.op === 'counters')) dice.warm();
     cur = { rec, plan, t: 0, i: 0, resolve, struck: new Set() };
   }
+  // The sequence between two games: win beat, clean-up, box swap, deal
+  // (ui/fly3d/regame.js). setState and startNext hand it the new game.
+  const regame = createRegame({
+    W, Z, T, piles, hall, seatPos, seatQuat, reduced: W.reduced,
+    newCard: id => new CardObj(W, id),
+    mirror: () => mirror, setMirror: m => { mirror = m; }, snapTo, deckBoxesOf,
+    clip, ended: () => winner, fp: () => fpSeat,
+    clearEnd: () => { winner = null; for (const f of flies) { f.end = null; f.tossAt = null; } },
+    shot: (name, p) => { if (camMode === 'auto' && fpSeat == null) { dir.state.then = null; dir.request(name, p, sceneT, { force: true }); } },
+    react: (kind, o) => hall.react(kind, o),
+  });
   function advance(dt) {
     startNext();
     if (!cur) return;
@@ -1960,6 +1985,7 @@ export function createDuelScene(canvas, opts = {}) {
     layout(false);
     seatHide();
     blockArrows();
+    regame.update(sdt);
     for (const o of Z.hand[0]) o.update(sdt);
     for (const o of Z.hand[1]) o.update(sdt);
     for (const o of Z.grave[0]) o.update(sdt);
@@ -2065,6 +2091,7 @@ export function createDuelScene(canvas, opts = {}) {
     layout(false);       // the hidden hand changes with the seat at once
     seatHide();          // and your own fly and its fan hide at once
     applyHats();         // the fedora goes to the fly you play against
+    if (fpSeat != null) regame.take(null, { park: true });   // after a game: the clean-up starts
     return fpSeat;
   }
   // The play-mode orbit (ui/fly3d/director.js ORBIT): orbitBy(dx, dy)
@@ -2226,6 +2253,7 @@ export function createDuelScene(canvas, opts = {}) {
   function setState(state) {
     queue.length = 0;
     if (cur) { cur.resolve(cur.plan); cur = null; }
+    if (regame.take(state)) { toAct = state.toAct ?? 0; return; }   // the change of game plays
     for (const f of fx) f.dispose?.();
     winner = state.result ? state.result.winner : null;
     for (const f of flies) { f.end = null; clip(f.p, 'idle'); }
@@ -2263,7 +2291,7 @@ export function createDuelScene(canvas, opts = {}) {
       // hand: the hand cards, thrown ones too (the mirror keeps them)
       hand: Z.hand.map((h, p) => h.length + Z.tossed.filter(o => o.toss.p === p).length),
       tossed: Z.tossed.length, grave: Z.grave.map(g => g.length), perms: Z.perms.size,
-      pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
+      pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0 || regame.busy, regame: regame.state(), fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       banners: bannerN, brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, bigBrain: bigP, hall: hall.stats(), dice: dice.stats(),
       arrows: arrows.children.filter(g => g.visible).length,
       firstPerson: fpSeat, hidden: hiddenSeat(), orbit: fpOrbit ? { ...fpOrbit } : null, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
@@ -2271,6 +2299,7 @@ export function createDuelScene(canvas, opts = {}) {
   }
   function dispose() {
     disposed = true;
+    regame.dispose();
     clearCards();
     io?.disconnect(); controls?.dispose();
     for (const f of flies) { try { f.built?.dispose?.(); } catch { /* gone */ } }
@@ -2284,7 +2313,8 @@ export function createDuelScene(canvas, opts = {}) {
   return {
     play, setState, resize, setClear, get clear() { return { ...clear, w: viewW, h: viewH }; }, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
     setFirstPerson, pickPermanent, pickCard, pickFace, highlight, setRig, orbitBy, zoomBy, seatView,
-    world: { W, Z, flies, drums, piles, lights, hall, dice, arrows, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
+    between: () => regame.busy, skipBetween: () => regame.skip(),
+    world: { W, Z, flies, drums, piles, lights, hall, dice, arrows, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP), regame },
   };
 }
 
