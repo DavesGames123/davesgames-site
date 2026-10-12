@@ -23,6 +23,10 @@
 //     point inside the board, not capped and at most NEW_NODES elements,
 //     at most LIGHT_MS at defaults (unless heavy) and MAX_MS at the max
 //     params, on three aspects. Prints a table of time and size.
+// 11. picks (taste.js, saver.js): Surprise me is fixed by its seed, keeps
+//     every used ink at contrast 3 or more, reaches most families and
+//     many palettes, and builds valid modifiers; the saver pool is dark
+//     and large enough.
 //  Prints one line per failure and a summary; exits 1 on any failure.
 // ============================================================================
 import { run, defaults, CAP, boardSize, UNIT } from './engine.js';
@@ -33,6 +37,9 @@ import { makeRng } from './engine.js';
 import { applyModifiers, modDefaults, MOD_KINDS } from './modifiers.js';
 import { toSVG, applyMode, codeExtract } from './export.js';
 import { runJob } from './worker.js';
+import { surprise, usedInks, LINE_FAMS } from './taste.js';
+import { SAVER_PALETTES } from './saver.js';
+import { paletteScore, luminance } from './color.js';
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } };
@@ -277,6 +284,28 @@ const NEW_NODES = 20000, LIGHT_MS = 150, MAX_MS = 1500;
     rows.push(`${p.id.padEnd(20)} ${p.family.padEnd(10)} ${S.defMs.toFixed(0).padStart(5)} ${S.maxMs.toFixed(0).padStart(6)} ${String(S.defN).padStart(7)} ${String(S.maxN).padStart(7)}`);
   }
   console.log(`new generators: ${NEW.length}\n${'id'.padEnd(20)} ${'family'.padEnd(10)} def ms max ms def els max els\n${rows.join('\n')}`);
+}
+
+// 11. picks
+{
+  const fams = new Set(), pals = new Set(); let worst = 21, sum = 0, rnd = 0;
+  for (let s = 1; s <= 400; s++) {
+    const a = surprise(makeRng(s, 'surprise'), PATTERNS, PALETTES), b = surprise(makeRng(s, 'surprise'), PATTERNS, PALETTES);
+    if (s <= 40) ok(a.pat.id === b.pat.id && a.pal.id === b.pal.id && JSON.stringify(a.P) === JSON.stringify(b.P) && JSON.stringify(a.mods) === JSON.stringify(b.mods), `surprise ${s}: fixed by the seed`);
+    const sc = paletteScore(a.pal, usedInks(a.pat, a.P));
+    worst = Math.min(worst, sc); sum += sc; fams.add(a.pat.family); pals.add(a.pal.id);
+    rnd += paletteScore(PALETTES[s % PALETTES.length], usedInks(a.pat, a.P));
+    ok(a.mods.every(m => MOD_KINDS[m.type]) && a.mods.length <= 2, `surprise ${s}: valid modifiers`);
+    ok(a.pal.ink.length >= Math.min(usedInks(a.pat, a.P), 2), `surprise ${s}: ${a.pal.id} has enough distinct inks for ${a.pat.id}`);
+  }
+  ok(worst >= 3, `surprise keeps every used ink at contrast 3 or more (worst ${worst.toFixed(2)})`);
+  ok(sum > rnd, `surprise mean contrast ${(sum / 400).toFixed(2)} beats a plain palette walk ${(rnd / 400).toFixed(2)}`);
+  ok(fams.size >= FAMILIES.length - 1, `surprise reaches ${fams.size} of ${FAMILIES.length} families`);
+  ok(pals.size >= 30, `surprise uses ${pals.size} palettes`);
+  ok(LINE_FAMS.every(f => FAMILIES.some(q => q.id === f)), 'LINE_FAMS names known families');
+  ok(SAVER_PALETTES.length >= 20 && SAVER_PALETTES.every(p => luminance(p.bg) < 0.05), `saver pool: ${SAVER_PALETTES.length} dark palettes`);
+  for (const n of [1, 2, 3, 4, 5]) ok(SAVER_PALETTES.some(p => paletteScore(p, n) >= 3), `saver pool has a palette for ${n} inks at contrast 3`);
+  console.log(`surprise: worst contrast ${worst.toFixed(2)}, mean ${(sum / 400).toFixed(2)} (palette walk ${(rnd / 400).toFixed(2)}), ${fams.size} families, ${pals.size} palettes`);
 }
 
 timing.sort((a, b) => b[1] - a[1]);

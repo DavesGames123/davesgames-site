@@ -20,8 +20,11 @@
 
    FILES
      engine.js        random source, noise, output list, caps, geometry
-     palettes.js      poster palettes and board sizes
-     patterns/*.js    the families; patterns/index.js joins them
+     color.js         OKLab, OKLCH, WCAG contrast, harmony palettes
+     palettes.js      90 grouped poster palettes and board sizes
+     patterns/*.js    the families; patterns/index.js joins them,
+                      patterns/kit.js clips the newer ones to the board
+     taste.js         tasteful random picks and Surprise me
      modifiers.js     warp, mask, clip, mirror, repeat, jitter, dash
      export.js        style modes, SVG text, canvas drawing, reveal
      worker.js        runs a pattern and its modifiers off the main thread
@@ -32,8 +35,11 @@
    LAYOUT  (# marks an element id main.js binds to)
      desktop ... #panel at the left, #desk fills the rest. #board is the
                  artboard canvas in the middle of #desk. #caption is one
-                 line under it. #tools holds Explore and Randomise.
-                 #explorer covers #desk with the pattern book.
+                 line under it. #tools holds Explore, Surprise me and
+                 Randomise. #explorer covers #desk with the pattern book
+                 (family chips with counts, search, worker thumbnails).
+                 The Colour section has a palette search, group chips
+                 (#palGroups), the swatches and the palette tools.
      phone ..... (max-width 768px, or a short landscape touch screen)
                  #dock at the base: explore, the pattern name (next),
                  randomise, palette, settings. #panel is a bottom sheet
@@ -52,7 +58,7 @@
      grep -n 'function exportPNG'    the raster file at a DPI
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Pattern Designer: an original generative vector pattern tool for posters. Over forty patterns in eight families, stackable modifiers, poster palettes, A-size boards, and SVG or PNG export.">
+<meta name="description" content="Pattern Designer: an original generative vector pattern tool for posters. 89 patterns in 15 families, from tilings and textiles to mazes and leaf veins, 90 palettes in 10 groups with harmony tools, stackable modifiers, A-size boards, and SVG or PNG export.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>
@@ -71,12 +77,14 @@
   <div id="caption"></div>
   <div id="tools">
     <button id="exploreBtn" title="Browse every pattern (E)">Explore the book</button>
+    <button id="surpriseBtn" title="A pattern, palette and modifiers with strong ink contrast (U)">Surprise me</button>
     <button id="randBtn" class="acc" title="A new pattern, palette and seed (R)">Randomise all</button>
   </div>
   <section id="explorer" aria-label="Pattern book" hidden>
     <header>
       <div class="ex-title">The pattern book <span id="exCount"></span></div>
       <input id="exSearch" type="search" placeholder="Search patterns" aria-label="Search patterns" autocomplete="off">
+      <button id="exSurprise" title="A pattern, palette and modifiers with strong ink contrast (U)">Surprise me</button>
       <button id="exClose" aria-label="Close the book">✕</button>
     </header>
     <div id="exFam" class="chips"></div>
@@ -107,6 +115,8 @@
   <div class="btns"><button id="paramReset">Reset parameters</button><button id="paramShake">Shake parameters</button></div>
 
   <div class="sec-label">Colour</div>
+  <div class="palbar"><input id="palSearch" type="search" placeholder="Search palettes" aria-label="Search palettes" autocomplete="off"><span id="palCount"></span></div>
+  <div id="palGroups" class="chips small"></div>
   <div id="palettes" class="pals"></div>
   <div class="custom" id="custom"></div>
   <div class="paltools">
@@ -148,6 +158,7 @@
   <div class="sec-label">About</div>
   <div class="about">
     <p>Each pattern is a small program: the sliders and the seed go in, and a list of vector shapes comes out. The same seed always gives the same shapes, so a design can be made again from its numbers. The SVG file keeps these numbers in its description.</p>
+    <p>Each palette keeps its first ink at a WCAG contrast of 3 or more on the paper. Harmony makes a palette from one seed colour in the OKLCH colour space; a lock keeps a colour while the tools change the rest. Surprise me picks a pattern and a palette that keeps every ink the pattern uses at that contrast.</p>
     <p>Modifiers act on the shapes after the pattern makes them, from the top of the list to the bottom. A warp bends every line, a mask cuts lines at the edge of a shape, and a clip sets a hard edge in the file.</p>
     <p>The SVG has a viewBox and, for A sizes, a width and height in millimetres, so it opens at print size. The PNG export writes its DPI into the file.</p>
     <p>All patterns, modifiers and code here are original work for davesgames.io. See also <a href="https://bookofshapes.com" target="_blank" rel="noopener">bookofshapes.com</a> by Nikolaj Sokolowski, a pattern site in the same genre. Nothing on this page is taken from it.</p>

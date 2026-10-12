@@ -3,8 +3,9 @@
 // ----------------------------------------------------------------------------
 //  The shell (lib/screensaver.js) calls snSaver.enter(opts) with
 //  { calm, seconds, caption, seed, label }. The tour is a seeded shuffle of
-//  patterns, dark palettes and light modifiers, so each run differs. Each
-//  shot:
+//  all patterns, dark palettes and light modifiers, so each run differs.
+//  Each shot takes a dark palette that keeps the inks it uses at a WCAG
+//  contrast of 3 or more (color.js paletteScore). Each shot:
 //    gen    the worker makes the elements (the next shot is made early)
 //    draw   the elements draw on in order: lines by length, solids fade in
 //    hold   the full pattern stays, with a slow push-in when it is light
@@ -29,14 +30,18 @@ import { makeRng, boardSize, clampParams } from './engine.js';
 import { PATTERNS, FAMILIES } from './patterns/index.js';
 import { PALETTES } from './palettes.js';
 import { modDefaults } from './modifiers.js';
+import { LINE_FAMS, usedInks } from './taste.js';
+import { paletteScore, luminance } from './color.js';
 import { applyMode, drawItems, revealPlan, codeExtract } from './export.js';
 
 const famName = id => (FAMILIES.find(f => f.id === id) || { name: id }).name;
-// Palettes with a dark paper read best under the light plate text.
-const lum = hex => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)) / 255; };
-const DARK = PALETTES.filter(p => lum(p.bg) < 0.3);
-// Mirror wedges cut solid tiles into blocks, so only line families get one.
-const LINE_FAMS = ['flow', 'radial', 'physics', 'distort'];
+// Palettes with a dark paper read best under the light plate text. The
+// WCAG luminance keeps out bright papers of a strong hue (hot red,
+// magenta, electric blue).
+const DARK = PALETTES.filter(p => luminance(p.bg) < 0.05);
+// The tour's palette pool (tests.mjs reads it). Mirror wedges cut solid
+// tiles into blocks, so only the line families (taste.js LINE_FAMS) get one.
+export const SAVER_PALETTES = DARK;
 const FADE_MS = 650, PUSH = 0.05, LIGHT_ITEMS = 6000, LIGHT_POINTS = 160000;
 
 function darker(hex, k) {
@@ -59,14 +64,15 @@ export function installSaver(api) {
     const r = S.rng, pat = PATTERNS[S.order[S.i % S.order.length]]; S.i++;
     const P = {};
     for (const k in pat.params) { const [a, b, st, d, lab] = pat.params[k]; P[k] = (st >= 1 && b - a === 1) || /\bink$/i.test(lab) ? d : d + (b - a) * 0.22 * (r.next() * 2 - 1); }
-    const pal = S.pals[S.i % S.pals.length], mods = [];
+    // A dark palette that keeps each ink the shot uses at contrast 3.
+    const PC = clampParams(pat, P), n = usedInks(pat, PC), fit = S.pals.filter(q => q.ink.length >= Math.min(n, 2) && paletteScore(q, n) >= 3), pal = (fit.length ? fit : S.pals)[S.i % (fit.length || S.pals.length)], mods = [];
     const roll = r.next();
     if (roll < 0.22) { const m = modDefaults('warp'); m.kind = r.pick(['lens', 'twirl', 'noise', 'wave']); m.amount = r.range(0.3, 0.7); m.size = r.range(0.4, 0.7); m.cx = r.range(0.35, 0.65); m.cy = r.range(0.4, 0.6); mods.push(m); }
     else if (roll < 0.34 && LINE_FAMS.includes(pat.family)) { const m = modDefaults('mirror'); m.kind = 'kaleido'; m.n = r.pick([6, 8, 10]); mods.push(m); }
     else if (roll < 0.44) { const m = modDefaults('clip'); m.shape = r.pick(['rounded', 'arch', 'hex']); m.margin = 0.05; mods.push(m); }
     const rc = bandRect(), aspect = Math.max(0.7, Math.min(2.4, rc.w / rc.h));
     const { W, H } = boardSize(aspect);
-    return { pat, P: clampParams(pat, P), pal, mods, seed: r.int(1, 999999), W, H, lw: r.range(1.6, 2.8), mode: 'auto' };
+    return { pat, P: PC, pal, mods, seed: r.int(1, 999999), W, H, lw: r.range(1.6, 2.8), mode: 'auto' };
   }
   function nextShot() {
     const shot = S.next || makeJob(pickShot());

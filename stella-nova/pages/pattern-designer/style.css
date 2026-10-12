@@ -10,7 +10,8 @@
      grep -n 'BOARD'      the artboard, the caption, the tool buttons
      grep -n 'EXPLORER'   the pattern book over the desk
      grep -n 'PANEL'      the control column
-     grep -n 'CONTROLS'   sliders, segments, chips, palettes, modifiers
+     grep -n 'CONTROLS'   sliders, segments, chips, palette filter and tools,
+                          modifiers
      grep -n 'TOUCH'      target and text sizes for any touch screen
      grep -n 'PHONE'      dock and bottom sheet
      grep -n 'LANDSCAPE'  the phone drawer at the right edge
@@ -64,6 +65,8 @@ html.in-frame #gear{top:14px}
 .ex-title{font-family:var(--sci-serif);font-size:1.3rem;color:#f1eee6;white-space:nowrap}
 .ex-title span{font-family:var(--sci-sans);font-size:0.8rem;color:var(--dim);margin-left:6px}
 #exSearch{flex:1;min-width:0;max-width:360px;margin-left:auto;padding:8px 12px;border-radius:9px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);font-size:0.85rem}
+#exSurprise{padding:8px 12px;border:1px solid var(--acc);background:rgba(227,196,138,0.07);color:var(--acc);border-radius:9px;font-size:0.8rem;white-space:nowrap;flex:0 0 auto}
+#exSurprise:hover{background:rgba(227,196,138,0.16)}
 #exClose{width:36px;height:36px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:8px;flex:0 0 auto}
 #exClose:hover{color:var(--acc);border-color:var(--acc)}
 #exFam{margin-bottom:14px}
@@ -127,6 +130,14 @@ html.in-frame #panel{padding-top:20px}
 .chips.add button::before{content:'+ ';color:var(--acc)}
 
 .pals{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.palbar{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+#palSearch{flex:1;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);font-size:0.8rem}
+#palCount{font:0.72rem var(--sci-mono);color:var(--dim);white-space:nowrap}
+.chips.small{margin:0 0 10px;gap:5px}
+.chips.small button{padding:4px 9px;font-size:0.72rem}
+.chips button .ct{font:0.66rem var(--sci-mono);color:var(--dim);margin-left:1px}
+.chips button.on .ct{color:var(--acc)}
+.pal-empty{grid-column:1 / -1;color:var(--dim);font-size:0.78rem;padding:8px 0}
 .pal-group{grid-column:1 / -1;font-size:0.72rem;color:var(--dim);margin:8px 0 -2px}
 .pal-group:first-child{margin-top:0}
 .pal{display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--dim);font-size:0.68rem;text-align:left;transition:border-color 0.2s}
@@ -209,6 +220,10 @@ html.in-frame #panel{padding-top:20px}
   #explorer header{flex-wrap:wrap}
   #exSearch{order:3;flex:1 1 100%;max-width:none;min-height:44px;font-size:16px}
   #exClose{margin-left:auto;width:44px;height:44px}
+  #exSurprise{min-height:44px}
+  #palSearch{min-height:44px;font-size:16px}
+  #palGroups{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  #palGroups button{flex:0 0 auto}
   #exFam{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
   #exFam button{flex:0 0 auto}
   #exGrid{grid-template-columns:repeat(2,1fr);gap:12px}

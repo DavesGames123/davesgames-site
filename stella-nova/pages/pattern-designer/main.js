@@ -19,7 +19,8 @@
 //    palettes ............. "function buildPalettes"
 //    palette tools ........ "function harmonyNow"  "function shuffleNow"  "function invertNow"
 //    modifiers ............ "function buildMods"
-//    randomise ............ "function randomiseAll"
+//    randomise ............ "function randomiseAll"  "function surpriseMe" (taste.js)
+//    palette filter ....... "function filterPalettes"
 //    explorer ............. "function openExplorer"
 //    exports .............. "function exportSVG"  "function exportPNG"
 //    panel and sheet ...... "function setOpen"
@@ -32,6 +33,7 @@ import { PALETTES, PALETTE_GROUPS, paletteById, BOARDS, boardById, boardDims } f
 import { MOD_KINDS, modDefaults, buildTextShape } from './modifiers.js';
 import { applyMode, toSVG, drawItems } from './export.js';
 import { installSaver } from './saver.js';
+import { tasteParams, tasteMods, surprise } from './taste.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -216,6 +218,29 @@ const newSeed = () => 1 + Math.floor(Math.random() * 999998);
 function setSeed(s) { st.seed = Math.max(1, Math.min(999999, Math.round(s) || 1)); $('seed').value = st.seed; regen(); }
 
 // ── palettes ───────────────────────────────────────────────────────────────
+// The chooser filter: a group chip and a search over names and groups.
+let palGroup = 'all', palQ = '';
+const groupName = id => (PALETTE_GROUPS.find(g => g.id === id) || { name: id }).name;
+function buildPalGroups() {
+  const box = $('palGroups'); box.textContent = '';
+  for (const g of [{ id: 'all', name: 'All' }].concat(PALETTE_GROUPS)) {
+    const b = document.createElement('button'), n = g.id === 'all' ? PALETTES.length : PALETTES.filter(p => p.group === g.id).length;
+    b.dataset.g = g.id; b.textContent = g.name + ' '; const c = document.createElement('span'); c.className = 'ct'; c.textContent = n; b.append(c);
+    b.classList.toggle('on', g.id === palGroup);
+    b.addEventListener('click', () => { palGroup = g.id; box.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); filterPalettes(); });
+    box.append(b);
+  }
+}
+const palHit = p => (palGroup === 'all' || p.group === palGroup) && (!palQ || (p.name + ' ' + groupName(p.group)).toLowerCase().includes(palQ));
+// The palettes that pass the filter (all of them when none pass).
+function palList() { const l = PALETTES.filter(palHit); return l.length ? l : PALETTES; }
+function filterPalettes() {
+  let n = 0;
+  document.querySelectorAll('#palettes .pal').forEach(b => { const hit = palHit(paletteById(b.dataset.id)); b.hidden = !hit; if (hit) n++; });
+  document.querySelectorAll('#palettes .pal-group').forEach(h => { h.hidden = !PALETTES.some(p => p.group === h.dataset.g && palHit(p)); });
+  $('palCount').textContent = `${n} of ${PALETTES.length}`;
+  $('palEmpty').hidden = n > 0;
+}
 function buildPalettes() {
   const box = $('palettes'); box.textContent = '';
   let grp = null;
@@ -233,6 +258,8 @@ function buildPalettes() {
     b.addEventListener('click', () => { st.pal = p.id; st.custom = null; st.locks = []; palLabels(); paint(); thumbsRepaint(); save(); });
     box.append(b);
   }
+  const e = document.createElement('div'); e.className = 'pal-empty'; e.id = 'palEmpty'; e.textContent = 'No palette matches.'; e.hidden = true; box.append(e);
+  buildPalGroups(); filterPalettes();
   palLabels();
 }
 // The colour inputs edit a copy of the palette (st.custom).
@@ -284,9 +311,10 @@ function bindPalTools() {
   $('inkShuffle').addEventListener('click', shuffleNow);
   $('palInvert').addEventListener('click', invertNow);
 }
+// Step through the palettes that pass the chooser filter.
 function stepPalette(d = 1) {
-  const i = PALETTES.findIndex(p => p.id === st.pal);
-  st.pal = PALETTES[(i + d + PALETTES.length) % PALETTES.length].id; st.custom = null; st.locks = [];
+  const L = palList(), i = L.findIndex(p => p.id === st.pal);
+  st.pal = L[(i + d + L.length) % L.length].id; st.custom = null; st.locks = [];
   palLabels(); paint(); thumbsRepaint(); save(); toast(pal().name);
 }
 
@@ -365,43 +393,8 @@ function buildModAdd() {
 }
 
 // ── randomise ──────────────────────────────────────────────────────────────
-// A tasteful pick: params near their defaults (within 35% of the range),
-// palettes from the list, and at most two mild modifiers.
-function tasteParams(p, rng) {
-  const P = {};
-  for (const k in p.params) {
-    const [a, b, step, d, label] = p.params[k];
-    // A slot param ("Warp ink") keeps its default, so two parts do not
-    // fall on the same ink.
-    if (/\bink$/i.test(label)) { P[k] = d; continue; }
-    if (step >= 1 && b - a === 1) { P[k] = rng.chance(0.75) ? d : 1 - d; continue; }
-    P[k] = Math.max(a, Math.min(b, d + (b - a) * 0.35 * (rng.next() * 2 - 1)));
-  }
-  return clampParams(p, P);
-}
-// Mirror and dash read well on line patterns; on solid tiles a mirror
-// cuts blocks at the wedge edge, so those families do not get it.
-const LINE_FAMS = ['flow', 'radial', 'physics', 'distort'];
-function tasteMods(rng, p) {
-  const out = [], n = rng.weighted([0.6, 0.3, 0.1]);
-  const pool = LINE_FAMS.includes(p.family) ? ['warp', 'warp', 'clip', 'mask', 'mirror', 'dash', 'jitter'] : ['warp', 'warp', 'clip', 'clip', 'mask', 'jitter'];
-  for (let i = 0; i < n; i++) {
-    const t = rng.pick(pool); if (out.some(m => m.type === t)) continue;
-    // A mask keeps solids by their centre, so large bands (flow, organic)
-    // can drop whole; and a mask then dots leaves too little.
-    if (t === 'mask' && (['flow', 'organic'].includes(p.family) || out.some(m => m.type === 'dash'))) continue;
-    if (t === 'dash' && out.some(m => m.type === 'mask')) continue;
-    const m = modDefaults(t);
-    if (t === 'warp') { m.kind = rng.pick(['lens', 'twirl', 'wave', 'noise']); m.amount = rng.range(0.25, 0.8) * (m.kind === 'lens' && rng.chance(0.3) ? -0.6 : 1); m.size = rng.range(0.35, 0.7); m.cx = rng.range(0.35, 0.65); m.cy = rng.range(0.35, 0.65); }
-    if (t === 'clip') { m.shape = rng.pick(['rounded', 'circle', 'arch', 'arch', 'hex']); m.margin = rng.range(0.05, 0.12); }
-    if (t === 'mask') { m.shape = rng.pick(['circle', 'arch', 'diamond']); m.margin = rng.range(0.08, 0.16); m.outline = rng.chance(0.5) ? 1 : 0; }
-    if (t === 'mirror') { m.kind = rng.pick(['x', 'kaleido', 'kaleido']); m.n = rng.pick([4, 6, 8, 10]); }
-    if (t === 'dash') { m.kind = rng.pick(['dash', 'dots']); m.dash = rng.range(8, 30); m.gap = rng.range(5, 16); }
-    if (t === 'jitter') { m.amount = rng.range(0.1, 0.35); m.turn = rng.chance(0.4) ? rng.range(0.1, 0.4) : 0; }
-    out.push(m);
-  }
-  return out;
-}
+// A tasteful pick (taste.js): params near their defaults, palettes from
+// the list, and at most two mild modifiers.
 function randomiseAll() {
   if (!st.lock) st.seed = newSeed();
   const rng = makeRng(newSeed(), 'taste'), p = rng.pick(PATTERNS);
@@ -412,6 +405,17 @@ function randomiseAll() {
   st.lw = +(rng.range(1.2, 3.2)).toFixed(2);
   st.mods = tasteMods(rng, p);
   syncAll(); regen();
+}
+// Surprise me: a pattern, palette and modifiers with every used ink at a
+// WCAG contrast of 3 or more on the paper (taste.js surprise).
+function surpriseMe() {
+  if (!st.lock) st.seed = newSeed();
+  const pick = surprise(makeRng(newSeed(), 'surprise'), PATTERNS, PALETTES);
+  if (st.P && st.pat) memo[st.pat] = st.P;
+  st.pat = pick.pat.id; st.P = pick.P; st.pal = pick.pal.id; st.custom = null; st.locks = [];
+  st.mode = pick.mode; st.lw = pick.lw; st.mods = pick.mods;
+  if (!$('explorer').hidden) closeExplorer();
+  syncAll(); regen(); toast(`${pick.pat.name} on ${pick.pal.name}`);
 }
 function shakeParams() { const p = pat(); st.P = tasteParams(p, makeRng(newSeed(), 'shake')); buildParams(); regen(); }
 
@@ -424,7 +428,8 @@ let exFam = 'all', exQ = '', thumbQueue = [], thumbBusy = false, io = null;
 function buildExplorer() {
   const fam = $('exFam'); fam.textContent = '';
   for (const f of [{ id: 'all', name: 'All' }].concat(FAMILIES)) {
-    const b = document.createElement('button'); b.textContent = f.name; b.dataset.f = f.id; b.title = f.text || '';
+    const b = document.createElement('button'), ct = document.createElement('span'); b.textContent = f.name + ' '; b.dataset.f = f.id; b.title = f.text || '';
+    ct.className = 'ct'; ct.textContent = f.id === 'all' ? PATTERNS.length : PATTERNS.filter(p => p.family === f.id).length; b.append(ct);
     b.classList.toggle('on', f.id === exFam);
     b.addEventListener('click', () => { exFam = f.id; fam.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); filterExplorer(); });
     fam.append(b);
@@ -603,6 +608,9 @@ function bindUI() {
   $('pngBtn').addEventListener('click', exportPNG);
   $('exploreBtn').addEventListener('click', openExplorer);
   $('randBtn').addEventListener('click', randomiseAll);
+  $('surpriseBtn').addEventListener('click', surpriseMe);
+  $('exSurprise').addEventListener('click', surpriseMe);
+  $('palSearch').addEventListener('input', () => { palQ = $('palSearch').value.trim().toLowerCase(); filterPalettes(); });
   $('exClose').addEventListener('click', closeExplorer);
   $('exSearch').addEventListener('input', () => { exQ = $('exSearch').value; filterExplorer(); });
   $('dockBook').addEventListener('click', () => $('explorer').hidden ? openExplorer() : closeExplorer());
@@ -620,6 +628,7 @@ function bindUI() {
     else if (e.key === 'ArrowRight') stepPattern(1);
     else if (e.key === 'ArrowLeft') stepPattern(-1);
     else if (e.key === 'p' || e.key === 'P') stepPalette(1);
+    else if (e.key === 'u' || e.key === 'U') surpriseMe();
   });
 }
 
@@ -639,6 +648,6 @@ installSaver({
   exit() { saverOn = false; layout(); regen(); },
 });
 window.__pd = {
-  st, PATTERNS, get cur() { return cur; }, pal, harmonyNow, shuffleNow, invertNow, setPattern, exportSVG, exportPNG, pngSize, syncAll, randomiseAll, openExplorer, closeExplorer, svgText, regen, layout, setOpen,
+  st, PATTERNS, get cur() { return cur; }, pal, harmonyNow, shuffleNow, invertNow, surpriseMe, filterPalettes, setPattern, exportSVG, exportPNG, pngSize, syncAll, randomiseAll, openExplorer, closeExplorer, svgText, regen, layout, setOpen,
   get ready() { return !!cur && !busy && !pending; },
 };
