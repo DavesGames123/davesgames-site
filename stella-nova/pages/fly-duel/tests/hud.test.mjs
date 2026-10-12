@@ -76,6 +76,11 @@ for (let i = 0; i < 30 && !rules.isOver(s); i++) {
   ok(dual.mana[0].inks.length === 2 && dual.tone === 'low', 'a dual stack has two inks; life 3 is low');
   const over = scorecardModel({ state: { ...g, result: { winner: 0, reason: 'life' } }, seat: 0, CARD });
   ok(over.status === 'Won' && !over.acting, 'winner says Won');
+  // the auto-tap preview: the untapped amber land that a card taps
+  const up = g.players[0].battlefield.find(x => x.id === 'amber-ridge' && !x.tapped).uid;
+  const pv = scorecardModel({ state: g, seat: 0, CARD, kind: 'human', paying: [up] });
+  const pa = pv.mana.find(r => r.kind === 'amber');
+  ok(pa && pa.pay === 1 && pa.label === '0/2' && pv.mana.find(r => r.kind === 'moss').pay === 0, 'paying: the amber stack shows 1 to pay, 0/2 left');
 }
 
 // --------------------------------------------------------------- 3 the d20
@@ -169,6 +174,11 @@ function stubEl(tag = 'div') {
   ok(/library/.test(sc.el.querySelector('.hd-counts').innerHTML), 'counts are written');
   ok(/class="chosen"/.test(sc.el.querySelector('.hd-top').innerHTML), 'the chosen top move is marked');
   ok(/V [+−]\d/.test(sc.el.querySelector('.hd-vd').textContent), 'the value and delta line is written');
+  const upA = s.players[1].battlefield.find(x => CARD[x.id]?.type === 'land' && !x.tapped);
+  if (upA) {
+    sc.update(scorecardModel({ state: s, seat: 1, CARD, kind: 'human', paying: [upA.uid] }));
+    ok(/class="up pay"/.test(sc.el.querySelector('.hd-mana').innerHTML), 'a land to pay is drawn as a .pay pip');
+  }
   sc.el.querySelector('.hd-life').listeners.click?.();
   ok(tapped === 1, 'a tap on the life die names the seat (player target)');
   // createBrainCard is used when the module gives it

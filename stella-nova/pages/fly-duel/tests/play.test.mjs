@@ -466,7 +466,7 @@ let fly = null;
       ev(q('[data-keep]'), 'click');
       const pc = P.controller, hs = pc.humanSeat;
       const bot = greedyBot();
-      let bad = '', guard = 0, playerTargets = 0;
+      let bad = '', guard = 0, playerTargets = 0, previews = 0, noPreview = 0;
       while (pc.need() !== 'over' && guard++ < 6000 && !bad) {
         await wait(1);
         if (pc.need() !== 'human' || P.busy) continue;
@@ -477,7 +477,10 @@ let fly = null;
         const handEls = [...root.querySelectorAll('.pl-hc')].filter(e => !e.hidden);
         if (a.type === 'land' || a.type === 'cast') {
           const i = s.players[hs].hand.indexOf(a.card);
-          tap(handEls[i]); tap(handEls[i]);
+          tap(handEls[i]);
+          // the auto-tap preview shows on your scorecard before you cast
+          if (a.type === 'cast') { previews++; if (!/class="up pay"/.test(q(`.pl-sc${hs} .hd-mana`).innerHTML)) noPreview++; }
+          tap(handEls[i]);
           if (a.target !== undefined) {
             if (typeof a.target === 'string') { playerTargets++; tapTable({ uid: null, player: +a.target.slice(1) }); } else tapTable({ uid: a.target });
           }
@@ -492,6 +495,7 @@ let fly = null;
       ok(!bad, `3D table game: every human action went through table taps${bad ? ': ' + bad : ''}`);
       ok(playerTargets > 0, `3D table game: a tap on a fly or its life die targets that player (${playerTargets} times)`);
       ok(!!pc.result, `3D table game ends (${JSON.stringify(pc.result)})`);
+      ok(previews > 0 && noPreview === 0, `3D table game: your scorecard marks the lands to pay for each selected cast (${previews - noPreview} of ${previews})`);
       P.destroy();
     }
     console.warn = ow; console.error = oe;

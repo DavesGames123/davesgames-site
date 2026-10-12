@@ -591,6 +591,7 @@ export function mountPlay(root, opts) {
         state: s, seat, CARD, kind, name: pc.names[seat], letter: seat ? 'B' : 'A',
         source: isFly ? (opts.sources?.[curOpp] || '') : '', deckName: deckName(pc.decks[seat]),
         top: isFly ? flyTop : [], thinking: thinking === seat || (seat === hs && v.mine), colours: colourTable,
+        paying: seat === hs ? v.preview : null,
       });
       scs[seat]?.update(m);
       scs[seat]?.setTarget(v.targetPlayers.includes(seat));

@@ -20,7 +20,8 @@
 //  Life is a d20 (an icosahedron face-on, our own drawing) with the number
 //  in it: the same die the 3D table shows. Mana: one stack per colour (a
 //  dual land is a split stack), one pip per land, solid = untapped, hollow
-//  = tapped. Seat is never told by colour only: the letter A or B is on
+//  = tapped. In play mode a white pip is a land that the selected card
+//  taps (the auto-tap preview of ui/play/model.js paidLands). Seat is never told by colour only: the letter A or B is on
 //  every card.
 //
 //  The neural panel is createBrainCard() of ui/fly3d/brain3d.js when that
@@ -50,8 +51,11 @@ export function manaColour(kind, colours = null) {
 }
 
 // Lands by mana kind, untapped and total. Same rule as ui/play/model.js
-// manaByColour (a dual land is its own stack 'a/b').
-function manaRows(CARD, player) {
+// manaByColour (a dual land is its own stack 'a/b'). paying: the uids of
+// the lands that the selected card taps (the auto-tap preview); pay is
+// their count per stack.
+function manaRows(CARD, player, paying = null) {
+  const pay = new Set(paying || []);
   const rows = new Map();
   for (const x of player.battlefield) {
     const c = CARD[x.id];
@@ -59,9 +63,9 @@ function manaRows(CARD, player) {
     const colours = Array.isArray(c.mana) && c.mana.length ? c.mana : [c.produces || c.colour || 'generic'];
     const kind = colours.join('/');
     let r = rows.get(kind);
-    if (!r) { r = { kind, colours: colours.slice(), up: 0, total: 0 }; rows.set(kind, r); }
+    if (!r) { r = { kind, colours: colours.slice(), up: 0, total: 0, pay: 0 }; rows.set(kind, r); }
     r.total++;
-    if (!x.tapped) r.up++;
+    if (!x.tapped) { r.up++; if (pay.has(x.uid)) r.pay++; }
   }
   return [...rows.values()];
 }
@@ -73,6 +77,7 @@ function manaRows(CARD, player) {
 //   top       top-3 rows from ui/play/controller.js top3()
 //   thinking  true while this seat decides
 //   colours   COLOURS of game/cards.js (optional)
+//   paying    land uids the selected card taps (play mode preview)
 export function scorecardModel(o) {
   const { state, seat, CARD } = o;
   const p = state.players[seat];
@@ -97,7 +102,7 @@ export function scorecardModel(o) {
       { key: 'graveyard', label: 'graveyard', short: 'G', n: p.graveyard.length, text: fmtCount(p.graveyard.length) },
       { key: 'creatures', label: 'creatures', short: 'C', n: creatures, text: fmtCount(creatures) },
     ],
-    mana: manaRows(CARD, p).map(r => ({ ...r, label: `${r.up}/${r.total}`, inks: r.colours.map(k => manaColour(k, o.colours)) })),
+    mana: manaRows(CARD, p, o.paying).map(r => ({ ...r, label: r.pay ? `${r.up - r.pay}/${r.total}` : `${r.up}/${r.total}`, inks: r.colours.map(k => manaColour(k, o.colours)) })),
     active: state.active === seat, acting: !res && state.toAct === seat,
     thinking: !!o.thinking, status,
     top: top.map((t, i) => ({ rank: i + 1, text: t.text, value: t.value, valueText: fmtValue(t.value),
@@ -195,8 +200,13 @@ export function createScorecard(host, opts = {}) {
     q('.hd-mana').innerHTML = m.mana.length ? m.mana.map(r => {
       const bg = r.inks.length > 1 ? `linear-gradient(90deg,${r.inks[0]} 50%,${r.inks[1]} 50%)` : r.inks[0];
       let pips = '';
-      for (let i = 0; i < r.total; i++) pips += `<i class="${i < r.up ? 'up' : 'dn'}" style="--c:${r.inks[0]};${i < r.up ? `background:${bg}` : ''}"></i>`;
-      return `<span class="hd-stack" title="${esc(r.kind)}: ${r.label} untapped"><span class="hd-pips">${pips}</span><em>${r.label}</em></span>`;
+      // untapped pips first; the top r.pay of them are the lands the
+      // selected card taps (marked .pay); then the tapped pips
+      for (let i = 0; i < r.total; i++) {
+        const cls = i < r.up ? (i >= r.up - (r.pay || 0) ? 'up pay' : 'up') : 'dn';
+        pips += `<i class="${cls}" style="--c:${r.inks[0]};${i < r.up ? `background:${bg}` : ''}"></i>`;
+      }
+      return `<span class="hd-stack${r.pay ? ' is-pay' : ''}" title="${esc(r.kind)}: ${r.label} untapped${r.pay ? `, ${r.pay} to pay` : ''}"><span class="hd-pips">${pips}</span><em>${r.label}</em></span>`;
     }).join('') : '<span class="hd-none">no lands yet</span>';
     q('.hd-counts').innerHTML = m.counts.map(c => `<span class="hd-c hd-c-${c.key}"><em><span class="l">${c.label}</span><span class="s" title="${c.label}">${c.short}</span></em><b>${c.text}</b></span>`).join('');
     brainBox.hidden = m.kind !== 'fly';

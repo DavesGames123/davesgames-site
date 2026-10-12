@@ -8,6 +8,7 @@
    GREP MAP
      .hd-card        the card box           .hd-head    letter, name, life
      .hd-mana        stacks of pips         .hd-counts  hand/library/grave
+     .pay            pips the selected card taps (play mode preview)
      .hd-brain       neural panel           .hd-top     top-3 move values
      .is-acting      this seat decides      .is-target  a legal target now
    ========================================================================== */
@@ -44,6 +45,9 @@
 .hd-pips { display: inline-flex; flex-direction: column-reverse; gap: 2px; }
 .hd-pips i { display: block; width: 14px; height: 4px; border: 1px solid var(--c); box-sizing: border-box; }
 .hd-pips i.dn { background: transparent; opacity: 0.55; }
+/* auto-tap preview: the lands the selected card taps are white pips */
+.hd-pips i.pay { background: #eef0f5 !important; border-color: #eef0f5; }
+.hd-stack.is-pay em { color: #eef0f5; }
 .hd-stack em { font: 600 11px var(--sci-mono, ui-monospace, Menlo, monospace); font-style: normal; font-variant-numeric: tabular-nums; color: #c2c7d4; }
 .hd-none { color: #8a91a5; font-size: 11px; }
 
