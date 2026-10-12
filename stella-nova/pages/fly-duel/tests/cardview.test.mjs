@@ -272,6 +272,10 @@ globalThis.innerWidth = 390; globalThis.innerHeight = 844;
   ok(!/clip-path/.test(css), 'card.css: no clip-path (the house-shaped DOM frame is gone)');
   ok(!/\.fx-title|\.fx-cost|\.fx-landglyph|--grain/.test(css), 'card.css: no rules for the old DOM frame');
   ok(/aspect-ratio:\s*5\s*\/\s*7/.test(css), 'card.css: the card box is 5:7');
+  // style.css sets .fcard{width:168px}; the deck fan has three columns
+  // narrower than that, so its cards must override the width or they
+  // spill over the next deck panel (user screenshot, 2026-10-12).
+  ok(/\.cv-fan\s*>\s*\.fcard\.cv\s*\{[^}]*width:\s*auto/.test(css), 'card.css: deck-fan cards take their grid column width');
   ok(/\[hidden\]\{display:none!important\}/.test(css.replace(/\s+/g, '')), 'card.css: the inspector and preview obey [hidden]');
   ok(!/filter:\s*(saturate|blur|drop-shadow)|text-shadow|backdrop-filter/.test(css), 'card.css: no blur, glow or text shadow');
   for (const f of ['ui/board.js', 'ui/cardview.js']) ok(!/clip-path/.test(readFileSync(join(ROOT, f), 'utf8')), `${f}: no clip-path`);

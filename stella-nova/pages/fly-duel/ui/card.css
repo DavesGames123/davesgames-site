@@ -101,6 +101,10 @@ html.cv-locked{overflow:hidden}
 .decklist.cv-deck h4{margin:0}
 .decklist.cv-deck .cv-desc{grid-column:1/-1; font-size:0.8rem; color:var(--ink2,#c2c7d4); line-height:1.4}
 .decklist.cv-deck .cv-fan{grid-column:1/-1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:4px}
+/* style.css gives every .fcard a fixed 168 px width; in the three-card fan
+   each card must take the width of its grid column, or it spills over
+   the next deck panel. */
+.decklist.cv-deck .cv-fan > .fcard.cv{width:auto; max-width:100%}
 .decklist.cv-deck .cv-open{font:600 0.72rem/1 var(--sans,system-ui); color:var(--bronze,#c9a45a); text-transform:uppercase; letter-spacing:0.06em}
 .decklist.cv-deck[open] .cv-open::after{content:' –'}
 .decklist.cv-deck:not([open]) .cv-open::after{content:' +'}
