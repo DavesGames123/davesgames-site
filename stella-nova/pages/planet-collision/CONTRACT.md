@@ -15,7 +15,8 @@ All modules are static ES modules with no DOM. Only `engine.js` needs WebGPU.
 | `engine.js` | `SphGPU`, the WebGPU solver. `shaders/sph.wgsl` is its code. |
 | `scenarios.js` | `PRESETS` (12), `randomScenario(seed)`, `presetByKey`. |
 | `budget.js` | `PROFILES`, `pickProfile`, `stepMs`, `stepsPerFrame`, `gpuBytes`. |
-| `tests.mjs` | `node tests.mjs` runs the CPU tests, then the GPU tests in Deno. |
+| `render.js` | `Renderer`: the fluid surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
+| `tests.mjs` | `node tests.mjs` runs the CPU tests, then the GPU and render tests in Deno. |
 
 ## Units
 
@@ -181,6 +182,54 @@ direct-sum gravity is O(N^2) and limits N; a tree or a particle-mesh
 gravity would allow more. Phones: 8k-12k particles. The page should
 measure its frame time and use `stepsPerFrame(msPerStep)`.
 
+## Render (render.js, step 2)
+
+```js
+import { Renderer, loadRenderCode, loadMaps, defaultFrame, classify } from './render.js';
+const ren = new Renderer(device, ctx, format, await loadRenderCode());
+loadMaps().then(b => ren.setMaps(b));   // tex/*.jpg; grey until then
+ren.attach(sim, setup);                 // after every sim.upload
+ren.resize(w, h);                       // drawing-buffer px
+const f = defaultFrame();               // every field, with defaults
+f.eye = [...]; f.target = [...]; f.time = seconds;
+ren.render(f);                          // one submit
+```
+
+Frame fields (`defaultFrame`): `eye target up fov near time`, `sun sunI`,
+`mode` (0 real, 1 temperature, 2 origin body, 3 speed, 4 material),
+`cut {on, n, d}` (dot(n, x) > d is cut away; the cut face is flat),
+`streakT` (code time of one frame: motion streaks; 0 = off), `frags`
+(fragments drawn per debris particle, 1-4; phones 1-2), `smooth` (filter
+iterations), `debrisQ`, `vapK`, `vapGlow`, `xvLo`, `xvHi`, `glowGain`,
+`ambient`, `bodies[b] {atm, shadow}` (0..1: fade the drawn atmosphere and
+the sphere shadow of body b; set both to 0 after the bodies merge),
+`flashes [{p, r, I, T}]` (up to 4 impact flashes), `exposure bloom
+bloomThreshold vignette`.
+
+Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`):
+
+| Class | Test | Drawn as |
+|---|---|---|
+| vapour | `xv > xvHi` (0.5) | translucent layer, opacity 1 - exp(-vapK chord), crisp edge |
+| debris | `h > min(debrisQ h0, 0.97 hmax)`, `h0 = eta_H (m / rho0)^(1/3)` | flat-faced fragments, `frags` per particle, and streaks |
+| fluid | all others | the screen-space surface |
+
+A free particle has a low summed density, so its smoothing length grows to
+`hmax`: that is the debris test. Debris fragments past the first are drawn,
+not simulated (label this on the page).
+
+What the surface shows (mode 0): the body's surface map at each particle's
+start position (the map moves with the material), rock, iron and ice
+inside, darkening from 0.7 T_melt, then the glow of a black body at the
+particle temperature (T^4 from the Draper point, about 800 K, capped).
+Bloom: only light over `bloomThreshold` (2.0), strength 0.035.
+
+GPU cost (Apple M4 Pro, Deno, `deno run -A tests.mjs --gpu --time`, the
+camera 4 radii from the impact): 5.8 ms per frame at 32k particles and
+1600 x 900; 8.3 ms at 12k and 780 x 1688 (a phone screen at pixel ratio
+2). The fill rate is the cost: cap the drawing buffer near 2 M px on
+desktop and 1 M px on phones.
+
 ## Checks
 
 ```
@@ -188,4 +237,5 @@ node stella-nova/pages/planet-collision/tests.mjs
 ~/.cargo/bin/naga stella-nova/pages/planet-collision/shaders/sph.wgsl
 ```
 
-The GPU tests run in Deno (`navigator.gpu`). Do not use headless Chrome.
+The GPU and render tests run in Deno (`navigator.gpu`, an offscreen
+texture). Do not use headless Chrome.

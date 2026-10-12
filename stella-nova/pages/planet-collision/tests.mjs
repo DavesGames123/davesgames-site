@@ -23,11 +23,19 @@
 //     energy kept through the impact
 //  7  presets and budget: every preset builds, sources given, contact in
 //     1-20 min of sim time; profile bytes under LIMIT; phones <= 12288
-//  8  WGSL text: no line mixes && with || (Tint precedence rule)
+//  8  WGSL text: no line of any shader mixes && with || (Tint precedence
+//     rule); naga validates each module (render shaders after common.wgsl)
 //  G  GPU (Deno WebGPU): primed fields = CPU (rho, P, c, Balsara, a, du, g,
 //     phi, T, hNext, nOther); 20 steps = CPU; energy over 300 steps; the
 //     relax and launch; stats counters; no validation errors. --time: the
 //     ms per step at 16k, 32k, 49k
+//  R  the renderer (Deno WebGPU, an offscreen texture, no browser and no
+//     image file): every shader compiles clean; before contact the target
+//     fills its disc and the sky round it is dark, with no glow; the
+//     bilateral filter makes the depth smooth and keeps the silhouette; a
+//     grazing hit makes debris (fn classify) and glowing pixels; the colour
+//     modes and the cutaway change the image; no validation errors.
+//     --time also prints ms per frame
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 // ============================================================================
@@ -171,9 +179,28 @@ async function presetTests() {
   const ph = BG.pickProfile({ phone: true });
   ok('7 profile bytes under LIMIT; a phone gets <= 12288', over.length === 0 && ph.N <= 12288, `phone ${ph.N} (${(BG.gpuBytes(ph.N) / 1e6).toFixed(1)} MB), desktop ${BG.pickProfile({}).N}${over.length ? ', over: ' + over.join(' ') : ''}`);
   const fs = await import('node:fs');
-  const w = fs.readFileSync(new URL('./shaders/sph.wgsl', import.meta.url), 'utf8').split('\n');
-  const mix = w.map((l, i) => [l, i + 1]).filter(([l]) => !l.trim().startsWith('//') && l.includes('&&') && l.includes('||'));
-  ok('8 WGSL: no line mixes && with ||', mix.length === 0, mix.map(m => 'line ' + m[1]).join(', ') || 'none');
+  const files = fs.readdirSync(new URL('./shaders/', import.meta.url)).filter(f => f.endsWith('.wgsl')).sort();
+  const mix = [];
+  for (const f of files) {
+    const w = fs.readFileSync(new URL('./shaders/' + f, import.meta.url), 'utf8').split('\n');
+    w.forEach((l, i) => { if (!l.trim().startsWith('//') && l.includes('&&') && l.includes('||')) mix.push(f + ':' + (i + 1)); });
+  }
+  ok('8 WGSL: no line mixes && with ||', mix.length === 0, mix.join(', ') || `none in ${files.length} files`);
+  // naga on each module as the GPU sees it (render shaders after common.wgsl)
+  const naga = (await import('node:os')).homedir() + '/.cargo/bin/naga';
+  if (fs.existsSync(naga)) {
+    const { spawnSync } = await import('node:child_process');
+    const tmp = fs.mkdtempSync((await import('node:os')).tmpdir() + '/pc-naga-'), bad = [];
+    const src = f => fs.readFileSync(new URL('./shaders/' + f, import.meta.url), 'utf8');
+    for (const f of files.filter(f => f !== 'common.wgsl')) {
+      const code = ['fluid.wgsl', 'smooth.wgsl', 'shade.wgsl', 'debris.wgsl'].includes(f) ? src('common.wgsl') + '\n' + src(f) : src(f);
+      fs.writeFileSync(tmp + '/' + f, code);
+      const r = spawnSync(naga, [tmp + '/' + f], { encoding: 'utf8' });
+      if (r.status !== 0) bad.push(f + ': ' + (r.stderr || r.stdout).trim().split('\n').slice(0, 3).join(' '));
+    }
+    fs.rmSync(tmp, { recursive: true, force: true });
+    ok('8 naga validates every shader module', bad.length === 0, bad.join(' | ') || files.filter(f => f !== 'common.wgsl').join(', '));
+  } else console.log('SKIP  8 naga: ~/.cargo/bin/naga is not installed');
 }
 
 // G ─ GPU against CPU (Deno WebGPU)
@@ -240,10 +267,94 @@ async function gpuTests() {
   device.destroy();
 }
 
+// R ─ the renderer (Deno WebGPU, offscreen)
+async function renderTests() {
+  if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  render tests: no navigator.gpu here'); return; }
+  const { SphGPU } = await import('./engine.js');
+  const { Renderer, loadRenderCode, defaultFrame, classify } = await import('./render.js');
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) { console.log('SKIP  render tests: no adapter'); return; }
+  const device = await adapter.requestDevice();
+  const errs = []; device.addEventListener?.('uncapturederror', e => errs.push(String(e.error?.message || e)));
+  const N = 8000, W = 320, H = 200;
+  const sim = await SphGPU.create(device, N, await Deno.readTextFile(new URL('./shaders/sph.wgsl', import.meta.url)));
+  const setup = buildScenario(PRESETS.find(p => p.key === 'moon-graze'), N, 3);
+  sim.upload(setup, makeParams(setup, { KG: 4 }));
+  for (let k = 0; k < 10; k++) sim.relaxSteps(20);
+  sim.launch();
+  const tex = device.createTexture({ size: [W, H], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const ren = new Renderer(device, { getCurrentTexture: () => tex }, 'rgba8unorm', await loadRenderCode(u => Deno.readTextFile(u)));
+  const msgs = (await ren.compilationMessages()).filter(m => / error /.test(m));
+  ok('R every render shader compiles with no error', msgs.length === 0, msgs.slice(0, 3).join(' | ') || 'common + fluid, smooth, shade, debris; centres; post');
+  ren.attach(sim, setup); ren.resize(W, H);
+  const readTex = async (t, bpp, w, h) => {
+    const bpr = Math.ceil(w * bpp / 256) * 256, buf = device.createBuffer({ size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = device.createCommandEncoder(); enc.copyTextureToBuffer({ texture: t }, { buffer: buf, bytesPerRow: bpr }, [w, h]); device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ); const a = buf.getMappedRange().slice(0); buf.unmap(); buf.destroy(); return { a, bpr };
+  };
+  const rgb = async () => { const { a, bpr } = await readTex(tex, 4, W, H), px = new Uint8Array(a); return (x, y) => { const o = y * bpr + 4 * x; return [px[o], px[o + 1], px[o + 2]]; }; };
+  const scan = at => { let glow = 0, lit = 0, s = [0, 0, 0]; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const c = at(x, y); if (c[0] > 150 && c[0] > c[1] + 30 && c[1] > c[2]) glow++; if (c[0] + c[1] + c[2] > 60) { lit++; s[0] += c[0]; s[1] += c[1]; s[2] += c[2]; } } return { glow, lit, mean: s.map(v => lit ? v / lit : 0) }; };
+  // before contact: look at the target from 4 radii, the impactor out of view
+  const f = defaultFrame(), X0 = setup.bodies[0].X, R0 = setup.bodies[0].R;
+  f.eye = [X0[0], X0[1] - 4 * R0, X0[2]]; f.target = X0; f.fov = 0.7;
+  ren.render(f); let at = await rgb();
+  const ctr = ren.project(X0, W, H), rpx = ren.focal * R0 / (4 * R0);
+  const cIn = at(Math.round(ctr.x), Math.round(ctr.y)), cOut = at(Math.min(W - 1, Math.round(ctr.x + 1.35 * rpx)), Math.round(ctr.y));
+  const pre = scan(at);
+  ok('R before contact: the target fills its disc, dark sky outside, no glow', cIn[0] + cIn[1] + cIn[2] > 90 && cOut[0] + cOut[1] + cOut[2] < 60 && pre.glow === 0,
+    `centre rgb ${cIn.join(',')}, 1.35 R out ${cOut.join(',')}, ${pre.glow} glowing px, disc ${rpx.toFixed(0)} px`);
+  // the bilateral filter: depth roughness down, silhouette unchanged
+  const zr = new Float32Array((await readTex(ren.rawZ, 8, W, H)).a), zs0 = await readTex(ren.smB, 4, W, H), zs = new Float32Array(zs0.a);
+  const bprR = Math.ceil(W * 8 / 256) * 256 / 8, bprS = zs0.bpr / 4;
+  let covR = 0, covS = 0, rough = [0, 0], cnt = 0;
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const r = k => zr[(y * bprR + x + k) * 2], s = k => zs[y * bprS + x + k];
+    if (r(0) > 0) covR++; if (s(0) > 0) covS++;
+    if (r(-1) > 0 && r(0) > 0 && r(1) > 0 && s(-1) > 0 && s(1) > 0) { rough[0] += Math.abs(r(-1) - 2 * r(0) + r(1)); rough[1] += Math.abs(s(-1) - 2 * s(0) + s(1)); cnt++; }
+  }
+  ok('R bilateral filter: depth roughness down, silhouette kept', rough[1] < 0.5 * rough[0] && covR === covS && cnt > 1000,
+    `mean |d2z| raw ${(rough[0] / cnt).toExponential(2)} smoothed ${(rough[1] / cnt).toExponential(2)}; covered px ${covR} raw, ${covS} smoothed`);
+  // run through the grazing hit; watch from the side
+  f.eye = [0.6, -7, 2.0]; f.target = [0, 0, 0]; f.streakT = 0.05;
+  let cls = null, st = null;
+  for (let k = 0; k < 12; k++) { for (let j = 0; j < 10; j++) sim.step(20); st = await sim.stats(); if (st.tSec > 1.4 * 3600) break; }
+  const rb = await sim.readback(['pos', 'vel', 'aux', 'tag']);
+  cls = classify(rb, sim.n, sim.prm.hmax, f);
+  ok('R a grazing hit makes debris fragments (fn classify)', cls.debris > 0.01 * sim.n && cls.fluid > 0.8 * sim.n,
+    `t ${(st.tSec / 3600).toFixed(2)} h: fluid ${cls.fluid}, debris ${cls.debris}, vapour ${cls.vapour}`);
+  ren.render(f); at = await rgb();
+  const post = scan(at);
+  ok('R after contact: hot melt glows (red > green > blue pixels)', post.glow > 20, `${post.glow} glowing px, ${post.lit} lit px`);
+  const means = [];
+  for (const m of [0, 1, 2, 3, 4]) { f.mode = m; ren.render(f); means.push(scan(await rgb()).mean); }
+  let minD = 1e9; for (let i = 0; i < means.length; i++) for (let j = i + 1; j < means.length; j++) minD = Math.min(minD, Math.hypot(...means[i].map((v, c) => v - means[j][c])));
+  ok('R the five colour modes give five different images', minD > 4, `smallest mean-colour distance ${minD.toFixed(1)}; means ${means.map(c => c.map(v => v.toFixed(0)).join('/')).join(' ')}`);
+  f.mode = 0; f.cut = { on: true, n: [0, -1, 0], d: 0 };
+  ren.render(f); const cut = scan(await rgb());
+  ok('R the cutaway changes the image', Math.hypot(...cut.mean.map((v, c) => v - means[0][c])) > 3 || Math.abs(cut.lit - post.lit) > 200,
+    `lit px ${post.lit} -> ${cut.lit}, mean ${means[0].map(v => v.toFixed(0)).join('/')} -> ${cut.mean.map(v => v.toFixed(0)).join('/')}`);
+  if (ARGS.includes('--time')) {
+    for (const [n, w, h] of [[32768, 1600, 900], [12288, 780, 1688]]) {
+      const s2 = await SphGPU.create(device, n, await Deno.readTextFile(new URL('./shaders/sph.wgsl', import.meta.url)));
+      const su = buildScenario(PRESETS[0], n, 2); s2.upload(su, makeParams(su, { KG: 4 })); s2.relaxSteps(5); s2.launch();
+      const t2 = device.createTexture({ size: [w, h], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT });
+      const r2 = new Renderer(device, { getCurrentTexture: () => t2 }, 'rgba8unorm', await loadRenderCode(u => Deno.readTextFile(u)));
+      r2.attach(s2, su); r2.resize(w, h);
+      const g = defaultFrame(); g.eye = [0.5, -4, 1]; g.streakT = 0.05;
+      for (let k = 0; k < 3; k++) r2.render(g); await device.queue.onSubmittedWorkDone();
+      const t0 = performance.now(); for (let k = 0; k < 20; k++) r2.render(g); await device.queue.onSubmittedWorkDone();
+      console.log(`INFO  render ${n} particles at ${w}x${h}: ${((performance.now() - t0) / 20).toFixed(2)} ms per frame`);
+      r2.destroy(); s2.destroy(); t2.destroy();
+    }
+  }
+  ok('R no WebGPU validation errors', errs.length === 0, errs.slice(0, 3).join(' | ') || 'none');
+  ren.destroy(); sim.destroy(); device.destroy();
+}
+
 if (!GPU_ONLY) {
   eosTests(); bodyTests(); geometryTests(); await presetTests(); cpuTests();
 }
-if (typeof Deno !== 'undefined') await gpuTests();
+if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); }
 else {
   const { spawnSync } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');

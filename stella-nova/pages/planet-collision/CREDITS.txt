@@ -1,0 +1,37 @@
+Planet Collision page (stella-nova/pages/planet-collision) — credits
+
+tex/earth.jpg, tex/earth_clouds.jpg, tex/moon.jpg, tex/mars.jpg,
+tex/mercury.jpg, tex/venus.jpg
+  Surface maps, equirectangular. Solar System Scope,
+  https://www.solarsystemscope.com/textures/
+  Licence: Creative Commons Attribution 4.0 International (CC BY 4.0),
+  https://creativecommons.org/licenses/by/4.0/
+  Changes: downscaled from 2048 x 1024 to 1024 x 512 (Lanczos) and saved
+  as JPEG quality 84; earth_clouds.jpg converted to one grey channel.
+  Source files 2k_earth_daymap.jpg, 2k_earth_clouds.jpg, 2k_moon.jpg,
+  2k_mars.jpg, 2k_mercury.jpg, 2k_venus_atmosphere.jpg (downloaded
+  2026-10-11). The page makes smaller mip levels at run time.
+  The proto-Earth, Theia, Ceres, Pluto, Charon and Vesta surfaces are
+  procedural (shaders/common.wgsl fn planetAlbedo).
+
+Colour maps (shaders/common.wgsl fn inferno, fn viridis)
+  Polynomial fits of matplotlib's "inferno" and "viridis" colour maps
+  (matplotlib colour maps by Nathaniel Smith and Stefan van der Walt,
+  CC0), fit by Matt Zucker (shadertoy "Matplotlib colormaps", CC0).
+
+Black-body colour (shaders/common.wgsl fn blackbody)
+  The curve fit of the Planck locus in sRGB by Tanner Helland (2012),
+  "How to convert temperature (K) to RGB".
+
+Rendering method
+  Screen-space fluid rendering: W. J. van der Laan, S. Green and M. Sainz,
+  "Screen space fluid rendering with curvature flow", I3D 2009. This page
+  uses the depth splat and a bilateral filter, not curvature flow.
+
+Sky, atmosphere and bloom
+  Adapted from stella-nova/pages/roche-limit (shaders/planet.wgsl fs_sky,
+  fs_atmo; shaders/post.wgsl copied unchanged apart from its header).
+
+Science
+  data.js SOURCES lists the papers for the equation of state, the bodies
+  and the impact presets.
