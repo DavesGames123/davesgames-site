@@ -524,9 +524,13 @@ function saverTests(cur) {
   }
   ok('saver: no run plays twice in a row', twice === 0, `${twice} repeats over 200 seeds x 3 reels`);
   ok('saver: every shot lasts 5-12 s (cuts every 5-12 s)', minL >= SP.CUT_MIN - 1e-9 && maxL <= SP.CUT_MAX + 0.05, `${lens.length} shots, ${minL.toFixed(2)} to ${maxL.toFixed(2)} s, mean ${(lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(2)} s`);
+  // the presets and random runs of the reel: test 13 checks their specs,
+  // test 15 runs them on the GPU
+  const extra = SP.RUNS.filter(r => r.preset || r.roll);
+  ok('saver: the reel holds presets and random runs that exist', extra.length >= 8 && extra.every(r => r.roll || RL.presetSpec(r.preset)), extra.map(r => r.key).join(' '));
   for (const run of SP.RUNS) {
     const sc = SCENARIOS.find(x => x.key === run.scen);
-    if (sc.kind !== 'spiral') continue;
+    if (!sc || sc.kind !== 'spiral') continue;
     const spec = Object.assign({ q: sc.q, d: sc.d, d1: sc.d1, orbits: sc.orbits, J2: sc.J2 || 0 }, run.spec);
     const dF = limitsOf(spec.q).fluid;
     const r = paceRun(Object.assign({}, cur, { q: spec.q, J2: spec.J2, s: sc.s || 0.12, d0: spec.d, d1: spec.d1, orbits: spec.orbits, speed: PC.SAVER_SPEED, settleTime: 0 }));

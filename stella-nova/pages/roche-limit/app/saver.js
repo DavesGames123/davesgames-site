@@ -4,7 +4,10 @@
 //  window.snSaver implements the lib/screensaver.js protocol. It plays the
 //  reel of saver-plan.js: a seeded shuffle of runs (Saturn and an icy
 //  moon, Mars and Phobos, Earth and the Moon, an ice giant, a comet at
-//  Jupiter, a loose and a rough moon). Each run is one take of the story
+//  Jupiter, a loose and a rough moon), eight presets of roll.js
+//  (Shoemaker-Levy 9, a Triton capture, a white dwarf, two moons, a
+//  core, a neutron star, a grazing comet, a two-lobed comet) and three
+//  random runs with seeds from the saver seed. Each run is one take of the story
 //  clock (pacing.js: the breakup within about 2 s, then slow motion) and
 //  the story camera (app/director.js), cut into four shots of 5-12 s:
 //  wide (the approach and push in), close (the breakup from a second
@@ -25,7 +28,8 @@
 import { SAVER_SPEED, timeWarp } from '../pacing.js';
 import { makeReel, shotPlan, shotDone, rng } from '../saver-plan.js';
 import { cam, resetCamStats, camStats } from './camera.js';
-import { applyScenario, openPanel } from './controls.js';
+import { applyScenario, applyRoll, openPanel } from './controls.js';
+import { presetSpec, rollRun } from '../roll.js';
 import { debugState } from './debug.js';
 import { $, UI, RM_Q } from './env.js';
 import { orbitsPerMin } from './loop.js';
@@ -85,7 +89,13 @@ function saverScenario() {
   // breakup is lit from the side by a seeded amount
   sv.cur = { key: run.key, az: 0.35 + 1.1 * sv.rnd() };
   UI.ringGain = 2; UI.rings = true; UI.real = true; UI.pred = false; UI.hill = false; UI.track = false; UI.blur = false; UI.ringOn = true;
-  applyScenario(run.scen);
+  // a preset or a random run of roll.js: its spec and its own title; the
+  // seed of a random run comes from the saver's seeded random function
+  if (run.preset || run.roll) {
+    const r = run.preset ? presetSpec(run.preset) : rollRun(1 + Math.floor(sv.rnd() * 999999));
+    applyRoll(r);
+    sv.run = Object.assign({}, run, { title: r.title, seed: r.seed });
+  } else applyScenario(run.scen);
   // cam.az stays at its scenario value (0.9): the story camera reads it
   // as the user's offset; runs.js hands sv.cur.az to planShots instead
   UI.cam = 'story'; UI.color = 4; UI.field = 0;

@@ -4,7 +4,11 @@
 //  app/saver.js plays it; tests.mjs checks it.
 //
 //  A REEL is a seeded shuffle of RUNS (a moon, a planet, a density); the
-//  same run never plays twice in a row. Each run is one take of the story
+//  same run never plays twice in a row. Since 2026-10-11 a run can also
+//  be a preset of roll.js (preset: its key) or a fresh random run (roll:
+//  true; app/saver.js draws its seed from the saver's own seeded random
+//  function), so the reel differs from one session to the next: the
+//  rolls change with the saver seed. Each run is one take of the story
 //  camera (app/director.js) and the story clock (pacing.js): the moon
 //  reaches its breakup within about 2 s of the start (tests.mjs test 8).
 //  The take is cut into SHOTS. A shot is an offset of the story camera:
@@ -39,6 +43,18 @@ export const RUNS = [
   { key: 'ice', scen: 'close', title: 'A loose moon as dense as its ice giant', spec: {} },
   { key: 'comet', scen: 'flyby', title: 'A comet torn into a string of pearls', spec: {} },
   { key: 'compare', scen: 'compare', title: 'A loose moon and a rough moon on one orbit', spec: {} },
+  // presets of roll.js (their own titles) and three random runs
+  { key: 'sl9', preset: 'sl9' },
+  { key: 'triton', preset: 'triton' },
+  { key: 'wd', preset: 'wd' },
+  { key: 'twomoons', preset: 'twomoons' },
+  { key: 'mantle', preset: 'mantle' },
+  { key: 'neutron', preset: 'neutron' },
+  { key: 'skim', preset: 'skim' },
+  { key: 'twolobes', preset: 'twolobes' },
+  { key: 'roll-a', roll: true },
+  { key: 'roll-b', roll: true },
+  { key: 'roll-c', roll: true },
 ];
 
 export const SHOTS = {
