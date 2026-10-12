@@ -34,7 +34,10 @@
      --parch --parch2 --parch-ink          parchment and its ink
 
    PHONE FIRST. The base rules of APP, WATCH HUD and BAR are the 390 px
-   portrait phone; the WIDE block widens them. In
+   portrait phone; the WIDE block widens them. #app is 100dvh, every box
+   at an edge keeps clear of the safe area (env(safe-area-inset-*), --sl
+   --sr), the app has touch-action: manipulation (no double-tap zoom) and
+   the table canvas touch-action: none (tests/mobile.test.mjs). In
    the drawer (max-width 860px) cards go to one column and the chip bar
    scrolls sideways. A pointer:coarse block sets 44px targets on any
    touch screen. Hover colours apply only where (hover:hover), so a tap
@@ -339,7 +342,7 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
    the play table and under the play HUD (z 30 and more). --bar-h is the
    height of the control bar; the move chip, the tag and the maps sit
    above it. */
-.app{position:fixed;inset:0;height:100vh;height:100dvh;overflow:hidden;background:var(--bg);
+.app{position:fixed;inset:0;height:100vh;height:100dvh;overflow:hidden;background:var(--bg);touch-action:manipulation;
   --bar-h:calc(96px + env(safe-area-inset-bottom,0px)); --pad:8px;
   --bpw:0px; --bph:0px; --cl:0px; --cr:0px; --ct:0px; --cb:var(--bar-h)}
 .stage{position:absolute;left:0;right:0;top:0;bottom:var(--bar-h);overflow:hidden;background:#0a0d14}
@@ -501,7 +504,7 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .app[data-table="3d"][data-mode="watch"] .bp.a .bp-cap{top:min(60%,calc(var(--bpw) * 0.92));left:calc(var(--pad) + var(--sl));right:auto;justify-content:flex-start;text-align:left}
   .app[data-table="3d"][data-mode="watch"] .bp.b .bp-cap{left:auto;right:calc(var(--pad) + var(--sr));justify-content:flex-end;text-align:right}
   .app[data-brains="panels"] .wsc{width:min(280px,calc(var(--bpw) - 2 * var(--pad)))}
-  .app[data-brains="panels"] .turnbox{top:var(--pad)}
+  .app[data-brains="panels"] .turnbox{top:calc(env(safe-area-inset-top,0px) + var(--pad))}
 }
 
 /* ---------------------------------------------------------------- ZOOM
@@ -528,7 +531,7 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 .arena-ctrls{display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .arena-ctrls::-webkit-scrollbar{display:none}
 .arena-ctrls>*{flex:none}
-.arena-ctrls .seg{width:auto}
+.arena-ctrls .seg{width:auto;flex-wrap:nowrap}
 .ctl-l{font-size:0.72rem;color:var(--dim);margin-left:4px}
 .tgl.go{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--parch2)}
 @media (hover:hover){.tgl.go:hover{color:var(--parch-ink)}}
@@ -536,9 +539,9 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 /* ---------------------------------------------------------------- DRAWER
    "How it works": the explainer sections over the whole table. Its own
    scroll; a sticky head and the chip bar under it. */
-.how{position:absolute;inset:0;z-index:400;overflow-y:auto;overscroll-behavior:contain;background:var(--bg);--top:52px}
-.how-top{position:sticky;top:0;z-index:21;height:52px;display:flex;align-items:center;gap:12px;
-  padding:0 calc(14px + var(--sr)) 0 calc(14px + var(--sl));background:var(--bg);border-bottom:1px solid var(--bronze-line)}
+.how{position:absolute;inset:0;z-index:400;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--bg);--top:calc(52px + env(safe-area-inset-top,0px))}
+.how-top{position:sticky;top:0;z-index:21;height:var(--top);display:flex;align-items:center;gap:12px;
+  padding:env(safe-area-inset-top,0px) calc(14px + var(--sr)) 0 calc(14px + var(--sl));background:var(--bg);border-bottom:1px solid var(--bronze-line)}
 .how-top .pagetitle{flex:1}
 .how .hero{padding-top:18px}
 .short{display:grid;gap:8px;max-width:82ch;padding-left:1.4em;margin:4px 0 6px;font:400 1rem/1.55 var(--serif);color:var(--ink2)}

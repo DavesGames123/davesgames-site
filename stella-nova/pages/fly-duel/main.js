@@ -639,6 +639,11 @@ function initHero(mod3d = null) {
   const cv = $('heroCv');
   for (const t of ['pointerdown', 'pointermove', 'wheel']) cv.addEventListener(t, () => { hero.poke = 1.5; }, { passive: true });
   addEventListener('resize', () => { hero.scene?.resize(); hero.panels?.resize(); syncClear(); hero.poke = 0.5; });
+  // A phone turns: some browsers give the old size at the event, so
+  // every resize handler runs again after the new layout (120 ms).
+  const turned = () => setTimeout(() => { try { dispatchEvent(new Event('resize')); } catch { /* no Event */ } }, 120);
+  addEventListener('orientationchange', turned);
+  try { screen?.orientation?.addEventListener?.('change', turned); } catch { /* no screen */ }
   setBrains(hero.brains);
   hero.syncClear = syncClear;
   if (REDUCED) stepNow();
@@ -1543,7 +1548,8 @@ let lastT = 0;
 function loop(now) {
   const dt = Math.min(0.05, lastT ? (now - lastT) / 1000 : 0.016);
   lastT = now;
-  if (!window.__fdSaver) {
+  // a hidden page (another tab, a locked phone) draws nothing
+  if (!window.__fdSaver && !document.hidden) {
     for (const t of tickers) { try { t(dt); } catch (e) { console.error(e); } }
     for (const v of views) {
       if (!onScreen.has(v.cv)) continue;

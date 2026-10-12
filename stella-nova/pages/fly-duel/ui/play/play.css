@@ -9,7 +9,9 @@
      phone        one column: cards, backs, table, bar, buttons, hand
      phone-land   scorecards in a left column, table at the right
      tablet / desktop  scorecards at the top corners, table in the middle
-   Every control is 44 px or more on a coarse pointer.
+   Every control is 44 px or more on a coarse pointer. Every box at an
+   edge keeps clear of the safe area (--sat --sab --sal --sar, and
+   --base = the hand peek plus the home bar).
    GREP MAP
      .pl            root grid          .pl-hc      a hand card
      .pl-handbox    the fan box        .pl-perm    a creature on the table
@@ -29,13 +31,17 @@
   --hair: rgba(255,255,255,0.10); --hair2: rgba(255,255,255,0.22);
   --flyA: #39d0f0; --flyB: #f26ad6; --dmg: #ff4d4d; --heal: #3ee89a;
   --hand-w: 96px; --hand-h: 134px; --peek: 96px; --btn-h: 52px; --btn-w: 148px; --zoom-w: 300px;
+  /* the safe area (notch, home bar): every box at an edge keeps clear of it */
+  --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+  --base: calc(var(--peek) + var(--sab));
   position: relative; overflow: hidden; box-sizing: border-box;
   width: 100%; height: 100%; min-height: 480px;
   display: grid; gap: 6px;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto auto var(--peek);
   grid-template-areas: "cards" "opp" "table" "bar" "act" "hand";
-  padding: 8px 8px 0;
+  padding: calc(8px + var(--sat)) calc(8px + var(--sar)) var(--sab) calc(8px + var(--sal));
   background: var(--bg); color: var(--ink);
   font: 14px/1.4 var(--sci-sans, Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
   -webkit-tap-highlight-color: transparent;
@@ -52,6 +58,7 @@
 .pl-table.is-3d { border: 0; background: none; }
 .pl-table.is-3d > canvas { width: 100%; height: 100%; display: block; }
 .pl-seatbtn { position: absolute; z-index: 35; left: 50%; top: 8px; transform: translateX(-50%); min-height: 36px; padding: 0 14px; font-size: 13px; opacity: 0.92; }
+@media (pointer: coarse) { .pl-seatbtn { min-height: 44px; } }
 .pl-seatbtn[hidden] { display: none !important; }
 .pl-bar { grid-area: bar; display: grid; grid-template-columns: auto auto; justify-content: space-between; align-items: center; gap: 2px 10px; }
 .pl-actions { grid-area: act; justify-self: end; display: flex; gap: 8px; align-items: stretch; position: relative; z-index: 60; }
@@ -73,8 +80,8 @@
 /* a message for the player, next to the control used (play.js flash) */
 .pl-hint { position: absolute; z-index: 95; margin: 0; max-width: min(300px, calc(100% - 16px)); padding: 6px 10px; background: var(--panel);
   border: 1px solid var(--dmg); border-radius: 4px; font-size: 12px; line-height: 1.35; color: var(--ink); pointer-events: none; }
-.pl-hint[data-at="button"] { right: 8px; bottom: calc(var(--peek) + var(--btn-h) + 16px); }
-.pl-hint[data-at="hand"] { left: 50%; transform: translateX(-50%); bottom: calc(var(--peek) + 8px); }
+.pl-hint[data-at="button"] { right: calc(8px + var(--sar)); bottom: calc(var(--base) + var(--btn-h) + 16px); }
+.pl-hint[data-at="hand"] { left: 50%; transform: translateX(-50%); bottom: calc(var(--base) + 8px); }
 .pl-hint[data-at="table"] { left: 50%; transform: translateX(-50%); top: 38%; }
 
 /* ----------------------------------------------------------- buttons */
@@ -96,8 +103,8 @@
 
 /* -------------------------------------------------------------- hand */
 .pl-handbox {
-  position: absolute; left: 0; right: 0; z-index: 40;
-  bottom: calc(var(--peek) - var(--hand-h));
+  position: absolute; left: var(--sal); right: var(--sar); z-index: 40;
+  bottom: calc(var(--base) - var(--hand-h));
   height: calc(var(--hand-h) * 1.36);
   overflow-x: auto; overflow-y: hidden; touch-action: pan-x;
   scrollbar-width: none;
@@ -187,9 +194,9 @@
 .pl-last-t { font-size: 13px; color: var(--ink); }
 
 /* ------------------------------------------------------------- menu */
-.pl-menu { position: absolute; z-index: 150; left: 8px; bottom: calc(var(--peek) + var(--btn-h) + 14px); width: min(300px, calc(100% - 16px)); display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--hair2); border-radius: 10px; }
+.pl-menu { position: absolute; z-index: 150; left: calc(8px + var(--sal)); bottom: calc(var(--base) + var(--btn-h) + 14px); width: min(300px, calc(100% - 16px)); display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--hair2); border-radius: 10px; }
 .pl-keys { margin: 0; font-size: 12px; color: var(--ink2); }
-.pl-log { position: absolute; z-index: 140; right: 8px; top: 8px; bottom: calc(var(--peek) + 8px); width: min(360px, calc(100% - 16px)); display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); border: 1px solid var(--hair2); border-radius: 10px; }
+.pl-log { position: absolute; z-index: 140; right: calc(8px + var(--sar)); top: calc(8px + var(--sat)); bottom: calc(var(--base) + 8px); width: min(360px, calc(100% - 16px)); display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); border: 1px solid var(--hair2); border-radius: 10px; }
 .pl-log header { display: flex; justify-content: space-between; align-items: center; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--hair); }
 .pl-log ol { list-style: none; margin: 0; padding: 8px 12px; overflow-y: auto; font: 12px/1.5 var(--sci-mono, ui-monospace, Menlo, monospace); color: var(--ink2); user-select: text; -webkit-user-select: text; }
 .pl-log li[data-seat="0"] { box-shadow: inset 2px 0 0 0 var(--flyA); padding-left: 6px; }
@@ -206,7 +213,7 @@
 
 
 /* --------------------------------------------------------- inspector */
-.pl-insp { position: absolute; z-index: 300; inset: 0; display: grid; place-items: center; background: rgba(3,5,10,0.94); overflow-y: auto; padding: 16px; }
+.pl-insp { position: absolute; z-index: 300; inset: 0; display: grid; place-items: center; background: rgba(3,5,10,0.94); overflow-y: auto; overscroll-behavior: contain; padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
 .pl-insp-in { display: grid; justify-items: center; gap: 12px; max-width: min(100%, 440px); }
 .pl-insp-txt { font-size: 14px; color: var(--ink2); width: 100%; }
 .pl-insp-txt ul { margin: 0; padding-left: 18px; }
@@ -216,7 +223,7 @@
 .pl-insp-x { min-width: 120px; }
 
 /* ------------------------------------------------------------ sheets */
-.pl-sheet { position: absolute; z-index: 250; inset: 0; display: grid; place-items: center; background: rgba(3,5,10,0.9); overflow-y: auto; padding: 16px; }
+.pl-sheet { position: absolute; z-index: 250; inset: 0; display: grid; place-items: center; background: rgba(3,5,10,0.9); overflow-y: auto; overscroll-behavior: contain; padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
 .pl-sheet-in { width: min(100%, 560px); background: var(--panel); border: 1px solid var(--hair2); border-radius: 12px; padding: 18px 16px; display: grid; gap: 10px; }
 .pl-sheet h2 { margin: 0; font: 400 1.35rem/1.2 var(--sci-serif, 'STIX Two Text', Georgia, serif); }
 .pl-sheet h3 { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -276,15 +283,15 @@
 .pl.pl-3d { display: block; padding: 0; }
 .pl.pl-3d .pl-table { position: absolute; inset: 0; border-radius: 0; }
 .pl.pl-3d .pl-opp { display: none; }
-.pl.pl-3d .pl-cards { position: absolute; z-index: 50; top: 6px; left: 6px; right: 6px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; pointer-events: none; }
+.pl.pl-3d .pl-cards { position: absolute; z-index: 50; top: calc(6px + var(--sat)); left: calc(6px + var(--sal)); right: calc(6px + var(--sar)); display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; pointer-events: none; }
 .pl.pl-3d .pl-sc { pointer-events: auto; width: min(250px, calc(50% - 4px)); }
 .pl.pl-3d .pl-sc1 { margin-left: auto; }
-.pl.pl-3d .pl-bar { position: absolute; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--peek) + var(--btn-h) + 12px);
+.pl.pl-3d .pl-bar { position: absolute; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--base) + var(--btn-h) + 12px);
   width: max-content; max-width: calc(100% - 16px); padding: 3px 8px; border-radius: 8px; background: rgba(5,7,12,0.5); }
 .pl.pl-3d .pl-prompt { font-size: 12px; min-height: 0; text-align: center; }
-.pl.pl-3d .pl-actions { position: absolute; right: 8px; bottom: calc(var(--peek) + 6px); }
-.pl.pl-3d .pl-menubtn { position: absolute; left: 8px; bottom: calc(var(--peek) + 6px); }
-.pl.pl-3d .pl-seatbtn { top: auto; bottom: calc(var(--peek) + var(--btn-h) + 56px); }
+.pl.pl-3d .pl-actions { position: absolute; right: calc(8px + var(--sar)); bottom: calc(var(--base) + 6px); }
+.pl.pl-3d .pl-menubtn { position: absolute; left: calc(8px + var(--sal)); bottom: calc(var(--base) + 6px); }
+.pl.pl-3d .pl-seatbtn { top: auto; bottom: calc(var(--base) + var(--btn-h) + 56px); }
 .pl.pl-3d[data-layout="phone-land"] .pl-cards { flex-direction: column; right: auto; width: 200px; }
 .pl.pl-3d[data-layout="phone-land"] .pl-sc { width: 100%; }
 .pl.pl-3d[data-layout="phone-land"] .pl-sc1 { margin-left: 0; }
