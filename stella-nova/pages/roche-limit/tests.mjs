@@ -58,6 +58,8 @@
 //     --no-rolls skips test 15. The cutting director (app/cuts.js) runs
 //     in the Director view over each run: it cuts after the tear, and
 //     every pose is finite and outside the planet.
+//     The screensaver protocol (Deno): enter() returns the canvas and a
+//     warm-up, and exit() gives back the view settings of the user.
 //  16 the link (node, DOM stubbed): ?seed= at boot, cleared by a story,
 //     ?run= for a preset
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
@@ -1006,6 +1008,23 @@ async function rollRunTests(keys) {
     shots = S.cuts ? S.cuts.take.shots.length : 0;
     ok('screensaver with Reduce motion: the take still ends, the camera stays calm', !!(S.cuts && S.cuts.take.done) && story === 0 && LO.orbitsPerMin() <= 7 * 1.5 + 1e-9, `ended after ${wall.toFixed(1)} s of wall time and ${shots} shots; ${story} story-camera frames; speed ${LO.orbitsPerMin().toFixed(2)} orbits/min`);
     S.saverOn = false; S.saver = null; UI.calm = false; S.cuts = null;
+  }
+  // the protocol: enter() returns the page canvas and a warm-up, starts
+  // a seeded take, and exit() gives back the view settings of the user
+  {
+    const ST = await import('./app/state.js'); ST.bootDone();
+    await import('./app/saver.js');
+    const before = { N: 16384, pred: true, hill: true, track: true, cam: 'planet', color: 0, field: 1, ringGain: 1 };
+    Object.assign(UI, before);
+    let r = null, err = '';
+    try { r = await window.snSaver.enter({ calm: 0.5, seed: 1234 }); } catch (e) { err = String(e && e.message || e); }
+    const inTake = UI.N <= 8192 && UI.cam === 'story' && UI.pred === false;
+    const take = window.snSaver.debug && window.snSaver.debug();
+    window.snSaver.exit();
+    const back = Object.keys(before).filter(k => UI[k] !== before[k]);
+    ok('screensaver protocol: enter returns the canvas and a warm-up; exit gives back the view settings', !err && r && !!r.canvas && r.warmupMs > 0 && inTake && back.length === 0,
+      `${err || ''}take ${take && take.take}, during the take N ${inTake ? '<= 8192, story camera' : 'not set'}; changed after exit: ${back.join(' ') || 'none'}`);
+    if (S.run) await new Promise(res => setTimeout(res, 50));
   }
   if (dirStat.runs) ok('Director view on the GPU runs: cuts on events, every pose finite and outside the planet', dirStat.bad.length === 0 && dirStat.tornCut === dirStat.torn && dirStat.phases.size >= 3, `${dirStat.runs} runs, ${dirStat.cuts} cuts; ${dirStat.tornCut} of ${dirStat.torn} runs that go on ${SP.CUT_MIN} s past the tear cut after it; phases ${[...dirStat.phases].join(' ')}; kinds ${[...dirStat.kinds].sort().join(' ')}; ${dirStat.rideFrag} ride frames on a fragment in ${dirStat.rides} rides; ${dirStat.bad.slice(0, 3).join('; ') || 'no bad pose'}`);
   if (dirStat.probes.length) { const pr = dirStat.probes, bad = pr.filter(q => !(q.d0 < 1e-4 && q.dmin < 0.08 * q.moved && q.dsync < 1e-4));

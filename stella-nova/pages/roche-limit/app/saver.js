@@ -25,6 +25,7 @@
 //    take clock .......... "function saverTick"
 //    fade ................ "export function saverFade"
 //    protocol ............ "window.snSaver"
+//    restore on exit ..... "const KEEP"
 // ============================================================================
 import { SAVER_SPEED, timeWarp } from '../pacing.js';
 import { nextTake, rng, CUT_MAX } from '../saver-plan.js';
@@ -50,6 +51,9 @@ const COLOR_LINE = {
   2: 'Colour: tide over self-gravity on each grain. Blue holds, amber is torn',
 };
 const SHOT_NAME = { push: 'slow motion', ride: 'riding with a fragment', surface: 'from the planet’s surface', lapse: 'time-lapse', impact: 'impact', skim: 'in the ring plane', top: 'from above' };
+
+// The UI fields that enter() and the takes set, kept for exit().
+const KEEP = ['N', 'ringGain', 'rings', 'real', 'pred', 'hill', 'track', 'blur', 'ringOn', 'cam', 'field', 'color', 'calm'];
 
 function fmtD(x) { return x >= 100 ? x.toFixed(0) : x.toFixed(2); }
 // The planet and the body, with their densities.
@@ -165,7 +169,9 @@ window.snSaver = {
     openPanel(null);
     const calm = Math.max(Math.min(1, Math.max(0, opts.calm ?? 0.7)), RM_Q.matches ? 1 : 0);
     const rnd = rng(opts.seed);
-    S.saver = { opts, rnd, calm, reel: { rnd, bag: null, last: null }, entry: null, cur: null, fade: 0, fadeTarget: 0, state: 'warm', speed: SAVER_SPEED };
+    // the view settings that the takes change: exit() puts them back
+    const keep = {}; for (const k of KEEP) keep[k] = UI[k];
+    S.saver = { opts, rnd, calm, keep, reel: { rnd, bag: null, last: null }, entry: null, cur: null, fade: 0, fadeTarget: 0, state: 'warm', speed: SAVER_SPEED };
     // Reduce motion: the story camera gives way to the planet view
     if (RM_Q.matches) UI.calm = true;
     UI.paused = false;
@@ -178,7 +184,7 @@ window.snSaver = {
   },
   exit() {
     S.saverOn = false;
-    if (S.saver) clearInterval(S.saver.tick);
+    if (S.saver) { clearInterval(S.saver.tick); Object.assign(UI, S.saver.keep); }
     S.saver = null; S.cuts = null;
     document.documentElement.classList.remove('sn-saver');
     resize();
