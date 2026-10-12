@@ -30,6 +30,8 @@
 //    - The turn-change pause (choreo op 'beat') eases to the wide shot
 //      and locks the camera for the pause. Only a forced request (the
 //      win) cuts into the lock.
+//    - A change from the crowd shot is a cut (it looks away from the
+//      table, and an eased turn back is too slow).
 //    - Reduced motion: every change is a cut and the scene stops the
 //      drift of the wide and win shots.
 //    - A lethal record (record.after has a winner by damage) gets the low
@@ -92,8 +94,11 @@ export function createDirector({ reduced = false } = {}) {
       if (!s.hist.slice(-1).some(k => k.startsWith(alt + ':'))) shot = alt;
     }
     if (shot === s.shot && p === s.p && !target) return false;
+    // The crowd shot looks away from the table: the next shot is a cut,
+    // because an eased turn back takes too long to show its subject.
+    const fromCrowd = s.shot === 'crowd';
     s.shot = shot; s.p = p; s.since = t; s.target = target;
-    s.cut = reduced || SHOTS[shot].move === 'cut';
+    s.cut = reduced || SHOTS[shot].move === 'cut' || fromCrowd;
     s.hist.push(`${shot}:${p}`); if (s.hist.length > 8) s.hist.shift();
     s.n++;
     return true;
