@@ -108,6 +108,23 @@ about the simulation and layout in fullscreen"
   tests/play-hand.test.mjs). Each creature or spell cast, yours or the
   fly's, shows large at the left for a beat, then flies down onto its
   spot on the mat (ui/play/castview.js, tests/play-cast.test.mjs).
+- Seat view (user, verbatim, 2026-10-12): "it's very hard to see my
+  hand/cards if i'm in the drivers seat because the fly model is
+  constantly blocking my board. its also very hard to get back to first
+  person perspective if you dont know what you're doing". In first person
+  your own fly and the fan it holds hide (ui/fly3d/scene.js seatHide);
+  the fly you play against stays. Away from the seat, a bold "Back to my
+  seat" button with an icon shows (44 px on touch); it, a double tap or
+  double click on empty table (ui/play/orbit.js), C or Home bring the
+  camera back (tests/play-seatview.test.mjs, tests/play-seatback.test.mjs).
+- Combat (user, verbatim, 2026-10-12): "i shold actully have to click
+  each creature i' m in cobat with". Attack: click each creature that
+  attacks, a click again takes it back; no key or button selects all.
+  Block: click your untapped creature, then the attacker it blocks (or
+  the other way); an arrow joins them (scene.js blockArrows); a click on
+  an assigned blocker takes the block off. The big button confirms the
+  step with the engine action; the rules do not change
+  (ui/play/model.js, tests/play-combat.test.mjs).
 
 
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain
