@@ -149,10 +149,14 @@ fn blackbody(T: f32) -> vec3f {
 // The radiance of incandescent matter, in scene units: grows as T^4
 // (Stefan-Boltzmann) from the Draper point (about 800 K, the first
 // visible red), times U.view.z, capped so the tone map keeps a shape.
+// The colour temperature stops at 7000 K: SPH over-heats the first
+// contact surface to tens of thousands of K ("wall heating", CONTRACT.md),
+// and a blue-white glow there would show the error, not the physics.
+// The temperature mode (fn modeColor) shows the values as they are.
 fn glow(T: f32) -> vec3f {
   let on = smoothstep(780.0, 1150.0, T);
-  let k = U0.view.z * pow(T / 1500.0, 4.0);
-  return blackbody(T) * on * min(k, 10.0);
+  let k = U0.view.z * pow(min(T, 7000.0) / 1500.0, 4.0);
+  return blackbody(min(T, 7000.0)) * on * min(k, 10.0);
 }
 
 // ── surfaces ────────────────────────────────────────────────────────────────

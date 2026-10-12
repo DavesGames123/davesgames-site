@@ -12,8 +12,9 @@
 //  events: first contact -> an impact flash, the atmospheres and the body
 //  shadows fade (they are drawn, not simulated).
 //
-//  GOVERNOR. A frame that takes over 24 ms (smoothed) lowers the cap on the
-//  steps per frame, one under 17 ms raises it (fn govern). The sim time per
+//  GOVERNOR. Every 10 frames: a smoothed frame time over 24 ms cuts the cap
+//  on the steps per frame by a quarter, one under 17 ms raises it by one
+//  (fn govern). The sim time per
 //  frame also shrinks by itself at the impact (the CFL time step).
 //
 //  For step 3 (UI and screensaver): window.__pc = { S, startRun, frameOf }.
@@ -139,9 +140,9 @@ function frame(now) {
   S.ren.render(f);
 }
 function govern(ms) {
-  S.dtAvg += (ms - S.dtAvg) * 0.05;
-  if (S.frameNo % 30) return;
-  if (S.dtAvg > 24 && S.cap > 1) S.cap--;
+  S.dtAvg += (ms - S.dtAvg) * 0.1;
+  if (S.frameNo % 10) return;
+  if (S.dtAvg > 24 && S.cap > 1) S.cap = Math.max(1, Math.floor(S.cap * 0.75));
   else if (S.dtAvg < 17 && S.cap < 8) S.cap++;
 }
 // The frame description for render.js (camera, events, display state).

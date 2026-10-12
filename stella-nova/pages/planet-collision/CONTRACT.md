@@ -223,7 +223,8 @@ not simulated (label this on the page).
 What the surface shows (mode 0): the body's surface map at each particle's
 start position (the map moves with the material), rock, iron and ice
 inside, darkening from 0.7 T_melt, then the glow of a black body at the
-particle temperature (T^4 from the Draper point, about 800 K, capped).
+particle temperature (T^4 from the Draper point, about 800 K, capped; the
+colour temperature stops at 7000 K because of SPH wall heating).
 Bloom: only light over `bloomThreshold` (2.0), strength 0.035.
 
 GPU cost (Apple M4 Pro, Deno, `deno run -A tests.mjs --gpu --time`, the
