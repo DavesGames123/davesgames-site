@@ -247,16 +247,17 @@ export function createRegame(ctx) {
     const m = clamp01((k - 0.15) / 0.65);
     const s = ease(dir === 'in' ? m : 1 - m);           // 0: on the mat, 1: in the box
     const h = n * PILE;
-    const top = hall.boxTop ? hall.boxTop(p, _a) : ctx.seatPos(p, 2.62, 0.67, 2.55, _a);
+    const top = hall.boxTop ? hall.boxTop(p, _a) : ctx.seatPos(p, 3.5, 0.35, 0.5, _a);
     const lib = ctx.seatPos(p, T.deckU, 0.008, T.deckV, _p);
     // up from the mat to over the box (s 0..0.6), then down into it
     const a = ease(s / 0.6), d = ease((s - 0.6) / 0.4);
     const x = lib.x + (top.x - lib.x) * a, z = lib.z + (top.z - lib.z) * a;
     const y = lib.y + (top.y + 0.25 - lib.y) * a + 0.3 * Math.sin(Math.PI * a) * (1 - a) - (0.45 + h) * d;
     H.position.set(x, y, z);
-    // the pile stands up as it goes into the box and gets smaller
-    ctx.seatQuat(p, -Math.PI / 2 * a, 0, 0, H.quaternion);
-    const sc = 1 - 0.3 * a;
+    // the box lies flat (hall.js BOX): the pile stays flat and goes in
+    // from above, a little smaller than the box
+    ctx.seatQuat(p, 0, 0, 0, H.quaternion);
+    const sc = 1 - 0.06 * a;
     H.scale.set(sc, Math.max(0.0005, h), sc);
     H.visible = h > 0 && d < 0.999;
   }

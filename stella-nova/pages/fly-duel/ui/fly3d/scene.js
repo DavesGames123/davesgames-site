@@ -756,6 +756,11 @@ export function createDuelScene(canvas, opts = {}) {
   const lights = buildLights(scene, W, coarse);
 
   // ---------------------------------------------------------- piles
+  // The count of a library floats this far over the top of its pile (the
+  // centre of a label 0.2 high). At 0.2 it stood over the deck box behind
+  // the pile in the seat view and in the wide shot (the 1600x900 capture
+  // of 2026-10-12: "31" over the box print).
+  const LIB_LABEL_UP = 0.13;
   const pileGeo = new THREE.BoxGeometry(T.cardW * 0.98, 1, T.cardH * 0.98); pileGeo.translate(0, 0.5, 0);
   // BoxGeometry face order: +x -x +y -y +z -z. The +y face shows the back
   // (the question mark on the library of the other fly in play mode).
@@ -1098,7 +1103,7 @@ export function createDuelScene(canvas, opts = {}) {
         pile.n = n;
         const old = pile.label; const pos = old.position.clone();
         scene.remove(old); old.material.dispose();
-        pile.label = W.sprites.make(String(n), TOKENS.ink2, 0.2); pile.label.position.copy(pos); pile.label.position.y = T.y + n * 0.007 + 0.2;
+        pile.label = W.sprites.make(String(n), TOKENS.ink2, 0.2); pile.label.position.copy(pos); pile.label.position.y = T.y + n * 0.007 + LIB_LABEL_UP;
         scene.add(pile.label);
       }
       // mana pips on untapped lands

@@ -183,9 +183,17 @@ function carpetCanvas(size) {
 export const MAT = { u: 2.95, v0: 0.18, v1: 3.08 };
 // Mat textures kept at most (two shown, the rest ready for a deck change).
 export const MAT_CACHE = 4;
-// The deck box of a seat (seat space u, v; height h). lidOpen: the turn
-// of the open lid (radians). yaw: the box stands a little turned.
-export const BOX = { u: 2.62, v: 2.55, h: 0.62, yaw: 0.2, lidOpen: 1.9 };
+// The deck box of a seat (seat space u, v; size w x d, height h with
+// the lid). It lies flat at the end of the mat, beside the library and
+// the graveyard, off the mat and off the line of the library: then the
+// count over the library does not stand over it in the wide shot. A real
+// deck box is a little larger than the card stack that it holds: a card is
+// 0.56 x 0.784, and the library pile of the scene is 0.007 per card
+// (0.28 for 40 cards). lidOpen: the turn of the open lid (radians).
+// yaw: the box lies a little turned. Before, an upright box 0.62 high
+// at v 2.55, near the seat, filled a corner of the seat view and of the
+// close shot (the 1600x900 capture of 2026-10-12).
+export const BOX = { u: 3.5, v: 0.5, w: 0.64, d: 0.88, h: 0.3, lid: 0.014, yaw: 0.06, lidOpen: 1.9 };
 // The key of a deck: its id, or 'list:' and the card ids of a custom list.
 // Two decks with one key are the same deck (no box swap between them).
 export function deckKey(deck) {
@@ -754,14 +762,17 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
       const boxCv = makeCanvas(coarse ? 96 : 192, coarse ? 140 : 280);
       const boxTex = keep(tex(boxCv, { aniso: 4 }));
       const boxMat = keep(new THREE.MeshStandardMaterial({ map: boxTex, color: boxTex ? 0xffffff : new THREE.Color(FLY[p]), roughness: 0.5 }));
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.62, 0.36), boxMat);
+      // the body: dark sides and a dark inside (its top face shows when
+      // the lid is open); the print is on the lid
+      const bodyH = BOX.h - BOX.lid;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(BOX.w, bodyH, BOX.d), mats.edge);
       box.userData = { canvas: boxCv, texture: boxTex, deck: null, key: '', seat: p };
-      const bp = L.seatPos(p, BOX.u, 0, BOX.v); box.position.set(bp.x, L.y + BOX.h / 2, bp.z); box.rotation.y = m.rotation.y + BOX.yaw;
+      const bp = L.seatPos(p, BOX.u, 0, BOX.v); box.position.set(bp.x, L.y + bodyH / 2, bp.z); box.rotation.y = m.rotation.y + BOX.yaw;
       box.castShadow = shadows; box.name = 'deck-box';
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.015, 0.37), mats.edge); lid.position.y = 0.2; box.add(lid);
-      // the flap of the lid turns on a hinge at the back top edge (setLid)
-      const hinge = new THREE.Group(); hinge.position.set(0, BOX.h / 2, -0.18); hinge.name = 'deck-box-lid';
-      const flap = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.014, 0.37), mats.edge); flap.position.set(0, 0.007, 0.185);
+      // the lid turns on a hinge at the edge toward the centre line (setLid)
+      const hinge = new THREE.Group(); hinge.position.set(0, bodyH / 2, -BOX.d / 2); hinge.name = 'deck-box-lid';
+      const flap = new THREE.Mesh(new THREE.BoxGeometry(BOX.w + 0.01, BOX.lid, BOX.d + 0.01), [mats.edge, mats.edge, boxMat, mats.edge, mats.edge, mats.edge]);
+      flap.position.set(0, BOX.lid / 2, BOX.d / 2);
       hinge.add(flap); box.add(hinge);
       box.userData.lid = hinge;
       table.add(box);
@@ -841,7 +852,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
   let swapCount = 0;
   const boxHome = (box, p) => {
     const bp = L.seatPos(p, BOX.u, 0, BOX.v);
-    box.position.set(bp.x, L.y + BOX.h / 2, bp.z); box.rotation.set(0, mats3[p].rotation.y + BOX.yaw, 0);
+    box.position.set(bp.x, L.y + (BOX.h - BOX.lid) / 2, bp.z); box.rotation.set(0, mats3[p].rotation.y + BOX.yaw, 0);
   };
   function swapDeckBox(p, deckId) {
     if (swaps[p]) swapStep(p, 1);
@@ -871,7 +882,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
       const u = BOX.u + (off + 0.3 - BOX.u) * a;
       const over = Math.max(0, u - L.halfLen);
       const P = L.seatPos(p, u, 0, BOX.v);
-      s.old.position.set(P.x, L.y + BOX.h / 2 - over * over * 9, P.z);
+      s.old.position.set(P.x, L.y + (BOX.h - BOX.lid) / 2 - over * over * 9, P.z);
       s.old.rotation.set(0, yaw, -(p === 0 ? 1 : -1) * Math.min(1.2, over * 2.4));
       s.old.visible = true;
     } else { s.old.visible = false; boxHome(s.old, p); setLidOf(s.old, 0); }
@@ -880,7 +891,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     const u = off + (BOX.u - off) * b;
     const lift = b < 0.2 ? -0.75 + 0.9 * (1 - (1 - b / 0.2) * (1 - b / 0.2)) : 0.15 * (1 - ease((b - 0.2) / 0.8));
     const P = L.seatPos(p, u, 0, BOX.v);
-    s.neu.position.set(P.x, L.y + BOX.h / 2 + lift, P.z); s.neu.rotation.set(0, yaw, 0);
+    s.neu.position.set(P.x, L.y + (BOX.h - BOX.lid) / 2 + lift, P.z); s.neu.rotation.set(0, yaw, 0);
     s.neu.visible = k > 0.35;
     // the old print of the mat fades out
     const f = fades[p];
