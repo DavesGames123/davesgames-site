@@ -42,6 +42,9 @@
 //  it when the import works. The brain map (ui/fly3d/brain3d.js,
 //  createBrainMap) loads the same way. Without it there is no map.
 //
+//  Play mode: the map of the other fly is big, behind its chair, and
+//  faces the camera (grep -n 'big brain'). The map of your seat hides.
+//
 //  The brain map floats beside the head of its fly, not inside the head:
 //  in a head capsule the map is too small to read at the wide shot, and it
 //  would hide the eyes, which carry the character of the fly.
@@ -787,13 +790,71 @@ export function createDuelScene(canvas, opts = {}) {
   // camera side. A tall frame (a phone) looks along the line between the
   // seats, so a map at the side is out of the frame. There, each map
   // floats above the head of its fly.
+  let tallFrame = false;
   function placeBrains(tall) {
+    tallFrame = !!tall;
     for (let p = 0; p < 2; p++) {
       if (tall) seatPos(p, 0, 2.55, T.seatV + 0.05, brainHolders[p].position);
       else seatPos(p, p === 0 ? -2.4 : 2.4, 2.1, T.seatV - 0.35, brainHolders[p].position);
     }
   }
   placeBrains(false);
+  // The ring and the label of each map (bigBrain moves them).
+  const brainParts = [null, null];
+  // ---------------------------------------------------------- big brain
+  // Play mode: the map of the other fly is large, in the hall behind its
+  // chair, and turns to face the camera. A wide frame puts it beside the
+  // fly (screen left, BIG.wide), a tall frame above it (BIG.tall). It is
+  // past the far edge of the table, so it never covers your hand or your
+  // mat (tests/fly3d-bigbrain.test.mjs). It fires on each decision of the
+  // fly with the real trace (the 'think' step). When the orbit takes the
+  // camera to the far side of the table, the map hides: there it would
+  // stand between the camera and the board.
+  // Seat space of the other fly: u (+ = screen left from your seat),
+  // y above the table top, dv behind its seat, scale of the 0.62 map.
+  const BIG = { wide: { u: 2.3, y: 1.1, dv: 0.7, scale: 1.7 }, tall: { u: 0, y: 3.05, dv: 0.8, scale: 1.75 } };
+  const BIG_TALL = 0.8;     // under this aspect: the tall seat pose and map
+  // The place of the big map now. A wide frame near BIG_TALL moves the
+  // map in toward the fly (u), so it stays in the frame.
+  function bigSpec() {
+    const a = camera.aspect || 1.6;
+    if (a < BIG_TALL) return BIG.tall;
+    return { ...BIG.wide, u: BIG.wide.u * Math.min(1, a / 1.05) };
+  }
+  let bigP = -1;
+  function bigBrain() {
+    const want = fpSeat == null || !brains[1 - fpSeat] ? -1 : 1 - fpSeat;
+    for (let p = 0; p < 2; p++) {
+      const g = brainHolders[p], parts = brainParts[p], big = p === want;
+      if (big) {
+        const b = bigSpec();
+        seatPos(p, b.u, b.y, T.seatV + b.dv, g.position);
+        g.scale.setScalar(b.scale);
+        if (parts) { parts.ring.visible = false; parts.label.position.y = 0.7; }
+      } else if (p === bigP || g.scale.x !== 1) {
+        g.scale.setScalar(1); g.rotation.set(0, YAW[p], 0);
+        if (parts) { parts.ring.visible = true; parts.label.position.y = -0.98; }
+      }
+    }
+    if (bigP !== want) { bigP = want; placeBrains(tallFrame); if (want >= 0) bigBrainPlace(); }
+    for (let p = 0; p < 2; p++) brainHolders[p].visible = p === want ? true : brainsOn && fpSeat == null;
+  }
+  // re-place the big map after placeBrains (a resize) moved it
+  function bigBrainPlace() {
+    if (bigP < 0) return;
+    const b = bigSpec();
+    seatPos(bigP, b.u, b.y, T.seatV + b.dv, brainHolders[bigP].position);
+  }
+  // Each frame: face the camera (a turn about +y only) and hide when the
+  // camera is on the far side of the table.
+  function bigBrainFrame() {
+    if (bigP < 0) return;
+    const g = brainHolders[bigP];
+    const dx = camera.position.x - g.position.x, dz = camera.position.z - g.position.z;
+    g.rotation.set(0, Math.atan2(dx, dz), 0);
+    const own = 1 - bigP;      // your seat: +z for seat 0, -z for seat 1
+    g.visible = (own === 0 ? camera.position.z : -camera.position.z) > 0;
+  }
   // One map per fly, from its own connectome (connectomes[1] may be the
   // FlyWire file of fly B). A thin ring in the seat colour and a label
   // stand under each map.
@@ -814,6 +875,7 @@ export function createDuelScene(canvas, opts = {}) {
         brainHolders[p].add(ring);
         const label = W.sprites.make(`${names[p]} · model mushroom body`, TOKENS.ink2, 0.13, { size: 40 });
         label.position.y = -0.98; brainHolders[p].add(label);
+        brainParts[p] = { ring, label };
         brains[p] = bm;
       } catch (e) { console.warn('fly-duel 3d: brain map failed', e); }
     }
@@ -826,7 +888,7 @@ export function createDuelScene(canvas, opts = {}) {
   ]).then(([flyMod, brainMod]) => {
     if (disposed) return;
     if (flyMod) for (const f of flies) { try { mountFly(f, flyMod); } catch (e) { console.warn('fly-duel 3d: fly.js failed, keeping the stand-in', e); mountFly(f, PLACEHOLDER); } }
-    return mountBrains(brainMod).then(() => ({ fly: flyMod ? 'fly.js' : 'placeholder', brain: brains.some(Boolean) }));
+    return mountBrains(brainMod).then(() => { if (!disposed) showBrains(); }).then(() => ({ fly: flyMod ? 'fly.js' : 'placeholder', brain: brains.some(Boolean) }));
   });
 
   // ---------------------------------------------------------- state
@@ -1217,16 +1279,29 @@ export function createDuelScene(canvas, opts = {}) {
   }
   const seatDir = (p, out) => out.set(0, 0, p === 0 ? 1 : -1);
   // First person at a seat (play mode): above and behind the head of the
-  // fly at that seat, looking down over its own mat to the other fly. The
-  // line of sight to the mat centre passes over the head of the fly.
-  // A tall frame (a phone) steps up and back and looks more down, so the
-  // whole mat is in the frame; the field of view opens a little (FP_FOV).
+  // fly at that seat, looking over its own mat to the other fly and its
+  // big brain map (grep -n 'big brain'). SEAT_POSE is in seat space (y
+  // above the table top, v toward the seat). The numbers come from a
+  // search that made the other fly as large as possible with these
+  // limits: the fly and its map in the frame, your creature row above
+  // 70 % of the frame height (clear of the hand), your head under that
+  // row, and the map above your mat. wide: aspect 1 and more. tall:
+  // aspect 0.5 (a phone). Between, a linear mix (seatMix).
+  // Before: a 48 deg view from just over the head; the map of the other
+  // fly did not fit above it.
+  const SEAT_POSE = { wide: { y: 2.2, v: 6.0, ly: 0, lv: -1.0, fov: 36 }, tall: { y: 4.2, v: 7.8, ly: 0.4, lv: -1.0, fov: 53 } };
+  const seatTall = () => (camera.aspect || 1.6) < BIG_TALL;
+  // A wide pose under aspect 1.1 opens its view a little, so the map
+  // beside the fly stays in the frame.
+  const seatVal = k => {
+    const a = camera.aspect || 1.6;
+    if (seatTall()) return k === 'fov' ? SEAT_POSE.tall.fov * Math.max(1, Math.sqrt(0.513 / a)) : SEAT_POSE.tall[k];
+    return k === 'fov' ? SEAT_POSE.wide.fov * Math.max(1, Math.sqrt(1.1 / a)) : SEAT_POSE.wide[k];
+  };
   let fpSeat = null;
   function seatPose(p, pos, look) {
-    const a = camera.aspect || 1.6;
-    const tall = Math.max(0, Math.min(1.2, (1 / a - 1) / (1 / 0.46 - 1)));
-    seatPos(p, 0, 2.05 + 7.4 * tall, T.seatV + 0.55 + 2.8 * tall, pos);
-    seatPos(p, 0, 0, 0.2 + 0.5 * tall, look);
+    seatPos(p, 0, seatVal('y'), seatVal('v'), pos);
+    seatPos(p, 0, seatVal('ly'), seatVal('lv'), look);
   }
   const shotK = (secs) => (W.reduced ? 1 : easeIO(Math.min(1, (sceneT - dir.state.since) / secs)));
   function shotPose(dt) {
@@ -1348,14 +1423,14 @@ export function createDuelScene(canvas, opts = {}) {
     cam.userUntil = camMode === 'free' ? Infinity : now;
     if (camMode !== 'free') { cam.pos.copy(camera.position); if (controls) cam.look.copy(controls.target); }
   }
-  const FOV = 40, FP_FOV = [48, 60];      // seat shot: wide frame, tall frame
+  const FOV = 40;                          // the seat shot: seatVal('fov')
   function updateCamera(dt) {
     if (camRig) {
       try { camRig(camera, dt, cam); } catch (e) { console.warn('fly-duel 3d: the saver rig failed', e); setRig(null); }
       if (controls) controls.target.copy(cam.look);
       return;
     }
-    const fov = dir.state.shot === 'seat' ? FP_FOV[(camera.aspect || 1.6) < TALL ? 1 : 0] : FOV;
+    const fov = dir.state.shot === 'seat' ? Math.round(seatVal('fov') * 10) / 10 : FOV;
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
     shotPose(dt);
     if (now < cam.userUntil) return;
@@ -1649,6 +1724,7 @@ export function createDuelScene(canvas, opts = {}) {
     const w = Math.max(1, canvas?.clientWidth || 960), h = Math.max(1, canvas?.clientHeight || 540);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     placeBrains(camera.aspect < TALL);
+    bigBrainPlace();
     renderer?.setSize(w, h, false);
   }
   resize();
@@ -1690,6 +1766,7 @@ export function createDuelScene(canvas, opts = {}) {
     hall.update(sdt, { focus: dir.state.shot === 'crowd' ? _t1.set(0, T.y, 0) : cam.look });
     for (let p = 0; p < 2; p++) brains[p]?.update?.(dt);
     updateCamera(dt);
+    bigBrainFrame();
     if (controls && now < cam.userUntil) controls.update();
     renderer?.render(scene, camera);
   }
@@ -1865,7 +1942,7 @@ export function createDuelScene(canvas, opts = {}) {
   // the scorecards already show the fly's brain. setBrains keeps the
   // watch-mode choice, and showBrains applies it when first person ends.
   let brainsOn = true;
-  function showBrains() { for (const g of brainHolders) g.visible = brainsOn && fpSeat == null; }
+  function showBrains() { bigBrain(); }
   function setBrains(on) { brainsOn = !!on; showBrains(); }
   function stats() {
     let meshes = 0, tris = 0;
@@ -1880,7 +1957,7 @@ export function createDuelScene(canvas, opts = {}) {
       cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length,
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
-      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(), dice: dice.stats(),
+      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, bigBrain: bigP, hall: hall.stats(), dice: dice.stats(),
       firstPerson: fpSeat, hidden: hiddenSeat(), orbit: fpOrbit ? { ...fpOrbit } : null, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
     };
   }

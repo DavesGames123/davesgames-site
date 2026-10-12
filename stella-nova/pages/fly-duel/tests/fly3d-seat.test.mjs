@@ -5,8 +5,9 @@
 //  Checks setFirstPerson, pickPermanent, pickCard and highlight of
 //  ui/fly3d/scene.js (the API that ui/play/play.js codes against):
 //
-//    seat       the camera sits behind the human seat, its own mat and
-//               the other fly in the frame (16:9 and a phone), and it
+//    seat       the camera sits behind the human seat, its own mat (on a
+//               phone: its creature and land rows) and the other fly in
+//               the frame (16:9 and a phone), and it
 //               stays there while records play; null gives the camera
 //               back
 //    picks      a permanent and a hand card under a screen point, a miss
@@ -60,9 +61,15 @@ for (const [w, h] of [[960, 540], [390, 760]]) {
     const cam = sc.camera;
     const behind = seat === 0 ? cam.position.z > TABLE.seatV : cam.position.z < -TABLE.seatV;
     ok(behind && cam.position.y > TABLE.y + 1.5, `${tag} seat ${seat}: camera above and behind the seat (${cam.position.toArray().map(v => v.toFixed(1))})`);
-    const want = [seatPos(seat, -MAT.u + 0.3, 0, MAT.v0 + 0.2), seatPos(seat, MAT.u - 0.3, 0, MAT.v0 + 0.2), seatPos(seat, 0, 0, MAT.v1 - 0.4), seatPos(1 - seat, 0, 1.2, TABLE.seatV - 0.2)];
+    // A wide frame shows the whole width of your mat. A phone frame (the
+    // tall seat pose makes the other fly larger) shows your creature row
+    // end to end and your land row; the mat corners may leave the frame.
+    const tall = w < h;
+    const want = tall
+      ? [seatPos(seat, -TABLE.rowHalf, 0, TABLE.creatureV), seatPos(seat, TABLE.rowHalf, 0, TABLE.creatureV), seatPos(seat, 0, 0, TABLE.landV), seatPos(1 - seat, 0, 1.2, TABLE.seatV - 0.2)]
+      : [seatPos(seat, -MAT.u + 0.3, 0, MAT.v0 + 0.2), seatPos(seat, MAT.u - 0.3, 0, MAT.v0 + 0.2), seatPos(seat, 0, 0, MAT.v1 - 0.4), seatPos(1 - seat, 0, 1.2, TABLE.seatV - 0.2)];
     const out = want.filter(p => !inFrame(cam, p)).length;
-    ok(out === 0, `${tag} seat ${seat}: own mat and the other fly in the frame (${out} out)`);
+    ok(out === 0, `${tag} seat ${seat}: ${tall ? 'creature and land rows' : 'own mat'} and the other fly in the frame (${out} out)`);
   }
   sc.setFirstPerson(0);
   await playSome(sc, M, 12);
