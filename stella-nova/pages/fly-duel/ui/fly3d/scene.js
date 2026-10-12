@@ -64,6 +64,11 @@
 //      the other fly in view) and holds it there. pickPermanent and
 //      pickCard take client px (a pointer event) and raycast the cards.
 //      highlight marks legal attackers, blockers and targets with rings.
+//      Hidden cards: in first person the hand and the library of the
+//      other fly show the question-mark back (textureCache mystery) on
+//      both caps. The mesh then has no card id, and pickCard gives id
+//      null for it. A lifted card is public (it is played) and shows its
+//      face. Watch mode shows every face.
 //      setCamera: 'auto' (the steps pick the shots), 'wide', 'free' (the
 //      user orbits, no cuts), 'script' (only shoot() cuts). Shots
 //      (ui/fly3d/director.js SHOTS): wide, over, close, follow, dolly,
@@ -79,6 +84,9 @@
 //      grep -n 'function textureCache'        faces and back (ui/cardface.js)
 //      grep -n 'function cardGeometry'        chamfered card mesh
 //      grep -n 'class CardObj'                one card on the table
+//      grep -n 'setHidden(on)'                question-mark caps, no id
+//      grep -n 'function drawMystery'         the question-mark back
+//      grep -n 'function hiddenSeat'          whose hand is hidden
 //      ui/fly3d/hall.js buildHall             hall, folding table, mats,
 //                                             chairs, crowd, other tables
 //      grep -n 'function buildLights'         key, rim, fill
@@ -230,7 +238,43 @@ export function textureCache({ coarse = false } = {}) {
     } else back = undefined;
     return back;
   }
-  return { face, back: backTex, size: [FW, FH], dispose() { for (const t of all) t.dispose(); faces.clear(); } };
+  // The hidden card (play mode): the card back with a big question mark.
+  // Both caps of a hand card of the other fly and the top of its library
+  // show it, so no camera angle shows a face (and the texture carries no
+  // card id). Our own design, from cardBack().
+  let mystery = null;
+  function mysteryTex() {
+    if (mystery !== null) return mystery;
+    const cv = makeCanvas(FW, FH);
+    const g = cv?.getContext?.('2d');
+    if (g) {
+      const paint = () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, FW, FH); drawMystery(g, FW, FH); if (mystery) mystery.needsUpdate = true; };
+      paint();
+      mystery = canvasTexture(cv);
+      mystery.userData.repaint = paint;
+      mystery.userData.mystery = true;
+      all.push(mystery);
+    } else mystery = undefined;
+    return mystery;
+  }
+  return { face, back: backTex, mystery: mysteryTex, size: [FW, FH], dispose() { for (const t of all) t.dispose(); faces.clear(); } };
+}
+
+// The question mark on the card back: a dark disc in the centre with a
+// bronze ring and a big '?' (MYSTERY_GLYPH). Shared by the 3D hidden card.
+export const MYSTERY_GLYPH = '?';
+function drawMystery(g, w, h) {
+  cardBack(g, { w, h });
+  const r = Math.min(w, h) * 0.34, cx = w / 2, cy = h / 2;
+  g.save();
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(10,8,5,0.88)'; g.fill();
+  g.lineWidth = Math.max(2, r * 0.07); g.strokeStyle = '#c9a45a'; g.stroke();
+  g.fillStyle = '#e8cf8a';
+  g.font = `700 ${Math.round(r * 1.5)}px ${SANS}`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(MYSTERY_GLYPH, cx, cy + r * 0.06);
+  g.restore();
 }
 
 // Text on a sprite (damage numbers, banners). Crisp: a dark outline, no
@@ -343,7 +387,19 @@ class CardObj {
     this.scale = 1; this.scaleTo = 1;
     this.lunge = null;                // { dir: Vector3, t, dur }
     this.pulse = 0;
+    this.hidden = false;
     W.cards.add(this.mesh);
+  }
+  // Hidden (play mode, a hand card of the other fly): both caps show the
+  // question-mark back, and the mesh carries no card id.
+  setHidden(on) {
+    on = !!on;
+    if (on === this.hidden) return;
+    this.hidden = on;
+    const ms = this.mesh.material;
+    ms[0] = on ? this.W.mysteryMat : this.front;
+    ms[1] = on ? this.W.mysteryMat : this.W.backMat;
+    this.mesh.userData.card = on ? null : this.id;
   }
   place(p, q) { this.mesh.position.copy(p); this.mesh.quaternion.copy(q); this.toP.copy(p); this.toQ.copy(q); this.t = 1; this.dur = 0; }
   // Move toward p, q. A zone change (this.next) always starts a new arc.
@@ -632,6 +688,9 @@ export function createDuelScene(canvas, opts = {}) {
   const backTex = W.tex.back();
   W.backMat = new THREE.MeshStandardMaterial({ map: backTex || null, color: backTex ? 0xffffff : 0x111623, roughness: 0.6 });
   W.edgeMat = new THREE.MeshStandardMaterial({ color: 0xe9e1cf, roughness: 0.8 });
+  const mysteryTex = W.tex.mystery();
+  W.mysteryMat = new THREE.MeshStandardMaterial({ map: mysteryTex || null, color: mysteryTex ? 0xffffff : 0x1a1408, roughness: 0.6 });
+  W.mysteryMat.userData.mystery = true;
   const hall = buildHall({
     coarse, reduced, seed: 7,
     layout: { y: T.y, halfLen: T.halfLen, halfDepth: T.halfDepth, seatV: T.seatV, seatTop: T.seatTop, seatPos: (p, u, y, v) => seatPos(p, u, y, v) },
@@ -644,10 +703,11 @@ export function createDuelScene(canvas, opts = {}) {
 
   // ---------------------------------------------------------- piles
   const pileGeo = new THREE.BoxGeometry(T.cardW * 0.98, 1, T.cardH * 0.98); pileGeo.translate(0, 0.5, 0);
-  const pileMat = [W.edgeMat, W.edgeMat, W.backMat, W.edgeMat, W.edgeMat, W.edgeMat];
-  // BoxGeometry face order: +x -x +y -y +z -z. The +y face shows the back.
+  // BoxGeometry face order: +x -x +y -y +z -z. The +y face shows the back
+  // (the question mark on the library of the other fly in play mode).
+  const pileMats = [W.backMat, W.mysteryMat].map(top => [W.edgeMat, W.edgeMat, top, W.edgeMat, W.edgeMat, W.edgeMat]);
   const piles = [0, 1].map(p => {
-    const lib = new THREE.Mesh(pileGeo, pileMat);
+    const lib = new THREE.Mesh(pileGeo, pileMats[0]);
     lib.position.copy(seatPos(p, T.deckU, 0.008, T.deckV)); lib.quaternion.copy(seatQuat(p, 0, 0, 0));
     lib.castShadow = lib.receiveShadow = true;
     scene.add(lib);
@@ -892,17 +952,20 @@ export function createDuelScene(canvas, opts = {}) {
       stacks[p] = stackLayout(pl.battlefield);
       updatePlates(p);
       const H = Z.hand[p];
+      const secret = p === hiddenSeat();
       H.forEach((o, i) => {
+        o.setHidden(secret);
         handPose(p, i, H.length); snap ? o.place(P, Qt) : o.target(P, Qt, 0.3, 0, true);
         o.scaleTo = T.handScale; o.dimTo = 1; o.glowTo = 0; o.ring.visible = false;
       });
-      for (const x of pl.battlefield) { const o = Z.perms.get(x.uid); if (!o) continue; permPose(p, x); snap ? o.place(P, Qt) : o.target(P, Qt, 0.35); }
-      Z.grave[p].forEach((o, i) => { gravePose(p, i); snap ? o.place(P, Qt) : o.target(P, Qt, 0.4); o.scaleTo = 1; o.dimTo = 1; o.glowTo = 0; o.ring.visible = false; if (o.badge) updateBadge(o, { id: 'x', dmg: 0, pp: 0 }); });
-      if (Z.held[p]) { const o = Z.held[p]; stagePose(p); snap ? o.place(P, Qt) : o.target(P, Qt, 0.4); o.scaleTo = 1; o.dimTo = 1; o.glowTo = 0; o.ring.visible = false; }
+      for (const x of pl.battlefield) { const o = Z.perms.get(x.uid); if (!o) continue; o.setHidden(false); permPose(p, x); snap ? o.place(P, Qt) : o.target(P, Qt, 0.35); }
+      Z.grave[p].forEach((o, i) => { o.setHidden(false); gravePose(p, i); snap ? o.place(P, Qt) : o.target(P, Qt, 0.4); o.scaleTo = 1; o.dimTo = 1; o.glowTo = 0; o.ring.visible = false; if (o.badge) updateBadge(o, { id: 'x', dmg: 0, pp: 0 }); });
+      if (Z.held[p]) { const o = Z.held[p]; o.setHidden(false); stagePose(p); snap ? o.place(P, Qt) : o.target(P, Qt, 0.4); o.scaleTo = 1; o.dimTo = 1; o.glowTo = 0; o.ring.visible = false; }
       // library pile height and count
       const n = pl.library;
       const pile = piles[p];
       pile.lib.scale.y = Math.max(0.0005, n * 0.007); pile.lib.visible = n > 0;
+      pile.lib.material = pileMats[secret ? 1 : 0];
       if (pile.n !== n) {
         pile.n = n;
         const old = pile.label; const pos = old.position.clone();
@@ -1677,6 +1740,9 @@ export function createDuelScene(canvas, opts = {}) {
   // cuts and the orbit is off, so a tap picks a card. null: back to the
   // camera mode from before.
   let fpPrev = null;
+  // The seat whose hand and library show the question mark: the other
+  // fly in play mode, none in watch mode.
+  function hiddenSeat() { return fpSeat == null ? -1 : 1 - fpSeat; }
   function setFirstPerson(seat) {
     if (seat === 0 || seat === 1) {
       if (fpSeat == null) fpPrev = camMode;
@@ -1692,6 +1758,7 @@ export function createDuelScene(canvas, opts = {}) {
       dir.request('wide', 0, sceneT, { force: true });
       if (controls) controls.enabled = true;
     }
+    layout(false);       // the hidden hand changes with the seat at once
     return fpSeat;
   }
   // Screen point (client px, as a pointer event gives) -> NDC.
@@ -1724,7 +1791,8 @@ export function createDuelScene(canvas, opts = {}) {
   // A hand card under the point: { seat, index, id } or null.
   function pickCard(x, y) {
     const list = [], at = new Map();
-    for (let p = 0; p < 2; p++) Z.hand[p].forEach((o, i) => { list.push(o.mesh); at.set(o.mesh, { seat: p, index: i, id: o.id }); });
+    // a hidden card (the hand of the other fly in play mode) gives no id
+    for (let p = 0; p < 2; p++) Z.hand[p].forEach((o, i) => { list.push(o.mesh); at.set(o.mesh, { seat: p, index: i, id: o.hidden ? null : o.id }); });
     const h = castAt(x, y, list);
     return h ? at.get(h.object) : null;
   }
@@ -1791,7 +1859,7 @@ export function createDuelScene(canvas, opts = {}) {
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(), dice: dice.stats(),
-      firstPerson: fpSeat, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
+      firstPerson: fpSeat, hidden: hiddenSeat(), highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
     };
   }
   function dispose() {

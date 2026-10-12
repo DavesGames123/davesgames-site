@@ -27,6 +27,7 @@
 //      grep -n 'export function createPlayController'
 //      grep -n 'export function flyKeeps'      fixed keep rule
 //      grep -n 'export function top3'          the fly's best moves
+//      grep -n 'export function publicTop'     hide the hand in the top 3
 //      grep -n 'export function deckColours'   colours of a deck
 //      grep -n 'function redeal'               the mulligan deal
 // ============================================================================
@@ -82,6 +83,19 @@ export function top3(rules, rec, n = 3) {
     let text = rec.legal[i].type;
     try { text = rules.describe(rec.legal[i], rec.before); } catch { /* keep the type */ }
     return { i, text, value: sc[i], chosen: i === rec.idx };
+  });
+}
+
+// The top-3 rows that you may see in play mode. A move that the fly did
+// not make and that plays a card (a land or a spell) names a card in its
+// hand, which is hidden information. That row shows HIDDEN_MOVE and keeps
+// its value. The move that the fly made is public, so it keeps its text.
+export const HIDDEN_MOVE = 'A card from its hand';
+export function publicTop(top, legal) {
+  return (top || []).map(t => {
+    const a = legal?.[t.i];
+    if (t.chosen || !a || (a.type !== 'land' && a.type !== 'cast')) return t;
+    return { ...t, text: HIDDEN_MOVE, hidden: true };
   });
 }
 
@@ -196,7 +210,7 @@ export function createPlayController(opts) {
   function flyStep() {
     if (need() !== 'fly') return null;
     const rec = match.next();
-    if (rec) rec.top = top3(rules, rec);
+    if (rec) rec.top = publicTop(top3(rules, rec), rec.legal);
     return after(rec);
   }
 
