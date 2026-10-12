@@ -24,7 +24,7 @@
 
    REGIONS
      .topbar       brand and title (hidden in the shell frame)
-     #views        the view tabs (data-view)
+     #views        the squircle view tiles (viewtiles.js, data-view)
      #stage        canvas#table, #card (hover), #legend, #hud
      #panel        colour, property, colour map, temperature, years,
                    scatter axes, filters, compare
@@ -32,7 +32,7 @@
      #dock         phone: Views · Colour · Filter · Find
 
    GREP MAP
-     grep -n 'data-view='     the view tabs
+     grep -n 'class="vtabs'   the view tiles host
      grep -n 'data-color='    the colour modes
      grep -n 'id="temp'       the temperature slider
      grep -n 'id="year'       the discovery year slider

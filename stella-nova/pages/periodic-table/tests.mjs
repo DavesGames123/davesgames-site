@@ -184,5 +184,30 @@ if (plan) {
   ok(!bad.length, 'tower: each box draws the sides that face the camera, not its far walls', bad.join('; '));
 }
 
+// ── view tiles and the phone fit ────────────────────────────────────────────
+{
+  const { miniPoints, squircle } = await import('./viewtiles.js');
+  const { fitScale, MIN_TILE_PX } = await import('./render.js');
+  const bad = [];
+  for (const v of L.VIEWS) {
+    const M = miniPoints(v.id, 56);
+    const out = M.pts.filter(p => p.a > 0 && (p.x - p.s / 2 < 0 || p.x + p.s / 2 > 56 || p.y - p.s / 2 < -1 || (p.by ?? p.y) + p.s / 2 > 57));
+    if (M.pts.length !== 118 || out.length) bad.push(`${v.id}: ${M.pts.length} points, ${out.length} outside`);
+  }
+  ok(!bad.length, 'tiles: every view miniature holds 118 elements inside its 56 px squircle', bad.join('; '));
+  const path = []; const g = { beginPath() {}, closePath() {}, moveTo(x, y) { path.push([x, y]); }, lineTo(x, y) { path.push([x, y]); } };
+  squircle(g, 0, 0, 100, 100);
+  const corner = Math.min(...path.map(([x, y]) => Math.hypot(x - 100, y - 100)));
+  ok(path.every(([x, y]) => x >= -1e-9 && x <= 100 + 1e-9 && y >= -1e-9 && y <= 100 + 1e-9) && corner > 8 && corner < 25, 'tiles: the squircle stays in its box and rounds its corners', `corner gap ${corner.toFixed(1)}`);
+
+  const std = L.buildLayout('standard'), b = std.bounds, w = b.x1 - b.x0, h = b.y1 - b.y0;
+  const phone = { w: 362, h: 560 }, desk = { w: 1110, h: 700 };
+  const fp = fitScale(phone, w, h, MIN_TILE_PX / 0.92), fd = fitScale(desk, w, h, 0);
+  ok(fp.anchorLeft && fp.k * 0.92 >= MIN_TILE_PX - 1e-9 && fp.k * h <= phone.h + 1e-9, 'fit: phone portrait standard keeps 24 px tiles and starts at the left', `tile ${(fp.k * 0.92).toFixed(1)} px`);
+  ok(!fd.anchorLeft && Math.abs(fd.k - Math.min(desk.w / w, desk.h / h)) < 1e-9, 'fit: desktop fits the whole table as before');
+  const short = fitScale({ w: 362, h: 150 }, w, h, MIN_TILE_PX / 0.92);
+  ok(short.k * h <= 150 + 1e-9, 'fit: the minimum tile never makes the table taller than the frame');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

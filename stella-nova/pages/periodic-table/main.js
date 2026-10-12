@@ -3,7 +3,8 @@
 // ----------------------------------------------------------------------------
 //  One state object S (render.js reads it) and one Table renderer on
 //  canvas#table. Everything the user does changes S or starts a morph:
-//    view tabs        setView(id): the elements fly to the new layout
+//    view tiles       setView(id): the elements fly to the new layout
+//                     (viewtiles.js: a squircle miniature per view)
 //    colour modes     S.color, S.prop, S.cmap (ct-lab colour map picker)
 //    temperature      S.temp with S.phaseOn: tiles melt, boil, flash
 //    discovery year   the timeline view's year (play scrubs it)
@@ -31,6 +32,7 @@ import { Table } from './render.js';
 import { drawAtom } from './atom.js';
 import { cardHTML, compareHTML, drawIE, drawRadius } from './card.js';
 import { createPicker } from '../ct-lab/colormaps/picker.js';
+import { mountViewTiles } from './viewtiles.js';
 import './saver.js';
 
 const $ = id => document.getElementById(id);
@@ -72,13 +74,7 @@ function setView(id, { keepColor = false, instant = false } = {}) {
 function refreshView() { T.update(viewOpts(), now()); writeHash(); }
 
 // ── controls ────────────────────────────────────────────────────────────────
-const tabs = document.querySelector('.vtabs');
-for (const v of VIEWS) {
-  const b = document.createElement('button');
-  b.type = 'button'; b.dataset.view = v.id; b.textContent = v.name; b.title = v.hint;
-  b.onclick = () => setView(v.id);
-  tabs.appendChild(b);
-}
+const tiles = mountViewTiles(document.querySelector('.vtabs'), VIEWS, { onPick: id => setView(id) });
 const numeric = PROPS.filter(p => p.id !== 'halflife' && p.id !== 'isotopes');
 for (const sel of [$('prop'), $('axX'), $('axY')]) for (const p of numeric) {
   const o = document.createElement('option'); o.value = p.id; o.textContent = p.name + (p.unit ? ` (${p.unit})` : ''); sel.appendChild(o);
@@ -167,7 +163,7 @@ function syncSeg() {
   document.querySelectorAll('#colorSeg button').forEach(b => b.classList.toggle('on', b.dataset.color === (S.phaseOn ? 'phase' : S.color)));
 }
 function syncUI() {
-  document.querySelectorAll('.vtabs button').forEach(b => b.classList.toggle('on', b.dataset.view === S.view));
+  tiles.setActive(S.view);
   syncSeg();
   $('prop').value = S.prop; $('axX').value = S.x; $('axY').value = S.y;
   document.querySelectorAll('#abSeg button').forEach(b => b.classList.toggle('on', b.dataset.source === S.source));
@@ -398,7 +394,8 @@ function clearFrame() {
 function hud() {
   const e = S.hover >= 0 ? ELEMENTS[S.hover] : S.pin >= 0 ? ELEMENTS[S.pin] : null;
   const m = S.match ? `${S.match.size} of ${N} shown` : `${N} elements`;
-  $('hud').innerHTML = `<b>${VIEW[S.view].name}</b> · ${m}${e ? ` · <b>${e.sym}</b> ${e.name}` : ''}`;
+  const pan = T.panHint && T.user.px === 0 && !e ? ' · drag sideways for the rest' : '';
+  $('hud').innerHTML = `<b>${VIEW[S.view].name}</b> · ${m}${e ? ` · <b>${e.sym}</b> ${e.name}` : ''}${pan}`;
 }
 let lastHud = 0;
 function frame() {

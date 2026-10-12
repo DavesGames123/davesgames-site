@@ -4,7 +4,7 @@
    Dark ink with a cool glow, Inter for the interface, STIX Two Text for
    names, the system monospace for numbers. The canvas fills the stage;
    the panel floats at the left, the inspect panel at the right.
-     grep -n 'TOP'      topbar and view tabs
+     grep -n 'TOP'      topbar and the squircle view tiles
      grep -n 'STAGE'    canvas, hud, hint, play bar
      grep -n 'CARD'     the hover card and its layered entrance
      grep -n 'PANEL'    the controls
@@ -16,7 +16,7 @@
 :root{
   --ink:#060810; --ink2:#0c1020; --ink3:#141a2e; --text:#e2e8f5; --dim:#8f9ab3; --faint:#3a4360;
   --glow:#7fb4ff; --gold:#ffd27a; --line:rgba(127,180,255,0.12); --line-b:rgba(127,180,255,0.26);
-  --top:48px; --tabs:46px; --panel-w:292px; --insp-w:380px; --dock-h:0px;
+  --top:48px; --tabs:92px; --vt:54px; --vt-w:76px; --panel-w:292px; --insp-w:380px; --dock-h:0px;
   --sans:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --serif:'STIX Two Text','Times New Roman',Georgia,serif;
   --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
@@ -38,11 +38,18 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:1px solid 
 html.in-frame{--top:0px}
 html.in-frame .topbar{display:none}
 #views{position:fixed;top:var(--top);left:0;right:0;height:var(--tabs);z-index:25;display:flex;align-items:center;gap:12px;padding:0 14px;background:linear-gradient(180deg,rgba(6,8,16,0.9),rgba(6,8,16,0.55));border-bottom:1px solid var(--line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.vtabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+/* view tiles: a squircle miniature of each layout (viewtiles.js draws it) */
+.vtabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;height:100%;align-items:center;padding:0 2px;scroll-snap-type:x proximity;-webkit-mask-image:linear-gradient(90deg,transparent,#000 10px,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(90deg,transparent,#000 10px,#000 calc(100% - 18px),transparent)}
 .vtabs::-webkit-scrollbar{display:none}
-.vtabs button{flex:none;height:30px;padding:0 12px;border-radius:15px;border:1px solid transparent;background:transparent;font-size:0.78rem;color:var(--dim);letter-spacing:0.02em;transition:color .2s,background .2s,border-color .2s}
-.vtabs button:hover{color:var(--text);background:rgba(127,180,255,0.07)}
-.vtabs button.on{color:#fff;border-color:var(--line-b);background:linear-gradient(180deg,rgba(127,180,255,0.22),rgba(127,180,255,0.08));box-shadow:0 0 18px rgba(127,180,255,0.18)}
+.vtile{flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;width:var(--vt-w);padding:0;border:0;background:none;color:var(--dim);scroll-snap-align:center;transition:color .2s,transform .2s cubic-bezier(.2,.8,.2,1)}
+.vtile canvas{display:block;width:var(--vt);height:var(--vt);transition:filter .25s,transform .25s cubic-bezier(.2,.8,.2,1)}
+.vtile span{font-size:0.68rem;line-height:1.1;letter-spacing:0.01em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.vtile:hover{color:var(--text)}
+.vtile:hover canvas{transform:translateY(-2px);filter:brightness(1.15)}
+.vtile.on{color:#fff}
+.vtile.on canvas{filter:drop-shadow(0 0 7px rgba(127,180,255,0.55)) drop-shadow(0 0 2px rgba(160,200,255,0.5))}
+.vtile:focus-visible{outline:none}
+.vtile:focus-visible canvas{filter:drop-shadow(0 0 0 1px var(--gold)) drop-shadow(0 0 6px rgba(255,210,122,0.7))}
 .find{display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line-b);border-radius:15px;background:var(--ink2);color:var(--dim)}
 .find input{width:150px;border:0;background:transparent;outline:none;font-size:0.8rem;color:var(--text)}
 
@@ -151,7 +158,7 @@ body.insp .playbar{right:calc(var(--insp-w) + 28px)}
 
 /* TOUCH. 44 px targets on any coarse pointer. */
 @media (pointer:coarse){
-  .vtabs button,.seg button,.btns button,.ghost,.chips button,.find,.x,.atomtog,.playbar button{min-height:44px}
+  .seg button,.btns button,.ghost,.chips button,.find,.x,.atomtog,.playbar button{min-height:44px}
   .row select,.find input{min-height:44px;font-size:16px}
   .x{width:44px}
 }
@@ -159,7 +166,9 @@ body.insp .playbar{right:calc(var(--insp-w) + 28px)}
 /* PHONE. The panel and the inspect panel become bottom sheets; the dock
    opens them. The card shows at the top of the stage. */
 @media (max-width:760px),(max-height:520px) and (pointer:coarse){
-  :root{--tabs:50px;--dock-h:58px}
+  :root{--tabs:80px;--vt:46px;--vt-w:62px;--dock-h:58px}
+  #views{padding:0 8px;gap:8px}
+  .vtile span{font-size:0.64rem}
   .find input{width:96px}
   #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;max-height:62vh;border-radius:18px 18px 0 0;transform:translateY(110%);transition:transform .32s cubic-bezier(.2,.8,.2,1);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
   #panel.open{transform:none}

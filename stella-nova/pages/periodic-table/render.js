@@ -25,6 +25,7 @@
 //    grep -n "setView("                start a morph to a layout
 //    grep -n "positions("              every element at this frame
 //    grep -n "fitCamera("              world -> screen for a layout
+//    grep -n "export function fitScale"  the fit, with a phone minimum tile
 //    grep -n "draw("                   one frame
 //    grep -n "drawTile("               one 2D tile
 //    grep -n "draw3D("                 the tower boxes
@@ -65,6 +66,21 @@ function rrect(g, x, y, w, h, r) {
   g.lineTo(x + r, y + h); g.arcTo(x, y + h, x, y + h - r, r);
   g.lineTo(x, y + r); g.arcTo(x, y, x + r, y, r);
   g.closePath();
+}
+
+// The smallest tile, in CSS px, that a phone shows before it pans instead.
+export const MIN_TILE_PX = 24;
+
+/**
+ * Camera scale for a world box w x h in frame f. With minK > 0 the scale
+ * does not go below minK (but never past the frame height): the box is
+ * then wider than the frame, and anchorLeft says to start at its left.
+ */
+export function fitScale(f, w, h, minK = 0) {
+  const k = Math.min(f.w / w, f.h / h);
+  if (!(minK > k)) return { k, anchorLeft: false };
+  const k2 = Math.max(k, Math.min(minK, f.h / h));
+  return { k: k2, anchorLeft: k2 * w > f.w + 0.5 };
 }
 
 export class Table {
@@ -144,8 +160,14 @@ export class Table {
       shiftY = (Math.max(...ys) + Math.min(...ys)) / 2;
     }
     if (S.color === 'prop' || S.phaseOn) h += 64 / Math.max(1e-3, Math.min(f.w / w, f.h / h));
-    const k = Math.min(f.w / w, f.h / h) * this.user.zoom;
-    const cx = (b.x0 + b.x1) / 2 - this.user.px / k, cy = (b.y0 + b.y1) / 2 + shiftY - this.user.py / k
+    // a wide flat table on a narrow frame (phone portrait) keeps readable
+    // tiles and starts at its left edge; a drag shows the rest
+    const flat = this.a3 <= 0.01;
+    const fs = fitScale(f, w, h, flat && f.w < 600 && w / h > 1.25 ? MIN_TILE_PX / 0.92 : 0);
+    this.panHint = fs.anchorLeft;
+    const k = fs.k * this.user.zoom;
+    const baseX = fs.anchorLeft ? b.x0 + f.w / (2 * k) : (b.x0 + b.x1) / 2;
+    const cx = baseX - this.user.px / k, cy = (b.y0 + b.y1) / 2 + shiftY - this.user.py / k
       + ((S.color === 'prop' || S.phaseOn) ? 30 / k : 0);
     const target = { k, cx, cy, ox: f.x + f.w / 2, oy: f.y + f.h / 2 };
     if (this.camSnap || !this.cam.ox) { Object.assign(this.cam, target); this.camSnap = false; return; }
