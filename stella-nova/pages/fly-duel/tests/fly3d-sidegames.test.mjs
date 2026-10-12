@@ -206,6 +206,8 @@ for (const coarse of [false, true]) {
   // the feature table deck boxes
   hall.setDeckBox(0, 'moss-rot'); hall.setDeckBox(1, 'amber');
   ok(hall.deckOf(0) === 'moss-rot' && hall.deckOf(1) === 'amber', `${tag}: setDeckBox sets the feature table decks`);
+  hall.setDeckBox(0, [['amber-ridge', 17]]); hall.setDeckBox(1, 'no-such-deck');
+  ok(hall.deckOf(0) === null && hall.deckOf(1) === null, `${tag}: setDeckBox prints no deck for a custom list or an unknown id`);
   hall.dispose();
 }
 

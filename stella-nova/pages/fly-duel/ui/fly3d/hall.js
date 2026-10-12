@@ -84,6 +84,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { createSideGames, drawDeckBoxFace } from './sidegames.js';
+import { DECKS } from '../../game/cards.js';
 
 export const HALL = {
   wall: 30,            // half size of the hall floor (x and z)
@@ -670,7 +671,8 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
   function setDeckBox(p, deckId) {
     const box = deckBoxes[p]; if (!box) return;
     const u = box.userData;
-    u.deck = deckId || null;
+    // a deck id of game/cards.js; a custom list (an array) prints no deck
+    u.deck = typeof deckId === 'string' && DECKS[deckId] ? deckId : null;
     const g = u.canvas?.getContext?.('2d');
     if (!g) return;
     drawDeckBoxFace(g, u.canvas.width, u.canvas.height, u.deck, { edge: FLY[p], label: p ? 'FLY B' : 'FLY A' });
