@@ -58,6 +58,7 @@
 //      grep -n 'export function artCredit'  "Art: Dru Drury, 1770"
 //      grep -n 'export function loadCardArt'   picture loader and cache
 //      grep -n 'export function getCardArt'    cached picture or null
+//      grep -n 'export function paintWithArt'  draw now, again on load
 //      grep -n 'export function rulesRuns'  rules text as styled runs
 //      grep -n 'export function drawManaGlyph' one mana glyph
 //      grep -n 'export function cardMode'   auto -> thumb | full
@@ -400,6 +401,35 @@ function imageFrom(src) {
 export function getCardArt(id, { small = false } = {}) {
   const big = artCache.get(id)?.img, sm = artCache.get(`${id}@sm`)?.img;
   return (small ? sm || big : big || sm) || null;
+}
+
+// Draw a canvas now, and again when the picture of id loads.
+// draw(art): art is the cached picture, or null while it loads.
+// target: the canvas (or any object) that the wait belongs to.
+// The wait is per target, not per id. So two canvases with the same
+// id both draw again (the old deck chooser kept one wait per id, and
+// the second deck box with the same key card stayed black). A second
+// call on the same target replaces its draw function, and a call with
+// a new id cancels the wait for the old id. A picture that loaded
+// before the target existed draws at once, with no wait.
+const artWait = new WeakMap();   // target -> { key, draw }
+export function paintWithArt(target, id, draw, { small = false } = {}) {
+  const art = getCardArt(id, { small });
+  const exact = artCache.get(`${id}${small ? '@sm' : ''}`)?.img;
+  draw(art);
+  if (!target || (typeof target !== 'object' && typeof target !== 'function')) return art;
+  if (exact) { artWait.delete(target); return art; }
+  const key = `${id}${small ? '@sm' : ''}`;
+  const had = artWait.get(target);
+  artWait.set(target, { key, draw });
+  if (had && had.key === key) return art;   // the first call waits already
+  loadCardArt(id, { small }).then(img => {
+    const w = artWait.get(target);
+    if (!w || w.key !== key) return;
+    artWait.delete(target);
+    if (img) w.draw(img);
+  }, () => { if (artWait.get(target)?.key === key) artWait.delete(target); });
+  return art;
 }
 
 function placeholderCanvas(id) {
