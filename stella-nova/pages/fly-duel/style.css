@@ -4,8 +4,9 @@
    A fullscreen game first (CONTRACT.md, user direction 2026-10-11).
    #app fills the viewport (100vw x 100dvh) in two modes: watch (the 3D
    table, the two scorecards, the control bar) and play (#playRoot, the
-   play screen of ui/play/play.css). The mode chooser (#chooser) and the
-   "How it works" drawer (#how) lie over it. The drawer holds the
+   play screen of ui/play/play.css). The title screen (#chooser, styled
+   by ui/chooser/chooser.css) and the "How it works" drawer (#how) lie
+   over it. The drawer holds the
    explainer sections: one column of grids of cards, a sticky chip bar.
    Fonts and math colours come from ../../lib/sci.css.
 
@@ -32,8 +33,8 @@
      --tome --tome2                        panel and control grounds
      --parch --parch2 --parch-ink          parchment and its ink
 
-   PHONE FIRST. The base rules of APP, WATCH HUD, BAR, CHOOSER and DECK
-   BOXES are the 390 px portrait phone; the WIDE block widens them. In
+   PHONE FIRST. The base rules of APP, WATCH HUD and BAR are the 390 px
+   portrait phone; the WIDE block widens them. In
    the drawer (max-width 860px) cards go to one column and the chip bar
    scrolls sideways. A pointer:coarse block sets 44px targets on any
    touch screen. Hover colours apply only where (hover:hover), so a tap
@@ -42,8 +43,6 @@
      grep -n 'APP'        the fullscreen frame and the two modes
      grep -n 'WATCH HUD'  scorecards, turn box, turn banner
      grep -n 'BAR'        the control bar of the watch table
-     grep -n 'CHOOSER'    the mode chooser sheet
-     grep -n 'DECK BOXES' the deck picker
      grep -n 'DRAWER'     the "How it works" drawer
      grep -n 'WIDE'       tablet, desktop and phone-sideways rules
      grep -n 'ORNAMENTS'  the SVG ornaments (rule, corner curl)
@@ -440,51 +439,6 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 .tgl.go{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--parch2)}
 @media (hover:hover){.tgl.go:hover{color:var(--parch-ink)}}
 
-/* ---------------------------------------------------------------- CHOOSER
-   The mode chooser: a full sheet on a phone (it scrolls, the Start row
-   stays at the bottom), a centred panel on a wide screen with the live
-   table around it. */
-.chooser{position:absolute;inset:0;z-index:20;overflow-y:auto;overscroll-behavior:contain;background:rgba(5,7,12,0.92);
-  padding:env(safe-area-inset-top,0px) var(--sr) 0 var(--sl)}
-.ch-in{position:relative;min-height:100%;display:flex;flex-direction:column;gap:14px;padding:16px 16px 0;background:var(--tome)}
-.ch-head{position:relative;padding-right:84px}
-.ch-head h1{font:500 1.6rem/1.15 var(--serif);color:var(--parch);margin:4px 0 6px}
-.ch-lede{font:400 0.95rem/1.5 var(--serif);color:var(--ink2);max-width:62ch}
-.ch-x{position:absolute;top:0;right:0}
-.ch-modes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
-.ch-mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:96px;padding:12px;text-align:left;
-  background:var(--tome2);border:1px solid var(--bronze-dim);border-radius:3px;color:var(--parch2)}
-.ch-mode b{font:600 1.25rem/1.1 var(--serif);color:var(--parch);font-variant:small-caps;letter-spacing:0.03em}
-.ch-mode span{font-size:0.8rem;line-height:1.35}
-.ch-mode[aria-pressed="true"]{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink);box-shadow:inset 0 0 0 2px var(--parch),inset 0 0 0 3px var(--bronze)}
-.ch-mode[aria-pressed="true"] b{color:var(--parch-ink)}
-.ch-pick{display:flex;flex-direction:column;gap:10px}
-.ch-row{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
-.ch-row .seg{margin:0}
-.ch-row .seg button{display:inline-flex;align-items:center;gap:6px}
-.ch-row .seg i{font-style:normal;font-weight:600}
-.ch-l{display:inline-flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--ink2)}
-.ch-h{font:600 1rem/1.2 var(--serif);color:var(--parch);font-variant:small-caps;letter-spacing:0.03em}
-.ch-fine{font-size:0.76rem;line-height:1.45;color:var(--dim);max-width:90ch}
-.ch-fine b{color:var(--ink2);font-weight:600}
-.ch-go{position:sticky;bottom:0;z-index:2;display:flex;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));background:var(--tome);border-top:1px solid var(--bronze-line)}
-.ch-go .tgl{min-height:48px;font-size:0.95rem}
-.ch-go .go{flex:1}
-.ch-in>.ch-fine:last-child{padding-bottom:16px}
-
-/* ---------------------------------------------------------------- DECK BOXES
-   One box per deck: a band per deck colour, the picture of the key card
-   in a window, the name and colours under it. The chosen box has a 3 px
-   white edge (drawn on the canvas) and a white name. */
-.dboxes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.dbox{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0;padding:0 0 6px;background:none;border:0;color:var(--parch2);text-align:left}
-.dbox-cv{display:block;width:100%;aspect-ratio:3/4;height:auto}
-.dbox-n{font:600 0.84rem/1.2 var(--serif);color:var(--parch2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dbox-c,.dbox-k{font-size:0.68rem;line-height:1.25;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dbox-k::before{content:'key card: '}
-.dbox[aria-pressed="true"] .dbox-n{color:var(--ink)}
-.dbox:focus-visible{outline:2px solid var(--bronze);outline-offset:2px}
-
 /* ---------------------------------------------------------------- DRAWER
    "How it works": the explainer sections over the whole table. Its own
    scroll; a sticky head and the chip bar under it. */
@@ -546,9 +500,6 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 /* WIDE: the watch table on a tablet or a desktop. The scorecards go to
    the two top corners at full size, the turn box between them, the bar
    is one row, the log shows at the lower left. */
-@media (min-width:560px){
-  .dboxes{grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
-}
 @media (min-width:760px){
   .app{--bar-h:calc(62px + env(safe-area-inset-bottom,0px)); --pad:12px}
   .wtop{grid-template-columns:minmax(0,250px) auto minmax(0,250px);justify-content:space-between;gap:12px}
@@ -569,15 +520,6 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .app .arena{grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,1fr)}
   .app .arena .arena-mid{grid-column:auto;order:0}
   .app .arena .fig.brain{height:100%;min-height:320px}
-  .chooser{padding:4vh 24px;display:flex;justify-content:center;align-items:flex-start}
-  .ch-in{width:min(940px,100%);min-height:0;padding:22px 24px 0;border:1px solid var(--bronze-dim);border-radius:4px;
-    box-shadow:inset 0 0 0 3px var(--tome),inset 0 0 0 4px var(--bronze-line)}
-  .ch-head h1{font-size:2.1rem}
-  .ch-mode{min-height:110px;padding:14px 16px}
-  .ch-mode b{font-size:1.5rem}
-  .ch-mode span{font-size:0.86rem}
-  .ch-go{position:static;padding-bottom:4px;border-top:0}
-  .ch-go .go{flex:0 1 280px}
 }
 @media (min-width:1200px){
   .wtop{grid-template-columns:minmax(0,250px) auto minmax(0,250px)}

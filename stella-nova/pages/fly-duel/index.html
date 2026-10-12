@@ -24,10 +24,10 @@
             panel (ui/hud/scorecard.js). A pause between turns.
      play   You against a model fly, first person (ui/play/play.js
             mountPlay). The 3D canvas moves into the play table.
-   With no mode in the URL, the mode chooser opens over a live watch
-   match. The chooser has the deck picker: one box per deck of
-   game/cards.js DECK_ORDER (five mono, the mixed decks), each with the
-   picture of its key card, and a Random box.
+   With no mode in the URL, the title screen (ui/chooser/chooser.js)
+   opens over a live watch match: the mode cards, a seat per player and
+   one tile per deck of game/cards.js DECK_ORDER with a fan of its key
+   cards, and a Random tile.
    URL: ?mode=watch&deck=<A>,<B>   (deck id or "random" per fly)
         ?mode=play&deck=<yours>&opp=A|B|bot&fly=<deck id or random>
 
@@ -57,7 +57,8 @@
      2. wishlist      ../../lib/wishlist.js
      3. stats-beacon  ../../lib/stats-beacon.js
      4. style.css, then ../../lib/sci.css, then ui/card.css,
-        ui/hud/hud.css (scorecards), ui/play/play.css (play mode)
+        ui/hud/hud.css (scorecards), ui/play/play.css (play mode),
+        ui/chooser/chooser.css (the title screen)
      5. the import map for three r160 (before any module script)
    Script at the end of body: main.js (module).
 
@@ -75,9 +76,8 @@
      #arena          2D stand-in: #heroPaneA #heroPaneB #heroCapA
                      #heroCapB #heroBrainA #heroBrainB #heroBoard
      #playRoot       play mode root (mountPlay)
-     #chooser        #modeWatch #modePlay #chSeat #chDeckA #chDeckB
-                     #chPlayRow #chOpp #chFlyDeck #chDeckHead #deckGrid
-                     #chTrained #chStart #chHow #chClose
+     #chooser        the title screen of ui/chooser/chooser.js (mountChooser
+                     fills it: mode cards, two seats, deck tiles, start)
      #how            "How it works" drawer: #howClose #chips #doc
        #s0 duel      #heroStats, honesty note, brain legend
        #s1 game      #manaKey #manaLeg #manaLegGlyphs #kwList #deckTag
@@ -100,8 +100,8 @@
 
    GREP MAP  (main.js)
      grep -n 'export function parseQuery'  URL -> mode and decks
-     grep -n 'function initModes'          chooser, deck boxes, URL
-     grep -n 'export function drawDeckBox' one deck box on a canvas
+     grep -n 'function initModes'          the title screen and the URL
+     grep -n 'function startChoice'        a start of the title screen
      grep -n 'async function enterPlay'    watch -> play
      grep -n 'function exitPlay'           play -> watch
      grep -n 'function initScorecards'     watch scorecards
@@ -116,6 +116,7 @@
 <link rel="stylesheet" href="ui/card.css">
 <link rel="stylesheet" href="ui/hud/hud.css">
 <link rel="stylesheet" href="ui/play/play.css">
+<link rel="stylesheet" href="ui/chooser/chooser.css">
 <script type="importmap">
 { "imports": {
   "three": "../../vendor/three@0.160.0/build/three.module.js",
@@ -177,38 +178,7 @@
 
   <main class="playroot" id="playRoot" hidden aria-label="Play a card duel against a model fruit fly"></main>
 
-  <section class="chooser" id="chooser" hidden role="dialog" aria-modal="false" aria-labelledby="chTitle">
-    <div class="ch-in">
-      <header class="ch-head">
-        <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
-        <h1 id="chTitle">Fly Brain Card Duel</h1>
-        <p class="ch-lede">Two model fruit fly brains, each <span data-wiring>wired from the connectome</span> of a different fly, play a card duel of our own. Watch them play each other, or take a seat against one.</p>
-        <button class="tgl ch-x" id="chClose" aria-label="Close the chooser">Close</button>
-      </header>
-      <div class="ch-modes" role="group" aria-label="Mode">
-        <button class="ch-mode" id="modeWatch" data-mode="watch" aria-pressed="true"><b>Watch</b><span>Fly A against Fly B at the convention table. Both brains fire live in the scorecards.</span></button>
-        <button class="ch-mode" id="modePlay" data-mode="play" aria-pressed="false"><b>Play</b><span>You against a model fly, first person. Tap a card to play it.</span></button>
-      </div>
-      <div class="ch-pick">
-        <div class="ch-row" id="chWatchRow">
-          <span class="seg" id="chSeat" role="group" aria-label="Deck of which fly"><button data-v="0" class="on"><b class="seatmark s0">A</b> Fly A: <i id="chDeckA">Random</i></button><button data-v="1"><b class="seatmark s1">B</b> Fly B: <i id="chDeckB">Random</i></button></span>
-        </div>
-        <div class="ch-row" id="chPlayRow" hidden>
-          <span class="ch-l">Opponent</span>
-          <span class="seg" id="chOpp" role="group" aria-label="Opponent"><button data-v="A">Fly A · hemibrain</button><button data-v="B" class="on">Fly B · FlyWire</button><button data-v="bot">Greedy bot</button></span>
-          <label class="ch-l">Its deck <select id="chFlyDeck" aria-label="The deck of the opponent"></select></label>
-        </div>
-        <h2 class="ch-h" id="chDeckHead">Deck of Fly A</h2>
-        <div class="dboxes" id="deckGrid" role="group" aria-label="Decks"></div>
-        <p class="ch-fine" id="chTrained"></p>
-      </div>
-      <div class="ch-go">
-        <button class="tgl go" id="chStart">Watch the duel</button>
-        <button class="tgl" id="chHow">How it works</button>
-      </div>
-      <p class="ch-fine"><b>We do not train a real fly.</b> We train two computer models of one brain structure. Play mode plays like digital card games such as MTG Arena; the cards, names, rules text, frame and symbols are our own. Not affiliated with or endorsed by Wizards of the Coast.</p>
-    </div>
-  </section>
+  <div id="chooser" hidden role="dialog" aria-modal="false" aria-labelledby="fdcTitle"></div>
 
   <aside class="how" id="how" hidden aria-label="How it works">
     <div class="how-top">

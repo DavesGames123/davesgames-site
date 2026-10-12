@@ -192,14 +192,15 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   ok(/Two computer models, <span data-wiring>wired from the connectomes<\/span> of two flies: each is a model, not a real fly/.test(html), 'markup: the 3D stage tag names two models and two connectomes');
   ok(/art\/CREDITS-ART\.md/.test(html) && /public-domain/.test(html), 'markup: the card art credit');
   // the fullscreen game: two modes, the chooser, the drawer
-  for (const id of ['app', 'watchHud', 'scA', 'scB', 'turnBanner', 'playRoot', 'chooser', 'modeWatch', 'modePlay', 'deckGrid', 'chStart', 'how', 'howClose', 'btnHow', 'btnPlay', 'btnDecks'])
+  for (const id of ['app', 'watchHud', 'scA', 'scB', 'turnBanner', 'playRoot', 'chooser', 'how', 'howClose', 'btnHow', 'btnPlay', 'btnDecks'])
     ok(html.includes(`id="${id}"`), `markup: #${id}`);
   ok(html.indexOf('id="scA"') < html.indexOf('id="scB"'), 'markup: Fly A scorecard first (top-left), Fly B second (top-right)');
   const how = html.slice(html.indexOf('id="how"'));
   ok(['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 'refs'].every(id => how.includes(`id="${id}"`)), 'markup: the explainer sections are in the drawer');
   ok(/href="ui\/hud\/hud\.css"/.test(head) && /href="ui\/play\/play\.css"/.test(head), 'markup: the head loads hud.css and play.css');
-  const chooser = html.slice(html.indexOf('id="chooser"'), html.indexOf('id="how"'));
-  ok(/not train a real fly/.test(chooser) && /Not affiliated with or endorsed by Wizards of the Coast\./.test(chooser), 'markup: the chooser has the honesty line and the not-affiliated line');
+  const chooserJs = readFileSync(join(ROOT, 'ui/chooser/chooser.js'), 'utf8');
+  ok(/not train a real fly/.test(chooserJs) && /Not affiliated with or endorsed by Wizards of the Coast\./.test(chooserJs), 'markup: the title screen (ui/chooser/chooser.js) has the honesty line and the not-affiliated line');
+  ok(/href="ui\/chooser\/chooser\.css"/.test(head) && /<div id="chooser" hidden/.test(html), 'markup: the head loads chooser.css and #chooser is an empty host');
   const plain0 = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
   ok(plain0.split(/(?<=\.)\s/).every(x => !/MTG Arena/.test(x) || /such as MTG Arena/.test(x)), 'markup: MTG Arena only as "plays like ... such as MTG Arena"');
   ok(html.replace(/<!--[\s\S]*?-->/g, '').split('\n').every(l => !/MTG Arena/.test(l) || /Not affiliated/.test(l)), 'markup: the MTG Arena line carries the not-affiliated line');
@@ -386,8 +387,8 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
 // --------------------------------------------------------------- modes (pure helpers of main.js)
 // parseQuery / queryOf: the URL keeps the mode and the decks. pickDecks:
 // 'random' gives a deck by the seed, the same seed the same decks.
-// keyCardOf: the picture of a deck box. drawDeckBox: finite numbers on a
-// stub context. turnPauseMs: the pause between turns.
+// keyCardsOf of ui/chooser/chooser.js: the first key card of a deck has
+// the top mana value. turnPauseMs: the pause between turns.
 if (has('game/cards.js')) {
   const cards = await import('../game/cards.js');
   // main.js is in the module cache from the fake DOM boot above
@@ -417,17 +418,13 @@ if (has('game/cards.js')) {
     ok(mm.pickDecks(['dew', 'random'], 5, ids)[0] === 'dew', 'modes: a chosen deck stays');
     const seen = new Set(); for (let sd = 1; sd < 400; sd++) mm.pickDecks(['random', 'random'], sd, ids).forEach(d => seen.add(d));
     ok(seen.size === ids.length, `modes: random reaches every deck (${seen.size} of ${ids.length})`);
+    const X = await import('../ui/chooser/chooser.js');
     for (const id of ids) {
-      const k = mm.keyCardOf(cards.DECKS[id], cards.CARD);
+      const k = X.keyCardsOf(cards.DECKS[id], cards.CARD, 1)[0];
       const inDeck = cards.DECKS[id].list.some(([c]) => c === k?.id);
       const mvMax = Math.max(...cards.DECKS[id].list.map(([c]) => cards.CARD[c]).filter(c => c.type !== 'land').map(c => Object.values(c.cost || {}).reduce((a, b) => a + b, 0)));
       ok(!!k && k.type !== 'land' && inDeck && Object.values(k.cost).reduce((a, b) => a + b, 0) === mvMax, `modes: key card of ${id} is ${k?.name}, the top mana value ${mvMax}`);
     }
-    const g = fakeCtx();
-    mm.drawDeckBox(g, 110, 147, { colours: ['#ffb347', '#6cc4e8'], art: { width: 400, height: 280 } });
-    mm.drawDeckBox(g, 110, 147, { colours: [], back: true, on: true });
-    mm.drawDeckBox(g, 60, 80, { colours: ['#a8d65a'] });
-    ok(g.calls.n > 20 && g.calls.bad === 0, `modes: drawDeckBox draws with finite numbers (${g.calls.n} calls)`);
     ok(mm.turnPauseMs(1) >= 1000 && mm.turnPauseMs(3) < mm.turnPauseMs(1) && mm.turnPauseMs(0.5) > mm.turnPauseMs(1), 'modes: the pause between turns follows the speed');
   }
 } else skipped('modes: game/cards.js not there');

@@ -179,19 +179,21 @@ if (PLAY) {
   const ids = cards.DECK_ORDER;
   ok($('chooser').hidden === false && fd.app.sheet, 'watch: no mode in the URL opens the chooser');
   ok(fd.hero.match.history.length > 0, 'watch: the match plays behind the chooser');
-  const boxes = [...$('deckGrid').querySelectorAll('.dbox')];
-  ok(boxes.length === ids.length + 1 && boxes[0].dataset.deck === 'random', `watch: a Random box and one box per deck (${boxes.length} boxes, ${ids.length} decks)`);
-  ok(boxes.slice(1).every((b, i) => b.querySelector('.dbox-n').textContent === cards.DECKS[ids[i]].name && b.querySelector('canvas')), 'watch: each box has its deck name and a canvas');
-  ok(boxes.slice(1).every(b => /\S/.test(b.querySelector('.dbox-k')?.textContent || '')), 'watch: each deck box names its key card');
+  const ch = $('chooser'), cq = sel => ch.querySelector(sel);
+  const tiles = [...ch.querySelectorAll('.fdc-tile')];
+  ok(tiles.length === ids.length + 1 && tiles[0].dataset.deck === 'random', `watch: a Random tile and one tile per deck (${tiles.length} tiles, ${ids.length} decks)`);
+  ok(tiles.slice(1).every((b, i) => b.dataset.deck === ids[i] && b.querySelector('.fdc-name').textContent === cards.DECKS[ids[i]].name && b.querySelector('canvas.fdc-fan')), 'watch: each tile has its deck name and a fan canvas');
+  ok(/not train a real fly/.test(ch.textContent) && /Not affiliated with or endorsed by Wizards of the Coast\./.test(ch.textContent), 'watch: the title screen has the honesty line and the not-affiliated line');
   ok($('deckTag').textContent === `${ids.length} decks: ${ids.filter(i => cards.DECKS[i].colours.length === 1).length} of one colour, ${ids.filter(i => cards.DECKS[i].colours.length > 1).length} mixed`, `01: the deck tag counts the decks (${$('deckTag').textContent})`);
   ok(['amber', 'moss', 'dew', 'rot', 'pollen'].every(k => $('manaLegGlyphs').innerHTML.includes(`mana-${k}`)), '01: the mana legend has the five colours');
-  // Fly A: dew, Fly B: rot
-  click(boxes.find(b => b.dataset.deck === 'dew'));
-  click([...$('chSeat').querySelectorAll('button')][1]);
-  click([...$('deckGrid').querySelectorAll('.dbox')].find(b => b.dataset.deck === 'rot'));
-  ok($('chDeckA').textContent === cards.DECKS.dew.name && $('chDeckB').textContent === cards.DECKS.rot.name, `watch: the seat buttons name the chosen decks (${$('chDeckA').textContent} / ${$('chDeckB').textContent})`);
-  ok($('deckGrid').querySelector('.dbox[data-deck="rot"]').getAttribute('aria-pressed') === 'true', 'watch: the chosen box is pressed');
-  click($('chStart'));
+  // Fly A: dew, Fly B: rot (a pick on seat A moves the choice to seat B)
+  click(cq('.fdc-mode[data-mode="watch"]'));
+  click(cq('.fdc-tile[data-deck="dew"]'));
+  click(cq('.fdc-tile[data-deck="rot"]'));
+  const seatN = [...ch.querySelectorAll('.fdc-seat-n')].map(e => e.textContent);
+  ok(seatN[0] === cards.DECKS.dew.name && seatN[1] === cards.DECKS.rot.name, `watch: the seats name the chosen decks (${seatN.join(' / ')})`);
+  ok(cq('.fdc-tile[data-deck="rot"]').getAttribute('aria-pressed') === 'true', 'watch: the chosen tile is pressed');
+  click(cq('.fdc-go'));
   ok($('chooser').hidden === true && fd.hero.match.decks.join() === 'dew,rot', `watch: Start plays the chosen decks (${fd.hero.match.decks})`);
   ok(urls.at(-1) === '?mode=watch&deck=dew%2Crot' || urls.at(-1) === '?mode=watch&deck=dew,rot', `watch: the URL keeps the decks (${urls.at(-1)})`);
   pump(300);
@@ -210,9 +212,9 @@ if (PLAY) {
   ok(fd.hero.match.history.length === nB || $('turnBanner').hidden, 'watch: no new move while the banner holds');
   // play from the chooser, then back
   click($('btnPlay'));
-  ok($('chooser').hidden === false && $('chPlayRow').hidden === false && $('chWatchRow').hidden === true, 'watch: "Play a fly" opens the chooser on play');
-  click([...$('deckGrid').querySelectorAll('.dbox')].find(b => b.dataset.deck === 'amber-pollen'));
-  click($('chStart'));
+  ok($('chooser').hidden === false && ch.dataset.mode === 'play' && cq('.fdc-opp').hidden === false, 'watch: "Play a fly" opens the title screen on play, with the opponent switch');
+  click(cq('.fdc-tile[data-deck="amber-pollen"]'));
+  click(cq('.fdc-go'));
   for (let i = 0; i < 200 && !fd.app.play; i++) await wait(10);
   ok(fd.app.mode === 'play' && /Call the coin/.test($('playRoot').textContent), 'watch -> play: the chooser starts a play game at the coin');
   ok(fd.app.play?.controller?.decks?.includes('amber-pollen'), `watch -> play: your deck from the box (${fd.app.play?.controller?.decks})`);

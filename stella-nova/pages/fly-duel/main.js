@@ -10,9 +10,9 @@
 //           #playRoot. The 3D canvas of the watch table moves into the
 //           play table, and play.js drives the scene. On exit the canvas
 //           comes back and a new watch game starts.
-//  The mode chooser (#chooser) holds the deck picker: one box per deck of
-//  game/cards.js DECK_ORDER with the picture of its key card, and a
-//  Random box. The URL keeps the mode and the decks (parseQuery,
+//  The title screen (#chooser) is ui/chooser/chooser.js mountChooser:
+//  the mode cards, a seat per player and one tile per deck of
+//  game/cards.js DECK_ORDER, and a Random tile. The URL keeps the mode and the decks (parseQuery,
 //  queryOf). The explainer sections 01 to 09 are in the "How it works"
 //  drawer (#how), as CONTRACT.md asks.
 //
@@ -45,8 +45,6 @@
 //      grep -n 'export function parseQuery'  URL -> mode, decks, opponent
 //      grep -n 'export function queryOf'  mode, decks -> URL query
 //      grep -n 'export function pickDecks'   'random' -> a deck id by seed
-//      grep -n 'export function keyCardOf'   the key card of a deck
-//      grep -n 'export function drawDeckBox' one deck box on a canvas
 //      grep -n 'export function turnPauseMs' the pause between turns
 //      grep -n 'function trainedDecks'    decks named in the training meta
 //      grep -n 'function start3d'         the 3D table (ui/fly3d/scene.js)
@@ -54,7 +52,8 @@
 //      grep -n 'function initScorecards'  watch scorecards, top-3, brains
 //      grep -n 'function setBrains'       brain maps: beside, close, off
 //      grep -n 'function conOf'           the connectome of Fly A or Fly B
-//      grep -n 'function initModes'       chooser, deck grid, URL
+//      grep -n 'function initModes'       the title screen, URL
+//      grep -n 'function startChoice'     a start of the title screen
 //      grep -n 'async function enterPlay' watch -> play
 //      grep -n 'function exitPlay'        play -> watch
 //      grep -n 'function initHow'         the drawer, Esc and keys
@@ -84,8 +83,9 @@ import { Match, agentFromFly, agentFromBot } from './ui/match.js';
 import { beatPlan, motionFor } from './ui/motion.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { TOKENS, KC_TYPE, FLY } from './ui/tokens.js';
-import { drawCard, cardBack, loadCardArt, getCardArt, colourInfo, manaValueOf } from './ui/cardface.js';
+import { colourInfo } from './ui/cardface.js';
 import { glyphHTML, hydrate } from './ui/cardview.js';
+import { mountChooser } from './ui/chooser/chooser.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -308,54 +308,6 @@ export function pickDecks(sel, seed, deckIds) {
   return out;
 }
 
-// The key card of a deck: the non-land card with the highest mana value,
-// a creature before a spell on a tie, then the most copies. Its picture
-// goes on the deck box. deck: a DECKS entry { list: [[id, n]...] }.
-export function keyCardOf(deck, CARD) {
-  let best = null, bestKey = null;
-  for (const [id, n] of deck?.list || []) {
-    const c = CARD?.[id];
-    if (!c || c.type === 'land') continue;
-    const k = [manaValueOf(c), c.type === 'creature' ? 1 : 0, n];
-    if (!bestKey || k[0] > bestKey[0] || (k[0] === bestKey[0] && (k[1] > bestKey[1] || (k[1] === bestKey[1] && k[2] > bestKey[2])))) { best = c; bestKey = k; }
-  }
-  return best;
-}
-
-// One deck box, face on, on a 2D canvas (CSS px units). colours: the hex
-// of each deck colour (one band per colour across the top and the
-// bottom), art: the key card picture (an image or a canvas, or null),
-// back: true draws the card back (the Random box). Crisp: flat fills,
-// 1 px edges, no blur, no gradient.
-export function drawDeckBox(g, w, h, { colours = [], art = null, back = false, on = false } = {}) {
-  g.clearRect(0, 0, w, h);
-  const r = Math.max(2, Math.round(w * 0.04));
-  const box = (x, y, bw, bh, rad) => { g.beginPath(); g.moveTo(x + rad, y); g.lineTo(x + bw - rad, y); g.quadraticCurveTo(x + bw, y, x + bw, y + rad); g.lineTo(x + bw, y + bh - rad); g.quadraticCurveTo(x + bw, y + bh, x + bw - rad, y + bh); g.lineTo(x + rad, y + bh); g.quadraticCurveTo(x, y + bh, x, y + bh - rad); g.lineTo(x, y + rad); g.quadraticCurveTo(x, y, x + rad, y); g.closePath(); };
-  // the lid: a darker top block with a hard seam, as a real deck box
-  g.fillStyle = TOKENS.panel2; box(0.5, 0.5, w - 1, h - 1, r); g.fill();
-  const band = Math.max(4, Math.round(h * 0.07));
-  const cols = colours.length ? colours : [TOKENS.none];
-  const bw = (w - 2) / cols.length;
-  cols.forEach((c, i) => { g.fillStyle = c; g.fillRect(1 + i * bw, 1 + r * 0.5, bw, band); g.fillRect(1 + i * bw, h - 1 - band - r * 0.5, bw, band); });
-  const lid = Math.round(h * 0.2);
-  g.fillStyle = TOKENS.faint; g.fillRect(1, lid, w - 2, 1);
-  // the window with the picture of the key card
-  const pad = Math.round(w * 0.09);
-  const wx = pad, wy = lid + Math.round(h * 0.05), ww = w - 2 * pad, wh = h - wy - band - pad;
-  if (back) {
-    try { g.save(); g.beginPath(); g.rect(wx, wy, ww, wh); g.clip(); cardBack(g, { w: ww, h: Math.max(wh, ww * 1.4), x: wx, y: wy + (wh - Math.max(wh, ww * 1.4)) / 2 }); g.restore(); } catch { g.restore?.(); }
-  } else if (art && (art.width || art.naturalWidth)) {
-    const iw = art.naturalWidth || art.width, ih = art.naturalHeight || art.height;
-    const sc = Math.max(ww / iw, wh / ih), sw = ww / sc, sh = wh / sc;
-    try { g.drawImage(art, (iw - sw) / 2, (ih - sh) / 2, sw, sh, wx, wy, ww, wh); } catch { /* not decoded yet */ }
-  } else { g.fillStyle = TOKENS.fig; g.fillRect(wx, wy, ww, wh); }
-  g.strokeStyle = '#000'; g.lineWidth = 1; g.strokeRect(wx - 0.5, wy - 0.5, ww + 1, wh + 1);
-  g.strokeStyle = cols[0]; g.strokeRect(wx - 1.5, wy - 1.5, ww + 3, wh + 3);
-  // the edge of the box: white when chosen, else a hairline
-  g.lineWidth = on ? 3 : 1; g.strokeStyle = on ? TOKENS.ink : TOKENS.faint;
-  box(on ? 1.5 : 0.5, on ? 1.5 : 0.5, w - (on ? 3 : 1), h - (on ? 3 : 1), r); g.stroke();
-}
-
 // The pause between turns of the watch table, in ms. The table holds the
 // board still and shows "Turn n · Fly X" for this long. Speed 1 gives
 // 1.4 s; reduced motion keeps the pause (it is a pause, not a motion).
@@ -369,7 +321,6 @@ function trainedDecks() {
 }
 const deckIdsOf = () => (M.cards?.DECK_ORDER?.length ? M.cards.DECK_ORDER : Object.keys(M.cards?.DECKS || {})).filter(k => M.cards?.DECKS?.[k]);
 const deckName = id => (id === 'random' ? 'Random' : M.cards?.DECKS?.[id]?.name || id);
-const deckHexes = id => (M.cards?.DECKS?.[id]?.colours || []).map(k => colourInfo(k).hex);
 
 // ---------------------------------------------------------------- hero
 // Two drivers share one Match.
@@ -752,8 +703,7 @@ function setBrains(v) {
 // does not draw and its match waits.
 const app = {
   mode: 'watch', sheet: false, how: false, play: null, playScene: false, cv: null,
-  pick: 'watch', seat: 0, selW: ['random', 'random'], myDeck: null, opp: 'B', flyDeck: 'random',
-  brainMod: null, boxes: new Map(),
+  myDeck: null, opp: 'B', flyDeck: 'random', brainMod: null, chooser: null,
   covered() { return this.how && (window.innerWidth || 390) < 860; },
 };
 const srcOf = side => (D.pretrained?.wiring?.[side]?.release || (side === 'A' ? 'hemibrain v1.2' : 'FlyWire 783')).split(/[;(]/)[0].trim();
@@ -780,103 +730,50 @@ function initModes() {
   let search = '';
   try { search = location.search; } catch { search = ''; }
   const q = parseQuery(search, ids);
-  hero.sel = q.decks.slice(); app.selW = q.decks.slice();
+  hero.sel = q.decks.slice();
   app.myDeck = q.myDeck || ids[0] || null; app.opp = q.opp; app.flyDeck = q.flyDeck;
-  if (!(heroFlies().A && heroFlies().B)) app.opp = 'bot';
-  // the deck grid: Random, then every deck of DECK_ORDER
-  const grid = $('deckGrid');
-  const CARD = M.cards?.CARD || {};
-  grid.innerHTML = ['random', ...ids].map(id => {
-    const d = M.cards?.DECKS?.[id];
-    const cols = id === 'random' ? 'any deck, new each game' : (d?.colours || []).map(k => colourInfo(k).name).join(' · ');
-    const key = id === 'random' ? null : keyCardOf(d, CARD);
-    return `<button type="button" class="dbox" data-deck="${esc(id)}" aria-pressed="false" title="${esc(d?.desc || 'A deck chosen at random for each game')}">`
-      + `<canvas class="dbox-cv" aria-hidden="true"></canvas><b class="dbox-n">${esc(deckName(id))}</b><span class="dbox-c">${esc(cols)}</span>`
-      + `${key ? `<span class="dbox-k">${esc(key.name)}</span>` : ''}</button>`;
-  }).join('');
-  $('chFlyDeck').innerHTML = ['random', ...ids].map(id => `<option value="${esc(id)}">${esc(id === 'random' ? 'Random (the fly does not choose)' : deckName(id))}</option>`).join('');
-  grid.addEventListener('click', e => {
-    const b = e.target.closest('.dbox'); if (!b) return;
-    if (app.pick === 'play') app.myDeck = b.dataset.deck;
-    else app.selW[app.seat] = b.dataset.deck;
-    syncChooser();
+  const F = heroFlies();
+  if (!(F.A && F.B)) app.opp = 'bot';
+  // the title screen (ui/chooser/chooser.js); the URL wins over the
+  // choice that the chooser keeps in localStorage
+  const initial = q.mode === 'play' ? { mode: 'play', humanDeck: q.myDeck, opponent: app.opp, flyDeck: q.flyDeck }
+    : q.mode === 'watch' ? { mode: 'watch', deckA: q.decks[0], deckB: q.decks[1] } : {};
+  app.chooser = mountChooser($('chooser'), {
+    decks: M.cards?.DECKS || {}, deckOrder: ids, colours: M.cards?.COLOURS || {}, cards: M.cards?.CARD || {},
+    curve: D.curve, initial, flies: { A: !!F.A, B: !!F.B },
+    onStart: c => startChoice(c),
+    onHow: () => { closeChooser(); app.openHow?.(); },
+    onClose: () => closeChooser(),
   });
-  $('chFlyDeck').addEventListener('change', e => { app.flyDeck = e.target.value; syncChooser(); });
-  for (const b of [$('modeWatch'), $('modePlay')]) b.addEventListener('click', () => { app.pick = b.dataset.mode; syncChooser(); });
-  seg($('chSeat'), v => { app.seat = +v; syncChooser(); });
-  seg($('chOpp'), v => { app.opp = v; syncChooser(); });
-  $('chStart').addEventListener('click', () => startChoice());
-  $('chClose').addEventListener('click', () => closeChooser());
   $('btnDecks').addEventListener('click', () => openChooser('watch'));
   $('btnPlay').addEventListener('click', () => openChooser('play'));
   if (q.mode === 'play') enterPlay();
   else if (q.mode === 'watch') syncURL();
-  else openChooser('watch');
+  else openChooser();
 }
 
-// Draw one deck box canvas at its CSS size. The key card picture loads
-// once (loadCardArt, the small file) and the box draws again.
-function paintBox(btn, on) {
-  const cv = btn.querySelector('canvas');
-  const id = btn.dataset.deck;
-  const r = cv.getBoundingClientRect();
-  const w = Math.max(40, Math.round(r.width) || 96), h = Math.max(56, Math.round(r.height) || 120);
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const g = cv.getContext('2d');
-  if (!g) return;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const key = id === 'random' ? null : keyCardOf(M.cards?.DECKS?.[id], M.cards?.CARD);
-  const art = key ? getCardArt(key.id, { small: true }) || getCardArt(key.id) : null;
-  drawDeckBox(g, w, h, { colours: id === 'random' ? [TOKENS.flyA, TOKENS.flyB] : deckHexes(id), art, back: id === 'random', on });
-  if (key && !art && !app.boxes.has(key.id)) {
-    app.boxes.set(key.id, true);
-    loadCardArt(key.id, { small: true }).then(() => paintBox(btn, btn.getAttribute('aria-pressed') === 'true')).catch(() => {});
-  }
-}
-
-function syncChooser() {
-  const play = app.pick === 'play';
-  $('modeWatch').setAttribute('aria-pressed', String(!play));
-  $('modePlay').setAttribute('aria-pressed', String(play));
-  $('chWatchRow').hidden = play; $('chPlayRow').hidden = !play;
-  $('chDeckA').textContent = deckName(app.selW[0]); $('chDeckB').textContent = deckName(app.selW[1]);
-  $('chDeckHead').textContent = play ? 'Your deck' : `Deck of Fly ${app.seat ? 'B' : 'A'}`;
-  $('chSeat').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === app.seat));
-  const F = heroFlies();
-  $('chOpp').querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === app.opp); if (b.dataset.v !== 'bot') b.disabled = !F[b.dataset.v]; });
-  setSelect($('chFlyDeck'), app.flyDeck);
-  const cur = play ? app.myDeck : app.selW[app.seat];
-  $('deckGrid').querySelectorAll('.dbox').forEach(b => { const on = b.dataset.deck === cur; b.setAttribute('aria-pressed', String(on)); b.classList.toggle('on', on); paintBox(b, on); });
-  $('chStart').textContent = play ? `Play ${app.opp === 'bot' ? 'the greedy bot' : `Fly ${app.opp}`}` : 'Watch the duel';
-  const t = trainedDecks();
-  const chosen = play ? [app.myDeck, app.flyDeck] : app.selW;
-  const off = t ? chosen.filter(d => d && d !== 'random' && !t.includes(d)) : [];
-  $('chTrained').textContent = t
-    ? `The flies trained with ${t.map(deckName).join(', ')}.${off.length ? ` ${off.map(deckName).join(' and ')} ${off.length > 1 ? 'are' : 'is'} new to them: they use the values they learned on other boards.` : ''}`
-    : 'The training files do not name the decks of the training games, so a deck here can be new to the flies.';
-}
-
-function openChooser(pick = 'watch') {
-  app.pick = pick; app.sheet = true;
-  app.selW = hero.sel.slice();
-  $('chooser').hidden = false; $('app').dataset.sheet = 'on';
-  syncChooser();
-  $('chStart').focus?.();
+// The title screen. pick: 'watch' or 'play' opens it on the decks of
+// that mode with a Close button; no pick opens it on the mode cards.
+function openChooser(pick) {
+  app.sheet = true; $('app').dataset.sheet = 'on';
+  app.chooser?.open({ mode: pick, closable: !!pick });
 }
 function closeChooser() {
   app.sheet = false;
-  $('chooser').hidden = true; delete $('app').dataset.sheet;
+  app.chooser?.close();
+  delete $('app').dataset.sheet;
   if (app.mode === 'watch') syncURL();
 }
 
-function startChoice() {
-  if (app.pick === 'play') {
+// A start of the title screen. c: normalise() of ui/chooser/chooser.js.
+function startChoice(c) {
+  if (c.mode === 'play') {
+    app.myDeck = c.humanDeck; app.opp = c.opponent; app.flyDeck = c.flyDeck;
     if (app.play) exitPlay(false);
     enterPlay();
     return;
   }
-  hero.sel = app.selW.slice();
+  hero.sel = [c.deckA, c.deckB];
   closeChooser();
   if (app.mode === 'play') exitPlay(false);
   hero.newGame?.();
@@ -961,7 +858,6 @@ function initHow() {
   const close = () => { app.how = false; how.hidden = true; delete $('app').dataset.how; hero.poke = 1; };
   app.openHow = open; app.closeHow = close;
   $('btnHow').addEventListener('click', open);
-  $('chHow').addEventListener('click', () => { closeChooser(); open(); });
   $('howClose').addEventListener('click', close);
   // a link to a section or a source opens the drawer
   let hash = '';
@@ -972,7 +868,6 @@ function initHow() {
     if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName || '')) return;
     if (e.key === 'Escape') {
       if (app.how) { close(); return; }
-      if (app.sheet && app.mode === 'watch') { closeChooser(); return; }
       return;
     }
     if (app.mode !== 'watch' || app.how || app.sheet) return;
