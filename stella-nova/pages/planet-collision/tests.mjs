@@ -179,6 +179,26 @@ async function presetTests() {
     if (!p.src || !p.title || s.N !== 8192 || !(tc > 1 && tc < 20) || s.bodies.some(b => b.n < 400)) bad.push(p.key);
   }
   ok('7 presets build, with sources, contact in 1-20 min', bad.length === 0, `${PRESETS.length} presets, contact ${minT.toFixed(1)}-${maxT.toFixed(1)} min${bad.length ? ', bad: ' + bad.join(' ') : ''}`);
+  // the dense random draw: 300 seeds
+  {
+    const pairs = new Set(), titles = new Set(), comps = new Set(); let badR = [], b2 = 0, fast = 0, lo = 99, hi = 0;
+    for (let sd = 1; sd <= 300; sd++) {
+      const sc = randomScenario(sd), st = buildScenario(sc, 8192, 1), tc = st.impact.tContact * UNIT.T / 60;
+      lo = Math.min(lo, tc); hi = Math.max(hi, tc);
+      pairs.add(sc.bodies[0].key + '/' + sc.bodies[1].key); titles.add(sc.title); comps.add(sc.draw.cT); comps.add(sc.draw.cI);
+      b2 += sc.impact.b ** 2 / 300; if (sc.impact.vRel >= 2.6) fast++;
+      if (!(tc > 1 && tc < 20) || st.bodies.some(b => b.n < 400) || st.N !== 8192 || !/^[A-Z]/.test(sc.title)) badR.push(sd);
+    }
+    const same = JSON.stringify(randomScenario(42)) === JSON.stringify(randomScenario(42));
+    ok('7 random draws: 300 seeds build, contact 1-20 min, many pairs, isotropic angles', badR.length === 0 && same && pairs.size >= 30 && titles.size >= 200 && comps.size >= 5 && Math.abs(b2 - 0.5) < 0.06 && fast > 15,
+      `contact ${lo.toFixed(1)}-${hi.toFixed(1)} min, ${pairs.size} body pairs, ${titles.size} titles, ${comps.size} compositions, mean b^2 ${b2.toFixed(3)} (isotropic 0.5), ${fast} fast draws${badR.length ? ', bad: ' + badR.join(' ') : ''}`);
+    // a composition override reaches the particles (build.js "layers")
+    const ir = buildScenario({ bodies: [{ key: 'mars', layers: [['iron', 0.5], ['basalt', 0.5]] }], impact: {} }, 4000, 1);
+    const re = buildScenario({ bodies: [{ key: 'mars' }], impact: {} }, 4000, 1);
+    let fe = 0, ba = 0; for (let k = 0; k < ir.N; k++) { if (ir.mat[k] === 0) fe++; if (ir.mat[k] === 2) ba++; }
+    ok('7 a composition override changes the body', Math.abs(fe / ir.N - 0.5) < 0.01 && Math.abs(ba / ir.N - 0.5) < 0.01 && ir.bodies[0].R < re.bodies[0].R,
+      `iron ${(fe / ir.N).toFixed(3)}, basalt ${(ba / ir.N).toFixed(3)}; R ${(ir.bodies[0].R * UNIT.L / 1e3).toFixed(0)} km (as measured ${(re.bodies[0].R * UNIT.L / 1e3).toFixed(0)} km)`);
+  }
   let over = [];
   for (const [k, p] of Object.entries(BG.PROFILES)) { const lim = k.startsWith('phone') ? BG.LIMIT.touch : BG.LIMIT.desktop; if (BG.gpuBytes(p.N) > lim) over.push(k); }
   const ph = BG.pickProfile({ phone: true });

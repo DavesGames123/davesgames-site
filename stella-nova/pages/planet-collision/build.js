@@ -231,12 +231,14 @@ export function splitCount(masses, N, fmin = 0.12) {
   return n;
 }
 
-// sc: { bodies: [{ key, massScale?, spinH? (hours, null = none) }, ...],
+// sc: { bodies: [{ key, massScale?, spinH? (hours, null = none),
+//                  layers? (a composition that replaces the data.js
+//                  layers: [[material, mass fraction], ...]) }, ...],
 //       impact: { vRel | vKms, b, d0 }, place?: [{ X, V }] (bodies 3-4) }
 // N: total particles. Returns the setup (CONTRACT.md "Setup").
 export function buildScenario(sc, N, seed = 1) {
   const R = rng(seed);
-  const specs = sc.bodies.map(b => Object.assign({}, b, { data: BODIES[b.key] }));
+  const specs = sc.bodies.map(b => Object.assign({}, b, { data: b.layers ? Object.assign({}, BODIES[b.key], { layers: b.layers }) : BODIES[b.key] }));
   const profs = specs.map(s => profile(s.data, s.massScale || 1));
   const counts = splitCount(profs.map(p => p.M), N, sc.fmin);
   const parts = profs.map((p, i) => bodyParticles(p, counts[i], R));
