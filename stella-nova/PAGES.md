@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-217 registered pages in 5 regions and 20 constellations.
+218 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -332,6 +332,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `sdf-clouds` | SDF Clouds | Rendering > Ray Marching | GPU | Raymarched clouds from signed-distance shapes. | SDF Clouds by Alex Foulon | search only | no | yes |
 | `cornell` | Rendering Engine | Rendering > Light Transport | PATH | A path tracer in the browser. |  | shown | hook, tier 3, default | yes |
 | `glass-cube` | Refraction | Rendering > Light Transport | GPU | Light bending through glass. |  | shown | hook, tier 3, default | yes |
+| `diamond` | Diamond Lab | Rendering > Light Transport | GPU | Fire and sparkle traced through cut gems. |  | shown | hook, tier 3, default | no |
 | `platonic` (pages/platonic-mirrors) | Platonic Mirrors | Rendering > Light Transport | SHADER | Platonic solids in mirrored shells. |  | shown | hook, tier 1, default | yes |
 | `branched-flow` (pages/cube_branched_flow) | Branched Flow | Rendering > Light Transport | GPU | Light that splits into branching paths. |  | shown | hook, tier 3, default | yes |
 | `orbs` (pages/presence-orbs) | Presence Orbs | Rendering > Volumes | WGSL | Soft volumetric presence orbs. |  | shown | hook, tier 3, default | yes |

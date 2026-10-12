@@ -383,6 +383,7 @@ w.SN_NAV = [
     { h: "Light Transport", p: [
       ["cornell", "Rendering Engine", "PATH"],
       ["glass-cube", "Refraction", "GPU"],
+      ["diamond", "Diamond Lab", "GPU"],
       ["platonic", "Platonic Mirrors", "SHADER", "platonic-mirrors"],
       ["branched-flow", "Branched Flow", "GPU", "cube_branched_flow"]
     ] },

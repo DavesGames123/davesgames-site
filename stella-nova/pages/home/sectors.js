@@ -63,6 +63,7 @@ const EXCLUDED = new Set([
 // common name, the science term).
 const SEARCH_WORDS = {
   'fly-duel': 'fruit fly drosophila brain connectome mushroom body neurons neuroscience card game trading card game tcg magic the gathering mtg deck duel play against ai reinforcement learning dopamine flywire hemibrain',
+  diamond: 'gem gemstone jewel jewellery jewelry brilliant cut diamond ring sapphire ruby emerald moissanite cubic zirconia facets dispersion fire sparkle total internal reflection snell fresnel aset',
   'gravity-lab': 'gravity sandbox n-body nbody orbits lagrange points three-body slingshot black hole galaxies tidal tails kepler',
   'planet-collision': 'planet collision giant impact moon crashes into earth theia moon formation sph smoothed particle hydrodynamics synestia melt debris',
   'roche-limit': 'roche limit tidal disruption rings saturn moon breakup shoemaker-levy comet rubble pile',
@@ -274,6 +275,7 @@ const BLURBS = {
   sdf2d: 'Every 2D signed-distance shape.',
   beam: 'Lasers, beams and decals.',
   'glass-cube': 'Light bending through glass.',
+  diamond: 'Fire and sparkle traced through cut gems.',
   platonic: 'Platonic solids in mirrored shells.',
   'branched-flow': 'Light that splits into branching paths.',
   postfx: 'Bloom, grain and grading passes.',
