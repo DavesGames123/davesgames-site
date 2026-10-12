@@ -564,7 +564,9 @@ async function pageTest() {
     G.__pc.startRun((await import('./scenarios.js')).randomScenario(77), 77); await pump(14);
     ok('P a preset change and a random draw run', S.sc.key === 'random-77' && S.phase === 'run', `now "${S.sc.title}", phase ${S.phase}`);
     for (const f of listeners.pagehide || []) f();
-    ok('P pagehide frees the solver, the renderer and the device', S.sim === null && S.dev === null, 'sim, ren, dev null');
+    let reloads = 0; G.location.reload = () => { reloads++; };
+    for (const f of listeners.pageshow || []) f({ persisted: true });
+    ok('P pagehide frees the solver, the renderer and the device; a cache restore reloads', S.sim === null && S.dev === null && reloads === 1, `sim, ren, dev null; ${reloads} reload on pageshow (persisted)`);
     ok('P no errors on the page', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
   } finally {
     console.error = ce; G.fetch = realFetch;

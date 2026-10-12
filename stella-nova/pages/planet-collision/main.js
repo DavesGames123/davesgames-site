@@ -96,6 +96,9 @@ async function boot() {
   resize(); addEventListener('resize', resize);
   bindPointer(canvas);
   addEventListener('pagehide', release);
+  // pagehide destroys the device; a back/forward cache restore then shows
+  // a dead page, so reload it to make a new device
+  addEventListener('pageshow', e => { if (e.persisted && !S.dev) location.reload(); });
   window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS };
   installSaver({ S, startRun, setSpeed });
   const q = new URLSearchParams(location.search);
