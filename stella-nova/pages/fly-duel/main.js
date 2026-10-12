@@ -98,6 +98,7 @@ import { colourInfo, drawCard, paintWithArt } from './ui/cardface.js';
 import { createCardZoom, attachCardZoom } from './ui/cardzoom.js';
 import { glyphHTML, hydrate } from './ui/cardview.js';
 import { mountChooser } from './ui/chooser/chooser.js';
+import { customFromCode } from './ui/deckbuilder/deckstore.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -271,10 +272,12 @@ function brainCanvas(cv, bv) {
 // ---------------------------------------------------------------- modes (pure)
 // The mode and the decks in the URL. deckIds: the known deck ids (an id
 // not in the list reads as 'random'). Result:
-//   { mode: 'watch'|'play'|null, decks: [A, B], myDeck, opp, flyDeck }
+//   { mode: 'watch'|'play'|null, decks: [A, B], myDeck, opp, flyDeck, myCode }
 // mode null means the URL names no mode: the chooser opens.
 //   ?mode=watch&deck=amber-dew,rot   Fly A plays amber-dew, Fly B rot
 //   ?mode=play&deck=moss&opp=A&fly=random
+//   ?mode=play&mydeck=<code>         a deck of the deck builder (myCode,
+//                                    ui/deckbuilder/deckstore.js encodeDeck)
 export function parseQuery(search, deckIds = []) {
   let q;
   try { q = new URLSearchParams(search || ''); } catch { q = new URLSearchParams(''); }
@@ -288,6 +291,7 @@ export function parseQuery(search, deckIds = []) {
     decks: mode === 'play' ? ['random', 'random'] : [known(parts[0]), known(parts[1])],
     myDeck: mode === 'play' && deckIds.includes(parts[0]) ? parts[0] : (deckIds[0] || null),
     opp, flyDeck: known(q.get('fly')),
+    myCode: q.get('mydeck') || null,
   };
 }
 
@@ -296,7 +300,7 @@ export function queryOf(st) {
   const q = new URLSearchParams();
   q.set('mode', st.mode === 'play' ? 'play' : 'watch');
   if (st.mode === 'play') {
-    if (st.myDeck) q.set('deck', st.myDeck);
+    if (st.custom) q.set('mydeck', st.custom.code); else if (st.myDeck) q.set('deck', st.myDeck);
     q.set('opp', st.opp || 'B');
     if (st.flyDeck && st.flyDeck !== 'random') q.set('fly', st.flyDeck);
   } else if (st.decks && st.decks.some(d => d && d !== 'random')) q.set('deck', st.decks.map(d => d || 'random').join(','));
@@ -835,7 +839,7 @@ function setBrains(v) {
 // does not draw and its match waits.
 const app = {
   mode: 'watch', sheet: false, how: false, play: null, playScene: false, cv: null,
-  myDeck: null, opp: 'B', flyDeck: 'random', panelMod: null, chooser: null,
+  myDeck: null, custom: null, opp: 'B', flyDeck: 'random', panelMod: null, chooser: null,
   covered() { return this.how && (window.innerWidth || 390) < 860; },
 };
 const srcOf = side => (D.pretrained?.wiring?.[side]?.release || (side === 'A' ? 'hemibrain v1.2' : 'FlyWire 783')).split(/[;(]/)[0].trim();
@@ -852,7 +856,7 @@ function setSelect(sel, v) {
 
 function syncURL() {
   try {
-    const q = queryOf(app.mode === 'play' ? { mode: 'play', myDeck: app.myDeck, opp: app.opp, flyDeck: app.flyDeck } : { mode: 'watch', decks: hero.sel });
+    const q = queryOf(app.mode === 'play' ? { mode: 'play', myDeck: app.myDeck, custom: app.custom, opp: app.opp, flyDeck: app.flyDeck } : { mode: 'watch', decks: hero.sel });
     history.replaceState(null, '', q + (location.hash || ''));
   } catch { /* no history (node, a sandboxed frame) */ }
 }
@@ -868,7 +872,11 @@ function initModes() {
   if (!(F.A && F.B)) app.opp = 'bot';
   // the title screen (ui/chooser/chooser.js); the URL wins over the
   // choice that the chooser keeps in localStorage
-  const initial = q.mode === 'play' ? { mode: 'play', humanDeck: q.myDeck, opponent: app.opp, flyDeck: q.flyDeck }
+  // ?mode=play&mydeck=<code>: a deck of the deck builder. A bad code
+  // opens the chooser on play (the chooser drops the code).
+  if (q.myCode && q.mode === 'play') { app.custom = customFromCode(q.myCode); if (app.custom) app.myDeck = app.custom.id; }
+  const initial = q.myCode && !app.custom ? { mode: 'play', myCode: q.myCode, opponent: app.opp, flyDeck: q.flyDeck }
+    : q.mode === 'play' ? { mode: 'play', humanDeck: q.myDeck, opponent: app.opp, flyDeck: q.flyDeck, myCode: q.myCode }
     : q.mode === 'watch' ? { mode: 'watch', deckA: q.decks[0], deckB: q.decks[1] } : {};
   app.chooser = mountChooser($('chooser'), {
     decks: M.cards?.DECKS || {}, deckOrder: ids, colours: M.cards?.COLOURS || {}, cards: M.cards?.CARD || {},
@@ -879,7 +887,8 @@ function initModes() {
   });
   $('btnDecks').addEventListener('click', () => openChooser('watch'));
   $('btnPlay').addEventListener('click', () => openChooser('play'));
-  if (q.mode === 'play') enterPlay();
+  if (q.mode === 'play' && (!q.myCode || app.custom)) enterPlay();
+  else if (q.myCode) openChooser('play');
   else if (q.mode === 'watch') syncURL();
   else openChooser();
 }
@@ -901,6 +910,7 @@ function closeChooser() {
 function startChoice(c) {
   if (c.mode === 'play') {
     app.myDeck = c.humanDeck; app.opp = c.opponent; app.flyDeck = c.flyDeck;
+    app.custom = c.customDeck || null;
     if (app.play) exitPlay(false);
     enterPlay();
     return;
@@ -945,6 +955,7 @@ async function enterPlay() {
       // the brain of the fly is in its side panel, not in its scorecard
       brainMod: null, cardBrain: false, scene: sceneOK ? hero.scene : null, sceneEl: sceneOK ? cv : null,
       trainedDecks: trainedDecks(), onExit: () => exitPlay(),
+      customDecks: app.custom ? { [app.custom.id]: app.custom } : null,
       onGame: g => { $('app').dataset.opp = g.opp; hero.panels?.resize(); syncClear(); },
       onFlyTrace: (side, trace, delta) => brainFire(side === 'A' ? 0 : 1, trace, delta),
     });

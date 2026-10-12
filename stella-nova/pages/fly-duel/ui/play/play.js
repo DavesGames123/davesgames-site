@@ -133,6 +133,9 @@ export function playTurnText(state, humanSeat, names) {
 //   scene     a createDuelScene() object (optional, 3D table)
 //   sceneEl   the element that holds the scene canvas (put in the table box)
 //   trainedDecks  deck ids the flies trained with (optional, for a note)
+//   customDecks   { id: deck } your decks from the deck builder (optional;
+//             ui/deckbuilder/deckstore.js customDeckOf). They show first
+//             under "Your deck". The fly plays a preset deck.
 //   onExit()  shows an Exit item in the menu
 //   seed      base seed (game n uses seed + n); default: from the clock
 export function mountPlay(root, opts) {
@@ -143,6 +146,9 @@ export function mountPlay(root, opts) {
   const coarse = !!win.matchMedia?.('(pointer: coarse)').matches;
   const reduced = !!win.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const deckIds = (cards.DECK_ORDER && cards.DECK_ORDER.length ? cards.DECK_ORDER : Object.keys(cards.DECKS)).filter(k => cards.DECKS[k]);
+  const customDecks = opts.customDecks || {};
+  const myDeckIds = [...Object.keys(customDecks).filter(k => Array.isArray(customDecks[k]?.list)), ...deckIds];
+  const deckOf = id => customDecks[id] || cards.DECKS[id];
   const colourTable = cards.COLOURS || null;
   const has3d = !!(opts.scene && typeof opts.scene.pickPermanent === 'function');
 
@@ -345,9 +351,9 @@ export function mountPlay(root, opts) {
     return agentFromFly(opts.flies[side], `Fly ${side}`, { explore: 0 });
   }
 
-  function deckName(id) { return cards.DECKS[id]?.name || id; }
+  function deckName(id) { if (Array.isArray(id)) return Object.values(customDecks).find(d => d.list === id)?.name || 'Your deck'; return deckOf(id)?.name || id; }
   function deckPips(id) {
-    return deckColours(CARD, cards.DECKS[id]).map(k => `<i style="background:${colourHex(k)}" title="${esc(colourTable?.[k]?.name || k)}"></i>`).join('');
+    return deckColours(CARD, deckOf(id)).map(k => `<i style="background:${colourHex(k)}" title="${esc(colourTable?.[k]?.name || k)}"></i>`).join('');
   }
 
   // ------------------------------------------------------------ sheets
@@ -366,14 +372,14 @@ export function mountPlay(root, opts) {
     if (opts.flies?.B) opps.push(['B', 'Fly B', opts.sources?.B || 'FlyWire']);
     opps.push(['bot', 'Greedy bot', 'practice: a fixed rule, no brain']);
     if (!opps.some(o => o[0] === pref.opp)) pref.opp = opps[0][0];
-    const tile = (id, on) => `<button type="button" class="pl-deck${on ? ' on' : ''}" data-deck="${esc(id)}" aria-pressed="${on}"><span class="pl-pips">${deckPips(id)}</span><b>${esc(deckName(id))}</b><em>${esc(cards.DECKS[id]?.blurb || cards.DECKS[id]?.theme || '')}</em></button>`;
+    const tile = (id, on) => `<button type="button" class="pl-deck${on ? ' on' : ''}" data-deck="${esc(id)}" aria-pressed="${on}"><span class="pl-pips">${deckPips(id)}</span><b>${esc(deckName(id))}</b><em>${esc(deckOf(id)?.blurb || deckOf(id)?.theme || (customDecks[id] ? 'Your deck' : ''))}</em></button>`;
     showSheet(`
       <h2>Play against a model fly</h2>
       <p class="pl-fine">The opponent is a model of a fruit fly's mushroom body on real connectome wiring, with pretrained weights. It does not learn during your game.</p>
       <h3>Opponent</h3>
       <div class="pl-seg" data-k="opp">${opps.map(([k, n, s]) => `<button type="button" data-v="${k}" aria-pressed="${pref.opp === k}"><b>${n}</b><em>${esc(s)}</em></button>`).join('')}</div>
       <h3>Your deck</h3>
-      <div class="pl-decks" data-k="myDeck">${deckIds.map(id => tile(id, id === pref.myDeck)).join('')}</div>
+      <div class="pl-decks" data-k="myDeck">${myDeckIds.map(id => tile(id, id === pref.myDeck)).join('')}</div>
       <h3>The fly's deck</h3>
       <label class="pl-sel"><select data-k="flyDeck"><option value="random">Random (the fly does not choose)</option>${deckIds.map(id => `<option value="${esc(id)}"${pref.flyDeck === id ? ' selected' : ''}>${esc(deckName(id))}</option>`).join('')}</select></label>
       <p class="pl-fine pl-trained" hidden></p>
@@ -476,7 +482,8 @@ export function mountPlay(root, opts) {
     const humanSeatNo = flySide === 'A' ? 1 : 0;
     let flyDeck = pref.flyDeck;
     if (flyDeck === 'random') flyDeck = deckIds[seed % deckIds.length];
-    const decks = humanSeatNo === 0 ? [pref.myDeck, flyDeck] : [flyDeck, pref.myDeck];
+    const mine = customDecks[pref.myDeck]?.list || pref.myDeck;
+    const decks = humanSeatNo === 0 ? [mine, flyDeck] : [flyDeck, mine];
     const agent = flyAgent(pref.opp);
     curOpp = pref.opp;
     pc = createPlayController({ rules, CARD, opponent: agent, humanSeat: humanSeatNo, humanName: 'You', seed, decks });
