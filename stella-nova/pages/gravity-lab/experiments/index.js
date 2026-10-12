@@ -60,7 +60,7 @@ export function bag(seed) {
 }
 
 // ── tests ───────────────────────────────────────────────────────────────────
-function shapeErrors(spec, n) {
+export function shapeErrors(spec, n) {
   const err = [], fin = x => typeof x === 'number' && isFinite(x);
   if (!spec.key || !spec.title || !spec.blurb) err.push('key, title or blurb missing');
   if (!(spec.dt > 0) || !(spec.rate > 0) || !(spec.duration > 0)) err.push('dt, rate or duration not positive');

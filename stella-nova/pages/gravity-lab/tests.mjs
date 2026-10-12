@@ -6,6 +6,7 @@
 //                                                       the GPU tests in Deno
 //  deno run -A stella-nova/pages/gravity-lab/tests.mjs --gpu   GPU only
 //  node tests.mjs --only <key>   the experiment tests of one experiment
+//  node tests.mjs --page --cpu   core, budget and page modules only (no Deno)
 //
 //  CORE (nbody.js, lab.js)
 //  1  Kepler: an e = 0.6 two-body orbit closes after one period (System);
@@ -24,8 +25,16 @@
 //     for every experiment on desktop and phone budgets; GPU bytes
 //  EXPERIMENTS (experiments/index.js runChecks): every spec well formed,
 //     seeds, the shuffle bag, then each experiment's own physics check
+//  PAGE MODULES (no DOM): roll.js (300 seeds well formed, in budget,
+//     seeded, varied; incoming() reaches q at tp; sandbox scenes and
+//     intruders do what their titles say on the CPU), items.js (a tap gives
+//     a circular orbit; extendSystem keeps every state; predictPath is
+//     the run that follows), frame.js, saver-plan.js (reel, shots, cuts,
+//     subjects, laws), budget.js pixelRatio
 //  GPU (Deno WebGPU): cs_restricted against CpuParticles, cs_gravity and
 //  cs_kick against the f64 direct sum, the impact stamp and hit counts
+//  PAGE (Deno WebGPU, test-page.mjs): the whole page on a fake DOM: boot,
+//  frames, every scene, the tray, the screensaver
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 // ============================================================================
@@ -137,6 +146,143 @@ function coreTests() {
   }
 }
 
+// ── page modules ────────────────────────────────────────────────────────────
+async function pageModuleTests() {
+  const R = await import('./roll.js'), X = await import('./experiments/index.js'), BG = await import('./budget.js');
+  const IT = await import('./items.js'), F = await import('./frame.js'), SP = await import('./saver-plan.js');
+  const C = await import('./experiments/common.js');
+  // R1 300 seeds: shape, budget, families, sandbox kinds, titles
+  {
+    const fam = {}, kinds = new Set(), titles = new Set(), bad = [];
+    let worst = { desktop: [0, ''], touch: [0, ''] };
+    for (let seed = 1; seed <= 300; seed++) {
+      for (const prof of ['desktop', 'touch']) {
+        if (prof === 'touch' && seed % 5) continue;
+        const q = BG.budgetFor('auto', prof === 'touch');
+        let sp;
+        try { sp = R.roll(seed, { n: q.n, nSelf: q.nSelf }); } catch (e) { bad.push(`${seed}: ${e.message}`); continue; }
+        for (const e of X.shapeErrors(sp, sp.key === 'disk' ? q.nSelf : q.n)) bad.push(`${seed} ${sp.title}: ${e}`);
+        if (prof === 'desktop') { fam[sp.rollInfo.family] = (fam[sp.rollInfo.family] || 0) + 1; if (sp.rollInfo.family === 'sandbox') kinds.add(sp.rollInfo.base); titles.add(sp.title); }
+        const pr = R.prepare(sp, { extra: prof === 'touch' ? 1024 : 3072 });
+        const w = BG.frameWork(pr, 1);
+        if (w > worst[prof][0]) worst[prof] = [w, `${seed} ${sp.title}`];
+      }
+    }
+    const a = JSON.stringify(R.roll(77, { n: 512 }).bodies.map(b => b.x)), b = JSON.stringify(R.roll(77, { n: 512 }).bodies.map(b => b.x));
+    ok('R1 roll: 300 seeds well formed, all three families, every scene kind, seeded', bad.length === 0 && Object.keys(fam).length === 3 && kinds.size === Object.keys(R.SANDBOX).length && a === b && titles.size >= 60,
+      `families ${JSON.stringify(fam)}, ${kinds.size}/${Object.keys(R.SANDBOX).length} scene kinds, ${titles.size} distinct titles; ${bad.slice(0, 3).join(' | ') || 'no errors'}`);
+    ok('R1 roll: pair work per frame at Normal speed with the page pool (desktop, phone)', worst.desktop[0] <= BG.LIMIT.desktop && worst.touch[0] <= BG.LIMIT.touch,
+      `desktop worst ${e3(worst.desktop[0])} (${worst.desktop[1]}), phone worst ${e3(worst.touch[0])} (${worst.touch[1]})`);
+  }
+  // R2 incoming(): two bodies from that state meet at q after tp
+  {
+    let worst = 0, worstT = 0;
+    for (const [GM, q, vk, tp] of [[1, 0.3, 0.4, 2], [3, 1.2, 0.8, 5], [1e-3, 0.05, 0.2, 40]]) {
+      const vinf = vk * Math.sqrt(GM / q), s = R.incoming(GM, q, vinf, tp, 0.4, 1.0, 2.0);
+      const sys = new N.System([{ m: GM, x: [0, 0, 0], v: [0, 0, 0] }, { m: 0, x: s.r, v: s.v }]);
+      let dmin = Infinity, tmin = 0;
+      const n = 4000;
+      for (let k = 0; k < n; k++) { sys.advance(2 * tp / n, 1); const d = N.v3.len(N.v3.sub(sys.pos(1), sys.pos(0))); if (d < dmin) { dmin = d; tmin = sys.t; } }
+      worst = Math.max(worst, Math.abs(dmin - q) / q); worstT = Math.max(worstT, Math.abs(tmin - tp) / tp);
+    }
+    ok('R2 incoming(): closest approach q at time tp (hyperbolic Kepler equation)', worst < 1e-4 && worstT < 2e-3, `worst |d - q|/q ${e3(worst)}, |t - tp|/tp ${e3(worstT)}`);
+  }
+  // R3 scenes and intruders do what their titles say (CPU, small n)
+  {
+    const res = [];
+    const runFor = (sp, sec, every = 1) => C.runCpu(R.prepare(sp, { extra: 512 }), sp.rate * sec, Math.ceil(sec * 20), null, every);
+    const fin = lab => { const s = lab.sys; for (let i = 0; i < 3 * s.n; i++) if (!isFinite(s.x[i])) return false; return true; };
+    let pass = true;
+    for (const key of Object.keys(R.SANDBOX)) for (const seed of [3, 4]) {
+      const sp = R.roll(seed, { n: 300, family: 'sandbox', sandbox: key });
+      const { lab, events } = runFor(sp, 15);
+      const types = new Set(events.map(e => e.type));
+      let want = true, note = '';
+      if (key === 'ringDive') { want = types.has('breakup'); note = 'breakup'; }
+      if (key === 'bhSwarm') { want = types.has('breakup'); note = 'breakup (TDE)'; }
+      const ok1 = fin(lab) && want;
+      if (!ok1) pass = false;
+      res.push(`${key}/${seed}${note ? ' ' + note + (want ? ' yes' : ' NO') : ''} [${[...types].join(',') || '-'}]`);
+    }
+    ok('R3 generated scenes: finite for 15 s at Normal speed; a rubble moon and a plunging star break up', pass, res.join('; '));
+    // intruders: the closest approach happens near the planned time
+    const out = []; let okI = true, count = 0;
+    for (let seed = 1; seed < 400 && count < 8; seed++) {
+      const sp = R.roll(seed, { n: 200, family: 'intruder' });
+      if (!sp.rollInfo || sp.rollInfo.family !== 'intruder' || !['blackhole', 'star', 'planet', 'rubble'].includes(sp.rollInfo.intruder)) continue;
+      count++;
+      const iN = sp.bodies.length - 1, sec = 14;
+      const { lab, events } = runFor(sp, sec);
+      const dom = sp.opts.watch[sp.opts.watch.length - 1][0];
+      const hit = events.find(e => (e.type === 'periapsis' && e.j === iN && e.i === dom) || (e.type === 'breakup' && e.i === iN) || (e.type === 'merge' && (e.j === iN || e.i === iN)));
+      const tRel = hit ? hit.t / sp.rollInfo.tPeri : NaN;
+      const good = fin(lab) && hit && tRel > 0.6 && tRel < 1.4;
+      if (!good) okI = false;
+      out.push(`${sp.rollInfo.intruder}@${sp.rollInfo.base}: ${hit ? hit.type + ' at ' + tRel.toFixed(2) + ' tp' : 'no approach'}`);
+    }
+    ok('R3 intruders: the planned closest approach (or a breakup or merge there) comes at 0.6-1.4 of the planned time', okI && count >= 6, out.join('; '));
+  }
+  // I1 items
+  {
+    const sp = X.build('kepler', 1, { n: 64, variant: 'laws' }), sys = new N.System(sp.bodies, sp.opts);
+    const dom = IT.dominant(sys), ext = sp.view.extent, p = N.v3.add(dom.x, [0.7, 0.3, 0]);
+    const v = IT.throwVelocity(p, [0, 0, 0], dom, ext, IT.itemMass('moon', sys));
+    const b = IT.makeItem('moon', sys, p, v, ext);
+    const el = N.stateToElements(dom.m + b.m, N.v3.sub(p, dom.x), N.v3.sub(v, dom.v));
+    const ns = IT.extendSystem(sys, [b], [[dom.i, sys.n]]);
+    let same = true; for (let i = 0; i < sys.n; i++) for (let k = 0; k < 3; k++) if (ns.x[3 * i + k] !== sys.x[3 * i + k] || ns.v[3 * i + k] !== sys.v[3 * i + k]) same = false;
+    // the path ahead against the run that follows (both end in the same
+    // merge, or neither does)
+    const p2 = N.v3.add(dom.x, [-0.9, 0.2, 0]), mk2 = () => IT.makeItem('planet', ns, p2, IT.throwVelocity(p2, [0.05, -0.2, 0], dom, ext), ext);
+    const pr = IT.predictPath(ns, mk2(), 3, 30, 4000);
+    const ns2 = IT.extendSystem(ns, [mk2()]), run = [ns2.pos(ns2.n - 1)];
+    for (let k = 0; k < 30 && ns2.alive[ns2.n - 1]; k++) { ns2.advance(0.1, 1); if (ns2.alive[ns2.n - 1]) run.push(ns2.pos(ns2.n - 1)); }
+    let dEnd = 0; for (let k = 0; k < pr.pts.length; k++) dEnd = Math.max(dEnd, N.v3.len(N.v3.sub(run[k] || [1e9, 0, 0], pr.pts[k])));
+    if ((pr.end !== null) !== !ns2.alive[ns2.n - 1] || run.length !== pr.pts.length) dEnd = Infinity;
+    const sw = IT.swarm('dust', p, v, ext, dom.v, 3);
+    const rub = IT.makeItem('rubble', ns, p, v, ext);
+    ok('I1 tray: a tap orbits in a circle; extendSystem keeps every state; the path ahead is the run that follows; swarms and rubble',
+      el.e < 1e-9 && same && ns.n === sys.n + 1 && ns.watch.length === sys.watch.length + 1 && dEnd < 1e-9 && sw.n === IT.ITEM.dust.parts.n && rub.fragile && rub.fragile.rho > 0,
+      `tap: e ${e3(el.e)}; states kept ${same}; path ahead vs run: ${pr.pts.length} points, ${pr.end !== null ? 'both end in a merge at t ' + pr.end.toFixed(3) : 'no merge'}, max |dx| ${e3(dEnd)}; dust ${sw.n} particles; rubble fragile rho ${rub.fragile && rub.fragile.rho.toFixed(3)}`);
+  }
+  // F1 frames
+  {
+    // a circular pair: both bodies stand still in the turning frame
+    const sys = new N.System([{ m: 1, x: [0, 0, 0], v: [0, 0, 0] }, { m: 0.01, x: [1, 0, 0], v: [0, Math.sqrt(1.01), 0] }]);
+    sys.advance(1.3, 4);
+    const f = F.frameOf(sys, { center: 'com', rotating: [0, 1] });
+    const q = F.toFrame(f, sys.pos(1)), back = F.toWorld(f, q);
+    const u = F.toWorldVel(f, sys.pos(1), [0, 0, 0]);
+    ok('F1 frame: the pair stays on the +x axis; frame <-> world round trip; omega x r', Math.abs(q[1]) < 1e-12 && q[0] > 0 && N.v3.len(N.v3.sub(back, sys.pos(1))) < 1e-12 && N.v3.len(N.v3.sub(u, sys.vel(1))) < 1e-9,
+      `y in the frame ${e3(Math.abs(q[1]))}, round trip ${e3(N.v3.len(N.v3.sub(back, sys.pos(1))))}, |v_frame -> world - v| ${e3(N.v3.len(N.v3.sub(u, sys.vel(1))))}`);
+  }
+  // S1 saver plan
+  {
+    const a = SP.makeReel(11), b = SP.makeReel(11), c = SP.makeReel(12);
+    let rep = 0; for (let i = 1; i < a.length; i++) if (a[i].type === 'library' && a[i - 1].type === 'library' && a[i].key === a[i - 1].key) rep++;
+    const lib = a.filter(x => x.type === 'library').length, rolls = a.filter(x => x.type === 'roll').length;
+    const rnd = SP.rng(5); let badLen = 0, badSeq = 0, kinds = new Set(), firstOK = true;
+    for (let k = 0; k < 200; k++) {
+      const plan = SP.shotPlan(rnd, k % 7 === 0);
+      if (plan[0].kind !== 'establish') firstOK = false;
+      for (let i = 0; i < plan.length; i++) { const sh = plan[i]; kinds.add(sh.kind); if (sh.len < SP.CUT_MIN || sh.len > SP.CUT_MAX) badLen++; if (i && sh.kind === plan[i - 1].kind) badSeq++; }
+    }
+    const subj = SP.pickSubject([{ i: 0, alive: true, a: 1, dom: true }, { i: 1, alive: true, a: 5 }, { i: 2, alive: true, a: 2 }, { i: 3, alive: false, a: 99 }], () => 0.9);
+    const cuts = [SP.shotDone({ len: 7 }, 4.9), SP.shotDone({ len: 7 }, 7.1), SP.shotDone({ len: 30 }, 12.1)];
+    const laws = [SP.lawFor({ key: 'lagrange', view: { rotating: [0, 1] } }).name, SP.lawFor({ key: 'kepler', view: {} }).name, SP.lawFor({ key: 'galaxies', view: {} }).name];
+    ok('S1 saver plan: seeded reel (library + rolls), shots 5-12 s, establish first, no kind twice in a row, data-driven subject, cuts, laws',
+      JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) !== JSON.stringify(c) && rep === 0 && lib === 53 && rolls === 40 && badLen === 0 && badSeq === 0 && firstOK && kinds.size === 5 && subj === 1 && cuts.join() === 'false,true,true' && laws.join() === 'Jacobi integral,vis-viva,Newton' && SP.eventWorth({ type: 'breakup' }, 1) > SP.eventWorth({ type: 'periapsis', d: 0.05 }, 1) && SP.eventWorth({ type: 'periapsis', d: 0.5 }, 1) === 0,
+      `reel ${a.length} (${lib} library, ${rolls} rolls, ${rep} repeats); ${badLen} shots out of 5-12 s, ${badSeq} repeats; kinds ${[...kinds].join(',')}; subject ${subj}; laws ${laws.join(', ')}`);
+  }
+  // B1 pixels
+  {
+    const pr = [BG.pixelRatio('auto', false, 1920, 1080, 2), BG.pixelRatio('auto', true, 390, 844, 3), BG.pixelRatio('high', false, 2560, 1440, 2)];
+    const px = [1920 * 1080 * pr[0] ** 2, 390 * 844 * pr[1] ** 2, 2560 * 1440 * pr[2] ** 2];
+    ok('B1 pixel ratio: under each preset\'s pixel budget, at most 1.5 on a phone', px[0] <= BG.MAXPX.medium * 1.0001 && pr[1] <= 1.5 && px[1] <= BG.MAXPX.low * 1.0001 && px[2] <= BG.MAXPX.high * 1.0001,
+      `desktop ${pr[0].toFixed(2)} (${(px[0] / 1e6).toFixed(2)} Mpx), phone ${pr[1].toFixed(2)} (${(px[1] / 1e6).toFixed(2)} Mpx), high ${pr[2].toFixed(2)} (${(px[2] / 1e6).toFixed(2)} Mpx)`);
+  }
+}
+
 // ── experiments ─────────────────────────────────────────────────────────────
 async function budgetTests() {
   const BG = await import('./budget.js'), X = await import('./experiments/index.js');
@@ -240,17 +386,24 @@ async function gpuTests() {
 
 if (!GPU_ONLY) {
   const t0 = Date.now();
-  if (!ONLY) { coreTests(); await budgetTests(); }
-  await experimentTests();
+  if (!ONLY) { coreTests(); await budgetTests(); await pageModuleTests(); }
+  if (!ARGS.includes('--page')) await experimentTests();
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 if (typeof Deno !== 'undefined') await gpuTests();
-else if (!ONLY) {
+else if (!ONLY && !ARGS.includes('--cpu')) {
   const { spawnSync } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');
   const d = spawnSync('deno', ['run', '-A', fileURLToPath(import.meta.url), '--gpu'], { encoding: 'utf8' });
   if (d.error) console.log('SKIP  GPU tests: deno is not installed (' + d.error.code + ')');
   else { process.stdout.write(d.stdout); if (d.stderr.trim()) process.stdout.write(d.stderr.split('\n').filter(l => !/^(Download|Warning)/.test(l)).join('\n')); if (d.status !== 0) fails++; }
+  // the whole page on Deno's WebGPU (test-page.mjs)
+  if (!d.error) {
+    const p = spawnSync('deno', ['run', '-A', fileURLToPath(new URL('./test-page.mjs', import.meta.url))], { encoding: 'utf8', timeout: 600000 });
+    process.stdout.write(p.stdout || '');
+    if (p.stderr && p.stderr.trim()) process.stdout.write(p.stderr.split('\n').filter(l => !/^(Download|Warning)/.test(l)).join('\n'));
+    if (p.status !== 0) fails++;
+  }
 }
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
 if (typeof Deno !== 'undefined') { if (fails) Deno.exit(1); } else if (fails) process.exit(1);

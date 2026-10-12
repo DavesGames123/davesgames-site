@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Gravity Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   GRAVITY LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js runs one gravity experiment at a time: up to
+   32 bodies in f64 on the CPU and tens of thousands of particles on the GPU
+   (WebGPU), and draws them (render.js). 22 experiments with real body data
+   (experiments/, data.js), a dense randomizer (roll.js: library runs,
+   library runs with an intruder, and generated scenes), and a tray of
+   things to throw in (items.js).
+
+   MODULES (each file has its own header and grep list)
+     nbody.js lab.js engine.js   the physics: bodies, particles, GPU kernels
+     data.js experiments/        real data with sources; the 22 experiments
+     roll.js items.js frame.js   randomizer, tray, frame coordinates
+     render.js shaders/          the renderer: bodies.wgsl points.wgsl
+                                 lines.wgsl post.wgsl (nbody.wgsl: physics)
+     saver-plan.js budget.js     the saver reel and shots; budgets
+     main.js app/                boot and frame loop; the page modules
+     tests.mjs                   node tests.mjs (CPU, then GPU in Deno)
+
+   LAYOUT  (# marks an element id the app binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ #bar [experiment ▾] [⚄ Randomize] [⟲ ❚❚ ›] [×1/8 … ×8] clock      │
+     │      #slowChip                       [Display] [Details] [?]      │
+     │ #tray        #gpu  the scene                       #selCard        │
+     │ (things to   #labels body names       #toasts                     │
+     │  throw in)                                                        │
+     │              #story  title, blurb, last event, seed, wishlist     │
+     └──────────────────────────────────────────────────────────────────┘
+     #gallery   experiments by group (cards with variants) and the
+                generated scenes (#scenes), #galRoll
+     #display   colour mode, show toggles, quality (popover)
+     #details   facts, equations, live numbers, notes, sources (drawer)
+     #explain   "What am I looking at?" (popover)
+   PHONE (max-width 768px, or a short landscape touch screen)
+     #bar keeps the experiment button, the die, the clock and "?"; #dock
+     at the base holds play, step, speed, the tray, display and "more";
+     #tray is a strip above the dock; panels are bottom sheets.
+   GREP MAP  (grep -n "<target>" <file>; every file lists more)
+     a run starts ......... app/run.js "export function startRun"
+     sim step + events .... app/run.js "export function stepRun", "function onEvents"
+     throw an item ........ app/pointer.js "function updateAim"; items.js "export function makeItem"
+     randomize ............ roll.js "export function roll", "export const SANDBOX", "function intruder"
+     an experiment ........ experiments/index.js "const LIST"; experiments/<group>.js
+     body shading ......... shaders/bodies.wgsl "fn surface", "fn fs_body"
+     particles, flashes ... shaders/points.wgsl "fn vs_main"
+     bloom, tone map ...... shaders/post.wgsl "fn fs_final"
+     camera ............... app/camera.js "export function camFrame"
+     saver director ....... app/saver.js "export function saverFrame", "function tick"; saver-plan.js
+     plate ................ app/saver.js "function plate"
+     panels, gallery ...... app/ui.js "function buildGallery", "export function refreshHUD"
+     links ................ app/ui.js "function choiceFromURL"
+   KEYS   Space pause · . step · [ ] speed · R restart · N randomize ·
+          T trails · F follow · 1-8 tray items · Esc
+   LINKS  ?seed=<int>[&scene=<key>] a random run · ?exp=<key>&v=<variant>
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A gravity laboratory in your browser: colliding galaxies, three-body chaos, Lagrange points, stars torn apart by black holes, and a tray of planets, stars and black holes to throw in. Real Newtonian gravity, tens of thousands of particles on the GPU.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<canvas id="gpu" aria-label="Simulation view"></canvas>
+<div id="labels" aria-hidden="true"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="busy"><div class="busy-t">Starting the gravity lab</div></div>
+<div id="nogpu" class="off">
+  <h2>WebGPU is not available</h2>
+  <p>This page moves tens of thousands of particles on the GPU. It needs WebGPU: Chrome or Edge 113+, Safari 26+, or Firefox 141+ on Windows.</p>
+  <p id="nogpuWhy"></p>
+</div>
+
+<header id="bar">
+  <button id="expBtn" class="pill" aria-haspopup="dialog"><span id="expName">Gravity lab</span><span class="caret">▾</span></button>
+  <button id="rollBtn" class="pill roll" title="A random run from the library, a library run with an intruder, or a generated scene (N). The seed goes in the link." aria-label="Randomize"><span class="die" aria-hidden="true">⚄</span><span class="rl">Randomize</span></button>
+  <div class="grp transport">
+    <button id="resetBtn" class="ib" title="Start again (R)" aria-label="Start again">⟲</button>
+    <button id="playBtn" class="ib play" title="Pause (Space)" aria-label="Pause">❚❚</button>
+    <button id="stepBtn" class="ib" title="Step (.)" aria-label="Step">›</button>
+  </div>
+  <div class="grp speed"><div class="stops" id="speeds" aria-label="Speed"></div><output id="speedV"></output></div>
+  <div id="clock" class="clock"></div>
+  <span id="slowChip" class="chip" hidden title="A very close pass needs many small steps: the clock runs slower until it is over">slowed: close pass</span>
+  <div class="grp right">
+    <button id="dispBtn" class="tb" aria-haspopup="dialog">Display</button>
+    <button id="detBtn" class="tb">Details</button>
+    <button id="helpBtn" class="ib round" aria-label="What am I looking at?">?</button>
+  </div>
+</header>
+
+<aside id="tray" aria-label="Things to throw in">
+  <div class="tr-h">Throw in</div>
+  <div id="trayItems"></div>
+  <p id="trayHint"></p>
+</aside>
+
+<aside id="selCard" hidden>
+  <div class="sc-h"><b id="selName"></b><button id="selClose" class="x sm" aria-label="Close">✕</button></div>
+  <table id="selRows" class="readout"></table>
+  <button id="followBtn" class="seedbtn">Follow</button>
+</aside>
+
+<section id="story">
+  <div id="title"></div>
+  <div id="blurb"></div>
+  <div id="feed" aria-live="off"></div>
+  <div id="rollInfo" hidden><span id="rollCap"></span><button id="seedBtn" class="seedbtn">copy link</button></div>
+  <a id="cta" class="cta" target="_blank" rel="noopener">Stella Nova: the gravity sim game · <b>Wishlist on Steam</b></a>
+</section>
+
+<div id="gallery" class="modal off" role="dialog" aria-label="Experiments">
+  <div class="sheet">
+    <div class="sh-h"><h2>Gravity experiments</h2><button class="x" data-close="gallery" aria-label="Close">✕</button></div>
+    <div class="gal-roll"><button id="galRoll" class="primary roll"><span aria-hidden="true">⚄</span> Randomize anything</button></div>
+    <h3 class="gal-h">Generated scenes <small>a new random one each time</small></h3>
+    <div id="scenes" class="chips"></div>
+    <div id="groups"></div>
+  </div>
+</div>
+
+<div id="display" class="pop off" role="dialog" aria-label="Display">
+  <div class="pg"><div class="ph">Colour the particles by</div>
+    <div class="seg" id="colors"><button data-c="0">Group</button><button data-c="1">Speed</button><button data-c="2">Strongest pull</button></div>
+    <p class="hint">Strongest pull: each particle takes the colour of the body that pulls on it hardest. The borders between colours are where gravity changes hands.</p></div>
+  <div class="pg"><div class="ph">Show</div>
+    <div class="toggles">
+      <label><input type="checkbox" id="tTrails"> Trails</label>
+      <label><input type="checkbox" id="tLabels"> Names</label>
+      <label><input type="checkbox" id="tPredict"> Path of a throw</label>
+      <label><input type="checkbox" id="tCalm"> Reduce motion</label>
+    </div></div>
+  <div class="pg"><div class="ph">Quality</div>
+    <div class="seg" id="quals"><button data-q="auto">Auto</button><button data-q="high">High</button><button data-q="medium">Medium</button><button data-q="low">Low</button></div>
+    <p class="hint">Particle count and pixels. A change starts the run again.</p></div>
+</div>
+
+<div id="explain" class="pop off" role="dialog" aria-label="What am I looking at?">
+  <h3>What am I looking at?</h3>
+  <p>Every body pulls on every other with Newton’s law of gravity, <span class="sym" data-tex="F = G m_1 m_2 / r^2" data-inline></span>. Nothing is scripted: the computer adds up the pulls and takes small steps in time.</p>
+  <p>The <b>bodies</b> (stars, planets, moons, black holes, galaxy cores) are computed in double precision with a 6th-order integrator that takes smaller steps in close passes. The <b>particles</b> (dust, debris, the stars of a galaxy disk) feel the bodies but are too light to pull back; thousands of them move on the GPU. In the disk experiment every particle pulls on every other.</p>
+  <p>Pick something from the tray and throw it in: a planet, a star, a black hole, a swarm of rocks. A tap gives a circular orbit; a drag throws it. The dashed line shows its path.</p>
+  <p>Randomize mixes the 22 experiments, adds intruders on computed paths, and generates new scenes. Each roll has a seed in the link, so you can share it.</p>
+  <p class="cta-p"><a id="ctaExplain" class="cta" target="_blank" rel="noopener">This is a taste of <b>Stella Nova</b>, a game built on a gravity simulation. Wishlist it on Steam.</a></p>
+</div>
+
+<aside id="details" class="drawer off" aria-label="Details">
+  <div class="sh-h"><h2>Details</h2><button class="x" data-close="details" aria-label="Close">✕</button></div>
+  <div class="card"><div class="ch">This run</div><table id="facts" class="readout"></table></div>
+  <div class="card"><div class="ch">Equations</div><div id="eqs"></div></div>
+  <div class="card"><div class="ch">Live</div><table id="live" class="readout"></table></div>
+  <div class="card"><div class="ch">Simplifications</div><ul id="notes"></ul></div>
+  <div class="card about"><div class="ch">Method</div>
+    <p>Bodies: f64 on the CPU, Yoshida's 6th-order composition of the leapfrog, adaptive substeps (a fraction of the shortest pair time), perfect mergers on contact, breakup inside the fluid Roche limit. Particles: kick-drift-kick leapfrog against the body positions of each step, one GPU thread each; the self-gravity disk uses a softened direct sum over all pairs. node tests.mjs checks the integrators against Kepler, the figure-eight, Burrau's problem, the Lagrange points, and the GPU kernels against the CPU.</p>
+    <p class="credit">Sources: <span id="sources"></span></p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <button id="dockStep" aria-label="Step">›</button>
+  <div class="seg" id="dockSpeed"><button data-d="-1" aria-label="Slower">−</button><span id="dockSpeedV"></span><button data-d="1" aria-label="Faster">+</button></div>
+  <button id="dockTray" aria-label="Throw in">＋</button>
+  <button id="dockDisp" aria-label="Display">◐</button>
+  <button id="dockMore" aria-label="More">⋯</button>
+</nav>
+<div id="moreMenu" class="pop off"><button id="moreRoll">⚄ Randomize</button><button id="moreGal">Experiments</button><button id="moreLink">Copy the link to this run</button><button data-open="details">Details</button><button data-open="explain">What am I looking at?</button></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

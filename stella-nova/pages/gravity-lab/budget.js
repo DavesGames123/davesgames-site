@@ -13,7 +13,13 @@
 //  LIMIT     what tests.mjs holds each profile to at Normal speed.
 //  particleBytes(cap, S)    GPU bytes of one Lab (engine.js buffers).
 //
-//  EXPORTS  QUALITY, LIMIT, budgetFor, frameWork, particleBytes
+//  PIXELS    pixelRatio(quality, touch, cssW, cssH, dpr): the device pixel
+//            ratio of the canvas, at most PR_CAP and under the preset's
+//            pixel count (MAXPX). The scene target is 12 B/px (rgba16f +
+//            depth32) plus the bloom chain (about 2.7 B/px) and the canvas.
+//
+//  EXPORTS  QUALITY, LIMIT, MAXPX, PR_CAP, budgetFor, frameWork,
+//           particleBytes, pixelRatio
 // ============================================================================
 import { MAXB, TRAJ_STRIDE } from './nbody.js';
 import { MAX_S } from './lab.js';
@@ -43,4 +49,15 @@ export function particleBytes(cap, self = false) {
   if (self) b += rows * 16 * 2 + 16 + 3 * 16;            // acc (+ staging), uniforms
   else b += 32 + (MAX_S + 1) * MAXB * TRAJ_STRIDE * 4 + MAXB * 4 * 2;   // params, traj, hits
   return b;
+}
+
+// the most canvas pixels of each preset, and the largest pixel ratio
+export const MAXPX = { high: 3.6e6, medium: 2.4e6, low: 1.1e6 };
+export const PR_CAP = { desktop: 2, touch: 1.5 };
+export function pixelRatio(quality, touch, cssW, cssH, dpr = 1) {
+  const q = MAXPX[quality] ? quality : (touch ? 'low' : 'medium');
+  let pr = Math.min(dpr || 1, touch ? PR_CAP.touch : PR_CAP.desktop);
+  const px = cssW * cssH;
+  if (px * pr * pr > MAXPX[q]) pr = Math.sqrt(MAXPX[q] / Math.max(1, px));
+  return Math.max(0.5, pr);
 }
