@@ -35,6 +35,7 @@
 //      grep -n 'function conOf'           the connectome of Fly A or Fly B
 //      grep -n 'function initHeroStats'   hero numbers, one line per fly
 //      grep -n 'function initGame'        01 rules, decks, gallery
+//      grep -n 'function initGallery'     01 card grid and filter bar
 //      grep -n 'function initCentre'      02 point cloud, counts, facts
 //      grep -n 'function initCompare'     02 Fly A / Fly B table (COMPARE)
 //      grep -n 'function initKcCode'      [data-kc] KC share, k, code
@@ -51,7 +52,7 @@
 //      grep -n 'function loop'            the one rAF loop
 // ============================================================================
 import { manaGlyph } from './ui/art.js';
-import { renderBoard, renderDecks, renderGallery, setKeywordText, KEYWORD_TEXT } from './ui/board.js';
+import { renderBoard, renderDecks, renderGallery, renderGalleryControls, GALLERY_ALL, setKeywordText, KEYWORD_TEXT } from './ui/board.js';
 import { BrainView } from './ui/brain.js';
 import { curveRows, toSeries, seriesLabel, drawChart, SERIES_COL, flattenRow, evalVerdict } from './ui/charts.js';
 import { ToyMB, drawToy, drawGlomeruli, drawSparse, jaccard, cosine } from './ui/explain.js';
@@ -528,9 +529,16 @@ function initGame() {
   if (!M.cards) { $('deckLists').innerHTML = `<p class="none">The card pool did not load (${esc(status.cards)}).</p>`; return; }
   const cards = M.cards.CARDS || [];
   if (M.cards.DECKS) renderDecks($('deckLists'), [...cards, ...(M.cards.TOKENS || [])], M.cards.DECKS);
-  let filter = 'all';
-  const draw = () => renderGallery($('gallery'), cards, filter);
-  seg($('galSeg'), v => { filter = v; draw(); });
+  initGallery(cards);
+}
+
+// 01 gallery: every card as the canvas card of the table (ui/cardview.js),
+// with the filter bar of ui/board.js in place of the old #galSeg buttons.
+// A tap opens the card in the inspector.
+function initGallery(cards) {
+  let filter = { ...GALLERY_ALL };
+  const bar = renderGalleryControls($('galSeg'), cards, filter, f => { filter = f; draw(); });
+  const draw = () => bar.set(renderGallery($('gallery'), cards, filter));
   draw();
 }
 
