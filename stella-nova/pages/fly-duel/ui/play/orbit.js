@@ -16,6 +16,13 @@
 //  (TAP.ms) that did not move: it picks a card as before. A long press
 //  that did not move is a 'hold' (the long-press inspect of play.js).
 //
+//  BACK TO THE SEAT. While the camera is away from the seat (orbiting),
+//  a double tap or double click on empty table (no card and no fly under
+//  both taps, scene.pickPermanent) puts it back: seat(). The click of the
+//  second tap is eaten, so it picks nothing. play.js adds the "Back to my
+//  seat" button and the C key (user: "its also very hard to get back to
+//  first person perspective if you dont know what you're doing").
+//
 //  The hand is a sibling box (ui/play/hand.js), so a drag of a hand card
 //  to play never reaches these listeners. blocked() (hand.dragging) is a
 //  second guard.
@@ -24,12 +31,22 @@
 //      grep -n 'export const TAP'              tap limits
 //      grep -n 'export function classifyGesture'  tap | drag | hold
 //      grep -n 'export const WHEEL'            wheel zoom rate
+//      grep -n 'export function isDoubleTap'   two taps -> back to the seat
 //      grep -n 'export function wheelZoom'     wheel delta -> factor
 //      grep -n 'export function attachOrbit'   the DOM listeners
 // ============================================================================
 
 export const TAP = { move: 8, moveTouch: 14, ms: 420 };
 export const WHEEL = { perPx: 0.0015, max: 1.5 };
+export const DOUBLE = { ms: 380, px: 28 };
+
+// Two taps { x, y, t } (t in ms) make a double tap when the second comes
+// soon after the first and near it.
+export function isDoubleTap(a, b) {
+  if (!a || !b) return false;
+  const dt = b.t - a.t;
+  return dt >= 0 && dt <= DOUBLE.ms && Math.hypot(b.x - a.x, b.y - a.y) <= DOUBLE.px;
+}
 
 // { dx, dy, ms, touch, pointers } -> 'tap' | 'drag' | 'hold'
 export function classifyGesture({ dx = 0, dy = 0, ms = 0, touch = false, pointers = 1 } = {}) {
@@ -46,13 +63,22 @@ export function wheelZoom(deltaY, deltaMode = 0) {
   return Math.max(1 / WHEEL.max, Math.min(WHEEL.max, k));
 }
 
-// el: the table box. scene: { orbitBy, zoomBy, seatView }. opts: {
-// blocked() -> true while a hand card drags, onChange(orbiting) }.
+// el: the table box. scene: { orbitBy, zoomBy, seatView, pickPermanent? }.
+// opts: { blocked() -> true while a hand card drags, onChange(orbiting),
+// empty(x, y) -> true on empty table (default: scene.pickPermanent finds
+// nothing) }.
 // Returns { consumeDrag(), seat(), get orbiting, dispose() }.
 export function attachOrbit(el, scene, opts = {}) {
   const pts = new Map();
   let g = null;                      // the gesture of the pointers down
   let ate = false, orbiting = false;
+  let lastTap = null;                // the last tap on empty table
+  const empty = (x, y) => {
+    try {
+      if (opts.empty) return !!opts.empty(x, y);
+      return !scene.pickPermanent?.(x, y);
+    } catch { return false; }
+  };
   const blocked = () => { try { return !!opts.blocked?.(); } catch { return false; } };
   const setOrbiting = v => { if (v !== orbiting) { orbiting = v; opts.onChange?.(v); } };
   const pinchD = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
@@ -85,6 +111,12 @@ export function attachOrbit(el, scene, opts = {}) {
     if (pts.size === 0 && g) {
       const kind = g.drag ? 'drag' : classifyGesture({ dx: e.clientX - g.x0, dy: e.clientY - g.y0, ms: performance.now() - g.t0, touch: g.touch, pointers: g.pointers });
       if (kind === 'drag') ate = true;
+      if (kind === 'tap') {
+        const tap = { x: e.clientX, y: e.clientY, t: performance.now() };
+        const onEmpty = empty(tap.x, tap.y);
+        if (orbiting && onEmpty && isDoubleTap(lastTap, tap)) { ate = true; lastTap = null; seat(); }
+        else lastTap = onEmpty ? tap : null;
+      } else lastTap = null;
       g = null;
     } else if (g) g.pinch = null;
   }
@@ -98,10 +130,12 @@ export function attachOrbit(el, scene, opts = {}) {
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
   el.addEventListener('wheel', wheel, { passive: false });
+  function seat() { scene.seatView?.(); setOrbiting(false); }
   return {
-    // true once after a drag: the click handler skips its pick
+    // true once after a drag or a double tap: the click handler skips
+    // its pick
     consumeDrag() { const a = ate; ate = false; return a; },
-    seat() { scene.seatView?.(); setOrbiting(false); },
+    seat,
     get orbiting() { return orbiting; },
     dispose() {
       el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move);

@@ -22,7 +22,7 @@
 //      │      table (2D or 3D)        │   last action chip in the middle
 //      │                              │
 //      │ Main · Attack · Block · End  │   phase bar + prompt line
-//      │                 [All][BUTTON]│   big button at the right thumb
+//      │                [Undo][BUTTON]│   big button at the right thumb
 //      └ your hand, fanned            ┘
 //
 //  FLOW  setup sheet (opponent, decks, timer) -> coin -> opening hand
@@ -61,12 +61,23 @@
 //
 //  ORBIT  Drag on the table turns your camera, pinch or the wheel zooms
 //        (ui/play/orbit.js; clamps in ui/fly3d/director.js ORBIT). A drag
-//        picks nothing; a tap still picks. "Back to seat" or C goes back.
+//        picks nothing; a tap still picks. Away from the seat, the
+//        "Back to my seat" button shows (an icon and the words, 44 px on
+//        touch); it, a double tap or double click on empty table, or the
+//        C or Home key bring the camera back to the seat (it eases back).
 //        The hand of the fly stays hidden from every angle (scene.js).
+//        In first person your own fly and its fan hide (scene.js
+//        seatHide): they covered your board.
+//
+//  COMBAT  Click each creature that attacks (a click again takes it
+//        back); no key or button picks them all. Block: click your
+//        untapped creature, then the attacker it blocks; an arrow joins
+//        them (scene.js blockArrows). The big button confirms.
 //
 //  KEYS (desktop)  Space / Enter: the big button. Esc: cancel or close.
-//        Z or Backspace: undo. A: all attack. 1-9: select a hand card.
-//        I: inspect the selected card. L: the log. ?: the key list.
+//        Z or Backspace: undo. C or Home: back to your seat. 1-9:
+//        select a hand card. I: inspect the selected card. L: the log.
+//        ?: the key list.
 //
 //  Honest labels: the fly's deck pick is random and its mulligan is a
 //  fixed rule (ui/play/controller.js flyKeeps); its moves come from its
@@ -173,7 +184,7 @@ export function mountPlay(root, opts) {
   root.innerHTML = `
     <div class="pl-cards"><div class="pl-sc pl-sc0"></div><div class="pl-sc pl-sc1"></div></div>
     <div class="pl-opp"></div>
-    <div class="pl-table"><button type="button" class="pl-btn pl-seatbtn" hidden aria-label="Back to seat (C)">Back to seat</button></div>
+    <div class="pl-table"><button type="button" class="pl-btn pl-seatbtn" hidden aria-label="Back to my seat (C)" title="Back to my seat (C, or double-click the table)"><svg class="pl-seatico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M3.5 3.5v5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg><span>Back to my seat</span></button></div>
     <div class="pl-last" hidden><canvas class="pl-cv"></canvas><span class="pl-last-t"></span></div>
     <div class="pl-bar"><ol class="pl-steps"></ol><span class="pl-turn"></span><p class="pl-prompt" aria-live="polite"></p></div>
     <div class="pl-handbox"></div>
@@ -241,8 +252,8 @@ export function mountPlay(root, opts) {
     if (opts.sceneEl) tableBox.insertBefore(opts.sceneEl, tableBox.firstChild);
     tableBox.classList.add('is-3d');
     // Orbit (ui/play/orbit.js): drag turns the seat camera, pinch and the
-    // wheel zoom. A drag eats its click, so it picks nothing. "Back to
-    // seat" (or C) puts the camera back.
+    // wheel zoom. A drag eats its click, so it picks nothing. "Back to my
+    // seat", C, Home, or a double tap on empty table puts the camera back.
     const seatBtn = $('.pl-seatbtn');
     if (typeof opts.scene.orbitBy === 'function') {
       orbit = attachOrbit(tableBox, opts.scene, { blocked: () => hand.dragging, onChange: on => { seatBtn.hidden = !on; } });
@@ -722,7 +733,7 @@ export function mountPlay(root, opts) {
       <button type="button" class="pl-btn" data-m="concede">Concede and restart</button>
       <button type="button" class="pl-btn" data-m="setup">Change decks</button>
       ${opts.onExit ? '<button type="button" class="pl-btn" data-m="exit">Exit play mode</button>' : ''}
-      <p class="pl-keys" hidden>Space or Enter: the big button. Esc: cancel or close. Z or Backspace: undo. A: all attack. 1 to 9: select a hand card. I: inspect it. L: the log. Drag the table to look around, pinch or wheel to zoom, C: back to your seat.</p>`;
+      <p class="pl-keys" hidden>Space or Enter: the big button. Esc: cancel or close. Z or Backspace: undo. 1 to 9: select a hand card. I: inspect it. L: the log. Combat: click each creature that attacks; to block, click your creature, then the attacker. Drag the table to look around, pinch or wheel to zoom. C, Home or a double click on the table: back to your seat.</p>`;
     menu.querySelector('.pl-seg').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       pref.speed = b.dataset.v;
@@ -766,7 +777,7 @@ export function mountPlay(root, opts) {
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
     hintAt = 'button';
-    if ((e.key === 'c' || e.key === 'C') && orbit?.orbiting) { orbit.seat(); return; }
+    if ((e.key === 'c' || e.key === 'C' || e.key === 'Home') && orbit?.orbiting && !e.metaKey && !e.ctrlKey) { e.preventDefault(); orbit.seat(); return; }
     if (e.key === 'Escape') {
       if (inspector.isOpen()) { inspector.close(); return; }
       if (!menu.hidden) { toggleMenu(false); return; }
@@ -781,7 +792,6 @@ export function mountPlay(root, opts) {
     if ((k === ' ' || k === 'Enter') && !onButton) { e.preventDefault(); pri.click(); return; }
     if ((k === 'z' || k === 'Z' || k === 'Backspace') && !e.metaKey) { e.preventDefault(); if (!busy) apply(ix.undo()); return; }
     if ((k === 'z' || k === 'Z') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (!busy) apply(ix.undo()); return; }
-    if (k === 'a' || k === 'A') { if (!busy) apply(ix.allAttack()); return; }
     if (k === 'l' || k === 'L') { toggleLog(); return; }
     if (k === 'i' || k === 'I') { const v = ix.view(); if (v.selected !== null) inspectCard(pc.state.players[humanSeat()].hand[v.selected]); return; }
     if (k === '?') { toggleMenu(true); menu.querySelector('.pl-keys').hidden = false; return; }
@@ -813,8 +823,11 @@ export function mountPlay(root, opts) {
     if (has3d) {
       try {
         opts.scene.highlight?.({
-          seat: hs, mode: v.mode, eligible: v.eligibleAttackers.concat(v.eligibleBlockers), attackers: v.attackers,
-          blocks: v.blocks, targets: v.targetUids, preview: v.preview,
+          // block step: the attackers with no blocker yet can be clicked
+          // too; blockTargets: what the next click pairs
+          seat: hs, mode: v.mode, attackers: v.attackers, preview: v.preview,
+          eligible: v.eligibleAttackers.concat(v.eligibleBlockers, v.mode === 'block' ? v.incoming.filter(a => !v.blocks.some(q => q[0] === a)) : []),
+          blocks: v.blocks, targets: v.targetUids.concat(v.blockTargets || []),
           pending: [v.pendingBlocker, v.pendingAttacker].filter(u => u !== null),
         });
       } catch (e) { console.info('fly-duel play: scene.highlight', e); }
