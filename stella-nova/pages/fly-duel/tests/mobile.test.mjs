@@ -96,7 +96,7 @@ const main = read('main.js');
   ok(/\.pl-sheet \{[^}]*padding: calc\(16px \+ var\(--sat\)\)/.test(play) && /\.pl-insp \{[^}]*padding: calc\(16px \+ var\(--sat\)\)/.test(play), 'css: the play sheets and the inspector keep clear of the notch');
   ok(/\.pl-btn \{[^}]*min-height: 44px[^}]*touch-action: manipulation/.test(play), 'css: every play button is 44 px and has touch-action: manipulation');
   ok(/@media \(pointer: coarse\) \{ \.pl-seatbtn \{ min-height: 44px; \} \}/.test(play), 'css: "Back to seat" is 44 px on a touch screen');
-  ok(/\.pl-handbox \{[^}]*touch-action: pan-x/.test(play) && /\.pl-hc \{[^}]*touch-action: pan-x/.test(play), 'css: the hand fan scrolls sideways; a drag up plays (touch-action: pan-x)');
+  ok(/\.pl-handbox \{[^}]*touch-action: none/.test(play) && /\.pl-hc \{[^}]*touch-action: none/.test(play), 'css: the hand fan does not scroll; a drag in any direction plays (touch-action: none)');
   ok(/@media \(pointer: coarse\) \{[\s\S]{0,200}\.hd-more \{ min-height: 44px; min-width: 44px;/.test(hud), 'css: the brain button of a scorecard is 44 px on a touch screen');
 }
 

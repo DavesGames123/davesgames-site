@@ -246,7 +246,7 @@ else {
 // --- css -------------------------------------------------------------------------------------
 {
   const css = readFileSync(join(ROOT, 'ui/play/play.css'), 'utf8');
-  ok(/\.pl-hc\.is-peek:not\(\.is-drag\) \{ transform: translate\(var\(--x\), calc\(var\(--y\) - var\(--hand-h\) \* 0\.22\)\) rotate\(0deg\) scale\(1\.16\)/.test(css), 'css: a held hand card rises and grows in place (.is-peek)');
+  ok(/\.pl-hc\.is-peek:not\(\.is-drag\) \{ transform: translate\(var\(--x\), calc\(0px - var\(--lift\)\)\) rotate\(0deg\) scale\(1\.16\)/.test(css), 'css: a held hand card rises and grows in place (.is-peek)');
   ok(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.pl-hc:hover:not\(\.is-drag\) \{[^}]*scale\(1\.16\)/.test(css), 'css: a hovered hand card rises and grows in place (fine pointer only)');
   ok(/\.pl-peek \{[^}]*pointer-events: none/.test(css), 'css: the copy takes no pointer events');
   ok(/\.pl-hc \{ -webkit-touch-callout: none; \}/.test(css), 'css: no iOS callout on a held hand card');

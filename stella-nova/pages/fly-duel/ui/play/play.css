@@ -106,12 +106,11 @@
   position: absolute; left: var(--sal); right: var(--sar); z-index: 40;
   bottom: calc(var(--base) - var(--hand-h));
   height: calc(var(--hand-h) * 1.36);
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-x;
-  scrollbar-width: none;
+  /* not bounded (ui/play/layout.js fanLayout): no scroll, no clip; more
+     cards overlap more, a hovered card rises by --lift into full view */
+  overflow: visible; touch-action: none;
   pointer-events: none;   /* the empty rise room must not block the buttons */
 }
-.pl-handbox::-webkit-scrollbar { display: none; }
-.pl-handbox.is-dragging { overflow: visible; }
 .pl-fan { position: relative; height: 100%; }
 .pl-hc {
   position: absolute; left: 0; top: calc(var(--hand-h) * 0.34);
@@ -119,20 +118,25 @@
   transform: translate(var(--x), var(--y)) rotate(var(--r));
   transform-origin: 50% 130%;
   transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
-  cursor: pointer; touch-action: pan-x; pointer-events: auto;
+  cursor: grab; touch-action: none; pointer-events: auto;
 }
 .pl-hc.is-play { outline: 2px solid var(--ink); outline-offset: 1px; }
 .pl-hc.is-sel { outline: 3px solid var(--ink); outline-offset: 2px; }
 .pl-hc.is-dark .pl-cv { filter: brightness(0.5) saturate(0.7); }
-.pl-hc.is-drag { transition: none; transform: translate(calc(var(--x) + var(--dx, 0px)), calc(var(--y) + var(--dy, 0px))) rotate(0deg); z-index: 200 !important; }
+.pl-hc.is-drag { transition: none; cursor: grabbing; transform: translate(calc(var(--x) + var(--dx, 0px)), calc(var(--y) + var(--dy, 0px))) rotate(0deg) scale(1.08); z-index: 200 !important; }
 .pl-hc.is-armed { outline: 3px solid var(--heal); outline-offset: 2px; }
+.pl-hc.is-back { transition: transform 220ms cubic-bezier(0.2, 0, 0, 1); }
+/* the drop line (ui/play/hand.js): a card released above it is played */
+.pl-dropline { position: absolute; left: 12px; right: 12px; top: -8px; height: 0; border-top: 2px dashed var(--hair2); pointer-events: none;
+  font-size: 11px; line-height: 1; color: var(--dim); text-align: center; padding-top: 4px; }
+.pl-dropline.is-armed { border-top: 2px solid var(--heal); color: var(--heal); }
 /* hover (a fine pointer) or a touch hold (.is-peek, ui/play/hand.js): the
    card rises, stands straight and grows in place; its hovered version
    shows above it (.pl-peek) */
 .pl-hc { -webkit-touch-callout: none; }
-.pl-hc.is-peek:not(.is-drag) { transform: translate(var(--x), calc(var(--y) - var(--hand-h) * 0.22)) rotate(0deg) scale(1.16); z-index: 120 !important; }
+.pl-hc.is-peek:not(.is-drag) { transform: translate(var(--x), calc(0px - var(--lift))) rotate(0deg) scale(1.16); z-index: 120 !important; }
 @media (hover: hover) and (pointer: fine) {
-  .pl-hc:hover:not(.is-drag) { transform: translate(var(--x), calc(var(--y) - var(--hand-h) * 0.22)) rotate(0deg) scale(1.16); z-index: 120 !important; }
+  .pl-hc:hover:not(.is-drag) { transform: translate(var(--x), calc(0px - var(--lift))) rotate(0deg) scale(1.16); z-index: 120 !important; }
 }
 
 .pl-opphand { display: flex; align-items: center; gap: 8px; min-height: 24px; }

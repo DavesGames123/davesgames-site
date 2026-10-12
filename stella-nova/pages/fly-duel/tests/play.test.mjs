@@ -342,10 +342,10 @@ let fly = null;
     const f = fanLayout(n, { width: 390, cardW: p.hand.w });
     ok(f.cards.length === n, `fan of ${n}`);
     const right = f.cards[n - 1].x + p.hand.w;
-    ok(f.scroll || right <= 390, `fan of ${n} fits 390 px or scrolls (right edge ${right})`);
-    for (let i = 1; i < n; i++) ok(f.cards[i].x - f.cards[i - 1].x >= p.hand.w * 0.42 - 1, `fan of ${n}: card ${i} shows at least 42%`);
+    ok(!f.scroll && right <= 390, `fan of ${n} fits 390 px, no scroll (right edge ${right})`);
+    for (let i = 1; i < n; i++) ok(f.cards[i].x - f.cards[i - 1].x > 0, `fan of ${n}: card ${i} is right of card ${i - 1}`);
   }
-  ok(fanLayout(12, { width: 390, cardW: 98 }).scroll, 'twelve cards on a phone scroll');
+  ok(!fanLayout(12, { width: 390, cardW: 98 }).scroll, 'twelve cards on a phone overlap more, no scroll (tests/play-hand.test.mjs)');
   const s = fanLayout(5, { width: 800, cardW: 120, selected: 2 });
   ok(s.cards[2].y < 0 && s.cards[2].rot === 0, 'the selected card rises and stands straight');
   ok(s.cards[0].rot < 0 && s.cards[4].rot > 0, 'the fan turns out from the centre');

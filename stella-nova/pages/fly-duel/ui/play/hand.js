@@ -5,7 +5,11 @@
 //  Gestures on a card (pointer events, so mouse, pen and touch are one):
 //      tap                 select: the card rises, its paid lands light
 //      tap again           play it (or choose its target next)
-//      drag up and drop    play it (drop above the top line of the hand)
+//      drag and drop       play it: press, drag the card (it follows the
+//                          pointer in any direction) and release it above
+//                          the drop line (DRAG.pad px above the hand box,
+//                          shown while a card is dragged); a release below
+//                          the line puts the card back in the hand
 //      right-click, or a long press of a mouse    the full-screen inspector
 //      (a double-click is two taps: select, then play)
 //      hover (mouse or pen)   the card rises and grows in place, and the
@@ -13,10 +17,11 @@
 //                          ui/play/peek.js, after 120 ms)
 //      touch: press and hold (380 ms)   the same: the card rises, the
 //                          hovered version shows (onHold) until the
-//                          finger lifts (onHoldEnd). A drag up to play
-//                          or a sideways scroll stops the hold first.
-//  A horizontal move does not start a drag: the fan scrolls sideways when
-//  it is wider than the screen (touch-action: pan-x).
+//                          finger lifts (onHoldEnd). A drag to play
+//                          stops the hold first.
+//  The hand is not bounded (user, 2026-10-12): the fan uses the whole
+//  width and never scrolls or clips; more cards overlap more (layout.js
+//  fanLayout), and a hovered card rises by --lift until all of it shows.
 //  Playable cards have a crisp 2 px outline. A dark card cannot be played
 //  now; tap it to read why in the prompt line.
 //
@@ -27,12 +32,11 @@
 //      grep -n 'export function createOppHand'   the backs
 //      grep -n 'function gesture'                pointer logic per card
 // ============================================================================
-import { fanLayout } from './layout.js';
+import { fanLayout, dragStarts, dropLine, dropVerdict } from './layout.js';
 import { paintCard, paintBack } from './canvas.js';
 
 const LONG_MS = 450;
 export const HOLD_MS = 380;
-const DRAG_PX = 18;
 
 // host: the hand box. cb: { onSelect(i), onPlay(i), onInspect(id),
 // onHover(id | null, el), onHold(id, el), onHoldEnd() }
@@ -41,6 +45,13 @@ export function createHand(host, cb = {}) {
   const box = doc.createElement('div');
   box.className = 'pl-fan';
   host.appendChild(box);
+  // the drop line: a card released above it is played
+  const line = doc.createElement('div');
+  line.className = 'pl-dropline';
+  line.hidden = true;
+  line.setAttribute('aria-hidden', 'true');
+  line.textContent = 'Release to play';
+  host.appendChild(line);
   const nodes = [];      // per hand index: { el, cv }
   let last = { ids: [], view: null, L: null };
   let drag = null;
@@ -83,22 +94,22 @@ export function createHand(host, cb = {}) {
       if (!t0 || e.pointerId !== t0.id) return;
       const dx = e.clientX - t0.x, dy = e.clientY - t0.y;
       if (!drag && Math.hypot(dx, dy) > 8) { moved = true; clear(); }
-      if (!drag && dy < -DRAG_PX && Math.abs(dy) > Math.abs(dx)) {
+      if (!drag && dragStarts(dx, dy)) {
         unhold();
         cb.onHover?.(null, el);
         drag = { n, x0: t0.x, y0: t0.y };
         try { el.setPointerCapture(e.pointerId); } catch { /* old browser */ }
+        el.classList.remove('is-back');
         el.classList.add('is-drag');
-        // the hand box scrolls (overflow-x), which would clip a card that
-        // leaves it: show overflow while dragging and keep the fan still
-        box.style.transform = `translateX(${-host.scrollLeft}px)`;
         host.classList.add('is-dragging');
+        line.hidden = false;
       }
       if (drag && drag.n === n) {
         el.style.setProperty('--dx', `${dx}px`);
         el.style.setProperty('--dy', `${dy}px`);
-        const top = host.getBoundingClientRect().top;
-        el.classList.toggle('is-armed', e.clientY < top - 8);
+        const armed = dropVerdict('pointerup', e.clientY, dropLine(host.getBoundingClientRect().top)) === 'play';
+        el.classList.toggle('is-armed', armed);
+        line.classList.toggle('is-armed', armed);
       }
     });
     const end = e => {
@@ -107,13 +118,15 @@ export function createHand(host, cb = {}) {
       unhold();
       const wasDrag = drag && drag.n === n;
       if (wasDrag) {
-        const top = host.getBoundingClientRect().top;
+        const verdict = dropVerdict(e.type, e.clientY, dropLine(host.getBoundingClientRect().top));
         el.classList.remove('is-drag', 'is-armed');
+        // a card that goes back slides to its place (play.css .is-back)
+        el.classList.toggle('is-back', verdict === 'return');
         host.classList.remove('is-dragging');
-        box.style.transform = '';
+        line.hidden = true; line.classList.remove('is-armed');
         el.style.removeProperty('--dx'); el.style.removeProperty('--dy');
         drag = null;
-        if (e.type === 'pointerup' && e.clientY < top - 8) cb.onPlay?.(n.i);
+        if (verdict === 'play') cb.onPlay?.(n.i);
       } else if (e.type === 'pointerup' && !moved && !long) {
         if (last.view?.selected === n.i) cb.onPlay?.(n.i); else cb.onSelect?.(n.i);
       }
@@ -138,9 +151,9 @@ export function createHand(host, cb = {}) {
   function render(ids, view, L, CARD) {
     last = { ids, view, L };
     const W = host.clientWidth || L.w;
-    const f = fanLayout(ids.length, { width: W, cardW: L.hand.w, cardH: L.hand.h, selected: view?.selected ?? -1 });
-    box.style.width = `${f.scroll ? f.total : W}px`;
-    host.classList.toggle('is-scroll', f.scroll);
+    const f = fanLayout(ids.length, { width: W, cardW: L.hand.w, cardH: L.hand.h, selected: view?.selected ?? -1, peek: L.hand.peek ?? L.hand.h * 0.72 });
+    box.style.width = `${W}px`;
+    host.style.setProperty('--lift', `${f.lift}px`);
     for (let i = 0; i < ids.length; i++) {
       const n = node(i);
       const h = view?.hand?.[i];
@@ -159,10 +172,6 @@ export function createHand(host, cb = {}) {
       paintCard(n.cv, c, { w: L.hand.w, h: L.hand.h, mode: 'auto' });
     }
     for (let i = ids.length; i < nodes.length; i++) if (nodes[i]) nodes[i].el.hidden = true;
-    if (view?.selected != null && f.scroll) {
-      const x = f.cards[view.selected]?.x ?? 0;
-      if (x < host.scrollLeft || x + L.hand.w > host.scrollLeft + W) host.scrollLeft = Math.max(0, x - (W - L.hand.w) / 2);
-    }
   }
 
   return { el: box, render, get dragging() { return !!drag; } };
