@@ -23,34 +23,45 @@
      build.js     hydrostatic bodies, particles, the impact orbit
      sph.js       parameters, the CPU reference solver, bound mass
      engine.js    SphGPU: the WebGPU solver
-     scenarios.js the presets ("The Moon falls on Earth", ...) and random draws
+     scenarios.js the presets ("The Moon crashes into Earth", ...) and the
+                  dense random draw
+     analysis.js  largest body, disk and escaping mass from a readback
+     arc.js       the preview arc of the approach (point masses)
      budget.js    particle counts, steps per frame, drawing-buffer size
      render.js    Renderer: fluid surface, debris, vapour, sky, bloom
      view.js      the camera: auto framing and the user's orbit
-     main.js      boot, the run, the frame loop, the bar and the caption
+     main.js      boot, the run, the frame loop, the bar, the aim panel
      tests.mjs    node tests.mjs (CPU tests, then GPU and render tests in Deno)
      CONTRACT.md  the API of the solver and the renderer
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
-     │ #bar [#preset ▾] [⚄ #rollBtn] [⟲ #resetBtn ❚❚ #playBtn]          │
-     │      [#speed ×1 ×2 ×4] [#modeSel ▾] [#cutBtn] [#infoBtn ?]       │
-     │                                                                   │
-     │ #gpu   the collision, framed by view.js (drag: orbit, wheel: zoom)│
-     │                                                                   │
-     │ #caption  title, one line, the source; #nums the live numbers     │
+     │ #bar [#preset ▾] [⚄ #rollBtn] [◎ #aimBtn] [⟲ #resetBtn ❚❚ #playBtn]│
+     │      [#speed ¼ ½ 1 2 4] [#modeSel ▾] [#cutBtn] [#followBtn] [?]   │
+     │                                                   ┌────────────┐ │
+     │ #gpu  the collision (drag: orbit, wheel: zoom)    │ #aim       │ │
+     │ #arc  2D overlay: the preview arc                 │ bodies,    │ │
+     │                                                   │ angle dial,│ │
+     │ #caption  title, line, #nums (live numbers),      │ speed      │ │
+     │           source, Stella Nova link                └────────────┘ │
      └──────────────────────────────────────────────────────────────────┘
      #busy    "settling the bodies" while the relax runs
      #info    what is simulated, what is drawn, the simplifications
      #nogpu   no WebGPU here
-   KEYS  Space pause · R restart · N random · C cutaway · M colour mode
-   LINKS ?run=<preset key> plays a preset; ?seed=<integer> a random draw
+   KEYS  Space pause · R restart · N random · A aim · C cutaway
+         M colour mode · F follow · - and = slower and faster
+   LINKS ?run=<preset key> a preset; ?seed=<integer> a random draw;
+         ?aim=<target>,<impactor>,<angle deg>,<v / v_esc>,<spin h>,<comp>
 
-   PHONE (max-width 768px or coarse pointer): the bar wraps to two rows of
-   44 px targets; the caption sits at the base, under the safe area.
+   PHONE (max-width 768px, or a short coarse screen): #bar keeps the
+   preset and ?, #caption goes to the top, #dock (play, speed, random,
+   aim, more) sits at the base, #aim and #info open as bottom sheets over
+   the dock. main.js frames the bodies in the clear band between the
+   caption and the dock or the open sheet (fn clearBand). 44 px targets.
+   SAVER  html.sn-saver (set by a screensaver hook) hides all of it.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Two planets collide: thousands of SPH particles with real masses, iron cores and rock mantles, simulated on your GPU. The Moon falls on Earth, Theia makes the Moon, Mars hits Earth.">
+<meta name="description" content="Two planets collide: tens of thousands of SPH particles with real masses, iron cores and rock mantles, simulated on your GPU. The Moon crashes into Earth, Theia makes the Moon, a synestia, hit and run, or aim your own.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>
@@ -58,6 +69,7 @@
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <canvas id="gpu" aria-label="Simulation view"></canvas>
+<canvas id="arc" aria-hidden="true"></canvas>
 <div id="busy" hidden><div class="busy-t" id="busyT">Settling the bodies</div><div class="busy-bar"><span id="busyBar"></span></div></div>
 <div id="nogpu" hidden>
   <h2>WebGPU is not available</h2>
@@ -68,17 +80,19 @@
 <header id="bar">
   <label class="pill sel"><span class="vh">Collision</span><select id="preset" aria-label="Collision"></select></label>
   <button id="rollBtn" class="pill roll" title="A random collision (N). The seed goes in the link." aria-label="Random collision"><span class="die" aria-hidden="true">⚄</span><span class="rl">Random</span></button>
-  <div class="grp">
+  <button id="aimBtn" class="pill" aria-pressed="false" aria-controls="aim" title="Choose the bodies, the angle and the speed (A)"><span aria-hidden="true">◎</span> Aim</button>
+  <div class="grp tr">
     <button id="resetBtn" class="ib" title="Restart (R)" aria-label="Restart">⟲</button>
     <button id="playBtn" class="ib play" title="Pause (Space)" aria-label="Pause">❚❚</button>
   </div>
-  <div class="grp stops" id="speed" role="group" aria-label="Speed">
-    <button data-s="1">×1</button><button data-s="2" class="on">×2</button><button data-s="4">×4</button>
+  <div class="grp stops" id="speed" role="group" aria-label="Speed (- and =)">
+    <button data-s="0.25" title="Slow motion">¼</button><button data-s="0.5">½</button><button data-s="1">×1</button><button data-s="2" class="on">×2</button><button data-s="4">×4</button>
   </div>
-  <label class="pill sel"><span class="vh">Colour</span><select id="modeSel" aria-label="Colour by">
+  <label class="pill sel dk"><span class="vh">Colour</span><select id="modeSel" aria-label="Colour by">
     <option value="0">Real colour</option><option value="1">Temperature</option><option value="2">Origin body</option><option value="3">Speed</option><option value="4">Material</option>
   </select></label>
-  <button id="cutBtn" class="pill" aria-pressed="false" title="Cut the bodies open (C)">Cutaway</button>
+  <button id="cutBtn" class="pill dk" aria-pressed="false" title="Cut the bodies open (C)">Cutaway</button>
+  <button id="followBtn" class="pill dk on" aria-pressed="true" title="The camera follows the bodies (F)">Follow</button>
   <button id="infoBtn" class="ib round" aria-label="What am I looking at?" aria-haspopup="dialog">?</button>
 </header>
 
@@ -87,23 +101,63 @@
   <p id="capSub"></p>
   <div id="nums"></div>
   <p id="capSrc"></p>
+  <a id="ctaCap" class="cta" target="_blank" rel="noopener">Stella Nova, the gravity sandbox, on Steam ↗</a>
 </section>
+
+<aside id="aim" class="pop" role="dialog" aria-label="Aim a collision" hidden>
+  <button class="x" id="aimX" aria-label="Close">✕</button>
+  <h2>Aim a collision</h2>
+  <div class="row2">
+    <label>Target<select id="aimT"></select></label>
+    <label>Impactor<select id="aimI"></select></label>
+  </div>
+  <svg id="aimDial" viewBox="0 0 220 120" role="img" aria-label="Impact geometry"></svg>
+  <label class="rng"><span>Impact angle <output id="aimAngV"></output></span>
+    <input id="aimAng" type="range" min="0" max="85" step="1" value="45"></label>
+  <label class="rng"><span>Impact speed <output id="aimVV"></output></span>
+    <input id="aimV" type="range" min="0.8" max="4" step="0.05" value="1.1"></label>
+  <div class="row2">
+    <label>Target spin<select id="aimSpin">
+      <option value="0">No spin</option><option value="day">Its real day</option><option value="8">8 h day</option><option value="5">5 h day</option><option value="3">3 h day</option>
+    </select></label>
+    <label>Impactor make-up<select id="aimComp"></select></label>
+  </div>
+  <p class="note">The angle is measured from head-on (0). The speed is in units of the mutual escape speed, the speed two bodies gain when they fall together from far away. The dashed arc is the path of the two centres as points; the real bodies touch first.</p>
+  <button id="aimGo" class="pill go">Collide</button>
+</aside>
 
 <div id="info" class="pop" role="dialog" aria-label="What am I looking at?" hidden>
   <button class="x" id="infoX" aria-label="Close">✕</button>
   <h2>What you see</h2>
   <p>Two bodies made of equal-mass particles: an iron core and a rock mantle (and an ice shell for icy bodies), with their real masses. Smoothed particle hydrodynamics (SPH) moves them under their own gravity and pressure. Pressure comes from the Tillotson equation of state of iron, granite, basalt and ice.</p>
   <p>The surface is drawn from the particles. The surface map moves with the rock it started on. Hot matter glows with the colour of a black body at its temperature. Vapour is the part of the gas phase that Tillotson marks as expanded and hot. Free fragments are drawn as rocks with motion streaks.</p>
+  <h2>The numbers</h2>
+  <p>Every few seconds the page reads all particles back. The largest body is the bound mass that stays on it or falls back. The disk is bound mass on orbits that miss the surface (Moon-forming material, in Moon masses). Escaping mass is not bound to the largest body, including a body that runs on after a hit-and-run. Peak temperature is the 99th percentile of the particles, not the single hottest one.</p>
   <h2>What is simplified</h2>
   <ul>
     <li>8,000 to 60,000 particles. Research codes use 100,000 to 100 million.</li>
     <li>Tillotson is a simple equation of state. The model Earth is 6 % smaller than the real one.</li>
     <li>Temperature is an estimate from the heat added, with a fixed heat capacity. The bodies start cold, so all the heat is impact heat. SPH over-heats the first contact surface.</li>
-    <li>No strength, no atmosphere, no oceans, no cooling. The atmospheres and the impact flash are drawn, not simulated.</li>
+    <li>No strength, no atmosphere, no oceans, no cooling. The atmospheres and the impact flash are drawn, not simulated. Bodies under about 1000 km (Vesta, Ceres) act as fluids here.</li>
     <li>A debris particle is drawn as 1 to 3 rocks. Only the particle is simulated.</li>
     <li>Gravity is softened over half a particle spacing. One time step for all particles: time slows at the impact because the shock needs short steps.</li>
+    <li>A small impactor gets more particles than its mass share, so its particles are lighter.</li>
   </ul>
+  <p class="cta-p">This page shows the kind of gravity Stella Nova simulates. <a id="ctaInfo" class="cta" target="_blank" rel="noopener">Wishlist Stella Nova on Steam ↗</a></p>
   <p class="src" id="srcList"></p>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <div class="seg" id="dockSpeed"><button data-d="-1" aria-label="Slower">−</button><span id="dockSpeedV">×2</span><button data-d="1" aria-label="Faster">+</button></div>
+  <button id="dockRoll" aria-label="Random collision">⚄</button>
+  <button id="dockAim" aria-label="Aim a collision">◎</button>
+  <button id="dockMore" aria-label="More">⋯</button>
+</nav>
+<div id="moreMenu" class="pop off" role="menu">
+  <button id="moreReset">⟲ Restart</button><button id="moreCut">Cutaway</button><button id="moreMode">Colour: real</button>
+  <button id="moreFollow">Follow: on</button><button id="moreInfo">What am I looking at?</button>
+  <a id="ctaMore" class="cta" target="_blank" rel="noopener">Stella Nova on Steam ↗</a>
 </div>
 
 <script type="module" src="main.js"></script>

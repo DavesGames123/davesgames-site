@@ -13,11 +13,13 @@ All modules are static ES modules with no DOM. Only `engine.js` needs WebGPU.
 | `build.js` | Hydrostatic body profiles, particle placement, the impact geometry, `buildScenario`. |
 | `sph.js` | `makeParams`, the CPU reference solver `CpuSPH`, `boundMass`. |
 | `engine.js` | `SphGPU`, the WebGPU solver. `shaders/sph.wgsl` is its code. |
-| `scenarios.js` | `PRESETS` (12), `randomScenario(seed)`, `presetByKey`. |
+| `scenarios.js` | `PRESETS` (17), `randomScenario(seed)` (dense: masses, compositions, angle, speed, spins), `presetByKey`, `composition`, `titleOf`. |
+| `analysis.js` | `outcome(readback, n, bodies)`: the largest body, the disk and the escaping mass (Canup 2004 orbits), T99. |
+| `arc.js` | `previewArc(setup)`: the point-mass path of the approach, for the aim panel. |
 | `budget.js` | `PROFILES`, `pickProfile`, `stepMs`, `stepsPerFrame`, `gpuBytes`. |
 | `render.js` | `Renderer`: the fluid surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
 | `view.js` | The camera: auto framing from the body centres, the user's orbit (no DOM). |
-| `main.js`, `index.html`, `style.css` | The page (step 2 shell): boot, one run, the frame loop, the bar, the caption. `window.__pc = { S, startRun, frameOf }` for step 3. |
+| `main.js`, `index.html`, `style.css` | The page: boot, one run, the frame loop, the bar, the aim panel, the phone dock and sheets, the caption and the outcome numbers. `window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS }`; `S.dir` is the hook for a camera director. |
 | `tests.mjs` | `node tests.mjs` runs the CPU tests, then the GPU, render and page tests in Deno. |
 
 ## Units

@@ -41,8 +41,9 @@
 //     falling test particles; arc.js meets at R1 + R2 at tContact
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
-//     (the flash and the fades), the numbers, a preset change, a random
-//     draw, pagehide; no errors
+//     (the flash and the fades), the numbers, the outcome of a readback,
+//     slow motion, an aimed collision, a preset change, a random draw,
+//     pagehide; no errors
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 // ============================================================================
@@ -52,7 +53,7 @@ import { profile, bodyParticles, impactGeometry, buildScenario, rng } from './bu
 import { CpuSPH, makeParams, boundMass } from './sph.js';
 import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
-import { outcome, percentile } from './analysis.js';
+import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
@@ -451,7 +452,7 @@ async function pageTest() {
   G.fetch = async url => { const u = String(url); if (u.endsWith('.jpg')) return { ok: false, status: 404 }; return { ok: true, text: () => Deno.readTextFile(new URL(u)) }; };
   const ce = console.error; console.error = (...a) => { errors.push(a.join(' ')); };
   try {
-    await import('./main.js?page-test');
+    const M = await import('./main.js?page-test');
     for (let k = 0; k < 400 && !G.__pc?.S?.sim && !errors.length; k++) await new Promise(r => setTimeout(r, 50));
     if (!G.__pc) { ok('P boot', false, errors.slice(0, 3).join(' | ') || 'no window.__pc after 20 s'); return; }
     const S = G.__pc.S;
@@ -466,6 +467,21 @@ async function pageTest() {
       `phase ${S.phase}, contact at ${c ? (c.simT * UNIT.T / 60).toFixed(1) + ' min' : 'none'}, flash r ${fl ? fl.r.toFixed(3) : '-'}, shadow ${S.f.bodies[0].shadow.toFixed(2)}, ${S.sim.n} particles`);
     const nums = el('nums').innerHTML;
     ok('P the numbers fill in', /Molten/.test(nums) && /J</.test(nums) && el('capTitle').textContent.length > 0, `title "${el('capTitle').textContent}"; ${nums.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}`);
+    // the outcome of a readback: the largest body, the disk, the escaping mass
+    for (let k = 0; k < 40 && !S.out; k++) { t += 400; await pump(4); }
+    const o = S.out, numsO = el('nums').innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    ok('P the outcome fills in from a readback', !!o && o.Mp / o.Mtot > 0.5 && Math.abs((o.Mp + o.Md + o.Me) / o.Mtot - 1) < 1e-6 && /Largest body \d/.test(numsO) && S.peak.T99 > 300,
+      o ? `largest ${(100 * o.Mp / o.Mtot).toFixed(1)} %, disk ${(o.Md / M_MOON_T).toFixed(3)} M_moon, escaping ${(100 * o.Me / o.Mtot).toFixed(2)} %, T99 ${S.peak.T99.toFixed(0)} K` : 'no outcome');
+    // slow motion: a quarter speed runs one step every second frame
+    let nStep = 0; const step0 = S.sim.step.bind(S.sim); S.sim.step = n => { nStep += n; step0(n); };
+    M.setSpeed(0.25); S.cap = 8; await pump(16); const slow = nStep; nStep = 0;
+    M.setSpeed(2); await pump(16); const fast = nStep; S.sim.step = step0;
+    ok('P slow motion: x1/4 runs 1/8 of the steps of x2', slow >= 7 && slow <= 9 && fast >= 4 * slow, `${slow} steps in 16 frames at x1/4, ${fast} at x2 (cap ${S.cap})`);
+    // an aimed collision
+    const aim = M.aimScenario({ t: 'earth', i: 'moon', ang: 30, v: 1.2, spin: '5', comp: 'ironRich' });
+    G.__pc.startRun(aim, 1); await pump(14);
+    ok('P an aimed collision builds and runs', S.sc.key === 'aim' && S.phase === 'run' && S.setup.bodies[1].key === 'moon' && Math.abs(S.setup.impact.theta - 30) < 1e-6 && !!S.arc && S.arc.imp.length > 10,
+      `"${S.sc.title}", theta ${S.setup.impact.theta.toFixed(1)}, ${S.arc ? S.arc.imp.length : 0} arc points`);
     G.__pc.startRun((await import('./scenarios.js')).presetByKey('theia'), 1); await pump(14);
     G.__pc.startRun((await import('./scenarios.js')).randomScenario(77), 77); await pump(14);
     ok('P a preset change and a random draw run', S.sc.key === 'random-77' && S.phase === 'run', `now "${S.sc.title}", phase ${S.phase}`);
