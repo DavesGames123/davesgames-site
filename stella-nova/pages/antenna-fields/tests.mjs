@@ -23,6 +23,7 @@
 //   16  circleFlux = S(t).n at the sample points
 //   17  flow.js and overlay.js draw every antenna and view into a recording
 //       2D context with finite coordinates only (a CPU probe grid)
+//   18  patternGrid (the 3D mesh): the grid integral of U = the radiated power
 // ============================================================================
 import * as em from './em.js';
 import * as geom from './geom.js';
@@ -383,6 +384,21 @@ function sphereFlux(L, r, nt = 48, np = 96) {
     }
   }
   check('flow.js and overlay.js: 7 antennas x 3 phases, finite coordinates only', bad === 0 && calls > 1000, calls + ' draw calls, ' + bad + ' non-finite');
+}
+
+// 18. patternGrid --------------------------------------------------------------------
+{
+  const A = em.buildAntenna({ type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 4, a: 1e-3 });
+  const g = geom.patternGrid((x, y, z) => em.farIntensity(A.elems, x, y, z), 96, 192), st = em.patternStats(A.elems, { nt: 64, np: 128 });
+  // trapezoid in theta and phi (the seam column repeats, so phi uses np cells)
+  let P = 0;
+  for (let i = 0; i <= g.nt; i++) {
+    const th = Math.PI * i / g.nt, wt = (i === 0 || i === g.nt ? 0.5 : 1) * Math.PI / g.nt * Math.sin(th);
+    for (let j = 0; j < g.np; j++) P += g.U[i * (g.np + 1) + j] * wt * 2 * Math.PI / g.np;
+  }
+  const seam = Math.max(...Array.from({ length: g.nt + 1 }, (_, i) => Math.abs(g.U[i * (g.np + 1)] - g.U[i * (g.np + 1) + g.np])));
+  check('patternGrid: grid integral of U = P_rad, seam closed', Math.abs(P - st.P) / st.P < 2e-3 && seam === 0 && Math.abs(g.Umax / st.Umax - 1) < 0.01,
+    'P = ' + fmt(P, 3) + ' W vs ' + fmt(st.P, 3) + ' W, Umax grid/true = ' + fmt(g.Umax / st.Umax, 4));
 }
 
 console.log(fails ? fails + ' check(s) failed' : 'all checks passed');

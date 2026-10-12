@@ -34,6 +34,8 @@
                            #param   one slider (length, frequency or steering)
                            #fields  E | B | power flow
                            #speed   1x, 1/2x, 1/4x
+                           #view3d  the 3D view (scene3d.js): the pattern,
+                                    the flux sphere and the field slice
                            #play    play / pause,  #detBtn  opens #details
      #details            the drawer, closed at start: numbers in plain
                          words, one pattern cut, options, equations, about.
@@ -81,6 +83,7 @@
   </div>
   <div id="spd" class="grp"><button id="speed" title="Speed">1×</button></div>
   <div id="ctl" class="grp">
+    <button id="view3d" title="Radiation pattern in 3D" aria-pressed="false">3D</button>
     <button id="play" aria-label="Pause" title="Pause (space)">❚❚</button>
     <button id="detBtn" aria-expanded="false" title="Details"><span class="lg">Details</span><span class="sm">⋯</span></button>
   </div>

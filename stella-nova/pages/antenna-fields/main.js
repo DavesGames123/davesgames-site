@@ -29,6 +29,7 @@ import { createField } from './field-gl.js';
 import { mapper, inPlane, traceLines, drawOverlay, RGB } from './overlay.js';
 import * as geom from './geom.js';
 import { createFlow } from './flow.js';
+import { createScene } from './scene3d.js';
 import { drawPolar } from './plots.js';
 import { installSaver } from './saver.js';
 
@@ -60,6 +61,8 @@ const S = {
   // The observer: a point in the view plane, rM metres from the antenna
   // centre at the angle ang (radians, from +x toward the vertical axis).
   obs: { rM: 0.8, ang: 0 },
+  // The 3D view: orbit angles (rad), morph 0 = flux sphere, 1 = pattern.
+  v3: { on: false, yaw: -1.05, pitch: 0.38, zoom: 1, morph: 1, morphTo: 1, db: false, auto: true },
   speed: 0.4, speedK: 1, playing: true, phase: 0,
   cam: { zoom: 1, panX: 0, panY: 0 },
   saver: false, band: null, fade: 1, saverTick: null,
@@ -70,6 +73,7 @@ let dirtyAntenna = true, statsTimer = 0, lastInteract = -1e9, refineDue = false,
 let probe = null, norm = { gain: 1, psiScale: 1 }, lastKey = '', lineBuf = null, lineRef = null;
 let geo = null, geoKey = '', probeR = null;
 const flow = createFlow(phoneMQ.matches ? 700 : 1300, 11);
+let scene = null, sceneFailed = false, patKey = '', patGrid = null;
 const fieldCanvas = $('field'), overlay = $('overlay'), octx = overlay.getContext('2d');
 
 // Frequency of the current antenna, MHz, and its wavelength in metres.
@@ -111,6 +115,7 @@ function rebuild() {
   }
   lastKey = '';
   geoKey = '';
+  patKey = '';
   scheduleStats();
   caption();
 }
@@ -285,6 +290,100 @@ function phasorRect(cr, dpr) {
   return { x: (cr.x + cr.w - sz - 14) * dpr, y: (cr.y + cr.h - h - 12) * dpr, w: sz * dpr, h: h * dpr };
 }
 
+// ── the 3D view ─────────────────────────────────────────────────────────────
+// Half size of the field slice (wavelengths); the pattern fits inside it.
+function sliceHalf() { return Math.max(1.4, (A ? A.extent : 0.5) * 0.75 + 1.1); }
+const farUnit = () => { const L = A.elems; return (x, y, z) => em.farIntensity(L, x, y, z); };
+// The pattern mesh and the far-field triads, when the antenna changes.
+function updatePattern(Hs) {
+  const key = A.elems.n + '|' + (A.Zin ? A.Zin.join() : '') + '|' + S.type + '|' + Hs.toFixed(3);
+  if (key === patKey) return;
+  patKey = key;
+  const fu = farUnit();
+  patGrid = geom.patternGrid(fu, S.saver ? 36 : 48, S.saver ? 72 : 96);
+  const c = centre3(), lobeR = 0.55 * Hs;
+  scene.setPattern(patGrid, c, lobeR);
+  scene.setWires(A.wires);
+  const um = Math.max(patGrid.Umax, 1e-30), tri = [];
+  for (const th of [35, 62, 90, 118, 145]) for (let ph = 0; ph < 360; ph += 30) {
+    const t = th * Math.PI / 180, p = (ph + (th === 90 ? 15 : 0)) * Math.PI / 180;
+    const n = [Math.sin(t) * Math.cos(p), Math.sin(t) * Math.sin(p), Math.cos(t)];
+    const q = geom.phasorTerms(A, n, 1), sq = Math.sqrt(um);
+    tri.push({ n, pol: q.pol, amp: [q.sum[0] / sq, q.sum[1] / sq], g: q.U / um });
+  }
+  scene.setTriads(tri);
+}
+// One frame of the 3D view. Returns false if the view cannot run (the field
+// view then draws instead).
+function frame3d(dt) {
+  if (sceneFailed) { S.v3.on = false; syncBar(); return false; }
+  if (!scene) {
+    try { scene = createScene(field.gl); }
+    catch (e) { console.error('[antenna-fields] 3D view', e); sceneFailed = true; return false; }
+  }
+  if (!A) return true;
+  const W = fieldCanvas.width, H = fieldCanvas.height, dpr = W / Math.max(1, fieldCanvas.clientWidth || innerWidth);
+  const cr = clearRect(), Hs = sliceHalf(), c = centre3(), ax = axes();
+  updatePattern(Hs);
+  // ease the morph, turn slowly when idle
+  const v3 = S.v3;
+  v3.morph += (v3.morphTo - v3.morph) * (1 - Math.exp(-dt * 2.6));
+  if (Math.abs(v3.morphTo - v3.morph) < 1e-3) v3.morph = v3.morphTo;
+  if (v3.auto && !drag3d) v3.yaw += dt * 0.12 * (S.saver ? 0.8 : 1);
+  // the slice: the field view's plane, a square of half Hs around the antenna
+  view.u0 = c[0] - Hs; view.u1 = c[0] + Hs; view.v0 = -Hs; view.v1 = Hs;
+  Object.assign(field.view, { u0: view.u0, u1: view.u1, v0: view.v0, v1: view.v1, axU: ax.u, axV: ax.v, centre: c, psi: psiMode() });
+  const size = phoneMQ.matches ? 512 : 768;
+  const skey = [S.view, Hs, A.elems.n, A.Zin && A.Zin.join(), field.view.psi].join('|');
+  if (skey !== lastKey) {
+    lastKey = skey;
+    try { probe = field.readProbe(phoneMQ.matches ? 96 : 128, phoneMQ.matches ? 96 : 128); normalise(); } catch (e) { /* the next frame tries again */ }
+  }
+  field.slice(size, field.view, skey);
+  const tex = field.drawSlice({
+    phase: S.phase, mode: { E: 0, H: 1, S: 2 }[S.field], comp: compSpec(), gain: norm.gain, log: S.field === 'S' || S.tog.log, rcomp: true,
+    rref: rRef(), psiOn: psiMode() > 0, psiScale: norm.psiScale, psiLog: psiMode() === 3, lineAlpha: 0.6, grid: 0, overlay: false, fade: 1,
+  }, field.view);
+  // the observer direction
+  updateGeo();
+  let dir = null;
+  if (geo && geo.ob) dir = geo.ob.rhat;
+  const vp = { x: Math.round(cr.x * dpr), y: Math.round(cr.y * dpr), w: Math.max(2, Math.round(cr.w * dpr)), h: Math.max(2, Math.round(cr.h * dpr)) };
+  const fu = farUnit(), um = Math.max(patGrid.Umax, 1e-30);
+  scene.draw({
+    W, H, vp, dpr, yaw: v3.yaw, pitch: v3.pitch, dist: 3.4 * Hs / v3.zoom, morph: v3.morph, db: v3.db, phase: S.phase, fade: S.fade, bands: 1,
+    slice: { tex, half: Hs, plane: S.view, alpha: 0.85 }, cut: S.view, dir, farU: (x, y, z) => fu(x, y, z) / um,
+  });
+  draw3dLabels(dpr, Hs, fu, um);
+  if (S.saver) { field.uploadOverlay(overlay); field.compositeOverlay(S.fade); }
+  return true;
+}
+let drag3d = false;
+// Axis letters and the gain at the main lobe, on the 2D overlay.
+function draw3dLabels(dpr, Hs, fu, um) {
+  const W = overlay.width, H = overlay.height;
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.clearRect(0, 0, W, H);
+  const c = centre3(), L = 0.55 * Hs * 0.42;
+  octx.font = `italic ${14 * dpr}px "STIX Two Text", serif`;
+  octx.fillStyle = 'rgba(200,210,222,0.75)';
+  octx.textAlign = 'center'; octx.textBaseline = 'middle';
+  for (const [p, t] of [[[c[0] + L * 1.15, c[1], c[2]], 'x'], [[c[0], c[1] + L * 1.15, c[2]], 'y'], [[c[0], c[1], c[2] + L * 1.75], 'z']]) {
+    const q = scene.project(p, 1);
+    if (q) octx.fillText(t, q[0], q[1]);
+  }
+  if (stats && S.v3.morph > 0.6) {
+    const d = stats.dir, R = 0.55 * Hs * (S.v3.db ? 1 : 1) * 1.08;
+    const q = scene.project([c[0] + d[0] * R, c[1] + d[1] * R, c[2] + d[2] * R], 1);
+    if (q) {
+      octx.font = `${12.5 * dpr}px Inter, system-ui, sans-serif`;
+      octx.fillStyle = 'rgba(232,236,242,0.9)'; octx.textAlign = 'left';
+      octx.fillText('D = ' + stats.Ddb.toFixed(2) + ' dBi', q[0] + 10 * dpr, q[1]);
+    }
+  }
+  octx.textAlign = 'left'; octx.textBaseline = 'alphabetic';
+}
+
 let last = performance.now(), computeFailed = false;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -296,6 +395,7 @@ function frame(now) {
   // context reports FRAMEBUFFER_UNSUPPORTED, so stop drawing here.
   if (!field || field.gl.isContextLost()) return;
   resize();
+  if (S.v3.on && frame3d(dt)) return;
   const cr = clearRect(), key = updateView(cr);
   const interacting = now - lastInteract < 180;
   if (key !== lastKey) { computePhasors(interacting ? 0.5 : 1); lastKey = key; refineDue = interacting; }
@@ -350,7 +450,9 @@ function computePhasors(q) {
 const FIELD_WORDS = { E: 'Electric field', H: 'Magnetic field', S: 'Power flow' };
 function caption() {
   if (S.saver) return;
-  $('caption').innerHTML = `<b>${TYPES[S.type] ? TYPES[S.type].name : ''}</b> · ${FIELD_WORDS[S.field]} · seen from ${S.view === 'side' ? 'the side' : 'above'}`;
+  $('caption').innerHTML = S.v3.on
+    ? `<b>${TYPES[S.type] ? TYPES[S.type].name : ''}</b> · radiation pattern in 3D, with the ${FIELD_WORDS[S.field].toLowerCase()} on the plane · drag to turn`
+    : `<b>${TYPES[S.type] ? TYPES[S.type].name : ''}</b> · ${FIELD_WORDS[S.field]} · seen from ${S.view === 'side' ? 'the side' : 'above'}`;
 }
 const fz = Z => !Z || !isFinite(Z[0]) ? 'very large' : Z[0].toFixed(1) + (isFinite(Z[1]) ? (Z[1] < 0 ? ' − j' : ' + j') + Math.abs(Z[1]).toFixed(1) : '') + ' Ω';
 function details() {
@@ -362,7 +464,9 @@ function details() {
     : tf ? 'The faint lines follow the ' + (tf === 'E' ? 'electric' : 'magnetic') + ' field direction, traced again each frame.' : '';
   const colour = S.field === 'S' ? 'Brightness shows how much power flows through each point, on a log scale.'
     : 'Orange and cyan are opposite directions of the ' + (S.field === 'E' ? 'electric' : 'magnetic') + ' field. The bands move outward at the speed of light.';
-  $('what').textContent = colour + ' ' + lineWord + ' Brightness grows with distance to cancel the 1/r fall-off, so the far wavefronts stay visible.'
+  if (S.v3.on) {
+    $('what').textContent = 'The 3D view shows the radiation pattern as a lit surface: its radius in each direction is the field strength there, and its colour is the power per solid angle (green, like the energy flow). The white ring is the plane of the field view, and the orange ray points at the observer. Turn on "3D: flux sphere" and the surface becomes a sphere around the antenna, coloured by the power that crosses it: the same function, drawn on a sphere. On the sphere, E (orange) and B (blue) lie across the radius and swing in phase, and S (green) always points out. The field on the plane is the same as in the field view.';
+  } else $('what').textContent = colour + ' ' + lineWord + ' Brightness grows with distance to cancel the 1/r fall-off, so the far wavefronts stay visible.'
     + ' The gold curve beside each wire is its current now, inside the band of its standing wave. Drag the ring marker: it is an observer. The arrows on the circle through it show the power that flows out of the sphere (green) or back in (grey). The label gives the phase between E and B there, and the box at the lower right adds the far-field contributions of each piece of current toward the marker.';
   const rows = [['Frequency', freq().toFixed(0) + ' MHz (wavelength ' + lambdaM().toFixed(2) + ' m)']];
   if (t === 'dipole') rows.push(['Length', S.dipole.L.toFixed(2) + ' wavelengths']);
@@ -398,6 +502,8 @@ function options() {
     ['Energy flow', () => S.tog.flow, () => { S.tog.flow = !S.tog.flow; flow.reset(); }],
     ['Flux sphere', () => S.tog.sphere, () => { S.tog.sphere = !S.tog.sphere; geoKey = ''; }],
     ['Phasor sum', () => S.tog.phasors, () => { S.tog.phasors = !S.tog.phasors; geoKey = ''; }],
+    ['3D: flux sphere', () => S.v3.morphTo === 0, () => { S.v3.morphTo = S.v3.morphTo ? 0 : 1; }],
+    ['3D: gain in dB', () => S.v3.db, () => { S.v3.db = !S.v3.db; }],
     ['Log brightness', () => S.tog.log, () => { S.tog.log = !S.tog.log; }],
   ];
   if (S.type === 'dipole' || S.type === 'halfwave') items.push(['Moment method current', () => S[S.type].model === 'mom', () => { const P = S[S.type]; P.model = P.model === 'mom' ? 'sin' : 'mom'; dirtyAntenna = true; }]);
@@ -423,7 +529,15 @@ function setType(t) {
   dirtyAntenna = true;
   syncBar();
 }
+function setView3d(on) {
+  S.v3.on = !!on && !sceneFailed;
+  lastKey = ''; patKey = '';
+  if (!S.v3.on) octx.clearRect(0, 0, overlay.width, overlay.height);
+  syncBar();
+}
 function syncBar() {
+  $('view3d').classList.toggle('on', S.v3.on);
+  $('view3d').setAttribute('aria-pressed', String(S.v3.on));
   document.querySelectorAll('#types button').forEach(b => b.classList.toggle('on', b.dataset.type === S.type));
   document.querySelectorAll('#fields button').forEach(b => b.classList.toggle('on', b.dataset.field === S.field));
   $('play').textContent = S.playing ? '❚❚' : '▶';
@@ -452,6 +566,7 @@ function wireBar() {
     $('paramVal').textContent = p.fmt(S[S.type][p.k]);
     dirtyAntenna = true; touch();
   };
+  $('view3d').onclick = () => { setView3d(!S.v3.on); touch(); if ($('details').classList.contains('open')) details(); };
   const play = () => { S.playing = !S.playing; syncBar(); };
   $('play').onclick = play;
   $('speed').onclick = () => { S.speedK = S.speedK === 1 ? 0.5 : S.speedK === 0.5 ? 0.25 : 1; syncBar(); };
@@ -489,14 +604,19 @@ function pointer() {
       const [mx, my] = toScreen(geo.u, geo.v);
       if (Math.hypot(e.clientX - mx, e.clientY - my) < (e.pointerType === 'mouse' ? 16 : 28)) dragObs = true;
     }
-    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: S.cam.zoom }; }
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: S.cam.zoom, z3: S.v3.zoom }; }
   });
   fieldCanvas.addEventListener('pointermove', e => {
     const p = ptrs.get(e.pointerId);
-    if (!p) { if (e.pointerType === 'mouse') showProbe(e.clientX, e.clientY); return; }
+    if (!p) { if (e.pointerType === 'mouse' && !S.v3.on) showProbe(e.clientX, e.clientY); return; }
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (Math.abs(dx) + Math.abs(dy) > 1) moved = true;
+    if (S.v3.on) {
+      if (ptrs.size === 1) { S.v3.yaw -= dx * 0.008; S.v3.pitch = Math.max(-1.35, Math.min(1.35, S.v3.pitch + dy * 0.008)); drag3d = true; }
+      else if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; S.v3.zoom = Math.max(0.5, Math.min(3, pinch0.z3 * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(10, pinch0.d))); }
+      touch(); return;
+    }
     if (dragObs && ptrs.size === 1) { moveObs(e.clientX, e.clientY); $('probe').classList.add('off'); return; }
     if (ptrs.size === 2 && pinch0) {
       const [a, b] = [...ptrs.values()];
@@ -511,15 +631,17 @@ function pointer() {
   const up = e => {
     ptrs.delete(e.pointerId);
     dragObs = false;
+    if (!ptrs.size) drag3d = false;
     if (ptrs.size < 2) pinch0 = null;
     if (!ptrs.size) fieldCanvas.classList.remove('drag');
-    if (!moved && e.pointerType !== 'mouse') showProbe(e.clientX, e.clientY);
+    if (!moved && e.pointerType !== 'mouse' && !S.v3.on) showProbe(e.clientX, e.clientY);
   };
   fieldCanvas.addEventListener('pointerup', up);
   fieldCanvas.addEventListener('pointercancel', up);
   fieldCanvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') $('probe').classList.add('off'); });
   fieldCanvas.addEventListener('wheel', e => {
     e.preventDefault();
+    if (S.v3.on) { S.v3.zoom = Math.max(0.5, Math.min(3, S.v3.zoom * Math.exp(-e.deltaY * 0.0015))); touch(); return; }
     const z = Math.max(0.15, Math.min(6, S.cam.zoom * Math.exp(e.deltaY * 0.0015))), kk = z / S.cam.zoom;
     // keep the point under the cursor in place: C' = P + (C - P) k
     const P = toPlane(e.clientX, e.clientY), s = scale();
@@ -571,4 +693,5 @@ window.__af = {
   debug: () => ({ type: S.type, view: S.view, field: S.field, n: A ? A.elems.n : 0, Z: A ? A.Zin : null, D: stats ? +stats.Ddb.toFixed(3) : null,
     phasor: field && field.size[0] ? field.size.join('×') : '', psi: psiMode(), saver: window.snSaver && window.snSaver.debug ? window.snSaver.debug() : null }),
   set: (t, patch, more) => { ctx.set(t, patch); if (more) Object.assign(S, more); syncBar(); lastKey = ''; },
+  view3d: on => setView3d(on),
 };

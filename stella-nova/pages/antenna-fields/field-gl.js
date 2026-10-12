@@ -37,8 +37,15 @@
 //      S   (--m3, green)   |E x H| on a log ramp: dark, green, pale
 //  A peak goes toward white. The ramps are linear in sRGB on a dark ground.
 //
+//  SLICE (the 3D view). slice() runs the phasor pass for a square of a plane
+//  into its own targets (only when its key changes); drawSlice() runs the
+//  display pass into an RGBA8 texture with mipmaps. scene3d.js draws that
+//  texture as a plane through the antenna. compositeOverlay() blends the 2D
+//  overlay canvas over the default framebuffer (the 3D view in the saver).
+//
 //  grep -n: "const PHASOR_FS"  "const DISPLAY_FS"  "export function createField"
-//           "function phasorPass"  "readProbe"  "draw(p)"  "function setNodes"
+//           "function phasorPass"  "readProbe"  "function drawTo"  "function setNodes"
+//           "function slice"  "function compositeOverlay"
 // ============================================================================
 
 const VS = `#version 300 es
@@ -260,6 +267,19 @@ void main(){
   frag = vec4(col * uFade, 1.0);
 }`;
 
+// The overlay canvas over the frame (premultiplied alpha), for the 3D view
+// in the saver.
+const COMP_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uOverlay;
+uniform vec2 uSize;
+uniform float uFade;
+out vec4 frag;
+void main(){
+  vec4 o = texture(uOverlay, gl_FragCoord.xy / uSize);
+  frag = o * uFade;
+}`;
+
 function compile(gl, type, src) {
   const sh = gl.createShader(type);
   gl.shaderSource(sh, src); gl.compileShader(sh);
@@ -285,7 +305,7 @@ export function createField(canvas) {
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
   if (!gl) throw new Error('WebGL2 is not available');
   if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('float render targets (EXT_color_buffer_float) are not available');
-  const ph = program(gl, PHASOR_FS), disp = program(gl, DISPLAY_FS);
+  const ph = program(gl, PHASOR_FS), disp = program(gl, DISPLAY_FS), comp = program(gl, COMP_FS);
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   const vb = gl.createBuffer();
@@ -362,7 +382,7 @@ export function createField(canvas) {
   function cost() { return nNode ? nNode + (view.psi === 3 ? nElem : 0) : 2 * nElem; }
 
   // Render into the lower-left vw x vh texels of target t.
-  function phasorPass(t, vw = t.w, vh = t.h) {
+  function phasorPass(t, vw = t.w, vh = t.h, V = view) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
     gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
     gl.viewport(0, 0, vw, vh);
@@ -376,13 +396,13 @@ export function createField(canvas) {
     gl.bindTexture(gl.TEXTURE_2D, nodeTex);
     gl.uniform1i(ph.u.uNodes, 1);
     gl.uniform1i(ph.u.uNN, nNode);
-    const su = (view.u1 - view.u0) / vw, sv = (view.v1 - view.v0) / vh;
-    gl.uniform2f(ph.u.uOrigin, view.u0 + 0.5 * su, view.v0 + 0.5 * sv);
+    const su = (V.u1 - V.u0) / vw, sv = (V.v1 - V.v0) / vh;
+    gl.uniform2f(ph.u.uOrigin, V.u0 + 0.5 * su, V.v0 + 0.5 * sv);
     gl.uniform2f(ph.u.uStep, su, sv);
-    gl.uniform3fv(ph.u.uAxU, view.axU);
-    gl.uniform3fv(ph.u.uAxV, view.axV);
+    gl.uniform3fv(ph.u.uAxU, V.axU);
+    gl.uniform3fv(ph.u.uAxV, V.axV);
     gl.uniform1f(ph.u.uSoft, view.soft);
-    gl.uniform1i(ph.u.uPsi, view.psi);
+    gl.uniform1i(ph.u.uPsi, V.psi);
     gl.bindVertexArray(vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -437,20 +457,26 @@ export function createField(canvas) {
   //      psiLog, lineAlpha, grid, overlay (bool), fade }
   function draw(p) {
     if (!main) return;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    drawTo(p, { fb: null, w: canvas.width, h: canvas.height }, main, used, view);
+  }
+  // The display pass from the phasor target src (used: its used size) into
+  // dst ({ fb, w, h }) for the plane rectangle of V.
+  function drawTo(p, dst, src, usedWH, V) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb);
+    if (dst.fb) gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.viewport(0, 0, dst.w, dst.h);
     gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.CULL_FACE);
     gl.useProgram(disp.p);
     const U = disp.u;
-    for (let i = 0; i < 4; i++) { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, main.tex[i]); }
+    for (let i = 0; i < 4; i++) { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, src.tex[i]); }
     gl.uniform1i(U.uP0, 0); gl.uniform1i(U.uP1, 1); gl.uniform1i(U.uP2, 2); gl.uniform1i(U.uP3, 3);
     gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, overlayTex); gl.uniform1i(U.uOverlay, 4);
-    gl.uniform2f(U.uPhSize, used[0], used[1]);
-    gl.uniform2f(U.uRatio, used[0] / canvas.width, used[1] / canvas.height);
-    const su = (view.u1 - view.u0) / canvas.width, sv = (view.v1 - view.v0) / canvas.height;
-    gl.uniform2f(U.uOrigin, view.u0 + 0.5 * su, view.v0 + 0.5 * sv);
+    gl.uniform2f(U.uPhSize, usedWH[0], usedWH[1]);
+    gl.uniform2f(U.uRatio, usedWH[0] / dst.w, usedWH[1] / dst.h);
+    const su = (V.u1 - V.u0) / dst.w, sv = (V.v1 - V.v0) / dst.h;
+    gl.uniform2f(U.uOrigin, V.u0 + 0.5 * su, V.v0 + 0.5 * sv);
     gl.uniform2f(U.uStep, su, sv);
-    gl.uniform3fv(U.uAxU, view.axU); gl.uniform3fv(U.uAxV, view.axV); gl.uniform3fv(U.uCentre, view.centre);
+    gl.uniform3fv(U.uAxU, V.axU); gl.uniform3fv(U.uAxV, V.axV); gl.uniform3fv(U.uCentre, V.centre);
     gl.uniform1f(U.uPhase, p.phase);
     gl.uniform1i(U.uMode, p.mode);
     gl.uniform4fv(U.uComp, p.comp);
@@ -468,11 +494,63 @@ export function createField(canvas) {
     gl.bindVertexArray(vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  // ── the slice for the 3D view ──
+  let sl = null, slOut = null, slKey = '';
+  function makeOut(n) {
+    const tex = gl.createTexture(), fb = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    const levels = Math.floor(Math.log2(n)) + 1;
+    gl.texStorage2D(gl.TEXTURE_2D, levels, gl.RGBA8, n, n);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fb, w: n, h: n };
+  }
+  // The phasor pass for the square plane V (size x size texels). key: the
+  // antenna and the plane; the pass runs again only when it changes.
+  function slice(size, V, key) {
+    if (!sl || sl.w !== size) {
+      freeTarget(sl); sl = makeTarget(size, size);
+      if (slOut) { gl.deleteTexture(slOut.tex); gl.deleteFramebuffer(slOut.fb); }
+      slOut = makeOut(size); slKey = '';
+    }
+    if (key !== slKey) { phasorPass(sl, size, size, V); slKey = key; }
+  }
+  // The display pass of the slice into its texture. Returns the texture.
+  function drawSlice(p, V) {
+    if (!sl) return null;
+    drawTo(p, slOut, sl, [sl.w, sl.h], V);
+    gl.bindTexture(gl.TEXTURE_2D, slOut.tex);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    return slOut.tex;
+  }
+  // Blend the uploaded overlay canvas over the default framebuffer.
+  function compositeOverlay(fade = 1) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(comp.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, overlayTex);
+    gl.uniform1i(comp.u.uOverlay, 0);
+    gl.uniform2f(comp.u.uSize, canvas.width, canvas.height);
+    gl.uniform1f(comp.u.uFade, fade);
+    gl.bindVertexArray(vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+    gl.disable(gl.BLEND);
   }
 
   function destroy() {
-    try { freeTarget(main); freeTarget(probe); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); } catch (e) { /* already lost */ }
+    try { freeTarget(main); freeTarget(probe); freeTarget(sl); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); } catch (e) { /* already lost */ }
   }
 
-  return { gl, canvas, view, setElems, setNodes, cost, compute, readProbe, uploadOverlay, draw, destroy, get size() { return main ? used.slice() : [0, 0]; } };
+  return { gl, canvas, view, setElems, setNodes, cost, compute, readProbe, uploadOverlay, draw, slice, drawSlice, compositeOverlay, destroy, get size() { return main ? used.slice() : [0, 0]; } };
 }
