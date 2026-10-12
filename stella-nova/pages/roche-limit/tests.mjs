@@ -39,7 +39,8 @@
 //     landscape strip, no page scroll, the canvas takes every touch
 //  13 random runs and start layouts (roll.js, initial.js): 3000 seeds
 //     valid, every choice reached, seeds reproducible and unrelated,
-//     presets valid, the world unit keeps the tide; the part sizes, the
+//     presets valid, the heights and limits in the preset texts match
+//     the runs, the world unit keeps the tide; the part sizes, the
 //     orbit tilt and the ellipse start, spin modes and the cap, contact
 //     lobes touch, a binary holds its mutual orbit (CPU), a train shares
 //     one orbit, two moons, the core mass, clumps.
@@ -309,6 +310,19 @@ function startTests() {
     ok('rolls: the same seed gives the same run', a === b && a !== c, `seed 4242: "${RL.rollRun(4242).title}"; 4243: "${RL.rollRun(4243).title}"`);
     const bp = RL.PRESETS.map(p => [p.key, RL.checkSpec(RL.presetSpec(p.key))]).filter(x => x[1]);
     ok('presets: a dozen or more, all valid, unique keys', RL.PRESETS.length >= 12 && bp.length === 0 && new Set(RL.PRESETS.map(p => p.key)).size === RL.PRESETS.length, `${RL.PRESETS.length} presets; ${bp.map(x => x.join(': ')).join('; ') || 'all valid'}`);
+    // the numbers in the preset texts: a height "N km above" is (peri - 1)
+    // radii of the primary, a "fluid limit ... (N)" or "fluid limit N"
+    // is the preset's own limit in true radii (found 2026-10-11: the
+    // tumbler said 8,600 km for a pass at 1.2 Jupiter radii, 14,300 km)
+    { const FA = { R: { jupiter: 71492, saturn: 60268, earth: 6378.137 } }, bad = [], seen = [];
+      for (const p of RL.PRESETS) {
+        const sp = RL.presetSpec(p.key), txt = p.hint + ' ' + p.title;
+        const km = txt.match(/([\d,]+) km above/);
+        if (km && p.peri !== undefined && FA.R[p.planet]) { const want = (p.peri - 1) * FA.R[p.planet], got = +km[1].replace(/,/g, ''); seen.push(`${p.key} ${got} km`); if (Math.abs(got - want) > 0.03 * want) bad.push(`${p.key}: ${got} km, want ${want.toFixed(0)}`); }
+        const lf = txt.match(/fluid limit[^\d(]*\(?(\d+\.\d)\b/);
+        if (lf) { const want = sp.LfTrue ?? (P.K_FLUID * Math.cbrt(sp.qTrue)); seen.push(`${p.key} limit ${lf[1]}`); if (Math.abs(+lf[1] - want) > 0.051) bad.push(`${p.key}: limit ${lf[1]}, want ${want.toFixed(2)}`); }
+      }
+      ok('presets: the heights and limits in the texts match the runs', bad.length === 0 && seen.length >= 3, bad.join('; ') || seen.join(', ')); }
     // the world unit: the tide is the same (q / d^3 in true and world units)
     const w = RL.presetSpec('wd'), tideW = w.q / (w.peri ** 3), tideT = w.qTrue / ((w.peri / w.bodyR) ** 3);
     ok('rolls: the world unit of a white dwarf keeps the tide', rel(tideW, tideT) < 1e-12 && w.bodyR < 0.02, `q ${w.q} world, ${w.qTrue.toExponential(3)} true, drawn radius ${w.bodyR.toExponential(2)} world units; Roche limit ${w.LfTrue.toFixed(0)} radii = ${(w.LfTrue * w.Rtrue / 1e6).toFixed(2)} million km`); }
