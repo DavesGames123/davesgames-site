@@ -11,6 +11,14 @@
    layer width) gives the step flow and the swipe carousel. Without it,
    the title and the modes are on the left and the decks on the right.
 
+   Contrast. Text never sits on the live table: the veil is 90 % dark, so
+   the worst case (a white table behind it) still gives WCAG AA (4.5:1)
+   for --c-dim and every other text colour here. A selected control is
+   parchment with --c-pink ink (13:1). A selected colour glyph stays on a
+   dark ground (a parchment ring marks it), because the light glyphs
+   (pollen, amber) do not show on parchment. tests/chooser-contrast.test.mjs
+   computes each pair from this file.
+
    GREP MAP
        grep -n 'TOKENS'     the colour and font tokens of the layer
        grep -n 'TITLE'      the title lockup
@@ -40,7 +48,7 @@
 .fdc button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;margin:0}
 .fdc button:focus-visible{outline:2px solid var(--c-parch);outline-offset:2px}
 .fdc canvas{display:block}
-.fdc-veil{position:absolute;inset:0;background:rgba(5,7,12,0.66)}
+.fdc-veil{position:absolute;inset:0;background:rgba(5,7,12,0.9)}
 .fdc-in{position:relative;height:100%;display:grid;gap:16px 22px;padding:26px calc(30px + env(safe-area-inset-right,0px)) 18px calc(30px + env(safe-area-inset-left,0px));
   grid-template-columns:minmax(300px,380px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
   grid-template-areas:"top decks" "modes decks" "fine foot";max-width:1640px;margin:0 auto}
@@ -102,7 +110,7 @@
 .fdc-filter{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
 .fdc-fpips{display:flex;gap:6px}
 .fdc-fpip{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid var(--c-line);border-radius:50%;background:var(--c-tome)}
-.fdc-fpip[aria-pressed="true"]{background:var(--c-parch);border-color:var(--c-bronze);box-shadow:inset 0 0 0 2px var(--c-parch),inset 0 0 0 3px var(--c-bronze)}
+.fdc-fpip[aria-pressed="true"]{background:var(--c-tome2);border-color:var(--c-parch);box-shadow:inset 0 0 0 2px var(--c-parch),inset 0 0 0 4px var(--c-tome2)}
 .fdc-kind{display:inline-flex;border:1px solid var(--c-line);border-radius:3px;overflow:hidden}
 .fdc-kind button{padding:8px 12px;border:0;border-right:1px solid var(--c-line);background:var(--c-tome);color:var(--c-ink2);font-size:0.82rem}
 .fdc-kind button:last-child{border-right:0}
@@ -140,7 +148,7 @@
 
 /* PHONE: step 1 = title + modes, step 2 = seats + carousel, start bar on both */
 .fdc-phone{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-.fdc-phone .fdc-veil{position:fixed;background:rgba(5,7,12,0.8)}
+.fdc-phone .fdc-veil{position:fixed;background:rgba(5,7,12,0.92)}
 .fdc-phone .fdc-in{display:flex;flex-direction:column;gap:14px;min-height:100%;height:auto;padding:16px 16px 0}
 .fdc-phone .fdc-t1{font-size:0.8rem}
 .fdc-phone .fdc-t2{font-size:2.3rem}
