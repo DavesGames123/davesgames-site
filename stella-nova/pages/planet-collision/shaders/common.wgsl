@@ -17,14 +17,18 @@
 //    0 pos   x y z h            1 vel   vx vy vz m
 //    2 aux   T hNext nOther xv  3 tag   material | body << 4
 //    4 orig  start position over the body radius (body frame), body R
+//    5 th    rho P c Balsara (the summed density is the debris test)
 //
 //  PARTICLE CLASSES (fn klass). One particle is in one class:
 //    vapour  aux.xv > U.vap.z (the Tillotson blend weight, not a phase)
-//    debris  h > min(U.surf.w * h0, 0.97 h_max), h0 = eta_H (m / rho0)^(1/3).
-//            sph.js sets h = eta_H (m / rho)^(1/3) from the summed density.
-//            A particle with few neighbours has a low summed density, so its
-//            h grows to h_max: a free fragment. h > 1.6 h0 is rho < 0.24
-//            rho0; the surface layer of a body is at about 0.5 rho0.
+//    debris  rho < rho0 / q^3, q = U.surf.w (1.6: rho < 0.24 rho0). This is
+//            the test h > q h0 with h = eta_H (m / rho)^(1/3) and
+//            h0 = eta_H (m / rho0)^(1/3), but on the summed density, so the
+//            clamp of h at h_max does not change it. A particle with few
+//            neighbours has a low summed density: a free fragment. The
+//            surface layer of a settled body stays over 0.8 rho0 (moon-earth,
+//            49k). A test on h itself took the whole surface layer of Earth
+//            for debris: its h sits at the h_max clamp.
 //    fluid   all other particles (the bodies, the melt, the big clumps)
 //
 //  Precedence: every mix of * with ^, or of && with ||, has parentheses
@@ -66,6 +70,7 @@ struct U {
 @group(1) @binding(2) var<storage, read> pAux: array<vec4f>;
 @group(1) @binding(3) var<storage, read> pTag: array<u32>;
 @group(1) @binding(4) var<storage, read> pOrig: array<vec4f>;
+@group(1) @binding(5) var<storage, read> pTh: array<vec4f>;
 
 const K_FLUID: u32 = 0u;
 const K_DEBRIS: u32 = 1u;
@@ -80,8 +85,8 @@ fn spacing0(i: u32) -> f32 {
 }
 fn klass(i: u32) -> u32 {
   if (pAux[i].w > U0.vap.z) { return K_VAPOUR; }
-  let h0 = U0.mats[matOf(i) & 3u].z * spacing0(i);
-  if (pPos[i].w > min(U0.surf.w * h0, 0.97 * U0.extra.x)) { return K_DEBRIS; }
+  let q = U0.surf.w;
+  if (pTh[i].x * q * q * q < U0.mats[matOf(i) & 3u].x) { return K_DEBRIS; }
   return K_FLUID;
 }
 fn removed(x: vec3f) -> bool {

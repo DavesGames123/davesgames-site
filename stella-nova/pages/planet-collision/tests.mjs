@@ -31,7 +31,8 @@
 //     ms per step at 16k, 32k, 49k
 //  R  the renderer (Deno WebGPU, an offscreen texture, no browser and no
 //     image file): every shader compiles clean; before contact the target
-//     fills its disc and the sky round it is dark, with no glow; the
+//     fills its disc and the sky round it is dark, with no glow; no
+//     particle of a settled body is debris; the
 //     filter makes the depth smooth, keeps the area and makes the limb
 //     rounder (less spread of its radius: no bump per particle); a
 //     grazing hit makes debris (fn classify) and glowing pixels; the colour
@@ -423,6 +424,15 @@ async function renderTests() {
   const msgs = (await ren.compilationMessages()).filter(m => / error /.test(m));
   ok('R every render shader compiles with no error', msgs.length === 0, msgs.slice(0, 3).join(' | ') || 'common + fluid, smooth, shade, debris; centres; post');
   ren.attach(sim, setup); ren.resize(W, H);
+  // a settled body is all fluid: its surface layer is not debris (a test
+  // on h took 1415 surface particles of Earth for debris here: they sit at
+  // the h_max clamp)
+  { const n0 = 16384, s0 = await SphGPU.create(device, n0, await Deno.readTextFile(new URL('./shaders/sph.wgsl', import.meta.url)));
+    const su0 = buildScenario(PRESETS.find(p => p.key === 'moon-earth'), n0, 1);
+    s0.upload(su0, makeParams(su0, { KG: 4 })); for (let k = 0; k < 10; k++) s0.relaxSteps(20); s0.launch();
+    const rb0 = await s0.readback(['pos', 'vel', 'aux', 'tag', 'th']), c0 = classify(rb0, s0.n, s0.prm.hmax, {});
+    ok('R before contact: no settled particle is debris (fn klass)', c0.debris === 0 && c0.vapour === 0, `moon-earth ${n0}: fluid ${c0.fluid}, debris ${c0.debris}, vapour ${c0.vapour}`);
+    s0.destroy(); }
   const readTex = async (t, bpp, w, h) => {
     const bpr = Math.ceil(w * bpp / 256) * 256, buf = device.createBuffer({ size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = device.createCommandEncoder(); enc.copyTextureToBuffer({ texture: t }, { buffer: buf, bytesPerRow: bpr }, [w, h]); device.queue.submit([enc.finish()]);
@@ -466,7 +476,7 @@ async function renderTests() {
   f.eye = [0.6, -7, 2.0]; f.target = [0, 0, 0]; f.streakT = 0.05;
   let cls = null, st = null;
   for (let k = 0; k < 12; k++) { for (let j = 0; j < 10; j++) sim.step(20); st = await sim.stats(); if (st.tSec > 1.4 * 3600) break; }
-  const rb = await sim.readback(['pos', 'vel', 'aux', 'tag']);
+  const rb = await sim.readback(['pos', 'vel', 'aux', 'tag', 'th']);
   cls = classify(rb, sim.n, sim.prm.hmax, f);
   ok('R a grazing hit makes debris fragments (fn classify)', cls.debris > 0.01 * sim.n && cls.fluid > 0.8 * sim.n,
     `t ${(st.tSec / 3600).toFixed(2)} h: fluid ${cls.fluid}, debris ${cls.debris}, vapour ${cls.vapour}`);

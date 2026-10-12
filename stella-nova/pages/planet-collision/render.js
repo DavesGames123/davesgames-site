@@ -26,7 +26,7 @@
 //    final     exposure, ACES, vignette, sRGB -> canvas
 //
 //  PARTICLE CLASSES (common.wgsl fn klass): fluid -> the surface, debris
-//  (a smoothing length far over its reference value: a free fragment) ->
+//  (a summed density far under the reference: a free fragment) ->
 //  rock fragments and streaks, vapour (Tillotson blend weight) -> the
 //  vapour layer. The test in tests.mjs (section R) checks that a contact
 //  run makes all three.
@@ -172,7 +172,7 @@ export class Renderer {
       { binding: 1, visibility: ALL, buffer: ro },
       { binding: 2, visibility: ALL, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: ALL, sampler: { type: 'filtering' } }] });
-    this.bgl1 = dev.createBindGroupLayout({ label: 'pc g1', entries: [0, 1, 2, 3, 4].map(b => ({ binding: b, visibility: VF, buffer: ro })) });
+    this.bgl1 = dev.createBindGroupLayout({ label: 'pc g1', entries: [0, 1, 2, 3, 4, 5].map(b => ({ binding: b, visibility: VF, buffer: ro })) });
     this.bglZ = dev.createBindGroupLayout({ label: 'pc gZ', entries: [{ binding: 0, visibility: VF, texture: { sampleType: 'unfilterable-float' } }] });
     this.bglSm = dev.createBindGroupLayout({ label: 'pc gSm', entries: [
       { binding: 0, visibility: S.COMPUTE, texture: { sampleType: 'unfilterable-float' } },
@@ -264,7 +264,7 @@ export class Renderer {
       this.nwg = Math.ceil(sim.np / 256);
       this.partBuf = dev.createBuffer({ size: this.nwg * 64, usage: U.STORAGE, label: 'pc centres partial' });
       const b = sim.buf;
-      this.bg1 = dev.createBindGroup({ layout: this.bgl1, label: 'pc g1', entries: [b.pos, b.vel, b.aux, b.tag, this.origBuf].map((x, i) => ({ binding: i, resource: { buffer: x } })) });
+      this.bg1 = dev.createBindGroup({ layout: this.bgl1, label: 'pc g1', entries: [b.pos, b.vel, b.aux, b.tag, this.origBuf, b.th].map((x, i) => ({ binding: i, resource: { buffer: x } })) });
       this.bgC = dev.createBindGroup({ layout: this.bglC, label: 'pc gC', entries: [this.cpBuf, b.pos, b.tag, this.partBuf, this.centresBuf].map((x, i) => ({ binding: i, resource: { buffer: x } })) });
       this.sim = sim;
     }
@@ -455,14 +455,14 @@ export function lookOf(setup) {
 }
 
 // The particle classes of common.wgsl fn klass, on the CPU, from a
-// sim.readback(['pos', 'vel', 'aux', 'tag']): { fluid, debris, vapour }
-// counts. The tests and the page (event cuts) use it.
+// sim.readback(['aux', 'tag', 'th']): { fluid, debris, vapour } counts.
+// The tests use it. (hmax is not used; the argument stays for the callers.)
 export function classify(rb, n, hmax, f = {}) {
   const q = f.debrisQ ?? 1.6, xvHi = f.xvHi ?? 0.5, out = { fluid: 0, debris: 0, vapour: 0 };
   for (let i = 0; i < n; i++) {
     if (rb.aux[4 * i + 3] > xvHi) { out.vapour++; continue; }
-    const M = MAT_LIST[rb.tag[i] & 3], h0 = ETA_H * Math.cbrt(rb.vel[4 * i + 3] / (M.rho0 / UNIT.RHO));
-    if (rb.pos[4 * i + 3] > Math.min(q * h0, 0.97 * hmax)) out.debris++; else out.fluid++;
+    const M = MAT_LIST[rb.tag[i] & 3];
+    if (rb.th[4 * i] * q * q * q < M.rho0 / UNIT.RHO) out.debris++; else out.fluid++;
   }
   return out;
 }

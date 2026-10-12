@@ -211,16 +211,18 @@ the sphere shadow of body b; set both to 0 after the bodies merge),
 `flashes [{p, r, I, T}]` (up to 4 impact flashes), `exposure bloom
 bloomThreshold vignette`.
 
-Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`):
+Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`;
+`rb` from `readback(['aux', 'tag', 'th'])`):
 
 | Class | Test | Drawn as |
 |---|---|---|
 | vapour | `xv > xvHi` (0.5) | translucent layer, opacity 1 - exp(-vapK chord), crisp edge |
-| debris | `h > min(debrisQ h0, 0.97 hmax)`, `h0 = eta_H (m / rho0)^(1/3)` | flat-faced fragments, `frags` per particle, and streaks |
+| debris | `rho < rho0 / debrisQ^3` (the summed density, `th.x`; 0.24 rho0) | flat-faced fragments, `frags` per particle, and streaks |
 | fluid | all others | the screen-space surface |
 
-A free particle has a low summed density, so its smoothing length grows to
-`hmax`: that is the debris test. Debris fragments past the first are drawn,
+A free particle has a low summed density: that is the debris test. (A test
+on h took the whole surface layer of Earth for debris, because those
+particles sit at the `hmax` clamp.) The renderer binds `th` for it. Debris fragments past the first are drawn,
 not simulated (label this on the page).
 
 What the surface shows (mode 0): the body's surface map at each particle's
