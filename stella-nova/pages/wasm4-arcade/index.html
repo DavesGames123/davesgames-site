@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>WASM-4 Arcade: fantasy console carts on a CRT — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   WASM-4 ARCADE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A CRT arcade cabinet for WASM-4, the open fantasy console (wasm4.org,
+   ISC). A shelf of 19 community carts, each with a source licence that
+   permits redistribution (carts.json, CREDITS.md), and a file picker for
+   your own .wasm cart. The page loads no commercial game or ROM.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts)
+   Script at the end of body: main.js (module), which imports saver.js.
+
+   LAYOUT  (# marks an element id)
+     #cabinet   marquee, #tube (the CRT canvas, WebGPU or 2D), #play,
+                the control strip (#power #crtBtn #crtStr #sound #reset #fs)
+                and #pad (the touch d-pad and X, Z; phones and tablets)
+     #info      the cart now in the tube: title, author, licence, controls
+     #shelf     cart labels (painted from each cart's own screen)
+     #own       load your own .wasm cart
+     #about     what WASM-4 is; #keys the key map; #credits
+
+   GREP MAP
+     grep -n 'id="'        every element id
+     grep -n 'class="sec'  the sections
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A CRT arcade cabinet for WASM-4, the open-source fantasy console: 160 x 160 pixels, 4 colours and 64 KB carts in WebAssembly. Play 19 community carts with permissive licences, or load your own .wasm cart. Keyboard, gamepad and touch.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">WASM-4 Arcade</div>
+</div>
+
+<main id="doc">
+
+<section class="stage" id="stage">
+  <div class="cabinet" id="cabinet">
+    <div class="marquee"><span class="mq-title" id="mqTitle">WASM-4 ARCADE</span><span class="mq-sub">160 × 160 · 4 colours · 64 KB carts</span></div>
+    <div class="tube-wrap">
+      <canvas id="tube" tabindex="0" aria-label="CRT screen of the WASM-4 console. Tap or click to play."></canvas>
+      <button id="play" class="play" type="button">Play</button>
+    </div>
+    <div class="strip" role="group" aria-label="Cabinet controls">
+      <button id="power" type="button" aria-pressed="true" title="Power">⏻ <span>Power</span></button>
+      <button id="crtBtn" type="button" aria-pressed="true" title="CRT effect on or off">CRT</button>
+      <label class="str" title="CRT strength"><span>Tube</span><input id="crtStr" type="range" min="5" max="100" step="1" value="80" aria-label="CRT strength"><output id="crtOut">80 %</output></label>
+      <button id="sound" type="button" aria-pressed="false" title="Sound">♪ <span>Sound</span></button>
+      <button id="reset" type="button" title="Reset the cart (R)">↺ <span>Reset</span></button>
+      <button id="fs" type="button" title="Full screen">⛶ <span>Full screen</span></button>
+    </div>
+    <div class="pad" id="pad" aria-label="Touch gamepad">
+      <div class="dpad" id="dpad" role="group" aria-label="Direction pad"><span class="arm h"></span><span class="arm v"></span><span class="hub"></span></div>
+      <div class="ab">
+        <button type="button" data-btn="z" aria-label="Z button">Z</button>
+        <button type="button" data-btn="x" aria-label="X button">X</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="info" id="info" aria-live="polite">
+    <p class="kicker">Now in the tube</p>
+    <h1 id="ciTitle">WASM-4 Arcade</h1>
+    <p class="by" id="ciBy"></p>
+    <p class="blurb" id="ciBlurb"></p>
+    <p class="ctl"><b>Controls</b> <span id="ciCtl"></span></p>
+    <p class="links" id="ciLinks"></p>
+    <p class="status" id="status"></p>
+    <p class="hint">Keys: arrows, <kbd>X</kbd> and <kbd>Z</kbd>. A second player uses <kbd>E</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd>, <kbd>A</kbd> and <kbd>Tab</kbd>. Gamepads work too. <kbd>R</kbd> resets, <kbd>Esc</kbd> gives the arrow keys back to the page.</p>
+    <p class="tubekind" id="tubeKind"></p>
+  </aside>
+</section>
+
+<section class="sec" id="shelfSec">
+  <div class="sec-head"><h2>The cart shelf</h2><p>Each label is the cart's own screen, run in your browser. Every cart here is open source with a licence that permits sharing it. The credit is on the label and in the table below.</p></div>
+  <div class="shelf" id="shelf" role="list"></div>
+  <label class="own"><input type="file" id="own" accept=".wasm,application/wasm"><span>Load your own .wasm cart</span><small>Up to 64 KB. It runs here and is not uploaded.</small></label>
+</section>
+
+<section class="sec" id="about">
+  <div class="sec-head"><h2>What is WASM-4?</h2></div>
+  <div class="cols">
+    <p><a href="https://wasm4.org" target="_blank" rel="noopener">WASM-4</a> is a fantasy console by Bruno Garcia and contributors: a games machine that exists only as a specification and a runtime. A game is a WebAssembly module of 64 KB or less. The screen is 160 × 160 pixels with four colours from a palette that the cart can change. Input is up to four gamepads with a d-pad and two buttons, X and Z, and a mouse. Sound comes from four channels: two pulse waves, a triangle and noise. A cart can save 1024 bytes.</p>
+    <p>Because the cart is plain WebAssembly, it can be written in any language that compiles to it: C, Rust, Zig, Go, AssemblyScript, Nim, Odin and more. The console gives each cart one 64 KB page of memory. The framebuffer, palette, gamepads and mouse are at fixed addresses in that memory, and the cart calls a small set of functions: <code>blit</code>, <code>rect</code>, <code>line</code>, <code>oval</code>, <code>text</code>, <code>tone</code>, <code>diskr</code> and <code>diskw</code>. The console calls the cart's <code>update</code> 60 times a second.</p>
+    <p>This cabinet runs a JavaScript port of the official WASM-4 web runtime (ISC licence). The CRT is our own: a WGSL shader with barrel glass, a beam for each of the 160 lines, an aperture grille, bloom, flicker and the static of a channel change. With no WebGPU, the page uses the 2D tube of our <a href="../sstv/index.html">slow-scan television</a> page. Turn the CRT off to see the plain pixels.</p>
+  </div>
+</section>
+
+<section class="sec" id="credits">
+  <div class="sec-head"><h2>Credits and licences</h2><p>Runtime: WASM-4 by Bruno Garcia, ISC licence (runtime/LICENSE.txt). Carts: the binaries that the wasm4.org showcase serves, by their authors under the licences below. The full licence text of each cart is in <code>carts/licenses/</code>, and the full list, with the carts that we did not take and why, is in <a href="CREDITS.md">CREDITS.md</a>.</p></div>
+  <div class="tbl"><table><thead><tr><th>Cart</th><th>Author</th><th>Licence</th><th>Source</th></tr></thead><tbody id="creditRows"></tbody></table></div>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
