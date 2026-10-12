@@ -58,6 +58,10 @@ async function readAndAnalyze(s, potential, epoch) {
     st[q + 3] = b[o + 4]; st[q + 4] = b[o + 5]; st[q + 5] = b[o + 6];
     st[q + 6] = b[o + 8]; st[q + 7] = b[o + 9]; st[q + 8] = b[o + 10];
   }
+  // the grain that a ride shot follows (app/cuts.js): its exact state at
+  // this read, so the ride snaps back onto it
+  const rf = S.cuts && S.cuts.frag;
+  if (rf && rf.idx >= 0 && s.idx === 0 && rf.idx < N) { const o = 12 * rf.idx; s.rideSync = { t: rb.t, X: [0, 1, 2].map(k => rb.X[k] + b[o + k]), V: [0, 1, 2].map(k => rb.V[k] + b[o + 4 + k]) }; }
   // a run of more than one body tags every intact piece as a body
   // (initial.js clumpMask): pieces of at least 3% of the start mass
   const ly = S.run.spec.layout, clumps = !!(ly && ly.type !== 'single' && ly.type !== 'core');
@@ -94,7 +98,9 @@ function onAnalysis(s, a, rb) {
   if (s.pl.drag > 0) { s.an.drift = NaN; s.E0 = null; }
   if (!s.hist.length || tt > s.hist[s.hist.length - 1][0]) { s.hist.push([tt, f]); if (s.hist.length > 2000) s.hist.splice(0, s.hist.length - 2000); }
   if (rb.fresh && Number.isFinite(s.an.drift)) { s.ehist.push([tt, Math.max(drift, 1e-12)]); if (s.ehist.length > 2000) s.ehist.splice(0, 1); }
-  // shed-grain conics
+  // shed-grain conics; the raw states for a ride shot (app/cuts.js)
+  s.fragRaw = { t: a.t, list: [] };
+  for (let i = 0; i + 5 < a.frag.length; i += 6) s.fragRaw.list.push([...a.frag.subarray(i, i + 6), a.fragIdx ? a.fragIdx[i / 6] : -1]);
   s.frag = [];
   const fr = a.frag;
   for (let i = 0; i + 5 < fr.length && s.frag.length < 6; i += 6) {

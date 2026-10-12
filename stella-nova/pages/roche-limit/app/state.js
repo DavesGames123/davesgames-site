@@ -22,6 +22,7 @@ export const S = {
   saverOn: false,
   profiling: false,
   saver: null,
+  cuts: null,           // the cutting director's take (app/cuts.js)
 };
 export const pileCache = new Map();
 export let bootDone; export const bootReady = new Promise(r => { bootDone = r; });

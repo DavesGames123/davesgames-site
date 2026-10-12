@@ -25,10 +25,15 @@
 //     node tests.mjs --pace runs test 8 only; --pace-old adds the old run.
 //  10 story camera: the default run's trace through app/director.js (node,
 //     DOM stubbed): view turn rate, the moon in frame, the pull-out
-//  11 screensaver: the reel is seeded (same seed, same reel; seeds differ),
-//     no run twice in a row, every shot lasts 5-12 s, every spiral run
-//     starts outside its fluid limit and sheds within 4 s at the saver's
-//     speed (pacing model, cached pile)
+//  11 screensaver: the reel is seeded (same seed, same reel; seeds
+//     differ); 1000 seeds x 12 takes are valid runs, with no take and no
+//     planet twice in a row, and every planet, body and orbit reached; the
+//     shot plan against 1000 random event timelines: shots of 5-12 s, cuts
+//     at most 5 s after a new phase, an impact shot, no surface shot at a
+//     compact star, every take ends, the Director view loops; the shot
+//     poses keep the eye outside the planet and the subject in view; every
+//     spiral story starts outside its fluid limit and sheds within 4 s at
+//     the saver's speed (pacing model, cached pile)
 //  12 phone layout (style.css, read as text): 44 px touch targets on a
 //     coarse pointer, the dock and bottom sheets on a phone, the short
 //     landscape strip, no page scroll, the canvas takes every touch
@@ -49,7 +54,9 @@
 //     bound and one unbound, a core that holds), finite values, no errors.
 //     The first scenarios saturn, flyby and compare run the same path
 //     (scen:<key>). deno run -A tests.mjs --gpu --rolls=sl9,seed:5 runs a few;
-//     --no-rolls skips test 15.
+//     --no-rolls skips test 15. The cutting director (app/cuts.js) runs
+//     in the Director view over each run: it cuts after the tear, and
+//     every pose is finite and outside the planet.
 //  16 the link (node, DOM stubbed): ?seed= at boot, cleared by a story,
 //     ?run= for a preset
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
@@ -66,6 +73,7 @@ import * as PC from './pacing.js';
 import { SCENARIOS, REAL, limitsOf } from './scenarios.js';
 import * as BG from './budget.js';
 import * as SP from './saver-plan.js';
+import * as SG from './shot-geom.js';
 import * as RL from './roll.js';
 import * as IN from './initial.js';
 
@@ -507,30 +515,101 @@ async function cameraTests(run, sc) {
   ok('story camera: after the breakup it pulls out to the planet', endPlanet < FOVH && endDist > 3, `at the end the planet is ${(endPlanet * 180 / Math.PI).toFixed(1)} deg off axis, the eye ${endDist.toFixed(2)} R_p from it`);
 }
 
-// 11 ─ the screensaver reel (saver-plan.js)
+// 11 ─ the screensaver reel and the shot plan (saver-plan.js, shot-geom.js)
 function saverTests(cur) {
-  const keys = seed => { const r = SP.rng(seed); return [0, 1, 2].flatMap(() => SP.makeReel(r).map(x => x.key)).join(' '); };
-  ok('saver: the reel is seeded', keys(7) === keys(7) && keys(7) !== keys(8), `seed 7: ${keys(7).split(' ').slice(0, 6).join(' ')}; seed 8: ${keys(8).split(' ').slice(0, 6).join(' ')}`);
-  let twice = 0, lens = [], minL = Infinity, maxL = 0;
-  for (let seed = 1; seed <= 200; seed++) {
-    const r = SP.rng(seed); let last = null;
-    for (let k = 0; k < 3; k++) { const reel = SP.makeReel(r, last); if (reel[0].key === last) twice++; last = reel[reel.length - 1].key; }
-    // play the shots of one run against a breakup at 0.5-3 s and a ring
-    // phase 4-9 s after it, in 50 ms ticks
-    const plan = SP.shotPlan(r), tB = 0.5 + 2.5 * r(), tR = tB + 4 + 5 * r();
-    let t = 0;
-    for (const sh of plan) {
-      const t0 = t; let el = 0, bAt = null;
-      while (true) { el = t - t0; if (bAt === null && t >= tB) bAt = el; if (SP.shotDone(sh, el, { breakupAt: bAt, ring: t >= tR })) break; t += 0.05; }
-      lens.push(el); minL = Math.min(minL, el); maxL = Math.max(maxL, el);
+  const keys = seed => { const rs = { rnd: SP.rng(seed), bag: null, last: null }; return Array.from({ length: 40 }, () => SP.nextTake(rs).key + (rs.last.planet ? '@' + rs.last.planet : '')).join(' '); };
+  ok('saver: the reel is seeded', keys(7) === keys(7) && keys(7) !== keys(8), `seed 7: ${keys(7).split(' ').slice(0, 5).join(' ')}; seed 8: ${keys(8).split(' ').slice(0, 5).join(' ')}`);
+  // 1000 saver seeds, 12 takes each: every take valid, none twice in a
+  // row, no planet twice in a row, rolls differ in planet and body
+  let bad = [], twice = 0, samePl = 0, rollSame = 0, rolls = 0, takes = 0, minPl = Infinity;
+  const seen = { planet: new Set(), body: new Set(), orbit: new Set(), kind: new Set() };
+  for (let seed = 1; seed <= 1000; seed++) {
+    const rs = { rnd: SP.rng(seed), bag: null, last: null }; let prev = null; const pl = new Set();
+    for (let k = 0; k < 12; k++) {
+      const e = SP.nextTake(rs); takes++; seen.kind.add(e.kind);
+      let spec = null;
+      if (e.kind === 'roll') { spec = e.spec; rolls++; if (prev && (spec.planet === prev.planet || spec.body === prev.body)) rollSame++; }
+      else if (e.kind === 'preset') spec = RL.presetSpec(e.preset);
+      else if (!SCENARIOS.find(x => x.key === e.scen)) bad.push(`${seed}: story ${e.key}`);
+      if (spec) { const w = RL.checkSpec(spec); if (w) bad.push(`${seed}/${e.key}: ${w}`); seen.planet.add(spec.planet); seen.body.add(spec.body); seen.orbit.add(spec.orbitKind); }
+      if (prev && prev.key === e.key) twice++;
+      if (prev && prev.planet && e.planet && prev.planet === e.planet) samePl++;
+      if (e.planet) pl.add(e.planet);
+      prev = { key: e.key, planet: e.planet, body: e.body };
     }
+    minPl = Math.min(minPl, pl.size);
   }
-  ok('saver: no run plays twice in a row', twice === 0, `${twice} repeats over 200 seeds x 3 reels`);
-  ok('saver: every shot lasts 5-12 s (cuts every 5-12 s)', minL >= SP.CUT_MIN - 1e-9 && maxL <= SP.CUT_MAX + 0.05, `${lens.length} shots, ${minL.toFixed(2)} to ${maxL.toFixed(2)} s, mean ${(lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(2)} s`);
+  ok('saver reel: 1000 seeds x 12 takes, every take a valid run', bad.length === 0, `${takes} takes (${rolls} fresh rolls); ${bad.slice(0, 3).join('; ') || 'all pass checkSpec'}`);
+  ok('saver reel: no take twice in a row, no planet twice in a row', twice === 0 && samePl === 0 && rollSame === 0, `${twice} repeated takes, ${samePl} repeated planets, ${rollSame} rolls that share the planet or body of the take before`);
+  ok('saver reel: varied (every planet, body and orbit; 5+ planets in 12 takes)', seen.planet.size === 10 && seen.body.size === 9 && seen.orbit.size === 6 && minPl >= 5 && seen.kind.size === 3, `${seen.planet.size} planets, ${seen.body.size} bodies, ${seen.orbit.size} orbits, kinds ${[...seen.kind].join('/')}; at least ${minPl} planets in each 12 takes`);
+  // the shot plan against random event timelines, in 50 ms ticks: crack
+  // at 0.5-4 s (or never: a weak roll), torn 2-8 s later, ring 4-12 s
+  // after that, an impact in some runs
+  let lens = [], minL = Infinity, maxL = 0, sameKind = 0, wrongPhase = 0, lateCut = 0, endT = 0, stallEnd = 0, impactOk = 0, impactRuns = 0, compactBad = 0, missed = 0;
+  const kinds = new Set();
+  for (let seed = 1; seed <= 1000; seed++) {
+    const r = SP.rng(seed * 31 + 5), weak = r() < 0.1, compact = r() < 0.15;
+    const tC = weak ? Infinity : 0.5 + 3.5 * r(), tT = tC + 2 + 6 * r(), tR = tT + 4 + 8 * r(), tI = r() < 0.4 ? tC + 1 + 10 * r() : Infinity;
+    const phaseAt = t => t >= tR ? 'ring' : t >= tT ? 'torn' : t >= tC ? 'crack' : 'approach';
+    const tk = SP.newTake(SP.rng(seed), { surface: !compact });
+    let t = 0, prevKind = null, shotT = 0, lastPhase = 'approach', phaseT = 0, res;
+    if (tI < Infinity && !compact) impactRuns++;
+    while (t < 200) {
+      const ph = phaseAt(t);
+      if (ph !== lastPhase) { lastPhase = ph; phaseT = t; }
+      res = SP.takeStep(tk, 0.05, { phase: ph, impact: t >= tI });
+      if (res === 'end') break;
+      if (res === 'cut') {
+        const sh = tk.shot; kinds.add(sh.kind);
+        if (tk.shots.length > 1) { const L = t - shotT; lens.push(L); minL = Math.min(minL, L); maxL = Math.max(maxL, L); }
+        if (sh.kind === prevKind) sameKind++;
+        if (sh.phase !== 'impact' && sh.phase !== ph) wrongPhase++;
+        if (sh.kind === 'impact' && t >= tI) impactOk++;
+        if ((sh.kind === 'surface' || sh.kind === 'impact') && compact) compactBad++;
+        // a cut into a new phase comes at most CUT_MIN s after it starts
+        // (or after an impact shot that started in it)
+        if (sh.phase === ph && ph !== 'approach' && tk.shots.filter(x => x.phase === ph).length === 1 && t - phaseT > SP.CUT_MIN + 0.06) { const prevSh = tk.shots[tk.shots.length - 2]; if (!(prevSh && prevSh.kind === 'impact' && prevSh.from === ph)) lateCut++; }
+        prevKind = sh.kind; shotT = t;
+      }
+      t += 0.05;
+    }
+    endT = Math.max(endT, t);
+    if (weak && t <= SP.STALL + SP.CUT_MAX + 0.1) stallEnd++;
+    if (!weak && tR + 2 * SP.CUT_MAX < 200 && !tk.shots.some(x => x.phase === 'ring')) missed++;
+  }
+  ok('shot plan: every shot lasts 5-12 s (cuts every 5-12 s)', minL >= SP.CUT_MIN - 1e-9 && maxL <= SP.CUT_MAX + 0.06, `${lens.length} shots, ${minL.toFixed(2)} to ${maxL.toFixed(2)} s, mean ${(lens.reduce((a, b) => a + b, 0) / lens.length).toFixed(2)} s`);
+  ok('shot plan: cuts follow the events', sameKind === 0 && wrongPhase === 0 && lateCut === 0 && missed === 0, `${sameKind} repeated kinds, ${wrongPhase} shots of a phase that is over, ${lateCut} cuts more than ${SP.CUT_MIN} s after a new phase, ${missed} takes with no ring shot`);
+  ok('shot plan: impacts get a shot; compact stars get no surface shot', impactOk >= 0.8 * impactRuns && compactBad === 0, `${impactOk} impact shots in ${impactRuns} runs with an impact; ${compactBad} surface shots at a compact star`);
+  ok('shot plan: every take ends; a weak roll ends early; every kind plays', endT <= SP.TAKE_MAX + SP.CUT_MAX + 1 && stallEnd >= 1 && kinds.size === SP.KINDS.length, `longest take ${endT.toFixed(1)} s; ${stallEnd} weak rolls ended by ${SP.STALL + SP.CUT_MAX} s; kinds ${[...kinds].sort().join(' ')}`);
+  { const tk = SP.newTake(SP.rng(9), { surface: true }, true); let t = 0, ends = 0, n = 0; while (t < 600) { const r = SP.takeStep(tk, 0.1, { phase: t < 3 ? 'approach' : t < 8 ? 'crack' : t < 14 ? 'torn' : 'ring', impact: false }); if (r === 'end') ends++; if (r === 'cut') n++; t += 0.1; }
+    ok('shot plan: the Director view loops (never ends)', ends === 0 && n > 50, `${n} cuts in 600 s, ${ends} ends`); }
+  // the poses: random scenes; the eye stays outside the planet, the
+  // subject stays in the view (half the view height is 0.31 rad), and
+  // the surface view puts its subject 12 deg above the horizon
+  { let worst = 0, inside = 0, elevErr = 0, n = 0;
+    const ang = (eye, a, b) => { const u = [0, 1, 2].map(i => a[i] - eye[i]), v = [0, 1, 2].map(i => b[i] - eye[i]); return Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / Math.hypot(...u) / Math.hypot(...v)))); };
+    for (let seed = 1; seed <= 300; seed++) {
+      const r = SP.rng(seed), d = 1.4 + 1.8 * r(), th = 6.283 * r(), c = [d * Math.cos(th), d * Math.sin(th), 0.05 * (r() - 0.5)];
+      const v = [-Math.sin(th), Math.cos(th), 0.02].map(q => q * 0.8), Rw = 0.06 + 0.08 * r();
+      const base = { target: c.slice(), dist: 1.5, az: 6.283 * r(), el: 0.3 };
+      const fp = c.map((q, i) => q + [0.1, -0.05, 0.01][i]);
+      for (const kind of ['surface', 'ride', 'impact', 'wide', 'push', 'skim', 'top']) {
+        for (const phase of kind === 'surface' ? ['approach', 'ring'] : ['torn']) {
+          const sh = Object.assign({ kind, phase, side: r() < 0.5 ? -1 : 1, len: 6 }, SP.SHOTS[kind]);
+          const ctx = { base, prog: r(), c, v, frag: kind === 'ride' ? { p: fp, v } : null, bodyR: 1, ringR: 2, impact: kind === 'impact' ? [Math.cos(th), Math.sin(th), 0] : null, Rw };
+          const g = SG.shotGoal(sh, ctx);
+          const ce = Math.cos(g.el), eye = [g.target[0] + g.dist * ce * Math.cos(g.az), g.target[1] + g.dist * ce * Math.sin(g.az), g.target[2] + g.dist * Math.sin(g.el)];
+          if (g.abs ? Math.hypot(...eye) < g.minR - 1e-9 || g.minR < 1.0 : g.minR < 1.3) inside++;
+          const subj = kind === 'ride' ? fp : kind === 'impact' ? ctx.impact : kind === 'surface' && phase === 'ring' ? sh.ringDir.map(q => q * 2) : c;
+          worst = Math.max(worst, ang(eye, g.target, subj)); n++;
+          if (kind === 'surface') { const up = eye.map(q => q / Math.hypot(...eye)), w = subj.map((q, i) => q - eye[i]), e = Math.asin((w[0] * up[0] + w[1] * up[1] + w[2] * up[2]) / Math.hypot(...w)); elevErr = Math.max(elevErr, Math.abs(e - 12 * Math.PI / 180)); }
+        }
+      }
+    }
+    ok('shot poses: the eye stays outside the planet, the subject in view', inside === 0 && worst < 0.31, `${n} poses; ${inside} eyes inside (an offset shot has minR 1.3, which app/camera.js poseOf enforces); the subject at most ${(worst * 180 / Math.PI).toFixed(1)} deg off the view axis (half the view is 17.8)`);
+    ok('shot poses: the surface view sees its subject 12 deg above the horizon', elevErr < 3 * Math.PI / 180, `worst error ${(elevErr * 180 / Math.PI).toFixed(2)} deg (the stand point is 4% of a radius above the plane)`); }
   // the presets and random runs of the reel: test 13 checks their specs,
   // test 15 runs them on the GPU
-  const extra = SP.RUNS.filter(r => r.preset || r.roll);
-  ok('saver: the reel holds presets and random runs that exist', extra.length >= 8 && extra.every(r => r.roll || RL.presetSpec(r.preset)), extra.map(r => r.key).join(' '));
   for (const run of SP.RUNS) {
     const sc = SCENARIOS.find(x => x.key === run.scen);
     if (!sc || sc.kind !== 'spiral') continue;
@@ -778,6 +857,10 @@ async function rollRunTests(keys) {
   UI.N = 4096; UI.quality = 'medium';
   const G = P.G;
   let weak = [], nSeeds = 0;
+  // the cutting director (app/cuts.js) in the Director view, driven by
+  // the run: wall time per block from the speed the shot asks for
+  const CU = await import('./app/cuts.js'), DI = await import('./app/director.js'), LO = await import('./app/loop.js');
+  const dirStat = { runs: 0, cuts: 0, bad: [], phases: new Set(), kinds: new Set(), tornCut: 0, torn: 0, rideFrag: 0, rides: 0, probes: [] };
   for (const key of keys) {
     if (!key) continue;
     const seed = key.startsWith('seed:') ? +key.slice(5) : null, scen = key.startsWith('scen:') ? key.slice(5) : null;
@@ -789,6 +872,8 @@ async function rollRunTests(keys) {
     const run = S.run;
     if (run.phase === 'settle') { while (!R.settleStep(24)) await S.dev.queue.onSubmittedWorkDone(); await R.placeSats(run.serial); }
     const s = run.sats[0], T0 = run.T0;
+    UI.cam = 'cut'; UI.calm = false; UI.paused = false; S.cuts = null;
+    const dirRun = { kinds: [], tornAt: null, cutAfterTorn: false, wallAfter: 0 };
     // the end: one orbit after the drag stops, or after the closest pass
     // (the comet of the first flyby scenario tears later: 3 orbits after)
     let tEnd = spec.kind === 'flyby' ? run.tPeri + (scen ? 3 : 1) * T0 : spec.kind === 'spiral' ? Infinity : 6 * T0, dragOff = null, reads = 0, fMin = 1, maxGroups = 0;
@@ -798,8 +883,50 @@ async function rollRunTests(keys) {
       const enc = S.dev.createCommandEncoder(); for (const q of run.sats) q.gpu.encodeSteps(enc, 512, true); S.dev.queue.submit([enc.finish()]);
       S.run.t = s.gpu.t;
       if (++reads % 8 === 0) { await H.readAll(true); if (s.an) { fMin = Math.min(fMin, s.an.f); maxGroups = Math.max(maxGroups, s.an.groups); } }
+      // the director: the wall time of this block at the speed it asks for
+      if (run.pace) {
+        run.pace.factor = run.pace.target;
+        const opm = LO.orbitsPerMin(), wall = Math.min(1, 512 * s.C.dt / (opm / 60 * T0));
+        const r = CU.cutsTick(wall);
+        const sh = CU.curShot();
+        if (dirRun.tornAt !== null) dirRun.wallAfter += wall;
+        if (r === 'cut') { dirStat.cuts++; dirRun.kinds.push(sh.kind); dirStat.kinds.add(sh.kind); dirStat.phases.add(sh.phase); if (dirRun.tornAt !== null) dirRun.cutAfterTorn = true; if (sh.kind === 'ride') dirStat.rides++; }
+        if (run.story.torn !== undefined && dirRun.tornAt === null) dirRun.tornAt = run.t;
+        if (sh) {
+          const g = CU.cutCamera(DI.storyGoal(wall));
+          const ce = Math.cos(g.el), eye = [g.target[0] + g.dist * ce * Math.cos(g.az), g.target[1] + g.dist * ce * Math.sin(g.az), g.target[2] + g.dist * Math.sin(g.el)];
+          const fine = [...g.target, g.dist, g.az, g.el].every(Number.isFinite) && g.dist > 0;
+          if (!fine || (g.abs && Math.hypot(...eye) < g.minR - 1e-6)) dirStat.bad.push(`${key}: ${sh.kind} ${fine ? 'eye inside' : 'not finite'}`);
+          if (sh.kind === 'ride' && S.cuts.frag && sh.phase === 'torn') dirStat.rideFrag++;
+        }
+      }
     }
+    dirStat.runs++;
+    // a run that goes on for CUT_MIN s of wall time after the tear must cut
+    if (dirRun.tornAt !== null && dirRun.wallAfter > SP.CUT_MIN + 0.5) { dirStat.torn++; if (dirRun.cutAfterTorn) dirStat.tornCut++; }
     await H.readAll(true);
+    // a ride's fragment: picked from the analysis, moved on by its own
+    // orbit for 1024 steps; the grain it was picked from must stay with it
+    // (within 8% of the distance moved: the stream's own pull and the
+    // contacts are not in the fragment's orbit), and the next read puts
+    // the ride back on the grain
+    if (s.an && s.an.f < 0.75 && S.cuts) {
+      const p0 = CU.rideProbe();
+      if (p0) {
+        // the grain that was picked: the one at the fragment's point now
+        const at = (rb, i) => [0, 1, 2].map(k => (rb.X[k] + rb.body[12 * i + k]) * s.k);
+        const rb0 = await s.gpu.readback(false); let i0 = -1, d0 = Infinity;
+        for (let i = 0; i < s.N; i++) { const d = Math.hypot(...at(rb0, i).map((q, k) => q - p0.p[k])); if (d < d0) { d0 = d; i0 = i; } }
+        const enc = S.dev.createCommandEncoder(); for (const q of run.sats) q.gpu.encodeSteps(enc, 1024, false); S.dev.queue.submit([enc.finish()]); S.run.t = s.gpu.t;
+        const p1 = CU.rideProbe(true), rb1 = await s.gpu.readback(false);
+        const dmin = Math.hypot(...at(rb1, i0).map((q, k) => q - p1.p[k]));
+        // a read puts the ride back on the grain's own state
+        await H.readAll(true);
+        const p2 = CU.rideProbe(true), rb2 = await s.gpu.readback(false);
+        const dsync = p2 ? Math.hypot(...at(rb2, i0).map((q, k) => q - p2.p[k])) : Infinity;
+        dirStat.probes.push({ key, moved: Math.hypot(...[0, 1, 2].map(k => p1.p[k] - p0.p[k])), dmin, d0, dsync });
+      }
+    }
     // the state at the end, in the planet frame
     const rb = await s.gpu.readback(false), N = s.N, pos = new Float64Array(N * 3), vel = new Float64Array(N * 3), m = new Float64Array(N);
     for (let i = 0; i < N; i++) { for (let k = 0; k < 3; k++) { pos[3 * i + k] = rb.body[12 * i + k]; vel[3 * i + k] = rb.body[12 * i + 4 + k]; } m[i] = rb.body[12 * i + 7]; }
@@ -863,6 +990,9 @@ async function rollRunTests(keys) {
     else { pass = pass && fMin < 0.75; claim += 'torn: the bound share falls under 75%'; }
     ok(`${seed !== null ? 'random run' : scen ? 'scenario run' : 'preset run'} "${key}" on the GPU: ${claim}`, pass, info + (errs.length ? ' | ' + errs.join(' | ') : ''));
   }
+  if (dirStat.runs) ok('Director view on the GPU runs: cuts on events, every pose finite and outside the planet', dirStat.bad.length === 0 && dirStat.tornCut === dirStat.torn && dirStat.phases.size >= 3, `${dirStat.runs} runs, ${dirStat.cuts} cuts; ${dirStat.tornCut} of ${dirStat.torn} runs that go on ${SP.CUT_MIN} s past the tear cut after it; phases ${[...dirStat.phases].join(' ')}; kinds ${[...dirStat.kinds].sort().join(' ')}; ${dirStat.rideFrag} ride frames on a fragment in ${dirStat.rides} rides; ${dirStat.bad.slice(0, 3).join('; ') || 'no bad pose'}`);
+  if (dirStat.probes.length) { const pr = dirStat.probes, bad = pr.filter(q => !(q.d0 < 1e-4 && q.dmin < 0.08 * q.moved && q.dsync < 1e-4));
+    ok('Director ride: the fragment\'s own orbit follows its grain', bad.length === 0, `${pr.length} runs; the picked grain found at ${Math.max(...pr.map(q => q.d0)).toExponential(1)}; moved ${Math.min(...pr.map(q => q.moved)).toFixed(3)}-${Math.max(...pr.map(q => q.moved)).toFixed(3)} world units in 1024 steps, off its grain by ${Math.max(...pr.map(q => q.dmin / q.moved * 100)).toFixed(2)}% of that at worst (limit 8%), back on it after a read: ${Math.max(...pr.map(q => q.dsync)).toExponential(1)}${bad.length ? '; off: ' + bad.map(q => q.key).join(' ') : ''}`); }
   if (nSeeds) ok('random runs: at most a quarter are weak (no tear, hit or capture in one orbit)', weak.length <= nSeeds / 4, `${weak.length} of ${nSeeds} weak${weak.length ? ': ' + weak.join(', ') : ''}`);
   for (const q of S.run.sats) q.gpu.destroy();
   S.worker.terminate(); S.dev.destroy();

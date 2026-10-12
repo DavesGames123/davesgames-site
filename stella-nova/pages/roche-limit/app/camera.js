@@ -10,12 +10,13 @@
 //    speed limits ...... "const ROT_MAX"
 //    goal of a mode .... "function camGoal"
 //    framing ........... "function poseOf"
-//    story camera ...... "function storyActive" (app/director.js)
+//    story camera ...... "function storyActive" (app/director.js; the
+//                        shots of app/cuts.js go on top of it)
 //    governor .......... "function cameraFrame"
 //    motion stats ...... "function finishPose"
 // ============================================================================
 import { cross, norm, sub } from '../render.js';
-import { saverCamera } from './saver.js';
+import { cutsOn, cutsTick, cutCamera } from './cuts.js';
 import { storyGoal, smoothStory } from './director.js';
 import { orbitsPerMin } from './loop.js';
 import { UI } from './env.js';
@@ -51,7 +52,7 @@ function camGoal(cssW, cssH) {
   const s = S.run.sats[0];
   const Rw = (s.Rs || s.C.Rs) * s.k;
   let target, dist, el = cam.el;
-  let mode = UI.cam === 'story' ? 'planet' : UI.cam;
+  let mode = UI.cam === 'story' || UI.cam === 'cut' ? 'planet' : UI.cam;
   cam.fastFollow = false;
   if (mode === 'follow' && S.run.phase === 'orbit') {
     // how fast does the moon go round the planet, in real time?
@@ -80,7 +81,9 @@ function camGoal(cssW, cssH) {
 function poseOf(g, cssW, cssH) {
   const o = occlusion(cssW, cssH);
   const clearW = Math.max(80, cssW - o.l - o.r), clearH = Math.max(80, cssH - o.t - o.b);
-  const fit = Math.min(1.9, Math.max(cssW / clearW * 0.85, cssH / clearH, 1));
+  // a pose of its own (a shot of app/cuts.js: the surface, a ride) keeps
+  // its eye: no fit
+  const fit = g.abs ? 1 : Math.min(1.9, Math.max(cssW / clearW * 0.85, cssH / clearH, 1));
   const dist = g.dist * fit;
   const ce = Math.cos(g.el), dir = [ce * Math.cos(g.az), ce * Math.sin(g.az), Math.sin(g.el)];
   const eye = [0, 1, 2].map(i => g.target[i] + dist * dir[i]), target = g.target.slice();
@@ -89,8 +92,8 @@ function poseOf(g, cssW, cssH) {
   const ox = (o.l - o.r) / 2, oy = (o.b - o.t) / 2;
   const sx = -ox * dist / focal, sy = -oy * dist / focal;
   for (let i = 0; i < 3; i++) { const d = sx * r[i] + sy * u[i]; eye[i] += d; target[i] += d; }
-  const re = Math.hypot(...eye);
-  if (re < 1.3) for (let i = 0; i < 3; i++) eye[i] *= 1.3 / re;
+  const re = Math.hypot(...eye), minR = g.minR ?? 1.3;
+  if (re < minR) for (let i = 0; i < 3; i++) eye[i] *= minR / re;
   return { eye, target };
 }
 const FOV = 0.62;
@@ -107,12 +110,14 @@ function turnToward(a, b, ang) {
 // The story camera (app/director.js) runs in place of the governor: its
 // motion is planned and sprung, not a chase. Reduce motion and the
 // settle phase use the planet view.
-export function storyActive() { return UI.cam === 'story' && !UI.calm && S.run && S.run.phase === 'orbit' && !!S.run.shot && !!S.run.pace; }
+export function storyActive() { return (UI.cam === 'story' || UI.cam === 'cut') && !UI.calm && S.run && S.run.phase === 'orbit' && !!S.run.shot && !!S.run.pace; }
 export function cameraFrame(dtReal, cssW, cssH) {
   if (storyActive()) {
     const user = cam.dragging || performance.now() < (cam.userUntil || 0);
-    const sg = smoothStory(storyGoal(dtReal), dtReal, user);
-    if (S.saverOn && S.saver) saverCamera(sg, dtReal);
+    let sg = smoothStory(storyGoal(dtReal), dtReal, user);
+    // the cutting director (the screensaver, the Director view): the shot
+    // replaces the goal after the springs, so a cut is a cut
+    if (cutsOn()) { cutsTick(dtReal); sg = cutCamera(sg); }
     const want = poseOf(sg, cssW, cssH);
     cam.pose = { eye: want.eye, target: want.target };
     // a screensaver cut is a jump on purpose: not counted as motion

@@ -13,6 +13,8 @@
 //               (pacing.js starts the slow motion on it) and its long axis
 //    clumps     with q.clumps: initial.js clumpMask, the pieces of at least
 //               q.clumpMin (their grains are tagged 1)
+//    frag, fragIdx   a sample of shed grains: position and velocity in the
+//               planet frame (6 floats each), and their indices
 //  A module worker: physics.js is the same module the page and tests use.
 //
 //  grep -n targets: "onmessage"
@@ -44,12 +46,13 @@ self.onmessage = e => {
   let clumps = 0;
   if (q.clumps) { const cm = clumpMask(pos, mass, rad, 3, q.clumpMin, N); clumps = cm.clumps; for (let i = 0; i < N; i++) if (cm.mask[i] && mass[i]) tags[i] = 1; }
   // a sample of shed grains for the fragment conics: state in the planet frame
-  const frag = [];
+  const frag = [], fragIdx = [];
   const want = q.fragCount || 0;
   if (want) {
     const step = Math.max(1, Math.floor(N / (want * 4)));
     for (let i = (q.seed || 0) % step; i < N && frag.length < want * 6; i += step) {
       if (!mass[i] || an.mask[i]) continue;
+      fragIdx.push(i);
       frag.push(X[0] + pos[3 * i], X[1] + pos[3 * i + 1], X[2] + pos[3 * i + 2], V[0] + vel[3 * i], V[1] + vel[3 * i + 1], V[2] + vel[3 * i + 2]);
     }
   }
@@ -61,5 +64,5 @@ self.onmessage = e => {
   let s2 = 0; for (let i = 0; i < N; i++) { const m = mass[i]; if (!m) continue; s2 += m * ((pos[3 * i] - ca[0]) ** 2 + (pos[3 * i + 1] - ca[1]) ** 2 + (pos[3 * i + 2] - ca[2]) ** 2); }
   const spread = Ma > 0 ? Math.sqrt(s2 / Ma) : 0;
   self.postMessage({ id: q.id, tags, M: an.M, com: an.com, vcm: an.vcm, rH: an.rH, groups: an.groups, largest: an.largest,
-    el: sh.el, axis: sh.axis, clumps, E: en.E, K: en.K + en.Kr, Us: en.Us, Up: en.Up, L: en.L, frag: new Float64Array(frag), accreted, comAll: ca, vcmAll: va, spread, t: q.t, X, V }, [tags.buffer]);
+    el: sh.el, axis: sh.axis, clumps, E: en.E, K: en.K + en.Kr, Us: en.Us, Up: en.Up, L: en.L, frag: new Float64Array(frag), fragIdx: new Int32Array(fragIdx), accreted, comAll: ca, vcmAll: va, spread, t: q.t, X, V }, [tags.buffer]);
 };

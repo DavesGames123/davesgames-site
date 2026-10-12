@@ -217,7 +217,7 @@ export function applyScenario(key) {
   UI.qLog = Math.log10(src.q ?? 1); UI.J2 = src.J2 || 0;
   UI.material = src.material || (sc.materials ? sc.materials[0] : 'fluid');
   const m = P.MATERIALS[UI.material]; UI.mu = m.mu; UI.coh = m.coh;
-  UI.cam = 'story'; cam.zoom = 1; cam.el = sc.el ?? 0.42; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
+  UI.cam = UI.cam === 'cut' ? 'cut' : 'story'; cam.zoom = 1; cam.el = sc.el ?? 0.42; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
   UI.color = sc.color ?? 4; UI.field = 0;
   if (sc.speed) setSpeed(Math.log10(sc.speed));
   UI.paused = false;
@@ -237,7 +237,7 @@ export function applyScenario(key) {
 // Load a roll.js spec (a seed or a preset) as the current run.
 export function applyRoll(spec) {
   UI.roll = spec;
-  UI.cam = 'story'; cam.zoom = 1; cam.el = spec.el; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
+  UI.cam = UI.cam === 'cut' ? 'cut' : 'story'; cam.zoom = 1; cam.el = spec.el; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
   UI.color = spec.color ?? 4; UI.field = 0;
   if (spec.speed) setSpeed(Math.log10(spec.speed));
   UI.paused = false;
@@ -303,6 +303,6 @@ function syncButtons() {
   for (const b of $('fields').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.f === UI.field);
   for (const b of $('quals').querySelectorAll('button')) b.classList.toggle('on', b.dataset.q === UI.quality);
   $('matHint').textContent = UI.roll ? `This run sets its own material (${P.MATERIALS[UI.roll.material].name.toLowerCase()}); the settings here are for the stories.` : UI.scen === 'compare' ? 'This story runs one loose and one rough moon.' : P.MATERIALS[UI.material].note;
-  $('camHint').textContent = UI.cam === 'story' ? (UI.calm ? 'Reduce motion is on: the story view stays on the planet.' : 'The camera tells the story: a wide shot, a push in to the moon as it breaks up (in slow motion), then a pull out to the ring. Drag or pinch to adjust it.') : UI.cam === 'follow' ? 'The view follows the moon, with its direction fixed in space. At high speed it stays on the planet instead.' : UI.cam === 'planet' ? 'The planet stays still; the moon goes round it.' : '';
+  $('camHint').textContent = UI.cam === 'cut' ? (UI.calm ? 'Reduce motion is on: the view stays on the planet.' : 'A director cuts between shots on the run’s events: from above, low over the ring plane, from the planet’s surface, a slow-motion push-in at the first crack, a ride with a fragment, a time-lapse of the ring.') : UI.cam === 'story' ? (UI.calm ? 'Reduce motion is on: the story view stays on the planet.' : 'The camera tells the story: a wide shot, a push in to the moon as it breaks up (in slow motion), then a pull out to the ring. Drag or pinch to adjust it.') : UI.cam === 'follow' ? 'The view follows the moon, with its direction fixed in space. At high speed it stays on the planet instead.' : UI.cam === 'planet' ? 'The planet stays still; the moon goes round it.' : '';
   drawLegend();
 }

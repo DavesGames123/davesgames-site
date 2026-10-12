@@ -29,7 +29,11 @@
      roll.js      random runs (a seed) and the presets; facts.js their data
      initial.js   the start state of a roll: binary, train, core, two moons
      plots.js     the plots (canvas 2D)
+     saver-plan.js the shot plan (shots that cut on the run's events) and
+                  the screensaver reel; shot-geom.js the pose of each shot
      main.js      boot, frame loop, time controls, camera, story, UI, saver
+                  (app/: app/cuts.js the cutting director of the saver and
+                  of the Director view)
      tests.mjs    node tests.mjs (CPU tests, then the GPU test in Deno)
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -38,7 +42,8 @@
      │      clock [Display                                               │
      │      Advanced Details ?]                                          │
      │                                                                   │
-     │ #gpu  the scene, filmed by the story camera (or a fixed view)     │
+     │ #gpu  the scene, filmed by the story camera, the Director (cuts  │
+     │       on events) or a fixed view                                  │
      │                                                                   │
      │ #readouts (distance bar,      #story  caption, time warp, phases, │
      │  one-piece share)                     time scrubber               │
@@ -139,7 +144,7 @@
 
 <div id="display" class="pop off" role="dialog" aria-label="Display">
   <div class="pg"><div class="ph">View</div>
-    <div class="seg" id="cams"><button data-c="story">Story</button><button data-c="planet">Planet</button><button data-c="top">From above</button><button data-c="follow">Follow moon</button></div>
+    <div class="seg" id="cams"><button data-c="story">Story</button><button data-c="planet">Planet</button><button data-c="top">From above</button><button data-c="follow">Follow moon</button><button data-c="cut">Director</button></div>
     <p class="hint" id="camHint"></p></div>
   <div class="pg"><div class="ph">Colour the grains by</div>
     <div class="seg" id="colors"><button data-k="4">Ice &amp; heat</button><button data-k="3">Heat</button><button data-k="0">In one piece?</button><button data-k="2">Tide strain</button><button data-k="5">Age</button><button data-k="6">Origin</button></div></div>

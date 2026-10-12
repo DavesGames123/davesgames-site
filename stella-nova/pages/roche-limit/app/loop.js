@@ -9,6 +9,7 @@
 //    speed ........... "function orbitsPerMin"
 //    steps wanted .... "function stepsWanted"
 // ============================================================================
+import { cutSpeed } from './cuts.js';
 import { drawFrame } from './draw.js';
 import { UI, CALM_SPEED, $, Q } from './env.js';
 import { READ_MS, stepFactor } from '../pacing.js';
@@ -30,8 +31,11 @@ export function frame(now) {
 // or the screensaver's) times the story factor of pacing.js (fast in, slow
 // at the breakup). Reduce motion caps the base at Normal and the factor
 // at 1.5. The screensaver's dark warm-up runs at its own base, unpaced.
+// A shot of the cutting director (app/cuts.js) can cap the speed (a deeper
+// slow motion) or raise it (a time-lapse).
 export function orbitsPerMin() {
-  return baseOrbitsPerMin() * paceFactor();
+  const o = baseOrbitsPerMin() * paceFactor();
+  return o * cutSpeed(o);
 }
 export function baseOrbitsPerMin() {
   if (S.saverOn && S.saver) return S.saver.speed;
