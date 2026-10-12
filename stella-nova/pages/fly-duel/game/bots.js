@@ -12,9 +12,13 @@
 //      attack  for each attack option, let the defender block with the
 //              same greedy block rule, and keep the best boardScore
 //      block   keep the block option with the best boardScore after damage
-//  boardScore counts life, creatures (with a small bonus per keyword),
-//  cards in hand and lands, and takes off points when the opposing
-//  creatures could kill on the next attack (the crack-back risk).
+//  boardScore counts life, creatures (power and toughness with growth, a
+//  small bonus per keyword and per trigger), cards in hand and lands (more
+//  for the first five), and takes off points when the opposing creatures
+//  could kill on the next attack (the crack-back risk). On its own main
+//  phase it also counts opposing untapped creatures as a cost, so a tap
+//  effect has value. Every effect of the five colours goes through step(),
+//  so the bots need no rule of their own for a card.
 //
 //  EXPORTS   (jump with grep -n "<anchor>" game/bots.js)
 //      boardScore ..... "export function boardScore"  heuristic, side me
@@ -26,12 +30,19 @@ import { step, legalActions, power } from './rules.js';
 
 const WIN = 1000;
 
+const KW_VALUE = { swift: 0.5, wings: 1.2, web: 0.5, sting: 1.2, thick: -0.5, sap: 0.6, lunge: 0.8, crush: 0.6, shell: 0.6, alert: 0.5 };
+
+// Lasting value of a creature: base stats plus growth (pc), keywords and
+// triggers. Pumps this turn are not counted.
 function creatureValue(x) {
   const c = CARD[x.id];
-  let v = c.power + c.toughness;
-  for (const k of c.keywords) v += k === 'sap' ? 0.5 : k === 'thick' ? -0.5 : 1;
+  let v = Math.max(0, c.power + (x.pc || 0)) + c.toughness + (x.pc || 0);
+  for (const k of c.keywords) v += KW_VALUE[k] ?? 0.5;
+  if (c.onDeath) v += 1;
+  if (c.onUpkeep) v += 1;
   return v;
 }
+const landValue = n => 0.8 * Math.min(n, 5) + 0.25 * Math.min(Math.max(n - 5, 0), 3);
 
 export function boardScore(state, me) {
   if (state.result) return state.result.winner === me ? WIN : state.result.winner < 0 ? 0 : -WIN;
@@ -40,11 +51,14 @@ export function boardScore(state, me) {
   let lands = 0, oLands = 0;
   for (const x of P.battlefield) { if (CARD[x.id].type === 'land') lands++; else v += 1.5 * creatureValue(x); }
   for (const x of O.battlefield) { if (CARD[x.id].type === 'land') oLands++; else v -= 1.5 * creatureValue(x); }
-  v += 0.5 * (P.hand.length - O.hand.length) + 0.4 * (Math.min(lands, 7) - Math.min(oLands, 7));
+  v += 0.5 * (P.hand.length - O.hand.length) + landValue(lands) - landValue(oLands);
+  if (state.active === me && state.phase === 'main') {
+    v -= 0.4 * O.battlefield.filter(x => CARD[x.id].type === 'creature' && !x.tapped).length;
+  }
   // crack-back: opposing attackers that my untapped creatures cannot all stop
   if (state.active !== me || state.phase === 'block') {
     const oPow = O.battlefield.filter(x => CARD[x.id].type === 'creature' && !CARD[x.id].keywords.includes('thick'))
-      .map(power).sort((a, b) => b - a);
+      .map(x => Math.max(0, power(x))).sort((a, b) => b - a);
     const blockers = P.battlefield.filter(x => CARD[x.id].type === 'creature' && !x.tapped).length;
     let through = 0;
     for (let i = blockers; i < oPow.length; i++) through += oPow[i];
