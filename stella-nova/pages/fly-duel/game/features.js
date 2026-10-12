@@ -13,14 +13,28 @@
 //  Scaling: count / cap, then clamp to [0, 1]. The cap is the second item
 //  in each FEATURE_SPEC row. Flags are 0 or 1. life_diff is centred on 0.5.
 //
+//  Colours. The features do not name a colour, so one brain can play any
+//  of the five colours and any mix. FEATURE_VERSION 2 (2026-10-11) changed
+//  two rows: 7 untapped_amber_me -> untapped_lands_me (all colours), 8
+//  untapped_moss_me -> untapped_useful_me (untapped lands that make a
+//  colour that a card in my hand needs). For a one-colour deck both rows
+//  give the untapped land count, so version-1 weights still play (measured
+//  2026-10-11 with tests/train.test.mjs: fly A 80/100, fly B 89/100 against
+//  random, against 94 and 96 with version 1). castable_in_hand now checks
+//  colours (dual lands too), and the wings rows count web as a blocker of
+//  wings. Retrain for the best play.
+//
 //  EXPORTS   (jump with grep -n "<anchor>" game/features.js)
 //      FEATURE_SPEC ... "export const FEATURE_SPEC"   [name, cap, text]
 //      FEATURE_NAMES .. "export const FEATURE_NAMES"  48 names, fixed order
+//      FEATURE_VERSION  "export const FEATURE_VERSION"  2 since five colours
 //      F .............. "export const F"              name -> index
 //      features ....... "export function features"    -> Float32Array(48)
 // ============================================================================
-import { CARD, manaValue } from './cards.js';
-import { TURN_CAP } from './rules.js';
+import { CARD, COLOUR_IDS } from './cards.js';
+import { TURN_CAP, power, toughness } from './rules.js';
+
+export const FEATURE_VERSION = 2;
 
 export const FEATURE_SPEC = [
   ['life_me', 30, 'my life'],
@@ -30,8 +44,8 @@ export const FEATURE_SPEC = [
   ['hand_opp', 7, 'cards in the opposing hand'],
   ['lands_me', 10, 'my lands'],
   ['lands_opp', 10, 'opposing lands'],
-  ['untapped_amber_me', 6, 'my untapped amber lands'],
-  ['untapped_moss_me', 6, 'my untapped moss lands'],
+  ['untapped_lands_me', 6, 'my untapped lands'],
+  ['untapped_useful_me', 6, 'my untapped lands that make a colour that a card in my hand needs'],
   ['untapped_lands_opp', 8, 'opposing untapped lands'],
   ['creatures_me', 6, 'my creatures'],
   ['creatures_opp', 6, 'opposing creatures'],
@@ -43,8 +57,8 @@ export const FEATURE_SPEC = [
   ['biggest_opp', 6, 'power of the biggest opposing creature'],
   ['wings_me', 4, 'my creatures with wings'],
   ['wings_opp', 4, 'opposing creatures with wings'],
-  ['evasive_power_me', 10, 'power of my wings creatures that no opposing creature can block'],
-  ['evasive_power_opp', 10, 'power of opposing wings creatures that none of mine can block'],
+  ['evasive_power_me', 10, 'power of my wings creatures when no opposing creature has wings or web'],
+  ['evasive_power_opp', 10, 'power of opposing wings creatures when none of mine has wings or web'],
   ['ready_attackers_me', 6, 'my creatures that can attack now'],
   ['ready_power_me', 15, 'power of my creatures that can attack now'],
   ['untapped_blockers_opp', 6, 'opposing untapped creatures'],
@@ -60,8 +74,8 @@ export const FEATURE_SPEC = [
   ['sap_me', 3, 'my creatures with sap'],
   ['sap_opp', 3, 'opposing creatures with sap'],
   ['swift_in_hand', 3, 'swift creatures in my hand'],
-  ['castable_in_hand', 7, 'cards in my hand that my lands could pay for'],
-  ['removal_in_hand', 3, 'damage and destroy spells in my hand'],
+  ['castable_in_hand', 7, 'cards in my hand that all my lands could pay for, colours checked'],
+  ['removal_in_hand', 3, 'spells in my hand that remove or stop an opposing creature'],
   ['creatures_in_hand', 7, 'creature cards in my hand'],
   ['lands_in_hand', 7, 'land cards in my hand'],
   ['turn', TURN_CAP, 'turn number'],
@@ -79,22 +93,63 @@ const CAPS = FEATURE_SPEC.map(r => Number(r[1]));
 
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+// Lands that the player controls: basic counts by colour, dual pairs,
+// and the set of colours they make.
+function landsOf(pl) {
+  const single = {}, duals = [], makes = new Set();
+  let n = 0;
+  for (const x of pl.battlefield) {
+    const c = CARD[x.id];
+    if (c.type !== 'land') continue;
+    n++;
+    for (const m of c.mana) makes.add(m);
+    if (c.mana.length === 1) single[c.mana[0]] = (single[c.mana[0]] || 0) + 1; else duals.push(c.mana);
+  }
+  return { single, duals, makes, n };
+}
+
+// Could all these lands pay this cost? Basic lands first, then a small
+// matching search over the dual lands.
+function payable(L, cost) {
+  let total = cost.generic;
+  const needs = [];
+  for (const c of COLOUR_IDS) {
+    total += cost[c];
+    for (let i = L.single[c] || 0; i < cost[c]; i++) needs.push(c);
+  }
+  if (total > L.n || needs.length > L.duals.length) return false;
+  const owner = new Array(L.duals.length).fill(-1);
+  const tryNeed = (i, seen) => {
+    for (let j = 0; j < L.duals.length; j++) {
+      if (seen[j] || !L.duals[j].includes(needs[i])) continue;
+      seen[j] = true;
+      if (owner[j] < 0 || tryNeed(owner[j], seen)) { owner[j] = i; return true; }
+    }
+    return false;
+  };
+  for (let i = 0; i < needs.length; i++) if (!tryNeed(i, new Array(L.duals.length).fill(false))) return false;
+  return true;
+}
+
+const REMOVAL = new Set(['damage', 'destroy', 'weaken', 'bounce', 'tap']);
+
 function side(pl) {
-  const r = { lands: 0, uA: 0, uM: 0, cre: 0, pow: 0, tou: 0, big: 0, wings: 0, wingsPow: 0,
+  const r = { lands: 0, untapped: 0, cre: 0, pow: 0, tou: 0, big: 0, wings: 0, wingsPow: 0, web: 0,
     ready: 0, readyPow: 0, untappedCre: 0, sting: 0, thick: 0, sap: 0, sick: 0 };
   for (const x of pl.battlefield) {
     const c = CARD[x.id];
     if (c.type === 'land') {
       r.lands++;
-      if (!x.tapped) { if (c.produces === 'amber') r.uA++; else r.uM++; }
+      if (!x.tapped) r.untapped++;
       continue;
     }
     const k = c.keywords;
-    const p = c.power + x.pp, t = c.toughness + x.pt - x.dmg;
+    const p = Math.max(0, power(x)), t = Math.max(0, toughness(x) - x.dmg);
     r.cre++; r.pow += p; r.tou += t;
     if (p > r.big) r.big = p;
     const wings = k.includes('wings'), thick = k.includes('thick');
     if (wings) { r.wings++; r.wingsPow += p; }
+    if (wings || k.includes('web')) r.web++;
     if (k.includes('sting')) r.sting++;
     if (thick) r.thick++;
     if (k.includes('sap')) r.sap++;
@@ -116,14 +171,14 @@ export function features(state, me) {
   v[3] = P.hand.length;
   v[4] = O.hand.length;
   v[5] = a.lands; v[6] = b.lands;
-  v[7] = a.uA; v[8] = a.uM; v[9] = b.uA + b.uM;
+  v[7] = a.untapped; v[9] = b.untapped;
   v[10] = a.cre; v[11] = b.cre;
   v[12] = a.pow; v[13] = b.pow;
   v[14] = a.tou; v[15] = b.tou;
   v[16] = a.big; v[17] = b.big;
   v[18] = a.wings; v[19] = b.wings;
-  v[20] = b.wings ? 0 : a.wingsPow;
-  v[21] = a.wings ? 0 : b.wingsPow;
+  v[20] = b.web ? 0 : a.wingsPow;
+  v[21] = a.web ? 0 : b.wingsPow;
   v[22] = a.ready; v[23] = a.readyPow;
   v[24] = b.untappedCre; v[25] = a.untappedCre;
   v[26] = O.life > 0 && a.readyPow >= O.life ? 1 : 0;
@@ -134,14 +189,24 @@ export function features(state, me) {
   v[32] = a.thick; v[33] = b.thick;
   v[34] = a.sap; v[35] = b.sap;
   let swift = 0, castable = 0, removal = 0, creH = 0, landH = 0;
-  const mana = a.lands;
+  const need = new Set();
+  const L = landsOf(P);
   for (const id of P.hand) {
     const c = CARD[id];
     if (c.type === 'land') { landH++; continue; }
     if (c.type === 'creature') { creH++; if (c.keywords.includes('swift')) swift++; }
-    if (c.effect && (c.effect.kind === 'damage' || c.effect.kind === 'destroy') && c.type === 'spell') removal++;
-    if (manaValue(c) <= mana) castable++;
+    if (c.type === 'spell' && REMOVAL.has(c.effect.kind) && c.effect.target !== 'face') removal++;
+    for (const m of c.colours) need.add(m);
+    if (c.colours.every(m => L.makes.has(m)) && payable(L, c.cost)) castable++;
   }
+  let useful = 0;
+  if (need.size) {
+    for (const x of P.battlefield) {
+      const c = CARD[x.id];
+      if (c.type === 'land' && !x.tapped && c.mana.some(m => need.has(m))) useful++;
+    }
+  }
+  v[8] = useful;
   v[36] = swift; v[37] = castable; v[38] = removal; v[39] = creH; v[40] = landH;
   v[41] = state.turn;
   v[42] = P.library.length; v[43] = O.library.length;

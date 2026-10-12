@@ -8,7 +8,7 @@
 //  alert, entry sickness), spells, tokens and every effect kind, enter,
 //  death and start-of-turn triggers, shell, hand size, decking, the turn
 //  cap, determinism by seed, no mutation of the input state (deep freeze),
-//  the option caps, features, describe, the log bound and
+//  the option caps, features (colour-generic), describe, the log bound and
 //  the events list, 5000 random games over every deck pair with their
 //  speed, and greedy against random for every deck.
 //  Exit code 1 on any failure.
@@ -21,7 +21,7 @@ import {
   newGame, legalActions, step, isOver, clone, describe, actionKey, withPermanent,
   manaPool, canPay, payPlan, power, toughness, LIFE, HAND_MAX, TURN_CAP, LOG_MAX, MAX_OPTIONS,
 } from '../game/rules.js';
-import { features, FEATURE_NAMES, FEATURE_SPEC, F } from '../game/features.js';
+import { features, FEATURE_NAMES, FEATURE_SPEC, F, FEATURE_VERSION } from '../game/features.js';
 import { randomBot, greedyBot, boardScore } from '../game/bots.js';
 
 let fail = 0, pass = 0;
@@ -711,6 +711,31 @@ function playOut(seed, botSeed, { log = true, freeze = false, decks } = {}) {
     try { playOut(800 + g, g, { freeze: true, decks }); } catch (e) { mutated++; if (mutated === 1) console.error(e); }
   }
   ok(mutated === 0, `step never mutates its input (${DECK_ORDER.length * 4} deep-frozen games, every deck)`);
+}
+
+// --------------------------------------------------------------- features are colour-generic
+{
+  ok(FEATURE_VERSION === 2 && F.untapped_lands_me === 7 && F.untapped_useful_me === 8, 'feature version 2, rows 7 and 8');
+  ok(!FEATURE_NAMES.some(n => COLOUR_IDS.some(c => n.includes(c))), 'no feature names a colour');
+  // the same board in two colours gives the same features
+  const mk = (land, cre, hand) => {
+    let s = board(); s.players[0].hand = hand;
+    for (let i = 0; i < 3; i++) s = put(s, 0, land);
+    s = put(s, 0, cre); s = put(s, 1, 'hive-soldier');
+    return s;
+  };
+  const fa = features(mk('amber-ridge', 'hive-soldier', ['flare-spit', 'cinder-ant']), 0);
+  const fr = features(mk('rot-log', 'hive-soldier', ['wither', 'blow-fly']), 0);
+  ok(J(Array.from(fa)) === J(Array.from(fr)), 'same board shape in amber and in rot: same features');
+  const off = features(mk('amber-ridge', 'hive-soldier', ['wither', 'blow-fly']), 0);
+  ok(off[F.untapped_useful_me] === 0 && off[F.untapped_lands_me] === 3 / 6 && off[F.castable_in_hand] === 0, 'off-colour hand: no useful land, nothing castable');
+  const dual = features(mk('cinder-fen', 'hive-soldier', ['wither', 'flare-spit']), 0);
+  ok(dual[F.untapped_useful_me] === 3 / 6 && Math.abs(dual[F.castable_in_hand] - 2 / 7) < 1e-6, 'dual land makes both colours castable and useful');
+  ok(fa[F.untapped_useful_me] === fa[F.untapped_lands_me], 'one-colour deck: rows 7 and 8 agree');
+  let w = board(); w = put(w, 0, 'dune-wasp'); w = put(w, 1, 'orb-weaver');
+  ok(features(w, 0)[F.evasive_power_me] === 0, 'web stops evasive power');
+  let g = board(); g = put(g, 0, 'hive-soldier', { pc: 2 });
+  ok(Math.abs(features(g, 0)[F.power_me] - 4 / 15) < 1e-6, 'growth counts in power');
 }
 
 // --------------------------------------------------------------- bots, every deck
