@@ -120,7 +120,10 @@ const SHOT_TEX = {
   approach: ['vesc', 'qr', 'till'], impact: ['till', 'sph', 'qr'], splash: ['sph', 'temp', 'till'],
   cutaway: ['till', 'temp', 'sph'], ejecta: ['esc', 'disk', 'vesc'], disk: ['disk', 'esc', 'qr'],
 };
-const fmtM = x => (x >= 0.1 ? x.toFixed(2) : x >= 0.001 ? x.toFixed(4) : x.toExponential(1));
+// x as plain text for the plate (no TeX there): 4.5×10⁶
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+export const sciU = x => { const [m, e] = x.toExponential(1).split('e'); return m + '×10' + String(+e).split('').map(c => SUP[c]).join(''); };
+const fmtM = x => (x >= 0.1 ? x.toFixed(2) : x >= 0.001 ? x.toFixed(4) : sciU(x));
 const pct = x => (100 * x).toFixed(x < 0.1 ? 1 : 0) + ' %';
 
 // The plate of the shot. g: { sc, setup, stats, out, peak, n, shot,
@@ -137,7 +140,9 @@ export function plateInfo(g) {
   let line;
   switch (k) {
     case 'approach': line = `${iName} falls toward ${tName} at ${vk.toFixed(1)} km/s. Contact in about ${toContact.toFixed(0)} min.`; break;
-    case 'impact': line = `First contact. Shock pressure up to ${st ? Math.round(g.peak.P).toLocaleString('en-US') : '-'} GPa. Slow motion.`; break;
+    // not the peak pressure: stats().maxPGPa includes the target's own
+    // core pressure (about 550 GPa in the model Earth before any contact)
+    case 'impact': line = `First contact at ${vk.toFixed(1)} km/s: ${sciU(QR)} J of impact energy per kilogram. Slow motion.`; break;
     case 'splash': line = `The melt splash: ${pct(g.peak.melt)} of the particles are over their melting point.`; break;
     case 'cutaway': line = `Cut open (${g.shot.mode === 1 ? 'temperature' : 'iron, rock and ice'}): the iron cores sink and merge.`; break;
     case 'ejecta': line = o ? `Ejecta: ${pct(o.Me / o.Mtot)} of the mass escapes, ${disk.toFixed(2)} Moon masses stay in orbit.` : 'Ejecta leave the impact site.'; break;
@@ -148,11 +153,11 @@ export function plateInfo(g) {
   const params = [
     { sym: 'M_T', name: tName, value: fmtM(B[0].M) + ' M⊕', cls: 'm1' },
     { sym: 'M_I', name: iName, value: fmtM(B[1] ? B[1].M : 0) + ' M⊕', cls: 'm2' },
-    { sym: 'v_\\mathrm{imp}', name: 'impact speed', value: `${vk.toFixed(1)} km/s = ${(im.vImp / im.vesc).toFixed(2)} v_esc`, cls: 'm5' },
+    { sym: 'v_\\mathrm{imp}', name: 'impact speed', value: `${vk.toFixed(1)} km/s (${(im.vImp / im.vesc).toFixed(2)} × escape speed)`, cls: 'm5' },
     { sym: '\\theta', name: 'impact angle', value: `${im.theta.toFixed(0)}°`, cls: 'm3' },
   ];
   if (o) params.push({ sym: 'M_p', name: 'largest body', value: pct(o.Mp / o.Mtot), cls: 'm6' });
-  else params.push({ sym: 'Q_R', name: 'impact energy per kg', value: QR.toExponential(1).replace('e+', '×10^') + ' J/kg', cls: 'm4' });
+  else params.push({ sym: 'Q_R', name: 'impact energy per kg', value: sciU(QR) + ' J/kg', cls: 'm4' });
   if (g.peak && g.peak.T99 > 0 && k !== 'approach') params.push({ sym: 'T_{99}', name: 'peak temperature', value: Math.round(g.peak.T99).toLocaleString('en-US') + ' K', cls: 'm2' });
   return {
     title: g.sc.title,

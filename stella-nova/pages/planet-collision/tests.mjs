@@ -212,7 +212,7 @@ function saverPlanTests() {
     `esc 5 %: ${p1.map(x => x.kind).join(' ')}; esc 0: next ${p2[j2].kind}`);
   // the plate: every shot kind, a preset and a random draw, no code
   const Rr = SP.rng(3), bad = [];
-  const runs = [SP.runScenario({ preset: 'theia' }, Rr), SP.runScenario({ roll: true }, Rr), SP.runScenario({ roll: true }, Rr)];
+  const runs = [SP.runScenario({ preset: 'theia' }, Rr), SP.runScenario({ roll: true }, Rr), SP.runScenario({ roll: true }, Rr), SP.runScenario({ preset: 'rheasilvia' }, Rr)];
   for (const { sc, seed } of runs) {
     const setup = buildScenario(sc, 4096, seed);
     for (const kind of Object.keys(SP.SHOTS)) {
@@ -221,11 +221,12 @@ function saverPlanTests() {
         out: after ? { Mp: 0.9, Md: 0.01, Me: 0.09, Mtot: 1, X: [0, 0, 0], Rp: 1 } : null, peak: { P: 310, melt: 0.2, vap: 0.01, T99: 4200 },
         n: 4096, shot: Object.assign({ kind, mode: 1 }, SP.SHOTS[kind]), warp: 95, slow: kind === 'impact' });
       const j = JSON.stringify(L);
-      if ('code' in L || L.tex.length !== 3 || L.eq.length !== 3 || L.params.length < 5 || L.lines.length !== 2 || L.title !== sc.title || /undefined|NaN|null/.test(j)) bad.push(sc.key + '/' + kind);
+      const plain = L.params.map(p => p.value).concat(L.lines).join(' ');
+      if ('code' in L || /[\^_]/.test(plain) || /GPa/.test(plain) || L.tex.length !== 3 || L.eq.length !== 3 || L.params.length < 5 || L.lines.length !== 2 || L.title !== sc.title || /undefined|NaN|null/.test(j)) bad.push(sc.key + '/' + kind);
     }
   }
   const L0 = SP.plateInfo({ sc: runs[0].sc, setup: buildScenario(runs[0].sc, 4096, 1), stats: null, out: null, peak: { P: 0, melt: 0, vap: 0, T99: 0 }, n: 4096, shot: Object.assign({ kind: 'approach' }, SP.SHOTS.approach), warp: 0 });
-  ok('10 plate: title, bodies, v_imp, angle, live numbers, 3 TeX, no code', bad.length === 0 && runs[1].sc.key !== runs[2].sc.key,
+  ok('10 plate: title, bodies, v_imp, angle, live numbers, 3 TeX, no code, no raw ^ or _', bad.length === 0 && runs[1].sc.key !== runs[2].sc.key,
     bad.join(' ') || `"${L0.title}": ${L0.params.map(p => p.name + ' ' + p.value).join('; ')}; ${L0.lines[0]}`);
 }
 
