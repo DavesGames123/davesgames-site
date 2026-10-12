@@ -20,7 +20,10 @@
 //     outside); the books E + Eloss hold
 //  7  Lagrange points of Earth-Moon against published values; elements
 //     to state and back
-//  EXPERIMENTS (experiments.js): see "function experimentTests"
+//  BUDGET (budget.js): the pair interactions of one frame at Normal speed
+//     for every experiment on desktop and phone budgets; GPU bytes
+//  EXPERIMENTS (experiments/index.js runChecks): every spec well formed,
+//     seeds, the shuffle bag, then each experiment's own physics check
 //  GPU (Deno WebGPU): cs_restricted against CpuParticles, cs_gravity and
 //  cs_kick against the f64 direct sum, the impact stamp and hit counts
 //
@@ -135,9 +138,24 @@ function coreTests() {
 }
 
 // ── experiments ─────────────────────────────────────────────────────────────
+async function budgetTests() {
+  const BG = await import('./budget.js'), X = await import('./experiments/index.js');
+  const worst = { desktop: [0, ''], touch: [0, ''] };
+  for (const [key, ex] of Object.entries(X.EXPERIMENTS)) for (const v of ex.variants) for (const prof of ['desktop', 'touch']) {
+    const q = BG.budgetFor('auto', prof === 'touch');
+    const spec = X.build(key, 1, { n: key === 'disk' ? q.nSelf : q.n, variant: v });
+    const w = BG.frameWork(spec, 1);
+    if (w > worst[prof][0]) worst[prof] = [w, key + '/' + v];
+  }
+  ok('budget: pair interactions per frame at Normal speed (desktop, phone)', worst.desktop[0] <= BG.LIMIT.desktop && worst.touch[0] <= BG.LIMIT.touch,
+    `desktop worst ${e3(worst.desktop[0])} (${worst.desktop[1]}, limit ${e3(BG.LIMIT.desktop)}), phone worst ${e3(worst.touch[0])} (${worst.touch[1]}, limit ${e3(BG.LIMIT.touch)})`);
+  const mb = BG.particleBytes(BG.QUALITY.high.n + 8192) / 1e6, ms = BG.particleBytes(BG.QUALITY.high.nSelf, true) / 1e6;
+  ok('budget: GPU bytes of one Lab (high quality)', mb < 8 && ms < 2, `restricted ${mb.toFixed(2)} MB, self-gravity ${ms.toFixed(2)} MB`);
+}
+
 async function experimentTests() {
   let X;
-  try { X = await import('./experiments.js'); } catch (e) { if (e.code === 'ERR_MODULE_NOT_FOUND') { console.log('SKIP  experiments.js not there yet'); return; } throw e; }
+  try { X = await import('./experiments/index.js'); } catch (e) { if (e.code === 'ERR_MODULE_NOT_FOUND') { console.log('SKIP  experiments/index.js not there yet'); return; } throw e; }
   await X.runChecks({ ok, only: ONLY, log: console.log });
 }
 
@@ -197,13 +215,32 @@ async function gpuTests() {
     ok('GPU self-gravity steps = CPU (100 steps); energy kept', dx < 1e-3 && rel(K + U, E0) < 1e-3, `max |dx| ${e3(dx)}, |dE/E| GPU ${e3(rel(K + U, E0))}`);
     lg.destroy();
   }
+  // an experiment through the whole path on the GPU: SL9 breaks up, the
+  // debris is spawned into the pool and hits Jupiter
+  {
+    const X = await import('./experiments/index.js');
+    const spec = X.build('sl9', 1, { n: 512, variant: '1994' });
+    const lc = new L.Lab(spec, cap => new L.CpuRestricted(cap)), lg = E.makeLab(dev, spec, code);
+    const h = spec.tq * 1.4 / 200;
+    let evc = 0, evg = 0;
+    for (let f = 0; f < 200; f++) { evc += lc.frame(h).filter(e => e.type === 'breakup').length; evg += lg.frame(h).filter(e => e.type === 'breakup').length; }
+    const rc = lc.be.readback(), rg = await lg.be.readback();
+    let hc = 0, hg = 0, dt = 0;
+    for (let i = 0; i < lg.cap; i++) {
+      const c = !(rc.body[12 * i + 7] > 0) && rc.body[12 * i + 11] > 0, g = !(rg.body[12 * i + 7] > 0) && rg.body[12 * i + 11] > 0;
+      hc += c; hg += g; if (c && g) dt = Math.max(dt, Math.abs(rc.body[12 * i + 11] - rg.body[12 * i + 11]));
+    }
+    ok('GPU experiment sl9/1994: breakup spawns debris, impacts = CPU', evc === 1 && evg === 1 && hg > 0 && Math.abs(hg - hc) <= 0.02 * hc && dt < 1e-2 * spec.tq,
+      `breakups CPU ${evc} GPU ${evg}; impacts CPU ${hc} GPU ${hg} (hit counter ${rg.hits[0]}); max |dt hit| ${e3(dt)}`);
+    lg.destroy();
+  }
   ok('no WebGPU validation errors', errs.length === 0, errs.join(' | ') || 'none');
   dev.destroy();
 }
 
 if (!GPU_ONLY) {
   const t0 = Date.now();
-  if (!ONLY) coreTests();
+  if (!ONLY) { coreTests(); await budgetTests(); }
   await experimentTests();
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }

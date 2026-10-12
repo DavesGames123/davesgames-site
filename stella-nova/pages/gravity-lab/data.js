@@ -26,6 +26,11 @@
 //    routh    Routh 1875 (stability of L4 and L5: mu < 0.0385)
 //    roche    Roche 1849; Chandrasekhar 1969 (fluid limit 2.44 to 2.46)
 //    toomre64 Toomre 1964, ApJ 139, 1217 (disk stability, Q)
+//    sd13     Suvakov & Dmitrasinovic 2013, PRL 110, 114301 (three-body
+//             choreographies: butterfly, moth, yin-yang, goggles)
+//    sitnikov Sitnikov 1960; Moser 1973 (the Sitnikov problem)
+//    rees88   Rees 1988, Nature 333, 523 (tidal disruption radius)
+//    gillessen Gillessen et al. 2017, ApJ 837, 30 (S-star orbits)
 //    vallado  Vallado, Fundamentals of Astrodynamics, 4th ed. (Hohmann,
 //             bi-elliptic transfers)
 //
@@ -52,6 +57,10 @@ export const SOURCES = {
   routh: 'Routh 1875',
   roche: 'Roche 1849; Chandrasekhar 1969',
   toomre64: 'Toomre 1964, ApJ 139, 1217',
+  sd13: 'Šuvakov & Dmitrašinović 2013, PRL 110, 114301',
+  sitnikov: 'Sitnikov 1960; Moser 1973',
+  rees88: 'Rees 1988, Nature 333, 523',
+  gillessen: 'Gillessen et al. 2017, ApJ 837, 30',
   vallado: 'Vallado, Fundamentals of Astrodynamics, 4th ed.',
 };
 
@@ -95,6 +104,10 @@ export const BODY = {
   prometheus: { m: 1.595e17, R: 43.1 * km, a: 139.38e6, rho: 480, src: 'jplsat' },
   pandora:    { m: 1.371e17, R: 40.7 * km, a: 141.72e6, rho: 490, src: 'jplsat' },
   pan:        { m: 4.95e15, R: 14.1 * km, a: 133.584e6, rho: 420, src: 'jplsat' },
+  callisto:   { m: 1.0759e23, R: 2410.3 * km, a: 1882.7e6, P: 16.689018 * C.DAY, rho: 1834, src: 'jplsat' },
+  pluto:      { m: 1.303e22, R: 1188.3 * km, a: 5906.38e9, e: 0.2488, i: 17.16, rho: 1854, src: 'nssdc' },
+  charon:     { m: 1.586e21, R: 606 * km, a: 19.596e6, rho: 1702, src: 'jplsat' },
+  phobos:     { m: 1.0659e16, R: 11.08 * km, a: 9.376e6, rho: 1876, src: 'jplsat' },
   triton:     { m: 2.139e22, R: 1353.4 * km, a: 354.759e6, i: 156.9, rho: 2061, src: 'jplsat' },
 };
 // Saturn's rings (nssdc Saturnian rings fact sheet), m from Saturn's centre
@@ -132,6 +145,11 @@ export const SGRA = {
 };
 // semi-major axis of S2 in m (small angle: a = theta R0)
 SGRA.S2.a = SGRA.S2.aArcsec / 206264.806 * SGRA.R0;
+// S2 orientation (grav22, approx): Omega 228.2 deg, omega 66.3 deg
+SGRA.S2.O = 228.2; SGRA.S2.w = 66.3;
+// Schwarzschild radius 2 G M / c^2 (m)
+export const C_LIGHT = 299792458;
+SGRA.rs = 2 * C.G * SGRA.M / C_LIGHT ** 2;
 
 // Shoemaker-Levy 9 (ab96): perijove of 7 July 1992 about 1.33 R_J from
 // Jupiter's centre; nucleus about 1.5 km in diameter, density near 600.
