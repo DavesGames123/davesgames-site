@@ -71,7 +71,8 @@
 //      seat of the human (above and behind the fly's head, its own mat and
 //      the other fly in view) and holds it there. pickPermanent and
 //      pickCard take client px (a pointer event) and raycast the cards.
-//      highlight marks legal attackers, blockers and targets with rings.
+//      highlight marks legal attackers, blockers and targets with rings,
+//      and draws an arrow from each blocker to its attacker (blocks).
 //      orbitBy(dx, dy), zoomBy(k), seatView(): the player turns and zooms
 //      the seat camera (clamped, ui/fly3d/director.js ORBIT) and goes
 //      back to the seat. ui/play/orbit.js gives the pointer gestures.
@@ -124,6 +125,7 @@
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
 //      grep -n 'function pickFace'            any card under a point (zoom)
 //      grep -n 'function seatHide'            first person: your fly hides
+//      grep -n 'function blockArrows'         blocker -> attacker arrows
 //      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'function deckBoxesOf'         the deck boxes print the game decks
 //      grep -n 'export function createDuelScene'
@@ -1957,6 +1959,7 @@ export function createDuelScene(canvas, opts = {}) {
     animateFlies();
     layout(false);
     seatHide();
+    blockArrows();
     for (const o of Z.hand[0]) o.update(sdt);
     for (const o of Z.hand[1]) o.update(sdt);
     for (const o of Z.grave[0]) o.update(sdt);
@@ -2155,7 +2158,7 @@ export function createDuelScene(canvas, opts = {}) {
   const HL_COLOUR = { eligible: TOKENS.ink2, attack: null, block: null, target: TOKENS.app, pending: TOKENS.ink };
   const hl = new Map();
   function highlight(a, kind) {
-    if (a == null) { hl.clear(); return hl.size; }
+    if (a == null) { hl.clear(); hlPairs = []; return hl.size; }
     if (Array.isArray(a)) {
       const k = HL_COLOUR[kind] !== undefined ? kind : 'eligible';
       for (const [u, v] of [...hl]) if (v === k) hl.delete(u);
@@ -2163,16 +2166,58 @@ export function createDuelScene(canvas, opts = {}) {
       return hl.size;
     }
     hl.clear();
+    hlPairs = [];
     const add = (list, k) => { for (const u of list || []) if (u != null && u !== -1) hl.set(u, k); };
     add(a.eligible, 'eligible');
     add(a.targets, 'target');
     add(a.attackers, 'attack');
     const bl = Array.isArray(a.blocks) ? a.blocks : a.blocks && typeof a.blocks === 'object' ? Object.entries(a.blocks).map(([x, y]) => [+x, y]) : [];
-    for (const q of bl) { if (Array.isArray(q)) { hl.set(q[1], 'block'); if (!hl.has(q[0])) hl.set(q[0], 'attack'); } }
+    for (const q of bl) { if (Array.isArray(q)) { hl.set(q[1], 'block'); if (!hl.has(q[0])) hl.set(q[0], 'attack'); hlPairs.push([q[0], q[1]]); } }
     add(a.pending, 'pending');
     return hl.size;
   }
   const hlColour = (uid, seat) => { const k = hl.get(uid); return k == null ? null : HL_COLOUR[k] ?? FLY[seat]; };
+  // Block arrows (play mode): a flat bar with a head from each blocker to
+  // the attacker that it blocks (highlight spec blocks), in the colour of
+  // the blocker's seat, just over the cards. blockArrows() runs each frame,
+  // so an arrow follows its cards. highlight(null) or a spec with no
+  // blocks takes the arrows off.
+  let hlPairs = [];
+  const arrows = new THREE.Group(); arrows.name = 'block-arrows';
+  scene.add(arrows);
+  const ARROW = { w: 0.07, t: 0.012, head: 0.24, headR: 0.13, gapB: 0.38, gapA: 0.46, lift: 0.07 };
+  const arrowBar = new THREE.BoxGeometry(1, 1, 1);
+  const arrowHead = new THREE.ConeGeometry(1, 1, 3).rotateX(Math.PI / 2);   // the tip at +z
+  const _a0 = new THREE.Vector3(), _a1 = new THREE.Vector3(), _ad = new THREE.Vector3();
+  function blockArrows() {
+    const live = hlPairs.filter(([a, b]) => Z.perms.get(a) && Z.perms.get(b));
+    while (arrows.children.length < live.length) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: TOKENS.ink });
+      g.add(new THREE.Mesh(arrowBar, mat), new THREE.Mesh(arrowHead, mat));
+      arrows.add(g);
+    }
+    arrows.children.forEach((g, i) => {
+      const q = live[i];
+      g.visible = !!q;
+      if (!q) return;
+      const [a, b] = q;
+      const seat = mirror?.players.findIndex(pl => pl.battlefield.some(x => x.uid === b)) ?? -1;
+      g.children[0].material.color.set(FLY[seat] || TOKENS.ink);
+      _a0.copy(Z.perms.get(b).mesh.position); _a1.copy(Z.perms.get(a).mesh.position);
+      _a0.y = _a1.y = Math.max(_a0.y, _a1.y) + ARROW.lift;
+      _ad.subVectors(_a1, _a0);
+      const d = _ad.length();
+      if (d < 1e-3) { g.visible = false; return; }
+      _ad.multiplyScalar(1 / d);
+      const len = Math.max(0.05, d - ARROW.gapB - ARROW.gapA - ARROW.head);
+      g.position.copy(_a0).addScaledVector(_ad, ARROW.gapB);
+      g.lookAt(_a1);
+      const [bar, head] = g.children;
+      bar.scale.set(ARROW.w, ARROW.t, len); bar.position.set(0, 0, len / 2);
+      head.scale.set(ARROW.headR, ARROW.t * 2, ARROW.head); head.position.set(0, 0, len + ARROW.head / 2);
+    });
+  }
 
   // ---------------------------------------------------------- API
   function play(rec) {
@@ -2220,6 +2265,7 @@ export function createDuelScene(canvas, opts = {}) {
       tossed: Z.tossed.length, grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       banners: bannerN, brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, bigBrain: bigP, hall: hall.stats(), dice: dice.stats(),
+      arrows: arrows.children.filter(g => g.visible).length,
       firstPerson: fpSeat, hidden: hiddenSeat(), orbit: fpOrbit ? { ...fpOrbit } : null, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
     };
   }
@@ -2238,7 +2284,7 @@ export function createDuelScene(canvas, opts = {}) {
   return {
     play, setState, resize, setClear, get clear() { return { ...clear, w: viewW, h: viewH }; }, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
     setFirstPerson, pickPermanent, pickCard, pickFace, highlight, setRig, orbitBy, zoomBy, seatView,
-    world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
+    world: { W, Z, flies, drums, piles, lights, hall, dice, arrows, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }
 

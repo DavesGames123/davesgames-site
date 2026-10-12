@@ -13,10 +13,11 @@
 //      perm(uid)      tap a permanent (target, attacker, blocker)
 //      player(p)      tap a player (scorecard or life die) as a target
 //      primary()      the big button: the label is in view().primary
-//      secondary()    the small button beside it (All / Cancel / Undo)
+//      secondary()    the small button beside it (Undo / Cancel)
 //      undo()         take back one attack or block change (not sent yet)
 //      cancel()       drop the selected card or the target choice
-//      allAttack()    every creature that can attack
+//      allAttack()    every creature that can attack (no control of
+//                     play mode calls it: see COMBAT)
 //      assign(b, a)   block attacker a with blocker b (drag b onto a)
 //
 //  MODES  (view().mode)
@@ -26,6 +27,16 @@
 //
 //  An action is sent only by commit. Attack and block maps stay local
 //  until the primary button confirms them, so undo() can take them back.
+//
+//  COMBAT  (user, 2026-10-12: "i shold actully have to click each
+//  creature i' m in cobat with"). Attack: each click on one of your
+//  creatures adds it to the attackers or takes it off. Nothing selects
+//  all attackers for you. Block: click one of your untapped creatures,
+//  then the attacker that it blocks (or the attacker first). A click on
+//  an assigned blocker takes the block off. view().blockTargets lists
+//  the cards that the next click can pair. The primary button confirms
+//  the step with the engine action { type: 'attack', attackers } or
+//  { type: 'block', blocks: [[attacker, blocker]...] }.
 //  Mana: the rules engine taps lands itself (auto-tap). paidLands() steps
 //  the action and lists the lands that changed to tapped, so the UI shows
 //  the true lands, not a guess.
@@ -307,8 +318,7 @@ export function createInteraction({ rules, CARD, seat = 0, names = null }) {
 
   function secondary() {
     const m = mode();
-    if (m === 'attack') return allAttack();
-    if (m === 'block') return undo();
+    if (m === 'attack' || m === 'block') return undo();
     if (m === 'main' && sel !== null) return cancel();
     if (m === 'target') return cancel();
     return fail('');
@@ -338,11 +348,7 @@ export function createInteraction({ rules, CARD, seat = 0, names = null }) {
   }
 
   function secondaryOf(m) {
-    if (m === 'attack') {
-      const el = eligibleAttackers();
-      return el.length ? { label: el.every(u => atk.has(u)) ? 'Clear' : 'All', kind: 'all', enabled: true } : null;
-    }
-    if (m === 'block') return { label: 'Undo', kind: 'undo', enabled: hist.length > 0 };
+    if (m === 'attack' || m === 'block') return { label: 'Undo', kind: 'undo', enabled: hist.length > 0 };
     if ((m === 'main' && sel !== null) || m === 'target') return { label: 'Cancel', kind: 'cancel', enabled: true };
     return null;
   }
@@ -359,11 +365,11 @@ export function createInteraction({ rules, CARD, seat = 0, names = null }) {
       if (sel !== null) { const id = me().hand[sel]; const w = whyNot(rules, CARD, S, seat, id, legal); return w ? `${CARD[id].name}: ${w}.` : `Drag it up or tap it again to play ${CARD[id].name}.`; }
       return me().landPlayed ? 'Cast cards, then go to combat.' : 'Play a land, cast cards, then go to combat.';
     }
-    if (m === 'attack') return 'Tap creatures to attack. Tap again to take one back.';
+    if (m === 'attack') return atk.size ? 'Click more creatures to attack, or click one again to take it back.' : 'Click each creature that attacks.';
     if (m === 'block') {
-      if (pendB !== null) return 'Now tap the attacker it blocks.';
-      if (pendA !== null) return 'Now tap your creature that blocks it.';
-      return 'Tap your creature, then the attacker it blocks.';
+      if (pendB !== null) return 'Now click the attacker it blocks.';
+      if (pendA !== null) return 'Now click your creature that blocks it.';
+      return 'Click your untapped creature, then the attacker it blocks.';
     }
     return '';
   }
@@ -380,6 +386,16 @@ export function createInteraction({ rules, CARD, seat = 0, names = null }) {
       if (acts.length && acts[0].type === 'cast') preview = paidLands(rules, S, acts[0], seat);
     }
     const targets = targeting ? [...targeting.actions.values()].map(a => a.target) : [];
+    // block step: the cards that the next click pairs with the waiting
+    // card (attackers for a waiting blocker, blockers for a waiting
+    // attacker), legal by rules.canBlock
+    let blockTargets = [];
+    if (m === 'block' && (pendB !== null || pendA !== null)) {
+      const B = pendB !== null ? me().battlefield.find(x => x.uid === pendB) : null;
+      const A = pendA !== null ? foe().battlefield.find(x => x.uid === pendA) : null;
+      blockTargets = B ? incoming().filter(a => { const x = foe().battlefield.find(y => y.uid === a); return x && rules.canBlock(B, x); })
+        : A ? eligibleBlockers().filter(b => rules.canBlock(me().battlefield.find(y => y.uid === b), A)) : [];
+    }
     return {
       mode: m, mine: mine(), seat,
       prompt: promptOf(m), error: err,
@@ -390,7 +406,7 @@ export function createInteraction({ rules, CARD, seat = 0, names = null }) {
       targetPlayers: targets.filter(t => typeof t === 'string').map(t => +t.slice(1)),
       attackers: [...atk].sort(sortNum), eligibleAttackers: eligibleAttackers(),
       blocks: [...blocks].sort((p, q) => p[0] - q[0]), eligibleBlockers: eligibleBlockers(),
-      incoming: incoming(), pendingBlocker: pendB, pendingAttacker: pendA,
+      incoming: incoming(), pendingBlocker: pendB, pendingAttacker: pendA, blockTargets,
       canUndo: hist.length > 0 || targeting !== null || sel !== null,
       phase: S ? phaseSteps(S, seat) : null,
     };
