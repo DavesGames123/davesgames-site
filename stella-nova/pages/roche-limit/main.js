@@ -77,6 +77,7 @@
 //    boot .................. "async function boot"
 //    planet map ............ "async function loadPlanetMap"
 //    debug object .......... "window.__roche"
+//    release ............... "RELEASE"
 // ============================================================================
 import { loadSimCode } from './engine.js';
 import { Renderer, loadRenderCode } from './render.js';
@@ -139,5 +140,17 @@ function fail(e) {
   $('nogpu').classList.remove('off');
   $('nogpuWhy').textContent = String(e && e.message || e);
 }
+
+// RELEASE. lib/gpu-guard.js destroys each device on pagehide. This page
+// also stops its worker and frees its own buffers and the device there,
+// so a fast page swap in the shell does not keep the GPU memory.
+window.addEventListener('pagehide', () => {
+  try {
+    if (S.worker) S.worker.terminate();
+    if (S.run) for (const s of S.run.sats) s.gpu.destroy();
+    if (S.dev) S.dev.destroy();
+  } catch (e) { /* already gone */ }
+  S.worker = null;
+});
 
 boot().catch(e => fail(e));
