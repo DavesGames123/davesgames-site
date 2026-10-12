@@ -41,7 +41,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 export function eqSVG(key, extraClass = '') {
   const q = EQ[key];
   if (!q) return `<span class="raw">${esc(key)}</span>`;
-  const [[x, y, w, h], mode, g, r, label] = q;
+  const [[x, y, w, h], , g, r, label] = q;
   let s = `<svg class="mj${extraClass ? ' ' + extraClass : ''}" viewBox="${x} ${y} ${w} ${h}" style="width:${r2(w / 1000)}em;height:${r2(h / 1000)}em;vertical-align:${r2(-(y + h) / 1000)}em" role="img" aria-label="${esc(label)}" fill="currentColor">`;
   for (let i = 0; i < g.length; i += 8) {
     const c = g[i + 7];

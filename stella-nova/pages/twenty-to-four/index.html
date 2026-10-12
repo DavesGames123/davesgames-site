@@ -6,127 +6,92 @@
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
 <title>Twenty to four — Stella Nova · davesgames.io</title>
+<meta name="description" content="Maxwell's twenty equations of 1865 fold into Heaviside's four vector laws and then into two equations of differential forms. Curl as circulation on three small loops, divergence as flux out of a cube, the potentials and gauge, and the boundary of a boundary, on a live radiating dipole.">
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    TWENTY TO FOUR  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup for the Maxwell to Heaviside page. main.js runs the radiating
-   dipole field in #sim-canvas. concepts.js builds the equation column inside
-   #eq-scroll from window.T24 (equations.js, MathJax SVG made by typeset.mjs)
-   and, on hover or tap, drives the canvas overlay through
-   window.__setOverlay. Nothing here computes the field.
+   Static markup only. main.js (an ES module) builds the story column from
+   story.js and draws the stage with scenes.js on render.js (WebGL2). The
+   field is the exact field of a radiating dipole (field.js). Formulas are
+   MathJax glyph data (glyphs.js, made by typeset.mjs from tex.js), drawn
+   as inline SVG in the column and with Path2D on the stage.
 
-   LOAD ORDER   (order matters)
-     ● style.css     the page stylesheet and the symbol colour tokens
-     ● lib/sci.css   shared science type (STIX Two Text, Inter, the system
-                     mono) and the math colors .m1 to .m6; it loads the fonts
-     ● equations.js  window.T24, the typeset equations
-     ● concepts.js   builds the equation column and the hover wiring
-     ● main.js       runs the field sim and defines __setOverlay
+   HEAD LOAD ORDER  (order matters)
+     gpu-guard, wishlist, stats-beacon   the site scripts, first
+     style.css      the page stylesheet
+     lib/sci.css    STIX Two Text + Inter, the math colours .m1 to .m6
+   Script at the end of body: main.js (type module). It loads saver.js
+   (the screensaver hook, window.snSaver) on its own.
 
-   LAYOUT   (the leading marker is an element id)
-     ┌──────────────────────────────────────────┬─────────────────────────┐
-     │ #stage                                   │ #eqpanel                │
-     │  #legend        colour key (top left)    │  title, lede, 20/4      │
-     │  #readout       λ · c · φ · fps          │  switch, tick strip     │
-     │  #sim-canvas    the dipole field         │  #eq-scroll             │
-     │  #ovl-caption   the hovered quantity     │   six concept blocks    │
-     │  #tune          slider card / sheet      │   the four that remain  │
-     │  #dock          play, speed, layers      │                         │
-     └──────────────────────────────────────────┴─────────────────────────┘
-   Phones (portrait): the stage sits on top and the column scrolls under
-   it. #tune is then a bottom sheet over the column, so the field stays in
-   view while a slider moves.
+   LAYOUT  (# marks an element id)
+     ┌────────────────────────────────────────────┬────────────────────────┐
+     │ topbar: Stella Nova · Twenty to four        │                        │
+     ├────────────────────────────────────────────┤ #story                 │
+     │ #stage                                      │  #story-scroll         │
+     │   #gl       the stage canvas                │   .hero  20 → 4 → 2    │
+     │   #legend   what the colours mean           │   #chapters            │
+     │   #nogl     the message without WebGL2      │    eight section.ch    │
+     │   #dock     play · ‹ chapter › · story      │                        │
+     └────────────────────────────────────────────┴────────────────────────┘
+   PHONE (max-width 768px, or a short landscape touch screen): the stage
+   fills the screen, #story is a bottom sheet (closed, half, full) above
+   the dock, and main.js layout() puts the scene in the part of the stage
+   that the sheet leaves clear. Landscape phone: the sheet is a drawer on
+   the right.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
-<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
-     this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
 <header class="topbar">
   <span class="brand">Stella Nova</span><span class="crumb">Twenty to four</span>
 </header>
 
-<div id="main">
-  <!-- STAGE: the field canvas with its legend, readout, caption, dock and tune card. -->
-  <section id="stage" aria-label="Radiating dipole field">
-    <canvas id="sim-canvas"></canvas>
-
-    <div id="legend" aria-label="Colour key">
-      <div class="lg-h">An oscillating charge, radiating</div>
-      <div class="lg-row"><i class="sw sw-e"></i><span><span class="sym" data-sym="E">E</span> field lines</span></div>
-      <div class="lg-row"><i class="sw sw-bp"></i><span><span class="sym" data-sym="B">B</span> out of the page</span></div>
-      <div class="lg-row"><i class="sw sw-bn"></i><span><span class="sym" data-sym="B">B</span> into the page</span></div>
-      <div class="lg-tip">Drag the glowing charge.</div>
+<div id="app">
+  <section id="stage" aria-label="The field and its geometry">
+    <canvas id="gl"></canvas>
+    <div id="legend" aria-label="Colour key"></div>
+    <div id="nogl" hidden>
+      <h2>This browser has no WebGL 2</h2>
+      <p>The stage draws the field with WebGL 2. The story column still has every equation and its explanation.</p>
     </div>
-
-    <div id="readout">
-      <span>λ <b id="st-lambda">140</b> px</span>
-      <span>c <b id="st-c">—</b></span>
-      <span>φ <b id="st-phase">0.00</b></span>
-      <span id="st-fps">-- fps</span>
-      <span id="st-ovl" hidden>showing: <b>field lines</b></span>
-    </div>
-
-    <div id="ovl-caption" aria-live="polite"></div>
-
-    <!-- Tune card: every slider. A floating card on desktop, a bottom sheet on phones. -->
-    <div id="tune" aria-label="Field controls">
-      <div class="tune-h"><span>Tune the field</span><button class="x" onclick="tuneOpen(false)" aria-label="Close">×</button></div>
-      <div class="t-grp">Source</div>
-      <label class="r-row"><span class="r-row-lbl"><span class="sym" data-sym="f"></span> <span class="d">Frequency</span></span><span class="val"><span id="vl-freq">1.00</span></span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"></label>
-      <label class="r-row"><span class="r-row-lbl"><span class="sym" data-sym="lambda"></span> <span class="d">Wavelength</span></span><span class="val"><span id="vl-lambda">140</span></span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"></label>
-      <label class="r-row"><span class="r-row-lbl"><span class="sym" data-sym="axis"></span> <span class="d">Axis angle</span></span><span class="val"><span id="vl-axis">90</span>°</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"></label>
-      <div class="t-grp">Field</div>
-      <label class="r-row"><span class="r-row-lbl">Field lines</span><span class="val"><span id="vl-density">42</span></span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"></label>
-      <label class="r-row"><span class="r-row-lbl">Strength</span><span class="val"><span id="vl-amp">1.00</span></span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"></label>
-      <label class="r-row"><span class="r-row-lbl">Near 1/r³</span><span class="val"><span id="vl-near">1.00</span></span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"></label>
-      <label class="r-row"><span class="r-row-lbl">Radiation 1/r</span><span class="val"><span id="vl-rad">1.00</span></span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"></label>
-      <p class="t-hint">Near sets the bound field close to the charge. Radiation sets the part that leaves as light.</p>
-    </div>
-
-    <!-- Dock: time, layers, and the tune toggle. -->
-    <nav id="dock" aria-label="Playback and layers">
-      <button class="dk on" id="btn-play" onclick="togglePlay()" aria-label="Play or pause">Pause</button>
-      <div class="seg"><button class="dk" id="sp-slow" onclick="setSpeed(0.25)">¼×</button><button class="dk on" id="sp-1" onclick="setSpeed(1)">1×</button></div>
-      <span class="dk-sep"></span>
-      <button class="dk chip on" id="tog-lines" onclick="tog('showLines',this)"><i class="dot d-e"></i>Lines</button>
-      <button class="dk chip on" id="tog-vectors" onclick="tog('showVectors',this)"><i class="dot d-ev"></i>Vectors</button>
-      <button class="dk chip on" id="tog-bfield" onclick="tog('showB',this)"><i class="dot d-b"></i>B field</button>
-      <button class="dk chip on" id="tog-flow" onclick="tog('showFlow',this)"><i class="dot d-p"></i>Pulse</button>
-      <button class="dk chip" id="tog-fronts" onclick="tog('showFronts',this)"><i class="dot d-f"></i>Fronts</button>
-      <span class="dk-sep"></span>
-      <button class="dk" id="tune-btn" onclick="tuneOpen()">Tune</button>
+    <nav id="dock" aria-label="Chapters and playback">
+      <button id="dkPlay" type="button" aria-label="Pause" title="Pause (space)"><i class="ico-play"></i></button>
+      <button id="dkPrev" type="button" aria-label="Previous chapter" title="Previous chapter (←)">‹</button>
+      <button id="dkChapter" type="button" class="name" aria-label="Chapter"><span id="dkNo">1/8</span><span id="dkTitle">Twenty equations</span></button>
+      <button id="dkNext" type="button" aria-label="Next chapter" title="Next chapter (→)">›</button>
+      <button id="dkStory" type="button" aria-label="Show or hide the story" aria-expanded="true">☰</button>
     </nav>
   </section>
 
-  <!-- EQUATION COLUMN: concepts.js fills #eq-scroll from window.T24. -->
-  <article id="eqpanel">
-    <div class="eq-scroll" id="eq-scroll">
-      <header class="eq-head">
-        <p class="kicker"><span class="y1">Maxwell 1865</span><span class="ar">→</span><span class="y2">Heaviside 1884</span></p>
+  <article id="story" aria-label="The story">
+    <div id="sheetGrip" role="button" aria-label="Resize the story"><span></span></div>
+    <div id="story-scroll">
+      <header class="hero">
+        <p class="kicker">Maxwell, Heaviside, and the language of forms</p>
         <h1>Twenty to four</h1>
-        <p class="lede">Maxwell wrote electromagnetism as twenty equations, one component at a time. Heaviside’s vector calculus folds them into four. Hover or tap any line, and the field lights up the exact quantity that line governs.</p>
-        <div class="collapse-bar">
-          <div class="seg seg-big" role="tablist" aria-label="Show the scalar or the vector form">
-            <button class="on" id="vw-20" role="tab" onclick="eqView(20)"><b>20</b> scalar</button>
-            <button id="vw-4" role="tab" onclick="eqView(4)"><b>4</b> vector</button>
-          </div>
-          <div class="ticks" id="ticks" aria-hidden="true"></div>
+        <div class="count" aria-label="Twenty equations, then four, then two">
+          <span><b>20</b><small>Maxwell, 1865</small></span><i>→</i>
+          <span><b>4</b><small>Heaviside, 1884</small></span><i>→</i>
+          <span><b>2</b><small>forms</small></span>
         </div>
+        <p class="lede">The same physics, written three times. Each step finds a better language for the geometry: circulation round small loops, flux out of small boxes, and finally the boundary of a boundary.</p>
       </header>
+      <div id="chapters"></div>
+      <footer class="foot">
+        <p>The field on the stage is the exact field of an oscillating point dipole in empty space, computed for every pixel. The formulas are typeset with MathJax.</p>
+        <p>Source: J. C. Maxwell, “A dynamical theory of the electromagnetic field”, <i>Phil. Trans. R. Soc.</i> 155 (1865), part III, equations A to H.</p>
+      </footer>
     </div>
   </article>
 </div>
 
-<script src="equations.js"></script>
-<script src="concepts.js"></script>
-<script src="../../lib/glow-lines.js"></script>
-<script src="main.js"></script>
+<script type="module" src="main.js"></script>
 </body>
 </html>

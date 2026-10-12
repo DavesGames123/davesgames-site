@@ -13,7 +13,8 @@
 //    heads   instanced arrowheads (a triangle in screen space)
 //    mesh    a surface with a rim light (the radiation lobe, faces, discs)
 //    sprite  a textured quad in px (labels and MathJax glyph equations),
-//            or a procedural glow (the charges)
+//            a procedural glow (the charges, kind 1) or a solid colour
+//            (the fade at a saver cut, kind 2)
 //  The field layers add (blend ONE, ONE) on a dark clear colour, so the
 //  draw order of crossing sheets does not matter. Sprites go last, with
 //  premultiplied alpha.
@@ -88,12 +89,13 @@ void fieldAt(vec2 p, out vec2 E, out float Bo, out float Q, out vec4 X){
 }
 
 // The gauge blob: chi = g cos(k t) exp(-|p - c|^2 / w^2), in the units of A/k.
+// Returns (grad chi, -d chi/dt / k): the changes to A/k and to phi/k.
 vec3 gaugeAt(vec2 p){
   vec2 d = p - uGauge.yz;
   float w2 = uGauge.w * uGauge.w;
   float G = exp(-dot(d, d) / w2);
   float ch = uGauge.x * cos(uK * uT) * G;
-  return vec3(ch * (-2.0 / w2) * d, uGauge.x * sin(uK * uT) * G);
+  return vec3(ch * (-2.0 / w2) * d, uGauge.x * uK * sin(uK * uT) * G);
 }
 
 float sdSeg(vec2 p, vec2 a, vec2 b){
@@ -321,6 +323,8 @@ void main(){
     float d = dot(q, q);
     float a = exp(-d * 5.0) * 0.55 + exp(-d * 40.0);
     o = vec4(uTint.rgb * a * uTint.a, 0.0);
+  } else if (uKind == 2) {
+    o = vec4(uTint.rgb * uTint.a, uTint.a);
   } else {
     o = texture(uTex, vUV) * uTint.a;
   }
@@ -578,7 +582,8 @@ export function createRenderer(canvas) {
   }
   function dropTexture(t) { if (t && textures.delete(t)) gl.deleteTexture(t); }
 
-  // A sprite: rect in CSS px. tex null + kind 1 draws a glow in tint.
+  // A sprite: rect in CSS px. tex null + kind 1 draws a glow in tint;
+  // kind 2 a solid tint with alpha.
   function sprite(tex, x, y, w, h, alpha = 1, kind = 0, tint = [1, 1, 1]) {
     const { p, u } = P.sprite;
     gl.useProgram(p); blend(kind === 1 ? 'add' : 'over');

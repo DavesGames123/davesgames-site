@@ -23,12 +23,18 @@
 //    story       every {{key}} and data-eq in the chapters exists; every
 //                widget name is one main.js builds
 //    svg         eqSVG gives one <use> per glyph, with the colour class
+//  SHELL (index.html, style.css)
+//    head        gpu-guard, wishlist, stats-beacon first, in that order;
+//                sci.css after style.css; main.js as a module
+//    css         [hidden] guard; no uppercase or letter-spaced labels;
+//                no KaTeX anywhere in the page
 // ============================================================================
 import * as f from './field.js';
 import { TEX, MAXWELL, GROUPS } from './tex.js';
 import { GLYPHS, EQ } from './glyphs.js';
 import { eqSVG, eqBox } from './math.js';
 import { CHAPTERS } from './story.js';
+import { readFileSync, readdirSync } from 'node:fs';
 
 let pass = 0, fail = 0;
 const ok = (c, name, info = '') => { if (c) pass++; else fail++; console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
@@ -254,6 +260,22 @@ const fromPotentials = f.fromPotentials;
 {
   const svg = eqSVG('lawIV'), n = (svg.match(/<use /g) || []).length;
   ok(n === EQ.lawIV[2].length / 8 && /class="m1"/.test(svg) && /class="m5"/.test(svg) && /aria-label=/.test(svg), 'svg: eqSVG has one <use> per glyph and the colour classes', `${n} glyphs`);
+}
+
+// ── shell ─────────────────────────────────────────────────────────────────
+{
+  const here = new URL('.', import.meta.url);
+  const html = readFileSync(new URL('index.html', here), 'utf8'), css = readFileSync(new URL('style.css', here), 'utf8');
+  const srcs = [...html.matchAll(/<script[^>]*src="([^"]+)"/g)].map(m => m[1]);
+  ok(srcs.slice(0, 3).join(' ') === '../../lib/gpu-guard.js ../../lib/wishlist.js ../../lib/stats-beacon.js', 'head: gpu-guard, wishlist, stats-beacon load first', srcs.join(' '));
+  ok(/<script type="module" src="main.js"><\/script>/.test(html) && html.indexOf('style.css') < html.indexOf('lib/sci.css'), 'head: style.css before sci.css, main.js as a module');
+  ok(/\[hidden\]\{display:none!important\}/.test(css), 'css: [hidden] {display:none!important}');
+  ok(!/text-transform\s*:\s*uppercase/i.test(css) && !/letter-spacing\s*:/i.test(css), 'css: no uppercase or letter-spaced labels');
+  const files = readdirSync(here).filter(n => /\.(js|mjs|html|css)$/.test(n) && n !== 'tests.mjs');
+  const kx = files.filter(n => /(src|href)=["'][^"']*katex|import[^;\n]*katex|katex\.render/i.test(readFileSync(new URL(n, here), 'utf8')));
+  ok(kx.length === 0, 'css: no KaTeX is loaded or called', kx.join(' '));
+  const hid = [...html.matchAll(/<(\w+)[^>]*id="([^"]+)"[^>]*\shidden[\s>]/g)].map(m => m[2]);
+  ok(hid.length > 0, 'css: hidden elements rely on the guard', hid.join(' '));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

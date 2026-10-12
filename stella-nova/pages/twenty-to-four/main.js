@@ -1,548 +1,444 @@
 // ============================================================================
-//  TWENTY TO FOUR  ·  radiating-dipole field simulation
+//  TWENTY TO FOUR  ·  main.js — the page: state, story column, stage, input
 // ----------------------------------------------------------------------------
-//  A single oscillating charge (a point dipole) radiates in a 2D slice. The
-//  canvas draws the electric field E as vectors and stream-function contour
-//  lines, the magnetic field B⊥ as a heatmap or glyphs, and outward wavefronts.
-//  The equation panel (built by concepts.js) hovers each of Maxwell's original
-//  scalar components; on hover it calls window.__setOverlay to paint the exact
-//  field quantity that component governs.
+//  The story column (story.js) drives the stage (scenes.js on render.js).
+//  The chapter nearest the top third of the column is active, and its scene
+//  is on the stage. Widgets in the chapters set the state S and show live
+//  numbers from the stage readouts.
 //
-//  FIELD MODEL   (dipole along the axis, evaluated at radius r, retarded phase)
-//  --------------------------------------------------------------------------
-//      u = k·r − t                 retarded phase; k = 2π/λ
-//      near/induction ∝ cos u / r³ + k·sin u / r²     dominates close in
-//      radiation      ∝ k²·cos u / r                  dominates far out, is light
-//      E = amp·( near·(3cosθ r̂ − â) + radiation·(â − cosθ r̂) )
-//      B⊥ = amp·(r̂ × â)·( radiation + near )          out of / into the plane
+//  STATE  S (one object; saver.js changes it too)
+//      t, playing, speed, lam      physical time (c = 1), wavelength
+//      chapter, scene              the active chapter and its scene
+//      probe                       the point of the curl, cube and forms
+//      map, arrows, lineGap        the field sheet
+//      gauge, gaugeMap, divField   chapter widgets
+//      hl                          a Maxwell group the column points at
+//      view {yaw,pitch,zoom,held}  the user's change to the scene camera
+//      band {t,b} | null           the clear part of the stage (phone sheet,
+//                                  saver plate), in CSS px from top and base
+//      clock                       wall time, s
+//      cycle0                      clock at the start of the loop and cube
+//                                  animations (the saver resets it per shot)
+//      camTarget, camHalf          saver camera overrides (scenes.js goal)
+//      fade                        1 = no fade; the saver dips it at a cut
 //
-//  COORDINATE FRAME   (canvas pixels; y increases downward)
-//  --------------------------------------------------------------------------
-//      (0,0) ┌─────────────▶ x
-//            │        â  axis (axisDeg, y flipped so degrees read upward)
-//            │       ╱
-//            │   ● SRC ─── r̂ ──▶ • sample (x,y)
-//            │   dipole          r = |sample − SRC|
-//            ▼ y
-//
-//  RENDER ORDER   (render(), back to front)
-//  --------------------------------------------------------------------------
-//      background grid ─▶ heatmap (overlay quantity or B⊥) ─▶ wavefronts
-//        ─▶ field-line contours ─▶ E vectors ─▶ overlay component vectors
-//        ─▶ source glow
-//
-//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
-//  --------------------------------------------------------------------------
-//      state ............... "const SIM="            all live parameters
-//      palette ............. "const PAL="            colours shared with style.css
-//      color ramp .......... "function fieldColorRGB"  magnitude → RGB
-//      field model ......... "function fieldAt"       the dipole E and B
-//      overlays ............ "OVERLAYS"               hover → quantity table
-//      heatmap ............. "function drawHeatmap"   dense scalar field paint
-//      vector arrows ....... "function drawArrowField"  arrow grid renderer
-//      Bz glyphs ........... "function drawBzGlyphs"  out/into-plane symbols
-//      field lines ......... "function buildGrid"     stream function + march
-//      contour march ....... "function marchAll"      marching squares
-//      line draw ........... "function renderLines"   one WebGL2 call; 2D fallback
-//      render .............. "function render"        the per-frame draw
-//      source glow ......... "function renderSource"  the oscillating charge
-//      controls ............ "function sg"            slider wiring
-//      pointer ............. "function ptr"           drag the source
-//      resize .............. "function resize"        canvas sizing and DPR
-//      loop ................ "function loop"          time advance and FPS
-//      screensaver ......... "window.snSaver"         hook for the shell
+//  GREP MAP
+//      grep -n "function buildStory"   chapters into the column
+//      grep -n "function widget"       the widgets by name
+//      grep -n "function setChapter"   chapter -> scene
+//      grep -n "function layout"       stage size, phone sheet, band
+//      grep -n "function bindPointer"  orbit, zoom, tap to move the probe
+//      grep -n "function frame"        the loop
+//      grep -n "window.t24"            the hook object for saver.js
 // ============================================================================
+import { createRenderer } from './render.js';
+import { createStage } from './scenes.js';
+import { CHAPTERS } from './story.js';
+import { GROUPS, QUANTITIES } from './tex.js';
+import { installDefs, eqSVG, has } from './math.js';
+import * as F from './field.js';
 
-// The drawing canvas and its 2D context. CW/CH are the CSS pixel size (the
-// backing store is scaled by device pixel ratio in resize()).
-const canvas=document.getElementById('sim-canvas');
-const ctx=canvas.getContext('2d');
-let CW=100,CH=100;
+const $ = id => document.getElementById(id);
+const canvas = $('gl'), stageEl = $('stage'), storyEl = $('story'), scrollEl = $('story-scroll');
+const PHONE_Q = matchMedia('(max-width: 768px), (max-height: 500px) and (pointer: coarse)');
 
-// The single mutable state. t is the phase clock; lambda is the wavelength in
-// pixels; axisDeg is the dipole orientation; density controls how many contour
-// levels appear; amp/cNear/cRad scale the overall strength and the two field
-// terms; the show* flags toggle each render layer; overlay names the hovered
-// quantity or is null.
-const SIM={
-  playing:true, speed:1.0, t:0,
-  freq:1.0, lambda:140, axisDeg:90, density:42,
-  showLines:true, showFlow:true, showB:true, showFronts:false, showVectors:true,
-  amp:1.0, cNear:1.0, cRad:1.0,
-  overlay:null,
-};
-// The source (dipole) position in canvas pixels, and the drag offset while it is
-// being moved.
-const SRC={x:0,y:0};
-// One palette for the canvas and the equations (style.css :root has the same
-// values as CSS tokens). E is --m2 orange, B is --m1 blue, A is --m3 green
-// and the displacement current is --m5 yellow, the lib/sci.css math colors
-// of the same symbols. Indigo marks the negative side of a signed heatmap.
-const PAL={e:[255,154,98],b:[98,196,255],disp:[255,214,102],a:[134,220,124],neg:[125,136,255],ev:[242,227,198]};
-const rgbS=c=>c[0]+','+c[1]+','+c[2];
-let dragging=false,dragDX=0,dragDY=0;
-
-// Map a field magnitude to an RGB colour along the E ramp: deep rust, orange,
-// then warm white where the field is strongest. E is orange in the
-// equations, so the field lines are too. The magnitude is log-compressed because the
-// field spans many orders between the near zone and the far zone.
-function fieldColorRGB(mag,gamma){
-  gamma=gamma||1.0;
-  const lv=Math.log10(1+mag*9e6)/6.6;
-  const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
-  const stops=[[0.30,0.12,0.05],[0.62,0.27,0.12],[0.92,0.50,0.28],[1,0.62,0.40],[1,0.80,0.64],[1,0.95,0.88]];
-  const sv=lc*5,si=Math.min(Math.floor(sv),4),sf=sv-si;
-  return [stops[si][0]+sf*(stops[si+1][0]-stops[si][0]),
-          stops[si][1]+sf*(stops[si+1][1]-stops[si][1]),
-          stops[si][2]+sf*(stops[si+1][2]-stops[si][2])];
-}
-// Wavenumber k = 2π/λ.
-function kOf(){return 2*Math.PI/SIM.lambda;}
-// Unit vector along the dipole axis. Y is negated so the degree readout matches
-// the usual math convention (counterclockwise from the x-axis) on a y-down canvas.
-function axisVec(){const a=SIM.axisDeg*Math.PI/180;return [Math.cos(a),-Math.sin(a)];}
-
-// The dipole field at a point and time. Combines the near/induction term
-// (1/r³ and 1/r², weighted by cNear) with the radiation term (1/r, weighted by
-// cRad). nvx/nvy is the radial-dominated component, tvx/tvy the transverse
-// radiation component, and Bz the out-of-plane magnetic field from r̂ × â.
-// r is clamped to 7 px to avoid the singularity at the source.
-// field at an arbitrary time (needed for d/dt overlays). amp/cNear/cRad are live coefficients.
-function fieldAt(x,y,t){
-  const k=kOf(),[ax,ay]=axisVec();
-  let dx=x-SRC.x,dy=y-SRC.y;
-  let r=Math.hypot(dx,dy); if(r<7) r=7;
-  const rx=dx/r,ry=dy/r,cosT=rx*ax+ry*ay;
-  const u=k*r-t,r2=r*r,r3=r2*r,cu=Math.cos(u),su=Math.sin(u);
-  const nearInd=SIM.cNear*(cu/r3+k*su/r2), rad=SIM.cRad*(k*k*cu/r);
-  const nvx=3*cosT*rx-ax,nvy=3*cosT*ry-ay,tvx=ax-cosT*rx,tvy=ay-cosT*ry;
-  const Ex=SIM.amp*(nvx*nearInd+tvx*rad), Ey=SIM.amp*(nvy*nearInd+tvy*rad);
-  const crossZ=rx*ay-ry*ax;
-  const Bz=SIM.amp*crossZ*(SIM.cRad*k*k*cu/r + SIM.cNear*k*su/r2);
-  return {Ex,Ey,Bz,Emag:Math.hypot(Ex,Ey)};
-}
-// Field at the current simulation time.
-function field(x,y){return fieldAt(x,y,SIM.t);}
-
-/* ─── OVERLAYS: hover a Maxwell equation → see that quantity ───
-   .fn  = signed scalar for the heatmap
-   .cvec= the COMPONENT vector drawn over the base E vectors, or 'glyph' (B⊥), or null */
-// HT is the time step for the ∂/∂t central difference; hS is the spatial step
-// for ∂/∂x and ∂/∂y central differences.
-const HT=0.05, hS=2;
-// Central-difference time derivative of one field component (displacement current).
-function dEdt(x,y,comp){const a=fieldAt(x,y,SIM.t+HT),b=fieldAt(x,y,SIM.t-HT);return (a[comp]-b[comp])/(2*HT);}
-// Central-difference spatial derivatives of B⊥ (the curl-of-H components).
-function dBz_dy(x,y){return (field(x,y+hS).Bz-field(x,y-hS).Bz)/(2*hS);}
-function dBz_dx(x,y){return (field(x+hS,y).Bz-field(x-hS,y).Bz)/(2*hS);}
-// Overlay table: for each hoverable equation component, fn is the signed scalar
-// the heatmap paints, and cvec is the component vector drawn over the base E
-// arrows ('glyph' means draw B⊥ symbols, null means nothing to draw). ov keys
-// in concepts.js index into this table.
-const OVL={
-  Ex:{lab:'Eₓ — electric field, x-component', col:'e', fn:(x,y)=>field(x,y).Ex, cvec:(x,y)=>[field(x,y).Ex,0]},
-  Ey:{lab:'E_y — electric field, y-component', col:'e', fn:(x,y)=>field(x,y).Ey, cvec:(x,y)=>[0,field(x,y).Ey]},
-  Bz:{lab:'B⊥ — magnetic field, out of / into the plane', col:'b', fn:(x,y)=>field(x,y).Bz, cvec:'glyph'},
-  dExdt:{lab:'∂Eₓ/∂t — displacement current, x', col:'disp', fn:(x,y)=>dEdt(x,y,'Ex'), cvec:(x,y)=>[dEdt(x,y,'Ex'),0]},
-  dEydt:{lab:'∂E_y/∂t — displacement current, y', col:'disp', fn:(x,y)=>dEdt(x,y,'Ey'), cvec:(x,y)=>[0,dEdt(x,y,'Ey')]},
-  curlHx:{lab:'(∇×H)ₓ ∝ ∂_y B⊥', col:'b', fn:dBz_dy, cvec:(x,y)=>[dBz_dy(x,y),0]},
-  curlHy:{lab:'(∇×H)_y ∝ −∂ₓ B⊥', col:'b', fn:(x,y)=>-dBz_dx(x,y), cvec:(x,y)=>[0,-dBz_dx(x,y)]},
-  divE:{lab:'∇·E — sources of the field (≈ 0 away from the charge)', col:'e', fn:(x,y)=>(dExdx(x,y)+dEydy(x,y)), cvec:null},
-  zero:{lab:'≡ 0 for an in-plane dipole — this component vanishes in the slice', col:'e', fn:null, cvec:null},
-};
-// Spatial derivatives of the E components, summed for the divergence overlay.
-function dExdx(x,y){return (field(x+hS,y).Ex-field(x-hS,y).Ex)/(2*hS);}
-function dEydy(x,y){return (field(x,y+hS).Ey-field(x,y-hS).Ey)/(2*hS);}
-// Called by concepts.js on hover: set the active overlay, update the caption and
-// the status readout, or clear back to the field-line view when kind is null.
-window.__setOverlay=function(kind){
-  SIM.overlay=(kind&&OVL[kind])?kind:null;
-  const cap=document.getElementById('ovl-caption'),stov=document.getElementById('st-ovl');
-  if(!SIM.overlay){cap.classList.remove('show');stov.innerHTML='showing: <b>field lines</b>';return;}
-  const o=OVL[kind];cap.classList.add('show');cap.style.setProperty('--cap','rgb('+rgbS(PAL[o.col])+')');
-  cap.innerHTML=o.fn
-    ? o.lab+'<span class="ck"><span class="pm pos">positive</span><span class="pm neg">negative</span><span>arrows: this component</span></span>'
-    : o.lab+'<span class="ck">nothing to draw: the field has no component here</span>';
-  stov.innerHTML='showing: <b>'+kind+'</b>';
+export const S = {
+  t: 0, playing: true, speed: 1, lam: 1, lineGap: 0.17,
+  chapter: 'twenty', scene: 'fold', probe: [0.55, 0, 0.32],
+  map: 'B', arrows: 0, gauge: 0.6, gaugeMap: 'Az', divField: 'E', triple: 1,
+  hl: null, view: { yaw: 0, pitch: 0, zoom: 1, held: false }, band: null, clock: 0,
+  saver: false, fade: 1,
 };
 
-/* ─── smooth high-resolution field heatmap (computed dense, upscaled with smoothing) ─── */
-// Offscreen buffer for the heatmap: the scalar field is sampled sparsely onto a
-// small canvas, then upscaled with smoothing for a fast, soft heatmap.
-const hmCanvas=document.createElement('canvas'); const hmCtx=hmCanvas.getContext('2d');
-// Paint the signed scalar fn as a heatmap: pos for positive, neg for
-// negative (RGB triples from PAL), with log-compressed alpha so both near and
-// far zones stay visible. maxA caps the alpha, so the field lines stay on top.
-function drawHeatmap(fn,pos,neg,maxA){
-  pos=pos||PAL.e;neg=neg||PAL.neg;maxA=maxA||150;
-  const step=6;
-  const bw=Math.max(2,Math.ceil(CW/step)), bh=Math.max(2,Math.ceil(CH/step));
-  if(hmCanvas.width!==bw||hmCanvas.height!==bh){hmCanvas.width=bw;hmCanvas.height=bh;}
-  const img=hmCtx.createImageData(bw,bh), data=img.data;
-  const vals=new Float32Array(bw*bh); let mx=1e-30, idx=0;
-  for(let j=0;j<bh;j++){const y=(j+0.5)*step;
-    for(let i=0;i<bw;i++,idx++){const x=(i+0.5)*step;const v=fn(x,y);vals[idx]=v;const a=Math.abs(v);if(a>mx)mx=a;}}
-  const TARGET=1e4, SCALE=TARGET/mx, DEN=Math.log10(1+TARGET);
-  const bright=Math.min(1.7,Math.sqrt(SIM.amp));
-  for(let p=0;p<vals.length;p++){
-    const v=vals[p]; let a=Math.log10(1+Math.abs(v)*SCALE)/DEN; a=a*a*bright;
-    if(a>1)a=1; const al=(a*maxA)|0; const o=p*4;
-    const c=v>=0?pos:neg; data[o]=c[0];data[o+1]=c[1];data[o+2]=c[2];
-    data[o+3]=al;
-  }
-  hmCtx.putImageData(img,0,0);
-  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  ctx.drawImage(hmCanvas,0,0,bw,bh,0,0,CW,CH);ctx.restore();
+// ── the story column ───────────────────────────────────────────────────────
+const inline = html => html.replace(/\{\{(\w+)\}\}/g, (m, k) => has(k) ? `<span class="im">${eqSVG(k)}</span>` : m);
+function buildStory() {
+  installDefs();
+  const frag = document.createDocumentFragment();
+  CHAPTERS.forEach((c, i) => {
+    const sec = document.createElement('section');
+    sec.className = 'ch'; sec.dataset.id = c.id; sec.id = 'ch-' + c.id;
+    sec.innerHTML = `<header class="ch-h"><p class="kicker"><span class="no">${i + 1}</span>${c.kicker}</p><h2>${c.title}</h2></header>` + inline(c.html);
+    sec.querySelectorAll('[data-eq]').forEach(el => { el.classList.add('eq'); el.innerHTML = eqSVG(el.dataset.eq); });
+    sec.querySelectorAll('[data-w]').forEach(el => widget(el.dataset.w, el, c));
+    frag.appendChild(sec);
+  });
+  $('chapters').appendChild(frag);
+  document.querySelectorAll('[data-sym]').forEach(el => { el.innerHTML = eqSVG(el.dataset.sym); });
 }
 
-/* ─── vector field arrows ─── */
-// Arrow grid spacing, scaled to the canvas size.
-function arrowGS(){return Math.max(30,Math.round(Math.min(CW,CH)/14));}
-// Draw a vector field vf as a grid of arrows. Lengths and opacities are
-// log-scaled to the grid maximum; additive blending makes overlapping arrows
-// glow. lenMul scales arrow length, rgb is the base color.
-function drawArrowField(vf,rgb,alpha,lenMul){
-  const gs=arrowGS(); let mx=1e-30; const pts=[];
-  for(let y=gs/2;y<CH;y+=gs)for(let x=gs/2;x<CW;x+=gs){const v=vf(x,y);const m=Math.hypot(v[0],v[1]);if(m>mx)mx=m;pts.push([x,y,v[0],v[1],m]);}
-  const K=1e4/mx, DEN=Math.log10(1+1e4);
-  ctx.save();ctx.globalCompositeOperation='lighter';
-  for(const a of pts){
-    const m=a[4]; if(m<1e-13) continue;
-    const nx=a[2]/m, ny=a[3]/m, t=Math.log10(1+m*K)/DEN;
-    const len=(6+t*gs*0.42)*lenMul, al=alpha*(0.32+0.68*t);
-    const x=a[0],y=a[1],x0=x-nx*len*0.5,y0=y-ny*len*0.5,x1=x+nx*len*0.5,y1=y+ny*len*0.5;
-    ctx.strokeStyle='rgba('+rgb+','+al+')';ctx.lineWidth=1.15;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
-    const px=-ny*2.3,py=nx*2.3;
-    ctx.fillStyle='rgba('+rgb+','+al+')';
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1-nx*4.6+px,y1-ny*4.6+py);ctx.lineTo(x1-nx*4.6-px,y1-ny*4.6-py);ctx.closePath();ctx.fill();
-  }
-  ctx.restore();
-}
-// Draw B⊥ as glyphs on the arrow grid: a filled dot for field out of the plane,
-// a cross for field into the plane, sized by log-scaled magnitude.
-function drawBzGlyphs(){
-  const gs=arrowGS(); let mx=1e-30; const pts=[];
-  for(let y=gs/2;y<CH;y+=gs)for(let x=gs/2;x<CW;x+=gs){const v=field(x,y).Bz;const a=Math.abs(v);if(a>mx)mx=a;pts.push([x,y,v]);}
-  const K=1e4/mx, DEN=Math.log10(1+1e4);
-  ctx.save();
-  for(const p of pts){
-    const v=p[2],a=Math.abs(v);if(a<1e-13)continue;
-    const t=Math.log10(1+a*K)/DEN, r=2+t*6, al=0.35+0.6*t;
-    ctx.strokeStyle='rgba('+rgbS(PAL.b)+','+al+')';ctx.lineWidth=1.4;
-    ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.stroke();
-    if(v>=0){ctx.fillStyle='rgba('+rgbS(PAL.b)+','+al+')';ctx.beginPath();ctx.arc(p[0],p[1],Math.max(1,r*0.32),0,Math.PI*2);ctx.fill();}
-    else{const d=r*0.7;ctx.beginPath();ctx.moveTo(p[0]-d,p[1]-d);ctx.lineTo(p[0]+d,p[1]+d);ctx.moveTo(p[0]+d,p[1]-d);ctx.lineTo(p[0]-d,p[1]+d);ctx.stroke();}
-  }
-  ctx.restore();
-}
-// Draw the hovered overlay's component vectors (or B⊥ glyphs) in the colour
-// of that quantity over the base E field.
-function renderComponentVectors(kind){
-  const o=OVL[kind]; if(!o) return;
-  if(o.cvec==='glyph'){drawBzGlyphs();return;}
-  if(typeof o.cvec==='function'){drawArrowField(o.cvec,rgbS(PAL[o.col]),0.95,1.0);}
-}
-
-/* ─── stream-function field lines (contours; smooth in time) ─── */
-// Grid state for the field-line contours: cell size GS, grid width/height GW/GH,
-// and the sampled stream-function and magnitude arrays.
-let GS=0,GW=0,GH=0,psiGrid=null,magGrid=null;
-// Sample the dipole stream function psi and the field magnitude onto a grid.
-// Field lines are the level curves of psi, so contouring psi traces the E field
-// lines without integrating them. sin²θ weighting gives the dipole lobe shape.
-function buildGrid(){
-  GS=Math.min(10,Math.max(5,Math.round(Math.sqrt(CW*CH)/130)));
-  GW=Math.ceil(CW/GS)+1;GH=Math.ceil(CH/GS)+1;const N=GW*GH;
-  if(!psiGrid||psiGrid.length!==N){psiGrid=new Float32Array(N);magGrid=new Float32Array(N);}
-  const k=kOf(),[ax,ay]=axisVec(),cN=SIM.cNear,cR=SIM.cRad,amp=SIM.amp;let idx=0;
-  for(let j=0;j<GH;j++){const y=j*GS;
-    for(let i=0;i<GW;i++,idx++){const x=i*GS;
-      let dx=x-SRC.x,dy=y-SRC.y;let r=Math.hypot(dx,dy);if(r<7)r=7;
-      const rx=dx/r,ry=dy/r,cosT=rx*ax+ry*ay,sin2=1-cosT*cosT,u=k*r-SIM.t,cu=Math.cos(u),su=Math.sin(u);
-      psiGrid[idx]=sin2*(cN*cu/r + cR*k*su);
-      const gw=cN*(cu/(r*r*r)+k*su/(r*r)), hw=cR*k*k*cu/r, gh=gw-hw;
-      magGrid[idx]=amp*Math.sqrt(4*cosT*cosT*gw*gw+sin2*gh*gh);
-    }}
-}
-// Build the set of psi contour levels, geometrically spaced (ratio 1.5) and
-// mirrored in sign, so both field-line densities near and far from the source
-// stay legible. The count grows with the density control.
-function contourLevels(){
-  const k=kOf();
-  const M=Math.max(7,Math.min(20,Math.round(SIM.density/3.8)));
-  const base=k*0.025, ratio=1.5, out=[];
-  for(let n=0;n<M;n++){const v=base*Math.pow(ratio,n);out.push(v);out.push(-v);}
-  out.sort((a,b)=>a-b);
-  return out;
-}
-// Nearest-cell lookup of the field magnitude, used to color a contour segment.
-function sampleMag(x,y){const gi=Math.min(GW-1,Math.max(0,(x/GS)|0)),gj=Math.min(GH-1,Math.max(0,(y/GS)|0));return magGrid[gj*GW+gi];}
-// Marching squares over psiGrid: for every cell and every level that crosses it,
-// interpolate the crossing points on the cell edges and emit line segments into
-// segs. Empty and single-value cells are skipped for speed.
-function marchAll(levels,segs){
-  const NL=levels.length;
-  for(let j=0;j<GH-1;j++){const rowA=j*GW,rowB=(j+1)*GW,y0=j*GS,y1=y0+GS;
-    for(let i=0;i<GW-1;i++){const x0=i*GS,x1=x0+GS;
-      const tl=psiGrid[rowA+i],tr=psiGrid[rowA+i+1],br=psiGrid[rowB+i+1],bl=psiGrid[rowB+i];
-      let mn=tl,mx=tl;if(tr<mn)mn=tr;else if(tr>mx)mx=tr;if(br<mn)mn=br;else if(br>mx)mx=br;if(bl<mn)mn=bl;else if(bl>mx)mx=bl;
-      for(let li=0;li<NL;li++){const L=levels[li];if(L<mn)continue;if(L>mx)break;
-        const a=tl<L,b=tr<L,c=br<L,d=bl<L;if(a===b&&b===c&&c===d)continue;
-        let n=0;const p=[];
-        if(a!==b){const t=(L-tl)/(tr-tl);p.push(x0+t*GS,y0);n++;}
-        if(b!==c){const t=(L-tr)/(br-tr);p.push(x1,y0+t*GS);n++;}
-        if(d!==c){const t=(L-bl)/(br-bl);p.push(x0+t*GS,y1);n++;}
-        if(a!==d){const t=(L-tl)/(bl-tl);p.push(x0,y0+t*GS);n++;}
-        if(n>=2){segs.push(p[0],p[1],p[2],p[3]);if(n===4)segs.push(p[4],p[5],p[6],p[7]);}
-      }}}
-}
-
-// The per-frame draw. Clear, paint the faint background grid, then layer the
-// heatmap, wavefronts, field lines, E vectors, any overlay vectors, and finally
-// the source glow, back to front.
-/* ─── render ─── */
-function render(){
-  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
-  ctx.fillStyle='#0a0d14';ctx.fillRect(0,0,CW,CH);
-  // A soft warm light round the charge, then a faint reference grid every 46 px.
-  const R0=Math.hypot(CW,CH)*0.6,bg=ctx.createRadialGradient(SRC.x,SRC.y,0,SRC.x,SRC.y,R0);
-  bg.addColorStop(0,'rgba(255,154,98,0.05)');bg.addColorStop(0.5,'rgba(98,196,255,0.015)');bg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=bg;ctx.fillRect(0,0,CW,CH);
-  ctx.strokeStyle='rgba(160,185,225,0.028)';ctx.lineWidth=1;
-  for(let x=0;x<CW;x+=46){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
-  for(let y=0;y<CH;y+=46){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
-
-  // base field heatmap: overlay quantity when hovering, else the magnetic field
-  if(SIM.overlay && OVL[SIM.overlay].fn) drawHeatmap(OVL[SIM.overlay].fn,PAL[OVL[SIM.overlay].col],PAL.neg,190);
-  else if(SIM.showB && !SIM.overlay) drawHeatmap((x,y)=>field(x,y).Bz,PAL.b,PAL.neg,105);
-
-  if(SIM.showFronts) renderFronts();
-  if(SIM.showLines) renderLines();
-  if(SIM.showVectors) drawArrowField((x,y)=>{const f=field(x,y);return [f.Ex,f.Ey];},rgbS(PAL.ev),SIM.overlay?0.25:0.42,0.9);
-  if(SIM.overlay) renderComponentVectors(SIM.overlay);
-  renderSource();
-}
-// Dashed concentric circles marking successive wavefronts, spaced one wavelength
-// apart and advancing outward with the phase clock.
-function renderFronts(){
-  const k=kOf();ctx.save();ctx.strokeStyle='rgba(168,185,217,0.2)';ctx.lineWidth=1;ctx.setLineDash([2,6]);
-  for(let n=0;n<16;n++){const r=(2*Math.PI*n+SIM.t)/k;if(r<8||r>Math.hypot(CW,CH))continue;
-    ctx.beginPath();ctx.arc(SRC.x,SRC.y,r,0,Math.PI*2);ctx.stroke();}
-  ctx.restore();
-}
-const GLOW=window.GlowLines?GlowLines.create():null;
-// Contour segments meet end to end. With round caps and additive blending,
-// each joint is drawn twice and shows as a bright bead along the line. trim
-// pulls both ends of a segment in by a part of the half width w/2, so the
-// caps of two neighbours just meet. It writes the result into TR.
-const TR=[0,0,0,0];
-function trim(x0,y0,x1,y1,w){
-  const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy),t=Math.min(w*0.42,L*0.35)/(L||1);
-  TR[0]=x0+dx*t;TR[1]=y0+dy*t;TR[2]=x1-dx*t;TR[3]=y1-dy*t;return TR;
-}
-// Draw the E field lines as contours of the stream function. Each segment is
-// colored by local magnitude and drawn twice: a soft wide glow pass then a thin
-// bright pass. When the energy pulse is on, a traveling sine brightens the lines
-// outward from the source; overlays dim the lines so the overlay reads clearly.
-function renderLines(){
-  buildGrid();
-  const levels=contourLevels();const segs=[];marchAll(levels,segs);
-  const k=kOf(),flowPhase=SIM.t/k, dim=SIM.overlay?0.3:1;
-  // One WebGL2 draw for all segments (lib/glow-lines.js); the 2D strokes below
-  // are the fallback. Same colors, alphas and widths in both paths.
-  if(GLOW&&GLOW.begin(ctx)){
-    for(let s=0;s<segs.length;s+=4){
-      const x0=segs[s],y0=segs[s+1],x1=segs[s+2],y1=segs[s+3];
-      const mx=(x0+x1)*0.5,my=(y0+y1)*0.5,m=sampleMag(mx,my);
-      const [r,g,b]=fieldColorRGB(m);
-      let pulse=1;
-      if(SIM.showFlow){const rr=Math.hypot(mx-SRC.x,my-SRC.y);pulse=0.4+0.6*Math.max(0,Math.sin((rr-flowPhase)*k));}
-      const lv=Math.min(1,Math.log10(1+m*9e6)/6.6);
-      const a=Math.min(0.92,0.16+lv*0.95)*pulse*dim;
-      if(a<0.02)continue;
-      const wg=4.5*pulse;trim(x0,y0,x1,y1,wg);
-      GLOW.seg(TR[0],TR[1],TR[2],TR[3],r*a*0.16,g*a*0.16,b*a*0.16,wg);
-      trim(x0,y0,x1,y1,1.4);
-      GLOW.seg(TR[0],TR[1],TR[2],TR[3],r*a,g*a,b*a,1.4);
-    }
-    GLOW.flush(ctx);
-    return;
-  }
-  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
-  for(let pass=0;pass<2;pass++){
-    for(let s=0;s<segs.length;s+=4){
-      const x0=segs[s],y0=segs[s+1],x1=segs[s+2],y1=segs[s+3];
-      const mx=(x0+x1)*0.5,my=(y0+y1)*0.5,m=sampleMag(mx,my);
-      const [r,g,b]=fieldColorRGB(m);
-      let pulse=1;
-      if(SIM.showFlow){const rr=Math.hypot(mx-SRC.x,my-SRC.y);pulse=0.4+0.6*Math.max(0,Math.sin((rr-flowPhase)*k));}
-      const lv=Math.min(1,Math.log10(1+m*9e6)/6.6);
-      const a=Math.min(0.92,0.16+lv*0.95)*pulse*dim;
-      if(a<0.02)continue;
-      if(pass===0){ctx.strokeStyle='rgba('+((r*a*0.16*255)|0)+','+((g*a*0.16*255)|0)+','+((b*a*0.16*255)|0)+',1)';ctx.lineWidth=4.5*pulse;}
-      else{ctx.strokeStyle='rgba('+((r*a*255)|0)+','+((g*a*255)|0)+','+((b*a*255)|0)+',1)';ctx.lineWidth=1.4;}
-      trim(x0,y0,x1,y1,ctx.lineWidth);
-      ctx.beginPath();ctx.moveTo(TR[0],TR[1]);ctx.lineTo(TR[2],TR[3]);ctx.stroke();
-    }
-  }
-  ctx.restore();
-}
-// Draw the oscillating charge: a short axis tick and a radial glow whose color
-// and position swing with sin(t), so the charge visibly vibrates along the axis.
-function renderSource(){
-  const [ax,ay]=axisVec();const osc=Math.sin(SIM.t);const off=osc*7;
-  const cx=SRC.x,cy=SRC.y;ctx.save();
-  ctx.strokeStyle='rgba(168,185,217,0.35)';ctx.lineWidth=1.5;ctx.lineCap='round';
-  ctx.beginPath();ctx.moveTo(cx-ax*12,cy-ay*12);ctx.lineTo(cx+ax*12,cy+ay*12);ctx.stroke();
-  const gx=cx+ax*off,gy=cy+ay*off,mix=(osc+1)*0.5;
-  const cr=(PAL.b[0]+(PAL.e[0]-PAL.b[0])*mix)|0,cg=(PAL.b[1]+(PAL.e[1]-PAL.b[1])*mix)|0,cb=(PAL.b[2]+(PAL.e[2]-PAL.b[2])*mix)|0,c=cr+','+cg+','+cb;
-  const grd=ctx.createRadialGradient(gx,gy,0,gx,gy,22);
-  grd.addColorStop(0,'rgba('+c+',0.95)');grd.addColorStop(0.35,'rgba('+c+',0.35)');grd.addColorStop(1,'rgba('+c+',0)');
-  ctx.fillStyle=grd;ctx.beginPath();ctx.arc(gx,gy,22,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='rgba(255,250,240,1)';ctx.beginPath();ctx.arc(gx,gy,3.2,0,Math.PI*2);ctx.fill();
-  ctx.restore();
-}
-
-// Control wiring. sg paints a slider's filled track; each set* handler writes one
-// SIM field and updates its readout; tog flips a boolean layer; togglePlay and
-// setSpeed drive the time clock. These are called from inline handlers in the HTML.
-/* ─── controls ─── */
-function sg(el){if(!el)return;const min=+el.min,max=+el.max;el.style.setProperty('--pct',((el.value-min)/(max-min)*100)+'%');}
-function setFreq(el){SIM.freq=+el.value;document.getElementById('vl-freq').textContent=SIM.freq.toFixed(2);sg(el);}
-function setLambda(el){SIM.lambda=+el.value;document.getElementById('vl-lambda').textContent=SIM.lambda;document.getElementById('st-lambda').textContent=SIM.lambda;sg(el);}
-function setAxis(el){SIM.axisDeg=+el.value;document.getElementById('vl-axis').textContent=SIM.axisDeg;sg(el);}
-function setDensity(el){SIM.density=+el.value;document.getElementById('vl-density').textContent=SIM.density;sg(el);}
-function setCoef(key,el){SIM[key]=+el.value;const m={amp:'vl-amp',cNear:'vl-near',cRad:'vl-rad'};document.getElementById(m[key]).textContent=(+el.value).toFixed(2);sg(el);}
-function tog(key,btn){SIM[key]=!SIM[key];btn.classList.toggle('on',SIM[key]);}
-// The play button shows the action it will take: pause while playing.
-function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'Pause':'Play';b.classList.toggle('on',SIM.playing);}
-function setSpeed(s){SIM.speed=s;document.getElementById('sp-slow').classList.toggle('on',s<1);document.getElementById('sp-1').classList.toggle('on',s>=1);}
-// The tune card (a bottom sheet on phones). open omitted = toggle.
-function tuneOpen(open){const t=document.getElementById('tune'),b=document.getElementById('tune-btn');const o=open===undefined?!t.classList.contains('open'):!!open;t.classList.toggle('open',o);b.classList.toggle('on',o);}
-
-// Pointer handling: drag the source when the press lands near it. ptr maps a
-// mouse or touch event to canvas pixels; the handlers store the grab offset so
-// the charge follows the cursor without snapping its center to it.
-/* ─── pointer: drag source ─── */
-function ptr(e){const r=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return [t.clientX-r.left,t.clientY-r.top];}
-canvas.addEventListener('mousedown',e=>{const[x,y]=ptr(e);if(Math.hypot(x-SRC.x,y-SRC.y)<60){dragging=true;dragDX=SRC.x-x;dragDY=SRC.y-y;}});
-canvas.addEventListener('mousemove',e=>{if(!dragging)return;const[x,y]=ptr(e);SRC.x=x+dragDX;SRC.y=y+dragDY;});
-window.addEventListener('mouseup',()=>dragging=false);
-canvas.addEventListener('touchstart',e=>{const[x,y]=ptr(e);if(Math.hypot(x-SRC.x,y-SRC.y)<70){dragging=true;dragDX=SRC.x-x;dragDY=SRC.y-y;e.preventDefault();}},{passive:false});
-canvas.addEventListener('touchmove',e=>{if(!dragging)return;const[x,y]=ptr(e);SRC.x=x+dragDX;SRC.y=y+dragDY;e.preventDefault();},{passive:false});
-window.addEventListener('touchend',()=>dragging=false);
-
-// Fit the canvas to the stage element, scale the backing store by device pixel
-// ratio (capped at 2), and place the source near the center on first size.
-/* ─── resize ─── */
-function resize(){
-  const s=document.getElementById('stage');CW=s.clientWidth;CH=s.clientHeight;
-  if(CW<10||CH<10){CW=600;CH=400;}
-  const dpr=Math.min(devicePixelRatio,2);canvas.width=CW*dpr;canvas.height=CH*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
-  if(SRC.x===0&&SRC.y===0){SRC.x=CW*0.46;SRC.y=CH*0.5;}
-}
-// Prefer a ResizeObserver on the stage; fall back to the window resize event.
-if(window.ResizeObserver){new ResizeObserver(()=>resize()).observe(document.getElementById('stage'));}
-else{window.addEventListener('resize',resize);}
-
-// The animation loop. Advance the phase clock by real elapsed time (scaled by
-// freq and speed) when playing, refresh the FPS and status readouts, and render.
-/* ─── loop ─── */
-let last=0,fc=0,ft=0;
-function loop(time){
-  requestAnimationFrame(loop);
-  const dt=Math.min((time-last)/1000,0.05);last=time;
-  fc++;ft+=dt;if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
-  if(SIM.playing){SIM.t+=dt*SIM.freq*SIM.speed*3.2;}
-  document.getElementById('st-c').textContent=(SIM.lambda*SIM.freq).toFixed(0)+'px/s';
-  document.getElementById('st-phase').textContent=(SIM.t%(2*Math.PI)).toFixed(2);
-  render();
-}
-// Boot: paint every slider's initial fill, then size the canvas and start the
-// loop after a short delay so the layout has settled.
-document.querySelectorAll('#tune input[type=range]').forEach(sg);
-setTimeout(()=>{resize();requestAnimationFrame(loop);},60);
-
-// Screensaver hook for the shell (lib/screensaver.js). enter() hides the equation
-// panel, legend, readout, caption, tune card and dock, and fixes #stage to the
-// window, so resize() sizes the canvas to it. The charge stays at the centre.
-// Vectors and fronts go off; lines, pulse and B stay. The axis turns slowly
-// through 90 +/- 60 degrees, so the radiation lobes rotate. opts.calm (1 =
-// slowest) sets the phase speed (the page's own slow button is 0.25) and the
-// axis period. opts.seed sets the start phase of the axis turn.
-/* ─── screensaver ─── */
-window.snSaver={
-  enter(opts){
-    const calm=Math.min(1,Math.max(0,opts.calm??0.7));
-    const st=document.createElement('style');
-    st.textContent='#eqpanel,#legend,#readout,#ovl-caption,#tune,#dock,.topbar{display:none!important}'+
-      '#stage{position:fixed!important;inset:0!important;height:auto!important;flex:none!important}';
-    document.head.appendChild(st);
-    window.__setOverlay(null);
-    SIM.playing=true; SIM.speed=0.25+0.5*(1-calm);
-    SIM.showVectors=false; SIM.showFronts=false;
-    SIM.showLines=true; SIM.showFlow=true; SIM.showB=true;
-    resize();
-    const period=90+90*calm, ph0=((opts.seed>>>0)%360)*Math.PI/180, t0=performance.now();
-    const turn=now=>{
-      SIM.axisDeg=90+60*Math.sin(ph0+(now-t0)/1000*2*Math.PI/period);
-      SRC.x=CW*0.5; SRC.y=CH*0.5;
-      requestAnimationFrame(turn);
-    };
-    requestAnimationFrame(turn);
-    saverLabel=opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
-    clearInterval(saverTimer);saverPlate();
-    if(saverLabel)saverTimer=setInterval(saverPlate,1000);
-    return { canvas, warmupMs:1000 };
-  },
-  exit(){saverLabel=null;clearInterval(saverTimer);saverTimer=0;}
+// ── widgets ────────────────────────────────────────────────────────────────
+const live = [];   // functions run ~8 times a second to refresh numbers
+const fmt = v => {
+  if (!isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if (a !== 0 && (a < 1e-3 || a >= 1e4)) { const e = Math.floor(Math.log10(a)), m = v / 10 ** e; return `${m.toFixed(2)}×10<sup>${e}</sup>`; }
+  return v.toFixed(3);
 };
-// The plate (opts.label) names the page: Maxwell's twenty scalar lines, the
-// group sizes read from window.T24 (equations.js), Heaviside's four vector
-// laws, and the dipole field that fieldAt() computes. The live values are λ,
-// k = kOf(), the axis angle from the turn above, the phase t mod 2π, the
-// near/far crossover r = 1/k. dipoleAnchor() gives the source and its near
-// zone to the plate leader.
-let saverLabel=null,saverTimer=0;
-function saverPlate(){
-  if(!saverLabel)return;
-  const k=kOf(),groups=((window.T24&&window.T24.concepts)||[]);
-  const total=groups.reduce((a,c)=>a+c.lines.length,0);
-  const short={gaussE:'Gauss E',gaussB:'Gauss B',faraday:'Faraday',ampere:'Ampère–Maxwell'};
-  const lines=[];
-  if(groups.length)lines.push('Maxwell wrote '+total+' scalar lines: '+groups.map(c=>(short[c.key]||c.name.replace(/ relations$/,''))+' '+c.lines.length).join(', ')+'.');
-  lines.push('Lines: E stream function. Heat map: B⊥.');
-  // Parameters and TeX. The classes are those of typeset.mjs (E m2, B m1,
-  // J m5, rho m4, lambda m6), the same as the page's equation panel.
-  const params=[{sym:'\\lambda',name:'wavelength',value:SIM.lambda.toFixed(0)+' px',cls:'m6'},
-    {sym:'1/k',name:'near–far crossover',value:(1/k).toFixed(1)+' px'},
-    {sym:'\\theta_a',name:'dipole axis, turning',value:SIM.axisDeg.toFixed(1)+'°'},
-    {sym:'t',name:'phase mod 2π',value:(SIM.t%(2*Math.PI)).toFixed(2)}];
-  saverLabel({
-    title:'Twenty to Four · radiating dipole',
-    sub:'Maxwell 1865, twenty scalar lines; Heaviside 1884, four vector laws',
-    params,lines,
-    tex:[String.raw`\nabla\cdot\vec{E}=\frac{\rho}{\varepsilon_0},\qquad \nabla\cdot\vec{B}=0`,
-      String.raw`\nabla\times\vec{E}=-\frac{\partial\vec{B}}{\partial t},\qquad \nabla\times\vec{B}=\mu_0\vec{J}+\mu_0\varepsilon_0\frac{\partial\vec{E}}{\partial t}`,
-      String.raw`\vec{E}=A\Big[\Big(\frac{\cos u}{r^3}+\frac{k\sin u}{r^2}\Big)(3\cos\theta\,\hat{r}-\hat{a})+\frac{k^2\cos u}{r}(\hat{a}-\cos\theta\,\hat{r})\Big]`,
-      String.raw`B_\perp=A\,(\hat{r}\times\hat{a})\Big(\frac{k^2\cos u}{r}+\frac{k\sin u}{r^2}\Big),\qquad u=kr-t`],
-    rules:[['\\vec{E}','m2'],['\\vec{B}','m1'],['B_\\perp','m1'],['\\vec{J}','m5'],['\\rho','m4'],['\\lambda','m6']],
-    eq:['∇·E = ρ/ε₀     ∇·B = 0',
-        '∇×E = −∂B/∂t     ∇×B = μ₀J + μ₀ε₀ ∂E/∂t',
-        'u = k r − t,   rad = k² cos u/r',
-        'near = cos u/r³ + k sin u/r²',
-        'E = A[near (3cosθ r̂ − â) + rad (â − cosθ r̂)]',
-        'B⊥ = A (r̂ × â)(k² cos u/r + k sin u/r²)'],
-    anchor:dipoleAnchor,
+function bars(el, items) {
+  const m = Math.max(1e-12, ...items.map(i => Math.abs(i.v)));
+  el.innerHTML = items.map(i => {
+    const w = Math.abs(i.v) / m * 50, left = i.v < 0 ? 50 - w : 50;
+    return `<div class="bar${i.sum ? ' sum' : ''}"><span class="bl">${i.label}</span><span class="bt"><i style="left:${left}%;width:${w}%;--c:${i.c || 'var(--ink)'}"></i><b></b></span><span class="bv">${fmt(i.v / m)}</span></div>`;
+  }).join('');
+}
+function seg(el, opts, cur, on) {
+  el.classList.add('seg');
+  el.innerHTML = opts.map(([v, h]) => `<button type="button" data-v="${v}"${v === cur ? ' class="on"' : ''}>${h}</button>`).join('');
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    on(b.dataset.v);
   });
 }
-// The dipole on screen, for the plate leader. The field lines fill the
-// window, so the anchor is the source SRC and the bright closed loops round
-// it: they close within about half a wavelength, so the radius is
-// λ/2 + 20 px (at least 40 px). The key point is SRC.
-function dipoleAnchor(){
-  const b=canvas.getBoundingClientRect(),x=b.left+SRC.x,y=b.top+SRC.y;
-  return{x,y,r:Math.max(40,SIM.lambda/2+20),pts:[{x,y}]};
+function slider(label, min, max, step, get, set, show) {
+  const row = document.createElement('label');
+  row.className = 'sl';
+  row.innerHTML = `<span class="sl-l">${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${get()}"><span class="sl-v"></span>`;
+  const inp = row.querySelector('input'), val = row.querySelector('.sl-v');
+  const upd = () => { val.innerHTML = show(+inp.value); };
+  inp.addEventListener('input', () => { set(+inp.value); upd(); });
+  upd();
+  return row;
 }
 
+function widget(name, el, ch) {
+  el.classList.add('w', 'w-' + name);
+  if (name === 'groups') {
+    el.innerHTML = GROUPS.map((g, gi) => `<div class="grp" data-g="${gi}" tabindex="0"><span class="gl">${g.g}</span><div class="gb"><span class="gn">${g.name}</span>${g.lines.map(i => `<span class="gm">${eqSVG('m' + String(i + 1).padStart(2, '0'))}</span>`).join('')}</div></div>`).join('');
+    let pinned = null;
+    const set = gi => { S.hl = gi; el.querySelectorAll('.grp').forEach(r => r.classList.toggle('lit', +r.dataset.g === gi)); };
+    el.querySelectorAll('.grp').forEach(r => {
+      const gi = +r.dataset.g;
+      r.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && pinned == null) set(gi); });
+      r.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && pinned == null) set(null); });
+      r.addEventListener('click', () => { pinned = pinned === gi ? null : gi; set(pinned); });
+      r.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); r.click(); } });
+    });
+  } else if (name === 'quantities') {
+    el.innerHTML = '<div class="qt">' + QUANTITIES.map((q, i) => `<span class="qa">${eqSVG('q' + i + 'a')}</span><span class="qn">${q[1]}</span><span class="qb">${eqSVG('q' + i + 'b')}</span>`).join('') + '</div>';
+  } else if (name === 'four') {
+    const L = [['I', 'Gauss', 'Electric field lines begin and end on charge.'], ['II', 'No magnetic charge', 'Magnetic field lines never end.'],
+      ['III', 'Faraday', 'A changing magnetic field curls the electric field.'], ['IV', 'Ampère and Maxwell', 'Current, and a changing electric field, curl the magnetic field.']];
+    el.innerHTML = L.map(([n, t, d]) => `<div class="law"><div class="lh"><span class="ln">${n}</span><span class="lt">${t}</span></div><div class="lm">${eqSVG('law' + n)}</div><p>${d}</p></div>`).join('');
+  } else if (name === 'falloff') {
+    el.innerHTML = '<canvas class="chart" aria-label="Size of the three parts of the field against kr"></canvas><p class="cap">The size of the field on the equator against <i>kr</i>, on log scales. Dashed: the three parts alone. The marker is the probe distance of the curl chapter.</p>';
+    const cv = el.querySelector('canvas');
+    const draw = () => drawFalloff(cv);
+    new ResizeObserver(draw).observe(cv);
+    live.push(() => { if (S.chapter === 'field' && cv.dataset.key !== chartKey()) draw(); });
+  } else if (name === 'maps') {
+    const M = [['B', 'sb', 'sBy'], ['Ex', 'sP', 'sEx'], ['Ez', 'sR', 'sEz'], ['Jx', 'sp1', 'sJx'], ['Jz', 'sr1', 'sJz'], ['Az', 'sH', 'sAz'], ['phi', 'sPsi', 'sphi'], ['none', '', '']];
+    const box = document.createElement('div');
+    seg(box, M.map(([v, a, b]) => [v, v === 'none' ? 'Lines only' : `<span class="mx">${eqSVG(a)}</span><span class="md">${eqSVG(b)}</span>`]), S.map, v => { S.map = v; });
+    box.classList.add('maps');
+    el.appendChild(box);
+    const cap = document.createElement('p'); cap.className = 'cap';
+    cap.textContent = 'Top: Maxwell’s symbol. Below: today’s name. In this plane the y parts of E and A are zero, so they have no button.';
+    el.appendChild(cap);
+  } else if (name === 'fieldctl') {
+    el.appendChild(slider('Wavelength', 0.6, 1.6, 0.05, () => S.lam, v => { S.lam = v; }, v => `${v.toFixed(2)}`));
+    el.appendChild(slider('Speed', 0, 2, 0.05, () => S.speed, v => { S.speed = v; }, v => `${v.toFixed(2)}×`));
+    el.appendChild(slider('Line spacing', 0.08, 0.32, 0.01, () => S.lineGap, v => { S.lineGap = v; }, v => v.toFixed(2)));
+    const a = document.createElement('div');
+    seg(a, [['0', 'No arrows'], ['1', 'Arrows of E']], String(S.arrows), v => { S.arrows = +v; });
+    el.appendChild(a);
+  } else if (name === 'curl') {
+    const which = ch.id === 'curlB' ? 'B' : 'E';
+    el.innerHTML = `<table class="ct"><thead><tr><th>loop</th><th>circulation ÷ area</th><th>partials</th><th>${which === 'B' ? eqSVG('ldispB') : eqSVG('lmdBdt')}</th></tr></thead><tbody></tbody></table><p class="cap">Scaled by the largest size of the curl at the probe. The loop column integrates round a square of side 10<sup>−3</sup>; the partials column takes the derivatives of Maxwell’s lines; the last column is the other side of the law.</p>`;
+    const tb = el.querySelector('tbody');
+    live.push(() => {
+      const r = stage.readouts.curl;
+      if (!r || r.which !== which || S.chapter !== ch.id) return;
+      const m = Math.max(1e-12, ...r.lines.map(Math.abs), ...r.cmp.map(Math.abs));
+      tb.innerHTML = ['yz', 'zx', 'xy'].map((p, i) => `<tr><td><i>${p}</i> → <i>${'xyz'[i]}</i></td><td>${fmt(r.loops[i] / m)}</td><td>${fmt(r.lines[i] / m)}</td><td>${fmt(r.cmp[i] / m)}</td></tr>`).join('');
+    });
+  } else if (name === 'div') {
+    const top = document.createElement('div');
+    seg(top, [['E', `Field ${eqSVG('iE')}`], ['B', `Field ${eqSVG('iB')}`]], S.divField, v => { S.divField = v; });
+    el.appendChild(top);
+    const b = document.createElement('div'); b.className = 'bars'; el.appendChild(b);
+    const cap = document.createElement('p'); cap.className = 'cap'; cap.innerHTML = 'Each bar is one pair of faces: the flux out minus the flux in, divided by the volume. Scaled by the largest bar.'; el.appendChild(cap);
+    live.push(() => {
+      const r = stage.readouts.div;
+      if (!r || S.chapter !== 'div') return;
+      const c = r.which === 'B' ? 'var(--m1)' : 'var(--m2)';
+      bars(b, [0, 1, 2].map(i => ({ label: `∂<sub>${'xyz'[i]}</sub>${r.which}<sub>${'xyz'[i]}</sub>`, v: r.pairs[i], c }))
+        .concat([{ label: 'sum', v: r.pairs[0] + r.pairs[1] + r.pairs[2], c: 'var(--ink)', sum: true }]));
+    });
+  } else if (name === 'gauge') {
+    el.appendChild(slider(`Gauge ${eqSVG('ichi')}`, 0, 1, 0.01, () => S.gauge, v => { S.gauge = v; }, v => `g = ${v.toFixed(2)}`));
+    const m = document.createElement('div');
+    seg(m, [['Az', `Map ${eqSVG('sAz')}`], ['phi', `Map ${eqSVG('sphi')}`]], S.gaugeMap, v => { S.gaugeMap = v; });
+    el.appendChild(m);
+    const out = document.createElement('div'); out.className = 'readout'; el.appendChild(out);
+    live.push(() => {
+      const r = stage.readouts.gauge;
+      if (!r || S.chapter !== 'gauge') return;
+      out.innerHTML = `<div><span>Change in ${eqSVG('iA')}</span><b>${fmt(r.dA)}</b></div><div><span>Change in ${eqSVG('iE')}</span><b>${fmt(r.dE)}</b></div><div><span>Change in ${eqSVG('iB')}</span><b>${fmt(r.dB)}</b></div>`;
+    });
+    const cap = document.createElement('p'); cap.className = 'cap';
+    cap.textContent = 'Measured near the blob: the largest change of each field, against the size of E there. A changes by order one; E and B change by rounding error of the finite differences.';
+    el.appendChild(cap);
+  } else if (name === 'forms') {
+    const AX = ['t', 'x', 'y', 'z'];
+    let grid = '<div class="fm"><span></span>' + AX.map(a => `<span class="fh">${eqSVG('ix' + a)}</span>`).join('');
+    for (let r = 0; r < 4; r++) grid += `<span class="fh">${eqSVG('ix' + AX[r])}</span>` + [0, 1, 2, 3].map(c => `<span class="fc" data-rc="${r}${c}">${eqSVG('Fc' + (r * 4 + c))}</span>`).join('');
+    grid += '</div>';
+    el.innerHTML = grid + '<div class="tri"></div><div class="tri-eq eq"></div><div class="bars"></div><p class="cap">The three terms of the chosen component at the probe, scaled by the largest. They cancel.</p>';
+    const T = [['xyz', 'tXYZ', 'II'], ['tyz', 'tTYZ', 'III, x'], ['tzx', 'tTZX', 'III, y'], ['txy', 'tTXY', 'III, z']];
+    const tri = el.querySelector('.tri'), teq = el.querySelector('.tri-eq'), bb = el.querySelector('.bars');
+    const show = i => {
+      S.triple = i;
+      teq.innerHTML = eqSVG(T[i][1]);
+      const [l, m, n] = F.TRIPLES[i];
+      const cells = new Set([`${m}${n}`, `${n}${m}`, `${n}${l}`, `${l}${n}`, `${l}${m}`, `${m}${l}`]);
+      el.querySelectorAll('.fc').forEach(c => c.classList.toggle('lit', cells.has(c.dataset.rc)));
+    };
+    seg(tri, T.map(([a, , law], i) => [String(i), `(${a.split('').join(' ')}) <small>law ${law}</small>`]), String(S.triple), v => show(+v));
+    show(S.triple);
+    live.push(() => {
+      if (S.chapter !== 'forms') return;
+      const k = F.kOf(S.lam), P = S.probe, h = 1e-5, [l, m, n] = F.TRIPLES[S.triple];
+      const at = X => { const E = [0, 0, 0], B = [0, 0, 0]; F.EB(X[1], X[2], X[3], X[0], k, E, B); return F.tensorF(E, B); };
+      const X = [S.t, ...P];
+      const d = (mu, a, b) => { const p = X.slice(), q = X.slice(); p[mu] += h; q[mu] -= h; return (at(p)[a][b] - at(q)[a][b]) / (2 * h); };
+      const A = 'txyz';
+      const terms = [[l, m, n], [m, n, l], [n, l, m]].map(([a, b, c]) => ({ label: `∂<sub>${A[a]}</sub>F<sub>${A[b]}${A[c]}</sub>`, v: d(a, b, c), c: 'var(--ink)' }));
+      bars(bb, terms.concat([{ label: 'sum', v: terms.reduce((s, x) => s + x.v, 0), sum: true }]));
+    });
+  }
+}
+
+// The falloff chart: |E| on the equator against kr, log-log.
+const chartKey = () => S.lam + ',' + S.probe.map(v => v.toFixed(3)).join(',');
+function drawFalloff(cv) {
+  const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.dataset.key = chartKey();
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const L = 34, Rr = 10, T = 10, B = 26, x0 = -1.3, x1 = 1.6, y0 = -2, y1 = 3.6;
+  const X = lx => L + (lx - x0) / (x1 - x0) * (w - L - Rr), Y = ly => T + (1 - (ly - y0) / (y1 - y0)) * (h - T - B);
+  g.font = '11px Inter, system-ui, sans-serif'; g.fillStyle = '#7f8b96'; g.strokeStyle = 'rgba(160,175,190,0.14)'; g.lineWidth = 1;
+  for (let e = -1; e <= 1; e++) { g.beginPath(); g.moveTo(X(e), T); g.lineTo(X(e), h - B); g.stroke(); g.fillText(e === 0 ? '1' : `10${e < 0 ? '⁻¹' : ''}`, X(e) - 6, h - 8); }
+  for (let e = -2; e <= 3; e++) { g.beginPath(); g.moveTo(L, Y(e)); g.lineTo(w - Rr, Y(e)); g.stroke(); }
+  g.fillText('kr', w - Rr - 14, h - 8);
+  const curve = (f, col, dash, lw) => {
+    g.beginPath(); g.setLineDash(dash); g.strokeStyle = col; g.lineWidth = lw;
+    for (let i = 0; i <= 120; i++) { const lx = x0 + (x1 - x0) * i / 120, v = Math.log10(f(10 ** lx)); const yy = Y(Math.max(y0 - 1, Math.min(y1 + 1, v))); i ? g.lineTo(X(lx), yy) : g.moveTo(X(lx), yy); }
+    g.stroke(); g.setLineDash([]);
+  };
+  g.save(); g.beginPath(); g.rect(L, T, w - L - Rr, h - T - B); g.clip();
+  curve(x => 1 / x ** 3, 'rgba(232,137,220,0.75)', [4, 4], 1.2);
+  curve(x => 1 / x ** 2, 'rgba(168,164,255,0.75)', [4, 4], 1.2);
+  curve(x => 1 / x, 'rgba(98,196,255,0.8)', [4, 4], 1.2);
+  curve(F.ampEquator, '#ff9a62', [], 2);
+  g.strokeStyle = 'rgba(230,235,240,0.5)'; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(X(0), T); g.lineTo(X(0), h - B); g.stroke(); g.setLineDash([]);
+  const kr = F.kOf(S.lam) * Math.hypot(S.probe[0], S.probe[2]), lx = Math.log10(kr);
+  g.fillStyle = '#ff9a62'; g.beginPath(); g.arc(X(lx), Y(Math.log10(F.ampEquator(kr))), 3.5, 0, 7); g.fill();
+  g.restore();
+  g.fillStyle = '#e889dc'; g.fillText('1/(kr)³', X(-1.2), Y(3.2));
+  g.fillStyle = '#a8a4ff'; g.fillText('1/(kr)²', X(-0.55), Y(1.6) - 4);
+  g.fillStyle = '#62c4ff'; g.fillText('1/kr', X(1.05), Y(-1.05) - 6);
+  g.fillStyle = '#c9d2dc'; g.fillText('kr = 1', X(0) + 4, T + 10);
+}
+
+// ── chapters ───────────────────────────────────────────────────────────────
+const chapterIx = id => CHAPTERS.findIndex(c => c.id === id);
+function setChapter(id, opts = {}) {
+  const c = CHAPTERS[chapterIx(id)];
+  if (!c || (S.chapter === id && !opts.force)) return;
+  S.chapter = id; S.scene = c.scene;
+  S.view = { yaw: 0, pitch: 0, zoom: 1, held: false };
+  if (id !== 'twenty') S.hl = null;
+  document.querySelectorAll('.ch').forEach(s => s.classList.toggle('active', s.dataset.id === id));
+  const i = chapterIx(id);
+  $('dkTitle').textContent = c.title; $('dkNo').textContent = `${i + 1}/${CHAPTERS.length}`;
+  $('dkPrev').disabled = i === 0; $('dkNext').disabled = i === CHAPTERS.length - 1;
+  legend();
+}
+function goChapter(i) {
+  const c = CHAPTERS[Math.max(0, Math.min(CHAPTERS.length - 1, i))];
+  const el = $('ch-' + c.id);
+  scrollEl.scrollTo({ top: el.offsetTop - 12, behavior: 'smooth' });
+  setChapter(c.id);
+}
+function activeFromScroll() {
+  const lim = scrollEl.scrollTop + scrollEl.clientHeight * 0.34;
+  let id = CHAPTERS[0].id;
+  for (const c of CHAPTERS) { const el = $('ch-' + c.id); if (el.offsetTop <= lim) id = c.id; }
+  if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 4) id = CHAPTERS[CHAPTERS.length - 1].id;
+  setChapter(id);
+}
+
+// The stage legend: what the colours mean in this scene.
+function legend() {
+  const sw = (cls, txt) => `<div class="lg"><i class="${cls}"></i><span>${txt}</span></div>`;
+  const E = sw('sw-e', `Lines of ${eqSVG('iE')}`), Bt = sw('sw-bt', `${eqSVG('iB')} toward you`), Ba = sw('sw-ba', `${eqSVG('iB')} away`);
+  const L = {
+    fold: E + Bt + Ba,
+    field: E + Bt + Ba + sw('sw-k', 'The ring kr = 1'),
+    curlB: sw('sw-bt', `Loops of ${eqSVG('iB')} and their curl`) + sw('sw-e', eqSVG('ldispB')) + '<p>Drag to turn. Tap the sheet to move the probe.</p>',
+    curlE: sw('sw-e', `Loops of ${eqSVG('iE')} and their curl`) + sw('sw-bt', eqSVG('lmdBdt')) + '<p>Drag to turn. Tap the sheet to move the probe.</p>',
+    div: sw('sw-e', 'Flux out of each face') + sw('sw-dim', 'Flux in') + '<p>Drag to turn. Tap the sheet to move the cube.</p>',
+    four: E + sw('sw-bt', `${eqSVG('iB')} clockwise, seen from above`) + sw('sw-ba', `${eqSVG('iB')} counterclockwise`) + sw('sw-lobe', 'Radiated power') + '<p>Drag to turn.</p>',
+    gauge: sw('sw-a', `Arrows of ${eqSVG('iA')}`) + E + '<p>The dashed circle is the blob of χ.</p>',
+    forms: sw('sw-ink', 'Loops on the six faces') + '<p>Each edge cancels. Drag to turn.</p>',
+  };
+  $('legend').innerHTML = L[S.scene] || '';
+}
+
+// ── layout ─────────────────────────────────────────────────────────────────
+let R = null, stage = null;
+let sheetState = 'half';   // phone: 'closed' | 'half' | 'full'
+function layout() {
+  const phone = PHONE_Q.matches;
+  document.body.classList.toggle('phone', phone);
+  document.body.dataset.sheet = sheetState;
+  const r = stageEl.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (R) R.resize(r.width, r.height, dpr);
+  if (S.saver) return;
+  if (phone) {
+    const top = document.querySelector('.topbar');
+    const tb = top && getComputedStyle(top).display !== 'none' ? top.getBoundingClientRect().bottom - r.top : 0;
+    const sh = storyEl.getBoundingClientRect(), dock = $('dock').getBoundingClientRect();
+    const coverTop = sheetState === 'closed' ? dock.top : Math.min(sh.top, dock.top);
+    let b = Math.max(0, r.bottom - coverTop) + 6, t = Math.max(0, tb) + 6;
+    const minH = r.height * 0.34;
+    if (r.height - t - b < minH) b = Math.max(0, r.height - t - minH);
+    S.band = { t, b };
+  } else S.band = null;
+}
+function setSheet(s) {
+  sheetState = s;
+  document.body.dataset.sheet = s;
+  $('dkStory').setAttribute('aria-expanded', String(s !== 'closed'));
+  setTimeout(layout, 320);
+  layout();
+}
+
+// ── pointer: orbit, zoom, tap ──────────────────────────────────────────────
+function bindPointer() {
+  const pts = new Map();
+  let down = null, pinch0 = 0, zoom0 = 1, heldTimer = 0;
+  const flat = () => ['fold', 'field', 'gauge'].includes(S.scene);
+  canvas.addEventListener('pointerdown', e => {
+    canvas.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 1) down = { x: e.clientX, y: e.clientY, yaw: S.view.yaw, pitch: S.view.pitch, moved: false };
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); zoom0 = S.view.zoom; }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (pinch0 > 0) S.view.zoom = Math.max(0.35, Math.min(3, zoom0 * pinch0 / d));
+      if (down) down.moved = true;
+      return;
+    }
+    if (!down) return;
+    const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    if (Math.hypot(dx, dy) > 6) down.moved = true;
+    if (down.moved && !flat()) {
+      S.view.yaw = down.yaw - dx * 0.006; S.view.pitch = Math.max(-1.2, Math.min(1.2, down.pitch + dy * 0.005));
+      S.view.held = true; clearTimeout(heldTimer);
+    }
+  });
+  const up = e => {
+    pts.delete(e.pointerId);
+    if (pts.size === 0 && down) {
+      if (!down.moved) tap(e.clientX, e.clientY);
+      down = null;
+      heldTimer = setTimeout(() => { S.view.held = false; }, 6000);
+    }
+  };
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); S.view.zoom = Math.max(0.35, Math.min(3, S.view.zoom * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
+  canvas.addEventListener('dblclick', () => { S.view = { yaw: 0, pitch: 0, zoom: 1, held: false }; });
+  function tap(cx, cy) {
+    if (PHONE_Q.matches && sheetState === 'full') { setSheet('half'); return; }
+    if (!['curlB', 'curlE', 'div', 'forms', 'field'].includes(S.scene)) return;
+    const r = canvas.getBoundingClientRect(), p = stage.pick(S, cx - r.left, cy - r.top);
+    if (!p) return;
+    const rho = Math.abs(p[0]);
+    if (rho < 0.12 || rho > 2 || Math.abs(p[2]) > 1.6) return;
+    S.probe = [p[0], 0, p[2]];
+  }
+}
+
+// ── dock and keys ──────────────────────────────────────────────────────────
+function bindDock() {
+  $('dkPlay').addEventListener('click', () => { S.playing = !S.playing; syncPlay(); });
+  $('dkPrev').addEventListener('click', () => goChapter(chapterIx(S.chapter) - 1));
+  $('dkNext').addEventListener('click', () => goChapter(chapterIx(S.chapter) + 1));
+  $('dkChapter').addEventListener('click', () => { if (PHONE_Q.matches) setSheet(sheetState === 'closed' ? 'half' : sheetState === 'half' ? 'full' : 'closed'); else goChapter(chapterIx(S.chapter)); });
+  $('dkStory').addEventListener('click', () => setSheet(sheetState === 'closed' ? 'half' : 'closed'));
+  // The sheet grip: tap to toggle half and full, drag down to close.
+  const grip = $('sheetGrip');
+  let y0 = null;
+  grip.addEventListener('pointerdown', e => { y0 = e.clientY; grip.setPointerCapture(e.pointerId); });
+  grip.addEventListener('pointerup', e => {
+    if (y0 == null) return;
+    const dy = e.clientY - y0; y0 = null;
+    if (dy > 40) setSheet(sheetState === 'full' ? 'half' : 'closed');
+    else if (dy < -40) setSheet('full');
+    else setSheet(sheetState === 'full' ? 'half' : 'full');
+  });
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, textarea')) return;
+    if (e.key === ' ') { e.preventDefault(); S.playing = !S.playing; syncPlay(); }
+    else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goChapter(chapterIx(S.chapter) + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goChapter(chapterIx(S.chapter) - 1); }
+  });
+}
+function syncPlay() {
+  const b = $('dkPlay');
+  b.classList.toggle('paused', !S.playing);
+  b.setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+  b.title = S.playing ? 'Pause (space)' : 'Play (space)';
+}
+
+// ── the loop ───────────────────────────────────────────────────────────────
+let last = 0, liveAt = 0;
+function frame(ms) {
+  requestAnimationFrame(frame);
+  const now = ms / 1000, dt = Math.min(0.1, last ? now - last : 0);
+  last = now;
+  S.clock += dt;
+  if (S.saverTick) S.saverTick(dt);
+  // One period every 4 s at speed 1 (c = 1, so the period is λ).
+  if (S.playing) S.t += dt * S.speed * S.lam / 4;
+  stage.draw(S, S.clock);
+  if (now - liveAt > 0.12) { liveAt = now; for (const f of live) f(); }
+}
+
+function boot() {
+  buildStory();
+  bindDock();
+  syncPlay();
+  let ok = true;
+  try { R = createRenderer(canvas); } catch (e) { R = null; console.error(e); }
+  if (!R) { ok = false; $('nogl').hidden = false; }
+  if (ok) { try { stage = createStage(R); } catch (e) { ok = false; console.error(e); $('nogl').hidden = false; } }
+  setChapter(CHAPTERS[0].id, { force: true });
+  scrollEl.addEventListener('scroll', () => requestAnimationFrame(activeFromScroll), { passive: true });
+  new ResizeObserver(layout).observe(stageEl);
+  addEventListener('resize', layout);
+  PHONE_Q.addEventListener?.('change', layout);
+  layout();
+  if (!ok) return;
+  bindPointer();
+  const fonts = ["italic 400 16px 'STIX Two Text'", "500 16px 'STIX Two Text'", '500 16px Inter'];
+  Promise.all(fonts.map(f => document.fonts.load(f).catch(() => null))).then(() => stage.fontsReady());
+  // The screensaver hook loads on its own, so a fault there cannot stop
+  // the page.
+  import('./saver.js').then(m => m.installSaver({ S, stage, layout, setChapter, CHAPTERS, canvas, R })).catch(e => console.warn('saver', e));
+  window.t24 = { S, stage, setChapter, goChapter };
+  requestAnimationFrame(frame);
+}
+boot();
