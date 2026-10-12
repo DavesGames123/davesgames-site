@@ -808,12 +808,58 @@ function shownPanes() {
   if (app.mode === 'play') { const o = $('app').dataset.opp; return o === 'A' || o === 'B' ? [$(`heroPane${o}`)] : []; }
   return [$('heroPaneA'), $('heroPaneB')];
 }
+// The brain of the other fly in play mode on a wide screen: a square at
+// the upper right, over the crowd, clear of your mat, your library, the
+// mat of the other fly, the dock, the hand and the scorecards
+// (playBrainBox of brainpanels.js; the 1600x900 capture of 2026-10-12
+// showed the old right column over your library and the dock). The seat
+// view then takes the full canvas. false: the CSS place stays (a tall
+// frame, no scene rects, no free square).
+const PANE_KEYS = ['left', 'top', 'width', 'height', 'right', 'bottom'];
+function unplacePanes(keep = null) {
+  for (const id of ['heroPaneA', 'heroPaneB']) {
+    const pane = $(id);
+    if (!pane?.dataset?.place || pane === keep) continue;
+    for (const k of PANE_KEYS) pane.style[k] = '';
+    const cap = pane.querySelector('.bp-cap');
+    if (cap) for (const k of [...PANE_KEYS, 'maxWidth']) cap.style[k] = '';
+    delete pane.dataset.place; delete pane.dataset.cap;
+    hero.panels?.resize();
+  }
+}
+function placePlayBrain(sc, PM, cv, wide) {
+  const pane = shownPanes()[0];
+  if (app.mode !== 'play' || !wide || !pane || !sc.seatRects || !PM?.playBrainBox) return false;
+  const human = $('app').dataset.opp === 'A' ? 1 : 0;
+  const R = sc.seatRects(human);
+  const cb = cv?.getBoundingClientRect?.(), ab = $('app')?.getBoundingClientRect?.();
+  if (!R || !cb || !ab || !(cb.width > 0)) return false;
+  const root = $('playRoot');
+  const rel = el => { const r = el && !el.hidden ? el.getBoundingClientRect() : null; return r && r.width > 0 ? { x: r.left - cb.left, y: r.top - cb.top, w: r.width, h: r.height } : null; };
+  const q = s => rel(root?.querySelector(s));
+  const cards = [q('.pl-sc0'), q('.pl-sc1')].filter(Boolean);
+  const top = Math.max(8, ...cards.map(r => r.y + r.h + 6));
+  const avoid = [R.mine.mat, R.mine.library, R.opp.mat, q('.pl-dock'), q('.pl-sec'), q('.pl-handbox'), q('.pl-menubtn'), q('.pl-bar'), ...cards];
+  const res = PM.playBrainBox({ w: cb.width, h: cb.height }, avoid, { top, capAvoid: [R.opp.fly] });
+  if (!res) return false;
+  unplacePanes(pane);
+  const px = v => `${Math.round(v)}px`;
+  const b = res.brain;
+  Object.assign(pane.style, { left: px(cb.left - ab.left + b.x), top: px(cb.top - ab.top + b.y), width: px(b.w), height: px(b.h), right: 'auto', bottom: 'auto' });
+  const cap = pane.querySelector('.bp-cap');
+  if (cap) Object.assign(cap.style, { left: px(res.cap.x - b.x), top: px(res.cap.y - b.y), width: px(res.cap.w), maxWidth: px(res.cap.w), height: px(res.cap.h), right: 'auto', bottom: 'auto' });
+  const key = `${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.w)}`;
+  if (pane.dataset.place !== key) { pane.dataset.place = key; pane.dataset.cap = res.capSide; hero.panels?.resize(); }
+  return true;
+}
 function syncClear() {
   const sc = hero.scene, PM = app.panelMod;
   if (!sc?.setClear) return null;
   const cv = app.mode === 'play' && app.playScene ? (app.cv || $('heroCv')) : $('heroCv');
   const box = el => (el?.getBoundingClientRect ? el.getBoundingClientRect() : null);
   const wide = wideScreen();
+  if (app.mode === 'play' && placePlayBrain(sc, PM, cv, wide)) return sc.setClear({ l: 0, r: 0, t: 0, b: 0, frame: null });
+  unplacePanes();
   if (app.mode === 'watch') {
     const sq = shownPanes().map(p => box(p?.querySelector?.('.bp-cv')));
     return sc.setClear(PM?.fillFrame ? PM.fillFrame(box(cv), sq, wide) : { frame: wide ? 'wide' : null, fill: true });

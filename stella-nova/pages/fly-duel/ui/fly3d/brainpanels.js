@@ -64,6 +64,7 @@
 //      export function projectedBounds  the screen box of the brain
 //      export function clearInsets .... overlay rects -> table insets (play)
 //      export function fillFrame ...... brain squares -> watch framing
+//      export function playBrainBox ... the brain of the other fly (play)
 //      export function createBrainPanels  the panels, shared renderer
 //      function makePanel ............. one map, scene, camera, controls
 //      function draw .................. viewport render + drawImage copy
@@ -135,6 +136,48 @@ export function clearInsets(canvas, overlays, wide) {
   }
   for (const k of ['l', 'r', 't', 'b']) out[k] = Math.round(out[k]);
   return out;
+}
+
+// The place of the brain of the other fly in play mode on a wide screen
+// (main.js syncClear). The user (verbatim, 2026-10-12): "when i'm
+// playing against fly b, we want a big visualization of the fly's
+// brain", and "the fly brain is obscuring my ability to see my hand in
+// play mode". Before, the brain filled a right column from the scorecard
+// to the hand line, and the seat view was framed left of it: the brain
+// lay over your library and your mat, and its caption lay behind the
+// dock (the 1600x900 capture of 2026-10-12). Now the brain is a square
+// at the upper right, over the crowd, above the far edge of the mat of
+// the other fly, as large as the free space lets it be; the seat view
+// takes the full canvas.
+//   view   { w, h }: the canvas, CSS px.
+//   avoid  rects { x, y, w, h } (canvas px) that the brain and its caption
+//          must not touch: your mat, your library, the mat of the other
+//          fly, the dock, the scorecards, the hand line (null: skipped).
+//   o      { top, pad, gap, capW, capH, min, max, capAvoid }: capAvoid,
+//          more rects for the caption only (the other fly).
+// Returns { brain, cap, capSide: 'left' | 'below' | 'inside' } (canvas
+// px) or null when no square of at least o.min fits. The caption goes to
+// the left of the square, else under it, else in its base.
+export const PLAY_BRAIN = Object.freeze({ pad: 8, gap: 6, capW: 230, capH: 40, min: 140, maxH: 0.5, maxW: 0.4 });
+const hit = (a, b, g = 0) => !!(a && b) && a.x < b.x + b.w + g && b.x < a.x + a.w + g && a.y < b.y + b.h + g && b.y < a.y + a.h + g;
+export function playBrainBox(view, avoid = [], o = {}) {
+  const P = { ...PLAY_BRAIN, top: 72, capAvoid: [], ...o };
+  const w = view?.w || 0, h = view?.h || 0;
+  if (!(w > 0 && h > 0)) return null;
+  const list = (avoid || []).filter(Boolean), capList = [...list, ...(P.capAvoid || []).filter(Boolean)];
+  const max = Math.floor(Math.min(h * P.maxH, w * P.maxW, h - P.top - P.pad));
+  for (let s = max; s >= P.min; s -= 2) {
+    const brain = { x: w - P.pad - s, y: P.top, w: s, h: s };
+    if (list.some(r => hit(brain, r, P.gap))) continue;
+    const left = { x: brain.x - P.gap - P.capW, y: brain.y + s - P.capH, w: P.capW, h: P.capH };
+    if (left.x >= P.pad && !capList.some(r => hit(left, r, P.gap))) return { brain, cap: left, capSide: 'left' };
+    const below = { x: brain.x, y: brain.y + s + 2, w: s, h: P.capH };
+    if (below.y + below.h <= h && !capList.some(r => hit(below, r, P.gap))) return { brain, cap: below, capSide: 'below' };
+    // no free place beside or under it: the caption lies in the square,
+    // at its base (the brain map stands over the middle of the square)
+    return { brain, cap: { x: brain.x, y: brain.y + s - P.capH, w: s, h: P.capH }, capSide: 'inside' };
+  }
+  return null;
 }
 
 // The watch framing of the table under the transparent brains (main.js

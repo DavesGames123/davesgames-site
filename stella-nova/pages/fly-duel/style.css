@@ -429,7 +429,11 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
        width), from the top to the bar.
      PLAY: only the brain of the opposing fly (data-opp A|B), on its side
        (wide) or at the top (tall), between the play scorecards and the
-       hand (--play-top, --play-bot). The bot has no brain.
+       hand (--play-top, --play-bot). The bot has no brain. On a wide
+       screen main.js placePlayBrain sets the pane inline (data-place): a
+       square at the upper right over the crowd, clear of your mat, your
+       library, the mat of the other fly and the dock
+       (brainpanels.js playBrainBox); the side column is the fallback.
    POINTER. A panel and its canvas take no pointer events: input goes to
    the table under them. Only .bp-grip, which brainpanels.js puts on the
    projected bounds of the brain, takes a drag (turn), the wheel (zoom)

@@ -54,7 +54,8 @@
 //  API
 //      createDuelScene(canvas, { connectomes, cards, names, reduced,
 //        coarse, headless }) -> { play(record) -> Promise, setState(state),
-//        resize(), setClear({ l, r, t, b, frame, fill }), render(dt), dispose(),
+//        resize(), setClear({ l, r, t, b, frame, fill }), seatRects(seat),
+//        render(dt), dispose(),
 //        setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), setBigBrain(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
@@ -129,6 +130,7 @@
 //      grep -n 'function applyHats'           the fedora on the opponent
 //      grep -n 'function shotPose'            camera place per shot
 //      grep -n 'export const WATCH'           watch framing numbers
+//      grep -n 'function seatRects'           board boxes of the seat view
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
 //      grep -n 'function pickFace'            any card under a point (zoom)
@@ -2115,6 +2117,48 @@ export function createDuelScene(canvas, opts = {}) {
     }
     for (const o of Z.perms.values()) o.mesh.visible = true;
   }
+  // seatRects(): the screen boxes of the board from the home seat view
+  // (canvas CSS px, from the top-left corner), for the layout of the play
+  // HUD (main.js syncClear places the brain of the other fly clear of
+  // them, ui/fly3d/brainpanels.js playBrainBox). It uses a copy of the
+  // camera at the seat pose, so an orbit or a camera move does not change
+  // it. { w, h, seat, mine: { mat, library }, opp: { mat, fly }, bigBrain }
+  // (bigBrain: the map of the other fly in the hall when it shows).
+  // seat: the seat when first person is off (play mode before the
+  // first game); null when there is neither.
+  const _sr = new THREE.Vector3(), _sb = new THREE.Box3();
+  function seatRects(seatIn = null) {
+    const me = fpSeat ?? (seatIn === 0 || seatIn === 1 ? seatIn : null);
+    if (me == null) return null;
+    const c = camera.clone();
+    seatPose(me, c.position, _sr);
+    c.fov = Math.round(seatVal('fov') * 10) / 10;
+    c.lookAt(_sr); c.updateProjectionMatrix(); c.updateMatrixWorld(true);
+    const w = viewW, h = viewH;
+    const rect = pts => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const q of pts) {
+        _sr.copy(q).project(c);
+        if (_sr.z > 1) continue;
+        const x = (_sr.x + 1) / 2 * w, y = (1 - _sr.y) / 2 * h;
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      return x1 > x0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+    };
+    const corners = b => [0, 1, 2, 3, 4, 5, 6, 7].map(i => new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
+    const mat = p => [[-MAT.u, MAT.v0], [MAT.u, MAT.v0], [-MAT.u, MAT.v1], [MAT.u, MAT.v1]].map(([u, v]) => seatPos(p, u, 0, v));
+    const lib = p => {
+      const n = mirror ? mirror.players[p].library : 20, top = n * 0.007 + 0.32;
+      const out = [];
+      for (const du of [-1, 1]) for (const dv of [-1, 1]) for (const y of [0, top]) out.push(seatPos(p, T.deckU + du * T.cardW / 2, y, T.deckV + dv * T.cardH / 2));
+      return out;
+    };
+    const op = 1 - me;
+    scene.updateMatrixWorld(true);
+    const fly = flies[op].holder.visible ? rect(corners(_sb.setFromObject(flies[op].holder))) : null;
+    const big = bigP >= 0 && brains[bigP] ? rect(corners(_sb.setFromObject(brains[bigP].group))) : null;
+    return { w, h, seat: me, mine: { mat: rect(mat(me)), library: rect(lib(me)) }, opp: { mat: rect(mat(op)), fly }, bigBrain: big };
+  }
   let fpOrbit = null;
   const _oa = new THREE.Vector3(), _ob = new THREE.Vector3();
   function orbitStart() {
@@ -2311,7 +2355,7 @@ export function createDuelScene(canvas, opts = {}) {
   }
 
   return {
-    play, setState, resize, setClear, get clear() { return { ...clear, w: viewW, h: viewH }; }, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
+    play, setState, resize, setClear, seatRects, get clear() { return { ...clear, w: viewW, h: viewH }; }, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
     setFirstPerson, pickPermanent, pickCard, pickFace, highlight, setRig, orbitBy, zoomBy, seatView,
     between: () => regame.busy, skipBetween: () => regame.skip(),
     world: { W, Z, flies, drums, piles, lights, hall, dice, arrows, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP), regame },

@@ -38,7 +38,14 @@ about the simulation and layout in fullscreen"
   its side) that never covers the cards or a hand: real neuron positions,
   the neuropil shell, KC sparse firing, spikes on real edges, DAN bursts
   per compartment, crisp (no soft glow). Play mode keeps the opponent's
-  brain big and drops only the human seat's map.
+  brain big and drops only the human seat's map. Then (verbatim,
+  2026-10-12): "when i'm playing against fly b, we want a big
+  visualization of the fly's brain" and "the fly brain is obscuring my
+  ability to see my hand in play mode". On a wide screen the brain of
+  the other fly is a square at the upper right, over the crowd, as large
+  as the space above the far mat lets it be, clear of your mat, your
+  library, the dock and the hand; its caption is beside it
+  (brainpanels.js playBrainBox, tests/play-brainplace.test.mjs).
   Then (verbatim): "that should be the main feature of the layout". So the
   two brains are the hero of the screen, not an inset: on wide screens
   the layout is brain A | the 3D table with the flies | brain B, each
