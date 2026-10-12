@@ -19,9 +19,10 @@
    (data/connectome-flywire.json). FLY3D.md is the spec of the 3D table.
 
    TWO MODES  (?mode=watch | ?mode=play in the URL)
-     watch  Fly A against Fly B on the 3D convention table. Scorecard of
-            Fly A top-left, Fly B top-right, each with its live neural
-            panel (ui/hud/scorecard.js). A pause between turns.
+     watch  Fly A against Fly B on the 3D convention table, a large live
+            brain of each fly on its side. The slim scorecard of each fly
+            (ui/hud/scorecard.js) lies over its brain. A pause between
+            turns.
      play   You against a model fly, first person (ui/play/play.js
             mountPlay). The 3D canvas moves into the play table.
    With no mode in the URL, the title screen (ui/chooser/chooser.js)
@@ -47,9 +48,11 @@
      "Not affiliated with or endorsed by Wizards of the Coast."
 
    GPU
-     One WebGL scene (three.js r160 from ../../vendor, by the import map):
-     ui/fly3d/scene.js. Play mode borrows the same canvas. When the scene
-     cannot start, the 2D table and 2D brains (#arena) take its place.
+     Two WebGL contexts in all: the scene of ui/fly3d/scene.js (three.js
+     r160 from ../../vendor, by the import map; play mode borrows the same
+     canvas) and the one shared renderer of the two brain panels
+     (ui/fly3d/brainpanels.js). When the scene cannot start, the 2D table
+     (#arena) takes its place and the 2D BrainView draws the panels.
      The drawer sections use 2D canvases and DOM cards only. No WebGPU.
 
    HEAD LOAD ORDER
@@ -63,18 +66,27 @@
    Script at the end of body: main.js (module).
 
    LAYOUT  (# marks an element id main.js binds to)
+     The two brains are the main feature (CONTRACT.md):
+       wide   [ brain A | 3D table with the flies | brain B ]  + bar
+       tall   [ brain A ] over [ table ] over [ brain B ]      + bar
+       play   the brain of the opposing fly on its side (data-opp A|B),
+              the play screen in the rest; no panel for the bot
      #app            fixed, 100vw x 100dvh; data-mode watch|play,
-                     data-table 3d|2d, data-sheet (chooser open)
-     watch HUD       #watchHud: #scA (Fly A, top-left) #heroTurn #scB
-                     (Fly B, top-right); #turnBanner (pause between turns)
+                     data-table 3d|2d, data-sheet (chooser open),
+                     data-brains panels|scene|off, data-opp A|B|bot (play)
+     brain panels    #heroPaneA #heroPaneB (.bp a|b): #heroBrainA
+                     #heroBrainB (2D canvases: ui/fly3d/brainpanels.js
+                     copies one shared WebGL renderer into them, or the
+                     2D BrainView of ui/brain.js draws them), captions
+                     #heroCapA #heroCapB (fly, wiring, active KCs, V, δ)
+     watch HUD       #watchHud: #scA (over brain A) #heroTurn #scB (over
+                     brain B); #turnBanner (pause between turns)
      fallback HUD    #hudBar #hudA #hudB (shows only when
                      ui/hud/scorecard.js does not load)
-     #heroStage      #heroCv #heroMaps #heroMapA #heroMapB #heroMove
-                     #heroLog, stage tag (honesty line)
+     #heroStage      #heroCv #heroMove #heroLog, stage tag (honesty line)
      .stagebar       #heroStatus #heroPlay #heroNew #heroSpeed #heroCam
                      #heroBrains #btnDecks #btnPlay #btnHow
-     #arena          2D stand-in: #heroPaneA #heroPaneB #heroCapA
-                     #heroCapB #heroBrainA #heroBrainB #heroBoard
+     #arena          2D stand-in of the table: #heroBoard
      #playRoot       play mode root (mountPlay)
      #chooser        the title screen of ui/chooser/chooser.js (mountChooser
                      fills it: mode cards, two seats, deck tiles, start)
@@ -105,6 +117,9 @@
      grep -n 'async function enterPlay'    watch -> play
      grep -n 'function exitPlay'           play -> watch
      grep -n 'function initScorecards'     watch scorecards
+     grep -n 'function initPanels'         the two brain panels
+     grep -n 'function brainFire'          a decision -> its fly's panel
+     grep -n 'function setBrains'          panels, in the hall, off
      grep -n 'function initHero'           watch match, 3D or 2D
      grep -n 'function initHow'            the drawer
      grep -n 'function loop'               one rAF loop
@@ -127,7 +142,7 @@
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
-<div class="app" id="app" data-mode="watch" data-table="3d">
+<div class="app" id="app" data-mode="watch" data-table="3d" data-brains="panels">
 
   <div class="hudbar" id="hudBar" hidden>
     <div class="hud a" id="hudA" aria-live="off"></div>
@@ -135,23 +150,26 @@
   </div>
 
   <div class="stage" id="heroStage">
-    <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a convention table play the card duel; each fly's mushroom body map floats beside it. Drag to turn the view."></canvas>
-    <div class="maps" id="heroMaps" hidden>
-      <figure class="map a"><figcaption><b class="seatmark s0">A</b> Fly A · model mushroom body</figcaption><canvas id="heroMapA" aria-label="3D map of the mushroom body of Fly A; drag to turn"></canvas></figure>
-      <figure class="map b"><figcaption><b class="seatmark s1">B</b> Fly B · model mushroom body</figcaption><canvas id="heroMapB" aria-label="3D map of the mushroom body of Fly B; drag to turn"></canvas></figure>
-    </div>
+    <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a convention table play the card duel. Drag to turn the view."></canvas>
     <ol class="log" id="heroLog" aria-label="Last moves"></ol>
     <p class="stage-move" id="heroMove" aria-live="polite"></p>
     <p class="stage-tag">Two computer models, <span data-wiring>wired from the connectomes</span> of two flies: each is a model, not a real fly</p>
   </div>
 
   <div class="arena" id="arena" hidden>
-    <div class="arena-brain a" id="heroPaneA" data-seat="0"><p class="brain-cap" id="heroCapA"><b class="seatmark s0">A</b> Fly A</p><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
     <div class="arena-mid">
       <div class="board" id="heroBoard" aria-live="off"><div class="board-empty">Loading…</div></div>
     </div>
-    <div class="arena-brain b" id="heroPaneB" data-seat="1"><p class="brain-cap" id="heroCapB"><b class="seatmark s1">B</b> Fly B</p><canvas class="fig brain" id="heroBrainB" aria-label="Brain of Fly B: point cloud of its mushroom body neurons"></canvas></div>
   </div>
+
+  <section class="bp a" id="heroPaneA" data-seat="0" aria-label="Fly A: live brain">
+    <canvas class="bp-cv" id="heroBrainA" aria-label="Live 3D map of the mushroom body of Fly A. Drag to turn it, tap a part to name it."></canvas>
+    <p class="bp-cap" id="heroCapA"><b class="seatmark s0">A</b><span class="bp-n">Fly A</span><span class="bp-src" data-src="A"></span><span class="bp-kc"></span></p>
+  </section>
+  <section class="bp b" id="heroPaneB" data-seat="1" aria-label="Fly B: live brain">
+    <canvas class="bp-cv" id="heroBrainB" aria-label="Live 3D map of the mushroom body of Fly B. Drag to turn it, tap a part to name it."></canvas>
+    <p class="bp-cap" id="heroCapB"><b class="seatmark s1">B</b><span class="bp-n">Fly B</span><span class="bp-src" data-src="B"></span><span class="bp-kc"></span></p>
+  </section>
 
   <div class="whud" id="watchHud">
     <div class="wtop">
@@ -171,7 +189,7 @@
       <button class="tgl go" id="btnPlay">Play a fly</button>
       <span class="seg mini" id="heroSpeed" role="group" aria-label="Speed"><button data-v="0.5">slow</button><button data-v="1" class="on">normal</button><button data-v="3">fast</button></span>
       <span class="ctl-l">camera</span><span class="seg mini" id="heroCam" role="group" aria-label="Camera"><button data-v="auto" class="on" title="The camera cuts to the fly that acts">director</button><button data-v="wide" title="Hold the wide shot of the table">wide</button><button data-v="free" title="Drag to turn, no cuts">free</button></span>
-      <span class="ctl-l">brains</span><span class="seg mini" id="heroBrains" role="group" aria-label="Brain maps"><button data-v="beside" class="on" title="Each brain map floats beside its fly">beside</button><button data-v="close" title="Two large brain maps you can turn">close-up</button><button data-v="off" title="Hide the brain maps">hide</button></span>
+      <span class="ctl-l">brains</span><span class="seg mini" id="heroBrains" role="group" aria-label="Brain maps"><button data-v="panels" class="on" title="A large live brain on each side of the table">sides</button><button data-v="scene" title="A small brain map beside each fly, in the hall">in hall</button><button data-v="off" title="Hide the brain maps">hide</button></span>
       <button class="tgl" id="btnHow" aria-haspopup="dialog">How it works</button>
     </span>
   </div>

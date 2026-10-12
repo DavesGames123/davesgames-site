@@ -33,7 +33,9 @@
 //        strips (ui/hud/scorecard.js slim, the neural panel behind a tap),
 //        the phase bar is a small strip over the hand, the opposing
 //        card backs go (the 3D table shows them, the scorecard counts
-//        them). The big brain of the fly is in the 3D scene.
+//        them). The big brain of the fly is the side panel of the page
+//        (opts.onFlyTrace, ui/fly3d/brainpanels.js); without the page,
+//        the 3D scene shows it behind the chair of the fly.
 //
 //  3D TABLE  When opts.scene gives pickPermanent(clientX, clientY), play
 //        mode uses it: setFirstPerson(seat) puts the camera behind you,
@@ -98,6 +100,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 //   connectomes { A, B }      wiring of each fly (for the brain panel)
 //   sources   { A: 'hemibrain v1.2', B: 'FlyWire 783' }   wiring labels
 //   brainMod  ui/fly3d/brain3d.js namespace (optional, createBrainCard)
+//   cardBrain false: the fly scorecard has no neural canvas (the page
+//             shows the fly's brain in its side panel)
+//   onGame({ opp, flySide, flySeat, humanSeat })  a new game is set up
+//   onFlyTrace(side, trace, delta)  each decision of the fly ('A'|'B')
 //   scene     a createDuelScene() object (optional, 3D table)
 //   sceneEl   the element that holds the scene canvas (put in the table box)
 //   trainedDecks  deck ids the flies trained with (optional, for a note)
@@ -396,12 +402,13 @@ export function mountPlay(root, opts) {
       const isFly = s === pc.flySeat && pref.opp !== 'bot';
       scs[s] = createScorecard(host, {
         seat: s, side: s ? 'right' : 'left', kind: s === humanSeatNo ? 'human' : isFly ? 'fly' : 'bot',
-        connectome: isFly ? opts.connectomes?.[flySide] : null, brainMod: opts.brainMod,
+        connectome: isFly ? opts.connectomes?.[flySide] : null, brainMod: opts.brainMod, brain: opts.cardBrain !== false,
         compact: L.score === 'compact', slim: has3d, onPlayer: seat => apply(ix?.player(seat)),
       });
       scs[s].setCompact(L.score === 'compact');
     }
     root.dataset.human = String(humanSeatNo);
+    try { opts.onGame?.({ opp: curOpp, flySide, flySeat: pc.flySeat, humanSeat: humanSeatNo }); } catch (e) { console.info('fly-duel play: onGame', e); }
     opts.scene?.setFirstPerson?.(humanSeatNo);
     orbit?.seat();
     lastBox.hidden = true;
@@ -441,7 +448,10 @@ export function mountPlay(root, opts) {
     flyTop = rec.top || [];
     // the TD error of ui/match.js (gamma V(now) - V(before)): learning is
     // off, so the trace's own learning delta stays 0
-    if (rec.trace) scs[fs]?.fire(rec.delta != null ? { ...rec.trace, delta: rec.delta } : rec.trace);
+    if (rec.trace) {
+      scs[fs]?.fire(rec.delta != null ? { ...rec.trace, delta: rec.delta } : rec.trace);
+      if (curOpp !== 'bot') try { opts.onFlyTrace?.(curOpp, rec.trace, rec.delta); } catch (e) { console.info('fly-duel play: onFlyTrace', e); }
+    }
     render();
     if (flyTop.length) await sleep(sp().top);
     await animate(rec);

@@ -33,7 +33,9 @@
 //
 //  The neural panel is createBrainCard() of ui/fly3d/brain3d.js when that
 //  module gives it, else the 2D raster of ui/hud/raster.js. Both get the
-//  trace of each decision through fire(trace).
+//  trace of each decision through fire(trace). opts.brain false drops the
+//  neural canvas: the page then shows the brain in its big side panel
+//  (ui/fly3d/brainpanels.js), and a brain must not show twice.
 //
 //  GREP MAP
 //      grep -n 'export function scorecardModel'  state -> what the card shows
@@ -146,6 +148,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 //   compact (phone)
 //   slim     a low, translucent corner strip (watch and 3D play): the
 //            neural panel and the top-3 hide behind the "brain" button
+//   brain    false: no neural canvas (the page shows the brain of the
+//            fly in its big side panel); the V and δ line and the top-3
+//            stay, behind a "moves" button when slim
 //   onPlayer(seat)  tap on the card: a player target in play mode
 export function createScorecard(host, opts = {}) {
   const doc = host.ownerDocument;
@@ -178,13 +183,15 @@ export function createScorecard(host, opts = {}) {
   function setOpen(on) {
     el.classList.toggle('is-open', !!on);
     more.setAttribute('aria-expanded', String(!!on));
-    more.setAttribute('aria-label', on ? 'hide the neural panel' : 'show the neural panel');
+    more.setAttribute('aria-label', noBrain ? (on ? 'hide the best three moves' : 'show the best three moves') : on ? 'hide the neural panel' : 'show the neural panel');
     if (on) neural?.resize?.();
   }
   more.addEventListener('click', e => { e.stopPropagation(); setOpen(!el.classList.contains('is-open')); });
 
+  const noBrain = opts.brain === false;
+  if (noBrain) { cv.hidden = true; more.textContent = 'moves'; more.setAttribute('aria-label', 'show the best three moves'); }
   function makeNeural() {
-    if (neural || (opts.kind !== 'fly') || !opts.connectome) return;
+    if (noBrain || neural || (opts.kind !== 'fly') || !opts.connectome) return;
     const C = opts.connectome;
     const nKC = C?.kc?.n || 2000;
     if (opts.brainMod?.createBrainCard) {

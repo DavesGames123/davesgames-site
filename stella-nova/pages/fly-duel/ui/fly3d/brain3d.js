@@ -76,9 +76,13 @@
 //      export function createBrainMap ... the map: group, fire, update, lit
 //      export function createBrainView .. own canvas, orbit, render loop
 //      export function createBrainCard .. small HUD panel, host loop
+//      export function regionLabels ..... PN, KC, MBON, DAN, APL labels
+//      export function sizeSprites ...... screen size of label sprites
+//      ui/fly3d/brainpanels.js .......... the two big side panels of the
+//                                         page (one shared renderer)
 //      export function lobeFamily ....... lobe or compartment -> KC family
 //      export const ANATOMY ............. names and text of the parts
-//      function anatomyTips ............. hover and tap labels
+//      export function anatomyTips ...... hover and tap labels
 //      anchors( / pickScreen( ........... inside createBrainMap
 //      export async function loadNeuropil  fetch neuropil json for a frame
 //      export function detectFrame ...... 'hemibrain' | 'fafb'
@@ -787,28 +791,9 @@ export function createBrainView(canvas, connectome, opts = {}) {
   controls.addEventListener('change', () => { dirty = true; });
 
   // labels: crisp text sprites, fixed screen size
-  const labels = [];
+  const labels = o.labels ? regionLabels(map) : [];
   let tip = null;
-  if (o.labels && typeof document !== 'undefined') {
-    const P = map.place;
-    const centroid = (arr) => { let x = 0, y = 0, z = 0; const n = arr.length / 3; for (let i = 0; i < n; i++) { x += arr[3 * i]; y += arr[3 * i + 1]; z += arr[3 * i + 2]; } return n ? [x / n, y / n, z / n] : [0, 0, 0]; };
-    const add = (text, p, colour, dy = 0.08) => {
-      const s = textSprite(text, colour);
-      s.position.set(p[0], p[1] + dy, p[2]);
-      map.group.add(s); labels.push(s);
-    };
-    add('PN', centroid(P.pn), TOKENS.pn);
-    add('KC', centroid(P.kc), TOKENS.ink2, 0.22);
-    add('MBON', centroid(P.mbon), TOKENS.dim, -0.12);
-    add('DAN', centroid(P.dan), TOKENS.dim, 0.18);
-    if (P.apl) add('APL', P.apl, TOKENS.dim, 0.1);
-  }
-  const sizeLabels = h => {
-    for (const s of labels) {
-      const k = (12 / Math.max(1, h)) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-      s.scale.set(k * s.userData.aspect, k, 1);
-    }
-  };
+  const sizeLabels = h => sizeSprites(labels, camera, h);
 
   function resize() {
     const w = canvas.clientWidth || canvas.width || 300, h = canvas.clientHeight || canvas.height || 200;
@@ -882,8 +867,36 @@ export function createBrainView(canvas, connectome, opts = {}) {
   };
 }
 
+// The group labels PN, KC, MBON, DAN and APL at the centroid of each
+// group, as text sprites in map.group. Returns the sprites (size them
+// with sizeSprites). No DOM (node): no labels.
+export function regionLabels(map) {
+  const labels = [];
+  if (typeof document === 'undefined') return labels;
+  const P = map.place;
+  const centroid = (arr) => { let x = 0, y = 0, z = 0; const n = arr.length / 3; for (let i = 0; i < n; i++) { x += arr[3 * i]; y += arr[3 * i + 1]; z += arr[3 * i + 2]; } return n ? [x / n, y / n, z / n] : [0, 0, 0]; };
+  const add = (text, p, colour, dy = 0.08) => {
+    const s = textSprite(text, colour);
+    s.position.set(p[0], p[1] + dy, p[2]);
+    map.group.add(s); labels.push(s);
+  };
+  add('PN', centroid(P.pn), TOKENS.pn);
+  add('KC', centroid(P.kc), TOKENS.ink2, 0.22);
+  add('MBON', centroid(P.mbon), TOKENS.dim, -0.12);
+  add('DAN', centroid(P.dan), TOKENS.dim, 0.18);
+  if (P.apl) add('APL', P.apl, TOKENS.dim, 0.1);
+  return labels;
+}
+
+// Size screen-fixed sprites for a canvas of height h (CSS px): px is the
+// text height on the screen.
+export function sizeSprites(sprites, camera, h, px = 12) {
+  const k = (px / Math.max(1, h)) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  for (const s of sprites) s.scale.set(k * s.userData.aspect, k, 1);
+}
+
 // A crisp text label as a sprite (screen-size, set by the view).
-function textSprite(text, colour) {
+export function textSprite(text, colour) {
   const px = 48, c = document.createElement('canvas'), g = c.getContext('2d');
   const fontStr = `500 ${px}px Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif`;
   g.font = fontStr;
@@ -930,7 +943,7 @@ function labelSprite(title, text, colour) {
 // Hover (mouse) and tap (touch) labels on a brain map in its own canvas:
 // the nearest anatomy anchor (map.pickScreen) gets a label with its name
 // and one line of text. A tap label stays 3 s. onChange: redraw.
-function anatomyTips(map, canvas, camera, onChange, onSize) {
+export function anatomyTips(map, canvas, camera, onChange, onSize) {
   if (typeof document === 'undefined' || !canvas?.addEventListener) return { dispose() {}, resize() {}, sprite: () => null, show() {} };
   let sprite = null, key = null, timer = 0;
   const hide = () => { if (sprite) { map.group.remove(sprite); sprite.material.map?.dispose(); sprite.material.dispose(); sprite = null; key = null; onChange(); } };

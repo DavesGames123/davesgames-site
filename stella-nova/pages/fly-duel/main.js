@@ -50,7 +50,10 @@
 //      grep -n 'function start3d'         the 3D table (ui/fly3d/scene.js)
 //      grep -n 'function initHero'        watch match, 3D or 2D driver
 //      grep -n 'function initScorecards'  watch scorecards, top-3, brains
-//      grep -n 'function setBrains'       brain maps: beside, close, off
+//      grep -n 'function initPanels'      the two brain panels, one renderer
+//      grep -n 'function brainFire'       a decision -> its fly's panel
+//      grep -n 'function capOf'           panel caption: KCs, V, δ
+//      grep -n 'function setBrains'       brains: panels, scene, off
 //      grep -n 'function conOf'           the connectome of Fly A or Fly B
 //      grep -n 'function initModes'       the title screen, URL
 //      grep -n 'function startChoice'     a start of the title screen
@@ -91,6 +94,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = v => `${(100 * v).toFixed(1)}%`;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COARSE = matchMedia('(pointer: coarse)').matches;
 const NAMES = ['Fly A', 'Fly B'];
 
 // Size a canvas to its CSS box at the device pixel ratio. Returns the 2D
@@ -335,7 +339,7 @@ const deckName = id => (id === 'random' ? 'Random' : M.cards?.DECKS?.[id]?.name 
 // At a game end the last board holds with a banner, then a new game.
 const hero = {
   match: null, playing: !REDUCED, speed: 1, bvs: [], log: [], last: null, rec: null, plan: null, t: 0, hold: 0, focus: -1,
-  mode: '2d', scene: null, busy: false, gen: 0, cam: 'auto', brains: 'beside', maps: [null, null], mapsLoading: null, poke: 0,
+  mode: '2d', scene: null, busy: false, gen: 0, cam: 'auto', brains: 'panels', panels: null, poke: 0,
   // watch mode: deck choice per fly ('random' or an id), the pause
   // between turns (ms left), the top-3 of each fly, the scorecards
   sel: ['random', 'random'], pause: 0, top: [[], []], cards: null, suspended: false,
@@ -413,8 +417,7 @@ function initHero(mod3d = null) {
   $('arena').hidden = hero.mode === '3d';
   if (hero.mode === '2d') { $('heroCam').hidden = true; $('heroBrains').hidden = true; document.querySelectorAll('.ctl-l').forEach(e => e.hidden = true); }
   hero.bvs = [new BrainView(conOf('A'), { side: 'A', label: 'Fly A' }), new BrainView(conOf('B'), { side: 'B', label: 'Fly B' })];
-  brainCanvas($('heroBrainA'), hero.bvs[0]);
-  brainCanvas($('heroBrainB'), hero.bvs[1]);
+  initPanels();
   if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: `The rules engine did not load: ${status.rules}.` }); $('arena').hidden = false; $('heroStage').hidden = true; return; }
   const F = heroFlies();
   const agents = agentsFor('ab', F.A, F.B);
@@ -436,8 +439,9 @@ function initHero(mod3d = null) {
     const f = hero.focus;
     $('heroTurn').innerHTML = `<b>turn ${state.turn ?? 1}</b>` + (over ? `<span>${over.winner === -1 ? 'draw' : `${esc(NAMES[over.winner])} wins`}</span>` : f >= 0 ? `<span class="s${f}">${esc(NAMES[f])} to act</span>` : '');
     hero.cards?.update(state);
-    // the 2D table starts under the scorecards
-    if (hero.mode === '2d') { const h = $('watchHud').getBoundingClientRect?.().height; if (h > 0) $('app').style?.setProperty?.('--hud-h', `${Math.round(h + 6)}px`); }
+    // the 2D table starts under the scorecards; with the brain panels the
+    // scorecards lie over the panels, and only the turn box is over it
+    if (hero.mode === '2d') { const h = $(hero.brains === 'panels' ? 'heroTurn' : 'watchHud').getBoundingClientRect?.().height; if (h > 0) $('app').style?.setProperty?.('--hud-h', `${Math.round(h + 6)}px`); }
   };
   hero.hud = hud;
   const decksLine = () => `${deckName(hero.match.decks[0])} against ${deckName(hero.match.decks[1])}.`;
@@ -453,16 +457,12 @@ function initHero(mod3d = null) {
     $('heroLog').innerHTML = hero.log.map(r => `<li class="p${r.who}">${esc(r.text)}${r.value != null ? ` <span class="v">V=${r.value.toFixed(2)}</span>` : ''}</li>`).join('');
     $('heroMove').innerHTML = `<b class="s${rec.who}">${NAMES[rec.who]}</b> ${esc(rec.text)}`;
   };
-  // Focus on the thinker: the acting pane gets the fly colour and
-  // "choosing", the other pane steps back with "waiting". A cut.
+  // Focus on the thinker: the name in the caption of the acting brain
+  // panel takes the fly colour. No words: the turn box is the one voice
+  // of the game state.
   const setFocus = w => {
     hero.focus = w;
-    [0, 1].forEach(p => {
-      const on = p === w;
-      const pane = $(p ? 'heroPaneB' : 'heroPaneA');
-      pane.classList.toggle('acting', on); pane.classList.toggle('waiting', w >= 0 && !on);
-      $(p ? 'heroCapB' : 'heroCapA').innerHTML = `<b class="seatmark s${p}">${p ? 'B' : 'A'}</b> ${NAMES[p]} · ${w < 0 ? 'game over' : on ? 'choosing' : 'waiting'}`;
-    });
+    [0, 1].forEach(p => $(p ? 'heroPaneB' : 'heroPaneA').classList.toggle('acting', p === w));
   };
   // The pause between turns: the board holds still and a banner names
   // the turn and the fly whose turn it is.
@@ -493,7 +493,7 @@ function initHero(mod3d = null) {
     hero.last = rec;
     const r = hero.match.over();
     if (r) {
-      if (hero.match.finalDelta) hero.match.finalDelta.forEach((d, p) => { if (d != null && hero.bvs[p]) hero.bvs[p].burst(d); });
+      if (hero.match.finalDelta && !hero.panels) hero.match.finalDelta.forEach((d, p) => { if (d != null && hero.bvs[p]) hero.bvs[p].burst(d); });
       setFocus(-1);
     }
     draw(rec.after, r ? resultBanner(r) : null); say();
@@ -513,7 +513,7 @@ function initHero(mod3d = null) {
     else if (step.key === 'pn') {
       const at = k => (P.steps.find(x => x.key === k)?.at ?? 0) - step.at;
       if (bv && rec.trace) bv.setTrace(rec.trace, rec.value, { pn: 0, kc: at('kc'), mbon: at('mbon') });
-    } else if (step.key === 'decide') { decided(rec); hero.onDecide?.(rec); }
+    } else if (step.key === 'decide') { decided(rec); capOf(rec.who, rec.trace, rec.delta); hero.onDecide?.(rec); }
     else if (step.key === 'burst') { if (bv) bv.burst(step.delta); }
     else if (step.key === 'table') { logLine(rec); landed(rec); }
   };
@@ -540,7 +540,7 @@ function initHero(mod3d = null) {
     const gen = hero.gen;
     hero.rec = rec; hero.busy = true;
     setFocus(rec.who); hud(rec.before); logLine(rec);
-    if (rec.trace) hero.maps[rec.who]?.fire(rec.trace, rec.delta);
+    if (rec.trace) brainFire(rec.who, rec.trace, rec.delta);
     decided(rec); hud(rec.before);
     hero.onDecide?.(rec);
     hero.scene.play(rec).then(() => {
@@ -564,10 +564,12 @@ function initHero(mod3d = null) {
   tickers.push(dt => {
     // play mode drives the scene itself (ui/play/play.js); this loop
     // only draws it
-    if (app.mode === 'play') { if (app.playScene && !app.covered()) hero.scene.render(dt); return; }
+    if (app.mode === 'play') { if (!app.covered()) { if (app.playScene) hero.scene.render(dt); hero.panels?.update(dt); } return; }
     if (hero.suspended) return;
     if (hero.mode === '3d') {
-      if (!onScreen.has($('heroCv')) || app.covered()) return;
+      if (app.covered()) return;
+      hero.panels?.update(dt);
+      if (!onScreen.has($('heroCv'))) return;
       // paused: still draw for a moment after a drag or a control change
       if (hero.playing || hero.poke > 0) hero.scene.render(hero.playing ? dt : 0);
       hero.poke = Math.max(0, hero.poke - dt);
@@ -606,19 +608,18 @@ function initHero(mod3d = null) {
   seg($('heroBrains'), v => setBrains(v));
   const cv = $('heroCv');
   for (const t of ['pointerdown', 'pointermove', 'wheel']) cv.addEventListener(t, () => { hero.poke = 1.5; }, { passive: true });
-  addEventListener('resize', () => { hero.scene?.resize(); hero.poke = 0.5; });
+  addEventListener('resize', () => { hero.scene?.resize(); hero.panels?.resize(); hero.poke = 0.5; });
+  setBrains(hero.brains);
   if (REDUCED) stepNow();
 }
 
 // Watch mode: the two scorecards of ui/hud/scorecard.js in #scA (Fly A,
-// top-left) and #scB (Fly B, top-right). They are slim corner strips (the
+// over brain A) and #scB (Fly B, over brain B). They are slim strips (the
 // user: "the fly a vs fly b cards should be much less visually
-// obstrusive"). A tap on "brain" opens the neural panel and the top-3.
-// Each fly card has its live
-// neural panel: createBrainCard of ui/fly3d/brain3d.js when the 3D
-// module loads, else the 2D raster of ui/hud/raster.js. Without the
-// scorecard module, the fallback strip #hudBar shows.
-function initScorecards(brainMod = null) {
+// obstrusive"). They have no neural canvas: the brain of each fly is its
+// side panel (initPanels). A tap on "moves" opens the top-3 and V, δ.
+// Without the scorecard module, the fallback strip #hudBar shows.
+function initScorecards() {
   const S = M.hud, CARD = M.cards?.CARD;
   if (!S?.createScorecard || !S.scorecardModel || !CARD || !hero.match) { $('hudBar').hidden = false; return; }
   const compact = () => (window.innerWidth || 390) < 760;
@@ -634,7 +635,8 @@ function initScorecards(brainMod = null) {
       const isFly = !!F[side];
       try {
         // slim: a low corner strip, the neural panel behind its brain button
-        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brainMod, compact: compact(), slim: true });
+        // brain: false: the brain of the fly is in its side panel
+        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brain: false, compact: compact(), slim: true });
         c.setCompact(compact());
         return c;
       } catch (e) { console.info('fly-duel: scorecard', e); return null; }
@@ -672,29 +674,66 @@ function initScorecards(brainMod = null) {
   update(hero.match.state);
 }
 
-// "brains": beside (the maps in the scene), close (two large WebGL brain
-// views over the stage), off. The close-up views load on first use.
-function setBrains(v) {
-  hero.brains = v;
-  hero.scene?.setBrains?.(v === 'beside');
-  $('heroMaps').hidden = v !== 'close';
-  hero.poke = 1;
-  if (v === 'close' && !hero.maps[0] && !hero.mapsLoading) {
-    hero.mapsLoading = import('./ui/fly3d/brain3d.js').then(async B => {
-      for (const [p, side, id] of [[0, 'A', 'heroMapA'], [1, 'B', 'heroMapB']]) {
-        const C = conOf(side);
-        if (!C) continue;
-        try {
-          const view = B.createBrainView($(id), C, { colour: FLY[p] });
-          hero.maps[p] = view;
-          const np = await B.loadNeuropil(C, new URL('./data/', import.meta.url)).catch(() => null);
-          if (np) view.setNeuropil(np);
-          const last = [...(hero.match?.history || [])].reverse().find(r => r.who === p && r.trace);
-          if (last) view.fire(last.trace, last.delta, { instant: true });
-        } catch (e) { console.info('fly-duel: brain close-up did not start', e); }
-      }
-    }).catch(e => console.info('fly-duel: brain3d.js did not load', e));
+// The two brain panels (#heroPaneA, #heroPaneB): the main feature of the
+// layout (CONTRACT.md). With the 3D table, ui/fly3d/brainpanels.js draws
+// both maps with ONE shared WebGL renderer into the two 2D panel
+// canvases, so the page has two WebGL contexts in all (the table and the
+// panels). Without it (no WebGL, node, an error), the 2D BrainView of
+// ui/brain.js draws the same canvases. The neuropil shell loads for a
+// hemibrain-frame file only (Fly A); FlyWire has no matching meshes.
+function initPanels() {
+  for (const side of ['A', 'B']) {
+    const el = document.querySelector(`[data-src="${side}"]`);
+    if (el) el.textContent = srcOf(side);
   }
+  const PM = app.panelMod;
+  if (hero.mode === '3d' && PM?.createBrainPanels) {
+    const headless = !!window.flyDuelOpts?.headless3d;
+    try {
+      hero.panels = PM.createBrainPanels([$('heroBrainA'), $('heroBrainB')], [conOf('A'), conOf('B')], { lite: COARSE, reducedMotion: REDUCED, headless });
+    } catch (e) { hero.panels = null; console.info('fly-duel: the brain panels did not start, the 2D brains draw', e); }
+    if (hero.panels && !headless && PM.loadNeuropil) {
+      const base = new URL('./data/', import.meta.url);
+      [0, 1].forEach(p => PM.loadNeuropil(conOf(p ? 'B' : 'A'), base).then(np => { if (np) hero.panels?.setNeuropil(p, np); }).catch(() => {}));
+    }
+  }
+  if (!hero.panels) { brainCanvas($('heroBrainA'), hero.bvs[0]); brainCanvas($('heroBrainB'), hero.bvs[1]); }
+}
+
+// One decision of the fly on seat p reaches the brain panel of that fly
+// (Fly A = 0, Fly B = 1) and its caption.
+function brainFire(p, trace, delta) {
+  if (!trace) return;
+  if (hero.panels) hero.panels.fire(p, trace, delta);
+  else if (hero.bvs[p]) { hero.bvs[p].setTrace(trace, trace.value); if (Number.isFinite(delta)) hero.bvs[p].burst(delta); }
+  capOf(p, trace, delta);
+}
+
+// The caption of a brain panel: the active KCs of the chosen board, the
+// value V of that board and the TD error δ (the dopamine signal).
+const signed = v => (Number.isFinite(v) ? `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}` : '');
+function capOf(p, trace, delta) {
+  const el = $(p ? 'heroCapB' : 'heroCapA')?.querySelector('.bp-kc');
+  if (!el || !trace) return;
+  const nKC = conOf(p ? 'B' : 'A')?.kc?.n;
+  const d = Number.isFinite(delta) ? delta : trace.delta;
+  el.textContent = `${(trace.kc || []).length}${nKC ? ` of ${nKC.toLocaleString('en-US')}` : ''} KCs active${Number.isFinite(trace.value) ? ` · V ${signed(trace.value)}` : ''}${Number.isFinite(d) ? ` · δ ${signed(d)}` : ''}`;
+}
+
+// The brain control: panels (the default: a large live brain on each
+// side), scene (the small maps beside the flies in the hall) or off. A
+// brain shows in one place only: the panels turn the maps of the scene
+// off, the big map of play mode too.
+function setBrains(v) {
+  hero.brains = v === 'scene' || v === 'off' ? v : 'panels';
+  $('app').dataset.brains = hero.brains;
+  hero.scene?.setBrains?.(hero.brains === 'scene');
+  hero.scene?.setBigBrain?.(hero.brains === 'scene');
+  $('heroBrains')?.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === hero.brains));
+  hero.scene?.resize?.();
+  hero.panels?.resize();
+  views.forEach(x => { x.dirty = true; });
+  hero.poke = 1;
 }
 
 // ---------------------------------------------------------------- modes
@@ -703,7 +742,7 @@ function setBrains(v) {
 // does not draw and its match waits.
 const app = {
   mode: 'watch', sheet: false, how: false, play: null, playScene: false, cv: null,
-  myDeck: null, opp: 'B', flyDeck: 'random', brainMod: null, chooser: null,
+  myDeck: null, opp: 'B', flyDeck: 'random', panelMod: null, chooser: null,
   covered() { return this.how && (window.innerWidth || 390) < 860; },
 };
 const srcOf = side => (D.pretrained?.wiring?.[side]?.release || (side === 'A' ? 'hemibrain v1.2' : 'FlyWire 783')).split(/[;(]/)[0].trim();
@@ -809,8 +848,11 @@ async function enterPlay() {
     app.play = P.mountPlay($('playRoot'), {
       rules: M.rules, cards: M.cards, bots: M.bots,
       flies: { A: F.A, B: F.B }, connectomes: { A: conOf('A'), B: conOf('B') }, sources: { A: srcOf('A'), B: srcOf('B') },
-      brainMod: app.brainMod, scene: sceneOK ? hero.scene : null, sceneEl: sceneOK ? cv : null,
+      // the brain of the fly is in its side panel, not in its scorecard
+      brainMod: null, cardBrain: false, scene: sceneOK ? hero.scene : null, sceneEl: sceneOK ? cv : null,
       trainedDecks: trainedDecks(), onExit: () => exitPlay(),
+      onGame: g => { $('app').dataset.opp = g.opp; hero.panels?.resize(); },
+      onFlyTrace: (side, trace, delta) => brainFire(side === 'A' ? 0 : 1, trace, delta),
     });
   } catch (e) {
     console.error('fly-duel: mountPlay', e);
@@ -846,7 +888,8 @@ function exitPlay(restart = true) {
     try { hero.scene.highlight?.(null); hero.scene.setFirstPerson?.(null); hero.scene.resize(); } catch (e) { console.info('fly-duel: scene after play', e); }
   }
   app.playScene = false;
-  app.mode = 'watch'; $('app').dataset.mode = 'watch';
+  app.mode = 'watch'; $('app').dataset.mode = 'watch'; delete $('app').dataset.opp;
+  hero.scene?.resize?.(); hero.panels?.resize();
   hero.suspended = false;
   if (restart) { hero.newGame?.(); syncURL(); }
 }
@@ -1447,12 +1490,12 @@ async function boot() {
   import('./saver.js').catch(e => console.warn('fly-duel: saver.js', e));
   await ready;
   const mod3d = await scene3d;
-  // the neural panel of the scorecards: createBrainCard of brain3d.js
-  // when the 3D modules load (not in the node test seam)
-  app.brainMod = mod3d && !window.flyDuelOpts?.headless3d ? await import('./ui/fly3d/brain3d.js').then(m => (m.createBrainCard ? m : null), () => null) : null;
+  // the two brain panels (one shared WebGL renderer); headless in the
+  // node test seam
+  app.panelMod = mod3d ? await import('./ui/fly3d/brainpanels.js').then(m => (m.createBrainPanels ? m : null), () => null) : null;
   if (M.cards?.COLOUR_IDS) colourIds = [...M.cards.COLOUR_IDS];
   const startHero = () => initHero(mod3d);
-  const cards = () => initScorecards(app.brainMod);
+  const cards = () => initScorecards();
   const steps = [initFacts, initWiring, initHeroStats, startHero, cards, initHow, initModes, initKcCode, initGame, initCentre, initCompare, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
   for (const f of steps) { try { f(); } catch (e) { console.error(f.name, e); } }
   try { typesetAll(document.querySelector('#doc')); } catch (e) { console.warn(e); }

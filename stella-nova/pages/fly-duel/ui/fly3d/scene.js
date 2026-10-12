@@ -44,6 +44,8 @@
 //
 //  Play mode: the map of the other fly is big, behind its chair, and
 //  faces the camera (grep -n 'big brain'). The map of your seat hides.
+//  The page turns both off (setBrains(false), setBigBrain(false)) while
+//  its side panels show the brains (ui/fly3d/brainpanels.js).
 //
 //  The brain map floats beside the head of its fly, not inside the head:
 //  in a head capsule the map is too small to read at the wide shot, and it
@@ -53,7 +55,7 @@
 //      createDuelScene(canvas, { connectomes, cards, names, reduced,
 //        coarse, headless }) -> { play(record) -> Promise, setState(state),
 //        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
-//        shoot(shot, p), setBrains(on), ready, stats(), world,
+//        shoot(shot, p), setBrains(on), setBigBrain(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
 //        orbitBy(dx, dy), zoomBy(k), seatView(),
 //        highlight(ids, kind) | highlight(spec) | highlight(null),
@@ -859,9 +861,9 @@ export function createDuelScene(canvas, opts = {}) {
     if (a < BIG_TALL) return BIG.tall;
     return { ...BIG.wide, u: BIG.wide.u * Math.min(1, a / 1.05) };
   }
-  let bigP = -1;
+  let bigP = -1, bigOn = true;
   function bigBrain() {
-    const want = fpSeat == null || !brains[1 - fpSeat] ? -1 : 1 - fpSeat;
+    const want = !bigOn || fpSeat == null || !brains[1 - fpSeat] ? -1 : 1 - fpSeat;
     for (let p = 0; p < 2; p++) {
       const g = brainHolders[p], parts = brainParts[p], big = p === want;
       if (big) {
@@ -2119,6 +2121,10 @@ export function createDuelScene(canvas, opts = {}) {
   let brainsOn = true;
   function showBrains() { bigBrain(); }
   function setBrains(on) { brainsOn = !!on; showBrains(); }
+  // setBigBrain(false): no big map of the other fly in first person. The
+  // page sets it when its side panels show the brains (a brain must not
+  // show twice); the big map stays for a page without the panels.
+  function setBigBrain(on) { bigOn = !!on; bigBrain(); }
   function stats() {
     let meshes = 0, tris = 0;
     scene.traverse(o => {
@@ -2151,7 +2157,7 @@ export function createDuelScene(canvas, opts = {}) {
   }
 
   return {
-    play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
+    play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
     setFirstPerson, pickPermanent, pickCard, highlight, setRig, orbitBy, zoomBy, seatView,
     world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };

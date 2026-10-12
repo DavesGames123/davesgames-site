@@ -129,7 +129,7 @@ const dE = (a, b) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[
   const js = read('main.js');
   ok(/beatPlan\(rec, hero\.speed, REDUCED\)/.test(js), 'motion: main.js runs the hero on beatPlan');
   for (const id of ['heroPaneA', 'heroPaneB', 'heroCapA', 'heroCapB']) ok(html.includes(`id="${id}"`), `motion: index.html has #${id}`);
-  ok(/\.arena-brain\.waiting \.fig\.brain\{opacity:0\.5\}/.test(css), 'motion: the waiting brain is at 0.5 opacity');
+  ok(/\.bp\.acting\.a \.bp-n\{color:var\(--flyA\)\}/.test(css) && !/\.waiting/.test(css), 'motion: the acting brain panel names its fly in the fly colour; no brain is dimmed');
 }
 
 console.log(`gui.test: ${pass} pass, ${fail} fail`);

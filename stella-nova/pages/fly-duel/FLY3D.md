@@ -10,6 +10,15 @@ lands lie in one stack per colour, dice rolls are Dice Lab throws
 (dice3d.js), and director.js has 11 shot kinds. Where this file still
 says table, stools or five shots, the hall and director.js win.
 
+UPDATE 2026-10-11 (layout pass): the live brain maps are now the two
+big side panels of the page (ui/fly3d/brainpanels.js, one shared WebGL
+renderer copied into two 2D canvases): brain A | table | brain B on a
+wide screen, brain A over and brain B under the table on a portrait
+phone. The small maps beside the flies and the big map of play mode in
+the scene are off while the panels show (setBrains, setBigBrain); the
+"in hall" brain control turns them back on. Where this file says the
+maps float beside the flies, the panels win.
+
 User words (2026-10-11, verbatim): "this visual design is horrible. I want to
 see TWO THREE DIMENSIONAL FRUIT FLIES at a table HOLDING CARDS ANIMATEDLY
 PLAYING THEM", then "showing me a live 3d map of their brain", then "they

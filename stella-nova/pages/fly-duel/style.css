@@ -19,9 +19,9 @@
      table      --dmg (life loss) --heal (life gain)
      chrome     --acc = --ink: an "on" toggle is a white fill, --bg text
 
-   ARENA. Desktop: brain A | table | brain B in three columns. Phone
-   (max-width 860px): the table takes the full width, the two brains go
-   side by side under it. The table stacks Fly B over Fly A.
+   BRAINS. The layout of the page: brain A | table | brain B on a wide
+   screen, brain A over the table over brain B on a portrait phone
+   (grep -n 'BRAINS'). The 2D table stacks Fly B over Fly A.
 
    LOOK. A faux fantasy card game, our own: bronze rules and corner curls
    (wing veins) on dark tome panels, parchment for the notes and the "on"
@@ -42,13 +42,14 @@
      grep -n 'HIDDEN'     the [hidden] guard
      grep -n 'APP'        the fullscreen frame and the two modes
      grep -n 'WATCH HUD'  scorecards, turn box, turn banner
+     grep -n 'BRAINS'     the two brain panels: wide, tall, play
      grep -n 'BAR'        the control bar of the watch table
      grep -n 'DRAWER'     the "How it works" drawer
      grep -n 'WIDE'       tablet, desktop and phone-sideways rules
      grep -n 'ORNAMENTS'  the SVG ornaments (rule, corner curl)
      grep -n 'CHIPS'      the sticky section bar
      grep -n 'ARENA'      hero layout, brains and table
-     grep -n 'STAGE'      the 3D hero: canvas, HUD cards, maps, bar
+     grep -n 'STAGE'      the 3D hero: canvas, move chip, log, bar
      grep -n 'TABLE'      the board: sides, lands, creatures
      grep -n 'FCARD'      one card, full and mini
      grep -n 'CARDS'      grid, cards, figures
@@ -132,15 +133,6 @@ sub,sup{font-size:0.72em;line-height:0}
 
 /* ---------------------------------------------------------------- ARENA */
 .arena{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,1fr);gap:12px;margin-top:18px;align-items:stretch}
-.arena-brain{min-width:0;display:flex;flex-direction:column;border:1px solid var(--hair2);border-top-width:2px;border-radius:8px;overflow:hidden;background:var(--fig)}
-.arena-brain .fig.brain{flex:1;border-radius:0}
-/* Focus on the thinker (DESIGN.md 2.3): the acting pane gets a 2 px top
-   border and caption in its fly colour, the other pane steps back to 0.5
-   opacity. A class swap, no transition. */
-.arena-brain.acting.a{border-top-color:var(--flyA)} .arena-brain.acting.b{border-top-color:var(--flyB)}
-.arena-brain.waiting .fig.brain{opacity:0.5}
-.brain-cap{display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:12px;color:var(--dim);border-bottom:1px solid var(--hair)}
-.arena-brain.acting.a .brain-cap{color:var(--flyA)} .arena-brain.acting.b .brain-cap{color:var(--flyB)}
 .seatmark{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:3px;font:700 11px/1 var(--mono)}
 .seatmark.s0{background:var(--flyA);color:var(--flyA-ink)} .seatmark.s1{background:var(--flyB);color:var(--flyB-ink)}
 .fig.brain{aspect-ratio:auto;height:100%;min-height:320px;max-height:none;background:var(--fig);touch-action:pan-y;cursor:grab}
@@ -345,13 +337,14 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
    height of the control bar; the move chip, the tag and the maps sit
    above it. */
 .app{position:fixed;inset:0;height:100vh;height:100dvh;overflow:hidden;background:var(--bg);
-  --bar-h:calc(96px + env(safe-area-inset-bottom,0px)); --pad:8px}
-.stage{position:absolute;inset:0;overflow:hidden;background:#0a0d14}
+  --bar-h:calc(96px + env(safe-area-inset-bottom,0px)); --pad:8px;
+  --bpw:0px; --bph:0px; --cl:0px; --cr:0px; --ct:0px; --cb:var(--bar-h)}
+.stage{position:absolute;left:var(--cl);right:var(--cr);top:var(--ct);bottom:var(--cb);overflow:hidden;background:#0a0d14}
 .stage-cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
 .stage-cv:active{cursor:grabbing}
 .app[data-mode="play"] .stage,.app[data-mode="play"] .whud,.app[data-mode="play"] .stagebar,
 .app[data-mode="play"] .hudbar,.app[data-mode="play"] .arena{display:none}
-.playroot{position:absolute;inset:0;z-index:10;height:100%;padding:env(safe-area-inset-top,0px) var(--sr) env(safe-area-inset-bottom,0px) var(--sl);background:var(--bg)}
+.playroot{position:absolute;left:var(--cl);right:var(--cr);top:var(--ct);bottom:0;z-index:10;padding:env(safe-area-inset-top,0px) var(--sr) env(safe-area-inset-bottom,0px) var(--sl);background:var(--bg)}
 
 /* ---------------------------------------------------------------- WATCH HUD
    Fly A's scorecard top-left, Fly B's top-right (ui/hud/hud.css draws
@@ -403,26 +396,83 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
 .hud .row .cr{display:none}
 i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 
-/* on the stage: the move chip, the honesty tag, the log, the maps */
-.stage-move{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--bar-h) + 30px);max-width:calc(100% - 16px);
+/* on the stage: the move chip, the honesty tag, the log */
+.stage-move{position:absolute;left:0;right:0;margin:0 auto;width:fit-content;bottom:30px;max-width:calc(100% - 16px);
   background:var(--bg);border:1px solid var(--hair2);border-radius:999px;padding:5px 12px;font:0.74rem/1.3 var(--mono);color:var(--ink);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:3}
 .stage-move:empty{display:none}
 .stage-move b{font-weight:700} .stage-move b.s0{color:var(--flyA)} .stage-move b.s1{color:var(--flyB)}
-.stage-tag{position:absolute;left:calc(8px + var(--sl));right:8px;bottom:calc(var(--bar-h) + 6px);font-size:11px;line-height:1.3;color:var(--ink2);
+.stage-tag{position:absolute;left:8px;right:8px;bottom:6px;font-size:11px;line-height:1.3;color:var(--ink2);
   pointer-events:none;z-index:3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stage-tag::before{content:'';display:inline-block;width:6px;height:6px;background:var(--bronze);transform:rotate(45deg);margin-right:6px;vertical-align:1px}
 .stage .log{display:none}
-.maps{position:absolute;left:8px;right:8px;bottom:calc(var(--bar-h) + 62px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;pointer-events:none;z-index:4}
-.map{pointer-events:auto;background:var(--fig);border:1px solid var(--hair2);border-top:3px solid var(--flyA);border-radius:10px;overflow:hidden;min-width:0}
-.map.b{border-top-color:var(--flyB)}
-.map figcaption{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:11px;color:var(--ink2);border-bottom:1px solid var(--hair);white-space:nowrap;overflow:hidden}
-.map canvas{display:block;width:100%;aspect-ratio:1/1;touch-action:none;cursor:grab}
-/* the 2D stand-in: between the cards and the bar, it scrolls */
-.app .arena{position:absolute;left:0;right:0;top:var(--hud-h,200px);bottom:var(--bar-h);margin:0;overflow:auto;overscroll-behavior:contain;
-  padding:8px calc(8px + var(--sr)) 8px calc(8px + var(--sl));grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
-.app .arena .arena-mid{grid-column:1/-1;order:-1}
-.app .arena .fig.brain{min-height:0;height:200px}
+/* the 2D stand-in of the table: the centre region, it scrolls */
+.app .arena{position:absolute;left:var(--cl);right:var(--cr);top:calc(var(--ct) + var(--hud-h,0px));bottom:var(--cb);margin:0;overflow:auto;overscroll-behavior:contain;
+  padding:8px calc(8px + var(--sr)) 8px calc(8px + var(--sl));display:block}
+.app .arena[hidden]{display:none}
+
+/* ---------------------------------------------------------------- BRAINS
+   The two brains are the main feature of the layout (CONTRACT.md).
+   #app data-brains: panels (the default) | scene (small maps in the
+   hall) | off. The region between the panels is --cl --cr --ct --cb
+   (left, right, top, bottom insets); the stage, the 2D table and the
+   play root fill it.
+     TALL (the base: a portrait phone or a narrow window): brain A is a
+       band of --bph over the table, brain B a band under it, over the bar.
+     WIDE (aspect 1.1 or more and 700 px or more): brain A | table |
+       brain B. Each panel is --bpw wide (about a third of the width) and
+       runs from the top to the bar.
+     PLAY: only the brain of the opposing fly (data-opp A|B), on its side
+       (wide) or at the top (tall: the fly sits across the table). Your
+       side is the play screen. The bot has no brain and no panel.
+   The slim scorecard of each fly lies over the top of its panel, the
+   turn box over the top of the table. Crisp: a hard 2 px edge in the fly
+   colour on the table side of a panel, no glow. */
+.bp{position:absolute;z-index:2;display:none;background:var(--fig);overflow:hidden;left:0;right:0;height:var(--bph)}
+.bp.a{top:0;border-bottom:2px solid var(--flyA)}
+.bp.b{bottom:var(--bar-h);border-top:2px solid var(--flyB)}
+.bp-cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none;outline:0}
+.bp-cv:active{cursor:grabbing}
+.bp-cv:focus-visible{box-shadow:inset 0 0 0 2px var(--bronze)}
+.bp-cap{position:absolute;right:var(--pad);bottom:6px;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:2px 8px;max-width:calc(100% - 2 * var(--pad));
+  font:11px/1.3 var(--sans);color:var(--ink2);pointer-events:none;text-align:right}
+.bp-cap .seatmark{width:16px;height:16px;font-size:10px}
+.bp-n{font-weight:600;color:var(--ink)}
+.bp.acting.a .bp-n{color:var(--flyA)} .bp.acting.b .bp-n{color:var(--flyB)}
+.bp-src{color:var(--dim)}
+.bp-kc{font:11px/1.3 var(--mono);color:var(--ink2);font-variant-numeric:tabular-nums}
+.bp-kc:empty{display:none}
+.app[data-brains="panels"]{--bph:clamp(118px,22dvh,250px)}
+.app[data-brains="panels"][data-mode="watch"]{--ct:var(--bph);--cb:calc(var(--bar-h) + var(--bph))}
+.app[data-brains="panels"][data-mode="watch"] .bp{display:block}
+.app[data-brains="panels"][data-mode="play"][data-opp="A"],
+.app[data-brains="panels"][data-mode="play"][data-opp="B"]{--ct:var(--bph)}
+.app[data-brains="panels"][data-mode="play"][data-opp="A"] .bp.a,
+.app[data-brains="panels"][data-mode="play"][data-opp="B"] .bp.b{display:block}
+.app[data-mode="play"] .bp.b{top:0;bottom:auto;border-top:0;border-bottom:2px solid var(--flyB)}
+/* the scorecards over their panels, the turn box over the table */
+.app[data-brains="panels"] .whud{bottom:0;padding:0}
+.app[data-brains="panels"] .wtop{display:block}
+.app[data-brains="panels"] .wsc{position:absolute;top:calc(env(safe-area-inset-top,0px) + var(--pad));width:min(250px,calc(62% - var(--pad)))}
+.app[data-brains="panels"] #scA{left:calc(var(--pad) + var(--sl))}
+.app[data-brains="panels"] #scB{left:calc(var(--pad) + var(--sl));top:calc(100% - var(--bar-h) - var(--bph) + var(--pad))}
+.app[data-brains="panels"] #scB .hd-slim{margin-left:0}
+.app[data-brains="panels"] .stage .log{display:none}
+.app[data-brains="panels"] .turnbox{position:absolute;left:var(--cl);right:var(--cr);margin:0 auto;width:fit-content;top:calc(var(--ct) + var(--pad))}
+@media (min-aspect-ratio:11/10) and (min-width:700px){
+  .app[data-brains="panels"]{--bph:0px;--bpw:clamp(220px,31vw,640px)}
+  .app[data-brains="panels"][data-mode="watch"]{--ct:0px;--cb:var(--bar-h);--cl:var(--bpw);--cr:var(--bpw)}
+  .app[data-brains="panels"][data-mode="play"][data-opp="A"]{--ct:0px;--cl:var(--bpw)}
+  .app[data-brains="panels"][data-mode="play"][data-opp="B"]{--ct:0px;--cr:var(--bpw)}
+  .bp,.app[data-mode="play"] .bp.b{top:0;bottom:var(--bar-h);height:auto;width:var(--bpw);border:0}
+  .app[data-mode="play"] .bp{bottom:0}
+  .bp.a{left:0;right:auto;border-right:2px solid var(--flyA)}
+  .bp.b,.app[data-mode="play"] .bp.b{left:auto;right:0;border-left:2px solid var(--flyB)}
+  .bp-cap{font-size:12px;bottom:10px}
+  .app[data-brains="panels"] .wsc{width:min(280px,calc(var(--bpw) - 2 * var(--pad)))}
+  .app[data-brains="panels"] #scB{left:auto;right:calc(var(--pad) + var(--sr));top:calc(env(safe-area-inset-top,0px) + var(--pad))}
+  .app[data-brains="panels"] #scB .hd-slim{margin-left:auto}
+}
 
 /* ---------------------------------------------------------------- BAR
    The control bar of the watch table: the status line, then one row of
@@ -512,14 +562,10 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .stagebar{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding-top:0}
   .stagebar .status{flex:1 1 200px;font-size:0.8rem}
   .arena-ctrls{flex:0 1 auto}
-  .stage-move{font-size:0.82rem;padding:6px 14px;bottom:calc(var(--bar-h) + 34px)}
-  .stage-tag{right:auto;bottom:calc(var(--bar-h) + 10px);left:calc(12px + var(--sl))}
-  .stage .log{display:block;position:absolute;left:calc(12px + var(--sl));bottom:calc(var(--bar-h) + 34px);width:min(340px,30vw);height:auto;z-index:3;background:var(--tome)}
+  .stage-move{font-size:0.82rem;padding:6px 14px;bottom:34px}
+  .stage-tag{right:auto;bottom:10px;left:12px}
+  .stage .log{display:block;position:absolute;left:12px;bottom:34px;width:min(340px,30vw);height:auto;z-index:3;background:var(--tome)}
   .stage .log:empty{display:none}
-  .maps{left:12px;right:12px;bottom:calc(var(--bar-h) + 120px);grid-template-columns:repeat(2,minmax(0,min(300px,40%)));justify-content:space-between;gap:12px}
-  .app .arena{grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,1fr)}
-  .app .arena .arena-mid{grid-column:auto;order:0}
-  .app .arena .fig.brain{height:100%;min-height:320px}
 }
 @media (min-width:1200px){
   .wtop{grid-template-columns:minmax(0,250px) auto minmax(0,250px)}

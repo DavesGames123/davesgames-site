@@ -58,7 +58,8 @@ const raw = readFileSync(join(ROOT, 'index.html'), 'utf8');
   const stage = raw.slice(raw.indexOf('id="heroStage"'), raw.indexOf('class="stagebar"'));
   ok(/not a real fly/.test(stage), 'markup: the honesty line is on the stage');
   ok(/<div class="arena" id="arena" hidden>/.test(raw), 'markup: the 2D stand-in starts hidden');
-  for (const id of ['heroCv', 'hudBar', 'heroTurn', 'hudA', 'hudB', 'heroCam', 'heroBrains', 'heroMaps', 'heroMove', 'manaLegGlyphs']) ok(raw.includes(`id="${id}"`), `markup: #${id}`);
+  for (const id of ['heroCv', 'hudBar', 'heroTurn', 'hudA', 'hudB', 'heroCam', 'heroBrains', 'heroPaneA', 'heroPaneB', 'heroBrainA', 'heroBrainB', 'heroMove', 'manaLegGlyphs']) ok(raw.includes(`id="${id}"`), `markup: #${id}`);
+  ok(!raw.includes('id="heroMaps"'), 'markup: no close-up maps over the stage (the side panels show the brains)');
 }
 
 // --------------------------------------------------------------- globals
@@ -156,6 +157,28 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   ok($('heroLog').children.length > 0 && /Fly [AB]/.test($('heroMove').textContent), `match: the log and the move line (${$('heroMove').textContent.slice(0, 50)})`);
 }
 
+// --------------------------------------------------------------- brain panels
+// Each fly's panel fires on that fly's own decisions with the real trace
+// (ui/fly3d/brainpanels.js, headless here: no renderer, the maps run).
+{
+  const P = hero.panels;
+  ok(!!P, 'panels: the 3D hero has the two brain panels');
+  const st = P?.stats();
+  ok(st?.contexts === 0, `panels: headless, no WebGL context (${st?.contexts})`);
+  const recs = hero.match.history;
+  for (const p of [0, 1]) {
+    const mine = recs.filter(r => r.who === p && r.trace);
+    const last = mine[mine.length - 1];
+    const sp = st?.panels?.[p];
+    ok(mine.length > 0 && sp?.fires >= mine.length - 1, `panels: Fly ${p ? 'B' : 'A'} panel fired on its decisions (${sp?.fires} fires, ${mine.length} decisions)`);
+    if (hero.rec?.who === p || !last) continue;
+    ok(sp?.info?.kc === last.trace.kc.length, `panels: Fly ${p ? 'B' : 'A'} lit its own active KCs (${sp?.info?.kc} = ${last.trace.kc.length})`);
+    const cap = $(p ? 'heroCapB' : 'heroCapA').textContent;
+    ok(new RegExp(`${last.trace.kc.length} of [\\d,]+ KCs active`).test(cap) && /hemibrain|FlyWire/.test(cap), `panels: caption names the wiring and the active KCs (${cap})`);
+  }
+  ok(P?.panels?.[0]?.map.stats().kc === fd.conOf('A').kc.n && P?.panels?.[1]?.map.stats().kc === fd.conOf('B').kc.n, 'panels: Fly A on its file, Fly B on the FlyWire file');
+}
+
 // --------------------------------------------------------------- HUD and mana
 {
   const st = hero.match.state, byId = hero.byId;
@@ -198,10 +221,13 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   ok(hero.scene.stats().camera === 'free', 'controls: camera "free"');
   click(segBtn('heroCam', 'auto'));
   ok(hero.scene.stats().camera === 'auto', 'controls: camera "director"');
+  ok($('app').dataset.brains === 'panels' && hero.scene.stats().brainsShown === false, 'controls: the side panels show the brains, the hall maps hide (one place per brain)');
   click(segBtn('heroBrains', 'off'));
-  ok(hero.scene.stats().brainsShown === false && $('heroMaps').hidden === true, 'controls: brains hidden');
-  click(segBtn('heroBrains', 'beside'));
-  ok(hero.scene.stats().brainsShown === true, 'controls: brains beside the flies');
+  ok(hero.scene.stats().brainsShown === false && $('app').dataset.brains === 'off', 'controls: brains hidden');
+  click(segBtn('heroBrains', 'scene'));
+  ok(hero.scene.stats().brainsShown === true && $('app').dataset.brains === 'scene', 'controls: brains beside the flies in the hall, no panels');
+  click(segBtn('heroBrains', 'panels'));
+  ok(hero.scene.stats().brainsShown === false && $('app').dataset.brains === 'panels', 'controls: back to the side panels');
   click(segBtn('heroSpeed', '3'));
   ok(hero.speed === 3, 'controls: speed 3');
   click($('heroPlay'));
