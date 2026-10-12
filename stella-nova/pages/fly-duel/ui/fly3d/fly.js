@@ -59,7 +59,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { loadFedora, fedoraModel, fedoraMeshes } from './hat.js';
+import { loadFedora, fedoraModel, fedoraMeshes, FEDORA_SEAT_Y } from './hat.js';
 
 const V3 = THREE.Vector3;
 const TAU = Math.PI * 2;
@@ -1390,7 +1390,7 @@ export function addFedora(rig, opts = {}) {
     for (const c of [...group.children]) group.remove(c);
     for (const x of own) x.dispose();
     own = [];
-    const inner = new THREE.Group(); inner.name = 'fedora-model'; inner.position.y = FEDORA.y - 0.015;   // a little lower than the procedural brim, so the head fills the crown
+    const inner = new THREE.Group(); inner.name = 'fedora-model'; inner.position.y = FEDORA_SEAT_Y;   // the model rests on the head and the eyes (hat.js)
     for (const m of fedoraMeshes(model)) {
       const tint = m.name === 'fedora-band' ? opts.band : opts.felt;
       if (tint) { m.material = m.material.clone(); m.material.color.set(tint); own.push(m.material); }

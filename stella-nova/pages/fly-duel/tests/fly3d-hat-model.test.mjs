@@ -1,14 +1,18 @@
 // ============================================================================
 //  FLY DUEL  ·  node tests for the fedora model  (node tests/fly3d-hat-model.test.mjs)
 // ----------------------------------------------------------------------------
-//  The user asked: "please find an actual model fedora". models/fedora.glb
-//  is "Fedora" by Poly by Google (CC BY 3.0, Poly Pizza). This test checks:
-//  the GLB parses in node with hat.js parseFedoraGlb, its size and bounds
-//  (brim about 1.6-1.8 times the head width, crown on the head top), the
-//  swap in fly.js addFedora puts the model meshes on the head joint, the
-//  async load path swaps a procedural hat, opts.model = false keeps the
-//  procedural hat, dispose keeps the shared model geometry, and the
-//  credits name the source and the licence. Exit code 1 on any failure.
+//  The user asked: "please find an actual model fedora", then: "the
+//  fedora shape is incorrect. i need a real fedora model from online".
+//  models/fedora.glb is "Fedora" by Mac BanCheese (CC BY 4.0, Printables
+//  804464), with a centre crease that we pressed into the crown top. This
+//  test checks: the GLB parses in node with hat.js parseFedoraGlb, its
+//  size and bounds, the fedora shape (centre crease, front pinch, band,
+//  brim down at the front and up at the back), the fit on the head (no
+//  head, eye, ocellus or bristle point in the felt at FEDORA_SEAT_Y, eye
+//  points in the felt 0.007 lower, head top under the crown, brim about
+//  1.65 times the head width), the swap in fly.js addFedora, the async
+//  load path, opts.model = false, dispose, and the credits. Exit code 1
+//  on any failure.
 // ============================================================================
 import { registerHooks } from 'node:module';
 import { readFileSync, statSync } from 'node:fs';
@@ -33,7 +37,7 @@ const box = new THREE.Box3();
 const glbUrl = new URL('../models/fedora.glb', import.meta.url);
 const buf = readFileSync(glbUrl);
 const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-ok(statSync(glbUrl).size < 150 * 1024, `fedora.glb under 150 KB (${statSync(glbUrl).size} bytes)`);
+ok(statSync(glbUrl).size < 200 * 1024, `fedora.glb under 200 KB (${statSync(glbUrl).size} bytes)`);
 ok(hat.FEDORA_URL.href === glbUrl.href, 'hat.js FEDORA_URL points at models/fedora.glb');
 
 // 1. the GLB parses, has the three named parts and sane bounds
@@ -48,14 +52,32 @@ for (const p of model.parts) {
   all.union(p.geometry.boundingBox);
 }
 const W = all.max.x - all.min.x, D = all.max.z - all.min.z, Hh = all.max.y - all.min.y;
-ok(Math.abs(W - 0.51) < 0.01, `brim width 0.51 in head-local units (${W.toFixed(3)})`);
-ok(D > 0.4 && D < W, `brim depth (${D.toFixed(3)})`);
-ok(Hh > 0.15 && Hh < 0.22, `hat height (${Hh.toFixed(3)})`);
+ok(Math.abs(W - 0.495) < 0.01, `brim width 0.495 in head-local units (${W.toFixed(3)})`);
+ok(D > W && D < W * 1.2, `brim a little longer front to back than wide (${D.toFixed(3)})`);
+ok(Hh > 0.2 && Hh < 0.26, `hat height (${Hh.toFixed(3)})`);
 ok(Math.abs((all.max.x + all.min.x) / 2) < 0.01, 'centred in x');
-ok(all.min.y > -0.01 && all.min.y < 0.01, `origin on the brim plane (min y ${all.min.y.toFixed(4)})`);
+ok(all.min.y > -0.02 && all.min.y < 0, `origin at the crown opening, front brim tip just below it (min y ${all.min.y.toFixed(4)})`);
 const tris = model.parts.reduce((n, p) => n + p.geometry.index.count / 3, 0);
-ok(tris > 300 && tris < 2000, `model triangles (${tris})`);
-ok(/Poly by Google/.test(model.copyright) && /CC BY 3\.0/.test(model.copyright) && /8TpZrCG3aRf/.test(model.copyright), 'GLB asset.copyright names the source');
+ok(tris > 2000 && tris < 8000, `model triangles (${tris})`);
+ok(/Mac BanCheese/.test(model.copyright) && /CC BY 4\.0/.test(model.copyright) && /printables\.com\/model\/804464/.test(model.copyright), 'GLB asset.copyright names the source');
+
+// 1b. the fedora shape
+{
+  const pts = (name) => { const a = model.parts.find(p => p.name === name).geometry.attributes.position.array, out = []; for (let i = 0; i < a.length; i += 3) out.push([a[i], a[i + 1], a[i + 2]]); return out; };
+  const crown = pts('fedora-crown'), brim = pts('fedora-brim'), band = pts('fedora-band');
+  const maxY = (ps) => ps.reduce((m, p) => Math.max(m, p[1]), -Infinity);
+  const mean = (ps, f) => ps.reduce((s, p) => s + f(p), 0) / ps.length;
+  const mid = crown.filter(p => Math.abs(p[2]) < 0.04);
+  const centre = maxY(mid.filter(p => Math.abs(p[0]) < 0.012)), side = maxY(mid.filter(p => Math.abs(p[0]) > 0.04 && Math.abs(p[0]) < 0.09));
+  ok(side - centre > 0.012, `centre crease: crown top centre ${centre.toFixed(3)} below the side lobes ${side.toFixed(3)}`);
+  const top = crown.filter(p => p[1] > 0.15);
+  const half = (z0) => top.filter(p => Math.abs(p[2] - z0) < 0.02).reduce((m, p) => Math.max(m, Math.abs(p[0])), 0);
+  ok(half(0.1) < 0.65 * half(-0.05), `front pinch: crown half-width ${half(0.1).toFixed(3)} at the front, ${half(-0.05).toFixed(3)} behind the middle`);
+  const front = mean(brim.filter(p => p[2] > 0.24), p => p[1]), back = mean(brim.filter(p => p[2] < -0.25), p => p[1]), sides = mean(brim.filter(p => Math.abs(p[0]) > 0.23), p => p[1]);
+  ok(front < back - 0.015 && front < sides - 0.03, `brim down at the front (${front.toFixed(3)}), up at the back (${back.toFixed(3)}) and the sides (${sides.toFixed(3)})`);
+  const by = band.map(p => p[1]), bandW = Math.max(...band.map(p => p[0])) - Math.min(...band.map(p => p[0])), crownW = Math.max(...crown.map(p => p[0])) - Math.min(...crown.map(p => p[0]));
+  ok(Math.min(...by) > -0.005 && Math.max(...by) < 0.08 && bandW > crownW, `band round the crown base (y ${Math.min(...by).toFixed(3)}..${Math.max(...by).toFixed(3)}, ${bandW.toFixed(3)} wide)`);
+}
 
 // 2. procedural first, then the async load swaps in the model
 {
@@ -91,9 +113,40 @@ for (const lod of ['desktop', 'phone']) {
   const crown = rig.hat.group.getObjectByName('fedora-crown'), band = rig.hat.group.getObjectByName('fedora-band'), brim = rig.hat.group.getObjectByName('fedora-brim');
   const cb = box.setFromObject(crown).clone().union(new THREE.Box3().setFromObject(band)), bb = box.setFromObject(brim).clone();
   const headW = hb.max.x - hb.min.x, brimW = bb.max.x - bb.min.x, r = brimW / headW;
-  ok(r > 1.55 && r < 1.85, `${lod}: brim ${r.toFixed(2)} x head width`);
+  ok(r > 1.55 && r < 1.8, `${lod}: brim ${r.toFixed(2)} x head width`);
   ok(cb.min.y > hb.max.y - 0.08 && cb.min.y < hb.max.y + 0.02, `${lod}: crown base on the head top (crown ${cb.min.y.toFixed(3)}, head top ${hb.max.y.toFixed(3)})`);
-  ok(cb.max.y > hb.max.y + 0.08, `${lod}: crown rises above the head (${(cb.max.y - hb.max.y).toFixed(3)})`);
+  ok(cb.max.y > hb.max.y + 0.15, `${lod}: crown rises above the head (${(cb.max.y - hb.max.y).toFixed(3)})`);
+  const fit = (seatY) => {
+    // count head-joint points (capsule, eyes, ocelli, bristles, antennae) in the felt: odd hit count on three rays
+    const inner = rig.hat.group.getObjectByName('fedora-model'); inner.position.y = seatY; root.updateMatrixWorld(true);
+    const shell = ['fedora-crown', 'fedora-brim'].map(n => { const m = inner.getObjectByName(n).clone(); m.material = m.material.clone(); m.material.side = THREE.DoubleSide; m.matrixWorld.copy(inner.getObjectByName(n).matrixWorld); return m; });
+    const toHat = inner.matrixWorld.clone().invert(), v = new THREE.Vector3(), w = new THREE.Vector3(), rc = new THREE.Raycaster();
+    const dirs = [[0, 1, 0], [0.3, 1, 0.2], [-0.3, 1, -0.2]].map(d => new THREE.Vector3(...d).normalize().transformDirection(inner.matrixWorld));
+    let inFelt = 0, above = 0;
+    rig.joints.head.traverse(o => {
+      if (!o.isMesh || o.name.startsWith('fedora')) return;
+      const p = o.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        w.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); v.copy(w).applyMatrix4(toHat);
+        if (v.y < -0.02) continue;
+        above++;
+        if (dirs.every(d => { rc.set(w, d); return rc.intersectObjects(shell, false).length % 2 === 1; })) inFelt++;
+      }
+    });
+    return { inFelt, above };
+  };
+  const seat = fit(hat.FEDORA_SEAT_Y), low = fit(hat.FEDORA_SEAT_Y - 0.007);
+  ok(seat.inFelt === 0 && seat.above > 500, `${lod}: no head point in the felt at the seat (${seat.inFelt} of ${seat.above})`);
+  ok(low.inFelt > 0, `${lod}: 0.007 lower, the eyes go into the felt, so the hat rests on the head (${low.inFelt})`);
+  fit(hat.FEDORA_SEAT_Y);
+  // the head top is under the crown: a ray up from the head top hits the inside of the crown
+  {
+    const p = headMesh.geometry.attributes.position, top = new THREE.Vector3(), t = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) { t.fromBufferAttribute(p, i).applyMatrix4(headMesh.matrixWorld); if (t.y > top.y || i === 0) top.copy(t); }
+    const rc = new THREE.Raycaster(top, new THREE.Vector3(0, 1, 0)), cm = crown.clone(); cm.material = cm.material.clone(); cm.material.side = THREE.DoubleSide; cm.matrixWorld.copy(crown.matrixWorld);
+    const hit = rc.intersectObject(cm, false)[0];
+    ok(hit && hit.distance > 0.01 && hit.distance < 0.25, `${lod}: head top under the crown ceiling (${hit ? hit.distance.toFixed(3) : 'no hit'})`);
+  }
   const t = countTriangles(rig.hat.group);
   ok(t === tris, `${lod}: hat triangles = model triangles (${t})`);
   for (const clip of Object.keys(CLIPS)) {
@@ -138,9 +191,10 @@ const pageDir = new URL('../', import.meta.url);
 const hc = readFileSync(new URL('ui/fly3d/HAT-CREDITS.md', pageDir), 'utf8');
 const cr = readFileSync(new URL('CREDITS.md', pageDir), 'utf8');
 for (const [nm, txt] of [['HAT-CREDITS.md', hc], ['CREDITS.md', cr]]) {
-  ok(/Poly by Google/.test(txt), `${nm} names the author`);
-  ok(/poly\.pizza\/m\/8TpZrCG3aRf/.test(txt), `${nm} links the source page`);
-  ok(/CC BY 3\.0/.test(txt) && /creativecommons\.org\/licenses\/by\/3\.0/.test(txt), `${nm} names and links the licence`);
+  ok(/Mac BanCheese/.test(txt), `${nm} names the author`);
+  ok(/printables\.com\/model\/804464-fedora/.test(txt), `${nm} links the source page`);
+  ok(/CC BY 4\.0/.test(txt) && /creativecommons\.org\/licenses\/by\/4\.0/.test(txt), `${nm} names and links the licence`);
+  ok(/crease/.test(txt), `${nm} says that we changed the crown`);
 }
 
 console.log(`fly3d-hat-model: ${pass} pass, ${fail} fail`);
