@@ -13,7 +13,8 @@
 //  SHOTS. One run is one take, cut into shots of CUT_MIN-CUT_MAX s:
 //    approach  the two bodies, a slow push-in; ends at first contact
 //              (event 'contact') plus HOLD s, not before CUT_MIN
-//    impact    the contact point, close, at x1/4: the slow-motion push-in
+//    impact    the contact point, close, at x1/4: the slow-motion push-in;
+//              a contact late in the shot extends it to contact + 4 s
 //    splash    the melt splash from the side
 //    cutaway   the bodies cut open (temperature or material colours): the
 //              iron cores sink and merge
@@ -53,7 +54,7 @@ export const RUNS = PRESETS.map(p => ({ key: p.key, preset: p.key }))
 
 export const SHOTS = {
   approach: { min: 5, max: 12, yaw: 0.0, pitch: 0.30, zoom: 1.00, push: 0.18, sweep: 0.10, speed: 2, follow: 'pair', until: 'contact' },
-  impact:   { min: 5, max: 8,  yaw: 0.85, pitch: 0.14, zoom: 0.40, push: 0.22, sweep: 0.05, speed: 0.25, follow: 'contact' },
+  impact:   { min: 5, max: 8,  yaw: 0.85, pitch: 0.14, zoom: 0.40, push: 0.22, sweep: 0.05, speed: 0.25, follow: 'contact', after: 4 },
   splash:   { min: 5, max: 9,  yaw: -0.7, pitch: 0.38, zoom: 0.78, push: 0.14, sweep: 0.12, speed: 1, follow: 'pair' },
   cutaway:  { min: 5, max: 8,  yaw: 1.6, pitch: 0.06, zoom: 0.70, push: 0.10, sweep: 0.0, speed: 1, follow: 'pair', cut: true },
   ejecta:   { min: 6, max: 10, yaw: 2.3, pitch: -0.22, zoom: 0.50, push: -1.1, sweep: 0.6, speed: 2, follow: 'pair' },
@@ -93,6 +94,8 @@ export function shotDone(sh, el, ev) {
   if (el >= CUT_MAX) return true;
   if (el < CUT_MIN) return false;
   if (sh.until === 'contact') return ev.contactAt !== null && el >= Math.max(CUT_MIN, ev.contactAt + HOLD);
+  // a late contact (a slow GPU) still gets `after` s of the shot
+  if (sh.after && ev.contactAt !== null) return el >= Math.max(sh.len, ev.contactAt + sh.after);
   return el >= sh.len;
 }
 // The index of the next shot in shots after i: 'ejecta' jumps ahead when

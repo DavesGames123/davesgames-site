@@ -215,8 +215,10 @@ function saverPlanTests() {
   ok('10 shots: approach, impact first, disk last, 5-12 s each, varied order', badLen === 0 && cut > 170 && cut < 230 && orders.size >= 8, `${cut}/300 plans with a cutaway, ${orders.size} orders`);
   const ap = SP.SHOTS.approach, dn = (el, c) => SP.shotDone(ap, el, { contactAt: c });
   const sp = SP.shotDone(Object.assign({ len: 6.5 }, SP.SHOTS.splash), 6.4, { contactAt: 0 }) === false && SP.shotDone(Object.assign({ len: 6.5 }, SP.SHOTS.splash), 6.5, { contactAt: 0 }) === true;
-  ok('10 cuts on events: the approach waits for contact, 5-12 s', !dn(11.9, null) && dn(12, null) && !dn(4.9, 2) && dn(5, 2) && !dn(7.7, 7) && dn(7.8, 7) && sp,
-    'no contact: cut at 12 s; contact at 2 s: cut at 5 s; contact at 7 s: cut at 7.8 s; splash cuts at its length');
+  const im = Object.assign({ len: 6 }, SP.SHOTS.impact), di = (el, c) => SP.shotDone(im, el, { contactAt: c });
+  const imp = di(6, 0) && !di(5.9, 0) && !di(8.9, 5) && di(9, 5) && di(12, 10) && di(6, null);
+  ok('10 cuts on events: the approach waits for contact, 5-12 s; a late contact extends the impact shot', !dn(11.9, null) && dn(12, null) && !dn(4.9, 2) && dn(5, 2) && !dn(7.7, 7) && dn(7.8, 7) && sp && imp,
+    'no contact: cut at 12 s; contact at 2 s: cut at 5 s; contact at 7 s: cut at 7.8 s; splash cuts at its length; impact len 6 s, contact at 5 s: cut at 9 s, at 10 s: cut at 12 s');
   const plan = () => ['approach', 'impact', 'splash', 'cutaway', 'ejecta', 'disk'].map(kind => ({ kind }));
   const p1 = plan(), j1 = SP.pickNext(p1, 1, 0.05), p2 = plan(), j2 = SP.pickNext(p2, 1, 0), p3 = plan(), p4 = plan(), j4 = SP.pickNext(p4, 0, 0.5);
   ok('10 escaping mass brings the ejecta shot forward, after the impact shot', p1[j1].kind === 'ejecta' && p2[j2].kind === 'splash' && SP.pickNext(p3, 5, 0.5) === -1 && p1[p1.length - 1].kind === 'disk' && p4[j4].kind === 'impact',
