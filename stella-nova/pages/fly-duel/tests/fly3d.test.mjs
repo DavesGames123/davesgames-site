@@ -34,7 +34,11 @@ registerHooks({
 
 const THREE = await import('three');
 const rules = await import('../game/rules.js');
-const { CARD } = await import('../game/cards.js');
+const CARDS_MOD = await import('../game/cards.js');
+const { CARD } = CARDS_MOD;
+// Every deck of game/cards.js in turn (five colours and the dual decks
+// when the cards module has them), so the steps meet every effect.
+const DECK_IDS = CARDS_MOD.DECK_ORDER || Object.keys(CARDS_MOD.DECKS || { amber: 1, moss: 1 });
 const { randomBot, greedyBot } = await import('../game/bots.js');
 const { Match, agentFromBot } = await import('../ui/match.js');
 const { choreograph, mirrorOf, applyStep, mirrorDiff, TIMING, MOVE_OPS } = await import('../ui/fly3d/choreo.js');
@@ -46,7 +50,8 @@ const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg
 function rngf(s) { let a = s >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function botMatch(seed) {
   const mk = i => ((seed + i) % 3 === 0 ? agentFromBot(randomBot(rngf(seed * 7 + i)), 'random') : agentFromBot(greedyBot(), 'greedy'));
-  return new Match(rules, [mk(0), mk(1)], { seed });
+  const n = DECK_IDS.length, decks = [DECK_IDS[seed % n], DECK_IDS[(seed * 5 + 1) % n]];
+  return new Match(rules, [mk(0), mk(1)], { seed, decks });
 }
 const warns = [];
 const realWarn = console.warn;
@@ -103,6 +108,17 @@ console.warn = (...a) => { warns.push(a.map(String).join(' ')); };
     ok((ops[op] || 0) > 0, `op ${op} occurs (${ops[op] || 0})`);
   }
   ok(Object.keys(TIMING).length > 20, 'TIMING table');
+  // Effect kinds of the cards module -> the op that shows them. An op is
+  // required only when some card has the effect.
+  const kinds = new Set();
+  for (const k of Object.values(CARD)) for (const e of [k.effect, k.effect?.then, k.onDeath, k.onUpkeep]) if (e?.kind) kinds.add(e.kind);
+  const hasEvents = Array.isArray(rules.newGame({ seed: 1 }).events);
+  const NEED = { ramp: 'ramp', bounce: 'bounce', raise: 'raise', tap: 'tapped', grow: 'grow', weaken: 'pump' };
+  if (hasEvents) {
+    ok((ops.trigger || 0) > 0, `event path: op trigger occurs (${ops.trigger || 0})`);
+    for (const [kind, op] of Object.entries(NEED)) if (kinds.has(kind)) ok((ops[op] || 0) > 0, `event path: effect ${kind} gives op ${op} (${ops[op] || 0})`);
+  }
+  globalThis.__choreoOps = ops;
 }
 
 // --- choreo: pauses between turns and after big plays ------------------------
@@ -187,6 +203,8 @@ async function runGame(sc, M, check) {
   ok(info.fly === (hasFly ? 'fly.js' : 'placeholder'), `fly module in use: ${info.fly}`);
   if (C && existsSync(new URL('../ui/fly3d/brain3d.js', import.meta.url))) ok(info.brain === true, 'brain maps built from the connectome');
   ok(sc.scene.getObjectByName('table') && sc.scene.getObjectByName('room') && sc.scene.getObjectByName('cards'), 'table, room and card groups');
+  const noHandler = Object.keys(globalThis.__choreoOps || {}).filter(op => !sc.world.ops.includes(op) && !['beat', 'hold', 'endturn'].includes(op));
+  ok(noHandler.length === 0, `scene: a step handler for every op of the steps (${noHandler.join(', ') || 'all'})`);
   let zoneBad = 0, pipBad = 0, pipSmall = 0, pipSeen = 0;
   const check = (st, m) => {
     const handOk = st.hand[0] === m.players[0].hand.length && st.hand[1] === m.players[1].hand.length;
@@ -205,7 +223,7 @@ async function runGame(sc, M, check) {
     }
   };
   let total = 0, maxTris = 0;
-  for (const seed of [5, 12]) {
+  for (const seed of [15, 40]) {   // ramp, bounce, raise and tokens with the five-colour cards
     const res = await runGame(sc, botMatch(seed), check);
     ok(res.stuck === 0, `seed ${seed}: every record finishes`);
     total += res.n; maxTris = Math.max(maxTris, res.maxTris);

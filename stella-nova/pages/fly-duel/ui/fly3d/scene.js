@@ -293,7 +293,7 @@ class CardObj {
     this.W = W; this.id = id; this.uid = null;
     const face = W.tex.face(id);
     this.front = new THREE.MeshStandardMaterial({
-      map: face || null, color: face ? 0xffffff : new THREE.Color(PALETTE[colourKey(CARD[id]?.colour)].ink),
+      map: face || null, color: face ? 0xffffff : new THREE.Color(PALETTE[colourKey(CARD[id]?.colour)]?.ink || TOKENS.none),
       roughness: 0.58, metalness: 0, emissive: 0xffffff, emissiveMap: face || null, emissiveIntensity: 0,
     });
     this.mesh = new THREE.Mesh(W.cardGeo, [this.front, W.backMat, W.edgeMat]);
@@ -1076,7 +1076,8 @@ export function createDuelScene(canvas, opts = {}) {
   function updateBadge(o, x) {
     const card = CARD[x.id] || { type: 'creature' };
     if (card.type !== 'creature') return;
-    const key = x.dmg || x.pp ? `${(card.power || 0) + x.pp}/${(card.toughness || 0) + x.pp - x.dmg}|${x.dmg}` : '';
+    const pt = x.pt ?? x.pp, pc = x.pc | 0;
+    const key = x.dmg || x.pp || pt || pc ? `${(card.power || 0) + x.pp + pc}/${(card.toughness || 0) + pt + pc - x.dmg}|${x.dmg}` : '';
     if (key === o.badgeKey) return;
     o.badgeKey = key;
     if (o.badge) { o.mesh.remove(o.badge); o.badge.material.map?.dispose(); o.badge.material.dispose(); o.badge = null; }
@@ -1085,7 +1086,7 @@ export function createDuelScene(canvas, opts = {}) {
     let tex = null;
     if (cv?.getContext) {
       const g = cv.getContext('2d');
-      g.fillStyle = x.dmg ? TOKENS.dmg : TOKENS.heal; g.fillRect(0, 0, 160, 64);
+      g.fillStyle = x.dmg || x.pp < 0 ? TOKENS.dmg : TOKENS.heal; g.fillRect(0, 0, 160, 64);
       g.fillStyle = TOKENS.bg; g.font = `700 44px ${MONO}`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(key.split('|')[0], 80, 34);
       tex = canvasTexture(cv, { aniso: 4 });
@@ -1380,15 +1381,22 @@ export function createDuelScene(canvas, opts = {}) {
     },
     reveal(s) { const o = Z.held[s.p]; if (o) o.pulse = 1; },
     spark(s) {
-      const o = Z.held[s.p];
-      const a = o ? o.mesh.position.clone() : stagePose(s.p).clone();
+      const src = s.src != null ? Z.perms.get(s.src) : null;
+      const o = src || Z.held[s.p];
+      const a = o ? (src ? o.toP.clone().add(new THREE.Vector3(0, 0.1, 0)) : o.mesh.position.clone()) : stagePose(s.p).clone();
       const b = worldOfTarget(s.to);
-      spark(a, b, PALETTE[colourKey(CARD[s.card]?.colour)].ink, s.dur || 0.4);
+      spark(a, b, PALETTE[colourKey(CARD[s.card]?.colour)]?.ink || TOKENS.ink, s.dur || 0.4);
       if (typeof s.to === 'number') { const f = Z.flags.get(s.to) || {}; f.target = true; Z.flags.set(s.to, f); }
       if (typeof s.to === 'string' && s.amount) { cur?.struck?.add(+s.to.slice(1)); floatNumber(`-${s.amount}`, TOKENS.dmg, drums[+s.to.slice(1)].grp.position.clone().add(new THREE.Vector3(0, 0.75, 0))); }
     },
     hurt(s) { const o = Z.perms.get(s.uid); if (o) floatNumber(`-${s.amount}`, TOKENS.dmg, o.toP.clone().add(new THREE.Vector3(0, 0.25, 0))); },
-    pump(s) { const o = Z.perms.get(s.uid); if (o) { o.pulse = 1; floatNumber(`+${s.amount}/+${s.amount}`, TOKENS.heal, o.toP.clone().add(new THREE.Vector3(0, 0.3, 0)), { height: 0.28 }); } },
+    pump(s) {
+      const o = Z.perms.get(s.uid);
+      if (!o) return;
+      o.pulse = 1;
+      const a = s.amount | 0, b = s.tough ?? a, sg = v => (v < 0 ? `${v}` : `+${v}`);
+      floatNumber(`${sg(a)}/${sg(b)}`, a < 0 || b < 0 ? TOKENS.dmg : TOKENS.heal, o.toP.clone().add(new THREE.Vector3(0, 0.3, 0)), { height: 0.28 });
+    },
     token(s) {
       // the token appears in its own slot (the mirror gets it after this)
       const o = new CardObj(W, s.card); o.uid = s.uid; Z.perms.set(s.uid, o);
@@ -1479,12 +1487,53 @@ export function createDuelScene(canvas, opts = {}) {
       }
       director('win', 0, true);
     },
+    trigger(s) {
+      const o = s.uid != null ? Z.perms.get(s.uid) : null;
+      const at = o ? o.toP.clone().add(new THREE.Vector3(0, 0.45, 0)) : flyHead(s.p).add(new THREE.Vector3(0, 0.7, 0));
+      if (o) o.pulse = 1;
+      banner(TRIGGER_WORD[s.when] ? `${TRIGGER_WORD[s.when]} \u00b7 ${s.kind}` : s.kind, FLY[s.p], at, 0.7);
+    },
+    ramp(s) {
+      const o = new CardObj(W, s.card); o.uid = s.uid;
+      libraryTop(s.p); o.place(P, Qt);
+      o.next = { dur: s.dur, arc: 0.55 };
+      Z.perms.set(s.uid, o);
+    },
+    bounce(s) {
+      const o = Z.perms.get(s.uid);
+      Z.perms.delete(s.uid); Z.flags.delete(s.uid);
+      if (!o) { if (!s.token) Z.hand[s.p].push(new CardObj(W, s.card)); return; }
+      o.ring.visible = false; o.lunge = null;
+      if (s.token) {
+        o.scaleTo = 0.01; let t = 0;
+        addFx({ update(dt) { t += dt; if (t > (W.reduced ? 0 : s.dur)) { o.dispose(); return false; } return true; } });
+        trackLoose(o);
+      } else { o.uid = null; o.next = { dur: s.dur, arc: 0.6 }; Z.hand[s.p].push(o); if (o.badge) updateBadge(o, { id: 'x', dmg: 0, pp: 0 }); }
+    },
+    raise(s) {
+      const i = mirror.players[s.p].graveyard.indexOf(s.card);
+      const G = Z.grave[s.p];
+      const o = i >= 0 && G[i] ? G.splice(i, 1)[0] : new CardObj(W, s.card);
+      o.next = { dur: s.dur, arc: 0.6 }; o.pulse = 1;
+      Z.hand[s.p].push(o);
+    },
+    tapped(s) { const o = Z.perms.get(s.uid); if (o) o.pulse = 1; },
+    grow(s) {
+      const o = Z.perms.get(s.uid);
+      if (o) { o.pulse = 1; floatNumber(`+${s.amount}/+${s.amount}`, TOKENS.heal, o.toP.clone().add(new THREE.Vector3(0, 0.3, 0)), { height: 0.28 }); }
+    },
+    counters(s) { const o = Z.perms.get(s.uid); if (o) o.pulse = 1; },
+    roll(s) {
+      const at = s.uid != null && Z.perms.get(s.uid) ? Z.perms.get(s.uid).toP.clone() : seatPos(s.p, 0.9, 0, T.landV - 0.9);
+      banner(`d${s.die} \u00b7 ${s.value}`, FLY[s.p], at.add(new THREE.Vector3(0, 0.5, 0)), 1.0);
+    },
     sync() {
       const want = mirrorOf(cur.rec.after);
       const diff = mirrorDiff(mirror, want);
       if (diff.length) { console.warn('fly-duel 3d: mirror drift, snap', diff); snapTo(want); }
     },
   };
+  const TRIGGER_WORD = { enter: 'enters', death: 'dies', upkeep: 'upkeep' };
   const loose = new Set();
   function trackLoose(o) { loose.add(o); }
 
@@ -1685,7 +1734,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
-    world: { W, Z, flies, drums, piles, lights, get mirror() { return mirror; }, cam, director, brains },
+    world: { W, Z, flies, drums, piles, lights, get mirror() { return mirror; }, cam, director, brains, ops: Object.keys(STEP) },
   };
 }
 
