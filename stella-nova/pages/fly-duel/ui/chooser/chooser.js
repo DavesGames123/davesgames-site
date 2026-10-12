@@ -58,10 +58,7 @@
 //      grep -n 'export function loadChoice'   localStorage -> a choice
 //      grep -n 'export function saveChoice'   a choice -> localStorage
 //      grep -n 'export function drawFan'      three cards in a fan
-//      grep -n 'export function drawWatchArt' the watch mode picture
-//      grep -n 'export function drawPlayArt'  the play mode picture
-//      grep -n 'function drawFly'             a model fly, side view
-//      grep -n 'function drawFlyFront'        a model fly, front view
+//      grep -n 'export const MODE_ART'        the watch and play captures
 //      grep -n 'export function mountChooser' the layer, events, sync
 //      grep -n 'function sync'                state -> DOM
 //      grep -n 'function onKey'               arrow, Enter, Escape keys
@@ -196,156 +193,13 @@ export function drawFan(g, W, H, cards, dpr = 1) {
   }
 }
 
-const ell = (g, x, y, rx, ry, rot = 0) => { g.beginPath(); g.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, Math.PI * 2); };
-
-// The hall behind both pictures: a dark floor, rows of far tables with
-// small flies at them, and the hall lights as flat bars.
-function drawHall(g, W, H) {
-  g.fillStyle = '#080a10'; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#0d1018'; g.fillRect(0, H * 0.5, W, H * 0.5);
-  g.fillStyle = '#1a1f2b';
-  for (let i = 0; i < 7; i++) g.fillRect(W * (0.03 + i * 0.145), H * 0.06, W * 0.07, Math.max(1, H * 0.012));
-  for (let row = 0; row < 2; row++) {
-    const y = H * (0.3 + row * 0.1), th = H * (0.025 + row * 0.01);
-    g.fillStyle = row ? '#171c27' : '#131722';
-    for (let i = 0; i < 5; i++) {
-      const x = W * (0.02 + i * 0.21 + row * 0.08);
-      g.fillRect(x, y, W * 0.15, th);
-      g.fillStyle = row ? '#232a38' : '#1c2230';
-      for (let k = 0; k < 3; k++) { ell(g, x + W * (0.025 + k * 0.05), y - th * 0.9, th * 0.55, th * 0.75); g.fill(); }
-      g.fillStyle = row ? '#171c27' : '#131722';
-    }
-  }
-}
-
-// A model fruit fly, side view, standing at (x, base). s: body length.
-// dir: 1 faces right, -1 faces left. collar: the seat colour. hold: a
-// small fan of card backs in the front legs.
-function drawFly(g, x, base, s, dir, collar, hold = true) {
-  g.save();
-  g.translate(x, base); g.scale(dir, 1);
-  g.lineCap = 'round';
-  g.strokeStyle = '#2a1c10'; g.lineWidth = Math.max(1, s * 0.022);
-  for (const [hx, fx] of [[-0.05, -0.2], [0.02, 0.02]]) { g.beginPath(); g.moveTo(hx * s, -0.36 * s); g.lineTo((hx + fx * 0.5) * s, -0.16 * s); g.lineTo(fx * s, 0); g.stroke(); }
-  // abdomen with dark bands
-  g.save(); ell(g, -0.27 * s, -0.36 * s, 0.25 * s, 0.16 * s, 0.12); g.fillStyle = '#c99a58'; g.fill(); g.clip();
-  g.fillStyle = '#3b2814';
-  for (let i = 0; i < 4; i++) g.fillRect((-0.44 + i * 0.09) * s, -0.6 * s, 0.024 * s, 0.5 * s);
-  g.restore();
-  // thorax
-  ell(g, -0.02 * s, -0.42 * s, 0.17 * s, 0.15 * s); g.fillStyle = '#a7783c'; g.fill();
-  g.strokeStyle = '#3b2814'; g.lineWidth = Math.max(1, s * 0.008);
-  for (let i = 0; i < 5; i++) { const a = -2.4 + i * 0.32; g.beginPath(); g.moveTo(-0.02 * s + Math.cos(a) * 0.15 * s, -0.42 * s + Math.sin(a) * 0.14 * s); g.lineTo(-0.02 * s + Math.cos(a) * 0.2 * s, -0.42 * s + Math.sin(a) * 0.19 * s); g.stroke(); }
-  // wing, flat and clear, with veins
-  ell(g, -0.36 * s, -0.55 * s, 0.36 * s, 0.085 * s, -0.16);
-  g.fillStyle = 'rgba(206,218,232,0.30)'; g.fill();
-  g.strokeStyle = 'rgba(226,234,244,0.75)'; g.lineWidth = Math.max(1, s * 0.008); g.stroke();
-  g.beginPath(); g.moveTo(-0.08 * s, -0.58 * s); g.lineTo(-0.66 * s, -0.47 * s); g.moveTo(-0.1 * s, -0.55 * s); g.lineTo(-0.6 * s, -0.42 * s); g.stroke();
-  // collar of the seat
-  g.strokeStyle = collar; g.lineWidth = Math.max(2, s * 0.05);
-  g.beginPath(); g.arc(0.13 * s, -0.44 * s, 0.075 * s, -1.9, 1.6); g.stroke();
-  // head, eye, antenna
-  ell(g, 0.22 * s, -0.46 * s, 0.12 * s, 0.13 * s); g.fillStyle = '#b0834a'; g.fill();
-  ell(g, 0.25 * s, -0.47 * s, 0.085 * s, 0.105 * s, 0.2); g.fillStyle = '#b3241c'; g.fill();
-  ell(g, 0.27 * s, -0.5 * s, 0.022 * s, 0.028 * s); g.fillStyle = '#e4594c'; g.fill();
-  g.strokeStyle = '#2a1c10'; g.lineWidth = Math.max(1, s * 0.012);
-  g.beginPath(); g.moveTo(0.3 * s, -0.56 * s); g.lineTo(0.35 * s, -0.63 * s); g.lineTo(0.42 * s, -0.66 * s); g.stroke();
-  // front leg up, with cards
-  g.strokeStyle = '#2a1c10'; g.lineWidth = Math.max(1, s * 0.022);
-  g.beginPath(); g.moveTo(0.1 * s, -0.33 * s); g.lineTo(0.2 * s, -0.22 * s); g.lineTo(0.34 * s, -0.27 * s); g.stroke();
-  g.beginPath(); g.moveTo(0.1 * s, -0.33 * s); g.lineTo(0.14 * s, -0.16 * s); g.lineTo(0.18 * s, 0); g.stroke();
-  if (hold) {
-    for (let i = 0; i < 3; i++) {
-      g.save(); g.translate(0.36 * s, -0.24 * s); g.rotate(-0.5 + i * 0.28);
-      cardBack(g, { x: -0.06 * s, y: -0.26 * s, w: 0.12 * s, h: 0.17 * s });
-      g.restore();
-    }
-  }
-  g.restore();
-}
-
-// A model fly, front view, behind the far edge of the table. The face
-// is to the viewer: two large red eyes, the collar, the wings out.
-function drawFlyFront(g, x, base, s, collar) {
-  g.save(); g.translate(x, base);
-  for (const sx of [-1, 1]) {
-    ell(g, sx * 0.42 * s, -0.36 * s, 0.36 * s, 0.09 * s, sx * 0.32);
-    g.fillStyle = 'rgba(206,218,232,0.28)'; g.fill();
-    g.strokeStyle = 'rgba(226,234,244,0.7)'; g.lineWidth = Math.max(1, s * 0.008); g.stroke();
-  }
-  ell(g, 0, -0.3 * s, 0.2 * s, 0.2 * s); g.fillStyle = '#a7783c'; g.fill();
-  g.strokeStyle = collar; g.lineWidth = Math.max(2, s * 0.05);
-  g.beginPath(); g.arc(0, -0.5 * s, 0.13 * s, 0.25, Math.PI - 0.25); g.stroke();
-  ell(g, 0, -0.62 * s, 0.2 * s, 0.15 * s); g.fillStyle = '#b0834a'; g.fill();
-  for (const sx of [-1, 1]) {
-    ell(g, sx * 0.13 * s, -0.64 * s, 0.1 * s, 0.13 * s, sx * 0.25); g.fillStyle = '#b3241c'; g.fill();
-    ell(g, sx * 0.1 * s, -0.69 * s, 0.025 * s, 0.03 * s); g.fillStyle = '#e4594c'; g.fill();
-  }
-  g.strokeStyle = '#2a1c10'; g.lineWidth = Math.max(1, s * 0.014); g.lineCap = 'round';
-  for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(sx * 0.03 * s, -0.74 * s); g.lineTo(sx * 0.07 * s, -0.84 * s); g.lineTo(sx * 0.16 * s, -0.88 * s); g.stroke(); }
-  g.restore();
-}
-
-// The bot opponent: a plain grey box with a die face. It has no brain.
-function drawBot(g, x, base, s) {
-  g.fillStyle = '#5a606c'; g.fillRect(x - 0.22 * s, base - 0.62 * s, 0.44 * s, 0.62 * s);
-  g.fillStyle = '#2b2f38'; g.fillRect(x - 0.16 * s, base - 0.54 * s, 0.32 * s, 0.22 * s);
-  g.fillStyle = '#d6dae2';
-  for (const [dx, dy] of [[-0.08, -0.5], [0, -0.43], [0.08, -0.36]]) { ell(g, x + dx * s, base + dy * s, 0.025 * s, 0.025 * s); g.fill(); }
-}
-
-// The watch picture: Fly A (left, cyan collar) and Fly B (right,
-// magenta collar) face each other over the folding table.
-export function drawWatchArt(g, W, H) {
-  drawHall(g, W, H);
-  const top = H * 0.7;
-  g.fillStyle = '#3a3f4b'; g.fillRect(0, top, W, H * 0.07);
-  g.fillStyle = '#23262f'; g.fillRect(0, top + H * 0.07, W, H * 0.03);
-  g.fillStyle = '#16181f'; g.fillRect(W * 0.08, top + H * 0.1, W * 0.012, H); g.fillRect(W * 0.9, top + H * 0.1, W * 0.012, H);
-  for (const [i, x] of [[0, 0.1], [1, 0.56]]) {
-    g.fillStyle = i ? '#241a26' : '#13232a'; g.fillRect(W * x, top + H * 0.008, W * 0.34, H * 0.05);
-    g.fillStyle = FLY_HEX[i]; g.fillRect(W * x, top + H * 0.008, W * 0.34, Math.max(1, H * 0.006));
-  }
-  const s = Math.min(H * 0.62, W * 0.34);
-  drawFly(g, W * 0.29, top + H * 0.012, s, 1, FLY_HEX[0]);
-  drawFly(g, W * 0.71, top + H * 0.012, s, -1, FLY_HEX[1]);
-  g.fillStyle = '#c9a45a';
-  g.font = `600 ${Math.round(H * 0.11)}px 'STIX Two Text','Times New Roman',Georgia,serif`;
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText('vs', W * 0.5, top - H * 0.24);
-}
-
-// The play picture: the far fly behind the table and your hand of five
-// cards at the bottom edge. hand: card definitions (empty: card backs).
-// opp: 'A' | 'B' | 'bot'.
-export function drawPlayArt(g, W, H, hand = [], opp = 'B', dpr = 1) {
-  drawHall(g, W, H);
-  const ty = H * 0.42;
-  g.fillStyle = '#3a3f4b';
-  g.beginPath(); g.moveTo(W * 0.14, ty); g.lineTo(W * 0.86, ty); g.lineTo(W * 1.2, H); g.lineTo(-W * 0.2, H); g.closePath(); g.fill();
-  const s = H * 0.5;
-  if (opp === 'bot') drawBot(g, W * 0.5, ty + H * 0.02, s * 0.7);
-  else drawFlyFront(g, W * 0.5, ty + H * 0.05, s, opp === 'A' ? FLY_HEX[0] : FLY_HEX[1]);
-  g.fillStyle = '#2c303a'; g.fillRect(W * 0.14, ty, W * 0.72, Math.max(1, H * 0.012));
-  g.fillStyle = opp === 'A' ? '#13232a' : opp === 'B' ? '#241a26' : '#20232a';
-  g.beginPath(); g.moveTo(W * 0.3, ty + H * 0.04); g.lineTo(W * 0.7, ty + H * 0.04); g.lineTo(W * 0.73, ty + H * 0.16); g.lineTo(W * 0.27, ty + H * 0.16); g.closePath(); g.fill();
-  const bw = H * 0.08;
-  for (let i = 0; i < 4; i++) cardBack(g, { x: W * 0.36 + i * bw * 0.85, y: ty + H * 0.05, w: bw * 0.7, h: bw });
-  g.fillStyle = '#1f2c22';
-  g.beginPath(); g.moveTo(W * 0.1, H * 0.66); g.lineTo(W * 0.9, H * 0.66); g.lineTo(W * 1.02, H); g.lineTo(-W * 0.02, H); g.closePath(); g.fill();
-  g.fillStyle = '#c9a45a'; g.fillRect(W * 0.1, H * 0.66, W * 0.8, Math.max(1, H * 0.006));
-  const n = 5, ch = H * 0.46, cw = ch * 5 / 7;
-  const px = W / 2, py = H + ch * 2.2;
-  for (let i = 0; i < n; i++) {
-    const a = (i - (n - 1) / 2) * 0.085;
-    g.save(); g.translate(px, py); g.rotate(a);
-    const x = -cw / 2, y = -py + H * 0.66;
-    const c = hand[i];
-    if (c) drawCard(g, c, { x, y, w: cw, h: ch, mode: 'thumb', dpr, art: getCardArt(c.id, { small: true }) });
-    else cardBack(g, { x, y, w: cw, h: ch });
-    g.restore();
-  }
-}
+// Screen captures of the real page (art/modes/, made from a headless
+// Chrome run of ?mode=watch and ?mode=play, then cropped to 2:1). The URL
+// is relative to this module, so ui/chooser/dev.html finds them too.
+export const MODE_ART = {
+  watch: new URL('../../art/modes/watch.jpg', import.meta.url).href,
+  play: new URL('../../art/modes/play.jpg', import.meta.url).href,
+};
 
 // ------------------------------------------------------------ the layer
 const PIP = (k, s = 16) => `<canvas class="fdc-glyph" data-k="${esc(k)}" width="${s}" height="${s}" style="width:${s}px;height:${s}px" aria-hidden="true"></canvas>`;
@@ -396,11 +250,11 @@ function shellHTML(D) {
   </header>
   <section class="fdc-modes" role="radiogroup" aria-label="Mode">
     <button type="button" class="fdc-mode" role="radio" data-mode="watch" aria-checked="true">
-      <span class="fdc-art"><canvas class="fdc-art-cv" data-art="watch" aria-hidden="true"></canvas></span>
+      <span class="fdc-art"><img src="${MODE_ART.watch}" alt="" width="1200" height="600" decoding="async"></span>
       <span class="fdc-mt"><b>Watch</b><span>Fly A and Fly B duel at the convention table, brains firing live.</span></span>
     </button>
     <button type="button" class="fdc-mode" role="radio" data-mode="play" aria-checked="false">
-      <span class="fdc-art"><canvas class="fdc-art-cv" data-art="play" aria-hidden="true"></canvas></span>
+      <span class="fdc-art"><img src="${MODE_ART.play}" alt="" width="1200" height="600" decoding="async"></span>
       <span class="fdc-mt"><b>Play</b><span>Take the seat across from a model fly. Your hand, first person.</span></span>
     </button>
   </section>
@@ -539,25 +393,12 @@ export function mountChooser(root, opts = {}) {
       try { drawManaGlyph(g, cv.dataset.k, 0, 0, s); } catch { /* an unknown key draws nothing */ }
     }
   }
-  function paintArt() {
-    for (const cv of $$('canvas.fdc-art-cv')) {
-      const p = prep(cv, 320, 180);
-      if (!p) continue;
-      const [g, W, H, dpr] = p;
-      if (cv.dataset.art === 'watch') drawWatchArt(g, W, H);
-      else {
-        const hand = keys(ch.humanDeck);
-        drawPlayArt(g, W, H, hand, ch.opponent, dpr);
-        hookArt(cv, hand, paintArt);
-      }
-    }
-  }
   function paintTiles() {
     for (const t of $$('.fdc-tile')) paintFanCv(t.querySelector('canvas'), t.dataset.deck);
     for (const t of $$('.fdc-ctile[data-cdeck]')) paintFanCv(t.querySelector('canvas'), t.dataset.cdeck);
   }
   function paintSeats() { $$('.fdc-seat-cv').forEach((cv, i) => paintFanCv(cv, seatDeck(i))); }
-  function paintAll() { paintGlyphs(); paintArt(); paintTiles(); paintSeats(); }
+  function paintAll() { paintGlyphs(); paintTiles(); paintSeats(); }
 
   // ---- state
   const seatDeck = i => (ch.mode === 'play' ? (i ? ch.flyDeck : ch.humanDeck) : (i ? ch.deckB : ch.deckA));
@@ -565,7 +406,7 @@ export function mountChooser(root, opts = {}) {
     if (ch.mode === 'play') { if (i) ch.flyDeck = id; else ch.humanDeck = id; }
     else if (i) ch.deckB = id; else ch.deckA = id;
   }
-  let lastArt = '', lastCustom = '';
+  let lastCustom = '';
   function sync() {
     const play = ch.mode === 'play';
     root.dataset.mode = ch.mode; root.dataset.step = S.step;
@@ -620,8 +461,6 @@ export function mountChooser(root, opts = {}) {
     $('.fdc-x').hidden = !S.closable;
     paintGlyphs();
     paintSeats();
-    const sig = `${ch.humanDeck}|${ch.opponent}`;
-    if (sig !== lastArt) { lastArt = sig; paintArt(); }
   }
 
   // ---- events

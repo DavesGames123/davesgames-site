@@ -9,7 +9,7 @@
   Stand-alone preview of ui/chooser/chooser.js with the real decks, cards
   and data/training-curve.json. It is a development page: the nav does
   not link it. The 3D table is not here. A still picture of the watch
-  table (drawWatchArt) stands in for the live table behind the veil.
+  table (the watch capture, MODE_ART) stands in for the live table behind the veil.
   The log at the top left shows each onStart / onHow / onClose call.
   ?closable=1 shows the Close button. ?mode=play opens on the deck step.
 -->
@@ -32,14 +32,16 @@
 <button id="again" hidden>Open the chooser again</button>
 <script type="module">
 import * as C from '../../game/cards.js';
-import { mountChooser, drawWatchArt } from './chooser.js';
+import { mountChooser, MODE_ART } from './chooser.js';
 
 const q = new URLSearchParams(location.search);
 const bg = document.getElementById('bg');
 function paintBg() {
   const dpr = Math.min(2, devicePixelRatio || 1);
   bg.width = Math.round(innerWidth * dpr); bg.height = Math.round(innerHeight * dpr);
-  drawWatchArt(bg.getContext('2d'), bg.width, bg.height);
+  const im = new Image();
+  im.onload = () => { const g = bg.getContext('2d'), k = Math.max(bg.width / im.width, bg.height / im.height); g.drawImage(im, (bg.width - im.width * k) / 2, (bg.height - im.height * k) / 2, im.width * k, im.height * k); };
+  im.src = MODE_ART.watch;
 }
 paintBg(); addEventListener('resize', paintBg);
 

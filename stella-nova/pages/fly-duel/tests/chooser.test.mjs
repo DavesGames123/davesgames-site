@@ -118,14 +118,19 @@ function stubCtx() {
   }
   const g0 = stubCtx(); X.drawFan(g0, 220, 130, [], 1);
   ok(g0.calls.n > 20 && g0.calls.bad === 0, 'draw: random fan of card backs');
-  const g1 = stubCtx(); X.drawWatchArt(g1, 760, 380);
-  ok(g1.calls.n > 50 && g1.calls.bad === 0, `draw: watch picture (${g1.calls.n} calls)`);
-  for (const opp of ['A', 'B', 'bot']) {
-    const g2 = stubCtx(); X.drawPlayArt(g2, 760, 380, X.keyCardsOf(C.DECKS.pollen, C.CARD, 5), opp, 2);
-    ok(g2.calls.n > 50 && g2.calls.bad === 0, `draw: play picture vs ${opp}`);
+  // the mode pictures are screen captures of the real page, not drawn
+  ok(!('drawWatchArt' in X) && !('drawPlayArt' in X), 'art: no drawn mode pictures');
+  for (const m of ['watch', 'play']) {
+    const f = fileURLToPath(X.MODE_ART[m]);
+    let ok2 = false, size = 0, w = 0, h = 0;
+    try {
+      const b = readFileSync(f); size = b.length;
+      // JPEG SOF0/SOF2 marker gives the size
+      for (let i = 2; i < b.length - 9; i++) if (b[i] === 0xFF && (b[i + 1] === 0xC0 || b[i + 1] === 0xC2)) { h = b.readUInt16BE(i + 5); w = b.readUInt16BE(i + 7); break; }
+      ok2 = b[0] === 0xFF && b[1] === 0xD8;
+    } catch { /* missing */ }
+    ok(ok2 && w === 2 * h && w >= 1200 && size < 400000, `art: ${m} capture is a 2:1 JPEG (${w}x${h}, ${size} bytes)`);
   }
-  const g3 = stubCtx(); X.drawPlayArt(g3, 1, 1, [], 'B', 1);
-  ok(g3.calls.bad === 0, 'draw: a 1x1 canvas gives no bad numbers');
 }
 
 // ------------------------------------------------------------ DOM
