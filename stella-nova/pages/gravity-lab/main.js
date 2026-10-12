@@ -33,7 +33,7 @@
 // ============================================================================
 import { loadNbodyCode } from './engine.js';
 import { Renderer, loadRenderCode } from './render.js';
-import { S, UI, $, bootDone, PHONE_Q, COARSE } from './app/state.js';
+import { S, UI, $, bootDone, bootFailed, PHONE_Q, COARSE } from './app/state.js';
 import { stepRun, bodyInstances, segments, lights } from './app/run.js';
 import { camFrame, cam } from './app/camera.js';
 import { buildUI, applyChoice, firstChoice, refreshHUD, placeLabels, resizeNow } from './app/ui.js';
@@ -107,6 +107,7 @@ function fail(e) {
   $('busy').classList.add('off');
   $('nogpu').classList.remove('off');
   $('nogpuWhy').textContent = String(e && e.message || e);
+  bootFailed(e);
 }
 window.addEventListener('pagehide', () => {
   try { if (S.lab) S.lab.destroy(); if (S.ren) S.ren.destroy(); if (S.dev) S.dev.destroy(); } catch (e) { /* already gone */ }

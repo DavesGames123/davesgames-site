@@ -218,7 +218,7 @@ bus('event', onEvent);
 window.snSaver = {
   async enter(opts = {}) {
     S.saverOn = true;
-    await bootReady;
+    try { await bootReady; } catch (e) { S.saverOn = false; throw e; }
     document.documentElement.classList.add('sn-saver');
     closePanels();
     UI.item = null; S.aim = null;

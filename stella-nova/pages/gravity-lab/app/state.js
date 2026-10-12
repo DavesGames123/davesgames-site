@@ -42,6 +42,11 @@ const subs = new Map();
 export function bus(type, fn) { if (!subs.has(type)) subs.set(type, []); subs.get(type).push(fn); }
 export function emit(type, data) { for (const f of subs.get(type) || []) { try { f(data); } catch (e) { console.error(e); } } }
 
-let readyFn;
-export const bootReady = new Promise(r => { readyFn = r; });
+// bootReady resolves when the page has a GPU device and a renderer, and
+// rejects when boot fails (no WebGPU): snSaver.enter then throws, and the
+// screensaver shell uses its generic mode instead of a wait with no end.
+let readyFn, failFn;
+export const bootReady = new Promise((res, rej) => { readyFn = res; failFn = rej; });
+bootReady.catch(() => {});
 export function bootDone() { readyFn(); }
+export function bootFailed(e) { failFn(e); }

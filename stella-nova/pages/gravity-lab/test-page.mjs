@@ -19,6 +19,7 @@
 //      shots keep the subject on screen, a push ends on its subject
 //  P7  the same run: no cut under 5 s except for a merge or a breakup,
 //      no stale event shot, one close shot per event and pair
+//  N1  (--nogpu, a second process) no WebGPU: snSaver.enter rejects
 //  Each check prints PASS or FAIL. Exit code 1 on a FAIL.
 // ============================================================================
 if (typeof Deno === 'undefined' || !navigator.gpu) { console.log('SKIP  page tests: needs Deno with navigator.gpu'); }
@@ -74,6 +75,18 @@ async function run() {
   try { navigator.gpu.getPreferredCanvasFormat = () => 'rgba8unorm'; } catch (e) { void origPref; }
   addEventListener('error', e => { console.log('FAIL  uncaught: ' + (e.error && e.error.stack || e.message)); fails++; e.preventDefault(); });
 
+  // ── no WebGPU (--nogpu): the saver hook must fail, not hang ───────────
+  if (Deno.args.includes('--nogpu')) {
+    Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
+    await import('./main.js');
+    const r = await Promise.race([
+      globalThis.snSaver.enter({ seed: 1, label: () => {} }).then(() => 'resolved', e => 'rejected: ' + e.message),
+      new Promise(res => setTimeout(() => res('still waiting after 3 s'), 3000)),
+    ]);
+    ok('N1 no WebGPU: snSaver.enter rejects (the shell then uses its generic mode) and the page says why', r.startsWith('rejected') && !$('nogpu').classList.contains('off') && !globalThis.__glab,
+      `enter ${r}; #nogpu ${$('nogpu').classList.contains('off') ? 'hidden' : 'shown'}: "${$('nogpuWhy').textContent}"`);
+    Deno.exit(fails ? 1 : 0);
+  }
   // ── boot ──────────────────────────────────────────────────────────────
   const t0 = Date.now();
   await import('./main.js');

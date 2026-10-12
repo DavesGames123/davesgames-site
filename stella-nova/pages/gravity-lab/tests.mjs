@@ -403,6 +403,10 @@ else if (!ONLY && !ARGS.includes('--cpu')) {
     process.stdout.write(p.stdout || '');
     if (p.stderr && p.stderr.trim()) process.stdout.write(p.stderr.split('\n').filter(l => !/^(Download|Warning)/.test(l)).join('\n'));
     if (p.status !== 0) fails++;
+    // the same page with no WebGPU: the saver hook must not hang
+    const q = spawnSync('deno', ['run', '-A', fileURLToPath(new URL('./test-page.mjs', import.meta.url)), '--nogpu'], { encoding: 'utf8', timeout: 60000 });
+    process.stdout.write(q.stdout || '');
+    if (q.status !== 0) fails++;
   }
 }
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
