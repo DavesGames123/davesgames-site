@@ -1042,6 +1042,9 @@ export function createBrainCard(canvas, connectome, opts = {}) {
     resize, render,
     pick(x, y) { const w = canvas?.clientWidth || 160, h = canvas?.clientHeight || 110; const a = map.pickScreen(x, y, camera, w, h, 40); tip?.show(a); dirty = true; return a; },
     get running() { return map.running; },
-    dispose() { alive = false; if (raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf); tip?.dispose(); map.dispose(); renderer?.dispose(); },
+    // free the context now, not at garbage collection: play mode makes a
+    // new card for each game, and a browser drops the oldest context
+    // (maybe the 3D table) after about 16
+    dispose() { alive = false; if (raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf); tip?.dispose(); map.dispose(); renderer?.dispose(); try { renderer?.forceContextLoss(); } catch { /* no context */ } },
   };
 }

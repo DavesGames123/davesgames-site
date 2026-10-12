@@ -264,5 +264,15 @@ map.dispose();
   card.resize(); card.dispose();
 }
 
+// Play mode makes a new brain card (a new WebGL context) for each game.
+// A browser keeps about 16 live contexts and then drops the oldest, which
+// can be the 3D table. dispose() of the card must free its context now.
+{
+  const src = readFileSync(join(ROOT, 'ui', 'fly3d', 'brain3d.js'), 'utf8');
+  const body = src.slice(src.indexOf('export function createBrainCard('));
+  const disp = (body.match(/dispose\(\)\s*\{[^\n]*/) || [''])[0];
+  ok(/forceContextLoss/.test(disp), 'createBrainCard dispose() frees its WebGL context (forceContextLoss)');
+}
+
 console.log(`fly3d-brain: ${pass} passed, ${fail} failed  (build ${buildMs} ms, ${st.tris} tris, ${st.lines} lines, lit pn ${expPn} kc ${tr.kc.length} pn-kc ${expE1} kc-mbon ${expE2})`);
 process.exit(fail ? 1 : 0);
