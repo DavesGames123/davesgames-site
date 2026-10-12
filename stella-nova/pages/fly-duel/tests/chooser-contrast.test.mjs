@@ -20,6 +20,7 @@
 //      grep -n 'PAIRS'      every text / ground pair
 //      grep -n 'GLYPHS'     a selected colour glyph on its ground
 //      grep -n 'PHONE'      type, targets, start bar, scroll, landscape
+//      grep -n 'CASCADE'    a generic element rule must not beat a class
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -208,6 +209,30 @@ for (const [sel, chain, need, o = {}] of PAIRS) {
   const total = 10 + titleH + 10 + modeH + 10 + footH;
   console.log(`  info: landscape 844x390 mode step estimate ${Math.round(total)} px (title ${Math.round(titleH)}, mode card ${Math.round(modeH)}, start bar ${Math.round(footH)})`);
   ok(total <= H, `landscape: the mode step fits in 390 px (estimate ${Math.round(total)} px)`);
+}
+
+// ------------------------------------------------------------ CASCADE
+// The PAIRS read each colour from its own rule and do not apply the
+// cascade. A generic rule such as ".fdc button{color:inherit}" has the
+// specificity (0,1,1) and beats ".fdc-go{color:..}" (0,1,0): the start
+// button then showed the light page ink on parchment. So every rule that
+// sets color or font on a type selector must have a lower specificity
+// than each single-class rule that sets the same property.
+{
+  const spec = sel => {
+    const s = sel.replace(/:where\([^)]*\)/g, '').replace(/::?[\w-]+(\([^)]*\))?/g, m => (m.startsWith('::') ? ' ' : '.x'));
+    const ids = (s.match(/#[\w-]+/g) || []).length;
+    const cls = (s.match(/\.[\w-]+|\[[^\]]*\]/g) || []).length;
+    const typ = (s.replace(/\.[\w-]+|\[[^\]]*\]|#[\w-]+/g, ' ').match(/(^|[\s>+~])[a-z][\w-]*/gi) || []).length;
+    return ids * 10000 + cls * 100 + typ;
+  };
+  const top = RULES.filter(r => !r.media);
+  for (const prop of ['color', 'font']) {
+    const generic = top.filter(r => r.decl[prop] != null).flatMap(r => r.sels).filter(x => /^(\.fdc|:where\(\.fdc\)) button$/.test(x));
+    const own = top.filter(r => r.decl[prop] != null).flatMap(r => r.sels).filter(x => /^\.[\w-]+$/.test(x));
+    for (const g of generic) for (const c of own) ok(spec(g) < spec(c), `cascade: "${g}" (${spec(g)}) must not beat "${c}" (${spec(c)}) on ${prop}`);
+  }
+  ok(top.some(r => r.decl.color === 'inherit' && r.sels.some(x => /^(\.fdc|:where\(\.fdc\)) button$/.test(x))), 'cascade: chooser buttons still inherit the ink by default');
 }
 
 console.log(`chooser-contrast: ${pass} pass, ${fail} fail`);

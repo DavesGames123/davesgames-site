@@ -47,7 +47,8 @@
 }
 .fdc[hidden],.fdc [hidden]{display:none!important}
 .fdc *{box-sizing:border-box}
-.fdc button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;margin:0}
+/* :where keeps this at (0,0,1): a class rule (.fdc-go ink) must win */
+:where(.fdc) button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;margin:0}
 .fdc button:focus-visible{outline:2px solid var(--c-parch);outline-offset:2px}
 .fdc canvas{display:block}
 .fdc-veil{position:absolute;inset:0;background:rgba(5,7,12,0.9)}
