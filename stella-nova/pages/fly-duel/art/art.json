@@ -811,5 +811,2327 @@
    "h": 0.4738,
    "note": "fractions of the source image, 4:3 box"
   }
+ },
+ "dew-pond": {
+  "artist": "Ivan Shishkin",
+  "file": "cards/dew-pond.jpg",
+  "small": "cards/dew-pond@sm.jpg",
+  "title": "Pond in an Old Park (oil painting)",
+  "subject": "pond in an old park",
+  "author": "Ivan Shishkin",
+  "year": "1898",
+  "commons": "File:Пруд в старом парке (Шишкин).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:%D0%9F%D1%80%D1%83%D0%B4_%D0%B2_%D1%81%D1%82%D0%B0%D1%80%D0%BE%D0%BC_%D0%BF%D0%B0%D1%80%D0%BA%D0%B5_(%D0%A8%D0%B8%D1%88%D0%BA%D0%B8%D0%BD).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0777,
+   "y": 0.0,
+   "w": 0.8446,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "rot-log": {
+  "artist": "Ivan Shishkin",
+  "file": "cards/rot-log.jpg",
+  "small": "cards/rot-log@sm.jpg",
+  "title": "Windfall (oil painting)",
+  "subject": "fallen trees in a pine forest",
+  "author": "Ivan Shishkin",
+  "year": "1888",
+  "commons": "File:Ivan Shishkin - Wind-Fallen Trees.JPG",
+  "url": "https://commons.wikimedia.org/wiki/File:Ivan_Shishkin_-_Wind-Fallen_Trees.JPG",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1182,
+   "y": 0.1304,
+   "w": 0.7636,
+   "h": 0.8696,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "pollen-meadow": {
+  "artist": "Claude Monet",
+  "file": "cards/pollen-meadow.jpg",
+  "small": "cards/pollen-meadow@sm.jpg",
+  "title": "Poppy Field (oil painting)",
+  "subject": "poppy meadow",
+  "author": "Claude Monet",
+  "year": "1890",
+  "commons": "File:Claude Monet Mohnfeld.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Claude_Monet_Mohnfeld.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1051,
+   "y": 0.0,
+   "w": 0.7898,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "geyser-basin": {
+  "artist": "Thomas Moran",
+  "file": "cards/geyser-basin.jpg",
+  "small": "cards/geyser-basin@sm.jpg",
+  "title": "Lower Geyser Basin (watercolour)",
+  "subject": "hot springs and geyser basin",
+  "author": "Thomas Moran",
+  "year": "1873",
+  "commons": "File:Lower Geyser Basin Thomas Moran 1873.jpeg",
+  "url": "https://commons.wikimedia.org/wiki/File:Lower_Geyser_Basin_Thomas_Moran_1873.jpeg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 0.9259,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "cinder-fen": {
+  "artist": "Frederic Edwin Church",
+  "file": "cards/cinder-fen.jpg",
+  "small": "cards/cinder-fen@sm.jpg",
+  "title": "Cotopaxi (oil painting)",
+  "subject": "volcano smoke over a lake",
+  "author": "Frederic Edwin Church",
+  "year": "1862",
+  "commons": "File:Cotopaxi church.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Cotopaxi_church.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0224,
+   "y": 0.0,
+   "w": 0.7552,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "sunlit-ridge": {
+  "artist": "Albert Bierstadt",
+  "file": "cards/sunlit-ridge.jpg",
+  "small": "cards/sunlit-ridge@sm.jpg",
+  "title": "Among the Sierra Nevada, California (oil painting)",
+  "subject": "mountain ridge in sunlight",
+  "author": "Albert Bierstadt",
+  "year": "1868",
+  "commons": "File:Albert Bierstadt - Among the Sierra Nevada, California - Google Art Project.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Albert_Bierstadt_-_Among_the_Sierra_Nevada,_California_-_Google_Art_Project.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1516,
+   "y": 0.0,
+   "w": 0.7969,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "fern-spring": {
+  "artist": "Ivan Shishkin",
+  "file": "cards/fern-spring.jpg",
+  "small": "cards/fern-spring@sm.jpg",
+  "title": "Forest River (oil painting)",
+  "subject": "forest stream",
+  "author": "Ivan Shishkin",
+  "year": "late 19th century",
+  "commons": "File:Forest river (Shishkin) 01.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Forest_river_(Shishkin)_01.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.3211,
+   "w": 1.0,
+   "h": 0.5578,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "leaf-litter": {
+  "artist": "Isaac Levitan",
+  "file": "cards/leaf-litter.jpg",
+  "small": "cards/leaf-litter@sm.jpg",
+  "title": "Golden Autumn (oil painting), detail",
+  "subject": "birch wood in autumn",
+  "author": "Isaac Levitan",
+  "year": "1895",
+  "commons": "File:Levitan Zolotaya Osen detail1.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Levitan_Zolotaya_Osen_detail1.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0607,
+   "w": 1.0,
+   "h": 0.9393,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "clover-hill": {
+  "artist": "Flora Batava",
+  "file": "cards/clover-hill.jpg",
+  "small": "cards/clover-hill@sm.jpg",
+  "title": "Flora Batava, vol. 5 (Trifolium pratense)",
+  "subject": "red clover",
+  "author": "Jan Kops et al.",
+  "year": "c. 1828",
+  "commons": "File:Trifolium pratense — Flora Batava — Volume v5.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Trifolium_pratense_%E2%80%94_Flora_Batava_%E2%80%94_Volume_v5.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.05,
+   "y": 0.0182,
+   "w": 0.8,
+   "h": 0.4036,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "still-marsh": {
+  "artist": "Jacob van Ruisdael",
+  "file": "cards/still-marsh.jpg",
+  "small": "cards/still-marsh@sm.jpg",
+  "title": "The Marsh in a Forest (oil painting)",
+  "subject": "forest marsh",
+  "author": "Jacob van Ruisdael",
+  "year": "c. 1665",
+  "commons": "File:Jacob Isaacksz. van Ruisdael - The Marsh in a Forest - WGA20490.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jacob_Isaacksz._van_Ruisdael_-_The_Marsh_in_a_Forest_-_WGA20490.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0081,
+   "y": 0.0,
+   "w": 0.9838,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "dawn-lake": {
+  "artist": "Frederic Edwin Church",
+  "file": "cards/dawn-lake.jpg",
+  "small": "cards/dawn-lake@sm.jpg",
+  "title": "Twilight in the Wilderness (oil painting)",
+  "subject": "lake under a burning sky",
+  "author": "Frederic Edwin Church",
+  "year": "1860",
+  "commons": "File:Frederic Edwin Church - Twilight in the Wilderness.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Frederic_Edwin_Church_-_Twilight_in_the_Wilderness.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0849,
+   "y": 0.0,
+   "w": 0.8302,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "old-orchard": {
+  "artist": "Vincent van Gogh",
+  "file": "cards/old-orchard.jpg",
+  "small": "cards/old-orchard@sm.jpg",
+  "title": "Orchard in Blossom (Plum Trees) (oil painting)",
+  "subject": "orchard in blossom",
+  "author": "Vincent van Gogh",
+  "year": "1888",
+  "commons": "File:Vincent van Gogh - Orchard in Blossom (Plum Trees) - Google Art Project.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Vincent_van_Gogh_-_Orchard_in_Blossom_(Plum_Trees)_-_Google_Art_Project.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0531,
+   "w": 1.0,
+   "h": 0.8939,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ram-weevil": {
+  "artist": "Meyers Lexikon",
+  "file": "cards/ram-weevil.jpg",
+  "small": "cards/ram-weevil@sm.jpg",
+  "title": "Meyers Konversations-Lexikon, vol. 16 (Hylobius abietis)",
+  "subject": "large pine weevil",
+  "author": "Meyers Konversations-Lexikon (unknown artist)",
+  "year": "1885-1890",
+  "commons": "File:Hylobius abietis meyers 1888 v16 p352.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Hylobius_abietis_meyers_1888_v16_p352.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-Meyers",
+   "PD-US-expired-text",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 0.9266,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "brush-fire": {
+  "artist": "George Catlin",
+  "file": "cards/brush-fire.jpg",
+  "small": "cards/brush-fire@sm.jpg",
+  "title": "Prairie Meadows Burning (oil painting)",
+  "subject": "prairie fire",
+  "author": "George Catlin",
+  "year": "1832",
+  "commons": "File:George Catlin - Prairie Meadows Burning - 1985.66.374 - Smithsonian American Art Museum.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:George_Catlin_-_Prairie_Meadows_Burning_-_1985.66.374_-_Smithsonian_American_Art_Museum.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-1923",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0137,
+   "w": 1.0,
+   "h": 0.9726,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "seed-carrier": {
+  "artist": "J. Traherne Moggridge",
+  "file": "cards/seed-carrier.jpg",
+  "small": "cards/seed-carrier@sm.jpg",
+  "title": "Harvesting Ants and Trap-door Spiders, plate IX",
+  "subject": "harvester ant nest with stored seeds",
+  "author": "J. Traherne Moggridge",
+  "year": "1873",
+  "commons": "File:Harvesting ants and trap-door spiders (Pl. IX) BHL6290773.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Harvesting_ants_and_trap-door_spiders_(Pl._IX)_BHL6290773.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0052,
+   "w": 1.0,
+   "h": 0.5897,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "orb-weaver": {
+  "artist": "Ernst Haeckel",
+  "file": "cards/orb-weaver.jpg",
+  "small": "cards/orb-weaver@sm.jpg",
+  "title": "Kunstformen der Natur, plate 66: Arachnida (detail, spiny orb-weaver)",
+  "subject": "spiny orb-weaver spider",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Arachnida (cropped).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Arachnida_(cropped).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.017,
+   "y": 0.0,
+   "w": 0.966,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "elder-mycelium": {
+  "artist": "Ernst Haeckel",
+  "file": "cards/elder-mycelium.jpg",
+  "small": "cards/elder-mycelium@sm.jpg",
+  "title": "Kunstformen der Natur, plate 63: Basimycetes",
+  "subject": "stinkhorn and morel fungi",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Basimycetes.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Basimycetes.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0455,
+   "y": 0.2096,
+   "w": 0.9091,
+   "h": 0.4808,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ring-growth": {
+  "artist": "Ivan Shishkin",
+  "file": "cards/ring-growth.jpg",
+  "small": "cards/ring-growth@sm.jpg",
+  "title": "Sunny Day in the Forest. Oaks (oil painting)",
+  "subject": "old oak trunks",
+  "author": "Ivan Shishkin",
+  "year": "before 1891",
+  "commons": "File:Sunny day in the forest. Oaks (Shishkin).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Sunny_day_in_the_forest._Oaks_(Shishkin).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-1923",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0904,
+   "w": 0.8696,
+   "h": 0.8192,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "diving-beetle": {
+  "artist": "Richard Lydekker",
+  "file": "cards/diving-beetle.jpg",
+  "small": "cards/diving-beetle@sm.jpg",
+  "title": "Royal Natural History: Dytiscus marginalis, life history",
+  "subject": "great diving beetle hunting under water",
+  "author": "Richard Lydekker (ed.)",
+  "year": "1879",
+  "commons": "File:DytiscusLifeLyd.png",
+  "url": "https://commons.wikimedia.org/wiki/File:DytiscusLifeLyd.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1097,
+   "y": 0.0,
+   "w": 0.7805,
+   "h": 0.8696,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "darner": {
+  "artist": "Joris Hoefnagel",
+  "file": "cards/darner.jpg",
+  "small": "cards/darner@sm.jpg",
+  "title": "Animalia Rationalia et Insecta (Ignis), plate LIV",
+  "subject": "dragonflies",
+  "author": "Joris Hoefnagel",
+  "year": "c. 1575",
+  "commons": "File:Joris Hoefnagel, Animalia Rationalia et Insecta (Ignis) - Plate LIV, c. 1575-1580, NGA 69719.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Joris_Hoefnagel,_Animalia_Rationalia_et_Insecta_(Ignis)_-_Plate_LIV,_c._1575-1580,_NGA_69719.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.1796,
+   "y": 0.0901,
+   "w": 0.7407,
+   "h": 0.7197,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "blue-damselfly": {
+  "artist": "Moses Harris",
+  "file": "cards/blue-damselfly.jpg",
+  "small": "cards/blue-damselfly@sm.jpg",
+  "title": "The Aurelian / Exposition of English Insects: Libellula plate",
+  "subject": "blue damselflies and dragonflies",
+  "author": "Moses Harris",
+  "year": "1782",
+  "commons": "File:Moses Harris02.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Moses_Harris02.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1429,
+   "y": 0.0743,
+   "w": 0.7143,
+   "h": 0.4114,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "storm-darner": {
+  "artist": "Dru Drury",
+  "file": "cards/storm-darner.jpg",
+  "small": "cards/storm-darner@sm.jpg",
+  "title": "Illustrations of Exotic Entomology, vol. I, plate 48 (Westwood edition)",
+  "subject": "dragonfly",
+  "author": "Dru Drury",
+  "year": "1837",
+  "commons": "File:DruryV1P048AA.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:DruryV1P048AA.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1667,
+   "y": 0.0,
+   "w": 0.6667,
+   "h": 0.3843,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "steam-darner": {
+  "artist": "Dru Drury",
+  "file": "cards/steam-darner.jpg",
+  "small": "cards/steam-darner@sm.jpg",
+  "title": "Illustrations of Exotic Entomology, vol. I, plate 47 (Westwood edition)",
+  "subject": "red dragonfly",
+  "author": "Dru Drury",
+  "year": "1837",
+  "commons": "File:DruryV1P047AA.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:DruryV1P047AA.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1929,
+   "y": 0.5954,
+   "w": 0.7143,
+   "h": 0.4046,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bell-spider": {
+  "artist": "Popular Science Monthly",
+  "file": "cards/bell-spider.jpg",
+  "small": "cards/bell-spider@sm.jpg",
+  "title": "Popular Science Monthly, vol. 33: aquatic spider and its diving bell",
+  "subject": "water spider under its bell of air",
+  "author": "Popular Science Monthly (unknown artist)",
+  "year": "1888",
+  "commons": "File:PSM V33 D813 Aquatic spider and its diving bell.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:PSM_V33_D813_Aquatic_spider_and_its_diving_bell.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.3355,
+   "w": 1.0,
+   "h": 0.5289,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "mist-moth": {
+  "artist": "Richard South",
+  "file": "cards/mist-moth.jpg",
+  "small": "cards/mist-moth@sm.jpg",
+  "title": "Moths of the British Isles, series 2, plate 157",
+  "subject": "pale moths",
+  "author": "Richard South",
+  "year": "1909",
+  "commons": "File:Moths of the British Isles Series2 Plate157.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Moths_of_the_British_Isles_Series2_Plate157.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Gutenberg",
+   "PD-Layout"
+  ],
+  "crop": {
+   "x": 0.0929,
+   "y": 0.0,
+   "w": 0.3542,
+   "h": 0.3846,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ripple": {
+  "artist": "Utagawa Hiroshige",
+  "file": "cards/ripple.jpg",
+  "small": "cards/ripple@sm.jpg",
+  "title": "One Hundred Famous Views of Edo: Sudden Shower over Shin-Ohashi Bridge and Atake (woodblock print)",
+  "subject": "sudden rain over a river",
+  "author": "Utagawa Hiroshige",
+  "year": "1857",
+  "commons": "File:Hiroshige, Sudden shower over Shin-Ōhashi bridge and Atake, 1857.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Hiroshige,_Sudden_shower_over_Shin-%C5%8Chashi_bridge_and_Atake,_1857.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Japan",
+   "PD-Layout",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.2524,
+   "w": 1.0,
+   "h": 0.4951,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "surface-tension": {
+  "artist": "Ernst Haeckel",
+  "file": "cards/surface-tension.jpg",
+  "small": "cards/surface-tension@sm.jpg",
+  "title": "Kunstformen der Natur, plate 4: Diatomea (detail)",
+  "subject": "diatoms",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Diatomeas-Haeckel.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Diatomeas-Haeckel.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0567,
+   "y": 0.0,
+   "w": 0.8867,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "carried-off": {
+  "artist": "Katsushika Hokusai",
+  "file": "cards/carried-off.jpg",
+  "small": "cards/carried-off@sm.jpg",
+  "title": "Thirty-six Views of Mount Fuji: The Great Wave off Kanagawa (woodblock print)",
+  "subject": "great wave",
+  "author": "Katsushika Hokusai",
+  "year": "c. 1831",
+  "commons": "File:Katsushika Hokusai - The Great Wave off the Coast of Kanagawa LCCN2008660568.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Katsushika_Hokusai_-_The_Great_Wave_off_the_Coast_of_Kanagawa_LCCN2008660568.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 0.9406,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "clear-water": {
+  "artist": "Ernst Haeckel",
+  "file": "cards/clear-water.jpg",
+  "small": "cards/clear-water@sm.jpg",
+  "title": "Kunstformen der Natur, plate 24: Desmidiea",
+  "subject": "desmid algae",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Desmidiea.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Desmidiea.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0455,
+   "y": 0.2566,
+   "w": 0.9091,
+   "h": 0.4867,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spring-spate": {
+  "artist": "Joshua Shaw",
+  "file": "cards/spring-spate.jpg",
+  "small": "cards/spring-spate@sm.jpg",
+  "title": "The Deluge towards Its Close (oil painting)",
+  "subject": "flood waters",
+  "author": "Joshua Shaw",
+  "year": "c. 1813",
+  "commons": "File:The Deluge towards Its Close MET ap09.14.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:The_Deluge_towards_Its_Close_MET_ap09.14.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 0.9667,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "burying-beetle": {
+  "artist": "John Curtis",
+  "file": "cards/burying-beetle.jpg",
+  "small": "cards/burying-beetle@sm.jpg",
+  "title": "British Entomology, plate 71 (Necrophorus)",
+  "subject": "burying beetle",
+  "author": "John Curtis",
+  "year": "1825",
+  "commons": "File:British-Entomology John-Curtis Plate 71 Burying-or-Sexton-Beetle.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:British-Entomology_John-Curtis_Plate_71_Burying-or-Sexton-Beetle.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.2219,
+   "w": 1.0,
+   "h": 0.4563,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "sexton-beetle": {
+  "artist": "Mary E. C. Boutell",
+  "file": "cards/sexton-beetle.jpg",
+  "small": "cards/sexton-beetle@sm.jpg",
+  "title": "Picture Natural History, no. 291: The Burying Beetle",
+  "subject": "sexton beetle",
+  "author": "Mary E. C. Boutell",
+  "year": "1869",
+  "commons": "File:Picture Natural History - No 291 - The Burying Beetle.png",
+  "url": "https://commons.wikimedia.org/wiki/File:Picture_Natural_History_-_No_291_-_The_Burying_Beetle.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.034,
+   "w": 1.0,
+   "h": 0.832,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bonfire-stag": {
+  "artist": "Pieter Holsteyn II",
+  "file": "cards/bonfire-stag.jpg",
+  "small": "cards/bonfire-stag@sm.jpg",
+  "title": "Stag beetle and other beetles (watercolour)",
+  "subject": "stag beetle",
+  "author": "Pieter Holsteyn II",
+  "year": "1636",
+  "commons": "File:RKD Research Stag beetle and others beetles, 1636 (dated).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:RKD_Research_Stag_beetle_and_others_beetles,_1636_(dated).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-unpublished",
+   "PD-art-category",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.39,
+   "y": 0.0363,
+   "w": 0.5,
+   "h": 0.4674,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "assassin-bug": {
+  "artist": "David Fairchild",
+  "file": "cards/assassin-bug.jpg",
+  "small": "cards/assassin-bug@sm.jpg",
+  "title": "The Book of Monsters, page 98",
+  "subject": "assassin bug",
+  "author": "David and Marian Fairchild",
+  "year": "1914",
+  "commons": "File:Book of monsters (Page 98) BHL4428190.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Book_of_monsters_(Page_98)_BHL4428190.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.1827,
+   "y": 0.2229,
+   "w": 0.6347,
+   "h": 0.7143,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "death-cap": {
+  "artist": "Emil Doerstling",
+  "file": "cards/death-cap.jpg",
+  "small": "cards/death-cap@sm.jpg",
+  "title": "Die Pilze der Heimat (Amanita phalloides)",
+  "subject": "death cap mushrooms",
+  "author": "Emil Doerstling",
+  "year": "1913",
+  "commons": "File:Amanita-phalloides-gramberg-1913-pilzederheimatei00gram 0147.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Amanita-phalloides-gramberg-1913-pilzederheimatei00gram_0147.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1091,
+   "w": 1.0,
+   "h": 0.6219,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "mould-crawler": {
+  "artist": "Ernst Haeckel",
+  "file": "cards/mould-crawler.jpg",
+  "small": "cards/mould-crawler@sm.jpg",
+  "title": "Kunstformen der Natur, plate 93: Mycetozoa (detail)",
+  "subject": "slime moulds",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Haeckel Mycetozoa.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Haeckel_Mycetozoa.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1329,
+   "w": 0.625,
+   "h": 0.3343,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bone-centipede": {
+  "artist": "Mark Catesby",
+  "file": "cards/bone-centipede.jpg",
+  "small": "cards/bone-centipede@sm.jpg",
+  "title": "The Natural History of Carolina, Florida and the Bahama Islands: Centipede (Scolopendra morsitans)",
+  "subject": "centipede",
+  "author": "Mark Catesby",
+  "year": "1731-1743",
+  "commons": "File:Mark Catesby, Centipede (Scolopendra morsitans), published 1731-1743, NGA 73665.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Mark_Catesby,_Centipede_(Scolopendra_morsitans),_published_1731-1743,_NGA_73665.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.0833,
+   "y": 0.5397,
+   "w": 0.8333,
+   "h": 0.4603,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bloated-tick": {
+  "artist": "Carl Wilhelm Hahn",
+  "file": "cards/bloated-tick.jpg",
+  "small": "cards/bloated-tick@sm.jpg",
+  "title": "Die Arachniden, fig. 152 (Ixodes reduvius)",
+  "subject": "engorged tick",
+  "author": "Carl Wilhelm Hahn",
+  "year": "1835",
+  "commons": "File:Hahn 1835 Die Arachniden fig. 152 Ixodes reduvius.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Hahn_1835_Die_Arachniden_fig._152_Ixodes_reduvius.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "plague-swarm": {
+  "artist": "W. W. Froggatt",
+  "file": "cards/plague-swarm.jpg",
+  "small": "cards/plague-swarm@sm.jpg",
+  "title": "Australian Insects, plate XXIX (Diptera)",
+  "subject": "flies",
+  "author": "Walter Wilson Froggatt",
+  "year": "1907",
+  "commons": "File:Australian insects (Plate XXIX) (7268261232).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Australian_insects_(Plate_XXIX)_(7268261232).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0823,
+   "y": 0.0,
+   "w": 0.8354,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "last-feast": {
+  "artist": "Rachel Ruysch",
+  "file": "cards/last-feast.jpg",
+  "small": "cards/last-feast@sm.jpg",
+  "title": "Still Life with Fruit, a Bird's Nest and Insects (oil painting)",
+  "subject": "ripe fruit with insects",
+  "author": "Rachel Ruysch",
+  "year": "c. 1710",
+  "commons": "File:Rachel Ruysch - Still Life with Fruit, a Bird's Nest and Insects NTII DMS 814164.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Rachel_Ruysch_-_Still_Life_with_Fruit,_a_Bird%27s_Nest_and_Insects_NTII_DMS_814164.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1154,
+   "y": 0.4526,
+   "w": 0.7692,
+   "h": 0.4548,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bog-breath": {
+  "artist": "Hermann Hendrich",
+  "file": "cards/bog-breath.jpg",
+  "small": "cards/bog-breath@sm.jpg",
+  "title": "Will-o'-the-Wisp and Snake (painting)",
+  "subject": "will-o'-the-wisp lights over the marsh",
+  "author": "Hermann Hendrich",
+  "year": "before 1931",
+  "commons": "File:Will-o-the-wisp and snake by Hermann Hendrich 1823.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Will-o-the-wisp_and_snake_by_Hermann_Hendrich_1823.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US"
+  ],
+  "crop": {
+   "x": 0.0573,
+   "y": 0.0,
+   "w": 0.8854,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "heart-rot": {
+  "artist": "Emil Doerstling",
+  "file": "cards/heart-rot.jpg",
+  "small": "cards/heart-rot@sm.jpg",
+  "title": "Die Pilze der Heimat, plate 23 (Polyporus fomentarius)",
+  "subject": "tinder bracket fungus",
+  "author": "Emil Doerstling",
+  "year": "1913",
+  "commons": "File:Pilze d. Heimat, T. 23 - Polyporus fomentarius-cropped.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Pilze_d._Heimat,_T._23_-_Polyporus_fomentarius-cropped.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "leaf-blight": {
+  "artist": "James Sowerby",
+  "file": "cards/leaf-blight.jpg",
+  "small": "cards/leaf-blight@sm.jpg",
+  "title": "Coloured Figures of English Fungi or Mushrooms, plate 140",
+  "subject": "rust fungus on a wheat ear",
+  "author": "James Sowerby",
+  "year": "1797",
+  "commons": "File:Coloured Figures of English Fungi or Mushrooms - t. 140.png",
+  "url": "https://commons.wikimedia.org/wiki/File:Coloured_Figures_of_English_Fungi_or_Mushrooms_-_t._140.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1667,
+   "y": 0.1614,
+   "w": 0.6667,
+   "h": 0.2773,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "shield-bug": {
+  "artist": "W. W. Froggatt",
+  "file": "cards/shield-bug.jpg",
+  "small": "cards/shield-bug@sm.jpg",
+  "title": "Australian Insects, plate XXXI (detail: shield bug)",
+  "subject": "shield bug",
+  "author": "Walter Wilson Froggatt",
+  "year": "1907",
+  "commons": "File:Australian insects (Plate XXXI) (7268263964), 1.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Australian_insects_(Plate_XXXI)_(7268263964),_1.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "burnt-clearing": {
+  "artist": "Vasily Polenov",
+  "file": "cards/burnt-clearing.jpg",
+  "small": "cards/burnt-clearing@sm.jpg",
+  "title": "The Burnt Forest (oil painting)",
+  "subject": "burnt forest with new growth",
+  "author": "Vasily Polenov",
+  "year": "1881",
+  "commons": "File:Vasily Polenov - The Burnt Forest.JPG",
+  "url": "https://commons.wikimedia.org/wiki/File:Vasily_Polenov_-_The_Burnt_Forest.JPG",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1531,
+   "y": 0.0,
+   "w": 0.6937,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ash-cricket": {
+  "artist": "G. H. von Schubert",
+  "file": "cards/ash-cricket.jpg",
+  "small": "cards/ash-cricket@sm.jpg",
+  "title": "Naturgeschichte des Tierreichs: Ensifera (crickets and bush crickets)",
+  "subject": "field cricket",
+  "author": "Gotthilf Heinrich von Schubert",
+  "year": "1886",
+  "commons": "File:Ensifera Naturgeschichte.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Ensifera_Naturgeschichte.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1154,
+   "y": 0.281,
+   "w": 0.7692,
+   "h": 0.719,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "scald-beetle": {
+  "artist": "Georgiy Jacobson",
+  "file": "cards/scald-beetle.jpg",
+  "small": "cards/scald-beetle@sm.jpg",
+  "title": "Beetles of Russia and Western Europe (Calosoma sycophanta)",
+  "subject": "ground beetle",
+  "author": "Georgiy Jacobson",
+  "year": "1905-1915",
+  "commons": "File:Calosoma sycophanta Jacobson.png",
+  "url": "https://commons.wikimedia.org/wiki/File:Calosoma_sycophanta_Jacobson.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-art-category",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "moss-tortoise": {
+  "artist": "Rijksmuseum album",
+  "file": "cards/moss-tortoise.jpg",
+  "small": "cards/moss-tortoise@sm.jpg",
+  "title": "Land tortoise, from the Lombard album (drawing)",
+  "subject": "land tortoise",
+  "author": "unknown artist (Rijksmuseum)",
+  "year": "1560-1585",
+  "commons": "File:Landschildpad Lombard album (serietitel), RP-T-1952-388.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Landschildpad_Lombard_album_(serietitel),_RP-T-1952-388.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.0875,
+   "y": 0.0,
+   "w": 0.825,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "wild-bloom": {
+  "artist": "Flora Batava",
+  "file": "cards/wild-bloom.jpg",
+  "small": "cards/wild-bloom@sm.jpg",
+  "title": "Flora Batava, vol. 4 (Papaver rhoeas)",
+  "subject": "corn poppies",
+  "author": "Jan Kops et al.",
+  "year": "c. 1822",
+  "commons": "File:Papaver rhoeas — Flora Batava — Volume v4.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Papaver_rhoeas_%E2%80%94_Flora_Batava_%E2%80%94_Volume_v4.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0654,
+   "y": 0.1057,
+   "w": 0.7692,
+   "h": 0.3887,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "caddis-case": {
+  "artist": "Popular Science Monthly",
+  "file": "cards/caddis-case.jpg",
+  "small": "cards/caddis-case@sm.jpg",
+  "title": "Popular Science Monthly, vol. 21: caddis worm with its case",
+  "subject": "caddisfly larva in its case",
+  "author": "Popular Science Monthly (unknown artist)",
+  "year": "1882",
+  "commons": "File:PSM V21 D619 Caddis worm with its case.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:PSM_V21_D619_Caddis_worm_with_its_case.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "water-boatman": {
+  "artist": "Iconographia Zoologica",
+  "file": "cards/water-boatman.jpg",
+  "small": "cards/water-boatman@sm.jpg",
+  "title": "Iconographia Zoologica: Corisa",
+  "subject": "lesser water boatman",
+  "author": "unknown artist (Iconographia Zoologica)",
+  "year": "1700-1880",
+  "commons": "File:Corisa - Print - Iconographia Zoologica - Special Collections University of Amsterdam - UBAINV0274 041 12 0003.tif",
+  "url": "https://commons.wikimedia.org/wiki/File:Corisa_-_Print_-_Iconographia_Zoologica_-_Special_Collections_University_of_Amsterdam_-_UBAINV0274_041_12_0003.tif",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.2782,
+   "y": 0.2417,
+   "w": 0.3837,
+   "h": 0.4167,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "mayfly-drift": {
+  "artist": "Die Gartenlaube",
+  "file": "cards/mayfly-drift.jpg",
+  "small": "cards/mayfly-drift@sm.jpg",
+  "title": "Die Gartenlaube (1887): mayflies",
+  "subject": "mayflies over the water",
+  "author": "Die Gartenlaube (unknown artist)",
+  "year": "1887",
+  "commons": "File:Die Gartenlaube (1887) b 556 2.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Die_Gartenlaube_(1887)_b_556_2.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-80-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 0.7443,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "newt-sage": {
+  "artist": "Christian Votteler",
+  "file": "cards/newt-sage.jpg",
+  "small": "cards/newt-sage@sm.jpg",
+  "title": "Deutschlands Amphibien und Reptilien, plate 6 (newts)",
+  "subject": "newts under water",
+  "author": "Christian Votteler (in Bruno Dürigen)",
+  "year": "1897",
+  "commons": "File:Dürigen, 1897, T06.JPG",
+  "url": "https://commons.wikimedia.org/wiki/File:D%C3%BCrigen,_1897,_T06.JPG",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-art-category",
+   "PD-old-auto",
+   "PD-old-text",
+   "PD-old-warning-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.5046,
+   "w": 1.0,
+   "h": 0.4954,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "pond-skater": {
+  "artist": "Edward Saunders",
+  "file": "cards/pond-skater.jpg",
+  "small": "cards/pond-skater@sm.jpg",
+  "title": "The Hemiptera Heteroptera of the British Islands, plate 31",
+  "subject": "water measurer",
+  "author": "Edward Saunders",
+  "year": "1895",
+  "commons": "File:SaundersHemipteraHeteropteraBritishIslandsPlate31.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:SaundersHemipteraHeteropteraBritishIslandsPlate31.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0826,
+   "y": 0.0173,
+   "w": 0.4348,
+   "h": 0.2053,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "marsh-leech": {
+  "artist": "Popular Science Monthly",
+  "file": "cards/marsh-leech.jpg",
+  "small": "cards/marsh-leech@sm.jpg",
+  "title": "Popular Science Monthly, vol. 17: the medicinal leech",
+  "subject": "medicinal leeches",
+  "author": "Popular Science Monthly (unknown artist)",
+  "year": "1880",
+  "commons": "File:PSM V17 D495 The medicinal leech.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:PSM_V17_D495_The_medicinal_leech.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "mason-bee": {
+  "artist": "Popular Science Monthly",
+  "file": "cards/mason-bee.jpg",
+  "small": "cards/mason-bee@sm.jpg",
+  "title": "Popular Science Monthly, vol. 44: homes of mason bees",
+  "subject": "mason bees at their mud nests",
+  "author": "Popular Science Monthly (unknown artist)",
+  "year": "1894",
+  "commons": "File:PSM V44 D619 Homes of mason bees.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:PSM_V44_D619_Homes_of_mason_bees.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.174,
+   "y": 0.0,
+   "w": 0.7521,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "lantern-firefly": {
+  "artist": "C. F. Holder",
+  "file": "cards/lantern-firefly.jpg",
+  "small": "cards/lantern-firefly@sm.jpg",
+  "title": "Living Lights, plate IX",
+  "subject": "glowing insects at night",
+  "author": "Charles Frederick Holder",
+  "year": "1887",
+  "commons": "File:Living lights (Plate IX) (7582781146).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Living_lights_(Plate_IX)_(7582781146).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1084,
+   "w": 1.0,
+   "h": 0.4831,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "lily-ward": {
+  "artist": "Pierre-Joseph Redouté",
+  "file": "cards/lily-ward.jpg",
+  "small": "cards/lily-ward@sm.jpg",
+  "title": "Les Liliacées: Lilium candidum",
+  "subject": "Madonna lily",
+  "author": "Pierre-Joseph Redouté",
+  "year": "1805",
+  "commons": "File:Lilium candidum in Les liliacees.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Lilium_candidum_in_Les_liliacees.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US"
+  ],
+  "crop": {
+   "x": 0.1154,
+   "y": 0.1046,
+   "w": 0.7692,
+   "h": 0.3907,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "golden-orb": {
+  "artist": "Carl Ludwig Koch",
+  "file": "cards/golden-orb.jpg",
+  "small": "cards/golden-orb@sm.jpg",
+  "title": "Die Arachniden, fig. 358 (Nephila vestita)",
+  "subject": "golden orb-weaver spider",
+  "author": "Carl Ludwig Koch",
+  "year": "1838",
+  "commons": "File:Koch 1838 Die Arachniden fig. 358 Nephila vestita.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Koch_1838_Die_Arachniden_fig._358_Nephila_vestita.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "bumble-queen": {
+  "artist": "E. W. Robinson",
+  "file": "cards/bumble-queen.jpg",
+  "small": "cards/bumble-queen@sm.jpg",
+  "title": "Proceedings of the Zoological Society (1871): Bombus impetuosus",
+  "subject": "bumblebee queen",
+  "author": "E. W. Robinson",
+  "year": "1871",
+  "commons": "File:Bombus impetuosus proceedingsofgen71zool 0323.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Bombus_impetuosus_proceedingsofgen71zool_0323.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-70",
+   "PD-old-text",
+   "PD-old-warning-text",
+   "Pd-old-70"
+  ],
+  "crop": {
+   "x": 0.0135,
+   "y": 0.0,
+   "w": 0.973,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "meadow-matriarch": {
+  "artist": "W. H. Lizars",
+  "file": "cards/meadow-matriarch.jpg",
+  "small": "cards/meadow-matriarch@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 17",
+  "subject": "bumblebees on flowers",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 17.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_17.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.4474,
+   "w": 1.0,
+   "h": 0.4651,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "honeyguard": {
+  "artist": "W. H. Lizars",
+  "file": "cards/honeyguard.jpg",
+  "small": "cards/honeyguard@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 14",
+  "subject": "bumblebees on a flowering plant",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 14.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_14.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1356,
+   "w": 1.0,
+   "h": 0.4888,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "comb-queen": {
+  "artist": "W. H. Lizars",
+  "file": "cards/comb-queen.jpg",
+  "small": "cards/comb-queen@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 15 (nest of the common humble-bee)",
+  "subject": "bumblebee nest with its comb",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Nest of the Common Humble-Bee Plate 15 Jardine.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Nest_of_the_Common_Humble-Bee_Plate_15_Jardine.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-art-category",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1047,
+   "y": 0.0,
+   "w": 0.7905,
+   "h": 0.9524,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "sun-moth": {
+  "artist": "Pieter Cramer",
+  "file": "cards/sun-moth.jpg",
+  "small": "cards/sun-moth@sm.jpg",
+  "title": "De uitlandsche kapellen, vol. 1, plate 85 (Urania sloanus)",
+  "subject": "sunset moth",
+  "author": "Pieter Cramer and Caspar Stoll",
+  "year": "1776",
+  "commons": "File:Urania sloanus Cramer&Stoll-uitlandsche kapellen vol. 1- plate 085.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Urania_sloanus_Cramer%26Stoll-uitlandsche_kapellen_vol._1-_plate_085.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0323,
+   "y": 0.0,
+   "w": 0.9354,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "dawn-blessing": {
+  "artist": "Caspar David Friedrich",
+  "file": "cards/dawn-blessing.jpg",
+  "small": "cards/dawn-blessing@sm.jpg",
+  "title": "Morning in the Riesengebirge (oil painting)",
+  "subject": "mountains at first light",
+  "author": "Caspar David Friedrich",
+  "year": "c. 1823",
+  "commons": "File:Friedrich, Caspar David - Morning in the Mountains.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Friedrich,_Caspar_David_-_Morning_in_the_Mountains.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0579,
+   "w": 1.0,
+   "h": 0.9421,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bloom-hymn": {
+  "artist": "Ernst Haeckel",
+  "file": "cards/bloom-hymn.jpg",
+  "small": "cards/bloom-hymn@sm.jpg",
+  "title": "Kunstformen der Natur, plate 74: Orchideae",
+  "subject": "orchids",
+  "author": "Ernst Haeckel",
+  "year": "1904",
+  "commons": "File:Kunstformen der Natur (Tafel 74) (6197846292).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Kunstformen_der_Natur_(Tafel_74)_(6197846292).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.1154,
+   "y": 0.2095,
+   "w": 0.7692,
+   "h": 0.381,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "solar-verdict": {
+  "artist": "J. M. W. Turner",
+  "file": "cards/solar-verdict.jpg",
+  "small": "cards/solar-verdict@sm.jpg",
+  "title": "Sun Setting over a Lake (oil painting)",
+  "subject": "sun burning through haze over water",
+  "author": "J. M. W. Turner",
+  "year": "c. 1840",
+  "commons": "File:Joseph Mallord William Turner (1775-1851) - Sun Setting over a Lake - N04665 - National Gallery.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Joseph_Mallord_William_Turner_(1775-1851)_-_Sun_Setting_over_a_Lake_-_N04665_-_National_Gallery.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0102,
+   "y": 0.0,
+   "w": 0.9797,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ash-wasp": {
+  "artist": "Dru Drury",
+  "file": "cards/ash-wasp.jpg",
+  "small": "cards/ash-wasp@sm.jpg",
+  "title": "Illustrations of Exotic Entomology, vol. I, plate 43 (detail: ichneumon wasp)",
+  "subject": "ichneumon wasp",
+  "author": "Dru Drury",
+  "year": "1770",
+  "commons": "File:Illustrations of Exotic Entomology I 43 (cropped).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_Exotic_Entomology_I_43_(cropped).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Gutenberg",
+   "PD-Layout"
+  ],
+  "crop": {
+   "x": 0.0415,
+   "y": 0.0,
+   "w": 0.9171,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "hive-fever": {
+  "artist": "W. W. Froggatt",
+  "file": "cards/hive-fever.jpg",
+  "small": "cards/hive-fever@sm.jpg",
+  "title": "Australian Insects, plate XV (Hymenoptera)",
+  "subject": "paper wasp nest and wasps",
+  "author": "Walter Wilson Froggatt",
+  "year": "1907",
+  "commons": "File:Australian insects (Plate XV) (7268238352).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Australian_insects_(Plate_XV)_(7268238352).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.1,
+   "y": 0.5619,
+   "w": 0.8,
+   "h": 0.3761,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "lily-toad": {
+  "artist": "A. J. Rösel von Rosenhof",
+  "file": "cards/lily-toad.jpg",
+  "small": "cards/lily-toad@sm.jpg",
+  "title": "Historia naturalis ranarum nostratium, frontispiece",
+  "subject": "frog among water plants",
+  "author": "August Johann Rösel von Rosenhof",
+  "year": "1758",
+  "commons": "File:RU OD Kluis - August Johann Rösel von Rosenhof - Historia naturalis ranarum nostratium 009.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:RU_OD_Kluis_-_August_Johann_R%C3%B6sel_von_Rosenhof_-_Historia_naturalis_ranarum_nostratium_009.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1368,
+   "y": 0.5439,
+   "w": 0.5263,
+   "h": 0.2722,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "mycelium-mound": {
+  "artist": "James Sowerby",
+  "file": "cards/mycelium-mound.jpg",
+  "small": "cards/mycelium-mound@sm.jpg",
+  "title": "Coloured Figures of English Fungi or Mushrooms (Calocybe gambosa)",
+  "subject": "St George's mushrooms",
+  "author": "James Sowerby",
+  "year": "1803",
+  "commons": "File:Calocybe gambosa, James Sowerby, 1803.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Calocybe_gambosa,_James_Sowerby,_1803.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "silt-lamprey": {
+  "artist": "W. Wing",
+  "file": "cards/silt-lamprey.jpg",
+  "small": "cards/silt-lamprey@sm.jpg",
+  "title": "Proceedings of the Zoological Society of London (1851): mouth of Petromyzon marinus",
+  "subject": "sea lamprey sucker mouth",
+  "author": "W. Wing",
+  "year": "1851",
+  "commons": "File:Petromyzon marinus-Mouth PZSL1851.png",
+  "url": "https://commons.wikimedia.org/wiki/File:Petromyzon_marinus-Mouth_PZSL1851.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "glasswing": {
+  "artist": "W. C. Hewitson",
+  "file": "cards/glasswing.jpg",
+  "small": "cards/glasswing@sm.jpg",
+  "title": "Illustrations of New Species of Exotic Butterflies: Ithomia, plate VII",
+  "subject": "clearwing butterflies",
+  "author": "William Chapman Hewitson",
+  "year": "1855",
+  "commons": "File:Illustrations of new species of exotic butterflies Ithomia VII.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_new_species_of_exotic_butterflies_Ithomia_VII.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-old-X-expired",
+   "PD-old-auto-1923",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1429,
+   "y": 0.3009,
+   "w": 0.7143,
+   "h": 0.3982,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "twilight-moth": {
+  "artist": "J. J. Ernst",
+  "file": "cards/twilight-moth.jpg",
+  "small": "cards/twilight-moth@sm.jpg",
+  "title": "Insectes d'Europe, peints d'après nature, atlas 2, plate CXXXI",
+  "subject": "great peacock moths",
+  "author": "Jacques-Louis Engramelle and Jean-Jacques Ernst",
+  "year": "1790",
+  "commons": "File:Insectes d'Europe, peints d'après nature Atlas 2 Plate CXXXI.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Insectes_d%27Europe,_peints_d%27apr%C3%A8s_nature_Atlas_2_Plate_CXXXI.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text",
+   "PD-old-70",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1552,
+   "y": 0.5227,
+   "w": 0.6897,
+   "h": 0.3946,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "colony-titan": {
+  "artist": "Popular Science Monthly",
+  "file": "cards/colony-titan.jpg",
+  "small": "cards/colony-titan@sm.jpg",
+  "title": "Popular Science Monthly, vol. 27: single termite mounds or in clusters",
+  "subject": "termite mounds among trees",
+  "author": "Popular Science Monthly (unknown artist)",
+  "year": "1885",
+  "commons": "File:PSM V27 D760 Single termite mounds or in clusters.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:PSM_V27_D760_Single_termite_mounds_or_in_clusters.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0271,
+   "y": 0.0,
+   "w": 0.9458,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "maggot": {
+  "artist": "Mary E. C. Boutell",
+  "file": "cards/maggot.jpg",
+  "small": "cards/maggot@sm.jpg",
+  "title": "Picture Natural History, no. 267: Larvae of Gad-fly",
+  "subject": "fly larva",
+  "author": "Mary E. C. Boutell",
+  "year": "1869",
+  "commons": "File:Picture Natural History - No 267 - Larvae of Gad-fly.png",
+  "url": "https://commons.wikimedia.org/wiki/File:Picture_Natural_History_-_No_267_-_Larvae_of_Gad-fly.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.04,
+   "y": 0.12,
+   "w": 0.92,
+   "h": 0.43,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "worker-bee": {
+  "artist": "Brett's Colonists' Guide",
+  "file": "cards/worker-bee.jpg",
+  "small": "cards/worker-bee@sm.jpg",
+  "title": "Brett's Colonists' Guide, p. 230, fig. 2: worker bee",
+  "subject": "worker honey bee",
+  "author": "unknown artist (Brett's Colonists' Guide)",
+  "year": "1883",
+  "commons": "File:Worker bee • Fig2 • p230 • Brett's Colonists' Guide 1883.tif",
+  "url": "https://commons.wikimedia.org/wiki/File:Worker_bee_%E2%80%A2_Fig2_%E2%80%A2_p230_%E2%80%A2_Brett%27s_Colonists%27_Guide_1883.tif",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1996",
+   "PD-1996-text",
+   "PD-Layout",
+   "PD-New Zealand",
+   "PD-US-1996",
+   "PD-old-warning-text",
+   "PD-two"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.0,
+   "w": 1.0,
+   "h": 1.0,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "blow-fly": {
+  "artist": "W. W. Froggatt",
+  "file": "cards/blow-fly.jpg",
+  "small": "cards/blow-fly@sm.jpg",
+  "title": "Australian Insects, plate XXX (Diptera)",
+  "subject": "blowfly",
+  "author": "Walter Wilson Froggatt",
+  "year": "1907",
+  "commons": "File:Australian insects (Plate XXX) (7268262816).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Australian_insects_(Plate_XXX)_(7268262816).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.2692,
+   "w": 0.7692,
+   "h": 0.3616,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "torch-queen": {
+  "artist": "John Curtis",
+  "file": "cards/torch-queen.jpg",
+  "small": "cards/torch-queen@sm.jpg",
+  "title": "British Entomology, plate 760",
+  "subject": "wasps on a flowering plant",
+  "author": "John Curtis",
+  "year": "1840",
+  "commons": "File:Britishentomologyvolume4Plate760.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Britishentomologyvolume4Plate760.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.2303,
+   "y": 0.1087,
+   "w": 0.6993,
+   "h": 0.2825,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "gnaw": {
+  "artist": "John Lubbock",
+  "file": "cards/gnaw.jpg",
+  "small": "cards/gnaw@sm.jpg",
+  "title": "Monograph of the Collembola and Thysanura, plate 52 (Lepisma saccharina)",
+  "subject": "silverfish",
+  "author": "John Lubbock",
+  "year": "1873",
+  "commons": "File:Lepisma saccharina, Monograph of the Collembola and Thysanura, Plate 52.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Lepisma_saccharina,_Monograph_of_the_Collembola_and_Thysanura,_Plate_52.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1429,
+   "y": 0.2549,
+   "w": 0.7143,
+   "h": 0.3301,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "hoverfly": {
+  "artist": "John Curtis",
+  "file": "cards/hoverfly.jpg",
+  "small": "cards/hoverfly@sm.jpg",
+  "title": "British Entomology, plate 753",
+  "subject": "hoverfly on a flowering plant",
+  "author": "John Curtis",
+  "year": "1836",
+  "commons": "File:Britishentomologyvolume8Plate753.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Britishentomologyvolume8Plate753.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.07,
+   "y": 0.1952,
+   "w": 0.5,
+   "h": 0.2095,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ladybird-knight": {
+  "artist": "John Curtis",
+  "file": "cards/ladybird-knight.jpg",
+  "small": "cards/ladybird-knight@sm.jpg",
+  "title": "British Entomology, plate 208",
+  "subject": "ladybird on a plant",
+  "author": "John Curtis",
+  "year": "1840",
+  "commons": "File:Britishentomologyvolume2Plate208.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Britishentomologyvolume2Plate208.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0506,
+   "y": 0.499,
+   "w": 0.5988,
+   "h": 0.242,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "hive-warden": {
+  "artist": "uncredited engraver",
+  "file": "cards/hive-warden.jpg",
+  "small": "cards/hive-warden@sm.jpg",
+  "title": "Engraving of straw bee skeps (Stupĭ)",
+  "subject": "straw bee skeps",
+  "author": "uncredited engraver",
+  "year": "1898",
+  "commons": "File:Stupĭ.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Stup%C4%AD.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-art-category",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.1168,
+   "y": 0.0,
+   "w": 0.7664,
+   "h": 0.8929,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "honey-balm": {
+  "artist": "Guercino",
+  "file": "cards/honey-balm.jpg",
+  "small": "cards/honey-balm@sm.jpg",
+  "title": "Samson and the Honeycomb (oil painting), detail",
+  "subject": "honeycomb in open hands",
+  "author": "Guercino (Giovanni Francesco Barbieri)",
+  "year": "c. 1657",
+  "commons": "File:Guercino - Samson and the Honeycomb, ca. 1657.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Guercino_-_Samson_and_the_Honeycomb,_ca._1657.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-100-1923",
+   "PD-old-100-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.1875,
+   "y": 0.3502,
+   "w": 0.625,
+   "h": 0.5396,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "solar-hornet": {
+  "artist": "Dru Drury",
+  "file": "cards/solar-hornet.jpg",
+  "small": "cards/solar-hornet@sm.jpg",
+  "title": "Illustrations of Exotic Entomology, vol. II, plate 39 (detail)",
+  "subject": "giant wasp",
+  "author": "Dru Drury",
+  "year": "1770",
+  "commons": "File:Illustrations of Exotic Entomology II 39 (cropped).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Illustrations_of_Exotic_Entomology_II_39_(cropped).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Gutenberg",
+   "PD-Layout"
+  ],
+  "crop": {
+   "x": 0.0024,
+   "y": 0.0,
+   "w": 0.9951,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "pollinate": {
+  "artist": "anonymous engraver",
+  "file": "cards/pollinate.jpg",
+  "small": "cards/pollinate@sm.jpg",
+  "title": "Dux omnibus unus (emblem engraving with a beehive)",
+  "subject": "beehive with bees in flight",
+  "author": "anonymous engraver",
+  "year": "18th century",
+  "commons": "File:Dux omnibus unus ubs G 0197 II.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Dux_omnibus_unus_ubs_G_0197_II.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.2237,
+   "y": 0.1259,
+   "w": 0.5525,
+   "h": 0.5882,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "maggot-mass": {
+  "artist": "W. W. Froggatt",
+  "file": "cards/maggot-mass.jpg",
+  "small": "cards/maggot-mass@sm.jpg",
+  "title": "Australian Insects, plate XXX (detail: blowfly larva)",
+  "subject": "blowfly maggot",
+  "author": "Walter Wilson Froggatt",
+  "year": "1907",
+  "commons": "File:Australian insects (Plate XXX) (7268262816).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Australian_insects_(Plate_XXX)_(7268262816).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.12,
+   "y": 0.06,
+   "w": 0.7,
+   "h": 0.105,
+   "note": "fractions of the source image; the whole box is set on a 4:3 field of its border colour"
+  }
+ },
+ "wither": {
+  "artist": "Vincent van Gogh",
+  "file": "cards/wither.jpg",
+  "small": "cards/wither@sm.jpg",
+  "title": "Vase with Withered Leaves (oil painting)",
+  "subject": "withered leaves",
+  "author": "Vincent van Gogh",
+  "year": "1884",
+  "commons": "File:Van Gogh - Vase mit verwelkten Blätter.jpeg",
+  "url": "https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Vase_mit_verwelkten_Bl%C3%A4tter.jpeg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.1324,
+   "w": 1.0,
+   "h": 0.5752,
+   "note": "fractions of the source image, 4:3 box"
+  }
  }
 }
