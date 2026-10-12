@@ -19,6 +19,10 @@
 //  9. palette tools: harmony hues sit at the kind's offsets in OKLCH, the
 //     first ink keeps a contrast of 3, the same random source gives the
 //     same palette, locks hold, shuffle keeps the ink set, invert swaps.
+// 10. new generators (NEW_FAMS and NEW_IDS): seeds 7 and 8 differ, every
+//     point inside the board, not capped and at most NEW_NODES elements,
+//     at most LIGHT_MS at defaults (unless heavy) and MAX_MS at the max
+//     params, on three aspects. Prints a table of time and size.
 //  Prints one line per failure and a summary; exits 1 on any failure.
 // ============================================================================
 import { run, defaults, CAP, boardSize, UNIT } from './engine.js';
@@ -56,10 +60,22 @@ for (const p of PATTERNS) {
 
 // 2-4. determinism, numbers, caps
 const at = (p, which) => { const P = {}; for (const k in p.params) P[k] = which === 'min' ? p.params[k][0] : which === 'max' ? p.params[k][1] : p.params[k][3]; return P; };
+// Per pattern: { defMs, maxMs, defN, maxN, out (worst units outside the
+// board), capped, same78 }, for section 10.
+const stats = {};
+const outside = (items, W, H) => {
+  let o = 0;
+  for (const e of items) {
+    const q = e.t === 'circle' ? [e.x - e.r, e.y - e.r, e.x + e.r, e.y + e.r] : e.t === 'multi' ? e.rr.flat() : e.p;
+    for (let i = 0; i < q.length; i += 2) o = Math.max(o, -q[i], -q[i + 1], q[i] - W, q[i + 1] - H);
+  }
+  return o;
+};
 for (const p of PATTERNS) {
   const { W, H } = boardSize(0.8);
   const a = run(p, defaults(p), 7, W, H), b = run(p, defaults(p), 7, W, H), c = run(p, defaults(p), 8, W, H);
   timing.push([p.id, a.ms, !!p.heavy]);
+  const S = stats[p.id] = { defMs: a.ms, maxMs: 0, defN: a.items.length, maxN: 0, out: 0, capped: false, same78: sig(a.items) === sig(c.items) };
   ok(sig(a.items) === sig(b.items), `${p.id} is fixed by the seed`);
   ok(a.items.length > 0, `${p.id} draws something at its defaults`);
   if (sig(a.items) === sig(c.items)) console.log('note', p.id, 'gives the same result for seeds 7 and 8');
@@ -68,6 +84,8 @@ for (const p of PATTERNS) {
     ok(finite(r.items), `${p.id} ${which} aspect ${asp.toFixed(2)}: finite numbers`);
     ok(r.items.length <= CAP.nodes && count(r.items) <= CAP.points, `${p.id} ${which} aspect ${asp.toFixed(2)}: under the caps (${r.items.length} nodes, ${count(r.items)} points)`);
     if (which === 'max') timing.push([p.id + ' max ' + asp.toFixed(2), r.ms, !!p.heavy]);
+    if (which === 'max') S.maxMs = Math.max(S.maxMs, r.ms);
+    S.maxN = Math.max(S.maxN, r.items.length); S.out = Math.max(S.out, outside(r.items, s.W, s.H)); S.capped = S.capped || r.capped;
   }
 }
 
@@ -238,6 +256,27 @@ const PAL_MIN_DIST = 0.04;
   }
   const inv = invertPalette(PALETTES[0]);
   ok(inv.bg === PALETTES[0].ink[0] && inv.ink[0] === PALETTES[0].bg && contrast(inv.ink[0], inv.bg) === contrast(PALETTES[0].ink[0], PALETTES[0].bg), 'invert swaps the paper and the first ink, contrast unchanged');
+}
+
+// 10. new generators
+const NEW_FAMS = ['tiling', 'textile', 'geometric', 'opart', 'botanical', 'paths', 'mesh'];
+const NEW_IDS = ['type-rhythm', 'greeked-columns', 'topo-lines'];
+const NEW_NODES = 20000, LIGHT_MS = 150, MAX_MS = 1500;
+{
+  const NEW = PATTERNS.filter(p => NEW_FAMS.includes(p.family) || NEW_IDS.includes(p.id));
+  ok(NEW.length >= 15, `at least 15 new generators (${NEW.length})`);
+  for (const f of NEW_FAMS) if (FAMILIES.some(q => q.id === f)) ok(PATTERNS.filter(p => p.family === f).length >= 4, `new family ${f} has 4 or more patterns`);
+  const rows = [];
+  for (const p of NEW) {
+    const S = stats[p.id];
+    ok(!S.same78, `${p.id}: seeds 7 and 8 give different results`);
+    ok(S.out <= 0.01, `${p.id}: every point inside the board (worst ${S.out.toFixed(3)} units out)`);
+    ok(!S.capped && S.maxN <= NEW_NODES, `${p.id}: not capped, at most ${NEW_NODES} elements (${S.maxN})`);
+    ok(p.heavy || S.defMs <= LIGHT_MS, `${p.id}: ${S.defMs.toFixed(0)} ms at defaults (light cap ${LIGHT_MS})`);
+    ok(S.maxMs <= MAX_MS, `${p.id}: ${S.maxMs.toFixed(0)} ms at the max params (cap ${MAX_MS})`);
+    rows.push(`${p.id.padEnd(20)} ${p.family.padEnd(10)} ${S.defMs.toFixed(0).padStart(5)} ${S.maxMs.toFixed(0).padStart(6)} ${String(S.defN).padStart(7)} ${String(S.maxN).padStart(7)}`);
+  }
+  console.log(`new generators: ${NEW.length}\n${'id'.padEnd(20)} ${'family'.padEnd(10)} def ms max ms def els max els\n${rows.join('\n')}`);
 }
 
 timing.sort((a, b) => b[1] - a[1]);
