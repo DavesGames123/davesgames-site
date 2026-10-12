@@ -25,7 +25,8 @@
 //      │                 [All][BUTTON]│   big button at the right thumb
 //      └ your hand, fanned            ┘
 //
-//  FLOW  setup sheet (opponent, decks, timer) -> coin -> mulligan -> play
+//  FLOW  setup sheet (opponent, decks, timer) -> coin -> opening hand
+//        (drawn card by card, then keep or mulligan) -> play
 //        -> result sheet (rematch, change decks).
 //  PACING  The fly thinks for a set time (its top-3 moves show in its
 //        scorecard), then its move plays. Between turns the table holds
@@ -75,7 +76,9 @@
 //      grep -n 'export function mountPlay'
 //      grep -n 'function setupSheet'     opponent, decks, timer
 //      grep -n 'function coinSheet'      call the coin
-//      grep -n 'function mulliganSheet'  keep or mulligan
+//      grep -n 'function mulliganSheet'  the opening hand: drawn card by
+//                                        card, then keep or mulligan
+//                                        (ui/play/opening.js)
 //      grep -n 'function overSheet'      the result
 //      grep -n 'async function loop'     need() -> fly or wait for you
 //      grep -n 'async function flyTurn'  think pause, top-3, the move
@@ -93,7 +96,8 @@ import { createHand, createOppHand } from './hand.js';
 import { createBoard2d } from './board2d.js';
 import { createInspector } from './inspector.js';
 import { attachOrbit } from './orbit.js';
-import { paintCard, colourHex } from './canvas.js';
+import { paintCard, paintBack, colourHex } from './canvas.js';
+import { mountOpening } from './opening.js';
 import { createPeek, PEEK } from './peek.js';
 import * as CF from '../cardface.js';
 import { createScorecard, scorecardModel } from '../hud/scorecard.js';
@@ -367,6 +371,7 @@ export function mountPlay(root, opts) {
   const hideSheet = () => { sheet.hidden = true; sheetIn.innerHTML = ''; };
 
   function setupSheet() {
+    closeOpening();
     const opps = [];
     if (opts.flies?.A) opps.push(['A', 'Fly A', opts.sources?.A || 'hemibrain']);
     if (opts.flies?.B) opps.push(['B', 'Fly B', opts.sources?.B || 'FlyWire']);
@@ -430,33 +435,35 @@ export function mountPlay(root, opts) {
     }));
   }
 
+  // The opening hand (ui/play/opening.js): each card comes off your
+  // library into a large row, one at a time, then Keep / Mulligan. A
+  // mulligan shuffles the cards back and draws again. The fan under it
+  // stays hidden until you keep (.pl[data-opening]).
+  let opening = null;
+  function closeOpening() { opening?.dispose(); opening = null; delete root.dataset.opening; }
   function mulliganSheet() {
+    hideSheet();
+    closeOpening();
     const hs = humanSeat();
-    const p = pc.state.players[hs];
-    const n = p.hand.length;
-    const mulls = pc.mulligans[hs];
-    const flyM = pc.mulligans[pc.flySeat];
-    const lands = p.hand.filter(id => CARD[id]?.type === 'land').length;
-    showSheet(`
-      <h2>Your opening hand</h2>
-      <p>${n} cards, ${lands} land${lands === 1 ? '' : 's'}.${mulls ? ` Mulligans: ${mulls}.` : ''}</p>
-      <div class="pl-openhand"></div>
-      <p class="pl-fine">${esc(nameOf(pc.flySeat))} ${flyM ? `took ${flyM} mulligan${flyM > 1 ? 's' : ''}` : 'keeps its hand'} (a fixed rule: keep 2 to 5 lands, not the brain).</p>
-      <div class="pl-row"><button type="button" class="pl-btn pl-go" data-keep data-focus>Keep ${n}</button><button type="button" class="pl-btn" data-mull${mulls >= 3 ? ' disabled' : ''}>Mulligan to ${Math.max(4, n - 1)}</button></div>`, 'pl-mull');
-    const box = sheetIn.querySelector('.pl-openhand');
-    const w = Math.min(L.hand.w + 12, Math.floor((Math.min(root.clientWidth || 390, 640) - 48) / Math.min(n, 4)));
-    for (const id of p.hand) {
-      const b = doc.createElement('button');
-      b.type = 'button'; b.className = 'pl-oh';
-      const cv = doc.createElement('canvas'); cv.className = 'pl-cv';
-      b.appendChild(cv);
-      paintCard(cv, CARD[id], { w, h: Math.round(w * 1.4), mode: 'auto' });
-      b.addEventListener('click', () => inspectCard(id));
-      b.setAttribute('aria-label', `${CARD[id].name}: inspect`);
-      box.appendChild(b);
-    }
-    sheetIn.querySelector('[data-keep]').addEventListener('click', () => { pc.keep(); hideSheet(); opts.scene?.setState?.(pc.state); start(); });
-    sheetIn.querySelector('[data-mull]').addEventListener('click', () => { pc.mulligan(); mulliganSheet(); });
+    const handOf = () => pc.state.players[hs].hand;
+    root.dataset.opening = '1';
+    opening = mountOpening(root, {
+      ids: handOf(), reduced,
+      view: () => [root.clientWidth || win.innerWidth || 390, root.clientHeight || win.innerHeight || 760],
+      label: id => CARD[id]?.name || id,
+      paint: (cv, id, w, h) => paintCard(cv, CARD[id], { w, h, mode: 'auto' }),
+      back: (cv, w, h) => paintBack(cv, { w, h }),
+      info: () => {
+        const p = pc.state.players[hs], m = pc.mulligans, flyM = m[pc.flySeat];
+        return {
+          n: p.hand.length, lands: p.hand.filter(id => CARD[id]?.type === 'land').length, mulls: m[hs], canMull: m[hs] < 3, library: p.library.length,
+          flyLine: `${nameOf(pc.flySeat)} ${flyM ? `took ${flyM} mulligan${flyM > 1 ? 's' : ''}` : 'keeps its hand'} (a fixed rule: keep 2 to 5 lands, not the brain).`,
+        };
+      },
+      onInspect: id => inspectCard(id),
+      onMulligan: () => { if (!pc.mulligan()) return null; opts.scene?.setState?.(pc.state); return handOf().slice(); },
+      onKeep: () => { opening = null; delete root.dataset.opening; pc.keep(); opts.scene?.setState?.(pc.state); start(); },
+    });
   }
 
   function overSheet() {
@@ -476,6 +483,7 @@ export function mountPlay(root, opts) {
   // ------------------------------------------------------------ a game
   function newGame() {
     stopTimer();
+    closeOpening();
     gameNo++;
     const seed = opts.seed != null ? (opts.seed + gameNo) >>> 0 : ((Date.now() & 0xfffffff) ^ (gameNo * 2654435761)) >>> 0;
     const flySide = pref.opp === 'bot' ? 'B' : pref.opp;
@@ -732,7 +740,7 @@ export function mountPlay(root, opts) {
       apply(ix?.cancel());
       return;
     }
-    if (!sheet.hidden || inspector.isOpen() || !ix) return;
+    if (!sheet.hidden || inspector.isOpen() || !ix || opening) return;
     const k = e.key;
     const onButton = t && t.tagName === 'BUTTON' && t !== doc.body;
     if ((k === ' ' || k === 'Enter') && !onButton) { e.preventDefault(); pri.click(); return; }
@@ -820,6 +828,7 @@ export function mountPlay(root, opts) {
     destroy() {
       alive = false; gameNo++;
       stopTimer();
+      closeOpening();
       doc.removeEventListener('keydown', onKey);
       orbit?.dispose();
       peek.dispose();
