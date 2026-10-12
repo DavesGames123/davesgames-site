@@ -17,6 +17,8 @@
 //      plate gets a title, TeX and numbers and no code; exit
 //  P6  the saver director on a virtual clock (150 s): follow and close
 //      shots keep the subject on screen, a push ends on its subject
+//  P7  the same run: no cut under 5 s except for a merge or a breakup,
+//      no stale event shot, one close shot per event and pair
 //  Each check prints PASS or FAIL. Exit code 1 on a FAIL.
 // ============================================================================
 if (typeof Deno === 'undefined' || !navigator.gpu) { console.log('SKIP  page tests: needs Deno with navigator.gpu'); }
@@ -204,7 +206,10 @@ async function run() {
       await frames(1, 1000 / 30);
       while (tNow >= nextTick) { tick(); nextTick += 250; }
       const sv = S.saver, sys = S.lab.sys;
-      if (!cur || cur.at !== sv.shotAt) { cur = { at: sv.shotAt, kind: sv.shot.kind, title: S.spec.title, n: 0, off: 0, px: [] }; shots.push(cur); }
+      if (!cur || cur.at !== sv.shotAt) {
+        cur = { at: sv.shotAt, kind: sv.shot.kind, title: S.spec.title, n: 0, off: 0, px: [], ev: sv.shot.event && sv.eventCut ? sv.eventCut.e : null, age: sv.shot.event && sv.eventCut ? (tNow - sv.eventCut.at) / 1000 : 0 };
+        shots.push(cur);
+      }
       if (sv.fade < 0.9 || !sys || sv.subject < 0 || !sys.alive[sv.subject]) continue;
       // the camera of the cut comes one frame after the tick: skip 0.3 s
       if (tNow - cur.at < 300) continue;
@@ -221,8 +226,24 @@ async function run() {
     const pushes = shots.filter(s => s.kind === 'push' && s.px.length > 30 && s.px[s.px.length - 1][0] > 4500);
     const flat = pushes.filter(s => s.px[s.px.length - 1][1] < 2 * s.px[0][1]);
     const closes = shots.filter(s => s.kind === 'close').length;
+    // pacing: a shot under CUT_MIN only when a merge or a breakup cuts it;
+    // no event older than EVENT_STALE; one close shot per event and pair
+    const SP = await import('./saver-plan.js');
+    const short = [], stale = [], twice = [], keys = new Map();
+    for (let i = 0; i + 1 < shots.length; i++) {
+      const a = shots[i], b = shots[i + 1], len = (b.at - a.at) / 1000;
+      if (len < SP.CUT_MIN - 0.1 && !(b.kind === 'close' && b.ev && SP.eventWorth(b.ev, 1e30) >= 4)) short.push(`${a.kind} ${len.toFixed(1)} s before ${b.kind}${b.ev ? ' (' + b.ev.type + ')' : ''}`);
+    }
+    for (const s of shots) if (s.ev) {
+      if (s.age > SP.EVENT_STALE + 0.3) stale.push(`${s.ev.type} ${s.age.toFixed(1)} s`);
+      const k = s.title + '|' + SP.eventKey(s.ev);
+      if (keys.has(k) && s.at - keys.get(k) < SP.EVENT_REPEAT * 1000) twice.push(`${s.ev.type} in "${s.title}"`);
+      keys.set(k, s.at);
+    }
     ok('P6 saver framing (virtual clock): follow and close shots keep the subject, a push ends on it', lost.length === 0 && pushes.length >= 2 && flat.length === 0 && closes >= 1 && errs.length === 0,
       `${shots.length} shots in ${SAVER_V} s, ${closes} close; subject off screen: ${lost.map(s => `${s.kind} in "${s.title}" ${(100 * s.off / s.n).toFixed(0)}%`).join(', ') || 'never over 5%'}; pushes ${pushes.length}, end/start size ${pushes.map(s => (s.px[s.px.length - 1][1] / s.px[0][1]).toFixed(1)).join(' ')}; ${errs.length} WebGPU errors`);
+    ok('P7 saver pacing (same run as P6): cuts at 5 s or more unless a merge or breakup, no stale or repeated event shots', short.length === 0 && stale.length === 0 && twice.length === 0 && closes >= 1,
+      `short: ${short.join(', ') || 'none'}; stale: ${stale.join(', ') || 'none'}; repeated: ${twice.join(', ') || 'none'}; event shots ${shots.filter(s => s.ev).map(s => s.ev.type + ' ' + s.age.toFixed(1) + ' s').join(', ')}`);
   }
   console.log(fails ? `${fails} page tests FAILED` : 'page tests: ALL PASS');
   Deno.exit(fails ? 1 : 0);

@@ -8,8 +8,10 @@
 //    subject   the body with the largest acceleration now (pickSubject),
 //              picked again at each cut
 //    events    a merge, a breakup, a hit, a capture, an ejection or a close
-//              periapsis cuts to a close shot of it in slow motion (once
-//              the shot has run EVENT_MIN s)
+//              periapsis cuts to a close shot of it in slow motion (a
+//              merge or a breakup after 3 s of the shot, the rest after
+//              5 s: saver-plan.js eventWait). A stale event is dropped and
+//              the same event of the same pair cuts once in 45 s.
 //    framing   the subject sits in the clear band of the plate (plateBand,
 //              lib/saver-clear.js): a lens shift moves it there and the
 //              distance grows with the band. A follow or a close shot
@@ -26,7 +28,7 @@
 //  grep -n targets: "function nextRun", "function cutTo", "export function saverFrame",
 //  "function tick", "function plate", "function onEvent", "window.snSaver"
 // ============================================================================
-import { makeReel, shotPlan, shotDone, eventWorth, pickSubject, shotGoal, lawFor, mk, rng, EVENT_MIN, CUT_MAX } from '../saver-plan.js';
+import { makeReel, shotPlan, shotDone, eventWorth, eventWait, eventKey, pickSubject, shotGoal, lawFor, mk, rng, CUT_MAX, EVENT_STALE, EVENT_REPEAT } from '../saver-plan.js';
 import { plateBand } from '../../../lib/saver-clear.js';
 import { S, UI, $, RM_Q, bus, bootReady } from './state.js';
 import { cam, fitDist } from './camera.js';
@@ -49,7 +51,7 @@ function nextRun() {
   }
   sv.lastKey = choice.key || 'roll' + choice.seed;
   sv.shots = shotPlan(sv.rnd, !!spec.self);
-  sv.si = -1; sv.runAt = performance.now(); sv.lastEvent = null; sv.eventCut = null;
+  sv.si = -1; sv.runAt = performance.now(); sv.lastEvent = null; sv.eventCut = null; sv.pendingEvent = null; sv.cutKeys = new Map();
   UI.trails = true; UI.colorMode = 0; S.follow = -1; S.sel = -1;
   sv.fadeTarget = 1;
   cutTo(0);
@@ -148,9 +150,11 @@ export function saverFrame(dt) {
 function tick() {
   const sv = S.saver; if (!sv || !S.saverOn) return;
   if (sv.state === 'fadeout') { if (sv.fade <= 0.002) { sv.state = 'show'; nextRun(); } return; }
-  const el = (performance.now() - sv.shotAt) / 1000;
-  if (sv.pendingEvent && el >= EVENT_MIN && !sv.shot.event) {
-    sv.eventCut = sv.pendingEvent; sv.pendingEvent = null;
+  const now = performance.now(), el = (now - sv.shotAt) / 1000, pe = sv.pendingEvent;
+  if (pe && now - pe.at > EVENT_STALE * 1000) sv.pendingEvent = null;
+  if (sv.pendingEvent && !sv.shot.event && el >= eventWait(eventWorth(pe.e, S.spec.view.extent))) {
+    sv.eventCut = pe; sv.pendingEvent = null;
+    sv.cutKeys.set(eventKey(pe.e), now);
     cutTo(sv.si, mk('close', sv.rnd));
   } else if (shotDone(sv.shot, el) || (sv.shot.event && el >= CUT_MAX)) {
     sv.eventCut = null;
@@ -164,6 +168,8 @@ function onEvent(d) {
   const w = eventWorth(d.e, S.spec.view.extent);
   if (!w) return;
   sv.lastEvent = d;
+  const seen = sv.cutKeys && sv.cutKeys.get(eventKey(d.e));
+  if (seen !== undefined && d.at - seen < EVENT_REPEAT * 1000) return;
   if (!sv.pendingEvent || w >= eventWorth(sv.pendingEvent.e, S.spec.view.extent)) sv.pendingEvent = d;
 }
 function plate() {

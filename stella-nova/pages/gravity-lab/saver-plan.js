@@ -17,18 +17,22 @@
 //    top        from above (best for disks and rotating frames)
 //    low        grazing the orbit plane
 //  Each shot lasts a seeded time in [min, max] inside [CUT_MIN, CUT_MAX].
-//  An event worth a cut (eventWorth) cuts to a close shot once the shot has
-//  run EVENT_MIN s. Data-driven subjects: pickSubject scores the bodies by
+//  An event worth a cut (eventWorth) cuts to a close shot (eventWait): a
+//  merge or a breakup once the shot has run EVENT_MIN s, any other event
+//  at CUT_MIN s. An event older than EVENT_STALE s is dropped, and the same
+//  event of the same pair (eventKey) cuts once in EVENT_REPEAT s, so a
+//  pair that flips between bound and free does not fill the reel. Data-driven subjects: pickSubject scores the bodies by
 //  their acceleration (where gravity is doing the most work right now).
 //
 //  grep -n targets: "export const SHOTS", "export function makeReel",
 //  "export function shotPlan", "export function shotDone",
 //  "export function eventWorth", "export function pickSubject",
-//  "export function shotGoal", "export function lawFor"
+//  "export function shotGoal", "export function lawFor",
+//  "export function eventWait", "export function eventKey"
 // ============================================================================
 import { reel } from './roll.js';
 
-export const CUT_MIN = 5, CUT_MAX = 12, EVENT_MIN = 3;
+export const CUT_MIN = 5, CUT_MAX = 12, EVENT_MIN = 3, EVENT_STALE = 6, EVENT_REPEAT = 45;
 export const RUN_SHOTS = [4, 6];
 export const SHOTS = {
   establish: { min: 6, max: 9, el: [0.35, 0.7], zoom: [1.0, 1.15], push: 0.08, turn: 0.035 },
@@ -88,6 +92,11 @@ export function eventWorth(e, ext) {
     default: return 0;
   }
 }
+// The seconds a shot must run before an event of this worth cuts it: a
+// merge or a breakup (worth 4 or more) at EVENT_MIN, the rest at CUT_MIN.
+export function eventWait(worth) { return worth >= 4 ? EVENT_MIN : CUT_MIN; }
+// The same event of the same pair has the same key.
+export function eventKey(e) { return e.type + ':' + (e.i ?? '') + ':' + (e.j ?? ''); }
 // The subject: bodies [{ i, a (|acceleration|), m, dom (bool), alive }];
 // the largest acceleration, not the dominant body; the runner-up one time
 // in three. Returns a body index or -1.
