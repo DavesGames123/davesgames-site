@@ -578,12 +578,14 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 @media (min-width:1200px){
   .wtop{grid-template-columns:minmax(0,380px) auto minmax(0,380px)}
 }
-/* phone held sideways: the cards are short, the table gets the height */
+/* phone held sideways: the cards are short, the table gets the height.
+   The neural panel stays (a short strip); the count row goes. */
 @media (max-height:520px) and (orientation:landscape){
   .app{--bar-h:calc(56px + env(safe-area-inset-bottom,0px))}
   .stagebar{flex-direction:row;align-items:center;padding-top:0}
   .stagebar .status{display:none}
-  .whud .hd-brain{display:none}
+  .whud .hd-brain{height:30px}
+  .whud .hd-counts{display:none}
   .wtop{grid-template-columns:minmax(0,260px) auto minmax(0,260px);justify-content:space-between}
   .turnbox{grid-column:2;grid-row:1}
 }

@@ -175,6 +175,9 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
   const css = readFileSync(join(ROOT, 'style.css'), 'utf8');
   ok(/\[hidden\]\{display:none!important\}/.test(css), 'markup: [hidden] guard in style.css');
+  // The user asked for the neural panel of each fly in its scorecard. No
+  // layout of the watch HUD (a phone on its side too) hides it.
+  ok(!/\.whud[^{]*\.hd-brain\s*\{[^}]*display:\s*none/.test(css), 'markup: no watch layout hides the neural panel of a scorecard');
   const head = html.slice(0, html.indexOf('</head>'));
   const order = ['gpu-guard.js', 'wishlist.js', 'stats-beacon.js', 'style.css'].map(x => head.indexOf(x));
   ok(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])), 'markup: head order gpu-guard, wishlist, stats-beacon, css');
