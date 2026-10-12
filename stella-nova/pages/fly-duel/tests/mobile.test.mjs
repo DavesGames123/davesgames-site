@@ -92,7 +92,7 @@ const main = read('main.js');
   ok(/--sat: env\(safe-area-inset-top, 0px\); --sab: env\(safe-area-inset-bottom, 0px\);/.test(play) && /--base: calc\(var\(--peek\) \+ var\(--sab\)\)/.test(play), 'css: play mode has the safe-area insets and --base (the hand peek plus the home bar)');
   ok(!/bottom: calc\(var\(--peek\) \+/.test(play), 'css: no play box sits on the bare hand peek (all use --base)');
   ok(/\.pl-handbox \{[^}]*left: var\(--sal\); right: var\(--sar\)[^}]*bottom: calc\(var\(--base\) - var\(--hand-h\)\)/.test(play), 'css: the hand fan keeps clear of the notch and the home bar');
-  ok(/\.pl\.pl-3d \.pl-cards \{[^}]*top: calc\(6px \+ var\(--sat\)\)/.test(play) && /\.pl\.pl-3d \.pl-actions \{[^}]*right: calc\(8px \+ var\(--sar\)\)/.test(play), 'css: the play scorecards and the big button keep clear of the notch');
+  ok(/\.pl\.pl-3d \.pl-cards \{[^}]*top: calc\(6px \+ var\(--sat\)\)/.test(play) && /\.pl\.pl-3d \.pl-dock \{[^}]*right: calc\(8px \+ var\(--sar\)\)/.test(play), 'css: the play scorecards and the dock with the big button keep clear of the notch');
   ok(/\.pl-sheet \{[^}]*padding: calc\(16px \+ var\(--sat\)\)/.test(play) && /\.pl-insp \{[^}]*padding: calc\(16px \+ var\(--sat\)\)/.test(play), 'css: the play sheets and the inspector keep clear of the notch');
   ok(/\.pl-btn \{[^}]*min-height: 44px[^}]*touch-action: manipulation/.test(play), 'css: every play button is 44 px and has touch-action: manipulation');
   ok(/@media \(pointer: coarse\) \{ \.pl-seatbtn \{ min-height: 44px; \} \}/.test(play), 'css: "Back to seat" is 44 px on a touch screen');

@@ -21,8 +21,9 @@
 //      │                              │
 //      │      table (2D or 3D)        │   last action chip in the middle
 //      │                              │
-//      │ Main · Attack · Block · End  │   phase bar + prompt line
-//      │                [Undo][BUTTON]│   big button at the right thumb
+//      │ prompt      ◆ Your turn Main │   the dock (ui/play/turnbar.js):
+//      │             ↻ ▣ ⚔ ⛨ ☾     T6 │   turn plate, phase ladder and
+//      │ [Menu]      [Undo][ BUTTON ] │   big button at the right thumb
 //      └ your hand, fanned            ┘
 //
 //  FLOW  setup sheet (opponent, decks, timer) -> coin -> opening hand
@@ -30,10 +31,11 @@
 //        -> result sheet (rematch, change decks).
 //  PACING  The fly thinks for a set time (its top-3 moves show in its
 //        scorecard), then its move plays. Between turns the table holds
-//        still. ONE VOICE (CONTRACT.md): the turn line of the phase bar
-//        (.pl-turn, "Turn 6 · Fly B · combat") is the one turn indicator;
-//        it changes in place and its edge takes the seat colour for the
-//        pause. No banner, no "is thinking" line. A message for the
+//        still. ONE VOICE (CONTRACT.md): the turn plate of the dock
+//        (.pl-turn, "Your turn" / "Fly B's turn") is the one turn
+//        indicator; it changes in place and its rim takes the seat colour
+//        for the pause. No banner, no "is thinking" line: on the fly's
+//        turn the big button reads "Waiting". A message for the
 //        player ("wait for your turn", a move that is not legal) shows
 //        next to the control used (.pl-hint at the hand, the table or the
 //        big button). Speed: calm, normal, fast.
@@ -41,7 +43,8 @@
 //  FULL BLEED  With the 3D table (.pl-3d) the canvas fills the whole play
 //        box, and the HUD lies over it: the scorecards are slim corner
 //        strips (ui/hud/scorecard.js slim, the neural panel behind a tap),
-//        the phase bar is a small strip over the hand, the opposing
+//        the dock is at the lower right over the hand line, the
+//        prompt a small line at the lower left, the opposing
 //        card backs go (the 3D table shows them, the scorecard counts
 //        them). The big brain of the fly is the side panel of the page
 //        (opts.onFlyTrace, ui/fly3d/brainpanels.js); without the page,
@@ -101,11 +104,13 @@
 //      grep -n 'function render'         every box from the state
 //      grep -n 'function onKey'          keyboard shortcuts
 //      grep -n 'function startTimer'     optional turn timer
-//      grep -n 'export function playTurnText'  the one turn line
+//      grep -n 'export function playTurnText'  the one turn indicator
+//      grep -n 'the dock'                the turn plate, ladder, buttons
 //      grep -n 'function flash'          a message at the control used
 // ============================================================================
 import { createPlayController, deckColours } from './controller.js';
 import { createInteraction } from './model.js';
+import { phaseLadder, turnText, buttonState, ladderHtml, paintDock } from './turnbar.js';
 import { layoutFor } from './layout.js';
 import { createHand, createOppHand } from './hand.js';
 import { createBoard2d } from './board2d.js';
@@ -129,15 +134,10 @@ const NOT_AFFILIATED = 'Not affiliated with or endorsed by Wizards of the Coast.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// The turn line of play mode: "Turn 6 · You · main", "Turn 7 · Fly B ·
-// combat", or the result. Pure, for the tests.
-const STEP_WORD = { main: 'main', attack: 'combat', block: 'blocks' };
+// The one turn indicator of play mode: "Your turn", "Fly B's turn", or
+// the result (turnText of ui/play/turnbar.js). Pure, for the tests.
 export function playTurnText(state, humanSeat, names) {
-  const r = state.result;
-  if (r) return `Turn ${state.turn} · ${r.winner < 0 ? 'Draw' : r.winner === humanSeat ? 'You win' : `${names[r.winner]} wins`}`;
-  const who = state.active === humanSeat ? 'You' : names[state.active];
-  const step = STEP_WORD[state.phase];
-  return `Turn ${state.turn} · ${who}${step ? ` · ${step}` : ''}`;
+  return turnText(state, humanSeat, names);
 }
 
 // opts:
@@ -186,11 +186,15 @@ export function mountPlay(root, opts) {
     <div class="pl-opp"></div>
     <div class="pl-table"><button type="button" class="pl-btn pl-seatbtn" hidden aria-label="Back to my seat (C)" title="Back to my seat (C, or double-click the table)"><svg class="pl-seatico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M3.5 3.5v5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></svg><span>Back to my seat</span></button></div>
     <div class="pl-last" hidden><canvas class="pl-cv"></canvas><span class="pl-last-t"></span></div>
-    <div class="pl-bar"><ol class="pl-steps"></ol><span class="pl-turn"></span><p class="pl-prompt" aria-live="polite"></p></div>
+    <div class="pl-bar"><p class="pl-prompt" aria-live="polite"></p></div>
     <div class="pl-handbox"></div>
-    <div class="pl-actions">
-      <button type="button" class="pl-btn pl-sec" hidden></button>
-      <button type="button" class="pl-btn pl-pri"><span class="pl-pri-t"></span><i class="pl-timer" hidden></i></button>
+    <div class="pl-dock" data-who="you">
+      <div class="pl-plate"><span class="pl-turn" role="status"></span><span class="pl-phase"></span></div>
+      <div class="pl-rungs"><ol class="pl-steps" aria-label="Steps of the turn">${ladderHtml()}</ol><span class="pl-turnno"></span></div>
+      <div class="pl-actions">
+        <button type="button" class="pl-btn pl-sec" hidden></button>
+        <button type="button" class="pl-btn pl-pri" aria-keyshortcuts="Space Enter"><span class="pl-pri-t"></span><b class="pl-timer-n" hidden></b><i class="pl-timer" hidden></i></button>
+      </div>
     </div>
     <p class="pl-hint" role="status" hidden></p>
     <button type="button" class="pl-btn pl-menubtn" aria-haspopup="true" aria-expanded="false">Menu</button>
@@ -200,7 +204,8 @@ export function mountPlay(root, opts) {
   const $ = s => root.querySelector(s);
   const tableBox = $('.pl-table');
   const sheet = $('.pl-sheet'), sheetIn = $('.pl-sheet-in');
-  const pri = $('.pl-pri'), priT = $('.pl-pri-t'), sec = $('.pl-sec'), timerEl = $('.pl-timer');
+  const pri = $('.pl-pri'), priT = $('.pl-pri-t'), sec = $('.pl-sec'), timerEl = $('.pl-timer'), timerN = $('.pl-timer-n');
+  const dockEls = { dock: $('.pl-dock'), turn: $('.pl-turn'), phase: $('.pl-phase'), steps: $('.pl-steps'), turnNo: $('.pl-turnno') };
   const menu = $('.pl-menu'), menuBtn = $('.pl-menubtn');
   const logBox = $('.pl-log');
   const hint = $('.pl-hint');
@@ -709,10 +714,15 @@ export function mountPlay(root, opts) {
     if (!pref.timer || !pc) return;
     timer.end = Date.now() + pref.timer * 1000;
     timerEl.hidden = false;
+    timerN.hidden = false;
+    timerN.textContent = String(pref.timer);
     timer.id = setInterval(() => {
       const left = timer.end - Date.now();
       timerEl.style.width = `${Math.max(0, left / (pref.timer * 1000)) * 100}%`;
       timerEl.classList.toggle('low', left < 8000);
+      // the seconds left, on the big button
+      timerN.textContent = String(Math.max(0, Math.ceil(left / 1000)));
+      timerN.classList.toggle('low', left < 8000);
       if (left > 0) return;
       stopTimer();
       // time is up: the empty choice (pass, no attack, no blocks)
@@ -722,7 +732,7 @@ export function mountPlay(root, opts) {
       act(a);
     }, 250);
   }
-  function stopTimer() { clearInterval(timer.id); timer.id = 0; timerEl.hidden = true; }
+  function stopTimer() { clearInterval(timer.id); timer.id = 0; timerEl.hidden = true; timerN.hidden = true; }
 
   // ------------------------------------------------------------ the menu
   function menuItems() {
@@ -833,19 +843,18 @@ export function mountPlay(root, opts) {
       } catch (e) { console.info('fly-duel play: scene.highlight', e); }
     }
     hand.render(s.players[hs].hand, v, L, CARD);
-    // phase bar
-    const ph = v.phase;
-    $('.pl-steps').innerHTML = ph.steps.map(st => `<li class="${st.now ? 'now' : st.done ? 'done' : ''}">${st.label}</li>`).join('');
-    // the one turn indicator of play mode, changed in place
-    $('.pl-turn').textContent = playTurnText(s, hs, pc.names);
-    $('.pl-turn').dataset.seat = String(s.active);
-    $('.pl-bar').dataset.seat = String(s.active);
+    // the dock (ui/play/turnbar.js): the turn plate is the one turn
+    // indicator of play mode; it and the phase ladder change in place
+    paintDock(dockEls, phaseLadder(s, hs, pc.names));
+    dockEls.turn.dataset.seat = String(s.active);
     // the prompt says what you can do; on the fly's turn it is empty
     $('.pl-prompt').textContent = thinking >= 0 || v.mode === 'wait' ? '' : v.prompt;
-    // buttons
-    priT.textContent = v.primary.label;
-    pri.disabled = !v.primary.enabled || busy;
-    pri.dataset.tone = v.primary.tone || '';
+    // buttons: go (your press moves the game on), quiet, wait
+    const bs = buttonState(v.primary, { busy });
+    priT.textContent = bs.label;
+    pri.disabled = bs.disabled;
+    pri.dataset.tone = bs.tone;
+    pri.dataset.state = bs.state;
     if (v.secondary) { sec.hidden = false; sec.textContent = v.secondary.label; sec.disabled = !v.secondary.enabled || busy; } else sec.hidden = true;
     root.dataset.mode = v.mode;
     renderLog();

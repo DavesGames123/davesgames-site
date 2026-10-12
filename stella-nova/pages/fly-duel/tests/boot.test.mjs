@@ -158,8 +158,9 @@ if (PLAY) {
   ok(mine >= 3 && pc().history.some(r => r.who !== pc().humanSeat), `play: human moves go through the screen and the fly answers (${mine} moves, ${pc().history.length} records)`);
   ok(rules.isOver(pc().state) || pc().state.turn >= 2, `play: the game goes on (turn ${pc().state.turn})`);
   ok(urls.some(u => u === '?mode=play&deck=moss&opp=A'), `play: the URL keeps the mode, the deck and the opponent (${urls.slice(-1)})`);
-  // one voice in play mode: one turn line, no banner, no "thinking" line
-  ok(!q('.pl-banner') && root.querySelectorAll('.pl-turn').length === 1 && /^Turn \d+ · (You|Fly A)/.test(q('.pl-turn').textContent), `play: one turn line, no banner (${q('.pl-turn').textContent})`);
+  // one voice in play mode: one turn indicator (the plate of the dock,
+  // ui/play/turnbar.js), no banner, no "thinking" line
+  ok(!q('.pl-banner') && root.querySelectorAll('.pl-turn').length === 1 && /^(Your turn|Fly A's turn|You win|Fly A wins|Draw)$/.test(q('.pl-turn').textContent), `play: one turn indicator, no banner (${q('.pl-turn').textContent})`);
   ok(!/thinking|takes a turn/i.test(q('.pl-prompt').textContent) && [...root.querySelectorAll('.hd-status')].every(e => !/turn|wait|act|think|move/i.test(e.textContent)), 'play: the prompt and the scorecards name no turn');
   ok($('app').dataset.opp === 'A', `play: the app marks the opposing fly for its brain panel (data-opp ${$('app').dataset.opp})`);
   const n0 = fd.hero.match.history.length;

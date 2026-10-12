@@ -15,8 +15,8 @@
 //
 //  WHERE  The side of the play box away from the pointer that focused
 //  the card (the last pointer on the page), under the scorecards
-//  (.pl-cards) and above the phase bar, the buttons and the hand
-//  (.pl-bar, .pl-actions, .pl-handbox). A phone gets a compact card
+//  (.pl-cards) and above the prompt, the dock and the hand
+//  (.pl-bar, .pl-dock, .pl-handbox). A phone gets a compact card
 //  docked at the top (data-dock).
 //
 //  CLOSE  The Close button. Escape (ui/play/play.js onKey). A mouse
@@ -56,7 +56,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 // The inline style that keeps the panel non-modal whatever the CSS says.
 const BASE = 'position:absolute;inset:auto;right:auto;bottom:auto;padding:0;background:transparent;overflow:visible;pointer-events:none;z-index:125';
 
-export function createInspector(host, { KEYWORDS = {}, top = ['.pl-cards'], bottom = ['.pl-bar', '.pl-actions', '.pl-handbox'] } = {}) {
+export function createInspector(host, { KEYWORDS = {}, top = ['.pl-cards'], bottom = ['.pl-bar', '.pl-dock', '.pl-handbox'] } = {}) {
   const doc = host.ownerDocument;
   const win = doc.defaultView || globalThis;
   const el = doc.createElement('div');

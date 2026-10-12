@@ -16,11 +16,12 @@
      .pl            root grid          .pl-hc      a hand card
      .pl-handbox    the fan box        .pl-perm    a creature on the table
      .pl-stack      a land stack       .pl-arrows  attack / block lines
-     .pl-actions    the big button     .pl-bar     phase steps + prompt
+     .pl-dock       turn plate, phase ladder, big button (ui/play/turnbar.js)
+     .pl-actions    the two buttons    .pl-bar     the prompt line
      .pl-sheet      setup/coin/mull    .pl-insp    the inspector
      .pl-hint       message at control .pl-last    the last action chip
      .pl-peek       hovered version    (ui/play/peek.js)
-     .pl-turn       the one turn line (is-new: the pause between turns)
+     .pl-turn       the one turn indicator (is-new: the pause between turns)
      .pl-3d         full bleed 3D      .pl-seatbtn back to seat (orbit)
    ========================================================================== */
 [hidden] { display: none !important; }
@@ -31,6 +32,12 @@
   --hair: rgba(255,255,255,0.10); --hair2: rgba(255,255,255,0.22);
   --flyA: #39d0f0; --flyB: #f26ad6; --dmg: #ff4d4d; --heal: #3ee89a;
   --hand-w: 96px; --hand-h: 134px; --peek: 96px; --btn-h: 52px; --btn-w: 148px; --zoom-w: 300px;
+  /* the dock (DOCK in ui/play/turnbar.js): plate and ladder rows, the
+     smallest width, the whole height (rows, gaps and 4 px padding) */
+  --dock-plate: 22px; --dock-rung: 26px; --dock-w: 176px;
+  --dock-h: calc(var(--dock-plate) + var(--dock-rung) + var(--btn-h) + 18px);
+  --bronze: #c9a45a; --bronze-dim: #6e5a32; --bronze-line: rgba(201,164,90,0.34);
+  --tome: #0e0c09; --tome2: #16120c; --parch: #f1e5cc; --parch2: #d9c9a6; --parch-ink: #2a1e10;
   /* the safe area (notch, home bar): every box at an edge keeps clear of it */
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
@@ -65,27 +72,49 @@
 .pl-seatico { flex: none; }
 @media (pointer: coarse) { .pl-seatbtn { min-height: 44px; } }
 .pl-seatbtn[hidden] { display: none !important; }
-.pl-bar { grid-area: bar; display: grid; grid-template-columns: auto auto; justify-content: space-between; align-items: center; gap: 2px 10px; }
-.pl-actions { grid-area: act; justify-self: end; display: flex; gap: 8px; align-items: stretch; position: relative; z-index: 60; }
+.pl-bar { grid-area: bar; display: grid; align-items: center; }
+.pl-dock { grid-area: act; justify-self: end; position: relative; z-index: 60; }
+.pl-actions { justify-self: stretch; display: flex; align-items: stretch; }
+/* the small button stands just left of the dock, at the height of the
+   big one, so the dock stays --dock-w wide */
+.pl-actions .pl-sec { position: absolute; right: calc(100% + 8px); bottom: 4px; }
 .pl-menubtn { grid-area: act; justify-self: start; z-index: 60; }
 
-/* -------------------------------------------------------- phase bar */
-.pl-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; }
-.pl-steps li { font-size: 11px; padding: 3px 8px; border: 1px solid var(--hair); color: var(--dim); }
-.pl-steps li:first-child { border-radius: 999px 0 0 999px; }
-.pl-steps li:last-child { border-radius: 0 999px 999px 0; }
-.pl-steps li.done { color: var(--ink2); }
-.pl-steps li.now { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
-.pl-bar[data-seat="1"] .pl-steps li.now { box-shadow: inset 0 -3px 0 0 var(--flyB); }
-.pl-bar[data-seat="0"] .pl-steps li.now { box-shadow: inset 0 -3px 0 0 var(--flyA); }
-.pl-turn { font: 600 12px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; color: var(--ink2); }
-.pl-prompt { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--ink2); min-height: 1.4em; }
-.pl-turn { padding: 1px 6px; border: 1px solid transparent; border-radius: 3px; }
-.pl-turn.is-new[data-seat="0"] { border-color: var(--flyA); } .pl-turn.is-new[data-seat="1"] { border-color: var(--flyB); }
+/* ------------------------------------------------------------- dock
+   ui/play/turnbar.js. A dark tome plate with a bronze rule; the turn
+   plate and the lit step take the colour of whose turn it is (data-who:
+   you = parchment, A = cyan, B = magenta). Done steps are dim bronze,
+   steps to come are faint. The big button is parchment with a bronze
+   rim when your press moves the game on (data-state go), a tome face
+   with a bronze line for Cancel (quiet), and a dark, dim face while the
+   fly acts (wait). Crisp: hard rims only, no glow. */
+.pl-dock { --who: var(--parch); --who-ink: var(--parch-ink);
+  display: grid; gap: 5px; justify-items: end; min-width: var(--dock-w); padding: 4px;
+  background: rgba(14,12,9,0.82); border: 1px solid var(--bronze-line); border-radius: 8px; }
+.pl-dock[data-who="you"] { --who: var(--parch); --who-ink: var(--parch-ink); }
+.pl-dock[data-who="A"] { --who: var(--flyA); --who-ink: #04161c; }
+.pl-dock[data-who="B"] { --who: var(--flyB); --who-ink: #1c0618; }
+.pl-dock[data-who="none"] { --who: var(--ink2); --who-ink: var(--bg); }
+.pl-plate { justify-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: var(--dock-plate);
+  padding: 0 6px 0 8px; border-left: 3px solid var(--who); border-bottom: 1px solid var(--bronze-line);
+  font: 600 14px/1 var(--sci-serif, 'STIX Two Text', Georgia, serif); font-variant: small-caps; letter-spacing: 0.04em; white-space: nowrap; }
+.pl-turn { color: var(--who); padding: 0; border: 0; }
+.pl-turn.is-new { text-decoration: underline 2px var(--bronze); text-underline-offset: 3px; }
+.pl-phase { color: var(--ink2); font-size: 12px; letter-spacing: 0.08em; }
+.pl-rungs { justify-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.pl-steps { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 5px; }
+.pl-steps li { position: relative; width: var(--dock-rung); height: var(--dock-rung); display: grid; place-items: center;
+  border: 1px solid var(--bronze-line); border-radius: 50%; color: var(--faint); background: var(--tome, #0e0c09); }
+.pl-steps li + li::before { content: ""; position: absolute; right: 100%; top: 50%; width: 5px; border-top: 1px solid var(--bronze-line); }
+.pl-steps svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.pl-steps li.done { color: var(--bronze-dim); border-color: var(--bronze-dim); }
+.pl-steps li.now { color: var(--who-ink); background: var(--who); border: 2px solid var(--bronze); }
+.pl-turnno { font: 600 11px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; color: var(--dim); }
+.pl-prompt { margin: 0; font-size: 13px; color: var(--ink2); min-height: 1.4em; }
 /* a message for the player, next to the control used (play.js flash) */
 .pl-hint { position: absolute; z-index: 95; margin: 0; max-width: min(300px, calc(100% - 16px)); padding: 6px 10px; background: var(--panel);
   border: 1px solid var(--dmg); border-radius: 4px; font-size: 12px; line-height: 1.35; color: var(--ink); pointer-events: none; }
-.pl-hint[data-at="button"] { right: calc(8px + var(--sar)); bottom: calc(var(--base) + var(--btn-h) + 16px); }
+.pl-hint[data-at="button"] { right: calc(8px + var(--sar)); bottom: calc(var(--base) + var(--dock-h) + 16px); }
 .pl-hint[data-at="hand"] { left: 50%; transform: translateX(-50%); bottom: calc(var(--base) + 8px); }
 .pl-hint[data-at="table"] { left: 50%; transform: translateX(-50%); top: 38%; }
 
@@ -97,13 +126,20 @@
 }
 .pl-btn:focus-visible, .pl-hc:focus-visible, .pl-perm:focus-visible, .pl-deck:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .pl-btn:disabled { color: var(--dim); cursor: default; }
-.pl-pri { position: relative; min-width: var(--btn-w); min-height: var(--btn-h); font-size: 16px; overflow: hidden; }
-.pl-pri[data-tone="go"], .pl-pri[data-tone="attack"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.pl-pri[data-tone="attack"] { box-shadow: inset 6px 0 0 0 var(--dmg); }
-.pl-pri[data-tone="wait"] { background: var(--panel2); }
-.pl-sec { min-height: var(--btn-h); }
-.pl-timer { position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: var(--flyA); }
+.pl-pri { position: relative; flex: 1 1 auto; min-width: var(--btn-w); min-height: var(--btn-h); padding: 0 18px; overflow: hidden;
+  font: 700 17px/1 var(--sci-serif, 'STIX Two Text', Georgia, serif); font-variant: small-caps; letter-spacing: 0.05em; }
+.pl-pri[data-state="go"] { background: var(--parch); color: var(--parch-ink); border: 2px solid var(--bronze); box-shadow: inset 0 0 0 2px var(--parch2); }
+.pl-pri[data-state="go"][data-tone="next"] { background: var(--parch2); }
+.pl-pri[data-state="go"][data-tone="attack"] { box-shadow: inset 6px 0 0 0 var(--dmg), inset 0 0 0 2px var(--parch2); }
+.pl-pri[data-state="quiet"] { background: var(--tome2); color: var(--parch); border: 1px solid var(--bronze); }
+.pl-pri[data-state="wait"] { background: var(--panel); color: var(--dim); border: 1px solid var(--bronze-line); font-weight: 600; }
+.pl-pri:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
+.pl-sec { min-height: var(--btn-h); min-width: 72px; background: var(--tome2); color: var(--parch2); border-color: var(--bronze-line);
+  font: 600 14px/1 var(--sci-serif, 'STIX Two Text', Georgia, serif); font-variant: small-caps; letter-spacing: 0.04em; }
+.pl-timer { position: absolute; left: 0; bottom: 0; height: 5px; width: 100%; background: var(--flyA); }
 .pl-timer.low { background: var(--dmg); }
+.pl-timer-n { position: absolute; right: 5px; top: 4px; font: 700 12px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; }
+.pl-timer-n.low { color: var(--dmg); }
 .pl[data-human="1"] .pl-timer:not(.low) { background: var(--flyB); }
 
 /* -------------------------------------------------------------- hand */
@@ -289,7 +325,6 @@
 .pl-coinface { justify-self: center; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; background: var(--panel2); border: 3px solid var(--ink); font: 700 34px var(--sci-serif, 'STIX Two Text', Georgia, serif); }
 
 /* ------------------------------------------------------------ layouts */
-.pl[data-layout="phone"] .pl-steps li { padding: 3px 6px; }
 
 .pl[data-layout="phone-land"] {
   grid-template-columns: 190px minmax(0, 1fr);
@@ -310,27 +345,29 @@
 .pl[data-layout="tablet"] .pl-sc0, .pl[data-layout="desktop"] .pl-sc0 { grid-area: sc0; align-self: start; }
 .pl[data-layout="tablet"] .pl-sc1, .pl[data-layout="desktop"] .pl-sc1 { grid-area: sc1; align-self: start; }
 .pl[data-layout="tablet"] .pl-menubtn, .pl[data-layout="desktop"] .pl-menubtn { grid-area: menu; }
-.pl[data-layout="tablet"] .pl-bar, .pl[data-layout="desktop"] .pl-bar { justify-self: center; width: min(100%, 760px); }
+.pl[data-layout="tablet"] .pl-bar, .pl[data-layout="desktop"] .pl-bar { justify-self: center; width: min(100%, 760px); text-align: center; }
 .pl[data-layout="desktop"] .hd-brain { height: 96px; }
 
 /* -------------------------------------------- full bleed 3D table
    With the 3D table (.pl-3d, ui/play/play.js) the canvas fills the play
    box, so the flies get the whole frame. The HUD lies over it: slim
-   scorecards in the top corners (ui/hud/hud.css .hd-slim), the phase bar
-   a small translucent strip over the hand, the buttons at the lower
-   corners. The opposing card backs go: the 3D table shows them. */
+   scorecards in the top corners (ui/hud/hud.css .hd-slim), the dock at
+   the lower right over the hand line (right thumb), the menu at the
+   lower left with the prompt line above it, clear of the dock. The
+   opposing card backs go: the 3D table shows them. */
 .pl.pl-3d { display: block; padding: 0; }
 .pl.pl-3d .pl-table { position: absolute; inset: 0; border-radius: 0; }
 .pl.pl-3d .pl-opp { display: none; }
 .pl.pl-3d .pl-cards { position: absolute; z-index: 50; top: calc(6px + var(--sat)); left: calc(6px + var(--sal)); right: calc(6px + var(--sar)); display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; pointer-events: none; }
 .pl.pl-3d .pl-sc { pointer-events: auto; width: min(250px, calc(50% - 4px)); }
 .pl.pl-3d .pl-sc1 { margin-left: auto; }
-.pl.pl-3d .pl-bar { position: absolute; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--base) + var(--btn-h) + 12px);
-  width: max-content; max-width: calc(100% - 16px); padding: 3px 8px; border-radius: 8px; background: rgba(5,7,12,0.5); }
-.pl.pl-3d .pl-prompt { font-size: 12px; min-height: 0; text-align: center; }
-.pl.pl-3d .pl-actions { position: absolute; right: calc(8px + var(--sar)); bottom: calc(var(--base) + 6px); }
+.pl.pl-3d .pl-bar { position: absolute; z-index: 45; left: calc(8px + var(--sal)); bottom: calc(var(--base) + var(--btn-h) + 20px);
+  width: max-content; max-width: calc(100% - var(--dock-w) - 40px - var(--sal) - var(--sar)); padding: 3px 8px; border-radius: 6px; background: rgba(14,12,9,0.6); }
+.pl.pl-3d .pl-bar:has(.pl-prompt:empty) { display: none; }
+.pl.pl-3d .pl-prompt { font-size: 12px; min-height: 0; }
+.pl.pl-3d .pl-dock { position: absolute; right: calc(8px + var(--sar)); bottom: calc(var(--base) + 8px); }
 .pl.pl-3d .pl-menubtn { position: absolute; left: calc(8px + var(--sal)); bottom: calc(var(--base) + 6px); }
-.pl.pl-3d .pl-seatbtn { top: auto; bottom: calc(var(--base) + var(--btn-h) + 56px); }
+.pl.pl-3d .pl-seatbtn { top: auto; bottom: calc(var(--base) + var(--dock-h) + 24px); }
 .pl.pl-3d[data-layout="phone-land"] .pl-cards { flex-direction: column; right: auto; width: 200px; }
 .pl.pl-3d[data-layout="phone-land"] .pl-sc { width: 100%; }
 .pl.pl-3d[data-layout="phone-land"] .pl-sc1 { margin-left: 0; }
