@@ -69,8 +69,13 @@
 //  after, as before (legacyPath).
 //
 //  Dice. record.rolls [{ die, value, p?, uid? }] or roll events give
-//  roll steps. permanent.counters { kind: n } is in the mirror. A
-//  counter event or a change of counters gives a counters step.
+//  roll steps. game/rules.js writes both: a 'roll' event per die (log on)
+//  and state.rolls (the dice of the last step, also with the log off).
+//  The legacy path reads record.rolls, else record.after.rolls.
+//  permanent.counters { kind: n } is in the mirror. A counter event
+//  ({ t: 'counter', p, uid, kind, n }, n the change) or a change of
+//  counters gives a counters step. A growth counter also gives a grow
+//  event (the rules add it to pc).
 //
 //  Each step is { op, at, dur, ... } in seconds at speed 1. The steps of
 //  one record are sorted by at. total is the time when the last step ends.
@@ -369,6 +374,20 @@ function legacyPath(ctx, p, act, rec) {
     combatSteps(ctx, act.blocks);
   }
 
+  // Dice: record.rolls, else the rolls of the step (state.rolls of
+  // game/rules.js, filled also with the log off). Counters: one counters
+  // step per permanent that changed.
+  const rolls = Array.isArray(rec.rolls) ? rec.rolls : Array.isArray(A.rolls) ? A.rolls : [];
+  rolls.forEach((r, i) => ctx.emit('roll', { p: r.p ?? p, die: r.die, value: r.value, i, uid: r.uid ?? null, why: r.why ?? null }, ctx.T.roll * 0.6, ctx.T.roll));
+  counterSync(ctx);
+  // lasting growth (pc) that changed: a grow step
+  for (let q = 0; q < 2; q++) {
+    for (const y of A.players[q].battlefield) {
+      const x = m.players[q].battlefield.find(z => z.uid === y.uid);
+      if (x && (y.pc | 0) !== (x.pc | 0)) ctx.emit('grow', { p: q, uid: y.uid, amount: (y.pc | 0) - (x.pc | 0) });
+    }
+  }
+
   // Turn change: discards, then the next turn, untap, draw.
   bigPlaySteps(ctx, p, act, B);
   if (A.turn !== m.turn || (A.result && A.result.reason === 'turn cap')) endTurnSteps(ctx);
@@ -512,11 +531,18 @@ function evStep(ctx, st, e, recRolls) {
         if (hit) { ctx.emit('strike', { p: hit.p, from: hit.from, to: e.uid ?? 'p' + e.p, amount: n }, 0.07, T.strike); if (e.uid != null) st.damaged.add(e.uid); break; }
       }
       const to = e.uid ?? 'p' + e.p;
+      if (e.uid == null) st.faceHit = e.p;
       ctx.emit('spark', { p: 1 - e.p, card: st.src?.card ?? null, src: st.src?.uid ?? null, to, amount: n }, T.spark * 0.75, T.spark);
       if (e.uid != null) { ctx.emit('hurt', { p: e.p, uid: e.uid, amount: n }, 0.3, T.hurt); st.damaged.add(e.uid); }
       break;
     }
     case 'life': {
+      // A loss with no damage event (drain, a death trigger): a spark from
+      // the source to the player first, so the hit is seen.
+      if (!st.combat && (e.n | 0) < 0 && st.faceHit !== e.p && st.src) {
+        ctx.emit('spark', { p: 1 - e.p, card: st.src.card, src: st.src.uid, to: 'p' + e.p, amount: -(e.n | 0) }, T.spark * 0.75, T.spark);
+      }
+      st.faceHit = null;
       const from = m.players[e.p].life;
       ctx.emit('life', { p: e.p, from, to: from + (e.n | 0) }, st.combat ? 0.07 : 0.45, T.life);
       break;
