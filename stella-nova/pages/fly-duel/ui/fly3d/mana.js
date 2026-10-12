@@ -7,7 +7,7 @@
 //  is the order of the first card that names the colour.
 //
 //  A land can produce one colour or more (a dual land). The field can be
-//  'produces: "amber"', 'produces: ["amber", "moss"]', 'produces:
+//  'mana: ["amber", "moss"]' (game/cards.js, read first), 'produces: "amber"', 'produces: ["amber", "moss"]', 'produces:
 //  "amber/moss"' or 'colours: [...]'. landProduces() reads all of them.
 //
 //  Land stacks. On the table, the lands of one player lie in stacks, one
@@ -42,7 +42,7 @@ const norm = c => String(c ?? '').trim().toLowerCase();
 export function landProduces(card) {
   const k = typeof card === 'string' ? CARD[card] : card;
   if (!k) return [];
-  let raw = k.produces ?? k.colours ?? k.colors ?? null;
+  let raw = k.mana ?? k.produces ?? k.colours ?? k.colors ?? null;
   if (raw == null) return [];
   if (typeof raw === 'string') raw = raw.split(/[\/|,+]/);
   if (!Array.isArray(raw)) return [];

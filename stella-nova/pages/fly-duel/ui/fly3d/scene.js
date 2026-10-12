@@ -70,6 +70,7 @@ import { PALETTE, colourKey } from '../art.js';
 import { drawCard, cardBack, loadCardArt, getCardArt } from '../cardface.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
+import { landProduces, colourHex, tokenShape, stackLayout, STACK } from './mana.js';
 
 // ------------------------------------------------------------ dimensions
 export const TABLE = {
@@ -562,25 +563,68 @@ function buildLifeDrum(W, p) {
 }
 
 // --------------------------------------------------------- mana tokens
-// The tokens are thick (0.08) and large (a third of the card width), so
-// that the mana on each untapped land reads in the wide shot.
-function tokenGeos() {
-  return {
-    amber: new THREE.CylinderGeometry(0.13, 0.13, 0.08, 6),    // honeycomb cell
-    moss: new THREE.CylinderGeometry(0.15, 0.15, 0.08, 4),     // diamond tile
-    generic: new THREE.BoxGeometry(0.2, 0.08, 0.2),            // grey square
-  };
-}
+// The tokens are thick (0.08) and large (a third of the card width or
+// more), so the mana on each stack reads in the wide shot. Each colour of
+// game/cards.js has its own prism (ui/fly3d/mana.js tokenShape: amber a
+// honeycomb cell, moss a diamond, the other colours the next free shape)
+// and its own hue (colourHex). Generic mana is a grey square. A token of
+// a dual land is the prism of its first colour with an inset of the
+// second colour on top.
 // A dark hull behind each token (back faces, 1.16 times the size) gives
 // a hard edge. Without it, an amber token on an amber land has almost
 // no contrast. It is an outline, not a glow: no blur, no blend.
 const TOKEN_HULL = 1.16;
-function tokenHullMat() {
-  return new THREE.MeshBasicMaterial({ color: new THREE.Color('#07080c'), side: THREE.BackSide });
-}
-function tokenMats() {
-  const m = (c, e) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), emissive: new THREE.Color(c), emissiveIntensity: e, roughness: 0.35, metalness: 0.1 });
-  return { amber: m(TOKENS.amber, 0.55), moss: m(TOKENS.moss, 0.5), generic: m(TOKENS.none, 0.35) };
+const TOKEN_H = 0.08;
+function tokenKit() {
+  const geos = new Map(), mats = new Map();
+  const hull = new THREE.MeshBasicMaterial({ color: new THREE.Color('#07080c'), side: THREE.BackSide });
+  function geo(key) {
+    const sides = key === 'generic' ? 0 : tokenShape(key);
+    const k = 's' + sides;
+    if (!geos.has(k)) {
+      const r = sides === 0 ? 0 : sides === 3 ? 0.165 : sides === 4 ? 0.15 : 0.135;
+      geos.set(k, sides === 0 ? new THREE.BoxGeometry(0.2, TOKEN_H, 0.2) : new THREE.CylinderGeometry(r, r, TOKEN_H, sides));
+    }
+    return geos.get(k);
+  }
+  function inset(key) {
+    const sides = tokenShape(key) || 4, k = 'i' + sides;
+    if (!geos.has(k)) { const r = 0.075; geos.set(k, new THREE.CylinderGeometry(r, r, TOKEN_H * 1.08, sides)); }
+    return geos.get(k);
+  }
+  function mat(key) {
+    if (!mats.has(key)) {
+      const c = key === 'generic' ? TOKENS.none : colourHex(key);
+      mats.set(key, new THREE.MeshStandardMaterial({ color: new THREE.Color(c), emissive: new THREE.Color(c), emissiveIntensity: key === 'generic' ? 0.35 : 0.5, roughness: 0.35, metalness: 0.1 }));
+    }
+    return mats.get(key);
+  }
+  // A token mesh for a list of colours ([] or ['generic'] = generic).
+  function make(colours) {
+    const cs = colours && colours.length ? colours : ['generic'];
+    const m = new THREE.Mesh(geo(cs[0]), mat(cs[0]));
+    m.castShadow = true;
+    const h = new THREE.Mesh(geo(cs[0]), hull);
+    h.scale.setScalar(TOKEN_HULL); h.name = 'token-hull'; m.add(h);
+    if (cs[1]) { const i = new THREE.Mesh(inset(cs[1]), mat(cs[1])); i.name = 'token-inset'; m.add(i); }
+    m.userData.kind = cs.join('+');
+    m.rotation.y = cs[0] === 'amber' ? Math.PI / 6 : 0;
+    return m;
+  }
+  // Turn a token into a generic one (a token that pays a generic cost).
+  function toGeneric(m) {
+    m.geometry = geo('generic'); m.material = mat('generic'); m.userData.kind = 'generic';
+    if (m.children[0]) m.children[0].geometry = geo('generic');
+    for (const c of m.children) if (c.name === 'token-inset') c.visible = false;
+  }
+  // Show only the paid colour (a dual land that pays its second colour).
+  function toColour(m, key) {
+    m.geometry = geo(key); m.material = mat(key); m.userData.kind = key;
+    if (m.children[0]) m.children[0].geometry = geo(key);
+    for (const c of m.children) if (c.name === 'token-inset') c.visible = false;
+  }
+  function dispose() { for (const g of geos.values()) g.dispose(); for (const x of mats.values()) x.dispose(); hull.dispose(); }
+  return { make, toGeneric, toColour, mat, geo, dispose };
 }
 
 // ======================================================== placeholder fly
@@ -934,10 +978,17 @@ export function createDuelScene(canvas, opts = {}) {
     const o = Z.perms.get(x.uid), f = Z.flags.get(x.uid) || {};
     const pl = mirror.players[p];
     const land = CARD[x.id].type === 'land';
-    const row = pl.battlefield.filter(y => (CARD[y.id].type === 'land') === land);
-    const slots = rowSlots(row.length, T.rowHalf, land ? 0.62 : 0.68);
-    const i = row.indexOf(x);
-    let u = slots[i] ?? 0, v = land ? T.landV : T.creatureV, y = 0.006 + i * 0.0012;
+    let u, v, y;
+    if (land) {
+      // lands: one stack per colour set (ui/fly3d/mana.js stackLayout)
+      const L = stackOf(p).at.get(x.uid) || { u: 0, dv: 0, dy: 0 };
+      u = L.u; v = T.landV + L.dv; y = 0.006 + L.dy;
+    } else {
+      const row = pl.battlefield.filter(y => CARD[y.id].type !== 'land');
+      const slots = rowSlots(row.length, T.rowHalf, 0.68);
+      const i = row.indexOf(x);
+      u = slots[i] ?? 0; v = T.creatureV; y = 0.006 + i * 0.0012;
+    }
     if (f.attacking) v = T.attackV;
     if (f.blocking != null) {
       const a = Z.perms.get(f.blocking);
@@ -946,7 +997,7 @@ export function createDuelScene(canvas, opts = {}) {
     // tapped: turn a little (not 90 degrees, DESIGN.md 3.6) and come
     // 0.1 toward the seat.
     const turn = x.tapped ? -0.38 : 0;
-    if (x.tapped && !f.attacking) v += 0.08;
+    if (x.tapped && !f.attacking && !land) v += 0.08;
     seatPos(p, u, y, v, out);
     seatQuat(p, -Math.PI / 2, 0, turn, q);
     if (o) {
@@ -980,6 +1031,8 @@ export function createDuelScene(canvas, opts = {}) {
     if (!mirror) return;
     for (let p = 0; p < 2; p++) {
       const pl = mirror.players[p];
+      stacks[p] = stackLayout(pl.battlefield);
+      updatePlates(p);
       const H = Z.hand[p];
       H.forEach((o, i) => {
         handPose(p, i, H.length); snap ? o.place(P, Qt) : o.target(P, Qt, 0.3, 0, true);
@@ -1042,24 +1095,62 @@ export function createDuelScene(canvas, opts = {}) {
     o.mesh.add(m); o.badge = m;
   }
 
-  const tokGeo = tokenGeos(), tokMat = tokenMats(), hullMat = tokenHullMat();
+  // ---------------------------------------------------------- stacks
+  // stacks[p]: stackLayout() of the battlefield of player p, made again on
+  // each layout() pass. stackOf(p) makes it when layout() did not run yet.
+  const stacks = [null, null];
+  const stackOf = p => stacks[p] || (stacks[p] = stackLayout(mirror.players[p].battlefield));
+  // A count plate lies on the felt at the head of each stack: the number
+  // of lands in the stack and a bar in each colour of the stack.
+  const plates = [new Map(), new Map()];
+  const plateGeo = new THREE.PlaneGeometry(0.34, 0.15);
+  function plateTex(n, colours) {
+    const cv = makeCanvas(136, 60);
+    if (!cv?.getContext) return null;
+    const g = cv.getContext('2d');
+    g.fillStyle = TOKENS.panel; g.fillRect(0, 0, 136, 60);
+    const cs = colours.length ? colours : ['generic'];
+    cs.forEach((c, i) => { g.fillStyle = c === 'generic' ? TOKENS.none : colourHex(c); g.fillRect(0, i * (60 / cs.length), 16, 60 / cs.length); });
+    g.strokeStyle = TOKENS.hair2; g.lineWidth = 2; g.strokeRect(1, 1, 134, 58);
+    g.fillStyle = TOKENS.ink; g.font = `700 40px ${MONO}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(`\u00d7${n}`, 76, 32);
+    return canvasTexture(cv, { aniso: 4 });
+  }
+  function updatePlates(p) {
+    const L = stacks[p], have = plates[p], seen = new Set();
+    for (const st of L.stacks) {
+      seen.add(st.key);
+      let pl = have.get(st.key);
+      if (!pl) {
+        const m = new THREE.Mesh(plateGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(st.colours[0] ? colourHex(st.colours[0]) : TOKENS.none) }));
+        m.name = 'stack-plate:' + st.key;
+        W.fx.add(m);
+        pl = { m, n: -1 };
+        have.set(st.key, pl);
+      }
+      if (pl.n !== st.n) {
+        pl.n = st.n;
+        const t = plateTex(st.n, st.colours);
+        if (t) { pl.m.material.map?.dispose(); pl.m.material.map = t; pl.m.material.color.set(0xffffff); pl.m.material.needsUpdate = true; }
+      }
+      seatPos(p, st.u, 0.004, T.landV - T.cardH / 2 - 0.11, pl.m.position);
+      pl.m.quaternion.copy(seatQuat(p, -Math.PI / 2, 0, 0));
+    }
+    for (const [k, pl] of have) if (!seen.has(k)) { W.fx.remove(pl.m); pl.m.material.map?.dispose(); pl.m.material.dispose(); have.delete(k); }
+  }
+
+  const tok = tokenKit();
+  // The place of the token of an untapped land: its slot in the tower at
+  // the head of its stack.
   function pipPose(p, uid, out = new THREE.Vector3()) {
-    const o = Z.perms.get(uid);
-    const base = o ? o.toP : seatPos(p, 0, 0, T.landV);
-    out.copy(base);
-    // toward the top end of the land card (the centre side)
-    out.add(seatPos(p, 0, 0, -0.2, _v1).sub(seatPos(p, 0, 0, 0, _v2)));
-    out.y = T.y + 0.065;
-    return out;
+    const t = stackOf(p).tower.get(uid);
+    if (!t) { const o = Z.perms.get(uid); return out.copy(o ? o.toP : seatPos(p, 0, 0, T.landV)).setY(T.y + 0.065); }
+    return seatPos(p, t.u, 0.065 + t.y + 0.012, T.landV + t.dv, out);
   }
   function addPip(p, x) {
-    const kind = CARD[x.id].produces === 'amber' ? 'amber' : 'moss';
-    const m = new THREE.Mesh(tokGeo[kind], tokMat[kind]);
-    m.castShadow = true;
-    const hull = new THREE.Mesh(tokGeo[kind], hullMat);
-    hull.scale.setScalar(TOKEN_HULL); hull.name = 'token-hull'; m.add(hull);
-    m.userData = { kind, p, uid: x.uid, grow: W.reduced ? 1 : 0 };
-    m.position.copy(pipPose(p, x.uid)); m.rotation.y = YAW[p] + (kind === 'amber' ? Math.PI / 6 : 0);
+    const m = tok.make(landProduces(CARD[x.id]));
+    m.userData = { ...m.userData, p, uid: x.uid, grow: W.reduced ? 1 : 0 };
+    m.position.copy(pipPose(p, x.uid)); m.rotation.y += YAW[p];
     m.scale.setScalar(m.userData.grow);
     W.fx.add(m); Z.pips.set(x.uid, m);
   }
@@ -1128,9 +1219,8 @@ export function createDuelScene(canvas, opts = {}) {
       const e = easeIO(k);
       pip.position.lerpVectors(from, to, e); pip.position.y += 0.55 * 4 * e * (1 - e);
       pip.rotation.x = e * Math.PI * 1.0;
-      if (pays === 'generic' && k > swapAt && pip.userData.kind !== 'generic') {
-        pip.geometry = tokGeo.generic; pip.material = tokMat.generic; pip.userData.kind = 'generic';
-        if (pip.children[0]) pip.children[0].geometry = tokGeo.generic;
+      if (k > swapAt && pip.userData.kind !== pays) {
+        if (pays === 'generic') tok.toGeneric(pip); else tok.toColour(pip, pays);
       }
       // the token gets smaller on the way: the cost rail slots are 0.1 apart
       const sc = k > 0.85 ? Math.max(0, 1 - (k - 0.85) / 0.15) : 1;
@@ -1268,7 +1358,16 @@ export function createDuelScene(canvas, opts = {}) {
     },
     tap(s) {
       const o = Z.perms.get(s.uid);
-      const pip = Z.pips.get(s.uid);
+      // The token that rises is the top token of the tower of this stack.
+      // The token of the tapped land takes the place of the top one.
+      let pip = Z.pips.get(s.uid);
+      const L = stackOf(s.p), at = L.at.get(s.uid), st = at && L.stacks[at.stack];
+      const topUid = st?.free?.length ? st.free[st.free.length - 1] : s.uid;
+      const top = topUid !== s.uid ? Z.pips.get(topUid) : null;
+      if (pip && top && !top.userData.flying) {
+        Z.pips.set(topUid, pip); pip.userData.uid = topUid;
+        pip = top;
+      }
       // the tarsus touches the land at 30 % of the step, then the token goes
       const touch = s.dur * 0.3;
       if (pip) { Z.pips.delete(s.uid); flyToken(pip, s.p, s.slot || 0, s.pays, s.dur - touch, touch); }
@@ -1479,7 +1578,9 @@ export function createDuelScene(canvas, opts = {}) {
       const u = pip.userData;
       if (u.flying) continue;
       if (u.grow < 1) { u.grow = Math.min(1, u.grow + sdt * 4); pip.scale.setScalar(easeOut(u.grow)); }
-      pipPose(u.p, u.uid, pip.position);
+      pipPose(u.p, u.uid, _v3);
+      if (W.reduced || pip.position.distanceToSquared(_v3) > 9) pip.position.copy(_v3);
+      else pip.position.lerp(_v3, 1 - Math.exp(-sdt * 12));
     }
     for (let p = 0; p < 2; p++) {
       const d = drums[p];
@@ -1529,6 +1630,10 @@ export function createDuelScene(canvas, opts = {}) {
   function mirrorSlot(p, uid, id) {
     const pl = mirror.players[p];
     const land = CARD[id]?.type === 'land';
+    if (land) {
+      const L = stackLayout([...pl.battlefield.filter(y => y.uid !== uid), { uid, id, tapped: false }]).at.get(uid);
+      return seatPos(p, L.u, 0.01 + L.dy, T.landV + L.dv);
+    }
     const row = pl.battlefield.filter(y => (CARD[y.id].type === 'land') === land && y.uid !== uid);
     const n = row.length + 1;
     const slots = rowSlots(n, T.rowHalf, land ? 0.62 : 0.68);
@@ -1563,7 +1668,7 @@ export function createDuelScene(canvas, opts = {}) {
       meshes, tris: Math.round(tris),
       cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length,
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
-      pips: Z.pips.size, busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
+      pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible,
     };
   }
@@ -1574,7 +1679,7 @@ export function createDuelScene(canvas, opts = {}) {
     for (const f of flies) { try { f.built?.dispose?.(); } catch { /* gone */ } }
     for (const b of brains) { try { b?.dispose?.(); } catch { /* gone */ } }
     scene.traverse(o => { if (o.isMesh) { o.geometry?.dispose(); for (const m of [].concat(o.material)) { m.map?.dispose(); m.dispose(); } } });
-    W.tex.dispose(); W.sprites.dispose();
+    W.tex.dispose(); W.sprites.dispose(); tok.dispose();
     renderer?.dispose();
   }
 
