@@ -18,7 +18,8 @@
 //                           particle fields (T, material, start position,
 //                           body, speed, mixing) weighted by a kernel and by
 //                           the distance to the front depth of pass 1 (only
-//                           the front layer counts). Three rgba16float
+//                           the front layer counts; where pass 1 drew
+//                           nothing, the kernel only). Three rgba16float
 //                           targets, additive:
 //                             a0  w, w T / 1000, w iron, w ice
 //                             a1  w o.x, w o.y, w o.z, w body 1
@@ -129,10 +130,10 @@ fn fs_attr(in: SOut) -> AOut {
   let q2 = dot(in.corner, in.corner);
   if (q2 >= 1.0) { discard; }
   let zf = textureLoad(frontZ, vec2i(in.pos.xy), 0);
-  if (zf.x <= 0.0) { discard; }
-  // the particle's front, against the front of the surface here
+  // the particle's front, against the front of the surface here; a pixel
+  // with no sphere (the smoothed outline can add it) takes the kernel only
   let zp = dot(in.centre.xyz - U0.eye.xyz, U0.fwd.xyz) - in.centre.w;
-  let dz = (zp - zf.x) / U0.surf.y;
+  let dz = select(0.0, (zp - zf.x) / U0.surf.y, zf.x > 0.0);
   let k = (1.0 - q2) * (1.0 - q2);
   let w = k * exp(-dz * dz) + 1e-7;
   var o: AOut;

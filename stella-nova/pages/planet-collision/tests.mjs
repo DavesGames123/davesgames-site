@@ -32,7 +32,8 @@
 //  R  the renderer (Deno WebGPU, an offscreen texture, no browser and no
 //     image file): every shader compiles clean; before contact the target
 //     fills its disc and the sky round it is dark, with no glow; the
-//     bilateral filter makes the depth smooth and keeps the silhouette; a
+//     filter makes the depth smooth, keeps the area and makes the limb
+//     rounder (less spread of its radius: no bump per particle); a
 //     grazing hit makes debris (fn classify) and glowing pixels; the colour
 //     modes and the cutaway change the image; no validation errors.
 //     --time also prints ms per frame
@@ -307,17 +308,29 @@ async function renderTests() {
   const pre = scan(at);
   ok('R before contact: the target fills its disc, dark sky outside, no glow', cIn[0] + cIn[1] + cIn[2] > 90 && cOut[0] + cOut[1] + cOut[2] < 60 && pre.glow === 0,
     `centre rgb ${cIn.join(',')}, 1.35 R out ${cOut.join(',')}, ${pre.glow} glowing px, disc ${rpx.toFixed(0)} px`);
-  // the bilateral filter: depth roughness down, silhouette unchanged
-  const zr = new Float32Array((await readTex(ren.rawZ, 8, W, H)).a), zs0 = await readTex(ren.smB, 4, W, H), zs = new Float32Array(zs0.a);
-  const bprR = Math.ceil(W * 8 / 256) * 256 / 8, bprS = zs0.bpr / 4;
-  let covR = 0, covS = 0, rough = [0, 0], cnt = 0;
-  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-    const r = k => zr[(y * bprR + x + k) * 2], s = k => zs[y * bprS + x + k];
-    if (r(0) > 0) covR++; if (s(0) > 0) covS++;
-    if (r(-1) > 0 && r(0) > 0 && r(1) > 0 && s(-1) > 0 && s(1) > 0) { rough[0] += Math.abs(r(-1) - 2 * r(0) + r(1)); rough[1] += Math.abs(s(-1) - 2 * s(0) + s(1)); cnt++; }
+  // the filter: depth roughness down; the outline (coverage 0.5) keeps
+  // the area and loses the bump of each particle (a shorter boundary)
+  // (a close view at 960 x 600, so a particle sphere is several px wide)
+  const W2 = 960, H2 = 600;
+  ren.resize(W2, H2); f.eye = [X0[0], X0[1] - 3 * R0, X0[2]]; ren.render(f);
+  const ctr2 = ren.project(X0, W2, H2), rpx2 = ren.focal / 3;
+  const zr = new Float32Array((await readTex(ren.rawZ, 8, W2, H2)).a), zs0 = await readTex(ren.smB, 8, W2, H2), zs = new Float32Array(zs0.a);
+  const bprR = Math.ceil(W2 * 8 / 256) * 256 / 8, bprS = zs0.bpr / 8;
+  const inR = (x, y) => zr[(y * bprR + x) * 2] > 0, inS = (x, y) => zs[(y * bprS + x) * 2 + 1] >= 0.5;
+  let covR = 0, covS = 0, perR = 0, perS = 0, rough = [0, 0], cnt = 0;
+  const radR = [], radS = [], rad = (x, y) => Math.hypot(x - ctr2.x, y - ctr2.y), near = (x, y) => Math.abs(rad(x, y) - rpx2) < 0.25 * rpx2;
+  for (let y = 1; y < H2 - 1; y++) for (let x = 1; x < W2 - 1; x++) {
+    const r = k => zr[(y * bprR + x + k) * 2], s = k => zs[(y * bprS + x + k) * 2];
+    if (inR(x, y)) { covR++; if (!inR(x + 1, y) || !inR(x - 1, y) || !inR(x, y + 1) || !inR(x, y - 1)) { perR++; if (near(x, y)) radR.push(rad(x, y)); } }
+    if (inS(x, y)) { covS++; if (!inS(x + 1, y) || !inS(x - 1, y) || !inS(x, y + 1) || !inS(x, y - 1)) { perS++; if (near(x, y)) radS.push(rad(x, y)); } }
+    if (r(-1) > 0 && r(0) > 0 && r(1) > 0 && inS(x - 1, y) && inS(x, y) && inS(x + 1, y)) { rough[0] += Math.abs(r(-1) - 2 * r(0) + r(1)); rough[1] += Math.abs(s(-1) - 2 * s(0) + s(1)); cnt++; }
   }
-  ok('R bilateral filter: depth roughness down, silhouette kept', rough[1] < 0.5 * rough[0] && covR === covS && cnt > 1000,
-    `mean |d2z| raw ${(rough[0] / cnt).toExponential(2)} smoothed ${(rough[1] / cnt).toExponential(2)}; covered px ${covR} raw, ${covS} smoothed`);
+  // the limb of the disc: the spread of the boundary radius (px)
+  const sd = a => { const m = a.reduce((p, q) => p + q, 0) / a.length; return Math.sqrt(a.reduce((p, q) => p + (q - m) ** 2, 0) / a.length); };
+  const sdR = sd(radR), sdS = sd(radS);
+  ok('R depth filter: roughness down, outline smooth, area kept', rough[1] < 0.5 * rough[0] && Math.abs(covS - covR) < 0.05 * covR && sdS < 0.8 * sdR && cnt > 1000,
+    `mean |d2z| raw ${(rough[0] / cnt).toExponential(2)} smoothed ${(rough[1] / cnt).toExponential(2)}; covered px ${covR} raw, ${covS} outline; limb radius spread ${sdR.toFixed(2)} px raw, ${sdS.toFixed(2)} px outline (disc ${rpx2.toFixed(0)} px)`);
+  ren.resize(W, H);
   // run through the grazing hit; watch from the side
   f.eye = [0.6, -7, 2.0]; f.target = [0, 0, 0]; f.streakT = 0.05;
   let cls = null, st = null;

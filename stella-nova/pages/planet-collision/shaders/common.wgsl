@@ -54,7 +54,7 @@ struct U {
   flash: array<vec4f, 4>,   // position, intensity
   flashR: vec4f,            // flash radius (world), per flash
   flashT: vec4f,            // flash colour temperature (K), per flash
-  extra: vec4f,             // x h_max of the solver (code)
+  extra: vec4f,             // x h_max of the solver (code), y view depth of the target
 };
 @group(0) @binding(0) var<uniform> U0: U;
 @group(0) @binding(1) var<storage, read> centres: array<vec4f>;

@@ -5,6 +5,7 @@
 //  Full-screen passes on one triangle (vs_full), in the scene pass:
 //    fs_sky       stars and the sun disc (the roche-limit sky, cut down).
 //    fs_surface   the smoothed depth (smooth.wgsl) -> position and normal;
+//                 the coverage -> the outline, blended over one pixel;
 //                 the fields of fluid.wgsl fs_attr -> albedo, temperature,
 //                 speed; lit by the sun with shadows of the bodies (spheres
 //                 at centres[b], only while U.bodies[b].w > 0), a gloss on
@@ -23,7 +24,7 @@
 //  "fn atmosphere", "fn fs_surface", "fn fs_vapour"
 // ============================================================================
 
-@group(2) @binding(0) var sZ: texture_2d<f32>;      // smoothed view depth (r32float)
+@group(2) @binding(0) var sZ: texture_2d<f32>;      // smoothed view depth, coverage (rg32float)
 @group(2) @binding(1) var a0Tex: texture_2d<f32>;
 @group(2) @binding(2) var a1Tex: texture_2d<f32>;
 @group(2) @binding(3) var a2Tex: texture_2d<f32>;
@@ -68,9 +69,15 @@ fn fs_sky(in: VOut) -> @location(0) vec4f {
   return vec4f(col, 1.0);
 }
 
+// the smoothed depth where the coverage is over 0.5, else 0 (no surface)
 fn zAt(p: vec2i) -> f32 {
   let s = vec2i(textureDimensions(sZ));
-  return textureLoad(sZ, clamp(p, vec2i(0), s - vec2i(1)), 0).x;
+  let t = textureLoad(sZ, clamp(p, vec2i(0), s - vec2i(1)), 0);
+  return select(0.0, t.x, t.y >= 0.5);
+}
+fn covAt(p: vec2i) -> f32 {
+  let s = vec2i(textureDimensions(sZ));
+  return textureLoad(sZ, clamp(p, vec2i(0), s - vec2i(1)), 0).y;
 }
 fn posAt(p: vec2i, z: f32) -> vec3f { return U0.eye.xyz + rayAt(vec2f(p) + 0.5) * z; }
 // The normal from the smoothed depth: on each axis the one-sided
@@ -152,14 +159,21 @@ struct SurfOut { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
 fn fs_surface(in: VOut) -> SurfOut {
   var o: SurfOut;
   let p = vec2i(in.pos.xy);
-  let z = zAt(p);
   let Dn = normalize(rayAt(in.pos.xy));
   let e = U0.eye.xyz;
-  if (z <= 0.0) {
+  // the outline: coverage 0.5, blended over one pixel of its gradient
+  let cov = covAt(p);
+  let gx = covAt(p + vec2i(1, 0)) - covAt(p - vec2i(1, 0));
+  let gy = covAt(p + vec2i(0, 1)) - covAt(p - vec2i(0, 1));
+  let fw = max(0.5 * length(vec2f(gx, gy)), 1e-3);
+  let edge = clamp(0.5 + (cov - 0.5) / fw, 0.0, 1.0);
+  let zRaw = textureLoad(sZ, p, 0).x;
+  if (edge <= 0.0 || zRaw <= 0.0) {
     o.color = vec4f(atmosphere(e, Dn, 1e9), 0.0);
     o.depth = 0.0;
     return o;
   }
+  let z = zRaw;
   let P = posAt(p, z);
   let n = normalAt(p, z, P);
   let a0 = textureLoad(a0Tex, p, 0);
@@ -203,8 +217,9 @@ fn fs_surface(in: VOut) -> SurfOut {
     col = mc * (0.30 + 0.70 * max(ndl, 0.0) * mix(1.0, shadow, 0.6));
   }
   col = col + atmosphere(e, Dn, dot(P - e, Dn));
-  o.color = vec4f(col, 1.0);
-  o.depth = depthOfZ(z);
+  // premultiplied: the edge pixel lets the sky (and the atmosphere) through
+  o.color = vec4f(col * edge + atmosphere(e, Dn, 1e9) * (1.0 - edge), edge);
+  o.depth = select(0.0, depthOfZ(z), edge >= 0.5);
   return o;
 }
 

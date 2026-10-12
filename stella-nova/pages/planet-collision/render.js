@@ -15,8 +15,9 @@
 //              mixing, weighted to the front layer (3 x rgba16float, additive)
 //    vapour    fluid.wgsl fs_thick: the chord through vapour particles in
 //              front of the surface (rg16float, half size, additive)
-//    smooth    smooth.wgsl: bilateral filter on the depth, X then Y, f.smooth
-//              times (r32float ping-pong)
+//    smooth    smooth.wgsl: bilateral filter on the depth and a blur of the
+//              coverage (the outline), X then Y, f.smooth times (rg32float
+//              ping-pong)
 //    scene     rgba16float + depth: sky, the lit surface with atmospheres
 //              (shade.wgsl), debris fragments and their streaks
 //              (debris.wgsl), the vapour, the impact flashes
@@ -175,7 +176,7 @@ export class Renderer {
     this.bglZ = dev.createBindGroupLayout({ label: 'pc gZ', entries: [{ binding: 0, visibility: VF, texture: { sampleType: 'unfilterable-float' } }] });
     this.bglSm = dev.createBindGroupLayout({ label: 'pc gSm', entries: [
       { binding: 0, visibility: S.COMPUTE, texture: { sampleType: 'unfilterable-float' } },
-      { binding: 1, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format: 'r32float' } }] });
+      { binding: 1, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float' } }] });
     this.bglShade = dev.createBindGroupLayout({ label: 'pc gShade', entries: [
       ...[0, 1, 2, 3].map(b => ({ binding: b, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } })),
       { binding: 4, visibility: S.FRAGMENT, texture: { sampleType: 'float' } }] });
@@ -202,6 +203,7 @@ export class Renderer {
     this.pAttr = rp(M.fluid, 'vs_sphereWide', 'fs_attr', L01Z, [tgt(HDR, add), tgt(HDR, add), tgt(HDR, add)], undefined, 'fields');
     this.pThick = rp(M.fluid, 'vs_thick', 'fs_thick', L01Z, [tgt('rg16float', add)], undefined, 'vapour');
     const LSm = pl(this.bgl0, this.bgl1, this.bglSm);
+    this.pSmX0 = dev.createComputePipeline({ label: 'pc smoothX0', layout: LSm, compute: { module: M.smooth, entryPoint: 'cs_smoothX0' } });
     this.pSmX = dev.createComputePipeline({ label: 'pc smoothX', layout: LSm, compute: { module: M.smooth, entryPoint: 'cs_smoothX' } });
     this.pSmY = dev.createComputePipeline({ label: 'pc smoothY', layout: LSm, compute: { module: M.smooth, entryPoint: 'cs_smoothY' } });
     this.pSky = rp(M.shade, 'vs_full', 'fs_sky', LS, [tgt(HDR)], dNone, 'sky');
@@ -288,8 +290,8 @@ export class Renderer {
     const RT = T.RENDER_ATTACHMENT | T.TEXTURE_BINDING;
     this.rawZ = mk('rg32float', RT | T.COPY_SRC, [w, h], 'raw depth');
     this.depthTex = mk(DEPTH, T.RENDER_ATTACHMENT, [w, h], 'depth');
-    this.smA = mk('r32float', T.STORAGE_BINDING | T.TEXTURE_BINDING, [w, h], 'smooth A');
-    this.smB = mk('r32float', T.STORAGE_BINDING | T.TEXTURE_BINDING | T.COPY_SRC, [w, h], 'smooth B');
+    this.smA = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING, [w, h], 'smooth A');
+    this.smB = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING | T.COPY_SRC, [w, h], 'smooth B');
     this.attr = [0, 1, 2].map(k => mk(HDR, RT, [w, h], 'field ' + k));
     this.thick = mk('rg16float', RT, [Math.max(1, w >> 1), Math.max(1, h >> 1)], 'vapour');
     this.hdr = mk(HDR, RT, [w, h], 'hdr');
@@ -340,6 +342,7 @@ export class Renderer {
       d[124 + k] = fl ? fl.r : 0; d[128 + k] = fl ? (fl.T || 6000) : 6000;
     }
     d[132] = this.sim && this.sim.prm ? this.sim.prm.hmax : 1e9;
+    d[133] = Math.max(f.near, dot(sub(f.target, f.eye), view.f));
     this.dev.queue.writeBuffer(this.frameBuf, 0, d);
     this.view = view; this.vp = vp; this.focal = focal;
   }
@@ -377,7 +380,7 @@ export class Renderer {
     { const p = enc.beginComputePass(); p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1);
       const gx = Math.ceil(this.W / 8), gy = Math.ceil(this.H / 8), it = Math.max(1, Math.min(4, f.smooth ?? 2));
       for (let k = 0; k < it; k++) {
-        p.setPipeline(this.pSmX); p.setBindGroup(2, k === 0 ? this.bgSm.rawA : this.bgSm.BA); p.dispatchWorkgroups(gx, gy);
+        p.setPipeline(k === 0 ? this.pSmX0 : this.pSmX); p.setBindGroup(2, k === 0 ? this.bgSm.rawA : this.bgSm.BA); p.dispatchWorkgroups(gx, gy);
         p.setPipeline(this.pSmY); p.setBindGroup(2, this.bgSm.AB); p.dispatchWorkgroups(gx, gy);
       }
       p.end(); }
