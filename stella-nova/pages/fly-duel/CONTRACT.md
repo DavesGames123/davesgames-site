@@ -75,6 +75,21 @@ about the simulation and layout in fullscreen"
   colours split it in bands with a soft blend. It changes on every new
   game in watch, play (custom decks too) and the saver
   (tests/fly3d-matcolour.test.mjs).
+- Card focus (user, verbatim, 2026-10-12): "wehen i focus on a card it
+  sholdnt be the only thing availabe in the iterface". A focused card is
+  non-modal: the watch zoom (ui/cardzoom.js) and the play inspector
+  (ui/play/inspector.js) are side panels with no veil, no full-screen box
+  and no click-catcher. Only their close control takes pointer events.
+  The board, the hand, the buttons, the menu, the brain panels, the keys
+  and the camera stay usable. focusPlace puts the card on the side away
+  from the pointer, clear of the scorecards and the hand; a phone gets a
+  compact card docked at the top. Close: the close control, Escape, a
+  right-click that does not focus a card, or another card focused. A
+  left click on the board goes to the board. The earlier direction stays
+  (verbatim): "if i hover and right click over any card during the
+  simulation i should be able to see a magnified view of it superimposed
+  on the screen until i right click somewhere elese"
+  (tests/focus.test.mjs).
 
 
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain

@@ -508,12 +508,31 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 }
 
 /* ---------------------------------------------------------------- ZOOM
-   The card zoom of the watch table (ui/cardzoom.js): one large card
-   face over the centre of the screen, a dark 1 px rim, no veil around
-   it. It takes no pointer events: the next right-click goes to the
-   table under it (a card changes the zoom, no card closes it). */
-.czoom{position:absolute;inset:0;z-index:20;display:grid;place-items:center;pointer-events:none}
+   FOCUS. A focused card is non-modal. The user (verbatim): "wehen i
+   focus on a card it sholdnt be the only thing availabe in the
+   iterface". The card zoom of the watch table (ui/cardzoom.js .czoom)
+   and the play inspector (ui/play/inspector.js .pl-insp.pl-focus) are
+   side panels: no veil, no full-screen box, no click-catcher. They take
+   no pointer events, except the close control. focusPlace of
+   ui/cardzoom.js sets left, top and width inline: the side away from the
+   pointer, a compact card docked at the top on a phone (data-dock). */
+.czoom{position:absolute;z-index:20;pointer-events:none}
 .czoom[hidden]{display:none}
+.czoom-x{position:absolute;top:0;width:44px;height:44px;display:grid;place-items:center;padding:0;border:1px solid var(--hair2);border-radius:8px;
+  background:var(--panel);color:var(--ink);font:22px/1 var(--sans);cursor:pointer;pointer-events:auto}
+.czoom[data-side="right"] .czoom-x{right:calc(100% + 6px)}
+.czoom[data-side="left"] .czoom-x{left:calc(100% + 6px)}
+.czoom-x:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.pl-insp.pl-focus{position:absolute;inset:auto;z-index:125;display:block;padding:0;background:transparent;overflow:visible;pointer-events:none}
+.pl-insp.pl-focus[hidden]{display:none}
+.pl-insp.pl-focus .pl-insp-in{position:relative;display:grid;gap:6px;justify-items:stretch;max-width:none}
+.pl-insp.pl-focus .pl-cv{display:block;border:1px solid #000;border-radius:3%/2.2%}
+.pl-insp.pl-focus .pl-insp-txt{padding:6px 8px;font-size:13px;line-height:1.35;color:var(--ink2);background:var(--panel);border:1px solid var(--hair2);border-radius:6px}
+.pl-insp.pl-focus .pl-insp-txt:empty{display:none}
+.pl-insp.pl-focus .pl-insp-x{position:absolute;top:0;min-width:64px;min-height:44px;pointer-events:auto}
+.pl-insp.pl-focus[data-side="right"] .pl-insp-x{right:calc(100% + 6px)}
+.pl-insp.pl-focus[data-side="left"] .pl-insp-x{left:calc(100% + 6px)}
+.pl-insp.pl-focus[data-dock] .pl-insp-txt{font-size:11px;max-height:22vh;overflow:hidden}
 .czoom-cv{display:block;border:1px solid #000;border-radius:3%/2.2%;background:var(--bg)}
 
 /* ---------------------------------------------------------------- BAR

@@ -13,7 +13,8 @@
 //             card it closes; a right-click elsewhere on the page closes;
 //             Escape closes; a hidden card (id null) never opens; play
 //             mode (active false) does nothing; touch: a long press opens,
-//             a tap outside the card closes
+//             a tap goes to the table and does not close (non-modal,
+//             tests/focus.test.mjs)
 //    size     zoomSize keeps 5:7 inside the view
 //    wiring   main.js attaches the zoom to the table canvas in watch mode
 //  Exit code 1 on any failure.
@@ -144,7 +145,8 @@ else {
   ok(zoom.isOpen() && zoom.id() === B, 'zoom: touch: a long press on a card opens it');
   ev(cv, 'pointerdown', { pointerType: 'touch', clientX: 400, clientY: 10 });
   ev(cv, 'pointerup', { pointerType: 'touch', clientX: 400, clientY: 10 });
-  ok(!zoom.isOpen(), 'zoom: touch: a tap outside the card closes it');
+  ok(zoom.isOpen(), 'zoom: touch: a tap on the table does not close it (non-modal)');
+  zoom.close();
   ev(cv, 'pointerdown', { pointerType: 'touch', clientX: 250, clientY: 10 });
   await new Promise(r => setTimeout(r, 520));
   ev(cv, 'pointerup', { pointerType: 'touch', clientX: 250, clientY: 10 });
@@ -159,7 +161,7 @@ else {
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   ok(/\.czoom\{[^}]*pointer-events:none/.test(css) && !/\.czoom\{[^}]*background/.test(css), 'look: the zoom takes no pointer events and has no veil over the screen');
   const insp = readFileSync(new URL('../ui/play/inspector.js', import.meta.url), 'utf8');
-  ok(/addEventListener\('contextmenu', e => \{ e\.preventDefault\(\); close\(\); \}\)/.test(insp), 'play: a right-click closes the play inspector too');
+  ok(/doc\.addEventListener\('contextmenu', onMenu\)/.test(insp) && /e\.preventDefault\(\);\s*close\(\);/.test(insp), 'play: a right-click elsewhere closes the play inspector too');
 }
 
 console.log(`cardzoom: ${pass} pass, ${fail} fail`);

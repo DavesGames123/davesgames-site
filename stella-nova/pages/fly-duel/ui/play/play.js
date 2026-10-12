@@ -10,7 +10,7 @@
 //      ui/hud/scorecard.js     the two seat cards (life d20, mana, brain)
 //      ui/play/hand.js         your fan and the opposing card backs
 //      ui/play/board2d.js      the flat table (when there is no 3D picking)
-//      ui/play/inspector.js    the full-screen card
+//      ui/play/inspector.js    the focused card: a non-modal side panel
 //      ui/play/peek.js         the hovered version of a card (MTG Arena
 //                              style): a mouse hover on a hand card or a
 //                              face-up table card, or a touch hold
@@ -740,7 +740,8 @@ export function mountPlay(root, opts) {
       apply(ix?.cancel());
       return;
     }
-    if (!sheet.hidden || inspector.isOpen() || !ix || opening) return;
+    // a focused card is non-modal: the keys still work (inspector.js)
+    if (!sheet.hidden || !ix || opening) return;
     const k = e.key;
     const onButton = t && t.tagName === 'BUTTON' && t !== doc.body;
     if ((k === ' ' || k === 'Enter') && !onButton) { e.preventDefault(); pri.click(); return; }
@@ -812,6 +813,7 @@ export function mountPlay(root, opts) {
     for (const sc of scs) { sc?.setCompact(L.score === 'compact'); sc?.resize(); }
     opts.scene?.resize?.();
     peek.resize();
+    inspector.resize(L);
     if (changed) render();
     else board?.redrawArrows();
   }
