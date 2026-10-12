@@ -31,6 +31,8 @@ export const CHAPTERS = [
   { name: 'Fields as forms', short: 'Forms' },
   { name: 'The boundary and d', short: 'Stokes' },
   { name: 'The four laws', short: 'Laws' },
+  { name: 'One equation', short: 'F = dA' },
+  { name: 'Light', short: 'Light' },
 ];
 
 const auto = (label = 'Animate') => ({ toggle: 'auto', label });
@@ -224,5 +226,58 @@ export const STEPS = [
       auto('Resize the loop'),
     ],
     cam: { pos: [3.2, 1.6, 6.8], target: [0, 0.2, 0] },
+  },
+
+  // ── 4 · one equation ─────────────────────────────────────────────────────
+  {
+    id: 'boundary-of-boundary', ch: 3, title: 'The boundary of a boundary is empty', scene: 'stokes', mode: 'dd',
+    params: { spread: 1, auto: true },
+    tex: [
+      { t: `${PD}${PD} = 0 \\qquad\\Longleftrightarrow\\qquad ${d}${d} = 0`, cap: 'By Stokes, the two statements are one.' },
+      { t: `${F} = ${d}${A} \;\;\\Longrightarrow\;\; ${d}${F} = ${d}${d}${A} = 0`, small: true },
+      { t: `${d}${J} = ${d}${d}\\,(${STAR}${F}) = 0 \\quad\\Longleftrightarrow\\quad \\frac{\\partial ${RHO}}{\\partial t} + \\nabla\\cdot ${Jv} = 0`, small: true, cap: 'Charge is conserved for the same reason.' },
+    ],
+    text: `<p>Take a cube and look at its boundary: six faces. Each face has its own boundary, a loop of four edges. The cube has twelve edges, and every one of them belongs to two faces, which run along it in opposite directions. Close the faces up and every edge cancels. The boundary of the boundary is nothing.</p>
+<p>Stokes' theorem turns this into a fact about <span class="m3">d</span>: doing <span class="m3">d</span> twice always gives zero. In vector calculus it hides as curl grad = 0 and div curl = 0.</p>
+<p>In spacetime, <span class="m2">E</span> and <span class="m1">B</span> are two parts of one 2-form <span class="m6">F</span>, and the potentials φ and <b>A</b> are two parts of one 1-form <span class="m6">A</span> with <span class="m6">F</span> = <span class="m3">d</span><span class="m6">A</span>. Then <span class="m3">d</span><span class="m6">F</span> = 0 needs no proof: it is <span class="m3">dd</span> = 0. Written out in space and time, it is two of Maxwell's laws at once, no monopoles and Faraday.</p>`,
+    controls: [
+      { key: 'spread', label: 'pull the faces apart', sym: '', cls: '', min: 0, max: 1, step: 0.01, value: 1, fmt: v => v.toFixed(2) },
+      auto('Close and open'),
+    ],
+    cam: { pos: [2.6, 2.4, 4.4], target: [0, 0, 0] },
+  },
+  {
+    id: 'hodge-star', ch: 3, title: 'The Hodge star turns sheets into tubes', scene: 'forms', mode: 'hodge',
+    params: { mix: 0, auto: true },
+    tex: [
+      { t: `${d}${F} = 0 \\qquad ${d}\\,(${STAR}${F}) = ${J}`, cap: 'All four laws. J is the current 3-form: ρ in space, and the current 2-form along time.' },
+      { t: `${F} = ${B} + ${E}\\wedge dt \\qquad ${STAR}${F} = ${STAR}${E} - ${STAR}${B}\\wedge dt`, small: true, cap: 'Signature (−, +, +, +) and volume dt∧dx∧dy∧dz. Then J = ρ dx∧dy∧dz − j∧dt, with j the current 2-form.' },
+    ],
+    text: `<p>The other two laws need one more operation, the Hodge star <span class="m6">⋆</span>. In space it turns a 1-form into a 2-form and back: the sheets of a 1-form become the tubes that run straight across them, and tubes become the sheets they stack along.</p>
+<p>Left: the sheets of <span class="m2">E</span> round a charge are spheres. Their star is the bundle of radial tubes, the field lines, and those tubes start on the charge: <span class="m3">d</span><span class="m6">⋆</span><span class="m2">E</span> = <span class="m4">ρ</span>, Gauss.</p>
+<p>Right: the tubes of <span class="m1">B</span> round a wire are rings. Their star is a fan of half-planes that end on the wire. A loop round the wire crosses one sheet per unit of current: <span class="m3">d</span><span class="m6">⋆</span><span class="m1">B</span> = <span class="m5">J</span>, Ampère.</p>
+<p>So the whole of electromagnetism fits in two lines: the tubes of <span class="m6">F</span> never end, and the tubes of <span class="m6">⋆F</span> end only on charge and current.</p>`,
+    controls: [
+      { key: 'mix', label: 'F → ⋆F', sym: '', cls: '', min: 0, max: 1, step: 0.01, value: 0, fmt: v => v.toFixed(2) },
+      auto('Swap back and forth'),
+    ],
+    cam: { pos: [0.2, 2.0, 7.4], target: [0, 0, 0] },
+  },
+  // ── 5 · light ────────────────────────────────────────────────────────────
+  {
+    id: 'light', ch: 4, title: 'Light: E and B carry each other forward', scene: 'wave', mode: 'wave',
+    params: { mix: 0, auto: true },
+    tex: [
+      { t: `\\nabla^2 ${Ev} = \\mu_0\\varepsilon_0\\,\\frac{\\partial^2 ${Ev}}{\\partial t^2} \\qquad c = \\frac{1}{\\sqrt{\\mu_0\\varepsilon_0}}` },
+      { t: `${d}${F} = 0 \\qquad ${d}\\,(${STAR}${F}) = 0`, small: true, cap: 'In empty space there is no source, and a wave solves the pair.' },
+    ],
+    text: `<p>Far from any charge, the two equations have nothing on the right. They still have solutions that move: a changing <span class="m1">B</span> makes <span class="m2">E</span> curl (Faraday), a changing <span class="m2">E</span> makes <span class="m1">B</span> curl (Maxwell's term), and each keeps the other going.</p>
+<p>Maxwell put the measured values of μ₀ and ε₀ into 1/√(μ₀ε₀) and found the speed of light. Light is this: <span class="m2">E</span> and <span class="m1">B</span> at right angles, in step, moving at <i>c</i>.</p>
+<p>The forms picture shows the same wave. In each slice, the count of <span class="m2">E</span> sheets and of <span class="m1">B</span> tubes rises and falls together. Where the sheets thin out, they must end, and their ends sit along the tubes of the changing <span class="m1">B</span>: that is <span class="m3">d</span><span class="m2">E</span> = −∂<sub>t</sub><span class="m1">B</span>.</p>`,
+    controls: [
+      { key: 'mix', label: 'arrows → forms', sym: '', cls: '', min: 0, max: 1, step: 0.01, value: 0, fmt: v => v.toFixed(2) },
+      auto('Switch pictures'),
+    ],
+    cam: { pos: [3.0, 2.6, 8.4], target: [0, 0, 0] },
   },
 ];

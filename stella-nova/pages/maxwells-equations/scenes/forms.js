@@ -471,7 +471,7 @@ export function build(ctx) {
       }
       if (P.mode === 'hodge' && parts.H.mix != null) {
         const m = parts.H.mix;
-        return [['picture', m < 0.5 ? 'F: E sheets, B tubes' : '⋆F: E tubes, B sheets', 'm6'], ['tubes of ⋆E from the charge', '60 (one per unit flux)', 'm2'], ['sheets of ⋆B round the wire', '12 (one per unit current)', 'm1']];
+        return [['picture', m < 0.5 ? 'F: E sheets, B tubes' : '⋆F: E tubes, B sheets', 'm6'], ['tubes of ⋆E that leave the charge', '60', 'm2'], ['sheets of ⋆B that a loop round the wire crosses', '12', 'm1']];
       }
       return [];
     },
