@@ -16,8 +16,9 @@
 //                                 diag, hits } (a Promise on the GPU)
 //    destroy()
 //
-//  ONE FRAME (Lab.frame(h)): S = ceil(h / spec.dt) particle steps, at most
-//  MAX_S; the bodies move by S dt (System.advance writes the S + 1 rows),
+//  ONE FRAME (Lab.frame(h)): S whole particle steps of spec.dt, at most
+//  MAX_S (the part of h short of a whole step waits for the next frame,
+//  the part over MAX_S is dropped and counted in lag); the bodies move by S dt (System.advance writes the S + 1 rows),
 //  the backend moves the particles, then the events of the bodies are
 //  returned. A breakup or a merge with ejecta spawns tracers into the pool
 //  (a ring: the oldest spawned rows are reused first).
@@ -51,8 +52,12 @@ export class Lab {
   // Advance by h (sim time). Returns the events of this frame.
   frame(h) {
     const dt = this.spec.dt;
-    let S = Math.max(1, Math.ceil(h / dt - 1e-9));
-    if (S > MAX_S) { this.lag += (S - MAX_S) * dt; S = MAX_S; }
+    // whole steps only: the rest of h waits for the next frame (debt)
+    this.debt = (this.debt || 0) + h;
+    let S = Math.floor(this.debt / dt + 1e-9);
+    if (S > MAX_S) { this.lag += (S - MAX_S) * dt; this.debt -= (S - MAX_S) * dt; S = MAX_S; }
+    this.debt -= S * dt;
+    if (S < 1) return [];
     if (this.self) {
       this.be.stepSelf(S, dt);
       this.t += S * dt; this.frames++;

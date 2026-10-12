@@ -93,8 +93,9 @@ export function solveKepler(M, e) {
   return E;
 }
 // el: { a, e, i, O, w, f } or { ..., M } (angles in rad). An elliptic
-// orbit (e < 1) or a hyperbolic one (e > 1, a < 0, needs f). Returns the
-// state relative to the focus.
+// orbit (e < 1), or a parabolic or hyperbolic one with the semi-latus
+// rectum p in place of a (needs f). Returns the state relative to the
+// focus.
 export function elementsToState(GM, el) {
   const e = el.e || 0, a = el.a, i = el.i || 0, O = el.O || 0, w = el.w || 0;
   let f = el.f;
@@ -102,7 +103,7 @@ export function elementsToState(GM, el) {
     const E = solveKepler(el.M || 0, e);
     f = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
   }
-  const p = a * (1 - e * e), r = p / (1 + e * Math.cos(f));
+  const p = el.p ?? a * (1 - e * e), r = p / (1 + e * Math.cos(f));
   const xo = r * Math.cos(f), yo = r * Math.sin(f);
   const s = Math.sqrt(GM / p), vxo = -s * Math.sin(f), vyo = s * (e + Math.cos(f));
   const cO = Math.cos(O), sO = Math.sin(O), cw = Math.cos(w), sw = Math.sin(w), ci = Math.cos(i), si = Math.sin(i);
@@ -156,8 +157,10 @@ export const Y6 = [W3, W2, W1, W0, W1, W2, W3];
 // bodies: [{ name, m, r (collision radius), x, v, eps (softening),
 //   epsP (extra softening for particles only), absorb (particles that
 //   touch it end; default r > 0), merge (takes part
-//   in merges; default true when r > 0), fragile: { rho, n } (breaks up
-//   inside the fluid Roche limit of a body 10x heavier; n debris),
+//   in merges; default true when r > 0), fragile: { rho, n, rt } (breaks
+//   up inside the fluid Roche limit of a body 10x heavier, or inside the
+//   distance rt when given (the tidal radius of a star near a black
+//   hole); n debris),
 //   rho (density for the Roche limit; default from m and r), track (watch
 //   for ejection; default true) }]
 // opts: { eta, maxSub, watch: [[i, j]], burns: [{ t, i, dv:[3] | prograde }],
@@ -189,7 +192,7 @@ export class System {
     this.strained = 0; // particle steps where the substep cap was hit
     this.subTotal = 0;
     this._acc();
-    for (const w of this.watch) w.bound = this._pairE(w.i, w.j) < 0;
+    for (const w of this.watch) { w.bound = this._pairE(w.i, w.j) < 0; const d = v3.len(v3.sub(this.pos(w.j), this.pos(w.i))); w.d = [d, d]; }
   }
   // softened pair accelerations into this.a
   _acc(x = this.x, a = this.a) {
@@ -244,8 +247,10 @@ export class System {
   step(h) {
     let left = h, nsub = 0;
     while (left > 1e-15 * Math.max(1, Math.abs(this.t))) {
-      let dt = Math.min(left, this.eta * this._tmin());
-      if (nsub >= this.maxSub - 1) { dt = left; this.strained++; }
+      const tm = this.eta * this._tmin();
+      let dt = Math.min(left, tm);
+      // over the cap: steps 8x longer (less exact), never one long jump
+      if (nsub >= this.maxSub - 1) { dt = Math.min(left, 8 * tm); this.strained++; }
       this._y6(dt); left -= dt; nsub++;
       if (this._contacts()) this._acc();
     }
@@ -313,7 +318,7 @@ export class System {
         for (const [s, p] of [[i, j], [j, i]]) {
           const fr = this.fragile[s];
           if (!fr || !al[s] || !al[p] || !(this.m[p] > 10 * this.m[s]) || !(this.R[p] > 0)) continue;
-          const dR = rocheFluid(this.R[p], this.rho[p], fr.rho || this.rho[s]);
+          const dR = fr.rt || rocheFluid(this.R[p], this.rho[p], fr.rho || this.rho[s]);
           if (d2 < dR * dR) { this._breakup(s, p, Math.sqrt(d2), dR); changed = true; }
         }
         if (!al[i] || !al[j]) continue;
@@ -399,7 +404,9 @@ export class System {
       const d = v3.len(v3.sub(this.pos(w.j), this.pos(w.i)));
       if (w.d[1] < w.d[0] && w.d[1] <= d) this.events.push({ type: 'periapsis', t: this.t, i: w.i, j: w.j, d: w.d[1], names: [this.names[w.i], this.names[w.j]] });
       w.d[0] = w.d[1]; w.d[1] = d;
-      const bound = this._pairE(w.i, w.j) < 0;
+      // hysteresis: a change counts only past 5% of the pair potential
+      const E = this._pairE(w.i, w.j), hy = 0.05 * (this.m[w.i] + this.m[w.j]) / Math.max(d, 1e-30);
+      const bound = w.bound ? E < hy : E < -hy;
       if (bound !== w.bound) { this.events.push({ type: bound ? 'capture' : 'release', t: this.t, i: w.i, j: w.j, names: [this.names[w.i], this.names[w.j]] }); w.bound = bound; }
     }
     if (this.escapeR < Infinity) {
