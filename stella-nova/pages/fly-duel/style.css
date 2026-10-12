@@ -460,10 +460,10 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .app[data-brains="panels"][data-mode="watch"]{--ct:0px;--cb:var(--bar-h);--cl:var(--bpw);--cr:var(--bpw)}
   .app[data-brains="panels"][data-mode="play"][data-opp="A"]{--ct:0px;--cl:var(--bpw)}
   .app[data-brains="panels"][data-mode="play"][data-opp="B"]{--ct:0px;--cr:var(--bpw)}
-  .bp,.app[data-mode="play"] .bp.b{top:0;bottom:var(--bar-h);height:auto;width:var(--bpw);border:0}
-  .app[data-mode="play"] .bp{bottom:0}
-  .bp.a{left:0;right:auto;border-right:2px solid var(--flyA)}
-  .bp.b,.app[data-mode="play"] .bp.b{left:auto;right:0;border-left:2px solid var(--flyB)}
+  .bp{top:0;bottom:var(--bar-h);height:auto;width:var(--bpw);border:0}
+  .bp.a{left:0;right:auto;border:0;border-right:2px solid var(--flyA)}
+  .bp.b,.app[data-mode="play"] .bp.b{top:0;bottom:var(--bar-h);left:auto;right:0;border:0;border-left:2px solid var(--flyB)}
+  .app[data-mode="play"] .bp.a,.app[data-mode="play"] .bp.b{bottom:0}
   .bp-cap{font-size:12px;bottom:10px}
   .app[data-brains="panels"] .wsc{width:min(280px,calc(var(--bpw) - 2 * var(--pad)))}
   .app[data-brains="panels"] #scB{left:auto;right:calc(var(--pad) + var(--sr));top:calc(env(safe-area-inset-top,0px) + var(--pad))}
