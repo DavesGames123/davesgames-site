@@ -26,7 +26,7 @@
 // ============================================================================
 import { boardSize, defaults, clampParams, makeRng } from './engine.js';
 import { PATTERNS, FAMILIES, byId } from './patterns/index.js';
-import { PALETTES, paletteById, BOARDS, boardById, boardDims } from './palettes.js';
+import { PALETTES, PALETTE_GROUPS, paletteById, BOARDS, boardById, boardDims } from './palettes.js';
 import { MOD_KINDS, modDefaults, buildTextShape } from './modifiers.js';
 import { applyMode, toSVG, drawItems } from './export.js';
 import { installSaver } from './saver.js';
@@ -214,9 +214,16 @@ function setSeed(s) { st.seed = Math.max(1, Math.min(999999, Math.round(s) || 1)
 // ── palettes ───────────────────────────────────────────────────────────────
 function buildPalettes() {
   const box = $('palettes'); box.textContent = '';
+  let grp = null;
   for (const p of PALETTES) {
+    if (p.group !== grp) {
+      grp = p.group;
+      const h = document.createElement('div'); h.className = 'pal-group'; h.dataset.g = grp;
+      h.textContent = (PALETTE_GROUPS.find(g => g.id === grp) || { name: grp }).name;
+      box.append(h);
+    }
     const b = document.createElement('button');
-    b.className = 'pal'; b.dataset.id = p.id; b.title = p.name;
+    b.className = 'pal'; b.dataset.id = p.id; b.dataset.g = p.group; b.title = p.name;
     b.innerHTML = `<div class="sw"><i style="background:${p.bg}"></i>${p.ink.map(c => `<i style="background:${c}"></i>`).join('')}</div><span></span>`;
     b.querySelector('span').textContent = p.name;
     b.addEventListener('click', () => { st.pal = p.id; st.custom = null; palLabels(); paint(); thumbsRepaint(); save(); });

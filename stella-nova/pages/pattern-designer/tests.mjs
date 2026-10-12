@@ -13,11 +13,15 @@
 //     symmetric, dash pieces are no longer than the dash, and a text mask
 //     reads its grid.
 //  7. worker: runJob gives the same result as run + applyModifiers.
+//  8. palettes: 80 or more in known groups, valid hex, the first ink has
+//     a WCAG contrast of 3 or more on the paper, and no two palettes are
+//     nearer than PAL_MIN_DIST in OKLab (color.js paletteDistance).
 //  Prints one line per failure and a summary; exits 1 on any failure.
 // ============================================================================
 import { run, defaults, CAP, boardSize, UNIT } from './engine.js';
 import { PATTERNS, FAMILIES } from './patterns/index.js';
-import { BOARDS, boardDims, PALETTES } from './palettes.js';
+import { BOARDS, boardDims, PALETTES, PALETTE_GROUPS } from './palettes.js';
+import { contrast, paletteDistance, hexToOklab, oklabToHex, hexToOklch, oklchToHex } from './color.js';
 import { applyModifiers, modDefaults, MOD_KINDS } from './modifiers.js';
 import { toSVG, applyMode, codeExtract } from './export.js';
 import { runJob } from './worker.js';
@@ -166,6 +170,40 @@ for (const id of sample) {
   const a = runJob({ pat: p.id, P: defaults(p), seed: 9, W: MW, H: MH, mods });
   const r = run(p, defaults(p), 9, MW, MH), b = applyModifiers(r.items, mods, MW, MH, 9);
   ok(sig(a.items) === sig(b.items), 'runJob equals run + applyModifiers');
+}
+
+// 8. palettes
+const PAL_MIN_DIST = 0.04;
+{
+  ok(PALETTES.length >= 80, `at least 80 palettes (${PALETTES.length})`);
+  ok(PALETTE_GROUPS.length >= 8, `at least 8 palette groups (${PALETTE_GROUPS.length})`);
+  for (const g of PALETTE_GROUPS) ok(PALETTES.filter(p => p.group === g.id).length >= 5, `palette group ${g.id} has 5 or more palettes`);
+  const pids = new Set(), hex = /^#[0-9a-f]{6}$/;
+  for (const p of PALETTES) {
+    ok(!pids.has(p.id), `unique palette id ${p.id}`); pids.add(p.id);
+    ok(PALETTE_GROUPS.some(g => g.id === p.group), `${p.id} group ${p.group} is known`);
+    ok(hex.test(p.bg) && p.ink.length >= 1 && p.ink.length <= 5 && p.ink.every(c => hex.test(c)), `${p.id}: lower-case hex paper and 1 to 5 inks`);
+    const c = contrast(p.ink[0], p.bg);
+    ok(c >= 3, `${p.id}: first ink contrast ${c.toFixed(2)} is 3 or more`);
+  }
+  let lo = [9, '', ''];
+  for (let i = 0; i < PALETTES.length; i++) for (let j = i + 1; j < PALETTES.length; j++) {
+    const d = paletteDistance(PALETTES[i], PALETTES[j]);
+    if (d < lo[0]) lo = [d, PALETTES[i].id, PALETTES[j].id];
+    if (d < PAL_MIN_DIST) ok(false, `palettes ${PALETTES[i].id} and ${PALETTES[j].id} are near copies (OKLab ${d.toFixed(3)})`);
+  }
+  ok(lo[0] >= PAL_MIN_DIST, `nearest palette pair ${lo[1]} / ${lo[2]} is ${lo[0].toFixed(3)} apart`);
+  console.log(`palettes: ${PALETTES.length} in ${PALETTE_GROUPS.length} groups, nearest pair ${lo[1]} / ${lo[2]} at ${lo[0].toFixed(3)}`);
+  // The colour maths: known values and round trips.
+  ok(Math.abs(contrast('#000000', '#ffffff') - 21) < 1e-9 && Math.abs(contrast('#777777', '#777777') - 1) < 1e-9, 'contrast of black on white is 21, of a colour on itself 1');
+  const w = hexToOklab('#ffffff');
+  ok(Math.abs(w[0] - 1) < 1e-3 && Math.abs(w[1]) < 1e-3 && Math.abs(w[2]) < 1e-3, 'white is OKLab (1, 0, 0)');
+  let worst = 0;
+  for (const p of PALETTES) for (const c of [p.bg, ...p.ink]) {
+    const back = oklabToHex(hexToOklab(c)), [L, C, h] = hexToOklch(c), back2 = oklchToHex(L, C, h);
+    worst = Math.max(worst, ...[1, 3, 5].map(i => Math.abs(parseInt(back.slice(i, i + 2), 16) - parseInt(c.slice(i, i + 2), 16))), ...[1, 3, 5].map(i => Math.abs(parseInt(back2.slice(i, i + 2), 16) - parseInt(c.slice(i, i + 2), 16))));
+  }
+  ok(worst <= 1, `hex -> OKLab -> hex and OKLCH round trips are within 1 step (${worst})`);
 }
 
 timing.sort((a, b) => b[1] - a[1]);
