@@ -29,6 +29,17 @@
 //  Enter or Space picks. W and P pick the mode. Escape goes back one
 //  step on a phone, or closes a closable chooser.
 //
+//  Custom decks (play mode, your seat). A "Your decks" strip shows the
+//  decks of the deck builder (ui/deckbuilder/, localStorage
+//  "fly-duel.decks.v1") as tiles with their key cards, and a "Build a
+//  new deck" tile. Build and Edit open the builder over the chooser (a
+//  child .fdc-builder; deckbuilder.js loads on first use). "Play this
+//  deck vs a fly" in the builder starts the game at once. A deck that
+//  is not legal yet opens in the builder instead of being picked. The
+//  start choice then has humanDeck 'my-<id>' and customDeck (deckstore
+//  customDeckOf: { id, name, colours, list, code, ... }). opts.initial
+//  .myCode (a ?mydeck= share code) saves that deck and picks it.
+//
 //  Memory. The last start is kept in localStorage ("fly-duel.chooser.v1"),
 //  in try/catch. Values in opts.initial win over the memory.
 //
@@ -42,6 +53,8 @@
 //      grep -n 'export function filterDecks'  colour and mono/mixed filter
 //      grep -n 'export function startLabel'   the label of the start button
 //      grep -n 'export function normalise'    a choice with known deck ids
+//      grep -n 'function customHTML'          the Your decks strip
+//      grep -n 'function openBuilder'         the deck builder over the layer
 //      grep -n 'export function loadChoice'   localStorage -> a choice
 //      grep -n 'export function saveChoice'   a choice -> localStorage
 //      grep -n 'export function drawFan'      three cards in a fan
@@ -54,6 +67,7 @@
 //      grep -n 'function onKey'               arrow, Enter, Escape keys
 // ============================================================================
 import { drawCard, cardBack, getCardArt, paintWithArt, manaValueOf, colourInfo, drawManaGlyph } from '../cardface.js';
+import { loadDecks, saveDecks, upsertDeck, customDeckOf, customFromCode } from '../deckbuilder/deckstore.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const STORE_KEY = 'fly-duel.chooser.v1';
@@ -122,12 +136,13 @@ export function startLabel(ch, decks) {
 }
 
 // A full choice with known deck ids ('random' for an unknown id).
-export function normalise(ch = {}, ids = []) {
+// customIds: ids of custom decks, allowed for your deck only.
+export function normalise(ch = {}, ids = [], customIds = []) {
   const known = v => (v && ids.includes(v) ? v : 'random');
   return {
     mode: ch.mode === 'play' ? 'play' : 'watch',
     deckA: known(ch.deckA), deckB: known(ch.deckB),
-    humanDeck: known(ch.humanDeck), flyDeck: known(ch.flyDeck),
+    humanDeck: ch.humanDeck && customIds.includes(ch.humanDeck) ? ch.humanDeck : known(ch.humanDeck), flyDeck: known(ch.flyDeck),
     opponent: ['A', 'B', 'bot'].includes(ch.opponent) ? ch.opponent : 'B',
   };
 }
@@ -357,6 +372,19 @@ function tileHTML(id, D) {
     + `<span class="fdc-marks" aria-hidden="true"></span></button>`;
 }
 
+// The Your decks strip: one tile per custom deck, then Build.
+function customHTML(customs, ch) {
+  const tiles = Object.values(customs).map(d => {
+    const cols = d.colours || [];
+    return `<button type="button" class="fdc-ctile" data-cdeck="${esc(d.id)}" aria-pressed="${ch.humanDeck === d.id}">`
+      + `<span class="fdc-fanbox"><canvas class="fdc-fan" aria-hidden="true"></canvas></span>`
+      + `<span class="fdc-tb"><span class="fdc-pips" role="img" aria-label="${esc(cols.map(k => colourInfo(k).name).join(' and ') || 'no colour')}">${cols.map(k => PIP(k, 15)).join('')}</span>`
+      + `<b class="fdc-name">${esc(d.name)}</b><span class="fdc-desc">${esc(d.desc)}</span>`
+      + `<span class="fdc-stat">${d.ok ? 'Legal: 40 cards' : '<span class="fdc-bad">Not legal yet: tap to fix</span>'}</span></span></button>`;
+  }).join('');
+  return tiles + `<button type="button" class="fdc-ctile fdc-build" data-act="build"><span class="fdc-plus" aria-hidden="true">+</span><span class="fdc-tb"><b class="fdc-name">Build a new deck</b><span class="fdc-desc">Pick cards from the whole pool, or copy a preset and change it.</span></span></button>`;
+}
+
 function shellHTML(D) {
   const colourKeys = Object.keys(D.colours || {});
   return `<div class="fdc-veil" aria-hidden="true"></div>
@@ -393,6 +421,10 @@ function shellHTML(D) {
       </button>
       <div class="fdc-opp" role="radiogroup" aria-label="Opponent">${OPP.map(o => `<button type="button" role="radio" data-opp="${o.v}" aria-checked="false"><b>${o.label}</b><small>${o.src}</small></button>`).join('')}</div></div>
     </div>
+    <div class="fdc-custom" role="group" aria-labelledby="fdcCustH" hidden>
+      <div class="fdc-chead"><h3 id="fdcCustH">Your decks</h3><button type="button" class="fdc-edit" data-act="edit" hidden>Edit this deck</button></div>
+      <div class="fdc-cgrid"></div>
+    </div>
     <div class="fdc-filter" role="group" aria-label="Filter the decks">
       <span class="fdc-fpips">${colourKeys.map(k => `<button type="button" class="fdc-fpip" data-col="${esc(k)}" aria-pressed="false" aria-label="${esc(D.colours[k]?.name || k)}" title="${esc(D.colours[k]?.name || k)}">${PIP(k, 20)}</button>`).join('')}</span>
       <span class="fdc-kind" role="radiogroup" aria-label="Colours per deck">${['all', 'mono', 'mixed'].map(k => `<button type="button" role="radio" data-kind="${k}" aria-checked="${k === 'all'}">${k === 'all' ? 'All' : k === 'mono' ? 'One colour' : 'Two or more'}</button>`).join('')}</span>
@@ -413,10 +445,12 @@ function shellHTML(D) {
 //   decks      game/cards.js DECKS          deckOrder  DECK_ORDER
 //   colours    COLOURS                      cards      CARD (id -> card)
 //   curve      data/training-curve.json
-//   initial    { mode, deckA, deckB, humanDeck, opponent, flyDeck }
+//   initial    { mode, deckA, deckB, humanDeck, opponent, flyDeck, myCode }
 //              (a value given here wins over the remembered choice)
 //   flies      { A: bool, B: bool } (false disables that opponent)
-//   onStart(choice)  choice: normalise() output, mode 'watch' | 'play'
+//   onStart(choice)  choice: normalise() output, mode 'watch' | 'play';
+//              with a custom deck also customDeck (deckstore customDeckOf)
+//   builderModule  the deckbuilder.js namespace (tests); default: import()
 //   onHow()    "How it works"      onClose()  Close or Escape (closable)
 // Returns { open({ mode, closable }), close(), destroy(), choice(), el }.
 export function mountChooser(root, opts = {}) {
@@ -426,18 +460,39 @@ export function mountChooser(root, opts = {}) {
   const flies = { A: opts.flies?.A !== false, B: opts.flies?.B !== false };
   const init = { ...(loadChoice() || {}) };
   for (const [k, v] of Object.entries(opts.initial || {})) if (v != null) init[k] = v;
-  const ch = normalise(init, ids);
-  if (!flies[ch.opponent] && ch.opponent !== 'bot') ch.opponent = flies.B ? 'B' : flies.A ? 'A' : 'bot';
-  const S = { step: 'mode', seat: 0, cols: new Set(), kind: 'all', closable: false, touchedB: false, open: false };
+  // custom decks of the deck builder; a ?mydeck= code is saved and picked
+  let customs = {};
+  const refreshCustoms = () => {
+    customs = Object.fromEntries(loadDecks().map(d => customDeckOf(d)).map(d => [d.id, d]));
+    for (const id of [...keyCache.keys()]) if (!decks[id]) keyCache.delete(id);
+  };
   const keyCache = new Map();
+  if (init.myCode) {
+    const d = customFromCode(init.myCode);
+    if (d) { saveDecks(upsertDeck(loadDecks(), { id: d.savedId, name: d.name, list: d.list, updated: Date.now() })); init.mode = 'play'; init.humanDeck = d.id; }
+  }
+  refreshCustoms();
+  const deckOf = id => decks[id] || customs[id];
+  const ch = normalise(init, ids, Object.keys(customs));
+  if (!flies[ch.opponent] && ch.opponent !== 'bot') ch.opponent = flies.B ? 'B' : flies.A ? 'A' : 'bot';
+  const S = { step: 'mode', seat: 0, cols: new Set(), kind: 'all', closable: false, touchedB: false, open: false, building: false };
   const keys = id => {
     if (!id || id === 'random') return [];
-    if (!keyCache.has(id)) keyCache.set(id, keyCardsOf(decks[id], D.cards, 5));
+    if (!keyCache.has(id)) keyCache.set(id, keyCardsOf(deckOf(id), D.cards, 5));
     return keyCache.get(id);
   };
 
   root.classList.add('fdc');
   root.innerHTML = shellHTML(D);
+  // the stylesheet of the deck builder, early, so the builder opens styled
+  try {
+    const doc = root.ownerDocument;
+    if (doc && !doc.getElementById('fdb-css')) {
+      const l = doc.createElement('link');
+      l.id = 'fdb-css'; l.rel = 'stylesheet'; l.href = new URL('../deckbuilder/deckbuilder.css', import.meta.url).href;
+      (doc.head || doc.documentElement).appendChild(l);
+    }
+  } catch { /* no document head: the builder adds the link itself */ }
   root.hidden = true;
   const $ = s => root.querySelector(s);
   const $$ = s => [...root.querySelectorAll(s)];
@@ -497,7 +552,10 @@ export function mountChooser(root, opts = {}) {
       }
     }
   }
-  function paintTiles() { for (const t of $$('.fdc-tile')) paintFanCv(t.querySelector('canvas'), t.dataset.deck); }
+  function paintTiles() {
+    for (const t of $$('.fdc-tile')) paintFanCv(t.querySelector('canvas'), t.dataset.deck);
+    for (const t of $$('.fdc-ctile[data-cdeck]')) paintFanCv(t.querySelector('canvas'), t.dataset.cdeck);
+  }
   function paintSeats() { $$('.fdc-seat-cv').forEach((cv, i) => paintFanCv(cv, seatDeck(i))); }
   function paintAll() { paintGlyphs(); paintArt(); paintTiles(); paintSeats(); }
 
@@ -507,11 +565,12 @@ export function mountChooser(root, opts = {}) {
     if (ch.mode === 'play') { if (i) ch.flyDeck = id; else ch.humanDeck = id; }
     else if (i) ch.deckB = id; else ch.deckA = id;
   }
-  let lastArt = '';
+  let lastArt = '', lastCustom = '';
   function sync() {
     const play = ch.mode === 'play';
     root.dataset.mode = ch.mode; root.dataset.step = S.step;
     $$('.fdc-mode').forEach(b => b.setAttribute('aria-checked', String(b.dataset.mode === ch.mode)));
+    const all = { ...decks, ...customs };
     const who = play ? ['Your deck', `${oppName(ch.opponent).replace(/^the g/, 'G')}'s deck`] : ['Fly A · hemibrain', 'Fly B · FlyWire'];
     $$('.fdc-seat').forEach((el, i) => {
       const id = seatDeck(i);
@@ -519,10 +578,10 @@ export function mountChooser(root, opts = {}) {
       el.dataset.side = play ? (i ? (ch.opponent === 'A' ? 'a' : ch.opponent === 'B' ? 'b' : 'bot') : 'you') : (i ? 'b' : 'a');
       const b = el.querySelector('.fdc-seat-b');
       b.setAttribute('aria-checked', String(S.seat === i));
-      b.setAttribute('aria-label', `${who[i]}: ${nameOf(decks, id)}. Pick to change.`);
+      b.setAttribute('aria-label', `${who[i]}: ${nameOf(all, id)}. Pick to change.`);
       el.querySelector('.fdc-who').textContent = who[i];
-      el.querySelector('.fdc-seat-n').textContent = id === 'random' ? 'Random deck' : decks[id]?.name || id;
-      el.querySelector('.fdc-seat-p').innerHTML = id === 'random' ? '' : (decks[id]?.colours || []).map(k => PIP(k, 13)).join('');
+      el.querySelector('.fdc-seat-n').textContent = id === 'random' ? 'Random deck' : deckOf(id)?.name || id;
+      el.querySelector('.fdc-seat-p').innerHTML = id === 'random' ? '' : (deckOf(id)?.colours || []).map(k => PIP(k, 13)).join('');
     });
     $$('.fdc-opp button').forEach(b => {
       b.setAttribute('aria-checked', String(b.dataset.opp === ch.opponent));
@@ -545,7 +604,19 @@ export function mountChooser(root, opts = {}) {
     $('.fdc-none').hidden = any;
     $$('.fdc-fpip').forEach(b => b.setAttribute('aria-pressed', String(S.cols.has(b.dataset.col))));
     $$('.fdc-kind button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.kind === S.kind)));
-    $('.fdc-go-l').textContent = startLabel(ch, decks);
+    // the Your decks strip: play mode, your seat
+    const showC = play && S.seat === 0;
+    $('.fdc-custom').hidden = !showC;
+    if (showC) {
+      const sig = JSON.stringify([Object.values(customs).map(d => [d.id, d.name, d.code]), ch.humanDeck]);
+      if (sig !== lastCustom) {
+        lastCustom = sig;
+        $('.fdc-cgrid').innerHTML = customHTML(customs, ch);
+        for (const t of $$('.fdc-ctile[data-cdeck]')) paintFanCv(t.querySelector('canvas'), t.dataset.cdeck);
+      }
+      $('.fdc-edit').hidden = !customs[ch.humanDeck];
+    }
+    $('.fdc-go-l').textContent = startLabel(ch, all);
     $('.fdc-x').hidden = !S.closable;
     paintGlyphs();
     paintSeats();
@@ -561,9 +632,47 @@ export function mountChooser(root, opts = {}) {
     sync();
   }
   function start() {
-    const out = normalise(ch, ids);
+    const out = normalise(ch, ids, Object.keys(customs));
     saveChoice(out);
+    if (out.mode === 'play' && customs[out.humanDeck]) out.customDeck = customs[out.humanDeck];
     opts.onStart?.(out);
+  }
+
+  // ---- the deck builder over the layer (ui/deckbuilder/deckbuilder.js)
+  let builder = null, builderEl = null;
+  async function openBuilder(deckId) {
+    S.building = true;
+    if (!builder) {
+      builderEl = root.ownerDocument.createElement('div');
+      builderEl.className = 'fdc-builder';
+      root.appendChild(builderEl);
+      let B = null;
+      try { B = opts.builderModule || await import('../deckbuilder/deckbuilder.js'); } catch (e) { console.info('fly-duel: deck builder', e); }
+      if (!B?.mountDeckBuilder) { S.building = false; builderEl.remove(); builderEl = null; return null; }
+      builder = B.mountDeckBuilder(builderEl, {
+        onSaved: () => { refreshCustoms(); },
+        onClose: () => { S.building = false; refreshCustoms(); sync(); $('.fdc-custom .fdc-build')?.focus?.(); },
+        onPlay: d => {
+          builder.close(); S.building = false;
+          refreshCustoms();
+          ch.mode = 'play'; ch.humanDeck = d.id;
+          if (!customs[d.id]) customs[d.id] = d;
+          sync();
+          start();
+        },
+      });
+    }
+    const saved = deckId && customs[deckId] ? { id: customs[deckId].savedId, name: customs[deckId].name, list: customs[deckId].list } : null;
+    builder.open(saved || { id: undefined, name: undefined, list: [] });
+    return builder;
+  }
+  function pickCustom(id) {
+    const d = customs[id];
+    if (!d) return;
+    if (!d.ok) { openBuilder(id); return; }
+    ch.humanDeck = id;
+    if (!S.touchedB) { S.touchedB = true; S.seat = 1; }
+    sync();
   }
   function close() { if (!S.open) return; S.open = false; root.hidden = true; }
   function onClick(e) {
@@ -575,7 +684,10 @@ export function mountChooser(root, opts = {}) {
     if (t.dataset.col) { if (S.cols.has(t.dataset.col)) S.cols.delete(t.dataset.col); else S.cols.add(t.dataset.col); return sync(); }
     if (t.dataset.kind) { S.kind = t.dataset.kind; return sync(); }
     if (t.dataset.deck) return pickDeck(t.dataset.deck);
+    if (t.dataset.cdeck) return pickCustom(t.dataset.cdeck);
     const act = t.dataset.act;
+    if (act === 'build') { openBuilder(null); return; }
+    if (act === 'edit') { openBuilder(ch.humanDeck); return; }
     if (act === 'start') return start();
     if (act === 'how') return opts.onHow?.();
     if (act === 'back') { S.step = 'mode'; sync(); $('.fdc-mode[aria-checked="true"]')?.focus?.(); return; }
@@ -608,7 +720,7 @@ export function mountChooser(root, opts = {}) {
     return best;
   }
   function onKey(e) {
-    if (!S.open) return;
+    if (!S.open || S.building) return;
     const k = e.key;
     const a = typeof document !== 'undefined' ? document.activeElement : null;
     if (k === 'Escape') {
@@ -623,6 +735,7 @@ export function mountChooser(root, opts = {}) {
     if (!/^(Arrow(Left|Right|Up|Down)|Home|End)$/.test(k) || !a || !root.contains(a)) return;
     let list = null;
     if (a.classList.contains('fdc-tile')) list = $$('.fdc-tile');
+    else if (a.classList.contains('fdc-ctile')) list = $$('.fdc-ctile');
     else if (a.classList.contains('fdc-mode')) list = $$('.fdc-mode');
     else if (a.classList.contains('fdc-seat-b')) list = $$('.fdc-seat-b');
     else if (a.closest?.('.fdc-opp')) list = $$('.fdc-opp button');
@@ -655,6 +768,7 @@ export function mountChooser(root, opts = {}) {
     open({ mode, closable = false } = {}) {
       if (mode) ch.mode = mode === 'play' ? 'play' : 'watch';
       S.closable = !!closable; S.open = true; S.step = mode ? 'decks' : 'mode'; S.seat = 0; S.touchedB = false;
+      refreshCustoms(); lastCustom = '';
       root.hidden = false;
       layout(); sync(); paintAll();
       ($('.fdc-go') || null)?.focus?.({ preventScroll: true });
@@ -662,12 +776,15 @@ export function mountChooser(root, opts = {}) {
     close,
     destroy() {
       close();
+      builder?.destroy(); builder = null;
       root.removeEventListener('click', onClick);
       if (typeof document !== 'undefined') document.removeEventListener('keydown', onKey);
       ro?.disconnect(); if (!ro && typeof removeEventListener === 'function') removeEventListener('resize', layout);
       root.innerHTML = ''; root.classList.remove('fdc', 'fdc-phone');
     },
-    choice: () => normalise(ch, ids),
+    choice: () => normalise(ch, ids, Object.keys(customs)),
+    customs: () => ({ ...customs }),
+    openBuilder,
     _state: S,
   };
 }

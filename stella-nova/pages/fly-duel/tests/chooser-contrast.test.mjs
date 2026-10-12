@@ -129,6 +129,8 @@ const PAIRS = [
   ['.fdc-marks i', [V, '.fdc-marks i'], 4.5], ['.fdc-marks i.m0', [V, '.fdc-marks i.m0'], 4.5], ['.fdc-marks i.m1', [V, '.fdc-marks i.m1'], 4.5],
   ['.fdc[data-mode="play"] .fdc-marks i.m0', [V, '.fdc[data-mode="play"] .fdc-marks i.m0'], 4.5],
   ['.fdc-go', [V, '.fdc-go'], 4.5], ['.fdc-go', [VP, '.fdc-go'], 4.5, { phone: true }],
+  ['.fdc-chead h3', [V, '.fdc-decks'], 4.5], ['.fdc-edit', [V, '.fdc-decks', '.fdc-edit'], 4.5],
+  ['.fdc-bad', [V, '.fdc-decks', '.fdc-ctile'], 4.5], ['.fdc-plus', [V, '.fdc-decks', '.fdc-ctile'], 3],
   ['.fdc-dhead h2', [VP, '.fdc-phone .fdc-decks'], 4.5, { phone: true }], ['.fdc-note', [VP, '.fdc-phone .fdc-decks'], 4.5, { phone: true }],
   ['.fdc-name', [VP, '.fdc-phone .fdc-decks', '.fdc-tile'], 4.5, { phone: true }],
 ];

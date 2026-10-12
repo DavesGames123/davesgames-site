@@ -26,6 +26,7 @@
        grep -n 'SEATS'      the two seats and the opponent switch
        grep -n 'FILTER'     colour glyphs and one colour / two or more
        grep -n 'TILES'      the deck tiles
+       grep -n 'CUSTOM'     Your decks strip, Build tile, the builder layer
        grep -n 'FOOT'       the start button and the fine print
        grep -n 'PHONE'      the step flow and the carousel
    ========================================================================== */
@@ -134,8 +135,24 @@
 .fdc[data-mode="play"] .fdc-marks i.m0{background:var(--c-parch);color:var(--c-pink)}
 .fdc-tile[aria-pressed="true"]{border-color:var(--c-parch);box-shadow:inset 0 0 0 2px var(--c-parch)}
 .fdc-tile[aria-pressed="true"] .fdc-tb{background:var(--c-tome2)}
-@media (hover:hover){.fdc-tile:hover,.fdc-seat-b:hover,.fdc-fpip:hover{border-color:var(--c-bronze)}}
+@media (hover:hover){.fdc-tile:hover,.fdc-seat-b:hover,.fdc-fpip:hover,.fdc-ctile:hover{border-color:var(--c-bronze)}}
 .fdc-none,.fdc-note{margin:0;font-size:0.74rem;color:var(--c-dim)}
+
+/* CUSTOM: your decks of the deck builder (play mode, your seat). The
+   builder (ui/deckbuilder/deckbuilder.css) covers the viewport. */
+.fdc-custom{display:flex;flex-direction:column;gap:6px;flex:none}
+.fdc-chead{display:flex;align-items:center;gap:10px}
+.fdc-chead h3{margin:0;font:500 1rem/1.2 var(--c-serif);color:var(--c-parch)}
+.fdc-edit{min-height:36px;padding:0 12px;border:1px solid var(--c-bronze);border-radius:3px;background:var(--c-tome);color:var(--c-parch);font-size:0.82rem}
+.fdc-cgrid{display:flex;gap:12px;overflow-x:auto;overscroll-behavior-x:contain;padding:2px 4px 6px 2px;scroll-snap-type:x proximity}
+.fdc-ctile{position:relative;flex:0 0 196px;display:flex;flex-direction:column;padding:0;text-align:left;border:1px solid var(--c-line);border-radius:4px;background:var(--c-tome);overflow:hidden;min-width:0;scroll-snap-align:start}
+.fdc-ctile .fdc-fanbox{aspect-ratio:16/8}
+.fdc-ctile[aria-pressed="true"]{border-color:var(--c-parch);box-shadow:inset 0 0 0 2px var(--c-parch)}
+.fdc-ctile[aria-pressed="true"] .fdc-tb{background:var(--c-tome2)}
+.fdc-build{border-style:dashed;border-color:var(--c-bronze)}
+.fdc-plus{display:grid;place-items:center;aspect-ratio:16/8;font:300 2.6rem/1 var(--c-serif);color:var(--c-bronze);border-bottom:1px dashed var(--c-line)}
+.fdc-bad{color:#ff9f85}
+.fdc .fdc-builder.fdb{position:fixed;inset:0;z-index:30}
 
 /* FOOT */
 .fdc-foot{grid-area:foot;display:flex;gap:10px;align-items:stretch}
@@ -189,6 +206,10 @@
 .fdc-phone .fdc-marks i{font-size:0.75rem}
 .fdc-phone .fdc-x{min-height:44px;padding:0 14px}
 .fdc-phone .fdc-tile{flex-basis:min(76%,320px)}
+.fdc-phone .fdc-ctile{flex-basis:min(64%,260px)}
+.fdc-phone .fdc-cgrid{margin:0 -16px;padding:2px 16px 8px;scroll-padding:0 16px}
+.fdc-phone .fdc-edit{min-height:44px}
+.fdc-phone .fdc-chead h3{font-size:1.05rem}
 .fdc-phone .fdc-tb{padding:10px 12px 12px}
 /* PHONE LANDSCAPE (844 x 390): the title shrinks, the two mode cards sit
    side by side with a short picture, the seats and the carousel fit above
