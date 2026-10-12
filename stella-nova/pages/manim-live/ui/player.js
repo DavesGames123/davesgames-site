@@ -8,7 +8,8 @@
 //  the speed at any time, also during the render.
 //
 //  MEMORY. A 1080p frame is about 8 MB. The cache keeps full frames up to
-//  BUDGET bytes. After that, the player keeps a half-size copy of each new
+//  budget bytes (option budget, default BUDGET; main.js gives a smaller
+//  one on phones, see ui/device.js frameBudgetMB). After that, the player keeps a half-size copy of each new
 //  frame (and then a quarter-size copy), and the status line says so.
 //  Export uses the cache, so a reduced cache gives a smaller video.
 //
@@ -18,7 +19,7 @@
 //  and main.js marks the code line of that segment.
 //
 //  EXPORTS
-//    createPlayer({canvas, track, onSegment, onTick}) -> api
+//    createPlayer({canvas, track, onSegment, onTick, budget}) -> api
 //  api: reset, addFrame, setAnimations, finish, play, pause, toggle,
 //       seek, step, seekLine, setLoop, setSpeed, frameCount, current,
 //       bitmap, fps, size, isPlaying, segments, destroy
@@ -27,7 +28,7 @@ import { buildSegments, segmentAtFrame, frameForLine, formatTime } from './timel
 
 const BUDGET = 700 * 1024 * 1024;
 
-export function createPlayer({ canvas, track, onSegment = () => {}, onTick = () => {} }) {
+export function createPlayer({ canvas, track, onSegment = () => {}, onTick = () => {}, budget = BUDGET }) {
   const ctx = canvas.getContext('2d');
   let frames = [];              // ImageBitmap per index (may hold holes)
   let bytes = 0, scale = 1;
@@ -183,7 +184,7 @@ export function createPlayer({ canvas, track, onSegment = () => {}, onTick = () 
       if (bitmap !== lastSrc) {
         lastSrc = bitmap;
         const full = bitmap.width * bitmap.height * 4;
-        while (scale > 0.25 && bytes + full * scale * scale > BUDGET) scale /= 2;
+        while (scale > 0.25 && bytes + full * scale * scale > budget) scale /= 2;
         if (scale < 1 && typeof createImageBitmap === 'function') {
           const w = Math.max(1, Math.round(bitmap.width * scale)), h = Math.max(1, Math.round(bitmap.height * scale));
           lastBm = createImageBitmap(bitmap, { resizeWidth: w, resizeHeight: h, resizeQuality: 'medium' })

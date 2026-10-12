@@ -29,17 +29,24 @@
 //    hood.js       "Under the hood" panel
 //    share.js      code <-> URL hash
 //    mobile.js     phone views after a run, key row, soft keyboard inset
+//    device.js     quality default, frame cache size, download advice
 //    pysource.js   fast regex reads of the code (scenes, play lines)
 //    markdown.js   small Markdown renderer
 //
 //  STORAGE (localStorage, each access in try/catch)
 //    manim-live:code      the last code in the editor
-//    manim-live:prefs     layout, panel, quality, code width
+//    manim-live:prefs     layout, panel, quality, qualityPicked, code width
+//
+//  DEVICE DEFAULTS (ui/device.js). A small or low-memory device gets the
+//  'phone' quality (640x360, 15 fps) and a smaller frame cache. When the
+//  user picks a quality, qualityPicked is true and the pick wins. With
+//  Data Saver on, Python loads only after a tap (Load Python or Run).
 //    manim-live:learn     lesson progress (ui/learn.js)
 //
 //  GREP MAP
 //    grep -n 'async function bootEngine'   engine import and boot status
 //    grep -n 'function onStatus'           boot stage list
+//    grep -n 'function startBoot'          download advice, then bootEngine
 //    grep -n 'function runCode'            one run
 //    grep -n 'function showError'          traceback view and editor mark
 //    grep -n 'function setLayout'          code | split | output
@@ -66,10 +73,11 @@ import { parseHeader } from './ui/catalog.js';
 import { escapeHtml } from './ui/markdown.js';
 import { SEEDS } from './ui/seed-examples.js';
 import { PHONE_QUERY, tabAfterRun, mountKeyRow, watchKeyboard } from './ui/mobile.js';
+import { DOWNLOAD_MB, deviceProfile, defaultQuality, frameBudgetMB, networkAdvice } from './ui/device.js';
 
 const $ = (id) => document.getElementById(id);
 const work = $('work');
-const QUALITY = { low: { fps: 15, w: 854, h: 480 }, medium: { fps: 30, w: 1280, h: 720 }, high: { fps: 60, w: 1920, h: 1080 } };
+const QUALITY = { phone: { fps: 15, w: 640, h: 360 }, low: { fps: 15, w: 854, h: 480 }, medium: { fps: 30, w: 1280, h: 720 }, high: { fps: 60, w: 1920, h: 1080 } };
 const PANEL_TITLE = { examples: 'Examples', learn: 'Learn', ref: 'Reference', hood: 'Under the hood' };
 const isPhone = () => matchMedia(PHONE_QUERY).matches;
 
@@ -78,7 +86,13 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const prefs = Object.assign({ layout: 'split', panel: 'examples', quality: 'low', codeW: 50 }, store.get('manim-live:prefs', {}));
+const prefs = Object.assign({ layout: 'split', panel: 'examples', quality: 'low', qualityPicked: false, codeW: 50 }, store.get('manim-live:prefs', {}));
+const device = deviceProfile({
+  deviceMemory: navigator.deviceMemory,
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  phone: isPhone(),
+  coarse: matchMedia('(pointer: coarse)').matches,
+});
 const savePrefs = () => store.set('manim-live:prefs', prefs);
 
 // ---- toast -----------------------------------------------------------------
@@ -114,6 +128,7 @@ const editor = createEditor($('editor'), {
 
 // ---- player ----------------------------------------------------------------
 const player = createPlayer({
+  budget: frameBudgetMB(device) * 1024 * 1024,
   canvas: $('frame'),
   track: $('track'),
   onSegment(seg) {
@@ -211,6 +226,7 @@ function onStatus(s) {
   if (s.error) {
     lis.forEach((li, i) => { if (i === Math.max(0, stageAt)) li.className = 'bad'; });
     $('bootMsg').textContent = `Python did not start: ${s.error.message || s.error}`;
+    clearInterval(bootTimer);
     $('boot').hidden = false;
     return;
   }
@@ -236,7 +252,34 @@ function onStatus(s) {
   if (text) $('bootMsg').textContent = text;
 }
 
+// ---- boot: download advice, elapsed time ---------------------------------------
+let bootStarted = false;
+let bootT0 = 0, bootTimer = 0;
+function startBoot() {
+  const advice = networkAdvice(navigator.connection || null);
+  const note = $('bootNote');
+  note.textContent = advice.text || `About ${DOWNLOAD_MB} MB on the first visit. The browser keeps it for later visits.`;
+  note.classList.toggle('warn', advice.level !== 'none');
+  if (advice.level === 'ask') {
+    $('bootGo').hidden = false;
+    $('bootMsg').textContent = 'Python is not loaded yet. You can write code now.';
+    $('bootGo').onclick = () => bootEngine();
+    return;
+  }
+  bootEngine();
+}
+function tickBoot() {
+  const s = Math.round((performance.now() - bootT0) / 1000);
+  $('bootTime').textContent = s ? `${s} s` : '';
+}
+
 async function bootEngine() {
+  if (bootStarted) return;
+  bootStarted = true;
+  $('bootGo').hidden = true;
+  bootT0 = performance.now();
+  clearInterval(bootTimer);
+  bootTimer = setInterval(tickBoot, 1000);
   let mod;
   try {
     mod = await import('./engine.js');
@@ -257,6 +300,7 @@ async function bootEngine() {
   try {
     const info = await engine.ready;
     engineReady = true;
+    clearInterval(bootTimer);
     onStatus({ ready: true, text: 'Ready.' });
     $('run').classList.remove('busy');
     $('run').title = 'Run (Ctrl or Cmd + Enter)';
@@ -291,6 +335,7 @@ function runCode(source = 'user') {
   if (!engine || !engineReady) {
     pendingRun = true;
     pendingSource = source;
+    if (!bootStarted) { bootEngine(); return; }
     $('run').classList.add('busy');
     toast('Python is still loading. The scene runs when it is ready.');
     return;
@@ -382,7 +427,7 @@ function cancelRun(silent = false) {
 }
 $('run').onclick = () => runCode();
 $('stop').onclick = () => cancelRun();
-$('quality').onchange = () => { prefs.quality = $('quality').value; savePrefs(); };
+$('quality').onchange = () => { prefs.quality = $('quality').value; prefs.qualityPicked = true; savePrefs(); };
 
 // ---- errors ----------------------------------------------------------------
 function showError(e) {
@@ -635,7 +680,8 @@ const hood = mountHood($('pHood'), { getEngine: () => engine });
 
 // ---- start -----------------------------------------------------------------
 async function start() {
-  $('quality').value = QUALITY[prefs.quality] ? prefs.quality : 'low';
+  const q = prefs.qualityPicked ? prefs.quality : defaultQuality(device);
+  $('quality').value = QUALITY[q] ? q : 'low';
   setLayout(prefs.layout);
   initSplitter();
   initKeys();
@@ -659,8 +705,8 @@ async function start() {
   setRunning(false);
   $('run').classList.add('busy');
   $('run').title = 'Python is loading. A click now runs the scene when it is ready.';
-  bootEngine();
+  startBoot();
 }
 
-window.__manimLive = { editor, player, examples, learn, reference, hood, get engine() { return engine; }, runCode };
+window.__manimLive = { editor, player, examples, learn, reference, hood, device, get engine() { return engine; }, runCode };
 start();

@@ -85,12 +85,15 @@ The tests are:
 
 - `tests/engine.test.mjs`: wheel digests, the RECORD of the installed
   manim, the stand-ins, seed renders, a pixel compare with native manim,
-  TeX parts, speed and the worker protocol. Without `MANIM_LIVE_CACHE`,
-  8 of the 12 tests are skipped.
+  TeX parts, speed, the 640x360 phone quality and the worker protocol.
+  Without `MANIM_LIVE_CACHE`, 9 of the 13 tests are skipped.
 - `tests/lessons.test.mjs`: the shape of `lessons/index.js`, and a Python
   `ast` parse of each step.
 - `tests/ui.test.mjs`: timeline, share links, catalog filter, Markdown,
   docstrings, source parse, step checks, highlight and the hood table.
+- `tests/device.test.mjs`: the quality default, the frame cache size and
+  the download advice per device, and one quality table in Python,
+  `main.js`, `engine.js` and `index.html`.
 - `tests/mobile.test.mjs`: the phone view after a run, the key row
   edits, the soft keyboard inset, the share-sheet choice, and the phone
   rules in `style.css` and `index.html` (one view at a time, 16 px
@@ -129,6 +132,10 @@ program, the scene name, a task, a hint and a check.
   (jsdom, worker_threads and @napi-rs/canvas).
 - No phone run was done. The key row focus, the iOS keyboard inset, the
   full screen fallback and the share sheet are not checked on a device.
+- Phones and devices with 4 GB or less get the 640x360 quality and a
+  frame cache of 256 MB (128 MB at 2 GB). The memory of Pyodide in the
+  worker is not measured on a phone. WebAssembly memory does not shrink
+  after a large render.
 - The site sends no COOP and COEP headers, so `crossOriginIsolated` is
   false. Stop then terminates the worker, and Python boots again, which
   takes some seconds.

@@ -39,7 +39,10 @@ import types
 USER_FILE = "/home/pyodide/scene.py"
 MODULE_NAME = "manim_live_scene"
 MEDIA_DIR = "/tmp/manim-media"
+# "phone" is not a manim quality name. It starts from low_quality, and
+# run() then sets 640x360 (the pixel keys come after "quality").
 QUALITIES = {
+    "phone": ("low_quality", 640, 360, 15),
     "low": ("low_quality", 854, 480, 15),
     "medium": ("medium_quality", 1280, 720, 30),
     "high": ("high_quality", 1920, 1080, 60),

@@ -8,7 +8,8 @@
 //    version and file of manim, every installed manim file against the
 //    wheel RECORD, shim modules come from py/, seed examples render,
 //    native reference frames, TeX parts and colours, speed of a 3 s scene,
-//    and the worker protocol through the real worker.js + engine.js.
+//    the 640x360 phone quality, and the worker protocol through the real
+//    worker.js + engine.js.
 // ============================================================================
 
 import assert from 'node:assert/strict';
@@ -194,6 +195,20 @@ class Three(Scene):
   assert.ok(s.ok);
   assert.equal(frames, 45);
   assert.ok(sec < 10, `${sec} s`);
+});
+
+test('phone quality renders 640x360 frames at 15 fps', NEED, () => {
+  const code = 'from manim import *\nclass P(Scene):\n    def construct(self):\n        self.play(Create(Circle()), run_time=1)\n';
+  const sizes = new Set();
+  let frames = 0;
+  rt.frameSink = (u8, w, h, i, t, rep) => { sizes.add(`${w}x${h}`); frames += rep; };
+  const s = rt.run(code, { quality: 'phone' }, () => {});
+  rt.frameSink = null;
+  assert.ok(s.ok);
+  assert.deepEqual([...sizes], ['640x360']);
+  assert.equal(frames, 15);
+  assert.equal(s.width, 640);
+  assert.equal(s.height, 360);
 });
 
 test('worker protocol: real worker.js + engine.js', NEED, async () => {

@@ -125,7 +125,7 @@ export function createEngine({ onStatus = () => {}, pyodide = null } = {}) {
     const listeners = new Map(EVENTS.map((n) => [n, new Set()]));
     let finishDone;
     const quality = opts.quality || 'low';
-    const fps = opts.fps || { low: 15, medium: 30, high: 60 }[quality] || 15;
+    const fps = opts.fps || { phone: 15, low: 15, medium: 30, high: 60 }[quality] || 15;
     const h = {
       id,
       fps,

@@ -32,6 +32,7 @@
                  data-panel  = none | examples | learn | ref | hood
      #side       #sideTitle #sideClose #pExamples #pLearn #pRef #pHood
      #codePane   #editor #keys (phone key row) #boot (load stages) #bootList
+                 #bootPct #bootTime #bootNote (size, data warning) #bootGo
      #split      the splitter between code and output
      #outPane    #stage #frame #stageMsg #err #errText
                  #transport: #play #stepB #stepF #loop #speed #time #fullBtn
@@ -83,6 +84,7 @@
     <label class="pick" title="Scene to render"><span>Scene</span><select id="scene" aria-label="Scene"></select></label>
     <label class="pick" title="Render quality"><span>Quality</span>
       <select id="quality" aria-label="Quality">
+        <option value="phone">360p, 15 fps</option>
         <option value="low">480p, 15 fps</option>
         <option value="medium">720p, 30 fps</option>
         <option value="high">1080p, 60 fps</option>
@@ -118,7 +120,7 @@
     <div id="editor"></div>
     <div id="keys" class="keyrow" role="toolbar" aria-label="Code keys"></div>
     <div id="boot" role="status" aria-live="polite">
-      <div class="boot-head"><b>Starting Python</b><span id="bootPct" class="muted"></span></div>
+      <div class="boot-head"><b>Starting Python</b><span class="muted"><span id="bootPct"></span> <span id="bootTime"></span></span></div>
       <ol id="bootList">
         <li data-stage="python">Python (Pyodide)</li>
         <li data-stage="numpy">numpy, scipy and the other packages</li>
@@ -127,6 +129,8 @@
       </ol>
       <div class="boot-bar"><i id="bootBar"></i></div>
       <p id="bootMsg" class="muted">You can write code while this loads.</p>
+      <p id="bootNote" class="muted"></p>
+      <button id="bootGo" class="btn primary small" hidden>Load Python</button>
     </div>
   </section>
 
