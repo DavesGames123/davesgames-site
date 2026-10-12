@@ -73,14 +73,18 @@
      (#heroStage) fills the game view down to the bar. The brains are
      TRANSPARENT OVERLAYS on it (no ground, no border):
        wide   brain A over the left side, brain B over the right side,
-              each about a third of the width; the board in the middle
+              each about a third of the width; in watch mode the map is
+              a square at the top of its side, the flies under it
        tall   brain A over the top band, brain B over the band above the
-              bar; the board in the middle band
+              bar; in watch mode the map is a square at the left (A) or
+              the right (B) of its band
        play   only the brain of the opposing fly (data-opp A|B), on its
               side (wide) or at the top (tall); no brain for the bot
-     main.js syncClear gives the scene the overlay insets (setClear of
-     ui/fly3d/scene.js), so the camera frames the board in the clear
-     region. Only .bp-grip (the projected bounds of the brain) takes the
+     main.js syncClear frames the scene (setClear of ui/fly3d/scene.js).
+     Watch: the full canvas (fill), so the flies are large and the outer
+     board lies under the brains; the centre moves under the brain
+     squares (fillFrame of brainpanels.js). Play: the overlay insets
+     frame the seat view in the clear region. Only .bp-grip (the projected bounds of the brain) takes the
      pointer; the rest of an overlay passes input to the table.
      #app            fixed, 100vw x 100dvh; data-mode watch|play,
                      data-table 3d|2d, data-sheet (chooser open),

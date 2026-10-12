@@ -6,7 +6,8 @@
 //           view. The two big live brains (initPanels) are transparent
 //           overlays on it: A at the left and B at the right side, or A
 //           at the top and B at the base on a portrait phone. The camera
-//           frames the board between them (syncClear). The slim
+//           frames the full view, the flies large, and keeps the flies
+//           and the board centre off the brain squares (syncClear). The slim
 //           scorecards sit in the top corners. One turn box
 //           (turnLine) is the one voice of the game state; the table
 //           holds still for a pause between turns.
@@ -59,7 +60,7 @@
 //      grep -n 'function initZoom'        right-click card zoom (watch)
 //      grep -n 'function brainFire'       a decision -> its fly's panel
 //      grep -n 'function capOf'           panel caption: KCs, V, δ
-//      grep -n 'function syncClear'       overlay insets -> scene framing
+//      grep -n 'function syncClear'       brain squares or insets -> framing
 //      grep -n 'function setBrains'       brains: panels, scene, off
 //      grep -n 'function conOf'           the connectome of Fly A or Fly B
 //      grep -n 'function initModes'       the title screen, URL
@@ -770,12 +771,18 @@ function capOf(p, trace, delta) {
   el.textContent = `${(trace.kc || []).length}${nKC ? ` of ${nKC.toLocaleString('en-US')}` : ''} KCs active${Number.isFinite(trace.value) ? ` · V ${signed(trace.value)}` : ''}${Number.isFinite(d) ? ` · δ ${signed(d)}` : ''}`;
 }
 
-// The clear region of the table (ui/fly3d/scene.js setClear). The brain
-// overlays are transparent and lie over the table canvas, so the camera
-// frames the board in the region between them: the insets are how far
-// each shown overlay reaches into the canvas (clearInsets of
-// brainpanels.js). A wide screen keeps the wide framing (frame 'wide');
-// a tall screen and play mode take the framing from the clear aspect.
+// The framing of the table (ui/fly3d/scene.js setClear). The brain
+// overlays are transparent and lie over the table canvas.
+//   watch  the shots take the scale of the full canvas (fill), so the
+//          flies are large and the outer board lies under the brains;
+//          the brain maps are squares (style.css WATCH SQUARES), and
+//          fillFrame of brainpanels.js moves the centre of the frame
+//          down under the squares on a wide screen. The user (verbatim):
+//          "i want the visual of the fly to take up as much visual real
+//          estate as possible".
+//   play   the seat view is framed in the region between the overlays:
+//          the insets are how far each shown overlay reaches into the
+//          canvas (clearInsets of brainpanels.js).
 const wideScreen = () => {
   try { if (typeof matchMedia === 'function') return matchMedia('(min-aspect-ratio: 11/10) and (min-width: 700px)').matches; } catch { /* no media queries */ }
   const w = window.innerWidth || 390, h = window.innerHeight || 844;
@@ -792,8 +799,12 @@ function syncClear() {
   const cv = app.mode === 'play' && app.playScene ? (app.cv || $('heroCv')) : $('heroCv');
   const box = el => (el?.getBoundingClientRect ? el.getBoundingClientRect() : null);
   const wide = wideScreen();
+  if (app.mode === 'watch') {
+    const sq = shownPanes().map(p => box(p?.querySelector?.('.bp-cv')));
+    return sc.setClear(PM?.fillFrame ? PM.fillFrame(box(cv), sq, wide) : { frame: wide ? 'wide' : null, fill: true });
+  }
   const ins = PM?.clearInsets ? PM.clearInsets(box(cv), shownPanes().map(box), wide) : { l: 0, r: 0, t: 0, b: 0 };
-  return sc.setClear({ ...ins, frame: wide && app.mode === 'watch' ? 'wide' : null });
+  return sc.setClear({ ...ins, frame: null });
 }
 
 // The brain control: panels (the default: a large live brain on each

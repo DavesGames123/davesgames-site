@@ -27,10 +27,14 @@
 //               no pointer events but the grip); wide = A left, B right,
 //               about a third of the width each; tall = bands at the top
 //               and the base; play shows only the opposing fly's brain
-//    framing    ui/fly3d/scene.js setClear: at 1920x1080, 1440x900,
-//               1024x768 and 390x844 the canvas is the game view, and the
-//               table centre and both flies (head and base) project
-//               inside the clear region between the overlays
+//    framing    ui/fly3d/scene.js setClear fill with fillFrame: at ten
+//               desktop, tablet and phone sizes the canvas is the game
+//               view, the table centre and both flies (head and base) are
+//               in the view and off the brain squares, and the smallest
+//               fly is at least the minimum of that size (120 px at
+//               1920x1080)
+//    fillFrame  the move of the centre under the wide brain squares
+//    squares    style.css watch squares, the grip offset, main.js
 //  Exit code 1 on any failure.
 // ============================================================================
 import { registerHooks } from 'node:module';
@@ -45,7 +49,7 @@ registerHooks({
   },
 });
 const THREE = await import('three');
-const { createBrainPanels, fitDistance, PANEL_VIEW, projectedBounds, clearInsets } = await import('../ui/fly3d/brainpanels.js');
+const { createBrainPanels, fitDistance, PANEL_VIEW, projectedBounds, clearInsets, fillFrame, WIDE_HEAD } = await import('../ui/fly3d/brainpanels.js');
 const rules = await import('../game/rules.js');
 const { Fly } = await import('../brain/fly.js');
 const { Match, agentFromFly } = await import('../ui/match.js');
@@ -222,32 +226,43 @@ ok(!!rA && !!rB, `fire: real traces of both flies (${recs.length} decisions)`);
   ok(/#scA\{left:/.test(css) && /#scB\{right:/.test(css), 'layout: the scorecards sit in the top corners');
 }
 
-// --- framing (ui/fly3d/scene.js setClear) ----------------------------------------------
+// --- framing (ui/fly3d/scene.js setClear fill, fillFrame) -------------------------------
+// The user (verbatim, 2026-10-12): "i want the visual of the fly to take
+// up as much visual real estate as possible". Before this framing, the
+// camera framed only the clear strip between the brains: the smallest
+// fly was 60 px at 1920x1080, 45 at 1440x900, 32 at 1024x768, 31 at
+// 390x844 and 26 at 844x390. Now the shots take the full canvas, and
+// the flies and the board centre stay off the brain squares.
 {
   const { createDuelScene, TABLE } = await import('../ui/fly3d/scene.js');
   const { greedyBot } = await import('../game/bots.js');
   const { agentFromBot } = await import('../ui/match.js');
-  const BAR = 96;
-  for (const [W, H] of [[1920, 1080], [1440, 900], [1024, 768], [390, 844]]) {
+  // [W, H, smallest fly px in the wide and combat shots]
+  const SIZES = [[1920, 1080, 120], [1440, 900, 100], [1024, 768, 75], [1180, 820, 85], [820, 1180, 85],
+    [390, 844, 45], [360, 740, 40], [430, 932, 50], [844, 390, 40], [932, 430, 45]];
+  for (const [W, H, MIN] of SIZES) {
+    // the bar of style.css: 96 px (phone), 62 px (760 px and wider), 56 px (a phone held sideways)
+    const BAR = H <= 520 && W > H ? 56 : W >= 760 ? 62 : 96;
     const h = H - BAR, wide = W / H >= 1.1 && W >= 700;
-    // the overlay boxes of style.css at this size
+    // the brain squares of style.css WATCH SQUARES at this size
     const bpw = Math.min(640, Math.max(220, 0.31 * W)), bph = Math.min(250, Math.max(118, 0.22 * H));
+    const sq = wide ? Math.min(0.6 * h, 0.92 * bpw) : bph;
+    const squares = wide ? [{ left: 0, top: 0, right: bpw, bottom: sq }, { left: W - bpw, top: 0, right: W, bottom: sq }]
+      : [{ left: 0, top: 52, right: sq, bottom: 52 + sq }, { left: W - sq, top: h - sq, right: W, bottom: h }];
     const cv = { left: 0, top: 0, right: W, bottom: h };
-    const panes = wide ? [{ left: 0, top: 0, right: bpw, bottom: h }, { left: W - bpw, top: 0, right: W, bottom: h }]
-      : [{ left: 0, top: 52, right: W, bottom: 52 + bph }, { left: 0, top: h - bph, right: W, bottom: h }];
-    const ins = clearInsets(cv, panes, wide);
+    const fr = fillFrame(cv, squares, wide);
     const sc = createDuelScene({ clientWidth: W, clientHeight: h }, { headless: true });
     await sc.ready;
     sc.setState(new Match(rules, [agentFromBot(greedyBot(), 'a'), agentFromBot(greedyBot(), 'b')], { seed: 3 }).state);
-    sc.setClear({ ...ins, frame: wide ? 'wide' : null });
-    ok(sc.clear.w === W && sc.clear.h === h, `framing ${W}x${H}: the scene canvas is the game view (${sc.clear.w}x${sc.clear.h}), not a centre column`);
+    sc.setClear(fr);
+    ok(sc.clear.w === W && sc.clear.h === h && sc.clear.fill, `framing ${W}x${H}: the scene canvas is the game view (${sc.clear.w}x${sc.clear.h}) and the shots fill it`);
     sc.setCamera('script');
-    const x0 = ins.l, x1 = W - ins.r, y0 = ins.t, y1 = h - ins.b;
     const px = v => { const p = v.clone().project(sc.camera); return [(p.x + 1) / 2 * W, (1 - p.y) / 2 * h]; };
-    const inside = ([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+    const onSq = ([x, y]) => squares.some(q => x >= q.left && x <= q.right && y >= q.top && y <= q.bottom);
+    const inView = ([x, y]) => x >= 0 && x <= W && y >= 0 && y <= h;
     let bad = [], minFly = Infinity;
-    for (const shot of ['wide', 'combat']) for (const az of [-1.57, 0, 1.57]) {
-      sc.shoot(shot, 0, { cut: true }); sc.world.cam.az = az; sc.render(1e-4);
+    for (const shot of ['wide', 'combat']) for (const az of [-1.57, 0, 1.57]) for (const p of [0, 1]) {
+      sc.shoot(shot, p, { cut: true }); sc.world.cam.az = az; sc.render(1e-4);
       sc.scene.updateMatrixWorld(true); sc.camera.updateMatrixWorld();
       const pts = [['centre', new THREE.Vector3(0, TABLE.y, 0)]];
       sc.world.flies.forEach((f, i) => {
@@ -256,11 +271,38 @@ ok(!!rA && !!rB, `fire: real traces of both flies (${recs.length} decisions)`);
         pts.push([`fly ${i} head`, head], [`fly ${i} base`, base]);
         minFly = Math.min(minFly, Math.abs(px(head)[1] - px(base)[1]));
       });
-      for (const [n, v] of pts) if (!inside(px(v))) bad.push(`${shot} az ${az} ${n} at ${px(v).map(q => q | 0)}`);
+      for (const [n, v] of pts) { const q = px(v); if (!inView(q) || onSq(q)) bad.push(`${shot} p${p} az ${az} ${n} at ${q.map(z => z | 0)}`); }
     }
-    ok(bad.length === 0, `framing ${W}x${H}: the table centre and both flies lie in the clear region x ${x0 | 0}..${x1 | 0}, y ${y0 | 0}..${y1 | 0}${bad.length ? ': ' + bad.slice(0, 3).join('; ') : ''} (smallest fly ${minFly | 0} px)`);
+    ok(bad.length === 0, `framing ${W}x${H}: the board centre and both flies are in the view and off the brain squares${bad.length ? ': ' + bad.slice(0, 3).join('; ') : ''}`);
+    ok(minFly >= MIN, `framing ${W}x${H}: the smallest fly in the wide and combat shots is ${minFly | 0} px high (at least ${MIN})`);
     sc.dispose();
   }
+}
+
+// --- fillFrame (pure) ----------------------------------------------------------------------
+{
+  const cv = { left: 0, top: 0, right: 1920, bottom: 1018 };
+  const f = fillFrame(cv, [{ left: 0, top: 0, right: 595, bottom: 547 }, { left: 1325, top: 0, right: 1920, bottom: 547 }], true);
+  ok(f.fill === true && f.frame === 'wide' && f.l === 0 && f.r === 0 && f.b === 0 && f.t > 0 && f.t <= 0.45 * 1018, `fillFrame: wide squares move the centre down (t ${f.t})`);
+  ok((1018 + f.t) / 2 - WIDE_HEAD * 1018 >= 547, 'fillFrame: the head line is under the brain squares');
+  const none = fillFrame(cv, [], true);
+  ok(none.t === 0 && none.fill, 'fillFrame: no brain (hidden maps): the full frame, no move');
+  const tall = fillFrame({ left: 0, top: 0, right: 390, bottom: 748 }, [{ left: 0, top: 52, right: 186, bottom: 238 }], false);
+  ok(tall.t === 0 && tall.frame === null && tall.fill, 'fillFrame: tall: no move, the frame from the aspect');
+  const huge = fillFrame(cv, [{ left: 0, top: 0, right: 595, bottom: 1000 }], true);
+  ok(huge.t === Math.round(0.45 * 1018), 'fillFrame: the move is at most 0.45 h (the limit of scene.js resize)');
+}
+
+// --- watch squares (style.css) -------------------------------------------------------------
+{
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const wide = css.slice(css.indexOf('@media (min-aspect-ratio:11/10) and (min-width:700px)'));
+  ok(/\.app\[data-table="3d"\]\[data-mode="watch"\] \.bp-cv\{right:auto;width:var\(--bph\)/.test(css) && /\.bp\.b \.bp-cv\{left:auto;right:0\}/.test(css), 'watch squares: tall: A square at the left of its band, B at the right');
+  ok(/\.bp-cv\{left:0;right:0;width:auto;bottom:auto;height:min\(60%,calc\(var\(--bpw\) \* 0\.92\)\)\}/.test(wide), 'watch squares: wide: a square at the top of the side, at most 60 % of its height');
+  const src = readFileSync(new URL('../ui/fly3d/brainpanels.js', import.meta.url), 'utf8');
+  ok(/offsetLeft/.test(src) && /offsetTop/.test(src), 'watch squares: the grip adds the canvas offset in the overlay');
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  ok(/app\.mode === 'watch'\)[\s\S]{0,200}fillFrame\(/.test(main), 'watch squares: main.js syncClear frames watch mode with fillFrame');
 }
 
 console.log(`brainpanels: ${pass} pass, ${fail} fail`);

@@ -52,9 +52,20 @@ about the simulation and layout in fullscreen"
   amount of board state". So the 3D table fills the whole game view
   again, and the two brains are transparent overlays on it (A on the
   left, B on the right; on a portrait phone A at the top, B at the base),
-  same size, no ground, no border. The camera frames the table, the cards
-  and the flies in the clear region between the overlays. Outside the
-  projected bounds of a brain, input goes to the table.
+  same size, no ground, no border. Outside the projected bounds of a
+  brain, input goes to the table.
+  Then (verbatim, 2026-10-12): "i want the visual of the fly to take up as
+  much visual real estate as possible". Framing the table only in the
+  narrow clear strip between the brains shrank the flies (60 px at
+  1920x1080). So in watch mode the camera frames the FULL view again: the
+  outer board can lie under the transparent brains, each brain map is a
+  square (wide: at the top of its side; tall: A at the left of the top
+  band, B at the right of the base band), and the two flies and the
+  board centre stay clear of the brain squares. At 1920x1080 each fly is
+  at least 120 px high in the wide and combat shots
+  (tests/brainpanels.test.mjs 'framing'). Also (verbatim): "make sure the
+  whole thing is extremely compatible with mobile" and "hovering cards in
+  the game section should pull the image up in their hovered version".
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
 

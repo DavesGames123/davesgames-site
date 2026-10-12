@@ -431,10 +431,19 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
    the table under them. Only .bp-grip, which brainpanels.js puts on the
    projected bounds of the brain, takes a drag (turn), the wheel (zoom)
    and a tap (anatomy label).
-   FRAMING. main.js gives the scene the overlay insets (setClear), so the
-   camera frames the table, the cards and the flies in the clear middle.
-   The 2D stand-in (data-table 2d) keeps the old columns: --cl --cr --ct
-   --cb place #arena between the panels. */
+   WATCH SQUARES. In watch mode each brain map is a square canvas in its
+   overlay (the map fits the smaller side, so the brain keeps its size):
+   wide: at the top of the side column, at most 60 % of its height, the
+   caption under it; tall: at the left of the top band (A) and at the
+   right of the base band (B), the caption beside it. The flies and the
+   centre of the board then lie clear of the dense brain cores.
+   FRAMING. Watch: main.js syncClear gives the scene the full canvas
+   (setClear fill, brainpanels.js fillFrame): the flies keep the size of
+   a full-view shot, the outer board lies under the transparent brains,
+   and the centre of the frame moves down under the brain squares (wide).
+   Play: the overlay insets (clearInsets) frame the seat view in the
+   clear region. The 2D stand-in (data-table 2d) keeps the old columns:
+   --cl --cr --ct --cb place #arena between the panels. */
 .bp{position:absolute;z-index:4;display:none;background:transparent;border:0;overflow:visible;pointer-events:none;left:0;right:0;height:var(--bph)}
 .bp.a{top:var(--bpa-top)}
 .bp.b{bottom:var(--bar-h)}
@@ -459,6 +468,13 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 .app[data-brains="panels"][data-mode="play"][data-opp="B"] .bp.b{display:block}
 .app[data-mode="play"] .bp.a,.app[data-mode="play"] .bp.b{top:var(--play-top);bottom:auto}
 .app[data-table="2d"][data-brains="panels"][data-mode="watch"]{--ct:calc(var(--bpa-top) + var(--bph));--cb:calc(var(--bar-h) + var(--bph))}
+/* watch squares, tall: A at the left of the top band, B at the right of
+   the base band; the caption of A at the top right, of B at the base left */
+.app[data-table="3d"][data-mode="watch"] .bp-cv{right:auto;width:var(--bph);max-width:100%}
+.app[data-table="3d"][data-mode="watch"] .bp.b .bp-cv{left:auto;right:0}
+.app[data-table="3d"][data-mode="watch"] .bp-cap{max-width:calc(100% - var(--bph) - 2 * var(--pad))}
+.app[data-table="3d"][data-mode="watch"] .bp.a .bp-cap{top:6px;bottom:auto;right:calc(var(--pad) + var(--sr))}
+.app[data-table="3d"][data-mode="watch"] .bp.b .bp-cap{left:calc(var(--pad) + var(--sl));right:auto;justify-content:flex-start;text-align:left}
 /* the scorecards in the corners, the turn box over the clear middle */
 .app[data-brains="panels"] .whud{bottom:0;padding:0}
 .app[data-brains="panels"] .wtop{display:block}
@@ -477,6 +493,13 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .bp.b{left:auto;right:0}
   .app[data-mode="play"] .bp.a,.app[data-mode="play"] .bp.b{top:var(--play-top);bottom:var(--play-bot)}
   .bp-cap{font-size:12px;bottom:10px}
+  /* watch squares, wide: a square at the top of each side column, the
+     caption under it (A at the outer left, B at the outer right) */
+  .app[data-table="3d"][data-mode="watch"] .bp-cv,
+  .app[data-table="3d"][data-mode="watch"] .bp.b .bp-cv{left:0;right:0;width:auto;bottom:auto;height:min(60%,calc(var(--bpw) * 0.92))}
+  .app[data-table="3d"][data-mode="watch"] .bp-cap{max-width:calc(100% - 2 * var(--pad));top:min(60%,calc(var(--bpw) * 0.92));bottom:auto}
+  .app[data-table="3d"][data-mode="watch"] .bp.a .bp-cap{top:min(60%,calc(var(--bpw) * 0.92));left:calc(var(--pad) + var(--sl));right:auto;justify-content:flex-start;text-align:left}
+  .app[data-table="3d"][data-mode="watch"] .bp.b .bp-cap{left:auto;right:calc(var(--pad) + var(--sr));justify-content:flex-end;text-align:right}
   .app[data-brains="panels"] .wsc{width:min(280px,calc(var(--bpw) - 2 * var(--pad)))}
   .app[data-brains="panels"] .turnbox{top:var(--pad)}
 }

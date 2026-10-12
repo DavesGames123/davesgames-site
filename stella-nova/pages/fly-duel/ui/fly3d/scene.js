@@ -54,7 +54,7 @@
 //  API
 //      createDuelScene(canvas, { connectomes, cards, names, reduced,
 //        coarse, headless }) -> { play(record) -> Promise, setState(state),
-//        resize(), setClear({ l, r, t, b, frame }), render(dt), dispose(),
+//        resize(), setClear({ l, r, t, b, frame, fill }), render(dt), dispose(),
 //        setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), setBigBrain(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
@@ -157,7 +157,9 @@ const YAW = [0, Math.PI];
 // the side drift, and the field of view of every watch shot. Tuned so the
 // flies fill the frame with both heads, both seats and both maps in it
 // (tests/fly3d.test.mjs 'camera framing').
-export const WATCH = { wideR: 7.6, wideEl: 0.42, wideLook: 0.7, drift: 0.3, tallR: 11.5, tallEl: 0.55, fov: 40, fitAspect: 1.7 };
+// fillTall: the tall shot radius factor of a fill frame (setClear fill):
+// the camera goes nearer, the table ends may lie under the brains.
+export const WATCH = { wideR: 7.6, wideEl: 0.42, wideLook: 0.7, drift: 0.3, tallR: 11.5, tallEl: 0.55, fov: 40, fitAspect: 1.7, fillTall: 0.78 };
 
 // Seat space (u, y above the table top, v) -> world.
 function seatPos(p, u, y, v, out = new THREE.Vector3()) {
@@ -1470,7 +1472,10 @@ export function createDuelScene(canvas, opts = {}) {
     // about 70 px high. The wide and combat shots look along the line
     // between the seats instead, so one fly is near and one is far.
     if (tallShot() && (s === 'wide' || s === 'win' || s === 'combat')) {
-      const r = WATCH.tallR * Math.max(1, 0.68 / aspect);
+      // a fill frame goes nearer (WATCH.fillTall); combat looks from
+      // higher, so it goes half as much nearer and keeps the near fly in
+      const near = clear.fill ? (s === 'combat' ? (1 + WATCH.fillTall) / 2 : WATCH.fillTall) : 1;
+      const r = WATCH.tallR * Math.max(1, 0.68 / aspect) * near;
       let el = WATCH.tallEl, az = 0.28, toward = 0.8;
       if (s === 'combat') { el = 0.75; az = P0 === 0 ? 0.3 : Math.PI + 0.3; toward = P0 === 0 ? 0.6 : -0.6; }
       else if (!W.reduced) { cam.az += dt * 0.05; az += 0.12 * Math.sin(cam.az); }
@@ -1510,7 +1515,9 @@ export function createDuelScene(canvas, opts = {}) {
     } else if (s === 'combat') {
       const side = P0 === 0 ? 1 : -1;
       cam.wantPos.set(7.6 * Math.max(fit, WATCH.fitAspect / aspect), T.y + 3.6, 1.2 * side);
-      cam.wantLook.set(0, T.y + 0.1, 0);
+      // a fill frame looks at the height of the wide shot, so the heads
+      // sit at the same place under the brains (brainpanels fillFrame)
+      cam.wantLook.set(0, T.y + (clear.fill ? WATCH.wideLook : 0.1), 0);
     } else if (s === 'crane') {
       // a rise over the board: from a low three-quarter view to high above
       const k = shotK(3.2);
@@ -1904,12 +1911,16 @@ export function createDuelScene(canvas, opts = {}) {
   // (camera.aspect = the clear aspect), and setViewOffset widens the
   // view to the full canvas around it. frame 'wide' or 'tall' sets the
   // framing of the wide, win and combat shots; null takes it from the
-  // clear aspect (under TALL: tall).
-  let clear = { l: 0, r: 0, t: 0, b: 0, frame: null }, viewW = 960, viewH = 540;
+  // clear aspect (under TALL: tall). fill true (watch mode, main.js
+  // syncClear): the shots take the scale of the FULL canvas (aspect
+  // w / h) and the insets only move the centre of the frame to the centre
+  // of the clear region (the brains are transparent, so the outer board
+  // can lie under them). The flies keep the size of a full-view shot.
+  let clear = { l: 0, r: 0, t: 0, b: 0, frame: null, fill: false }, viewW = 960, viewH = 540;
   const tallShot = () => (clear.frame ? clear.frame === 'tall' : (camera.aspect || 1.6) < TALL);
   function setClear(c = {}) {
     const px = v => (Number.isFinite(+v) && +v > 0 ? +v : 0);
-    clear = { l: px(c.l), r: px(c.r), t: px(c.t), b: px(c.b), frame: c.frame === 'wide' || c.frame === 'tall' ? c.frame : null };
+    clear = { l: px(c.l), r: px(c.r), t: px(c.t), b: px(c.b), frame: c.frame === 'wide' || c.frame === 'tall' ? c.frame : null, fill: !!c.fill };
     resize();
     return { ...clear };
   }
@@ -1919,7 +1930,8 @@ export function createDuelScene(canvas, opts = {}) {
     viewW = w; viewH = h;
     const cl = Math.min(clear.l, w * 0.45), cr = Math.min(clear.r, w * 0.45), ct = Math.min(clear.t, h * 0.45), cb = Math.min(clear.b, h * 0.45);
     const cw = Math.max(1, w - cl - cr), ch = Math.max(1, h - ct - cb);
-    if (cl || cr || ct || cb) camera.setViewOffset(cw, ch, -cl, -ct, w, h);
+    if (clear.fill && (cl || cr || ct || cb)) camera.setViewOffset(w, h, (cr - cl) / 2, (cb - ct) / 2, w, h);
+    else if (cl || cr || ct || cb) camera.setViewOffset(cw, ch, -cl, -ct, w, h);
     else { camera.clearViewOffset(); camera.aspect = w / h; }
     camera.updateProjectionMatrix();
     placeBrains(tallShot());

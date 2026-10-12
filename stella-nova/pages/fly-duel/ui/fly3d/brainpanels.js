@@ -62,7 +62,8 @@
 //      export function fitDistance .... camera distance that fits the map
 //      export const PANEL_EDGE ........ the dark edge on points and lines
 //      export function projectedBounds  the screen box of the brain
-//      export function clearInsets .... overlay rects -> table insets
+//      export function clearInsets .... overlay rects -> table insets (play)
+//      export function fillFrame ...... brain squares -> watch framing
 //      export function createBrainPanels  the panels, shared renderer
 //      function makePanel ............. one map, scene, camera, controls
 //      function draw .................. viewport render + drawImage copy
@@ -133,6 +134,40 @@ export function clearInsets(canvas, overlays, wide) {
     else out.b = Math.max(out.b, canvas.bottom - o.top);
   }
   for (const k of ['l', 'r', 't', 'b']) out[k] = Math.round(out[k]);
+  return out;
+}
+
+// The watch framing of the table under the transparent brains (main.js
+// syncClear in watch mode). The scene takes the scale of the FULL canvas
+// (fill), so the flies keep the size of a full-view shot, and the outer
+// board can lie under a brain. Only the centre of the frame moves:
+//   wide   the brain maps are squares at the top of the side overlays
+//          (style.css BRAINS). t moves the centre down until the fly
+//          heads (at most WIDE_HEAD h over the centre in the wide and
+//          combat shots) are under the lowest brain square plus a gap of
+//          0.03 h. At most 0.45 h (the limit of scene.js resize).
+//   tall   the brain squares sit at the left of the top band and at the
+//          right of the base band. The tall shot sets the near fly at
+//          the lower left and the far fly at the upper right, clear of
+//          both squares, with no move of the centre.
+// canvas: the rect of the scene canvas; brains: the rects of the brain
+// canvases (.bp-cv) that show. Returns { l, r, t, b, frame, fill }.
+export const WIDE_HEAD = 0.09;
+export function fillFrame(canvas, brains, wide) {
+  const out = { l: 0, r: 0, t: 0, b: 0, frame: wide ? 'wide' : null, fill: true };
+  if (!canvas || !wide) return out;
+  const h = canvas.bottom - canvas.top;
+  if (!(h > 0)) return out;
+  let low = -Infinity;
+  for (const o of brains || []) {
+    if (!o || !(o.right > o.left) || !(o.bottom > o.top)) continue;
+    if (o.right <= canvas.left || o.left >= canvas.right || o.bottom <= canvas.top || o.top >= canvas.bottom) continue;
+    low = Math.max(low, o.bottom - canvas.top);
+  }
+  if (low === -Infinity) return out;
+  // the centre (h + t) / 2 less the head height is under low + gap
+  const t = 2 * (low + 0.03 * h + WIDE_HEAD * h) - h;
+  out.t = Math.round(Math.max(0, Math.min(0.45 * h, t)));
   return out;
 }
 
@@ -327,7 +362,10 @@ export function createBrainPanels(canvases, connectomes, opts = {}) {
     const b = P.bounds;
     if (!b) { g.display = 'none'; return; }
     g.display = 'block';
-    g.left = `${b.x.toFixed(1)}px`; g.top = `${b.y.toFixed(1)}px`; g.width = `${b.w.toFixed(1)}px`; g.height = `${b.h.toFixed(1)}px`;
+    // the canvas can sit inside its overlay (a watch square), so the
+    // grip adds the canvas offset in the overlay
+    const ox = P.cv.offsetLeft || 0, oy = P.cv.offsetTop || 0;
+    g.left = `${(b.x + ox).toFixed(1)}px`; g.top = `${(b.y + oy).toFixed(1)}px`; g.width = `${b.w.toFixed(1)}px`; g.height = `${b.h.toFixed(1)}px`;
   }
 
   // The host loop step. Runs each fire sequence and draws the panels that
