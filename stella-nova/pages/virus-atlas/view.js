@@ -28,7 +28,9 @@
 //  shared uniform objects that every material holds.
 //
 //  OTHER OBJECTS  membrane shell (an illustration), spike stalks, the
-//  symmetry axes with 5-, 3- and 2-fold markers, a soft dust field.
+//  symmetry axes with 5-, 3- and 2-fold markers, a soft dust field, and
+//  the saver backdrop (setBackdrop: a radial gradient and a vignette,
+//  off on the page).
 //
 //  MEMORY  The canvas follows budget.js canvasBudget (no render targets,
 //  no MSAA at a pixel ratio of 1.5 or more). dispose() frees every
@@ -36,7 +38,7 @@
 //  calls it on pagehide.
 //
 //  grep -n targets: "export function createView", "function setPalette",
-//    "function setLight", "function makePart", "function setColors", "part.setSel",
+//    "function setLight", "function setBackdrop", "function makePart", "function setColors", "part.setSel",
 //    "function makeMembrane", "function makeAxes", "function makeStalks"
 // ============================================================================
 import * as THREE from 'three';
@@ -92,8 +94,10 @@ export function createView(canvas, opts = {}) {
     for (const n of ['ramp', 'div', 'ss', 'cls']) u[n].forEach((c, i) => PALU['u' + n[0].toUpperCase() + n.slice(1)].value[i].set(c[0], c[1], c[2]));
     PALU.uCopy.value.set(...u.copy);
   }
+  // key: a colors.js LIGHTS key, or a rig object of the same shape (the
+  // saver passes its own rigs, saver-look.js)
   function setLight(key) {
-    const L = LIGHTS[key] || LIGHTS.studio; lightKey = key;
+    const L = typeof key === 'object' && key ? key : LIGHTS[key] || LIGHTS.studio; lightKey = typeof key === 'object' && key ? key.id || 'custom' : key;
     LIGHT.uKey.value.set(...L.key).normalize(); LIGHT.uKeyCol.value.set(...L.keyCol); LIGHT.uFill.value.set(...L.fill).normalize();
     LIGHT.uAmb.value = L.amb; LIGHT.uRimK.value = L.rim; LIGHT.uSpecK.value = L.spec;
     const c = hex01(L.bg); bg.set(c[0], c[1], c[2]); renderer.setClearColor(new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace), 1);
@@ -132,7 +136,7 @@ export function createView(canvas, opts = {}) {
       uSway: { value: 0 }, uSwayH: { value: o.sway ? o.sway.h : 1 }, uSwayBase: { value: o.sway ? o.sway.base : 0 },
       uDim: { value: 0.35 }, uRadialR: { value: o.radius || 10 }, uFade: { value: 1 }, uOffset: { value: new THREE.Vector3() }, uGather: { value: 0 },
       uSel: { value: selT }, uSelOn: { value: 0 }, uExT: { value: 0 }, uExStag: { value: 0 }, uIso: { value: 0 }, uGhost: { value: 0.3 },
-      uLift: { value: 0 }, uAway: { value: 0 }, uLiftDir: { value: new THREE.Vector3(0, 1, 0) },
+      uLift: { value: 0 }, uAway: { value: 0 }, uSelFade: { value: 0 }, uLiftDir: { value: new THREE.Vector3(0, 1, 0) },
       ...LIGHT, ...PALU,
     };
     const uniforms = { ...base, uRadMul: { value: 1 }, uRepScale: { value: 1 }, uSprite: { value: 1 }, uAO: { value: 0 }, uToon: { value: 0 } };
@@ -249,6 +253,40 @@ export function createView(canvas, opts = {}) {
     return { group, dispose() { scene.remove(group); geos.forEach(g => g.dispose()); mats.forEach(m => m.dispose()); } };
   }
 
+  // ── the saver backdrop: a radial gradient with a soft vignette ────────
+  // Off on the page. setBackdrop({ inner, outer, cx, cy }) turns it on
+  // (colours '#rrggbb', centre in 0..1 of the canvas, y up); null turns it
+  // off. A full-screen triangle pair at the far plane, drawn first, no
+  // depth; a little noise breaks the bands of the gradient.
+  const backU = { uIn: { value: new THREE.Vector3() }, uOut: { value: new THREE.Vector3() }, uC: { value: new THREE.Vector2(0.5, 0.5) }, uRes: { value: new THREE.Vector2(1, 1) } };
+  const backGeo = new THREE.BufferGeometry();
+  backGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+  const backMat = new THREE.ShaderMaterial({ uniforms: backU, depthTest: false, depthWrite: false,
+    vertexShader: /* glsl */`void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: /* glsl */`
+      uniform vec3 uIn, uOut; uniform vec2 uC, uRes;
+      void main() {
+        vec2 p = gl_FragCoord.xy / uRes;
+        vec2 d = (p - uC) * vec2(uRes.x / uRes.y, 1.0);
+        float r = length(d);
+        vec3 c = mix(uIn, uOut, smoothstep(0.0, 0.85, r));
+        c *= 1.0 - 0.55 * smoothstep(0.45, 1.25, length((p - 0.5) * vec2(1.0, 1.15)) * 1.414);
+        float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+        gl_FragColor = vec4(c + n / 255.0, 1.0);
+      }` });
+  const backdrop = new THREE.Mesh(backGeo, backMat);
+  backdrop.frustumCulled = false; backdrop.renderOrder = -1000; backdrop.visible = false;
+  scene.add(backdrop);
+  function setBackdrop(o) {
+    if (!o) { backdrop.visible = false; return; }
+    if (o.inner) { const c = hex01(o.inner); backU.uIn.value.set(c[0], c[1], c[2]); }
+    if (o.outer) { const c = hex01(o.outer); backU.uOut.value.set(c[0], c[1], c[2]); }
+    if (o.cx != null) backU.uC.value.set(o.cx, o.cy);
+    const s = renderer.getDrawingBufferSize(new THREE.Vector2());
+    backU.uRes.value.set(Math.max(1, s.x), Math.max(1, s.y));
+    backdrop.visible = true;
+  }
+
   // ── a dust field far behind, for depth when the camera moves ──────────
   const dustGeo = new THREE.BufferGeometry();
   { const n = coarse ? 500 : 1200, p = new Float32Array(3 * n);
@@ -280,10 +318,10 @@ export function createView(canvas, opts = {}) {
   function dispose() {
     if (lost) return;
     lost = true;
-    dustGeo.dispose(); dustMat.dispose(); quad.dispose();
+    dustGeo.dispose(); dustMat.dispose(); quad.dispose(); backGeo.dispose(); backMat.dispose();
     renderer.dispose();
     try { renderer.forceContextLoss(); } catch (e) { /* already lost */ }
   }
-  return { renderer, scene, camera, makePart, makeMembrane, makeStalks, makeAxes, resize, frameScale, render, dispose, setPalette, setLight,
+  return { renderer, scene, camera, makePart, makeMembrane, makeStalks, makeAxes, resize, frameScale, render, dispose, setPalette, setLight, setBackdrop,
     get palette() { return palKey; }, get light() { return lightKey; }, get budget() { return budget; }, coarse };
 }

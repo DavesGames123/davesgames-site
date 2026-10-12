@@ -27,7 +27,8 @@
 //  EXPLODE    explodePlan(T, opts): a direction, a stagger key (0..1) and
 //             a group per unit, for one axis set (5, 3, 2), radial (-1) or
 //             capsomer ('cap') and one stagger ('distance', 'ring', 'copy',
-//             'type'). explodeAmount and unitOffset are the same curve
+//             'type'); on a rod the radial lines leave the rod axis.
+//             explodeAmount and unitOffset are the same curve
 //             that glsl.js unitMove uses (uExT, uExStag), so a camera can
 //             follow a part. selTable packs it for pack.js packSel.
 //             TIMELINE: exT and the isolation over one shot (0..1).
@@ -274,6 +275,8 @@ export function explodePlan(T, opts = {}) {
     let d;
     if (mode === 5 || mode === 3 || mode === 2) { const a = centres[group[u]] || p; d = norm([0.85 * a[0] + 0.15 * p[0], 0.85 * a[1] + 0.15 * p[1], 0.85 * a[2] + 0.15 * p[2]]); }
     else if (mode === 'cap' && caps && caps.length) d = centres[group[u]];
+    // a rod (TMV, axis y): out from the axis, not from the middle of the rod
+    else if (opts.look === 'rod' && Math.hypot(T.cent[3 * u], T.cent[3 * u + 2]) > 1e-6) d = norm([T.cent[3 * u], 0, T.cent[3 * u + 2]]);
     else d = Math.hypot(T.cent[3 * u], T.cent[3 * u + 1], T.cent[3 * u + 2]) > 1e-6 ? p : [0, 1, 0];
     dirs[3 * u] = d[0]; dirs[3 * u + 1] = d[1]; dirs[3 * u + 2] = d[2];
   }

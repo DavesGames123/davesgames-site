@@ -15,7 +15,8 @@
 //  four axis sets (A.exOrder). The slice can keep a slab (A.slab).
 //  A.tour (the saver only): a staggered explode and an isolated region,
 //  from the per-unit table that saver.js uploads (part.setSel); the frame
-//  loop copies it into the uSel uniforms (glsl.js unitMove).
+//  loop copies it into the uSel uniforms (glsl.js unitMove). The saver also
+//  uses show(key, { drop: true }), app.preload(key) and app.setBackdrop.
 //
 //  VIEWS  seven ways to draw the same beads (budget.js REPS): beads,
 //  space-filling, tube, blobs, cage, glow, toon (reps.js). A.W holds a
@@ -83,7 +84,8 @@ const A = {
   // slice keeps only a slab of this half thickness (nm), 0 = half space
   peelMode: 0, peelReach: 0.5, exOrder: 0, slab: 0, spiral: 5,
   // saver tour: null, or { exT, exStag, exAmp (x R), iso, ghost, lift
-  // (nm), liftDir, away (nm) }
+  // (nm), liftDir, away (nm), fade (0..1: units shrink at the end of their
+  // flight), mem (null, or the membrane scale 0..1) }
   tour: null,
 };
 
@@ -237,8 +239,9 @@ async function show(key, opt = {}) {
   if (token !== showToken) { B.dispose(); return null; }
   setLoading(null);
   exitLadderUI();
-  // the old particle fades and flies out
-  if (cur) { leaving.push({ B: cur, t: 0 }); }
+  // the old particle fades and flies out (opt.drop: it goes at once; the
+  // saver drops a particle that its take-apart has already emptied)
+  if (cur) { if (opt.drop) cur.dispose(); else leaving.push({ B: cur, t: 0 }); }
   for (const L of lineup) leaving.push({ B: L, t: 0 });
   lineup = [];
   cur = B;
@@ -451,10 +454,12 @@ function frame(now) {
         u.uExMode.value = 3; p._ex = NaN;   // NaN: the axis set is set again when the tour ends
         u.uExplode.value = T.exAmp * R; u.uExT.value = T.exT; u.uExStag.value = T.exStag;
         u.uIso.value = T.iso; u.uGhost.value = T.ghost; u.uLift.value = T.lift; u.uAway.value = T.away; u.uLiftDir.value.copy(T.liftDir);
+        u.uSelFade.value = T.fade || 0;
       }
     }
     if (cur.membrane) {
-      const e = easeInOut(Math.min(1, A.asm * 1.6));
+      // the saver tour may grow or shrink the membrane (A.tour.mem 0..1)
+      const e = easeInOut(Math.min(1, A.asm * 1.6)) * (A.tour && A.tour.mem != null ? easeInOut(A.tour.mem) : 1);
       cur.membrane.mesh.scale.setScalar(Math.max(0.001, e * (1 + breath)));
       cur.membrane.mat.uniforms.uTime.value = A.time;
       cur.membrane.mesh.visible = A.slice < 0.02 && A.peel < 0.02;
@@ -738,6 +743,10 @@ const app = {
   setRep, repFor, effRep, REP_LABEL,
   setPalette(k) { G.pal = k; V.setPalette(k); if (cur) applyLook(cur); },
   setLight(k) { V.setLight(k); },
+  setBackdrop(o) { V.setBackdrop(o); },
+  // fetch and decode the data of an entry ahead of show() (the saver
+  // calls it while the particle before is on screen)
+  preload(key) { const e = entryByKey(key); return e ? Promise.all(pdbsOf(e).map(p => load(p))).catch(() => null) : Promise.resolve(null); },
   applyLook: () => cur && applyLook(cur),
 };
 window.__va = app;

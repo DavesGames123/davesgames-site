@@ -19,6 +19,9 @@
 //      curve of regions.js explodeAmount. A selected unit (the inspected
 //      region) lifts by uLift along uLiftDir; the rest shrinks to uGhost,
 //      darkens by uIso (gIso) and moves uAway along its away direction.
+//      uSelFade 1 shrinks each unit to nothing as it nears the end of its
+//      flight (exF 0.55 -> 1): uExT 1 -> 0 builds the shell from nothing,
+//      0 -> 1 takes it apart to nothing.
 //    peelKey  0 plane (camera side), 1 latitude from the pole, 2 copy
 //      order, 3 radius shell (outer first), 4 spiral, 5 random tiles.
 //      A unit lifts off when its key passes uPeelD (width uPeelW).
@@ -47,7 +50,7 @@ uniform sampler2D uBeads, uAux, uOps, uUnits, uChainCol, uSel;
 uniform int uNB, uStride, uNChains, uColMode, uHiK, uNCopies, uNBead, uPeelMode, uExMode, uNAx, uSelOn;
 uniform float uRad, uAsm, uSpread, uFly, uJitter, uExplode, uPeelD, uPeelW, uPeelOn, uSpiral,
   uSliceD, uSliceOn, uSlab, uBreath, uTime, uSway, uSwayH, uSwayBase, uDim, uRadialR, uFade, uGather,
-  uExT, uExStag, uIso, uGhost, uLift, uAway;
+  uExT, uExStag, uIso, uGhost, uLift, uAway, uSelFade;
 uniform vec3 uPeelN, uSliceN, uOffset, uCopy, uLiftDir;
 uniform vec3 uAx[15];
 uniform vec3 uRamp[5];
@@ -138,6 +141,10 @@ Move unitMove(int k, int ch) {
     m.off += sel * uLiftDir * uLift + (1.0 - sel) * awd * uAway;
     gIso = (1.0 - sel) * uIso;
     m.s = 1.0 - (1.0 - m.s) * mix(1.0, uGhost, gIso);
+    // uSelFade 1 (the saver build and take-apart): a unit shrinks to
+    // nothing over the last part of its flight out, and grows back as it
+    // flies in, so a shell builds from nothing and goes to nothing
+    m.s = 1.0 - (1.0 - m.s) * (1.0 - uSelFade * smoothstep(0.55, 1.0, exF));
   }
   m.off += m.c * uBreath;
   return m;
