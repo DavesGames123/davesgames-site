@@ -19,10 +19,11 @@
    (data/connectome-flywire.json). FLY3D.md is the spec of the 3D table.
 
    TWO MODES  (?mode=watch | ?mode=play in the URL)
-     watch  Fly A against Fly B on the 3D convention table, a large live
-            brain of each fly on its side. The slim scorecard of each fly
-            (ui/hud/scorecard.js) lies over its brain. One turn box at
-            the top of the table; a pause between turns.
+     watch  Fly A against Fly B on the 3D convention table, which fills
+            the game view. A large live brain of each fly lies on its
+            side as a transparent overlay. The slim scorecards
+            (ui/hud/scorecard.js) sit in the top corners. One turn box
+            at the top of the table; a pause between turns.
      play   You against a model fly, first person (ui/play/play.js
             mountPlay). The 3D canvas moves into the play table.
    With no mode in the URL, the title screen (ui/chooser/chooser.js)
@@ -68,21 +69,31 @@
    Script at the end of body: main.js (module).
 
    LAYOUT  (# marks an element id main.js binds to)
-     The two brains are the main feature (CONTRACT.md):
-       wide   [ brain A | 3D table with the flies | brain B ]  + bar
-       tall   [ brain A ] over [ table ] over [ brain B ]      + bar
-       play   the brain of the opposing fly on its side (data-opp A|B),
-              the play screen in the rest; no panel for the bot
+     The two brains are the main feature (CONTRACT.md). The 3D table
+     (#heroStage) fills the game view down to the bar. The brains are
+     TRANSPARENT OVERLAYS on it (no ground, no border):
+       wide   brain A over the left side, brain B over the right side,
+              each about a third of the width; the board in the middle
+       tall   brain A over the top band, brain B over the band above the
+              bar; the board in the middle band
+       play   only the brain of the opposing fly (data-opp A|B), on its
+              side (wide) or at the top (tall); no brain for the bot
+     main.js syncClear gives the scene the overlay insets (setClear of
+     ui/fly3d/scene.js), so the camera frames the board in the clear
+     region. Only .bp-grip (the projected bounds of the brain) takes the
+     pointer; the rest of an overlay passes input to the table.
      #app            fixed, 100vw x 100dvh; data-mode watch|play,
                      data-table 3d|2d, data-sheet (chooser open),
                      data-brains panels|scene|off, data-opp A|B|bot (play)
      brain panels    #heroPaneA #heroPaneB (.bp a|b): #heroBrainA
                      #heroBrainB (2D canvases: ui/fly3d/brainpanels.js
-                     copies one shared WebGL renderer into them, or the
-                     2D BrainView of ui/brain.js draws them), captions
-                     #heroCapA #heroCapB (fly, wiring, active KCs, V, δ)
-     watch HUD       #watchHud: #scA (over brain A) #heroTurn #scB (over
-                     brain B). #heroTurn is the one turn indicator
+                     copies one shared WebGL renderer into them with
+                     alpha, or the 2D BrainView of ui/brain.js draws
+                     them), .bp-grip (the input box of the brain),
+                     captions #heroCapA #heroCapB at the base of each
+                     overlay (fly, wiring, active KCs, V, δ)
+     watch HUD       #watchHud: #scA (top-left) #heroTurn #scB
+                     (top-right). #heroTurn is the one turn indicator
                      ("Turn 7 · Fly B · combat"); it changes in place, no
                      banner per turn
      fallback HUD    #hudBar #hudA #hudB (shows only when
@@ -170,10 +181,12 @@
 
   <section class="bp a" id="heroPaneA" data-seat="0" aria-label="Fly A: live brain">
     <canvas class="bp-cv" id="heroBrainA" aria-label="Live 3D map of the mushroom body of Fly A. Drag to turn it, tap a part to name it."></canvas>
+    <div class="bp-grip" aria-label="Fly A brain: drag to turn it, tap a part to name it"></div>
     <p class="bp-cap" id="heroCapA"><b class="seatmark s0">A</b><span class="bp-n">Fly A</span><span class="bp-src" data-src="A"></span><span class="bp-kc"></span></p>
   </section>
   <section class="bp b" id="heroPaneB" data-seat="1" aria-label="Fly B: live brain">
     <canvas class="bp-cv" id="heroBrainB" aria-label="Live 3D map of the mushroom body of Fly B. Drag to turn it, tap a part to name it."></canvas>
+    <div class="bp-grip" aria-label="Fly B brain: drag to turn it, tap a part to name it"></div>
     <p class="bp-cap" id="heroCapB"><b class="seatmark s1">B</b><span class="bp-n">Fly B</span><span class="bp-src" data-src="B"></span><span class="bp-kc"></span></p>
   </section>
 

@@ -2,10 +2,12 @@
 //  FLY DUEL  ·  page logic  (module)
 // ----------------------------------------------------------------------------
 //  The page is a fullscreen game with two modes (index.html header):
-//    watch  Fly A against Fly B on the 3D table, between the two big
-//           live brain panels (initPanels: brain A | table | brain B,
-//           or A over the table over B on a portrait phone). The slim
-//           scorecard of each fly lies over its panel. One turn box
+//    watch  Fly A against Fly B on the 3D table, which fills the game
+//           view. The two big live brains (initPanels) are transparent
+//           overlays on it: A at the left and B at the right side, or A
+//           at the top and B at the base on a portrait phone. The camera
+//           frames the board between them (syncClear). The slim
+//           scorecards sit in the top corners. One turn box
 //           (turnLine) is the one voice of the game state; the table
 //           holds still for a pause between turns.
 //    play   You against a model fly: ui/play/play.js mountPlay() in
@@ -56,6 +58,7 @@
 //      grep -n 'function initPanels'      the two brain panels, one renderer
 //      grep -n 'function brainFire'       a decision -> its fly's panel
 //      grep -n 'function capOf'           panel caption: KCs, V, δ
+//      grep -n 'function syncClear'       overlay insets -> scene framing
 //      grep -n 'function setBrains'       brains: panels, scene, off
 //      grep -n 'function conOf'           the connectome of Fly A or Fly B
 //      grep -n 'function initModes'       the title screen, URL
@@ -631,8 +634,9 @@ function initHero(mod3d = null) {
   seg($('heroBrains'), v => setBrains(v));
   const cv = $('heroCv');
   for (const t of ['pointerdown', 'pointermove', 'wheel']) cv.addEventListener(t, () => { hero.poke = 1.5; }, { passive: true });
-  addEventListener('resize', () => { hero.scene?.resize(); hero.panels?.resize(); hero.poke = 0.5; });
+  addEventListener('resize', () => { hero.scene?.resize(); hero.panels?.resize(); syncClear(); hero.poke = 0.5; });
   setBrains(hero.brains);
+  hero.syncClear = syncClear;
   if (REDUCED) stepNow();
 }
 
@@ -699,7 +703,7 @@ function initScorecards() {
 }
 
 // The two brain panels (#heroPaneA, #heroPaneB): the main feature of the
-// layout (CONTRACT.md). With the 3D table, ui/fly3d/brainpanels.js draws
+// layout (CONTRACT.md), transparent overlays on the table. With the 3D table, ui/fly3d/brainpanels.js draws
 // both maps with ONE shared WebGL renderer into the two 2D panel
 // canvases, so the page has two WebGL contexts in all (the table and the
 // panels). Without it (no WebGL, node, an error), the 2D BrainView of
@@ -744,6 +748,32 @@ function capOf(p, trace, delta) {
   el.textContent = `${(trace.kc || []).length}${nKC ? ` of ${nKC.toLocaleString('en-US')}` : ''} KCs active${Number.isFinite(trace.value) ? ` · V ${signed(trace.value)}` : ''}${Number.isFinite(d) ? ` · δ ${signed(d)}` : ''}`;
 }
 
+// The clear region of the table (ui/fly3d/scene.js setClear). The brain
+// overlays are transparent and lie over the table canvas, so the camera
+// frames the board in the region between them: the insets are how far
+// each shown overlay reaches into the canvas (clearInsets of
+// brainpanels.js). A wide screen keeps the wide framing (frame 'wide');
+// a tall screen and play mode take the framing from the clear aspect.
+const wideScreen = () => {
+  try { if (typeof matchMedia === 'function') return matchMedia('(min-aspect-ratio: 11/10) and (min-width: 700px)').matches; } catch { /* no media queries */ }
+  const w = window.innerWidth || 390, h = window.innerHeight || 844;
+  return w / h >= 1.1 && w >= 700;
+};
+function shownPanes() {
+  if (hero.brains !== 'panels' || hero.mode !== '3d') return [];
+  if (app.mode === 'play') { const o = $('app').dataset.opp; return o === 'A' || o === 'B' ? [$(`heroPane${o}`)] : []; }
+  return [$('heroPaneA'), $('heroPaneB')];
+}
+function syncClear() {
+  const sc = hero.scene, PM = app.panelMod;
+  if (!sc?.setClear) return null;
+  const cv = app.mode === 'play' && app.playScene ? (app.cv || $('heroCv')) : $('heroCv');
+  const box = el => (el?.getBoundingClientRect ? el.getBoundingClientRect() : null);
+  const wide = wideScreen();
+  const ins = PM?.clearInsets ? PM.clearInsets(box(cv), shownPanes().map(box), wide) : { l: 0, r: 0, t: 0, b: 0 };
+  return sc.setClear({ ...ins, frame: wide && app.mode === 'watch' ? 'wide' : null });
+}
+
 // The brain control: panels (the default: a large live brain on each
 // side), scene (the small maps beside the flies in the hall) or off. A
 // brain shows in one place only: the panels turn the maps of the scene
@@ -756,6 +786,7 @@ function setBrains(v) {
   $('heroBrains')?.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === hero.brains));
   hero.scene?.resize?.();
   hero.panels?.resize();
+  syncClear();
   views.forEach(x => { x.dirty = true; });
   hero.poke = 1;
 }
@@ -875,7 +906,7 @@ async function enterPlay() {
       // the brain of the fly is in its side panel, not in its scorecard
       brainMod: null, cardBrain: false, scene: sceneOK ? hero.scene : null, sceneEl: sceneOK ? cv : null,
       trainedDecks: trainedDecks(), onExit: () => exitPlay(),
-      onGame: g => { $('app').dataset.opp = g.opp; hero.panels?.resize(); },
+      onGame: g => { $('app').dataset.opp = g.opp; hero.panels?.resize(); syncClear(); },
       onFlyTrace: (side, trace, delta) => brainFire(side === 'A' ? 0 : 1, trace, delta),
     });
   } catch (e) {
@@ -883,7 +914,7 @@ async function enterPlay() {
     exitPlay();
     return;
   }
-  if (sceneOK) hero.scene.resize();
+  if (sceneOK) { hero.scene.resize(); syncClear(); }
   presetPlay($('playRoot'));
 }
 
@@ -913,7 +944,7 @@ function exitPlay(restart = true) {
   }
   app.playScene = false;
   app.mode = 'watch'; $('app').dataset.mode = 'watch'; delete $('app').dataset.opp;
-  hero.scene?.resize?.(); hero.panels?.resize();
+  hero.scene?.resize?.(); hero.panels?.resize(); syncClear();
   hero.suspended = false;
   if (restart) { hero.newGame?.(); syncURL(); }
 }

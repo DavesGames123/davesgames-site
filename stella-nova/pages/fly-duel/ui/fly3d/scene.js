@@ -54,7 +54,8 @@
 //  API
 //      createDuelScene(canvas, { connectomes, cards, names, reduced,
 //        coarse, headless }) -> { play(record) -> Promise, setState(state),
-//        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
+//        resize(), setClear({ l, r, t, b, frame }), render(dt), dispose(),
+//        setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), setBigBrain(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
 //        orbitBy(dx, dy), zoomBy(k), seatView(),
@@ -1466,7 +1467,7 @@ export function createDuelScene(canvas, opts = {}) {
     // side view: at 0.65 the camera went past the wall and each fly was
     // about 70 px high. The wide and combat shots look along the line
     // between the seats instead, so one fly is near and one is far.
-    if (aspect < TALL && (s === 'wide' || s === 'win' || s === 'combat')) {
+    if (tallShot() && (s === 'wide' || s === 'win' || s === 'combat')) {
       const r = WATCH.tallR * Math.max(1, 0.68 / aspect);
       let el = WATCH.tallEl, az = 0.28, toward = 0.8;
       if (s === 'combat') { el = 0.75; az = P0 === 0 ? 0.3 : Math.PI + 0.3; toward = P0 === 0 ? 0.6 : -0.6; }
@@ -1893,10 +1894,33 @@ export function createDuelScene(canvas, opts = {}) {
       io.observe(canvas);
     }
   }
-  function resize() {
-    const w = Math.max(1, canvas?.clientWidth || 960), h = Math.max(1, canvas?.clientHeight || 540);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
-    placeBrains(camera.aspect < TALL);
+  // CLEAR REGION (setClear). The page lays the two brain overlays over
+  // the sides (or the top and the base) of the canvas. The overlays are
+  // transparent, so the canvas fills the whole game view, but the board
+  // must not lie under a brain. clear holds the overlay insets in CSS px
+  // (l, r, t, b). The camera frames each shot for the clear region only
+  // (camera.aspect = the clear aspect), and setViewOffset widens the
+  // view to the full canvas around it. frame 'wide' or 'tall' sets the
+  // framing of the wide, win and combat shots; null takes it from the
+  // clear aspect (under TALL: tall).
+  let clear = { l: 0, r: 0, t: 0, b: 0, frame: null }, viewW = 960, viewH = 540;
+  const tallShot = () => (clear.frame ? clear.frame === 'tall' : (camera.aspect || 1.6) < TALL);
+  function setClear(c = {}) {
+    const px = v => (Number.isFinite(+v) && +v > 0 ? +v : 0);
+    clear = { l: px(c.l), r: px(c.r), t: px(c.t), b: px(c.b), frame: c.frame === 'wide' || c.frame === 'tall' ? c.frame : null };
+    resize();
+    return { ...clear };
+  }
+  // w, h: a size for a headless scene (tests); the canvas size wins
+  function resize(wIn, hIn) {
+    const w = Math.max(1, canvas?.clientWidth || wIn || viewW), h = Math.max(1, canvas?.clientHeight || hIn || viewH);
+    viewW = w; viewH = h;
+    const cl = Math.min(clear.l, w * 0.45), cr = Math.min(clear.r, w * 0.45), ct = Math.min(clear.t, h * 0.45), cb = Math.min(clear.b, h * 0.45);
+    const cw = Math.max(1, w - cl - cr), ch = Math.max(1, h - ct - cb);
+    if (cl || cr || ct || cb) camera.setViewOffset(cw, ch, -cl, -ct, w, h);
+    else { camera.clearViewOffset(); camera.aspect = w / h; }
+    camera.updateProjectionMatrix();
+    placeBrains(tallShot());
     bigBrainPlace();
     renderer?.setSize(w, h, false);
   }
@@ -2160,7 +2184,7 @@ export function createDuelScene(canvas, opts = {}) {
   }
 
   return {
-    play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
+    play, setState, resize, setClear, get clear() { return { ...clear, w: viewW, h: viewH }; }, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
     setFirstPerson, pickPermanent, pickCard, highlight, setRig, orbitBy, zoomBy, seatView,
     world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };

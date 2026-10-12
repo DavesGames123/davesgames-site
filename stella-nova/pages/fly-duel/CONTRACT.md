@@ -46,6 +46,15 @@ about the simulation and layout in fullscreen"
   and turnable; the flies still fill the centre panel. On a portrait
   phone: the two brains stacked above and below the table (or one brain
   per half, switching with the acting fly), never hidden by default.
+  Then (verbatim, 2026-10-11): "so much of the visual real estate of the
+  fruit fly panel is just shrouded in black bars when instead the
+  backgrouds of both brains shoul dbe transparent to show the maximum
+  amount of board state". So the 3D table fills the whole game view
+  again, and the two brains are transparent overlays on it (A on the
+  left, B on the right; on a portrait phone A at the top, B at the base),
+  same size, no ground, no border. The camera frames the table, the cards
+  and the flies in the clear region between the overlays. Outside the
+  projected bounds of a brain, input goes to the table.
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
 

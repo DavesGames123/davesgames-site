@@ -32,7 +32,7 @@
   --c-sans:var(--sci-sans,Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);
   --c-mono:var(--sci-mono,ui-monospace,'SF Mono',Menlo,Consolas,monospace);
   --c-rule:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='10' viewBox='0 0 220 10'%3E%3Cpath d='M0 5H96M124 5H220' stroke='%23c9a45a' stroke-width='1'/%3E%3Cpath d='M110 0.6 114.4 5 110 9.4 105.6 5Z' fill='%23c9a45a'/%3E%3Cpath d='M99 5 101.5 2.5 104 5 101.5 7.5ZM116 5 118.5 2.5 121 5 118.5 7.5Z' fill='%236e5a32'/%3E%3C/svg%3E");
-  position:absolute;inset:0;z-index:30;color:var(--c-ink);font:400 14px/1.45 var(--c-sans);
+  position:absolute;inset:0;z-index:400;color:var(--c-ink);font:400 14px/1.45 var(--c-sans);
   overflow:hidden;-webkit-font-smoothing:antialiased;
 }
 .fdc[hidden],.fdc [hidden]{display:none!important}
