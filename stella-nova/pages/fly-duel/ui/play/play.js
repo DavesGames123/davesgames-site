@@ -38,6 +38,11 @@
 //        no target to choose, the fly's turn). Without pickPermanent the
 //        flat table is used and the scene is not touched.
 //
+//  ORBIT  Drag on the table turns your camera, pinch or the wheel zooms
+//        (ui/play/orbit.js; clamps in ui/fly3d/director.js ORBIT). A drag
+//        picks nothing; a tap still picks. "Back to seat" or C goes back.
+//        The hand of the fly stays hidden from every angle (scene.js).
+//
 //  KEYS (desktop)  Space / Enter: the big button. Esc: cancel or close.
 //        Z or Backspace: undo. A: all attack. 1-9: select a hand card.
 //        I: inspect the selected card. L: the log. ?: the key list.
@@ -65,6 +70,7 @@ import { layoutFor } from './layout.js';
 import { createHand, createOppHand } from './hand.js';
 import { createBoard2d } from './board2d.js';
 import { createInspector } from './inspector.js';
+import { attachOrbit } from './orbit.js';
 import { paintCard, colourHex } from './canvas.js';
 import { createScorecard, scorecardModel } from '../hud/scorecard.js';
 import { agentFromFly, agentFromBot } from '../match.js';
@@ -111,7 +117,7 @@ export function mountPlay(root, opts) {
   root.innerHTML = `
     <div class="pl-cards"><div class="pl-sc pl-sc0"></div><div class="pl-sc pl-sc1"></div></div>
     <div class="pl-opp"></div>
-    <div class="pl-table"></div>
+    <div class="pl-table"><button type="button" class="pl-btn pl-seatbtn" hidden aria-label="Back to seat (C)">Back to seat</button></div>
     <div class="pl-last" hidden><canvas class="pl-cv"></canvas><span class="pl-last-t"></span></div>
     <div class="pl-bar"><ol class="pl-steps"></ol><span class="pl-turn"></span><p class="pl-prompt" aria-live="polite"></p></div>
     <div class="pl-handbox"></div>
@@ -157,10 +163,19 @@ export function mountPlay(root, opts) {
     onHover: id => hover(id),
   });
   const opp = createOppHand($('.pl-opp'));
-  let board = null;
+  let board = null, orbit = null;
   if (has3d) {
-    if (opts.sceneEl) tableBox.appendChild(opts.sceneEl);
+    if (opts.sceneEl) tableBox.insertBefore(opts.sceneEl, tableBox.firstChild);
     tableBox.classList.add('is-3d');
+    // Orbit (ui/play/orbit.js): drag turns the seat camera, pinch and the
+    // wheel zoom. A drag eats its click, so it picks nothing. "Back to
+    // seat" (or C) puts the camera back.
+    const seatBtn = $('.pl-seatbtn');
+    if (typeof opts.scene.orbitBy === 'function') {
+      orbit = attachOrbit(tableBox, opts.scene, { blocked: () => hand.dragging, onChange: on => { seatBtn.hidden = !on; } });
+      seatBtn.addEventListener('pointerdown', e => e.stopPropagation());
+      seatBtn.addEventListener('click', e => { e.stopPropagation(); orbit.seat(); });
+    }
     const pickAt = (x, y) => {
       let hit = null;
       try { hit = opts.scene.pickPermanent(x, y); } catch { hit = null; }
@@ -188,6 +203,7 @@ export function mountPlay(root, opts) {
       if (uid !== null) { e.preventDefault(); clearTimeout(press.t); inspectPerm(uid); }
     });
     tableBox.addEventListener('click', e => {
+      if (orbit?.consumeDrag()) { press.long = false; return; }
       if (!ix) return;
       if (press.long) { press.long = false; return; }
       const { uid, who } = pickAt(e.clientX, e.clientY);
@@ -378,6 +394,7 @@ export function mountPlay(root, opts) {
     }
     root.dataset.human = String(humanSeatNo);
     opts.scene?.setFirstPerson?.(humanSeatNo);
+    orbit?.seat();
     lastBox.hidden = true;
     render();
     coinSheet();
@@ -541,7 +558,7 @@ export function mountPlay(root, opts) {
       <button type="button" class="pl-btn" data-m="concede">Concede and restart</button>
       <button type="button" class="pl-btn" data-m="setup">Change decks</button>
       ${opts.onExit ? '<button type="button" class="pl-btn" data-m="exit">Exit play mode</button>' : ''}
-      <p class="pl-keys" hidden>Space or Enter: the big button. Esc: cancel or close. Z or Backspace: undo. A: all attack. 1 to 9: select a hand card. I: inspect it. L: the log.</p>`;
+      <p class="pl-keys" hidden>Space or Enter: the big button. Esc: cancel or close. Z or Backspace: undo. A: all attack. 1 to 9: select a hand card. I: inspect it. L: the log. Drag the table to look around, pinch or wheel to zoom, C: back to your seat.</p>`;
     menu.querySelector('.pl-seg').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       pref.speed = b.dataset.v;
@@ -584,6 +601,7 @@ export function mountPlay(root, opts) {
     if (!alive || !root.isConnected) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    if ((e.key === 'c' || e.key === 'C') && orbit?.orbiting) { orbit.seat(); return; }
     if (e.key === 'Escape') {
       if (inspector.isOpen()) { inspector.close(); return; }
       if (!menu.hidden) { toggleMenu(false); return; }
@@ -677,6 +695,7 @@ export function mountPlay(root, opts) {
       alive = false; gameNo++;
       stopTimer();
       doc.removeEventListener('keydown', onKey);
+      orbit?.dispose();
       ro?.disconnect(); win.removeEventListener('resize', relayout);
       for (const sc of scs) sc?.dispose();
       root.innerHTML = '';

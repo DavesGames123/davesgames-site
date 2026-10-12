@@ -48,6 +48,8 @@
 .pl-table { grid-area: table; position: relative; min-height: 0; border: 1px solid var(--hair); border-radius: 10px; background: var(--fig); overflow: hidden; }
 .pl-table.is-3d { border: 0; background: none; }
 .pl-table.is-3d > canvas { width: 100%; height: 100%; display: block; }
+.pl-seatbtn { position: absolute; z-index: 35; left: 50%; top: 8px; transform: translateX(-50%); min-height: 36px; padding: 0 14px; font-size: 13px; opacity: 0.92; }
+.pl-seatbtn[hidden] { display: none !important; }
 .pl-bar { grid-area: bar; display: grid; grid-template-columns: auto auto; justify-content: space-between; align-items: center; gap: 2px 10px; }
 .pl-actions { grid-area: act; justify-self: end; display: flex; gap: 8px; align-items: stretch; position: relative; z-index: 60; }
 .pl-menubtn { grid-area: act; justify-self: start; z-index: 60; }

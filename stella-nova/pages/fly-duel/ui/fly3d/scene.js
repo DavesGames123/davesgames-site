@@ -52,6 +52,7 @@
 //        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
+//        orbitBy(dx, dy), zoomBy(k), seatView(),
 //        highlight(ids, kind) | highlight(spec) | highlight(null),
 //        setRig(fn | null) }
 //      Saver hook: setRig(fn) gives the camera to the saver reel
@@ -64,6 +65,9 @@
 //      the other fly in view) and holds it there. pickPermanent and
 //      pickCard take client px (a pointer event) and raycast the cards.
 //      highlight marks legal attackers, blockers and targets with rings.
+//      orbitBy(dx, dy), zoomBy(k), seatView(): the player turns and zooms
+//      the seat camera (clamped, ui/fly3d/director.js ORBIT) and goes
+//      back to the seat. ui/play/orbit.js gives the pointer gestures.
 //      Hidden cards: in first person the hand and the library of the
 //      other fly show the question-mark back (textureCache mystery) on
 //      both caps. The mesh then has no card id, and pickCard gives id
@@ -108,7 +112,7 @@ import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
 import { landProduces, colourHex, tokenShape, stackLayout, STACK } from './mana.js';
 import { buildHall, HALL, CROWD_SECTOR, MAT } from './hall.js';
-import { createDirector, recordInfo, SHOTS } from './director.js';
+import { createDirector, recordInfo, SHOTS, orbitFrom, orbitPos, orbitDrag, orbitZoom } from './director.js';
 import { createLifeDice } from './d20.js';
 import { createDice } from './dice3d.js';
 
@@ -1299,6 +1303,7 @@ export function createDuelScene(canvas, opts = {}) {
       cam.wantPos.set(Math.sin(a) * 2.2, T.y + 1.1, Math.cos(a) * 2.2);
     } else if (s === 'seat') {
       seatPose(fpSeat ?? P0, cam.wantPos, cam.wantLook);
+      if (fpOrbit) orbitPos(fpOrbit, cam.wantLook, cam.wantPos);
     }
   }
   // The point a shot is about (tests: it must be in the frame).
@@ -1746,13 +1751,15 @@ export function createDuelScene(canvas, opts = {}) {
   function setFirstPerson(seat) {
     if (seat === 0 || seat === 1) {
       if (fpSeat == null) fpPrev = camMode;
-      fpSeat = seat; camMode = 'script';
+      fpSeat = seat; camMode = 'script'; fpOrbit = null;
+      if (canvas?.style) canvas.style.touchAction = 'none';
       showBrains();
       dir.request('seat', seat, sceneT, { force: true });
       cam.userUntil = now;
       if (controls) controls.enabled = false;
     } else if (fpSeat != null) {
-      fpSeat = null;
+      fpSeat = null; fpOrbit = null;
+      if (canvas?.style) canvas.style.touchAction = 'pan-y';
       camMode = fpPrev || 'auto'; fpPrev = null;
       showBrains();
       dir.request('wide', 0, sceneT, { force: true });
@@ -1761,6 +1768,21 @@ export function createDuelScene(canvas, opts = {}) {
     layout(false);       // the hidden hand changes with the seat at once
     return fpSeat;
   }
+  // The play-mode orbit (ui/fly3d/director.js ORBIT): orbitBy(dx, dy)
+  // turns the seat camera about the seat look point by a drag in px,
+  // zoomBy(k) changes the distance, seatView() goes back to the seat. The
+  // first call starts from the seat pose, so the camera does not jump.
+  // Only in first person: in watch mode OrbitControls has the camera.
+  let fpOrbit = null;
+  const _oa = new THREE.Vector3(), _ob = new THREE.Vector3();
+  function orbitStart() {
+    if (fpSeat == null) return false;
+    if (!fpOrbit) { seatPose(fpSeat, _oa, _ob); fpOrbit = orbitFrom(_oa, _ob); }
+    return true;
+  }
+  function orbitBy(dx, dy) { if (!orbitStart()) return null; fpOrbit = orbitDrag(fpOrbit, +dx || 0, +dy || 0); return { ...fpOrbit }; }
+  function zoomBy(k) { if (!orbitStart()) return null; fpOrbit = orbitZoom(fpOrbit, k); return { ...fpOrbit }; }
+  function seatView() { fpOrbit = null; return fpSeat; }
   // Screen point (client px, as a pointer event gives) -> NDC.
   const _ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
   function toNdc(x, y) {
@@ -1859,7 +1881,7 @@ export function createDuelScene(canvas, opts = {}) {
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(), dice: dice.stats(),
-      firstPerson: fpSeat, hidden: hiddenSeat(), highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
+      firstPerson: fpSeat, hidden: hiddenSeat(), orbit: fpOrbit ? { ...fpOrbit } : null, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
     };
   }
   function dispose() {
@@ -1876,7 +1898,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
-    setFirstPerson, pickPermanent, pickCard, highlight, setRig,
+    setFirstPerson, pickPermanent, pickCard, highlight, setRig, orbitBy, zoomBy, seatView,
     world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }

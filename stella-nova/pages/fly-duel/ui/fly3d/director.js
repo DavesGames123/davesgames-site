@@ -45,7 +45,20 @@
 //        'perm', uid } | { kind: 'uids', uids } (what the shot looks at)
 //      info (per record): { action, lethal, loser }
 //
+//  ORBIT (play mode). The player can turn the seat camera about the look
+//  point of the seat: a drag turns it, a pinch or the wheel zooms. The
+//  orbit is { az, el, dist } about the look point (az about +y, from +z;
+//  el above the table plane). ORBIT holds the clamps: the camera stays
+//  above the table top (minEl) and below the top of the frame (maxEl),
+//  and between minDist and maxDist from the look point. The functions
+//  are pure (plain {x, y, z}), so node tests check the clamps.
+//
 //  GREP MAP
+//      grep -n 'export const ORBIT'        orbit clamps and rates
+//      grep -n 'export function orbitFrom' camera place -> orbit
+//      grep -n 'export function orbitPos'  orbit -> camera place
+//      grep -n 'export function orbitDrag' drag px -> turn (clamped)
+//      grep -n 'export function orbitZoom' zoom factor (clamped)
 //      grep -n 'export const SHOTS'        shot table (move, hold, rate)
 //      grep -n 'export const PRIORITY'     which shot cuts into which
 //      grep -n 'export const ALT'          the no-repeat change
@@ -156,4 +169,37 @@ export function createDirector({ reduced = false } = {}) {
     lock(until) { s.lockUntil = Math.max(s.lockUntil, until); },
     reset(t = 0) { s.shot = 'wide'; s.p = 0; s.since = t; s.cut = true; s.target = null; s.lockUntil = -1; s.hist = ['wide:0']; s.lowDone = false; },
   };
+}
+
+// ---------------------------------------------------------------- orbit
+export const ORBIT = { minDist: 2.6, maxDist: 14, minEl: 0.1, maxEl: 1.4, perPx: 0.0065 };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const wrap = a => { const t = Math.PI * 2; return ((a + Math.PI) % t + t) % t - Math.PI; };
+export function clampOrbit(o) {
+  return {
+    az: wrap(Number.isFinite(o.az) ? o.az : 0),
+    el: clamp(Number.isFinite(o.el) ? o.el : 0.5, ORBIT.minEl, ORBIT.maxEl),
+    dist: clamp(Number.isFinite(o.dist) ? o.dist : 6, ORBIT.minDist, ORBIT.maxDist),
+  };
+}
+export function orbitFrom(pos, look) {
+  const dx = pos.x - look.x, dy = pos.y - look.y, dz = pos.z - look.z;
+  const dist = Math.hypot(dx, dy, dz) || 1;
+  return clampOrbit({ az: Math.atan2(dx, dz), el: Math.asin(clamp(dy / dist, -1, 1)), dist });
+}
+export function orbitPos(o, look, out = { x: 0, y: 0, z: 0 }) {
+  const c = Math.cos(o.el);
+  out.x = look.x + Math.sin(o.az) * c * o.dist;
+  out.y = look.y + Math.sin(o.el) * o.dist;
+  out.z = look.z + Math.cos(o.az) * c * o.dist;
+  return out;
+}
+// A drag of (dx, dy) px: right turns the camera to the left about the
+// look point, down lifts it (the OrbitControls sense).
+export function orbitDrag(o, dx, dy) {
+  return clampOrbit({ az: o.az - dx * ORBIT.perPx, el: o.el + dy * ORBIT.perPx, dist: o.dist });
+}
+// k < 1 comes nearer, k > 1 goes back.
+export function orbitZoom(o, k) {
+  return clampOrbit({ az: o.az, el: o.el, dist: o.dist * (Number.isFinite(k) && k > 0 ? k : 1) });
 }
