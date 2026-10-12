@@ -648,7 +648,7 @@ export function createDuelScene(canvas, opts = {}) {
   // BoxGeometry face order: +x -x +y -y +z -z. The +y face shows the back.
   const piles = [0, 1].map(p => {
     const lib = new THREE.Mesh(pileGeo, pileMat);
-    lib.position.copy(seatPos(p, T.deckU, 0.003, T.deckV)); lib.quaternion.copy(seatQuat(p, 0, 0, 0));
+    lib.position.copy(seatPos(p, T.deckU, 0.008, T.deckV)); lib.quaternion.copy(seatQuat(p, 0, 0, 0));
     lib.castShadow = lib.receiveShadow = true;
     scene.add(lib);
     const label = W.sprites.make('0', TOKENS.ink2, 0.2);
@@ -839,12 +839,12 @@ export function createDuelScene(canvas, opts = {}) {
     if (land) {
       // lands: one stack per colour set (ui/fly3d/mana.js stackLayout)
       const L = stackOf(p).at.get(x.uid) || { u: 0, dv: 0, dy: 0 };
-      u = L.u; v = T.landV + L.dv; y = 0.006 + L.dy;
+      u = L.u; v = T.landV + L.dv; y = 0.008 + L.dy;
     } else {
       const row = pl.battlefield.filter(y => CARD[y.id].type !== 'land');
       const slots = rowSlots(row.length, T.rowHalf, 0.68);
       const i = row.indexOf(x);
-      u = slots[i] ?? 0; v = T.creatureV; y = 0.006 + i * 0.0012;
+      u = slots[i] ?? 0; v = T.creatureV; y = 0.008 + i * 0.0012;
     }
     if (f.attacking) v = T.attackV;
     if (f.blocking != null) {
@@ -870,7 +870,7 @@ export function createDuelScene(canvas, opts = {}) {
   }
   function gravePose(p, i, out = P, q = Qt) {
     const jit = ((i * 7919) % 13) / 13 - 0.5;
-    seatPos(p, T.graveU + jit * 0.04, 0.006 + i * 0.007, T.graveV, out);
+    seatPos(p, T.graveU + jit * 0.04, 0.008 + i * 0.007, T.graveV, out);
     seatQuat(p, -Math.PI / 2, 0, jit * 0.25, q);
     return out;
   }
@@ -881,7 +881,7 @@ export function createDuelScene(canvas, opts = {}) {
   }
   function libraryTop(p, out = P, q = Qt) {
     const n = mirror ? mirror.players[p].library : 20;
-    seatPos(p, T.deckU, 0.004 + n * 0.007, T.deckV, out);
+    seatPos(p, T.deckU, 0.008 + n * 0.007, T.deckV, out);
     seatQuat(p, Math.PI / 2, 0, 0, q);  // face down
     return out;
   }
@@ -1681,12 +1681,14 @@ export function createDuelScene(canvas, opts = {}) {
     if (seat === 0 || seat === 1) {
       if (fpSeat == null) fpPrev = camMode;
       fpSeat = seat; camMode = 'script';
+      showBrains();
       dir.request('seat', seat, sceneT, { force: true });
       cam.userUntil = now;
       if (controls) controls.enabled = false;
     } else if (fpSeat != null) {
       fpSeat = null;
       camMode = fpPrev || 'auto'; fpPrev = null;
+      showBrains();
       dir.request('wide', 0, sceneT, { force: true });
       if (controls) controls.enabled = true;
     }
@@ -1768,7 +1770,13 @@ export function createDuelScene(canvas, opts = {}) {
   }
   function setSpeed(s) { speed = Math.max(0.1, Math.min(8, +s || 1)); }
   // The two floating brain maps (and their rings and labels) on or off.
-  function setBrains(on) { for (const g of brainHolders) g.visible = !!on; }
+  // The brain maps float beside the flies. In first person they hide:
+  // the map of the human's seat sits between the camera and the hand, and
+  // the scorecards already show the fly's brain. setBrains keeps the
+  // watch-mode choice, and showBrains applies it when first person ends.
+  let brainsOn = true;
+  function showBrains() { for (const g of brainHolders) g.visible = brainsOn && fpSeat == null; }
+  function setBrains(on) { brainsOn = !!on; showBrains(); }
   function stats() {
     let meshes = 0, tris = 0;
     scene.traverse(o => {

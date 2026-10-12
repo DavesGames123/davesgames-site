@@ -691,7 +691,10 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     // +z, so flipY (the default) gives row 0 at -z. The u axis of seat 0
     // is +x. Seat 1 turns the whole mat by PI.
     const c = L.seatPos(p, 0, 0, (MAT.v0 + MAT.v1) / 2);
-    m.position.set(c.x, L.y + 0.006, c.z);
+    // The mat is 12 mm thick but sits sunk in the table top: its top face
+    // is 1 mm above the laminate. Cards rest from 2 mm up (scene.js), so
+    // no card goes under the mat.
+    m.position.set(c.x, L.y + 0.001 - 0.006, c.z);
     m.rotation.y = p === 0 ? 0 : Math.PI;
     m.receiveShadow = true; m.name = 'playmat';
     table.add(m); mats3.push(m);
@@ -699,7 +702,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     const bandMat = keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(FLY[p]) }));
     const band = new THREE.Mesh(new THREE.BoxGeometry(w, 0.016, 0.07), bandMat);
     const b = L.seatPos(p, 0, 0, MAT.v1 - 0.035);
-    band.position.set(b.x, L.y + 0.008, b.z); band.rotation.y = m.rotation.y; band.name = 'mat-band';
+    band.position.set(b.x, L.y + 0.0015 - 0.008, b.z); band.rotation.y = m.rotation.y; band.name = 'mat-band';
     table.add(band); inlay.push(bandMat);
     // deck box beside the library
     const boxMat = keep(new THREE.MeshStandardMaterial({ color: new THREE.Color(FLY[p]), roughness: 0.5 }));
