@@ -33,6 +33,12 @@
 //  a bare name with opts.target, opts.dur (stretch a one-shot clip) and
 //  opts.droop or opts.life (set the life).
 //
+//  The loser. headDown flings the fan forward at CLIPS.headDown.release
+//  (the scene throws the cards then), puts the head on its cheek on the
+//  table and holds it there, with a sigh each HEAD_DOWN.sighEvery s. The
+//  pose takes no life droop and no tremor. A fedora falls off onto the
+//  table beside the head and goes back on the head in any other clip.
+//
 //  Node. The module needs no DOM. The eye textures are DataTextures.
 //
 //  GREP MAP   (grep -n "^// ---" ui/fly3d/fly.js)
@@ -45,7 +51,8 @@
 //    // --- pose             makePose, resetPose, lerpPose, applyPose
 //    // --- ik               solveLeg (two-bone IK + tarsus aim)
 //    // --- clips            CLIP_FNS: idle think groom reach place tap
-//                            push raiseArms slump
+//                            push raiseArms slump headDown; HEAD_DOWN
+//                            (the loser pose), placeHat (hat falls off)
 //    // --- animate          animate(), countTriangles()
 //    // --- hat              FEDORA, addFedora(rig), setHat(rig, on);
 //                            the fedora model loads in ui/fly3d/hat.js
@@ -101,6 +108,9 @@ export const CLIPS = {
   push: { duration: 1.2, contact: 0.38, release: 0.8, leg: 'auto' },
   raiseArms: { duration: 1.4, hold: true },
   slump: { duration: 1.6, hold: true },
+  // The sore loser: the front legs throw the hand at release, then the fly
+  // puts its head down on the table and stays there (HEAD_DOWN).
+  headDown: { duration: 2.4, hold: true, release: 0.42 },
 };
 
 // Leg definitions for the left side (x > 0). The right side mirrors x.
@@ -813,7 +823,7 @@ function makePose() {
     headPitch: 0, headYaw: 0, headRoll: 0,
     antLPitch: 0, antLSpread: 0, antRPitch: 0, antRSpread: 0, proboscis: 0,
     wingLSweep: 0, wingLStroke: 0, wingLPitch: 0, wingRSweep: 0, wingRStroke: 0, wingRPitch: 0,
-    wingDroop: 0, haltere: 0, fanTilt: 0, legs,
+    wingDroop: 0, haltere: 0, fanTilt: 0, hatOff: 0, legs,
   };
 }
 const NUM_KEYS = Object.keys(makePose()).filter(k => k !== 'legs');
@@ -821,8 +831,10 @@ const NUM_KEYS = Object.keys(makePose()).filter(k => k !== 'legs');
 // The base pose: hold the cards, sit, breathe. Life adds wing droop, a
 // lower head and (at 25 % life or less) a small tremor. opts.shake ===
 // false in animate() stops the tremor (reduced motion).
-function resetPose(rig, P, time) {
-  const life = rig.life, low = 1 - life, ph = rig.phase;
+// calm (the headDown clip): no life droop and no tremor, so the head
+// lies still on the table at any life.
+function resetPose(rig, P, time, calm = false) {
+  const life = calm ? 1 : rig.life, low = 1 - life, ph = rig.phase;
   for (const k of NUM_KEYS) P[k] = 0;
   P.thoraxPitch = 0.08 + 0.06 * low;
   P.breathe = 0.5 + 0.5 * Math.sin((time * TAU) / 3.4 + ph);
@@ -914,6 +926,58 @@ function applyPose(rig, P) {
   _e.set(P.thoraxPitch * 0.5 + P.bodyPitch, P.thoraxYaw + P.bodyYaw, 0, 'YXZ');
   fan.quaternion.setFromEuler(_e).multiply(_q.setFromAxisAngle(AX, P.fanTilt));
   fan.updateMatrixWorld(true);
+  placeHat(rig, P.hatOff);
+}
+
+// The fedora on the head (k = 0) or fallen on the table (k = 1). Between,
+// it moves in root space on a short arc and turns from the head pose to
+// the rest pose (brim flat on the table at HEAD_DOWN.hatX / hatZ).
+const _hm = new THREE.Matrix4(), _hh = new THREE.Matrix4(), _hr = new THREE.Matrix4(), _ri = new THREE.Matrix4(),
+  _hp0 = new V3(), _hq0 = new THREE.Quaternion(), _hs0 = new V3(), _hp1 = new V3(), _hq1 = new THREE.Quaternion(), _hs1 = new V3();
+// The lowest point of the hat in its group frame (the brim tip), measured
+// once per source: the procedural brim and the model brim differ.
+const _hv = new V3(), _hgi = new THREE.Matrix4(), _hmm = new THREE.Matrix4();
+function hatLow(hat) {
+  if (hat._lowSrc === hat.source) return hat._low;
+  const g = hat.group;
+  g.updateMatrixWorld(true);
+  _hgi.copy(g.matrixWorld).invert();
+  let low = Infinity;
+  g.traverse(o => {
+    if (!o.isMesh) return;
+    _hmm.multiplyMatrices(_hgi, o.matrixWorld);
+    const p = o.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) low = Math.min(low, _hv.fromBufferAttribute(p, i).applyMatrix4(_hmm).y);
+  });
+  hat._low = Number.isFinite(low) ? low : FEDORA.y; hat._lowSrc = hat.source;
+  return hat._low;
+}
+function placeHat(rig, kIn) {
+  const hat = rig.hat;
+  if (!hat?.home) return;
+  const g = hat.group, k = clamp(kIn || 0, 0, 1);
+  g.position.copy(hat.home.p); g.quaternion.copy(hat.home.q); g.scale.set(1, 1, 1);
+  if (k > 0) {
+    const root = rig.root, head = rig.joints.head, H = HEAD_DOWN;
+    // root <- head transform
+    _ri.copy(root.matrixWorld).invert();
+    _hh.multiplyMatrices(_ri, head.matrixWorld);
+    // home pose in root space
+    g.updateMatrix();
+    _hm.multiplyMatrices(_hh, g.matrix).decompose(_hp0, _hq0, _hs0);
+    // rest pose in root space: upright, brim on the table
+    _hq1.setFromAxisAngle(AY, H.hatYaw);
+    _hs1.setScalar(HEAD_SCALE);
+    _hp1.set(H.hatX, rig.rest.tableY - hatLow(hat) * HEAD_SCALE, rig.rest.tableZ + H.hatZ);
+    const e = k * k * (3 - 2 * k);
+    _hp0.lerp(_hp1, e).y += 0.22 * Math.sin(Math.PI * k);
+    _hq0.slerp(_hq1, e);
+    _hs0.lerp(_hs1, e);
+    _hm.compose(_hp0, _hq0, _hs0);
+    _hm.premultiply(_hh.invert());
+    _hm.decompose(g.position, g.quaternion, g.scale);
+  }
+  g.updateMatrixWorld(true);
 }
 
 // --- ik ----------------------------------------------------------------------
@@ -1002,6 +1066,16 @@ function arcTo(P, name, p, e, arc, tdirTo) {
   if (tdirTo) l.tdir.lerp(tdirTo, e).normalize();
 }
 
+// The head-down pose of the loser (clip headDown), in root units and
+// radians: body and thorax pitch, thorax lift, head pitch, roll and yaw,
+// antenna fold, front-leg goals on the table (x out, z past the edge), the
+// sigh period, and where the fedora lands (root-local x, z past the table
+// edge, yaw). tests/fly3d-headdown.test.mjs checks the head on the table.
+export const HEAD_DOWN = {
+  body: 0.4, thorax: 0.6, lift: 0.059, headPitch: 0.97, headRoll: 0.8, headYaw: 0.2, ant: 1.6,
+  armX: 0.26, armZ: 0.2, sighEvery: 6.5,
+  hatX: 0.5, hatZ: 0.36, hatYaw: 0.5,
+};
 const DOWN_FWD = new V3(0, -0.55, 0.84).normalize();
 const pickLeg = (spec, p, pair) => {
   if (spec.leg && spec.leg !== 'auto') return spec.leg;
@@ -1118,6 +1192,55 @@ const CLIP_FNS = {
       l.pole.lerp(_to.set(s, 0.4, -0.5), e);
     }
   },
+  headDown(rig, P, t) {
+    // 1. Toss (0 .. release + 0.4 s): the front legs pull the fan back and
+    // up, then fling it forward. The scene lets the cards go at release.
+    const H = HEAD_DOWN, rel = CLIPS.headDown.release;
+    const wind = smooth(0, 0.28, t) * (1 - smooth(0.28, rel, t));
+    const fling = smooth(0.28, rel, t) * (1 - smooth(rel + 0.05, 0.85, t));
+    // 2. Head down (0.7 .. 2.0 s): the body and the thorax pitch forward,
+    // the head rests on its cheek on the table, the front legs lie flat.
+    const d = smooth(0.7, 2.0, t);
+    const ty = rig.rest.tableY, tz = rig.rest.tableZ;
+    for (const [n, s] of [['L1', 1], ['R1', -1]]) {
+      const l = P.legs[n];
+      l.goal.lerp(_tmp.set(0.13 * s, 0.86, 0.2), wind).lerp(_tmp.set(0.16 * s, 0.95, 0.62), fling);
+      l.tdir.lerp(_to.set(0.2 * s, 1, -0.3), wind).lerp(_to.set(0.1 * s, 0.3, 1), fling).normalize();
+      l.goal.lerp(_tmp.set(H.armX * s, ty + CLAW, tz + H.armZ), d);
+      l.tdir.lerp(_to.set(0.35 * s, -0.12, 1), d).normalize();
+      l.pole.lerp(_to.set(s, 0.6, -0.2), d);
+    }
+    P.thoraxPitch += -0.12 * wind + 0.18 * fling;
+    P.headPitch += -0.15 * wind - 0.1 * fling;
+    P.fanTilt += 0.5 * fling;
+    P.bodyPitch += H.body * d;
+    P.thoraxPitch += H.thorax * d;
+    P.lift += H.lift * d;
+    P.headPitch += H.headPitch * d;
+    P.headRoll += H.headRoll * d;
+    P.headYaw += H.headYaw * d;
+    // the antennae fold back flat, the proboscis tucks in
+    P.antLPitch += H.ant * d; P.antRPitch += H.ant * d;
+    P.proboscis = 0;
+    // middle legs slide a little forward, hind legs stay on the stool
+    for (const n of ['L2', 'R2']) P.legs[n].goal.z += 0.06 * d;
+    // the wings hang open and droop
+    P.wingLSweep = P.wingRSweep = lerp(P.wingLSweep, -0.85, d);
+    P.wingLStroke = P.wingRStroke = lerp(P.wingLStroke, 0.35, d);
+    P.wingDroop += 0.5 * d;
+    P.wingLPitch = P.wingRPitch = lerp(P.wingLPitch, 0.55, d);
+    // a slow breath, with a deep sigh after the head lands and then each
+    // SIGH_EVERY seconds (the abdomen swells and the thorax lifts a hair)
+    const ts = t - 2.1;
+    const sigh = ts > 0 ? Math.sin(Math.PI * clamp((ts % H.sighEvery) / 1.4, 0, 1)) ** 2 : 0;
+    P.breathe = lerp(P.breathe, 0.35 + 0.25 * Math.sin(t * 1.1) + 0.4 * sigh, d);
+    P.abdPitch += -0.05 * sigh * d;
+    // The breath lifts the body (applyPose); the thorax takes the lift
+    // back, so the head lies still on the table.
+    P.lift -= rig.sink * (P.breathe - 0.5) * d;
+    // 3. The fedora (if any) falls off as the head goes down.
+    P.hatOff = smooth(0.95, 1.75, t);
+  },
 };
 
 // --- animate -----------------------------------------------------------------
@@ -1132,7 +1255,7 @@ function poseFor(rig, P, clip, t, time, opts = {}) {
   // opts.dur stretches a one-shot clip to the time the scene gives it.
   if (Number.isFinite(opts.dur) && opts.dur > 0 && !def.loop && !def.hold) tt *= dur / opts.dur;
   if (def.loop) tt %= dur; else if (!def.hold) tt = Math.min(tt, dur);
-  resetPose(rig, P, time);
+  resetPose(rig, P, time, spec.name === 'headDown');
   fn(rig, P, tt, spec, dur, def.contact ?? dur);
   return { spec, def, tt };
 }
@@ -1257,7 +1380,8 @@ export function addFedora(rig, opts = {}) {
   group.rotation.z = 0.06;                 // and a touch to one side
   head.add(group);
   let own = [...Object.values(g), felt, bandM];   // freed by dispose
-  const hat = { group, source: 'procedural', ready: null, dispose: null };
+  // home: the pose on the head (placeHat moves the hat off it in headDown)
+  const hat = { group, source: 'procedural', ready: null, dispose: null, home: { p: group.position.clone(), q: group.quaternion.clone() } };
   // Swap the procedural parts for the meshes of models/fedora.glb (hat.js).
   // The model geometry and materials are shared through the cache; only
   // recoloured material clones belong to this hat.

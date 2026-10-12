@@ -91,7 +91,7 @@ for (const n of ['L2', 'R2', 'L3', 'R3']) {
 // --- every clip, 3 s at 60 Hz, no NaN ----------------------------------------
 const target = new THREE.Vector3(0.15, 0.43, 0.6);
 const specs = {
-  idle: 'idle', think: 'think', groom: 'groom', raiseArms: 'raiseArms', slump: 'slump',
+  idle: 'idle', think: 'think', groom: 'groom', raiseArms: 'raiseArms', slump: 'slump', headDown: 'headDown',
   reach: { name: 'reach' },
   place: { name: 'place', target },
   tap: { name: 'tap', target: new THREE.Vector3(-0.3, 0.43, 0.62) },
