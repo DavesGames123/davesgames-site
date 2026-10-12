@@ -112,12 +112,15 @@ function turnToward(a, b, ang) {
 // settle phase use the planet view.
 export function storyActive() { return (UI.cam === 'story' || UI.cam === 'cut') && !UI.calm && S.run && S.run.phase === 'orbit' && !!S.run.shot && !!S.run.pace; }
 export function cameraFrame(dtReal, cssW, cssH) {
+  // the shot clock runs even when the camera does not take the shots
+  // (Reduce motion in the screensaver): the take still ends on time
+  if (cutsOn()) cutsTick(dtReal);
   if (storyActive()) {
     const user = cam.dragging || performance.now() < (cam.userUntil || 0);
     let sg = smoothStory(storyGoal(dtReal), dtReal, user);
     // the cutting director (the screensaver, the Director view): the shot
     // replaces the goal after the springs, so a cut is a cut
-    if (cutsOn()) { cutsTick(dtReal); sg = cutCamera(sg); }
+    if (cutsOn()) sg = cutCamera(sg);
     const want = poseOf(sg, cssW, cssH);
     cam.pose = { eye: want.eye, target: want.target };
     // a screensaver cut is a jump on purpose: not counted as motion

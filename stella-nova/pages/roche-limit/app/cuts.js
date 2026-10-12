@@ -40,8 +40,9 @@ import { UI } from './env.js';
 import { satCentre, satState } from './sat.js';
 import { S } from './state.js';
 
-// Is the cutting director on? The saver always; the page in the
-// Director view (not with Reduce motion).
+// Is the cutting director on? The saver always (with Reduce motion its
+// clock still ends the take; app/camera.js then keeps the planet view);
+// the page in the Director view (not with Reduce motion).
 export function cutsOn() { return (S.saverOn && !!S.saver) || (UI.cam === 'cut' && !UI.calm); }
 
 // The story's phase now, and the first impact.
@@ -103,7 +104,8 @@ export function cutCamera(g) {
 export function cutSpeed(opm) {
   const sh = cutsOn() ? curShot() : null;
   if (!sh) return 1;
-  let k = sh.warp || 1;
+  // Reduce motion: a shot may slow the run, never speed it up
+  let k = UI.calm ? Math.min(1, sh.warp || 1) : (sh.warp || 1);
   if (sh.opm && opm * k > sh.opm) k = sh.opm / opm;
   return k;
 }

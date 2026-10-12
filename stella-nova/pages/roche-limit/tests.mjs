@@ -990,6 +990,17 @@ async function rollRunTests(keys) {
     else { pass = pass && fMin < 0.75; claim += 'torn: the bound share falls under 75%'; }
     ok(`${seed !== null ? 'random run' : scen ? 'scenario run' : 'preset run'} "${key}" on the GPU: ${claim}`, pass, info + (errs.length ? ' | ' + errs.join(' | ') : ''));
   }
+  // the screensaver with Reduce motion: the camera keeps the planet view,
+  // and the take must still end (app/camera.js runs the shot clock)
+  if (S.run && S.run.pace) {
+    const CA = await import('./app/camera.js');
+    S.saverOn = true; S.saver = { state: 'show', rnd: SP.rng(1), calm: 1, fade: 1, speed: 7 }; UI.calm = true; S.cuts = null;
+    let wall = 0, shots = 0, story = 0;
+    while (wall < 80 && !(S.cuts && S.cuts.take.done)) { CA.cameraFrame(0.05, 640, 360); if (CA.storyActive()) story++; wall += 0.05; }
+    shots = S.cuts ? S.cuts.take.shots.length : 0;
+    ok('screensaver with Reduce motion: the take still ends, the camera stays calm', !!(S.cuts && S.cuts.take.done) && story === 0 && LO.orbitsPerMin() <= 7 * 1.5 + 1e-9, `ended after ${wall.toFixed(1)} s of wall time and ${shots} shots; ${story} story-camera frames; speed ${LO.orbitsPerMin().toFixed(2)} orbits/min`);
+    S.saverOn = false; S.saver = null; UI.calm = false; S.cuts = null;
+  }
   if (dirStat.runs) ok('Director view on the GPU runs: cuts on events, every pose finite and outside the planet', dirStat.bad.length === 0 && dirStat.tornCut === dirStat.torn && dirStat.phases.size >= 3, `${dirStat.runs} runs, ${dirStat.cuts} cuts; ${dirStat.tornCut} of ${dirStat.torn} runs that go on ${SP.CUT_MIN} s past the tear cut after it; phases ${[...dirStat.phases].join(' ')}; kinds ${[...dirStat.kinds].sort().join(' ')}; ${dirStat.rideFrag} ride frames on a fragment in ${dirStat.rides} rides; ${dirStat.bad.slice(0, 3).join('; ') || 'no bad pose'}`);
   if (dirStat.probes.length) { const pr = dirStat.probes, bad = pr.filter(q => !(q.d0 < 1e-4 && q.dmin < 0.08 * q.moved && q.dsync < 1e-4));
     ok('Director ride: the fragment\'s own orbit follows its grain', bad.length === 0, `${pr.length} runs; the picked grain found at ${Math.max(...pr.map(q => q.d0)).toExponential(1)}; moved ${Math.min(...pr.map(q => q.moved)).toFixed(3)}-${Math.max(...pr.map(q => q.moved)).toFixed(3)} world units in 1024 steps, off its grain by ${Math.max(...pr.map(q => q.dmin / q.moved * 100)).toFixed(2)}% of that at worst (limit 8%), back on it after a read: ${Math.max(...pr.map(q => q.dsync)).toExponential(1)}${bad.length ? '; off: ' + bad.map(q => q.key).join(' ') : ''}`); }
