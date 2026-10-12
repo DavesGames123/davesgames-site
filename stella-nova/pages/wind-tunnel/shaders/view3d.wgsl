@@ -16,6 +16,7 @@
 // coordinate of world point p is p / dims.
 //
 // grep: struct CamU  struct PartU  fn advect  fn fsScene  fn march  fn shadow
+//       fn objLo  fn objHi  fn hasObj (the solid-cell box, binding 12)
 //       fn fsSlice  fn vsLine  fn speedRamp  fn divRamp  fn palRamp  fn fieldColor  fn pref
 
 struct CamU {
@@ -62,6 +63,18 @@ struct PartU {
 @group(0) @binding(9) var<storage, read> trailR: array<vec4f>;
 @group(0) @binding(10) var<storage, read_write> prefOut: array<f32>;
 @group(0) @binding(11) var<storage, read> prefR: array<f32>;
+// The solid-cell box from lbm3d.wgsl voxelize: min x, y, z, max x, y, z.
+// max x < 0: no solid cell.
+@group(0) @binding(12) var<storage, read> bndR: array<i32, 8>;
+
+// The object box in cells, with a margin: the ray march and the shadows
+// look for the object only in it. The margin covers the half cell between
+// a cell centre and the surface, the cells a belt ground leaves out under
+// the object (y < 3), and thin parts that no cell centre falls inside.
+const BND_PAD = 3.0;
+fn objLo() -> vec3f { return vec3f(f32(bndR[0]), f32(bndR[1]), f32(bndR[2])) - vec3f(BND_PAD); }
+fn objHi() -> vec3f { return vec3f(f32(bndR[3]), f32(bndR[4]), f32(bndR[5])) + vec3f(1.0 + BND_PAD); }
+fn hasObj() -> bool { return bndR[3] >= 0; }
 
 fn hashU(a: u32) -> u32 {
   var x = a;
@@ -302,13 +315,19 @@ fn march(ro: vec3f, rd: vec3f, t0: f32, t1: f32) -> vec4f {
 }
 
 fn shadow(p: vec3f, L: vec3f) -> f32 {
+  // A ray toward the light that misses the object box has no shadow, so
+  // most floor pixels skip the march.
+  if (!hasObj()) { return 1.0; }
+  let ob = boxHit(p, L, objLo(), objHi());
+  if (ob.x >= ob.y) { return 1.0; }
   var res = 1.0;
-  var t = 0.6;
+  var t = max(0.6, ob.x);
+  let tEnd = min(160.0, ob.y);
   for (var i = 0; i < 40; i++) {
     let d = objDist(p + L * t).x;
     res = min(res, 6.0 * d / t);
     t += clamp(d, 0.4, 8.0);
-    if (res < 0.02 || t > 160.0) { break; }
+    if (res < 0.02 || t > tEnd) { break; }
   }
   return clamp(res, 0.0, 1.0);
 }
@@ -339,10 +358,14 @@ fn fsScene(i: SOut) -> FOut {
   var tFloor = 1e9;
   if (rd.y < 0.0) { tFloor = (1.0 - ro.y) / rd.y; }
 
-  let bh = boxHit(ro, rd, vec3f(0.0), d);
+  // March only inside the object box (inside the tunnel box): a pixel whose
+  // ray misses it does no SDF work at all.
   var hit = vec4f(0.0);
-  if (bh.x < bh.y) {
-    hit = march(ro, rd, bh.x, min(bh.y, tFloor));
+  if (hasObj()) {
+    let bh = boxHit(ro, rd, max(vec3f(0.0), objLo()), min(d, objHi()));
+    if (bh.x < bh.y) {
+      hit = march(ro, rd, bh.x, min(bh.y, tFloor));
+    }
   }
 
   if (hit.w > 0.5) {

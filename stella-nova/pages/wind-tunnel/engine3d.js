@@ -133,6 +133,12 @@ export async function createEngine3D(device, code, opts) {
   const trail = buf(maxParticles * K * 16, U.STORAGE, 'trail');
   // Free-stream rho - 1 from view3d.wgsl fn pref; the pressure colours use it.
   const prefBuf = buf(16, U.STORAGE, 'pref');
+  // The solid-cell box (lbm3d.wgsl voxelize, view3d.wgsl bndR). Each
+  // voxelize starts from bndInit: min = big, max = -1.
+  const bnd = buf(32, U.STORAGE | U.COPY_DST, 'bnd');
+  const bndInit = device.createBuffer({ size: 32, usage: U.COPY_SRC, mappedAtCreation: true, label: 'bndInit' });
+  new Int32Array(bndInit.getMappedRange()).set([1 << 30, 1 << 30, 1 << 30, -1, -1, -1, 0, 0]);
+  bndInit.unmap();
   const macro = device.createTexture({
     size: [nx, ny, nz], dimension: '3d', format: 'rgba16float', label: 'macro',
     usage: T.STORAGE_BINDING | T.TEXTURE_BINDING,
@@ -149,7 +155,7 @@ export async function createEngine3D(device, code, opts) {
     entries: Object.entries(entries).map(([b, r]) => ({ binding: +b, resource: r instanceof GPUBuffer ? { buffer: r } : r })),
   });
   const fPair = [[fA, fB], [fB, fA]];
-  const gVox = bg(pVox, { 0: simBuf, 1: shapeBuf, 2: fA, 3: fB, 4: types });
+  const gVox = bg(pVox, { 0: simBuf, 1: shapeBuf, 2: fA, 3: fB, 4: types, 7: bnd });
   const gMark = bg(pMark, { 0: simBuf, 4: types });
   const gInit = bg(pInit, { 0: simBuf, 2: fA, 3: fB, 4: types });
   const gStep = fPair.map(([a, b]) => bg(pStep, { 0: simBuf, 2: a, 3: b, 4: types, 5: macroView, 6: forces }));
@@ -157,7 +163,7 @@ export async function createEngine3D(device, code, opts) {
   const gArea = bg(pArea, { 0: simBuf, 4: types, 6: forces });
   const gAdv = bg(pAdv, { 0: camBuf, 2: macroView, 3: samp, 4: types, 5: partUBuf, 6: parts, 7: trail });
   const gPref = bg(pPref, { 0: camBuf, 2: macroView, 10: prefBuf });
-  const gScene = bg(pScene, { 0: camBuf, 1: shapeBuf, 2: macroView, 3: samp, 11: prefBuf });
+  const gScene = bg(pScene, { 0: camBuf, 1: shapeBuf, 2: macroView, 3: samp, 11: prefBuf, 12: bnd });
   const gSlice = bg(pSlice, { 0: camBuf, 2: macroView, 3: samp, 4: types, 11: prefBuf });
   const gLine = bg(pLine, { 0: camBuf, 5: partUBuf, 8: parts, 9: trail });
 
@@ -193,6 +199,7 @@ export async function createEngine3D(device, code, opts) {
   }
 
   function dispatchVoxelize(enc) {
+    enc.copyBufferToBuffer(bndInit, 0, bnd, 0, 32);
     const p = enc.beginComputePass();
     p.setPipeline(pVox); p.setBindGroup(0, gVox);
     p.dispatchWorkgroups(Math.ceil(n / 128));
@@ -372,7 +379,7 @@ export async function createEngine3D(device, code, opts) {
 
     destroy() {
       disposed = true;
-      for (const b of [simBuf, simMBuf, shapeBuf, camBuf, partUBuf, fA, fB, types, forces, parts, trail, prefBuf, ...staging]) b.destroy();
+      for (const b of [simBuf, simMBuf, shapeBuf, camBuf, partUBuf, fA, fB, types, forces, parts, trail, prefBuf, bnd, bndInit, ...staging]) b.destroy();
       macro.destroy();
       if (depthTex) depthTex.destroy();
     },

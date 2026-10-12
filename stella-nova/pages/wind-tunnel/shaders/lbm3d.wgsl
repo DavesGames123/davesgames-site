@@ -63,6 +63,10 @@ struct SimU {
 @group(0) @binding(4) var<storage, read_write> types: array<u32>;
 @group(0) @binding(5) var macroOut: texture_storage_3d<rgba16float, write>;
 @group(0) @binding(6) var<storage, read_write> forces: array<atomic<i32>, 16>;
+// The box of the solid cells (min x, y, z, max x, y, z), written by
+// voxelize. engine3d.js resets it to (big, -1) first. view3d.wgsl reads it
+// to march and shadow only near the object.
+@group(0) @binding(7) var<storage, read_write> bnd: array<atomic<i32>, 8>;
 
 const FIX = 1048576.0;
 const T_FLUID = 0u;
@@ -163,7 +167,11 @@ fn voxelize(@builtin(global_invocation_id) g: vec3u) {
   var t = boundaryType(x, y, z);
   if (t == T_FLUID || t == T_OUT) {
     let o = objDist(vec3f(f32(x), f32(y), f32(z)) + 0.5);
-    if (o.x < 0.0 && !(S.ground == 2u && y < 3u)) { t = T_SOLID + u32(o.z); }
+    if (o.x < 0.0 && !(S.ground == 2u && y < 3u)) {
+      t = T_SOLID + u32(o.z);
+      atomicMin(&bnd[0], i32(x)); atomicMin(&bnd[1], i32(y)); atomicMin(&bnd[2], i32(z));
+      atomicMax(&bnd[3], i32(x)); atomicMax(&bnd[4], i32(y)); atomicMax(&bnd[5], i32(z));
+    }
   }
   let old = types[i];
   if (old >= T_SOLID && t < T_WALL) {
