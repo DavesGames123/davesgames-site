@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fly Duel deck builder preview</title>
+<meta name="robots" content="noindex">
+<!--
+  Stand-alone preview of ui/deckbuilder/deckbuilder.js with the real card
+  pool. It is a development page: the nav does not link it. The log at
+  the bottom left shows each onPlay / onClose call. Decks save in the
+  localStorage of this origin, the same key as the page.
+  ?mydeck=<code> opens with a shared deck.
+-->
+<link rel="stylesheet" href="../../style.css">
+<link rel="stylesheet" href="../../../../lib/sci.css">
+<link rel="stylesheet" href="../card.css">
+<link rel="stylesheet" href="deckbuilder.css">
+<style>
+  html,body{margin:0;height:100%;background:#05070c;overflow:hidden}
+  #host{position:fixed;inset:0}
+  #log{position:fixed;left:8px;bottom:8px;z-index:50;margin:0;max-width:60vw;font:12px/1.4 ui-monospace,Menlo,monospace;color:#c2c7d4;background:#0b0e15;border:1px solid #394155;padding:6px 8px;white-space:pre-wrap;pointer-events:none}
+  #log:empty{display:none}
+  #again{position:fixed;right:8px;top:8px;z-index:50;font:13px system-ui;padding:8px 12px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="host"></div>
+<pre id="log"></pre>
+<button id="again" hidden>Open the builder again</button>
+<script type="module">
+import { mountDeckBuilder } from './deckbuilder.js';
+import { decodeDeck, freeName, loadDecks } from './deckstore.js';
+
+const q = new URLSearchParams(location.search);
+const log = s => { const el = document.getElementById('log'); el.textContent = `${s}\n${el.textContent}`.slice(0, 900); };
+const again = document.getElementById('again');
+const b = mountDeckBuilder(document.getElementById('host'), {
+  onPlay: d => { log(`onPlay ${d.name} (${d.id}) ${d.list.length} rows, ok ${d.ok}`); },
+  onClose: () => { log('onClose'); again.hidden = false; },
+  onSaved: ds => log(`saved ${ds.length} decks`),
+});
+again.addEventListener('click', () => { again.hidden = true; b.open(); });
+const shared = q.get('mydeck') ? decodeDeck(q.get('mydeck')) : null;
+b.open(shared?.ok ? { id: undefined, name: freeName(loadDecks(), shared.name || 'Shared deck'), list: shared.list } : undefined);
+window.builder = b;
+</script>
+</body>
+</html>
