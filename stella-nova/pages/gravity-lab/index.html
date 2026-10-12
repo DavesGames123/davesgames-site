@@ -164,6 +164,7 @@
   <div class="card"><div class="ch">Simplifications</div><ul id="notes"></ul></div>
   <div class="card about"><div class="ch">Method</div>
     <p>Bodies: f64 on the CPU, Yoshida's 6th-order composition of the leapfrog, adaptive substeps (a fraction of the shortest pair time), perfect mergers on contact, breakup inside the fluid Roche limit. Particles: kick-drift-kick leapfrog against the body positions of each step, one GPU thread each; the self-gravity disk uses a softened direct sum over all pairs. node tests.mjs checks the integrators against Kepler, the figure-eight, Burrau's problem, the Lagrange points, and the GPU kernels against the CPU.</p>
+    <p>Particle counts here (2 048 to about 36 000) are far below research codes, which run millions to billions of particles. Particles that feel the bodies are massless tracers; galaxy cores are softened point masses with no dark-matter halo; bodies merge perfectly on contact.</p>
     <p class="credit">Sources: <span id="sources"></span></p>
   </div>
 </aside>
