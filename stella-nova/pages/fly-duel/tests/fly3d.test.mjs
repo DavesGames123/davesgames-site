@@ -375,9 +375,10 @@ if (C) {
 }
 
 // --- camera framing: wide stage and phone stage --------------------------------
+const { HALL: { wall: HALL_WALL, ceiling: HALL_CEIL } } = await import('../ui/fly3d/hall.js');
 {
-  // The wide and combat shots keep the camera inside the room wall
-  // (radius 16) and keep each fly (head and seat) and each brain map in
+  // The wide and combat shots keep the camera inside the hall walls
+  // and under the ceiling and keep each fly (head and seat) and each brain map in
   // the frame, at a 16:9 stage and at a 362 x 557 phone stage. Before the
   // tall-frame shots, the phone camera stood at r = 22 (past the wall) and
   // the combat shot cut both flies at the frame edges.
@@ -392,7 +393,7 @@ if (C) {
         sc.shoot(shot, p);
         for (let k = 0; k < 240; k++) sc.render(1 / 30);
         const cam = sc.camera, r = Math.hypot(cam.position.x, cam.position.z);
-        ok(r < 15.5, `${w}x${h} ${shot} p${p}: camera inside the wall (r ${r.toFixed(1)})`);
+        ok(Math.abs(cam.position.x) < HALL_WALL - 0.5 && Math.abs(cam.position.z) < HALL_WALL - 0.5 && cam.position.y < HALL_CEIL, `${w}x${h} ${shot} p${p}: camera inside the hall (r ${r.toFixed(1)})`);
         let out = [];
         for (const f of sc.world.flies) {
           const head = f.built.rig.joints?.head?.getWorldPosition(new THREE.Vector3()) ?? f.holder.position.clone().setY(3.2);
@@ -409,14 +410,66 @@ if (C) {
 
 // --- layout numbers ---------------------------------------------------------------
 {
-  const inTable = (u, v) => Math.hypot(u, v) < TABLE.felt;
-  ok(inTable(TABLE.rowHalf + TABLE.cardW / 2, TABLE.landV + TABLE.cardH / 2), 'land row on the felt');
-  ok(inTable(TABLE.deckU + TABLE.cardW / 2, TABLE.deckV + TABLE.cardH / 2), 'library on the felt');
-  ok(inTable(TABLE.graveU + TABLE.cardW / 2, TABLE.graveV + TABLE.cardH / 2), 'graveyard on the felt');
-  ok(inTable(Math.abs(TABLE.lifeU) + 0.36, TABLE.lifeV + 0.36), 'life drum on the felt');
-  ok(Math.abs(TABLE.lifeU) - 0.36 > TABLE.rowHalf + TABLE.cardW / 2, 'life drum clear of the land row');
+  // Every zone lies on the playmat of its seat, and the mat lies on the
+  // table top. The life dice stand in the LIFE circle, clear of the land
+  // stacks. The chair is behind the table edge.
+  const { MAT } = await import('../ui/fly3d/hall.js');
+  const onMat = (u, v) => Math.abs(u) < MAT.u && v > MAT.v0 - 0.3 && v < MAT.v1;
+  ok(MAT.u < TABLE.halfLen && MAT.v1 < TABLE.halfDepth, 'playmat on the table top');
+  ok(onMat(TABLE.rowHalf + TABLE.cardW / 2, TABLE.landV + TABLE.cardH / 2), 'land stacks on the mat');
+  ok(onMat(TABLE.deckU + TABLE.cardW / 2, TABLE.deckV + TABLE.cardH / 2), 'library on the mat');
+  ok(onMat(TABLE.graveU + TABLE.cardW / 2, TABLE.graveV + TABLE.cardH / 2), 'graveyard on the mat');
+  ok(onMat(Math.abs(TABLE.lifeU) + TABLE.lifeSize * 1.2, TABLE.lifeV + TABLE.lifeSize * 2), 'life dice on the mat');
+  ok(Math.abs(TABLE.lifeU) - TABLE.lifeSize * 1.2 > TABLE.rowHalf + TABLE.cardW / 2 - 0.25, 'life dice clear of the land stacks');
   ok(TABLE.graveU - TABLE.cardW / 2 > TABLE.rowHalf + TABLE.cardW / 2 - 0.01, 'graveyard clear of the creature row');
-  ok(TABLE.seatV - 0.78 < TABLE.r && TABLE.seatV > TABLE.r + 0.3, 'stools tuck under the table edge');
+  ok(TABLE.seatV > TABLE.halfDepth + 0.3 && TABLE.seatV - 0.8 < TABLE.halfDepth, 'chair just behind the table edge');
+}
+
+// --- convention hall ------------------------------------------------------------
+{
+  // The hall around the duel: a folding table, chairs, two playmats,
+  // deck boxes, the pairings board, other tables with flies at fake
+  // games, and the watching crowd (20 to 60 on a desktop, fewer on a
+  // phone). The crowd stands outside the table and in its sector, its
+  // heads turn to the focus, and react() moves it.
+  const { HALL, CROWD_SECTOR } = await import('../ui/fly3d/hall.js');
+  for (const coarse of [false, true]) {
+    const sc = createDuelScene(null, { headless: true, coarse });
+    await sc.ready;
+    const hall = sc.world.hall;
+    const st = hall.stats();
+    const tag = coarse ? 'phone' : 'desktop';
+    ok(coarse ? st.crowd >= 10 && st.crowd < 20 : st.crowd >= 20 && st.crowd <= 60, `${tag}: crowd of ${st.crowd}`);
+    ok(st.flags > 0 && st.extras >= 4 && st.tables >= 2, `${tag}: ${st.flags} flags, ${st.extras} flies at ${st.tables} other tables`);
+    ok(['folding-table', 'folding-chair', 'playmat', 'deck-box', 'pairings-board', 'banner', 'mat-band'].every(n => sc.scene.getObjectByName(n)), `${tag}: table, chairs, mats, deck boxes, board, banners`);
+    let inside = 0, outSector = 0;
+    for (const P of hall.crowd.herd.pose.slice(0, hall.crowd.n)) {
+      if (Math.abs(P.pos.x) < TABLE.halfLen + 1.5 && Math.abs(P.pos.z) < TABLE.seatV + 1.2) inside++;
+      let a = Math.atan2(P.pos.x, P.pos.z); if (a < 0) a += 2 * Math.PI;
+      if (a < CROWD_SECTOR[0] - 0.1 || a > CROWD_SECTOR[1] + 0.1) outSector++;
+    }
+    ok(inside === 0 && outSector === 0, `${tag}: the crowd stands clear of the table and the chairs, in its sector (${inside} in, ${outSector} out)`);
+    // heads follow the focus: a focus to one side turns the mean head yaw
+    sc.setCamera('free');   // the look point stays where the test puts it
+    const yawAt = x => { sc.world.cam.look.set(x, TABLE.y, 0); for (let k = 0; k < 60; k++) sc.render(1 / 30); return hall.crowd.herd.pose.slice(0, hall.crowd.n).map(P => P.hy); };
+    const y1 = yawAt(-4), y2 = yawAt(4), turned = y1.filter((v, i) => Math.abs(v - y2[i]) > 0.05).length;
+    ok(turned > hall.crowd.n / 3, `${tag}: crowd heads follow the focus (${turned} of ${hall.crowd.n} heads turn)`);
+    hall.react('cheer', { side: 0, strength: 1 });
+    for (let k = 0; k < 20; k++) sc.render(1 / 30);
+    const up = hall.crowd.herd.pose.slice(0, hall.crowd.n).filter(P => P.legL > 0.3 && P.buzz > 0.2).length;
+    ok(up > hall.crowd.n / 3, `${tag}: a cheer raises legs and buzzes wings (${up} of ${hall.crowd.n})`);
+    for (let k = 0; k < 120; k++) sc.render(1 / 30);
+    const still = hall.crowd.herd.pose.slice(0, hall.crowd.n).filter(P => P.buzz > 0).length;
+    ok(still === 0, `${tag}: the cheer ends (${still} still buzz)`);
+    // the extras play: in 6 s some fly lifts a leg past the rest pose
+    let moved = 0;
+    for (let k = 0; k < 180; k++) { sc.render(1 / 30); if (hall.extras.herd.pose.some(P => P.legR > 0.3 || P.legL > 0.3)) moved++; }
+    ok(moved > 10, `${tag}: flies at the other tables play (${moved} frames with a lifted leg)`);
+    ok(sc.world.drums.every(d => d.dice && d.grp.getObjectByName('life-plate')), `${tag}: a d20 with a life plate on each mat`);
+    ok(sc.stats().hall?.crowd === st.crowd, `${tag}: stats().hall`);
+    sc.dispose();
+  }
+  ok(HALL.wall > 16, 'hall size');
 }
 
 // --- card faces: ui/cardface.js on the table cards ---------------------------

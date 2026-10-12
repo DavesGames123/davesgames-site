@@ -1,23 +1,30 @@
 // ============================================================================
 //  FLY DUEL 3D  ·  the table scene  (ES module, three.js r160, DOM optional)
 // ----------------------------------------------------------------------------
-//  Two fruit flies sit on stools at a round wooden table and play the real
-//  match. ui/match.js makes one record per decision. play(record) turns the
+//  Two fruit flies sit on folding chairs at a long folding table in a
+//  card convention hall (ui/fly3d/hall.js) and play the real match. ui/match.js makes one record per decision. play(record) turns the
 //  record into timed steps (ui/fly3d/choreo.js) and plays them: cards go
 //  from the fan to the table, lands turn and dim when tapped, mana tokens
 //  go from the lands to the card, creatures attack and block, damage
 //  numbers rise, dead creatures go to the graveyard.
 //
-//  Look (FLY3D.md): crisp and well lit. One shadow light (the lamp over
-//  the table), a cool rim light and a hemisphere fill. ACES tone mapping,
-//  sRGB. No bloom, no blur, no fog.
+//  Look (FLY3D.md): crisp and well lit. One shadow light (the overhead
+//  key of the hall panels), cool and warm rim lights and a hemisphere
+//  fill. ACES tone mapping, sRGB. No bloom, no blur, no fog.
+//
+//  Hall. Each fly has its playmat, a deck box and its life on a d20
+//  (ui/fly3d/d20.js createLifeDice, at TABLE.lifeU / lifeV). A crowd of
+//  cheap flies stands around the table, its heads follow the camera
+//  look point, and it reacts on the hold steps (big plays) and on the
+//  win. Other flies play fake games at the other tables.
 //
 //  Cards: every face is drawCard() of ui/cardface.js on a 5:7 canvas, the
 //  painted plate card of section 01. The face is drawn again when its
 //  picture (loadCardArt) and the STIX font load. The back of every card,
 //  the deck and the hand of the other fly show cardBack().
 //
-//  World units: the table top is at y = TABLE.y, radius TABLE.r. Seat 0
+//  World units: the table top is at y = TABLE.y, the table is
+//  2 halfLen long (x) and 2 halfDepth deep (z). Seat 0
 //  (Fly A) sits at +z and looks to -z. Seat 1 (Fly B) sits at -z. Layout
 //  numbers are in seat space (u = to the right of the seat as seen from
 //  the centre, v = distance from the centre toward the seat). seatPos()
@@ -53,8 +60,8 @@
 //      grep -n 'function textureCache'        faces and back (ui/cardface.js)
 //      grep -n 'function cardGeometry'        chamfered card mesh
 //      grep -n 'class CardObj'                one card on the table
-//      grep -n 'function buildRoom'           floor, rug, walls, lamp
-//      grep -n 'function buildTable'          table, felt, stools
+//      ui/fly3d/hall.js buildHall             hall, folding table, mats,
+//                                             chairs, crowd, other tables
 //      grep -n 'function buildLights'         key, rim, fill
 //      grep -n 'function placeholderBuildFly' stand-in fly
 //      grep -n 'function placeholderAnimate'  stand-in clips
@@ -71,14 +78,16 @@ import { drawCard, cardBack, loadCardArt, getCardArt } from '../cardface.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
 import { landProduces, colourHex, tokenShape, stackLayout, STACK } from './mana.js';
+import { buildHall, HALL } from './hall.js';
+import { createLifeDice } from './d20.js';
 
 // ------------------------------------------------------------ dimensions
 export const TABLE = {
-  r: 3.6, y: 2.0, thick: 0.12, felt: 3.3,
+  y: 2.0, thick: 0.09, halfLen: 4.6, halfDepth: 3.45,
   cardW: 0.56, cardH: 0.784, cardT: 0.008,
   landV: 2.2, creatureV: 1.2, attackV: 0.48, rowHalf: 1.75,
   deckU: 2.35, deckV: 1.35, graveU: 2.35, graveV: 0.45,
-  lifeU: -2.45, lifeV: 1.25,
+  lifeU: -2.52, lifeV: 1.12, lifeSize: 0.27,
   handV: 3.75, handY: 0.12, handR: 0.38,
   stageU: 0.7, stageV: 2.0, stageY: 1.0,
   seatV: 4.2, seatTop: 1.16,
@@ -366,202 +375,6 @@ class CardObj {
   }
 }
 
-// --------------------------------------------------------- wood and felt
-function woodCanvas(size, { rings = true, base = '#6b3f22', dark = '#4a2a15', light = '#8a5630', planks = 0, seed = 7 } = {}) {
-  const cv = makeCanvas(size, size);
-  if (!cv?.getContext) return null;
-  const g = cv.getContext('2d');
-  let s = seed >>> 0; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  g.fillStyle = base; g.fillRect(0, 0, size, size);
-  if (rings) {
-    const c = size / 2;
-    for (let i = 0; i < 70; i++) {
-      const rr = (i / 70) * c * 1.42 + r() * 4;
-      g.strokeStyle = i % 3 ? dark : light; g.globalAlpha = 0.18 + r() * 0.2; g.lineWidth = 1 + r() * 2.5;
-      g.beginPath();
-      for (let k = 0; k <= 96; k++) { const a = (k / 96) * Math.PI * 2, w = rr + Math.sin(a * 3 + i) * 3 + Math.sin(a * 7 + i * 0.3) * 1.5; g[k ? 'lineTo' : 'moveTo'](c + Math.cos(a) * w, c + Math.sin(a) * w); }
-      g.stroke();
-    }
-  }
-  if (planks) {
-    const pw = size / planks;
-    for (let i = 0; i < planks; i++) {
-      g.globalAlpha = 0.25; g.fillStyle = i % 2 ? light : dark; g.fillRect(i * pw, 0, pw, size);
-      g.globalAlpha = 0.9; g.fillStyle = '#1a0f08'; g.fillRect(i * pw, 0, 2, size);
-      for (let k = 0; k < 26; k++) { g.globalAlpha = 0.12 + r() * 0.12; g.strokeStyle = dark; g.lineWidth = 1 + r() * 2; const x = i * pw + r() * pw; g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + (r() - 0.5) * 20, size * 0.3, x + (r() - 0.5) * 20, size * 0.7, x + (r() - 0.5) * 10, size); g.stroke(); }
-      const cut = r() * size; g.globalAlpha = 0.9; g.fillStyle = '#1a0f08'; g.fillRect(i * pw, cut, pw, 2);
-    }
-  }
-  g.globalAlpha = 1;
-  return cv;
-}
-
-// The felt play mat: hairline zones per seat, in the seat colour.
-function feltCanvas(size) {
-  const cv = makeCanvas(size, size);
-  if (!cv?.getContext) return null;
-  const g = cv.getContext('2d');
-  g.fillStyle = '#16302c'; g.fillRect(0, 0, size, size);
-  // fine weave
-  g.globalAlpha = 0.07; g.strokeStyle = '#000';
-  for (let i = 0; i < size; i += 3) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, size); g.stroke(); }
-  g.globalAlpha = 1;
-  const k = size / (2 * T.felt), c = size / 2;
-  // world (x, z) -> canvas column, row (see buildTable)
-  const toC = (x, z) => [c + x * k, c + z * k];
-  g.lineWidth = 2; g.font = `600 ${Math.round(size * 0.016)}px ${SANS}`; g.textAlign = 'center';
-  for (let p = 0; p < 2; p++) {
-    const col = FLY[p], sg = p === 0 ? 1 : -1;
-    g.strokeStyle = col; g.fillStyle = col; g.globalAlpha = 0.38;
-    const zone = (u0, u1, v0, v1, label) => {
-      const a = toC(sg * u0, sg * v0), b = toC(sg * u1, sg * v1);
-      const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]), w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
-      g.setLineDash([10, 8]); g.strokeRect(x, y, w, h); g.setLineDash([]);
-      if (label) {
-        g.save(); g.globalAlpha = 0.5;
-        const [lx, ly] = toC(sg * (u0 + u1) / 2, sg * (v1 + 0.08));
-        g.translate(lx, ly); if (p === 1) g.rotate(Math.PI);
-        g.fillText(label, 0, size * 0.006); g.restore();
-      }
-    };
-    zone(-T.rowHalf - 0.4, T.rowHalf + 0.4, T.landV - 0.48, T.landV + 0.46, 'LANDS · MANA');
-    zone(-T.rowHalf - 0.4, T.rowHalf + 0.4, T.creatureV - 0.48, T.creatureV + 0.46, 'CREATURES');
-  }
-  g.globalAlpha = 0.5; g.strokeStyle = TOKENS.ink2; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(toC(-T.felt, 0)[0], c); g.lineTo(toC(T.felt, 0)[0], c); g.stroke();
-  g.globalAlpha = 1;
-  return cv;
-}
-
-function rugCanvas(size) {
-  const cv = makeCanvas(size, size);
-  if (!cv?.getContext) return null;
-  const g = cv.getContext('2d'), c = size / 2;
-  const bands = ['#2a1a2e', '#3b2337', '#5b2f3a', '#7a4a2e', '#3b2337', '#24324a', '#1e2638'];
-  for (let i = 0; i < bands.length; i++) { g.fillStyle = bands[i]; g.beginPath(); g.arc(c, c, c * (1 - i * 0.11), 0, Math.PI * 2); g.fill(); }
-  g.strokeStyle = '#c99a5b'; g.globalAlpha = 0.55; g.lineWidth = 3;
-  for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; g.beginPath(); g.moveTo(c + Math.cos(a) * c * 0.62, c + Math.sin(a) * c * 0.62); g.lineTo(c + Math.cos(a + 0.13) * c * 0.78, c + Math.sin(a + 0.13) * c * 0.78); g.lineTo(c + Math.cos(a + 0.26) * c * 0.62, c + Math.sin(a + 0.26) * c * 0.62); g.stroke(); }
-  g.globalAlpha = 1;
-  return cv;
-}
-
-// ------------------------------------------------------------- the room
-function buildRoom(W) {
-  const room = new THREE.Group(); room.name = 'room';
-  const floorTex = canvasTexture(woodCanvas(1024, { rings: false, planks: 8, base: '#3a2416', dark: '#24150c', light: '#4c3020', seed: 3 }));
-  if (floorTex) { floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(4, 4); }
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(22, 48), new THREE.MeshStandardMaterial({ map: floorTex, color: floorTex ? 0xffffff : 0x3a2416, roughness: 0.82 }));
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; room.add(floor);
-  const rugTex = canvasTexture(rugCanvas(1024));
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(6.4, 64), new THREE.MeshStandardMaterial({ map: rugTex, color: rugTex ? 0xffffff : 0x3b2337, roughness: 1 }));
-  rug.rotation.x = -Math.PI / 2; rug.position.y = 0.01; rug.receiveShadow = true; room.add(rug);
-  // walls: a dark panelled cylinder with a lighter wainscot rail
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 12, 48, 1, true), new THREE.MeshStandardMaterial({ color: 0x1b2230, roughness: 0.92, side: THREE.BackSide }));
-  wall.position.y = 6; room.add(wall);
-  const rail = new THREE.Mesh(new THREE.CylinderGeometry(15.9, 15.9, 0.18, 48, 1, true), new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.6, side: THREE.BackSide }));
-  rail.position.y = 3.2; room.add(rail);
-  const wains = new THREE.Mesh(new THREE.CylinderGeometry(15.95, 15.95, 3.1, 48, 1, true), new THREE.MeshStandardMaterial({ color: 0x2a1c14, roughness: 0.8, side: THREE.BackSide }));
-  wains.position.y = 1.55; room.add(wains);
-  // the lamp over the table: cord, brass shade, bulb
-  const lampY = T.y + 5.0;
-  const brass = new THREE.MeshStandardMaterial({ color: 0xb08a4a, metalness: 0.85, roughness: 0.32, side: THREE.DoubleSide });
-  const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 1.25, 0.75, 40, 1, true), brass);
-  shade.position.y = lampY; room.add(shade);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.35, 0.16, 24), brass); cap.position.y = lampY + 0.44; room.add(cap);
-  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 7, 6), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 }));
-  cord.position.y = lampY + 4; room.add(cord);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 12), new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffe2b0, emissiveIntensity: 2.2 }));
-  bulb.position.y = lampY - 0.18; room.add(bulb);
-  W.lampY = lampY;
-  return room;
-}
-
-// ---------------------------------------------------- table and stools
-function buildTable(W) {
-  const g = new THREE.Group(); g.name = 'table';
-  const woodTex = canvasTexture(woodCanvas(1024, { seed: 11 }));
-  const wood = new THREE.MeshStandardMaterial({ map: woodTex, color: woodTex ? 0xffffff : 0x6b3f22, roughness: 0.48, metalness: 0 });
-  const woodPlain = new THREE.MeshStandardMaterial({ color: 0x5a331b, roughness: 0.5 });
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(T.r, T.r, T.thick, 96), [woodPlain, wood, woodPlain]);
-  top.position.y = T.y - T.thick / 2; top.castShadow = true; top.receiveShadow = true; g.add(top);
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(T.r, 0.06, 10, 96), woodPlain);
-  lip.rotation.x = Math.PI / 2; lip.position.y = T.y - 0.03; g.add(lip);
-  const feltTex = canvasTexture(feltCanvas(2048));
-  const felt = new THREE.Mesh(new THREE.CircleGeometry(T.felt, 96), new THREE.MeshStandardMaterial({ map: feltTex, color: feltTex ? 0xffffff : 0x16302c, roughness: 0.95 }));
-  // CircleGeometry uv: u = x, v = y. Laid flat with rotation.x = -PI/2,
-  // local y becomes world -z. With flipY the canvas row grows with world
-  // z, and the canvas reads the right way from seat 0.
-  felt.rotation.x = -Math.PI / 2; felt.position.y = T.y + 0.002; felt.receiveShadow = true;
-  g.add(felt);
-  // seat inlays: an arc of the seat colour at the table edge, bright when
-  // that seat is to act.
-  W.inlay = [0, 1].map(p => {
-    const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(FLY[p]) });
-    const arc = new THREE.Mesh(new THREE.RingGeometry(T.felt + 0.04, T.felt + 0.16, 64, 1, 0, Math.PI * 0.56), m);
-    arc.rotation.x = -Math.PI / 2;
-    arc.rotation.z = (p === 0 ? -Math.PI / 2 : Math.PI / 2) - Math.PI * 0.28;
-    arc.position.y = T.y + 0.003;
-    g.add(arc);
-    return m;
-  });
-  // pedestal: lathe column and four feet
-  const prof = [[0.0, 0], [0.9, 0], [0.9, 0.12], [0.4, 0.22], [0.28, 0.5], [0.34, 0.9], [0.22, 1.3], [0.3, 1.7], [0.6, T.y - T.thick - 0.02], [0, T.y - T.thick - 0.02]].map(([x, y]) => new THREE.Vector2(x, y));
-  const col = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), woodPlain); col.castShadow = true; col.receiveShadow = true; g.add(col);
-  // stools
-  W.stools = [0, 1].map(p => {
-    const s = new THREE.Group();
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.74, 0.14, 40), wood); seat.position.y = T.seatTop - 0.07; seat.castShadow = seat.receiveShadow = true; s.add(seat);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 8, 32), woodPlain); ring.rotation.x = Math.PI / 2; ring.position.y = T.seatTop * 0.4; s.add(ring);
-    for (let k = 0; k < 3; k++) {
-      const a = (k / 3) * Math.PI * 2 + 0.5;
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, T.seatTop, 10), woodPlain);
-      leg.position.set(Math.cos(a) * 0.55, T.seatTop / 2 - 0.07, Math.sin(a) * 0.55);
-      leg.rotation.set(Math.sin(a) * 0.12, 0, -Math.cos(a) * 0.12);
-      leg.castShadow = true; s.add(leg);
-    }
-    // seat badge: a thin band in the seat colour
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.785, 0.785, 0.04, 40, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(FLY[p]) }));
-    band.position.y = T.seatTop - 0.1; s.add(band);
-    s.position.copy(seatPos(p, 0, 0, T.seatV)); s.position.y = 0;
-    g.add(s);
-    return s;
-  });
-  return g;
-}
-
-// Life counter: a drum in the seat colour. The number is on the drum
-// four times, so it reads from every side. On a change the drum turns a
-// quarter turn, and the number shows red (loss) or green (gain) for a
-// short time.
-function buildLifeDrum(W, p) {
-  const cv = makeCanvas(1024, 256);
-  const tex = canvasTexture(cv, { aniso: 4 });
-  const side = new THREE.MeshStandardMaterial({ map: tex, color: tex ? 0xffffff : 0x111623, roughness: 0.5, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: tex ? 0.35 : 0 });
-  const capM = new THREE.MeshStandardMaterial({ color: new THREE.Color(FLY[p]), roughness: 0.4 });
-  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.42, 48), [side, capM, capM]);
-  drum.castShadow = true;
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x1a1f2b, roughness: 0.5, metalness: 0.3 }));
-  const grp = new THREE.Group(); grp.add(base); base.position.y = 0.04; grp.add(drum); drum.position.y = 0.08 + 0.21;
-  grp.position.copy(seatPos(p, T.lifeU, 0, T.lifeV));
-  const st = { grp, drum, tex, cv, value: null, flash: 0, flashCol: TOKENS.ink, spin: 0, spinTo: 0 };
-  st.draw = (v, col) => {
-    if (!cv?.getContext) return;
-    const g = cv.getContext('2d');
-    g.fillStyle = TOKENS.panel2; g.fillRect(0, 0, 1024, 256);
-    for (let k = 0; k < 4; k++) {
-      const x = k * 256;
-      g.fillStyle = FLY[p]; g.fillRect(x, 0, 256, 18); g.fillRect(x, 238, 256, 18);
-      g.fillStyle = col; g.font = `700 150px ${MONO}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(String(v), x + 128, 134);
-      g.fillStyle = TOKENS.ink2; g.font = `600 26px ${SANS}`; g.textAlign = 'left';
-      g.fillText(p ? 'B' : 'A', x + 12, 46);
-      g.fillStyle = TOKENS.hair2; g.fillRect(x + 255, 18, 1, 220);
-    }
-    if (tex) tex.needsUpdate = true;
-  };
-  return st;
-}
-
 // --------------------------------------------------------- mana tokens
 // The tokens are thick (0.08) and large (a third of the card width or
 // more), so the mana on each stack reads in the wide shot. Each colour of
@@ -796,7 +609,12 @@ export function createDuelScene(canvas, opts = {}) {
   const backTex = W.tex.back();
   W.backMat = new THREE.MeshStandardMaterial({ map: backTex || null, color: backTex ? 0xffffff : 0x111623, roughness: 0.6 });
   W.edgeMat = new THREE.MeshStandardMaterial({ color: 0xe9e1cf, roughness: 0.8 });
-  scene.add(buildRoom(W), buildTable(W), W.cards, W.fx);
+  const hall = buildHall({
+    coarse, reduced, seed: 7,
+    layout: { y: T.y, halfLen: T.halfLen, halfDepth: T.halfDepth, seatV: T.seatV, seatTop: T.seatTop, seatPos: (p, u, y, v) => seatPos(p, u, y, v) },
+  });
+  W.inlay = hall.inlay; W.chairs = hall.chairs;
+  scene.add(hall.group, W.cards, W.fx);
 
   // ---------------------------------------------------------- lights
   const lights = buildLights(scene, W, coarse);
@@ -816,8 +634,17 @@ export function createDuelScene(canvas, opts = {}) {
     return { lib, label, n: -1 };
   });
 
-  // ---------------------------------------------------------- life drums
-  const drums = [0, 1].map(p => { const d = buildLifeDrum(W, p); scene.add(d.grp); return d; });
+  // ---------------------------------------------------------- life dice
+  // Each fly keeps its life on a d20 on its mat (ui/fly3d/d20.js), with
+  // a plate that shows the exact number. grp: the place of the dice.
+  const drums = [0, 1].map(p => {
+    const d = createLifeDice({ colour: FLY[p], size: T.lifeSize, reduced, label: p ? 'B' : 'A' });
+    seatPos(p, T.lifeU, 0.006, T.lifeV, d.group.position);
+    d.group.rotation.y = YAW[p];
+    d.group.traverse(o => { if (o.isMesh) o.castShadow = !coarse; });
+    scene.add(d.group);
+    return { dice: d, grp: d.group, value: null };
+  });
 
   // ---------------------------------------------------------- flies
   const flies = [0, 1].map(p => ({
@@ -834,7 +661,7 @@ export function createDuelScene(canvas, opts = {}) {
     const real = !mod.placeholder;
     const built = mod.buildFly({
       colour: FLY[f.p], seed: f.p + 1, lod: coarse ? 'phone' : 'desktop', detail: coarse ? 'low' : 'high',
-      tableY: (T.y - T.seatTop) / flyScale, tableZ: (T.seatV - T.r) / flyScale,
+      tableY: (T.y - T.seatTop) / flyScale, tableZ: (T.seatV - T.halfDepth) / flyScale,
     });
     f.built = built;
     if (real) built.root.scale.setScalar(flyScale);
@@ -1059,14 +886,9 @@ export function createDuelScene(canvas, opts = {}) {
         if (!x.tapped && !has) addPip(p, x);
         if (x.tapped && has && !has.userData.flying) { W.fx.remove(has); Z.pips.delete(x.uid); }
       }
-      // drums
+      // life dice
       const d = drums[p];
-      if (d.value !== pl.life) {
-        const first = d.value == null;
-        const col = first ? TOKENS.ink : pl.life < d.value ? TOKENS.dmg : TOKENS.heal;
-        d.value = pl.life; d.draw(pl.life, col); d.flash = first ? 0 : 1.1;
-        if (!first) d.spinTo += Math.PI / 2;
-      }
+      if (d.value !== pl.life) { d.dice.set(pl.life, { instant: d.value == null || snap }); d.value = pl.life; }
     }
     // pips that lost their land
     for (const [uid, pip] of Z.pips) if (!Z.perms.has(uid) && !pip.userData.flying) { W.fx.remove(pip); Z.pips.delete(uid); }
@@ -1101,7 +923,7 @@ export function createDuelScene(canvas, opts = {}) {
   // each layout() pass. stackOf(p) makes it when layout() did not run yet.
   const stacks = [null, null];
   const stackOf = p => stacks[p] || (stacks[p] = stackLayout(mirror.players[p].battlefield));
-  // A count plate lies on the felt at the head of each stack: the number
+  // A count plate lies on the mat at the head of each stack: the number
   // of lands in the stack and a bar in each colour of the stack.
   const plates = [new Map(), new Map()];
   const plateGeo = new THREE.PlaneGeometry(0.34, 0.15);
@@ -1249,7 +1071,7 @@ export function createDuelScene(canvas, opts = {}) {
     f.t0 = sceneT; f.rate = Math.min(8, Math.max(0.25, rate)); f.until = sceneT + until;
   }
   const handAnchor = p => seatPos(p, 0, T.handY + 0.15, T.handV + 0.05);
-  const restAnchor = p => seatPos(p, 0, 0.02, T.r - 0.15);
+  const restAnchor = p => seatPos(p, 0, 0.02, T.halfDepth - 0.15);
   const flyHead = p => seatPos(p, 0, 1.15, T.seatV - 0.15);
 
   // ---------------------------------------------------------- director
@@ -1387,7 +1209,7 @@ export function createDuelScene(canvas, opts = {}) {
       const b = worldOfTarget(s.to);
       spark(a, b, PALETTE[colourKey(CARD[s.card]?.colour)]?.ink || TOKENS.ink, s.dur || 0.4);
       if (typeof s.to === 'number') { const f = Z.flags.get(s.to) || {}; f.target = true; Z.flags.set(s.to, f); }
-      if (typeof s.to === 'string' && s.amount) { cur?.struck?.add(+s.to.slice(1)); floatNumber(`-${s.amount}`, TOKENS.dmg, drums[+s.to.slice(1)].grp.position.clone().add(new THREE.Vector3(0, 0.75, 0))); }
+      if (typeof s.to === 'string' && s.amount) { cur?.struck?.add(+s.to.slice(1)); floatNumber(`-${s.amount}`, TOKENS.dmg, drums[+s.to.slice(1)].grp.position.clone().add(new THREE.Vector3(0, 0.9, 0))); }
     },
     hurt(s) { const o = Z.perms.get(s.uid); if (o) floatNumber(`-${s.amount}`, TOKENS.dmg, o.toP.clone().add(new THREE.Vector3(0, 0.25, 0))); },
     pump(s) {
@@ -1419,6 +1241,7 @@ export function createDuelScene(canvas, opts = {}) {
       const first = Z.perms.get(s.uids[0]);
       if (first) clip(s.p, 'push', { target: first.toP, to: seatPos(s.p, 0, 0, T.attackV), contactAt: touch });
       director('combat', s.p);
+      hall.react('lean', { side: s.p, strength: 0.55 });
     },
     block(s) {
       const touch = s.dur * 0.3;
@@ -1434,7 +1257,7 @@ export function createDuelScene(canvas, opts = {}) {
       if (typeof s.to === 'string') {
         const q = +s.to.slice(1);
         cur?.struck?.add(q);
-        floatNumber(`-${s.amount}`, TOKENS.dmg, drums[q].grp.position.clone().add(new THREE.Vector3(0, 0.75, 0)));
+        floatNumber(`-${s.amount}`, TOKENS.dmg, drums[q].grp.position.clone().add(new THREE.Vector3(0, 0.9, 0)));
         clip(q, 'slump', { dur: 0.6, until: 0.45 });   // a short flinch
       } else {
         const t = Z.perms.get(s.to);
@@ -1443,7 +1266,7 @@ export function createDuelScene(canvas, opts = {}) {
     },
     life(s) {
       const d = s.to - s.from;
-      if (!(cur?.struck?.has(s.p) && d < 0)) floatNumber(d > 0 ? `+${d}` : `${d}`, d > 0 ? TOKENS.heal : TOKENS.dmg, drums[s.p].grp.position.clone().add(new THREE.Vector3(0, 0.75, 0)));
+      if (!(cur?.struck?.has(s.p) && d < 0)) floatNumber(d > 0 ? `+${d}` : `${d}`, d > 0 ? TOKENS.heal : TOKENS.dmg, drums[s.p].grp.position.clone().add(new THREE.Vector3(0, 0.9, 0)));
     },
     die(s) {
       const o = Z.perms.get(s.uid);
@@ -1486,7 +1309,14 @@ export function createDuelScene(canvas, opts = {}) {
         flies[p].end = s.winner < 0 ? 'slump' : p === s.winner ? 'raiseArms' : 'slump';
       }
       director('win', 0, true);
+      hall.react('cheer', { side: s.winner, strength: 1 });
     },
+    // A hold after a big play: the crowd reacts (CROWD_REACT).
+    hold(s) {
+      const r = CROWD_REACT[s.reason];
+      if (r) hall.react(r[0], { side: s.reason === 'lethal' || s.reason === 'hit' ? 1 - s.p : s.p, strength: r[1] });
+    },
+    beat() { /* the turn pause: the flies settle (the director holds) */ },
     trigger(s) {
       const o = s.uid != null ? Z.perms.get(s.uid) : null;
       const at = o ? o.toP.clone().add(new THREE.Vector3(0, 0.45, 0)) : flyHead(s.p).add(new THREE.Vector3(0, 0.7, 0));
@@ -1534,6 +1364,8 @@ export function createDuelScene(canvas, opts = {}) {
     },
   };
   const TRIGGER_WORD = { enter: 'enters', death: 'dies', upkeep: 'upkeep' };
+  // hold reason -> crowd reaction and strength (ui/fly3d/hall.js react)
+  const CROWD_REACT = { lethal: ['cheer', 1], hit: ['buzz', 0.9], deaths: ['gasp', 0.8], creature: ['lean', 0.7] };
   const loose = new Set();
   function trackLoose(o) { loose.add(o); }
 
@@ -1632,12 +1464,10 @@ export function createDuelScene(canvas, opts = {}) {
       else pip.position.lerp(_v3, 1 - Math.exp(-sdt * 12));
     }
     for (let p = 0; p < 2; p++) {
-      const d = drums[p];
-      if (d.flash > 0) { d.flash -= dt; if (d.flash <= 0) d.draw(d.value, TOKENS.ink); }
-      d.spin += (d.spinTo - d.spin) * (W.reduced ? 1 : 1 - Math.exp(-dt * 9));
-      d.drum.rotation.y = d.spin;
+      drums[p].dice.update(sdt);
       W.inlay[p].color.set(p === toAct && winner == null ? FLY[p] : TOKENS.faint);
     }
+    hall.update(sdt, { focus: cam.look });
     for (let p = 0; p < 2; p++) brains[p]?.update?.(dt);
     updateCamera(dt);
     if (controls && now < cam.userUntil) controls.update();
@@ -1718,7 +1548,7 @@ export function createDuelScene(canvas, opts = {}) {
       cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length,
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
-      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible,
+      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(),
     };
   }
   function dispose() {
@@ -1728,37 +1558,39 @@ export function createDuelScene(canvas, opts = {}) {
     for (const f of flies) { try { f.built?.dispose?.(); } catch { /* gone */ } }
     for (const b of brains) { try { b?.dispose?.(); } catch { /* gone */ } }
     scene.traverse(o => { if (o.isMesh) { o.geometry?.dispose(); for (const m of [].concat(o.material)) { m.map?.dispose(); m.dispose(); } } });
-    W.tex.dispose(); W.sprites.dispose(); tok.dispose();
+    W.tex.dispose(); W.sprites.dispose(); tok.dispose(); hall.dispose();
+    for (const d of drums) d.dice.dispose();
     renderer?.dispose();
   }
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
-    world: { W, Z, flies, drums, piles, lights, get mirror() { return mirror; }, cam, director, brains, ops: Object.keys(STEP) },
+    world: { W, Z, flies, drums, piles, lights, hall, get mirror() { return mirror; }, cam, director, brains, ops: Object.keys(STEP) },
   };
 }
 
 // ---------------------------------------------------------------- lights
+// The hall light: fluorescent panels over every table. A cool white
+// hemisphere fill and one high key light (the only shadow light, its
+// shadow box fits the feature table). A warm low rim from the camera
+// side keeps the flies apart from the dark floor. Crisp: no bloom.
 function buildLights(scene, W, coarse) {
-  const hemi = new THREE.HemisphereLight(0xbfcbe8, 0x2a1c12, 0.55);
+  const hemi = new THREE.HemisphereLight(0xeef3ff, 0x2a2f3a, 1.25);
   scene.add(hemi);
-  // key: the lamp over the table, the only shadow light
-  // cone wide enough to reach the flies on the stools; the felt is in the
-  // bright centre of the cone
-  const key = new THREE.SpotLight(0xffe6c4, 130, 24, 0.98, 0.5, 2);
-  key.position.set(0, W.lampY - 0.25, 0);
+  const key = new THREE.DirectionalLight(0xf4f7ff, 2.4);
+  key.position.set(2.5, 14, 3.5);
   key.target.position.set(0, T.y, 0);
   key.castShadow = !coarse;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
-  key.shadow.camera.near = 1; key.shadow.camera.far = 12;
+  const sc = key.shadow.camera;
+  sc.left = -6.5; sc.right = 6.5; sc.top = 6.5; sc.bottom = -6.5; sc.near = 4; sc.far = 22;
   scene.add(key, key.target);
-  // rim: cool light from behind and above, at the side of the room
-  const rim = new THREE.DirectionalLight(0x9fc4ff, 1.5);
-  rim.position.set(-6, 8, -3);
+  const rim = new THREE.DirectionalLight(0x9fc4ff, 0.9);
+  rim.position.set(-6, 8, -5);
   scene.add(rim);
-  const rim2 = new THREE.DirectionalLight(0xffd2a8, 0.6);
-  rim2.position.set(5, 5, 6);
+  const rim2 = new THREE.DirectionalLight(0xffe2c4, 0.55);
+  rim2.position.set(7, 4, 6);
   scene.add(rim2);
   return { hemi, key, rim, rim2 };
 }
