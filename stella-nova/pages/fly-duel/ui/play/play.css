@@ -197,6 +197,19 @@
 .pl-last[data-seat="1"] { border-left-color: var(--flyB); }
 .pl-last-t { font-size: 13px; color: var(--ink); }
 
+/* -------------------------------------------------- the cast preview
+   ui/play/castview.js, MTG Arena style: the cast card shows large at the
+   left (left, top, width, height from castRect), holds, then flies down
+   onto the mat (transform translate + scale, .is-down) and fades. The
+   rim takes the seat colour of the caster. No pointer events. */
+.pl-cast { position: absolute; z-index: 90; pointer-events: none; border-radius: 3% / 2.2%; border: 2px solid var(--flyA); background: var(--bg);
+  transform-origin: 50% 50%; transition-property: transform, opacity; transition-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+.pl-cast[data-seat="1"] { border-color: var(--flyB); }
+.pl-cast .pl-cv { width: 100%; height: 100%; }
+.pl-cast.is-in { animation: pl-cast-in 180ms cubic-bezier(0.2, 0, 0, 1); }
+.pl-cast.is-down:not(.is-in) { opacity: 0; transition-duration: 140ms !important; }
+@keyframes pl-cast-in { from { transform: translateX(-40px) scale(0.92); opacity: 0; } to { transform: none; opacity: 1; } }
+
 /* ------------------------------------------------------------- menu */
 .pl-menu { position: absolute; z-index: 150; left: calc(8px + var(--sal)); bottom: calc(var(--base) + var(--btn-h) + 14px); width: min(300px, calc(100% - 16px)); display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--hair2); border-radius: 10px; }
 .pl-keys { margin: 0; font-size: 12px; color: var(--ink2); }
@@ -319,6 +332,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pl-hc, .pl-hc.is-peek, .pl-perm, .pl-perm .pl-cv, .pl-stack, .pl-oh { transition: none !important; }
-  .pl-open-deck.is-shuffle { animation: none; }
+  .pl-open-deck.is-shuffle, .pl-cast.is-in { animation: none; }
   .pl-perm.is-new { transform: none; opacity: 1; }
 }

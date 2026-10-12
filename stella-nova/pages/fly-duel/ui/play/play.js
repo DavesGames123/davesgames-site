@@ -83,6 +83,10 @@
 //      grep -n 'async function loop'     need() -> fly or wait for you
 //      grep -n 'async function flyTurn'  think pause, top-3, the move
 //      grep -n 'async function animate'  one record on the table
+//      grep -n 'function castTarget'     where a cast preview lands
+//                                        (ui/play/castview.js: a cast card
+//                                        shows large at the left, then
+//                                        flies down onto the mat)
 //      grep -n 'function render'         every box from the state
 //      grep -n 'function onKey'          keyboard shortcuts
 //      grep -n 'function startTimer'     optional turn timer
@@ -98,6 +102,7 @@ import { createInspector } from './inspector.js';
 import { attachOrbit } from './orbit.js';
 import { paintCard, paintBack, colourHex } from './canvas.js';
 import { mountOpening } from './opening.js';
+import { castPlan, createCastView, fallbackTarget, projectTarget } from './castview.js';
 import { createPeek, PEEK } from './peek.js';
 import * as CF from '../cardface.js';
 import { createScorecard, scorecardModel } from '../hud/scorecard.js';
@@ -213,6 +218,15 @@ export function mountPlay(root, opts) {
   // its copy above it; a table card beside the pointer.
   const peek = createPeek(root, { CARD, CF, KEYWORDS: cards.KEYWORDS || {}, view: () => [root.clientWidth || win.innerWidth, root.clientHeight || win.innerHeight] });
   const rectOfEl = el => () => el?.getBoundingClientRect?.() || null;
+  // The cast preview (ui/play/castview.js), MTG Arena style: a creature or
+  // spell cast (yours or the fly's) shows large at the left for a beat,
+  // then flies down onto its spot on the mat (castTarget). animate waits
+  // for it and the 3D clip together.
+  const castView = createCastView(root, {
+    paint: (cv, id, w, h) => paintCard(cv, CARD[id], { w, h, mode: 'auto' }),
+    view: () => [root.clientWidth || win.innerWidth, root.clientHeight || win.innerHeight],
+    insets: () => ({ peek: L.hand.peek, top: has3d ? 64 : 0 }),
+  });
   const hand = createHand($('.pl-handbox'), {
     onSelect: from('hand', i => apply(ix?.select(i))),
     onPlay: from('hand', i => apply(ix?.play(i))),
@@ -577,12 +591,13 @@ export function mountPlay(root, opts) {
   async function animate(rec) {
     if (!rec) return;
     showLast(rec);
+    const cast = castView.play(castPlan(rec, CARD, { speed: pref.speed, reduced }), castTarget);
     if (has3d) {
       render();
-      try { await Promise.race([opts.scene.play(rec), sleep(8000)]); } catch (e) { console.info('fly-duel play: scene.play', e); }
+      try { await Promise.race([Promise.all([opts.scene.play(rec), cast]), sleep(8000)]); } catch (e) { console.info('fly-duel play: scene.play', e); }
     } else {
       render();
-      await sleep(reduced ? Math.max(sp().beat, 400) : sp().beat);
+      await Promise.all([sleep(reduced ? Math.max(sp().beat, 400) : sp().beat), cast]);
     }
     // the pause between turns: the turn line has the new turn already;
     // it is marked for the pause (no banner)
@@ -594,6 +609,25 @@ export function mountPlay(root, opts) {
       await sleep(sp().pause);
       tl.classList.remove('is-new');
     }
+  }
+
+  // Where a cast preview lands (client px): the new permanent on the 3D
+  // table (its place, projected with the scene camera) or on the flat
+  // table, else the creature row of the caster (castview.js
+  // fallbackTarget). A spell lands at the middle of the table.
+  function castTarget(plan) {
+    if (plan.uid != null && has3d) {
+      const o = opts.scene.world?.Z?.perms?.get?.(plan.uid);
+      const cv = opts.sceneEl || tableBox.querySelector('canvas');
+      const p = projectTarget(o?.toP || o?.mesh?.position, opts.scene.camera, cv?.getBoundingClientRect?.());
+      if (p) return p;
+    } else if (plan.uid != null) {
+      const r = tableBox.querySelector(`[data-uid="${plan.uid}"]`)?.getBoundingClientRect?.();
+      if (r && r.width > 0) return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    const b = tableBox.getBoundingClientRect?.();
+    const box = b && b.width > 0 ? b : { left: 0, top: 0, width: root.clientWidth || win.innerWidth || 0, height: root.clientHeight || win.innerHeight || 0 };
+    return fallbackTarget(box, plan.seat === humanSeat(), plan.kind);
   }
 
   function showLast(rec) {
