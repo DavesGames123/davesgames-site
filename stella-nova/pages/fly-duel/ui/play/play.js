@@ -33,8 +33,10 @@
 //        highlight(spec) marks playable / eligible / target cards, and
 //        play(record) animates each decision. A tap on a fly or its life
 //        die (pickPermanent gives { uid: null, player }) targets that
-//        player. Without pickPermanent the flat table is used and the
-//        scene is not touched.
+//        player. To read a card on the table: long-press or right-click
+//        it, or tap it when a tap has no other job (your main phase with
+//        no target to choose, the fly's turn). Without pickPermanent the
+//        flat table is used and the scene is not touched.
 //
 //  KEYS (desktop)  Space / Enter: the big button. Esc: cancel or close.
 //        Z or Backspace: undo. A: all attack. 1-9: select a hand card.
@@ -159,15 +161,41 @@ export function mountPlay(root, opts) {
   if (has3d) {
     if (opts.sceneEl) tableBox.appendChild(opts.sceneEl);
     tableBox.classList.add('is-3d');
-    tableBox.addEventListener('click', e => {
-      if (!ix) return;
+    const pickAt = (x, y) => {
       let hit = null;
-      try { hit = opts.scene.pickPermanent(e.clientX, e.clientY); } catch { hit = null; }
+      try { hit = opts.scene.pickPermanent(x, y); } catch { hit = null; }
       const uid = hit && typeof hit === 'object' ? hit.uid : hit;
       // a tap on a fly or its life die: { uid: null, player: seat }
       const who = hit && typeof hit === 'object' ? hit.player : undefined;
-      if (uid != null && uid !== -1) apply(ix.perm(uid));
-      else if ((who === 0 || who === 1) && ix.mode() === 'target') apply(ix.player(who));
+      return { uid: uid != null && uid !== -1 ? uid : null, who };
+    };
+    // Read a card on the table: a long press (touch), a right-click, or
+    // a tap when a tap has no other job (your main phase with no target
+    // to choose, the fly's turn, the end of the game).
+    let press = { t: 0, x: 0, y: 0, long: false };
+    tableBox.addEventListener('pointerdown', e => {
+      if (e.button > 0) return;
+      clearTimeout(press.t);
+      press = { x: e.clientX, y: e.clientY, long: false, t: setTimeout(() => {
+        const { uid } = pickAt(press.x, press.y);
+        if (uid !== null) { press.long = true; inspectPerm(uid); }
+      }, 450) };
+    });
+    const unpress = e => { if (e.type !== 'pointermove' || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) clearTimeout(press.t); };
+    for (const t of ['pointerup', 'pointercancel', 'pointermove']) tableBox.addEventListener(t, unpress);
+    tableBox.addEventListener('contextmenu', e => {
+      const { uid } = pickAt(e.clientX, e.clientY);
+      if (uid !== null) { e.preventDefault(); clearTimeout(press.t); inspectPerm(uid); }
+    });
+    tableBox.addEventListener('click', e => {
+      if (!ix) return;
+      if (press.long) { press.long = false; return; }
+      const { uid, who } = pickAt(e.clientX, e.clientY);
+      const m = ix.mode();
+      if (uid !== null) {
+        if (m === 'wait' || m === 'over' || m === 'main') inspectPerm(uid);
+        else apply(ix.perm(uid));
+      } else if ((who === 0 || who === 1) && m === 'target') apply(ix.player(who));
       else if (ix.view().selected !== null) apply(ix.confirm());
     });
   } else {

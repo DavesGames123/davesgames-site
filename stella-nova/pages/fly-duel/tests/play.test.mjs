@@ -472,12 +472,23 @@ let fly = null;
       ev(q('[data-keep]'), 'click');
       const pc = P.controller, hs = pc.humanSeat;
       const bot = greedyBot();
-      let bad = '', guard = 0, playerTargets = 0, previews = 0, noPreview = 0;
+      let bad = '', guard = 0, playerTargets = 0, previews = 0, noPreview = 0, inspected = 0;
       while (pc.need() !== 'over' && guard++ < 6000 && !bad) {
         await wait(1);
         if (pc.need() !== 'human' || P.busy) continue;
         const s = pc.state, n0 = pc.history.length;
         const legal = rules.legalActions(s);
+        // read a card on the table: in your main phase a tap on any
+        // permanent opens the inspector (a tap has no other job there)
+        if (s.phase === 'main' && !inspected) {
+          const any = s.players[1 - hs].battlefield[0] || s.players[hs].battlefield[0];
+          if (any) {
+            tapTable({ uid: any.uid });
+            inspected = !q('.pl-insp').hidden ? 1 : -1;
+            ev(q('.pl-insp-x'), 'click');
+            if (pc.history.length !== n0) bad = 'a tap to read a card made a move';
+          }
+        }
         // prefer a cast at a player, so the table path for players runs
         const a = legal.find(x => x.type === 'cast' && typeof x.target === 'string') || bot(s, legal);
         const handEls = [...root.querySelectorAll('.pl-hc')].filter(e => !e.hidden);
@@ -501,6 +512,7 @@ let fly = null;
       ok(!bad, `3D table game: every human action went through table taps${bad ? ': ' + bad : ''}`);
       ok(playerTargets > 0, `3D table game: a tap on a fly or its life die targets that player (${playerTargets} times)`);
       ok(!!pc.result, `3D table game ends (${JSON.stringify(pc.result)})`);
+      ok(inspected === 1, `3D table game: a tap on a permanent in your main phase opens the inspector (${inspected})`);
       ok(previews > 0 && noPreview === 0, `3D table game: your scorecard marks the lands to pay for each selected cast (${previews - noPreview} of ${previews})`);
       P.destroy();
     }
