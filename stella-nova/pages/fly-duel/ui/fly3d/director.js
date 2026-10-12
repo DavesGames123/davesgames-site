@@ -18,6 +18,8 @@
 //      crane   a rise over the board after combat       ease
 //      low     a low angle on the lethal attack         cut
 //      crowd   the crowd reacts (big hit, deaths)       cut
+//      toss    the loser throws its cards and puts its
+//              head down (front, low, the mat in view)  cut
 //      win     the winner, a slow orbit                 ease
 //      seat    first person at a seat (play mode)       cut
 //
@@ -36,11 +38,17 @@
 //      drift of the wide and win shots.
 //    - A lethal record (record.after has a winner by damage) gets the low
 //      shot on its first strike or spark at a player.
+//    - The end of a game: the toss step (the loser throws its hand) cuts
+//      to the toss shot on the loser. After SHOTS.toss.hold the director
+//      goes on to the win shot of the winner: tick(t) makes that change
+//      (the scene calls it each frame). A think step (a new record)
+//      cancels a change that has not come yet.
 //
 //  API
 //      createDirector({ reduced }) -> { state, request(shot, p, t, o),
-//        onStep(step, t, info), lock(until), reset(t) }
-//      state: { shot, p, since, cut, target, lockUntil, hist, n }
+//        onStep(step, t, info), tick(t), lock(until), reset(t) }
+//      state: { shot, p, since, cut, target, lockUntil, hist, n, then }
+//        then: { shot, p, at } | null, the change that tick(t) makes
 //      o: { force, target }. target: { kind: 'held', p } | { kind:
 //        'perm', uid } | { kind: 'uids', uids } (what the shot looks at)
 //      info (per record): { action, lethal, loser }
@@ -77,10 +85,11 @@ export const SHOTS = {
   crane: { move: 'ease', hold: 2.0, rate: 1.1 },
   low: { move: 'cut', hold: 1.8, rate: 3 },
   crowd: { move: 'cut', hold: 1.2, rate: 4 },
+  toss: { move: 'cut', hold: 4.2, rate: 2.2 },
   win: { move: 'ease', hold: 99, rate: 1.2 },
   seat: { move: 'cut', hold: 0, rate: 6 },
 };
-export const PRIORITY = { wide: 0, crane: 1, over: 2, close: 2, follow: 2, combat: 3, dolly: 3, crowd: 3, low: 4, win: 5, seat: 6 };
+export const PRIORITY = { wide: 0, crane: 1, over: 2, close: 2, follow: 2, combat: 3, dolly: 3, crowd: 3, low: 4, toss: 5, win: 5, seat: 6 };
 export const ALT = { wide: 'crane', crane: 'wide', over: 'close', close: 'over', crowd: 'wide' };
 const WEAK = new Set(['wide', 'crane', 'over', 'close', 'crowd']);
 
@@ -92,7 +101,7 @@ export function recordInfo(rec) {
 }
 
 export function createDirector({ reduced = false } = {}) {
-  const s = { shot: 'wide', p: 0, since: -99, cut: true, target: null, lockUntil: -1, hist: ['wide:0'], n: 0, lowDone: false };
+  const s = { shot: 'wide', p: 0, since: -99, cut: true, target: null, lockUntil: -1, hist: ['wide:0'], n: 0, lowDone: false, then: null };
 
   function request(shotIn, p = 0, t = 0, { force = false, target = null } = {}) {
     let shot = shotIn;
@@ -122,7 +131,7 @@ export function createDirector({ reduced = false } = {}) {
     const a = info.action || {};
     switch (step.op) {
       case 'think':
-        s.lowDone = false;
+        s.lowDone = false; s.then = null;
         if (a.type === 'land' || a.type === 'cast' || (a.type === 'block' && step.p != null)) request('over', step.p, t);
         break;
       case 'lift':
@@ -160,14 +169,25 @@ export function createDirector({ reduced = false } = {}) {
       case 'win':
         request('win', Math.max(0, step.winner), t, { force: true });
         break;
+      case 'toss':
+        request('toss', step.p, t, { force: true });
+        s.then = { shot: 'win', p: step.winner ?? 1 - step.p, at: t + SHOTS.toss.hold };
+        break;
       default: break;
     }
   }
 
+  // The timed change after a shot (the toss, then the win).
+  function tick(t) {
+    if (!s.then || t < s.then.at) return false;
+    const n = s.then; s.then = null;
+    return request(n.shot, n.p, t, { force: true });
+  }
+
   return {
-    state: s, request, onStep,
+    state: s, request, onStep, tick,
     lock(until) { s.lockUntil = Math.max(s.lockUntil, until); },
-    reset(t = 0) { s.shot = 'wide'; s.p = 0; s.since = t; s.cut = true; s.target = null; s.lockUntil = -1; s.hist = ['wide:0']; s.lowDone = false; },
+    reset(t = 0) { s.shot = 'wide'; s.p = 0; s.since = t; s.cut = true; s.target = null; s.lockUntil = -1; s.hist = ['wide:0']; s.lowDone = false; s.then = null; },
   };
 }
 

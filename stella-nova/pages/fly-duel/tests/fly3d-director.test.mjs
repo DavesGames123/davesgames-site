@@ -10,6 +10,9 @@
 //             pause, each lethal record gets the low shot
 //    poses    a played game at speed 2: each shot keeps the camera inside
 //             the hall and over the table top, and its subject in frame
+//    toss     the toss step cuts to the toss shot on the loser, tick()
+//             goes on to the win shot after SHOTS.toss.hold, and a think
+//             step cancels that change
 //  Exit code 1 on any failure.
 // ============================================================================
 import { registerHooks } from 'node:module';
@@ -29,7 +32,7 @@ const CM = await import('../game/cards.js');
 const { randomBot, greedyBot } = await import('../game/bots.js');
 const { Match, agentFromBot } = await import('../ui/match.js');
 const { choreograph } = await import('../ui/fly3d/choreo.js');
-const { createDirector, recordInfo, SHOTS } = await import('../ui/fly3d/director.js');
+const { createDirector, recordInfo, SHOTS, PRIORITY } = await import('../ui/fly3d/director.js');
 const { createDuelScene, TABLE } = await import('../ui/fly3d/scene.js');
 const { HALL } = await import('../ui/fly3d/hall.js');
 
@@ -141,6 +144,25 @@ function botMatch(seed) {
     ok(Object.keys(miss).length === 0, `${tag}: each shot keeps its subject in the frame (misses ${JSON.stringify(miss)} of ${JSON.stringify(seen)})`);
     sc.dispose();
   }
+}
+
+// --- the toss shot (the loser throws its hand) ---------------------------------------------------------------------------
+{
+  ok(SHOTS.toss && SHOTS.toss.move === 'cut' && SHOTS.toss.hold > 2.5, 'SHOTS.toss is a cut that holds for the head-down');
+  ok(PRIORITY.toss >= PRIORITY.low, 'the toss shot cuts into the lethal shot');
+  const d = createDirector();
+  d.onStep({ op: 'win', winner: 0 }, 10, {});
+  d.onStep({ op: 'toss', p: 1, winner: 0 }, 10, {});
+  ok(d.state.shot === 'toss' && d.state.p === 1 && d.state.cut, 'the toss step cuts to the toss shot on the loser');
+  ok(d.tick(10 + SHOTS.toss.hold - 0.1) === false && d.state.shot === 'toss', 'the toss shot holds');
+  ok(d.tick(10 + SHOTS.toss.hold + 0.01) === true && d.state.shot === 'win' && d.state.p === 0, 'then tick goes to the win shot of the winner');
+  ok(d.tick(30) === false, 'tick does nothing more');
+  d.onStep({ op: 'toss', p: 0, winner: 1 }, 40, {});
+  d.onStep({ op: 'think', p: 1 }, 41, {});
+  ok(d.tick(60) === false && d.state.then === null, 'a think step cancels the change to the win shot');
+  const r = createDirector({ reduced: true });
+  r.onStep({ op: 'toss', p: 0, winner: 1 }, 1, {});
+  ok(r.state.shot === 'toss' && r.state.cut, 'reduced motion: the toss shot is a cut');
 }
 
 console.log(`fly3d-director: ${pass} pass, ${fail} fail`);
