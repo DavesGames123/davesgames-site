@@ -1,26 +1,39 @@
 // ============================================================================
 //  FLY DUEL  ·  page logic  (module)
 // ----------------------------------------------------------------------------
-//  Binds every card of index.html. The other packages load by dynamic
-//  import(), so a missing or broken module gives a loading message in its
-//  card and the rest of the page still works:
+//  The page is a fullscreen game with two modes (index.html header):
+//    watch  Fly A against Fly B on the 3D table. The scorecards of
+//           ui/hud/scorecard.js sit top-left (Fly A) and top-right
+//           (Fly B), each with the live neural panel of its fly. The
+//           table holds still for a pause between turns.
+//    play   You against a model fly: ui/play/play.js mountPlay() in
+//           #playRoot. The 3D canvas of the watch table moves into the
+//           play table, and play.js drives the scene. On exit the canvas
+//           comes back and a new watch game starts.
+//  The mode chooser (#chooser) holds the deck picker: one box per deck of
+//  game/cards.js DECK_ORDER with the picture of its key card, and a
+//  Random box. The URL keeps the mode and the decks (parseQuery,
+//  queryOf). The explainer sections 01 to 09 are in the "How it works"
+//  drawer (#how), as CONTRACT.md asks.
+//
+//  The other packages load by dynamic import(), so a missing or broken
+//  module gives a loading message and the rest of the page still works:
 //    game/rules.js game/cards.js game/features.js game/bots.js   (package A)
 //    data/connectome.json data/connectome-flywire.json data/facts.js (package B)
 //    brain/fly.js brain/mb.js                                    (package C)
 //    train/worker.js data/pretrained.json data/training-curve.json (package D)
 //    saver.js                                                    (package F)
-//    ui/fly3d/scene.js (the 3D hero, three.js by the import map)
+//    ui/fly3d/scene.js (the 3D table, three.js by the import map)
+//    ui/hud/scorecard.js ui/play/controller.js ui/play/play.js
 //  Fly A is wired from data/connectome.json (hemibrain v1.2) and Fly B
 //  from data/connectome-flywire.json (FlyWire 783): two animals.
 //  pretrained.json format 2 names the file of each fly, and conOf(side)
-//  gives it. Every view of Fly B (hero, 07, worker, 3D maps) uses conOf.
-//  The ui/ modules (this package) load by static import. The 3D table
-//  loads by import() too: in node or without WebGL, the 2D table and the
-//  2D brains of #arena play the hero match instead.
+//  gives it. In node or without WebGL, the 2D table and the 2D brains of
+//  #arena play the watch match instead of the 3D table.
 //
 //  One rAF loop draws only the canvases that are on screen, and runs the
-//  autoplay tickers. The loop stops while window.__fdSaver is true (the
-//  saver sets it). window.flyDuel gives the saver the loaded modules.
+//  tickers. The loop stops while window.__fdSaver is true (the saver
+//  sets it). window.flyDuel gives the saver the loaded modules.
 //
 //  GREP MAP
 //      grep -n 'function fit'             canvas size from CSS size and DPR
@@ -28,12 +41,24 @@
 //      grep -n 'function weightsFor'      pretrained.json -> one fly
 //      grep -n 'function makeFly'         Fly construction and weights
 //      grep -n 'function dragRotate'      pointer drag on a brain canvas
-//      grep -n 'export function hudHTML'  hero HUD card: life, mana, hand
+//      grep -n 'export function hudHTML'  fallback HUD strip: life, mana
+//      grep -n 'export function parseQuery'  URL -> mode, decks, opponent
+//      grep -n 'export function queryOf'  mode, decks -> URL query
+//      grep -n 'export function pickDecks'   'random' -> a deck id by seed
+//      grep -n 'export function keyCardOf'   the key card of a deck
+//      grep -n 'export function drawDeckBox' one deck box on a canvas
+//      grep -n 'export function turnPauseMs' the pause between turns
+//      grep -n 'function trainedDecks'    decks named in the training meta
 //      grep -n 'function start3d'         the 3D table (ui/fly3d/scene.js)
-//      grep -n 'function initHero'        hero live match, 3D or 2D driver
-//      grep -n 'function setBrains'       hero brain maps: beside, close, off
+//      grep -n 'function initHero'        watch match, 3D or 2D driver
+//      grep -n 'function initScorecards'  watch scorecards, top-3, brains
+//      grep -n 'function setBrains'       brain maps: beside, close, off
 //      grep -n 'function conOf'           the connectome of Fly A or Fly B
-//      grep -n 'function initHeroStats'   hero numbers, one line per fly
+//      grep -n 'function initModes'       chooser, deck grid, URL
+//      grep -n 'async function enterPlay' watch -> play
+//      grep -n 'function exitPlay'        play -> watch
+//      grep -n 'function initHow'         the drawer, Esc and keys
+//      grep -n 'function initHeroStats'   numbers in the drawer, per fly
 //      grep -n 'function initGame'        01 rules, decks, gallery
 //      grep -n 'function initGallery'     01 card grid and filter bar
 //      grep -n 'function initCentre'      02 point cloud, counts, facts
@@ -48,10 +73,9 @@
 //      grep -n 'function finalOf'         meta.final of training-curve.json
 //      grep -n 'function initFacts'       [data-fact] and [data-cite] spans
 //      grep -n 'function initSources'     references and credits
-//      grep -n 'function initChips'       sticky section bar
+//      grep -n 'function initChips'       section bar of the drawer
 //      grep -n 'function loop'            the one rAF loop
 // ============================================================================
-import { manaGlyph } from './ui/art.js';
 import { renderBoard, renderDecks, renderGallery, renderGalleryControls, GALLERY_ALL, setKeywordText, KEYWORD_TEXT } from './ui/board.js';
 import { BrainView } from './ui/brain.js';
 import { curveRows, toSeries, seriesLabel, drawChart, SERIES_COL, flattenRow, evalVerdict } from './ui/charts.js';
@@ -60,6 +84,8 @@ import { Match, agentFromFly, agentFromBot } from './ui/match.js';
 import { beatPlan, motionFor } from './ui/motion.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { TOKENS, KC_TYPE, FLY } from './ui/tokens.js';
+import { drawCard, cardBack, loadCardArt, getCardArt, colourInfo, manaValueOf } from './ui/cardface.js';
+import { glyphHTML, hydrate } from './ui/cardview.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -110,6 +136,10 @@ async function tryImport(key, path) {
   try { M[key] = await import(path); status[key] = 'ok'; }
   catch (e) { M[key] = null; status[key] = String(e && e.message || e); console.warn(`fly-duel: ${path}`, e); }
 }
+async function quietImport(key, path) {
+  try { M[key] = await import(path); status[key] = 'ok'; }
+  catch (e) { M[key] = null; status[key] = String(e && e.message || e); console.info(`fly-duel: ${path}`, e); }
+}
 async function tryJSON(key, path) {
   try {
     const r = await fetch(path);
@@ -138,6 +168,9 @@ async function loadAll() {
   }
   await tryImport('fly', './brain/fly.js');
   await tryImport('trainer', './train/selfplay.js');
+  // the scorecards and the top-3 of a decision; without them the
+  // fallback HUD strip (#hudBar) shows
+  await Promise.all([quietImport('hud', './ui/hud/scorecard.js'), quietImport('ctrl', './ui/play/controller.js')]);
   if (M.cards?.KEYWORDS) setKeywordText(M.cards.KEYWORDS);
   return { M, D, status };
 }
@@ -222,6 +255,122 @@ function brainCanvas(cv, bv) {
   return v;
 }
 
+// ---------------------------------------------------------------- modes (pure)
+// The mode and the decks in the URL. deckIds: the known deck ids (an id
+// not in the list reads as 'random'). Result:
+//   { mode: 'watch'|'play'|null, decks: [A, B], myDeck, opp, flyDeck }
+// mode null means the URL names no mode: the chooser opens.
+//   ?mode=watch&deck=amber-dew,rot   Fly A plays amber-dew, Fly B rot
+//   ?mode=play&deck=moss&opp=A&fly=random
+export function parseQuery(search, deckIds = []) {
+  let q;
+  try { q = new URLSearchParams(search || ''); } catch { q = new URLSearchParams(''); }
+  const known = id => (id && deckIds.includes(id) ? id : 'random');
+  const m = (q.get('mode') || '').toLowerCase();
+  const mode = m === 'watch' || m === 'play' ? m : null;
+  const parts = (q.get('deck') || '').split(',').map(x => x.trim()).filter(Boolean);
+  const opp = ['A', 'B', 'bot'].includes(q.get('opp')) ? q.get('opp') : 'B';
+  return {
+    mode,
+    decks: mode === 'play' ? ['random', 'random'] : [known(parts[0]), known(parts[1])],
+    myDeck: mode === 'play' && deckIds.includes(parts[0]) ? parts[0] : (deckIds[0] || null),
+    opp, flyDeck: known(q.get('fly')),
+  };
+}
+
+// The URL query of a mode state (the inverse of parseQuery).
+export function queryOf(st) {
+  const q = new URLSearchParams();
+  q.set('mode', st.mode === 'play' ? 'play' : 'watch');
+  if (st.mode === 'play') {
+    if (st.myDeck) q.set('deck', st.myDeck);
+    q.set('opp', st.opp || 'B');
+    if (st.flyDeck && st.flyDeck !== 'random') q.set('fly', st.flyDeck);
+  } else if (st.decks && st.decks.some(d => d && d !== 'random')) q.set('deck', st.decks.map(d => d || 'random').join(','));
+  return `?${q.toString()}`;
+}
+
+// 'random' -> a deck id, from the game seed: the same seed gives the same
+// decks. The two random picks of one game are different decks when the
+// pool has two or more.
+export function pickDecks(sel, seed, deckIds) {
+  const ids = deckIds && deckIds.length ? deckIds : ['amber', 'moss'];
+  let a = (seed >>> 0) || 1;
+  const next = () => { a = (Math.imul(a ^ (a >>> 15), 2246822507) + 0x9e3779b9) >>> 0; return a / 4294967296; };
+  const out = [];
+  for (let i = 0; i < 2; i++) {
+    const want = sel?.[i];
+    if (want && want !== 'random' && ids.includes(want)) { out.push(want); continue; }
+    let pick = ids[Math.floor(next() * ids.length)];
+    for (let k = 0; k < 8 && ids.length > 1 && out.includes(pick); k++) pick = ids[Math.floor(next() * ids.length)];
+    out.push(pick);
+  }
+  return out;
+}
+
+// The key card of a deck: the non-land card with the highest mana value,
+// a creature before a spell on a tie, then the most copies. Its picture
+// goes on the deck box. deck: a DECKS entry { list: [[id, n]...] }.
+export function keyCardOf(deck, CARD) {
+  let best = null, bestKey = null;
+  for (const [id, n] of deck?.list || []) {
+    const c = CARD?.[id];
+    if (!c || c.type === 'land') continue;
+    const k = [manaValueOf(c), c.type === 'creature' ? 1 : 0, n];
+    if (!bestKey || k[0] > bestKey[0] || (k[0] === bestKey[0] && (k[1] > bestKey[1] || (k[1] === bestKey[1] && k[2] > bestKey[2])))) { best = c; bestKey = k; }
+  }
+  return best;
+}
+
+// One deck box, face on, on a 2D canvas (CSS px units). colours: the hex
+// of each deck colour (one band per colour across the top and the
+// bottom), art: the key card picture (an image or a canvas, or null),
+// back: true draws the card back (the Random box). Crisp: flat fills,
+// 1 px edges, no blur, no gradient.
+export function drawDeckBox(g, w, h, { colours = [], art = null, back = false, on = false } = {}) {
+  g.clearRect(0, 0, w, h);
+  const r = Math.max(2, Math.round(w * 0.04));
+  const box = (x, y, bw, bh, rad) => { g.beginPath(); g.moveTo(x + rad, y); g.lineTo(x + bw - rad, y); g.quadraticCurveTo(x + bw, y, x + bw, y + rad); g.lineTo(x + bw, y + bh - rad); g.quadraticCurveTo(x + bw, y + bh, x + bw - rad, y + bh); g.lineTo(x + rad, y + bh); g.quadraticCurveTo(x, y + bh, x, y + bh - rad); g.lineTo(x, y + rad); g.quadraticCurveTo(x, y, x + rad, y); g.closePath(); };
+  // the lid: a darker top block with a hard seam, as a real deck box
+  g.fillStyle = TOKENS.panel2; box(0.5, 0.5, w - 1, h - 1, r); g.fill();
+  const band = Math.max(4, Math.round(h * 0.07));
+  const cols = colours.length ? colours : [TOKENS.none];
+  const bw = (w - 2) / cols.length;
+  cols.forEach((c, i) => { g.fillStyle = c; g.fillRect(1 + i * bw, 1 + r * 0.5, bw, band); g.fillRect(1 + i * bw, h - 1 - band - r * 0.5, bw, band); });
+  const lid = Math.round(h * 0.2);
+  g.fillStyle = TOKENS.faint; g.fillRect(1, lid, w - 2, 1);
+  // the window with the picture of the key card
+  const pad = Math.round(w * 0.09);
+  const wx = pad, wy = lid + Math.round(h * 0.05), ww = w - 2 * pad, wh = h - wy - band - pad;
+  if (back) {
+    try { g.save(); g.beginPath(); g.rect(wx, wy, ww, wh); g.clip(); cardBack(g, { w: ww, h: Math.max(wh, ww * 1.4), x: wx, y: wy + (wh - Math.max(wh, ww * 1.4)) / 2 }); g.restore(); } catch { g.restore?.(); }
+  } else if (art && (art.width || art.naturalWidth)) {
+    const iw = art.naturalWidth || art.width, ih = art.naturalHeight || art.height;
+    const sc = Math.max(ww / iw, wh / ih), sw = ww / sc, sh = wh / sc;
+    try { g.drawImage(art, (iw - sw) / 2, (ih - sh) / 2, sw, sh, wx, wy, ww, wh); } catch { /* not decoded yet */ }
+  } else { g.fillStyle = TOKENS.fig; g.fillRect(wx, wy, ww, wh); }
+  g.strokeStyle = '#000'; g.lineWidth = 1; g.strokeRect(wx - 0.5, wy - 0.5, ww + 1, wh + 1);
+  g.strokeStyle = cols[0]; g.strokeRect(wx - 1.5, wy - 1.5, ww + 3, wh + 3);
+  // the edge of the box: white when chosen, else a hairline
+  g.lineWidth = on ? 3 : 1; g.strokeStyle = on ? TOKENS.ink : TOKENS.faint;
+  box(on ? 1.5 : 0.5, on ? 1.5 : 0.5, w - (on ? 3 : 1), h - (on ? 3 : 1), r); g.stroke();
+}
+
+// The pause between turns of the watch table, in ms. The table holds the
+// board still and shows "Turn n · Fly X" for this long. Speed 1 gives
+// 1.4 s; reduced motion keeps the pause (it is a pause, not a motion).
+export function turnPauseMs(speed = 1) { return Math.round(1400 / Math.max(0.25, speed || 1)); }
+
+// The decks the flies trained with, from the meta of the measured files,
+// or null when no file names them. The page never types them in.
+function trainedDecks() {
+  const d = D.curve?.meta?.decks ?? D.pretrained?.meta?.decks ?? D.curve?.meta?.curriculum?.decks ?? null;
+  return Array.isArray(d) && d.length ? d : null;
+}
+const deckIdsOf = () => (M.cards?.DECK_ORDER?.length ? M.cards.DECK_ORDER : Object.keys(M.cards?.DECKS || {})).filter(k => M.cards?.DECKS?.[k]);
+const deckName = id => (id === 'random' ? 'Random' : M.cards?.DECKS?.[id]?.name || id);
+const deckHexes = id => (M.cards?.DECKS?.[id]?.colours || []).map(k => colourInfo(k).hex);
+
 // ---------------------------------------------------------------- hero
 // Two drivers share one Match.
 //   3D (hero.mode '3d'): ui/fly3d/scene.js plays each record. The next
@@ -236,6 +385,9 @@ function brainCanvas(cv, bv) {
 const hero = {
   match: null, playing: !REDUCED, speed: 1, bvs: [], log: [], last: null, rec: null, plan: null, t: 0, hold: 0, focus: -1,
   mode: '2d', scene: null, busy: false, gen: 0, cam: 'auto', brains: 'beside', maps: [null, null], mapsLoading: null, poke: 0,
+  // watch mode: deck choice per fly ('random' or an id), the pause
+  // between turns (ms left), the top-3 of each fly, the scorecards
+  sel: ['random', 'random'], pause: 0, top: [[], []], cards: null, suspended: false,
 };
 
 // The banner text of a game result (DESIGN.md 2.3).
@@ -246,20 +398,30 @@ export function resultBanner(r, names = NAMES) {
   return { text: `${names[r.winner]} wins${why ? ` · ${why}` : ''}`, seat: r.winner };
 }
 
-// One HUD card: life, then one mana glyph per land (dim when tapped) and
-// the untapped count, then hand, deck and creatures. Exported for the
-// node test.
+// One mana glyph of ui/cardface.js as page markup, in a wrapper with the
+// class mana-<kind>. hydrate() of ui/cardview.js draws the canvas.
+function glyphOf(kind, size = 16, n = 0) {
+  const k = kind || 'generic';
+  return `<i class="mana mana-${esc(k)}">${glyphHTML(k === 'generic' ? { generic: n || 1 } : { [k]: 1 }, size, k)}</i>`;
+}
+// Colour order of the pool (COLOUR_IDS of game/cards.js), then generic.
+let colourIds = ['amber', 'moss'];
+
+// The fallback HUD strip, one box per fly: life, then one mana glyph per
+// land (dim when tapped) and the untapped count, then hand, deck and
+// creatures. It shows only when ui/hud/scorecard.js does not load. A
+// dual land shows its first colour. Exported for the node test.
 export function hudHTML(state, p, byId, { acting = false, over = null, names = NAMES } = {}) {
   const pl = state?.players?.[p];
   if (!pl) return '';
   const card = id => (byId && (byId.get ? byId.get(id) : byId[id])) || {};
   const lands = pl.battlefield.filter(x => card(x.id).type === 'land');
-  const order = { amber: 0, moss: 1 };
-  const kind = x => card(x.id).produces || 'generic';
-  lands.sort((a, b) => (order[kind(a)] ?? 2) - (order[kind(b)] ?? 2) || (a.tapped - b.tapped));
+  const kind = x => (Array.isArray(card(x.id).mana) ? card(x.id).mana[0] : card(x.id).produces) || 'generic';
+  const rank = k => { const i = colourIds.indexOf(k); return i < 0 ? colourIds.length : i; };
+  lands.sort((a, b) => rank(kind(a)) - rank(kind(b)) || (a.tapped - b.tapped));
   const up = lands.filter(x => !x.tapped).length;
   const shown = lands.slice(0, 12);
-  const glyphs = shown.map(x => `<i class="m ${x.tapped ? 'off' : 'on'}" title="${esc(card(x.id).name || 'land')}${x.tapped ? ', tapped' : ''}">${manaGlyph(kind(x), 0, 16)}</i>`).join('');
+  const glyphs = shown.map(x => `<i class="m ${x.tapped ? 'off' : 'on'}" title="${esc(card(x.id).name || 'land')}${x.tapped ? ', tapped' : ''}">${glyphOf(kind(x), 16)}</i>`).join('');
   const more = lands.length > shown.length ? `<span class="none">+${lands.length - shown.length}</span>` : '';
   const creatures = pl.battlefield.filter(x => card(x.id).type === 'creature').length;
   const tag = over ? (over.winner === p ? 'wins' : over.winner === -1 ? 'draw' : 'loses') : acting ? 'choosing' : 'waiting';
@@ -295,11 +457,10 @@ function initHero(mod3d = null) {
   hero.byId = byId;
   hero.scene = M.rules ? start3d(mod3d) : null;
   hero.mode = hero.scene ? '3d' : '2d';
+  $('app').dataset.table = hero.mode;
   $('heroStage').hidden = hero.mode !== '3d';
-  $('hudBar').hidden = hero.mode !== '3d';
   $('arena').hidden = hero.mode === '3d';
   if (hero.mode === '2d') { $('heroCam').hidden = true; $('heroBrains').hidden = true; document.querySelectorAll('.ctl-l').forEach(e => e.hidden = true); }
-  $('manaLegGlyphs').innerHTML = `${manaGlyph('amber', 0, 16)} Amber ${manaGlyph('moss', 0, 16)} Moss ${manaGlyph('generic', 1, 16)} generic.`;
   hero.bvs = [new BrainView(conOf('A'), { side: 'A', label: 'Fly A' }), new BrainView(conOf('B'), { side: 'B', label: 'Fly B' })];
   brainCanvas($('heroBrainA'), hero.bvs[0]);
   brainCanvas($('heroBrainB'), hero.bvs[1]);
@@ -307,7 +468,8 @@ function initHero(mod3d = null) {
   const F = heroFlies();
   const agents = agentsFor('ab', F.A, F.B);
   if (!agents) { st.textContent = 'No players could load.'; return; }
-  hero.match = new Match(M.rules, agents, { seed: 1 + Math.floor(Math.random() * 1e6), names: NAMES });
+  const seed0 = 1 + Math.floor(Math.random() * 1e6);
+  hero.match = new Match(M.rules, agents, { seed: seed0, names: NAMES, decks: pickDecks(hero.sel, seed0, deckIdsOf()) });
   const who = F.A && F.B ? (F.trained ? 'Both flies play with their pretrained weights.' : 'Untrained flies: no pretrained weights.') : 'Stand-in bots play until the fly model loads.';
   const draw = (state, banner = null) => {
     if (hero.mode === '2d') renderBoard($('heroBoard'), state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '', lastWho: hero.last?.who, banner });
@@ -317,16 +479,22 @@ function initHero(mod3d = null) {
     const over = hero.match.over();
     $('hudA').innerHTML = hudHTML(state, 0, byId, { acting: hero.focus === 0, over });
     $('hudB').innerHTML = hudHTML(state, 1, byId, { acting: hero.focus === 1, over });
+    hydrate($('hudBar'));
     $('hudA').classList.toggle('acting', hero.focus === 0);
     $('hudB').classList.toggle('acting', hero.focus === 1);
     const f = hero.focus;
     $('heroTurn').innerHTML = `<b>turn ${state.turn ?? 1}</b>` + (over ? `<span>${over.winner === -1 ? 'draw' : `${esc(NAMES[over.winner])} wins`}</span>` : f >= 0 ? `<span class="s${f}">${esc(NAMES[f])} to act</span>` : '');
+    hero.cards?.update(state);
+    // the 2D table starts under the scorecards
+    if (hero.mode === '2d') { const h = $('watchHud').getBoundingClientRect?.().height; if (h > 0) $('app').style?.setProperty?.('--hud-h', `${Math.round(h + 6)}px`); }
   };
+  hero.hud = hud;
+  const decksLine = () => `${deckName(hero.match.decks[0])} against ${deckName(hero.match.decks[1])}.`;
   const say = () => {
     const r = hero.match.over();
     st.classList.toggle('win', !!r);
     if (r) st.textContent = r.winner === -1 ? `Draw (${r.reason || 'turn cap'}). A new game starts soon.` : `${NAMES[r.winner]} wins${r.reason ? ` (${r.reason})` : ''}. A new game starts soon.`;
-    else st.textContent = `${who} Seed ${hero.match.seed}, turn ${hero.match.state.turn}.`;
+    else st.textContent = `${who} ${decksLine()} Seed ${hero.match.seed}, turn ${hero.match.state.turn}.`;
   };
   const logLine = rec => {
     hero.log.unshift(rec);
@@ -344,15 +512,28 @@ function initHero(mod3d = null) {
       pane.classList.toggle('acting', on); pane.classList.toggle('waiting', w >= 0 && !on);
       $(p ? 'heroCapB' : 'heroCapA').innerHTML = `<b class="seatmark s${p}">${p ? 'B' : 'A'}</b> ${NAMES[p]} · ${w < 0 ? 'game over' : on ? 'choosing' : 'waiting'}`;
     });
-    const chip = document.querySelector('#chips a[data-target="s0"]');
-    if (chip) chip.dataset.seat = w < 0 ? '' : String(w);
   };
+  // The pause between turns: the board holds still and a banner names
+  // the turn and the fly whose turn it is.
+  const banner = $('turnBanner');
+  const turnPause = rec => {
+    const a = rec.before, b = rec.after;
+    if (!b || b.result || hero.match.over() || a.turn === b.turn) return;
+    hero.pause = turnPauseMs(hero.speed);
+    banner.innerHTML = `<b>Turn ${b.turn}</b><span class="s${b.active}">${esc(NAMES[b.active])}</span>`;
+    banner.dataset.seat = String(b.active);
+    banner.hidden = false;
+  };
+  const endPause = () => { hero.pause = 0; banner.hidden = true; };
   const newGame = () => {
-    hero.match.reset(1 + Math.floor(Math.random() * 1e6));
-    hero.log = []; hero.last = null; hero.rec = null; hero.plan = null; hero.hold = 0; hero.t = 0;
-    hero.gen++; hero.busy = false;
+    const seed = 1 + Math.floor(Math.random() * 1e6);
+    hero.match.decks = pickDecks(hero.sel, seed, deckIdsOf());
+    hero.match.reset(seed);
+    hero.log = []; hero.last = null; hero.rec = null; hero.plan = null; hero.hold = 0; hero.t = 0; hero.top = [[], []];
+    hero.gen++; hero.busy = false; endPause();
     $('heroLog').innerHTML = ''; $('heroMove').innerHTML = '';
     if (hero.scene) hero.scene.setState(hero.match.state);
+    hero.cards?.reset();
     setFocus(hero.match.state.toAct); draw(hero.match.state); say();
     hero.onReset?.();
   };
@@ -365,7 +546,14 @@ function initHero(mod3d = null) {
       setFocus(-1);
     }
     draw(rec.after, r ? resultBanner(r) : null); say();
+    turnPause(rec);
     hero.onDecision?.(rec);
+  };
+  // The decision reaches the scorecard of the fly: its top-3 moves and
+  // the trace of the chosen board on the neural panel.
+  const decided = rec => {
+    hero.top[rec.who] = M.ctrl?.top3 ? M.ctrl.top3(M.rules, rec) : [];
+    if (rec.trace) hero.cards?.fire(rec.who, rec.delta != null ? { ...rec.trace, delta: rec.delta } : rec.trace);
   };
   // 2D: one step of the beat plan.
   const fire = (step) => {
@@ -374,7 +562,7 @@ function initHero(mod3d = null) {
     else if (step.key === 'pn') {
       const at = k => (P.steps.find(x => x.key === k)?.at ?? 0) - step.at;
       if (bv && rec.trace) bv.setTrace(rec.trace, rec.value, { pn: 0, kc: at('kc'), mbon: at('mbon') });
-    } else if (step.key === 'decide') hero.onDecide?.(rec);
+    } else if (step.key === 'decide') { decided(rec); hero.onDecide?.(rec); }
     else if (step.key === 'burst') { if (bv) bv.burst(step.delta); }
     else if (step.key === 'table') { logLine(rec); landed(rec); }
   };
@@ -394,7 +582,7 @@ function initHero(mod3d = null) {
     return true;
   };
   // 3D: the fly decides now; the scene plays the record, then the next
-  // one starts. The close-up maps fire with the decision.
+  // one starts. The close-up maps and the scorecard fire with the decision.
   const begin3d = () => {
     const rec = next();
     if (!rec) return false;
@@ -402,6 +590,7 @@ function initHero(mod3d = null) {
     hero.rec = rec; hero.busy = true;
     setFocus(rec.who); hud(rec.before); logLine(rec);
     if (rec.trace) hero.maps[rec.who]?.fire(rec.trace, rec.delta);
+    decided(rec); hud(rec.before);
     hero.onDecide?.(rec);
     hero.scene.play(rec).then(() => {
       if (gen !== hero.gen) return;
@@ -412,22 +601,27 @@ function initHero(mod3d = null) {
   // A whole record at once (reduced motion start, the 2D stand-in).
   const stepNow = () => {
     if (hero.match.over()) { newGame(); return; }
-    if (hero.mode === '3d') { if (!hero.busy) begin3d(); return; }
+    if (hero.mode === '3d') { if (!hero.busy) { endPause(); begin3d(); } return; }
     flush(true);
     if (begin()) flush(true);
     hero.plan = null;
   };
-  hero.stepNow = stepNow; hero.newGame = newGame;
+  hero.stepNow = stepNow; hero.newGame = newGame; hero.say = say; hero.endPause = endPause;
   if (hero.scene) hero.scene.setState(hero.match.state);
   setFocus(hero.match.state.toAct); draw(hero.match.state); say();
   const onStage = () => onScreen.has($('heroCv')) || onScreen.has($('heroBrainA')) || onScreen.has($('heroBoard'));
   tickers.push(dt => {
+    // play mode drives the scene itself (ui/play/play.js); this loop
+    // only draws it
+    if (app.mode === 'play') { if (app.playScene && !app.covered()) hero.scene.render(dt); return; }
+    if (hero.suspended) return;
     if (hero.mode === '3d') {
-      if (!onScreen.has($('heroCv'))) return;
+      if (!onScreen.has($('heroCv')) || app.covered()) return;
       // paused: still draw for a moment after a drag or a control change
       if (hero.playing || hero.poke > 0) hero.scene.render(hero.playing ? dt : 0);
       hero.poke = Math.max(0, hero.poke - dt);
       if (!hero.playing || hero.busy) return;
+      if (hero.pause > 0) { hero.pause -= dt * 1000; if (hero.pause <= 0) endPause(); return; }
       if (hero.match.over()) {
         hero.t += dt * 1000;
         if (hero.t >= motionFor(REDUCED).endHold + 1500) newGame();
@@ -437,7 +631,7 @@ function initHero(mod3d = null) {
       begin3d();
       return;
     }
-    if (!hero.playing || !onStage()) return;
+    if (!hero.playing || !onStage() || app.covered()) return;
     hero.t += dt * 1000;
     if (hero.plan) {
       flush();
@@ -445,6 +639,7 @@ function initHero(mod3d = null) {
       hero.plan = null;
       if (hero.match.over()) { hero.hold = motionFor(REDUCED).endHold; hero.t = 0; return; }
     }
+    if (hero.pause > 0) { hero.pause -= dt * 1000; if (hero.pause <= 0) { endPause(); hero.t = 0; } return; }
     if (hero.hold > 0) { if (hero.t < hero.hold) return; newGame(); return; }
     begin();
   });
@@ -462,6 +657,64 @@ function initHero(mod3d = null) {
   for (const t of ['pointerdown', 'pointermove', 'wheel']) cv.addEventListener(t, () => { hero.poke = 1.5; }, { passive: true });
   addEventListener('resize', () => { hero.scene?.resize(); hero.poke = 0.5; });
   if (REDUCED) stepNow();
+}
+
+// Watch mode: the two scorecards of ui/hud/scorecard.js in #scA (Fly A,
+// top-left) and #scB (Fly B, top-right). Each fly card has its live
+// neural panel: createBrainCard of ui/fly3d/brain3d.js when the 3D
+// module loads, else the 2D raster of ui/hud/raster.js. Without the
+// scorecard module, the fallback strip #hudBar shows.
+function initScorecards(brainMod = null) {
+  const S = M.hud, CARD = M.cards?.CARD;
+  if (!S?.createScorecard || !S.scorecardModel || !CARD || !hero.match) { $('hudBar').hidden = false; return; }
+  const compact = () => (window.innerWidth || 390) < 760;
+  const src = side => (D.pretrained?.wiring?.[side]?.release || (side === 'A' ? 'hemibrain v1.2' : 'FlyWire 783')).split(/[;(]/)[0].trim();
+  const F = heroFlies();
+  let cards = [];
+  const make = () => {
+    cards.forEach(c => c?.dispose());
+    cards = [0, 1].map(seat => {
+      const host = $(seat ? 'scB' : 'scA');
+      host.innerHTML = '';
+      const side = seat ? 'B' : 'A';
+      const isFly = !!F[side];
+      try {
+        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brainMod, compact: compact() });
+        c.setCompact(compact());
+        return c;
+      } catch (e) { console.info('fly-duel: scorecard', e); return null; }
+    });
+  };
+  make();
+  if (!cards[0] || !cards[1]) { $('hudBar').hidden = false; return; }
+  $('hudBar').hidden = true;
+  let wasCompact = compact();
+  addEventListener('resize', () => {
+    const c = compact();
+    cards.forEach(x => { x?.setCompact(c); x?.resize(); });
+    if (c !== wasCompact) { wasCompact = c; cards.forEach((x, seat) => x && update(hero.match.state, seat)); }
+  });
+  const update = (state, only = -1) => {
+    for (let seat = 0; seat < 2; seat++) {
+      if (only >= 0 && seat !== only) continue;
+      const side = seat ? 'B' : 'A';
+      const m = S.scorecardModel({
+        state, seat, CARD, kind: F[side] ? 'fly' : 'bot', name: NAMES[seat], letter: side,
+        source: src(side), deckName: deckName(hero.match.decks[seat]), top: hero.top[seat],
+        thinking: hero.busy && hero.focus === seat, colours: M.cards.COLOURS,
+      });
+      // the deck of the fly goes under its name, with the wiring
+      m.source = `${m.source} · ${deckName(hero.match.decks[seat])}`;
+      cards[seat]?.update(m);
+    }
+  };
+  hero.cards = {
+    update: s => update(s),
+    fire: (seat, trace) => cards[seat]?.fire(trace),
+    // a new game keeps the cards (and their WebGL brain panels)
+    reset: () => update(hero.match.state),
+  };
+  update(hero.match.state);
 }
 
 // "brains": beside (the maps in the scene), close (two large WebGL brain
@@ -487,6 +740,241 @@ function setBrains(v) {
       }
     }).catch(e => console.info('fly-duel: brain3d.js did not load', e));
   }
+}
+
+// ---------------------------------------------------------------- modes
+// The mode of the page and the choices of the chooser. covered() is true
+// while the drawer hides the whole table (a phone): the watch table then
+// does not draw and its match waits.
+const app = {
+  mode: 'watch', sheet: false, how: false, play: null, playScene: false, cv: null,
+  pick: 'watch', seat: 0, selW: ['random', 'random'], myDeck: null, opp: 'B', flyDeck: 'random',
+  brainMod: null, boxes: new Map(),
+  covered() { return this.how && (window.innerWidth || 390) < 860; },
+};
+const srcOf = side => (D.pretrained?.wiring?.[side]?.release || (side === 'A' ? 'hemibrain v1.2' : 'FlyWire 783')).split(/[;(]/)[0].trim();
+
+// Choose an option of a select by its value. It marks the option
+// selected (property and attribute), which also works where select.value
+// has no setter (linkedom in the node tests).
+function setSelect(sel, v) {
+  const opts = [...(sel?.querySelectorAll?.('option') || [])];
+  for (const o of opts) { o.selected = false; o.removeAttribute('selected'); }
+  const t = opts.find(o => o.value === v);
+  if (t) { t.setAttribute('selected', 'selected'); t.selected = true; }
+}
+
+function syncURL() {
+  try {
+    const q = queryOf(app.mode === 'play' ? { mode: 'play', myDeck: app.myDeck, opp: app.opp, flyDeck: app.flyDeck } : { mode: 'watch', decks: hero.sel });
+    history.replaceState(null, '', q + (location.hash || ''));
+  } catch { /* no history (node, a sandboxed frame) */ }
+}
+
+function initModes() {
+  const ids = deckIdsOf();
+  let search = '';
+  try { search = location.search; } catch { search = ''; }
+  const q = parseQuery(search, ids);
+  hero.sel = q.decks.slice(); app.selW = q.decks.slice();
+  app.myDeck = q.myDeck || ids[0] || null; app.opp = q.opp; app.flyDeck = q.flyDeck;
+  if (!(heroFlies().A && heroFlies().B)) app.opp = 'bot';
+  // the deck grid: Random, then every deck of DECK_ORDER
+  const grid = $('deckGrid');
+  const CARD = M.cards?.CARD || {};
+  grid.innerHTML = ['random', ...ids].map(id => {
+    const d = M.cards?.DECKS?.[id];
+    const cols = id === 'random' ? 'any deck, new each game' : (d?.colours || []).map(k => colourInfo(k).name).join(' · ');
+    const key = id === 'random' ? null : keyCardOf(d, CARD);
+    return `<button type="button" class="dbox" data-deck="${esc(id)}" aria-pressed="false" title="${esc(d?.desc || 'A deck chosen at random for each game')}">`
+      + `<canvas class="dbox-cv" aria-hidden="true"></canvas><b class="dbox-n">${esc(deckName(id))}</b><span class="dbox-c">${esc(cols)}</span>`
+      + `${key ? `<span class="dbox-k">${esc(key.name)}</span>` : ''}</button>`;
+  }).join('');
+  $('chFlyDeck').innerHTML = ['random', ...ids].map(id => `<option value="${esc(id)}">${esc(id === 'random' ? 'Random (the fly does not choose)' : deckName(id))}</option>`).join('');
+  grid.addEventListener('click', e => {
+    const b = e.target.closest('.dbox'); if (!b) return;
+    if (app.pick === 'play') app.myDeck = b.dataset.deck;
+    else app.selW[app.seat] = b.dataset.deck;
+    syncChooser();
+  });
+  $('chFlyDeck').addEventListener('change', e => { app.flyDeck = e.target.value; syncChooser(); });
+  for (const b of [$('modeWatch'), $('modePlay')]) b.addEventListener('click', () => { app.pick = b.dataset.mode; syncChooser(); });
+  seg($('chSeat'), v => { app.seat = +v; syncChooser(); });
+  seg($('chOpp'), v => { app.opp = v; syncChooser(); });
+  $('chStart').addEventListener('click', () => startChoice());
+  $('chClose').addEventListener('click', () => closeChooser());
+  $('btnDecks').addEventListener('click', () => openChooser('watch'));
+  $('btnPlay').addEventListener('click', () => openChooser('play'));
+  if (q.mode === 'play') enterPlay();
+  else if (q.mode === 'watch') syncURL();
+  else openChooser('watch');
+}
+
+// Draw one deck box canvas at its CSS size. The key card picture loads
+// once (loadCardArt, the small file) and the box draws again.
+function paintBox(btn, on) {
+  const cv = btn.querySelector('canvas');
+  const id = btn.dataset.deck;
+  const r = cv.getBoundingClientRect();
+  const w = Math.max(40, Math.round(r.width) || 96), h = Math.max(56, Math.round(r.height) || 120);
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const g = cv.getContext('2d');
+  if (!g) return;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const key = id === 'random' ? null : keyCardOf(M.cards?.DECKS?.[id], M.cards?.CARD);
+  const art = key ? getCardArt(key.id, { small: true }) || getCardArt(key.id) : null;
+  drawDeckBox(g, w, h, { colours: id === 'random' ? [TOKENS.flyA, TOKENS.flyB] : deckHexes(id), art, back: id === 'random', on });
+  if (key && !art && !app.boxes.has(key.id)) {
+    app.boxes.set(key.id, true);
+    loadCardArt(key.id, { small: true }).then(() => paintBox(btn, btn.getAttribute('aria-pressed') === 'true')).catch(() => {});
+  }
+}
+
+function syncChooser() {
+  const play = app.pick === 'play';
+  $('modeWatch').setAttribute('aria-pressed', String(!play));
+  $('modePlay').setAttribute('aria-pressed', String(play));
+  $('chWatchRow').hidden = play; $('chPlayRow').hidden = !play;
+  $('chDeckA').textContent = deckName(app.selW[0]); $('chDeckB').textContent = deckName(app.selW[1]);
+  $('chDeckHead').textContent = play ? 'Your deck' : `Deck of Fly ${app.seat ? 'B' : 'A'}`;
+  $('chSeat').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === app.seat));
+  const F = heroFlies();
+  $('chOpp').querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === app.opp); if (b.dataset.v !== 'bot') b.disabled = !F[b.dataset.v]; });
+  setSelect($('chFlyDeck'), app.flyDeck);
+  const cur = play ? app.myDeck : app.selW[app.seat];
+  $('deckGrid').querySelectorAll('.dbox').forEach(b => { const on = b.dataset.deck === cur; b.setAttribute('aria-pressed', String(on)); b.classList.toggle('on', on); paintBox(b, on); });
+  $('chStart').textContent = play ? `Play ${app.opp === 'bot' ? 'the greedy bot' : `Fly ${app.opp}`}` : 'Watch the duel';
+  const t = trainedDecks();
+  const chosen = play ? [app.myDeck, app.flyDeck] : app.selW;
+  const off = t ? chosen.filter(d => d && d !== 'random' && !t.includes(d)) : [];
+  $('chTrained').textContent = t
+    ? `The flies trained with ${t.map(deckName).join(', ')}.${off.length ? ` ${off.map(deckName).join(' and ')} ${off.length > 1 ? 'are' : 'is'} new to them: they use the values they learned on other boards.` : ''}`
+    : 'The training files do not name the decks of the training games, so a deck here can be new to the flies.';
+}
+
+function openChooser(pick = 'watch') {
+  app.pick = pick; app.sheet = true;
+  app.selW = hero.sel.slice();
+  $('chooser').hidden = false; $('app').dataset.sheet = 'on';
+  syncChooser();
+  $('chStart').focus?.();
+}
+function closeChooser() {
+  app.sheet = false;
+  $('chooser').hidden = true; delete $('app').dataset.sheet;
+  if (app.mode === 'watch') syncURL();
+}
+
+function startChoice() {
+  if (app.pick === 'play') {
+    if (app.play) exitPlay(false);
+    enterPlay();
+    return;
+  }
+  hero.sel = app.selW.slice();
+  closeChooser();
+  if (app.mode === 'play') exitPlay(false);
+  hero.newGame?.();
+  hero.setPlay?.(true);
+  syncURL();
+}
+
+// Watch -> play. ui/play/play.js loads on first use. The 3D canvas moves
+// into the play table when the scene can pick cards (pickPermanent);
+// else play mode draws its flat table and the 3D table waits. The
+// choices of the chooser go into the setup sheet of play.js, and its
+// Start button is pressed, so the coin call comes next. When a control
+// of that sheet is not there, the sheet stays open for the player.
+async function enterPlay() {
+  closeChooser();
+  app.mode = 'play'; $('app').dataset.mode = 'play';
+  hero.suspended = true; hero.gen++; hero.busy = false; hero.endPause?.();
+  syncURL();
+  let P = null;
+  try { P = await import('./ui/play/play.js'); } catch (e) { console.info('fly-duel: ui/play/play.js', e); }
+  if (!P?.mountPlay || !M.rules || !M.cards || !M.bots) {
+    app.mode = 'watch'; $('app').dataset.mode = 'watch'; hero.suspended = false;
+    $('heroStatus').textContent = `Play mode did not load (${!P ? 'ui/play/play.js' : 'the rules'}). The flies play each other.`;
+    syncURL();
+    return;
+  }
+  const F = heroFlies();
+  const cv = $('heroCv');
+  const sceneOK = hero.mode === '3d' && typeof hero.scene?.pickPermanent === 'function';
+  app.cv = cv; app.playScene = sceneOK;
+  $('playRoot').hidden = false;
+  try {
+    app.play = P.mountPlay($('playRoot'), {
+      rules: M.rules, cards: M.cards, bots: M.bots,
+      flies: { A: F.A, B: F.B }, connectomes: { A: conOf('A'), B: conOf('B') }, sources: { A: srcOf('A'), B: srcOf('B') },
+      brainMod: app.brainMod, scene: sceneOK ? hero.scene : null, sceneEl: sceneOK ? cv : null,
+      trainedDecks: trainedDecks(), onExit: () => exitPlay(),
+    });
+  } catch (e) {
+    console.error('fly-duel: mountPlay', e);
+    exitPlay();
+    return;
+  }
+  if (sceneOK) hero.scene.resize();
+  presetPlay($('playRoot'));
+}
+
+function presetPlay(root) {
+  const q = sel => root.querySelector(sel);
+  const press = el => { el?.dispatchEvent(new Event('click', { bubbles: true })); return !!el; };
+  const mine = app.myDeck === 'random' || !app.myDeck ? pickDecks(['random', 'random'], Date.now() >>> 0, deckIdsOf())[0] : app.myDeck;
+  const okOpp = press(q(`.pl-seg[data-k="opp"] button[data-v="${app.opp}"]`));
+  const okDeck = press(q(`.pl-deck[data-deck="${mine}"]`));
+  const sel = q('select[data-k="flyDeck"]');
+  if (sel) { setSelect(sel, app.flyDeck); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+  if (okOpp && okDeck && sel) press(q('.pl-go'));
+}
+
+// Play -> watch. play.js destroy() empties #playRoot, so the canvas is
+// held first and goes back to the stage. setFirstPerson(null) gives the
+// camera mode of before. A new watch game starts.
+function exitPlay(restart = true) {
+  const cv = app.cv || $('heroCv');
+  try { app.play?.destroy(); } catch (e) { console.info('fly-duel: play destroy', e); }
+  app.play = null;
+  $('playRoot').hidden = true;
+  const stage = $('heroStage');
+  if (cv && cv.parentNode !== stage) stage.insertBefore(cv, stage.firstChild);
+  if (app.playScene) {
+    try { hero.scene.highlight?.(null); hero.scene.setFirstPerson?.(null); hero.scene.resize(); } catch (e) { console.info('fly-duel: scene after play', e); }
+  }
+  app.playScene = false;
+  app.mode = 'watch'; $('app').dataset.mode = 'watch';
+  hero.suspended = false;
+  if (restart) { hero.newGame?.(); syncURL(); }
+}
+
+// The "How it works" drawer, and the keys of the watch table.
+function initHow() {
+  const how = $('how');
+  const open = () => { app.how = true; how.hidden = false; $('app').dataset.how = 'on'; $('howClose').focus?.(); };
+  const close = () => { app.how = false; how.hidden = true; delete $('app').dataset.how; hero.poke = 1; };
+  app.openHow = open; app.closeHow = close;
+  $('btnHow').addEventListener('click', open);
+  $('chHow').addEventListener('click', () => { closeChooser(); open(); });
+  $('howClose').addEventListener('click', close);
+  // a link to a section or a source opens the drawer
+  let hash = '';
+  try { hash = location.hash; } catch { hash = ''; }
+  if (/^#(s\d|refs|ref-|how)/.test(hash)) open();
+  document.addEventListener('keydown', e => {
+    const t = e.target;
+    if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName || '')) return;
+    if (e.key === 'Escape') {
+      if (app.how) { close(); return; }
+      if (app.sheet && app.mode === 'watch') { closeChooser(); return; }
+      return;
+    }
+    if (app.mode !== 'watch' || app.how || app.sheet) return;
+    if (e.key === ' ' && !(t && t.tagName === 'BUTTON')) { e.preventDefault(); hero.setPlay?.(!hero.playing); }
+    else if (e.key === 'n' || e.key === 'N') hero.newGame?.();
+  });
 }
 
 // Held-out numbers of the shipped flies (tools/train.mjs meta.final), or null.
@@ -524,11 +1012,18 @@ function initWiring() {
 
 // ---------------------------------------------------------------- 01
 function initGame() {
-  $('manaKey').innerHTML = `${manaGlyph('amber', 0, 16)} amber mana ${manaGlyph('moss', 0, 16)} moss mana ${manaGlyph('generic', 2, 16)} any two mana`;
+  // mana glyphs of every colour of the pool (COLOUR_IDS), then generic
+  const named = colourIds.map(k => `${glyphOf(k, 16)} ${esc(colourInfo(k).name)}`).join(' ');
+  $('manaKey').innerHTML = `${colourIds.map(k => `${glyphOf(k, 16)} ${esc(colourInfo(k).name.toLowerCase())} mana`).join(' ')} ${glyphOf('generic', 16, 2)} any two mana`;
+  $('manaLegGlyphs').innerHTML = `${named} ${glyphOf('generic', 16, 1)} generic.`;
+  hydrate($('manaKey')); hydrate($('manaLeg'));
   $('kwList').innerHTML = Object.entries(KEYWORD_TEXT).map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v[1])}</li>`).join('');
   if (!M.cards) { $('deckLists').innerHTML = `<p class="none">The card pool did not load (${esc(status.cards)}).</p>`; return; }
   const cards = M.cards.CARDS || [];
-  if (M.cards.DECKS) renderDecks($('deckLists'), [...cards, ...(M.cards.TOKENS || [])], M.cards.DECKS);
+  const ids = deckIdsOf();
+  const mono = ids.filter(id => (M.cards.DECKS[id].colours || []).length === 1).length;
+  $('deckTag').textContent = `${ids.length} decks: ${mono} of one colour, ${ids.length - mono} mixed`;
+  if (M.cards.DECKS) renderDecks($('deckLists'), [...cards, ...(M.cards.TOKENS || [])], M.cards.DECKS, { order: ids });
   initGallery(cards);
 }
 
@@ -993,20 +1488,22 @@ function initChips() {
   const links = [...document.querySelectorAll('#chips a')];
   const secs = links.map(a => $(a.dataset.target));
   const ol = $('chips').querySelector('ol');
+  const box = $('how');
   let cur = null;
   const update = () => {
     let best = null;
-    for (const s of secs) if (s && s.getBoundingClientRect().top < innerHeight * 0.4) best = s;
+    const top = box.getBoundingClientRect().top;
+    for (const s of secs) if (s && s.getBoundingClientRect().top - top < (box.clientHeight || innerHeight) * 0.4) best = s;
     if (best === cur) return;
     cur = best;
     links.forEach(a => {
       const on = !!best && a.dataset.target === best.id;
       a.classList.toggle('on', on);
-      // scroll the chip row only; scrollIntoView would move the window too
+      // scroll the chip row only; scrollIntoView would move the drawer too
       if (on) ol.scrollTo({ left: a.offsetLeft - ol.offsetLeft - 20, behavior: 'smooth' });
     });
   };
-  addEventListener('scroll', update, { passive: true });
+  box.addEventListener('scroll', update, { passive: true });
   update();
 }
 
@@ -1045,14 +1542,19 @@ async function boot() {
     const off = !!window.flyDuelOpts?.headless3d;   // node test seam
     return m.createDuelScene(off ? null : canvas, { connectomes: D.connectome ? [conOf('A'), conOf('B')] : null, names: NAMES, headless: off, ...o });
   };
-  window.flyDuel = { ready, scene3d, makeScene3d, makeFly: (s, w) => makeFly(s, w), heroFlies, conOf, BrainView, Match, renderBoard, M, D, hero };
+  window.flyDuel = { ready, scene3d, makeScene3d, makeFly: (s, w) => makeFly(s, w), heroFlies, conOf, BrainView, Match, renderBoard, M, D, hero, app, enterPlay, exitPlay, openChooser, closeChooser };
   // The saver installs window.snSaver at once and waits on flyDuel.ready
   // itself, so the shell finds the hook before the data has loaded.
   import('./saver.js').catch(e => console.warn('fly-duel: saver.js', e));
   await ready;
   const mod3d = await scene3d;
+  // the neural panel of the scorecards: createBrainCard of brain3d.js
+  // when the 3D modules load (not in the node test seam)
+  app.brainMod = mod3d && !window.flyDuelOpts?.headless3d ? await import('./ui/fly3d/brain3d.js').then(m => (m.createBrainCard ? m : null), () => null) : null;
+  if (M.cards?.COLOUR_IDS) colourIds = [...M.cards.COLOUR_IDS];
   const startHero = () => initHero(mod3d);
-  const steps = [initFacts, initWiring, initHeroStats, startHero, initKcCode, initGame, initCentre, initCompare, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
+  const cards = () => initScorecards(app.brainMod);
+  const steps = [initFacts, initWiring, initHeroStats, startHero, cards, initHow, initModes, initKcCode, initGame, initCentre, initCompare, linkCentre, initSmell, initSparse, initDopamine, initTrain, initWatch, initResults, initSources];
   for (const f of steps) { try { f(); } catch (e) { console.error(f.name, e); } }
   try { typesetAll(document.querySelector('#doc')); } catch (e) { console.warn(e); }
 }

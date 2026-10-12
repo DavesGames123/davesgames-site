@@ -1,9 +1,13 @@
 /* ============================================================================
    FLY DUEL  ·  stylesheet
    ----------------------------------------------------------------------------
-   Dark page, one column of sections, each a grid of cards, as on
-   pages/mrna-vaccine. A sticky chip bar jumps between sections. Fonts and
-   math colours come from ../../lib/sci.css.
+   A fullscreen game first (CONTRACT.md, user direction 2026-10-11).
+   #app fills the viewport (100vw x 100dvh) in two modes: watch (the 3D
+   table, the two scorecards, the control bar) and play (#playRoot, the
+   play screen of ui/play/play.css). The mode chooser (#chooser) and the
+   "How it works" drawer (#how) lie over it. The drawer holds the
+   explainer sections: one column of grids of cards, a sticky chip bar.
+   Fonts and math colours come from ../../lib/sci.css.
 
    COLOURS. DESIGN.md 1.1. ui/tokens.js TOKENS holds the same values for
    the canvases and SVG strings; tests/gui.test.mjs compares the two.
@@ -28,11 +32,20 @@
      --tome --tome2                        panel and control grounds
      --parch --parch2 --parch-ink          parchment and its ink
 
-   PHONE (max-width 860px): cards go to one column, the chip bar scrolls
-   sideways, small labels go up to 12px. A pointer:coarse block sets 44px
-   targets on any touch screen. Hover colours apply only where
-   (hover:hover), so a tap does not leave them on.
+   PHONE FIRST. The base rules of APP, WATCH HUD, BAR, CHOOSER and DECK
+   BOXES are the 390 px portrait phone; the WIDE block widens them. In
+   the drawer (max-width 860px) cards go to one column and the chip bar
+   scrolls sideways. A pointer:coarse block sets 44px targets on any
+   touch screen. Hover colours apply only where (hover:hover), so a tap
+   does not leave them on.
      grep -n 'HIDDEN'     the [hidden] guard
+     grep -n 'APP'        the fullscreen frame and the two modes
+     grep -n 'WATCH HUD'  scorecards, turn box, turn banner
+     grep -n 'BAR'        the control bar of the watch table
+     grep -n 'CHOOSER'    the mode chooser sheet
+     grep -n 'DECK BOXES' the deck picker
+     grep -n 'DRAWER'     the "How it works" drawer
+     grep -n 'WIDE'       tablet, desktop and phone-sideways rules
      grep -n 'ORNAMENTS'  the SVG ornaments (rule, corner curl)
      grep -n 'CHIPS'      the sticky section bar
      grep -n 'ARENA'      hero layout, brains and table
@@ -70,9 +83,8 @@
 [hidden]{display:none!important}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 /* overflow-x stays on html only: on the body it breaks position:sticky. */
-html{background:var(--bg);overflow-x:hidden;scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
-html.in-frame{--top:0px;scroll-padding-top:60px}
+html{background:var(--bg);overflow-x:hidden;height:100%;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;height:100%;overflow:hidden;overscroll-behavior:none}
 button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 button:disabled{opacity:0.45;cursor:default}
 a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--hair2);text-underline-offset:2px}
@@ -81,11 +93,8 @@ sub,sup{font-size:0.72em;line-height:0}
 .mi{font-family:var(--serif);font-style:italic;font-size:1.06em}
 .none{color:var(--dim);font-size:0.82rem}
 
-.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;
-  padding:0 calc(20px + var(--sr)) 0 calc(20px + var(--sl));background:var(--bg);border-bottom:1px solid var(--bronze-line);pointer-events:none}
 .brand{font:500 0.85rem/1 var(--sans);color:var(--dim);white-space:nowrap}
-.pagetitle{font:500 1.1rem/1 var(--serif);color:var(--parch);letter-spacing:0.01em;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-html.in-frame .topbar{display:none}
+.pagetitle{font:500 1.1rem/1 var(--serif);color:var(--parch);letter-spacing:0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 
 /* ---------------------------------------------------------------- CHIPS */
 #chips{position:sticky;top:var(--top);z-index:20;background:var(--bg);
@@ -105,7 +114,7 @@ html.in-frame .topbar{display:none}
 #chips a.on b{color:var(--parch-ink);opacity:0.75}
 
 /* ---------------------------------------------------------------- page */
-#doc{max-width:1320px;margin:0 auto;padding:calc(var(--top) + 6px) calc(22px + var(--sr)) 60px calc(22px + var(--sl))}
+#doc{max-width:1320px;margin:0 auto;padding:6px calc(22px + var(--sr)) calc(60px + env(safe-area-inset-bottom,0px)) calc(22px + var(--sl))}
 .hero{padding:22px 0 22px;border-bottom:1px solid var(--hair);margin-bottom:8px}
 .kicker{font-size:0.74rem;font-weight:600;color:var(--bronze);letter-spacing:0.09em;text-transform:uppercase}
 .hero h1{font:500 clamp(1.7rem,4.2vw,2.7rem)/1.15 var(--serif);color:var(--parch);margin:6px 0 10px;max-width:30ch}
@@ -330,57 +339,160 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
 .cands li i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--v,0%);background:var(--c,var(--pn))}
 .cands .head{background:none;border:0;color:var(--dim);padding:0 2px 4px}
 
-/* ---------------------------------------------------------------- STAGE
-   The 3D hero (ui/fly3d/scene.js) fills .stage. The HUD bar above it
-   holds one card per fly and the turn box: no card covers the flies or
-   the brain maps. A HUD card reads life, mana (one glyph per land, dim
-   when tapped), hand, deck, creatures and graveyard of one fly. The
-   move line, the honesty tag and the close-up brain maps sit on the
-   canvas as solid panels with a hard 1 px edge: no blur. #arena is the
-   2D stand-in. */
-.hudbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;margin-top:18px;align-items:stretch}
-.hudbar[hidden]{display:none}
-.turnbox{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:92px;padding:6px 12px;background:var(--tome);border:1px solid var(--bronze-dim);border-radius:3px;text-align:center;box-shadow:inset 0 0 0 2px var(--tome),inset 0 0 0 3px var(--bronze-line)}
-.turnbox b{font:600 24px/1 var(--serif);color:var(--ink);font-variant-numeric:tabular-nums}
-.turnbox span{font-size:11px;color:var(--dim);margin-top:4px;white-space:nowrap}
-.turnbox span.s0{color:var(--flyA)} .turnbox span.s1{color:var(--flyB)}
-.stage{position:relative;margin-top:10px;height:clamp(440px,74vh,800px);border:1px solid var(--bronze-dim);border-radius:4px;overflow:hidden;background:#0a0d14}
-.stage-cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:pan-y}
+/* ---------------------------------------------------------------- APP
+   #app is the whole viewport. Watch: the 3D stage fills it, the HUD and
+   the bar lie over it as solid panels with a hard 1 px edge (no blur).
+   Play: #playRoot fills it and the watch parts hide. --bar-h is the
+   height of the control bar; the move chip, the tag and the maps sit
+   above it. */
+.app{position:fixed;inset:0;height:100vh;height:100dvh;overflow:hidden;background:var(--bg);
+  --bar-h:calc(96px + env(safe-area-inset-bottom,0px)); --pad:8px}
+.stage{position:absolute;inset:0;overflow:hidden;background:#0a0d14}
+.stage-cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
 .stage-cv:active{cursor:grabbing}
-.hud{min-width:0;background:var(--tome);border:1px solid var(--bronze-line);border-top:3px solid var(--flyA);border-radius:3px;padding:8px 12px 9px;color:var(--ink2)}
+.app[data-mode="play"] .stage,.app[data-mode="play"] .whud,.app[data-mode="play"] .stagebar,
+.app[data-mode="play"] .hudbar,.app[data-mode="play"] .arena{display:none}
+.playroot{position:absolute;inset:0;z-index:10;height:100%;padding:env(safe-area-inset-top,0px) var(--sr) env(safe-area-inset-bottom,0px) var(--sl);background:var(--bg)}
+
+/* ---------------------------------------------------------------- WATCH HUD
+   Fly A's scorecard top-left, Fly B's top-right (ui/hud/hud.css draws
+   the card). Phone: two compact cards side by side, the turn box under
+   them; the top-3 list hides (the neural panel stays). */
+.whud{position:absolute;left:0;right:0;top:0;z-index:5;pointer-events:none;
+  padding:calc(env(safe-area-inset-top,0px) + var(--pad)) calc(var(--pad) + var(--sr)) 0 calc(var(--pad) + var(--sl))}
+.wtop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:start}
+.wsc{min-width:0;pointer-events:auto}
+.wsc:empty{display:none}
+.whud .hd-compact .hd-top{display:none}
+.turnbox{grid-column:1/-1;grid-row:2;justify-self:center;display:flex;flex-direction:row;align-items:baseline;gap:8px;pointer-events:auto;
+  padding:3px 10px;background:var(--tome);border:1px solid var(--bronze-dim);border-radius:3px;text-align:center}
+.turnbox:empty{display:none}
+.turnbox b{font:600 15px/1.2 var(--serif);color:var(--ink);font-variant-numeric:tabular-nums}
+.turnbox span{font-size:12px;color:var(--dim);white-space:nowrap}
+.turnbox span.s0{color:var(--flyA)} .turnbox span.s1{color:var(--flyB)}
+/* the pause between turns: a plate in the middle of the table */
+.turnbanner{position:absolute;left:50%;top:44vh;top:44dvh;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;
+  min-width:180px;padding:10px 22px 12px;background:var(--tome);border:1px solid var(--bronze);border-top:3px solid var(--bronze);border-radius:3px;
+  box-shadow:inset 0 0 0 3px var(--tome),inset 0 0 0 4px var(--bronze-line);pointer-events:none}
+.turnbanner[data-seat="0"]{border-top-color:var(--flyA)} .turnbanner[data-seat="1"]{border-top-color:var(--flyB)}
+.turnbanner b{font:600 28px/1.1 var(--serif);color:var(--parch);font-variant-numeric:tabular-nums}
+.turnbanner span{font:600 13px/1.2 var(--sans);letter-spacing:0.04em;text-transform:uppercase}
+.turnbanner span.s0{color:var(--flyA)} .turnbanner span.s1{color:var(--flyB)}
+/* the fallback strip (no scorecard module) takes the same place */
+.hudbar{position:absolute;left:0;right:0;top:0;z-index:5;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;
+  padding:calc(env(safe-area-inset-top,0px) + var(--pad)) calc(var(--pad) + var(--sr)) 0 calc(var(--pad) + var(--sl))}
+.hud{min-width:0;background:var(--tome);border:1px solid var(--bronze-line);border-top:3px solid var(--flyA);border-radius:3px;padding:6px 8px 7px;color:var(--ink2)}
 .hud.b{border-top-color:var(--flyB)}
 .hud.acting.a{background:#08161b} .hud.acting.b{background:#180a17}
 .hud .top{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink)}
 .hud .top em{font-style:normal;color:var(--dim);font-size:11px;letter-spacing:0.02em}
 .hud.acting .top em{color:var(--ink)}
-.hud .life{margin-left:auto;font:600 30px/1 var(--serif);font-variant-numeric:tabular-nums;color:var(--ink)}
+.hud .life{margin-left:auto;font:600 22px/1 var(--serif);font-variant-numeric:tabular-nums;color:var(--ink);background:none;padding:0;min-width:0}
 .hud.a .life{color:var(--flyA)} .hud.b .life{color:var(--flyB)}
 .hud .life.low{color:var(--dmg)}
-.hud .mana{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:7px 0 5px;min-height:18px}
+.hud .mana{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:5px 0 4px;min-height:16px}
 .hud .mana .m{display:inline-block;line-height:0}
-.hud .mana svg{width:18px;height:18px}
+.hud .mana .n{margin-left:6px;font:600 12px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
 .hud .mana .m.off{opacity:0.3}
-.hud .mana .n{margin-left:6px;font:600 13px/1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
 .hud .mana .none{font-size:11px;color:var(--dim)}
-.hud .row{display:flex;flex-wrap:wrap;gap:4px 11px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.hud .row{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
 .hud .row b{color:var(--ink2);font-weight:600}
-.stage-move{position:absolute;left:50%;transform:translateX(-50%);bottom:42px;max-width:min(720px,calc(100% - 24px));background:rgba(5,7,12,0.86);border:1px solid var(--hair2);border-radius:999px;padding:6px 14px;font:0.82rem/1.3 var(--mono);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.hud .row .cr{display:none}
+i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
+
+/* on the stage: the move chip, the honesty tag, the log, the maps */
+.stage-move{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--bar-h) + 30px);max-width:calc(100% - 16px);
+  background:var(--bg);border:1px solid var(--hair2);border-radius:999px;padding:5px 12px;font:0.74rem/1.3 var(--mono);color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:3}
 .stage-move:empty{display:none}
 .stage-move b{font-weight:700} .stage-move b.s0{color:var(--flyA)} .stage-move b.s1{color:var(--flyB)}
-.stage-tag{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--ink2);background:rgba(5,7,12,0.86);border:1px solid var(--hair);border-radius:6px;padding:3px 8px;pointer-events:none}
-.maps{position:absolute;left:12px;right:12px;bottom:82px;display:grid;grid-template-columns:repeat(2,minmax(0,min(300px,40%)));justify-content:space-between;gap:12px;pointer-events:none}
+.stage-tag{position:absolute;left:calc(8px + var(--sl));right:8px;bottom:calc(var(--bar-h) + 6px);font-size:11px;line-height:1.3;color:var(--ink2);
+  pointer-events:none;z-index:3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-tag::before{content:'';display:inline-block;width:6px;height:6px;background:var(--bronze);transform:rotate(45deg);margin-right:6px;vertical-align:1px}
+.stage .log{display:none}
+.maps{position:absolute;left:8px;right:8px;bottom:calc(var(--bar-h) + 62px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;pointer-events:none;z-index:4}
 .map{pointer-events:auto;background:var(--fig);border:1px solid var(--hair2);border-top:3px solid var(--flyA);border-radius:10px;overflow:hidden;min-width:0}
 .map.b{border-top-color:var(--flyB)}
 .map figcaption{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:11px;color:var(--ink2);border-bottom:1px solid var(--hair);white-space:nowrap;overflow:hidden}
-.map canvas{display:block;width:100%;aspect-ratio:1/1;touch-action:pan-y;cursor:grab}
-.stagebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin-top:10px}
-.ctl-l{font-size:0.72rem;color:var(--dim);margin-left:6px}
-.under{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:12px;margin-top:10px}
-.under .log{height:auto;min-height:6.4em;margin:0}
-.manaleg{font-size:0.8rem;line-height:1.5;color:var(--parch2);background:var(--tome);border:1px solid var(--bronze-line);border-radius:3px;padding:8px 12px}
+.map canvas{display:block;width:100%;aspect-ratio:1/1;touch-action:none;cursor:grab}
+/* the 2D stand-in: between the cards and the bar, it scrolls */
+.app .arena{position:absolute;left:0;right:0;top:var(--hud-h,200px);bottom:var(--bar-h);margin:0;overflow:auto;overscroll-behavior:contain;
+  padding:8px calc(8px + var(--sr)) 8px calc(8px + var(--sl));grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+.app .arena .arena-mid{grid-column:1/-1;order:-1}
+.app .arena .fig.brain{min-height:0;height:200px}
+
+/* ---------------------------------------------------------------- BAR
+   The control bar of the watch table: the status line, then one row of
+   controls. On a phone the row scrolls sideways; every control is 44 px
+   on a touch screen (TOUCH). */
+.stagebar{position:absolute;left:0;right:0;bottom:0;z-index:6;height:var(--bar-h);display:flex;flex-direction:column;justify-content:flex-start;gap:6px;
+  padding:8px calc(8px + var(--sr)) env(safe-area-inset-bottom,0px) calc(8px + var(--sl));background:var(--bg);border-top:1px solid var(--bronze-line)}
+.stagebar .status{font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1.3em;line-height:1.3}
+.arena-ctrls{display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.arena-ctrls::-webkit-scrollbar{display:none}
+.arena-ctrls>*{flex:none}
+.arena-ctrls .seg{width:auto}
+.ctl-l{font-size:0.72rem;color:var(--dim);margin-left:4px}
+.tgl.go{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--parch2)}
+@media (hover:hover){.tgl.go:hover{color:var(--parch-ink)}}
+
+/* ---------------------------------------------------------------- CHOOSER
+   The mode chooser: a full sheet on a phone (it scrolls, the Start row
+   stays at the bottom), a centred panel on a wide screen with the live
+   table around it. */
+.chooser{position:absolute;inset:0;z-index:20;overflow-y:auto;overscroll-behavior:contain;background:rgba(5,7,12,0.92);
+  padding:env(safe-area-inset-top,0px) var(--sr) 0 var(--sl)}
+.ch-in{position:relative;min-height:100%;display:flex;flex-direction:column;gap:14px;padding:16px 16px 0;background:var(--tome)}
+.ch-head{position:relative;padding-right:84px}
+.ch-head h1{font:500 1.6rem/1.15 var(--serif);color:var(--parch);margin:4px 0 6px}
+.ch-lede{font:400 0.95rem/1.5 var(--serif);color:var(--ink2);max-width:62ch}
+.ch-x{position:absolute;top:0;right:0}
+.ch-modes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.ch-mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:96px;padding:12px;text-align:left;
+  background:var(--tome2);border:1px solid var(--bronze-dim);border-radius:3px;color:var(--parch2)}
+.ch-mode b{font:600 1.25rem/1.1 var(--serif);color:var(--parch);font-variant:small-caps;letter-spacing:0.03em}
+.ch-mode span{font-size:0.8rem;line-height:1.35}
+.ch-mode[aria-pressed="true"]{background:var(--parch);border-color:var(--bronze);color:var(--parch-ink);box-shadow:inset 0 0 0 2px var(--parch),inset 0 0 0 3px var(--bronze)}
+.ch-mode[aria-pressed="true"] b{color:var(--parch-ink)}
+.ch-pick{display:flex;flex-direction:column;gap:10px}
+.ch-row{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.ch-row .seg{margin:0}
+.ch-row .seg button{display:inline-flex;align-items:center;gap:6px}
+.ch-row .seg i{font-style:normal;font-weight:600}
+.ch-l{display:inline-flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--ink2)}
+.ch-h{font:600 1rem/1.2 var(--serif);color:var(--parch);font-variant:small-caps;letter-spacing:0.03em}
+.ch-fine{font-size:0.76rem;line-height:1.45;color:var(--dim);max-width:90ch}
+.ch-fine b{color:var(--ink2);font-weight:600}
+.ch-go{position:sticky;bottom:0;z-index:2;display:flex;gap:8px;padding:10px 0 calc(10px + env(safe-area-inset-bottom,0px));background:var(--tome);border-top:1px solid var(--bronze-line)}
+.ch-go .tgl{min-height:48px;font-size:0.95rem}
+.ch-go .go{flex:1}
+.ch-in>.ch-fine:last-child{padding-bottom:16px}
+
+/* ---------------------------------------------------------------- DECK BOXES
+   One box per deck: a band per deck colour, the picture of the key card
+   in a window, the name and colours under it. The chosen box has a 3 px
+   white edge (drawn on the canvas) and a white name. */
+.dboxes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.dbox{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0;padding:0 0 6px;background:none;border:0;color:var(--parch2);text-align:left}
+.dbox-cv{display:block;width:100%;aspect-ratio:3/4;height:auto}
+.dbox-n{font:600 0.84rem/1.2 var(--serif);color:var(--parch2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbox-c,.dbox-k{font-size:0.68rem;line-height:1.25;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbox-k::before{content:'key card: '}
+.dbox[aria-pressed="true"] .dbox-n{color:var(--ink)}
+.dbox:focus-visible{outline:2px solid var(--bronze);outline-offset:2px}
+
+/* ---------------------------------------------------------------- DRAWER
+   "How it works": the explainer sections over the whole table. Its own
+   scroll; a sticky head and the chip bar under it. */
+.how{position:absolute;inset:0;z-index:30;overflow-y:auto;overscroll-behavior:contain;background:var(--bg);--top:52px}
+.how-top{position:sticky;top:0;z-index:21;height:52px;display:flex;align-items:center;gap:12px;
+  padding:0 calc(14px + var(--sr)) 0 calc(14px + var(--sl));background:var(--bg);border-bottom:1px solid var(--bronze-line)}
+.how-top .pagetitle{flex:1}
+.how .hero{padding-top:18px}
+.galbar{margin-bottom:8px}
+
+.manaleg{font-size:0.8rem;line-height:1.5;color:var(--parch2);background:var(--tome2);border:1px solid var(--bronze-line);border-radius:3px;padding:8px 12px;margin:0 0 10px}
 .manaleg b{color:var(--parch);font-weight:600;font-family:var(--serif)}
-.manaleg svg{vertical-align:-3px}
-.hero .arena{margin-top:12px}
 
 /* ---------------------------------------------------------------- TOUCH */
 @media (pointer:coarse){
@@ -427,25 +539,51 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
   .side-head .meta{flex-basis:100%;order:5}
 }
 
-/* STAGE on a phone: smaller HUD cards in the two top corners, the brain
-   close-ups side by side over the lower half of the stage, the log and
-   the mana legend in one column. */
-@media (max-width:860px){
-  .stage{height:clamp(420px,66svh,620px);border-radius:10px}
-  .hudbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:14px}
-  .turnbox{grid-column:1/-1;grid-row:2;flex-direction:row;gap:10px;min-width:0;padding:4px 10px}
-  .turnbox b{font-size:15px} .turnbox span{margin-top:0;font-size:12px}
-  .hud{padding:6px 8px 7px}
-  .hud .top{font-size:12px}
-  .hud .top em{display:none}
-  .hud .life{font-size:22px}
-  .hud .mana svg{width:13px;height:13px}
-  .hud .mana .n{font-size:12px}
-  .hud .row{font-size:12px;gap:2px 8px}
-  .hud .row .cr{display:none}
-  .stage-move{bottom:38px;font-size:0.72rem;padding:5px 10px}
-  .stage-tag{left:8px;bottom:8px}
-  .maps{left:8px;right:8px;bottom:74px;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .under{grid-template-columns:minmax(0,1fr)}
-  .ctl-l{margin-left:0;flex-basis:100%;margin-top:4px}
+/* WIDE: the watch table on a tablet or a desktop. The scorecards go to
+   the two top corners at full size, the turn box between them, the bar
+   is one row, the log shows at the lower left. */
+@media (min-width:560px){
+  .dboxes{grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
+}
+@media (min-width:760px){
+  .app{--bar-h:calc(62px + env(safe-area-inset-bottom,0px)); --pad:12px}
+  .wtop{grid-template-columns:minmax(0,340px) auto minmax(0,340px);justify-content:space-between;gap:12px}
+  .turnbox{grid-column:2;grid-row:1;flex-direction:column;align-items:center;min-width:92px;padding:6px 12px;
+    box-shadow:inset 0 0 0 2px var(--tome),inset 0 0 0 3px var(--bronze-line)}
+  .turnbox b{font-size:24px;line-height:1} .turnbox span{margin-top:4px;font-size:11px}
+  .hudbar{grid-template-columns:minmax(0,340px) minmax(0,340px);justify-content:space-between}
+  .hud .life{font-size:30px}
+  .hud .row .cr{display:inline}
+  .stagebar{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding-top:0}
+  .stagebar .status{flex:1 1 200px;font-size:0.8rem}
+  .arena-ctrls{flex:0 1 auto}
+  .stage-move{font-size:0.82rem;padding:6px 14px;bottom:calc(var(--bar-h) + 34px)}
+  .stage-tag{right:auto;bottom:calc(var(--bar-h) + 10px);left:calc(12px + var(--sl))}
+  .stage .log{display:block;position:absolute;left:calc(12px + var(--sl));bottom:calc(var(--bar-h) + 34px);width:min(340px,30vw);height:auto;z-index:3;background:var(--tome)}
+  .stage .log:empty{display:none}
+  .maps{left:12px;right:12px;bottom:calc(var(--bar-h) + 120px);grid-template-columns:repeat(2,minmax(0,min(300px,40%)));justify-content:space-between;gap:12px}
+  .app .arena{grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,1fr)}
+  .app .arena .arena-mid{grid-column:auto;order:0}
+  .app .arena .fig.brain{height:100%;min-height:320px}
+  .chooser{padding:4vh 24px;display:flex;justify-content:center;align-items:flex-start}
+  .ch-in{width:min(940px,100%);min-height:0;padding:22px 24px 0;border:1px solid var(--bronze-dim);border-radius:4px;
+    box-shadow:inset 0 0 0 3px var(--tome),inset 0 0 0 4px var(--bronze-line)}
+  .ch-head h1{font-size:2.1rem}
+  .ch-mode{min-height:110px;padding:14px 16px}
+  .ch-mode b{font-size:1.5rem}
+  .ch-mode span{font-size:0.86rem}
+  .ch-go{position:static;padding-bottom:4px;border-top:0}
+  .ch-go .go{flex:0 1 280px}
+}
+@media (min-width:1200px){
+  .wtop{grid-template-columns:minmax(0,380px) auto minmax(0,380px)}
+}
+/* phone held sideways: the cards are short, the table gets the height */
+@media (max-height:520px) and (orientation:landscape){
+  .app{--bar-h:calc(56px + env(safe-area-inset-bottom,0px))}
+  .stagebar{flex-direction:row;align-items:center;padding-top:0}
+  .stagebar .status{display:none}
+  .whud .hd-brain{display:none}
+  .wtop{grid-template-columns:minmax(0,260px) auto minmax(0,260px);justify-content:space-between}
+  .turnbox{grid-column:2;grid-row:1}
 }

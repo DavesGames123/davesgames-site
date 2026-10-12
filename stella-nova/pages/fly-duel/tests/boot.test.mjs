@@ -13,6 +13,13 @@
 //  also checks the [data-fact], [data-mix] and segment button paths, and
 //  it compares the page text against the data files.
 //
+//  Two modes. The first run boots with no mode in the URL: the chooser
+//  opens over the watch table, and the test drives the chooser (decks of
+//  each fly, then play mode, then back). Then the test starts itself
+//  again with FD_BOOT=play (a new node process, so main.js boots again)
+//  and a URL of ?mode=play&deck=moss&opp=A: play mode opens at once, the
+//  test plays a few moves through the play screen, and exits to watch.
+//
 //  linkedom is not a dependency of the site. The test looks for it in
 //  node_modules and in the global openclaw install. Without it, the test
 //  prints "skipped" and exits 0.
@@ -20,10 +27,12 @@
 //  GREP MAP   (grep -n "^// ---" tests/boot.test.mjs)
 // ============================================================================
 import { readFileSync, existsSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const PLAY = process.env.FD_BOOT === 'play';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log(`  FAIL ${m}`); } };
 
@@ -79,7 +88,13 @@ class FakeWorker {
   terminate() {}
 }
 const frames = [], winL = {};
+const urls = [];
+const realST = globalThis.setTimeout;
+// play mode: the pauses of play.js are for people, not for the test
+if (PLAY) globalThis.setTimeout = (f, ms, ...a) => realST(f, Math.min(ms || 0, 1), ...a);
 Object.assign(globalThis, {
+  location: { search: PLAY ? '?mode=play&deck=moss&opp=A' : '', hash: '' },
+  history: { replaceState: (a, b, u) => urls.push(String(u)) },
   window: globalThis, document, Node: W.Node, HTMLElement: W.HTMLElement, Event: W.Event,
   innerWidth: 390, innerHeight: 800, devicePixelRatio: 2, Image: Img, Worker: FakeWorker,
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
@@ -111,6 +126,105 @@ pump(600);
 const $ = id => document.getElementById(id);
 const click = el => el.dispatchEvent(new W.Event('click', { bubbles: true }));
 const pct = v => `${(100 * v).toFixed(1)}%`;
+const fd = globalThis.flyDuel;
+const wait = ms => new Promise(r => realST(r, ms));
+
+// --------------------------------------------------------------- play mode (FD_BOOT=play)
+if (PLAY) {
+  for (let i = 0; i < 200 && !fd.app.play; i++) await wait(10);
+  const root = $('playRoot'), q = sel => root.querySelector(sel);
+  ok(fd.app.mode === 'play' && !!fd.app.play && root.hidden === false, `play: ?mode=play opens play mode at once (mode ${fd.app.mode})`);
+  ok($('app').dataset.mode === 'play' && $('chooser').hidden === true, 'play: the app is in play mode, the chooser is closed');
+  ok(/Call the coin/.test(q('.pl-sheet')?.textContent || ''), `play: the URL choices passed the setup sheet: the coin is next (${(q('.pl-sheet h2')?.textContent || '').slice(0, 40)})`);
+  const pc = () => fd.app.play.controller;
+  ok(pc()?.decks?.[pc().humanSeat] === 'moss', `play: your deck is moss from the URL (${pc()?.decks})`);
+  ok(pc()?.humanSeat === 1 && pc()?.names?.[0] === 'Fly A', `play: against Fly A you sit right, seat 1 (${pc()?.names})`);
+  click(q('[data-call="heads"]')); await wait(5);
+  click(q('.pl-go')); await wait(5);
+  click(q('[data-keep]')); await wait(5);
+  ok(q('.pl-sheet').hidden === true, 'play: coin, keep: the table is open');
+  ok(root.querySelectorAll('.hd-card').length === 2, 'play: two scorecards in the play screen');
+  // a few human moves through the big button (pass, no attack, no block)
+  const rules = await import(pathToFileURL(join(ROOT, 'game/rules.js')).href);
+  let mine = 0;
+  for (let k = 0; k < 4000 && mine < 6 && pc().need() !== 'over'; k++) {
+    await wait(1);
+    if (pc().need() !== 'human' || fd.app.play.busy) continue;
+    const n0 = pc().history.length;
+    click(q('.pl-pri'));
+    for (let j = 0; j < 200 && pc().history.length === n0; j++) await wait(1);
+    if (pc().history.length > n0) mine++;
+  }
+  ok(mine >= 3 && pc().history.some(r => r.who !== pc().humanSeat), `play: human moves go through the screen and the fly answers (${mine} moves, ${pc().history.length} records)`);
+  ok(rules.isOver(pc().state) || pc().state.turn >= 2, `play: the game goes on (turn ${pc().state.turn})`);
+  ok(urls.some(u => u === '?mode=play&deck=moss&opp=A'), `play: the URL keeps the mode, the deck and the opponent (${urls.slice(-1)})`);
+  const n0 = fd.hero.match.history.length;
+  fd.exitPlay();
+  ok(fd.app.mode === 'watch' && root.hidden === true && $('heroCv').parentNode === $('heroStage'), 'play: exit gives the watch table back');
+  ok(urls.at(-1)?.startsWith('?mode=watch'), `play: the URL says watch after exit (${urls.at(-1)})`);
+  pump(400);
+  ok(fd.hero.match.history.length > 0 && $('heroLog').children.length > 0, `play: the watch match plays again after exit (${n0} -> ${fd.hero.match.history.length})`);
+  const text = document.body.textContent;
+  ok(!/NaN|undefined|\[object/.test(text), 'play: no NaN, undefined or [object in the text');
+  console.error = oe; console.warn = ow;
+  globalThis.setTimeout = realST;
+  ok(errors.length === 0, `play: no console.error or console.warn (${errors.length}): ${errors.slice(0, 3).join(' | ').slice(0, 600)}`);
+  console.log(`boot.test (play): ${pass} pass, ${fail} fail (${Date.now() - t0} ms)`);
+  process.exit(fail ? 1 : 0);
+}
+
+// --------------------------------------------------------------- watch mode: chooser, decks, scorecards
+{
+  const cards = await import(pathToFileURL(join(ROOT, 'game/cards.js')).href);
+  const ids = cards.DECK_ORDER;
+  ok($('chooser').hidden === false && fd.app.sheet, 'watch: no mode in the URL opens the chooser');
+  ok(fd.hero.match.history.length > 0, 'watch: the match plays behind the chooser');
+  const boxes = [...$('deckGrid').querySelectorAll('.dbox')];
+  ok(boxes.length === ids.length + 1 && boxes[0].dataset.deck === 'random', `watch: a Random box and one box per deck (${boxes.length} boxes, ${ids.length} decks)`);
+  ok(boxes.slice(1).every((b, i) => b.querySelector('.dbox-n').textContent === cards.DECKS[ids[i]].name && b.querySelector('canvas')), 'watch: each box has its deck name and a canvas');
+  ok(boxes.slice(1).every(b => /\S/.test(b.querySelector('.dbox-k')?.textContent || '')), 'watch: each deck box names its key card');
+  ok($('deckTag').textContent === `${ids.length} decks: ${ids.filter(i => cards.DECKS[i].colours.length === 1).length} of one colour, ${ids.filter(i => cards.DECKS[i].colours.length > 1).length} mixed`, `01: the deck tag counts the decks (${$('deckTag').textContent})`);
+  ok(['amber', 'moss', 'dew', 'rot', 'pollen'].every(k => $('manaLegGlyphs').innerHTML.includes(`mana-${k}`)), '01: the mana legend has the five colours');
+  // Fly A: dew, Fly B: rot
+  click(boxes.find(b => b.dataset.deck === 'dew'));
+  click([...$('chSeat').querySelectorAll('button')][1]);
+  click([...$('deckGrid').querySelectorAll('.dbox')].find(b => b.dataset.deck === 'rot'));
+  ok($('chDeckA').textContent === cards.DECKS.dew.name && $('chDeckB').textContent === cards.DECKS.rot.name, `watch: the seat buttons name the chosen decks (${$('chDeckA').textContent} / ${$('chDeckB').textContent})`);
+  ok($('deckGrid').querySelector('.dbox[data-deck="rot"]').getAttribute('aria-pressed') === 'true', 'watch: the chosen box is pressed');
+  click($('chStart'));
+  ok($('chooser').hidden === true && fd.hero.match.decks.join() === 'dew,rot', `watch: Start plays the chosen decks (${fd.hero.match.decks})`);
+  ok(urls.at(-1) === '?mode=watch&deck=dew%2Crot' || urls.at(-1) === '?mode=watch&deck=dew,rot', `watch: the URL keeps the decks (${urls.at(-1)})`);
+  pump(300);
+  ok($('scA').querySelector('.hd-card') && $('scB').querySelector('.hd-card'), 'watch: Fly A scorecard in #scA (top-left), Fly B in #scB (top-right)');
+  ok($('hudBar').hidden === true, 'watch: the fallback strip hides when the scorecards load');
+  ok(/Dew Mirror/.test($('scA').textContent) && /Carrion Court/.test($('scB').textContent), 'watch: each scorecard names the deck of its fly');
+  const life = fd.hero.match.state.players.map(p => p.life);
+  ok($('scA').querySelector('.hd-life').getAttribute('aria-label') === `life ${life[0]}` || fd.hero.busy, `watch: the d20 of Fly A shows life ${life[0]}`);
+  ok(/^V [+−]/.test($('scA').querySelector('.hd-vd').textContent + $('scB').querySelector('.hd-vd').textContent), 'watch: the neural panel shows the value of a decision');
+  // the pause between turns: the banner shows at a turn change
+  let seenBanner = false;
+  for (let i = 0; i < 600 && !seenBanner; i++) { pump(1); if (!$('turnBanner').hidden && /Turn \d+/.test($('turnBanner').textContent)) seenBanner = true; }
+  ok(seenBanner, `watch: a turn change holds the table with a turn banner (${$('turnBanner').textContent})`);
+  const nB = fd.hero.match.history.length;
+  pump(4);
+  ok(fd.hero.match.history.length === nB || $('turnBanner').hidden, 'watch: no new move while the banner holds');
+  // play from the chooser, then back
+  click($('btnPlay'));
+  ok($('chooser').hidden === false && $('chPlayRow').hidden === false && $('chWatchRow').hidden === true, 'watch: "Play a fly" opens the chooser on play');
+  click([...$('deckGrid').querySelectorAll('.dbox')].find(b => b.dataset.deck === 'amber-pollen'));
+  click($('chStart'));
+  for (let i = 0; i < 200 && !fd.app.play; i++) await wait(10);
+  ok(fd.app.mode === 'play' && /Call the coin/.test($('playRoot').textContent), 'watch -> play: the chooser starts a play game at the coin');
+  ok(fd.app.play?.controller?.decks?.includes('amber-pollen'), `watch -> play: your deck from the box (${fd.app.play?.controller?.decks})`);
+  fd.exitPlay();
+  ok(fd.app.mode === 'watch' && $('playRoot').hidden === true, 'play -> watch: back to the table');
+  // the drawer
+  click($('btnHow'));
+  ok($('how').hidden === false && fd.app.how, 'how: the drawer opens');
+  click($('howClose'));
+  ok($('how').hidden === true, 'how: the drawer closes');
+  pump(200);
+}
 
 // --------------------------------------------------------------- hero, 02
 ok(/pretrained weights/.test($('heroStatus').textContent), `hero: plays the pretrained flies (${$('heroStatus').textContent.slice(0, 60)})`);
@@ -192,4 +306,8 @@ ok(!/NaN|undefined|\[object/.test(text), `page: no NaN, undefined or [object in 
 console.error = oe; console.warn = ow;
 ok(errors.length === 0, `page: no console.error or console.warn (${errors.length}): ${errors.slice(0, 3).join(' | ').slice(0, 600)}`);
 console.log(`boot.test: ${pass} pass, ${fail} fail (${Date.now() - t0} ms)`);
+// play mode boots in its own process (a new main.js)
+const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { env: { ...process.env, FD_BOOT: 'play' }, encoding: 'utf8' });
+process.stdout.write(child.stdout || '');
+if (child.status !== 0) { console.log(`  FAIL play-mode boot exited ${child.status} ${(child.stderr || '').slice(0, 400)}`); fail++; }
 process.exit(fail ? 1 : 0);

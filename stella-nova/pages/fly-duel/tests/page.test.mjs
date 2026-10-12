@@ -119,8 +119,10 @@ if (has('game/rules.js') && has('game/cards.js')) {
   ok(root.innerHTML.includes('side-0') && root.innerHTML.includes('Ember Gnat') && root.innerHTML.includes('tapped'), 'board: table shows a tapped creature');
   const counts = board.deckCounts(cards.DECKS.amber);
   ok([...counts.values()].reduce((a, b) => a + b, 0) === 40, 'board: the amber deck counts 40');
-  const dl = { innerHTML: '' }; board.renderDecks(dl, [...cards.CARDS, ...cards.TOKENS], cards.DECKS);
-  ok((dl.innerHTML.match(/class="decklist/g) || []).length === 2 && dl.innerHTML.includes('40 cards, 17 lands'), 'board: two deck lists with 40 cards, 17 lands');
+  const dl = { innerHTML: '' }; board.renderDecks(dl, [...cards.CARDS, ...cards.TOKENS], cards.DECKS, { order: cards.DECK_ORDER });
+  const nLists = (dl.innerHTML.match(/class="decklist/g) || []).length;
+  ok(nLists === cards.DECK_ORDER.length && nLists >= 10, `board: one deck list per deck of DECK_ORDER (${nLists} of ${cards.DECK_ORDER.length})`);
+  ok((dl.innerHTML.match(/40 cards/g) || []).length === cards.DECK_ORDER.length, 'board: every deck list counts 40 cards');
   const gal = { innerHTML: '' }; board.renderGallery(gal, cards.CARDS, 'all');
   ok((gal.innerHTML.match(/class="fcard /g) || []).length === cards.CARDS.length, 'board: gallery shows every card');
   ok(!/NaN|undefined/.test(gal.innerHTML + dl.innerHTML + root.innerHTML), 'board: no NaN or undefined in the markup');
@@ -186,9 +188,23 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   ok(/detect synapses by different methods/.test(html), 'markup: the synapse-method caveat');
   ok(/Two computer models, <span data-wiring>wired from the connectomes<\/span> of two flies: each is a model, not a real fly/.test(html), 'markup: the 3D stage tag names two models and two connectomes');
   ok(/art\/CREDITS-ART\.md/.test(html) && /public-domain/.test(html), 'markup: the card art credit');
+  // the fullscreen game: two modes, the chooser, the drawer
+  for (const id of ['app', 'watchHud', 'scA', 'scB', 'turnBanner', 'playRoot', 'chooser', 'modeWatch', 'modePlay', 'deckGrid', 'chStart', 'how', 'howClose', 'btnHow', 'btnPlay', 'btnDecks'])
+    ok(html.includes(`id="${id}"`), `markup: #${id}`);
+  ok(html.indexOf('id="scA"') < html.indexOf('id="scB"'), 'markup: Fly A scorecard first (top-left), Fly B second (top-right)');
+  const how = html.slice(html.indexOf('id="how"'));
+  ok(['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 'refs'].every(id => how.includes(`id="${id}"`)), 'markup: the explainer sections are in the drawer');
+  ok(/href="ui\/hud\/hud\.css"/.test(head) && /href="ui\/play\/play\.css"/.test(head), 'markup: the head loads hud.css and play.css');
+  const chooser = html.slice(html.indexOf('id="chooser"'), html.indexOf('id="how"'));
+  ok(/not train a real fly/.test(chooser) && /Not affiliated with or endorsed by Wizards of the Coast\./.test(chooser), 'markup: the chooser has the honesty line and the not-affiliated line');
+  const plain0 = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  ok(plain0.split(/(?<=\.)\s/).every(x => !/MTG Arena/.test(x) || /such as MTG Arena/.test(x)), 'markup: MTG Arena only as "plays like ... such as MTG Arena"');
+  ok(html.replace(/<!--[\s\S]*?-->/g, '').split('\n').every(l => !/MTG Arena/.test(l) || /Not affiliated/.test(l)), 'markup: the MTG Arena line carries the not-affiliated line');
+  ok(/\.app\{[^}]*100dvh/.test(css), 'markup: the app fills 100dvh');
+  ok(!/<div class="topbar"/.test(html), 'markup: no page top bar over the game');
   // Text that the old page had and the shipped state no longer holds.
   const plain = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
-  for (const re of [/(?<!binary code at )\b5 ?%/, /88 active KCs/, /\b21 ?%/, /96\.3/, /both flies use the hemibrain/i, /same wiring/i, /share the same PN-to-KC claws/i, /procedural art/i, /picture and mana glyph here is our own/i])
+  for (const re of [/(?<!binary code at )\b5 ?%/, /88 active KCs/, /\b21 ?%/, /96\.3/, /both flies use the hemibrain/i, /same wiring/i, /share the same PN-to-KC claws/i, /procedural art/i, /picture and mana glyph here is our own/i, /two decks/i, /Fly A plays Amber/i, /The two decks/i])
     ok(!re.test(plain), `markup: no stale text ${re}`);
   const js = readFileSync(join(ROOT, 'main.js'), 'utf8');
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
@@ -363,6 +379,55 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   console.error = origErr; console.warn = origWarn;
   ok(errors.length === 0, `dom: no console.error (${errors.length}): ${errors.slice(0, 3).join(' | ')}`);
 }
+
+// --------------------------------------------------------------- modes (pure helpers of main.js)
+// parseQuery / queryOf: the URL keeps the mode and the decks. pickDecks:
+// 'random' gives a deck by the seed, the same seed the same decks.
+// keyCardOf: the picture of a deck box. drawDeckBox: finite numbers on a
+// stub context. turnPauseMs: the pause between turns.
+if (has('game/cards.js')) {
+  const cards = await import('../game/cards.js');
+  // main.js is in the module cache from the fake DOM boot above
+  const mm = await import(pathToFileURL(join(ROOT, 'main.js')).href).catch(e => ({ err: e }));
+  if (mm.err) skipped(`modes: main.js did not import in node (${mm.err.message})`);
+  else {
+    const ids = cards.DECK_ORDER;
+    ok(ids.length >= 13 && ['amber', 'moss', 'dew', 'rot', 'pollen'].every(c => ids.includes(c)), `modes: five mono decks in DECK_ORDER (${ids.length} decks)`);
+    ok(ids.filter(id => cards.DECKS[id].colours.length > 1).length >= 7, 'modes: several mixed decks');
+    const q0 = mm.parseQuery('', ids);
+    ok(q0.mode === null && q0.decks.join() === 'random,random', 'modes: no mode in the URL opens the chooser, random decks');
+    const qw = mm.parseQuery('?mode=watch&deck=amber-dew,rot', ids);
+    ok(qw.mode === 'watch' && qw.decks.join() === 'amber-dew,rot', `modes: watch decks from the URL (${qw.decks})`);
+    ok(mm.parseQuery('?mode=watch&deck=nope', ids).decks.join() === 'random,random', 'modes: an unknown deck id reads as random');
+    ok(mm.parseQuery('?mode=WATCH', ids).mode === 'watch' && mm.parseQuery('?mode=x', ids).mode === null, 'modes: the mode word, any case; other words open the chooser');
+    const qp = mm.parseQuery('?mode=play&deck=moss-rot&opp=A&fly=dew', ids);
+    ok(qp.mode === 'play' && qp.myDeck === 'moss-rot' && qp.opp === 'A' && qp.flyDeck === 'dew', 'modes: play deck, opponent and its deck from the URL');
+    ok(mm.parseQuery('?mode=play&opp=Z', ids).opp === 'B' && mm.parseQuery('?mode=play', ids).myDeck === ids[0], 'modes: play defaults: Fly B, the first deck');
+    for (const st of [{ mode: 'watch', decks: ['dew', 'random'] }, { mode: 'play', myDeck: 'pollen', opp: 'bot', flyDeck: 'amber-rot' }, { mode: 'play', myDeck: 'rot', opp: 'A', flyDeck: 'random' }]) {
+      const back = mm.parseQuery(mm.queryOf(st), ids);
+      const same = st.mode === 'watch' ? back.decks.join() === st.decks.join() : back.myDeck === st.myDeck && back.opp === st.opp && back.flyDeck === st.flyDeck;
+      ok(back.mode === st.mode && same, `modes: URL round trip ${mm.queryOf(st)}`);
+    }
+    ok(mm.queryOf({ mode: 'watch', decks: ['random', 'random'] }) === '?mode=watch', 'modes: random decks keep the URL short');
+    const p1 = mm.pickDecks(['random', 'random'], 77, ids), p2 = mm.pickDecks(['random', 'random'], 77, ids);
+    ok(p1.join() === p2.join() && p1.every(d => ids.includes(d)) && p1[0] !== p1[1], `modes: random decks by seed, two different decks (${p1})`);
+    ok(mm.pickDecks(['dew', 'random'], 5, ids)[0] === 'dew', 'modes: a chosen deck stays');
+    const seen = new Set(); for (let sd = 1; sd < 400; sd++) mm.pickDecks(['random', 'random'], sd, ids).forEach(d => seen.add(d));
+    ok(seen.size === ids.length, `modes: random reaches every deck (${seen.size} of ${ids.length})`);
+    for (const id of ids) {
+      const k = mm.keyCardOf(cards.DECKS[id], cards.CARD);
+      const inDeck = cards.DECKS[id].list.some(([c]) => c === k?.id);
+      const mvMax = Math.max(...cards.DECKS[id].list.map(([c]) => cards.CARD[c]).filter(c => c.type !== 'land').map(c => Object.values(c.cost || {}).reduce((a, b) => a + b, 0)));
+      ok(!!k && k.type !== 'land' && inDeck && Object.values(k.cost).reduce((a, b) => a + b, 0) === mvMax, `modes: key card of ${id} is ${k?.name}, the top mana value ${mvMax}`);
+    }
+    const g = fakeCtx();
+    mm.drawDeckBox(g, 110, 147, { colours: ['#ffb347', '#6cc4e8'], art: { width: 400, height: 280 } });
+    mm.drawDeckBox(g, 110, 147, { colours: [], back: true, on: true });
+    mm.drawDeckBox(g, 60, 80, { colours: ['#a8d65a'] });
+    ok(g.calls.n > 20 && g.calls.bad === 0, `modes: drawDeckBox draws with finite numbers (${g.calls.n} calls)`);
+    ok(mm.turnPauseMs(1) >= 1000 && mm.turnPauseMs(3) < mm.turnPauseMs(1) && mm.turnPauseMs(0.5) > mm.turnPauseMs(1), 'modes: the pause between turns follows the speed');
+  }
+} else skipped('modes: game/cards.js not there');
 
 console.log(`page tests: ${pass} pass, ${fail} fail, ${skip} skipped`);
 process.exit(fail ? 1 : 0);

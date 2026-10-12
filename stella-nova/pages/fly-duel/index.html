@@ -12,106 +12,110 @@
   ═══════════════════════════════════════════════════════════════════════════
    FLY DUEL  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup and the text. Two model fruit fly mushroom bodies learn a
-   small card duel of our own by dopamine-gated plasticity, and play it
-   against each other on the page. Fly A and Fly B are wired from two
-   different animals: Fly A from the hemibrain v1.2 right MB
-   (data/connectome.json), Fly B from the FlyWire 783 right MB
-   (data/connectome-flywire.json). CONTRACT.md is the binding spec.
-   FLY3D.md is the spec of the 3D hero.
+   A fullscreen game first (CONTRACT.md, user direction 2026-10-11). Two
+   model fruit fly mushroom bodies learn a small card duel of our own by
+   dopamine-gated plasticity. Fly A is wired from the hemibrain v1.2 right
+   MB (data/connectome.json), Fly B from the FlyWire 783 right MB
+   (data/connectome-flywire.json). FLY3D.md is the spec of the 3D table.
+
+   TWO MODES  (?mode=watch | ?mode=play in the URL)
+     watch  Fly A against Fly B on the 3D convention table. Scorecard of
+            Fly A top-left, Fly B top-right, each with its live neural
+            panel (ui/hud/scorecard.js). A pause between turns.
+     play   You against a model fly, first person (ui/play/play.js
+            mountPlay). The 3D canvas moves into the play table.
+   With no mode in the URL, the mode chooser opens over a live watch
+   match. The chooser has the deck picker: one box per deck of
+   game/cards.js DECK_ORDER (five mono, the mixed decks), each with the
+   picture of its key card, and a Random box.
+   URL: ?mode=watch&deck=<A>,<B>   (deck id or "random" per fly)
+        ?mode=play&deck=<yours>&opp=A|B|bot&fly=<deck id or random>
 
    HONESTY
-     We do not train a real fly. The page says so in the hero and in 09.
-     Every number about the fly comes from data/facts.js (with a source)
-     or is counted from the two connectome files. The KC share and k come
-     from the loaded model (brain/mb.js), not from the markup. Win rates
-     come from data/training-curve.json meta.final, measured by train/
-     code. The one typed-in result is the development-run line in 08
-     (tools/mb-lab.mjs), and the line says so. Toy figures carry the tag
-     "illustrative"; model parts carry the tag "model".
+     We do not train a real fly. The chooser, the stage tag and the "How
+     it works" drawer say so. Every number about the fly comes from
+     data/facts.js (with a source) or is counted from the two connectome
+     files. Win rates come from data/training-curve.json meta.final.
+     The decks the flies trained with come from the meta of
+     data/training-curve.json or data/pretrained.json, never from markup.
 
    IP
      The game, the card names, the card text, the card frame, the card
      back and the mana glyphs are our own. The card pictures are crops of
      public-domain plates and paintings (art/CREDITS-ART.md). Magic: The
-     Gathering is named in plain text only, as the inspiration, with the
-     line "Not affiliated with or endorsed by Wizards of the Coast."
+     Gathering and MTG Arena are named in plain text only, with the line
+     "Not affiliated with or endorsed by Wizards of the Coast."
 
    GPU
-     The hero is one WebGL scene (three.js r160 from ../../vendor, by the
-     import map in the head): ui/fly3d/scene.js with the flies of
-     ui/fly3d/fly.js and the brain maps of ui/fly3d/brain3d.js. "close-up"
-     adds two WebGL brain views. When the scene cannot start, the 2D table
-     and 2D brains (#arena) take its place. Sections 01 to 09 use 2D
-     canvases and DOM cards only. No WebGPU.
+     One WebGL scene (three.js r160 from ../../vendor, by the import map):
+     ui/fly3d/scene.js. Play mode borrows the same canvas. When the scene
+     cannot start, the 2D table and 2D brains (#arena) take its place.
+     The drawer sections use 2D canvases and DOM cards only. No WebGPU.
 
    HEAD LOAD ORDER
      1. gpu-guard     ../../lib/gpu-guard.js
      2. wishlist      ../../lib/wishlist.js
      3. stats-beacon  ../../lib/stats-beacon.js
-     4. style.css, then ../../lib/sci.css (fonts, math colours), then
-        ui/card.css (the card face of the DOM cards, ui/board.js)
+     4. style.css, then ../../lib/sci.css, then ui/card.css,
+        ui/hud/hud.css (scorecards), ui/play/play.css (play mode)
      5. the import map for three r160 (before any module script)
-   Script at the end of body: main.js (module). main.js loads the other
-   packages with dynamic import(), so a missing file gives a loading
-   message, not a blank page.
+   Script at the end of body: main.js (module).
 
    LAYOUT  (# marks an element id main.js binds to)
-     #chips   sticky section bar
-     #s0 hero  3D: #hudBar #hudA #heroTurn #hudB #heroStage #heroCv
-                   #heroMaps #heroMapA #heroMapB #heroMove
-               bar: #heroStatus #heroPlay #heroSpeed #heroNew #heroCam
-                    #heroBrains
-               under: #heroLog #manaLeg #manaLegGlyphs #heroStats
-               2D stand-in (shown only when the 3D scene cannot start):
-                    #arena #heroPaneA #heroPaneB #heroBrainA #heroBrainB
-                    #heroBoard
-     #s1 game       #manaKey #kwList #deckLists #galSeg #gallery
-     #s2 centre     #mbCv #mbLegend #wiringTag #cxMeta #factList #ourList
-                    #flyCompare (Fly A / Fly B table from COMPARE)
-     #s3 smell      #featPick #featIn #featOut #glomCv #featBars #smellGrab
-                    #smellRead
-     #s4 sparse     #sparseCv #spIn #spOut #spNext #spRead
-     #s5 dopamine   #toyCv #toySel #toyRew #toyPun #toyReset #toyRead
-     #s6 train      #trainStart #trainPause #trainNaive #trainLoad
-                    #trainSpeed #trainEval #trainCv #trainLegend #trainRead
-     #s7 watch      #wOpp #wPrev #wNext #wAuto #wNew #wSeed #wBoard
-                    #wBrainA #wBrainB #wCands #wInfo
-     #s8 results    #evalVerdict #evalTable #curveCv #curveLegend #curveMeta
-     #s9 limits     text only
-     #refs          #srcList #credits
-     anywhere       [data-fact] value of a FACTS id
-                    [data-cite] [n] links to #srcList
-                    [data-mix] TRAIN_MIX share or TRAIN_EXPLORE
-                    [data-kc] KC code of the loaded flies: share, count, code
-                    [data-wiring] text that changes for sampled wiring
+     #app            fixed, 100vw x 100dvh; data-mode watch|play,
+                     data-table 3d|2d, data-sheet (chooser open)
+     watch HUD       #watchHud: #scA (Fly A, top-left) #heroTurn #scB
+                     (Fly B, top-right); #turnBanner (pause between turns)
+     fallback HUD    #hudBar #hudA #hudB (shows only when
+                     ui/hud/scorecard.js does not load)
+     #heroStage      #heroCv #heroMaps #heroMapA #heroMapB #heroMove
+                     #heroLog, stage tag (honesty line)
+     .stagebar       #heroStatus #heroPlay #heroNew #heroSpeed #heroCam
+                     #heroBrains #btnDecks #btnPlay #btnHow
+     #arena          2D stand-in: #heroPaneA #heroPaneB #heroCapA
+                     #heroCapB #heroBrainA #heroBrainB #heroBoard
+     #playRoot       play mode root (mountPlay)
+     #chooser        #modeWatch #modePlay #chSeat #chDeckA #chDeckB
+                     #chPlayRow #chOpp #chFlyDeck #chDeckHead #deckGrid
+                     #chTrained #chStart #chHow #chClose
+     #how            "How it works" drawer: #howClose #chips #doc
+       #s0 duel      #heroStats, honesty note, brain legend
+       #s1 game      #manaKey #manaLeg #manaLegGlyphs #kwList #deckTag
+                     #deckLists #galSeg #gallery
+       #s2 centre    #mbCv #mbLegend #wiringTag #cxMeta #factList #ourList
+                     #flyCompare
+       #s3 smell     #featPick #featIn #featOut #glomCv #featBars
+                     #smellGrab #smellRead
+       #s4 sparse    #sparseCv #spIn #spOut #spNext #spRead
+       #s5 dopamine  #toyCv #toySel #toyRew #toyPun #toyReset #toyRead
+       #s6 train     #trainStart #trainPause #trainNaive #trainLoad
+                     #trainSpeed #trainEval #trainCv #trainLegend #trainRead
+       #s7 watch     #wOpp #wPrev #wNext #wAuto #wNew #wSeed #wBoard
+                     #wBrainA #wBrainB #wCands #wInfo
+       #s8 results   #evalVerdict #evalTable #curveCv #curveLegend #curveMeta
+       #s9 limits    text only
+       #refs         #srcList #credits
+     anywhere        [data-fact] [data-cite] [data-mix] [data-kc]
+                     [data-wiring] (filled by main.js)
 
    GREP MAP  (main.js)
-     grep -n 'async function loadAll'   dynamic imports, both wiring files
-     grep -n 'function makeFly'         Fly construction and weights
-     grep -n 'function conOf'           the connectome of Fly A or Fly B
-     grep -n 'function start3d'         the 3D table
-     grep -n 'function initHero'        hero live match, 3D or 2D
-     grep -n 'function setBrains'       hero brain maps
-     grep -n 'function initHeroStats'   hero numbers, per fly
-     grep -n 'function initGame'        section 01
-     grep -n 'function initCentre'      section 02 point cloud
-     grep -n 'function initCompare'     section 02 Fly A / Fly B table
-     grep -n 'function initKcCode'      [data-kc] spans from brain/mb.js
-     grep -n 'function initSmell'       section 03
-     grep -n 'function initSparse'      section 04
-     grep -n 'function initDopamine'    section 05
-     grep -n 'function initTrain'       section 06
-     grep -n 'function initWatch'       section 07
-     grep -n 'function initResults'     section 08
-     grep -n 'function initSources'     references and credits
-     grep -n 'function loop'            one rAF loop, visible canvases only
+     grep -n 'export function parseQuery'  URL -> mode and decks
+     grep -n 'function initModes'          chooser, deck boxes, URL
+     grep -n 'export function drawDeckBox' one deck box on a canvas
+     grep -n 'async function enterPlay'    watch -> play
+     grep -n 'function exitPlay'           play -> watch
+     grep -n 'function initScorecards'     watch scorecards
+     grep -n 'function initHero'           watch match, 3D or 2D
+     grep -n 'function initHow'            the drawer
+     grep -n 'function loop'               one rAF loop
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Two model fruit fly brains, wired from the mushroom body connectomes of two different flies (hemibrain and FlyWire), learn a small trading-card duel by dopamine-gated plasticity and play it against each other. Live match, brain view, training in your browser, measured win rates and sources.">
+<meta name="description" content="Two model fruit fly brains, wired from the mushroom body connectomes of two different flies (hemibrain and FlyWire), learn a small trading-card duel by dopamine-gated plasticity. Watch them play each other at a 3D convention table, or play against one yourself.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="ui/card.css">
+<link rel="stylesheet" href="ui/hud/hud.css">
+<link rel="stylesheet" href="ui/play/play.css">
 <script type="importmap">
 { "imports": {
   "three": "../../vendor/three@0.160.0/build/three.module.js",
@@ -122,64 +126,24 @@
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
-<div class="topbar">
-  <div class="brand">Stella Nova</div>
-  <div class="pagetitle">Fly Brain Card Duel</div>
-</div>
+<div class="app" id="app" data-mode="watch" data-table="3d">
 
-<nav id="chips" aria-label="Sections">
-  <ol>
-    <li><a href="#s0" data-target="s0"><b>00</b>The duel</a></li>
-    <li><a href="#s1" data-target="s1"><b>01</b>The game</a></li>
-    <li><a href="#s2" data-target="s2"><b>02</b>Learning centre</a></li>
-    <li><a href="#s3" data-target="s3"><b>03</b>Smell of a board</a></li>
-    <li><a href="#s4" data-target="s4"><b>04</b>Sparse code</a></li>
-    <li><a href="#s5" data-target="s5"><b>05</b>Dopamine teaches</a></li>
-    <li><a href="#s6" data-target="s6"><b>06</b>Train them</a></li>
-    <li><a href="#s7" data-target="s7"><b>07</b>Watch a match</a></li>
-    <li><a href="#s8" data-target="s8"><b>08</b>How good</a></li>
-    <li><a href="#s9" data-target="s9"><b>09</b>What this is not</a></li>
-    <li><a href="#refs" data-target="refs"><b>¶</b>Sources</a></li>
-  </ol>
-</nav>
-
-<main id="doc">
-
-<header class="hero" id="s0">
-  <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
-  <h1>Two fruit fly brains learn a card duel</h1>
-  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, each <span data-wiring>wired from the published connectome</span> of a different fly, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
-
-  <div class="hudbar" id="hudBar">
+  <div class="hudbar" id="hudBar" hidden>
     <div class="hud a" id="hudA" aria-live="off"></div>
-    <div class="turnbox" id="heroTurn" aria-live="off"></div>
     <div class="hud b" id="hudB" aria-live="off"></div>
   </div>
+
   <div class="stage" id="heroStage">
-    <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a table play the card duel; each fly's mushroom body map floats beside it. Drag to turn the view."></canvas>
+    <canvas class="stage-cv" id="heroCv" aria-label="Two model fruit flies at a convention table play the card duel; each fly's mushroom body map floats beside it. Drag to turn the view."></canvas>
     <div class="maps" id="heroMaps" hidden>
       <figure class="map a"><figcaption><b class="seatmark s0">A</b> Fly A · model mushroom body</figcaption><canvas id="heroMapA" aria-label="3D map of the mushroom body of Fly A; drag to turn"></canvas></figure>
       <figure class="map b"><figcaption><b class="seatmark s1">B</b> Fly B · model mushroom body</figcaption><canvas id="heroMapB" aria-label="3D map of the mushroom body of Fly B; drag to turn"></canvas></figure>
     </div>
+    <ol class="log" id="heroLog" aria-label="Last moves"></ol>
     <p class="stage-move" id="heroMove" aria-live="polite"></p>
     <p class="stage-tag">Two computer models, <span data-wiring>wired from the connectomes</span> of two flies: each is a model, not a real fly</p>
   </div>
-  <div class="stagebar">
-    <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
-    <span class="arena-ctrls">
-      <button class="tgl" id="heroPlay" aria-pressed="true">Pause</button>
-      <span class="seg mini" id="heroSpeed" role="group" aria-label="Speed"><button data-v="0.5">slow</button><button data-v="1" class="on">normal</button><button data-v="3">fast</button></span>
-      <button class="tgl" id="heroNew">New game</button>
-      <span class="ctl-l">camera</span><span class="seg mini" id="heroCam" role="group" aria-label="Camera"><button data-v="auto" class="on" title="The camera cuts to the fly that acts">director</button><button data-v="wide" title="Hold the wide shot of the table">wide</button><button data-v="free" title="Drag to turn, no cuts">free</button></span>
-      <span class="ctl-l">brains</span><span class="seg mini" id="heroBrains" role="group" aria-label="Brain maps"><button data-v="beside" class="on" title="Each brain map floats beside its fly">beside</button><button data-v="close" title="Two large brain maps you can turn">close-up</button><button data-v="off" title="Hide the brain maps">hide</button></span>
-    </span>
-  </div>
-  <div class="under">
-  <ol class="log" id="heroLog" aria-label="Last moves"></ol>
-  <div class="manaleg" id="manaLeg">
-    <b>Mana.</b> <span id="manaLegGlyphs"></span> Each land makes one mana of its colour. A bright land is untapped; a dim, turned land is tapped. To cast a card, the fly touches each land it pays with and a token goes from the land to the card. A token that pays a generic cost turns into a grey square on the way.
-  </div>
-  </div>
+
   <div class="arena" id="arena" hidden>
     <div class="arena-brain a" id="heroPaneA" data-seat="0"><p class="brain-cap" id="heroCapA"><b class="seatmark s0">A</b> Fly A</p><canvas class="fig brain" id="heroBrainA" aria-label="Brain of Fly A: point cloud of its mushroom body neurons"></canvas></div>
     <div class="arena-mid">
@@ -187,19 +151,105 @@
     </div>
     <div class="arena-brain b" id="heroPaneB" data-seat="1"><p class="brain-cap" id="heroCapB"><b class="seatmark s1">B</b> Fly B</p><canvas class="fig brain" id="heroBrainB" aria-label="Brain of Fly B: point cloud of its mushroom body neurons"></canvas></div>
   </div>
+
+  <div class="whud" id="watchHud">
+    <div class="wtop">
+      <div class="wsc a" id="scA" aria-label="Fly A scorecard"></div>
+      <div class="turnbox" id="heroTurn" aria-live="off"></div>
+      <div class="wsc b" id="scB" aria-label="Fly B scorecard"></div>
+    </div>
+    <div class="turnbanner" id="turnBanner" hidden role="status"></div>
+  </div>
+
+  <div class="stagebar">
+    <span class="status" id="heroStatus" role="status">Loading the rules, the wiring and the trained weights…</span>
+    <span class="arena-ctrls">
+      <button class="tgl" id="heroPlay" aria-pressed="true">Pause</button>
+      <button class="tgl" id="heroNew">New game</button>
+      <button class="tgl" id="btnDecks" aria-haspopup="dialog">Decks</button>
+      <button class="tgl go" id="btnPlay">Play a fly</button>
+      <span class="seg mini" id="heroSpeed" role="group" aria-label="Speed"><button data-v="0.5">slow</button><button data-v="1" class="on">normal</button><button data-v="3">fast</button></span>
+      <span class="ctl-l">camera</span><span class="seg mini" id="heroCam" role="group" aria-label="Camera"><button data-v="auto" class="on" title="The camera cuts to the fly that acts">director</button><button data-v="wide" title="Hold the wide shot of the table">wide</button><button data-v="free" title="Drag to turn, no cuts">free</button></span>
+      <span class="ctl-l">brains</span><span class="seg mini" id="heroBrains" role="group" aria-label="Brain maps"><button data-v="beside" class="on" title="Each brain map floats beside its fly">beside</button><button data-v="close" title="Two large brain maps you can turn">close-up</button><button data-v="off" title="Hide the brain maps">hide</button></span>
+      <button class="tgl" id="btnHow" aria-haspopup="dialog">How it works</button>
+    </span>
+  </div>
+
+  <main class="playroot" id="playRoot" hidden aria-label="Play a card duel against a model fruit fly"></main>
+
+  <section class="chooser" id="chooser" hidden role="dialog" aria-modal="false" aria-labelledby="chTitle">
+    <div class="ch-in">
+      <header class="ch-head">
+        <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
+        <h1 id="chTitle">Fly Brain Card Duel</h1>
+        <p class="ch-lede">Two model fruit fly brains, each <span data-wiring>wired from the connectome</span> of a different fly, play a card duel of our own. Watch them play each other, or take a seat against one.</p>
+        <button class="tgl ch-x" id="chClose" aria-label="Close the chooser">Close</button>
+      </header>
+      <div class="ch-modes" role="group" aria-label="Mode">
+        <button class="ch-mode" id="modeWatch" data-mode="watch" aria-pressed="true"><b>Watch</b><span>Fly A against Fly B at the convention table. Both brains fire live in the scorecards.</span></button>
+        <button class="ch-mode" id="modePlay" data-mode="play" aria-pressed="false"><b>Play</b><span>You against a model fly, first person. Tap a card to play it.</span></button>
+      </div>
+      <div class="ch-pick">
+        <div class="ch-row" id="chWatchRow">
+          <span class="seg" id="chSeat" role="group" aria-label="Deck of which fly"><button data-v="0" class="on"><b class="seatmark s0">A</b> Fly A: <i id="chDeckA">Random</i></button><button data-v="1"><b class="seatmark s1">B</b> Fly B: <i id="chDeckB">Random</i></button></span>
+        </div>
+        <div class="ch-row" id="chPlayRow" hidden>
+          <span class="ch-l">Opponent</span>
+          <span class="seg" id="chOpp" role="group" aria-label="Opponent"><button data-v="A">Fly A · hemibrain</button><button data-v="B" class="on">Fly B · FlyWire</button><button data-v="bot">Greedy bot</button></span>
+          <label class="ch-l">Its deck <select id="chFlyDeck" aria-label="The deck of the opponent"></select></label>
+        </div>
+        <h2 class="ch-h" id="chDeckHead">Deck of Fly A</h2>
+        <div class="dboxes" id="deckGrid" role="group" aria-label="Decks"></div>
+        <p class="ch-fine" id="chTrained"></p>
+      </div>
+      <div class="ch-go">
+        <button class="tgl go" id="chStart">Watch the duel</button>
+        <button class="tgl" id="chHow">How it works</button>
+      </div>
+      <p class="ch-fine"><b>We do not train a real fly.</b> We train two computer models of one brain structure. Play mode plays like digital card games such as MTG Arena; the cards, names, rules text, frame and symbols are our own. Not affiliated with or endorsed by Wizards of the Coast.</p>
+    </div>
+  </section>
+
+  <aside class="how" id="how" hidden aria-label="How it works">
+    <div class="how-top">
+      <span class="brand">Stella Nova</span>
+      <b class="pagetitle">How it works</b>
+      <button class="tgl" id="howClose">Back to the table</button>
+    </div>
+    <nav id="chips" aria-label="Sections">
+      <ol>
+        <li><a href="#s0" data-target="s0"><b>00</b>The duel</a></li>
+        <li><a href="#s1" data-target="s1"><b>01</b>The game</a></li>
+        <li><a href="#s2" data-target="s2"><b>02</b>Learning centre</a></li>
+        <li><a href="#s3" data-target="s3"><b>03</b>Smell of a board</a></li>
+        <li><a href="#s4" data-target="s4"><b>04</b>Sparse code</a></li>
+        <li><a href="#s5" data-target="s5"><b>05</b>Dopamine teaches</a></li>
+        <li><a href="#s6" data-target="s6"><b>06</b>Train them</a></li>
+        <li><a href="#s7" data-target="s7"><b>07</b>Watch a match</a></li>
+        <li><a href="#s8" data-target="s8"><b>08</b>How good</a></li>
+        <li><a href="#s9" data-target="s9"><b>09</b>What this is not</a></li>
+        <li><a href="#refs" data-target="refs"><b>¶</b>Sources</a></li>
+      </ol>
+    </nav>
+    <main id="doc">
+
+<header class="hero sec" id="s0">
+  <p class="kicker">Neuroscience · reinforcement learning · a model, not a fly</p>
+  <h1>Two fruit fly brains learn a card duel</h1>
+  <p class="lede">A fruit fly learns which smells mean sugar and which mean a shock with a small structure called the mushroom body. Here two copies of that circuit, each <span data-wiring>wired from the published connectome</span> of a different fly, see a card game as if it were a smell, and learn to play it against each other with a rule modelled on the fly's: dopamine changes the synapses of the cells that were just active. In our model, the dopamine signal tells those synapses whether the last choice turned out better or worse than expected.</p>
+  <div class="stats" id="heroStats"></div>
   <div class="legend brainleg">
     <span><i style="background:var(--pn)"></i>projection neurons (the board's smell)</span>
     <span><i style="background:var(--kc-on)"></i>active Kenyon cells</span>
     <span><i style="background:var(--app)"></i>approach output / PAM</span>
     <span><i style="background:var(--avoid)"></i>avoid output / PPL1</span>
   </div>
-  <div class="stats" id="heroStats"></div>
-  <p class="note"><b>We do not train a real fly.</b> We train two computer models. Each model is one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons, <span data-wiring>taken from a published fruit fly connectome</span>. Fly A and Fly B are wired from two different animals: Fly A from the hemibrain connectome<span data-cite="scheffer2020"></span>, Fly B from the FlyWire connectome<span data-cite="dorkenwald2024"></span>. Fly A wears the cyan collar, Fly B the magenta collar; the flies are drawn by us, larger than life, and only the brain maps come from data. In this live match both flies play with their trained weights and learning is switched off. The flashes show the dopamine signal the model computes after each move. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
+  <p class="note"><b>We do not train a real fly.</b> We train two computer models. Each model is one mushroom body: projection neurons, Kenyon cells, output neurons and dopamine neurons, <span data-wiring>taken from a published fruit fly connectome</span>. Fly A and Fly B are wired from two different animals: Fly A from the hemibrain connectome<span data-cite="scheffer2020"></span>, Fly B from the FlyWire connectome<span data-cite="dorkenwald2024"></span>. Fly A wears the cyan collar, Fly B the magenta collar; the flies are drawn by us, larger than life, and only the brain maps come from data. On the table both flies play with their trained weights and learning is switched off. The neural panel in each scorecard shows the Kenyon cells of the move the fly chose, and the dopamine signal the model computes after it. Parts marked <b>model</b> are our simplifications; parts marked <b>illustrative</b> are teaching toys. The card game is our own, inspired by Magic: The Gathering. Not affiliated with or endorsed by Wizards of the Coast.</p>
 </header>
 
 <!-- ───────────────────────────────────────────────────────────── 01 -->
 <section class="sec" id="s1">
-  <div class="sec-head"><span class="num">01</span><div><h2>The game: a small card duel of our own</h2><p>The flies play a cut-down duel in the style of the trading card games: two players, 20 life each, a 40-card deck, lands that make mana, creatures that attack and block, and spells. Every card, name, card text and mana glyph here is our own. The pictures are crops of public-domain natural-history plates and paintings (credits under Sources). The rules are short on purpose, so that each decision is a choice among a few options.</p></div></div>
+  <div class="sec-head"><span class="num">01</span><div><h2>The game: a small card duel of our own</h2><p>The flies play a cut-down duel in the style of the trading card games: two players, 20 life each, a 40-card deck, lands that make mana of five colours (Amber, Moss, Dew, Rot and Pollen), creatures that attack and block, and spells. Each colour has its own deck, and the mixed decks join two or three colours with dual lands. Every card, name, card text and mana glyph here is our own. The pictures are crops of public-domain natural-history plates and paintings (credits under Sources). The rules are short on purpose, so that each decision is a choice among a few options.</p></div></div>
   <div class="grid">
     <article class="card span-5">
       <div class="card-top"><h3>One turn</h3><span class="tag">rules engine: game/rules.js</span></div>
@@ -212,15 +262,16 @@
       </ol>
       <p class="body dim">A player at 0 life, or who must draw from an empty deck, loses. After turn 60 the game is a draw. To keep each choice short, the engine lists at most 16 attack plans and 16 block plans, and always includes "do nothing".</p>
       <div class="manakey"><span id="manaKey"></span></div>
+      <div class="manaleg" id="manaLeg"><b>Mana on the table.</b> <span id="manaLegGlyphs"></span> Each land makes one mana of its colour; a dual land makes one of its two. Lands of one kind stand in one stack. A bright land is untapped; a dim, turned land is tapped. To cast a card, the fly touches each land it pays with and a token goes from the land to the card. A token that pays a generic cost turns into a grey square on the way.</div>
       <ul class="facts" id="kwList"></ul>
     </article>
     <article class="card span-7">
-      <div class="card-top"><h3>The two decks</h3><span class="tag">Fly A plays Amber, Fly B plays Moss</span></div>
+      <div class="card-top"><h3>The decks</h3><span class="tag" id="deckTag">one deck per colour, and mixed decks</span></div>
       <div class="decks" id="deckLists"><p class="none">Loading the card pool…</p></div>
     </article>
     <article class="card span-12">
       <div class="card-top"><h3>Every card</h3><span class="tag">public-domain plate art</span></div>
-      <div class="seg" id="galSeg" role="group" aria-label="Filter"><button data-v="all" class="on">All</button><button data-v="amber">Amber</button><button data-v="moss">Moss</button><button data-v="none">Colourless</button><button data-v="creature">Creatures</button><button data-v="spell">Spells</button></div>
+      <div class="galbar" id="galSeg" role="group" aria-label="Filter"></div>
       <div class="gallery" id="gallery"></div>
     </article>
   </div>
@@ -346,7 +397,7 @@
         <li>At the end, the win (+1), loss (−1) or draw (0) is the only reward. Nothing tells the fly which cards are good.</li>
         <li>The wiring (PN to KC claws, which DAN reaches which compartment) never changes. Only the KC-to-MBON weights learn.</li>
       </ul>
-      <p class="body dim">The trained weights from this panel are used by section 07 when you press "New game" there.</p>
+      <p class="body dim">The trained weights from this panel are used by section 07 when you press "New game" there. The table and play mode keep the shipped weights.</p>
     </article>
   </div>
 </section>
@@ -445,7 +496,9 @@
   <p class="note">Magic: The Gathering is a trademark of Wizards of the Coast LLC. The game on this page is our own, with our own cards, names, card frame and symbols. The card pictures are public-domain plates and paintings (<a href="art/CREDITS-ART.md">art credits</a>). Not affiliated with or endorsed by Wizards of the Coast.</p>
 </section>
 
-</main>
+    </main>
+  </aside>
+</div>
 <script type="module" src="main.js"></script>
 </body>
 </html>
