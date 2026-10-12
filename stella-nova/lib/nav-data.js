@@ -75,6 +75,9 @@ w.SN_NAV = [
     ] },
     { h: "Live Data", p: [
       ["flight-board", "Flight Board", "LIVE"]
+    ] },
+    { h: "Arcade", p: [
+      ["wasm4-arcade", "WASM-4 Arcade", "WASM"]
     ] }
   ] }
 ] },

@@ -79,6 +79,7 @@ const DIRECTORY_ONLY = new Set(['qave', 'origami']);
 // widgets/ten-minute-physics/kit.js.
 const TMP = n => 'Ten Minute Physics #' + n + ' by Matthias Müller (MIT)';
 const CREDITS = {
+  'wasm4-arcade': 'WASM-4 runtime by Bruno Garcia (ISC); 19 community carts under MIT, BSD-2-Clause and ISC',
   'mandelbulber': 'Mandelbulber2 by Krzysztof Marczak and team (GPL-3.0)',
   'shan-shui': 'shan-shui-inf by Lingdong Huang (MIT)',
   'markov-junior': 'MarkovJunior by Maxim Gumin',
@@ -325,6 +326,7 @@ const BLURBS = {
   'ns-geometry': 'The blowup question through the geometry of the flow.',
   'antenna-fields': 'Radio waves leave a dipole, a loop and an array.',
   sstv: 'Slow-scan television: a picture sent as sound, decoded live.',
+  'wasm4-arcade': 'Open-source WASM-4 fantasy console carts in a CRT arcade cabinet.',
   'photon-caustics-3d': 'Sunlight through waves draws caustics on a pool floor.',
   'game-of-life': 'Conway’s Life on the GPU, with a pattern library.',
   'ulam-spiral': 'Primes form lines in the Ulam spiral and 21 more layouts.',
