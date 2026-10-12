@@ -16,9 +16,10 @@
 //    8  envelope illustration: spikes stand on the membrane
 //    9  ladder and ruler
 //   10  GPU budget
-//   11  saver plan: weighted bags with no back-to-back repeats over
-//       thousands of shots, every effect, view, scheme, palette, light,
-//       camera move, peel order and explode axis; shots of 5 to 12 s
+//   11  saver plan: cycles of build, inspect or axes, take-apart on one
+//       virus; a new virus each cycle, all 12 before a repeat; looks,
+//       explode styles and regions from saver-look.js; 5..12 s beats;
+//       the rod fit (saver-look.js fitLong)
 //   12  GPU expansion: the shader's instance arithmetic (pack.js) gives each
 //       copy of each bead once, at the position of its operator
 //   13  colour schemes: every scheme, palette and light maps into [0, 1]
@@ -39,12 +40,15 @@
 //       the GPU table (pack.js packSel)
 //   21  framing: an inspected region stays in the clear band of a
 //       portrait and a landscape frame through the whole turn
-//   22  tour plans: seeded, varied, chapters on one capsid, no back-to-
-//       back repeat of effect or region, 5..12 s shots
+//   22  build and take-apart: the explode curve run backwards lands every
+//       unit at rest; size 0 at the start of a build and the end of a
+//       take-apart; pentamers first; TMV lines leave the rod axis; the
+//       saver-look.js traits and assembly units against the data
 //   23  saver run in node: saver.js on a stub of main.js (real bead data,
-//       three.js r160 maths, no WebGL): 4 minutes of shots per seed, the
-//       camera stays finite, every open shell closes, the inspected
-//       region sits in the clear band while the camera turns round it
+//       three.js r160 maths, no WebGL): 4 minutes per seed; every take-
+//       apart ends on an empty screen, every next virus was preloaded,
+//       the camera turns under 20 deg/s and zooms under 0.65 per s, one
+//       plate per beat, the inspected region sits in the clear band
 // ============================================================================
 import { readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -264,67 +268,61 @@ ok(big < 8e6, 'bead textures of the two largest parts: ' + (big / 1e6).toFixed(2
 ok(B.strideFor(12507, 60, B.maxInstances(true)) === 3 && B.strideFor(858, 60, B.maxInstances(false)) === 1, 'LOD stride: adenovirus 3 on a phone, polio 1');
 
 // ── 11 saver plan ────────────────────────────────────────────────────────
-section('11 saver plan');
-for (const seed of [1, 2, 99, 12345]) for (const calm of [0, 0.7, 1]) {
-  const plan = P.plan(seed, calm, 40);
-  ok(plan.every(s => s.dur >= 5 && s.dur <= 12), 'seed ' + seed + ' calm ' + calm + ': 40 shots of 5..12 s');
-  ok(plan.every(s => P.EFFECTS[s.kind] && C.entryByKey(s.entry) && P.EFFECTS[s.kind].pool.includes(s.entry)), 'seed ' + seed + ': known effects, entries from their pools');
-}
-const a = P.plan(1, 0.7, 12).map(s => s.kind + s.entry + s.rep).join(), b2 = P.plan(2, 0.7, 12).map(s => s.kind + s.entry + s.rep).join();
-ok(a !== b2, 'two seeds give two orders');
-ok(P.plan(5, 0.7, 12).map(s => JSON.stringify(s)).join() === P.plan(5, 0.7, 12).map(s => JSON.stringify(s)).join(), 'one seed gives one plan');
+section('11 saver plan (shots.js: build, look, take apart)');
+const LK = await import(join(HERE, 'saver-look.js'));
+const RGK = (await import(join(HERE, 'regions.js'))).REGION_KINDS;
 {
-  // a weighted bag on its own: thousands of draws, no back-to-back repeat,
-  // every key, and counts that follow the weights
+  for (const seed of [1, 2, 99, 12345]) for (const calm of [0, 0.7, 1]) {
+    const plan = P.plan(seed, calm, 60);
+    ok(plan.length === 60 && plan.every(s => s.dur >= 5 && s.dur <= 12), 'seed ' + seed + ' calm ' + calm + ': 60 beats of 5..12 s');
+  }
+  const a = P.plan(1, 0.7, 30).map(s => JSON.stringify(s)).join(), b2 = P.plan(2, 0.7, 30).map(s => JSON.stringify(s)).join();
+  ok(a !== b2 && a === P.plan(1, 0.7, 30).map(s => JSON.stringify(s)).join(), 'one seed gives one plan; two seeds give two');
+  // a weighted bag on its own: no back-to-back repeat, counts follow the weights
   const r = S.makeRng(77), bag = P.makeBag(r, { a: 3, b: 1, c: 1, d: 0.2 }), cnt = { a: 0, b: 0, c: 0, d: 0 };
   let prev = null, rep = 0;
   for (let i = 0; i < 6000; i++) { const k = bag.next(); cnt[k]++; if (k === prev) rep++; prev = k; }
-  ok(rep === 0 && cnt.d > 0, 'bag: 6000 draws, ' + rep + ' back-to-back repeats, every key drawn');
-  ok(cnt.a > 2 * cnt.b && cnt.b > cnt.d, 'bag: counts follow the weights (a ' + cnt.a + ', b ' + cnt.b + ', c ' + cnt.c + ', d ' + cnt.d + ')');
-  let forced = 0; prev = null;
-  for (let i = 0; i < 500; i++) { const k = bag.next(x => x === 'a' || x === 'b'); if (k === prev) forced++; prev = k; if (k !== 'a' && k !== 'b') forced += 1000; }
-  ok(forced === 0, 'bag with a filter: only allowed keys, still no repeats');
-}
-{
-  // 3000 shots over 4 seeds: no dimension repeats in two shots in a row
-  // unless the shot allows one value only; every value shows up
-  const seen = { kind: new Set(), rep: new Set(), scheme: new Set(), pal: new Set(), light: new Set(), cam: new Set(), peel: new Set(), ex: new Set(), slice: new Set() };
-  const bad = { kind: 0, entry: 0, rep: 0, scheme: 0, pal: 0, light: 0, cam: 0 };
-  let n = 0, morphs = 0, peels = 0, tours = 0, durBad = 0, repBad = 0;
+  ok(rep === 0 && cnt.d > 0 && cnt.a > 2 * cnt.b, 'bag: 6000 draws, ' + rep + ' back-to-back repeats, counts follow the weights');
+  // the cycles: build, inspect or axes, apart, on one virus
+  let n = 0, cycBad = 0, sameNext = 0, fullBad = 0, lookRep = 0, lookBad = 0, exBad = 0, regBad = 0, contrast = 0, pairs = 0;
+  const seen = { entry: new Set(), look: new Set(), ex: new Set(), stag: new Set(), region: new Set(), mid: new Set() };
   for (const seed of [3, 41, 2024, 987654]) {
-    const plan = P.plan(seed, 0.6, 750);
-    plan.forEach((s, i) => {
+    const plan = P.plan(seed, 0.6, 360), cycles = [];
+    for (let i = 0; i + 2 < plan.length; i += 3) cycles.push(plan.slice(i, i + 3));
+    cycles.forEach((c, i) => {
       n++;
-      for (const k of Object.keys(seen)) if (s[k] != null) seen[k].add(String(s[k]));
-      if (s.repTo) { seen.rep.add(s.repTo); morphs++; if (s.repTo === s.rep) repBad++; }
-      if (s.kind === 'peel' || s.kind === 'inside') peels++;
-      if (s.kind === 'exview' || s.kind === 'inspect') tours++;
-      if (!(s.dur >= 5 && s.dur <= 12)) durBad++;
-      if (!P.okRep(s.kind, s.entry, s.rep) || (s.repTo && !P.okRep(s.kind, s.entry, s.repTo)) || !P.okScheme(s.entry, s.scheme) || !P.okCam(s.kind, s.cam)) repBad++;
-      const q = plan[i - 1];
-      if (!q) return;
-      if (s.kind === q.kind) bad.kind++;
-      // a chapter shot (cont) keeps the entry, palette, light, view and
-      // colour of the shot before it: no cut, so no change
-      if (s.cont) return;
-      for (const k of ['entry', 'pal', 'light']) if (s[k] === q[k]) bad[k]++;
-      if (s.rep === (q.repTo || q.rep)) bad.rep++;
-      if (s.scheme === q.scheme) bad.scheme++;
-      if (s.cam === q.cam && P.CAMS.filter(c => P.okCam(s.kind, c)).length > 1) bad.cam++;
+      const [bd, mid, ap] = c;
+      if (bd.kind !== 'build' || !(mid.kind === 'inspect' || mid.kind === 'axes') || ap.kind !== 'apart' || c.some(x => x.entry !== bd.entry || x.look !== bd.look)) cycBad++;
+      seen.entry.add(bd.entry); seen.look.add(bd.look); seen.ex.add(bd.ex); seen.stag.add(bd.stag); seen.mid.add(mid.kind);
+      const V0 = LK.VIRUSES[bd.entry], look = C.entryByKey(bd.entry).look;
+      if (!LK.okLook(bd.entry, LK.lookById(bd.look))) lookBad++;
+      if (!V0.build.map(String).includes(bd.ex) || !V0.apart.map(String).includes(ap.ex) || (bd.stag === 'type' && bd.ex !== 'cap')) exBad++;
+      if (ap.ex === bd.ex && V0.apart.map(String).some(x => x !== bd.ex)) exBad++;
+      if (mid.kind === 'axes' && look !== 'capsid') exBad++;
+      if (mid.kind === 'inspect') { seen.region.add(bd.entry + ':' + mid.region); if (!RGK[bd.entry].includes(mid.region) || !V0.mid.includes(mid.region)) regBad++; }
+      const q = cycles[i - 1];
+      if (q) {
+        pairs++;
+        if (q[0].entry === bd.entry) sameNext++;
+        if (q[0].look === bd.look) lookRep++;
+        const da = LK.VIRUSES[q[0].entry].d, db = LK.VIRUSES[bd.entry].d;
+        if (C.entryByKey(q[0].entry).look !== look || Math.max(da, db) / Math.min(da, db) >= 1.3) contrast++;
+      }
+      // no repeat until all 12 have played
+      if (i % 12 === 11 && new Set(cycles.slice(i - 11, i + 1).map(x => x[0].entry)).size !== 12) fullBad++;
     });
   }
-  ok(Object.values(bad).every(v => v === 0), n + ' shots: no back-to-back repeat of effect, entry, view, scheme, palette, light or camera move (' + JSON.stringify(bad) + ')');
-  ok(durBad === 0, n + ' shots of 5..12 s');
-  ok(repBad === 0, 'every view, scheme and camera suits its shot; a morph changes the view');
-  ok(Object.keys(P.EFFECTS).every(k => seen.kind.has(k)), 'every effect plays: ' + [...seen.kind].join(' '));
-  ok(B.REPS.every(k => seen.rep.has(k)), 'every view plays: ' + [...seen.rep].join(' '));
-  ok(CO.SCHEMES.every(x => seen.scheme.has(x.id)), 'every colour scheme plays (' + seen.scheme.size + ')');
-  ok(Object.keys(CO.PALETTES).every(k => seen.pal.has(k)) && Object.keys(CO.LIGHTS).every(k => seen.light.has(k)), 'every palette and light rig plays');
-  ok(P.CAMS.every(k => seen.cam.has(k)), 'every camera move plays: ' + [...seen.cam].join(' '));
-  ok(['0', '1', '2', '3', '4', '5'].every(k => seen.peel.has(k)), 'all six peel orders play');
-  ok(['5', '3', '2', '-1'].every(k => seen.ex.has(k)) && seen.slice.size === 2, 'explode on 5-, 3-, 2-fold and radial; slice and slab');
-  console.log('  ' + n + ' shots: ' + morphs + ' with a view morph, ' + peels + ' peels (' + (100 * peels / n).toFixed(0) + ' %), ' + tours + ' exploded views and inspections (' + (100 * tours / n).toFixed(0) + ' %)');
-  ok(tours / n > 0.35 && peels / n > 0.1, 'exploded views and inspections lead the tour (' + (100 * tours / n).toFixed(0) + ' %); peels still play (' + (100 * peels / n).toFixed(0) + ' %)');
+  ok(cycBad === 0, n + ' cycles: build, then an inspection or the axes, then the take-apart, all on one virus with one look');
+  ok(sameNext === 0 && fullBad === 0, 'a new virus each cycle; each run of 12 cycles holds all 12 viruses (' + sameNext + ', ' + fullBad + ')');
+  ok(contrast / pairs > 0.85, 'neighbour viruses differ in kind or by 30 % in size in ' + (100 * contrast / pairs).toFixed(0) + ' % of ' + pairs + ' pairs');
+  ok(lookRep === 0 && lookBad === 0 && seen.look.size === LK.LOOKS.length, 'no look twice in a row, every look suits its virus, all ' + seen.look.size + ' looks play');
+  ok(exBad === 0 && regBad === 0, 'build and apart styles from the virus table, apart differs from build, axes only on capsids, regions from the virus table');
+  ok(seen.entry.size === 12 && seen.mid.size === 2 && ['5', '3', '2', '-1', 'cap'].every(x => seen.ex.has(x)) && ['distance', 'ring', 'type'].every(x => seen.stag.has(x)), 'every virus, both middle beats, every build style and stagger play (' + seen.region.size + ' virus:region pairs)');
+  console.log('  seed 9: ' + P.plan(9, 0.6, 12).map(s => s.kind + ':' + s.entry + (s.ex != null ? ':' + s.ex : '') + (s.region ? ':' + s.region : '')).join(' '));
+  // long subjects: the fit sizes the rod along the long side of the band
+  const land = LK.fitLong(151, 9, { w: 1280, h: 800, fov: 32, occ: { l: 0, r: 0, t: 250, b: 250 } }), port = LK.fitLong(151, 9, { w: 1080, h: 1920, fov: 32, occ: { l: 0, r: 0, t: 380, b: 380 } });
+  const half = (f, s, h) => Math.atan(Math.tan(16 * Math.PI / 180) * s / h);
+  ok(land.across && !port.across && 151 / (land.dist - 9) <= Math.tan(half(0, 1280, 800)) * 1.0001 && 151 / (port.dist - 9) <= Math.tan(half(0, 1160, 1920)) * 1.0001, 'fitLong: the rod lies across a landscape band and up a portrait band, and fits its long side');
 }
 
 // ── 12 GPU expansion ─────────────────────────────────────────────────────
@@ -778,48 +776,54 @@ section('21 framing of an inspected region (clear band, portrait and landscape)'
   }
 }
 
-// ── 22 tour plans ────────────────────────────────────────────────────────
-section('22 tour plans (shots.js: chapters, exview, inspect)');
+// ── 22 build and take-apart ──────────────────────────────────────────────
+section('22 build and take-apart (the explode run backwards, fade, key flip, rod lines)');
 {
-  const a1 = P.plan(31, 0.6, 60).map(s => JSON.stringify(s)).join(), a2 = P.plan(31, 0.6, 60).map(s => JSON.stringify(s)).join(), a3 = P.plan(32, 0.6, 60).map(s => JSON.stringify(s)).join();
-  ok(a1 === a2 && a1 !== a3, 'one seed gives one tour; another seed another');
-  const seen = { region: new Set(), ex: new Set(), stag: new Set(), chapter: new Set(), detail: new Set(), dscheme: new Set(), iso: new Set() };
-  let n = 0, rep = 0, regRep = 0, durBad = 0, chBad = 0, fromBad = 0, regBad = 0, exBad = 0, lastRegion = null, firstFive = 0;
-  for (const seed of [5, 17, 404, 31337]) {
-    const plan = P.plan(seed, 0.5, 600);
-    lastRegion = null;
-    plan.forEach((s, i) => {
-      n++;
-      const q = plan[i - 1];
-      if (q && q.kind === s.kind) rep++;
-      if (!(s.dur >= 5 && s.dur <= 12)) durBad++;
-      if (s.kind === 'inspect') {
-        seen.region.add(s.entry + ':' + s.region); seen.detail.add(s.detail); seen.dscheme.add(s.dscheme); seen.iso.add(s.iso);
-        if (!P.okRegion(s.entry, s.region, null) || !(s.detail === 'tube' || s.detail === 'space') || s.repTo !== s.detail || s.rep === s.detail) regBad++;
-        if (s.region === lastRegion) { regRep++; console.log('  repeat ' + seed + ' #' + i + ' ' + s.entry + ' ' + s.region + (s.fromEx ? ' fromEx ' + s.ex : '')); }
-        lastRegion = s.region;
+  const fadeSize = ex => { const t = Math.min(1, Math.max(0, (ex - 0.55) / 0.45)); return 1 - t * t * (3 - 2 * t); };
+  let monoBad = 0, startBad = 0, endBad = 0, n = 0;
+  for (const key of LK.VIRUS_KEYS) {
+    const e = C.entryByKey(key), R = regionsFor(e), V0 = LK.VIRUSES[key];
+    for (const ex of [...V0.build, ...V0.apart]) {
+      const mode = ex === 'cap' ? 'cap' : ex, pl = RG.explodePlan(R.T, { mode, stagger: 'distance', pole: [0.3, 0.8, 0.5], axes: R.axes, caps: R.caps, look: e.look });
+      for (let u = 0; u < R.T.U; u += Math.max(1, Math.floor(R.T.U / 200))) {
+        n++;
+        // build: exT = 1 - lin(t, 0, 0.84), stagger 0.72
+        let prev = Infinity;
+        for (let i = 0; i <= 50; i++) {
+          const t = i / 50, exT = 1 - Math.min(1, t / 0.84), a = RG.explodeAmount(exT, pl.keys[u], 0.72);
+          if (a > prev + 1e-12) monoBad++;
+          prev = a;
+        }
+        if (fadeSize(RG.explodeAmount(1, pl.keys[u], 0.72)) !== 0) startBad++;
+        if (RG.explodeAmount(0, pl.keys[u], 0.72) !== 0) monoBad++;
+        // apart: exT = lin(t, 0.06, 0.97), stagger 0.6: size 0 at the end
+        if (fadeSize(RG.explodeAmount(1, pl.keys[u], 0.6)) !== 0) endBad++;
       }
-      if (s.kind === 'exview') { seen.ex.add(String(s.ex)); seen.stag.add(s.stag); if (!P.okEx(s.entry, String(s.ex)) || !P.okStag(String(s.ex), s.stag)) exBad++; }
-      if (s.chapter != null) seen.chapter.add(s.chapter);
-      if (s.cont && (!q || q.entry !== s.entry || q.pal !== s.pal || q.light !== s.light || s.rep !== (q.repTo || q.rep))) chBad++;
-      if (s.fromEx && !(q && q.kind === 'exview' && q.hold && P.okRegion(s.entry, s.region, String(q.ex)))) fromBad++;
-      if (q && q.kind === 'exview' && q.hold && !(s.kind === 'inspect' && s.fromEx)) fromBad++;
-      if (i < 5 && (s.kind === 'exview' || s.kind === 'inspect')) firstFive++;
-    });
+    }
   }
-  ok(rep === 0 && regRep === 0, n + ' shots: no effect twice in a row, no region kind twice in a row (' + rep + ', ' + regRep + ')');
-  ok(durBad === 0, n + ' shots of 5..12 s');
-  ok(chBad === 0, 'a chapter shot keeps the entry, palette, light and view (no cut)');
-  ok(fromBad === 0, 'an open shell (hold) always goes on to an inspection of a part that suits it, which closes it');
-  ok(regBad === 0 && exBad === 0, 'every region suits its entry; every inspection morphs to a tube or space-filling; every explode style suits its entry');
-  const kinds = new Set([...seen.region].map(x => x.split(':')[1]));
-  const allKinds = new Set(Object.values(RG.REGION_KINDS).flat());
-  ok([...allKinds].every(k => kinds.has(k)), 'every region kind plays: ' + [...kinds].join(' '));
-  ok(['5', '3', '2', '-1', 'cap'].every(k => seen.ex.has(k)) && ['distance', 'ring', 'copy', 'type'].every(k => seen.stag.has(k)), 'every explode style and stagger plays');
-  ok(seen.chapter.size === P.CHAPTERS.length && seen.detail.size === 2 && seen.dscheme.size === 2 && seen.iso.size === 2, 'every chapter, both detail views, both colourings and both ghost styles play');
-  ok(firstFive > 0, 'the first five shots of the four runs hold ' + firstFive + ' exploded views or inspections');
-  const ex = P.plan(9, 0.6, 40).slice(0, 12).map(s => s.kind + (s.cont ? '+' : '') + (s.region ? ':' + s.region : '') + (s.ex != null && s.kind === 'exview' ? ':' + s.ex : '')).join(' ');
-  console.log('  seed 9: ' + ex);
+  ok(monoBad === 0, n + ' unit samples: in a build every unit flies in monotonically and lands at rest');
+  ok(startBad === 0 && endBad === 0, 'a build starts with every unit at size 0 and a take-apart ends with every unit at size 0 (glsl.js uSelFade)');
+  // pentamers first: the build flips the 'type' keys, and a unit lands at exT = key * stag
+  const R = regionsFor(C.entryByKey('hk97')), pl = RG.explodePlan(R.T, { mode: 'cap', stagger: 'type', pole: [0, 1, 0], axes: R.axes, caps: R.caps, look: 'capsid' });
+  const pent = new Set(R.byKind.pentamer.inst.flatMap(x => x.units));
+  let pk = 0, pn = 0, hk = 0, hn = 0;
+  for (let u = 0; u < R.T.U; u++) { const k = 1 - pl.keys[u]; if (pent.has(u)) { pk += k; pn++; } else if (R.T.big[u % R.T.nc]) { hk += k; hn++; } }
+  ok(pn > 0 && pk / pn > hk / hn + 0.3, 'HK97 build, pentamers first: pentamers land at exT ' + (0.72 * pk / pn).toFixed(2) + ' (mean), the rest at ' + (0.72 * hk / hn).toFixed(2));
+  // the rod: the lines leave the rod axis
+  const Rt = regionsFor(C.entryByKey('tmv')), pt = RG.explodePlan(Rt.T, { mode: -1, stagger: 'distance', pole: [0, 1, 0], look: 'rod' });
+  let rodBad = 0;
+  for (let u = 0; u < Rt.T.U; u++) if (Math.abs(pt.dirs[3 * u + 1]) > 1e-6) rodBad++;
+  ok(rodBad === 0, 'TMV: ' + Rt.T.U + ' subunits fly out from the rod axis (no motion along the rod)');
+  // the virus table against the data
+  let trBad = 0;
+  for (const key of LK.VIRUS_KEYS) {
+    const e = C.entryByKey(key), d = D[C.pdbsOf(e)[0]], t = LK.TRAITS[key];
+    if (d.info.entities.filter(x => x.role === 'main').length !== t.mains || (e.look !== 'cone' && d.info.chains.length !== t.nc)) { trBad++; console.log('  traits ' + key); }
+  }
+  ok(trBad === 0, 'saver-look.js TRAITS match the data (main proteins, chains per unit)');
+  const capOf = (key, kind) => (regionsFor(C.entryByKey(key)).byKind[kind] || { inst: [] }).inst.length;
+  ok(capOf('polio', 'pentamer') === 12 && capOf('rhino', 'pentamer') === 12 && capOf('hk97', 'pentamer') === 12 && capOf('hk97', 'hexamer') === 60 && capOf('hpv', 'pentamer') + capOf('hpv', 'pentamer6') === 72 && capOf('adeno', 'trimer') === 240,
+    'plate assembly units match the capsomers found in the data: polio and rhino 12 pentamers, HK97 60 + 12, HPV 72 pentamers, adenovirus 240 hexon trimers');
 }
 
 // ── 23 saver run in node ─────────────────────────────────────────────────
@@ -836,7 +840,8 @@ section('23 saver run in node (saver.js on a stub of main.js)');
   const camera = new THREE.PerspectiveCamera(32, W0 / H0, 0.1, 5000);
   const G = { key: 'polio', color: 'auto', axes: false, orbit: true, breathe: true, sway: true, mode: 'entry', rep: 'auto', pal: 'atlas' };
   const A = { asm: 1, explode: 0, explodeT: 0, peel: 0, peelT: 0, slice: 0, sliceT: 0, peelN: new THREE.Vector3(0, 0, 1), sliceN: new THREE.Vector3(0, 0, 1), hiK: -1, camLock: false, tour: null, peelMode: 0, peelReach: 0.5, exOrder: 0, slab: 0, spiral: 5 };
-  let cur = null, hooks = [], sels = 0, selBad = 0;
+  let cur = null, hooks = [], sels = 0, selBad = 0, backdrops = 0, rigs = 0;
+  const loaded = new Set(), shows = [];
   const fit = r => RG.fitDistance(r, { w: W0, h: H0, occ, fov: 32 });
   function build(key) {
     const e = C.entryByKey(key);
@@ -844,7 +849,7 @@ section('23 saver run in node (saver.js on a stub of main.js)');
       const axes = d.info.sym.type === 'icosa' ? S.axesOf(ops) : [], U = d.info.chains.length * ops.length / 12;
       return { d, ops, axes, m: ops.length / 12, nc: d.info.chains.length, setSel(t) { sels++; if (t.keys.length !== U || t.dirs.length !== 3 * U || t.sel.length !== U) selBad++; } };
     };
-    let parts, r;
+    let parts, r, b = null;
     if (e.look === 'virion') {
       const env = S.envelopeOps({ R: e.membrane.r, tilt: e.tilt || 0, parts: e.parts.map(p => ({ count: p.count, stalk: p.stalk, base: D[p.pdb].info.anchor.base / 10 })) }, S.makeRng(11).next);
       parts = e.parts.map((p, i) => mk(D[p.pdb], env.ops[i]));
@@ -852,9 +857,10 @@ section('23 saver run in node (saver.js on a stub of main.js)');
     } else {
       const d = D[e.pdb], ops = F.copyOps(d.info, e.layers);
       parts = [mk(d, ops)];
-      r = S.bounds(d, ops, Math.max(1, Math.floor(d.n * ops.length / 12 / 20000))).r;
+      b = S.bounds(d, ops, Math.max(1, Math.floor(d.n * ops.length / 12 / 20000)));
+      r = b.r;
     }
-    return { entry: e, parts, r, axes: parts[0].axes };
+    return { entry: e, parts, r, bounds: b, axes: parts[0].axes, membrane: e.membrane ? {} : null };
   }
   const built = {};
   const app = {
@@ -862,57 +868,60 @@ section('23 saver run in node (saver.js on a stub of main.js)');
     REP_LABEL: { beads: 'Beads', space: 'Space-filling', tube: 'Backbone tube', blob: 'Subunit blobs', cage: 'Lattice cage', glow: 'Glow points', toon: 'Outline (toon)' },
     get cur() { return cur; },
     async show(key) {
+      shows.push({ key, pre: loaded.has(key) }); loaded.add(key);
       G.key = key; G.mode = 'entry';
       cur = built[key] || (built[key] = build(key));
       cur._tour = null;
       camera.position.set(0.35, 0.3, 1).normalize().multiplyScalar(fit(cur.r)); this.controls.target.set(0, 0, 0); camera.lookAt(0, 0, 0);
       return cur;
     },
+    async preload(key) { loaded.add(key); },
     async enterLadder() { G.mode = 'ladder'; cur = null; },
-    fitDistance: fit, setRep() {}, applyLook() {}, setPalette(k) { G.pal = k; }, setLight() {}, startAssembly() { A.asm = 0; },
-    setPeel(on) { A.peelT = on ? 1 : 0; }, setSlice(on) { A.sliceT = on ? 1 : 0; }, setExplode(on) { A.explodeT = on ? 1 : 0; },
+    fitDistance: fit, setRep() {}, applyLook() {}, setPalette(k) { G.pal = k; }, setLight(k) { if (typeof k === 'object') rigs++; }, setBackdrop(o) { if (o && o.inner) backdrops++; }, startAssembly() { A.asm = 0; },
     addHook(f) { hooks.push(f); }, removeHook(f) { hooks = hooks.filter(x => x !== f); }, setBand() {},
   };
   installSaver(app);
   const plates = [];
-  let frames = 0, nanCam = 0, errors = 0, openAtEnd = 0, closedChecks = 0, inBand = 0, outBand = 0, worst = 0, inspected = 0;
+  let frames = 0, nanCam = 0, errors = 0, apartOpen = 0, apartEnds = 0, buildOpen = 0, buildEnds = 0, inBand = 0, outBand = 0, worst = 0, inspected = 0, beats = 0, turn = 0, zoom = 0;
   const kinds = new Set();
   for (const seed of [7, 2024, 99]) {
+    shows.length = 0; loaded.clear();
     window.snSaver.enter({ seed, calm: 0.6, label: info => { if (info) plates.push(info); } });
-    let lastShot = null;
+    let last = null, prevDir = null, prevDist = 0;
     for (let f = 0; f < 30 * 240; f++) {
       await new Promise(r => setImmediate(r));
       try { for (const h of hooks) h(1 / 30); } catch (err) { errors++; if (errors < 4) console.log('  error: ' + err.stack.split('\n').slice(0, 3).join(' | ')); }
-      // advance the cut-free part of main.js: asm runs to 1
-      if (A.asm < 1) A.asm = Math.min(1, A.asm + 1 / 30 / 4);
       frames++;
       const p = camera.position;
       if (!Number.isFinite(p.x + p.y + p.z)) nanCam++;
       const dbg = window.snSaver.debug();
       if (!dbg) continue;
       kinds.add(dbg.kind);
-      // at the end of a shot: an exview that does not hold, and an inspection, leave the shell closed
-      if (lastShot && dbg.t < lastShot.t) {
-        if ((lastShot.kind === 'exview' && !lastShot.hold) || lastShot.kind === 'inspect') { closedChecks++; if (lastShot.exT > 1e-6 || lastShot.iso > 1e-3) openAtEnd++; }
+      if (last && last.beat !== dbg.beat) {
+        beats++;
+        // a take-apart ends on an empty screen; a build ends closed
+        if (last.kind === 'apart') { apartEnds++; if (!(last.exT > 0.999 && last.fade === 1)) apartOpen++; }
+        if (last.kind === 'build') { buildEnds++; if (last.exT > 1e-6) buildOpen++; }
+        prevDir = null;
       }
-      const shot = window.snSaver.debug();
-      const S2 = shot && shot.tour;
-      lastShot = { t: shot.t, kind: shot.kind, hold: false, exT: S2 ? S2.exT : 0, iso: S2 ? S2.iso : 0 };
-      lastShot.hold = !!shot.hold;
+      last = { beat: dbg.beat, kind: dbg.kind, exT: dbg.tour ? dbg.tour.exT : 0, fade: dbg.tour ? dbg.tour.fade : 0 };
+      // camera speed inside a beat (after the cut)
+      const tg = app.controls.target, dv = p.clone().sub(tg), dist = dv.length(); dv.normalize();
+      if (prevDir && dbg.t > 0.2) { turn = Math.max(turn, Math.acos(Math.min(1, dv.dot(prevDir))) * 180 / Math.PI * 30); zoom = Math.max(zoom, Math.abs(Math.log(dist / prevDist)) * 30); }
+      prevDir = dv; prevDist = dist;
       // the near pose of an inspection: the region in the clear band
-      if (shot.kind === 'inspect' && shot.t / shot.dur > 0.5 && shot.t / shot.dur < 0.7 && cur && cur._tour && f % 6 === 0) {
+      if (dbg.kind === 'inspect' && dbg.t / dbg.dur > 0.51 && dbg.t / dbg.dur < 0.56 && cur && cur._tour && f % 3 === 0) {
         const reg = window.snSaver.region && window.snSaver.region();
         if (reg) {
           inspected++;
-          const T = cur._tour.parts[reg.reg.part].T, tgt = app.controls.target;
+          const T = cur._tour.parts[reg.reg.part].T;
           for (const u of reg.inst.units) {
             const k = Math.floor(u / T.nc), ch = u % T.nc, idx = T.d._byChain[ch], o = 12 * k;
             for (let j = 0; j < idx.length; j += 6) {
               const ii = idx[j], px = T.d.pos[3 * ii], py = T.d.pos[3 * ii + 1], pz = T.d.pos[3 * ii + 2];
               const w3 = [0, 1, 2].map(rw => T.ops[o + 4 * rw] * px + T.ops[o + 4 * rw + 1] * py + T.ops[o + 4 * rw + 2] * pz + T.ops[o + 4 * rw + 3]);
               const lift = A.tour ? A.tour.lift : 0, ld = A.tour ? A.tour.liftDir : { x: 0, y: 0, z: 0 };
-              const ex = reg.plans ? RG.unitOffset(reg.plans[reg.reg.part], u, A.tour.exT, reg.stag, reg.ampN) : [0, 0, 0];
-              const q = RG.screenOf([w3[0] + ex[0] + ld.x * lift, w3[1] + ex[1] + ld.y * lift, w3[2] + ex[2] + ld.z * lift], [p.x, p.y, p.z], [tgt.x, tgt.y, tgt.z], { w: W0, h: H0, occ, fov: 32 });
+              const q = RG.screenOf([w3[0] + ld.x * lift, w3[1] + ld.y * lift, w3[2] + ld.z * lift], [p.x, p.y, p.z], [tg.x, tg.y, tg.z], { w: W0, h: H0, occ, fov: 32 });
               const m = Math.max(occ.t - q.y, q.y - (H0 - occ.b), -q.x, q.x - W0);
               if (m > 0) { outBand++; worst = Math.max(worst, m); } else inBand++;
             }
@@ -921,16 +930,17 @@ section('23 saver run in node (saver.js on a stub of main.js)');
       }
     }
     window.snSaver.exit();
+    const rest = shows.slice(1, -1);
+    ok(rest.length > 3 && rest.every(x => x.pre) && shows.slice(0, -1).every((x, i, a) => i === 0 || x.key !== a[i - 1].key), 'seed ' + seed + ': ' + rest.length + ' viruses after the first, each preloaded during the virus before, never the same twice in a row');
   }
-  console.log('  ' + frames + ' frames (3 seeds x 4 min at 30 fps), shots: ' + [...kinds].join(' ') + '; ' + plates.length + ' plates; ' + sels + ' table uploads');
-  console.log('  ' + closedChecks + ' exview/inspect shot ends checked (' + openAtEnd + ' left open); inspect near pose: ' + inBand + ' bead positions in the band, ' + outBand + ' out (worst ' + worst.toFixed(1) + ' px), ' + inspected + ' samples');
+  console.log('  ' + frames + ' frames (3 seeds x 4 min at 30 fps), beats: ' + [...kinds].join(' ') + '; ' + plates.length + ' plates; ' + sels + ' table uploads; camera turn max ' + turn.toFixed(1) + ' deg/s, zoom max ' + zoom.toFixed(2) + ' /s');
   ok(errors === 0, 'no exception in ' + frames + ' saver frames (' + errors + ')');
   ok(nanCam === 0, 'the camera position stays finite (' + nanCam + ' bad frames)');
-  ok(kinds.has('exview') && kinds.has('inspect'), 'the run plays exploded views and inspections');
-  ok(selBad === 0 && sels > 0, sels + ' per-unit tables uploaded, every one the size of its part');
-  ok(closedChecks > 0 && openAtEnd === 0, closedChecks + ' exview and inspect shots end with every unit back at rest and no ghost (' + openAtEnd + ' open)');
-  const regPlates = plates.filter(p => p.params && p.params.some(x => x.name === 'chains'));
-  ok(regPlates.length > 0 && regPlates.every(p => p.params.find(x => x.name === 'size').value.match(/^≈ \d+\.\d nm across$/) && !/code/.test(JSON.stringify(Object.keys(p)))), regPlates.length + ' plates name a region with its chains and size in nm, and no code');
+  ok(kinds.has('build') && kinds.has('inspect') && kinds.has('apart'), 'the run builds, inspects and takes apart');
+  ok(selBad === 0 && sels > 0 && backdrops > 0 && rigs > 0, sels + ' per-unit tables uploaded, every one the size of its part; the looks set the backdrop and the light rig');
+  ok(apartEnds > 0 && apartOpen === 0 && buildEnds > 0 && buildOpen === 0, apartEnds + ' take-aparts end on an empty screen and ' + buildEnds + ' builds end closed (' + apartOpen + ', ' + buildOpen + ')');
+  ok(turn < 20 && zoom < 0.65, 'the camera turns under 20 deg/s and zooms under 0.65 per s inside a beat (' + turn.toFixed(1) + ', ' + zoom.toFixed(2) + ')');
+  ok(plates.length >= beats && plates.length <= beats + 6 && plates.every(p => ['family', 'size', 'subunits', 'built from', 'PDB'].every(n => p.params.some(x => x.name === n && x.value)) && !('code' in p)), plates.length + ' plates for ' + beats + ' beats (one per beat), each with family, size, subunits, assembly unit and PDB, and no code');
   ok(inspected > 0 && outBand / Math.max(1, inBand + outBand) < 0.01, 'inspect near pose (camera spring included): ' + inBand + ' bead positions in the clear band, ' + outBand + ' out (worst ' + worst.toFixed(1) + ' px) over ' + inspected + ' samples');
 }
 
