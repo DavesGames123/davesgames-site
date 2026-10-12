@@ -9,10 +9,17 @@
 //  of a bright 3D table behind the veil. Text needs WCAG AA: 4.5:1, or
 //  3:1 for large text (24 px, or 18.7 px bold) and for a glyph.
 //
+//  Node has no layout engine. The phone part checks the CSS rules that
+//  give each property (type size, 44 px targets, the sticky start bar
+//  above the home indicator, no sideways scroll, 100dvh), and a height
+//  budget of the mode step at 844 x 390 from the sizes in the file. The
+//  budget is an estimate, not a measured layout.
+//
 //  GREP MAP
 //      grep -n 'PARSE'      rules, media blocks, tokens
 //      grep -n 'PAIRS'      every text / ground pair
 //      grep -n 'GLYPHS'     a selected colour glyph on its ground
+//      grep -n 'PHONE'      type, targets, start bar, scroll, landscape
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -154,6 +161,51 @@ for (const [sel, chain, need, o = {}] of PAIRS) {
     const r = ratio(rgba(c.ink), bg);
     ok(r >= 3, `glyphs: ${k} glyph on a pressed filter: ${r.toFixed(2)}:1, need 3:1`);
   }
+}
+
+// ------------------------------------------------------------ PHONE
+{
+  const px = v => { if (!v) return null; const m = /([\d.]+)(rem|px)/.exec(v); return m ? +m[1] * (m[2] === 'rem' ? 16 : 1) : null; };
+  const sizeOf = sel => {
+    let s = null;
+    for (const r of RULES) {
+      if (r.media && !/landscape/.test(r.media)) continue;
+      if (/landscape/.test(r.media)) continue;
+      for (const x of r.sels) if (x === sel || x === `.fdc-phone ${sel}`) {
+        if (r.decl['font-size']) s = px(r.decl['font-size']);
+        else if (r.decl.font) { const m = /(?:^|\s)([\d.]+(?:rem|px))/.exec(r.decl.font.replace(/\/[\d.]+/, '')); if (m) s = px(m[1]); }
+      }
+    }
+    return s;
+  };
+  for (const sel of ['.fdc-mt span', '.fdc-desc', '.fdc-stat', '.fdc-stat small', '.fdc-note', '.fdc-fine', '.fdc-who', '.fdc-opp b', '.fdc-opp small', '.fdc-kind button', '.fdc-lede', '.fdc-name', '.fdc-seat-n', '.fdc-go', '.fdc-back', '.fdc-how']) {
+    const s = sizeOf(sel);
+    ok(s != null && s >= 14, `phone: ${sel} is ${s} px, need 14 px or more`);
+  }
+  const has = re => re.test(CSS);
+  ok(has(/\.fdc-phone\{overflow-x:hidden;/), 'phone: no sideways scroll of the layer');
+  ok(has(/@supports \(height:100dvh\)\{\.fdc-phone\{max-height:100dvh\}\}/), 'phone: the layer is held to 100dvh');
+  ok(has(/\.fdc-phone \.fdc-foot\{position:sticky;bottom:0;[^}]*padding:[^}]*env\(safe-area-inset-bottom/), 'phone: the start bar is sticky above the home indicator');
+  ok(has(/\.fdc-phone \.fdc-grid\{[^}]*scroll-snap-type:x mandatory/) && has(/\.fdc-phone \.fdc-tile\{[^}]*scroll-snap-align:center/), 'phone: the deck carousel swipes and snaps');
+  for (const sel of ['.fdc-back', '.fdc-seat-b', '.fdc-opp button', '.fdc-kind button', '.fdc-x']) {
+    const h = px(get(`.fdc-phone ${sel}`, 'min-height')) ?? px(get(`.fdc-phone ${sel}`, 'height'));
+    ok(h != null && h >= 44, `phone: ${sel} is at least 44 px tall (${h})`);
+  }
+  ok(px(get('.fdc-phone .fdc-fpip', 'width')) >= 44, 'phone: colour filters are 44 px');
+  ok(px(get('.fdc-phone .fdc-go', 'min-height')) >= 44, 'phone: the start button is 44 px or more');
+  // 844 x 390: the mode step, an estimate from the sizes in the file
+  const land = { land: true };
+  ok(get('.fdc-phone .fdc-modes', 'flex-direction', land) === 'row', 'landscape: the two mode cards side by side');
+  ok(get('.fdc-phone .fdc-lede', 'display', land) === 'none' && get('.fdc-phone .fdc-seat-cvb', 'display', land) === 'none', 'landscape: lede and seat pictures go');
+  const [aw, ah] = (get('.fdc-phone .fdc-art', 'aspect-ratio', land) || '2/1').split('/').map(Number);
+  const W = 844, H = 390, pad = 16;
+  const cardW = (W - 2 * pad - 12) / 2;
+  const modeH = cardW * ah / aw + 2 + 8 + 10 + 1.35 * 16 * 1.1 + 14 * 1.45 * 2;     // art, border, padding, title, two lines
+  const titleH = 0.8 * 16 + 4 + px(get('.fdc-phone .fdc-t2', 'font-size', land)) * 1;
+  const footH = px(get('.fdc-phone .fdc-go', 'min-height', land)) + 20;
+  const total = 10 + titleH + 10 + modeH + 10 + footH;
+  console.log(`  info: landscape 844x390 mode step estimate ${Math.round(total)} px (title ${Math.round(titleH)}, mode card ${Math.round(modeH)}, start bar ${Math.round(footH)})`);
+  ok(total <= H, `landscape: the mode step fits in 390 px (estimate ${Math.round(total)} px)`);
 }
 
 console.log(`chooser-contrast: ${pass} pass, ${fail} fail`);
