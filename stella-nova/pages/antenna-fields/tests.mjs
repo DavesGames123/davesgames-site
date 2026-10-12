@@ -13,8 +13,16 @@
 //    8  Yagi-Uda MoM: forward main lobe, front/back ratio
 //    9  MoM convergence, small loop radiation resistance
 //   10  wire nodes (the GPU source) vs the closed form and the element sum
+//   11  geom.js: Poynting flux through a sphere = the pattern integral, at
+//       every radius (divergence theorem); P(t) < 0 only near the antenna
+//   12  geom.js: half-wave directivity 4 pi U_max / (sphere flux) = 1.64
+//   13  geom.js: phasor sum = farIntensity; array terms line up at the
+//       steering angle sin(theta_s) = -beta/(kd)
+//   14  geom.js: E-H phase gap -90 deg near, 0 far (Hertzian closed form)
+//   15  geom.js: energy velocity |v| <= c, = c and radial in the far field
 // ============================================================================
 import * as em from './em.js';
+import * as geom from './geom.js';
 
 let fails = 0;
 const fmt = (v, d = 3) => (typeof v === 'number' ? v.toFixed(d) : String(v));
@@ -210,6 +218,94 @@ function sphereFlux(L, r, nt = 48, np = 96) {
     for (let i = 0; i < 12; i++) wy = Math.max(wy, Math.abs(out[i] - o12[i]) / n);
   }
   check('wire nodes vs element sum, 5-element Yagi MoM', wy < 1e-6, Y.nodes.n + ' nodes vs ' + Y.elems.n + ' elements, max rel err ' + wy.toExponential(2));
+}
+
+// 11. Flux through a sphere ------------------------------------------------------
+{
+  const cases = [
+    ['half-wave', em.buildAntenna({ type: 'dipole', L: 0.5, a: 1e-3, model: 'sin' }), [0, 0, 0], [0.3, 1, 3]],
+    ['6-element Yagi', em.buildAntenna({ type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 4, a: 1e-3 }), [0.4, 0, 0], [1.2, 2.5]],
+    ['loop C = 1', em.buildAntenna({ type: 'loop', C: 1, a: 1e-3 }), [0, 0, 0], [0.4, 2]],
+    ['Hertzian', em.buildAntenna({ type: 'hertz', dl: 0.02 }), [0, 0, 0], [0.05, 0.3, 3]],
+  ];
+  for (const [nm, A, c, radii] of cases) {
+    const st = em.patternStats(A.elems, { nt: 64, np: 128 });
+    const fl = radii.map(r => geom.sphereFlux(A, c, r, 48, 96));
+    const err = Math.max(...fl.map(f => Math.abs(f.P - st.P) / st.P));
+    check(nm + ': sphere flux = pattern integral at r = ' + radii.join(', '), err < 4e-3,
+      'P = ' + fl.map(f => fmt(f.P, 4)).join(', ') + ' W vs ' + fmt(st.P, 4) + ' W, max rel err ' + err.toExponential(2));
+  }
+  // The stored energy sloshes: P(t) dips below 0 near a Hertzian dipole, not far away.
+  const Hz = em.buildAntenna({ type: 'hertz', dl: 0.02 });
+  const near = geom.sphereFlux(Hz, [0, 0, 0], 0.05, 32, 32), far = geom.sphereFlux(Hz, [0, 0, 0], 3, 32, 32);
+  const pmin = sf => Math.min(...Array.from({ length: 64 }, (_, i) => geom.fluxAt(sf, Math.PI * i / 64)));
+  check('Hertzian: P(t) < 0 at r = 0.05 (reactive), P(t) >= 0 at r = 3 (radiating)', pmin(near) < -10 * near.P && pmin(far) > -0.01 * far.P,
+    'min P(t)/P = ' + fmt(pmin(near) / near.P, 1) + ' and ' + fmt(pmin(far) / far.P, 4) + ', |Q|/P = ' + fmt(Math.hypot(...near.Q) / near.P, 1) + ' and ' + fmt(Math.hypot(...far.Q) / far.P, 4));
+}
+
+// 12. Half-wave directivity from the sphere flux -------------------------------------
+{
+  const A = em.buildAntenna({ type: 'dipole', L: 0.5, a: 1e-3, model: 'sin' });
+  const P = geom.sphereFlux(A, [0, 0, 0], 2, 48, 32).P, Umax = em.farIntensity(A.elems, 1, 0, 0);
+  const D = 4 * Math.PI * Umax / P;
+  check('half-wave directivity 4 pi U_max / (sphere flux) = 1.64', Math.abs(D - 1.641) < 0.005, 'D = ' + fmt(D, 4) + ' = ' + fmt(10 * Math.log10(D), 3) + ' dBi');
+}
+
+// 13. Phasor sums ----------------------------------------------------------------------
+{
+  let worst = 0;
+  const ants = [
+    em.buildAntenna({ type: 'dipole', L: 1.25, a: 1e-3, model: 'sin' }),
+    em.buildAntenna({ type: 'array', N: 8, d: 0.5, beta: -0.9, Le: 0.5, a: 1e-3 }),
+    em.buildAntenna({ type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 4, a: 1e-3 }),
+  ];
+  for (const A of ants) for (const [th, ph] of [[0.4, 0.3], [1.2, 2.0], [Math.PI / 2, 0.1], [2.5, 4.0]]) {
+    const s = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
+    const U = em.farIntensity(A.elems, ...s), q = geom.phasorTerms(A, s);
+    worst = Math.max(worst, Math.abs(q.U - U) / Math.max(U, 1e-12));
+  }
+  check('phasor sum |sum|^2 = U for dipole, array and Yagi', worst < 1e-9, 'max rel err ' + worst.toExponential(2));
+  const N = 8, d = 0.5, ts = 25 * Math.PI / 180, beta = -em.K * d * Math.sin(ts);
+  const Ar = em.buildAntenna({ type: 'array', N, d, beta, Le: 0.5, a: 1e-3 });
+  const s = [Math.sin(ts), Math.cos(ts), 0];   // 25 deg from broadside (+y) toward +x
+  const q = geom.phasorTerms(Ar, s), st = em.patternStats(Ar.elems);
+  const steer = Math.atan2(st.dir[0], Math.abs(st.dir[1])) * 180 / Math.PI;
+  check('array: terms line up at theta_s = asin(-beta/(kd)) = 25 deg', Math.abs(Math.hypot(...q.sum) / q.mags - 1) < 1e-9 && Math.abs(steer - 25) < 0.2,
+    q.terms.length + ' terms, |sum|/sum|t| = ' + fmt(Math.hypot(...q.sum) / q.mags, 9) + ', beam at ' + fmt(steer, 2) + ' deg');
+}
+
+// 14. E-H phase gap ---------------------------------------------------------------------
+{
+  const Hz = em.buildAntenna({ type: 'hertz', dl: 0.01 });
+  let worst = 0;
+  const rows = [];
+  for (const kr of [0.05, 0.5, 1, 3, 60]) {
+    const r = kr / em.K, o = geom.observer(Hz, [0, 0, 0], [r, 0, 0]);
+    worst = Math.max(worst, Math.abs(o.gap - geom.hertzGap(kr)));
+    rows.push('kr ' + kr + ': ' + fmt(o.gap, 1));
+  }
+  check('E-H gap = closed form; -90 deg near, 0 far', worst < 1e-6 && geom.hertzGap(0.05) < -87 && Math.abs(geom.hertzGap(60)) < 1,
+    rows.join(', ') + ' deg; max err ' + worst.toExponential(2));
+}
+
+// 15. Energy velocity ------------------------------------------------------------------
+{
+  const Y = em.buildAntenna({ type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 4, a: 1e-3 });
+  let vmax = 0, r = 12345;
+  const rnd = () => { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; return r / 4294967296 - 0.5; };
+  const f = new Float64Array(12);
+  for (let i = 0; i < 400; i++) {
+    geom.fieldPoint(Y, 3 * rnd(), 3 * rnd(), 3 * rnd(), f);
+    const ph = 6.283 * rnd(), c = Math.cos(ph), s = Math.sin(ph);
+    const E = [0, 1, 2].map(k => f[2 * k] * c - f[2 * k + 1] * s), H = [0, 1, 2].map(k => f[6 + 2 * k] * c - f[7 + 2 * k] * s);
+    vmax = Math.max(vmax, Math.hypot(...geom.energyVelocity(E, H)));
+  }
+  const A = em.buildAntenna({ type: 'dipole', L: 0.5, a: 1e-3, model: 'sin' }), R = 40;
+  geom.fieldPoint(A, R, 0, 0, f);
+  const E = [0, 1, 2].map(k => f[2 * k] * 0.3 - f[2 * k + 1] * 0.95), H = [0, 1, 2].map(k => f[6 + 2 * k] * 0.3 - f[7 + 2 * k] * 0.95);
+  const v = geom.energyVelocity(E, H);
+  check('energy velocity: |v| <= c near a Yagi; = c and radial at r = 40', vmax <= 1 + 1e-12 && Math.abs(v[0] - 1) < 2e-3,
+    'max |v|/c over 400 points ' + fmt(vmax, 4) + ', far v/c = (' + v.map(q => fmt(q, 4)).join(', ') + ')');
 }
 
 console.log(fails ? fails + ' check(s) failed' : 'all checks passed');
