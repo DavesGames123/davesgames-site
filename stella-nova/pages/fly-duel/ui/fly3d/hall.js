@@ -58,6 +58,14 @@
 //        setDeckBox(seat, deckId), deckOf(seat), matOf(seat),
 //        matTextures(), stats(), dispose() }
 //      setDeckBox(seat, deck) also repaints the mat of the seat (setMat).
+//      Between two games (ui/fly3d/regame.js): swapDeckBox(seat, deck)
+//      makes the spare box of the seat the box in use, with the new
+//      print, and puts the old mat print on a crossfade layer;
+//      swapStep(seat, k) moves the boxes and fades the layer (k 0..1);
+//      setLid(seat, k) opens the lid; boxTop(seat) is the point over the
+//      box; deckKeyOf(seat) / deckKey(deck) tell a deck change;
+//      boxSwaps() counts the swaps. A texture on the crossfade layer
+//      stays in the cache until the fade ends.
 //      deck: a deck id or a custom list. matOf(seat) -> { key, colours }.
 //      matTextures() -> { cached, made, disposed }: one texture per seat
 //      and colour set, MAT_CACHE at most; a texture that no mat shows is
@@ -88,6 +96,8 @@
 //      grep -n 'function lowFlyParts'       the cheap fly geometry
 //      grep -n 'class FlyHerd'              instanced flies and poses
 //      grep -n 'function setDeckBox'        feature table deck box print
+//      grep -n 'function swapDeckBox'       box swap, mat crossfade, lid
+//      grep -n 'export const BOX'           deck box place and lid
 //      grep -n 'createSideGames'            real games at other tables
 //      grep -n 'function fanSides'          Fly A / Fly B fans of the crowd
 //      grep -n 'function crowdController'   the watching crowd
@@ -173,6 +183,16 @@ function carpetCanvas(size) {
 export const MAT = { u: 2.95, v0: 0.18, v1: 3.08 };
 // Mat textures kept at most (two shown, the rest ready for a deck change).
 export const MAT_CACHE = 4;
+// The deck box of a seat (seat space u, v; height h). lidOpen: the turn
+// of the open lid (radians). yaw: the box stands a little turned.
+export const BOX = { u: 2.62, v: 2.55, h: 0.62, yaw: 0.2, lidOpen: 1.9 };
+// The key of a deck: its id, or 'list:' and the card ids of a custom list.
+// Two decks with one key are the same deck (no box swap between them).
+export function deckKey(deck) {
+  if (typeof deck === 'string') return deck;
+  if (Array.isArray(deck)) return 'list:' + deck.map(r => (Array.isArray(r) ? r.join('x') : String(r))).join(',');
+  return '';
+}
 // The deck colours of a mat: a deck id of game/cards.js, a custom list
 // [[id, count]...] (deckColours) or a DECKS-like object with colours.
 // Anything else gives [] (the mat then takes the seat colour).
@@ -697,7 +717,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     { label: 'GRAVE', u0: 2.06, u1: 2.86, v0: 0.24, v1: 0.8 },
     { label: 'LIFE', round: true, u: -2.52, v: 1.12, r: 0.34 },
   ];
-  const mats3 = [], inlay = [], deckBoxes = [];
+  const mats3 = [], inlay = [], deckBoxes = [], spareBoxes = [], fades = [];
   for (let p = 0; p < 2; p++) {
     // the print comes from setMat() (the deck colours of the seat)
     const t = null;
@@ -728,15 +748,34 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     // deck box beside the library
     // its print: the deck box design of the side tables (sidegames.js
     // drawDeckBoxFace) with a seat-colour edge; setDeckBox() prints a deck
-    const boxCv = makeCanvas(coarse ? 96 : 192, coarse ? 140 : 280);
-    const boxTex = keep(tex(boxCv, { aniso: 4 }));
-    const boxMat = keep(new THREE.MeshStandardMaterial({ map: boxTex, color: boxTex ? 0xffffff : new THREE.Color(FLY[p]), roughness: 0.5 }));
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.62, 0.36), boxMat);
-    box.userData = { canvas: boxCv, texture: boxTex, deck: null, seat: p };
-    const bp = L.seatPos(p, 2.62, 0, 2.55); box.position.set(bp.x, L.y + 0.31, bp.z); box.rotation.y = m.rotation.y + 0.2;
-    box.castShadow = shadows; box.name = 'deck-box';
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.015, 0.37), mats.edge); lid.position.y = 0.2; box.add(lid);
-    table.add(box); deckBoxes.push(box);
+    // Two boxes per seat: the box in use and a spare that slides in when
+    // the deck of the seat changes (swapDeckBox).
+    const makeBox = () => {
+      const boxCv = makeCanvas(coarse ? 96 : 192, coarse ? 140 : 280);
+      const boxTex = keep(tex(boxCv, { aniso: 4 }));
+      const boxMat = keep(new THREE.MeshStandardMaterial({ map: boxTex, color: boxTex ? 0xffffff : new THREE.Color(FLY[p]), roughness: 0.5 }));
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.62, 0.36), boxMat);
+      box.userData = { canvas: boxCv, texture: boxTex, deck: null, key: '', seat: p };
+      const bp = L.seatPos(p, BOX.u, 0, BOX.v); box.position.set(bp.x, L.y + BOX.h / 2, bp.z); box.rotation.y = m.rotation.y + BOX.yaw;
+      box.castShadow = shadows; box.name = 'deck-box';
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.015, 0.37), mats.edge); lid.position.y = 0.2; box.add(lid);
+      // the flap of the lid turns on a hinge at the back top edge (setLid)
+      const hinge = new THREE.Group(); hinge.position.set(0, BOX.h / 2, -0.18); hinge.name = 'deck-box-lid';
+      const flap = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.014, 0.37), mats.edge); flap.position.set(0, 0.007, 0.185);
+      hinge.add(flap); box.add(hinge);
+      box.userData.lid = hinge;
+      table.add(box);
+      return box;
+    };
+    deckBoxes.push(makeBox());
+    const spare = makeBox(); spare.visible = false; spareBoxes.push(spare);
+    // the old print of the mat during a crossfade (swapDeckBox)
+    const fade = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), keep(new THREE.MeshStandardMaterial({
+      map: null, color: 0xffffff, roughness: 0.92, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    })));
+    fade.position.set(c.x, L.y + 0.0012, c.z); fade.rotation.y = m.rotation.y;
+    fade.receiveShadow = true; fade.visible = false; fade.name = 'playmat-fade'; fade.userData.matKey = null;
+    table.add(fade); fades.push(fade);
   }
   // The playmat of each seat takes the colours of the deck of that seat
   // (CONTRACT.md, user direction 2026-10-12). setDeckBox calls setMat, so
@@ -759,7 +798,12 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     if (!!top.map !== !!t) top.needsUpdate = true;
     top.map = t;
     top.color.copy(t ? new THREE.Color(0xffffff) : matTint(cols, FLY[p]));
-    const shown = new Set(mats3.map(x => x.userData.matKey));
+    trimMats();
+  }
+  // A texture that no mat and no running crossfade shows goes when the
+  // cache is full.
+  function trimMats() {
+    const shown = new Set([...mats3, ...fades.filter(f => f.visible)].map(x => x.userData.matKey));
     for (const [k, x] of matCache) {
       if (matCache.size <= MAT_CACHE) break;
       if (shown.has(k)) continue;
@@ -767,17 +811,90 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
       matCache.delete(k);
     }
   }
-  function setDeckBox(p, deckId) {
-    setMat(p, deckId);
-    const box = deckBoxes[p]; if (!box) return;
+  function printBox(box, p, deckId) {
     const u = box.userData;
     // a deck id of game/cards.js; a custom list (an array) prints no deck
     u.deck = typeof deckId === 'string' && DECKS[deckId] ? deckId : null;
+    u.key = deckKey(deckId);
     const g = u.canvas?.getContext?.('2d');
     if (!g) return;
     drawDeckBoxFace(g, u.canvas.width, u.canvas.height, u.deck, { edge: FLY[p], label: p ? 'FLY B' : 'FLY A' });
     u.texture.needsUpdate = true;
   }
+  function setDeckBox(p, deckId) {
+    if (swaps[p]) swapStep(p, 1);
+    setMat(p, deckId);
+    const box = deckBoxes[p]; if (!box) return;
+    printBox(box, p, deckId);
+  }
+
+  // ---- the deck box swap and the mat crossfade (scene.js regame)
+  // swapDeckBox(p, deck): the spare box takes the print of the new deck
+  // and becomes the box in use at once (deckOf gives the new deck). The
+  // mat takes the new print under a crossfade layer that shows the old
+  // print. swapStep(p, k), k from 0 to 1: the old box slides along the
+  // table to the end and falls off, the new box comes up over the end
+  // and slides into place, the old print fades out. At k = 1 all is at
+  // rest. setLid(p, k): the lid of the box in use opens (k = 1) or
+  // closes (k = 0). boxTop(p): the world point over the open box.
+  const swaps = [null, null];
+  let swapCount = 0;
+  const boxHome = (box, p) => {
+    const bp = L.seatPos(p, BOX.u, 0, BOX.v);
+    box.position.set(bp.x, L.y + BOX.h / 2, bp.z); box.rotation.set(0, mats3[p].rotation.y + BOX.yaw, 0);
+  };
+  function swapDeckBox(p, deckId) {
+    if (swaps[p]) swapStep(p, 1);
+    const old = deckBoxes[p], neu = spareBoxes[p], f = fades[p], m = mats3[p];
+    if (!old || !neu) { setDeckBox(p, deckId); return false; }
+    // the crossfade layer takes the old print, then the mat takes the new
+    const top = m.material[2];
+    f.material.map = top.map; f.material.color.copy(top.color); f.material.opacity = 1; f.material.needsUpdate = true;
+    f.userData.matKey = m.userData.matKey; f.visible = true;
+    setMat(p, deckId);
+    printBox(neu, p, deckId);
+    setLidOf(neu, 0);
+    deckBoxes[p] = neu; spareBoxes[p] = old;
+    swaps[p] = { old, neu, k: 0 };
+    swapCount++;
+    swapStep(p, 0);
+    return true;
+  }
+  const ease = k => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
+  function swapStep(p, kIn) {
+    const s = swaps[p]; if (!s) return;
+    const k = Math.max(0, Math.min(1, kIn)); s.k = k;
+    const yaw = mats3[p].rotation.y + BOX.yaw, off = L.halfLen + 0.55;
+    // the old box: slides to the end of the table, then falls off it
+    const a = ease(k / 0.55);
+    if (k < 0.55) {
+      const u = BOX.u + (off + 0.3 - BOX.u) * a;
+      const over = Math.max(0, u - L.halfLen);
+      const P = L.seatPos(p, u, 0, BOX.v);
+      s.old.position.set(P.x, L.y + BOX.h / 2 - over * over * 9, P.z);
+      s.old.rotation.set(0, yaw, -(p === 0 ? 1 : -1) * Math.min(1.2, over * 2.4));
+      s.old.visible = true;
+    } else { s.old.visible = false; boxHome(s.old, p); setLidOf(s.old, 0); }
+    // the new box: comes up over the end of the table and slides in
+    const b = ease((k - 0.35) / 0.65);
+    const u = off + (BOX.u - off) * b;
+    const lift = b < 0.2 ? -0.75 + 0.9 * (1 - (1 - b / 0.2) * (1 - b / 0.2)) : 0.15 * (1 - ease((b - 0.2) / 0.8));
+    const P = L.seatPos(p, u, 0, BOX.v);
+    s.neu.position.set(P.x, L.y + BOX.h / 2 + lift, P.z); s.neu.rotation.set(0, yaw, 0);
+    s.neu.visible = k > 0.35;
+    // the old print of the mat fades out
+    const f = fades[p];
+    f.material.opacity = 1 - ease((k - 0.2) / 0.7);
+    if (k >= 1) {
+      f.visible = false; f.material.map = null; f.userData.matKey = null; f.material.needsUpdate = true;
+      boxHome(s.neu, p); s.neu.visible = true;
+      swaps[p] = null;
+      trimMats();
+    }
+  }
+  function setLidOf(box, k) { const l = box?.userData?.lid; if (l) l.rotation.x = -BOX.lidOpen * Math.max(0, Math.min(1, k)); }
+  const setLid = (p, k) => setLidOf(deckBoxes[p], k);
+  const boxTop = (p, out = new THREE.Vector3()) => out.copy(L.seatPos(p, BOX.u, 0, BOX.v)).setY(L.y + BOX.h + 0.05);
   setDeckBox(0, null); setDeckBox(1, null);
   group.add(table);
 
@@ -905,8 +1022,10 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     crowd: { herd: crowdHerd, n: nCrowd, flags: flagSlot, fx: crowd.fx },
     extras: { herd: sit, n: nSit, tables: tables.length, tableAt: i => tables[seats[i].table], games: side },
     setDeckBox, deckOf: p => deckBoxes[p]?.userData.deck ?? null,
+    deckKeyOf: p => deckBoxes[p]?.userData.key ?? '',
+    swapDeckBox, swapStep, swapping: p => !!swaps[p], setLid, boxTop, boxSwaps: () => swapCount,
     matOf: p => ({ key: mats3[p]?.userData.matKey ?? null, colours: (mats3[p]?.userData.colours || []).slice() }),
-    matTextures: () => ({ cached: matCache.size, made: matCount.made, disposed: matCount.disposed }),
+    matTextures: () => ({ cached: matCache.size, made: matCount.made, disposed: matCount.disposed, fading: fades.map(f => (f.visible ? +f.material.opacity.toFixed(3) : null)) }),
     focus,
     update,
     react: (kind, o) => crowd.react(kind, o),
