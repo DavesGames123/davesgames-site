@@ -159,3 +159,13 @@ The card game on this page is our own design, inspired by Magic: The
 Gathering. The card names, the card text, the card frame, the card back
 and the mana glyphs are our own. The card pictures are public domain
 (see Card art). Not affiliated with or endorsed by Wizards of the Coast.
+
+## Fedora model
+
+The competitor fly wears "Fedora" by Poly by Google, from Poly Pizza
+(https://poly.pizza/m/8TpZrCG3aRf). The licence is CC BY 3.0
+(https://creativecommons.org/licenses/by/3.0/). We changed the model:
+we moved the origin, changed the scale, divided the brim from the band
+and changed the colours. `ui/fly3d/HAT-CREDITS.md` gives all the
+changes. The procedural fedora in `ui/fly3d/fly.js` is our own and
+shows until the model loads.

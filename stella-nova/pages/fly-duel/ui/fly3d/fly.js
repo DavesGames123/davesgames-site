@@ -2,7 +2,8 @@
 //  FLY DUEL  ·  ui/fly3d/fly.js  ·  the 3D fruit fly character, rig and clips
 // ----------------------------------------------------------------------------
 //  This module builds one seated Drosophila melanogaster character from
-//  procedural geometry (our own, no downloaded model) with three.js r160.
+//  procedural geometry (our own; only the fedora is a CC BY model, hat.js)
+//  with three.js r160.
 //  The anatomy is exaggerated for legibility: large brick-red compound eyes
 //  with a hex facet normal map, a tan thorax with dark macrochaetae and rows
 //  of microchaetae, a striped abdomen, clear iridescent wings with veins,
@@ -46,10 +47,12 @@
 //    // --- clips            CLIP_FNS: idle think groom reach place tap
 //                            push raiseArms slump
 //    // --- animate          animate(), countTriangles()
-//    // --- hat              FEDORA, addFedora(rig), setHat(rig, on)
+//    // --- hat              FEDORA, addFedora(rig), setHat(rig, on);
+//                            the fedora model loads in ui/fly3d/hat.js
 // ============================================================================
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { loadFedora, fedoraModel, fedoraMeshes } from './hat.js';
 
 const V3 = THREE.Vector3;
 const TAU = Math.PI * 2;
@@ -1185,8 +1188,11 @@ export function countTriangles(obj) {
 // crown is a lathe with a centre crease and a front pinch; the brim is a
 // lathe ring that turns up at the back and the sides and dips at the
 // front. A dark band runs round the crown base. addFedora(rig) puts it on
-// the head joint and returns { group, dispose }; setHat(rig, on) shows or
-// hides it.
+// the head joint and returns { group, source, ready, dispose }; setHat(rig,
+// on) shows or hides it. The procedural parts show at once. When
+// models/fedora.glb loads (hat.js), addFedora swaps them for the model
+// meshes: source changes from 'procedural' to 'model', and ready resolves.
+// opts.model = false keeps the procedural fedora.
 export const FEDORA = { y: 0.205, crownR: 0.135, crownH: 0.135, brimR: 0.255, tilt: -0.12, felt: '#3a3128', band: '#141210' };
 
 function fedoraGeos(L) {
@@ -1250,9 +1256,31 @@ export function addFedora(rig, opts = {}) {
   group.rotation.x = FEDORA.tilt;          // tipped a little forward and down
   group.rotation.z = 0.06;                 // and a touch to one side
   head.add(group);
-  const dispose = () => { group.removeFromParent(); for (const x of Object.values(g)) x.dispose(); felt.dispose(); bandM.dispose(); rig.hat = null; };
-  rig.hat = { group, dispose };
-  return rig.hat;
+  let own = [...Object.values(g), felt, bandM];   // freed by dispose
+  const hat = { group, source: 'procedural', ready: null, dispose: null };
+  // Swap the procedural parts for the meshes of models/fedora.glb (hat.js).
+  // The model geometry and materials are shared through the cache; only
+  // recoloured material clones belong to this hat.
+  const swap = (model) => {
+    if (!model || rig.hat !== hat || hat.source === 'model') return hat;
+    for (const c of [...group.children]) group.remove(c);
+    for (const x of own) x.dispose();
+    own = [];
+    const inner = new THREE.Group(); inner.name = 'fedora-model'; inner.position.y = FEDORA.y - 0.015;   // a little lower than the procedural brim, so the head fills the crown
+    for (const m of fedoraMeshes(model)) {
+      const tint = m.name === 'fedora-band' ? opts.band : opts.felt;
+      if (tint) { m.material = m.material.clone(); m.material.color.set(tint); own.push(m.material); }
+      inner.add(m);
+    }
+    group.add(inner);
+    hat.source = 'model';
+    return hat;
+  };
+  hat.dispose = () => { group.removeFromParent(); for (const x of own) x.dispose(); own = []; if (rig.hat === hat) rig.hat = null; };
+  rig.hat = hat;
+  if (fedoraModel()) swap(fedoraModel());
+  else if (opts.model !== false) hat.ready = loadFedora().then(swap);
+  return hat;
 }
 
 export function setHat(rig, on) {
