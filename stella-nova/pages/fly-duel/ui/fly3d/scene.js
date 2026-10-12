@@ -117,6 +117,7 @@
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
 //      grep -n 'function setRig'              saver hook: the reel camera
+//      grep -n 'function deckBoxesOf'         the deck boxes print the game decks
 //      grep -n 'export function createDuelScene'
 // ============================================================================
 import * as THREE from 'three';
@@ -1843,6 +1844,7 @@ export function createDuelScene(canvas, opts = {}) {
       // a new game or a skipped record: put the table in its before state
       winner = null; for (const f of flies) { f.end = null; clip(f.p, 'idle'); }
       snapTo(mirrorOf(rec.before));
+      deckBoxesOf(rec.before);
     }
     const plan = choreograph(rec, { reduced: W.reduced });
     recInfo = recordInfo(rec);
@@ -2103,7 +2105,11 @@ export function createDuelScene(canvas, opts = {}) {
     for (const f of flies) { f.end = null; clip(f.p, 'idle'); }
     toAct = state.toAct ?? 0;
     snapTo(mirrorOf(state));
+    deckBoxesOf(state);
   }
+  // The deck box of each fly on the feature table prints the deck of the
+  // game (hall.setDeckBox ignores a value that is not a deck id).
+  function deckBoxesOf(state) { state?.decks?.forEach((d, p) => hall.setDeckBox(p, d)); }
   function setSpeed(s) { speed = Math.max(0.1, Math.min(8, +s || 1)); }
   // The two floating brain maps (and their rings and labels) on or off.
   // The brain maps float beside the flies. In first person they hide:
