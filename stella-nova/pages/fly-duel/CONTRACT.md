@@ -90,6 +90,24 @@ about the simulation and layout in fullscreen"
   simulation i should be able to see a magnified view of it superimposed
   on the screen until i right click somewhere elese"
   (tests/focus.test.mjs).
+- Opening hand (user, verbatim, 2026-10-12): "show mny opening hand as me
+  actually drawing cards, the mulligan row is bad interface design. i want
+  to see each card getting drawn then choose". After the coin, each card
+  of the opening hand comes off your library one at a time into a large
+  row (ui/play/opening.js); only then Keep N / Mulligan to N-1 show. A
+  mulligan sends the cards back, the library shuffles, and the new hand
+  is drawn again. No sheet row of cards (tests/play-opening.test.mjs).
+- Hand and casting (user, verbatim, 2026-10-12): "i should be able to
+  click and drag to play cards from my hand. my hand should not be
+  bounded. it should animatedly display the card in the left, then place
+  it down on the mat magic the gathering arena style". Drag a hand card
+  above the drop line to play it; below the line it goes back; tap, tap
+  again still plays; the touch hold still shows the hovered version
+  (ui/play/hand.js). The fan never scrolls or clips: more cards overlap
+  more, and a hovered card rises fully into view (layout.js fanLayout,
+  tests/play-hand.test.mjs). Each creature or spell cast, yours or the
+  fly's, shows large at the left for a beat, then flies down onto its
+  spot on the mat (ui/play/castview.js, tests/play-cast.test.mjs).
 
 
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain
