@@ -1,5 +1,15 @@
 # Fly Duel 3D hero: binding spec
 
+UPDATE 2026-10-11: the scene is now a convention hall, not a round table
+(user: "it should definitely be done on a convention table not a proper
+card table foldling table with mana mats and other flies nearby engaged
+in fake other games"). ui/fly3d/hall.js builds a long folding table,
+folding chairs, a playmat per fly, deck boxes, six other tables of flies
+at their own games and a reacting crowd. Life shows on d20s (d20.js),
+lands lie in one stack per colour, dice rolls are Dice Lab throws
+(dice3d.js), and director.js has 11 shot kinds. Where this file still
+says table, stools or five shots, the hall and director.js win.
+
 User words (2026-10-11, verbatim): "this visual design is horrible. I want to
 see TWO THREE DIMENSIONAL FRUIT FLIES at a table HOLDING CARDS ANIMATEDLY
 PLAYING THEM", then "showing me a live 3d map of their brain", then "they
