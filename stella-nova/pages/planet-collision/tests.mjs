@@ -39,6 +39,9 @@
 //     --time also prints ms per frame
 //  9  analysis.js outcome on a made-up ball with orbiting, escaping and
 //     falling test particles; arc.js meets at R1 + R2 at tContact
+//  10 saver-plan.js: the reel (seeded, every run once, no repeat), the
+//     shots (order, 5-12 s), the event cuts, the ejecta jump, the plate
+//     (3 TeX, live numbers, no code)
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, the outcome of a readback,
@@ -55,6 +58,7 @@ import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
+import * as SP from './saver-plan.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const GPU_ONLY = ARGS.includes('--gpu');
@@ -172,6 +176,57 @@ function analysisTests() {
     worst = Math.max(worst, err); info.push(`${k} ${a.imp.length}+${a.ghost.length} pts`);
   }
   ok('9 preview arc: starts at the impactor, meets at R1 + R2 at tContact', worst < 0.01, `worst rel err ${worst.toExponential(1)}; ${info.join(', ')}`);
+}
+
+// 10 ─ the saver plan (saver-plan.js): reel, shots, events, plate
+function saverPlanTests() {
+  const keys = SP.RUNS.map(r => r.key);
+  let full = true, rep = 0, last = null;
+  const R = SP.rng(11);
+  for (let b = 0; b < 60; b++) {
+    const reel = SP.makeReel(R, last);
+    if (reel.length !== keys.length || new Set(reel.map(r => r.key)).size !== keys.length) full = false;
+    if (reel[0].key === last) rep++;
+    last = reel[reel.length - 1].key;
+  }
+  const a = SP.makeReel(SP.rng(1)).map(r => r.key).join(), a2 = SP.makeReel(SP.rng(1)).map(r => r.key).join(), b = SP.makeReel(SP.rng(2)).map(r => r.key).join();
+  ok('10 reel: every run once per bag, no repeat across bags, seeded', full && rep === 0 && a === a2 && a !== b && keys.length >= 20 && SP.RUNS.filter(r => r.roll).length === 5,
+    `${keys.length} runs (${PRESETS.length} presets + 5 random), 60 bags, ${rep} repeats; seed 1 starts ${a.split(',').slice(0, 3).join(' ')}, seed 2 ${b.split(',').slice(0, 3).join(' ')}`);
+  let badLen = 0, cut = 0, orders = new Set();
+  const Rp = SP.rng(5);
+  for (let k = 0; k < 300; k++) {
+    const sh = SP.shotPlan(Rp);
+    if (sh[0].kind !== 'approach' || sh[1].kind !== 'impact' || sh[sh.length - 1].kind !== 'disk') badLen++;
+    for (const x of sh) if (!(x.len >= x.min && x.len <= x.max && x.min >= SP.CUT_MIN && x.max <= SP.CUT_MAX)) badLen++;
+    if (sh.some(x => x.kind === 'cutaway')) cut++;
+    orders.add(sh.map(x => x.kind[0]).join(''));
+  }
+  ok('10 shots: approach, impact first, disk last, 5-12 s each, varied order', badLen === 0 && cut > 170 && cut < 230 && orders.size >= 8, `${cut}/300 plans with a cutaway, ${orders.size} orders`);
+  const ap = SP.SHOTS.approach, dn = (el, c) => SP.shotDone(ap, el, { contactAt: c });
+  const sp = SP.shotDone(Object.assign({ len: 6.5 }, SP.SHOTS.splash), 6.4, { contactAt: 0 }) === false && SP.shotDone(Object.assign({ len: 6.5 }, SP.SHOTS.splash), 6.5, { contactAt: 0 }) === true;
+  ok('10 cuts on events: the approach waits for contact, 5-12 s', !dn(11.9, null) && dn(12, null) && !dn(4.9, 2) && dn(5, 2) && !dn(7.7, 7) && dn(7.8, 7) && sp,
+    'no contact: cut at 12 s; contact at 2 s: cut at 5 s; contact at 7 s: cut at 7.8 s; splash cuts at its length');
+  const plan = () => ['approach', 'impact', 'splash', 'cutaway', 'ejecta', 'disk'].map(kind => ({ kind }));
+  const p1 = plan(), j1 = SP.pickNext(p1, 1, 0.05), p2 = plan(), j2 = SP.pickNext(p2, 1, 0), p3 = plan(), p4 = plan(), j4 = SP.pickNext(p4, 0, 0.5);
+  ok('10 escaping mass brings the ejecta shot forward, after the impact shot', p1[j1].kind === 'ejecta' && p2[j2].kind === 'splash' && SP.pickNext(p3, 5, 0.5) === -1 && p1[p1.length - 1].kind === 'disk' && p4[j4].kind === 'impact',
+    `esc 5 %: ${p1.map(x => x.kind).join(' ')}; esc 0: next ${p2[j2].kind}`);
+  // the plate: every shot kind, a preset and a random draw, no code
+  const Rr = SP.rng(3), bad = [];
+  const runs = [SP.runScenario({ preset: 'theia' }, Rr), SP.runScenario({ roll: true }, Rr), SP.runScenario({ roll: true }, Rr)];
+  for (const { sc, seed } of runs) {
+    const setup = buildScenario(sc, 4096, seed);
+    for (const kind of Object.keys(SP.SHOTS)) {
+      const after = kind !== 'approach';
+      const L = SP.plateInfo({ sc, setup, stats: after ? { t: setup.impact.tContact + 1, tSec: 7200, maxPGPa: 300 } : null,
+        out: after ? { Mp: 0.9, Md: 0.01, Me: 0.09, Mtot: 1, X: [0, 0, 0], Rp: 1 } : null, peak: { P: 310, melt: 0.2, vap: 0.01, T99: 4200 },
+        n: 4096, shot: Object.assign({ kind, mode: 1 }, SP.SHOTS[kind]), warp: 95, slow: kind === 'impact' });
+      const j = JSON.stringify(L);
+      if ('code' in L || L.tex.length !== 3 || L.eq.length !== 3 || L.params.length < 5 || L.lines.length !== 2 || L.title !== sc.title || /undefined|NaN|null/.test(j)) bad.push(sc.key + '/' + kind);
+    }
+  }
+  const L0 = SP.plateInfo({ sc: runs[0].sc, setup: buildScenario(runs[0].sc, 4096, 1), stats: null, out: null, peak: { P: 0, melt: 0, vap: 0, T99: 0 }, n: 4096, shot: Object.assign({ kind: 'approach' }, SP.SHOTS.approach), warp: 0 });
+  ok('10 plate: title, bodies, v_imp, angle, live numbers, 3 TeX, no code', bad.length === 0 && runs[1].sc.key !== runs[2].sc.key,
+    bad.join(' ') || `"${L0.title}": ${L0.params.map(p => p.name + ' ' + p.value).join('; ')}; ${L0.lines[0]}`);
 }
 
 function settledEarth(N, seed) {
@@ -443,7 +498,7 @@ async function pageTest() {
   };
   const rafQ = [];
   const G = globalThis, saved = {};
-  const stub = { window: G, document: { getElementById: el }, matchMedia: () => ({ matches: false }), screen: { width: 1280, height: 800 },
+  const stub = { window: G, document: { getElementById: el, documentElement: { classList: { add() {}, remove() {}, toggle() {} } } }, matchMedia: () => ({ matches: false }), screen: { width: 1280, height: 800 },
     innerWidth: 320, innerHeight: 200, devicePixelRatio: 1, location: { href: 'http://x/pages/planet-collision/?run=moon-graze', search: '?run=moon-graze' },
     history: { replaceState() {} }, addEventListener: (k, f) => { (listeners[k] = listeners[k] || []).push(f); },
     requestAnimationFrame: f => rafQ.push(f), createImageBitmap: () => Promise.reject(new Error('no images in the test')) };
@@ -482,6 +537,28 @@ async function pageTest() {
     G.__pc.startRun(aim, 1); await pump(14);
     ok('P an aimed collision builds and runs', S.sc.key === 'aim' && S.phase === 'run' && S.setup.bodies[1].key === 'moon' && Math.abs(S.setup.impact.theta - 30) < 1e-6 && !!S.arc && S.arc.imp.length > 10,
       `"${S.sc.title}", theta ${S.setup.impact.theta.toFixed(1)}, ${S.arc ? S.arc.imp.length : 0} arc points`);
+    // the screensaver: enter, the approach, contact -> the slow-motion impact shot, the plate, a new run
+    {
+      const labels = [];
+      const ret = await G.snSaver.enter({ seed: 7, calm: 0.5, label: l => labels.push(l) });
+      const dbg = () => G.snSaver.debug();
+      const seen = [];
+      for (let k = 0; k < 120 && !(dbg().contact && dbg().shot === 'impact'); k++) { await pump(12); const d = dbg(); if (d.shot && seen[seen.length - 1] !== d.shot) seen.push(d.shot); }
+      const d1 = dbg(), L = labels[labels.length - 1], an = L && L.anchor ? L.anchor() : null;
+      ok('P saver: contact cuts to the slow-motion impact shot', ret && ret.canvas === el('gpu') && d1.shot === 'impact' && d1.speed === 0.25 && d1.fade > 0.5 && seen.join() === 'approach,impact',
+        `run ${d1.run} "${d1.title}", shots ${seen.join(' > ')}, speed ${d1.speed}, fade ${d1.fade.toFixed(2)}, warp ${d1.warp.toFixed(0)} sim s per s`);
+      ok('P saver: the plate has live numbers and TeX, no code', !!L && !('code' in L) && L.tex.length === 3 && L.params.length >= 5 && !!an && isFinite(an.x) && an.r > 0,
+        L ? `"${L.title}" | ${L.params.map(p => p.name + ' ' + p.value).join('; ')} | ${L.lines[0]} | anchor ${an ? an.x.toFixed(0) + ',' + an.y.toFixed(0) + ' r ' + an.r.toFixed(0) : '-'}` : 'no label');
+      const run1 = d1.run;
+      for (let k = 0; k < 8; k++) { G.snSaver.cut(); await pump(2); }
+      for (let k = 0; k < 40 && dbg().runs < 2; k++) await pump(6);
+      for (let k = 0; k < 20 && dbg().state !== 'show'; k++) await pump(6);
+      const d2 = dbg();
+      ok('P saver: the take ends, fades out and a new run starts', d2.runs === 2 && d2.run !== run1 && d2.state === 'show' && d2.shot === 'approach',
+        `run 2 ${d2.run} "${d2.title}", state ${d2.state}, shot ${d2.shot}, shots ${d2.shots.join(' ')}`);
+      G.snSaver.exit();
+      ok('P saver: exit hands the page back', S.dir === null && S.speed === 2, `dir ${S.dir}, speed ${S.speed}`);
+    }
     G.__pc.startRun((await import('./scenarios.js')).presetByKey('theia'), 1); await pump(14);
     G.__pc.startRun((await import('./scenarios.js')).randomScenario(77), 77); await pump(14);
     ok('P a preset change and a random draw run', S.sc.key === 'random-77' && S.phase === 'run', `now "${S.sc.title}", phase ${S.phase}`);
@@ -495,7 +572,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {

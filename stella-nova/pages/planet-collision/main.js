@@ -33,7 +33,8 @@
 //  impactor make-up; each change restarts the run (debounced) and the link
 //  gets ?aim=. While the panel is open, arc.js draws the point-mass path.
 //
-//  For the saver and the tests: window.__pc = { S, startRun, frameOf }.
+//  SAVER. saver.js installSaver sets window.snSaver; its director is S.dir.
+//  For the tests: window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS }.
 //
 //  grep -n targets
 //    boot ............ "async function boot"
@@ -57,6 +58,7 @@ import { makeView, frameTarget, stepView, eyeOf } from './view.js';
 import { UNIT, SOURCES, BODIES } from './data.js';
 import { outcome, M_MOON } from './analysis.js';
 import { previewArc } from './arc.js';
+import { installSaver } from './saver.js';
 
 const RELAX_STEPS = 200, RELAX_PER_FRAME = 20, STATS_EVERY = 6, OUTCOME_MS = 1500;
 export const SPEEDS = [0.25, 0.5, 1, 2, 4];
@@ -95,6 +97,7 @@ async function boot() {
   bindPointer(canvas);
   addEventListener('pagehide', release);
   window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS };
+  installSaver({ S, startRun, setSpeed });
   const q = new URLSearchParams(location.search);
   const aim = q.get('aim') && aimFromLink(q.get('aim'));
   if (aim) { setAim(aim); startRun(aimScenario(), 1); }

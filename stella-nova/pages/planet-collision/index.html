@@ -31,6 +31,8 @@
      render.js    Renderer: fluid surface, debris, vapour, sky, bloom
      view.js      the camera: auto framing and the user's orbit
      main.js      boot, the run, the frame loop, the bar, the aim panel
+     saver.js     window.snSaver: the screensaver director
+     saver-plan.js the reel, the shots and the plate text (no DOM)
      tests.mjs    node tests.mjs (CPU tests, then GPU and render tests in Deno)
      CONTRACT.md  the API of the solver and the renderer
 
@@ -58,7 +60,8 @@
    aim, more) sits at the base, #aim and #info open as bottom sheets over
    the dock. main.js frames the bodies in the clear band between the
    caption and the dock or the open sheet (fn clearBand). 44 px targets.
-   SAVER  html.sn-saver (set by a screensaver hook) hides all of it.
+   SAVER  html.sn-saver (saver.js) hides all of it; the subject is framed
+          in the clear band of the shell's plate (lib/saver-clear.js).
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Two planets collide: tens of thousands of SPH particles with real masses, iron cores and rock mantles, simulated on your GPU. The Moon crashes into Earth, Theia makes the Moon, a synestia, hit and run, or aim your own.">
