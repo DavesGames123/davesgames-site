@@ -9,8 +9,10 @@
 // building stands on the same exaggerated surface as the ground.
 // Colour: by height (G.res.w 0) or by use (1). After dusk the walls get lit
 // windows: one cell per floor (3.5 m) and per 3 m of wall, picked by a hash.
+// The window grid is box-filtered to the pixel (pulseBox), and the lit cells
+// fade to their mean when a cell is under about 2 px, so there is no grain.
 //
-// grep: fn vs  fn vsShadow  fn heightColour  fn useColour  fn fs
+// grep: fn vs  fn vsShadow  fn heightColour  fn useColour  fn pulseBox  fn fs
 
 struct VIn {
   @location(0) pos: vec4i,
@@ -77,8 +79,26 @@ fn useColour(k: f32) -> vec3f {
   }
 }
 
+// Box filter of a pulse train: the share of [x - w/2, x + w/2] where
+// fract(x) is in [a, b]. pulseInt is the integral of the pulse from 0.
+// The caller moves x near 0 first, so the f32 difference stays exact.
+fn pulseInt(x: f32, a: f32, b: f32) -> f32 {
+  return floor(x) * (b - a) + clamp(fract(x), a, b) - a;
+}
+fn pulseBox(x: f32, w: f32, a: f32, b: f32) -> f32 {
+  let ww = max(w, 0.001);
+  let x0 = floor(x);
+  let xl = x - x0;
+  return (pulseInt(xl + 0.5 * ww, a, b) - pulseInt(xl - 0.5 * ww, a, b)) / ww;
+}
+
 @fragment
 fn fs(v: VOut) -> @location(0) vec4f {
+  // Window cells: x along the wall (3 m), y up the wall (one floor, 3.5 m).
+  // The derivatives come first, in uniform control flow. fw is the pixel
+  // size in cells, so the pattern can be filtered to it.
+  let cellP = vec2f(v.wall.y / 3.0, v.wall.x / 3.5);
+  let fw = vec2f(length(vec2f(dpdx(cellP.x), dpdy(cellP.x))), length(vec2f(dpdx(cellP.y), dpdy(cellP.y))));
   let L = normalize(G.sun.xyz);
   let night = G.sun.w;
   let N = normalize(v.n);
@@ -95,16 +115,22 @@ fn fs(v: VOut) -> @location(0) vec4f {
 
   // windows: a faint grid by day, lit cells after dusk
   if (!roof && v.info.x > 6.0) {
-    let fl = floor(v.wall.x / 3.5);
-    let cl = floor(v.wall.y / 3.0);
-    let fy = fract(v.wall.x / 3.5);
-    let fx = fract(v.wall.y / 3.0);
-    let pane = step(0.25, fy) * step(fy, 0.8) * step(0.18, fx) * step(fx, 0.82);
+    // pane: box-filtered to the pixel, so it goes to its mean cover (0.35)
+    // when many windows fall in one pixel, and does not alias
+    let pane = pulseBox(cellP.x, fw.x, 0.18, 0.82) * pulseBox(cellP.y, fw.y, 0.25, 0.8);
     col *= 1.0 - 0.10 * pane * (1.0 - night);
+    // lit or not: a hash of the cell, so it is stable per window. When a
+    // cell is under about 2 px, one pixel would pick one random cell of
+    // many: then use the mean of the hash (the lit share and mean colour).
+    let fl = floor(cellP.y);
+    let cl = floor(cellP.x);
     let seed = u32(v.info.z * 65535.0) * 7919u + u32(fl) * 104729u + u32(cl + 4096.0) * 31u;
-    let on = step(0.58 - 0.25 * smoothstep(40.0, 0.0, v.wall.x), hash11(seed));
+    let thr = 0.58 - 0.25 * smoothstep(40.0, 0.0, v.wall.x);
+    let on = step(thr, hash11(seed));
     let warm = mix(vec3f(1.0, 0.74, 0.42), vec3f(0.85, 0.92, 1.0), step(0.8, hash11(seed + 17u)));
-    col += night * pane * on * warm * 0.85;
+    let meanLit = (1.0 - thr) * mix(vec3f(1.0, 0.74, 0.42), vec3f(0.85, 0.92, 1.0), 0.2);
+    let farK = smoothstep(0.4, 0.7, max(fw.x, fw.y));
+    col += night * pane * mix(on * warm, meanLit, farK) * 0.85;
   }
   col = fogMix(col, distance(G.eye.xyz, v.world), v.world.z);
   return vec4f(col, 1.0);
