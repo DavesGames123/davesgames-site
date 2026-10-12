@@ -70,7 +70,8 @@ const ov = {
   terrain: { on: true, exag: 2, contour: true, amt: 0 },
   ocean: { on: false, amt: 0 },
   wind: { on: true, amt: 0, live: false, dirFrom: 270, speed: 5, slice: 12, seaBreeze: false, heat: true, liveInfo: null },
-  view: { light: 'golden', colour: 0, orbit: true },
+  // colour 2: the facade materials (buildings.wgsl matOf); 0 height, 1 use
+  view: { light: 'golden', colour: 2, orbit: true },
 };
 const cam = { target: [0, 0, 0], yaw: 3.6, pitch: 0.5, dist: 4500 };
 let camGoal = null;            // eased toward on a city switch and a reset
@@ -310,6 +311,7 @@ function captionHTML() {
   ];
   if (m.current) facts.push(['Fastest surface water', `${fmt(m.curMax * KNOTS, 1)} kn (${fmt(m.curMax, 2)} m/s)`]);
   paras.push(`<div class="facts">${facts.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`);
+  paras.push('<p><b>Buildings</b> stand on their real footprints and heights. Their roofs, floors, windows and materials are made up by the page from the footprint, the height and the use alone (gable and hip roofs on small rectangles, parapets and rooftop plant on flat roofs, tiers on some towers), so they show the kind of building, not the real facade. Colour: Facade shows the materials; Height and Use colour the walls by those instead.</p>');
   paras.push('<h3 class="sub">The overlays</h3>');
   paras.push('<p><b>Terrain</b> lifts the ground and the sea floor to their real heights, with a vertical exaggeration. Land shows contour lines; water is darker where it is deeper, and the relief of the sea floor shows through it.</p>');
   paras.push(m.current
@@ -455,7 +457,7 @@ function buildLayers() {
   <section class="lg" data-k="view" id="lgView">
     <h3>View</h3>
     ${seg('vwLight', 'Light', Object.keys(LIGHTS).map((k) => [k, k[0].toUpperCase() + k.slice(1)]), ov.view.light)}
-    ${seg('vwColour', 'Colour', [[0, 'Height'], [1, 'Use']], ov.view.colour)}
+    ${seg('vwColour', 'Colour', [[2, 'Facade'], [0, 'Height'], [1, 'Use']], ov.view.colour)}
     <div class="row two"><span>Slow orbit</span>${sw('swOrbit', ov.view.orbit, 'Slow orbit when idle')}</div>
   </section>`;
   const ramp = 'linear-gradient(90deg, rgb(20,41,115), rgb(26,140,217) 25%, rgb(77,217,166) 50%, rgb(250,219,89) 75%, rgb(255,247,230))';
@@ -1245,7 +1247,7 @@ const CODE = {
   wind: ['lbm.wgsl', 'let Q = pxx * pxx', 12, 'Smagorinsky BGK collision'],
   ocean: ['tracers.wgsl', 'fn stepOf(u: vec2f)', 10, 'current streak step'],
   terrain: ['terrain.wgsl', '  let w = waterAt(p);', 12, 'water over the sea floor'],
-  none: ['buildings.wgsl', '  // windows: a faint grid', 12, 'lit windows after dusk'],
+  none: ['buildings.wgsl', '  // lit windows after dusk', 13, 'lit windows after dusk'],
 };
 let saverCode = null;
 function saverPlate() {

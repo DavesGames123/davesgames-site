@@ -22,7 +22,8 @@
 // part: 0 wall, 1 flat roof or ledge, 2 pitched roof, 3 rooftop unit wall,
 //       4 rooftop unit top.
 // style: material (low 3 bits: 0 glass, 1 concrete, 2 brick, 3 stone,
-//        4 render) + 16 shopfront ground floor + 128 height estimated.
+//        4 render) + 16 shopfront ground floor + 32 x pitched roof tone
+//        (0 terracotta, 1 slate, 2 brown, 3 dark grey) + 128 height estimated.
 //
 // Forms, from the footprint, height and use only (the data has no roof tags):
 //   flat    all walls rise to a parapet above the roof; the stored roof
@@ -67,7 +68,7 @@ export const LOD_SIZES = [400, 200, 100, 50, 25, 12, 6, 0];
 
 // Material and shopfront per building: a stable hash, the height class and
 // the use. Warm cities (|lat| < 30) take render in place of brick.
-const { glass: MG, concrete: MC, brick: MB, stone: MS, render: MR } = { glass: 0, concrete: 1, brick: 2, stone: 3, render: 4 };
+const { glass: MG, concrete: MC, brick: MB, stone: MS, render: MR } = MAT;
 // [material, share] pairs per class, flat
 const W_TALL = [MG, 0.6, MC, 0.25, MS, 0.15];
 const W_MID_OFFICE = [MG, 0.45, MC, 0.35, MS, 0.2];
@@ -86,7 +87,11 @@ export function styleOf(i, hM, kind, lat = 45) {
   for (let k = 0; k < w.length; k += 2) { acc += w[k + 1]; if (r < acc) { m = w[k]; break; } }
   if (m === MB && Math.abs(lat) < 30) m = MR;
   const shop = kind === 2 || kind === 7 || ((kind === 0 || kind === 1) && hM >= 12 && rndK(i, 2) < 0.55);
-  return { mat: m, shop };
+  // pitched roof tone: 0 terracotta, 1 slate, 2 brown, 3 dark grey;
+  // terracotta leads under 45 deg of latitude, slate north of it
+  const t = rndK(i, 14);
+  const tone = Math.abs(lat) < 45 ? (t < 0.6 ? 0 : t < 0.8 ? 2 : t < 0.95 ? 1 : 3) : (t < 0.5 ? 1 : t < 0.75 ? 2 : t < 0.9 ? 0 : 3);
+  return { mat: m, shop, tone };
 }
 
 // A ring of 4 corners near 90 deg (|cos| < 0.26), convex: the corners in
@@ -371,7 +376,7 @@ export function buildMesh(b, opts = {}) {
     const hM = b.h[i] / 10, hminM = b.hmin ? b.hmin[i] / 10 : 0;
     const kind = b.kind[i] & 15, est = !!(b.kind[i] & 128);
     const st = styleOf(i, hM, kind, lat);
-    B = { base: b.base[i], h: b.h[i], kind, rr: Math.round(rnd(i) * 255), style: st.mat | (st.shop && hminM < 0.5 ? 16 : 0) | (est ? 128 : 0), i };
+    B = { base: b.base[i], h: b.h[i], kind, rr: Math.round(rnd(i) * 255), style: st.mat | (st.shop && hminM < 0.5 ? 16 : 0) | (st.tone << 5) | (est ? 128 : 0), i };
     if (hM > tallest && !est) tallest = hM;
     // rings in metres
     const R = [];

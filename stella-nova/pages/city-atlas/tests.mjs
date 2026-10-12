@@ -18,8 +18,8 @@
 //   6 wind       tools/wind-check.js under Deno (WebGPU): mass in a closed box, and a
 //                wake with vortex shedding behind a block. Skipped (and said so) when
 //                deno is not on the PATH.
-//   7 windows    tools/facade-check.mjs: the facade window pattern of buildings.wgsl,
-//                filtered, against one sample per pixel. Far away (cells under 1.2 px)
+//   7 windows    tools/facade-check.mjs: the facade window pattern of buildings.wgsl
+//                (concrete and glass), filtered, against one sample per pixel. Far away (cells under 1.2 px)
 //                the grain and the shimmer must drop to half or less; close up the
 //                filtered image must stay within 0.02 RMS of the 8 x 8 supersampled truth.
 // Exit code 1 when any check fails.
@@ -320,20 +320,27 @@ function windCheck() {
 
 async function windowCheck() {
   const wgsl = readFileSync(`${HERE}shaders/buildings.wgsl`, 'utf8');
-  // the JS port in facade-check.mjs must use the constants of the shader
-  for (const k of ['pulseBox(cellP.x, fw.x, 0.18, 0.82)', 'pulseBox(cellP.y, fw.y, 0.25, 0.8)', 'smoothstep(0.4, 0.7, max(fw.x, fw.y))']) {
+  // facade-check.mjs reads the materials from matOf; the filter lines must be as it ports them
+  for (const k of ['pulseBox(bx, fw.x, M.pane.x, M.pane.y) * pulseBox(fy, fw.y, M.pane.z, M.pane.w) * upper',
+    'let fw = vec2f(fu / max(run, 0.01) * bays, fz / M.cell.y);', 'smoothstep(0.4, 0.7, max(fw.x, fw.y))']) {
     check(wgsl.includes(k), `windows: buildings.wgsl lacks ${k} (facade-check.mjs is out of step)`);
   }
-  const { measure } = await import('./tools/facade-check.mjs');
-  for (const r of measure()) {
-    const p = r.point, f = r.filter, t = r.truth;
-    console.log(`windows: ${r.d} m, ${r.pxCell.toFixed(2)} px per cell: grain ${p.nbr.toFixed(3)} -> ${f.nbr.toFixed(3)}, shimmer ${p.flicker.toFixed(4)} -> ${f.flicker.toFixed(4)} (truth ${t.nbr.toFixed(3)}, ${t.flicker.toFixed(4)})`);
-    if (r.pxCell < 1.2) {
-      check(f.nbr <= 0.5 * p.nbr, `windows: ${r.d} m grain ${f.nbr} not under half of ${p.nbr}`);
-      check(f.flicker <= 0.5 * p.flicker, `windows: ${r.d} m shimmer ${f.flicker} not under half of ${p.flicker}`);
+  // the saver plate shows an extract of fs from this anchor (main.js SAVER_CODE)
+  const anchor = /none: \['buildings\.wgsl', '([^']+)'/.exec(readFileSync(`${HERE}main.js`, 'utf8'));
+  check(anchor && wgsl.includes(anchor[1]), `windows: the saver code anchor ${anchor && anchor[1]} is not in buildings.wgsl`);
+  const { measure, materials } = await import('./tools/facade-check.mjs');
+  check(materials().length === 5, `windows: ${materials().length} materials read from matOf, want 5`);
+  for (const [mat, name] of [[1, 'concrete'], [0, 'glass']]) {
+    for (const r of measure(undefined, 48, mat)) {
+      const p = r.point, f = r.filter, t = r.truth;
+      console.log(`windows: ${name} ${r.d} m, ${r.pxCell.toFixed(2)} px per cell: grain ${p.nbr.toFixed(3)} -> ${f.nbr.toFixed(3)}, shimmer ${p.flicker.toFixed(4)} -> ${f.flicker.toFixed(4)} (truth ${t.nbr.toFixed(3)}, ${t.flicker.toFixed(4)})`);
+      if (r.pxCell < 1.2) {
+        check(f.nbr <= 0.5 * p.nbr, `windows: ${name} ${r.d} m grain ${f.nbr} not under half of ${p.nbr}`);
+        check(f.flicker <= 0.5 * p.flicker, `windows: ${name} ${r.d} m shimmer ${f.flicker} not under half of ${p.flicker}`);
+      }
+      if (r.pxCell > 5) check(f.err < 0.02, `windows: ${name} ${r.d} m filtered image ${f.err} RMS from the truth`);
+      check(f.flicker <= t.flicker * 1.1 + 0.002, `windows: ${name} ${r.d} m shimmer ${f.flicker} above the truth ${t.flicker}`);
     }
-    if (r.pxCell > 5) check(f.err < 0.02, `windows: ${r.d} m filtered image ${f.err} RMS from the truth`);
-    check(f.flicker <= t.flicker * 1.1 + 0.002, `windows: ${r.d} m shimmer ${f.flicker} above the truth ${t.flicker}`);
   }
 }
 
