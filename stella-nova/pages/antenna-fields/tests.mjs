@@ -247,6 +247,12 @@ function sphereFlux(L, r, nt = 48, np = 96) {
   const pmin = sf => Math.min(...Array.from({ length: 64 }, (_, i) => geom.fluxAt(sf, Math.PI * i / 64)));
   check('Hertzian: P(t) < 0 at r = 0.05 (reactive), P(t) >= 0 at r = 3 (radiating)', pmin(near) < -10 * near.P && pmin(far) > -0.01 * far.P,
     'min P(t)/P = ' + fmt(pmin(near) / near.P, 1) + ' and ' + fmt(pmin(far) / far.P, 4) + ', |Q|/P = ' + fmt(Math.hypot(...near.Q) / near.P, 1) + ' and ' + fmt(Math.hypot(...far.Q) / far.P, 4));
+  // The page text: the whole-sphere flux goes below zero near a small antenna
+  // (a small loop too), but not near a large one (the 6-element Yagi).
+  const Lp = em.buildAntenna({ type: 'loop', C: 0.15, a: 1e-3 }), lp = geom.sphereFlux(Lp, [0, 0, 0], 0.05, 24, 48);
+  const Yg = em.buildAntenna({ type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 4, a: 1e-3 }), yg = geom.sphereFlux(Yg, [0.4, 0, 0], 0.75, 24, 48);
+  check('small loop: P(t) < 0 at r = 0.05; 6-element Yagi: P(t) > 0 at r = 0.75', pmin(lp) < 0 && pmin(yg) > 0,
+    'min P(t)/P = ' + fmt(pmin(lp) / lp.P, 2) + ' and ' + fmt(pmin(yg) / yg.P, 2));
 }
 
 // 12. Half-wave directivity from the sphere flux -------------------------------------
