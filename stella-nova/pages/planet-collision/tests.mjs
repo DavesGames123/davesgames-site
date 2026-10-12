@@ -36,6 +36,10 @@
 //     grazing hit makes debris (fn classify) and glowing pixels; the colour
 //     modes and the cutaway change the image; no validation errors.
 //     --time also prints ms per frame
+//  P  the page (Deno, main.js with the DOM stubbed and an offscreen
+//     texture for the canvas): boot, the relax, the launch, first contact
+//     (the flash and the fades), the numbers, a preset change, a random
+//     draw, pagehide; no errors
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 // ============================================================================
@@ -351,10 +355,63 @@ async function renderTests() {
   ren.destroy(); sim.destroy(); device.destroy();
 }
 
+// P ─ main.js in Deno with a stubbed DOM (no browser, no image file)
+async function pageTest() {
+  if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  page test: no navigator.gpu here'); return; }
+  const els = new Map(), listeners = {}, errors = [];
+  const el = id => {
+    if (!els.has(id)) els.set(id, { id, hidden: false, textContent: '', innerHTML: '', value: '', style: {}, dataset: {}, width: 0, height: 0,
+      classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, addEventListener() {}, setPointerCapture() {},
+      querySelectorAll: () => [], getContext: () => ctxStub });
+    return els.get(id);
+  };
+  let tex = null, device = null;
+  const ctxStub = {
+    configure(o) { device = o.device; tex = device.createTexture({ size: [320, 200], format: o.format, usage: GPUTextureUsage.RENDER_ATTACHMENT }); },
+    getCurrentTexture: () => tex,
+  };
+  const rafQ = [];
+  const G = globalThis, saved = {};
+  const stub = { window: G, document: { getElementById: el }, matchMedia: () => ({ matches: false }), screen: { width: 1280, height: 800 },
+    innerWidth: 320, innerHeight: 200, devicePixelRatio: 1, location: { href: 'http://x/pages/planet-collision/?run=moon-graze', search: '?run=moon-graze' },
+    history: { replaceState() {} }, addEventListener: (k, f) => { (listeners[k] = listeners[k] || []).push(f); },
+    requestAnimationFrame: f => rafQ.push(f), createImageBitmap: () => Promise.reject(new Error('no images in the test')) };
+  for (const k of Object.keys(stub)) { saved[k] = Object.getOwnPropertyDescriptor(G, k); Object.defineProperty(G, k, { value: stub[k], configurable: true, writable: true }); }
+  const realFetch = G.fetch;
+  G.fetch = async url => { const u = String(url); if (u.endsWith('.jpg')) return { ok: false, status: 404 }; return { ok: true, text: () => Deno.readTextFile(new URL(u)) }; };
+  const ce = console.error; console.error = (...a) => { errors.push(a.join(' ')); };
+  try {
+    await import('./main.js?page-test');
+    for (let k = 0; k < 400 && !G.__pc?.S?.sim && !errors.length; k++) await new Promise(r => setTimeout(r, 50));
+    if (!G.__pc) { ok('P boot', false, errors.slice(0, 3).join(' | ') || 'no window.__pc after 20 s'); return; }
+    const S = G.__pc.S;
+    let t = 0;
+    const pump = async n => { for (let k = 0; k < n; k++) { const f = rafQ.shift(); if (!f) break; t += 16.7; f(t); if (k % 6 === 5) await S.dev.queue.onSubmittedWorkDone(); } await S.dev.queue.onSubmittedWorkDone(); await new Promise(r => setTimeout(r, 30)); };
+    await pump(12);
+    const relaxed = S.phase === 'run';
+    for (let k = 0; k < 60 && !S.contact; k++) await pump(12);
+    const c = S.contact, fl = S.f.flashes[0];
+    await pump(30);
+    ok('P boot, relax, launch, first contact with a flash', relaxed && !!c && !!fl && fl.r > 0 && S.f.bodies[0].shadow < 1,
+      `phase ${S.phase}, contact at ${c ? (c.simT * UNIT.T / 60).toFixed(1) + ' min' : 'none'}, flash r ${fl ? fl.r.toFixed(3) : '-'}, shadow ${S.f.bodies[0].shadow.toFixed(2)}, ${S.sim.n} particles`);
+    const nums = el('nums').innerHTML;
+    ok('P the numbers fill in', /Molten/.test(nums) && /J</.test(nums) && el('capTitle').textContent.length > 0, `title "${el('capTitle').textContent}"; ${nums.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}`);
+    G.__pc.startRun((await import('./scenarios.js')).presetByKey('theia'), 1); await pump(14);
+    G.__pc.startRun((await import('./scenarios.js')).randomScenario(77), 77); await pump(14);
+    ok('P a preset change and a random draw run', S.sc.key === 'random-77' && S.phase === 'run', `now "${S.sc.title}", phase ${S.phase}`);
+    for (const f of listeners.pagehide || []) f();
+    ok('P pagehide frees the solver, the renderer and the device', S.sim === null && S.dev === null, 'sim, ren, dev null');
+    ok('P no errors on the page', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
+  } finally {
+    console.error = ce; G.fetch = realFetch;
+    for (const k of Object.keys(stub)) { if (saved[k]) Object.defineProperty(G, k, saved[k]); else delete G[k]; }
+  }
+}
+
 if (!GPU_ONLY) {
   eosTests(); bodyTests(); geometryTests(); await presetTests(); cpuTests();
 }
-if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); }
+if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {
   const { spawnSync } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');

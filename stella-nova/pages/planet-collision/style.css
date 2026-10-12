@@ -1,0 +1,85 @@
+/* ============================================================================
+   PLANET COLLISION  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A full-frame WebGPU canvas, one bar at the top, the caption at the base
+   left (the roche-limit tokens). Type from lib/sci.css (loaded after this
+   file). Sentence case labels.
+     grep -n 'BAR'      the control strip
+     grep -n 'CAPTION'  title, numbers, source
+     grep -n 'PANELS'   busy, info, no WebGPU
+     grep -n 'PHONE'    two-row bar, 44 px targets
+   ========================================================================== */
+:root{
+  --bg:#03050a; --card:rgba(8,12,19,0.86); --ink:#dfe5ee; --dim:#8a94a3;
+  --line:rgba(150,190,240,0.10); --line-b:rgba(150,200,255,0.20);
+  --warm:#ffb46a; --hot:#ff7a3c}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+[hidden]{display:none!important}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px}
+button,select{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:inherit;color:inherit}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+#gpu{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gpu:active{cursor:grabbing}
+
+/* ── BAR ─────────────────────────────────────────────────────────────── */
+#bar{position:fixed;top:10px;left:12px;right:12px;z-index:30;display:flex;flex-wrap:wrap;align-items:center;gap:8px;pointer-events:none}
+#bar > *{pointer-events:auto}
+.pill{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border:1px solid var(--line-b);border-radius:19px;background:var(--card);
+  font-size:0.86rem;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);white-space:nowrap}
+.pill:hover,.pill.on{border-color:var(--warm)}
+.pill.on{color:var(--warm)}
+.pill.sel{padding:0 6px 0 12px}
+.pill select{appearance:none;-webkit-appearance:none;border:0;background:transparent;font:inherit;font-weight:600;padding:0 22px 0 0;cursor:pointer;max-width:240px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);
+  background-position:calc(100% - 9px) 55%,calc(100% - 4px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.pill select option{background:#0b1018;color:var(--ink)}
+.pill.roll{color:var(--warm);padding:0 12px;gap:6px}
+.pill.roll .die{font-size:1.15rem;line-height:1}
+.grp{display:flex;align-items:center;gap:4px;height:38px;padding:0 5px;border:1px solid var(--line);border-radius:19px;background:var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.ib{width:30px;height:30px;border:0;border-radius:15px;background:transparent;cursor:pointer;font-size:0.95rem;line-height:1}
+.ib:hover{background:rgba(255,255,255,0.07)}
+.ib.play{width:34px;background:rgba(255,180,106,0.14);color:var(--warm)}
+.ib.round{font-weight:700;font-size:0.85rem;border:1px solid var(--line-b);background:var(--card);width:38px;height:38px;border-radius:19px}
+.stops button{border:0;background:transparent;color:var(--dim);font-size:0.78rem;padding:6px 9px;border-radius:13px;cursor:pointer;font-variant-numeric:tabular-nums}
+.stops button.on{background:rgba(255,180,106,0.14);color:var(--warm)}
+html.in-frame #bar{top:8px}
+
+/* ── CAPTION ─────────────────────────────────────────────────────────── */
+#caption{position:fixed;left:16px;bottom:16px;z-index:20;max-width:min(460px,calc(100vw - 32px));padding:12px 16px 12px;border:1px solid var(--line);border-radius:12px;
+  background:var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#capTitle{font-size:1.05rem;font-weight:700;letter-spacing:0.01em}
+#capSub{color:var(--dim);font-size:0.84rem;margin-top:2px}
+#nums{display:grid;grid-template-columns:repeat(3,auto);gap:4px 16px;margin-top:9px;font:0.78rem var(--sci-mono);font-variant-numeric:tabular-nums}
+#nums b{display:block;font:600 0.66rem var(--sci-sans);color:var(--dim);letter-spacing:0.04em;text-transform:uppercase}
+#nums .hot{color:var(--hot)}
+#capSrc{color:var(--dim);font-size:0.7rem;margin-top:8px;line-height:1.35}
+
+/* ── PANELS ──────────────────────────────────────────────────────────── */
+#busy{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:25;padding:8px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:0.8rem;color:var(--dim)}
+.busy-bar{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+.busy-bar span{display:block;height:100%;width:0;background:var(--warm)}
+.pop{position:fixed;top:60px;right:12px;z-index:40;width:min(420px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow:auto;padding:16px 18px;
+  border:1px solid var(--line-b);border-radius:12px;background:rgba(8,12,19,0.95);font-size:0.84rem;line-height:1.45}
+.pop h2{font-size:0.92rem;margin:4px 0 6px}
+.pop p,.pop ul{margin-bottom:8px;color:#c9d1dc}
+.pop ul{padding-left:18px}
+.pop .src{color:var(--dim);font-size:0.72rem}
+.pop .x{position:absolute;top:8px;right:8px;width:32px;height:32px;border:0;border-radius:16px;background:transparent;color:var(--dim);cursor:pointer}
+#nogpu{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:var(--bg)}
+#nogpu p{max-width:520px;color:var(--dim)}
+
+/* ── PHONE ───────────────────────────────────────────────────────────── */
+@media (max-width:768px),(pointer:coarse){
+  #bar{gap:6px;left:8px;right:8px;top:max(8px,env(safe-area-inset-top))}
+  .pill,.grp{height:44px;border-radius:22px}
+  .ib{width:40px;height:40px;border-radius:20px}
+  .ib.round{width:44px;height:44px;border-radius:22px}
+  .stops button{min-width:44px;min-height:40px;padding:0 8px}
+  .pill select{max-width:150px;min-height:40px}
+  .pill.roll .rl{display:none}
+  #caption{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));max-width:none;padding:10px 12px}
+  #capSrc{display:none}
+  #nums{grid-template-columns:repeat(3,1fr);gap:3px 10px}
+}

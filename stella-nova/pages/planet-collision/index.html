@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Planet Collision — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PLANET COLLISION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js runs two real bodies (iron cores, rock
+   mantles, ice shells; real masses) into each other with SPH on the GPU
+   (engine.js, shaders/sph.wgsl) and draws the particles as a lit fluid
+   surface with debris, vapour and the glow of hot melt (render.js).
+
+   MODULES
+     data.js      units, Tillotson materials, real bodies, sources
+     eos.js       the Tillotson equation of state (f64)
+     build.js     hydrostatic bodies, particles, the impact orbit
+     sph.js       parameters, the CPU reference solver, bound mass
+     engine.js    SphGPU: the WebGPU solver
+     scenarios.js the presets ("The Moon falls on Earth", ...) and random draws
+     budget.js    particle counts, steps per frame, drawing-buffer size
+     render.js    Renderer: fluid surface, debris, vapour, sky, bloom
+     view.js      the camera: auto framing and the user's orbit
+     main.js      boot, the run, the frame loop, the bar and the caption
+     tests.mjs    node tests.mjs (CPU tests, then GPU and render tests in Deno)
+     CONTRACT.md  the API of the solver and the renderer
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ #bar [#preset ▾] [⚄ #rollBtn] [⟲ #resetBtn ❚❚ #playBtn]          │
+     │      [#speed ×1 ×2 ×4] [#modeSel ▾] [#cutBtn] [#infoBtn ?]       │
+     │                                                                   │
+     │ #gpu   the collision, framed by view.js (drag: orbit, wheel: zoom)│
+     │                                                                   │
+     │ #caption  title, one line, the source; #nums the live numbers     │
+     └──────────────────────────────────────────────────────────────────┘
+     #busy    "settling the bodies" while the relax runs
+     #info    what is simulated, what is drawn, the simplifications
+     #nogpu   no WebGPU here
+   KEYS  Space pause · R restart · N random · C cutaway · M colour mode
+   LINKS ?run=<preset key> plays a preset; ?seed=<integer> a random draw
+
+   PHONE (max-width 768px or coarse pointer): the bar wraps to two rows of
+   44 px targets; the caption sits at the base, under the safe area.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Two planets collide: thousands of SPH particles with real masses, iron cores and rock mantles, simulated on your GPU. The Moon falls on Earth, Theia makes the Moon, Mars hits Earth.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<canvas id="gpu" aria-label="Simulation view"></canvas>
+<div id="busy" hidden><div class="busy-t" id="busyT">Settling the bodies</div><div class="busy-bar"><span id="busyBar"></span></div></div>
+<div id="nogpu" hidden>
+  <h2>WebGPU is not available</h2>
+  <p>This page simulates tens of thousands of particles on the GPU. It needs WebGPU: Chrome or Edge 113+, Safari 26+, or Firefox 141+ on Windows.</p>
+  <p id="nogpuWhy"></p>
+</div>
+
+<header id="bar">
+  <label class="pill sel"><span class="vh">Collision</span><select id="preset" aria-label="Collision"></select></label>
+  <button id="rollBtn" class="pill roll" title="A random collision (N). The seed goes in the link." aria-label="Random collision"><span class="die" aria-hidden="true">⚄</span><span class="rl">Random</span></button>
+  <div class="grp">
+    <button id="resetBtn" class="ib" title="Restart (R)" aria-label="Restart">⟲</button>
+    <button id="playBtn" class="ib play" title="Pause (Space)" aria-label="Pause">❚❚</button>
+  </div>
+  <div class="grp stops" id="speed" role="group" aria-label="Speed">
+    <button data-s="1">×1</button><button data-s="2" class="on">×2</button><button data-s="4">×4</button>
+  </div>
+  <label class="pill sel"><span class="vh">Colour</span><select id="modeSel" aria-label="Colour by">
+    <option value="0">Real colour</option><option value="1">Temperature</option><option value="2">Origin body</option><option value="3">Speed</option><option value="4">Material</option>
+  </select></label>
+  <button id="cutBtn" class="pill" aria-pressed="false" title="Cut the bodies open (C)">Cutaway</button>
+  <button id="infoBtn" class="ib round" aria-label="What am I looking at?" aria-haspopup="dialog">?</button>
+</header>
+
+<section id="caption" aria-live="polite">
+  <h1 id="capTitle"></h1>
+  <p id="capSub"></p>
+  <div id="nums"></div>
+  <p id="capSrc"></p>
+</section>
+
+<div id="info" class="pop" role="dialog" aria-label="What am I looking at?" hidden>
+  <button class="x" id="infoX" aria-label="Close">✕</button>
+  <h2>What you see</h2>
+  <p>Two bodies made of equal-mass particles: an iron core and a rock mantle (and an ice shell for icy bodies), with their real masses. Smoothed particle hydrodynamics (SPH) moves them under their own gravity and pressure. Pressure comes from the Tillotson equation of state of iron, granite, basalt and ice.</p>
+  <p>The surface is drawn from the particles. The surface map moves with the rock it started on. Hot matter glows with the colour of a black body at its temperature. Vapour is the part of the gas phase that Tillotson marks as expanded and hot. Free fragments are drawn as rocks with motion streaks.</p>
+  <h2>What is simplified</h2>
+  <ul>
+    <li>8,000 to 60,000 particles. Research codes use 100,000 to 100 million.</li>
+    <li>Tillotson is a simple equation of state. The model Earth is 6 % smaller than the real one.</li>
+    <li>Temperature is an estimate from the heat added, with a fixed heat capacity. The bodies start cold, so all the heat is impact heat. SPH over-heats the first contact surface.</li>
+    <li>No strength, no atmosphere, no oceans, no cooling. The atmospheres and the impact flash are drawn, not simulated.</li>
+    <li>A debris particle is drawn as 1 to 3 rocks. Only the particle is simulated.</li>
+    <li>Gravity is softened over half a particle spacing. One time step for all particles: time slows at the impact because the shock needs short steps.</li>
+  </ul>
+  <p class="src" id="srcList"></p>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

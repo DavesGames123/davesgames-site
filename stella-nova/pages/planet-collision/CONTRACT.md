@@ -16,7 +16,9 @@ All modules are static ES modules with no DOM. Only `engine.js` needs WebGPU.
 | `scenarios.js` | `PRESETS` (12), `randomScenario(seed)`, `presetByKey`. |
 | `budget.js` | `PROFILES`, `pickProfile`, `stepMs`, `stepsPerFrame`, `gpuBytes`. |
 | `render.js` | `Renderer`: the fluid surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
-| `tests.mjs` | `node tests.mjs` runs the CPU tests, then the GPU and render tests in Deno. |
+| `view.js` | The camera: auto framing from the body centres, the user's orbit (no DOM). |
+| `main.js`, `index.html`, `style.css` | The page (step 2 shell): boot, one run, the frame loop, the bar, the caption. `window.__pc = { S, startRun, frameOf }` for step 3. |
+| `tests.mjs` | `node tests.mjs` runs the CPU tests, then the GPU, render and page tests in Deno. |
 
 ## Units
 

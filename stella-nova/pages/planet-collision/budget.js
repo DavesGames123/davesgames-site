@@ -17,7 +17,13 @@
 //  PROFILES. N is the particle count of the scene (both bodies). Phones
 //  get 8k-12k (budget rule of the site: lower counts on phones).
 //
-//  EXPORTS  PROFILES, pickProfile, stepMs, stepsPerFrame, gpuBytes, LIMIT
+//  RENDER. The renderer (render.js) costs fill rate: 5.8 ms per frame at
+//  1600 x 900 (tests.mjs --time). renderBudget caps the drawing buffer at
+//  PIXELS[desktop | touch] and sets the debris fragments per particle and
+//  the filter iterations.
+//
+//  EXPORTS  PROFILES, pickProfile, stepMs, stepsPerFrame, gpuBytes, LIMIT,
+//           PIXELS, renderBudget
 // ============================================================================
 import { sphBytes } from './engine.js';
 
@@ -48,3 +54,13 @@ export function stepsPerFrame(msPerStep, frameMs = 12, max = 8) {
   return Math.max(1, Math.min(max, Math.floor(frameMs / msPerStep)));
 }
 export function gpuBytes(N) { return sphBytes(N); }
+
+// drawing-buffer pixels the renderer may use
+export const PIXELS = { desktop: 2.2e6, touch: 1.0e6 };
+// o: { cssW, cssH, dpr, touch, phone } -> { ratio, w, h, frags, smooth }
+export function renderBudget(o) {
+  const touch = !!(o.touch || o.phone), cap = touch ? PIXELS.touch : PIXELS.desktop;
+  const css = Math.max(1, o.cssW * o.cssH);
+  const ratio = Math.max(0.5, Math.min(o.dpr || 1, 2, Math.sqrt(cap / css)));
+  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 2 : 3, smooth: 2 };
+}
