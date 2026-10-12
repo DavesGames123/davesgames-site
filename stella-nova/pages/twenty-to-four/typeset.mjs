@@ -1,39 +1,36 @@
 // ============================================================================
-//  TWENTY TO FOUR  ·  equation typesetter  (Node, run by hand)
+//  TWENTY TO FOUR  ·  typeset.mjs — TeX to glyph data  (Node, run by hand)
 // ----------------------------------------------------------------------------
-//  Typesets every formula of the page with MathJax into static SVG and
-//  writes equations.js. The page then shows the same glyph outlines in each
-//  browser and loads no math library. KaTeX HTML broke in Safari: subscripts
-//  and fraction denominators stayed on the baseline (see hydrogen-table).
-//
-//  Colour: each symbol family is wrapped in \class{mN}{...}. MathJax keeps
-//  the class on the SVG group, and lib/sci.css gives .m1 to .m6 a fill. The
-//  classes are the same as on the other field pages (maxwells-equations,
-//  smith-chart). style.css --e, --b ... and main.js PAL use the same values.
-//    m2  electric field E, D       m1  magnetic field B, H
-//    m3  vector potential A, φ     m4  charge ρ
-//    m5  current J, J'             m6  wavelength λ (label only)
-//  Operators, constants and the displacement term stay ink.
+//  Typesets every entry of tex.js with MathJax 3 (SVG output) and flattens
+//  each result into glyph data: one shared table of glyph outlines, and per
+//  formula a list of (glyph, affine matrix, colour) and of rules (fraction
+//  bars). It writes glyphs.js. The page then needs no math library:
+//    math.js eqSVG(key)       inline SVG for the story column (<use> of
+//                             one shared <defs>; colours by .m1 to .m6)
+//    math.js drawEq(ctx, ..)  the same outlines with Path2D, for the stage
+//                             sprites and so for the saver recording
+//  KaTeX HTML broke in Safari (hydrogen-table); glyph paths do not.
 //
 //  RUN (MathJax is not a dependency of the site):
 //      cd "$(mktemp -d)" && npm i mathjax-full@3 && \
 //        NODE_PATH="$PWD/node_modules" node \
 //        <repo>/stella-nova/pages/twenty-to-four/typeset.mjs
-//  The script writes equations.js next to itself.
 //
-//  SECTION MAP   (jump with grep -n "<anchor>" typeset.mjs)
-//      symbol macros ... "const E ="      \class wrappers per symbol family
-//      concept table ... "const CONCEPTS" the 20 -> 4 collapse, with ov keys
-//      the four ........ "const FOUR"     the summary grid
-//      svg cleanup ..... "function svg"   MathJax output to inline SVG
-//      inline math ..... "function prose" \( \) inside notes to inline SVG
-//      label symbols ... "const SYM"      inline symbols for the legend and
-//                                         the slider labels
+//  UNITS. MathJax works in 1/1000 em. A formula entry holds its viewBox
+//  [x, y, w, h] in those units, y down (MathJax puts scale(1,-1) on the
+//  root group; the flattened matrices include it). The baseline is y = 0,
+//  so the depth below the baseline is y + h.
+//
+//  GREP MAP
+//      grep -n "function parseTransform"   translate / scale / matrix
+//      grep -n "function flatten"          the tree walk
+//      grep -n "const COLORS"              class mN -> colour index
 // ============================================================================
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-const require = createRequire(process.env.NODE_PATH + '/');
+import { TEX } from './tex.js';
+const require = createRequire((process.env.NODE_PATH || process.cwd() + '/node_modules') + '/');
 const { mathjax } = require('mathjax-full/js/mathjax.js');
 const { TeX } = require('mathjax-full/js/input/tex.js');
 require('mathjax-full/js/input/tex/AllPackages.js');
@@ -41,138 +38,139 @@ const { SVG } = require('mathjax-full/js/output/svg.js');
 const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
 const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
 
-const S = String.raw;
-// Symbol macros: one \class per family (see the header).
-const E = t => S`\class{m2}{${t}}`, B = t => S`\class{m1}{${t}}`, A = t => S`\class{m3}{${t}}`;
-const J = t => S`\class{m5}{${t}}`, Q = t => S`\class{m4}{${t}}`, L = t => S`\class{m6}{${t}}`;
-// Operators and the displacement term are not quantities: they stay ink.
-const O = t => t, DISP = t => t;
-const d = i => O(S`\partial_${i}`), nabla = O(S`\nabla`), rho = Q(S`\rho`), phi = A(S`\varphi`);
-
-// The concept table. role: core (one of the four), aside (a material
-// relation) or follows (not independent). Each line has an ov key that
-// main.js reads (OVL table) to paint that quantity on the canvas.
-const CONCEPTS = [
-  { key: 'gaussE', role: 'core', numeral: 'I', name: 'Gauss’s law', tag: 'electric',
-    plain: 'Electric field lines begin and end on charge.',
-    src: 'G · free charge  ·  E · elasticity',
-    lines: [
-      [S`${d('x')}${E('D_x')}+${d('y')}${E('D_y')}+${d('z')}${E('D_z')}=${rho}`, 'divE'],
-      [S`${E('D_x')}=\varepsilon\,${E('E_x')}`, 'Ex'],
-      [S`${E('D_y')}=\varepsilon\,${E('E_y')}`, 'Ey'],
-      [S`${E('D_z')}=\varepsilon\,${E('E_z')}`, 'zero'],
-    ],
-    heav: S`${nabla}\cdot${E(S`\vec{E}`)}=\dfrac{${rho}}{\varepsilon_0}`,
-    note: S`Put \(${E('D')}=\varepsilon ${E('E')}\) into the first line, and the three terms \(\partial_i ${E('D_i')}\) fold into one <b>divergence</b>.` },
-  { key: 'gaussB', role: 'core', numeral: 'II', name: 'Gauss’s law', tag: 'magnetic',
-    plain: 'There is no magnetic charge. Every B line closes on itself.',
-    src: 'B · field from the vector potential',
-    lines: [
-      [S`${B('B_x')}=${d('y')}${A('A_z')}-${d('z')}${A('A_y')}`, 'zero'],
-      [S`${B('B_y')}=${d('z')}${A('A_x')}-${d('x')}${A('A_z')}`, 'zero'],
-      [S`${B('B_z')}=${d('x')}${A('A_y')}-${d('y')}${A('A_x')}`, 'Bz'],
-    ],
-    heav: S`${nabla}\cdot${B(S`\vec{B}`)}=0`,
-    note: S`Because \(${B(S`\vec B`)}=\nabla\times${A(S`\vec A`)}\), the identity \(\nabla\cdot(\nabla\times${A(S`\vec A`)})=0\) makes this law true <b>for free</b>.` },
-  { key: 'faraday', role: 'core', numeral: 'III', name: 'Faraday’s law', tag: 'induction',
-    plain: 'A changing magnetic field drives a curling electric field.',
-    src: 'D · electromotive force',
-    lines: [
-      [S`${E('E_x')}=\mu(v_y${B('H_z')}-v_z${B('H_y')})-${O(S`\partial_t`)}${A('A_x')}-${d('x')}${phi}`, 'Ex'],
-      [S`${E('E_y')}=\mu(v_z${B('H_x')}-v_x${B('H_z')})-${O(S`\partial_t`)}${A('A_y')}-${d('y')}${phi}`, 'Ey'],
-      [S`${E('E_z')}=\mu(v_x${B('H_y')}-v_y${B('H_x')})-${O(S`\partial_t`)}${A('A_z')}-${d('z')}${phi}`, 'zero'],
-    ],
-    heav: S`${nabla}\times${E(S`\vec{E}`)}=-\dfrac{\partial${B(S`\vec{B}`)}}{\partial t}`,
-    note: S`Drop the motional term and take the <b>curl</b>: \(\nabla\times(-\partial_t${A(S`\vec A`)})=-\partial_t${B(S`\vec B`)}\).` },
-  { key: 'ampere', role: 'core', numeral: 'IV', name: 'Ampère–Maxwell law', tag: 'circulation',
-    plain: 'Current, and a changing electric field, curl the magnetic field.',
-    src: 'C · circuital law  ·  A · total current',
-    lines: [
-      [S`${d('y')}${B('H_z')}-${d('z')}${B('H_y')}=${J("J'_x")}`, 'curlHx'],
-      [S`${d('z')}${B('H_x')}-${d('x')}${B('H_z')}=${J("J'_y")}`, 'curlHy'],
-      [S`${d('x')}${B('H_y')}-${d('y')}${B('H_x')}=${J("J'_z")}`, 'zero'],
-      [S`${J("J'_x")}=${J('J_x')}+${DISP(S`\partial_t ${E('D_x')}`)}`, 'dExdt'],
-      [S`${J("J'_y")}=${J('J_y')}+${DISP(S`\partial_t ${E('D_y')}`)}`, 'dEydt'],
-      [S`${J("J'_z")}=${J('J_z')}+${DISP(S`\partial_t ${E('D_z')}`)}`, 'zero'],
-    ],
-    heav: S`${nabla}\times${B(S`\vec{B}`)}=\mu_0${J(S`\vec{J}`)}+${DISP(S`\mu_0\varepsilon_0\dfrac{\partial${E(S`\vec{E}`)}}{\partial t}`)}`,
-    note: S`The curl of \(${B('H')}\) is the <b>total</b> current. Its \(\partial ${E('D')}/\partial t\) part is Maxwell’s <b>displacement current</b>: the term that lets the loops on the canvas break free and travel as light.` },
-  { key: 'const', role: 'aside', numeral: '', name: 'Constitutive relations', tag: 'set aside',
-    plain: 'How a material answers the field. They describe the medium, not the field.',
-    src: 'F · Ohm’s law  ·  E · elasticity',
-    lines: [
-      [S`${J('J_x')}=\sigma\,${E('E_x')}`, 'Ex'],
-      [S`${J('J_y')}=\sigma\,${E('E_y')}`, 'Ey'],
-      [S`${J('J_z')}=\sigma\,${E('E_z')}`, 'zero'],
-    ],
-    heav: S`${J(S`\vec J`)}=\sigma${E(S`\vec E`)},\qquad ${E(S`\vec D`)}=\varepsilon${E(S`\vec E`)}`,
-    note: S`Material relations sit outside the famous four.` },
-  { key: 'contin', role: 'follows', numeral: '', name: 'Continuity', tag: 'follows',
-    plain: 'Charge is conserved. This follows from the Ampère–Maxwell law.',
-    src: 'H · conservation of charge',
-    lines: [
-      [S`${d('x')}${J('J_x')}+${d('y')}${J('J_y')}+${d('z')}${J('J_z')}+${O(S`\partial_t`)}${rho}=0`, 'zero'],
-    ],
-    heav: S`${nabla}\cdot${J(S`\vec J`)}+\dfrac{\partial${rho}}{\partial t}=0`,
-    note: S`Take the divergence of Ampère–Maxwell: \(\nabla\cdot(\nabla\times${B(S`\vec B`)})=0\) leaves exactly this line.` },
-];
-
-const FOUR = [
-  ['I', 'Gauss · electric', S`${nabla}\cdot${E(S`\vec E`)}=\dfrac{${rho}}{\varepsilon_0}`],
-  ['II', 'Gauss · magnetic', S`${nabla}\cdot${B(S`\vec B`)}=0`],
-  ['III', 'Faraday', S`${nabla}\times${E(S`\vec E`)}=-\dfrac{\partial${B(S`\vec B`)}}{\partial t}`],
-  ['IV', 'Ampère–Maxwell', S`${nabla}\times${B(S`\vec B`)}=\mu_0${J(S`\vec J`)}+${DISP(S`\mu_0\varepsilon_0\dfrac{\partial${E(S`\vec E`)}}{\partial t}`)}`],
-];
-
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
-const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'html'] }), OutputJax: new SVG({ fontCache: 'local' }) });
+const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'html', 'boldsymbol'] }), OutputJax: new SVG({ fontCache: 'local' }) });
 
-// MathJax output to inline SVG. The ex sizes stay, so CSS font-size scales
-// the formula. aria-hidden goes, and the TeX becomes the label.
-let nSvg = 0;
-function svg(tex, display = true) {
-  const node = doc.convert(tex, { display });
-  let s = adaptor.innerHTML(node).replace(/ aria-hidden="true"/, '');
-  if (s.includes('merror')) throw new Error('TeX error in: ' + tex);
-  // Glyph ids are MJX-<n>-...; give every SVG its own prefix so the ids in
-  // one document never clash.
-  const id = 'T' + (nSvg++);
-  s = s.replace(/MJX-(\d+)-/g, `MJX-${id}-`);
-  const label = tex.replace(/\\class\{m\d\}/g, '').replace(/"/g, '&quot;');
-  return s.replace('<svg ', `<svg class="mj" aria-label="${label}" `);
+// Affine matrices as [a, b, c, d, e, f] (SVG order).
+const I = [1, 0, 0, 1, 0, 0];
+const mm = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+function parseTransform(s) {
+  let m = I;
+  if (!s) return m;
+  const re = /(translate|scale|matrix)\(([^)]*)\)/g;
+  let x;
+  while ((x = re.exec(s))) {
+    const v = x[2].trim().split(/[\s,]+/).map(Number);
+    let n;
+    if (x[1] === 'translate') n = [1, 0, 0, 1, v[0], v[1] || 0];
+    else if (x[1] === 'scale') n = [v[0], 0, 0, v.length > 1 ? v[1] : v[0], 0, 0];
+    else n = v;
+    m = mm(m, n);
+  }
+  if (s.replace(re, '').trim()) throw new Error('unknown transform: ' + s);
+  return m;
 }
-// Prose with inline \( \) math: each piece becomes an inline SVG.
-const prose = html => html.replace(/\\\((.+?)\\\)/g, (m, tex) => svg(tex, false));
 
+// The bounding box [x0, y0, x1, y1] of a glyph path (absolute M L H V Q T
+// C Z commands, as MathJax writes them).
+function pathBox(d) {
+  const tok = d.match(/[A-Za-z]|-?\d*\.?\d+(?:e-?\d+)?/g);
+  let cmd = '', x = 0, y = 0, i = 0;
+  const b = [Infinity, Infinity, -Infinity, -Infinity];
+  const add = (px, py) => { b[0] = Math.min(b[0], px); b[1] = Math.min(b[1], py); b[2] = Math.max(b[2], px); b[3] = Math.max(b[3], py); };
+  while (i < tok.length) {
+    if (/[A-Za-z]/.test(tok[i])) { cmd = tok[i++]; if (cmd === 'Z' || cmd === 'z') continue; }
+    if (cmd !== cmd.toUpperCase()) throw new Error('relative path command ' + cmd);
+    if (cmd === 'H') { x = +tok[i++]; add(x, y); }
+    else if (cmd === 'V') { y = +tok[i++]; add(x, y); }
+    else { const n = { M: 2, L: 2, T: 2, Q: 4, S: 4, C: 6 }[cmd]; if (!n) throw new Error('path command ' + cmd);
+      for (let j = 0; j < n; j += 2) { x = +tok[i + j]; y = +tok[i + j + 1]; add(x, y); } i += n; }
+  }
+  return b;
+}
+
+const COLORS = { m1: 1, m2: 2, m3: 3, m4: 4, m5: 5, m6: 6 };
+const glyphIndex = new Map(), GLYPHS = [];
+const r2 = v => Math.round(v * 100) / 100;
+
+// Walk the MathJax tree. Returns { g: [...], r: [...] }.
+function flatten(svgNode) {
+  const defs = new Map();
+  const g = [], r = [];
+  const kids = n => (n.children || []);
+  const attr = (n, a) => (n.attributes ? n.attributes[a] : undefined);
+  for (const d of kids(svgNode)) if (d.kind === 'defs') for (const p of kids(d)) defs.set(attr(p, 'id'), attr(p, 'd'));
+  const walk = (n, m, col) => {
+    if (!n.kind || n.kind === '#text' || n.kind === '#comment') return;
+    if (n.kind === 'defs' || n.kind === 'title') return;
+    if (n.kind === 'svg' && n !== svgNode) { clipped(n, m, col); return; }
+    const cl = (attr(n, 'class') || '').trim().split(/\s+/).find(c => COLORS[c]);
+    const c = cl ? COLORS[cl] : col;
+    const M = mm(m, parseTransform(attr(n, 'transform')));
+    if (n.kind === 'use') {
+      const id = (attr(n, 'xlink:href') || attr(n, 'href') || '').slice(1), d = defs.get(id);
+      // Invisible operators (function application, times, separator) have
+      // no outline: skip them. Any other missing glyph is an error.
+      if (!d && /^(2061|2062|2063|200B)$/.test(attr(n, 'data-c') || '')) return;
+      if (!d) throw new Error('missing glyph ' + id);
+      if (!glyphIndex.has(d)) { glyphIndex.set(d, GLYPHS.length); GLYPHS.push(d); }
+      g.push(glyphIndex.get(d), ...M.map(r2), c);
+      return;
+    }
+    if (n.kind === 'rect') {
+      const v = ['x', 'y', 'width', 'height'].map(a => +(attr(n, a) || 0));
+      r.push(...v.map(r2), ...M.map(r2), c);
+      return;
+    }
+    if (n.kind === 'path') throw new Error('inline path is not supported');
+    for (const k of kids(n)) walk(k, M, c);
+  };
+  // A nested svg is a clip window round a scaled extender glyph (the long
+  // middle of a tall bracket). Extenders are straight strokes, so the
+  // glyph's box clipped to the window is the visible shape: emit it as a
+  // rule. Anything else inside a nested svg is an error.
+  const clipped = (n, m, col) => {
+    const [vx, vy, vw, vh] = attr(n, 'viewBox').split(/\s+/).map(Number);
+    const x = +(attr(n, 'x') || 0), y = +(attr(n, 'y') || 0);
+    if (Math.abs(+attr(n, 'width') - vw) > 1e-6 || Math.abs(+attr(n, 'height') - vh) > 1e-6) throw new Error('scaled nested svg');
+    const M = mm(m, [1, 0, 0, 1, x - vx, y - vy]);
+    for (const u of kids(n)) {
+      if (u.kind !== 'use') throw new Error('nested svg holds ' + u.kind);
+      const d = defs.get((attr(u, 'xlink:href') || '').slice(1));
+      const T = parseTransform(attr(u, 'transform'));
+      if (T[1] || T[2]) throw new Error('rotated extender');
+      const b = pathBox(d);
+      const x0 = Math.max(vx, T[0] * b[0] + T[4]), x1 = Math.min(vx + vw, T[0] * b[2] + T[4]);
+      const ya = T[3] * b[1] + T[5], yb = T[3] * b[3] + T[5];
+      const y0 = Math.max(vy, Math.min(ya, yb)), y1 = Math.min(vy + vh, Math.max(ya, yb));
+      if (x1 > x0 && y1 > y0) r.push(...[x0, y0, x1 - x0, y1 - y0].map(r2), ...M.map(r2), col);
+    }
+  };
+  for (const k of kids(svgNode)) walk(k, I, 0);
+  return { g, r };
+}
+
+const EQ = {};
 let n = 0;
-const data = {
-  concepts: CONCEPTS.map(c => ({
-    key: c.key, role: c.role, numeral: c.numeral, name: c.name, tag: c.tag, plain: c.plain, src: c.src,
-    lines: c.lines.map(([tex, ov]) => ({ n: ++n, ov, svg: svg(tex, false) })),
-    heav: svg(c.heav),
-    note: prose(c.note),
-  })),
-  four: FOUR.map(([numeral, name, tex]) => ({ numeral, name, svg: svg(tex) })),
-};
-// Inline symbols for the legend (E, B) and the slider labels. concepts.js
-// puts each one into the element with the matching data-sym.
-const SYM = { E: E(S`\vec E`), B: B(S`\vec B`), f: 'f', lambda: L(S`\lambda`), axis: S`\theta_a` };
-data.sym = Object.fromEntries(Object.entries(SYM).map(([k, t]) => [k, svg(t, false)]));
-if (n !== 20) throw new Error(`expected 20 scalar lines, got ${n}`);
+for (const [key, [tex, mode]] of Object.entries(TEX)) {
+  const node = doc.convert(tex, { display: mode === 'd' });
+  const svg = adaptor.firstChild(node);
+  if (adaptor.innerHTML(node).includes('merror') || adaptor.innerHTML(node).includes('data-mjx-error')) throw new Error('TeX error in ' + key + ': ' + tex);
+  const vb = adaptor.getAttribute(svg, 'viewBox').split(/\s+/).map(Number).map(r2);
+  let g, r;
+  try { ({ g, r } = flatten(svg)); } catch (e) { throw new Error(key + ': ' + e.message + '\n' + adaptor.innerHTML(node).replace(/ d="[^"]*"/g, '').slice(0, 1500)); }
+  const label = tex.replace(/\\class\{m\d\}/g, '').replace(/\s+/g, ' ');
+  EQ[key] = [vb, mode, g, r, label];
+  n++;
+}
 
 const js = `// ============================================================================
-//  TWENTY TO FOUR  ·  equation data  (GENERATED by typeset.mjs)
+//  TWENTY TO FOUR  ·  glyphs.js  (GENERATED by typeset.mjs — do not edit)
 // ----------------------------------------------------------------------------
-//  Do not edit by hand. Change the TeX in typeset.mjs and run it again.
-//  window.T24 holds the six concept blocks (20 scalar lines, each with its
-//  canvas overlay key ov) and the four vector equations, as static MathJax
-//  SVG. concepts.js builds the panel from it. window.T24.sym holds the
-//  inline label symbols. Symbol colours are the .m1 to .m6 classes of
-//  lib/sci.css.
+//  Change the TeX in tex.js and run typeset.mjs again (see its header).
+//  GLYPHS   glyph outlines (SVG path data, 1/1000 em, y down after the
+//           matrix), shared by all formulas
+//  EQ[key]  [viewBox, mode, glyphs, rules, label]
+//           glyphs: runs of 8 numbers: glyph index, a b c d e f, colour
+//           rules:  runs of 11 numbers: x y w h, a b c d e f, colour
+//           colour 0 is ink, 1 to 6 the lib/sci.css classes m1 to m6
+//  math.js reads it.
 // ============================================================================
-window.T24 = ${JSON.stringify(data)};
+export const GLYPHS = ${JSON.stringify(GLYPHS)};
+export const EQ = ${JSON.stringify(EQ)};
 `;
-const dest = fileURLToPath(new URL('./equations.js', import.meta.url));
+const dest = fileURLToPath(new URL('./glyphs.js', import.meta.url));
 writeFileSync(dest, js);
-console.log('wrote', dest, js.length, 'bytes,', n, 'scalar lines,', nSvg, 'svg');
+console.log('wrote', dest, js.length, 'bytes,', n, 'formulas,', GLYPHS.length, 'glyphs');

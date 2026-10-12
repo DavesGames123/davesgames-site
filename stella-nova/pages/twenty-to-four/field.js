@@ -37,6 +37,8 @@
 //      grep -n "export function tensorF"   F_{μν} from E and B
 //      grep -n "export function dF"        the four components of dF
 //      grep -n "export function termAmps"  near, induction and far terms
+//      grep -n "export function ampEquator" |E| on the equator, closed form
+//      grep -n "export function fromPotentials"  E and B by differencing φ, A
 // ============================================================================
 
 export const TAU = Math.PI * 2;
@@ -233,4 +235,27 @@ export function powerPattern(r, theta, k, n = 64) {
     s += S[0] * nx + S[2] * nz;
   }
   return r * r * s / n;
+}
+
+// |E| amplitude on the equator in units of k³ (p0 = 1), as a function of
+// x = kr: the phasor sum 1/x³ + i/x² − 1/x of the three terms.
+export function ampEquator(x) { const re = 1 / (x * x * x) - 1 / x, im = 1 / (x * x); return Math.hypot(re, im); }
+
+// E and B from potentials by central differences: pot(x, y, z, t) returns
+// [φ, Ax, Ay, Az]. Also the Lorenz expression ∇·A + ∂φ/∂t. The gauge check
+// of the page and tests.mjs use it.
+export function fromPotentials(P, t, pot, h = 1e-5) {
+  const g = [0, 0, 0], Ab = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let j = 0; j < 3; j++) {
+    const p = P.slice(), m = P.slice(); p[j] += h; m[j] -= h;
+    const a = pot(p[0], p[1], p[2], t), b = pot(m[0], m[1], m[2], t);
+    g[j] = (a[0] - b[0]) / (2 * h);
+    for (let i = 0; i < 3; i++) Ab[i][j] = (a[i + 1] - b[i + 1]) / (2 * h);
+  }
+  const ap = pot(P[0], P[1], P[2], t + h), am = pot(P[0], P[1], P[2], t - h);
+  const dA = [1, 2, 3].map(i => (ap[i] - am[i]) / (2 * h));
+  const dphi = (ap[0] - am[0]) / (2 * h);
+  const E = [0, 1, 2].map(i => -g[i] - dA[i]);
+  const B = [Ab[2][1] - Ab[1][2], Ab[0][2] - Ab[2][0], Ab[1][0] - Ab[0][1]];
+  return { E, B, lorenz: Ab[0][0] + Ab[1][1] + Ab[2][2] + dphi };
 }

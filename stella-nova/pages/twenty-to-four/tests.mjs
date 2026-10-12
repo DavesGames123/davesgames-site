@@ -15,9 +15,20 @@
 //                ∂_iF_i terms equal the cube's face-pair fluxes over volume
 //    forms       dF = 0 and d⋆F = 0 in all four components, and each
 //                component equals the vector law it names
-//  The page tests (story, equations, shaders) are added with the layout.
+//  EQUATIONS AND STORY (tex.js, glyphs.js, math.js, story.js)
+//    twenty      Maxwell's 20 lines in 8 groups, each line in one group
+//    glyphs      every TeX entry is typeset; indices, colours and numbers
+//                in range
+//    colours     each law carries the colours of its fields
+//    story       every {{key}} and data-eq in the chapters exists; every
+//                widget name is one main.js builds
+//    svg         eqSVG gives one <use> per glyph, with the colour class
 // ============================================================================
 import * as f from './field.js';
+import { TEX, MAXWELL, GROUPS } from './tex.js';
+import { GLYPHS, EQ } from './glyphs.js';
+import { eqSVG, eqBox } from './math.js';
+import { CHAPTERS } from './story.js';
 
 let pass = 0, fail = 0;
 const ok = (c, name, info = '') => { if (c) pass++; else fail++; console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
@@ -40,6 +51,9 @@ const TS = [0, 0.137, 0.61];
   const slope = (r1, r2) => Math.log(f.ampE(r2, Math.PI / 2, k) / f.ampE(r1, Math.PI / 2, k)) / Math.log(r2 / r1);
   const sn = slope(0.001, 0.002), sf = slope(40, 80);
   ok(Math.abs(sn + 3) < 0.02 && Math.abs(sf + 1) < 0.02, 'falloff: log slope −3 near, −1 far', `near ${sn.toFixed(3)}, far ${sf.toFixed(3)}`);
+  let worst = 0;
+  for (const x of [0.05, 0.3, 1, 2.5, 9, 40]) worst = Math.max(worst, rel(f.ampEquator(x) * k ** 3, f.ampE(x / k, Math.PI / 2, k, 512)));
+  ok(worst < 1e-3, 'falloff: the chart curve (closed form) matches the sampled |E| on the equator', `max ${worst.toExponential(2)}`);
   const t = f.termAmps(1);
   ok(t[0] === 1 && t[1] === 1 && t[2] === 1, 'falloff: the three terms are equal at kr = 1');
 }
@@ -78,21 +92,7 @@ const TS = [0, 0.137, 0.61];
 }
 
 // ── potentials ────────────────────────────────────────────────────────────
-function fromPotentials(P, t, pot) {
-  const h = 1e-5, g = [0, 0, 0], Ab = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-  for (let j = 0; j < 3; j++) {
-    const p = P.slice(), m = P.slice(); p[j] += h; m[j] -= h;
-    const a = pot(...p, t), b = pot(...m, t);
-    g[j] = (a[0] - b[0]) / (2 * h);
-    for (let i = 0; i < 3; i++) Ab[i][j] = (a[i + 1] - b[i + 1]) / (2 * h);
-  }
-  const ap = pot(...P, t + h), am = pot(...P, t - h);
-  const dA = [1, 2, 3].map(i => (ap[i] - am[i]) / (2 * h));
-  const dphi = (ap[0] - am[0]) / (2 * h);
-  const E = [0, 1, 2].map(i => -g[i] - dA[i]);
-  const B = [Ab[2][1] - Ab[1][2], Ab[0][2] - Ab[2][0], Ab[1][0] - Ab[0][1]];
-  return { E, B, lorenz: Ab[0][0] + Ab[1][1] + Ab[2][2] + dphi };
-}
+const fromPotentials = f.fromPotentials;
 {
   let eE = 0, eB = 0, eL = 0;
   const E = [0, 0, 0], B = [0, 0, 0];
@@ -196,6 +196,64 @@ function fromPotentials(P, t, pot) {
   // F is antisymmetric with six independent entries: three E, three B.
   const F = f.tensorF([1, 2, 3], [4, 5, 6]);
   ok(F.every((row, a) => row.every((v, b) => v === -F[b][a])), 'forms: F_{μν} is antisymmetric');
+}
+
+// ── twenty ────────────────────────────────────────────────────────────────
+{
+  const seen = GROUPS.flatMap(g => g.lines).sort((a, b) => a - b);
+  ok(MAXWELL.length === 20 && seen.length === 20 && seen.every((v, i) => v === i), 'twenty: 20 lines in 8 groups, each line once', `groups ${GROUPS.map(g => g.g + g.lines.length).join(' ')}`);
+  const laws = new Set(['I', 'II', 'III', 'IV', 'diel', 'ohm', 'cont']);
+  ok(GROUPS.every(g => laws.has(g.law)) && ['I', 'II', 'III', 'IV'].every(l => GROUPS.some(g => g.law === l)), 'twenty: every group folds into a law, and every law gets a group');
+}
+
+// ── glyphs ────────────────────────────────────────────────────────────────
+{
+  const keys = Object.keys(TEX), missing = keys.filter(k => !EQ[k]);
+  ok(missing.length === 0 && Object.keys(EQ).length === keys.length, `glyphs: all ${keys.length} TeX entries are typeset`, missing.join(' '));
+  let bad = [];
+  for (const [k, [vb, mode, g, r]] of Object.entries(EQ)) {
+    if (vb.length !== 4 || !vb.every(Number.isFinite) || vb[2] <= 0 || vb[3] <= 0 || (mode !== 'd' && mode !== 'i')) bad.push(k + ':box');
+    if (g.length % 8 || r.length % 11 || !g.length) bad.push(k + ':runs');
+    for (let i = 0; i < g.length; i += 8) if (!(g[i] >= 0 && g[i] < GLYPHS.length) || !(g[i + 7] >= 0 && g[i + 7] <= 6) || !g.slice(i, i + 8).every(Number.isFinite)) { bad.push(k + ':glyph'); break; }
+    for (let i = 0; i < r.length; i += 11) if (!(r[i + 10] >= 0 && r[i + 10] <= 6) || !r.slice(i, i + 11).every(Number.isFinite)) { bad.push(k + ':rule'); break; }
+  }
+  ok(bad.length === 0, 'glyphs: boxes, glyph indices, colours and numbers are in range', bad.slice(0, 6).join(' '));
+  ok(GLYPHS.every(d => /^M/.test(d) && !/[a-z]/.test(d.replace(/e-?\d/g, ''))), 'glyphs: every outline is absolute path data', `${GLYPHS.length} outlines`);
+  const b = eqBox('lawI', 20);
+  ok(b.w > 40 && b.asc > 5 && b.desc > 2, 'glyphs: a fraction has height above and below the baseline', `lawI at 20px: ${b.w.toFixed(1)} × ${b.h.toFixed(1)}`);
+}
+
+// ── colours ───────────────────────────────────────────────────────────────
+{
+  const cols = k => new Set(EQ[k][2].filter((v, i) => i % 8 === 7));
+  const want = { lawI: [2, 4], lawII: [1], lawIII: [2, 1], lawIV: [1, 5, 2], pB: [1, 3], pE: [2, 3], cBx: [1], cEx: [2] };
+  const bad = Object.entries(want).filter(([k, c]) => !c.every(x => cols(k).has(x))).map(([k]) => k);
+  ok(bad.length === 0, 'colours: E is m2, B m1, A and φ m3, ρ m4, J m5 in the laws', bad.join(' '));
+  const m = MAXWELL.map((t, i) => cols('m' + String(i + 1).padStart(2, '0')));
+  ok(m[3].has(1) && m[3].has(3) && m[9].has(2) && m[9].has(1) && m[9].has(3) && m[18].has(4), 'colours: Maxwell’s α β γ blue, F G H Ψ green, P Q R orange, e pink');
+}
+
+// ── story ─────────────────────────────────────────────────────────────────
+{
+  const WIDGETS = new Set(['groups', 'quantities', 'four', 'falloff', 'maps', 'fieldctl', 'curl', 'div', 'gauge', 'forms']);
+  const SCENES = new Set(['fold', 'field', 'curlB', 'curlE', 'div', 'four', 'gauge', 'forms']);
+  const miss = [], wid = [];
+  for (const c of CHAPTERS) {
+    for (const m of c.html.matchAll(/\{\{(\w+)\}\}/g)) if (!EQ[m[1]]) miss.push(c.id + ':' + m[1]);
+    for (const m of c.html.matchAll(/data-eq="(\w+)"/g)) if (!EQ[m[1]]) miss.push(c.id + ':' + m[1]);
+    for (const m of c.html.matchAll(/data-w="(\w+)"/g)) if (!WIDGETS.has(m[1])) wid.push(c.id + ':' + m[1]);
+  }
+  ok(miss.length === 0, 'story: every inline and display formula key exists', miss.join(' '));
+  ok(wid.length === 0, 'story: every widget is one main.js builds', wid.join(' '));
+  ok(CHAPTERS.every(c => SCENES.has(c.scene)) && new Set(CHAPTERS.map(c => c.id)).size === CHAPTERS.length, `story: ${CHAPTERS.length} chapters, unique ids, known scenes`);
+  const caps = CHAPTERS.filter(c => !/^[A-Z0-9]/.test(c.title) || /[A-Z]{3,}/.test(c.title.replace(/[IVX]+/g, '')));
+  ok(caps.length === 0, 'story: chapter titles are sentence case', caps.map(c => c.title).join(' | '));
+}
+
+// ── svg ───────────────────────────────────────────────────────────────────
+{
+  const svg = eqSVG('lawIV'), n = (svg.match(/<use /g) || []).length;
+  ok(n === EQ.lawIV[2].length / 8 && /class="m1"/.test(svg) && /class="m5"/.test(svg) && /aria-label=/.test(svg), 'svg: eqSVG has one <use> per glyph and the colour classes', `${n} glyphs`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
