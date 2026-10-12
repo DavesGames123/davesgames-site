@@ -73,7 +73,7 @@ h1{font-family:var(--sci-serif);font-weight:500;font-size:1.9rem;line-height:1.1
 #stepTex .eq{font-size:1.06rem;color:#eef2f4}
 #stepTex .eq.small{font-size:0.92rem}
 #stepTex .eq .cap{display:block;font:0.72rem var(--sci-sans);color:var(--dim);margin-top:4px;line-height:1.3}
-#stepTex .eq svg{display:block;max-width:100%}
+#stepTex .eq svg{display:block;max-width:100%;height:auto}
 #stepText p{font-family:var(--sci-serif);font-size:1.05rem;line-height:1.6;color:var(--text);margin-bottom:12px}
 #stepText p em{color:#eef2f4}
 #stepText .m1,#stepText .m2,#stepText .m3,#stepText .m4,#stepText .m5,#stepText .m6{font-style:italic}

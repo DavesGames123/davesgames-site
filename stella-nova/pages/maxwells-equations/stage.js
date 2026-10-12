@@ -36,7 +36,6 @@ export function createStage(canvas, { labelsEl = null } = {}) {
   scene.background = new THREE.Color(0x07090d);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-  scene.environmentIntensity = 0.55;
   const key = new THREE.DirectionalLight(0xfff1e0, 1.4); key.position.set(3, 5, 4); scene.add(key);
   const rim = new THREE.DirectionalLight(0x9cc8ff, 0.9); rim.position.set(-4, 2, -5); scene.add(rim);
   scene.add(new THREE.HemisphereLight(0x8fa6c8, 0x0a0c10, 0.35));

@@ -64,8 +64,10 @@ export function lineMat({ color = '#ffffff', width = 1.5, opacity = 1, dashed = 
 }
 export function lines(polys, opts = {}) {
   const g = new LineSegmentsGeometry();
-  g.setPositions(linePositions(polys, opts.closed));
-  if (opts.colors) {
+  // An empty set gets one zero-length segment, so the bounds stay finite.
+  const empty = !polys.some(P => P.length > 1);
+  g.setPositions(empty ? new Float32Array(6) : linePositions(polys, opts.closed));
+  if (opts.colors && !empty) {
     const col = [];
     polys.forEach((P, li) => {
       const m = P.length - 1 + (opts.closed && P.length > 2 ? 1 : 0);
@@ -76,6 +78,7 @@ export function lines(polys, opts = {}) {
   const L = new LineSegments2(g, lineMat({ ...opts, vertexColors: !!opts.colors }));
   if (opts.dashed) L.computeLineDistances();
   L.frustumCulled = false;
+  if (empty) L.visible = false;
   return L;
 }
 // Replace the polylines of a LineSegments2 in place.
