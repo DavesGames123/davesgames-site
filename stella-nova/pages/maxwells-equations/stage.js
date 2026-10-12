@@ -68,7 +68,7 @@ export function createStage(canvas, { labelsEl = null } = {}) {
     renderer, scene, camera, controls, composer, bloom,
     w: 1, h: 1, occ: { t: 0, b: 0, l: 0, r: 0 }, fly: null, idle: 0, drift: 0.04,
     labels: [], tick: null, running: true, last: performance.now(), t: 0, fade: 1, fadeTarget: 1,
-    paused: false, saver: false,
+    paused: false, saver: false, saverTick: null,
   };
   let lastInput = performance.now();
   for (const ev of ['pointerdown', 'wheel', 'touchstart']) canvas.addEventListener(ev, () => { lastInput = performance.now(); S.fly = null; }, { passive: true });
@@ -106,7 +106,8 @@ export function createStage(canvas, { labelsEl = null } = {}) {
     camera.aspect = w / h;
     const fw = Math.max(1, w - occ.l - occ.r), fh = Math.max(1, h - occ.t - occ.b);
     // A shorter free area shows the subject a little smaller, so it fits.
-    camera.zoom = Math.max(0.6, Math.min(1, fh / h + 0.18));
+    // The saver fits its own camera distance to the band, so it keeps zoom 1.
+    camera.zoom = S.saver ? 1 : Math.max(0.6, Math.min(1, fh / h + 0.18));
     camera.setViewOffset(w, h, (occ.r - occ.l) / 2, (occ.b - occ.t) / 2, w, h);
     camera.updateProjectionMatrix();
     S.free = { fw, fh };
@@ -162,6 +163,7 @@ export function createStage(canvas, { labelsEl = null } = {}) {
     }
     controls.update();
     if (S.tick) S.tick(dt, S.t);
+    if (S.saverTick) S.saverTick(dt);
     camQ.copy(camera.quaternion);
     scene.traverse(o => {
       if (!o.userData.billboard || !o.visible) return;

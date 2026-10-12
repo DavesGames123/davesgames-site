@@ -94,6 +94,37 @@ try {
 } catch (e) {
   if (e.code !== 'ERR_MODULE_NOT_FOUND') check('saver.js loads in node', false, String(e.stack || e).split('\n').slice(0, 2).join(' | '));
 }
+// the director: enter(), 40 s of ticks, exit(), with a stub stage and DOM
+try {
+  const sv = await import('./saver.js');
+  const cls = new Set();
+  globalThis.window = globalThis;
+  globalThis.document = { documentElement: { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } } };
+  const cam = new THREE.PerspectiveCamera(34, 16 / 9, 0.05, 200);
+  const stage = { camera: cam, controls: { target: new THREE.Vector3(), enabled: true }, w: 1280, h: 720, fade: 1, fadeTarget: 1, canvas: { id: 'stage' },
+    occ: null, setOcclusion(o) { this.occ = o; }, resize() {}, saverTick: null };
+  const SCENES = {};
+  const sceneFn = k => { if (!SCENES[k]) { SCENES[k] = built[k]; } return SCENES[k]; };
+  for (const k of Object.keys(built)) SCENES[k] = built[k];
+  let active = null, plates = 0, reentered = 0;
+  sv.installSaver({ stage, scene: sceneFn, SCENES, toWorld: p => [p[0], p[2], -p[1]], S: {}, setActive: s => { active = s; }, reenter: () => reentered++ });
+  const got = window.snSaver.enter({ calm: 0.7, seed: 1234, label: info => { if (info && info.title && info.tex) plates++; } });
+  const keys = new Set();
+  let bad = 0;
+  for (let f = 0; f < 60 * 40; f++) {
+    active.update(1 / 60, f / 60);
+    stage.saverTick(1 / 60);
+    keys.add(window.snSaver.debug().key);
+    if (![cam.position.x, cam.position.y, cam.position.z].every(Number.isFinite)) bad++;
+  }
+  const dbg = window.snSaver.debug();
+  window.snSaver.exit();
+  check('saver director: enter returns the stage canvas', got.canvas === stage.canvas && got.warmupMs > 0);
+  check('saver director: cuts between shots in 40 s', dbg.count >= 4 && keys.size >= 4, `${dbg.count} shots, ${keys.size} kinds: ${[...keys].join(' ')}`);
+  check('saver director: camera stays finite', bad === 0, `${bad} bad frames`);
+  check('saver director: plates sent with title and TeX', plates >= dbg.count, `${plates} plates`);
+  check('saver director: exit restores the page', reentered === 1 && !cls.has('mx-saver') && stage.controls.enabled);
+} catch (e) { check('saver director runs', false, String(e.stack || e).split('\n').slice(0, 3).join(' | ')); }
 void THREE;
 console.log(`\n${n - fails}/${n} smoke checks passed`);
 process.exit(fails ? 1 : 0);

@@ -14,7 +14,7 @@
 //    "const SCENES"   scene modules       "function go"        change step
 //    "function buildControls"             "function renderReadout"
 //    "function layoutPhone"  sheet, dock and occlusion
-//    "function bindKeys"     keys          "saver.js"           screensaver
+//    "function bindKeys"     keys          "installSaver"       screensaver
 // ============================================================================
 import { THREE } from './kit.js';
 import { createStage } from './stage.js';
@@ -24,6 +24,7 @@ import * as forms from './scenes/forms.js';
 import * as stokes from './scenes/stokes.js';
 import * as laws from './scenes/laws.js';
 import * as wave from './scenes/wave.js';
+import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('stage');
@@ -197,7 +198,8 @@ function setSheet(state) {
 }
 function layoutPhone() {
   if (!stage) return;
-  if (!phoneMQ.matches || S.saver) { stage.setOcclusion({}); return; }
+  if (S.saver) return;   // saver.js frames the camera in the plate's band
+  if (!phoneMQ.matches) { stage.setOcclusion({}); return; }
   const dock = $('dock').getBoundingClientRect().height;
   if (panel.classList.contains('closed')) { stage.setOcclusion({ b: dock }); return; }
   if (landMQ.matches) { stage.setOcclusion({ r: panel.getBoundingClientRect().width, b: dock }); return; }
@@ -243,6 +245,13 @@ bindKeys();
 const start = Math.max(0, STEPS.findIndex(s => '#' + s.id === location.hash));
 go(start, { instant: true });
 layoutPhone();
+
+// The screensaver hook (saver.js). reenter() puts the reader's step back.
+if (stage) installSaver({
+  stage, scene, SCENES, toWorld, S,
+  setActive: s => { active = s; },
+  reenter: () => { const i = cur; cur = -1; go(i, { instant: true }); layoutPhone(); },
+});
 
 // The page state for the screensaver module and for debugging.
 window.__mx = { go, get cur() { return cur; }, STEPS, SCENES, scene, stage, WORLD, S, layoutPhone, get active() { return active; } };

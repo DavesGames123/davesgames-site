@@ -389,7 +389,7 @@ export function build(ctx) {
       Object.assign(P, params, { mode });
       for (const [k, v] of Object.entries({ gauss: parts.gauss, monopole: parts.mono, faraday: parts.far, ampere: parts.amp })) v.g.visible = k === mode;
       parts.far.key = ''; parts.amp.key = '';
-      clock = 0;
+      clock = params.t0 || 0;
     },
     set(key, v) { P[key] = v; },
     update(dt) {

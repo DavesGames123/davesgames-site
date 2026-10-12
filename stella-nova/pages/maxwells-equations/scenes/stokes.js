@@ -233,6 +233,7 @@ export function build(ctx) {
     enter(mode, params = {}) {
       Object.assign(P, params, { mode });
       if (mode === 'dd') dimT = 3;
+      else if (params.instant) dimT = P.dim;
       clock = 0;
       if (mode === 'stokes' && !INT) INT = integrals();
     },
