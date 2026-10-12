@@ -53,5 +53,16 @@ s = { ...s, players: s.players.map((p, i) => (i === 0 ? { ...p, hand: ['heat-pul
   ok(ix.view().mode === 'main', 'target: secondary() (Escape) still cancels');
 }
 
+// combat: the small button is Undo, no Cancel
+{
+  let c = rules.newGame({ seed: 3, first: 0 });
+  c = rules.withPermanent(c, 0, 'hive-soldier');
+  c = rules.step(c, { type: 'pass' });
+  const ix = createInteraction({ rules, CARD, seat: 0 });
+  ix.sync(c);
+  const v = ix.view();
+  ok(v.mode === 'attack' && v.secondary?.kind === 'undo' && cancels(v) === 0, `combat: the small button is Undo (${v.secondary?.label}), no Cancel`);
+}
+
 console.log(`play-cancel: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);
