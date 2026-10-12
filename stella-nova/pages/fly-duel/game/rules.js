@@ -32,8 +32,26 @@
 //
 //  Triggers. A creature effect happens when it enters (it can have a
 //  target: the cast action carries it). onDeath happens when it dies
-//  (combat, damage, destroy, weaken, feast). onUpkeep happens at the start
-//  of its controller's turn. Triggers never have a target choice.
+//  (combat, damage, destroy, weaken, feast, an age clock). onUpkeep
+//  happens at the start of its controller's turn. Triggers never have a
+//  target choice.
+//
+//  Dice. An effect amount can be dice text ('2d4', 'd20'; game/cards.js
+//  diceSpec). The engine rolls it with the game RNG: state.rngState, one
+//  rngNext() step per die, so a seed and the same actions give the same
+//  rolls. Each die goes to state.rolls [{ die, value, p, uid?, why? }]
+//  (the rolls of the last step, in order, also with the log off) and to a
+//  'roll' event. die is the number of sides, why the id of the card.
+//  chance rolls one die: at `at` or more the hit effect happens, else the
+//  miss effect. per: 'creature' rolls once for each creature of the
+//  player. each (rally, counter) rolls once for each creature in the list.
+//
+//  Counters. permanent.counters { kind: n }, only when there is one (the
+//  key goes at 0). growth: +1/+1 each (it adds to pc too, so power() and
+//  toughness() need no change). charge and age count up, time counts
+//  down. enterCounters on a card: it enters with them. tick (on upkeep):
+//  one counter on or off the creature itself; at the threshold the done
+//  effect happens, reset takes the counters off, dies kills it.
 //
 //  Action shapes (legalActions gives them, step takes them). Unchanged
 //  from the two-colour version; a creature cast can now carry a target.
@@ -46,13 +64,15 @@
 //  built from greedy seeds first (good blocks, prefix attacks by power),
 //  then filled in a fixed order. The empty option is always present.
 //
-//  Permanent: { uid, id, tapped, sick, dmg, pp, pt, pc }
+//  Permanent: { uid, id, tapped, sick, dmg, pp, pt, pc, counters? }
 //      pp/pt: pump this turn (can be below 0 after weaken)
-//      pc:    lasting +pc/+pc (grow). power() and toughness() add both.
+//      pc:    lasting +pc/+pc (grow, growth counters). power() and
+//             toughness() add both.
+//      counters: { kind: n } (see Dice and Counters above)
 //  Player:    { life, library, hand, battlefield, graveyard, landPlayed }
 //  State:     { seed, decks, first, names, turn, active, phase, toAct,
 //               players, combat, nextUid, rngState, logOn, log, events,
-//               result }
+//               rolls, result }
 //  events: what the last step did, for animation. Filled only when the
 //  log is on (else []). One object per thing, in order:
 //      { t: 'tap', p, uid, pays }           a land paid (colour or 'generic')
@@ -66,6 +86,9 @@
 //      { t: 'grow', p, uid, n }             lasting +n/+n
 //      { t: 'pump', p, uid, pp, pt }        this-turn change
 //      { t: 'draw', p, n }  { t: 'discard', p, id }  { t: 'raise', p, id }
+//      { t: 'roll', p, die, value, uid?, why? }   one die (sides, result)
+//      { t: 'counter', p, uid, kind, n }    counters on (n > 0) or off
+//  A growth counter gives a counter event and then a grow event.
 //  Speed: newGame({ log: false }) skips the log text and the events.
 //
 //  EXPORTS   (jump with grep -n "<anchor>" game/rules.js)
@@ -86,10 +109,15 @@
 //      canAttack ...... "export function canAttack"
 //      canBlock ....... "export function canBlock"
 //      canTarget ...... "export function canTarget"   shell check
+//      countersOf ..... "export const countersOf"     counters of one kind
 //  INTERNALS
 //      fork ........... "function fork"             copy-on-step clone
 //      landInfo ....... "function landInfo"         untapped land summary
 //      targetsFor ..... "function targetsFor"
+//      rollDie ........ "function rollDie"           one die from rngState
+//      rollText ....... "function rollText"          dice text -> total
+//      amountOf ....... "function amountOf"          number or dice
+//      addCounters .... "function addCounters"       counters on or off
 //      resolveEffect .. "function resolveEffect"
 //      die ............ "function die"              death + onDeath trigger
 //      sweep .......... "function sweep"            lethal damage check
@@ -98,8 +126,8 @@
 //      attackOptions .. "function attackOptions"
 //      blockOptions ... "function blockOptions"
 // ============================================================================
-import { CARD, COLOUR_IDS, buildDeck, manaValue } from './cards.js';
-import { mulberry32 } from '../data/rng.js';
+import { CARD, COLOUR_IDS, buildDeck, manaValue, diceSpec } from './cards.js';
+import { mulberry32, rngNext } from '../data/rng.js';
 
 export const LIFE = 20;
 export const HAND_MAX = 7;
@@ -122,6 +150,8 @@ const isCreature = perm => CARD[perm.id].type === 'creature';
 const isLand = perm => CARD[perm.id].type === 'land';
 const pname = (s, p) => (s.names && s.names[p]) || `Player ${p + 1}`;
 const mkPerm = (s, id, tapped, sick) => ({ uid: s.nextUid++, id, tapped, sick, dmg: 0, pp: 0, pt: 0, pc: 0 });
+// Counters of one kind on a permanent (0 when it has none).
+export const countersOf = (perm, kind) => (perm.counters && perm.counters[kind]) || 0;
 const ev = (s, o) => { if (s.logOn) s.events.push(o); };
 
 export function canAttack(perm) {
@@ -149,7 +179,7 @@ export function newGame({ seed = 1, decks = ['amber', 'moss'], first = 0, names 
     names: names ? names.slice() : null,
     turn: 1, active: first, phase: 'main', toAct: first, players, combat: null,
     nextUid: 1, rngState: Math.floor(rng() * 4294967296) >>> 0,
-    logOn: !!log, log: [], events: [], result: null,
+    logOn: !!log, log: [], events: [], rolls: [], result: null,
   };
   if (s.logOn) s.log = [`Turn 1: ${pname(s, first)} goes first.`];
   return s;
@@ -161,6 +191,7 @@ export function clone(state) {
   for (const p of s.players) p.library = p.library.slice();
   s.log = state.log.slice();
   s.events = (state.events || []).map(e => ({ ...e }));
+  s.rolls = (state.rolls || []).map(r => ({ ...r }));
   return s;
 }
 
@@ -170,24 +201,30 @@ export function clone(state) {
 function fork(state) {
   const players = state.players.map(p => ({
     life: p.life, library: p.library, hand: p.hand.slice(),
-    battlefield: p.battlefield.map(x => ({ uid: x.uid, id: x.id, tapped: x.tapped, sick: x.sick, dmg: x.dmg, pp: x.pp, pt: x.pt, pc: x.pc || 0 })),
+    battlefield: p.battlefield.map(x => (x.counters
+      ? { uid: x.uid, id: x.id, tapped: x.tapped, sick: x.sick, dmg: x.dmg, pp: x.pp, pt: x.pt, pc: x.pc || 0, counters: { ...x.counters } }
+      : { uid: x.uid, id: x.id, tapped: x.tapped, sick: x.sick, dmg: x.dmg, pp: x.pp, pt: x.pt, pc: x.pc || 0 })),
     graveyard: p.graveyard.slice(), landPlayed: p.landPlayed,
   }));
   return {
     seed: state.seed, decks: state.decks, first: state.first, names: state.names,
     turn: state.turn, active: state.active, phase: state.phase, toAct: state.toAct, players,
     combat: state.combat ? { attackers: state.combat.attackers.slice() } : null,
-    nextUid: state.nextUid, rngState: state.rngState, logOn: state.logOn, log: state.log, events: [],
+    nextUid: state.nextUid, rngState: state.rngState, logOn: state.logOn, log: state.log, events: [], rolls: [],
     result: state.result ? { winner: state.result.winner, reason: state.result.reason } : null,
   };
 }
 
 // Add a permanent for tests or a sandbox board. Pure: returns a new state.
-export function withPermanent(state, p, id, { tapped = false, sick = false, dmg = 0, pc = 0 } = {}) {
+export function withPermanent(state, p, id, { tapped = false, sick = false, dmg = 0, pc = 0, counters = null } = {}) {
   if (!CARD[id]) throw new Error(`unknown card ${id}`);
   const s = fork(state);
   const perm = mkPerm(s, id, tapped, sick);
   perm.dmg = dmg; perm.pc = pc;
+  if (counters) {
+    const c = Object.fromEntries(Object.entries(counters).filter(([, n]) => n > 0));
+    if (Object.keys(c).length) perm.counters = c;
+  }
   s.players[p].battlefield.push(perm);
   return s;
 }
@@ -543,12 +580,13 @@ export function step(state, action) {
         const perm = mkPerm(s, card.id, false, true);
         me.battlefield.push(perm);
         ev(s, { t: 'enter', p, uid: perm.uid, id: perm.id });
+        if (card.enterCounters) for (const [kind, n] of Object.entries(card.enterCounters)) addCounters(s, p, perm, kind, n);
         if (card.effect) {
           ev(s, { t: 'trigger', p, uid: perm.uid, id: card.id, when: 'enter', kind: card.effect.kind });
-          resolveEffect(s, p, card.effect, action.target, lines, perm.uid);
+          resolveEffect(s, p, card.effect, action.target, lines, perm.uid, card.id);
         }
       } else {
-        resolveEffect(s, p, card.effect, action.target, lines, undefined);
+        resolveEffect(s, p, card.effect, action.target, lines, undefined, card.id);
         me.graveyard.push(card.id);
       }
       sweep(s, lines);
@@ -624,7 +662,7 @@ function die(s, owner, x, lines) {
   const d = CARD[x.id].onDeath;
   if (d && !s.result) {
     ev(s, { t: 'trigger', p: owner, uid: x.uid, id: x.id, when: 'death', kind: d.kind });
-    resolveEffect(s, owner, d, undefined, lines, undefined);
+    resolveEffect(s, owner, d, undefined, lines, undefined, x.id);
   }
 }
 
@@ -636,35 +674,104 @@ function findPerm(s, uid) {
   return [null, -1];
 }
 
-function resolveEffect(s, p, e, target, lines, srcUid) {
+// ------------------------------------------------------------------ dice
+// One die with `sides` faces from the game RNG (state.rngState). The roll
+// goes to state.rolls (always) and to the events (log on), in order.
+function rollDie(s, p, sides, srcUid, why) {
+  const [f, next] = rngNext(s.rngState);
+  s.rngState = next;
+  const value = 1 + Math.floor(f * sides);
+  const r = { die: sides, value, p };
+  if (srcUid !== undefined) r.uid = srcUid;
+  if (why) r.why = why;
+  s.rolls.push(r);
+  ev(s, { t: 'roll', ...r });
+  return value;
+}
+
+// Roll a dice text ('2d4', 'd20', 'd6+1', '2d20kh1') once. Returns the total.
+function rollText(s, p, text, srcUid, why, lines) {
+  const spec = diceSpec(text);
+  let total = 0;
+  const seen = [];
+  for (const t of spec.terms) {
+    if (t.kind === 'const') { total += t.sign * t.value; continue; }
+    const vals = [];
+    for (let i = 0; i < t.count; i++) vals.push(rollDie(s, p, t.sides, srcUid, why));
+    seen.push(...vals);
+    let kept = vals;
+    if (t.keep) kept = vals.slice().sort((a, b) => (t.keep.hi ? b - a : a - b)).slice(0, t.keep.n);
+    total += t.sign * kept.reduce((a, b) => a + b, 0);
+  }
+  total = Math.max(0, total);
+  if (lines) lines.push(`  ${pname(s, p)} rolls ${text}: ${seen.join(', ')}${seen.length > 1 || total !== seen[0] ? ` = ${total}` : ''}.`);
+  return total;
+}
+
+// The number an effect uses. A plain number stays. A dice text rolls; with
+// per: 'creature' it rolls once for each creature of player p and adds.
+function amountOf(s, p, e, srcUid, why, lines) {
+  if (typeof e.amount === 'number') return e.amount;
+  if (e.per === 'creature') {
+    let n = 0;
+    const k = s.players[p].battlefield.filter(isCreature).length;
+    for (let i = 0; i < k; i++) n += rollText(s, p, e.amount, srcUid, why, lines);
+    return n;
+  }
+  return rollText(s, p, e.amount, srcUid, why, lines);
+}
+
+// Put n counters of one kind on a permanent (n < 0 takes them off). A
+// growth counter is also a lasting +1/+1, so it changes pc too. The kind
+// key goes away at 0.
+function addCounters(s, q, x, kind, n) {
+  if (!n) return;
+  const have = countersOf(x, kind);
+  if (n < 0) n = -Math.min(have, -n);
+  if (!n) return;
+  const c = { ...(x.counters || {}) };
+  if (have + n > 0) c[kind] = have + n; else delete c[kind];
+  if (Object.keys(c).length) x.counters = c; else delete x.counters;
+  ev(s, { t: 'counter', p: q, uid: x.uid, kind, n });
+  if (kind === 'growth') { x.pc += n; ev(s, { t: 'grow', p: q, uid: x.uid, n }); }
+}
+
+function resolveEffect(s, p, e, target, lines, srcUid, why) {
   const me = s.players[p], opp = s.players[1 - p], o = 1 - p;
   const oppCreatures = () => opp.battlefield.filter(isCreature);
   const myCreatures = () => me.battlefield.filter(isCreature);
   const tgtOpp = () => (typeof target === 'number' ? opp.battlefield.find(y => y.uid === target) : null);
   const tgtOwn = () => (typeof target === 'number' ? me.battlefield.find(y => y.uid === target) : null);
+  // The amount, rolled at most once (dice) and only when the effect needs it.
+  let n0;
+  const amt = () => (n0 === undefined ? (n0 = amountOf(s, p, e, srcUid, why, lines)) : n0);
   switch (e.kind) {
-    case 'damage':
+    case 'damage': {
+      const n = amt();
       if (e.target === 'each') {
-        for (const x of oppCreatures()) { x.dmg += e.amount; ev(s, { t: 'damage', p: o, uid: x.uid, n: e.amount }); }
+        for (const x of oppCreatures()) { x.dmg += n; ev(s, { t: 'damage', p: o, uid: x.uid, n }); }
       } else if (e.target === 'face' || typeof target === 'string') {
         const q = e.target === 'face' ? o : +target.slice(1);
-        ev(s, { t: 'damage', p: q, n: e.amount });
-        loseLife(s, q, e.amount);
+        ev(s, { t: 'damage', p: q, n });
+        loseLife(s, q, n);
       } else {
         const x = tgtOpp();
-        if (x) { x.dmg += e.amount; ev(s, { t: 'damage', p: o, uid: x.uid, n: e.amount }); }
+        if (x) { x.dmg += n; ev(s, { t: 'damage', p: o, uid: x.uid, n }); }
       }
       break;
-    case 'draw':
-      for (let i = 0; i < e.amount && !s.result; i++) drawCard(s, p, lines);
+    }
+    case 'draw': {
+      const n = amt();
+      for (let i = 0; i < n && !s.result; i++) drawCard(s, p, lines);
       break;
+    }
     case 'pump': {
       const x = tgtOwn();
       if (x) { x.pp += e.amount; x.pt += e.tough ?? e.amount; ev(s, { t: 'pump', p, uid: x.uid, pp: e.amount, pt: e.tough ?? e.amount }); }
       break;
     }
     case 'heal':
-      gainLife(s, p, e.amount);
+      gainLife(s, p, amt());
       break;
     case 'destroy': {
       const x = tgtOpp();
@@ -672,7 +779,7 @@ function resolveEffect(s, p, e, target, lines, srcUid) {
       break;
     }
     case 'token':
-      for (let i = 0; i < e.amount; i++) {
+      for (let i = 0, n = amt(); i < n; i++) {
         const perm = mkPerm(s, e.token, false, !KW[e.token].swift);
         me.battlefield.push(perm);
         ev(s, { t: 'enter', p, uid: perm.uid, id: perm.id });
@@ -685,12 +792,50 @@ function resolveEffect(s, p, e, target, lines, srcUid) {
       break;
     }
     case 'rally':
-      for (const x of myCreatures()) { x.pp += e.amount; x.pt += e.amount; ev(s, { t: 'pump', p, uid: x.uid, pp: e.amount, pt: e.amount }); }
+      // each: one roll for each creature; tough: a fixed toughness change
+      for (const x of myCreatures()) {
+        const a = e.each ? amountOf(s, p, e, srcUid, why, lines) : amt();
+        const t = e.tough ?? a;
+        x.pp += a; x.pt += t; ev(s, { t: 'pump', p, uid: x.uid, pp: a, pt: t });
+      }
       break;
-    case 'drain':
-      loseLife(s, o, e.amount);
-      gainLife(s, p, e.amount);
+    case 'drain': {
+      const n = amt();
+      loseLife(s, o, n);
+      gainLife(s, p, n);
       break;
+    }
+    case 'counter': {
+      const list = e.target === 'all' ? myCreatures()
+        : e.target === 'this' ? me.battlefield.filter(y => y.uid === srcUid) : [tgtOwn()].filter(Boolean);
+      for (const x of list) addCounters(s, p, x, e.counter, e.each ? amountOf(s, p, e, srcUid, why, lines) : amt());
+      break;
+    }
+    case 'chance': {
+      // roll; at or over `at` the hit effect happens, else the miss effect
+      const v = amt();
+      const next = v >= e.at ? e.hit : e.miss;
+      if (lines) lines.push(`  ${v >= e.at ? 'Hit' : 'Miss'} (${v}, needs ${e.at}).`);
+      if (next && !s.result) resolveEffect(s, p, next, target, lines, srcUid, why);
+      break;
+    }
+    case 'tick': {
+      // One counter on (amount 1) or off (amount -1) the creature itself.
+      // Up: when it has `at`, the effect happens. Down: when the last one
+      // goes, the effect happens. reset takes the counters off, dies kills
+      // the creature after the done effect.
+      const x = me.battlefield.find(y => y.uid === srcUid);
+      if (!x) break;
+      const had = countersOf(x, e.counter);
+      if (e.amount < 0 && had <= 0) break;
+      addCounters(s, p, x, e.counter, e.amount);
+      const now = countersOf(x, e.counter);
+      if (e.amount < 0 ? now > (e.at || 0) : now < e.at) break;
+      if (e.reset && now) addCounters(s, p, x, e.counter, -now);
+      if (e.done && !s.result) resolveEffect(s, p, e.done, undefined, lines, srcUid, why);
+      if (e.dies && !s.result && me.battlefield.includes(x)) die(s, p, x, lines);
+      break;
+    }
     case 'tap': {
       const x = tgtOpp();
       if (x) { x.tapped = true; ev(s, { t: 'tapped', p: o, uid: x.uid }); }
@@ -756,7 +901,7 @@ function resolveEffect(s, p, e, target, lines, srcUid) {
     }
     default: throw new Error(`unknown effect ${e.kind}`);
   }
-  if (e.then && !s.result) resolveEffect(s, p, e.then, undefined, lines, srcUid);
+  if (e.then && !s.result) resolveEffect(s, p, e.then, undefined, lines, srcUid, why);
 }
 
 function drawCard(s, p, lines) {
@@ -892,7 +1037,7 @@ function endTurn(s, lines) {
     const u = CARD[x.id].onUpkeep;
     if (!u || !nx.battlefield.includes(x)) continue;
     ev(s, { t: 'trigger', p: s.active, uid: x.uid, id: x.id, when: 'upkeep', kind: u.kind });
-    resolveEffect(s, s.active, u, undefined, lines, x.uid);
+    resolveEffect(s, s.active, u, undefined, lines, x.uid, x.id);
     checkLife(s, lines);
     if (s.result) return;
   }

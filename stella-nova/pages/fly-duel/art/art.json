@@ -3133,5 +3133,492 @@
    "h": 0.5752,
    "note": "fractions of the source image, 4:3 box"
   }
+ },
+ "tinder-cricket": {
+  "artist": "W. H. Lizars",
+  "file": "cards/tinder-cricket.jpg",
+  "small": "cards/tinder-cricket@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 14 (Anostostoma australasiae)",
+  "subject": "king cricket",
+  "author": "James Duncan (ed. William Jardine), drawn by J. O. Westwood, engraved by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 14.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_14.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.18,
+   "y": 0.03,
+   "w": 0.7397,
+   "h": 0.9003,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "bombardier": {
+  "artist": "Edmund Reitter",
+  "file": "cards/bombardier.jpg",
+  "small": "cards/bombardier@sm.jpg",
+  "title": "Fauna Germanica: Die Käfer des Deutschen Reiches, plate 31, fig. 4b (Brachinus crepitans)",
+  "subject": "bombardier beetle",
+  "author": "Edmund Reitter (colour plates by K. G. Lutz)",
+  "year": "1908",
+  "commons": "File:Reitter-1908 table31.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Reitter-1908_table31.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.07,
+   "y": 0.572,
+   "w": 0.47,
+   "h": 0.2309,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spark-scatter": {
+  "artist": "James McNeill Whistler",
+  "file": "cards/spark-scatter.jpg",
+  "small": "cards/spark-scatter@sm.jpg",
+  "title": "Nocturne in Black and Gold: The Falling Rocket (oil painting), detail",
+  "subject": "falling fireworks sparks at night",
+  "author": "James McNeill Whistler",
+  "year": "1875",
+  "commons": "File:Whistler-Nocturne in black and gold.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Whistler-Nocturne_in_black_and_gold.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.33,
+   "y": 0.02,
+   "w": 0.62,
+   "h": 0.35,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "drum-frenzy": {
+  "artist": "W. H. Lizars",
+  "file": "cards/drum-frenzy.jpg",
+  "small": "cards/drum-frenzy@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 18 (Polyneura ducalis)",
+  "subject": "cicada, the drummer of the insects",
+  "author": "James Duncan (ed. William Jardine), drawn by J. O. Westwood, engraved by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 18.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_18.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.09,
+   "w": 1.0,
+   "h": 0.4779,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "ember-hail": {
+  "artist": "Frederic Edwin Church",
+  "file": "cards/ember-hail.jpg",
+  "small": "cards/ember-hail@sm.jpg",
+  "title": "The Meteor of 1860 (oil painting)",
+  "subject": "a fireball meteor over a lake",
+  "author": "Frederic Edwin Church",
+  "year": "1860",
+  "commons": "File:The Meteor of 1860.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:The_Meteor_of_1860.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.02,
+   "y": 0.0,
+   "w": 0.7573,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "cicada-nymph": {
+  "artist": "W. H. Lizars",
+  "file": "cards/cicada-nymph.jpg",
+  "small": "cards/cicada-nymph@sm.jpg",
+  "title": "The Naturalist's Library, Entomology, plate 21, fig. 2 (Cicada septendecim)",
+  "subject": "periodical (17-year) cicada",
+  "author": "James Duncan (ed. William Jardine), plates engraved by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Entomology Plate 21.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Entomology_Plate_21.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.06,
+   "y": 0.02,
+   "w": 0.86,
+   "h": 0.3967,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "gall-larva": {
+  "artist": "Hermann Adler",
+  "file": "cards/gall-larva.jpg",
+  "small": "cards/gall-larva@sm.jpg",
+  "title": "Oak leaf with spangle galls (Neuroterus lenticularis), from Über den Generationswechsel der Eichen-Gallwespen, Zeitschrift für wissenschaftliche Zoologie 35, plate X",
+  "subject": "oak leaf with spangle galls",
+  "author": "Hermann Adler",
+  "year": "1881",
+  "commons": "File:Neuroterus - Print - Iconographia Zoologica - Special Collections University of Amsterdam - UBAINV0274 047 03 0043.tif",
+  "url": "https://commons.wikimedia.org/wiki/File:Neuroterus_-_Print_-_Iconographia_Zoologica_-_Special_Collections_University_of_Amsterdam_-_UBAINV0274_047_03_0043.tif",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.26,
+   "y": 0.36,
+   "w": 0.53,
+   "h": 0.2627,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "spring-downpour": {
+  "artist": "Utagawa Hiroshige",
+  "file": "cards/spring-downpour.jpg",
+  "small": "cards/spring-downpour@sm.jpg",
+  "title": "Driving Rain at Shōno, from The Fifty-Three Stations of the Tōkaidō (woodblock print)",
+  "subject": "travellers in a driving rain",
+  "author": "Utagawa Hiroshige",
+  "year": "c. 1833",
+  "commons": "File:Clevelandart 1948.306.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Clevelandart_1948.306.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.19,
+   "y": 0.14,
+   "w": 0.7122,
+   "h": 0.8,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "whirligig": {
+  "artist": "John Curtis",
+  "file": "cards/whirligig.jpg",
+  "small": "cards/whirligig@sm.jpg",
+  "title": "British Beetles, plate VI, fig. 51 (Gyrinus bicolor)",
+  "subject": "whirligig beetle",
+  "author": "E. C. Rye, plates by John Curtis",
+  "year": "1863",
+  "commons": "File:British beetles (Plate VI) BHL9609784.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:British_beetles_(Plate_VI)_BHL9609784.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.655,
+   "y": 0.451,
+   "w": 0.25,
+   "h": 0.1284,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "moon-snail": {
+  "artist": "unknown engraver",
+  "file": "cards/moon-snail.jpg",
+  "small": "cards/moon-snail@sm.jpg",
+  "title": "Lunatia heros (engraving), Freshwater and Marine Image Bank, University of Washington",
+  "subject": "moon snail shell",
+  "author": "unknown engraver (Freshwater and Marine Image Bank)",
+  "year": "1884",
+  "commons": "File:FMIB 51165 Lunatia heros.jpeg",
+  "url": "https://commons.wikimedia.org/wiki/File:FMIB_51165_Lunatia_heros.jpeg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-UWASH-FMIB"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.08,
+   "w": 1.0,
+   "h": 0.8081,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "rain-omen": {
+  "artist": "Utagawa Hiroshige",
+  "file": "cards/rain-omen.jpg",
+  "small": "cards/rain-omen@sm.jpg",
+  "title": "Night Rain at Karasaki, from Eight Views of Ōmi (woodblock print)",
+  "subject": "rain over the lake at night",
+  "author": "Utagawa Hiroshige",
+  "year": "c. 1835",
+  "commons": "File:近江八景之内 唐崎夜雨-Night Rain at Karasaki, from the series Eight Views of Ō-mi MET DP122118.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:%E8%BF%91%E6%B1%9F%E5%85%AB%E6%99%AF%E4%B9%8B%E5%86%85_%E5%94%90%E5%B4%8E%E5%A4%9C%E9%9B%A8-Night_Rain_at_Karasaki,_from_the_series_Eight_Views_of_%C5%8C-mi_MET_DP122118.jpg",
+  "licence": "CC0",
+  "templates": [
+   "CC0"
+  ],
+  "crop": {
+   "x": 0.16,
+   "y": 0.2,
+   "w": 0.6942,
+   "h": 0.8,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "deathwatch": {
+  "artist": "John Curtis",
+  "file": "cards/deathwatch.jpg",
+  "small": "cards/deathwatch@sm.jpg",
+  "title": "British Beetles, plate XIX, fig. 168 (Anobium pertinax)",
+  "subject": "death-watch beetle (Anobium)",
+  "author": "E. C. Rye, plates by John Curtis",
+  "year": "1863",
+  "commons": "File:British beetles (Plate XIX) BHL9609810.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:British_beetles_(Plate_XIX)_BHL9609810.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.06,
+   "y": 0.746,
+   "w": 0.25,
+   "h": 0.1284,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "carrion-hive": {
+  "artist": "W. W. Froggatt",
+  "file": "cards/carrion-hive.jpg",
+  "small": "cards/carrion-hive@sm.jpg",
+  "title": "Australian Insects, plate XXIX (Diptera)",
+  "subject": "blowflies and flesh flies",
+  "author": "Walter Wilson Froggatt",
+  "year": "1907",
+  "commons": "File:Australian insects (Plate XXIX) (7268261232).jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Australian_insects_(Plate_XXIX)_(7268261232).jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art-category",
+   "PD-old-70-1923",
+   "PD-old-70-expired",
+   "PD-old-X-expired",
+   "PD-old-text",
+   "PD-scan"
+  ],
+  "crop": {
+   "x": 0.06,
+   "y": 0.0,
+   "w": 0.8358,
+   "h": 1.0,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "knucklebones": {
+  "artist": "Jean Siméon Chardin",
+  "file": "cards/knucklebones.jpg",
+  "small": "cards/knucklebones@sm.jpg",
+  "title": "The Game of Knucklebones (oil painting), detail",
+  "subject": "a girl playing knucklebones",
+  "author": "Jean Siméon Chardin",
+  "year": "c. 1734",
+  "commons": "File:Knucklebones.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Knucklebones.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Art",
+   "PD-Layout",
+   "PD-US-expired-text",
+   "PD-art",
+   "PD-art-category",
+   "PD-old-X-expired",
+   "PD-old-auto-1923",
+   "PD-old-auto-expired",
+   "PD-old-text"
+  ],
+  "crop": {
+   "x": 0.0,
+   "y": 0.06,
+   "w": 1.0,
+   "h": 0.6224,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "scout-bee": {
+  "artist": "W. H. Lizars",
+  "file": "cards/scout-bee.jpg",
+  "small": "cards/scout-bee@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 1 (honey bee: male, queen, worker)",
+  "subject": "honey bees",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 1.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_1.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.08,
+   "y": 0.14,
+   "w": 0.9,
+   "h": 0.4277,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "royal-cell": {
+  "artist": "W. H. Lizars",
+  "file": "cards/royal-cell.jpg",
+  "small": "cards/royal-cell@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 6 (cells of the comb, with the queen or royal cell)",
+  "subject": "honeycomb with a royal cell",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 6.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_6.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.14,
+   "y": 0.24,
+   "w": 0.776,
+   "h": 0.3801,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "waggle-dance": {
+  "artist": "W. H. Lizars",
+  "file": "cards/waggle-dance.jpg",
+  "small": "cards/waggle-dance@sm.jpg",
+  "title": "The Naturalist's Library, Entomology: Bees, plate 7 (bees swarming)",
+  "subject": "bees swarming at a hive",
+  "author": "James Duncan (ed. William Jardine), plate by W. H. Lizars",
+  "year": "1840",
+  "commons": "File:Jardine Naturalist's library Bees Plate 7.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Jardine_Naturalist%27s_library_Bees_Plate_7.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-1923",
+   "PD-Layout",
+   "PD-US-expired",
+   "PD-US-expired-text"
+  ],
+  "crop": {
+   "x": 0.08,
+   "y": 0.05,
+   "w": 0.7597,
+   "h": 0.85,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "honey-harvest": {
+  "artist": "Pieter Bruegel the Elder",
+  "file": "cards/honey-harvest.jpg",
+  "small": "cards/honey-harvest@sm.jpg",
+  "title": "The Beekeepers (pen drawing)",
+  "subject": "beekeepers at their hives",
+  "author": "Pieter Bruegel the Elder",
+  "year": "c. 1568",
+  "commons": "File:Pieter Brueghel the Elder - The Beekeepers and the Birdnester, c1568 - Kupferstichkabinett Berlin.jpg",
+  "url": "https://commons.wikimedia.org/wiki/File:Pieter_Brueghel_the_Elder_-_The_Beekeepers_and_the_Birdnester,_c1568_-_Kupferstichkabinett_Berlin.jpg",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-old-100",
+   "PD-old-text",
+   "PD-old-warning-text"
+  ],
+  "crop": {
+   "x": 0.03,
+   "y": 0.06,
+   "w": 0.7516,
+   "h": 0.8499,
+   "note": "fractions of the source image, 4:3 box"
+  }
+ },
+ "pill-bug": {
+  "artist": "Charles Sillem",
+  "file": "cards/pill-bug.jpg",
+  "small": "cards/pill-bug@sm.jpg",
+  "title": "The British Woodlice, plate XXIII (Armadillidium vulgare)",
+  "subject": "pill woodlouse",
+  "author": "Wilfred Mark Webb and Charles Sillem; drawn by Charles Sillem, engraved by F. W. Reader",
+  "year": "1906",
+  "commons": "File:The British Woodlice 66.png",
+  "url": "https://commons.wikimedia.org/wiki/File:The_British_Woodlice_66.png",
+  "licence": "Public domain",
+  "templates": [
+   "PD-Layout",
+   "PD-US"
+  ],
+  "crop": {
+   "x": 0.2,
+   "y": 0.215,
+   "w": 0.6,
+   "h": 0.48,
+   "note": "fractions of the source image, 4:3 box; set on a 4:3 field"
+  }
  }
 }

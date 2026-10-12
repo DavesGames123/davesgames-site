@@ -9,26 +9,28 @@
 //  death and start-of-turn triggers, shell, hand size, decking, the turn
 //  cap, determinism by seed, no mutation of the input state (deep freeze),
 //  the option caps, features (colour-generic), describe, the log bound and
-//  the events list, 5000 random games over every deck pair with their
-//  speed, and greedy against random for every deck.
+//  the events list, dice and counters (every dice card, rolls in
+//  state.rolls, events and match records, determinism by seed, the
+//  greedy mean over rolls), 5000 random games over every deck pair with
+//  their speed and dice count, and greedy against random for every deck.
 //  Exit code 1 on any failure.
 //
 //  GREP MAP   (grep -n "^// ---" tests/game.test.mjs)
 // ============================================================================
 import { mulberry32, rngNext, hashSeed, shuffle } from '../data/rng.js';
-import { CARDS, TOKENS, CARD, DECKS, DECK_ORDER, COLOUR_IDS, COLOURS, buildDeck, deckList, manaValue, KEYWORDS, rulesText, validateDeck, deckColours } from '../game/cards.js';
+import { CARDS, TOKENS, CARD, DECKS, DECK_ORDER, COLOUR_IDS, COLOURS, buildDeck, deckList, manaValue, KEYWORDS, rulesText, validateDeck, deckColours, diceSpec, diceMean, diceChance, cardRolls, cardCounters } from '../game/cards.js';
 import {
   newGame, legalActions, step, isOver, clone, describe, actionKey, withPermanent,
-  manaPool, canPay, payPlan, power, toughness, LIFE, HAND_MAX, TURN_CAP, LOG_MAX, MAX_OPTIONS,
+  manaPool, canPay, payPlan, power, toughness, LIFE, HAND_MAX, TURN_CAP, LOG_MAX, MAX_OPTIONS, countersOf,
 } from '../game/rules.js';
 import { features, FEATURE_NAMES, FEATURE_SPEC, F, FEATURE_VERSION } from '../game/features.js';
-import { randomBot, greedyBot, boardScore } from '../game/bots.js';
+import { randomBot, greedyBot, boardScore, expectedScore } from '../game/bots.js';
 
 let fail = 0, pass = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg); } };
 const throws = (fn, msg) => { try { fn(); ok(false, msg); } catch { ok(true, msg); } };
 const J = x => JSON.stringify(x);
-const EFFECTS = ['damage', 'draw', 'pump', 'heal', 'destroy', 'token', 'grow', 'rally', 'drain', 'tap', 'bounce', 'ramp', 'discard', 'weaken', 'feast', 'raise'];
+const EFFECTS = ['damage', 'draw', 'pump', 'heal', 'destroy', 'token', 'grow', 'rally', 'drain', 'tap', 'bounce', 'ramp', 'discard', 'weaken', 'feast', 'raise', 'counter', 'chance', 'tick'];
 
 // --------------------------------------------------------------- rng
 {
@@ -72,7 +74,7 @@ const EFFECTS = ['damage', 'draw', 'pump', 'heal', 'destroy', 'token', 'grow', '
       ok(EFFECTS.includes(c.effect.kind), `effect kind ${c.id}`);
       if (c.effect.kind === 'token') ok(CARD[c.effect.token] && CARD[c.effect.token].token, `token exists ${c.id}`);
     }
-    for (const t of [c.onDeath, c.onUpkeep, c.effect?.then]) if (t) ok(['draw', 'heal', 'drain', 'token', 'grow', 'damage'].includes(t.kind) && !['any', 'opp', 'own'].includes(t.target), `trigger has no choice ${c.id}`);
+    for (const t of [c.onDeath, c.onUpkeep, c.effect?.then]) if (t) ok(['draw', 'heal', 'drain', 'token', 'grow', 'damage', 'counter', 'chance', 'tick'].includes(t.kind) && !['any', 'opp', 'own'].includes(t.target), `trigger has no choice ${c.id}`);
     ok(typeof c.text === 'string' && typeof c.flavour === 'string', `text ${c.id}`);
   }
   ok(COLOUR_IDS.length === 5 && COLOUR_IDS.every(x => COLOURS[x] && COLOURS[x].name && COLOURS[x].theme), 'five named colours');
@@ -97,7 +99,9 @@ const EFFECTS = ['damage', 'draw', 'pump', 'heal', 'destroy', 'token', 'grow', '
   for (const k of Object.keys(KEYWORDS)) ok(CARDS.some(c => (c.keywords || []).includes(k)), `pool has keyword ${k}`);
   // IP: no WotC card names, land names or keyword words in our cards
   const bannedName = /\b(magic|gathering|wizards|island|swamp|mountain|plains|forest|planeswalker|llanowar|serra|shivan|lightning bolt|giant growth|counterspell)\b/i;
-  const bannedText = /\b(flying|haste|deathtouch|vigilance|lifelink|defender|trample|first strike|reach|hexproof|ward|menace|counter|planeswalker|tap:\s*add \{|wizards of the coast)\b/i;
+  // "counter" the noun (a growth counter, shown by a die) is plain board
+  // game language. The verb (counter a spell) and "counterspell" stay out.
+  const bannedText = /\b(flying|haste|deathtouch|vigilance|lifelink|defender|trample|first strike|reach|hexproof|ward|menace|counter (target|a|that|it|the)|counterspell|planeswalker|tap:\s*add \{|wizards of the coast)\b/i;
   for (const c of [...CARDS, ...TOKENS]) {
     ok(!bannedName.test(c.name), `IP: own name ${c.name}`);
     ok(!bannedText.test(c.text + ' ' + c.flavour), `IP: own text ${c.id}`);
@@ -615,6 +619,261 @@ function playOut(seed, botSeed, { log = true, freeze = false, decks } = {}) {
   ok(J(s0) === before, 'clone is independent');
 }
 
+// --------------------------------------------------------------- dice and counters
+{
+  const lands = (s, id, n, p = 0) => { for (let i = 0; i < n; i++) s = put(s, p, id); return s; };
+  const rollsOf = r => r.events.filter(e => e.t === 'roll');
+  const libOf = n => Array.from({ length: n }, () => 'dew-pond');
+  // to the next turn of player 0: pass, no attack, then player 1 passes too
+  const nextTurn = s => {
+    let r = step(s, { type: 'pass' });
+    if (r.phase === 'attack') r = step(r, { type: 'attack', attackers: [] });
+    if (r.result) return r;
+    r = step(r, { type: 'pass' });
+    if (r.phase === 'attack') r = step(r, { type: 'attack', attackers: [] });
+    return r;
+  };
+  const withSeed = (s, rs) => { const t = clone(s); t.rngState = rs >>> 0; return t; };
+
+  // dice text helpers (game/cards.js)
+  ok(diceMean('2d4') === 5 && diceMean('d20') === 10.5 && diceMean(3) === 3 && Math.abs(diceMean('2d20kh1') - 13.825) < 1e-9, 'diceMean: 2d4 = 5, d20 = 10.5, 2d20kh1 = 13.825');
+  ok(diceChance('d20', 11) === 0.5 && diceChance('d6', 5) === 2 / 6 && Math.abs(diceChance('2d4', 6) - 6 / 16) < 1e-12, 'diceChance: exact');
+  throws(() => diceSpec('d7'), 'diceSpec refuses a d7');
+  throws(() => diceSpec('d6!'), 'diceSpec refuses an exploding die');
+  ok(diceSpec('2d4').terms[0].count === 2 && diceSpec('2d4').terms[0].sides === 4, 'diceSpec reads Dice Lab notation');
+
+  // the pool: 19 dice and counter cards over the five colours, each in a deck
+  const diceCards = CARDS.filter(c => cardRolls(c) || cardCounters(c));
+  ok(diceCards.length >= 14 && diceCards.length <= 20, `14 to 20 dice and counter cards (${diceCards.length})`);
+  for (const col of COLOUR_IDS) ok(diceCards.filter(c => c.colours.includes(col)).length >= 3, `${col}: three or more dice cards`);
+  for (const sides of [4, 6, 8, 10, 12, 20]) ok(diceCards.some(c => JSON.stringify(c).includes(`d${sides}"`)), `a card rolls a d${sides}`);
+  for (const k of ['growth', 'charge', 'age', 'time']) ok(diceCards.some(c => JSON.stringify(c).includes(`"${k}"`)), `a card uses ${k} counters`);
+  const inDecks = new Set(Object.values(DECKS).flatMap(d => d.list.map(r => r[0])));
+  for (const c of diceCards) ok(inDecks.has(c.id), `${c.id} is in a deck`);
+  for (const n of DECK_ORDER) ok(DECKS[n].list.filter(([id]) => cardRolls(id) || cardCounters(id)).reduce((a, r) => a + r[1], 0) >= 3, `${n}: three or more dice cards`);
+  for (const c of diceCards) ok(/roll|counter/i.test(c.text), `${c.id}: text names the roll or the counter`);
+
+  // Spark Scatter: 2d4 to a player; the rolls are in state.rolls and the events, in order
+  let s = board(); s.players[0].hand = ['spark-scatter']; s = lands(s, 'amber-ridge', 3);
+  let r = step(s, { type: 'cast', card: 'spark-scatter', target: 'p1' });
+  let R = rollsOf(r);
+  ok(R.length === 2 && R.every(e => e.die === 4 && e.value >= 1 && e.value <= 4 && e.p === 0 && e.why === 'spark-scatter'), 'spark scatter: two d4 roll events');
+  ok(J(r.rolls) === J(R.map(({ t, ...x }) => x)), 'state.rolls equals the roll events, in order');
+  ok(r.players[1].life === 20 - R[0].value - R[1].value, 'spark scatter: damage is the sum of the dice');
+  ok(r.rngState !== s.rngState && r.log.some(l => /rolls 2d4/.test(l)), 'the roll moves rngState and has a log line');
+  ok(J(step(s, { type: 'cast', card: 'spark-scatter', target: 'p1' }).rolls) === J(r.rolls), 'same state, same action: same rolls');
+  ok(J(step(s, { type: 'cast', card: 'spark-scatter', target: 'p1' })) === J(r), 'step with dice is deterministic');
+  ok(step(r, { type: 'pass' }).rolls.length === 0, 'state.rolls holds the rolls of the last step only');
+  // all values over many rng states: every face of a d4 comes up, and only those
+  const faces = new Set();
+  for (let k = 0; k < 200; k++) for (const x of step(withSeed(s, k * 7919 + 1), { type: 'cast', card: 'spark-scatter', target: 'p1' }).rolls) faces.add(x.value);
+  ok(J([...faces].sort()) === '[1,2,3,4]', 'd4 faces 1 to 4 all occur');
+  // to a creature
+  s = put(s, 1, 'grove-stag');
+  r = step(s, { type: 'cast', card: 'spark-scatter', target: uidOf(s, 1, 'grove-stag') });
+  const sum = r.rolls.reduce((a, x) => a + x.value, 0);
+  ok(sum >= 5 ? !r.players[1].battlefield.length : r.players[1].battlefield[0].dmg === sum, 'spark scatter on a creature: dice damage, lethal at 5+');
+
+  // Ember Hail: one d12
+  s = board(); s.players[0].hand = ['ember-hail']; s = lands(s, 'amber-ridge', 5);
+  r = step(s, { type: 'cast', card: 'ember-hail', target: 'p1' });
+  ok(r.rolls.length === 1 && r.rolls[0].die === 12 && r.players[1].life === 20 - r.rolls[0].value, 'ember hail: d12 damage');
+
+  // Tinder Cricket: d20, 11 or more deals 2 to the opposing player
+  let hit = 0, miss = 0;
+  for (let k = 0; k < 60; k++) {
+    s = withSeed(board(), k * 104729 + 5); s.players[0].hand = ['tinder-cricket']; s = lands(s, 'amber-ridge', 2);
+    r = step(s, { type: 'cast', card: 'tinder-cricket' });
+    const v = r.rolls[0].value;
+    if (r.rolls.length !== 1 || r.rolls[0].die !== 20 || r.rolls[0].uid !== uidOf(r, 0, 'tinder-cricket')) { ok(false, 'tinder cricket: one d20 from the cricket'); break; }
+    if (v >= 11) { hit++; ok(r.players[1].life === 18, `tinder cricket hit at ${v}`); } else { miss++; ok(r.players[1].life === 20, `tinder cricket miss at ${v}`); }
+  }
+  ok(hit > 10 && miss > 10, `tinder cricket: hits and misses both occur (${hit}/${miss})`);
+
+  // Drumming Frenzy: one d4 for each of my creatures, power only
+  s = board(); s.players[0].hand = ['drum-frenzy']; s = lands(s, 'amber-ridge', 2);
+  s = put(s, 0, 'hive-soldier'); s = put(s, 0, 'cinder-ant'); s = put(s, 0, 'ember-gnat');
+  r = step(s, { type: 'cast', card: 'drum-frenzy' });
+  const cre = r.players[0].battlefield.filter(x => CARD[x.id].type === 'creature');
+  ok(r.rolls.length === 3 && cre.every((x, i) => x.pp === r.rolls[i].value && x.pt === 0), 'drumming frenzy: one d4 per creature, +n/+0');
+
+  // Knucklebones: d8 drain
+  s = board(); s.players[0].hand = ['knucklebones']; s = lands(s, 'rot-log', 3);
+  r = step(s, { type: 'cast', card: 'knucklebones' });
+  ok(r.rolls[0].die === 8 && r.players[1].life === 20 - r.rolls[0].value && r.players[0].life === 20 + r.rolls[0].value, 'knucklebones: d8 drain');
+
+  // Waggle Dance: one d4 for each creature I control, gain the total
+  s = board(); s.players[0].hand = ['waggle-dance']; s = lands(s, 'pollen-meadow', 2);
+  s = put(s, 0, 'hoverfly'); s = put(s, 0, 'worker-bee');
+  r = step(s, { type: 'cast', card: 'waggle-dance' });
+  ok(r.rolls.length === 2 && r.players[0].life === 20 + r.rolls[0].value + r.rolls[1].value, 'waggle dance: a d4 per creature, gain the total');
+  s = board(); s.players[0].hand = ['waggle-dance']; s = lands(s, 'pollen-meadow', 2);
+  r = step(s, { type: 'cast', card: 'waggle-dance' });
+  ok(r.rolls.length === 0 && r.players[0].life === 20, 'waggle dance with no creature: no roll, no life');
+
+  // Honey Harvest: d10 life, then draw
+  s = board(); s.players[0].hand = ['honey-harvest']; s.players[0].library = libOf(3); s = lands(s, 'pollen-meadow', 3);
+  r = step(s, { type: 'cast', card: 'honey-harvest' });
+  ok(r.rolls[0].die === 10 && r.players[0].life === 20 + r.rolls[0].value && r.players[0].hand.length === 1, 'honey harvest: d10 life, then a card');
+
+  // Rain Omen: d6, 4 or more draws two, else one
+  let seen2 = 0, seen1 = 0;
+  for (let k = 0; k < 30; k++) {
+    s = withSeed(board(), k * 31337 + 9); s.players[0].hand = ['rain-omen']; s.players[0].library = libOf(5); s = lands(s, 'dew-pond', 2);
+    r = step(s, { type: 'cast', card: 'rain-omen' });
+    const want = r.rolls[0].value >= 4 ? 2 : 1;
+    ok(r.players[0].hand.length === want, `rain omen: ${r.rolls[0].value} draws ${want}`);
+    if (want === 2) seen2++; else seen1++;
+  }
+  ok(seen2 && seen1, 'rain omen: both results occur');
+
+  // Whirligig: d20 on enter, 11 or more draws
+  s = board(); s.players[0].hand = ['whirligig']; s.players[0].library = libOf(3); s = lands(s, 'dew-pond', 3);
+  r = step(s, { type: 'cast', card: 'whirligig' });
+  ok(r.players[0].hand.length === (r.rolls[0].value >= 11 ? 1 : 0), 'whirligig: draw on 11 or more');
+
+  // Pill Bug: d6 on enter, 4 or more puts two growth counters on it
+  for (let k = 0; k < 12; k++) {
+    s = withSeed(board(), k * 7 + 1); s.players[0].hand = ['pill-bug']; s = lands(s, 'moss-hollow', 2);
+    r = step(s, { type: 'cast', card: 'pill-bug' });
+    const pb = r.players[0].battlefield.find(x => x.id === 'pill-bug');
+    const big = r.rolls[0].value >= 4;
+    ok(big ? pb.counters.growth === 2 && pb.pc === 2 && power(pb) === 3 && toughness(pb) === 4 : !pb.counters && pb.pc === 0, `pill bug: roll ${r.rolls[0].value}`);
+  }
+
+  // Spring Downpour: d6 growth counters on one of my creatures; no creature, no cast
+  s = board(); s.players[0].hand = ['spring-downpour']; s = lands(s, 'moss-hollow', 3);
+  ok(!legalActions(s).some(a => a.card === 'spring-downpour'), 'spring downpour needs one of my creatures');
+  s = put(s, 0, 'bark-toad');
+  r = step(s, { type: 'cast', card: 'spring-downpour', target: uidOf(s, 0, 'bark-toad') });
+  let bt = r.players[0].battlefield.find(x => x.id === 'bark-toad');
+  const v6 = r.rolls[0].value;
+  ok(bt.counters.growth === v6 && bt.pc === v6 && power(bt) === 2 + v6, 'spring downpour: d6 growth counters, +1/+1 each');
+  const ce = r.events.filter(e => e.t === 'counter'), ge = r.events.filter(e => e.t === 'grow');
+  ok(ce.length === 1 && ce[0].kind === 'growth' && ce[0].n === v6 && ge.length === 1 && ge[0].n === v6, 'a growth counter gives a counter event and a grow event');
+  r = nextTurn(r); bt = r.players[0].battlefield.find(x => x.id === 'bark-toad');
+  ok(bt.counters.growth === v6 && power(bt) === 2 + v6, 'growth counters last past the end of turn');
+
+  // Oak Gall Larva: a growth counter at the start of each of my turns
+  s = board(); s.players[0].library = libOf(10); s.players[1].library = libOf(10); s = put(s, 0, 'gall-larva');
+  r = nextTurn(s);
+  let gl = r.players[0].battlefield.find(x => x.id === 'gall-larva');
+  ok(r.turn === 3 && gl.counters.growth === 1 && power(gl) === 2, 'gall larva: one growth counter on my turn');
+  r = nextTurn(r); gl = r.players[0].battlefield.find(x => x.id === 'gall-larva');
+  ok(gl.counters.growth === 2 && toughness(gl) === 3, 'gall larva: two after two turns');
+
+  // Cicada Nymph: enters with three time counters, counts down, then four growth counters
+  s = board(); s.players[0].hand = ['cicada-nymph']; s.players[0].library = libOf(12); s.players[1].library = libOf(12); s = lands(s, 'moss-hollow', 2);
+  r = step(s, { type: 'cast', card: 'cicada-nymph' });
+  let cn = r.players[0].battlefield.find(x => x.id === 'cicada-nymph');
+  ok(J(cn.counters) === '{"time":3}' && r.events.some(e => e.t === 'counter' && e.kind === 'time' && e.n === 3), 'cicada nymph enters with three time counters');
+  const timeLine = [];
+  for (let k = 0; k < 4; k++) { r = nextTurn(r); cn = r.players[0].battlefield.find(x => x.id === 'cicada-nymph'); timeLine.push(`${countersOf(cn, 'time')}/${countersOf(cn, 'growth')}`); }
+  ok(J(timeLine) === '["2/0","1/0","0/4","0/4"]', `cicada nymph: 3 -> 2 -> 1 -> 0, then four growth counters once (${timeLine})`);
+  ok(power(cn) === 5 && toughness(cn) === 6 && J(cn.counters) === '{"growth":4}', 'cicada nymph: 5/6 with the time key gone');
+
+  // Bombardier Beetle: charge counters, at three: remove them, 3 to the opposing player
+  s = board(); s.players[0].library = libOf(12); s.players[1].library = libOf(12); s = put(s, 0, 'bombardier');
+  const life = [], ch = [];
+  r = s;
+  for (let k = 0; k < 4; k++) { r = nextTurn(r); life.push(r.players[1].life); ch.push(countersOf(r.players[0].battlefield.find(x => x.id === 'bombardier'), 'charge')); }
+  ok(J(ch) === '[1,2,0,1]' && J(life) === '[20,20,17,17]', `bombardier: charge 1, 2, fire, 1 (${ch}; life ${life})`);
+
+  // Moon Snail: charge two, then draw
+  s = board(); s.players[0].library = libOf(12); s.players[1].library = libOf(12); s = put(s, 0, 'moon-snail');
+  r = nextTurn(s); const h1 = r.players[0].hand.length;
+  r = nextTurn(r);
+  ok(r.players[0].hand.length === h1 + 2 && !r.players[0].battlefield.find(x => x.id === 'moon-snail').counters, 'moon snail: at two charge counters, remove them and draw');
+
+  // Deathwatch Beetle: age counters, at three it dies and drains 2
+  s = board(); s.players[0].library = libOf(12); s.players[1].library = libOf(12); s = put(s, 0, 'deathwatch');
+  r = nextTurn(nextTurn(s));
+  ok(countersOf(r.players[0].battlefield.find(x => x.id === 'deathwatch'), 'age') === 2, 'deathwatch: two age counters after two turns');
+  r = nextTurn(r);
+  ok(!r.players[0].battlefield.some(x => x.id === 'deathwatch') && r.players[0].graveyard.includes('deathwatch') && r.players[1].life === 18 && r.players[0].life === 22, 'deathwatch: dies at three, death drain 2');
+
+  // Royal Cell: two time counters, then three Worker Bees, and it dies
+  s = board(); s.players[0].hand = ['royal-cell']; s.players[0].library = libOf(12); s.players[1].library = libOf(12); s = lands(s, 'pollen-meadow', 3);
+  r = nextTurn(step(s, { type: 'cast', card: 'royal-cell' }));
+  ok(countersOf(r.players[0].battlefield.find(x => x.id === 'royal-cell'), 'time') === 1, 'royal cell: one time counter left');
+  r = nextTurn(r);
+  ok(!r.players[0].battlefield.some(x => x.id === 'royal-cell') && r.players[0].battlefield.filter(x => x.id === 'worker-bee').length === 3, 'royal cell: three Worker Bees, then it dies');
+
+  // Carrion Hive: when it dies, d4 Maggots
+  s = board(); s.players[0].hand = ['heat-pulse']; s = lands(s, 'amber-ridge', 2); s = put(s, 1, 'carrion-hive');
+  r = step(s, { type: 'cast', card: 'heat-pulse', target: uidOf(s, 1, 'carrion-hive') });
+  ok(r.rolls.length === 1 && r.rolls[0].p === 1 && r.rolls[0].why === 'carrion-hive' && r.players[1].battlefield.filter(x => x.id === 'maggot').length === r.rolls[0].value, 'carrion hive: d4 maggots on death, rolled by its owner');
+
+  // Scout Bee: d6 at the start of my turn, 5 or more makes a Worker Bee
+  let bees = 0, rolls = 0;
+  r = put(withSeed(board(), 77), 0, 'scout-bee'); r.players[0].library = libOf(30); r.players[1].library = libOf(30);
+  for (let k = 0; k < 12; k++) {
+    const before = r.players[0].battlefield.filter(x => x.id === 'worker-bee').length;
+    r = nextTurn(r);
+    const up = r.events.filter(e => e.t === 'roll');
+    rolls += up.length;
+    const after = r.players[0].battlefield.filter(x => x.id === 'worker-bee').length;
+    if (up.length === 1) ok(after - before === (up[0].value >= 5 ? 1 : 0), `scout bee: roll ${up[0].value}`);
+    bees += after - before;
+  }
+  ok(rolls === 12 && bees > 0 && bees < 12, `scout bee: one d6 per turn, ${bees} bees in 12 turns`);
+
+  // counters are copied, never shared; withPermanent takes counters
+  s = put(board(), 0, 'bark-toad', { counters: { growth: 0, charge: 2 } });
+  ok(J(s.players[0].battlefield[0].counters) === '{"charge":2}', 'withPermanent keeps counters over 0');
+  const fr = deepFreeze(clone(s));
+  const f2 = step(fr, { type: 'pass' });
+  ok(f2.players[0].battlefield[0].counters !== fr.players[0].battlefield[0].counters, 'step copies the counters object');
+
+  // determinism by seed with dice: whole games with dice decks
+  ok(J(playOut(77, 4, { decks: ['amber', 'pollen'] }).s) === J(playOut(77, 4, { decks: ['amber', 'pollen'] }).s), 'dice decks: same seed, same game and rolls');
+  let mut = 0;
+  for (let g = 0; g < 20; g++) { try { playOut(1200 + g, g, { freeze: true, decks: ['rot', 'moss'] }); } catch (e) { mut++; if (mut === 1) console.error(e); } }
+  ok(mut === 0, 'dice decks: step never mutates its input (20 deep-frozen games)');
+
+  // records: ui/match.js records carry the rolls; choreo makes one roll step per die with the engine value
+  const { Match, agentFromBot } = await import('../ui/match.js');
+  const { choreograph, mirrorOf, mirrorDiff } = await import('../ui/fly3d/choreo.js');
+  let recRolls = 0, stepRolls = 0, same = 0, counterSteps = 0, mirrorBad = 0;
+  for (let g = 0; g < 24; g++) {
+    const M = new Match({ newGame, legalActions, step, isOver, describe, actionKey }, [agentFromBot(greedyBot(), 'greedy'), agentFromBot(randomBot(mulberry32(g)), 'random')],
+      { seed: 3000 + g, decks: [DECK_ORDER[g % DECK_ORDER.length], DECK_ORDER[(g + 4) % DECK_ORDER.length]] });
+    let rec;
+    while ((rec = M.next())) {
+      const n = rec.after.rolls.length;
+      if (!n) continue;
+      recRolls += n;
+      const c = choreograph(rec);
+      const st = c.steps.filter(x => x.op === 'roll');
+      stepRolls += st.length;
+      if (J(st.map(x => [x.die, x.value])) === J(rec.after.rolls.map(x => [x.die, x.value]))) same++;
+      counterSteps += c.steps.filter(x => x.op === 'counters').length;
+      if (mirrorDiff(c.mirror, mirrorOf(rec.after)).length) mirrorBad++;
+    }
+  }
+  ok(recRolls > 20 && stepRolls === recRolls, `records: ${recRolls} rolls in record.after.rolls, ${stepRolls} roll steps`);
+  ok(same > 0 && mirrorBad === 0, `records: roll steps carry the engine values in order (${same} records), mirror matches (${mirrorBad} bad)`);
+  console.log(`dice in bot games: ${recRolls} rolls, ${counterSteps} counter steps`);
+  // log off (no events): the legacy choreo path reads record.after.rolls and the counters
+  {
+    let q = board(); q.logOn = false; q.players[0].hand = ['spring-downpour']; q = lands(q, 'moss-hollow', 3); q = put(q, 0, 'bark-toad');
+    const act = { type: 'cast', card: 'spring-downpour', target: uidOf(q, 0, 'bark-toad') };
+    const after = step(q, act);
+    const c = choreograph({ who: 0, before: q, after, action: act });
+    const rs = c.steps.filter(x => x.op === 'roll');
+    ok(after.events.length === 0 && rs.length === 1 && rs[0].value === after.rolls[0].value && rs[0].die === 6, 'log off: a roll step from state.rolls');
+    ok(mirrorDiff(c.mirror, mirrorOf(after)).length === 0, 'log off: the mirror has the growth counters');
+  }
+
+  // greedy: the mean over rolls, not the real roll
+  s = board(); s.players[0].hand = ['knucklebones']; s = lands(s, 'rot-log', 3);
+  const base = boardScore(s, 0);
+  const e1 = expectedScore(s, x => step(x, { type: 'cast', card: 'knucklebones' }), 0);
+  const e2 = expectedScore(withSeed(s, 12345), x => step(x, { type: 'cast', card: 'knucklebones' }), 0);
+  ok(Math.abs(e1 - base - 2 * diceMean('d8')) < 4 && Math.abs(e2 - base - 2 * diceMean('d8')) < 4, `expectedScore near the mean of a d8 drain (${(e1 - base).toFixed(2)}, ${(e2 - base).toFixed(2)}, mean ${2 * diceMean('d8')})`);
+  ok(expectedScore(s, x => step(x, { type: 'pass' }), 0) === boardScore(step(s, { type: 'pass' }), 0), 'expectedScore without dice is boardScore');
+}
+
 // --------------------------------------------------------------- features
 {
   ok(FEATURE_NAMES.length === 48 && new Set(FEATURE_NAMES).size === 48 && FEATURE_SPEC.every(r => r[2]), '48 named features');
@@ -668,7 +927,7 @@ function playOut(seed, botSeed, { log = true, freeze = false, decks } = {}) {
   const pairs = [];
   for (const a of DECK_ORDER) for (const b of DECK_ORDER) pairs.push([a, b]);
   const t0 = performance.now();
-  let empty = 0, steps = 0, over = 0, maxL = 0, illegal = 0, threw = 0, badF = 0, draws = 0;
+  let empty = 0, steps = 0, over = 0, maxL = 0, illegal = 0, threw = 0, badF = 0, draws = 0, dice = 0, badRoll = 0;
   const seenPair = new Set();
   const wins = Object.fromEntries(DECK_ORDER.map(d => [d, 0]));
   const rng = mulberry32(2026);
@@ -685,6 +944,7 @@ function playOut(seed, botSeed, { log = true, freeze = false, decks } = {}) {
         if (g % 25 === 0) { const f = features(s, s.toAct); if (!f.every(v => Number.isFinite(v) && v >= 0 && v <= 1)) badF++; }
         s = step(s, L[Math.floor(rng() * L.length)]);
         steps++;
+        for (const x of s.rolls) { dice++; if (!(x.value >= 1 && x.value <= x.die && Number.isInteger(x.value))) badRoll++; }
       }
     } catch (e) { threw++; if (threw < 3) console.error(decks, e); }
     if (s.result) { over++; if (s.result.winner < 0) draws++; else wins[decks[s.result.winner]]++; }
@@ -698,8 +958,9 @@ function playOut(seed, botSeed, { log = true, freeze = false, decks } = {}) {
   ok(illegal === 0, 'attack and block lists stay within the cap');
   ok(badF === 0, 'features finite in [0,1] for every deck');
   ok(gps > 800, `speed: ${gps.toFixed(0)} random games/s (target > 800)`);
+  ok(dice > N && badRoll === 0, `dice rolled in random games: ${dice} dice, every value in 1..sides`);
   console.log(`random play: ${N} games over ${seenPair.size} deck pairs in ${dt.toFixed(2)} s = ${gps.toFixed(0)} games/s, ` +
-    `${(steps / N).toFixed(1)} steps/game, max ${maxL} options, ${draws} draws`);
+    `${(steps / N).toFixed(1)} steps/game, max ${maxL} options, ${draws} draws, ${dice} dice rolled`);
   console.log('random wins by deck: ' + DECK_ORDER.map(d => `${d} ${wins[d]}`).join(', '));
 }
 

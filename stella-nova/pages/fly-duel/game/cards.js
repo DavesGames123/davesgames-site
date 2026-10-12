@@ -55,6 +55,20 @@
 //      feast     destroy one of your creatures, then draw n       own
 //      raise     most costly creature card of your graveyard
 //                returns to your hand                             self
+//      counter   put n counters of kind `counter` on creatures    own, this, all
+//      chance    roll one die; at `at` or more do `hit`, else     self
+//                `miss` (optional)
+//      tick      (start of turn) one counter of kind `counter`    this
+//                on (+1) or off (-1); at `at` do `done`; reset
+//                takes them off; dies kills the creature
+//  Dice. The amount of damage, draw, heal, token, drain, counter, chance
+//  and rally (with each) can be dice text in Dice Lab notation: '2d4',
+//  'd20' (pages/dice/notation.js parses it; d4 to d20, no explode). The
+//  rules engine rolls it. per: 'creature' rolls once per creature you
+//  control. Counter kinds (COUNTER_KINDS): growth (+1/+1 each), charge,
+//  age, time. enterCounters: { kind: n } on a creature that enters with
+//  them. The 3D table shows each roll as a thrown die and each counter
+//  kind as a die on the card (ui/fly3d/dice3d.js).
 //  Target words: 'any' = the opposing player or one opposing creature,
 //  'opp' = one opposing creature, 'own' = one of your creatures, 'self' =
 //  no choice, 'this' = the creature itself, 'each' = every opposing
@@ -81,11 +95,19 @@
 //      buildDeck ...... "export function buildDeck"  shuffled id array
 //      deckList ....... "export function deckList"   [{card, count}] rows
 //      validateDeck ... "export function validateDeck"  {ok, errors, ...}
+//      diceSpec ....... "export function diceSpec"   dice text -> terms
+//      diceMean ....... "export function diceMean"   exact mean
+//      diceChance ..... "export function diceChance" P(roll >= at)
+//      cardRolls ...... "export function cardRolls"  card can roll dice
+//      cardCounters ... "export function cardCounters"  card uses counters
+//      DICE_KINDS ..... "export const DICE_KINDS"    effects that take dice
+//      COUNTER_KINDS .. "export const COUNTER_KINDS" growth charge age time
 //  INTERNALS
 //      k() ............ "const k ="                cost from a short string
 //      cr/sp/land ..... "const cr ="               card builders
 // ============================================================================
 import { shuffle } from '../data/rng.js';
+import { parse as parseDice } from '../../dice/notation.js';
 
 export const COLOUR_IDS = Object.freeze(['amber', 'moss', 'dew', 'rot', 'pollen']);
 
@@ -141,6 +163,74 @@ const land = (id, name, mana, subtype, flavour) => ({
   mana: mana.slice(), produces: mana[0], basic: mana.length === 1, entersTapped: mana.length > 1, subtype, flavour,
 });
 const E = (kind, amount, target, more = {}) => ({ kind, amount, target, ...more });
+
+// ------------------------------------------------------------------ dice
+// Dice text in the notation of Dice Lab (pages/dice/notation.js): '2d4',
+// 'd20', 'd6+1', '2d20kh1'. The game uses only real dice (d4, d6, d8,
+// d10, d12, d20) and no exploding dice. diceSpec() parses once and keeps
+// the result.
+export const DIE_SIDES = Object.freeze([4, 6, 8, 10, 12, 20]);
+const SPEC = new Map();
+export function diceSpec(text) {
+  let sp = SPEC.get(text);
+  if (sp) return sp;
+  const r = parseDice(text);
+  if (r.error) throw new Error(`bad dice ${text}: ${r.error}`);
+  for (const t of r.terms) {
+    if (t.kind === 'dice' && (!DIE_SIDES.includes(t.sides) || t.explode)) throw new Error(`bad dice ${text}: d4 to d20 only, no explode`);
+  }
+  sp = { terms: r.terms, text };
+  SPEC.set(text, sp);
+  return sp;
+}
+export const isDice = a => typeof a === 'string';
+
+// The mean of a dice text (exact). A number is its own mean. With keep,
+// the mean comes from the full table of outcomes (small dice counts only).
+export function diceMean(a) {
+  if (typeof a === 'number') return a;
+  let m = 0;
+  for (const t of diceSpec(a).terms) {
+    if (t.kind === 'const') { m += t.sign * t.value; continue; }
+    if (!t.keep) { m += t.sign * t.count * (t.sides + 1) / 2; continue; }
+    let sum = 0, n = 0;
+    const vals = new Array(t.count).fill(1);
+    for (;;) {
+      const kept = vals.slice().sort((x, y) => (t.keep.hi ? y - x : x - y)).slice(0, t.keep.n);
+      sum += kept.reduce((x, y) => x + y, 0); n++;
+      let i = 0;
+      while (i < t.count && vals[i] === t.sides) vals[i++] = 1;
+      if (i === t.count) break;
+      vals[i]++;
+    }
+    m += t.sign * sum / n;
+  }
+  return Math.max(0, m);
+}
+
+// Chance that a dice text rolls `at` or more (exact, one die: (sides-at+1)/sides).
+export function diceChance(a, at) {
+  const sp = diceSpec(a);
+  const t = sp.terms;
+  if (t.length === 1 && t[0].kind === 'dice' && t[0].count === 1 && !t[0].keep) {
+    const s = t[0].sides;
+    return Math.max(0, Math.min(1, (s - at + 1) / s));
+  }
+  // general case: the full table of sums (the game uses small dice counts)
+  if (t.some(x => x.keep)) throw new Error(`diceChance: no keep in ${a}`);
+  let dist = new Map([[0, 1]]);
+  for (const term of t) {
+    if (term.kind === 'const') { dist = new Map([...dist].map(([v, q]) => [v + term.sign * term.value, q])); continue; }
+    for (let i = 0; i < term.count; i++) {
+      const nd = new Map();
+      for (const [v, q] of dist) for (let f = 1; f <= term.sides; f++) nd.set(v + term.sign * f, (nd.get(v + term.sign * f) || 0) + q / term.sides);
+      dist = nd;
+    }
+  }
+  let c = 0;
+  for (const [v, q] of dist) if (v >= at) c += q;
+  return c;
+}
 
 // --------------------------------------------------------------- the pool
 const POOL = [
@@ -302,7 +392,41 @@ const POOL = [
   // ---------------------------------------------------------- three colours
   cr('colony-titan', 'Colony Titan', '2AMR', 5, 5, ['crush'], 'Termite', 'A mound the size of a house, and all of it is hungry.'),
 
+  // ------------------------------------------------- dice and counters
+  // Rolls use the game RNG (game/rules.js). Counters: growth (+1/+1 each),
+  // charge and age (count up to an effect), time (count down to one).
+  cr('tinder-cricket', 'Tinder Cricket', '1A', 2, 1, [], 'Cricket', 'It sings until the grass catches, or until it does not.',
+    { effect: E('chance', 'd20', 'self', { at: 11, hit: E('damage', 2, 'face') }) }),
+  cr('bombardier', 'Bombardier Beetle', '2A', 2, 2, [], 'Beetle', 'Pop. Pop. Then a very loud pop.',
+    { onUpkeep: E('tick', 1, 'this', { counter: 'charge', at: 3, reset: true, done: E('damage', 3, 'face') }) }),
+  sp('spark-scatter', 'Spark Scatter', '2A', E('damage', '2d4', 'any'), 'Sparks', 'Where the sparks land is the fun part.'),
+  sp('drum-frenzy', 'Drumming Frenzy', '1A', E('rally', 'd4', 'self', { each: true, tough: 0 }), 'Frenzy', 'Every leg on the hollow log, and every beat a little faster.'),
+  sp('ember-hail', 'Ember Hail', '3AA', E('damage', 'd12', 'any'), 'Hail', 'Hot stones from a clear sky.'),
+  cr('cicada-nymph', 'Cicada Nymph', '1M', 1, 2, [], 'Cicada', 'Years in the dark, counting. Then one warm night, wings.',
+    { enterCounters: { time: 3 }, onUpkeep: E('tick', -1, 'this', { counter: 'time', at: 0, done: E('counter', 4, 'this', { counter: 'growth' }) }) }),
+  cr('gall-larva', 'Oak Gall Larva', '1M', 1, 1, [], 'Wasp', 'The tree builds it a house and feeds it all summer.',
+    { onUpkeep: E('counter', 1, 'this', { counter: 'growth' }) }),
+  sp('spring-downpour', 'Spring Downpour', '2M', E('counter', 'd6', 'own', { counter: 'growth' }), 'Growth', 'Some years it rains a little. Some years it rains a lot.'),
+  cr('whirligig', 'Whirligig Beetle', '2D', 2, 2, [], 'Beetle', 'It spins on the pond in circles that only it understands.',
+    { effect: E('chance', 'd20', 'self', { at: 11, hit: E('draw', 1, 'self') }) }),
+  cr('moon-snail', 'Moon Snail', '1D', 0, 3, ['thick'], 'Snail', 'It counts the tides on its shell.',
+    { onUpkeep: E('tick', 1, 'this', { counter: 'charge', at: 2, reset: true, done: E('draw', 1, 'self') }) }),
+  sp('rain-omen', 'Rain Omen', '1D', E('chance', 'd6', 'self', { at: 4, hit: E('draw', 2, 'self'), miss: E('draw', 1, 'self') }), 'Omen', 'Read the ripples. Some days they say more.'),
+  cr('deathwatch', 'Deathwatch Beetle', '2R', 3, 3, [], 'Beetle', 'Tap, tap, tap in the beam at night, and one fewer each time.',
+    { onUpkeep: E('tick', 1, 'this', { counter: 'age', at: 3, dies: true }), onDeath: E('drain', 2, 'self') }),
+  cr('carrion-hive', 'Carrion Hive', '3R', 2, 3, [], 'Fly', 'Nobody knows how many are inside until it breaks.',
+    { onDeath: E('token', 'd4', 'self', { token: 'maggot' }) }),
+  sp('knucklebones', 'Knucklebones', '2R', E('drain', 'd8', 'self'), 'Lots', 'Old bones make honest dice.'),
+  cr('scout-bee', 'Scout Bee', '2P', 1, 2, ['wings'], 'Bee', 'Most days it comes home with news. Some days it comes home with friends.',
+    { onUpkeep: E('chance', 'd6', 'self', { at: 5, hit: E('token', 1, 'self', { token: 'worker-bee' }) }) }),
+  cr('royal-cell', 'Royal Cell', '2P', 0, 3, ['thick'], 'Bee', 'Wax walls, royal jelly, and a slow count to spring.',
+    { enterCounters: { time: 2 }, onUpkeep: E('tick', -1, 'this', { counter: 'time', at: 0, dies: true, done: E('token', 3, 'self', { token: 'worker-bee' }) }) }),
+  sp('waggle-dance', 'Waggle Dance', '1P', E('heal', 'd4', 'self', { per: 'creature' }), 'Dance', 'Every bee in the hive dances the way to the flowers.'),
+  sp('honey-harvest', 'Honey Harvest', '2P', E('heal', 'd10', 'self', { then: E('draw', 1, 'self') }), 'Nectar', 'A good year fills every frame. A poor year fills some.'),
+
   // ------------------------------------------------------------ colourless
+  cr('pill-bug', 'Pill Bug', '2', 1, 2, [], 'Woodlouse', 'Roll it over and it rolls up. Roll it back and it may get bigger.',
+    { effect: E('chance', 'd6', 'self', { at: 4, hit: E('counter', 2, 'this', { counter: 'growth' }) }) }),
   cr('drift-seed', 'Drift Seed', '1', 1, 1, ['wings'], 'Seed', 'Wherever the wind goes.'),
   cr('hollow-husk', 'Hollow Husk', '3', 2, 3, [], 'Crab', 'Something moved into the empty shell and kept walking.'),
 ];
@@ -322,30 +446,61 @@ const num = n => NUM[n] || String(n);
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const TOKEN_BY_ID = Object.fromEntries(TOKEN_POOL.map(t => [t.id, t]));
 
+// Dice text as words: 'd20' -> 'a d20', '2d4' -> '2d4'.
+const diceWords = a => (/^d/.test(a) ? `a ${a}` : a);
+const COUNTER_NOTE = { growth: [' (+1/+1)', ' (+1/+1 each)'] };
+const counterWords = (n, kind) => (n === 1 ? `${kind === 'age' ? 'an' : 'a'} ${kind} counter` : `${num(n)} ${kind} counters`);
+
+// The phrase of an effect. A dice amount rolls first: "roll 2d4: deal
+// that much damage ...". per: 'creature' rolls once for each creature.
 function phrase(e) {
-  const n = e.amount;
+  if (isDice(e.amount) && e.kind !== 'chance' && !e.each) {
+    const roll = `roll ${diceWords(e.amount)}${e.per === 'creature' ? ' for each creature you control' : ''}`;
+    return `${roll}: ${basePhrase(e, e.kind === 'token' || e.kind === 'counter' ? 'that many' : 'that much')}`;
+  }
+  return basePhrase(e, e.amount);
+}
+
+function basePhrase(e, n) {
   switch (e.kind) {
+    case 'chance': {
+      const hit = phrase(e.hit), miss = e.miss ? phrase(e.miss) : '';
+      return `roll ${diceWords(e.amount)}: on ${e.at} or more, ${hit}${miss ? `; else ${miss}` : ''}`;
+    }
+    case 'counter': {
+      const where = e.target === 'this' ? 'it' : e.target === 'all' ? 'each of your creatures' : 'one of your creatures';
+      const what = typeof n === 'number' ? counterWords(n, e.counter) : `${n} ${e.counter} counters`;
+      const note = COUNTER_NOTE[e.counter] ? COUNTER_NOTE[e.counter][n === 1 ? 0 : 1] : '';
+      return `put ${what}${note} on ${where}`;
+    }
+    case 'tick': {
+      const done = [e.done ? phrase(e.done) : '', e.dies ? 'it dies' : ''].filter(Boolean).join(', then ');
+      if (e.amount < 0) return `remove a ${e.counter} counter from it; when the last one goes, ${done}`;
+      return `put ${counterWords(1, e.counter)} on it; when it has ${num(e.at)}, ${e.reset ? 'remove them and ' : ''}${done}`;
+    }
     case 'damage':
       if (e.target === 'any') return `deal ${n} damage to the opposing player or to one opposing creature`;
       if (e.target === 'opp') return `deal ${n} damage to one opposing creature`;
       if (e.target === 'each') return `deal ${n} damage to each opposing creature`;
       return `deal ${n} damage to the opposing player`;
-    case 'draw': return n === 1 ? 'draw a card' : `draw ${num(n)} cards`;
+    case 'draw': return n === 1 ? 'draw a card' : typeof n === 'number' ? `draw ${num(n)} cards` : `draw ${n} cards`;
     case 'pump': return `one of your creatures gets +${n}/+${e.tough ?? n} this turn`;
-    case 'heal': return `you gain ${n} life`;
+    case 'heal': return e.per ? 'you gain life equal to the total' : `you gain ${n} life`;
     case 'destroy':
       if (e.min) return `destroy one opposing creature with power ${e.min} or more`;
       return n >= 99 ? 'destroy one opposing creature' : `destroy one opposing creature with power ${n} or less`;
     case 'token': {
       const t = TOKEN_BY_ID[e.token];
       const kws = t.keywords.length ? ` with ${t.keywords.join(' and ')}` : '';
-      return n === 1 ? `make one ${t.power}/${t.toughness} ${t.name}${kws}` : `make ${num(n)} ${t.power}/${t.toughness} ${t.name} creatures${kws}`;
+      return n === 1 ? `make one ${t.power}/${t.toughness} ${t.name}${kws}` : `make ${typeof n === 'number' ? num(n) : n} ${t.power}/${t.toughness} ${t.name} creatures${kws}`;
     }
     case 'grow':
       if (e.target === 'this') return `it gets a lasting +${n}/+${n}`;
       if (e.target === 'all') return `each of your creatures gets a lasting +${n}/+${n}`;
       return `one of your creatures gets a lasting +${n}/+${n}`;
-    case 'rally': return `your creatures get +${n}/+${n} this turn`;
+    case 'rally':
+      if (e.each) return `for each of your creatures, roll ${diceWords(e.amount)}: it gets that much ${e.tough === 0 ? 'more power' : '+X/+X'} this turn`;
+      return `your creatures get +${n}/+${e.tough ?? n} this turn`;
     case 'drain': return `the opposing player loses ${n} life and you gain ${n} life`;
     case 'tap': return 'tap one opposing creature';
     case 'bounce': return 'return one opposing creature to its owner\'s hand';
@@ -361,6 +516,7 @@ function phrase(e) {
   }
 }
 const chain = e => cap(phrase(e)) + '.' + (e.then ? ' ' + cap(phrase(e.then)) + '.' : '');
+const countersText = c => Object.entries(c).map(([k, n]) => counterWords(n, k)).join(' and ');
 const lower = e => phrase(e) + (e.then ? ', then ' + phrase(e.then) : '');
 
 // The rules text of a card, from its data.
@@ -372,6 +528,7 @@ export function rulesText(card) {
   const parts = (card.keywords || []).map(w => KEYWORD_NAMES[w] + '.');
   if (card.type === 'spell') parts.push(chain(card.effect));
   else {
+    if (card.enterCounters) parts.push(`It enters with ${countersText(card.enterCounters)}.`);
     if (card.effect) parts.push(`When it enters, ${lower(card.effect)}.`);
     if (card.onDeath) parts.push(`When it dies, ${lower(card.onDeath)}.`);
     if (card.onUpkeep) parts.push(`At the start of your turn, ${lower(card.onUpkeep)}.`);
@@ -379,7 +536,42 @@ export function rulesText(card) {
   return parts.join(' ');
 }
 
+// Dice may stand in the amount of these effect kinds only (the rules
+// engine rolls them). A chance effect needs one die and a hit effect.
+export const DICE_KINDS = Object.freeze(['damage', 'draw', 'heal', 'token', 'drain', 'counter', 'chance', 'rally']);
+export const COUNTER_KINDS = Object.freeze(['growth', 'charge', 'age', 'time']);
+function checkEffect(id, e) {
+  if (!e) return;
+  if (isDice(e.amount)) {
+    if (!DICE_KINDS.includes(e.kind)) throw new Error(`${id}: dice amount on ${e.kind}`);
+    diceSpec(e.amount);
+  }
+  if (e.kind === 'chance') {
+    const t = diceSpec(e.amount).terms;
+    if (t.length !== 1 || t[0].count !== 1 || !e.hit || !Number.isInteger(e.at)) throw new Error(`${id}: chance needs one die, at and hit`);
+  }
+  if ((e.kind === 'counter' || e.kind === 'tick') && !COUNTER_KINDS.includes(e.counter)) throw new Error(`${id}: counter kind ${e.counter}`);
+  if (e.kind === 'tick' && (Math.abs(e.amount) !== 1 || e.target !== 'this')) throw new Error(`${id}: tick is +1 or -1 on this`);
+  for (const k of ['then', 'hit', 'miss', 'done']) checkEffect(id, e[k]);
+}
+for (const c of [...POOL, ...TOKEN_POOL]) {
+  for (const k of ['effect', 'onDeath', 'onUpkeep']) checkEffect(c.id, c[k]);
+  for (const k of Object.keys(c.enterCounters || {})) if (!COUNTER_KINDS.includes(k)) throw new Error(`${c.id}: counter kind ${k}`);
+}
 for (const c of [...POOL, ...TOKEN_POOL]) c.text = rulesText(c);
+
+// True when a card can roll dice (its own effects, any depth).
+const rollsIn = e => !!e && (isDice(e.amount) || ['then', 'hit', 'miss', 'done'].some(k => rollsIn(e[k])));
+export function cardRolls(card) {
+  const c = typeof card === 'string' ? CARD[card] : card;
+  return !!c && ['effect', 'onDeath', 'onUpkeep'].some(k => rollsIn(c[k]));
+}
+// True when a card uses counters (enters with them or puts them on).
+const countsIn = e => !!e && (e.kind === 'counter' || e.kind === 'tick' || ['then', 'hit', 'miss', 'done'].some(k => countsIn(e[k])));
+export function cardCounters(card) {
+  const c = typeof card === 'string' ? CARD[card] : card;
+  return !!c && (!!c.enterCounters || ['effect', 'onDeath', 'onUpkeep'].some(k => countsIn(c[k])));
+}
 
 export const CARDS = POOL;
 export const TOKENS = TOKEN_POOL;
@@ -406,9 +598,10 @@ export const DECKS = {
     desc: 'Fast insects and burn. Hit early, hit often, finish with fire.',
     list: [
       ['amber-ridge', 17],
-      ['ember-gnat', 2], ['cinder-ant', 2], ['ash-cricket', 1], ['dune-wasp', 2], ['hive-soldier', 1], ['sting-hopper', 1],
-      ['ram-weevil', 1], ['spark-hornet', 2], ['ember-mantis', 2], ['scald-beetle', 1], ['brood-captain', 1], ['magma-beetle', 1],
-      ['torch-queen', 1], ['flare-spit', 2], ['heat-pulse', 1], ['kiln-burst', 1], ['war-chirp', 1],
+      ['ember-gnat', 1], ['cinder-ant', 1], ['ash-cricket', 1], ['dune-wasp', 1], ['hive-soldier', 1], ['sting-hopper', 1],
+      ['ram-weevil', 1], ['spark-hornet', 2], ['ember-mantis', 1], ['scald-beetle', 1], ['brood-captain', 1], ['magma-beetle', 1],
+      ['torch-queen', 1], ['flare-spit', 1], ['heat-pulse', 1], ['kiln-burst', 1], ['war-chirp', 1],
+      ['tinder-cricket', 1], ['bombardier', 1], ['spark-scatter', 1], ['drum-frenzy', 1], ['ember-hail', 1],
     ],
   },
   moss: {
@@ -416,9 +609,10 @@ export const DECKS = {
     desc: 'Walls early, more land, then the biggest bodies in the pool.',
     list: [
       ['moss-hollow', 17],
-      ['root-sentinel', 1], ['moss-snail', 2], ['thorn-vine', 2], ['seed-carrier', 2], ['bark-toad', 2], ['dew-moth', 1],
-      ['orb-weaver', 1], ['spore-mother', 2], ['grove-stag', 2], ['moss-tortoise', 1], ['fern-beast', 1], ['elder-mycelium', 1],
+      ['root-sentinel', 1], ['moss-snail', 1], ['thorn-vine', 1], ['seed-carrier', 1], ['bark-toad', 1], ['dew-moth', 1],
+      ['orb-weaver', 1], ['spore-mother', 1], ['grove-stag', 2], ['moss-tortoise', 1], ['fern-beast', 1], ['elder-mycelium', 1],
       ['strangle-root', 2], ['swell', 1], ['wild-bloom', 1], ['ring-growth', 1],
+      ['gall-larva', 1], ['cicada-nymph', 2], ['spring-downpour', 1], ['pill-bug', 1],
     ],
   },
   dew: {
@@ -426,9 +620,10 @@ export const DECKS = {
     desc: 'Wings and tricks. Tap the blockers, send the big ones home, draw cards.',
     list: [
       ['dew-pond', 17],
-      ['pond-skater', 2], ['water-boatman', 2], ['mayfly-drift', 2], ['caddis-case', 1], ['diving-beetle', 2], ['darner', 2],
-      ['bell-spider', 1], ['newt-sage', 1], ['blue-damselfly', 2], ['mist-moth', 1], ['storm-darner', 1],
+      ['pond-skater', 2], ['water-boatman', 1], ['mayfly-drift', 1], ['caddis-case', 1], ['diving-beetle', 2], ['darner', 1],
+      ['bell-spider', 1], ['newt-sage', 1], ['blue-damselfly', 1], ['mist-moth', 1], ['storm-darner', 1],
       ['ripple', 1], ['surface-tension', 1], ['carried-off', 2], ['clear-water', 1], ['spring-spate', 1],
+      ['moon-snail', 1], ['rain-omen', 2], ['whirligig', 1],
     ],
   },
   rot: {
@@ -436,9 +631,10 @@ export const DECKS = {
     desc: 'Things that are worth more dead. Drain, sting, discard and sacrifice.',
     list: [
       ['rot-log', 17],
-      ['blow-fly', 2], ['burying-beetle', 2], ['maggot-mass', 2], ['marsh-leech', 2], ['assassin-bug', 2], ['death-cap', 1],
+      ['blow-fly', 1], ['burying-beetle', 2], ['maggot-mass', 2], ['marsh-leech', 1], ['assassin-bug', 1], ['death-cap', 1],
       ['mould-crawler', 1], ['bone-centipede', 2], ['bloated-tick', 1], ['sexton-beetle', 1], ['plague-swarm', 1],
-      ['wither', 2], ['last-feast', 1], ['bog-breath', 1], ['heart-rot', 1], ['leaf-blight', 1],
+      ['wither', 1], ['last-feast', 1], ['bog-breath', 1], ['heart-rot', 1], ['leaf-blight', 1],
+      ['carrion-hive', 1], ['deathwatch', 2], ['knucklebones', 1],
     ],
   },
   pollen: {
@@ -446,9 +642,10 @@ export const DECKS = {
     desc: 'Order and light. Bees that never tire, life every turn, a queen to end it.',
     list: [
       ['pollen-meadow', 17],
-      ['hoverfly', 2], ['ladybird-knight', 2], ['shield-bug', 1], ['mason-bee', 2], ['hive-warden', 2], ['lantern-firefly', 2],
-      ['lily-ward', 1], ['golden-orb', 1], ['honeyguard', 2], ['sun-moth', 1], ['bumble-queen', 1], ['comb-queen', 1],
+      ['hoverfly', 1], ['ladybird-knight', 1], ['shield-bug', 1], ['mason-bee', 1], ['hive-warden', 1], ['lantern-firefly', 2],
+      ['lily-ward', 1], ['golden-orb', 1], ['honeyguard', 1], ['sun-moth', 1], ['bumble-queen', 1], ['comb-queen', 1],
       ['dawn-blessing', 1], ['bloom-hymn', 1], ['pollinate', 1], ['solar-verdict', 2],
+      ['royal-cell', 1], ['scout-bee', 2], ['waggle-dance', 1], ['honey-harvest', 1],
     ],
   },
   'amber-dew': {
@@ -456,9 +653,10 @@ export const DECKS = {
     desc: 'Amber and dew. Fast wings over the top, burn and tricks to clear the way.',
     list: [
       ['amber-ridge', 7], ['dew-pond', 6], ['geyser-basin', 4],
-      ['ember-gnat', 2], ['dune-wasp', 2], ['pond-skater', 2], ['darner', 2], ['spark-hornet', 2], ['steam-darner', 3],
+      ['ember-gnat', 1], ['dune-wasp', 2], ['pond-skater', 1], ['darner', 2], ['spark-hornet', 2], ['steam-darner', 2],
       ['blue-damselfly', 1], ['mist-moth', 1], ['sun-locust', 1],
-      ['flare-spit', 2], ['heat-pulse', 2], ['ripple', 1], ['carried-off', 1], ['kiln-burst', 1],
+      ['flare-spit', 2], ['heat-pulse', 1], ['ripple', 1], ['carried-off', 1], ['kiln-burst', 1],
+      ['tinder-cricket', 1], ['rain-omen', 1], ['spark-scatter', 1], ['whirligig', 1],
     ],
   },
   'moss-rot': {
@@ -466,9 +664,10 @@ export const DECKS = {
     desc: 'Moss and rot. Bodies that come back as spores and maggots, and big ones to follow.',
     list: [
       ['moss-hollow', 7], ['rot-log', 6], ['leaf-litter', 4],
-      ['maggot-mass', 2], ['thorn-vine', 2], ['burying-beetle', 2], ['seed-carrier', 2], ['spore-mother', 2], ['mycelium-mound', 3],
+      ['maggot-mass', 1], ['thorn-vine', 1], ['burying-beetle', 1], ['seed-carrier', 2], ['spore-mother', 1], ['mycelium-mound', 3],
       ['bloated-tick', 1], ['sexton-beetle', 1], ['grove-stag', 1], ['elder-mycelium', 1],
-      ['strangle-root', 2], ['last-feast', 1], ['wither', 1], ['heart-rot', 1], ['bog-breath', 1],
+      ['strangle-root', 1], ['last-feast', 1], ['wither', 1], ['heart-rot', 1], ['bog-breath', 1],
+      ['gall-larva', 1], ['knucklebones', 1], ['spring-downpour', 1], ['carrion-hive', 1], ['deathwatch', 1],
     ],
   },
   'amber-pollen': {
@@ -476,9 +675,10 @@ export const DECKS = {
     desc: 'Amber and pollen. Go wide with bees and larvae, then pump the whole field.',
     list: [
       ['amber-ridge', 7], ['pollen-meadow', 6], ['sunlit-ridge', 4],
-      ['ember-gnat', 2], ['hoverfly', 2], ['ladybird-knight', 2], ['hive-soldier', 2], ['mason-bee', 2], ['solar-hornet', 3],
+      ['ember-gnat', 2], ['hoverfly', 2], ['ladybird-knight', 2], ['hive-soldier', 1], ['mason-bee', 1], ['solar-hornet', 3],
       ['brood-captain', 1], ['bumble-queen', 1], ['honeyguard', 1],
-      ['swarm-call', 1], ['pollinate', 1], ['hive-warden', 2], ['bloom-hymn', 1], ['heat-pulse', 2],
+      ['swarm-call', 1], ['pollinate', 1], ['hive-warden', 1], ['bloom-hymn', 1], ['heat-pulse', 1],
+      ['bombardier', 1], ['drum-frenzy', 1], ['scout-bee', 1], ['waggle-dance', 1],
     ],
   },
   'dew-pollen': {
@@ -486,9 +686,10 @@ export const DECKS = {
     desc: 'Dew and pollen. Shelled wings, life every turn, and answers for the big threats.',
     list: [
       ['dew-pond', 6], ['pollen-meadow', 7], ['dawn-lake', 4],
-      ['pond-skater', 2], ['shield-bug', 2], ['mayfly-drift', 2], ['lantern-firefly', 2], ['glasswing', 3], ['sun-moth', 2],
+      ['pond-skater', 1], ['shield-bug', 1], ['mayfly-drift', 1], ['lantern-firefly', 2], ['glasswing', 3], ['sun-moth', 2],
       ['golden-orb', 1], ['storm-darner', 1], ['comb-queen', 1],
-      ['carried-off', 1], ['solar-verdict', 2], ['honey-balm', 2], ['clear-water', 1], ['dawn-blessing', 1],
+      ['carried-off', 1], ['solar-verdict', 2], ['honey-balm', 1], ['clear-water', 1], ['dawn-blessing', 1],
+      ['moon-snail', 1], ['honey-harvest', 1], ['rain-omen', 1], ['royal-cell', 1],
     ],
   },
   'amber-rot': {
@@ -496,9 +697,10 @@ export const DECKS = {
     desc: 'Amber and rot. Swift stings and drain: every trade hurts the other side more.',
     list: [
       ['amber-ridge', 7], ['rot-log', 6], ['cinder-fen', 4],
-      ['ember-gnat', 2], ['cinder-ant', 2], ['burying-beetle', 2], ['ash-wasp', 3], ['ember-mantis', 2], ['spark-hornet', 2],
+      ['ember-gnat', 2], ['cinder-ant', 1], ['burying-beetle', 2], ['ash-wasp', 2], ['ember-mantis', 1], ['spark-hornet', 2],
       ['assassin-bug', 1], ['bone-centipede', 1], ['bloated-tick', 1], ['magma-beetle', 1], ['torch-queen', 1],
-      ['flare-spit', 2], ['bog-breath', 1], ['wither', 1], ['heat-pulse', 1],
+      ['flare-spit', 1], ['bog-breath', 1], ['wither', 1], ['heat-pulse', 1],
+      ['tinder-cricket', 1], ['knucklebones', 1], ['spark-scatter', 1], ['deathwatch', 1],
     ],
   },
   'moss-pollen': {
@@ -506,9 +708,10 @@ export const DECKS = {
     desc: 'Moss and pollen. Lasting growth and life gain on big, untiring bodies.',
     list: [
       ['moss-hollow', 7], ['pollen-meadow', 6], ['clover-hill', 4],
-      ['moss-snail', 2], ['mason-bee', 2], ['hive-warden', 2], ['bark-toad', 2], ['meadow-matriarch', 3], ['honeyguard', 1],
+      ['moss-snail', 1], ['mason-bee', 1], ['hive-warden', 2], ['bark-toad', 2], ['meadow-matriarch', 3], ['honeyguard', 1],
       ['moss-tortoise', 1], ['fern-beast', 1], ['comb-queen', 1],
-      ['ring-growth', 2], ['dawn-blessing', 2], ['solar-verdict', 1], ['strangle-root', 1], ['sap-bloom', 1], ['bloom-hymn', 1],
+      ['ring-growth', 1], ['dawn-blessing', 1], ['solar-verdict', 1], ['strangle-root', 1], ['sap-bloom', 1], ['bloom-hymn', 1],
+      ['cicada-nymph', 1], ['gall-larva', 1], ['waggle-dance', 1], ['spring-downpour', 1],
     ],
   },
   'moss-dew': {
@@ -516,9 +719,10 @@ export const DECKS = {
     desc: 'Moss and dew. Card flow and ramp into large bodies that the other side cannot touch.',
     list: [
       ['moss-hollow', 7], ['dew-pond', 6], ['fern-spring', 4],
-      ['seed-carrier', 2], ['water-boatman', 2], ['bell-spider', 1], ['lily-toad', 3], ['dew-moth', 2], ['diving-beetle', 2],
+      ['seed-carrier', 1], ['water-boatman', 1], ['bell-spider', 1], ['lily-toad', 2], ['dew-moth', 1], ['diving-beetle', 2],
       ['newt-sage', 1], ['grove-stag', 1], ['elder-mycelium', 1], ['fern-beast', 1],
-      ['deep-roots', 1], ['wild-bloom', 1], ['carried-off', 2], ['swell', 1], ['spring-spate', 1], ['strangle-root', 1],
+      ['deep-roots', 1], ['wild-bloom', 1], ['carried-off', 1], ['swell', 1], ['spring-spate', 1], ['strangle-root', 1],
+      ['moon-snail', 1], ['spring-downpour', 1], ['rain-omen', 1], ['whirligig', 1], ['pill-bug', 1],
     ],
   },
   'amber-moss-rot': {
@@ -526,9 +730,10 @@ export const DECKS = {
     desc: 'Amber, moss and rot. Burn and decay clear the board for the Colony Titan.',
     list: [
       ['amber-ridge', 4], ['moss-hollow', 3], ['rot-log', 3], ['burnt-clearing', 3], ['cinder-fen', 2], ['leaf-litter', 2],
-      ['cinder-ant', 2], ['thorn-vine', 2], ['seed-carrier', 2], ['ash-wasp', 2], ['mycelium-mound', 2], ['bonfire-stag', 2],
+      ['cinder-ant', 1], ['thorn-vine', 1], ['seed-carrier', 1], ['ash-wasp', 2], ['mycelium-mound', 2], ['bonfire-stag', 2],
       ['bone-centipede', 1], ['colony-titan', 2], ['grove-stag', 1],
-      ['flare-spit', 2], ['strangle-root', 1], ['wither', 1], ['heat-pulse', 1], ['heart-rot', 1], ['brush-fire', 1],
+      ['flare-spit', 1], ['strangle-root', 1], ['wither', 1], ['heat-pulse', 1], ['heart-rot', 1], ['brush-fire', 1],
+      ['bombardier', 1], ['cicada-nymph', 1], ['ember-hail', 1], ['knucklebones', 1],
     ],
   },
 };

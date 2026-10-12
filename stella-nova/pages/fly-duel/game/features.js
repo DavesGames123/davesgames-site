@@ -24,6 +24,14 @@
 //  colours (dual lands too), and the wings rows count web as a blocker of
 //  wings. Retrain for the best play.
 //
+//  Dice cards (2026-10-11). The 48 rows did not change. Growth counters
+//  add to pc, so the power and toughness rows include them. A dice damage
+//  spell counts in removal_in_hand (kind 'damage'). A chance or counter
+//  card counts as a castable card only. Note: an afterstate from step()
+//  holds the real roll. An agent that scores one afterstate per action
+//  sees that roll. game/bots.js expectedScore gives the mean over other
+//  RNG states for that reason.
+//
 //  EXPORTS   (jump with grep -n "<anchor>" game/features.js)
 //      FEATURE_SPEC ... "export const FEATURE_SPEC"   [name, cap, text]
 //      FEATURE_NAMES .. "export const FEATURE_NAMES"  48 names, fixed order
