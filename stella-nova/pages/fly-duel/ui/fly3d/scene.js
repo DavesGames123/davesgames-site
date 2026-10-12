@@ -102,6 +102,8 @@
 //      grep -n 'function layout'              where every card goes
 //      grep -n 'const STEP'                   one handler per choreo op
 //      grep -n 'function shotPose'            camera place per shot
+//      grep -n 'export const WATCH'           watch framing numbers
+//      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
 //      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'export function createDuelScene'
@@ -133,6 +135,12 @@ export const TABLE = {
 };
 const T = TABLE;
 const YAW = [0, Math.PI];
+// Watch-mode framing of the wide (and win) shot and of the tall-frame
+// wide and combat shots: radius, elevation, look height above the table,
+// the side drift, and the field of view of every watch shot. Tuned so the
+// flies fill the frame with both heads, both seats and both maps in it
+// (tests/fly3d.test.mjs 'camera framing').
+export const WATCH = { wideR: 7.6, wideEl: 0.42, wideLook: 0.7, drift: 0.3, tallR: 11.5, tallEl: 0.55, fov: 40, fitAspect: 1.7 };
 
 // Seat space (u, y above the table top, v) -> world.
 function seatPos(p, u, y, v, out = new THREE.Vector3()) {
@@ -812,7 +820,7 @@ export function createDuelScene(canvas, opts = {}) {
   // stand between the camera and the board.
   // Seat space of the other fly: u (+ = screen left from your seat),
   // y above the table top, dv behind its seat, scale of the 0.62 map.
-  const BIG = { wide: { u: 2.3, y: 1.1, dv: 0.7, scale: 1.7 }, tall: { u: 0, y: 3.05, dv: 0.8, scale: 1.75 } };
+  const BIG = { wide: { u: 2.3, y: 0.85, dv: 0.7, scale: 1.7 }, tall: { u: 0, y: 3.05, dv: 0.8, scale: 1.75 } };
   const BIG_TALL = 0.8;     // under this aspect: the tall seat pose and map
   // The place of the big map now. A wide frame near BIG_TALL moves the
   // map in toward the fly (u), so it stays in the frame.
@@ -1315,18 +1323,18 @@ export function createDuelScene(canvas, opts = {}) {
     // about 70 px high. The wide and combat shots look along the line
     // between the seats instead, so one fly is near and one is far.
     if (aspect < TALL && (s === 'wide' || s === 'win' || s === 'combat')) {
-      const r = 13.5 * Math.max(1, 0.68 / aspect);
-      let el = 0.55, az = 0.28, toward = 0.8;
+      const r = WATCH.tallR * Math.max(1, 0.68 / aspect);
+      let el = WATCH.tallEl, az = 0.28, toward = 0.8;
       if (s === 'combat') { el = 0.75; az = P0 === 0 ? 0.3 : Math.PI + 0.3; toward = P0 === 0 ? 0.6 : -0.6; }
       else if (!W.reduced) { cam.az += dt * 0.05; az += 0.12 * Math.sin(cam.az); }
       cam.wantLook.set(0, T.y + 0.3, toward);
       cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + 0.3 + Math.sin(el) * r, toward + Math.cos(az) * Math.cos(el) * r);
     } else if (s === 'wide' || s === 'win') {
       if (!W.reduced) cam.az += dt * (s === 'win' ? 0.12 : 0.05);
-      const r = 10 * fit, el = 0.48;
-      const az = Math.PI / 2 + 0.55 * Math.sin(cam.az);
-      cam.wantLook.set(0, T.y + 0.5, 0);
-      cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + 0.5 + Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
+      const r = WATCH.wideR * Math.max(1, WATCH.fitAspect / aspect), el = WATCH.wideEl, ly = WATCH.wideLook;
+      const az = Math.PI / 2 + WATCH.drift * Math.sin(cam.az);
+      cam.wantLook.set(0, T.y + ly, 0);
+      cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + ly + Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
     } else if (s === 'over') {
       // over the right shoulder of the fly, high enough to see its fan
       seatPos(P0, (P0 === 0 ? 2.0 : -2.0) * fit, 3.0, T.seatV + 0.9 * fit, cam.wantPos);
@@ -1354,7 +1362,7 @@ export function createDuelScene(canvas, opts = {}) {
       cam.wantPos.copy(cam.wantLook).addScaledVector(_t1, d);
     } else if (s === 'combat') {
       const side = P0 === 0 ? 1 : -1;
-      cam.wantPos.set(7.6 * fit, T.y + 3.6, 1.2 * side);
+      cam.wantPos.set(7.6 * Math.max(fit, WATCH.fitAspect / aspect), T.y + 3.6, 1.2 * side);
       cam.wantLook.set(0, T.y + 0.1, 0);
     } else if (s === 'crane') {
       // a rise over the board: from a low three-quarter view to high above
@@ -1423,7 +1431,7 @@ export function createDuelScene(canvas, opts = {}) {
     cam.userUntil = camMode === 'free' ? Infinity : now;
     if (camMode !== 'free') { cam.pos.copy(camera.position); if (controls) cam.look.copy(controls.target); }
   }
-  const FOV = 40;                          // the seat shot: seatVal('fov')
+  const FOV = WATCH.fov;                   // the seat shot: seatVal('fov')
   function updateCamera(dt) {
     if (camRig) {
       try { camRig(camera, dt, cam); } catch (e) { console.warn('fly-duel 3d: the saver rig failed', e); setRig(null); }

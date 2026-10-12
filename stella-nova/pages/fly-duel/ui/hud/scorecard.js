@@ -24,6 +24,13 @@
 //  taps (the auto-tap preview of ui/play/model.js paidLands). Seat is never told by colour only: the letter A or B is on
 //  every card.
 //
+//  SLIM (opts.slim, the default of watch mode and the 3D play table): the
+//  card is a low strip in its corner, translucent and low in contrast,
+//  with small type: letter, name, status, life, mana pips and counts on
+//  one or two lines. The neural panel and the top-3 hide behind the small
+//  "brain" button (setOpen). The big brain of play mode is in the 3D
+//  scene (ui/fly3d/scene.js 'big brain').
+//
 //  The neural panel is createBrainCard() of ui/fly3d/brain3d.js when that
 //  module gives it, else the 2D raster of ui/hud/raster.js. Both get the
 //  trace of each decision through fire(trace).
@@ -137,6 +144,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 //   seat, side ('left'|'right'), kind ('fly'|'human'|'bot')
 //   connectome, brainMod (the ui/fly3d/brain3d.js namespace, optional)
 //   compact (phone)
+//   slim     a low, translucent corner strip (watch and 3D play): the
+//            neural panel and the top-3 hide behind the "brain" button
 //   onPlayer(seat)  tap on the card: a player target in play mode
 export function createScorecard(host, opts = {}) {
   const doc = host.ownerDocument;
@@ -149,6 +158,7 @@ export function createScorecard(host, opts = {}) {
       <b class="hd-letter"></b>
       <span class="hd-id"><span class="hd-name"></span><span class="hd-src"></span></span>
       <span class="hd-status"></span>
+      <button class="hd-more" type="button" aria-expanded="false" aria-label="show the neural panel" hidden>brain</button>
       <button class="hd-life" type="button" aria-label="life"></button>
     </header>
     <div class="hd-mana" aria-label="mana: untapped of total lands"></div>
@@ -161,6 +171,17 @@ export function createScorecard(host, opts = {}) {
   const brainBox = q('.hd-brain');
   let neural = null;
   let compact = !!opts.compact;
+  let slim = !!opts.slim;
+  el.classList.toggle('hd-slim', slim);
+  // slim: the neural panel and the top-3 open and close with this button
+  const more = q('.hd-more');
+  function setOpen(on) {
+    el.classList.toggle('is-open', !!on);
+    more.setAttribute('aria-expanded', String(!!on));
+    more.setAttribute('aria-label', on ? 'hide the neural panel' : 'show the neural panel');
+    if (on) neural?.resize?.();
+  }
+  more.addEventListener('click', e => { e.stopPropagation(); setOpen(!el.classList.contains('is-open')); });
 
   function makeNeural() {
     if (neural || (opts.kind !== 'fly') || !opts.connectome) return;
@@ -176,7 +197,7 @@ export function createScorecard(host, opts = {}) {
 
   const lifeBtn = q('.hd-life');
   lifeBtn.addEventListener('click', () => opts.onPlayer?.(opts.seat));
-  el.addEventListener('click', e => { if (e.target === el || e.target.closest('.hd-head')) opts.onPlayer?.(opts.seat); });
+  el.addEventListener('click', e => { if (e.target.closest('.hd-more')) return; if (e.target === el || e.target.closest('.hd-head')) opts.onPlayer?.(opts.seat); });
 
   let lastLife = null;
   function update(m) {
@@ -189,7 +210,7 @@ export function createScorecard(host, opts = {}) {
     q('.hd-src').textContent = m.kind === 'fly' ? m.source : m.deckName;
     q('.hd-status').textContent = m.status;
     if (lastLife !== m.life) {
-      lifeBtn.innerHTML = d20Svg(m.life, { size: compact ? 40 : 52, tone: m.tone, accent: TOKENS.ink });
+      lifeBtn.innerHTML = d20Svg(m.life, { size: slim ? 30 : compact ? 40 : 52, tone: m.tone, accent: TOKENS.ink });
       lifeBtn.setAttribute('aria-label', `life ${m.life}`);
       if (lastLife !== null) {
         lifeBtn.dataset.flash = m.life < lastLife ? 'dmg' : 'heal';
@@ -210,6 +231,7 @@ export function createScorecard(host, opts = {}) {
     }).join('') : '<span class="hd-none">no lands yet</span>';
     q('.hd-counts').innerHTML = m.counts.map(c => `<span class="hd-c hd-c-${c.key}"><em><span class="l">${c.label}</span><span class="s" title="${c.label}">${c.short}</span></em><b>${c.text}</b></span>`).join('');
     brainBox.hidden = m.kind !== 'fly';
+    more.hidden = !slim || m.kind !== 'fly';
     q('.hd-top').innerHTML = m.top.map(t => `<li class="${t.chosen ? 'chosen' : ''}"><span class="hd-t">${esc(t.text)}</span><b>${t.valueText}</b><i style="width:${Math.round(t.bar * 100)}%"></i></li>`).join('');
     q('.hd-top').hidden = !m.top.length;
     if (m.kind === 'fly') makeNeural();
@@ -227,6 +249,9 @@ export function createScorecard(host, opts = {}) {
   return {
     el, update, fire,
     setCompact(c) { if (compact === !!c) return; compact = !!c; el.classList.toggle('hd-compact', compact); lastLife = null; neural?.resize?.(); },
+    setSlim(on) { if (slim === !!on) return; slim = !!on; el.classList.toggle('hd-slim', slim); lastLife = null; if (!slim) setOpen(false); },
+    setOpen,
+    get open() { return el.classList.contains('is-open'); },
     resize() { neural?.resize?.(); },
     setTarget(on) { el.classList.toggle('is-target', !!on); lifeBtn.disabled = false; },
     dispose() { neural?.dispose?.(); el.remove(); },

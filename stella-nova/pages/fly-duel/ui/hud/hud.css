@@ -11,6 +11,7 @@
      .pay            pips the selected card taps (play mode preview)
      .hd-brain       neural panel           .hd-top     top-3 move values
      .is-acting      this seat decides      .is-target  a legal target now
+     .hd-slim        corner strip           .hd-more    the brain button
    ========================================================================== */
 [hidden] { display: none !important; }
 
@@ -85,5 +86,37 @@
 .hd-compact .hd-c .s { display: inline; }
 .hd-compact .hd-pips i { width: 10px; height: 4px; }
 .hd-compact .hd-top li { font-size: 11px; padding: 2px 4px; }
+
+/* slim: a low, translucent corner strip. Small type, low contrast. The
+   neural panel and the top-3 show only when the brain button opens them. */
+.hd-slim { gap: 3px; padding: 4px 8px 5px; border-radius: 8px; font-size: 11px;
+  background: rgba(8,10,16,0.52); border-color: rgba(255,255,255,0.08); border-top: 2px solid color-mix(in srgb, var(--acc) 60%, transparent); }
+.hd-slim .hd-head { grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 6px; }
+.hd-slim .hd-letter { width: 16px; height: 16px; border-radius: 4px; font-size: 10px; }
+.hd-slim .hd-name { font-size: 12px; font-weight: 600; color: #d6dae3; }
+.hd-slim .hd-src { display: none; }
+.hd-slim .hd-status { font-size: 10px; padding: 1px 5px; color: #9aa1b3; border-color: rgba(255,255,255,0.08); }
+.hd-slim.is-acting { box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 70%, transparent); }
+.hd-slim.is-acting .hd-status { background: none; color: var(--acc); border-color: color-mix(in srgb, var(--acc) 60%, transparent); }
+.hd-slim .hd-life { min-width: 32px; min-height: 32px; }
+.hd-slim .hd-mana { gap: 6px; min-height: 0; }
+.hd-slim .hd-pips i { width: 9px; height: 3px; }
+.hd-slim .hd-stack em { font-size: 10px; color: #9aa1b3; }
+.hd-slim .hd-none { font-size: 10px; }
+.hd-slim .hd-counts { gap: 8px; font-size: 10px; }
+.hd-slim .hd-c b { font-size: 10px; color: #c2c7d4; }
+.hd-slim .hd-c .l { display: none; }
+.hd-slim .hd-c .s { display: inline; }
+.hd-slim .hd-brain, .hd-slim .hd-top { display: none; }
+.hd-slim.is-open .hd-brain { display: block; height: 72px; }
+.hd-slim.is-open .hd-top { display: grid; }
+.hd-more { appearance: none; font: 600 10px var(--sci-mono, ui-monospace, Menlo, monospace); color: #9aa1b3; background: none;
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 2px 7px; cursor: pointer; min-height: 22px; }
+.hd-more[aria-expanded="true"] { color: var(--acc); border-color: var(--acc); }
+.hd-more:focus-visible { outline: 2px solid #eef0f5; outline-offset: 2px; }
+@media (pointer: coarse) {
+  .hd-slim .hd-life { min-width: 44px; min-height: 44px; }
+  .hd-more { min-height: 32px; padding: 2px 10px; }
+}
 
 @media (prefers-reduced-motion: reduce) { .hd-life[data-flash] svg polygon { transition: none; } }

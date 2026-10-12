@@ -660,7 +660,10 @@ function initHero(mod3d = null) {
 }
 
 // Watch mode: the two scorecards of ui/hud/scorecard.js in #scA (Fly A,
-// top-left) and #scB (Fly B, top-right). Each fly card has its live
+// top-left) and #scB (Fly B, top-right). They are slim corner strips (the
+// user: "the fly a vs fly b cards should be much less visually
+// obstrusive"). A tap on "brain" opens the neural panel and the top-3.
+// Each fly card has its live
 // neural panel: createBrainCard of ui/fly3d/brain3d.js when the 3D
 // module loads, else the 2D raster of ui/hud/raster.js. Without the
 // scorecard module, the fallback strip #hudBar shows.
@@ -679,7 +682,8 @@ function initScorecards(brainMod = null) {
       const side = seat ? 'B' : 'A';
       const isFly = !!F[side];
       try {
-        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brainMod, compact: compact() });
+        // slim: a low corner strip, the neural panel behind its brain button
+        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brainMod, compact: compact(), slim: true });
         c.setCompact(compact());
         return c;
       } catch (e) { console.info('fly-duel: scorecard', e); return null; }

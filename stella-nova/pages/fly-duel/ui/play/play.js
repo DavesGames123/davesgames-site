@@ -28,6 +28,13 @@
 //        scorecard), then its move plays. Between turns a banner holds the
 //        table still ("Turn 6 · Fly B"). Speed: calm, normal, fast.
 //
+//  FULL BLEED  With the 3D table (.pl-3d) the canvas fills the whole play
+//        box, and the HUD lies over it: the scorecards are slim corner
+//        strips (ui/hud/scorecard.js slim, the neural panel behind a tap),
+//        the phase bar is a small strip over the hand, the opposing
+//        card backs go (the 3D table shows them, the scorecard counts
+//        them). The big brain of the fly is in the 3D scene.
+//
 //  3D TABLE  When opts.scene gives pickPermanent(clientX, clientY), play
 //        mode uses it: setFirstPerson(seat) puts the camera behind you,
 //        highlight(spec) marks playable / eligible / target cards, and
@@ -114,6 +121,8 @@ export function mountPlay(root, opts) {
   };
 
   root.classList.add('pl');
+  // 3D table: full bleed, the HUD lies over it (play.css .pl-3d)
+  root.classList.toggle('pl-3d', has3d);
   root.innerHTML = `
     <div class="pl-cards"><div class="pl-sc pl-sc0"></div><div class="pl-sc pl-sc1"></div></div>
     <div class="pl-opp"></div>
@@ -388,7 +397,7 @@ export function mountPlay(root, opts) {
       scs[s] = createScorecard(host, {
         seat: s, side: s ? 'right' : 'left', kind: s === humanSeatNo ? 'human' : isFly ? 'fly' : 'bot',
         connectome: isFly ? opts.connectomes?.[flySide] : null, brainMod: opts.brainMod,
-        compact: L.score === 'compact', onPlayer: seat => apply(ix?.player(seat)),
+        compact: L.score === 'compact', slim: has3d, onPlayer: seat => apply(ix?.player(seat)),
       });
       scs[s].setCompact(L.score === 'compact');
     }
@@ -699,7 +708,7 @@ export function mountPlay(root, opts) {
       ro?.disconnect(); win.removeEventListener('resize', relayout);
       for (const sc of scs) sc?.dispose();
       root.innerHTML = '';
-      root.classList.remove('pl');
+      root.classList.remove('pl', 'pl-3d');
     },
   };
 }

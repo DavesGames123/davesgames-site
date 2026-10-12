@@ -17,6 +17,7 @@
      .pl-actions    the big button     .pl-bar     phase steps + prompt
      .pl-sheet      setup/coin/mull    .pl-insp    the inspector
      .pl-banner     turn pause         .pl-last    the last action chip
+     .pl-3d         full bleed 3D      .pl-seatbtn back to seat (orbit)
    ========================================================================== */
 [hidden] { display: none !important; }
 
@@ -248,6 +249,28 @@
 .pl[data-layout="tablet"] .pl-menubtn, .pl[data-layout="desktop"] .pl-menubtn { grid-area: menu; }
 .pl[data-layout="tablet"] .pl-bar, .pl[data-layout="desktop"] .pl-bar { justify-self: center; width: min(100%, 760px); }
 .pl[data-layout="desktop"] .hd-brain { height: 96px; }
+
+/* -------------------------------------------- full bleed 3D table
+   With the 3D table (.pl-3d, ui/play/play.js) the canvas fills the play
+   box, so the flies get the whole frame. The HUD lies over it: slim
+   scorecards in the top corners (ui/hud/hud.css .hd-slim), the phase bar
+   a small translucent strip over the hand, the buttons at the lower
+   corners. The opposing card backs go: the 3D table shows them. */
+.pl.pl-3d { display: block; padding: 0; }
+.pl.pl-3d .pl-table { position: absolute; inset: 0; border-radius: 0; }
+.pl.pl-3d .pl-opp { display: none; }
+.pl.pl-3d .pl-cards { position: absolute; z-index: 50; top: 6px; left: 6px; right: 6px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; pointer-events: none; }
+.pl.pl-3d .pl-sc { pointer-events: auto; width: min(250px, calc(50% - 4px)); }
+.pl.pl-3d .pl-sc1 { margin-left: auto; }
+.pl.pl-3d .pl-bar { position: absolute; z-index: 45; left: 50%; transform: translateX(-50%); bottom: calc(var(--peek) + var(--btn-h) + 12px);
+  width: max-content; max-width: calc(100% - 16px); padding: 3px 8px; border-radius: 8px; background: rgba(5,7,12,0.5); }
+.pl.pl-3d .pl-prompt { font-size: 12px; min-height: 0; text-align: center; }
+.pl.pl-3d .pl-actions { position: absolute; right: 8px; bottom: calc(var(--peek) + 6px); }
+.pl.pl-3d .pl-menubtn { position: absolute; left: 8px; bottom: calc(var(--peek) + 6px); }
+.pl.pl-3d .pl-seatbtn { top: auto; bottom: calc(var(--peek) + var(--btn-h) + 56px); }
+.pl.pl-3d[data-layout="phone-land"] .pl-cards { flex-direction: column; right: auto; width: 200px; }
+.pl.pl-3d[data-layout="phone-land"] .pl-sc { width: 100%; }
+.pl.pl-3d[data-layout="phone-land"] .pl-sc1 { margin-left: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .pl-hc, .pl-perm, .pl-perm .pl-cv, .pl-stack { transition: none !important; }

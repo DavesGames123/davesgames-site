@@ -361,6 +361,10 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
 .whud{position:absolute;left:0;right:0;top:0;z-index:5;pointer-events:none;
   padding:calc(env(safe-area-inset-top,0px) + var(--pad)) calc(var(--pad) + var(--sr)) 0 calc(var(--pad) + var(--sl))}
 .wtop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:start}
+/* the scorecards are slim strips (ui/hud/hud.css .hd-slim): at most
+   240 px wide in their corners, so the flies keep the frame */
+.wsc .hd-slim{max-width:240px}
+#scB .hd-slim{margin-left:auto}
 .wsc{min-width:0;pointer-events:auto}
 .wsc:empty{display:none}
 .whud .hd-compact .hd-top{display:none}
@@ -547,7 +551,7 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 }
 @media (min-width:760px){
   .app{--bar-h:calc(62px + env(safe-area-inset-bottom,0px)); --pad:12px}
-  .wtop{grid-template-columns:minmax(0,340px) auto minmax(0,340px);justify-content:space-between;gap:12px}
+  .wtop{grid-template-columns:minmax(0,250px) auto minmax(0,250px);justify-content:space-between;gap:12px}
   .turnbox{grid-column:2;grid-row:1;flex-direction:column;align-items:center;min-width:92px;padding:6px 12px;
     box-shadow:inset 0 0 0 2px var(--tome),inset 0 0 0 3px var(--bronze-line)}
   .turnbox b{font-size:24px;line-height:1} .turnbox span{margin-top:4px;font-size:11px}
@@ -576,7 +580,7 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .ch-go .go{flex:0 1 280px}
 }
 @media (min-width:1200px){
-  .wtop{grid-template-columns:minmax(0,380px) auto minmax(0,380px)}
+  .wtop{grid-template-columns:minmax(0,250px) auto minmax(0,250px)}
 }
 /* phone held sideways: the cards are short, the table gets the height.
    The neural panel stays (a short strip); the count row goes. */
@@ -586,6 +590,6 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .stagebar .status{display:none}
   .whud .hd-brain{height:30px}
   .whud .hd-counts{display:none}
-  .wtop{grid-template-columns:minmax(0,260px) auto minmax(0,260px);justify-content:space-between}
+  .wtop{grid-template-columns:minmax(0,220px) auto minmax(0,220px);justify-content:space-between}
   .turnbox{grid-column:2;grid-row:1}
 }
