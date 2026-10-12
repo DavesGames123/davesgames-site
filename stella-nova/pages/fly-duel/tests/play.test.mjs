@@ -443,6 +443,57 @@ let fly = null;
       ok((opp === 'A') === (hs === 1), 'against Fly A you sit right (seat 1); else left');
       P.destroy();
     }
+    // The same game on a stub 3D table: every table gesture is a click on
+    // .pl-table, and pickPermanent() answers with the permanent, or with
+    // { uid: null, player } for a tap on a fly or its life die (the shape
+    // of ui/fly3d/scene.js). A player target must work from the table.
+    {
+      let pick = null;
+      const scene = {
+        pickPermanent: () => pick, setFirstPerson() {}, highlight() {}, setState() {}, setSpeed() {}, resize() {},
+        play: () => Promise.resolve(),
+      };
+      const root = document.getElementById('play');
+      const P = mountPlay(root, { rules, cards, bots, flies, connectomes: cons, sources: { A: 'hemibrain', B: 'FlyWire' }, seed: 44, scene, sceneEl: document.createElement('canvas') });
+      const q = s => root.querySelector(s);
+      const table = q('.pl-table');
+      const tapTable = hit => { pick = hit; ev(table, 'click'); pick = null; };
+      ev(q('.pl-seg[data-k="opp"] button[data-v="bot"]'), 'click');
+      ev(q('.pl-go'), 'click');
+      ev(q('[data-call="heads"]'), 'click');
+      await wait(2);
+      ev(q('.pl-go'), 'click');
+      ev(q('[data-keep]'), 'click');
+      const pc = P.controller, hs = pc.humanSeat;
+      const bot = greedyBot();
+      let bad = '', guard = 0, playerTargets = 0;
+      while (pc.need() !== 'over' && guard++ < 6000 && !bad) {
+        await wait(1);
+        if (pc.need() !== 'human' || P.busy) continue;
+        const s = pc.state, n0 = pc.history.length;
+        const legal = rules.legalActions(s);
+        // prefer a cast at a player, so the table path for players runs
+        const a = legal.find(x => x.type === 'cast' && typeof x.target === 'string') || bot(s, legal);
+        const handEls = [...root.querySelectorAll('.pl-hc')].filter(e => !e.hidden);
+        if (a.type === 'land' || a.type === 'cast') {
+          const i = s.players[hs].hand.indexOf(a.card);
+          tap(handEls[i]); tap(handEls[i]);
+          if (a.target !== undefined) {
+            if (typeof a.target === 'string') { playerTargets++; tapTable({ uid: null, player: +a.target.slice(1) }); } else tapTable({ uid: a.target });
+          }
+        } else if (a.type === 'pass') ev(q('.pl-pri'), 'click');
+        else if (a.type === 'attack') { for (const u of a.attackers) tapTable({ uid: u }); ev(q('.pl-pri'), 'click'); }
+        else { for (const [at, b] of a.blocks) { tapTable({ uid: b }); tapTable({ uid: at }); } ev(q('.pl-pri'), 'click'); }
+        for (let k = 0; k < 100 && pc.history.length === n0; k++) await wait(1);
+        const rec = pc.history[n0];
+        if (!rec || rec.who !== hs || canon(rec.action) !== canon(a)) bad = `${canon(a)} -> ${rec ? canon(rec.action) : 'nothing'} (${q('.pl-prompt').textContent})`;
+      }
+      await wait(5);
+      ok(!bad, `3D table game: every human action went through table taps${bad ? ': ' + bad : ''}`);
+      ok(playerTargets > 0, `3D table game: a tap on a fly or its life die targets that player (${playerTargets} times)`);
+      ok(!!pc.result, `3D table game ends (${JSON.stringify(pc.result)})`);
+      P.destroy();
+    }
     console.warn = ow; console.error = oe;
     globalThis.setTimeout = realST;
     ok(errs.length === 0, `no console error or warn in DOM games (${errs.slice(0, 3).join(' | ')})`);

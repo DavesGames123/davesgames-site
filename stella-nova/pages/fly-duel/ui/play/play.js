@@ -31,8 +31,10 @@
 //  3D TABLE  When opts.scene gives pickPermanent(clientX, clientY), play
 //        mode uses it: setFirstPerson(seat) puts the camera behind you,
 //        highlight(spec) marks playable / eligible / target cards, and
-//        play(record) animates each decision. Without pickPermanent the
-//        flat table is used and the scene is not touched.
+//        play(record) animates each decision. A tap on a fly or its life
+//        die (pickPermanent gives { uid: null, player }) targets that
+//        player. Without pickPermanent the flat table is used and the
+//        scene is not touched.
 //
 //  KEYS (desktop)  Space / Enter: the big button. Esc: cancel or close.
 //        Z or Backspace: undo. A: all attack. 1-9: select a hand card.
@@ -162,7 +164,10 @@ export function mountPlay(root, opts) {
       let hit = null;
       try { hit = opts.scene.pickPermanent(e.clientX, e.clientY); } catch { hit = null; }
       const uid = hit && typeof hit === 'object' ? hit.uid : hit;
+      // a tap on a fly or its life die: { uid: null, player: seat }
+      const who = hit && typeof hit === 'object' ? hit.player : undefined;
       if (uid != null && uid !== -1) apply(ix.perm(uid));
+      else if ((who === 0 || who === 1) && ix.mode() === 'target') apply(ix.player(who));
       else if (ix.view().selected !== null) apply(ix.confirm());
     });
   } else {
