@@ -296,6 +296,10 @@ async function presetTests() {
   let over = [];
   for (const [k, p] of Object.entries(BG.PROFILES)) { const lim = k.startsWith('phone') ? BG.LIMIT.touch : BG.LIMIT.desktop; if (BG.gpuBytes(p.N) > lim) over.push(k); }
   const ph = BG.pickProfile({ phone: true });
+  // the info panel states the counts the page really uses (main.js passes no quality)
+  const html = (await import('node:fs')).readFileSync(new URL('./index.html', import.meta.url), 'utf8'), fmt = n => n.toLocaleString('en-US');
+  const said = html.includes(fmt(ph.N) + ' particles on a phone') && html.includes(fmt(BG.pickProfile({}).N) + ' on a computer');
+  ok('7 the info panel states the real particle counts', said, said ? `${fmt(ph.N)} phone, ${fmt(BG.pickProfile({}).N)} computer` : 'index.html counts differ from budget.js pickProfile');
   ok('7 profile bytes under LIMIT; a phone gets <= 12288', over.length === 0 && ph.N <= 12288, `phone ${ph.N} (${(BG.gpuBytes(ph.N) / 1e6).toFixed(1)} MB), desktop ${BG.pickProfile({}).N}${over.length ? ', over: ' + over.join(' ') : ''}`);
   const fs = await import('node:fs');
   const files = fs.readdirSync(new URL('./shaders/', import.meta.url)).filter(f => f.endsWith('.wgsl')).sort();
