@@ -7,6 +7,9 @@
 //  and data/connectome-flywire.json (FlyWire, fly B). Checks:
 //    1. playGame ends, is deterministic in the seed, does not share one
 //       fly between seats, and gameSetup rotates seat, deck and first.
+//    1c. The deck pool: gameSetup plays every pair of the 13 decks, puts
+//       each deck in each seat, and fixes the deck of the subject fly
+//       when opts.deck is set. Training and eval games use the pool.
 //    2. binomialP and wilson give known values.
 //    3. A short training run is deterministic (same weights twice).
 //    4. Learning helps: over 3 seeds, a fly that trained 200 games vs
@@ -21,7 +24,8 @@
 //       one connectome and with two, and the worker glue in a fake
 //       worker scope.
 //    8. tools/train.mjs run() twice with a tiny budget writes the same
-//       weights, and records the wiring of each fly.
+//       weights, records the wiring of each fly, the deck pool and a
+//       per-deck table against the greedy bot.
 //  Exit code 1 on any failure.
 // ============================================================================
 import { existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -30,7 +34,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mulberry32, hashSeed } from '../data/rng.js';
 import { makePair, Fly } from '../brain/fly.js';
-import { playGame, evaluate, gameSetup, binomialP, wilson, trainGame, asPlayer, FLY_OPTS, WIRING } from '../train/selfplay.js';
+import { playGame, evaluate, gameSetup, binomialP, wilson, trainGame, asPlayer, FLY_OPTS, WIRING, DECK_POOL, deckPairs } from '../train/selfplay.js';
+import { DECK_ORDER, DECKS } from '../game/cards.js';
 import { createTrainer } from '../train/worker.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -80,6 +85,40 @@ const t0 = performance.now();
   ok(FLY_OPTS.sparsity >= 0.05 && FLY_OPTS.sparsity <= 0.1 && A.mb.k === Math.round(FLY_OPTS.sparsity * A.mb.nLive), `FLY_OPTS: sparsity ${FLY_OPTS.sparsity} in the 5-10 % band, k = ${A.mb.k}`);
   const j = JSON.parse(JSON.stringify(A)), A2 = Fly.fromJSON(C, j);
   ok(A2.mb.graded && A2.mb.k === A.mb.k, 'FLY_OPTS: a saved fly keeps its code and sparsity');
+}
+
+// ---------------------------------------------------------------- 1c deck pool
+{
+  ok(DECK_POOL.length === DECK_ORDER.length && DECK_POOL.length >= 11 && DECK_POOL.every(d => DECKS[d]), `DECK_POOL: all ${DECK_POOL.length} decks of game/cards.js`);
+  const P = deckPairs(DECK_POOL);
+  ok(P.length === DECK_POOL.length * (DECK_POOL.length - 1) / 2 && P.every(([a, b]) => a !== b), `deckPairs: ${P.length} pairs of two different decks`);
+  const pairs = new Set(), seatDeck = new Set(), firstDeck = new Set();
+  for (let i = 0; i < 1000; i++) {
+    const { seat, decks, first } = gameSetup(i, { seed: 77 });
+    pairs.add([...decks].sort().join('|'));
+    seatDeck.add(`${seat}:${decks[seat]}`);
+    firstDeck.add(`${first}:${decks[first]}`);
+    if (decks[0] === decks[1]) { ok(false, `gameSetup: game ${i} is a mirror match`); break; }
+  }
+  ok(pairs.size === P.length, `gameSetup: 1000 games play all ${P.length} deck pairs (${pairs.size})`);
+  ok(seatDeck.size === 2 * DECK_POOL.length, `gameSetup: the subject fly plays every deck from each seat (${seatDeck.size})`);
+  ok(firstDeck.size === 2 * DECK_POOL.length, `gameSetup: every deck goes first and second (${firstDeck.size})`);
+  const other = new Set();
+  let fixed = true;
+  for (let i = 0; i < 200; i++) { const { seat, decks } = gameSetup(i, { deck: 'dew', seed: 3 }); if (decks[seat] !== 'dew' || decks[1 - seat] === 'dew') fixed = false; other.add(decks[1 - seat]); }
+  ok(fixed && other.size === DECK_POOL.length - 1, `gameSetup: with deck 'dew' the subject always plays dew, the opponent plays the ${other.size} other decks`);
+  const small = new Set(Array.from({ length: 16 }, (_, i) => gameSetup(i, { pool: ['amber', 'moss'] }).decks.join('|')));
+  ok(small.size === 2 && small.has('amber|moss') && small.has('moss|amber'), 'gameSetup: a pool of two decks plays only that pair');
+  const seen = new Set();
+  const rng = mulberry32(hashSeed('pool-train'));
+  const [A, B] = makePair(C, { ...FLY_OPTS, seed: 6 });
+  let same = true;
+  for (let g = 0; g < 16; g++) {
+    const r = trainGame(A, B, g, rng, { mix: { random: 1, greedy: 0, self: 0 }, seed: 4 });
+    if (r.decks.join() !== gameSetup(g, { seed: hashSeed('train-decks:4') }).decks.join()) same = false;
+    seen.add([...r.decks].sort().join('|'));
+  }
+  ok(same && seen.size === 2, `trainGame: 16 games play the gameSetup decks, two deck pairs (${[...seen].join(' ')})`);
 }
 
 // ---------------------------------------------------------------- 2 stats
@@ -243,6 +282,7 @@ if (CW) {
   const drain = () => { while (queue.length) queue.shift()(); };
   T.handle({ cmd: 'init', connectomes: { A: C, B: CW } });
   const r = out.at(-1);
+  ok(Array.isArray(r.decks) && r.decks.length === DECK_POOL.length, `worker: ready names the deck pool (${r.decks && r.decks.length} decks)`);
   ok(r.type === 'ready' && r.wiring.A.kc === C.kc.n && r.wiring.B.kc === CW.kc.n, `worker: init with two connectomes (A ${r.wiring && r.wiring.A.kc} KCs, B ${r.wiring && r.wiring.B.kc} KCs)`);
   ok(T.state.A.mb.nKC === C.kc.n && T.state.B.mb.nKC === CW.kc.n, 'worker: fly A on the hemibrain, fly B on FlyWire');
   T.handle({ cmd: 'train', games: 4 });
@@ -253,6 +293,10 @@ if (CW) {
   ok(out.at(-1).type === 'ready' && out.at(-1).trained === true && T.state.B.toJSON().mb.w === w.B.mb.w, 'worker: two-wiring weights load back');
   T.handle({ cmd: 'init', connectome: C, weights: { A: w.A, B: w.B } });
   ok(out.at(-1).type === 'error' && /fly B/.test(out.at(-1).message), `worker: fly B weights on the wrong wiring post an error (${out.at(-1).message.slice(0, 60)})`);
+  const pk = [], pq = [];
+  const tp = createTrainer(m => pk.push(m), fn => pq.push(fn));
+  tp.handle({ cmd: 'init', connectomes: { A: C, B: CW }, decks: ['rot', 'pollen'] });
+  ok(pk.at(-1).decks.join() === 'rot,pollen' && tp.state.pool.join() === 'rot,pollen', 'worker: init with decks sets the pool');
   const one = createTrainer(() => {}, fn => fn());
   one.handle({ cmd: 'init', connectome: C });
   ok(one.state.A.mb.nKC === C.kc.n && one.state.B.mb.nKC === C.kc.n, 'worker: the old one-connectome init gives both flies the same wiring');
@@ -263,17 +307,24 @@ if (CW) {
   const { run } = await import(pathToFileURL(join(ROOT, 'tools/train.mjs')).href);
   const d1 = mkdtempSync(join(tmpdir(), 'fly-duel-train-')), d2 = mkdtempSync(join(tmpdir(), 'fly-duel-train-'));
   try {
-    const o = { games: 20, every: 10, eval: 4, final: 4, curriculum: 10, seed: 5, quiet: true };
+    const o = { games: 20, every: 10, eval: 4, final: 4, curriculum: 10, seed: 5, quiet: true, perdeck: 2 };
     run({ ...o, out: d1 }); run({ ...o, out: d2 });
     const p1 = JSON.parse(readFileSync(join(d1, 'pretrained.json'), 'utf8')), p2 = JSON.parse(readFileSync(join(d2, 'pretrained.json'), 'utf8'));
     ok(p1.A.mb.w === p2.A.mb.w && p1.B.mb.w === p2.B.mb.w, 'train.mjs: two tiny runs with one seed write the same weights');
     const c1 = JSON.parse(readFileSync(join(d1, 'training-curve.json'), 'utf8'));
     ok(c1.checkpoints.length === 3 && c1.meta.command.includes('--seed 5'), `train.mjs: 3 checkpoints and the command in meta (${c1.meta.command})`);
+    ok(c1.meta.decks.join() === DECK_POOL.join() && p1.meta.decks.join() === DECK_POOL.join(), `train.mjs: the deck pool in pretrained.json and the curve meta (${c1.meta.decks.length} decks)`);
+    const pd = c1.meta.final.perDeck || {};
+    ok(Object.keys(pd).join() === DECK_POOL.join() && Object.values(pd).every(r => ['A', 'B', 'greedy'].every(k => r[k].n === 2 && r[k].wins + r[k].losses + r[k].draws === 2 && Array.isArray(r[k].ci95))), 'train.mjs: per-deck table, fly A, fly B and the greedy bot on every deck');
     const mode = CW ? 'two' : 'one';
     ok(p1.format === 'fly-duel-pretrained/2' && p1.wiring.mode === mode && c1.meta.wiring.mode === mode && c1.meta.command.includes(`--wiring ${mode}`), `train.mjs: wiring ${mode} in pretrained.json, the curve meta and the command`);
     if (CW) ok(p1.wiring.A.file === WIRING.A.file && p1.wiring.B.file === WIRING.B.file && Fly.fromJSON(CW, p1.B).mb.nKC === CW.kc.n, 'train.mjs: fly B trains on the FlyWire file');
-    run({ ...o, games: 10, every: 10, wiring: 'one', out: d1 });
+    run({ ...o, games: 10, every: 10, wiring: 'one', out: d1, decks: 'amber,moss', perdeck: 0 });
     const q = JSON.parse(readFileSync(join(d1, 'pretrained.json'), 'utf8'));
+    ok(q.meta.decks.join() === 'amber,moss' && /--decks amber,moss/.test(q.meta.command), 'train.mjs: --decks sets the pool and goes into the command');
+    let unk = false;
+    try { run({ ...o, out: d2, decks: 'no-such-deck' }); } catch { unk = true; }
+    ok(unk, 'train.mjs: an unknown deck id throws');
     ok(q.wiring.mode === 'one' && q.wiring.B.file === WIRING.A.file && Fly.fromJSON(C, q.B).mb.nKC === C.kc.n, 'train.mjs: --wiring one puts both flies on data/connectome.json');
   } finally { rmSync(d1, { recursive: true, force: true }); rmSync(d2, { recursive: true, force: true }); }
 }

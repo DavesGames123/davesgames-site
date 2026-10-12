@@ -12,6 +12,11 @@
 //      node tools/mb-lab.mjs --cfg '{"kcCode":"graded"}' --games 8000
 //      options: --games 8000 --every 1000 --eval 100 --final 500
 //               --curriculum 1000 --seed 2026 --cfg '{...}' --tag name
+//               --mix '{"random":0.1,"greedy":0.3,"self":0.6}'
+//               --curmix '{"random":0.5,"greedy":0,"self":0.5}'
+//      mix is the opponent mix after the curriculum (default TRAIN_MIX),
+//      curmix the mix of the curriculum (default CURRICULUM_MIX of
+//      tools/train.mjs). The games use all decks (DECK_POOL).
 //
 //  METHOD.  At each checkpoint, fly A and fly B play --eval games each
 //  against the greedy bot (checkpoint seed). The tool keeps the
@@ -36,13 +41,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CURRICULUM_MIX = Object.freeze({ random: 0.5, greedy: 0, self: 0.5 });
 
 function args(argv) {
-  const o = { games: 8000, every: 1000, eval: 100, final: 500, curriculum: 1000, seed: 2026, cfg: '{}', tag: '' };
+  const o = { games: 8000, every: 1000, eval: 100, final: 500, curriculum: 1000, seed: 2026, cfg: '{}', tag: '', mix: '', curmix: '' };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i].replace(/^--/, ''), v = argv[++i];
     if (!(k in o)) throw new Error(`mb-lab.mjs: unknown option --${k}`);
     o[k] = typeof o[k] === 'number' ? Number(v) : v;
   }
   o.cfg = JSON.parse(o.cfg);
+  o.mix = o.mix ? JSON.parse(o.mix) : TRAIN_MIX;
+  o.curmix = o.curmix ? JSON.parse(o.curmix) : CURRICULUM_MIX;
   return o;
 }
 
@@ -55,7 +62,7 @@ export function lab(opt) {
   const curve = [];
   let best = null;
   for (let g = 0; g < opt.games; g++) {
-    trainGame(A, B, g, rng, { mix: g < opt.curriculum ? CURRICULUM_MIX : TRAIN_MIX, seed: opt.seed });
+    trainGame(A, B, g, rng, { mix: g < opt.curriculum ? (opt.curmix || CURRICULUM_MIX) : (opt.mix || TRAIN_MIX), seed: opt.seed });
     if ((g + 1) % opt.every === 0) {
       const a = evaluate(A, 'greedy', opt.eval, evalSeed).rate, b = evaluate(B, 'greedy', opt.eval, evalSeed).rate;
       curve.push([g + 1, a, b]);
@@ -70,7 +77,7 @@ export function lab(opt) {
   const wins = gA.wins + gB.wins, n = gA.n + gB.n;
   const r3 = x => Math.round(x * 1000) / 1000;
   return {
-    tag: opt.tag, cfg: opt.cfg, games: opt.games, kept: best.games,
+    tag: opt.tag, cfg: opt.cfg, mix: opt.mix, curmix: opt.curmix, games: opt.games, kept: best.games,
     greedy: { A: r3(gA.rate), B: r3(gB.rate), pooled: r3(wins / n), ci95: wilson(wins, n).map(r3), wins, n },
     random: { A: r3(rA.rate), B: r3(rB.rate) },
     curve, seconds: Math.round((Date.now() - t0) / 1000),

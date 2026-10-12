@@ -13,6 +13,16 @@
 //  matchup() rotate the seat, the deck and the first player over each
 //  block of 8 games, so no fly gets an easy seat or deck.
 //
+//  DECK POOL.  DECK_POOL holds all the decks of game/cards.js (DECK_ORDER,
+//  13 decks since the five-colour pool). Each block of 8 games plays one
+//  pair of two different decks. The blocks go through the unordered pairs
+//  of the pool in a fixed order, from an offset that the seed sets. Thus
+//  1000 games touch every pair of 13 decks (78 pairs) at least once, and
+//  each deck of a pair goes to each seat. opts.pool gives a smaller pool.
+//  opts.deck fixes the deck of the subject fly: the opponent then plays
+//  the other decks of the pool in turn (the per-deck table of
+//  tools/train.mjs).
+//
 //  LEARNING (way A of brain/agent.js).  When opts.learn is on, a learning
 //  fly calls choose(.., { learn: true }) at each decision: that does one
 //  TD step from its last afterstate to the new afterstate. At the end of
@@ -37,15 +47,18 @@
 //      playGame ....... "export function playGame"   one game
 //      evaluate ....... "export function evaluate"   fly vs opponent, n games
 //      matchup ........ "export function matchup"    fly A vs fly B, n games
+//      DECK_POOL ...... "export const DECK_POOL"     all deck ids
+//      deckPairs ...... "export function deckPairs"  unordered pairs of a pool
 //      gameSetup ...... "export function gameSetup"  seat, deck, first of game i
 //      binomialP ...... "export function binomialP"  one-sided p of k wins in n
 //      wilson ......... "export function wilson"     95 % interval of a rate
 // ============================================================================
 import { newGame, legalActions, step, isOver } from '../game/rules.js';
 import { randomBot, greedyBot } from '../game/bots.js';
+import { DECK_ORDER } from '../game/cards.js';
 import { mulberry32, hashSeed } from '../data/rng.js';
 
-const DECKS = ['amber', 'moss'];
+export const DECK_POOL = Object.freeze(DECK_ORDER.slice());
 const STEP_CAP = 20000;   // safety only: the rules end a game at TURN_CAP
 
 const isFly = p => !!p && typeof p.choose === 'function';
@@ -92,11 +105,13 @@ export const TRAIN_EXPLORE = 0.05;
 
 // One training game number g. A fly vs fly game trains both flies. A bot
 // game plays fly A and fly B against the bot, one game each. rng picks
-// the opponent kind. Returns { kind, results: [{ fly: 'A'|'B', won }] }.
-export function trainGame(A, B, g, rng, { mix = TRAIN_MIX, explore = TRAIN_EXPLORE, seed = 1 } = {}) {
+// the opponent kind. Returns { kind, decks, results: [{ fly: 'A'|'B',
+// won }] }. decks[seat] is the deck of the subject fly (fly A in a fly
+// vs fly game).
+export function trainGame(A, B, g, rng, { mix = TRAIN_MIX, explore = TRAIN_EXPLORE, seed = 1, pool = DECK_POOL } = {}) {
   const x = rng(), r = mix.random || 0, gr = mix.greedy || 0;
   const kind = x < r ? 'random' : x < r + gr ? 'greedy' : 'self';
-  const { seat, decks, first } = gameSetup(g);
+  const { seat, decks, first } = gameSetup(g, { pool, seed: hashSeed(`train-decks:${seed}`) });
   const gs = hashSeed(`train:${seed}:${g}`);
   const results = [];
   if (kind === 'self') {
@@ -110,21 +125,48 @@ export function trainGame(A, B, g, rng, { mix = TRAIN_MIX, explore = TRAIN_EXPLO
       results.push({ fly: name, won: res.winner === seat ? 1 : res.winner === -1 ? 0.5 : 0 });
     }
   }
-  return { kind, results };
+  return { kind, decks, results };
+}
+
+// The unordered pairs [a, b] (a before b in the pool) of two different
+// decks. A pool of one deck gives the mirror pair [a, a].
+const pairCache = new Map();
+export function deckPairs(pool = DECK_POOL) {
+  const key = pool.join(',');
+  if (!pairCache.has(key)) {
+    const out = [];
+    for (let i = 0; i < pool.length; i++) for (let j = i + 1; j < pool.length; j++) out.push([pool[i], pool[j]]);
+    if (!out.length && pool.length) out.push([pool[0], pool[0]]);
+    pairCache.set(key, out);
+  }
+  return pairCache.get(key);
 }
 
 // Seat of the subject fly, the decks and the first player for game i.
-// The 8 combinations of (seat, deck, first) repeat every 8 games.
-export function gameSetup(i) {
-  const seat = i & 1, swap = (i >> 1) & 1, first = (i >> 2) & 1;
-  const decks = swap ? [DECKS[1], DECKS[0]] : DECKS.slice();
-  return { seat, decks, first };
+// The 8 combinations of (seat, deck, first) repeat every 8 games, on
+// one deck pair. Block b = i >> 3 plays pair (b + offset) of
+// deckPairs(pool), and the seed sets the offset. With opts.deck, the
+// subject fly always plays that deck, and the opponent plays the other
+// decks of the pool in turn, one deck per block.
+export function gameSetup(i, { pool = DECK_POOL, seed = 0, deck = null } = {}) {
+  const seat = i & 1, swap = (i >> 1) & 1, first = (i >> 2) & 1, block = i >> 3;
+  if (!pool.length) throw new Error('selfplay: empty deck pool');
+  if (deck) {
+    const others = pool.filter(d => d !== deck);
+    const opp = others.length ? others[(block + (seed >>> 0)) % others.length] : deck;
+    const decks = [opp, opp];
+    decks[seat] = deck;
+    return { seat, decks, first };
+  }
+  const pairs = deckPairs(pool);
+  const [a, b] = pairs[(block + (seed >>> 0)) % pairs.length];
+  return { seat, decks: swap ? [b, a] : [a, b], first };
 }
 
 // One game. p0 sits in seat 0, p1 in seat 1. opts: { seed, decks, first,
 // learn, explore, epsilon, log, frames, onDecision }.
 export function playGame(p0, p1, opts = {}) {
-  const { seed = 1, decks = DECKS, first = 0, learn = false, explore = 0, epsilon = 0, log = false, frames = false, onDecision = null } = opts;
+  const { seed = 1, decks = DECK_POOL.slice(0, 2), first = 0, learn = false, explore = 0, epsilon = 0, log = false, frames = false, onDecision = null } = opts;
   const players = [asPlayer(p0, hashSeed(`p0:${seed}`)), asPlayer(p1, hashSeed(`p1:${seed}`))];
   if (players[0].kind === 'fly' && players[0].fly === players[1].fly) throw new Error('selfplay: one fly cannot sit in both seats');
   const rng = mulberry32(hashSeed(`explore:${seed}`));
@@ -160,13 +202,15 @@ export function playGame(p0, p1, opts = {}) {
 }
 
 // fly vs opponent over n games, seats/decks/first rotated by gameSetup.
-// opts: { explore = 0, epsilon = 0, learn = false }. Returns { n, wins,
-// losses, draws, rate (wins / n), score ((wins + draws / 2) / n) }.
+// opts: { explore = 0, epsilon = 0, learn = false, pool = DECK_POOL,
+// deck = null }. The seed also sets the first deck pair. Returns { n,
+// wins, losses, draws, rate (wins / n), score ((wins + draws / 2) / n) }.
 export function evaluate(fly, opponent, n = 200, seed = 1, opts = {}) {
-  const { explore = 0, epsilon = 0, learn = false } = opts;
+  const { explore = 0, epsilon = 0, learn = false, pool = DECK_POOL, deck = null } = opts;
   let wins = 0, losses = 0, draws = 0, turns = 0;
+  const setup = { pool, deck, seed: hashSeed(`eval-decks:${seed}`) };
   for (let i = 0; i < n; i++) {
-    const { seat, decks, first } = gameSetup(i);
+    const { seat, decks, first } = gameSetup(i, setup);
     const gs = hashSeed(`eval:${seed}:${i}`);
     const opp = typeof opponent === 'string' ? asPlayer(opponent, gs).act : opponent;
     const pair = seat === 0 ? [fly, opp] : [opp, fly];

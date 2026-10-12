@@ -14,6 +14,9 @@
 //            train/selfplay.js). The old form, one connectome, gives
 //            both flies the same wiring. Saved weights load only on
 //            the wiring that made them: if not, the worker posts 'error'.
+//            decks? (deck ids) sets the deck pool of the training and
+//            eval games. The default is DECK_POOL of train/selfplay.js
+//            (all decks of game/cards.js).
 //      { cmd: 'train', games: n, mix? }
 //            play n more training games, then post 'weights'. mix gives
 //            the share of games vs the random bot, vs the greedy bot and
@@ -23,7 +26,7 @@
 //      { cmd: 'eval', n }   n games each fly vs random, vs greedy, A vs B
 //                           with greedy play (no exploration, no learning).
 //  PROTOCOL (messages out)
-//      { type: 'ready', game, trained, wiring: { A, B } }  after init.
+//      { type: 'ready', game, trained, wiring: { A, B }, decks }  after init.
 //        wiring gives meta.release and kc.n of the connectome of each fly.
 //      { type: 'progress', game, winRateA, vsRandom: {A, B}, vsGreedy:
 //        {A, B}, ms }  every PROGRESS_EVERY games. winRateA is the share
@@ -42,14 +45,14 @@
 //
 //  GREP MAP   (grep -n "<anchor>" train/worker.js)
 //      createTrainer ... "export function createTrainer"  the protocol, no worker globals
-//      TRAIN_MIX, FLY_OPTS, WIRING  re-exported from train/selfplay.js
+//      TRAIN_MIX, FLY_OPTS, WIRING, DECK_POOL  re-exported from train/selfplay.js
 //      worker glue ..... "self.onmessage"
 // ============================================================================
 import { Fly, makePair } from '../brain/fly.js';
-import { evaluate, trainGame, TRAIN_MIX, FLY_OPTS, WIRING } from './selfplay.js';
+import { evaluate, trainGame, TRAIN_MIX, FLY_OPTS, WIRING, DECK_POOL } from './selfplay.js';
 import { mulberry32, hashSeed } from '../data/rng.js';
 
-export { TRAIN_MIX, FLY_OPTS, WIRING };
+export { TRAIN_MIX, FLY_OPTS, WIRING, DECK_POOL };
 const PROGRESS_EVERY = 10;
 const SLICE = 5;          // games per macrotask, so 'pause' gets in
 
@@ -57,7 +60,7 @@ const SLICE = 5;          // games per macrotask, so 'pause' gets in
 // fake post(). post(msg) sends a message out. defer(fn) runs fn later
 // (setTimeout in the worker; tests may run it at once or queue it).
 export function createTrainer(post, defer = fn => setTimeout(fn, 0)) {
-  const T = { A: null, B: null, connectome: null, connectomes: null, game: 0, running: false, todo: 0, rng: null, mix: TRAIN_MIX, recent: null, t0: 0 };
+  const T = { A: null, B: null, connectome: null, connectomes: null, game: 0, running: false, todo: 0, rng: null, mix: TRAIN_MIX, pool: DECK_POOL, recent: null, t0: 0 };
   const resetRecent = () => { T.recent = { self: [], random: { A: [], B: [] }, greedy: { A: [], B: [] } }; };
   const mean = a => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
   const push = (a, v, cap = 50) => { a.push(v); if (a.length > cap) a.shift(); };
@@ -76,7 +79,7 @@ export function createTrainer(post, defer = fn => setTimeout(fn, 0)) {
     if (!T.running) return;
     const n = Math.min(SLICE, T.todo);
     for (let i = 0; i < n; i++) {
-      const { kind, results } = trainGame(T.A, T.B, T.game, T.rng, { mix: T.mix });
+      const { kind, results } = trainGame(T.A, T.B, T.game, T.rng, { mix: T.mix, pool: T.pool });
       T.game++; T.todo--;
       if (kind === 'self') push(T.recent.self, results[0].won);
       else for (const r of results) push(T.recent[kind][r.fly], r.won);
@@ -112,10 +115,11 @@ export function createTrainer(post, defer = fn => setTimeout(fn, 0)) {
         T.connectome = CA; T.connectomes = { A: CA, B: CB };
         T.game = (w.A && w.B && Number.isFinite(w.games)) ? w.games : 0;
         T.rng = mulberry32(hashSeed(`worker:${T.game}`));
+        T.pool = Array.isArray(m.decks) && m.decks.length ? m.decks.slice() : DECK_POOL;
         T.running = false; T.todo = 0;
         resetRecent();
         const about = C => ({ release: C.meta?.release || '', kc: C.kc?.n ?? null });
-        post({ type: 'ready', game: T.game, trained: !!(w.A && w.B), wiring: { A: about(CA), B: about(CB) } });
+        post({ type: 'ready', game: T.game, trained: !!(w.A && w.B), wiring: { A: about(CA), B: about(CB) }, decks: T.pool.slice() });
       } else if (m.cmd === 'train') {
         if (!T.A) throw new Error('train before init');
         if (m.mix) T.mix = m.mix;
@@ -128,10 +132,11 @@ export function createTrainer(post, defer = fn => setTimeout(fn, 0)) {
         if (!T.A) throw new Error('eval before init');
         const n = Math.max(2, m.n | 0 || 200);
         const seed = hashSeed(`worker-eval:${T.game}`);
+        const o = { pool: T.pool };
         const ev = {
-          rA: evaluate(T.A, 'random', n, seed), rB: evaluate(T.B, 'random', n, seed),
-          gA: evaluate(T.A, 'greedy', n, seed), gB: evaluate(T.B, 'greedy', n, seed),
-          ab: evaluate(T.A, T.B, n, seed),
+          rA: evaluate(T.A, 'random', n, seed, o), rB: evaluate(T.B, 'random', n, seed, o),
+          gA: evaluate(T.A, 'greedy', n, seed, o), gB: evaluate(T.B, 'greedy', n, seed, o),
+          ab: evaluate(T.A, T.B, n, seed, o),
         };
         post({ type: 'eval', game: T.game, n,
           vsRandom: { A: ev.rA.rate, B: ev.rB.rate }, vsGreedy: { A: ev.gA.rate, B: ev.gB.rate }, AvsB: ev.ab.rate,
