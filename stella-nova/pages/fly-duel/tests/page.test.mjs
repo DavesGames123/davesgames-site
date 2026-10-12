@@ -192,7 +192,8 @@ if (has('game/rules.js') && has('brain/fly.js') && has('data/connectome.json')) 
   ok(/Two computer models, <span data-wiring>wired from the connectomes<\/span> of two flies: each is a model, not a real fly/.test(html), 'markup: the 3D stage tag names two models and two connectomes');
   ok(/art\/CREDITS-ART\.md/.test(html) && /public-domain/.test(html), 'markup: the card art credit');
   // the fullscreen game: two modes, the chooser, the drawer
-  for (const id of ['app', 'watchHud', 'scA', 'scB', 'turnBanner', 'playRoot', 'chooser', 'how', 'howClose', 'btnHow', 'btnPlay', 'btnDecks'])
+  ok(!html.includes('id="turnBanner"') && (html.match(/data-turn-indicator/g) || []).length === 1, 'markup: one turn indicator, no turn banner');
+  for (const id of ['app', 'watchHud', 'scA', 'scB', 'heroTurn', 'playRoot', 'chooser', 'how', 'howClose', 'btnHow', 'btnPlay', 'btnDecks'])
     ok(html.includes(`id="${id}"`), `markup: #${id}`);
   ok(html.indexOf('id="scA"') < html.indexOf('id="scB"'), 'markup: Fly A scorecard first (top-left), Fly B second (top-right)');
   const how = html.slice(html.indexOf('id="how"'));

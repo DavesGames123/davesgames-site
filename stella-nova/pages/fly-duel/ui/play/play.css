@@ -16,7 +16,8 @@
      .pl-stack      a land stack       .pl-arrows  attack / block lines
      .pl-actions    the big button     .pl-bar     phase steps + prompt
      .pl-sheet      setup/coin/mull    .pl-insp    the inspector
-     .pl-banner     turn pause         .pl-last    the last action chip
+     .pl-hint       message at control .pl-last    the last action chip
+     .pl-turn       the one turn line (is-new: the pause between turns)
      .pl-3d         full bleed 3D      .pl-seatbtn back to seat (orbit)
    ========================================================================== */
 [hidden] { display: none !important; }
@@ -66,7 +67,14 @@
 .pl-bar[data-seat="0"] .pl-steps li.now { box-shadow: inset 0 -3px 0 0 var(--flyA); }
 .pl-turn { font: 600 12px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; color: var(--ink2); }
 .pl-prompt { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--ink2); min-height: 1.4em; }
-.pl-prompt.is-err { color: var(--ink); text-decoration: underline 2px var(--dmg); text-underline-offset: 3px; }
+.pl-turn { padding: 1px 6px; border: 1px solid transparent; border-radius: 3px; }
+.pl-turn.is-new[data-seat="0"] { border-color: var(--flyA); } .pl-turn.is-new[data-seat="1"] { border-color: var(--flyB); }
+/* a message for the player, next to the control used (play.js flash) */
+.pl-hint { position: absolute; z-index: 95; margin: 0; max-width: min(300px, calc(100% - 16px)); padding: 6px 10px; background: var(--panel);
+  border: 1px solid var(--dmg); border-radius: 4px; font-size: 12px; line-height: 1.35; color: var(--ink); pointer-events: none; }
+.pl-hint[data-at="button"] { right: 8px; bottom: calc(var(--peek) + var(--btn-h) + 16px); }
+.pl-hint[data-at="hand"] { left: 50%; transform: translateX(-50%); bottom: calc(var(--peek) + 8px); }
+.pl-hint[data-at="table"] { left: 50%; transform: translateX(-50%); top: 38%; }
 
 /* ----------------------------------------------------------- buttons */
 .pl-btn {
@@ -171,10 +179,6 @@
 .pl-last { position: absolute; z-index: 30; left: 50%; top: 40%; transform: translate(-50%, -50%); display: flex; gap: 10px; align-items: center; max-width: min(92%, 420px); padding: 8px 12px 8px 8px; background: var(--panel); border: 1px solid var(--hair2); border-left: 3px solid var(--flyA); border-radius: 8px; pointer-events: none; }
 .pl-last[data-seat="1"] { border-left-color: var(--flyB); }
 .pl-last-t { font-size: 13px; color: var(--ink); }
-
-/* ------------------------------------------------------ turn banner */
-.pl-banner { position: absolute; z-index: 90; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 14px 22px; background: var(--panel); border: 2px solid var(--flyA); border-radius: 10px; font: 400 22px var(--sci-serif, 'STIX Two Text', Georgia, serif); white-space: nowrap; pointer-events: none; }
-.pl-banner[data-seat="1"] { border-color: var(--flyB); }
 
 /* ------------------------------------------------------------- menu */
 .pl-menu { position: absolute; z-index: 150; left: 8px; bottom: calc(var(--peek) + var(--btn-h) + 14px); width: min(300px, calc(100% - 16px)); display: grid; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--hair2); border-radius: 10px; }

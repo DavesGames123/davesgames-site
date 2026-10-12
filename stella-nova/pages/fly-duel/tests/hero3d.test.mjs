@@ -206,7 +206,7 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   ok(h.indexOf('mana-amber') < h.indexOf('mana-moss') && /life low/.test(h) && /choosing/.test(h), 'hudHTML: amber first, low life marked, "choosing"');
   // while a record plays, the box shows the turn before the record
   const turn = hero.busy ? hero.rec.before.turn : st.turn;
-  ok(new RegExp(`turn ${turn}(?!\\d)`).test($('heroTurn').textContent), `turn box: turn ${turn} (${$('heroTurn').textContent}, busy ${hero.busy})`);
+  ok(new RegExp(`^Turn ${turn}(?!\\d)`).test($('heroTurn').textContent), `turn box: turn ${turn} (${$('heroTurn').textContent}, busy ${hero.busy})`);
   ok(/mana-amber/.test($('manaLegGlyphs').innerHTML) && /mana-moss/.test($('manaLegGlyphs').innerHTML), 'mana legend: the glyphs');
 }
 
@@ -248,6 +248,7 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
 
 // --------------------------------------------------------------- whole game
 {
+  const bannersAtStart = hero.scene.stats().banners;
   let guard = 0;
   while (!hero.match.over() && guard++ < 6000) await pump(10);
   ok(!!hero.match.over(), `game: a whole game ends (${hero.match.history.length} records)`);
@@ -257,7 +258,10 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   await pump(2);
   const over = hero.match.over();
   ok(/wins|draw|loses/.test($('hudA').textContent + $('hudB').textContent), 'game: the HUD names the result');
-  ok(over && /wins|Draw/.test($('heroStatus').textContent), `game: the status line (${$('heroStatus').textContent.slice(0, 50)})`);
+  ok(over && /wins|Draw/.test($('heroTurn').textContent) && !/wins|Draw/.test($('heroStatus').textContent), `game: the turn box names the result, the status line does not (${$('heroTurn').textContent})`);
+  // one voice on the 3D table: no turn banner, one big panel at the end
+  const st = hero.scene.stats();
+  ok(st.banners === bannersAtStart + 1, `game: one big banner in the whole game, the result (${st.banners - bannersAtStart})`);
   await pump(200);
   ok(hero.match.history.length < 20 && !hero.match.over(), 'game: a new game starts after the hold');
 }

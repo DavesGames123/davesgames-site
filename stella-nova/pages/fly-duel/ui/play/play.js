@@ -25,8 +25,14 @@
 //  FLOW  setup sheet (opponent, decks, timer) -> coin -> mulligan -> play
 //        -> result sheet (rematch, change decks).
 //  PACING  The fly thinks for a set time (its top-3 moves show in its
-//        scorecard), then its move plays. Between turns a banner holds the
-//        table still ("Turn 6 · Fly B"). Speed: calm, normal, fast.
+//        scorecard), then its move plays. Between turns the table holds
+//        still. ONE VOICE (CONTRACT.md): the turn line of the phase bar
+//        (.pl-turn, "Turn 6 · Fly B · combat") is the one turn indicator;
+//        it changes in place and its edge takes the seat colour for the
+//        pause. No banner, no "is thinking" line. A message for the
+//        player ("wait for your turn", a move that is not legal) shows
+//        next to the control used (.pl-hint at the hand, the table or the
+//        big button). Speed: calm, normal, fast.
 //
 //  FULL BLEED  With the 3D table (.pl-3d) the canvas fills the whole play
 //        box, and the HUD lies over it: the scorecards are slim corner
@@ -72,6 +78,8 @@
 //      grep -n 'function render'         every box from the state
 //      grep -n 'function onKey'          keyboard shortcuts
 //      grep -n 'function startTimer'     optional turn timer
+//      grep -n 'export function playTurnText'  the one turn line
+//      grep -n 'function flash'          a message at the control used
 // ============================================================================
 import { createPlayController, deckColours } from './controller.js';
 import { createInteraction } from './model.js';
@@ -85,14 +93,25 @@ import { createScorecard, scorecardModel } from '../hud/scorecard.js';
 import { agentFromFly, agentFromBot } from '../match.js';
 
 const SPEED = {
-  calm: { think: 1500, top: 900, beat: 900, banner: 1500 },
-  normal: { think: 950, top: 650, beat: 600, banner: 1100 },
-  fast: { think: 350, top: 250, beat: 220, banner: 500 },
+  calm: { think: 1500, top: 900, beat: 900, pause: 1500 },
+  normal: { think: 950, top: 650, beat: 600, pause: 1100 },
+  fast: { think: 350, top: 250, beat: 220, pause: 500 },
 };
 const NOT_AFFILIATED = 'Not affiliated with or endorsed by Wizards of the Coast.';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// The turn line of play mode: "Turn 6 · You · main", "Turn 7 · Fly B ·
+// combat", or the result. Pure, for the tests.
+const STEP_WORD = { main: 'main', attack: 'combat', block: 'blocks' };
+export function playTurnText(state, humanSeat, names) {
+  const r = state.result;
+  if (r) return `Turn ${state.turn} · ${r.winner < 0 ? 'Draw' : r.winner === humanSeat ? 'You win' : `${names[r.winner]} wins`}`;
+  const who = state.active === humanSeat ? 'You' : names[state.active];
+  const step = STEP_WORD[state.phase];
+  return `Turn ${state.turn} · ${who}${step ? ` · ${step}` : ''}`;
+}
 
 // opts:
 //   rules, cards, bots        game/rules.js, game/cards.js, game/bots.js namespaces
@@ -140,10 +159,10 @@ export function mountPlay(root, opts) {
       <button type="button" class="pl-btn pl-sec" hidden></button>
       <button type="button" class="pl-btn pl-pri"><span class="pl-pri-t"></span><i class="pl-timer" hidden></i></button>
     </div>
+    <p class="pl-hint" role="status" hidden></p>
     <button type="button" class="pl-btn pl-menubtn" aria-haspopup="true" aria-expanded="false">Menu</button>
     <div class="pl-menu" hidden role="menu"></div>
     <section class="pl-log" hidden aria-label="game log"><header><b>Log</b><button type="button" class="pl-btn pl-logx">Close</button></header><ol></ol></section>
-    <div class="pl-banner" hidden></div>
     <div class="pl-zoom" hidden><canvas class="pl-cv"></canvas></div>
     <div class="pl-sheet" hidden><div class="pl-sheet-in"></div></div>`;
   const $ = s => root.querySelector(s);
@@ -152,7 +171,10 @@ export function mountPlay(root, opts) {
   const pri = $('.pl-pri'), priT = $('.pl-pri-t'), sec = $('.pl-sec'), timerEl = $('.pl-timer');
   const menu = $('.pl-menu'), menuBtn = $('.pl-menubtn');
   const logBox = $('.pl-log');
-  const banner = $('.pl-banner');
+  const hint = $('.pl-hint');
+  // where the last gesture came from: the hint shows next to it
+  let hintAt = 'button';
+  const from = (at, f) => (...a) => { hintAt = at; return f(...a); };
   const lastBox = $('.pl-last');
   const zoom = $('.pl-zoom');
 
@@ -172,8 +194,8 @@ export function mountPlay(root, opts) {
 
   const inspector = createInspector(root, { KEYWORDS: cards.KEYWORDS || {} });
   const hand = createHand($('.pl-handbox'), {
-    onSelect: i => apply(ix?.select(i)),
-    onPlay: i => apply(ix?.play(i)),
+    onSelect: from('hand', i => apply(ix?.select(i))),
+    onPlay: from('hand', i => apply(ix?.play(i))),
     onInspect: id => inspectCard(id),
     onHover: id => hover(id),
   });
@@ -218,6 +240,7 @@ export function mountPlay(root, opts) {
       if (uid !== null) { e.preventDefault(); clearTimeout(press.t); inspectPerm(uid); }
     });
     tableBox.addEventListener('click', e => {
+      hintAt = 'table';
       if (orbit?.consumeDrag()) { press.long = false; return; }
       if (!ix) return;
       if (press.long) { press.long = false; return; }
@@ -231,8 +254,8 @@ export function mountPlay(root, opts) {
     });
   } else {
     board = createBoard2d(tableBox, {
-      onPerm: uid => apply(ix?.perm(uid)),
-      onAssign: (b, a) => apply(ix?.assign(b, a)),
+      onPerm: from('table', uid => apply(ix?.perm(uid))),
+      onAssign: from('table', (b, a) => apply(ix?.assign(b, a))),
       onBoard: () => { if (ix && ix.view().selected !== null) apply(ix.confirm()); },
       onInspect: uid => inspectPerm(uid),
     });
@@ -403,7 +426,7 @@ export function mountPlay(root, opts) {
       scs[s] = createScorecard(host, {
         seat: s, side: s ? 'right' : 'left', kind: s === humanSeatNo ? 'human' : isFly ? 'fly' : 'bot',
         connectome: isFly ? opts.connectomes?.[flySide] : null, brainMod: opts.brainMod, brain: opts.cardBrain !== false,
-        compact: L.score === 'compact', slim: has3d, onPlayer: seat => apply(ix?.player(seat)),
+        compact: L.score === 'compact', slim: has3d, quiet: true, onPlayer: from('table', seat => apply(ix?.player(seat))),
       });
       scs[s].setCompact(L.score === 'compact');
     }
@@ -481,14 +504,15 @@ export function mountPlay(root, opts) {
       render();
       await sleep(reduced ? Math.max(sp().beat, 400) : sp().beat);
     }
+    // the pause between turns: the turn line has the new turn already;
+    // it is marked for the pause (no banner)
     const a = rec.before, b = rec.after;
     if (!b.result && b.turn !== a.turn) {
-      const yours = b.active === humanSeat();
-      banner.textContent = `Turn ${b.turn} · ${yours ? 'Your turn' : nameOf(b.active)}`;
-      banner.dataset.seat = String(b.active);
-      banner.hidden = false;
-      await sleep(sp().banner);
-      banner.hidden = true;
+      const tl = $('.pl-turn');
+      render();
+      tl.classList.add('is-new');
+      await sleep(sp().pause);
+      tl.classList.remove('is-new');
     }
   }
 
@@ -516,13 +540,15 @@ export function mountPlay(root, opts) {
     if (r.error) flash(r.error);
   }
 
-  function flash(msg) {
+  // A message for the player, next to the control used (hintAt: hand,
+  // table or button). It goes after 1.8 s or at the next gesture.
+  function flash(msg, at = hintAt) {
     if (!msg) return;
-    const p = $('.pl-prompt');
-    p.textContent = msg;
-    p.classList.add('is-err');
-    clearTimeout(p._t);
-    p._t = setTimeout(() => { p.classList.remove('is-err'); render(); }, 1800);
+    hint.textContent = msg;
+    hint.dataset.at = at;
+    hint.hidden = false;
+    clearTimeout(hint._t);
+    hint._t = setTimeout(() => { hint.hidden = true; }, 1800);
   }
 
   function inspectCard(id) { if (CARD[id]) inspector.open(CARD[id], { L }); }
@@ -540,12 +566,13 @@ export function mountPlay(root, opts) {
   }
 
   pri.addEventListener('click', () => {
+    hintAt = 'button';
     if (!ix) return;
     if (ix.mode() === 'over') { newGame(); return; }
     if (busy) return;
     apply(ix.primary());
   });
-  sec.addEventListener('click', () => { if (!busy) apply(ix?.secondary()); });
+  sec.addEventListener('click', () => { hintAt = 'button'; if (!busy) apply(ix?.secondary()); });
 
   // ------------------------------------------------------------ the timer
   function startTimer() {
@@ -562,7 +589,7 @@ export function mountPlay(root, opts) {
       // time is up: the empty choice (pass, no attack, no blocks)
       const m = ix.mode();
       const a = m === 'attack' ? { type: 'attack', attackers: [] } : m === 'block' ? { type: 'block', blocks: [] } : { type: 'pass' };
-      flash('Time is up.');
+      flash('Time is up.', 'button');
       act(a);
     }, 250);
   }
@@ -620,6 +647,7 @@ export function mountPlay(root, opts) {
     if (!alive || !root.isConnected) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    hintAt = 'button';
     if ((e.key === 'c' || e.key === 'C') && orbit?.orbiting) { orbit.seat(); return; }
     if (e.key === 'Escape') {
       if (inspector.isOpen()) { inspector.close(); return; }
@@ -676,10 +704,12 @@ export function mountPlay(root, opts) {
     // phase bar
     const ph = v.phase;
     $('.pl-steps').innerHTML = ph.steps.map(st => `<li class="${st.now ? 'now' : st.done ? 'done' : ''}">${st.label}</li>`).join('');
-    $('.pl-turn').textContent = `Turn ${ph.turn} · ${ph.yours ? 'You' : nameOf(s.active)}`;
+    // the one turn indicator of play mode, changed in place
+    $('.pl-turn').textContent = playTurnText(s, hs, pc.names);
+    $('.pl-turn').dataset.seat = String(s.active);
     $('.pl-bar').dataset.seat = String(s.active);
-    const p = $('.pl-prompt');
-    if (!p.classList.contains('is-err')) p.textContent = thinking >= 0 ? `${nameOf(thinking)} is thinking.` : v.prompt;
+    // the prompt says what you can do; on the fly's turn it is empty
+    $('.pl-prompt').textContent = thinking >= 0 || v.mode === 'wait' ? '' : v.prompt;
     // buttons
     priT.textContent = v.primary.label;
     pri.disabled = !v.primary.enabled || busy;

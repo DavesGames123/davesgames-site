@@ -113,7 +113,7 @@ export function scorecardModel(o) {
     ],
     mana: manaRows(CARD, p, o.paying).map(r => ({ ...r, label: r.pay ? `${r.up - r.pay}/${r.total}` : `${r.up}/${r.total}`, inks: r.colours.map(k => manaColour(k, o.colours)) })),
     active: state.active === seat, acting: !res && state.toAct === seat,
-    thinking: !!o.thinking, status,
+    thinking: !!o.thinking, status, res: !!res,
     top: top.map((t, i) => ({ rank: i + 1, text: t.text, value: t.value, valueText: fmtValue(t.value),
       bar: Math.max(0, Math.min(1, (t.value - lo) / (hi - lo || 1))), chosen: !!t.chosen })),
   };
@@ -148,6 +148,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 //   compact (phone)
 //   slim     a low, translucent corner strip (watch and 3D play): the
 //            neural panel and the top-3 hide behind the "brain" button
+//   quiet    true: the status names a result only (Won, Lost, Draw), no
+//            "Turn", "Waiting" or "Thinking": the page has one turn box
 //   brain    false: no neural canvas (the page shows the brain of the
 //            fly in its big side panel); the V and δ line and the top-3
 //            stay, behind a "moves" button when slim
@@ -215,7 +217,8 @@ export function createScorecard(host, opts = {}) {
     q('.hd-letter').textContent = m.letter;
     q('.hd-name').textContent = m.name;
     q('.hd-src').textContent = m.kind === 'fly' ? m.source : m.deckName;
-    q('.hd-status').textContent = m.status;
+    // quiet: the page has one turn indicator; the card names a result only
+    q('.hd-status').textContent = opts.quiet && !m.res ? '' : m.status;
     if (lastLife !== m.life) {
       lifeBtn.innerHTML = d20Svg(m.life, { size: slim ? 30 : compact ? 40 : 52, tone: m.tone, accent: TOKENS.ink });
       lifeBtn.setAttribute('aria-label', `life ${m.life}`);

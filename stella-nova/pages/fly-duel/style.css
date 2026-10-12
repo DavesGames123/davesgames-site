@@ -41,7 +41,7 @@
    does not leave them on.
      grep -n 'HIDDEN'     the [hidden] guard
      grep -n 'APP'        the fullscreen frame and the two modes
-     grep -n 'WATCH HUD'  scorecards, turn box, turn banner
+     grep -n 'WATCH HUD'  scorecards, the one turn box
      grep -n 'BRAINS'     the two brain panels: wide, tall, play
      grep -n 'BAR'        the control bar of the watch table
      grep -n 'DRAWER'     the "How it works" drawer
@@ -360,20 +360,19 @@ input[type=number]{background:var(--tome2);color:var(--parch);border:1px solid v
 .wsc{min-width:0;pointer-events:auto}
 .wsc:empty{display:none}
 .whud .hd-compact .hd-top{display:none}
-.turnbox{grid-column:1/-1;grid-row:2;justify-self:center;display:flex;flex-direction:row;align-items:baseline;gap:8px;pointer-events:auto;
-  padding:3px 10px;background:var(--tome);border:1px solid var(--bronze-dim);border-radius:3px;text-align:center}
+/* the one turn indicator (CONTRACT.md "one voice"): a slim strip that
+   changes in place, "Turn 7 · Fly B · combat". No banner per turn. At a
+   turn change the edge takes the colour of the fly for the pause
+   (.is-new): a static change, no motion. */
+.turnbox{grid-column:1/-1;grid-row:2;justify-self:center;display:flex;flex-direction:row;align-items:baseline;gap:6px;pointer-events:none;white-space:nowrap;
+  padding:2px 10px;background:var(--tome);border:1px solid var(--bronze-line);border-radius:3px;font-size:12px;line-height:1.35;color:var(--dim)}
 .turnbox:empty{display:none}
-.turnbox b{font:600 15px/1.2 var(--serif);color:var(--ink);font-variant-numeric:tabular-nums}
-.turnbox span{font-size:12px;color:var(--dim);white-space:nowrap}
+.turnbox b{font:600 12px/1.35 var(--sans);color:var(--ink);font-variant-numeric:tabular-nums}
+.turnbox i{font-style:normal;color:var(--faint)}
+.turnbox span{font-weight:600;color:var(--ink2)}
 .turnbox span.s0{color:var(--flyA)} .turnbox span.s1{color:var(--flyB)}
-/* the pause between turns: a plate in the middle of the table */
-.turnbanner{position:absolute;left:50%;top:44vh;top:44dvh;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:180px;padding:10px 22px 12px;background:var(--tome);border:1px solid var(--bronze);border-top:3px solid var(--bronze);border-radius:3px;
-  box-shadow:inset 0 0 0 3px var(--tome),inset 0 0 0 4px var(--bronze-line);pointer-events:none}
-.turnbanner[data-seat="0"]{border-top-color:var(--flyA)} .turnbanner[data-seat="1"]{border-top-color:var(--flyB)}
-.turnbanner b{font:600 28px/1.1 var(--serif);color:var(--parch);font-variant-numeric:tabular-nums}
-.turnbanner span{font:600 13px/1.2 var(--sans);letter-spacing:0.04em;text-transform:uppercase}
-.turnbanner span.s0{color:var(--flyA)} .turnbanner span.s1{color:var(--flyB)}
+.turnbox em{font-style:normal;color:var(--ink2)}
+.turnbox.is-new[data-seat="0"]{border-color:var(--flyA)} .turnbox.is-new[data-seat="1"]{border-color:var(--flyB)}
 /* the fallback strip (no scorecard module) takes the same place */
 .hudbar{position:absolute;left:0;right:0;top:0;z-index:5;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;
   padding:calc(env(safe-area-inset-top,0px) + var(--pad)) calc(var(--pad) + var(--sr)) 0 calc(var(--pad) + var(--sl))}
@@ -553,9 +552,7 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
 @media (min-width:760px){
   .app{--bar-h:calc(62px + env(safe-area-inset-bottom,0px)); --pad:12px}
   .wtop{grid-template-columns:minmax(0,250px) auto minmax(0,250px);justify-content:space-between;gap:12px}
-  .turnbox{grid-column:2;grid-row:1;flex-direction:column;align-items:center;min-width:92px;padding:6px 12px;
-    box-shadow:inset 0 0 0 2px var(--tome),inset 0 0 0 3px var(--bronze-line)}
-  .turnbox b{font-size:24px;line-height:1} .turnbox span{margin-top:4px;font-size:11px}
+  .turnbox{grid-column:2;grid-row:1;align-self:start}
   .hudbar{grid-template-columns:minmax(0,340px) minmax(0,340px);justify-content:space-between}
   .hud .life{font-size:30px}
   .hud .row .cr{display:inline}

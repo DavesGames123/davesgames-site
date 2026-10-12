@@ -45,6 +45,7 @@
 //      grep -n 'export function parseQuery'  URL -> mode, decks, opponent
 //      grep -n 'export function queryOf'  mode, decks -> URL query
 //      grep -n 'export function pickDecks'   'random' -> a deck id by seed
+//      grep -n 'export function turnLine'    the one turn indicator
 //      grep -n 'export function turnPauseMs' the pause between turns
 //      grep -n 'function trainedDecks'    decks named in the training meta
 //      grep -n 'function start3d'         the 3D table (ui/fly3d/scene.js)
@@ -312,8 +313,25 @@ export function pickDecks(sel, seed, deckIds) {
   return out;
 }
 
+// The one turn indicator (CONTRACT.md "one voice"): the turn, the fly
+// whose turn it is and the step, or the result. Pure, for the tests.
+//   { turn, seat, who, step, over, text }   text: "Turn 7 · Fly B · combat"
+const STEP_WORD = { main: 'main', attack: 'combat', block: 'blocks', over: 'end' };
+export function turnLine(state, names = NAMES) {
+  const turn = state?.turn ?? 1, r = state?.result || null;
+  if (r) {
+    const who = r.winner === -1 ? 'Draw' : `${names[r.winner]} wins`;
+    return { turn, seat: r.winner, who, step: '', over: true, text: `Turn ${turn} · ${who}` };
+  }
+  const seat = state?.active ?? 0, step = STEP_WORD[state?.phase] || state?.phase || '';
+  return { turn, seat, who: names[seat], step, over: false, text: `Turn ${turn} · ${names[seat]}${step ? ` · ${step}` : ''}` };
+}
+function turnBoxHTML(t) {
+  return `<b>Turn ${t.turn}</b><i aria-hidden="true">·</i><span class="s${t.seat}">${esc(t.who)}</span>${t.step ? `<i aria-hidden="true">·</i><em>${esc(t.step)}</em>` : ''}`;
+}
+
 // The pause between turns of the watch table, in ms. The table holds the
-// board still and shows "Turn n · Fly X" for this long. Speed 1 gives
+// board still and the turn box marks the new turn for this long. Speed 1 gives
 // 1.4 s; reduced motion keeps the pause (it is a pause, not a motion).
 export function turnPauseMs(speed = 1) { return Math.round(1400 / Math.max(0.25, speed || 1)); }
 
@@ -426,7 +444,7 @@ function initHero(mod3d = null) {
   hero.match = new Match(M.rules, agents, { seed: seed0, names: NAMES, decks: pickDecks(hero.sel, seed0, deckIdsOf()) });
   const who = F.A && F.B ? (F.trained ? 'Both flies play with their pretrained weights.' : 'Untrained flies: no pretrained weights.') : 'Stand-in bots play until the fly model loads.';
   const draw = (state, banner = null) => {
-    if (hero.mode === '2d') renderBoard($('heroBoard'), state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '', lastWho: hero.last?.who, banner });
+    if (hero.mode === '2d') renderBoard($('heroBoard'), state, { byId, names: NAMES, hands: 'count', hot: hotOf(hero.last?.action), last: hero.last?.text || '', lastWho: hero.last?.who, banner, turn: false });
     hud(state);
   };
   const hud = (state = hero.match.state) => {
@@ -436,8 +454,11 @@ function initHero(mod3d = null) {
     hydrate($('hudBar'));
     $('hudA').classList.toggle('acting', hero.focus === 0);
     $('hudB').classList.toggle('acting', hero.focus === 1);
-    const f = hero.focus;
-    $('heroTurn').innerHTML = `<b>turn ${state.turn ?? 1}</b>` + (over ? `<span>${over.winner === -1 ? 'draw' : `${esc(NAMES[over.winner])} wins`}</span>` : f >= 0 ? `<span class="s${f}">${esc(NAMES[f])} to act</span>` : '');
+    // the one turn indicator of the page: it changes in place
+    const tl = turnLine(state, NAMES);
+    const box = $('heroTurn');
+    box.innerHTML = turnBoxHTML(tl);
+    box.dataset.seat = String(tl.seat);
     hero.cards?.update(state);
     // the 2D table starts under the scorecards; with the brain panels the
     // scorecards lie over the panels, and only the turn box is over it
@@ -448,8 +469,9 @@ function initHero(mod3d = null) {
   const say = () => {
     const r = hero.match.over();
     st.classList.toggle('win', !!r);
-    if (r) st.textContent = r.winner === -1 ? `Draw (${r.reason || 'turn cap'}). A new game starts soon.` : `${NAMES[r.winner]} wins${r.reason ? ` (${r.reason})` : ''}. A new game starts soon.`;
-    else st.textContent = `${who} ${decksLine()} Seed ${hero.match.seed}, turn ${hero.match.state.turn}.`;
+    // the status line names the set-up only; the turn box has the game
+    // state (one voice), the table has the end banner
+    st.textContent = `${who} ${decksLine()} Seed ${hero.match.seed}.${r ? ' A new game starts soon.' : ''}`;
   };
   const logLine = rec => {
     hero.log.unshift(rec);
@@ -464,18 +486,16 @@ function initHero(mod3d = null) {
     hero.focus = w;
     [0, 1].forEach(p => $(p ? 'heroPaneB' : 'heroPaneA').classList.toggle('acting', p === w));
   };
-  // The pause between turns: the board holds still and a banner names
-  // the turn and the fly whose turn it is.
-  const banner = $('turnBanner');
+  // The pause between turns: the board holds still. The turn box (the one
+  // voice of the game state) has the new turn already and is marked
+  // (.is-new, a static border, no motion) for the pause. No banner.
   const turnPause = rec => {
     const a = rec.before, b = rec.after;
     if (!b || b.result || hero.match.over() || a.turn === b.turn) return;
     hero.pause = turnPauseMs(hero.speed);
-    banner.innerHTML = `<b>Turn ${b.turn}</b><span class="s${b.active}">${esc(NAMES[b.active])}</span>`;
-    banner.dataset.seat = String(b.active);
-    banner.hidden = false;
+    $('heroTurn').classList.add('is-new');
   };
-  const endPause = () => { hero.pause = 0; banner.hidden = true; };
+  const endPause = () => { hero.pause = 0; $('heroTurn').classList.remove('is-new'); };
   const newGame = () => {
     const seed = 1 + Math.floor(Math.random() * 1e6);
     hero.match.decks = pickDecks(hero.sel, seed, deckIdsOf());
@@ -636,7 +656,8 @@ function initScorecards() {
       try {
         // slim: a low corner strip, the neural panel behind its brain button
         // brain: false: the brain of the fly is in its side panel
-        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brain: false, compact: compact(), slim: true });
+        // quiet: no "Turn", "Waiting", "Thinking" on the card (one voice)
+        const c = S.createScorecard(host, { seat, side: seat ? 'right' : 'left', kind: isFly ? 'fly' : 'bot', connectome: isFly ? conOf(side) : null, brain: false, quiet: true, compact: compact(), slim: true });
         c.setCompact(compact());
         return c;
       } catch (e) { console.info('fly-duel: scorecard', e); return null; }

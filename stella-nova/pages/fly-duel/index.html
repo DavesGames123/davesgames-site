@@ -21,8 +21,8 @@
    TWO MODES  (?mode=watch | ?mode=play in the URL)
      watch  Fly A against Fly B on the 3D convention table, a large live
             brain of each fly on its side. The slim scorecard of each fly
-            (ui/hud/scorecard.js) lies over its brain. A pause between
-            turns.
+            (ui/hud/scorecard.js) lies over its brain. One turn box at
+            the top of the table; a pause between turns.
      play   You against a model fly, first person (ui/play/play.js
             mountPlay). The 3D canvas moves into the play table.
    With no mode in the URL, the title screen (ui/chooser/chooser.js)
@@ -80,7 +80,9 @@
                      2D BrainView of ui/brain.js draws them), captions
                      #heroCapA #heroCapB (fly, wiring, active KCs, V, δ)
      watch HUD       #watchHud: #scA (over brain A) #heroTurn #scB (over
-                     brain B); #turnBanner (pause between turns)
+                     brain B). #heroTurn is the one turn indicator
+                     ("Turn 7 · Fly B · combat"); it changes in place, no
+                     banner per turn
      fallback HUD    #hudBar #hudA #hudB (shows only when
                      ui/hud/scorecard.js does not load)
      #heroStage      #heroCv #heroMove #heroLog, stage tag (honesty line)
@@ -174,10 +176,9 @@
   <div class="whud" id="watchHud">
     <div class="wtop">
       <div class="wsc a" id="scA" aria-label="Fly A scorecard"></div>
-      <div class="turnbox" id="heroTurn" aria-live="off"></div>
+      <div class="turnbox" id="heroTurn" aria-live="off" data-turn-indicator></div>
       <div class="wsc b" id="scB" aria-label="Fly B scorecard"></div>
     </div>
-    <div class="turnbanner" id="turnBanner" hidden role="status"></div>
   </div>
 
   <div class="stagebar">

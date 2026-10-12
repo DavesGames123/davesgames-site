@@ -1202,7 +1202,9 @@ export function createDuelScene(canvas, opts = {}) {
     } });
   }
   function banner(text, colour, at, secs = 1.4) { floatNumber(text, colour, at, { rise: 0.1, hold: secs, height: 0.32 }); }
+  let bannerN = 0;    // big banner panels made (stats().banners)
   function bannerPanel(text, colour, at, secs = 1.6) {
+    bannerN++;
     const s = W.sprites.make(text, colour, 0.42, { size: 44, panel: true });
     s.position.copy(at); W.fx.add(s); let t = 0;
     addFx({ update(dt) { t += dt; if (t > secs) s.material.opacity = Math.max(0, 1 - (t - secs) / 0.3); if (t > secs + 0.3) { W.fx.remove(s); s.material.dispose(); return false; } return true; } });
@@ -1736,15 +1738,16 @@ export function createDuelScene(canvas, opts = {}) {
       Z.grave[s.p].push(o); o.next = { dur: s.dur, arc: 0.5 };
     },
     endturn() { for (const f of Z.flags.values()) delete f.target; },
-    turn(s) {
-      toAct = s.active;
-      bannerPanel(`Turn ${s.turn} · ${names[s.active]}`, FLY[s.active], new THREE.Vector3(0, T.y + 2.3, 0), 1.2);
-    },
+    // One voice for the game state (CONTRACT.md): the page has one turn
+    // box, so the table shows no turn banner. Big panels only at the end.
+    turn(s) { toAct = s.active; },
     untap() { /* layout reads the mirror: lands brighten, pips grow back */ },
     pass(s) {
       const label = s.label === 'combat' ? 'to combat' : s.label;
       clip(s.p, 'idle');
-      banner(label, TOKENS.ink2, flyHead(s.p).add(new THREE.Vector3(0, 0.75, 0)), 0.8);
+      // "end turn" is the turn box's word; "no attack", "no block" and
+      // "to combat" name the choice of the fly
+      if (s.label !== 'end turn') banner(label, TOKENS.ink2, flyHead(s.p).add(new THREE.Vector3(0, 0.75, 0)), 0.8);
     },
     win(s) {
       winner = s.winner;
@@ -2140,7 +2143,7 @@ export function createDuelScene(canvas, opts = {}) {
       hand: Z.hand.map((h, p) => h.length + Z.tossed.filter(o => o.toss.p === p).length),
       tossed: Z.tossed.length, grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
-      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, bigBrain: bigP, hall: hall.stats(), dice: dice.stats(),
+      banners: bannerN, brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, bigBrain: bigP, hall: hall.stats(), dice: dice.stats(),
       firstPerson: fpSeat, hidden: hiddenSeat(), orbit: fpOrbit ? { ...fpOrbit } : null, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
     };
   }

@@ -131,10 +131,12 @@ export function renderBoard(root, state, opts = {}) {
   const phase = state.phase ? `${state.phase}` : '';
   // The midline: turn and phase, and the last action in the actor's seat
   // colour. A result banner replaces it at a game end (opts.banner).
+  // opts.turn false drops the turn and phase: the page has its own one
+  // turn box (the watch table of the page; section 07 keeps it).
   const ban = opts.banner;
   const mid = ban
     ? `<div class="midline banner${ban.seat >= 0 ? ` s${ban.seat}` : ''}" role="note"><b>${esc(ban.text)}</b></div>`
-    : `<div class="midline"><span>turn ${state.turn ?? '?'}${phase ? ' · ' + esc(phase) : ''}</span><span class="last${opts.lastWho != null ? ` s${opts.lastWho}` : ''}">${esc(opts.last || '')}</span></div>`;
+    : `<div class="midline"><span>${opts.turn === false ? '' : `turn ${state.turn ?? '?'}${phase ? ' · ' + esc(phase) : ''}`}</span><span class="last${opts.lastWho != null ? ` s${opts.lastWho}` : ''}">${esc(opts.last || '')}</span></div>`;
   root.innerHTML = side(1) + mid + side(0);
   hydrate(root);
 }

@@ -158,9 +158,14 @@ if (PLAY) {
   ok(mine >= 3 && pc().history.some(r => r.who !== pc().humanSeat), `play: human moves go through the screen and the fly answers (${mine} moves, ${pc().history.length} records)`);
   ok(rules.isOver(pc().state) || pc().state.turn >= 2, `play: the game goes on (turn ${pc().state.turn})`);
   ok(urls.some(u => u === '?mode=play&deck=moss&opp=A'), `play: the URL keeps the mode, the deck and the opponent (${urls.slice(-1)})`);
+  // one voice in play mode: one turn line, no banner, no "thinking" line
+  ok(!q('.pl-banner') && root.querySelectorAll('.pl-turn').length === 1 && /^Turn \d+ · (You|Fly A)/.test(q('.pl-turn').textContent), `play: one turn line, no banner (${q('.pl-turn').textContent})`);
+  ok(!/thinking|takes a turn/i.test(q('.pl-prompt').textContent) && [...root.querySelectorAll('.hd-status')].every(e => !/turn|wait|act|think|move/i.test(e.textContent)), 'play: the prompt and the scorecards name no turn');
+  ok($('app').dataset.opp === 'A', `play: the app marks the opposing fly for its brain panel (data-opp ${$('app').dataset.opp})`);
   const n0 = fd.hero.match.history.length;
   fd.exitPlay();
   ok(fd.app.mode === 'watch' && root.hidden === true && $('heroCv').parentNode === $('heroStage'), 'play: exit gives the watch table back');
+  ok(!('opp' in $('app').dataset), 'play: exit clears data-opp');
   ok(urls.at(-1)?.startsWith('?mode=watch'), `play: the URL says watch after exit (${urls.at(-1)})`);
   pump(400);
   ok(fd.hero.match.history.length > 0 && $('heroLog').children.length > 0, `play: the watch match plays again after exit (${n0} -> ${fd.hero.match.history.length})`);
@@ -203,13 +208,41 @@ if (PLAY) {
   const life = fd.hero.match.state.players.map(p => p.life);
   ok($('scA').querySelector('.hd-life').getAttribute('aria-label') === `life ${life[0]}` || fd.hero.busy, `watch: the d20 of Fly A shows life ${life[0]}`);
   ok(/^V [+−]/.test($('scA').querySelector('.hd-vd').textContent + $('scB').querySelector('.hd-vd').textContent), 'watch: the neural panel shows the value of a decision');
-  // the pause between turns: the banner shows at a turn change
-  let seenBanner = false;
-  for (let i = 0; i < 600 && !seenBanner; i++) { pump(1); if (!$('turnBanner').hidden && /Turn \d+/.test($('turnBanner').textContent)) seenBanner = true; }
-  ok(seenBanner, `watch: a turn change holds the table with a turn banner (${$('turnBanner').textContent})`);
-  const nB = fd.hero.match.history.length;
-  pump(4);
-  ok(fd.hero.match.history.length === nB || $('turnBanner').hidden, 'watch: no new move while the banner holds');
+  // ONE VOICE: the turn box is the one turn indicator. Over a whole
+  // scripted game no turn banner is made, and at most one element shows
+  // a turn notice at a time, always inside the turn box.
+  {
+    const box = $('heroTurn');
+    ok(!$('turnBanner') && document.querySelectorAll('[data-turn-indicator]').length === 1, 'one voice: one turn indicator element, no turn banner element');
+    const shown = el => { for (let e = el; e && e !== document.body; e = e.parentNode) if (e.hidden) return false; return true; };
+    // card rules text ("... your turn") is not a notice: skip the cards
+    const notices = () => [...document.body.querySelectorAll('*')].filter(e => !e.closest('#how') && !e.closest('#chooser') && !e.closest('.fcard') && shown(e)
+      && [...e.childNodes].some(n => n.nodeType === 3 && /\b(turn \d+|to act|choosing|waiting|is thinking|your turn)\b/i.test(n.textContent)));
+    let bannerEls = 0;
+    let maxN = 0, outside = 0, paused = 0, movedInPause = 0, guard = 0;
+    const turns = new Set();
+    fd.hero.newGame();
+    while (!fd.hero.match.over() && guard++ < 30000) {
+      const h0 = fd.hero.match.history.length, inPause = fd.hero.pause > 0;
+      pump(1);
+      if (inPause && fd.hero.pause > 0 && fd.hero.match.history.length !== h0) movedInPause++;
+      if (fd.hero.pause > 0 && box.classList.contains('is-new')) paused++;
+      const ns = notices();
+      maxN = Math.max(maxN, ns.length);
+      if (!fd.hero.match.over() && [...document.querySelectorAll('[class*="banner"],[role="alert"]')].some(e => shown(e) && !e.closest('#how') && !e.closest('#chooser'))) bannerEls++;
+      outside += ns.filter(e => !e.closest('[data-turn-indicator]')).length;
+      const m = box.textContent.match(/^Turn (\d+)/); if (m) turns.add(+m[1]);
+    }
+    for (let i = 0; i < 80 && !/wins|Draw/.test(box.textContent); i++) pump(1);   // the last beat lands
+    ok(fd.hero.match.over(), `one voice: the scripted game ends (${fd.hero.match.history.length} records, turn ${fd.hero.match.state.turn})`);
+    ok(maxN <= 1 && outside === 0, `one voice: at most one turn notice at a time, in the turn box (max ${maxN}, ${outside} outside)`);
+    ok(turns.size >= 3 && document.querySelectorAll('[data-turn-indicator]').length === 1 && $('heroTurn') === box, `one voice: the box changes in place over ${turns.size} turns`);
+    ok(bannerEls === 0, `one voice: no banner element shows during the game (${bannerEls} frames)`);
+    ok(paused > 0 && movedInPause === 0, `one voice: the pause between turns marks the box and holds the table (${paused} paused frames)`);
+    ok(/wins|Draw/.test(box.textContent), `one voice: the box names the result at the end (${box.textContent})`);
+    ok(!/turn \d/i.test($('heroStatus').textContent), `one voice: the status line names no turn (${$('heroStatus').textContent.slice(0, 60)})`);
+    ok([...document.querySelectorAll('.hd-status')].every(e => !/turn|wait|act|think/i.test(e.textContent)), 'one voice: the scorecards name no turn');
+  }
   // play from the chooser, then back
   click($('btnPlay'));
   ok($('chooser').hidden === false && ch.dataset.mode === 'play' && cq('.fdc-opp').hidden === false, 'watch: "Play a fly" opens the title screen on play, with the opponent switch');
