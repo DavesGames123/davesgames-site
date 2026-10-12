@@ -399,11 +399,14 @@ export function lowFlyParts({ standing = true } = {}) {
     rod([-0.05, 0.12, 0.17], [-0.08, 0.3, 0.24], 0.022, ochre, 4),
     rod([0.05, 0.12, 0.17], [0.08, 0.3, 0.24], 0.022, ochre, 4),
   ];
-  // one wing: a flat fan, root at the origin, along -z and out to +x
+  // one wing: a flat fan, root at the origin. The shape is drawn along
+  // +x; a turn of +PI/2 about y puts it along -z, behind the fly (the
+  // fly faces +z). The old turn of -PI/2 put the wing along +z, in front
+  // of the face.
   const ws = new THREE.Shape();
   ws.moveTo(0, 0); ws.bezierCurveTo(0.22, 0.08, 0.85, 0.06, 0.95, -0.1); ws.bezierCurveTo(0.8, -0.28, 0.28, -0.25, 0, -0.05);
   const wing = new THREE.ShapeGeometry(ws, 4);
-  wing.rotateY(-Math.PI / 2);  // the wing runs back along -z... then out
+  wing.rotateY(Math.PI / 2);
   coloured(wing, '#dfe8f2');
   // a front leg: from the shoulder (origin) down and forward, tip at
   // (0, -0.62, 0.18)
@@ -456,12 +459,13 @@ class FlyHerd {
       // head
       r.compose(this._v.fromArray(parts.headAt), q.setFromEuler(e.set(P.hp, P.hy, 0, 'YXZ')), s.setScalar(1));
       m.multiplyMatrices(pm, r); this.head.setMatrixAt(i, m);
-      // wings: folded back over the abdomen, a buzz opens and beats them
+      // wings: folded back and down along the back of the abdomen, a
+      // little out to the side of the wing root; a buzz opens and beats them
       for (const side of [-1, 1]) {
         const beat = P.buzz > 0 ? P.buzz * (0.5 + 0.5 * Math.sin(time * 70 + i)) : 0;
         const open = 0.2 + 0.9 * beat;
         r.compose(this._v.set(side * parts.wingAt[0], parts.wingAt[1], parts.wingAt[2]),
-          q.setFromEuler(e.set(0.55, side * (-0.15 - open), side * -0.35, 'YXZ')), s.set(side, 1, 1));
+          q.setFromEuler(e.set(-0.6, side * (-0.15 - open), side * -0.35, 'YXZ')), s.set(side, 1, 1));
         m.multiplyMatrices(pm, r); this.wings.setMatrixAt(2 * i + (side > 0 ? 1 : 0), m);
       }
       // front legs: lift turns them up and forward
@@ -861,7 +865,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
   return {
     group, table, room, mats: mats3, inlay, chairs, deckBoxes, board,
     crowd: { herd: crowdHerd, n: nCrowd, flags: flagSlot, fx: crowd.fx },
-    extras: { herd: sit, n: nSit, tables: tables.length, props },
+    extras: { herd: sit, n: nSit, tables: tables.length, props, tableAt: i => tables[seats[i].table] },
     focus,
     update,
     react: (kind, o) => crowd.react(kind, o),

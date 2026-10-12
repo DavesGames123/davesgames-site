@@ -10,6 +10,10 @@
 //    react     a cheer for seat 0: the Fly A fans cheer (legs up, wings)
 //              and wave their flags, the Fly B fans groan (no wings, head
 //              down); a cheer for seat 1 turns it round; it all ends
+//    facing    every crowd fly and every side-table fly: the head is in
+//              front of the body and both wings are behind it, along the
+//              facing direction of the instance; the crowd faces the
+//              feature table, the side flies face their own table
 //  Exit code 1 on any failure.
 // ============================================================================
 import { registerHooks } from 'node:module';
@@ -93,6 +97,49 @@ for (const side of [0, 1]) {
   ok(waved > 10, `cheer for ${side}: the flags of its fans wave (${waved})`);
   for (let k = 0; k < 120; k++) hall.update(1 / 30);
   ok(herd.pose.slice(0, n).every(P => P.buzz === 0 && P.wave === 0), `cheer for ${side}: the reaction ends`);
+  hall.dispose();
+}
+
+// --- facing ------------------------------------------------------------------------
+for (const coarse of [false, true]) {
+  const tag = coarse ? 'phone' : 'desktop';
+  const hall = buildHall({ coarse, seed: 7, layout: LAYOUT });
+  hall.update(1 / 30);
+  const centre = mesh => { const g = mesh.geometry; g.computeBoundingBox(); return g.boundingBox.getCenter(new THREE.Vector3()); };
+  const herds = [['crowd', hall.crowd.herd, hall.crowd.n], ['side', hall.extras.herd, hall.extras.n]];
+  for (const [name, herd, n] of herds) {
+    const cHead = centre(herd.head), cWing = centre(herd.wings), M = new THREE.Matrix4();
+    let headBad = 0, wingBad = 0, faceBad = 0, spreadBad = 0;
+    const inv = new THREE.Matrix4();
+    for (let i = 0; i < n; i++) {
+      herd.body.getMatrixAt(i, M);
+      const pos = new THREE.Vector3().setFromMatrixPosition(M);
+      const fwd = new THREE.Vector3(0, 0, 1).transformDirection(M).setY(0).normalize();
+      const along = v => v.clone().sub(pos).setY(0).dot(fwd);
+      inv.copy(M).invert();
+      // in the body frame: wing 2i at -x, wing 2i+1 at +x (out from the root)
+      const lx = k => { const W = new THREE.Matrix4(); herd.wings.getMatrixAt(k, W); return cWing.clone().applyMatrix4(W).applyMatrix4(inv).x; };
+      if (!(lx(2 * i) < -0.1 && lx(2 * i + 1) > 0.1)) spreadBad++;
+      herd.head.getMatrixAt(i, M); const head = cHead.clone().applyMatrix4(M);
+      if (along(head) <= 0.05) headBad++;
+      for (const k of [2 * i, 2 * i + 1]) {
+        herd.wings.getMatrixAt(k, M); const w = cWing.clone().applyMatrix4(M);
+        if (along(w) >= -0.05) wingBad++;
+      }
+      // what the fly looks at: the feature table (origin) or its own table
+      let target = new THREE.Vector3();
+      if (name === 'side') {
+        const t = hall.extras.tableAt(i);
+        target.set(t.x, 0, t.z);
+      }
+      const to = target.sub(pos).setY(0).normalize();
+      if (to.dot(fwd) < 0.7) faceBad++;
+    }
+    ok(headBad === 0, `${tag} ${name}: the head is in front of the body (${headBad} of ${n} not)`);
+    ok(wingBad === 0, `${tag} ${name}: the wings are behind the body (${wingBad} of ${2 * n} not)`);
+    ok(spreadBad === 0, `${tag} ${name}: the two wings lie out to the two sides of the body (${spreadBad} not)`);
+    ok(faceBad === 0, `${tag} ${name}: each fly faces ${name === 'side' ? 'its own table' : 'the feature table'} (${faceBad} not)`);
+  }
   hall.dispose();
 }
 
