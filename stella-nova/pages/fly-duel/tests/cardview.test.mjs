@@ -205,6 +205,26 @@ globalThis.innerWidth = 390; globalThis.innerHeight = 844;
   ok(cv.hydrate(root) === 0, 'hydrate does not draw a shell twice');
 }
 
+// Lazy: a shell far below the view waits for the IntersectionObserver,
+// even when the ResizeObserver reports its size first (it does so at
+// once on observe in a browser).
+{
+  const ioSeen = [], roSeen = [];
+  globalThis.IntersectionObserver = class { constructor(cb) { this.cb = cb; } observe(t) { ioSeen.push([this, t]); } unobserve() {} };
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; } observe(t) { roSeen.push(t); this.cb([{ target: t, contentRect: { width: 150 } }]); } unobserve() {} };
+  const cvm = await import('../ui/cardview.js?lazy');
+  const root = new StubEl('div');
+  root.innerHTML = cvm.shellHTML(POOL[1], {});
+  const el = root.firstElementChild;
+  el.getBoundingClientRect = () => ({ width: 150, height: 210, top: 5000, bottom: 5210, left: 10, right: 160 });
+  cvm.hydrate(root);
+  const c = el.querySelector('canvas');
+  ok(roSeen.length === 1 && ioSeen.length === 1 && c.ctx.calls.n === 0, `an off-screen shell is not drawn before it comes near the view (${c.ctx.calls.n} calls)`);
+  ioSeen[0][0].cb([{ target: el, isIntersecting: true }]);
+  ok(c.ctx.calls.n > 50, 'the shell draws when the IntersectionObserver reports it');
+  delete globalThis.IntersectionObserver; delete globalThis.ResizeObserver;
+}
+
 // --------------------------------------------------------------- SHELL
 {
   const all = POOL.map(c => board.cardHTML(c, { mini: c.type === 'creature', damage: 1, info: { pp: 1, pt: 1 } })).join('');

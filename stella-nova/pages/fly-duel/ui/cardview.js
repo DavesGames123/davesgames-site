@@ -146,13 +146,14 @@ function inView(el, margin = 300) {
 function observers() {
   if (!io && typeof IntersectionObserver === 'function') {
     io = new IntersectionObserver(es => {
-      for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); paint(e.target); }
+      for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); e.target._cvLazy = false; paint(e.target); }
     }, { rootMargin: '300px' });
   }
   if (!ro && typeof ResizeObserver === 'function') {
     ro = new ResizeObserver(es => {
       for (const e of es) {
         const el = e.target, w = Math.round(e.contentRect?.width || 0);
+        if (el._cvLazy) continue;          // the IntersectionObserver draws it
         if (w && (!el._cvW || Math.abs(w - el._cvW) >= 1)) paint(el);
       }
     });
@@ -170,8 +171,10 @@ function hydrateOne(el) {
   el._cvLive = true;
   live.add(el);
   observers();
+  const now = inView(el) || !io;
+  el._cvLazy = !now;
   ro?.observe(el);
-  if (inView(el) || !io) paint(el);
+  if (now) paint(el);
   else io.observe(el);
 }
 
@@ -222,9 +225,15 @@ function paint(el) {
   if (hit) { g.drawImage(hit, 0, 0); return; }
   drawCard(g, card, { w: W, h: H, state, mode, dpr, art });
   if (art && fontsLoaded) remember(key, cv);
-  if (card && !art && !el._cvWait) {
+  // Load the picture of this size. getCardArt() may have given the other
+  // size (a small one for a large card): draw again when the right one
+  // is there.
+  if (card && !el._cvWait) {
     el._cvWait = true;
-    loadCardArt(id, { small }).then(() => { el._cvWait = false; if (el.isConnected !== false) paint(el); }, () => { el._cvWait = false; });
+    loadCardArt(id, { small }).then(img => {
+      el._cvWait = false;
+      if (img && img !== art && el.isConnected !== false) paint(el);
+    }, () => { el._cvWait = false; });
   }
 }
 

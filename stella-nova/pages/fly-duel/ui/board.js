@@ -203,7 +203,7 @@ export function renderDecks(root, cards, decks, { order } = {}) {
       + (deck.desc ? `<span class="cv-desc">${esc(deck.desc)}</span>` : '')
       + (fanHTML ? `<span class="cv-fan">${fanHTML}</span>` : '')
       + `<span class="cv-open">List</span></summary><ul>`
-      + rows.map(o => `<li data-zoom="1" data-id="${esc(o.c.id)}" data-count="${o.n}" tabindex="0" role="button" title="${esc(o.c.name)}${o.c.text ? ' — ' + esc(o.c.text) : ''}"><b>${o.n}</b>${thumbHTML(o.c)}<span class="dl-name t-${esc(o.c.type)}">${esc(o.c.name)}</span><span class="dl-cost">${glyphHTML(o.c.cost, 13)}</span></li>`).join('')
+      + rows.map(o => `<li data-zoom="1" data-id="${esc(o.c.id)}" data-count="${o.n}" tabindex="0" role="button" aria-label="${esc(o.n)} ${esc(o.c.name)}"><b>${o.n}</b>${thumbHTML(o.c)}<span class="dl-name t-${esc(o.c.type)}">${esc(o.c.name)}</span><span class="dl-cost">${glyphHTML(o.c.cost, 13)}</span></li>`).join('')
       + `</ul></details>`;
   }).join('');
   hydrate(root);
