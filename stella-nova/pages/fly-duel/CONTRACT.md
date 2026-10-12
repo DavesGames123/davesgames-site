@@ -1,5 +1,24 @@
 # Fly Duel: binding contract
 
+## USER DIRECTION, 2026-10-11 (overrides the section plan below)
+
+User words, verbatim: "you can break from form from the rest o fthe
+research pages. the "how it's done" is uninteresting tbh, i mostly care
+about the simulation and layout in fullscreen"
+
+- The page is a fullscreen game first. On load, the viewport is the 3D
+  table (watch or play mode) at 100vw x 100dvh, with the HUD (scorecards
+  top-left Fly A / top-right Fly B, mode and deck controls, the play UI)
+  laid over it. No hero-and-scroll research layout around it.
+- The explainer sections (01-09) are no longer the page. Move them behind
+  one small "How it works" button (a drawer or a separate overlay), short.
+  Keep the honesty line ("a model wired from the connectome, not a real
+  fly"), the not-affiliated line and the credits reachable from the HUD.
+  Keep the facts and tests that guard them, but the text can shrink.
+- Spend the effort on the simulation, the 3D table, the play UX and the
+  fullscreen layout on phones and desktops.
+
+
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain
 (two of them) to play magic the gathering against one another i need a page
 for this under the research section please do not hold back dispatch the
