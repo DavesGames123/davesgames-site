@@ -85,7 +85,7 @@ function ease(u) { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); 
 export function storyGoal(dtReal) {
   const run = S.run, s = run.sats[0], sh = run.shot;
   const sc = SCENARIOS.find(x => x.key === UI.scen) || {};
-  const azU = cam.az - 0.9, elU = cam.el - (sc.el ?? 0.42);
+  const azU = cam.az - 0.9, elU = cam.el - (run.spec.roll ? run.spec.el : (sc.el ?? 0.42));
   const mode = run.pace ? run.pace.mode : 'approach';
   if (mode !== 'spread') sh.spreadAt = null;   // a scrub back in time
   sh.drift += (DRIFT[mode] || 0) * Math.PI / 180 * dtReal * (UI.paused ? 0 : 1);

@@ -28,7 +28,10 @@ export async function readAll(potential) {
   if (serial !== S.runSerial || epoch !== S.run.epoch || parts.some(p => !p)) return;
   updatePhase(parts[0].t);
   const s0 = S.run.sats[0];
-  if (S.run.pace && s0.an) updatePace(S.run.pace, { f: s0.an.f, el: s0.an.el }, parts[0].t, S.run.T0);
+  // a pass (roll.js paceAtPeri) also goes into slow motion at the
+  // pericentre, where a binary splits or a body that holds is stretched
+  const peri = !!(S.run.spec.paceAtPeri && S.run.tPeri !== undefined && parts[0].t >= S.run.tPeri - 0.04 * S.run.T0);
+  if (S.run.pace && s0.an) updatePace(S.run.pace, { f: s0.an.f, el: s0.an.el, peri }, parts[0].t, S.run.T0);
   const t = parts[0].t, last = S.run.snaps[S.run.snaps.length - 1];
   if (last && t <= last.t + 1e-9) return;
   S.run.snaps.push({ t, sats: parts, story: Object.assign({}, S.run.story), pace: S.run.pace ? Object.assign({}, S.run.pace) : null });
@@ -55,7 +58,10 @@ async function readAndAnalyze(s, potential, epoch) {
     st[q + 3] = b[o + 4]; st[q + 4] = b[o + 5]; st[q + 5] = b[o + 6];
     st[q + 6] = b[o + 8]; st[q + 7] = b[o + 9]; st[q + 8] = b[o + 10];
   }
-  const res = await workerCall({ type: 'analyze', N: s.N, np: s.gpu.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24, seed: S.run.frames }, [rb.body.buffer, rb.grav.buffer]);
+  // a run of more than one body tags every intact piece as a body
+  // (initial.js clumpMask): pieces of at least 3% of the start mass
+  const ly = S.run.spec.layout, clumps = !!(ly && ly.type !== 'single' && ly.type !== 'core');
+  const res = await workerCall({ type: 'analyze', N: s.N, np: s.gpu.np, body: rb.body, grav: rb.grav, rad: s.rad, X: rb.X, V: rb.V, GMp: s.pl.GM, t: rb.t, fragCount: 24, seed: S.run.frames, clumps, clumpMin: 0.03 * (s.Mtot || s.M0) }, [rb.body.buffer, rb.grav.buffer]);
   s.waiting = false;
   if (serial !== S.runSerial || epoch !== S.run.epoch) return null;
   onAnalysis(s, res, rb);
@@ -64,7 +70,10 @@ async function readAndAnalyze(s, potential, epoch) {
 function onAnalysis(s, a, rb) {
   S.ren.setTags(s.e, a.tags);
   const T0 = S.run.T0, tt = a.t / T0;
-  const f = a.M / s.M0;
+  // a train or two moons: the share is of the largest piece at the first
+  // analysis (the other pieces are not bound to it)
+  if (s.M0rule === 'first' && !s.M0set && a.M > 0) { s.M0 = a.M; s.M0set = true; }
+  const f = Math.min(1, a.M / s.M0);
   // energy ledger: E - W, relative to |U_self| at the start; only from a
   // readback with a fresh potential
   const prevDrift = s.an ? s.an.drift : NaN;

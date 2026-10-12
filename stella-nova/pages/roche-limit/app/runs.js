@@ -4,6 +4,15 @@
 //  startRun() makes one SimGPU per moon and gets a cloud from the
 //  worker or a settled pile from pileCache. settleStep() lets the cloud
 //  fall together; placeSats() puts the pile on its start orbit.
+//  RANDOM RUNS (roll.js; UI.roll holds the spec, 2026-10-11). A roll can
+//  have a layout (initial.js): the settled pile is cut into a binary, a
+//  train, two moons or two lobes, and gets a spin and a tilted or
+//  elliptic orbit. A core layout makes the inner grains denser before
+//  the settle (the pile cache key holds the core). The primary's radius
+//  in world units is spec.bodyR (1 for the first scenarios): s.pl.Rp is
+//  the true radius in sim units (the GPU uses it for hits and J2), s.Rp
+//  stays the world unit. placeSats uploads the grains after planShots has
+//  turned the start orbit, so a layout keeps its place along the orbit.
 //
 //  grep -n targets
 //    start a run ........... "async function startRun"
@@ -12,12 +21,15 @@
 //    start orbit ........... "function prepareOrbit", "function orbitFor"
 //    time to pericentre .... "function timeToPeri"
 //    Roche limits .......... "function limitsFor"
+//    roll start state ...... "function startState"
 // ============================================================================
 import * as P from '../physics.js';
 import { SimGPU } from '../engine.js';
 import { MAT_COLOR } from '../plots.js';
 import { SETTLE_TIME, DESKTOP, PHONE, directed, newPace } from '../pacing.js';
 import { SCENARIOS, specFor, flybyStart, limitsOf } from '../scenarios.js';
+import { buildStart, coreMasses, orbitStart3 } from '../initial.js';
+import { rng as rollRng } from '../roll.js';
 import { UI, Q, $, G_SI, PHONE_Q, COARSE } from './env.js';
 import { workerCall } from './jobs.js';
 import { refreshReadout } from './readout.js';
@@ -26,6 +38,9 @@ import { syncStory } from './story.js';
 import { planShots } from './director.js';
 
 export function currentSpec() {
+  // a random run or a preset: its own spec (the Advanced settings are for
+  // the stories); a copy, so a run never changes UI.roll
+  if (UI.roll) return JSON.parse(JSON.stringify(UI.roll));
   const sc = SCENARIOS.find(s => s.key === UI.scen);
   const ui = { q: Math.pow(10, UI.qLog), material: UI.material, J2: UI.J2, d: UI.d, peri: UI.peri, e: UI.e, mu: UI.mu, coh: UI.coh, body: UI.body };
   const spec = specFor(sc, ui);
@@ -64,12 +79,15 @@ export async function startRun(specIn) {
   setBusy(true, 'Building the moon', 0);
   syncStory(true);
   // the cloud or the cached pile
+  const core = spec.layout && spec.layout.type === 'core' ? spec.layout : null;
   for (const s of S.run.sats) {
-    const key = `${s.N}|${s.matName}|${s.mat.mu}|${s.mat.coh}`;
+    const key = `${s.N}|${s.matName}|${s.mat.mu}|${s.mat.coh}${core ? `|core${core.frac.toFixed(3)}x${core.factor.toFixed(3)}` : ''}`;
     s.cacheKey = key;
     if (pileCache.has(key)) { s.pile = pileCache.get(key); continue; }
     const cl = await workerCall({ type: 'cloud', N: s.N, seed: 3 + s.idx });
     if (serial !== S.runSerial) return;
+    // a dense core: the inner grains get more mass before the settle
+    if (core) coreMasses(cl.pos, cl.mass, core.frac, core.factor);
     s.cloud = cl;
   }
   if (serial !== S.runSerial) return;
@@ -109,20 +127,27 @@ function viewDistance(spec, L) {
 // Planet and start orbit for each moon (from the spec; the pile stats
 // replace the expected density once the pile is settled).
 function prepareOrbit() {
-  const spec = S.run.spec;
+  const spec = S.run.spec, u = spec.bodyR || 1;
   for (const s of S.run.sats) {
     const rhoS = s.pile ? s.pile.st.rho : P.RHO_GRAIN * P.PHI0;
     const rhoP = spec.q * rhoS;
     const GM = P.G * rhoP * 4 / 3 * Math.PI * s.Rp ** 3;
-    s.pl = { Rp: s.Rp, rhoP, rhoS, GM, Mp: GM, J2: spec.J2 || 0, drag: 0 };
-    const o = orbitFor(spec, s.pl);
+    // Rp: the true radius (hits, J2); the world unit stays s.Rp
+    s.pl = { Rp: s.Rp * u, rhoP, rhoS, GM, Mp: GM, J2: spec.J2 || 0, drag: 0 };
+    const o = orbitFor(spec, s.pl, s.Rp);
     // compare: the second moon half an orbit ahead
     if (s.phase) { const c = Math.cos(s.phase), sn = Math.sin(s.phase); o.X = [c * o.X[0] - sn * o.X[1], sn * o.X[0] + c * o.X[1], 0]; o.V = [c * o.V[0] - sn * o.V[1], sn * o.V[0] + c * o.V[1], 0]; }
     s.o = o;
     s.ref = new P.RefOrbit(s.pl, o.X, o.V);
   }
 }
-function orbitFor(spec, pl) {
+function orbitFor(spec, pl, Rw = pl.Rp) {
+  if (spec.roll) {
+    // the planet in world units: J2 (R_true / R_world)^2 gives the same pull
+    const u = spec.bodyR || 1, Pw = { GM: pl.GM, Rp: Rw, J2: (pl.J2 || 0) * u * u };
+    const o = orbitStart3(Pw, { kind: spec.kind === 'flyby' ? 'flyby' : 'circular', d: spec.d, peri: spec.peri, e: spec.e, r0: spec.r0 ?? flybyStart(spec), inc: spec.inc || 0 });
+    return { X: o.X, V: o.V, Omega: o.Omega };
+  }
   if (spec.kind === 'flyby') return P.orbitStart(pl, { kind: 'flyby', peri: spec.peri, e: spec.e, r0: flybyStart(spec) });
   return P.orbitStart(pl, { kind: 'circular', d: spec.d });
 }
@@ -162,15 +187,9 @@ export async function placeSats(serial) {
   }
   prepareOrbit();
   for (const s of S.run.sats) {
-    const N = s.N, pos = Float64Array.from(s.pile.pos), vel = new Float64Array(N * 3), spin = new Float64Array(N * 3);
-    s.rad = s.pile.rad; s.mass = s.pile.mass; s.M0 = s.pile.st.M; s.Rs = s.pile.st.R;
-    P.placeOnOrbit(pos, vel, spin, s.mass, s.o.Omega);
+    s.rad = s.pile.rad; s.mass = s.pile.mass; s.M0 = s.pile.st.M; s.Rs = s.pile.st.R; s.M0rule = 'total'; s.M0set = false;
     s.gpu.setParams(s.C, s.pl, 0);
     s.gpu.ref = s.ref; s.gpu.t = 0;
-    s.gpu.setState(pos, vel, spin, s.rad, s.mass);
-    s.gpu.prime();
-    S.ren.setTags(s.e, new Float32Array(s.gpu.np).fill(1));
-    s.e.fresh = true;
     s.hist = [[0, 1]]; s.ehist = []; s.an = null; s.E0 = null; s.L0 = null; s.frag = [];
   }
   const s0 = S.run.sats[0], spec = S.run.spec;
@@ -195,12 +214,43 @@ export async function placeSats(serial) {
   // the story camera turns the start orbit about the planet's axis (no
   // change to the physics); the first forces are then found again
   planShots(S.saverOn && S.saver && S.saver.cur ? { az: S.saver.cur.az } : {});
-  for (const s of S.run.sats) s.gpu.prime();
+  // the grains go up after the turn of the start orbit
+  for (const s of S.run.sats) {
+    const b = startState(s, spec);
+    s.gpu.setState(b.pos, b.vel, b.spin, s.rad, s.mass);
+    s.gpu.prime();
+    S.ren.setTags(s.e, new Float32Array(s.gpu.np).fill(1));
+    s.e.fresh = true;
+  }
   S.run.phase = 'orbit'; S.run.t = 0; S.run.recorded = false; S.run.track = [];
   S.run.lastRead = 0;
   setBusy(false);
   syncStory();
   refreshReadout(true);
+}
+// The start state of one moon's grains (relative to the frame point). The
+// first scenarios: the settled pile with a synchronous spin about z
+// (physics.js placeOnOrbit). A roll: initial.js buildStart on the turned
+// orbit, with the roll's seed; it sets s.rad and s.mass (the parts take
+// the grains in a new order), s.M0, s.Rs (the largest part) and s.parts.
+function startState(s, spec) {
+  const N = s.N;
+  if (!spec.roll) {
+    const pos = Float64Array.from(s.pile.pos), vel = new Float64Array(N * 3), spin = new Float64Array(N * 3);
+    P.placeOnOrbit(pos, vel, spin, s.mass, s.o.Omega);
+    return { pos, vel, spin };
+  }
+  const u = spec.bodyR || 1, X = s.o.X, V = s.o.V;
+  const h = [X[1] * V[2] - X[2] * V[1], X[2] * V[0] - X[0] * V[2], X[0] * V[1] - X[1] * V[0]], hl = Math.hypot(...h), r2 = X[0] ** 2 + X[1] ** 2 + X[2] ** 2;
+  const orb = { X, V, Omega: hl / r2, n: h.map(q => q / hl), P: { GM: s.pl.GM, Rp: s.Rp, J2: (s.pl.J2 || 0) * u * u } };
+  const b = buildStart(s.pile, spec, orb, rollRng((spec.seed || 7) + 31 * s.idx));
+  s.rad = b.rad; s.mass = b.mass; s.parts = b.parts;
+  s.Rs = Math.max(...b.parts.map(p => p.R));
+  // the bound share is of the whole body, or (a train, two moons) of the
+  // largest piece at the first analysis
+  s.M0rule = spec.layout && (spec.layout.type === 'train' || spec.layout.type === 'two') ? 'first' : 'total';
+  s.M0 = b.mass.reduce((a, q) => a + q, 0); s.Mtot = s.M0;
+  return b;
 }
 function timeToPeri(X, V, GM, el) {
   const r = Math.hypot(...X), e = el.e;

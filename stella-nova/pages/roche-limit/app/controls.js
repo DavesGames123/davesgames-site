@@ -4,6 +4,12 @@
 //  buildUI() fills the gallery, binds the buttons, the sliders, the
 //  scrubber and the keys. applyScenario() loads the settings of a
 //  scenario; syncButtons() marks the active choices.
+//  RANDOM RUNS. applyRoll() loads a roll.js spec (a random seed or a
+//  preset) into UI.roll and puts ?seed= or ?run= in the URL, so a link
+//  plays the same run; randomRun() rolls a new seed; applyUrl() reads
+//  the link at boot. The Random button sits in the bar (an icon on a
+//  phone) and in the More menu; the presets fill the second part of the
+//  gallery.
 //
 //  grep -n targets
 //    transport ....... "function setPaused", "function stepBy"
@@ -13,11 +19,14 @@
 //    bindings ........ "function buildUI"
 //    scenario ........ "function applyScenario"
 //    button state .... "function syncButtons"
+//    random runs ..... "function applyRoll", "function randomRun", "function applyUrl", "function syncRollInfo"
 // ============================================================================
 import * as P from '../physics.js';
 import { SCENARIOS, REAL } from '../scenarios.js';
 import { cam } from './camera.js';
-import { cardArt } from './card-art.js';
+import { cardArt, rollArt } from './card-art.js';
+import { PRESETS, presetSpec, rollRun } from '../roll.js';
+import { SOURCES } from '../facts.js';
 import { UI, $, SPEED_MIN, SPEED_MAX, N_OPTS, PHONE_Q, RM_Q, SPEED_STOPS } from './env.js';
 import { truncateHistory, restoreSnap } from './history.js';
 import { drawLegend } from './legend.js';
@@ -80,6 +89,24 @@ export function buildUI() {
     b.addEventListener('click', () => { applyScenario(sc.key); startRun(); openPanel(null); });
     cards.appendChild(b);
   }
+  // the presets and a random run (roll.js)
+  const pBox = $('presetCards');
+  { const b = document.createElement('button');
+    b.className = 'scard dice'; b.dataset.k = 'roll';
+    b.innerHTML = `${rollArt(rollRun(7))}<b>⚄ A random run</b><span>A new planet, body, spin and orbit each time; the seed goes in the link.</span>`;
+    b.addEventListener('click', () => { randomRun(); openPanel(null); });
+    pBox.appendChild(b); }
+  for (const p of PRESETS) {
+    const sp = presetSpec(p.key), b = document.createElement('button');
+    b.className = 'scard'; b.dataset.p = p.key;
+    b.innerHTML = `${rollArt(sp)}<b>${p.name}</b><span>${sp.caption.split(' · ').slice(0, 2).join(' · ')}</span>`;
+    b.addEventListener('click', () => { applyRoll(presetSpec(p.key)); startRun(); openPanel(null); });
+    pBox.appendChild(b);
+  }
+  $('rollBtn').addEventListener('click', () => randomRun());
+  $('moreRoll').addEventListener('click', () => { openPanel(null); randomRun(); });
+  $('seedBtn').addEventListener('click', copyLink);
+  $('moreLink').addEventListener('click', () => { copyLink(); openPanel(null); });
   const bBox = $('bodies');
   for (const [k, r] of Object.entries(REAL)) {
     const b = document.createElement('button'); b.dataset.b = k; b.textContent = r.name;
@@ -167,16 +194,21 @@ export function buildUI() {
     else if (e.key === '[') setSpeed(UI.speedLog - 0.3);
     else if (e.key === ']') setSpeed(UI.speedLog + 0.3);
     else if (e.key === 'r' || e.key === 'R') startRun();
+    else if (e.key === 'n' || e.key === 'N') randomRun();
     else if (e.key === 'Escape') openPanel(null);
   });
   bindPointer();
   syncStory(true);
   applyScenario(UI.scen);
+  applyUrl();
   setSpeed(UI.speedLog);
   syncPlayButtons();
 }
 export function applyScenario(key) {
   UI.scen = key;
+  UI.roll = null;
+  if (!S.saverOn) setUrl(null);
+  syncRollInfo();
   const sc = SCENARIOS.find(s => s.key === key);
   const src = sc.kind === 'real' ? REAL[UI.body] : sc;
   UI.d = src.d ?? UI.d; UI.peri = src.peri ?? UI.peri; UI.e = src.e ?? UI.e;
@@ -199,8 +231,68 @@ export function applyScenario(key) {
   $('tReal').closest('label').style.display = (sc.kind === 'real' ? REAL[UI.body].rings : sc.rings) ? '' : 'none';
   syncButtons();
 }
+// ── random runs ───────────────────────────────────────────────────────────
+// Load a roll.js spec (a seed or a preset) as the current run.
+export function applyRoll(spec) {
+  UI.roll = spec;
+  UI.cam = 'story'; cam.zoom = 1; cam.el = spec.el; cam.az = 0.9; cam.boostUntil = performance.now() + 3000;
+  UI.color = spec.color ?? 4; UI.field = 0;
+  if (spec.speed) setSpeed(Math.log10(spec.speed));
+  UI.paused = false;
+  $('scenName').textContent = spec.preset ? spec.name : `⚄ ${spec.title}`;
+  $('explainSaturn').style.display = 'none';
+  $('tReal').closest('label').style.display = spec.rings ? '' : 'none';
+  const kind = spec.kind;
+  $('rowD').style.display = kind === 'flyby' ? 'none' : '';
+  $('rowPeri').style.display = kind === 'flyby' ? '' : 'none';
+  $('rowEcc').style.display = kind === 'flyby' ? '' : 'none';
+  if (!S.saverOn) setUrl(spec);
+  syncRollInfo(); syncButtons();
+}
+// A new random seed, run at once.
+export function randomRun() {
+  const seed = 1 + Math.floor(Math.random() * 999999);
+  applyRoll(rollRun(seed));
+  startRun();
+}
+// The link at boot: ?run=<preset key> or ?seed=<integer>. True when it
+// loaded a run.
+export function applyUrl() {
+  try {
+    const q = new URLSearchParams(location.search), run = q.get('run'), seed = q.get('seed');
+    if (run) { const sp = presetSpec(run); if (sp) { applyRoll(sp); return true; } }
+    if (seed && /^\d{1,9}$/.test(seed)) { applyRoll(rollRun(+seed)); return true; }
+  } catch (e) {}
+  return false;
+}
+function setUrl(spec) {
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete('seed'); u.searchParams.delete('run');
+    if (spec && spec.preset) u.searchParams.set('run', spec.preset);
+    else if (spec && spec.seed !== undefined) u.searchParams.set('seed', String(spec.seed));
+    history.replaceState(history.state, '', u);
+  } catch (e) {}
+}
+function copyLink() {
+  const b = $('seedBtn'), t = b.textContent;
+  const done = ok => { b.textContent = ok ? 'link copied' : 'copy failed: the link is in the address bar'; setTimeout(() => { b.textContent = t; }, 1600); };
+  try { navigator.clipboard.writeText(location.href).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+}
+// The line under the caption: the roll's numbers and its seed; and the
+// "What am I looking at?" text for the roll.
+export function syncRollInfo() {
+  const r = UI.roll;
+  $('rollInfo').hidden = !r;
+  $('explainRoll').hidden = !r;
+  if (!r) return;
+  $('rollCap').textContent = (r.preset ? '' : `seed ${r.seed} · `) + r.caption;
+  $('seedBtn').textContent = r.preset ? 'copy link' : `copy link (seed ${r.seed})`;
+  $('explainRoll').textContent = `${r.hint} The model: one rubble pile of a few thousand grains (research codes use millions), self-gravity, contacts and the tide of a point-mass planet with J2. The moon is drawn larger than real moons; the Roche limit does not depend on its size.${r.kind === 'spiral' ? ' The inward drift is a drag, millions of times faster than real tides.' : ''}${r.bodyR < 1 ? ` The ${r.radiiName.replace(/ radii$/, '')} is drawn in a larger unit: the tide is the same.` : ''} Data: ${SOURCES.join(' ')}`;
+}
 function syncButtons() {
-  for (const b of $('cards').querySelectorAll('.scard')) b.classList.toggle('on', b.dataset.k === UI.scen);
+  for (const b of $('cards').querySelectorAll('.scard')) b.classList.toggle('on', !UI.roll && b.dataset.k === UI.scen);
+  for (const b of $('presetCards').querySelectorAll('.scard')) b.classList.toggle('on', !!UI.roll && (b.dataset.p ? UI.roll.preset === b.dataset.p : !UI.roll.preset));
   for (const b of $('bodies').querySelectorAll('button')) b.classList.toggle('on', UI.scen === 'bodies' && b.dataset.b === UI.body);
   for (const b of $('materials').querySelectorAll('button')) b.classList.toggle('on', b.dataset.m === UI.material);
   $('materials').classList.toggle('dim', UI.scen === 'compare');
@@ -208,7 +300,7 @@ function syncButtons() {
   for (const b of $('colors').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.k === UI.color);
   for (const b of $('fields').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.f === UI.field);
   for (const b of $('quals').querySelectorAll('button')) b.classList.toggle('on', b.dataset.q === UI.quality);
-  $('matHint').textContent = UI.scen === 'compare' ? 'This story runs one loose and one rough moon.' : P.MATERIALS[UI.material].note;
+  $('matHint').textContent = UI.roll ? `This run sets its own material (${P.MATERIALS[UI.roll.material].name.toLowerCase()}); the settings here are for the stories.` : UI.scen === 'compare' ? 'This story runs one loose and one rough moon.' : P.MATERIALS[UI.material].note;
   $('camHint').textContent = UI.cam === 'story' ? (UI.calm ? 'Reduce motion is on: the story view stays on the planet.' : 'The camera tells the story: a wide shot, a push in to the moon as it breaks up (in slow motion), then a pull out to the ring. Drag or pinch to adjust it.') : UI.cam === 'follow' ? 'The view follows the moon, with its direction fixed in space. At high speed it stays on the planet instead.' : UI.cam === 'planet' ? 'The planet stays still; the moon goes round it.' : '';
   drawLegend();
 }

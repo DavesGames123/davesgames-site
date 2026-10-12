@@ -28,13 +28,17 @@ export function fmtTime(sec) {
   return (sec / 86400).toFixed(1) + ' days';
 }
 function fmtKm(km) { return km >= 1e4 ? Math.round(km / 100) * 100 : Math.round(km); }
+function fmtR(r) { return r >= 100 ? r.toFixed(0) : r.toFixed(2); }
 function planetName(spec, cap) { const n = spec.planetName || 'the planet'; return cap ? n.charAt(0).toUpperCase() + n.slice(1) : n; }
+// The unit of the printed distances: the primary's true radius. A roll
+// around a dense star draws in a larger world unit (roll.js bodyR).
+function radiiName(spec) { return spec.radiiName || `${planetName(spec)} radii`; }
 export function refreshReadout(force) {
   if (!S.run || !S.run.sats.length) return;
   const s = S.run.sats[0], spec = S.run.spec, L = S.run.limits || limitsFor(spec);
   if (!s.ref) return;
   const st = satState(s);
-  const dNow = Math.hypot(...st.r) / s.Rp;
+  const dNow = Math.hypot(...st.r) / s.Rp, u = spec.bodyR || 1;
   const tt = S.run.t / S.run.T0;
   const orbit = S.run.phase === 'orbit';
   // clock: hours and orbits
@@ -52,7 +56,7 @@ export function refreshReadout(force) {
   $('dockSpeedV').textContent = SPEED_STOPS.reduce((b, x) => Math.abs(x.v - UI.speedLog) < Math.abs(b.v - UI.speedLog) ? x : b).name;
   // distance bar: from the surface (1) to a little past the start
   const maxD = Math.max(S.run.viewD * 1.15, L.fluid * 1.3);
-  const x = v => Math.max(0, Math.min(100, (v - 1) / (maxD - 1) * 100));
+  const x = v => Math.max(0, Math.min(100, (v - u) / (maxD - u) * 100));
   $('distTitle').textContent = `Distance from ${planetName(spec)}`;
   document.querySelector('#distBar .zone.in').style.width = x(L.fluid) + '%';
   document.querySelector('#distBar .zone.out').style.left = x(L.fluid) + '%';
@@ -71,8 +75,8 @@ export function refreshReadout(force) {
   else if (fs[0] < 0.25 && S.run.sats.length === 1 && S.run.storyKey === 'ring') sent = `${subj} is gone: its pieces now circle ${Pn}${spec.kind === 'flyby' ? ' in a stream' : ' as a ring'}.`;
   else if (dNow < L.fluid) {
     const holds = s.matName !== 'fluid' && fs[0] > 0.9;
-    sent = `${subj} is ${dNow.toFixed(2)} ${Pn} radii out, inside the Roche limit (${L.fluid.toFixed(2)}): ${holds ? 'friction still holds it together, for now.' : `${Pn}’s tide is stronger than its own gravity, so it comes apart.`}`;
-  } else sent = `${subj} is ${dNow.toFixed(2)} ${Pn} radii out (${fmtKm(km).toLocaleString()} km), ${Math.round((dNow / L.fluid - 1) * 100)}% outside the Roche limit: it holds together.`;
+    sent = `${subj} is ${fmtR(dNow / u)} ${radiiName(spec)} out, inside the Roche limit (${fmtR(L.fluid / u)}): ${holds ? 'friction still holds it together, for now.' : `${Pn}’s tide is stronger than its own gravity, so it comes apart.`}`;
+  } else sent = `${subj} is ${fmtR(dNow / u)} ${radiiName(spec)} out (${fmtKm(km).toLocaleString()} km), ${Math.round((dNow / L.fluid - 1) * 100)}% outside the Roche limit: it holds together.`;
   $('sentence').textContent = sent;
   if (!$('details').classList.contains('off') || force) refreshDetails(dNow, tt, L);
   syncPlayButtons();
@@ -112,7 +116,7 @@ function refreshDetails(dNow, tt, L) {
   const s = S.run.sats[0], spec = S.run.spec;
   const tStr = spec.kind === 'flyby' && S.run.tPeri !== undefined ? `${(S.run.t - S.run.tPeri) / S.run.T0 >= 0 ? '+' : '−'}${Math.abs((S.run.t - S.run.tPeri) / S.run.T0).toFixed(2)} from the closest pass` : `${tt.toFixed(2)} orbits`;
   $('rdT').textContent = `${tStr} · ${fmtTime(S.run.t * (S.run.tUnitSec || 0))}`;
-  $('rdD').textContent = dNow.toFixed(3);
+  $('rdD').textContent = (dNow / (spec.bodyR || 1)).toFixed(3);
   $('rdDr').textContent = (dNow / L.rigid).toFixed(3);
   $('rdDf').textContent = (dNow / L.fluid).toFixed(3);
   const bnd = S.run.sats.map(x => x.an ? (100 * x.an.f).toFixed(1) + '%' : '—').join(' · ');

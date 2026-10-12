@@ -26,13 +26,16 @@
      pacing.js    the story clock: fast approach, slow motion at the breakup
      budget.js    pixel ratio, MSAA and the GPU memory of the page
      scenarios.js the scenarios, the real bodies, the story lines
+     roll.js      random runs (a seed) and the presets; facts.js their data
+     initial.js   the start state of a roll: binary, train, core, two moons
      plots.js     the plots (canvas 2D)
      main.js      boot, frame loop, time controls, camera, story, UI, saver
      tests.mjs    node tests.mjs (CPU tests, then the GPU test in Deno)
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
-     │ #bar [scenario ▾] [⟲ ❚❚ › »] [Slow Normal Fast ──●──] clock [Display │
+     │ #bar [scenario ▾] [⚄ Random] [⟲ ❚❚ › »] [Slow Normal Fast ──●──]   │
+     │      clock [Display                                               │
      │      Advanced Details ?]                                          │
      │                                                                   │
      │ #gpu  the scene, filmed by the story camera (or a fixed view)     │
@@ -40,16 +43,19 @@
      │ #readouts (distance bar,      #story  caption, time warp, phases, │
      │  one-piece share)                     time scrubber               │
      └──────────────────────────────────────────────────────────────────┘
-     #gallery   the scenario gallery (modal)
+     #gallery   the scenario gallery (modal): #cards the stories,
+                #presetCards a random run and the presets (roll.js)
+     #rollInfo  under the caption: the roll's numbers, its seed, copy link
      #display   view, colour, field, overlays, quality (popover)
      #advanced  the physics settings (drawer)
      #details   the plots and numbers for physicists (drawer)
      #explain   "What am I looking at?" (popover)
      #legend    the colour key of the grains or the force map
-   KEYS  Space pause · . and , step · [ and ] speed · R restart
+   KEYS  Space pause · . and , step · [ and ] speed · R restart · N random
+   LINKS ?seed=<integer> plays that random run; ?run=<preset key> a preset
 
    PHONE (max-width 768px, or a short landscape touch screen)
-     #bar keeps the scenario button, the time and "?"; #dock at the base
+     #bar keeps the scenario button, the die, the time and "?"; #dock at the base
      holds play, step, speed and "more"; the drawers are bottom sheets.
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -72,6 +78,7 @@
 
 <header id="bar">
   <button id="scenBtn" class="pill" aria-haspopup="dialog"><span id="scenName">Saturn’s rings</span><span class="caret">▾</span></button>
+  <button id="rollBtn" class="pill roll" title="A random run: a new planet, body, spin and orbit (N). The seed goes in the link." aria-label="Random run"><span class="die" aria-hidden="true">⚄</span><span class="rl">Random</span></button>
   <div class="grp transport">
     <button id="resetBtn" class="ib" title="Back to the start (R)" aria-label="Back to the start">⟲</button>
     <button id="playBtn" class="ib play" title="Pause (Space)" aria-label="Pause">❚❚</button>
@@ -95,6 +102,7 @@
 
 <section id="story">
   <div id="caption"></div>
+  <div id="rollInfo" hidden><span id="rollCap"></span><button id="seedBtn" class="seedbtn">copy link</button></div>
   <div id="warp" aria-live="off"></div>
   <div id="phases" role="group" aria-label="Phases"></div>
   <div class="scrubrow">
@@ -124,6 +132,8 @@
   <div class="sheet">
     <div class="sh-h"><h2>Choose a story</h2><button class="x" data-close="gallery" aria-label="Close">✕</button></div>
     <div id="cards"></div>
+    <h3 class="gal-h">Random runs and more stories</h3>
+    <div id="presetCards"></div>
   </div>
 </div>
 
@@ -155,6 +165,7 @@
   <p>A planet pulls the near side of a moon a little harder than the far side. That difference, the <b>tide</b>, tries to stretch the moon, and the moon’s own gravity holds it together.</p>
   <p>The tide grows fast as the moon comes closer. Inside a distance called the <b>Roche limit</b>, a moon held together only by its own gravity is pulled apart, and its pieces spread into a ring.</p>
   <p>Here thousands of grains, each pulled by the planet and by every other grain, and bumping into each other, show it happen. Nothing is scripted.</p>
+  <p id="explainRoll" hidden></p>
   <p id="explainSaturn">Saturn’s rings may be what is left of such a moon. Canup (2010) proposed a Titan-sized moon that spiralled in and lost its icy mantle; the “Chrysalis” idea (Wisdom et al. 2022) has a moon torn apart about 160 million years ago. The moon here is a simple icy rubble pile.</p>
 </div>
 
@@ -252,7 +263,7 @@
   <button id="dockDisp" aria-label="Display">◐</button>
   <button id="dockMore" aria-label="More">⋯</button>
 </nav>
-<div id="moreMenu" class="pop off"><button data-open="advanced">Advanced</button><button data-open="details">Details for physicists</button><button data-open="explain">What am I looking at?</button></div>
+<div id="moreMenu" class="pop off"><button id="moreRoll">⚄ Random run</button><button id="moreLink">Copy the link to this run</button><button data-open="advanced">Advanced</button><button data-open="details">Details for physicists</button><button data-open="explain">What am I looking at?</button></div>
 
 <script type="module" src="main.js"></script>
 </body>

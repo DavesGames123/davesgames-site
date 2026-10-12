@@ -93,8 +93,9 @@ export function rollChoice(rnd) {
 }
 
 // The run spec of a choice ch, with the numbers drawn from rnd. Fixed
-// numbers in ch win: rhoS, d, d1, peri (true radii), e, inc (deg), k
-// (spin factor), layout fields, title, name.
+// numbers in ch win: rhoS, d, d1 (world units), f1 (the spiral end as a
+// share of the fluid limit), peri (true radii), e, inc (deg), k (spin
+// factor), layout fields, title, name.
 export function buildRoll(ch, rnd) {
   const P = PRIMARIES[ch.planet], B = SMALL[ch.body];
   if (!P || !B) throw new Error('buildRoll: unknown planet or body');
@@ -124,8 +125,12 @@ export function buildRoll(ch, rnd) {
     // 0.6 r_H): about twice the fluid limit; the Hill radius at the fluid
     // limit is only some 1.7 moon radii
     spec.d = ch.d ?? Lf * (ch.body === 'binary' ? lerp(rnd(), 1.9, 2.1) : lerp(rnd(), 1.03, 1.08));
-    let f1 = D1_FRAC[material] * lerp(rnd(), 0.95, 1.05);
-    if (ch.body === 'core') f1 = Math.max(f1, 0.78);
+    let f1 = ch.f1 ?? D1_FRAC[material] * lerp(rnd(), 0.95, 1.05);
+    // a core: stop outside the core's own fluid limit, (rho / rho_core)^(1/3)
+    // of the bulk limit, so the mantle sheds and the core can hold
+    // (Deno run of the preset 'mantle', 2026-10-11: at 0.78 the core was
+    // torn too)
+    if (ch.body === 'core') { const L = spec.layout, bulk = L.frac * L.factor + 1 - L.frac; f1 = Math.max(f1, 1.08 * Math.cbrt(bulk / L.factor)); }
     spec.d1 = ch.d1 ?? Math.max(Lf * f1, surf);
     spec.orbits = material === 'fluid' ? 0.8 : 0.95;
     spec.speed = 6;
@@ -147,12 +152,22 @@ export function buildRoll(ch, rnd) {
     const hard = material === 'rigid' || material === 'cohesive';
     if (ch.peri !== undefined) spec.peri = ch.peri * bodyR;
     else if (orbit === 'grazing') spec.peri = bodyR * lerp(rnd(), 0.85, 1.05);
-    else spec.peri = Math.max(1.3 * bodyR + s, Lf * (hard ? lerp(rnd(), 0.4, 0.6) : lerp(rnd(), 0.45, 0.75)));
+    else {
+      // one pass tears a body only well inside the limit (Deno runs of
+      // 2026-10-11: a fluid moon at 0.75 d_fluid kept all its mass)
+      spec.peri = Math.max(1.3 * bodyR + s, Lf * (hard ? lerp(rnd(), 0.25, 0.42) : lerp(rnd(), 0.3, 0.5)));
+      // no room between the surface and a deep pass: graze the planet
+      // instead (a train, or a planet), or spiral in
+      if (spec.peri > 0.62 * Lf) {
+        if (ch.body === 'train' || !P.compact) { orbit = 'grazing'; spec.peri = bodyR * lerp(rnd(), 0.85, 1.05); spec.e = Math.min(spec.e, 0.99); }
+      }
+    }
     spec.speed = spec.e < 1 ? 4 : 3;
     spec.paceAtPeri = true;
     if (ch.body === 'binary') spec.r0 = 2.2 * Lf;
   }
   if (spec.layout.type === 'two' && spec.kind !== 'spiral') spec.layout.type = 'single';
+  spec.orbitKind = orbit; spec.choice.orbit = orbit;
   spec.ringExt = Math.max(3.6, 1.25 * (spec.kind === 'flyby' ? spec.peri + 1.5 : spec.d));
   // a tilted orbit puts its debris out of the plane of the ring layer
   if (spec.inc && Math.abs(Math.sin(spec.inc)) > 0.2) spec.noRingLayer = true;
@@ -170,7 +185,7 @@ function layoutOf(ch, rnd) {
   if (t === 'contact') L.ratio ??= lerp(rnd(), 0.4, 1);
   if (t === 'binary') { L.ratio ??= lerp(rnd(), 0.2, 0.7); L.sep ??= lerp(rnd(), 2.2, 3.5); L.tilt ??= lerp(rnd(), 0, 0.6); }
   if (t === 'train') { L.k ??= 5 + Math.floor(rnd() * 5); L.gap ??= lerp(rnd(), 2.2, 3.2); L.w ??= Array.from({ length: L.k }, (_, i) => i === 0 ? 1.6 : lerp(rnd(), 0.5, 1.4)); }
-  if (t === 'core') { L.frac ??= lerp(rnd(), 0.25, 0.35); L.factor ??= lerp(rnd(), 2.5, 3.5); }
+  if (t === 'core') { L.frac ??= lerp(rnd(), 0.25, 0.35); L.factor ??= lerp(rnd(), 3, 4); }
   if (t === 'two') { L.ratio ??= lerp(rnd(), 0.5, 0.85); L.d2 ??= lerp(rnd(), 1.08, 1.16); L.phi ??= (rnd() < 0.5 ? -1 : 1) * lerp(rnd(), 0.35, 0.8); }
   return L;
 }
@@ -247,7 +262,7 @@ export const PRESETS = [
   { key: 'phobos30', name: 'Phobos in 30 million years', planet: 'mars', body: 'rocky', material: 'loose', spin: 'sync', orbit: 'decay', rhoS: 1.876,
     title: 'Phobos, some 30 million years from now',
     hint: 'Tides bring Phobos about 2 m closer to Mars each century. In some 20 to 50 million years (Efroimsky and Lainey 2007; Black and Mittal 2015) it reaches its Roche limit. A rubble Phobos (1.876 g/cm³) with loose grains breaks into a ring here; the drag is millions of times faster than the real tide.' },
-  { key: 'wd', name: 'A rubble pile at a white dwarf', planet: 'wdwarf', body: 'rocky', material: 'loose', spin: 'tumbling', k: 1, orbit: 'eccentric', rhoS: 2.0, e: 0.85,
+  { key: 'wd', name: 'A rubble pile at a white dwarf', planet: 'wdwarf', body: 'rocky', material: 'loose', spin: 'tumbling', k: 1, orbit: 'eccentric', rhoS: 2.0, e: 0.85, peri: 50,
     title: 'An asteroid falls toward a white dwarf and is torn into a stream',
     hint: 'Many white dwarfs show rock in their atmospheres: asteroids that came too close and were torn apart (WD 1145+017 has a disintegrating one in transit). Sirius B (1.018 solar masses, 0.0086 solar radii, Bond et al. 2017) has a density near 2 million g/cm³; its Roche limit for rock (2 g/cm³) is about 1.5 million km, some 250 times its radius. The white dwarf lights the scene.' },
   { key: 'twomoons', name: 'Two moons cross the limit', planet: 'uranus', body: 'two', material: 'fluid', spin: 'sync', orbit: 'decay', rhoS: 1.0, layout: { ratio: 0.7, d2: 1.12, phi: -0.6 },
@@ -262,13 +277,13 @@ export const PRESETS = [
   { key: 'didymos', name: 'A binary asteroid grazes Earth', planet: 'earth', body: 'binary', material: 'rigid', spin: 'sync', orbit: 'flyby', rhoS: 2.4, e: 1, peri: 1.7, layout: { ratio: 0.4, sep: 2.6, tilt: 0.3 },
     title: 'A Didymos-like binary asteroid passes 4,500 km above Earth',
     hint: 'Didymos and its moon Dimorphos (about 2.4 g/cm³) are a rubble pile with a moonlet. A pass at 1.7 Earth radii (4,500 km above the surface) is inside the fluid limit (3.2 Earth radii): the pair splits and both bodies stretch. Dimorphos is drawn larger than it is, to show the grains.' },
-  { key: 'mantle', name: 'A moon loses its mantle', planet: 'jupiter', body: 'core', material: 'fluid', spin: 'sync', orbit: 'decay', rhoS: 1.94, layout: { frac: 0.3, factor: 3 },
+  { key: 'mantle', name: 'A moon loses its mantle', planet: 'jupiter', body: 'core', material: 'fluid', spin: 'sync', orbit: 'decay', rhoS: 1.94, layout: { frac: 0.3, factor: 4 },
     title: 'A Ganymede-like moon spirals into Jupiter: the ice is stripped, the core holds',
-    hint: 'Ganymede is ice over rock (1.94 g/cm³). The denser the material, the closer its Roche limit, so the icy mantle comes off first, and the rocky core lasts longer. The core grains here have 3 times the density of the mantle grains.' },
-  { key: 'tumbler', name: 'A tumbling comet at Jupiter', planet: 'jupiter', body: 'comet', material: 'loose', spin: 'tumbling', k: 1.8, orbit: 'flyby', rhoS: 0.5, e: 1, peri: 1.5,
+    hint: 'Ganymede is ice over rock (1.94 g/cm³). The denser the material, the closer its Roche limit, so the icy mantle comes off first, and the rocky core lasts longer. The core grains here have 4 times the density of the mantle grains (rock near 3.8 g/cm³ under ice near 0.95).' },
+  { key: 'tumbler', name: 'A tumbling comet at Jupiter', planet: 'jupiter', body: 'comet', material: 'loose', spin: 'tumbling', k: 1.8, orbit: 'flyby', rhoS: 0.5, e: 1, peri: 1.2,
     title: 'A tumbling comet swings past Jupiter and breaks into a string of clumps',
-    hint: 'Comet nuclei often tumble about no fixed axis. Spin adds to the tide on one side, so a tumbling comet sheds unevenly. Pass at 1.5 Jupiter radii; fluid limit 3.4.' },
-  { key: 'neutron', name: 'A neutron star shreds an asteroid', planet: 'nstar', body: 'rocky', material: 'rigid', spin: 'sync', orbit: 'eccentric', rhoS: 2.0, e: 0.7,
+    hint: 'Comet nuclei often tumble about no fixed axis. Spin adds to the tide on one side, so a tumbling comet sheds unevenly. Pass at 1.2 Jupiter radii (8,600 km above the cloud tops); fluid limit 3.4.' },
+  { key: 'neutron', name: 'A neutron star shreds an asteroid', planet: 'nstar', body: 'rocky', material: 'loose', spin: 'sync', orbit: 'eccentric', rhoS: 2.0, e: 0.7, peri: 45000,
     title: 'An asteroid plunges past a neutron star and is shredded',
     hint: 'A neutron star of 1.44 solar masses and 13 km radius (PSR J0030+0451, Miller et al. 2019) has a density near 3×10¹⁴ g/cm³. Its Roche limit for rock (2 g/cm³) is about 1.7 million km: tides act far from the star. There G M / (c² r) is a few parts in a million, so Newton’s tide is enough.' },
   { key: 'browndwarf', name: 'A molten moon at a brown dwarf', planet: 'bdwarf', body: 'fluid', material: 'fluid', spin: 'sync', orbit: 'decay', rhoS: 3.0,

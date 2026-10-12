@@ -43,6 +43,8 @@ export function storyText(key) {
   else if (key === 'torn' && spec.kind === 'flyby') tx = 'The comet is pulled into a long stream of rubble.';
   else if (key === 'ring' && spec.kind === 'flyby') tx = 'The stream’s own gravity gathers it into a chain of clumps.';
   else if (key === 'ring' && spec.key !== 'saturn') tx = 'The debris spreads into a ring around {P}.';
+  // a random run (roll.js) has its own lines for its layout
+  if (spec.storyText && spec.storyText[key]) tx = spec.storyText[key];
   tx = tx.split('{P}').join(Pn);
   return tx.charAt(0).toUpperCase() + tx.slice(1);
 }

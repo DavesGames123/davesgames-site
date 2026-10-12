@@ -74,8 +74,11 @@ export function paceTarget(pc, sig) {
   return Math.exp(Math.log(PACE.approach) + u * (Math.log(PACE.slow) - Math.log(PACE.approach)));
 }
 // After each analysis: move the mode on. t: sim time; T0: one orbit.
+// sig.peri (optional, the random passes of roll.js): the closest pass is
+// near, so the slow motion starts there even if the body has not yet
+// stretched (a binary that splits, a body that holds).
 export function updatePace(pc, sig, t, T0) {
-  if (pc.mode === 'approach' && (sig.el >= PACE.elFull || sig.f < PACE.fShed)) { pc.mode = 'breakup'; pc.tSlow = t; }
+  if (pc.mode === 'approach' && (sig.el >= PACE.elFull || sig.f < PACE.fShed || sig.peri)) { pc.mode = 'breakup'; pc.tSlow = t; }
   if (pc.mode === 'breakup' && (sig.f < PACE.fDone || t - pc.tSlow > PACE.slowOrbits * T0)) pc.mode = 'spread';
   pc.target = paceTarget(pc, sig);
   return pc;

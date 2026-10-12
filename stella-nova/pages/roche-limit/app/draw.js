@@ -26,6 +26,9 @@ function backlitSun(cf) { const d = norm(sub([0, 0, 0], cf.eye)); return norm([d
 // the sun: about 40 degrees from the default view and 34 degrees above the
 // orbit plane, so a moon beyond 1.8 R_p is never in the planet's shadow
 const SUN = norm([-0.024, 0.825, 0.565]);
+// the shed-grain tint of a roll's body (roll.js spec.tint); ice keeps the
+// tint of its material
+const TINTS = { rock: [0.92, 0.80, 0.66, 1], comet: [0.70, 0.67, 0.64, 1], melt: [1.0, 0.70, 0.50, 1] };
 export function drawFrame(now, cssW, cssH, steps) {
   const dtReal = Math.min(0.1, (now - (S.run.lastDraw || now)) / 1000); S.run.lastDraw = now;
   const cf = cameraFrame(dtReal || 0.016, cssW, cssH);
@@ -43,7 +46,8 @@ export function drawFrame(now, cssW, cssH, steps) {
     sat: fp ? fp.c : satCentre(s0), satR: fp ? fp.satR : (s0.C.Rs * s0.k),
     GMs: fp ? fp.GMs : 0, GMp: fp ? fp.GMp : 0, omega: fp ? fp.omega : 0, phiL1: fp ? fp.phiL1 : 0,
     fieldMode: fp ? UI.field : 0, fieldExt: fp ? fp.ext : 4, fieldScale: fp ? fp.scale : 1, fieldAlpha: 0.62,
-    ringExt: 3.6, ringGain: UI.ringOn ? UI.ringGain : 0, ringBlend: steps > 0 ? (UI.calm ? 0.94 : Math.min(0.92, 0.6 + 0.08 * steps / 32)) : 0.97, ringOn: UI.ringOn || frameRealRings(spec),
+    bodyR: spec.bodyR || 1,
+    ringExt: spec.ringExt || 3.6, ringGain: UI.ringOn && !spec.noRingLayer ? UI.ringGain : 0, ringBlend: steps > 0 ? (UI.calm ? 0.94 : Math.min(0.92, 0.6 + 0.08 * steps / 32)) : 0.97, ringOn: UI.ringOn || frameRealRings(spec),
     exposure: 0.88 * (S.saverOn ? saverFade(dtReal) : 1), bloom: Q.bloom ? 0.08 : 0, bloomThreshold: 1.0, vignette: 0.32,
     grainR: s0.k,   // the mean grain radius (1) in world units
   };
@@ -68,7 +72,7 @@ export function drawFrame(now, cssW, cssH, steps) {
     frame: [s.ref.X[0] * s.k, s.ref.X[1] * s.k, s.ref.X[2] * s.k, s.k],
     refV: [s.ref.V[0] * s.k, s.ref.V[1] * s.k, s.ref.V[2] * s.k, frameT], motion,
     opts: [UI.color, UI.color === 2 ? 1 : 0, 1.0, s.C.vesc],
-    tint: s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1],
+    tint: TINTS[spec.tint] || (s.matName === 'rigid' ? [1.0, 0.82, 0.62, 1] : s.matName === 'cohesive' ? [0.75, 1.0, 0.72, 1] : [0.78, 0.9, 1.0, 1]),
     heatInv: 1 / (S.run.heatRef || 0.006 * s.C.vesc * s.C.vesc),
     simT: s.gpu.t, flashT: S.run.phase === 'orbit' ? flashT : 0, strain: 1,
   }));

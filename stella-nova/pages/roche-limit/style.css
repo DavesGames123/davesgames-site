@@ -22,6 +22,7 @@
   --warm:#ffb46a; --roche:#ff7a59; --safe:#5fb7e8; --r:12px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+[hidden]{display:none!important}
 body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px}
 button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:inherit;color:inherit}
 .off{display:none!important}
@@ -36,6 +37,9 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-fa
   font-size:0.86rem;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
 .pill .caret{color:var(--dim);font-size:0.7rem}
 .pill:hover,.pill.on{border-color:var(--warm)}
+/* the random run (roll.js): a die and a word; the die alone on a phone */
+.pill.roll{padding:0 12px;gap:6px;color:var(--warm)}
+.pill.roll .die{font-size:1.15rem;line-height:1}
 .grp{display:flex;align-items:center;gap:4px;height:38px;padding:0 5px;border:1px solid var(--line);border-radius:19px;background:var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .ib{width:30px;height:30px;border:0;border-radius:15px;background:transparent;cursor:pointer;font-size:0.95rem;line-height:1}
 .ib:hover{background:rgba(255,255,255,0.07)}
@@ -62,6 +66,11 @@ html.in-frame #bar{top:8px}
 /* the time warp of the story clock (pacing.js): sim time per wall second */
 #warp{font:0.7rem var(--sci-mono);color:var(--dim);margin-top:3px;min-height:1.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 #warp b{font-weight:600;color:var(--warm)}
+/* a random run: its numbers and seed on one line, and the copy-link button */
+#rollInfo{display:flex;align-items:center;gap:8px;margin-top:3px;min-width:0}
+#rollCap{flex:1;min-width:0;font-size:0.7rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seedbtn{flex:none;border:1px solid var(--line-b);background:transparent;color:var(--warm);border-radius:11px;font-size:0.68rem;padding:3px 9px;cursor:pointer;white-space:nowrap}
+.seedbtn:hover{border-color:var(--warm)}
 #phases{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:9px 0 6px}
 #phases button{display:flex;align-items:center;gap:6px;border:0;background:transparent;padding:4px 2px;cursor:pointer;color:var(--dim);font-size:0.74rem;text-align:left;border-top:2px solid var(--faint)}
 #phases button i{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
@@ -110,7 +119,9 @@ html.in-frame #bar{top:8px}
 .sh-h h2{font-size:1.05rem;font-weight:600}
 .x{width:32px;height:32px;border:1px solid var(--line);background:transparent;border-radius:16px;cursor:pointer;color:var(--dim)}
 .x:hover{color:var(--warm);border-color:var(--warm)}
-#cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+#cards,#presetCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.gal-h{font-size:0.86rem;font-weight:600;margin:18px 0 10px;color:var(--ink)}
+.scard.dice b{color:var(--warm)}
 .scard{display:flex;flex-direction:column;gap:5px;text-align:left;border:1px solid var(--line);background:var(--bg2);border-radius:12px;padding:0 0 12px;cursor:pointer;overflow:hidden}
 .scard svg{display:block;width:100%;height:auto;border-bottom:1px solid var(--line)}
 .scard b{font-size:0.84rem;padding:4px 11px 0}
@@ -198,7 +209,10 @@ html.in-frame #bar{top:8px}
   :root{--dock-h:calc(62px + env(safe-area-inset-bottom))}
   #bar{top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;gap:6px}
   #bar .transport,#bar .speed,#dispBtn,#advBtn,#detBtn{display:none}
-  .pill{height:40px;max-width:58vw;font-size:0.82rem}
+  .pill{height:40px;max-width:50vw;font-size:0.82rem}
+  .pill.roll{width:44px;height:44px;padding:0;justify-content:center;border-radius:22px;flex:none}
+  .pill.roll .rl{display:none}
+  .seedbtn{display:none}
   .grp.right{border:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
   .ib.round{width:40px;height:40px;border-radius:20px;background:var(--card)}
   .clock{margin-left:auto;font-size:0.7rem}
@@ -229,7 +243,7 @@ html.in-frame #bar{top:8px}
   #explain{width:auto}
   .modal{align-items:flex-end;padding:0}
   .sheet{border-radius:16px 16px 0 0;max-height:85vh;max-height:85dvh;padding:14px 14px calc(18px + env(safe-area-inset-bottom))}
-  #cards{grid-template-columns:1fr 1fr;gap:8px}
+  #cards,#presetCards{grid-template-columns:1fr 1fr;gap:8px}
   .seg button,.chips button,.toggles label{min-height:44px}
   .toggles label{font-size:0.82rem}
 }

@@ -48,15 +48,15 @@ export function saverCamera(g) {
 function saverLabel() {
   if (!S.saver || !S.saver.opts.label || !S.run || S.run.phase !== 'orbit' || !S.run.sats[0].ref) return;
   const s = S.run.sats[0], L = S.run.limits || limitsFor(S.run.spec);
-  const st = satState(s), dNow = Math.hypot(...st.r) / s.Rp;
+  const u = S.run.spec.bodyR || 1, st = satState(s), dNow = Math.hypot(...st.r) / s.Rp / u;
   const bnd = S.run.sats.map(x => x.an ? (100 * x.an.f).toFixed(0) + '%' : '100%').join(' / ');
   const w = S.run.tUnitSec ? timeWarp(orbitsPerMin(), S.run.T0, S.run.tUnitSec) : 0;
   const slow = S.run.pace && S.run.pace.mode === 'breakup' && S.run.pace.factor < 0.7;
   S.saver.opts.label({
     title: 'Roche limit', sub: S.saver.run ? S.saver.run.title : '',
     params: [
-      { sym: 'd/R_M', name: 'distance', value: dNow.toFixed(2), cls: 'm5' },
-      { sym: 'd_\\mathrm{fluid}', name: 'Roche limit', value: L.fluid.toFixed(2) + ' R_M', cls: 'm1' },
+      { sym: 'd/R_M', name: 'distance', value: dNow.toFixed(dNow >= 100 ? 0 : 2), cls: 'm5' },
+      { sym: 'd_\\mathrm{fluid}', name: 'Roche limit', value: (L.fluid / u).toFixed(L.fluid / u >= 100 ? 0 : 2) + ' R_M', cls: 'm1' },
       { sym: 'f_b', name: 'in one piece', value: bnd, cls: 'm3' },
     ],
     tex: [

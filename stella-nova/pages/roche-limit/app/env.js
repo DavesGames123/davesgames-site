@@ -48,6 +48,7 @@ Q.bloom = QUALITY[Q.preset].bloom;
 
 export const UI = {
   scen: 'saturn', body: 'phobos',
+  roll: null,           // a random run or a preset (roll.js spec); null: the story UI.scen
   d: 2.24, peri: 1.6, e: 1, qLog: 0, J2: 0,
   material: 'fluid', mu: 0, coh: 0,
   N: (PHONE_Q.matches || COARSE) ? 4096 : 8192,
