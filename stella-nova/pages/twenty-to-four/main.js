@@ -278,7 +278,7 @@ function legend() {
   const sw = (cls, txt) => `<div class="lg"><i class="${cls}"></i><span>${txt}</span></div>`;
   const E = sw('sw-e', `Lines of ${eqSVG('iE')}`), Bt = sw('sw-bt', `${eqSVG('iB')} toward you`), Ba = sw('sw-ba', `${eqSVG('iB')} away`);
   const L = {
-    fold: E + Bt + Ba,
+    fold: '',
     field: E + Bt + Ba + sw('sw-k', 'The ring kr = 1'),
     curlB: sw('sw-bt', `Loops of ${eqSVG('iB')} and their curl`) + sw('sw-e', eqSVG('ldispB')) + '<p>Drag to turn. Tap the sheet to move the probe.</p>',
     curlE: sw('sw-e', `Loops of ${eqSVG('iE')} and their curl`) + sw('sw-bt', eqSVG('lmdBdt')) + '<p>Drag to turn. Tap the sheet to move the probe.</p>',

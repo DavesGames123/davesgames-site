@@ -306,6 +306,10 @@ export function createStage(R) {
   const FOLD_LEN = 17;
   function drawFold(S, W, H, band) {
     const rect = { x: Math.max(16, W * 0.03), y: band.t + band.h * 0.02, w: W - Math.max(32, W * 0.06), h: band.h * 0.96 };
+    // On a wide screen the dock floats over the base of the stage: keep
+    // the fold above it. (The phone band and the saver band already leave
+    // it out.)
+    if (!S.band && !S.saver) { rect.y = 18; rect.h = H - 18 - 84; }
     if (S.foldRect) Object.assign(rect, S.foldRect);
     const Lo = foldLayout(rect), T = ((S.clock - foldT0) % FOLD_LEN + FOLD_LEN) % FOLD_LEN;
     const SM = screenMatrix(W, H);
