@@ -4,7 +4,7 @@
 //  Two parts:
 //    1. Live facts, read from the worker after boot: manim.__version__,
 //       manim.__file__, the wheel sha256, the Pyodide and Python versions,
-//       and the five native modules that the page replaces. The facts
+//       and the six native modules that the page replaces. The facts
 //       come from engine.facts() when the engine has it. Else the panel
 //       asks engine.introspect('manim') and introspect of each stub.
 //    2. UNDER-THE-HOOD.md (written by the engine side), as Markdown.
@@ -25,14 +25,15 @@ export const REPLACED = [
   { mod: 'pathops', real: 'skia-pathops (Skia)', why: 'Skia is native C++ code.', how: 'Boolean operations (Union, Intersection, Difference, Exclusion) go through shapely.' },
   { mod: 'mapbox_earcut', real: 'mapbox-earcut (C++)', why: 'Native C++ extension.', how: 'The earcut polygon triangulation, in Python.' },
   { mod: 'av', real: 'PyAV (FFmpeg)', why: 'FFmpeg is native C code.', how: 'A container that writes nothing. The real SceneFileWriter hands each frame to the page, which shows it and records the video in the browser.' },
+  { mod: 'moderngl', real: 'ModernGL (OpenGL)', why: '“from manim import *” imports it for its OpenGL renderer, and a browser has no desktop OpenGL.', how: 'Import-time names and constants only. The Cairo renderer that this page uses never calls it.' },
 ];
 
 export function mountHood(root, { getEngine }) {
   root.innerHTML = `
     <h2>Under the hood</h2>
-    <p class="rf-lead">This page runs the real ManimCE package from PyPI, without changes, in Python compiled to WebAssembly (Pyodide). Only five native libraries cannot run in a browser. Small Python modules replace them, and the table below says how.</p>
+    <p class="rf-lead">This page runs the real ManimCE package from PyPI, without changes, in Python compiled to WebAssembly (Pyodide). Six native libraries cannot run in a browser. Small Python modules replace them, and the table below says how. Three wrappers observe Scene.play, one Camera draw method and SceneFileWriter.write_frame and call the originals unchanged. One function, tex_to_svg_file, sends TeX to MathJax, because there is no LaTeX in a browser.</p>
     <dl class="hood-facts"><dt>Status</dt><dd class="muted">Python is loading…</dd></dl>
-    <h3>The five replaced native modules</h3>
+    <h3>The six replaced native modules</h3>
     <div class="hood-table">${REPLACED.map(r => `
       <div class="hood-row"><code>${r.mod}</code><div><b>${escapeHtml(r.real)}</b>. ${escapeHtml(r.why)}<br>${escapeHtml(r.how)}</div><button class="btn small hood-src" data-mod="${r.mod}">Source</button></div>`).join('')}
     </div>

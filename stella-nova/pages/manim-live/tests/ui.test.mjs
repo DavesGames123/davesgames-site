@@ -216,7 +216,10 @@ test('pyhighlight: tokens get classes and text is escaped', () => {
   assert.equal(h.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'), 'def f(x):\n    return "<a>" # c');
 });
 
-test('hood: the five replaced native modules, and file names', () => {
-  assert.deepEqual(REPLACED.map(r => r.mod), ['cairo', 'manimpango', 'pathops', 'mapbox_earcut', 'av']);
+test('hood: the table names every replaced native module in py/, and file names', async () => {
+  const { readdirSync } = await import('node:fs');
+  const shims = readdirSync(new URL('../py/', import.meta.url), { withFileTypes: true })
+    .filter(d => d.isDirectory() && !['manimlive', 'wheels'].includes(d.name)).map(d => d.name).sort();
+  assert.deepEqual(REPLACED.map(r => r.mod).sort(), shims);
   assert.equal(shortFile('/lib/python3.13/site-packages/manim/mobject/geometry/arc.py'), 'manim/mobject/geometry/arc.py');
 });
