@@ -125,6 +125,19 @@ about the simulation and layout in fullscreen"
   an assigned blocker takes the block off. The big button confirms the
   step with the engine action; the rules do not change
   (ui/play/model.js, tests/play-combat.test.mjs).
+- Turn controls (user, verbatim, 2026-10-12): "the interface for ending
+  my tern of moving along, as well as what's tracking the current
+  [hase, look really really bad." The phase bar and the long turn line
+  are replaced by one dock at the lower right, above the hand line
+  (ui/play/turnbar.js, play.css .pl-dock): a turn plate ("Your turn" /
+  "Fly B's turn", the one turn indicator), a ladder of five step icons
+  (start, main, attack, block, end: the phases of game/rules.js and the
+  two steps with no choice), the lit step in the colour of whose turn it
+  is (you parchment, Fly A cyan, Fly B magenta), done steps dim, and the
+  big button (parchment and bronze "go", muted "Waiting" on the fly's
+  turn; Space or Enter) with the timer on it. The small button stands
+  beside it. 44 px targets, safe areas, no overlap with a resting hand
+  card (tests/play-dock.test.mjs).
 
 
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain
