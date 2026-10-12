@@ -60,7 +60,7 @@ export const PHASES = ['approach', 'crack', 'torn', 'ring'];
 // and drifts to 0.72 of it. planet: for the reel's planet rule.
 export const RUNS = [
   { key: 'saturn', scen: 'saturn', planet: 'saturn', title: 'An icy moon becomes Saturn’s rings', spec: {} },
-  { key: 'phobos', scen: 'close', planet: 'mars', title: 'Phobos, some 40 million years from now',
+  { key: 'phobos', scen: 'close', planet: 'mars', title: 'Phobos, 20 to 50 million years from now',
     spec: { q: B.mars.rho / B.phobos.rho, d: 3.25, d1: 2.25, orbits: 0.8, style: 3, planetName: 'Mars', Rkm: B.mars.R, rhoS: B.phobos.rho, J2: B.mars.J2, flattening: 0.006 } },
   { key: 'earth', scen: 'close', planet: 'earth', title: 'If the Moon came too close to Earth',
     spec: { q: B.earth.rho / B.moon.rho, d: 3.0, d1: 2.1, orbits: 0.8, style: 4, planetName: 'Earth', Rkm: B.earth.R, rhoS: B.moon.rho, J2: B.earth.J2, flattening: 0.0034 } },
