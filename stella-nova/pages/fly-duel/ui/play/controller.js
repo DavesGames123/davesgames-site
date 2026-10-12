@@ -164,7 +164,7 @@ export function createPlayController(opts) {
     phase = 'play';
     // the log line of each mulligan, so the log tells the true story
     const s = rules.clone(match.state);
-    for (const p of [0, 1]) if (mulls[p]) s.log.push(`${names[p]} takes ${mulls[p]} mulligan${mulls[p] > 1 ? 's' : ''} (${s.players[p].hand.length} cards).`);
+    for (const p of [0, 1]) if (mulls[p]) s.log.push(`${names[p]} ${names[p] === 'You' ? 'take' : 'takes'} ${mulls[p]} mulligan${mulls[p] > 1 ? 's' : ''} (${s.players[p].hand.length} cards).`);
     match.state = s;
     emit({ type: 'start', first: match.state.active });
     return true;

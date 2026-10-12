@@ -24,7 +24,8 @@ let fail = 0, pass = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg); } };
 
 const rules = await import('../game/rules.js');
-const { CARD, DECKS } = await import('../game/cards.js');
+const cards = await import('../game/cards.js');
+const { CARD, DECKS } = cards;
 const { greedyBot, randomBot } = await import('../game/bots.js');
 const { mulberry32 } = await import('../data/rng.js');
 const { createHuman, checkAction, matchLegal, scriptedHuman } = await import('../train/human.js');
@@ -200,7 +201,25 @@ function viaGestures(ix, state, seat, a) {
       s = rules.step(s, bot(s, legal));
     }
   }
-  ok(bad === 0, `every legal action reachable by gestures (${checked} actions in ${states} states, ${bad} bad)`);
+  // every deck of game/cards.js (five colours and the mixed decks, when
+  // they exist): one game each, against the next deck in the menu order
+  const ids = (cards.DECK_ORDER || Object.keys(DECKS)).filter(k => DECKS[k]);
+  for (let d = 0; d < ids.length; d++) {
+    const bot = randomBot(mulberry32(900 + d));
+    let s = rules.newGame({ seed: 300 + d, first: d & 1, decks: [ids[d], ids[(d + 1) % ids.length]] });
+    while (!rules.isOver(s)) {
+      const legal = rules.legalActions(s);
+      states++;
+      for (const a of legal) {
+        const got = viaGestures(createInteraction({ rules, CARD, seat: s.toAct }), s, s.toAct, a);
+        checked++;
+        counts[a.type] = (counts[a.type] || 0) + 1;
+        if (!got || canon(got) !== canon(a)) { bad++; if (bad < 5) console.error('  unreachable', ids[d], canon(a), '->', got && canon(got)); }
+      }
+      s = rules.step(s, bot(s, legal));
+    }
+  }
+  ok(bad === 0, `every legal action reachable by gestures (${checked} actions in ${states} states, ${ids.length} decks, ${bad} bad)`);
   for (const t of ['land', 'cast', 'pass', 'attack', 'block']) ok(counts[t] > 0, `action type ${t} was seen and checked`);
   const tgt = { player: 0, creature: 0 };
   // targeted casts in both target kinds were part of the check
@@ -338,11 +357,96 @@ let fly = null;
     .concat(['ui/play/play.js', 'ui/play/hand.js', 'ui/play/board2d.js', 'ui/play/inspector.js', 'ui/play/play.css', 'ui/play/dev.html'].filter(f => existsSync(join(ROOT, f))));
   for (const f of files) {
     const t = readFileSync(join(ROOT, f), 'utf8');
-    ok(!/Beleren|MPlantin|Matrix Bold|Planeswalker|Wizards of the Coast(?![^\n]*[Nn]ot affiliated)/.test(t), `${f}: no WotC fonts or names`);
+    ok(!/Beleren|MPlantin|Matrix Bold|Planeswalker/.test(t), `${f}: no WotC fonts or names`);
+    ok(t.split('\n').every(l => !/Wizards of the Coast/.test(l) || /[Nn]ot affiliated/.test(l)), `${f}: WotC named only in the not-affiliated line`);
     ok(!/shadowBlur|filter:\s*blur|text-shadow|backdrop-filter/.test(t), `${f}: no soft glow`);
     ok(!/box-shadow:[^;]*\d+px\s+\d+px\s+[1-9]/.test(t), `${f}: box-shadow only as a hard ring`);
   }
   if (existsSync(join(ROOT, 'ui/play/play.css'))) ok(/\[hidden\]\s*\{\s*display:\s*none\s*!important/.test(readFileSync(join(ROOT, 'ui/play/play.css'), 'utf8')), 'play.css has the [hidden] rule');
+}
+
+// --------------------------------------------------------------- 11 the DOM screen, end to end (linkedom, optional)
+// mountPlay() on a linkedom document: real DOM events on the hand cards,
+// the creatures, the life dice and the big button play whole games
+// against the pretrained flies. linkedom has no layout and no canvas, so
+// this checks the wiring, not the look. It is skipped when linkedom is
+// not installed (it is not a page dependency).
+{
+  const { createRequire } = await import('node:module');
+  let parseHTML = null;
+  for (const base of [join(ROOT, 'package.json'), '/usr/local/lib/node_modules/openclaw/package.json']) {
+    try { ({ parseHTML } = createRequire(base)('linkedom')); break; } catch { /* next */ }
+  }
+  if (!parseHTML || !fly) console.log('  skip: DOM end-to-end (linkedom or the fly is missing)');
+  else {
+    const { window, document } = parseHTML('<!doctype html><html><body><main id="play"></main></body></html>');
+    globalThis.window = window; globalThis.document = document;
+    const realST = globalThis.setTimeout;
+    globalThis.setTimeout = (f) => realST(f, 0);          // no waits: pauses are for people
+    const errs = [];
+    const ow = console.warn, oe = console.error;
+    console.warn = (...a) => errs.push(a.join(' '));
+    console.error = (...a) => errs.push(a.join(' '));
+    const bots = await import('../game/bots.js');
+    const { Fly } = await import('../brain/fly.js');
+    const pre = JSON.parse(readFileSync(join(ROOT, 'data/pretrained.json'), 'utf8'));
+    const cons = {}, flies = {};
+    for (const side of ['A', 'B']) {
+      cons[side] = JSON.parse(readFileSync(join(ROOT, pre.wiring?.[side]?.file || 'data/connectome.json'), 'utf8'));
+      flies[side] = Fly.fromJSON(cons[side], pre[side]);
+    }
+    const { mountPlay } = await import('../ui/play/play.js');
+    const wait = ms => new Promise(r => realST(r, ms));
+    const ev = (el, type) => { const e = new window.Event(type, { bubbles: true }); Object.assign(e, { clientX: 0, clientY: 0, button: 0, pointerId: 1, pointerType: 'touch', detail: 1 }); el.dispatchEvent(e); };
+    const tap = el => { ev(el, 'pointerdown'); ev(el, 'pointerup'); };
+    for (const [opp, seed] of [['A', 41], ['B', 42], ['bot', 43]]) {
+      const root = document.getElementById('play');
+      const P = mountPlay(root, { rules, cards, bots, flies, connectomes: cons, sources: { A: 'hemibrain', B: 'FlyWire' }, seed });
+      const q = s => root.querySelector(s);
+      ev(q(`.pl-seg[data-k="opp"] button[data-v="${opp}"]`), 'click');
+      ev(q('.pl-go'), 'click');
+      ev(q('[data-call="tails"]'), 'click');
+      await wait(2);
+      ev(q('.pl-go'), 'click');
+      ev(q('[data-keep]'), 'click');
+      const pc = P.controller, hs = pc.humanSeat;
+      const bot = greedyBot();
+      let steps = 0, bad = '', guard = 0;
+      const seen = new Set();
+      while (pc.need() !== 'over' && guard++ < 6000 && !bad) {
+        await wait(1);
+        if (pc.need() !== 'human' || P.busy) continue;
+        const s = pc.state, n0 = pc.history.length;
+        const a = bot(s, rules.legalActions(s));
+        seen.add(a.type);
+        const handEls = [...root.querySelectorAll('.pl-hc')].filter(e => !e.hidden);
+        const perm = u => q(`.pl-perm[data-uid="${u}"]`);
+        if (a.type === 'land' || a.type === 'cast') {
+          const i = s.players[hs].hand.indexOf(a.card);
+          tap(handEls[i]); tap(handEls[i]);
+          if (a.target !== undefined) typeof a.target === 'string' ? ev(q(`.pl-sc${+a.target.slice(1)} .hd-life`), 'click') : tap(perm(a.target));
+        } else if (a.type === 'pass') ev(q('.pl-pri'), 'click');
+        else if (a.type === 'attack') { for (const u of a.attackers) tap(perm(u)); ev(q('.pl-pri'), 'click'); }
+        else { for (const [at, b] of a.blocks) { tap(perm(b)); tap(perm(at)); } ev(q('.pl-pri'), 'click'); }
+        for (let k = 0; k < 100 && pc.history.length === n0; k++) await wait(1);
+        const rec = pc.history[n0];
+        if (!rec || rec.who !== hs || canon(rec.action) !== canon(a)) bad = `${canon(a)} -> ${rec ? canon(rec.action) : 'nothing'} (${q('.pl-prompt').textContent})`;
+        steps++;
+      }
+      await wait(5);
+      ok(!bad, `DOM game vs ${opp}: every human action went through the screen${bad ? ': ' + bad : ''}`);
+      console.log(`  info: DOM game vs ${opp}: ${steps} human actions, types ${[...seen].join(",")}, result ${JSON.stringify(pc.result)}`);
+      ok(!!pc.result, `DOM game vs ${opp} ends (${steps} human actions, types ${[...seen].join(',')}, result ${JSON.stringify(pc.result)})`);
+      ok(!q('.pl-sheet').hidden && /win|Draw/.test(q('.pl-sheet h2').textContent), 'the result sheet shows');
+      ok(q(`.pl-sc${hs} .hd-name`).textContent === 'You', 'your scorecard says You');
+      if (opp !== 'bot') ok(q(`.pl-sc${pc.flySeat} .hd-top`).children.length >= 1 && /V [+−]/.test(q(`.pl-sc${pc.flySeat} .hd-vd`).textContent), 'the fly card shows its moves and its value');
+      ok((opp === 'A') === (hs === 1), 'against Fly A you sit right (seat 1); else left');
+      P.destroy();
+    }
+    console.warn = ow; console.error = oe;
+    globalThis.setTimeout = realST;
+    ok(errs.length === 0, `no console error or warn in DOM games (${errs.slice(0, 3).join(' | ')})`);
+  }
 }
 
 console.log(`play: ${pass} pass, ${fail} fail`);

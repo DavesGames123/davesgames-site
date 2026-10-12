@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  FLY DUEL · play mode dev page (not linked from the site)
+  Runs ui/play/play.js mountPlay() full window: you against a model fly
+  (data/pretrained.json, each fly on its own wiring file) or the greedy
+  bot. Without the weights or brain/fly.js, only the greedy bot is offered
+  and the setup sheet says so.
+  URL options:
+    ?table=3d   try the 3D table (ui/fly3d/scene.js). Play mode uses it only
+                when the scene gives pickPermanent(); else the flat table.
+  GREP MAP
+    grep -n 'async function loadFlies'  weights + wiring -> Fly objects
+    grep -n 'async function load3d'     optional 3D table
+    grep -n 'mountPlay('                the play screen
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fly Duel: play (dev)</title>
+<link rel="stylesheet" href="../../../../lib/sci.css">
+<link rel="stylesheet" href="../hud/hud.css">
+<link rel="stylesheet" href="./play.css">
+<style>
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: #05070c; color: #eef0f5; overflow: hidden; }
+  #play { position: fixed; inset: 0; height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+  #boot { position: fixed; inset: 0; display: grid; place-items: center; font: 14px var(--sci-sans, Inter, system-ui, sans-serif); color: #8a91a5; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "../../../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="boot">Loading the flies…</div>
+<main id="play" aria-label="Play a card duel against a model fruit fly"></main>
+<script type="module">
+import * as rules from '../../game/rules.js';
+import * as cards from '../../game/cards.js';
+import * as bots from '../../game/bots.js';
+import { mountPlay } from './play.js';
+
+const json = async u => { try { const r = await fetch(u); return r.ok ? await r.json() : null; } catch { return null; } };
+const params = new URLSearchParams(location.search);
+
+async function loadFlies() {
+  const pre = await json('../../data/pretrained.json');
+  const out = { flies: { A: null, B: null }, connectomes: { A: null, B: null }, sources: { A: 'hemibrain', B: 'FlyWire' }, trainedDecks: pre?.meta?.decks || null };
+  let Fly = null;
+  try { ({ Fly } = await import('../../brain/fly.js')); } catch (e) { console.warn('fly-duel play: brain/fly.js did not load', e); }
+  for (const side of ['A', 'B']) {
+    const w = pre?.wiring?.[side];
+    const file = w?.file || 'data/connectome.json';
+    const C = await json(`../../${file}`);
+    out.connectomes[side] = C;
+    if (w?.release) out.sources[side] = w.release.split(/[;(]/)[0].trim();
+    if (!Fly || !C) continue;
+    try { out.flies[side] = pre?.[side] ? Fly.fromJSON(C, pre[side]) : null; }
+    catch (e) { console.warn(`fly-duel play: Fly ${side} did not load`, e); }
+  }
+  return out;
+}
+
+async function load3d() {
+  if (params.get('table') !== '3d') return {};
+  try {
+    const mod = await import('../fly3d/scene.js');
+    const cv = document.createElement('canvas');
+    const scene = mod.createDuelScene(cv, { names: ['Fly A', 'Fly B'] });
+    if (typeof scene.pickPermanent !== 'function') { scene.dispose?.(); console.info('fly-duel play: the scene has no pickPermanent yet, the flat table is used'); return {}; }
+    let last = performance.now();
+    const frame = t => { scene.render?.(Math.min(0.05, (t - last) / 1000)); last = t; requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
+    return { scene, sceneEl: cv };
+  } catch (e) { console.info('fly-duel play: no 3D table', e); return {}; }
+}
+
+const [F, T, brainMod] = await Promise.all([loadFlies(), load3d(), import('../fly3d/brain3d.js').catch(() => null)]);
+document.getElementById('boot').remove();
+window.flyDuelPlay = mountPlay(document.getElementById('play'), {
+  rules, cards, bots, ...F, ...T,
+  brainMod: brainMod?.createBrainCard ? brainMod : null,
+});
+</script>
+</body>
+</html>
