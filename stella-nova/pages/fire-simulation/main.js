@@ -7,8 +7,9 @@
 //  on the saver plate.
 //
 //  OUR ADDITIONS (davesgames.io, not upstream): burner kinds and motions,
-//  wind, flame colour ramps and colour maps, glow, this controller, the sim
-//  kit GUI (widgets/sim-kit), the renderer and the screensaver.
+//  wind, flame palettes (palette.js, blackbody by default) and colour
+//  maps, glow, this controller, the sim kit GUI (widgets/sim-kit), the
+//  renderer and the screensaver.
 //
 //  Every upstream control lives on in the kit panel: Floor and Ring are the
 //  Fire choice and the Floor burns toggle, Swirls is "Show swirls",
@@ -19,7 +20,8 @@
 //  "function frame", "window.__fire"
 // ============================================================================
 import * as SV from './solver.js';
-import { draw, fitView, pickBurner, rampLut } from './render.js';
+import { draw, fitView, pickBurner } from './render.js';
+import { paletteLut } from './palette.js';
 import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
 import { installSaver } from './saver.js';
 import * as SC from './scene.js';
@@ -34,7 +36,7 @@ const R = {};
 const S = SV.createSim();
 let kit, cmMod = null, veil = 0, saverView = null;
 const RAMPS = new Map();
-const ramp = id => { if (!RAMPS.has(id)) { const f = SC.FIRE.find(x => x.id === id) || SC.FIRE[0]; RAMPS.set(id, rampLut(f.colors, SC.FIRE_STOPS)); } return RAMPS.get(id); };
+const ramp = id => { if (!RAMPS.has(id)) RAMPS.set(id, paletteLut(id)); return RAMPS.get(id); };
 
 function rebuild() {
   const st = kit.state, r = SC.sceneRng(kit.seed);

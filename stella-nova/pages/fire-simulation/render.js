@@ -2,14 +2,20 @@
 //  FIRE SIMULATION  ·  pages/fire-simulation/render.js — Canvas 2D renderer
 // ----------------------------------------------------------------------------
 //  Our code (davesgames.io). Temperature goes into an RGBA image at one
-//  pixel per cell through a flame ramp (FIRE in scene.js; 'Classic' is the
-//  upstream getFireColor) or a colour map. Cold cells are transparent, so
-//  the theme background shows. A glow pass draws a quarter-size copy on
-//  top with additive blending. Burners and swirls draw as shapes.
+//  pixel per cell. Two kinds of LUT:
+//    palette LUT  { n, rgba, glow } from palette.js paletteLut(): straight
+//                 sRGB colour and alpha of flame and smoke (blackbody, tone
+//                 mapped), and an emission-only glow table
+//    byte LUT     768 bytes RGB (a colour map, or rampLut()): alpha = 3.5 t
+//  Cold cells are transparent, so the theme background shows. The glow
+//  pass draws a quarter-size image on top with additive blending. For a
+//  palette LUT that image holds emission only, so smoke does not glow.
+//  Burners and swirls draw as shapes.
 //
 //  rampLut(colors, stops)   768-byte LUT of a flame ramp
 //  fitView(S, rect, cam), draw(ctx, S, view, look, cache, makeCanvas, cw, ch)
-//  grep -n targets: "export function rampLut", "function heatImage", "export function draw"
+//  grep -n targets: "export function rampLut", "function heatImage",
+//  "function glowImage", "export function draw"
 // ============================================================================
 import { burnCell } from './solver.js';
 
@@ -34,20 +40,48 @@ function heatImage(S, look, cache, makeCanvas) {
   if (!cache.cv || cache.cv.width !== NX || cache.cv.height !== NY) {
     cache.cv = makeCanvas(NX, NY); cache.cx = cache.cv.getContext('2d'); cache.img = cache.cx.createImageData(NX, NY);
     cache.gw = makeCanvas(Math.max(2, NX >> 2), Math.max(2, NY >> 2)); cache.gx = cache.gw.getContext('2d');
+    cache.gimg = cache.gx.createImageData(cache.gw.width, cache.gw.height);
   }
   const d = cache.img.data, lut = look.lut, speed = look.colorBy === 'speed';
+  const P = lut && lut.rgba ? lut.rgba : null, PN = P ? lut.n - 1 : 0;
   let vmax = 1e-6;
   if (speed) for (let k = 0; k < f.numCells; k++) vmax = Math.max(vmax, Math.abs(f.v[k]), Math.abs(f.u[k]));
   for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
     const k = i * n + j, o = ((NY - 1 - j) * NX + i) * 4;
     let t = speed ? Math.min(1, Math.hypot(f.u[k], f.v[k]) / vmax) : f.t[k];
     if (!(t > 0)) t = 0; else if (t > 1) t = 1;
-    const q = (t * 255 | 0) * 3;
-    d[o] = lut[q]; d[o + 1] = lut[q + 1]; d[o + 2] = lut[q + 2];
-    d[o + 3] = speed ? 255 : Math.min(255, t * 255 * 3.5);
+    if (P) {
+      const q = ((t * PN + 0.5) | 0) * 4;
+      d[o] = P[q]; d[o + 1] = P[q + 1]; d[o + 2] = P[q + 2]; d[o + 3] = speed ? 255 : P[q + 3];
+    } else {
+      const q = (t * 255 | 0) * 3;
+      d[o] = lut[q]; d[o + 1] = lut[q + 1]; d[o + 2] = lut[q + 2];
+      d[o + 3] = speed ? 255 : Math.min(255, t * 255 * 3.5);
+    }
   }
   cache.cx.putImageData(cache.img, 0, 0);
   return cache.cv;
+}
+// Quarter-size emission image for the glow pass (palette LUT only): each
+// pixel is the mean glow colour of a 4 x 4 block of cells, weighted by
+// the glow alpha. Smoke has zero glow alpha, so smoke does not glow.
+function glowImage(S, look, cache) {
+  const f = S.f, n = f.numY, NX = f.numX, NY = f.numY, G = look.lut.glow, PN = look.lut.n - 1;
+  const GW = cache.gw.width, GH = cache.gw.height, d = cache.gimg.data;
+  for (let gj = 0; gj < GH; gj++) for (let gi = 0; gi < GW; gi++) {
+    let r = 0, g = 0, b = 0, a = 0, c = 0;
+    const i1 = Math.min(NX, gi * 4 + 4), j1 = Math.min(NY, gj * 4 + 4);
+    for (let i = gi * 4; i < i1; i++) for (let j = gj * 4; j < j1; j++) {
+      let t = f.t[i * n + j]; if (!(t > 0)) t = 0; else if (t > 1) t = 1;
+      const q = ((t * PN + 0.5) | 0) * 4, w = G[q + 3];
+      r += G[q] * w; g += G[q + 1] * w; b += G[q + 2] * w; a += w; c++;
+    }
+    const o = ((GH - 1 - gj) * GW + gi) * 4;
+    if (a > 0) { d[o] = r / a; d[o + 1] = g / a; d[o + 2] = b / a; d[o + 3] = a / Math.max(1, c); }
+    else d[o] = d[o + 1] = d[o + 2] = d[o + 3] = 0;
+  }
+  cache.gx.putImageData(cache.gimg, 0, 0);
+  return cache.gw;
 }
 
 export function draw(ctx, S, view, look, cache, makeCanvas, cw, ch) {
@@ -62,8 +96,8 @@ export function draw(ctx, S, view, look, cache, makeCanvas, cw, ch) {
   ctx.save(); ctx.imageSmoothingEnabled = true;
   ctx.drawImage(img, x0, y0, w, h);
   if (look.glow > 0 && look.colorBy !== 'speed') {
-    cache.gx.clearRect(0, 0, cache.gw.width, cache.gw.height);
-    cache.gx.drawImage(img, 0, 0, cache.gw.width, cache.gw.height);
+    if (look.lut && look.lut.glow) glowImage(S, look, cache);
+    else { cache.gx.clearRect(0, 0, cache.gw.width, cache.gw.height); cache.gx.drawImage(img, 0, 0, cache.gw.width, cache.gw.height); }
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = look.glow * 0.7;
     ctx.drawImage(cache.gw, x0 - w * 0.01, y0 - h * 0.02, w * 1.02, h * 1.03);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';

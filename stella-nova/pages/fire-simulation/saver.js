@@ -17,14 +17,14 @@ const TEX_DIV = String.raw`\nabla\cdot\mathbf{u} = 0`;
 
 const SHOTS = [
   { key: 'ring', title: 'Burning ring', sub: 'Hot cells rise, cool and turn to smoke', tex: TEX_HEAT,
-    scene: r => ({ preset: 'ring', nBurn: 1, motion: r.pick(['sweep', 'orbit']), fire: r.pick(['upstream', 'campfire']), colorBy: 'flame', showBurners: true }), warm: 120 },
+    scene: r => ({ preset: 'ring', nBurn: 1, motion: r.pick(['sweep', 'orbit']), fire: r.pick(['blackbody', 'blackbody', 'campfire']), colorBy: 'flame', showBurners: true }), warm: 120 },
   { key: 'floor', title: 'Burning floor', sub: 'The whole floor burns; an unlit ring stirs the air', tex: TEX_LIFT,
-    scene: r => ({ preset: 'floor', floor: true, fireCool: 1.2 + 0.6 * r(), lift: 2.5 + r(), smokeCool: 0.4, motion: 'orbit', fire: r.pick(['upstream', 'campfire', 'blue', 'violet']), colorBy: 'flame' }), warm: 120 },
+    scene: r => ({ preset: 'floor', floor: true, fireCool: 1.2 + 0.6 * r(), lift: 2.5 + r(), smokeCool: 0.4, motion: 'orbit', fire: r.pick(['blackbody', 'campfire', 'white', 'violet']), colorBy: 'flame' }), warm: 120 },
   { key: 'campfire', title: 'Campfire', sub: 'Logs side by side feed one plume', tex: TEX_LIFT,
     scene: r => ({ preset: 'campfire', nBurn: r.int(2, 4), motion: 'static', fire: 'campfire', wind: (r() - 0.5) * 0.6, colorBy: 'flame', theme: r.pick(['night', 'ember', 'abyss']) }), warm: 150,
     camera: () => ({ zoom: 1.35, cx: 0.5, cy: 0.4 }) },
   { key: 'torches', title: 'Torches', sub: 'Jets of hot gas in a row', tex: TEX_LIFT,
-    scene: r => ({ preset: 'torches', nBurn: r.int(3, 6), motion: r.pick(['static', 'bob']), fire: r.pick(['blue', 'green', 'violet', 'white', 'ghost']), colorBy: 'flame' }), warm: 120 },
+    scene: r => ({ preset: 'torches', nBurn: r.int(3, 6), motion: r.pick(['static', 'bob']), fire: r.pick(['blue', 'green', 'violet', 'sodium', 'white']), colorBy: 'flame' }), warm: 120 },
   { key: 'swirls', title: 'Swirls', sub: 'Random vortices start in the flame and decay in one second', tex: TEX_SWIRL,
     scene: r => ({ preset: 'ring', floor: false, prob: 100, showSwirls: true, swirlW: 25 + 10 * r(), motion: 'sweep', colorBy: 'flame' }), warm: 120 },
   { key: 'laminar', title: 'No swirls', sub: 'Swirl probability 0: a smooth, laminar plume', tex: TEX_DIV,
@@ -32,7 +32,7 @@ const SHOTS = [
   { key: 'wind', title: 'In the wind', sub: 'A side draft bends the plume', tex: TEX_LIFT,
     scene: r => ({ preset: r.pick(['mixed', 'campfire']), wind: (r() < 0.5 ? -1 : 1) * (0.5 + 0.5 * r()), lift: 3 + 2 * r(), colorBy: 'flame' }), warm: 160 },
   { key: 'blaze', title: 'Ring over fire', sub: 'The floor and a fast ring both burn', tex: TEX_HEAT,
-    scene: r => ({ preset: 'both', floor: true, fireCool: 1.3 + 0.5 * r(), lift: 2.5 + r(), smokeCool: 0.4, motion: 'orbit', speed: 0.25 + 0.1 * r(), fire: r.pick(['upstream', 'campfire', 'violet']), colorBy: 'flame', glow: 0.8 }), warm: 120 },
+    scene: r => ({ preset: 'both', floor: true, fireCool: 1.3 + 0.5 * r(), lift: 2.5 + r(), smokeCool: 0.4, motion: 'orbit', speed: 0.25 + 0.1 * r(), fire: r.pick(['blackbody', 'campfire', 'white']), colorBy: 'flame', glow: 0.8 }), warm: 120 },
 ];
 
 export function installSaver(P) {

@@ -8,11 +8,15 @@
 //  determinism    one seed, one scene, one result (seeded swirls)
 //  hash, guard    share link round-trip; floor follows the preset; smoke
 //                 cools slower than fire
+//  palette        blackbody chain: Planck locus check, hue and luminance
+//                 rise with t, no green or blue cast, smoke does not glow,
+//                 the renderer LUT matches palette.js per cell
 //  render, saver, page   as in the other sim kit pages
 // ============================================================================
 import * as SV from './solver.js';
 import * as SC from './scene.js';
 import { draw, fitView, rampLut } from './render.js';
+import * as PL from './palette.js';
 import * as K from '../../widgets/sim-kit/core.js';
 import { installDom, fakeCtx, makeCanvas } from '../../widgets/sim-kit/test/stubs.mjs';
 
@@ -66,15 +70,85 @@ function heatCentroid(S) { const f = S.f, n = f.numY; let w = 0, y = 0; for (let
 }
 {
   let bad = 0, calls = 0; const t = K.themeById('night');
-  for (const [preset, colorBy, fire] of [['ring', 'flame', 'upstream'], ['campfire', 'flame', 'campfire'], ['torches', 'map', 'blue'], ['mixed', 'speed', 'violet']]) {
+  for (const [preset, colorBy, fire] of [['ring', 'flame', 'blackbody'], ['ring', 'flame', 'upstream'], ['campfire', 'flame', 'campfire'], ['torches', 'map', 'blue'], ['mixed', 'speed', 'violet']]) {
     const st = sceneOf(5, { preset, colorBy, fire, showSwirls: true, nBurn: 3 }), S = run(st, 5, 40, 10000), ctx = fakeCtx(800, 500);
-    const f = SC.FIRE.find(x => x.id === fire);
-    draw(ctx, S, fitView(S, { x: 0, y: 0, w: 800, h: 500 }), { bg: t.bg, bg2: t.bg2, ink: t.ink, wall: t.wall, accent: t.accent, burner: '#444', log: '#5b3a24', lut: rampLut(f.colors, SC.FIRE_STOPS), colorBy, glow: 0.6, showBurners: true, showSwirls: true, veil: 0.2 }, {}, makeCanvas, 800, 500);
+    draw(ctx, S, fitView(S, { x: 0, y: 0, w: 800, h: 500 }), { bg: t.bg, bg2: t.bg2, ink: t.ink, wall: t.wall, accent: t.accent, burner: '#444', log: '#5b3a24', lut: PL.paletteLut(fire), colorBy, glow: 0.6, showBurners: true, showSwirls: true, veil: 0.2 }, {}, makeCanvas, 800, 500);
     bad += ctx.bad; calls += ctx.calls;
   }
   ok(bad === 0 && calls > 20, 'render: every mode draws with finite canvas calls', `${calls} calls`);
-  const up = rampLut(SC.FIRE[0].colors, SC.FIRE_STOPS);
+  const up = rampLut(SC.FIRE.find(x => x.id === 'upstream').colors, SC.FIRE_STOPS);
   ok(up[0] === 0 && up[255 * 3] === 255 && up[255 * 3 + 1] === 255 && up[255 * 3 + 2] === 0, 'render: the Classic ramp runs black to yellow like upstream getFireColor');
+}
+{
+  // palette: the blackbody chain in palette.js
+  const D65 = PL.planckRGB(6504);
+  ok(D65.every(v => v > 0.93), 'palette: Planck 6504 K is near white in linear sRGB (CIE 1931 fit + XYZ matrix)', D65.map(v => v.toFixed(3)).join(' '));
+  const lo = PL.planckRGB(1000), mid = PL.planckRGB(2000);
+  ok(lo[0] === 1 && lo[1] < 0.1 && lo[2] < 0.01 && mid[1] > 0.2 && mid[1] < 0.35, 'palette: Planck 1000 K is red, 2000 K is orange', `1000 K ${lo.map(v => v.toFixed(3)).join(' ')}, 2000 K ${mid.map(v => v.toFixed(3)).join(' ')}`);
+  const E = 0.5 / 255;
+  for (const id of ['blackbody', 'campfire', 'white']) {
+    const p = PL.paletteById(id), N = 141, F = [], A = [];
+    for (let k = 0; k < N; k++) { const t = 0.3 + 0.7 * k / (N - 1); F.push(PL.flameDisplay(p, t)); A.push(PL.samplePalette(p, t).rgb); }
+    const Y = F.map(c => PL.luminance(c.map(PL.srgbDecode)));
+    let order = 0, ratio = 0, lum = 0, hueDrop = 0, tailDrop = 0;
+    for (let k = 0; k < N; k++) {
+      for (const c of [F[k], A[k]]) if (c[1] > c[0] + E || c[2] > c[1] + E) order++;
+      if (k && !(Math.max(...F[k - 1]) > 0)) { if (!(Y[k] > Y[k - 1])) lum++; continue; }
+      if (k) {
+        // a ratio drop counts only where that channel shows (>= 1/255): the
+        // ACES toe bends G/R a little in the first 2 % of the fade-in
+        if ((F[k][1] >= 1 / 255 && F[k][1] / F[k][0] < F[k - 1][1] / F[k - 1][0] - 1e-6) || (F[k][2] >= 1 / 255 && F[k][2] / F[k][0] < F[k - 1][2] / F[k - 1][0] - 1e-6)) ratio++;
+        if (!(Y[k] > Y[k - 1])) lum++;
+        const sat = 1 - Math.min(...F[k]) / Math.max(...F[k]), dh = PL.hue(F[k - 1]) - PL.hue(F[k]);
+        if (sat >= 0.5 && dh > 1e-6 && F[k][1] >= 1 / 255) hueDrop++;
+        if (sat < 0.5) tailDrop = Math.max(tailDrop, dh);
+      }
+    }
+    const h0 = PL.hue(F[1]), hN = PL.hue(F[N - 1]), cN = F[N - 1];
+    ok(order === 0, `palette ${id}: red >= green >= blue at every flame sample (no green, no magenta)`, `${N} flame + ${N} composited samples`);
+    ok(ratio === 0 && lum === 0, `palette ${id}: G/R and B/R rise and luminance rises with t (red, orange, yellow, white)`, `Y ${Y[0].toFixed(4)} .. ${Y[N - 1].toFixed(3)}`);
+    ok(hueDrop === 0 && h0 < 8, `palette ${id}: hue rises from red while the colour is saturated`, `hue ${h0.toFixed(1)} .. ${hN.toFixed(1)} deg; near-white tail drift ${tailDrop.toFixed(1)} deg`);
+    if (id === 'blackbody') ok(Math.min(...cN) > 0.75 && F[0].every(v => v === 0) && F[14][0] < 0.45 && F[14][1] < 0.1 * F[14][0], 'palette blackbody: emission starts at zero, the edge is a dim deep red, the core is near white', `t 0.37 ${F[14].map(v => Math.round(v * 255))}, core ${cN.map(v => Math.round(v * 255))}`);
+  }
+  {
+    let glow = 0, light = 0, order = 0, prevA = 0, mono = 0;
+    for (let k = 1; k < 60; k++) {
+      const t = 0.3 * k / 60, s = PL.samplePalette(PL.paletteById('blackbody'), t);
+      if (Math.max(...s.emit) > 0) glow++;
+      if (Math.max(...s.rgb) > 70 / 255) light++;
+      if (s.rgb[1] > s.rgb[0] + E || s.rgb[2] > s.rgb[1] + E) order++;
+      if (!(s.a > prevA)) mono++; prevA = s.a;
+    }
+    ok(!glow && !light && !order && !mono, 'palette: smoke (t < 0.3) absorbs and does not glow: dark grey-brown, alpha rises with t');
+  }
+  {
+    let worst = 0, cells = 0;
+    for (const id of ['blackbody', 'campfire', 'sodium', 'blue']) {
+      const L = PL.paletteLut(id), p = PL.paletteById(id);
+      for (let k = 0; k < L.n; k++) { const s = PL.samplePalette(p, k / (L.n - 1)); for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(L.rgba[k * 4 + c] - Math.round(s.rgb[c] * 255))); worst = Math.max(worst, Math.abs(L.rgba[k * 4 + 3] - Math.round(s.a * 255))); }
+    }
+    const st = sceneOf(11, { preset: 'ring', colorBy: 'flame', fire: 'blackbody' }), S = run(st, 11, 60, 10000), cache = {}, t = K.themeById('night');
+    draw(fakeCtx(800, 500), S, fitView(S, { x: 0, y: 0, w: 800, h: 500 }), { bg: t.bg, bg2: t.bg2, ink: t.ink, wall: t.wall, accent: t.accent, burner: '#444', log: '#5b3a24', lut: PL.paletteLut('blackbody'), colorBy: 'flame', glow: 0.6, showBurners: true, showSwirls: false, veil: 0 }, cache, makeCanvas, 800, 500);
+    const f = S.f, n = f.numY, d = cache.img.data, p = PL.paletteById('blackbody');
+    let px = 0;
+    for (let i = 0; i < f.numX; i++) for (let j = 0; j < n; j++) {
+      const tv = Math.min(1, Math.max(0, f.t[i * n + j])), s = PL.samplePalette(p, tv), o = ((n - 1 - j) * f.numX + i) * 4;
+      if (tv > 0.3) cells++;
+      // premultiplied: the colour of a near-transparent cell does not show
+      for (let c = 0; c < 3; c++) px = Math.max(px, Math.abs(d[o + c] * d[o + 3] / 255 - s.rgb[c] * s.a * 255));
+      px = Math.max(px, Math.abs(d[o + 3] - s.a * 255));
+    }
+    ok(worst === 0 && px <= 3, 'palette: the renderer LUT matches palette.js (table exact, per cell within 3/255 premultiplied after the 1024-step lookup)', `table max diff ${worst}, per-cell max diff ${px.toFixed(2)} over ${f.numCells} cells (${cells} flame)`);
+  }
+  if (process.env.FIRE_TABLE) {
+    console.log('\n  t     T (K)   flame sRGB      hue   Y      pixel sRGB + alpha');
+    const p = PL.paletteById('blackbody');
+    for (const t of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]) {
+      const T = PL.temperatureAt(p, t), F = PL.flameDisplay(p, t), s = PL.samplePalette(p, t), hx = c => '#' + c.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+      console.log(`  ${t.toFixed(1)}  ${T == null ? ' smoke' : String(Math.round(T)).padStart(6)}  ${hx(F)}  ${PL.hue(F).toFixed(1).padStart(5)}  ${PL.luminance(F.map(PL.srgbDecode)).toFixed(3)}  ${hx(s.rgb)} a ${s.a.toFixed(2)}`);
+    }
+    console.log('');
+  }
 }
 {
   const { SHOTS } = await import('./saver.js');

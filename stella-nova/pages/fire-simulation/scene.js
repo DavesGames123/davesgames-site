@@ -3,26 +3,21 @@
 // ----------------------------------------------------------------------------
 //  No DOM, so main.js and tests.mjs use the same rules:
 //    makeSchema(phone), REBUILD, guard(next), sceneConfig(st, r),
-//    applyParams(S, st), PALETTES (fire colour ramps)
+//    applyParams(S, st), FIRE (flame palettes from palette.js)
 //  Our code (davesgames.io); the upstream credit is in solver.js.
 //  grep -n targets: "export function makeSchema", "export function guard",
 //  "export function sceneConfig", "export function applyParams"
 // ============================================================================
 import * as K from '../../widgets/sim-kit/core.js';
 import { BURNERS } from './solver.js';
+import { PALETTES, RAMP_STOPS, swatchColors } from './palette.js';
 
-// Fire ramps (t = 0 cold .. 1 hot). 'upstream' is getFireColor of 21-fire.html.
-export const FIRE = [
-  { id: 'upstream', label: 'Classic', colors: ['#000000', '#333333', '#ff1a1a', '#ff9900', '#ffff00'] },
-  { id: 'campfire', label: 'Campfire', colors: ['#050302', '#3a2a22', '#c2300c', '#ff8a1c', '#fff2b0'] },
-  { id: 'blue', label: 'Gas flame', colors: ['#010208', '#14203a', '#1f5bff', '#79c6ff', '#f2fbff'] },
-  { id: 'green', label: 'Copper', colors: ['#020502', '#123220', '#13b26b', '#7dffb0', '#f4fff4'] },
-  { id: 'violet', label: 'Potassium', colors: ['#050208', '#2a1838', '#9b37ff', '#e09bff', '#fff0ff'] },
-  { id: 'white', label: 'Magnesium', colors: ['#020202', '#2b2b2b', '#c7c9d6', '#f2f4ff', '#ffffff'] },
-  { id: 'ghost', label: 'Ghost', colors: ['#000306', '#062430', '#18a3b8', '#9ef3ff', '#ffffff'] },
-];
-// stops of each ramp at t = 0, 0.3, 0.5, 0.75, 1 (upstream breaks)
-export const FIRE_STOPS = [0, 0.3, 0.5, 0.75, 1];
+// Flame palettes (palette.js). 'blackbody' is the default: Planck colour,
+// T^4 intensity, ACES tone map, absorbing smoke. 'upstream' is the
+// getFireColor ramp of 21-fire.html. colors = the swatch in the GUI.
+export const FIRE = PALETTES.map(p => ({ id: p.id, label: p.label, kind: p.kind, colors: swatchColors(p.id) }));
+// stops of the stylised ramps at t = 0, 0.3, 0.5, 0.75, 1 (upstream breaks)
+export const FIRE_STOPS = RAMP_STOPS;
 
 export function makeSchema(PHONE) {
   return { groups: [
@@ -58,7 +53,7 @@ export function makeSchema(PHONE) {
       { key: 'showSwirls', type: 'toggle', label: 'Show swirls', value: false, random: { p: 0.15 } },
     ] },
     { id: 'look', label: 'Look', controls: [
-      { key: 'fire', type: 'swatch', label: 'Flame colour', value: 'upstream', options: FIRE.map(f => ({ id: f.id, label: f.label, colors: f.colors })), random: { weights: { upstream: 3, campfire: 3, blue: 1, green: 1, violet: 1, white: 1, ghost: 1 } } },
+      { key: 'fire', type: 'swatch', label: 'Flame colour', value: 'blackbody', options: FIRE.map(f => ({ id: f.id, label: f.label, colors: f.colors })), random: { weights: { blackbody: 8, campfire: 3, sodium: 1, blue: 1, green: 1, violet: 1, white: 1, upstream: 1, ghost: 0 } } },
       { key: 'colorBy', type: 'choice', label: 'Colour by', value: 'flame', options: [{ id: 'flame', label: 'Flame' }, { id: 'map', label: 'Colour map' }, { id: 'speed', label: 'Speed' }], random: { weights: { flame: 6, map: 2, speed: 1 } } },
       { key: 'cmap', type: 'cmap', label: 'Colour map', value: 'inferno', random: { pick: ['inferno', 'magma', 'hot-iron', 'ember', 'plasma', 'gold-leaf', 'copper', 'rocket', 'synthwave', 'ice', 'aurora', 'nebula', 'turbo'] } },
       { key: 'glow', type: 'range', label: 'Glow', min: 0, max: 1, step: 0.05, value: 0.6, random: { min: 0.3, max: 0.9 } },
