@@ -4,9 +4,14 @@
 //  Two fragment passes on one WebGL2 context.
 //
 //  PHASOR PASS (only when the antenna or the view changes). Each pixel of the
-//  view plane sums the exact Hertzian element fields of em.js (near,
-//  intermediate and far terms) over the element texture, and writes the
-//  complex phasors to four RGBA32F targets (multiple render targets):
+//  view plane sums the exact fields of em.js and writes the complex phasors
+//  to four RGBA32F targets (multiple render targets). Two source kinds:
+//    wire nodes (dipoles, arrays, Yagi-Uda): the closed-form PWS field, one
+//      point term per node (em.js "WIRE NODES"). 3 to 160 nodes, so the pass
+//      runs at the full canvas size. The elements then give only A_z (psi 3).
+//    elements (loop, Hertzian dipole): the Hertzian element sum (near,
+//      intermediate and far terms).
+//  The targets:
 //      T0 = Ex re, Ex im, Ey re, Ey im      T1 = Ez re, Ez im, Hx re, Hx im
 //      T2 = Hy re, Hy im, Hz re, Hz im      T3 = psi re, psi im
 //  psi is a flux function. Its contours are exact field lines:
@@ -19,15 +24,21 @@
 //  colour scale.
 //
 //  DISPLAY PASS (every frame). Re{F e^{jwt}} = F_re cos wt - F_im sin wt,
-//  then a colour map (signed component, in-plane magnitude, or the
-//  instantaneous Poynting magnitude), the psi contours,
+//  then a colour map, the psi contours,
 //  a faint wavelength grid, and, in the screensaver, the 2D overlay canvas as
 //  a texture so the returned canvas holds the whole picture.
 //  The float targets are read with texelFetch and a manual bilinear filter,
 //  because iOS has no OES_texture_float_linear.
 //
+//  COLOUR MAPS. The colours are the symbol colours of lib/sci.css, so the
+//  field on screen and its symbol in the equations match:
+//      E   (--m2, orange)  + orange, - rose, through the dark ground
+//      B   (--m1, blue)    + blue,   - violet, through the dark ground
+//      S   (--m3, green)   |E x H| on a log ramp: dark, green, pale
+//  A peak goes toward white. The ramps are linear in sRGB on a dark ground.
+//
 //  grep -n: "const PHASOR_FS"  "const DISPLAY_FS"  "export function createField"
-//           "function phasorPass"  "readProbe"  "draw(p)"
+//           "function phasorPass"  "readProbe"  "draw(p)"  "function setNodes"
 // ============================================================================
 
 const VS = `#version 300 es
@@ -41,6 +52,8 @@ precision highp float;
 precision highp int;
 uniform highp sampler2D uElems;
 uniform int uN;
+uniform highp sampler2D uNodes;   // column i: row 0 = x y z c.re, row 1 = c.im
+uniform int uNN;                  // node count (0: the elements give E and H)
 uniform vec2 uOrigin;   // plane coords of pixel (0, 0) centre
 uniform vec2 uStep;     // plane units per pixel
 uniform vec3 uAxU;
@@ -58,18 +71,49 @@ void main(){
   vec2 uv = uOrigin + (gl_FragCoord.xy - 0.5) * uStep;
   vec3 p = uv.x * uAxU + uv.y * uAxV;
   vec3 Er = vec3(0.0), Ei = vec3(0.0), Hr = vec3(0.0), Hi = vec3(0.0), Ar = vec3(0.0), Ai = vec3(0.0);
+  vec2 G = vec2(0.0);   // sum of c_j e^{-jkR_j}: 4 pi rho H_phi / j, the psi 1 flux function
+  float s2 = uSoft * uSoft;
+  const float Q = ETA / FOUR_PI;
   for (int i = 0; i < 1024; i++) {
-    if (i >= uN) break;
+    if (i >= uNN) break;
+    vec4 a = texelFetch(uNodes, ivec2(i, 0), 0);
+    float ci = texelFetch(uNodes, ivec2(i, 1), 0).x;
+    vec3 d = p - a.xyz;
+    float rr = d.x * d.x + d.y * d.y;
+    float R = sqrt(rr + d.z * d.z + s2);
+    float c = cos(K * R), sn = sin(K * R);
+    float er = a.w * c + ci * sn, ei = ci * c - a.w * sn;
+    G += vec2(er, ei);
+    Er.z += Q * ei / R;
+    Ei.z -= Q * er / R;
+    float r2 = rr + s2;
+    float fe = Q * d.z / (R * r2), fh = 1.0 / (FOUR_PI * r2);
+    Er.xy += (-ei * fe) * d.xy;
+    Ei.xy += (er * fe) * d.xy;
+    Hr.x += ei * fh * d.y;
+    Hi.x -= er * fh * d.y;
+    Hr.y -= ei * fh * d.x;
+    Hi.y += er * fh * d.x;
+  }
+  // With nodes, the elements run only for A_z (psi 3).
+  bool elemEH = uNN == 0;
+  int nE = (elemEH || uPsi == 3) ? uN : 0;
+  for (int i = 0; i < 1024; i++) {
+    if (i >= nE) break;
     vec4 a = texelFetch(uElems, ivec2(i, 0), 0);
     vec4 b = texelFetch(uElems, ivec2(i, 1), 0);
     vec3 d = p - a.xyz;
     float dl = length(d);
-    float R = sqrt(dl * dl + uSoft * uSoft);
+    float R = sqrt(dl * dl + s2);
     vec3 rh = d / max(dl, 1e-7);
     vec3 u = b.xyz;
     float x = K * R, ix = 1.0 / x;
     float c = cos(x), s = -sin(x);
     float er = a.w * c - b.w * s, ei = a.w * s + b.w * c;
+    float ia = 1.0 / (FOUR_PI * R);
+    Ar += er * ia * u;
+    Ai += ei * ia * u;
+    if (!elemEH) continue;
     float kr = K / (FOUR_PI * R);
     float p2 = 1.0 - ix * ix;
     float A_r = ETA * kr * (ix * er - p2 * ei), A_i = ETA * kr * (ix * ei + p2 * er);
@@ -82,15 +126,13 @@ void main(){
     vec3 cr = cross(u, rh);
     Hr += C_r * cr;
     Hi += C_i * cr;
-    float ia = 1.0 / (FOUR_PI * R);
-    Ar += er * ia * u;
-    Ai += ei * ia * u;
   }
   o0 = vec4(Er.x, Ei.x, Er.y, Ei.y);
   o1 = vec4(Er.z, Ei.z, Hr.x, Hi.x);
   o2 = vec4(Hr.y, Hi.y, Hr.z, Hi.z);
   vec2 psi = vec2(0.0);
-  if (uPsi == 1) psi = vec2(p.x * Hi.y, -p.x * Hr.y);
+  // psi 1 = Re{-j rho H_phi e^{jwt}}; with nodes, -j rho H_phi = G/(4 pi) exactly.
+  if (uPsi == 1) psi = uNN > 0 ? G / FOUR_PI : vec2(p.x * Hi.y, -p.x * Hr.y);
   else if (uPsi == 2) psi = vec2(p.x * Ar.y, p.x * Ai.y);
   else if (uPsi == 3) psi = vec2(Ar.z, Ai.z);
   o3 = vec4(psi, 0.0, 1.0);
@@ -145,14 +187,16 @@ vec3 diverge(float v, vec3 neg, vec3 pos) {
   float a = clamp(abs(v), 0.0, 1.0);
   vec3 c = v < 0.0 ? neg : pos;
   vec3 col = mix(bg, c, pow(a, 0.85));
-  col = mix(col, vec3(1.0, 0.97, 0.92), smoothstep(0.72, 1.05, a) * 0.55);
+  col = mix(col, vec3(1.0, 0.97, 0.94), smoothstep(0.78, 1.08, a) * 0.4);
   return col;
 }
-vec3 inferno(float t) {
+// Energy flow, --m3 #86dc7c: dark ground, deep green, green, pale.
+vec3 flowRamp(float t) {
   t = clamp(t, 0.0, 1.0);
-  vec3 c0 = vec3(0.0002, 0.0016, -0.0194), c1 = vec3(0.1065, 0.5640, 3.9327), c2 = vec3(11.6024, -3.9728, -15.9423);
-  vec3 c3 = vec3(-41.7039, 17.4364, 44.3541), c4 = vec3(77.1629, -33.4023, -81.8073), c5 = vec3(-71.3194, 32.6260, 73.2095), c6 = vec3(25.1311, -12.2426, -23.0703);
-  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), 0.0, 1.0);
+  vec3 c1 = vec3(0.05, 0.16, 0.12), c2 = vec3(0.525, 0.863, 0.486), c3 = vec3(0.95, 1.0, 0.9);
+  vec3 a = mix(bg, c1, smoothstep(0.0, 0.35, t));
+  a = mix(a, c2, smoothstep(0.3, 0.8, t));
+  return mix(a, c3, smoothstep(0.8, 1.05, t));
 }
 void main(){
   vec2 tc = gl_FragCoord.xy * uRatio - 0.5;
@@ -168,8 +212,9 @@ void main(){
   vec3 col;
   if (uMode <= 1) {
     vec3 F = uMode == 0 ? E : H;
-    vec3 neg = uMode == 0 ? vec3(0.22, 0.78, 0.93) : vec3(0.45, 0.42, 1.0);
-    vec3 pos = uMode == 0 ? vec3(1.0, 0.62, 0.32) : vec3(1.0, 0.36, 0.66);
+    // E: --m2 #ff9a62 and a rose; B: --m1 #62c4ff and a violet.
+    vec3 pos = uMode == 0 ? vec3(1.0, 0.604, 0.384) : vec3(0.384, 0.769, 1.0);
+    vec3 neg = uMode == 0 ? vec3(0.86, 0.33, 0.52) : vec3(0.55, 0.47, 1.0);
     if (uComp.w > 0.5) {
       float m = length(vec2(dot(F, uAxU), dot(F, uAxV))) * uGain * w;
       float t = compress(m);
@@ -182,7 +227,7 @@ void main(){
   } else {
     float m = length(cross(E, H)) * uGain * w * w;
     float t = uLog == 1 ? log(1.0 + 60.0 * m) / log(61.0) : m / (1.0 + m) * 1.4;
-    col = inferno(t * 0.95);
+    col = flowRamp(t);
   }
   // faint wavelength grid
   if (uGrid > 0.0) {
@@ -250,8 +295,8 @@ export function createField(canvas) {
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
 
-  const elemTex = gl.createTexture();
-  let nElem = 0;
+  const elemTex = gl.createTexture(), nodeTex = gl.createTexture();
+  let nElem = 0, nNode = 0;
   const overlayTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, overlayTex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
@@ -299,6 +344,22 @@ export function createField(canvas) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     if (soft != null) view.soft = soft;
   }
+  // Wire nodes (em.js NSTRIDE 6: x y z c.re c.im spare), or null.
+  function setNodes(N) {
+    nNode = N ? Math.min(1024, N.n) : 0;
+    const w = Math.max(1, nNode), data = new Float32Array(w * 2 * 4);
+    for (let i = 0; i < nNode; i++) {
+      const o = i * 6;
+      data.set([N.d[o], N.d[o + 1], N.d[o + 2], N.d[o + 3]], i * 4);
+      data[(w + i) * 4] = N.d[o + 4];
+    }
+    gl.bindTexture(gl.TEXTURE_2D, nodeTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, 2, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  }
+  // Relative cost of one phasor pixel: a node term is about half an element term.
+  function cost() { return nNode ? nNode + (view.psi === 3 ? nElem : 0) : 2 * nElem; }
 
   // Render into the lower-left vw x vh texels of target t.
   function phasorPass(t, vw = t.w, vh = t.h) {
@@ -311,6 +372,10 @@ export function createField(canvas) {
     gl.bindTexture(gl.TEXTURE_2D, elemTex);
     gl.uniform1i(ph.u.uElems, 0);
     gl.uniform1i(ph.u.uN, nElem);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, nodeTex);
+    gl.uniform1i(ph.u.uNodes, 1);
+    gl.uniform1i(ph.u.uNN, nNode);
     const su = (view.u1 - view.u0) / vw, sv = (view.v1 - view.v0) / vh;
     gl.uniform2f(ph.u.uOrigin, view.u0 + 0.5 * su, view.v0 + 0.5 * sv);
     gl.uniform2f(ph.u.uStep, su, sv);
@@ -409,5 +474,5 @@ export function createField(canvas) {
     try { freeTarget(main); freeTarget(probe); const ext = gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); } catch (e) { /* already lost */ }
   }
 
-  return { gl, canvas, view, setElems, compute, readProbe, uploadOverlay, draw, destroy, get size() { return main ? used.slice() : [0, 0]; } };
+  return { gl, canvas, view, setElems, setNodes, cost, compute, readProbe, uploadOverlay, draw, destroy, get size() { return main ? used.slice() : [0, 0]; } };
 }

@@ -95,9 +95,12 @@ function rebuild() {
   dirtyAntenna = false;
   A = em.buildAntenna(electrical());
   if (field) {
-    let soft = 0.004;
-    if (A.elems.n > 1) { const D = A.elems.d; soft = Math.max(0.003, Math.min(0.02, 0.6 * Math.hypot(D[8] - D[0], D[9] - D[1], D[10] - D[2]))); }
+    // Nodes give the closed-form wire field; a small soft radius only stops
+    // the 1/rho peak on the wire. Elements need about their own spacing.
+    let soft = A.nodes ? 0.006 : 0.004;
+    if (!A.nodes && A.elems.n > 1) { const D = A.elems.d; soft = Math.max(0.003, Math.min(0.02, 0.6 * Math.hypot(D[8] - D[0], D[9] - D[1], D[10] - D[2]))); }
     field.setElems(A.elems, soft);
+    field.setNodes(A.nodes);
   }
   lastKey = '';
   scheduleStats();
@@ -210,7 +213,7 @@ function normalise() {
 
 // ── canvases and the frame loop ─────────────────────────────────────────────
 function resize() {
-  const d = Math.min(window.devicePixelRatio || 1, phoneMQ.matches ? 2 : 1.5);
+  const d = Math.min(window.devicePixelRatio || 1, 2);
   const W = Math.max(2, Math.round(innerWidth * d)), H = Math.max(2, Math.round(innerHeight * d));
   if (fieldCanvas.width !== W || fieldCanvas.height !== H) { fieldCanvas.width = W; fieldCanvas.height = H; }
   if (overlay.width !== W || overlay.height !== H) { overlay.width = W; overlay.height = H; }
@@ -259,8 +262,10 @@ function frame(now) {
   });
 }
 function computePhasors(q) {
-  const n = A ? A.elems.n : 1, px = fieldCanvas.width * fieldCanvas.height;
-  const sc = Math.min(1, Math.max(0.22, Math.sqrt(2.4e8 / (n * px)))) * q;
+  // Full size while the cost (node or element terms x pixels) stays under
+  // the budget; a dipole or an array has 3 to 50 nodes, so it always does.
+  const n = Math.max(1, field.cost()), px = fieldCanvas.width * fieldCanvas.height;
+  const sc = Math.min(1, Math.max(0.3, Math.sqrt(6e8 / (n * px)))) * q;
   try { field.compute(sc); }
   catch (e) { if (!computeFailed) console.error('[antenna-fields] phasor pass', e); computeFailed = true; return; }
   const pw = phoneMQ.matches ? 120 : 176, ph = Math.max(24, Math.round(pw * fieldCanvas.height / fieldCanvas.width));

@@ -16,6 +16,18 @@
 //      C  = j k m/(4 pi R) (1 - j/kR) e^{-jkR}
 //  The GPU shader in field-gl.js has the same sum.
 //
+//  WIRE NODES. A straight z wire whose current is sinusoidal between equally
+//  spaced nodes (a sum of PWS bases) has a closed-form field: three point
+//  terms per basis, so one point term per node. With c_j the node weight,
+//      E_z    = -j eta/(4 pi)      sum c_j e^{-jkR_j}/R_j
+//      E_rho  =  j eta/(4 pi rho)  sum c_j (z - z_j) e^{-jkR_j}/R_j
+//      H_phi  =  j/(4 pi rho)      sum c_j e^{-jkR_j}
+//      c_j    = (I_{j-1} + I_{j+1} - 2 cos(kd) I_j)/sin(kd)   (I = 0 past the ends)
+//  A whole-wire sinusoid I_m sin k(h - |z|) has the weights I_m (1, -2 cos kh, 1)
+//  at z = -h, 0, h. This is exact for the current, so the GPU sums 3 to 160
+//  nodes and not 300 elements, and the field near the wire has no ripple.
+//  The loop and the Hertzian element have no nodes: they use the elements.
+//
 //  CURRENTS.
 //    Straight parallel wires (dipoles, Yagi-Uda): Galerkin moment method with
 //    piecewise-sinusoidal (PWS) bases and the reduced (thin-wire) kernel
@@ -43,6 +55,8 @@
 //    buildAntenna ....... a page state -> elements, wires and numbers
 //    hertzClosed ........ the textbook spherical fields (tests only)
 //    pwsField ........... the closed-form field of a sinusoidal dipole
+//    fieldAtNodes ....... E and H of the wire nodes at one point (12 numbers)
+//    NSTRIDE ............ numbers per node: x y z  c.re c.im  (spare)
 // ============================================================================
 
 export const ETA = 376.730313668;
@@ -121,6 +135,55 @@ export function pwsField(h, Im, rho, z) {
   const p = Im / (FOUR_PI * rho);
   const Hphi = [-p * sh[1], p * sh[0]];
   return { Ez, Erho, Hphi };
+}
+
+// ── wire nodes: the closed-form field of PWS currents ─────────────────────
+export const NSTRIDE = 6;     // x y z  c.re c.im  spare
+export function nodeList(cap) { return { n: 0, d: new Float64Array(Math.max(1, cap) * NSTRIDE) }; }
+function pushNode(N, x, y, z, cr, ci) {
+  if ((N.n + 1) * NSTRIDE > N.d.length) { const d = new Float64Array(N.d.length * 2 + NSTRIDE * 16); d.set(N.d); N.d = d; }
+  const o = N.n * NSTRIDE;
+  N.d[o] = x; N.d[o + 1] = y; N.d[o + 2] = z; N.d[o + 3] = cr; N.d[o + 4] = ci; N.d[o + 5] = 0;
+  N.n++;
+}
+// Node weights of one wire from its node currents (end nodes carry 0 A).
+// I: [[re, im]..] at z[0..n], equal spacing d.
+function wireNodes(N, x, y, z, I) {
+  const n = z.length - 1, d = z[1] - z[0], s = Math.sin(K * d), c2 = 2 * Math.cos(K * d);
+  for (let j = 0; j <= n; j++) {
+    const a = j > 0 ? I[j - 1] : [0, 0], b = j < n ? I[j + 1] : [0, 0], m = I[j];
+    pushNode(N, x, y, z[j], (a[0] + b[0] - c2 * m[0]) / s, (a[1] + b[1] - c2 * m[1]) / s);
+  }
+}
+// A whole-wire sinusoid: current Im sin k(h - |z|) times the complex I.
+function sinNodes(N, x, y, h, Im, I) {
+  const w = [1, -2 * Math.cos(K * h), 1];
+  [-h, 0, h].forEach((z, i) => pushNode(N, x, y, z, Im * w[i] * I[0], Im * w[i] * I[1]));
+}
+// E and H of the nodes at one point. out: Float64Array(12) = E (x re, x im,
+// y re, y im, z re, z im), H (6). soft adds to rho^2 and R^2 (0 = exact).
+export function fieldAtNodes(N, px, py, pz, out, soft = 0) {
+  out.fill(0, 0, 12);
+  const D = N.d, s2 = soft * soft, q = ETA / FOUR_PI;
+  for (let i = 0; i < N.n; i++) {
+    const o = i * NSTRIDE;
+    const dx = px - D[o], dy = py - D[o + 1], dz = pz - D[o + 2];
+    const rr = dx * dx + dy * dy, R = Math.sqrt(rr + dz * dz + s2);
+    if (R < 1e-12) continue;
+    const c = Math.cos(K * R), sn = Math.sin(K * R);
+    const er = D[o + 3] * c + D[o + 4] * sn, ei = D[o + 4] * c - D[o + 3] * sn;   // c_j e^{-jkR}
+    // E_z = -j q e/R
+    out[4] += q * ei / R; out[5] -= q * er / R;
+    const r2 = rr + s2;
+    if (r2 < 1e-18) continue;
+    // j e = -ei + j er.  E_x,y = j q (dz/R) e (dx, dy)/rho^2.  H_x,y = j e (-dy, dx)/(4 pi rho^2)
+    const fe = q * dz / R / r2, fh = 1 / (FOUR_PI * r2);
+    out[0] += -ei * fe * dx; out[1] += er * fe * dx;
+    out[2] += -ei * fe * dy; out[3] += er * fe * dy;
+    out[6] += ei * fh * dy; out[7] -= er * fh * dy;
+    out[8] -= ei * fh * dx; out[9] += er * fh * dx;
+  }
+  return out;
 }
 
 // ── far field, radiation intensity ──────────────────────────────────────────
@@ -471,7 +534,7 @@ function wireElems(Lst, x, y, z, Ir, Ii, sub, scale, draw) {
 }
 
 export function buildAntenna(st) {
-  const L = elemList(256), wires = [];
+  const L = elemList(256), wires = [], NL = nodeList(64);
   let Zin = null, extent = 0, note = '', psi = { side: null, top: null }, nonUniform = 0;
   const budget = st.budget || 260;
   if (st.type === 'hertz') {
@@ -494,6 +557,7 @@ export function buildAntenna(st) {
       const sc = cdiv([1, 0], r.feed);
       const nd = r.nodes[0];
       wireElems(L, 0, 0, nd.z, nd.Ir, nd.Ii, Math.max(1, Math.round(Math.min(budget, 200) / nseg)), sc, wires);
+      wireNodes(NL, 0, 0, nd.z, wires[0].I);
       note = nseg - 1 + ' PWS bases';
     } else {
       const zs = dipoleZsin(st.L, st.a);
@@ -508,6 +572,7 @@ export function buildAntenna(st) {
       }
       for (let i = 0; i <= 40; i++) { const z = -h + i * h / 20; pts.push([0, 0, z]); cur.push([Im * Math.sin(K * (h - Math.abs(z))), 0]); }
       wires.push({ pts, I: cur });
+      sinNodes(NL, 0, 0, h, Im, [1, 0]);
       if (Math.abs(sk) <= 0.05) note = 'feed at a current node: Z_in is very large';
     }
   } else if (st.type === 'loop') {
@@ -547,6 +612,7 @@ export function buildAntenna(st) {
       }
       for (let i = 0; i <= 12; i++) { const z = -h + i * h / 6, a = Im * Math.sin(K * (h - Math.abs(z))); pts.push([x, 0, z]); cur.push([I[0] * a, I[1] * a]); }
       wires.push({ pts, I: cur });
+      sinNodes(NL, x, 0, h, Im, I);
     }
     // Active impedance of the centre element from induced-EMF mutual impedances.
     const c = Math.floor((N - 1) / 2), self = dipoleZsin(st.Le, st.a).Zin;
@@ -569,12 +635,17 @@ export function buildAntenna(st) {
     Zin = r.Zin;
     const sc = cdiv([1, 0], r.feed);
     const sub = Math.max(1, Math.floor(budget / (W.length * nseg)));
-    W.forEach((w, i) => wireElems(L, w.x, w.y, r.nodes[i].z, r.nodes[i].Ir, r.nodes[i].Ii, sub, sc, wires));
+    W.forEach((w, i) => { wireElems(L, w.x, w.y, r.nodes[i].z, r.nodes[i].Ir, r.nodes[i].Ii, sub, sc, wires); wireNodes(NL, w.x, w.y, r.nodes[i].z, wires[i].I); });
     const span = st.sr + st.nd * st.sd;
     extent = Math.hypot(span, Math.max(st.Lr, st.Ld));
     psi = { side: null, top: 'B' };
     note = r.n + ' PWS bases on ' + W.length + ' wires';
     wires.forEach((w, i) => { w.role = i === 0 ? 'reflector' : i === 1 ? 'driven' : 'director'; });
   }
-  return { elems: L, wires, Zin, extent, note, psi, nonUniform };
+  // Element range of each wire, in push order: wire i owns elements
+  // [e0, e1). geom.js groups the far-field phasors by wire with it.
+  let e = 0;
+  const per = wires.length ? L.n / wires.length : 0;
+  wires.forEach((w, i) => { w.e0 = Math.round(e); e += per; w.e1 = i === wires.length - 1 ? L.n : Math.round(e); });
+  return { elems: L, nodes: NL.n ? NL : null, wires, Zin, extent, note, psi, nonUniform };
 }

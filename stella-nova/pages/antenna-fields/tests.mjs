@@ -12,6 +12,7 @@
 //    7  power: Poynting flux through a sphere = |I|^2 R_in / 2
 //    8  Yagi-Uda MoM: forward main lobe, front/back ratio
 //    9  MoM convergence, small loop radiation resistance
+//   10  wire nodes (the GPU source) vs the closed form and the element sum
 // ============================================================================
 import * as em from './em.js';
 
@@ -183,6 +184,32 @@ function sphereFlux(L, r, nt = 48, np = 96) {
   const C = 0.1, lp = em.solveLoop(C / (2 * Math.PI), 1e-4, 40), Rt = em.ETA * Math.PI / 6 * C ** 4;
   check('small loop mode-0 R = (eta pi/6)(C/lambda)^4 (20 pi^2 C^4 with exact eta)', Math.abs(lp.Z0[0] - Rt) / Rt < 0.01,
     'R0 = ' + lp.Z0[0].toExponential(4) + ' vs ' + Rt.toExponential(4) + ' ohm; R_in with the gap = ' + lp.Zin[0].toExponential(4) + ', X_in = ' + fmt(lp.Zin[1], 2));
+}
+
+// 10. Wire nodes -----------------------------------------------------------------
+{
+  const o12 = new Float64Array(12);
+  // Half-wave and 1.25-wavelength sinusoidal dipoles: nodes vs pwsField (exact).
+  let worst = 0;
+  for (const Lw of [0.5, 1.25]) {
+    const A = em.buildAntenna({ type: 'dipole', L: Lw, a: 1e-3, model: 'sin' });
+    const Im = 1 / Math.sin(em.K * Lw / 2);
+    for (const [rho, z] of [[0.1, 0.1], [0.05, -0.2], [0.3, 0.4], [1.2, 0.3], [0.02, 0.7]]) {
+      em.fieldAtNodes(A.nodes, rho, 0, z, o12);
+      const c = em.pwsField(Lw / 2, Im, rho, z);
+      worst = Math.max(worst, crel([o12[4], o12[5]], c.Ez), crel([o12[0], o12[1]], c.Erho), crel([o12[8], o12[9]], c.Hphi));
+    }
+  }
+  check('wire nodes vs closed-form sinusoidal dipole (L = 0.5, 1.25)', worst < 1e-12, 'nodes 3, max rel err ' + worst.toExponential(2));
+  // MoM Yagi-Uda: nodes vs a dense element sum of the same node currents.
+  const Y = em.buildAntenna({ type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 3, a: 1e-3, budget: 20000 });
+  let wy = 0;
+  for (const p of [[0.3, 0.1, 0.2], [0.05, 0.02, -0.1], [1.5, -0.7, 0.4], [0.2, 0.2, 0.6]]) {
+    em.fieldAt(Y.elems, p[0], p[1], p[2], out); em.fieldAtNodes(Y.nodes, p[0], p[1], p[2], o12);
+    const n = Math.hypot(...out.slice(0, 12));
+    for (let i = 0; i < 12; i++) wy = Math.max(wy, Math.abs(out[i] - o12[i]) / n);
+  }
+  check('wire nodes vs element sum, 5-element Yagi MoM', wy < 1e-6, Y.nodes.n + ' nodes vs ' + Y.elems.n + ' elements, max rel err ' + wy.toExponential(2));
 }
 
 console.log(fails ? fails + ' check(s) failed' : 'all checks passed');
