@@ -53,7 +53,8 @@
 //     stubbed): each preset's claim (torn, hits, a capture with one body
 //     bound and one unbound, a core that holds), finite values, no errors.
 //     The first scenarios saturn, flyby and compare run the same path
-//     (scen:<key>). deno run -A tests.mjs --gpu --rolls=sl9,seed:5 runs a few;
+//     (scen:<key>), set up by applyScenario as the gallery does; the
+//     flyby comet must tear into 5 or more groups. deno run -A tests.mjs --gpu --rolls=sl9,seed:5 runs a few;
 //     --no-rolls skips test 15. The cutting director (app/cuts.js) runs
 //     in the Director view over each run: it cuts after the tear, and
 //     every pose is finite and outside the planet.
@@ -865,8 +866,11 @@ async function rollRunTests(keys) {
     if (!key) continue;
     const seed = key.startsWith('seed:') ? +key.slice(5) : null, scen = key.startsWith('scen:') ? key.slice(5) : null;
     const t0 = Date.now();
-    // scen:<key>: a first scenario (the code path before the rolls)
-    if (scen) { UI.roll = null; UI.scen = scen; } else UI.roll = seed !== null ? RL.rollRun(seed) : RL.presetSpec(key);
+    // scen:<key>: a first scenario (the code path before the rolls). The
+    // gallery path, applyScenario, sets q, the material and the orbit in
+    // UI; before 2026-10-11 the test set only UI.scen, so each scenario
+    // ran with the q, the material and the orbit left in UI (q = 1 here)
+    if (scen) (await import('./app/controls.js')).applyScenario(scen); else UI.roll = seed !== null ? RL.rollRun(seed) : RL.presetSpec(key);
     const spec = R.currentSpec();
     await R.startRun(spec);
     const run = S.run;
@@ -875,7 +879,7 @@ async function rollRunTests(keys) {
     UI.cam = 'cut'; UI.calm = false; UI.paused = false; S.cuts = null;
     const dirRun = { kinds: [], tornAt: null, cutAfterTorn: false, wallAfter: 0 };
     // the end: one orbit after the drag stops, or after the closest pass
-    // (the comet of the first flyby scenario tears later: 3 orbits after)
+    // (the first flyby scenario runs 3 orbits after, for the chain)
     let tEnd = spec.kind === 'flyby' ? run.tPeri + (scen ? 3 : 1) * T0 : spec.kind === 'spiral' ? Infinity : 6 * T0, dragOff = null, reads = 0, fMin = 1, maxGroups = 0;
     while (S.run.t < tEnd && S.run.t < 12 * T0) {
       if (spec.kind === 'spiral' && s.pl.drag > 0 && Math.hypot(...s.ref.X) < spec.d1 * s.Rp) { s.pl.drag = 0; s.gpu.setParams(s.C, s.pl, 0); }
@@ -957,11 +961,13 @@ async function rollRunTests(keys) {
     if (!fin || rb.overflow || rb.listFull) claim = `[finite ${fin}, bucket overflow ${rb.overflow}, list full ${rb.listFull}] `;
     if (scen === 'compare') { const f2 = run.sats[1].an ? run.sats[1].an.f : 1; pass = pass && fMin < 0.75 && f2 > 0.9; claim += `the loose moon is torn (${(100 * fMin).toFixed(0)}%), the rough one holds (${(100 * f2).toFixed(0)}%)`; }
     else if (scen === 'flyby') {
-      // found 2026-10-11, the same on the code before the rolls: the comet
-      // of this scenario (fluid, no spin, pass at 0.47 d_fluid) stretches
-      // (el 1.7) but keeps all its mass for 3 T_q after the pass at N =
-      // 4096. Reported here, not a fail: the scenario is not this change.
-      const fEnd = s.an ? s.an.f : 1; claim += `runs clean; INFO bound ${(100 * Math.min(fMin, fEnd)).toFixed(0)}% three T_q after the pass`;
+      // the card says the comet breaks into a string of pearls: under 75%
+      // still bound three T_q after the pass, in 5 or more groups. Before
+      // 2026-10-11 the harness ran this story with q = 1 (see above), the
+      // comet kept all its mass, and the check was only a note
+      const fEnd = s.an ? s.an.f : 1, ng = s.an ? s.an.groups : 0;
+      pass = pass && fEnd < 0.75 && ng >= 5;
+      claim += `the comet is torn into a chain: ${(100 * fEnd).toFixed(0)}% bound, ${ng} groups, three T_q after the pass`;
     }
     else if (scen) { const fEnd = s.an ? s.an.f : 1; pass = pass && Math.min(fMin, fEnd) < 0.75; claim += `the first scenario still tears its moon (${(100 * Math.min(fMin, fEnd)).toFixed(0)}% bound)`; }
     else if (seed !== null) {
