@@ -21,6 +21,17 @@ about the simulation and layout in fullscreen"
   folding table, a playmat per fly (our own design), dice and deck boxes,
   rows of other tables where other flies play their own fake games, a
   crowd watching. Saver and review must follow this setting.
+- One voice for the game state (user, verbatim): "generally there are way
+  too many nofifications of who'se turn it is. it looks as if we have the
+  research page information coflicting with the simulation GUI and the
+  game GUI". Rules: one turn indicator only (a slim, quiet element that
+  changes in place; no stacked banners, no 3D banner plus DOM banner plus
+  pause banner for the same event); big banners only for game start and
+  game end. Three layers that never overlap: the 3D scene; the game HUD
+  (scorecards, play controls); and the research content, which lives only
+  behind "How it works" (no kicker, chips, stage tag or section text over
+  the game). Messages that a player needs ("wait for your turn") show at
+  the control that was used, not as page-wide notices.
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
 
