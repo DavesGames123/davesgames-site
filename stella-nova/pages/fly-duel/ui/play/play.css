@@ -17,6 +17,7 @@
      .pl-actions    the big button     .pl-bar     phase steps + prompt
      .pl-sheet      setup/coin/mull    .pl-insp    the inspector
      .pl-hint       message at control .pl-last    the last action chip
+     .pl-peek       hovered version    (ui/play/peek.js)
      .pl-turn       the one turn line (is-new: the pause between turns)
      .pl-3d         full bleed 3D      .pl-seatbtn back to seat (orbit)
    ========================================================================== */
@@ -118,8 +119,13 @@
 .pl-hc.is-dark .pl-cv { filter: brightness(0.5) saturate(0.7); }
 .pl-hc.is-drag { transition: none; transform: translate(calc(var(--x) + var(--dx, 0px)), calc(var(--y) + var(--dy, 0px))) rotate(0deg); z-index: 200 !important; }
 .pl-hc.is-armed { outline: 3px solid var(--heal); outline-offset: 2px; }
+/* hover (a fine pointer) or a touch hold (.is-peek, ui/play/hand.js): the
+   card rises, stands straight and grows in place; its hovered version
+   shows above it (.pl-peek) */
+.pl-hc { -webkit-touch-callout: none; }
+.pl-hc.is-peek:not(.is-drag) { transform: translate(var(--x), calc(var(--y) - var(--hand-h) * 0.22)) rotate(0deg) scale(1.16); z-index: 120 !important; }
 @media (hover: hover) and (pointer: fine) {
-  .pl-hc:hover:not(.is-drag) { transform: translate(var(--x), calc(var(--y) - var(--hand-h) * 0.22)) rotate(0deg); z-index: 120 !important; }
+  .pl-hc:hover:not(.is-drag) { transform: translate(var(--x), calc(var(--y) - var(--hand-h) * 0.22)) rotate(0deg) scale(1.16); z-index: 120 !important; }
 }
 
 .pl-opphand { display: flex; align-items: center; gap: 8px; min-height: 24px; }
@@ -189,8 +195,15 @@
 .pl-log li[data-seat="0"] { box-shadow: inset 2px 0 0 0 var(--flyA); padding-left: 6px; }
 .pl-log li[data-seat="1"] { box-shadow: inset 2px 0 0 0 var(--flyB); padding-left: 6px; }
 
-/* --------------------------------------------------- hover zoom card */
-.pl-zoom { position: absolute; z-index: 130; left: 16px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+/* ------------------------------------- the hovered version of a card
+   ui/play/peek.js: a large copy of the card beside or above the card
+   under the pointer (left and top from peekPlace), a dark 1 px rim, the
+   keyword reminders under it. It takes no pointer events. Over the hand
+   (z 40) and the buttons (z 60), under the inspector (z 300). */
+.pl-peek { position: absolute; z-index: 130; left: 0; top: 0; pointer-events: none; display: grid; gap: 4px; justify-items: center; }
+.pl-peek-cv { display: block; border: 1px solid #000; border-radius: 3% / 2.2%; background: var(--bg); }
+.pl-peek-kw { margin: 0; max-width: 100%; padding: 4px 8px; font-size: 12px; line-height: 1.35; color: var(--ink2); background: var(--panel); border: 1px solid var(--hair2); border-radius: 4px; }
+
 
 /* --------------------------------------------------------- inspector */
 .pl-insp { position: absolute; z-index: 300; inset: 0; display: grid; place-items: center; background: rgba(3,5,10,0.94); overflow-y: auto; padding: 16px; }
@@ -277,6 +290,6 @@
 .pl.pl-3d[data-layout="phone-land"] .pl-sc1 { margin-left: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pl-hc, .pl-perm, .pl-perm .pl-cv, .pl-stack { transition: none !important; }
+  .pl-hc, .pl-hc.is-peek, .pl-perm, .pl-perm .pl-cv, .pl-stack { transition: none !important; }
   .pl-perm.is-new { transform: none; opacity: 1; }
 }

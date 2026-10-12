@@ -6,9 +6,15 @@
 //      tap                 select: the card rises, its paid lands light
 //      tap again           play it (or choose its target next)
 //      drag up and drop    play it (drop above the top line of the hand)
-//      long-press (450 ms) or right-click    the full-screen inspector
+//      right-click, or a long press of a mouse    the full-screen inspector
 //      (a double-click is two taps: select, then play)
-//      hover (fine pointer only)   the card rises, a large copy shows
+//      hover (mouse or pen)   the card rises and grows in place, and the
+//                          hovered version shows above it (onHover,
+//                          ui/play/peek.js, after 120 ms)
+//      touch: press and hold (380 ms)   the same: the card rises, the
+//                          hovered version shows (onHold) until the
+//                          finger lifts (onHoldEnd). A drag up to play
+//                          or a sideways scroll stops the hold first.
 //  A horizontal move does not start a drag: the fan scrolls sideways when
 //  it is wider than the screen (touch-action: pan-x).
 //  Playable cards have a crisp 2 px outline. A dark card cannot be played
@@ -25,9 +31,11 @@ import { fanLayout } from './layout.js';
 import { paintCard, paintBack } from './canvas.js';
 
 const LONG_MS = 450;
+export const HOLD_MS = 380;
 const DRAG_PX = 18;
 
-// host: the hand box. cb: { onSelect(i), onPlay(i), onInspect(id), onHover(id|null) }
+// host: the hand box. cb: { onSelect(i), onPlay(i), onInspect(id),
+// onHover(id | null, el), onHold(id, el), onHoldEnd() }
 export function createHand(host, cb = {}) {
   const doc = host.ownerDocument;
   const box = doc.createElement('div');
@@ -54,20 +62,30 @@ export function createHand(host, cb = {}) {
 
   function gesture(n) {
     const el = n.el;
-    let t0 = null, timer = 0, moved = false, long = false;
+    let t0 = null, timer = 0, moved = false, long = false, held = false, lastType = '';
     const clear = () => { clearTimeout(timer); timer = 0; };
+    // the end of a touch hold: the hovered version goes
+    const unhold = () => { if (!held) return; held = false; el.classList.remove('is-peek'); cb.onHoldEnd?.(); };
     el.addEventListener('pointerdown', e => {
+      lastType = e.pointerType || '';
       if (e.button > 0) return;
       t0 = { x: e.clientX, y: e.clientY, id: e.pointerId };
       moved = false; long = false;
       clear();
-      timer = setTimeout(() => { long = true; cb.onInspect?.(last.ids[n.i]); }, LONG_MS);
+      // touch or pen: a hold shows the hovered version; a mouse: the inspector
+      const hold = e.pointerType !== 'mouse' && typeof cb.onHold === 'function';
+      timer = setTimeout(() => {
+        long = true;
+        if (hold) { held = true; el.classList.add('is-peek'); cb.onHold(last.ids[n.i], el); } else cb.onInspect?.(last.ids[n.i]);
+      }, hold ? HOLD_MS : LONG_MS);
     });
     el.addEventListener('pointermove', e => {
       if (!t0 || e.pointerId !== t0.id) return;
       const dx = e.clientX - t0.x, dy = e.clientY - t0.y;
       if (!drag && Math.hypot(dx, dy) > 8) { moved = true; clear(); }
       if (!drag && dy < -DRAG_PX && Math.abs(dy) > Math.abs(dx)) {
+        unhold();
+        cb.onHover?.(null, el);
         drag = { n, x0: t0.x, y0: t0.y };
         try { el.setPointerCapture(e.pointerId); } catch { /* old browser */ }
         el.classList.add('is-drag');
@@ -86,6 +104,7 @@ export function createHand(host, cb = {}) {
     const end = e => {
       if (!t0) return;
       clear();
+      unhold();
       const wasDrag = drag && drag.n === n;
       if (wasDrag) {
         const top = host.getBoundingClientRect().top;
@@ -102,9 +121,15 @@ export function createHand(host, cb = {}) {
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
-    el.addEventListener('contextmenu', e => { e.preventDefault(); clear(); cb.onInspect?.(last.ids[n.i]); });
-    el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') cb.onHover?.(last.ids[n.i]); });
-    el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') cb.onHover?.(null); });
+    // a touch hold also fires contextmenu (Android): the hold has the
+    // job, so only a mouse or pen right-click opens the inspector
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      if (lastType === 'touch' && (held || t0)) return;
+      clear(); cb.onInspect?.(last.ids[n.i]);
+    });
+    el.addEventListener('pointerenter', e => { if (e.pointerType !== 'touch' && !drag) cb.onHover?.(last.ids[n.i], el); });
+    el.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') cb.onHover?.(null, el); });
     // keyboard: the button gets Enter / Space from the browser as a click
     el.addEventListener('click', e => { if (e.detail === 0) { if (last.view?.selected === n.i) cb.onPlay?.(n.i); else cb.onSelect?.(n.i); } });
   }

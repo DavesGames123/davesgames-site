@@ -11,6 +11,9 @@
 //      ui/play/hand.js         your fan and the opposing card backs
 //      ui/play/board2d.js      the flat table (when there is no 3D picking)
 //      ui/play/inspector.js    the full-screen card
+//      ui/play/peek.js         the hovered version of a card (MTG Arena
+//                              style): a mouse hover on a hand card or a
+//                              face-up table card, or a touch hold
 //
 //  SCREEN (phone, upright; the other layouts move the same boxes)
 //      ┌ [A scorecard] [B scorecard] ┐   Fly A left, Fly B right; you take
@@ -48,10 +51,12 @@
 //        highlight(spec) marks playable / eligible / target cards, and
 //        play(record) animates each decision. A tap on a fly or its life
 //        die (pickPermanent gives { uid: null, player }) targets that
-//        player. To read a card on the table: long-press or right-click
-//        it, or tap it when a tap has no other job (your main phase with
-//        no target to choose, the fly's turn). Without pickPermanent the
-//        flat table is used and the scene is not touched.
+//        player. To read a card on the table: hover it (mouse) or hold
+//        it (touch) for its hovered version (pickFace, peek.js); right-
+//        click it, long-press it with a mouse, or tap it when a tap has
+//        no other job (your main phase with no target to choose, the
+//        fly's turn) for the inspector. Without pickPermanent the flat
+//        table is used and the scene is not touched.
 //
 //  ORBIT  Drag on the table turns your camera, pinch or the wheel zooms
 //        (ui/play/orbit.js; clamps in ui/fly3d/director.js ORBIT). A drag
@@ -89,6 +94,8 @@ import { createBoard2d } from './board2d.js';
 import { createInspector } from './inspector.js';
 import { attachOrbit } from './orbit.js';
 import { paintCard, colourHex } from './canvas.js';
+import { createPeek, PEEK } from './peek.js';
+import * as CF from '../cardface.js';
 import { createScorecard, scorecardModel } from '../hud/scorecard.js';
 import { agentFromFly, agentFromBot } from '../match.js';
 
@@ -163,7 +170,6 @@ export function mountPlay(root, opts) {
     <button type="button" class="pl-btn pl-menubtn" aria-haspopup="true" aria-expanded="false">Menu</button>
     <div class="pl-menu" hidden role="menu"></div>
     <section class="pl-log" hidden aria-label="game log"><header><b>Log</b><button type="button" class="pl-btn pl-logx">Close</button></header><ol></ol></section>
-    <div class="pl-zoom" hidden><canvas class="pl-cv"></canvas></div>
     <div class="pl-sheet" hidden><div class="pl-sheet-in"></div></div>`;
   const $ = s => root.querySelector(s);
   const tableBox = $('.pl-table');
@@ -176,7 +182,6 @@ export function mountPlay(root, opts) {
   let hintAt = 'button';
   const from = (at, f) => (...a) => { hintAt = at; return f(...a); };
   const lastBox = $('.pl-last');
-  const zoom = $('.pl-zoom');
 
   let L = layoutFor(root.clientWidth || win.innerWidth, root.clientHeight || win.innerHeight, { coarse });
   // CSS sizes from the layout numbers
@@ -193,11 +198,18 @@ export function mountPlay(root, opts) {
   applyVars();
 
   const inspector = createInspector(root, { KEYWORDS: cards.KEYWORDS || {} });
+  // The hovered version of a card (ui/play/peek.js): a mouse hover on a
+  // hand card or a face-up table card, or a touch hold. A hand card has
+  // its copy above it; a table card beside the pointer.
+  const peek = createPeek(root, { CARD, CF, KEYWORDS: cards.KEYWORDS || {}, view: () => [root.clientWidth || win.innerWidth, root.clientHeight || win.innerHeight] });
+  const rectOfEl = el => () => el?.getBoundingClientRect?.() || null;
   const hand = createHand($('.pl-handbox'), {
     onSelect: from('hand', i => apply(ix?.select(i))),
     onPlay: from('hand', i => apply(ix?.play(i))),
-    onInspect: id => inspectCard(id),
-    onHover: id => hover(id),
+    onInspect: id => { peek.hide(); inspectCard(id); },
+    onHover: (id, el) => { if (id == null) peek.hide(); else peek.schedule(id, rectOfEl(el), 'above'); },
+    onHold: (id, el) => peek.show(id, rectOfEl(el), 'above'),
+    onHoldEnd: () => peek.hide(),
   });
   const opp = createOppHand($('.pl-opp'));
   let board = null, orbit = null;
@@ -224,20 +236,65 @@ export function mountPlay(root, opts) {
     // Read a card on the table: a long press (touch), a right-click, or
     // a tap when a tap has no other job (your main phase with no target
     // to choose, the fly's turn, the end of the game).
-    let press = { t: 0, x: 0, y: 0, long: false };
+    // The face-up card under a point for the hovered version: pickFace
+    // (any card: hand, table, the card being cast, graveyard) or, on an
+    // older scene, the permanent. A hidden card gives id null: no copy.
+    const faceAt = (x, y) => {
+      if (typeof opts.scene.pickFace === 'function') {
+        let h = null;
+        try { h = opts.scene.pickFace(x, y); } catch { h = null; }
+        return h && h.id != null ? h.id : null;
+      }
+      const { uid } = pickAt(x, y);
+      return uid === null ? null : permCard(uid);
+    };
+    const near = (x, y) => () => ({ left: x - 16, top: y - 16, right: x + 16, bottom: y + 16 });
+    // mouse or pen hover: one pick per frame at most, the copy follows
+    let hov = { x: 0, y: 0, raf: 0 };
+    const hoverPick = () => {
+      hov.raf = 0;
+      const id = faceAt(hov.x, hov.y);
+      if (id == null) { peek.hide(); return; }
+      if (peek.id() === id || peek.waiting()) peek.move(near(hov.x, hov.y));
+      if (peek.id() !== id) peek.schedule(id, near(hov.x, hov.y), 'side');
+    };
+    tableBox.addEventListener('pointermove', e => {
+      if (e.pointerType === 'touch') return;
+      if (e.buttons || hand.dragging) { peek.hide(); return; }
+      hov.x = e.clientX; hov.y = e.clientY;
+      if (!hov.raf) hov.raf = (win.requestAnimationFrame || (f => setTimeout(f, 16)))(hoverPick);
+    });
+    tableBox.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') peek.hide(); });
+    // Read a card: touch: press and hold shows its hovered version until
+    // the finger lifts (a move first is an orbit: no copy); a long press
+    // of a mouse opens the inspector.
+    let press = { t: 0, x: 0, y: 0, long: false, peek: false, type: '' };
     tableBox.addEventListener('pointerdown', e => {
       if (e.button > 0) return;
       clearTimeout(press.t);
-      press = { x: e.clientX, y: e.clientY, long: false, t: setTimeout(() => {
+      const touch = e.pointerType !== 'mouse';
+      press = { x: e.clientX, y: e.clientY, long: false, peek: false, type: e.pointerType || '', t: setTimeout(() => {
+        if (touch) {
+          const id = faceAt(press.x, press.y);
+          if (id != null) { press.long = true; press.peek = true; peek.show(id, near(press.x, press.y), 'side'); }
+          return;
+        }
         const { uid } = pickAt(press.x, press.y);
         if (uid !== null) { press.long = true; inspectPerm(uid); }
-      }, 450) };
+      }, touch ? PEEK.holdMs : 450) };
     });
-    const unpress = e => { if (e.type !== 'pointermove' || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) clearTimeout(press.t); };
+    const unpress = e => {
+      const far = Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10;
+      if (e.type !== 'pointermove' || far) clearTimeout(press.t);
+      // the finger lifts, or the hold turns into an orbit: the copy goes
+      if (press.peek && (e.type !== 'pointermove' || far)) { press.peek = false; peek.hide(); }
+    };
     for (const t of ['pointerup', 'pointercancel', 'pointermove']) tableBox.addEventListener(t, unpress);
     tableBox.addEventListener('contextmenu', e => {
+      // a touch hold fires contextmenu too (Android): the hold has the job
+      if (press.type === 'touch') { e.preventDefault(); return; }
       const { uid } = pickAt(e.clientX, e.clientY);
-      if (uid !== null) { e.preventDefault(); clearTimeout(press.t); inspectPerm(uid); }
+      if (uid !== null) { e.preventDefault(); clearTimeout(press.t); peek.hide(); inspectPerm(uid); }
     });
     tableBox.addEventListener('click', e => {
       hintAt = 'table';
@@ -257,8 +314,16 @@ export function mountPlay(root, opts) {
       onPerm: from('table', uid => apply(ix?.perm(uid))),
       onAssign: from('table', (b, a) => apply(ix?.assign(b, a))),
       onBoard: () => { if (ix && ix.view().selected !== null) apply(ix.confirm()); },
-      onInspect: uid => inspectPerm(uid),
+      onInspect: uid => { peek.hide(); inspectPerm(uid); },
     });
+    // mouse or pen hover on a card of the flat table: its hovered version
+    tableBox.addEventListener('pointerover', e => {
+      if (e.pointerType === 'touch') return;
+      const el = e.target?.closest?.('[data-uid]');
+      const id = el ? permCard(+el.dataset.uid) : null;
+      if (id == null) peek.hide(); else peek.schedule(id, rectOfEl(el), 'side');
+    });
+    tableBox.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') peek.hide(); });
   }
 
   let pc = null, ix = null, scs = [null, null];
@@ -551,7 +616,7 @@ export function mountPlay(root, opts) {
     hint._t = setTimeout(() => { hint.hidden = true; }, 1800);
   }
 
-  function inspectCard(id) { if (CARD[id]) inspector.open(CARD[id], { L }); }
+  function inspectCard(id) { if (CARD[id]) { peek.hide(); inspector.open(CARD[id], { L }); } }
   function inspectPerm(uid) {
     if (!pc) return;
     for (let s = 0; s < 2; s++) {
@@ -559,10 +624,14 @@ export function mountPlay(root, opts) {
       if (x) { inspector.open(CARD[x.id], { L, perm: x, owner: s === humanSeat() ? 'Yours' : nameOf(s) }); return; }
     }
   }
-  function hover(id) {
-    if (!L.hover || !id || !CARD[id]) { zoom.hidden = true; return; }
-    paintCard(zoom.querySelector('canvas'), CARD[id], { w: 260, h: 364, mode: 'full' });
-    zoom.hidden = false;
+  // the card id of a permanent on the table (null: none)
+  function permCard(uid) {
+    if (!pc) return null;
+    for (let s = 0; s < 2; s++) {
+      const x = pc.state.players[s].battlefield.find(y => y.uid === uid);
+      if (x) return x.id;
+    }
+    return null;
   }
 
   pri.addEventListener('click', () => {
@@ -727,6 +796,7 @@ export function mountPlay(root, opts) {
     applyVars();
     for (const sc of scs) { sc?.setCompact(L.score === 'compact'); sc?.resize(); }
     opts.scene?.resize?.();
+    peek.resize();
     if (changed) render();
     else board?.redrawArrows();
   }
@@ -745,6 +815,7 @@ export function mountPlay(root, opts) {
       stopTimer();
       doc.removeEventListener('keydown', onKey);
       orbit?.dispose();
+      peek.dispose();
       ro?.disconnect(); win.removeEventListener('resize', relayout);
       for (const sc of scs) sc?.dispose();
       root.innerHTML = '';
