@@ -39,6 +39,13 @@ about the simulation and layout in fullscreen"
   the neuropil shell, KC sparse firing, spikes on real edges, DAN bursts
   per compartment, crisp (no soft glow). Play mode keeps the opponent's
   brain big and drops only the human seat's map.
+  Then (verbatim): "that should be the main feature of the layout". So the
+  two brains are the hero of the screen, not an inset: on wide screens
+  the layout is brain A | the 3D table with the flies | brain B, each
+  brain panel large (about a third of the width each, full height), live
+  and turnable; the flies still fill the centre panel. On a portrait
+  phone: the two brains stacked above and below the table (or one brain
+  per half, switching with the acting fly), never hidden by default.
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
 
