@@ -11,9 +11,12 @@
 //  hash           every control round-trips through the share link
 //  guard          random scenes keep inflow, lid and jets <= 3.5 cells/step
 //  render         render.draw makes only finite canvas calls in all views
+//  step clock     30 Hz, 120 Hz and half speed give a regular step cadence
+//  range ease     the colour range eases toward a pressure jump
 //  saver          plan: no back-to-back repeats, 6-12 s cuts
 //  page           main.js boots under the DOM stub, autoplays, rebuilds on
-//                 a new scene, and runs saver cuts with TeX plates
+//                 a new scene, steps once per frame at 60 Hz with 1 ms rAF
+//                 times, and runs saver cuts with TeX plates
 // ============================================================================
 import * as SV from './solver.js';
 import * as SC from './scene.js';
@@ -101,6 +104,28 @@ function divergence(S) {
   ok(bad === 0 && calls > 200, 'render: every view draws with finite canvas calls', `${calls} calls`);
 }
 {
+  // the step clock at other display rates: 30 Hz (a throttled frame) gets
+  // 2 steps per frame, 120 Hz and half speed get a regular 0, 1, 0, 1
+  const run = (hz, speed) => { const c = SC.makeClock(), T = k => Math.round(k * 1000 / hz), out = [];
+    for (let k = 1; k <= 200; k++) out.push(SC.clockSteps(c, (T(k) - T(k - 1)) / 1000, speed, 1 / 60)); return out.slice(20); };
+  const alt = a => a.every((n, i) => n === (i % 2 ? 1 - a[0] : a[0])) && a[0] + a[1] === 1;
+  const r30 = run(30, 1), r120 = run(120, 1), rHalf = run(60, 0.5);
+  ok(r30.every(n => n === 2) && alt(r120) && alt(rHalf), 'step clock: 30 Hz steps 2 per frame; 120 Hz and half speed alternate 0, 1',
+    `30 Hz ${r30.slice(0, 6).join('')}, 120 Hz ${r120.slice(0, 6).join('')}, 60 Hz half ${rHalf.slice(0, 6).join('')}`);
+}
+{
+  // the colour range eases: a pressure spike moves the range by RANGE_EASE
+  // of the way per frame, not all the way (the field brightness pumps)
+  const { RANGE_EASE } = await import('./render.js');
+  const st = sceneOf(77, { kind: 'tunnel', colorBy: 'pressure', nObs: 1 });
+  const S = run(st, 77, 40, 60), t = K.themeById('night'), cache = {}, lut = new Uint8Array(768);
+  const look = { bg: t.bg, bg2: t.bg2, ink: t.ink, wall: t.wall, accent: t.accent, colorBy: 'pressure', lut, smooth: true, palette: ['#fff'], veil: 0, dpr: 1 };
+  const go = () => { draw(fakeCtx(400, 300), S, fitView(S, { x: 0, y: 0, w: 400, h: 300 }), look, cache, makeCanvas, 400, 300); return cache.range.slice(); };
+  const a = go(); for (let k = 0; k < S.f.numCells; k++) S.f.p[k] *= 3; const b = go();
+  const want = a[1] + (3 * a[1] - a[1]) * RANGE_EASE;
+  ok(Math.abs(b[1] - want) < 0.05 * Math.abs(want) && b[1] < 2 * a[1], 'render: the colour range eases toward a 3x pressure jump', `hi ${a[1].toFixed(0)} -> ${b[1].toFixed(0)} Pa (target ${(3 * a[1]).toFixed(0)})`);
+}
+{
   const { SHOTS } = await import('./saver.js');
   const plan = K.planShots(SHOTS, 5, 200);
   ok(SHOTS.length >= 6 && plan.every((p, i) => !i || p.key !== plan[i - 1].key) && plan.every(p => p.sec >= 6 && p.sec <= 12), `saver plan: ${SHOTS.length} shots, no repeats, 6-12 s cuts`);
@@ -119,6 +144,17 @@ function divergence(S) {
   const seed0 = P.kit.seed; P.kit.newScene(); runRaf(5);
   ok(P.kit.seed !== seed0 && P.S.frame < f0 + 10, 'page: a new scene rebuilds the sim');
   ok(view._c.bad === 0, 'page: no non-finite canvas calls while running');
+  {
+    // Safari gives rAF times in whole ms (17, 16, 17 ms at 60 Hz): every
+    // frame must get one solver step, not 0, 1, 2 (a 20 Hz judder). A
+    // 40 ms hitch first: the old loop set its remainder to 0 there, so the
+    // 1 ms rounding then put each frame just under or over one step.
+    runRaf(1, 40);
+    const per = [], T = k => Math.round(k * 1000 / 60);
+    for (let k = 1; k <= 130; k++) { const a = P.S.frame; runRaf(1, T(k) - T(k - 1)); per.push(P.S.frame - a); }
+    const c = [0, 0, 0]; per.slice(10).forEach(n => c[Math.min(2, n)]++);
+    ok(c[1] === 120, 'page cadence: 60 Hz with 1 ms rAF times gives one step per frame', `steps 0/1/2 per frame: ${c.join('/')}`);
+  }
   const labels = [];
   await window.snSaver.enter({ seed: 9, label: L => labels.push(L) });
   for (let k = 0; k < 10; k++) { window.snSaver.cut(); runRaf(10); }

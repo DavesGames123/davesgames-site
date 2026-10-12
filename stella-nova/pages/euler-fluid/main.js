@@ -97,15 +97,17 @@ function bindPointer() {
 }
 
 // ---- loop -------------------------------------------------------------------------
-let lastT = 0, acc = 0;
+// steps per frame come from the step clock (scene.js "clockSteps"): a fixed
+// count per frame when the frame time fits, so 1 ms rAF times do not judder
+let lastT = 0;
+const clock = SC.makeClock();
 function frame(ts) {
   requestAnimationFrame(frame);
   const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0; lastT = ts;
   const H = S.P.dt;
   if (kit.playing) {
-    acc += dt * kit.speed;
-    let n = 0; while (acc >= H && n < 2) { SV.step(S, H); acc -= H; n++; }
-    if (n === 2) acc = 0;
+    const n = SC.clockSteps(clock, dt, kit.speed, H);
+    for (let k = 0; k < n; k++) SV.step(S, H);
   } else if (kit.takeStep()) SV.step(S, H);
   veil = Math.max(0, veil - dt / 0.45);
   view = fitView(S, viewRect(), saverView && saverView.cam);

@@ -11,8 +11,12 @@
 //  look = { bg, bg2, ink, wall, accent, colorBy, lut (768 bytes), stream,
 //           vel, smooth, palette, veil }
 //
+//  The colour range of pressure, speed and vorticity is the 1st to 99th
+//  percentile of the open cells, eased by RANGE_EASE per frame so that the
+//  field brightness does not pump frame to frame.
+//
 //  grep -n targets: "export function fitView", "function fieldImage",
-//  "export function draw"
+//  "export function draw", "RANGE_EASE"
 // ============================================================================
 import { obstacleSDF } from './solver.js';
 
@@ -23,6 +27,8 @@ export function fitView(S, rect, cam) {
   return { s, ox: rect.x + rect.w / 2 - cx * s, oy: rect.y + rect.h / 2 + cy * s, rect };
 }
 
+// the share of the way the colour range moves to this frame's percentiles
+export const RANGE_EASE = 0.1;
 const GREY = (() => { const l = new Uint8Array(768); for (let i = 0; i < 256; i++) l[3 * i] = l[3 * i + 1] = l[3 * i + 2] = i; return l; })();
 const hex = h => { const n = parseInt(String(h).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 
@@ -55,6 +61,13 @@ function fieldImage(S, look, cache, makeCanvas) {
     if (m > 16) { const a = smp.subarray(0, m).sort(); lo = a[Math.floor(m * 0.01)]; hi = a[Math.floor(m * 0.99)]; }
     if (by === 'vorticity') { const w = Math.max(Math.abs(lo), Math.abs(hi), 1e-6); lo = -w; hi = w; }
     if (by === 'speed') lo = 0;
+    // ease the range: the percentiles move with every pressure spike, and
+    // a range that follows them each frame pumps the brightness of the
+    // whole field. A new grid or a new view snaps the range.
+    if (cache.rf === f && cache.rby === by && Number.isFinite(cache.rlo + cache.rhi)) {
+      lo = cache.rlo + (lo - cache.rlo) * RANGE_EASE; hi = cache.rhi + (hi - cache.rhi) * RANGE_EASE;
+    }
+    cache.rf = f; cache.rby = by; cache.rlo = lo; cache.rhi = hi;
   }
   if (!(hi > lo)) { hi = lo + 1; }
   cache.range = [lo, hi];

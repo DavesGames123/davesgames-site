@@ -7,10 +7,12 @@
 //    guard(next)             clamps a random draw so the scene stays stable
 //    sceneConfig(st, r)      the solver.buildScene config of a state
 //    applyParams(S, st)      live parameters onto the sim
+//    makeClock, clockSteps   solver steps per display frame (no judder)
 //  Our code (davesgames.io); the upstream credit is in solver.js.
 //
 //  grep -n targets: "export function makeSchema", "export function guard",
-//  "export function sceneConfig", "export function applyParams"
+//  "export function sceneConfig", "export function applyParams",
+//  "export function clockSteps"
 // ============================================================================
 import * as K from '../../widgets/sim-kit/core.js';
 import { SHAPES } from './solver.js';
@@ -112,4 +114,29 @@ export function applyParams(S, st) {
   const P = S.P;
   P.inVel = st.inVel; P.lid = st.lid; P.jet = st.jet; P.g = st.g; P.visc = st.visc;
   P.iters = st.iters; P.over = st.over ? 1.9 : 1.0; P.dt = st.dt === '120' ? 1 / 120 : 1 / 60;
+}
+
+// The step clock: how many solver steps a display frame gets. Safari gives
+// rAF times in whole milliseconds, so a 60 Hz display reports 17, 16, 17 ms.
+// A plain "while (acc >= dt)" accumulator then steps 0, 1, 2, 0, 1, 2 times
+// per frame: the field stops for one frame and jumps two steps on the next,
+// and the moving smoke and colour shimmer at 20 Hz. The clock looks at the
+// median frame time of the last 9 frames. When the frame time is near a
+// whole number k of steps (60 Hz: 1, 30 Hz in a throttled frame: 2), every
+// frame gets exactly k steps. At other rates (120 Hz, half speed) the
+// accumulator stays, and it gives a regular 0, 1, 0, 1 there.
+export function makeClock() { return { acc: 0, dts: [] }; }
+export function clockSteps(c, dt, speed, H, maxN = 2) {
+  if (!(dt > 0) || !(speed > 0)) return 0;
+  c.dts.push(dt); if (c.dts.length > 9) c.dts.shift();
+  const med = c.dts.slice().sort((a, b) => a - b)[c.dts.length >> 1];
+  const r = med * speed / H, k = Math.round(r);
+  if (k >= 1 && k <= maxN && Math.abs(r - k) < 0.1) { c.acc = 0; return k; }
+  // the mean frame time: 1 ms rounding cancels out over 9 frames, so a
+  // half-step frame (120 Hz, or half speed) steps 0, 1, 0, 1 and not 0, 0, 1
+  let mean = 0; for (const d of c.dts) mean += d; mean /= c.dts.length;
+  c.acc += mean * speed;
+  let n = 0; while (c.acc >= H * 0.999 && n < maxN) { c.acc -= H; n++; }
+  if (n === maxN) c.acc = 0;
+  return n;
 }
