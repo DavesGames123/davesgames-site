@@ -1,44 +1,47 @@
 // ============================================================================
 //  FLY DUEL  ·  cards and the table  (DOM module)
 // ----------------------------------------------------------------------------
-//  Draws cards and the game table as HTML. A card has the frame of
-//  ui/cardface.js (name bar, painted picture, type line, rules box, stat
-//  plate), styled by ui/card.css. The pictures are the public-domain plates
-//  in art/cards/. The mana glyphs come from ui/art.js. A card id with no
-//  picture falls back to the procedural art of ui/art.js. The game state comes from game/rules.js (package A):
+//  Every card here is a canvas card of ui/cardview.js: drawCard() of
+//  ui/cardface.js, the same face as the 3D table. This module writes the
+//  card shells as HTML strings, sets innerHTML, then calls hydrate() to
+//  draw them. The game state comes from game/rules.js:
 //    players[i] = { life, library, hand, battlefield, graveyard, landPlayed }
-//  A permanent is { uid, id, tapped, sick, dmg, pp, pt } (game/rules.js,
-//  pp/pt = pump this turn). permInfo() reads it, with fallbacks for other
-//  field names. Decks are DECKS[name] = { name, colour, list: [[id, n]] }.
+//  A permanent is { uid, id, tapped, sick, dmg, pp, pt } (pp/pt = pump this
+//  turn). permInfo() reads it, with fallbacks for other field names. Decks
+//  are DECKS[id] = { name, colours, desc, list: [[id, n]] } in DECK_ORDER.
 //
 //  Player 0 is Fly A (top of the layout is Fly B, bottom is Fly A, as two
 //  players at a table). The table re-renders on each decision, at most a
-//  few times per second, so plain innerHTML is enough.
+//  few times per second. hydrate() draws a shell on screen at once and
+//  copies a face that is in its cache, so the table does not flash.
+//
+//  Section 01 has the deck boxes (renderDecks) and the gallery with its
+//  filter bar (renderGallery, renderGalleryControls, filterCards).
 //
 //  GREP MAP
 //      grep -n 'export function permInfo'     read one permanent
 //      grep -n 'export function ensureCardCSS' link ui/card.css once
-//      grep -n 'export function cardHTML'     one card, full or mini
+//      grep -n 'export function cardHTML'     one card shell, full or mini
 //      grep -n 'export function renderBoard'  the table for one state
 //      grep -n 'export function deckCounts'   card id -> count in a deck
-//      grep -n 'function thumbHTML'            plate thumbnail of a deck row
-//      grep -n 'export function renderDecks'  section 01 deck lists
-//      grep -n 'export function renderGallery' section 01 card gallery
+//      grep -n 'function thumbHTML'           picture crop of a deck row
+//      grep -n 'export function renderDecks'  section 01 deck boxes
+//      grep -n 'export const GALLERY_ALL'     the empty filter
+//      grep -n 'export function galleryGroup' card -> colour group
+//      grep -n 'export function filterCards'  filter and sort the pool
+//      grep -n 'export function renderGallery' section 01 card grid
+//      grep -n 'export function renderGalleryControls' the filter bar
 // ============================================================================
-import { cardArt, costGlyphs, manaGlyph, colourKey } from './art.js';
-import { ART_CREDIT, artURL, typeLine, rulesRuns, frameKind, TOKEN_NOTE } from './cardface.js';
+import * as CM from '../game/cards.js';
+import { ART_CREDIT, artURL, typeLine, cardColours, colourOrder, colourInfo, manaValueOf, hasPlate } from './cardface.js';
+import { shellHTML, hydrate, glyphHTML } from './cardview.js';
+import { cardArt } from './art.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// Reminder text per keyword. main.js replaces it with KEYWORDS from
-// game/cards.js when that module loads (setKeywordText).
-export const KEYWORD_TEXT = {
-  swift: ['swift', 'can attack on the turn it enters'],
-  wings: ['wings', 'only creatures with wings can block it'],
-  sting: ['sting', 'any damage it deals to a creature destroys that creature'],
-  thick: ['thick', 'cannot attack'],
-  sap: ['sap', 'combat damage it deals also gives you that much life'],
-};
+// Reminder text per keyword: [display word, reminder]. Filled from
+// KEYWORDS of game/cards.js. main.js can replace it (setKeywordText).
+export const KEYWORD_TEXT = Object.fromEntries(Object.entries(CM.KEYWORDS || {}).map(([k, v]) => [k, [k, String(v).replace(/^[^:]*:\s*/, '')]]));
 export function setKeywordText(map) {
   for (const [k, v] of Object.entries(map || {})) KEYWORD_TEXT[k] = [k, String(v).replace(/^[^:]*:\s*/, '')];
 }
@@ -60,16 +63,11 @@ export function permInfo(p) {
   };
 }
 
-function ptOf(card, info) {
-  if (!card || card.type !== 'creature') return null;
-  return [(card.power ?? 0) + (info?.pp | 0), (card.toughness ?? 0) + (info?.pt | 0)];
-}
-
-// Link ui/card.css once, so the card frame has its styles before the page
-// links the file itself. No work without a DOM.
+// Link ui/card.css once, so the card layout has its styles before the
+// page links the file itself. No work without a DOM.
 let cardCssDone = false;
 export function ensureCardCSS() {
-  if (cardCssDone || typeof document === 'undefined') return;
+  if (cardCssDone || typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
   cardCssDone = true;
   if (document.querySelector('link[data-card-css]')) return;
   const href = new URL('./card.css', import.meta.url).href;
@@ -79,63 +77,31 @@ export function ensureCardCSS() {
   document.head.appendChild(l);
 }
 
-// The picture of a card: the plate when there is one, else the
-// procedural art.
-function pictureHTML(card, small) {
-  if (ART_CREDIT[card.id]) {
-    return `<img class="art" src="${esc(artURL(card.id, { small }))}" alt="${esc(card.name)}" loading="lazy" decoding="async" draggable="false">`;
-  }
-  return cardArt(card, 'art');
-}
-
-function rulesHTML(card) {
-  return rulesRuns(card).map(r => r.s === 'b' ? `<b>${esc(r.t)}</b>` : r.s === 'i' ? `<i>${esc(r.t)}</i>` : esc(r.t)).join('');
-}
-
-// One card. opts: { mini, tapped, damage, sick, info, count, hot, uid }.
+// One card shell. opts: { mini, tapped, damage, sick, info (pump), count,
+// hot, uid, attacking, blocking, dim, mode, zoomable }. hydrate() draws it.
 export function cardHTML(card, opts = {}) {
   ensureCardCSS();
-  if (!card) return `<div class="fcard fx ${opts.mini ? 'mini' : ''} unknown"><div class="fx-name"><span class="fx-title">?</span></div></div>`;
-  const ck = colourKey(card.colour);
-  const pt = ptOf(card, opts.info);
-  const pumped = !!((opts.info?.pp | 0) || (opts.info?.pt | 0));
-  const kw = (card.keywords || []).map(k => `<span class="kw" title="${esc(KEYWORD_TEXT[k]?.[1] || k)}">${esc(KEYWORD_TEXT[k]?.[0] || k)}</span>`).join('');
-  const cls = ['fcard', 'fx', `c-${ck}`, `f-${frameKind(card)}`, `t-${card.type}`, card.token ? 'token' : '', opts.mini ? 'mini' : '', opts.tapped ? 'tapped' : '', opts.sick ? 'sick' : '', opts.hot ? 'hot' : ''].filter(Boolean).join(' ');
-  const dmg = opts.damage ? `<span class="fx-dmg" title="${opts.damage} damage">−${opts.damage}</span>` : '';
-  const cnt = opts.count ? `<span class="fx-count">${opts.count}×</span>` : '';
-  const uid = opts.uid != null ? ` data-uid="${esc(opts.uid)}"` : '';
-  const title = `${card.name}${card.text ? ' — ' + card.text : ''}`;
-  const ptHTML = pt ? `<div class="fx-pt${pumped ? ' pumped' : ''}">${dmg}<span>${pt[0]}/${pt[1]}</span></div>` : '';
-  if (opts.mini) {
-    return `<div class="${cls}" data-id="${esc(card.id)}"${uid} title="${esc(title)}">`
-      + `<div class="fx-art">${pictureHTML(card, true)}</div>`
-      + `<div class="fx-name"><span class="fx-title">${esc(card.name)}</span></div>`
-      + (kw ? `<div class="fx-kws">${kw}</div>` : '')
-      + ptHTML + cnt + `</div>`;
-  }
-  const flav = card.flavour || (card.token ? TOKEN_NOTE : '');
-  const rules = rulesHTML(card);
-  const land = card.type === 'land'
-    ? `<div class="fx-landglyph">${manaGlyph(card.produces === 'moss' ? 'moss' : card.produces === 'amber' ? 'amber' : 'generic', 1, 40)}</div>` : '';
-  const credit = ART_CREDIT[card.id] ? `<div class="fx-credit">Art: ${esc(ART_CREDIT[card.id])}</div>` : '';
-  return `<div class="${cls}" data-id="${esc(card.id)}"${uid}>`
-    + `<div class="fx-name"><span class="fx-title">${esc(card.name)}</span><span class="fx-cost">${costGlyphs(card.cost, 16)}</span></div>`
-    + `<div class="fx-art">${pictureHTML(card, false)}</div>`
-    + `<div class="fx-type">${esc(typeLine(card))}</div>`
-    + `<div class="fx-text${rules ? '' : ' only-flavour'}">${land}${rules ? `<p class="fx-rules">${rules}</p>` : ''}${flav ? `<p class="fx-flav">${esc(flav)}</p>` : ''}</div>`
-    + ptHTML + credit + cnt
-    + `</div>`;
+  const st = {
+    tapped: opts.tapped, sick: opts.sick, hot: opts.hot, attacking: opts.attacking, blocking: opts.blocking, dim: opts.dim,
+    damage: opts.damage | 0, pp: opts.info?.pp | 0, pt: opts.info?.pt | 0,
+  };
+  return shellHTML(card, { mini: opts.mini, state: st, count: opts.count, uid: opts.uid, mode: opts.mode, zoomable: opts.zoomable,
+    art: card && !hasPlate(card.id) && !CM.CARD?.[card.id] ? procedural(card) : undefined });
 }
 
+// The procedural picture (ui/art.js) of a card that is not in
+// game/cards.js. cardview draws it from the shell.
+function procedural(card) { return cardArt(card, 'art'); }
+
 function landChip(card, info) {
-  const ck = colourKey(card?.colour);
-  const g = ck === 'amber' ? manaGlyph('amber', 0, 15) : ck === 'moss' ? manaGlyph('moss', 0, 15) : manaGlyph('generic', 1, 15);
-  return `<span class="land ${info.tapped ? 'tapped' : ''}" title="${esc(card?.name || 'land')}${info.tapped ? ' (tapped)' : ''}">${g}</span>`;
+  const ks = cardColours(card);
+  const g = glyphHTML(ks.length ? Object.fromEntries(ks.map(k => [k, 1])) : { generic: 1 }, 15, card?.name || 'land');
+  return `<span class="land ${info.tapped ? 'tapped' : ''}" data-zoom="1" data-id="${esc(card?.id ?? '')}" title="${esc(card?.name || 'land')}${info.tapped ? ' (tapped)' : ''}">${g}</span>`;
 }
 
 // The table for one state. opts: { byId: Map, names: [a, b], hands:
-// 'open' | 'count', hot: Set of uids to light, last: string, lastWho:
-// seat of the last action, banner: { text, seat } at a game end }.
+// 'open' | 'count' | 'none', hot: Set of uids to light, last: string,
+// lastWho: seat of the last action, banner: { text, seat } at a game end }.
 export function renderBoard(root, state, opts = {}) {
   if (!root) return;
   if (!state || !state.players) { root.innerHTML = `<div class="board-empty">${esc(opts.empty || 'Waiting for the rules engine.')}</div>`; return; }
@@ -170,6 +136,7 @@ export function renderBoard(root, state, opts = {}) {
     ? `<div class="midline banner${ban.seat >= 0 ? ` s${ban.seat}` : ''}" role="note"><b>${esc(ban.text)}</b></div>`
     : `<div class="midline"><span>turn ${state.turn ?? '?'}${phase ? ' · ' + esc(phase) : ''}</span><span class="last${opts.lastWho != null ? ` s${opts.lastWho}` : ''}">${esc(opts.last || '')}</span></div>`;
   root.innerHTML = side(1) + mid + side(0);
+  hydrate(root);
 }
 
 // card id -> count for a deck given as { list: [[id, n]] }, as ids, as
@@ -188,35 +155,147 @@ export function deckCounts(deck) {
   return m;
 }
 
-// A small crop of the plate of a card for a deck list row (the 240 px
-// file, shown at 32 x 24 px). An id with no plate gets an empty box.
+// A crop of the picture of a card for a deck row, 32 x 24 px: the 240 px
+// plate file, or a canvas that cardview draws with the procedural picture.
 function thumbHTML(card) {
-  if (!ART_CREDIT[card.id]) return '<span class="dl-art none"></span>';
-  return `<img class="dl-art" src="${esc(artURL(card.id, { small: true }))}" alt="" loading="lazy" decoding="async" draggable="false">`;
+  if (ART_CREDIT[card.id] || hasPlate(card.id)) return `<img class="dl-art" src="${esc(artURL(card.id, { small: true }))}" alt="" loading="lazy" decoding="async" draggable="false">`;
+  return `<canvas class="dl-art" data-art-id="${esc(card.id)}" width="32" height="24" aria-hidden="true"></canvas>`;
 }
 
-// Section 01: the two deck lists, sorted lands, creatures by cost, spells.
-// Each row: count, a thumbnail of the plate, name, cost.
-export function renderDecks(root, cards, decks) {
+function deckColoursOf(deck, name, counts, byId) {
+  let cs = deck.colours || (deck.colour ? [deck.colour] : null);
+  if (!cs || !cs.length) {
+    const set = new Set();
+    for (const id of counts.keys()) for (const k of cardColours(byId.get(id))) set.add(k);
+    cs = [...set];
+  }
+  if (!cs.length && name) cs = [name];
+  const order = colourOrder();
+  return cs.map(c => String(c).toLowerCase()).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+}
+
+// Section 01: one deck box per deck, in DECK_ORDER. A box is a <details>:
+// the summary has the name, the colour glyphs, the size, the text of the
+// deck and its three most costly cards. The list (lands, creatures by
+// cost, spells) opens under it. Each row opens the card in the inspector.
+export function renderDecks(root, cards, decks, { order } = {}) {
   if (!root) return;
   const byId = new Map(cards.map(c => [c.id, c]));
-  const cmc = c => (c.cost?.generic | 0) + (c.cost?.amber | 0) + (c.cost?.moss | 0);
-  const order = { land: 0, creature: 1, spell: 2 };
-  root.innerHTML = Object.entries(decks).filter(([, d]) => d && (Array.isArray(d) || typeof d === 'object')).slice(0, 2).map(([name, deck]) => {
-    const counts = [...deckCounts(deck)].map(([id, n]) => ({ c: byId.get(id), n })).filter(o => o.c)
-      .sort((a, b) => order[a.c.type] - order[b.c.type] || cmc(a.c) - cmc(b.c) || a.c.name.localeCompare(b.c.name));
-    const total = counts.reduce((s, o) => s + o.n, 0);
-    const lands = counts.filter(o => o.c.type === 'land').reduce((s, o) => s + o.n, 0);
+  const typeRank = { land: 0, creature: 1 };
+  const ids = (order || CM.DECK_ORDER || Object.keys(decks)).filter(k => decks[k] && typeof decks[k] === 'object');
+  const many = ids.length > 2;
+  root.classList?.add('cv-decks');
+  root.innerHTML = ids.map((name, i) => {
+    const deck = decks[name];
+    const counts = deckCounts(deck);
+    const rows = [...counts].map(([id, n]) => ({ c: byId.get(id), n })).filter(o => o.c)
+      .sort((a, b) => (typeRank[a.c.type] ?? 2) - (typeRank[b.c.type] ?? 2) || manaValueOf(a.c) - manaValueOf(b.c) || a.c.name.localeCompare(b.c.name));
+    const total = rows.reduce((s, o) => s + o.n, 0);
+    const lands = rows.filter(o => o.c.type === 'land').reduce((s, o) => s + o.n, 0);
     const title = deck.name || (name[0].toUpperCase() + name.slice(1));
-    return `<div class="decklist c-${colourKey(deck.colour || name)}"><h4>${esc(title)} <small>${total} cards, ${lands} lands</small></h4><ul>`
-      + counts.map(o => `<li title="${esc(o.c.name)}${o.c.text ? ' — ' + esc(o.c.text) : ''}"><b>${o.n}</b>${thumbHTML(o.c)}<span class="dl-name c-${colourKey(o.c.colour)} t-${o.c.type}">${esc(o.c.name)}</span><span class="dl-cost">${costGlyphs(o.c.cost, 13)}</span></li>`).join('')
-      + `</ul></div>`;
+    const cs = deckColoursOf(deck, name, counts, byId);
+    const pips = glyphHTML(Object.fromEntries(cs.map(k => [k, 1])), 16, cs.map(k => colourInfo(k).name).join(' and '));
+    const fan = rows.filter(o => o.c.type !== 'land').sort((a, b) => manaValueOf(b.c) - manaValueOf(a.c) || b.n - a.n || a.c.name.localeCompare(b.c.name)).slice(0, 3);
+    const fanHTML = fan.map(o => shellHTML(o.c, { mode: 'thumb', count: 0 })).join('');
+    const open = !many || i === 0 ? ' open' : '';
+    return `<details class="decklist cv-deck c-${esc(cs[0] || 'none')}${cs.length > 1 ? ' multi' : ''}" data-deck="${esc(name)}"${open}>`
+      + `<summary><h4>${esc(title)} <small>${total} cards, ${lands} lands</small></h4><span class="cv-pips">${pips}</span>`
+      + (deck.desc ? `<span class="cv-desc">${esc(deck.desc)}</span>` : '')
+      + (fanHTML ? `<span class="cv-fan">${fanHTML}</span>` : '')
+      + `<span class="cv-open">List</span></summary><ul>`
+      + rows.map(o => `<li data-zoom="1" data-id="${esc(o.c.id)}" data-count="${o.n}" tabindex="0" role="button" title="${esc(o.c.name)}${o.c.text ? ' — ' + esc(o.c.text) : ''}"><b>${o.n}</b>${thumbHTML(o.c)}<span class="dl-name t-${esc(o.c.type)}">${esc(o.c.name)}</span><span class="dl-cost">${glyphHTML(o.c.cost, 13)}</span></li>`).join('')
+      + `</ul></details>`;
   }).join('');
+  hydrate(root);
 }
 
-// Section 01: a gallery of full cards, filtered by colour or type.
+// ------------------------------------------------------------ the gallery
+// Filter: colour 'all' | a colour key | 'multi' | 'none' | 'land'; type
+// 'all' | 'creature' | 'spell' | 'land'; cost 'all' | '0'...'4' | '5'
+// (5 or more); q a search text (name, type line, rules, flavour).
+export const GALLERY_ALL = Object.freeze({ colour: 'all', type: 'all', cost: 'all', q: '' });
+
+// The colour group of a card: a colour key, 'multi', 'none' or 'land'.
+export function galleryGroup(card) {
+  if (card?.type === 'land') return 'land';
+  const cs = cardColours(card);
+  return cs.length === 0 ? 'none' : cs.length === 1 ? cs[0] : 'multi';
+}
+
+// Filter and sort: colour group in order (each colour, multicolour,
+// colourless, lands), then cost, then name. A string filter is the old
+// form: a colour key or a type.
+export function filterCards(cards, f = GALLERY_ALL) {
+  if (typeof f === 'string') f = f === 'all' ? GALLERY_ALL : ['creature', 'spell', 'land'].includes(f) ? { ...GALLERY_ALL, type: f } : { ...GALLERY_ALL, colour: f };
+  f = { ...GALLERY_ALL, ...f };
+  const q = String(f.q || '').trim().toLowerCase();
+  const order = [...colourOrder(), 'multi', 'none', 'land'];
+  const rank = c => { const g = galleryGroup(c); const i = order.indexOf(g); return i < 0 ? 99 : i; };
+  return cards.filter(c => {
+    if (!c) return false;
+    const grp = galleryGroup(c);
+    if (f.colour !== 'all') {
+      if (f.colour === 'multi' || f.colour === 'none' || f.colour === 'land') { if (grp !== f.colour) return false; }
+      else if (c.type === 'land' || !cardColours(c).includes(f.colour)) return false;
+    }
+    if (f.type !== 'all' && c.type !== f.type) return false;
+    if (f.cost !== 'all') { const mv = manaValueOf(c); if (f.cost === '5' ? mv < 5 : mv !== +f.cost) return false; }
+    if (q) {
+      const hay = `${c.name} ${typeLine(c)} ${c.text || ''} ${c.flavour || ''} ${(c.keywords || []).join(' ')}`.toLowerCase();
+      if (!q.split(/\s+/).every(w => hay.includes(w))) return false;
+    }
+    return true;
+  }).sort((a, b) => rank(a) - rank(b) || manaValueOf(a) - manaValueOf(b) || a.name.localeCompare(b.name));
+}
+
+// Section 01: the grid of cards for a filter. Returns the number shown.
 export function renderGallery(root, cards, filter = 'all') {
-  if (!root) return;
-  const pick = cards.filter(c => filter === 'all' || colourKey(c.colour) === filter || c.type === filter);
+  if (!root) return 0;
+  root.classList?.add('cv-gallery');
+  const pick = filterCards(cards, filter);
   root.innerHTML = pick.map(c => cardHTML(c)).join('') || '<p class="none">No cards in this filter.</p>';
+  hydrate(root);
+  return pick.length;
+}
+
+// The filter bar: colour chips (each colour with its glyph, multicolour,
+// colourless, lands), type chips, cost chips, a search box and the count.
+// onChange(filter) runs on each change. Returns { set(n) } to show the
+// count of shown cards.
+export function renderGalleryControls(root, cards, filter, onChange) {
+  if (!root) return { set() {} };
+  let f = { ...GALLERY_ALL, ...filter };
+  const groups = new Set(cards.map(galleryGroup));
+  const colours = colourOrder().filter(k => cards.some(c => c.type !== 'land' && cardColours(c).includes(k)));
+  const chip = (key, v, label, extra = '') => `<button type="button" class="cv-chip" data-f="${key}" data-v="${esc(v)}" aria-pressed="${f[key] === v}">${extra}${esc(label)}</button>`;
+  const colourChips = [chip('colour', 'all', 'All')]
+    .concat(colours.map(k => chip('colour', k, colourInfo(k).name, glyphHTML({ [k]: 1 }, 14, ''))))
+    .concat(groups.has('multi') ? [chip('colour', 'multi', 'Multicolour')] : [])
+    .concat(groups.has('none') ? [chip('colour', 'none', 'Colourless')] : [])
+    .concat(groups.has('land') ? [chip('colour', 'land', 'Lands')] : []);
+  const typeChips = [chip('type', 'all', 'Any'), chip('type', 'creature', 'Creatures'), chip('type', 'spell', 'Spells')];
+  const costChips = [chip('cost', 'all', 'Any')].concat(['0', '1', '2', '3', '4'].map(v => chip('cost', v, v))).concat([chip('cost', '5', '5+')]);
+  root.classList?.remove('seg');
+  root.classList?.add('cv-filters');
+  root.setAttribute?.('aria-label', 'Filter the cards');
+  root.innerHTML = `<div class="cv-row" role="group" aria-label="Colour"><span class="cv-lab">Colour</span>${colourChips.join('')}</div>`
+    + `<div class="cv-row" role="group" aria-label="Type"><span class="cv-lab">Type</span>${typeChips.join('')}</div>`
+    + `<div class="cv-row" role="group" aria-label="Cost"><span class="cv-lab">Cost</span>${costChips.join('')}</div>`
+    + `<div class="cv-row"><input class="cv-search" type="search" placeholder="Search name or text" aria-label="Search the cards" value="${esc(f.q)}"><span class="cv-found" aria-live="polite"></span></div>`;
+  hydrate(root);
+  root.addEventListener?.('click', e => {
+    const b = e.target?.closest?.('.cv-chip');
+    if (!b) return;
+    f = { ...f, [b.dataset.f]: b.dataset.v };
+    for (const x of root.querySelectorAll(`.cv-chip[data-f="${b.dataset.f}"]`)) x.setAttribute('aria-pressed', String(x === b));
+    onChange?.(f);
+  });
+  let t = 0;
+  root.addEventListener?.('input', e => {
+    if (!e.target?.classList?.contains('cv-search')) return;
+    clearTimeout(t);
+    t = setTimeout(() => { f = { ...f, q: e.target.value }; onChange?.(f); }, 120);
+  });
+  const found = root.querySelector?.('.cv-found');
+  return { set(n) { if (found) found.textContent = `${n} of ${cards.length} cards`; } };
 }
