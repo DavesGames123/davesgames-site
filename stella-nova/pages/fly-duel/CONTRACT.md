@@ -32,6 +32,13 @@ about the simulation and layout in fullscreen"
   behind "How it works" (no kicker, chips, stage tag or section text over
   the game). Messages that a player needs ("wait for your turn") show at
   the control that was used, not as page-wide notices.
+- Brains (user, verbatim): "let's make sure we have a beautifully
+  represented fly brain on both sides". Fly A and Fly B each get a large,
+  beautiful, live brain view placed symmetrically (A on its side, B on
+  its side) that never covers the cards or a hand: real neuron positions,
+  the neuropil shell, KC sparse firing, spikes on real edges, DAN bursts
+  per compartment, crisp (no soft glow). Play mode keeps the opponent's
+  brain big and drops only the human seat's map.
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
 
