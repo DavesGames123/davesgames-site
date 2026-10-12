@@ -39,6 +39,11 @@
 //    untap     p, uids                    lands and creatures untap
 //    pass      p, label                   the fly passes (no attack, ...)
 //    win       winner, reason             the game ends
+//    toss      p, winner, n               the loser p throws its n hand
+//                                         cards and puts its head down
+//                                         (same time as win; no toss on
+//                                         a draw). The mirror keeps the
+//                                         hand: the throw is only shown
 //    beat      from, to                   the turn goes to the other fly:
 //                                         both flies settle, the camera
 //                                         goes wide, a short hold
@@ -123,7 +128,7 @@ export const TIMING = {
   reveal: 0.45, spark: 0.4, hurt: 0.9, pump: 0.6, token: 0.5, draw: 0.55,
   drawGap: 0.2, spent: 0.55, attack: 0.65, block: 0.6, strike: 0.45,
   life: 0.7, die: 0.65, settle: 0.45, discard: 0.5, endturn: 0.1,
-  turn: 0.45, untap: 0.4, pass: 0.45, win: 3.2, sync: 0,
+  turn: 0.45, untap: 0.4, pass: 0.45, win: 3.2, toss: 2.4, sync: 0,
   beat: 1.25, hold: 0.8,
   trigger: 0.55, ramp: 0.6, bounce: 0.6, raise: 0.6, tapped: 0.5, grow: 0.6,
   counters: 0.55, roll: 1.4,
@@ -135,7 +140,7 @@ export const BIG_POWER = 4, BIG_HIT = 4;
 // cut) and the time between steps stays, so each change is still seen.
 export const MOVE_OPS = new Set(['lift', 'land', 'tap', 'cast', 'reveal', 'draw', 'spent',
   'attack', 'block', 'strike', 'die', 'settle', 'discard', 'untap', 'token', 'spark',
-  'ramp', 'bounce', 'raise', 'tapped', 'roll']);
+  'ramp', 'bounce', 'raise', 'tapped', 'roll', 'toss']);
 
 const power = perm => (CARD[perm.id]?.power || 0) + (perm.pp || 0) + (perm.pc || 0);
 const toughness = perm => (CARD[perm.id]?.toughness || 0) + (perm.pt || 0) + (perm.pc || 0);
@@ -338,7 +343,14 @@ export function choreograph(rec, opts = {}) {
     if (sameStart(A.players[q].hand, m.players[q].hand)) for (const c of drawn) ctx.emit('draw', { p: q, card: c, fallback: true }, T.drawGap, T.draw);
     if (A.players[q].life !== m.players[q].life) ctx.emit('life', { p: q, from: m.players[q].life, to: A.players[q].life, fallback: true });
   }
-  if (A.result && !m.result) ctx.emit('win', { winner: A.result.winner, reason: A.result.reason });
+  if (A.result && !m.result) {
+    // The loser throws its hand at the same time (user: "we should have
+    // the loser throw their cards and put their head down on the table
+    // if they lose"). A draw has no loser.
+    const w = A.result.winner, lost = w === 0 || w === 1;
+    ctx.emit('win', { winner: w, reason: A.result.reason }, lost ? 0 : T.win);
+    if (lost) ctx.emit('toss', { p: 1 - w, winner: w, n: m.players[1 - w].hand.length }, T.win, T.toss);
+  }
   ctx.emit('sync', {}, 0, 0);
 
   steps.sort((a, b) => a.at - b.at);
