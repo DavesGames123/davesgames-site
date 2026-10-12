@@ -18,6 +18,11 @@
 //  look point, and it reacts on the hold steps (big plays) and on the
 //  win. Other flies play fake games at the other tables.
 //
+//  Dice. A roll step (record.rolls) throws a real Dice Lab die on the mat
+//  of the fly (ui/fly3d/dice3d.js, Rapier when it loads, else a scripted
+//  tumble), and the engine value comes up. A permanent with counters
+//  carries a small d6 (a d20 over 6) per counter kind.
+//
 //  Cards: every face is drawCard() of ui/cardface.js on a 5:7 canvas, the
 //  painted plate card of section 01. The face is drawn again when its
 //  picture (loadCardArt) and the STIX font load. The back of every card,
@@ -80,9 +85,10 @@ import { drawCard, cardBack, loadCardArt, getCardArt } from '../cardface.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
 import { landProduces, colourHex, tokenShape, stackLayout, STACK } from './mana.js';
-import { buildHall, HALL, CROWD_SECTOR } from './hall.js';
+import { buildHall, HALL, CROWD_SECTOR, MAT } from './hall.js';
 import { createDirector, recordInfo, SHOTS } from './director.js';
 import { createLifeDice } from './d20.js';
+import { createDice } from './dice3d.js';
 
 // ------------------------------------------------------------ dimensions
 export const TABLE = {
@@ -649,6 +655,13 @@ export function createDuelScene(canvas, opts = {}) {
     return { dice: d, grp: d.group, value: null };
   });
 
+  // ---------------------------------------------------------- dice
+  // Thrown dice (record.rolls) and counter dice (permanent.counters), from
+  // the Dice Lab shapes and physics (ui/fly3d/dice3d.js).
+  const dice = createDice({ reduced, coarse, physics: opts.dicePhysics !== false });
+  scene.add(dice.group);
+  const counterKeys = new Set();
+
   // ---------------------------------------------------------- flies
   const flies = [0, 1].map(p => ({
     p, holder: new THREE.Group(), mod: PLACEHOLDER, built: null,
@@ -893,6 +906,14 @@ export function createDuelScene(canvas, opts = {}) {
       const d = drums[p];
       if (d.value !== pl.life) { d.dice.set(pl.life, { instant: d.value == null || snap }); d.value = pl.life; }
     }
+    // counter dice on permanents with counters
+    const seen = new Set();
+    for (let p = 0; p < 2; p++) for (const x of mirror.players[p].battlefield) {
+      if (!x.counters) continue;
+      const o = Z.perms.get(x.uid);
+      dice.setCounters(x.uid, x.counters, o ? o.mesh : null); seen.add(x.uid); counterKeys.add(x.uid);
+    }
+    for (const k of counterKeys) if (!seen.has(k)) { dice.setCounters(k, null); counterKeys.delete(k); }
     // pips that lost their land
     for (const [uid, pip] of Z.pips) if (!Z.perms.has(uid) && !pip.userData.flying) { W.fx.remove(pip); Z.pips.delete(uid); }
   }
@@ -1428,8 +1449,12 @@ export function createDuelScene(canvas, opts = {}) {
     },
     counters(s) { const o = Z.perms.get(s.uid); if (o) o.pulse = 1; },
     roll(s) {
-      const at = s.uid != null && Z.perms.get(s.uid) ? Z.perms.get(s.uid).toP.clone() : seatPos(s.p, 0.9, 0, T.landV - 0.9);
-      banner(`d${s.die} \u00b7 ${s.value}`, FLY[s.p], at.add(new THREE.Vector3(0, 0.5, 0)), 1.0);
+      // a real die on the mat of the fly; the engine value comes up
+      const at = seatPos(s.p, 0, 0.012, (MAT.v0 + MAT.v1) / 2);
+      const seed = ((cur?.rec?.i ?? cur?.rec?.idx ?? 0) * 131 + (s.i | 0) * 17 + s.value * 7 + 1) >>> 0;
+      dice.roll([{ die: s.die, value: s.value }], { p: s.p, at, yaw: YAW[s.p], seed }).then(() => {}, () => {});
+      const o = s.uid != null ? Z.perms.get(s.uid) : null;
+      if (o) o.pulse = 1;
     },
     sync() {
       const want = mirrorOf(cur.rec.after);
@@ -1463,6 +1488,7 @@ export function createDuelScene(canvas, opts = {}) {
     }
     const plan = choreograph(rec, { reduced: W.reduced });
     recInfo = recordInfo(rec);
+    if (plan.steps.some(x => x.op === 'roll' || x.op === 'counters')) dice.warm();
     cur = { rec, plan, t: 0, i: 0, resolve, struck: new Set() };
   }
   function advance(dt) {
@@ -1531,6 +1557,7 @@ export function createDuelScene(canvas, opts = {}) {
     for (const o of Z.held) o?.update(sdt);
     for (const o of loose) { o.update(sdt); if (!o.mesh.parent) loose.delete(o); }
     for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(sdt)) fx.splice(i, 1);
+    dice.update(sdt);
     for (const pip of Z.pips.values()) {
       const u = pip.userData;
       if (u.flying) continue;
@@ -1624,7 +1651,7 @@ export function createDuelScene(canvas, opts = {}) {
       cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length,
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
-      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(),
+      brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(), dice: dice.stats(),
     };
   }
   function dispose() {
@@ -1634,14 +1661,14 @@ export function createDuelScene(canvas, opts = {}) {
     for (const f of flies) { try { f.built?.dispose?.(); } catch { /* gone */ } }
     for (const b of brains) { try { b?.dispose?.(); } catch { /* gone */ } }
     scene.traverse(o => { if (o.isMesh) { o.geometry?.dispose(); for (const m of [].concat(o.material)) { m.map?.dispose(); m.dispose(); } } });
-    W.tex.dispose(); W.sprites.dispose(); tok.dispose(); hall.dispose();
+    W.tex.dispose(); W.sprites.dispose(); tok.dispose(); hall.dispose(); dice.dispose();
     for (const d of drums) d.dice.dispose();
     renderer?.dispose();
   }
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
-    world: { W, Z, flies, drums, piles, lights, hall, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
+    world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }
 
