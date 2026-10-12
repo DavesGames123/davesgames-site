@@ -15,6 +15,12 @@ about the simulation and layout in fullscreen"
   Keep the honesty line ("a model wired from the connectome, not a real
   fly"), the not-affiliated line and the credits reachable from the HUD.
   Keep the facts and tests that guard them, but the text can shrink.
+- Setting (user, verbatim): "it should definitely be done on a convention
+  table not a proper card table foldling table with mana mats and other
+  flies nearby engaged in fake other games". A convention hall: long
+  folding table, a playmat per fly (our own design), dice and deck boxes,
+  rows of other tables where other flies play their own fake games, a
+  crowd watching. Saver and review must follow this setting.
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
 
