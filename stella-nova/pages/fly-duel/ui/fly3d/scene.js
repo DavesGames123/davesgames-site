@@ -47,8 +47,9 @@
 //        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), ready, stats(), world }
 //      setCamera: 'auto' (the steps pick the shots), 'wide', 'free' (the
-//      user orbits, no cuts), 'script' (only shoot() cuts). Shots: wide,
-//      over, close, combat, win.
+//      user orbits, no cuts), 'script' (only shoot() cuts). Shots
+//      (ui/fly3d/director.js SHOTS): wide, over, close, follow, dolly,
+//      combat, crane, low, crowd, win, seat.
 //      canvas null or headless: true builds the scene graph without a
 //      renderer (node tests).
 //
@@ -67,7 +68,8 @@
 //      grep -n 'function placeholderAnimate'  stand-in clips
 //      grep -n 'function layout'              where every card goes
 //      grep -n 'const STEP'                   one handler per choreo op
-//      grep -n 'function director'            camera shots
+//      grep -n 'function shotPose'            camera place per shot
+//      grep -n 'function shotSubject'         what a shot looks at (tests)
 //      grep -n 'export function createDuelScene'
 // ============================================================================
 import * as THREE from 'three';
@@ -78,7 +80,8 @@ import { drawCard, cardBack, loadCardArt, getCardArt } from '../cardface.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
 import { landProduces, colourHex, tokenShape, stackLayout, STACK } from './mana.js';
-import { buildHall, HALL } from './hall.js';
+import { buildHall, HALL, CROWD_SECTOR } from './hall.js';
+import { createDirector, recordInfo, SHOTS } from './director.js';
 import { createLifeDice } from './d20.js';
 
 // ------------------------------------------------------------ dimensions
@@ -1075,27 +1078,56 @@ export function createDuelScene(canvas, opts = {}) {
   const flyHead = p => seatPos(p, 0, 1.15, T.seatV - 0.15);
 
   // ---------------------------------------------------------- director
-  const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 80);
-  const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), wantPos: new THREE.Vector3(), wantLook: new THREE.Vector3(), shot: 'wide', p: 0, az: 0.35, userUntil: -1, since: -99 };
-  // A shot holds at least HOLD seconds (scene time), so the camera does
-  // not swing on each small decision. force: a cast, a combat or the end
-  // of the game cuts at once.
-  const HOLD = 3.2;
+  // ui/fly3d/director.js picks the shot from the steps (createDirector,
+  // onStep in runStep). shotPose() turns the shot into a camera place and
+  // look point each frame. A 'cut' shot jumps there, an 'ease' shot moves
+  // there at SHOTS[shot].rate. Reduced motion: every change is a cut.
+  const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 120);
+  const dir = createDirector({ reduced });
+  const cam = {
+    pos: new THREE.Vector3(), look: new THREE.Vector3(), wantPos: new THREE.Vector3(), wantLook: new THREE.Vector3(),
+    az: 0.35, userUntil: -1,
+    get shot() { return dir.state.shot; }, get p() { return dir.state.p; }, get since() { return dir.state.since; },
+  };
   const TALL = 0.95;
-  // Camera mode (setCamera): 'auto' lets the steps call director();
+  // Camera mode (setCamera): 'auto' lets the steps pick the shots;
   // 'wide' holds the wide shot; 'free' leaves the camera to the user's
   // orbit; 'script' takes shots only from shoot() (the saver director).
   let camMode = 'auto';
+  let recInfo = { action: { type: 'pass' }, lethal: false, loser: -1 };
   function director(shot, p = 0, force = false) {
-    if (camMode !== 'auto') return;
-    if (cam.shot === shot && cam.p === p) return;
-    if (!force && sceneT - cam.since < HOLD) return;
-    cam.shot = shot; cam.p = p; cam.since = sceneT;
+    if (camMode !== 'auto') return false;
+    return dir.request(shot, p, sceneT, { force });
   }
+  const _t1 = new THREE.Vector3(), _t2 = new THREE.Vector3(), _t3 = new THREE.Vector3();
+  // The world point that a shot target names (null when it is gone).
+  function targetPos(tg, out) {
+    if (!tg) return null;
+    if (tg.kind === 'held') { const o = Z.held[tg.p]; return o ? out.copy(o.mesh.position) : null; }
+    if (tg.kind === 'perm') { const o = Z.perms.get(tg.uid); return o ? out.copy(o.mesh.position) : null; }
+    if (tg.kind === 'uids') {
+      out.set(0, 0, 0); let n = 0;
+      for (const u of tg.uids) { const o = Z.perms.get(u); if (o) { out.add(o.mesh.position); n++; } }
+      return n ? out.multiplyScalar(1 / n) : null;
+    }
+    return null;
+  }
+  const seatDir = (p, out) => out.set(0, 0, p === 0 ? 1 : -1);
+  // First person at a seat (play mode): above and behind the head of the
+  // fly at that seat, looking down over its own mat to the other fly. The
+  // line of sight to the mat centre passes over the head of the fly.
+  let fpSeat = null;
+  function seatPose(p, pos, look) {
+    seatPos(p, 0, 2.05, T.seatV + 0.55, pos);
+    seatPos(p, 0, 0.35, 0.2, look);
+  }
+  const shotK = (secs) => (W.reduced ? 1 : easeIO(Math.min(1, (sceneT - dir.state.since) / secs)));
   function shotPose(dt) {
     const aspect = camera.aspect || 1.6;
     const fit = Math.max(1, 1.45 / aspect);           // tall frames step back
-    const s = speed > 2.5 ? 'wide' : cam.shot;
+    const st = dir.state;
+    const s = speed > 2.5 && st.shot !== 'seat' ? 'wide' : st.shot;
+    const P0 = st.p;
     // A tall frame (a phone, aspect < TALL) does not step back from the
     // side view: at 0.65 the camera went past the wall and each fly was
     // about 70 px high. The wide and combat shots look along the line
@@ -1103,33 +1135,83 @@ export function createDuelScene(canvas, opts = {}) {
     if (aspect < TALL && (s === 'wide' || s === 'win' || s === 'combat')) {
       const r = 13.5 * Math.max(1, 0.68 / aspect);
       let el = 0.55, az = 0.28, toward = 0.8;
-      if (s === 'combat') { el = 0.75; az = cam.p === 0 ? 0.3 : Math.PI + 0.3; toward = cam.p === 0 ? 0.6 : -0.6; }
+      if (s === 'combat') { el = 0.75; az = P0 === 0 ? 0.3 : Math.PI + 0.3; toward = P0 === 0 ? 0.6 : -0.6; }
       else if (!W.reduced) { cam.az += dt * 0.05; az += 0.12 * Math.sin(cam.az); }
       cam.wantLook.set(0, T.y + 0.3, toward);
       cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + 0.3 + Math.sin(el) * r, toward + Math.cos(az) * Math.cos(el) * r);
     } else if (s === 'wide' || s === 'win') {
-      if (!W.reduced) cam.az += dt * 0.05;
+      if (!W.reduced) cam.az += dt * (s === 'win' ? 0.12 : 0.05);
       const r = 10 * fit, el = 0.48;
       const az = Math.PI / 2 + 0.55 * Math.sin(cam.az);
       cam.wantLook.set(0, T.y + 0.5, 0);
       cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + 0.5 + Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
     } else if (s === 'over') {
       // over the right shoulder of the fly, high enough to see its fan
-      seatPos(cam.p, (cam.p === 0 ? 2.0 : -2.0) * fit, 3.0, T.seatV + 0.9 * fit, cam.wantPos);
-      seatPos(cam.p, -0.2, 0.25, T.seatV - 1.7, cam.wantLook);
+      seatPos(P0, (P0 === 0 ? 2.0 : -2.0) * fit, 3.0, T.seatV + 0.9 * fit, cam.wantPos);
+      seatPos(P0, -0.2, 0.25, T.seatV - 1.7, cam.wantLook);
     } else if (s === 'close') {
       // in front of the held card: the card face, the mana tokens and
       // the face of the fly behind it
-      seatPos(cam.p, -0.35, 1.5, T.stageV - 2.2 * fit, cam.wantPos);
-      seatPos(cam.p, 0.3, T.stageY + 0.05, T.stageV + 0.35, cam.wantLook);
+      seatPos(P0, -0.35, 1.5, T.stageV - 2.2 * fit, cam.wantPos);
+      if (!targetPos(st.target, cam.wantLook)) seatPos(P0, 0.3, T.stageY + 0.05, T.stageV + 0.35, cam.wantLook);
+    } else if (s === 'follow') {
+      // behind and above the seat side of the card, the card in the
+      // middle of the frame while it goes from the hand to the mat
+      if (!targetPos(st.target, cam.wantLook)) stagePose(P0, cam.wantLook);
+      seatDir(P0, _t1);
+      _t2.set(P0 === 0 ? 1 : -1, 0, 0);
+      cam.wantPos.copy(cam.wantLook).addScaledVector(_t1, 2.4 * fit).addScaledVector(_t2, 1.3 * fit);
+      cam.wantPos.y = Math.max(cam.wantLook.y, T.y) + 2.6 * fit;
+    } else if (s === 'dolly') {
+      // from the defending side, a slow push onto the attackers
+      if (!targetPos(st.target, _t3)) seatPos(P0, 0, 0, T.attackV, _t3);
+      const d = (6.2 - 3.0 * shotK(2.4)) * fit;
+      seatDir(1 - P0, _t1); _t2.set(P0 === 0 ? -1 : 1, 0, 0);
+      _t1.multiplyScalar(0.8).addScaledVector(_t2, 0.55).add(_t2.set(0, 0.62, 0)).normalize();
+      cam.wantLook.copy(_t3).setY(T.y + 0.15);
+      cam.wantPos.copy(cam.wantLook).addScaledVector(_t1, d);
     } else if (s === 'combat') {
-      const side = cam.p === 0 ? 1 : -1;
+      const side = P0 === 0 ? 1 : -1;
       cam.wantPos.set(7.6 * fit, T.y + 3.6, 1.2 * side);
       cam.wantLook.set(0, T.y + 0.1, 0);
+    } else if (s === 'crane') {
+      // a rise over the board: from a low three-quarter view to high above
+      const k = shotK(3.2);
+      const az = Math.PI / 2 + (P0 === 0 ? -0.5 : 0.5), r = (6.5 - 3.2 * k) * fit, h = 3.0 + 6.0 * k;
+      cam.wantLook.set(0, T.y, 0);
+      cam.wantPos.set(Math.sin(az) * r, T.y + h, Math.cos(az) * r);
+    } else if (s === 'low') {
+      // low over the mat of the loser, looking up at the attacking fly
+      // over its attackers
+      const att = P0, def = 1 - att;
+      seatPos(att, 0, 1.25, T.seatV - 0.2, _t1);           // attacker head
+      if (!targetPos(st.target, _t3)) seatPos(att, 0, 0, T.attackV, _t3);
+      cam.wantLook.copy(_t3).lerp(_t1, 0.55);
+      seatPos(def, (def === 0 ? -1.1 : 1.1), 0.32, 1.35 + 1.4 * (fit - 1), cam.wantPos);
+      cam.wantPos.y = T.y + 0.32 + 0.6 * (fit - 1);
+    } else if (s === 'crowd') {
+      // from the table end, toward the middle of the crowd
+      const a = (CROWD_SECTOR[0] + CROWD_SECTOR[1]) / 2 + (P0 === 0 ? -0.45 : 0.45);
+      cam.wantLook.set(Math.sin(a) * 9, 2.8, Math.cos(a) * 9);
+      cam.wantPos.set(Math.sin(a) * 2.2, T.y + 1.1, Math.cos(a) * 2.2);
+    } else if (s === 'seat') {
+      seatPose(fpSeat ?? P0, cam.wantPos, cam.wantLook);
+    }
+  }
+  // The point a shot is about (tests: it must be in the frame).
+  function shotSubject() {
+    const st = dir.state, out = new THREE.Vector3();
+    switch (st.shot) {
+      case 'follow': case 'close': case 'dolly': return targetPos(st.target, out) || null;
+      case 'low': return seatPos(st.p, 0, 1.15, T.seatV - 0.2, out);
+      case 'over': return seatPos(st.p, 0, 0, T.creatureV, out);
+      case 'crowd': { const a = (CROWD_SECTOR[0] + CROWD_SECTOR[1]) / 2 + (st.p === 0 ? -0.45 : 0.45); return out.set(Math.sin(a) * 9, 2.8, Math.cos(a) * 9); }
+      case 'seat': return seatPos(1 - st.p, 0, 1.0, T.seatV - 0.2, out);
+      default: return out.set(0, T.y, 0);
     }
   }
   // Cut to a shot now, in any mode but 'free' (the saver and the page).
-  function shoot(shot, p = 0) { cam.shot = shot; cam.p = p | 0; cam.since = sceneT; }
+  function shoot(shot, p = 0) { dir.request(shot, p | 0, sceneT, { force: true }); }
   function setCamera(mode) {
     camMode = ['auto', 'wide', 'free', 'script'].includes(mode) ? mode : 'auto';
     if (camMode === 'wide') shoot('wide');
@@ -1139,7 +1221,9 @@ export function createDuelScene(canvas, opts = {}) {
   function updateCamera(dt) {
     shotPose(dt);
     if (now < cam.userUntil) return;
-    const k = W.reduced ? 1 : 1 - Math.exp(-dt * 1.9);
+    if (dir.state.cut) { cam.pos.copy(cam.wantPos); cam.look.copy(cam.wantLook); dir.state.cut = false; }
+    const rate = SHOTS[dir.state.shot]?.rate ?? 1.9;
+    const k = W.reduced ? 1 : 1 - Math.exp(-dt * rate);
     cam.pos.lerp(cam.wantPos, k); cam.look.lerp(cam.wantLook, k);
     camera.position.copy(cam.pos); camera.lookAt(cam.look);
     if (controls) controls.target.copy(cam.look);
@@ -1156,10 +1240,6 @@ export function createDuelScene(canvas, opts = {}) {
       toAct = s.p;
       clip(s.p, 'think', { until: s.dur + 0.3 });
       if (!s.bot && cur?.rec) brains[s.p]?.fire?.(cur.rec.trace, cur.rec.delta);
-      const ty = cur?.rec?.action?.type;
-      if (ty === 'attack' && cur.rec.action.attackers.length) director('combat', s.p, true);
-      else if (ty === 'block') director('combat', s.p);
-      else if (ty === 'land' || ty === 'cast') director('over', s.p);
     },
     lift(s) {
       const H = Z.hand[s.p];
@@ -1171,7 +1251,6 @@ export function createDuelScene(canvas, opts = {}) {
       const touch = s.dur * 0.45;
       Z.held[s.p] = o; o.next = { dur: s.dur - touch, arc: 0.35, delay: touch };
       clip(s.p, 'reach', { target: o.mesh.position, contactAt: touch });
-      if (CARD[s.card].type !== 'land') director('close', s.p, true);
     },
     land(s) {
       const o = Z.held[s.p] || new CardObj(W, s.card);
@@ -1240,7 +1319,6 @@ export function createDuelScene(canvas, opts = {}) {
       for (const u of s.uids) { const f = Z.flags.get(u) || {}; f.attacking = true; Z.flags.set(u, f); const o = Z.perms.get(u); if (o) o.next = { dur: s.dur - touch, arc: 0.12, delay: touch }; }
       const first = Z.perms.get(s.uids[0]);
       if (first) clip(s.p, 'push', { target: first.toP, to: seatPos(s.p, 0, 0, T.attackV), contactAt: touch });
-      director('combat', s.p);
       hall.react('lean', { side: s.p, strength: 0.55 });
     },
     block(s) {
@@ -1248,7 +1326,6 @@ export function createDuelScene(canvas, opts = {}) {
       for (const [a, b] of s.pairs) { const f = Z.flags.get(b) || {}; f.blocking = a; Z.flags.set(b, f); const o = Z.perms.get(b); if (o) o.next = { dur: s.dur - touch, arc: 0.15, delay: touch }; }
       const first = Z.perms.get(s.pairs[0]?.[1]);
       if (first) clip(s.p, 'push', { target: first.toP, to: seatPos(s.p, 0, 0, T.attackV), contactAt: touch });
-      director('combat', s.p);
     },
     strike(s) {
       const o = Z.perms.get(s.from);
@@ -1280,7 +1357,6 @@ export function createDuelScene(canvas, opts = {}) {
       } else { Z.grave[s.p].push(o); o.next = { dur: s.dur, arc: 0.55 }; }
     },
     settle() {
-      director('wide');
       for (const [u, f] of Z.flags) { delete f.attacking; delete f.blocking; delete f.target; if (!Object.keys(f).length) Z.flags.delete(u); } },
     discard(s) {
       const H = Z.hand[s.p];
@@ -1292,7 +1368,6 @@ export function createDuelScene(canvas, opts = {}) {
     turn(s) {
       toAct = s.active;
       bannerPanel(`Turn ${s.turn} · ${names[s.active]}`, FLY[s.active], new THREE.Vector3(0, T.y + 2.3, 0), 1.2);
-      director('wide');
     },
     untap() { /* layout reads the mirror: lands brighten, pips grow back */ },
     pass(s) {
@@ -1308,7 +1383,6 @@ export function createDuelScene(canvas, opts = {}) {
         clip(p, s.winner >= 0 && p === s.winner ? 'raiseArms' : 'slump');
         flies[p].end = s.winner < 0 ? 'slump' : p === s.winner ? 'raiseArms' : 'slump';
       }
-      director('win', 0, true);
       hall.react('cheer', { side: s.winner, strength: 1 });
     },
     // A hold after a big play: the crowd reacts (CROWD_REACT).
@@ -1374,6 +1448,7 @@ export function createDuelScene(canvas, opts = {}) {
     // old mirror (lift, discard) run before applyStep.
     const h = STEP[s.op];
     try { h?.(s); } catch (e) { console.warn('fly-duel 3d: step failed', s.op, e); }
+    if (camMode === 'auto') dir.onStep(s, sceneT, recInfo);
     applyStep(mirror, s);
   }
 
@@ -1387,6 +1462,7 @@ export function createDuelScene(canvas, opts = {}) {
       snapTo(mirrorOf(rec.before));
     }
     const plan = choreograph(rec, { reduced: W.reduced });
+    recInfo = recordInfo(rec);
     cur = { rec, plan, t: 0, i: 0, resolve, struck: new Set() };
   }
   function advance(dt) {
@@ -1467,7 +1543,7 @@ export function createDuelScene(canvas, opts = {}) {
       drums[p].dice.update(sdt);
       W.inlay[p].color.set(p === toAct && winner == null ? FLY[p] : TOKENS.faint);
     }
-    hall.update(sdt, { focus: cam.look });
+    hall.update(sdt, { focus: dir.state.shot === 'crowd' ? _t1.set(0, T.y, 0) : cam.look });
     for (let p = 0; p < 2; p++) brains[p]?.update?.(dt);
     updateCamera(dt);
     if (controls && now < cam.userUntil) controls.update();
@@ -1565,7 +1641,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
-    world: { W, Z, flies, drums, piles, lights, hall, get mirror() { return mirror; }, cam, director, brains, ops: Object.keys(STEP) },
+    world: { W, Z, flies, drums, piles, lights, hall, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }
 
