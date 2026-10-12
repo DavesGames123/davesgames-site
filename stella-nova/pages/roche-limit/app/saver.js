@@ -46,6 +46,7 @@ import { storyText } from './story.js';
 // The grain colour of a take (seeded): mostly ice and heat.
 const COLORS = [4, 4, 4, 6, 5, 2];
 const COLOR_LINE = {
+  4: 'Colour: ice. A grain glows where its collisions turn motion into heat: a relative scale, not a temperature',
   6: 'Colour: where each grain started. Cyan faced the planet, amber faced away',
   5: 'Colour: orbits since each grain was torn off. White is new, violet is three orbits old',
   2: 'Colour: tide over self-gravity on each grain. Blue holds, amber is torn',
