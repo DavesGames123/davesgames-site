@@ -158,6 +158,18 @@ ok(ids.every(id => CARD[id].subtype && cf.typeLine(CARD[id]).endsWith(' — ' + 
   const d = cf.rulesRuns(CARD['dew-moth']);
   ok(d[0].s === 'b' && d[0].t === 'Wings.' && d.some(x => x.s === 'r' && /draw a card/.test(x.t)), 'keyword then effect text');
   ok(cf.rulesRuns(CARD['cinder-ant']).length === 0, 'no rules text gives no runs');
+  // dice text gets its own 'd' run (drawn in a die outline)
+  const sd = cf.rulesRuns(CARD['spark-scatter']);
+  ok(sd.some(x => x.s === 'd' && x.t === '2d4') && sd.map(x => x.t).join('') === CARD['spark-scatter'].text, 'dice run: 2d4, and the runs still spell the text');
+  const sb = cf.rulesRuns(CARD['scout-bee']);
+  ok(sb[0].s === 'b' && sb.some(x => x.s === 'd' && x.t === 'd6'), 'dice run after a keyword: d6');
+  ok(!cf.rulesRuns(CARD['dew-moth']).some(x => x.s === 'd'), 'no dice run on a card without dice');
+  const gd = stubCtx();
+  cf.drawCard(gd, CARD['spark-scatter'], { w: 300, h: 420, mode: 'full' });
+  ok(gd.calls.text.includes('2d4') && gd.calls.bad === 0, 'drawCard draws the dice text 2d4 as its own run');
+  for (const id of ids.filter(i => /\bd(4|6|8|10|12|20)\b/.test(CARD[i].text || ''))) {
+    ok(cf.rulesRuns(CARD[id]).some(x => x.s === 'd'), `${id}: dice text has a dice run`);
+  }
 }
 
 // --------------------------------------------------------------- DOM

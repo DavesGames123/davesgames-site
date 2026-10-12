@@ -667,7 +667,8 @@ const KW_LIST = () => Object.keys(KEYWORDS);
 function kwRe() { const ks = KW_LIST(); return ks.length ? new RegExp(`^(${ks.join('|')})\\.$`, 'i') : /^$/; }
 
 // The rules text of a card as runs { t, s } with s = 'r' (roman), 'b'
-// (bold keyword) or 'i' (italic reminder). A card whose text is only
+// (bold keyword), 'i' (italic reminder) or 'd' (dice text such as 2d4 or
+// d20, drawn bold in a small die outline). A card whose text is only
 // keywords gets the reminder text in italic, as a classic card does.
 // Flavour line of a token that has none: what a token is.
 export const TOKEN_NOTE = 'Made by an effect. It never goes to a hand or a graveyard.';
@@ -692,12 +693,36 @@ export function rulesRuns(card) {
       runs.push({ t: 'Tap:', s: 'b' }, { t: p.slice(4), s: 'r' });
     } else runs.push({ t: p, s: 'r' });
   });
-  return runs;
+  // dice text in a roman run: its own 'd' run
+  const out = [];
+  for (const r of runs) {
+    if (r.s !== 'r' || !DICE_RE.test(r.t)) { out.push(r); continue; }
+    for (const bit of r.t.split(DICE_SPLIT)) if (bit) out.push({ t: bit, s: DICE_RE.test(bit) && DICE_WHOLE.test(bit) ? 'd' : 'r' });
+  }
+  return out;
+}
+const DICE_RE = /\b\d*d(?:4|6|8|10|12|20)\b/;
+const DICE_SPLIT = /(\b\d*d(?:4|6|8|10|12|20)\b)/;
+const DICE_WHOLE = /^\d*d(?:4|6|8|10|12|20)$/;
+
+// The die outline behind a 'd' run: a rounded square, open ink.
+function diceChip(g, x, y, w, px, ink) {
+  const pad = px * 0.22, h = px * 1.08, r = px * 0.22;
+  const x0 = x - pad, y0 = y - px * 0.86, ww = w + pad * 2;
+  g.save();
+  g.strokeStyle = ink; g.globalAlpha = 0.7; g.lineWidth = Math.max(0.5, px * 0.09);
+  g.beginPath();
+  g.moveTo(x0 + r, y0); g.lineTo(x0 + ww - r, y0); g.quadraticCurveTo(x0 + ww, y0, x0 + ww, y0 + r);
+  g.lineTo(x0 + ww, y0 + h - r); g.quadraticCurveTo(x0 + ww, y0 + h, x0 + ww - r, y0 + h);
+  g.lineTo(x0 + r, y0 + h); g.quadraticCurveTo(x0, y0 + h, x0, y0 + h - r);
+  g.lineTo(x0, y0 + r); g.quadraticCurveTo(x0, y0, x0 + r, y0);
+  g.closePath(); g.stroke();
+  g.restore();
 }
 
 function fontFor(s, px) {
   const sz = Math.round(px * 10) / 10;
-  return s === 'b' ? `600 ${sz}px ${SERIF}` : s === 'i' ? `italic 400 ${sz}px ${SERIF}` : `400 ${sz}px ${SERIF}`;
+  return s === 'b' || s === 'd' ? `600 ${sz}px ${SERIF}` : s === 'i' ? `italic 400 ${sz}px ${SERIF}` : `400 ${sz}px ${SERIF}`;
 }
 
 // Word wrap for styled runs. paragraphs: [[run...], ...]. Returns lines
@@ -972,6 +997,7 @@ function drawFull(L) {
       for (const it of ln.items) {
         g.font = fontFor(it.s, px);
         g.fillStyle = isFlav ? F.soft : F.paperInk;
+        if (it.s === 'd') diceChip(g, bx + padX + dx + it.x, ty0 + ln.y, g.measureText(it.t).width, px, F.paperInk);
         g.fillText(it.t, bx + padX + dx + it.x, ty0 + ln.y);
       }
     }
