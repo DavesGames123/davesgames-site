@@ -23,7 +23,9 @@
 //    crowd     20 to 60 standing flies around the feature table. Their
 //              heads follow the focus point of the scene. react() makes
 //              them buzz their wings, raise their front legs or lean in
-//              on big events. Some hold a small flag in a seat colour.
+//              on big events. Half are Fly A fans and half Fly B fans,
+//              mixed; about 30% hold a small flag in the colour of
+//              their fly.
 //
 //  Cheap flies. One low-poly fly is cut in parts (body, head, wings, front
 //  legs, flag), and each part is one InstancedMesh for all extras and the
@@ -47,8 +49,10 @@
 //        dispose() }
 //      layout: { y, halfLen, halfDepth, seatV, seatTop, seatPos(p, u, y, v) }
 //      react kinds: 'lean' (look in), 'buzz' (wings), 'cheer' (legs up and
-//      wings), 'gasp' (lean back). side: the seat that the event favours
-//      (flag holders of that seat cheer harder) or -1.
+//      wings), 'gasp' (lean back). side: the seat that the event favours,
+//      or -1. Each crowd fly is a fan of one seat (fanSides: half and
+//      half, mixed). On a cheer or a buzz for a seat, its fans cheer and
+//      wave their flags, and the fans of the other seat groan.
 //      HALL: hall sizes (the scene tests keep the camera inside it).
 //      CROWD_SECTOR: the azimuth range of the crowd (radians, atan2(x, z)).
 //
@@ -63,6 +67,7 @@
 //      grep -n 'function lowFlyParts'       the cheap fly geometry
 //      grep -n 'class FlyHerd'              instanced flies and poses
 //      grep -n 'function extrasController'  fake games at other tables
+//      grep -n 'function fanSides'          Fly A / Fly B fans of the crowd
 //      grep -n 'function crowdController'   the watching crowd
 //      grep -n 'export function buildHall'  assembly
 // ============================================================================
@@ -433,7 +438,7 @@ class FlyHerd {
     this.legs = mk(parts.leg, solid, 2 * n, name + '-legs');
     this.flags = mk(parts.flag, flagMat, flags, name + '-flags');
     this.wings.castShadow = false;
-    this.pose = Array.from({ length: n }, () => ({ pos: new THREE.Vector3(), yaw: 0, scale: 1, lean: 0, roll: 0, hy: 0, hp: 0, legL: 0, legR: 0, buzz: 0, flag: null, flagIdx: -1, t: 0 }));
+    this.pose = Array.from({ length: n }, () => ({ pos: new THREE.Vector3(), yaw: 0, scale: 1, lean: 0, roll: 0, hy: 0, hp: 0, legL: 0, legR: 0, buzz: 0, wave: 0, flag: null, flagIdx: -1, t: 0 }));
     this._m = new THREE.Matrix4(); this._r = new THREE.Matrix4(); this._p = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._e = new THREE.Euler(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3();
   }
   setFlag(i, colour, slot) {
@@ -472,6 +477,8 @@ class FlyHerd {
           this._p3 = this._p3 || new THREE.Matrix4();
           this._p3.makeRotationX(lift * 2.5 - 0.1);
           m.multiply(this._p3);
+          // a wave swings the pole from side to side
+          if (P.wave) { this._p4 = this._p4 || new THREE.Matrix4(); m.multiply(this._p4.makeRotationZ(0.55 * P.wave * Math.sin(time * 11 + i))); }
           this.flags.setMatrixAt(P.flagIdx, m);
         }
       }
@@ -533,21 +540,36 @@ function extrasController(herd, seats, props, R) {
 }
 
 // ----------------------------------------------------------------- crowd
+// Fan sides for n crowd flies: as many 0 (Fly A) as 1 (Fly B), +-1, in
+// a seeded random order (Fisher-Yates with R).
+export function fanSides(n, R) {
+  const a = Array.from({ length: n }, (_, i) => i % 2);
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+
 // The watching crowd. Heads follow the focus. react() starts a short
 // envelope on each fly with its own delay, so the reaction runs through
 // the crowd and is not one sync jump.
 function crowdController(herd, ids, reduced, R) {
-  const fx = ids.map((i, k) => ({ i, k, sway: R() * TAU, kind: null, t: 0, dur: 1, delay: 0, gain: 0, side: -1, flagSide: -1 }));
+  const fx = ids.map((i, k) => ({ i, k, sway: R() * TAU, kind: null, t: 0, dur: 1, delay: 0, gain: 0, side: -1, flagSide: -1, fan: -1, wave: false, hy: 0, hp: 0 }));
   const _v = new THREE.Vector3();
   return {
     fx,
     react(kind, { side = -1, strength = 1 } = {}) {
       for (const f of fx) {
-        f.kind = kind; f.t = 0; f.side = side;
+        // A big play for one fly (cheer, buzz): the fans of that fly cheer
+        // and wave, the fans of the other fly groan. A lean for one fly:
+        // its fans also wave. A draw (side -1) and a gasp move all alike.
+        let k = kind;
+        const mine = side >= 0 && f.fan === side, theirs = side >= 0 && f.fan >= 0 && f.fan !== side;
+        if ((kind === 'cheer' || kind === 'buzz') && theirs) k = 'groan';
+        else if (kind === 'buzz' && mine) k = 'cheer';
+        f.kind = k; f.t = 0; f.side = side;
+        f.wave = mine && f.flagSide === side && k !== 'gasp';
         f.delay = reduced ? 0 : R() * 0.45;
-        f.dur = kind === 'cheer' ? 1.8 : kind === 'buzz' ? 1.0 : 1.3;
-        const fan = f.flagSide >= 0 && f.flagSide === side;
-        f.gain = Math.min(1, strength * (0.55 + 0.45 * R()) * (fan ? 1.25 : 1));
+        f.dur = k === 'cheer' ? 1.8 : k === 'buzz' ? 1.0 : 1.3;
+        f.gain = Math.min(1, strength * (0.55 + 0.45 * R()) * (mine ? 1.25 : 1));
       }
     },
     update(dt, time, focus) {
@@ -555,7 +577,7 @@ function crowdController(herd, ids, reduced, R) {
         const P = herd.pose[f.i];
         // idle: weight shift and small head moves
         P.roll = reduced ? 0 : 0.025 * Math.sin(time * 0.7 + f.sway);
-        P.lean = 0.05; P.legL = 0.05; P.legR = 0.05; P.buzz = 0;
+        P.lean = 0.05; P.legL = 0.05; P.legR = 0.05; P.buzz = 0; P.wave = 0;
         // head to the focus, in the fly's own frame
         _v.copy(focus).sub(P.pos);
         const yaw = Math.atan2(_v.x, _v.z) - P.yaw;
@@ -564,7 +586,8 @@ function crowdController(herd, ids, reduced, R) {
         const pitch = Math.atan2(P.pos.y + 2.4 * P.scale - focus.y, dist);
         const hy = Math.max(-1.0, Math.min(1.0, yawW)), hp = Math.max(-0.2, Math.min(0.75, pitch));
         const k = reduced ? 1 : 1 - Math.exp(-dt * (3 + (f.k % 3)));
-        P.hy += (hy - P.hy) * k; P.hp += (hp - P.hp) * k;
+        f.hy += (hy - f.hy) * k; f.hp += (hp - f.hp) * k;
+        P.hy = f.hy; P.hp = f.hp;
         if (f.kind) {
           f.t += dt;
           const u = (f.t - f.delay) / f.dur;
@@ -575,6 +598,9 @@ function crowdController(herd, ids, reduced, R) {
             if (f.kind === 'gasp') { P.lean = 0.05 - 0.22 * env; P.legL = P.legR = 0.4 * env; }
             if (f.kind === 'buzz') { P.buzz = env; P.lean = 0.05 + 0.12 * env; }
             if (f.kind === 'cheer') { P.legL = P.legR = 0.95 * env; P.buzz = env; P.lean = -0.08 * env; }
+            // groan: slump forward, head down, front legs up to the head
+            if (f.kind === 'groan') { P.lean = 0.05 + 0.2 * env; P.hp += 0.5 * env; P.legL = P.legR = 0.6 * env; }
+            if (f.wave) { P.wave = env; if (f.kind !== 'cheer' && f.kind !== 'groan') P.legR = Math.max(P.legR, 0.7 * env); }
           }
         }
         // reduced motion: no wing beat (a fast flicker), the legs and the
@@ -801,12 +827,23 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     ids.push(i);
   }
   const crowd = crowdController(crowdHerd, ids, reduced, R);
-  // flags: the flies nearer seat 0 (+z) wave Fly A, the others Fly B
-  for (let i = 0; i < nCrowd && flagSlot < nFlags; i++) {
-    if (R() > 0.42) continue;
-    const side = crowdHerd.pose[i].pos.z > -1.5 ? 0 : 1;
-    crowdHerd.setFlag(i, FLY[side], flagSlot++);
-    crowd.fx[i].flagSide = side;
+  // Fans. Each crowd fly supports one of the two flies. fanSides() gives
+  // a balanced split (half Fly A, half Fly B) in a seeded random order,
+  // so the two sets of fans stand mixed over the whole sector. The flags
+  // go to the same number of fans on each side, spread along the sector.
+  // (The old rule gave Fly A to the flies at z > -1.5 and filled the
+  // flags in sector order. The sector starts behind seat 1, so all the
+  // flags were full before the +z part of the crowd: all Fly B.)
+  const fans = fanSides(nCrowd, R);
+  fans.forEach((s, i) => { crowd.fx[i].fan = s; });
+  for (const s of [0, 1]) {
+    const mine = ids.filter(i => fans[i] === s);
+    const want = Math.min(mine.length, s === 0 ? Math.ceil(nFlags / 2) : Math.floor(nFlags / 2));
+    for (let j = 0; j < want; j++) {
+      const i = mine[Math.floor((j + 0.5) * mine.length / want)];
+      crowdHerd.setFlag(i, FLY[s], flagSlot++);
+      crowd.fx[i].flagSide = s;
+    }
   }
   crowdHerd.flags.count = flagSlot;
 
