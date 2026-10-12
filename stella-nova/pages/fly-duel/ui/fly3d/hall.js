@@ -11,8 +11,12 @@
 //    chairs    a folding metal chair at each seat
 //    mats      a rubber playmat per fly, printed with our own zones (LANDS,
 //              CREATURES, LIBRARY, GRAVE, LIFE) and a wing-vein and
-//              honeycomb print in the seat colour. No marks of any card
-//              game publisher.
+//              honeycomb print. The print takes the colours of the deck of
+//              the seat (user direction 2026-10-12): one colour fills the
+//              mat, two or three colours split it across in bands with a
+//              soft blend, and a faint symbol of each colour lies under
+//              the creatures. With no deck, the seat colour. No marks of
+//              any card game publisher.
 //    deck box  a box beside each library: the deck box print of the side
 //              tables (sidegames.js drawDeckBoxFace) with a seat-colour
 //              edge. setDeckBox(seat, deckId) prints the deck of a game.
@@ -51,7 +55,14 @@
 //      buildHall({ coarse, reduced, seed, layout }) -> { group, table,
 //        room, mats, inlay, chairs, deckBoxes, crowd, extras, update(dt,
 //        { focus, time }), react(kind, { side, strength }),
-//        setDeckBox(seat, deckId), deckOf(seat), stats(), dispose() }
+//        setDeckBox(seat, deckId), deckOf(seat), matOf(seat),
+//        matTextures(), stats(), dispose() }
+//      setDeckBox(seat, deck) also repaints the mat of the seat (setMat).
+//      deck: a deck id or a custom list. matOf(seat) -> { key, colours }.
+//      matTextures() -> { cached, made, disposed }: one texture per seat
+//      and colour set, MAT_CACHE at most; a texture that no mat shows is
+//      disposed when the cache is full.
+//      matColours(deck): the deck colours of a mat (COLOUR_IDS order).
 //      extras.games: the side games (sidegames.js createSideGames).
 //      The side games get the camera from the onBeforeRender of the hall
 //      floor, so scene.js needs no new call for them.
@@ -68,6 +79,8 @@
 //      grep -n 'export const HALL'          hall sizes and counts
 //      grep -n 'function laminateCanvas'    table top print
 //      grep -n 'function matCanvas'         the playmat print
+//      grep -n 'export function matColours' deck -> mat colours
+//      grep -n 'function setMat'            mat texture per deck, cache
 //      grep -n 'function buildFoldingTable' table, legs, braces
 //      grep -n 'function buildChair'        folding chair
 //      grep -n 'function buildRoomShell'    floor, walls, ceiling, panels
@@ -84,7 +97,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
 import { createSideGames, drawDeckBoxFace } from './sidegames.js';
-import { DECKS } from '../../game/cards.js';
+import { DECKS, COLOUR_IDS, deckColours } from '../../game/cards.js';
+import { colourInfo, drawManaGlyph } from '../cardface.js';
 
 export const HALL = {
   wall: 30,            // half size of the hall floor (x and z)
@@ -157,17 +171,63 @@ function carpetCanvas(size) {
 // v from the centre line (v0) to the seat (v1). The canvas x grows with
 // u, the canvas y grows with v, so the seat edge is at the bottom.
 export const MAT = { u: 2.95, v0: 0.18, v1: 3.08 };
-function matCanvas(colour, label, zones, px) {
+// Mat textures kept at most (two shown, the rest ready for a deck change).
+export const MAT_CACHE = 4;
+// The deck colours of a mat: a deck id of game/cards.js, a custom list
+// [[id, count]...] (deckColours) or a DECKS-like object with colours.
+// Anything else gives [] (the mat then takes the seat colour).
+export function matColours(deck) {
+  let cs = [];
+  if (typeof deck === 'string') cs = DECKS[deck]?.colours || [];
+  else if (Array.isArray(deck)) { try { cs = deckColours(deck); } catch { cs = []; } }
+  else if (deck && Array.isArray(deck.colours)) cs = deck.colours;
+  return COLOUR_IDS.filter(c => cs.includes(c));
+}
+// The hex of each deck colour (cardface.js colourInfo), or the seat colour.
+export function matHexes(cols, seatColour) {
+  return cols.length ? cols.map(c => colourInfo(c).hex) : [seatColour];
+}
+// A flat dark tint of the mat colours (the top colour when no canvas).
+export function matTint(cols, seatColour) {
+  const hs = matHexes(cols, seatColour), c = new THREE.Color(0, 0, 0);
+  for (const h of hs) c.add(new THREE.Color(h));
+  return c.multiplyScalar(0.2 / hs.length);
+}
+// cols: the deck colours ([] = the seat colour). One colour: the whole
+// print in that colour. Two or three colours: the mat is split across u
+// in one band per colour, with a soft blend at each border.
+function matCanvas(colour, label, zones, px, cols = []) {
   const W = px, H = Math.round(px * (MAT.v1 - MAT.v0) / (2 * MAT.u));
   const cv = makeCanvas(W, H);
   if (!cv?.getContext) return null;
   const g = cv.getContext('2d');
   const X = u => (u + MAT.u) / (2 * MAT.u) * W, Y = v => (v - MAT.v0) / (MAT.v1 - MAT.v0) * H, S = W / (2 * MAT.u);
-  // base: a dark tint of the seat colour, a soft vignette band is not
+  const hexes = matHexes(cols, colour), n = hexes.length;
+  const paint = k => {
+    if (n === 1) return shade(hexes[0], k);
+    const gr = g.createLinearGradient?.(0, 0, W, 0), blend = 0.06;
+    if (!gr?.addColorStop) return shade(hexes[0], k);
+    hexes.forEach((h, i) => {
+      gr.addColorStop(Math.max(0, i / n + (i ? blend : 0)), shade(h, k));
+      gr.addColorStop(Math.min(1, (i + 1) / n - (i < n - 1 ? blend : 0)), shade(h, k));
+    });
+    return gr;
+  };
+  // base: a dark tint of the mat colours, a soft vignette band is not
   // used (crisp), only flat tints
-  g.fillStyle = shade(colour, 0.13); g.fillRect(0, 0, W, H);
+  g.fillStyle = paint(0.13); g.fillRect(0, 0, W, H);
+  // the colour symbol of each deck colour, large and faint, one per band
+  if (cols.length) {
+    const s = H * 0.36;
+    g.save(); g.globalAlpha = 0.16;
+    cols.forEach((c, i) => {
+      const cx = n === 1 ? W * 0.3 : (i + 0.5) / n * W;
+      drawManaGlyph(g, c, cx - s / 2, Y(1.2) - s / 2, s);
+    });
+    g.restore();
+  }
   // honeycomb print
-  g.strokeStyle = shade(colour, 0.24); g.lineWidth = Math.max(1, W / 900);
+  g.strokeStyle = paint(0.24); g.lineWidth = Math.max(1, W / 900);
   const hr = W / 34;
   for (let row = -1; row < H / (hr * 1.5) + 1; row++) {
     for (let col = -1; col < W / (hr * 1.732) + 1; col++) {
@@ -180,7 +240,7 @@ function matCanvas(colour, label, zones, px) {
   // a big wing, drawn with veins, across the right half
   g.save();
   g.translate(W * 0.62, H * 0.52); g.rotate(-0.18);
-  g.strokeStyle = shade(colour, 0.42); g.lineWidth = Math.max(1.5, W / 520);
+  g.strokeStyle = paint(0.42); g.lineWidth = Math.max(1.5, W / 520);
   g.beginPath(); g.moveTo(-W * 0.3, 0);
   g.bezierCurveTo(-W * 0.1, -H * 0.42, W * 0.25, -H * 0.36, W * 0.33, -H * 0.05);
   g.bezierCurveTo(W * 0.3, H * 0.2, W * 0.0, H * 0.24, -W * 0.3, 0); g.stroke();
@@ -190,14 +250,14 @@ function matCanvas(colour, label, zones, px) {
     g.stroke();
   }
   g.restore();
-  // border in the seat colour
-  g.strokeStyle = colour; g.lineWidth = Math.max(3, W / 260);
+  // border in the mat colours
+  g.strokeStyle = paint(1); g.lineWidth = Math.max(3, W / 260);
   g.strokeRect(g.lineWidth / 2, g.lineWidth / 2, W - g.lineWidth, H - g.lineWidth);
   // zones: thin solid outlines and small caps labels
   g.lineWidth = Math.max(2, W / 520);
   g.font = `700 ${Math.round(W / 62)}px ${SANS}`; g.textBaseline = 'top';
   for (const z of zones) {
-    g.strokeStyle = shade(colour, 0.85); g.fillStyle = shade(colour, 0.9);
+    g.strokeStyle = paint(0.85); g.fillStyle = paint(0.9);
     if (z.round) {
       g.beginPath(); g.arc(X(z.u), Y(z.v), z.r * S, 0, TAU); g.stroke();
       g.textAlign = 'center'; g.fillText(z.label, X(z.u), Y(z.v) + z.r * S + 6);
@@ -213,6 +273,16 @@ function matCanvas(colour, label, zones, px) {
   g.fillText(label, X(-MAT.u) + W * 0.02, H - H * 0.04);
   g.fillStyle = shade(colour, 0.7); g.font = `600 ${Math.round(W / 70)}px ${MONO}`;
   g.fillText('FLY DUEL OPEN · FEATURE TABLE', X(-MAT.u) + W * 0.02, H - H * 0.04 - W / 32);
+  // the deck colours after the seat name: one symbol per colour and the
+  // colour names (the mat of a colour set is the same for every deck)
+  if (cols.length) {
+    g.font = `800 ${Math.round(W / 40)}px ${SANS}`;
+    const s = W / 36, y = H - H * 0.04 - s * 0.82;
+    let x = X(-MAT.u) + W * 0.02 + (+g.measureText(label).width || W * 0.08) + W * 0.015;
+    for (const c of cols) { drawManaGlyph(g, c, x, y, s); x += s * 1.15; }
+    g.fillStyle = shade(hexes[0], 0.85); g.font = `700 ${Math.round(W / 64)}px ${MONO}`;
+    g.fillText(cols.map(c => colourInfo(c).name.toUpperCase()).join(' · '), x + W * 0.006, H - H * 0.04 - s * 0.2);
+  }
   return cv;
 }
 
@@ -629,13 +699,13 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
   ];
   const mats3 = [], inlay = [], deckBoxes = [];
   for (let p = 0; p < 2; p++) {
-    const cv = matCanvas(FLY[p], p ? 'FLY B' : 'FLY A', zones, matPx);
-    const t = keep(tex(cv, { aniso: 8 }));
+    // the print comes from setMat() (the deck colours of the seat)
+    const t = null;
     const w = 2 * MAT.u, d = MAT.v1 - MAT.v0;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), [
       keep(new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.9 })), null, null, null, null, null,
     ]);
-    const top = keep(new THREE.MeshStandardMaterial({ map: t, color: t ? 0xffffff : new THREE.Color(shade(FLY[p], 0.2)), roughness: 0.92 }));
+    const top = keep(new THREE.MeshStandardMaterial({ map: t, color: matTint([], FLY[p]), roughness: 0.92 }));
     m.material = [m.material[0], m.material[0], top, m.material[0], m.material[0], m.material[0]];
     // mat texture: canvas y grows toward the seat (v). BoxGeometry +y face
     // uv: u along +x, v along -z. Seat 0 (+z): canvas bottom must be at
@@ -668,7 +738,37 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     const lid = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.015, 0.37), mats.edge); lid.position.y = 0.2; box.add(lid);
     table.add(box); deckBoxes.push(box);
   }
+  // The playmat of each seat takes the colours of the deck of that seat
+  // (CONTRACT.md, user direction 2026-10-12). setDeckBox calls setMat, so
+  // every new game (setState, play, watch, play mode, the saver) repaints
+  // the mats. One texture per seat and colour set, in a small cache: a
+  // texture that no mat shows is disposed when the cache is full.
+  const matCache = new Map();            // 'seat|colours' -> texture or null
+  const matCount = { made: 0, disposed: 0 };
+  function setMat(p, deck) {
+    const m = mats3[p]; if (!m) return;
+    const cols = matColours(deck);
+    const key = `${p}|${cols.join('+') || 'seat'}`;
+    if (m.userData.matKey === key) return;
+    let t;
+    if (matCache.has(key)) { t = matCache.get(key); matCache.delete(key); }
+    else { t = tex(matCanvas(FLY[p], p ? 'FLY B' : 'FLY A', zones, matPx, cols), { aniso: 8 }); matCount.made++; }
+    matCache.set(key, t);
+    m.userData.matKey = key; m.userData.colours = cols.slice();
+    const top = m.material[2];
+    if (!!top.map !== !!t) top.needsUpdate = true;
+    top.map = t;
+    top.color.copy(t ? new THREE.Color(0xffffff) : matTint(cols, FLY[p]));
+    const shown = new Set(mats3.map(x => x.userData.matKey));
+    for (const [k, x] of matCache) {
+      if (matCache.size <= MAT_CACHE) break;
+      if (shown.has(k)) continue;
+      if (x) { x.dispose(); matCount.disposed++; }
+      matCache.delete(k);
+    }
+  }
   function setDeckBox(p, deckId) {
+    setMat(p, deckId);
     const box = deckBoxes[p]; if (!box) return;
     const u = box.userData;
     // a deck id of game/cards.js; a custom list (an array) prints no deck
@@ -805,12 +905,16 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     crowd: { herd: crowdHerd, n: nCrowd, flags: flagSlot, fx: crowd.fx },
     extras: { herd: sit, n: nSit, tables: tables.length, tableAt: i => tables[seats[i].table], games: side },
     setDeckBox, deckOf: p => deckBoxes[p]?.userData.deck ?? null,
+    matOf: p => ({ key: mats3[p]?.userData.matKey ?? null, colours: (mats3[p]?.userData.colours || []).slice() }),
+    matTextures: () => ({ cached: matCache.size, made: matCount.made, disposed: matCount.disposed }),
     focus,
     update,
     react: (kind, o) => crowd.react(kind, o),
     stats: () => ({ crowd: nCrowd, flags: flagSlot, extras: nSit, tables: tables.length, flyTris: crowdHerd.tris() + sit.tris(), side: side.stats() }),
     dispose() {
       for (const x of disposables) x?.dispose?.();
+      for (const x of matCache.values()) if (x) { x.dispose(); matCount.disposed++; }
+      matCache.clear();
       sit.dispose(); crowdHerd.dispose(); side.dispose();
       group.traverse(o => { if (o.isMesh && !o.isInstancedMesh) o.geometry?.dispose(); });
     },

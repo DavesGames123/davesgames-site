@@ -68,6 +68,13 @@ about the simulation and layout in fullscreen"
   the game section should pull the image up in their hovered version".
 - Spend the effort on the simulation, the 3D table, the play UX and the
   fullscreen layout on phones and desktops.
+- Playmats (user, verbatim, 2026-10-12): "colors of the playmats should
+  change based on their current deck". Each seat's playmat takes the
+  colours of that seat's deck (ui/fly3d/hall.js setMat, called from
+  setDeckBox): one colour fills a dark mat with its symbol; two or three
+  colours split it in bands with a soft blend. It changes on every new
+  game in watch, play (custom decks too) and the saver
+  (tests/fly3d-matcolour.test.mjs).
 
 
 User request (2026-10-11, verbatim): "i want you to train a fruit fly brain
