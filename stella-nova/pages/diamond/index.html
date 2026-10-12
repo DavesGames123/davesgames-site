@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Diamond Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DIAMOND LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js builds the cut and material buttons, runs
+   WebGPU and fills the readouts. One full-window canvas (#view) shows the
+   stone; shaders/gem.wgsl traces it per pixel (refraction, total internal
+   reflection, dispersion, absorption) and adds a star-filter glow.
+     cuts.js     the cuts as convex sets of facet planes (DOM-free)
+     optics.js   materials, dispersion, Fresnel, the CPU tracer (DOM-free)
+     saver.js    the screensaver director (window.snSaver)
+     tests.mjs   node tests: geometry, optics, saver hook, main.js link
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left; #view fills the window behind it, and
+                 main.js centres the stone in the clear part.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: panel button, cut strip, material.
+                 portrait: #panel is a bottom sheet; the stone moves up.
+                 landscape: #panel is a drawer at the right edge.
+
+   GREP MAP  (main.js)
+     grep -n 'function packUniforms'  the uniform block for gem.wgsl
+     grep -n 'function clearRect'     where the stone can sit on screen
+     grep -n 'function drawDiagram'   the facet diagram in the panel
+     grep -n 'function buildUI'       buttons, sliders and the dock
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Diamond Lab: a real-time spectral ray tracer for cut gemstones. Nine cuts, nine stones with real refractive indices and dispersion, total internal reflection, fire, ASET and bounce views.">
+<link href="../../vendor/fonts/inter+stix-two-text.c614b9ad.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<canvas id="view" aria-label="The cut stone, ray traced"></canvas>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Diamond Lab</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<div id="caption" aria-live="polite"><b id="capCut">Round brilliant</b><span id="capMat">Diamond</span></div>
+<div id="hint">drag to turn · pinch or scroll to zoom · double-tap to reset</div>
+<div id="nogpu" hidden>WebGPU is not available in this browser, so the stone cannot render. Chrome, Edge and Safari 26 have it on by default. Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <h1>Diamond Lab</h1>
+  <p class="lede">Light enters a cut stone, bends, bounces off the facets inside and comes back out split into colours. Every pixel here is traced through the real facet planes.</p>
+
+  <div class="sec-label">Cut</div>
+  <div class="grid3" id="cuts"></div>
+  <p class="note" id="cutNote"></p>
+  <canvas id="diagram" aria-label="Facet diagram: crown, pavilion and profile"></canvas>
+  <div class="row"><label for="table">table</label><input type="range" id="table" min="0.45" max="0.72" step="0.005"><span class="val" id="tableV"></span></div>
+  <div class="row"><label for="crown">crown angle</label><input type="range" id="crown" min="25" max="42" step="0.25"><span class="val" id="crownV"></span></div>
+  <div class="row"><label for="pav">pavilion angle</label><input type="range" id="pav" min="34" max="56" step="0.25"><span class="val" id="pavV"></span></div>
+  <div class="row"><label for="girdle">girdle</label><input type="range" id="girdle" min="0.01" max="0.08" step="0.005"><span class="val" id="girdleV"></span></div>
+  <table class="readout" id="cutRead"></table>
+
+  <div class="sec-label">Stone</div>
+  <div class="grid3" id="mats"></div>
+  <p class="note" id="matNote"></p>
+  <table class="readout" id="matRead"></table>
+
+  <div class="sec-label">Light</div>
+  <div class="seg4" id="envs"></div>
+  <div class="row"><label for="rig">turn lights</label><input type="range" id="rig" min="0" max="6.283" step="0.01"><span class="val" id="rigV"></span></div>
+  <div class="row"><label for="exposure">exposure</label><input type="range" id="exposure" min="0.3" max="2.5" step="0.05"><span class="val" id="exposureV"></span></div>
+  <div class="row"><label for="spark">sparkle</label><input type="range" id="spark" min="0" max="2" step="0.05"><span class="val" id="sparkV"></span></div>
+  <div class="toggles">
+    <button type="button" id="sweepBtn" class="tog">Light sweep · off</button>
+    <button type="button" id="spinBtn" class="tog on">Turntable · on</button>
+  </div>
+
+  <div class="sec-label">Optics</div>
+  <div class="seg3" id="modes"></div>
+  <p class="note" id="modeNote"></p>
+  <div class="row"><label for="fire">fire ×</label><input type="range" id="fire" min="0" max="4" step="0.05"><span class="val" id="fireV"></span></div>
+  <div class="row"><label for="bounces">bounces</label><input type="range" id="bounces" min="1" max="16" step="1"><span class="val" id="bouncesV"></span></div>
+  <div class="row"><label for="samples">wavelengths</label><input type="range" id="samples" min="0" max="4" step="1"><span class="val" id="samplesV"></span></div>
+  <table class="readout"><tr><td>render</td><td id="rdRender"></td></tr><tr><td>frame rate</td><td id="rdFps"></td></tr></table>
+
+  <div class="sec-label">How it works</div>
+  <div class="about">
+    <p><b>Refraction.</b> Light slows down in the stone, so it bends at each facet. Snell's law gives the angle. Diamond has a high index n, so it bends light more than glass does.</p>
+    <div class="eq" data-tex="n_1 \sin\theta_1 = n_2 \sin\theta_2"></div>
+    <p><b>Total internal reflection.</b> Inside the stone, a ray that meets a facet at more than the critical angle cannot leave. All of it reflects. For diamond the critical angle is 24.4°; for glass it is 41°. A good cut makes the pavilion facets steep enough that the light reflects twice and goes back up through the crown.</p>
+    <div class="eq" data-tex="\theta_c = \arcsin\frac{1}{n}"></div>
+    <p><b>Reflection.</b> At each facet, some light reflects and the rest passes through. The Fresnel equations give the split. Straight on, diamond reflects 17% and glass 4%. That is the hard lustre of diamond.</p>
+    <div class="eq" data-tex="R_0 = \left(\frac{n-1}{n+1}\right)^{2}"></div>
+    <p><b>Dispersion (fire).</b> The index is a little larger for blue light than for red. So each colour takes its own path, and a white spark leaves the stone as a spectrum. The Abbe number ν tells how small the spread is. This page traces up to twelve wavelengths per pixel.</p>
+    <div class="eq" data-tex="n(\lambda) = A + \frac{B}{\lambda^{2}}, \qquad \nu_d = \frac{n_d - 1}{n_F - n_C}"></div>
+    <p><b>Colour.</b> A coloured stone absorbs some wavelengths along the path (Beer–Lambert). Long paths give deep colour, so the colour is strongest where the light bounces most.</p>
+    <div class="eq" data-tex="I = I_0\, e^{-\sigma L}"></div>
+    <p><b>The tracer.</b> The stone is a convex set: the intersection of one half-space per facet. A ray enters at the latest entry plane and leaves at the earliest exit plane, so each bounce tests every facet once. The cost is pixels × wavelengths × bounces × facets.</p>
+  </div>
+
+  <div class="sec-label">Credit</div>
+  <div class="about credit">
+    <p>Inspired by <a href="https://github.com/piellardj/diamond-webgl" target="_blank" rel="noopener">diamond-webgl</a> by Jérémie Piellard (GPL-3.0), a WebGL gem renderer that traces rays through the facet planes. This page is a new program written from the ideas in its description. It has no code from that project. See NOTICE in this folder.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockCuts" class="seg"></div>
+  <button id="dockMat" type="button" aria-label="Next stone"><i></i></button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

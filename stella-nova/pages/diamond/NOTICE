@@ -1,0 +1,26 @@
+Diamond Lab (stella-nova/pages/diamond)
+========================================
+
+Credit
+  This page is inspired by diamond-webgl by Jeremie Piellard:
+  https://github.com/piellardj/diamond-webgl
+  That project is licensed under the GNU General Public License v3.0.
+
+What was used
+  Only the ideas in the public description of that project: a stone made
+  of facet planes, a ray tracer that tests every facet at each bounce,
+  Snell's law, Fresnel reflection, total internal reflection, Beer's law,
+  dispersion, ASET views and a star-filter sparkle.
+
+What was not used
+  No source code, shader code, geometry data or assets of diamond-webgl
+  are in this folder. The code here (cuts.js, optics.js, saver.js,
+  main.js, shaders/gem.wgsl) is a new program, written for this site in
+  2026. It does not derive from the GPL-3.0 code.
+
+Data
+  Refractive indices, Abbe numbers and B-G dispersion values are the
+  published gemmological reference values (GIA, Gem-A). The colour
+  matching fit is from Wyman, Sloan and Shirley, "Simple Analytic
+  Approximations to the CIE XYZ Color Matching Functions", JCGT 2013.
+  Round brilliant proportions follow Tolkowsky, "Diamond Design", 1919.
