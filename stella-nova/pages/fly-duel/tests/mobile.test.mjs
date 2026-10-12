@@ -12,6 +12,9 @@
 //             control bar in one row that scrolls sideways, every :hover
 //             inside a hover media query; play.css: the safe area at every
 //             edge box of play mode; hud.css: 44 px brain button
+//    chooser  ui/chooser/chooser.css: the title screen keeps clear of the
+//             safe area at the top (phone, phone landscape, wide) and the
+//             bottom (wide), and every control is 44 px on a coarse pointer
 //    layout   at 360x740, 390x844, 430x932, 844x390, 932x430, 820x1180 and
 //             1180x820 (and 1920x1080): the numbers of the CSS rules give a
 //             control bar that holds one row of 44 px controls, brain
@@ -95,6 +98,32 @@ const main = read('main.js');
   ok(/@media \(pointer: coarse\) \{ \.pl-seatbtn \{ min-height: 44px; \} \}/.test(play), 'css: "Back to seat" is 44 px on a touch screen');
   ok(/\.pl-handbox \{[^}]*touch-action: pan-x/.test(play) && /\.pl-hc \{[^}]*touch-action: pan-x/.test(play), 'css: the hand fan scrolls sideways; a drag up plays (touch-action: pan-x)');
   ok(/@media \(pointer: coarse\) \{[\s\S]{0,200}\.hd-more \{ min-height: 44px; min-width: 44px;/.test(hud), 'css: the brain button of a scorecard is 44 px on a touch screen');
+}
+
+// --- chooser css (ui/chooser/chooser.css) ------------------------------------------------------
+{
+  const cc = read('ui/chooser/chooser.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  // the body of a media block: from its opening brace to the matching close
+  const mediaBody = q => {
+    const i = cc.indexOf(q);
+    if (i < 0) return '';
+    let d = 0, j = cc.indexOf('{', i);
+    const s = j;
+    for (; j < cc.length; j++) { if (cc[j] === '{') d++; else if (cc[j] === '}' && --d === 0) break; }
+    return cc.slice(s + 1, j);
+  };
+  const land = mediaBody('@media (orientation:landscape) and (max-height:520px)');
+  const top = cc.replace(/@media[^{]*\{(?:[^{}]*\{[^}]*\})*[^{}]*\}/g, '');
+  ok(/(^|[}\s])\.fdc-in\{[^}]*padding:calc\(26px \+ env\(safe-area-inset-top,0px\)\) [^;]*calc\(18px \+ env\(safe-area-inset-bottom,0px\)\)/.test(top), 'chooser css: the wide layout (iPad 1180x820) keeps the title and the Start bar clear of the safe area (top and bottom)');
+  ok(/\.fdc-phone \.fdc-in\{[^}]*padding:calc\(16px \+ env\(safe-area-inset-top,0px\)\)/.test(top), 'chooser css: the phone layout keeps the title under the notch (safe-area-inset-top)');
+  ok(/\.fdc-phone \.fdc-in\{[^}]*padding:calc\(10px \+ env\(safe-area-inset-top,0px\)\)/.test(land), 'chooser css: phone landscape keeps the title clear of the safe area (top)');
+  const coarse = mediaBody('@media (pointer:coarse)');
+  const rules = [...coarse.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].split(',').map(x => x.trim()), body: m[2] }));
+  const has = (sel, prop) => rules.some(r => r.sel.includes(sel) && new RegExp(`(^|;)${prop}:44px`).test(r.body));
+  for (const sel of ['.fdc-x', '.fdc-fpip', '.fdc-kind button', '.fdc-edit', '.fdc-back', '.fdc-opp button', '.fdc-how', '.fdc-seat-b', '.fdc-mode', '.fdc-tile', '.fdc-ctile', '.fdc-go']) {
+    ok(has(sel, 'min-height'), `chooser css: ${sel} is 44 px high or more on a coarse pointer`);
+  }
+  for (const sel of ['.fdc-x', '.fdc-fpip', '.fdc-kind button', '.fdc-opp button']) ok(has(sel, 'min-width'), `chooser css: ${sel} is 44 px wide or more on a coarse pointer`);
 }
 
 // --- layout -------------------------------------------------------------------------------------

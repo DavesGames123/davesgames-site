@@ -29,6 +29,7 @@
        grep -n 'CUSTOM'     Your decks strip, Build tile, the builder layer
        grep -n 'FOOT'       the start button and the fine print
        grep -n 'PHONE'      the step flow and the carousel
+       grep -n 'TOUCH'      44 px controls on a coarse pointer
    ========================================================================== */
 
 /* TOKENS */
@@ -50,7 +51,7 @@
 .fdc button:focus-visible{outline:2px solid var(--c-parch);outline-offset:2px}
 .fdc canvas{display:block}
 .fdc-veil{position:absolute;inset:0;background:rgba(5,7,12,0.9)}
-.fdc-in{position:relative;height:100%;display:grid;gap:16px 22px;padding:26px calc(30px + env(safe-area-inset-right,0px)) 18px calc(30px + env(safe-area-inset-left,0px));
+.fdc-in{position:relative;height:100%;display:grid;gap:16px 22px;padding:calc(26px + env(safe-area-inset-top,0px)) calc(30px + env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) calc(30px + env(safe-area-inset-left,0px));
   grid-template-columns:minmax(300px,380px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
   grid-template-areas:"top decks" "modes decks" "fine foot";max-width:1640px;margin:0 auto}
 
@@ -167,7 +168,7 @@
 .fdc-phone{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 @supports (height:100dvh){.fdc-phone{max-height:100dvh}}
 .fdc-phone .fdc-veil{position:fixed;background:rgba(5,7,12,0.92)}
-.fdc-phone .fdc-in{display:flex;flex-direction:column;gap:14px;min-height:100%;height:auto;padding:16px 16px 0}
+.fdc-phone .fdc-in{display:flex;flex-direction:column;gap:14px;min-height:100%;height:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 16px 0}
 .fdc-phone .fdc-t1{font-size:0.8rem}
 .fdc-phone .fdc-t2{font-size:2.3rem}
 .fdc-phone .fdc-lede{font-size:0.95rem}
@@ -215,7 +216,7 @@
    side by side with a short picture, the seats and the carousel fit above
    the start bar */
 @media (orientation:landscape) and (max-height:520px){
-  .fdc-phone .fdc-in{gap:10px;padding:10px calc(16px + env(safe-area-inset-right,0px)) 0 calc(16px + env(safe-area-inset-left,0px))}
+  .fdc-phone .fdc-in{gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) 0 calc(16px + env(safe-area-inset-left,0px))}
   .fdc-phone .fdc-lede{display:none}
   .fdc-phone .fdc-title::after{display:none}
   .fdc-phone .fdc-t2{font-size:1.5rem}
@@ -228,4 +229,14 @@
   .fdc-phone .fdc-tile{flex-basis:min(42%,300px)}
   .fdc-phone .fdc-fanbox{aspect-ratio:3/1}
   .fdc-phone .fdc-go{min-height:48px}
+}
+
+/* TOUCH: on a coarse pointer (a phone, a tablet) every control of the
+   title screen is 44 px or more in each direction, in both layouts.
+   tests/mobile.test.mjs checks this block. */
+@media (pointer:coarse){
+  .fdc-x,.fdc-fpip,.fdc-kind button,.fdc-edit,.fdc-back,.fdc-opp button,.fdc-how,.fdc-seat-b,.fdc-mode,.fdc-tile,.fdc-ctile,.fdc-go{min-height:44px}
+  .fdc-x,.fdc-fpip,.fdc-kind button,.fdc-opp button{min-width:44px}
+  .fdc-fpip{width:44px;height:44px}
+  .fdc-x{padding:0 14px}
 }
