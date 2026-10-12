@@ -1,0 +1,85 @@
+/* ============================================================================
+   FLY DUEL  ·  scorecards  (ui/hud/scorecard.js)
+   ----------------------------------------------------------------------------
+   Crisp: 1 px hairlines, hard 2 px state rings, no blur, no glow, no
+   gradient fills (a dual-land pip is a hard 50/50 split). Seat colour is
+   the letter chip and the 2 px top rule only. Numbers are mono with
+   tabular figures. Compact mode (.hd-compact) is the phone card.
+   GREP MAP
+     .hd-card        the card box           .hd-head    letter, name, life
+     .hd-mana        stacks of pips         .hd-counts  hand/library/grave
+     .hd-brain       neural panel           .hd-top     top-3 move values
+     .is-acting      this seat decides      .is-target  a legal target now
+   ========================================================================== */
+[hidden] { display: none !important; }
+
+.hd-card {
+  --acc: #39d0f0; --acc-ink: #04161c;
+  position: relative; box-sizing: border-box; min-width: 0;
+  display: grid; grid-template-columns: 1fr; gap: 6px;
+  padding: 8px 10px 10px; border: 1px solid rgba(255,255,255,0.22); border-top: 2px solid var(--acc);
+  border-radius: 10px; background: #0b0e15; color: #eef0f5;
+  font: 13px/1.3 var(--sci-sans, Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
+}
+.hd-seatB { --acc: #f26ad6; --acc-ink: #1c0618; }
+.hd-card.is-acting { box-shadow: 0 0 0 2px var(--acc); }
+.hd-card.is-target { box-shadow: 0 0 0 2px #eef0f5; cursor: pointer; }
+.hd-card.is-target .hd-life { outline: 2px solid #eef0f5; outline-offset: 2px; }
+
+.hd-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.hd-letter { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
+  background: var(--acc); color: var(--acc-ink); font: 700 13px var(--sci-mono, ui-monospace, Menlo, monospace); }
+.hd-id { display: flex; flex-direction: column; min-width: 0; }
+.hd-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hd-src { color: #8a91a5; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hd-status { color: #c2c7d4; font-size: 11px; padding: 2px 6px; border: 1px solid rgba(255,255,255,0.10); border-radius: 999px; white-space: nowrap; }
+.hd-card.is-acting .hd-status { background: var(--acc); color: var(--acc-ink); border-color: var(--acc); }
+.hd-life { appearance: none; background: none; border: 0; padding: 0; margin: 0; line-height: 0; cursor: pointer; border-radius: 8px; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+.hd-life:focus-visible { outline: 2px solid #eef0f5; outline-offset: 2px; }
+.hd-life[data-flash="dmg"] svg polygon { fill: #ff4d4d; }
+.hd-life[data-flash="heal"] svg polygon { fill: #3ee89a; }
+
+.hd-mana { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; min-height: 22px; }
+.hd-stack { display: inline-flex; align-items: flex-end; gap: 4px; }
+.hd-pips { display: inline-flex; flex-direction: column-reverse; gap: 2px; }
+.hd-pips i { display: block; width: 14px; height: 4px; border: 1px solid var(--c); box-sizing: border-box; }
+.hd-pips i.dn { background: transparent; opacity: 0.55; }
+.hd-stack em { font: 600 11px var(--sci-mono, ui-monospace, Menlo, monospace); font-style: normal; font-variant-numeric: tabular-nums; color: #c2c7d4; }
+.hd-none { color: #8a91a5; font-size: 11px; }
+
+.hd-counts { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: #8a91a5; }
+.hd-c { display: inline-flex; gap: 4px; align-items: baseline; }
+.hd-c em { font-style: normal; }
+.hd-c .s { display: none; }
+.hd-c b { color: #eef0f5; font: 600 12px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; }
+
+.hd-brain { position: relative; height: 64px; border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; overflow: hidden; background: #03050a; }
+.hd-cv { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.hd-vd { position: absolute; left: 6px; bottom: 3px; font: 500 11px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; color: #c2c7d4; background: #03050a; padding: 0 3px; white-space: pre; }
+.hd-vd[data-sign="app"] { color: #3ee89a; }
+.hd-vd[data-sign="avoid"] { color: #ff4d4d; }
+
+.hd-top { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; counter-reset: top; }
+.hd-top li { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 4px; background: #111623; font-size: 11px; overflow: hidden; counter-increment: top; }
+.hd-top li::before { content: counter(top); color: #8a91a5; font: 600 11px var(--sci-mono, ui-monospace, Menlo, monospace); }
+.hd-top li.chosen { box-shadow: inset 0 0 0 1px var(--acc); }
+.hd-top li.chosen::before { color: var(--acc); }
+.hd-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #c2c7d4; }
+.hd-top b { font: 600 11px var(--sci-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; }
+.hd-top i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--acc); }
+
+/* phone: one row of two cards; the brain strip is short, the top-3
+   shows only while the fly thinks (play.js toggles [hidden]) */
+.hd-compact { padding: 6px 8px 8px; gap: 4px; }
+.hd-compact .hd-head { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; }
+.hd-compact .hd-status { display: none; }
+.hd-compact .hd-name { font-size: 13px; }
+.hd-compact .hd-brain { height: 40px; }
+.hd-compact .hd-counts { gap: 8px; }
+.hd-compact .hd-c-creatures { display: none; }
+.hd-compact .hd-c .l { display: none; }
+.hd-compact .hd-c .s { display: inline; }
+.hd-compact .hd-pips i { width: 10px; height: 4px; }
+.hd-compact .hd-top li { font-size: 11px; padding: 2px 4px; }
+
+@media (prefers-reduced-motion: reduce) { .hd-life[data-flash] svg polygon { transition: none; } }
