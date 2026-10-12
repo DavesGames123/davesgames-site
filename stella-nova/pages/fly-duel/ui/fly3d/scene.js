@@ -52,7 +52,13 @@
 //        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
-//        highlight(ids, kind) | highlight(spec) | highlight(null) }
+//        highlight(ids, kind) | highlight(spec) | highlight(null),
+//        setRig(fn | null) }
+//      Saver hook: setRig(fn) gives the camera to the saver reel
+//      (ui/fly3d/reel.js). Each frame fn(camera, dt, cam) puts the camera
+//      in place and sets cam.look (the crowd looks there). setRig(null)
+//      gives the camera back to the director. shoot(shot, p, { cut: true })
+//      jumps to the shot, also when the shot is an 'ease' shot.
 //      Play mode (ui/play/play.js): setFirstPerson puts the camera at the
 //      seat of the human (above and behind the fly's head, its own mat and
 //      the other fly in view) and holds it there. pickPermanent and
@@ -82,6 +88,7 @@
 //      grep -n 'const STEP'                   one handler per choreo op
 //      grep -n 'function shotPose'            camera place per shot
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
+//      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'export function createDuelScene'
 // ============================================================================
 import * as THREE from 'three';
@@ -1244,7 +1251,27 @@ export function createDuelScene(canvas, opts = {}) {
     }
   }
   // Cut to a shot now, in any mode but 'free' (the saver and the page).
-  function shoot(shot, p = 0) { dir.request(shot, p | 0, sceneT, { force: true }); }
+  // o.cut: jump to the shot also when its move is 'ease' (a reel cut).
+  function shoot(shot, p = 0, o = {}) {
+    const r = dir.request(shot, p | 0, sceneT, { force: true });
+    if (o && o.cut) dir.state.cut = true;
+    return r;
+  }
+  // Saver hook (saver.js, ui/fly3d/reel.js). While camRig is set, it puts
+  // the camera in place each frame and the director shot does not move it.
+  // setRig(null) keeps the camera where the rig left it; the next shot
+  // eases or cuts from there.
+  let camRig = null;
+  const _rd = new THREE.Vector3();
+  function setRig(fn) {
+    camRig = typeof fn === 'function' ? fn : null;
+    if (!camRig) {
+      cam.pos.copy(camera.position);
+      camera.getWorldDirection(_rd);
+      cam.look.copy(camera.position).addScaledVector(_rd, 8);
+    }
+    return !!camRig;
+  }
   function setCamera(mode) {
     const m = ['auto', 'wide', 'free', 'script'].includes(mode) ? mode : 'auto';
     if (fpSeat != null) { fpPrev = m; return; }     // first person holds; the mode applies after it
@@ -1255,6 +1282,11 @@ export function createDuelScene(canvas, opts = {}) {
   }
   const FOV = 40, FP_FOV = [48, 60];      // seat shot: wide frame, tall frame
   function updateCamera(dt) {
+    if (camRig) {
+      try { camRig(camera, dt, cam); } catch (e) { console.warn('fly-duel 3d: the saver rig failed', e); setRig(null); }
+      if (controls) controls.target.copy(cam.look);
+      return;
+    }
     const fov = dir.state.shot === 'seat' ? FP_FOV[(camera.aspect || 1.6) < TALL ? 1 : 0] : FOV;
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
     shotPose(dt);
@@ -1768,7 +1800,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
-    setFirstPerson, pickPermanent, pickCard, highlight,
+    setFirstPerson, pickPermanent, pickCard, highlight, setRig,
     world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }
