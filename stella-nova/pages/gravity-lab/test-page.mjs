@@ -15,6 +15,8 @@
 //      body count grows, the run stays finite
 //  P5  the screensaver: enter, real time for SAVER_S s; cuts happen, the
 //      plate gets a title, TeX and numbers and no code; exit
+//  P6  the saver director on a virtual clock (150 s): follow and close
+//      shots keep the subject on screen, a push ends on its subject
 //  Each check prints PASS or FAIL. Exit code 1 on a FAIL.
 // ============================================================================
 if (typeof Deno === 'undefined' || !navigator.gpu) { console.log('SKIP  page tests: needs Deno with navigator.gpu'); }
@@ -183,6 +185,45 @@ async function run() {
   globalThis.snSaver.exit();
   ok('P5 saver: enter returns the canvas, shots cut, plate has title + TeX + numbers, no code', !!(res && res.canvas) && nCuts >= 3 && labels.length > 5 && last.title && last.tex && last.tex.length >= 1 && last.params && last.params.length >= 2 && !anyCode && errs.length === 0,
     `${nCuts} shots in ${SAVER_S} s (${[...cuts].join(', ')}); runs: ${[...titles].join(' | ')}; ${labels.length} plate updates; tex "${last.tex && last.tex[0]}"; params ${last.params && last.params.map(p => p.name + ' ' + p.value).join(', ')}; anchor ${anch ? `${anch.x.toFixed(0)},${anch.y.toFixed(0)}` : 'none'}; ${errs.length} WebGPU errors`);
+  // ── P6 the saver director on a virtual clock ──────────────────────────
+  // performance.now and the 250 ms tick follow the frame clock, so
+  // SAVER_V s of saver run in a few real seconds per minute. The camera
+  // must keep its subject on screen in follow and close shots, and a push
+  // must end on the subject (its disc at least 2x larger than at the
+  // start of the push).
+  {
+    const SAVER_V = 150, F = await import('./frame.js');
+    const ticks = [], realSI = globalThis.setInterval, realNow = performance.now;
+    globalThis.setInterval = (f, ms) => { if (ms === 250) { ticks.push(f); return 1; } return realSI(f, ms); };
+    Object.defineProperty(performance, 'now', { value: () => tNow, configurable: true });
+    await globalThis.snSaver.enter({ seed: 4242, calm: 0.7, label: () => {} });
+    const tick = ticks[ticks.length - 1], tv0 = tNow;
+    let nextTick = tNow + 250, cur = null;
+    const shots = [];
+    while (tNow - tv0 < SAVER_V * 1000) {
+      await frames(1, 1000 / 30);
+      while (tNow >= nextTick) { tick(); nextTick += 250; }
+      const sv = S.saver, sys = S.lab.sys;
+      if (!cur || cur.at !== sv.shotAt) { cur = { at: sv.shotAt, kind: sv.shot.kind, title: S.spec.title, n: 0, off: 0, px: [] }; shots.push(cur); }
+      if (sv.fade < 0.9 || !sys || sv.subject < 0 || !sys.alive[sv.subject]) continue;
+      // the camera of the cut comes one frame after the tick: skip 0.3 s
+      if (tNow - cur.at < 300) continue;
+      const p = F.toFrame(S.frame, sys.pos(sv.subject)), q = S.ren.project(p);
+      cur.n++;
+      if (!q || q.x < 0 || q.y < 0 || q.x > S.ren.W || q.y > S.ren.H) { cur.off++; continue; }
+      const eye = S.camNow.eye, d = Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]);
+      cur.px.push([tNow - cur.at, S.meta[sv.subject].rDraw / d]);
+    }
+    globalThis.snSaver.exit();
+    globalThis.setInterval = realSI;
+    Object.defineProperty(performance, 'now', { value: realNow, configurable: true });
+    const lost = shots.filter(s => (s.kind === 'follow' || s.kind === 'close') && s.n > 10 && s.off / s.n > 0.05);
+    const pushes = shots.filter(s => s.kind === 'push' && s.px.length > 30 && s.px[s.px.length - 1][0] > 4500);
+    const flat = pushes.filter(s => s.px[s.px.length - 1][1] < 2 * s.px[0][1]);
+    const closes = shots.filter(s => s.kind === 'close').length;
+    ok('P6 saver framing (virtual clock): follow and close shots keep the subject, a push ends on it', lost.length === 0 && pushes.length >= 2 && flat.length === 0 && closes >= 1 && errs.length === 0,
+      `${shots.length} shots in ${SAVER_V} s, ${closes} close; subject off screen: ${lost.map(s => `${s.kind} in "${s.title}" ${(100 * s.off / s.n).toFixed(0)}%`).join(', ') || 'never over 5%'}; pushes ${pushes.length}, end/start size ${pushes.map(s => (s.px[s.px.length - 1][1] / s.px[0][1]).toFixed(1)).join(' ')}; ${errs.length} WebGPU errors`);
+  }
   console.log(fails ? `${fails} page tests FAILED` : 'page tests: ALL PASS');
   Deno.exit(fails ? 1 : 0);
 }

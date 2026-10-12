@@ -11,7 +11,8 @@
 //              extent in the narrow side of the screen
 //  The user turns it (pointer.js: drag, wheel, pinch); the saver drives
 //  it with shot goals (app/saver.js: S.saver.goal) on critically damped
-//  springs, so a cut can also be hard (cam.cut).
+//  springs, so a cut can also be hard (cam.cut). A goal with lock set
+//  moves the target with the goal at once (a follow or a close shot).
 //  camFrame(W, H) returns the renderer camera (render.js writeCam).
 //
 //  grep -n targets: "export const cam", "export function resetCam",
@@ -61,7 +62,8 @@ export function camFrame(W, H, dt) {
       [cam.el, cam.v.el] = spring(cam.el, g.el, cam.v.el, k, dt);
       const ld = Math.log(cam.dist);
       let vd; [cam.dist, vd] = spring(ld, Math.log(g.dist), cam.v.dist, k, dt); cam.v.dist = vd; cam.dist = Math.exp(cam.dist);
-      const e = 1 - Math.exp(-dt * 2.2);
+      // a locked goal (follow, close) holds the subject; else ease to it
+      const e = g.lock ? 1 : 1 - Math.exp(-dt * 2.2);
       for (let c = 0; c < 3; c++) cam.target[c] += (g.target[c] - cam.target[c]) * e;
     }
     cam.shiftY += ((g.shiftY || 0) - cam.shiftY) * Math.min(1, dt * 3);
