@@ -6,7 +6,8 @@
 //        side, top: U over 0..2pi in the xz plane (angle from +x toward +z)
 //        or in the xy plane (from +x toward +y). The screen angle is the
 //        same as in the field view: x to the right, z or y up. Scale: dB
-//        from 0 to -30, normalised to the maximum.
+//        from 0 to -30, normalised to the maximum. beam: the angle of the
+//        observer, drawn as an orange line.
 //  grep -n: "export function drawPolar"
 // ============================================================================
 
@@ -58,10 +59,12 @@ export function drawPolar(canvas, d) {
     ctx.fillStyle = fill; ctx.fill();
     ctx.strokeStyle = col; ctx.lineWidth = 1.8 * dpr; ctx.stroke();
   };
-  curve(d.side, '#60e0ee', 'rgba(96,224,238,0.07)');
-  curve(d.top, '#ffb478', 'rgba(255,180,120,0.07)');
-  if (d.beam) {
-    ctx.strokeStyle = 'rgba(255,214,102,0.8)'; ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.lineWidth = 1 * dpr;
+  // U is the power per solid angle: the --m3 green of the energy flow
+  curve(d.side, '#86dc7c', 'rgba(134,220,124,0.08)');
+  curve(d.top, '#86dc7c', 'rgba(134,220,124,0.08)');
+  if (d.beam != null && isFinite(d.beam)) {
+    // the direction of the observer: the far field E there (--m2)
+    ctx.strokeStyle = 'rgba(255,154,98,0.85)'; ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.lineWidth = 1 * dpr;
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * Math.cos(d.beam), cy - R * Math.sin(d.beam)); ctx.stroke();
     ctx.setLineDash([]);
   }

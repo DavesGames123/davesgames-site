@@ -5,115 +5,185 @@
 <script src="../../lib/wishlist.js"></script>
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Antenna Fields — Stella Nova · davesgames.io</title>
+<title>Antenna fields — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    ANTENNA FIELDS  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. The page is the field: the wavefronts that leave an
-   antenna, on a plane, animated. em.js computes the currents (moment
-   method) and the numbers. field-gl.js sums the exact element fields on the
-   GPU and animates Re{F e^{jwt}}. overlay.js draws the antenna, the traced
-   field lines and the zone rings. plots.js draws the one pattern cut in
-   the Details drawer.
+   Static markup only. The page shows the exact field of an antenna on a
+   plane, animated, and the geometry of radiation over it: the current on
+   the wires, the observer with E, B and S, the flux through a sphere, the
+   energy flow, the far-field phasor sum, and a 3D view of the pattern.
+     em.js       currents (moment method), the field model, the pattern
+     geom.js     flux through a sphere, E-B phase, energy velocity, phasors
+     field-gl.js the field on the GPU (WebGL2): phasor pass, colour maps
+     scene3d.js  the 3D view: the pattern surface, the sphere, the slice
+     overlay.js  the 2D layer: wires, observer, flux arrows, phasor inset
+     flow.js     energy particles that move at v = S/u
+     plots.js    the pattern cut in the panel
+     ui.js       the panel, the dock and the sheet
+     saver.js    the screensaver hook (window.snSaver)
 
    HEAD LOAD ORDER
-     1. style.css    the page stylesheet
-     2. lib/sci.css  science type (STIX Two Text, Inter, system mono) and
-                     the math colours .m1 to .m6
+     gpu-guard, wishlist, stats-beacon (the site order), then style.css,
+     then lib/sci.css (STIX Two Text, Inter, the math colours .m1 to .m6).
    Scripts at the end of body: equations.js (MathJax SVG through
    lib/sci-math.js), then main.js (ES module; it imports the rest).
 
-   LAYOUT  (# marks an element id main.js binds to)
-     #field + #overlay   the full-screen field (WebGL2 + 2D)
-     #caption            one line at the top left: what the colour shows
-     #bar                one compact bar at the base:
-                           #types   five antenna icons
-                           #param   one slider (length, frequency or steering)
-                           #fields  E | B | power flow
-                           #speed   1x, 1/2x, 1/4x
-                           #view3d  the 3D view (scene3d.js): the pattern,
-                                    the flux sphere and the field slice
-                           #play    play / pause,  #detBtn  opens #details
-     #details            the drawer, closed at start: numbers in plain
-                         words, one pattern cut, options, equations, about.
-                         A right drawer on a desktop, a bottom sheet on a
-                         phone.
+   SYMBOL COLOURS  (lib/sci.css; the field on screen uses the same)
+     m2 E (orange)   m1 B, H (blue)   m3 S, U, the energy flow (green)
+     m5 the current I (gold)          m6 k, beta, the phase (lavender)
+     m4 D, P_rad (pink)
 
-   GREP MAP  (main.js)
-     grep -n 'const TYPES'          the five antennas and their slider
-     grep -n 'function rebuild'     antenna -> currents, GPU upload
-     grep -n 'function frame'       the render loop
-     grep -n 'function clearRect'   the framing clear of the bar and drawer
-     grep -n 'function details'     the drawer text
+   LAYOUT  (# marks an element id ui.js or main.js binds to)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ .topbar  Stella Nova · Antenna fields                    #viewSeg │
+     ├────────────┬──────────────────────────────────────────────────────┤
+     │ #panel     │  #field + #overlay   the field (WebGL2 + 2D),        │
+     │  antenna   │                      full window; the subject sits   │
+     │  show      │                      in the part the panel leaves    │
+     │  numbers   │  #caption + #legend  what the colour shows           │
+     │  pattern   │  #probe              the hover read-out              │
+     │  geometry  │                                                      │
+     │  sections  │                                                      │
+     ├────────────┴──────────────────────────────────────────────────────┤
+     │ #status   antenna · frequency · gain · impedance                   │
+     └───────────────────────────────────────────────────────────────────┘
+   PHONE (max-width 768px, or a short landscape touch screen)
+     #dock    the antenna, the field (E, B, S), 3D, play, the panel
+     #panel   a bottom sheet above the dock (#sheetGrip: half or full);
+              a drawer on the right in landscape
+
+   GREP MAP
+     grep -n 'id="panel"'      the panel and its sections
+     grep -n 'class="geo'      the geometry sections and their equations
+     grep -n 'id="dock"'       the phone dock
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Watch radio waves leave an antenna: the exact electric field of a dipole, a loop, a phased array and a Yagi-Uda, with field lines that break away and travel outward.">
+<meta name="description" content="The exact field of a dipole, a loop, a phased array and a Yagi-Uda, with the geometry of radiation: the current on the wire, E and B near and far, the Poynting flow, the flux through a sphere, the 3D pattern and the phasor sum of an array.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Antenna fields</div>
+</div>
+
 <canvas id="field"></canvas>
 <canvas id="overlay"></canvas>
-<div id="caption"></div>
-<div id="probe" class="off"></div>
-<div id="fail" class="off"></div>
+<div id="caption"><span id="capText"></span><span id="legend" aria-hidden="true"><i class="neg"></i><span class="bar"></span><i class="pos"></i></span></div>
+<div id="viewSeg" class="seg" role="group" aria-label="View">
+  <button id="viewField" class="on">Field</button>
+  <button id="view3d" aria-pressed="false" title="The radiation pattern in 3D">3D pattern</button>
+</div>
+<button id="gear" aria-label="Open the panel" title="Open the panel">☰</button>
+<div id="probe" hidden></div>
+<div id="fail" hidden></div>
 
-<nav id="bar" aria-label="Controls">
-  <div id="types" class="grp" role="group" aria-label="Antenna">
-    <button data-type="dipole" title="Dipole, any length" aria-label="Dipole"><svg viewBox="0 0 24 24"><path d="M12 2v9M12 13v9"/></svg></button>
-    <button data-type="halfwave" title="Half-wave dipole" aria-label="Half-wave dipole"><svg viewBox="0 0 24 24"><path d="M9 6v5M9 13v5"/><text x="13" y="15">½</text></svg></button>
-    <button data-type="loop" title="Loop" aria-label="Loop"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg></button>
-    <button data-type="array" title="Phased array" aria-label="Phased array"><svg viewBox="0 0 24 24"><path d="M4 7v10M9 7v10M14 7v10M19 7v10"/></svg></button>
-    <button data-type="yagi" title="Yagi-Uda" aria-label="Yagi-Uda"><svg viewBox="0 0 24 24"><path d="M4 3v18M9 5v14M14 6v12M19 7v10M3 12h17" /></svg></button>
+<aside id="panel" class="open" aria-label="Controls and explanation">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button id="panelClose" aria-label="Close the panel">✕</button>
+
+  <div class="sec-label">Antenna</div>
+  <div id="types" class="types" role="group" aria-label="Antenna">
+    <button data-type="dipole"><svg viewBox="0 0 24 24"><path d="M12 2v9M12 13v9"/></svg><span>Dipole</span></button>
+    <button data-type="halfwave"><svg viewBox="0 0 24 24"><path d="M12 6v5M12 13v5"/></svg><span>Half-wave</span></button>
+    <button data-type="loop"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg><span>Loop</span></button>
+    <button data-type="array"><svg viewBox="0 0 24 24"><path d="M4 7v10M9 7v10M14 7v10M19 7v10"/></svg><span>Phased array</span></button>
+    <button data-type="yagi"><svg viewBox="0 0 24 24"><path d="M4 3v18M9 5v14M14 6v12M19 7v10M3 12h17"/></svg><span>Yagi-Uda</span></button>
   </div>
-  <label id="param" class="grp">
-    <span class="plab" id="paramLab"></span>
-    <input type="range" id="paramIn">
-    <span class="pval" id="paramVal"></span>
-  </label>
-  <div id="fields" class="grp seg" role="group" aria-label="Field">
-    <button data-field="E" title="Electric field">E</button>
-    <button data-field="H" title="Magnetic field">B</button>
-    <button data-field="S" title="Power flow">Power</button>
+  <p class="desc" id="typeDesc"></p>
+  <div id="params"></div>
+  <div class="chips" id="typeOpts"></div>
+
+  <div class="sec-label">Show</div>
+  <div class="seg wide" id="fields" role="group" aria-label="Field">
+    <button data-field="E"><b class="m2">E</b> electric</button>
+    <button data-field="H"><b class="m1">B</b> magnetic</button>
+    <button data-field="S"><b class="m3">S</b> power flow</button>
   </div>
-  <div id="spd" class="grp"><button id="speed" title="Speed">1×</button></div>
-  <div id="ctl" class="grp">
-    <button id="view3d" title="Radiation pattern in 3D" aria-pressed="false">3D</button>
+  <div class="seg wide" id="views" role="group" aria-label="Plane">
+    <button data-view="side">From the side</button>
+    <button data-view="top">From above</button>
+  </div>
+  <div class="chips" id="togs">
+    <button data-tog="lines">Field lines</button>
+    <button data-tog="flow">Energy flow</button>
+    <button data-tog="sphere">Flux sphere</button>
+    <button data-tog="phasors">Phasor sum</button>
+    <button data-tog="zones">Near and far zones</button>
+    <button data-tog="log">Log brightness</button>
+  </div>
+  <div class="chips" id="opts3d">
+    <button id="morphBtn">3D: sphere or pattern</button>
+    <button id="dbBtn">3D: gain in dB</button>
+  </div>
+  <div class="row run">
     <button id="play" aria-label="Pause" title="Pause (space)">❚❚</button>
-    <button id="detBtn" aria-expanded="false" title="Details"><span class="lg">Details</span><span class="sm">⋯</span></button>
+    <label for="speed">Speed</label>
+    <input type="range" id="speed" min="0.05" max="1" step="0.01" value="0.4">
+    <span class="val" id="speedV"></span>
   </div>
-</nav>
+  <p class="hint">Drag the ring marker to move the observer. Drag elsewhere to move the view; scroll or pinch to zoom. In the 3D view, drag to turn.</p>
 
-<aside id="details" aria-label="Details">
-  <div class="dhead"><span>Details</span><button id="detClose" aria-label="Close details">✕</button></div>
+  <div class="sec-label">Numbers</div>
   <p class="what" id="what"></p>
   <table class="nums" id="nums"></table>
-  <div class="dsec">Radiation pattern</div>
+
+  <div class="sec-label">Pattern cut</div>
   <canvas id="polar"></canvas>
-  <p class="small" id="polarNote"></p>
-  <div class="dsec">Options</div>
-  <div class="opts" id="opts"></div>
-  <div class="dsec">Equations</div>
-  <div id="eqs">
-    <p class="small">The field of each short piece of current, with all three terms. The page adds these up for every pixel.</p>
-    <div class="sci-eq" data-tex="E_\theta=\frac{j\eta k\,I\Delta l\,\sin\theta}{4\pi r}\Big[1+\frac{1}{jkr}-\frac{1}{(kr)^2}\Big]e^{-jkr}"></div>
-    <p class="small">The picture at time t is the real part of the phasor.</p>
-    <div class="sci-eq" data-tex="\vec E(t)=\mathrm{Re}\{\vec E\,e^{j\omega t}\}"></div>
-    <p class="small">Currents that nobody feeds (the Yagi-Uda reflector and directors) come from the moment method: the field of all the currents must be zero along each wire.</p>
-    <div class="sci-eq" data-tex="\sum_n Z_{mn}I_n=V_m"></div>
-  </div>
-  <div class="dsec">About</div>
+  <p class="hint" id="polarNote"></p>
+
+  <div class="sec-label geo">The current on the wire</div>
+  <p class="geo">A centre-fed wire carries a standing wave of current. It is zero at the open ends. The gold curve beside each wire is the current now; the faint band is its envelope. Each short piece of current radiates, and the field on screen is the sum of all of them.</p>
+  <div class="sci-eq" data-tex="I(z)=I_m\sin k\Big(\tfrac{L}{2}-|z|\Big),\qquad k=\frac{2\pi}{\lambda}"></div>
+  <p class="geo">For the Yagi-Uda only the middle wire is fed. The currents on the other wires come from the moment method: the field of all the currents together must be zero along every wire.</p>
+  <div class="sci-eq" data-tex="\sum_n Z_{mn}\,I_n=V_m"></div>
+
+  <div class="sec-label geo">Near field and far field</div>
+  <p class="geo">The field of one short piece of current has three terms. Close to the wire the <i>1/r³</i> and <i>1/r²</i> terms win: the field stores energy and gives it back each cycle, and <span class="m2">E</span> is 90° behind <span class="m1">B</span>. Far away only the <i>1/r</i> term is left: <span class="m2">E</span> and <span class="m1">B</span> are across the radius, in phase, and <span class="m2">E</span> = <i>c</i><span class="m1">B</span>. That part carries energy away. The change happens near <i>kr</i> = 1, one sixth of a wavelength out. Drag the marker outward and read the phase in its label.</p>
+  <div class="sci-eq" data-tex="E_\theta=\frac{j\eta k\,I\Delta l\,\sin\theta}{4\pi r}\Big[1+\frac{1}{jkr}-\frac{1}{(kr)^2}\Big]e^{-jkr}"></div>
+  <div class="sci-eq" data-tex="H_\phi=\frac{jk\,I\Delta l\,\sin\theta}{4\pi r}\Big[1+\frac{1}{jkr}\Big]e^{-jkr},\qquad \vec B=\mu_0\vec H"></div>
+
+  <div class="sec-label geo">Energy flow</div>
+  <p class="geo">The Poynting vector <span class="m3">S</span> is the flow of energy: power per unit area, along <span class="m2">E</span> × <span class="m1">B</span>. With <b>Energy flow</b> on, particles move with the energy velocity <span class="m3">S</span>/<i>u</i>. Far away they move out at the speed of light with the wavefronts. Near the wire they move out and back: that is the stored energy. The speed can never pass <i>c</i>.</p>
+  <div class="sci-eq" data-tex="\vec S=\frac{1}{\mu_0}\vec E\times\vec B,\qquad \vec v=\frac{\vec S}{u}\le c,\qquad u=\tfrac{1}{2}\big(\varepsilon_0E^2+B^2/\mu_0\big)"></div>
+
+  <div class="sec-label geo">Flux through a sphere</div>
+  <p class="geo">The dashed circle is a sphere around the antenna, through the marker, cut by the plane. Its arrows show <span class="m3">S</span> · <i>n</i> now: out, or back in. Add the flux over the whole sphere and you get the power that leaves. In empty space the time-average flow has no divergence, so the divergence theorem gives the same flux through every sphere: drag the marker and the average stays the same. The flux now swings around that average, and near the antenna it goes below zero.</p>
+  <div class="sci-eq" data-tex="\oint_{\partial V}\langle\vec S\rangle\cdot d\vec A=\int_V\nabla\cdot\langle\vec S\rangle\,dV=P_\text{rad}"></div>
+  <div class="sci-eq" data-tex="\langle\vec S\rangle=\tfrac{1}{2}\,\mathrm{Re}\{\vec E\times\vec H^{*}\},\qquad \nabla\cdot\vec S+\frac{\partial u}{\partial t}=-\vec J\cdot\vec E"></div>
+
+  <div class="sec-label geo">The radiation pattern</div>
+  <p class="geo">Far away, the power per solid angle <span class="m3">U</span> depends only on the direction. In the 3D view its radius in each direction is the field strength there. The same function on a sphere is the flux density: the 3D option changes one shape into the other. Directivity compares the strongest direction with the average.</p>
+  <div class="sci-eq" data-tex="U(\theta,\phi)=r^2\langle S_r\rangle,\qquad D=\frac{4\pi\,U_\text{max}}{P_\text{rad}}"></div>
+  <p class="geo">A half-wave dipole has <i>D</i> = 1.64 (2.15 dBi): a ring of power around the wire and none along it.</p>
+
+  <div class="sec-label geo">Arrays and the phasor sum</div>
+  <p class="geo">The far field toward one direction is a sum of arrows, one per element: the length is the current, the angle is the phase of the current plus the extra path. The box at the lower right draws this sum head to tail toward the marker; the arrows turn together at the wave frequency. Where the arrows line up, the beam is; where they close into a polygon, there is a null. A phase step <span class="m6">β</span> from one element to the next turns the beam.</p>
+  <div class="sci-eq" data-tex="AF(\theta)=\sum_{n=0}^{N-1}I_n\,e^{jn(kd\sin\theta+\beta)},\qquad \sin\theta_s=-\frac{\beta}{kd}"></div>
+
+  <div class="sec-label">About</div>
   <div class="about">
-    <p>Close to the wire the field stores energy and gives it back each cycle. Farther out, closed loops of electric field break away and travel outward at the speed of light. That is radiation.</p>
-    <p>The field lines are exact where a flux function exists (a dipole seen from the side, a small loop, any of these antennas seen from above). In the other views the page traces the field direction.</p>
+    <p>The field is exact for the current on each wire: a sinusoidal current between equally spaced nodes has a closed-form field, and the GPU adds it up for every pixel. The loop uses many short elements. The numbers come from the far-field sum and from the flux through a sphere; the two agree.</p>
     <p>Inspired by <a href="https://github.com/rotemTsafrir/dipole_sim" target="_blank" rel="noopener">dipole_sim</a> by Rotem Tsafrir. This page shares no code with it.</p>
   </div>
 </aside>
+
+<div id="status"><span id="stMain"></span><span id="stRight" class="right"></span></div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockType" class="name" aria-label="Antenna"><span id="dockName">Half-wave</span></button>
+  <button id="dockField" aria-label="Field"><b class="m2">E</b></button>
+  <button id="dock3d" aria-label="3D pattern" aria-pressed="false">3D</button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <button id="dockPanel" aria-label="Panel" aria-expanded="false">☰</button>
+</nav>
 
 <script type="module" src="equations.js"></script>
 <script type="module" src="main.js"></script>

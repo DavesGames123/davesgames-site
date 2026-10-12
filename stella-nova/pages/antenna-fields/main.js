@@ -1,28 +1,28 @@
 // ============================================================================
-//  ANTENNA FIELDS  ·  main.js — state, the bar, the drawer, the frame loop
+//  ANTENNA FIELDS  ·  main.js — state, framing, the frame loop and input
 // ----------------------------------------------------------------------------
-//  ES module. em.js gives the currents and the numbers, field-gl.js the GPU
-//  field, overlay.js the 2D layer, plots.js the one pattern cut in the
-//  drawer, saver.js the screensaver hook.
+//  ES module. em.js gives the currents and the numbers, geom.js the flux,
+//  phase and phasor geometry, field-gl.js the GPU field, overlay.js and
+//  flow.js the 2D layer, scene3d.js the 3D view, ui.js the panel and the
+//  dock, saver.js the screensaver hook.
 //
-//  The page is the field. One bar holds the antenna, one slider, the field
-//  (E, B, power flow), speed, play and the Details button. The drawer holds
-//  the numbers in plain words, the cut, the options and the equations.
-//
-//  UNITS. Physics runs in wavelengths. The view and the drawer show metres.
+//  UNITS. Physics runs in wavelengths. The view and the panel show metres.
 //  The half-wave dipole and the Yagi-Uda are built for 300 MHz (lambda0 =
 //  1 m); their slider is the frequency, so the metal keeps its size and the
-//  electrical length changes. The other antennas run at 300 MHz and their
-//  slider is a length in wavelengths, or the steering angle.
+//  electrical length changes. The other antennas run at 300 MHz.
 //
-//  PIPELINE.
-//    rebuild()  state -> em.buildAntenna -> GPU elements; the numbers later
-//    frame()    phase, framing (clearRect), the phasor pass when the view or
-//               the antenna changed (low resolution while the user drags),
-//               the probe grid, the overlay, the display pass
+//  PIPELINE (one frame)
+//    rebuild()      state -> em.buildAntenna -> GPU elements and wire nodes
+//    frame3d()      the 3D view, when it is on (then the frame ends)
+//    updateView()   framing in clearRect(); the phasor pass when the view or
+//                   the antenna changed; the probe grid and normalise()
+//    updateGeo()    the observer: E, H, the sphere flux, the phasor sum
+//    drawOverlay()  field lines, flow, flux arrows, wires, observer, phasors
+//    field.draw()   the display pass
 //
-//  grep -n: "const TYPES"  "function rebuild"  "function frame"
-//           "function clearRect"  "function details"  "function pointer"
+//  grep -n: "const TYPES"  "function rebuild"  "function frame("  "function frame3d"
+//           "function clearRect"  "function updateGeo"  "function pointer"
+//           "function setType"
 // ============================================================================
 import * as em from './em.js';
 import { createField } from './field-gl.js';
@@ -30,22 +30,22 @@ import { mapper, inPlane, traceLines, drawOverlay, RGB } from './overlay.js';
 import * as geom from './geom.js';
 import { createFlow } from './flow.js';
 import { createScene } from './scene3d.js';
-import { drawPolar } from './plots.js';
+import { initUI, PHONE_Q } from './ui.js';
 import { installSaver } from './saver.js';
 
 const $ = id => document.getElementById(id);
 const F0 = 300, TAU = 2 * Math.PI;
-const phoneMQ = window.matchMedia('(max-width:760px)');
+const phoneMQ = window.matchMedia(PHONE_Q);
+let ui = null;
 
-// ── the five antennas and their one slider ──────────────────────────────────
-// p: the state key, min, max, step, label, fmt. zoom: default half height of
-// the view in metres. view: the plane the page shows at first.
+// ── the five antennas: the view at first and the default half height of the
+// view in metres. Their sliders are in ui.js PARAMS.
 const TYPES = {
-  dipole:   { name: 'Dipole', view: 'side', zoom: 1.5, p: { k: 'L', min: 0.1, max: 2, step: 0.01, lab: 'Length', fmt: v => v.toFixed(2) + ' λ' } },
-  halfwave: { name: 'Half-wave dipole', view: 'side', zoom: 1.3, p: { k: 'f', min: 150, max: 600, step: 1, lab: 'Frequency', fmt: v => v.toFixed(0) + ' MHz' } },
-  loop:     { name: 'Loop', view: 'side', zoom: 1.2, p: { k: 'C', min: 0.05, max: 1.6, step: 0.01, lab: 'Circumference', fmt: v => v.toFixed(2) + ' λ' } },
-  array:    { name: 'Phased array', view: 'top', zoom: 2.6, p: { k: 'steer', min: -60, max: 60, step: 1, lab: 'Steering', fmt: v => v.toFixed(0) + '°' } },
-  yagi:     { name: 'Yagi-Uda', view: 'top', zoom: 2.4, p: { k: 'f', min: 240, max: 360, step: 1, lab: 'Frequency', fmt: v => v.toFixed(0) + ' MHz' } },
+  dipole: { view: 'side', zoom: 1.5 },
+  halfwave: { view: 'side', zoom: 1.3 },
+  loop: { view: 'side', zoom: 1.2 },
+  array: { view: 'top', zoom: 2.6 },
+  yagi: { view: 'top', zoom: 2.4 },
 };
 
 const S = {
@@ -71,7 +71,7 @@ const S = {
 let A = null, stats = null, field = null;
 let dirtyAntenna = true, statsTimer = 0, lastInteract = -1e9, refineDue = false, lastStatsAt = -1e9;
 let probe = null, norm = { gain: 1, psiScale: 1 }, lastKey = '', lineBuf = null, lineRef = null;
-let geo = null, geoKey = '', probeR = null;
+let geo = null, geoKey = '', probeR = null, geoChanged = false, lastNumbers = 0;
 const flow = createFlow(phoneMQ.matches ? 700 : 1300, 11);
 let scene = null, sceneFailed = false, patKey = '', patGrid = null;
 const fieldCanvas = $('field'), overlay = $('overlay'), octx = overlay.getContext('2d');
@@ -117,7 +117,7 @@ function rebuild() {
   geoKey = '';
   patKey = '';
   scheduleStats();
-  caption();
+  if (ui) ui.caption();
 }
 // The pattern integral costs 5 to 40 ms: it waits for a pause in a drag,
 // and in the screensaver it runs at most every 600 ms.
@@ -134,28 +134,32 @@ function computeStats() {
   if (!A) return;
   lastStatsAt = performance.now();
   stats = em.patternStats(A.elems, { nt: 64, np: 128 });
-  if (!S.saver && $('details').classList.contains('open')) details();
+  if (!S.saver && ui) ui.numbers();
 }
 
 // ── framing ─────────────────────────────────────────────────────────────────
-// The part of the window that the bar and the drawer do not cover (CSS px).
+// The part of the window that the panel, the dock, the caption and the
+// status line leave clear (CSS px). The subject is centred in it.
 function clearRect() {
   const W = innerWidth, H = innerHeight;
   if (S.saver) {
     const b = S.band, wc = b && b.w ? b.w : W;
     return { x: (W - wc) / 2, y: b ? b.t : 0, w: wc, h: H - (b ? b.t + b.b : 0) };
   }
-  let r = W, btm = H, t = 0;
-  const bar = $('bar').getBoundingClientRect();
-  btm = Math.min(btm, bar.top - 6);
-  const det = $('details');
-  if (det.classList.contains('open')) {
-    const d = det.getBoundingClientRect();
-    if (phoneMQ.matches) btm = Math.min(btm, d.top); else r = Math.min(r, d.left);
+  let l = 0, r = W, btm = H, t = 0;
+  const P = $('panel'), open = P.classList.contains('open'), pr = P.getBoundingClientRect();
+  if (phoneMQ.matches) {
+    const dock = $('dock').getBoundingClientRect();
+    if (dock.height) btm = Math.min(btm, dock.top);
+    if (open && pr.height) { if (pr.left > W * 0.3) r = Math.min(r, pr.left); else btm = Math.min(btm, pr.top); }
+  } else {
+    if (open && pr.width) l = Math.max(l, pr.right);
+    const st = $('status').getBoundingClientRect();
+    if (st.height) btm = Math.min(btm, st.top + 4);
   }
   const cap = $('caption').getBoundingClientRect();
   if (cap.height) t = cap.bottom + 4;
-  return { x: 0, y: t, w: Math.max(40, r), h: Math.max(40, btm - t) };
+  return { x: l, y: t, w: Math.max(40, r - l), h: Math.max(40, btm - t) };
 }
 const view = { u0: -2, v0: -1, u1: 2, v1: 1 };
 function updateView(cr) {
@@ -271,6 +275,7 @@ function updateGeo() {
   const key = [u, v, S.view, S.type, A.elems.n, A.Zin && A.Zin[0]].join('|');
   if (key === geoKey && geo) return;
   geoKey = key;
+  geoChanged = true;
   const p = [0, 1, 2].map(k => u * ax.u[k] + v * ax.v[k]);
   const dir = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], dl = Math.hypot(...dir) || 1;
   const zr = zoneRadii(A.extent), rl = dl;
@@ -316,7 +321,7 @@ function updatePattern(Hs) {
 // One frame of the 3D view. Returns false if the view cannot run (the field
 // view then draws instead).
 function frame3d(dt) {
-  if (sceneFailed) { S.v3.on = false; syncBar(); return false; }
+  if (sceneFailed) { S.v3.on = false; if (ui) ui.sync(); return false; }
   if (!scene) {
     try { scene = createScene(field.gl); }
     catch (e) { console.error('[antenna-fields] 3D view', e); sceneFailed = true; return false; }
@@ -411,6 +416,7 @@ function frame(now) {
   }
   const ax = axes(), showGeo = !S.saver;
   if (showGeo) updateGeo();
+  if (geoChanged && ui && !S.saver && now - lastNumbers > 300) { geoChanged = false; lastNumbers = now; ui.numbers(); }
   const flowOn = S.tog.flow && probe && !S.saver;
   if (flowOn) {
     flow.field(probe, S.phase, ax.u, ax.v, probeR);
@@ -425,7 +431,7 @@ function frame(now) {
     obs: showGeo && geo ? { u: geo.u, v: geo.v, ob: geo.ob, sf: geo.sf, circle: geo.circle, sphere: S.tog.sphere, zone: geo.zone, lambdaM: lambdaM(),
       clip: { x: cr.x * dpr, y: cr.y * dpr, w: cr.w * dpr, h: cr.h * dpr } } : null,
     phasors: showGeo && geo && geo.pt ? { pt: geo.pt, rect: phasorRect(cr, dpr) } : null,
-    scaleBox: S.saver ? null : { x: 16 * dpr, y: (cr.y + cr.h - 10) * dpr, lambdaM: lambdaM() },
+    scaleBox: S.saver ? null : { x: (cr.x + 16) * dpr, y: (cr.y + cr.h - 10) * dpr, lambdaM: lambdaM() },
   });
   if (S.saver) field.uploadOverlay(overlay);
   field.draw({
@@ -446,79 +452,7 @@ function computePhasors(q) {
   normalise();
 }
 
-// ── caption and the drawer ───────────────────────────────────────────────────
-const FIELD_WORDS = { E: 'Electric field', H: 'Magnetic field', S: 'Power flow' };
-function caption() {
-  if (S.saver) return;
-  $('caption').innerHTML = S.v3.on
-    ? `<b>${TYPES[S.type] ? TYPES[S.type].name : ''}</b> · radiation pattern in 3D, with the ${FIELD_WORDS[S.field].toLowerCase()} on the plane · drag to turn`
-    : `<b>${TYPES[S.type] ? TYPES[S.type].name : ''}</b> · ${FIELD_WORDS[S.field]} · seen from ${S.view === 'side' ? 'the side' : 'above'}`;
-}
-const fz = Z => !Z || !isFinite(Z[0]) ? 'very large' : Z[0].toFixed(1) + (isFinite(Z[1]) ? (Z[1] < 0 ? ' − j' : ' + j') + Math.abs(Z[1]).toFixed(1) : '') + ' Ω';
-function details() {
-  if (!A) return;
-  const t = S.type, pm = psiMode(), tf = traceField();
-  const lineWord = pm === 1 ? 'The white lines are electric field lines. They are exact here, and you can see closed loops break away from the wire.'
-    : pm === 2 ? 'The white lines are magnetic field lines of the loop\'s uniform current (the other current modes add ' + (A.nonUniform * 100).toFixed(0) + ' %).'
-    : pm === 3 ? 'The white lines are magnetic field lines in this plane. They are exact.'
-    : tf ? 'The faint lines follow the ' + (tf === 'E' ? 'electric' : 'magnetic') + ' field direction, traced again each frame.' : '';
-  const colour = S.field === 'S' ? 'Brightness shows how much power flows through each point, on a log scale.'
-    : 'Orange and cyan are opposite directions of the ' + (S.field === 'E' ? 'electric' : 'magnetic') + ' field. The bands move outward at the speed of light.';
-  if (S.v3.on) {
-    $('what').textContent = 'The 3D view shows the radiation pattern as a lit surface: its radius in each direction is the field strength there, and its colour is the power per solid angle (green, like the energy flow). The white ring is the plane of the field view, and the orange ray points at the observer. Turn on "3D: flux sphere" and the surface becomes a sphere around the antenna, coloured by the power that crosses it: the same function, drawn on a sphere. On the sphere, E (orange) and B (blue) lie across the radius and swing in phase, and S (green) always points out. The field on the plane is the same as in the field view.';
-  } else $('what').textContent = colour + ' ' + lineWord + ' Brightness grows with distance to cancel the 1/r fall-off, so the far wavefronts stay visible.'
-    + ' The gold curve beside each wire is its current now, inside the band of its standing wave. Drag the ring marker: it is an observer. The arrows on the circle through it show the power that flows out of the sphere (green) or back in (grey). The label gives the phase between E and B there, and the box at the lower right adds the far-field contributions of each piece of current toward the marker.';
-  const rows = [['Frequency', freq().toFixed(0) + ' MHz (wavelength ' + lambdaM().toFixed(2) + ' m)']];
-  if (t === 'dipole') rows.push(['Length', S.dipole.L.toFixed(2) + ' wavelengths']);
-  if (t === 'halfwave') rows.push(['Length', (0.5 * scale()).toFixed(3) + ' wavelengths (0.50 m)']);
-  if (t === 'loop') rows.push(['Circumference', S.loop.C.toFixed(2) + ' wavelengths']);
-  if (t === 'array') rows.push(['Elements', S.array.N + ', half a wavelength apart']);
-  if (t === 'yagi') rows.push(['Elements', (S.yagi.nd + 2) + ': reflector, driven, ' + S.yagi.nd + ' directors']);
-  rows.push([t === 'array' ? 'Impedance of the centre element' : 'Input impedance', fz(A.Zin)]);
-  if (stats) {
-    rows.push(['Gain', stats.Ddb.toFixed(1) + ' dBi (' + stats.D.toFixed(2) + ' × an isotropic source)']);
-    const bw = [stats.hpbwE, stats.hpbwH].filter(isFinite);
-    rows.push(['Beam width (half power)', bw.length ? bw.map(v => v.toFixed(0) + '°').join(' and ') : 'all round']);
-    if (t === 'yagi') rows.push(['Front to back', stats.fb.toFixed(1) + ' dB']);
-    if (t === 'array') rows.push(['Beam direction', (Math.atan2(stats.dir[0], Math.abs(stats.dir[1])) * 180 / Math.PI).toFixed(0) + '° from broadside']);
-    rows.push(['Radiated power at 1 A', stats.P.toFixed(stats.P < 1 ? 3 : 1) + ' W']);
-  }
-  rows.push(['How the currents are found', A.note ? (t === 'yagi' ? 'moment method, ' : t === 'loop' ? 'Fourier modes, ' : t === 'array' ? '' : 'moment method, ') + A.note : (t === 'array' ? 'equal currents, progressive phase' : 'sinusoidal current (textbook)')]);
-  $('nums').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
-  // one cut: the plane on screen
-  const side = S.view === 'side', n = 360;
-  const cut = em.patternCut(A.elems, [1, 0, 0], side ? [0, 0, 1] : [0, 1, 0], n);
-  drawPolar($('polar'), side ? { side: cut, sideX: 'x', upLabel: 'z' } : { top: cut, sideX: 'x', upLabel: 'y' });
-  $('polarNote').textContent = 'Gain around the antenna in the plane on screen, 0 to −30 dB. The shape is the same at every distance in the far field.';
-  options();
-}
-function options() {
-  const o = $('opts');
-  const items = [
-    ['View from the side', () => S.view === 'side', () => { S.view = 'side'; }],
-    ['View from above', () => S.view === 'top', () => { S.view = 'top'; }],
-    ['Field lines', () => S.tog.lines, () => { S.tog.lines = !S.tog.lines; }],
-    ['Near and far zones', () => S.tog.zones, () => { S.tog.zones = !S.tog.zones; }],
-    ['Energy flow', () => S.tog.flow, () => { S.tog.flow = !S.tog.flow; flow.reset(); }],
-    ['Flux sphere', () => S.tog.sphere, () => { S.tog.sphere = !S.tog.sphere; geoKey = ''; }],
-    ['Phasor sum', () => S.tog.phasors, () => { S.tog.phasors = !S.tog.phasors; geoKey = ''; }],
-    ['3D: flux sphere', () => S.v3.morphTo === 0, () => { S.v3.morphTo = S.v3.morphTo ? 0 : 1; }],
-    ['3D: gain in dB', () => S.v3.db, () => { S.v3.db = !S.v3.db; }],
-    ['Log brightness', () => S.tog.log, () => { S.tog.log = !S.tog.log; }],
-  ];
-  if (S.type === 'dipole' || S.type === 'halfwave') items.push(['Moment method current', () => S[S.type].model === 'mom', () => { const P = S[S.type]; P.model = P.model === 'mom' ? 'sin' : 'mom'; dirtyAntenna = true; }]);
-  if (S.type === 'array') items.push(['16 elements', () => S.array.N === 16, () => { S.array.N = S.array.N === 16 ? 8 : 16; dirtyAntenna = true; }]);
-  if (S.type === 'yagi') items.push(['8 directors', () => S.yagi.nd === 8, () => { S.yagi.nd = S.yagi.nd === 8 ? 4 : 8; dirtyAntenna = true; }]);
-  o.innerHTML = '';
-  for (const [label, on, act] of items) {
-    const b = document.createElement('button');
-    b.textContent = label; b.classList.toggle('on', on());
-    b.onclick = () => { act(); lastKey = ''; caption(); touch(); if (!dirtyAntenna) details(); else setTimeout(details, 50); };
-    o.appendChild(b);
-  }
-}
-
-// ── the bar ───────────────────────────────────────────────────────────────────
+// ── state changes the panel calls ──────────────────────────────────────────────
 function touch() { lastInteract = performance.now(); }
 function setType(t) {
   S.type = t;
@@ -527,60 +461,15 @@ function setType(t) {
   defaultObs();
   stats = null;
   dirtyAntenna = true;
-  syncBar();
+  if (ui) ui.sync();
 }
 function setView3d(on) {
   S.v3.on = !!on && !sceneFailed;
   lastKey = ''; patKey = '';
   if (!S.v3.on) octx.clearRect(0, 0, overlay.width, overlay.height);
-  syncBar();
+  if (ui) ui.sync();
 }
-function syncBar() {
-  $('view3d').classList.toggle('on', S.v3.on);
-  $('view3d').setAttribute('aria-pressed', String(S.v3.on));
-  document.querySelectorAll('#types button').forEach(b => b.classList.toggle('on', b.dataset.type === S.type));
-  document.querySelectorAll('#fields button').forEach(b => b.classList.toggle('on', b.dataset.field === S.field));
-  $('play').textContent = S.playing ? '❚❚' : '▶';
-  $('play').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
-  $('speed').textContent = S.speedK === 1 ? '1×' : S.speedK === 0.5 ? '½×' : '¼×';
-  const T = TYPES[S.type];
-  if (T) {
-    const p = T.p, inp = $('paramIn');
-    inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = S[S.type][p.k];
-    $('paramLab').textContent = p.lab;
-    $('paramVal').textContent = p.fmt(S[S.type][p.k]);
-  }
-  caption();
-  if ($('details').classList.contains('open')) details();
-}
-function wireBar() {
-  document.querySelectorAll('#types button').forEach(b => b.onclick = () => { setType(b.dataset.type); touch(); });
-  document.querySelectorAll('#fields button').forEach(b => b.onclick = () => {
-    S.field = b.dataset.field;
-    if (S.field === 'S' && !S.tog.flow) { S.tog.flow = true; flow.reset(); }
-    syncBar(); normalise();
-  });
-  $('paramIn').oninput = () => {
-    const p = TYPES[S.type].p;
-    S[S.type][p.k] = +$('paramIn').value;
-    $('paramVal').textContent = p.fmt(S[S.type][p.k]);
-    dirtyAntenna = true; touch();
-  };
-  $('view3d').onclick = () => { setView3d(!S.v3.on); touch(); if ($('details').classList.contains('open')) details(); };
-  const play = () => { S.playing = !S.playing; syncBar(); };
-  $('play').onclick = play;
-  $('speed').onclick = () => { S.speedK = S.speedK === 1 ? 0.5 : S.speedK === 0.5 ? 0.25 : 1; syncBar(); };
-  const det = $('details');
-  const setDet = open => { det.classList.toggle('open', open); $('detBtn').classList.toggle('on', open); $('detBtn').setAttribute('aria-expanded', String(open)); if (open) details(); lastKey = ''; touch(); };
-  $('detBtn').onclick = () => setDet(!det.classList.contains('open'));
-  $('detClose').onclick = () => setDet(false);
-  window.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') return;
-    if (e.code === 'Space') { e.preventDefault(); play(); }
-    if (e.key === 'Escape') setDet(false);
-  });
-  window.addEventListener('resize', () => { lastKey = ''; });
-}
+window.addEventListener('resize', () => { lastKey = ''; });
 
 // ── pointer: pan, zoom, probe ────────────────────────────────────────────────
 function pointer() {
@@ -617,7 +506,7 @@ function pointer() {
       else if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; S.v3.zoom = Math.max(0.5, Math.min(3, pinch0.z3 * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(10, pinch0.d))); }
       touch(); return;
     }
-    if (dragObs && ptrs.size === 1) { moveObs(e.clientX, e.clientY); $('probe').classList.add('off'); return; }
+    if (dragObs && ptrs.size === 1) { moveObs(e.clientX, e.clientY); $('probe').hidden = true; return; }
     if (ptrs.size === 2 && pinch0) {
       const [a, b] = [...ptrs.values()];
       S.cam.zoom = Math.max(0.15, Math.min(6, pinch0.zoom * pinch0.d / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y))));
@@ -626,7 +515,7 @@ function pointer() {
       S.cam.panX -= dx * mPerPx; S.cam.panY += dy * mPerPx;
     }
     touch();
-    $('probe').classList.add('off');
+    $('probe').hidden = true;
   });
   const up = e => {
     ptrs.delete(e.pointerId);
@@ -638,7 +527,7 @@ function pointer() {
   };
   fieldCanvas.addEventListener('pointerup', up);
   fieldCanvas.addEventListener('pointercancel', up);
-  fieldCanvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') $('probe').classList.add('off'); });
+  fieldCanvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') $('probe').hidden = true; });
   fieldCanvas.addEventListener('wheel', e => {
     e.preventDefault();
     if (S.v3.on) { S.v3.zoom = Math.max(0.5, Math.min(3, S.v3.zoom * Math.exp(-e.deltaY * 0.0015))); touch(); return; }
@@ -661,19 +550,23 @@ function pointer() {
     const zone = r < zr.rNear ? 'near field' : r < zr.rFar ? 'between near and far' : 'far field';
     const el = $('probe');
     el.textContent = `${(r * lm).toFixed(2)} m from the antenna · ${zone} · |E| ${(Math.hypot(...out.slice(0, 6)) / lm).toFixed(1)} V/m`;
-    el.classList.remove('off');
+    el.hidden = false;
     el.style.left = Math.min(innerWidth - el.offsetWidth - 8, x + 14) + 'px';
     el.style.top = Math.max(8, y - el.offsetHeight - 10) + 'px';
   }
 }
 
 // ── start ───────────────────────────────────────────────────────────────────
-wireBar();
+ui = initUI({
+  S, A: () => A, stats: () => stats, geo: () => geo, freq, lambdaM, scale,
+  setType, setView3d, dirty: () => { dirtyAntenna = true; }, touch, invalidate: () => { lastKey = ''; },
+  geoDirty: () => { geoKey = ''; }, resetFlow: () => flow.reset(), psiMode, traceField, compSpec,
+});
 pointer();
 defaultObs();
-syncBar();
+ui.sync();
 try { field = createField(fieldCanvas); }
-catch (e) { console.error('[antenna-fields]', e); $('fail').innerHTML = '<b>The field view did not start.</b><br>' + e.message; $('fail').classList.remove('off'); }
+catch (e) { console.error('[antenna-fields]', e); $('fail').innerHTML = '<b>The field view did not start.</b><br>' + e.message; $('fail').hidden = false; }
 requestAnimationFrame(frame);
 window.addEventListener('pagehide', () => { try { field && field.destroy(); } catch (e) { /* gone */ } });
 
@@ -685,13 +578,13 @@ const ctx = {
   patch(p) { Object.assign(S[S.type], p); dirtyAntenna = true; },
   rebuildNow() { rebuild(); computeStats(); },
   invalidate() { lastKey = ''; },
-  syncUI() { syncBar(); },
+  syncUI() { if (ui) ui.sync(); },
 };
 installSaver(ctx);
 window.__af = {
   ctx,
   debug: () => ({ type: S.type, view: S.view, field: S.field, n: A ? A.elems.n : 0, Z: A ? A.Zin : null, D: stats ? +stats.Ddb.toFixed(3) : null,
     phasor: field && field.size[0] ? field.size.join('×') : '', psi: psiMode(), saver: window.snSaver && window.snSaver.debug ? window.snSaver.debug() : null }),
-  set: (t, patch, more) => { ctx.set(t, patch); if (more) Object.assign(S, more); syncBar(); lastKey = ''; },
+  set: (t, patch, more) => { ctx.set(t, patch); if (more) Object.assign(S, more); ui.sync(); lastKey = ''; },
   view3d: on => setView3d(on),
 };
