@@ -183,7 +183,7 @@ export function createStage(R) {
     const k = F.kOf(S.lam), c = Math.cos(phi), s = Math.sin(phi);
     R.sheet({
       M, O: [0, 0, 0], U: [c, s, 0], Wv: [0, 0, 1], R: o.R, k, t: S.t, lam: S.lam,
-      alpha: o.alpha, lineGap: S.lineGap || 0.17, lineA: o.lineA ?? 1, map: o.map ?? S.map, mapA: o.mapA ?? 0.55,
+      alpha: o.alpha, lineGap: S.lineGap || 0.28, lineA: o.lineA ?? 1, map: o.map ?? S.map, mapA: o.mapA ?? 0.55,
       ringA: o.ringA ?? 1, half: !!o.half, arrows: o.arrows || 0, arrowCell: o.cell || 0.14, mask: o.mask || 0.035, gauge: o.gauge,
     });
   }
@@ -525,7 +525,7 @@ export function createStage(R) {
     for (const z of [-0.9, -0.45, 0, 0.45, 0.9]) for (let i = 1; i <= 11; i++) {
       const rho = i * 0.2;
       F.EB(rho, 0, z, S.t, k, E, B);
-      const r = Math.hypot(rho, z), val = B[1] / (k * k) * k * r, m = Math.tanh(Math.abs(val) * 1.3);
+      const r = Math.hypot(rho, z), val = B[1] / (k * k) * r, m = Math.tanh(Math.abs(val) * 1.3);
       if (m < 0.04) continue;
       const col = withA(val < 0 ? C.B : VIOLET, 0.12 + 0.6 * m), pts = [];
       for (let j = 0; j <= 64; j++) { const a = j / 64 * F.TAU; pts.push([rho * Math.cos(a), rho * Math.sin(a), z]); }

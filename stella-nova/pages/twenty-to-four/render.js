@@ -49,8 +49,10 @@ void main(){
 }`;
 
 // Units in the shader: c = 1, k = 2π/λ. E and B are divided by k², A and φ
-// by k, ∂E/∂t by k³, so one gain works for every λ. Display values are
-// multiplied by kr (the far field falls as 1/r) and pass through tanh.
+// by k, ∂E/∂t by k³. Then the far field of each is about sin θ / r, so a
+// display value is the quantity times r: about 1 in the far zone, larger
+// near the source, and tanh compresses it. (Times kr, the far zone came
+// out near k ≈ 6 and every map saturated.)
 export const SHEET_FS = `#version 300 es
 precision highp float;
 in vec2 vP;
@@ -118,15 +120,15 @@ void main(){
 
   // The map: a signed quantity in a diverging pair of colours.
   float v = 0.0;
-  if (uMap == 1) v = Bo * kr;
-  else if (uMap == 2) v = E.x * kr;
-  else if (uMap == 3) v = E.y * kr;
+  if (uMap == 1) v = Bo * r;
+  else if (uMap == 2) v = E.x * r;
+  else if (uMap == 3) v = E.y * r;
   else if (uMap == 4 || uMap == 5) {
     vec3 g = gaugeAt(vP);
-    v = (uMap == 4 ? X.x + g.y : X.y + g.z) * kr * 0.6;
+    v = (uMap == 4 ? X.x + g.y : X.y + g.z) * r;
   }
-  else if (uMap == 6) v = X.z * kr;
-  else if (uMap == 7) v = X.w * kr;
+  else if (uMap == 6) v = X.z * r;
+  else if (uMap == 7) v = X.w * r;
   if (uMap > 0) {
     float t = tanh(v * 1.15);
     float m = pow(abs(t), 0.85);
@@ -140,7 +142,7 @@ void main(){
   float line = 1.0 - smoothstep(0.55, 1.45, d);
   float halo = (1.0 - smoothstep(0.0, 4.0, d)) * 0.16;
   float dense = 1.0 - smoothstep(0.18, 0.5, fw);
-  float em = tanh(length(E) * kr * 0.9);
+  float em = tanh(length(E) * r * 1.1);
   vec3 lc = mix(uEcol * 0.5, mix(uEcol, vec3(1.0, 0.96, 0.9), 0.4), em);
   col += lc * (line + halo) * dense * uLineA * (0.35 + 0.65 * em);
 
@@ -163,8 +165,8 @@ void main(){
     fieldAt(pc, E2, B2, Q2, X2);
     float rc = length(pc);
     vec2 vec;
-    if (uArrows == 1) vec = E2 * uK * rc;
-    else vec = (vec2(0.0, X2.x) + gaugeAt(pc).xy) * uK * rc * 0.6;
+    if (uArrows == 1) vec = E2 * rc * 1.2;
+    else vec = vec2(0.0, X2.x) + gaugeAt(pc).xy;
     float mag = length(vec);
     float tn = tanh(mag * 0.9);
     float L = cs * 0.44 * tn;

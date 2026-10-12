@@ -43,7 +43,7 @@ const canvas = $('gl'), stageEl = $('stage'), storyEl = $('story'), scrollEl = $
 const PHONE_Q = matchMedia('(max-width: 768px), (max-height: 500px) and (pointer: coarse)');
 
 export const S = {
-  t: 0, playing: true, speed: 1, lam: 1, lineGap: 0.17,
+  t: 0, playing: true, speed: 1, lam: 1, lineGap: 0.28,
   chapter: 'twenty', scene: 'fold', probe: [0.55, 0, 0.32],
   map: 'B', arrows: 0, gauge: 0.6, gaugeMap: 'Az', divField: 'E', triple: 1,
   hl: null, view: { yaw: 0, pitch: 0, zoom: 1, held: false }, band: null, clock: 0,
@@ -139,7 +139,7 @@ function widget(name, el, ch) {
   } else if (name === 'fieldctl') {
     el.appendChild(slider('Wavelength', 0.6, 1.6, 0.05, () => S.lam, v => { S.lam = v; }, v => `${v.toFixed(2)}`));
     el.appendChild(slider('Speed', 0, 2, 0.05, () => S.speed, v => { S.speed = v; }, v => `${v.toFixed(2)}×`));
-    el.appendChild(slider('Line spacing', 0.08, 0.32, 0.01, () => S.lineGap, v => { S.lineGap = v; }, v => v.toFixed(2)));
+    el.appendChild(slider('Line spacing', 0.12, 0.5, 0.01, () => S.lineGap, v => { S.lineGap = v; }, v => v.toFixed(2)));
     const a = document.createElement('div');
     seg(a, [['0', 'No arrows'], ['1', 'Arrows of E']], String(S.arrows), v => { S.arrows = +v; });
     el.appendChild(a);

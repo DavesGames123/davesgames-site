@@ -15,6 +15,9 @@
 //                ∂_iF_i terms equal the cube's face-pair fluxes over volume
 //    forms       dF = 0 and d⋆F = 0 in all four components, and each
 //                component equals the vector law it names
+//    display     the shader's display value (quantity / k² times r) peaks
+//                near 1 in the far zone for every λ, and SHEET_FS
+//                multiplies no display value by kr
 //  EQUATIONS AND STORY (tex.js, glyphs.js, math.js, story.js)
 //    twenty      Maxwell's 20 lines in 8 groups, each line in one group
 //    glyphs      every TeX entry is typeset; indices, colours and numbers
@@ -34,6 +37,7 @@ import { TEX, MAXWELL, GROUPS } from './tex.js';
 import { GLYPHS, EQ } from './glyphs.js';
 import { eqSVG, eqBox } from './math.js';
 import { CHAPTERS } from './story.js';
+import { SHEET_FS } from './render.js';
 import { readFileSync, readdirSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -202,6 +206,26 @@ const fromPotentials = f.fromPotentials;
   // F is antisymmetric with six independent entries: three E, three B.
   const F = f.tensorF([1, 2, 3], [4, 5, 6]);
   ok(F.every((row, a) => row.every((v, b) => v === -F[b][a])), 'forms: F_{μν} is antisymmetric');
+}
+
+// ── display ───────────────────────────────────────────────────────────────
+{
+  const E = [0, 0, 0], B = [0, 0, 0];
+  let worst = 0, near = 0;
+  for (const lam of [0.6, 1, 1.6]) {
+    const kk = f.kOf(lam);
+    let m = 0, mn = 0;
+    for (let i = 0; i < 64; i++) {
+      const t = i / 64 * lam;
+      f.EB(3 * lam, 0, 0, t, kk, E, B); m = Math.max(m, Math.abs(B[1]) / kk ** 2 * 3 * lam);
+      f.EB(0.03 * lam, 0, 0, t, kk, E, B); mn = Math.max(mn, Math.abs(B[1]) / kk ** 2 * 0.03 * lam);
+    }
+    worst = Math.max(worst, Math.abs(m - 1)); near = Math.max(near, mn);
+  }
+  ok(worst < 0.03, 'display: far-zone B·r/k² peaks at 1 for λ = 0.6, 1, 1.6', `max |peak − 1| ${worst.toFixed(3)}`);
+  ok(near > 2, 'display: the near zone is brighter than the far zone', `peak at r = 0.03λ: ${near.toFixed(1)}`);
+  const lines = SHEET_FS.split('\n').filter(l => /\*\s*kr\b/.test(l));
+  ok(lines.length === 0, 'display: no map, arrow or line brightness is scaled by kr', lines.join(' | '));
 }
 
 // ── twenty ────────────────────────────────────────────────────────────────

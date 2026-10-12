@@ -64,7 +64,7 @@ export function installSaver(ctx) {
     const ch = sh.kind === 'curl' ? (sh.which === 'B' ? 'curlB' : 'curlE') : SCENE[sh.kind];
     setChapter(ch, { force: true });
     S.camTarget = null; S.camHalf = 1; S.cycle0 = S.clock; S.hl = null;
-    S.lam = sh.lam || 1; S.map = sh.map || 'B'; S.arrows = 0; S.lineGap = 0.16;
+    S.lam = sh.lam || 1; S.map = sh.map || 'B'; S.arrows = 0; S.lineGap = 0.26;
     if (sh.probe) S.probe = sh.probe.slice();
     if (sh.kind === 'gauge') { S.gauge = 0; S.gaugeMap = 'Az'; }
     if (sh.kind === 'cube') S.divField = 'E';
