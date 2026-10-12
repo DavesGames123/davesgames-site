@@ -12,13 +12,19 @@
 //  determinism    one seed, one scene, one result
 //  hash           every control round-trips through the share link
 //  render         render.draw makes only finite canvas calls in all modes
+//  budget         pickDpr caps and pixel budgets, fieldCell limits, and the
+//                 measured solver + surface time at the start count
+//  surface        the contour of a disc of particles is one closed loop of
+//                 the right area; a ring gives an outer loop and a hole;
+//                 the water look fills a vector path and draws no image
 //  saver          saver plan: shots, no back-to-back repeats, 6-12 s cuts
 //  page           main.js boots under the DOM stub, autoplays, rebuilds on
 //                 a new scene, and runs saver cuts
 // ============================================================================
 import * as SV from './solver.js';
 import * as SC from './scene.js';
-import { draw, fitView, WATER } from './render.js';
+import { draw, fitView, WATER, splat, contour } from './render.js';
+import * as BG from './budget.js';
 import * as K from '../../widgets/sim-kit/core.js';
 import { installDom, fakeCtx, makeCanvas } from '../../widgets/sim-kit/test/stubs.mjs';
 
@@ -108,6 +114,54 @@ function submergedFraction(S, b, level) {
     bad += ctx.bad; calls += ctx.calls;
   }
   ok(bad === 0 && calls > 100, 'render: every mode draws with finite canvas calls', `${calls} calls`);
+}
+{
+  // budget: canvas pixels per CSS pixel, surface cell, measured frame cost
+  const d1 = BG.pickDpr(2, false, 1440, 900), d2 = BG.pickDpr(3, true, 390, 844), d3 = BG.pickDpr(2, false, 3840, 2160), d4 = BG.pickDpr(1, false, 1280, 800);
+  ok(d1 === 2 && d2 === 1.75 && d4 === 1 && Math.abs(3840 * 2160 * d3 * d3 - BG.PIXEL_BUDGET.desktop) < 10 && d3 >= 1, 'budget: dpr 2 on a laptop, 1.75 on a phone, a 3840x2160 CSS window held to the pixel budget',
+    `1440x900@2 -> ${1440 * d1}x${900 * d1}, phone 390x844@3 -> ${Math.round(390 * d2)}x${Math.round(844 * d2)}, 3840x2160@2 -> dpr ${d3.toFixed(2)}`);
+  const sLap = fitView({ Wd: 2, Hd: 1.25 }, { x: 0, y: 0, w: 2160, h: 1380 }).s;
+  const c1 = BG.fieldCell(sLap), c2 = BG.fieldCell(sLap * 4), c3 = BG.fieldCell(10);
+  ok(c1 * sLap <= BG.FIELD_PX + 1e-9 && c2 === BG.CELL_MIN && c3 === BG.CELL_MAX, 'budget: the surface cell is 5 canvas px at laptop scale, clamped to D/6..D/2.5',
+    `laptop ${(c1 * 1000).toFixed(2)} mm = ${(c1 * sLap).toFixed(1)} px (was D/2.5 = ${(SV.D / 2.5 * sLap).toFixed(1)} px)`);
+  const st = sceneOf(5, { container: 'tank', fill: 'pool', count: BG.COUNT.desktop, nBodies: 3, obstacles: 1, emitters: 0, paddle: false, material: 'water', substeps: 3, iters: 3 });
+  const S = run(st, 5, 60, BG.CAP.desktop);
+  let t0 = performance.now(); for (let f = 0; f < 60; f++) S.step(1 / 60); const tSolve = (performance.now() - t0) / 60;
+  const ctx = fakeCtx(2160, 1380), t = K.themeById('abyss'), R = {};
+  const look = { bg: t.bg, bg2: t.bg2, grid: null, wall: t.wall, wallFill: 'rgba(255,255,255,0.06)', obstacle: t.wall, outline: '#000', mark: t.accent, cabin: '#fff', water: 'ocean', colorBy: 'water', lut: null, render: 'smooth', foam: true, size: 1, palette: K.paletteColors('toybox'), veil: 0, alpha: 0.94 };
+  const v = fitView(S, { x: 0, y: 0, w: 2160, h: 1380 });
+  draw(ctx, S, v, look, R, makeCanvas, 2160, 1380);
+  t0 = performance.now(); for (let f = 0; f < 60; f++) draw(ctx, S, v, look, R, makeCanvas, 2160, 1380); const tDraw = (performance.now() - t0) / 60;
+  ok(tSolve + tDraw < 12, 'budget: solver + surface script time at the start count fits a 60 fps frame with room for the canvas',
+    `${S.n} particles: solver ${tSolve.toFixed(1)} ms + surface ${tDraw.toFixed(1)} ms (field ${R.gw}x${R.gh})`);
+}
+{
+  // surface: contour of known shapes
+  const mk = pts => { const S = SV.createSim({ cap: pts.length }); S.n = pts.length; pts.forEach(([x, y], i) => { S.x[i] = x; S.y[i] = y; }); return S; };
+  const area = L => { let a = 0; for (let i = 0; i < L.length; i += 2) { const j = (i + 2) % L.length; a += L[i] * L[j + 1] - L[j] * L[i + 1]; } return a / 2; };
+  const disc = [], ring = [];
+  for (let y = 0.3; y <= 0.7; y += SV.D) for (let x = 0.8; x <= 1.2; x += SV.D) {
+    const r = Math.hypot(x - 1, y - 0.5);
+    if (r <= 0.2) disc.push([x, y]);
+    if (r <= 0.2 && r >= 0.1) ring.push([x, y]);
+  }
+  const cell = BG.fieldCell(1000), x0 = -0.05, y0 = -0.05;
+  const field = S => { const R = { gw: Math.ceil(2.1 / cell) + 2, gh: Math.ceil(1.35 / cell) + 2 }; R.f = new Float32Array(R.gw * R.gh); R.s = new Float32Array(R.gw * R.gh); R.next = new Int32Array(2 * R.gw * R.gh); R.loops = []; splat(S, R, 'water', x0, y0, cell); return contour(R, 0.32, x0, y0, cell); };
+  // the surface sits about one particle radius outside the outer centres
+  const L1 = field(mk(disc)), a1 = L1.length === 1 ? Math.abs(area(L1[0])) : 0, rEq = Math.sqrt(a1 / Math.PI);
+  const rOut = Math.max(...disc.map(([x, y]) => Math.hypot(x - 1, y - 0.5))) + 0.5 * SV.D;
+  ok(L1.length === 1 && Math.abs(rEq - rOut) < 0.25 * SV.D, 'surface: a disc of particles gives one closed loop one particle radius out', `${L1.length} loop, radius ${(rEq * 100).toFixed(2)} cm vs ${(rOut * 100).toFixed(2)} cm, ${L1[0] ? L1[0].length / 2 : 0} vertices`);
+  const L2 = field(mk(ring)), as = L2.map(area).sort((a, b) => Math.abs(b) - Math.abs(a));
+  ok(L2.length === 2 && Math.sign(as[0]) !== Math.sign(as[1]), 'surface: a ring gives an outer loop and a hole of opposite turn', `${L2.length} loops, signed areas ${as.map(a => (a * 1e4).toFixed(0)).join(', ')} cm²`);
+  // the water look fills a vector path; no field image is drawn
+  const st = sceneOf(77, { render: 'smooth', colorBy: 'water', nBodies: 2 });
+  const S = run(st, 77, 30, 900), ctx = fakeCtx(800, 500), t = K.themeById('abyss');
+  let images = 0, evenodd = 0; const di = ctx.drawImage, fl = ctx.fill;
+  ctx.drawImage = (...a) => { images++; return di && di.apply(ctx, a); };
+  ctx.fill = (...a) => { if (a[0] === 'evenodd') evenodd++; return fl && fl.apply(ctx, a); };
+  const look = { bg: t.bg, bg2: t.bg2, grid: null, wall: t.wall, wallFill: 'rgba(255,255,255,0.06)', obstacle: t.wall, outline: '#000', mark: t.accent, cabin: '#fff', water: 'ocean', colorBy: 'water', lut: null, render: 'smooth', foam: false, size: 1, palette: K.paletteColors('toybox'), veil: 0, alpha: 0.94 };
+  draw(ctx, S, fitView(S, { x: 0, y: 0, w: 800, h: 500 }), look, {}, makeCanvas, 800, 500);
+  ok(images === 0 && evenodd >= 2, 'surface: the water look is a filled vector contour, no scaled raster', `drawImage ${images}, evenodd fills ${evenodd}`);
 }
 {
   const { default: _ } = { default: 0 };

@@ -15,6 +15,7 @@
 import * as SV from './solver.js';
 import { WATER } from './render.js';
 import * as K from '../../widgets/sim-kit/core.js';
+import { COUNT, CAP as CAPS } from './budget.js';
 
 export const BODY_SETS = {
   mixed: ['box', 'disc', 'boat', 'duck', 'log', 'plank', 'rock', 'ball'],
@@ -26,7 +27,7 @@ export const BODY_SETS = {
 };
 
 export function makeSchema(PHONE) {
-  const CAP = PHONE ? 1600 : 3200;
+  const CAP = PHONE ? CAPS.phone : CAPS.desktop;
   return {
   groups: [
     { id: 'scene', label: 'Scene', controls: [
@@ -36,7 +37,7 @@ export function makeSchema(PHONE) {
       { key: 'fill', type: 'choice', label: 'Start', value: 'dam', seg: false, options: [
         { id: 'pool', label: 'Still pool' }, { id: 'dam', label: 'Dam break' }, { id: 'drop', label: 'Drop into pool' }, { id: 'twin', label: 'Two columns' },
         { id: 'rain', label: 'Scattered' }, { id: 'empty', label: 'Empty + pour' }], rebuild: true },
-      { key: 'count', type: 'range', label: 'Particles', min: 300, max: CAP, step: 50, value: PHONE ? 1100 : 2000, phone: 1100, rebuild: true, random: { min: 600, max: CAP } },
+      { key: 'count', type: 'range', label: 'Particles', min: 300, max: CAP, step: 50, value: PHONE ? COUNT.phone : COUNT.desktop, phone: COUNT.phone, rebuild: true, random: { min: 600, max: CAP } },
       { key: 'obstacles', type: 'range', label: 'Obstacles', min: 0, max: 5, step: 1, value: 1, rebuild: true, random: { dist: 'int', min: 0, max: 4 } },
       { key: 'emitters', type: 'range', label: 'Emitters', min: 0, max: 3, step: 1, value: 0, rebuild: true, random: { dist: 'int', min: 0, max: 2 } },
       { key: 'paddle', type: 'toggle', label: 'Wave paddle', value: false, rebuild: true, random: { p: 0.25 } },

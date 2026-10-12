@@ -7,12 +7,15 @@
 //
 //  Layers, back to front:
 //    background   theme gradient and a faint grid
-//    fluid        "smooth": a splatted field at D / 2.5 per cell, cut at an
-//                 iso level, coloured by the water scheme (deep inside, a
-//                 lighter rim at the surface) or by a colour map of speed,
-//                 density, pressure or vorticity; drawn scaled with
-//                 smoothing. "particles": one disc per particle, coloured
-//                 the same way (32 colour bins, one path per bin).
+//    fluid        "smooth": a kernel field splatted at about 5 canvas px
+//                 per cell (budget.fieldCell), traced at the iso level by
+//                 marching squares into closed loops, and filled as a vector
+//                 path at canvas resolution: the water scheme as a depth
+//                 gradient, or a colour map of speed, density, pressure or
+//                 vorticity from the field image under the path clip. A
+//                 light rim marks the free surface. The edge is never a
+//                 scaled raster. "particles": one disc per particle,
+//                 coloured the same way (32 colour bins, one path per bin).
 //    foam         white dots on fast, lonely particles
 //    walls        container, solids, obstacles (theme wall colour)
 //    bodies       filled shapes in the object palette, with marks
@@ -23,13 +26,16 @@
 //  grep -n targets
 //    view fit ............. "export function fitView"
 //    water schemes ........ "export const WATER"
-//    field splat .......... "function splat"
+//    field splat .......... "export function splat"
+//    surface contour ...... "export function contour"
+//    surface fill ......... "function drawSmooth"
 //    particle discs ....... "function drawParticles"
 //    walls ................ "function drawWalls"
 //    bodies ............... "function drawBody"
 //    entry ................ "export function draw"
 // ============================================================================
 import { D, RHO0, DEN0 } from './solver.js';
+import { fieldCell } from './budget.js';
 
 // Water schemes: deep, mid and surface colours, foam colour.
 export const WATER = [
@@ -63,13 +69,16 @@ export function fitView(S, rect, cam) {
 const X = (v, x) => v.ox + x * v.s;
 const Y = (v, y) => v.oy - y * v.s;
 
-// A field image cache per state object.
+// The surface field cache per state object. f = kernel sum, s = weighted
+// scalar sum, both in image row order (row 0 at the top of the domain).
 function fieldBuf(R, gw, gh, makeCanvas) {
   if (!R.cv || R.gw !== gw || R.gh !== gh) {
     R.gw = gw; R.gh = gh;
     R.cv = makeCanvas(gw, gh); R.cx2 = R.cv.getContext('2d');
     R.img = R.cx2.createImageData(gw, gh);
     R.f = new Float32Array(gw * gh); R.s = new Float32Array(gw * gh);
+    R.next = new Int32Array(2 * gw * gh);
+    R.loops = [];
   }
   return R;
 }
@@ -79,6 +88,14 @@ function fieldBuf(R, gw, gh, makeCanvas) {
 const LIFT = 0.16;
 
 // Scalar per particle for the colour-by modes, mapped to 0..1.
+// SCALAR_RANGE gives the legend (main.js) the physical end values.
+export const SCALAR_RANGE = {
+  speed: { lo: 0, hi: 2.5, unit: 'm/s', label: 'Speed' },
+  density: { lo: 0.85, hi: 1.15, unit: 'ρ₀', label: 'Density' },
+  pressure: { lo: 0, hi: 0.08, unit: '', label: 'Pressure (−λ, scaled)' },
+  vorticity: { lo: -30, hi: 30, unit: '1/s', label: 'Vorticity' },
+  depth: { lo: 0, hi: 1.25, unit: 'm', label: 'Height' },
+};
 function scalar(S, i, by) {
   switch (by) {
     case 'speed': return Math.min(1, Math.hypot(S.vx[i], S.vy[i]) / 2.5);
@@ -91,60 +108,144 @@ function scalar(S, i, by) {
 }
 
 // Splat every particle into the field grid: f = kernel sum, s = weighted
-// scalar sum. Cell = D / 2.5 world units.
-function splat(S, R, by, x0, y0, cell) {
+// scalar sum. The kernel (1 - d²/r²)³ with r = 1.7 d does not depend on
+// the cell size, so the iso level ISO is the same at every cell size.
+const KR = 1.7 * D, ISO = 0.32;
+export function splat(S, R, by, x0, y0, cell) {
   const gw = R.gw, gh = R.gh, f = R.f, sc = R.s;
   f.fill(0); sc.fill(0);
-  const rad = 1.7 * D, rc = Math.ceil(rad / cell), r2 = rad * rad, ic = 1 / cell;
+  const rad = KR, rc = Math.ceil(rad / cell), r2 = rad * rad, ic = 1 / cell;
+  const scal = by !== 'water';
   for (let i = 0; i < S.n; i++) {
     const px = (S.x[i] - x0) * ic, py = (S.y[i] - y0) * ic;
     const ci = Math.floor(px), cj = Math.floor(py);
-    const v = by === 'water' ? 0 : scalar(S, i, by);
-    for (let j = cj - rc; j <= cj + rc; j++) {
-      if (j < 0 || j >= gh) continue;
+    const v = scal ? scalar(S, i, by) : 0;
+    const j0 = Math.max(1, cj - rc), j1 = Math.min(gh - 2, cj + rc);
+    const k0 = Math.max(1, ci - rc), k1 = Math.min(gw - 2, ci + rc);
+    for (let j = j0; j <= j1; j++) {
       const dy = (j + 0.5 - py) * cell, dy2 = dy * dy;
-      for (let k = ci - rc; k <= ci + rc; k++) {
-        if (k < 0 || k >= gw) continue;
+      if (dy2 >= r2) continue;
+      const row = (gh - 1 - j) * gw;
+      for (let k = k0; k <= k1; k++) {
         const dx = (k + 0.5 - px) * cell, d2 = dx * dx + dy2;
         if (d2 >= r2) continue;
         const q = 1 - d2 / r2, w = q * q * q;
-        const o = (gh - 1 - j) * gw + k;
-        f[o] += w; sc[o] += w * v;
+        f[row + k] += w;
+        if (scal) sc[row + k] += w * v;
       }
     }
   }
 }
 
-function drawSmooth(ctx, S, v, look, R, makeCanvas) {
-  const cell = D / 2.5;
-  const x0 = -0.05, y0 = -0.05, gw = Math.ceil((S.Wd + 0.1) / cell), gh = Math.ceil((S.Hd + 0.1) / cell);
-  fieldBuf(R, gw, gh, makeCanvas);
-  const by = look.colorBy;
-  splat(S, R, by, x0, y0, cell);
-  const data = R.img.data, f = R.f, sc = R.s;
-  const wcol = waterById(look.water).colors.map(hex);
-  const lut = look.lut;           // 768-byte LUT or null
-  const iso = 0.32, band = 0.22, a0 = look.alpha != null ? look.alpha : 0.94;
-  for (let o = 0, n = gw * gh; o < n; o++) {
-    const fv = f[o]; const p = o * 4;
-    if (fv < iso - 0.08) { data[p + 3] = 0; continue; }
-    const a = Math.min(1, (fv - (iso - 0.08)) / 0.16);
-    let c;
-    if (by === 'water' || !lut) {
-      // inside: deep -> mid with the field; rim: the surface colour
-      const t = Math.min(1, (fv - iso) / 1.4);
-      c = t < 0 ? wcol[2] : t < band ? mix(wcol[2], wcol[1], t / band) : mix(wcol[1], wcol[0], Math.min(1, (t - band) / (1 - band)));
-    } else {
-      const s = Math.max(0, Math.min(1, sc[o] / fv)), k = ((LIFT + (1 - LIFT) * s) * 255) | 0;
-      c = [lut[3 * k], lut[3 * k + 1], lut[3 * k + 2]];
-      // keep the surface readable: a light rim
-      if (fv < iso + 0.15) c = mix(c, [255, 255, 255], 0.35 * (1 - (fv - iso + 0.08) / 0.23));
+// Marching squares on the field f at level iso. The outer ring of cells is
+// never written by splat(), so it stays 0 and every loop closes. Each
+// segment runs from the edge where the boundary walk leaves the inside to
+// the edge where it enters again, so every edge point has one successor
+// and the loops follow next[]. A saddle cell joins its two inside corners
+// when the cell centre is inside. Output: R.loops, flat [x, y, ...] arrays
+// in world metres.
+export function contour(R, iso, x0, y0, cell) {
+  const gw = R.gw, gh = R.gh, f = R.f, next = R.next;
+  next.fill(-1);
+  const starts = [];
+  const cr = [0, 0, 0, 0], ce = [0, 0, 0, 0];   // crossings: edge id, enter flag
+  for (let r = 0; r < gh - 1; r++) {
+    for (let c = 0; c < gw - 1; c++) {
+      const o = r * gw + c;
+      const tl = f[o], tr = f[o + 1], br = f[o + gw + 1], bl = f[o + gw];
+      const it = tl >= iso, ir = tr >= iso, ib = br >= iso, il = bl >= iso;
+      if (it === ir && ir === ib && ib === il) continue;
+      // edges clockwise on screen: top (tl->tr), right (tr->br),
+      // bottom (br->bl), left (bl->tl)
+      let m = 0;
+      if (it !== ir) { cr[m] = 2 * o; ce[m++] = ir ? 1 : 0; }
+      if (ir !== ib) { cr[m] = 2 * (o + 1) + 1; ce[m++] = ib ? 1 : 0; }
+      if (ib !== il) { cr[m] = 2 * (o + gw); ce[m++] = il ? 1 : 0; }
+      if (il !== it) { cr[m] = 2 * o + 1; ce[m++] = it ? 1 : 0; }
+      const centreIn = m === 4 && (tl + tr + br + bl) * 0.25 >= iso;
+      for (let k = 0; k < m; k++) {
+        if (ce[k]) continue;                       // k is an exit
+        const to = centreIn ? (k + 1) % m : (k + m - 1) % m;
+        next[cr[k]] = cr[to];
+        starts.push(cr[k]);
+      }
     }
-    data[p] = c[0]; data[p + 1] = c[1]; data[p + 2] = c[2]; data[p + 3] = (a * a0 * 255) | 0;
   }
-  R.cx2.putImageData(R.img, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(R.cv, X(v, x0), Y(v, y0 + gh * cell), gw * cell * v.s, gh * cell * v.s);
+  const loops = R.loops; loops.length = 0;
+  const pt = (e, out) => {
+    const o = e >> 1, r = (o / gw) | 0, c = o - r * gw;
+    const a = f[o], b = (e & 1) ? f[o + gw] : f[o + 1];
+    const t = b !== a ? Math.max(0, Math.min(1, (iso - a) / (b - a))) : 0.5;
+    const cc = (e & 1) ? c : c + t, rr = (e & 1) ? r + t : r;
+    out.push(x0 + (cc + 0.5) * cell, y0 + (gh - 1 - rr + 0.5) * cell);
+  };
+  for (const s0 of starts) {
+    if (next[s0] < 0) continue;
+    const L = [];
+    let e = s0, guard = 0;
+    while (e >= 0 && guard++ < 1e6) { pt(e, L); const nx = next[e]; next[e] = -1; e = nx; if (e === s0) break; }
+    if (L.length >= 6) loops.push(L);
+  }
+  return loops;
+}
+
+function loopsPath(ctx, v, loops) {
+  ctx.beginPath();
+  for (const L of loops) {
+    ctx.moveTo(X(v, L[0]), Y(v, L[1]));
+    for (let i = 2; i < L.length; i += 2) ctx.lineTo(X(v, L[i]), Y(v, L[i + 1]));
+    ctx.closePath();
+  }
+}
+
+// The fluid surface: the iso contour of the kernel field as a vector path
+// at canvas resolution. The water colours fill it with a depth gradient;
+// a colour map fills it with the scalar field image under a clip. The
+// field image only carries colour: the edge is always the vector path.
+function drawSmooth(ctx, S, v, look, R, makeCanvas) {
+  const cell = fieldCell(v.s);
+  const x0 = -0.05, y0 = -0.05, gw = Math.ceil((S.Wd + 0.1) / cell) + 2, gh = Math.ceil((S.Hd + 0.1) / cell) + 2;
+  fieldBuf(R, gw, gh, makeCanvas);
+  const by = look.colorBy, lut = look.lut, mapped = by !== 'water' && !!lut;
+  splat(S, R, mapped ? by : 'water', x0, y0, cell);
+  const loops = contour(R, ISO, x0, y0, cell);
+  R.cell = cell;
+  if (!loops.length) return;
+  const wcol = waterById(look.water).colors;
+  let top = -1e9, bot = 1e9;
+  for (const L of loops) for (let i = 1; i < L.length; i += 2) { if (L[i] > top) top = L[i]; if (L[i] < bot) bot = L[i]; }
+  ctx.save();
+  ctx.globalAlpha = look.alpha != null ? look.alpha : 0.94;
+  loopsPath(ctx, v, loops);
+  if (mapped) {
+    const data = R.img.data, f = R.f, sc = R.s;
+    for (let o = 0, n = gw * gh; o < n; o++) {
+      const fv = f[o], p = o * 4;
+      if (fv < 1e-4) { data[p + 3] = 0; continue; }
+      const s = Math.max(0, Math.min(1, sc[o] / fv)), k = ((LIFT + (1 - LIFT) * s) * 255) | 0;
+      data[p] = lut[3 * k]; data[p + 1] = lut[3 * k + 1]; data[p + 2] = lut[3 * k + 2]; data[p + 3] = 255;
+    }
+    R.cx2.putImageData(R.img, 0, 0);
+    ctx.clip('evenodd');
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(R.cv, X(v, x0), Y(v, y0 + gh * cell), gw * cell * v.s, gh * cell * v.s);
+  } else {
+    const g = ctx.createLinearGradient(0, Y(v, top), 0, Y(v, bot));
+    g.addColorStop(0, wcol[1]); g.addColorStop(1, wcol[0]);
+    ctx.fillStyle = g;
+    ctx.fill('evenodd');
+    ctx.clip('evenodd');
+  }
+  // the free surface: a light rim inside the contour (the clip keeps the
+  // inner half of a stroke twice as wide)
+  const rim = Math.max(1.5, 0.14 * D * v.s);
+  ctx.globalAlpha = 1;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = mapped ? 'rgba(255,255,255,0.55)' : wcol[2];
+  ctx.lineWidth = 2 * rim;
+  loopsPath(ctx, v, loops);
+  ctx.stroke();
+  ctx.restore();
 }
 
 const BINS = 32;

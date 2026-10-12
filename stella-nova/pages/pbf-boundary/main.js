@@ -35,11 +35,12 @@ import { draw, fitView } from './render.js';
 import { mount, isPhone, core as K } from '../../widgets/sim-kit/ui.js';
 import { installSaver } from './saver.js';
 import * as SC from './scene.js';
+import { pickDpr, CAP as CAPS } from './budget.js';
 
 TMP.page({ n: null, title: 'PBF Boundaries', file: 'contribs/PBFBoundary.html', video: null, year: 2021, licence: 'MIT', by: 'Sergii Biloshytskyi', from: 'Ukraine', holder: 'Matthias Müller' });
 
 const PHONE = isPhone();
-const CAP = PHONE ? 1600 : 3200;
+const CAP = PHONE ? CAPS.phone : CAPS.desktop;
 const SCHEMA = SC.makeSchema(PHONE);
 
 const canvas = document.getElementById('view');
@@ -69,7 +70,7 @@ function look() {
 // ---- view ----------------------------------------------------------------------
 let dpr = 1, cw = 1, ch = 1;
 function resize() {
-  dpr = Math.min(2, devicePixelRatio || 1);
+  dpr = pickDpr(devicePixelRatio || 1, PHONE, innerWidth, innerHeight);
   cw = Math.max(1, Math.round(innerWidth * dpr)); ch = Math.max(1, Math.round(innerHeight * dpr));
   canvas.width = cw; canvas.height = ch;
 }
