@@ -39,6 +39,7 @@ const { randomBot, greedyBot } = await import('../game/bots.js');
 const { Match, agentFromBot } = await import('../ui/match.js');
 const { choreograph, mirrorOf, applyStep, mirrorDiff, TIMING, MOVE_OPS } = await import('../ui/fly3d/choreo.js');
 const { createDuelScene, TABLE, PLACEHOLDER_FLY } = await import('../ui/fly3d/scene.js');
+const { costColours, landProduces } = await import('../ui/fly3d/mana.js');
 
 let fail = 0, pass = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.error('FAIL', msg); } };
@@ -72,11 +73,12 @@ console.warn = (...a) => { warns.push(a.map(String).join(' ')); };
       for (const s of c.steps) applyStep(m2, s);
       if (mirrorDiff(m2, mirrorOf(r.after)).length) drift++;
       if (r.action.type === 'cast') {
+        // every colour key of the cost (five colours, duals), not only two
         const card = CARD[r.action.card], taps = c.steps.filter(s => s.op === 'tap');
         const n = k => taps.filter(s => s.pays === k).length;
-        if (taps.length !== card.cost.generic + card.cost.amber + card.cost.moss || n('amber') !== card.cost.amber
-          || n('moss') !== card.cost.moss || n('generic') !== card.cost.generic) badCost++;
-        if (taps.some(s => s.colour !== CARD[r.before.players[r.who].battlefield.find(x => x.uid === s.uid).id].produces)) badCost++;
+        const cc = costColours(card.cost), total = (card.cost.generic | 0) + cc.reduce((a, [, v]) => a + v, 0);
+        if (taps.length !== total || n('generic') !== (card.cost.generic | 0) || cc.some(([k, v]) => n(k) !== v)) badCost++;
+        if (taps.some(s => { const cs = landProduces(CARD[r.before.players[r.who].battlefield.find(x => x.uid === s.uid).id]); return s.colour !== cs[0] || (s.pays !== 'generic' && !cs.includes(s.pays)); })) badCost++;
       }
       if (r.action.type === 'land') {
         const ls = c.steps.filter(s => s.op === 'lift' || s.op === 'land');
@@ -97,10 +99,39 @@ console.warn = (...a) => { warns.push(a.map(String).join(' ')); };
   ok(landsOk === (ops.land || 0) && landsOk > 0, 'each land play lifts and lays a land with its uid');
   ok(reducedBad === 0, 'reduced motion: moves cut to 0 s, timing kept');
   for (const op of ['think', 'lift', 'land', 'tap', 'cast', 'reveal', 'spark', 'hurt', 'token', 'draw', 'spent', 'attack',
-    'block', 'strike', 'life', 'die', 'settle', 'discard', 'endturn', 'turn', 'untap', 'pass', 'win', 'sync']) {
+    'block', 'strike', 'life', 'die', 'settle', 'discard', 'endturn', 'turn', 'untap', 'pass', 'win', 'sync', 'beat', 'hold']) {
     ok((ops[op] || 0) > 0, `op ${op} occurs (${ops[op] || 0})`);
   }
   ok(Object.keys(TIMING).length > 20, 'TIMING table');
+}
+
+// --- choreo: pauses between turns and after big plays ------------------------
+{
+  // The beat comes after endturn and before the next turn. pause 0 drops
+  // the beat and the hold steps and keeps every other step. pause 2 makes
+  // them two times as long.
+  let beats = 0, order = 0, zeroBad = 0, scaleBad = 0, holds = {};
+  for (let g = 1; g <= 12; g++) {
+    const M = botMatch(g); let r;
+    while ((r = M.next())) {
+      const c = choreograph(r), z = choreograph(r, { pause: 0 }), two = choreograph(r, { pause: 2 });
+      const b = c.steps.find(s => s.op === 'beat');
+      if (b) {
+        beats++;
+        const ie = c.steps.findIndex(s => s.op === 'endturn'), ib = c.steps.indexOf(b), it = c.steps.findIndex(s => s.op === 'turn');
+        if (ie < ib && ib < it && b.to === r.after.active && b.dur > 0.5) order++;
+      }
+      for (const s of c.steps) if (s.op === 'hold') holds[s.reason] = (holds[s.reason] || 0) + 1;
+      if (z.steps.some(s => s.op === 'beat' || s.op === 'hold') || z.steps.length !== c.steps.filter(s => s.op !== 'beat' && s.op !== 'hold').length) zeroBad++;
+      const b2 = two.steps.find(s => s.op === 'beat');
+      if (b && Math.abs(b2.dur - 2 * b.dur) > 1e-6) scaleBad++;
+      if (mirrorDiff(z.mirror, mirrorOf(r.after)).length || mirrorDiff(two.mirror, mirrorOf(r.after)).length) zeroBad++;
+    }
+  }
+  ok(beats > 50 && order === beats, `turn beat after endturn, before turn, to the next fly (${order}/${beats})`);
+  ok(zeroBad === 0, 'pause 0: no beat or hold, the same other steps and end state');
+  ok(scaleBad === 0, 'pause 2: the beat is two times as long');
+  ok((holds.creature || 0) + (holds.hit || 0) + (holds.deaths || 0) > 5 && (holds.lethal || 0) > 0, `holds after big plays ${JSON.stringify(holds)}`);
 }
 
 // --- choreo: one hand-made record ---------------------------------------------

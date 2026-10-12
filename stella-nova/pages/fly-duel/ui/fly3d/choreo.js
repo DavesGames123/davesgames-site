@@ -15,8 +15,8 @@
 //                                         brain map fires
 //    lift      p, card, from              a card leaves the fan
 //    land      p, card, uid               the lifted land goes to the land row
-//    tap       p, uid, colour, pays, slot the fly touches a land, the land
-//                                         turns a little and dims, a mana
+//    tap       p, uid, colour, colours,   the fly touches a land, the land
+//              pays, slot                 turns a little and dims, a mana
 //                                         token goes to the lifted card
 //    cast      p, card, uid               the lifted creature goes to the row
 //    reveal    p, card                    the lifted spell shows its face
@@ -39,6 +39,11 @@
 //    untap     p, uids                    lands and creatures untap
 //    pass      p, label                   the fly passes (no attack, ...)
 //    win       winner, reason             the game ends
+//    beat      from, to                   the turn goes to the other fly:
+//                                         both flies settle, the camera
+//                                         goes wide, a short hold
+//    hold      p, reason                  a short hold after a big play
+//                                         (big creature, big hit, lethal)
 //    sync      -                          the scene checks its mirror
 //
 //  Each step is { op, at, dur, ... } in seconds at speed 1. The steps of
@@ -52,8 +57,16 @@
 //  after the last step equals mirrorOf(record.after).
 //
 //  Mana. The rules auto-tap lands (game/rules.js pay()): coloured costs
-//  first, then generic. A tap step says what the land pays: 'amber',
-//  'moss' or 'generic'. The scene draws a generic token as a grey square.
+//  first, then generic. A tap step says what the land pays: a colour key
+//  of game/cards.js (ui/fly3d/mana.js reads them at run time) or
+//  'generic'. colour is the first colour of the land, colours all of them
+//  (two for a dual land). The scene draws a generic token as a grey square.
+//
+//  Pauses. opts.pause multiplies the beat and hold lengths (1 = the
+//  standard pause, 0 = no pause). The scene sets it from its speed: at a
+//  high speed the pauses are short. A big play is a creature with power
+//  BIG_POWER or more, a hit of BIG_HIT or more life, two deaths or more,
+//  or a hit that ends the game.
 //
 //  GREP MAP
 //      grep -n 'export const TIMING'       step lengths in seconds
@@ -68,6 +81,7 @@
 //                                          reduced motion is on)
 // ============================================================================
 import { CARD } from '../../game/cards.js';
+import { landProduces, costColours } from './mana.js';
 
 // Step lengths in seconds at speed 1. gap is the time from one step to the
 // next when the steps are in sequence.
@@ -77,7 +91,10 @@ export const TIMING = {
   drawGap: 0.2, spent: 0.55, attack: 0.65, block: 0.6, strike: 0.45,
   life: 0.7, die: 0.65, settle: 0.45, discard: 0.5, endturn: 0.1,
   turn: 0.45, untap: 0.4, pass: 0.45, win: 3.2, sync: 0,
+  beat: 1.25, hold: 0.8,
 };
+// Big plays (see the header): they get a hold step.
+export const BIG_POWER = 4, BIG_HIT = 4;
 
 // Ops that move a card or a token. With reduced motion their dur is 0 (a
 // cut) and the time between steps stays, so each change is still seen.
@@ -212,13 +229,14 @@ export function mirrorDiff(a, b) {
 export function choreograph(rec, opts = {}) {
   const T = { ...TIMING, ...(opts.timing || {}) };
   const reduced = !!opts.reduced;
+  const pause = Number.isFinite(opts.pause) ? Math.max(0, opts.pause) : 1;
   const B = rec.before, A = rec.after, act = rec.action || { type: 'pass' };
   const p = rec.who ?? B.toAct;
   const m = mirrorOf(B);
   const steps = [];
   let t = 0;
   const ctx = {
-    T, m, A, B, steps,
+    T, m, A, B, steps, pause,
     get t() { return t; },
     // Add a step at the cursor, apply it, move the cursor by gap.
     emit(op, fields = {}, gap = T[op] ?? 0, dur = T[op] ?? 0) {
@@ -255,6 +273,7 @@ export function choreograph(rec, opts = {}) {
   }
 
   // Turn change: discards, then the next turn, untap, draw.
+  bigPlaySteps(ctx, p, act, B);
   if (A.turn !== m.turn || (A.result && A.result.reason === 'turn cap')) endTurnSteps(ctx);
   // Anything not yet explained (for safety): draws and life. These steps
   // carry fallback: true. The test requires that none occur.
@@ -282,13 +301,24 @@ function castSteps(ctx, p, act) {
   // Lands that this cast taps, in battlefield order, and what each pays.
   const before = B.players[p].battlefield, after = A.players[p].battlefield;
   const tapped = before.filter(x => !x.tapped && CARD[x.id].type === 'land' && after.some(y => y.uid === x.uid && y.tapped));
-  let needA = card.cost.amber | 0, needM = card.cost.moss | 0, slot = 0;
+  // Coloured needs from the cost (every colour key of game/cards.js, not
+  // only amber and moss). A dual land pays the first of its colours that
+  // is still needed. Single-colour lands pay first, so a dual land is kept
+  // for the colour that only it can pay.
+  const need = new Map(costColours(card.cost));
+  let slot = 0;
+  const pays = new Map();
+  for (const pass of [1, 2]) {
+    for (const x of tapped) {
+      const cs = landProduces(CARD[x.id]);
+      if ((pass === 1) !== (cs.length <= 1) || pays.has(x.uid)) continue;
+      const c = cs.find(k => (need.get(k) | 0) > 0);
+      if (c) { need.set(c, need.get(c) - 1); pays.set(x.uid, c); }
+    }
+  }
   for (const x of tapped) {
-    const colour = CARD[x.id].produces === 'amber' ? 'amber' : 'moss';
-    let pays = 'generic';
-    if (colour === 'amber' && needA > 0) { pays = 'amber'; needA--; }
-    else if (colour === 'moss' && needM > 0) { pays = 'moss'; needM--; }
-    ctx.emit('tap', { p, uid: x.uid, colour, pays, slot: slot++, of: tapped.length }, T.tapGap, T.tap);
+    const cs = landProduces(CARD[x.id]);
+    ctx.emit('tap', { p, uid: x.uid, colour: cs[0] || 'generic', colours: cs, pays: pays.get(x.uid) || 'generic', slot: slot++, of: tapped.length }, T.tapGap, T.tap);
   }
   if (tapped.length) ctx.wait(Math.max(0, T.tap - T.tapGap));
   if (card.type === 'creature') {
@@ -398,6 +428,8 @@ function endTurnSteps(ctx) {
   for (const c of A.players[q].graveyard.slice(m.players[q].graveyard.length)) ctx.emit('discard', { p: q, card: c }, 0.25, T.discard);
   ctx.emit('endturn', {});
   if (A.turn !== m.turn) {
+    // the pass-the-turn beat: both flies settle, the camera goes wide
+    if (ctx.pause > 0) { const d = round(T.beat * ctx.pause); ctx.emit('beat', { from: q, to: A.active }, d, d); }
     ctx.emit('turn', { turn: A.turn, active: A.active });
     const n = A.active;
     const up = new Set(A.players[n].battlefield.filter(x => !x.tapped).map(x => x.uid));
@@ -407,6 +439,24 @@ function endTurnSteps(ctx) {
     for (const c of drawn) ctx.emit('draw', { p: n, card: c }, T.drawGap, T.draw);
     if (drawn.length) ctx.wait(T.draw - T.drawGap);
   }
+}
+
+// ------------------------------------------------------------- big plays
+// A hold step after a big play (see the header). reason: 'creature',
+// 'hit', 'deaths' or 'lethal'.
+function bigPlaySteps(ctx, p, act, B) {
+  const { T, m, steps } = ctx;
+  if (!(ctx.pause > 0)) return;
+  let reason = null, who = p;
+  const lost = q => B.players[q].life - m.players[q].life;
+  const deaths = steps.filter(s => s.op === 'die').length;
+  if (m.players.some(q => q.life <= 0)) { reason = 'lethal'; who = m.players[0].life <= 0 ? 0 : 1; }
+  else if (lost(0) >= BIG_HIT || lost(1) >= BIG_HIT) { reason = 'hit'; who = lost(0) >= lost(1) ? 0 : 1; }
+  else if (deaths >= 2) reason = 'deaths';
+  else if (act.type === 'cast' && CARD[act.card]?.type === 'creature' && (CARD[act.card].power | 0) >= BIG_POWER) reason = 'creature';
+  if (!reason) return;
+  const d = round(T.hold * ctx.pause);
+  ctx.emit('hold', { p: who, reason }, d, d);
 }
 
 // ----------------------------------------------------------------- utils
