@@ -420,6 +420,13 @@ section('page module (DOM stubs, no browser)');
   globalThis.location = { hash: '#seed=5&size=town' };
   globalThis.history = { replaceState() {} };
   globalThis.addEventListener = () => {};
+  // The real nav registry and saver catalog: pageMark() walks them at start.
+  // A hole in a nav group (a stray ",,") stopped start() before generate.
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['../../lib/nav-data.js', '../../lib/screensaver-catalog.js']) {
+    new Function(readFileSync(new URL(f, import.meta.url), 'utf8'))();
+  }
+  check('the real nav registry loads', Array.isArray(globalThis.SN_NAV) && globalThis.SN_NAV.length > 0);
   let err = null;
   try { await import('./main.js'); await globalThis.__mapGen.started; } catch (e) { err = e; }
   const g = globalThis.__mapGen;
