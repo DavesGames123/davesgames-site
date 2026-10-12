@@ -37,7 +37,7 @@
 import { viewProj, lookAt, mul } from './camera.js';
 import { createTracers } from './tracers.js';
 import { createWind } from './wind.js';
-import { LOD_SIZES } from './mesh.js';
+import { LOD_SIZES, STRIDE } from './mesh.js';
 
 export const LIGHTS = {
   day: { elev: 38, sun: [1.0, 0.95, 0.88], sunK: 1.25, amb: 0.62, hor: [0.66, 0.74, 0.84], zen: [0.20, 0.38, 0.66], night: 0 },
@@ -136,11 +136,13 @@ export async function createRenderer(canvas, opts = {}) {
   ]);
   const ms = { count: sampleCount };
   const pl = (groups) => device.createPipelineLayout({ bindGroupLayouts: groups });
-  const bVerts = [{ arrayStride: 20, attributes: [
+  // mesh.js vertex layout (STRIDE 24 bytes), see the head of buildings.wgsl
+  const bVerts = [{ arrayStride: STRIDE, attributes: [
     { shaderLocation: 0, offset: 0, format: 'sint16x4' },
     { shaderLocation: 1, offset: 8, format: 'sint16x2' },
     { shaderLocation: 2, offset: 12, format: 'snorm8x4' },
     { shaderLocation: 3, offset: 16, format: 'unorm8x4' },
+    { shaderLocation: 4, offset: 20, format: 'uint16x2' },
   ] }];
   boot.modules = performance.now() - boot.t0;
   const [pSky, pTerrain, pBuild, pShadow] = await Promise.all([

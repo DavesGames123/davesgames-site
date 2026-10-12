@@ -20,7 +20,7 @@
 // grep: function hash11  function pulseBox  function pointPattern
 //       function filteredPattern  export function measure
 
-const BAY = 3.0, FLOOR = 3.5;
+const BAY = 3.0, FLOOR = 3.5, RUN = 600;   // a long facade run: 200 bays of 3 m
 const PX = [0.18, 0.82], PY = [0.25, 0.8];
 const WARM = [1.0, 0.74, 0.42], COOL = [0.85, 0.92, 1.0];
 const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
@@ -45,7 +45,7 @@ export function pulseBox(x, w, a, b) {
 
 function cellOf(u, z, rnd) {
   const fl = Math.floor(z / FLOOR), cl = Math.floor(u / BAY);
-  const seed = ((Math.imul(Math.floor(rnd * 65535), 7919) + Math.imul(fl >>> 0, 104729) + Math.imul((cl + 4096) >>> 0, 31)) >>> 0);
+  const seed = ((Math.imul(Math.floor(rnd * 65535), 7919) + Math.imul(fl >>> 0, 104729) + Math.imul((cl + 4096) >>> 0, 31) + Math.imul(RUN * 4, 13)) >>> 0);
   const thr = 0.58 - 0.25 * smooth(40, 0, z);
   return { on: hash11(seed) >= thr ? 1 : 0, L: hash11(seed + 17) >= 0.8 ? LC : LW, thr };
 }

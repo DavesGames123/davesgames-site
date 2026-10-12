@@ -4,8 +4,12 @@
 //   2 decode     each city file inflates and parses (data.js), every section has the
 //                byte length its shape needs
 //   3 buildings  count, heights 2.5..900 m, footprints inside the city disc + 500 m, ring and
-//                triangle indices in range; mesh.js builds a mesh with no NaN; the
-//                height raster covers a sane share of the disc
+//                triangle indices in range; the height raster covers a sane share of the disc.
+//                mesh.js (meshCheck): no degenerate triangle, each normal on its face
+//                plane, walls level and outward, roofs and pitched faces up, every roof,
+//                ledge and rooftop unit inside the footprint and between hmin and the top,
+//                triangles at most 1.6 x (desktop) and 1.2 x (coarse pointer) the plain
+//                extrusion; the build time is printed
 //   4 terrain    the inner grid matches known spot heights (summits) within tolerance;
 //                the water surface is at sea level on the sea, and Lake Michigan's
 //                surface at Chicago is near 176 m
@@ -20,13 +24,13 @@
 //                filtered image must stay within 0.02 RMS of the 8 x 8 supersampled truth.
 // Exit code 1 when any check fails.
 //
-// grep: function check  const SPOTS  function spot  function windCheck  function windowCheck
+// grep: function check  const SPOTS  function spot  function meshCheck  function windCheck  function windowCheck
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseCity, inflate, buildingsOf } from './data.js';
-import { buildMesh, heightRaster, LOD_SIZES } from './mesh.js';
+import { buildMesh, heightRaster, LOD_SIZES, STRIDE } from './mesh.js';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const only = process.argv.slice(2);
@@ -111,20 +115,24 @@ async function testCity(id) {
   check(tp === b.tri.length, `${id}: triangle count ${tp} != ${b.tri.length}`);
   check(far === 0, `${id}: ${far} vertices outside the disc (r + 500 m)`);
   check(badTri === 0, `${id}: ${badTri} roof indices out of range`);
-  const mesh = buildMesh(b);
+  const t0 = performance.now();
+  buildMesh(b, { detail: 1, lat: m.lat });
+  const buildMs = performance.now() - t0;
+  const mesh = buildMesh(b, { detail: 1, lat: m.lat, debug: true });
+  const t1 = performance.now();
+  const meshLo = buildMesh(b, { detail: 0, lat: m.lat });
+  const buildLoMs = performance.now() - t1;
   const i16 = new Int16Array(mesh.vertices);
   let maxIdx = 0;
   for (const v of mesh.indices) if (v > maxIdx) maxIdx = v;
   check(maxIdx < mesh.count, `${id}: mesh index ${maxIdx} >= vertex count ${mesh.count}`);
-  check(i16.length === mesh.count * 10, `${id}: mesh vertex buffer size`);
+  check(i16.length === mesh.count * (STRIDE / 2), `${id}: mesh vertex buffer size`);
   // LOD: the buildings go in largest first, so lod[k] is a prefix of the index buffer
   const lod = mesh.lod || [];
   let mono = lod.length === LOD_SIZES.length;
   for (let k = 1; k < lod.length; k++) if (lod[k] < lod[k - 1]) mono = false;
   check(mono && lod[lod.length - 1] === mesh.indices.length, `${id}: LOD prefixes ${JSON.stringify(lod)} not rising to ${mesh.indices.length}`);
-  let wantIdx = 0;
-  for (let i = 0; i < b.n; i++) wantIdx += b.ntri[i] * 3;
-  check(mesh.indices.length - wantIdx === (mesh.count - b.xy.length / 2) / 4 * 6, `${id}: mesh index count after the reorder`);
+  meshCheck(id, b, mesh, meshLo, buildMs, buildLoMs);
   const ras = heightRaster(b, m.bHalf, 512);
   let covered = 0;
   for (const v of ras) if (v > 0) covered++;
@@ -189,6 +197,106 @@ async function testCity(id) {
     }
   }
   return c;
+}
+
+// The building mesh against its footprints (mesh.tris from debug: building,
+// part, centre x, centre y per triangle).
+function inRings(b, i, x, y, ringStart, ptStart) {
+  // even-odd over all rings; a point on an edge (0.01 m) counts as inside
+  let inside = false, p = ptStart[i];
+  for (let k = 0; k < b.rings[i]; k++) {
+    const len = b.ringLen[ringStart[i] + k];
+    for (let e = 0; e < len; e++) {
+      const a = p + e, c = p + ((e + 1) % len);
+      const ax = b.xy[2 * a] * 0.5, ay = b.xy[2 * a + 1] * 0.5, cx = b.xy[2 * c] * 0.5, cy = b.xy[2 * c + 1] * 0.5;
+      const ex = cx - ax, ey = cy - ay, L2 = ex * ex + ey * ey;
+      const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / L2)) : 0;
+      if (Math.hypot(ax + t * ex - x, ay + t * ey - y) < 0.01) return true;
+      if ((ay > y) !== (cy > y) && x < ax + (y - ay) / (cy - ay) * ex) inside = !inside;
+    }
+    p += len;
+  }
+  return inside;
+}
+
+function meshCheck(id, b, mesh, meshLo, buildMs, buildLoMs) {
+  const ringStart = new Uint32Array(b.n), ptStart = new Uint32Array(b.n);
+  let plain = 0;
+  { let r = 0, p = 0; for (let i = 0; i < b.n; i++) { ringStart[i] = r; ptStart[i] = p; let c = 0; for (let k = 0; k < b.rings[i]; k++) c += b.ringLen[r + k]; plain += c * 2 + b.ntri[i]; r += b.rings[i]; p += c; } }
+  const i16 = new Int16Array(mesh.vertices), i8 = new Int8Array(mesh.vertices);
+  const V = (v) => { const o = v * (STRIDE / 2); return [i16[o] * 0.5, i16[o + 1] * 0.5, i16[o + 2] * 0.1]; };
+  const N = (v) => { const o = v * STRIDE + 12; return [i8[o] / 127, i8[o + 1] / 127, i8[o + 2] / 127]; };
+  const T = mesh.tris, nt = mesh.indices.length / 3;
+  check(T && T.length === nt * 4, `${id}: debug triangle list ${T && T.length} != ${nt} x 4`);
+  const bad = { degenerate: 0, plane: 0, wallLevel: 0, wallOut: 0, roofUp: 0, outside: 0, zRange: 0, nan: 0 };
+  const seen = new Set();
+  // source footprint edges of 2 m or more that fail the in / out probe
+  const srcBad = new Set();
+  let excused = 0;
+  for (let i = 0; i < b.n; i++) {
+    let p = ptStart[i];
+    for (let k = 0; k < b.rings[i]; k++) {
+      const len = b.ringLen[ringStart[i] + k];
+      for (let e = 0; e < len; e++) {
+        const a = p + e, c = p + ((e + 1) % len);
+        const ax = b.xy[2 * a] * 0.5, ay = b.xy[2 * a + 1] * 0.5, cx = b.xy[2 * c] * 0.5, cy = b.xy[2 * c + 1] * 0.5, L = Math.hypot(cx - ax, cy - ay);
+        if (L < 2) continue;
+        const nx = (cy - ay) / L, ny = -(cx - ax) / L, mx = (ax + cx) / 2, my = (ay + cy) / 2;
+        if (!inRings(b, i, mx - 0.2 * nx, my - 0.2 * ny, ringStart, ptStart) || inRings(b, i, mx + 0.2 * nx, my + 0.2 * ny, ringStart, ptStart)) {
+          srcBad.add(`${i}:${Math.min(ax, cx)}:${Math.max(ax, cx)}:${Math.min(ay, cy)}:${Math.max(ay, cy)}`);
+        }
+      }
+      p += len;
+    }
+  }
+  for (let t = 0; t < nt; t++) {
+    const ia = mesh.indices[3 * t], ib = mesh.indices[3 * t + 1], ic = mesh.indices[3 * t + 2];
+    const A = V(ia), B = V(ib), C = V(ic), n = N(ia);
+    const i = T[4 * t], part = T[4 * t + 1], cx = T[4 * t + 2], cy = T[4 * t + 3];
+    if (![...A, ...B, ...C, ...n].every(Number.isFinite)) { bad.nan++; continue; }
+    const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], w = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+    const g = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const area = Math.hypot(...g) / 2;
+    if (area < 1e-3) { bad.degenerate++; continue; }
+    const nl = Math.hypot(...n);
+    if (area > 0.25 && Math.abs(g[0] * n[0] + g[1] * n[1] + g[2] * n[2]) / (2 * area * nl) < 0.9) bad.plane++;
+    const hM = b.h[i] / 10, hmin = b.hmin ? b.hmin[i] / 10 : 0;
+    const mid = [(A[0] + B[0] + C[0]) / 3, (A[1] + B[1] + C[1]) / 3];
+    if (part === 0 || part === 3) {
+      if (Math.abs(n[2]) > 0.01) bad.wallLevel++;
+      const nh = Math.hypot(n[0], n[1]) || 1, nx = n[0] / nh, ny = n[1] / nh;
+      if (Number.isFinite(cx)) { if ((mid[0] - cx) * nx + (mid[1] - cy) * ny <= 0) bad.wallOut++; }
+      else {
+        // the wall's foot: the two xy points furthest apart; probe 0.2 m in
+        // and out of its middle. Walls under 2 m are not probed (on the 0.5 m
+        // grid a probe there can cross the next edge). A wall on a source
+        // edge that fails the same probe (a footprint that crosses itself)
+        // is the data, not the mesh: it counts as excused.
+        let s0 = A, s1 = B, dmax = Math.hypot(A[0] - B[0], A[1] - B[1]);
+        for (const [p, q] of [[A, C], [B, C]]) { const d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d > dmax) { dmax = d; s0 = p; s1 = q; } }
+        if (dmax >= 2) {
+          const mx = (s0[0] + s1[0]) / 2, my = (s0[1] + s1[1]) / 2;
+          if (!inRings(b, i, mx - 0.2 * nx, my - 0.2 * ny, ringStart, ptStart) || inRings(b, i, mx + 0.2 * nx, my + 0.2 * ny, ringStart, ptStart)) {
+            if (srcBad.has(`${i}:${Math.min(s0[0], s1[0])}:${Math.max(s0[0], s1[0])}:${Math.min(s0[1], s1[1])}:${Math.max(s0[1], s1[1])}`)) excused++;
+            else bad.wallOut++;
+          }
+        }
+      }
+    } else if (n[2] < 0.2) bad.roofUp++;
+    if (part !== 0) {
+      for (const P of [A, B, C]) {
+        const key = `${i}:${P[0]}:${P[1]}`;
+        if (!seen.has(key)) { seen.add(key); if (!inRings(b, i, P[0], P[1], ringStart, ptStart)) bad.outside++; }
+        const zt = part >= 3 ? hM + 8.05 : hM + 0.05;
+        if (P[2] < hmin - 0.05 || P[2] > zt) bad.zRange++;
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(bad)) check(v === 0, `${id}: mesh ${k} ${v} of ${nt} triangles`);
+  const tri = nt, triLo = meshLo.indices.length / 3;
+  check(tri <= plain * 1.6, `${id}: ${tri} triangles over 1.6 x the plain ${plain}`);
+  check(triLo <= plain * 1.2, `${id}: coarse-pointer tier ${triLo} triangles over 1.2 x the plain ${plain}`);
+  console.log(`  mesh: ${tri} triangles (${(tri / plain).toFixed(2)} x plain ${plain}) in ${buildMs.toFixed(0)} ms; coarse tier ${triLo} (${(triLo / plain).toFixed(2)} x) in ${buildLoMs.toFixed(0)} ms; ${JSON.stringify(mesh.forms)}; ${excused} wall triangles on ${srcBad.size} self-crossing source edges`);
 }
 
 function windCheck() {

@@ -4,7 +4,8 @@
 // the terrain can draw before the buildings are built (low detail first),
 // and a city can preload during a saver shot without a dropped frame.
 //
-// message in:   { id, url, rasterN }
+// message in:   { id, url, rasterN, detail }   detail 1 desktop, 0 coarse pointer
+//                (mesh.js: no rooftop units and no tiers)
 // message out:  1. { id, ok, stage: 'base', meta, arrays, hInData, hOutData, timing }
 //               2. { id, ok, stage: 'full', mesh: { vertices, indices, count, tallest, lod },
 //                    bRaster, bHalf, bN, timing }
@@ -33,7 +34,7 @@ function packHeights(ground, surf, wf) {
 }
 
 self.onmessage = async (e) => {
-  const { id, url, rasterN } = e.data;
+  const { id, url, rasterN, detail } = e.data;
   try {
     const T = [performance.now()];
     const res = await fetch(url);
@@ -61,13 +62,13 @@ self.onmessage = async (e) => {
     self.postMessage({ id, ok: true, stage: 'base', meta: city.meta, arrays, hInData, hOutData, timing }, transfer);
     // stage 2: the merged building mesh (largest first, for the LOD) and the raster
     const t5 = performance.now();
-    const mesh = buildMesh(b);
+    const mesh = buildMesh(b, { detail: detail ?? 1, lat: city.meta.lat });
     const t6 = performance.now();
     const bHalf = city.meta.bHalf;
     const bN = rasterN || 1024;
     const bRaster = heightRaster(b, bHalf, bN);
     const t7 = performance.now();
-    self.postMessage({ id, ok: true, stage: 'full', mesh, bRaster, bHalf, bN, timing: { meshMs: t6 - t5, rasterMs: t7 - t6 } },
+    self.postMessage({ id, ok: true, stage: 'full', mesh, bRaster, bHalf, bN, timing: { meshMs: t6 - t5, rasterMs: t7 - t6, tris: mesh.indices.length / 3 } },
       [mesh.vertices, mesh.indices.buffer, bRaster.buffer]);
   } catch (err) {
     self.postMessage({ id, ok: false, error: String(err?.message || err) });

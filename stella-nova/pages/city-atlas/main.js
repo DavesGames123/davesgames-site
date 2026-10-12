@@ -830,7 +830,8 @@ function requestCity(i) {
       }
     };
     worker.addEventListener('message', onMsg);
-    worker.postMessage({ id: c.id, url: new URL(`data/${c.id}.bin`, import.meta.url).href, rasterN: 1024 });
+    // a coarse pointer (phone, tablet) gets the lower building detail (mesh.js)
+    worker.postMessage({ id: c.id, url: new URL(`data/${c.id}.bin`, import.meta.url).href, rasterN: 1024, detail: coarse.matches ? 0 : 1 });
   });
   pending.set(c.id, p);
   p.catch(() => pending.delete(c.id));

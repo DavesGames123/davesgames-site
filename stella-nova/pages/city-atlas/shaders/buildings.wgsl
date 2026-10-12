@@ -1,14 +1,20 @@
-// buildings.wgsl — extruded buildings (common.wgsl in front).
+// buildings.wgsl — the city buildings (common.wgsl in front).
 //
-// mesh.js builds the walls and the roofs. One vertex is 20 bytes:
-//   pos   sint16x4  x, y in 0.5 m; z above the base in 0.1 m; u along the wall in 0.5 m
+// mesh.js builds the walls, the roofs (flat with a parapet, gable, hip, or
+// tiers) and the rooftop units. One vertex is 24 bytes:
+//   pos   sint16x4  x, y in 0.5 m; z above the base in 0.1 m; facade top in 0.1 m
 //   bat   sint16x2  base height in 0.1 m (lowest ground under the footprint), building height in 0.1 m
 //   nrm   snorm8x4  normal xyz, 0
-//   attr  unorm8x4  use class / 255, random 0..1, roof 1 / wall 0, height estimated 1 / tagged 0
+//   attr  unorm8x4  use class / 255, random 0..1, part / 255, style / 255
+//   fac   uint16x2  u along the facade run in 0.25 m, run length in 0.25 m
+// part: 0 wall, 1 flat roof or ledge, 2 pitched roof, 3 rooftop unit wall,
+// 4 rooftop unit top. style: material (low 3 bits) + 16 shopfront + 128
+// height estimated (mesh.js styleOf).
 // The base follows the terrain overlay: z = base * E + z above base. So a
 // building stands on the same exaggerated surface as the ground.
 // Colour: by height (G.res.w 0) or by use (1). After dusk the walls get lit
-// windows: one cell per floor (3.5 m) and per 3 m of wall, picked by a hash.
+// windows: one cell per floor (3.5 m) and per bay of about 3 m. A facade run
+// holds a whole number of bays, so the windows line up with its corners.
 // The window grid is box-filtered to the pixel (pulseBox), and the lit cells
 // fade to their mean when a cell is under about 2 px, so there is no grain.
 //
@@ -19,14 +25,16 @@ struct VIn {
   @location(1) bat: vec2i,
   @location(2) nrm: vec4f,
   @location(3) attr: vec4f,
+  @location(4) fac: vec2u,
 };
 
 struct VOut {
   @builtin(position) pos: vec4f,
   @location(0) world: vec3f,
   @location(1) n: vec3f,
-  @location(2) @interpolate(flat) info: vec4f,   // height m, use class, random, estimated
-  @location(3) wall: vec3f,                     // z above base, u along wall, roof
+  @location(2) @interpolate(flat) info: vec4f,   // height m, use class, random, facade top m
+  @location(3) @interpolate(flat) pk: vec4f,   // part, style, run length m, 0
+  @location(4) wall: vec2f,                     // z above base m, u along the run m
 };
 
 @vertex
@@ -34,15 +42,17 @@ fn vs(v: VIn) -> VOut {
   let xy = vec2f(v.pos.xy) * 0.5;
   let zr = f32(v.pos.z) * 0.1;
   let base = f32(v.bat.x) * 0.1;
+  let part = round(v.attr.z * 255.0);
   var o: VOut;
   // A wall foot goes 6 m below the base, so a slope never shows a gap.
-  let foot = select(0.0, 6.0, v.pos.z == 0 && v.attr.z < 0.5);
+  let foot = select(0.0, 6.0, v.pos.z == 0 && part < 0.5);
   let z = base * exag() + zr - foot;
   o.world = vec3f(xy, z);
   o.pos = G.viewProj * vec4f(xy, z, 1.0);
   o.n = v.nrm.xyz;
-  o.info = vec4f(f32(v.bat.y) * 0.1, round(v.attr.x * 255.0), v.attr.y, v.attr.w);
-  o.wall = vec3f(zr, f32(v.pos.w) * 0.5, v.attr.z);
+  o.info = vec4f(f32(v.bat.y) * 0.1, round(v.attr.x * 255.0), v.attr.y, f32(v.pos.w) * 0.1);
+  o.pk = vec4f(part, round(v.attr.w * 255.0), f32(v.fac.y) * 0.25, 0.0);
+  o.wall = vec2f(zr, f32(v.fac.x) * 0.25);
   return o;
 }
 
@@ -94,17 +104,19 @@ fn pulseBox(x: f32, w: f32, a: f32, b: f32) -> f32 {
 
 @fragment
 fn fs(v: VOut) -> @location(0) vec4f {
-  // Window cells: x along the wall (3 m), y up the wall (one floor, 3.5 m).
-  // The derivatives come first, in uniform control flow. fw is the pixel
-  // size in cells, so the pattern can be filtered to it.
-  let cellP = vec2f(v.wall.y / 3.0, v.wall.x / 3.5);
+  // Window cells: x a bay (a whole number of them in the run), y one floor
+  // (3.5 m). The derivatives come first, in uniform control flow. fw is the
+  // pixel size in cells, so the pattern can be filtered to it.
+  let run = v.pk.z;
+  let bays = max(1.0, round(run / 3.0));
+  let cellP = vec2f(v.wall.y / max(run, 0.01) * bays, v.wall.x / 3.5);
   let fw = vec2f(length(vec2f(dpdx(cellP.x), dpdy(cellP.x))), length(vec2f(dpdx(cellP.y), dpdy(cellP.y))));
   let L = normalize(G.sun.xyz);
   let night = G.sun.w;
   let N = normalize(v.n);
   var alb = mix(heightColour(v.info.x), useColour(v.info.y), G.res.w);
   alb *= 0.9 + 0.2 * v.info.z;
-  let roof = v.wall.z > 0.5;
+  let roof = v.pk.x > 0.5;
   if (roof) { alb *= 0.82; }
   // after dusk the city glow keeps the facades just visible
   let skyAmb = max(mix(G.skyH.rgb, G.skyZ.rgb, 0.6), vec3f(0.10, 0.11, 0.15) * night);
@@ -114,7 +126,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   var col = alb * (G.sunCol.rgb * lamb + skyAmb * G.sunCol.w * (0.55 + 0.45 * N.z)) * ao;
 
   // windows: a faint grid by day, lit cells after dusk
-  if (!roof && v.info.x > 6.0) {
+  if (!roof && v.info.x > 6.0 && run > 1.5 && v.wall.x < v.info.w - 0.3) {
     // pane: box-filtered to the pixel, so it goes to its mean cover (0.35)
     // when many windows fall in one pixel, and does not alias
     let pane = pulseBox(cellP.x, fw.x, 0.18, 0.82) * pulseBox(cellP.y, fw.y, 0.25, 0.8);
@@ -124,7 +136,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
     // many: then use the mean of the hash (the lit share and mean colour).
     let fl = floor(cellP.y);
     let cl = floor(cellP.x);
-    let seed = u32(v.info.z * 65535.0) * 7919u + u32(fl) * 104729u + u32(cl + 4096.0) * 31u;
+    let seed = u32(v.info.z * 65535.0) * 7919u + u32(fl) * 104729u + u32(cl + 4096.0) * 31u + u32(run * 4.0) * 13u;
     let thr = 0.58 - 0.25 * smoothstep(40.0, 0.0, v.wall.x);
     let on = step(thr, hash11(seed));
     let warm = mix(vec3f(1.0, 0.74, 0.42), vec3f(0.85, 0.92, 1.0), step(0.8, hash11(seed + 17u)));
