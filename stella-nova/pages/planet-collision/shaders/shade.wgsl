@@ -17,8 +17,8 @@
 //                 there is no fluid (the sky shows, the atmosphere adds).
 //    fs_vapour    the vapour thickness of fluid.wgsl fs_thick (half size,
 //                 filtered) -> opacity 1 - exp(-k chord), sharpened at the
-//                 edge; lit condensate plus a weak glow at the vapour
-//                 temperature. Premultiplied.
+//                 edge; lit condensate plus a weak glow at the skin
+//                 temperature (fn skinT). Premultiplied.
 //
 //  grep -n targets: "fn vs_full", "fn fs_sky", "fn normalAt", "fn shadowAt",
 //  "fn atmosphere", "fn fs_surface", "fn fs_vapour"
@@ -207,10 +207,13 @@ fn fs_surface(in: VOut) -> SurfOut {
     let melt = smoothstep(Tm, 1.2 * Tm, T);
     // hot rock darkens before it glows; a cut face shows the inside as it is
     let base = alb.rgb * (1.0 - 0.7 * hot);
+    // the visible skin: cooled crust plates and hot cracks (fn crustSkin)
+    // (the frame of the target body: the remnant, where most crust forms)
+    let skin = crustSkin(T, (P - centres[0].xyz) / max(U0.bodies[0].y, 1e-4), 7.0);
     let H = normalize(L + V);
-    let gloss = clamp(alb.w + 0.5 * melt, 0.0, 1.0);
+    let gloss = clamp(alb.w + 0.5 * melt * (1.0 - skin.y), 0.0, 1.0);
     let spec = gloss * pow(max(dot(n, H), 0.0), mix(40.0, 160.0, melt)) * diff * (0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0) + 0.25);
-    col = base * (U0.sun.w * diff + U0.view.w) + vec3f(spec) * U0.sun.w * 0.6 + glow(T);
+    col = base * (U0.sun.w * diff + U0.view.w) + vec3f(spec) * U0.sun.w * 0.6 + glow(skin.x);
     col = col * (1.0 - 0.15 * cutF);
   } else {
     let mc = modeColor(mode, T, b1, mixw, speed, fIron, fIce);
@@ -237,6 +240,6 @@ fn fs_vapour(in: VOut) -> @location(0) vec4f {
   let fwdS = pow(max(dot(D, U0.sun.xyz), 0.0), 6.0);
   // silicate condensate: grey-white, lit from the sun (more toward it)
   let lit = vec3f(0.78, 0.76, 0.74) * U0.sun.w * (0.35 + 0.5 * fwdS) + vec3f(U0.view.w);
-  let col = lit + glow(T) * U0.vap.w;
+  let col = lit + glow(skinT(T, 0.6)) * U0.vap.w;
   return vec4f(col * a, a);
 }

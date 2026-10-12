@@ -35,7 +35,7 @@
 //  (Chrome's Tint rejects WGSL that naga accepts).
 //
 //  grep -n targets: "struct U", "fn klass", "fn spacing0", "fn blackbody",
-//  "fn glow", "fn planetAlbedo", "fn matAlbedo", "fn modeColor", "fn rayAt",
+//  "fn glow", "fn skinT", "fn crustSkin", "fn voronoi", "fn planetAlbedo", "fn matAlbedo", "fn modeColor", "fn rayAt",
 //  "fn depthOf", "fn removed"
 // ============================================================================
 
@@ -58,7 +58,7 @@ struct U {
   flash: array<vec4f, 4>,   // position, intensity
   flashR: vec4f,            // flash radius (world), per flash
   flashT: vec4f,            // flash colour temperature (K), per flash
-  extra: vec4f,             // x h_max of the solver (code), y view depth of the target
+  extra: vec4f,             // x h_max of the solver (code), y view depth of the target, z sim hours since contact (< 0 before)
 };
 @group(0) @binding(0) var<uniform> U0: U;
 @group(0) @binding(1) var<storage, read> centres: array<vec4f>;
@@ -151,17 +151,80 @@ fn blackbody(T: f32) -> vec3f {
   }
   return pow(vec3f(r, g, b), vec3f(2.2));
 }
-// The radiance of incandescent matter, in scene units: grows as T^4
-// (Stefan-Boltzmann) from the Draper point (about 800 K, the first
-// visible red), times U.view.z, capped so the tone map keeps a shape.
-// The colour temperature stops at 7000 K: SPH over-heats the first
-// contact surface to tens of thousands of K ("wall heating", CONTRACT.md),
-// and a blue-white glow there would show the error, not the physics.
+// The radiance of incandescent matter, in scene units. Three steps:
+//  1 the skin temperature (fn skinT): SPH gives the mean T of a parcel
+//    about 100 km wide, and wall heating puts tens of thousands of K on
+//    the first contact surface (CONTRACT.md). A free melt surface radiates
+//    sigma T^4 (2 MW/m^2 at 2500 K) and its skin cools in minutes, so the
+//    visible skin is far cooler than the parcel. The cap starts at
+//    4000 K and falls to 1700 K with the sim hours since contact
+//    (U.extra.z). The solver has no radiative cooling: this is drawn.
+//  2 T^4 (Stefan-Boltzmann) from the Draper point (about 750 K, the first
+//    visible red), times U.view.z.
+//  3 a soft limit at GLOW_MAX: the tone map keeps the colour of the
+//    black body (orange stays orange) and does not clip to white.
 // The temperature mode (fn modeColor) shows the values as they are.
+const GLOW_MAX: f32 = 3.0;
+// sim hours since the first contact (negative before it)
+fn coolH() -> f32 { return U0.extra.z; }
+// the highest skin temperature at this time; rate: the time constant (h).
+// Small free pieces cool faster than the bulk (a smaller rate).
+fn skinCap(rate: f32) -> f32 { return 1700.0 + 2300.0 * exp(-max(coolH(), 0.0) / rate); }
+fn skinT(T: f32, rate: f32) -> f32 { return min(T, skinCap(rate)); }
 fn glow(T: f32) -> vec3f {
-  let on = smoothstep(780.0, 1150.0, T);
-  let k = U0.view.z * pow(min(T, 7000.0) / 1500.0, 4.0);
-  return blackbody(min(T, 7000.0)) * on * min(k, 10.0);
+  let on = smoothstep(750.0, 1100.0, T);
+  let k = U0.view.z * max(pow(T / 1500.0, 4.0) - 0.0625, 0.0);
+  return blackbody(T) * on * (GLOW_MAX * (1.0 - exp(-k / GLOW_MAX)));
+}
+// Voronoi of p (cells about one unit wide): x F1, y F2, z a hash of the
+// nearest cell
+fn voronoi(p: vec3f) -> vec3f {
+  let i = floor(p);
+  let f = fract(p);
+  var d1 = 9.0;
+  var d2 = 9.0;
+  var id = 0.0;
+  for (var z = -1; z <= 1; z++) {
+    for (var y = -1; y <= 1; y++) {
+      for (var x = -1; x <= 1; x++) {
+        let c = vec3f(f32(x), f32(y), f32(z));
+        let q = i + c;
+        let o = vec3f(hash3(q), hash3(q + vec3f(5.3, 1.1, 7.7)), hash3(q + vec3f(2.9, 8.3, 3.7)));
+        let d = length(c + 0.15 + 0.7 * o - f);
+        if (d < d1) { d2 = d1; d1 = d; id = hash3(q + vec3f(0.37, 4.1, 2.3)); } else if (d < d2) { d2 = d; }
+      }
+    }
+  }
+  return vec3f(d1, d2, id);
+}
+// The share of a melt surface under a cooled crust: none before contact,
+// it grows with the sim hours since contact (0.22 at 0.1 h, 0.71 at 1 h,
+// 0.85 from 2.5 h).
+fn crustShare() -> f32 {
+  let h = coolH();
+  if (h < 0.0) { return 0.0; }
+  return clamp(1.1 * (1.0 - exp(-(h + 0.15) / 1.1)), 0.0, 0.85);
+}
+// The skin temperature of a melt surface at point o (the world position
+// over the target radius, from the target centre: SPH mixes the start
+// positions at the particle scale, and a pattern on them is noise).
+// Crust plates (Voronoi cells) cover crustShare of it at about 0.45 of
+// the skin temperature; the cracks between them show the hot melt.
+// x: skin T, y: crust 0..1.
+fn crustSkin(T: f32, o: vec3f, scale: f32) -> vec2f {
+  let Ts = skinT(T, 0.6);
+  let share = crustShare();
+  if (share <= 0.0 || T < 1100.0) { return vec2f(Ts, 0.0); }
+  let p = o * scale;
+  let v = voronoi(p);
+  let wob = fbm(p * 1.7);
+  // a cell is crust when its rank is under the share; the crack is the
+  // band where F2 - F1 is small
+  let rank = fract(v.z + 0.35 * wob);
+  let crack = smoothstep(0.10, 0.03, v.y - v.x);
+  let plate = smoothstep(share + 0.08, share - 0.08, rank) * (1.0 - crack);
+  let c = clamp(plate * (0.85 + 0.3 * wob), 0.0, 1.0);
+  return vec2f(mix(Ts, max(0.45 * Ts, 760.0), c), c);
 }
 
 // ── surfaces ────────────────────────────────────────────────────────────────

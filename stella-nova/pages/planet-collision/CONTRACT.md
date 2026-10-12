@@ -206,7 +206,7 @@ Frame fields (`defaultFrame`): `eye target up fov near time`, `sun sunI`,
 `streakT` (code time of one frame: motion streaks; 0 = off), `frags`
 (fragments drawn per debris particle, 1-4; phones 1-2), `smooth` (filter
 iterations), `debrisQ`, `vapK`, `vapGlow`, `xvLo`, `xvHi`, `glowGain`,
-`ambient`, `bodies[b] {atm, shadow}` (0..1: fade the drawn atmosphere and
+`ambient`, `coolH` (sim hours since contact, < 0 before), `bodies[b] {atm, shadow}` (0..1: fade the drawn atmosphere and
 the sphere shadow of body b; set both to 0 after the bodies merge),
 `flashes [{p, r, I, T}]` (up to 4 impact flashes), `exposure bloom
 bloomThreshold vignette`.
@@ -228,9 +228,25 @@ not simulated (label this on the page).
 What the surface shows (mode 0): the body's surface map at each particle's
 start position (the map moves with the material), rock, iron and ice
 inside, darkening from 0.7 T_melt, then the glow of a black body at the
-particle temperature (T^4 from the Draper point, about 800 K, capped; the
-colour temperature stops at 7000 K because of SPH wall heating).
-Bloom: only light over `bloomThreshold` (2.0), strength 0.035.
+skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn crustSkin`):
+
+- The skin temperature is the particle T, capped at
+  1700 K + 2300 K exp(-coolH / 0.6 h) (4000 K at contact, 2100 K at 1 h,
+  1700 K late). Free debris uses 0.25 h. The parcel of one particle is
+  about 100 km wide, its free surface radiates sigma T^4, and SPH wall
+  heating puts 5000-20000 K on the surface: the visible skin is far
+  cooler. The solver has no radiative cooling: this is drawn.
+- Crust: Voronoi plates (in the frame of the target body) cover
+  1.1 (1 - exp(-(coolH + 0.15) / 1.1)) of the melt, up to 0.85, at 0.45
+  of the skin temperature; the cracks between them stay hot. Debris
+  pieces carry a crust with the same chance.
+- Radiance: T^4 from the Draper point (750 K) times `glowGain`, with a
+  soft limit at 3 (scene units): orange stays orange after the tone map.
+
+`coolH` (frame field) is the sim hours since the first contact; main.js
+sets it, and a negative value (the default) means before contact: no
+crust, the 4000 K cap. Bloom: only light over `bloomThreshold` (2.0),
+strength 0.035: the hottest melt only.
 
 GPU cost (Apple M4 Pro, Deno, `deno run -A tests.mjs --gpu --time`, the
 camera 4 radii from the impact): 5.8 ms per frame at 32k particles and

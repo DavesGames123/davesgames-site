@@ -32,7 +32,9 @@
 //  R  the renderer (Deno WebGPU, an offscreen texture, no browser and no
 //     image file): every shader compiles clean; before contact the target
 //     fills its disc and the sky round it is dark, with no glow; no
-//     particle of a settled body is debris; the
+//     particle of a settled body is debris; the remnant at +1 h and +3 h
+//     after contact (moon-earth, 16k) has under 2 % near-white pixels in
+//     its disc and over 2 % orange-red ones; the
 //     filter makes the depth smooth, keeps the area and makes the limb
 //     rounder (less spread of its radius: no bump per particle); a
 //     grazing hit makes debris (fn classify) and glowing pixels; the colour
@@ -59,7 +61,7 @@ import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
-import { bandFrom } from './view.js';
+import { bandFrom, makeView, frameTarget, eyeOf } from './view.js';
 import * as SP from './saver-plan.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
@@ -424,6 +426,12 @@ async function renderTests() {
   const msgs = (await ren.compilationMessages()).filter(m => / error /.test(m));
   ok('R every render shader compiles with no error', msgs.length === 0, msgs.slice(0, 3).join(' | ') || 'common + fluid, smooth, shade, debris; centres; post');
   ren.attach(sim, setup); ren.resize(W, H);
+  const readTex = async (t, bpp, w, h) => {
+    const bpr = Math.ceil(w * bpp / 256) * 256, buf = device.createBuffer({ size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = device.createCommandEncoder(); enc.copyTextureToBuffer({ texture: t }, { buffer: buf, bytesPerRow: bpr }, [w, h]); device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ); const a = buf.getMappedRange().slice(0); buf.unmap(); buf.destroy(); return { a, bpr };
+  };
+  const rgb = async () => { const { a, bpr } = await readTex(tex, 4, W, H), px = new Uint8Array(a); return (x, y) => { const o = y * bpr + 4 * x; return [px[o], px[o + 1], px[o + 2]]; }; };
   // a settled body is all fluid: its surface layer is not debris (a test
   // on h took 1415 surface particles of Earth for debris here: they sit at
   // the h_max clamp)
@@ -432,13 +440,40 @@ async function renderTests() {
     s0.upload(su0, makeParams(su0, { KG: 4 })); for (let k = 0; k < 10; k++) s0.relaxSteps(20); s0.launch();
     const rb0 = await s0.readback(['pos', 'vel', 'aux', 'tag', 'th']), c0 = classify(rb0, s0.n, s0.prm.hmax, {});
     ok('R before contact: no settled particle is debris (fn klass)', c0.debris === 0 && c0.vapour === 0, `moon-earth ${n0}: fluid ${c0.fluid}, debris ${c0.debris}, vapour ${c0.vapour}`);
-    s0.destroy(); }
-  const readTex = async (t, bpp, w, h) => {
-    const bpr = Math.ceil(w * bpp / 256) * 256, buf = device.createBuffer({ size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-    const enc = device.createCommandEncoder(); enc.copyTextureToBuffer({ texture: t }, { buffer: buf, bytesPerRow: bpr }, [w, h]); device.queue.submit([enc.finish()]);
-    await buf.mapAsync(GPUMapMode.READ); const a = buf.getMappedRange().slice(0); buf.unmap(); buf.destroy(); return { a, bpr };
-  };
-  const rgb = async () => { const { a, bpr } = await readTex(tex, 4, W, H), px = new Uint8Array(a); return (x, y) => { const o = y * bpr + 4 * x; return [px[o], px[o + 1], px[o + 2]]; }; };
+    // the remnant after the impact is not a white blob: run on to 1 h and
+    // 3 h after contact, frame it as the page does (view.js), and count
+    // the near-white pixels in its disc (the radius of the target). Wall
+    // heating puts 5000-20000 K on the surface; the skin cap, the soft
+    // limit of fn glow and the crust keep it orange-red.
+    const Wb = 320, Hb = 200, tb = device.createTexture({ size: [Wb, Hb], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const rb2 = new Renderer(device, { getCurrentTexture: () => tb }, 'rgba8unorm', await loadRenderCode(u => Deno.readTextFile(u)));
+    rb2.attach(s0, su0); rb2.resize(Wb, Hb);
+    let tc = null, st0 = null;
+    const shots = [];
+    for (const goal of [1, 3]) {
+      for (let k = 0; k < 2000; k++) {
+        s0.step(20); st0 = null; while (!st0) st0 = await s0.stats();
+        if (tc == null && st0.touching > 0) tc = st0.t;
+        if (tc != null && (st0.t - tc) * UNIT.T / 3600 >= goal) break;
+      }
+      const hrs = tc == null ? -1 : (st0.t - tc) * UNIT.T / 3600, B = su0.bodies.map((b, i) => ({ c: st0.com[i] || b.X, R: b.R }));
+      const g = defaultFrame(), v = makeView(), ft = frameTarget(B, hrs, g.fov, Wb / Hb);
+      v.target = ft.target; v.dist = ft.dist;
+      Object.assign(g, { eye: eyeOf(v), target: v.target, sun: [1, 0.25, 0.3], coolH: hrs, streakT: 4 * st0.dt, bodies: [0, 1, 2, 3].map(() => ({ atm: 0, shadow: 0 })) });
+      rb2.render(g);
+      const { a, bpr } = await readTex(tb, 4, Wb, Hb), px = new Uint8Array(a);
+      const c = rb2.project(B[0].c, Wb, Hb), rr = rb2.focal * B[0].R / Math.hypot(...B[0].c.map((x, j) => x - g.eye[j]));
+      let inD = 0, white = 0, hot = 0;
+      for (let y = 0; y < Hb; y++) for (let x = 0; x < Wb; x++) {
+        if (Math.hypot(x - c.x, y - c.y) >= rr) continue;
+        const o = y * bpr + 4 * x, r = px[o], gg = px[o + 1], b = px[o + 2];
+        inD++; if (r > 235 && gg > 235 && b > 220) white++; if (r > 120 && r > gg + 30 && gg >= b) hot++;
+      }
+      shots.push({ goal, hrs, white: white / Math.max(inD, 1), hot: hot / Math.max(inD, 1), inD });
+    }
+    ok('R the remnant at +1 h and +3 h is not a white blob, and it glows', tc != null && shots.every(q => q.white < 0.02 && q.hot > 0.02 && q.inD > 300),
+      shots.map(q => `+${q.hrs.toFixed(2)} h: ${(100 * q.white).toFixed(1)} % near-white, ${(100 * q.hot).toFixed(1)} % orange-red of ${q.inD} disc px`).join('; '));
+    rb2.destroy(); tb.destroy(); s0.destroy(); }
   const scan = at => { let glow = 0, lit = 0, s = [0, 0, 0]; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const c = at(x, y); if (c[0] > 150 && c[0] > c[1] + 30 && c[1] > c[2]) glow++; if (c[0] + c[1] + c[2] > 60) { lit++; s[0] += c[0]; s[1] += c[1]; s[2] += c[2]; } } return { glow, lit, mean: s.map(v => lit ? v / lit : 0) }; };
   // before contact: look at the target from 4 radii, the impactor out of view
   const f = defaultFrame(), X0 = setup.bodies[0].X, R0 = setup.bodies[0].R;

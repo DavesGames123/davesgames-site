@@ -107,7 +107,9 @@ fn vs_rock(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -
     let a = matAlbedo(og, fIron, fIce, style, 2.0);
     let Tm = tMelt(fIron, fIce);
     o.alb = vec4f(a.rgb * (1.0 - 0.7 * smoothstep(0.7 * Tm, Tm, T)) * (0.8 + 0.4 * hashU(seed + 17u)), 0.3 * fIron);
-    o.emit = glow(T);
+    // a small piece cools faster than the bulk; some carry a cold crust
+    let crust = select(0.0, 1.0, hashU(seed + 29u) < crustShare());
+    o.emit = glow(skinT(T, 0.25) * (1.0 - 0.55 * crust));
   } else {
     o.alb = vec4f(modeColor(mode, T, select(0.0, 1.0, bodyOf(ii) == 1u), 0.0, length(pVel[ii].xyz), fIron, fIce), 0.0);
     o.emit = vec3f(0.0);
@@ -166,7 +168,7 @@ fn vs_streak(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -
     let fIce = select(0.0, 1.0, mt == 3u);
     let style = i32(U0.bodies[min(bodyOf(ii), 3u)].x + 0.5);
     let alb = matAlbedo(pOrig[ii].xyz, fIron, fIce, style, 3.0).rgb;
-    o.col = glow(T) * 0.55 + alb * U0.sun.w * 0.12;
+    o.col = glow(skinT(T, 0.25)) * 0.55 + alb * U0.sun.w * 0.12;
   } else {
     o.col = 0.25 * modeColor(mode, T, select(0.0, 1.0, bodyOf(ii) == 1u), 0.0, length(v), select(0.0, 1.0, matOf(ii) == 0u), select(0.0, 1.0, matOf(ii) == 3u));
   }

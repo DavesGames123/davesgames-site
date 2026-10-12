@@ -231,6 +231,8 @@ export function frameOf(now, dt, steps) {
   f.cut.d = f.cut.n[0] * f.target[0] + f.cut.n[1] * f.target[1] + f.cut.n[2] * f.target[2];
   f.streakT = S.stats && steps ? S.stats.dt * steps : 0;
   f.exposure = S.dir && S.dir.exposure != null ? S.dir.exposure : 1;
+  // sim hours since contact: the visible skin of the melt cools (render.js)
+  f.coolH = sinceH == null ? -1 : sinceH;
   // events: the flash decays, atmospheres and shadows fade after contact
   if (S.contact) {
     const s = (now - S.contact.wall) / 1000;

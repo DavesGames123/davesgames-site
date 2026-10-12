@@ -138,6 +138,7 @@ export function defaultFrame() {
     bodies: [{ atm: 1, shadow: 1 }, { atm: 1, shadow: 1 }, { atm: 0, shadow: 0 }, { atm: 0, shadow: 0 }],
     flashes: [],                  // [{ p, r, I, T }]
     exposure: 1.0, bloom: 0.035, bloomThreshold: 2.0, vignette: 0.3,
+    coolH: -1,                    // sim hours since the first contact (< 0 before): the skin cools
   };
 }
 
@@ -343,6 +344,7 @@ export class Renderer {
     }
     d[132] = this.sim && this.sim.prm ? this.sim.prm.hmax : 1e9;
     d[133] = Math.max(f.near, dot(sub(f.target, f.eye), view.f));
+    d[134] = f.coolH ?? -1;
     this.dev.queue.writeBuffer(this.frameBuf, 0, d);
     this.view = view; this.vp = vp; this.focal = focal;
   }
