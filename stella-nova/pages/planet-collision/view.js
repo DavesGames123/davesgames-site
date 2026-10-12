@@ -14,8 +14,13 @@
 //  USER ORBIT. yaw and pitch (radians) turn the eye about the target, zoom
 //  scales the auto distance. A drag sets them; the page resets them.
 //
+//  CLEAR BAND (fn bandFrom). The screen band that no phone GUI covers,
+//  from the rects of the caption and of the bottom GUI (dock, sheets).
+//  A caption counts only when it spans the width (portrait). In landscape
+//  it is a narrow left column, and the band keeps the full height.
+//
 //  grep -n targets: "export function makeView", "export function frameTarget",
-//  "export function stepView", "export function eyeOf"
+//  "export function stepView", "export function eyeOf", "export function bandFrom"
 // ============================================================================
 
 export function makeView() {
@@ -54,4 +59,15 @@ export function stepView(v, goal, dt, tau = 0.8) {
 export function eyeOf(v) {
   const d = v.dist * v.zoom, cp = Math.cos(v.pitch);
   return [v.target[0] + d * cp * Math.cos(v.yaw), v.target[1] + d * cp * Math.sin(v.yaw), v.target[2] + d * Math.sin(v.pitch)];
+}
+
+// H, W: the viewport in CSS px; cap: the caption rect or null; lows: the
+// rects of the dock and the open sheets. Returns { t, b } in CSS px. The
+// band keeps at least 30 % of H.
+export function bandFrom(H, W, cap, lows) {
+  let t = cap && cap.bottom > 0 && cap.width > 0.6 * W ? cap.bottom + 6 : 0, b = 0;
+  for (const r of lows) if (r && r.height > 0 && r.top > H * 0.25) b = Math.max(b, H - r.top + 6);
+  const room = 0.3 * H;
+  if (H - t - b < room) { const k = (H - room) / (t + b); t *= k; b *= k; }
+  return { t, b };
 }

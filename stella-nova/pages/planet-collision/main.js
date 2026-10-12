@@ -25,8 +25,8 @@
 //  CAMERA (fn frameOf). view.js frames the bodies (Follow on), the user
 //  orbits and zooms. fn clearBand gives the screen band that no GUI covers
 //  (the saver plate, or on a phone the caption and the dock or the open
-//  sheet); fn bandView moves the eye back and pans it so the subject
-//  centres in that band. A director (S.dir, saver.js) can set the shot.
+//  sheet; view.js fn bandFrom); fn bandView moves the eye back and pans
+//  it so the subject centres in that band. A director (S.dir, saver.js) can set the shot.
 //
 //  AIM (fn aimScenario). The aim panel builds a scenario from two bodies,
 //  the angle (b = sin theta), the speed in v_esc, the target spin and the
@@ -54,7 +54,7 @@ import { makeParams } from './sph.js';
 import { PRESETS, presetByKey, randomScenario, composition, VARIANTS, titleOf } from './scenarios.js';
 import { pickProfile, renderBudget } from './budget.js';
 import { Renderer, loadRenderCode, loadMaps, defaultFrame, norm, cross, sub } from './render.js';
-import { makeView, frameTarget, stepView, eyeOf } from './view.js';
+import { makeView, frameTarget, stepView, eyeOf, bandFrom } from './view.js';
 import { UNIT, SOURCES, BODIES } from './data.js';
 import { outcome, M_MOON } from './analysis.js';
 import { previewArc } from './arc.js';
@@ -199,15 +199,8 @@ function govern(ms) {
 export function clearBand() {
   if (S.dir && S.dir.band) return S.dir.band();
   if (!PHONE_Q.matches) return { t: 0, b: 0 };
-  const H = innerHeight, cap = $('caption').getBoundingClientRect ? $('caption').getBoundingClientRect() : null;
-  let t = cap && cap.bottom > 0 ? cap.bottom + 6 : 0, b = 0;
-  for (const id of ['dock', 'aim', 'info']) {
-    const e = $(id); if (!e || e.hidden || !e.getBoundingClientRect) continue;
-    const r = e.getBoundingClientRect(); if (r.height > 0 && r.top > H * 0.25) b = Math.max(b, H - r.top + 6);
-  }
-  const room = 0.3 * H;
-  if (H - t - b < room) { const k = (H - room) / (t + b); t *= k; b *= k; }
-  return { t, b };
+  const rect = e => (e && !e.hidden && e.getBoundingClientRect ? e.getBoundingClientRect() : null);
+  return bandFrom(innerHeight, innerWidth, rect($('caption')), ['dock', 'aim', 'info'].map(id => rect($(id))));
 }
 // eye and target for view v, fitted to the band (zoom back by H / band
 // height, then pan along the camera's up so the target sits at the band

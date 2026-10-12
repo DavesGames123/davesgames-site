@@ -58,6 +58,7 @@ import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
+import { bandFrom } from './view.js';
 import * as SP from './saver-plan.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
@@ -147,6 +148,16 @@ function geometryTests() {
 
 // 9 ─ the outcome of a readback (analysis.js) and the preview arc (arc.js)
 function analysisTests() {
+  // the phone clear band: a full-width caption on top, a narrow side caption ignored
+  {
+    const dock = { top: 844 - 62, height: 62 };
+    const port = bandFrom(844, 390, { bottom: 180, width: 374 }, [dock, null]);
+    const land = bandFrom(390, 844, { bottom: 220, width: 300 }, [{ top: 390 - 62, height: 62 }]);
+    const tight = bandFrom(500, 390, { bottom: 300, width: 374 }, [{ top: 300, height: 200 }]);
+    ok('9 phone band: a top caption pushes the band down, a side caption does not, 30 % kept',
+      port.t === 186 && port.b === 68 && land.t === 0 && land.b === 68 && Math.abs(500 - tight.t - tight.b - 150) < 1e-9,
+      `portrait t ${port.t} b ${port.b}; landscape t ${land.t} b ${land.b}; tight band ${(500 - tight.t - tight.b).toFixed(0)} of 500 px`);
+  }
   // a uniform ball (M 1, R 1, at rest) and four test particles
   const nb = 3000, R = rng(5), n = nb + 4;
   const rb = { pos: new Float32Array(4 * n), vel: new Float32Array(4 * n), grav: new Float32Array(8 * n), aux: new Float32Array(4 * n) };
