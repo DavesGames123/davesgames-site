@@ -130,6 +130,7 @@
 //      grep -n 'function applyHats'           the fedora on the opponent
 //      grep -n 'function shotPose'            camera place per shot
 //      grep -n 'export const WATCH'           watch framing numbers
+//      grep -n 'export const CLOSE_TO_BOARD'  the close shot keeps the board
 //      grep -n 'function seatRects'           board boxes of the seat view
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
@@ -176,6 +177,9 @@ const YAW = [0, Math.PI];
 // (tests/fly3d.test.mjs 'camera framing').
 // fillTall: the tall shot radius factor of a fill frame (setClear fill):
 // the camera goes nearer, the table ends may lie under the brains.
+// The close shot looks this far from the held card toward the centre of
+// the board (0: at the card, 1: at the centre).
+export const CLOSE_TO_BOARD = 0.7;
 export const WATCH = { wideR: 7.6, wideEl: 0.42, wideLook: 0.7, drift: 0.3, tallR: 11.5, tallEl: 0.55, fov: 40, fitAspect: 1.7, fillTall: 0.78 };
 
 // Seat space (u, y above the table top, v) -> world.
@@ -1511,13 +1515,19 @@ export function createDuelScene(canvas, opts = {}) {
       cam.wantPos.set(Math.sin(az) * Math.cos(el) * r, T.y + ly + Math.sin(el) * r, Math.cos(az) * Math.cos(el) * r);
     } else if (s === 'over') {
       // over the right shoulder of the fly, high enough to see its fan
-      seatPos(P0, (P0 === 0 ? 2.0 : -2.0) * fit, 3.0, T.seatV + 0.9 * fit, cam.wantPos);
-      seatPos(P0, -0.2, 0.25, T.seatV - 1.7, cam.wantLook);
+      // A tall frame (fit > 1) keeps the camera nearer the middle and
+      // looks further in, so the centre of the board stays in the frame.
+      seatPos(P0, (P0 === 0 ? 2.0 : -2.0) * Math.min(fit, 1.3), 3.0, T.seatV + 0.9 * fit, cam.wantPos);
+      seatPos(P0, -0.2, 0.25, T.seatV - 1.7 - 0.6 * (fit - 1), cam.wantLook);
     } else if (s === 'close') {
       // in front of the held card: the card face, the mana tokens and
-      // the face of the fly behind it
-      seatPos(P0, -0.35, 1.5, T.stageV - 2.2 * fit, cam.wantPos);
+      // the face of the fly behind it. The camera stands back over the
+      // far side and looks between the card and the centre of the board,
+      // so the board stays in the frame (a close-up of the fly alone
+      // showed no board: the 1600x900 capture of 2026-10-12).
+      seatPos(P0, -0.35, 2.8, T.stageV - 5.0 * Math.min(fit, 1.4), cam.wantPos);
       if (!targetPos(st.target, cam.wantLook)) seatPos(P0, 0.3, T.stageY + 0.05, T.stageV + 0.35, cam.wantLook);
+      cam.wantLook.lerp(seatPos(P0, 0, 0, 0, _t3), CLOSE_TO_BOARD);
     } else if (s === 'follow') {
       // behind and above the seat side of the card, the card in the
       // middle of the frame while it goes from the hand to the mat
@@ -1552,7 +1562,7 @@ export function createDuelScene(canvas, opts = {}) {
       const att = P0, def = 1 - att;
       seatPos(att, 0, 1.25, T.seatV - 0.2, _t1);           // attacker head
       if (!targetPos(st.target, _t3)) seatPos(att, 0, 0, T.attackV, _t3);
-      cam.wantLook.copy(_t3).lerp(_t1, 0.55);
+      cam.wantLook.copy(_t3).lerp(_t1, 0.25);
       seatPos(def, (def === 0 ? -1.1 : 1.1), 0.32, 1.35 + 1.4 * (fit - 1), cam.wantPos);
       cam.wantPos.y = T.y + 0.32 + 0.6 * (fit - 1);
     } else if (s === 'crowd') {
@@ -1564,8 +1574,9 @@ export function createDuelScene(canvas, opts = {}) {
       // the loser from the front and a little to the side, low over the
       // table: the throw, the cards on the mat and the head on the table
       const L = P0;
-      seatPos(L, 0.15, 0.45, T.seatV - 1.25, cam.wantLook);
-      seatPos(L, 1.55, 1.35 + 0.5 * (fit - 1), T.seatV - 1.25 - 2.9 * fit, cam.wantPos);
+      // (from over the far half, so the centre of the board is in view)
+      seatPos(L, 0.15, 0.2, T.seatV - 3.3, cam.wantLook);
+      seatPos(L, 1.55, 2.2 + 0.5 * (fit - 1), T.seatV - 1.25 - 5.4 * fit, cam.wantPos);
     } else if (s === 'seat') {
       seatPose(fpSeat ?? P0, cam.wantPos, cam.wantLook);
       if (fpOrbit) orbitPos(fpOrbit, cam.wantLook, cam.wantPos);
