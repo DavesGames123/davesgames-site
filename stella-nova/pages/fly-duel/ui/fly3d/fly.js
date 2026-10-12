@@ -46,6 +46,7 @@
 //    // --- clips            CLIP_FNS: idle think groom reach place tap
 //                            push raiseArms slump
 //    // --- animate          animate(), countTriangles()
+//    // --- hat              FEDORA, addFedora(rig), setHat(rig, on)
 // ============================================================================
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -764,6 +765,7 @@ export function buildFly(opts = {}) {
     setRest({ tableY: ty = rig.rest.tableY, tableZ: tz = rig.rest.tableZ } = {}) { rig.rest = makeRest(ty, tz); },
   };
   rig.poses = { hold: () => animate(rig, 'idle', 0) };
+  if (opts.hat === 'fedora') addFedora(rig);
   animate(rig, 'idle', 0);
 
   const dispose = () => {
@@ -772,6 +774,7 @@ export function buildFly(opts = {}) {
     for (const m of owned.mats) m.dispose();
     for (const t of owned.texs) t.dispose();
     micro.dispose?.();
+    rig.hat?.dispose();
   };
   return { root, rig, dispose };
 }
@@ -1173,4 +1176,87 @@ export function countTriangles(obj) {
     n += tri * (o.isInstancedMesh ? o.count : 1);
   });
   return n;
+}
+
+// --- hat ---------------------------------------------------------------------
+
+// A fedora for a fly (the opponent in play mode wears it). Head-local
+// units: the head capsule centre is HEAD_C, its top about y = 0.225. The
+// crown is a lathe with a centre crease and a front pinch; the brim is a
+// lathe ring that turns up at the back and the sides and dips at the
+// front. A dark band runs round the crown base. addFedora(rig) puts it on
+// the head joint and returns { group, dispose }; setHat(rig, on) shows or
+// hides it.
+export const FEDORA = { y: 0.205, crownR: 0.135, crownH: 0.135, brimR: 0.255, tilt: -0.12, felt: '#3a3128', band: '#141210' };
+
+function fedoraGeos(L) {
+  const F = FEDORA, seg = Math.max(24, L.sph?.[0] ?? 32);
+  // crown profile (r, y), base to top
+  const prof = [];
+  const n = 14;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const r = F.crownR * (1 - 0.16 * t * t) ;
+    prof.push(new THREE.Vector2(r, F.crownH * t));
+  }
+  prof.push(new THREE.Vector2(0.001, F.crownH));
+  const crown = new THREE.LatheGeometry(prof, seg);
+  const p = crown.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const h = y / F.crownH;
+    // centre crease: the top dips along the front-back line
+    const crease = 0.045 * Math.exp(-((x / (F.crownR * 0.45)) ** 2)) * smooth(0.55, 1.0, h);
+    // front pinch: the two sides at the front pull in near the top
+    const front = Math.max(0, z / F.crownR);
+    const pinch = 1 - 0.22 * front * smooth(0.35, 1.0, h) * Math.min(1, Math.abs(x) / (F.crownR * 0.3));
+    p.setXYZ(i, x * pinch, y - crease, z * (1 - 0.06 * h));
+  }
+  crown.computeVertexNormals();
+  crown.translate(0, F.y, 0);
+  // brim: a ring from the crown to brimR, up at the back and sides
+  const brimProf = [];
+  const m = 8;
+  for (let i = 0; i <= m; i++) brimProf.push(new THREE.Vector2(F.crownR * 0.98 + (F.brimR - F.crownR * 0.98) * (i / m), 0));
+  for (let i = m; i >= 0; i--) brimProf.push(new THREE.Vector2(F.crownR * 0.98 + (F.brimR - F.crownR * 0.98) * (i / m), -0.008));
+  const brim = new THREE.LatheGeometry(brimProf, seg);
+  const b = brim.attributes.position;
+  for (let i = 0; i < b.count; i++) {
+    const x = b.getX(i), y = b.getY(i), z = b.getZ(i);
+    const r = Math.hypot(x, z), a = Math.atan2(x, z);           // a = 0 at the front (+z)
+    const out = Math.max(0, (r - F.crownR) / (F.brimR - F.crownR));
+    const up = 0.05 * out * out * (0.6 - 0.6 * Math.cos(a));     // turned up behind and at the sides
+    const dip = -0.022 * out * Math.max(0, Math.cos(a)) ** 2;    // snap brim down at the front
+    b.setXYZ(i, x, y + up + dip, z);
+  }
+  brim.computeVertexNormals();
+  brim.translate(0, F.y, 0);
+  const band = new THREE.CylinderGeometry(F.crownR * 1.012, F.crownR * 1.02, 0.03, seg, 1, true).translate(0, F.y + 0.017, 0);
+  return { crown, brim, band };
+}
+
+export function addFedora(rig, opts = {}) {
+  const head = rig?.joints?.head;
+  if (!head) return null;
+  if (rig.hat) return rig.hat;
+  const L = LODS[rig.lod] || LODS.desktop;
+  const g = fedoraGeos(L);
+  const felt = new THREE.MeshStandardMaterial({ color: new THREE.Color(opts.felt || FEDORA.felt), roughness: 0.88, side: THREE.DoubleSide });
+  const bandM = new THREE.MeshStandardMaterial({ color: new THREE.Color(opts.band || FEDORA.band), roughness: 0.6, side: THREE.DoubleSide });
+  const group = new THREE.Group(); group.name = 'fedora';
+  for (const [geo, mat, nm] of [[g.crown, felt, 'fedora-crown'], [g.brim, felt, 'fedora-brim'], [g.band, bandM, 'fedora-band']]) {
+    const m = new THREE.Mesh(geo, mat); m.name = nm; m.castShadow = true; m.receiveShadow = true; group.add(m);
+  }
+  group.rotation.x = FEDORA.tilt;          // tipped a little forward and down
+  group.rotation.z = 0.06;                 // and a touch to one side
+  head.add(group);
+  const dispose = () => { group.removeFromParent(); for (const x of Object.values(g)) x.dispose(); felt.dispose(); bandM.dispose(); rig.hat = null; };
+  rig.hat = { group, dispose };
+  return rig.hat;
+}
+
+export function setHat(rig, on) {
+  if (on) { const h = addFedora(rig); if (h) h.group.visible = true; return !!h; }
+  if (rig?.hat) rig.hat.group.visible = false;
+  return false;
 }
