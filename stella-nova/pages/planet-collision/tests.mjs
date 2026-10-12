@@ -2,7 +2,10 @@
 //  PLANET COLLISION  ·  tests.mjs — checks of the EOS, the bodies, the CPU
 //  solver and the GPU solver
 // ----------------------------------------------------------------------------
-//  node stella-nova/pages/planet-collision/tests.mjs         CPU tests
+//  node stella-nova/pages/planet-collision/tests.mjs         CPU tests, then
+//                                                            the GPU tests in Deno
+//  deno run -A stella-nova/pages/planet-collision/tests.mjs --gpu          GPU only
+//  deno run -A stella-nova/pages/planet-collision/tests.mjs --gpu --time   + timing
 //
 //  1  Tillotson EOS (SI) against its published properties: P(rho0, 0) = 0,
 //     bulk modulus A at rho0, Grueneisen a + b, the ideal-gas limit a, a
@@ -18,8 +21,13 @@
 //  6  two bodies merge (CPU, Mars + half Mars, head-on at v_esc): the
 //     bound remnant holds > 95 % of the mass, no NaN, mass sum exact,
 //     energy kept through the impact
-//  7  presets: every preset builds, sources given, contact in 1-20 min of
-//     sim time
+//  7  presets and budget: every preset builds, sources given, contact in
+//     1-20 min of sim time; profile bytes under LIMIT; phones <= 12288
+//  8  WGSL text: no line mixes && with || (Tint precedence rule)
+//  G  GPU (Deno WebGPU): primed fields = CPU (rho, P, c, Balsara, a, du, g,
+//     phi, T, hNext, nOther); 20 steps = CPU; energy over 300 steps; the
+//     relax and launch; stats counters; no validation errors. --time: the
+//     ms per step at 16k, 32k, 49k
 //
 //  Each test prints PASS or FAIL with its numbers. Exit code 1 on a FAIL.
 // ============================================================================
@@ -28,9 +36,10 @@ import { tillotson, soundSpeed, uCold, matSI } from './eos.js';
 import { profile, bodyParticles, impactGeometry, buildScenario, rng } from './build.js';
 import { CpuSPH, makeParams, boundMass } from './sph.js';
 import { PRESETS, randomScenario } from './scenarios.js';
+import * as BG from './budget.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
-const GPU_ONLY = false;
+const GPU_ONLY = ARGS.includes('--gpu');
 let fails = 0;
 const ok = (name, cond, info) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}  ${info}`); if (!cond) fails++; };
 const rel = (a, b) => Math.abs(a - b) / Math.abs(b);
@@ -157,10 +166,90 @@ async function presetTests() {
     if (!p.src || !p.title || s.N !== 8192 || !(tc > 1 && tc < 20) || s.bodies.some(b => b.n < 400)) bad.push(p.key);
   }
   ok('7 presets build, with sources, contact in 1-20 min', bad.length === 0, `${PRESETS.length} presets, contact ${minT.toFixed(1)}-${maxT.toFixed(1)} min${bad.length ? ', bad: ' + bad.join(' ') : ''}`);
+  let over = [];
+  for (const [k, p] of Object.entries(BG.PROFILES)) { const lim = k.startsWith('phone') ? BG.LIMIT.touch : BG.LIMIT.desktop; if (BG.gpuBytes(p.N) > lim) over.push(k); }
+  const ph = BG.pickProfile({ phone: true });
+  ok('7 profile bytes under LIMIT; a phone gets <= 12288', over.length === 0 && ph.N <= 12288, `phone ${ph.N} (${(BG.gpuBytes(ph.N) / 1e6).toFixed(1)} MB), desktop ${BG.pickProfile({}).N}${over.length ? ', over: ' + over.join(' ') : ''}`);
+  const fs = await import('node:fs');
+  const w = fs.readFileSync(new URL('./shaders/sph.wgsl', import.meta.url), 'utf8').split('\n');
+  const mix = w.map((l, i) => [l, i + 1]).filter(([l]) => !l.trim().startsWith('//') && l.includes('&&') && l.includes('||'));
+  ok('8 WGSL: no line mixes && with ||', mix.length === 0, mix.map(m => 'line ' + m[1]).join(', ') || 'none');
+}
+
+// G ─ GPU against CPU (Deno WebGPU)
+async function gpuTests() {
+  if (typeof navigator === 'undefined' || !navigator.gpu) { console.log('SKIP  GPU tests: no navigator.gpu here'); return; }
+  const { SphGPU } = await import('./engine.js');
+  const code = await Deno.readTextFile(new URL('./shaders/sph.wgsl', import.meta.url));
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) { console.log('SKIP  GPU tests: no adapter'); return; }
+  const device = await adapter.requestDevice();
+  const errs = []; device.addEventListener?.('uncapturederror', e => errs.push(String(e.error?.message || e)));
+  // two bodies in contact range, with a velocity field, so every term acts
+  const st = buildScenario({ bodies: [{ key: 'mars' }, { key: 'moon' }], impact: { vRel: 1.2, b: 0.5, d0: 1.02 } }, 1500, 4);
+  for (let i = 0; i < 3 * st.N; i++) st.vel[i] = 0.05 * Math.sin(i * 1.7);
+  const prm = makeParams(st, { KG: 1 });
+  const cpu = new CpuSPH(st, prm); cpu.prime();
+  const g = await SphGPU.create(device, 2048, code); g.upload(st, prm); g.prime();
+  const rb = await g.readback(['pos', 'vel', 'th', 'aux', 'acc', 'grav', 'uu']);
+  const err = (f, fc) => { let n = 0, d = 0; for (let i = 0; i < st.N; i++) { const a = f(i), b = fc(i); n += (a - b) ** 2; d += b * b; } return Math.sqrt(n / d); };
+  const E = {
+    rho: err(i => rb.th[4 * i], i => cpu.rho[i]), P: err(i => rb.th[4 * i + 1], i => cpu.P[i]), c: err(i => rb.th[4 * i + 2], i => cpu.cs[i]),
+    bal: err(i => rb.th[4 * i + 3], i => cpu.bal[i]), a: err(i => rb.acc[4 * i], i => cpu.a[3 * i]), du: err(i => rb.acc[4 * i + 3], i => cpu.du[i]),
+    g: err(i => rb.grav[8 * i + 1], i => cpu.g[3 * i + 1]), phi: err(i => rb.grav[8 * i + 3], i => cpu.phi[i]),
+    T: err(i => rb.aux[4 * i], i => cpu.T[i]), hN: err(i => rb.aux[4 * i + 1], i => cpu.hn[i]),
+  };
+  let nOd = 0, nOs = 0; for (let i = 0; i < st.N; i++) { nOd = Math.max(nOd, Math.abs(rb.aux[4 * i + 2] - cpu.nOther[i])); nOs += cpu.nOther[i]; }
+  const eMax = Math.max(...Object.values(E));
+  ok('G primed fields = CPU (1500 particles, bodies in contact)', eMax < 1e-4 && nOd === 0 && nOs > 0, Object.entries(E).map(([k, v]) => `${k} ${v.toExponential(1)}`).join(', ') + `; nOther exact (${nOs} cross pairs)`);
+  ok('G first time step = CPU', rel(rb.ctl.dt, cpu.dt) < 1e-4, `GPU ${rb.ctl.dt.toExponential(5)} CPU ${cpu.dt.toExponential(5)}`);
+  cpu.run(20); g.step(20);
+  const r2 = await g.readback(['pos', 'vel']);
+  let dx = 0; for (let i = 0; i < st.N; i++) for (let c = 0; c < 3; c++) dx = Math.max(dx, Math.abs(r2.pos[4 * i + c] - cpu.x[3 * i + c]));
+  ok('G 20 steps = CPU', dx < 1e-5 && rel(r2.ctl.t, cpu.t) < 1e-4, `max |dx| ${dx.toExponential(2)} R_E (h ${prm.hmax.toFixed(3)}), t GPU ${r2.ctl.t.toFixed(6)} CPU ${cpu.t.toFixed(6)}`);
+  g.destroy();
+  // energy over 300 steps of a spinning settled body, relax and launch on the GPU
+  { const st2 = buildScenario({ bodies: [{ key: 'earth', spinH: 8 }], impact: {} }, 4000, 9), p2 = makeParams(st2, { KG: 1 });
+    const G = await SphGPU.create(device, 4096, code); G.upload(st2, p2);
+    for (let k = 0; k < 6; k++) G.relaxSteps(25);
+    G.launch();
+    const en = r => { let K = 0, U = 0, W = 0, Lz = 0; for (let i = 0; i < G.n; i++) { const m = r.vel[4 * i + 3]; K += 0.5 * m * (r.vel[4 * i] ** 2 + r.vel[4 * i + 1] ** 2 + r.vel[4 * i + 2] ** 2); U += m * r.uu[i]; W += 0.5 * m * r.grav[8 * i + 3]; Lz += m * (r.pos[4 * i] * r.vel[4 * i + 1] - r.pos[4 * i + 1] * r.vel[4 * i]); } return { K, U, W, E: K + U + W, Lz }; };
+    const a = await G.readback(['pos', 'vel', 'uu', 'grav']), A = en(a);
+    // launched spin: v = W x r about the body centre (X = 0)
+    const w = p2.bodies[0].W[2]; let sv = 0; for (let i = 0; i < G.n; i++) sv = Math.max(sv, Math.abs(a.vel[4 * i] + w * a.pos[4 * i + 1]) + Math.abs(a.vel[4 * i + 1] - w * a.pos[4 * i]));
+    ok('G launch gives v = W x r', sv < 1e-5, `max |v - W x r| ${sv.toExponential(2)}, spin 8 h`);
+    for (let k = 0; k < 6; k++) G.step(50);
+    const b = await G.readback(['pos', 'vel', 'uu', 'grav']), B = en(b);
+    ok('G energy and L_z over 300 GPU steps (KG = 1)', Math.abs(B.E - A.E) / Math.abs(A.W) < 1e-4 && Math.abs(B.Lz - A.Lz) / Math.abs(A.Lz) < 1e-3,
+      `|dE|/|W| ${(Math.abs(B.E - A.E) / Math.abs(A.W)).toExponential(2)}, |dLz|/|Lz| ${(Math.abs(B.Lz - A.Lz) / Math.abs(A.Lz)).toExponential(2)}, ${(b.ctl.t * UNIT.T / 3600).toFixed(2)} h`);
+    const S = await G.stats();
+    let cx = 0; for (let i = 0; i < G.n; i++) cx += b.pos[4 * i];
+    ok('G stats: counts, centre, nothing unbound, no melt', S.count[0] === G.n && S.unbound[0] === 0 && Math.abs(S.com[0][0] - cx / G.n) < 0.01 && S.melt === 0,
+      `count ${S.count[0]}, com x ${S.com[0][0].toFixed(4)} (readback ${(cx / G.n).toFixed(4)}), unbound ${S.unbound[0]}, melt ${S.melt}, max T ${S.maxT.toFixed(0)} K, max P ${S.maxPGPa.toFixed(0)} GPa`);
+    G.destroy(); }
+  if (ARGS.includes('--time')) {
+    for (const N of [16384, 32768, 49152]) {
+      const s3 = buildScenario(PRESETS[0], N, 2), p3 = makeParams(s3, { KG: 4 });
+      const G = await SphGPU.create(device, N, code); G.upload(s3, p3); G.relaxSteps(8); G.launch(); await G.stats();
+      const t0 = performance.now(); G.step(40); await G.stats();
+      console.log(`INFO  ${N} particles, KG 4: ${((performance.now() - t0) / 40).toFixed(2)} ms per step (${adapter.info?.description || 'adapter'})`);
+      G.destroy();
+    }
+  }
+  ok('G no WebGPU validation errors', errs.length === 0, errs.slice(0, 3).join(' | ') || 'none');
+  device.destroy();
 }
 
 if (!GPU_ONLY) {
   eosTests(); bodyTests(); geometryTests(); await presetTests(); cpuTests();
+}
+if (typeof Deno !== 'undefined') await gpuTests();
+else {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const d = spawnSync('deno', ['run', '-A', fileURLToPath(import.meta.url), '--gpu'], { encoding: 'utf8' });
+  if (d.error) console.log('SKIP  GPU tests: deno is not installed (' + d.error.code + ')');
+  else { process.stdout.write(d.stdout); if (d.stderr.trim()) process.stdout.write(d.stderr); if (d.status !== 0) fails++; }
 }
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
 if (typeof Deno !== 'undefined') { if (fails) Deno.exit(1); }
