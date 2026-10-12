@@ -6,8 +6,8 @@
 //  scenario; syncButtons() marks the active choices.
 //  RANDOM RUNS. applyRoll() loads a roll.js spec (a random seed or a
 //  preset) into UI.roll and puts ?seed= or ?run= in the URL, so a link
-//  plays the same run; randomRun() rolls a new seed; applyUrl() reads
-//  the link at boot. The Random button sits in the bar (an icon on a
+//  plays the same run; randomRun() rolls a new seed; urlSpec() reads
+//  the link at boot, before applyScenario clears it. The Random button sits in the bar (an icon on a
 //  phone) and in the More menu; the presets fill the second part of the
 //  gallery.
 //
@@ -19,7 +19,7 @@
 //    bindings ........ "function buildUI"
 //    scenario ........ "function applyScenario"
 //    button state .... "function syncButtons"
-//    random runs ..... "function applyRoll", "function randomRun", "function applyUrl", "function syncRollInfo"
+//    random runs ..... "function applyRoll", "function randomRun", "function urlSpec", "function syncRollInfo"
 // ============================================================================
 import * as P from '../physics.js';
 import { SCENARIOS, REAL } from '../scenarios.js';
@@ -199,8 +199,10 @@ export function buildUI() {
   });
   bindPointer();
   syncStory(true);
+  // read the link before applyScenario clears ?seed= and ?run=
+  const linked = urlSpec();
   applyScenario(UI.scen);
-  applyUrl();
+  if (linked) applyRoll(linked);
   setSpeed(UI.speedLog);
   syncPlayButtons();
 }
@@ -255,15 +257,15 @@ export function randomRun() {
   applyRoll(rollRun(seed));
   startRun();
 }
-// The link at boot: ?run=<preset key> or ?seed=<integer>. True when it
-// loaded a run.
-export function applyUrl() {
+// The run of the link at boot: ?run=<preset key> or ?seed=<integer>, or
+// null.
+export function urlSpec() {
   try {
     const q = new URLSearchParams(location.search), run = q.get('run'), seed = q.get('seed');
-    if (run) { const sp = presetSpec(run); if (sp) { applyRoll(sp); return true; } }
-    if (seed && /^\d{1,9}$/.test(seed)) { applyRoll(rollRun(+seed)); return true; }
+    if (run) { const sp = presetSpec(run); if (sp) return sp; }
+    if (seed && /^\d{1,9}$/.test(seed)) return rollRun(+seed);
   } catch (e) {}
-  return false;
+  return null;
 }
 function setUrl(spec) {
   try {

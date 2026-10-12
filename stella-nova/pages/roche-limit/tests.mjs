@@ -49,6 +49,8 @@
 //     The first scenarios saturn, flyby and compare run the same path
 //     (scen:<key>). deno run -A tests.mjs --gpu --rolls=sl9,seed:5 runs a few;
 //     --no-rolls skips test 15.
+//  16 the link (node, DOM stubbed): ?seed= at boot, cleared by a story,
+//     ?run= for a preset
 //  9  memory: the GPU bytes of the page (scene, bloom, canvas, moons, ring)
 //     for desktop and phone profiles, against budget.js LIMIT; phones get
 //     at most 4096 grains, a pixel ratio of 1.5 and no MSAA
@@ -840,6 +842,31 @@ async function rollRunTests(keys) {
   S.worker.terminate(); S.dev.destroy();
 }
 
+// 16 ─ the link (node, DOM stubbed): ?seed= at boot loads that roll and
+// stays in the URL; a story from the gallery clears it; ?run= loads a
+// preset. buildUI read the link after applyScenario had cleared it,
+// before 2026-10-11 (found in review).
+async function linkTests() {
+  const el = () => new Proxy(function () {}, { get: (t, k) => k === 'children' ? [] : k === 'style' ? {} : k === 'classList' ? { add() {}, remove() {}, toggle() {}, contains: () => true } : k === Symbol.iterator ? [][Symbol.iterator] : k === Symbol.toPrimitive ? () => 0 : (k === 'textContent' || k === 'innerHTML' || k === 'value') ? '' : k === 'then' ? undefined : el(), set: () => true, apply: () => el() });
+  const mq = () => ({ matches: false, addEventListener() {} });
+  globalThis.window = globalThis.window || { matchMedia: mq, devicePixelRatio: 1 };
+  globalThis.window.addEventListener = globalThis.window.addEventListener || (() => {});
+  globalThis.document = { getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [], createElement: () => el(), body: el(), documentElement: { classList: { add() {}, remove() {}, toggle() {} } } };
+  let href = 'https://davesgames.io/stella-nova/pages/roche-limit/?seed=4242';
+  globalThis.location = { get href() { return href; }, get search() { return new URL(href).search; } };
+  globalThis.history = { state: null, replaceState(st, t, u) { href = String(u); } };
+  const C = await import('./app/controls.js'), { UI } = await import('./app/env.js'), { S } = await import('./app/state.js');
+  S.run = null;   // the camera test leaves its run here
+  C.buildUI();
+  const boot = UI.roll && UI.roll.seed === 4242 && /seed=4242/.test(href);
+  C.applyScenario('flyby');
+  const cleared = UI.roll === null && !/seed=/.test(href);
+  href = 'https://davesgames.io/stella-nova/pages/roche-limit/?run=triton';
+  const sp = C.urlSpec(); if (sp) C.applyRoll(sp);
+  const preset = sp && sp.preset === 'triton' && /run=triton/.test(href);
+  ok('link: ?seed= loads its roll at boot, a story clears it, ?run= loads a preset', boot && cleared && preset, `boot ${boot}, cleared ${cleared}, preset ${preset}`);
+}
+
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
 const PACE_ONLY = ARGS.includes('--pace') || ARGS.includes('--pace-old');
 const START_ONLY = ARGS.includes('--start');
@@ -847,9 +874,11 @@ const CAMERA = typeof Deno === 'undefined';   // the camera test imports app/ wi
 if (!GPU_ONLY) {
   const t0 = Date.now();
   if (START_ONLY) startTests();
+  else if (ARGS.includes('--link')) await linkTests();
   else {
     if (!PACE_ONLY) { cpuTests(); budgetTests(); startTests(); if (CAMERA) await layoutTests(); }
     await paceTests(ARGS.includes('--pace-old'));
+    if (CAMERA && !PACE_ONLY) await linkTests();
   }
   console.log(`CPU tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
@@ -858,7 +887,7 @@ if (typeof Deno !== 'undefined') {
   if (only) await rollRunTests(only.slice(8).split(','));
   else { await gpuTest(); await renderTest(); if (!ARGS.includes('--no-rolls')) await rollRunTests(['scen:saturn', 'scen:flyby', 'scen:compare', ...RL.PRESETS.map(p => p.key), ...Array.from({ length: 16 }, (_, i) => 'seed:' + (i + 1))]); }
 }
-else if (PACE_ONLY || START_ONLY) {}
+else if (PACE_ONLY || START_ONLY || ARGS.includes('--link')) {}
 else {
   // Node has no WebGPU: run the GPU test in Deno when it is installed.
   const { spawnSync } = await import('node:child_process');
