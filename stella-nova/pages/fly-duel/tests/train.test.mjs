@@ -223,10 +223,18 @@ if (existsSync(CUR)) {
   ok(/^node tools\/train\.mjs/.test(m.command || '') && Number.isFinite(m.seed) && m.wallSeconds > 0, `curve meta: command, seed and wall time (${m.command}, ${m.wallSeconds} s)`);
   const f = m.final;
   ok(f && f.vsRandom.A.n > 0 && f.vsGreedy.B.n > 0 && Array.isArray(f.AvsB.ci95), 'curve meta: held-out final evaluation with intervals');
+  const pd = f && f.perDeck;
+  let pdOk = !!pd && DECK_POOL.every(d => pd[d]);
+  if (pdOk) for (const d of DECK_POOL) for (const k of ['A', 'B', 'greedy']) {
+    const r = pd[d][k];
+    if (!(r.n >= 100 && r.wins + r.losses + r.draws === r.n && near(r.wins / r.n, r.rate, 0.0006) && r.ci95[0] <= r.rate && r.rate <= r.ci95[1])) pdOk = false;
+  }
+  ok(pdOk, `curve meta: per-deck table vs the greedy bot for all ${DECK_POOL.length} decks, counts agree with rates`);
   if (f && existsSync(PRE)) {
     const pre = JSON.parse(readFileSync(PRE, 'utf8'));
     ok(pre.meta && pre.meta.games === f.games, `pretrained.json is the kept checkpoint of the curve (games ${pre.meta && pre.meta.games})`);
     ok(JSON.stringify(pre.wiring || null) === JSON.stringify(m.wiring || null), 'pretrained.json and the curve meta name the same wiring');
+    ok((pre.meta.decks || []).join() === DECK_POOL.join() && (m.decks || []).join() === DECK_POOL.join(), `the shipped flies trained on all ${DECK_POOL.length} decks (pretrained.json ${(pre.meta.decks || []).length}, curve ${(m.decks || []).length})`);
   }
 }
 

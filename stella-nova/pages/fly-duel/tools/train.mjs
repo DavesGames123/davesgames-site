@@ -10,7 +10,7 @@
 //  count of games that this script played. Nothing is estimated.
 //
 //  RUN (from the page folder)
-//      node tools/train.mjs                      the full run (about 20 min)
+//      node tools/train.mjs                      the full run (1349 s on 2026-10-11)
 //      node tools/train.mjs --games 400 --every 200 --eval 40 --final 100 \
 //           --out /tmp/x                         a short run (tests use this)
 //      --wiring two   fly A on the hemibrain MB, fly B on the FlyWire MB
