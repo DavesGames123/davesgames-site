@@ -99,6 +99,7 @@ export function mountReference(root, { getEngine, onLoadCode }) {
         <h3><code>${escapeHtml(full)}</code></h3>
         ${info.signature ? `<pre class="rf-sig"><code>${highlightPython(`${(info.name || name).split('.').pop()}${info.signature}`)}</code></pre>` : ''}
         ${info.file ? `<p class="rf-file muted" title="${escapeHtml(info.file)}">${escapeHtml(shortFile(info.file))}${info.line ? ':' + info.line : ''}</p>` : ''}
+        ${info.note ? `<p class="rf-note">${escapeHtml(info.note)}</p>` : ''}
         ${info.bases && info.bases.filter(b => !/^builtins\./.test(b)).length ? `<p class="rf-bases">Inherits from ${info.bases.filter(b => !/^builtins\./.test(b)).map(b => `<code class="ref-link" data-ref="${escapeHtml(b)}">${escapeHtml(b.split('.').pop())}</code>`).join(', ')}</p>` : ''}
         <div class="rf-acts"><button class="btn small rf-src">View source</button></div>
       </header>
@@ -134,6 +135,14 @@ export function mountReference(root, { getEngine, onLoadCode }) {
     const hl = highlightPython(r.text.replace(/\n$/, '')).split('\n');
     box.innerHTML = `<div class="rf-src-head"><span title="${escapeHtml(r.file || '')}">${escapeHtml(shortFile(r.file || ''))}, lines ${start}–${start + lines.length - 1}</span><button class="btn small rf-copy">Copy</button></div>
       <pre class="rf-code"><code>${hl.map((h, i) => `<span class="ln" data-n="${start + i}"></span>${h}`).join('\n')}</code></pre>`;
+    if (r.note) box.insertAdjacentHTML('afterbegin', `<p class="rf-note">${escapeHtml(r.note)}</p>`);
+    const o = r.original;
+    if (o && o.text) {
+      const os = o.line || 1;
+      const ohl = highlightPython(o.text.replace(/\n$/, '')).split('\n');
+      box.insertAdjacentHTML('beforeend', `<div class="rf-src-head"><span title="${escapeHtml(o.file || '')}">manim's own code: ${escapeHtml(shortFile(o.file || ''))}, lines ${os}–${os + ohl.length - 1}</span></div>
+      <pre class="rf-code"><code>${ohl.map((h, i) => `<span class="ln" data-n="${os + i}"></span>${h}`).join('\n')}</code></pre>`);
+    }
     box.querySelector('.rf-copy').onclick = () => navigator.clipboard?.writeText(r.text).catch(() => {});
   }
 

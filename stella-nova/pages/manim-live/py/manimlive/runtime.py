@@ -170,6 +170,8 @@ def install_hooks() -> None:
 
     Scene.play = _play_observer
 
+    # Keep manim's own function, so the Reference panel can show both.
+    tex.tex_to_svg_file.__manim_original__ = tex_file_writing.tex_to_svg_file
     tex_file_writing.tex_to_svg_file = tex.tex_to_svg_file
     tex_mobject.tex_to_svg_file = tex.tex_to_svg_file
     _hooks_installed = True

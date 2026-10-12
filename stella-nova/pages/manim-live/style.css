@@ -257,6 +257,7 @@ input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);ou
 .kind{font-size:11px;color:var(--accent);border:1px solid var(--line-b);border-radius:4px;padding:0 6px}
 .rf-sig{margin:6px 0;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:8px;white-space:pre-wrap;word-break:break-word;font-size:12.5px}
 .rf-file{font:11.5px var(--mono);margin:2px 0;word-break:break-all}
+.rf-note{margin:6px 0;padding:6px 10px;border-left:3px solid var(--warm);background:var(--bg3);font-size:13px;line-height:1.45}
 .rf-bases{font-size:12.5px;margin:4px 0}
 .rf-acts{margin:6px 0}
 .rf-source{margin:8px 0}

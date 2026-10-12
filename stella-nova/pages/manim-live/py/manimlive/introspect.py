@@ -3,7 +3,9 @@
     introspect("Circle") / ("manim.Circle") / ("Mobject.shift") / ("cairo")
         -> {kind, name, module, signature, doc, members:[{name, kind, summary}],
             bases, file, line}
-    source(same names)  -> {file, line, text}      (inspect.getsource)
+    source(same names)  -> {file, line, text, note, original?}
+                           (inspect.getsource; "original" is manim's own
+                           source of a function that manim-live replaced)
     complete(code, line, col) -> [{name, kind, signature}]   (jedi)
 
 Names resolve against the ``manim`` namespace first (what
@@ -136,12 +138,37 @@ def _members(obj) -> list[dict]:
     return out
 
 
+def _unwrap(obj):
+    """The function under a functools.wraps observer (runtime.install_hooks).
+
+    inspect.getsourcelines() follows __wrapped__, but getsourcefile() does
+    not. Without this, the real source of Scene.play would show with the
+    file name of the observer (py/manimlive/runtime.py).
+    """
+    try:
+        return inspect.unwrap(obj)
+    except (TypeError, ValueError):
+        return obj
+
+
+def _note(file: str | None) -> str | None:
+    """Plain text for the page when the code is not manim's own code."""
+    if not file or not file.startswith("py/"):
+        return None
+    mod = file.split("/")[1]
+    if mod == "manimlive":
+        return ("This code is part of manim-live, not manim. It replaces a manim "
+                "function that cannot run in a browser (see Under the hood).")
+    return (f"This is the manim-live stand-in for the native module '{mod}', "
+            "not the real library (see Under the hood).")
+
+
 def introspect(path: str) -> str:
     try:
         obj = _resolve(path)
     except LookupError as e:
         return json.dumps({"error": str(e)})
-    target = obj.fget if isinstance(obj, property) else obj
+    target = _unwrap(obj.fget if isinstance(obj, property) else obj)
     file = line = None
     try:
         file = _rel_file(inspect.getsourcefile(target))
@@ -158,6 +185,7 @@ def introspect(path: str) -> str:
         "bases": [b.__module__ + "." + b.__qualname__ for b in obj.__mro__[1:]] if inspect.isclass(obj) else [],
         "file": file,
         "line": line,
+        "note": _note(file),
     }
     if inspect.ismodule(obj) and getattr(obj, "__file__", None):
         info["path"] = obj.__file__
@@ -167,9 +195,19 @@ def introspect(path: str) -> str:
 def source(path: str) -> str:
     try:
         obj = _resolve(path)
-        target = obj.fget if isinstance(obj, property) else obj
+        target = _unwrap(obj.fget if isinstance(obj, property) else obj)
         lines, start = inspect.getsourcelines(target)
-        return json.dumps({"file": _rel_file(inspect.getsourcefile(target)), "line": start, "text": "".join(lines)})
+        file = _rel_file(inspect.getsourcefile(target))
+        out = {"file": file, "line": start, "text": "".join(lines), "note": _note(file)}
+        original = getattr(target, "__manim_original__", None)
+        if original is not None:
+            olines, ostart = inspect.getsourcelines(original)
+            out["original"] = {
+                "file": _rel_file(inspect.getsourcefile(original)),
+                "line": ostart,
+                "text": "".join(olines),
+            }
+        return json.dumps(out)
     except (LookupError, TypeError, OSError) as e:
         return json.dumps({"error": f"No Python source for '{path}': {e}"})
 

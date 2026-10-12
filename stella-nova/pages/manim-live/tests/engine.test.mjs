@@ -238,6 +238,20 @@ test('worker protocol: real worker.js + engine.js', NEED, async () => {
     assert.ok(src.text.startsWith('class Circle(Arc):'));
     const shim = await eng.source('cairo.Context');
     assert.equal(shim.file, 'py/cairo/__init__.py');
+    assert.ok(shim.note && shim.note.includes("'cairo'"));
+    // Scene.play has an observer (runtime.install_hooks). The page must name
+    // manim's file for manim's source, not the file of the observer.
+    const play = await eng.source('Scene.play');
+    assert.equal(play.file, 'manim/scene/scene.py');
+    assert.ok(play.text.trimStart().startsWith('def play('));
+    assert.equal(play.note, null);
+    assert.equal((await eng.introspect('Scene.play')).file, 'manim/scene/scene.py');
+    // The one replaced function: its own source, a note, and manim's original.
+    const tex = await eng.source('manim.utils.tex_file_writing.tex_to_svg_file');
+    assert.equal(tex.file, 'py/manimlive/tex.py');
+    assert.ok(tex.note);
+    assert.equal(tex.original.file, 'manim/utils/tex_file_writing.py');
+    assert.ok(tex.original.text.includes('dvisvgm') || tex.original.text.includes('compile_tex'));
     const comp = await eng.complete('from manim import *\nCirc', 2, 4);
     assert.ok(comp.some((c) => c.name === 'Circle'));
 
