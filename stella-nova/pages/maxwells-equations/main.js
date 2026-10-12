@@ -21,6 +21,7 @@ import { createStage } from './stage.js';
 import { CHAPTERS, STEPS } from './chapters.js';
 import { typeset } from '../../lib/sci-math.js';
 import * as forms from './scenes/forms.js';
+import * as stokes from './scenes/stokes.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('stage');
@@ -46,7 +47,7 @@ function label(html, cls, fn) {
 }
 
 const ctx = { label, stage };
-const MODULES = { forms };
+const MODULES = { forms, stokes };
 const SCENES = {};
 function scene(key) {
   if (!SCENES[key]) {

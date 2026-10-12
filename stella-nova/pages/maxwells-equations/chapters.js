@@ -29,6 +29,7 @@ export const TEX = { E, B, RHO, J, PHI, Ev, Bv, Jv, d, PD, A, F, STAR, c };
 
 export const CHAPTERS = [
   { name: 'Fields as forms', short: 'Forms' },
+  { name: 'The boundary and d', short: 'Stokes' },
 ];
 
 const auto = (label = 'Animate') => ({ toggle: 'auto', label });
@@ -95,5 +96,57 @@ export const STEPS = [
       auto('Tilt the disc'),
     ],
     cam: { pos: [2.0, 1.8, 7.6], target: [0, 0, 0] },
+  },
+
+  // ── 2 · the boundary and d ───────────────────────────────────────────────
+  {
+    id: 'gradient-theorem', ch: 1, title: 'A path, and the two points at its ends', scene: 'stokes', mode: 'stokes',
+    params: { dim: 1, n: 5, spread: 1, auto: true },
+    tex: [
+      { t: `\\int_{R} ${d}\\omega \;=\; \\int_{${PD} R} \\omega`, cap: 'The generalized Stokes theorem. Here R is a path and ω = f is a 0-form.' },
+      { t: `\\int_{\\gamma} ${d}f \;=\; f(b) - f(a), \\qquad ${PD}\\gamma = b - a`, small: true },
+    ],
+    text: `<p>Two operations sit under all four laws. The <em>exterior derivative</em> <span class="m3">d</span> turns a k-form into a (k+1)-form: a function into its gradient, a 1-form into its curl, a 2-form into its divergence. The <em>boundary</em> <span class="m3">∂</span> turns a region into its edge: a path into its two ends, a sheet into its rim, a solid into its skin.</p>
+<p>Stokes' theorem says they are partners: integrating <span class="m3">d</span>ω over a region is the same as integrating ω over its boundary.</p>
+<p>Start with a path cut into segments. On each segment, the integral of <span class="m3">d</span>f is f at the end minus f at the start: a + at one end and a − at the other. As the segments close up, each inner + lands on the next segment's −, and they cancel. Only the two outer ends are left.</p>`,
+    controls: [
+      { key: 'n', label: 'pieces', sym: '', cls: '', min: 2, max: 7, step: 1, value: 5, fmt: v => String(v) },
+      { key: 'spread', label: 'pull the pieces apart', sym: '', cls: '', min: 0, max: 1, step: 0.01, value: 1, fmt: v => v.toFixed(2) },
+      auto('Close and open'),
+    ],
+    cam: { pos: [0.6, 2.6, 5.4], target: [0, -0.1, 0] },
+  },
+  {
+    id: 'kelvin-stokes', ch: 1, title: 'A sheet, and the loop round its rim', scene: 'stokes', mode: 'stokes',
+    params: { dim: 2, n: 4, spread: 1, auto: true },
+    tex: [
+      { t: `\\int_{S} ${d}\\alpha \;=\; \\oint_{${PD} S} \\alpha`, cap: 'R is now a sheet and α a 1-form.' },
+      { t: `\\iint_{S} (\\nabla\\times\\mathbf{A})\\cdot d\\mathbf{S} \;=\; \\oint_{${PD} S} \\mathbf{A}\\cdot d\\boldsymbol{\\ell}`, small: true, cap: 'The same statement in vector calculus (Kelvin–Stokes).' },
+    ],
+    text: `<p>Pull the path sideways and it sweeps out a sheet. Cut the sheet into cells. Round each cell, the circulation of α is the integral of <span class="m3">d</span>α over that cell: the small loop of arrows.</p>
+<p>Where two cells meet, their loops run along the shared edge in opposite directions, so the two contributions cancel. Close the cells up and every inner edge goes; the arrows that are left run round the rim of the sheet.</p>
+<p>The readout gives both sides for a sample α on this exact sheet.</p>`,
+    controls: [
+      { key: 'n', label: 'pieces per side', sym: '', cls: '', min: 2, max: 6, step: 1, value: 4, fmt: v => String(v) },
+      { key: 'spread', label: 'pull the pieces apart', sym: '', cls: '', min: 0, max: 1, step: 0.01, value: 1, fmt: v => v.toFixed(2) },
+      auto('Close and open'),
+    ],
+    cam: { pos: [1.2, 3.4, 4.9], target: [0, 0, 0] },
+  },
+  {
+    id: 'divergence-theorem', ch: 1, title: 'A solid, and the skin round it', scene: 'stokes', mode: 'stokes',
+    params: { dim: 3, n: 3, spread: 1, auto: true },
+    tex: [
+      { t: `\\int_{V} ${d}\\beta \;=\; \\oint_{${PD} V} \\beta`, cap: 'R is a solid and β a 2-form.' },
+      { t: `\\iiint_{V} \\nabla\\cdot\\mathbf{F}\; dV \;=\; \\oint_{${PD} V} \\mathbf{F}\\cdot d\\mathbf{S}`, small: true, cap: 'The divergence theorem.' },
+    ],
+    text: `<p>Lift the sheet and it sweeps out a solid. Each cell has six faces with arrows pointing out. Where two cells touch, one cell's outward arrow is the other's inward arrow, so the flux through the shared face cancels.</p>
+<p>Close the cells and only the outer skin is left. Three theorems from a calculus course, the gradient theorem, Kelvin–Stokes and the divergence theorem, are one statement about <span class="m3">d</span> and <span class="m3">∂</span> in three sizes.</p>`,
+    controls: [
+      { key: 'n', label: 'pieces per side', sym: '', cls: '', min: 1, max: 4, step: 1, value: 3, fmt: v => String(v) },
+      { key: 'spread', label: 'pull the pieces apart', sym: '', cls: '', min: 0, max: 1, step: 0.01, value: 1, fmt: v => v.toFixed(2) },
+      auto('Close and open'),
+    ],
+    cam: { pos: [3.4, 3.0, 4.6], target: [0, 0, 0.1] },
   },
 ];
