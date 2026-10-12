@@ -126,7 +126,11 @@ export function saverFrame(dt) {
     } else target = v3.mul(p, 0.55);   // low: between the centre and the subject
   }
   // the clear band of the plate: lens shift and a longer distance
-  const band = plateBand(H);
+  // plateBand measures the plate text in the parent document (a layout
+  // read): 4 times a second is enough, as in roche-limit/app/occlusion.js
+  const now = performance.now();
+  if (!(now - (sv.bandAt || 0) < 250) || sv.bandH !== H) { sv.bandAt = now; sv.bandH = H; sv.band = plateBand(H); }
+  const band = sv.band;
   let shiftY = 0, kBand = 1;
   if (band) {
     const yc = (band.t + (H - band.b)) / 2, fr = Math.max(0.3, (H - band.t - band.b) / H);
