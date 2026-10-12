@@ -28,6 +28,7 @@
 //    grep -n "draw("                   one frame
 //    grep -n "drawTile("               one 2D tile
 //    grep -n "draw3D("                 the tower boxes
+//    grep -n "function frontSides"     which box sides face the camera
 //    grep -n "drawLegend("             colour legend on the canvas
 //    grep -n "hit("                    pointer -> element index
 //    grep -n "export function colorOf" the colour of an element
@@ -443,12 +444,7 @@ export class Table {
       g.save();
       g.globalAlpha = dim * clamp(this.vis[i], 0, 1);
       // sides: the faces whose outward normal faces the camera, back first
-      const faces = [0, 1, 2, 3].map(f => {
-        const a = f, b = (f + 1) % 4;
-        const quad = [bot[a], bot[b], top[b], top[a]];
-        const area = (quad[1][0] - quad[0][0]) * (quad[2][1] - quad[0][1]) - (quad[2][0] - quad[0][0]) * (quad[1][1] - quad[0][1]);
-        return { f, quad, area, d: (bot[a][2] + bot[b][2]) / 2 };
-      }).filter(f => f.area < 0).sort((a, b) => a.d - b.d);
+      const faces = frontSides(bot, top);
       for (const F of faces) {
         g.fillStyle = mix(col, BG, [0.45, 0.62, 0.52, 0.7][F.f]);
         g.beginPath(); F.quad.forEach(([x, y], j) => j ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
@@ -542,6 +538,21 @@ export class Table {
     }
     return best;
   }
+}
+
+// The side faces of a tower box that face the camera, far first. bot and
+// top are the projected corners in the order (-1,-1) (1,-1) (1,1) (-1,1).
+// A face is [bot a, bot b, top b, top a]. On the screen (y down) a face
+// that faces the camera has a positive signed area. The faces with a
+// negative area are the far walls: before this test was corrected, the
+// page drew those, and the box showed its inside below the top face.
+export function frontSides(bot, top) {
+  return [0, 1, 2, 3].map(f => {
+    const a = f, b = (f + 1) % 4;
+    const quad = [bot[a], bot[b], top[b], top[a]];
+    const area = (quad[1][0] - quad[0][0]) * (quad[2][1] - quad[0][1]) - (quad[2][0] - quad[0][0]) * (quad[1][1] - quad[0][1]);
+    return { f, quad, area, d: (bot[a][2] + bot[b][2]) / 2 };
+  }).filter(f => f.area > 0).sort((a, b) => a.d - b.d);
 }
 
 function fitText(g, s, w) {

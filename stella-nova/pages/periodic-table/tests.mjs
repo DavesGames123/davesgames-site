@@ -164,5 +164,25 @@ if (plan) {
   }
 }
 
+// ── tower faces ─────────────────────────────────────────────────────────────
+// A tower box draws the sides that face the camera, never its far walls.
+{
+  const { Table, frontSides } = await import('./render.js');
+  const T = new Table();
+  T.setView('tower', { prop: 'en' }, 0, true);
+  T.a3 = 1; T.cam = { k: 40, cx: 9, cy: 5, ox: 500, oy: 300 };
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const bad = [];
+  for (const [yaw, pitch] of [[0, 0.95], [-0.5, 0.95], [0.8, 0.6], [2.5, 1.2], [-2, 0.3]]) {
+    T.rot = { yaw, pitch };
+    const c = corners.map(([u, v]) => [9 + u * 0.46, 5 + v * 0.46]);
+    const drawn = frontSides(c.map(([x, y]) => T.proj3(x, y, 0)), c.map(([x, y]) => T.proj3(x, y, 2))).map(f => f.f);
+    const ctr = T.proj3(9, 5, 1)[2];
+    const near = [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([u, v], i) => T.proj3(9 + u * 0.46, 5 + v * 0.46, 1)[2] > ctr + 1e-9 ? i : -1).filter(i => i >= 0);
+    if (!near.every(i => drawn.includes(i)) || drawn.some(i => !near.includes(i) && T.proj3(9 + [0, 1, 0, -1][i] * 0.46, 5 + [-1, 0, 1, 0][i] * 0.46, 1)[2] < ctr - 1e-6)) bad.push(`yaw ${yaw} pitch ${pitch}: drawn ${drawn} near ${near}`);
+  }
+  ok(!bad.length, 'tower: each box draws the sides that face the camera, not its far walls', bad.join('; '));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
