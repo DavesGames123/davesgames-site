@@ -43,6 +43,7 @@
      grep -n 'APP'        the fullscreen frame and the two modes
      grep -n 'WATCH HUD'  scorecards, the one turn box
      grep -n 'BRAINS'     the two brain panels: wide, tall, play
+     grep -n 'ZOOM'       the right-click card zoom of the watch table
      grep -n 'BAR'        the control bar of the watch table
      grep -n 'DRAWER'     the "How it works" drawer
      grep -n 'WIDE'       tablet, desktop and phone-sideways rules
@@ -479,6 +480,15 @@ i.mana{display:inline-flex;vertical-align:-3px;line-height:0;font-style:normal}
   .app[data-brains="panels"] .wsc{width:min(280px,calc(var(--bpw) - 2 * var(--pad)))}
   .app[data-brains="panels"] .turnbox{top:var(--pad)}
 }
+
+/* ---------------------------------------------------------------- ZOOM
+   The card zoom of the watch table (ui/cardzoom.js): one large card
+   face over the centre of the screen, a dark 1 px rim, no veil around
+   it. It takes no pointer events: the next right-click goes to the
+   table under it (a card changes the zoom, no card closes it). */
+.czoom{position:absolute;inset:0;z-index:20;display:grid;place-items:center;pointer-events:none}
+.czoom[hidden]{display:none}
+.czoom-cv{display:block;border:1px solid #000;border-radius:3%/2.2%;background:var(--bg)}
 
 /* ---------------------------------------------------------------- BAR
    The control bar of the watch table: the status line, then one row of

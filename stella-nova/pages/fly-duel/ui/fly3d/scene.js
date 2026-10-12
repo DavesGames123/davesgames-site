@@ -58,6 +58,7 @@
 //        setSpeed(s), setCamera(mode),
 //        shoot(shot, p), setBrains(on), setBigBrain(on), ready, stats(), world,
 //        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
+//        pickFace(x, y),
 //        orbitBy(dx, dy), zoomBy(k), seatView(),
 //        highlight(ids, kind) | highlight(spec) | highlight(null),
 //        setRig(fn | null) }
@@ -119,6 +120,7 @@
 //      grep -n 'export const WATCH'           watch framing numbers
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
+//      grep -n 'function pickFace'            any card under a point (zoom)
 //      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'function deckBoxesOf'         the deck boxes print the game decks
 //      grep -n 'export function createDuelScene'
@@ -2095,6 +2097,23 @@ export function createDuelScene(canvas, opts = {}) {
     const h = castAt(x, y, list);
     return h ? at.get(h.object) : null;
   }
+  // Any card under the point, for the card zoom (ui/cardzoom.js):
+  // { id, zone, seat, uid } or null. zone: hand, perm, held (a card
+  // being cast), grave, tossed. A hidden card (the question-mark back of
+  // play mode) gives id null, so the zoom never shows its face.
+  function pickFace(x, y) {
+    const list = [], at = new Map();
+    const add = (o, zone, seat) => { if (!o?.mesh?.visible) return; list.push(o.mesh); at.set(o.mesh, { id: o.hidden ? null : o.id, zone, seat, uid: o.uid ?? null }); };
+    for (let p = 0; p < 2; p++) {
+      Z.hand[p].forEach(o => add(o, 'hand', p));
+      Z.grave[p].forEach(o => add(o, 'grave', p));
+      add(Z.held[p], 'held', p);
+      for (const pe of mirror?.players[p].battlefield || []) add(Z.perms.get(pe.uid), 'perm', p);
+    }
+    Z.tossed.forEach(o => add(o, 'tossed', -1));
+    const h = castAt(x, y, list);
+    return h ? at.get(h.object) : null;
+  }
   // highlight(ids, kind) or highlight(spec). kind: 'eligible' (can act),
   // 'attack', 'block', 'target', 'pending'. spec (ui/play/play.js): {
   // eligible, attackers, blocks: [[attacker, blocker]], targets, pending }.
@@ -2185,7 +2204,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   return {
     play, setState, resize, setClear, get clear() { return { ...clear, w: viewW, h: viewH }; }, render, dispose, setSpeed, setCamera, shoot, setBrains, setBigBrain, ready, stats, camera, scene,
-    setFirstPerson, pickPermanent, pickCard, highlight, setRig, orbitBy, zoomBy, seatView,
+    setFirstPerson, pickPermanent, pickCard, pickFace, highlight, setRig, orbitBy, zoomBy, seatView,
     world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }

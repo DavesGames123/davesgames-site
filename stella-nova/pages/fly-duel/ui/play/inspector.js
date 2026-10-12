@@ -4,8 +4,9 @@
 //  A full-screen view of one card: the card face as large as the screen
 //  allows (layout.zoom), then the keyword reminders, the state of the
 //  permanent (damage, pump, tapped, entered this turn) and the picture
-//  credit. Close: the Close button (44 px), a tap on the dark ground, or
-//  Esc. Focus goes to Close when it opens and back when it closes.
+//  credit. Close: the Close button (44 px), a tap on the dark ground, a
+//  right-click (as the watch zoom of ui/cardzoom.js), or Esc. Focus goes
+//  to Close when it opens and back when it closes.
 //
 //  GREP MAP
 //      grep -n 'export function createInspector'
@@ -43,6 +44,8 @@ export function createInspector(host, { KEYWORDS = {} } = {}) {
   const close = () => { if (el.hidden) return; el.hidden = true; back?.focus?.(); back = null; };
   x.addEventListener('click', close);
   el.addEventListener('click', e => { if (e.target === el) close(); });
+  // as the watch zoom (ui/cardzoom.js): a right-click closes it
+  el.addEventListener('contextmenu', e => { e.preventDefault(); close(); });
 
   function open(card, { L, perm = null, owner = '' } = {}) {
     if (!card) return;

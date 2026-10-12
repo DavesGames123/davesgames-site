@@ -56,6 +56,7 @@
 //      grep -n 'function initHero'        watch match, 3D or 2D driver
 //      grep -n 'function initScorecards'  watch scorecards, top-3, brains
 //      grep -n 'function initPanels'      the two brain panels, one renderer
+//      grep -n 'function initZoom'        right-click card zoom (watch)
 //      grep -n 'function brainFire'       a decision -> its fly's panel
 //      grep -n 'function capOf'           panel caption: KCs, V, δ
 //      grep -n 'function syncClear'       overlay insets -> scene framing
@@ -92,7 +93,8 @@ import { Match, agentFromFly, agentFromBot } from './ui/match.js';
 import { beatPlan, motionFor } from './ui/motion.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { TOKENS, KC_TYPE, FLY } from './ui/tokens.js';
-import { colourInfo } from './ui/cardface.js';
+import { colourInfo, drawCard, paintWithArt } from './ui/cardface.js';
+import { createCardZoom, attachCardZoom } from './ui/cardzoom.js';
 import { glyphHTML, hydrate } from './ui/cardview.js';
 import { mountChooser } from './ui/chooser/chooser.js';
 
@@ -441,6 +443,7 @@ function initHero(mod3d = null) {
   if (hero.mode === '2d') { $('heroCam').hidden = true; $('heroBrains').hidden = true; document.querySelectorAll('.ctl-l').forEach(e => e.hidden = true); }
   hero.bvs = [new BrainView(conOf('A'), { side: 'A', label: 'Fly A' }), new BrainView(conOf('B'), { side: 'B', label: 'Fly B' })];
   initPanels();
+  initZoom();
   if (!M.rules) { st.textContent = `The rules engine did not load (${status.rules}).`; renderBoard($('heroBoard'), null, { empty: `The rules engine did not load: ${status.rules}.` }); $('arena').hidden = false; $('heroStage').hidden = true; return; }
   const F = heroFlies();
   const agents = agentsFor('ab', F.A, F.B);
@@ -728,6 +731,25 @@ function initPanels() {
   if (!hero.panels) { brainCanvas($('heroBrainA'), hero.bvs[0]); brainCanvas($('heroBrainB'), hero.bvs[1]); }
 }
 
+// The card zoom of the watch table (ui/cardzoom.js): a right-click on a
+// card of the 3D table (hand, table, the card being cast, graveyard)
+// shows it large over the screen until the next right-click or Escape.
+// A long press opens it on a touch screen. Play mode has its own
+// inspector (ui/play/inspector.js), so the zoom input is off there.
+function initZoom() {
+  const sc = hero.scene, CARD = M.cards?.CARD;
+  if (hero.mode !== '3d' || !sc?.pickFace || !CARD) return;
+  try {
+    hero.zoom = createCardZoom($('app'), { CARD, CF: { drawCard, paintWithArt }, view: () => [window.innerWidth || 390, window.innerHeight || 844] });
+    hero.zoomIn = attachCardZoom($('heroCv'), hero.zoom, {
+      pick: (x, y) => sc.pickFace(x, y),
+      active: () => app.mode === 'watch' && !app.sheet && !app.how,
+      doc: document,
+    });
+    addEventListener('resize', () => hero.zoom?.resize());
+  } catch (e) { hero.zoom = null; console.info('fly-duel: card zoom', e); }
+}
+
 // One decision of the fly on seat p reaches the brain panel of that fly
 // (Fly A = 0, Fly B = 1) and its caption.
 function brainFire(p, trace, delta) {
@@ -883,6 +905,7 @@ function startChoice(c) {
 // of that sheet is not there, the sheet stays open for the player.
 async function enterPlay() {
   closeChooser();
+  hero.zoom?.close();
   app.mode = 'play'; $('app').dataset.mode = 'play';
   hero.suspended = true; hero.gen++; hero.busy = false; hero.endPause?.();
   syncURL();
