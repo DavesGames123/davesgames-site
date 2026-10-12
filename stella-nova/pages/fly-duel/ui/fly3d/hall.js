@@ -13,13 +13,17 @@
 //              CREATURES, LIBRARY, GRAVE, LIFE) and a wing-vein and
 //              honeycomb print in the seat colour. No marks of any card
 //              game publisher.
-//    deck box  a box in the seat colour beside each library
+//    deck box  a box beside each library: the deck box print of the side
+//              tables (sidegames.js drawDeckBoxFace) with a seat-colour
+//              edge. setDeckBox(seat, deckId) prints the deck of a game.
 //    hall      a carpet floor, far walls, a dark ceiling with a grid of
 //              fluorescent panels, a pairings board and hanging banners
 //              (our own event name, "FLY DUEL OPEN")
 //    extras    rows of other folding tables. A pair of cheap flies sits at
-//              each one and plays its own fake game: they shuffle, tap
-//              cards, roll dice, think and cheer, each on its own clock.
+//              each one and plays a real game of our card game with the
+//              bots (ui/fly3d/sidegames.js): real cards from one atlas,
+//              deck boxes, life cubes, and fly gestures from the actions.
+//              The decks change at random between games.
 //    crowd     20 to 60 standing flies around the feature table. Their
 //              heads follow the focus point of the scene. react() makes
 //              them buzz their wings, raise their front legs or lean in
@@ -39,14 +43,18 @@
 //  tables stand behind the crowd and behind the cameras.
 //
 //  Phone (coarse): 16 crowd flies, two extra tables, no shadow casters in
-//  the hall, smaller textures. Reduced motion: the fake games stand still,
-//  the heads turn at once, a reaction has no wing beat.
+//  the hall, smaller textures. Reduced motion: the side games still play,
+//  but their cards move at once; the heads turn at once, a reaction has
+//  no wing beat.
 //
 //  API
 //      buildHall({ coarse, reduced, seed, layout }) -> { group, table,
 //        room, mats, inlay, chairs, deckBoxes, crowd, extras, update(dt,
-//        { focus, time }), react(kind, { side, strength }), stats(),
-//        dispose() }
+//        { focus, time }), react(kind, { side, strength }),
+//        setDeckBox(seat, deckId), deckOf(seat), stats(), dispose() }
+//      extras.games: the side games (sidegames.js createSideGames).
+//      The side games get the camera from the onBeforeRender of the hall
+//      floor, so scene.js needs no new call for them.
 //      layout: { y, halfLen, halfDepth, seatV, seatTop, seatPos(p, u, y, v) }
 //      react kinds: 'lean' (look in), 'buzz' (wings), 'cheer' (legs up and
 //      wings), 'gasp' (lean back). side: the seat that the event favours,
@@ -66,7 +74,8 @@
 //      grep -n 'function pairingsCanvas'    the pairings board sheet
 //      grep -n 'function lowFlyParts'       the cheap fly geometry
 //      grep -n 'class FlyHerd'              instanced flies and poses
-//      grep -n 'function extrasController'  fake games at other tables
+//      grep -n 'function setDeckBox'        feature table deck box print
+//      grep -n 'createSideGames'            real games at other tables
 //      grep -n 'function fanSides'          Fly A / Fly B fans of the crowd
 //      grep -n 'function crowdController'   the watching crowd
 //      grep -n 'export function buildHall'  assembly
@@ -74,6 +83,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
+import { createSideGames, drawDeckBoxFace } from './sidegames.js';
 
 export const HALL = {
   wall: 30,            // half size of the hall floor (x and z)
@@ -502,47 +512,6 @@ class FlyHerd {
   }
 }
 
-// ---------------------------------------------------------------- extras
-// Fake games at the other tables. Each fly loops through short actions on
-// its own clock. A die hops on the table when a fly rolls, a card turns
-// when a fly taps it.
-const EXTRA_ACTS = ['think', 'shuffle', 'tap', 'roll', 'think', 'tap', 'cheer'];
-function extrasController(herd, seats, props, R) {
-  const st = seats.map((s, i) => ({ ...s, act: 'think', t: 0, dur: 1 + R() * 3, k: i }));
-  function pick(a) {
-    a.act = EXTRA_ACTS[Math.floor(R() * EXTRA_ACTS.length)];
-    a.t = 0;
-    a.dur = { think: 1.5 + R() * 3, shuffle: 1.6 + R(), tap: 0.9, roll: 1.2, cheer: 1.4 }[a.act];
-    if (a.act === 'roll' && a.die) a.die.h = 0;
-    if (a.act === 'tap' && a.card) a.card.tapTo = a.card.tapTo ? 0 : 1;
-  }
-  return {
-    update(dt, time) {
-      for (const a of st) {
-        a.t += dt;
-        if (a.t > a.dur) pick(a);
-        const P = herd.pose[a.i], k = Math.min(1, a.t / a.dur), env = Math.sin(Math.PI * k);
-        P.lean = 0.08; P.legL = 0.15; P.legR = 0.15; P.buzz = 0; P.hy = 0; P.hp = 0.35;
-        switch (a.act) {
-          case 'think': P.hy = 0.25 * Math.sin(time * 0.6 + a.k); P.hp = 0.25; break;
-          case 'shuffle': P.legL = 0.35 + 0.15 * Math.sin(time * 16 + a.k); P.legR = 0.35 + 0.15 * Math.sin(time * 16 + a.k + Math.PI); break;
-          case 'tap': P.lean = 0.08 + 0.25 * env; P.legR = 0.15 + 0.35 * env; P.hp = 0.5; break;
-          case 'roll': P.legR = 0.2 + 0.6 * env; P.hp = 0.45; break;
-          case 'cheer': P.legL = P.legR = 0.9 * env; P.buzz = env; P.hp = -0.1; break;
-          default: break;
-        }
-      }
-      // props
-      for (const c of props.cards) {
-        if (c.tapTo == null) continue;
-        c.tap = (c.tap || 0) + ((c.tapTo || 0) - (c.tap || 0)) * Math.min(1, dt * 10);
-      }
-      for (const d of props.dice) if (d.h < 1) d.h = Math.min(1, d.h + dt / 0.9);
-      props.write();
-    },
-  };
-}
-
 // ----------------------------------------------------------------- crowd
 // Fan sides for n crowd flies: as many 0 (Fly A) as 1 (Fly B), +-1, in
 // a seeded random order (Fisher-Yates with R).
@@ -612,55 +581,6 @@ function crowdController(herd, ids, reduced, R) {
         if (reduced) P.buzz = 0;
       }
     },
-  };
-}
-
-// --------------------------------------------------------------- props
-// Cards and dice on the extra tables: one InstancedMesh each.
-function buildProps(tables, R, coarse) {
-  const cardGeo = new THREE.BoxGeometry(0.5, 0.008, 0.7);
-  const cardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
-  const dieGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-  const dieMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
-  const cards = [], dice = [];
-  const backs = ['#4b2f6b', '#7a2a2a', '#1f4a6b', '#2f5a2f', '#6b5a2a'];
-  for (const t of tables) {
-    for (const side of [-1, 1]) {
-      const back = backs[Math.floor(R() * backs.length)];
-      const n = coarse ? 4 : 7;
-      for (let k = 0; k < n; k++) {
-        const u = -1.8 + k * 0.62 + (R() - 0.5) * 0.08, v = side * (0.9 + (k % 2) * 0.95);
-        cards.push({ t, u, v, rot: (R() - 0.5) * 0.08, colour: k % 3 === 0 ? '#e9e1cf' : back, tap: 0, tapTo: null });
-      }
-      dice.push({ tab: t, u: 2.6, v: side * 1.2, colour: side < 0 ? '#c43b3b' : '#3b6fc4', h: 1 });
-    }
-  }
-  const cm = new THREE.InstancedMesh(cardGeo, cardMat, cards.length); cm.name = 'extra-cards';
-  const dm = new THREE.InstancedMesh(dieGeo, dieMat, dice.length); dm.name = 'extra-dice';
-  cards.forEach((c, i) => cm.setColorAt(i, new THREE.Color(c.colour)));
-  dice.forEach((d, i) => dm.setColorAt(i, new THREE.Color(d.colour)));
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
-  function write() {
-    cards.forEach((c, i) => {
-      const T = c.t;
-      p.set(T.x + Math.cos(T.yaw) * c.u + Math.sin(T.yaw) * c.v, T.y + 0.006, T.z - Math.sin(T.yaw) * c.u + Math.cos(T.yaw) * c.v);
-      q.setFromEuler(e.set(0, T.yaw + c.rot + (c.tap || 0) * Math.PI / 2, 0));
-      cm.setMatrixAt(i, m.compose(p, q, one));
-    });
-    // a die hops and turns while its clock h runs from 0 to 1
-    dice.forEach((d, i) => {
-      const T = d.tab, k = d.h;
-      const hop = Math.sin(Math.PI * Math.min(1, k)) * 0.5;
-      p.set(T.x + Math.cos(T.yaw) * d.u + Math.sin(T.yaw) * d.v, T.y + 0.1 + hop, T.z - Math.sin(T.yaw) * d.u + Math.cos(T.yaw) * d.v);
-      q.setFromEuler(e.set(k * 9, k * 7, 0));
-      dm.setMatrixAt(i, m.compose(p, q, one));
-    });
-    cm.instanceMatrix.needsUpdate = true; dm.instanceMatrix.needsUpdate = true;
-  }
-  write();
-  return {
-    cards, dice, meshes: [cm, dm], write,
-    dispose() { cardGeo.dispose(); cardMat.dispose(); dieGeo.dispose(); dieMat.dispose(); cm.dispose?.(); dm.dispose?.(); },
   };
 }
 
@@ -735,13 +655,28 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     band.position.set(b.x, L.y + 0.0015 - 0.008, b.z); band.rotation.y = m.rotation.y; band.name = 'mat-band';
     table.add(band); inlay.push(bandMat);
     // deck box beside the library
-    const boxMat = keep(new THREE.MeshStandardMaterial({ color: new THREE.Color(FLY[p]), roughness: 0.5 }));
+    // its print: the deck box design of the side tables (sidegames.js
+    // drawDeckBoxFace) with a seat-colour edge; setDeckBox() prints a deck
+    const boxCv = makeCanvas(coarse ? 96 : 192, coarse ? 140 : 280);
+    const boxTex = keep(tex(boxCv, { aniso: 4 }));
+    const boxMat = keep(new THREE.MeshStandardMaterial({ map: boxTex, color: boxTex ? 0xffffff : new THREE.Color(FLY[p]), roughness: 0.5 }));
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.62, 0.36), boxMat);
+    box.userData = { canvas: boxCv, texture: boxTex, deck: null, seat: p };
     const bp = L.seatPos(p, 2.62, 0, 2.55); box.position.set(bp.x, L.y + 0.31, bp.z); box.rotation.y = m.rotation.y + 0.2;
     box.castShadow = shadows; box.name = 'deck-box';
     const lid = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.015, 0.37), mats.edge); lid.position.y = 0.2; box.add(lid);
     table.add(box); deckBoxes.push(box);
   }
+  function setDeckBox(p, deckId) {
+    const box = deckBoxes[p]; if (!box) return;
+    const u = box.userData;
+    u.deck = deckId || null;
+    const g = u.canvas?.getContext?.('2d');
+    if (!g) return;
+    drawDeckBoxFace(g, u.canvas.width, u.canvas.height, u.deck, { edge: FLY[p], label: p ? 'FLY B' : 'FLY A' });
+    u.texture.needsUpdate = true;
+  }
+  setDeckBox(0, null); setDeckBox(1, null);
   group.add(table);
 
   // ---- pairings board and banners
@@ -783,8 +718,6 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
     }
     tables.push({ x: s.x, y: L.y, z: s.z, yaw: s.yaw });
   }
-  const props = buildProps(tables, R, coarse);
-  for (const m of props.meshes) group.add(m);
 
   // ---- the flies: extras sit, the crowd stands. Two herds (one part set
   // each), so the sitting parts have no floor legs.
@@ -803,12 +736,15 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
       const dz = side * L.seatV;
       P.pos.set(t.x + Math.sin(t.yaw) * dz, L.seatTop, t.z + Math.cos(t.yaw) * dz);
       P.yaw = t.yaw + (side > 0 ? Math.PI : 0); P.scale = FS * (0.94 + R() * 0.1);
-      const card = props.cards.find(c => c.t === t && Math.sign(c.v) === side);
-      const die = props.dice.find(d => d.tab === t && Math.sign(d.v) === side);
-      seats.push({ i, card, die, table: ti });
+      seats.push({ i, side, table: ti });
     }
   });
-  const extras = extrasController(sit, seats, props, R);
+  // the real games at these tables (sidegames.js)
+  const side = createSideGames({ tables, herd: sit, seats, coarse, reduced, seed, layout: L });
+  group.add(side.group);
+  // the hall floor gives the side games the camera of each drawn frame
+  const floor = room.getObjectByName('floor');
+  if (floor) floor.onBeforeRender = (renderer, scene, camera) => side.setCamera(camera);
 
   // crowd places: rows on a ring in CROWD_SECTOR, jittered
   const ids = [];
@@ -856,7 +792,7 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
   function update(dt, o = {}) {
     time += dt;
     if (o.focus) focus.lerp(o.focus, reduced ? 1 : 1 - Math.exp(-dt * 4));
-    extras.update(reduced ? 0 : dt, time);
+    side.update(dt, time);
     crowd.update(dt, time, focus);
     sit.write(time); crowdHerd.write(time);
   }
@@ -865,14 +801,15 @@ export function buildHall({ coarse = false, reduced = false, seed = 7, layout } 
   return {
     group, table, room, mats: mats3, inlay, chairs, deckBoxes, board,
     crowd: { herd: crowdHerd, n: nCrowd, flags: flagSlot, fx: crowd.fx },
-    extras: { herd: sit, n: nSit, tables: tables.length, props, tableAt: i => tables[seats[i].table] },
+    extras: { herd: sit, n: nSit, tables: tables.length, tableAt: i => tables[seats[i].table], games: side },
+    setDeckBox, deckOf: p => deckBoxes[p]?.userData.deck ?? null,
     focus,
     update,
     react: (kind, o) => crowd.react(kind, o),
-    stats: () => ({ crowd: nCrowd, flags: flagSlot, extras: nSit, tables: tables.length, flyTris: crowdHerd.tris() + sit.tris() }),
+    stats: () => ({ crowd: nCrowd, flags: flagSlot, extras: nSit, tables: tables.length, flyTris: crowdHerd.tris() + sit.tris(), side: side.stats() }),
     dispose() {
       for (const x of disposables) x?.dispose?.();
-      sit.dispose(); crowdHerd.dispose(); props.dispose();
+      sit.dispose(); crowdHerd.dispose(); side.dispose();
       group.traverse(o => { if (o.isMesh && !o.isInstancedMesh) o.geometry?.dispose(); });
     },
   };
