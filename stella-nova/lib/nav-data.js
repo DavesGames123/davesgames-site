@@ -73,12 +73,6 @@ w.SN_NAV = [
     { h: "Help Translate", id: "translate-cycle", p: [
       ["translate", "Translation Tool", "i18n"]
     ] },
-    { h: "Studio Tools", p: [
-      ["solar", "Solar Transit Study", "TOOL"],
-      ["matlab", "PBR Material Studio", "TOOL", "material-studio"],
-      ["pascal-editor", "Pascal Editor", "TOOL"],
-      ["sci-tools", "Science Toolkit", "TOOL"]
-    ] },
     { h: "Live Data", p: [
       ["flight-board", "Flight Board", "LIVE"]
     ] }
@@ -349,9 +343,7 @@ w.SN_NAV = [
     { h: "Image", p: [
       ["color", "Color Table", "WGSL", "color-table"],
       ["postfx", "Post-Process", "WGSL", "postfx-table"],
-      ["sampling", "Sampling Table", "WGSL", "sampling-table"],
-      ["halftone", "Halftone", "WGSL"],
-      ["thread-art", "Thread Art", "WGSL"]
+      ["sampling", "Sampling Table", "WGSL", "sampling-table"],,
     ] },
     { h: "Surfaces", p: [
       ["lighting", "Lighting Table", "WGSL", "lighting-table"],
@@ -361,9 +353,6 @@ w.SN_NAV = [
     ] },
     { h: "Fractals", p: [
       ["fractal-flames", "Fractal Flames", "WGSL"]
-    ] },
-    { h: "Composition", p: [
-      ["bench", "Composition Bench", "NODES", "composition-bench"]
     ] }
   ] },
   { id: "effects", label: "Game Effects", short: "Effects", icon: "✺", color: "#ff9a5c", color2: "#ff5a4a", groups: [
@@ -385,8 +374,7 @@ w.SN_NAV = [
   ] },
   { id: "rendering", label: "Rendering", short: "Render", icon: "◈", color: "#96c8ff", color2: "#ffb478", groups: [
     { h: "Ray Marching", p: [
-      ["supernova", "Fractal Orb", "SHADER", "fractal-orb"],
-      ["sdf-lab", "SDF Modeller", "TOOL"],
+      ["supernova", "Fractal Orb", "SHADER", "fractal-orb"],,
       ["biome-parts", "Biome Parts", "AI"],
       ["sphere-tracing", "Sphere Tracing Lab", "LAB"],
       ["mandelbulber", "Mandelbulber", "WGSL"],
@@ -430,16 +418,34 @@ w.SN_NAV = [
     ] },
     { h: "Vector & Layout", p: [
       ["vectorcraft", "VectorCraft", "RUST"],
-      ["designcraft", "DesignCraft", "RUST"],
-      ["pattern-designer", "Pattern Designer", "SVG"]
+      ["designcraft", "DesignCraft", "RUST"]
     ] },
     { h: "Video & Motion", p: [
       ["filmcraft", "FilmCraft", "RUST"],
-      ["effectcraft", "EffectCraft", "RUST"],
-      ["manim-live", "Manim live", "NEW"]
+      ["effectcraft", "EffectCraft", "RUST"]
     ] },
     { h: "Documents", p: [
       ["printcraft", "PrintCraft", "RUST"]
+    ] }
+  ] },
+  { id: "tools", label: "Studio Tools", short: "Tools", icon: "⚒", color: "#9fd8a0", color2: "#ffd27a", groups: [
+    { h: "Animation & Video", p: [
+      ["manim-live", "Manim live", "NEW"]
+    ] },
+    { h: "Pattern & Print", p: [
+      ["pattern-designer", "Pattern Designer", "SVG"],
+      ["thread-art", "Thread Art", "WGSL"],
+      ["halftone", "Halftone", "WGSL"]
+    ] },
+    { h: "3D & Materials", p: [
+      ["matlab", "PBR Material Studio", "TOOL", "material-studio"],
+      ["sdf-lab", "SDF Modeller", "TOOL"],
+      ["bench", "Composition Bench", "NODES", "composition-bench"]
+    ] },
+    { h: "Code & Science", p: [
+      ["pascal-editor", "Pascal Editor", "TOOL"],
+      ["sci-tools", "Science Toolkit", "TOOL"],
+      ["solar", "Solar Transit Study", "TOOL"]
     ] }
   ] }
 ] }

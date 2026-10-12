@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-217 registered pages in 5 regions and 19 constellations.
+217 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -151,10 +151,6 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `fortom` (pages/for-tom) | For Tom | Community & Tools > From the Community |  | A tribute page. |  | shown | generic, tier 5 | yes |
 | `starward-belt` | Starward Belt | Community & Tools > From the Community | MAP | A player-made map of the belt. |  | shown | hook, tier 3, default | yes |
 | `translate` | Translation Tool | Community & Tools > Help Translate | i18n | Help put Stella Nova in your language. |  | shown | generic, tier 5 | no |
-| `solar` | Solar Transit Study | Community & Tools > Studio Tools | TOOL | Sun paths for any place and date. |  | shown | generic, tier 5 | yes |
-| `matlab` (pages/material-studio) | PBR Material Studio | Community & Tools > Studio Tools | TOOL | Author PBR materials with a live sphere. |  | shown | hook, tier 3, default | yes |
-| `pascal-editor` | Pascal Editor | Community & Tools > Studio Tools | TOOL | Pascal, the open-source 3D building editor. |  | shown | no | no |
-| `sci-tools` | Science Toolkit | Community & Tools > Studio Tools | TOOL | Units, constants, statistics, fits and chemistry in one offline page. |  | shown | no | yes |
 | `flight-board` | Flight Board | Community & Tools > Live Data | LIVE | A split-flap board for any airport, from live ADS-B. |  | shown | no | no |
 
 ### Science
@@ -216,8 +212,8 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `ns-vortex` | Blowup: Vortex | Fluids > Blowup | 3D | A vortex that may blow up. |  | shown | hook, tier 2, default | yes |
 | `magnetlab` | MagnetLab | Light & Fields > Electromagnetism | NEW | Drag magnets and see the field lines. |  | shown | hook, tier 2, default | yes |
 | `biot-savart` | Biot–Savart Law | Light & Fields > Electromagnetism | NEW | The field around a current. |  | shown | hook, tier 2, default | yes |
-| `maxwell` (pages/maxwells-equations) | Maxwell's Equations | Light & Fields > Electromagnetism | NEW | The four equations, animated. |  | shown | hook, tier 3, default | yes |
-| `twenty-to-four` | Twenty to Four | Light & Fields > Electromagnetism | NEW | A field study in four panels. |  | shown | hook, tier 2, default | yes |
+| `maxwell` (pages/maxwells-equations) | Maxwell's Equations | Light & Fields > Electromagnetism | NEW | The four equations, animated. |  | shown | hook, tier 4, default | yes |
+| `twenty-to-four` | Twenty to Four | Light & Fields > Electromagnetism | NEW | A field study in four panels. |  | shown | hook, tier 4, default | yes |
 | `smith-chart` | Smith Chart | Light & Fields > Electromagnetism | NEW | Impedance on the Smith chart. |  | shown | hook, tier 3, default | yes |
 | `antenna-fields` | Antenna Fields | Light & Fields > Electromagnetism | NEW | Radio waves leave a dipole, a loop and an array. |  | shown | hook, tier 4, default | yes |
 | `sstv` | Slow-Scan Television | Light & Fields > Electromagnetism | NEW | Slow-scan television: a picture sent as sound, decoded live. |  | shown | hook, tier 3, default | yes |
@@ -315,14 +311,11 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `color` (pages/color-table) | Color Table | Shader Tables > Image | WGSL | Tone curves and palettes in WGSL. |  | shown | no | yes |
 | `postfx` (pages/postfx-table) | Post-Process | Shader Tables > Image | WGSL | Bloom, grain and grading passes. |  | shown | no | yes |
 | `sampling` (pages/sampling-table) | Sampling Table | Shader Tables > Image | WGSL | Sampling patterns, side by side. |  | shown | hook, tier 2 | yes |
-| `halftone` | Halftone | Shader Tables > Image | WGSL | Photos as halftone dots and rosettes, in WGSL. | glsl-halftone (MIT) | search only | hook, tier 3, default | yes |
-| `thread-art` | Thread Art | Shader Tables > Image | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 4, default | yes |
 | `lighting` (pages/lighting-table) | Lighting Table | Shader Tables > Surfaces | WGSL | BRDFs and light models compared. |  | shown | hook, tier 2 | yes |
 | `sdf-solids` (pages/sdf-solids-table) | SDF Solids Table | Shader Tables > Surfaces | WGSL | 78 signed-distance solids, glass to gold. |  | shown | hook, tier 4, default | yes |
 | `liquid-metal` (pages/liquid-metal-table) | Liquid Metal Table | Shader Tables > Surfaces | WGSL | Chrome blobs that melt and merge. |  | shown | hook, tier 2, default | yes |
 | `refraction-table` | Refraction Table | Shader Tables > Surfaces | WGSL | Glass panels that bend, split and frost the light. | optics after quick-liquid (MIT) | search only | no | yes |
 | `fractal-flames` | Fractal Flames | Shader Tables > Fractals | WGSL | flam3 fractal flames on the GPU: mutate and morph. | flam3 by Scott Draves (GPL-3.0) | search only | hook, tier 3, default | yes |
-| `bench` (pages/composition-bench) | Composition Bench | Shader Tables > Composition | NODES | Wire nodes from every table together. |  | shown | generic, tier 4 | yes |
 | `explosion` | Explosion | Game Effects > Weapons & Engines |  | The game’s explosion effects. |  | shown | hook, tier 2, default | yes |
 | `flare` | Engine Propulsion Effects | Game Effects > Weapons & Engines |  | Engine plumes and thruster flares. |  | shown | hook, tier 2, default | yes |
 | `beam` (pages/beam-table) | Beam & Decal Table | Game Effects > Weapons & Engines | WGSL | Lasers, beams and decals. |  | shown | hook, tier 3, default | yes |
@@ -333,7 +326,6 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `heat-metal` | Heat Metal | Game Effects > Heat & Frost | WGSL | Metal that glows from a hot spot. |  | shown | hook, tier 3, default | yes |
 | `frost` (pages/frost-table) | Frost Table | Game Effects > Heat & Frost | WGSL | Frost that creeps across glass. |  | shown | hook, tier 3, default | yes |
 | `supernova` (pages/fractal-orb) | Fractal Orb | Rendering > Ray Marching | SHADER | A raymarched fractal orb. |  | shown | hook, tier 2, default | yes |
-| `sdf-lab` | SDF Modeller | Rendering > Ray Marching | TOOL | Model with distance fields, Forge style. |  | shown | generic, tier 4 | yes |
 | `biome-parts` | Biome Parts | Rendering > Ray Marching | AI | A 1.2M-parameter model builds CAD parts live, command by command. |  | shown | hook, tier 4, default | yes |
 | `sphere-tracing` | Sphere Tracing Lab | Rendering > Ray Marching | LAB | Watch one ray march through a distance field. |  | shown | hook, tier 3, default | yes |
 | `mandelbulber` | Mandelbulber | Rendering > Ray Marching | WGSL | The Mandelbulber2 fractal engine in WGSL. | Mandelbulber2 by Krzysztof Marczak and team (GPL-3.0) | search only | no | yes |
@@ -368,11 +360,19 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `lightcraft` | LightCraft | Crafting Apps > Image | RUST | The LightCraft photo library and raw developer. |  | shown | no | no |
 | `vectorcraft` | VectorCraft | Crafting Apps > Vector & Layout | RUST | The VectorCraft vector illustration app. |  | shown | no | no |
 | `designcraft` | DesignCraft | Crafting Apps > Vector & Layout | RUST | The DesignCraft page layout app. |  | shown | no | no |
-| `pattern-designer` | Pattern Designer | Crafting Apps > Vector & Layout | SVG | Generative vector patterns for posters. |  | shown | hook, tier 3, default | yes |
 | `filmcraft` | FilmCraft | Crafting Apps > Video & Motion | RUST | The FilmCraft video editor: timeline, colour, sound. |  | shown | no | no |
 | `effectcraft` | EffectCraft | Crafting Apps > Video & Motion | RUST | The EffectCraft motion graphics compositor. |  | shown | no | no |
-| `manim-live` | Manim live | Crafting Apps > Video & Motion | NEW | Write real ManimCE code and watch it render beside the editor. |  | shown | no | yes |
 | `printcraft` | PrintCraft | Crafting Apps > Documents | RUST | The PrintCraft PDF workbench. |  | shown | no | no |
+| `manim-live` | Manim live | Studio Tools > Animation & Video | NEW | Write real ManimCE code and watch it render beside the editor. |  | shown | no | yes |
+| `pattern-designer` | Pattern Designer | Studio Tools > Pattern & Print | SVG | Generative vector patterns for posters. |  | shown | hook, tier 3, default | yes |
+| `thread-art` | Thread Art | Studio Tools > Pattern & Print | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 4, default | yes |
+| `halftone` | Halftone | Studio Tools > Pattern & Print | WGSL | Photos as halftone dots and rosettes, in WGSL. | glsl-halftone (MIT) | search only | hook, tier 3, default | yes |
+| `matlab` (pages/material-studio) | PBR Material Studio | Studio Tools > 3D & Materials | TOOL | Author PBR materials with a live sphere. |  | shown | hook, tier 3, default | yes |
+| `sdf-lab` | SDF Modeller | Studio Tools > 3D & Materials | TOOL | Model with distance fields, Forge style. |  | shown | generic, tier 4 | yes |
+| `bench` (pages/composition-bench) | Composition Bench | Studio Tools > 3D & Materials | NODES | Wire nodes from every table together. |  | shown | generic, tier 4 | yes |
+| `pascal-editor` | Pascal Editor | Studio Tools > Code & Science | TOOL | Pascal, the open-source 3D building editor. |  | shown | no | no |
+| `sci-tools` | Science Toolkit | Studio Tools > Code & Science | TOOL | Units, constants, statistics, fits and chemistry in one offline page. |  | shown | no | yes |
+| `solar` | Solar Transit Study | Studio Tools > Code & Science | TOOL | Sun paths for any place and date. |  | shown | generic, tier 5 | yes |
 
 ### Hidden pages
 

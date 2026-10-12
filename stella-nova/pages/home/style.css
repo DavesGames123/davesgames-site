@@ -58,6 +58,7 @@
 [data-sector="rendering"]  { --c: #96c8ff; --c2: #ffb478; }
 [data-sector="finance"]    { --c: #2bd685; --c2: #79acff; }
 [data-sector="craft"]      { --c: #7cc4ff; --c2: #ffb86c; }
+[data-sector="tools"]      { --c: #9fd8a0; --c2: #ffd27a; }
 /* SECTOR-COLOURS:END */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

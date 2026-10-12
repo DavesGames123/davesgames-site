@@ -105,7 +105,7 @@ const SECTOR_TEXT = {
   wiki: { at: [150, 300], tilt: -35, lead: 'wiki',
     blurb: 'The player handbook, live. Look up every item, module and tech, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.' },
   community: { at: [120, 525], tilt: 50, lead: 'starward-belt',
-    blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool, and two studio tools for sunlight and materials.' },
+    blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool and the live flight board.' },
   space: { at: [345, 140], tilt: -15, lead: 'hohmann',
     blurb: 'Orbits you can plan and planets you can fling: transfer burns, real satellites, an n-body sandbox, a galaxy, a black hole and a wormhole.' },
   quantum: { at: [565, 82], tilt: 30, lead: 'orbital',
@@ -138,6 +138,8 @@ const SECTOR_TEXT = {
     blurb: 'Pretrained forecasters, run in your browser, honest about their odds. Market Forecast reads like a stock page, but the fan beyond the price is a probabilistic forecast from Amazon’s Chronos models on your GPU, with a portfolio analysis and a backtest of how often the 80% band held. Demo data is synthetic; your own free API key brings live tickers.' },
   craft: { at: [930, 560], tilt: 15, lead: 'photocraft',
     blurb: 'The open-source Crafting Apps by the ArtCraft Team, in pure Rust, running in your browser: image editing, raw photos, vector art, page layout, video, motion graphics and PDFs. The official web builds, unchanged, with full credits.' },
+  tools: { at: [950, 488], tilt: -20, lead: 'manim-live',
+    blurb: 'Our own tools for making things: real Manim animations compiled in your browser, a pattern designer, thread art and halftone prints, PBR materials, an SDF modeller, a node compositor, a Pascal editor, a science toolkit and a sunlight study.' },
 };
 
 // Region bands on the chart: a faint name and the edge of the band.
