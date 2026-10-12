@@ -225,7 +225,10 @@ ok(/pretrained weights/.test($('heroStatus').textContent), `hero: the pretrained
   let guard = 0;
   while (!hero.match.over() && guard++ < 6000) await pump(10);
   ok(!!hero.match.over(), `game: a whole game ends (${hero.match.history.length} records)`);
-  await pump(40);
+  // The last record can be a long lethal combat (many strikes, the hold
+  // after a big play, the win): wait until the scene has played it.
+  for (let k = 0; k < 400 && hero.busy; k++) await pump(1);
+  await pump(2);
   const over = hero.match.over();
   ok(/wins|draw|loses/.test($('hudA').textContent + $('hudB').textContent), 'game: the HUD names the result');
   ok(over && /wins|Draw/.test($('heroStatus').textContent), `game: the status line (${$('heroStatus').textContent.slice(0, 50)})`);

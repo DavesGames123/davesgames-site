@@ -437,7 +437,7 @@ function eventPath(ctx, p, act, rec) {
   for (let i = 0; i < cut; i++) evStep(ctx, st, E[i], recRolls);
   if (st.tapping) endTaps(ctx, st, recRolls);
   if (st.spell && !st.spent) { ctx.emit('spent', { p, card: st.spell }); st.spent = true; }
-  if (st.combat) ctx.emit('settle', {});
+  if (st.combat) { ctx.wait(T.strike); ctx.emit('settle', {}); }
   counterSync(ctx);
   bigPlaySteps(ctx, p, act, B);
   if (turned || (A.result && A.result.reason === 'turn cap')) {
@@ -507,7 +507,9 @@ function evStep(ctx, st, e, recRolls) {
       const n = e.n | 0;
       if (st.combat) {
         const hit = combatSource(m, st, e);
-        if (hit) { ctx.emit('strike', { p: hit.p, from: hit.from, to: e.uid ?? 'p' + e.p, amount: n }, 0.12, T.strike); if (e.uid != null) st.damaged.add(e.uid); break; }
+        // combat damage lands together (one damage step of the rules):
+        // the strikes follow each other closely, settle waits for them
+        if (hit) { ctx.emit('strike', { p: hit.p, from: hit.from, to: e.uid ?? 'p' + e.p, amount: n }, 0.07, T.strike); if (e.uid != null) st.damaged.add(e.uid); break; }
       }
       const to = e.uid ?? 'p' + e.p;
       ctx.emit('spark', { p: 1 - e.p, card: st.src?.card ?? null, src: st.src?.uid ?? null, to, amount: n }, T.spark * 0.75, T.spark);
@@ -516,7 +518,7 @@ function evStep(ctx, st, e, recRolls) {
     }
     case 'life': {
       const from = m.players[e.p].life;
-      ctx.emit('life', { p: e.p, from, to: from + (e.n | 0) }, st.combat ? 0.15 : 0.45, T.life);
+      ctx.emit('life', { p: e.p, from, to: from + (e.n | 0) }, st.combat ? 0.07 : 0.45, T.life);
       break;
     }
     case 'dies': {
