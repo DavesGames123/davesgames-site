@@ -67,7 +67,7 @@
 
 /* ----------------------------------------------------------- buttons */
 .pl-btn {
-  appearance: none; font: 600 14px/1 inherit; font-family: inherit; color: var(--ink);
+  appearance: none; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1; color: var(--ink);
   background: var(--panel); border: 1px solid var(--hair2); border-radius: 8px;
   min-height: 44px; padding: 0 14px; cursor: pointer; touch-action: manipulation;
 }

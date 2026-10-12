@@ -363,6 +363,12 @@ let fly = null;
     ok(!/box-shadow:[^;]*\d+px\s+\d+px\s+[1-9]/.test(t), `${f}: box-shadow only as a hard ring`);
   }
   if (existsSync(join(ROOT, 'ui/play/play.css'))) ok(/\[hidden\]\s*\{\s*display:\s*none\s*!important/.test(readFileSync(join(ROOT, 'ui/play/play.css'), 'utf8')), 'play.css has the [hidden] rule');
+  // 'inherit' is legal only alone in the font shorthand: a browser drops
+  // "font: 600 14px/1 inherit" whole, and the buttons get the UA font.
+  for (const f of ['style.css', 'ui/card.css', 'ui/hud/hud.css', 'ui/play/play.css'].filter(f => existsSync(join(ROOT, f)))) {
+    const bad = readFileSync(join(ROOT, f), 'utf8').match(/font:[^;}]*\S\s+inherit\b|font:\s*inherit\s+[^;}\s]/g);
+    ok(!bad, `${f}: no font shorthand mixes inherit with values (${bad ? bad[0] : ''})`);
+  }
 }
 
 // --------------------------------------------------------------- 11 the DOM screen, end to end (linkedom, optional)
