@@ -346,7 +346,7 @@ w.SN_NAV = [
     { h: "Image", p: [
       ["color", "Color Table", "WGSL", "color-table"],
       ["postfx", "Post-Process", "WGSL", "postfx-table"],
-      ["sampling", "Sampling Table", "WGSL", "sampling-table"],,
+      ["sampling", "Sampling Table", "WGSL", "sampling-table"],
     ] },
     { h: "Surfaces", p: [
       ["lighting", "Lighting Table", "WGSL", "lighting-table"],
@@ -377,7 +377,7 @@ w.SN_NAV = [
   ] },
   { id: "rendering", label: "Rendering", short: "Render", icon: "◈", color: "#96c8ff", color2: "#ffb478", groups: [
     { h: "Ray Marching", p: [
-      ["supernova", "Fractal Orb", "SHADER", "fractal-orb"],,
+      ["supernova", "Fractal Orb", "SHADER", "fractal-orb"],
       ["biome-parts", "Biome Parts", "AI"],
       ["sphere-tracing", "Sphere Tracing Lab", "LAB"],
       ["mandelbulber", "Mandelbulber", "WGSL"],
