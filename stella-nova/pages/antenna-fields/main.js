@@ -26,7 +26,9 @@
 // ============================================================================
 import * as em from './em.js';
 import { createField } from './field-gl.js';
-import { mapper, inPlane, traceLines, drawOverlay } from './overlay.js';
+import { mapper, inPlane, traceLines, drawOverlay, RGB } from './overlay.js';
+import * as geom from './geom.js';
+import { createFlow } from './flow.js';
 import { drawPolar } from './plots.js';
 import { installSaver } from './saver.js';
 
@@ -54,7 +56,10 @@ const S = {
   yagi: { f: 300, nd: 4 },
   hertz: { dl: 0.05 },          // the screensaver only
   view: 'side', field: 'E',
-  tog: { lines: true, zones: false, log: false },
+  tog: { lines: true, zones: false, log: false, flow: false, sphere: true, phasors: true },
+  // The observer: a point in the view plane, rM metres from the antenna
+  // centre at the angle ang (radians, from +x toward the vertical axis).
+  obs: { rM: 0.8, ang: 0 },
   speed: 0.4, speedK: 1, playing: true, phase: 0,
   cam: { zoom: 1, panX: 0, panY: 0 },
   saver: false, band: null, fade: 1, saverTick: null,
@@ -63,6 +68,8 @@ const S = {
 let A = null, stats = null, field = null;
 let dirtyAntenna = true, statsTimer = 0, lastInteract = -1e9, refineDue = false, lastStatsAt = -1e9;
 let probe = null, norm = { gain: 1, psiScale: 1 }, lastKey = '', lineBuf = null, lineRef = null;
+let geo = null, geoKey = '', probeR = null;
+const flow = createFlow(phoneMQ.matches ? 700 : 1300, 11);
 const fieldCanvas = $('field'), overlay = $('overlay'), octx = overlay.getContext('2d');
 
 // Frequency of the current antenna, MHz, and its wavelength in metres.
@@ -103,6 +110,7 @@ function rebuild() {
     field.setNodes(A.nodes);
   }
   lastKey = '';
+  geoKey = '';
   scheduleStats();
   caption();
 }
@@ -205,6 +213,14 @@ function normalise() {
     pvals.push(Math.hypot(T[3][q], T[3][q + 1]));
   }
   // Power flow is shown on a log scale; E and B on a soft linear scale.
+  // r^2 weights per probe cell for the flow particles (u ~ 1/r^2 far out)
+  const n2 = w * h;
+  if (!probeR || probeR.length !== n2) probeR = new Float32Array(n2);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const u = view.u0 + (i + 0.5) / w * (view.u1 - view.u0), v = view.v0 + (j + 0.5) / h * (view.v1 - view.v0);
+    const rr = Math.max(Math.hypot(u - cen, v), 0.12) / rref;
+    probeR[j * w + i] = rr * rr;
+  }
   norm.gain = S.field === 'S' ? 0.3 / percentile(svals, 0.88) : (S.tog.log ? 0.45 : 0.85) / percentile(vals, 0.9);
   const pm = psiMode();
   norm.psiScale = pm === 3 ? 1 / (percentile(pvals, 0.5) * 0.6) : (pm === 2 ? 3.5 : 4) / percentile(pvals, 0.88);
@@ -218,11 +234,57 @@ function resize() {
   if (fieldCanvas.width !== W || fieldCanvas.height !== H) { fieldCanvas.width = W; fieldCanvas.height = H; }
   if (overlay.width !== W || overlay.height !== H) { overlay.width = W; overlay.height = H; }
 }
-function zoneRadii(D) {
-  // reactive near field inside max(lambda/2pi, 0.62 sqrt(D^3/lambda));
-  // far field beyond max(2D^2/lambda, 2D, lambda). In wavelengths.
-  return { rNear: Math.max(1 / TAU, 0.62 * Math.sqrt(D * D * D)), rFar: Math.max(2 * D * D, 2 * D, 1) };
+const zoneRadii = geom.zoneRadii;
+// ── the observer and the geometry it drives ───────────────────────────────────
+// The antenna centre and the view axes in 3D (wavelengths).
+function axes() { return { u: [1, 0, 0], v: S.view === 'side' ? [0, 0, 1] : [0, 1, 0] }; }
+function centre3() { return [centreM() * scale(), 0, 0]; }
+// The smallest sphere radius (metres) that holds all the metal, plus a margin:
+// the divergence theorem needs every source inside the sphere.
+function enclosingM() {
+  if (!A) return 0.1;
+  const c = centre3();
+  let r = 0;
+  for (const w of A.wires) for (const p of w.pts) r = Math.max(r, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
+  return r / scale() * 1.08 + 0.02;
 }
+function defaultObs() {
+  const t = S.type;
+  const ang = t === 'array' ? Math.PI / 2 - S.array.steer * Math.PI / 180 : 0;
+  const rM = t === 'yagi' ? 1.6 : t === 'array' ? 2.6 : t === 'loop' ? 0.45 : t === 'dipole' ? Math.max(0.6, S.dipole.L * 0.8) : 0.7;
+  S.obs = { rM, ang };
+}
+function obsPlane() {
+  const s = scale(), rM = Math.max(S.obs.rM, enclosingM());
+  return [(centreM() + rM * Math.cos(S.obs.ang)) * s, rM * Math.sin(S.obs.ang) * s, rM * s];
+}
+// E, H, the sphere flux and the phasor sum for the observer. Runs when the
+// antenna, the view or the observer changes.
+function updateGeo() {
+  if (!A) return;
+  const [u, v, r] = obsPlane(), ax = axes(), c = centre3();
+  const key = [u, v, S.view, S.type, A.elems.n, A.Zin && A.Zin[0]].join('|');
+  if (key === geoKey && geo) return;
+  geoKey = key;
+  const p = [0, 1, 2].map(k => u * ax.u[k] + v * ax.v[k]);
+  const dir = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], dl = Math.hypot(...dir) || 1;
+  const zr = zoneRadii(A.extent), rl = dl;
+  geo = {
+    u, v, r,
+    ob: geom.observer(A, c, p),
+    sf: S.tog.sphere ? geom.sphereFlux(A, c, r, 20, 40) : null,
+    circle: S.tog.sphere ? geom.circleFlux(A, c, r, ax.u, ax.v, 60) : null,
+    pt: S.tog.phasors ? geom.phasorTerms(A, dir.map(q => q / dl), 12) : null,
+    zone: rl < zr.rNear ? 'reactive near field' : rl < zr.rFar ? 'between near and far' : 'radiating far field',
+  };
+}
+// The phasor inset: the lower right of the clear area (device px).
+function phasorRect(cr, dpr) {
+  const sz = Math.max(150, Math.min(230, 0.32 * Math.min(cr.w, cr.h * 1.3)));
+  const h = sz + 44;
+  return { x: (cr.x + cr.w - sz - 14) * dpr, y: (cr.y + cr.h - h - 12) * dpr, w: sz * dpr, h: h * dpr };
+}
+
 let last = performance.now(), computeFailed = false;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -247,11 +309,22 @@ function frame(now) {
     lines = { list: traceLines(lineBuf, probe.w, probe.h, { seedStep: phoneMQ.matches ? 7 : 6.5, steps: 44, ds: 0.5 }), gw: probe.w, gh: probe.h, ref: lineRef,
       color: tf === 'E' ? 'rgba(225,245,255,A)' : 'rgba(225,215,255,A)' };
   }
+  const ax = axes(), showGeo = !S.saver;
+  if (showGeo) updateGeo();
+  const flowOn = S.tog.flow && probe && !S.saver;
+  if (flowOn) {
+    flow.field(probe, S.phase, ax.u, ax.v, probeR);
+    if (S.playing) flow.step(dt, S.speed * S.speedK, (view.u1 - view.u0) / probe.w, (view.v1 - view.v0) / probe.h);
+  }
   drawOverlay(octx, {
-    W, H, dpr, view, map: mapper(view, W, H), wires: A ? A.wires : [], plane: S.view, phase: S.phase,
+    W, H, dpr, view, map: mapper(view, W, H), wires: A ? A.wires : [], plane: S.view, axU: ax.u, axV: ax.v, phase: S.phase,
     centre: [centreM() * scale(), 0],
     zones: Object.assign({ on: S.tog.zones, lambdaM: lambdaM() }, zoneRadii(A ? A.extent : 0)),
     lines, feed: S.type === 'loop' ? [S.loop.C / TAU, 0, 0] : [0, 0, 0],
+    flow: flowOn ? c2 => flow.draw(c2, W, H, RGB.S, dpr, 1) : null,
+    obs: showGeo && geo ? { u: geo.u, v: geo.v, ob: geo.ob, sf: geo.sf, circle: geo.circle, sphere: S.tog.sphere, zone: geo.zone, lambdaM: lambdaM(),
+      clip: { x: cr.x * dpr, y: cr.y * dpr, w: cr.w * dpr, h: cr.h * dpr } } : null,
+    phasors: showGeo && geo && geo.pt ? { pt: geo.pt, rect: phasorRect(cr, dpr) } : null,
     scaleBox: S.saver ? null : { x: 16 * dpr, y: (cr.y + cr.h - 10) * dpr, lambdaM: lambdaM() },
   });
   if (S.saver) field.uploadOverlay(overlay);
@@ -268,7 +341,7 @@ function computePhasors(q) {
   const sc = Math.min(1, Math.max(0.3, Math.sqrt(6e8 / (n * px)))) * q;
   try { field.compute(sc); }
   catch (e) { if (!computeFailed) console.error('[antenna-fields] phasor pass', e); computeFailed = true; return; }
-  const pw = phoneMQ.matches ? 120 : 176, ph = Math.max(24, Math.round(pw * fieldCanvas.height / fieldCanvas.width));
+  const pw = phoneMQ.matches ? 150 : 210, ph = Math.max(24, Math.round(pw * fieldCanvas.height / fieldCanvas.width));
   probe = field.readProbe(pw, ph);
   normalise();
 }
@@ -289,7 +362,8 @@ function details() {
     : tf ? 'The faint lines follow the ' + (tf === 'E' ? 'electric' : 'magnetic') + ' field direction, traced again each frame.' : '';
   const colour = S.field === 'S' ? 'Brightness shows how much power flows through each point, on a log scale.'
     : 'Orange and cyan are opposite directions of the ' + (S.field === 'E' ? 'electric' : 'magnetic') + ' field. The bands move outward at the speed of light.';
-  $('what').textContent = colour + ' ' + lineWord + ' Brightness grows with distance to cancel the 1/r fall-off, so the far wavefronts stay visible.';
+  $('what').textContent = colour + ' ' + lineWord + ' Brightness grows with distance to cancel the 1/r fall-off, so the far wavefronts stay visible.'
+    + ' The gold curve beside each wire is its current now, inside the band of its standing wave. Drag the ring marker: it is an observer. The arrows on the circle through it show the power that flows out of the sphere (green) or back in (grey). The label gives the phase between E and B there, and the box at the lower right adds the far-field contributions of each piece of current toward the marker.';
   const rows = [['Frequency', freq().toFixed(0) + ' MHz (wavelength ' + lambdaM().toFixed(2) + ' m)']];
   if (t === 'dipole') rows.push(['Length', S.dipole.L.toFixed(2) + ' wavelengths']);
   if (t === 'halfwave') rows.push(['Length', (0.5 * scale()).toFixed(3) + ' wavelengths (0.50 m)']);
@@ -321,6 +395,9 @@ function options() {
     ['View from above', () => S.view === 'top', () => { S.view = 'top'; }],
     ['Field lines', () => S.tog.lines, () => { S.tog.lines = !S.tog.lines; }],
     ['Near and far zones', () => S.tog.zones, () => { S.tog.zones = !S.tog.zones; }],
+    ['Energy flow', () => S.tog.flow, () => { S.tog.flow = !S.tog.flow; flow.reset(); }],
+    ['Flux sphere', () => S.tog.sphere, () => { S.tog.sphere = !S.tog.sphere; geoKey = ''; }],
+    ['Phasor sum', () => S.tog.phasors, () => { S.tog.phasors = !S.tog.phasors; geoKey = ''; }],
     ['Log brightness', () => S.tog.log, () => { S.tog.log = !S.tog.log; }],
   ];
   if (S.type === 'dipole' || S.type === 'halfwave') items.push(['Moment method current', () => S[S.type].model === 'mom', () => { const P = S[S.type]; P.model = P.model === 'mom' ? 'sin' : 'mom'; dirtyAntenna = true; }]);
@@ -341,6 +418,7 @@ function setType(t) {
   S.type = t;
   if (TYPES[t]) S.view = TYPES[t].view;
   S.cam = { zoom: 1, panX: 0, panY: 0 };
+  defaultObs();
   stats = null;
   dirtyAntenna = true;
   syncBar();
@@ -363,7 +441,11 @@ function syncBar() {
 }
 function wireBar() {
   document.querySelectorAll('#types button').forEach(b => b.onclick = () => { setType(b.dataset.type); touch(); });
-  document.querySelectorAll('#fields button').forEach(b => b.onclick = () => { S.field = b.dataset.field; syncBar(); normalise(); });
+  document.querySelectorAll('#fields button').forEach(b => b.onclick = () => {
+    S.field = b.dataset.field;
+    if (S.field === 'S' && !S.tog.flow) { S.tog.flow = true; flow.reset(); }
+    syncBar(); normalise();
+  });
   $('paramIn').oninput = () => {
     const p = TYPES[S.type].p;
     S[S.type][p.k] = +$('paramIn').value;
@@ -388,12 +470,25 @@ function wireBar() {
 // ── pointer: pan, zoom, probe ────────────────────────────────────────────────
 function pointer() {
   const ptrs = new Map();
-  let pinch0 = null, moved = false;
+  let pinch0 = null, moved = false, dragObs = false;
   const toPlane = (x, y) => [view.u0 + x / fieldCanvas.clientWidth * (view.u1 - view.u0), view.v1 - y / fieldCanvas.clientHeight * (view.v1 - view.v0)];
+  const toScreen = (u, v) => [(u - view.u0) / (view.u1 - view.u0) * fieldCanvas.clientWidth, (view.v1 - v) / (view.v1 - view.v0) * fieldCanvas.clientHeight];
+  // Move the observer to a screen point (CSS px).
+  const moveObs = (x, y) => {
+    const [u, v] = toPlane(x, y), s = scale(), cu = centreM() * s;
+    S.obs.rM = Math.max(enclosingM(), Math.hypot(u - cu, v) / s);
+    S.obs.ang = Math.atan2(v, u - cu);
+  };
   fieldCanvas.addEventListener('pointerdown', e => {
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     fieldCanvas.setPointerCapture(e.pointerId);
     fieldCanvas.classList.add('drag'); moved = false;
+    // A press on the observer marker moves the marker, not the view.
+    dragObs = false;
+    if (ptrs.size === 1 && geo) {
+      const [mx, my] = toScreen(geo.u, geo.v);
+      if (Math.hypot(e.clientX - mx, e.clientY - my) < (e.pointerType === 'mouse' ? 16 : 28)) dragObs = true;
+    }
     if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: S.cam.zoom }; }
   });
   fieldCanvas.addEventListener('pointermove', e => {
@@ -402,6 +497,7 @@ function pointer() {
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (Math.abs(dx) + Math.abs(dy) > 1) moved = true;
+    if (dragObs && ptrs.size === 1) { moveObs(e.clientX, e.clientY); $('probe').classList.add('off'); return; }
     if (ptrs.size === 2 && pinch0) {
       const [a, b] = [...ptrs.values()];
       S.cam.zoom = Math.max(0.15, Math.min(6, pinch0.zoom * pinch0.d / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y))));
@@ -414,6 +510,7 @@ function pointer() {
   });
   const up = e => {
     ptrs.delete(e.pointerId);
+    dragObs = false;
     if (ptrs.size < 2) pinch0 = null;
     if (!ptrs.size) fieldCanvas.classList.remove('drag');
     if (!moved && e.pointerType !== 'mouse') showProbe(e.clientX, e.clientY);
@@ -451,6 +548,7 @@ function pointer() {
 // ── start ───────────────────────────────────────────────────────────────────
 wireBar();
 pointer();
+defaultObs();
 syncBar();
 try { field = createField(fieldCanvas); }
 catch (e) { console.error('[antenna-fields]', e); $('fail').innerHTML = '<b>The field view did not start.</b><br>' + e.message; $('fail').classList.remove('off'); }

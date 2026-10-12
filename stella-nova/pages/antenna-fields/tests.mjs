@@ -20,9 +20,14 @@
 //       steering angle sin(theta_s) = -beta/(kd)
 //   14  geom.js: E-H phase gap -90 deg near, 0 far (Hertzian closed form)
 //   15  geom.js: energy velocity |v| <= c, = c and radial in the far field
+//   16  circleFlux = S(t).n at the sample points
+//   17  flow.js and overlay.js draw every antenna and view into a recording
+//       2D context with finite coordinates only (a CPU probe grid)
 // ============================================================================
 import * as em from './em.js';
 import * as geom from './geom.js';
+import { createFlow } from './flow.js';
+import { drawOverlay, mapper } from './overlay.js';
 
 let fails = 0;
 const fmt = (v, d = 3) => (typeof v === 'number' ? v.toFixed(d) : String(v));
@@ -306,6 +311,78 @@ function sphereFlux(L, r, nt = 48, np = 96) {
   const v = geom.energyVelocity(E, H);
   check('energy velocity: |v| <= c near a Yagi; = c and radial at r = 40', vmax <= 1 + 1e-12 && Math.abs(v[0] - 1) < 2e-3,
     'max |v|/c over 400 points ' + fmt(vmax, 4) + ', far v/c = (' + v.map(q => fmt(q, 4)).join(', ') + ')');
+}
+
+// 16. circleFlux ----------------------------------------------------------------------
+{
+  const A = em.buildAntenna({ type: 'dipole', L: 0.5, a: 1e-3, model: 'sin' }), cf = geom.circleFlux(A, [0, 0, 0], 0.3, [1, 0, 0], [0, 0, 1], 8);
+  let w = 0, big = 0;
+  for (const i of [0, 1, 3]) {
+    const a = 2 * Math.PI * i / 8, n = [Math.cos(a), 0, Math.sin(a)], f = geom.fieldPoint(A, 0.3 * n[0], 0, 0.3 * n[2]);
+    for (const ph of [0.2, 0.7, 2.1]) {
+      const c = Math.cos(ph), s = Math.sin(ph);
+      const E = [0, 1, 2].map(k => f[2 * k] * c - f[2 * k + 1] * s), H = [0, 1, 2].map(k => f[6 + 2 * k] * c - f[7 + 2 * k] * s);
+      const S = [E[1] * H[2] - E[2] * H[1], E[2] * H[0] - E[0] * H[2], E[0] * H[1] - E[1] * H[0]], d = S[0] * n[0] + S[1] * n[1] + S[2] * n[2];
+      w = Math.max(w, Math.abs(d - (cf.s[i] + cf.q[2 * i] * Math.cos(2 * ph) - cf.q[2 * i + 1] * Math.sin(2 * ph)))); big = Math.max(big, Math.abs(d));
+    }
+  }
+  check('circleFlux: s + Re{q e^{2jwt}} = S(t).n', w / big < 1e-6, 'max rel err ' + (w / big).toExponential(2));
+}
+
+// 17. Drawing: flow.js and overlay.js into a recording context ----------------------
+{
+  let bad = 0, calls = 0;
+  const fin = (args, where) => { for (const v of args) if (typeof v === 'number' && !Number.isFinite(v)) { if (bad < 4) console.log('  non-finite in ' + where, args); bad++; } };
+  globalThis.Path2D = class { moveTo(...a) { calls++; fin(a, 'Path2D.moveTo'); } lineTo(...a) { calls++; fin(a, 'Path2D.lineTo'); } };
+  const ctx = new Proxy({}, {
+    get(t, k) {
+      if (k in t) return t[k];
+      if (k === 'measureText') return s => ({ width: String(s).length * 6 });
+      if (k === 'createRadialGradient' || k === 'createLinearGradient') return (...a) => { fin(a, k); return { addColorStop() {} }; };
+      return (...a) => { calls++; fin(a, String(k)); };
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  // A CPU probe grid in the format of field-gl.js readProbe: T0..T3 RGBA per cell.
+  const probeOf = (A, view, axU, axV, w, h) => {
+    const T = [0, 1, 2, 3].map(() => new Float32Array(w * h * 4)), f = new Float64Array(12);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const u = view.u0 + (i + 0.5) / w * (view.u1 - view.u0), v = view.v0 + (j + 0.5) / h * (view.v1 - view.v0);
+      geom.fieldPoint(A, u * axU[0] + v * axV[0], u * axU[1] + v * axV[1], u * axU[2] + v * axV[2], f);
+      const o = (j * w + i) * 4;
+      T[0].set([f[0], f[1], f[2], f[3]], o); T[1].set([f[4], f[5], f[6], f[7]], o); T[2].set([f[8], f[9], f[10], f[11]], o);
+    }
+    return { w, h, T };
+  };
+  const ants = [
+    ['half-wave', { type: 'dipole', L: 0.5, a: 1e-3, model: 'sin' }, 'side'],
+    ['dipole 1.25', { type: 'dipole', L: 1.25, a: 1e-3, model: 'mom' }, 'top'],
+    ['loop', { type: 'loop', C: 0.15, a: 1e-3 }, 'side'],
+    ['loop above', { type: 'loop', C: 1, a: 1e-3 }, 'top'],
+    ['array', { type: 'array', N: 8, d: 0.5, beta: -1, Le: 0.5, a: 1e-3 }, 'top'],
+    ['Yagi', { type: 'yagi', Lr: 0.495, Ld: 0.47, Lz: 0.44, sr: 0.2, sd: 0.25, nd: 4, a: 1e-3 }, 'top'],
+    ['Hertzian', { type: 'hertz', dl: 0.05 }, 'side'],
+  ];
+  for (const [nm, st, vw] of ants) {
+    const A = em.buildAntenna(st), axU = [1, 0, 0], axV = vw === 'side' ? [0, 0, 1] : [0, 1, 0];
+    const view = { u0: -2, u1: 2, v0: -1.25, v1: 1.25 }, W = 800, H = 500;
+    const probe = probeOf(A, view, axU, axV, 64, 40), fl = createFlow(300, 3);
+    for (let k = 0; k < 20; k++) { fl.field(probe, k * 0.3, axU, axV, null); fl.step(1 / 60, 0.4, 4 / 64, 2.5 / 40); }
+    const c = [0, 0, 0], p = [0.9, 0, 0.2].map((q, k) => k === 2 && vw === 'top' ? 0 : q);
+    if (vw === 'top') p[1] = 0.2;
+    const ob = geom.observer(A, c, p), r = Math.hypot(...p);
+    for (const phase of [0, 1.3, 4]) {
+      drawOverlay(ctx, {
+        W, H, dpr: 2, view, map: mapper(view, W, H), wires: A.wires, plane: vw, axU, axV, phase, centre: [0, 0],
+        zones: { on: true, rNear: 0.2, rFar: 1, lambdaM: 1 }, lines: null, feed: [0, 0, 0],
+        flow: c2 => fl.draw(c2, W, H, '1,2,3', 2, 1),
+        obs: { u: 0.9, v: 0.2, ob, sf: geom.sphereFlux(A, c, r, 8, 16), circle: geom.circleFlux(A, c, r, axU, axV, 24), sphere: true, zone: 'far', lambdaM: 1 },
+        phasors: { pt: geom.phasorTerms(A, p.map(q => q / r)), rect: { x: 500, y: 300, w: 280, h: 190 } },
+        scaleBox: { x: 10, y: 480, lambdaM: 1 },
+      });
+    }
+  }
+  check('flow.js and overlay.js: 7 antennas x 3 phases, finite coordinates only', bad === 0 && calls > 1000, calls + ' draw calls, ' + bad + ' non-finite');
 }
 
 console.log(fails ? fails + ' check(s) failed' : 'all checks passed');

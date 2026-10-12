@@ -37,6 +37,7 @@
 //    fieldPoint ...... E, H at one point (12 numbers), nodes or elements
 //    sphereFlux ...... P, Q and the reactive power through a sphere
 //    fluxAt .......... P(t) from sphereFlux and the phase w t
+//    circleFlux ...... S . n around the cut of the sphere in the view plane
 //    observer ........ E, H, gap, amplitudes and the zone at one point
 //    hertzGap ........ closed-form E-H phase gap of a Hertzian dipole (deg)
 //    energyVelocity .. v/c from the instantaneous E and H
@@ -90,6 +91,21 @@ export function sphereFlux(A, c, r, nt = 32, np = 64) {
 export function fluxAt(sf, wt) {
   const c = Math.cos(2 * wt), s = Math.sin(2 * wt);
   return sf.P + sf.Q[0] * c - sf.Q[1] * s;
+}
+
+// Radial flux density around the circle where the sphere of radius r cuts the
+// view plane (axes axU, axV through c). n samples. The instantaneous value at
+// sample i is s[i] + q[2i] cos 2wt - q[2i+1] sin 2wt, and s[i] is its average.
+export function circleFlux(A, c, r, axU, axV, n = 72) {
+  const s = new Float32Array(n), q = new Float32Array(2 * n), f = new Float64Array(12);
+  for (let i = 0; i < n; i++) {
+    const a = 2 * Math.PI * i / n, ca = Math.cos(a), sa = Math.sin(a);
+    const nv = [0, 1, 2].map(k => ca * axU[k] + sa * axV[k]);
+    fieldPoint(A, c[0] + r * nv[0], c[1] + r * nv[1], c[2] + r * nv[2], f);
+    const d = poyntingDots(f, nv);
+    s[i] = d[0]; q[2 * i] = d[2]; q[2 * i + 1] = d[3];
+  }
+  return { n, r, s, q };
 }
 
 // Main real direction of a complex 3-vector (re, im): the major axis of its
