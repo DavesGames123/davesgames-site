@@ -20,6 +20,9 @@ import tiling from './tiling.js';
 import textile from './textile.js';
 import geometric from './geometric.js';
 import opart from './opart.js';
+import botanical from './botanical.js';
+import paths from './paths.js';
+import mesh from './mesh.js';
 
 export const FAMILIES = [
   { id: 'grid', name: 'Grid', text: 'Tiles and modules on a regular cell grid.' },
@@ -32,9 +35,12 @@ export const FAMILIES = [
   { id: 'physics', name: 'Physics', text: 'Packing, springs, orbits and field lines.' },
   { id: 'geometric', name: 'Geometric', text: 'Guilloche, gear curves, Lissajous tables, superformula, pursuit polygons and circle packing.' },
   { id: 'opart', name: 'Op art', text: 'Moire line fields, drifting tunnels, waving bands and turning squares.' },
+  { id: 'botanical', name: 'Botanical', text: 'Leaf spirals, branching plants, leaf veins and fern fronds.' },
+  { id: 'paths', name: 'Paths and mazes', text: 'Grid and ring mazes, and Hilbert, Gosper and Peano curves.' },
+  { id: 'mesh', name: 'Cells and meshes', text: 'Delaunay meshes, Voronoi glass, rectangle cuts and crack networks.' },
   { id: 'textile', name: 'Textile', text: 'Plaid setts, dyed bands and rings, twill checks, chevrons and diamonds.' },
   { id: 'tiling', name: 'Tilings', text: 'Rhombs, Truchet tiles, matched edges, star rosettes, pentagons and bricks.' },
 ];
-export const PATTERNS = [grid, flow, radial, texture, iso, distort, organic, physics, tiling, textile, geometric, opart].flat();
+export const PATTERNS = [grid, flow, radial, texture, iso, distort, organic, physics, tiling, textile, geometric, opart, botanical, paths, mesh].flat();
 export const byId = id => PATTERNS.find(p => p.id === id) || null;
 export default PATTERNS;

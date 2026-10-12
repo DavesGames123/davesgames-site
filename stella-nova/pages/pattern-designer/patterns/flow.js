@@ -9,9 +9,13 @@
 //  gen writes to ctx.out (engine.js class Out) and reads randomness only
 //  from ctx.rng and ctx.noise, so the result is fixed by the seed.
 //
+//  The last entry, topo-lines, draws through board(ctx) (kit.js), which
+//  clips each element to the board.
+//
 //  grep -n "id: '" for the list of patterns in this file.
 // ============================================================================
 import { TAU, clamp, contours } from '../engine.js';
+import { board } from './kit.js';
 
 // A spatial hash of points, for the "too near a line" test.
 function makeHash(W, H, cs) {
@@ -233,6 +237,49 @@ export default [
           pts.push(x, y);
         }
         ctx.out.poly(pts, false, { s: r % P.inks, w: P.weight, sm: 1 });
+      }
+    },
+  },
+  {
+    id: 'topo-lines', name: 'Topo Lines', family: 'flow', heavy: true,
+    blurb: 'A survey map of a made-up terrain with sharp ridges: thin contours, a thick index contour every few levels with ticks that point downhill, and lakes below a water line.',
+    params: { interval: [6, 60, 1, 20, 'Contours'], index: [2, 10, 1, 5, 'Index every'], ridge: [0, 1, 0.01, 0.6, 'Ridges'], scale: [0.4, 3, 0.01, 1, 'Terrain scale'], water: [0, 0.5, 0.01, 0.12, 'Water level'], ticks: [0, 1, 1, 1, 'Downhill ticks'], weight: [0.3, 3, 0.05, 0.7, 'Line weight'], inks: [1, 4, 1, 3, 'Inks'] },
+    gen(P, ctx) {
+      const B = board(ctx), { W, H, noise } = ctx, res = 5, gw = Math.ceil(W / res) + 1, gh = Math.ceil(H / res) + 1, f = new Float32Array(gw * gh), sc = 1 / (ctx.S * 1.25 * P.scale);
+      let lo = Infinity, hi = -Infinity;
+      for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+        const x = i * res * sc, y = j * res * sc, wx = 0.25 * noise.fbm(x + 5.2, y - 1.3, 2), wy = 0.25 * noise.fbm(x - 7.1, y + 3.7, 2);
+        const smooth = noise.fbm(x + wx, y + wy, 3), rid = 1 - Math.abs(noise.fbm(x * 1.3 + wy, y * 1.3 + wx, 3));
+        const v = (1 - P.ridge) * smooth + P.ridge * (rid * rid * 1.6 - 0.6);
+        f[j * gw + i] = v; lo = Math.min(lo, v); hi = Math.max(hi, v);
+      }
+      const at = (x, y) => f[clamp(Math.round(y / res), 0, gh - 1) * gw + clamp(Math.round(x / res), 0, gw - 1)];
+      const toXY = q => q.map((v, i) => clamp(v * res, 0, i % 2 ? H : W));
+      if (P.water > 0 && P.inks > 2) {
+        // Lakes: rings of the low ground, closed by a high border.
+        const pw = gw + 2, ph = gh + 2, pad = new Float32Array(pw * ph).fill(-1e9), wl = lo + (hi - lo) * P.water;
+        for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) pad[(j + 1) * pw + i + 1] = -f[j * gw + i];
+        const rings = contours(pad, pw, ph, -wl).rings.filter(r => r.length >= 8).map(r => toXY(r.map(v => v - 1)));
+        if (rings.length) B.multi(rings, { f: 2 });
+      }
+      for (let k = 1; k < P.interval && !B.full(); k++) {
+        const lv = lo + (hi - lo) * k / P.interval, idx = k % P.index === 0, o = { f: -1, s: idx ? 0 : (P.inks > 1 ? 1 : 0), w: P.weight * (idx ? 2.4 : 1), sm: 1 };
+        const { rings, lines } = contours(f, gw, gh, lv);
+        for (const r of rings) B.poly(toXY(r), true, o);
+        for (const r of lines) B.poly(toXY(r), false, o);
+        if (!idx || !P.ticks) continue;
+        // Short ticks down the slope, about every 24 units along each index line.
+        for (const r of rings.concat(lines)) {
+          const q = toXY(r);
+          for (let i = 0, acc = 0; i + 3 < q.length; i += 2) {
+            acc += Math.hypot(q[i + 2] - q[i], q[i + 3] - q[i + 1]);
+            if (acc < 24) continue;
+            acc = 0;
+            const x = q[i], y = q[i + 1], gx = at(x + res, y) - at(x - res, y), gy = at(x, y + res) - at(x, y - res), gl = Math.hypot(gx, gy);
+            if (gl < 1e-6) continue;
+            B.line(x, y, x - gx / gl * 6, y - gy / gl * 6, { s: 0, w: P.weight * 1.2 });
+          }
+        }
       }
     },
   },
