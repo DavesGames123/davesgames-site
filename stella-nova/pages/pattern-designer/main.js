@@ -17,6 +17,7 @@
 //    drawing .............. "function paint"
 //    pattern controls ..... "function buildParams"
 //    palettes ............. "function buildPalettes"
+//    palette tools ........ "function harmonyNow"  "function shuffleNow"  "function invertNow"
 //    modifiers ............ "function buildMods"
 //    randomise ............ "function randomiseAll"
 //    explorer ............. "function openExplorer"
@@ -25,6 +26,7 @@
 //    saver ................ saver.js (installSaver)
 // ============================================================================
 import { boardSize, defaults, clampParams, makeRng } from './engine.js';
+import { HARMONY_KINDS, harmony, luminance, withLocks, shuffleInks, invertPalette } from './color.js';
 import { PATTERNS, FAMILIES, byId } from './patterns/index.js';
 import { PALETTES, PALETTE_GROUPS, paletteById, BOARDS, boardById, boardDims } from './palettes.js';
 import { MOD_KINDS, modDefaults, buildTextShape } from './modifiers.js';
@@ -40,7 +42,7 @@ const famName = id => (FAMILIES.find(f => f.id === id) || { name: id }).name;
 
 const st = {
   pat: 'arc-lattice', P: null, seed: 1, lock: false,
-  pal: 'bone', custom: null, mode: 'auto', lw: 2,
+  pal: 'bone', custom: null, mode: 'auto', lw: 2, locks: [], harm: { seed: '#d9622b', kind: 'triadic' },
   board: 'a4', land: false, mods: [], dpi: 300,
 };
 const memo = {};          // params per pattern id, so a return keeps the tweaks
@@ -88,6 +90,8 @@ function load() {
     if (!d || !d.st) return;
     Object.assign(st, d.st); Object.assign(memo, d.memo || {});
     if (!byId(st.pat)) st.pat = PATTERNS[0].id;
+    if (!Array.isArray(st.locks)) st.locks = [];
+    if (!st.harm || typeof st.harm.seed !== 'string') st.harm = { seed: '#d9622b', kind: 'triadic' };
     st.mods = (st.mods || []).filter(m => m && MOD_KINDS[m.type]);
   } catch (e) { /* a bad entry: the defaults */ }
 }
@@ -226,7 +230,7 @@ function buildPalettes() {
     b.className = 'pal'; b.dataset.id = p.id; b.dataset.g = p.group; b.title = p.name;
     b.innerHTML = `<div class="sw"><i style="background:${p.bg}"></i>${p.ink.map(c => `<i style="background:${c}"></i>`).join('')}</div><span></span>`;
     b.querySelector('span').textContent = p.name;
-    b.addEventListener('click', () => { st.pal = p.id; st.custom = null; palLabels(); paint(); thumbsRepaint(); save(); });
+    b.addEventListener('click', () => { st.pal = p.id; st.custom = null; st.locks = []; palLabels(); paint(); thumbsRepaint(); save(); });
     box.append(b);
   }
   palLabels();
@@ -235,20 +239,54 @@ function buildPalettes() {
 function palLabels() {
   document.querySelectorAll('.pal').forEach(b => b.classList.toggle('on', !st.custom && b.dataset.id === st.pal));
   const p = pal(), box = $('custom'); box.textContent = '';
-  const add = (label, color, set) => {
+  // Each colour has a lock under it: a locked colour stays when a palette
+  // tool (harmony, shuffle) makes the next palette.
+  const add = (label, color, lockKey, set) => {
+    const w = document.createElement('span'); w.className = 'cw';
     const i = document.createElement('input'); i.type = 'color'; i.value = color; i.title = label; i.setAttribute('aria-label', label);
     i.addEventListener('input', () => { if (!st.custom) st.custom = { id: 'custom', name: 'Custom', bg: p.bg, ink: p.ink.slice() }; set(i.value); document.querySelectorAll('.pal').forEach(b => b.classList.remove('on')); paint(); });
     i.addEventListener('change', () => { thumbsRepaint(); save(); });
-    box.append(i);
+    const on = st.locks.includes(lockKey), lk = document.createElement('button');
+    lk.className = 'lk' + (on ? ' on' : ''); lk.dataset.lock = String(lockKey);
+    lk.title = (on ? 'Unlock ' : 'Lock ') + label.toLowerCase(); lk.setAttribute('aria-label', 'Lock ' + label.toLowerCase()); lk.setAttribute('aria-pressed', String(on));
+    lk.innerHTML = on ? '<svg viewBox="0 0 12 12"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>' : '<svg viewBox="0 0 12 12"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0"/></svg>';
+    lk.addEventListener('click', () => { st.locks = on ? st.locks.filter(k => k !== lockKey) : st.locks.concat([lockKey]); palLabels(); save(); });
+    w.append(i, lk); box.append(w);
   };
   const l = document.createElement('span'); l.className = 'lbl'; l.textContent = st.custom ? 'Custom' : 'Edit'; box.append(l);
-  add('Paper', p.bg, v => { st.custom.bg = v; });
+  add('Paper', p.bg, 'bg', v => { st.custom.bg = v; });
   const s = document.createElement('i'); s.className = 'sep'; box.append(s);
-  p.ink.forEach((c, k) => add('Ink ' + (k + 1), c, v => { st.custom.ink[k] = v; }));
+  p.ink.forEach((c, k) => add('Ink ' + (k + 1), c, k, v => { st.custom.ink[k] = v; }));
+}
+// ── palette tools ──────────────────────────────────────────────────────────
+function setCustom(p, msg) {
+  st.custom = { id: 'custom', name: p.name || 'Custom', bg: p.bg, ink: p.ink.slice() };
+  palLabels(); paint(); thumbsRepaint(); save();
+  if (msg) toast(msg);
+}
+// A harmony palette from the seed colour. The ink count and the paper
+// side (light or dark) follow the palette on the board; locks hold.
+function harmonyNow() {
+  const prev = pal(), kind = st.harm.kind, rng = makeRng(newSeed(), 'harmony');
+  const next = harmony(st.harm.seed, kind, { n: prev.ink.length < 2 ? 3 : prev.ink.length, dark: luminance(prev.bg) < 0.18, rnd: rng.next });
+  setCustom(withLocks(next, prev, st.locks), HARMONY_KINDS[kind].name + ' harmony' + (st.locks.length ? ' (locks kept)' : ''));
+}
+function shuffleNow() { setCustom(shuffleInks(pal(), makeRng(newSeed(), 'shuffle').next, st.locks), 'Inks shuffled'); }
+function invertNow() { setCustom(invertPalette(pal()), 'Paper and first ink changed places'); }
+function bindPalTools() {
+  const sel = $('harmKind');
+  sel.innerHTML = Object.entries(HARMONY_KINDS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  if (!HARMONY_KINDS[st.harm.kind]) st.harm.kind = 'triadic';
+  sel.value = st.harm.kind; $('harmSeed').value = st.harm.seed;
+  sel.addEventListener('change', () => { st.harm.kind = sel.value; harmonyNow(); });
+  $('harmSeed').addEventListener('change', () => { st.harm.seed = $('harmSeed').value; harmonyNow(); });
+  $('harmGo').addEventListener('click', harmonyNow);
+  $('inkShuffle').addEventListener('click', shuffleNow);
+  $('palInvert').addEventListener('click', invertNow);
 }
 function stepPalette(d = 1) {
   const i = PALETTES.findIndex(p => p.id === st.pal);
-  st.pal = PALETTES[(i + d + PALETTES.length) % PALETTES.length].id; st.custom = null;
+  st.pal = PALETTES[(i + d + PALETTES.length) % PALETTES.length].id; st.custom = null; st.locks = [];
   palLabels(); paint(); thumbsRepaint(); save(); toast(pal().name);
 }
 
@@ -369,7 +407,7 @@ function randomiseAll() {
   const rng = makeRng(newSeed(), 'taste'), p = rng.pick(PATTERNS);
   if (st.P && st.pat) memo[st.pat] = st.P;
   st.pat = p.id; st.P = tasteParams(p, rng);
-  st.pal = rng.pick(PALETTES).id; st.custom = null;
+  st.pal = rng.pick(PALETTES).id; st.custom = null; st.locks = [];
   st.mode = rng.chance(0.82) ? 'auto' : rng.pick(['stroke', 'fill', 'knock']);
   st.lw = +(rng.range(1.2, 3.2)).toFixed(2);
   st.mods = tasteMods(rng, p);
@@ -587,7 +625,7 @@ function bindUI() {
 
 // ── boot ───────────────────────────────────────────────────────────────────
 load();
-bindUI(); bindPanel(); buildPalettes(); buildBoards(); buildModAdd(); buildExplorer();
+bindUI(); bindPanel(); bindPalTools(); buildPalettes(); buildBoards(); buildModAdd(); buildExplorer();
 if (PHONE_Q.matches) { panel.classList.remove('open'); document.body.classList.add('panel-closed'); }
 syncAll();
 addEventListener('resize', layout);
@@ -601,6 +639,6 @@ installSaver({
   exit() { saverOn = false; layout(); regen(); },
 });
 window.__pd = {
-  st, PATTERNS, get cur() { return cur; }, setPattern, exportSVG, exportPNG, pngSize, syncAll, randomiseAll, openExplorer, closeExplorer, svgText, regen, layout, setOpen,
+  st, PATTERNS, get cur() { return cur; }, pal, harmonyNow, shuffleNow, invertNow, setPattern, exportSVG, exportPNG, pngSize, syncAll, randomiseAll, openExplorer, closeExplorer, svgText, regen, layout, setOpen,
   get ready() { return !!cur && !busy && !pending; },
 };

@@ -109,6 +109,14 @@
   <div class="sec-label">Colour</div>
   <div id="palettes" class="pals"></div>
   <div class="custom" id="custom"></div>
+  <div class="paltools">
+    <div class="harm">
+      <input type="color" id="harmSeed" value="#d9622b" aria-label="Harmony seed colour" title="Seed colour">
+      <select id="harmKind" aria-label="Harmony kind"></select>
+      <button id="harmGo" title="A new palette from the seed colour. Locked colours stay.">Harmony</button>
+    </div>
+    <div class="btns"><button id="inkShuffle" title="A new order of the unlocked inks">Shuffle inks</button><button id="palInvert" title="The paper and the first ink change places">Invert paper</button></div>
+  </div>
   <div class="seg four" id="mode">
     <button data-m="auto" class="on">As drawn</button>
     <button data-m="stroke">Lines</button>

@@ -16,12 +16,16 @@
 //  8. palettes: 80 or more in known groups, valid hex, the first ink has
 //     a WCAG contrast of 3 or more on the paper, and no two palettes are
 //     nearer than PAL_MIN_DIST in OKLab (color.js paletteDistance).
+//  9. palette tools: harmony hues sit at the kind's offsets in OKLCH, the
+//     first ink keeps a contrast of 3, the same random source gives the
+//     same palette, locks hold, shuffle keeps the ink set, invert swaps.
 //  Prints one line per failure and a summary; exits 1 on any failure.
 // ============================================================================
 import { run, defaults, CAP, boardSize, UNIT } from './engine.js';
 import { PATTERNS, FAMILIES } from './patterns/index.js';
 import { BOARDS, boardDims, PALETTES, PALETTE_GROUPS } from './palettes.js';
-import { contrast, paletteDistance, hexToOklab, oklabToHex, hexToOklch, oklchToHex } from './color.js';
+import { contrast, paletteDistance, hexToOklab, oklabToHex, hexToOklch, oklchToHex, HARMONY_KINDS, harmony, withLocks, shuffleInks, invertPalette } from './color.js';
+import { makeRng } from './engine.js';
 import { applyModifiers, modDefaults, MOD_KINDS } from './modifiers.js';
 import { toSVG, applyMode, codeExtract } from './export.js';
 import { runJob } from './worker.js';
@@ -204,6 +208,36 @@ const PAL_MIN_DIST = 0.04;
     worst = Math.max(worst, ...[1, 3, 5].map(i => Math.abs(parseInt(back.slice(i, i + 2), 16) - parseInt(c.slice(i, i + 2), 16))), ...[1, 3, 5].map(i => Math.abs(parseInt(back2.slice(i, i + 2), 16) - parseInt(c.slice(i, i + 2), 16))));
   }
   ok(worst <= 1, `hex -> OKLab -> hex and OKLCH round trips are within 1 step (${worst})`);
+}
+
+// 9. palette tools
+{
+  const seeds = ['#d9622b', '#2d6bd8', '#3fa34d', '#9b5de5', '#f2c14e', '#111111', '#e8e8e8', '#ff3fa4'];
+  const hueGap = (a, b) => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); };
+  let worstHue = 0, n9 = 0;
+  for (const kind in HARMONY_KINDS) for (const sd of seeds) for (const dark of [false, true]) for (const nInk of [2, 3, 4, 5]) {
+    const a = harmony(sd, kind, { n: nInk, dark, rnd: makeRng(5, sd + kind).next }), b = harmony(sd, kind, { n: nInk, dark, rnd: makeRng(5, sd + kind).next });
+    n9++;
+    ok(JSON.stringify(a) === JSON.stringify(b), `harmony ${kind} ${sd}: same random source, same palette`);
+    ok(a.ink.length === nInk && [a.bg, ...a.ink].every(c => /^#[0-9a-f]{6}$/.test(c)), `harmony ${kind} ${sd} n ${nInk}: ${nInk} hex inks`);
+    ok(contrast(a.ink[0], a.bg) >= 3, `harmony ${kind} ${sd} dark ${dark}: first ink contrast ${contrast(a.ink[0], a.bg).toFixed(2)}`);
+    ok(dark ? hexToOklab(a.bg)[0] < 0.3 : hexToOklab(a.bg)[0] > 0.85, `harmony ${kind} ${sd}: paper is ${dark ? 'dark' : 'light'}`);
+    // Each ink with a clear chroma sits at its target hue (gamut fit keeps hue).
+    a.ink.forEach((c, i) => { const [, C, h] = hexToOklch(c); if (C > 0.04) worstHue = Math.max(worstHue, hueGap(h, a.hues[i])); });
+    const K = HARMONY_KINDS[kind].hues, h0 = a.hues[0];
+    ok(a.hues.every((h, i) => hueGap(h - h0, K[i % K.length] - K[0]) < 1e-6), `harmony ${kind}: target hues at the offsets ${K.join(', ')}`);
+  }
+  ok(worstHue < 12, `harmony inks within 12 degrees of their target hue (worst ${worstHue.toFixed(1)}, ${n9} palettes)`);
+  const prev = PALETTES.find(p => p.id === 'sun'), next = harmony('#2d6bd8', 'triadic', { n: 5, rnd: makeRng(1).next });
+  const L = withLocks(next, prev, ['bg', 2]);
+  ok(L.bg === prev.bg && L.ink[2] === prev.ink[2] && L.ink[1] === next.ink[1], 'locks keep the paper and ink 3, and take the rest from the new palette');
+  for (const p of PALETTES.filter(q => q.ink.length >= 3).slice(0, 20)) {
+    const sh = shuffleInks(p, makeRng(3, p.id).next, [1]);
+    ok(sh.ink.slice().sort().join() === p.ink.slice().sort().join() && sh.ink[1] === p.ink[1] && sh.bg === p.bg, `${p.id}: shuffle keeps the ink set, the locked ink and the paper`);
+    ok(sh.ink.join() !== p.ink.join(), `${p.id}: shuffle changes the order`);
+  }
+  const inv = invertPalette(PALETTES[0]);
+  ok(inv.bg === PALETTES[0].ink[0] && inv.ink[0] === PALETTES[0].bg && contrast(inv.ink[0], inv.bg) === contrast(PALETTES[0].ink[0], PALETTES[0].bg), 'invert swaps the paper and the first ink, contrast unchanged');
 }
 
 timing.sort((a, b) => b[1] - a[1]);

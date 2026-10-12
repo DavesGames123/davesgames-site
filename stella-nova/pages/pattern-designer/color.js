@@ -158,3 +158,37 @@ export function paletteScore(pal, n = pal.ink.length) {
   for (let k = 0; k < Math.max(1, n); k++) lo = Math.min(lo, contrast(pal.ink[k % pal.ink.length], pal.bg));
   return lo;
 }
+
+// ── palette tools ──────────────────────────────────────────────────────────
+// locks: a list of locked slots, 'bg' or an ink index. A locked slot keeps
+// its colour from prev when a tool makes the next palette.
+export function withLocks(next, prev, locks = []) {
+  const out = { id: 'custom', name: next.name || 'Custom', bg: next.bg, ink: next.ink.slice() };
+  for (const k of locks) {
+    if (k === 'bg') out.bg = prev.bg;
+    else if (k < prev.ink.length) { while (out.ink.length <= k) out.ink.push(prev.ink[out.ink.length % prev.ink.length]); out.ink[k] = prev.ink[k]; }
+  }
+  return out;
+}
+// A new order of the unlocked inks. A first ink with a contrast of 3 or
+// more on the paper is preferred; the order always changes when it can.
+export function shuffleInks(pal, rnd, locks = []) {
+  const free = pal.ink.map((_, i) => i).filter(i => !locks.includes(i));
+  if (free.length < 2) return { id: 'custom', name: 'Custom', bg: pal.bg, ink: pal.ink.slice() };
+  let best = null;
+  for (let t = 0; t < 24; t++) {
+    const order = free.slice();
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const ink = pal.ink.slice(); free.forEach((slot, n) => { ink[slot] = pal.ink[order[n]]; });
+    const same = ink.every((c, i) => c === pal.ink[i]);
+    if (same) continue;
+    if (!best) best = ink;
+    if (contrast(ink[0], pal.bg) >= 3) { best = ink; break; }
+  }
+  return { id: 'custom', name: 'Custom', bg: pal.bg, ink: best || pal.ink.slice() };
+}
+// Paper and first ink change places.
+export function invertPalette(pal) {
+  const ink = pal.ink.slice(), bg = ink[0]; ink[0] = pal.bg;
+  return { id: 'custom', name: 'Custom', bg, ink };
+}
