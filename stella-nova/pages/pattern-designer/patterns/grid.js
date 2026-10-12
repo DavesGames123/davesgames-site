@@ -7,9 +7,14 @@
 //  gen writes to ctx.out (engine.js class Out) and reads randomness only
 //  from ctx.rng and ctx.noise, so the result is fixed by the seed.
 //
+//  The last two entries (type-rhythm, greeked-columns) are type rhythms
+//  with no letters: abstract pen marks and text-block bars on a page
+//  grid. They draw through board(ctx) (kit.js), which clips to the board.
+//
 //  grep -n "id: '" for the list of patterns in this file.
 // ============================================================================
 import { TAU, clamp } from '../engine.js';
+import { board } from './kit.js';
 
 // Cell size for n cells across the short side, and the grid that covers
 // the board with whole cells centred on it.
@@ -170,6 +175,91 @@ export default [
         const c = Math.cos(a), sn = Math.sin(a), pts = [];
         for (const [u, v] of [[-t, -L], [t, -L], [t, -t], [L, -t], [L, t], [t, t], [t, L], [-t, L], [-t, t], [-L, t], [-L, -t], [-t, -t]]) pts.push(x + u * c - v * sn, y + u * sn + v * c);
         ctx.out.poly(pts, true, { f: P.inks === 1 ? 0 : clamp(Math.floor((n + 0.5) * P.inks), 0, P.inks - 1) });
+      }
+    },
+  },
+  {
+    id: 'type-rhythm', name: 'Type Rhythm', family: 'grid',
+    blurb: 'Lines of made-up pen marks in columns: stems, arches, bowls, dots and bars set like words on a baseline. It reads like text, but holds no letters.',
+    params: { rows: [6, 60, 1, 22, 'Lines'], cols: [1, 4, 1, 2, 'Columns'], xh: [0.3, 0.8, 0.01, 0.5, 'x-height'], wide: [0.4, 1.6, 0.01, 0.8, 'Mark width'], weight: [0.5, 4, 0.05, 1.6, 'Stroke'], rag: [0, 1, 1, 1, 'Ragged right'], inks: [1, 4, 1, 2, 'Inks'] },
+    gen(P, ctx) {
+      const B = board(ctx), r = ctx.rng, m = ctx.S * 0.08, gut = ctx.S * 0.05, cw = (ctx.W - 2 * m - gut * (P.cols - 1)) / P.cols, lh = (ctx.H - 2 * m) / P.rows;
+      const xh = lh * P.xh * 0.62, asc = xh * 1.7, gw = xh * 0.75 * P.wide, o = { f: -1, s: 0, w: P.weight };
+      // One mark with its baseline at (x, y); returns its advance.
+      const mark = (x, y, ink) => {
+        const k = r.weighted([4, 2, 1.2, 3, 3, 1.5, 1.2, 1]), q = Object.assign({}, o, { s: ink });
+        switch (k) {
+          case 0: B.line(x, y, x, y - xh, q); return gw * 0.45;
+          case 1: B.line(x, y, x, y - asc, q); return gw * 0.45;
+          case 2: B.line(x, y + xh * 0.7, x, y - xh, q); return gw * 0.45;
+          case 3: { const p = [x, y]; for (let n = 0; n <= 10; n++) { const a = Math.PI + Math.PI * n / 10; p.push(x + gw / 2 + gw / 2 * Math.cos(a), y - xh + gw / 2 * 0.9 + gw / 2 * 0.9 * Math.sin(a)); } p.push(x + gw, y); B.poly(p, false, q); return gw * 1.45; }
+          case 4: { const p = []; for (let n = 0; n < 16; n++) { const a = TAU * n / 16; p.push(x + gw / 2 + gw / 2 * Math.cos(a), y - xh / 2 + xh / 2 * Math.sin(a)); } B.poly(p, true, { f: -1, s: ink, w: P.weight }); return gw * 1.45; }
+          case 5: B.line(x, y, x, y - xh, q); B.line(x, y - xh * 1.45, x, y - xh * 1.5, q); return gw * 0.45;
+          case 6: B.line(x + gw * 0.3, y, x + gw * 0.3, y - asc * 0.85, q); B.line(x, y - xh, x + gw * 0.7, y - xh, q); return gw * 0.95;
+          default: { const p = []; for (let n = 0; n <= 12; n++) { const t = n / 12; p.push(x + gw * t, y - xh * (0.5 + 0.5 * Math.cos(Math.PI * t * 1.5)) ); } B.poly(p, false, q); return gw * 1.3; }
+        }
+      };
+      for (let c = 0; c < P.cols && !B.full(); c++) {
+        const x0 = m + c * (cw + gut);
+        let para = r.int(3, 7);
+        for (let j = 0; j < P.rows; j++) {
+          const y = m + (j + 0.78) * lh, head = j === 0 && P.inks > 1, ink = head ? 1 : 0;
+          if (para-- <= 0) { para = r.int(3, 8); continue; }
+          const end = x0 + cw * (P.rag ? (para === 0 ? r.range(0.25, 0.7) : r.range(0.82, 1)) : (para === 0 ? r.range(0.25, 0.7) : 1));
+          let x = x0 + (para === r.int(2, 7) ? gw * 2 : 0);
+          while (x < end - gw * 1.6 && !B.full()) {
+            const n = r.int(1, 8);
+            for (let g = 0; g < n && x < end - gw * 1.6; g++) x += mark(x, y, ink % P.inks) + gw * 0.35;
+            x += gw * 1.4;
+          }
+        }
+      }
+    },
+  },
+  {
+    id: 'greeked-columns', name: 'Greeked Columns', family: 'grid',
+    blurb: 'A page layout with no letters: bars for words in justified lines, thick bars for headings, solid blocks for pictures, and rules between parts.',
+    params: { cols: [1, 5, 1, 3, 'Columns'], lead: [6, 40, 0.5, 14, 'Leading'], bar: [0.2, 0.9, 0.01, 0.5, 'Bar height'], heads: [0, 1, 0.01, 0.35, 'Headings'], images: [0, 1, 0.01, 0.3, 'Picture blocks'], round: [0, 1, 1, 1, 'Round ends'], inks: [1, 4, 1, 3, 'Inks'] },
+    gen(P, ctx) {
+      const B = board(ctx), r = ctx.rng, m = ctx.S * 0.07, gut = ctx.S * 0.04, cw = (ctx.W - 2 * m - gut * (P.cols - 1)) / P.cols;
+      const bar = (x, y, w, h, ink) => {
+        if (w < 1 || h < 0.3) return;
+        if (!P.round || w < h) { B.rect(x, y, w, h, { f: ink }); return; }
+        const rr = h / 2, p = [];
+        for (let n = 0; n <= 6; n++) { const a = -Math.PI / 2 + Math.PI * n / 6; p.push(x + w - rr + rr * Math.cos(a), y + rr + rr * Math.sin(a)); }
+        for (let n = 0; n <= 6; n++) { const a = Math.PI / 2 + Math.PI * n / 6; p.push(x + rr + rr * Math.cos(a), y + rr + rr * Math.sin(a)); }
+        B.poly(p, true, { f: ink });
+      };
+      const ink = k => k % P.inks;
+      for (let c = 0; c < P.cols && !B.full(); c++) {
+        const x0 = m + c * (cw + gut);
+        let y = m;
+        while (y < ctx.H - m - P.lead) {
+          const roll = r.next();
+          if (roll < P.heads * 0.3) {
+            const n = r.int(1, 2), h = P.lead * 1.3;
+            for (let k = 0; k < n && y + h < ctx.H - m; k++) { bar(x0, y, cw * r.range(0.45, 0.95), h * P.bar * 1.4, ink(1)); y += h * 1.2; }
+            y += P.lead * 0.5;
+          } else if (roll < P.heads * 0.3 + P.images * 0.25) {
+            const h = Math.min(ctx.H - m - y, cw * r.range(0.4, 0.9));
+            if (h > P.lead * 2) { B.rect(x0, y, cw, h, { f: ink(2) }); B.line(x0, y + h, x0 + cw, y, { s: -2, w: 0.6 }); }
+            y += h + P.lead;
+          } else {
+            const n = r.int(3, 9);
+            for (let k = 0; k < n && y + P.lead < ctx.H - m; k++) {
+              const last = k === n - 1, end = last ? cw * r.range(0.2, 0.75) : cw;
+              let x = k === 0 ? P.lead * 1.2 : 0;
+              while (x < end - 2) {
+                const w = Math.min(end - x, P.lead * r.range(0.8, 4.2));
+                bar(x0 + x, y + P.lead * (1 - P.bar) / 2, w, P.lead * P.bar, ink(0));
+                x += w + P.lead * 0.45;
+              }
+              y += P.lead;
+            }
+            if (r.chance(0.2)) { B.line(x0, y + P.lead * 0.3, x0 + cw, y + P.lead * 0.3, { s: ink(3), w: 0.5 }); y += P.lead * 0.6; }
+            y += P.lead * 0.7;
+          }
+        }
       }
     },
   },

@@ -264,7 +264,7 @@ const NEW_IDS = ['type-rhythm', 'greeked-columns', 'topo-lines'];
 const NEW_NODES = 20000, LIGHT_MS = 150, MAX_MS = 1500;
 {
   const NEW = PATTERNS.filter(p => NEW_FAMS.includes(p.family) || NEW_IDS.includes(p.id));
-  ok(NEW.length >= 15, `at least 15 new generators (${NEW.length})`);
+  ok(NEW.length >= 27, `at least 27 new generators (${NEW.length})`);
   for (const f of NEW_FAMS) if (FAMILIES.some(q => q.id === f)) ok(PATTERNS.filter(p => p.family === f).length >= 4, `new family ${f} has 4 or more patterns`);
   const rows = [];
   for (const p of NEW) {
