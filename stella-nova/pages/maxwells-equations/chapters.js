@@ -30,6 +30,7 @@ export const TEX = { E, B, RHO, J, PHI, Ev, Bv, Jv, d, PD, A, F, STAR, c };
 export const CHAPTERS = [
   { name: 'Fields as forms', short: 'Forms' },
   { name: 'The boundary and d', short: 'Stokes' },
+  { name: 'The four laws', short: 'Laws' },
 ];
 
 const auto = (label = 'Animate') => ({ toggle: 'auto', label });
@@ -148,5 +149,80 @@ export const STEPS = [
       auto('Close and open'),
     ],
     cam: { pos: [3.4, 3.0, 4.6], target: [0, 0, 0.1] },
+  },
+
+  // ── 3 · the four laws ────────────────────────────────────────────────────
+  {
+    id: 'gauss', ch: 2, title: 'Gauss: the charge inside is the flux out', scene: 'laws', mode: 'gauss',
+    params: { R0: 1.0, cz: 0.1, amp: 0.25, auto: true },
+    tex: [
+      { t: `\\nabla\\cdot ${Ev} = \\frac{${RHO}}{\\varepsilon_0} \\qquad \\oint_{${PD} V} ${Ev}\\cdot d\\mathbf{A} = \\frac{${c('m4', 'Q_V')}}{\\varepsilon_0}` },
+      { t: `${d}\\,(${STAR}${E}) \;=\; ${RHO}`, small: true, cap: 'As forms (ε₀ = 1): ⋆E is the 2-form whose tubes are the field lines. Its d is the charge 3-form, so tubes begin and end only on charge.' },
+    ],
+    text: `<p>Three charges sit on an axis: +2, −1 and +1. Each orange line is the centre of one tube of flux, and each unit of charge sends out 24 of them. The +2 sends out 48, the −1 takes in 24.</p>
+<p>The green surface <i>S</i> breathes and moves. Where a line leaves it, a bright mark; where a line enters, a dark one. Count out minus in and divide by 24: that is the charge inside, whatever the shape of the surface. A line that passes through without starting or ending inside crosses twice, once each way.</p>
+<p>This is the divergence theorem of the last chapter, read the other way: the flux out of a region is the sum of the sources in it.</p>`,
+    controls: [
+      { key: 'R0', label: 'size of S', sym: '', cls: '', min: 0.3, max: 2.2, step: 0.01, value: 1, fmt: v => v.toFixed(2) },
+      { key: 'cz', label: 'height of its centre', sym: '', cls: '', min: -1.9, max: 1.2, step: 0.01, value: 0.1, fmt: v => v.toFixed(2) },
+      { key: 'amp', label: 'wobble', sym: '', cls: '', min: 0, max: 0.45, step: 0.01, value: 0.25, fmt: v => v.toFixed(2) },
+      auto('Move the surface'),
+    ],
+    cam: { pos: [2.4, 1.2, 7.6], target: [0, -0.35, 0] },
+  },
+  {
+    id: 'no-monopoles', ch: 2, title: 'No monopoles: tubes of B never end', scene: 'laws', mode: 'monopole',
+    params: { R0: 1.0, cz: 0.1, amp: 0.25, auto: true },
+    tex: [
+      { t: `\\nabla\\cdot ${Bv} = 0 \\qquad \\oint_{${PD} V} ${Bv}\\cdot d\\mathbf{A} = 0` },
+      { t: `${d}${B} \;=\; 0`, small: true, cap: 'The 2-form B is closed: its tubes have no ends.' },
+    ],
+    text: `<p>A ring of current makes a magnetic field whose lines close on themselves, each one looping once through the ring. There is no place where a line of <span class="m1">B</span> begins or ends.</p>
+<p>So any closed surface, of any shape, in any place, sees each line leave and come back. The count of bright marks always equals the count of dark ones. Put the surface round the whole ring, round one side of the wire, or inside the ring: the net flux is zero.</p>
+<p>A magnetic charge, a monopole, would be a place where tubes of <span class="m1">B</span> end. None has ever been found.</p>`,
+    controls: [
+      { key: 'R0', label: 'size of S', sym: '', cls: '', min: 0.3, max: 2.4, step: 0.01, value: 1, fmt: v => v.toFixed(2) },
+      { key: 'cz', label: 'height of its centre', sym: '', cls: '', min: -1.2, max: 1.2, step: 0.01, value: 0.1, fmt: v => v.toFixed(2) },
+      { key: 'amp', label: 'wobble', sym: '', cls: '', min: 0, max: 0.45, step: 0.01, value: 0.25, fmt: v => v.toFixed(2) },
+      auto('Move the surface'),
+    ],
+    cam: { pos: [2.6, 3.0, 6.6], target: [0, 0, 0] },
+  },
+  {
+    id: 'faraday', ch: 2, title: 'Faraday: a changing flux drives E round a loop', scene: 'laws', mode: 'faraday',
+    params: { z0: 0.9, rho: 0.75, tilt: 0.25, bulge: 0.55, auto: true },
+    tex: [
+      { t: `\\nabla\\times ${Ev} = -\\frac{\\partial ${Bv}}{\\partial t} \\qquad \\oint_{C} ${Ev}\\cdot d\\boldsymbol{\\ell} = -\\frac{d}{dt}\\int_{S} ${Bv}\\cdot d\\mathbf{A}` },
+      { t: `${d}${E} + \\partial_t ${B} \;=\; 0`, small: true, cap: 'As forms: the sheets of E end along the tubes of ∂B/∂t.' },
+    ],
+    text: `<p>Now the current in the ring swings back and forth, so its field of <span class="m1">B</span> grows, falls and turns over. A loop <i>C</i> floats above the ring. The changing flux through it drives an electric field round it: the orange arrows on <i>C</i>, and the orange circles round the axis.</p>
+<p>Which surface's flux? <i>C</i> bounds a flat disc <i>S</i><sub>1</sub> and a dome <i>S</i><sub>2</sub>, and the readout shows they carry the same flux at every moment. That is the last law at work: together the two surfaces close a region, and <span class="m3">d</span><span class="m1">B</span> = 0 makes the net flux out of it zero. So "the flux through <i>C</i>" has one value, and Faraday's law makes sense.</p>
+<p>The minus sign is Lenz's law: the induced field pushes against the change.</p>`,
+    controls: [
+      { key: 'z0', label: 'height of C', sym: '', cls: '', min: 0.4, max: 1.6, step: 0.01, value: 0.9, fmt: v => v.toFixed(2) },
+      { key: 'rho', label: 'radius of C', sym: '', cls: '', min: 0.3, max: 1.3, step: 0.01, value: 0.75, fmt: v => v.toFixed(2) },
+      { key: 'tilt', label: 'tilt of C', sym: '', cls: '', min: -0.6, max: 0.6, step: 0.01, value: 0.25, fmt: v => (v * 57.3).toFixed(0) + '°' },
+      { key: 'bulge', label: 'bulge of the dome', sym: '', cls: '', min: -0.9, max: 0.9, step: 0.01, value: 0.55, fmt: v => v.toFixed(2) },
+      auto('Tilt and bulge'),
+    ],
+    cam: { pos: [2.8, 2.6, 6.2], target: [0, 0.45, 0] },
+  },
+  {
+    id: 'ampere-maxwell', ch: 2, title: 'Ampère and Maxwell: the current that crosses the gap', scene: 'laws', mode: 'ampere',
+    params: { zc: 0.9, r0: 0.75, auto: true },
+    tex: [
+      { t: `\\nabla\\times ${Bv} = \\mu_0 ${Jv} + \\mu_0\\varepsilon_0 \\frac{\\partial ${Ev}}{\\partial t}` },
+      { t: `\\oint_{C} ${Bv}\\cdot d\\boldsymbol{\\ell} = \\mu_0 ${c('m5', 'I_S')} + \\mu_0\\varepsilon_0\\frac{d}{dt}\\int_{S} ${Ev}\\cdot d\\mathbf{A}`, small: true },
+      { t: `${d}\\,(${STAR}${B}) - \\partial_t (${STAR}${E}) \;=\; ${J}`, small: true, cap: 'As forms (μ₀ = ε₀ = 1).' },
+    ],
+    text: `<p>An alternating current runs in a wire with a capacitor in it. Charge piles up on one plate and drains from the other, and between the plates there is no wire at all.</p>
+<p>Ampère's law says the circulation of <span class="m1">B</span> round a loop <i>C</i> equals the current through a surface bounded by <i>C</i>. The flat disc <i>S</i><sub>1</sub> is cut by the wire, so it carries the current <span class="m5">I</span>. The bag <i>S</i><sub>2</sub> has the same rim but passes between the plates, and no charge crosses it. Without a second term, the two surfaces would give two answers.</p>
+<p>Maxwell's term settles it. Between the plates <span class="m2">E</span> grows as the charge grows, and ε₀ d<span class="m2">Φ<sub>E</sub></span>/dt is exactly the current that stopped at the plate. The dashed orange lines carry the current on across the gap, and both surfaces now give the same circulation.</p>`,
+    controls: [
+      { key: 'zc', label: 'height of C', sym: '', cls: '', min: 0.45, max: 1.8, step: 0.01, value: 0.9, fmt: v => v.toFixed(2) },
+      { key: 'r0', label: 'radius of C', sym: '', cls: '', min: 0.3, max: 1.5, step: 0.01, value: 0.75, fmt: v => v.toFixed(2) },
+      auto('Resize the loop'),
+    ],
+    cam: { pos: [3.2, 1.6, 6.8], target: [0, 0.2, 0] },
   },
 ];

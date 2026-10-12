@@ -439,9 +439,13 @@ export function profileCurrent(cap, prof, I, n = 2000) {
   const end = prof(1);
   const cond = Math.abs(end[1]) > cap.g ? I : 0;
   let disp = 0;
+  // J_z is I / (pi a^2) for r < a in the gap, so a piece from r1 to r2
+  // inside the gap carries I (min(r2,a)^2 - min(r1,a)^2) / a^2, exactly.
   for (let i = 0; i < n; i++) {
     const a = prof(i / n), b = prof((i + 1) / n), m = prof((i + 0.5) / n);
-    disp -= capJd(cap, [m[0], 0, m[1]], I)[2] * TAU * m[0] * (b[0] - a[0]);
+    if (Math.abs(m[1]) >= cap.g) continue;
+    const ra = Math.min(a[0], cap.a), rb = Math.min(b[0], cap.a);
+    disp -= I * (rb * rb - ra * ra) / (cap.a * cap.a);
   }
   return { cond, disp };
 }

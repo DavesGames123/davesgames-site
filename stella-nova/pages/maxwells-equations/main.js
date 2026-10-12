@@ -22,6 +22,7 @@ import { CHAPTERS, STEPS } from './chapters.js';
 import { typeset } from '../../lib/sci-math.js';
 import * as forms from './scenes/forms.js';
 import * as stokes from './scenes/stokes.js';
+import * as laws from './scenes/laws.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('stage');
@@ -47,7 +48,7 @@ function label(html, cls, fn) {
 }
 
 const ctx = { label, stage };
-const MODULES = { forms, stokes };
+const MODULES = { forms, stokes, laws };
 const SCENES = {};
 function scene(key) {
   if (!SCENES[key]) {
