@@ -979,10 +979,11 @@ function anatomyTips(map, canvas, camera, onChange, onSize) {
 // createBrainCard(canvas, connectome, opts) -> { map, fire(trace, delta,
 // fo), update(dt) -> bool, resize(), render(), pick(x, y), dispose() }.
 // Cheap: its own small WebGL canvas, the lite map on a phone (octahedra,
-// fewer spikes), pixel ratio 1 on a phone, no orbit and no own frame
-// loop. The host calls update(dt) from its loop; the card draws only when
-// the map runs or the view changed. A fixed three-quarter view shows the
-// calyx at the top and the lobes at the front. Hover (mouse) or tap
+// fewer spikes), pixel ratio 1 on a phone and no orbit. The host can call
+// update(dt) from its own loop: the first call turns the card loop off.
+// Else a small card loop runs while the map runs. The card draws only
+// when the map runs or the view changed. A fixed three-quarter view shows
+// the calyx at the top and the lobes at the front. Hover (mouse) or tap
 // (touch) shows the anatomy label of the nearest part. canvas null or
 // opts.headless: no renderer (node tests); fire and update still run.
 // opts: as createBrainMap, plus { coarse, neuropil, background, view:
@@ -1019,14 +1020,28 @@ export function createBrainCard(canvas, connectome, opts = {}) {
     dirty = true;
   }
   function render() { if (renderer) renderer.render(scene, camera); dirty = false; }
+  // Own loop: a host that never calls update() still sees the sequence.
+  // The first update() call from the host turns the own loop off.
+  let hostDriven = false, raf = 0, last = 0, alive = true;
+  const canRaf = !headless && typeof requestAnimationFrame === 'function';
+  function step(dt) { const ch = map.update(dt); if (ch || dirty) { render(); return true; } return false; }
+  function frame(now) {
+    raf = 0;
+    if (!alive || hostDriven) return;
+    const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
+    if (!(typeof document !== 'undefined' && document.hidden)) step(dt);
+    if (map.running || dirty) raf = requestAnimationFrame(frame); else last = 0;
+  }
+  const kick = () => { if (canRaf && !hostDriven && !raf && alive) raf = requestAnimationFrame(frame); };
   resize();
+  kick();
   return {
     map, scene, camera,
-    fire(trace, delta, fo) { const r = map.fire(trace, delta, fo); dirty = true; return r; },
-    update(dt) { const ch = map.update(dt); if (ch || dirty) { render(); return true; } return false; },
+    fire(trace, delta, fo) { const r = map.fire(trace, delta, fo); dirty = true; kick(); return r; },
+    update(dt) { hostDriven = true; return step(dt); },
     resize, render,
     pick(x, y) { const w = canvas?.clientWidth || 160, h = canvas?.clientHeight || 110; const a = map.pickScreen(x, y, camera, w, h, 40); tip?.show(a); dirty = true; return a; },
     get running() { return map.running; },
-    dispose() { tip?.dispose(); map.dispose(); renderer?.dispose(); },
+    dispose() { alive = false; if (raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf); tip?.dispose(); map.dispose(); renderer?.dispose(); },
   };
 }

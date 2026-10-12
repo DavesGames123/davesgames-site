@@ -50,7 +50,14 @@
 //      createDuelScene(canvas, { connectomes, cards, names, reduced,
 //        coarse, headless }) -> { play(record) -> Promise, setState(state),
 //        resize(), render(dt), dispose(), setSpeed(s), setCamera(mode),
-//        shoot(shot, p), setBrains(on), ready, stats(), world }
+//        shoot(shot, p), setBrains(on), ready, stats(), world,
+//        setFirstPerson(seat | null), pickPermanent(x, y), pickCard(x, y),
+//        highlight(ids, kind) | highlight(spec) | highlight(null) }
+//      Play mode (ui/play/play.js): setFirstPerson puts the camera at the
+//      seat of the human (above and behind the fly's head, its own mat and
+//      the other fly in view) and holds it there. pickPermanent and
+//      pickCard take client px (a pointer event) and raycast the cards.
+//      highlight marks legal attackers, blockers and targets with rings.
 //      setCamera: 'auto' (the steps pick the shots), 'wide', 'free' (the
 //      user orbits, no cuts), 'script' (only shoot() cuts). Shots
 //      (ui/fly3d/director.js SHOTS): wide, over, close, follow, dolly,
@@ -847,8 +854,9 @@ export function createDuelScene(canvas, opts = {}) {
       o.dimTo = x.tapped ? (land ? 0.42 : 0.62) : 1;
       o.glowTo = land && !x.tapped ? 0.16 : 0;
       o.scaleTo = x.pp > 0 ? 1.12 : 1;
-      const col = f.attacking ? FLY[p] : f.blocking != null ? FLY[p] : f.target ? TOKENS.dmg : null;
+      const col = f.attacking ? FLY[p] : f.blocking != null ? FLY[p] : f.target ? TOKENS.dmg : hlColour(x.uid, p);
       o.ring.visible = !!col; if (col) o.ring.material.color.set(col);
+      if (!f.attacking && hl.get(x.uid) === 'attack') o.scaleTo = Math.max(o.scaleTo, 1.06);
       updateBadge(o, x);
     }
     return out;
@@ -1137,10 +1145,14 @@ export function createDuelScene(canvas, opts = {}) {
   // First person at a seat (play mode): above and behind the head of the
   // fly at that seat, looking down over its own mat to the other fly. The
   // line of sight to the mat centre passes over the head of the fly.
+  // A tall frame (a phone) steps up and back and looks more down, so the
+  // whole mat is in the frame; the field of view opens a little (FP_FOV).
   let fpSeat = null;
   function seatPose(p, pos, look) {
-    seatPos(p, 0, 2.05, T.seatV + 0.55, pos);
-    seatPos(p, 0, 0.35, 0.2, look);
+    const a = camera.aspect || 1.6;
+    const tall = Math.max(0, Math.min(1.2, (1 / a - 1) / (1 / 0.46 - 1)));
+    seatPos(p, 0, 2.05 + 7.4 * tall, T.seatV + 0.55 + 2.8 * tall, pos);
+    seatPos(p, 0, 0, 0.2 + 0.5 * tall, look);
   }
   const shotK = (secs) => (W.reduced ? 1 : easeIO(Math.min(1, (sceneT - dir.state.since) / secs)));
   function shotPose(dt) {
@@ -1234,12 +1246,17 @@ export function createDuelScene(canvas, opts = {}) {
   // Cut to a shot now, in any mode but 'free' (the saver and the page).
   function shoot(shot, p = 0) { dir.request(shot, p | 0, sceneT, { force: true }); }
   function setCamera(mode) {
-    camMode = ['auto', 'wide', 'free', 'script'].includes(mode) ? mode : 'auto';
+    const m = ['auto', 'wide', 'free', 'script'].includes(mode) ? mode : 'auto';
+    if (fpSeat != null) { fpPrev = m; return; }     // first person holds; the mode applies after it
+    camMode = m;
     if (camMode === 'wide') shoot('wide');
     cam.userUntil = camMode === 'free' ? Infinity : now;
     if (camMode !== 'free') { cam.pos.copy(camera.position); if (controls) cam.look.copy(controls.target); }
   }
+  const FOV = 40, FP_FOV = [48, 60];      // seat shot: wide frame, tall frame
   function updateCamera(dt) {
+    const fov = dir.state.shot === 'seat' ? FP_FOV[(camera.aspect || 1.6) < TALL ? 1 : 0] : FOV;
+    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
     shotPose(dt);
     if (now < cam.userUntil) return;
     if (dir.state.cut) { cam.pos.copy(cam.wantPos); cam.look.copy(cam.wantLook); dir.state.cut = false; }
@@ -1473,7 +1490,7 @@ export function createDuelScene(canvas, opts = {}) {
     // old mirror (lift, discard) run before applyStep.
     const h = STEP[s.op];
     try { h?.(s); } catch (e) { console.warn('fly-duel 3d: step failed', s.op, e); }
-    if (camMode === 'auto') dir.onStep(s, sceneT, recInfo);
+    if (camMode === 'auto' && fpSeat == null) dir.onStep(s, sceneT, recInfo);
     applyStep(mirror, s);
   }
 
@@ -1622,6 +1639,88 @@ export function createDuelScene(canvas, opts = {}) {
     return seatPos(p, slots[n - 1], 0.01, land ? T.landV : T.creatureV);
   }
 
+  // ---------------------------------------------------------- play mode
+  // setFirstPerson(seat): the camera sits at the seat of the human player
+  // (the 'seat' shot of the director) and stays there; the steps make no
+  // cuts and the orbit is off, so a tap picks a card. null: back to the
+  // camera mode from before.
+  let fpPrev = null;
+  function setFirstPerson(seat) {
+    if (seat === 0 || seat === 1) {
+      if (fpSeat == null) fpPrev = camMode;
+      fpSeat = seat; camMode = 'script';
+      dir.request('seat', seat, sceneT, { force: true });
+      cam.userUntil = now;
+      if (controls) controls.enabled = false;
+    } else if (fpSeat != null) {
+      fpSeat = null;
+      camMode = fpPrev || 'auto'; fpPrev = null;
+      dir.request('wide', 0, sceneT, { force: true });
+      if (controls) controls.enabled = true;
+    }
+    return fpSeat;
+  }
+  // Screen point (client px, as a pointer event gives) -> NDC.
+  const _ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
+  function toNdc(x, y) {
+    const r = canvas?.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: canvas?.clientWidth || 960, height: canvas?.clientHeight || 540 };
+    if (!(r.width > 0 && r.height > 0)) return null;
+    return _ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  }
+  function castAt(x, y, objs) {
+    const n = toNdc(x, y);
+    if (!n) return null;
+    camera.updateMatrixWorld();
+    _ray.setFromCamera(n, camera);
+    const hits = _ray.intersectObjects(objs, false);
+    return hits[0] || null;
+  }
+  // A permanent under the point: { uid, id, seat, point } or null. A tap
+  // on a fly or its life dice gives { uid: null, player: seat }.
+  function pickPermanent(x, y) {
+    const list = [], owner = new Map();
+    for (let p = 0; p < 2; p++) for (const pe of mirror?.players[p].battlefield || []) { const o = Z.perms.get(pe.uid); if (o) { list.push(o.mesh); owner.set(o.mesh, { uid: pe.uid, id: pe.id, seat: p }); } }
+    const h = castAt(x, y, list);
+    if (h) return { ...owner.get(h.object), point: h.point.clone() };
+    const bodies = [];
+    for (let p = 0; p < 2; p++) { drums[p].grp.traverse(o => { if (o.isMesh) { o.userData.seat = p; bodies.push(o); } }); flies[p].built?.root.traverse(o => { if (o.isMesh && !o.isInstancedMesh) { o.userData.seat = p; bodies.push(o); } }); }
+    const b = castAt(x, y, bodies);
+    return b ? { uid: null, player: b.object.userData.seat, point: b.point.clone() } : null;
+  }
+  // A hand card under the point: { seat, index, id } or null.
+  function pickCard(x, y) {
+    const list = [], at = new Map();
+    for (let p = 0; p < 2; p++) Z.hand[p].forEach((o, i) => { list.push(o.mesh); at.set(o.mesh, { seat: p, index: i, id: o.id }); });
+    const h = castAt(x, y, list);
+    return h ? at.get(h.object) : null;
+  }
+  // highlight(ids, kind) or highlight(spec). kind: 'eligible' (can act),
+  // 'attack', 'block', 'target', 'pending'. spec (ui/play/play.js): {
+  // eligible, attackers, blocks: [[attacker, blocker]], targets, pending }.
+  // highlight(null) clears every mark. A step mark (attacking, blocking,
+  // a spell target) wins over a highlight mark.
+  const HL_COLOUR = { eligible: TOKENS.ink2, attack: null, block: null, target: TOKENS.app, pending: TOKENS.ink };
+  const hl = new Map();
+  function highlight(a, kind) {
+    if (a == null) { hl.clear(); return hl.size; }
+    if (Array.isArray(a)) {
+      const k = HL_COLOUR[kind] !== undefined ? kind : 'eligible';
+      for (const [u, v] of [...hl]) if (v === k) hl.delete(u);
+      for (const u of a) if (u != null) hl.set(u, k);
+      return hl.size;
+    }
+    hl.clear();
+    const add = (list, k) => { for (const u of list || []) if (u != null && u !== -1) hl.set(u, k); };
+    add(a.eligible, 'eligible');
+    add(a.targets, 'target');
+    add(a.attackers, 'attack');
+    const bl = Array.isArray(a.blocks) ? a.blocks : a.blocks && typeof a.blocks === 'object' ? Object.entries(a.blocks).map(([x, y]) => [+x, y]) : [];
+    for (const q of bl) { if (Array.isArray(q)) { hl.set(q[1], 'block'); if (!hl.has(q[0])) hl.set(q[0], 'attack'); } }
+    add(a.pending, 'pending');
+    return hl.size;
+  }
+  const hlColour = (uid, seat) => { const k = hl.get(uid); return k == null ? null : HL_COLOUR[k] ?? FLY[seat]; };
+
   // ---------------------------------------------------------- API
   function play(rec) {
     return new Promise(resolve => { queue.push({ rec, resolve }); if (!mirror) startNext(); });
@@ -1652,6 +1751,7 @@ export function createDuelScene(canvas, opts = {}) {
       hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, hall: hall.stats(), dice: dice.stats(),
+      firstPerson: fpSeat, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
     };
   }
   function dispose() {
@@ -1668,6 +1768,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   return {
     play, setState, resize, render, dispose, setSpeed, setCamera, shoot, setBrains, ready, stats, camera, scene,
+    setFirstPerson, pickPermanent, pickCard, highlight,
     world: { W, Z, flies, drums, piles, lights, hall, dice, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP) },
   };
 }
