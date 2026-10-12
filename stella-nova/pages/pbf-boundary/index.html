@@ -6,14 +6,17 @@
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PBF Boundaries — Stella Nova · davesgames.io</title>
+<title>Fluid walls made of particles (PBF boundaries) — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    PBF BOUNDARIES  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Position based particles in moving containers, with floating and
-   sinking bodies. The page starts a random scene on load and keeps it
-   running.
+   A position-based fluid whose walls, obstacles and bodies are boundary
+   particles (Akinci 2012) that enter the same density sum. The page says
+   so on screen: an info band with a lead, six presets with captions (one
+   boundary idea each) and a "How it works" sheet with TeX, a colour
+   legend, orange dots on every boundary particle, and labels on the
+   canvas. It starts on the first preset and keeps running.
 
    CREDIT. The upstream demo is by Sergii Biloshytskyi (Ukraine), a
    contribution to Ten Minute Physics by Matthias Müller:
@@ -31,6 +34,8 @@
      budget.js   canvas dpr, surface cell size, particle counts (no DOM)
      main.js     page controller: sim kit GUI, loop, pointer
      saver.js    screensaver shots (sim kit director)
+     explain.js  info band, presets, legend, "How it works" (MathJax SVG)
+     scene.js    control schema, guard, presets (no DOM)
      tests.mjs   node tests (no browser)
    Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver director),
            ../../widgets/ten-minute-physics/kit.js (credit bar).
@@ -38,9 +43,11 @@
    GREP MAP
      grep -n 'const SCHEMA'  main.js    every control and its random rule
      grep -n 'const SHOTS'   saver.js   the screensaver shots
+     grep -n 'const PRESETS' scene.js   the presets and their captions
+     grep -n 'const EQS'     explain.js the TeX of "How it works"
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Position based particles in moving containers, with boats, ducks and stones that float and sink. After Sergii Biloshytskyi's Ten Minute Physics contribution.">
+<meta name="description" content="A position-based fluid whose walls and floating bodies are made of particles too, so the water feels them through one density rule. Presets, labels and the equations explain each boundary idea. After Sergii Biloshytskyi's Ten Minute Physics contribution.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
@@ -48,7 +55,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="view" aria-label="Particle fluid simulation. Drag a body to throw it; drag in the water to stir it."></canvas>
+<canvas id="view" aria-label="Particle fluid with particle walls. Drag a body to throw it; drag in the water to stir it."></canvas>
 <script type="module" src="main.js"></script>
 </body>
 </html>

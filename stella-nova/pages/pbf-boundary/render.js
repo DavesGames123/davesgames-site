@@ -21,7 +21,10 @@
 //    bodies       filled shapes in the object palette, with marks
 //                 (duck eye and beak, boat cabin, log rings, a red index
 //                 dot so a spin reads)
+//    boundary     the boundary particles (look.showB), orange dots
 //    pointer      a ring at the stir point
+//    labels       named callouts on the fluid, the free surface, a wall,
+//                 a body and an obstacle (look.labels)
 //
 //  grep -n targets
 //    view fit ............. "export function fitView"
@@ -32,6 +35,9 @@
 //    particle discs ....... "function drawParticles"
 //    walls ................ "function drawWalls"
 //    bodies ............... "function drawBody"
+//    boundary dots ........ "function drawBoundary"
+//    label anchors ........ "export function labelAnchors"
+//    label boxes .......... "function drawLabels"
 //    entry ................ "export function draw"
 // ============================================================================
 import { D, RHO0, DEN0 } from './solver.js';
@@ -383,9 +389,117 @@ function drawBody(ctx, S, v, b, col, look) {
   if (b.kind !== 'duck') { const p = b.prims[0]; const rr = p.t === 'c' ? p.r * 0.6 : p.t === 'b' ? Math.min(p.hw, p.hh) * 0.55 : p.t === 's' ? p.r * 0.5 : 0.02; dot(p.t === 's' ? p.x1 - p.r : rr, 0, 0.009, look.mark); }
 }
 
+// ---- boundary particles and labels ---------------------------------------------
+// The boundary particles of walls, obstacles and bodies, in the colour that
+// the legend and the "How it works" equations give the weight Ψ (sci.css
+// --m2). They sit just inside each solid, one layer deep.
+export const BOUNDARY_COLOR = '#ff9a62';
+export const FLUID_COLOR = '#62c4ff';
+export const BODY_COLOR = '#e889dc';
+function drawBoundary(ctx, S, v, look) {
+  const r = Math.max(0.9 * (look.dpr || 1), 0.16 * D * v.s), x0 = v.rect.x - r, x1 = v.rect.x + v.rect.w + r, y0 = v.rect.y - r, y1 = v.rect.y + v.rect.h + r;
+  ctx.fillStyle = BOUNDARY_COLOR;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  for (let i = 0; i < S.bn; i++) {
+    const x = X(v, S.bx[i]), y = Y(v, S.by[i]);
+    if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, 6.2832);
+  }
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// Label anchors in world metres, from the solver state. No canvas, so the
+// tests check them. Each: { key, text, x, y, color } (color null: the
+// label ink of the theme).
+//   fluid     the particle nearest the centre of the fluid
+//   surface   the highest particle within 6 cm of that column (water)
+//   wall      the static boundary particle nearest the fluid centre
+//   body      the first body: lighter or heavier than water
+//   obstacle  the first obstacle: a moving wall or a fixed obstacle
+export function labelAnchors(S, opts = {}) {
+  const out = [], n = S.n;
+  const grains = S.P && S.P.material === 'granular';
+  if (n > 0) {
+    let mx = 0, my = 0;
+    for (let i = 0; i < n; i++) { mx += S.x[i]; my += S.y[i]; }
+    mx /= n; my /= n;
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < n; i++) { const d = (S.x[i] - mx) ** 2 + (S.y[i] - my) ** 2; if (d < bd) { bd = d; bi = i; } }
+    out.push({ key: 'fluid', text: (grains ? 'Grains: ' : 'Fluid: ') + n.toLocaleString('en-US') + ' particles', x: S.x[bi], y: S.y[bi], color: FLUID_COLOR });
+    if (!grains) {
+      let ti = -1, ty = -Infinity;
+      for (let i = 0; i < n; i++) if (Math.abs(S.x[i] - S.x[bi]) < 0.06 && S.y[i] > ty) { ty = S.y[i]; ti = i; }
+      if (ti >= 0 && ty - S.y[bi] > 0.06) out.push({ key: 'surface', text: 'Free surface', x: S.x[ti], y: S.y[ti] + 0.5 * D, color: null });
+    }
+    let wi = -1, wd = Infinity;
+    for (let i = 0; i < S.bn; i++) { if (S.bown[i] !== -1) continue; const d = (S.bx[i] - S.x[bi]) ** 2 + (S.by[i] - S.y[bi]) ** 2; if (d < wd) { wd = d; wi = i; } }
+    if (wi >= 0) out.push({ key: 'wall', text: opts.bparts === false ? 'Wall particles (switched off)' : 'Wall: boundary particles', x: S.bx[wi], y: S.by[wi], color: BOUNDARY_COLOR });
+  }
+  if (S.bodies.length) {
+    const b = S.bodies[0];
+    out.push({ key: 'body', text: b.s < 1 ? 'Body lighter than water' : 'Body heavier than water', x: b.x, y: b.y, color: BODY_COLOR });
+  }
+  const ob = S.obstacles.find(o => o.kind !== 'disk') || S.obstacles[0];
+  if (ob) out.push({ key: 'obstacle', text: ob.spin || ob.orbit || ob.kind === 'paddle' ? 'Moving wall' : 'Fixed obstacle', x: ob.x + S.shake, y: ob.y, color: BOUNDARY_COLOR });
+  return out;
+}
+
+// Label boxes: a dot on the anchor, a leader line, and a text pill. The
+// anchors are smoothed over frames (R.lab) so the labels do not jitter
+// with the particles; a jump over 0.15 m (a new scene) snaps. Each label
+// takes the first of four offsets that stays in the view and clear of
+// the labels before it.
+function drawLabels(ctx, S, v, look, R) {
+  const k = look.dpr || 1, fs = Math.round(12 * k), pad = 5 * k, rect = v.rect;
+  const L = labelAnchors(S, { bparts: look.bparts });
+  R.lab = R.lab || {};
+  const seen = new Set();
+  ctx.save();
+  ctx.font = `500 ${fs}px Inter, system-ui, -apple-system, sans-serif`;
+  ctx.textBaseline = 'middle';
+  const boxes = [];
+  for (const a of L) {
+    seen.add(a.key);
+    const col = a.color || look.labelInk;
+    let s = R.lab[a.key];
+    if (!s || Math.hypot(s.x - a.x, s.y - a.y) > 0.15) s = R.lab[a.key] = { x: a.x, y: a.y };
+    else { s.x += (a.x - s.x) * 0.12; s.y += (a.y - s.y) * 0.12; }
+    const ax = X(v, s.x), ay = Y(v, s.y);
+    if (ax < rect.x || ax > rect.x + rect.w || ay < rect.y || ay > rect.y + rect.h) continue;
+    const tw = ctx.measureText(a.text).width, bw = tw + 2 * pad, bh = fs + 2 * pad;
+    const off = 34 * k, cands = [[off, -off], [-off - bw, -off], [off, off - bh], [-off - bw, off - bh]];
+    let pick = null;
+    for (const [dx, dy] of cands) {
+      const bx = ax + dx, by = ay + dy - bh / 2;
+      if (bx < rect.x || bx + bw > rect.x + rect.w || by < rect.y || by + bh > rect.y + rect.h) continue;
+      if (boxes.some(o => bx < o[0] + o[2] + 4 * k && bx + bw + 4 * k > o[0] && by < o[1] + o[3] + 4 * k && by + bh + 4 * k > o[1])) continue;
+      pick = [bx, by]; break;
+    }
+    if (!pick) continue;
+    const [bx, by] = pick;
+    boxes.push([bx, by, bw, bh]);
+    const lx = bx < ax ? bx + bw : bx, ly = by + bh / 2;
+    ctx.strokeStyle = col; ctx.lineWidth = 1.25 * k; ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(lx, ly); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(ax, ay, 3 * k, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = look.labelBg; ctx.lineWidth = 1.5 * k; ctx.stroke();
+    ctx.fillStyle = look.labelBg; ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 6 * k); else ctx.rect(bx, by, bw, bh);
+    ctx.fill();
+    ctx.fillStyle = col; ctx.fillRect(bx, by + 4 * k, 2.5 * k, bh - 8 * k);
+    ctx.fillStyle = look.labelInk; ctx.fillText(a.text, bx + pad + 2 * k, ly);
+  }
+  for (const key in R.lab) if (!seen.has(key)) delete R.lab[key];
+  ctx.restore();
+}
+
 // Draw one frame. look = { theme, water, colorBy, lut, render, foam,
 // palette: [..], size, wall, wallFill, obstacle, outline, mark, cabin,
-// grid, bg, bg2, veil, veilColor }. view from fitView. R is a cache object.
+// grid, bg, bg2, veil, veilColor, showB, labels, bparts, labelBg,
+// labelInk, dpr }. view from fitView. R is a cache object.
 export function draw(ctx, S, view, look, R, makeCanvas, cw, ch) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
@@ -407,10 +521,12 @@ export function draw(ctx, S, view, look, R, makeCanvas, cw, ch) {
   drawWalls(ctx, S, view, look);
   const pal = look.palette;
   for (let k = 0; k < S.bodies.length; k++) { const b = S.bodies[k]; drawBody(ctx, S, view, b, b.color || pal[(b.id + (b.kind === 'rock' ? 3 : 0)) % pal.length], look); }
+  if (look.showB) drawBoundary(ctx, S, view, look);
   // emitters
   ctx.fillStyle = look.wall;
   for (const e of S.emitters) { const x = X(view, e.x), y = Y(view, e.y), r = 0.018 * view.s; ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); }
   const p = S.pointer;
   if (p.on && p.body < 0) { ctx.strokeStyle = look.mark; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X(view, p.x), Y(view, p.y), p.r * view.s, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; }
+  if (look.labels) drawLabels(ctx, S, view, look, R);
   if (look.veil > 0) { ctx.globalAlpha = Math.min(1, look.veil); ctx.fillStyle = look.bg; ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1; }
 }

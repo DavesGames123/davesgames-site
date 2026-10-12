@@ -262,7 +262,7 @@ export function createSim(o = {}) {
     P: {
       gx: 0, gy: -9.81, substeps: 3, iters: 3, material: 'water', visc: 0.08, vort: 0.4, tension: 0.12, relax: 0.05,
       mu_s: 0.2, mu_k: 0.2, e: 0.2, velPass: true, wallMu: 0.05, bspace: 0.8, shakeA: 0, shakeF: 1.2, spin: 0, mixer: 120,
-      coupling: 1, maxV: 6,
+      coupling: 1, maxV: 6, bparts: true,
     },
     container: null, bodies: [], emitters: [], obstacles: [],
     nb: new Int32Array(cap * MAXNB), nbc: new Int32Array(cap), nbb: new Int32Array(cap * MAXNBB), nbbc: new Int32Array(cap),
@@ -424,7 +424,9 @@ function solveDensity(S) {
       gx += g * dx; gy += g * dy; s2 += g * g * r2;
     }
     const bb = i * MAXNBB;
-    for (let q = 0, m = S.nbbc[i]; q < m; q++) {
+    // P.bparts false: the boundary particles drop out of the density sum
+    // (the page's "no wall particles" preset); only the SDF clamp is left.
+    for (let q = 0, m = P.bparts ? S.nbbc[i] : 0; q < m; q++) {
       const j = S.nbb[bb + q]; const dx = xi - S.bx[j], dy = yi - S.by[j]; const r2 = dx * dx + dy * dy; const psi = S.bpsi[j];
       rho += psi * W(r2);
       const r = Math.sqrt(r2); if (r < 1e-9) continue;
@@ -448,7 +450,7 @@ function solveDensity(S) {
       ddx += g * dx; ddy += g * dy;
     }
     const bb = i * MAXNBB;
-    for (let q = 0, m = S.nbbc[i]; q < m; q++) {
+    for (let q = 0, m = P.bparts ? S.nbbc[i] : 0; q < m; q++) {
       const j = S.nbb[bb + q]; const dx = xi - S.bx[j], dy = yi - S.by[j]; const r2 = dx * dx + dy * dy;
       const r = Math.sqrt(r2); if (r < 1e-9) continue;
       const g = S.bpsi[j] * SPIKY * (H - r) * (H - r) / r * li * inv;

@@ -53,11 +53,13 @@ export function installSaver(P) {
   const D = director({
     kit: P.kit,
     canvas: () => P.canvas,
+    // every shot runs with the boundary particles on, whatever preset the
+    // visitor left (the solver group is not drawn by the randomizer)
     shots: SHOTS.map(s => Object.assign({ params: st => [
       { sym: 'N', name: 'particles', value: String(P.S.n) },
       { sym: 'B', name: 'bodies', value: String(P.S.bodies.length) },
       { sym: 'g', name: 'gravity', value: st.g.toFixed(1) + ' m/s²' },
-    ] }, s)),
+    ] }, s, { scene: (r, st) => Object.assign({ bparts: true, bspace: 0.8 }, s.scene ? s.scene(r, st) : {}) })),
     apply(state, shot, cam) { P.rebuild(); drift = 0; P.setView(shot ? { x: 0, y: 0, w: innerWidth, h: innerHeight, cam } : null); },
     frame(band, cam) { P.setView(band ? Object.assign({}, band, { cam }) : null); },
     tick(dt, ctx) {

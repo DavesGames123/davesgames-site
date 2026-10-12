@@ -17,13 +17,22 @@
 //  surface        the contour of a disc of particles is one closed loop of
 //                 the right area; a ring gives an outer loop and a hole;
 //                 the water look fills a vector path and draws no image
+//  presets        every preset is a valid state that runs clean; "wall
+//                 particles off" lowers the level and the box; a sparse
+//                 wall keeps the wall density at rest (the Ψ weight)
+//  labels         label anchors are finite and inside the domain for every
+//                 preset; the canvas draws them and the boundary dots
+//  tex            the "How it works" TeX has balanced braces and only
+//                 known macros
 //  saver          saver plan: shots, no back-to-back repeats, 6-12 s cuts
-//  page           main.js boots under the DOM stub, autoplays, rebuilds on
-//                 a new scene, and runs saver cuts
+//  page           main.js boots under the DOM stub on the first preset,
+//                 shows the band, chips, legend and sheet, rebuilds on a
+//                 new scene, and runs saver cuts
 // ============================================================================
 import * as SV from './solver.js';
 import * as SC from './scene.js';
-import { draw, fitView, WATER, splat, contour } from './render.js';
+import { draw, fitView, WATER, splat, contour, labelAnchors } from './render.js';
+import { EQS } from './explain.js';
 import * as BG from './budget.js';
 import * as K from '../../widgets/sim-kit/core.js';
 import { installDom, fakeCtx, makeCanvas } from '../../widgets/sim-kit/test/stubs.mjs';
@@ -164,6 +173,70 @@ function submergedFraction(S, b, level) {
   ok(images === 0 && evenodd >= 2, 'surface: the water look is a filled vector contour, no scaled raster', `drawImage ${images}, evenodd fills ${evenodd}`);
 }
 {
+  // presets: valid states that run clean
+  let bad = [];
+  for (const p of SC.PRESETS) {
+    const st = SC.presetState(SCHEMA, K.defaults(SCHEMA), p);
+    for (const k in p.state) { const c = K.normalize(SCHEMA).byKey.get(k); if (!c || K.coerce(c, p.state[k]) !== p.state[k]) bad.push(p.id + '.' + k); }
+    if (!p.caption || p.caption.length > 240) bad.push(p.id + ' caption');
+    const S = run(st, p.seed, 300, BG.CAP.desktop), hh = SV.health(S);
+    if (hh.bad || hh.out || !S.n) bad.push(`${p.id}: n ${S.n} bad ${hh.bad} out ${hh.out}`);
+  }
+  ok(!bad.length, `presets: ${SC.PRESETS.length} presets are valid states and run 300 frames clean`, bad.join('; ') || SC.PRESETS.map(p => p.id).join(' '));
+  // wall particles off: the level drops and the box rides lower
+  const pw = SC.presetById('nowall'), base = SC.presetState(SCHEMA, K.defaults(SCHEMA), pw);
+  const lvl = (on) => { const S = run(Object.assign({}, base, { bparts: on }), pw.seed, 700, BG.CAP.desktop); return { lvl: surface(S), box: S.bodies[0] ? S.bodies[0].y : NaN }; };
+  const on = lvl(true), off = lvl(false);
+  ok(on.lvl - off.lvl > 0.01 && on.box - off.box > 0.01, 'presets: with wall particles off the level drops and the box rides lower',
+    `level ${(on.lvl * 100).toFixed(1)} -> ${(off.lvl * 100).toFixed(1)} cm, box ${(on.box * 100).toFixed(1)} -> ${(off.box * 100).toFixed(1)} cm`);
+  // sparse wall: with the Ψ weight the wall layer is the same at any wall
+  // spacing; with Ψ held at its 0.8 d value, a 1.0 d wall lets the water
+  // pack in (more particles within 3 cm of the walls)
+  const wallLayer = (bs, fixPsi) => {
+    const st = Object.assign(K.defaults(SCHEMA), { container: 'tank', fill: 'pool', count: 2000, nBodies: 0, obstacles: 0, bspace: bs });
+    const S = SV.createSim({ cap: 2200 }), r = SC.sceneRng(9);
+    SC.applyParams(S, st); SV.buildScene(S, SC.sceneConfig(st, r), r);
+    let ps = 0; for (let i = 0; i < S.nStatic; i++) ps += S.bpsi[i]; ps /= S.nStatic;
+    if (fixPsi) for (let i = 0; i < S.nStatic; i++) S.bpsi[i] = fixPsi;
+    for (let f = 0; f < 400; f++) S.step(1 / 60);
+    const inn = S.container.inner; let a = 0, m = 0;
+    for (let i = 0; i < S.n; i++) if (Math.min(S.x[i] - inn.x0, inn.x1 - S.x[i], S.y[i] - inn.y0) < 0.03) { a += S.rho[i] / SV.RHO0; m++; }
+    return { rho: a / m, m, psi: ps };
+  };
+  const w8 = wallLayer(0.8), w6 = wallLayer(0.6), w10 = wallLayer(1.0), w10f = wallLayer(1.0, w8.psi);
+  ok(Math.abs(w6.rho - w8.rho) < 0.01 && Math.abs(w10.rho - w8.rho) < 0.01 && Math.abs(w10.m - w8.m) <= 0.05 * w8.m && w10f.m > 1.2 * w8.m, 'presets: Ψ keeps the wall layer the same for wall spacing 0.6 d to 1.0 d; a fixed Ψ does not',
+    `density ${w6.rho.toFixed(3)} / ${w8.rho.toFixed(3)} / ${w10.rho.toFixed(3)}, particles within 3 cm ${w6.m} / ${w8.m} / ${w10.m}; fixed Ψ at 1.0 d: ${w10f.m}`);
+}
+{
+  // labels: anchors and drawing
+  let bad = [], texts = 0;
+  for (const p of SC.PRESETS) {
+    const st = SC.presetState(SCHEMA, K.defaults(SCHEMA), p);
+    const S = run(st, p.seed, 60, BG.CAP.desktop);
+    const L = labelAnchors(S, { bparts: st.bparts });
+    if (!L.some(a => a.key === 'fluid') || !L.some(a => a.key === 'wall')) bad.push(p.id + ' missing fluid or wall');
+    for (const a of L) if (!Number.isFinite(a.x + a.y) || a.x < -0.3 || a.x > S.Wd + 0.3 || a.y < -0.3 || a.y > S.Hd + 0.3) bad.push(p.id + ' ' + a.key);
+    if (p.id === 'nowall' && !L.some(a => /switched off/.test(a.text))) bad.push('nowall wall text');
+    const ctx = fakeCtx(1600, 1000), t = K.themeById('abyss'); let ft = 0; const f0 = ctx.fillText; ctx.fillText = (...a) => { ft++; return f0(...a); };
+    const look = { bg: t.bg, bg2: t.bg2, grid: null, wall: t.wall, wallFill: 'x', obstacle: t.wall, outline: '#000', mark: t.accent, cabin: '#fff', water: 'ocean', colorBy: 'water', lut: null, render: st.render, foam: true, size: 1, palette: K.paletteColors('toybox'), veil: 0, alpha: 0.94, showB: true, labels: true, bparts: st.bparts, labelBg: '#000', labelInk: '#fff', dpr: 2 };
+    draw(ctx, S, fitView(S, { x: 0, y: 200, w: 1600, h: 800 }), look, {}, makeCanvas, 1600, 1000);
+    if (ctx.bad) bad.push(p.id + ' non-finite draw'); texts += ft;
+    if (ft < 2) bad.push(`${p.id} drew ${ft} labels`);
+  }
+  ok(!bad.length, 'labels: anchors finite and in the domain for every preset; at least two labels drawn each', bad.join('; ') || `${texts} labels drawn over ${SC.PRESETS.length} presets`);
+}
+{
+  // tex: balanced braces, known macros only
+  const known = new Set(['class', 'rho', 'Psi', 'lambda', 'mathbf', 'sum', 'qquad', 'frac', 'lvert', 'rvert', 'nabla', 'varepsilon', 'quad', 'Delta', 'left', 'right', 'mathrm', 'text', 'in', 'leftarrow', 'Rightarrow', 'approx', 'phi', 'bigl', 'bigr', 'lt', ',', ';']);
+  let bad = [];
+  for (const [k, tex] of Object.entries(EQS)) {
+    let d = 0; for (const ch of tex.replace(/\\[{}]/g, '')) { if (ch === '{') d++; else if (ch === '}') d--; if (d < 0) break; }
+    if (d !== 0) bad.push(k + ' braces');
+    for (const m of tex.matchAll(/\\([A-Za-z]+|.)/g)) if (!known.has(m[1])) bad.push(k + ' \\' + m[1]);
+  }
+  ok(!bad.length, `tex: ${Object.keys(EQS).length} equations, balanced braces, known macros`, bad.join('; '));
+}
+{
   const { default: _ } = { default: 0 };
   const plan = K.planShots([{ key: 'a' }, { key: 'b' }, { key: 'c' }, { key: 'd' }, { key: 'e' }, { key: 'f' }, { key: 'g' }, { key: 'h' }], 5, 200);
   ok(plan.every((p, i) => !i || p.key !== plan[i - 1].key) && plan.every(p => p.sec >= 6 && p.sec <= 12), 'saver plan: 8 shots, no repeats, 6-12 s cuts');
@@ -179,7 +252,18 @@ function submergedFraction(S, b, level) {
   const P = window.__pbf;
   runRaf(30);
   const S0 = P.S, n0 = S0.n, f0 = S0.frame;
-  ok(P.kit.playing && S0.frame > 0 && n0 > 0, 'page: boots, builds a random scene and autoplays', `${n0} particles, ${S0.frame} frames, seed ${P.kit.seed}`);
+  ok(P.kit.playing && S0.frame > 0 && n0 > 0 && P.kit.seed === SC.PRESETS[0].seed && P.kit.state.fill === 'dam' && P.ex.active === 'dam', 'page: boots on the first preset and autoplays', `${n0} particles, ${S0.frame} frames, seed ${P.kit.seed}, preset ${P.ex.active}`);
+  const band = document.getElementById('pb-info'), legend = document.getElementById('pb-legend'), sheet = document.getElementById('pb-how');
+  const chips = band ? band.findAll(e => e._cls.has('pb-chip')) : [];
+  runRaf(20);
+  ok(band && band.parentNode === P.kit.root && chips.length === SC.PRESETS.length + 1 && legend.children.length >= 3 && sheet.hidden, 'page: the band has a title, one chip per preset and "How it works"; the legend has a key',
+    `${chips.length} chips, legend: ${legend.children.map(li => li.children[li.children.length - 1].textContent).join(' | ')}`);
+  chips[2].click(); runRaf(5);
+  const howB = chips[chips.length - 1]; howB.click();
+  const vr = P.viewRect();
+  ok(P.ex.active === 'nowall' && P.kit.state.bparts === false && P.S.P.bparts === false && !sheet.hidden && [vr.x, vr.y, vr.w, vr.h].every(Number.isFinite), 'page: a chip loads its preset; "How it works" opens the sheet',
+    `preset ${P.ex.active}, bparts ${P.S.P.bparts}, sheet open, view ${vr.w}x${vr.h} at ${vr.x},${vr.y}`);
+  howB.click();
   const seed0 = P.kit.seed; P.kit.newScene(); runRaf(5);
   ok(P.kit.seed !== seed0 && P.S.frame < f0 + 10, 'page: a new scene rebuilds the sim');
   ok(view._c.bad === 0, 'page: no non-finite canvas calls while running');
