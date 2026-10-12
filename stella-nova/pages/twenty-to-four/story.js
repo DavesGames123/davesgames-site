@@ -19,7 +19,7 @@ export const CHAPTERS = [
   {
     id: 'twenty', scene: 'fold', kicker: 'Maxwell, 1865', title: 'Twenty equations',
     html: `
-<p class="lede">In 1865 James Clerk Maxwell wrote the electromagnetic field as twenty equations in twenty unknowns. He wrote each law three times, once for each of x, y and z, because the vector notation we use now did not exist yet.</p>
+<p class="lede">In 1865 James Clerk Maxwell wrote the electromagnetic field as twenty equations in twenty unknowns. He wrote each law three times, once for each of x, y and z, because vector notation was not yet in common use.</p>
 <p>His eight groups are below, with his own letters. Point at a group and the stage marks its lines.</p>
 <div data-w="groups"></div>
 <p>His twenty unknowns, with the names we use today:</p>
@@ -87,7 +87,7 @@ export const CHAPTERS = [
   {
     id: 'gauge', scene: 'gauge', kicker: 'Groups B and D, rewritten', title: 'Potentials and gauge',
     html: `
-<p>Maxwell built his equations on two potentials, {{iphi}} and {{iA}}. Heaviside called them metaphysical and wrote the four laws with {{iE}} and {{iB}} only. But the potentials make two of the four laws automatic.</p>
+<p>Maxwell built his equations on two potentials, {{iphi}} and {{iA}}. Heaviside distrusted them and wrote the four laws with {{iE}} and {{iB}} only. But the potentials make two of the four laws automatic.</p>
 <div data-eq="pB"></div><div data-eq="pE"></div>
 <p>With the first, law II holds for any {{iA}}. With the second, law III holds. The potentials are not unique: add the gradient of any function {{ichi}} to {{iA}}, take its time derivative from {{iphi}}, and {{iE}} and {{iB}} do not change. This freedom is a gauge.</p>
 <div data-eq="gaugeA"></div><div data-eq="gaugeP"></div>
