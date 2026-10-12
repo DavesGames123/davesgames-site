@@ -85,7 +85,14 @@ export function asPlayer(p, seed = 1) {
 //     binary, sparsity 0.10:  829/3000 = 0.276
 //     graded, sparsity 0.10:  899/3000 = 0.300
 // Weights saved with other options keep their own options in the JSON.
-export const FLY_OPTS = Object.freeze({ imagine: true, kcCode: 'graded', sparsity: 0.1 });
+// calibrationGames 24 (2026-10-11, dice cards). The KC thresholds come
+// from random games on the default decks (calibrationSet, brain/agent.js).
+// With the dice cards, the default 6 games gave a sample that let fly B
+// (FlyWire) collapse in training: it passed every turn, 0.00 against the
+// random bot at games 500 and 3000 (seed 2026), and 0.071 against the
+// greedy bot held out. With 12, 24 or 48 games, fly B stayed at 0.88-1.00
+// against the random bot over 2000 games, seeds 2026 and 2027.
+export const FLY_OPTS = Object.freeze({ imagine: true, kcCode: 'graded', sparsity: 0.1, calibrationGames: 24, maxCalibration: 4000 });
 // WIRING: the connectome file of each fly. Fly A has the hemibrain MB
 // (Janelia, one animal) and fly B has the FlyWire MB (FAFB, a second
 // animal). The KC count and the claws are not the same, so the saved

@@ -85,6 +85,8 @@ const t0 = performance.now();
   ok(FLY_OPTS.sparsity >= 0.05 && FLY_OPTS.sparsity <= 0.1 && A.mb.k === Math.round(FLY_OPTS.sparsity * A.mb.nLive), `FLY_OPTS: sparsity ${FLY_OPTS.sparsity} in the 5-10 % band, k = ${A.mb.k}`);
   const j = JSON.parse(JSON.stringify(A)), A2 = Fly.fromJSON(C, j);
   ok(A2.mb.graded && A2.mb.k === A.mb.k, 'FLY_OPTS: a saved fly keeps its code and sparsity');
+  // 6 calibration games let fly B (FlyWire) collapse with the dice cards (see FLY_OPTS)
+  ok(FLY_OPTS.calibrationGames >= 12 && FLY_OPTS.maxCalibration >= 2000, `FLY_OPTS: KC thresholds from ${FLY_OPTS.calibrationGames} random games (at least 12), up to ${FLY_OPTS.maxCalibration} boards`);
 }
 
 // ---------------------------------------------------------------- 1c deck pool
