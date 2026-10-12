@@ -14,7 +14,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mulberry32 } from '../data/rng.js';
+import { mulberry32, rngNext } from '../data/rng.js';
 import { MushroomBody } from '../brain/mb.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -476,6 +476,35 @@ const walk = {
   }
 }
 
+// ---------------------------------------------------------------- dice
+// A coin game: "roll" ends the game at once, a win when the real roll
+// (from rngState) is odd, else a loss. "stay" ends nothing. A fly that
+// sees the real roll in its afterstate rolls exactly when the roll wins.
+// A fair fly must choose "roll" at the same rate whatever the real roll.
+{
+  const coin = {
+    legalActions: s => (s.result ? [] : [{ type: 'roll' }, { type: 'stay' }]),
+    step: (s, a) => {
+      if (a.type === 'stay') return { ...s, turn: s.turn + 1 };
+      const [f, next] = rngNext(s.rngState);
+      return { ...s, rngState: next, turn: s.turn + 1, result: { winner: Math.floor(f * 2) === 1 ? 0 : 1, reason: 'roll' } };
+    },
+    isOver: s => s.result,
+    features: () => randFeat(mulberry32(45)),
+  };
+  const fly = new FlyAgent(C, { game: coin, seed: 9 });
+  const n = [0, 0], rolls = [0, 0];
+  for (let k = 0; k < 400; k++) {
+    const s = { toAct: 0, turn: 0, rngState: (Math.imul(k + 7, 2654435761) >>> 0), players: [{ life: 20 }, { life: 20 }], result: null };
+    const real = coin.step(s, { type: 'roll' }).result.winner === 0 ? 1 : 0;
+    const r = fly.choose(s, coin.legalActions(s), { trace: false });
+    n[real]++; if (r.action.type === 'roll') rolls[real]++;
+  }
+  const pWin = rolls[1] / n[1], pLose = rolls[0] / n[0];
+  ok(n[0] > 100 && n[1] > 100, `dice: both real outcomes occur (${n})`);
+  ok(Math.abs(pWin - pLose) < 0.2, `dice: the fly does not see the real roll (rolls ${(pWin * 100).toFixed(0)} % when it would win, ${(pLose * 100).toFixed(0)} % when it would lose)`);
+}
+
 // ---------------------------------------------------------------- integration
 // Runs only when the real game and the real connectome exist.
 const need = ['game/rules.js', 'game/features.js', 'data/connectome.json'].map(p => join(ROOT, p));
@@ -527,7 +556,9 @@ if (need.every(existsSync)) {
   const c1 = A.choose(s0, R.legalActions(s0)), c2 = A2.choose(s0, R.legalActions(s0));
   ok(c1.index === c2.index && c1.values.every((v, i) => v === c2.values[i]), 'real Fly JSON round trip');
   ok(GAME.features(s0, 0).length === 48, 'features() gives 48 numbers');
-  ok(c1.scores === c1.values, 'imagine off: the policy uses the MB values');
+  // a dice action (the RNG moves) is scored by the mean over sampled rolls
+  const rolls0 = R.legalActions(s0).map(x => R.step(s0, x).rngState !== s0.rngState);
+  ok(c1.values.every((v, i) => rolls0[i] || c1.scores[i] === v), 'imagine off: the policy uses the MB values (dice actions excepted)');
   // imagine on: block-phase afterstates get the worst block value, others keep their value
   const [I] = makePair(RC, { seed: 2, imagine: true });
   let checked = 0, badImg = 0;
@@ -539,7 +570,8 @@ if (need.every(existsSync)) {
       legal.forEach((a, i) => {
         const after = R.step(s, a);
         if (!Number.isFinite(r.scores[i])) badImg++;
-        if (after.phase !== 'block' || after.toAct === s.toAct || R.isOver(after)) { if (r.scores[i] !== r.values[i]) badImg++; }
+        if (after.rngState !== s.rngState) { if (!Number.isFinite(r.scores[i])) badImg++; }
+        else if (after.phase !== 'block' || after.toAct === s.toAct || R.isOver(after)) { if (r.scores[i] !== r.values[i]) badImg++; }
         else checked++;
       });
       s = R.step(s, r.action);

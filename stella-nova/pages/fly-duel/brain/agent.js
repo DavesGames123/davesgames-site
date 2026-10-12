@@ -45,6 +45,12 @@
 //  (6000 games), 0.02-0.04 without (15000 games). These are dev runs,
 //  not the page numbers (train/ measures those).
 //
+//  DICE.  step() rolls with the RNG in the state, so the afterstate of a
+//  dice action shows the real roll. The policy scores such an action by
+//  the mean MB value over ROLL_SAMPLES other RNG states (_rollMean), so
+//  the fly cannot choose on a roll it has not seen. TD learns on the
+//  real afterstate.
+//
 //  SHAPED REWARD (optional, opts.shaping, default 0 = off).  Potential
 //  based (Ng, Harada, Russell 1999), so it does not change which policy is
 //  best: r_t += gamma * Phi(x_{t+1}) - Phi(x_t), Phi = shaping * (my life
@@ -61,6 +67,9 @@
 //      toJSON/fromJSON . "  toJSON(" / "static fromJSON("
 // ============================================================================
 import { MushroomBody, MB_DEFAULTS } from './mb.js';
+
+// Dice actions: the policy scores the mean over this many sampled rolls.
+export const ROLL_SAMPLES = 8;
 import { mulberry32, hashSeed } from '../data/rng.js';
 
 export const FLY_DEFAULTS = {
@@ -186,10 +195,18 @@ export class FlyAgent {
         values[i] = mb.valueOfKc(code.kc, code.rate);
       }
     }
+    // Dice: step() rolls with the state RNG, so an afterstate shows the
+    // real roll. When an action rolls (the RNG moves), the policy uses the
+    // mean value over ROLL_SAMPLES other RNG states (the greedy bot does
+    // the same, game/bots.js expectedScore). TD still learns on the real
+    // afterstate, because the roll has happened when the fly learns.
+    const rolled = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if (afters[i].rngState !== state.rngState) rolled[i] = 1;
     // Imagined block (opts.imagine, off by default). Model, not biology:
     // when an action hands the opponent a block choice, score it by the
     // worst value over the opponent's blocks. TD still learns on values.
-    const scores = this.opts.imagine ? values.map((v, i) => this._imagine(afters[i], me, v, terminal[i])) : values;
+    const scores = values.map((v, i) => (rolled[i] ? this._rollMean(state, legal[i], me)
+      : this.opts.imagine ? this._imagine(afters[i], me, v, terminal[i]) : v));
     // policy
     let best = 0;
     for (let i = 1; i < n; i++) if (scores[i] > scores[best]) best = i;
@@ -233,6 +250,19 @@ export class FlyAgent {
     const out = { action: legal[index], index, values, scores, probs, learned, trace: null };
     if (trace) out.trace = this.buildTrace(feats[index] || (chosenTerminal ? safeFeatures(features, afters[index], me) : null), { me, index, values, probs, terminal: chosenTerminal });
     return out;
+  }
+
+  // Mean value of action a over ROLL_SAMPLES RNG states that are not the
+  // real one (the same alternates as game/bots.js expectedScore).
+  _rollMean(state, a, me) {
+    const { step, isOver, features } = this.game;
+    let t = 0;
+    for (let k = 0; k < ROLL_SAMPLES; k++) {
+      const alt = (Math.imul(k + 1, 0x9E3779B9) ^ state.rngState ^ 0x5bd1e995) >>> 0;
+      const s2 = step({ ...state, rngState: alt }, a), over = isOver(s2);
+      t += over ? (over.winner === me ? 1 : over.winner === -1 ? 0 : -1) : this.mb.value(features(s2, me));
+    }
+    return t / ROLL_SAMPLES;
   }
 
   _imagine(after, me, v, isTerminal) {
