@@ -209,5 +209,109 @@ if (plan) {
   ok(short.k * h <= 150 + 1e-9, 'fit: the minimum tile never makes the table taller than the frame');
 }
 
+// ── saver shots (saver-plan.js, saver-fx.js) ────────────────────────────────
+// The seeded shot plan, the plate of every shot, the camera aim against
+// render.js fitCamera, the close-up boxes in the clear band, the data
+// helpers, and the light layer run on a stub canvas context.
+{
+  const SP = await import('./saver-plan.js');
+  const FXM = await import('./saver-fx.js');
+  const { Table } = await import('./render.js');
+  // variety: every kind in each plan, no kind twice in a row, 6-12 s cuts, also when calm
+  {
+    const bad = []; const all = new Set();
+    for (let seed = 1; seed <= 60; seed++) for (const calm of [0, 1]) {
+      const P = SP.planShots(seed, 27, { calm });
+      const kinds = new Set(P.map(s => s.kind));
+      P.forEach((s, i) => { all.add(s.kind); if (i && s.kind === P[i - 1].kind) bad.push(`${seed}:${i} repeat`); if (!(s.dur >= 6 && s.dur <= 12)) bad.push(`${seed}:${i} dur ${s.dur}`); });
+      if (kinds.size !== SP.KINDS.length) bad.push(`${seed} has ${kinds.size} kinds`);
+      for (const s of P) if (s.kind === 'flight' && new Set(s.views).size !== 3) bad.push(`${seed} flight views ${s.views}`);
+    }
+    ok(!bad.length && all.size === SP.KINDS.length, `saver shots: 120 plans hold all ${SP.KINDS.length} kinds, no repeats, cuts of 6-12 s`, bad.slice(0, 4).join(' '));
+    const first = new Set(); for (let seed = 1; seed <= 40; seed++) first.add(SP.planShots(seed, 3).map(s => s.kind).join(','));
+    ok(first.size >= 25, 'saver shots: the opening of the run differs between seeds', `${first.size} of 40 openings differ`);
+    const slow = SP.planShots(4, 30, { calm: 1 }).reduce((a, s) => a + s.dur, 0), fast = SP.planShots(4, 30).reduce((a, s) => a + s.dur, 0);
+    ok(slow > fast, 'saver shots: calm makes the shots longer', `${fast.toFixed(0)} s -> ${slow.toFixed(0)} s for 30 shots`);
+  }
+  // plates: every shot and sub-state gives a title, plain values, at most one TeX line, no code
+  {
+    const bad = [];
+    for (let seed = 1; seed <= 30; seed++) for (const sh of SP.planShots(seed, 18)) {
+      const ks = sh.kind === 'timeline' ? [0, { year: 1898, newest: SP.known(1898).newest }, { year: 2030, newest: SP.known(2030).newest }] : [0, 1, 2, 3, 7];
+      for (const k of ks) {
+        const p = SP.plateFor(sh, k), j = JSON.stringify(p);
+        if (!p.title || typeof p.sub !== 'string' || /undefined|NaN|null|\[object/.test(j) || p.code || (p.tex || []).length > 1 || !(p.params || []).every(q => typeof q.value === 'string' && q.name)) bad.push(`${sh.kind}/${typeof k === 'object' ? k.year : k}: ${j.slice(0, 80)}`);
+      }
+    }
+    ok(!bad.length, 'saver shots: every plate has a title, plain values, at most one TeX line and no code', bad.slice(0, 3).join(' | '));
+  }
+  // camera: aimUser puts the chosen tile at the centre of the frame (render.js fitCamera)
+  {
+    const bad = [];
+    const frames = [{ x: 58, y: 180, w: 1325, h: 470 }, { x: 16, y: 210, w: 358, h: 420 }];
+    for (const v of ['standard', 'long', 'spiral', 'radial', 'janet', 'blocks', 'scatter']) for (const f of frames) for (const legend of [false, true]) {
+      const T = new Table(); T.setView(v, v === 'scatter' ? { x: 'radius', y: 'ie1' } : {}, 0, true);
+      const S = { frame: f, color: legend ? 'prop' : 'cat', phaseOn: false };
+      for (const z of [8, 26, 79]) {
+        const it = T.B.items[z - 1];
+        const a = SP.aimUser(T, S, it.x, it.y, 2.5);
+        T.user.zoom = a.zoom; T.user.px = a.px; T.user.py = a.py;
+        T.camSnap = true; T.fitCamera(S, 1440, 900, 0.016);
+        const [sx, sy] = T.toScreen(it.x, it.y);
+        if (Math.hypot(sx - (f.x + f.w / 2), sy - (f.y + f.h / 2)) > 0.5) bad.push(`${v} Z${z} ${legend ? 'legend' : ''} off by ${Math.hypot(sx - (f.x + f.w / 2), sy - (f.y + f.h / 2)).toFixed(1)} px`);
+      }
+    }
+    ok(!bad.length, 'saver shots: the camera aim puts the subject tile at the centre of the clear band', bad.slice(0, 3).join('; '));
+    let x = 0, v = 0, over = 0; for (let k = 0; k < 240; k++) { [x, v] = SP.spring(x, v, 10, 3, 1 / 60); over = Math.max(over, x - 10); }
+    ok(Math.abs(x - 10) < 0.01 && over <= 1e-9, 'saver shots: the camera spring settles with no overshoot past the target', `x ${x.toFixed(4)} after 4 s`);
+  }
+  // the close-up boxes and the counter strip stay in the band and apart
+  {
+    const bad = [];
+    const inside = (r, f) => r.x >= f.x - 0.5 && r.y >= f.y - 0.5 && r.x + r.w <= f.x + f.w + 0.5 && r.y + r.h <= f.y + f.h + 0.5;
+    const apart = (a, b) => a.x + a.w <= b.x + 0.5 || b.x + b.w <= a.x + 0.5 || a.y + a.h <= b.y + 0.5 || b.y + b.h <= a.y + 0.5;
+    for (const f of [{ x: 58, y: 180, w: 1325, h: 470 }, { x: 16, y: 210, w: 358, h: 420 }, { x: 40, y: 120, w: 900, h: 700 }, { x: 77, y: 260, w: 1766, h: 520 }]) {
+      const L = SP.atomLayout(f);
+      for (const [n, r] of Object.entries(L)) if (!inside(r, f)) bad.push(`${f.w}x${f.h} ${n} outside`);
+      if (!apart(L.atom, L.ie) || !apart(L.atom, L.iso) || !apart(L.ie, L.iso)) bad.push(`${f.w}x${f.h} overlap`);
+      if (L.atom.w < Math.min(f.w, f.h) * 0.5) bad.push(`${f.w}x${f.h} atom ${L.atom.w.toFixed(0)} px`);
+      const t = SP.frameOf(f, 'timeline');
+      if (!inside(t, f) || !inside(t.strip, f) || !apart(t, t.strip)) bad.push(`${f.w}x${f.h} timeline strip`);
+    }
+    ok(!bad.length, 'saver shots: the atom, its panels and the year strip sit in the clear band, apart', bad.join('; '));
+  }
+  // data helpers
+  {
+    const na = SP.ieSteps(C.BY_SYM.na), mg = SP.ieSteps(C.BY_SYM.mg);
+    ok(na.length >= 2 && na[0].shell === 'M' && na[1].shell === 'L' && na[1].jump && !na[0].jump && mg[2].jump && !mg[1].jump,
+      'saver shots: the ionization staircase jumps where an inner shell opens (Na at 2, Mg at 3)', na.slice(0, 3).map(s => s.shell + Math.round(s.eV)).join(' '));
+    const iso = SP.isoBars(C.BY_SYM.cl), sum = SP.isoBars(C.BY_SYM.sn, 20).reduce((a, b) => a + b.pct, 0);
+    ok(iso[0].A === 35 && iso[1].A === 37 && sum > 99 && sum < 101 && SP.isoBars(C.BY_SYM.tc).length === 0, 'saver shots: natural isotopes, largest first (Cl 35, 37; Sn sums to 100 %; Tc none)');
+    const k0 = SP.known(1650), k1 = SP.known(2030), k2 = SP.known(1898);
+    ok(k1.count === 118 && k0.count >= 10 && k0.count < 20 && k2.newest.some(e => e.sym === 'Po' || e.sym === 'Ra' || e.sym === 'Ne'), 'saver shots: the discovery count runs from the antiquity elements to 118', `${k0.count} known in 1650, ${k2.count} in 1898 (${k2.newest.map(e => e.sym).join(' ')})`);
+  }
+  // the light layer runs on a stub context: finite, and cheap in JS
+  {
+    const grad = { addColorStop() {} };
+    let calls = 0, nonfinite = 0;
+    const g = new Proxy({}, { get: (t, k) => k === 'createRadialGradient' || k === 'createLinearGradient' ? () => grad : k === 'measureText' ? s => ({ width: s.length * 7 }) : (...a) => { calls++; if (a.some(x => typeof x === 'number' && !isFinite(x))) nonfinite++; }, set: () => true });
+    const n = N, hist = new Float32Array(5 * n * 2).map((_, i) => (i * 37) % 1400), cols = ELEMENTS.map(e => C.CAT[e.cat].color), sides = new Float32Array(n).fill(40);
+    const f = { x: 58, y: 180, w: 1325, h: 470 };
+    const t0 = performance.now();
+    for (let k = 0; k < 300; k++) {
+      FXM.drawSky(g, 1440, 900, { x: k, y: -k, z: 1.4 }, k / 60);
+      FXM.drawStreaks(g, hist, 5, k % 5, n, cols, sides, 1);
+      for (let i = 0; i < n; i++) FXM.drawHalo(g, 100 + i, 300, 40, cols[i], 0.4);
+      FXM.drawBurst(g, 400, 300, 50, '#ff6fcf', (k % 60) / 60);
+      FXM.drawScan(g, f, 300 + k, '#cfe0ff', 1);
+      FXM.drawCounter(g, { x: 1100, y: 180, w: 290, h: 470 }, '1898', '84 of 118 known', 1);
+      FXM.drawIEPanel(g, { x: 900, y: 200, w: 400, h: 200 }, SP.ieSteps(C.BY_SYM.fe), '#4aa8ff', 1);
+      FXM.drawIsoPanel(g, { x: 900, y: 420, w: 400, h: 160 }, SP.isoBars(C.BY_SYM.fe), '#4aa8ff', 1);
+    }
+    const ms = (performance.now() - t0) / 300;
+    ok(nonfinite === 0 && calls > 1000 && ms < 4, 'saver shots: the light layer draws finite shapes in under 4 ms of JS per frame (stub context)', `${ms.toFixed(2)} ms per frame, ${Math.round(calls / 300)} calls`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
