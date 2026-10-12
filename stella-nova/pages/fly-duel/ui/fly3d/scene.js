@@ -76,10 +76,18 @@
 //      both caps. The mesh then has no card id, and pickCard gives id
 //      null for it. A lifted card is public (it is played) and shows its
 //      face. Watch mode shows every face.
+//      The end of a game (choreo ops win and toss): the winner raises
+//      its arms. The loser plays the fly.js clip headDown: it throws its
+//      hand (the cards fly on ballistic arcs and land flat on the table,
+//      on other cards or on the floor, Z.tossed) and puts its head down
+//      on the table until the next game. In play mode your own seat does
+//      not throw: it keeps the slump. The director frames the toss
+//      (shot 'toss'), then the win. The fedora is on the fly you play
+//      against only (applyHats).
 //      setCamera: 'auto' (the steps pick the shots), 'wide', 'free' (the
 //      user orbits, no cuts), 'script' (only shoot() cuts). Shots
 //      (ui/fly3d/director.js SHOTS): wide, over, close, follow, dolly,
-//      combat, crane, low, crowd, win, seat.
+//      combat, crane, low, crowd, toss, win, seat.
 //      canvas null or headless: true builds the scene graph without a
 //      renderer (node tests).
 //
@@ -101,6 +109,9 @@
 //      grep -n 'function placeholderAnimate'  stand-in clips
 //      grep -n 'function layout'              where every card goes
 //      grep -n 'const STEP'                   one handler per choreo op
+//      grep -n 'the toss'                     the loser throws its hand
+//      grep -n 'function tossUpdate'          thrown cards: flight, landing
+//      grep -n 'function applyHats'           the fedora on the opponent
 //      grep -n 'function shotPose'            camera place per shot
 //      grep -n 'export const WATCH'           watch framing numbers
 //      grep -n 'const SEAT_POSE'              play seat camera
@@ -376,6 +387,9 @@ function ringGeometry(W = T.cardW, H = T.cardH, w = 0.035) {
 }
 
 const easeOut = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+// A small seeded random number source (the toss of a hand is the same
+// for the same record).
+function rngf(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const easeIO = t => { t = Math.min(1, Math.max(0, t)); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
 
 // One card on the table. It moves toward its target with an arc.
@@ -773,6 +787,21 @@ export function createDuelScene(canvas, opts = {}) {
     built.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
     f.holder.add(built.root);
     f.holder.updateMatrixWorld(true);
+    applyHats();
+  }
+  // The fedora (user: "put the competitor fly in a fedora"). Only the fly
+  // you play against wears it (play mode). In watch mode and in the saver
+  // no fly wears it: the two flies are equal there, and the brim (1.7
+  // head widths) hides the fan from the shots over the head of the fly
+  // (reel rig 'hands', tests/saver-reel.test.mjs). fly.js setHat puts the
+  // hat on (the CC BY model of ui/fly3d/hat.js when it loads) or hides
+  // it. The stand-in fly has no setHat and no hat.
+  function applyHats() {
+    for (const f of flies) {
+      const rig = f.built?.rig;
+      if (!rig || typeof f.mod.setHat !== 'function') continue;
+      try { f.mod.setHat(rig, f.p === hatSeat()); } catch (e) { console.warn('fly-duel 3d: setHat failed', e); }
+    }
   }
   for (const f of flies) {
     f.holder.position.copy(seatPos(f.p, 0, 0, T.seatV)); f.holder.position.y = T.seatTop;
@@ -901,7 +930,7 @@ export function createDuelScene(canvas, opts = {}) {
 
   // ---------------------------------------------------------- state
   let mirror = null;
-  const Z = { hand: [[], []], grave: [[], []], perms: new Map(), held: [null, null], pips: new Map(), flags: new Map() };
+  const Z = { hand: [[], []], grave: [[], []], perms: new Map(), held: [null, null], pips: new Map(), flags: new Map(), tossed: [] };
   const fx = [];                       // running effects { update(dt) -> bool alive }
   let now = 0, sceneT = 0, speed = 1, disposed = false;   // now: real s, sceneT: s times speed
   const queue = [];                    // { rec, resolve }
@@ -909,8 +938,8 @@ export function createDuelScene(canvas, opts = {}) {
   let toAct = 0, winner = null;
 
   function clearCards() {
-    for (const o of [...Z.hand[0], ...Z.hand[1], ...Z.grave[0], ...Z.grave[1], ...Z.perms.values(), ...Z.held]) o?.dispose();
-    Z.hand = [[], []]; Z.grave = [[], []]; Z.perms.clear(); Z.held = [null, null];
+    for (const o of [...Z.hand[0], ...Z.hand[1], ...Z.grave[0], ...Z.grave[1], ...Z.perms.values(), ...Z.held, ...Z.tossed]) o?.dispose();
+    Z.hand = [[], []]; Z.grave = [[], []]; Z.perms.clear(); Z.held = [null, null]; Z.tossed = [];
     for (const pip of Z.pips.values()) W.fx.remove(pip);
     Z.pips.clear(); Z.flags.clear();
   }
@@ -1245,6 +1274,114 @@ export function createDuelScene(canvas, opts = {}) {
     if (target) f.spec.target = target.clone();
     if (to) f.spec.to = to.clone();
     f.t0 = sceneT; f.rate = Math.min(8, Math.max(0.25, rate)); f.until = sceneT + until;
+    f.tossAt = null;
+  }
+
+  // ---------------------------------------------------------- the toss
+  // The loser throws its hand (choreo op toss, user: "we should have the
+  // loser throw their cards and put their head down on the table if they
+  // lose"). The fly plays headDown; at CLIPS.headDown.release the cards
+  // leave the fan and fly on ballistic arcs with spin. A card lands on the
+  // table top (or on a card that lies there) when it comes down inside the
+  // table, else on the floor. Below the table top a card does not go into
+  // the table: it hits the side and drops. On landing the card turns flat
+  // (face up or down, as it fell) and slides a little. Z.tossed holds the
+  // thrown cards; the mirror keeps them in the hand (stats().hand counts
+  // them). Reduced motion: the fly cuts to the end pose and the cards
+  // are at once where the same throw puts them. In play mode the human
+  // seat does not throw (the human has no body): that fly keeps the slump.
+  const TOSS = { g: 16, rest: 0.005, floorRest: 0.005, stackGap: 0.0016, slide: 0.15, settle: 0.12, maxT: 6 };
+  const _tv = new THREE.Vector3(), _tw = new THREE.Vector3(), _tq = new THREE.Quaternion(), _tn = new THREE.Vector3(), _te = new THREE.Euler();
+  const insideTable = (x, z, m = 0) => Math.abs(x) <= T.halfLen - m && Math.abs(z) <= T.halfDepth - m;
+  // The launch of card i of n of seat p: a fan of forward throws, and now
+  // and then a card that slips out to the side and falls to the floor.
+  function tossLaunch(p, i, n, seed) {
+    const r = rngf((seed * 977 + p * 131 + i * 31 + 7) >>> 0);
+    const side = p === 0 ? 1 : -1;
+    let a = (n > 1 ? (i / (n - 1) - 0.5) * 1.15 : 0) + (r() - 0.5) * 0.35;
+    let sp = 2.4 + 2.2 * r(), vy = 2.6 + 1.6 * r();
+    if (n > 2 && r() < 0.2) { a = (r() < 0.5 ? -1 : 1) * (1.6 + 0.4 * r()); sp = 2.6 + 1.2 * r(); vy = 1.6 + 1.0 * r(); }
+    const vel = new THREE.Vector3(side * Math.sin(a) * sp, vy, -side * Math.cos(a) * sp);
+    const spin = new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize().multiplyScalar(9 + 9 * r());
+    return { vel, spin };
+  }
+  function tossStart(p) {
+    const H = Z.hand[p];
+    if (!H.length) return;
+    const seed = (cur?.rec?.i ?? cur?.rec?.idx ?? 0) + 1;
+    const n = H.length;
+    H.splice(0).forEach((o, i) => {
+      const { vel, spin } = tossLaunch(p, i, n, seed);
+      o.toss = { p, vel, spin, rested: false, landT: 0, slideV: new THREE.Vector3(), fromQ: new THREE.Quaternion(), toQ: new THREE.Quaternion(), surface: null };
+      o.ring.visible = false; o.lunge = null; o.t = 1; o.delay = 0;
+      Z.tossed.push(o);
+    });
+    if (W.reduced) { for (let k = 0; k < TOSS.maxT * 120 && Z.tossed.some(o => !o.toss.rested); k++) tossUpdate(1 / 120, true); }
+  }
+  // Rest height at (x, z) on the table: the table top, or over the cards
+  // already there (permanents, graveyard, other thrown cards).
+  function restOn(x, z, self) {
+    let y = T.y + TOSS.rest;
+    const near = (o) => { const q = o.mesh.position; if (Math.abs(q.x - x) < T.cardH * 0.7 && Math.abs(q.z - z) < T.cardH * 0.7 && q.y > T.y - 0.01) y = Math.max(y, q.y + TOSS.stackGap + 0.004); };
+    for (const o of Z.perms.values()) near(o);
+    for (const g of Z.grave) for (const o of g) near(o);
+    for (const o of Z.tossed) if (o !== self && o.toss.rested && o.toss.surface === 'table') near(o);
+    return y;
+  }
+  function tossLand(o, surface, y) {
+    const st = o.toss, m = o.mesh;
+    st.surface = surface; st.rested = true; st.landT = 0;
+    m.position.y = y;
+    // flat, face up or down as it fell, the heading of the card kept
+    _tn.set(0, 0, 1).applyQuaternion(m.quaternion);
+    const up = _tn.y >= 0;
+    _tw.set(0, 1, 0).applyQuaternion(m.quaternion); _tw.y = 0;
+    // Rx(-pi/2) puts the card top at -z (face up), Rx(pi/2) at +z
+    const yaw = _tw.lengthSq() > 1e-6 ? (up ? Math.atan2(-_tw.x, -_tw.z) : Math.atan2(_tw.x, _tw.z)) : 0;
+    st.fromQ.copy(m.quaternion);
+    st.toQ.setFromEuler(_te.set(up ? -Math.PI / 2 : Math.PI / 2, yaw, 0, 'YXZ'));
+    st.slideV.set(st.vel.x, 0, st.vel.z).multiplyScalar(TOSS.slide / Math.max(1e-6, Math.hypot(st.vel.x, st.vel.z)) * Math.min(1, Math.hypot(st.vel.x, st.vel.z) / 4));
+    st.vel.set(0, 0, 0);
+  }
+  function tossUpdate(dt, instant = false) {
+    const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
+    for (const o of Z.tossed) {
+      const st = o.toss, m = o.mesh;
+      if (st.rested) {
+        if (st.landT >= 1) continue;
+        st.landT = instant ? 1 : Math.min(1, st.landT + dt / TOSS.settle);
+        const k = easeOut(st.landT);
+        m.quaternion.slerpQuaternions(st.fromQ, st.toQ, k);
+        // a short slide, which stays on the table when it landed there
+        const nx = m.position.x + st.slideV.x * (instant ? 1 : dt / TOSS.settle) * (1 - k * 0.5);
+        const nz = m.position.z + st.slideV.z * (instant ? 1 : dt / TOSS.settle) * (1 - k * 0.5);
+        if (st.surface !== 'table' || insideTable(nx, nz, 0.02)) { m.position.x = nx; m.position.z = nz; }
+        if (st.landT >= 1) { m.quaternion.copy(st.toQ); if (st.surface === 'table') m.position.y = restOn(m.position.x, m.position.z, o); }
+        continue;
+      }
+      for (let k = 0; k < steps && !st.rested; k++) {
+        const prevY = m.position.y;
+        st.vel.y -= TOSS.g * h;
+        const nx = m.position.x + st.vel.x * h, ny = m.position.y + st.vel.y * h, nz = m.position.z + st.vel.z * h;
+        const inNow = insideTable(nx, nz);
+        if (ny < T.y && inNow && prevY >= T.y - 1e-6) {
+          // down onto the table top (or the cards on it)
+          m.position.x = nx; m.position.z = nz;
+          tossLand(o, 'table', restOn(nx, nz, o));
+          break;
+        }
+        if (ny < T.y && inNow && prevY < T.y) {
+          // under the top level and moving into the table: hit the side
+          if (Math.abs(nx) > T.halfLen - 1e-3 || Math.abs(m.position.x) > T.halfLen) st.vel.x *= -0.2;
+          if (Math.abs(nz) > T.halfDepth - 1e-3 || Math.abs(m.position.z) > T.halfDepth) st.vel.z *= -0.2;
+          m.position.y = ny;
+        } else m.position.set(nx, ny, nz);
+        if (m.position.y <= TOSS.floorRest) { tossLand(o, 'floor', TOSS.floorRest + Z.tossed.filter(x => x.toss.rested && x.toss.surface === 'floor').length * TOSS.stackGap); break; }
+        // spin
+        _tq.setFromAxisAngle(_tv.copy(st.spin).normalize(), st.spin.length() * h);
+        m.quaternion.premultiply(_tq);
+      }
+    }
   }
   const handAnchor = p => seatPos(p, 0, T.handY + 0.15, T.handV + 0.05);
   const restAnchor = p => seatPos(p, 0, 0.02, T.halfDepth - 0.15);
@@ -1307,6 +1444,8 @@ export function createDuelScene(canvas, opts = {}) {
     return k === 'fov' ? SEAT_POSE.wide.fov * Math.max(1, Math.sqrt(1.1 / a)) : SEAT_POSE.wide[k];
   };
   let fpSeat = null;
+  // The fly that wears the fedora: the fly you play against, else none.
+  const hatSeat = () => (fpSeat == null ? -1 : 1 - fpSeat);
   function seatPose(p, pos, look) {
     seatPos(p, 0, seatVal('y'), seatVal('v'), pos);
     seatPos(p, 0, seatVal('ly'), seatVal('lv'), look);
@@ -1384,6 +1523,12 @@ export function createDuelScene(canvas, opts = {}) {
       const a = (CROWD_SECTOR[0] + CROWD_SECTOR[1]) / 2 + (P0 === 0 ? -0.45 : 0.45);
       cam.wantLook.set(Math.sin(a) * 9, 2.8, Math.cos(a) * 9);
       cam.wantPos.set(Math.sin(a) * 2.2, T.y + 1.1, Math.cos(a) * 2.2);
+    } else if (s === 'toss') {
+      // the loser from the front and a little to the side, low over the
+      // table: the throw, the cards on the mat and the head on the table
+      const L = P0;
+      seatPos(L, 0.15, 0.45, T.seatV - 1.25, cam.wantLook);
+      seatPos(L, 1.55, 1.35 + 0.5 * (fit - 1), T.seatV - 1.25 - 2.9 * fit, cam.wantPos);
     } else if (s === 'seat') {
       seatPose(fpSeat ?? P0, cam.wantPos, cam.wantLook);
       if (fpOrbit) orbitPos(fpOrbit, cam.wantLook, cam.wantPos);
@@ -1398,6 +1543,7 @@ export function createDuelScene(canvas, opts = {}) {
       case 'over': return seatPos(st.p, 0, 0, T.creatureV, out);
       case 'crowd': { const a = (CROWD_SECTOR[0] + CROWD_SECTOR[1]) / 2 + (st.p === 0 ? -0.45 : 0.45); return out.set(Math.sin(a) * 9, 2.8, Math.cos(a) * 9); }
       case 'seat': return seatPos(1 - st.p, 0, 1.0, T.seatV - 0.2, out);
+      case 'toss': return seatPos(st.p, 0, 0.3, T.seatV - 1.0, out);
       default: return out.set(0, T.y, 0);
     }
   }
@@ -1438,6 +1584,7 @@ export function createDuelScene(canvas, opts = {}) {
       if (controls) controls.target.copy(cam.look);
       return;
     }
+    if (camMode === 'auto' && fpSeat == null) dir.tick(sceneT);   // the toss shot goes on to the win shot
     const fov = dir.state.shot === 'seat' ? Math.round(seatVal('fov') * 10) / 10 : FOV;
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
     shotPose(dt);
@@ -1606,6 +1753,17 @@ export function createDuelScene(canvas, opts = {}) {
       }
       hall.react('cheer', { side: s.winner, strength: 1 });
     },
+    // The loser throws its hand and puts its head down (see 'the toss').
+    toss(s) {
+      const f = flies[s.p];
+      if (fpSeat === s.p) return;            // the human seat keeps the slump
+      const def = clipDef(f, 'headDown');
+      if (!def || f.mod.placeholder || !(f.mod.CLIPS && f.mod.CLIPS.headDown)) { tossStart(s.p); return; }
+      clip(s.p, 'headDown');
+      f.end = 'headDown';
+      if (W.reduced) { f.t0 = sceneT - 3; f.prev = null; tossStart(s.p); }
+      else f.tossAt = f.t0 + (def.release ?? 0.4);
+    },
     // A hold after a big play: the crowd reacts (CROWD_REACT).
     hold(s) {
       const r = CROWD_REACT[s.reason];
@@ -1757,6 +1915,7 @@ export function createDuelScene(canvas, opts = {}) {
     for (const o of Z.perms.values()) o.update(sdt);
     for (const o of Z.held) o?.update(sdt);
     for (const o of loose) { o.update(sdt); if (!o.mesh.parent) loose.delete(o); }
+    if (Z.tossed.length) tossUpdate(sdt);
     for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(sdt)) fx.splice(i, 1);
     dice.update(sdt);
     for (const pip of Z.pips.values()) {
@@ -1797,6 +1956,7 @@ export function createDuelScene(canvas, opts = {}) {
         t = 0;
       }
       f.tNow = f.spec.name === 'idle' ? sceneT : t;
+      if (f.tossAt != null && sceneT >= f.tossAt) { f.tossAt = null; tossStart(f.p); }
       f.built.rig.setLife?.(Math.max(0, Math.min(1, life / 20)));
       const mix = W.reduced ? 1 : Math.min(1, (sceneT - f.mixT0) / 0.22);
       const o = {
@@ -1851,6 +2011,7 @@ export function createDuelScene(canvas, opts = {}) {
       if (controls) controls.enabled = true;
     }
     layout(false);       // the hidden hand changes with the seat at once
+    applyHats();         // the fedora goes to the fly you play against
     return fpSeat;
   }
   // The play-mode orbit (ui/fly3d/director.js ORBIT): orbitBy(dx, dy)
@@ -1962,8 +2123,10 @@ export function createDuelScene(canvas, opts = {}) {
     });
     return {
       meshes, tris: Math.round(tris),
-      cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length,
-      hand: Z.hand.map(h => h.length), grave: Z.grave.map(g => g.length), perms: Z.perms.size,
+      cards: Z.hand[0].length + Z.hand[1].length + Z.grave[0].length + Z.grave[1].length + Z.perms.size + Z.held.filter(Boolean).length + Z.tossed.length,
+      // hand: the hand cards, thrown ones too (the mirror keeps them)
+      hand: Z.hand.map((h, p) => h.length + Z.tossed.filter(o => o.toss.p === p).length),
+      tossed: Z.tossed.length, grave: Z.grave.map(g => g.length), perms: Z.perms.size,
       pips: Z.pips.size, stacks: stacks.map(L => (L ? L.stacks.map(x => `${x.key}:${x.untapped}/${x.n}`) : [])), busy: !!cur || queue.length > 0, fly: flies[0].mod.placeholder ? 'placeholder' : 'fly.js',
       brain: brains.map(Boolean), camera: camMode, shot: cam.shot, brainsShown: brainHolders[0].visible, bigBrain: bigP, hall: hall.stats(), dice: dice.stats(),
       firstPerson: fpSeat, hidden: hiddenSeat(), orbit: fpOrbit ? { ...fpOrbit } : null, highlight: Object.fromEntries([...new Set(hl.values())].map(k => [k, [...hl.values()].filter(v => v === k).length])),
