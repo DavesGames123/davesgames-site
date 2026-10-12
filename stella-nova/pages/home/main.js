@@ -55,7 +55,7 @@
 // ============================================================================
 (function (O) {
 'use strict';
-const { SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, THUMBS, FEATURED, allPages, searchPages } = O;
+const { SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, SEARCH_WORDS = {}, THUMBS, FEATURED, allPages, searchPages } = O;
 
 document.documentElement.classList.add('js');
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
@@ -787,7 +787,7 @@ const FIND_ITEMS = (() => {
   const add = (p, sec) => {
     if (p.key && items.some(x => x.key === p.key)) return;
     const it = withImg(p);
-    it.hay = fold([p.label, p.group, p.cluster, p.badge, sec.name, BLURBS[p.key], p.sub, p.key, p.credit, p.port ? 'port' : ''].filter(Boolean).join(' '));
+    it.hay = fold([p.label, p.group, p.cluster, p.badge, sec.name, BLURBS[p.key], SEARCH_WORDS[p.key], p.sub, p.key, p.credit, p.port ? 'port' : ''].filter(Boolean).join(' '));
     items.push(it);
   };
   SECTORS.forEach(sec => sectorGroups(sec).forEach(g => g.pages.forEach(p => add(p, sec))));

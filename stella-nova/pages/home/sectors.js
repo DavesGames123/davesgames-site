@@ -20,6 +20,7 @@
 //    sector table ......... "const SECTORS"
 //    anchor layout ........ "function layoutFor"
 //    page blurbs .......... "const BLURBS"
+//    search words ......... "const SEARCH_WORDS"
 //    thumbnail keys ....... "const THUMBS"
 //    featured rail ........ "const FEATURED"
 //    flat page list ....... "function allPages"
@@ -56,6 +57,17 @@ const EXCLUDED = new Set([
 ]);
 // Pages listed only in the plain directory: no featured spot, quick link,
 // thumbnail rail, star or search result. Their origin is being confirmed.
+// Extra words that home search matches for a page, besides its label,
+// group, sector, blurb and key. They are not shown. Use them for the words
+// a visitor types that the label does not hold (a game it is like, a
+// common name, the science term).
+const SEARCH_WORDS = {
+  'fly-duel': 'fruit fly drosophila brain connectome mushroom body neurons neuroscience card game trading card game tcg magic the gathering mtg deck duel play against ai reinforcement learning dopamine flywire hemibrain',
+  'gravity-lab': 'gravity sandbox n-body nbody orbits lagrange points three-body slingshot black hole galaxies tidal tails kepler',
+  'planet-collision': 'planet collision giant impact moon crashes into earth theia moon formation sph smoothed particle hydrodynamics synestia melt debris',
+  'roche-limit': 'roche limit tidal disruption rings saturn moon breakup shoemaker-levy comet rubble pile',
+};
+
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
 
 // Upstream credit of each port, one short line. Search shows it on the
@@ -462,5 +474,5 @@ const LAYOUT = {};
   });
 }
 
-Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, CREDITS, PORTS, searchPages, THUMBS, SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, FEATURED, allPages });
+Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, CREDITS, PORTS, searchPages, THUMBS, SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, SEARCH_WORDS, FEATURED, allPages });
 })(window.Observatory = window.Observatory || {});

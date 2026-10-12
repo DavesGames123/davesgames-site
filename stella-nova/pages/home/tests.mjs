@@ -133,6 +133,11 @@ const top = want.filter(p => {
 }).map(p => p.key);
 check('a label search shows the page in the visible results', !top.length, 'not shown: ' + top.join(', '));
 
+// SEARCH_WORDS (sectors.js): words a visitor types that the label lacks.
+for (const [q, key] of [['magic', 'fly-duel'], ['mtg', 'fly-duel'], ['fruit fly', 'fly-duel'], ['card game', 'fly-duel'], ['drosophila', 'fly-duel'],
+  ['n-body', 'gravity-lab'], ['lagrange', 'gravity-lab'], ['moon crashes into earth', 'planet-collision'], ['giant impact', 'planet-collision'], ['tidal disruption', 'roche-limit']]) {
+  check(`search "${q}" finds ${key}`, hits(q).some(it => it.key === key));
+}
 const ports = Object.keys(CREDITS).filter(k => pages.some(p => p.key === k));
 const portHits = new Set(hits('port').map(it => it.key));
 const lostPorts = ports.filter(k => !portHits.has(k));
