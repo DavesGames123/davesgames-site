@@ -1165,7 +1165,12 @@ export function createDuelScene(canvas, opts = {}) {
   // A count plate lies on the mat at the head of each stack: the number
   // of lands in the stack and a bar in each colour of the stack.
   const plates = [new Map(), new Map()];
-  const plateGeo = new THREE.PlaneGeometry(0.34, 0.15);
+  // The count plate of a land stack lies in the gap between the creature
+  // row and the land row. At 0.34 x 0.15 it touched the ring of a marked
+  // creature (the 1600x900 capture of 2026-10-12: "x2" on the target
+  // ring). PLATE: its size and the gap to the head of the land stack.
+  const PLATE = { w: 0.3, d: 0.11, gap: 0.02 };
+  const plateGeo = new THREE.PlaneGeometry(PLATE.w, PLATE.d);
   function plateTex(n, colours) {
     const cv = makeCanvas(136, 60);
     if (!cv?.getContext) return null;
@@ -1195,7 +1200,7 @@ export function createDuelScene(canvas, opts = {}) {
         const t = plateTex(st.n, st.colours);
         if (t) { pl.m.material.map?.dispose(); pl.m.material.map = t; pl.m.material.color.set(0xffffff); pl.m.material.needsUpdate = true; }
       }
-      seatPos(p, st.u, 0.004, T.landV - T.cardH / 2 - 0.11, pl.m.position);
+      seatPos(p, st.u, 0.004, T.landV - T.cardH / 2 - PLATE.gap - PLATE.d / 2, pl.m.position);
       pl.m.quaternion.copy(seatQuat(p, -Math.PI / 2, 0, 0));
     }
     for (const [k, pl] of have) if (!seen.has(k)) { W.fx.remove(pl.m); pl.m.material.map?.dispose(); pl.m.material.dispose(); have.delete(k); }
