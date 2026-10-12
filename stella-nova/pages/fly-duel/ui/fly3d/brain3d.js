@@ -56,6 +56,17 @@
 //      map.fire(trace);                     // trace from fly.choose()
 //      map.update(dt);                      // each frame, dt in seconds
 //      const view = createBrainView(canvas, connectome, { colour });  // own canvas
+//      const card = createBrainCard(canvas, connectome, { colour, neuropil });
+//      card.fire(trace, delta); card.update(dt);   // HUD scorecard panel
+//
+//  ANATOMY (clearer parts, 2026-10-11)
+//      Lobes take the colour of their KC family (γ, α/β, α′/β′: KC_TYPE),
+//      the calyx and the peduncle the fly colour. A wire marker stands at
+//      each compartment in its lobe colour; a DAN burst lights it. The
+//      active KCs also show as bright square points (the sparse code),
+//      with a flash when the set forms. Each spike has a short tail along
+//      its edge. anchors() and pickScreen() give the hover and tap labels
+//      (ANATOMY names the parts in plain words).
 //      Edge alpha options: restEdges (default 1) multiplies the rest alpha
 //      of all edges. holdOut (default HOLD_ALPHA) is the alpha factor of
 //      the lit KC->MBON edges after the sequence. The small map in the
@@ -64,6 +75,11 @@
 //  GREP MAP   (grep -n "<anchor>" ui/fly3d/brain3d.js)
 //      export function createBrainMap ... the map: group, fire, update, lit
 //      export function createBrainView .. own canvas, orbit, render loop
+//      export function createBrainCard .. small HUD panel, host loop
+//      export function lobeFamily ....... lobe or compartment -> KC family
+//      export const ANATOMY ............. names and text of the parts
+//      function anatomyTips ............. hover and tap labels
+//      anchors( / pickScreen( ........... inside createBrainMap
 //      export async function loadNeuropil  fetch neuropil json for a frame
 //      export function detectFrame ...... 'hemibrain' | 'fafb'
 //      export const PN_ON ............... PN rate that counts as active
@@ -229,6 +245,30 @@ export function compartmentRoi(name) {
   return null;
 }
 
+// KC family of a lobe or compartment (the KC type whose axons make it):
+// gamma -> 'g', alpha/beta -> 'ab', alpha'/beta' -> 'apbp', else null.
+export function lobeFamily(name) {
+  const s = String(name || '').replace(/\(R\)|\(L\)/g, '');
+  if (/calyx|^CA|^PED|ped/i.test(s)) return null;
+  const prime = /['′]/.test(s);
+  if (/^γ|^g/i.test(s)) return 'g';
+  if (/^[αβab]/i.test(s)) return prime ? 'apbp' : 'ab';
+  return null;
+}
+
+// Names and one line of plain text for the tap and hover labels.
+export const ANATOMY = {
+  'CA(R)': ['calyx', 'PN boutons meet KC dendrites (the claws)'],
+  'PED(R)': ['peduncle', 'the bundle of KC axons'],
+  'aL(R)': ['α lobe', 'KC α/β axons, compartments α1-α3'],
+  'bL(R)': ['β lobe', 'KC α/β axons, compartments β1-β2'],
+  "a'L(R)": ['α′ lobe', 'KC α′/β′ axons, compartments α′1-α′3'],
+  "b'L(R)": ['β′ lobe', 'KC α′/β′ axons, compartments β′1-β′2'],
+  'gL(R)': ['γ lobe', 'KC γ axons, compartments γ1-γ5'],
+  'AL(R)': ['antennal lobe', 'odour input: PNs leave from here'],
+};
+const compText = name => [`compartment ${name}`, 'KC axons meet MBON dendrites; DANs gate the synapses here'];
+
 // ---------------------------------------------------------------- neuropil
 function buildNeuropil(data, place, colour) {
   const group = new THREE.Group();
@@ -245,7 +285,10 @@ function buildNeuropil(data, place, colour) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setIndex(r.f);
-    const base = r.part === 'al' ? alTint : tint;
+    // lobes in the colour of their KC family, calyx and peduncle in the
+    // fly colour: the anatomy reads at a glance
+    const fam = lobeFamily(r.name);
+    const base = r.part === 'al' ? alTint : fam ? col(KC_TYPE[fam]).lerp(col(TOKENS.faint), 0.3) : tint;
     const edges = new THREE.EdgesGeometry(geo, 28);
     const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: base.clone(), transparent: true, opacity: r.part === 'al' ? 0.35 : 0.7, depthWrite: false, toneMapped: false }));
     line.name = 'roi:' + r.name;
@@ -253,7 +296,9 @@ function buildNeuropil(data, place, colour) {
     skin.name = 'skin:' + r.name;
     skin.renderOrder = -1;
     group.add(skin, line);
-    rois.set(r.name, { line, skin, base: base.clone(), part: r.part, tris: r.f.length / 3 });
+    let cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i < n; i++) { cx += pos[3 * i]; cy += pos[3 * i + 1]; cz += pos[3 * i + 2]; }
+    rois.set(r.name, { line, skin, base: base.clone(), part: r.part, tris: r.f.length / 3, centre: [cx / n, cy / n, cz / n] });
   }
   return { group, rois };
 }
@@ -385,6 +430,24 @@ export function createBrainMap(connectome, opts = {}) {
   spikes.name = 'spikes';
   spikes.frustumCulled = false;
   group.add(spikes);
+  // a short tail behind each spike (a crisp streak along its edge)
+  const tlGeo = new THREE.BufferGeometry();
+  const tlPos = new THREE.BufferAttribute(new Float32Array(6 * Math.max(1, spikeN)), 3).setUsage(THREE.DynamicDrawUsage);
+  const tlCol = new THREE.BufferAttribute(new Float32Array(6 * Math.max(1, spikeN)), 3).setUsage(THREE.DynamicDrawUsage);
+  tlGeo.setAttribute('position', tlPos); tlGeo.setAttribute('color', tlCol);
+  tlGeo.setDrawRange(0, 0);
+  const tails = new THREE.LineSegments(tlGeo, new THREE.LineBasicMaterial({ vertexColors: true, toneMapped: false, depthWrite: false, transparent: true }));
+  tails.name = 'spike-tails'; tails.frustumCulled = false;
+  group.add(tails);
+  // the active KCs as bright sparse points (the sparse code), with a
+  // short flash when the KC set forms
+  const kfGeo = new THREE.BufferGeometry();
+  const kfPos = new THREE.BufferAttribute(new Float32Array(3 * Math.max(1, nKC)), 3).setUsage(THREE.DynamicDrawUsage);
+  kfGeo.setAttribute('position', kfPos); kfGeo.setDrawRange(0, 0);
+  const KF_SIZE = o.lite ? 3 : 4;
+  const kcFire = new THREE.Points(kfGeo, new THREE.PointsMaterial({ color: K.kcOn.clone(), size: KF_SIZE, sizeAttenuation: false, toneMapped: false, depthWrite: false }));
+  kcFire.name = 'kc-fire'; kcFire.frustumCulled = false;
+  group.add(kcFire);
 
   // ---- compartments: centroid of their DANs (else MBONs), shell per burst
   const compNames = [...new Set([...(C.mbon.compartment || []), ...(C.dan?.compartment || [])].filter(Boolean).map(String))];
@@ -401,6 +464,17 @@ export function createBrainMap(connectome, opts = {}) {
     group.add(shell);
     return { name, shell, roi: compartmentRoi(name), on: false, strength: 0, colour: K.app };
   });
+  // a small wire marker at each compartment, in its lobe colour (a
+  // FlyWire file has no neuropil meshes: the markers still show the lobes)
+  const markGeo = new THREE.EdgesGeometry(new THREE.OctahedronGeometry(0.034, 0));
+  for (const c of comps) {
+    const fam = lobeFamily(c.name);
+    c.rest = fam ? col(KC_TYPE[fam]).lerp(K.faint, 0.15) : K.fly.clone().lerp(K.faint, 0.3);
+    c.marker = new THREE.LineSegments(markGeo, new THREE.LineBasicMaterial({ color: c.rest.clone(), toneMapped: false }));
+    c.marker.position.copy(c.shell.position);
+    c.marker.name = 'comp:' + c.name;
+    group.add(c.marker);
+  }
   const compIdx = new Map(compNames.map((n, i) => [n, i]));
   const danComp = Int32Array.from({ length: nD }, (_, d) => compIdx.get(String(C.dan.compartment?.[d])) ?? -1);
 
@@ -441,7 +515,7 @@ export function createBrainMap(connectome, opts = {}) {
     for (let i = 0; i < nM; i++) resetMb(i);
     for (const i of S.danList) resetDan(i);
     restoreEdges(E1, S.litE1); restoreEdges(E2, S.litE2);
-    for (const c of comps) { c.on = false; c.shell.visible = false; }
+    for (const c of comps) { c.on = false; c.shell.visible = false; c.marker.material.color.copy(c.rest); }
     if (np) for (const r of np.rois.values()) r.line.material.color.copy(r.base);
     // new decision
     S.trace = trace; S.delta = d; S.fires++;
@@ -452,6 +526,9 @@ export function createBrainMap(connectome, opts = {}) {
     const kl = [];
     for (const k of trace.kc || []) if (k >= 0 && k < nKC && !S.kcActive[k]) { S.kcActive[k] = 1; kl.push(k); }
     S.kcList = kl;
+    for (let j = 0; j < kl.length; j++) { const i = kl[j]; kfPos.array[3 * j] = P.kc[3 * i]; kfPos.array[3 * j + 1] = P.kc[3 * i + 1]; kfPos.array[3 * j + 2] = P.kc[3 * i + 2]; }
+    kfPos.needsUpdate = true;
+    kfGeo.setDrawRange(0, 0);
     let mx = 0;
     S.mbonRate.fill(0);
     const mb = trace.mbon || [];
@@ -532,6 +609,11 @@ export function createBrainMap(connectome, opts = {}) {
           sp[3 * ns + 1] = q[o6 + 1] + (q[o6 + 4] - q[o6 + 1]) * u;
           sp[3 * ns + 2] = q[o6 + 2] + (q[o6 + 5] - q[o6 + 2]) * u;
           sc[3 * ns] = cb.r; sc[3 * ns + 1] = cb.g; sc[3 * ns + 2] = cb.b;
+          const ut = Math.max(0, u - 0.12 * E.maxLen / Math.max(1e-6, E.len[e]) * 0.5);
+          const tp = tlPos.array, tc = tlCol.array, o12 = 6 * ns;
+          tp[o12] = q[o6] + (q[o6 + 3] - q[o6]) * ut; tp[o12 + 1] = q[o6 + 1] + (q[o6 + 4] - q[o6 + 1]) * ut; tp[o12 + 2] = q[o6 + 2] + (q[o6 + 5] - q[o6 + 2]) * ut;
+          tp[o12 + 3] = sp[3 * ns]; tp[o12 + 4] = sp[3 * ns + 1]; tp[o12 + 5] = sp[3 * ns + 2];
+          tc[o12] = cA.r * 0.5; tc[o12 + 1] = cA.g * 0.5; tc[o12 + 2] = cA.b * 0.5; tc[o12 + 3] = cb.r; tc[o12 + 4] = cb.g; tc[o12 + 5] = cb.b;
           ns++;
         }
       }
@@ -539,10 +621,14 @@ export function createBrainMap(connectome, opts = {}) {
     run(E1, S.litE1, PHASE.pnKc, K.pn, K.kcOn, e => 0.25 + 0.75 * S.pnRate[E1.list[e][0]]);
     if (p >= PHASE.kcMbon[0] || done) run(E2, S.litE2, PHASE.kcMbon, K.kcOn, e => valCol(E2.list[e][1]), () => 0.8, o.holdOut);
     spGeo.setDrawRange(0, done ? 0 : ns);
+    tlGeo.setDrawRange(0, done ? 0 : 2 * ns);
     spPos.needsUpdate = spCol.needsUpdate = true;
+    tlPos.needsUpdate = tlCol.needsUpdate = true;
     E1.col.needsUpdate = E2.col.needsUpdate = true;
     // KCs: one cut
     const kcOn = done || p >= PHASE.kcOn;
+    kfGeo.setDrawRange(0, kcOn ? S.kcList.length : 0);
+    kcFire.material.size = !done && p >= PHASE.kcOn && p < PHASE.kcOn + 0.06 ? KF_SIZE * 1.75 : KF_SIZE;
     for (const i of S.kcList) {
       if (kcOn) { setInst(kcMesh, i, P.kc[3 * i], P.kc[3 * i + 1], P.kc[3 * i + 2], R.kcOn); setCol(kcMesh, i, K.kcOn); } else resetKc(i);
     }
@@ -568,6 +654,7 @@ export function createBrainMap(connectome, opts = {}) {
       const show = c.on && inBurst;
       c.shell.visible = show;
       if (show) { c.shell.scale.setScalar(0.02 + (0.06 + 0.1 * S.burstK) * bu); c.shell.material.color.copy(c.colour); }
+      c.marker.material.color.copy(c.on && (show || done) ? c.colour : c.rest);
       const r = np && c.roi && np.rois.get(c.roi);
       if (r && c.on) r.line.material.color.copy(show ? c.colour : r.base);
     }
@@ -611,10 +698,43 @@ export function createBrainMap(connectome, opts = {}) {
     if (group.parent) group.parent.remove(group);
   }
 
+  // Label anchors in group space: the neuropil parts (when loaded) and
+  // every compartment. { key, title, text, pos: [x,y,z], colour, kind }.
+  function anchors() {
+    const out = [];
+    if (np) for (const [name, r] of np.rois) {
+      const a = ANATOMY[name]; if (!a) continue;
+      out.push({ key: name, title: a[0], text: a[1], pos: r.centre, colour: '#' + r.base.getHexString(), kind: 'roi' });
+    }
+    for (const c of comps) {
+      const t = compText(c.name);
+      out.push({ key: 'comp:' + c.name, title: t[0], text: t[1], pos: c.marker.position.toArray(), colour: '#' + c.rest.getHexString(), kind: 'compartment' });
+    }
+    const cen = arr => { let x = 0, y = 0, z = 0; const n = arr.length / 3; for (let i = 0; i < n; i++) { x += arr[3 * i]; y += arr[3 * i + 1]; z += arr[3 * i + 2]; } return n ? [x / n, y / n, z / n] : [0, 0, 0]; };
+    out.push({ key: 'KC', title: 'Kenyon cells', text: `${nKC} KCs; about 5 % fire for one board (sparse code)`, pos: cen(P.kc), colour: TOKENS['kc-on'], kind: 'cells' });
+    out.push({ key: 'PN', title: 'projection neurons', text: `${nPN} PNs carry the board "smell" into the calyx`, pos: cen(P.pn), colour: TOKENS.pn, kind: 'cells' });
+    return out;
+  }
+  // The anchor nearest to a screen point (px), within maxPx, or null.
+  // camera: the camera that draws the map; w, h: the canvas size in px.
+  const _pv = new THREE.Vector3();
+  function pickScreen(x, y, camera, w, h, maxPx = 26) {
+    group.updateWorldMatrix(true, false);
+    let best = null, bd = maxPx;
+    for (const a of anchors()) {
+      _pv.set(a.pos[0], a.pos[1], a.pos[2]).applyMatrix4(group.matrixWorld).project(camera);
+      if (_pv.z > 1) continue;
+      const sx = (_pv.x * 0.5 + 0.5) * w, sy = (1 - (_pv.y * 0.5 + 0.5)) * h;
+      const d = Math.hypot(sx - x, sy - y) - (a.kind === 'roi' ? 8 : 0);
+      if (d < bd) { bd = d; best = { ...a, x: sx, y: sy }; }
+    }
+    return best;
+  }
+
   return {
-    group, fire, update, lit, dispose, stats, setNeuropil, setDuration, setReducedMotion, setKcColour,
+    group, fire, update, lit, dispose, stats, setNeuropil, setDuration, setReducedMotion, setKcColour, anchors, pickScreen,
     get running() { return S.on; },
-    meshes: { kc: kcMesh, pn: pnMesh, mbon: mbMesh, dan: danMesh, apl, pnKc: E1.line, kcMbon: E2.line, spikes },
+    meshes: { kc: kcMesh, pn: pnMesh, mbon: mbMesh, dan: danMesh, apl, pnKc: E1.line, kcMbon: E2.line, spikes, tails, kcFire, markers: comps.map(c => c.marker) },
     place,
   };
 }
@@ -668,6 +788,7 @@ export function createBrainView(canvas, connectome, opts = {}) {
 
   // labels: crisp text sprites, fixed screen size
   const labels = [];
+  let tip = null;
   if (o.labels && typeof document !== 'undefined') {
     const P = map.place;
     const centroid = (arr) => { let x = 0, y = 0, z = 0; const n = arr.length / 3; for (let i = 0; i < n; i++) { x += arr[3 * i]; y += arr[3 * i + 1]; z += arr[3 * i + 2]; } return n ? [x / n, y / n, z / n] : [0, 0, 0]; };
@@ -695,6 +816,7 @@ export function createBrainView(canvas, connectome, opts = {}) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     sizeLabels(h);
+    tip?.resize(h);
     dirty = true;
   }
 
@@ -716,6 +838,8 @@ export function createBrainView(canvas, connectome, opts = {}) {
   };
   canvas.addEventListener('keydown', onKey);
   canvas.addEventListener('dblclick', reset);
+  tip = anatomyTips(map, canvas, camera, () => { dirty = true; kick(); }, h => sizeTip(h));
+  const sizeTip = h => { const s = tip.sprite(); if (!s) return; const k = (s.userData.px / Math.max(1, h)) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)); s.scale.set(k * s.userData.aspect, k, 1); };
 
   // loop: only when visible
   let raf = 0, last = 0, visible = true, alive = true;
@@ -750,6 +874,7 @@ export function createBrainView(canvas, connectome, opts = {}) {
       io?.disconnect(); ro?.disconnect();
       canvas.removeEventListener('keydown', onKey);
       canvas.removeEventListener('dblclick', reset);
+      tip.dispose();
       controls.dispose();
       map.dispose();
       renderer.dispose();
@@ -777,4 +902,131 @@ function textSprite(text, colour) {
   s.renderOrder = 10;
   s.name = 'label:' + text;
   return s;
+}
+
+// A label of two lines (title, text) as a sprite. lines: 2 (for sizing).
+function labelSprite(title, text, colour) {
+  const px = 40, c = document.createElement('canvas'), g = c.getContext('2d');
+  const f1 = `600 ${px}px Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif`;
+  const f2 = `400 ${Math.round(px * 0.72)}px Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif`;
+  g.font = f1; const w1 = g.measureText(title).width;
+  g.font = f2; const w2 = g.measureText(text).width;
+  c.width = Math.ceil(Math.max(w1, w2)) + 28; c.height = Math.round(px * 2.3);
+  g.fillStyle = TOKENS.panel; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = colour; g.fillRect(0, 0, 6, c.height);
+  g.strokeStyle = TOKENS.hair2; g.lineWidth = 2; g.strokeRect(1, 1, c.width - 2, c.height - 2);
+  g.textBaseline = 'middle';
+  g.font = f1; g.fillStyle = TOKENS.ink; g.fillText(title, 16, px * 0.62);
+  g.font = f2; g.fillStyle = TOKENS.ink2; g.fillText(text, 16, px * 1.62);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, depthTest: false, transparent: true, toneMapped: false }));
+  s.center.set(0, 0);
+  s.userData.aspect = c.width / c.height; s.userData.px = 34;
+  s.renderOrder = 20; s.name = 'tip:' + title;
+  return s;
+}
+
+// Hover (mouse) and tap (touch) labels on a brain map in its own canvas:
+// the nearest anatomy anchor (map.pickScreen) gets a label with its name
+// and one line of text. A tap label stays 3 s. onChange: redraw.
+function anatomyTips(map, canvas, camera, onChange, onSize) {
+  if (typeof document === 'undefined' || !canvas?.addEventListener) return { dispose() {}, resize() {}, sprite: () => null, show() {} };
+  let sprite = null, key = null, timer = 0;
+  const hide = () => { if (sprite) { map.group.remove(sprite); sprite.material.map?.dispose(); sprite.material.dispose(); sprite = null; key = null; onChange(); } };
+  const show = a => {
+    if (!a) { hide(); return; }
+    if (a.key === key) return;
+    hide();
+    sprite = labelSprite(a.title, a.text, a.colour);
+    sprite.position.set(a.pos[0], a.pos[1], a.pos[2]);
+    map.group.add(sprite); key = a.key;
+    onSize(canvas.clientHeight || canvas.height || 200);
+    onChange();
+  };
+  const at = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, r.width, r.height]; };
+  const move = e => { if (e.pointerType === 'touch') return; const [x, y, w, h] = at(e); show(map.pickScreen(x, y, camera, w, h)); };
+  let down = null;
+  const pdown = e => { down = [e.clientX, e.clientY]; };
+  const up = e => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) { down = null; return; }
+    down = null;
+    const [x, y, w, h] = at(e);
+    const a = map.pickScreen(x, y, camera, w, h, e.pointerType === 'touch' ? 40 : 26);
+    show(a);
+    clearTimeout(timer);
+    if (a && e.pointerType === 'touch') timer = setTimeout(hide, 3000);
+  };
+  const leave = () => hide();
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerdown', pdown);
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointerleave', leave);
+  return {
+    sprite: () => sprite, show: a => show(a),
+    resize: h => onSize(h),
+    dispose() {
+      clearTimeout(timer);
+      canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerdown', pdown);
+      canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointerleave', leave);
+      hide();
+    },
+  };
+}
+
+// ================================================================ the card
+// A small live brain panel for the scorecards of the HUD (play agent):
+// createBrainCard(canvas, connectome, opts) -> { map, fire(trace, delta,
+// fo), update(dt) -> bool, resize(), render(), pick(x, y), dispose() }.
+// Cheap: its own small WebGL canvas, the lite map on a phone (octahedra,
+// fewer spikes), pixel ratio 1 on a phone, no orbit and no own frame
+// loop. The host calls update(dt) from its loop; the card draws only when
+// the map runs or the view changed. A fixed three-quarter view shows the
+// calyx at the top and the lobes at the front. Hover (mouse) or tap
+// (touch) shows the anatomy label of the nearest part. canvas null or
+// opts.headless: no renderer (node tests); fire and update still run.
+// opts: as createBrainMap, plus { coarse, neuropil, background, view:
+// { yaw, pitch, dist } }.
+export function createBrainCard(canvas, connectome, opts = {}) {
+  const mm = q => (typeof matchMedia === 'function' ? matchMedia(q).matches : false);
+  const coarse = opts.coarse ?? mm('(pointer: coarse)');
+  const reduce = opts.reducedMotion ?? mm('(prefers-reduced-motion: reduce)');
+  const headless = !!opts.headless || !canvas || typeof window === 'undefined';
+  const map = createBrainMap(connectome, { lite: coarse, reducedMotion: reduce, holdOut: 0.2, restEdges: 0.55, ...opts, size: 1 });
+  const scene = new THREE.Scene();
+  scene.add(map.group);
+  const camera = new THREE.PerspectiveCamera(32, 1.4, 0.01, 40);
+  const V = { yaw: 1.25, pitch: 0.32, dist: 3.5, ...(opts.view || {}) };
+  camera.position.set(V.dist * Math.cos(V.pitch) * Math.sin(V.yaw), V.dist * Math.sin(V.pitch), V.dist * Math.cos(V.pitch) * Math.cos(V.yaw));
+  camera.lookAt(0, 0, 0);
+  let renderer = null, dirty = true, tip = null;
+  if (!headless) {
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse, alpha: !opts.background, powerPreference: 'low-power' });
+      renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, coarse ? 1 : 1.5));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.NoToneMapping;
+      if (opts.background) scene.background = new THREE.Color(opts.background);
+    } catch (e) { renderer = null; }
+    const sizeTip = h => { const s = tip?.sprite(); if (!s) return; const k = (s.userData.px / Math.max(1, h)) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)); s.scale.set(k * s.userData.aspect, k, 1); };
+    tip = anatomyTips(map, canvas, camera, () => { dirty = true; }, sizeTip);
+  }
+  function resize() {
+    const w = canvas?.clientWidth || canvas?.width || 160, h = canvas?.clientHeight || canvas?.height || 110;
+    camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+    renderer?.setSize(w, h, false);
+    tip?.resize(h);
+    dirty = true;
+  }
+  function render() { if (renderer) renderer.render(scene, camera); dirty = false; }
+  resize();
+  return {
+    map, scene, camera,
+    fire(trace, delta, fo) { const r = map.fire(trace, delta, fo); dirty = true; return r; },
+    update(dt) { const ch = map.update(dt); if (ch || dirty) { render(); return true; } return false; },
+    resize, render,
+    pick(x, y) { const w = canvas?.clientWidth || 160, h = canvas?.clientHeight || 110; const a = map.pickScreen(x, y, camera, w, h, 40); tip?.show(a); dirty = true; return a; },
+    get running() { return map.running; },
+    dispose() { tip?.dispose(); map.dispose(); renderer?.dispose(); },
+  };
 }

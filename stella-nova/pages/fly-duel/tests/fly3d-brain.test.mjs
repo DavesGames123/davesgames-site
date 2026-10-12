@@ -214,5 +214,55 @@ ok(typeof B.createBrainView === 'function' && typeof B.loadNeuropil === 'functio
 ok(await B.loadNeuropil({ meta: { source: 'FlyWire' } }, 'file:///nowhere/') === null, 'loadNeuropil: null for FAFB');
 
 map.dispose();
+// ---------------------------------------------------------------- anatomy, KC points, spike tails, card
+{
+  // Lobes in their KC family colour, a marker per compartment, label
+  // anchors for the parts, the KC firing points, spike tails, and the
+  // small HUD card (headless in node).
+  const { KC_TYPE } = await import('../ui/tokens.js');
+  const m = B.createBrainMap(C, { colour: '#39d0f0', neuropil: NP });
+  ok(B.lobeFamily('gL(R)') === 'g' && B.lobeFamily("a'L(R)") === 'apbp' && B.lobeFamily('β2') === 'ab' && B.lobeFamily("β'1") === 'apbp' && B.lobeFamily('CA(R)') === null, 'lobeFamily: γ, α/β, α′/β′, calyx');
+  const roiCol = name => '#' + m.group.getObjectByName('roi:' + name).material.color.getHexString();
+  const famHex = f => '#' + new THREE.Color(KC_TYPE[f]).lerp(new THREE.Color('#394155'), 0.3).getHexString();
+  ok(roiCol('gL(R)') === famHex('g') && roiCol('aL(R)') === famHex('ab') && roiCol("b'L(R)") === famHex('apbp'), 'lobe outlines in the KC family colour');
+  ok(roiCol('gL(R)') !== roiCol('aL(R)') && roiCol('aL(R)') !== roiCol("a'L(R)"), 'the three lobe families have three colours');
+  const comps = new Set([...C.mbon.compartment, ...C.dan.compartment]);
+  ok(m.meshes.markers.length === comps.size, `a marker per compartment (${m.meshes.markers.length})`);
+  const A = m.anchors();
+  for (const k of ['CA(R)', 'PED(R)', 'gL(R)', 'aL(R)', "b'L(R)", 'comp:γ1', 'KC', 'PN']) ok(A.some(a => a.key === k && a.title && a.text && a.pos.every(Number.isFinite)), `label anchor ${k}`);
+  // pickScreen: project an anchor and pick at its screen point
+  const cam = new THREE.PerspectiveCamera(34, 1.5, 0.01, 40); cam.position.set(3, 1, 2); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+  const g1 = A.find(a => a.key === 'comp:γ1');
+  const v = new THREE.Vector3(...g1.pos).applyMatrix4(m.group.matrixWorld).project(cam);
+  const hit = m.pickScreen((v.x * 0.5 + 0.5) * 600, (1 - (v.y * 0.5 + 0.5)) * 400, cam, 600, 400);
+  ok(hit && (hit.key === 'comp:γ1' || hit.kind === 'compartment' || hit.kind === 'roi'), `pickScreen finds a part at the γ1 marker (${hit?.key})`);
+  ok(m.pickScreen(-500, -500, cam, 600, 400) === null, 'pickScreen: nothing far from every part');
+  // KC points and spike tails
+  m.fire(tr);
+  ok(m.meshes.kcFire.geometry.drawRange.count === 0, 'KC points dark before the cut');
+  m.update(0.25 * 1.4);
+  ok(m.meshes.tails.geometry.drawRange.count === 2 * m.meshes.spikes.geometry.drawRange.count && m.meshes.tails.geometry.drawRange.count > 0, 'one tail per spike in flight');
+  const tp = m.meshes.tails.geometry.attributes.position.array, sp = m.meshes.spikes.geometry.attributes.position.array;
+  ok(Math.abs(tp[3] - sp[0]) + Math.abs(tp[4] - sp[1]) + Math.abs(tp[5] - sp[2]) < 1e-6, 'a tail ends at its spike');
+  m.update(0.2 * 1.4);
+  ok(m.meshes.kcFire.geometry.drawRange.count === tr.kc.length, `KC points = active KCs after the cut (${m.meshes.kcFire.geometry.drawRange.count})`);
+  for (let i = 0; i < 40 && m.running; i++) m.update(0.05);
+  ok(m.meshes.kcFire.geometry.drawRange.count === tr.kc.length && m.meshes.tails.geometry.drawRange.count === 0, 'KC points hold, tails gone at the end');
+  if (withDelta) {
+    const Lb = m.fire(withDelta, undefined, { instant: true });
+    const lit = m.meshes.markers.filter(mk => Lb.compartments.includes(mk.name.slice(5)));
+    ok(lit.length === Lb.compartments.length && lit.every(mk => '#' + mk.material.color.getHexString() === (withDelta.delta > 0 ? '#3ee89a' : '#ff4d4d')), 'burst compartments light their markers');
+  }
+  m.dispose();
+  // the HUD card, headless
+  const card = B.createBrainCard(null, C, { colour: '#f26ad6', coarse: true });
+  ok(card.map.stats().tris < st.tris / 2, `card on a phone uses the lite map (${card.map.stats().tris} tris)`);
+  card.fire(tr, 0.1);
+  let frames = 0; while (card.update(1 / 30) && frames < 200) frames++;
+  ok(frames > 10 && !card.running, `card: the host loop runs the sequence (${frames} frames)`);
+  ok(card.update(1 / 30) === false, 'card: no draw when nothing changes');
+  card.resize(); card.dispose();
+}
+
 console.log(`fly3d-brain: ${pass} passed, ${fail} failed  (build ${buildMs} ms, ${st.tris} tris, ${st.lines} lines, lit pn ${expPn} kc ${tr.kc.length} pn-kc ${expE1} kc-mbon ${expE2})`);
 process.exit(fail ? 1 : 0);
