@@ -37,7 +37,8 @@
 //  tables stand behind the crowd and behind the cameras.
 //
 //  Phone (coarse): 16 crowd flies, two extra tables, no shadow casters in
-//  the hall, smaller textures.
+//  the hall, smaller textures. Reduced motion: the fake games stand still,
+//  the heads turn at once, a reaction has no wing beat.
 //
 //  API
 //      buildHall({ coarse, reduced, seed, layout }) -> { group, table,
@@ -576,6 +577,9 @@ function crowdController(herd, ids, reduced, R) {
             if (f.kind === 'cheer') { P.legL = P.legR = 0.95 * env; P.buzz = env; P.lean = -0.08 * env; }
           }
         }
+        // reduced motion: no wing beat (a fast flicker), the legs and the
+        // lean still show the reaction
+        if (reduced) P.buzz = 0;
       }
     },
   };
