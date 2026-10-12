@@ -127,10 +127,12 @@ export function buildRoll(ch, rnd) {
     spec.d = ch.d ?? Lf * (ch.body === 'binary' ? lerp(rnd(), 1.9, 2.1) : lerp(rnd(), 1.03, 1.08));
     let f1 = ch.f1 ?? D1_FRAC[material] * lerp(rnd(), 0.95, 1.05);
     // a core: stop outside the core's own fluid limit, (rho / rho_core)^(1/3)
-    // of the bulk limit, so the mantle sheds and the core can hold
-    // (Deno run of the preset 'mantle', 2026-10-11: at 0.78 the core was
-    // torn too)
-    if (ch.body === 'core') { const L = spec.layout, bulk = L.frac * L.factor + 1 - L.frac; f1 = Math.max(f1, 1.08 * Math.cbrt(bulk / L.factor)); }
+    // of the bulk limit, so the mantle sheds and the core can hold. Deno
+    // runs of the preset 'mantle' (2026-10-11): a stop at 0.78 of the bulk
+    // limit tore the core too; at 1.08 core limits the core broke in some
+    // runs; at 1.15 the mantle lost only 13%; at 1.11 the core held in 5 of
+    // 5 runs and the body lost 20-24% of its mass
+    if (ch.body === 'core') { const L = spec.layout, bulk = L.frac * L.factor + 1 - L.frac; f1 = Math.max(f1, 1.11 * Math.cbrt(bulk / L.factor)); }
     spec.d1 = ch.d1 ?? Math.max(Lf * f1, surf);
     spec.orbits = material === 'fluid' ? 0.8 : 0.95;
     spec.speed = 6;

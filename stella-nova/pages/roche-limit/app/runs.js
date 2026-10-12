@@ -70,7 +70,8 @@ export async function startRun(specIn) {
   S.run = { serial, spec, sats: [], phase: 'init', t: 0, T0: 1, frames: 0, started: performance.now(), recorded: false, track: [],
     snaps: [], viewIdx: -1, epoch: 0, stepLeft: 0, rate: 0, story: { approach: 0 }, storyKey: 'approach' };
   for (let k = 0; k < mats.length; k++) {
-    const mat = matFor(mats[k], spec, !two);
+    // a roll takes its material as it is (loose has no rolling resistance)
+    const mat = matFor(mats[k], spec, !two && !spec.roll);
     const C = P.contactParams(nEach, mat);
     const gpu = new SimGPU(S.dev, nEach, S.simCode);
     const e = S.ren.addSim(gpu);
