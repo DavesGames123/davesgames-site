@@ -65,7 +65,7 @@ const S = {
   v3: { on: false, yaw: -1.05, pitch: 0.38, zoom: 1, morph: 1, morphTo: 1, db: false, auto: true },
   speed: 0.4, speedK: 1, playing: true, phase: 0,
   cam: { zoom: 1, panX: 0, panY: 0 },
-  saver: false, band: null, fade: 1, saverTick: null,
+  saver: false, band: null, fade: 1, saverTick: null, saverShow: null,
 };
 
 let A = null, stats = null, field = null;
@@ -264,7 +264,8 @@ function defaultObs() {
   S.obs = { rM, ang };
 }
 function obsPlane() {
-  const s = scale(), rM = Math.max(S.obs.rM, enclosingM());
+  // With the flux sphere on, the sphere must hold all the metal.
+  const s = scale(), rM = Math.max(S.obs.rM, S.tog.sphere ? enclosingM() : 0.02);
   return [(centreM() + rM * Math.cos(S.obs.ang)) * s, rM * Math.sin(S.obs.ang) * s, rM * s];
 }
 // E, H, the sphere flux and the phasor sum for the observer. Runs when the
@@ -414,10 +415,11 @@ function frame(now) {
     lines = { list: traceLines(lineBuf, probe.w, probe.h, { seedStep: phoneMQ.matches ? 7 : 6.5, steps: 44, ds: 0.5 }), gw: probe.w, gh: probe.h, ref: lineRef,
       color: tf === 'E' ? 'rgba(225,245,255,A)' : 'rgba(225,215,255,A)' };
   }
-  const ax = axes(), showGeo = !S.saver;
+  // In the saver, the shot says which layers show (S.saverShow).
+  const ax = axes(), show = S.saver ? S.saverShow : { obs: true, label: true, triad: true }, showGeo = !!show;
   if (showGeo) updateGeo();
   if (geoChanged && ui && !S.saver && now - lastNumbers > 300) { geoChanged = false; lastNumbers = now; ui.numbers(); }
-  const flowOn = S.tog.flow && probe && !S.saver;
+  const flowOn = S.tog.flow && probe;
   if (flowOn) {
     flow.field(probe, S.phase, ax.u, ax.v, probeR);
     if (S.playing) flow.step(dt, S.speed * S.speedK, (view.u1 - view.u0) / probe.w, (view.v1 - view.v0) / probe.h);
@@ -428,7 +430,8 @@ function frame(now) {
     zones: Object.assign({ on: S.tog.zones, lambdaM: lambdaM() }, zoneRadii(A ? A.extent : 0)),
     lines, feed: S.type === 'loop' ? [S.loop.C / TAU, 0, 0] : [0, 0, 0],
     flow: flowOn ? c2 => flow.draw(c2, W, H, RGB.S, dpr, 1) : null,
-    obs: showGeo && geo ? { u: geo.u, v: geo.v, ob: geo.ob, sf: geo.sf, circle: geo.circle, sphere: S.tog.sphere, zone: geo.zone, lambdaM: lambdaM(),
+    obs: showGeo && show.obs && geo ? { u: geo.u, v: geo.v, ob: geo.ob, sf: geo.sf, circle: geo.circle, sphere: S.tog.sphere, zone: geo.zone, lambdaM: lambdaM(),
+      label: show.label !== false, triad: show.triad !== false,
       clip: { x: cr.x * dpr, y: cr.y * dpr, w: cr.w * dpr, h: cr.h * dpr } } : null,
     phasors: showGeo && geo && geo.pt ? { pt: geo.pt, rect: phasorRect(cr, dpr) } : null,
     scaleBox: S.saver ? null : { x: (cr.x + 16) * dpr, y: (cr.y + cr.h - 10) * dpr, lambdaM: lambdaM() },
@@ -480,7 +483,7 @@ function pointer() {
   // Move the observer to a screen point (CSS px).
   const moveObs = (x, y) => {
     const [u, v] = toPlane(x, y), s = scale(), cu = centreM() * s;
-    S.obs.rM = Math.max(enclosingM(), Math.hypot(u - cu, v) / s);
+    S.obs.rM = Math.max(S.tog.sphere ? enclosingM() : 0.02, Math.hypot(u - cu, v) / s);
     S.obs.ang = Math.atan2(v, u - cu);
   };
   fieldCanvas.addEventListener('pointerdown', e => {
@@ -579,6 +582,10 @@ const ctx = {
   rebuildNow() { rebuild(); computeStats(); },
   invalidate() { lastKey = ''; },
   syncUI() { if (ui) ui.sync(); },
+  get geo() { updateGeo(); return geo; },
+  freq, centreM,
+  view3d: on => setView3d(on),
+  resetFlow: () => flow.reset(),
 };
 installSaver(ctx);
 window.__af = {
