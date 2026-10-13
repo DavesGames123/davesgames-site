@@ -49,6 +49,13 @@ jobs:
       # Download the pinned release zips and check each sha256.
       - name: Fetch pinned Craft builds
         run: node tools/craft-fetch.mjs && node tools/craft-fetch.mjs --check
+      # Retro Shelf: the pinned engines (js-dos emulators, EmulatorJS and its
+      # cores) and the freeware game archives. They are not in git. Each file
+      # is sha256 checked. A failure (a mirror is down) does not stop the
+      # deploy: the page then says that the file is not available.
+      - name: Fetch pinned Retro Shelf files
+        run: node tools/retro-fetch.mjs && node tools/retro-fetch.mjs --check
+        continue-on-error: true
       # The service worker file list and version stamp (sw-manifest.js, sw.js).
       # Run here too, so the deploy never ships a list that is out of date.
       - name: Write offline manifest

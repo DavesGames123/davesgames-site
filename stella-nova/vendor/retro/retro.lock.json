@@ -1,0 +1,161 @@
+{
+  "comment": "Pinned third-party files of the Retro Shelf page (stella-nova/pages/retro-shelf). tools/retro-fetch.mjs downloads each one, checks its sha256 and writes it under stella-nova/vendor/retro/fetched/ (not in git). Game archives are kept byte for byte; the licence review is pages/retro-shelf/LICENSES.md.",
+  "out": "stella-nova/vendor/retro/fetched",
+  "items": {
+    "emulators": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/emulators/-/emulators-8.5.2.tgz",
+      "sha256": "99a3e6f257726749915f4dc6828d82cd9834969aa69cc2dcc5ed8babfb323cb4",
+      "dir": "emulators-8.5.2",
+      "pick": [
+        ["package/dist/emulators.js", "emulators.js"],
+        ["package/dist/wdosbox.js", "wdosbox.js"],
+        ["package/dist/wdosbox.wasm", "wdosbox.wasm"],
+        ["package/dist/wlibzip.js", "wlibzip.js"],
+        ["package/dist/wlibzip.wasm", "wlibzip.wasm"],
+        ["package/LICENSE", "LICENSE"]
+      ],
+      "license": "GPL-2.0",
+      "source": "https://github.com/caiiiycuk/emulators/tree/6bbf0925d221a7304ea8e0dda1e89b8dc01569b2"
+    },
+    "emulatorjs": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/@emulatorjs/emulatorjs/-/emulatorjs-4.2.3.tgz",
+      "sha256": "8033a18a3398cae5efd7a4c12a633b10672435977290959633d671365b589639",
+      "dir": "emulatorjs-4.2.3",
+      "pick": [
+        ["package/data/loader.js", "data/loader.js"],
+        ["package/data/emulator.css", "data/emulator.css"],
+        ["package/data/version.json", "data/version.json"],
+        ["package/data/src/", "data/src/"],
+        ["package/data/compression/", "data/compression/"],
+        ["package/data/localization/", "data/localization/"],
+        ["package/LICENSE", "LICENSE"]
+      ],
+      "license": "GPL-3.0",
+      "source": "https://github.com/EmulatorJS/EmulatorJS/tree/e150dc0491ae747028919fb82d6598954976ede6"
+    },
+    "core-pcsx_rearmed": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/@emulatorjs/core-pcsx_rearmed/-/core-pcsx_rearmed-4.2.3.tgz",
+      "sha256": "d641b90c4d4bea0a29e55803a5bc7bd02eb9980e7b4684be6e64618ff165d923",
+      "dir": "emulatorjs-4.2.3/data/cores",
+      "stamp": "pcsx_rearmed",
+      "pick": [
+        ["package/pcsx_rearmed-wasm.data", "pcsx_rearmed-wasm.data"],
+        ["package/pcsx_rearmed-legacy-wasm.data", "pcsx_rearmed-legacy-wasm.data"],
+        ["package/reports/pcsx_rearmed.json", "reports/pcsx_rearmed.json"]
+      ],
+      "license": "GPL-2.0",
+      "source": "https://github.com/EmulatorJS/pcsx_rearmed/tree/f29871dde1742cafb0ab56ba33636a8600bbbd80"
+    },
+    "core-mupen64plus_next": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/@emulatorjs/core-mupen64plus_next/-/core-mupen64plus_next-4.2.3.tgz",
+      "sha256": "2b8952aabbe32dc620cbde31b4456a16d7ff96116f471283699dc9ae09724417",
+      "dir": "emulatorjs-4.2.3/data/cores",
+      "stamp": "mupen64plus_next",
+      "pick": [
+        ["package/mupen64plus_next-wasm.data", "mupen64plus_next-wasm.data"],
+        ["package/mupen64plus_next-legacy-wasm.data", "mupen64plus_next-legacy-wasm.data"],
+        ["package/reports/mupen64plus_next.json", "reports/mupen64plus_next.json"]
+      ],
+      "license": "GPL-2.0",
+      "source": "https://github.com/EmulatorJS/mupen64plus-libretro-nx/tree/0346d3ef26016bb4de604cf918d004bd791447ee"
+    },
+    "core-fceumm": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/@emulatorjs/core-fceumm/-/core-fceumm-4.2.3.tgz",
+      "sha256": "72d7ec8a1cace14448b9f2e177e64a37120543e117d274072b02b67576d54025",
+      "dir": "emulatorjs-4.2.3/data/cores",
+      "stamp": "fceumm",
+      "pick": [
+        ["package/fceumm-wasm.data", "fceumm-wasm.data"],
+        ["package/fceumm-legacy-wasm.data", "fceumm-legacy-wasm.data"],
+        ["package/reports/fceumm.json", "reports/fceumm.json"]
+      ],
+      "license": "GPL-2.0",
+      "source": "https://github.com/EmulatorJS/libretro-fceumm/tree/d9d7e141274d07186b6a871ca2919b6f13cfb2f9"
+    },
+    "core-gambatte": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/@emulatorjs/core-gambatte/-/core-gambatte-4.2.3.tgz",
+      "sha256": "2edc2ed30fb18da28f67e95209a25f18307913a7eaba693d0d8481986c2fdd32",
+      "dir": "emulatorjs-4.2.3/data/cores",
+      "stamp": "gambatte",
+      "pick": [
+        ["package/gambatte-wasm.data", "gambatte-wasm.data"],
+        ["package/gambatte-legacy-wasm.data", "gambatte-legacy-wasm.data"],
+        ["package/reports/gambatte.json", "reports/gambatte.json"]
+      ],
+      "license": "GPL-2.0",
+      "source": "https://github.com/EmulatorJS/gambatte-libretro/tree/811b1f7a56c16f8588caada36d7a3f9a56cb16d4"
+    },
+    "core-mgba": {
+      "kind": "tgz",
+      "url": "https://registry.npmjs.org/@emulatorjs/core-mgba/-/core-mgba-4.2.3.tgz",
+      "sha256": "9ea664b4f998f6304a49c31a427206e2c12a3c1aa3652765ec5aa6db42cad529",
+      "dir": "emulatorjs-4.2.3/data/cores",
+      "stamp": "mgba",
+      "pick": [
+        ["package/mgba-wasm.data", "mgba-wasm.data"],
+        ["package/mgba-legacy-wasm.data", "mgba-legacy-wasm.data"],
+        ["package/reports/mgba.json", "reports/mgba.json"]
+      ],
+      "license": "MPL-2.0",
+      "source": "https://github.com/EmulatorJS/mgba/tree/57678d6180e7020798809703283e02d2bba18b63"
+    },
+    "game-doom": {
+      "kind": "file",
+      "urls": [
+        "https://youfailit.net/pub/idgames/idstuff/doom/doom19s.zip",
+        "https://ftpmirror1.infania.net/pub/idgames/idstuff/doom/doom19s.zip"
+      ],
+      "sha256": "cacf0142b31ca1af00796b4a0339e07992ac5f21bc3f81e7532fe1b5e1b486e6",
+      "bytes": 2450688,
+      "path": "games/doom19s.zip"
+    },
+    "game-sky": {
+      "kind": "file",
+      "urls": ["https://downloads.scummvm.org/frs/extras/Beneath%20a%20Steel%20Sky/BASS-Floppy-1.3.zip"],
+      "sha256": "d0bac1bd61747a67e885fa44b78c78887bf2b15d3dfa2790c483fad651078818",
+      "bytes": 7675813,
+      "path": "games/BASS-Floppy-1.3.zip"
+    },
+    "game-queen": {
+      "kind": "file",
+      "urls": ["https://downloads.scummvm.org/frs/extras/Flight%20of%20the%20Amazon%20Queen/FOTAQ_Floppy.zip"],
+      "sha256": "2e59de85f708cdb32bf85c85b394ac091c05f7647e856b71f5b3ae73fde761e0",
+      "bytes": 7109570,
+      "path": "games/FOTAQ_Floppy.zip"
+    },
+    "game-lure": {
+      "kind": "file",
+      "urls": ["https://downloads.scummvm.org/frs/extras/Lure%20of%20the%20Temptress/lure-1.1.zip"],
+      "sha256": "f3178245a1483da1168c3a11e70b65d33c389f1f5df63d4f3a356886c1890108",
+      "bytes": 5678861,
+      "path": "games/lure-1.1.zip"
+    },
+    "game-drascula": {
+      "kind": "file",
+      "urls": ["https://downloads.scummvm.org/frs/extras/Drascula_%20The%20Vampire%20Strikes%20Back/drascula-1.0.zip"],
+      "sha256": "b731f6cb5a22ba8b4c3b3362f570b9a10a67b6cb0b395394b19a94b36e4e42de",
+      "bytes": 32842993,
+      "path": "games/drascula-1.0.zip"
+    },
+    "game-soltys": {
+      "kind": "file",
+      "urls": ["https://downloads.scummvm.org/frs/extras/Soltys/soltys-en-v1.0.zip"],
+      "sha256": "87b89e654b8a5b8ebe342cb4c5c6049ab9a43a5efb474d9c49bafb77dcce48f6",
+      "bytes": 3484518,
+      "path": "games/soltys-en-v1.0.zip"
+    },
+    "game-sfinx": {
+      "kind": "file",
+      "urls": ["https://downloads.scummvm.org/frs/extras/Sfinx/sfinx-en-v1.1.zip"],
+      "sha256": "f516b30a046526f78cbc923d8f907d267ab964ccd9b770afc72350e8d467ec4d",
+      "bytes": 16549117,
+      "path": "games/sfinx-en-v1.1.zip"
+    }
+  }
+}

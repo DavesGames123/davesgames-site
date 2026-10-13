@@ -1,3 +1,6 @@
 # Craft Suite web builds. tools/craft-fetch.mjs downloads them from the
 # upstream GitHub releases pinned in stella-nova/vendor/craft/craft.lock.json.
 stella-nova/vendor/craft/*/
+# Retro Shelf engines and freeware game archives. tools/retro-fetch.mjs
+# downloads them from the pins in stella-nova/vendor/retro/retro.lock.json.
+stella-nova/vendor/retro/fetched/
