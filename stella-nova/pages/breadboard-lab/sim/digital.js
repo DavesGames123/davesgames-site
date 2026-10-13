@@ -111,8 +111,11 @@ class DigitalBase extends Dev {
     if (this.damaged) return;
     let worst = 0;
     for (const k in this.outPins) worst = Math.max(worst, Math.abs(this.outCurrent(s.x, k)));
-    if (worst > 0.1) this.burnT += s.h; else this.burnT = 0;
-    if (this.burnT > 0.05) this.damage('burnt', `${this.label()} burned: an output carried ${(worst * 1000).toFixed(0)} mA (limit about 25 mA). An output is shorted to a supply or to another output.`, true, s.t);
+    // the family limit (FAMILIES iburn). The old fixed 0.1 A could never
+    // fire: rout bounds an HC short at 5 V to 100 mA.
+    const fam = this.fam || {}, lim = fam.iburn || 0.035, abs = fam.iabs || 0.025;
+    if (worst > lim) this.burnT += s.h; else this.burnT = 0;
+    if (this.burnT > 0.05) this.damage('burnt', `${this.label()} burned: an output carried ${(worst * 1000).toFixed(0)} mA (limit ${(abs * 1000).toFixed(0)} mA). An output is shorted to a supply or to another output.`, true, s.t);
   }
 }
 

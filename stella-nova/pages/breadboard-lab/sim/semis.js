@@ -28,7 +28,9 @@
 //  an avalanche at BVdss.
 //
 //  DAMAGE. Thermal model per device (devbase thermalStep). An LED above iabs
-//  for 50 ms burns open with smoke. A transistor dies open above about 1.2 ×
+//  for 50 ms burns open with smoke, above 2 × imax for 3 s it overheats.
+//  Its reverse knee is at 4 × vrmax: above vrmax it warns, and 1 mA of
+//  avalanche current for 50 ms burns it. A transistor dies open above about 1.2 ×
 //  pmax in steady state.
 //
 //  GREP MAP
@@ -176,9 +178,12 @@ export class Led extends Diode {
     const m = ledModel((el.params || {}).color || 'red');
     // no junction capacitance on an LED: it costs Newton iterations on every
     // LED bench and changes no visible result
-    el = { ...el, params: { is: m.is, n: m.n, rs: m.rs, bv: 40, pmax: 1, cj: 0, ...(el.params || {}) } };
+    // the reverse knee sits at 4 × vrmax (real LEDs break down well above
+    // their 5 V rating); above vrmax the LED warns, in avalanche it burns
+    const vr = +((el.params || {}).vrmax ?? 5) || 5;
+    el = { ...el, params: { is: m.is, n: m.n, rs: m.rs, bv: 4 * vr, pmax: 1, cj: 0, ...(el.params || {}) } };
     super(el, eng);
-    this.overAbs = 0; this.overMax = 0;
+    this.overAbs = 0; this.overMax = 0; this.revT = 0; this.revAv = 0; this.revWarned = false;
     this.metered = true;
   }
   paramChanged(key) {
@@ -194,8 +199,21 @@ export class Led extends Diode {
     if (this.damaged) return;
     const i = this.current(s.x);
     if (i > this.p.iabs) this.overAbs += s.h; else this.overAbs = 0;
-    if (i > this.p.imax * 1.5) this.overMax += s.h; else this.overMax = Math.max(0, this.overMax - s.h);
-    if (this.overAbs > 0.05) {
+    // 'overheated': above 2 × imax for 3 s (31 mA from 9 V and 220 Ω is
+    // hard use, but a 5 mm LED lives through it)
+    if (i > this.p.imax * 2) this.overMax += s.h; else this.overMax = Math.max(0, this.overMax - s.h);
+    // reverse: a warning above vrmax for 50 ms; a burn above 1 mA of
+    // avalanche current for 50 ms
+    const vrev = -this.vd, vrmax = +this.p.vrmax || 5;
+    if (vrev > vrmax) this.revT += s.h; else { this.revT = 0; if (vrev < 0.8 * vrmax) this.revWarned = false; }
+    if (-i > 1e-3) this.revAv += s.h; else this.revAv = 0;
+    if (this.revT > 0.05 && !this.revWarned) {
+      this.revWarned = true;
+      this.eng._event({ t: s.t, kind: 'warn', owner: this.owner, element: this.id, severity: 'warn', msg: `${this.label()} has ${vrev.toFixed(1)} V in reverse, above its ${vrmax} V reverse rating. Check that it is the right way round.` });
+    }
+    if (this.revAv > 0.05) {
+      this.damage('burnt', `${this.label()} broke down in reverse: ${(-i * 1000).toFixed(0)} mA at ${vrev.toFixed(1)} V (rated ${vrmax} V reverse). The flat side and the short leg are the cathode.`, true, s.t);
+    } else if (this.overAbs > 0.05) {
       this.damage('burnt', `${this.label()} burned out: ${(i * 1000).toFixed(0)} mA through an LED rated ${(this.p.imax * 1000).toFixed(0)} mA. Put a resistor in series (about 220 Ω at 5 V).`, true, s.t);
     } else if (this.overMax > 3) {
       this.damage('burnt', `${this.label()} overheated: ${(i * 1000).toFixed(0)} mA for seconds (rated ${(this.p.imax * 1000).toFixed(0)} mA). Use a larger series resistor.`, true, s.t);

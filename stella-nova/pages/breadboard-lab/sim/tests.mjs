@@ -1063,6 +1063,28 @@ if (section('review fixes')) {
     const ev = e.drainEvents().find(v => v.kind === 'short');
     check('9 V battery shorted by a button at 0.5 s → one short event', !!ev, ev ? `t = ${ev.t.toFixed(3)} s: ${ev.msg}` : 'no short event');
   }
+  // 5. a logic output shorted to a rail burns the chip
+  {
+    const nodes = {}; for (let p = 1; p <= 14; p++) nodes['p' + p] = p;
+    nodes.p7 = 0; nodes.p1 = 0; nodes.p2 = 0; // input low → output high, output on GND
+    const { frames } = runFor(net(15, [vsrc('vcc', 14, 5), E('u/main', 'logic', nodes, { chip: '74hc04' })]), 1);
+    const ev = evsOf(frames).find(v => v.kind === 'damage' && v.owner === 'u');
+    check('74HC04 output high wired to GND burns within 1 s', !!ev, ev ? `t = ${ev.t.toFixed(3)} s: ${ev.msg}` : 'no damage event');
+  }
+  // 6. the 555 output has a current limit
+  {
+    const { frames } = runFor(net(5, [vsrc('vcc', 1, 9), E('u/main', 'timer555', { gnd: 0, trig: 1, out: 2, reset: 1, thres: 1, dis: 3, vcc: 1 }), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 10, pmax: 100 })]), 1);
+    const ev = evsOf(frames).find(v => v.kind === 'damage' && v.owner === 'u');
+    check('555 output low sinking 450 mA (10 Ω from 9 V) burns within 1 s', !!ev, ev ? `t = ${ev.t.toFixed(3)} s: ${ev.msg}` : 'no damage event');
+  }
+  // 8. the LED reverse rating
+  {
+    const { frames } = runFor(net(3, [vsrc('v', 1, 50), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 1000, pmax: 10 }), E('d/main', 'led', { a: 0, k: 2 }, { color: 'red' })]), 2);
+    const ev = evsOf(frames).find(v => v.kind === 'damage' && v.owner === 'd');
+    const { frames: f2 } = runFor(net(3, [vsrc('v', 1, 12), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 220 }), E('d/main', 'led', { a: 0, k: 2 }, { color: 'red' })]), 0.5);
+    const w = evsOf(f2).find(v => v.owner === 'd' && /reverse/i.test(v.msg));
+    check('LED reversed: 50 V / 1 kΩ burns it; 12 V / 220 Ω warns that it passes the 5 V reverse rating', !!ev && !!w, `${ev ? `burn at ${ev.t.toFixed(3)} s` : 'no burn'}; ${w ? `${w.kind} at ${w.t.toFixed(3)} s` : 'no warning'}`);
+  }
   // 9. the USB polyfuse stays tripped while the short stays
   {
     const e = createEngine(net(2, [E('u/main', 'usbpower', { p: 1, n: 0 }, {}), E('bt/main', 'button', { a: 1, b: 0 }, {})]));
@@ -1071,6 +1093,12 @@ if (section('review fixes')) {
     e.press('bt', false); e.advanceTo(20);
     const back = e.drainEvents().filter(v => /polyfuse reset/.test(v.msg)).length;
     check('USB polyfuse: one trip, no reset while the short stays, reset after release', trips === 1 && resets === 0 && back === 1 && !e.dev('u/main').tripped, `${trips} trips, ${resets} resets while shorted, ${back} reset after release`);
+  }
+  // 10. 31 mA in a red LED does not burn it in seconds
+  {
+    const { frames } = runFor(net(3, [vsrc('v', 1, 9), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 220 }), E('d/main', 'led', { a: 2, k: 0 }, { color: 'red' })]), 6);
+    const ev = evsOf(frames).find(v => v.kind === 'damage' && v.owner === 'd');
+    check('red LED at 31 mA (9 V, 220 Ω) survives 6 s', !ev, ev ? `burnt at ${ev.t.toFixed(3)} s` : 'no damage');
   }
   // 11. the bench supply says "short" only for a real short
   {

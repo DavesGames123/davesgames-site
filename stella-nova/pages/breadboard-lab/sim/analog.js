@@ -16,7 +16,8 @@
 //  above ctrl resets it, reset below 0.7 V clears it. The engine finds the
 //  exact crossing time (cross()), so the timing does not depend on the step.
 //  Output: Norton source, high = vcc − 1.4 V, low = gnd + 0.05 V, rout 10 Ω.
-//  Discharge: 10 Ω to gnd while the latch is clear.
+//  Discharge: 10 Ω to gnd while the latch is clear. Damage: the output
+//  burns after 50 ms above 300 mA or above 150 °C (thermal model).
 //
 //  REGULATOR. A pass current Ip from in to out, toward the target
 //  vt = softmin(gnd + vout_nominal, vin − dropout). Three regions, picked
@@ -199,7 +200,7 @@ export class Timer555 extends Dev {
     stampG(A, this.h1, 1 / 5000); stampG(A, this.h2, 1 / 5000); stampG(A, this.h3, 1 / 5000);
     stampG(A, this.hq, 1 / (5 / this.p.iq));
     for (const h of this.hin) stampG(A, h, 1e-9);
-    if (!this.pw) { stampG(A, this.hout, 1e-6); stampG(A, this.hdis, GMIN); return; }
+    if (!this.pw || this.damaged) { stampG(A, this.hout, 1e-6); stampG(A, this.hdis, GMIN); return; }
     if (!this.q && !this.damaged) stampG(A, this.hdis, 1 / this.p.rdis);
     // output Norton: target depends on vcc (high) or gnd (low)
     const g = 1 / this.p.rout;
@@ -251,7 +252,7 @@ export class Timer555 extends Dev {
     return changed;
   }
   current(x) {
-    if (!this.pw) return 0;
+    if (!this.pw || this.damaged) return 0;
     const target = this.q ? vat(x, this.n_vcc) - this.p.vhiDrop : vat(x, this.n_gnd) + this.p.vlo;
     return (target - vat(x, this.n_out)) / this.p.rout;
   }
@@ -261,7 +262,18 @@ export class Timer555 extends Dev {
     const rail = I >= 0 ? vat(x, this.n_vcc) : vat(x, this.n_gnd);
     return vq * vq * this.p.iq / 5 + (rail - vat(x, this.n_out)) * I;
   }
-  frameVis(vis) { vis.on = !!this.q; }
+  // damage: the output burns after 50 ms above 300 mA (the NE555 rating
+  // is 200 mA), or when the die passes 150 °C (100 °C/W, τ 1 s)
+  accept(s) {
+    if (this.damaged || s.mode !== 'tran') return;
+    const i = Math.abs(this.current(s.x)), P = Math.max(0, this.power(s.x));
+    this.overT = i > 0.3 ? (this.overT || 0) + s.h : 0;
+    this.temp = thermalStep(this.temp, P, 100, 1, s.h);
+    if (this.overT > 0.05 || this.temp > 150) {
+      this.damage('burnt', `${this.label()} burned: its output carried ${(i * 1000).toFixed(0)} mA (rated 200 mA), ${P.toFixed(2)} W. Put a resistor or a transistor between the output and the load.`, true, s.t);
+    }
+  }
+  frameVis(vis) { vis.on = !!this.q && !this.damaged; }
   sig() { return (this.pw ? 2 : 0) + this.q; }
 }
 

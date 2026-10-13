@@ -131,8 +131,10 @@ export const CHIPS = {
   cd4017: CD4017,
 };
 export const FAMILIES = {
-  hc: { rout: 50, vil: 0.3, vih: 0.7, vmin: 1.5, iq: 2e-6 },
-  cmos4000: { rout: 400, vil: 0.3, vih: 0.7, vmin: 1.5, iq: 1e-6 },
+  // iabs: the absolute maximum output current; iburn: the current that
+  // burns an output in 50 ms (rout bounds a short, so iburn sits below it)
+  hc: { rout: 50, vil: 0.3, vih: 0.7, vmin: 1.5, iq: 2e-6, iabs: 0.025, iburn: 0.035 },
+  cmos4000: { rout: 400, vil: 0.3, vih: 0.7, vmin: 1.5, iq: 1e-6, iabs: 0.01, iburn: 0.02 },
 };
 
 export function chipOf(name) {
