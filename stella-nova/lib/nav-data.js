@@ -192,6 +192,9 @@ w.SN_NAV = [
       ["antenna-fields", "Antenna Fields", "NEW"],
       ["sstv", "Slow-Scan Television", "NEW"]
     ] },
+    { h: "Electronics", p: [
+      ["breadboard-lab", "Breadboard Lab", "NEW"]
+    ] },
     { h: "Optics", p: [
       ["diffraction", "Aperture Diffraction", "NEW", "diffraction-lab"],
       ["double-slit", "Double-Slit Diffraction", "NEW"],

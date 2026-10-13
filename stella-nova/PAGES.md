@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-220 registered pages in 5 regions and 20 constellations.
+221 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -219,6 +219,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `smith-chart` | Smith Chart | Light & Fields > Electromagnetism | NEW | Impedance on the Smith chart. |  | shown | hook, tier 3, default | yes |
 | `antenna-fields` | Antenna Fields | Light & Fields > Electromagnetism | NEW | Radio waves leave a dipole, a loop and an array. |  | shown | hook, tier 4, default | yes |
 | `sstv` | Slow-Scan Television | Light & Fields > Electromagnetism | NEW | Slow-scan television: a picture sent as sound, decoded live. |  | shown | hook, tier 3, default | yes |
+| `breadboard-lab` | Breadboard Lab | Light & Fields > Electronics | NEW | Build circuits on 3D breadboards and test them live. |  | shown | no | no |
 | `diffraction` (pages/diffraction-lab) | Aperture Diffraction | Light & Fields > Optics | NEW | Light through an aperture. |  | shown | hook, tier 3, default | yes |
 | `double-slit` | Double-Slit Diffraction | Light & Fields > Optics | NEW | Interference, one photon at a time. |  | shown | hook, tier 2, default | yes |
 | `polarization` (pages/circular-polarization) | Circular Polarization | Light & Fields > Optics | NEW | Watch a wave twist as it travels. |  | shown | hook, tier 2, default | yes |

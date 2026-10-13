@@ -327,6 +327,7 @@ const BLURBS = {
   'ns-geometry': 'The blowup question through the geometry of the flow.',
   'antenna-fields': 'Radio waves leave a dipole, a loop and an array.',
   sstv: 'Slow-scan television: a picture sent as sound, decoded live.',
+  'breadboard-lab': 'Build circuits on 3D breadboards and test them live.',
   'wasm4-arcade': 'Open-source WASM-4 fantasy console carts in a CRT arcade cabinet.',
   'retro-shelf': 'Freeware classics (DOOM shareware, Beneath a Steel Sky and more) in DOSBox and ScummVM, or your own disc.',
   'photon-caustics-3d': 'Sunlight through waves draws caustics on a pool floor.',
