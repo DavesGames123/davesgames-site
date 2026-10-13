@@ -16,7 +16,9 @@
 //  converged only if it also contracts. The start point is a linear
 //  prediction from the last two points after the last breakpoint. Then
 //  three checks, in order:
-//    1. Newton failed .............. h /= 8 and try again
+//    1. Newton failed .............. h /= 8 and try again; at dtMin a
+//                                    backward Euler _solveRobust, then hold
+//                                    the old point (one warning, _ncWarned)
 //    2. LTE ratio > 1 .............. h shrinks by the error ratio
 //    3. a logic input crosses inside the step (cross()) .. land just past it
 //  Then accept: devices move state; logic outputs, timers and MCUs update;
@@ -473,9 +475,20 @@ export class Engine {
         if (!r.ok) {
           rejected++; this.stats.rejNewton++;
           if (h <= o.dtMin * 1.0001 || tries > 30) {
-            // give up on this point: hold the old solution and move on
-            this._event({ t: t + h, kind: 'warn', severity: 'warn', msg: `The solver did not converge at t = ${(t + h).toExponential(3)} s.` });
-            this.xTrial.set(this.xAcc);
+            // last resort at this point: backward Euler with gmin and source
+            // stepping (a switching edge with no nearby solution)
+            s.method = 'be'; this.xTrial.set(this.xAcc);
+            const rr = this._solveRobust(s);
+            this.stats.robust = (this.stats.robust || 0) + 1;
+            if (!rr.ok) {
+              // give up on this point: hold the old solution and move on.
+              // One warning per stretch between clean steps.
+              if (!this._ncWarned) {
+                this._ncWarned = true;
+                this._event({ t: t + h, kind: 'warn', severity: 'warn', msg: `The solver did not converge at t = ${(t + h).toExponential(3)} s.` });
+              }
+              this.xTrial.set(this.xAcc);
+            }
             this._accept(h, true);
             accepted = true; break;
           }
@@ -524,6 +537,7 @@ export class Engine {
         }
         this._accept(h, false);
         this.hLast = h;
+        if (tries === 1) this._ncWarned = false;
         accepted = true;
       }
       steps++;

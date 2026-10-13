@@ -30,6 +30,8 @@
 //    Builder hooks ....... b.node / b.internal / b.branch / b.entry / b.pair
 //    stampG / stampI / stampVCCS / stampBranch  the stamp helpers
 //    dd2 / dd3 / lteRatio  divided differences for step control
+//    JCap ................ a small linear capacitor inside a device (junction
+//                          capacitance): companion stamp, accept, save
 // ============================================================================
 
 export const VT = 0.025852; // k·T/q at 300 K
@@ -158,6 +160,26 @@ export function lteRatio(s, x0, hist, abstol) {
   return Math.abs(h * h * d) / (tol * s.trtol);
 }
 export function pushHist(hist, v) { hist[2] = hist[1]; hist[1] = hist[0]; hist[0] = v; }
+
+// A fixed capacitor between two unknowns of a device (junction capacitance).
+// It always uses backward Euler, whatever the engine method: these
+// capacitors are tiny and have no LTE control, and the trapezoid rule would
+// let them ring from step to step. Backward Euler damps them. In DC mode the
+// capacitor is open. The owner calls stamp() in load() and accept() with the
+// new voltage in accept().
+export class JCap {
+  constructor(c) { this.c = +c || 0; this.v = 0; }
+  stamp(s, h, a, b) {
+    if (!(this.c > 0) || s.mode === 'dc') return;
+    const g = this.c / s.h;
+    stampG(s.A, h, g);
+    stampI(s.rhs, a, b, -g * this.v);
+  }
+  accept(s, v) { this.v = v; }
+  reset() { this.v = 0; }
+  save() { return this.v; }
+  restore(v) { if (typeof v === 'number') this.v = v; }
+}
 
 // Thermal model: C·dT/dt = P − (T − 25)/Rth. tau = Rth·C.
 export function thermalStep(T, P, rth, tau, dt) {

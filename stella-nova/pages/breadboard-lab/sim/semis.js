@@ -10,10 +10,17 @@
 //  BJT. Transport Ebers-Moll with the Early effect on the transfer current:
 //    Icc = Is·(e^(vbe/VT) − e^(vbc/VT))·(1 − vbc/Vaf)
 //    Ic = Icc − Is/βr·(e^(vbc/VT) − 1),   Ib = Is/βf·(e^(vbe/VT) − 1) + Is/βr·(e^(vbc/VT) − 1)
-//  In the active region Ic/Ib = βf·(1 − vbc/Vaf). A softplus avalanche from
+//  In the active region Ic/Ib = βf·(1 − vbc/Vaf). Above the knee current
+//  ikf the transfer current is divided by qb = (1 + √(1 + 4·If/ikf))/2
+//  (high injection), so β falls at high current. A softplus avalanche from
 //  C to E at BVceo bounds the flyback spike of an unprotected coil. Every
 //  current is linearized in (vbe, vbc) after junction limiting, then mapped
-//  to the three nodes. A PNP is the same with every sign flipped.
+//  to the three nodes. A PNP is the same with every sign flipped. The
+//  junctions sit behind a base resistance rb (an internal node) and carry
+//  linear capacitances cje (B–E) and cjc (B–C). Without them a two-
+//  transistor flip-flop has no nearby solution at its switching point and
+//  Newton fails at every step size. A diode carries cj in the same way
+//  (devbase JCap).
 //
 //  MOSFET. Square law with a softplus overdrive (smooth at threshold):
 //    sat: Id = k/2·vov²·(1 + λ·vds);  triode: Id = k·(vov·vds − vds²/2)·(1 + λ·vds)
@@ -35,15 +42,15 @@
 //    SEMI_TYPES .......... type name → class
 // ============================================================================
 import {
-  Dev, VT, GMIN, vat, stampG, stampI, pnjlim, pnj, LIMIT, vcritOf, stepLimit, softplus, sigmoid, thermalStep,
+  Dev, VT, GMIN, vat, stampG, stampI, pnjlim, pnj, LIMIT, vcritOf, stepLimit, softplus, sigmoid, thermalStep, JCap,
 } from './devbase.js';
 
 export const BYPASS_V = 2e-5;
 
 export const DIODE_MODELS = {
-  '1n4148': { is: 2.52e-9, n: 1.752, rs: 0.568, bv: 100, pmax: 0.5 },
-  '1n4007': { is: 7.03e-9, n: 1.808, rs: 0.034, bv: 1000, pmax: 3 },
-  schottky: { is: 3.17e-5, n: 1.373, rs: 0.051, bv: 40, pmax: 1.25 },
+  '1n4148': { is: 2.52e-9, n: 1.752, rs: 0.568, bv: 100, pmax: 0.5, cj: 4e-12 },
+  '1n4007': { is: 7.03e-9, n: 1.808, rs: 0.034, bv: 1000, pmax: 3, cj: 15e-12 },
+  schottky: { is: 3.17e-5, n: 1.373, rs: 0.051, bv: 40, pmax: 1.25, cj: 50e-12 },
 };
 export const LED_VF = { red: 2.0, orange: 2.05, yellow: 2.1, green: 2.2, blue: 3.1, white: 3.1, ir: 1.3 };
 const LED_N = { red: 2, orange: 2, yellow: 2.1, green: 2.3, blue: 3, white: 3, ir: 1.6 };
@@ -55,9 +62,9 @@ export function ledModel(color) {
   return { is, n, rs, vf };
 }
 export const BJT_MODELS = {
-  '2n3904': { is: 6.734e-15, bf: 416.4, br: 0.7371, vaf: 74.03, pmax: 0.625, bv: 40 },
-  '2n2222': { is: 14.34e-15, bf: 255.9, br: 6.092, vaf: 74.03, pmax: 0.625, bv: 40 },
-  '2n3906': { is: 1.41e-15, bf: 180.7, br: 4.977, vaf: 18.7, pmax: 0.625, bv: 40 },
+  '2n3904': { is: 6.734e-15, bf: 416.4, br: 0.7371, vaf: 74.03, pmax: 0.625, bv: 40, cje: 4.5e-12, cjc: 3.6e-12, rb: 10, ikf: 0.06678 },
+  '2n2222': { is: 14.34e-15, bf: 255.9, br: 6.092, vaf: 74.03, pmax: 0.625, bv: 40, cje: 22e-12, cjc: 7.3e-12, rb: 10, ikf: 0.2847 },
+  '2n3906': { is: 1.41e-15, bf: 180.7, br: 4.977, vaf: 18.7, pmax: 0.625, bv: 40, cje: 4.5e-12, cjc: 9.7e-12, rb: 10, ikf: 0.08 },
 };
 export const MOS_MODELS = {
   '2n7000': { vth: 2.1, k: 0.08, lambda: 0.01, pmax: 0.4, bv: 60, body: false },
@@ -83,8 +90,9 @@ export class Diode extends Dev {
     super(el, eng);
     this.nonlinear = true;
     const m = DIODE_MODELS[this.p.model] || DIODE_MODELS['1n4148'];
-    for (const k of ['is', 'n', 'rs', 'bv', 'pmax']) if (this.p[k] == null) this.p[k] = m[k];
+    for (const k of ['is', 'n', 'rs', 'bv', 'pmax', 'cj']) if (this.p[k] == null) this.p[k] = m[k];
     if (this.p.ibv == null) this.p.ibv = 1e-4;
+    this.cap = new JCap(this.p.cj);
     this.init();
   }
   init() {
@@ -117,6 +125,7 @@ export class Diode extends Dev {
   load(s) {
     if (this.damaged) { stampG(s.A, this.hd, GMIN); if (this.hrs) stampG(s.A, this.hrs, 1 / this.p.rs); return; }
     if (this.hrs) stampG(s.A, this.hrs, 1 / this.p.rs);
+    this.cap.stamp(s, this.hd, this.ij, this.ik);
     const v = vat(s.x, this.ij) - vat(s.x, this.ik);
     const vl = pnj(v, this.vd, this.nvt, this.vcrit);
     if (LIMIT.hit) s.noncon = true;
@@ -141,15 +150,18 @@ export class Diode extends Dev {
     return this._bi + this._bg * (v - this._bv);
   }
   power(x) { return this.damaged ? 0 : this.current(x) * (vat(x, this.ia) - vat(x, this.ik)); }
+  acceptDC(s) { this.cap.accept(s, vat(s.x, this.ij) - vat(s.x, this.ik)); }
   accept(s) {
     this.vd = vat(s.x, this.ij) - vat(s.x, this.ik);
+    this.cap.accept(s, this.vd);
     if (this.damaged) return;
     const P = this.power(s.x), pmax = this.p.pmax || 0.5;
     this.temp = thermalStep(this.temp, Math.abs(P), 100 / pmax, 0.5, s.h);
     if (this.temp > 275) this.damage('burnt', `${this.label()} burned: ${Math.abs(P).toFixed(2)} W in a ${pmax} W diode.`, true, s.t);
   }
-  save() { return { ...super.save(), vd: this.vd }; }
-  restore(st) { super.restore(st); if (st && st.vd != null) this.vd = st.vd; }
+  save() { return { ...super.save(), vd: this.vd, cap: this.cap.save() }; }
+  restore(st) { super.restore(st); if (st && st.vd != null) this.vd = st.vd; if (st) this.cap.restore(st.cap); }
+  resetState() { super.resetState(); this.cap.reset(); }
 }
 
 export class Zener extends Diode {
@@ -162,7 +174,9 @@ export class Led extends Diode {
   static defaults = { color: 'red', imax: 0.02, iabs: 0.05, vrmax: 5 };
   constructor(el, eng) {
     const m = ledModel((el.params || {}).color || 'red');
-    el = { ...el, params: { is: m.is, n: m.n, rs: m.rs, bv: 40, pmax: 1, ...(el.params || {}) } };
+    // no junction capacitance on an LED: it costs Newton iterations on every
+    // LED bench and changes no visible result
+    el = { ...el, params: { is: m.is, n: m.n, rs: m.rs, bv: 40, pmax: 1, cj: 0, ...(el.params || {}) } };
     super(el, eng);
     this.overAbs = 0; this.overMax = 0;
     this.metered = true;
@@ -202,15 +216,20 @@ export class Bjt extends Dev {
     this.sgn = el.type === 'pnp' ? -1 : 1;
     const def = this.sgn < 0 ? '2n3906' : '2n3904';
     const m = BJT_MODELS[this.p.model] || BJT_MODELS[def];
-    for (const k of ['is', 'bf', 'br', 'vaf', 'pmax', 'bv']) if (this.p[k] == null) this.p[k] = m[k];
+    for (const k of ['is', 'bf', 'br', 'vaf', 'pmax', 'bv', 'cje', 'cjc', 'rb', 'ikf']) if (this.p[k] == null) this.p[k] = m[k];
     this.vcrit = vcritOf(this.p.is, VT);
     this.vbe = 0; this.vbc = 0;
+    this.cje = new JCap(this.p.cje); this.cjc = new JCap(this.p.cjc);
   }
   setup(b) {
-    this.ic = b.node('c'); this.ib = b.node('b'); this.ie = b.node('e');
+    this.ic = b.node('c'); this.ibx = b.node('b'); this.ie = b.node('e');
+    // base spreading resistance: the junctions sit on an internal base node
+    if (this.p.rb > 0) { this.ib = b.internal('b'); this.hrb = b.pair(this.ibx, this.ib); }
+    else { this.ib = this.ibx; this.hrb = null; }
     const ids = [this.ic, this.ib, this.ie];
     this.H = [];
     for (const r of ids) for (const c of ids) this.H.push(b.entry(r, c));
+    this.hbe = b.pair(this.ib, this.ie); this.hbc = b.pair(this.ib, this.ic);
   }
   // currents (Ic, Ib) and derivatives in junction coordinates
   eval(vbe, vbc) {
@@ -220,10 +239,17 @@ export class Bjt extends Dev {
     const gif = p.is * eBE / VT, gir = p.is * eBC / VT;
     let kE = 1 - vbc / p.vaf, dkE = -1 / p.vaf;
     if (kE < 0.05) { kE = 0.05; dkE = 0; }
-    const Icc = (If - Ir) * kE;
+    // high injection (Gummel-Poon knee at ikf): the transfer current is
+    // divided by qb, so it grows as √(If·ikf) at high current
+    let qb = 1, dqb = 0;
+    if (p.ikf > 0 && If > 0) {
+      const r = Math.sqrt(1 + 4 * If / p.ikf);
+      qb = 0.5 * (1 + r); dqb = gif / (p.ikf * r);
+    }
+    const Icc = (If - Ir) * kE / qb;
     let Ic = Icc - Ir / p.br + GMIN * (vbe - vbc);
-    let gc_be = gif * kE + GMIN;
-    let gc_bc = -gir * kE + (If - Ir) * dkE - gir / p.br - GMIN;
+    let gc_be = gif * kE / qb - Icc * dqb / qb + GMIN;
+    let gc_bc = (-gir * kE + (If - Ir) * dkE) / qb - gir / p.br - GMIN;
     const Ib = If / p.bf + Ir / p.br + GMIN * (vbe + vbc);
     const gb_be = gif / p.bf + GMIN, gb_bc = gir / p.br + GMIN;
     // avalanche C→E at bv (vce = vbe − vbc)
@@ -233,11 +259,16 @@ export class Bjt extends Dev {
   }
   load(s) {
     const x = s.x, sg = this.sgn;
+    if (this.hrb) stampG(s.A, this.hrb, 1 / this.p.rb);
     if (this.damaged) {
       const H = this.H;
       for (const [r, c] of [[0, 0], [1, 1], [2, 2]]) if (H[r * 3 + c] >= 0) s.A[H[r * 3 + c]] += GMIN;
       return;
     }
+    // junction capacitances (linear companions): they give the switching
+    // edge of a flip-flop or flasher a finite speed, so Newton can follow it
+    this.cje.stamp(s, this.hbe, this.ib, this.ie);
+    this.cjc.stamp(s, this.hbc, this.ib, this.ic);
     const vb = vat(x, this.ib), vc = vat(x, this.ic), ve = vat(x, this.ie);
     let vbe = sg * (vb - ve), vbc = sg * (vb - vc);
     vbe = pnj(vbe, this.vbe, VT, this.vcrit);
@@ -278,17 +309,27 @@ export class Bjt extends Dev {
     const ve = vat(x, this.ie);
     return ic * (vat(x, this.ic) - ve) + ib * (vat(x, this.ib) - ve);
   }
+  acceptDC(s) {
+    const x = s.x, vb = vat(x, this.ib);
+    this.cje.accept(s, vb - vat(x, this.ie)); this.cjc.accept(s, vb - vat(x, this.ic));
+  }
   accept(s) {
     const x = s.x, sg = this.sgn;
     const vb = vat(x, this.ib);
     this.vbe = sg * (vb - vat(x, this.ie)); this.vbc = sg * (vb - vat(x, this.ic));
+    this.cje.accept(s, vb - vat(x, this.ie)); this.cjc.accept(s, vb - vat(x, this.ic));
     if (this.damaged) return;
     const P = this.power(x);
     this.temp = thermalStep(this.temp, Math.abs(P), 125 / this.p.pmax, 1, s.h);
     if (this.temp > 175) this.damage('burnt', `${this.label()} overheated and failed: ${Math.abs(P).toFixed(2)} W in a ${this.p.pmax} W transistor.`, true, s.t);
   }
-  save() { return { ...super.save(), vbe: this.vbe, vbc: this.vbc }; }
-  restore(st) { super.restore(st); if (st && st.vbe != null) { this.vbe = st.vbe; this.vbc = st.vbc; } }
+  save() { return { ...super.save(), vbe: this.vbe, vbc: this.vbc, cje: this.cje.save(), cjc: this.cjc.save() }; }
+  restore(st) {
+    super.restore(st);
+    if (st && st.vbe != null) { this.vbe = st.vbe; this.vbc = st.vbc; }
+    if (st) { this.cje.restore(st.cje); this.cjc.restore(st.cjc); }
+  }
+  resetState() { super.resetState(); this.cje.reset(); this.cjc.reset(); }
 }
 
 // --------------------------------------------------------------------- MOS

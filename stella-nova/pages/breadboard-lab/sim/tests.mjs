@@ -217,8 +217,10 @@ if (section('transistors')) {
     const q = eng.dev('q/main');
     const [ic, ib] = q.terminal(eng.x);
     const vbc = eng.v(4) - eng.v(3), M = BJT_MODELS['2n3904'];
-    const beta = M.bf * (1 - vbc / M.vaf);
-    check('NPN active: Ic/Ib = βf·(1 − vbc/Vaf)', rel(ic / ib, beta) < 0.02, `Ic/Ib = ${(ic / ib).toFixed(2)}, model β = ${beta.toFixed(2)}, Vce = ${eng.v(3).toFixed(3)} V`);
+    // high injection: qb = (1 + √(1 + 4·If/ikf)) / 2 with If ≈ βf·Ib
+    const qb = 0.5 * (1 + Math.sqrt(1 + 4 * M.bf * ib / M.ikf));
+    const beta = M.bf * (1 - vbc / M.vaf) / qb;
+    check('NPN active: Ic/Ib = βf·(1 − vbc/Vaf)/qb', rel(ic / ib, beta) < 0.02, `Ic/Ib = ${(ic / ib).toFixed(2)}, model β = ${beta.toFixed(2)}, Vce = ${eng.v(3).toFixed(3)} V`);
     eng.setParam('rb', 'r', 10e3);
     const e2 = createEngine(net(5, [E('vc/main', 'vsource', { p: 1, n: 0 }, { v: 10 }), E('vb/main', 'vsource', { p: 2, n: 0 }, { v: 5 }), E('rc/main', 'resistor', { a: 1, b: 3 }, { r: 1000 }), E('rb/main', 'resistor', { a: 2, b: 4 }, { r: 10e3 }), E('q/main', 'npn', { c: 3, b: 4, e: 0 }, { model: '2n3904' })]));
     e2.dcop();
@@ -1000,6 +1002,41 @@ if (section('real parts and MCU runtime (cross-role)')) {
       }
       check('esp32-traffic: 3.3 V logic runs the light sequence', seen.size >= 3 && vhi > 3.1 && vhi < 3.4, `LED states seen (r y g): ${[...seen].join(' ')}; GPIO 25 high level ${vhi.toFixed(3)} V`);
     }
+  }
+}
+
+// ================================================================ review fixes
+// one check per finding of the physics review (2026-10-13); each failed
+// before its fix
+if (section('review fixes')) {
+  const evsOf = frames => frames.flatMap(f => f.events);
+  // 1. the two-transistor flasher runs at worker speed (12 ms slices)
+  {
+    const e = createEngine(net(6, [vsrc('v', 1, 5), E('rc1/main', 'resistor', { a: 1, b: 2 }, { r: 1000 }), E('rc2/main', 'resistor', { a: 1, b: 4 }, { r: 1000 }),
+      E('rb1/main', 'resistor', { a: 1, b: 3 }, { r: 47000 }), E('rb2/main', 'resistor', { a: 1, b: 5 }, { r: 47000 }),
+      E('c1/main', 'capacitor', { a: 2, b: 5 }, { c: 10e-6 }), E('c2/main', 'capacitor', { a: 4, b: 3 }, { c: 10e-6 }),
+      E('q1/main', 'npn', { c: 2, b: 3, e: 0 }), E('q2/main', 'npn', { c: 4, b: 5, e: 0 })]));
+    const w0 = Date.now(); let last = 0; const rise = [];
+    while (e.t < 3 && Date.now() - w0 < 8000) {
+      const t1 = e.t + 1 / 30;
+      while (e.t < t1 - 1e-12 && Date.now() - w0 < 8000) {
+        e.advanceTo(t1, 12);
+      }
+      const v = e.v(2); if (v > 2.5 && last <= 2.5) rise.push(e.t); last = v;
+    }
+    const n = rise.length, f = n > 3 ? (n - 2) / (rise[n - 1] - rise[1]) : 0, want = 1 / (2 * Math.LN2 * 47000 * 10e-6);
+    const nc = e.drainEvents().filter(v => /converge/.test(v.msg)).length;
+    check('astable flasher (2 × 2N3904, 47 kΩ, 10 µF): 3 s of sim in 8 s wall, f within 10 %', e.t >= 3 - 1e-9 && Math.abs(f / want - 1) < 0.1 && nc <= 2,
+      `t ${e.t.toFixed(3)} s in ${Date.now() - w0} ms, f ${f.toFixed(3)} Hz vs ${want.toFixed(3)} Hz, ${nc} convergence warnings`);
+  }
+  // 12. a base tied straight to a source gives sane numbers
+  {
+    const { frames } = runFor(net(3, [vsrc('v', 1, 5), vsrc('vc', 2, 5), E('q/main', 'npn', { c: 2, b: 1, e: 0 })]), 0.05);
+    const evs = evsOf(frames);
+    const nums = evs.flatMap(v => (v.msg.match(/[\d.]+(?= (A|W)\b)/g) || []).map(Number));
+    const big = Math.max(0, ...nums);
+    check('NPN base on an ideal 5 V source: it dies, and no message gives more than 100 A or 1 kW', evs.some(v => v.kind === 'damage' && v.owner === 'q') && big < 100,
+      `largest number ${big}; ${evs.map(v => v.msg).slice(0, 2).join(' | ')}`);
   }
 }
 
