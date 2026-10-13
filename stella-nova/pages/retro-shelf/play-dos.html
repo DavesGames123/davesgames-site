@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Retro Shelf · DOS player</title>
+<!--
+  RETRO SHELF · play-dos.html — DOSBox player (js-dos emulators 8.5.2, GPL-2.0)
+  Runs in the #player iframe of index.html: play-dos.html?game=<id>.
+  play-dos.js unpacks the unchanged game archive in memory and starts its
+  DOS program. ../../vendor/retro/fetched/emulators-8.5.2/emulators.js sets
+  the global "emulators"; the deploy fetches it (tools/retro-fetch.mjs).
+-->
+<link rel="stylesheet" href="player.css">
+</head>
+<body>
+<div class="stage" id="stage"><canvas id="screen" tabindex="0" aria-label="Game screen"></canvas></div>
+<div class="status" id="status"><p id="statusText">Starting DOSBox…</p><progress id="statusBar" max="1" value="0" hidden></progress></div>
+<p class="sound-hint" id="soundHint" hidden>Press a key or tap the screen to start the sound.</p>
+<div class="pad" id="pad" hidden aria-label="On-screen keys">
+  <div class="dpad" id="dpad">
+    <button type="button" class="u" data-key="ArrowUp" aria-label="Up">▲</button>
+    <button type="button" class="l" data-key="ArrowLeft" aria-label="Left">◀</button>
+    <button type="button" class="r" data-key="ArrowRight" aria-label="Right">▶</button>
+    <button type="button" class="d" data-key="ArrowDown" aria-label="Down">▼</button>
+  </div>
+  <div class="btns" id="btns"></div>
+</div>
+<script src="../../vendor/retro/fetched/emulators-8.5.2/emulators.js"></script>
+<script type="module" src="play-dos.js"></script>
+</body>
+</html>

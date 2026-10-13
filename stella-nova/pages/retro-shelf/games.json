@@ -1,0 +1,311 @@
+{
+  "comment": "Retro Shelf manifest. Each game is the unchanged archive that its rights holder released; LICENSES.md has the review. 'file' is relative to vendor/retro/fetched/ and must match a 'file' pin in vendor/retro/retro.lock.json (same sha256 and bytes). tests.mjs checks both.",
+  "fetched": "../../vendor/retro/fetched/",
+  "games": [
+    {
+      "id": "doom",
+      "title": "DOOM",
+      "sub": "Shareware episode: Knee-Deep in the Dead",
+      "year": 1993,
+      "maker": "id Software",
+      "engine": "dos",
+      "file": "games/doom19s.zip",
+      "sha256": "cacf0142b31ca1af00796b4a0339e07992ac5f21bc3f81e7532fe1b5e1b486e6",
+      "bytes": 2450688,
+      "lock": "game-doom",
+      "licence": "id Software shareware: \"SHAREWARE VERSION / PLEASE DISTRIBUTE!!!\"",
+      "licenceFile": "DOOMS_19.DAT and README.TXT (inside the archive)",
+      "source": "https://youfailit.net/pub/idgames/idstuff/doom/doom19s.zip",
+      "blurb": "Nine levels on Phobos, a moon of Mars, as id Software sent them out to bulletin boards. The original DOS program runs in DOSBox.",
+      "controls": "Arrows move, Ctrl fires, Space opens doors, Shift runs, Alt + arrows strafe, Esc is the menu, Tab the map. Gamepad: A fires, B opens, X runs, Y is Enter, the shoulder buttons strafe, Start is the menu, Back the map.",
+      "keyboard": true,
+      "dos": {
+        "unpack": "join-zip",
+        "join": [
+          "DOOMS_19.1",
+          "DOOMS_19.2"
+        ],
+        "dir": "DOOM",
+        "exe": "DOOM.EXE",
+        "config": "DEFAULT.CFG"
+      },
+      "pad": [
+        [
+          "Fire",
+          "ControlLeft"
+        ],
+        [
+          "Use",
+          "Space"
+        ],
+        [
+          "Run",
+          "ShiftLeft"
+        ],
+        [
+          "Map",
+          "Tab"
+        ],
+        [
+          "Esc",
+          "Escape"
+        ],
+        [
+          "Enter",
+          "Enter"
+        ],
+        [
+          "Y",
+          "KeyY"
+        ]
+      ],
+      "gamepad": {
+        "0": "ControlLeft",
+        "1": "Space",
+        "2": "ShiftLeft",
+        "3": "Enter",
+        "4": "Comma",
+        "5": "Period",
+        "8": "Tab",
+        "9": "Escape"
+      },
+      "accent": "#c8321e"
+    },
+    {
+      "id": "sky",
+      "title": "Beneath a Steel Sky",
+      "sub": "Floppy version 1.3",
+      "year": 1994,
+      "maker": "Revolution Software",
+      "engine": "scummvm",
+      "file": "games/BASS-Floppy-1.3.zip",
+      "sha256": "d0bac1bd61747a67e885fa44b78c78887bf2b15d3dfa2790c483fad651078818",
+      "bytes": 7675813,
+      "lock": "game-sky",
+      "root": "",
+      "licence": "Revolution Software freeware licence: free distribution with the readme intact",
+      "licenceFile": "readme.txt",
+      "source": "https://www.scummvm.org/games/",
+      "blurb": "A cyberpunk point-and-click thriller with art by Dave Gibbons. Robert Foster and the robot Joey must learn the truth about his past and about Union City.",
+      "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
+      "keyboard": false,
+      "accent": "#3e8fb0"
+    },
+    {
+      "id": "queen",
+      "title": "Flight of the Amazon Queen",
+      "sub": "Floppy version",
+      "year": 1995,
+      "maker": "John Passfield and Steve Stamatiadis",
+      "engine": "scummvm",
+      "file": "games/FOTAQ_Floppy.zip",
+      "sha256": "2e59de85f708cdb32bf85c85b394ac091c05f7647e856b71f5b3ae73fde761e0",
+      "bytes": 7109570,
+      "lock": "game-queen",
+      "root": "FOTAQ_Floppy",
+      "licence": "Freeware licence of the authors: free distribution with the readme intact",
+      "licenceFile": "FOTAQ_Floppy/readme.txt",
+      "source": "https://www.scummvm.org/games/",
+      "blurb": "Pilot Joe King crashes in the Amazon jungle in the 1940s and finds Amazon women, six-foot pygmies and a very suspicious lederhosen company.",
+      "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
+      "keyboard": false,
+      "accent": "#d29a2e"
+    },
+    {
+      "id": "lure",
+      "title": "Lure of the Temptress",
+      "sub": "Version 1.1, English",
+      "year": 1992,
+      "maker": "Revolution Software",
+      "engine": "scummvm",
+      "file": "games/lure-1.1.zip",
+      "sha256": "f3178245a1483da1168c3a11e70b65d33c389f1f5df63d4f3a356886c1890108",
+      "bytes": 5678861,
+      "lock": "game-lure",
+      "root": "lure",
+      "licence": "Revolution Software freeware licence: free distribution with the licence intact",
+      "licenceFile": "lure/LICENSE.txt",
+      "source": "https://www.scummvm.org/games/",
+      "blurb": "Revolution's first game. Diermot wakes in a dungeon in Turnvale, a town that the sorceress Selena holds with her Skorl.",
+      "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
+      "keyboard": false,
+      "accent": "#7a9a3a"
+    },
+    {
+      "id": "drascula",
+      "title": "Drascula: The Vampire Strikes Back",
+      "sub": "Version 1.0, English",
+      "year": 1996,
+      "maker": "Alcachofa Soft",
+      "engine": "scummvm",
+      "file": "games/drascula-1.0.zip",
+      "sha256": "b731f6cb5a22ba8b4c3b3362f570b9a10a67b6cb0b395394b19a94b36e4e42de",
+      "bytes": 32842993,
+      "lock": "game-drascula",
+      "root": "",
+      "licence": "Alcachofa Soft freeware licence: free distribution with the readme intact",
+      "licenceFile": "readme.txt",
+      "source": "https://www.scummvm.org/games/",
+      "blurb": "A comedy adventure from Spain: estate agent John Hacker goes to Transylvania to save B.J. from Count Drascula.",
+      "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
+      "keyboard": false,
+      "accent": "#8c2a4a"
+    },
+    {
+      "id": "soltys",
+      "title": "Sołtys",
+      "sub": "English version 1.0",
+      "year": 1995,
+      "maker": "Laboratorium Komputerowe Avalon",
+      "engine": "scummvm",
+      "file": "games/soltys-en-v1.0.zip",
+      "sha256": "87b89e654b8a5b8ebe342cb4c5c6049ab9a43a5efb474d9c49bafb77dcce48f6",
+      "bytes": 3484518,
+      "lock": "game-soltys",
+      "root": "",
+      "licence": "LK Avalon freeware licence: free distribution with the licence intact",
+      "licenceFile": "license.txt",
+      "source": "https://www.scummvm.org/games/",
+      "blurb": "A comic point-and-click adventure from Poland. A sołtys is the elected head of a Polish village.",
+      "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
+      "keyboard": false,
+      "accent": "#5a7a3e"
+    },
+    {
+      "id": "sfinx",
+      "title": "Sfinx",
+      "sub": "English version 1.1",
+      "year": 1995,
+      "maker": "Laboratorium Komputerowe Avalon",
+      "engine": "scummvm",
+      "file": "games/sfinx-en-v1.1.zip",
+      "sha256": "f516b30a046526f78cbc923d8f907d267ab964ccd9b770afc72350e8d467ec4d",
+      "bytes": 16549117,
+      "lock": "game-sfinx",
+      "root": "sfinx-en-v1.1",
+      "licence": "LK Avalon freeware licence: free distribution with the licence intact",
+      "licenceFile": "sfinx-en-v1.1/license.txt",
+      "source": "https://www.scummvm.org/games/",
+      "blurb": "A fairy-tale point-and-click adventure from LK Avalon, the studio of Sołtys.",
+      "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
+      "keyboard": false,
+      "accent": "#b07a3a"
+    }
+  ],
+  "engines": [
+    {
+      "id": "dos",
+      "name": "DOSBox (js-dos emulators 8.5.2)",
+      "licence": "GPL-2.0",
+      "lock": "emulators",
+      "dir": "emulators-8.5.2/",
+      "source": "https://github.com/caiiiycuk/emulators/tree/6bbf0925d221a7304ea8e0dda1e89b8dc01569b2",
+      "site": "https://js-dos.com"
+    },
+    {
+      "id": "scummvm",
+      "name": "ScummVM 2026.4.0 (web build for this site)",
+      "licence": "GPL-3.0-or-later",
+      "dir": "../../vendor/scummvm-web@2026.4.0/",
+      "source": "https://github.com/scummvm/scummvm/tree/v2026.4.0",
+      "build": "../../vendor/scummvm-web@2026.4.0/build/build.sh",
+      "site": "https://www.scummvm.org"
+    },
+    {
+      "id": "emu",
+      "name": "EmulatorJS 4.2.3",
+      "licence": "GPL-3.0",
+      "lock": "emulatorjs",
+      "dir": "emulatorjs-4.2.3/data/",
+      "source": "https://github.com/EmulatorJS/EmulatorJS/tree/e150dc0491ae747028919fb82d6598954976ede6",
+      "site": "https://emulatorjs.org"
+    }
+  ],
+  "systems": [
+    {
+      "id": "psx",
+      "name": "PlayStation",
+      "core": "pcsx_rearmed",
+      "lock": "core-pcsx_rearmed",
+      "licence": "GPL-2.0",
+      "ext": [
+        ".cue",
+        ".bin",
+        ".chd",
+        ".pbp",
+        ".iso",
+        ".img",
+        ".m3u",
+        ".zip",
+        ".7z"
+      ],
+      "bios": "optional",
+      "biosNote": "Not needed: the core has its own BIOS (HLE). If you own a PlayStation BIOS dump, you can add it for better compatibility.",
+      "source": "https://github.com/EmulatorJS/pcsx_rearmed/tree/f29871dde1742cafb0ab56ba33636a8600bbbd80"
+    },
+    {
+      "id": "n64",
+      "name": "Nintendo 64",
+      "core": "mupen64plus_next",
+      "lock": "core-mupen64plus_next",
+      "licence": "GPL-2.0",
+      "ext": [
+        ".z64",
+        ".n64",
+        ".v64",
+        ".zip",
+        ".7z"
+      ],
+      "bios": "none",
+      "source": "https://github.com/EmulatorJS/mupen64plus-libretro-nx/tree/0346d3ef26016bb4de604cf918d004bd791447ee"
+    },
+    {
+      "id": "nes",
+      "name": "NES / Famicom",
+      "core": "fceumm",
+      "lock": "core-fceumm",
+      "licence": "GPL-2.0",
+      "ext": [
+        ".nes",
+        ".unf",
+        ".unif",
+        ".fds",
+        ".zip",
+        ".7z"
+      ],
+      "bios": "fds",
+      "biosNote": "Only Famicom Disk System games need a BIOS (disksys.rom). You must supply it from your own console.",
+      "source": "https://github.com/EmulatorJS/libretro-fceumm/tree/d9d7e141274d07186b6a871ca2919b6f13cfb2f9"
+    },
+    {
+      "id": "gb",
+      "name": "Game Boy / Game Boy Color",
+      "core": "gambatte",
+      "lock": "core-gambatte",
+      "licence": "GPL-2.0",
+      "ext": [
+        ".gb",
+        ".gbc",
+        ".zip",
+        ".7z"
+      ],
+      "bios": "none",
+      "source": "https://github.com/EmulatorJS/gambatte-libretro/tree/811b1f7a56c16f8588caada36d7a3f9a56cb16d4"
+    },
+    {
+      "id": "gba",
+      "name": "Game Boy Advance",
+      "core": "mgba",
+      "lock": "core-mgba",
+      "licence": "MPL-2.0",
+      "ext": [
+        ".gba",
+        ".zip",
+        ".7z"
+      ],
+      "bios": "optional",
+      "biosNote": "Not needed: mGBA has its own BIOS (HLE). A gba_bios.bin dump from your own console is optional.",
+      "source": "https://github.com/EmulatorJS/mgba/tree/57678d6180e7020798809703283e02d2bba18b63"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Retro Shelf · ScummVM player</title>
+<!--
+  RETRO SHELF · play-scummvm.html — ScummVM player (2026.4.0 web build, GPL-3.0-or-later)
+  Runs in the #player iframe of index.html: play-scummvm.html?game=<id>.
+  play-scummvm.js writes the unpacked game into the Emscripten FS and then
+  loads ../../vendor/scummvm-web@2026.4.0/scummvm.js. SDL draws into #canvas.
+-->
+<link rel="stylesheet" href="player.css">
+</head>
+<body>
+<div class="stage" id="stage"><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()" aria-label="Game screen"></canvas></div>
+<div class="status" id="status"><p id="statusText">Starting ScummVM…</p><progress id="statusBar" max="1" value="0" hidden></progress></div>
+<div class="keys" id="keys" hidden aria-label="Game keys">
+  <button type="button" data-code="Escape" data-key="Escape">Esc · skip</button>
+  <button type="button" data-code="F5" data-key="F5">F5 · menu</button>
+  <button type="button" data-code="Space" data-key=" ">Space · pause</button>
+</div>
+<script type="module" src="play-scummvm.js"></script>
+</body>
+</html>

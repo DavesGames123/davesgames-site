@@ -1,0 +1,40 @@
+/* ============================================================================
+   RETRO SHELF  ·  player.css — the player pages in the #player iframe
+   ----------------------------------------------------------------------------
+   One black full-window stage. #screen is the game canvas (DOSBox: the
+   page draws each frame; ScummVM: SDL draws into #canvas). #status is the
+   download and error line. #pad is the touch pad of the DOS player and the
+   key strip of the ScummVM player (coarse pointers only).
+     grep -n 'STAGE'  'STATUS'  'PAD'
+   ========================================================================== */
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;color:#ecebe6;overflow:hidden;font:15px/1.5 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+
+/* ---------------------------------------------------------------- STAGE */
+.stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;touch-action:none}
+#screen{display:block;max-width:100%;max-height:100%;aspect-ratio:4/3;width:min(100vw,calc(100vh*4/3));height:auto;image-rendering:pixelated;outline:none;background:#000}
+html.has-pad #screen{width:min(100vw,calc((100vh - 170px)*4/3))}
+html.has-pad .stage{bottom:170px}
+#canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border:0;outline:none;background:#000}
+html.has-keys .stage{bottom:52px}
+
+/* ---------------------------------------------------------------- STATUS */
+.status{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(440px,calc(100vw - 32px));padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,0.16);background:rgba(14,16,22,0.94);text-align:center}
+.status p{font-size:0.95rem}
+.status.err p{color:#ffb0a6}
+.status progress{width:100%;height:6px;margin-top:10px;accent-color:#ffb347}
+.sound-hint{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;font-size:0.8rem;color:#c4c2ba;background:rgba(14,16,22,0.85);border:1px solid rgba(255,255,255,0.12);border-radius:999px;padding:6px 12px;pointer-events:none}
+
+/* ---------------------------------------------------------------- PAD */
+.pad{position:fixed;left:0;right:0;bottom:0;height:170px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px calc(14px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px));background:#0b0c10;border-top:1px solid rgba(255,255,255,0.08);user-select:none;-webkit-user-select:none}
+.dpad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:4px;flex:none}
+.dpad button{border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:#1b1e28;color:#ecebe6;font-size:1.1rem}
+.dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .r{grid-column:3;grid-row:2}.dpad .d{grid-column:2;grid-row:3}
+.btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:58vw}
+.btns button{min-width:56px;height:44px;padding:0 10px;border-radius:10px;border:1px solid rgba(255,179,71,0.5);background:rgba(255,179,71,0.12);color:#ecebe6;font-weight:600;font-size:0.85rem}
+.pad button.on,.keys button.on{background:#ffb347;color:#1a1206}
+.keys{position:fixed;left:0;right:0;bottom:0;height:52px;z-index:3;display:flex;gap:6px;align-items:center;justify-content:center;padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));background:#0b0c10;border-top:1px solid rgba(255,255,255,0.08)}
+.keys button{height:38px;padding:0 14px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:#1b1e28;color:#ecebe6;font-size:0.85rem}

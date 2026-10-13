@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Retro Shelf · your own disc</title>
+<!--
+  RETRO SHELF · play-emu.html — EmulatorJS 4.2.3 (GPL-3.0) for "Bring your own disc"
+  Runs in the #player iframe of index.html: play-emu.html?system=<id>.
+  The shelf page posts { type: 'retro-file', file, bios } after this page
+  posts 'retro-ready'. The file stays in this browser; nothing is uploaded.
+  This page hosts no game and no BIOS.
+-->
+<link rel="stylesheet" href="player.css">
+<style>#game{position:fixed;inset:0}</style>
+</head>
+<body>
+<div id="game"></div>
+<div class="status" id="status"><p id="statusText">Waiting for your file…</p><progress id="statusBar" max="1" value="0" hidden></progress></div>
+<script type="module" src="play-emu.js"></script>
+</body>
+</html>
