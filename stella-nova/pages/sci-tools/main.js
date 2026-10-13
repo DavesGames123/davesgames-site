@@ -256,6 +256,7 @@ function bind() {
   });
   $('#back').addEventListener('click', () => { show(back); writeHash(true); });
   $('#openIndex').addEventListener('click', () => { show('index'); writeHash(true); });
+  $('#sheetBtn').hidden = false;
   $('#indexBack').addEventListener('click', () => { show('pad'); writeHash(true); });
   $('#padLink').addEventListener('click', (e) => { padShared = true; writeHash(false); copyText(location.href, e.currentTarget); });
   $('#padClear').addEventListener('click', () => { pad.clear(); pad.focusLast(); });
@@ -352,7 +353,7 @@ const ready = (async () => {
       onOpenTool: (id, vals) => openTool(id, vals || {}, true),
       onChange: () => { padShared = true; if (view === 'pad') writeHash(false); },
     });
-    initSheet({ root: $('#sheet'), onInsert: (t) => pad.insert(t) });
+    initSheet({ root: $('#sheet'), onInsert: (t) => pad.insert(t), button: $('#sheetBtn') });
     const first = parseHash();
     if (first.view === 'pad' && first.text != null) padShared = true;
     pad.boot(first.view === 'pad' && first.text != null ? first.text : null);

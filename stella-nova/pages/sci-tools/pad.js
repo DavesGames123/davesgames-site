@@ -363,6 +363,7 @@ export function initPad({ root, onOpenTool, onChange }) {
     if (l === lines[lines.length - 1]) { lines.push(mk()); list.append(lineLI(lines[lines.length - 1], lines.length - 1)); renumber(); }
     focusLine(l, (before + pre + text).length);
     evaluate(); save(); onChange && onChange(textOf());
+    return `line ${lines.indexOf(l) + 1}`;
   }
 
   function setLines(texts, forms = null) {

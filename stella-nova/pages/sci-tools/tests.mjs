@@ -70,6 +70,17 @@ if (TOOLS.some(t => t.id === 'molar-mass')) ok(search('molar mass')[0].id === 'm
 if (defs['unit-convert']) ok(search('convert unit')[0]?.id === 'unit-convert', 'palette: "convert unit" finds the unit converter');
 ok(search('zzzz').length === 0, 'palette: no match gives an empty list');
 
+// Page rules that node can read: the CSS text (jsdom has no media queries).
+const css = readFileSync(here + 'style.css', 'utf8');
+const phone = (css.split('/* PHONE */')[1] || '').split('/* TOUCH */')[0];
+ok(/\[hidden\]\{display:none!important\}/.test(css), 'style.css: [hidden]{display:none!important}');
+ok(/\.wrap\{padding:16px 16px/.test(phone) && /\.desk\{grid-template-columns:minmax\(0,1fr\)\}/.test(phone), 'phone: 16 px gutters and one column');
+ok(/\.sheet\{display:none;position:fixed/.test(phone) && /\.sheet\.open\{display:block\}/.test(phone) && /\.sheetbtn\{display:block/.test(phone), 'phone: the tables are a bottom sheet opened by the Tables button');
+ok(/overflow-x:hidden/.test(css.split('/* TOKENS */')[1].split('/* PAD */')[0]) && !/body\{[^}]*overflow-x/.test(css), 'overflow-x is on html only (sticky stays working)');
+const pageText = ['index.html', 'style.css', 'main.js', 'pad.js', 'sheet.js', 'view.js', 'intent.js'].map(f => readFileSync(here + f, 'utf8')).join('\n');
+ok(!/Playfair|Cormorant|JetBrains/i.test(pageText), 'no Playfair, Cormorant or JetBrains fonts');
+ok(!/katex/i.test(pageText), 'no KaTeX (MathJax SVG through lib/sci-math.js)');
+
 // 3. defaults and examples
 console.log('\n# defaults and examples');
 const runErr = [];
@@ -203,6 +214,16 @@ else {
   ok([...sh.querySelectorAll('#t-pka tbody tr')].filter(r => !r.hidden).length === 1 && doc.getElementById('t-const').hidden, 'the filter "acetic" leaves one pKa row and hides the other tables');
   fbox.value = ''; fbox.dispatchEvent(new w.Event('input', { bubbles: true }));
   ok(!doc.getElementById('t-const').hidden && !doc.getElementById('t-el').hidden, 'an empty filter shows every table again');
+  const sbtn = doc.getElementById('sheetBtn');
+  ok(!sbtn.hidden && sbtn.getAttribute('aria-expanded') === 'false', 'the Tables button is there for phones');
+  sbtn.click();
+  ok(sh.classList.contains('open') && sbtn.getAttribute('aria-expanded') === 'true', 'the Tables button opens the sheet');
+  sh.querySelector('.stabs [data-tab="pka"]').click();
+  ok(doc.getElementById('t-pka').classList.contains('cur') && !doc.getElementById('t-const').classList.contains('cur'), 'a tab shows its table (pKa)');
+  sh.querySelector('.ins[data-ins="acetic acid"]').click();
+  ok(/acetic acid → line \d+/.test(sh.querySelector('.flash').textContent), 'an insert says which line it went to', sh.querySelector('.flash').textContent);
+  doc.getElementById('sheetClose').click();
+  ok(!sh.classList.contains('open'), 'Close closes the sheet');
   ok(!pageErrors.length && !S.errors.length, 'no page errors during boot and the pad checks', [...pageErrors, ...S.errors].slice(0, 3).join(' | '));
 
   w.close();

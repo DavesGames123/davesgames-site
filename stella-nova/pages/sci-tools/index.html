@@ -38,6 +38,7 @@
      #desk        the home view
        #pad         the scratchpad: #lines (one li.ln per line), #tryRow
        #sheet       the cheat sheet tables (sheet.js); a click inserts a value
+       #sheetBtn    phone only: opens #sheet as a bottom sheet
      #index       all tools: #tabs (data-cat) and #grid (the tool cards)
      #tool        one open tool: inputs, result, method and references
      #palette     the command palette (a sheet on a phone)
@@ -78,6 +79,7 @@
       <div id="tryRow" class="examples try"></div>
     </section>
     <aside id="sheet" class="sheet" aria-label="Reference tables"></aside>
+    <button id="sheetBtn" class="sheetbtn" type="button" aria-controls="sheet" aria-expanded="false" hidden>Tables</button>
   </div>
 
   <section id="index" hidden aria-label="All tools">

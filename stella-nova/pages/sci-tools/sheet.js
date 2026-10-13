@@ -12,6 +12,11 @@
 //    densities   the density with its unit
 //    units       the right side of the equivalence
 //
+//  PHONE  (max-width 760px, style.css) the tables are a bottom sheet with
+//         one tab per table. The "Tables" button (#sheetBtn) opens it;
+//         the close button or Esc closes it. The filter shows every
+//         matching table at once.
+//
 //  The data comes from core/constants.js (CODATA 2022), core/chem.js
 //  (element data of the Periodic Table page) and core/ref.js (prefixes,
 //  pKa, densities, unit equivalences). Each table shows its source.
@@ -21,6 +26,8 @@
 //    grep -n "const KEY_CONSTS"           the constants shown first
 //    grep -n "function periodic"          the 18-column periodic table
 //    grep -n "function filter"            the filter box
+//    grep -n "function setTab"            the phone tabs
+//    grep -n "function setOpen"           the phone sheet open or closed
 // ============================================================================
 import { ROWS, CONST } from './core/constants.js';
 import { EL } from './core/chem.js';
@@ -62,7 +69,9 @@ function section(id, title, body, src, open = true) {
   return `<details class="tbl" id="t-${id}" ${open ? 'open' : ''}><summary>${esc(title)}</summary>${body}${src ? `<p class="src">${src}</p>` : ''}</details>`;
 }
 
-export function initSheet({ root, onInsert }) {
+const TABS = [['const', 'Constants'], ['pre', 'Prefixes'], ['el', 'Elements'], ['pka', 'pKa'], ['dens', 'Densities'], ['units', 'Units']];
+
+export function initSheet({ root, onInsert, button }) {
   const others = ROWS.map(r => r[0]).filter(id => !KEY_CONSTS.includes(id));
   const constBody = `<table class="ct"><tbody>${constRows(KEY_CONSTS)}</tbody></table>` +
     `<details class="allc"><summary>all ${ROWS.length} constants</summary><table class="ct"><tbody>${constRows(others)}</tbody></table></details>`;
@@ -83,7 +92,8 @@ export function initSheet({ root, onInsert }) {
   const unitsBody = `<table class="ct"><tbody>${eq.map(([a, v, u]) =>
     `<tr data-f="${esc((a + ' ' + u).toLowerCase())}"><td>${esc(a)}</td><td>=</td><td><button type="button" class="ins num" data-ins="${esc(`${nice(v, 8)} ${u}`)}">${esc(nice(v, 6))}</button> <span class="u">${esc(u)}</span></td></tr>`).join('')}</tbody></table>`;
 
-  root.innerHTML = `<div class="sheethead"><h2>Tables</h2><input id="sheetFilter" type="search" placeholder="Filter: planck, acetic, ethanol, psi" aria-label="Filter the tables" autocomplete="off" spellcheck="false"></div>` +
+  root.innerHTML = `<div class="sheethead"><h2>Tables</h2><input id="sheetFilter" type="search" placeholder="Filter: planck, acetic, ethanol, psi" aria-label="Filter the tables" autocomplete="off" spellcheck="false"><button id="sheetClose" class="mini" type="button" aria-label="Close the tables">Close</button>` +
+    `<nav class="stabs" role="tablist" aria-label="Tables">${TABS.map(([id, n]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="${id === 'const'}">${n}</button>`).join('')}</nav><p class="flash dim" aria-live="polite"></p></div>` +
     `<div class="sheetbody">` +
     section('const', 'Constants (CODATA 2022)', constBody, 'E. Tiesinga et al., CODATA 2022, NIST (2024). Click a symbol to insert its name, a value to insert it with its unit.') +
     section('pre', 'SI prefixes', pre, esc(SRC.si)) +
@@ -94,6 +104,21 @@ export function initSheet({ root, onInsert }) {
     `</div>`;
 
   const read = root.querySelector('.elread');
+  const flash = root.querySelector('.flash');
+  function setTab(id) {
+    root.dataset.tab = id;
+    root.querySelectorAll('.stabs [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === id)));
+    root.querySelectorAll('details.tbl').forEach(d => { d.classList.toggle('cur', d.id === 't-' + id); if (d.id === 't-' + id) d.open = true; });
+  }
+  function setOpen(on) {
+    root.classList.toggle('open', on);
+    if (button) button.setAttribute('aria-expanded', String(on));
+  }
+  setTab('const');
+  root.querySelector('.stabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+  root.querySelector('#sheetClose').addEventListener('click', () => { setOpen(false); if (button) button.focus(); });
+  if (button) button.addEventListener('click', () => setOpen(!root.classList.contains('open')));
+  root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && root.classList.contains('open')) { setOpen(false); e.stopPropagation(); if (button) button.focus(); } });
   root.addEventListener('mousedown', (e) => { if (e.target.closest('[data-ins]')) e.preventDefault(); });
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-ins]');
@@ -102,11 +127,12 @@ export function initSheet({ root, onInsert }) {
       const el = EL[b.dataset.el];
       read.textContent = `${el.sym} · ${el.name} · Z ${el.z} · ${el.mass} g/mol${el.massNum != null ? ' (longest-lived isotope)' : ''}`;
     }
-    onInsert && onInsert(b.dataset.ins);
+    const where = onInsert && onInsert(b.dataset.ins);
+    if (flash) flash.textContent = `${b.dataset.ins} → ${where || 'the line'}`;
   });
   const box = root.querySelector('#sheetFilter');
-  box.addEventListener('input', () => filter(root, box.value));
-  return { filter: (q) => { box.value = q; filter(root, q); } };
+  box.addEventListener('input', () => { root.classList.toggle('filtering', !!box.value.trim()); filter(root, box.value); });
+  return { filter: (q) => { box.value = q; root.classList.toggle('filtering', !!String(q).trim()); filter(root, q); }, setTab, setOpen };
 }
 
 // Hide rows that do not hold every word; hide a table with no rows left.
