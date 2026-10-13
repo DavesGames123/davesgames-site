@@ -336,7 +336,7 @@ function buildLamp(root) {
   bulb.position.copy(j3).addScaledVector(hd, 6); g.add(bulb);
   shadow(g); bulb.castShadow = false; head.castShadow = true;
   root.add(g);
-  const spot = new THREE.SpotLight(0xffd3a0, 2.6, 0, 0.78, 0.55, 0);
+  const spot = new THREE.SpotLight(0xffd3a0, 7, 0, 0.78, 0.55, 0);
   spot.position.copy(j3).addScaledVector(hd, 6.5);
   spot.target.position.copy(aim);
   spot.castShadow = true;
@@ -363,8 +363,9 @@ export function buildRoom() {
   const rack = buildRack(root);
   const lamp = buildLamp(root);
   const props = buildProps(root);
-  const hemi = new THREE.HemisphereLight(0xa8b8d8, 0x3a2a1e, 0.85);
-  const fill = new THREE.DirectionalLight(0xdfe6ff, 0.55);
+  // r160 lights are physical: a diffuse surface gets intensity / pi
+  const hemi = new THREE.HemisphereLight(0xa8b8d8, 0x3a2a1e, 1.3);
+  const fill = new THREE.DirectionalLight(0xdfe6ff, 1.3);
   fill.position.set(60, 120, 160);
   const glow = new THREE.PointLight(0x9fe0b0, 0, 130, 0);
   glow.position.set(0, DIM.tv.holeY, DIM.tv.zFront + 14);
