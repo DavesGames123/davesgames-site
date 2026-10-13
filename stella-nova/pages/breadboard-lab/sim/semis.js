@@ -222,18 +222,20 @@ export class Bjt extends Dev {
     this.vbe = vbe; this.vbc = vbc;
     const [Ic, gcbe, gcbc, Ib, gbbe, gbbc] = this.eval(vbe, vbc);
     const A = s.A, H = this.H, rhs = s.rhs;
-    // rows: 0 = c, 1 = b, 2 = e ; cols the same order
-    const rows = [[Ic, gcbe, gcbc], [Ib, gbbe, gbbc], [-(Ic + Ib), -(gcbe + gbbe), -(gcbc + gbbc)]];
-    const idx = [this.ic, this.ib, this.ie];
-    for (let r = 0; r < 3; r++) {
-      const [I0, gbe, gbc] = rows[r];
-      const ri = idx[r];
-      if (ri < 0) continue;
-      rhs[ri] -= sg * (I0 - gbe * vbe - gbc * vbc);
-      if (H[r * 3 + 1] >= 0) A[H[r * 3 + 1]] += gbe + gbc;
-      if (H[r * 3 + 2] >= 0) A[H[r * 3 + 2]] -= gbe;
-      if (H[r * 3 + 0] >= 0) A[H[r * 3 + 0]] -= gbc;
-    }
+    // rows c (0), b (1), e (2); cols in the same order. Each terminal current
+    // (leaving its node) is sg·T(vbe, vbc); mapped to nodes it has
+    // d/dvb = gbe + gbc, d/dve = −gbe, d/dvc = −gbc.
+    this._row(A, rhs, H, 0, this.ic, sg, Ic, gcbe, gcbc, vbe, vbc);
+    this._row(A, rhs, H, 1, this.ib, sg, Ib, gbbe, gbbc, vbe, vbc);
+    this._row(A, rhs, H, 2, this.ie, sg, -(Ic + Ib), -(gcbe + gbbe), -(gcbc + gbbc), vbe, vbc);
+  }
+  _row(A, rhs, H, r, ri, sg, I0, gbe, gbc, vbe, vbc) {
+    if (ri < 0) return;
+    rhs[ri] -= sg * (I0 - gbe * vbe - gbc * vbc);
+    const o = r * 3;
+    if (H[o + 1] >= 0) A[H[o + 1]] += gbe + gbc;
+    if (H[o + 2] >= 0) A[H[o + 2]] -= gbe;
+    if (H[o] >= 0) A[H[o]] -= gbc;
   }
   terminal(x) {
     const sg = this.sgn;
@@ -320,9 +322,13 @@ export class Mos extends Dev {
     const c0 = sg * (I - gm * vgs - gds * vds);
     if (this.nd >= 0) s.rhs[this.nd] -= c0;
     if (this.is_ >= 0) s.rhs[this.is_] += c0;
-    const put = (r, c, v) => { const h = H[r * 3 + c]; if (h >= 0) A[h] += v; };
-    put(0, 1, gm); put(0, 0, gds); put(0, 2, -gm - gds);
-    put(2, 1, -gm); put(2, 0, -gds); put(2, 2, gm + gds);
+    let hh;
+    if ((hh = H[1]) >= 0) A[hh] += gm;
+    if ((hh = H[0]) >= 0) A[hh] += gds;
+    if ((hh = H[2]) >= 0) A[hh] -= gm + gds;
+    if ((hh = H[7]) >= 0) A[hh] -= gm;
+    if ((hh = H[6]) >= 0) A[hh] -= gds;
+    if ((hh = H[8]) >= 0) A[hh] += gm + gds;
     if (this.p.body) {
       // body diode from source to drain (nmos); drain to source (pmos)
       let vb = -vds;

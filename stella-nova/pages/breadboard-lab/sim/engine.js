@@ -25,7 +25,8 @@
 //  BREAKPOINTS. Source edges, PWM edges, MCU wake times, relay moves and
 //  button bounce are time points the step lands on exactly. After a
 //  breakpoint the next two steps use backward Euler (no trapezoid ringing)
-//  and start at hReg/64 (hReg: the last clean, untruncated step plan).
+//  and start at hReg/16, at most 10 µs (hReg: the last clean, untruncated
+//  step plan).
 //  Trapezoid steps after that. The first step after a breakpoint starts
 //  Newton from the solution seen at the last edge with the same switching
 //  state (startCache, keyed by Dev.sig()), so periodic circuits converge
@@ -276,11 +277,14 @@ export class Engine {
         lu.solve(rhs, xn);
       }
       let conv = !s.noncon, bad = false, q = 0;
+      const atolB = Math.max(abstol, 1e-9);
       for (let i = 0; i < n; i++) {
-        const a = xn[i];
-        if (!Number.isFinite(a)) { bad = true; break; }
-        const r = Math.abs(a - x[i]) / (reltol * Math.max(Math.abs(a), Math.abs(x[i])) + (nl[i] ? vabstol : Math.max(abstol, 1e-9)));
-        if (r > q) q = r;
+        const a = xn[i], b = x[i];
+        const d = a > b ? a - b : b - a;
+        if (!(d < Infinity)) { bad = true; break; }
+        const aa = a < 0 ? -a : a, bb = b < 0 ? -b : b;
+        const tol = reltol * (aa > bb ? aa : bb) + (nl[i] ? vabstol : atolB);
+        if (d > tol * q) { const r = d / tol; if (r > q) q = r; }
       }
       if (q > 1) conv = false;
       // a chord step converges only if it also contracts (no false stall)
@@ -556,7 +560,7 @@ export class Engine {
       this.sinceBp = 0; this.nh = 1; this.crossHint = null;
       if (this.sigDevs.length) { let g = ''; for (const d of this.sigDevs) g += d.sig() + ','; this.pendingSig = g; }
       const hb = this.hReg || h;
-      this.hNext = Math.max(this.o.dtMin * 4, Math.min(hb / 64, 1e-5, this.dtMaxEff / 4));
+      this.hNext = Math.max(this.o.dtMin * 4, Math.min(hb / (this.o.hStartDiv || 16), 1e-5, this.dtMaxEff / 4));
     } else {
       this.sinceBp++; this.nh = Math.min(3, this.nh + 1);
     }
