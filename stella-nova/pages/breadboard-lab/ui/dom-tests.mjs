@@ -194,6 +194,19 @@ export async function domTests({ ok, ROOT }) {
   ok($('toasts').children.length >= 1 && /burned out/.test($('toasts').textContent), 'a damage event makes a toast', $('toasts').textContent.slice(0, 50));
   ok(/burned out/.test($('p-checks').textContent), 'and a row in CHECKS');
 
+  // the view's own toasts and context requests go through the bus
+  bus.emit('toast', { level: 'warn', text: 'That hole is covered by a part body' });
+  ok(/covered by a part body/.test($('toasts').textContent), 'a bus toast from the view shows as a squircle toast');
+  bus.emit('context', { target: { kind: 'part', id: 'p2' }, x: 200, y: 200, ids: ['p2'] });
+  const menuEl = dom.body.querySelector('.menu');
+  const labels = menuEl ? [...menuEl.querySelectorAll('button')].map(b => b.textContent.replace(/[⌘⌫RF]$|D$/, '').trim()) : [];
+  ok(menuEl && labels.includes('Rotate') && labels.some(l => /^Delete/.test(l)), 'a context event from the view opens the part menu', labels.join(' | '));
+  const delBtn = menuEl && [...menuEl.querySelectorAll('button')].find(b => /^Delete/.test(b.textContent));
+  if (delBtn) delBtn.click();
+  ok(!store.doc.parts.some(p => p.id === 'p2'), 'Delete in the menu removes the part');
+  store.undo();
+  ok(store.doc.parts.some(p => p.id === 'p2'), 'and undo puts it back');
+
   // materials: duplicate a preset into the document
   const matTab = [...$('bar').querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'Materials');
   matTab.click();

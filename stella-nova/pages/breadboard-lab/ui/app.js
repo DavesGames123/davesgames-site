@@ -66,7 +66,7 @@ export const SPEEDS = [[10, '×10'], [1, 'real time'], [0.1, '×0.1'], [0.01, '�
 const PREFIX = { board: 'b', part: 'p', wire: 'w', probe: 'm', material: 'mat-', customPart: 'cp-' };
 const UI_KEY = 'bblab:ui';
 
-export function createUI({ store, registry, bus, view, sim, mcu, materials }) {
+export function createUI({ store, registry, bus, view, sim, mcu, materials }) { // eslint-disable-line prefer-const
   const ensure = (id, tag = 'div') => {
     let el = document.getElementById(id);
     if (!el) { el = document.createElement(tag); el.id = id; document.body.appendChild(el); }
@@ -83,6 +83,16 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) {
   const offs = [];
   const on = (type, fn) => { const off = bus.on(type, fn); if (typeof off === 'function') offs.push(off); };
   const listen = (el, type, fn, opt) => { el.addEventListener(type, fn, opt); offs.push(() => el.removeEventListener(type, fn, opt)); };
+
+  // Panels edit through this wrapper: an op that the store refuses (the item
+  // went away meanwhile) becomes a toast instead of an exception in a handler.
+  const raw = store;
+  store = {
+    get doc() { return raw.doc; }, get canUndo() { return raw.canUndo; }, get canRedo() { return raw.canRedo; },
+    apply(op, opts) { try { return raw.apply(op, opts); } catch (e) { toast('warn', 'That edit did not apply: ' + e.message); return null; } },
+    undo: () => raw.undo(), redo: () => raw.redo(), load: d => raw.load(d),
+    newId: typeof raw.newId === 'function' ? k => raw.newId(k) : undefined
+  };
 
   // ── the context every panel gets ──
   let localSeq = 0, dirty = false, hintText = '', issueCounts = { error: 0, warn: 0, info: 0 }, ready = false;
@@ -414,10 +424,8 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) {
   function endLead() { lead = null; if (prevTool) setTool(prevTool); prevTool = null; C.hint(''); }
   let downAt = null;
   const canvas = view.canvas || D.stage.querySelector('canvas') || D.stage;
-  listen(canvas, 'pointerdown', e => { downAt = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, touch: e.pointerType === 'touch' }; armLongPress(e); C.audio.unlock(); }, true);
-  listen(canvas, 'pointermove', e => { if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 8) clearLongPress(); }, true);
+  listen(canvas, 'pointerdown', e => { downAt = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }; C.audio.unlock(); }, true);
   listen(canvas, 'pointerup', e => {
-    clearLongPress();
     if (!downAt) return;
     const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6;
     downAt = null;
@@ -430,18 +438,9 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) {
     endLead();
   }, true);
 
-  // ── context menu: right click, or a long press on touch ──
-  let lpTimer = null;
-  function armLongPress(e) {
-    clearLongPress();
-    if (e.pointerType !== 'touch') return;
-    const x = e.clientX, y = e.clientY;
-    lpTimer = setTimeout(() => { lpTimer = null; downAt = null; contextMenu(x, y); }, 550);
-  }
-  function clearLongPress() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
-  listen(canvas, 'contextmenu', e => { e.preventDefault(); contextMenu(e.clientX, e.clientY); });
-  function contextMenu(x, y) {
-    const t = view.pick ? view.pick(x, y) : null;
+  // ── context menu: the view raises 'context' for a right click or a long press ──
+  function contextMenu(x, y, target) {
+    const t = target !== undefined ? target : (view.pick ? view.pick(x, y) : null);
     const id = t && (t.id || (t.kind === 'pin' ? t.part : t.kind === 'lead' ? t.probe : null));
     if (!id || !findItem(store.doc, id)) return;
     if (!C.sel.includes(id)) C.select([id]);
@@ -550,6 +549,7 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) {
         if (lead) { endLead(); break; }
         libraryPanel.clearArm();
         if (dock.phone && dock.open) { dock.close(); break; }
+        if (C.sel.length) C.select([]);
         C.hint('');
         break;
       default:
@@ -591,6 +591,8 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) {
     }
   });
   on('camera', () => layoutChanged());
+  on('toast', ({ level = 'info', text = '' } = {}) => { if (text) toast(level, text); });
+  on('context', ({ target = null, x = 0, y = 0 } = {}) => contextMenu(x, y, target));
 
   function refreshAll(reason) {
     C.sel = C.sel.filter(id => findItem(store.doc, id));
