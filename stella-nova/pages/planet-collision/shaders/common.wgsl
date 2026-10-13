@@ -41,7 +41,7 @@
 //  (Chrome's Tint rejects WGSL that naga accepts).
 //
 //  grep -n targets: "struct U", "fn klass", "fn spacing0", "fn blackbody",
-//  "fn glow", "fn skinT", "fn crustSkin", "fn voronoi", "fn planetAlbedo", "fn matAlbedo", "fn modeColor", "fn rayAt",
+//  "fn glow", "fn skinT", "fn crustShare", "fn lavaSkin", "fn warped", "fn drift", "fn planetAlbedo", "fn matAlbedo", "fn modeColor", "fn rayAt",
 //  "fn depthOf", "fn removed", "fn toGrid", "fn inVolume", "fn kernelCells"
 // ============================================================================
 
@@ -196,27 +196,6 @@ fn glow(T: f32) -> vec3f {
   let k = U0.view.z * max(pow(T / 1500.0, 4.0) - 0.0625, 0.0);
   return blackbody(T) * on * (GLOW_MAX * (1.0 - exp(-k / GLOW_MAX)));
 }
-// Voronoi of p (cells about one unit wide): x F1, y F2, z a hash of the
-// nearest cell
-fn voronoi(p: vec3f) -> vec3f {
-  let i = floor(p);
-  let f = fract(p);
-  var d1 = 9.0;
-  var d2 = 9.0;
-  var id = 0.0;
-  for (var z = -1; z <= 1; z++) {
-    for (var y = -1; y <= 1; y++) {
-      for (var x = -1; x <= 1; x++) {
-        let c = vec3f(f32(x), f32(y), f32(z));
-        let q = i + c;
-        let o = vec3f(hash3(q), hash3(q + vec3f(5.3, 1.1, 7.7)), hash3(q + vec3f(2.9, 8.3, 3.7)));
-        let d = length(c + 0.15 + 0.7 * o - f);
-        if (d < d1) { d2 = d1; d1 = d; id = hash3(q + vec3f(0.37, 4.1, 2.3)); } else if (d < d2) { d2 = d; }
-      }
-    }
-  }
-  return vec3f(d1, d2, id);
-}
 // The share of a melt surface under a cooled crust: none before contact,
 // it grows with the sim hours since contact (0.22 at 0.1 h, 0.71 at 1 h,
 // 0.85 from 2.5 h).
@@ -225,26 +204,61 @@ fn crustShare() -> f32 {
   if (h < 0.0) { return 0.0; }
   return clamp(1.1 * (1.0 - exp(-(h + 0.15) / 1.1)), 0.0, 0.85);
 }
-// The skin temperature of a melt surface at point o (the world position
-// over the target radius, from the target centre: SPH mixes the start
-// positions at the particle scale, and a pattern on them is noise).
-// Crust plates (Voronoi cells) cover crustShare of it at about 0.45 of
-// the skin temperature; the cracks between them show the hot melt.
+// ── molten rock (fn lavaSkin) ───────────────────────────────────────────────
+// fbm of p bent by a second fbm (domain warp): soft, folded, never cells
+fn warped(p: vec3f) -> f32 {
+  let w = vec3f(fbm(p * 0.7 + vec3f(3.1, 7.4, 1.9)), fbm(p * 0.7 + vec3f(8.3, 2.8, 5.6)), fbm(p * 0.7 + vec3f(1.2, 6.1, 9.7))) - vec3f(0.5);
+  return fbm(p + 2.2 * w);
+}
+// A slow swirl: the direction the melt drifts at p (a smooth field)
+fn drift(p: vec3f) -> vec3f {
+  return vec3f(fbm(p * 0.5 + vec3f(11.0, 0.0, 0.0)), fbm(p * 0.5 + vec3f(0.0, 13.0, 0.0)), fbm(p * 0.5 + vec3f(0.0, 0.0, 17.0))) - vec3f(0.5);
+}
+// The skin temperature of a melt surface at point o (world position over
+// the target radius, from the target centre; SPH mixes the start
+// positions at the particle scale, so a pattern on them is noise).
+//  flow   two copies of the warped fbm, each carried along the drift by
+//         a phase that runs 0..1 (wall time), half a period apart and
+//         faded across, so the pattern flows and never stretches out
+//  crust  where the flowing pattern is under the cover: the cover is the
+//         time share (fn crustShare) less where the melt is hot, so hot
+//         ground stays open and cool ground skins over
+//  seams  the ridge lines of a second warped field crack the crust; they
+//         are wider and hotter where the melt is hot, and the crust near
+//         an edge (thin crust) is hotter than a thick plate
+//  T      open melt at the skin temperature (fn skinT, which cools with
+//         the hours since contact); thick crust at 0.42 of it, not under
+//         700 K (a dull red at most). fn glow turns T into the black body
+//         colour (dark red, orange, yellow-white) and its T^4 radiance:
+//         hot seams pass the bloom threshold, the crust does not.
 // x: skin T, y: crust 0..1.
-fn crustSkin(T: f32, o: vec3f, scale: f32) -> vec2f {
+fn lavaSkin(T: f32, o: vec3f, scale: f32) -> vec2f {
   let Ts = skinT(T, 0.6);
   let share = crustShare();
   if (share <= 0.0 || T < 1100.0) { return vec2f(Ts, 0.0); }
   let p = o * scale;
-  let v = voronoi(p);
-  let wob = fbm(p * 1.7);
-  // a cell is crust when its rank is under the share; the crack is the
-  // band where F2 - F1 is small
-  let rank = fract(v.z + 0.35 * wob);
-  let crack = smoothstep(0.10, 0.03, v.y - v.x);
-  let plate = smoothstep(share + 0.08, share - 0.08, rank) * (1.0 - crack);
-  let c = clamp(plate * (0.85 + 0.3 * wob), 0.0, 1.0);
-  return vec2f(mix(Ts, max(0.45 * Ts, 760.0), c), c);
+  let heat = clamp((Ts - 1000.0) / 1800.0, 0.0, 1.0);
+  // flow advection: two phases of the drift, faded across
+  let ph = fract(U0.eye.w * 0.05);
+  let ph2 = fract(ph + 0.5);
+  let v = 1.6 * drift(p);
+  let n0 = warped(p - v * ph);
+  let n1 = warped(p - v * ph2 + vec3f(4.7, 1.3, 2.9));
+  let n = mix(n0, n1, abs(2.0 * ph - 1.0));
+  // the crust cover: the flowing pattern under it is crust
+  let cover = clamp(share * (1.3 - 0.75 * heat), 0.0, 0.92);
+  let edge = cover - (n - 0.18) / 0.64;
+  let crust = smoothstep(0.0, 0.08, edge);
+  // seams: ridges of a second warped field, wider where hot
+  let r = 1.0 - abs(2.0 * warped(p * 1.9 + vec3f(7.3, 3.1, 5.5) - 0.5 * v * ph) - 1.0);
+  let width = 0.05 + 0.10 * heat;
+  let seam = smoothstep(1.0 - width, 1.0 - 0.3 * width, r);
+  let c = crust * (1.0 - seam);
+  // thin crust (near the edge of a plate) is hotter than a thick plate
+  let thick = smoothstep(0.0, 0.25, edge);
+  let Tcrust = max(mix(0.75, 0.42, thick) * Ts, 700.0);
+  let Topen = Ts * (0.93 + 0.07 * n);
+  return vec2f(mix(Topen, Tcrust, c), c);
 }
 
 // ── surfaces ────────────────────────────────────────────────────────────────

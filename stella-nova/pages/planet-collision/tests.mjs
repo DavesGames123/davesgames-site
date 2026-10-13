@@ -33,9 +33,11 @@
 //     image file): every shader compiles clean; before contact the target
 //     fills its disc and the sky round it is dark, with no glow; no
 //     particle of a settled body is debris; a body drawn all as vapour
-//     is a dim haze (mean under 110 of 255); the remnant at +1 h and +3 h
-//     after contact (moon-earth, 16k) has under 2 % near-white pixels in
-//     its disc and over 2 % orange-red ones; the
+//     is a dim haze (mean under 110 of 255); the remnant at +0.25, +1 and
+//     +3 h after contact (moon-earth, 16k) has under 2 % near-white pixels
+//     in its disc and over 2 % orange-red ones; the lava skin (one state,
+//     coolH 0.05 h and 3 h, two wall times) loses light as the crust forms,
+//     keeps bright seams, and flows; the
 //     filter makes the depth smooth, keeps the area and makes the limb
 //     rounder (less spread of its radius: no bump per particle); a
 //     grazing hit makes debris (fn classify) and glowing pixels; the colour
@@ -626,7 +628,7 @@ async function renderTests() {
     rb2.attach(s0, su0); rb2.resize(Wb, Hb);
     let tc = null, st0 = null;
     const shots = [];
-    for (const goal of [1, 3]) {
+    for (const goal of [0.25, 1, 3]) {
       for (let k = 0; k < 2000; k++) {
         s0.step(20); st0 = null; while (!st0) st0 = await s0.stats();
         if (tc == null && st0.touching > 0) tc = st0.t;
@@ -639,16 +641,38 @@ async function renderTests() {
       rb2.render(g);
       const { a, bpr } = await readTex(tb, 4, Wb, Hb), px = new Uint8Array(a);
       const c = rb2.project(B[0].c, Wb, Hb), rr = rb2.focal * B[0].R / Math.hypot(...B[0].c.map((x, j) => x - g.eye[j]));
-      let inD = 0, white = 0, hot = 0;
+      let inD = 0, white = 0, hot = 0, dark = 0, bright = 0, lum = 0;
       for (let y = 0; y < Hb; y++) for (let x = 0; x < Wb; x++) {
         if (Math.hypot(x - c.x, y - c.y) >= rr) continue;
         const o = y * bpr + 4 * x, r = px[o], gg = px[o + 1], b = px[o + 2];
         inD++; if (r > 235 && gg > 235 && b > 220) white++; if (r > 120 && r > gg + 30 && gg >= b) hot++;
+        if (r + gg + b < 75) dark++; if (r > 200 && gg > 90 && r > gg && gg > b) bright++; lum += r + gg + b;
       }
-      shots.push({ goal, hrs, white: white / Math.max(inD, 1), hot: hot / Math.max(inD, 1), inD });
+      const k = Math.max(inD, 1);
+      shots.push({ goal, hrs, white: white / k, hot: hot / k, dark: dark / k, bright: bright / k, lum: lum / k / 3, inD });
     }
-    ok('R the remnant at +1 h and +3 h is not a white blob, and it glows', tc != null && shots.every(q => q.white < 0.02 && q.hot > 0.02 && q.inD > 300),
+    ok('R the remnant at +0.25, +1 and +3 h is not a white blob, and it glows', tc != null && shots.every(q => q.white < 0.02 && q.hot > 0.02 && q.inD > 300),
       shots.map(q => `+${q.hrs.toFixed(2)} h: ${(100 * q.white).toFixed(1)} % near-white, ${(100 * q.hot).toFixed(1)} % orange-red of ${q.inD} disc px`).join('; '));
+    // the lava skin alone (fn lavaSkin): the state at +3 h, framed the
+    // same, drawn with coolH 0.05 h and 3 h, and at two wall times. In the
+    // pixels that glow at 0.05 h: the light falls as the crust forms, the
+    // crust is dark, the seams stay bright, and the pattern flows.
+    { const g = defaultFrame(), v = makeView(), B = su0.bodies.map((b, i) => ({ c: st0.com[i] || b.X, R: b.R })), ft = frameTarget(B, 3, g.fov, Wb / Hb);
+      v.target = ft.target; v.dist = 0.7 * ft.dist;
+      Object.assign(g, { eye: eyeOf(v), target: v.target, sun: [1, 0.25, 0.3], sunI: 0.2, bodies: [0, 1, 2, 3].map(() => ({ atm: 0, shadow: 0 })), time: 10 });
+      const shot = async (coolH, time) => { rb2.render(Object.assign({}, g, { coolH, time })); const { a, bpr } = await readTex(tb, 4, Wb, Hb); const p = new Uint8Array(a); return (x, y) => { const o = y * bpr + 4 * x; return [p[o], p[o + 1], p[o + 2]]; }; };
+      const early = await shot(0.05, 10), late = await shot(3, 10), later = await shot(3, 14);
+      let n = 0, l0 = 0, l3 = 0, dark = 0, seam = 0, moved = 0;
+      for (let y = 0; y < Hb; y++) for (let x = 0; x < Wb; x++) {
+        const a = early(x, y); if (!(a[0] > 90 && a[0] > a[2] + 30)) continue;
+        const b = late(x, y), c = later(x, y); n++;
+        l0 += a[0] + a[1] + a[2]; l3 += b[0] + b[1] + b[2];
+        if (b[0] + b[1] + b[2] < 0.45 * (a[0] + a[1] + a[2])) dark++;
+        if (b[0] > 150 && b[0] > b[1] && b[1] > b[2]) seam++;
+        if (Math.abs(b[0] - c[0]) + Math.abs(b[1] - c[1]) + Math.abs(b[2] - c[2]) > 24) moved++;
+      }
+      ok('R the lava skins over as it cools: dark crust, bright seams, flowing', n > 200 && l3 < 0.75 * l0 && dark > 0.25 * n && seam > 0.02 * n && moved > 0.05 * n,
+        `${n} glowing px at +0.05 h: light ${(l0 / n / 3).toFixed(0)} -> ${(l3 / n / 3).toFixed(0)} at +3 h; crust (under 45 % of the light) ${(100 * dark / n).toFixed(0)} %, bright seams ${(100 * seam / n).toFixed(1)} %, changed in 4 s of flow ${(100 * moved / n).toFixed(0)} %`); }
     rb2.destroy(); tb.destroy(); s0.destroy(); }
   const scan = at => { let glow = 0, lit = 0, s = [0, 0, 0]; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const c = at(x, y); if (c[0] > 150 && c[0] > c[1] + 30 && c[1] > c[2]) glow++; if (c[0] + c[1] + c[2] > 60) { lit++; s[0] += c[0]; s[1] += c[1]; s[2] += c[2]; } } return { glow, lit, mean: s.map(v => lit ? v / lit : 0) }; };
   // before contact: look at the target from 4 radii, the impactor out of view

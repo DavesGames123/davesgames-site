@@ -214,9 +214,10 @@ fn fs_surface(in: VOut) -> SurfOut {
     let melt = smoothstep(Tm, 1.2 * Tm, T);
     // hot rock darkens before it glows; a cut face shows the inside as it is
     let base = alb.rgb * (1.0 - 0.7 * hot);
-    // the visible skin: cooled crust plates and hot cracks (fn crustSkin)
-    // (the frame of the target body: the remnant, where most crust forms)
-    let skin = crustSkin(T, (P - centres[0].xyz) / max(U0.bodies[0].y, 1e-4), 7.0);
+    // the visible skin: flowing melt, a crust that skins over as it cools
+    // and glowing seams (fn lavaSkin) (the frame of the target body: the
+    // remnant, where most crust forms)
+    let skin = lavaSkin(T, (P - centres[0].xyz) / max(U0.bodies[0].y, 1e-4), 5.0);
     let H = normalize(L + V);
     let gloss = clamp(alb.w + 0.5 * melt * (1.0 - skin.y), 0.0, 1.0);
     let spec = gloss * pow(max(dot(n, H), 0.0), mix(40.0, 160.0, melt)) * diff * (0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0) + 0.25);

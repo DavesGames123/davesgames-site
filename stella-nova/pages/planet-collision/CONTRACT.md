@@ -228,7 +228,7 @@ not simulated (label this on the page).
 What the surface shows (mode 0): the body's surface map at each particle's
 start position (the map moves with the material), rock, iron and ice
 inside, darkening from 0.7 T_melt, then the glow of a black body at the
-skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn crustSkin`):
+skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn lavaSkin`):
 
 - The skin temperature is the particle T, capped at
   1700 K + 2300 K exp(-coolH / 0.6 h) (4000 K at contact, 2100 K at 1 h,
@@ -236,10 +236,15 @@ skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn crustSkin`):
   about 100 km wide, its free surface radiates sigma T^4, and SPH wall
   heating puts 5000-20000 K on the surface: the visible skin is far
   cooler. The solver has no radiative cooling: this is drawn.
-- Crust: Voronoi plates (in the frame of the target body) cover
-  1.1 (1 - exp(-(coolH + 0.15) / 1.1)) of the melt, up to 0.85, at 0.45
-  of the skin temperature; the cracks between them stay hot. Debris
-  pieces carry a crust with the same chance.
+- Crust (`fn lavaSkin`): a flowing, domain-warped fbm (two phases of a
+  slow drift field, faded across, wall time) in the frame of the target
+  body. Where it is under the cover, crust: the cover is
+  1.1 (1 - exp(-(coolH + 0.15) / 1.1)) (up to 0.85), less where the melt
+  is hot. Ridges of a second warped field crack it with seams, wider
+  where hot. Thick crust is at 0.42 of the skin temperature (not under
+  700 K), thin crust near a plate edge is hotter, open melt and seams
+  stay at the skin temperature. Debris drops carry a crust with the same
+  chance. No Voronoi cells.
 - Radiance: T^4 from the Draper point (750 K) times `glowGain`, with a
   soft limit at 3 (scene units): orange stays orange after the tone map.
 
