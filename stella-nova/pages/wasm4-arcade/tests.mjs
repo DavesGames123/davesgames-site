@@ -36,7 +36,17 @@
 //                 64 keys exist, the cans carry no brand name, frameFor
 //                 fits the TV and the desk at four aspects, every cart
 //                 builds with a label, the swap tracks start, seat and end
-//                 where they must
+//                 where they must; screen.js GLSL, turned into Vulkan
+//                 GLSL 450, through ~/.cargo/bin/naga
+//    room.        main.js in a fresh linkedom DOM with three resolved and a
+//                 stand-in renderer (window.__w4TestRenderer): the 3D room
+//                 boots with the first cart seated; a click on a rack cart
+//                 swaps it physically (static while the slot is empty, the
+//                 cart boots when it seats, the old cart goes home); a drag
+//                 onto the console swaps, a drag elsewhere goes home; a tap
+//                 on the glass arms the keys and sets the mouse; the reset
+//                 button pushes and reboots; a key press moves a 3D key;
+//                 the view button; pagehide releases the renderer
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync, existsSync } from 'node:fs';
@@ -430,7 +440,145 @@ async function sceneTest() {
   ok(d.tracks.a.length === 3 && near(swap.sample(d, 0).get('a').p, [0, 20, 10]), 'swap: a dropped cart flies from where it was dropped');
   const r = swap.planReturn('a', [0, 20, 10], home, -0.1);
   ok(near(swap.sample(r, r.end).get('a').p, home), 'swap: a cart dropped away from the slot goes home');
+  // GLSL of screen.js through naga (as Vulkan GLSL 450)
+  const nagaBin = join(homedir(), '.cargo/bin/naga');
+  if (existsSync(nagaBin)) {
+    const { FRAG } = await import('./screen.js');
+    const f = '#version 450\n' + FRAG.replace(/precision highp \w+;\n/g, '')
+      .replace('uniform sampler2D tex;', 'layout(set = 0, binding = 1) uniform texture2D tex_t;\nlayout(set = 0, binding = 2) uniform sampler tex_s;')
+      .replace(/uniform float (\w+);\n/g, '')
+      .replace('varying vec2 vUv;', 'layout(set = 0, binding = 0) uniform U { float time; float fx; float stat; float power; };\nlayout(location = 0) in vec2 vUv;\nlayout(location = 0) out vec4 o_color;')
+      .replace(/texelFetch\(tex,/g, 'texelFetch(sampler2D(tex_t, tex_s),').replace(/textureLod\(tex,/g, 'textureLod(sampler2D(tex_t, tex_s),')
+      .replace(/gl_FragColor/g, 'o_color');
+    let out = '';
+    try { out = execFileSync(nagaBin, ['--input-kind', 'glsl', '--shader-stage', 'frag', '--stdin-file-path', 'crt.frag'], { input: f }).toString(); } catch (e) { out = String(e.stderr || e.stdout || e.message); }
+    ok(/Validation successful/.test(out), 'scene: naga validates the screen GLSL ' + out.slice(0, 200));
+  } else console.log('  naga not found: GLSL validation skipped');
   group('scene.', m0);
+}
+
+// --------------------------------------------------------------------- room
+await roomTest();
+async function roomTest() {
+  const m0 = mark();
+  const cands = [process.env.LINKEDOM, '/usr/local/lib/node_modules/openclaw/node_modules/linkedom/esm/index.js'].filter(Boolean);
+  const lp = cands.find(p => existsSync(p));
+  if (!lp) { console.log('room.      skipped: linkedom not found (set LINKEDOM)'); return; }
+  const THREE = await import('three');
+  const { parseHTML } = await import(pathToFileURL(lp).href);
+  const { window, document } = parseHTML(html);
+  const W = 390, H = 800, raf = [];
+  const ctx2d = () => {
+    const grad = { addColorStop() {} };
+    const base = { canvas: null, createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), getImageData: (x, y, w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+      createLinearGradient: () => grad, createRadialGradient: () => grad, measureText: t => ({ width: String(t).length * 6 }) };
+    return new Proxy(base, { get: (o, k) => (k in o ? o[k] : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+  };
+  const store = new Map();
+  let clock = 5000;
+  Object.assign(globalThis, {
+    window, document, localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
+    requestAnimationFrame: f => { raf.push(f); return raf.length; }, cancelAnimationFrame: () => {}, innerWidth: W, innerHeight: H, devicePixelRatio: 1,
+    getComputedStyle: () => ({ display: 'flex' }), matchMedia: () => ({ matches: false, addEventListener() {} }),
+  });
+  window.innerWidth = W; window.innerHeight = H; window.devicePixelRatio = 1;
+  window.matchMedia = globalThis.matchMedia;
+  const realNow = performance.now.bind(performance);
+  performance.now = () => clock;
+  const proto = Object.getPrototypeOf(document.createElement('canvas'));
+  proto.getContext = function (t) { return t === '2d' ? (this.__c ||= ctx2d()) : null; };
+  const El = Object.getPrototypeOf(Object.getPrototypeOf(proto));
+  El.getBoundingClientRect = function () {
+    if (this.id === 'hud') return { left: 12, top: 62, x: 12, y: 62, width: 200, height: 50, right: 212, bottom: 112 };
+    return { left: 0, top: H - 60, x: 0, y: H - 60, width: W, height: 60, right: W, bottom: H };
+  };
+  proto.getBoundingClientRect = function () { return { left: 0, top: 0, x: 0, y: 0, width: W, height: H, right: W, bottom: H }; };
+  let renders = 0, disposed = false;
+  window.__w4TestRenderer = { setPixelRatio() {}, getPixelRatio: () => 1, setSize() {}, render(sc, cam) { renders++; sc.updateMatrixWorld(); cam.updateMatrixWorld(); }, dispose() { disposed = true; }, forceContextLoss() {}, shadowMap: {} };
+  const errors = [];
+  const origWarn = console.warn; console.warn = (...a) => { errors.push(a.map(String).join(' ')); };
+  const tick = async (n, dtMs = 17) => { for (let i = 0; i < n; i++) { const fs = raf.splice(0); clock += dtMs; for (const f of fs) { try { f(clock); } catch (e) { errors.push('raf: ' + e.message); } } await new Promise(r => setTimeout(r, 0)); } };
+  const view = document.getElementById('view');
+  const ptr = (type, x, y, o = {}) => { const e = new window.Event(type); Object.assign(e, { clientX: x, clientY: y, pointerId: o.id || 1, button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerType: o.type || 'mouse' }); view.dispatchEvent(e); };
+  const toScreen = (S, v) => { const q = v.clone().project(S.room.camera); return [(q.x + 1) / 2 * W, (1 - q.y) / 2 * H]; };
+  try {
+    await import(pathToFileURL(join(HERE, 'main.js')).href + '?room');
+    const S = window.__w4;
+    for (let i = 0; i < 60 && !(S.host && S.host.frame > 0); i++) await tick(1);
+    await tick(10);
+    ok(S.room && S.tube === S.room && S.tube.kind === 'webgl3d' && renders > 5, `room: the 3D room boots and renders (${renders} frames)`);
+    ok(S.room.carts.size === manifest.carts.length && S.room.seated === 'kittygame' && S.cart.id === 'kittygame' && S.host.frame > 3, 'room: the first cart is seated and runs');
+    // click a rack cart: it flies to the slot, the old one goes home
+    const id = manifest.carts[4].id, m = S.room.carts.get(id), old = S.room.carts.get('kittygame');
+    const lab = new THREE.Vector3(); m.group.children[1].getWorldPosition(lab);
+    const [cx, cy] = toScreen(S, lab);
+    ptr('pointerdown', cx, cy); ptr('pointerup', cx, cy);
+    ok(S.room.busy && S.host === null, 'room: a click on a rack cart starts the swap and empties the slot');
+    await tick(25);
+    ok(S.stat === 1 && S.host === null, 'room: the TV shows static while the slot is empty');
+    await tick(140);
+    ok(S.cart.id === id && S.room.seated === id && S.host && S.host.frame > 2, `room: the new cart seats and boots (${S.cart.id})`);
+    ok(old.group.position.distanceTo(old.home) < 0.05 && m.group.position.distanceTo(S.room.slot) < 0.05, 'room: the old cart is home and the new one is in the slot');
+    // drag a cart onto the console
+    const id2 = manifest.carts[9].id, m2 = S.room.carts.get(id2);
+    m2.group.children[1].getWorldPosition(lab);
+    const [dx, dy] = toScreen(S, lab);
+    const above = () => toScreen(S, S.room.slot.clone().add(new THREE.Vector3(0, 12, 0)));
+    ptr('pointerdown', dx, dy, { id: 2 });
+    for (let k = 1; k <= 12; k++) { const [ax, ay] = above(); ptr('pointermove', dx + (ax - dx) * k / 12, dy + (ay - dy) * k / 12, { id: 2 }); await tick(2); }
+    await tick(60);
+    let [sx, sy] = above(); ptr('pointermove', sx, sy, { id: 2 }); await tick(30);
+    [sx, sy] = above(); ptr('pointermove', sx, sy, { id: 2 }); await tick(10);
+    ok(m2.state === 'drag' && m2.group.position.distanceTo(S.room.slot) < 20, `room: the dragged cart follows the pointer (${m2.group.position.distanceTo(S.room.slot).toFixed(1)} cm from the slot)`);
+    ptr('pointerup', sx, sy, { id: 2 });
+    await tick(140);
+    ok(S.cart.id === id2 && S.room.seated === id2 && S.room.carts.get(id).group.position.distanceTo(S.room.carts.get(id).home) < 0.05, 'room: a cart dropped on the console swaps in');
+    // drag a cart and drop it away from the console: it goes home
+    const id3 = manifest.carts[12].id, m3 = S.room.carts.get(id3);
+    m3.group.children[1].getWorldPosition(lab);
+    const [ex, ey] = toScreen(S, lab);
+    ptr('pointerdown', ex, ey, { id: 3 });
+    for (let k = 1; k <= 6; k++) { ptr('pointermove', ex - 12 * k, ey - 4 * k, { id: 3 }); await tick(2); }
+    ptr('pointerup', ex - 72, ey - 24, { id: 3 });
+    await tick(80);
+    ok(S.cart.id === id2 && m3.group.position.distanceTo(m3.home) < 0.05 && m3.state === 'rack', 'room: a cart dropped away from the console goes home');
+    // tap the glass: keys armed, mouse on the console screen
+    const g = new THREE.Vector3(); S.room.parts.tv.glass.getWorldPosition(g);
+    const [gx, gy] = toScreen(S, g.add(new THREE.Vector3(0, 0, 1.2)));
+    ptr('pointerdown', gx, gy, { id: 4 });
+    const mx = S.input.mouse.x, my = S.input.mouse.y;
+    await tick(2);
+    ptr('pointerup', gx, gy, { id: 4 });
+    ok(document.getElementById('play').hidden === true, 'room: a tap on the glass arms the keys (Play hides)');
+    ok(S.input.armed && Math.abs(mx - 80) < 6 && Math.abs(my - 80) < 6, `room: the glass maps to the middle of the console screen (${mx}, ${my})`);
+    // view button: the desk view shows the console
+    await tick(80);
+    const m0v = S.room.mode; document.getElementById('viewBtn').dispatchEvent(new window.Event('click'));
+    ok(m0v === 'tv' && S.room.userMode === 'desk' && S.room.mode === 'desk', `room: the view button changes the view (${m0v} -> ${S.room.mode})`);
+    await tick(90);
+    // the reset button on the console
+    const rb = new THREE.Vector3(); S.room.parts.con.buttons.reset.getWorldPosition(rb);
+    const [rx, ry] = toScreen(S, rb.add(new THREE.Vector3(0, 0, 0.7)));
+    ok(rx > 0 && rx < W && ry > 0 && ry < H, `room: the desk view shows the console buttons (${rx.toFixed(0)}, ${ry.toFixed(0)})`);
+    const f0 = S.host.frame;
+    ptr('pointerdown', rx, ry, { id: 5 }); ptr('pointerup', rx, ry, { id: 5 });
+    await tick(40);
+    ok(S.cart.id === id2 && S.host && S.host.frame < f0, `room: the console reset button reboots the cart (${f0} -> ${S.host && S.host.frame})`);
+    // a key press moves a 3D key
+    const ke = new window.Event('keydown'); Object.assign(ke, { code: 'ArrowLeft', key: 'ArrowLeft' }); document.dispatchEvent(ke);
+    await tick(10);
+    const key = S.room.parts.props.keyboard.keys.get('ArrowLeft');
+    ok(key.position.y < key.userData.rest - 0.3, 'room: a key press moves the 3D key');
+    // the shelf list swaps too
+    document.querySelectorAll('#shelf .cart')[2].dispatchEvent(new window.Event('click'));
+    await tick(150);
+    ok(S.cart.id === manifest.carts[2].id && S.room.seated === manifest.carts[2].id, 'room: a click in the cart list swaps the cart in the room');
+    window.dispatchEvent(Object.assign(new window.Event('pagehide'), { persisted: false }));
+    ok(disposed && S.room === null, 'room: pagehide releases the renderer');
+    ok(!errors.length, `room: no warnings or loop errors ${errors.slice(0, 3).join(' | ')}`);
+  } catch (e) { ok(false, 'room: ' + (e && e.stack || e)); }
+  console.warn = origWarn; performance.now = realNow;
+  group('room.', m0);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);
