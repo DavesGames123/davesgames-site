@@ -1,36 +1,45 @@
 // ============================================================================
 //  SCIENCE TOOLKIT  ·  main.js  ·  the page shell
 // ----------------------------------------------------------------------------
-//  Draws the tabs and the tool grid from registry.js, opens a tool in place,
-//  and runs the command palette. A tool's code (tools/<category>.js) loads
-//  the first time a tool of that category opens.
+//  Three views in one page:
+//    pad    the home view: the scratchpad (pad.js). One line in, an answer
+//           with its method out.
+//    index  "All tools": the category tabs and the tool cards from
+//           registry.js.
+//    tool   one tool in full: inputs, result, plots, method, references.
+//  A tool's code (tools/<category>.js) loads the first time a tool of that
+//  category opens in the full view. The scratchpad loads intent.js, which
+//  holds every tool definition for the inline forms.
 //
 //  A tool definition gives inputs, run(values), TeX, a method text and
-//  references (see the header of tools/units.js). This file makes the form,
-//  calls run() on each edit (debounced), and shows the rows, extra HTML, a
-//  plot (SVG) and the method. The values go in the URL hash, so a link
-//  opens the tool with the same inputs.
+//  references (see the header of tools/units.js). The full view makes the
+//  form, calls run() on each edit (debounced), and shows the rows, extra
+//  HTML, a plot (SVG) and the method.
 //
-//  HASH   ""               the grid, all categories
-//         "#cat=<id>"      the grid, one category
+//  HASH   ""               the scratchpad, lines from this device
+//         "#pad=<text>"    the scratchpad with these lines (a shared link)
+//         "#cat=<id>"      all tools, one category ("all" for every one)
 //         "#<tool>?k=v&…"  one tool; only inputs that differ from the default
 //
-//  window.__sciTools exposes open(), the current tool and an error list for
-//  the node boot test (tests.mjs).
+//  window.__sciTools exposes open(), show(), the current tool, the pad and
+//  an error list for the node boot test (tests.mjs).
 //
 //  GREP MAP
+//    grep -n "function show("         switch between pad, index and tool
 //    grep -n "function renderGrid"    tabs and cards
 //    grep -n "async function openTool"  load a module, build the form
 //    grep -n "function runTool"       run() and the result view
-//    grep -n "function texInto"       MathJax with a cache
-//    grep -n "function copyText"      clipboard
 //    grep -n "function exportFig"     SVG and PNG download
 //    grep -n "PALETTE"                the command palette
 //    grep -n "function route"         hash routing
+//    grep -n "const ready"            boot: grid, pad, first route
 // ============================================================================
 import { CATS, TOOLS, BY_ID, search, RELATED } from './registry.js';
-import { typeset } from '../../lib/sci-math.js';
 import { esc } from './kit.js';
+import { field, valueOf, texInto, copyText } from './view.js';
+import { initPad } from './pad.js';
+
+export { texInto };
 
 const $ = (s) => document.querySelector(s);
 const errors = [];
@@ -38,23 +47,29 @@ const mods = {};
 const loadCat = (cat) => (mods[cat] ||= import(`./tools/${cat}.js`));
 
 let tab = 'all';
+let view = 'pad';         // 'pad' | 'index' | 'tool'
+let back = 'pad';         // the view the back button of a tool returns to
 let cur = null;           // { id, meta, def, els }
 let lastHash = null;
+let pad = null;
+let padShared = false;    // true after an edit: the hash then carries the lines
 
 // ── hash ────────────────────────────────────────────────────────────────────
 function parseHash(h = location.hash) {
   h = String(h || '').replace(/^#\/?/, '');
-  if (!h) return { cat: 'all' };
-  if (h.startsWith('cat=')) return { cat: decodeURIComponent(h.slice(4)) };
+  if (!h) return { view: 'pad' };
+  if (h.startsWith('pad=')) { let t = h.slice(4); try { t = decodeURIComponent(t); } catch (e) { /* raw text */ } return { view: 'pad', text: t }; }
+  if (h.startsWith('cat=')) return { view: 'index', cat: decodeURIComponent(h.slice(4)) };
   const q = h.indexOf('?');
   const id = decodeURIComponent(q < 0 ? h : h.slice(0, q));
   const params = {};
   if (q >= 0) for (const [k, v] of new URLSearchParams(h.slice(q + 1))) params[k] = v;
-  return { id, params };
+  return { view: 'tool', id, params };
 }
 
 function toolHash() {
-  if (!cur) return tab === 'all' ? '' : `#cat=${tab}`;
+  if (view === 'pad') return padShared && pad && pad.text ? `#pad=${encodeURIComponent(pad.text)}` : '';
+  if (view === 'index' || !cur) return `#cat=${tab}`;
   const p = new URLSearchParams();
   for (const inp of cur.def.inputs) {
     const v = valueOf(cur.els[inp.k], inp);
@@ -88,62 +103,32 @@ function renderGrid() {
   }).join('');
 }
 
-function showGrid() {
-  cur = null;
-  $('#tool').hidden = true;
-  $('#grid').hidden = false; $('#tabs').hidden = false; $('#intro').hidden = false;
-  renderGrid();
+// Show one of the three views.
+function show(v) {
+  view = v;
+  if (v !== 'tool') cur = null;
+  $('#desk').hidden = v !== 'pad';
+  $('#intro').hidden = v !== 'pad';
+  $('#index').hidden = v !== 'index';
+  $('#tool').hidden = v !== 'tool';
+  if (v === 'index') renderGrid();
+  if (v !== 'tool') document.title = 'Science Toolkit — Stella Nova · davesgames.io';
 }
 
 // ── tool ────────────────────────────────────────────────────────────────────
-function valueOf(el, inp) {
-  if (!el) return inp.def ?? '';
-  if (inp.type === 'check') return el.checked ? '1' : '0';
-  return el.value;
-}
-
-function field(inp, value) {
-  const id = `f-${inp.k}`;
-  const wrap = document.createElement('div');
-  wrap.className = `fld${inp.w ? ' w' + inp.w : ''}${inp.type === 'check' ? ' check' : ''}${inp.type === 'area' ? ' w3' : ''}`;
-  let el;
-  if (inp.type === 'select') {
-    el = document.createElement('select');
-    el.innerHTML = inp.opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('');
-    el.value = value;
-  } else if (inp.type === 'area') {
-    el = document.createElement('textarea');
-    el.rows = inp.rows || 5;
-    el.value = value;
-  } else if (inp.type === 'check') {
-    el = document.createElement('input');
-    el.type = 'checkbox';
-    el.checked = value === '1' || value === true;
-  } else {
-    el = document.createElement('input');
-    el.type = 'text';
-    el.value = value;
-    el.inputMode = inp.mode || 'text';
-  }
-  el.id = id; el.name = inp.k;
-  const lab = document.createElement('label');
-  lab.htmlFor = id; lab.textContent = inp.label;
-  if (inp.type === 'check') wrap.append(el, lab); else wrap.append(lab, el);
-  if (inp.hint) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = inp.hint; wrap.append(h); }
-  return [wrap, el];
-}
 
 async function openTool(id, params = {}, push = true) {
   const meta = BY_ID[id];
-  if (!meta) { showGrid(); return false; }
+  if (!meta) { show('pad'); return false; }
   let mod;
   try { mod = await loadCat(meta.cat); }
-  catch (e) { errors.push(`load ${meta.cat}: ${e.message}`); showGrid(); return false; }
+  catch (e) { errors.push(`load ${meta.cat}: ${e.message}`); show('pad'); return false; }
   const def = mod.TOOLS[id];
-  if (!def) { errors.push(`no definition for ${id}`); showGrid(); return false; }
+  if (!def) { errors.push(`no definition for ${id}`); show('pad'); return false; }
+  if (view !== 'tool') back = view;
+  show('tool');
   cur = { id, meta, def, els: {} };
-  $('#grid').hidden = true; $('#tabs').hidden = true; $('#intro').hidden = true;
-  $('#tool').hidden = false;
+  $('#back').textContent = back === 'index' ? '← All tools' : '← Scratchpad';
   $('#toolName').textContent = meta.name;
   $('#toolBlurb').textContent = meta.blurb;
   const form = $('#form');
@@ -201,35 +186,7 @@ function runTool() {
   return res;
 }
 
-// ── MathJax with a cache (one SVG per TeX string) ───────────────────────────
-const texCache = new Map();
-export async function texInto(el, tex, display = true) {
-  const key = (display ? 'D' : 'I') + tex;
-  if (texCache.has(key)) { el.innerHTML = texCache.get(key); el.setAttribute('aria-label', tex); return true; }
-  const ok = await typeset(el, tex, { display });
-  if (ok) texCache.set(key, el.innerHTML);
-  return ok;
-}
-
-// ── clipboard and export ────────────────────────────────────────────────────
-async function copyText(text, btn) {
-  let ok = false;
-  try { await navigator.clipboard.writeText(text); ok = true; }
-  catch (e) {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.append(ta); ta.select(); ok = document.execCommand('copy'); ta.remove();
-    } catch (e2) { ok = false; }
-  }
-  if (btn) {
-    const was = btn.textContent;
-    btn.textContent = ok ? 'copied' : 'copy failed';
-    btn.classList.add('done');
-    setTimeout(() => { btn.textContent = was; btn.classList.remove('done'); }, 1100);
-  }
-  return ok;
-}
+// ── export ──────────────────────────────────────────────────────────────────
 
 function download(name, blob) {
   const a = document.createElement('a');
@@ -296,7 +253,11 @@ function bind() {
     const b = e.target.closest('[data-tool]');
     if (b) openTool(b.dataset.tool, {}, true);
   });
-  $('#back').addEventListener('click', () => { showGrid(); writeHash(true); });
+  $('#back').addEventListener('click', () => { show(back); writeHash(true); });
+  $('#openIndex').addEventListener('click', () => { show('index'); writeHash(true); });
+  $('#indexBack').addEventListener('click', () => { show('pad'); writeHash(true); });
+  $('#padLink').addEventListener('click', (e) => { padShared = true; writeHash(false); copyText(location.href, e.currentTarget); });
+  $('#padClear').addEventListener('click', () => { pad.clear(); pad.focusLast(); });
   $('#copyLink').addEventListener('click', (e) => copyText(location.href, e.currentTarget));
   $('#form').addEventListener('input', schedule);
   $('#form').addEventListener('change', schedule);
@@ -345,7 +306,8 @@ function bind() {
     if (e.key === 'Escape') {
       if (!$('#palette').hidden) { closePalette(); return; }
       if (typing) { t.blur(); return; }
-      if (cur) { showGrid(); writeHash(true); }
+      if (view === 'tool') { show(back); writeHash(true); }
+      else if (view === 'index') { show('pad'); writeHash(true); }
     }
   });
   window.addEventListener('hashchange', route);
@@ -365,9 +327,14 @@ async function route() {
   if (h === lastHash) return;
   lastHash = h;
   const r = parseHash(h);
-  if (r.id) { await openTool(r.id, r.params, false); return; }
-  tab = r.cat && (r.cat === 'all' || CATS.some(c => c.id === r.cat)) ? r.cat : 'all';
-  showGrid();
+  if (r.view === 'tool') { await openTool(r.id, r.params, false); return; }
+  if (r.view === 'index') {
+    tab = r.cat && (r.cat === 'all' || CATS.some(c => c.id === r.cat)) ? r.cat : 'all';
+    show('index');
+    return;
+  }
+  if (r.text != null && pad && r.text !== pad.text) { padShared = true; pad.setLines(r.text.split('\n')); }
+  show('pad');
 }
 
 function renderRelated() {
@@ -378,10 +345,19 @@ function renderRelated() {
 const ready = (async () => {
   try {
     renderRelated();
+    renderGrid();
+    pad = initPad({
+      root: $('#pad'),
+      onOpenTool: (id, vals) => openTool(id, vals || {}, true),
+      onChange: () => { padShared = true; if (view === 'pad') writeHash(false); },
+    });
+    const first = parseHash();
+    if (first.view === 'pad' && first.text != null) padShared = true;
+    pad.boot(first.view === 'pad' && first.text != null ? first.text : null);
     bind();
     lastHash = null;
     await route();
   } catch (e) { errors.push(e.message || String(e)); throw e; }
 })();
 
-window.__sciTools = { open: openTool, run: runTool, get current() { return cur; }, errors, ready, search, parseHash };
+window.__sciTools = { open: openTool, run: runTool, show, get current() { return cur; }, get view() { return view; }, get pad() { return pad; }, errors, ready, search, parseHash };

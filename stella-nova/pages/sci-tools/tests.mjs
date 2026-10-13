@@ -10,9 +10,11 @@
 //     references; each related page is registered in lib/nav-data.js.
 //  3. Each tool runs with its default inputs and with each example (an
 //     example marked err: true must throw a message).
-//  4. jsdom boot (needs jsdom on NODE_PATH, else SKIP): the page loads,
-//     opens every tool through the shell with 0 errors, and every TeX
-//     string of every tool typesets through lib/sci-math.js to an SVG.
+//  4. jsdom boot (needs jsdom on NODE_PATH, else SKIP): the page loads
+//     into the scratchpad, lines answer as they are typed, a tool name
+//     opens its form under the line, the shell opens every tool with 0
+//     errors, and every TeX string of every tool typesets through
+//     lib/sci-math.js to an SVG (SCI_SKIP_TEX=1 skips only the TeX part).
 // ============================================================================
 import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -141,12 +143,53 @@ else {
   ok(!w.document.getElementById('palette').hidden, 'Ctrl-K opens the palette');
   w.document.getElementById('pq').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   ok(w.document.getElementById('palette').hidden, 'Esc closes the palette');
-  ok(!pageErrors.length, 'no page errors during boot', pageErrors.slice(0, 3).join(' | '));
+  // Scratchpad.
+  const { STARTER } = await import('./intent.js');
+  const doc = w.document;
+  S.show('pad');
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const lis = () => [...doc.querySelectorAll('#lines li.ln')];
+  ok(S.view === 'pad' && !doc.getElementById('desk').hidden, 'the scratchpad is the home view');
+  ok(lis().length === STARTER.length + 1, `the first visit shows ${STARTER.length} starter lines and an empty line`, `got ${lis().length}`);
+  const ansOf = (li) => (li.querySelector('.ans .v') || {}).textContent;
+  ok(ansOf(lis()[1]) === '2.4797 eV' && /hc\/λ/.test(lis()[1].querySelector('.ans .how').textContent), 'starter line "500 nm photon in eV" shows "= 2.4797 eV" and its method');
+  ok(lis().find(li => li.querySelector('input').value.startsWith('dilute')).querySelector('.ans .v').textContent === 'take 12.5 mL, add 37.5 mL', 'starter dilution line answers "take 12.5 mL, add 37.5 mL"');
+  const type = async (text) => {
+    const last = lis()[lis().length - 1], inp = last.querySelector('input');
+    inp.focus(); inp.value = text; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await wait(200);
+    return last;
+  };
+  let li = await type('molar mass NaCl');
+  ok(ansOf(li) === '58.44 g/mol', 'typing "molar mass NaCl" answers 58.44 g/mol', ansOf(li));
+  ok(lis()[lis().length - 1].querySelector('input').value === '', 'a new empty line follows the typed line');
+  li = await type('dilution');
+  const nIn = (await import('./tools/chem.js')).TOOLS.dilution.inputs.length;
+  ok(li.querySelectorAll('.iform .fld').length === nIn && li.querySelector('.iout .res'), 'a tool name opens the live tool form under the line');
+  li = await type('foo bar');
+  ok(li.querySelector('.ans .msg') && li.classList.contains('bad'), 'an unreadable line shows its error');
+  li = await type('x = 2 m');
+  li = await type('x^2 * 3');
+  ok(ansOf(li) === '12 m²', 'a variable carries to later lines (x = 2 m, x^2 * 3 = 12 m²)', ansOf(li));
+  lis()[1].querySelector('[data-more]').click();
+  ok(!lis()[1].querySelector('.more').hidden && lis()[1].querySelector('.more .res') && lis()[1].querySelectorAll('.more .refs li').length > 0, '[method] opens the full method: rows and references');
+  const n0 = lis().length;
+  lis()[1].querySelector('input').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  ok(lis().length === n0 + 1, 'Enter adds a line');
+  const sugIn = lis()[lis().length - 1].querySelector('input');
+  sugIn.focus(); sugIn.value = 'dil'; sugIn.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok(doc.querySelectorAll('.sugg li[data-s]').length > 0, 'typing "dil" shows suggestions');
+  sugIn.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  ok(sugIn.value.startsWith('dilute'), 'Tab takes the first suggestion', sugIn.value);
+  ok(S.parseHash('#pad=a%0Ab').text === 'a\nb', 'parseHash reads the pad lines');
+  ok(!pageErrors.length && !S.errors.length, 'no page errors during boot and the pad checks', [...pageErrors, ...S.errors].slice(0, 3).join(' | '));
 
   w.close();
 
   // TeX of every tool through lib/sci-math.js, evaluated inside a jsdom
   // window (MathJax must run in the window's own realm).
+  if (process.env.SCI_SKIP_TEX) console.log('SKIP  TeX typesetting (SCI_SKIP_TEX)');
+  else {
   const lib = here + '../../lib/sci-math.js';
   const tdom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: pathToFileURL(here + 'index.html').href, runScripts: 'dangerously', resources: 'usable' });
   const tw = tdom.window;
@@ -170,6 +213,7 @@ else {
   ok(!!res && !badT.length, `every method formula typesets to SVG (${texes.length})`, badT.slice(0, 3).map(b => `${b[0]}: ${b[1]}`).join(' | '));
   if (defs.constants) ok(!!res && syms.length > 50 && !badS.length, `every constant symbol typesets (${syms.length})`, badS.slice(0, 3).map(b => b[1]).join(' | '));
   tw.close();
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

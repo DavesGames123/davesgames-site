@@ -7,23 +7,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Science toolkit: unit conversion, CODATA constants, uncertainty propagation, statistics, curve fits, chemistry, physics and numerics in one page. Runs on your device and works offline.">
+<meta name="description" content="Science scratchpad: type a line such as 500 nm photon in eV or molar mass CuSO4 and get the answer with its method. Units, CODATA constants, chemistry, statistics and 47 tools, with reference tables at the side. Runs on your device and works offline.">
 <title>Science Toolkit — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    SCIENCE TOOLKIT  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   One page of small tools for lab and desk work. registry.js lists the
-   tools. tools/<category>.js holds the tools of one category; main.js loads
-   it when a tool of that category opens. core/*.js holds the maths (no
-   DOM), which tests.mjs checks against reference values.
+   A scratchpad for lab and desk work. The home view is a notebook of
+   lines (pad.js). intent.js reads each line and answers with units and
+   the method. registry.js lists the 47 tools; tools/<category>.js holds
+   their definitions; core/*.js holds the maths (no DOM), which tests.mjs
+   checks against reference values.
 
-   Every tool runs on the device. Nothing is sent to a server. The site
+   Everything runs on the device. Nothing is sent to a server. The site
    service worker keeps the files, so the page works offline after one
-   visit. The state of a tool is in the URL hash: #unit-convert?q=...&to=...
+   visit. The lines are in localStorage and, after an edit, in the URL
+   hash (#pad=...). A tool is at #unit-convert?q=...&to=...
 
    KEYS   / or Ctrl-K (Cmd-K) opens the palette. Esc closes the palette or
-          goes back to the grid. Arrow keys move in the palette.
+          goes back. In a line: Enter adds a line, Tab takes a suggestion.
 
    HEAD LOAD ORDER
      1. gpu-guard  2. wishlist  3. stats-beacon   (../../lib/)
@@ -32,9 +34,10 @@
 
    REGIONS
      .topbar      brand and title (hidden in the shell frame)
-     #intro       title and one line on what the page is
-     #tabs        category tabs (data-cat)
-     #grid        the tool cards
+     #intro       title, one line on what the page is, all tools, search
+     #desk        the home view
+       #pad         the scratchpad: #lines (one li.ln per line), #tryRow
+     #index       all tools: #tabs (data-cat) and #grid (the tool cards)
      #tool        one open tool: inputs, result, method and references
      #palette     the command palette (a sheet on a phone)
      footer       related pages and the credit
@@ -53,19 +56,40 @@
 <main class="wrap">
   <header id="intro">
     <h1>Science toolkit</h1>
-    <p class="lead">Small, exact tools for lab and desk work. Each one shows its method and its sources. Everything runs on this device, nothing is uploaded, and the page works offline.</p>
-    <button id="openPalette" class="search" type="button" aria-label="Search tools">
-      <span>Search tools</span><kbd>/</kbd>
-    </button>
+    <p class="lead">Type a line, get the answer and its method. Units, constants and 47 tools answer in place. Everything runs on this device and works offline.</p>
+    <div class="hbtns">
+      <button id="openIndex" class="ghost" type="button">All 47 tools</button>
+      <button id="openPalette" class="search" type="button" aria-label="Search tools">
+        <span>Search tools</span><kbd>/</kbd>
+      </button>
+    </div>
   </header>
 
-  <nav id="tabs" role="tablist" aria-label="Categories"></nav>
+  <div id="desk" class="desk">
+    <section id="pad" aria-label="Scratchpad">
+      <div class="padbar">
+        <h2>Scratchpad</h2>
+        <span class="dim padhint">Units, constants (h, c, kB, NA, R …), variables (x = 3 mm), formulas and phrases.</span>
+        <button id="padLink" class="mini" type="button" title="Copy a link with these lines">Copy link</button>
+        <button id="padClear" class="mini" type="button" title="Delete every line">Clear</button>
+      </div>
+      <ol id="lines" class="lines"></ol>
+      <div id="tryRow" class="examples try"></div>
+    </section>
+  </div>
 
-  <section id="grid" aria-label="Tools"></section>
+  <section id="index" hidden aria-label="All tools">
+    <div class="toolhead">
+      <button id="indexBack" class="ghost" type="button">← Scratchpad</button>
+      <div class="titles"><h2>All tools</h2><p class="dim">Each tool also opens in the scratchpad: type its name.</p></div>
+    </div>
+    <nav id="tabs" role="tablist" aria-label="Categories"></nav>
+    <section id="grid" aria-label="Tools"></section>
+  </section>
 
   <section id="tool" hidden aria-live="polite">
     <div class="toolhead">
-      <button id="back" class="ghost" type="button" aria-label="Back to all tools">← All tools</button>
+      <button id="back" class="ghost" type="button" aria-label="Back">← Scratchpad</button>
       <div class="titles">
         <h2 id="toolName"></h2>
         <p id="toolBlurb" class="dim"></p>
