@@ -30,6 +30,13 @@
 //                 the first cart runs, the CRT button and slider work, the
 //                 saver enters, sends a plate with no code, runs a cart and
 //                 exits. Skipped when linkedom is not found (set LINKEDOM).
+//    scene.       the 3D room in node (three r160 from ../../vendor through a
+//                 resolve hook, a stub canvas): the room builds with finite
+//                 geometry, the TV glass, console slot, 20 rack slots and
+//                 64 keys exist, the cans carry no brand name, frameFor
+//                 fits the TV and the desk at four aspects, every cart
+//                 builds with a label, the swap tracks start, seat and end
+//                 where they must
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync, existsSync } from 'node:fs';
@@ -344,6 +351,86 @@ async function bootTest() {
   } catch (e) { ok(false, 'boot: ' + (e && e.stack || e)); }
   console.warn = origWarn;
   group('boot.', m0);
+}
+
+// -------------------------------------------------------------------- scene
+await sceneTest();
+async function sceneTest() {
+  const m0 = mark();
+  const { register } = await import('node:module');
+  const V = pathToFileURL(join(HERE, '../../vendor/three@0.160.0/')).href;
+  register('data:text/javascript,' + encodeURIComponent(`
+    export async function resolve(s, c, next) {
+      if (s === 'three') return next(${JSON.stringify(V + 'build/three.module.js')}, c);
+      if (s.startsWith('three/addons/')) return next(${JSON.stringify(V + 'examples/jsm/')} + s.slice(13), c);
+      return next(s, c);
+    }`));
+  // a canvas whose 2D context accepts every call (also when boot. ran first)
+  const noop = new Proxy(function () {}, { get: (t, k) => (k === Symbol.toPrimitive ? () => 0 : k === 'width' ? 10 : noop), apply: () => noop, set: () => true });
+  const stubCanvas = () => ({ width: 1, height: 1, style: {}, getContext: () => noop, addEventListener() {}, toDataURL: () => '' });
+  globalThis.document = { createElement: t => (t === 'canvas' ? stubCanvas() : { style: {} }), createElementNS: () => stubCanvas() };
+  let THREE, room, props, carts3d, swap;
+  try {
+    THREE = await import('three');
+    room = await import('./room.js'); props = await import('./props.js'); carts3d = await import('./carts3d.js'); swap = await import('./swap.js');
+  } catch (e) { ok(false, 'scene: modules import in node: ' + (e && e.stack || e)); group('scene.', m0); return; }
+  const R = room.buildRoom();
+  let meshes = 0, bad = [];
+  R.scene.traverse(o => {
+    if (!o.isMesh) return; meshes++;
+    const a = o.geometry.attributes.position.array;
+    for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) { bad.push(o.name || o.geometry.type); break; }
+  });
+  ok(meshes > 120 && !bad.length, `scene: the room builds, ${meshes} meshes, finite geometry ${bad.slice(0, 3).join(' ')}`);
+  ok(R.tv.glass && R.tv.glass.userData.pick.type === 'screen', 'scene: the TV glass is a pick target');
+  ok(R.rack.slots.length === 20 && R.rack.slots.length >= manifest.carts.length, `scene: the rack has a slot for every cart (${R.rack.slots.length})`);
+  const sl = R.rack.slots; let minD = 1e9;
+  for (let i = 0; i < sl.length; i++) for (let j = i + 1; j < sl.length; j++) minD = Math.min(minD, sl[i].distanceTo(sl[j]));
+  ok(minD >= room.DIM.cart.w * 0.9, `scene: rack slots do not overlap (min ${minD.toFixed(1)} cm)`);
+  ok(Number.isFinite(R.con.slot.y) && R.con.slot.y - room.DIM.cart.h / 2 < room.DIM.console.h + 1.4, 'scene: a seated cart sits down in the console slot');
+  ok(R.props.keyboard.keys.size === 64 && R.props.keyboard.keys.has('ArrowUp') && R.props.keyboard.keys.has('Escape'), `scene: the keyboard has 64 keys (${R.props.keyboard.keys.size})`);
+  R.props.keyboard.press('KeyX', true); R.props.keyboard.update(0.2);
+  const kx = R.props.keyboard.keys.get('KeyX');
+  ok(kx.position.y < kx.userData.rest - 0.4, 'scene: a pressed key goes down');
+  ok(props.capStyle('ArrowLeft').bg !== props.capStyle('KeyQ').bg && props.capStyle('KeyX').bg === props.capStyle('KeyZ').bg, 'scene: game keys have their own colours');
+  const src = read('props.js').toString() + read('room.js').toString();
+  ok(!/coca|pepsi|sprite|fanta|dr\.? ?pepper|mountain dew|red ?bull|monster/i.test(src), 'scene: no drink brand names');
+  for (const aspect of [16 / 9, 4 / 3, 1, 9 / 19.5]) {
+    for (const mode of ['tv', 'desk']) {
+      const f = room.frameFor(mode, aspect);
+      const cam = new THREE.PerspectiveCamera(f.fov, aspect, 1, 5000);
+      cam.position.copy(f.pos); cam.lookAt(f.target); cam.updateMatrixWorld();
+      const q = room.KEYPOINTS[mode].map(p => new THREE.Vector3(...p).project(cam));
+      const inside = q.every(v => Math.abs(v.x) <= 0.95 && Math.abs(v.y) <= 0.95);
+      const span = Math.max(Math.max(...q.map(v => v.x)) - Math.min(...q.map(v => v.x)), Math.max(...q.map(v => v.y)) - Math.min(...q.map(v => v.y)));
+      ok(inside && span > 1.7, `scene: frameFor ${mode} at aspect ${aspect.toFixed(2)} fits and fills (span ${span.toFixed(2)} of 2)`);
+    }
+  }
+  const made = manifest.carts.map((c, i) => carts3d.makeCart(c, i));
+  ok(made.every(m => m.group.children.length >= 5 && m.canvas.width === carts3d.LABEL.w), 'scene: every cart builds with a label canvas');
+  let picks = 0; made[0].group.traverse(o => { if (o.isMesh && o.userData.pick && o.userData.pick.id === made[0].id) picks++; });
+  ok(picks >= 5, 'scene: every part of a cart is a pick target');
+  made[0].paint({ width: 160, height: 160 });
+  ok(made[0].tex.version > 0, 'scene: painting a label marks its texture for upload');
+  // swap tracks
+  const from = [52, 10, 25], slot = [-54, 8.9, 14], home = [43.6, 10, 20.6];
+  const p = swap.planSwap({ incoming: 'a', from, fromRx: -0.1, slot, outgoing: 'b', home, homeRx: -0.1 });
+  const near = (u, v, e = 1e-6) => u.every((x, i) => Math.abs(x - v[i]) < e);
+  ok(near(swap.sample(p, 0).get('a').p, from) && near(swap.sample(p, p.end + 1).get('a').p, slot), 'swap: the new cart starts on the rack and ends in the slot');
+  ok(near(swap.sample(p, p.end + 1).get('b').p, home) && Math.abs(swap.sample(p, p.end + 1).get('b').rx + 0.1) < 1e-9, 'swap: the old cart ends in its rack slot at the rack lean');
+  ok(swap.sample(p, swap.DUR.eject).get('b').p[1] > slot[1] + 8, 'swap: the old cart pops out of the slot first');
+  ok(Math.abs(p.seatAt - p.tracks.a.at(-1).t1) < 1e-9 && p.seatAt > 1, `swap: the cart seats at the end of its push (${p.seatAt.toFixed(2)} s)`);
+  const mid = p.tracks.a.at(-1), dip = swap.sample(p, (mid.t0 + mid.t1) / 2).get('a').p[1];
+  ok(dip < slot[1] - 0.8, 'swap: the push dips the cart into the slot and back');
+  const arrive = p.tracks.a.at(-3).t1;
+  ok(arrive >= swap.DUR.eject + 0.3, 'swap: the new cart reaches the slot after the old one has left');
+  let maxY = 0; for (let t = 0; t < p.end; t += 0.02) maxY = Math.max(maxY, swap.sample(p, t).get('a').p[1]);
+  ok(maxY > slot[1] + 11, 'swap: the new cart flies over the slot in an arc');
+  const d = swap.planSwap({ incoming: 'a', from: [0, 20, 10], slot, drag: true });
+  ok(d.tracks.a.length === 3 && near(swap.sample(d, 0).get('a').p, [0, 20, 10]), 'swap: a dropped cart flies from where it was dropped');
+  const r = swap.planReturn('a', [0, 20, 10], home, -0.1);
+  ok(near(swap.sample(r, r.end).get('a').p, home), 'swap: a cart dropped away from the slot goes home');
+  group('scene.', m0);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);
