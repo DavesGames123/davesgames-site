@@ -769,6 +769,21 @@ if (section('builtin parts (cross-role)')) {
       const codes = new Set(nl.issues.map(i => i.code));
       check('checks with real defs: covered-hole, pin-overlap, not-simulated', codes.has('covered-hole') && codes.has('pin-overlap') && codes.has('not-simulated'), [...codes].join(','));
     }
+    {
+      // two 830 boards side by side: board 2 sits where its row a is 9
+      // pitches from row j of board 1, so the devkit's two pin rows (9
+      // pitches apart) plug into b1 row j and b2 row a
+      const g = realGeo || geoStub;
+      const lj = g.holeLocal('bb830', 'j20'), la = g.holeLocal('bb830', 'a20');
+      const dz = lj.z + 9 * 2.54 - la.z;
+      const doc = { format: 'breadboard-lab', version: 1, boards: [{ id: 'b1', type: 'bb830', x: 0, z: 0, rot: 0 }, { id: 'b2', type: 'bb830', x: 0, z: dz, rot: 0 }],
+        parts: [{ id: 'esp', def: 'mcu-esp32', place: { on: 'b1', x: lj.x, z: lj.z, rot: 0 }, params: {} }], wires: [], probes: [], materials: [], customParts: [], programs: {} };
+      const nl = buildNetlist(doc, realReg, g);
+      const holes = Object.entries(nl.pinHole).filter(([k]) => k.startsWith('esp.'));
+      const onB1 = holes.filter(([, h]) => h && /^b1:j/.test(h)).length, onB2 = holes.filter(([, h]) => h && /^b2:a/.test(h)).length;
+      const nodes = new Set(holes.map(([k]) => nl.pinNode[k]));
+      check('real ESP32 devkit across two boards: one row in b1 row j, one in b2 row a', onB1 === 15 && onB2 === 15, `${onB1} pins in b1:j, ${onB2} in b2:a, ${nodes.size} distinct nodes for ${holes.length} pins (GND.1/GND.2 share one)`);
+    }
     check(`every builtin part def (${defs.length}) builds a netlist and runs 1 ms`, bad.length === 0, bad.length ? bad.slice(0, 12).join(' | ') : 'all ran');
   }
 }
