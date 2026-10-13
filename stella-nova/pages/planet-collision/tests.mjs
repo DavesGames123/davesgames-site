@@ -54,6 +54,11 @@
 //     phone) or in the saver's clear band. In the saver, the shot from
 //     contact to contact + IMPACT_HOLD is never the cutaway, and the
 //     cutaway starts no sooner than CUTAWAY_AFTER s after contact
+//  12 the density volume (render.js VOL_K, VOL_ISO): on a settled-shape
+//     Earth (moon-earth, 32k) the iso surface sits about 0.6 spacing out
+//     with a radius spread under 0.05 spacing, against 0.28 for the union
+//     of particle spheres (the old look); a lone particle stays under the
+//     iso level, two touching ones join; the volume tiers and bytes
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, the outcome of a readback,
@@ -71,7 +76,7 @@ import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
 import { bandFrom, makeView, frameTarget, eyeOf, stepView, cameraOf, impactYaw, sideFor, contactPoint } from './view.js';
-import { M4 } from './render.js';
+import { M4, VOL_K, VOL_ISO, SPHERE_K } from './render.js';
 import * as SP from './saver-plan.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
@@ -374,6 +379,32 @@ function cameraTests() {
   ok('11 saver: no cutaway or other shot in the impact window; the cutaway comes late', cutBad === 0, `${cutBad} bad frames; first cutaway ${cutMin === Infinity ? 'none' : cutMin.toFixed(1) + ' s'} after contact (rule ${SP.CUTAWAY_AFTER} s), impact window ${SP.IMPACT_HOLD} s`);
 }
 
+// 12 ─ the density volume: a smooth iso surface, not particle bumps
+function volumeTests() {
+  const su = buildScenario(PRESETS.find(p => p.key === 'moon-earth'), 32768, 1), B = su.bodies[0], pts = [];
+  for (let i = 0; i < su.N; i++) if (su.body[i] === 0) {
+    const x = [0, 1, 2].map(c => su.pos[3 * i + c] - B.X[c]), r = Math.hypot(...x);
+    if (r > 0.8 * B.R) pts.push({ x, r, s0: Math.cbrt(su.mass[i] / (MATERIALS[['iron', 'granite', 'basalt', 'ice'][su.mat[i]]].rho0 / UNIT.RHO)) });
+  }
+  const S0 = pts.reduce((a, p) => a + p.s0, 0) / pts.length, Rout = Math.max(...pts.map(p => p.r));
+  const dirs = []; for (let k = 0; k < 400; k++) { const z = 1 - 2 * (k + 0.5) / 400, rr = Math.sqrt(1 - z * z), ph = k * 2.39996 + 0.3; dirs.push([rr * Math.cos(ph), rr * Math.sin(ph), z]); }
+  const sd = a => { const m = a.reduce((p, q) => p + q, 0) / a.length; return [m, Math.sqrt(a.reduce((p, q) => p + (q - m) ** 2, 0) / a.length)]; };
+  const field = q => { let s = 0; for (const p of pts) { const R = VOL_K * p.s0, d2 = (q[0] - p.x[0]) ** 2 + (q[1] - p.x[1]) ** 2 + (q[2] - p.x[2]) ** 2; if (d2 < R * R) { const u = 1 - d2 / (R * R); s += u * u * u; } } return s; };
+  const iso = dirs.map(d => { let lo = 0.85 * B.R, hi = Rout + 3 * S0; for (let it = 0; it < 22; it++) { const m = 0.5 * (lo + hi); if (field(d.map(x => x * m)) >= VOL_ISO) lo = m; else hi = m; } return lo; });
+  const sph = dirs.map(d => { let best = 0; for (const p of pts) { const r = SPHERE_K * p.s0, b = p.x[0] * d[0] + p.x[1] * d[1] + p.x[2] * d[2], h = b * b - (p.r * p.r - r * r); if (h >= 0) best = Math.max(best, b + Math.sqrt(h)); } return best; });
+  const [mi, si] = sd(iso), [ms, ss] = sd(sph);
+  ok('12 the iso surface of a body is smooth: no particle bumps', si < 0.05 * S0 && ss > 0.2 * S0 && si < 0.2 * ss && Math.abs((mi - Rout) / S0 - 0.62) < 0.15,
+    `radius spread ${(si / S0).toFixed(3)} spacing (spheres ${(ss / S0).toFixed(3)}); surface ${((mi - Rout) / S0).toFixed(2)} spacing out (spheres ${((ms - Rout) / S0).toFixed(2)}); spacing ${(S0 * 6371).toFixed(0)} km, ${pts.length} outer particles`);
+  // one particle alone: peak 1 < iso (the spray draws it); two at one
+  // spacing: the middle is over the iso (they join as a drop)
+  const pair = 2 * Math.pow(1 - 0.25 / (VOL_K * VOL_K), 3);
+  ok('12 a lone particle stays under the iso level, two touching ones join', 1 < VOL_ISO && pair > VOL_ISO, `peak of one 1.00, middle of a pair ${pair.toFixed(2)}, iso ${VOL_ISO}`);
+  const mb = G => (BG.volBytes(G) / 1e6).toFixed(1) + ' MB';
+  const rb = BG.renderBudget({ cssW: 390, cssH: 844, dpr: 3, touch: true, phone: true }), rd = BG.renderBudget({ cssW: 1600, cssH: 900, dpr: 2 });
+  ok('12 volume tiers: phones get a smaller volume, the governor steps down', rb.grid < rd.grid && rd.grid % 8 === 0 && rb.grid % 8 === 0 && BG.lowerGrid(rd.grid) < rd.grid && BG.lowerGrid(64) === 64 && BG.volBytes(rd.grid) < 40e6,
+    `desktop ${rd.grid}^3 (${mb(rd.grid)}), phone ${rb.grid}^3 (${mb(rb.grid)}); tiers ${BG.GRID_TIERS.join(' ')}`);
+}
+
 function settledEarth(N, seed) {
   const st = buildScenario({ bodies: [{ key: 'earth', spinH: 10 }], impact: {} }, N, seed);
   const prm = makeParams(st, { KG: 1 });
@@ -460,7 +491,7 @@ async function presetTests() {
     const tmp = fs.mkdtempSync((await import('node:os')).tmpdir() + '/pc-naga-'), bad = [];
     const src = f => fs.readFileSync(new URL('./shaders/' + f, import.meta.url), 'utf8');
     for (const f of files.filter(f => f !== 'common.wgsl')) {
-      const code = ['fluid.wgsl', 'smooth.wgsl', 'shade.wgsl', 'debris.wgsl'].includes(f) ? src('common.wgsl') + '\n' + src(f) : src(f);
+      const code = ['fluid.wgsl', 'smooth.wgsl', 'shade.wgsl', 'debris.wgsl', 'vol.wgsl', 'march.wgsl'].includes(f) ? src('common.wgsl') + '\n' + src(f) : src(f);
       fs.writeFileSync(tmp + '/' + f, code);
       const r = spawnSync(naga, [tmp + '/' + f], { encoding: 'utf8' });
       if (r.status !== 0) bad.push(f + ': ' + (r.stderr || r.stdout).trim().split('\n').slice(0, 3).join(' '));
@@ -619,28 +650,43 @@ async function renderTests() {
     let n = 0, sum = 0, white = 0;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (Math.hypot(x - ctr.x, y - ctr.y) >= 0.8 * rpx) continue; const c = at2(x, y); n++; sum += (c[0] + c[1] + c[2]) / 3; if (c[0] > 235 && c[1] > 235) white++; }
     ok('R an all-vapour body is a dim haze, not a pale fog', n > 100 && sum / n < 110 && white === 0, `mean ${(sum / Math.max(n, 1)).toFixed(0)} of 255 over ${n} disc px, ${white} near-white`); }
-  // the filter: depth roughness down; the outline (coverage 0.5) keeps
-  // the area and loses the bump of each particle (a shorter boundary)
-  // (a close view at 960 x 600, so a particle sphere is several px wide)
+  // the surface of a settled body before contact: one smooth planet, not
+  // a heap of particle spheres. A close view (960 x 600, 3 radii) drawn
+  // with the density volume (f.grid 144) and with the old particle
+  // spheres (f.grid 0): the second difference of the view depth and of
+  // the normal map along x over the disc (a facet or a particle bump is a
+  // spike there), and the spread of the limb radius in px.
   const W2 = 960, H2 = 600;
-  ren.resize(W2, H2); f.eye = [X0[0], X0[1] - 3 * R0, X0[2]]; ren.render(f);
-  const ctr2 = ren.project(X0, W2, H2), rpx2 = ren.focal / 3;
-  const zr = new Float32Array((await readTex(ren.rawZ, 8, W2, H2)).a), zs0 = await readTex(ren.smB, 8, W2, H2), zs = new Float32Array(zs0.a);
-  const bprR = Math.ceil(W2 * 8 / 256) * 256 / 8, bprS = zs0.bpr / 8;
-  const inR = (x, y) => zr[(y * bprR + x) * 2] > 0, inS = (x, y) => zs[(y * bprS + x) * 2 + 1] >= 0.5;
-  let covR = 0, covS = 0, perR = 0, perS = 0, rough = [0, 0], cnt = 0;
-  const radR = [], radS = [], rad = (x, y) => Math.hypot(x - ctr2.x, y - ctr2.y), near = (x, y) => Math.abs(rad(x, y) - rpx2) < 0.25 * rpx2;
-  for (let y = 1; y < H2 - 1; y++) for (let x = 1; x < W2 - 1; x++) {
-    const r = k => zr[(y * bprR + x + k) * 2], s = k => zs[(y * bprS + x + k) * 2];
-    if (inR(x, y)) { covR++; if (!inR(x + 1, y) || !inR(x - 1, y) || !inR(x, y + 1) || !inR(x, y - 1)) { perR++; if (near(x, y)) radR.push(rad(x, y)); } }
-    if (inS(x, y)) { covS++; if (!inS(x + 1, y) || !inS(x - 1, y) || !inS(x, y + 1) || !inS(x, y - 1)) { perS++; if (near(x, y)) radS.push(rad(x, y)); } }
-    if (r(-1) > 0 && r(0) > 0 && r(1) > 0 && inS(x - 1, y) && inS(x, y) && inS(x + 1, y)) { rough[0] += Math.abs(r(-1) - 2 * r(0) + r(1)); rough[1] += Math.abs(s(-1) - 2 * s(0) + s(1)); cnt++; }
-  }
-  // the limb of the disc: the spread of the boundary radius (px)
+  ren.resize(W2, H2); f.eye = [X0[0], X0[1] - 3 * R0, X0[2]];
+  const ctr2 = () => ren.project(X0, W2, H2), rpx2 = () => ren.focal / 3;
   const sd = a => { const m = a.reduce((p, q) => p + q, 0) / a.length; return Math.sqrt(a.reduce((p, q) => p + (q - m) ** 2, 0) / a.length); };
-  const sdR = sd(radR), sdS = sd(radS);
-  ok('R depth filter: roughness down, outline smooth, area kept', rough[1] < 0.5 * rough[0] && Math.abs(covS - covR) < 0.05 * covR && sdS < 0.8 * sdR && cnt > 1000,
-    `mean |d2z| raw ${(rough[0] / cnt).toExponential(2)} smoothed ${(rough[1] / cnt).toExponential(2)}; covered px ${covR} raw, ${covS} outline; limb radius spread ${sdR.toFixed(2)} px raw, ${sdS.toFixed(2)} px outline (disc ${rpx2.toFixed(0)} px)`);
+  const surfStats = async grid => {
+    ren.render(Object.assign({}, f, { grid }));
+    const zr = new Float32Array((await readTex(ren.rawZ, 8, W2, H2)).a), nr0 = await readTex(ren.nrm, 8, W2, H2);
+    const nr = new Uint16Array(nr0.a), half = h => { const s = h >> 15 ? -1 : 1, e = (h >> 10) & 31, m = h & 1023; return e ? s * Math.pow(2, e - 15) * (1 + m / 1024) : s * Math.pow(2, -14) * (m / 1024); };
+    const bz = Math.ceil(W2 * 8 / 256) * 256 / 8, bn = nr0.bpr / 8, c = ctr2(), rp = rpx2();
+    const z = (x, y) => zr[(y * bz + x) * 2], n = (x, y, k) => half(nr[(y * bn + x) * 4 + k]);
+    let d2z = 0, d2n = 0, cnt = 0, cov = 0; const limb = [];
+    for (let y = 1; y < H2 - 1; y++) for (let x = 1; x < W2 - 1; x++) {
+      const r = Math.hypot(x - c.x, y - c.y);
+      if (z(x, y) > 0) { cov++; if ((z(x + 1, y) <= 0 || z(x - 1, y) <= 0 || z(x, y + 1) <= 0 || z(x, y - 1) <= 0) && Math.abs(r - rp) < 0.25 * rp) limb.push(r); }
+      if (r > 0.85 * rp || !(z(x - 1, y) > 0 && z(x, y) > 0 && z(x + 1, y) > 0)) continue;
+      d2z += Math.abs(z(x - 1, y) - 2 * z(x, y) + z(x + 1, y));
+      for (let k = 0; k < 3; k++) d2n += Math.abs(n(x - 1, y, k) - 2 * n(x, y, k) + n(x + 1, y, k));
+      cnt++;
+    }
+    return { d2z: d2z / Math.max(cnt, 1), d2n: d2n / Math.max(cnt, 1), cnt, cov, limb: sd(limb) };
+  };
+  const sv = await surfStats(144), cellV = ren.volBox ? ren.volBox.cell : 0, ss = await surfStats(0);
+  ok('R before contact: the volume surface is one smooth body, no particle bumps or cell facets', sv.cnt > 1000 && sv.d2n < 0.25 * ss.d2n && sv.d2z < 0.5 * ss.d2z && sv.limb < 0.8 * ss.limb && Math.abs(sv.cov - ss.cov) < 0.12 * ss.cov && sv.d2n < 0.02,
+    `normal 2nd diff ${sv.d2n.toExponential(2)} (spheres ${ss.d2n.toExponential(2)}), depth 2nd diff ${sv.d2z.toExponential(2)} (spheres ${ss.d2z.toExponential(2)}), limb spread ${sv.limb.toFixed(2)} px (spheres ${ss.limb.toFixed(2)}), covered px ${sv.cov} (spheres ${ss.cov}); disc ${rpx2().toFixed(0)} px, grid 144, cell ${cellV.toFixed(4)} R_E`);
+  // the cutaway on the volume: the plane through the centre gives a flat
+  // face (flag 1) over much of the disc
+  { ren.render(Object.assign({}, f, { grid: 144, cut: { on: true, n: [0, -1, 0], d: X0[1] * -1 } }));
+    const zr = new Float32Array((await readTex(ren.rawZ, 8, W2, H2)).a), bz = Math.ceil(W2 * 8 / 256) * 256 / 8, c = ctr2(), rp = rpx2();
+    let disc = 0, face = 0;
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) { if (Math.hypot(x - c.x, y - c.y) > 0.8 * rp) continue; disc++; if (zr[(y * bz + x) * 2 + 1] > 0.5) face++; }
+    ok('R the cutaway cuts the volume surface flat', face > 0.6 * disc, `${face} of ${disc} disc px on the cut face`); }
   ren.resize(W, H);
   // run through the grazing hit; watch from the side
   f.eye = [0.6, -7, 2.0]; f.target = [0, 0, 0]; f.streakT = 0.05;
@@ -657,21 +703,28 @@ async function renderTests() {
   for (const m of [0, 1, 2, 3, 4]) { f.mode = m; ren.render(f); means.push(scan(await rgb()).mean); }
   let minD = 1e9; for (let i = 0; i < means.length; i++) for (let j = i + 1; j < means.length; j++) minD = Math.min(minD, Math.hypot(...means[i].map((v, c) => v - means[j][c])));
   ok('R the five colour modes give five different images', minD > 4, `smallest mean-colour distance ${minD.toFixed(1)}; means ${means.map(c => c.map(v => v.toFixed(0)).join('/')).join(' ')}`);
-  f.mode = 0; f.cut = { on: true, n: [0, -1, 0], d: 0 };
-  ren.render(f); const cut = scan(await rgb());
-  ok('R the cutaway changes the image', Math.hypot(...cut.mean.map((v, c) => v - means[0][c])) > 3 || Math.abs(cut.lit - post.lit) > 200,
-    `lit px ${post.lit} -> ${cut.lit}, mean ${means[0].map(v => v.toFixed(0)).join('/')} -> ${cut.mean.map(v => v.toFixed(0)).join('/')}`);
+  f.mode = 0; ren.render(f); const at0 = await rgb();
+  f.cut = { on: true, n: [0, -1, 0], d: 0 };
+  ren.render(f); const at1 = await rgb(), cut = scan(at1);
+  let changed = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = at0(x, y), b = at1(x, y); if (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) > 30) changed++; }
+  ok('R the cutaway changes the image', changed > 0.05 * post.lit,
+    `${changed} px changed of ${post.lit} lit; lit px ${post.lit} -> ${cut.lit}, mean ${means[0].map(v => v.toFixed(0)).join('/')} -> ${cut.mean.map(v => v.toFixed(0)).join('/')}`);
   if (ARGS.includes('--time')) {
-    for (const [n, w, h] of [[32768, 1600, 900], [12288, 780, 1688]]) {
+    for (const [n, w, h, grid] of [[32768, 1600, 900, 144], [12288, 780, 1688, 96]]) {
       const s2 = await SphGPU.create(device, n, await Deno.readTextFile(new URL('./shaders/sph.wgsl', import.meta.url)));
       const su = buildScenario(PRESETS[0], n, 2); s2.upload(su, makeParams(su, { KG: 4 })); s2.relaxSteps(5); s2.launch();
       const t2 = device.createTexture({ size: [w, h], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT });
       const r2 = new Renderer(device, { getCurrentTexture: () => t2 }, 'rgba8unorm', await loadRenderCode(u => Deno.readTextFile(u)));
       r2.attach(s2, su); r2.resize(w, h);
-      const g = defaultFrame(); g.eye = [0.5, -4, 1]; g.streakT = 0.05;
+      const g = defaultFrame(); g.eye = [0.5, -4, 1]; g.streakT = 0.05; g.grid = grid;
+      const B = su.bodies, fr = frameTarget(B.map(b => ({ c: b.X, R: b.R })), null, g.fov, w / h); g.vol = { c: fr.target, r: fr.rad };
       for (let k = 0; k < 3; k++) r2.render(g); await device.queue.onSubmittedWorkDone();
-      const t0 = performance.now(); for (let k = 0; k < 20; k++) r2.render(g); await device.queue.onSubmittedWorkDone();
-      console.log(`INFO  render ${n} particles at ${w}x${h}: ${((performance.now() - t0) / 20).toFixed(2)} ms per frame`);
+      let t0 = performance.now(); for (let k = 0; k < 20; k++) r2.render(g); await device.queue.onSubmittedWorkDone();
+      const cached = (performance.now() - t0) / 20;
+      t0 = performance.now(); for (let k = 0; k < 20; k++) { r2.volK = -1; r2.render(g); } await device.queue.onSubmittedWorkDone();
+      const built = (performance.now() - t0) / 20;
+      const z = Math.hypot(...g.eye), cellPx = r2.volBox.cell * r2.focal / z;
+      console.log(`INFO  render ${n} particles at ${w}x${h}, volume ${grid}^3 (cell ${r2.volBox.cell.toFixed(4)} R_E, ${cellPx.toFixed(1)} px at the target): ${built.toFixed(2)} ms per frame with the volume built, ${cached.toFixed(2)} ms with it kept`);
       r2.destroy(); s2.destroy(); t2.destroy();
     }
   }
@@ -772,7 +825,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); volumeTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {

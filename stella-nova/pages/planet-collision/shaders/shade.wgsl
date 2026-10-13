@@ -4,7 +4,9 @@
 // ----------------------------------------------------------------------------
 //  Full-screen passes on one triangle (vs_full), in the scene pass:
 //    fs_sky       stars and the sun disc (the roche-limit sky, cut down).
-//    fs_surface   the smoothed depth (smooth.wgsl) -> position and normal;
+//    fs_surface   the smoothed depth (smooth.wgsl) -> position; the normal
+//                 of the depth pass (the field gradient of march.wgsl, or
+//                 the sphere of fluid.wgsl), else from the depth;
 //                 the coverage -> the outline, blended over one pixel;
 //                 the fields of fluid.wgsl fs_attr -> albedo, temperature,
 //                 speed; lit by the sun with shadows of the bodies (spheres
@@ -29,6 +31,7 @@
 @group(2) @binding(2) var a1Tex: texture_2d<f32>;
 @group(2) @binding(3) var a2Tex: texture_2d<f32>;
 @group(2) @binding(4) var thickTex: texture_2d<f32>;
+@group(2) @binding(5) var nTex: texture_2d<f32>;    // the normal of the depth pass (w 1 where set)
 
 struct VOut { @builtin(position) pos: vec4f };
 @vertex
@@ -175,7 +178,11 @@ fn fs_surface(in: VOut) -> SurfOut {
   }
   let z = zRaw;
   let P = posAt(p, z);
-  let n = normalAt(p, z, P);
+  // the normal of the depth pass (the volume gradient or the sphere), or
+  // from the smoothed depth on the pixels that the outline blur adds
+  let nt = textureLoad(nTex, p, 0);
+  var n = normalAt(p, z, P);
+  if (nt.w > 0.5) { n = normalize(nt.xyz); }
   let a0 = textureLoad(a0Tex, p, 0);
   let a1 = textureLoad(a1Tex, p, 0);
   let a2 = textureLoad(a2Tex, p, 0);

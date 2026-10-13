@@ -19,11 +19,13 @@
 //
 //  RENDER. The renderer (render.js) costs fill rate: 5.8 ms per frame at
 //  1600 x 900 (tests.mjs --time). renderBudget caps the drawing buffer at
-//  PIXELS[desktop | touch] and sets the debris fragments per particle and
-//  the filter iterations.
+//  PIXELS[desktop | touch] and sets the debris fragments per particle, the
+//  filter iterations and the volume size (GRID: cells per side of the
+//  density volume; memory volBytes). The governor in main.js steps the
+//  volume down GRID_TIERS when the frame stays slow at one step a frame.
 //
 //  EXPORTS  PROFILES, pickProfile, stepMs, stepsPerFrame, gpuBytes, LIMIT,
-//           PIXELS, renderBudget
+//           PIXELS, renderBudget, GRID, GRID_TIERS, volBytes, lowerGrid
 // ============================================================================
 import { sphBytes } from './engine.js';
 
@@ -57,10 +59,17 @@ export function gpuBytes(N) { return sphBytes(N); }
 
 // drawing-buffer pixels the renderer may use
 export const PIXELS = { desktop: 2.2e6, touch: 1.0e6 };
+// density volume cells per side (render.js "_volume"), and the steps down
+export const GRID = { desktop: 144, touch: 96 };
+export const GRID_TIERS = [144, 128, 112, 96, 80, 64];
+// GPU bytes of a G^3 volume: u32 sums, rgba16float field, brick marks
+export function volBytes(G) { return G * G * G * (4 + 8) + Math.pow(G / 8, 3) * 4; }
+// the next tier under G (G when it is the last)
+export function lowerGrid(G) { const t = GRID_TIERS.find(x => x < G); return t || G; }
 // o: { cssW, cssH, dpr, touch, phone } -> { ratio, w, h, frags, smooth }
 export function renderBudget(o) {
   const touch = !!(o.touch || o.phone), cap = touch ? PIXELS.touch : PIXELS.desktop;
   const css = Math.max(1, o.cssW * o.cssH);
   const ratio = Math.max(0.5, Math.min(o.dpr || 1, 2, Math.sqrt(cap / css)));
-  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 2 : 3, smooth: 2 };
+  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 2 : 3, smooth: 2, grid: touch ? GRID.touch : GRID.desktop };
 }

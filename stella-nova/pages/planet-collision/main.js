@@ -19,7 +19,8 @@
 //
 //  GOVERNOR. Every 10 frames: a smoothed frame time over 24 ms cuts the cap
 //  on the steps per frame by a quarter, one under 17 ms raises it by one
-//  (fn govern). The sim time per frame also shrinks by itself at the
+//  (fn govern). At one step a frame and still over 30 ms, the density
+//  volume steps down one tier (budget.js GRID_TIERS), at most every 3 s. The sim time per frame also shrinks by itself at the
 //  impact (the CFL time step).
 //
 //  CAMERA (fn frameOf). view.js frames the contact (Follow on): the eye
@@ -58,7 +59,7 @@ import { SphGPU, loadSphCode } from './engine.js';
 import { buildScenario } from './build.js';
 import { makeParams } from './sph.js';
 import { PRESETS, presetByKey, randomScenario, composition, VARIANTS, titleOf } from './scenarios.js';
-import { pickProfile, renderBudget } from './budget.js';
+import { pickProfile, renderBudget, lowerGrid } from './budget.js';
 import { Renderer, loadRenderCode, loadMaps, defaultFrame, norm, cross, sub } from './render.js';
 import { makeView, frameTarget, stepView, cameraOf, impactYaw, sideFor, bandFrom } from './view.js';
 import { UNIT, SOURCES, BODIES } from './data.js';
@@ -131,6 +132,7 @@ function resize() {
   const c = $('gpu'), b = renderBudget({ cssW: innerWidth, cssH: innerHeight, dpr: devicePixelRatio, touch, phone });
   c.width = b.w; c.height = b.h;
   S.f.frags = b.frags; S.f.smooth = b.smooth;
+  S.f.grid = Math.min(b.grid, S.gridCap || b.grid);
   S.ren.resize(b.w, b.h);
   const a = $('arc'); a.width = Math.round(innerWidth * Math.min(2, devicePixelRatio || 1)); a.height = Math.round(innerHeight * Math.min(2, devicePixelRatio || 1));
 }
@@ -202,6 +204,9 @@ function govern(ms) {
   if (S.frameNo % 10) return;
   if (S.dtAvg > 24 && S.cap > 1) S.cap = Math.max(1, Math.floor(S.cap * 0.75));
   else if (S.dtAvg < 17 && S.cap < 8) S.cap++;
+  else if (S.dtAvg > 30 && S.cap === 1 && S.f.grid && S.now - (S.gridAt || 0) > 3000) {
+    S.gridCap = lowerGrid(S.f.grid); S.f.grid = S.gridCap; S.gridAt = S.now;
+  }
 }
 
 // The screen band (CSS px from the top t and from the bottom b) that no
@@ -227,6 +232,8 @@ export function frameOf(now, dt, steps) {
   const v = S.dir && S.dir.view ? S.dir.view(S.view, now) : S.view;
   const cam = cameraOf(v, clearBand(), f.fov, innerHeight, aspect);
   f.eye = cam.eye; f.target = cam.target; f.up = cam.up; f.time = now / 1000;
+  // the density volume holds the framed matter (render.js "_volume")
+  f.vol = S.cam ? { c: S.cam.target, r: S.cam.rad } : null;
   f.sun = S.dir && S.dir.sun ? S.dir.sun : SUN;
   f.mode = S.dir && S.dir.mode != null ? S.dir.mode : S.mode;
   const cutOn = S.dir && S.dir.cut != null ? S.dir.cut : S.cut;

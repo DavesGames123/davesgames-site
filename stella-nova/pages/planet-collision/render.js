@@ -9,8 +9,17 @@
 //  FRAME (render(f), one command encoder)
 //    centres   centres.wgsl: the mean position of each body (for the
 //              atmospheres and the shadows)
-//    depth     fluid.wgsl fs_depth: fluid particles as spheres -> view depth
-//              (rg32float: depth, cut-face flag) + reversed-Z depth
+//    volume    vol.wgsl (fn _volume): a cube of f.grid^3 cells round the
+//              framed matter (f.vol { c, r }, or the view at the target);
+//              each fluid and debris particle adds a smooth kernel; the
+//              field and its gradient go to a 3D texture, with brick
+//              marks for empty-space skips. Rebuilt only when the solver
+//              stepped or the cube moved.
+//    depth     march.wgsl fs_march: the iso surface of the volume (one
+//              liquid surface: the bodies, the neck, the splash), and
+//              fluid.wgsl fs_depth: fluid particles outside the cube as
+//              spheres -> view depth (rg32float: depth, cut-face flag),
+//              normal (rgba16float) + reversed-Z depth
 //    fields    fluid.wgsl fs_attr: T, material, start position, body, speed,
 //              mixing, weighted to the front layer (3 x rgba16float, additive)
 //    vapour    fluid.wgsl fs_thick: the chord through vapour particles in
@@ -40,7 +49,15 @@
 //    ren.project(p, cssW, cssH)   world -> CSS px, for labels
 //    ren.destroy()
 //
+//  VOLUME SIZE (f.grid, budget.js GRID): desktop 144^3 cells: 11.9 MB of
+//  u32 sums + 23.9 MB of rgba16float field; phones 96^3: 3.5 + 7.1 MB.
+//  The cell is 2.2 r / (G - 1), never under 0.3 of the finest particle
+//  spacing (that caps the scatter cost), and snapped to steps of 2^(1/4)
+//  and to the cell lattice, so the surface does not shimmer as the camera
+//  moves. f.grid 0 turns the volume off (all spheres: the old look).
+//
 //  grep -n targets
+//    volume ............... "_volume(", "_makeVolume(", "export const VOL_K"
 //    looks of the bodies .. "export const BODY_LOOK"
 //    frame defaults ....... "export function defaultFrame"
 //    uniform layout ....... "writeFrame("
@@ -57,7 +74,7 @@ import { ETA_H } from './build.js';
 const HDR = 'rgba16float';
 const DEPTH = 'depth32float';
 const BLOOM_LEVELS = 6;
-const FRAME_BYTES = 544;
+const FRAME_BYTES = 576;
 export const MAP_LAYERS = ['earth', 'earth_clouds', 'moon', 'mars', 'mercury', 'venus'];
 export const MAP_SIZE = [1024, 512];
 
@@ -79,6 +96,10 @@ export const BODY_LOOK = {
 };
 // sphere radius of a fluid particle over its spacing (m / rho0)^(1/3)
 export const SPHERE_K = 0.62;
+// the volume kernel radius over the spacing and the iso level of the
+// field (tests.mjs 12: the iso surface of a settled body sits 0.62
+// spacing out, like the spheres, with a radius spread of 0.01 spacing)
+export const VOL_K = 1.8, VOL_ISO = 1.1;
 
 // ── 4x4 matrices, column-major (a copy of roche-limit render.js M4) ───────
 export const M4 = {
@@ -100,7 +121,7 @@ export function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 export function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
 export function norm(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
 
-const SHADERS = ['common', 'fluid', 'smooth', 'shade', 'debris', 'centres', 'post'];
+const SHADERS = ['common', 'fluid', 'smooth', 'shade', 'debris', 'centres', 'post', 'vol', 'march'];
 export async function loadRenderCode(read) {
   const out = {};
   await Promise.all(SHADERS.map(async n => {
@@ -139,6 +160,8 @@ export function defaultFrame() {
     flashes: [],                  // [{ p, r, I, T }]
     exposure: 1.0, bloom: 0.035, bloomThreshold: 2.0, vignette: 0.3,
     coolH: -1,                    // sim hours since the first contact (< 0 before): the skin cools
+    grid: 144,                    // volume cells per side (0: no volume, particle spheres)
+    vol: null,                    // { c, r }: the sphere the volume must hold (default: the view at the target)
   };
 }
 
@@ -149,9 +172,9 @@ export class Renderer {
     this.frame = new Float32Array(FRAME_BYTES / 4);
     this.modules = {};
     const pre = code.common;
-    for (const k of ['fluid', 'smooth', 'shade', 'debris']) this.modules[k] = device.createShaderModule({ code: pre + '\n' + code[k], label: 'pc ' + k + '.wgsl' });
+    for (const k of ['fluid', 'smooth', 'shade', 'debris', 'vol', 'march']) this.modules[k] = device.createShaderModule({ code: pre + '\n' + code[k], label: 'pc ' + k + '.wgsl' });
     for (const k of ['centres', 'post']) this.modules[k] = device.createShaderModule({ code: code[k], label: 'pc ' + k + '.wgsl' });
-    this.look = { surf: [SPHERE_K, 0.05, 1, 1.6], bodies: [], speed: 1, unit: 1 };
+    this.look = { surf: [SPHERE_K, 0.05, 1, 1.6], bodies: [], speed: 1, unit: 1, s0min: 0 };
     this._make();
   }
   async compilationMessages() {
@@ -174,13 +197,22 @@ export class Renderer {
       { binding: 2, visibility: ALL, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: ALL, sampler: { type: 'filtering' } }] });
     this.bgl1 = dev.createBindGroupLayout({ label: 'pc g1', entries: [0, 1, 2, 3, 4, 5].map(b => ({ binding: b, visibility: VF, buffer: ro })) });
+    // the volume compute: the particle buffers it reads (8 storage buffers at most per stage)
+    this.bgl1c = dev.createBindGroupLayout({ label: 'pc g1 volume', entries: [0, 1, 2, 3, 5].map(b => ({ binding: b, visibility: S.COMPUTE, buffer: ro })) });
     this.bglZ = dev.createBindGroupLayout({ label: 'pc gZ', entries: [{ binding: 0, visibility: VF, texture: { sampleType: 'unfilterable-float' } }] });
     this.bglSm = dev.createBindGroupLayout({ label: 'pc gSm', entries: [
       { binding: 0, visibility: S.COMPUTE, texture: { sampleType: 'unfilterable-float' } },
       { binding: 1, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float' } }] });
     this.bglShade = dev.createBindGroupLayout({ label: 'pc gShade', entries: [
       ...[0, 1, 2, 3].map(b => ({ binding: b, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } })),
-      { binding: 4, visibility: S.FRAGMENT, texture: { sampleType: 'float' } }] });
+      { binding: 4, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 5, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } }] });
+    this.bglVolC = dev.createBindGroupLayout({ label: 'pc gVolC', entries: [
+      { binding: 0, visibility: S.COMPUTE, buffer: { type: 'storage' } }, { binding: 1, visibility: S.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 2, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } }] });
+    this.bglMarch = dev.createBindGroupLayout({ label: 'pc gMarch', entries: [
+      { binding: 0, visibility: S.FRAGMENT, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 1, visibility: S.FRAGMENT, buffer: ro }, { binding: 2, visibility: S.FRAGMENT, sampler: { type: 'filtering' } }] });
     this.bglC = dev.createBindGroupLayout({ label: 'pc gC', entries: [
       { binding: 0, visibility: S.COMPUTE, buffer: { type: 'uniform' } }, { binding: 1, visibility: S.COMPUTE, buffer: ro },
       { binding: 2, visibility: S.COMPUTE, buffer: ro }, { binding: 3, visibility: S.COMPUTE, buffer: { type: 'storage' } },
@@ -200,7 +232,11 @@ export class Renderer {
     const dAlwaysW = { format: DEPTH, depthWriteEnabled: true, depthCompare: 'always' };
     const dNone = { format: DEPTH, depthWriteEnabled: false, depthCompare: 'always' };
     const L01 = pl(this.bgl0, this.bgl1), L01Z = pl(this.bgl0, this.bgl1, this.bglZ), LS = pl(this.bgl0, this.bgl1, this.bglShade);
-    this.pDepth = rp(M.fluid, 'vs_sphere', 'fs_depth', L01, [tgt('rg32float')], dW, 'depth');
+    this.pDepth = rp(M.fluid, 'vs_sphere', 'fs_depth', L01, [tgt('rg32float'), tgt(HDR)], dW, 'depth');
+    this.pMarch = rp(M.march, 'vs_march', 'fs_march', pl(this.bgl0, this.bgl1, this.bglMarch), [tgt('rg32float'), tgt(HDR)], dW, 'march');
+    const LV = pl(this.bgl0, this.bgl1c, this.bglVolC);
+    this.pVolScatter = dev.createComputePipeline({ label: 'pc volScatter', layout: LV, compute: { module: M.vol, entryPoint: 'cs_volScatter' } });
+    this.pVolResolve = dev.createComputePipeline({ label: 'pc volResolve', layout: LV, compute: { module: M.vol, entryPoint: 'cs_volResolve' } });
     this.pAttr = rp(M.fluid, 'vs_sphereWide', 'fs_attr', L01Z, [tgt(HDR, add), tgt(HDR, add), tgt(HDR, add)], undefined, 'fields');
     this.pThick = rp(M.fluid, 'vs_thick', 'fs_thick', L01Z, [tgt('rg16float', add)], undefined, 'vapour');
     const LSm = pl(this.bgl0, this.bgl1, this.bglSm);
@@ -266,6 +302,7 @@ export class Renderer {
       this.partBuf = dev.createBuffer({ size: this.nwg * 64, usage: U.STORAGE, label: 'pc centres partial' });
       const b = sim.buf;
       this.bg1 = dev.createBindGroup({ layout: this.bgl1, label: 'pc g1', entries: [b.pos, b.vel, b.aux, b.tag, this.origBuf, b.th].map((x, i) => ({ binding: i, resource: { buffer: x } })) });
+      this.bg1c = dev.createBindGroup({ layout: this.bgl1c, label: 'pc g1 volume', entries: [[0, b.pos], [1, b.vel], [2, b.aux], [3, b.tag], [5, b.th]].map(([i, x]) => ({ binding: i, resource: { buffer: x } })) });
       this.bgC = dev.createBindGroup({ layout: this.bglC, label: 'pc gC', entries: [this.cpBuf, b.pos, b.tag, this.partBuf, this.centresBuf].map((x, i) => ({ binding: i, resource: { buffer: x } })) });
       this.sim = sim;
     }
@@ -290,6 +327,7 @@ export class Renderer {
     const mk = (fmt, usage, size = [w, h], label) => dev.createTexture({ size, format: fmt, usage, label: 'pc ' + label });
     const RT = T.RENDER_ATTACHMENT | T.TEXTURE_BINDING;
     this.rawZ = mk('rg32float', RT | T.COPY_SRC, [w, h], 'raw depth');
+    this.nrm = mk(HDR, RT | T.COPY_SRC, [w, h], 'normal');
     this.depthTex = mk(DEPTH, T.RENDER_ATTACHMENT, [w, h], 'depth');
     this.smA = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING, [w, h], 'smooth A');
     this.smB = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING | T.COPY_SRC, [w, h], 'smooth B');
@@ -299,14 +337,15 @@ export class Renderer {
     this.bloom = [];
     let bw = w, bh = h;
     for (let i = 0; i < BLOOM_LEVELS; i++) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); this.bloom.push(mk(HDR, RT, [bw, bh], 'bloom ' + i)); }
-    this.targets = [this.rawZ, this.depthTex, this.smA, this.smB, ...this.attr, this.thick, this.hdr, ...this.bloom];
-    this.v = { rawZ: this.rawZ.createView(), depth: this.depthTex.createView(), smA: this.smA.createView(), smB: this.smB.createView(),
+    this.targets = [this.rawZ, this.nrm, this.depthTex, this.smA, this.smB, ...this.attr, this.thick, this.hdr, ...this.bloom];
+    this.v = { rawZ: this.rawZ.createView(), nrm: this.nrm.createView(), depth: this.depthTex.createView(), smA: this.smA.createView(), smB: this.smB.createView(),
       attr: this.attr.map(t => t.createView()), thick: this.thick.createView(), hdr: this.hdr.createView(), bloom: this.bloom.map(t => t.createView()) };
     this.bgZ = dev.createBindGroup({ layout: this.bglZ, entries: [{ binding: 0, resource: this.v.rawZ }] });
     const sm = (a, b) => dev.createBindGroup({ layout: this.bglSm, entries: [{ binding: 0, resource: a }, { binding: 1, resource: b }] });
     this.bgSm = { rawA: sm(this.v.rawZ, this.v.smA), AB: sm(this.v.smA, this.v.smB), BA: sm(this.v.smB, this.v.smA) };
     this.bgShade = dev.createBindGroup({ layout: this.bglShade, entries: [
-      { binding: 0, resource: this.v.smB }, ...this.v.attr.map((v, i) => ({ binding: 1 + i, resource: v })), { binding: 4, resource: this.v.thick }] });
+      { binding: 0, resource: this.v.smB }, ...this.v.attr.map((v, i) => ({ binding: 1 + i, resource: v })), { binding: 4, resource: this.v.thick },
+      { binding: 5, resource: this.v.nrm }] });
     const pg = (buf, src, bl) => dev.createBindGroup({ layout: this.bglPost, entries: [
       { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.sampClamp }, { binding: 3, resource: (bl || this.dummy).createView() }] });
     this.downBG = this.bloom.map((t, i) => pg(this.postBufs[i], i === 0 ? this.hdr : this.bloom[i - 1]));
@@ -345,6 +384,8 @@ export class Renderer {
     d[132] = this.sim && this.sim.prm ? this.sim.prm.hmax : 1e9;
     d[133] = Math.max(f.near, dot(sub(f.target, f.eye), view.f));
     d[134] = f.coolH ?? -1;
+    const vb = this.volBox;
+    d.set(vb ? [vb.o[0], vb.o[1], vb.o[2], vb.cell, vb.G, VOL_ISO, VOL_K, 0] : [0, 0, 0, 0, 0, VOL_ISO, VOL_K, 0], 136);
     this.dev.queue.writeBuffer(this.frameBuf, 0, d);
     this.view = view; this.vp = vp; this.focal = focal;
   }
@@ -359,17 +400,21 @@ export class Renderer {
   render(f) {
     if (!this.sim || !this.W) return;
     const dev = this.dev, n = this.sim.n, enc = dev.createCommandEncoder({ label: 'pc frame' });
+    const rebuild = this._volBox(f);
     this.writeFrame(f);
     // centres
     { const p = enc.beginComputePass(); p.setBindGroup(0, this.bgC);
       p.setPipeline(this.pCPart); p.dispatchWorkgroups(Math.max(1, Math.ceil(n / 256)));
       p.setPipeline(this.pCFinal); p.dispatchWorkgroups(1); p.end(); }
     const clear0 = { r: 0, g: 0, b: 0, a: 0 };
-    // depth of the fluid spheres
-    { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.rawZ, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }],
+    if (rebuild) this._volume(enc);
+    // depth: the iso surface of the volume, and the fluid spheres outside it
+    { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.rawZ, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }, { view: this.v.nrm, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }],
         depthStencilAttachment: { view: this.v.depth, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' } });
       p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1);
-      p.setPipeline(this.pDepth); p.draw(6, n); p.end(); }
+      p.setPipeline(this.pDepth); p.draw(6, n);
+      if (this.volBox) { p.setBindGroup(2, this.bgMarch); p.setPipeline(this.pMarch); p.draw(3); }
+      p.end(); }
     // the fields of the front layer
     { const p = enc.beginRenderPass({ colorAttachments: this.v.attr.map(view => ({ view, loadOp: 'clear', storeOp: 'store', clearValue: clear0 })) });
       p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgZ);
@@ -401,6 +446,55 @@ export class Renderer {
     this._bloom(enc, f); this._final(enc, f);
     dev.queue.submit([enc.finish()]);
   }
+  // The volume of G^3 cells: sums, field texture, brick marks.
+  _makeVolume(G) {
+    const dev = this.dev, U = GPUBufferUsage, T = GPUTextureUsage, NB = G / 8;
+    this._dropVolume();
+    this.vol = {
+      G,
+      acc: dev.createBuffer({ size: G * G * G * 4, usage: U.STORAGE | U.COPY_DST, label: 'pc volume sums' }),
+      bricks: dev.createBuffer({ size: Math.max(16, NB * NB * NB * 4), usage: U.STORAGE | U.COPY_DST, label: 'pc volume bricks' }),
+      tex: dev.createTexture({ size: [G, G, G], dimension: '3d', format: 'rgba16float', usage: T.STORAGE_BINDING | T.TEXTURE_BINDING, label: 'pc volume field' }),
+    };
+    const v = this.vol, view = v.tex.createView({ dimension: '3d' });
+    this.bgVolC = dev.createBindGroup({ layout: this.bglVolC, entries: [
+      { binding: 0, resource: { buffer: v.acc } }, { binding: 1, resource: { buffer: v.bricks } }, { binding: 2, resource: view }] });
+    this.bgMarch = dev.createBindGroup({ layout: this.bglMarch, entries: [
+      { binding: 0, resource: view }, { binding: 1, resource: { buffer: v.bricks } }, { binding: 2, resource: this.sampClamp }] });
+    this.volKey = '';
+  }
+  _dropVolume() {
+    if (!this.vol) return;
+    this.vol.acc.destroy(); this.vol.bricks.destroy(); this.vol.tex.destroy();
+    this.vol = null; this.volBox = null;
+  }
+  // The cube of this frame (this.volBox: { o, cell, G }, or null) and
+  // whether its field must be built again.
+  _volBox(f) {
+    const G = Math.max(0, Math.floor((f.grid ?? 144) / 8) * 8);
+    if (!G) { this._dropVolume(); return false; }
+    if (!this.vol || this.vol.G !== G) this._makeVolume(G);
+    const c = f.vol && f.vol.c ? f.vol.c : f.target;
+    const r = f.vol && f.vol.r > 0 ? f.vol.r : Math.hypot(...sub(f.target, f.eye)) * Math.tan(f.fov / 2);
+    let cell = Math.max(2.2 * r / (G - 1), 0.3 * (this.look.s0min || 0));
+    cell = Math.pow(2, Math.round(4 * Math.log2(cell)) / 4);
+    const o = c.map(x => (Math.round(x / cell) - (G - 1) / 2) * cell);
+    this.volBox = { o, cell, G };
+    const key = [G, cell, ...o].join();
+    const k = this.sim.k, again = key !== this.volKey || k !== this.volK || k === 0 || this.volSim !== this.sim || this.volSetup !== this.setup;
+    this.volKey = key; this.volK = k; this.volSim = this.sim; this.volSetup = this.setup;
+    return again;
+  }
+  _volume(enc) {
+    const v = this.vol, G = v.G, NB = G / 8, np = this.sim.np;
+    enc.clearBuffer(v.acc); enc.clearBuffer(v.bricks);
+    const p = enc.beginComputePass({ label: 'pc volume' });
+    p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1c); p.setBindGroup(2, this.bgVolC);
+    p.setPipeline(this.pVolScatter); p.dispatchWorkgroups(Math.min(np, 65535), Math.ceil(np / 65535));
+    p.setPipeline(this.pVolResolve); const w = Math.ceil(G / 4); p.dispatchWorkgroups(w, w, w);
+    p.end();
+    return NB;
+  }
   _bloom(enc, f) {
     const dev = this.dev, pb = this._pb || (this._pb = new Float32Array(8));
     let sw = this.W, sh = this.H;
@@ -431,7 +525,7 @@ export class Renderer {
   destroy() {
     for (const t of this.targets || []) t.destroy();
     for (const b of [this.frameBuf, this.centresBuf, this.cpBuf, this.origBuf, this.partBuf, ...this.postBufs]) if (b) b.destroy();
-    this.mapTex.destroy(); this.dummy.destroy();
+    this.mapTex.destroy(); this.dummy.destroy(); this._dropVolume();
     this.targets = null; this.sim = null;
   }
 }
@@ -447,8 +541,10 @@ export function lookOf(setup) {
     return { style: L.style, atm: L.atm, th: L.th, R: B.R + SPHERE_K * s0, s0 };
   });
   const s0 = bodies[0].s0;
+  // the finest spacing: iron (the densest material) of the lightest particles
+  const s0min = Math.min(...setup.bodies.map(B => Math.cbrt(B.mp / (MATERIALS.iron.rho0 / UNIT.RHO))));
   return {
-    bodies,
+    bodies, s0min,
     // depth band: about one sphere; filter: one sphere diameter in px
     surf: [SPHERE_K, 1.6 * SPHERE_K * s0, 1.0, 1.6],
     speed: 1.5 * setup.impact.vesc,

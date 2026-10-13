@@ -9,13 +9,17 @@
 //  spheres, not a blur: the smoothing keeps depth edges (bilateral).
 //
 //    vs_sphere + fs_depth   pass 1: one camera-facing quad per fluid
-//                           particle, ray-sphere hit per pixel, writes the
-//                           view depth (r32float) and the reversed-Z depth.
+//                           particle OUTSIDE the density volume (inside
+//                           it, march.wgsl draws the iso surface in the
+//                           same pass), ray-sphere hit per pixel, writes
+//                           the view depth + cut flag (rg32float), the
+//                           normal (rgba16float) and the reversed-Z depth.
 //                           The cutaway plane cuts the spheres: a pixel
 //                           behind the plane takes the plane hit, so the
 //                           cut face is flat.
-//    vs_sphere + fs_attr    pass 2: the same quads, 1.6 x larger, add the
-//                           particle fields (T, material, start position,
+//    vs_sphereWide + fs_attr  pass 2: quads 1.6 x the sphere for every
+//                           fluid and debris particle, add the particle
+//                           fields (T, material, start position,
 //                           body, speed, mixing) weighted by a kernel and by
 //                           the distance to the front depth of pass 1 (only
 //                           the front layer counts; where pass 1 drew
@@ -54,10 +58,18 @@ fn culled() -> SOut {
   o.pos = vec4f(2.0, 2.0, 2.0, 1.0);
   return o;
 }
-// grow: the quad size over the sphere radius (1 for depth, 1.6 for fields)
+// grow: the quad size over the sphere radius (1 for depth, 1.6 for
+// fields). The depth quads: fluid particles outside the volume only. The
+// field quads: fluid and debris (the iso surface holds both).
 fn sphereVert(vi: u32, ii: u32, grow: f32) -> SOut {
-  if (ii >= arrayLength(&pTag) || klass(ii) != K_FLUID) { return culled(); }
+  if (ii >= arrayLength(&pTag)) { return culled(); }
+  let kl = klass(ii);
+  if (kl == K_VAPOUR) { return culled(); }
   let x = pPos[ii].xyz;
+  if (grow < 1.5) {
+    if (kl != K_FLUID) { return culled(); }
+    if (volOn() && inVolume(x, kernelCells(ii) + 1.0)) { return culled(); }
+  }
   let r = U0.surf.x * spacing0(ii);
   // a whole sphere on the removed side of the cut plane is gone
   if (U0.mode.y > 0.5 && dot(U0.cut.xyz, x) - r > U0.cut.w) { return culled(); }
@@ -113,7 +125,7 @@ fn hitSphere(D: vec3f, c: vec3f, r: f32) -> vec2f {
   return vec2f(t0, 0.0);
 }
 
-struct DOut { @location(0) z: vec4f, @builtin(frag_depth) depth: f32 };
+struct DOut { @location(0) z: vec4f, @location(1) n: vec4f, @builtin(frag_depth) depth: f32 };
 @fragment
 fn fs_depth(in: SOut) -> DOut {
   let D = rayAt(in.pos.xy);
@@ -121,6 +133,10 @@ fn fs_depth(in: SOut) -> DOut {
   if (h.x <= 0.0) { discard; }
   var o: DOut;
   o.z = vec4f(h.x, h.y, 0.0, 0.0);
+  let P = U0.eye.xyz + h.x * D;
+  var n = (P - in.centre.xyz) / in.centre.w;
+  if (h.y > 0.5) { n = select(-U0.cut.xyz, U0.cut.xyz, dot(U0.cut.xyz, U0.eye.xyz - P) > 0.0); }
+  o.n = vec4f(n, 1.0);
   o.depth = depthOfZ(h.x);
   return o;
 }

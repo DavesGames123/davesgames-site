@@ -96,14 +96,16 @@ export function sideFor(d, sun) {
 // bodies: [{ c: [x,y,z] or null, R }] (index 0 the target); contactT: sim
 // hours since the first contact (null before); fov: vertical, radians;
 // aspect: width / height; o: { axis (the axis before), ext (ejecta radius
-// about the remnant, code units) }. Returns { target, dist, axis, p }.
+// about the remnant, code units) }. Returns { target, dist, axis, p, rad }
+// (rad: the radius about target that the frame holds; render.js sizes its
+// density volume to it).
 export function frameTarget(bodies, contactT, fov, aspect, o = {}) {
   const live = bodies.filter(b => b && b.c);
-  if (!live.length) return { target: [0, 0, 0], dist: 6, axis: o.axis || [1, 0, 0], p: [0, 0, 0] };
+  if (!live.length) return { target: [0, 0, 0], dist: 6, axis: o.axis || [1, 0, 0], p: [0, 0, 0], rad: 2 };
   const half = halfAngle(fov, aspect);
   const A = bodies[0] && bodies[0].c ? bodies[0] : live[0];
   const B = bodies[1] && bodies[1].c ? bodies[1] : null;
-  if (!B) return { target: A.c.slice(), dist: 1.6 * A.R / Math.sin(half), axis: o.axis || [1, 0, 0], p: A.c.slice() };
+  if (!B) return { target: A.c.slice(), dist: 1.6 * A.R / Math.sin(half), axis: o.axis || [1, 0, 0], p: A.c.slice(), rad: 1.45 * A.R };
   const ax = pairAxis([A, B], o.axis);
   const p = contactPoint(A, B);
   // the box round both spheres
@@ -112,7 +114,7 @@ export function frameTarget(bodies, contactT, fov, aspect, o = {}) {
   const mid = lo.map((v, k) => 0.5 * (v + hi[k]));
   if (contactT == null) {
     const rad = 0.5 * Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
-    return { target: mid, dist: 1.08 * rad / Math.sin(half), axis: ax.d, p };
+    return { target: mid, dist: 1.08 * rad / Math.sin(half), axis: ax.d, p, rad };
   }
   const w = Math.min(1, Math.max(0, contactT) / 2);
   const target = p.map((x, k) => x + (mid[k] - x) * w);
@@ -123,7 +125,7 @@ export function frameTarget(bodies, contactT, fov, aspect, o = {}) {
   spheres.push({ c: A.c, R: ej });
   let rad = 0;
   for (const s of spheres) rad = Math.max(rad, len3([s.c[0] - target[0], s.c[1] - target[1], s.c[2] - target[2]]) + s.R);
-  return { target, dist: 1.1 * rad / Math.sin(half), axis: ax.d, p };
+  return { target, dist: 1.1 * rad / Math.sin(half), axis: ax.d, p, rad };
 }
 
 // Move the view toward goal { target, dist } over dt seconds (tau: the time

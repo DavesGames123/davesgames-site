@@ -17,7 +17,7 @@ All modules are static ES modules with no DOM. Only `engine.js` needs WebGPU.
 | `analysis.js` | `outcome(readback, n, bodies)`: the largest body, the disk and the escaping mass (Canup 2004 orbits), T99. |
 | `arc.js` | `previewArc(setup)`: the point-mass path of the approach, for the aim panel. |
 | `budget.js` | `PROFILES`, `pickProfile`, `stepMs`, `stepsPerFrame`, `gpuBytes`. |
-| `render.js` | `Renderer`: the fluid surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
+| `render.js` | `Renderer`: the density volume and its iso surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `vol`, `march`, `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
 | `view.js` | The camera: the eye looks at the contact point from the side (perpendicular to the approach axis), frames both bodies and the ejecta, the user's orbit as an offset (no DOM). tests.mjs 11 checks it. |
 | `main.js`, `index.html`, `style.css` | The page: boot, one run, the frame loop, the bar, the aim panel, the phone dock and sheets, the caption and the outcome numbers. `window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS }`; `S.dir` is the hook for a camera director. |
 | `saver-plan.js`, `saver.js` | The screensaver: the seeded reel (presets and five random draws), the shots (approach, slow-motion impact held 8 s past contact, splash, ejecta, then a late cutaway no sooner than 18 s after contact, disk; cut on contact and on escaping mass), the plate text; `window.snSaver` and the director `S.dir`. |
@@ -200,7 +200,7 @@ f.eye = [...]; f.target = [...]; f.time = seconds;
 ren.render(f);                          // one submit
 ```
 
-Frame fields (`defaultFrame`): `eye target up fov near time`, `sun sunI`,
+Frame fields (`defaultFrame`): `eye target up fov near time`, `grid` (density volume cells per side; 0 = particle spheres), `vol {c, r}` (the sphere the volume must hold; main.js passes view.js frameTarget's target and rad), `sun sunI`,
 `mode` (0 real, 1 temperature, 2 origin body, 3 speed, 4 material),
 `cut {on, n, d}` (dot(n, x) > d is cut away; the cut face is flat),
 `streakT` (code time of one frame: motion streaks; 0 = off), `frags`
@@ -218,7 +218,7 @@ Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`;
 |---|---|---|
 | vapour | `xv > xvHi` (0.5) | translucent layer, opacity 0.6 (1 - exp(-vapK chord)), crisp edge |
 | debris | `rho < rho0 / debrisQ^3` (the summed density, `th.x`; 0.24 rho0) | flat-faced fragments, `frags` per particle, and streaks |
-| fluid | all others | the screen-space surface |
+| fluid | all others | the iso surface of the density volume (vol.wgsl, march.wgsl; debris adds to it too); outside the volume, spheres |
 
 A free particle has a low summed density: that is the debris test. (A test
 on h took the whole surface layer of Earth for debris, because those

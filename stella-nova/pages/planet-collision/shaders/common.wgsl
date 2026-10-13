@@ -6,12 +6,18 @@
 //  tests and the naga check do the same concatenation.
 //
 //  BIND GROUP 0 (every render pass and the smooth compute)
-//    0 U          the frame uniform (render.js "writeFrame", 528 bytes)
+//    0 U          the frame uniform (render.js "writeFrame", 576 bytes)
 //    1 centres    vec4f per body: the mean particle position, the count
 //                 (centres.wgsl writes it each frame)
 //    2 maps       texture_2d_array: equirectangular surface maps
 //                 (render.js "setMaps"; 1 x 1 grey until they load)
 //    3 linSamp    a linear sampler (repeat on u, clamp on v)
+//  VOLUME (U.vol0, U.vol1; render.js "_volume"): a cube of G^3 cells round
+//  the framed bodies. vol.wgsl adds a smooth kernel (1 - r^2/Rk^2)^3 of
+//  each particle (Rk = U.vol1.z spacing0) to it; march.wgsl marches the
+//  rays to the iso level U.vol1.y. Where kernels overlap the field joins:
+//  two bodies, a neck and a splash merge as one liquid surface. A lone
+//  particle (peak 1) stays under the iso level 1.1: debris.wgsl draws it.
 //  BIND GROUP 1 (the particle passes): the solver buffers of engine.js,
 //  read only, and orig, the render buffer of start positions
 //    0 pos   x y z h            1 vel   vx vy vz m
@@ -36,7 +42,7 @@
 //
 //  grep -n targets: "struct U", "fn klass", "fn spacing0", "fn blackbody",
 //  "fn glow", "fn skinT", "fn crustSkin", "fn voronoi", "fn planetAlbedo", "fn matAlbedo", "fn modeColor", "fn rayAt",
-//  "fn depthOf", "fn removed"
+//  "fn depthOf", "fn removed", "fn toGrid", "fn inVolume", "fn kernelCells"
 // ============================================================================
 
 struct U {
@@ -59,6 +65,8 @@ struct U {
   flashR: vec4f,            // flash radius (world), per flash
   flashT: vec4f,            // flash colour temperature (K), per flash
   extra: vec4f,             // x h_max of the solver (code), y view depth of the target, z sim hours since contact (< 0 before)
+  vol0: vec4f,              // the density volume: origin xyz (world, cell 0), w cell size (world; 0 = no volume)
+  vol1: vec4f,              // x cells per side G, y iso level, z kernel radius over spacing0, w -
 };
 @group(0) @binding(0) var<uniform> U0: U;
 @group(0) @binding(1) var<storage, read> centres: array<vec4f>;
@@ -88,6 +96,18 @@ fn klass(i: u32) -> u32 {
   let q = U0.surf.w;
   if (pTh[i].x * q * q * q < U0.mats[matOf(i) & 3u].x) { return K_DEBRIS; }
   return K_FLUID;
+}
+// ── the density volume (vol.wgsl fills it, march.wgsl draws its surface) ───
+fn volOn() -> bool { return U0.vol0.w > 0.0; }
+// world -> grid coordinates (cell centres at integers)
+fn toGrid(p: vec3f) -> vec3f { return (p - U0.vol0.xyz) / U0.vol0.w; }
+// the kernel radius of particle i in cells
+fn kernelCells(i: u32) -> f32 { return U0.vol1.z * spacing0(i) / max(U0.vol0.w, 1e-9); }
+// p is in the volume with margin cells to spare on each side
+fn inVolume(p: vec3f, margin: f32) -> bool {
+  let g = toGrid(p);
+  let top = U0.vol1.x - 1.0 - margin;
+  return all(g >= vec3f(margin)) && all(g <= vec3f(top));
 }
 fn removed(x: vec3f) -> bool {
   return U0.mode.y > 0.5 && dot(U0.cut.xyz, x) > U0.cut.w;
