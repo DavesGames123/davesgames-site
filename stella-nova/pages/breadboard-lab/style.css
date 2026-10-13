@@ -19,7 +19,8 @@
    GREP MAP
      :root ............. electronics tokens, layout sizes, @property --sq-r
      base .............. html, body, [hidden], #stage, #nogl
-     #bar .............. the top bar: groups, tools, run, wire colours
+     #bar .............. the top bar: groups, tools, run, wire colours;
+                         narrower desktops (1440 / 1240 / 1100 px)
      .col / .panel ..... the columns and the squircle panels
      controls .......... .btn .chip .seg .num .tog .sel .rowv .sec
      library ........... .cats .cards .card
@@ -74,6 +75,20 @@ button{cursor:pointer}
 .swatches button.on{box-shadow:0 0 0 2px var(--panel),0 0 0 3.5px var(--acc)}
 .speed{height:34px;--sq-r:9px}
 .runbtn.on{--sq-fill:#1f3b25;color:#c9f5d2}
+
+/* narrower desktops: the bar sheds its title, then shrinks, then wraps */
+@media (max-width:1440px){ #bar .grp.title{display:none} }
+@media (max-width:1240px){
+  .swatches button{width:16px;height:16px}
+  #bar .seg button{min-width:24px;padding:0 5px;font-size:10px}
+  #bar .btn{min-width:30px;padding:0 6px}
+  :root{--lw:248px;--rw:316px}
+}
+@media (max-width:1100px) and (min-width:769px){
+  :root{--bar-h:100px}
+  #bar{flex-wrap:wrap;height:auto;row-gap:6px}
+  #bar .spacer{display:none}
+}
 
 /* ── columns and panels ───────────────────────────────────────────────────── */
 .col{position:fixed;top:calc(var(--bar-h) + 10px);bottom:calc(var(--status-h) + var(--instr-h) + 18px);display:flex;flex-direction:column;gap:var(--gap);z-index:25;pointer-events:none;min-height:0}
