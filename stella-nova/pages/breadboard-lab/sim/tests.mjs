@@ -1077,6 +1077,23 @@ if (section('review fixes')) {
     const ev = evsOf(frames).find(v => v.kind === 'damage' && v.owner === 'u');
     check('555 output low sinking 450 mA (10 Ω from 9 V) burns within 1 s', !!ev, ev ? `t = ${ev.t.toFixed(3)} s: ${ev.msg}` : 'no damage event');
   }
+  // 7. an op-amp relaxation oscillator starts on its own
+  for (const model of ['ideal', 'lm358']) {
+    const e = createEngine(net(6, [vsrc('vp', 1, 6), E('vn/main', 'vsource', { p: 0, n: 2 }, { v: 6 }), E('u/main', 'opamp', { inp: 5, inn: 4, out: 3, vcc: 1, vee: 2 }, { model }),
+      E('rf/main', 'resistor', { a: 3, b: 4 }, { r: 10000 }), E('c/main', 'capacitor', { a: 4, b: 0 }, { c: 1e-6 }), E('r1/main', 'resistor', { a: 3, b: 5 }, { r: 10000 }), E('r2/main', 'resistor', { a: 5, b: 0 }, { r: 10000 })]));
+    // rising edges through +1 V (with hysteresis), and the output rails
+    let hi = false; const rise = []; let vh = -1e9, vl = 1e9;
+    while (e.t < 0.3) {
+      e.advanceTo(e.t + 1e-5); const v = e.v(3);
+      if (!hi && v > 1) { hi = true; rise.push(e.t); } else if (hi && v < -1) hi = false;
+      if (e.t > 0.1) { vh = Math.max(vh, v); vl = Math.min(vl, v); }
+    }
+    // hand value from the rails: thresholds vh/2 and vl/2, RC = 10 ms
+    const RC = 0.01, ut = vh / 2, lt = vl / 2;
+    const want = 1 / (RC * Math.log((vh - lt) / (vh - ut)) + RC * Math.log((ut - vl) / (lt - vl)));
+    const n = rise.length, f = n > 3 ? (n - 2) / (rise[n - 1] - rise[1]) : 0;
+    check(`op-amp relaxation oscillator (${model}) starts; f within 5 % of the RC hand value for its rails`, Math.abs(f / want - 1) < 0.05, `${n} rising edges, f ${f.toFixed(2)} Hz vs ${want.toFixed(2)} Hz (rails ${vl.toFixed(2)} / ${vh.toFixed(2)} V)`);
+  }
   // 8. the LED reverse rating
   {
     const { frames } = runFor(net(3, [vsrc('v', 1, 50), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 1000, pmax: 10 }), E('d/main', 'led', { a: 0, k: 2 }, { color: 'red' })]), 2);

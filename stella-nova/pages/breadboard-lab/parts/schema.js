@@ -74,7 +74,7 @@ export const ELEMENT_TYPES = {
   pnp:        { t: ['c', 'b', 'e'], p: ['model', 'bf', 'br', 'is', 'vaf', 'pmax', 'cje', 'cjc', 'rb', 'ikf'] },
   nmos:       { t: ['d', 'g', 's'], p: ['model', 'vth', 'k', 'lambda', 'pmax'] },
   pmos:       { t: ['d', 'g', 's'], p: ['model', 'vth', 'k', 'lambda', 'pmax'] },
-  opamp:      { t: ['inp', 'inn', 'out', 'vcc', 'vee'], p: ['model', 'a0', 'gbw', 'rout', 'slew'] },
+  opamp:      { t: ['inp', 'inn', 'out', 'vcc', 'vee'], p: ['model', 'a0', 'gbw', 'rout', 'slew', 'vos'] },
   timer555:   { t: ['gnd', 'trig', 'out', 'reset', 'ctrl', 'thres', 'dis', 'vcc'], p: ['model'] },
   switch:     { t: T2, p: ['on', 'ron'] },
   spdt:       { t: ['com', 'a', 'b'], p: ['pos', 'ron'] },

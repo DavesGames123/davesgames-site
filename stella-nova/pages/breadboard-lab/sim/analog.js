@@ -9,6 +9,8 @@
 //  The output current comes from vcc when it sources and goes to vee when it
 //  sinks, so the supply pins carry the load current. A soft clamp on x
 //  keeps x near the rails, so the amplifier comes out of saturation fast.
+//  An input offset vos (LM358 1 mV, ideal 1 µV) adds to the input voltage,
+//  so a balanced circuit that starts at exactly 0 V still starts.
 //
 //  555. The internal 5k-5k-5k divider is real (ctrl is a pin; the lower
 //  reference is an internal node). Two comparators and a reset input feed an
@@ -43,8 +45,8 @@
 import { Dev, vat, stampG, stampI, softplus, sigmoid, softmin, thermalStep, lteRatio, pushHist, GMIN, crossFrac, CROSS } from './devbase.js';
 
 export const OPAMP_MODELS = {
-  lm358: { a0: 1e5, gbw: 1e6, rout: 50, slew: 0.3e6, swHi: 1.5, swLo: 0.005, iq: 0.7e-3 },
-  ideal: { a0: 1e6, gbw: 1e8, rout: 1, slew: 1e9, swHi: 0, swLo: 0, iq: 0 },
+  lm358: { a0: 1e5, gbw: 1e6, rout: 50, slew: 0.3e6, swHi: 1.5, swLo: 0.005, iq: 0.7e-3, vos: 1e-3 },
+  ideal: { a0: 1e6, gbw: 1e8, rout: 1, slew: 1e9, swHi: 0, swLo: 0, iq: 0, vos: 1e-6 },
 };
 export const REG_MODELS = {
   '7805': { vout: 5, dropout: 2, iq: 5e-3, imax: 1.5, rth: 50 },
@@ -114,7 +116,9 @@ export class Opamp extends Dev {
     if (this.p.iq > 0) stampG(s.A, this.hq, this.p.iq / 5);
     stampG(s.A, this.hin, GMIN);
     // input stage into x
-    const vd = vat(x, this.ip) - vat(x, this.in);
+    // the input offset vos breaks the tie of a balanced circuit (a
+    // relaxation oscillator or flip-flop that starts at exactly 0 V)
+    const vd = vat(x, this.ip) - vat(x, this.in) + (+this.p.vos || 0);
     const th = Math.tanh(this.gm1 * vd / this.Im);
     const iin = this.Im * th, gd = this.gm1 * (1 - th * th);
     stampRow(s, eng, this.ix, -iin, [this.ip, this.in], [-gd, gd], [vat(x, this.ip), vat(x, this.in)]);
