@@ -1,0 +1,11 @@
+#!/bin/sh
+# Minimal pkg-config shim for the ScummVM emscripten configure (sdl3 only).
+PC="$EMSDK/upstream/emscripten/cache/sysroot/lib/pkgconfig"
+case "$*" in
+  *--version*) echo 0.29.2 ;;
+  *--exists*) for a in "$@"; do case "$a" in --*) ;; *) [ -f "$PC/$a.pc" ] || exit 1 ;; esac; done ;;
+  *--modversion*) sed -n 's/^Version: *//p' "$PC/sdl3.pc" ;;
+  *--cflags*) echo "-sUSE_SDL=3" ;;
+  *--libs*) echo "-sUSE_SDL=3" ;;
+  *) exit 1 ;;
+esac

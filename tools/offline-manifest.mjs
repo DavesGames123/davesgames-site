@@ -79,6 +79,7 @@ const LAZY_DIRS = [
   /^stella-nova\/vendor\/onnxruntime-web@[^/]+\//, // ML runtime + wasm, market-forecast only
   /^stella-nova\/vendor\/rapier3d-compat@[^/]+\//, // physics wasm, dice only
   /^stella-nova\/vendor\/openchemlib@[^/]+\//,     // chemistry engine, molecules only
+  /^stella-nova\/vendor\/scummvm-web@[^/]+\//,     // ScummVM wasm, retro-shelf Play only
 ];
 
 function isCore(p, size) {
