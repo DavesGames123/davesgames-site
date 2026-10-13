@@ -1029,6 +1029,21 @@ if (section('review fixes')) {
     check('astable flasher (2 × 2N3904, 47 kΩ, 10 µF): 3 s of sim in 8 s wall, f within 10 %', e.t >= 3 - 1e-9 && Math.abs(f / want - 1) < 0.1 && nc <= 2,
       `t ${e.t.toFixed(3)} s in ${Date.now() - w0} ms, f ${f.toFixed(3)} Hz vs ${want.toFixed(3)} Hz, ${nc} convergence warnings`);
   }
+  // 2. a live funcgen frequency or wave change resets the step limit
+  {
+    const fg = (wave) => E('fg/main', 'vsource', { p: 1, n: 0 }, { wave, rint: 50 });
+    const bind = el => ({ ...el, bind: { 'wave.freq': 'freq', 'wave.kind': 'wave' } });
+    const e = createEngine(net(3, [bind(fg({ kind: 'sine', amp: 1, freq: 10, offset: 0, phase: 0, duty: 0.5, v: 0 })), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 1000 }), E('d/main', 'led', { a: 2, k: 0 }, { color: 'red' })]));
+    e.advanceTo(0.2);
+    e.setParam('fg', 'freq', 10000);
+    const s0 = e.stats.steps; e.advanceTo(0.22);
+    const steps = e.stats.steps - s0;
+    const e2 = createEngine(net(3, [bind(fg({ kind: 'dc', amp: 1, freq: 1000, offset: 0, phase: 0, duty: 0.5, v: 0 })), E('r/main', 'resistor', { a: 1, b: 0 }, { r: 1000 })]));
+    e2.advanceTo(0.1);
+    e2.setParam('fg', 'wave', 'sine');
+    check('funcgen 10 Hz → 10 kHz live: the step limit follows (≥ 4000 steps in 200 periods); dc → sine too', steps >= 4000 && e.dtMaxEff <= 1 / 400000 * 1.0001 && e2.dtMaxEff <= 1 / 40000 * 1.0001,
+      `${steps} steps, dtMaxEff ${e.dtMaxEff.toExponential(2)} s; dc → sine dtMaxEff ${e2.dtMaxEff.toExponential(2)} s`);
+  }
   // 12. a base tied straight to a source gives sane numbers
   {
     const { frames } = runFor(net(3, [vsrc('v', 1, 5), vsrc('vc', 2, 5), E('q/main', 'npn', { c: 2, b: 1, e: 0 })]), 0.05);

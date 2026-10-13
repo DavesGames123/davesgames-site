@@ -58,6 +58,7 @@
 //    TYPES ............... element type → device class
 //    createEngine / Engine
 //    _build .............. devices, unknowns, matrix entries, LU
+//    _dtMaxUpdate ........ the step limit (devices, scopes); build and live edits
 //    _newton ............. one Newton-Raphson solve (base stamps, chord steps)
 //    _nlUnknowns ......... the unknowns nonlinear devices read (first-iteration exit)
 //    _solveRobust ........ Newton, then gmin stepping, then source stepping
@@ -205,12 +206,21 @@ export class Engine {
     this.hNext = 1e-6;
     this._pwmCache = new Map();
     this.wireDevs = (this.nl.wireIds || []).map(id => this.devById.get(id) || null);
-    this.dtMaxEff = Math.min(this.o.dtMax, ...devs.map(d => (d.dtMax ? d.dtMax() : Infinity)), ...this.probeSpecs.filter(p => p.type === 'scope').map(p => Math.max(1e-8, (+(p.settings || {}).tdiv || 1e-3) / 10)));
+    this._dtMaxUpdate();
     this.s = {
       A: this.A, rhs: this.rhs, x: this.xTrial, h: 0, method: 'be', mode: 'tran', t: 0,
       srcFact: 1, gshunt: 0, noncon: false, reltol: this.o.reltol, trtol: this.o.trtol * this.o.ltetol,
       th: this.th, nh: 0, eng: this,
     };
+  }
+  // the step limit: the engine dtMax, each device's own limit (a source
+  // wave) and each scope timebase. Called at build and after a live edit.
+  _dtMaxUpdate() {
+    let m = this.o.dtMax;
+    for (const d of this.devs) if (d.dtMax) m = Math.min(m, d.dtMax());
+    for (const p of this.probeSpecs) if (p.type === 'scope') m = Math.min(m, Math.max(1e-8, (+(p.settings || {}).tdiv || 1e-3) / 10));
+    this.dtMaxEff = m;
+    return m;
   }
   // unknowns that nonlinear devices read (recorded by the builder in setup)
   _nlUnknowns() {
@@ -644,7 +654,10 @@ export class Engine {
   // ------------------------------------------------------- live interaction
   _paramBp() {
     this.sinceBp = 0; this.nh = 1;
-    this.hNext = Math.max(this.o.dtMin * 4, Math.min(this.hNext, 1e-5));
+    // a live edit can change a wave frequency or kind: recompute the limit
+    this._dtMaxUpdate();
+    this.hNext = Math.max(this.o.dtMin * 4, Math.min(this.hNext, 1e-5, this.dtMaxEff));
+    if (this.hReg) this.hReg = Math.min(this.hReg, this.dtMaxEff);
     this.paramVersion++;
     this._mrCache.clear();
   }
