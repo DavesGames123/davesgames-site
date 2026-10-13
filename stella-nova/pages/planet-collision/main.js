@@ -22,11 +22,17 @@
 //  (fn govern). The sim time per frame also shrinks by itself at the
 //  impact (the CFL time step).
 //
-//  CAMERA (fn frameOf). view.js frames the bodies (Follow on), the user
-//  orbits and zooms. fn clearBand gives the screen band that no GUI covers
+//  CAMERA (fn frameOf). view.js frames the contact (Follow on): the eye
+//  looks at the contact point from the side, perpendicular to the
+//  approach axis, and pulls out to hold both bodies and the ejecta
+//  (analysis.js R90). The user orbits and zooms (an offset from the
+//  auto yaw). fn clearBand gives the screen band that no GUI covers
 //  (the saver plate, or on a phone the caption and the dock or the open
-//  sheet; view.js fn bandFrom); fn bandView moves the eye back and pans
-//  it so the subject centres in that band. A director (S.dir, saver.js) can set the shot.
+//  sheet; view.js fn bandFrom); view.js fn cameraOf moves the eye back
+//  and pans it so the subject centres in that band. A director (S.dir,
+//  saver.js) can set the shot. S.cam is the last auto goal (its p is
+//  the live contact point). Nothing here cuts the bodies open by itself:
+//  only the Cut button or the saver's late cutaway shot does.
 //
 //  AIM (fn aimScenario). The aim panel builds a scenario from two bodies,
 //  the angle (b = sin theta), the speed in v_esc, the target spin and the
@@ -41,7 +47,7 @@
 //    one run ......... "function startRun"
 //    frame loop ...... "function frame("
 //    stats + events .. "function onStats", "function analyse"
-//    camera .......... "function frameOf", "function clearBand", "function bandView"
+//    camera .......... "function frameOf", "function clearBand"
 //    arc overlay ..... "function drawArc"
 //    aim panel ....... "function buildAim", "function aimScenario", "function drawDial"
 //    caption ......... "function caption", "function numbers"
@@ -54,7 +60,7 @@ import { makeParams } from './sph.js';
 import { PRESETS, presetByKey, randomScenario, composition, VARIANTS, titleOf } from './scenarios.js';
 import { pickProfile, renderBudget } from './budget.js';
 import { Renderer, loadRenderCode, loadMaps, defaultFrame, norm, cross, sub } from './render.js';
-import { makeView, frameTarget, stepView, eyeOf, bandFrom } from './view.js';
+import { makeView, frameTarget, stepView, cameraOf, impactYaw, sideFor, bandFrom } from './view.js';
 import { UNIT, SOURCES, BODIES } from './data.js';
 import { outcome, M_MOON } from './analysis.js';
 import { previewArc } from './arc.js';
@@ -74,8 +80,9 @@ export const S = {
   stats: null, contact: null, peak: { P: 0, melt: 0, vap: 0, esc: 0, T99: 0 },
   out: null, outAt: 0, outBusy: false,
   view: makeView(), f: defaultFrame(), mode: 0, cut: false, follow: true,
-  arc: null, aimOpen: false, dir: null, now: 0,
+  arc: null, aimOpen: false, dir: null, now: 0, cam: null,
 };
+const SUN = norm([1, 0.25, 0.3]);
 
 async function boot() {
   buildUI();
@@ -144,7 +151,11 @@ export function startRun(sc, seed = 1, o = {}) {
   S.f.flashes = [];
   S.f.bodies = [0, 1, 2, 3].map(() => ({ atm: 1, shadow: 1 }));
   const g = frameTarget(bodiesNow(), null, S.f.fov, innerWidth / innerHeight);
-  S.view.target = g.target.slice(); S.view.dist = g.dist;
+  S.view.target = g.target.slice(); S.view.dist = g.dist; S.cam = g;
+  // the side of the contact that the sun lights; the yaw follows the axis
+  S.view.axis = g.axis; S.view.side = sideFor(g.axis, S.dir && S.dir.sun ? S.dir.sun : SUN);
+  S.view.base = impactYaw(g.axis, S.view.side);
+  if (S.follow) { S.view.yaw = 0; S.view.pitch = makeView().pitch; }
   caption();
   if (o.link === false) return;
   const sel = $('preset');
@@ -202,29 +213,21 @@ export function clearBand() {
   const rect = e => (e && !e.hidden && e.getBoundingClientRect ? e.getBoundingClientRect() : null);
   return bandFrom(innerHeight, innerWidth, rect($('caption')), ['dock', 'aim', 'info'].map(id => rect($(id))));
 }
-// eye and target for view v, fitted to the band (zoom back by H / band
-// height, then pan along the camera's up so the target sits at the band
-// centre).
-export function bandView(v, band, fov) {
-  const H = innerHeight, hb = Math.max(0.3 * H, H - band.t - band.b);
-  const vv = Object.assign({}, v, { dist: v.dist * Math.min(2.5, H / hb) });
-  let eye = eyeOf(vv), target = vv.target.slice();
-  const fw = norm(sub(target, eye)), right = norm(cross(fw, [0, 0, 1])), up = cross(right, fw);
-  const D = Math.hypot(...sub(target, eye)), s = (band.t - band.b) / 2 * 2 * D * Math.tan(fov / 2) / H;
-  eye = eye.map((x, k) => x + up[k] * s); target = target.map((x, k) => x + up[k] * s);
-  return { eye, target };
-}
 // The frame description for render.js (camera, events, display state).
 export function frameOf(now, dt, steps) {
   const f = S.f, aspect = innerWidth / innerHeight;
   const sinceH = S.contact && S.stats ? (S.stats.t - S.contact.simT) * UNIT.T / 3600 : null;
-  const goal = frameTarget(bodiesNow(), sinceH, f.fov, aspect);
+  const goal = frameTarget(bodiesNow(), sinceH, f.fov, aspect, { axis: S.view.axis, ext: S.out ? S.out.R90 : 0 });
   if (S.dir && S.dir.goal) S.dir.goal(goal);
-  if (S.follow || S.dir) stepView(S.view, goal, dt, S.contact ? 1.2 : 0.6);
+  if (S.follow || S.dir) {
+    S.cam = goal; S.view.axis = goal.axis;
+    S.view.base = impactYaw(goal.axis, S.view.side);
+    stepView(S.view, goal, dt, S.contact ? 1.2 : 0.6);
+  }
   const v = S.dir && S.dir.view ? S.dir.view(S.view, now) : S.view;
-  const bv = bandView(v, clearBand(), f.fov);
-  f.eye = bv.eye; f.target = bv.target; f.time = now / 1000;
-  f.sun = S.dir && S.dir.sun ? S.dir.sun : norm([1, 0.25, 0.3]);
+  const cam = cameraOf(v, clearBand(), f.fov, innerHeight, aspect);
+  f.eye = cam.eye; f.target = cam.target; f.up = cam.up; f.time = now / 1000;
+  f.sun = S.dir && S.dir.sun ? S.dir.sun : SUN;
   f.mode = S.dir && S.dir.mode != null ? S.dir.mode : S.mode;
   const cutOn = S.dir && S.dir.cut != null ? S.dir.cut : S.cut;
   f.cut = { on: cutOn, n: norm([f.eye[0] - f.target[0], f.eye[1] - f.target[1], f.eye[2] - f.target[2]]), d: 0 };
@@ -478,7 +481,7 @@ function bindPointer(el) {
   const up = e => { pts.delete(e.pointerId); pinch0 = 0; };
   el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   el.addEventListener('wheel', e => { e.preventDefault(); S.view.zoom = clampZoom(S.view.zoom * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
-  el.addEventListener('dblclick', () => { const v = makeView(); S.view.yaw = v.yaw; S.view.pitch = v.pitch; S.view.zoom = 1; });
+  el.addEventListener('dblclick', () => { const v = makeView(); S.view.yaw = 0; S.view.pitch = v.pitch; S.view.zoom = 1; });
   function spread() { const a = [...pts.values()]; return Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]); }
 }
 function clampZoom(z) { return Math.max(0.2, Math.min(5, z)); }

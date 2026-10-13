@@ -18,9 +18,9 @@ All modules are static ES modules with no DOM. Only `engine.js` needs WebGPU.
 | `arc.js` | `previewArc(setup)`: the point-mass path of the approach, for the aim panel. |
 | `budget.js` | `PROFILES`, `pickProfile`, `stepMs`, `stepsPerFrame`, `gpuBytes`. |
 | `render.js` | `Renderer`: the fluid surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
-| `view.js` | The camera: auto framing from the body centres, the user's orbit (no DOM). |
+| `view.js` | The camera: the eye looks at the contact point from the side (perpendicular to the approach axis), frames both bodies and the ejecta, the user's orbit as an offset (no DOM). tests.mjs 11 checks it. |
 | `main.js`, `index.html`, `style.css` | The page: boot, one run, the frame loop, the bar, the aim panel, the phone dock and sheets, the caption and the outcome numbers. `window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS }`; `S.dir` is the hook for a camera director. |
-| `saver-plan.js`, `saver.js` | The screensaver: the seeded reel (presets and five random draws), the shots (approach, slow-motion impact, splash, cutaway, ejecta, disk; 5-12 s; cut on contact and on escaping mass), the plate text; `window.snSaver` and the director `S.dir`. |
+| `saver-plan.js`, `saver.js` | The screensaver: the seeded reel (presets and five random draws), the shots (approach, slow-motion impact held 8 s past contact, splash, ejecta, then a late cutaway no sooner than 18 s after contact, disk; cut on contact and on escaping mass), the plate text; `window.snSaver` and the director `S.dir`. |
 | `tests.mjs` | `node tests.mjs` runs the CPU tests, then the GPU, render and page tests in Deno. |
 
 ## Units

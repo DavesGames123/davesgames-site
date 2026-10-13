@@ -46,6 +46,14 @@
 //  10 saver-plan.js: the reel (seeded, every run once, no repeat), the
 //     shots (order, 5-12 s), the event cuts, the ejecta jump, the plate
 //     (3 TeX, live numbers, no code)
+//  11 the camera on the impact (view.js, saver-plan.js): 17 presets and 40
+//     random draws, point-mass bodies that merge or run on, sampled every
+//     frame through the collision. The contact (the neck point that faces
+//     the eye) is in front of the eye, no body sphere (shrunk 3 %) is
+//     between the eye and it, and it is in the frame (16:9 desktop, 9:16
+//     phone) or in the saver's clear band. In the saver, the shot from
+//     contact to contact + IMPACT_HOLD is never the cutaway, and the
+//     cutaway starts no sooner than CUTAWAY_AFTER s after contact
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, the outcome of a readback,
@@ -62,7 +70,8 @@ import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
-import { bandFrom, makeView, frameTarget, eyeOf } from './view.js';
+import { bandFrom, makeView, frameTarget, eyeOf, stepView, cameraOf, impactYaw, sideFor, contactPoint } from './view.js';
+import { M4 } from './render.js';
 import * as SP from './saver-plan.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
@@ -214,15 +223,24 @@ function saverPlanTests() {
     if (sh[0].kind !== 'approach' || sh[1].kind !== 'impact' || sh[sh.length - 1].kind !== 'disk') badLen++;
     for (const x of sh) if (!(x.len >= x.min && x.len <= x.max && x.min >= SP.CUT_MIN && x.max <= SP.CUT_MAX)) badLen++;
     if (sh.some(x => x.kind === 'cutaway')) cut++;
+    const ci = sh.findIndex(x => x.kind === 'cutaway');
+    if (ci >= 0 && ci < sh.findIndex(x => x.kind === 'splash')) badLen++;
+    if (ci >= 0 && ci < sh.findIndex(x => x.kind === 'ejecta')) badLen++;
     orders.add(sh.map(x => x.kind[0]).join(''));
   }
-  ok('10 shots: approach, impact first, disk last, 5-12 s each, varied order', badLen === 0 && cut > 170 && cut < 230 && orders.size >= 8, `${cut}/300 plans with a cutaway, ${orders.size} orders`);
+  ok('10 shots: approach, impact first, cutaway after splash and ejecta, disk last, 5-12 s each, varied order', badLen === 0 && cut > 170 && cut < 230 && orders.size === 4, `${cut}/300 plans with a cutaway, ${orders.size} orders`);
   const ap = SP.SHOTS.approach, dn = (el, c) => SP.shotDone(ap, el, { contactAt: c });
   const sp = SP.shotDone(Object.assign({ len: 6.5 }, SP.SHOTS.splash), 6.4, { contactAt: 0 }) === false && SP.shotDone(Object.assign({ len: 6.5 }, SP.SHOTS.splash), 6.5, { contactAt: 0 }) === true;
   const im = Object.assign({ len: 6 }, SP.SHOTS.impact), di = (el, c) => SP.shotDone(im, el, { contactAt: c });
-  const imp = di(6, 0) && !di(5.9, 0) && !di(8.9, 5) && di(9, 5) && di(12, 10) && di(6, null);
-  ok('10 cuts on events: the approach waits for contact, 5-12 s; a late contact extends the impact shot', !dn(11.9, null) && dn(12, null) && !dn(4.9, 2) && dn(5, 2) && !dn(7.7, 7) && dn(7.8, 7) && sp && imp,
-    'no contact: cut at 12 s; contact at 2 s: cut at 5 s; contact at 7 s: cut at 7.8 s; splash cuts at its length; impact len 6 s, contact at 5 s: cut at 9 s, at 10 s: cut at 12 s');
+  const imp = di(8, 0) && !di(7.9, 0) && !di(12.9, 5) && di(13, 5) && !di(30, null) && di(SP.APPROACH_MAX, null) && !di(17.9, 10) && di(18, 10);
+  ok('10 cuts on events: the approach and the impact wait for contact; the impact holds IMPACT_HOLD s after it', !dn(11.9, null) && !dn(30, null) && dn(SP.APPROACH_MAX, null) && !dn(4.9, 2) && dn(5, 2) && !dn(7.7, 7) && dn(7.8, 7) && sp && imp,
+    `no contact: approach and impact hold to ${SP.APPROACH_MAX} s; contact at 2 s: cut at 5 s; contact at 7 s: cut at 7.8 s; splash cuts at its length; impact len 6 s, contact at 0: cut at 8 s, at 5 s: cut at 13 s, at 10 s: cut at 18 s`);
+  { const p = ['approach', 'impact', 'cutaway', 'splash', 'disk'].map(kind => ({ kind })), j = SP.pickNext(p, 1, 0, 3);
+    const q = ['approach', 'impact', 'cutaway', 'disk'].map(kind => ({ kind })), jq = SP.pickNext(q, 1, 0, 3);
+    const r = ['approach', 'impact', 'cutaway', 'disk'].map(kind => ({ kind })), jr = SP.pickNext(r, 1, 0, 30);
+    const c = ['approach', 'impact', 'splash', 'cutaway', 'disk'].map(kind => ({ kind })), jc = SP.contactCut(c, 3);
+    ok('10 an early cutaway gives way; a contact in a later shot cuts back to the impact', p[j].kind === 'splash' && q[jq].kind === 'disk' && r[jr].kind === 'cutaway' && c[jc].kind === 'impact' && SP.contactCut(c, 1) === 1,
+      `3 s after contact: next ${p[j].kind} (cutaway dropped when only the disk is left: next ${q[jq].kind}); 30 s after: ${r[jr].kind}; contact in the cutaway: cut to ${c[jc].kind}`); }
   const plan = () => ['approach', 'impact', 'splash', 'cutaway', 'ejecta', 'disk'].map(kind => ({ kind }));
   const p1 = plan(), j1 = SP.pickNext(p1, 1, 0.05), p2 = plan(), j2 = SP.pickNext(p2, 1, 0), p3 = plan(), p4 = plan(), j4 = SP.pickNext(p4, 0, 0.5);
   ok('10 escaping mass brings the ejecta shot forward, after the impact shot', p1[j1].kind === 'ejecta' && p2[j2].kind === 'splash' && SP.pickNext(p3, 5, 0.5) === -1 && p1[p1.length - 1].kind === 'disk' && p4[j4].kind === 'impact',
@@ -245,6 +263,115 @@ function saverPlanTests() {
   const L0 = SP.plateInfo({ sc: runs[0].sc, setup: buildScenario(runs[0].sc, 4096, 1), stats: null, out: null, peak: { P: 0, melt: 0, vap: 0, T99: 0 }, n: 4096, shot: Object.assign({ kind: 'approach' }, SP.SHOTS.approach), warp: 0 });
   ok('10 plate: title, bodies, v_imp, angle, live numbers, 3 TeX, no code, no raw ^ or _', bad.length === 0 && runs[1].sc.key !== runs[2].sc.key,
     bad.join(' ') || `"${L0.title}": ${L0.params.map(p => p.name + ' ' + p.value).join('; ')}; ${L0.lines[0]}`);
+}
+
+// 11 ─ the camera on the impact (view.js + saver-plan.js, point masses)
+function cameraTests() {
+  const fov = 0.7, near = 0.01, SUN = (() => { const a = [1, 0.25, 0.3], l = Math.hypot(...a); return a.map(x => x / l); })();
+  const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const nrm3 = a => { const l = Math.hypot(...a) || 1; return a.map(x => x / l); };
+  // the neck point that faces the eye (on both spheres once they overlap)
+  function witness(A, B, eye) {
+    const q = contactPoint(A, B), n = nrm3(sub3(B.c, A.c)), D = Math.hypot(...sub3(B.c, A.c));
+    if (D >= A.R + B.R) return q;
+    const a = Math.hypot(...sub3(q, A.c)), rho = Math.sqrt(Math.max(0, A.R * A.R - a * a));
+    const g = sub3(eye, q), gp = nrm3(sub3(g, n.map(x => x * dot3(g, n))));
+    return q.map((x, k) => x + rho * gp[k]);
+  }
+  // the smallest distance of segment eye -> W from c, over R
+  function clearance(eye, W, c, R) {
+    const d = sub3(W, eye), t = Math.max(0, Math.min(1, dot3(sub3(c, eye), d) / dot3(d, d)));
+    return Math.hypot(...sub3(eye.map((x, k) => x + t * d[k]), c)) / R;
+  }
+  // one run: point masses, softened gravity, drag while they overlap
+  function run(sc, seed, o) {
+    const su = buildScenario(sc, 600, seed), B = su.bodies, M1 = B[0].M, M2 = B[1].M, Mt = M1 + M2, Rs = B[0].R + B[1].R;
+    const im = su.impact, eps = 0.3 * Math.min(B[0].R, B[1].R), kd = 1.2 * im.vImp / Rs;
+    let r = sub3(B[1].X, B[0].X), v = sub3(B[1].V, B[0].V), t = 0, tc = null, wall = 0;
+    const H = o.H, aspect = o.aspect, band = o.band;
+    const view = makeView(), rnd = SP.rng(seed * 7 + 1);
+    let shots = o.saver ? SP.shotPlan(rnd) : null, si = 0, shotAt = 0, contactAt = null, contactWall = null, speed = 2;
+    const st = { n: 0, occl: 0, out: 0, behind: 0, minClr: 9, maxX: 0, cutEarly: 0, wrongShot: 0, cutStart: null };
+    const bodies = () => [{ c: r.map(x => -M2 / Mt * x), R: B[0].R }, { c: r.map(x => M1 / Mt * x), R: B[1].R }];
+    let g = frameTarget(bodies(), null, fov, aspect);
+    view.target = g.target.slice(); view.dist = g.dist; view.axis = g.axis; view.side = sideFor(g.axis, SUN);
+    const dtw = 1 / 30, warp = o.warp;
+    for (let f = 0; f < 30 * 120; f++) {
+      // sim time of this frame
+      let left = warp * speed / 2 * dtw;
+      while (left > 0) {
+        const h = Math.min(left, 0.02 * Rs / Math.max(1e-6, Math.hypot(...v)));
+        const D = Math.hypot(...r), k = -Mt / Math.pow(D * D + eps * eps, 1.5);
+        const a = r.map((x, j) => k * x - (D < Rs ? kd * v[j] : 0));
+        v = v.map((x, j) => x + h * a[j]); r = r.map((x, j) => x + h * v[j]); t += h; left -= h;
+      }
+      wall += dtw;
+      const bs = bodies(), D = Math.hypot(...r);
+      if (tc == null && D <= Rs) {
+        tc = t; contactWall = wall;
+        if (shots) { const j = SP.contactCut(shots, si); if (j !== si) { si = j; shotAt = wall; } contactAt = wall - shotAt; if (shots[si].kind === 'approach' || shots[si].kind === 'impact') speed = 0.25; }
+      }
+      const sinceH = tc == null ? null : (t - tc) * UNIT.T / 3600;
+      g = frameTarget(bs, sinceH, fov, aspect, { axis: view.axis });
+      view.axis = g.axis; view.base = impactYaw(g.axis, view.side);
+      stepView(view, g, dtw, tc != null ? 1.2 : 0.6);
+      let v2 = view, sh = null;
+      if (shots) {
+        sh = shots[si];
+        if (SP.shotDone(sh, wall - shotAt, { contactAt })) {
+          const j = SP.pickNext(shots, si, 0, contactWall == null ? null : wall - contactWall);
+          if (j < 0) break;
+          si = j; shotAt = wall; sh = shots[si]; contactAt = tc != null ? 0 : null;
+          speed = sh.kind === 'impact' && tc == null ? 2 : sh.kind === 'approach' && tc != null ? 0.25 : sh.speed;
+          if (sh.kind === 'cutaway' && st.cutStart == null) st.cutStart = wall - contactWall;
+        }
+        v2 = SP.shotView(sh, Math.min(1, (wall - shotAt) / sh.len), o.calm, view, g.p);
+        if (contactWall != null && wall - contactWall < SP.IMPACT_HOLD) {
+          if (sh.cut || sh.kind === 'cutaway') st.cutEarly++;
+          if (sh.kind !== 'approach' && sh.kind !== 'impact') st.wrongShot++;
+        }
+      }
+      // the impact window: up to 1.5 sim h, until the smaller body is mostly under
+      const depth = Rs - D, inWindow = (tc == null || sinceH < 1.5) && depth < 0.8 * Math.min(B[0].R, B[1].R);
+      const checkShot = !sh || sh.kind === 'approach' || sh.kind === 'impact';
+      if (!inWindow || !checkShot) { if (tc != null && !shots && !inWindow) break; continue; }
+      const cam = cameraOf(v2, band, fov, H, aspect);
+      const W = witness(bs[0], bs[1], cam.eye), fw = nrm3(sub3(cam.target, cam.eye));
+      st.n++;
+      if (dot3(sub3(W, cam.eye), fw) <= near) { st.behind++; continue; }
+      const clr = Math.min(clearance(cam.eye, W, bs[0].c, bs[0].R), clearance(cam.eye, W, bs[1].c, bs[1].R));
+      st.minClr = Math.min(st.minClr, clr);
+      if (clr < 0.97) st.occl++;
+      const vm = M4.lookAt(cam.eye, cam.target, cam.up).m, pm = M4.persp(fov, aspect, near), m = M4.mul(pm, vm);
+      const cx = m[0] * W[0] + m[4] * W[1] + m[8] * W[2] + m[12], cy = m[1] * W[0] + m[5] * W[1] + m[9] * W[2] + m[13], cw = m[3] * W[0] + m[7] * W[1] + m[11] * W[2] + m[15];
+      const nx = cx / cw, py = (0.5 - cy / cw * 0.5) * H;
+      st.maxX = Math.max(st.maxX, Math.abs(nx));
+      if (Math.abs(nx) > 0.92 || py < band.t || py > H - band.b) st.out++;
+    }
+    return st;
+  }
+  const scs = PRESETS.map(p => ({ sc: p, seed: 1 })).concat(Array.from({ length: 40 }, (_, k) => ({ sc: randomScenario(1000 + 37 * k), seed: 1000 + 37 * k })));
+  const frames = [
+    { name: 'page 16:9', H: 900, aspect: 16 / 9, band: { t: 0, b: 0 } },
+    { name: 'page 9:16 phone', H: 844, aspect: 390 / 844, band: { t: 150, b: 90 } },
+    { name: 'saver 16:9', H: 1080, aspect: 16 / 9, band: { t: 0.2 * 1080, b: 0.3 * 1080 }, saver: true },
+    { name: 'saver 9:16', H: 1920, aspect: 9 / 16, band: { t: 0.2 * 1920, b: 0.3 * 1920 }, saver: true },
+  ];
+  const lines = [];
+  let bad = 0, cutBad = 0, cutMin = Infinity, total = 0;
+  for (const fr of frames) for (const warp of [1.0, 0.15]) {
+    const agg = { n: 0, occl: 0, out: 0, behind: 0, minClr: 9, maxX: 0 };
+    for (const { sc, seed } of scs) {
+      const s = run(sc, seed, Object.assign({ warp, calm: 0.7 }, fr));
+      for (const k of ['n', 'occl', 'out', 'behind']) agg[k] += s[k];
+      agg.minClr = Math.min(agg.minClr, s.minClr); agg.maxX = Math.max(agg.maxX, s.maxX);
+      if (fr.saver) { cutBad += s.cutEarly + s.wrongShot; if (s.cutStart != null) { cutMin = Math.min(cutMin, s.cutStart); if (s.cutStart < SP.CUTAWAY_AFTER) cutBad++; } }
+    }
+    total += agg.n; bad += agg.occl + agg.out + agg.behind;
+    lines.push(`${fr.name} warp ${warp}: ${agg.n} samples, occluded ${agg.occl}, out of frame ${agg.out}, behind ${agg.behind}, min clearance ${agg.minClr.toFixed(3)} R, max |x| ${agg.maxX.toFixed(2)}`);
+  }
+  ok('11 camera: the contact is in front, not behind a body, in the frame or the clear band', bad === 0 && total > 5000, `${scs.length} runs x 4 frames x 2 speeds, ${total} samples, ${bad} bad | ` + lines.join(' | '));
+  ok('11 saver: no cutaway or other shot in the impact window; the cutaway comes late', cutBad === 0, `${cutBad} bad frames; first cutaway ${cutMin === Infinity ? 'none' : cutMin.toFixed(1) + ' s'} after contact (rule ${SP.CUTAWAY_AFTER} s), impact window ${SP.IMPACT_HOLD} s`);
 }
 
 function settledEarth(N, seed) {
@@ -645,7 +772,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {

@@ -11,26 +11,34 @@
 //  end of one bag and the start of the next.
 //
 //  SHOTS. One run is one take, cut into shots of CUT_MIN-CUT_MAX s:
-//    approach  the two bodies, a slow push-in; ends at first contact
-//              (event 'contact') plus HOLD s, not before CUT_MIN
-//    impact    the contact point, close, at x1/4: the slow-motion push-in;
-//              a contact late in the shot extends it to contact + 4 s
+//    approach  the two bodies side by side, a slow push-in; ends at first
+//              contact (event 'contact') plus HOLD s, not before CUT_MIN.
+//              A slow GPU can hold it up to APPROACH_MAX s.
+//    impact    the contact point from the side, at x1/4: the slow-motion
+//              push-in. It ends no sooner than contact + IMPACT_HOLD s and
+//              never before contact (up to APPROACH_MAX s).
 //    splash    the melt splash from the side
-//    cutaway   the bodies cut open (temperature or material colours): the
-//              iron cores sink and merge
 //    ejecta    a fly-through: the eye starts low and close and pulls back
 //              through the debris while it turns
+//    cutaway   the bodies cut open (temperature or material colours): the
+//              iron cores sink and merge. It comes after splash and
+//              ejecta, and never sooner than CUTAWAY_AFTER s after contact
+//              (fn pickNext). The impact must play out first.
 //    disk      high above: the re-accretion and the disk, at x4
-//  The order is approach, impact, then splash, cutaway (in 2 runs of 3)
-//  and ejecta in a seeded order, then disk. fn pickNext moves 'ejecta'
-//  to the front when the escaping mass passes EJECTA_FRAC (data-driven).
+//  The order is approach, impact, then splash and ejecta in a seeded
+//  order, the cutaway (in 2 runs of 3), then disk. fn pickNext moves
+//  'ejecta' to the front when the escaping mass passes EJECTA_FRAC
+//  (data-driven). fn contactCut sends a contact that comes in any other
+//  shot back to the impact shot.
 //  Each shot gets a seeded length in [min, max], a side (the sign of its
 //  turn) and, for the cutaway, a colour mode.
-//  A shot is an offset of the auto-framed view (view.js): yaw (rad, times
-//  the side), pitch (rad), zoom, push (the share of zoom lost over the
-//  shot; negative pulls back), sweep (rad of turn over the shot), speed
-//  (the page speed 1/4..4), follow ('pair' the auto frame, 'contact' the
-//  first contact point).
+//  A shot is an offset of the auto view (view.js): yaw (rad, times the
+//  side, from the contact-facing yaw), pitch (rad), zoom, push (the share
+//  of zoom lost over the shot; negative pulls back), sweep (rad of turn
+//  over the shot), speed (the page speed 1/4..4), follow ('pair' the auto
+//  frame, 'contact' the live contact point). Approach, impact and splash
+//  stay within 0.3 rad of the side view, so no body hides the contact
+//  (tests.mjs 11). fn shotView applies a shot to a view.
 //
 //  PLATE (fn plateInfo). The lib/screensaver.js label: the run title, the
 //  bodies, the impact speed in km/s and in v_esc, the angle, live numbers
@@ -41,6 +49,7 @@
 //  grep -n targets: "export const RUNS", "export const SHOTS",
 //  "export function makeReel", "export function shotPlan",
 //  "export function shotDone", "export function pickNext",
+//  "export function contactCut", "export function shotView",
 //  "export function runScenario", "export function plateInfo"
 // ============================================================================
 import { PRESETS, presetByKey, randomScenario } from './scenarios.js';
@@ -48,14 +57,15 @@ import { UNIT } from './data.js';
 import { M_MOON } from './analysis.js';
 
 export const CUT_MIN = 5, CUT_MAX = 12, HOLD = 0.8, EJECTA_FRAC = 0.02;
+export const APPROACH_MAX = 40, IMPACT_HOLD = 8, CUTAWAY_AFTER = 18;
 
 export const RUNS = PRESETS.map(p => ({ key: p.key, preset: p.key }))
   .concat(['roll-a', 'roll-b', 'roll-c', 'roll-d', 'roll-e'].map(key => ({ key, roll: true })));
 
 export const SHOTS = {
   approach: { min: 5, max: 12, yaw: 0.0, pitch: 0.30, zoom: 1.00, push: 0.18, sweep: 0.10, speed: 2, follow: 'pair', until: 'contact' },
-  impact:   { min: 5, max: 8,  yaw: 0.85, pitch: 0.14, zoom: 0.40, push: 0.22, sweep: 0.05, speed: 0.25, follow: 'contact', after: 4 },
-  splash:   { min: 5, max: 9,  yaw: -0.7, pitch: 0.38, zoom: 0.78, push: 0.14, sweep: 0.12, speed: 1, follow: 'pair' },
+  impact:   { min: 5, max: 8,  yaw: 0.10, pitch: 0.22, zoom: 0.72, push: 0.18, sweep: 0.08, speed: 0.25, follow: 'contact', after: IMPACT_HOLD },
+  splash:   { min: 5, max: 9,  yaw: -0.18, pitch: 0.38, zoom: 0.85, push: 0.10, sweep: 0.12, speed: 1, follow: 'pair' },
   cutaway:  { min: 5, max: 8,  yaw: 1.6, pitch: 0.06, zoom: 0.70, push: 0.10, sweep: 0.0, speed: 1, follow: 'pair', cut: true },
   ejecta:   { min: 6, max: 10, yaw: 2.3, pitch: -0.22, zoom: 0.50, push: -1.1, sweep: 0.6, speed: 2, follow: 'pair' },
   disk:     { min: 6, max: 12, yaw: 0.3, pitch: 1.18, zoom: 1.25, push: 0.10, sweep: 0.25, speed: 4, follow: 'pair' },
@@ -81,33 +91,68 @@ export function runScenario(run, rnd) {
 // The shots of one run.
 export function shotPlan(rnd) {
   const mid = ['splash', 'ejecta'];
+  if (rnd() < 0.5) mid.reverse();
   if (rnd() < 2 / 3) mid.push('cutaway');
-  for (let i = mid.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [mid[i], mid[j]] = [mid[j], mid[i]]; }
   return ['approach', 'impact', ...mid, 'disk'].map(kind => {
     const S = SHOTS[kind], len = S.min + (S.max - S.min) * rnd();
     return Object.assign({ kind, len, side: rnd() < 0.5 ? -1 : 1, mode: kind === 'cutaway' ? (rnd() < 0.5 ? 1 : 4) : 0 }, S);
   });
 }
 // Is the shot over? el: seconds in the shot; ev: { contactAt (s in the
-// shot, or null) }.
+// shot, or null) }. Approach and impact wait for the contact.
 export function shotDone(sh, el, ev) {
+  if (sh.until === 'contact') {
+    if (ev.contactAt === null) return el >= APPROACH_MAX;
+    return el >= Math.max(CUT_MIN, ev.contactAt + HOLD);
+  }
+  if (sh.after) {
+    if (ev.contactAt === null) return el >= APPROACH_MAX;
+    return el >= Math.max(sh.len, ev.contactAt + sh.after);
+  }
   if (el >= CUT_MAX) return true;
   if (el < CUT_MIN) return false;
-  if (sh.until === 'contact') return ev.contactAt !== null && el >= Math.max(CUT_MIN, ev.contactAt + HOLD);
-  // a late contact (a slow GPU) still gets `after` s of the shot
-  if (sh.after && ev.contactAt !== null) return el >= Math.max(sh.len, ev.contactAt + sh.after);
   return el >= sh.len;
 }
 // The index of the next shot in shots after i: 'ejecta' jumps ahead when
 // the escaping mass share esc is over EJECTA_FRAC, but never before the
 // impact shot (a fast impactor counts as escaping at first contact).
-export function pickNext(shots, i, esc) {
+// since: wall seconds since the contact (null before): a cutaway sooner
+// than CUTAWAY_AFTER trades places with the next shot that is not the
+// disk, or is dropped.
+export function pickNext(shots, i, esc, since = Infinity) {
   if (i + 1 >= shots.length) return -1;
   const afterImpact = shots.slice(0, i + 1).some(s => s.kind === 'impact');
   if (esc > EJECTA_FRAC && afterImpact) for (let k = i + 1; k < shots.length - 1; k++) if (shots[k].kind === 'ejecta') {
     const [s] = shots.splice(k, 1); shots.splice(i + 1, 0, s); break;
   }
+  if (shots[i + 1].kind === 'cutaway' && !(since >= CUTAWAY_AFTER)) {
+    const k = shots.findIndex((s, j) => j > i + 1 && s.kind !== 'disk');
+    if (k > 0) { const t = shots[i + 1]; shots[i + 1] = shots[k]; shots[k] = t; }
+    else shots.splice(i + 1, 1);
+  }
+  return i + 1 < shots.length ? i + 1 : -1;
+}
+// A contact in shot i: the index to cut to. Approach and impact keep
+// their shot (i); any other shot cuts to an impact shot, put in after i.
+export function contactCut(shots, i) {
+  const k = shots[i] ? shots[i].kind : 'approach';
+  if (k === 'approach' || k === 'impact') return i;
+  const at = shots.findIndex(s => s.kind === 'impact');
+  const im = Object.assign({}, at >= 0 ? shots[at] : Object.assign({ kind: 'impact', len: SHOTS.impact.min, side: 1, mode: 0 }, SHOTS.impact));
+  shots.splice(i + 1, 0, im);
   return i + 1;
+}
+// The view of shot sh at progress prog (0..1) on the auto view v
+// (view.js makeView); calm 0..1 slows the moves; p: the live contact
+// point. Returns a new view.
+export function shotView(sh, prog, calm, v, p) {
+  if (!sh) return Object.assign({}, v);
+  const k = 1 - 0.5 * calm;
+  return Object.assign({}, v, {
+    yaw: sh.side * (sh.yaw + sh.sweep * prog * k), pitch: sh.pitch,
+    zoom: sh.zoom * (1 - sh.push * prog * k),
+    target: sh.follow === 'contact' && p ? p.slice() : v.target,
+  });
 }
 
 const TEX = {

@@ -20,6 +20,8 @@
 //       Five passes update Mp, Rp, X and V.
 //    3  a hot tail: the 99th percentile of the particle temperatures (the
 //       hottest single particle is SPH wall heating, CONTRACT.md).
+//    4  the spread: R90, the 90th percentile of the particle distances
+//       from X. The camera (view.js) pulls out to hold it.
 //  A body that runs on after a hit-and-run counts as escaping: it is not
 //  bound to the largest body.
 //
@@ -45,7 +47,7 @@ export function percentile(a, n, p) {
 // rb: { pos, vel, grav, aux } Float32Arrays (CONTRACT.md "GPU buffers":
 // vec4 rows, grav two vec4 rows per particle); n: live particles;
 // bodies: setup.bodies (M, R). Returns code units:
-// { Mtot, Mp, Md, Me, Rp, X, T99, nP, nD, nE }.
+// { Mtot, Mp, Md, Me, Rp, X, T99, R90, nP, nD, nE }.
 export function outcome(rb, n, bodies) {
   const x = new Float64Array(3 * n), v = new Float64Array(3 * n), m = new Float64Array(n), phi = new Float64Array(n);
   let Mtot = 0;
@@ -86,5 +88,7 @@ export function outcome(rb, n, bodies) {
   }
   const T = new Float32Array(n);
   if (rb.aux) for (let i = 0; i < n; i++) T[i] = rb.aux[4 * i];
-  return { Mtot, Mp, Md, Me, Rp, X, V, T99: rb.aux ? percentile(T, n, 0.99) : 0, nP, nD, nE };
+  const dist = new Float32Array(n);
+  for (let i = 0; i < n; i++) dist[i] = Math.hypot(x[3 * i] - X[0], x[3 * i + 1] - X[1], x[3 * i + 2] - X[2]);
+  return { Mtot, Mp, Md, Me, Rp, X, V, T99: rb.aux ? percentile(T, n, 0.99) : 0, R90: percentile(dist, n, 0.9), nP, nD, nE };
 }
