@@ -12,7 +12,7 @@
 //  set point. A small hysteresis keeps Newton from flipping between them.
 //
 //  EVENTS. 'cc' when a supply enters CC. 'short' when a source current passes
-//  max(5 A, its limit) or 0.8 · EMF / rint, at any time (once; it re-arms
+//  max(5 A, its limit) or 0.8 · EMF / rint for 2 ms, at any time (once; it re-arms
 //  when the current falls), or when the bench supply is in CC below 10 % of
 //  its set point. 'fuse' when the USB polyfuse trips. A tripped polyfuse
 //  resets only after the fault is gone.
@@ -102,8 +102,8 @@ class BranchSource extends Dev {
   power(x) { const r = this.rint(), i = x[this.k]; return i * i * r; }
   // a short at any time (at load, or later by a button or a wire): above
   // max(5 A, ilimit), or above 0.8 of the current the source gives into a
-  // dead short (EMF / rint). One event; it re-arms when the current falls
-  // below half the threshold.
+  // dead short (EMF / rint), for 2 ms. One event; it re-arms when the
+  // current falls below half the threshold.
   shortLimit(s) {
     // the dead-short rule needs a steady EMF (not a wave: a wave into a
     // capacitor leads its voltage and passes it near each zero)
@@ -114,8 +114,10 @@ class BranchSource extends Dev {
   checkShort(s) {
     if (s.mode !== 'tran') return;
     const i = Math.abs(this.delivered(s.x)), lim = this.shortLimit(s);
-    if (this.shortSent) { if (i < 0.5 * lim) this.shortSent = false; return; }
-    if (i > lim) {
+    if (this.shortSent) { if (i < 0.5 * lim) { this.shortSent = false; this.shortT = 0; } return; }
+    // for 2 ms: the inrush of a capacitor is not a short
+    this.shortT = i > lim ? (this.shortT || 0) + s.h : 0;
+    if (this.shortT > 2e-3) {
       this.shortSent = true;
       this.eng._event({ t: s.t, kind: 'short', owner: this.owner, element: this.id, severity: 'error', msg: `Short circuit: ${this.label()} delivers ${i.toFixed(2)} A.` });
     }
