@@ -12,11 +12,14 @@
 //  set point. A small hysteresis keeps Newton from flipping between them.
 //
 //  EVENTS. 'cc' when a supply enters CC. 'short' when a source current passes
-//  5 A or its own limit within 1 ms after the circuit was loaded. 'fuse' when
-//  the USB polyfuse trips.
+//  max(5 A, its limit) or 0.8 · EMF / rint, at any time (once; it re-arms
+//  when the current falls), or when the bench supply is in CC below 10 % of
+//  its set point. 'fuse' when the USB polyfuse trips. A tripped polyfuse
+//  resets only after the fault is gone.
 //
 //  GREP MAP
 //    waveAt / waveBreaks .. dc, sine, square, triangle values and edges
+//    shortLimit / checkShort  the 'short' event of a branch source
 //    VSource .............. ideal or Thevenin source, function generator
 //    ISource .............. constant current source
 //    Supply ............... the CV/CC bench supply
@@ -97,11 +100,22 @@ class BranchSource extends Dev {
   delivered(x) { return -x[this.k]; }
   current(x) { return -x[this.k]; }
   power(x) { const r = this.rint(), i = x[this.k]; return i * i * r; }
+  // a short at any time (at load, or later by a button or a wire): above
+  // max(5 A, ilimit), or above 0.8 of the current the source gives into a
+  // dead short (EMF / rint). One event; it re-arms when the current falls
+  // below half the threshold.
+  shortLimit(s) {
+    // the dead-short rule needs a steady EMF (not a wave: a wave into a
+    // capacitor leads its voltage and passes it near each zero)
+    const r = this.rint(), steady = !this.w || this.w.kind === 'dc';
+    const dead = r > 0 && steady ? 0.8 * Math.abs(this.E(s.t)) / r : Infinity;
+    return Math.min(Math.max(5, this.ilimit()), dead > 1e-3 ? dead : Infinity);
+  }
   checkShort(s) {
-    if (this.shortSent || s.mode !== 'tran') return;
-    if (s.t - this.eng.tLoad > 1e-3) return;
-    const i = Math.abs(this.delivered(s.x));
-    if (i > Math.max(5, this.ilimit()) || i > this.ilimit()) {
+    if (s.mode !== 'tran') return;
+    const i = Math.abs(this.delivered(s.x)), lim = this.shortLimit(s);
+    if (this.shortSent) { if (i < 0.5 * lim) this.shortSent = false; return; }
+    if (i > lim) {
       this.shortSent = true;
       this.eng._event({ t: s.t, kind: 'short', owner: this.owner, element: this.id, severity: 'error', msg: `Short circuit: ${this.label()} delivers ${i.toFixed(2)} A.` });
     }
@@ -170,11 +184,14 @@ export class Supply extends Dev {
     const cc = this.isOn() && this.region !== 'cv';
     if (cc && !this.wasCC && s.mode === 'tran') {
       this.eng._event({ t: s.t, kind: 'cc', owner: this.owner, element: this.id, severity: 'warn', msg: `${this.label()} is current limiting at ${this.p.ilim} A (CC). The output voltage dropped to ${this.vpn(s.x).toFixed(2)} V.` });
-      if (!this.shortSent && s.t - this.eng.tLoad <= 1e-3) {
-        this.shortSent = true;
-        this.eng._event({ t: s.t, kind: 'short', owner: this.owner, element: this.id, severity: 'error', msg: `Short circuit across ${this.label()}: it hit its ${this.p.ilim} A limit at once.` });
-      }
     }
+    // a short, not just a heavy load: in CC with the output below 10 % of
+    // the set point. Once per CC stretch.
+    if (cc && !this.shortSent && s.mode === 'tran' && this.vpn(s.x) < 0.1 * this.p.v) {
+      this.shortSent = true;
+      this.eng._event({ t: s.t, kind: 'short', owner: this.owner, element: this.id, severity: 'error', msg: `Short circuit across ${this.label()}: it is at its ${this.p.ilim} A limit with ${this.vpn(s.x).toFixed(2)} V out.` });
+    }
+    if (!cc) this.shortSent = false;
     this.wasCC = cc;
   }
   frameVis(vis, avgI) {
@@ -220,11 +237,15 @@ export class UsbPower extends BranchSource {
   resetState() { super.resetState(); this.heat = 0; this.tripped = false; }
   repair() { super.repair(); this.heat = 0; this.tripped = false; }
   accept(s) {
-    this.checkShort(s);
+    if (!this.tripped) this.checkShort(s);
     if (s.mode !== 'tran') return;
     const i = Math.abs(this.delivered(s.x)), tr = this.p.trip;
-    if (i > tr) this.heat += (i * i - tr * tr) * s.h;
-    else this.heat = Math.max(0, this.heat - tr * tr * s.h * (this.tripped ? 0.25 : 1));
+    if (this.tripped) {
+      // a tripped polyfuse stays hot while the fault stays: it cools only
+      // when its 50 Ω drop is below 20 % of the port voltage
+      if (i * 50 < 0.2 * this.p.v) this.heat = Math.max(0, this.heat - tr * tr * s.h * 0.25);
+    } else if (i > tr) this.heat += (i * i - tr * tr) * s.h;
+    else this.heat = Math.max(0, this.heat - tr * tr * s.h);
     if (!this.tripped && this.heat > tr * tr * 0.5) {
       this.tripped = true;
       this.eng._event({ t: s.t, kind: 'fuse', owner: this.owner, element: this.id, severity: 'warn', msg: `USB polyfuse tripped: ${i.toFixed(2)} A from a ${tr} A port. It resets when the load is removed.` });

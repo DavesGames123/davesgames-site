@@ -1055,6 +1055,30 @@ if (section('review fixes')) {
     check('18650 shield: switch off → 5V and 3V rails dead; switch on → 5 V', Math.abs(off.v(3)) < 0.1 && Math.abs(off.v(4)) < 0.1 && Math.abs(off.v(2)) < 5 && Math.abs(on.v(3) - 5) < 0.05,
       `off: 5V ${off.v(3).toFixed(3)} V, 3V ${off.v(4).toFixed(3)} V, switch node ${off.v(2).toFixed(3)} V; on: 5V ${on.v(3).toFixed(3)} V`);
   }
+  // 4. a short made later (a button press) is reported
+  {
+    const e = createEngine(net(2, [E('b/main', 'battery', { p: 1, n: 0 }, { v: 9, rint: 1.7, mah: 500 }), E('bt/main', 'button', { a: 1, b: 0 }, {})]));
+    e.advanceTo(0.5); e.drainEvents();
+    e.press('bt', true); e.advanceTo(1.0);
+    const ev = e.drainEvents().find(v => v.kind === 'short');
+    check('9 V battery shorted by a button at 0.5 s → one short event', !!ev, ev ? `t = ${ev.t.toFixed(3)} s: ${ev.msg}` : 'no short event');
+  }
+  // 9. the USB polyfuse stays tripped while the short stays
+  {
+    const e = createEngine(net(2, [E('u/main', 'usbpower', { p: 1, n: 0 }, {}), E('bt/main', 'button', { a: 1, b: 0 }, {})]));
+    e.advanceTo(0.5); e.press('bt', true); e.advanceTo(10);
+    const evs = e.drainEvents(), trips = evs.filter(v => v.kind === 'fuse').length, resets = evs.filter(v => /polyfuse reset/.test(v.msg)).length;
+    e.press('bt', false); e.advanceTo(20);
+    const back = e.drainEvents().filter(v => /polyfuse reset/.test(v.msg)).length;
+    check('USB polyfuse: one trip, no reset while the short stays, reset after release', trips === 1 && resets === 0 && back === 1 && !e.dev('u/main').tripped, `${trips} trips, ${resets} resets while shorted, ${back} reset after release`);
+  }
+  // 11. the bench supply says "short" only for a real short
+  {
+    const run = r => evsOf(runFor(net(2, [E('s/main', 'supply', { p: 1, n: 0 }, { v: 5, ilim: 0.1, on: true }), E('r/main', 'resistor', { a: 1, b: 0 }, { r, pmax: 100 })]), 0.1).frames);
+    const a = run(10), b = run(0.1);
+    check('supply 5 V / 0.1 A: 10 Ω → cc, no short; 0.1 Ω → short', a.some(v => v.kind === 'cc') && !a.some(v => v.kind === 'short') && b.some(v => v.kind === 'short'),
+      `10 Ω: ${a.map(v => v.kind).join(',')}; 0.1 Ω: ${b.map(v => v.kind).join(',')}`);
+  }
   // 12. a base tied straight to a source gives sane numbers
   {
     const { frames } = runFor(net(3, [vsrc('v', 1, 5), vsrc('vc', 2, 5), E('q/main', 'npn', { c: 2, b: 1, e: 0 })]), 0.05);
