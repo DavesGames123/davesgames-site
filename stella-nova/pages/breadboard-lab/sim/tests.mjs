@@ -697,6 +697,36 @@ if (section('client measureR probes')) {
     sim.dispose();
     check('inline client: load, run, frames at about 30 Hz', res.ok && frames.length >= 4 && last && last.t > 0.1, `${frames.length} frames in 0.25 s, t = ${last ? last.t.toFixed(3) : '-'} s, ratio ${last ? last.ratio.toFixed(2) : '-'}`);
   }
+  {
+    // a module worker that fails at start: the client replays inline
+    const had = Object.prototype.hasOwnProperty.call(globalThis, 'Worker'), old = globalThis.Worker;
+    globalThis.Worker = class { constructor() { setTimeout(() => this.onerror && this.onerror({ message: 'no module workers' }), 5); } postMessage() {} terminate() {} };
+    const sim = createSim();
+    const errs = [];
+    sim.on('error', e => errs.push(e));
+    const res = await sim.load(net(2, [vsrc('v', 1, 5), E('r/main', 'resistor', { a: 1, b: 0 }, { r: 100 })]));
+    const inl = sim.inline;
+    sim.dispose();
+    if (had) globalThis.Worker = old; else delete globalThis.Worker;
+    check('client falls back to inline when the worker fails to start', res.ok && inl && errs.length === 1, errs.join(' | '));
+  }
+  {
+    // worker.js on a stand-in port: load, a step, and a frame come back
+    const got = [];
+    const hadSelf = Object.prototype.hasOwnProperty.call(globalThis, 'self'), oldSelf = globalThis.self;
+    globalThis.self = { postMessage: (m) => got.push(m) };
+    await import('./worker.js?port-test');
+    const port = globalThis.self;
+    port.onmessage({ data: { cmd: 'load', netlist: net(3, [vsrc('v', 1, 5), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 220 }), E('d1/main', 'led', { a: 2, k: 0 })]) } });
+    await new Promise(r => setTimeout(r, 50));
+    port.onmessage({ data: { cmd: 'step', dt: 0.01 } });
+    await new Promise(r => setTimeout(r, 50));
+    port.onmessage({ data: { cmd: 'dispose' } });
+    if (hadSelf) globalThis.self = oldSelf; else delete globalThis.self;
+    const types = got.map(m => m.type);
+    const fr = got.filter(m => m.type === 'frame').pop();
+    check('worker.js answers on its port: loaded, frames, state', types.includes('loaded') && fr && fr.t >= 0.01 && fr.nodeV instanceof Float32Array, `${types.join(',')}; last frame t = ${fr ? fr.t.toFixed(4) : '-'} s`);
+  }
 }
 
 // ================================================================ real parts

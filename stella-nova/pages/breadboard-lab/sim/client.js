@@ -5,6 +5,8 @@
 //  module worker sim/worker.js. With inline: true, or when Worker is absent
 //  or fails to start, it runs sim/host.js on this thread with the same
 //  messages, so the page still works (slower) and node tests can drive it.
+//  A worker that errors before its first reply is dropped: the messages
+//  sent so far replay into the inline host, and an 'error' says so.
 //
 //  Replies: 'frame', 'event', 'serial', 'state', 'error' go to the on()
 //  listeners. load() and measureR() return promises; loadProgram() returns a
@@ -24,9 +26,13 @@ export function createSim(opts = {}) {
   const emit = (t, v) => { for (const f of ls[t] || []) { try { f(v); } catch (e) { /* a listener must not stop the sim */ } } };
   let pendingLoad = [], reqId = 1, mrWait = new Map(), progWait = [];
   let worker = null, host = null, disposed = false;
+  // messages sent before the worker first replies, replayed inline if the
+  // worker fails to start (no module workers, a load error)
+  let replay = [], replied = false;
 
   function onMsg(m) {
     if (!m || disposed) return;
+    if (!replied) { replied = true; replay = []; }
     switch (m.type) {
       case 'frame': { const { type, ...f } = m; emit('frame', f); break; }
       case 'event': { const { type, ...ev } = m; emit('event', ev); break; }
@@ -43,15 +49,28 @@ export function createSim(opts = {}) {
   function startInline() {
     host = createHost((m) => onMsg(m), { loadRuntime: opts.loadRuntime });
   }
+  function fallback(why) {
+    if (worker) { try { worker.terminate(); } catch (e) { /* already gone */ } }
+    worker = null;
+    startInline();
+    emit('error', `worker unavailable (${why}); the simulator runs on the page thread`);
+    const msgs = replay; replay = [];
+    for (const m of msgs) host.handle(m);
+  }
   if (!opts.inline && typeof Worker !== 'undefined') {
     try {
       worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
       worker.onmessage = (e) => onMsg(e.data);
-      worker.onerror = (e) => emit('error', `worker: ${e && e.message || 'failed'}`);
+      worker.onerror = (e) => { if (!replied) fallback(e && e.message || 'start failed'); else emit('error', `worker: ${e && e.message || 'failed'}`); };
+      worker.onmessageerror = () => emit('error', 'worker: a message could not be read');
     } catch (e) { worker = null; }
   }
   if (!worker) startInline();
-  const send = (m) => { if (disposed) return; if (worker) worker.postMessage(m); else host.handle(m); };
+  const send = (m) => {
+    if (disposed) return;
+    if (worker) { worker.postMessage(m); if (!replied) replay.push(m); }
+    else host.handle(m);
+  };
 
   return {
     get inline() { return !worker; },
