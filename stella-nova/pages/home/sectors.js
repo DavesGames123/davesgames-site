@@ -80,6 +80,7 @@ const DIRECTORY_ONLY = new Set(['qave', 'origami']);
 const TMP = n => 'Ten Minute Physics #' + n + ' by Matthias Müller (MIT)';
 const CREDITS = {
   'wasm4-arcade': 'WASM-4 runtime by Bruno Garcia (ISC); 19 community carts under MIT, BSD-2-Clause and ISC',
+  'retro-shelf': 'Freeware games released by their owners; DOSBox via js-dos (GPL-2.0), ScummVM (GPL-3.0), EmulatorJS (GPL-3.0)',
   'mandelbulber': 'Mandelbulber2 by Krzysztof Marczak and team (GPL-3.0)',
   'shan-shui': 'shan-shui-inf by Lingdong Huang (MIT)',
   'markov-junior': 'MarkovJunior by Maxim Gumin',
@@ -327,6 +328,7 @@ const BLURBS = {
   'antenna-fields': 'Radio waves leave a dipole, a loop and an array.',
   sstv: 'Slow-scan television: a picture sent as sound, decoded live.',
   'wasm4-arcade': 'Open-source WASM-4 fantasy console carts in a CRT arcade cabinet.',
+  'retro-shelf': 'Freeware classics (DOOM shareware, Beneath a Steel Sky and more) in DOSBox and ScummVM, or your own disc.',
   'photon-caustics-3d': 'Sunlight through waves draws caustics on a pool floor.',
   'game-of-life': 'Conway’s Life on the GPU, with a pattern library.',
   'ulam-spiral': 'Primes form lines in the Ulam spiral and 21 more layouts.',

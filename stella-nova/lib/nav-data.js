@@ -77,7 +77,8 @@ w.SN_NAV = [
       ["flight-board", "Flight Board", "LIVE"]
     ] },
     { h: "Arcade", p: [
-      ["wasm4-arcade", "WASM-4 Arcade", "WASM"]
+      ["wasm4-arcade", "WASM-4 Arcade", "WASM"],
+      ["retro-shelf", "Retro Shelf", "NEW"]
     ] }
   ] }
 ] },
@@ -460,12 +461,12 @@ w.SN_NAV = [
 // ask for a session. tools/nav-sync.js checks that each key is registered.
 w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'attractorlab', 'resonance-3d', 'cannonball-vr'];
 
-// Craft Suite pages (lib/craft-host.js) and pascal-editor. Each one holds an
-// upstream app in a child iframe. The shell gives their iframe
-// allow="fullscreen; clipboard-read; clipboard-write", so the child can ask
-// for these too.
+// Craft Suite pages (lib/craft-host.js), pascal-editor and retro-shelf. Each
+// one holds an upstream app or engine in a child iframe. The shell gives
+// their iframe allow="fullscreen; clipboard-read; clipboard-write", so the
+// child can ask for these too (retro-shelf needs full screen for its games).
 // tools/nav-sync.js checks that each key is registered.
-w.SN_CRAFT = ['photocraft', 'lightcraft', 'vectorcraft', 'designcraft', 'filmcraft', 'effectcraft', 'printcraft', 'pascal-editor'];
+w.SN_CRAFT = ['photocraft', 'lightcraft', 'vectorcraft', 'designcraft', 'filmcraft', 'effectcraft', 'printcraft', 'pascal-editor', 'retro-shelf'];
 
 // Hidden pages: [key, label, dir]. The shell opens them at #<key>, and
 // nothing links to them: they are not in SN_NAV, so snPages(), the sidebar,
