@@ -23,14 +23,21 @@
 //  and one more event, IMPACT: the first grain hits the planet.
 //
 //  THE SHOTS. Each SHOTS entry is a kind of shot, with the phases where
-//  it can play. type 'off' is an offset of the story camera (dAz turns
-//  the view, el replaces the elevation, zoom scales the distance, push is
-//  the push-in over the shot, a negative push pulls out). type 'abs' is a
-//  pose of its own (shot-geom.js): from the planet's surface, a ride with
-//  a fragment, a low view of an impact. warp multiplies the sim speed
-//  (a time-lapse); opm caps it in orbits per wall minute (deeper slow
-//  motion). needs: a trait of the run that the shot needs.
-//
+//  it can play. scope names the subject that the shot frames (shot-geom.js
+//  "THE SUBJECT"): orbit, moon, tide, cluster, stream, ring or impact.
+//  fill is the part of the clear band that the subject fills in its tight
+//  direction (0.42 to 0.68: no extreme close-up, and room for the
+//  subject to grow before followGoal catches up). elW and elT are the
+//  elevations for a wide band (16:9) and a tall band (the 9:16 column).
+//  dAz turns a subject with no axis from the reel's view azimuth. drift
+//  turns the view slowly (deg/s), dolly changes the fill over the shot
+//  (at most 10%). warp multiplies the sim speed (a time-lapse); opm caps
+//  it in orbits per wall minute (a calm shot of a moving subject). needs:
+//  a trait of the run that the shot needs.
+//  Before 2026-10-13 the shots were offsets of the story camera with
+//  push-ins of up to 55%, a view from the planet's surface and a ride with
+//  one grain. The user found them "too close up, aggressive", made for a
+//  wide frame, and "much of the time the camera focuses on nothing".
 //  THE CUTS. A shot lasts CUT_MIN to CUT_MAX s. It ends at its own
 //  seeded length, or earlier (but not before CUT_MIN) when the story
 //  reaches a new phase or the first impact: the cut goes to a shot of the
@@ -74,17 +81,16 @@ export const ROLL_SLOTS = PRESETS.length;
 export const RECENT = 3;
 
 export const SHOTS = {
-  wide:    { type: 'off', phases: ['approach'], min: 5, max: 9, dAz: 0, el: null, zoom: 1.0, push: 0.10 },
-  top:     { type: 'off', phases: ['approach', 'ring'], min: 5, max: 8, dAz: 0.25, el: 1.30, zoom: 1.10, push: 0.14 },
-  skim:    { type: 'off', phases: ['approach', 'ring'], min: 5, max: 9, dAz: -0.75, el: 0.025, zoom: 0.85, push: 0.06 },
-  surface: { type: 'abs', phases: ['approach', 'torn', 'ring'], min: 6, max: 10, needs: 'surface', opm: 1.5 },
-  push:    { type: 'off', phases: ['crack'], min: 6, max: 10, dAz: 0.5, el: 0.20, zoom: 0.95, push: 0.55, opm: 1.2 },
-  close:   { type: 'off', phases: ['crack', 'torn'], min: 5, max: 9, dAz: 0.7, el: 0.16, zoom: 0.72, push: 0.12 },
-  ride:    { type: 'abs', phases: ['crack', 'torn'], min: 5, max: 8, opm: 2.5 },
-  stream:  { type: 'off', phases: ['torn'], min: 5, max: 9, dAz: -0.9, el: 0.07, zoom: 0.80, push: 0.06 },
-  lapse:   { type: 'off', phases: ['ring'], min: 6, max: 11, dAz: 0.3, el: 0.85, zoom: 0.95, push: -0.25, warp: 2.2 },
-  ring:    { type: 'off', phases: ['ring'], min: 6, max: 12, dAz: 0.4, el: 0.95, zoom: 1.05, push: 0.08 },
-  impact:  { type: 'abs', phases: [], min: 5, max: 8, needs: 'surface', opm: 2.5 },
+  wide:    { phases: ['approach'], min: 5, max: 9, scope: 'orbit', fill: 0.66, elW: 0.30, elT: 0.95, dAz: 0, drift: 1.0, dolly: 0.06 },
+  top:     { phases: ['approach', 'ring'], min: 5, max: 8, scope: 'orbit', fill: 0.64, elW: 0.95, elT: 1.20, dAz: 0.25, drift: 1.0, dolly: 0.05 },
+  close:   { phases: ['crack'], min: 6, max: 10, scope: 'moon', fill: 0.42, elW: 0.22, elT: 0.85, drift: 0.8, dolly: 0.08, opm: 1.2 },
+  tide:    { phases: ['crack'], min: 5, max: 9, scope: 'tide', fill: 0.62, elW: 0.30, elT: 0.95, drift: 0.8, dolly: 0.05, opm: 1.5 },
+  cluster: { phases: ['torn'], min: 5, max: 8, scope: 'cluster', fill: 0.50, elW: 0.75, elT: 1.00, drift: 0.8, dolly: 0.05, opm: 2 },
+  stream:  { phases: ['torn'], min: 5, max: 9, scope: 'stream', fill: 0.64, elW: 0.35, elT: 1.00, dAz: 0.4, drift: 1.2, dolly: 0.05, opm: 4 },
+  ring:    { phases: ['ring'], min: 6, max: 12, scope: 'ring', fill: 0.66, elW: 0.55, elT: 1.05, dAz: 0.4, drift: 1.5, dolly: 0.06 },
+  skim:    { phases: ['ring'], min: 5, max: 9, scope: 'ring', fill: 0.66, elW: 0.14, elT: 0.60, dAz: -0.75, drift: 1.0, dolly: 0.04 },
+  lapse:   { phases: ['ring'], min: 6, max: 11, scope: 'ring', fill: 0.68, elW: 0.80, elT: 1.20, dAz: 0.3, drift: 1.0, dolly: -0.08, warp: 1.6 },
+  impact:  { phases: [], min: 5, max: 8, needs: 'surface', scope: 'impact', fill: 0.55, drift: 0.6, dolly: 0.05, opm: 2 },
 };
 export const KINDS = Object.keys(SHOTS);
 

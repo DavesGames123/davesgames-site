@@ -8,10 +8,13 @@
 //  a row do not share a planet when the bag can avoid it. Each take is
 //  one run of the story clock (pacing.js) under the cutting director
 //  (app/cuts.js): shots of 5-12 s that cut on the run's events (the first
-//  crack, the breakup, the first lap of the ring, the first impact), from
-//  a wide shot, from above, low over the ring plane, from the planet's
-//  surface, a slow-motion push-in, a ride with a fragment, a time-lapse
-//  of the ring. The take fades out when the director ends it.
+//  crack, the breakup, the first lap of the ring, the first impact): the
+//  orbit wide or from above, the moon as it stretches, the moon and the
+//  planet's limb, the largest clump, the whole stream, the ring (also low
+//  over its plane and as a time-lapse), the impact. Each shot frames its
+//  subject in the clear band for the frame's aspect (shot-geom.js), so
+//  the 9:16 column gets its own poses. The take fades out when the
+//  director ends it.
 //  Each take has a seeded grain colour: ice and heat, or origin, age or
 //  tide strain (shaders/particles.wgsl), named on the plate.
 //  The subject is framed in the clear band of the plate (plateBand, in
@@ -51,7 +54,7 @@ const COLOR_LINE = {
   5: 'Colour: orbits since each grain was torn off. White is new, violet is three orbits old',
   2: 'Colour: tide over self-gravity on each grain. Blue holds, amber is torn',
 };
-const SHOT_NAME = { push: 'slow motion', ride: 'riding with a fragment', surface: 'from the planet’s surface', lapse: 'time-lapse', impact: 'impact', skim: 'in the ring plane', top: 'from above' };
+const SHOT_NAME = { cluster: 'with the largest clump', lapse: 'time-lapse', impact: 'impact', skim: 'in the ring plane', top: 'from above' };
 
 // The UI fields that enter() and the takes set, kept for exit().
 const KEEP = ['N', 'ringGain', 'rings', 'real', 'pred', 'hill', 'track', 'blur', 'ringOn', 'cam', 'field', 'color', 'calm'];

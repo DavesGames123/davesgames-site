@@ -104,7 +104,7 @@ export function cameraFrame(dtReal, cssW, cssH) {
     let sg = smoothStory(storyGoal(dtReal), dtReal, user);
     // the cutting director (the screensaver, the Director view): the shot
     // replaces the goal after the springs, so a cut is a cut
-    if (cutsOn()) sg = cutCamera(sg);
+    if (cutsOn()) sg = cutCamera(sg, cssW, cssH, dtReal);
     const want = poseOf(sg, cssW, cssH);
     cam.pose = { eye: want.eye, target: want.target };
     // a screensaver cut is a jump on purpose: not counted as motion

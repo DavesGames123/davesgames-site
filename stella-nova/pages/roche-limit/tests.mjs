@@ -30,10 +30,14 @@
 //     planet twice in a row, and every planet, body and orbit reached; the
 //     shot plan against 1000 random event timelines: shots of 5-12 s, cuts
 //     at most 5 s after a new phase, an impact shot, no surface shot at a
-//     compact star, every take ends, the Director view loops; the shot
-//     poses keep the eye outside the planet and the subject in view; every
+//     compact star, every take ends, the Director view loops; every
 //     spiral story starts outside its fluid limit and sheds within 4 s at
 //     the saver's speed (pacing model, cached pile)
+//  11b framing (shot-geom.js) over whole takes of a synthetic run, 16:9 and
+//     9:16 with three plate bands: the act point in the clear band and in
+//     view, the subject 20-80% of the band and not cut off, the view turn
+//     at most 10 deg/s, poses for the band's shape.
+//     node tests.mjs --framing runs test 11b only.
 //  12 phone layout (style.css, read as text): 44 px touch targets on a
 //     coarse pointer, the dock and bottom sheets on a phone, the short
 //     landscape strip, no page scroll, the canvas takes every touch
@@ -484,6 +488,7 @@ async function paceTests(old) {
   ok('pacing: screensaver run (cached pile) sheds within 4 s', sv.tShed !== null && sv.tShed - sv.cloudS < 4, `first shed ${(sv.tShed - sv.cloudS).toFixed(2)} s after the start (no cloud, no settle)`);
   if (CAMERA) await cameraTests(a, sc);
   saverTests(cur);
+  framingTests();
   if (old) {
     const b = paceRun(Object.assign({}, base, { d0: 2.7, d1: 1.7, orbits: 4, director: false, settleTime: 6, readMs: 1000, settlePerFrame: 64 }));
     console.log(`INFO  old pacing (2.7 -> 1.7 in 4 orbits, one speed, settle 6 at 64 steps/frame): ${fmt(b)}`);
@@ -600,31 +605,6 @@ function saverTests(cur) {
   ok('shot plan: every take ends; a weak roll ends early; every kind plays', endT <= SP.TAKE_MAX + SP.CUT_MAX + 1 && stallEnd >= 1 && kinds.size === SP.KINDS.length, `longest take ${endT.toFixed(1)} s; ${stallEnd} weak rolls ended by ${SP.STALL + SP.CUT_MAX} s; kinds ${[...kinds].sort().join(' ')}`);
   { const tk = SP.newTake(SP.rng(9), { surface: true }, true); let t = 0, ends = 0, n = 0; while (t < 600) { const r = SP.takeStep(tk, 0.1, { phase: t < 3 ? 'approach' : t < 8 ? 'crack' : t < 14 ? 'torn' : 'ring', impact: false }); if (r === 'end') ends++; if (r === 'cut') n++; t += 0.1; }
     ok('shot plan: the Director view loops (never ends)', ends === 0 && n > 50, `${n} cuts in 600 s, ${ends} ends`); }
-  // the poses: random scenes; the eye stays outside the planet, the
-  // subject stays in the view (half the view height is 0.31 rad), and
-  // the surface view puts its subject 12 deg above the horizon
-  { let worst = 0, inside = 0, elevErr = 0, n = 0;
-    const ang = (eye, a, b) => { const u = [0, 1, 2].map(i => a[i] - eye[i]), v = [0, 1, 2].map(i => b[i] - eye[i]); return Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / Math.hypot(...u) / Math.hypot(...v)))); };
-    for (let seed = 1; seed <= 300; seed++) {
-      const r = SP.rng(seed), d = 1.4 + 1.8 * r(), th = 6.283 * r(), c = [d * Math.cos(th), d * Math.sin(th), 0.05 * (r() - 0.5)];
-      const v = [-Math.sin(th), Math.cos(th), 0.02].map(q => q * 0.8), Rw = 0.06 + 0.08 * r();
-      const base = { target: c.slice(), dist: 1.5, az: 6.283 * r(), el: 0.3 };
-      const fp = c.map((q, i) => q + [0.1, -0.05, 0.01][i]);
-      for (const kind of ['surface', 'ride', 'impact', 'wide', 'push', 'skim', 'top']) {
-        for (const phase of kind === 'surface' ? ['approach', 'ring'] : ['torn']) {
-          const sh = Object.assign({ kind, phase, side: r() < 0.5 ? -1 : 1, len: 6 }, SP.SHOTS[kind]);
-          const ctx = { base, prog: r(), c, v, frag: kind === 'ride' ? { p: fp, v } : null, bodyR: 1, ringR: 2, impact: kind === 'impact' ? [Math.cos(th), Math.sin(th), 0] : null, Rw };
-          const g = SG.shotGoal(sh, ctx);
-          const ce = Math.cos(g.el), eye = [g.target[0] + g.dist * ce * Math.cos(g.az), g.target[1] + g.dist * ce * Math.sin(g.az), g.target[2] + g.dist * Math.sin(g.el)];
-          if (g.abs ? Math.hypot(...eye) < g.minR - 1e-9 || g.minR < 1.0 : g.minR < 1.3) inside++;
-          const subj = kind === 'ride' ? fp : kind === 'impact' ? ctx.impact : kind === 'surface' && phase === 'ring' ? sh.ringDir.map(q => q * 2) : c;
-          worst = Math.max(worst, ang(eye, g.target, subj)); n++;
-          if (kind === 'surface') { const up = eye.map(q => q / Math.hypot(...eye)), w = subj.map((q, i) => q - eye[i]), e = Math.asin((w[0] * up[0] + w[1] * up[1] + w[2] * up[2]) / Math.hypot(...w)); elevErr = Math.max(elevErr, Math.abs(e - 12 * Math.PI / 180)); }
-        }
-      }
-    }
-    ok('shot poses: the eye stays outside the planet, the subject in view', inside === 0 && worst < 0.31, `${n} poses; ${inside} eyes inside (an offset shot has minR 1.3, which app/camera.js poseOf enforces); the subject at most ${(worst * 180 / Math.PI).toFixed(1)} deg off the view axis (half the view is 17.8)`);
-    ok('shot poses: the surface view sees its subject 12 deg above the horizon', elevErr < 3 * Math.PI / 180, `worst error ${(elevErr * 180 / Math.PI).toFixed(2)} deg (the stand point is 4% of a radius above the plane)`); }
   // the presets and random runs of the reel: test 13 checks their specs,
   // test 15 runs them on the GPU
   for (const run of SP.RUNS) {
@@ -635,6 +615,133 @@ function saverTests(cur) {
     const r = paceRun(Object.assign({}, cur, { q: spec.q, J2: spec.J2, s: sc.s || 0.12, d0: spec.d, d1: spec.d1, orbits: spec.orbits, speed: PC.SAVER_SPEED, settleTime: 0 }));
     const tS = r.tShed === null ? Infinity : r.tShed - r.cloudS;
     ok(`saver run "${run.key}": starts outside the limit, sheds within 4 s`, spec.d > dF && spec.d < 1.1 * dF && spec.d1 < 0.8 * dF && tS < 4, `start ${(spec.d / dF).toFixed(3)} d_fluid, end ${(spec.d1 / dF).toFixed(3)}; first shed ${tS.toFixed(2)} s after the start (${r.oShed?.toFixed(3)} orbit)`);
+  }
+}
+
+// 11b ─ the framing of the shots (shot-geom.js) over whole takes, in a
+// 16:9 frame and in the 9:16 column, with three plate bands each. The
+// user found the old shots "too close up, aggressive", made for a wide
+// frame, and said that "much of the time the camera focuses on nothing".
+// A synthetic run stands in for the GPU (node has none): the moon spirals
+// in from d0 to its breakup distance (a fluid moon at 0.72 to 0.85 of
+// d0), then 24 sample grains leave it one by one, each on its own circle
+// (radius within 15% of the breakup distance), so the stream shears into
+// a ring at the Kepler rates. The sim speed is the saver's: 7 orbits a
+// minute times the pace (approach 4, slow motion 0.3, spread 3) and the
+// shot's own cap (opm, warp). takeStep (saver-plan.js) cuts as on the page.
+// Each frame goes through shotGoal, followGoal and poseIn, as in
+// app/cuts.js and app/camera.js, and the test projects the points:
+//   the act point (the moon's centre while it holds; the grain that a
+//     cluster shot follows; the stream's mid-point; the impact point)
+//     lies in the clear band, in front of the eye, not behind the planet
+//   the subject's points fill 20% to 80% of the band in its tight
+//     direction, and none of them is cut off by the band's edge
+//   the eye stays outside the planet; the view turns at most 10 deg/s
+//     inside a shot
+function framingTests(nSeeds = 150) {
+  const VIEWS = [['16:9', 1280, 720], ['9:16', 720, 1280]];
+  const BANDS = [[0.12, 0.18], [0.20, 0.30], [0.24, 0.41]];
+  const PACEF = { approach: 4, crack: 0.3, torn: 3, ring: 3 };
+  for (const [name, W, H] of VIEWS) {
+    let shapeBad = 0, axisN = 0, axisBad = 0, roundN = 0, roundHid = 0, frames = 0, actOut = 0, actHid = 0, eyeIn = 0, cropF = 0, fillLo = 0, fillHi = 0, rotMax = 0, takes = 0, ringTakes = 0, strong = 0, tLen = 0;
+    const fills = [], moonSz = [], tallN = [0, 0], debIn = [];
+    const kinds = {};
+    for (let bi = 0; bi < BANDS.length; bi++) {
+      const o = { l: 0, r: 0, t: BANDS[bi][0] * H, b: BANDS[bi][1] * H };
+      const bandW = W, bandH = H - o.t - o.b;
+      for (let seed = 1; seed <= nSeeds; seed++) {
+        const r = SP.rng(seed * 7919 + bi * 131 + W);
+        const R = r() < 0.2 ? 0.35 + 0.5 * r() : 1, compact = R < 1 && r() < 0.5;
+        const d0 = 1.6 + 1.8 * r(), dB = Math.max(1.25, d0 * (0.72 + 0.13 * r())), Rw = 0.03 + 0.12 * r(), tilt = 0.2 * r();
+        const weak = r() < 0.08;
+        const oC = weak ? Infinity : 0.3 + 0.6 * r(), oT = oC + 0.1 + 0.25 * r(), oR = oT + 0.75 + 0.75 * r();
+        const oI = !weak && r() < 0.4 ? oC + 0.2 + r() : Infinity, baseAz = 6.283 * r();
+        const grains = Array.from({ length: 24 }, (_, i) => ({ o: oC + (oT + 0.2 - oC) * (i + r()) / 24, rr: dB * (1 + 0.15 * (2 * r() - 1)), z: 0.02 * (r() - 0.5) }));
+        // the moon: its distance and angle after o orbits (of the start orbit)
+        const dAt = q => weak ? d0 + (dB - d0) * Math.min(1, q) : q < oC ? d0 + (dB - d0) * q / oC : dB;
+        const tl = p => [p[0], p[1] * Math.cos(tilt) - p[2] * Math.sin(tilt), p[1] * Math.sin(tilt) + p[2] * Math.cos(tilt)];
+        let o2 = 0, phi = 0;
+        const phiAt = []; // the moon's angle at each grain's release
+        const tk = SP.newTake(SP.rng(seed), { surface: !compact });
+        let t = 0, res, prevF = null, guideI = -1, impactP = null, ringShot = false;
+        takes++; if (!weak) strong++;
+        while (t < 200) {
+          const ph = o2 >= oR ? 'ring' : o2 >= oT ? 'torn' : o2 >= oC ? 'crack' : 'approach';
+          const impact = o2 >= oI;
+          res = SP.takeStep(tk, 0.05, { phase: ph, impact });
+          if (res === 'end') break;
+          const sh = tk.shot;
+          if (res === 'cut') { prevF = null; guideI = -1; kinds[sh.kind] = (kinds[sh.kind] || 0) + 1; if (sh.phase === 'ring') ringShot = true; }
+          // the world now
+          const d = dAt(o2), f = o2 < oC ? 1 : Math.max(0.05, 1 - 0.95 * (o2 - oC) / (oT + 0.3 - oC)), live = f >= 0.2;
+          const c = tl([d * Math.cos(phi), d * Math.sin(phi), 0]);
+          const debris = [], ids = [];
+          grains.forEach((g, i) => {
+            if (o2 < g.o) return;
+            if (phiAt[i] === undefined) phiAt[i] = phi;
+            const a = phiAt[i] + 2 * Math.PI * Math.pow(d0 / g.rr, 1.5) * (o2 - g.o);
+            debris.push(tl([g.rr * Math.cos(a), g.rr * Math.sin(a), g.z])); ids.push(i);
+          });
+          if (impact && !impactP) { const l = Math.hypot(...c); impactP = c.map(q => q / l * R); }
+          if (sh.scope === 'cluster' && guideI < 0 && !live) { const k = SG.clusterOf(debris); guideI = k >= 0 ? ids[k] : -1; }
+          const gk = guideI >= 0 ? ids.indexOf(guideI) : -1;
+          const ctx = { view: { W, H, o }, t: tk.el, prog: Math.min(1, tk.el / sh.len), c, live, Rw, debris, guide: gk >= 0 ? debris[gk] : null, bodyR: R, ringR: dB, impact: impactP, baseAz, spin: 1 };
+          if (sh.onGrain === undefined) sh.onGrain = !live;
+          if (!sh.onGrain) ctx.guide = null;
+          const g = SG.followGoal(sh, SG.shotGoal(sh, ctx), 0.05);
+          const pose = SG.poseIn(g, W, H, o);
+          frames++;
+          if (Math.hypot(...pose.eye) < R) eyeIn++;
+          // the act point
+          const act = g.subj.act, q = SG.project(act, pose, W, H);
+          if (!(q.z > 0 && q.x >= 0 && q.x <= W && q.y >= o.t && q.y <= H - o.b)) actOut++;
+          { // the segment eye -> act must not pass through the planet
+            const e = pose.eye, v = act.map((x, i) => x - e[i]), L = Math.hypot(...v), u = v.map(x => x / L);
+            const tc = -(e[0] * u[0] + e[1] * u[1] + e[2] * u[2]), cl = Math.hypot(...e.map((x, i) => x + tc * u[i]));
+            // a shot round the planet (orbit, stream, ring) sees the moon or
+          // the stream go behind it once a lap: counted, not a fault
+          const round = !g.subj.track && sh.scope !== 'impact';
+          if (round) roundN++;
+          if (tc > 0 && tc < L - 0.02 * R && cl < 0.98 * R) { if (round) roundHid++; else actHid++; }
+          }
+          // the subject's box
+          let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, crop = false;
+          for (const p of g.subj.pts) { const s2 = SG.project(p, pose, W, H); if (s2.z <= 0) { crop = true; continue; } x0 = Math.min(x0, s2.x); x1 = Math.max(x1, s2.x); y0 = Math.min(y0, s2.y); y1 = Math.max(y1, s2.y); }
+          if (crop || x0 < -1 || x1 > W + 1 || y0 < o.t - 1 || y1 > H - o.b + 1) cropF++;
+          const fl = Math.max((x1 - x0) / bandW, (y1 - y0) / bandH);
+          fills.push(fl); if (fl < 0.2) fillLo++; if (fl > 0.8) fillHi++;
+          if (sh.scope === 'moon') { const a2 = SG.project(c.map((x, i) => x + Rw * [1, 0, 0][i]), pose, W, H), b2 = SG.project(c.map((x, i) => x - Rw * [1, 0, 0][i]), pose, W, H), a3 = SG.project(c.map((x, i) => x + Rw * [0, 0, 1][i]), pose, W, H), b3 = SG.project(c.map((x, i) => x - Rw * [0, 0, 1][i]), pose, W, H); moonSz.push(Math.max(Math.hypot(a2.x - b2.x, a2.y - b2.y), Math.hypot(a3.x - b3.x, a3.y - b3.y)) / Math.min(bandW, bandH)); }
+          if ((sh.scope === 'stream' || sh.scope === 'ring') && debris.length) { let n = 0; for (const p of debris) { const s2 = SG.project(p, pose, W, H); if (s2.z > 0 && s2.x >= 0 && s2.x <= W && s2.y >= o.t && s2.y <= H - o.b) n++; } debIn.push(n / debris.length); }
+          if (tk.el < 0.06) {
+            // the composition follows the band's shape; a subject with an
+            // axis lies along the band's long side at the first frame
+            const tallB = bandW / bandH < SG.BAND_TALL;
+            tallN[sh.dir0.tall ? 1 : 0]++; if (sh.dir0.tall !== tallB) shapeBad++;
+            if (g.subj.axis) {
+              const a0 = SG.project(g.subj.aim, pose, W, H), a1 = SG.project(g.subj.aim.map((x, i) => x + 0.05 * g.subj.axis[i]), pose, W, H);
+              const dx = Math.abs(a1.x - a0.x), dy = Math.abs(a1.y - a0.y);
+              axisN++; if (tallB ? dx > dy * Math.tan(35 * Math.PI / 180) : dy > dx * Math.tan(35 * Math.PI / 180)) axisBad++;
+            }
+          }
+          const F = pose.target.map((x, i) => x - pose.eye[i]), Fl = Math.hypot(...F);
+          if (prevF) { const cs = (F[0] * prevF[0] + F[1] * prevF[1] + F[2] * prevF[2]) / (Fl * Math.hypot(...prevF)); const rr = Math.acos(Math.min(1, cs)) * 180 / Math.PI / 0.05; rotMax = Math.max(rotMax, rr); }
+          prevF = F;
+          // the sim moves on
+          let k = sh.warp || 1; const opm = 7 * PACEF[ph]; if (sh.opm && opm * k > sh.opm) k = sh.opm / opm;
+          const dO = opm * k / 60 * 0.05;
+          phi += 2 * Math.PI * Math.pow(d0 / d, 1.5) * dO; o2 += dO;
+          t += 0.05;
+        }
+        tLen += t;
+        if (!weak && ringShot) ringTakes++;
+      }
+    }
+    fills.sort((a, b) => a - b); moonSz.sort((a, b) => a - b); debIn.sort((a, b) => a - b);
+    const pc = (a, x) => a.length ? a[Math.min(a.length - 1, Math.floor(x * a.length))] : NaN;
+    const okFill = (fillLo + fillHi) <= 0.01 * frames, okCrop = cropF <= 0.01 * frames;
+    ok(`framing ${name}: the act point is in the clear band, in view of the eye`, actOut === 0 && actHid === 0 && eyeIn === 0 && roundHid <= 0.25 * roundN, `${frames} frames in ${takes} takes (3 plate bands); ${actOut} frames with the act point out of the band, ${actHid} with it behind the planet in a shot that follows it, ${eyeIn} with the eye inside the planet; in shots round the planet the act point is behind it in ${(100 * roundHid / roundN).toFixed(1)}% of frames (limit 25%: once a lap)`);
+    ok(`framing ${name}: the subject fills 20-80% of the band, not cut off`, okFill && okCrop, `fill of the band (tight direction): min ${fills[0].toFixed(2)}, 1% ${pc(fills, 0.01).toFixed(2)}, median ${pc(fills, 0.5).toFixed(2)}, 99% ${pc(fills, 0.99).toFixed(2)}, max ${fills[fills.length - 1].toFixed(2)}; ${fillLo} frames under 0.2, ${fillHi} over 0.8, ${cropF} with a point cut off (limit 1% each); the moon in a close shot: ${pc(moonSz, 0.05).toFixed(2)} to ${pc(moonSz, 0.95).toFixed(2)} of the band's short side (5-95%); stream and ring shots hold ${(100 * pc(debIn, 0.01)).toFixed(0)}% of the debris or more in 99% of frames`);
+    ok(`framing ${name}: calm (view turn at most 10 deg/s in a shot), poses for the band's shape`, rotMax <= 10 && shapeBad === 0 && axisBad === 0, `largest view turn ${rotMax.toFixed(1)} deg/s; shots composed for a tall band ${tallN[1]}, for a wide band ${tallN[0]}, ${shapeBad} for the wrong shape; ${axisN - axisBad} of ${axisN} subjects with an axis start within 35 deg of the band's long side; ${ringTakes} of ${strong} takes with a breakup reach a ring shot; mean take ${(tLen / takes).toFixed(1)} s; shots ${Object.entries(kinds).map(([k, v]) => k + ' ' + v).join(', ')}`);
   }
 }
 
@@ -910,14 +1017,14 @@ async function rollRunTests(keys) {
         const r = CU.cutsTick(wall);
         const sh = CU.curShot();
         if (dirRun.tornAt !== null) dirRun.wallAfter += wall;
-        if (r === 'cut') { dirStat.cuts++; dirRun.kinds.push(sh.kind); dirStat.kinds.add(sh.kind); dirStat.phases.add(sh.phase); if (dirRun.tornAt !== null) dirRun.cutAfterTorn = true; if (sh.kind === 'ride') dirStat.rides++; }
+        if (r === 'cut') { dirStat.cuts++; dirRun.kinds.push(sh.kind); dirStat.kinds.add(sh.kind); dirStat.phases.add(sh.phase); if (dirRun.tornAt !== null) dirRun.cutAfterTorn = true; if (sh.kind === 'cluster') dirStat.rides++; }
         if (run.story.torn !== undefined && dirRun.tornAt === null) dirRun.tornAt = run.t;
         if (sh) {
           const g = CU.cutCamera(DI.storyGoal(wall));
           const ce = Math.cos(g.el), eye = [g.target[0] + g.dist * ce * Math.cos(g.az), g.target[1] + g.dist * ce * Math.sin(g.az), g.target[2] + g.dist * Math.sin(g.el)];
           const fine = [...g.target, g.dist, g.az, g.el].every(Number.isFinite) && g.dist > 0;
           if (!fine || (g.abs && Math.hypot(...eye) < g.minR - 1e-6)) dirStat.bad.push(`${key}: ${sh.kind} ${fine ? 'eye inside' : 'not finite'}`);
-          if (sh.kind === 'ride' && S.cuts.frag && sh.phase === 'torn') dirStat.rideFrag++;
+          if (sh.kind === 'cluster' && S.cuts.frag) dirStat.rideFrag++;
         }
       }
     }
@@ -925,11 +1032,11 @@ async function rollRunTests(keys) {
     // a run that goes on for CUT_MIN s of wall time after the tear must cut
     if (dirRun.tornAt !== null && dirRun.wallAfter > SP.CUT_MIN + 0.5) { dirStat.torn++; if (dirRun.cutAfterTorn) dirStat.tornCut++; }
     await H.readAll(true);
-    // a ride's fragment: picked from the analysis, moved on by its own
+    // a cluster shot's grain: picked from the analysis, moved on by its own
     // orbit for 1024 steps; the grain it was picked from must stay with it
     // (within 8% of the distance moved: the stream's own pull and the
     // contacts are not in the fragment's orbit), and the next read puts
-    // the ride back on the grain
+    // the shot back on the grain
     if (s.an && s.an.f < 0.75 && S.cuts) {
       const p0 = CU.rideProbe();
       if (p0) {
@@ -940,7 +1047,7 @@ async function rollRunTests(keys) {
         const enc = S.dev.createCommandEncoder(); for (const q of run.sats) q.gpu.encodeSteps(enc, 1024, false); S.dev.queue.submit([enc.finish()]); S.run.t = s.gpu.t;
         const p1 = CU.rideProbe(true), rb1 = await s.gpu.readback(false);
         const dmin = Math.hypot(...at(rb1, i0).map((q, k) => q - p1.p[k]));
-        // a read puts the ride back on the grain's own state
+        // a read puts the shot back on the grain's own state
         await H.readAll(true);
         const p2 = CU.rideProbe(true), rb2 = await s.gpu.readback(false);
         const dsync = p2 ? Math.hypot(...at(rb2, i0).map((q, k) => q - p2.p[k])) : Infinity;
@@ -1040,9 +1147,9 @@ async function rollRunTests(keys) {
       `${err || ''}take ${take && take.take}, during the take N ${inTake ? '<= 8192, story camera' : 'not set'}; changed after exit: ${back.join(' ') || 'none'}`);
     if (S.run) await new Promise(res => setTimeout(res, 50));
   }
-  if (dirStat.runs) ok('Director view on the GPU runs: cuts on events, every pose finite and outside the planet', dirStat.bad.length === 0 && dirStat.tornCut === dirStat.torn && dirStat.phases.size >= 3, `${dirStat.runs} runs, ${dirStat.cuts} cuts; ${dirStat.tornCut} of ${dirStat.torn} runs that go on ${SP.CUT_MIN} s past the tear cut after it; phases ${[...dirStat.phases].join(' ')}; kinds ${[...dirStat.kinds].sort().join(' ')}; ${dirStat.rideFrag} ride frames on a fragment in ${dirStat.rides} rides; ${dirStat.bad.slice(0, 3).join('; ') || 'no bad pose'}`);
+  if (dirStat.runs) ok('Director view on the GPU runs: cuts on events, every pose finite and outside the planet', dirStat.bad.length === 0 && dirStat.tornCut === dirStat.torn && dirStat.phases.size >= 3, `${dirStat.runs} runs, ${dirStat.cuts} cuts; ${dirStat.tornCut} of ${dirStat.torn} runs that go on ${SP.CUT_MIN} s past the tear cut after it; phases ${[...dirStat.phases].join(' ')}; kinds ${[...dirStat.kinds].sort().join(' ')}; ${dirStat.rideFrag} cluster-shot frames on a grain in ${dirStat.rides} cluster shots; ${dirStat.bad.slice(0, 3).join('; ') || 'no bad pose'}`);
   if (dirStat.probes.length) { const pr = dirStat.probes, bad = pr.filter(q => !(q.d0 < 1e-4 && q.dmin < 0.08 * q.moved && q.dsync < 1e-4));
-    ok('Director ride: the fragment\'s own orbit follows its grain', bad.length === 0, `${pr.length} runs; the picked grain found at ${Math.max(...pr.map(q => q.d0)).toExponential(1)}; moved ${Math.min(...pr.map(q => q.moved)).toFixed(3)}-${Math.max(...pr.map(q => q.moved)).toFixed(3)} world units in 1024 steps, off its grain by ${Math.max(...pr.map(q => q.dmin / q.moved * 100)).toFixed(2)}% of that at worst (limit 8%), back on it after a read: ${Math.max(...pr.map(q => q.dsync)).toExponential(1)}${bad.length ? '; off: ' + bad.map(q => q.key).join(' ') : ''}`); }
+    ok('Director cluster shot: the grain\'s own orbit follows the grain', bad.length === 0, `${pr.length} runs; the picked grain found at ${Math.max(...pr.map(q => q.d0)).toExponential(1)}; moved ${Math.min(...pr.map(q => q.moved)).toFixed(3)}-${Math.max(...pr.map(q => q.moved)).toFixed(3)} world units in 1024 steps, off its grain by ${Math.max(...pr.map(q => q.dmin / q.moved * 100)).toFixed(2)}% of that at worst (limit 8%), back on it after a read: ${Math.max(...pr.map(q => q.dsync)).toExponential(1)}${bad.length ? '; off: ' + bad.map(q => q.key).join(' ') : ''}`); }
   if (nSeeds) ok('random runs: at most a quarter are weak (no tear, hit or capture in one orbit)', weak.length <= nSeeds / 4, `${weak.length} of ${nSeeds} weak${weak.length ? ': ' + weak.join(', ') : ''}`);
   for (const q of S.run.sats) q.gpu.destroy();
   S.worker.terminate(); S.dev.destroy();
@@ -1081,6 +1188,7 @@ if (!GPU_ONLY) {
   const t0 = Date.now();
   if (START_ONLY) startTests();
   else if (ARGS.includes('--link')) await linkTests();
+  else if (ARGS.includes('--framing')) framingTests();
   else {
     if (!PACE_ONLY) { cpuTests(); budgetTests(); startTests(); if (CAMERA) await layoutTests(); }
     await paceTests(ARGS.includes('--pace-old'));
@@ -1093,7 +1201,7 @@ if (typeof Deno !== 'undefined') {
   if (only) await rollRunTests(only.slice(8).split(','));
   else { await gpuTest(); await renderTest(); if (!ARGS.includes('--no-rolls')) await rollRunTests(['scen:saturn', 'scen:flyby', 'scen:compare', ...RL.PRESETS.map(p => p.key), ...Array.from({ length: 16 }, (_, i) => 'seed:' + (i + 1))]); }
 }
-else if (PACE_ONLY || START_ONLY || ARGS.includes('--link')) {}
+else if (PACE_ONLY || START_ONLY || ARGS.includes('--link') || ARGS.includes('--framing')) {}
 else {
   // Node has no WebGPU: run the GPU test in Deno when it is installed.
   const { spawnSync } = await import('node:child_process');
