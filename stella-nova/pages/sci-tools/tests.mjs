@@ -182,6 +182,27 @@ else {
   sugIn.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
   ok(sugIn.value.startsWith('dilute'), 'Tab takes the first suggestion', sugIn.value);
   ok(S.parseHash('#pad=a%0Ab').text === 'a\nb', 'parseHash reads the pad lines');
+  // Cheat sheet.
+  const sh = doc.getElementById('sheet');
+  ok(sh.querySelectorAll('.ptable .el').length === 118, 'the cheat sheet has a periodic table of 118 elements');
+  ok(sh.querySelectorAll('#t-const > table tr').length >= 20 && sh.querySelectorAll('#t-pre .pf').length === 24 && sh.querySelectorAll('#t-pka tbody tr').length >= 20 && sh.querySelectorAll('#t-dens tbody tr').length >= 15 && sh.querySelectorAll('#t-units tbody tr').length >= 20, 'constants, 24 SI prefixes, pKa, densities and unit tables are filled');
+  ok([...sh.querySelectorAll('details.tbl')].every(d => d.open && d.querySelector('.src')), 'every table is open and shows its source');
+  let tl = lis()[lis().length - 1], ti = tl.querySelector('input');
+  ti.focus(); ti.value = 'molar mass '; ti.setSelectionRange(11, 11); ti.dispatchEvent(new w.Event('input', { bubbles: true }));
+  sh.querySelector('.el[data-el="Fe"]').click();
+  ok(ti.value === 'molar mass Fe' && ansOf(tl) === '55.845 g/mol', 'a click on Fe inserts its symbol and the line answers', `${ti.value} -> ${ansOf(tl)}`);
+  tl = lis()[lis().length - 1]; ti = tl.querySelector('input'); ti.focus();
+  sh.querySelector('#t-const .sym[data-ins="$h"]').click();
+  ti.value += ' * '; ti.setSelectionRange(ti.value.length, ti.value.length);
+  sh.querySelector('#t-const .sym[data-ins="c"]').click();
+  ti.value += ' / 500 nm in eV'; ti.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await wait(200);
+  ok(ti.value === '$h * c / 500 nm in eV' && ansOf(tl) === '2.4797 eV', 'constant names insert from the table ($h for the name that is also a unit)', `${ti.value} -> ${ansOf(tl)}`);
+  const fbox = doc.getElementById('sheetFilter');
+  fbox.value = 'acetic'; fbox.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok([...sh.querySelectorAll('#t-pka tbody tr')].filter(r => !r.hidden).length === 1 && doc.getElementById('t-const').hidden, 'the filter "acetic" leaves one pKa row and hides the other tables');
+  fbox.value = ''; fbox.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok(!doc.getElementById('t-const').hidden && !doc.getElementById('t-el').hidden, 'an empty filter shows every table again');
   ok(!pageErrors.length && !S.errors.length, 'no page errors during boot and the pad checks', [...pageErrors, ...S.errors].slice(0, 3).join(' | '));
 
   w.close();

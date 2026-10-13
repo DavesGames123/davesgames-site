@@ -38,6 +38,7 @@ import { CATS, TOOLS, BY_ID, search, RELATED } from './registry.js';
 import { esc } from './kit.js';
 import { field, valueOf, texInto, copyText } from './view.js';
 import { initPad } from './pad.js';
+import { initSheet } from './sheet.js';
 
 export { texInto };
 
@@ -351,6 +352,7 @@ const ready = (async () => {
       onOpenTool: (id, vals) => openTool(id, vals || {}, true),
       onChange: () => { padShared = true; if (view === 'pad') writeHash(false); },
     });
+    initSheet({ root: $('#sheet'), onInsert: (t) => pad.insert(t) });
     const first = parseHash();
     if (first.view === 'pad' && first.text != null) padShared = true;
     pad.boot(first.view === 'pad' && first.text != null ? first.text : null);
