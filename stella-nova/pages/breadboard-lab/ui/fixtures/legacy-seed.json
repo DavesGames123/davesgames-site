@@ -1,0 +1,353 @@
+{
+ "_note": "The seed of breadboard-designer-3.html (photo v4: five boards, 18 parts) with wires in the old format, as its autowire would draw them.",
+ "boards": [
+  {
+   "bx": 110,
+   "by": 132
+  },
+  {
+   "bx": 110,
+   "by": 532
+  },
+  {
+   "bx": 796,
+   "by": 532
+  },
+  {
+   "bx": 796,
+   "by": 932
+  },
+  {
+   "bx": 1482,
+   "by": 532
+  }
+ ],
+ "placed": [
+  {
+   "uid": 1,
+   "defId": "esp32sp",
+   "board": 1,
+   "col": 2
+  },
+  {
+   "uid": 2,
+   "defId": "seg7",
+   "board": 1,
+   "col": 19
+  },
+  {
+   "uid": 3,
+   "defId": "joy",
+   "board": 1,
+   "row": "g",
+   "col": 0
+  },
+  {
+   "uid": 4,
+   "defId": "lcd",
+   "board": 2,
+   "row": "i",
+   "col": 6,
+   "rot": 2
+  },
+  {
+   "uid": 5,
+   "defId": "fm",
+   "mode": "board",
+   "board": 2,
+   "row": "b",
+   "col": 5
+  },
+  {
+   "uid": 6,
+   "defId": "tft",
+   "board": 4,
+   "row": "a",
+   "col": 19
+  },
+  {
+   "uid": 7,
+   "defId": "btnb",
+   "board": 3,
+   "col": 1
+  },
+  {
+   "uid": 8,
+   "defId": "btnr",
+   "board": 3,
+   "col": 5
+  },
+  {
+   "uid": 9,
+   "defId": "btnm",
+   "board": 3,
+   "col": 9
+  },
+  {
+   "uid": 10,
+   "defId": "btnm",
+   "board": 3,
+   "col": 12
+  },
+  {
+   "uid": 11,
+   "defId": "btnm",
+   "board": 3,
+   "col": 15
+  },
+  {
+   "uid": 12,
+   "defId": "btnm",
+   "board": 3,
+   "col": 18
+  },
+  {
+   "uid": 13,
+   "defId": "rc522",
+   "board": 4,
+   "row": "j",
+   "col": 15,
+   "rot": 2,
+   "side": "down"
+  },
+  {
+   "uid": 14,
+   "defId": "nrf",
+   "x": 120,
+   "y": 1448
+  },
+  {
+   "uid": 15,
+   "defId": "radar",
+   "x": 370,
+   "y": 1448
+  },
+  {
+   "uid": 16,
+   "defId": "spk",
+   "x": 620,
+   "y": 1448
+  },
+  {
+   "uid": 17,
+   "defId": "vshield",
+   "x": 870,
+   "y": 1448
+  },
+  {
+   "uid": 18,
+   "defId": "solar",
+   "x": 1120,
+   "y": 1448
+  }
+ ],
+ "wires": [
+  {
+   "a": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 29
+   },
+   "b": {
+    "type": "hole",
+    "board": 1,
+    "row": "P1",
+    "col": 7
+   },
+   "color": "#D63B3B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 28
+   },
+   "b": {
+    "type": "hole",
+    "board": 1,
+    "row": "N1",
+    "col": 8
+   },
+   "color": "#2B2B2B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 4,
+    "pin": 0
+   },
+   "b": {
+    "type": "hole",
+    "board": 2,
+    "row": "N2",
+    "col": 3
+   },
+   "color": "#2B2B2B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 4,
+    "pin": 1
+   },
+   "b": {
+    "type": "hole",
+    "board": 2,
+    "row": "P2",
+    "col": 4
+   },
+   "color": "#D63B3B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 4,
+    "pin": 3
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 16
+   },
+   "color": "#2F80D6"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 4,
+    "pin": 5
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 19
+   },
+   "color": "#4E9A2E"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 3,
+    "pin": 2
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 3
+   },
+   "color": "#E0A126"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 9,
+    "pin": 0
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 25
+   },
+   "color": "#7A6FD8"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 14,
+    "pin": 0
+   },
+   "b": {
+    "type": "hole",
+    "board": 1,
+    "row": "N1",
+    "col": 20
+   },
+   "color": "#2B2B2B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 14,
+    "pin": 1
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 29
+   },
+   "color": "#D63B3B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 16,
+    "pin": 0
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 7
+   },
+   "color": "#E2704A"
+  },
+  {
+   "a": {
+    "type": "hole",
+    "board": 0,
+    "row": "a",
+    "col": 3
+   },
+   "b": {
+    "type": "hole",
+    "board": 1,
+    "row": "j",
+    "col": 3
+   },
+   "color": "#EDEDE6"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 5,
+    "pin": 3
+   },
+   "b": {
+    "type": "hole",
+    "board": 2,
+    "row": "N1",
+    "col": 9
+   },
+   "color": "#2B2B2B"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 2,
+    "pin": 0
+   },
+   "b": {
+    "type": "pin",
+    "uid": 1,
+    "pin": 12
+   },
+   "color": "#2F80D6"
+  },
+  {
+   "a": {
+    "type": "pin",
+    "uid": 6,
+    "pin": 1
+   },
+   "b": {
+    "type": "hole",
+    "board": 4,
+    "row": "P1",
+    "col": 20
+   },
+   "color": "#D63B3B"
+  }
+ ],
+ "nextUid": 19,
+ "wireStyle": "routed",
+ "lanePitch": 10
+}
