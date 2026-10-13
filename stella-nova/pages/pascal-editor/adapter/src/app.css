@@ -1,0 +1,33 @@
+/*
+  PASCAL EDITOR  ·  adapter/src/app.css
+  The upstream app stylesheet (Tailwind 4 theme, dark tokens, elevation) plus
+  local fonts. Upstream loads Barlow from Google Fonts through next/font. This
+  build uses the Geist files that upstream ships, so no font request leaves
+  the site.
+*/
+@import "../../editor/app/globals.css";
+
+@font-face {
+  font-family: "GeistSans";
+  src: url("../../editor/app/fonts/GeistVF.woff") format("woff");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "GeistMono";
+  src: url("../../editor/app/fonts/GeistMonoVF.woff") format("woff");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --font-geist-sans: "GeistSans";
+  --font-geist-mono: "GeistMono";
+  --font-geist-pixel-square: "GeistMono";
+  --font-barlow: "GeistSans";
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}

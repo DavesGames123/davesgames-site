@@ -1,0 +1,8 @@
+Pascal Editor, static build for davesgames.io
+upstream  https://github.com/pascalorg/editor
+commit    bccd365bbb54d33afd78b67f14579b9fda3a14e1
+tag       @pascal-app/editor@1.0.4
+assets    cdn
+licence   MIT, Copyright (c) 2026 Pascal Group Inc. (LICENSE.txt)
+changes   scenes saved in browser IndexedDB, not the Next.js scenes API.
+          Adapter source: stella-nova/pages/pascal-editor/adapter/

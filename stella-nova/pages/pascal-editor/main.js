@@ -1,44 +1,40 @@
 // ============================================================================
-//  PASCAL EDITOR  ·  pages/pascal-editor/main.js — the frame around the editor
+//  PASCAL EDITOR  ·  pages/pascal-editor/main.js — the page around the editor
 // ----------------------------------------------------------------------------
-//  The page shows the official hosted Pascal Editor (editor.pascal.app) in an
-//  iframe. The open-source build is a Next.js server, so this static site
-//  cannot host it (see the header of index.html). This module:
+//  The page shows our static build of Pascal Editor (app/index.html, made by
+//  build.sh from the pinned upstream commit) in a same-origin iframe. This
+//  module:
 //    - sets the iframe source (APP) after the page loads
-//    - writes the pinned open-source release (PIN) into the bar and credits
+//    - writes the pinned commit (PIN) into the bar and credits
 //    - opens and closes the credits panel
-//    - shows the phone note once, and a hint if the frame stays blank
+//    - shows the phone note once, and a hint if the editor does not start
 //    - unloads the iframe when the shell calls window.__snRelease
-//  PIN is the release of @pascal-app/cli that "npx" runs on a local computer,
-//  and the sha256 of its web runtime as GitHub publishes it. The hosted frame
-//  is the live version, which Pascal updates, so the page cannot pin it.
+//  PIN.sha must be the same as PIN_SHA in build.sh and the commit line in
+//  app/BUILD.txt. tests.mjs checks this.
 //
 //  grep -n targets
-//    hosted URL ........... "const APP"
-//    release pin .......... "const PIN"
+//    app entry ............ "const APP"
+//    pinned commit ........ "const PIN"
 //    phone note ........... "sn-pascal-note"
 //    GPU release .......... "__snRelease"
 // ============================================================================
-export const APP = 'https://editor.pascal.app/';
+export const APP = 'app/index.html';
 
 export const PIN = {
   repo: 'pascalorg/editor',
-  cli: '@pascal-app/cli',
-  version: '1.0.3',
-  tag: '@pascal-app/cli@1.0.3',
-  asset: 'pascal-web-runtime-1.0.3.tar.gz',
-  sha256: 'abd20f2b7f77f0b0f056a3f7a65ef63c65698284ea30607aa5d1a00cf83b37da',
-  checked: '2026-10-09',
+  tag: '@pascal-app/editor@1.0.4',
+  version: '1.0.4',
+  sha: 'bccd365bbb54d33afd78b67f14579b9fda3a14e1',
+  built: '2026-10-13',
 };
 
-export const releaseUrl = p => `https://github.com/${p.repo}/releases/tag/${encodeURIComponent(p.tag)}`;
+export const commitUrl = p => `https://github.com/${p.repo}/commit/${p.sha}`;
 
 function boot() {
   const $ = id => document.getElementById(id);
-  $('pe-ver').textContent = `hosted · OSS v${PIN.version}`;
-  $('pe-cmd').textContent = `npx ${PIN.cli}@${PIN.version} editor`;
-  $('pe-pin').innerHTML = `<a href="${releaseUrl(PIN)}" target="_blank" rel="noopener">${PIN.tag}</a>`
-    + ` · <code>${PIN.asset}</code> · sha256 <code>${PIN.sha256}</code> (checked ${PIN.checked})`;
+  $('pe-ver').textContent = `v${PIN.version}`;
+  $('pe-pin').innerHTML = `<a href="${commitUrl(PIN)}" target="_blank" rel="noopener">${PIN.repo} ${PIN.sha.slice(0, 12)}</a>`
+    + ` · <code>${PIN.tag}</code> · built ${PIN.built}`;
 
   const btn = document.querySelector('.pe-bar .pe-btn');
   const panel = $('pe-credits');
@@ -56,13 +52,15 @@ function boot() {
     try { localStorage.setItem('sn-pascal-note', '1'); } catch { /* storage blocked */ }
   });
 
-  // A cross-origin frame does not tell the parent if it failed. After 12 s
-  // with no load event, show a link to open the editor in its own tab.
+  // The frame is same-origin, so the page can see if the editor mounted.
+  // After 20 s with an empty #root, show the hint.
   const frame = $('pe-frame');
-  let loaded = false;
-  frame.addEventListener('load', () => { if (frame.src) loaded = true; });
   frame.src = APP;
-  setTimeout(() => { if (!loaded) $('pe-msg').hidden = false; }, 12000);
+  setTimeout(() => {
+    let mounted = false;
+    try { mounted = !!frame.contentDocument?.querySelector('#root > *'); } catch { /* not readable */ }
+    if (!mounted && frame.src) $('pe-msg').hidden = false;
+  }, 20000);
 }
 
 const own = window.__snRelease;

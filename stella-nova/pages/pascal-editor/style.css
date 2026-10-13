@@ -1,8 +1,8 @@
 /* ============================================================================
    PASCAL EDITOR  ·  pages/pascal-editor/style.css — the frame around the editor
    ----------------------------------------------------------------------------
-   A slim top bar, a credits panel, a phone note and the iframe with the
-   hosted editor, which fills the rest of the page. The colours and fonts
+   A slim top bar, a credits panel, a phone note and the iframe with our
+   build of the editor (app/), which fills the rest of the page. The colours and fonts
    are the same as lib/craft-host.css. The editor has its own styles in its
    own document. This file does not touch them.
 
@@ -45,7 +45,7 @@ a:hover { text-decoration: underline; }
 .pe-credits code { font: .8rem var(--f-mono); color: var(--text); overflow-wrap: anywhere; }
 
 .pe-stage { position: relative; flex: 1; min-height: 0; }
-.pe-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #f2f2f2; }
+.pe-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #171717; }
 .pe-msg { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 10px 14px; border-radius: 10px;
   border: 1px solid var(--line2); background: rgba(10, 13, 20, .92); color: var(--text); font-size: .86rem; text-align: center; }
 
