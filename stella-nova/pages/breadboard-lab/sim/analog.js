@@ -18,13 +18,15 @@
 //  Output: Norton source, high = vcc − 1.4 V, low = gnd + 0.05 V, rout 10 Ω.
 //  Discharge: 10 Ω to gnd while the latch is clear.
 //
-//  REGULATOR. A pass current from in to out: Ip = clamp((vt − vout)/rreg)
-//  with vt = softmin(gnd + vout_nominal, vin − dropout). The clamp is 0 at
-//  the bottom (the pass element does not sink) and the current limit at the
-//  top, folded back by a thermal model above 150 °C. A 1 µS leak from vt to
-//  out keeps Newton well posed when the pass element is off. The ground pin
-//  takes the quiescent current. Model 'ideal' is the boost of the 18650
-//  shield: no dropout, and the input current scales by vout / vin / 0.9.
+//  REGULATOR. A pass current Ip from in to out, toward the target
+//  vt = softmin(gnd + vout_nominal, vin − dropout). Three regions, picked
+//  per Newton iteration with hysteresis (as in the bench supply): 'reg' is
+//  a Thevenin source vt behind 5 mΩ, 'lim' is a current source at the
+//  limit (folded back by a thermal model above 150 °C), 'off' is vout above
+//  vt (the pass element does not sink). A 1 µS leak from vt to out keeps a
+//  floating output defined. The ground pin takes the quiescent current.
+//  Model 'ideal' (or boost: true) is the boost of the 18650 shield: no
+//  dropout, and the input current scales by vout / vin / 0.9.
 //
 //  GREP MAP
 //    OPAMP_MODELS / REG_MODELS
@@ -268,7 +270,7 @@ export class Regulator extends Dev {
     this.nonlinear = true;
     const m = REG_MODELS[this.p.model] || REG_MODELS['7805'];
     for (const k of Object.keys(m)) if (this.p[k] == null) this.p[k] = m[k];
-    this.ideal = this.p.model === 'ideal';
+    this.ideal = this.p.model === 'ideal' || this.p.boost === true || this.p.boost === 'true';
     this.limWarned = false; this.boostK = 1; this.region = 'reg';
   }
   setup(b) {

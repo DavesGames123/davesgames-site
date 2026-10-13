@@ -510,6 +510,7 @@ export class Buzzer extends TwoTerm {
     const act = this.p.active === true || this.p.active === 'true' || this.p.active === 1;
     this.p.active = act;
     if (this.p.r == null) this.p.r = act ? 160 : 40;
+    if (this.p.freq != null) this.p.tone = +this.p.freq; // template name for the tone
     this.fm = new FreqMeter(); this.onT = 0; this.vOn = 0;
   }
   g() { return 1 / this.p.r; }

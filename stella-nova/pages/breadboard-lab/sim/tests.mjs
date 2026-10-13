@@ -757,6 +757,18 @@ if (section('builtin parts (cross-role)')) {
         if (eng.warnings.length) bad.push(`${def.id}: ${eng.warnings.join('; ')}`);
       } catch (e) { bad.push(`${def.id}: ${e.message}`); }
     }
+    {
+      const g = realGeo || geoStub;
+      const at = (b, local) => { const l = g.holeLocal('bb830', local); return { on: b, x: l.x, z: l.z, rot: 0 }; };
+      const doc = { format: 'breadboard-lab', version: 1, boards: [{ id: 'b1', type: 'bb830', x: 0, z: 0, rot: 0 }], parts: [
+        { id: 'gps', def: 'mod-gps', place: at('b1', 'f20'), params: {} },
+        { id: 'ra', def: 'res', place: at('b1', 'a5'), params: { span: 4 } },
+        { id: 'rb', def: 'res', place: at('b1', 'a5'), params: { span: 3 } },
+      ], wires: [{ id: 'w1', a: { hole: 'b1:e21' }, b: { hole: 'b1:TP5' }, color: '#fff', style: 'flat' }], probes: [], materials: [], customParts: [], programs: {} };
+      const nl = buildNetlist(doc, realReg, g);
+      const codes = new Set(nl.issues.map(i => i.code));
+      check('checks with real defs: covered-hole, pin-overlap, not-simulated', codes.has('covered-hole') && codes.has('pin-overlap') && codes.has('not-simulated'), [...codes].join(','));
+    }
     check(`every builtin part def (${defs.length}) builds a netlist and runs 1 ms`, bad.length === 0, bad.length ? bad.slice(0, 12).join(' | ') : 'all ran');
   }
 }

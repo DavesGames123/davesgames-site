@@ -593,9 +593,12 @@ export class Engine {
           const b = d.damaged ? 0 : Math.min(1.5, Math.max(0, avg(d)) / 0.02);
           if (singleLed) { vis.b = b; vis.color = d.p.color; }
           else {
+            // two elements may share a key (a segment and its reversed twin):
+            // only one direction conducts, so their light adds
             const key = d.vis || d.id.slice(d.id.indexOf('/') + 1);
-            (vis.leds || (vis.leds = {}))[key] = b;
-            if (key === 'bl') vis.backlight = b;
+            const L = vis.leds || (vis.leds = {});
+            L[key] = Math.min(1.5, (L[key] || 0) + b);
+            if (key === 'bl') vis.backlight = L[key];
           }
         } else d.frameVis(vis, avg(d), d.metered && win > 0 ? d.accP / win : d.power(x), win);
       }
