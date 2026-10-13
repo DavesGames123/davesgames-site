@@ -30,7 +30,8 @@
 //
 //  GREP MAP
 //    LEAD / READ_LEAD ....... how far the MCU may run ahead of the sim
-//    createMcu .............. the export; program -> compile -> factory
+//    createMcu .............. the export; program -> compile -> factory;
+//                             { lang:'hex' } goes to mcu/avr.js (avr8js)
 //    makeEnv ................ the `$` object the generated code sees
 //    pinOf / drive .......... pin numbers -> names, io.drive bookkeeping
 //    B. ..................... the Arduino built-ins (pinMode ... ledcWrite)
@@ -43,23 +44,16 @@
 import { BOARDS, pinName } from './boards.js';
 import { compileSketch } from './compile.js';
 import { SketchError, makeSerial, makeLCD, makeServo, strText, cstr, mkArr, mkObjArr, STRING, cprintf, writeChars, atol, atof } from './libs.js';
+import { createAvrMcu } from './avr.js';
 
 export const LEAD = 1e-3;
 export const READ_LEAD = 2e-4;
 const MAX_STEPS = 4e6;
 
-// The HEX runner (mcu/avr.js) registers itself here when it is loaded, so the
-// sketch path never imports the vendored emulator.
-let hexFactory = null;
-export function registerHexRunner(f) { hexFactory = f; }
-
 export function createMcu({ board, program = null } = {}) {
   const B = BOARDS[board];
   if (!B) throw new Error(`unknown board '${board}'`);
-  if (program && program.lang === 'hex') {
-    if (hexFactory) return hexFactory({ board, program });
-    return deadMcu(board, 'HEX programs need the AVR emulator, which is not loaded');
-  }
+  if (program && program.lang === 'hex') return createAvrMcu({ board, program });
   let compiled = null, factory = null, compileError = null;
   if (program && program.lang === 'sketch') {
     compiled = compileSketch(program.source, { board });
@@ -511,12 +505,4 @@ export function createMcu({ board, program = null } = {}) {
   m.reset(0);
   if (!factory) { m.running = false; m.wake = Infinity; }
   return m;
-}
-
-// An MCU that cannot run (no emulator): it reports why and never wakes.
-function deadMcu(board, msg) {
-  return {
-    board, compiled: null, reset() {}, nextWake: () => Infinity, run() {}, pinChanged() {}, serialIn() {}, watching: () => false,
-    state: () => ({ running: false, error: msg, millis: 0, pins: {} })
-  };
 }

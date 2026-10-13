@@ -1,0 +1,14 @@
+avr8js 0.21.1 (MIT, Copyright (c) 2019-2025 Uri Shaked), from the npm package
+avr8js-0.21.1.tgz, directory dist/esm.
+
+Kept: index.js, types.js, cpu/*.js, peripherals/*.js (the runtime).
+Left out: the .d.ts type files and utils/ (the assembler and test helpers).
+
+One change: every relative import specifier gained a ".js" extension
+(for example from './cpu/cpu' became from './cpu/cpu.js'), so browsers and
+node load the files as ES modules without a bundler. No code was changed.
+
+The npm package.json (which points at the CommonJS build, not copied) was
+replaced by a short one with "type": "module".
+
+Used by stella-nova/pages/breadboard-lab/mcu/avr.js (the HEX runner).
