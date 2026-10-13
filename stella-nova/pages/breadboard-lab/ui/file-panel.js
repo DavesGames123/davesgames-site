@@ -7,8 +7,8 @@
 //  from pasted text (the old page had a "copy design JSON" box). An import
 //  that is approximate lists its warnings here.
 //
-//  The HEX upload of CONTRACT 6 step 2 is not built (mcu/avr.js is absent),
-//  so this panel shows no HEX option.
+//  A .hex program loads per board in the CODE panel (LOAD .HEX), because a
+//  program belongs to one microcontroller part.
 //
 //  GREP MAP
 //    createFilePanel ... the panel: save, list, share, export, import, legacy

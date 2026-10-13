@@ -20,6 +20,10 @@
 //  Drafts: an edit that is not uploaded stays in the panel per board (a dot
 //  on the board selector) until UPLOAD or REVERT.
 //
+//  LOAD HEX (328 boards): a .hex file built elsewhere becomes the program
+//  { lang:'hex', hex } and runs on the avr8js CPU (mcu/avr.js). The editor
+//  then shows the HEX summary; EDIT SKETCH goes back to the sketch.
+//
 //  GREP MAP
 //    KW / TYPES / API ..... the highlight word lists
 //    highlight ............ source -> HTML (tested)
@@ -29,6 +33,8 @@
 // ============================================================================
 import { h, makePanel, btn, sec, note } from './panels.js';
 import { esc } from './format.js';
+import { pickFile } from './files.js';
+import { parseHex } from '../mcu/avr.js';
 import { createSerial } from './serial.js';
 import { SKETCHES, STARTERS } from '../mcu/sketches.js';
 
@@ -71,6 +77,18 @@ export function createCode(C) {
   const verifyBtn = btn('Verify', { cls: 'small', title: 'Compile and list the errors', onClick: () => verify(true) });
   const uploadBtn = btn('Upload', { cls: 'small.primary', title: 'Compile and run it on the board (Cmd/Ctrl+Enter)', onClick: () => upload() });
   const revertBtn = btn('Revert', { cls: 'small', title: 'Back to the sketch on the board', onClick: () => { drafts.delete(cur); load(); } });
+  const hexBtn = btn('Load .hex', { cls: 'small', title: 'Run a compiled .hex file (for example the Arduino IDE "Export compiled binary") on this 328 board', onClick: () => loadHex() });
+  const hexBox = h('div');
+  async function loadHex() {
+    if (!cur) return;
+    let text;
+    try { text = await pickFile('.hex,.ihex,text/plain'); } catch (e) { return; }
+    let info;
+    try { info = parseHex(text); } catch (e) { C.toast('error', e.message); return; }
+    C.store.apply({ op: 'program', id: cur, program: { lang: 'hex', hex: text } });
+    C.toast('info', `Loaded ${info.size} bytes of flash onto ${C.partName(cur)}. The board restarts.`);
+    load();
+  }
   const gutter = h('div.gutter', { 'aria-hidden': 'true' });
   const pre = h('pre', { 'aria-hidden': 'true' });
   const bands = h('div', { style: { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '0' } });
@@ -81,7 +99,7 @@ export function createCode(C) {
   const errList = h('ul.errs');
   const serial = createSerial(C, () => cur);
   const empty = note('Add a microcontroller board from the LIBRARY (MCU) to write a sketch for it.');
-  const body = h('div', {}, h('div.code-top', {}, boardSel, exSel, verifyBtn, uploadBtn, revertBtn), editor, status, errList, sec('Serial'), serial.el);
+  const body = h('div', {}, h('div.code-top', {}, boardSel, exSel, verifyBtn, uploadBtn, revertBtn, hexBtn), hexBox, editor, status, errList, sec('Serial'), serial.el);
   P.body.append(empty, body);
 
   const boardOf = () => { const p = C.store.doc.parts.find(q => q.id === cur); return p ? C.boardOf(p.def) : 'uno328'; };
@@ -165,6 +183,16 @@ export function createCode(C) {
   function load() {
     if (!cur) return;
     const prog = C.store.doc.programs && C.store.doc.programs[cur];
+    hexBtn.hidden = boardOf() === 'esp32dev';
+    hexBox.innerHTML = '';
+    const isHex = prog && prog.lang === 'hex' && !drafts.has(cur);
+    editor.hidden = errList.hidden = verifyBtn.hidden = uploadBtn.hidden = revertBtn.hidden = exSel.hidden = !!isHex;
+    if (isHex) {
+      let size = 0; try { size = parseHex(prog.hex).size; } catch (e) { size = 0; }
+      hexBox.append(note(`A compiled HEX program runs on this board (${size} bytes of flash, on the ATmega328P emulator).`),
+        btn('Edit sketch instead', { cls: 'small', onClick: () => { drafts.set(cur, STARTERS[boardOf()]); load(); } }));
+      return;
+    }
     const src = drafts.has(cur) ? drafts.get(cur) : prog && prog.lang === 'sketch' ? prog.source : STARTERS[boardOf()];
     ta.value = src; errs = []; warns = []; runErr = null;
     paintText(); verify(false);
