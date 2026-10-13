@@ -25,7 +25,7 @@
 //    Switch / Spdt / Button (bounce schedule)
 //    Relay ............... coil branch, pick and drop, contact travel time
 //    Motor ............... branch current plus shaft speed unknown
-//    Servo ............... pulse width in, horn angle out
+//    Servo ............... pulse width in (544–2400 µs = 0–180°), horn angle out
 //    FreqMeter / Buzzer / Speaker   tone frequency from the current
 //    Lamp / Fuse / TempSensor
 //    VMeter / AMeter ..... the probe elements
@@ -284,7 +284,7 @@ export class Button extends TwoTerm {
 // ------------------------------------------------------------------- relay
 export class Relay extends Inductor {
   static defaults = { coilR: 70, coilL: 0.1, vpick: 3.75, vdrop: 1.5, tmove: 0.005, ron: 0.05 };
-  constructor(el, eng) { super(el, eng); this.p.l = this.p.coilL; this.ener = false; this.contact = 'nc'; this.moveAt = Infinity; }
+  constructor(el, eng) { super(el, eng); this.p.l = this.p.coilL; this.ener = false; this.contact = 'nc'; this.moveAt = Infinity; this.digitalDev = true; }
   rser() { return this.p.coilR; }
   setup(b) {
     this.ia = b.node('c1'); this.ib = b.node('c2'); this.k = b.branch('i');
@@ -412,7 +412,9 @@ export class Motor extends Dev {
 
 // ------------------------------------------------------------------- servo
 export class Servo extends Dev {
-  static defaults = { vmin: 4, rate: 500, thrHi: 1.5, thrLo: 1.0 };
+  // pmin / pmax: the pulse widths of 0° and 180° (the Arduino Servo library
+  // range, so write(x) gives x degrees)
+  static defaults = { vmin: 4, rate: 500, thrHi: 1.5, thrLo: 1.0, pmin: 544e-6, pmax: 2400e-6 };
   constructor(el, eng) {
     super(el, eng); this.digitalDev = true;
     this.level = 0; this.tRise = -1; this.angle = 90; this.target = 90; this.moving = false; this.pulse = 0;
@@ -442,7 +444,7 @@ export class Servo extends Dev {
       const w = s.t - this.tRise;
       if (this.tRise >= 0 && w > 0.3e-3 && w < 3e-3) {
         this.pulse = w;
-        this.target = Math.min(180, Math.max(0, (w - 0.5e-3) / 2e-3 * 180));
+        this.target = Math.min(180, Math.max(0, (w - this.p.pmin) / (this.p.pmax - this.p.pmin) * 180));
       }
     }
     return false;
@@ -482,12 +484,21 @@ export class FreqMeter {
     }
     this.tp = t; this.vp = v;
   }
+  // the mean of the newest periods that agree with the last one (±3 %),
+  // so a note change does not blend two pitches
   read(t) {
     const e = this.edges;
     while (e.length && e[0] < t - 0.25) e.shift();
     if (e.length < 3) return [0, this.env];
-    const per = (e[e.length - 1] - e[0]) / (e.length - 1);
-    if (t - e[e.length - 1] > 3 * per + 0.02) return [0, this.env];
+    const last = e[e.length - 1] - e[e.length - 2];
+    let sum = 0, n = 0;
+    for (let k = e.length - 1; k > 0 && n < 16; k--) {
+      const d = e[k] - e[k - 1];
+      if (Math.abs(d / last - 1) > 0.03) break;
+      sum += d; n++;
+    }
+    const per = sum / n;
+    if (n < 2 || t - e[e.length - 1] > 3 * per + 0.02) return [0, this.env];
     return [1 / per, this.env];
   }
 }

@@ -434,6 +434,89 @@ if (section('damage')) {
   }
 }
 
+// ================================================================ more models
+if (section('relay motor comparator probes')) {
+  {
+    // NPN drives a 5 V relay; the contact switches a 6 V lamp; flyback diode
+    const els = [vsrc('v5', 1, 5), vsrc('v6', 2, 6), E('sw/main', 'switch', { a: 1, b: 3 }, { on: false }), E('rb/main', 'resistor', { a: 3, b: 4 }, { r: 1000 }),
+      E('q/main', 'npn', { c: 5, b: 4, e: 0 }), E('k/main', 'relay', { c1: 1, c2: 5, com: 2, no: 6, nc: 7 }), E('d/main', 'diode', { a: 5, k: 1 }, { model: '1n4007' }),
+      E('la/main', 'lamp', { a: 6, b: 0 })];
+    const eng = createEngine(net(8, els));
+    eng.advanceTo(0.05);
+    const off = eng.frame();
+    eng.setParam('sw', 'on', true);
+    eng.advanceTo(0.3);
+    const on = eng.frame();
+    check('relay picks up through an NPN and the lamp glows', off.parts.k.vis.on === false && on.parts.k.vis.on === true && on.parts.la.vis.on && on.parts.la.vis.b > 0.9, `relay ${off.parts.k.vis.on}→${on.parts.k.vis.on}, lamp b ${on.parts.la.vis.b.toFixed(3)}, coil ${(eng.i('k/main') * 1e3).toFixed(1)} mA`);
+  }
+  for (const withDiode of [true, false]) {
+    const els = [vsrc('v', 1, 5), E('sw/main', 'switch', { a: 1, b: 2 }, { on: true }), E('rb/main', 'resistor', { a: 2, b: 3 }, { r: 470 }), E('rbe/main', 'resistor', { a: 3, b: 0 }, { r: 10000 }),
+      E('q/main', 'npn', { c: 4, b: 3, e: 0 }, { model: '2n2222' }), E('m/main', 'motor', { a: 1, b: 4 })];
+    if (withDiode) els.push(E('d/main', 'diode', { a: 4, k: 1 }, { model: '1n4007' }));
+    const eng = createEngine(net(5, els));
+    eng.advanceTo(1);
+    eng.setParam('sw', 'on', false);
+    let vmax = 0;
+    while (eng.t < 1.002) { eng.advanceTo(eng.t + 2e-6); vmax = Math.max(vmax, eng.v(4)); }
+    const ok = withDiode ? vmax < 6.5 : vmax > 25;
+    check(`motor switched off ${withDiode ? 'with' : 'without'} a flyback diode: collector peak`, ok, `${vmax.toFixed(2)} V`);
+  }
+  {
+    // LM358 as a comparator: thermistor divider against a set point
+    const els = [vsrc('v', 1, 5), E('rt/main', 'resistor', { a: 1, b: 2 }, { r: 10000 }), E('th/main', 'thermistor', { a: 2, b: 0 }, { tempC: 20 }),
+      E('r1/main', 'resistor', { a: 1, b: 3 }, { r: 10000 }), E('r2/main', 'resistor', { a: 3, b: 0 }, { r: 8000 }),
+      E('u/main', 'opamp', { inp: 3, inn: 2, out: 4, vcc: 1, vee: 0 }, { model: 'lm358' }), E('rl/main', 'resistor', { a: 4, b: 0 }, { r: 10000 })];
+    const eng = createEngine(net(5, els));
+    eng.advanceTo(0.01);
+    const lo = eng.v(4);
+    eng.setParam('th', 'tempC', 35);
+    eng.advanceTo(0.02);
+    const hi = eng.v(4);
+    check('LM358 comparator switches when the thermistor passes the set point', lo < 0.1 && hi > 3.3, `out ${lo.toFixed(3)} V at 20 °C, ${hi.toFixed(3)} V at 35 °C`);
+  }
+  {
+    const els = [E('ck/main', 'vsource', { p: 1, n: 0 }, { wave: { kind: 'square', amp: 2.5, offset: 2.5, freq: 1000 } }), E('r/main', 'resistor', { a: 1, b: 0 }, { r: 1000 })];
+    const eng = createEngine(net(2, els, { probes: [{ id: 'la', type: 'logic', leads: { d0: 1, gnd: 0 }, settings: { threshold: 1.4 } }] }));
+    eng.advanceTo(0.0105);
+    const f = eng.frame().probes.la;
+    const rises = f.edges.filter(e => e[1] === 0 && e[2] === 1).map(e => e[0]);
+    const per = (rises[rises.length - 1] - rises[0]) / (rises.length - 1);
+    check('logic analyzer edges of a 1 kHz square', f.edges.length >= 20 && Math.abs(per - 1e-3) < 1e-7, `${f.edges.length} edges, period ${(per * 1e3).toFixed(6)} ms`);
+  }
+  {
+    const els = [vsrc('v', 1, 0), E('r/main', 'resistor', { a: 2, b: 3 }, { r: 10 })];
+    const eng = createEngine(net(4, els, { probes: [{ id: 'm', type: 'dmm', leads: { red: 2, black: 3 }, settings: { mode: 'cont' } }] }));
+    eng.advanceTo(0.01);
+    const f = eng.frame().probes.m;
+    check('continuity mode beeps on 10 Ω', f.beep && Math.abs(f.value - 10) < 0.01, `${f.value.toFixed(4)} Ω, beep ${f.beep}`);
+  }
+  {
+    const els = [E('usb/main', 'usbpower', { p: 1, n: 0 }), E('r/main', 'resistor', { a: 1, b: 0 }, { r: 4, pmax: 100 })];
+    const { eng, frames } = runFor(net(2, els), 1.0);
+    const ev = frames.flatMap(f => f.events).find(e => e.kind === 'fuse');
+    check('USB polyfuse trips at about 1.2 A', !!ev && eng.dev('usb/main').tripped, ev ? `t = ${ev.t.toFixed(3)} s: ${ev.msg}` : 'no event');
+  }
+  {
+    const els = [E('pv/main', 'solar', { p: 1, n: 0 }, { isc: 0.1, voc: 6, lux: 100000 })];
+    const e1 = createEngine(net(2, els)); e1.dcop();
+    const e2 = createEngine(net(2, [...els, E('r/main', 'resistor', { a: 1, b: 0 }, { r: 1 })])); e2.dcop();
+    check('solar cell: Voc and Isc at full light', Math.abs(e1.v(1) - 6) < 0.15 && Math.abs(e2.v(1) / 1 - 0.1) < 0.005, `Voc ${e1.v(1).toFixed(3)} V, I into 1 Ω ${(e2.v(1) * 1e3).toFixed(2)} mA`);
+  }
+  {
+    // a rebuild keeps capacitor charge (load with carry, as after a wire edit)
+    const mk = (extra) => net(4, [vsrc('v', 1, 5), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 10000 }), E('c/main', 'capacitor', { a: 2, b: 0 }, { c: 100e-6 }), ...extra]);
+    const e1 = createEngine(mk([]));
+    e1.advanceTo(0.5);
+    const v1 = e1.v(2);
+    const e2 = createEngine(mk([E('rx/main', 'resistor', { a: 3, b: 0 }, { r: 1000 })]));
+    e2.restoreState(e1.snapshotState());
+    const v2 = e2.v(2);
+    e2.advanceTo(1.0);
+    const ref = 5 * (1 - Math.exp(-1));
+    check('restoreState carries capacitor charge across a rebuild', Math.abs(v2 - v1) < 1e-3 && rel(e2.v(2), ref) < 0.005, `${v1.toFixed(4)} V → ${v2.toFixed(4)} V; at 1 s ${e2.v(2).toFixed(4)} V (ref ${ref.toFixed(4)})`);
+  }
+}
+
 // ================================================================ netlist
 let realGeo = null, realReg = null;
 try { realGeo = await import('../parts/geometry.js'); } catch (e) { realGeo = null; }
@@ -636,6 +719,110 @@ if (section('builtin parts (cross-role)')) {
       } catch (e) { bad.push(`${def.id}: ${e.message}`); }
     }
     check(`every builtin part def (${defs.length}) builds a netlist and runs 1 ms`, bad.length === 0, bad.length ? bad.slice(0, 12).join(' | ') : 'all ran');
+  }
+}
+
+// ================================================================ real parts + MCU runtime
+let realMcu = null;
+try { realMcu = await import('../mcu/runtime.js'); } catch (e) { realMcu = null; }
+if (section('real parts and MCU runtime (cross-role)')) {
+  if (!realReg || !realMcu) console.log('   parts/index.js or mcu/runtime.js did not import; skipped');
+  else {
+    const { SKETCHES } = await import('../mcu/sketches.js');
+    const geo = realGeo || geoStub;
+    const factory = (spec) => realMcu.createMcu(spec);
+    const end = (s) => { const i = s.indexOf('.'); return { part: s.slice(0, i), pin: s.slice(i + 1) }; };
+    const mkDoc = (parts, wires, programs = {}) => ({
+      format: 'breadboard-lab', version: 1, boards: [],
+      parts: parts.map(([id, def, params = {}], i) => ({ id, def, place: { on: null, x: i * 40, z: 0, rot: 0 }, params })),
+      wires: wires.map(([a, b], i) => ({ id: 'w' + (i + 1), a: end(a), b: end(b), color: '#d63b3b', style: 'arch' })),
+      probes: [], materials: [], customParts: [], programs,
+    });
+    const prog = (key) => ({ u: { lang: 'sketch', source: SKETCHES[key].source } });
+    const sample = (eng, times, fn) => times.map(t => { eng.advanceTo(t); return fn(); });
+    {
+      const doc = mkDoc([['u', 'mcu-uno'], ['r1', 'res', { r: 220 }], ['d1', 'led']], [['u.D13', 'r1.1'], ['r1.2', 'd1.A'], ['d1.K', 'u.GND.1']], prog('uno-blink'));
+      const nl = buildNetlist(doc, realReg, geo);
+      const eng = createEngine(nl, { mcuFactory: factory });
+      const on = sample(eng, [0.25, 0.75, 1.25, 1.75], () => eng.i('d1/main') > 0.005 ? 1 : 0);
+      eng.frame();
+      eng.advanceTo(2.2);
+      const f = eng.frame();
+      const L = f.parts.u.vis && f.parts.u.vis.leds ? Object.entries(f.parts.u.vis.leds).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', ') : 'none';
+      check('uno-blink sketch (real runtime, real defs): D13 LED blinks at 1 Hz', on.join('') === '1010', `LED on at 0.25/0.75/1.25/1.75 s: ${on.join('')}; board LEDs: ${L}; mcu ${JSON.stringify(f.mcus.u.running)}`);
+    }
+    {
+      const doc = mkDoc([['u', 'mcu-uno'], ['b1', 'button-6mm']], [['u.D2', 'b1.1'], ['b1.3', 'u.GND.1']], prog('uno-button-serial'));
+      const eng = createEngine(buildNetlist(doc, realReg, geo), { mcuFactory: factory });
+      eng.advanceTo(0.2);
+      eng.press('b1', true); eng.advanceTo(0.4);
+      eng.press('b1', false); eng.advanceTo(0.6);
+      eng.press('b1', true); eng.advanceTo(0.8);
+      eng.press('b1', false); eng.advanceTo(1.0);
+      const text = eng.drainSerial().map(s => s.text).join('');
+      check('uno-button-serial: INPUT_PULLUP button presses reach Serial', /Ready/.test(text) && /Press 1/.test(text) && /Press 2/.test(text), JSON.stringify(text));
+    }
+    {
+      const doc = mkDoc([['u', 'mcu-uno'], ['lcd', 'lcd-1602'], ['tp', 'pot', { pos: 0.1 }], ['rf', 'res', { r: 10000 }], ['th', 'thermistor', { tempC: 23.4 }]], [
+        ['u.D12', 'lcd.RS'], ['u.D11', 'lcd.E'], ['u.D5', 'lcd.D4'], ['u.D4', 'lcd.D5'], ['u.D3', 'lcd.D6'], ['u.D2', 'lcd.D7'],
+        ['lcd.RW', 'u.GND.1'], ['lcd.VSS', 'u.GND.1'], ['lcd.K', 'u.GND.2'], ['lcd.VDD', 'u.5V'], ['lcd.A', 'u.5V'],
+        ['tp.1', 'u.GND.2'], ['tp.2', 'u.5V'], ['tp.W', 'lcd.V0'],
+        ['rf.1', 'u.5V'], ['rf.2', 'u.A0'], ['th.1', 'u.A0'], ['th.2', 'u.GND.3']], prog('uno-lcd-thermo'));
+      const eng = createEngine(buildNetlist(doc, realReg, geo), { mcuFactory: factory });
+      eng.advanceTo(1.0);
+      const v = eng.frame().parts.lcd.vis || {};
+      eng.setParam('th', 'tempC', 30);
+      eng.advanceTo(1.6);
+      const v2 = eng.frame().parts.lcd.vis || {};
+      check('uno-lcd-thermo: LiquidCrystal text on the hd44780 follows the thermistor', v.rows && /^TEMP 23\.[345] C/.test(v.rows[0]) && /^TEMP (29\.\d|30\.[01]) C/.test(v2.rows[0]), `"${v.rows && v.rows[0]}" / "${v.rows && v.rows[1]}" then "${v2.rows && v2.rows[0]}", contrast ${v.contrast != null ? v.contrast.toFixed(2) : '-'}, backlight ${v.backlight != null ? v.backlight.toFixed(2) : '-'}`);
+    }
+    {
+      const doc = mkDoc([['u', 'mcu-uno'], ['p1', 'pot', { pos: 0.25 }], ['r1', 'res', { r: 220 }], ['d1', 'led']], [
+        ['p1.1', 'u.GND.1'], ['p1.2', 'u.5V'], ['p1.W', 'u.A0'], ['u.D9', 'r1.1'], ['r1.2', 'd1.A'], ['d1.K', 'u.GND.2']], prog('uno-fade-pot'));
+      const eng = createEngine(buildNetlist(doc, realReg, geo), { mcuFactory: factory });
+      eng.advanceTo(0.3); eng.frame(); eng.advanceTo(0.5);
+      const b1 = eng.frame().parts.d1.vis.b;
+      eng.setParam('p1', 'pos', 0.75);
+      eng.advanceTo(0.8); eng.frame(); eng.advanceTo(1.0);
+      const b2 = eng.frame().parts.d1.vis.b;
+      const plot = eng.drainSerial().map(s => s.text).join('').trim().split(/\s+/).slice(-2).join(' ');
+      check('uno-fade-pot: analogRead and analogWrite: LED brightness follows the pot', b2 > 2 * b1 && b1 > 0.05, `b at pos 0.25 = ${b1.toFixed(3)}, at 0.75 = ${b2.toFixed(3)}; last serial: ${plot}`);
+    }
+    {
+      const doc = mkDoc([['u', 'mcu-uno'], ['r1', 'res', { r: 100 }], ['bz', 'buzzer-passive']], [['u.D8', 'r1.1'], ['r1.2', 'bz.+'], ['bz.−', 'u.GND.1']], prog('uno-melody'));
+      const eng = createEngine(buildNetlist(doc, realReg, geo), { mcuFactory: factory });
+      const fs = [];
+      for (let k = 1; k <= 30; k++) { eng.advanceTo(k * 0.05); const fv = eng.frame().parts.bz.vis.freq; if (fv) fs.push(Math.round(fv)); }
+      const notes = [262, 294, 330, 349, 392, 440, 494, 523];
+      const off = fs.filter(f => !notes.some(n => Math.abs(f / n - 1) < 0.01));
+      check('uno-melody: tone() notes reach the buzzer, no blended pitches', new Set(fs).size >= 3 && off.length === 0, `frequencies seen: ${[...new Set(fs)].join(', ')} Hz; off-note readings: ${off.length}`);
+    }
+    {
+      const doc = mkDoc([['u', 'mcu-uno'], ['p1', 'pot', { pos: 0.2 }], ['sv', 'servo']], [
+        ['p1.1', 'u.GND.1'], ['p1.2', 'u.5V'], ['p1.W', 'u.A0'], ['sv.SIG', 'u.D9'], ['sv.VCC', 'u.5V'], ['sv.GND', 'u.GND.2']], prog('uno-servo'));
+      const eng = createEngine(buildNetlist(doc, realReg, geo), { mcuFactory: factory });
+      eng.advanceTo(1.0);
+      const a1 = eng.frame().parts.sv.vis.angle;
+      eng.setParam('p1', 'pos', 0.8);
+      eng.advanceTo(2.0);
+      const a2 = eng.frame().parts.sv.vis.angle;
+      check('uno-servo: the horn angle follows the pot', Math.abs(a1 - 36) < 2 && Math.abs(a2 - 144) < 2, `angle ${a1.toFixed(1)}° at pos 0.2, ${a2.toFixed(1)}° at pos 0.8`);
+    }
+    {
+      const doc = mkDoc([['u', 'mcu-esp32'], ['rr', 'res', { r: 220 }], ['lr', 'led', { color: 'red' }], ['ry', 'res', { r: 220 }], ['ly', 'led', { color: 'yellow' }], ['rg', 'res', { r: 220 }], ['lg', 'led', { color: 'green' }]], [
+        ['u.25', 'rr.1'], ['rr.2', 'lr.A'], ['lr.K', 'u.GND.1'], ['u.26', 'ry.1'], ['ry.2', 'ly.A'], ['ly.K', 'u.GND.1'], ['u.27', 'rg.1'], ['rg.2', 'lg.A'], ['lg.K', 'u.GND.2']],
+        { u: { lang: 'sketch', source: SKETCHES['esp32-traffic'].source } });
+      const eng = createEngine(buildNetlist(doc, realReg, geo), { mcuFactory: factory });
+      const seen = new Set();
+      let vhi = 0;
+      for (let k = 1; k <= 120; k++) {
+        eng.advanceTo(k * 0.1);
+        const st = ['lr', 'ly', 'lg'].map(id => (eng.i(id + '/main') > 0.002 ? 1 : 0)).join('');
+        seen.add(st);
+        vhi = Math.max(vhi, eng.v(eng.nl.mcus[0].pins['25']));
+      }
+      check('esp32-traffic: 3.3 V logic runs the light sequence', seen.size >= 3 && vhi > 3.1 && vhi < 3.4, `LED states seen (r y g): ${[...seen].join(' ')}; GPIO 25 high level ${vhi.toFixed(3)} V`);
+    }
   }
 }
 
