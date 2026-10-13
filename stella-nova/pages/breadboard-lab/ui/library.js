@@ -18,7 +18,7 @@
 //    BOARD_CARDS / INSTR_CARDS
 //    createLibraryPanel . the panel; render(), arm(), freeSpot()
 // ============================================================================
-import { h, makePanel, chip } from './panels.js';
+import { h, makePanel, chip, measure, flip } from './panels.js';
 
 const CAT_ICON = {
   boards: 'M3 7h18v10H3zM6 10h1M9 10h1M12 10h1M15 10h1M18 10h1M6 14h1M9 14h1M12 14h1M15 14h1M18 14h1',
@@ -132,6 +132,7 @@ export function createLibraryPanel(C) {
   }
   function render() {
     for (const b of cats.children) b.classList.toggle('on', b.dataset.k === cat);
+    const before = measure([...list.querySelectorAll('.card')].map(c => [c.dataset.k, c]));
     list.innerHTML = '';
     const sections = [];
     if ((cat === 'all' || cat === 'boards')) {
@@ -159,6 +160,8 @@ export function createLibraryPanel(C) {
       list.appendChild(h('div.sec', {}, h('span', {}, title), h('span.r', {}, String(cards.length))));
       list.appendChild(h('div.cards', {}, cards));
     }
+    // cards that stay slide from their old places (CONTRACT 8: measure / flip)
+    flip(before, [...list.querySelectorAll('.card')].map(c => [c.dataset.k, c]));
   }
   C.bus.on('place:end', () => { if (armed) { armed = null; render(); C.hint(''); } });
   render();

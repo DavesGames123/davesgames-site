@@ -26,7 +26,7 @@
 //    menu ............... a context menu that unfolds from a point
 //    PanelManager ....... open / close / toggle with unfold, phone sheet aware
 // ============================================================================
-import { unfold, reducedMotion } from '../../../lib/forge-ui.js';
+import { unfold, reducedMotion, measure, flip } from '../../../lib/forge-ui.js';
 import { si, siParts, parseSI, snapE, stepE, clamp } from './format.js';
 
 // h('button.sq.btn#run', { title: 'Run', onclick }, 'RUN')
@@ -275,4 +275,4 @@ export class PanelManager {
     }
   }
 }
-export { unfold, reducedMotion };
+export { unfold, reducedMotion, measure, flip };

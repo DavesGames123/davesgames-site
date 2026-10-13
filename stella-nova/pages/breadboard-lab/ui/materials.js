@@ -32,6 +32,8 @@ const FIELDS = [
   ['transmission', 'Transmission', 0, 1, 0.01], ['ior', 'IOR', 1, 2.5, 0.01], ['thickness', 'Thickness mm', 0, 10, 0.1],
   ['opacity', 'Opacity', 0, 1, 0.01], ['emissiveIntensity', 'Glow', 0, 10, 0.05], ['patternScale', 'Pattern scale', 0.25, 16, 0.05]
 ];
+// a material without the panel's bookkeeping field
+const strip = m => { const o = { ...m }; delete o._src; return o; };
 const DEFAULTS = { clearcoat: 0, clearcoatRoughness: 0.3, transmission: 0, ior: 1.5, thickness: 1, opacity: 1, emissive: '#000000', emissiveIntensity: 0, pattern: 'none', patternScale: 1 };
 
 export function createMaterials(C) {
@@ -85,9 +87,7 @@ export function createMaterials(C) {
   }
   function duplicate(m) {
     const id = C.newId('material');
-    const { _src, ...spec } = m;
-    void _src;
-    const copy = { ...DEFAULTS, ...spec, id, name: (m.name || m.id) + ' copy' };
+    const copy = { ...DEFAULTS, ...strip(m), id, name: (m.name || m.id) + ' copy' };
     C.store.apply({ op: 'add', kind: 'material', item: copy });
     curId = id; render();
     return copy;
@@ -152,14 +152,14 @@ export function createMaterials(C) {
     const acts = h('div.grid2');
     acts.append(btn('Duplicate', { cls: 'small', title: 'An editable copy in this bench', onClick: () => duplicate(m) }));
     if (m._src === 'doc') {
-      acts.append(btn('Save to library', { cls: 'small', title: 'Keep it in this browser for other benches', onClick: () => { const { _src, ...spec } = m; void _src; const ok = C.files.saveLibMaterial(spec); C.toast('info', ok ? 'Saved to your material library.' : 'Saved for this visit only (storage is blocked).'); render(); } }));
-      acts.append(btn('Export JSON', { cls: 'small', onClick: () => { const { _src, ...spec } = m; void _src; C.download(`${(m.name || m.id).replace(/\W+/g, '-')}.material.json`, JSON.stringify({ kind: 'material', spec }, null, 1)); } }));
+      acts.append(btn('Save to library', { cls: 'small', title: 'Keep it in this browser for other benches', onClick: () => { const ok = C.files.saveLibMaterial(strip(m)); C.toast('info', ok ? 'Saved to your material library.' : 'Saved for this visit only (storage is blocked).'); render(); } }));
+      acts.append(btn('Export JSON', { cls: 'small', onClick: () => C.download(`${(m.name || m.id).replace(/\W+/g, '-')}.material.json`, JSON.stringify({ kind: 'material', spec: strip(m) }, null, 1)) }));
       acts.append(btn('Delete', { cls: 'small.warn', title: 'Remove it from this bench (parts fall back to their default)', onClick: () => { C.store.apply({ op: 'remove', ids: [m.id] }); curId = null; render(); } }));
     }
     if (m._src === 'lib') acts.append(btn('Remove from library', { cls: 'small.warn', onClick: () => { C.files.removeLibMaterial(m.id); curId = null; render(); } }));
     acts.append(btn('Import JSON', { cls: 'small', onClick: () => C.importFile() }));
     editor.append(sec('Actions'), acts);
-    const errs = C.materials && C.materials.validateMaterial ? C.materials.validateMaterial((({ _src, ...s }) => s)(m)) : [];
+    const errs = C.materials && C.materials.validateMaterial ? C.materials.validateMaterial(strip(m)) : [];
     if (errs && errs.length) editor.append(h('ul.errs', {}, ...errs.map(e => h('li.sq.w', {}, e))));
   }
   function render() { renderTarget(); renderGrid(); renderEditor(); }

@@ -131,10 +131,11 @@ export function createLogicPanel(probe, ctx) {
   uartCh.addEventListener('change', () => { ui.uartCh = +uartCh.value; paint(); });
   baudSel.addEventListener('change', () => { ui.baud = +baudSel.value; paint(); });
   const liveBtn = btn('LIVE', { cls: 'small.on', title: 'Follow the newest edges, or hold the view to pan', onClick: () => { ui.live = !ui.live; liveBtn.classList.toggle('on', ui.live); } });
-  const thr = h('span.dim');
+  const thr = ctx.well ? ctx.well({ value: (probe.settings && probe.settings.threshold) || 1.5, unit: 'V', min: 0.1, max: 12, step: 0.05, onChange: (v, m) => ctx.store.apply({ op: 'set', id: cur.id, path: 'settings.threshold', value: v }, m && m.merge ? { merge: m.merge } : undefined) }) : null;
+  const thrEl = thr ? h('span.knob', {}, h('span', {}, 'THRESHOLD'), thr.el) : h('span');
   const text = h('div.meas.mono');
   const leads = h('div.leads');
-  const el = h('div.instr.logic', {}, canvas, h('div.instr-ctl', {}, spanSeg.el, liveBtn), h('div.instr-ctl', {}, uartBtn, uartCh, baudSel, thr), text, leads);
+  const el = h('div.instr.logic', {}, canvas, h('div.instr-ctl', {}, spanSeg.el, liveBtn), h('div.instr-ctl', {}, uartBtn, uartCh, baudSel), h('div.instr-ctl', {}, thrEl), text, leads);
   // drag to pan when not live
   let drag = null;
   canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, ta: ui.ta }; ui.live = false; liveBtn.classList.remove('on'); try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } });
@@ -147,7 +148,7 @@ export function createLogicPanel(probe, ctx) {
   }
   function setProbe(p) {
     cur = p;
-    thr.textContent = `threshold ${(p.settings && p.settings.threshold) ?? 'auto'} V`;
+    if (thr && p.settings && p.settings.threshold !== undefined) thr.set(p.settings.threshold);
     leads.innerHTML = '';
     for (const name of Object.keys(p.leads || {})) {
       const end = p.leads[name];

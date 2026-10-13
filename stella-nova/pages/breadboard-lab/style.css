@@ -277,12 +277,8 @@ textarea.txt{height:auto;min-height:60px;padding:8px 10px;resize:vertical;font-f
 }
 @keyframes breathe{0%,100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 0 0 0 rgba(107,159,226,0)}50%{box-shadow:inset 0 0 0 1px rgba(107,159,226,.28),0 0 6px 1px rgba(107,159,226,.18)}}
 body.running .face{animation:breathe 2.6s ease-in-out infinite}
-@keyframes toastIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
-.toast{animation:toastIn var(--t-open) var(--ease-out)}
-.toast.out{opacity:0;transform:translateY(6px) scale(.97);transition:opacity var(--t-close),transform var(--t-close)}
 @media (prefers-reduced-motion:reduce){
   .btn,.card,.tog::after{transition:none}
-  .toast{animation:none}
   body.running .face{animation:none}
 }
 

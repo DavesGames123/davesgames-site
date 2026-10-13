@@ -511,14 +511,16 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     const now = Date.now();
     if (recent.has(key) && now - recent.get(key) < 2500) return null;
     recent.set(key, now);
-    const el = h(`div.sq.toast.${level}`, { role: level === 'error' ? 'alert' : 'status' }, h('i'), h('span', {}, text));
+    const el = h(`div.sq.toast.${level}`, { role: level === 'error' ? 'alert' : 'status', hidden: true }, h('i'), h('span', {}, text));
     if (actions.length) el.appendChild(h('span.acts', {}, ...actions.map(a => btn(a.label, { cls: 'small', onClick: () => { a.onClick(); close(); } }))));
     D.toasts.appendChild(el);
     while (D.toasts.children.length > 4) D.toasts.firstChild.remove();
+    unfold(el, { open: true, from: D.status, radius: 12, content: null });
     let timer = setTimeout(close, ms || (level === 'error' ? 9000 : level === 'warn' ? 6500 : 4200));
     el.addEventListener('pointerenter', () => clearTimeout(timer));
     el.addEventListener('pointerleave', () => { timer = setTimeout(close, 2500); });
-    function close() { clearTimeout(timer); el.classList.add('out'); setTimeout(() => el.remove(), 260); }
+    let closing = false;
+    function close() { if (closing) return; closing = true; clearTimeout(timer); unfold(el, { open: false, from: D.status, radius: 12, content: null }).then(() => el.remove()); }
     return { el, close };
   }
 

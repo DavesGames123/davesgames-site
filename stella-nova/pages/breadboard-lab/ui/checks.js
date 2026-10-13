@@ -15,7 +15,7 @@
 //    createChecks ........ the panel
 //    counts .............. { error, warn, info } for the status bar
 // ============================================================================
-import { h, makePanel, btn, note } from './panels.js';
+import { h, makePanel, btn, note, measure, flip } from './panels.js';
 import { fmtTime } from './format.js';
 
 export const CODE_HELP = {
@@ -42,8 +42,8 @@ export function createChecks(C) {
   P.tools.append(reset);
   P.body.append(list, h('div.sec', {}, h('span', {}, 'Events'), clear), live);
 
-  function row(level, msg, sub, targets) {
-    const b = h(`button.sq.issue.${level}`, { type: 'button' }, h('i'), h('span', {}, msg, sub ? h('small', {}, sub) : null));
+  function row(level, msg, sub, targets, key) {
+    const b = h(`button.sq.issue.${level}`, { type: 'button', dataset: { k: key || msg } }, h('i'), h('span', {}, msg, sub ? h('small', {}, sub) : null));
     b.addEventListener('click', () => {
       if (!targets || !targets.length) return;
       C.view.flash && C.view.flash(targets);
@@ -55,14 +55,16 @@ export function createChecks(C) {
     return b;
   }
   function render() {
+    const before = measure([...list.children, ...live.children].map(e => [e.dataset && e.dataset.k, e]).filter(p => p[0]));
     list.innerHTML = '';
     const order = { error: 0, warn: 1, info: 2 };
     const L = issues.slice().sort((a, b) => order[a.level] - order[b.level]);
     if (!L.length) list.appendChild(note(C.netlist ? 'No problems found in the wiring.' : 'Checks run when the bench has a circuit.'));
-    for (const i of L) list.appendChild(row(i.level, i.msg, CODE_HELP[i.code] || i.code, i.targets));
+    for (const i of L) list.appendChild(row(i.level, i.msg, CODE_HELP[i.code] || i.code, i.targets, i.code + ':' + i.msg));
     live.innerHTML = '';
     if (!events.length) live.appendChild(h('p.empty', {}, 'No damage or limits so far.'));
-    for (const e of events.slice(0, 40)) live.appendChild(row(e.severity === 'error' ? 'error' : e.severity === 'warn' ? 'warn' : 'info', e.msg, `${fmtTime(e.t)}${e.owner ? ' · ' + e.owner : ''}`, e.owner ? [{ kind: 'part', id: e.owner }] : []));
+    for (const e of events.slice(0, 40)) live.appendChild(row(e.severity === 'error' ? 'error' : e.severity === 'warn' ? 'warn' : 'info', e.msg, `${fmtTime(e.t)}${e.owner ? ' · ' + e.owner : ''}`, e.owner ? [{ kind: 'part', id: e.owner }] : [], 'ev:' + e.t + e.msg));
+    flip(before, [...list.children, ...live.children].map(e => [e.dataset && e.dataset.k, e]).filter(p => p[0]));
     C.setIssueCount(counts());
   }
   function counts() {
