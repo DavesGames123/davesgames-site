@@ -187,6 +187,23 @@ function tableReturn(g, n, rays = 15) {
   ok(p.title.includes(CUTS[S.cut].name) && p.tex.some(t => t.includes('lambda')), 'the fire plate carries the dispersion equation');
 }
 
+// ── inspect: loupe and grading views ────────────────────────────────────────
+{
+  const I = await import('./inspect.js');
+  const c = [300, 200];
+  ok(I.loupeMap(c, c, 100, 10).every((v, i) => v === c[i]), 'the loupe centre traces itself');
+  const m = I.loupeMap([350, 200], c, 100, 10);
+  ok(near(m[0], 305, 1e-9) && m[1] === 200, 'a point 50 px out traces 5 px out at 10x', m.join());
+  ok(I.loupeMap([450, 200], c, 100, 10)[0] === 450, 'a point outside the lens does not move');
+  ok(I.loupeMap([350, 200], c, 100, 0)[0] === 350, 'a loupe of power 0 is off');
+  ok(I.LOUPE_MAGS[0] === 0 && I.LOUPE_MAGS.includes(10), 'loupe powers: off and the standard 10x');
+  ok(I.loupeRadius(390, 844) >= 70 && I.loupeRadius(2560, 1440) <= 190, 'the lens fits phone and desktop', I.loupeRadius(390, 844) + ', ' + I.loupeRadius(2560, 1440));
+  ok(I.VIEWS.faceup.pitch > 1.4 && I.VIEWS.tabledown.pitch < -1.4 && I.VIEWS.profile.pitch === 0, 'face up, table down and profile pitches');
+  ok(I.clampPitch(-1.5) === -1.5 && I.clampPitch(2) === 1.5, 'a drag reaches the table-down view');
+  const wgsl = (await import('node:fs')).readFileSync(new URL('./shaders/gem.wgsl', import.meta.url), 'utf8');
+  ok(/px = u\.scr\.zw \+ dl \/ u\.mat\.w/.test(wgsl), 'fs_gem maps the lens like loupeMap');
+}
+
 // ── page ────────────────────────────────────────────────────────────────────
 {
   let err = null;

@@ -43,12 +43,12 @@ struct U {
   right: vec4f,   // right, bounces
   up: vec4f,      // up, sample count
   ctr: vec4f,     // principal point x, y (render px), px per unit, fade
-  mat: vec4f,     // n_d, gem bounding radius, 0, 0
+  mat: vec4f,     // n_d, gem bounding radius, loupe radius (render px, 0 off), loupe mag
   absorb: vec4f,  // Beer-Lambert sigma rgb, 0
   envp: vec4f,    // rig angle, preset, exposure, spark gain
   sweep: vec4f,   // sweep azimuth, sweep gain, background level, 0
   post: vec4f,    // threshold, streak gain, streak angle, glow gain
-  scr: vec4f,     // canvas w, h, 0, 0
+  scr: vec4f,     // canvas w, h, loupe centre x, y (render px)
   samp: array<vec4f, 12>,   // n_k, w_k.rgb
 };
 @group(0) @binding(0) var<uniform> u: U;
@@ -175,7 +175,12 @@ fn background(px: vec2f) -> vec3f {
 
 @fragment fn fs_gem(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let mode = u32(u.res.w);
-  let q = (pos.xy - u.ctr.xy) / u.ctr.z;
+  // the loupe: a pixel in the lens traces the ray of a pixel 1/mag as far
+  // from the lens centre (inspect.js loupeMap)
+  var px = pos.xy;
+  let dl = px - u.scr.zw;
+  if (u.mat.z > 0.0 && dot(dl, dl) < u.mat.z * u.mat.z) { px = u.scr.zw + dl / u.mat.w; }
+  let q = (px - u.ctr.xy) / u.ctr.z;
   let th = u.eye.w;
   let ro = u.eye.xyz;
   let rd = normalize(u.fwd.xyz + u.right.xyz * (q.x * th) - u.up.xyz * (q.y * th));
@@ -201,7 +206,7 @@ fn background(px: vec2f) -> vec3f {
     }
   }
   if (miss || (tN > tF) || (tF < 0.0)) {
-    if (mode == 0u) { return vec4f(background(pos.xy), 1.0); }
+    if (mode == 0u) { return vec4f(background(px), 1.0); }
     return vec4f(vec3f(0.02), 1.0);
   }
 
@@ -355,6 +360,19 @@ fn hash(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43
   c = pow(c, vec3f(1.0 / 2.2));
   let v = uv - 0.5;
   c *= 1.0 - 0.35 * dot(v, v);
+  // the loupe rim: a dark band with a thin bright edge, and a little
+  // darkening at the edge of the lens
+  if (u.mat.z > 0.0) {
+    let ks = u.scr.x / u.res.x;
+    let lr = u.mat.z * ks;
+    let d = length(pos.xy - u.scr.zw * ks) - lr;
+    let px1 = max(1.0, ks * 1.5);
+    c *= 1.0 - 0.3 * smoothstep(-lr * 0.25, 0.0, d) * step(d, 0.0);
+    let rim = smoothstep(-px1, 0.0, d) * (1.0 - smoothstep(px1 * 5.0, px1 * 6.0, d));
+    c = mix(c, vec3f(0.07, 0.07, 0.08), rim);
+    let edge = 1.0 - smoothstep(0.0, px1, abs(d - px1 * 0.5));
+    c = mix(c, vec3f(0.85, 0.78, 0.62), edge * 0.8);
+  }
   c *= 1.0 - u.ctr.w;
   c += (hash(pos.xy + fract(u.res.z)) - 0.5) / 255.0;
   return vec4f(c, 1.0);

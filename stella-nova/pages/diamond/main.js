@@ -27,6 +27,7 @@
 //    function packUniforms ........ S to the uniform block (struct U)
 //    function drawDiagram ......... crown, pavilion and profile drawings
 //    function buildUI ............. buttons, sliders, sheet and dock
+//    function setView / setLoupe .. grading views and the loupe (inspect.js)
 //    function initGPU / function resizeTargets / function frame
 //    window.snSaver ............... saver.js makeSaver(app)
 // ============================================================================
@@ -35,6 +36,7 @@ import { MATERIALS, MATERIAL_KEYS, spectralSamples, indexAt, materialStats } fro
 import { typesetAll } from '../../lib/sci-math.js';
 import { plateBand } from '../../lib/saver-clear.js';
 import { makeSaver } from './saver.js';
+import { LOUPE_MAGS, VIEWS, VIEW_KEYS, loupeRadius, clampPitch } from './inspect.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -54,7 +56,10 @@ const S = {
   cut: 'round', prop: { table: CUTS.round.p.table, crown: CUTS.round.p.crown, pav: CUTS.round.p.pav, girdle: CUTS.round.p.girdle }, mat: 'diamond', fire: 1, bounces: 8, samples: COARSE ? 1 : 2,
   env: 0, rig: 0.4, sweep: false, sweepAz: 0, exposure: 1, spark: 1, mode: 0, spin: true,
   cam: { yaw: 0.5, pitch: 0.55, zoom: 1 }, fade: 0, matEase: 0.35, saver: false, band: null,
+  loupe: 0, loupeAt: null, view: 'free',
 };
+// the pitch a grading view eases to; a drag cancels it
+let pitchGoal = null;
 const live = { nd: MATERIALS.diamond.nd, abbe: MATERIALS.diamond.abbe, absorb: [0, 0, 0] };
 let geom = null, planesDirty = true, spinHold = 0;
 
@@ -141,13 +146,15 @@ function packUniforms(time) {
   U.set([...C.right, S.bounces], 12);
   U.set([...C.up, ns], 16);
   U.set([ctr.x * k, ctr.y * k, ctr.s * k, S.fade], 20);
-  U.set([live.nd, geom.stats.radius, 0, 0], 24);
+  // the loupe in render px; off in the saver
+  const lOn = S.loupe > 0 && !S.saver, la = S.loupeAt || [ctr.x, ctr.y];
+  U.set([live.nd, geom.stats.radius, lOn ? loupeRadius(innerWidth, innerHeight) * k : 0, S.loupe || 1], 24);
   U.set([...live.absorb, 0], 28);
   U.set([S.rig, S.env, S.exposure, S.spark], 32);
   U.set([S.sweepAz, S.sweep ? 1 : 0, 1, 0], 36);
   U.set([3.0, S.spark, 0.62 + 0.15 * Math.sin(time * 0.05), 1], 40);
   const cv = $('view');
-  U.set([cv.width, cv.height, 0, 0], 44);
+  U.set([cv.width, cv.height, la[0] * k, la[1] * k], 44);
   samplesCache.s.forEach((sm, i) => {
     const n = ns === 1 ? live.nd : indexAt(live.nd, live.abbe, sm.lambda, S.fire);
     U.set([n, sm.w[0], sm.w[1], sm.w[2]], 48 + i * 4);
@@ -234,6 +241,10 @@ function syncControls() {
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', +b.dataset.mode === S.mode));
   $('sweepBtn').classList.toggle('on', S.sweep); $('sweepBtn').textContent = 'Light sweep · ' + (S.sweep ? 'on' : 'off');
   $('spinBtn').classList.toggle('on', S.spin); $('spinBtn').textContent = 'Turntable · ' + (S.spin ? 'on' : 'off');
+  document.querySelectorAll('[data-loupe]').forEach(b => b.classList.toggle('on', +b.dataset.loupe === S.loupe));
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === S.view));
+  $('viewNote').textContent = S.loupe ? 'Loupe ' + S.loupe + '×: ' + (COARSE ? 'drag' : 'move the pointer') + ' to look through it. The turntable stops while the loupe is out.' : VIEWS[S.view].note;
+  $('dockLoupe').classList.toggle('on', S.loupe > 0);
   const act = document.querySelector('#dockCuts .on'); if (act && act.scrollIntoView && PHONE_Q.matches) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 function button(host, label, data, on) {
@@ -255,6 +266,13 @@ function buildUI() {
   MODES.forEach((m, i) => button($('modes'), m, { mode: i }, () => { S.mode = i; syncControls(); refreshReadouts(); }));
   $('sweepBtn').addEventListener('click', () => { S.sweep = !S.sweep; syncControls(); });
   $('spinBtn').addEventListener('click', () => { S.spin = !S.spin; syncControls(); });
+  LOUPE_MAGS.forEach(m => button($('loupes'), m ? m + '×' : 'Off', { loupe: m }, () => setLoupe(m)));
+  VIEW_KEYS.forEach(k => button($('views'), VIEWS[k].name, { view: k }, () => setView(k)));
+  $('dockLoupe').addEventListener('click', () => setLoupe(S.loupe ? 0 : 10));
+  addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if (e.key === 'l' || e.key === 'L') setLoupe(S.loupe ? 0 : 10);
+  });
   for (const k of Object.keys(RANGES)) { $(k).min = RANGES[k][0]; $(k).max = RANGES[k][1]; }
   const prop = (k, fmt) => bindRange(k, () => S.prop[k], v => { S.prop[k] = v; }, fmt, rebuild);
   prop('table', v => (100 * v).toFixed(1) + '%');
@@ -295,7 +313,21 @@ function buildUI() {
   addEventListener('resize', () => setTimeout(drawDiagram, 50));
 }
 
-// ── pointer: orbit, pinch, wheel, double tap ────────────────────────────────
+// A grading view eases the pitch and sets the turntable. The loupe stays
+// where it was put; it starts on the stone.
+function setView(k) {
+  const v = VIEWS[k]; S.view = k; pitchGoal = v.pitch;
+  if (v.spin !== null) S.spin = v.spin;
+  syncControls();
+}
+function setLoupe(m) {
+  S.loupe = m; if (m && !S.loupeAt) S.loupeAt = [ctr.x, ctr.y];
+  syncControls();
+}
+
+// ── pointer: orbit, pinch, wheel, double tap, loupe ─────────────────────────
+// With the loupe out, a mouse moves it by hover and turns the stone by a
+// drag. A finger moves the loupe; two fingers still pinch.
 function bindView() {
   const cv = $('view'), pts = new Map(); let pinch = null, last = null, lastTap = 0;
   const hide = () => $('hint').classList.add('gone');
@@ -303,16 +335,19 @@ function bindView() {
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
     pts.set(e.pointerId, [e.clientX, e.clientY]); hide(); spinHold = 2.5;
     if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: S.cam.zoom }; return; }
-    last = [e.clientX, e.clientY];
-    const now = performance.now(); if (now - lastTap < 300) S.cam = { yaw: 0.5, pitch: 0.55, zoom: 1 }; lastTap = now;
+    last = [e.clientX, e.clientY]; pitchGoal = null;
+    if (S.loupe && e.pointerType !== 'mouse') S.loupeAt = [e.clientX, e.clientY];
+    const now = performance.now(); if (now - lastTap < 300) { S.cam = { yaw: 0.5, pitch: 0.55, zoom: 1 }; S.view = 'free'; syncControls(); } lastTap = now;
   });
   cv.addEventListener('pointermove', e => {
+    if (S.loupe && e.pointerType === 'mouse' && !pts.has(e.pointerId)) { S.loupeAt = [e.clientX, e.clientY]; return; }
     if (!pts.has(e.pointerId)) return;
     pts.set(e.pointerId, [e.clientX, e.clientY]); spinHold = 2.5;
     if (pinch && pts.size >= 2) { const [a, b] = [...pts.values()]; S.cam.zoom = clampZoom(pinch.z * Math.hypot(a[0] - b[0], a[1] - b[1]) / Math.max(pinch.d, 1)); return; }
     if (!last) return;
     const dx = e.clientX - last[0], dy = e.clientY - last[1]; last = [e.clientX, e.clientY];
-    S.cam.yaw -= dx * 0.008; S.cam.pitch = Math.min(1.5, Math.max(-0.6, S.cam.pitch + dy * 0.008));
+    if (S.loupe) { S.loupeAt = [e.clientX, e.clientY]; if (e.pointerType !== 'mouse') return; }
+    S.cam.yaw -= dx * 0.008; S.cam.pitch = clampPitch(S.cam.pitch + dy * 0.008);
   });
   const end = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) last = null; else last = [...pts.values()][0]; };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
@@ -398,7 +433,11 @@ function frame(now) {
   const m = MATERIALS[S.mat], k = 1 - Math.exp(-dt / Math.max(0.01, S.matEase));
   live.nd += (m.nd - live.nd) * k; live.abbe += (m.abbe - live.abbe) * k;
   live.absorb = live.absorb.map((v, i) => v + (m.absorb[i] - v) * k);
-  if (spinHold > 0) spinHold -= dt; else if (S.spin && !S.saver) S.cam.yaw += dt * 0.16;
+  if (spinHold > 0) spinHold -= dt; else if (S.spin && !S.saver && !S.loupe) S.cam.yaw += dt * 0.16;
+  if (pitchGoal !== null && !S.saver) {
+    S.cam.pitch += (pitchGoal - S.cam.pitch) * (1 - Math.exp(-dt / 0.25));
+    if (Math.abs(pitchGoal - S.cam.pitch) < 1e-3) pitchGoal = null;
+  }
   if (S.sweep && !S.saver) S.sweepAz += dt * 0.5;
   updateCentre(dt);
   if (!device || !geom) return;
