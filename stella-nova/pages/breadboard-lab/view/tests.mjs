@@ -9,6 +9,7 @@
 //  GREP MAP
 //    section('bus') ........... order, off, once, a throwing handler
 //    section('space') ......... CONTRACT 3.2 hole positions, strips, frames
+//    section('space vs parts')  core/space.js against parts/geometry.js
 //    section('applyOp') ....... 500 random sequences, inverse property, purity
 //    section('topology') ...... the flags of CONTRACT 4.1
 //    section('store') ......... merge window, undo / redo, newId
@@ -121,6 +122,38 @@ section('space');
   const pins = SP.partPinsWorld(doc, { id: 'p1', def: 'res', place: { on: 'b1', x: SP.colX(63, 10), z: SP.rowZ(0), rot: 0 }, params: { span: 5 } }, res);
   const h2 = SP.nearestHole(doc, pins[1].x, pins[1].z, 0.6);
   check('resistor span 5 from b1:a10 lands pin 2 on b1:a15', h2 === 'b1:a15', h2);
+}
+
+// ── space against parts/geometry.js (when PARTS has delivered it) ──────────
+section('space vs parts');
+{
+  let PG = null;
+  try { PG = await import('../parts/geometry.js'); } catch (e) { console.log('skip space vs parts: parts/geometry.js does not load: ' + e.message); }
+  if (PG) {
+    const doc = { boards: [{ id: 'b1', type: 'bb830', x: 12, z: -7, rot: 1 }, { id: 'b2', type: 'bb400', x: 140, z: 30, rot: 2 }, { id: 'b3', type: 'bb170', x: -150, z: 60, rot: 3 }] };
+    let bad = 0, n = 0;
+    for (const b of doc.boards) for (const l of SP.holeList(b.type)) {
+      const a = SP.holeWorld(doc, b.id + ':' + l), c = PG.holeWorld(doc, b.id + ':' + l);
+      n++;
+      if (!c || !near(a.x, c.x, 1e-6) || !near(a.z, c.z, 1e-6)) bad++;
+    }
+    check('every hole of three rotated boards matches parts/geometry.js', bad === 0, `${n - bad}/${n}`);
+    const R = rng(7);
+    let diff = 0;
+    for (let i = 0; i < 4000; i++) {
+      const x = R() * 400 - 200, z = R() * 200 - 60;
+      const a = SP.nearestHole(doc, x, z, 1.27), c = PG.nearestHole(doc, x, z, 1.27);
+      if (a !== c) { const pa = a && SP.holeWorld(doc, a), pc = c && SP.holeWorld(doc, c); if (!(pa && pc && near(Math.hypot(pa.x - x, pa.z - z), Math.hypot(pc.x - x, pc.z - z), 1e-6))) diff++; }
+    }
+    check('nearestHole agrees at 4000 random points', diff === 0, `${diff} differ`);
+    let pinBad = 0;
+    for (const def of Object.values(DEFS)) for (let rot = 0; rot < 4; rot++) {
+      const part = { id: 'p1', def: def.id, place: { on: def.mount === 'free' ? null : 'b1', x: SP.colX(63, 20), z: SP.rowZ(5), rot }, params: { span: 6 } };
+      const a = SP.partPinsWorld(doc, part, def), c = PG.partPinsWorld(doc, part, def);
+      a.forEach((p, i) => { if (!near(p.x, c[i].x, 1e-6) || !near(p.z, c[i].z, 1e-6)) pinBad++; });
+    }
+    check('partPinsWorld agrees for every stub def at four turns', pinBad === 0, `${pinBad} pins differ`);
+  }
 }
 
 // ── applyOp: inverse property ──────────────────────────────────────────────
