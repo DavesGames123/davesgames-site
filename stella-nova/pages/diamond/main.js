@@ -145,7 +145,7 @@ function packUniforms(time) {
   U.set([...live.absorb, 0], 28);
   U.set([S.rig, S.env, S.exposure, S.spark], 32);
   U.set([S.sweepAz, S.sweep ? 1 : 0, 1, 0], 36);
-  U.set([1.6, S.spark, 0.62 + 0.15 * Math.sin(time * 0.05), 1], 40);
+  U.set([3.0, S.spark, 0.62 + 0.15 * Math.sin(time * 0.05), 1], 40);
   const cv = $('view');
   U.set([cv.width, cv.height, 0, 0], 44);
   samplesCache.s.forEach((sm, i) => {
@@ -370,16 +370,17 @@ function pass(enc, view, pipe, group) {
   p.setPipeline(pipe); p.setBindGroup(0, group); p.draw(3); p.end();
 }
 
-// Adaptive pixel factor q: 1 s windows; below 42 fps q drops, after three
-// windows above 56 fps it rises (never past the last failed level).
-const perf = { t0: 0, n: 0, good: 0, ceil: 1, warm: 2, fps: 0 };
+// Adaptive pixel factor q: 1 s windows; below 42 fps q drops by (fps/50)^2
+// (at most x0.72), after three windows above 56 fps it rises (never past
+// the last failed level).
+const perf = { t0: 0, n: 0, good: 0, ceil: 1, warm: 1, fps: 0 };
 function tickPerf(now) {
   if (!perf.t0) { perf.t0 = now; return; }
   perf.n++;
   if (now - perf.t0 < 1000) return;
   const fps = perf.n * 1000 / (now - perf.t0); perf.fps = fps; perf.t0 = now; perf.n = 0;
   if (perf.warm > 0) { perf.warm--; return; }
-  if (fps < 42 && q > 0.12) { perf.ceil = q * 0.95; q = Math.max(0.12, q * 0.72); perf.good = 0; }
+  if (fps < 42 && q > 0.12) { perf.ceil = q * 0.95; q = Math.max(0.12, q * Math.min(0.72, (fps / 50) ** 2)); perf.good = 0; }
   else if (fps > 56) { if (++perf.good >= 3 && q < perf.ceil) { q = Math.min(perf.ceil, q * 1.18); perf.good = 0; } }
   else perf.good = 0;
   $('rdFps').textContent = fps.toFixed(0) + ' fps';

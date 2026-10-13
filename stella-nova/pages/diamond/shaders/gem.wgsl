@@ -234,6 +234,8 @@ fn background(px: vec2f) -> vec3f {
     var thr = vec3f(1.0 - R);
     var acc = vec3f(0.0);
     for (var b = 0u; b < nb; b = b + 1u) {
+      // the light still inside is too dim to see: stop the path here
+      if (mode != 2u && max(thr.x, max(thr.y, thr.z)) < 0.015) { break; }
       var tm = 1e9;
       var ne = vec3f(0.0, 1.0, 0.0);
       for (var i = 0u; i < np; i = i + 1u) {
@@ -317,22 +319,22 @@ fn lum(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
   var star = vec3f(0.0);
   for (var arm = 0; arm < 2; arm = arm + 1) {
     let ang = a + f32(arm) * (PI * 0.5);
-    let dv = vec2f(cos(ang), sin(ang)) * tx * 1.6;
-    for (var j = 1; j < 12; j = j + 1) {
+    let dv = vec2f(cos(ang), sin(ang)) * tx;
+    for (var j = 1; j < 7; j = j + 1) {
       let fj = f32(j);
-      let wgt = pow(0.8, fj);
+      let wgt = pow(0.55, fj);
       star += wgt * textureSampleLevel(srcTex, linSamp, uv + dv * fj, 0.0).rgb;
       star += wgt * textureSampleLevel(srcTex, linSamp, uv - dv * fj, 0.0).rgb;
     }
   }
   var glow = vec3f(0.0);
-  for (var y = -2; y <= 2; y = y + 1) {
-    for (var x = -2; x <= 2; x = x + 1) {
+  for (var y = -1; y <= 1; y = y + 1) {
+    for (var x = -1; x <= 1; x = x + 1) {
       let o = vec2f(f32(x), f32(y));
-      glow += exp(-dot(o, o) * 0.35) * textureSampleLevel(srcTex, linSamp, uv + o * tx * 1.5, 0.0).rgb;
+      glow += exp(-dot(o, o) * 0.7) * textureSampleLevel(srcTex, linSamp, uv + o * tx, 0.0).rgb;
     }
   }
-  return vec4f(star * 0.12 * u.post.y + glow * 0.09 * u.post.w, 1.0);
+  return vec4f(star * 0.05 * u.post.y + glow * 0.035 * u.post.w, 1.0);
 }
 
 fn aces(x: vec3f) -> vec3f {
