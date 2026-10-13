@@ -19,7 +19,8 @@
 //  (rows of the spawn pool).
 //
 //  bodyInstances() / segments() fill the renderer's buffers each frame:
-//  bodies in frame coordinates (frame.js), trails, the throw preview.
+//  bodies in frame coordinates (frame.js) at their drawn radius (size.js
+//  drawRadius, kept in S.meta[i].rNow), trails, the throw preview.
 //
 //  grep -n targets: "export function startRun", "export function stepRun",
 //  "export function throwItem", "function onEvents", "export function describe",
@@ -35,6 +36,7 @@ import { frameOf, toFrame, toWorld, dirToFrame } from '../frame.js';
 import { extendSystem, makeItem, swarm, dominant, ITEM } from '../items.js';
 import { MAXB, v3, rng } from '../nbody.js';
 import { BODY_FLOATS, SEG_FLOATS } from '../render.js';
+import { drawRadius, heaviest } from '../size.js';
 import { S, UI, SPEEDS, PHONE_Q, COARSE, emit } from './state.js';
 import { cam } from './camera.js';
 
@@ -227,13 +229,16 @@ export function throwItem(key, x, v) {
 const bodyF = new Float32Array(32 * BODY_FLOATS);
 export function bodyInstances() {
   const sys = S.lab && S.lab.sys; if (!sys) return 0;
-  const f = S.frame;
+  const f = S.frame, mMax = heaviest(sys), ext = S.spec.view.extent;
   for (let i = 0; i < sys.n; i++) {
     const o = i * BODY_FLOATS, m = S.meta[i];
     if (!sys.alive[i] || !m) { bodyF.fill(0, o, o + BODY_FLOATS); bodyF[o + 7] = -1; continue; }
     const p = toFrame(f, sys.pos(i));
     const grow = m.r0 > 0 ? sys.R[i] / m.r0 : (m.m0 > 0 ? Math.cbrt(sys.m[i] / m.m0) : 1);
-    bodyF[o] = p[0]; bodyF[o + 1] = p[1]; bodyF[o + 2] = p[2]; bodyF[o + 3] = m.rDraw * (isFinite(grow) && grow > 0 ? grow : 1);
+    // the drawn radius: small next to the orbits (size.js), never under
+    // the collision radius; m.rNow is the same number for the saver
+    m.rNow = drawRadius(m.rDraw * (isFinite(grow) && grow > 0 ? grow : 1), sys.m[i], mMax, ext, sys.R[i]);
+    bodyF[o] = p[0]; bodyF[o + 1] = p[1]; bodyF[o + 2] = p[2]; bodyF[o + 3] = m.rNow;
     bodyF[o + 4] = m.color[0]; bodyF[o + 5] = m.color[1]; bodyF[o + 6] = m.color[2]; bodyF[o + 7] = m.id;
     bodyF[o + 8] = m.seed; bodyF[o + 9] = i === S.sel ? 1 : 0; bodyF[o + 10] = m.id === 5 ? cometGlow(i) : 0; bodyF[o + 11] = 0;
   }

@@ -97,7 +97,7 @@ function subjectScale(i) {
   const sys = S.lab.sys, ext = S.spec.view.extent, x = sys.pos(i);
   let near = Infinity;
   for (let j = 0; j < sys.n; j++) if (j !== i && sys.alive[j] && sys.m[j] > sys.m[i]) near = Math.min(near, v3.len(v3.sub(sys.pos(j), x)));
-  const r = S.meta[i] ? S.meta[i].rDraw : 0;
+  const r = S.meta[i] ? (S.meta[i].rNow ?? S.meta[i].rDraw) : 0;
   return Math.max(0.04 * ext, Math.min(ext, Math.max(10 * r, 0.6 * (isFinite(near) ? near : ext))));
 }
 // Each frame (main loop): the camera goal, the slow motion, the fade.
@@ -119,7 +119,7 @@ export function saverFrame(dt) {
       // from the whole scene to the subject: the target moves onto it and
       // the framing shrinks from the extent to about 12 radii of the
       // subject (between 4% and 30% of the extent)
-      const pe = Math.min(0.3 * ext, Math.max(0.04 * ext, 12 * S.meta[sv.subject].rDraw));
+      const pe = Math.min(0.3 * ext, Math.max(0.04 * ext, 12 * (S.meta[sv.subject].rNow ?? S.meta[sv.subject].rDraw)));
       const e = u * u * (3 - 2 * u), k = Math.log(Math.min(1, pe / (ext * sh.zoom)));
       target = v3.mul(p, 0.55 + 0.45 * e);
       scale = ext; distK = sh.zoom * Math.exp(k * e);

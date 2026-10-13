@@ -24,7 +24,7 @@
 //    ui.js       controls, panels, gallery, tray, HUD, labels, toasts
 //    saver.js    window.snSaver: the director and the plate
 //  Root (no DOM): nbody.js lab.js engine.js budget.js data.js
-//  experiments/ items.js roll.js frame.js saver-plan.js render.js
+//  experiments/ items.js roll.js frame.js saver-plan.js render.js size.js
 //
 //  RELEASE. lib/gpu-guard.js destroys the device on pagehide; this file
 //  also destroys it there (and the Lab and renderer buffers first).

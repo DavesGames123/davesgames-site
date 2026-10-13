@@ -26,6 +26,7 @@
      render.js shaders/          the renderer: bodies.wgsl points.wgsl
                                  lines.wgsl post.wgsl (nbody.wgsl: physics)
      saver-plan.js budget.js     the saver reel and shots; budgets
+     size.js                     the drawn radius of a body (a cap)
      main.js app/                boot and frame loop; the page modules
      tests.mjs                   node tests.mjs (CPU, then GPU in Deno)
 
@@ -56,6 +57,7 @@
      body shading ......... shaders/bodies.wgsl "fn surface", "fn fs_body"
      particles, flashes ... shaders/points.wgsl "fn vs_main"
      bloom, tone map ...... shaders/post.wgsl "fn fs_final"
+     body size ............ size.js "export function drawRadius"; app/run.js "export function bodyInstances"
      camera ............... app/camera.js "export function camFrame"
      saver director ....... app/saver.js "export function saverFrame", "function tick"; saver-plan.js
      plate ................ app/saver.js "function plate"

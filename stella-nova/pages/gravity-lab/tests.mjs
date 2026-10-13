@@ -30,7 +30,8 @@
 //     intruders do what their titles say on the CPU), items.js (a tap gives
 //     a circular orbit; extendSystem keeps every state; predictPath is
 //     the run that follows), frame.js, saver-plan.js (reel, shots, cuts,
-//     subjects, laws), budget.js pixelRatio
+//     subjects, laws), budget.js pixelRatio, size.js (drawn radii under
+//     the cap, never under the collision radius)
 //  GPU (Deno WebGPU): cs_restricted against CpuParticles, cs_gravity and
 //  cs_kick against the f64 direct sum, the impact stamp and hit counts
 //  PAGE (Deno WebGPU, test-page.mjs): the whole page on a fake DOM: boot,
@@ -273,6 +274,29 @@ async function pageModuleTests() {
     ok('S1 saver plan: seeded reel (library + rolls), shots 5-12 s, establish first, no kind twice in a row, data-driven subject, cuts, laws',
       JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) !== JSON.stringify(c) && rep === 0 && lib === 53 && rolls === 40 && badLen === 0 && badSeq === 0 && firstOK && kinds.size === 5 && subj === 1 && cuts.join() === 'false,true,true' && laws.join() === 'Jacobi integral,vis-viva,Newton' && SP.eventWorth({ type: 'breakup' }, 1) > SP.eventWorth({ type: 'periapsis', d: 0.05 }, 1) && SP.eventWorth({ type: 'periapsis', d: 0.5 }, 1) === 0,
       `reel ${a.length} (${lib} library, ${rolls} rolls, ${rep} repeats); ${badLen} shots out of 5-12 s, ${badSeq} repeats; kinds ${[...kinds].join(',')}; subject ${subj}; laws ${laws.join(', ')}`);
+  }
+  // Z1 drawn sizes (size.js): every library variant and 300 rolls
+  {
+    const Z = await import('./size.js');
+    let worst = [0, ''], over = 0, under = 0, before = 0, nb = 0;
+    const specs = [];
+    for (const [key, ex] of Object.entries(X.EXPERIMENTS)) for (const v of ex.variants) specs.push(X.build(key, 1, { n: 64, variant: v }));
+    for (let seed = 1; seed <= 300; seed++) specs.push(R.roll(seed, { n: 64 }));
+    for (const sp of specs) {
+      const B = sp.bodies || [], ext = sp.view.extent, mMax = Z.heaviest(B);
+      for (const b of B) {
+        nb++;
+        const r = Z.drawRadius(b.rDraw || b.r, b.m, mMax, ext, b.r), cap = Math.max(Z.SIZE_MAX * ext, b.r || 0);
+        if ((b.rDraw || b.r || 0) > 0.02 * ext && !((b.r || 0) > 0.02 * ext)) before++;
+        if (r > cap * (1 + 1e-12)) over++;
+        if (r < (b.r || 0)) under++;
+        if (!((b.r || 0) > Z.SIZE_MAX * ext) && r / ext > worst[0]) worst = [r / ext, `${sp.title}: ${b.name}`];
+      }
+    }
+    const mono = Z.sizeCap(1e-3, 1, 1) < Z.sizeCap(0.1, 1, 1) && Z.sizeCap(0.1, 1, 1) < Z.sizeCap(1, 1, 1) && Z.sizeCap(0, 1, 1) === Z.SIZE_MIN;
+    ok('Z1 drawn radius: under 1.4% of the view extent (or the collision radius), never under the collision radius, grows gently with mass',
+      over === 0 && under === 0 && worst[0] <= Z.SIZE_MAX + 1e-12 && mono,
+      `${nb} bodies in ${specs.length} specs; ${before} drawn over 2% of the extent before (not at true scale), ${over} over the cap now, ${under} under R; largest capped ${(100 * worst[0]).toFixed(2)}% (${worst[1]})`);
   }
   // B1 pixels
   {

@@ -31,6 +31,7 @@ import { SOURCES } from '../data.js';
 import { toFrame } from '../frame.js';
 import { stateToElements, v3 } from '../nbody.js';
 import { pixelRatio } from '../budget.js';
+import { drawRadius, heaviest } from '../size.js';
 import { typeset } from '../../../lib/sci-math.js';
 
 export const SCENES = { cluster: 'A knot of suns', rumble: 'Packed planets', ringDive: 'Rubble moon dive', binaryDisk: 'Two suns and a disk', bhSwarm: 'Stars and a black hole',
@@ -294,8 +295,9 @@ function cardArt(cv, spec) {
       g.fillRect(q[0], q[1], 1.2, 1.2);
     }
   }
+  const mMax = heaviest(B);
   for (const b of B) {
-    const q = proj(v3.sub(b.x, c0)), r = Math.max(2, Math.min(14, b.rDraw * s));
+    const q = proj(v3.sub(b.x, c0)), r = Math.max(2, Math.min(14, drawRadius(b.rDraw, b.m, mMax, ext, b.r) * s));
     g.fillStyle = b.kind === 'bh' ? '#000' : `rgb(${b.color.map(x => Math.round(x * 255)).join(',')})`;
     g.beginPath(); g.arc(q[0], q[1], r, 0, 7); g.fill();
     if (b.kind === 'bh') { g.strokeStyle = 'rgba(255,220,170,0.9)'; g.lineWidth = 1; g.stroke(); }
