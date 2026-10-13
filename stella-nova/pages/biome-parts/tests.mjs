@@ -270,5 +270,17 @@ ok(repeats === 0, 'no shot kind twice in a row');
 const shotOk = cuts.filter(c => c >= 5800 && c <= 14000).length;
 ok(cuts.length > 10 && shotOk / cuts.length > 0.9, `cuts every 6-12 s (${shotOk}/${cuts.length} cuts in range, a cut lands after the step that crosses it)`);
 
+// ── adaptive render size (scene.js) ─────────────────────────────────────────
+{
+  const { adaptScale, budgetScale, SCALE_MIN } = await import('./js/scene.js');
+  let sc = 1; for (let i = 0; i < 40; i++) sc = adaptScale(sc, 60);
+  ok(sc === SCALE_MIN, 'a 60 ms frame drives the scale to its floor');
+  ok(adaptScale(0.5, 10) > 0.5 && adaptScale(1, 10) === 1, 'a fast frame raises the scale, at most to 1');
+  ok(adaptScale(0.7, 18) === 0.7, 'an 18 ms frame keeps the scale');
+  ok(budgetScale(1440, 900, 2) < 0.5 && budgetScale(400, 300, 1) === 1, 'a Retina window starts inside the pixel budget');
+  const src = (await import('node:fs')).readFileSync(new URL('./js/scene.js', import.meta.url), 'utf8');
+  ok(!/performance\.now\(\) - t0/.test(src), 'the scale does not come from the CPU submit time');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

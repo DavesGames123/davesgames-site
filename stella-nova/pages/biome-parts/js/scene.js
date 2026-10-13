@@ -31,6 +31,17 @@ function stepSpring(s, dt) {
   s.v += a * dt; s.x += s.v * dt;
   return Math.abs(s.g - s.x) > 1e-4 || Math.abs(s.v) > 1e-4;
 }
+// Adaptive render size. sc is the pane scale while the view moves. The
+// frame interval (not the CPU time to submit, which does not include the
+// GPU) drives it: above 24 ms the scale falls, below 14 ms it rises. The
+// pane also has a pixel budget, so a large Retina window starts small.
+export const PIX_BUDGET = 1.1e6, SCALE_MIN = 0.35;
+export function adaptScale(sc, ms) {
+  if (ms > 24) return Math.max(SCALE_MIN, sc * Math.max(0.6, Math.min(0.9, 20 / ms)));
+  if (ms < 14) return Math.min(1, sc * 1.05);
+  return sc;
+}
+export const budgetScale = (cssW, cssH, dpr) => Math.min(1, Math.sqrt(PIX_BUDGET / Math.max(1, cssW * cssH * dpr * dpr)));
 const fcToWorld = p => [p[0] / MM, p[2] / MM, -p[1] / MM];
 
 export async function createScene({ canvas, overlay, maxDpr = 2, onLost }) {
@@ -40,7 +51,7 @@ export async function createScene({ canvas, overlay, maxDpr = 2, onLost }) {
   const cam = { yaw: spring(38), pitch: spring(28), dist: spring(13), tx: spring(0), ty: spring(0.5), tz: spring(0), explode: spring(0, 2.4) };
   const S = {
     ops: [], born: new Map(), A: null, mode: 1, sel: [-9, -9], ghost: -1, sketch: null, spin: 0, lastUser: -1e9,
-    scene: [0, 0.5, 0, 3], dirty: true, raf: 0, last: 0, scale: 1, slow: 0, fov: 34, destroyed: false, colour: null, time: 0,
+    scene: [0, 0.5, 0, 3], dirty: true, raf: 0, last: 0, scale: 1, moveScale: 1, still: false, prevMoving: false, fov: 34, destroyed: false, colour: null, time: 0,
   };
   const appearOf = (i, op) => { const b = S.born.get(op.id); return b == null ? 1 : Math.min(1, (S.time - b) / 0.55); };
   const explodeOf = (i, op) => {
@@ -56,7 +67,8 @@ export async function createScene({ canvas, overlay, maxDpr = 2, onLost }) {
     return { target: [cam.tx.x, cam.ty.x, cam.tz.x], yaw: cam.yaw.x, pitch: cam.pitch.x, dist: cam.dist.x, fov: S.fov };
   }
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr) * S.scale;
+    const d0 = Math.min(window.devicePixelRatio || 1, maxDpr);
+    const dpr = d0 * (S.still ? 1 : S.scale * budgetScale(canvas.clientWidth, canvas.clientHeight, d0));
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     if (overlay) {
@@ -68,26 +80,27 @@ export async function createScene({ canvas, overlay, maxDpr = 2, onLost }) {
   function frame(now) {
     S.raf = 0;
     if (S.destroyed || document.hidden) return;
-    const dt = Math.min(0.05, S.last ? (now - S.last) / 1000 : 0.016);
+    const gap = S.last ? now - S.last : 16;
+    const dt = Math.min(0.05, gap / 1000);
     S.last = now; S.time += dt;
     let moving = S.dirty;
     if (S.spin && now - S.lastUser > 3000) { cam.yaw.g += S.spin * dt; moving = true; }
     for (const s of Object.values(cam)) moving = stepSpring(s, dt) || moving;
     for (const b of S.born.values()) if (S.time - b < 0.6) moving = true;
+    // In motion: the adapted scale, no soft shadows, fewer march steps.
+    // When it settles: one still frame at full size with shadows.
+    if (moving && S.prevMoving && gap < 250) S.scale = adaptScale(S.scale, gap);
+    S.still = !moving;
+    S.prevMoving = moving;
     resize();
     pack();
     const c = camObj();
-    packUniform(U, c, canvas.width, canvas.height, { mode: S.mode, sel: S.sel, ghost: S.ghost, scene: S.scene, grid: true, time: S.time, maxSteps: 150 });
-    const t0 = performance.now();
+    packUniform(U, c, canvas.width, canvas.height, { mode: S.mode, sel: S.sel, ghost: S.ghost, scene: S.scene, grid: true, time: S.time, maxSteps: S.still ? 150 : 96, shadows: S.still });
     R.drawPanes([{ pane, u: U, kind: 'view' }]);
     drawOverlay(c);
-    // adaptive resolution: a slow frame lowers the pane scale, idle restores it
-    const ft = performance.now() - t0;
-    S.slow = S.slow * 0.9 + (ft > 24 ? 1 : 0) * 0.1;
-    if (S.slow > 0.5 && S.scale > 0.6) { S.scale = Math.max(0.6, S.scale - 0.1); S.slow = 0; }
     S.dirty = false;
     if (moving) S.raf = requestAnimationFrame(frame);
-    else if (S.scale < 1) { S.scale = 1; S.dirty = true; S.raf = requestAnimationFrame(frame); }
+    else S.last = 0;
   }
   const kick = () => { S.dirty = true; if (!S.raf && !S.destroyed) S.raf = requestAnimationFrame(frame); };
 
