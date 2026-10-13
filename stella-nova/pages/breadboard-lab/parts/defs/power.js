@@ -132,7 +132,7 @@ export const POWER_DEFS = [
     electrical: [
       el('cell', 'battery', { p: '#b', n: 'GND' }, { v: 4.1, rint: 0.06, mah: 2600, soc: '$soc' }),
       el('sw', 'switch', { a: '#b', b: '#s' }, { on: '$on' }),
-      el('boost', 'regulator', { in: '#s', gnd: 'GND', out: '5V' }, { vout: 5, dropout: 0, iq: 0.002, imax: 2, boost: true }),
+      el('boost', 'regulator', { in: '#s', gnd: 'GND', out: '5V' }, { vout: 5, dropout: 0, iq: 0.002, imax: 2, boost: true, uvlo: 2.7 }),
       el('reg3', 'regulator', { in: '5V', gnd: 'GND', out: '3V' }, { model: 'ams1117-3.3' }),
     ],
     interact: { kind: 'toggle', key: 'on' },

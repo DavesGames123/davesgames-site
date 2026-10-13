@@ -642,7 +642,8 @@ if (section('custom parts and live edits')) {
 // ================================================================ netlist
 let realGeo = null, realReg = null;
 try { realGeo = await import('../parts/geometry.js'); } catch (e) { realGeo = null; }
-try { const P = await import('../parts/index.js'); realReg = P.createRegistry(); } catch (e) { realReg = null; }
+let realRegErr = '';
+try { const P = await import('../parts/index.js'); realReg = P.createRegistry(); } catch (e) { realReg = null; realRegErr = String(e.message || e).split('\n').slice(0, 2).join(' '); }
 if (section('netlist')) {
   const geo = realGeo || geoStub;
   console.log(`   geometry: ${realGeo ? 'parts/geometry.js (real)' : 'test stub'}`);
@@ -853,8 +854,8 @@ if (section('client measureR probes')) {
 
 // ================================================================ real parts
 if (section('builtin parts (cross-role)')) {
-  if (!realReg) console.log('   parts/index.js did not import; skipped');
-  else {
+  check('parts/index.js imports and createRegistry() builds (else the cross-role checks are skipped)', !!realReg, realReg ? 'real registry' : `did not import: ${realRegErr}`);
+  if (realReg) {
     const defs = realReg.list();
     const bad = [];
     for (const def of defs) {
@@ -1043,6 +1044,16 @@ if (section('review fixes')) {
     e2.setParam('fg', 'wave', 'sine');
     check('funcgen 10 Hz → 10 kHz live: the step limit follows (≥ 4000 steps in 200 periods); dc → sine too', steps >= 4000 && e.dtMaxEff <= 1 / 400000 * 1.0001 && e2.dtMaxEff <= 1 / 40000 * 1.0001,
       `${steps} steps, dtMaxEff ${e.dtMaxEff.toExponential(2)} s; dc → sine dtMaxEff ${e2.dtMaxEff.toExponential(2)} s`);
+  }
+  // 3. the 18650 shield gives nothing with its switch off
+  {
+    const sh = on => createEngine(net(5, [E('sh/cell', 'battery', { p: 1, n: 0 }, { v: 4.1, rint: 0.06, mah: 2600, soc: 0.9 }), E('sh/sw', 'switch', { a: 1, b: 2 }, { on }),
+      E('sh/boost', 'regulator', { in: 2, gnd: 0, out: 3 }, { vout: 5, dropout: 0, iq: 0.002, imax: 2, boost: true, uvlo: 2.7 }), E('sh/reg3', 'regulator', { in: 3, gnd: 0, out: 4 }, { model: 'ams1117-3.3' }),
+      E('r/main', 'resistor', { a: 3, b: 0 }, { r: 100, pmax: 5 })]));
+    const off = sh(false); off.advanceTo(0.5);
+    const on = sh(true); on.advanceTo(0.5);
+    check('18650 shield: switch off → 5V and 3V rails dead; switch on → 5 V', Math.abs(off.v(3)) < 0.1 && Math.abs(off.v(4)) < 0.1 && Math.abs(off.v(2)) < 5 && Math.abs(on.v(3) - 5) < 0.05,
+      `off: 5V ${off.v(3).toFixed(3)} V, 3V ${off.v(4).toFixed(3)} V, switch node ${off.v(2).toFixed(3)} V; on: 5V ${on.v(3).toFixed(3)} V`);
   }
   // 12. a base tied straight to a source gives sane numbers
   {

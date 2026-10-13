@@ -24,9 +24,12 @@
 //  a Thevenin source vt behind 5 mΩ, 'lim' is a current source at the
 //  limit (folded back by a thermal model above 150 °C), 'off' is vout above
 //  vt (the pass element does not sink). A 1 µS leak from vt to out keeps a
-//  floating output defined. The ground pin takes the quiescent current.
+//  floating output defined; in 'off' the leak goes to the ground pin.
+//  The ground pin takes the quiescent current.
 //  Model 'ideal' (or boost: true) is the boost of the 18650 shield: no
-//  dropout, and the input current scales by vout / vin / 0.9.
+//  dropout, and the input current scales by vout / vin / 0.9. Below its
+//  undervoltage lockout uvlo (2.7 V for a boost; 0.2 V hysteresis) the
+//  regulator is 'off'. Without it the boost made 5 V from an open switch.
 //
 //  GREP MAP
 //    OPAMP_MODELS / REG_MODELS
@@ -272,6 +275,9 @@ export class Regulator extends Dev {
     for (const k of Object.keys(m)) if (this.p[k] == null) this.p[k] = m[k];
     this.ideal = this.p.model === 'ideal' || this.p.boost === true || this.p.boost === 'true';
     this.limWarned = false; this.boostK = 1; this.region = 'reg';
+    // undervoltage lockout: a boost stops below uvlo (2.7 V by default)
+    if (this.p.uvlo == null && (this.p.boost === true || this.p.boost === 'true')) this.p.uvlo = 2.7;
+    this.uv = false;
   }
   setup(b) {
     this.iin = b.node('in'); this.ig = b.node('gnd'); this.iout = b.node('out');
@@ -295,7 +301,14 @@ export class Regulator extends Dev {
     const [vt, da, db] = this.target(x);
     const d = vt - vo, iu = d / rreg, im = this.imaxEff();
     let reg = this.region || 'reg';
-    if (pick) {
+    const uvlo = +this.p.uvlo || 0;
+    if (pick && uvlo > 0) {
+      // 0.2 V of hysteresis, so Newton does not flip the lockout
+      const vi = vat(x, this.iin) - vat(x, this.ig);
+      if (this.uv) { if (vi > uvlo + 0.2) this.uv = false; } else if (vi < uvlo) this.uv = true;
+    }
+    if (uvlo > 0 && this.uv) { if (pick) this.region = 'off'; reg = 'off'; }
+    else if (pick) {
       if (reg === 'reg') { if (iu > im * 1.0005) reg = 'lim'; else if (iu < -1e-6) reg = 'off'; }
       else if (reg === 'lim') { if (iu < im) reg = 'reg'; }
       else if (reg === 'off') { if (iu > 1e-6) reg = 'reg'; }
@@ -304,7 +317,12 @@ export class Regulator extends Dev {
     let I, g;
     if (reg === 'reg') { I = iu + gleak * d; g = 1 / rreg + gleak; }
     else if (reg === 'lim') { I = im + gleak * d; g = gleak; }
-    else { I = gleak * d; g = gleak; }
+    else {
+      // off: the pass element conducts nothing. The leak goes to the ground
+      // pin, not to vt: with no input, vt (vin − dropout) is below ground,
+      // and a leak toward it pulled an open output to −1.1 V.
+      return [gleak * (vat(x, this.ig) - vo), [0, gleak, -gleak]];
+    }
     // partials of I vs (vin, vg, vout)
     return [I, [g * db, g * da, -g]];
   }
