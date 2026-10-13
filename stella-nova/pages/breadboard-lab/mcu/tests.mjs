@@ -12,6 +12,9 @@
 //    examples ...... every sketch of mcu/sketches.js (and examples/*.json
 //                    programs when INTEGRATE has written them) runs as its
 //                    wiring line says
+//    co-sim ........ SIM's engine (sim/engine.js, when present) drives this
+//                    runtime: blink, LiquidCrystal into hd44780, tone into
+//                    a buzzer, a HEX program
 //    avr ........... the HEX runner, when mcu/avr.js is present
 // ============================================================================
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -404,6 +407,56 @@ for (const [b, src] of Object.entries(STARTERS)) ok(compileSketch(src, { board: 
     }
   }
   ok(!bad.length, `example files: every sketch compiles`, files.length ? `${n} sketches in ${files.length} files${bad.length ? '; ' + bad.join(' | ') : ''}` : 'no example files yet');
+}
+
+// ── co-simulation with SIM's engine (when sim/engine.js exists) ─────────────
+if (existsSync(join(HERE, '..', 'sim', 'engine.js'))) {
+  section('co-simulation: sim/engine.js drives this runtime');
+  const { createEngine } = await import('../sim/engine.js');
+  const mk = (elements, pins, source, extra = {}) => ({
+    nodeCount: 12, nodeNames: Array.from({ length: 12 }, (_, i) => 'n' + i), ground: { node: 0, why: 'mcu GND' },
+    elements: [{ id: 'src/main', owner: 'src', type: 'vsource', nodes: { p: 1, n: 0 }, params: { wave: { kind: 'dc', v: 5 } } }, ...elements],
+    mcus: [{ id: 'u1', board: 'uno328', pins, gnd: 0, vdd: 1, program: extra.program || { lang: 'sketch', source } }],
+    probes: [], holeNode: {}, pinNode: {}, wireIds: [], issues: []
+  });
+  try {
+    const nl = mk([{ id: 'r/main', owner: 'r', type: 'resistor', nodes: { a: 2, b: 3 }, params: { r: 220 } }, { id: 'led/main', owner: 'led', type: 'led', nodes: { a: 3, k: 0 }, params: { color: 'red' } }], { D13: 2 }, SKETCHES['uno-blink'].source);
+    const eng = createEngine(nl, { mcuFactory: spec => createMcu(spec) });
+    eng.dcop();
+    const I = [];
+    for (let k = 1; k <= 22; k++) { eng.advanceTo(k * 0.1, 1e9); I.push(eng.i('led/main')); }
+    const on = I.filter((_, k) => (k + 1) % 10 >= 1 && (k + 1) % 10 <= 4), off = I.filter((_, k) => (k + 1) % 10 >= 6 && (k + 1) % 10 <= 9);
+    ok(on.every(i => i > 0.01) && off.every(i => i < 1e-4), 'uno-blink in the engine: the LED current is on for 0.5 s, off for 0.5 s', `on ${(on[0] * 1e3).toFixed(2)} mA, off ${(off[0] * 1e3).toFixed(4)} mA`);
+  } catch (e) { ok(false, 'uno-blink in the engine', e.message); }
+  try {
+    const nl = mk([
+      { id: 'lcd/main', owner: 'lcd', type: 'hd44780', nodes: { vss: 0, vdd: 1, v0: 8, rs: 2, rw: 0, e: 3, d0: 0, d1: 0, d2: 0, d3: 0, d4: 4, d5: 5, d6: 6, d7: 7 }, params: {} },
+      { id: 'pot/main', owner: 'pot', type: 'resistor', nodes: { a: 8, b: 0 }, params: { r: 1000 } },
+      { id: 'bz/main', owner: 'bz', type: 'buzzer', nodes: { a: 9, b: 0 }, params: { active: false } }
+    ], { D12: 2, D11: 3, D5: 4, D4: 5, D3: 6, D2: 7, D8: 9 }, '#include <LiquidCrystal.h>\nLiquidCrystal lcd(12, 11, 5, 4, 3, 2);\nvoid setup() { lcd.begin(16, 2); lcd.print("HELLO"); tone(8, 440); }\nvoid loop() {}');
+    const e2 = createEngine(nl, { mcuFactory: spec => createMcu(spec) });
+    e2.dcop();
+    const t0 = performance.now();
+    e2.advanceTo(0.3, 1e9);
+    const f = e2.frame(), ms = performance.now() - t0;
+    const rows = f.parts.lcd && f.parts.lcd.vis && f.parts.lcd.vis.rows;
+    ok(rows && rows[0].startsWith('HELLO'), "LiquidCrystal pin edges -> SIM's hd44780 shows HELLO", rows ? JSON.stringify(rows[0]) + ` (${ms.toFixed(0)} ms wall for 0.3 s)` : 'no rows');
+    const fz = f.parts.bz && f.parts.bz.vis && f.parts.bz.vis.freq;
+    ok(Math.abs(fz - 440) / 440 < 0.01, 'tone(8, 440) -> buzzer vis.freq within 1 % of 440 Hz', fz);
+  } catch (e) { ok(false, 'LCD and tone in the engine', e.message); }
+  if (existsSync(join(HERE, 'avr.js'))) {
+    try {
+      const { TOGGLE, toHex } = await import('./avr-tests.mjs');
+      const bytes = []; for (const w of TOGGLE) bytes.push(w & 255, w >> 8);
+      const nl = mk([{ id: 'r/main', owner: 'r', type: 'resistor', nodes: { a: 2, b: 3 }, params: { r: 220 } }, { id: 'led/main', owner: 'led', type: 'led', nodes: { a: 3, k: 0 }, params: { color: 'red' } }], { D13: 2 }, null, { program: { lang: 'hex', hex: toHex(bytes) } });
+      const e3 = createEngine(nl, { mcuFactory: spec => createMcu(spec) });
+      e3.dcop();
+      const samples = [];
+      for (let k = 1; k <= 12; k++) { e3.advanceTo(k * 0.001 - 0.0005, 1e9); samples.push(e3.i('led/main') > 0.005 ? 1 : 0); }
+      const flips = samples.slice(1).filter((v, k) => v !== samples[k]).length;
+      ok(flips >= 10, 'the HEX toggle program in the engine: the LED flips every millisecond', samples.join(''));
+    } catch (e) { ok(false, 'the HEX program in the engine', e.message); }
+  }
 }
 
 // ── speed ───────────────────────────────────────────────────────────────────
