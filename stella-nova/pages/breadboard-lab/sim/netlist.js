@@ -17,6 +17,9 @@
 //  (vsource, battery, supply, usbpower, solar), else the GND of the first
 //  MCU board, else a free node 0 (Netlist.ground.why = 'none').
 //
+//  WHEN. A template with a `when` field joins only when the part params
+//  match it (whenMatches), as parts/schema.js expandElectrical does.
+//
 //  PARAMS. A template param '$key' reads the part param (or the def
 //  default). '$key*2+1' is an expression of + − * / and numbers. A plain
 //  '$key' value is recorded in Element.bind (param path → part key), so
@@ -31,6 +34,7 @@
 //    SOURCE_TERMS ........ which terminal of which source type is negative
 //    MCU_BOARD ........... def id → board kind
 //    resolveParams ....... '$key' and expressions, with the bind map
+//    whenMatches ......... the template `when` filter
 //    buildNetlist ........ the whole build
 //    splitHole ........... 'b1:a12' → ['b1', 'a12']
 // ============================================================================
@@ -57,6 +61,17 @@ export function splitHole(id) {
   const s = String(id || '');
   const i = s.lastIndexOf(':');
   return i < 0 ? [null, s] : [s.slice(0, i), s.slice(i + 1)];
+}
+
+// A template with `when: { key: value | [values] }` exists only when the part
+// params match (the 7-segment common cathode / common anode sets).
+function whenMatches(when, vals) {
+  if (!when) return true;
+  for (const k in when) {
+    const want = when[k];
+    if (Array.isArray(want) ? !want.includes(vals[k]) : vals[k] !== want) return false;
+  }
+  return true;
 }
 
 function paramValues(part, def) {
@@ -205,6 +220,7 @@ export function buildNetlist(doc, registry, geo) {
     const vals = paramValues(part, def);
     const pinNames = new Set((def.pins || []).map(p => p.name));
     for (const tpl of def.electrical || []) {
+      if (!whenMatches(tpl.when, vals)) continue;
       const nodes = {};
       for (const [term, ref] of Object.entries(tpl.nodes || {})) {
         if (ref == null) continue;
