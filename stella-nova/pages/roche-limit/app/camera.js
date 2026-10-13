@@ -16,6 +16,7 @@
 //    motion stats ...... "function finishPose"
 // ============================================================================
 import { cross, norm, sub } from '../render.js';
+import { FOV, poseIn } from '../shot-geom.js';
 import { cutsOn, cutsTick, cutCamera } from './cuts.js';
 import { storyGoal, smoothStory } from './director.js';
 import { orbitsPerMin } from './loop.js';
@@ -77,26 +78,9 @@ function camGoal(cssW, cssH) {
   if (mode !== 'follow') dist *= Math.max(1, 0.8 * cssH / cssW);
   return { target, dist: dist * cam.zoom, az: cam.az, el };
 }
-// The eye and target for a goal, framed in the clear part of the canvas.
-function poseOf(g, cssW, cssH) {
-  const o = occlusion(cssW, cssH);
-  const clearW = Math.max(80, cssW - o.l - o.r), clearH = Math.max(80, cssH - o.t - o.b);
-  // a pose of its own (a shot of app/cuts.js: the surface, a ride) keeps
-  // its eye: no fit
-  const fit = g.abs ? 1 : Math.min(1.9, Math.max(cssW / clearW * 0.85, cssH / clearH, 1));
-  const dist = g.dist * fit;
-  const ce = Math.cos(g.el), dir = [ce * Math.cos(g.az), ce * Math.sin(g.az), Math.sin(g.el)];
-  const eye = [0, 1, 2].map(i => g.target[i] + dist * dir[i]), target = g.target.slice();
-  const f = norm(sub(target, eye)), r = norm(cross(f, [0, 0, 1])), u = cross(r, f);
-  const focal = 0.5 * cssH / Math.tan(FOV / 2);
-  const ox = (o.l - o.r) / 2, oy = (o.b - o.t) / 2;
-  const sx = -ox * dist / focal, sy = -oy * dist / focal;
-  for (let i = 0; i < 3; i++) { const d = sx * r[i] + sy * u[i]; eye[i] += d; target[i] += d; }
-  const re = Math.hypot(...eye), minR = g.minR ?? 1.3;
-  if (re < minR) for (let i = 0; i < 3; i++) eye[i] *= minR / re;
-  return { eye, target };
-}
-const FOV = 0.62;
+// The eye and target for a goal, framed in the clear part of the canvas
+// (shot-geom.js poseIn: the same fit for the page and the tests).
+function poseOf(g, cssW, cssH) { return poseIn(g, cssW, cssH, occlusion(cssW, cssH)); }
 // rotate unit vector a toward unit vector b by at most ang (radians)
 function turnToward(a, b, ang) {
   const c = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])), full = Math.acos(c);

@@ -25,16 +25,23 @@
 //  drawn radius), ringR (the ring's mean radius), impact (a point on the
 //  surface, or null), Rw (the moon's radius, world), calm (0..1) }.
 //  sh.anchor holds the fixed stand point of a shot after its first frame.
+//  poseIn(g, W, H, o) is the fit of app/camera.js: a goal and the
+//  occlusion margins (CSS px) give the eye and the target, with the
+//  target moved to the centre of the clear band and the eye kept outside
+//  minR. project() maps a world point to CSS px for the same pose.
 //
 //  grep -n targets: "export function shotGoal", "export function standPoint",
-//  "export function goalOfPose"
+//  "export function goalOfPose", "export function poseIn",
+//  "export function project", "export const FOV"
 // ============================================================================
 
+export const FOV = 0.62;            // rad, the full vertical view angle
 const SURF = 1.08;          // the stand point, in planet radii
 const ELEV = 12 * Math.PI / 180;
 
 const len = a => Math.hypot(a[0], a[1], a[2]);
 const nrm = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 function rotZ(v, a) { const c = Math.cos(a), s = Math.sin(a); return [c * v[0] - s * v[1], s * v[0] + c * v[1], v[2]]; }
 
@@ -88,4 +95,36 @@ export function shotGoal(sh, ctx) {
   const eye = [0, 1, 2].map(i => F[i] - f[i] * D + n[i] * 0.32 * D);
   const tgt = [0, 1, 2].map(i => F[i] + f[i] * 0.45 * D);
   return goalOfPose(eye, tgt, 1.04 * R);
+}
+
+// The camera axes for an eye direction (az, el): dir points from the
+// target to the eye; r is screen right, u screen up (+z up, no roll).
+function axes(az, el) {
+  const ce = Math.cos(el), dir = [ce * Math.cos(az), ce * Math.sin(az), Math.sin(el)];
+  const f = dir.map(q => -q), r = nrm(crs(f, [0, 0, 1])), u = crs(r, f);
+  return { dir, r, u };
+}
+// The eye and the target for a goal, framed in the clear band (o: the
+// occlusion margins, CSS px). A goal with abs: true keeps its distance;
+// any other goal is fitted to the band (the planet view of app/camera.js).
+export function poseIn(g, W, H, o) {
+  o = o || { l: 0, r: 0, t: 0, b: 0 };
+  const clearW = Math.max(80, W - o.l - o.r), clearH = Math.max(80, H - o.t - o.b);
+  const fit = g.abs ? 1 : Math.min(1.9, Math.max(W / clearW * 0.85, H / clearH, 1));
+  const dist = g.dist * fit, { dir, r, u } = axes(g.az, g.el);
+  const eye = [0, 1, 2].map(i => g.target[i] + dist * dir[i]), target = g.target.slice();
+  const focal = 0.5 * H / Math.tan(FOV / 2);
+  const ox = (o.l - o.r) / 2, oy = (o.b - o.t) / 2;
+  const sx = -ox * dist / focal, sy = -oy * dist / focal;
+  for (let i = 0; i < 3; i++) { const d = sx * r[i] + sy * u[i]; eye[i] += d; target[i] += d; }
+  const re = len(eye), minR = g.minR ?? 1.3;
+  if (re < minR) for (let i = 0; i < 3; i++) eye[i] *= minR / re;
+  return { eye, target };
+}
+// A world point in CSS px for a pose: { x, y, z } (z: depth along the
+// view, negative behind the eye).
+export function project(p, pose, W, H) {
+  const f = nrm(pose.target.map((q, i) => q - pose.eye[i])), r = nrm(crs(f, [0, 0, 1])), u = crs(r, f);
+  const q = p.map((x, i) => x - pose.eye[i]), z = dot(q, f), focal = 0.5 * H / Math.tan(FOV / 2);
+  return { x: W / 2 + focal * dot(q, r) / z, y: H / 2 - focal * dot(q, u) / z, z };
 }
