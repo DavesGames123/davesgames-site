@@ -334,29 +334,43 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
 #sn-saver-menu kbd { font: 500 .75rem/1 var(--f-sans, system-ui); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,.14); color: #c9d2df; }
 #sn-saver-menu .cols { display: grid; grid-template-columns: 1fr 320px; min-height: 0; border-top: 1px solid rgba(255,255,255,.07); }
 #sn-saver-menu .pages { display: grid; grid-template-rows: auto 1fr; min-height: 0; border-right: 1px solid rgba(255,255,255,.07); }
-#sn-saver-menu .bar { display: flex; align-items: center; gap: 4px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,.07); }
-#sn-saver-menu .tab { padding: 12px 10px 11px; color: #8591a3; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
-#sn-saver-menu .tab:hover { color: #dfe5ee; }
-#sn-saver-menu .tab.on { color: #f1f4f8; border-bottom-color: #8ec5ff; }
-#sn-saver-menu .tab small, #sn-saver-menu .card-h small { font-size: .75rem; color: #6c7788; font-variant-numeric: tabular-nums; margin-left: 6px; font-weight: 400; }
-#sn-saver-menu .quick { margin-left: auto; display: flex; gap: 2px; }
-#sn-saver-menu .quick button { padding: 5px 8px; border-radius: 6px; font-size: .8rem; color: #8591a3; }
-#sn-saver-menu .quick button:hover { color: #f1f4f8; background: rgba(255,255,255,.05); }
-#sn-saver-menu .panes { overflow: auto; padding: 16px; }
-#sn-saver-menu .pane { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-items: start; }
-#sn-saver-menu .pane[hidden] { display: none; }
-#sn-saver-menu .card { border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 4px 4px 6px; background: rgba(255,255,255,.015); }
-#sn-saver-menu .card-h { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 8px 6px; font-weight: 600; font-size: .86rem; color: #e6ebf2; text-align: left; border-radius: 6px; }
-#sn-saver-menu .card-h:hover { background: rgba(255,255,255,.04); }
-#sn-saver-menu .card-h i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
-#sn-saver-menu .card-h small { margin-left: auto; }
-#sn-saver-menu label.pg { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-radius: 6px; font-size: .86rem; cursor: pointer; color: #c9d2df; }
-#sn-saver-menu label.pg:hover { background: rgba(255,255,255,.04); }
-#sn-saver-menu label.pg span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#sn-saver-menu label.pg em { font-style: normal; font-size: .72rem; color: #6c7788; }
-#sn-saver-menu .pg input { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; margin: 0; flex: none; border: 1.5px solid rgba(255,255,255,.28); border-radius: 4px; display: grid; place-items: center; cursor: pointer; }
-#sn-saver-menu .pg input:checked { background: #8ec5ff; border-color: #8ec5ff; }
-#sn-saver-menu .pg input:checked::after { content: ''; width: 8px; height: 4px; border: 2px solid #0c0f15; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+#sn-saver-menu .pages { grid-template-rows: auto auto 1fr; }
+#sn-saver-menu .find { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px 16px 10px; }
+#sn-saver-menu .find .q { flex: 1 1 200px; min-width: 0; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: #f1f4f8; font: inherit; font-size: .86rem; outline: none; }
+#sn-saver-menu .find .q:focus { border-color: #8ec5ff; }
+#sn-saver-menu .chips { display: flex; padding: 2px; border-radius: 8px; background: rgba(255,255,255,.05); }
+#sn-saver-menu .chips button { padding: 5px 10px; border-radius: 6px; font-size: .8rem; color: #8591a3; white-space: nowrap; }
+#sn-saver-menu .chips button.on { background: #1d2430; color: #f1f4f8; }
+#sn-saver-menu .chips small, #sn-saver-menu .jump small, #sn-saver-menu .reg-h small { font-size: .75rem; color: #6c7788; font-variant-numeric: tabular-nums; margin-left: 5px; }
+#sn-saver-menu .quick { display: flex; gap: 2px; margin-left: auto; }
+#sn-saver-menu .quick button { padding: 5px 8px; border-radius: 6px; font-size: .8rem; color: #8591a3; white-space: nowrap; }
+#sn-saver-menu .quick button:hover, #sn-saver-menu .jump:hover, #sn-saver-menu .reg-t:hover { color: #f1f4f8; background: rgba(255,255,255,.05); }
+#sn-saver-menu .bar { display: flex; gap: 2px; padding: 0 12px 8px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid rgba(255,255,255,.07); }
+#sn-saver-menu .jump { padding: 4px 8px; border-radius: 6px; font-size: .8rem; color: #8591a3; white-space: nowrap; }
+#sn-saver-menu .panes { overflow: auto; padding: 0 16px 16px; }
+#sn-saver-menu .reg[hidden], #sn-saver-menu .con[hidden], #sn-saver-menu .pg[hidden], #sn-saver-menu .empty[hidden] { display: none; }
+#sn-saver-menu .reg-h { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; gap: 4px; padding: 14px 0 8px; background: #0c0f15; }
+#sn-saver-menu .reg-h h4 { margin: 0; font-size: .95rem; font-weight: 600; color: #f1f4f8; }
+#sn-saver-menu .reg-t { margin-left: auto; padding: 4px 8px; border-radius: 6px; font-size: .8rem; color: #8ec5ff; }
+#sn-saver-menu .con { margin: 0 0 12px; }
+#sn-saver-menu .con-h { display: flex; align-items: center; gap: 7px; font-size: .76rem; color: #8591a3; margin: 2px 0 7px; }
+#sn-saver-menu .con-h i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+#sn-saver-menu .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+#sn-saver-menu label.pg { position: relative; display: block; cursor: pointer; border-radius: 9px; padding: 4px; border: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.015); transition: border-color .12s, background .12s; }
+#sn-saver-menu label.pg:hover { border-color: rgba(255,255,255,.2); }
+#sn-saver-menu .pg input { position: absolute; opacity: 0; pointer-events: none; }
+#sn-saver-menu .pg .th { position: relative; display: block; aspect-ratio: 16 / 10; border-radius: 6px; overflow: hidden; background: #161b25; }
+#sn-saver-menu .pg .th::before { content: attr(data-ch); position: absolute; inset: 0; display: grid; place-items: center; font: 600 1.6rem/1 var(--f-sans, system-ui); color: var(--c); opacity: .8; }
+#sn-saver-menu .pg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(.85) brightness(.5); transition: filter .15s; }
+#sn-saver-menu .pg .nm { display: block; padding: 6px 4px 2px; font-size: .8rem; line-height: 1.25; color: #8591a3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sn-saver-menu .pg em { position: absolute; top: 9px; left: 9px; font-style: normal; font-size: .66rem; padding: 1px 5px; border-radius: 4px; background: rgba(5,7,11,.75); color: #a4acb8; }
+#sn-saver-menu .pg .th::after { content: ''; position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.45); background: rgba(5,7,11,.4); }
+#sn-saver-menu .pg:has(input:checked) { border-color: #8ec5ff; background: rgba(142,197,255,.07); }
+#sn-saver-menu .pg:has(input:checked) img { filter: none; }
+#sn-saver-menu .pg:has(input:checked) .nm { color: #f1f4f8; }
+#sn-saver-menu .pg:has(input:checked) .th::after { border-color: #8ec5ff; background: #8ec5ff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='%230c0f15' stroke-width='2'/%3E%3C/svg%3E") center / 14px no-repeat; }
+#sn-saver-menu .pg:has(input:focus-visible) { outline: 2px solid #8ec5ff; outline-offset: 2px; }
+#sn-saver-menu .empty { color: #6c7788; font-size: .86rem; padding: 24px 0; text-align: center; }
 #sn-saver-menu .opts { overflow: auto; padding: 6px 20px 20px; }
 #sn-saver-menu .opts h3 { font-size: .8rem; font-weight: 600; color: #e6ebf2; margin: 18px 0 10px; }
 #sn-saver-menu .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; margin: 0 0 12px; font-size: .86rem; }
@@ -393,8 +407,8 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
   #sn-saver-menu .pages { border-right: 0; }
   #sn-saver-menu .opts { max-height: 38dvh; border-top: 1px solid rgba(255,255,255,.07); }
   #sn-saver-menu header p { display: none; }
-  #sn-saver-menu .bar { overflow-x: auto; }
-  #sn-saver-menu .tab { white-space: nowrap; }
+  #sn-saver-menu .tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  #sn-saver-menu .quick { margin-left: 0; }
 }
 #sn-saver-touch { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: 6px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--dim, #7f91ad); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 #sn-saver-touch:active { background: rgba(150,200,255,.12); color: var(--ink, #eef3fb); }
@@ -433,9 +447,12 @@ function buildMenu() {
   const m = document.createElement('div');
   m.id = 'sn-saver-menu'; m.hidden = true;
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Screensaver options');
-  // Pages: one tab per region, one card per constellation. Pages that cannot
-  // play (tier 5) do not show. A page with no hook of its own plays in the
-  // generic mode and gets a "Basic" tag.
+  // Pages: one scroll list of picture tiles, a section per region and a
+  // small heading per constellation. A click on a tile adds or removes the
+  // page. The search box and the filter chips narrow the list; the quick
+  // buttons act on the tiles that show. The region chips jump to a section.
+  // Pages that cannot play (tier 5) do not show. A page with no hook of its
+  // own plays in the generic mode and gets a "Basic" tag.
   const pages = allPages().filter(p => p.state !== 'no');
   const regions = (window.SN_NAV || []).map(r => {
     const cons = [];
@@ -445,12 +462,17 @@ function buildMenu() {
     });
     return { id: r.id, label: r.label, cons };
   }).filter(r => r.cons.length);
-  if (!regions.some(r => r.id === S.menuTab)) S.menuTab = regions[0] && regions[0].id;
-  const tabs = regions.map(r => `<button class="tab" role="tab" data-tab="${r.id}">${esc(r.label)}<small data-tc="${r.id}"></small></button>`).join('');
-  const panes = regions.map(r => `<div class="pane" role="tabpanel" data-pane="${r.id}">${r.cons.map(c => `<div class="card" style="--c:${c.color}">
-    <button class="card-h" title="Select or clear this group"><i></i>${esc(c.label)}<small></small></button>
-    ${c.pages.map(p => `<label class="pg" title="${esc(p.note)}"><input type="checkbox" value="${p.key}"><span>${esc(p.label)}</span>${p.state === 'later' ? '<em title="No screensaver of its own: it plays in the generic mode">Basic</em>' : ''}</label>`).join('')}
-  </div>`).join('')}</div>`).join('');
+  const THUMBS = new URL('../pages/home/thumbs/', SELF).href;
+  const jump = regions.map(r => `<button class="jump" data-jump="${r.id}">${esc(r.label)}<small data-tc="${r.id}"></small></button>`).join('');
+  const tile = (p, c) => `<label class="pg" data-key="${p.key}" data-find="${esc((p.label + ' ' + c.label + ' ' + p.regionName).toLowerCase())}"${p.state === 'later' ? ' data-basic' : ''} style="--c:${c.color}">
+      <input type="checkbox" value="${p.key}">
+      <span class="th" data-ch="${esc(p.label.charAt(0))}"><img alt="" loading="lazy" decoding="async" src="${THUMBS}${p.key}.jpg"></span>
+      <span class="nm">${esc(p.label)}</span>${p.state === 'later' ? '<em title="No screensaver of its own: it plays in the generic mode">Basic</em>' : ''}
+    </label>`;
+  const sections = regions.map(r => `<section class="reg" data-pane="${r.id}">
+    <div class="reg-h"><h4>${esc(r.label)}</h4><small></small><button class="reg-t" data-reg="${r.id}">Add all</button></div>
+    ${r.cons.map(c => `<div class="con" style="--c:${c.color}"><div class="con-h"><i></i>${esc(c.label)}</div><div class="tiles">${c.pages.map(p => tile(p, c)).join('')}</div></div>`).join('')}
+  </section>`).join('');
   const seg = (k, opts) => `<div class="seg">${opts.map(([v, t]) => `<label><input type="radio" name="sn-${k}" data-k="${k}" value="${v}">${t}</label>`).join('')}</div>`;
   const sw = (k, t) => `<label class="sw"><span>${t}</span><input type="checkbox" data-k="${k}"></label>`;
   const fmt = recFormat();
@@ -459,8 +481,13 @@ function buildMenu() {
   <header><h2>Screensaver</h2><p>${combo} opens this menu. <kbd>Esc</kbd> stops the screensaver. Double-click or double tap for the next page. On a touch screen, tap once to stop it.</p></header>
   <div class="cols">
     <div class="pages">
-      <div class="bar" role="tablist">${tabs}<div class="quick"><button data-q="default">Defaults</button><button data-q="all">All</button><button data-q="none">None</button></div></div>
-      <div class="panes">${panes}</div>
+      <div class="find">
+        <input type="search" class="q" placeholder="Search ${pages.length} pages" aria-label="Search pages">
+        <div class="chips" role="group" aria-label="Show"><button data-f="all">All</button><button data-f="on">Selected <small class="n-on"></small></button><button data-f="own">Own screensaver</button></div>
+        <div class="quick"><button data-q="all" title="Add every page that shows">Add shown</button><button data-q="none" title="Remove every page that shows">Remove shown</button><button data-q="default" title="The default list for the pages that show">Defaults</button></div>
+      </div>
+      <div class="bar">${jump}</div>
+      <div class="panes">${sections}<p class="empty" hidden>No page matches.</p></div>
     </div>
     <div class="opts">
       <h3>Playback</h3>
@@ -493,24 +520,34 @@ function buildMenu() {
 
   const boxes = () => Array.from(m.querySelectorAll('.pg input'));
   const units = { seconds: v => v >= 60 ? `${Math.floor(v / 60)} min${v % 60 ? ' ' + v % 60 + ' s' : ''}` : v + ' s', fade: v => (+v).toFixed(1) + ' s', calm: v => Math.round(v * 100) + '%', recordMbps: v => v + ' Mbit/s', recordWarmup: v => (+v).toFixed(1) + ' s' };
-  function showTab() {
-    m.querySelectorAll('.tab').forEach(t => { const on = t.dataset.tab === S.menuTab; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
-    m.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.pane !== S.menuTab; });
+  // The filter: the search words (all must match) and the chip.
+  let filt = 'all';
+  const shown = () => boxes().filter(b => !b.closest('.pg').hidden);
+  function applyFilter() {
+    const words = m.querySelector('.q').value.toLowerCase().split(/\s+/).filter(Boolean);
+    m.querySelectorAll('.pg').forEach(t => {
+      const ok = words.every(w => t.dataset.find.includes(w))
+        && (filt !== 'on' || t.querySelector('input').checked)
+        && (filt !== 'own' || !t.hasAttribute('data-basic'));
+      t.hidden = !ok;
+    });
+    m.querySelectorAll('.con').forEach(c => { c.hidden = !c.querySelector('.pg:not([hidden])'); });
+    m.querySelectorAll('.reg').forEach(r => { r.hidden = !r.querySelector('.pg:not([hidden])'); });
+    m.querySelector('.empty').hidden = !!m.querySelector('.pg:not([hidden])');
+    m.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === filt));
   }
   function sync() {
     const keys = boxes().filter(b => b.checked).map(b => b.value);
     S.pages = keys;
     S.seenDefaults = defaultKeys();
     m.querySelectorAll('[data-o]').forEach(o => { o.textContent = units[o.dataset.o](S[o.dataset.o]); });
-    m.querySelectorAll('.card').forEach(c => {
-      const bs = c.querySelectorAll('.pg input');
-      c.querySelector('.card-h small').textContent = `${[...bs].filter(b => b.checked).length} / ${bs.length}`;
+    m.querySelectorAll('.reg').forEach(r => {
+      const bs = [...r.querySelectorAll('.pg input')], n = bs.filter(b => b.checked).length;
+      r.querySelector('.reg-h small').textContent = `${n} of ${bs.length}`;
+      r.querySelector('.reg-t').textContent = n === bs.length ? 'Remove all' : 'Add all';
+      const t = m.querySelector(`[data-tc="${r.dataset.pane}"]`); if (t) t.textContent = n ? String(n) : '';
     });
-    m.querySelectorAll('[data-tc]').forEach(t => {
-      const bs = m.querySelectorAll(`[data-pane="${t.dataset.tc}"] .pg input`);
-      const n = [...bs].filter(b => b.checked).length;
-      t.textContent = n ? String(n) : '';
-    });
+    m.querySelector('.n-on').textContent = String(keys.length);
     const rec = m.querySelector('.rec-opts'); if (rec) rec.hidden = !S.record;
     const total = keys.length * S.seconds;
     m.querySelector('.sum').textContent = keys.length ? `${keys.length} pages, about ${Math.max(1, Math.round(total / 60))} min a pass${S.record ? ', recording' : ''}` : 'Select at least one page.';
@@ -526,30 +563,36 @@ function buildMenu() {
       else if (el.type === 'checkbox') el.checked = !!S[k];
       else el.value = S[k];
     });
-    showTab();
+    applyFilter();
     sync();
   };
+  // A thumbnail that does not load leaves a letter plate in the colour of
+  // its constellation (error events do not bubble, so listen in capture).
+  m.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
   m.addEventListener('input', e => {
+    if (e.target.classList.contains('q')) { applyFilter(); return; }
     const t = e.target, k = t.dataset.k;
     if (k) S[k] = t.type === 'checkbox' ? t.checked : (t.type === 'range' || k === 'recordFps') ? +t.value : t.value;
     sync();
   });
   m.addEventListener('click', e => {
-    const tab = e.target.closest('.tab'), q = e.target.closest('[data-q]'), act = e.target.closest('[data-act]'), head = e.target.closest('.card-h');
+    const q = e.target.closest('[data-q]'), act = e.target.closest('[data-act]'), reg = e.target.closest('[data-reg]');
+    const f = e.target.closest('[data-f]'), j = e.target.closest('[data-jump]');
     if (e.target === m) closeMenu();
-    if (tab) { S.menuTab = tab.dataset.tab; showTab(); save(); }
-    if (head) { const bs = Array.from(head.parentElement.querySelectorAll('.pg input')); const all = bs.every(b => b.checked); bs.forEach(b => { b.checked = !all; }); sync(); }
+    if (f) { filt = f.dataset.f; applyFilter(); }
+    if (j) { const sec = m.querySelector(`.reg[data-pane="${j.dataset.jump}"]`); if (sec && !sec.hidden) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+    if (reg) {
+      const bs = Array.from(m.querySelectorAll(`.reg[data-pane="${reg.dataset.reg}"] .pg input`));
+      const all = bs.every(b => b.checked); bs.forEach(b => { b.checked = !all; }); sync();
+    }
     if (q) {
-      // The quick buttons act on the open tab only.
+      // The quick buttons act on the tiles that show (search and chip).
       const def = new Set(defaultKeys());
-      m.querySelectorAll(`[data-pane="${S.menuTab}"] .pg input`).forEach(b => {
-        b.checked = q.dataset.q === 'all' ? true : q.dataset.q === 'none' ? false : def.has(b.value);
-      });
-      sync();
+      shown().forEach(b => { b.checked = q.dataset.q === 'all' ? true : q.dataset.q === 'none' ? false : def.has(b.value); });
+      sync(); if (filt === 'on') applyFilter();
     }
     if (act && act.dataset.act === 'reset') {
-      const tab = S.menuTab;
-      S = Object.assign({}, DEFAULTS, { menuTab: tab });
+      S = Object.assign({}, DEFAULTS);
       m.sync();
     }
     if (act && act.dataset.act === 'close') closeMenu();
