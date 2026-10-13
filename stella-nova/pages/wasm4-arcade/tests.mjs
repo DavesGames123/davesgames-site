@@ -46,7 +46,8 @@
 //                 onto the console swaps, a drag elsewhere goes home; a tap
 //                 on the glass arms the keys and sets the mouse; the reset
 //                 button pushes and reboots; a key press moves a 3D key;
-//                 the view button; pagehide releases the renderer
+//                 the view button; the saver runs in the room and exits;
+//                 pagehide releases the renderer
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync, existsSync } from 'node:fs';
@@ -573,6 +574,21 @@ async function roomTest() {
     document.querySelectorAll('#shelf .cart')[2].dispatchEvent(new window.Event('click'));
     await tick(150);
     ok(S.cart.id === manifest.carts[2].id && S.room.seated === manifest.carts[2].id, 'room: a click in the cart list swaps the cart in the room');
+    // saver in the room
+    let plate = null;
+    const res = window.snSaver.enter({ seed: 7, calm: 0.5, label: p => { if (p) plate = p; } });
+    ok(res && res.canvas === view, 'room: the saver uses the room canvas');
+    for (let i = 0; i < 200 && !(window.snSaver.debug() && window.snSaver.debug().frame > 10); i++) await tick(1);
+    const dbg = window.snSaver.debug();
+    ok(dbg && dbg.frame > 10 && dbg.tube === 'webgl3d' && S.room.seated === dbg.cart, `room: the saver swaps a cart in and plays it (${JSON.stringify(dbg)})`);
+    ok(plate && plate.title && !('code' in plate), 'room: the saver plate names the cart, no code');
+    window.snSaver.cut();
+    for (let i = 0; i < 300 && !(window.snSaver.debug().cart !== dbg.cart && window.snSaver.debug().frame > 5); i++) await tick(1);
+    const d2 = window.snSaver.debug();
+    ok(d2.cart !== dbg.cart && S.room.seated === d2.cart && d2.frame > 5, `room: the saver cut swaps the next cart in (${dbg.cart} -> ${d2.cart})`);
+    window.snSaver.exit();
+    await tick(5);
+    ok(window.__w4Saver === false && S.room.seated === S.cart.id && document.body.contains(view), 'room: the saver exits and the page cart is back in the slot');
     window.dispatchEvent(Object.assign(new window.Event('pagehide'), { persisted: false }));
     ok(disposed && S.room === null, 'room: pagehide releases the renderer');
     ok(!errors.length, `room: no warnings or loop errors ${errors.slice(0, 3).join(' | ')}`);
